@@ -1,0 +1,40 @@
+name: Auto Sync Football Data
+
+on:
+  schedule:
+    - cron: '0 */3 * * *' # 每 3 小时自动同步一次
+  workflow_dispatch: # 支持在 GitHub 控制台手动点击触发
+
+jobs:
+  sync-data:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # 赋予 actions 写入与推送代码的权限
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: npm install iconv-lite
+
+      - name: Run Data Scraper & Predictor
+        env:
+          FOOTBALL_DATA_API_KEY: ${{ secrets.FOOTBALL_DATA_API_KEY }}
+        run: node scripts/syncData.cjs
+
+      - name: Commit & Push Changes
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/matches.json
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "chore: auto sync sports predictions matches [skip ci]"
+            git push
+          else
+            echo "No changes in predictions data."
+          fi
