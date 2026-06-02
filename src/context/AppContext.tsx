@@ -38,7 +38,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // 从 matches.json 加载数据并动态扩展球队、联赛、国家列表
   useEffect(() => {
-    fetch('/matches.json')
+    fetch('./matches.json')
       .then(res => {
         if (!res.ok) throw new Error('Not found');
         return res.json();
