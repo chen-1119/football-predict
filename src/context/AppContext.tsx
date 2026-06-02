@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { Match } from '../services/mockData';
-import { matchesPool, teams, leagues, countries } from '../services/mockData';
+import { matchesPool, registerTeam, registerLeague, registerCountry } from '../services/mockData';
 
 export type Language = 'zh' | 'en';
 
@@ -47,8 +47,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (Array.isArray(data) && data.length > 0) {
           // 动态注册抓取到的真实球队、联赛及国家，保证前端UI组件能正常获取信息且不会因空对象红屏崩溃
           data.forEach((m: any) => {
-            if (m.homeTeamId && !teams.some(t => t.id === m.homeTeamId)) {
-              teams.push({
+            if (m.homeTeamId) {
+              registerTeam({
                 id: m.homeTeamId,
                 name: { zh: m.homeTeamName || '未知主队', en: m.homeTeamNameEn || 'Home Team' },
                 shortName: { zh: m.homeTeamName || '未知', en: m.homeTeamNameEn || 'Home' },
@@ -57,8 +57,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 color: m.homeTeamColor || '#7f8c8d'
               });
             }
-            if (m.awayTeamId && !teams.some(t => t.id === m.awayTeamId)) {
-              teams.push({
+            if (m.awayTeamId) {
+              registerTeam({
                 id: m.awayTeamId,
                 name: { zh: m.awayTeamName || '未知客队', en: m.awayTeamNameEn || 'Away Team' },
                 shortName: { zh: m.awayTeamName || '未知', en: m.awayTeamNameEn || 'Away' },
@@ -67,8 +67,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 color: m.awayTeamColor || '#95a5a6'
               });
             }
-            if (m.leagueId && !leagues.some(l => l.id === m.leagueId)) {
-              leagues.push({
+            if (m.leagueId) {
+              registerLeague({
                 id: m.leagueId,
                 name: { zh: m.leagueName || '未知联赛', en: m.leagueNameEn || 'League' },
                 shortName: { zh: m.leagueShortName || m.leagueName || '未知', en: m.leagueShortNameEn || m.leagueNameEn || 'League' },
@@ -76,8 +76,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 isImportant: false
               });
             }
-            if (m.countryId && !countries.some(c => c.id === m.countryId)) {
-              countries.push({
+            if (m.countryId) {
+              registerCountry({
                 id: m.countryId,
                 name: { zh: m.countryName || '其他', en: m.countryNameEn || 'Other' },
                 flag: m.countryFlag || '🏳️'

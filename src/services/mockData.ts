@@ -417,3 +417,21 @@ export const bettingGlossary = [
   { term: 'O1.5 / O2.5', name: { zh: '大于1.5 / 2.5', en: 'Over 1.5 / 2.5 Goals' }, desc: { zh: '预测全场两队总进球数大于 1.5 或 2.5 球（如 2球以上或 3球以上）。', en: 'Predict total match goals to be greater than 1.5 or 2.5.' } },
   { term: 'U2.5 / U3.5', name: { zh: '小于2.5 / 3.5', en: 'Under 2.5 / 3.5 Goals' }, desc: { zh: '预测全场两队总进球数小于 2.5 或 3.5 球。', en: 'Predict total match goals to be less than 2.5 or 3.5.' } },
 ];
+
+export function registerTeam(t: Team) {
+  if (!teams.some(existing => existing.id === t.id)) {
+    teams.push(t);
+  }
+}
+
+export function registerLeague(l: League) {
+  if (!leagues.some(existing => existing.id === l.id)) {
+    leagues.push(l);
+  }
+}
+
+export function registerCountry(c: Country) {
+  if (!countries.some(existing => existing.id === c.id)) {
+    countries.push(c);
+  }
+}
