@@ -40,54 +40,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     fetch(`./matches.json?t=${Date.now()}`)
       .then(res => {
-        if (!res.ok) throw new Error('Not found');
+        if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
         return res.json();
       })
       .then((data: Match[]) => {
-        if (Array.isArray(data) && data.length > 0) {
-          // 动态注册抓取到的真实球队、联赛及国家，保证前端UI组件能正常获取信息且不会因空对象红屏崩溃
-          data.forEach((m: any) => {
-            if (m.homeTeamId) {
-              registerTeam({
-                id: m.homeTeamId,
-                name: { zh: m.homeTeamName || '未知主队', en: m.homeTeamNameEn || 'Home Team' },
-                shortName: { zh: m.homeTeamName || '未知', en: m.homeTeamNameEn || 'Home' },
-                logo: (m.homeTeamName || 'FC').substring(0, 2),
-                value: '50M €',
-                color: m.homeTeamColor || '#7f8c8d'
-              });
-            }
-            if (m.awayTeamId) {
-              registerTeam({
-                id: m.awayTeamId,
-                name: { zh: m.awayTeamName || '未知客队', en: m.awayTeamNameEn || 'Away Team' },
-                shortName: { zh: m.awayTeamName || '未知', en: m.awayTeamNameEn || 'Away' },
-                logo: (m.awayTeamName || 'FC').substring(0, 2),
-                value: '50M €',
-                color: m.awayTeamColor || '#95a5a6'
-              });
-            }
-            if (m.leagueId) {
-              registerLeague({
-                id: m.leagueId,
-                name: { zh: m.leagueName || '未知联赛', en: m.leagueNameEn || 'League' },
-                shortName: { zh: m.leagueShortName || m.leagueName || '未知', en: m.leagueShortNameEn || m.leagueNameEn || 'League' },
-                countryId: m.countryId || 'oth',
-                isImportant: false
-              });
-            }
-            if (m.countryId) {
-              registerCountry({
-                id: m.countryId,
-                name: { zh: m.countryName || '其他', en: m.countryNameEn || 'Other' },
-                flag: m.countryFlag || '🏳️'
-              });
-            }
-          });
-          setMatches(data);
+        try {
+          if (Array.isArray(data) && data.length > 0) {
+            // 动态注册抓取到的真实球队、联赛及国家，保证前端UI组件能正常获取信息且不会因空对象红屏崩溃
+            data.forEach((m: any) => {
+              if (m.homeTeamId) {
+                registerTeam({
+                  id: m.homeTeamId,
+                  name: { zh: m.homeTeamName || '未知主队', en: m.homeTeamNameEn || 'Home Team' },
+                  shortName: { zh: m.homeTeamName || '未知', en: m.homeTeamNameEn || 'Home' },
+                  logo: (m.homeTeamName || 'FC').substring(0, 2),
+                  value: '50M €',
+                  color: m.homeTeamColor || '#7f8c8d'
+                });
+              }
+              if (m.awayTeamId) {
+                registerTeam({
+                  id: m.awayTeamId,
+                  name: { zh: m.awayTeamName || '未知客队', en: m.awayTeamNameEn || 'Away Team' },
+                  shortName: { zh: m.awayTeamName || '未知', en: m.awayTeamNameEn || 'Away' },
+                  logo: (m.awayTeamName || 'FC').substring(0, 2),
+                  value: '50M €',
+                  color: m.awayTeamColor || '#95a5a6'
+                });
+              }
+              if (m.leagueId) {
+                registerLeague({
+                  id: m.leagueId,
+                  name: { zh: m.leagueName || '未知联赛', en: m.leagueNameEn || 'League' },
+                  shortName: { zh: m.leagueShortName || m.leagueName || '未知', en: m.leagueShortNameEn || m.leagueNameEn || 'League' },
+                  countryId: m.countryId || 'oth',
+                  isImportant: false
+                });
+              }
+              if (m.countryId) {
+                registerCountry({
+                  id: m.countryId,
+                  name: { zh: m.countryName || '其他', en: m.countryNameEn || 'Other' },
+                  flag: m.countryFlag || '🏳️'
+                });
+              }
+            });
+            setMatches(data);
+          }
+        } catch (e: any) {
+          console.error(e);
+          alert(`数据处理错误 (Data Processing Error):\n${e.message}\n${e.stack}`);
         }
       })
-      .catch(() => {
+      .catch((err: any) => {
+        console.error(err);
+        alert(`数据加载错误 (Fetch Error):\n${err.message || err}`);
         // 降级使用静态 mock 引擎数据
         console.log('Using static fallback matchesPool data.');
       });
