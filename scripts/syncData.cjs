@@ -180,6 +180,49 @@ function generateMockStandings(homeId, awayId, allTeams) {
   });
 }
 
+// 从欧赔详情页获取真实赔率
+async function fetchOddsFromOuzhi(fid) {
+  try {
+    const ouzUrl = `https://odds.500.com/fenxi/ouzhi-${fid}.shtml`;
+    const ouzRes = await httpGetBinary(ouzUrl);
+    const ouzHtml = iconv.decode(ouzRes.buffer, 'gb2312');
+    
+    // 优先匹配 Bet365 (cid=3)，如果找不到，匹配 威廉希尔 (cid=293)，再找不到匹配 皇冠 (cid=280)，再找不到匹配 立博 (cid=2)
+    const cids = [3, 293, 280, 2];
+    for (const cid of cids) {
+      const searchStr = `id="${cid}"`;
+      const idx = ouzHtml.indexOf(searchStr);
+      if (idx > 0) {
+        const subHtml = ouzHtml.substring(idx, idx + 1500);
+        const tdRegex = /<td[^>]*onclick="OZ\.r\(this\)"[^>]*>\s*([0-9.]+)\s*<\/td>/g;
+        const odds = [];
+        let tdMatch;
+        while ((tdMatch = tdRegex.exec(subHtml)) !== null) {
+          odds.push(parseFloat(tdMatch[1]));
+        }
+        if (odds.length >= 6) {
+          // 优先使用即赔
+          return {
+            odds1: odds[3],
+            oddsX: odds[4],
+            odds2: odds[5]
+          };
+        } else if (odds.length >= 3) {
+          // fallback 到初赔
+          return {
+            odds1: odds[0],
+            oddsX: odds[1],
+            odds2: odds[2]
+          };
+        }
+      }
+    }
+  } catch (e) {
+    // 获取欧赔失败不影响主流程
+  }
+  return { odds1: null, oddsX: null, odds2: null };
+}
+
 // 500网赛事抓取与解析引擎
 async function fetchMatchesFrom500() {
   const dates = [-1, 0, 1, 2]; // 昨天、今天、明天、后天
@@ -197,63 +240,74 @@ async function fetchMatchesFrom500() {
       const { buffer } = await httpGetBinary(url);
       const html = iconv.decode(buffer, 'gb2312');
 
-      const trRegex = /<tr[^>]*data-fid="(\d+)"[^>]*data-cid="3"[^>]*date-dtime="([^"]+)"[^>]*>([\s\S]*?)<\/tr>/g;
-      let match;
+      // 修复: 不依赖属性顺序，只匹配含 data-fid 和 data-cid="3" 的主行TR
+      // 500.com 的开赛时间属性名是 date-dtime（不是 data-dtime）
+      const trRegex = /<tr\s+[^>]*?data-fid="(\d+)"[^>]*?data-cid="3"[^>]*?>/g;
+      let trMatch;
       let dayCount = 0;
 
-      while ((match = trRegex.exec(html)) !== null) {
-        const fid = match[1];
-        const dtime = match[2];
-        const trHtml = match[3];
+      while ((trMatch = trRegex.exec(html)) !== null) {
+        const fid = trMatch[1];
+        const trTagFull = trMatch[0];
+        // 从 TR 开标签中提取 date-dtime
+        const dtimeMatch = trTagFull.match(/date-dtime="([^"]+)"/);
+        const dtime = dtimeMatch ? dtimeMatch[1] : `${dateStr} 00:00:00`;
 
-        // 1. 提取比赛编号 ("周一001")
+        // 提取 TR 开标签后到 </tr> 的内容
+        const trStartPos = trMatch.index + trMatch[0].length;
+        const trEndPos = html.indexOf('</tr>', trStartPos);
+        const trHtml = trEndPos > 0 ? html.substring(trStartPos, trEndPos) : '';
+
+        // 1. 提取比赛编号
         let matchNo = '';
         const labelMatch = trHtml.match(/<label[^>]*>([\s\S]*?)<\/label>/);
         if (labelMatch) {
           matchNo = labelMatch[1].replace(/<[^>]+>/g, '').trim();
         }
 
-        // 2. 提取联赛名字
+        // 2. 提取联赛名字（从 title 属性）
         let leagueName = '未知联赛';
-        const leagueMatch = trHtml.match(/href="[^"]*liansai\.500\.com[^"]*"[^>]*title="([^"]+)"[^>]*>([^<]+)<\/a>/) ||
+        const leagueMatch = trHtml.match(/href="[^"]*liansai\.500\.com[^"]*"\s+title="([^"]+)"/) ||
                             trHtml.match(/href="[^"]*liansai\.500\.com[^"]*"[^>]*>([^<]+)<\/a>/);
         if (leagueMatch) {
-          leagueName = (leagueMatch[1] || leagueMatch[2] || leagueMatch[0]).trim();
+          leagueName = (leagueMatch[1]).trim();
         }
 
-        // 3. 提取主队和客队
-        const teamRegex = /<a[^>]*class="team_link"[^>]*title="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
-        let teamMatch;
-        const teams = [];
-        while ((teamMatch = teamRegex.exec(trHtml)) !== null) {
-          teams.push(teamMatch[1].trim());
-        }
-
-        if (teams.length < 2) {
-          const altTeamRegex = /<a[^>]*href="[^"]*team\/[^"]*"[^>]*title="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
-          let altMatch;
-          while ((altMatch = altTeamRegex.exec(trHtml)) !== null) {
-            teams.push(altMatch[1].trim());
+        // 3. 提取主队和客队（从 team_link 的 title 属性）
+        const teamMatches = [...trHtml.matchAll(/class="team_link"[^>]+title="([^"]+)"/g)];
+        let homeTeam = '主队';
+        let awayTeam = '客队';
+        if (teamMatches.length >= 2) {
+          homeTeam = teamMatches[0][1].trim();
+          awayTeam = teamMatches[1][1].trim();
+        } else {
+          // 备用：从链接文本提取
+          const textMatches = [...trHtml.matchAll(/class="team_link"[^>]*>([^<]+)<\/a>/g)];
+          if (textMatches.length >= 2) {
+            homeTeam = textMatches[0][1].trim();
+            awayTeam = textMatches[1][1].trim();
           }
         }
 
-        const homeTeam = teams[0] || '主队';
-        const awayTeam = teams[1] || '客队';
-
-        // 4. 解析比分与完赛状态
+        // 4. 解析比分（在 class 含 no_border 的 td 中找 数字:数字）
         let isFinished = false;
         let scoreHome = undefined;
         let scoreAway = undefined;
-        const noBorderMatch = trHtml.match(/<td[^>]*class="no_border"[^>]*>([\s\S]*?)<\/td>/);
-        if (noBorderMatch) {
-          const content = noBorderMatch[1];
-          const scoreMatch = content.match(/(\d+):(\d+)/);
+        const noBorderMatches = [...trHtml.matchAll(/<td[^>]*class="[^"]*no_border[^"]*"[^>]*>([\s\S]*?)<\/td>/g)];
+        for (const nb of noBorderMatches) {
+          const rawContent = nb[1].replace(/<[^>]+>/g, '').trim();
+          const scoreMatch = rawContent.match(/^(\d+):(\d+)$/);
           if (scoreMatch) {
             isFinished = true;
             scoreHome = parseInt(scoreMatch[1], 10);
             scoreAway = parseInt(scoreMatch[2], 10);
+            break;
           }
         }
+
+        // 5. 获取真实欧赔
+        const realOdds = await fetchOddsFromOuzhi(fid);
+        await new Promise(r => setTimeout(r, 600));
 
         parsedMatches.push({
           fid,
@@ -265,10 +319,14 @@ async function fetchMatchesFrom500() {
           isFinished,
           scoreHome,
           scoreAway,
+          odds1: realOdds.odds1,
+          oddsX: realOdds.oddsX,
+          odds2: realOdds.odds2,
           isMock: false,
           matchDate: dateStr
         });
         dayCount++;
+        console.log(`  📋 ${homeTeam} vs ${awayTeam} [${leagueName}] dtime=${dtime} odds=${realOdds.odds1}/${realOdds.oddsX}/${realOdds.odds2}`);
       }
       console.log(`✅ 成功抓取到 ${dayCount} 场真实比赛。`);
     } catch (e) {
@@ -388,7 +446,7 @@ async function sync() {
 
   // 3. 为每场合并后的比赛，计算胜率、赔率、AI 预测及详情数据
   for (const raw of rawMatches) {
-    const { fid, kickoffTime, matchNo, leagueName, homeTeam, awayTeam, isFinished, scoreHome, scoreAway, isMock, matchDate } = raw;
+    const { fid, kickoffTime, matchNo, leagueName, homeTeam, awayTeam, isFinished, scoreHome, scoreAway, isMock, matchDate, odds1: rawOdds1, oddsX: rawOddsX, odds2: rawOdds2 } = raw;
     
     // 统一生成 ID，如果是模拟的就 mock_ 前缀，真实的就 real_ 前缀
     const matchId = isMock ? `match_mock_${fid}` : `match_real_${fid}`;
@@ -441,9 +499,11 @@ async function sync() {
     awayWinProb = Math.round((awayWinProb / sum) * 100);
     drawProb = 100 - homeWinProb - awayWinProb;
 
-    const odds1 = parseFloat((1 / (homeWinProb / 100) * 0.95).toFixed(2));
-    const odds2 = parseFloat((1 / (awayWinProb / 100) * 0.95).toFixed(2));
-    const oddsX = parseFloat((1 / (drawProb / 100) * 0.90).toFixed(2));
+    // 使用真实抓取的赔率（如果存在），否则用概率模型计算
+    const odds1 = rawOdds1 || parseFloat((1 / (homeWinProb / 100) * 0.95).toFixed(2));
+    const odds2 = rawOdds2 || parseFloat((1 / (awayWinProb / 100) * 0.95).toFixed(2));
+    const oddsX = rawOddsX || parseFloat((1 / (drawProb / 100) * 0.90).toFixed(2));
+    if (rawOdds1) console.log(`  ✓ 使用真实欧赔: ${odds1}/${oddsX}/${odds2} [${homeTeam} vs ${awayTeam}]`);
 
     let bestTipCode = '1';
     let bestTipTextZH = `主胜 (${homeTeam})`;
