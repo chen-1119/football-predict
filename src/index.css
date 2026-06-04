@@ -604,50 +604,90 @@ button.status-pill:hover {
   font-weight: 650;
 }
 
-.date-strip {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.7rem;
-  overflow-x: auto;
-  padding-bottom: 0.1rem;
-}
-
-.date-pill {
+.date-toolbar {
   display: flex;
-  min-height: 72px;
-  flex-direction: column;
-  justify-content: center;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
   background: hsl(var(--bg-card));
+  padding: 0.55rem;
+}
+
+.date-quick-row {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  gap: 0.45rem;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.date-chip {
+  display: inline-flex;
+  min-height: 42px;
+  min-width: max-content;
+  align-items: center;
+  gap: 0.48rem;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: hsl(var(--bg));
   color: hsl(var(--text-secondary));
   cursor: pointer;
-  padding: 0.75rem 0.9rem;
-  text-align: left;
+  padding: 0.42rem 0.72rem;
   transition: border-color 0.18s ease, background-color 0.18s ease, color 0.18s ease;
 }
 
-.date-pill:hover {
+.date-chip:hover {
   border-color: hsl(var(--text-muted));
   color: hsl(var(--text-primary));
 }
 
-.date-pill.active {
+.date-chip.active,
+.history-date-select.active {
   border-color: hsl(var(--primary));
   background: hsl(var(--primary) / 0.14);
   color: hsl(var(--primary));
 }
 
 .date-label {
-  font-size: 0.95rem;
+  font-size: 0.88rem;
   font-weight: 850;
 }
 
 .date-value {
-  margin-top: 0.2rem;
   color: hsl(var(--text-muted));
-  font-size: 0.75rem;
+  font-size: 0.74rem;
   font-weight: 700;
+}
+
+.history-date-select {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  background: hsl(var(--bg));
+  color: hsl(var(--text-secondary));
+  padding: 0 0.55rem;
+}
+
+.history-date-select select {
+  min-width: 8.5rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 800;
+  outline: none;
+}
+
+.history-date-select option {
+  background: hsl(var(--bg-card));
+  color: hsl(var(--text-primary));
 }
 
 .filters-panel {
@@ -1322,14 +1362,30 @@ button.status-pill:hover {
     height: 32px;
   }
 
-  .date-strip {
-    grid-template-columns: repeat(4, minmax(118px, 1fr));
-    gap: 0.55rem;
+  .date-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.5rem;
   }
 
-  .date-pill {
-    min-height: 64px;
-    padding: 0.62rem 0.72rem;
+  .date-quick-row {
+    width: 100%;
+  }
+
+  .date-chip {
+    min-height: 38px;
+    padding: 0.35rem 0.62rem;
+  }
+
+  .history-date-select {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .history-date-select select {
+    min-width: 0;
+    flex: 1;
   }
 
   .filters-panel {

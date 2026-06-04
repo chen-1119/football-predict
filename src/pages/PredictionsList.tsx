@@ -261,19 +261,29 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
     );
   };
 
-  const dateOptions = (() => {
-    const quickDates = [yesterdayStr, todayStr, tomorrowStr, dayAfterTomorrowStr];
-    const matchDates = matches.map(getMatchDay).filter(Boolean);
-    const mergedDates = Array.from(new Set([...matchDates, ...quickDates])).sort();
+  const quickDateOptions = [
+    { label: t('yesterday'), date: yesterdayStr },
+    { label: t('today'), date: todayStr },
+    { label: t('tomorrow'), date: tomorrowStr },
+    { label: t('dayAfterTomorrow'), date: dayAfterTomorrowStr }
+  ];
 
-    return mergedDates.map((date) => {
-      if (date === yesterdayStr) return { label: t('yesterday'), date };
-      if (date === todayStr) return { label: t('today'), date };
-      if (date === tomorrowStr) return { label: t('tomorrow'), date };
-      if (date === dayAfterTomorrowStr) return { label: t('dayAfterTomorrow'), date };
-      return { label: date < todayStr ? (language === 'zh' ? '历史' : 'History') : (language === 'zh' ? '赛事日' : 'Match day'), date };
+  const historyDateOptions = (() => {
+    const quickDates = new Set(quickDateOptions.map((option) => option.date));
+    const matchDates = matches.map(getMatchDay).filter(Boolean);
+    const historyDates = Array.from(new Set(matchDates))
+      .filter((date) => !quickDates.has(date))
+      .sort((a, b) => b.localeCompare(a));
+
+    return historyDates.map((date) => {
+      return {
+        label: date < todayStr ? (language === 'zh' ? '历史' : 'History') : (language === 'zh' ? '赛事日' : 'Match day'),
+        date
+      };
     });
   })();
+
+  const selectedHistoryDate = historyDateOptions.some((option) => option.date === effectiveSelectedDate) ? effectiveSelectedDate : '';
 
   const metrics = [
     {
@@ -343,18 +353,39 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
         })}
       </section>
 
-      <section className="date-strip" aria-label="Date filters">
-        {dateOptions.map((option) => (
-          <button
-            key={option.date}
-            type="button"
-            onClick={() => setSelectedDate(option.date)}
-            className={`date-pill ${effectiveSelectedDate === option.date ? 'active' : ''}`}
-          >
-            <span className="date-label">{option.label}</span>
-            <span className="date-value">{formatShortDate(option.date, language)}</span>
-          </button>
-        ))}
+      <section className="date-toolbar" aria-label="Date filters">
+        <div className="date-quick-row">
+          {quickDateOptions.map((option) => (
+            <button
+              key={option.date}
+              type="button"
+              onClick={() => setSelectedDate(option.date)}
+              className={`date-chip ${effectiveSelectedDate === option.date ? 'active' : ''}`}
+            >
+              <span className="date-label">{option.label}</span>
+              <span className="date-value">{formatShortDate(option.date, language)}</span>
+            </button>
+          ))}
+        </div>
+        {historyDateOptions.length > 0 && (
+          <label className={`history-date-select ${selectedHistoryDate ? 'active' : ''}`}>
+            <CalendarDays size={15} />
+            <select
+              aria-label={language === 'zh' ? '历史日期' : 'History dates'}
+              value={selectedHistoryDate}
+              onChange={(event) => {
+                if (event.target.value) setSelectedDate(event.target.value);
+              }}
+            >
+              <option value="">{language === 'zh' ? '历史日期' : 'History'}</option>
+              {historyDateOptions.map((option) => (
+                <option key={option.date} value={option.date}>
+                  {option.label} · {formatShortDate(option.date, language)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </section>
 
       <section className="panel filters-panel" aria-label="Filters">
