@@ -10,6 +10,7 @@ import {
   getSportteryPoolRows
 } from '../services/bettingDisplay';
 import { getCountryById, getLeagueById, getTeamById } from '../services/entities';
+import { getMatchSignal } from '../services/matchSignal';
 import { TeamBadge } from '../components/TeamBadge';
 import { ArrowLeft, Lock, Trophy } from 'lucide-react';
 
@@ -335,6 +336,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   const awayHistory = buildTeamHistory(matches, awayTeam.id, match, language);
   const headToHead = buildHeadToHead(matches, homeTeam.id, awayTeam.id, match, language);
   const historyCoverageLabel = getHistoryCoverageLabel(matches, language);
+  const matchSignal = getMatchSignal(match);
   const projectedScoreText = isFinished
     ? `${match.scoreHome} - ${match.scoreAway}`
     : `${match.projectedScoreHome ?? Math.round(match.stats?.xG.home ?? 1)} - ${match.projectedScoreAway ?? Math.round(match.stats?.xG.away ?? 1)}`;
@@ -677,6 +679,23 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
         {/* Tab 1: AI 推荐 */}
         {activeTab === 'predictions' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <div className={`card signal-summary-card is-${matchSignal.category}`}>
+              <div>
+                <span className={`signal-badge is-${matchSignal.category}`}>{matchSignal.label[language]}</span>
+                <h3>{language === 'zh' ? 'AI 初筛结论' : 'AI Signal Summary'}</h3>
+                <p>{matchSignal.note[language]}</p>
+              </div>
+              <div className="signal-summary-meta">
+                <span>{language === 'zh' ? '可信度' : 'Trust'} <strong>{matchSignal.trustScore ? `${matchSignal.trustScore}%` : '--'}</strong></span>
+                <span>{language === 'zh' ? '风险项' : 'Risks'} <strong>{matchSignal.riskCount}</strong></span>
+                {match.oddsTrend && (
+                  <span>{language === 'zh' ? 'SP快照' : 'SP snapshots'} <strong>{match.oddsTrend.sampleSize}</strong></span>
+                )}
+              </div>
+              {match.oddsTrend && (
+                <p className="signal-summary-trend">{match.oddsTrend.summary[language]}</p>
+              )}
+            </div>
             
             {/* 比分推演卡片 */}
             {hasPredictions && (

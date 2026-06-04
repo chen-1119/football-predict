@@ -760,6 +760,34 @@ button.status-pill:hover {
   color: hsl(var(--accent));
 }
 
+.signal-chip strong {
+  border-radius: 999px;
+  background: hsl(var(--bg));
+  color: inherit;
+  font-size: 0.68rem;
+  min-width: 1.15rem;
+  padding: 0.04rem 0.34rem;
+  text-align: center;
+}
+
+.signal-chip.is-steady.active {
+  border-color: hsl(var(--success) / 0.52);
+  background: hsl(var(--success) / 0.12);
+  color: hsl(var(--success));
+}
+
+.signal-chip.is-watch.active {
+  border-color: hsl(var(--premium) / 0.5);
+  background: hsl(var(--premium) / 0.11);
+  color: hsl(var(--premium));
+}
+
+.signal-chip.is-avoid.active {
+  border-color: hsl(var(--danger) / 0.5);
+  background: hsl(var(--danger) / 0.1);
+  color: hsl(var(--danger));
+}
+
 .segmented {
   display: inline-flex;
   gap: 0.25rem;
@@ -922,6 +950,57 @@ button.status-pill:hover {
   min-width: 0;
   align-items: center;
   gap: 0.62rem;
+}
+
+.match-signal-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.12rem;
+  padding-left: 2.85rem;
+}
+
+.signal-badge,
+.signal-risk-count {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 850;
+  padding: 0.14rem 0.42rem;
+}
+
+.signal-badge {
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--bg-card-hover));
+  color: hsl(var(--text-secondary));
+}
+
+.signal-badge.is-steady {
+  border-color: hsl(var(--success) / 0.42);
+  background: hsl(var(--success) / 0.12);
+  color: hsl(var(--success));
+}
+
+.signal-badge.is-watch {
+  border-color: hsl(var(--premium) / 0.42);
+  background: hsl(var(--premium) / 0.11);
+  color: hsl(var(--premium));
+}
+
+.signal-badge.is-avoid {
+  border-color: hsl(var(--danger) / 0.44);
+  background: hsl(var(--danger) / 0.11);
+  color: hsl(var(--danger));
+}
+
+.signal-badge.is-unavailable {
+  color: hsl(var(--text-muted));
+}
+
+.signal-risk-count {
+  background: hsl(var(--bg));
+  color: hsl(var(--text-muted));
 }
 
 .team-badge {
@@ -1287,6 +1366,55 @@ button.status-pill:hover {
   font-size: 0.66rem;
   font-weight: 850;
   padding: 0.16rem 0.42rem;
+}
+
+.signal-summary-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.9rem;
+  align-items: start;
+}
+
+.signal-summary-card h3 {
+  margin-top: 0.52rem;
+  color: hsl(var(--text-primary));
+  font-family: var(--font-title);
+  font-size: 1.05rem;
+  font-weight: 900;
+}
+
+.signal-summary-card p {
+  color: hsl(var(--text-secondary));
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.signal-summary-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.signal-summary-meta span {
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  background: hsl(var(--bg));
+  color: hsl(var(--text-muted));
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 0.3rem 0.52rem;
+}
+
+.signal-summary-meta strong {
+  color: hsl(var(--text-primary));
+}
+
+.signal-summary-trend {
+  grid-column: 1 / -1;
+  border-top: 1px solid hsl(var(--border));
+  margin-top: 0.15rem;
+  padding-top: 0.72rem;
 }
 
 .sp-trend-box {
@@ -2002,6 +2130,27 @@ button.status-pill:hover {
   .sporttery-pool-head,
   .sporttery-pool-row {
     grid-template-columns: 2.25rem repeat(3, minmax(2rem, 1fr)) 3.75rem;
+  }
+
+  .match-signal-line {
+    padding-left: 0;
+  }
+
+  .signal-summary-card {
+    grid-template-columns: 1fr;
+    gap: 0.7rem;
+  }
+
+  .signal-summary-card h3 {
+    margin-top: 0.42rem;
+  }
+
+  .signal-summary-meta {
+    justify-content: flex-start;
+  }
+
+  .signal-summary-trend {
+    margin-top: 0;
   }
 
   .match-action-cell {

@@ -18,6 +18,7 @@ import { getDateStringOffset, leagues } from '../services/mockData';
 import type { Country, League, Match, PredictionDetail } from '../services/mockData';
 import { getMarketLabel, getPredictionTipDisplay, getPredictionValueLabel, getSportteryPoolRows } from '../services/bettingDisplay';
 import { getCountryById, getLeagueById, getTeamById } from '../services/entities';
+import { getMatchSignal, type MatchSignalCategory } from '../services/matchSignal';
 import { TeamBadge } from '../components/TeamBadge';
 
 interface PredictionsListProps {
@@ -25,8 +26,10 @@ interface PredictionsListProps {
 }
 
 type SortBy = 'time' | 'trust' | 'odds';
+type SignalFilter = 'all' | MatchSignalCategory;
 
 const SORT_OPTIONS: SortBy[] = ['time', 'trust', 'odds'];
+const SIGNAL_FILTERS: SignalFilter[] = ['all', 'steady', 'watch', 'avoid', 'unavailable'];
 
 const getMatchDay = (match: Match) => match.matchDate || match.businessDate || match.kickoffTime.split('T')[0];
 
@@ -67,6 +70,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
 
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
   const [selectedLeagues, setSelectedLeagues] = useState<string[]>([]);
+  const [signalFilter, setSignalFilter] = useState<SignalFilter>('all');
   const [sortBy, setSortBy] = useState<SortBy>('time');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
@@ -78,6 +82,12 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
     upgradeBtn: { zh: '解锁 PRO', en: 'Unlock PRO' },
     filterTitle: { zh: '赛事筛选', en: 'Competition Filters' },
     allLeagues: { zh: '全部赛事', en: 'All Competitions' },
+    signalTitle: { zh: '推荐分组', en: 'Signal' },
+    allSignals: { zh: '全部分组', en: 'All Signals' },
+    steady: { zh: '稳胆候选', en: 'Steady' },
+    watch: { zh: '观察', en: 'Watch' },
+    avoid: { zh: '避坑', en: 'Avoid' },
+    unavailable: { zh: '待开售', en: 'Pending' },
     sortTitle: { zh: '排序', en: 'Sort' },
     time: { zh: '开赛时间', en: 'Time' },
     trust: { zh: '可信度', en: 'Trust' },
@@ -94,7 +104,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
     details: { zh: '详情', en: 'Details' },
     hitRate: { zh: '已赛命中率', en: 'Settled Hit Rate' },
     selectedMatches: { zh: '当前筛选场次', en: 'Filtered Matches' },
-    highTrust: { zh: '高可信推荐', en: 'High Trust Tips' },
+    signalSummary: { zh: '推荐分组', en: 'Signal Split' },
     avgTrust: { zh: '平均可信度', en: 'Average Trust' },
     settledPicks: { zh: '条已结算预测', en: 'settled picks' },
     matchUnit: { zh: '场', en: 'matches' },
@@ -110,6 +120,10 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
   };
 
   const t = (key: keyof typeof translations) => translations[key][language] || '';
+  const getSignalFilterLabel = (filter: SignalFilter) => {
+    if (filter === 'all') return t('allSignals');
+    return translations[filter][language];
+  };
 
   const effectiveSelectedDate = useMemo(() => {
     const selectedDateHasMatches = matches.some((match) => getMatchDay(match) === selectedDate);
@@ -139,12 +153,26 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
   const availableLeagueIds = new Set(availableLeagues.map((league) => league.id));
   const effectiveSelectedLeagues = selectedLeagues.filter((leagueId) => availableLeagueIds.has(leagueId));
 
-  const filteredMatches = useMemo(() => {
+  const baseFilteredMatches = useMemo(() => {
     return matches.filter((match) => {
       if (getMatchDay(match) !== effectiveSelectedDate) return false;
       return effectiveSelectedLeagues.length === 0 || effectiveSelectedLeagues.includes(match.leagueId);
     });
   }, [effectiveSelectedDate, effectiveSelectedLeagues, matches]);
+
+  const signalCounts = useMemo(() => {
+    return baseFilteredMatches.reduce<Record<SignalFilter, number>>((counts, match) => {
+      const signal = getMatchSignal(match);
+      counts.all += 1;
+      counts[signal.category] += 1;
+      return counts;
+    }, { all: 0, steady: 0, watch: 0, avoid: 0, unavailable: 0 });
+  }, [baseFilteredMatches]);
+
+  const filteredMatches = useMemo(() => {
+    if (signalFilter === 'all') return baseFilteredMatches;
+    return baseFilteredMatches.filter((match) => getMatchSignal(match).category === signalFilter);
+  }, [baseFilteredMatches, signalFilter]);
 
   const sortedMatches = useMemo(() => {
     const sorted = [...filteredMatches];
@@ -205,10 +233,6 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
     return Math.round(total / trustScores.length);
   }, [sortedMatches]);
 
-  const highTrustCount = useMemo(() => {
-    return sortedMatches.filter((match) => getBestTrust(match) >= 78).length;
-  }, [sortedMatches]);
-
   const handleLeagueToggle = (leagueId: string) => {
     setSelectedLeagues((current) => (
       current.includes(leagueId)
@@ -219,6 +243,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
 
   const handleResetFilters = () => {
     setSelectedLeagues([]);
+    setSignalFilter('all');
     setSortBy('time');
     setSortOrder('asc');
   };
@@ -307,9 +332,9 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
       tone: 'accent'
     },
     {
-      label: t('highTrust'),
-      value: String(highTrustCount),
-      note: language === 'zh' ? '可信度 >=78%' : 'Trust >=78%',
+      label: t('signalSummary'),
+      value: `${signalCounts.steady}/${signalCounts.watch}/${signalCounts.avoid}`,
+      note: language === 'zh' ? '稳 / 观 / 避' : 'Steady / Watch / Avoid',
       icon: ShieldCheck,
       tone: 'premium'
     },
@@ -428,6 +453,26 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
           </div>
         </div>
 
+        <div className="panel-row is-stacked">
+          <span className="panel-label">
+            <ShieldCheck size={16} />
+            {t('signalTitle')}
+          </span>
+          <div className="chip-row">
+            {SIGNAL_FILTERS.map((filter) => (
+              <button
+                key={filter}
+                type="button"
+                onClick={() => setSignalFilter(filter)}
+                className={`filter-chip signal-chip is-${filter} ${signalFilter === filter ? 'active' : ''}`}
+              >
+                <span>{getSignalFilterLabel(filter)}</span>
+                <strong>{signalCounts[filter]}</strong>
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="panel-row">
           <div className="sort-controls">
             <span className="panel-label">
@@ -511,6 +556,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
                       const bestTrust = getBestTrust(match);
                       const formattedTime = formatKickoffTime(match.kickoffTime, language);
                       const poolRows = getSportteryPoolRows(match, language);
+                      const signal = getMatchSignal(match);
 
                       return (
                         <tr
@@ -542,6 +588,14 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
                               <div className="team-line">
                                 <TeamBadge team={awayTeam} size="sm" />
                                 <span className="team-name">{awayTeam.name[language]}</span>
+                              </div>
+                              <div className="match-signal-line">
+                                <span className={`signal-badge is-${signal.category}`}>{signal.label[language]}</span>
+                                {signal.riskCount > 0 && (
+                                  <span className="signal-risk-count">
+                                    {language === 'zh' ? `风险 ${signal.riskCount}` : `${signal.riskCount} risks`}
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </td>
