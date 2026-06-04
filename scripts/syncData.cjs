@@ -706,42 +706,6 @@ function predictionSet(match) {
   return { predictions: [oneXTwo, goals, gg, best], homeLambda, awayLambda };
 }
 
-function makeRecentForm(teamName, leagueName, seedKey) {
-  const rand = seeded(seedKey);
-  const rows = Array.from({ length: 5 }, (_, idx) => {
-    const ourScore = Math.floor(rand() * 4);
-    const oppScore = Math.floor(rand() * 3);
-    return {
-      opponentId: `opp_${hashString(`${seedKey}_${idx}`)}`,
-      opponentName: { zh: `近期对手${idx + 1}`, en: `Recent opponent ${idx + 1}` },
-      isHome: rand() >= 0.5,
-      ourScore,
-      oppScore,
-      date: `2026-05-${String(25 - idx).padStart(2, "0")}`,
-      competition: { zh: leagueName, en: leagueName },
-    };
-  });
-  const wins = rows.filter((x) => x.ourScore > x.oppScore).length;
-  const draws = rows.filter((x) => x.ourScore === x.oppScore).length;
-  const losses = rows.length - wins - draws;
-  const over25 = rows.filter((x) => x.ourScore + x.oppScore > 2.5).length;
-  const btts = rows.filter((x) => x.ourScore > 0 && x.oppScore > 0).length;
-  return {
-    recentMatches: rows,
-    statsLast10: {
-      wins,
-      draws,
-      losses,
-      over1_5: 70,
-      over2_5: over25 * 20,
-      over3_5: Math.max(0, over25 - 1) * 20,
-      bothToScore: btts * 20,
-      upsetWins: wins >= 3 ? 1 : 0,
-      upsetLosses: losses >= 3 ? 1 : 0,
-    },
-  };
-}
-
 function toAppMatch(match) {
   const meta = leagueMeta(match.leagueName);
   const homeTeamId = `team_${hashString(match.homeTeam)}`;
@@ -785,20 +749,6 @@ function toAppMatch(match) {
       yellowCards: { home: Math.floor(rand() * 4), away: Math.floor(rand() * 4) },
       redCards: { home: 0, away: 0 },
     },
-    recentForm: {
-      home: makeRecentForm(match.homeTeam, match.leagueName, `${match.sourceMatchId}_home`),
-      away: makeRecentForm(match.awayTeam, match.leagueName, `${match.sourceMatchId}_away`),
-    },
-    h2h: [
-      {
-        date: "2026-05-20",
-        homeScore: Math.floor(rand() * 3),
-        awayScore: Math.floor(rand() * 3),
-        homeTeamId,
-        awayTeamId,
-        competition: { zh: match.leagueName, en: meta.leagueNameEn },
-      },
-    ],
     standings: [homeTeamId, awayTeamId].map((teamId, idx) => ({
       position: idx + 1,
       teamId,
