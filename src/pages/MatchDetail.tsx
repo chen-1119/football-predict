@@ -11,6 +11,7 @@ import {
 } from '../services/bettingDisplay';
 import { getCountryById, getLeagueById, getTeamById } from '../services/entities';
 import { getMatchSignal } from '../services/matchSignal';
+import { buildMatchInsight } from '../services/predictionInsight';
 import { TeamBadge } from '../components/TeamBadge';
 import { ArrowLeft, Lock, Trophy } from 'lucide-react';
 
@@ -337,6 +338,12 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   const headToHead = buildHeadToHead(matches, homeTeam.id, awayTeam.id, match, language);
   const historyCoverageLabel = getHistoryCoverageLabel(matches, language);
   const matchSignal = getMatchSignal(match);
+  const matchInsight = buildMatchInsight(match, {
+    homeSampleSize: homeHistory.sampleSize,
+    awaySampleSize: awayHistory.sampleSize,
+    h2hSampleSize: headToHead.sampleSize,
+    coverageLabel: historyCoverageLabel
+  });
   const projectedScoreText = isFinished
     ? `${match.scoreHome} - ${match.scoreAway}`
     : `${match.projectedScoreHome ?? Math.round(match.stats?.xG.home ?? 1)} - ${match.projectedScoreAway ?? Math.round(match.stats?.xG.away ?? 1)}`;
@@ -695,6 +702,54 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
               {match.oddsTrend && (
                 <p className="signal-summary-trend">{match.oddsTrend.summary[language]}</p>
               )}
+            </div>
+
+            <div className={`card insight-card is-${matchInsight.tone}`}>
+              <div className="insight-head">
+                <div>
+                  <span className={`insight-action is-${matchInsight.tone}`}>{matchInsight.action[language]}</span>
+                  <h3>{matchInsight.title[language]}</h3>
+                  <p>{matchInsight.summary[language]}</p>
+                </div>
+                <div className="insight-score">
+                  <span>{language === 'zh' ? '综合评分' : 'Score'}</span>
+                  <strong>{matchInsight.score === null ? '--' : matchInsight.score}</strong>
+                </div>
+              </div>
+
+              <div className="insight-metric-grid">
+                {matchInsight.metrics.map((metric) => (
+                  <div key={`${metric.label.zh}-${metric.value.zh}`} className={`insight-metric is-${metric.tone}`}>
+                    <span>{metric.label[language]}</span>
+                    <strong>{metric.value[language]}</strong>
+                  </div>
+                ))}
+              </div>
+
+              <div className="insight-section-grid">
+                <div>
+                  <h4>{language === 'zh' ? '支撑因素' : 'Drivers'}</h4>
+                  <div className="insight-point-list">
+                    {matchInsight.drivers.map((point) => (
+                      <div key={point.title.zh} className={`insight-point is-${point.tone}`}>
+                        <strong>{point.title[language]}</strong>
+                        <p>{point.body[language]}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <h4>{language === 'zh' ? '观察风险' : 'Watchpoints'}</h4>
+                  <div className="insight-point-list">
+                    {matchInsight.watchpoints.map((point) => (
+                      <div key={point.title.zh} className={`insight-point is-${point.tone}`}>
+                        <strong>{point.title[language]}</strong>
+                        <p>{point.body[language]}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
             
             {/* 比分推演卡片 */}

@@ -31,7 +31,7 @@ type SignalFilter = 'all' | MatchSignalCategory;
 const SORT_OPTIONS: SortBy[] = ['time', 'trust', 'odds'];
 const SIGNAL_FILTERS: SignalFilter[] = ['all', 'steady', 'watch', 'avoid', 'unavailable'];
 
-const getMatchDay = (match: Match) => match.matchDate || match.businessDate || match.kickoffTime.split('T')[0];
+const getMatchDay = (match: Match): string => match.kickoffDate || match.kickoffTime.slice(0, 10) || match.matchDate || match.businessDate || '';
 
 const getBestPrediction = (match: Match) => match.predictions.find((p) => p.marketType === 'BEST');
 

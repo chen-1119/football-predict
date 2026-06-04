@@ -1511,6 +1511,173 @@ button.status-pill:hover {
   padding-top: 0.72rem;
 }
 
+.insight-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.insight-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: start;
+}
+
+.insight-action {
+  display: inline-flex;
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  background: hsl(var(--bg));
+  color: hsl(var(--text-secondary));
+  font-size: 0.68rem;
+  font-weight: 900;
+  padding: 0.16rem 0.5rem;
+}
+
+.insight-action.is-success,
+.insight-metric.is-success,
+.insight-point.is-success {
+  border-color: hsl(var(--success) / 0.34);
+}
+
+.insight-action.is-success {
+  color: hsl(var(--success));
+}
+
+.insight-action.is-warning {
+  border-color: hsl(var(--premium) / 0.36);
+  color: hsl(var(--premium));
+}
+
+.insight-action.is-danger {
+  border-color: hsl(var(--danger) / 0.36);
+  color: hsl(var(--danger));
+}
+
+.insight-head h3 {
+  margin-top: 0.48rem;
+  color: hsl(var(--text-primary));
+  font-family: var(--font-title);
+  font-size: 1.1rem;
+  font-weight: 900;
+}
+
+.insight-head p,
+.insight-point p {
+  color: hsl(var(--text-secondary));
+  font-size: 0.8rem;
+  line-height: 1.58;
+}
+
+.insight-score {
+  display: grid;
+  min-width: 5.6rem;
+  justify-items: end;
+  gap: 0.1rem;
+}
+
+.insight-score span {
+  color: hsl(var(--text-muted));
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.insight-score strong {
+  color: hsl(var(--primary));
+  font-family: var(--font-title);
+  font-size: 2rem;
+  font-weight: 950;
+}
+
+.insight-card.is-danger .insight-score strong {
+  color: hsl(var(--danger));
+}
+
+.insight-card.is-warning .insight-score strong {
+  color: hsl(var(--premium));
+}
+
+.insight-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.insight-metric {
+  display: grid;
+  min-height: 68px;
+  align-content: center;
+  gap: 0.18rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--bg));
+  padding: 0.62rem;
+}
+
+.insight-metric span {
+  color: hsl(var(--text-muted));
+  font-size: 0.68rem;
+  font-weight: 820;
+}
+
+.insight-metric strong {
+  overflow-wrap: anywhere;
+  color: hsl(var(--text-primary));
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.insight-metric.is-warning {
+  border-color: hsl(var(--premium) / 0.32);
+}
+
+.insight-metric.is-danger {
+  border-color: hsl(var(--danger) / 0.32);
+}
+
+.insight-section-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 0.9rem;
+}
+
+.insight-section-grid h4 {
+  margin-bottom: 0.52rem;
+  color: hsl(var(--text-primary));
+  font-size: 0.84rem;
+  font-weight: 900;
+}
+
+.insight-point-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.insight-point {
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--bg));
+  padding: 0.64rem;
+}
+
+.insight-point.is-warning {
+  border-color: hsl(var(--premium) / 0.3);
+}
+
+.insight-point.is-danger {
+  border-color: hsl(var(--danger) / 0.3);
+}
+
+.insight-point strong {
+  display: block;
+  margin-bottom: 0.22rem;
+  color: hsl(var(--text-primary));
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
 .sp-trend-box {
   display: grid;
   gap: 0.28rem;
@@ -2253,6 +2420,24 @@ button.status-pill:hover {
   .signal-summary-card {
     grid-template-columns: 1fr;
     gap: 0.7rem;
+  }
+
+  .insight-head {
+    grid-template-columns: 1fr;
+    gap: 0.65rem;
+  }
+
+  .insight-score {
+    justify-items: start;
+  }
+
+  .insight-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.45rem;
+  }
+
+  .insight-section-grid {
+    grid-template-columns: 1fr;
   }
 
   .signal-summary-card h3 {
