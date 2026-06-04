@@ -64,6 +64,82 @@ const formatError = (error: unknown): string => {
   return String(error);
 };
 
+const fetchJson = async <T,>(url: string): Promise<T> => {
+  const res = await fetch(`${url}?t=${Date.now()}`);
+  if (!res.ok) throw new Error(`${url}: HTTP ${res.status} ${res.statusText}`);
+  return res.json() as Promise<T>;
+};
+
+const fetchFirstAvailable = async <T,>(urls: string[]): Promise<T> => {
+  let lastError: unknown;
+
+  for (const url of urls) {
+    try {
+      return await fetchJson<T>(url);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError;
+};
+
+const mergeMatches = (baseMatches: Match[], nextMatches: Match[]) => {
+  const byId = new Map<string, Match>();
+
+  [...baseMatches, ...nextMatches].forEach((match) => {
+    byId.set(match.id, match);
+  });
+
+  return Array.from(byId.values()).sort((a, b) => new Date(a.kickoffTime).getTime() - new Date(b.kickoffTime).getTime());
+};
+
+const registerSyncedMatches = (data: SyncedMatch[]) => {
+  data.forEach((m) => {
+    if (m.homeTeamId) {
+      registerTeam({
+        id: m.homeTeamId,
+        name: { zh: m.homeTeamName || '未知主队', en: m.homeTeamNameEn || m.homeTeamName || 'Home Team' },
+        shortName: { zh: m.homeTeamName || '未知', en: m.homeTeamNameEn || m.homeTeamName || 'Home' },
+        logo: m.homeTeamLogo || (m.homeTeamName || 'FC').substring(0, 2),
+        logoType: m.homeTeamLogoType,
+        value: m.homeTeamValue || '',
+        color: m.homeTeamColor || '#7f8c8d'
+      });
+    }
+
+    if (m.awayTeamId) {
+      registerTeam({
+        id: m.awayTeamId,
+        name: { zh: m.awayTeamName || '未知客队', en: m.awayTeamNameEn || m.awayTeamName || 'Away Team' },
+        shortName: { zh: m.awayTeamName || '未知', en: m.awayTeamNameEn || m.awayTeamName || 'Away' },
+        logo: m.awayTeamLogo || (m.awayTeamName || 'FC').substring(0, 2),
+        logoType: m.awayTeamLogoType,
+        value: m.awayTeamValue || '',
+        color: m.awayTeamColor || '#95a5a6'
+      });
+    }
+
+    if (m.leagueId) {
+      registerLeague({
+        id: m.leagueId,
+        name: { zh: m.leagueName || '未知联赛', en: m.leagueNameEn || m.leagueName || 'League' },
+        shortName: { zh: m.leagueShortName || m.leagueName || '未知', en: m.leagueShortNameEn || m.leagueNameEn || m.leagueName || 'League' },
+        countryId: m.countryId || 'oth',
+        isImportant: false
+      });
+    }
+
+    if (m.countryId) {
+      registerCountry({
+        id: m.countryId,
+        name: { zh: m.countryName || '其他', en: m.countryNameEn || m.countryName || 'Other' },
+        flag: m.countryFlag || '🏳️'
+      });
+    }
+  });
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>(readStoredLanguage);
   const [currentUser, setCurrentUser] = useState<User | null>(readStoredUser);
@@ -72,70 +148,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [hitAndWinSubmission, setHitAndWinSubmission] = useState<HitAndWinSubmission | null>(readStoredHitAndWinSubmission);
   const [matches, setMatches] = useState<Match[]>(matchesPool);
 
-  // 从 matches.json 加载数据并动态扩展球队、联赛、国家列表
+  // 先加载当前赛程，历史赛果后台补齐；队名保持中国竞彩网同步值，不做别名覆盖。
   useEffect(() => {
-    fetch(`./matches.json?t=${Date.now()}`)
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
-        return res.json();
-      })
-      .then((data: unknown) => {
-        try {
-          if (isSyncedMatchArray(data) && data.length > 0) {
-            // 动态注册抓取到的真实球队、联赛及国家，保证前端UI组件能正常获取信息且不会因空对象红屏崩溃
-            data.forEach((m) => {
-              if (m.homeTeamId) {
-                registerTeam({
-                  id: m.homeTeamId,
-                  name: { zh: m.homeTeamName || '未知主队', en: m.homeTeamNameEn || 'Home Team' },
-                  shortName: { zh: m.homeTeamName || '未知', en: m.homeTeamNameEn || 'Home' },
-                  logo: m.homeTeamLogo || (m.homeTeamName || 'FC').substring(0, 2),
-                  logoType: m.homeTeamLogoType,
-                  value: m.homeTeamValue || '',
-                  color: m.homeTeamColor || '#7f8c8d'
-                });
-              }
-              if (m.awayTeamId) {
-                registerTeam({
-                  id: m.awayTeamId,
-                  name: { zh: m.awayTeamName || '未知客队', en: m.awayTeamNameEn || 'Away Team' },
-                  shortName: { zh: m.awayTeamName || '未知', en: m.awayTeamNameEn || 'Away' },
-                  logo: m.awayTeamLogo || (m.awayTeamName || 'FC').substring(0, 2),
-                  logoType: m.awayTeamLogoType,
-                  value: m.awayTeamValue || '',
-                  color: m.awayTeamColor || '#95a5a6'
-                });
-              }
-              if (m.leagueId) {
-                registerLeague({
-                  id: m.leagueId,
-                  name: { zh: m.leagueName || '未知联赛', en: m.leagueNameEn || 'League' },
-                  shortName: { zh: m.leagueShortName || m.leagueName || '未知', en: m.leagueShortNameEn || m.leagueNameEn || 'League' },
-                  countryId: m.countryId || 'oth',
-                  isImportant: false
-                });
-              }
-              if (m.countryId) {
-                registerCountry({
-                  id: m.countryId,
-                  name: { zh: m.countryName || '其他', en: m.countryNameEn || 'Other' },
-                  flag: m.countryFlag || '🏳️'
-                });
-              }
-            });
-            setMatches(data);
-          }
-        } catch (error: unknown) {
-          console.error(error);
-          alert(`Data Processing Error:\n${formatError(error)}`);
+    let cancelled = false;
+
+    const applyData = (data: unknown, mode: 'replace' | 'append') => {
+      if (cancelled) return;
+
+      try {
+        if (isSyncedMatchArray(data) && data.length > 0) {
+          registerSyncedMatches(data);
+          setMatches((current) => (mode === 'replace' ? data : mergeMatches(current, data)));
         }
+      } catch (error: unknown) {
+        console.error(error);
+        alert(`Data Processing Error:\n${formatError(error)}`);
+      }
+    };
+
+    fetchFirstAvailable<unknown>(['./data/matches-current.json', './matches.json'])
+      .then((data) => {
+        applyData(data, 'replace');
+
+        window.setTimeout(() => {
+          fetchJson<unknown>('./data/matches-history.json')
+            .then((historyData) => applyData(historyData, 'append'))
+            .catch((error: unknown) => {
+              console.warn('History data is unavailable; current matches remain usable.', error);
+            });
+        }, 250);
       })
       .catch((error: unknown) => {
+        if (cancelled) return;
         console.error(error);
         alert(`Fetch Error:\n${formatError(error)}`);
         // 降级使用静态 mock 引擎数据
         console.log('Using static fallback matchesPool data.');
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const setLanguage = (lang: Language) => {

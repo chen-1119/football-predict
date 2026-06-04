@@ -39,7 +39,7 @@ jobs:
         run: |
           git config --local user.name "github-actions[bot]"
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git add public/matches.json public/odds-history.json
+          git add public/matches.json public/odds-history.json public/data
           if ! git diff-index --quiet HEAD; then
             git commit -m "chore: auto sync sports predictions matches [skip ci]"
             git push

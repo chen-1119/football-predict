@@ -43,6 +43,7 @@ export interface PredictionDetail {
   trustScore: number; // 0-100
   explanation: MultiLangString;
   analysisItems?: MultiLangString[];
+  riskTags?: MultiLangString[];
   visibilityStatus: 'FREE' | 'PREMIUM';
   resultStatus: 'WON' | 'LOST' | 'PENDING';
 }
@@ -115,6 +116,16 @@ export interface Match {
   scoreAway?: number;
   projectedScoreHome?: number;
   projectedScoreAway?: number;
+  oddsTrend?: {
+    sampleSize: number;
+    firstCapturedAt: string;
+    lastCapturedAt: string;
+    odds1Change: number;
+    oddsXChange: number;
+    odds2Change: number;
+    direction: 'home' | 'draw' | 'away' | 'mixed' | 'flat';
+    summary: MultiLangString;
+  };
   odds?: Odds | null;
   handicapOdds?: Odds | null;
   handicapLine?: string;

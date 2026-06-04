@@ -1,9 +1,17 @@
 const fs = require("fs");
 const path = require("path");
 
-const matchesPath = path.join(__dirname, "..", "public", "matches.json");
-const oddsHistoryPath = path.join(__dirname, "..", "public", "odds-history.json");
-const matches = JSON.parse(fs.readFileSync(matchesPath, "utf8"));
+const publicDir = path.join(__dirname, "..", "public");
+const matchesPath = path.join(publicDir, "matches.json");
+const currentMatchesPath = path.join(publicDir, "data", "matches-current.json");
+const historyMatchesPath = path.join(publicDir, "data", "matches-history.json");
+const oddsHistoryPath = path.join(publicDir, "odds-history.json");
+const dataOddsHistoryPath = path.join(publicDir, "data", "odds-history.json");
+const readJson = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
+const rootMatches = fs.existsSync(matchesPath) ? readJson(matchesPath) : [];
+const currentMatches = fs.existsSync(currentMatchesPath) ? readJson(currentMatchesPath) : rootMatches;
+const historyMatches = fs.existsSync(historyMatchesPath) ? readJson(historyMatchesPath) : [];
+const matches = Array.from(new Map([...currentMatches, ...historyMatches].map((match) => [match.id, match])).values());
 const hexColor = /^#[0-9a-fA-F]{6}$/;
 const staleText = /胜\(3\)|平\(1\)|负\(0\)|当前 1X2|大于 2\.5|小于 2\.5|Both Teams to Score \(GG\)|稳胆:/;
 
@@ -17,8 +25,20 @@ function expectedSportterySp(match, tipCode) {
 const errors = [];
 let oddsHistoryRows = [];
 
+if (!Array.isArray(currentMatches) || currentMatches.length === 0) {
+  errors.push("matches-current.json must contain a non-empty array.");
+}
+
+if (!Array.isArray(historyMatches)) {
+  errors.push("matches-history.json must contain an array.");
+}
+
 if (!Array.isArray(matches) || matches.length === 0) {
-  errors.push("matches.json must contain a non-empty array.");
+  errors.push("combined match data must contain a non-empty array.");
+}
+
+if (Array.isArray(rootMatches) && rootMatches.length > currentMatches.length + 2) {
+  errors.push("root matches.json should stay lightweight and contain current matches only.");
 }
 
 for (const match of matches) {
@@ -133,6 +153,14 @@ if (fs.existsSync(oddsHistoryPath)) {
         errors.push(`${match.id}: missing odds-history snapshot.`);
       }
     }
+  }
+}
+
+if (fs.existsSync(dataOddsHistoryPath)) {
+  const rootHistory = fs.existsSync(oddsHistoryPath) ? readJson(oddsHistoryPath) : null;
+  const dataHistory = readJson(dataOddsHistoryPath);
+  if (rootHistory && JSON.stringify(rootHistory.rows || []) !== JSON.stringify(dataHistory.rows || [])) {
+    errors.push("public/data/odds-history.json must mirror public/odds-history.json rows.");
   }
 }
 

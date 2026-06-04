@@ -1272,6 +1272,46 @@ button.status-pill:hover {
   color: hsl(var(--primary));
 }
 
+.risk-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.46rem;
+}
+
+.risk-tag {
+  border: 1px solid hsl(var(--premium) / 0.32);
+  border-radius: 999px;
+  background: hsl(var(--premium) / 0.1);
+  color: hsl(var(--premium));
+  font-size: 0.66rem;
+  font-weight: 850;
+  padding: 0.16rem 0.42rem;
+}
+
+.sp-trend-box {
+  display: grid;
+  gap: 0.28rem;
+  border-top: 1px solid hsl(var(--border));
+  background: hsl(var(--bg-card-hover));
+  color: hsl(var(--text-secondary));
+  font-size: 0.74rem;
+  line-height: 1.45;
+  padding: 0.62rem 0.7rem;
+  text-align: left;
+}
+
+.sp-trend-box strong {
+  color: hsl(var(--text-primary));
+  font-size: 0.72rem;
+}
+
+.sp-trend-box.is-home,
+.sp-trend-box.is-away,
+.sp-trend-box.is-draw {
+  border-top-color: hsl(var(--primary) / 0.45);
+}
+
 .history-overflow-note,
 .data-quality-note {
   color: hsl(var(--text-muted));

@@ -99,7 +99,11 @@ function almostEqual(a, b) {
 }
 
 async function main() {
-  const matchesPath = path.join(__dirname, "..", "public", "matches.json");
+  const publicDir = path.join(__dirname, "..", "public");
+  const currentMatchesPath = path.join(publicDir, "data", "matches-current.json");
+  const matchesPath = fs.existsSync(currentMatchesPath)
+    ? currentMatchesPath
+    : path.join(publicDir, "matches.json");
   const matches = JSON.parse(fs.readFileSync(matchesPath, "utf8"));
   const official = await loadOfficialOdds();
   const errors = [];

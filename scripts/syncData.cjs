@@ -721,6 +721,27 @@ function predictionSet(match) {
   const drawRiskEn = probabilities.draw >= 0.28
     ? "Draw support is high, so cover the draw risk."
     : "Draw support is not dominant, but late SP movement still matters.";
+  const hhadProbabilities = sanitizeOdds(match.handicapOdds) ? impliedProbabilities(match.handicapOdds) : null;
+  const riskTags = [];
+
+  if (probabilities.draw >= 0.28) {
+    riskTags.push({ zh: "防平", en: "Draw risk" });
+  }
+  if (best1x2[2] <= 1.25) {
+    riskTags.push({ zh: "热门过热", en: "Heavy favorite" });
+  }
+  if (probabilityGap < 0.12) {
+    riskTags.push({ zh: "胜负接近", en: "Tight 1X2" });
+  }
+  if (hhadProbabilities && best1x2[0] === "1" && hhadProbabilities.home < 0.42) {
+    riskTags.push({ zh: "让球支持不足", en: "Handicap support weak" });
+  }
+  if (hhadProbabilities && best1x2[0] === "2" && hhadProbabilities.away < 0.42) {
+    riskTags.push({ zh: "让球支持不足", en: "Handicap support weak" });
+  }
+  if (bttsProbability >= 0.45 && bttsProbability < 0.65) {
+    riskTags.push({ zh: "进球临界", en: "Goal-model borderline" });
+  }
 
   const oneXTwo = {
     marketType: "1X2",
@@ -746,6 +767,7 @@ function predictionSet(match) {
         en: `${drawRiskEn} ${sourceTextEn}.`,
       },
     ],
+    riskTags,
     visibilityStatus: "FREE",
     resultStatus: resultStatus(match, best1x2[0]),
   };
@@ -770,6 +792,7 @@ function predictionSet(match) {
         en: `Over 2.5 probability is about ${pct(over25Probability)}%. This is a model reference, not official Sporttery total-goals SP.`,
       },
     ],
+    riskTags: riskTags.filter((tag) => tag.zh === "进球临界"),
     visibilityStatus: "PREMIUM",
     resultStatus: resultStatus(match, goalsTip),
   };
@@ -798,6 +821,7 @@ function predictionSet(match) {
         en: `This is shown as a model index, not official Sporttery SP.`,
       },
     ],
+    riskTags: riskTags.filter((tag) => tag.zh === "进球临界"),
     visibilityStatus: "PREMIUM",
     resultStatus: resultStatus(match, ggTip),
   };
@@ -826,6 +850,7 @@ function predictionSet(match) {
         en: `Risk note: if the selected SP rises sharply or draw SP drops late, reduce stake or wait for the next snapshot.`,
       },
     ],
+    riskTags,
     visibilityStatus: "PREMIUM",
     resultStatus: oneXTwo.resultStatus,
   };
@@ -1076,6 +1101,127 @@ function appendOddsHistory(publicDir, matches, capturedAt) {
   return { rows: rows.length, appended, updated };
 }
 
+function writeJson(file, payload) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(payload, null, 2), "utf8");
+}
+
+function spChange(value) {
+  const rounded = Number(value.toFixed(2));
+  if (Object.is(rounded, -0)) return 0;
+  return rounded;
+}
+
+function formatSpChange(value) {
+  const rounded = spChange(value);
+  if (rounded === 0) return "0.00";
+  return `${rounded > 0 ? "+" : ""}${rounded.toFixed(2)}`;
+}
+
+function oddsTrendForMatch(match, historyRows) {
+  const sourceMatchId = normText(match?.sourceMatchId || String(match?.id || "").replace(/^sporttery_/, ""));
+  if (!sourceMatchId) return undefined;
+
+  const rows = historyRows
+    .filter((row) => normText(row?.sourceMatchId) === sourceMatchId)
+    .sort((a, b) => Date.parse(a.capturedAt) - Date.parse(b.capturedAt));
+
+  if (rows.length < 2) return undefined;
+
+  const first = rows[0];
+  const latest = rows[rows.length - 1];
+  const changes = {
+    odds1Change: spChange(Number(latest.odds1) - Number(first.odds1)),
+    oddsXChange: spChange(Number(latest.oddsX) - Number(first.oddsX)),
+    odds2Change: spChange(Number(latest.odds2) - Number(first.odds2)),
+  };
+  const candidates = [
+    { key: "home", change: changes.odds1Change, zh: "主胜", en: "home win" },
+    { key: "draw", change: changes.oddsXChange, zh: "平局", en: "draw" },
+    { key: "away", change: changes.odds2Change, zh: "客胜", en: "away win" },
+  ].sort((a, b) => a.change - b.change);
+  const strongest = candidates[0];
+  const hasMove = candidates.some((item) => Math.abs(item.change) >= 0.03);
+  const direction = hasMove && strongest.change < -0.02 ? strongest.key : hasMove ? "mixed" : "flat";
+  const zhInterpretation = direction === "flat"
+    ? "整体波动很小。"
+    : direction === "mixed"
+      ? "盘口存在波动，需继续观察临场快照。"
+      : `${strongest.zh} SP 下调，市场支持有所增强。`;
+  const enInterpretation = direction === "flat"
+    ? "Overall movement is small."
+    : direction === "mixed"
+      ? "The market is moving; keep watching late snapshots."
+      : `${strongest.en} SP shortened, indicating stronger market support.`;
+
+  return {
+    sampleSize: rows.length,
+    firstCapturedAt: first.capturedAt,
+    lastCapturedAt: latest.capturedAt,
+    ...changes,
+    direction,
+    summary: {
+      zh: `SP 快照 ${rows.length} 次：主胜 ${formatSpChange(changes.odds1Change)}，平局 ${formatSpChange(changes.oddsXChange)}，客胜 ${formatSpChange(changes.odds2Change)}；${zhInterpretation}`,
+      en: `${rows.length} SP snapshots: home ${formatSpChange(changes.odds1Change)}, draw ${formatSpChange(changes.oddsXChange)}, away ${formatSpChange(changes.odds2Change)}. ${enInterpretation}`,
+    },
+  };
+}
+
+function attachOddsTrends(matches, publicDir) {
+  const history = loadOddsHistory(publicDir);
+  return matches.map((match) => {
+    const trend = oddsTrendForMatch(match, history.rows);
+    return trend ? { ...match, oddsTrend: trend } : match;
+  });
+}
+
+function splitMatchesForOutput(matches) {
+  const current = matches.filter((match) => match.status !== "FINISHED" || hasOfficialDisplayOdds(match));
+  const history = matches.filter((match) => match.status === "FINISHED");
+  return { current, history };
+}
+
+function buildTeamIndex(matches) {
+  const byTeam = new Map();
+  const upsert = (match, side) => {
+    const isHome = side === "home";
+    const teamId = isHome ? match.homeTeamId : match.awayTeamId;
+    if (!teamId) return;
+    const existing = byTeam.get(teamId) || {
+      teamId,
+      teamName: isHome ? match.homeTeamName : match.awayTeamName,
+      teamNameEn: isHome ? match.homeTeamNameEn : match.awayTeamNameEn,
+      logo: isHome ? match.homeTeamLogo : match.awayTeamLogo,
+      logoType: isHome ? match.homeTeamLogoType : match.awayTeamLogoType,
+      countryIso: isHome ? match.homeTeamCountryIso : match.awayTeamCountryIso,
+      color: isHome ? match.homeTeamColor : match.awayTeamColor,
+      matchCount: 0,
+      finishedCount: 0,
+      firstMatchDate: "",
+      lastMatchDate: "",
+    };
+    const date = match.matchDate || match.businessDate || String(match.kickoffTime || "").slice(0, 10);
+    existing.matchCount += 1;
+    if (match.status === "FINISHED") existing.finishedCount += 1;
+    if (date && (!existing.firstMatchDate || date < existing.firstMatchDate)) existing.firstMatchDate = date;
+    if (date && (!existing.lastMatchDate || date > existing.lastMatchDate)) existing.lastMatchDate = date;
+    byTeam.set(teamId, existing);
+  };
+
+  for (const match of matches) {
+    upsert(match, "home");
+    upsert(match, "away");
+  }
+
+  return {
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    source: "sporttery",
+    note: "Team names are kept exactly as synced from China Sporttery.",
+    teams: Array.from(byTeam.values()).sort((a, b) => String(a.teamName).localeCompare(String(b.teamName), "zh-CN")),
+  };
+}
+
 async function sync() {
   const capturedAt = new Date().toISOString();
   const allRawMatches = await fetchSportteryMatches();
@@ -1094,12 +1240,21 @@ async function sync() {
   }
 
   const publicDir = path.join(__dirname, "..", "public");
+  const dataDir = path.join(publicDir, "data");
   fs.mkdirSync(publicDir, { recursive: true });
-  const outputPath = path.join(publicDir, "matches.json");
-  fs.writeFileSync(outputPath, JSON.stringify(output, null, 2), "utf8");
   const oddsHistory = usedFreshOdds
     ? appendOddsHistory(publicDir, output, capturedAt)
     : { rows: loadOddsHistory(publicDir).rows.length, appended: 0, updated: 0, skipped: "no fresh official odds" };
+  output = attachOddsTrends(output, publicDir);
+  const split = splitMatchesForOutput(output);
+  const teamIndex = buildTeamIndex(output);
+  const oddsHistoryPayload = loadOddsHistory(publicDir);
+
+  writeJson(path.join(publicDir, "matches.json"), split.current);
+  writeJson(path.join(dataDir, "matches-current.json"), split.current);
+  writeJson(path.join(dataDir, "matches-history.json"), split.history);
+  writeJson(path.join(dataDir, "team-index.json"), teamIndex);
+  writeJson(path.join(dataDir, "odds-history.json"), oddsHistoryPayload);
 
   const byStatus = output.reduce((acc, match) => {
     acc[match.status] = (acc[match.status] || 0) + 1;
@@ -1122,6 +1277,11 @@ async function sync() {
         skippedWithoutOfficialOdds: rawMatches.length - rawMatchesWithOdds.length,
         window: { backDays: WINDOW_BACK_DAYS, forwardDays: WINDOW_FORWARD_DAYS },
         coverage: { first: outputDates[0], last: outputDates[outputDates.length - 1] },
+        files: {
+          current: split.current.length,
+          history: split.history.length,
+          teams: teamIndex.teams.length,
+        },
         oddsHistory,
         byStatus,
       },

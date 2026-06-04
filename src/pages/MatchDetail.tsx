@@ -393,6 +393,13 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
               {getPredictionTipDisplay(pred, language)}
             </h4>
             {codeHint && <span className="prediction-code-hint">{codeHint}</span>}
+            {pred.riskTags && pred.riskTags.length > 0 && (
+              <div className="risk-tag-row">
+                {pred.riskTags.map((tag) => (
+                  <span key={`${pred.marketType}-${tag.zh}`} className="risk-tag">{tag[language]}</span>
+                ))}
+              </div>
+            )}
           </div>
           
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
@@ -643,6 +650,12 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
               <div className="odds-source detail-odds-source">
                 {language === 'zh' ? '官方竞彩 HAD / HHAD' : 'Official Sporttery HAD / HHAD'}
               </div>
+              {match.oddsTrend && (
+                <div className={`sp-trend-box is-${match.oddsTrend.direction}`}>
+                  <strong>{language === 'zh' ? '官方 SP 走势' : 'Official SP Trend'}</strong>
+                  <span>{match.oddsTrend.summary[language]}</span>
+                </div>
+              )}
             </div>
           </div>
         )}
