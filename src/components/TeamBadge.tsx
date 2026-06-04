@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react';
 import type { Team } from '../services/mockData';
 
 interface TeamBadgeProps {
-  team: Team;
+  team?: Team;
   size?: 'sm' | 'md' | 'lg';
   className?: string;
 }
@@ -11,10 +11,18 @@ const isImageLogo = (logo: string) => /^(https?:\/\/|\/|\.\/)/.test(logo);
 const isFlagEmoji = (logo: string) => /\p{Regional_Indicator}/u.test(logo);
 
 export function TeamBadge({ team, size = 'md', className = '' }: TeamBadgeProps) {
-  const logo = team.logo || team.shortName.en || team.name.en || '?';
-  const label = team.shortName.zh || team.shortName.en || team.name.zh || team.name.en;
-  const style = { '--team-color': team.color } as CSSProperties;
-  const logoType = team.logoType || (isFlagEmoji(logo) ? 'flag' : isImageLogo(logo) ? 'crest' : 'crest-placeholder');
+  const safeTeam = team ?? {
+    id: 'unknown',
+    name: { zh: '未知球队', en: 'Unknown Team' },
+    shortName: { zh: '未知', en: 'Unknown' },
+    logo: '?',
+    value: '-',
+    color: '#64748b'
+  };
+  const logo = safeTeam.logo || safeTeam.shortName.en || safeTeam.name.en || '?';
+  const label = safeTeam.shortName.zh || safeTeam.shortName.en || safeTeam.name.zh || safeTeam.name.en;
+  const style = { '--team-color': safeTeam.color } as CSSProperties;
+  const logoType = safeTeam.logoType || (isFlagEmoji(logo) ? 'flag' : isImageLogo(logo) ? 'crest' : 'crest-placeholder');
 
   return (
     <span className={`team-badge team-badge-${size} team-badge-${logoType} ${className}`.trim()} style={style} title={label}>

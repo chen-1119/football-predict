@@ -94,6 +94,14 @@ export function getPredictionCodeHint(prediction: PredictionDetail, language: La
   return language === 'zh' ? sportteryLabel.zhCodeHint : '';
 }
 
+export function getPredictionValueLabel(prediction: PredictionDetail, language: Language): string {
+  if (prediction.marketType === '1X2' || prediction.marketType === 'BEST') {
+    return 'SP';
+  }
+
+  return language === 'zh' ? '指数' : 'Index';
+}
+
 export function getPredictionExplanationDisplay(prediction: PredictionDetail, language: Language): string {
   const text = prediction.explanation[language];
 

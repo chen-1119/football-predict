@@ -5,6 +5,7 @@ import {
   getMarketLabel,
   getPredictionCodeHint,
   getPredictionExplanationDisplay,
+  getPredictionValueLabel,
   getPredictionTipDisplay,
   getSportteryPoolRows
 } from '../services/bettingDisplay';
@@ -24,6 +25,11 @@ type FinishedMatch = Match & {
   scoreAway: number;
 };
 
+const HISTORY_LOOKBACK_DAYS = 365;
+const TEAM_HISTORY_DISPLAY_LIMIT = 12;
+const H2H_DISPLAY_LIMIT = 10;
+const MIN_RATE_SAMPLE_SIZE = 3;
+
 interface TeamHistoryResult {
   id: string;
   dateLabel: string;
@@ -37,11 +43,19 @@ interface TeamHistoryResult {
 
 interface TeamHistorySummary {
   rows: TeamHistoryResult[];
+  sampleSize: number;
   wins: number;
   draws: number;
   losses: number;
+  over25Count: number;
+  bothScoreCount: number;
   over25Rate: number | null;
   bothScoreRate: number | null;
+}
+
+interface HeadToHeadSummary {
+  rows: HeadToHeadResult[];
+  sampleSize: number;
 }
 
 interface HeadToHeadResult {
@@ -95,6 +109,10 @@ const isFinishedWithScore = (match: Match): match is FinishedMatch => {
 
 const getMatchSortTime = (match: Match) => new Date(match.kickoffTime).getTime();
 
+const getHistoryStartTime = (match: Match) => {
+  return getMatchSortTime(match) - HISTORY_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
+};
+
 const getMatchDateValue = (match: Match) => {
   return match.matchDate || match.kickoffDate || match.businessDate || match.kickoffTime.slice(0, 10);
 };
@@ -108,6 +126,29 @@ const formatHistoryDate = (match: Match, language: Language) => {
     weekday: 'short',
     timeZone: 'Asia/Shanghai'
   });
+};
+
+const formatCoverageDate = (date: string, language: Language) => {
+  return new Date(`${date}T00:00:00+08:00`).toLocaleDateString(language === 'zh' ? 'zh-CN' : 'en-US', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'Asia/Shanghai'
+  });
+};
+
+const getHistoryCoverageLabel = (allMatches: Match[], language: Language) => {
+  const dates = allMatches
+    .filter(isFinishedWithScore)
+    .map(getMatchDateValue)
+    .filter(Boolean)
+    .sort();
+
+  if (dates.length === 0) {
+    return language === 'zh' ? '暂无官方历史覆盖' : 'no official history coverage yet';
+  }
+
+  return `${formatCoverageDate(dates[0], language)} - ${formatCoverageDate(dates[dates.length - 1], language)}`;
 };
 
 const getTeamNameInMatch = (match: Match, teamId: string, language: Language) => {
@@ -131,13 +172,16 @@ const buildTeamHistory = (
   language: Language
 ): TeamHistorySummary => {
   const cutoffTime = getMatchSortTime(currentMatch);
-  const rows = allMatches
+  const startTime = getHistoryStartTime(currentMatch);
+  const allRows = allMatches
     .filter(isFinishedWithScore)
     .filter((item) => item.id !== currentMatch.id)
     .filter((item) => item.homeTeamId === teamId || item.awayTeamId === teamId)
-    .filter((item) => getMatchSortTime(item) <= cutoffTime)
+    .filter((item) => {
+      const matchTime = getMatchSortTime(item);
+      return matchTime <= cutoffTime && matchTime >= startTime;
+    })
     .sort((a, b) => getMatchSortTime(b) - getMatchSortTime(a))
-    .slice(0, 10)
     .map<TeamHistoryResult>((item) => {
       const isHomeSide = item.homeTeamId === teamId;
       const ourScore = isHomeSide ? item.scoreHome : item.scoreAway;
@@ -157,19 +201,24 @@ const buildTeamHistory = (
       };
     });
 
-  const wins = rows.filter((item) => item.result === 'win').length;
-  const draws = rows.filter((item) => item.result === 'draw').length;
-  const losses = rows.length - wins - draws;
-  const over25 = rows.filter((item) => item.ourScore + item.oppScore >= 3).length;
-  const bothScore = rows.filter((item) => item.ourScore > 0 && item.oppScore > 0).length;
+  const rows = allRows.slice(0, TEAM_HISTORY_DISPLAY_LIMIT);
+  const wins = allRows.filter((item) => item.result === 'win').length;
+  const draws = allRows.filter((item) => item.result === 'draw').length;
+  const losses = allRows.length - wins - draws;
+  const over25 = allRows.filter((item) => item.ourScore + item.oppScore >= 3).length;
+  const bothScore = allRows.filter((item) => item.ourScore > 0 && item.oppScore > 0).length;
+  const hasRateSample = allRows.length >= MIN_RATE_SAMPLE_SIZE;
 
   return {
     rows,
+    sampleSize: allRows.length,
     wins,
     draws,
     losses,
-    over25Rate: rows.length ? Math.round((over25 / rows.length) * 100) : null,
-    bothScoreRate: rows.length ? Math.round((bothScore / rows.length) * 100) : null
+    over25Count: over25,
+    bothScoreCount: bothScore,
+    over25Rate: hasRateSample ? Math.round((over25 / allRows.length) * 100) : null,
+    bothScoreRate: hasRateSample ? Math.round((bothScore / allRows.length) * 100) : null
   };
 };
 
@@ -179,19 +228,22 @@ const buildHeadToHead = (
   awayTeamId: string,
   currentMatch: Match,
   language: Language
-) => {
+): HeadToHeadSummary => {
   const cutoffTime = getMatchSortTime(currentMatch);
+  const startTime = getHistoryStartTime(currentMatch);
 
-  return allMatches
+  const rows = allMatches
     .filter(isFinishedWithScore)
     .filter((item) => item.id !== currentMatch.id)
     .filter((item) => {
       const teamIds = new Set([item.homeTeamId, item.awayTeamId]);
       return teamIds.has(homeTeamId) && teamIds.has(awayTeamId);
     })
-    .filter((item) => getMatchSortTime(item) <= cutoffTime)
+    .filter((item) => {
+      const matchTime = getMatchSortTime(item);
+      return matchTime <= cutoffTime && matchTime >= startTime;
+    })
     .sort((a, b) => getMatchSortTime(b) - getMatchSortTime(a))
-    .slice(0, 8)
     .map<HeadToHeadResult>((item) => ({
       id: item.id,
       dateLabel: formatHistoryDate(item, language),
@@ -201,6 +253,11 @@ const buildHeadToHead = (
       homeScore: item.scoreHome,
       awayScore: item.scoreAway
     }));
+
+  return {
+    rows: rows.slice(0, H2H_DISPLAY_LIMIT),
+    sampleSize: rows.length
+  };
 };
 
 export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => {
@@ -276,13 +333,18 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   const awayValueText = formatSquadValue(awayTeam.value, language);
   const homeHistory = buildTeamHistory(matches, homeTeam.id, match, language);
   const awayHistory = buildTeamHistory(matches, awayTeam.id, match, language);
-  const headToHeadRows = buildHeadToHead(matches, homeTeam.id, awayTeam.id, match, language);
+  const headToHead = buildHeadToHead(matches, homeTeam.id, awayTeam.id, match, language);
+  const historyCoverageLabel = getHistoryCoverageLabel(matches, language);
+  const projectedScoreText = isFinished
+    ? `${match.scoreHome} - ${match.scoreAway}`
+    : `${match.projectedScoreHome ?? Math.round(match.stats?.xG.home ?? 1)} - ${match.projectedScoreAway ?? Math.round(match.stats?.xG.away ?? 1)}`;
 
   // 渲染预测详细行
   const renderPredictionBlock = (pred: PredictionDetail) => {
     // 免费版对活跃比赛的高级推荐锁定
     const isLocked = !isFinished && pred.visibilityStatus === 'PREMIUM' && !isPremium;
     const codeHint = getPredictionCodeHint(pred, language);
+    const valueLabel = getPredictionValueLabel(pred, language);
 
     return (
       <div 
@@ -335,8 +397,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
           
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
             <div style={{ textAlign: 'right' }}>
-              <span style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))', display: 'block' }}>{t('odds')}</span>
-              <span style={{ fontSize: '1.1rem', fontWeight: '800', color: 'hsl(var(--accent))' }}>@{pred.odds.toFixed(2)}</span>
+              <span style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))', display: 'block' }}>{valueLabel}</span>
+              <span style={{ fontSize: '1.1rem', fontWeight: '800', color: 'hsl(var(--accent))' }}>{pred.odds.toFixed(2)}</span>
             </div>
             <div style={{ textAlign: 'right' }}>
               <span style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))', display: 'block' }}>{t('trust')}</span>
@@ -352,37 +414,56 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
           <p style={{ fontSize: '0.825rem', color: 'hsl(var(--text-secondary))', lineHeight: '1.6' }}>
             {getPredictionExplanationDisplay(pred, language)}
           </p>
+          {pred.analysisItems && pred.analysisItems.length > 0 && (
+            <ul className="prediction-analysis-list">
+              {pred.analysisItems.map((item, index) => (
+                <li key={`${pred.marketType}-${index}`}>{item[language]}</li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
     );
   };
 
   const formatRate = (value: number | null) => (value === null ? '--' : `${value}%`);
+  const formatRateNote = (count: number, sampleSize: number) => {
+    if (sampleSize === 0) return language === 'zh' ? '近一年无样本' : 'No yearly sample';
+    if (sampleSize < MIN_RATE_SAMPLE_SIZE) return language === 'zh' ? `样本不足 · ${count}/${sampleSize}` : `Small sample · ${count}/${sampleSize}`;
+    return language === 'zh' ? `${count}/${sampleSize} 场` : `${count}/${sampleSize} matches`;
+  };
 
   const renderFormSummaryCard = (teamName: string, teamColor: string, summary: TeamHistorySummary) => (
     <div className="form-summary-card">
       <h4>
         <span style={{ backgroundColor: teamColor }} />
-        {teamName} {language === 'zh' ? '近期官方赛果' : 'Recent Official Results'}
+        {teamName} {language === 'zh' ? '近一年官方赛果' : 'Last-Year Official Results'}
       </h4>
       <div className="form-stat-grid">
         <div className="form-stat-tile">
           <span>{language === 'zh' ? '胜 - 平 - 负' : 'W - D - L'}</span>
           <strong>{summary.wins} - {summary.draws} - {summary.losses}</strong>
+          <em>{language === 'zh' ? `样本 ${summary.sampleSize} 场` : `${summary.sampleSize} samples`}</em>
         </div>
         <div className="form-stat-tile">
           <span>{language === 'zh' ? '大 2.5 球率' : 'Over 2.5'}</span>
           <strong>{formatRate(summary.over25Rate)}</strong>
+          <em>{formatRateNote(summary.over25Count, summary.sampleSize)}</em>
         </div>
         <div className="form-stat-tile">
           <span>{language === 'zh' ? '双方进球率' : 'BTTS'}</span>
           <strong>{formatRate(summary.bothScoreRate)}</strong>
+          <em>{formatRateNote(summary.bothScoreCount, summary.sampleSize)}</em>
         </div>
       </div>
       <p>
-        {summary.rows.length
-          ? (language === 'zh' ? `已匹配 ${summary.rows.length} 场官方历史赛果` : `${summary.rows.length} official historical matches found`)
-          : (language === 'zh' ? '当前历史库暂无该队已完场记录' : 'No finished official records in the local history window')}
+        {summary.sampleSize
+          ? (language === 'zh'
+            ? `近一年窗口已匹配 ${summary.sampleSize} 场官方已完场记录，列表展示最近 ${summary.rows.length} 场。历史库覆盖：${historyCoverageLabel}。`
+            : `${summary.sampleSize} finished official records found in the last-year window. Showing latest ${summary.rows.length}. History coverage: ${historyCoverageLabel}.`)
+          : (language === 'zh'
+            ? `近一年历史库暂无该队已完场记录。历史库覆盖：${historyCoverageLabel}。`
+            : `No finished official records in the last-year window. History coverage: ${historyCoverageLabel}.`)}
       </p>
     </div>
   );
@@ -607,13 +688,12 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                   {t('scorePrediction')}
                 </h4>
                 <div style={{ fontSize: '2.5rem', fontWeight: '900', fontFamily: 'var(--font-title)', margin: '0.75rem 0', filter: (!isPremium && !isFinished) ? 'blur(4px)' : 'none' }}>
-                  {/* 模拟生成的比分 */}
-                  {isFinished ? `${match.scoreHome} - ${match.scoreAway}` : '2 - 1'}
+                  {projectedScoreText}
                 </div>
                 <p style={{ fontSize: '0.825rem', color: 'hsl(var(--text-secondary))', filter: (!isPremium && !isFinished) ? 'blur(4px)' : 'none' }}>
                   {language === 'zh'
-                    ? '模型结合双方 xG 演进曲线、防守反击效率得出本场最可能之最终比分。'
-                    : 'Derived from xG progression models and tactical defensive transitions.'}
+                    ? `模型基于官方 SP 反推预期进球，当前热区约 ${match.stats?.xG.home?.toFixed(2) ?? '--'} : ${match.stats?.xG.away?.toFixed(2) ?? '--'}。`
+                    : `Derived from official SP-implied xG. Current heat zone is about ${match.stats?.xG.home?.toFixed(2) ?? '--'} : ${match.stats?.xG.away?.toFixed(2) ?? '--'}.`}
                 </p>
               </div>
             )}
@@ -637,10 +717,11 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
         )}
 
         {/* Tab 2: 统计数据 */}
-        {activeTab === 'stats' && match.stats && (
-          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        {activeTab === 'stats' && (
+          match.stats ? (
+            <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
             <h3 style={{ fontSize: '1.1rem', fontWeight: '700', fontFamily: 'var(--font-title)' }}>
-              {language === 'zh' ? 'AI 数值预测 vs 场均实力' : 'AI Performance Forecast'}
+              {language === 'zh' ? 'AI 模型参数预测' : 'AI Model Parameters'}
             </h3>
             
             {/* 进度条统计 */}
@@ -671,7 +752,14 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                 </div>
               );
             })}
-          </div>
+            </div>
+          ) : (
+            <div className="card data-quality-note">
+              {language === 'zh'
+                ? '这场比赛当前只有官方赛果记录，没有可验证的赛前模型参数，因此不展示模拟统计。'
+                : 'This match only has an official result record, so no simulated model stats are shown.'}
+            </div>
+          )
         )}
 
         {/* Tab 3: 近期战绩 */}
@@ -685,11 +773,11 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
             <div className="card team-history-card">
               <div className="history-card-head">
                 <div>
-                  <h4>{language === 'zh' ? '双方近期官方赛果' : 'Recent Official Team Results'}</h4>
+                  <h4>{language === 'zh' ? '双方近一年官方赛果' : 'Last-Year Official Team Results'}</h4>
                   <p>
                     {language === 'zh'
-                      ? '从当前已同步的中国竞彩网历史赛果中匹配同队比赛，按时间倒序展示。'
-                      : 'Matched from synced official Sporttery historical results and sorted by date.'}
+                      ? `从已同步的中国竞彩网历史赛果中追溯近一年同队比赛，单队最多展示最近 ${TEAM_HISTORY_DISPLAY_LIMIT} 场。当前历史库覆盖：${historyCoverageLabel}。`
+                      : `Matched from synced official Sporttery results in the last-year window. Showing up to ${TEAM_HISTORY_DISPLAY_LIMIT} recent matches per team. Coverage: ${historyCoverageLabel}.`}
                   </p>
                 </div>
               </div>
@@ -706,18 +794,18 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
           <div className="card h2h-card">
             <div className="history-card-head">
               <div>
-                <h3>{language === 'zh' ? '历史对阵记录' : 'Head-to-Head History'}</h3>
+                <h3>{language === 'zh' ? '近一年直接交锋' : 'Last-Year Head-to-Head'}</h3>
                 <p>
                   {language === 'zh'
-                    ? '仅展示当前历史库里已同步到的双方正式交锋结果。'
-                    : 'Only official head-to-head results available in the synced history window are shown.'}
+                    ? `仅展示当前历史库里近一年已同步到的双方正式交锋结果，最多展示 ${H2H_DISPLAY_LIMIT} 场。当前历史库覆盖：${historyCoverageLabel}。`
+                    : `Only official head-to-head results in the last-year window are shown, up to ${H2H_DISPLAY_LIMIT} matches. Coverage: ${historyCoverageLabel}.`}
                 </p>
               </div>
             </div>
 
-            {headToHeadRows.length > 0 ? (
+            {headToHead.rows.length > 0 ? (
               <div className="h2h-list">
-                {headToHeadRows.map((item) => (
+                {headToHead.rows.map((item) => (
                   <div key={item.id} className="h2h-row">
                     <div className="history-row-meta">
                       <span>{item.dateLabel}</span>
@@ -734,76 +822,91 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
             ) : (
               <div className="history-empty">
                 {language === 'zh'
-                  ? '当前官方历史库暂未匹配到这两队的直接交锋。'
-                  : 'No direct head-to-head result found in the current official history window.'}
+                  ? '近一年官方历史库暂未匹配到这两队的直接交锋。'
+                  : 'No direct head-to-head result found in the last-year official history window.'}
               </div>
+            )}
+            {headToHead.sampleSize > headToHead.rows.length && (
+              <p className="history-overflow-note">
+                {language === 'zh'
+                  ? `已匹配 ${headToHead.sampleSize} 场，当前仅展示最近 ${headToHead.rows.length} 场。`
+                  : `${headToHead.sampleSize} matches found. Showing latest ${headToHead.rows.length}.`}
+              </p>
             )}
           </div>
         )}
 
         {/* Tab 5: 积分榜 */}
-        {activeTab === 'standings' && match.standings && (
-          <div className="card" style={{ padding: '0', overflow: 'hidden' }}>
-            <div style={{ padding: '1rem', backgroundColor: 'hsl(var(--bg-card-hover))', borderBottom: '1px solid hsl(var(--border))', fontWeight: '700' }}>
-              {league.name[language]} - {language === 'zh' ? '最新排名' : 'Standings Table'}
-            </div>
-            
-            <table className="responsive-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '60px', textAlign: 'center' }}>排名</th>
-                  <th>球队</th>
-                  <th style={{ textAlign: 'center' }}>已赛</th>
-                  <th style={{ textAlign: 'center' }}>胜</th>
-                  <th style={{ textAlign: 'center' }}>平</th>
-                  <th style={{ textAlign: 'center' }}>负</th>
-                  <th style={{ textAlign: 'center' }}>进/失球</th>
-                  <th style={{ textAlign: 'center', fontWeight: '700' }}>积分</th>
-                </tr>
-              </thead>
-              <tbody>
-                {match.standings.map((row) => {
-                  const teamObj = getTeamById(row.teamId);
-                  const isCurrentMatchTeam = teamObj.id === homeTeam.id || teamObj.id === awayTeam.id;
+        {activeTab === 'standings' && (
+          match.standings && match.standings.length > 0 ? (
+            <div className="card" style={{ padding: '0', overflow: 'hidden' }}>
+              <div style={{ padding: '1rem', backgroundColor: 'hsl(var(--bg-card-hover))', borderBottom: '1px solid hsl(var(--border))', fontWeight: '700' }}>
+                {league.name[language]} - {language === 'zh' ? '最新排名' : 'Standings Table'}
+              </div>
 
-                  return (
-                    <tr 
-                      key={row.position}
-                      style={{ 
-                        backgroundColor: isCurrentMatchTeam ? 'hsl(var(--primary) / 0.08)' : 'transparent',
-                        fontWeight: isCurrentMatchTeam ? '700' : 'normal'
-                      }}
-                    >
-                      <td data-label="排名" style={{ textAlign: 'center' }}>
-                        <span style={{ 
-                          display: 'inline-flex', width: '22px', height: '22px', borderRadius: '50%',
-                          backgroundColor: row.position <= 3 ? 'hsl(var(--primary) / 0.15)' : 'transparent',
-                          color: row.position <= 3 ? 'hsl(var(--primary))' : 'hsl(var(--text-secondary))',
-                          alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: '700'
-                        }}>
-                          {row.position}
-                        </span>
-                      </td>
-                      <td data-label="球队">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: teamObj.color }} />
-                          <span>{teamObj.name[language]}</span>
-                        </div>
-                      </td>
-                      <td data-label="已赛" style={{ textAlign: 'center' }}>{row.played}</td>
-                      <td data-label="胜" style={{ textAlign: 'center', color: 'hsl(var(--primary))' }}>{row.wins}</td>
-                      <td data-label="平" style={{ textAlign: 'center' }}>{row.draws}</td>
-                      <td data-label="负" style={{ textAlign: 'center', color: 'hsl(var(--danger))' }}>{row.losses}</td>
-                      <td data-label="得失球" style={{ textAlign: 'center', color: 'hsl(var(--text-secondary))', fontSize: '0.8rem' }}>
-                        {row.goalsFor}:{row.goalsAgainst}
-                      </td>
-                      <td data-label="积分" style={{ textAlign: 'center', fontWeight: '800', color: 'hsl(var(--primary))' }}>{row.points}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+              <table className="responsive-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '60px', textAlign: 'center' }}>排名</th>
+                    <th>球队</th>
+                    <th style={{ textAlign: 'center' }}>已赛</th>
+                    <th style={{ textAlign: 'center' }}>胜</th>
+                    <th style={{ textAlign: 'center' }}>平</th>
+                    <th style={{ textAlign: 'center' }}>负</th>
+                    <th style={{ textAlign: 'center' }}>进/失球</th>
+                    <th style={{ textAlign: 'center', fontWeight: '700' }}>积分</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {match.standings.map((row) => {
+                    const teamObj = getTeamById(row.teamId);
+                    const isCurrentMatchTeam = teamObj.id === homeTeam.id || teamObj.id === awayTeam.id;
+
+                    return (
+                      <tr
+                        key={row.position}
+                        style={{
+                          backgroundColor: isCurrentMatchTeam ? 'hsl(var(--primary) / 0.08)' : 'transparent',
+                          fontWeight: isCurrentMatchTeam ? '700' : 'normal'
+                        }}
+                      >
+                        <td data-label="排名" style={{ textAlign: 'center' }}>
+                          <span style={{
+                            display: 'inline-flex', width: '22px', height: '22px', borderRadius: '50%',
+                            backgroundColor: row.position <= 3 ? 'hsl(var(--primary) / 0.15)' : 'transparent',
+                            color: row.position <= 3 ? 'hsl(var(--primary))' : 'hsl(var(--text-secondary))',
+                            alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', fontWeight: '700'
+                          }}>
+                            {row.position}
+                          </span>
+                        </td>
+                        <td data-label="球队">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: teamObj.color }} />
+                            <span>{teamObj.name[language]}</span>
+                          </div>
+                        </td>
+                        <td data-label="已赛" style={{ textAlign: 'center' }}>{row.played}</td>
+                        <td data-label="胜" style={{ textAlign: 'center', color: 'hsl(var(--primary))' }}>{row.wins}</td>
+                        <td data-label="平" style={{ textAlign: 'center' }}>{row.draws}</td>
+                        <td data-label="负" style={{ textAlign: 'center', color: 'hsl(var(--danger))' }}>{row.losses}</td>
+                        <td data-label="得失球" style={{ textAlign: 'center', color: 'hsl(var(--text-secondary))', fontSize: '0.8rem' }}>
+                          {row.goalsFor}:{row.goalsAgainst}
+                        </td>
+                        <td data-label="积分" style={{ textAlign: 'center', fontWeight: '800', color: 'hsl(var(--primary))' }}>{row.points}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="card data-quality-note">
+              {language === 'zh'
+                ? '暂未接入中国竞彩网官方积分榜数据，因此不展示模拟排名，避免误导判断。'
+                : 'Official standings are not connected yet, so no simulated table is shown.'}
+            </div>
+          )
         )}
 
       </div>

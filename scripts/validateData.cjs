@@ -57,6 +57,16 @@ for (const match of matches) {
     if (!String(match.sourceUrl || "").includes("webapi.sporttery.cn")) {
       errors.push(`${match.id}: result-only match is missing official result URL`);
     }
+    if ((match.predictions || []).length > 0) {
+      errors.push(`${match.id}: result-only match must not contain model predictions`);
+    }
+    if (match.stats) {
+      errors.push(`${match.id}: result-only match must not contain simulated model stats`);
+    }
+  }
+
+  if (Array.isArray(match.standings) && match.standings.length > 0) {
+    errors.push(`${match.id}: standings are not official and must not be emitted`);
   }
 
   if (!hexColor.test(match.homeTeamColor || "") || !hexColor.test(match.awayTeamColor || "")) {

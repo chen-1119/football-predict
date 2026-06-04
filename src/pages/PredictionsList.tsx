@@ -16,7 +16,7 @@ import {
 import { useApp } from '../context/AppContextCore';
 import { getDateStringOffset, leagues } from '../services/mockData';
 import type { Country, League, Match, PredictionDetail } from '../services/mockData';
-import { getMarketLabel, getPredictionTipDisplay, getSportteryPoolRows } from '../services/bettingDisplay';
+import { getMarketLabel, getPredictionTipDisplay, getPredictionValueLabel, getSportteryPoolRows } from '../services/bettingDisplay';
 import { getCountryById, getLeagueById, getTeamById } from '../services/entities';
 import { TeamBadge } from '../components/TeamBadge';
 
@@ -261,7 +261,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
         <span className="prediction-tip">
           {getPredictionTipDisplay(pred, language, true)}
         </span>
-        <span className="prediction-odds">SP {pred.odds.toFixed(2)}</span>
+        <span className="prediction-odds">{getPredictionValueLabel(pred, language)} {pred.odds.toFixed(2)}</span>
         {showResult && <span className="mini-hit">{t('hit')}</span>}
       </div>
     );

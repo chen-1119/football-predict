@@ -6,10 +6,10 @@ const SPORTTERY_BASE = "https://webapi.sporttery.cn";
 const CURRENT_URL = `${SPORTTERY_BASE}/gateway/uniform/football/getMatchListV1.qry?clientCode=3001`;
 const CALCULATOR_URL = `${SPORTTERY_BASE}/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c`;
 const PAGE_SIZE = Math.max(1, Number(process.env.SPORTTERY_PAGE_SIZE || 80));
-const PAGE_DEPTH = Math.max(1, Number(process.env.SPORTTERY_PAGE_DEPTH || 16));
-const WINDOW_BACK_DAYS = Math.max(0, Number(process.env.MATCH_WINDOW_BACK_DAYS || 7));
+const PAGE_DEPTH = Math.max(1, Number(process.env.SPORTTERY_PAGE_DEPTH || 120));
+const WINDOW_BACK_DAYS = Math.max(0, Number(process.env.MATCH_WINDOW_BACK_DAYS || 365));
 const WINDOW_FORWARD_DAYS = Math.max(1, Number(process.env.MATCH_WINDOW_FORWARD_DAYS || 14));
-const ODDS_HISTORY_RETENTION_DAYS = Math.max(1, Number(process.env.ODDS_HISTORY_RETENTION_DAYS || 180));
+const ODDS_HISTORY_RETENTION_DAYS = Math.max(1, Number(process.env.ODDS_HISTORY_RETENTION_DAYS || 365));
 const ODDS_HISTORY_BUCKET_MINUTES = Math.max(1, Number(process.env.ODDS_HISTORY_BUCKET_MINUTES || 60));
 const METHODS = (process.env.SPORTTERY_METHODS || "concern,live,result,all")
   .split(",")
@@ -356,6 +356,36 @@ function impliedProbabilities(odds) {
   return { home: inv1 / total, draw: invX / total, away: inv2 / total };
 }
 
+function pct(value) {
+  return Math.round(value * 100);
+}
+
+function poissonProbability(lambda, goals) {
+  let factorial = 1;
+  for (let i = 2; i <= goals; i += 1) factorial *= i;
+  return (Math.exp(-lambda) * lambda ** goals) / factorial;
+}
+
+function totalGoalsProbability(lambda, goalsTip) {
+  if (goalsTip === "7+") {
+    let under7 = 0;
+    for (let goals = 0; goals <= 6; goals += 1) under7 += poissonProbability(lambda, goals);
+    return clamp(1 - under7, 0, 1);
+  }
+  return clamp(poissonProbability(lambda, Number(goalsTip)), 0, 1);
+}
+
+function projectedScore(homeLambda, awayLambda) {
+  let best = { home: 0, away: 0, probability: 0 };
+  for (let home = 0; home <= 5; home += 1) {
+    for (let away = 0; away <= 5; away += 1) {
+      const probability = poissonProbability(homeLambda, home) * poissonProbability(awayLambda, away);
+      if (probability > best.probability) best = { home, away, probability };
+    }
+  }
+  return best;
+}
+
 function resultStatus(match, expected) {
   if (match.status !== "FINISHED") return "PENDING";
   if (!Number.isFinite(match.scoreHome) || !Number.isFinite(match.scoreAway)) return "PENDING";
@@ -569,7 +599,7 @@ async function fetchMethodMatches(method) {
   const firstUrl = buildPageUrl(method);
   const payloads = [{ payload: await httpGetJson(firstUrl, method), url: firstUrl }];
   if (method === "all" || method === "result") {
-    for (let page = 1; page < PAGE_DEPTH; page += 1) {
+    for (let page = 2; page <= PAGE_DEPTH; page += 1) {
       try {
         const pageUrl = buildPageUrl(method, page, 0);
         const payload = await httpGetJson(pageUrl, method);
@@ -659,16 +689,38 @@ function predictionSet(match) {
     ["2", probabilities.away, match.odds.odds2, `客胜 ${match.awayTeam}`, `Away Win (${match.awayTeam})`],
   ].sort((a, b) => b[1] - a[1]);
   const best1x2 = picks[0];
-  const baseTrust = clamp(Math.round(best1x2[1] * 100 + 18), 55, 94);
+  const second1x2 = picks[1];
+  const probabilityGap = best1x2[1] - second1x2[1];
+  const baseTrust = clamp(Math.round(best1x2[1] * 100 + probabilityGap * 55 + 12), 52, 93);
   const rand = seeded(`${match.sourceMatchId}-${match.homeTeam}-${match.awayTeam}`);
   const homeLambda = clamp(0.75 + probabilities.home * 2.2 + rand() * 0.35, 0.6, 2.8);
   const awayLambda = clamp(0.65 + probabilities.away * 2.1 + rand() * 0.35, 0.5, 2.6);
   const totalLambda = homeLambda + awayLambda;
   const goalsTip = totalLambda >= 6.5 ? "7+" : String(clamp(Math.round(totalLambda), 0, 6));
-  const ggTip = (1 - Math.exp(-homeLambda)) * (1 - Math.exp(-awayLambda)) >= 0.48 ? "GG" : "NG";
-  const goalsDistance = goalsTip === "7+" ? Math.abs(totalLambda - 7) : Math.abs(totalLambda - Number(goalsTip));
-  const goalsOdds = Number((1.65 + goalsDistance * 0.35 + rand() * 0.28).toFixed(2));
-  const ggOdds = Number((ggTip === "GG" ? 1.75 + rand() * 0.3 : 1.8 + rand() * 0.32).toFixed(2));
+  const over25Probability = clamp(1 - [0, 1, 2].reduce((sum, goals) => sum + poissonProbability(totalLambda, goals), 0), 0, 1);
+  const bttsProbability = clamp((1 - Math.exp(-homeLambda)) * (1 - Math.exp(-awayLambda)), 0, 1);
+  const bttsYesThreshold = 0.6;
+  const ggTip = bttsProbability >= bttsYesThreshold ? "GG" : "NG";
+  const ggTipProbability = ggTip === "GG" ? bttsProbability : 1 - bttsProbability;
+  const goalsProbability = totalGoalsProbability(totalLambda, goalsTip);
+  const goalsOdds = Number(clamp(1 / Math.max(goalsProbability, 0.08), 1.2, 12.5).toFixed(2));
+  const ggOdds = Number(clamp(1 / Math.max(ggTipProbability, 0.15), 1.2, 8).toFixed(2));
+  const score = projectedScore(homeLambda, awayLambda);
+  const probabilityTextZh = `主胜 ${pct(probabilities.home)}% / 平局 ${pct(probabilities.draw)}% / 客胜 ${pct(probabilities.away)}%`;
+  const probabilityTextEn = `home ${pct(probabilities.home)}% / draw ${pct(probabilities.draw)}% / away ${pct(probabilities.away)}%`;
+  const oddsText = `${match.odds.odds1.toFixed(2)} / ${match.odds.oddsX.toFixed(2)} / ${match.odds.odds2.toFixed(2)}`;
+  const sourceTextZh = match.oddsUpdatedAt
+    ? `官方 SP 更新时间：${match.oddsUpdatedAt}`
+    : "官方 SP 来自本次中国竞彩网同步快照";
+  const sourceTextEn = match.oddsUpdatedAt
+    ? `Official SP updated at ${match.oddsUpdatedAt}`
+    : "Official SP came from this Sporttery sync snapshot";
+  const drawRiskZh = probabilities.draw >= 0.28
+    ? "平局支持率偏高，胜平负方向需要防平。"
+    : "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。";
+  const drawRiskEn = probabilities.draw >= 0.28
+    ? "Draw support is high, so cover the draw risk."
+    : "Draw support is not dominant, but late SP movement still matters.";
 
   const oneXTwo = {
     marketType: "1X2",
@@ -677,9 +729,23 @@ function predictionSet(match) {
     odds: best1x2[2],
     trustScore: baseTrust,
     explanation: {
-      zh: `基于官方竞彩胜平负 SP 和赛程状态，${match.homeTeam} vs ${match.awayTeam} 当前隐含概率最高方向为 ${best1x2[3]}。`,
-      en: `Based on official match data and 1X2 odds, the strongest direction is ${best1x2[4]}.`,
+      zh: `本场以中国竞彩网官方 HAD 胜平负 SP 为主轴，去水后最高支持方向为${best1x2[3]}。模型同时参考主客预期进球、平局拉力和赔率分布，不使用本地模拟赛果回填。`,
+      en: `This pick is anchored to official Sporttery HAD odds. After removing overround, the strongest direction is ${best1x2[4]}.`,
     },
+    analysisItems: [
+      {
+        zh: `官方 HAD SP：主胜 ${match.odds.odds1.toFixed(2)} / 平局 ${match.odds.oddsX.toFixed(2)} / 客胜 ${match.odds.odds2.toFixed(2)}；去水支持率约 ${probabilityTextZh}。`,
+        en: `Official HAD SP: ${oddsText}; normalized support is about ${probabilityTextEn}.`,
+      },
+      {
+        zh: `胜平负差距：首选方向领先第二方向约 ${pct(probabilityGap)} 个百分点，当前模型可信度 ${baseTrust}%。`,
+        en: `1X2 separation: the top side leads the second side by about ${pct(probabilityGap)} percentage points. Model confidence: ${baseTrust}%.`,
+      },
+      {
+        zh: `${drawRiskZh} ${sourceTextZh}。`,
+        en: `${drawRiskEn} ${sourceTextEn}.`,
+      },
+    ],
     visibilityStatus: "FREE",
     resultStatus: resultStatus(match, best1x2[0]),
   };
@@ -689,11 +755,21 @@ function predictionSet(match) {
     tipCode: goalsTip,
     tipLabel: { zh: goalsTip === "7+" ? "总进球数 7+" : `总进球数 ${goalsTip}球`, en: goalsTip === "7+" ? "Total Goals 7+" : `Total Goals ${goalsTip}` },
     odds: goalsOdds,
-    trustScore: clamp(Math.round((1 - Math.min(goalsDistance, 2.5) / 3) * 100), 55, 88),
+    trustScore: clamp(Math.round(goalsProbability * 100 + 45), 50, 82),
     explanation: {
-      zh: `总进球数参考以胜平负 SP 反推预期进球，当前总进球期望约 ${totalLambda.toFixed(2)}。`,
-      en: `The goals model derives expected goals from the win/draw/loss market. Estimated total goals: ${totalLambda.toFixed(2)}.`,
+      zh: `总进球数为模型参考项，基于胜平负 SP 反推出主队 ${homeLambda.toFixed(2)}、客队 ${awayLambda.toFixed(2)} 的预期进球，当前总进球期望约 ${totalLambda.toFixed(2)}。`,
+      en: `The goals model derives expected goals from 1X2 odds: home ${homeLambda.toFixed(2)}, away ${awayLambda.toFixed(2)}, total ${totalLambda.toFixed(2)}.`,
     },
+    analysisItems: [
+      {
+        zh: `比分热区：${score.home}-${score.away} 附近；总进球 ${goalsTip} 的模型概率约 ${pct(goalsProbability)}%。`,
+        en: `Score heat zone: around ${score.home}-${score.away}; model probability for total goals ${goalsTip} is about ${pct(goalsProbability)}%.`,
+      },
+      {
+        zh: `大 2.5 球概率约 ${pct(over25Probability)}%，该指标用于走势参考，不等同于中国竞彩网官方总进球 SP。`,
+        en: `Over 2.5 probability is about ${pct(over25Probability)}%. This is a model reference, not official Sporttery total-goals SP.`,
+      },
+    ],
     visibilityStatus: "PREMIUM",
     resultStatus: resultStatus(match, goalsTip),
   };
@@ -703,11 +779,25 @@ function predictionSet(match) {
     tipCode: ggTip,
     tipLabel: ggTip === "GG" ? { zh: "双方进球 是", en: "Both Teams to Score" } : { zh: "双方进球 否", en: "No Both Teams to Score" },
     odds: ggOdds,
-    trustScore: clamp(Math.round((ggTip === "GG" ? 0.58 : 0.56) * 100 + rand() * 20), 55, 86),
+    trustScore: clamp(Math.round(ggTipProbability * 100 + 16), 55, 86),
     explanation: {
-      zh: `双方进球参考来自主客队预期进球分布，主队约 ${homeLambda.toFixed(2)}，客队约 ${awayLambda.toFixed(2)}。`,
-      en: `BTTS is estimated from goal distribution: home ${homeLambda.toFixed(2)}, away ${awayLambda.toFixed(2)}.`,
+      zh: ggTip === "GG"
+        ? `双方进球为模型参考项，使用主客队进球分布估算。当前双方均有进球概率约 ${pct(bttsProbability)}%，已超过 ${pct(bttsYesThreshold)}% 保守阈值，模型倾向是。`
+        : `双方进球为模型参考项，使用主客队进球分布估算。当前双方均有进球概率约 ${pct(bttsProbability)}%，未超过 ${pct(bttsYesThreshold)}% 保守阈值，模型倾向否。`,
+      en: ggTip === "GG"
+        ? `BTTS is estimated from goal distribution. Current BTTS probability is about ${pct(bttsProbability)}%, above the ${pct(bttsYesThreshold)}% conservative threshold, leaning yes.`
+        : `BTTS is estimated from goal distribution. Current BTTS probability is about ${pct(bttsProbability)}%, below the ${pct(bttsYesThreshold)}% conservative threshold, leaning no.`,
     },
+    analysisItems: [
+      {
+        zh: `主队预期进球 ${homeLambda.toFixed(2)}，客队预期进球 ${awayLambda.toFixed(2)}；若客队预期低于 1 球，双方进球命中波动会更大。`,
+        en: `Home xG ${homeLambda.toFixed(2)}, away xG ${awayLambda.toFixed(2)}. BTTS volatility rises when either side projects below 1.0 xG.`,
+      },
+      {
+        zh: `该玩法不是中国竞彩网标准胜平负 SP，页面以“参考指数”展示，避免和官方 SP 混淆。`,
+        en: `This is shown as a model index, not official Sporttery SP.`,
+      },
+    ],
     visibilityStatus: "PREMIUM",
     resultStatus: resultStatus(match, ggTip),
   };
@@ -719,14 +809,28 @@ function predictionSet(match) {
     odds: oneXTwo.odds,
     trustScore: clamp(oneXTwo.trustScore + 2, 57, 96),
     explanation: {
-      zh: `AI 精选优先使用官方竞彩实时数据，不再混入本地模拟比赛。本场综合胜平负 SP、状态和进球模型后推荐 ${oneXTwo.tipLabel.zh}。`,
+      zh: `AI 精选优先使用中国竞彩网官方实时 SP。本场综合胜平负支持率、SP 分布、预期进球和防平风险后，首选 ${oneXTwo.tipLabel.zh}。`,
       en: `The best tip uses official Sporttery data without local fake fixtures. Recommended: ${oneXTwo.tipLabel.en}.`,
     },
+    analysisItems: [
+      {
+        zh: `核心理由：${oneXTwo.tipLabel.zh} 是当前官方 HAD 去水概率最高方向，且首选优势约 ${pct(probabilityGap)} 个百分点。`,
+        en: `Core reason: ${oneXTwo.tipLabel.en} is the highest normalized HAD direction, leading by about ${pct(probabilityGap)} points.`,
+      },
+      {
+        zh: `进球侧参考：模型比分热区 ${score.home}-${score.away}，总进球期望 ${totalLambda.toFixed(2)}，大 2.5 概率约 ${pct(over25Probability)}%。`,
+        en: `Goals side: score heat zone ${score.home}-${score.away}, total xG ${totalLambda.toFixed(2)}, over 2.5 around ${pct(over25Probability)}%.`,
+      },
+      {
+        zh: `风险提示：赛前若主胜/客胜 SP 大幅升高或平局 SP 明显下压，应降低单关仓位或等待下一次快照。`,
+        en: `Risk note: if the selected SP rises sharply or draw SP drops late, reduce stake or wait for the next snapshot.`,
+      },
+    ],
     visibilityStatus: "PREMIUM",
     resultStatus: oneXTwo.resultStatus,
   };
 
-  return { predictions: [oneXTwo, goals, gg, best], homeLambda, awayLambda };
+  return { predictions: [oneXTwo, goals, gg, best], homeLambda, awayLambda, projectedScore: score };
 }
 
 function toAppMatch(match) {
@@ -736,6 +840,7 @@ function toAppMatch(match) {
   const leagueId = `league_${hashString(match.leagueName)}`;
   const odds = sanitizeOdds(match.odds);
   const handicapOdds = sanitizeOdds(match.handicapOdds);
+  const hasPredictionModel = Boolean(odds);
   const model = odds
     ? predictionSet({ ...match, odds })
     : { predictions: [], homeLambda: match.scoreHome ?? 0, awayLambda: match.scoreAway ?? 0 };
@@ -755,9 +860,12 @@ function toAppMatch(match) {
     status: match.status,
     scoreHome,
     scoreAway,
+    projectedScoreHome: model.projectedScore?.home,
+    projectedScoreAway: model.projectedScore?.away,
     odds: odds || undefined,
     handicapOdds: handicapOdds || undefined,
     predictions: model.predictions,
+    ...(hasPredictionModel ? {
     stats: {
       xG: {
         home: Number((scoreHome ?? model.homeLambda).toFixed(2)),
@@ -772,17 +880,7 @@ function toAppMatch(match) {
       yellowCards: { home: Math.floor(rand() * 4), away: Math.floor(rand() * 4) },
       redCards: { home: 0, away: 0 },
     },
-    standings: [homeTeamId, awayTeamId].map((teamId, idx) => ({
-      position: idx + 1,
-      teamId,
-      played: 10,
-      wins: 6 - idx,
-      draws: 2,
-      losses: 2 + idx,
-      goalsFor: 18 - idx * 3,
-      goalsAgainst: 10 + idx * 2,
-      points: (6 - idx) * 3 + 2,
-    })),
+    } : {}),
     matchDate: match.businessDate || match.matchDate || match.kickoffTime.slice(0, 10),
     kickoffDate: match.matchDate || match.kickoffTime.slice(0, 10),
     businessDate: match.businessDate || match.matchDate || match.kickoffTime.slice(0, 10),
@@ -1007,6 +1105,10 @@ async function sync() {
     acc[match.status] = (acc[match.status] || 0) + 1;
     return acc;
   }, {});
+  const outputDates = output
+    .map((match) => match.matchDate || match.businessDate || String(match.kickoffTime || "").slice(0, 10))
+    .filter(Boolean)
+    .sort();
   console.log(
     JSON.stringify(
       {
@@ -1019,6 +1121,7 @@ async function sync() {
         officialResultMatches: rawResultMatches.length,
         skippedWithoutOfficialOdds: rawMatches.length - rawMatchesWithOdds.length,
         window: { backDays: WINDOW_BACK_DAYS, forwardDays: WINDOW_FORWARD_DAYS },
+        coverage: { first: outputDates[0], last: outputDates[outputDates.length - 1] },
         oddsHistory,
         byStatus,
       },

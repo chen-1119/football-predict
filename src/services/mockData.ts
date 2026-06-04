@@ -42,6 +42,7 @@ export interface PredictionDetail {
   odds: number;
   trustScore: number; // 0-100
   explanation: MultiLangString;
+  analysisItems?: MultiLangString[];
   visibilityStatus: 'FREE' | 'PREMIUM';
   resultStatus: 'WON' | 'LOST' | 'PENDING';
 }
@@ -112,6 +113,8 @@ export interface Match {
   status: 'SCHEDULED' | 'LIVE' | 'FINISHED';
   scoreHome?: number;
   scoreAway?: number;
+  projectedScoreHome?: number;
+  projectedScoreAway?: number;
   odds?: Odds | null;
   handicapOdds?: Odds | null;
   handicapLine?: string;
