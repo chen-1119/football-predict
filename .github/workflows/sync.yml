@@ -20,14 +20,12 @@ jobs:
           node-version: '20'
 
       - name: Install Dependencies
-        run: npm install iconv-lite
+        run: npm ci
 
       - name: Run Data Scraper & Predictor
-        env:
-          FOOTBALL_DATA_API_KEY: ${{ secrets.FOOTBALL_DATA_API_KEY }}
         run: node scripts/syncData.cjs
 
-      - name: Commit & Push Changes
+      - name: Commit & Push Changes to Main
         run: |
           git config --local user.name "github-actions[bot]"
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
@@ -38,3 +36,12 @@ jobs:
           else
             echo "No changes in predictions data."
           fi
+
+      - name: Build Project
+        run: npm run build
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
