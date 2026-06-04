@@ -8,10 +8,12 @@ type SyncedMatch = Match & {
   homeTeamName?: string;
   homeTeamNameEn?: string;
   homeTeamLogo?: string;
+  homeTeamLogoType?: 'flag' | 'crest' | 'crest-placeholder';
   homeTeamColor?: string;
   awayTeamName?: string;
   awayTeamNameEn?: string;
   awayTeamLogo?: string;
+  awayTeamLogoType?: 'flag' | 'crest' | 'crest-placeholder';
   awayTeamColor?: string;
   leagueName?: string;
   leagueNameEn?: string;
@@ -86,6 +88,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   name: { zh: m.homeTeamName || '未知主队', en: m.homeTeamNameEn || 'Home Team' },
                   shortName: { zh: m.homeTeamName || '未知', en: m.homeTeamNameEn || 'Home' },
                   logo: m.homeTeamLogo || (m.homeTeamName || 'FC').substring(0, 2),
+                  logoType: m.homeTeamLogoType,
                   value: '50M €',
                   color: m.homeTeamColor || '#7f8c8d'
                 });
@@ -96,6 +99,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   name: { zh: m.awayTeamName || '未知客队', en: m.awayTeamNameEn || 'Away Team' },
                   shortName: { zh: m.awayTeamName || '未知', en: m.awayTeamNameEn || 'Away' },
                   logo: m.awayTeamLogo || (m.awayTeamName || 'FC').substring(0, 2),
+                  logoType: m.awayTeamLogoType,
                   value: '50M €',
                   color: m.awayTeamColor || '#95a5a6'
                 });

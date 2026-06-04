@@ -143,6 +143,39 @@ const TEAM_NAME_TO_ISO = {
   "美国": "US",
   "日本": "JP",
   "韩国": "KR",
+  "乌兹别克斯坦": "UZ",
+  "保加利亚": "BG",
+  "克罗地亚": "HR",
+  "冰岛": "IS",
+  "刚果(金)": "CD",
+  "刚果": "CG",
+  "加拿大": "CA",
+  "加纳": "GH",
+  "北马其顿": "MK",
+  "卡塔尔": "QA",
+  "土耳其": "TR",
+  "塞内加尔": "SN",
+  "奥地利": "AT",
+  "威尔士": "GB-WLS",
+  "卢森堡": "LU",
+  "巴拿马": "PA",
+  "库拉索": "CW",
+  "挪威": "NO",
+  "捷克": "CZ",
+  "格鲁吉亚": "GE",
+  "比利时": "BE",
+  "波黑": "BA",
+  "澳大利亚": "AU",
+  "爱尔兰": "IE",
+  "瑞士": "CH",
+  "科索沃": "XK",
+  "突尼斯": "TN",
+  "约旦": "JO",
+  "罗马尼亚": "RO",
+  "芬兰": "FI",
+  "苏格兰": "GB-SCT",
+  "黑山": "ME",
+  "阿尔及利亚": "DZ",
   "丹麦": "DK",
   "波兰": "PL",
   "尼日利亚": "NG",
@@ -156,9 +189,79 @@ function flagEmojiFromIso(isoCode) {
   return String.fromCodePoint(...code.split("").map((letter) => 127397 + letter.charCodeAt(0)));
 }
 
-function teamLogo(teamName, teamCode) {
-  const isoCode = FIFA_TO_ISO[normText(teamCode).toUpperCase()] || TEAM_NAME_TO_ISO[normText(teamName)] || "";
-  return flagEmojiFromIso(isoCode) || normText(teamName, "FC").slice(0, 2).toUpperCase();
+const CLUB_LOGO_BY_NAME = {
+  "曼彻斯特城": "https://media.api-sports.io/football/teams/50.png",
+  "曼城": "https://media.api-sports.io/football/teams/50.png",
+  "利物浦": "https://media.api-sports.io/football/teams/40.png",
+  "阿森纳": "https://media.api-sports.io/football/teams/42.png",
+  "切尔西": "https://media.api-sports.io/football/teams/49.png",
+  "曼彻斯特联": "https://media.api-sports.io/football/teams/33.png",
+  "曼联": "https://media.api-sports.io/football/teams/33.png",
+  "托特纳姆热刺": "https://media.api-sports.io/football/teams/47.png",
+  "热刺": "https://media.api-sports.io/football/teams/47.png",
+  "水晶宫": "https://media.api-sports.io/football/teams/52.png",
+  "阿斯顿维拉": "https://media.api-sports.io/football/teams/66.png",
+  "皇家马德里": "https://media.api-sports.io/football/teams/541.png",
+  "皇马": "https://media.api-sports.io/football/teams/541.png",
+  "巴塞罗那": "https://media.api-sports.io/football/teams/529.png",
+  "巴萨": "https://media.api-sports.io/football/teams/529.png",
+  "马德里竞技": "https://media.api-sports.io/football/teams/530.png",
+  "马竞": "https://media.api-sports.io/football/teams/530.png",
+  "皇家社会": "https://media.api-sports.io/football/teams/548.png",
+  "拜仁慕尼黑": "https://media.api-sports.io/football/teams/157.png",
+  "拜仁": "https://media.api-sports.io/football/teams/157.png",
+  "多特蒙德": "https://media.api-sports.io/football/teams/165.png",
+  "多特": "https://media.api-sports.io/football/teams/165.png",
+  "勒沃库森": "https://media.api-sports.io/football/teams/168.png",
+  "国际米兰": "https://media.api-sports.io/football/teams/505.png",
+  "国米": "https://media.api-sports.io/football/teams/505.png",
+  "AC米兰": "https://media.api-sports.io/football/teams/489.png",
+  "尤文图斯": "https://media.api-sports.io/football/teams/496.png",
+  "尤文": "https://media.api-sports.io/football/teams/496.png",
+};
+
+function isoFromTeam(teamName, teamCode) {
+  return FIFA_TO_ISO[normText(teamCode).toUpperCase()] || TEAM_NAME_TO_ISO[normText(teamName)] || "";
+}
+
+function flagImageFromIso(isoCode) {
+  const code = normText(isoCode).toLowerCase();
+  if (!/^[a-z]{2}(-[a-z]{3})?$/.test(code)) return "";
+  return `https://flagcdn.com/w80/${code}.png`;
+}
+
+function initialsFromName(teamName, teamCode) {
+  const code = normText(teamCode).toUpperCase();
+  if (/^[A-Z]{2,4}$/.test(code)) return code.slice(0, 3);
+  return normText(teamName, "FC").slice(0, 2).toUpperCase();
+}
+
+function normalizeLogoUrl(rawLogo) {
+  const logo = normText(rawLogo);
+  if (!logo) return "";
+  if (/^https?:\/\//i.test(logo)) return logo;
+  if (logo.startsWith("//")) return `https:${logo}`;
+  if (logo.startsWith("/")) return `${SPORTTERY_BASE}${logo}`;
+  return logo;
+}
+
+function teamLogoInfo(teamName, teamCode, rawLogo) {
+  const suppliedLogo = normalizeLogoUrl(rawLogo);
+  if (suppliedLogo) return { logo: suppliedLogo, logoType: "crest" };
+
+  const isoCode = isoFromTeam(teamName, teamCode);
+  if (isoCode) {
+    return {
+      logo: flagImageFromIso(isoCode) || flagEmojiFromIso(isoCode),
+      logoType: "flag",
+      countryIso: isoCode,
+    };
+  }
+
+  const clubLogo = CLUB_LOGO_BY_NAME[normText(teamName)];
+  if (clubLogo) return { logo: clubLogo, logoType: "crest" };
+
+  return { logo: initialsFromName(teamName, teamCode), logoType: "crest-placeholder" };
 }
 
 function scoreFromSections(section) {
@@ -365,15 +468,21 @@ function mapSportteryRow(row, sourceMethod, sourceUrl) {
   const matchId = String(row.matchId || `${row.matchDate}-${homeTeam}-${awayTeam}`);
   const status = statusFromSporttery(row.matchStatus, row.sellStatus, row.matchStatusName);
   const kickoffTime = parseKickoff(row.matchDate, row.matchTime);
+  const businessDate = normText(row.businessDate || row.matchNumDate || row.matchDate);
   const oddsInfo = sportteryHadOdds(row, sourceUrl, sourceMethod);
   return {
     sourceMethod,
+    sourceUrl,
     sourceMatchId: matchId,
     matchNo: normText(row.matchNumStr),
+    businessDate,
+    matchDate: normText(row.matchDate),
     homeTeam,
     awayTeam,
     homeTeamCode: normText(row.homeTeamCode || row.homeTeamAbbEnName),
     awayTeamCode: normText(row.awayTeamCode || row.awayTeamAbbEnName),
+    homeTeamLogo: normText(row.homeTeamLogo || row.homeTeamLogoUrl || row.homeLogoUrl || row.homeTeamFlag),
+    awayTeamLogo: normText(row.awayTeamLogo || row.awayTeamLogoUrl || row.awayLogoUrl || row.awayTeamFlag),
     leagueName,
     leagueCode: String(row.leagueId || ""),
     kickoffTime,
@@ -461,6 +570,11 @@ function mergeMatch(prev, next) {
     oddsSourceUrl: oddsMatch.oddsSourceUrl,
     homeTeamCode: next.homeTeamCode || prev.homeTeamCode,
     awayTeamCode: next.awayTeamCode || prev.awayTeamCode,
+    homeTeamLogo: next.homeTeamLogo || prev.homeTeamLogo,
+    awayTeamLogo: next.awayTeamLogo || prev.awayTeamLogo,
+    businessDate: next.businessDate || prev.businessDate,
+    matchDate: next.matchDate || prev.matchDate,
+    sourceUrl: next.sourceUrl || prev.sourceUrl,
     scoreHome: nextHasScore ? next.scoreHome : prevHasScore ? prev.scoreHome : next.scoreHome,
     scoreAway: nextHasScore ? next.scoreAway : prevHasScore ? prev.scoreAway : next.scoreAway,
   };
@@ -601,11 +715,16 @@ function toAppMatch(match) {
   const homeTeamId = `team_${hashString(match.homeTeam)}`;
   const awayTeamId = `team_${hashString(match.awayTeam)}`;
   const leagueId = `league_${hashString(match.leagueName)}`;
-  const model = predictionSet(match);
+  const odds = sanitizeOdds(match.odds);
+  const model = odds
+    ? predictionSet({ ...match, odds })
+    : { predictions: [], homeLambda: match.scoreHome ?? 0, awayLambda: match.scoreAway ?? 0 };
   const scoreHome = Number.isFinite(match.scoreHome) ? match.scoreHome : undefined;
   const scoreAway = Number.isFinite(match.scoreAway) ? match.scoreAway : undefined;
   const rand = seeded(match.sourceMatchId);
   const possessionHome = 48 + Math.floor(rand() * 12);
+  const homeLogo = teamLogoInfo(match.homeTeam, match.homeTeamCode, match.homeTeamLogo);
+  const awayLogo = teamLogoInfo(match.awayTeam, match.awayTeamCode, match.awayTeamLogo);
   return {
     id: `sporttery_${match.sourceMatchId}`,
     homeTeamId,
@@ -616,7 +735,7 @@ function toAppMatch(match) {
     status: match.status,
     scoreHome,
     scoreAway,
-    odds: match.odds,
+    odds,
     predictions: model.predictions,
     stats: {
       xG: {
@@ -657,14 +776,20 @@ function toAppMatch(match) {
       goalsAgainst: 10 + idx * 2,
       points: (6 - idx) * 3 + 2,
     })),
-    matchDate: match.kickoffTime.slice(0, 10),
+    matchDate: match.businessDate || match.matchDate || match.kickoffTime.slice(0, 10),
+    kickoffDate: match.matchDate || match.kickoffTime.slice(0, 10),
+    businessDate: match.businessDate || match.matchDate || match.kickoffTime.slice(0, 10),
     homeTeamName: match.homeTeam,
     homeTeamNameEn: match.homeTeam,
-    homeTeamLogo: teamLogo(match.homeTeam, match.homeTeamCode),
+    homeTeamLogo: homeLogo.logo,
+    homeTeamLogoType: homeLogo.logoType,
+    homeTeamCountryIso: homeLogo.countryIso,
     homeTeamColor: colorFromName(match.homeTeam),
     awayTeamName: match.awayTeam,
     awayTeamNameEn: match.awayTeam,
-    awayTeamLogo: teamLogo(match.awayTeam, match.awayTeamCode),
+    awayTeamLogo: awayLogo.logo,
+    awayTeamLogoType: awayLogo.logoType,
+    awayTeamCountryIso: awayLogo.countryIso,
     awayTeamColor: colorFromName(match.awayTeam),
     leagueName: match.leagueName,
     leagueNameEn: meta.leagueNameEn,
@@ -675,6 +800,7 @@ function toAppMatch(match) {
     countryFlag: meta.countryFlag,
     source: "sporttery",
     sourceMethod: match.sourceMethod,
+    sourceUrl: match.sourceUrl,
     sourceMatchId: match.sourceMatchId,
     matchNo: match.matchNo,
     oddsSource: match.oddsSource,
@@ -719,6 +845,15 @@ function isTrustedOddsMatch(match) {
     match?.oddsSource === "sporttery:HAD" &&
     String(match?.oddsSourceUrl || "").includes("webapi.sporttery.cn") &&
     Boolean(sanitizeOdds(match?.odds))
+  );
+}
+
+function isOfficialResultMatch(match) {
+  return (
+    match?.status === "FINISHED" &&
+    Number.isFinite(match?.scoreHome) &&
+    Number.isFinite(match?.scoreAway) &&
+    String(match?.sourceUrl || "").includes("webapi.sporttery.cn")
   );
 }
 
@@ -831,8 +966,10 @@ async function sync() {
   const allRawMatches = await fetchSportteryMatches();
   const rawMatches = allRawMatches.filter(inMatchWindow);
   const rawMatchesWithOdds = rawMatches.filter((match) => sanitizeOdds(match.odds));
+  const rawResultMatches = rawMatches.filter(isOfficialResultMatch);
+  const rawMatchesForOutput = rawMatches.filter((match) => sanitizeOdds(match.odds) || isOfficialResultMatch(match));
   const usedFreshOdds = rawMatchesWithOdds.length > 0;
-  let output = rawMatchesWithOdds.map(toAppMatch);
+  let output = rawMatchesForOutput.map(toAppMatch);
 
   if (!output.length) {
     output = loadExistingMatches().filter(isTrustedOddsMatch);
@@ -859,6 +996,8 @@ async function sync() {
         source: "sporttery",
         count: output.length,
         scanned: allRawMatches.length,
+        officialOddsMatches: rawMatchesWithOdds.length,
+        officialResultMatches: rawResultMatches.length,
         skippedWithoutOfficialOdds: rawMatches.length - rawMatchesWithOdds.length,
         window: { backDays: WINDOW_BACK_DAYS, forwardDays: WINDOW_FORWARD_DAYS },
         oddsHistory,

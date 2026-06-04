@@ -28,7 +28,7 @@ type SortBy = 'time' | 'trust' | 'odds';
 
 const SORT_OPTIONS: SortBy[] = ['time', 'trust', 'odds'];
 
-const getMatchDay = (match: Match) => match.kickoffTime.split('T')[0];
+const getMatchDay = (match: Match) => match.matchDate || match.businessDate || match.kickoffTime.split('T')[0];
 
 const getBestPrediction = (match: Match) => match.predictions.find((p) => p.marketType === 'BEST');
 
@@ -48,6 +48,13 @@ const formatShortDate = (date: string, language: 'zh' | 'en') => {
     day: '2-digit',
     weekday: 'short'
   });
+};
+
+const formatKickoffTime = (kickoffTime: string, language: 'zh' | 'en') => {
+  return new Date(kickoffTime).toLocaleTimeString(
+    language === 'zh' ? 'zh-CN' : 'en-US',
+    { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Shanghai' }
+  );
 };
 
 export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch }) => {
@@ -95,6 +102,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
     statusTime: { zh: '时间 / 状态', en: 'Time / Status' },
     teams: { zh: '对阵双方', en: 'Teams' },
     oddsHeader: { zh: '胜平负 SP', en: '1X2 Odds' },
+    noOdds: { zh: '赛果记录', en: 'Result only' },
     trustHeader: { zh: '可信度', en: 'Trust' },
     unlockTitle: { zh: '点击模拟升级解锁', en: 'Click to unlock' },
     hit: { zh: '命中', en: 'Hit' },
@@ -185,9 +193,10 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
   }, [settledPredictions]);
 
   const avgTrust = useMemo(() => {
-    if (sortedMatches.length === 0) return null;
-    const total = sortedMatches.reduce((sum, match) => sum + getBestTrust(match), 0);
-    return Math.round(total / sortedMatches.length);
+    const trustScores = sortedMatches.map(getBestTrust).filter((score) => score > 0);
+    if (trustScores.length === 0) return null;
+    const total = trustScores.reduce((sum, score) => sum + score, 0);
+    return Math.round(total / trustScores.length);
   }, [sortedMatches]);
 
   const highTrustCount = useMemo(() => {
@@ -252,12 +261,19 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
     );
   };
 
-  const dateOptions = [
-    { label: t('yesterday'), date: yesterdayStr },
-    { label: t('today'), date: todayStr },
-    { label: t('tomorrow'), date: tomorrowStr },
-    { label: t('dayAfterTomorrow'), date: dayAfterTomorrowStr }
-  ];
+  const dateOptions = (() => {
+    const quickDates = [yesterdayStr, todayStr, tomorrowStr, dayAfterTomorrowStr];
+    const matchDates = matches.map(getMatchDay).filter(Boolean);
+    const mergedDates = Array.from(new Set([...matchDates, ...quickDates])).sort();
+
+    return mergedDates.map((date) => {
+      if (date === yesterdayStr) return { label: t('yesterday'), date };
+      if (date === todayStr) return { label: t('today'), date };
+      if (date === tomorrowStr) return { label: t('tomorrow'), date };
+      if (date === dayAfterTomorrowStr) return { label: t('dayAfterTomorrow'), date };
+      return { label: date < todayStr ? (language === 'zh' ? '历史' : 'History') : (language === 'zh' ? '赛事日' : 'Match day'), date };
+    });
+  })();
 
   const metrics = [
     {
@@ -454,10 +470,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
                       const isFinished = match.status === 'FINISHED';
                       const score = `${match.scoreHome ?? '-'}:${match.scoreAway ?? '-'}`;
                       const bestTrust = getBestTrust(match);
-                      const formattedTime = new Date(match.kickoffTime).toLocaleTimeString(
-                        language === 'zh' ? 'zh-CN' : 'en-US',
-                        { hour: '2-digit', minute: '2-digit', hour12: false }
-                      );
+                      const formattedTime = formatKickoffTime(match.kickoffTime, language);
+                      const oddsRows = getSportteryOddsRows(match.odds, language);
 
                       return (
                         <tr
@@ -495,12 +509,16 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
 
                           <td className="match-odds-cell" data-label={t('oddsHeader')} style={{ textAlign: 'center' }}>
                             <div className="odds-stack">
-                              {getSportteryOddsRows(match.odds, language).map((row) => (
-                                <span key={row.label} className="odds-row">
-                                  <strong>{row.label}</strong>
-                                  <span>{row.value.toFixed(2)}</span>
-                                </span>
-                              ))}
+                              {oddsRows.length > 0 ? (
+                                oddsRows.map((row) => (
+                                  <span key={row.label} className="odds-row">
+                                    <strong>{row.label}</strong>
+                                    <span>{row.value.toFixed(2)}</span>
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="odds-source">{t('noOdds')}</span>
+                              )}
                               {match.oddsSource && (
                                 <span className="odds-source" title={match.oddsUpdatedAt || match.oddsSource}>
                                   {language === 'zh' ? '官方HAD' : 'Official HAD'}
@@ -526,18 +544,22 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
                           </td>
 
                           <td className="match-trust-cell" data-label={t('trustHeader')} style={{ textAlign: 'center' }}>
-                            <div
-                              className="trust-meter"
-                              style={{
-                                '--trust': `${bestTrust}%`,
-                                '--trust-color': getTrustColor(bestTrust)
-                              } as React.CSSProperties}
-                            >
-                              <span className="trust-value">{bestTrust}%</span>
-                              <span className="trust-bar">
-                                <span />
-                              </span>
-                            </div>
+                            {bestTrust > 0 ? (
+                              <div
+                                className="trust-meter"
+                                style={{
+                                  '--trust': `${bestTrust}%`,
+                                  '--trust-color': getTrustColor(bestTrust)
+                                } as React.CSSProperties}
+                              >
+                                <span className="trust-value">{bestTrust}%</span>
+                                <span className="trust-bar">
+                                  <span />
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="status-note">--</span>
+                            )}
                           </td>
 
                           <td className="match-action-cell" style={{ textAlign: 'right' }}>

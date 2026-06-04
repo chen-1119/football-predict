@@ -73,7 +73,9 @@ export function getPredictionTipDisplay(
     : label;
 }
 
-export function getSportteryOddsRows(odds: Odds, language: Language) {
+export function getSportteryOddsRows(odds: Odds | null | undefined, language: Language) {
+  if (!odds) return [];
+
   if (language === 'zh') {
     return [
       { label: '胜(3)', hint: '主队胜', value: odds.odds1 },

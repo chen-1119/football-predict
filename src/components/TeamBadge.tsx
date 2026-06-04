@@ -8,14 +8,16 @@ interface TeamBadgeProps {
 }
 
 const isImageLogo = (logo: string) => /^(https?:\/\/|\/|\.\/)/.test(logo);
+const isFlagEmoji = (logo: string) => /\p{Regional_Indicator}/u.test(logo);
 
 export function TeamBadge({ team, size = 'md', className = '' }: TeamBadgeProps) {
   const logo = team.logo || team.shortName.en || team.name.en || '?';
   const label = team.shortName.zh || team.shortName.en || team.name.zh || team.name.en;
   const style = { '--team-color': team.color } as CSSProperties;
+  const logoType = team.logoType || (isFlagEmoji(logo) ? 'flag' : isImageLogo(logo) ? 'crest' : 'crest-placeholder');
 
   return (
-    <span className={`team-badge team-badge-${size} ${className}`.trim()} style={style} title={label}>
+    <span className={`team-badge team-badge-${size} team-badge-${logoType} ${className}`.trim()} style={style} title={label}>
       {isImageLogo(logo) ? (
         <img src={logo} alt={label} loading="lazy" />
       ) : (

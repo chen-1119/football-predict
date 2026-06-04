@@ -23,16 +23,29 @@ if (!Array.isArray(matches) || matches.length === 0) {
 
 for (const match of matches) {
   const oddsValues = [match.odds?.odds1, match.odds?.oddsX, match.odds?.odds2];
-  if (!oddsValues.every((value) => Number.isFinite(value) && value > 1.01)) {
+  const hasOfficialOdds = match.oddsSource === "sporttery:HAD";
+  const hasValidOdds = oddsValues.every((value) => Number.isFinite(value) && value > 1.01);
+  const isResultOnly = match.status === "FINISHED" && !hasOfficialOdds;
+
+  if (!hasValidOdds && !isResultOnly) {
     errors.push(`${match.id}: invalid SP values ${JSON.stringify(match.odds)}`);
   }
 
-  if (match.source === "sporttery" && match.oddsSource !== "sporttery:HAD") {
+  if (match.source === "sporttery" && !isResultOnly && !hasOfficialOdds) {
     errors.push(`${match.id}: missing official Sporttery HAD odds source`);
   }
 
-  if (match.source === "sporttery" && !String(match.oddsSourceUrl || "").includes("webapi.sporttery.cn")) {
+  if (hasOfficialOdds && !String(match.oddsSourceUrl || "").includes("webapi.sporttery.cn")) {
     errors.push(`${match.id}: missing official Sporttery odds source URL`);
+  }
+
+  if (isResultOnly) {
+    if (!Number.isFinite(match.scoreHome) || !Number.isFinite(match.scoreAway)) {
+      errors.push(`${match.id}: result-only match is missing final score`);
+    }
+    if (!String(match.sourceUrl || "").includes("webapi.sporttery.cn")) {
+      errors.push(`${match.id}: result-only match is missing official result URL`);
+    }
   }
 
   if (!hexColor.test(match.homeTeamColor || "") || !hexColor.test(match.awayTeamColor || "")) {
@@ -40,9 +53,9 @@ for (const match of matches) {
   }
 
   const sportteryPick = match.predictions?.find((prediction) => prediction.marketType === "1X2");
-  if (!sportteryPick) {
+  if (hasOfficialOdds && !sportteryPick) {
     errors.push(`${match.id}: missing 1X2 prediction`);
-  } else if (Math.abs(expectedSportterySp(match, sportteryPick.tipCode) - sportteryPick.odds) > 1e-9) {
+  } else if (hasOfficialOdds && Math.abs(expectedSportterySp(match, sportteryPick.tipCode) - sportteryPick.odds) > 1e-9) {
     errors.push(`${match.id}: 1X2 prediction SP does not match selected SP`);
   }
 
@@ -93,7 +106,7 @@ if (fs.existsSync(oddsHistoryPath)) {
     }
 
     for (const match of matches) {
-      if (match.source !== "sporttery") continue;
+      if (match.source !== "sporttery" || match.oddsSource !== "sporttery:HAD") continue;
       const sourceMatchId = String(match.sourceMatchId || "").replace(/^sporttery_/, "");
       if (sourceMatchId && !historySourceIds.has(sourceMatchId)) {
         errors.push(`${match.id}: missing odds-history snapshot.`);
@@ -111,5 +124,13 @@ const statuses = matches.reduce((acc, match) => {
   acc[match.status] = (acc[match.status] || 0) + 1;
   return acc;
 }, {});
+const officialOddsCount = matches.filter((match) => match.oddsSource === "sporttery:HAD").length;
+const resultOnlyCount = matches.filter((match) => match.status === "FINISHED" && match.oddsSource !== "sporttery:HAD").length;
 
-console.log(JSON.stringify({ ok: true, count: matches.length, statuses, oddsHistoryRows: oddsHistoryRows.length }, null, 2));
+console.log(
+  JSON.stringify(
+    { ok: true, count: matches.length, statuses, officialOddsCount, resultOnlyCount, oddsHistoryRows: oddsHistoryRows.length },
+    null,
+    2
+  )
+);

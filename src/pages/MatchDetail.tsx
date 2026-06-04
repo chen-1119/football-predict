@@ -37,9 +37,24 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   const isFinished = match.status === 'FINISHED';
   const isLive = match.status === 'LIVE';
   
-  const formattedDate = new Date(match.kickoffTime).toLocaleDateString(undefined, { 
-    weekday: 'long', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+  const formattedDate = new Date(match.kickoffTime).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'Asia/Shanghai'
   });
+  const businessDateLabel = match.matchDate
+    ? new Date(`${match.matchDate}T00:00:00+08:00`).toLocaleDateString(language === 'zh' ? 'zh-CN' : 'en-US', {
+      month: '2-digit',
+      day: '2-digit',
+      weekday: 'short',
+      timeZone: 'Asia/Shanghai'
+    })
+    : '';
 
   const translations = {
     backBtn: { zh: '返回列表', en: 'Back' },
@@ -63,6 +78,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   const t = (key: keyof typeof translations) => {
     return translations[key][language] || '';
   };
+  const oddsRows = getSportteryOddsRows(match.odds, language);
 
   // 渲染预测详细行
   const renderPredictionBlock = (pred: PredictionDetail) => {
@@ -174,6 +190,13 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
           <div style={{ fontSize: '0.825rem', color: 'hsl(var(--text-secondary))', marginTop: '0.25rem' }}>
             {formattedDate}
           </div>
+          {(match.matchNo || businessDateLabel) && (
+            <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))', marginTop: '0.35rem' }}>
+              {match.matchNo ? `${match.matchNo}` : ''}
+              {match.matchNo && businessDateLabel ? ' · ' : ''}
+              {businessDateLabel ? (language === 'zh' ? `竞彩日 ${businessDateLabel}` : `Match day ${businessDateLabel}`) : ''}
+            </div>
+          )}
         </div>
 
         {/* 球队比分对阵大面板 */}
@@ -250,12 +273,18 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
           gap: '2rem',
           fontSize: '0.875rem'
         }}>
-          {getSportteryOddsRows(match.odds, language).map((row) => (
-            <div key={row.label}>
-              {row.label} <span style={{ color: 'hsl(var(--text-muted))' }}>{row.hint}</span>:{' '}
-              <span style={{ fontWeight: '700', color: 'hsl(var(--accent))' }}>{row.value.toFixed(2)}</span>
+          {oddsRows.length > 0 ? (
+            oddsRows.map((row) => (
+              <div key={row.label}>
+                {row.label} <span style={{ color: 'hsl(var(--text-muted))' }}>{row.hint}</span>:{' '}
+                <span style={{ fontWeight: '700', color: 'hsl(var(--accent))' }}>{row.value.toFixed(2)}</span>
+              </div>
+            ))
+          ) : (
+            <div style={{ color: 'hsl(var(--text-muted))', fontWeight: 700 }}>
+              {language === 'zh' ? '官方赛果记录，暂无 SP 快照' : 'Official result record, no SP snapshot'}
             </div>
-          ))}
+          )}
           {match.oddsSource && (
             <div style={{ color: 'hsl(var(--success))', fontWeight: 700 }}>
               {language === 'zh' ? '官方HAD' : 'Official HAD'}
@@ -315,7 +344,15 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
             </div>
 
             {/* 预测列表 */}
-            {match.predictions.map(pred => renderPredictionBlock(pred))}
+            {match.predictions.length > 0 ? (
+              match.predictions.map(pred => renderPredictionBlock(pred))
+            ) : (
+              <div className="card" style={{ color: 'hsl(var(--text-secondary))', lineHeight: 1.6 }}>
+                {language === 'zh'
+                  ? '这场是官方赛果历史记录。由于此前没有本项目定时抓取到的官方 SP 快照，所以不用于模型赔率回测。'
+                  : 'This is an official result record. No scheduled SP snapshot was captured by this project, so it is not used for odds backtesting.'}
+              </div>
+            )}
 
           </div>
         )}

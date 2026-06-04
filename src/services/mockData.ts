@@ -10,6 +10,7 @@ export interface Team {
   name: MultiLangString;
   shortName: MultiLangString;
   logo: string; // 队徽占位字符或CSS图形配色
+  logoType?: 'flag' | 'crest' | 'crest-placeholder';
   value: string; // 球队身价，如 "1.2B €"
   color: string; // 队色，主色和副色，用于绘制炫酷队标
 }
@@ -111,7 +112,7 @@ export interface Match {
   status: 'SCHEDULED' | 'LIVE' | 'FINISHED';
   scoreHome?: number;
   scoreAway?: number;
-  odds: Odds;
+  odds?: Odds | null;
   oddsSource?: string;
   oddsPoolCode?: string;
   oddsSourceMethod?: string;
@@ -126,13 +127,19 @@ export interface Match {
   h2h?: H2HRecord[];
   standings?: StandingRow[];
   matchDate?: string;
+  kickoffDate?: string;
+  businessDate?: string;
   homeTeamName?: string;
   homeTeamNameEn?: string;
   homeTeamLogo?: string;
+  homeTeamLogoType?: 'flag' | 'crest' | 'crest-placeholder';
+  homeTeamCountryIso?: string;
   homeTeamColor?: string;
   awayTeamName?: string;
   awayTeamNameEn?: string;
   awayTeamLogo?: string;
+  awayTeamLogoType?: 'flag' | 'crest' | 'crest-placeholder';
+  awayTeamCountryIso?: string;
   awayTeamColor?: string;
   leagueName?: string;
   leagueNameEn?: string;
@@ -143,6 +150,7 @@ export interface Match {
   countryFlag?: string;
   source?: string;
   sourceMethod?: string;
+  sourceUrl?: string;
   sourceMatchId?: string;
   matchNo?: string;
 }

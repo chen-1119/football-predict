@@ -10,12 +10,16 @@ interface HitAndWinProps {
   onGoToAuth: () => void;
 }
 
+type MatchWithOdds = Match & { odds: NonNullable<Match['odds']> };
+
+const hasOdds = (match: Match): match is MatchWithOdds => Boolean(match.odds);
+
 export const HitAndWin: React.FC<HitAndWinProps> = ({ onGoToAuth }) => {
   const { language, currentUser, hitAndWinSubmission, submitHitAndWin, matches } = useApp();
   
   // 筛选 10 场即将开赛的精选比赛
   const hitMatches = React.useMemo(() => {
-    return matches.filter((m: Match) => m.status === 'SCHEDULED').slice(0, 10);
+    return matches.filter((m: Match): m is MatchWithOdds => m.status === 'SCHEDULED' && hasOdds(m)).slice(0, 10);
   }, [matches]);
 
   // 用户当前的选择 { [matchId]: '1' | 'X' | '2' }

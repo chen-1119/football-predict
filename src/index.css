@@ -905,10 +905,32 @@ button.status-pill:hover {
   text-transform: uppercase;
 }
 
+.team-badge-flag {
+  width: 36px;
+  border-color: hsl(var(--border));
+  border-radius: 4px;
+  background: hsl(var(--bg-card));
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18);
+}
+
+.team-badge-crest {
+  border-radius: 50%;
+  background: hsl(var(--bg-card));
+}
+
+.team-badge-crest-placeholder {
+  border-radius: 10px 10px 14px 14px;
+  clip-path: polygon(12% 0, 88% 0, 100% 34%, 82% 100%, 18% 100%, 0 34%);
+}
+
 .team-badge-sm {
   width: 24px;
   height: 24px;
   font-size: 0.72rem;
+}
+
+.team-badge-sm.team-badge-flag {
+  width: 32px;
 }
 
 .team-badge-lg {
@@ -918,10 +940,33 @@ button.status-pill:hover {
   font-size: 1.7rem;
 }
 
+.team-badge-lg.team-badge-flag {
+  width: 84px;
+  height: 56px;
+  border-radius: 7px;
+}
+
+.team-badge-lg.team-badge-crest-placeholder {
+  border-radius: 16px 16px 22px 22px;
+}
+
 .team-badge img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.team-badge-flag img {
+  object-fit: cover;
+}
+
+.team-badge-crest img {
+  object-fit: contain;
+  padding: 3px;
+}
+
+.team-badge-lg.team-badge-crest img {
+  padding: 6px;
 }
 
 .team-badge span {
@@ -1349,5 +1394,10 @@ button.status-pill:hover {
   .team-badge {
     width: 28px;
     height: 28px;
+  }
+
+  .team-badge-flag {
+    width: 36px;
+    height: 26px;
   }
 }
