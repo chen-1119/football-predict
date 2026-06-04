@@ -631,9 +631,9 @@ function dedupeMatches(matches) {
 function predictionSet(match) {
   const probabilities = impliedProbabilities(match.odds);
   const picks = [
-    ["1", probabilities.home, match.odds.odds1, `胜(3) ${match.homeTeam}`, `Home Win (${match.homeTeam})`],
-    ["X", probabilities.draw, match.odds.oddsX, "平(1)", "Draw"],
-    ["2", probabilities.away, match.odds.odds2, `负(0) ${match.awayTeam}`, `Away Win (${match.awayTeam})`],
+    ["1", probabilities.home, match.odds.odds1, `主胜 ${match.homeTeam}`, `Home Win (${match.homeTeam})`],
+    ["X", probabilities.draw, match.odds.oddsX, "平局", "Draw"],
+    ["2", probabilities.away, match.odds.odds2, `客胜 ${match.awayTeam}`, `Away Win (${match.awayTeam})`],
   ].sort((a, b) => b[1] - a[1]);
   const best1x2 = picks[0];
   const baseTrust = clamp(Math.round(best1x2[1] * 100 + 18), 55, 94);

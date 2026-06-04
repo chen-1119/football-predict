@@ -5,7 +5,7 @@ const matchesPath = path.join(__dirname, "..", "public", "matches.json");
 const oddsHistoryPath = path.join(__dirname, "..", "public", "odds-history.json");
 const matches = JSON.parse(fs.readFileSync(matchesPath, "utf8"));
 const hexColor = /^#[0-9a-fA-F]{6}$/;
-const staleText = /主胜|客胜|当前 1X2|大于 2\.5|小于 2\.5|Both Teams to Score \(GG\)|稳胆:/;
+const staleText = /胜\(3\)|平\(1\)|负\(0\)|当前 1X2|大于 2\.5|小于 2\.5|Both Teams to Score \(GG\)|稳胆:/;
 
 function expectedSportterySp(match, tipCode) {
   if (tipCode === "1") return match.odds?.odds1;

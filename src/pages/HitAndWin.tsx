@@ -30,7 +30,7 @@ export const HitAndWin: React.FC<HitAndWinProps> = ({ onGoToAuth }) => {
     title: { zh: '命中赢奖 • 终身 VIP 大挑战', en: 'Hit & Win • Lifetime VIP Challenge' },
     rulesCard: { zh: '挑战规则', en: 'Rules & Rewards' },
     rule1: { zh: '1. 平台每日精选 10 场热门赛事。', en: '1. We feature 10 selected matches daily.' },
-    rule2: { zh: '2. 针对每场比赛，选择胜(3) / 平(1) / 负(0) 预测。', en: '2. Pick Home, Draw, or Away for each match.' },
+    rule2: { zh: '2. 针对每场比赛，选择主胜 / 平局 / 客胜；对应竞彩代码为 3 / 1 / 0。', en: '2. Pick Home, Draw, or Away for each match.' },
     rule3: { zh: '3. 每日仅限提交一张竞猜票据，提交后不可修改。', en: '3. Strictly 1 ticket per day. No edits after submission.' },
     rule4: { zh: '4. 全部 10 场预测完美命中，即刻赢取平台【终身免费 PRO 订阅】！', en: '4. Predict all 10 correctly and win Lifetime PRO Membership!' },
     notLoggedIn: { zh: '您当前未登录。提交预测前请先登录账户。', en: 'You are not logged in. Please sign in to submit.' },
@@ -175,10 +175,10 @@ export const HitAndWin: React.FC<HitAndWinProps> = ({ onGoToAuth }) => {
               {/* 右侧：1 / X / 2 竞猜单选钮组 */}
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 {([
-                  { key: '1', label: language === 'zh' ? '胜(3)' : 'Home', odds: match.odds.odds1 },
-                  { key: 'X', label: language === 'zh' ? '平(1)' : 'Draw', odds: match.odds.oddsX },
-                  { key: '2', label: language === 'zh' ? '负(0)' : 'Away', odds: match.odds.odds2 },
-                ] satisfies { key: HitAndWinPick; label: string; odds: number }[]).map(opt => {
+                  { key: '1', label: language === 'zh' ? '主胜' : 'Home', code: language === 'zh' ? '代码3' : '', odds: match.odds.odds1 },
+                  { key: 'X', label: language === 'zh' ? '平局' : 'Draw', code: language === 'zh' ? '代码1' : '', odds: match.odds.oddsX },
+                  { key: '2', label: language === 'zh' ? '客胜' : 'Away', code: language === 'zh' ? '代码0' : '', odds: match.odds.odds2 },
+                ] satisfies { key: HitAndWinPick; label: string; code: string; odds: number }[]).map(opt => {
                   const isChosen = userPick === opt.key;
                   return (
                     <button
@@ -200,7 +200,8 @@ export const HitAndWin: React.FC<HitAndWinProps> = ({ onGoToAuth }) => {
                       }}
                     >
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <span style={{ fontWeight: '700' }}>{opt.key}</span>
+                        <span style={{ fontWeight: '700' }}>{opt.label}</span>
+                        {opt.code && <span style={{ fontSize: '0.6rem', opacity: 0.58 }}>{opt.code}</span>}
                         <span style={{ fontSize: '0.65rem', opacity: 0.7 }}>@{opt.odds.toFixed(2)}</span>
                       </div>
                     </button>

@@ -155,6 +155,8 @@ export interface Match {
   countryName?: string;
   countryNameEn?: string;
   countryFlag?: string;
+  homeTeamValue?: string;
+  awayTeamValue?: string;
   source?: string;
   sourceMethod?: string;
   sourceUrl?: string;
@@ -328,9 +330,9 @@ const generateMatchPool = (): Match[] => {
     const homeTeam = teams.find(t => t.id === scheme.homeId)!;
     const awayTeam = teams.find(t => t.id === scheme.awayId)!;
     const sfpPicks = [
-      { code: '1', odds: scheme.odds.odds1, zh: `胜(3) ${homeTeam.shortName.zh}`, en: `Home Win (${homeTeam.shortName.en})` },
-      { code: 'X', odds: scheme.odds.oddsX, zh: '平(1)', en: 'Draw' },
-      { code: '2', odds: scheme.odds.odds2, zh: `负(0) ${awayTeam.shortName.zh}`, en: `Away Win (${awayTeam.shortName.en})` }
+      { code: '1', odds: scheme.odds.odds1, zh: `主胜 ${homeTeam.shortName.zh}`, en: `Home Win (${homeTeam.shortName.en})` },
+      { code: 'X', odds: scheme.odds.oddsX, zh: '平局', en: 'Draw' },
+      { code: '2', odds: scheme.odds.odds2, zh: `客胜 ${awayTeam.shortName.zh}`, en: `Away Win (${awayTeam.shortName.en})` }
     ].sort((a, b) => a.odds - b.odds);
     const sfpPick = sfpPicks[0];
     const totalGoalsPick = scheme.score ? Math.min(scheme.score[0] + scheme.score[1], 7) : 3 + (index % 2);
@@ -452,9 +454,9 @@ export const getMatchesByDate = (dateStr: string): Match[] => {
 
 // 全局投注术语
 export const bettingGlossary = [
-  { term: '胜(3)', name: { zh: '主队胜', en: 'Home Win' }, desc: { zh: '竞彩足球胜平负选项，表示主队在全场90分钟（含伤停补时）内获胜。', en: 'The home team wins in regular time.' } },
-  { term: '平(1)', name: { zh: '平局', en: 'Draw' }, desc: { zh: '竞彩足球胜平负选项，表示比赛在全场90分钟（含伤停补时）结束时为平局。', en: 'The match ends in a draw in regular time.' } },
-  { term: '负(0)', name: { zh: '主队负', en: 'Away Win' }, desc: { zh: '竞彩足球胜平负选项，表示主队在全场90分钟（含伤停补时）内告负。', en: 'The away team wins in regular time.' } },
+  { term: '主胜', name: { zh: '主队胜（代码3）', en: 'Home Win' }, desc: { zh: '竞彩足球胜平负选项，表示主队在全场90分钟（含伤停补时）内获胜；官方赛果代码为 3。', en: 'The home team wins in regular time.' } },
+  { term: '平局', name: { zh: '平局（代码1）', en: 'Draw' }, desc: { zh: '竞彩足球胜平负选项，表示比赛在全场90分钟（含伤停补时）结束时为平局；官方赛果代码为 1。', en: 'The match ends in a draw in regular time.' } },
+  { term: '客胜', name: { zh: '客队胜（代码0）', en: 'Away Win' }, desc: { zh: '竞彩足球胜平负选项，表示主队在全场90分钟（含伤停补时）内告负，也就是客队获胜；官方赛果代码为 0。', en: 'The away team wins in regular time.' } },
   { term: 'SP', name: { zh: '固定奖金指数', en: 'Starting Price' }, desc: { zh: '页面中的胜平负 SP 来自官方竞彩数据源或其同步快照，表示对应选项的固定奖金指数。', en: 'Displayed odds value for the selected market.' } },
   { term: '总进球数', name: { zh: '0/1/2/3/4/5/6/7+', en: 'Total Goals' }, desc: { zh: '预测全场90分钟（含伤停补时）主客队进球数之和，竞彩常见选项为 0、1、2、3、4、5、6、7+。', en: 'Predict the total number of goals in regular time.' } },
   { term: 'GG', name: { zh: '双方进球参考', en: 'Both Teams to Score' }, desc: { zh: '模型拓展参考项，不作为竞彩官方标准玩法展示。表示双方是否都能进球。', en: 'Model reference for whether both teams score.' } },

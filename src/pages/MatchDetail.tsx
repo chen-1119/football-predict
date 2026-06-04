@@ -1,7 +1,13 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContextCore';
 import type { PredictionDetail } from '../services/mockData';
-import { getMarketLabel, getPredictionTipDisplay, getSportteryPoolRows } from '../services/bettingDisplay';
+import {
+  getMarketLabel,
+  getPredictionCodeHint,
+  getPredictionExplanationDisplay,
+  getPredictionTipDisplay,
+  getSportteryPoolRows
+} from '../services/bettingDisplay';
 import { getCountryById, getLeagueById, getTeamById } from '../services/entities';
 import { TeamBadge } from '../components/TeamBadge';
 import { ArrowLeft, Lock, Trophy } from 'lucide-react';
@@ -10,6 +16,41 @@ interface MatchDetailProps {
   matchId: string;
   onBack: () => void;
 }
+
+const formatNumber = (value: number) => {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, '');
+};
+
+const formatSquadValue = (value: string | undefined, language: 'zh' | 'en') => {
+  const rawValue = value?.trim();
+
+  if (!rawValue || rawValue === '-' || rawValue.startsWith('#')) {
+    return language === 'zh' ? '身价数据暂缺' : 'Value unavailable';
+  }
+
+  const matchedValue = rawValue.match(/^([\d.]+)\s*([BM])\s*€$/i);
+
+  if (!matchedValue) {
+    return language === 'zh' ? `阵容估值：${rawValue}` : `Squad value: ${rawValue}`;
+  }
+
+  const amount = Number(matchedValue[1]);
+  const unit = matchedValue[2].toUpperCase();
+
+  if (!Number.isFinite(amount)) {
+    return language === 'zh' ? '身价数据暂缺' : 'Value unavailable';
+  }
+
+  if (language === 'zh') {
+    const cnAmount = unit === 'B'
+      ? `${formatNumber(amount * 10)}亿`
+      : `${formatNumber(amount * 100)}万`;
+
+    return `阵容估值：约 ${cnAmount}欧元`;
+  }
+
+  return `Squad value: ${rawValue}`;
+};
 
 export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => {
   const { language, isPremium, togglePremium, matches } = useApp();
@@ -80,11 +121,14 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   };
   const poolRows = getSportteryPoolRows(match, language);
   const hasPredictions = match.predictions.length > 0;
+  const homeValueText = formatSquadValue(homeTeam.value, language);
+  const awayValueText = formatSquadValue(awayTeam.value, language);
 
   // 渲染预测详细行
   const renderPredictionBlock = (pred: PredictionDetail) => {
     // 免费版对活跃比赛的高级推荐锁定
     const isLocked = !isFinished && pred.visibilityStatus === 'PREMIUM' && !isPremium;
+    const codeHint = getPredictionCodeHint(pred, language);
 
     return (
       <div 
@@ -132,6 +176,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
             <h4 style={{ fontSize: '1.1rem', fontWeight: '800', color: pred.marketType === 'BEST' ? 'hsl(var(--primary))' : 'hsl(var(--text-primary))', marginTop: '0.2rem' }}>
               {getPredictionTipDisplay(pred, language)}
             </h4>
+            {codeHint && <span className="prediction-code-hint">{codeHint}</span>}
           </div>
           
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
@@ -151,7 +196,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
             {t('analysis')}
           </span>
           <p style={{ fontSize: '0.825rem', color: 'hsl(var(--text-secondary))', lineHeight: '1.6' }}>
-            {pred.explanation[language]}
+            {getPredictionExplanationDisplay(pred, language)}
           </p>
         </div>
       </div>
@@ -216,9 +261,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
             <h3 style={{ fontSize: '1.25rem', fontWeight: '800', fontFamily: 'var(--font-title)' }}>
               {homeTeam.name[language]}
             </h3>
-            <span style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>
-              {t('teamValue')}: {homeTeam.value}
-            </span>
+            <span className="match-team-value">{homeValueText}</span>
           </div>
 
           {/* 比分 / 状态 */}
@@ -257,9 +300,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
             <h3 style={{ fontSize: '1.25rem', fontWeight: '800', fontFamily: 'var(--font-title)' }}>
               {awayTeam.name[language]}
             </h3>
-            <span style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>
-              {t('teamValue')}: {awayTeam.value}
-            </span>
+            <span className="match-team-value">{awayValueText}</span>
           </div>
 
         </div>

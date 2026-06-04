@@ -15,20 +15,23 @@ export interface SportteryOddsPoolDisplay {
 
 const sportteryResultLabels = {
   '1': {
-    zhCompact: '胜(3)',
-    zhFull: '胜(3) 主队胜',
+    zhCompact: '主胜',
+    zhFull: '主胜',
+    zhCodeHint: '竞彩代码 3',
     enCompact: 'Home',
     enFull: 'Home Win'
   },
   X: {
-    zhCompact: '平(1)',
-    zhFull: '平(1) 平局',
+    zhCompact: '平局',
+    zhFull: '平局',
+    zhCodeHint: '竞彩代码 1',
     enCompact: 'Draw',
     enFull: 'Draw'
   },
   '2': {
-    zhCompact: '负(0)',
-    zhFull: '负(0) 主队负',
+    zhCompact: '客胜',
+    zhFull: '客胜',
+    zhCodeHint: '竞彩代码 0',
     enCompact: 'Away',
     enFull: 'Away Win'
   }
@@ -84,14 +87,32 @@ export function getPredictionTipDisplay(
     : label;
 }
 
+export function getPredictionCodeHint(prediction: PredictionDetail, language: Language): string {
+  const sportteryLabel = sportteryResultLabels[prediction.tipCode as keyof typeof sportteryResultLabels];
+
+  if (!sportteryLabel || (prediction.marketType !== '1X2' && prediction.marketType !== 'BEST')) return '';
+  return language === 'zh' ? sportteryLabel.zhCodeHint : '';
+}
+
+export function getPredictionExplanationDisplay(prediction: PredictionDetail, language: Language): string {
+  const text = prediction.explanation[language];
+
+  if (language !== 'zh') return text;
+
+  return text
+    .replace(/胜\(3\)\s*/g, '主胜')
+    .replace(/平\(1\)\s*/g, '平局')
+    .replace(/负\(0\)\s*/g, '客胜');
+}
+
 export function getSportteryOddsRows(odds: Odds | null | undefined, language: Language) {
   if (!odds) return [];
 
   if (language === 'zh') {
     return [
-      { label: '胜(3)', hint: '主队胜', value: odds.odds1 },
-      { label: '平(1)', hint: '平局', value: odds.oddsX },
-      { label: '负(0)', hint: '主队负', value: odds.odds2 }
+      { label: '主胜', hint: '代码3', value: odds.odds1 },
+      { label: '平局', hint: '代码1', value: odds.oddsX },
+      { label: '客胜', hint: '代码0', value: odds.odds2 }
     ];
   }
 

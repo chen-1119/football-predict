@@ -22,6 +22,8 @@ type SyncedMatch = Match & {
   countryName?: string;
   countryNameEn?: string;
   countryFlag?: string;
+  homeTeamValue?: string;
+  awayTeamValue?: string;
 };
 
 const readStoredLanguage = (): Language => {
@@ -89,7 +91,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   shortName: { zh: m.homeTeamName || '未知', en: m.homeTeamNameEn || 'Home' },
                   logo: m.homeTeamLogo || (m.homeTeamName || 'FC').substring(0, 2),
                   logoType: m.homeTeamLogoType,
-                  value: '50M €',
+                  value: m.homeTeamValue || '',
                   color: m.homeTeamColor || '#7f8c8d'
                 });
               }
@@ -100,7 +102,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   shortName: { zh: m.awayTeamName || '未知', en: m.awayTeamNameEn || 'Away' },
                   logo: m.awayTeamLogo || (m.awayTeamName || 'FC').substring(0, 2),
                   logoType: m.awayTeamLogoType,
-                  value: '50M €',
+                  value: m.awayTeamValue || '',
                   color: m.awayTeamColor || '#95a5a6'
                 });
               }
