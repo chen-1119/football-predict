@@ -10,6 +10,17 @@ export interface User {
   isPremium: boolean;
 }
 
+export interface DataSyncState {
+  currentLoaded: boolean;
+  historyLoaded: boolean;
+  historyLoading: boolean;
+  currentCount: number;
+  historyCount: number;
+  totalCount: number;
+  error?: string;
+  updatedAt?: string;
+}
+
 export interface AppContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
@@ -25,6 +36,7 @@ export interface AppContextType {
   register: (username: string) => void;
   logout: () => void;
   matches: Match[];
+  dataSync: DataSyncState;
 }
 
 export const AppContext = createContext<AppContextType | undefined>(undefined);

@@ -604,6 +604,100 @@ button.status-pill:hover {
   font-weight: 650;
 }
 
+.data-sync-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--bg-card));
+  padding: 0.68rem 0.8rem;
+}
+
+.data-sync-strip.is-ready {
+  border-color: hsl(var(--success) / 0.28);
+}
+
+.data-sync-strip.is-loading {
+  border-color: hsl(var(--accent) / 0.28);
+}
+
+.data-sync-strip.is-warning {
+  border-color: hsl(var(--premium) / 0.32);
+}
+
+.data-sync-copy,
+.data-sync-items,
+.data-sync-items span {
+  display: flex;
+  align-items: center;
+}
+
+.data-sync-copy {
+  min-width: 0;
+  gap: 0.5rem;
+  color: hsl(var(--text-secondary));
+  font-size: 0.78rem;
+}
+
+.data-sync-copy strong {
+  color: hsl(var(--text-primary));
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.data-sync-copy > span:last-child {
+  min-width: 0;
+}
+
+.data-sync-dot {
+  width: 0.52rem;
+  height: 0.52rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: hsl(var(--text-muted));
+  box-shadow: 0 0 0 4px hsl(var(--text-muted) / 0.08);
+}
+
+.data-sync-strip.is-ready .data-sync-dot {
+  background: hsl(var(--success));
+  box-shadow: 0 0 0 4px hsl(var(--success) / 0.12);
+}
+
+.data-sync-strip.is-loading .data-sync-dot {
+  background: hsl(var(--accent));
+  box-shadow: 0 0 0 4px hsl(var(--accent) / 0.12);
+}
+
+.data-sync-strip.is-warning .data-sync-dot {
+  background: hsl(var(--premium));
+  box-shadow: 0 0 0 4px hsl(var(--premium) / 0.12);
+}
+
+.data-sync-items {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+.data-sync-items span {
+  gap: 0.28rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  background: hsl(var(--bg));
+  color: hsl(var(--text-muted));
+  font-size: 0.7rem;
+  font-weight: 780;
+  padding: 0.22rem 0.46rem;
+  white-space: nowrap;
+}
+
+.data-sync-items strong {
+  color: hsl(var(--text-secondary));
+  font-weight: 900;
+}
+
 .date-toolbar {
   display: flex;
   align-items: center;
@@ -1998,6 +2092,26 @@ button.status-pill:hover {
   .metric-icon {
     width: 32px;
     height: 32px;
+  }
+
+  .data-sync-strip {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 0.72rem;
+  }
+
+  .data-sync-copy {
+    width: 100%;
+    align-items: flex-start;
+  }
+
+  .data-sync-dot {
+    margin-top: 0.22rem;
+  }
+
+  .data-sync-items {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .date-toolbar {

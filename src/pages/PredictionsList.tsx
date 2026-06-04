@@ -46,10 +46,11 @@ const getTrustColor = (score: number) => {
 };
 
 const formatShortDate = (date: string, language: 'zh' | 'en') => {
-  return new Date(`${date}T00:00:00`).toLocaleDateString(language === 'zh' ? 'zh-CN' : 'en-US', {
+  return new Date(`${date}T00:00:00+08:00`).toLocaleDateString(language === 'zh' ? 'zh-CN' : 'en-US', {
     month: '2-digit',
     day: '2-digit',
-    weekday: 'short'
+    weekday: 'short',
+    timeZone: 'Asia/Shanghai'
   });
 };
 
@@ -60,8 +61,19 @@ const formatKickoffTime = (kickoffTime: string, language: 'zh' | 'en') => {
   );
 };
 
+const formatSyncTime = (isoTime: string | undefined, language: 'zh' | 'en') => {
+  if (!isoTime) return '--';
+
+  return new Date(isoTime).toLocaleTimeString(language === 'zh' ? 'zh-CN' : 'en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'Asia/Shanghai'
+  });
+};
+
 export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch }) => {
-  const { language, isPremium, togglePremium, matches } = useApp();
+  const { language, isPremium, togglePremium, matches, dataSync } = useApp();
 
   const yesterdayStr = getDateStringOffset(-1);
   const todayStr = getDateStringOffset(0);
@@ -106,6 +118,20 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
     selectedMatches: { zh: '当前筛选场次', en: 'Filtered Matches' },
     signalSummary: { zh: '推荐分组', en: 'Signal Split' },
     avgTrust: { zh: '平均可信度', en: 'Average Trust' },
+    dataStatusTitle: { zh: '数据同步', en: 'Data Sync' },
+    dataCurrent: { zh: '当前赛程', en: 'Current' },
+    dataHistory: { zh: '历史库', en: 'History' },
+    dataTotal: { zh: '总数据', en: 'Total' },
+    dataLoading: { zh: '加载中', en: 'Loading' },
+    dataSyncing: { zh: '同步中', en: 'Syncing' },
+    dataReady: { zh: '已加载', en: 'Ready' },
+    dataFallback: { zh: '本地兜底', en: 'Fallback' },
+    dataUpdated: { zh: '更新', en: 'Updated' },
+    dataCurrentLoading: { zh: '正在加载中国竞彩网赛程', en: 'Loading Sporttery schedule' },
+    dataHistoryLoading: { zh: '历史结果后台补齐中', en: 'History loading in background' },
+    dataHistoryReady: { zh: '当前赛程与历史库已就绪', en: 'Current schedule and history are ready' },
+    dataHistoryUnavailable: { zh: '当前赛程已就绪，历史库暂不可用', en: 'Current schedule ready, history unavailable' },
+    dataFallbackNote: { zh: '官方数据暂不可用，已启用兜底数据', en: 'Official data unavailable, using fallback' },
     settledPicks: { zh: '条已结算预测', en: 'settled picks' },
     matchUnit: { zh: '场', en: 'matches' },
     tipUnit: { zh: '条', en: 'tips' },
@@ -347,6 +373,51 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
     }
   ];
 
+  const dataSyncSummary = dataSync.error && !dataSync.currentLoaded
+    ? t('dataFallbackNote')
+    : dataSync.error && dataSync.currentLoaded && !dataSync.historyLoaded
+      ? t('dataHistoryUnavailable')
+      : dataSync.historyLoading
+      ? t('dataHistoryLoading')
+      : dataSync.historyLoaded
+        ? t('dataHistoryReady')
+        : t('dataCurrentLoading');
+
+  const dataSyncTone = dataSync.error
+    ? 'is-warning'
+    : dataSync.historyLoading
+      ? 'is-loading'
+      : dataSync.historyLoaded
+        ? 'is-ready'
+        : '';
+
+  const dataSyncItems = [
+    {
+      label: t('dataCurrent'),
+      value: dataSync.currentLoaded
+        ? `${dataSync.currentCount} ${t('matchUnit')}`
+        : dataSync.error
+          ? t('dataFallback')
+          : t('dataLoading')
+    },
+    {
+      label: t('dataHistory'),
+      value: dataSync.historyLoaded
+        ? `${dataSync.historyCount} ${t('matchUnit')}`
+        : dataSync.historyLoading
+          ? t('dataSyncing')
+          : '--'
+    },
+    {
+      label: t('dataTotal'),
+      value: `${matches.length || dataSync.totalCount} ${t('matchUnit')}`
+    },
+    {
+      label: t('dataUpdated'),
+      value: formatSyncTime(dataSync.updatedAt, language)
+    }
+  ];
+
   return (
     <div className="dashboard-stack">
       {!isPremium && (
@@ -382,6 +453,22 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
             </article>
           );
         })}
+      </section>
+
+      <section className={`data-sync-strip ${dataSyncTone}`} aria-label={t('dataStatusTitle')}>
+        <div className="data-sync-copy">
+          <span className="data-sync-dot" />
+          <strong>{t('dataStatusTitle')}</strong>
+          <span>{dataSyncSummary}</span>
+        </div>
+        <div className="data-sync-items">
+          {dataSyncItems.map((item) => (
+            <span key={item.label}>
+              {item.label}
+              <strong>{item.value}</strong>
+            </span>
+          ))}
+        </div>
       </section>
 
       <section className="date-toolbar" aria-label="Date filters">
@@ -513,7 +600,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
         <section className="empty-state">
           <div>
             <CalendarDays size={40} />
-            <p>{t('noMatches')}</p>
+            <p>{!dataSync.currentLoaded && !dataSync.error ? t('dataCurrentLoading') : t('noMatches')}</p>
           </div>
         </section>
       ) : (

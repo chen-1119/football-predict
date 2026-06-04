@@ -225,11 +225,23 @@ export const teams: Team[] = [
   { id: 'juv', name: { zh: '尤文图斯', en: 'Juventus' }, shortName: { zh: '尤文', en: 'Juventus' }, logo: 'JUV', value: '580M €', color: '#000000' },
 ];
 
-// 辅助函数，生成相对于今天的日期字符串 (YYYY-MM-DD)
+const BEIJING_TIME_ZONE = 'Asia/Shanghai';
+
+export function formatBeijingDateString(date: Date): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: BEIJING_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(date);
+  const getPart = (type: string) => parts.find((part) => part.type === type)?.value || '';
+
+  return `${getPart('year')}-${getPart('month')}-${getPart('day')}`;
+}
+
+// 辅助函数，按中国竞彩网口径生成北京时间日期字符串 (YYYY-MM-DD)
 export function getDateStringOffset(offsetDays: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + offsetDays);
-  return d.toISOString().split('T')[0];
+  return formatBeijingDateString(new Date(Date.now() + offsetDays * 24 * 60 * 60 * 1000));
 }
 
 // 模拟的历史交锋数据源

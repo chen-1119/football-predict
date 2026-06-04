@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { Match } from '../services/mockData';
 import { matchesPool, registerTeam, registerLeague, registerCountry } from '../services/mockData';
 import { AppContext } from './AppContextCore';
-import type { HitAndWinSubmission, Language, User } from './AppContextCore';
+import type { DataSyncState, HitAndWinSubmission, Language, User } from './AppContextCore';
 
 type SyncedMatch = Match & {
   homeTeamName?: string;
@@ -146,42 +146,94 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isPremium, setIsPremium] = useState<boolean>(() => currentUser?.isPremium ?? false);
   const [dailySlipCount, setDailySlipCount] = useState<number>(readStoredDailySlipCount);
   const [hitAndWinSubmission, setHitAndWinSubmission] = useState<HitAndWinSubmission | null>(readStoredHitAndWinSubmission);
-  const [matches, setMatches] = useState<Match[]>(matchesPool);
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [dataSync, setDataSync] = useState<DataSyncState>({
+    currentLoaded: false,
+    historyLoaded: false,
+    historyLoading: false,
+    currentCount: 0,
+    historyCount: 0,
+    totalCount: 0
+  });
 
   // 先加载当前赛程，历史赛果后台补齐；队名保持中国竞彩网同步值，不做别名覆盖。
   useEffect(() => {
     let cancelled = false;
 
     const applyData = (data: unknown, mode: 'replace' | 'append') => {
-      if (cancelled) return;
+      if (cancelled) return 0;
 
       try {
         if (isSyncedMatchArray(data) && data.length > 0) {
           registerSyncedMatches(data);
           setMatches((current) => (mode === 'replace' ? data : mergeMatches(current, data)));
+          return data.length;
         }
       } catch (error: unknown) {
         console.error(error);
-        alert(`Data Processing Error:\n${formatError(error)}`);
+        setDataSync((current) => ({
+          ...current,
+          historyLoading: false,
+          error: formatError(error),
+          updatedAt: new Date().toISOString()
+        }));
       }
+
+      return 0;
     };
 
     fetchFirstAvailable<unknown>(['./data/matches-current.json', './matches.json'])
       .then((data) => {
-        applyData(data, 'replace');
+        const currentCount = applyData(data, 'replace');
+        setDataSync((current) => ({
+          ...current,
+          currentLoaded: currentCount > 0,
+          historyLoading: true,
+          currentCount,
+          totalCount: currentCount,
+          error: undefined,
+          updatedAt: new Date().toISOString()
+        }));
 
         window.setTimeout(() => {
           fetchJson<unknown>('./data/matches-history.json')
-            .then((historyData) => applyData(historyData, 'append'))
+            .then((historyData) => {
+              const historyCount = applyData(historyData, 'append');
+              setDataSync((current) => ({
+                ...current,
+                historyLoaded: historyCount > 0,
+                historyLoading: false,
+                historyCount,
+                totalCount: current.currentCount + historyCount,
+                updatedAt: new Date().toISOString()
+              }));
+            })
             .catch((error: unknown) => {
               console.warn('History data is unavailable; current matches remain usable.', error);
+              setDataSync((current) => ({
+                ...current,
+                historyLoaded: false,
+                historyLoading: false,
+                error: formatError(error),
+                updatedAt: new Date().toISOString()
+              }));
             });
         }, 250);
       })
       .catch((error: unknown) => {
         if (cancelled) return;
         console.error(error);
-        alert(`Fetch Error:\n${formatError(error)}`);
+        setMatches(matchesPool);
+        setDataSync({
+          currentLoaded: false,
+          historyLoaded: false,
+          historyLoading: false,
+          currentCount: 0,
+          historyCount: 0,
+          totalCount: matchesPool.length,
+          error: formatError(error),
+          updatedAt: new Date().toISOString()
+        });
         // 降级使用静态 mock 引擎数据
         console.log('Using static fallback matchesPool data.');
       });
@@ -258,7 +310,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       login,
       register,
       logout,
-      matches
+      matches,
+      dataSync
     }}>
       {children}
     </AppContext.Provider>
