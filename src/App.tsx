@@ -72,7 +72,7 @@ function AppContent() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+    <div className="app-frame">
       {/* 顶部导航 */}
       <Navbar 
         currentTab={currentTab} 
@@ -84,7 +84,7 @@ function AppContent() {
       />
 
       {/* 主体渲染区 */}
-      <main className="container" style={{ flex: 1, padding: '2rem 1.25rem' }}>
+      <main className="container page-main">
         {renderContent()}
       </main>
 

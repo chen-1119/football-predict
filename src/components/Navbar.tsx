@@ -1,6 +1,16 @@
 import React from 'react';
-import { useApp } from '../context/AppContext';
-import { Globe, LogOut, User as UserIcon, HelpCircle } from 'lucide-react';
+import {
+  Globe,
+  HelpCircle,
+  ListChecks,
+  LogOut,
+  ShieldCheck,
+  Target,
+  Ticket,
+  Trophy,
+  User as UserIcon
+} from 'lucide-react';
+import { useApp } from '../context/AppContextCore';
 
 interface NavbarProps {
   currentTab: string;
@@ -8,136 +18,114 @@ interface NavbarProps {
   openGlossary: () => void;
 }
 
+type NavTab = 'best' | 'predictions' | 'generator' | 'hitwin';
+
+const navItems: Array<{
+  key: NavTab;
+  labelKey: 'bestTips' | 'predictions' | 'generator' | 'hitAndWin';
+  icon: React.ComponentType<{ size?: number }>;
+}> = [
+  { key: 'best', labelKey: 'bestTips', icon: Trophy },
+  { key: 'predictions', labelKey: 'predictions', icon: ListChecks },
+  { key: 'generator', labelKey: 'generator', icon: Ticket },
+  { key: 'hitwin', labelKey: 'hitAndWin', icon: Target }
+];
+
 export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openGlossary }) => {
   const { language, setLanguage, currentUser, isPremium, togglePremium, logout } = useApp();
 
-  const handleTabClick = (tab: string) => {
-    setCurrentTab(tab);
-  };
-
   const translations = {
-    brand: { zh: 'AI 足球预测', en: 'AI Predict' },
+    brand: { zh: 'AI 足球预测', en: 'AI Football' },
+    subtitle: { zh: '竞彩数据看板', en: 'Prediction Desk' },
     bestTips: { zh: '每日稳胆', en: 'Best Tips' },
-    predictions: { zh: '足球预测', en: 'Predictions' },
-    generator: { zh: '投注单生成器', en: 'Bet Generator' },
-    hitAndWin: { zh: '命中赢奖', en: 'Hit & Win' },
-    login: { zh: '登录/注册', en: 'Login/Register' },
-    premium: { zh: '高级会员', en: 'Premium' },
-    free: { zh: '免费版', en: 'Free Mode' },
-    togglePrem: { zh: '模拟订阅', en: 'Simulate Pro' },
-    help: { zh: '术语', en: 'Glossary' }
+    predictions: { zh: '赛事预测', en: 'Predictions' },
+    generator: { zh: '投注单', en: 'Bet Slip' },
+    hitAndWin: { zh: '命中挑战', en: 'Hit & Win' },
+    login: { zh: '登录', en: 'Login' },
+    premium: { zh: 'PRO', en: 'PRO' },
+    free: { zh: '免费版', en: 'Free' },
+    togglePrem: { zh: '切换 PRO 预览', en: 'Toggle PRO Preview' },
+    help: { zh: '术语', en: 'Glossary' },
+    language: { zh: '切换语言', en: 'Switch Language' },
+    logout: { zh: '退出登录', en: 'Logout' }
   };
 
-  const t = (key: keyof typeof translations) => {
-    return translations[key][language] || '';
-  };
+  const t = (key: keyof typeof translations) => translations[key][language] || '';
+  const activeTab = currentTab === 'detail' ? 'predictions' : currentTab;
 
   return (
     <header className="glass-header">
-      <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '70px' }}>
-        
-        {/* Brand Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }} onClick={() => handleTabClick('predictions')}>
-          <div style={{
-            background: 'linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--accent)) 100%)',
-            width: '36px', height: '36px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontWeight: '800', color: '#000', fontSize: '1.25rem', fontFamily: 'var(--font-title)'
-          }}>
-            Ω
-          </div>
-          <span className="primary-gradient-text" style={{ fontSize: '1.4rem', letterSpacing: '-0.5px' }}>
-            {t('brand')}
+      <div className="container nav-shell">
+        <button
+          type="button"
+          className="brand-button"
+          onClick={() => setCurrentTab('predictions')}
+          aria-label={t('brand')}
+        >
+          <span className="brand-mark">AI</span>
+          <span className="brand-copy">
+            <span className="brand-title">{t('brand')}</span>
+            <span className="brand-subtitle">{t('subtitle')}</span>
           </span>
-        </div>
+        </button>
 
-        {/* Navigation Items */}
-        <nav style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-          <button 
-            className={`tab-btn ${currentTab === 'best' ? 'active' : ''}`}
-            onClick={() => handleTabClick('best')}
-          >
-            {t('bestTips')}
-          </button>
-          <button 
-            className={`tab-btn ${currentTab === 'predictions' ? 'active' : ''}`}
-            onClick={() => handleTabClick('predictions')}
-          >
-            {t('predictions')}
-          </button>
-          <button 
-            className={`tab-btn ${currentTab === 'generator' ? 'active' : ''}`}
-            onClick={() => handleTabClick('generator')}
-          >
-            {t('generator')}
-          </button>
-          <button 
-            className={`tab-btn ${currentTab === 'hitwin' ? 'active' : ''}`}
-            onClick={() => handleTabClick('hitwin')}
-          >
-            {t('hitAndWin')}
-          </button>
+        <nav className="nav-links" aria-label="Primary">
+          {navItems.map(({ key, labelKey, icon: Icon }) => (
+            <button
+              key={key}
+              type="button"
+              className={`nav-link ${activeTab === key ? 'active' : ''}`}
+              onClick={() => setCurrentTab(key)}
+            >
+              <Icon size={16} />
+              <span>{t(labelKey)}</span>
+            </button>
+          ))}
         </nav>
 
-        {/* Right Actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          {/* Glossary trigger */}
-          <button 
-            onClick={openGlossary} 
-            className="btn btn-secondary" 
-            style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
-          >
-            <HelpCircle size={14} />
+        <div className="nav-actions">
+          <button type="button" onClick={openGlossary} className="status-pill" title={t('help')}>
+            <HelpCircle size={15} />
             <span>{t('help')}</span>
           </button>
 
-          {/* Language Switcher */}
-          <button 
+          <button
+            type="button"
             onClick={() => setLanguage(language === 'zh' ? 'en' : 'zh')}
-            className="btn btn-secondary"
-            style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+            className="status-pill"
+            title={t('language')}
           >
-            <Globe size={14} />
+            <Globe size={15} />
             <span>{language === 'zh' ? 'EN' : '中文'}</span>
           </button>
 
-          {/* Premium Debug Switch */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', background: 'hsl(var(--bg-card))', border: '1px solid hsl(var(--border))', borderRadius: '10px', padding: '0.25rem 0.5rem' }}>
-            <span className={`badge ${isPremium ? 'badge-premium' : 'badge-success'}`} style={{ fontSize: '0.7rem' }}>
-              {isPremium ? t('premium') : t('free')}
-            </span>
-            <button 
-              onClick={togglePremium} 
-              className="btn btn-primary" 
-              style={{
-                padding: '0.25rem 0.5rem', 
-                fontSize: '0.7rem', 
-                background: isPremium ? 'transparent' : 'hsl(var(--premium))',
-                border: isPremium ? '1px solid hsl(var(--border))' : 'none',
-                color: isPremium ? 'hsl(var(--text-secondary))' : '#3b2203'
-              }}
-            >
-              {t('togglePrem')}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={togglePremium}
+            className={`status-pill ${isPremium ? 'is-premium' : ''}`}
+            title={t('togglePrem')}
+          >
+            <ShieldCheck size={15} />
+            <span>{isPremium ? t('premium') : t('free')}</span>
+          </button>
 
-          {/* Auth Button / Profile */}
           {currentUser ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.85rem' }}>
-                <UserIcon size={14} />
+            <>
+              <span className="user-chip" title={currentUser.username}>
+                <UserIcon size={15} />
                 <span>{currentUser.username}</span>
-              </div>
-              <button onClick={logout} className="btn btn-secondary" style={{ padding: '0.4rem 0.5rem' }} title="Logout">
-                <LogOut size={14} />
+              </span>
+              <button type="button" onClick={logout} className="icon-button" title={t('logout')}>
+                <LogOut size={16} />
               </button>
-            </div>
+            </>
           ) : (
-            <button onClick={() => handleTabClick('auth')} className="btn btn-accent" style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem' }}>
+            <button type="button" onClick={() => setCurrentTab('auth')} className="btn btn-accent">
+              <UserIcon size={16} />
               {t('login')}
             </button>
           )}
         </div>
-
       </div>
     </header>
   );

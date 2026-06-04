@@ -1,22 +1,58 @@
-import React, { useState, useMemo } from 'react';
-import { useApp } from '../context/AppContext';
-import { 
-  countries, 
-  leagues, 
-  teams, 
-  getDateStringOffset 
-} from '../services/mockData';
-import type { Match, PredictionDetail } from '../services/mockData';
-import { Lock, SlidersHorizontal, Calendar, Sparkles } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import {
+  Activity,
+  ArrowRight,
+  BarChart3,
+  CalendarDays,
+  ChevronDown,
+  ChevronUp,
+  Lock,
+  RotateCcw,
+  ShieldCheck,
+  SlidersHorizontal,
+  Sparkles,
+  Trophy
+} from 'lucide-react';
+import { useApp } from '../context/AppContextCore';
+import { countries, getDateStringOffset } from '../services/mockData';
+import type { Country, League, Match, PredictionDetail } from '../services/mockData';
+import { getMarketLabel, getPredictionTipDisplay, getSportteryOddsRows } from '../services/bettingDisplay';
+import { getCountryById, getLeagueById, getTeamById } from '../services/entities';
+import { TeamBadge } from '../components/TeamBadge';
 
 interface PredictionsListProps {
   onSelectMatch: (matchId: string) => void;
 }
 
+type SortBy = 'time' | 'trust' | 'odds';
+
+const SORT_OPTIONS: SortBy[] = ['time', 'trust', 'odds'];
+
+const getMatchDay = (match: Match) => match.kickoffTime.split('T')[0];
+
+const getBestPrediction = (match: Match) => match.predictions.find((p) => p.marketType === 'BEST');
+
+const getBestTrust = (match: Match) => getBestPrediction(match)?.trustScore || 0;
+
+const getBestOdds = (match: Match) => getBestPrediction(match)?.odds || 0;
+
+const getTrustColor = (score: number) => {
+  if (score >= 80) return '156 70% 44%';
+  if (score >= 68) return '41 88% 56%';
+  return '196 76% 48%';
+};
+
+const formatShortDate = (date: string, language: 'zh' | 'en') => {
+  return new Date(`${date}T00:00:00`).toLocaleDateString(language === 'zh' ? 'zh-CN' : 'en-US', {
+    month: '2-digit',
+    day: '2-digit',
+    weekday: 'short'
+  });
+};
+
 export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch }) => {
   const { language, isPremium, togglePremium, matches } = useApp();
-  
-  // 日期范围
+
   const yesterdayStr = getDateStringOffset(-1);
   const todayStr = getDateStringOffset(0);
   const tomorrowStr = getDateStringOffset(1);
@@ -24,77 +60,146 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
 
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
   const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
-  
-  // 排序状态
-  const [sortBy, setSortBy] = useState<string>('time'); // 'time', 'trust', 'odds'
+  const [sortBy, setSortBy] = useState<SortBy>('time');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
-  // 1. 过滤 & 分类数据
+  const translations = {
+    premiumNotice: {
+      zh: '当前为免费模式，部分精选稳胆、总进球数和双方进球参考已锁定。升级 PRO 可查看完整模型数据。',
+      en: 'Free mode is active. Some best tips, total goals, and BTTS references are locked. Upgrade to PRO for full model data.'
+    },
+    upgradeBtn: { zh: '解锁 PRO', en: 'Unlock PRO' },
+    filterTitle: { zh: '国家 / 联赛筛选', en: 'Country / League Filters' },
+    allCountries: { zh: '全部国家', en: 'All Countries' },
+    sortTitle: { zh: '排序', en: 'Sort' },
+    time: { zh: '开赛时间', en: 'Time' },
+    trust: { zh: '可信度', en: 'Trust' },
+    odds: { zh: 'SP 值', en: 'Odds' },
+    reset: { zh: '重置', en: 'Reset' },
+    noMatches: { zh: '这个日期暂无可用比赛预测。', en: 'No scheduled matches found for this day.' },
+    yesterday: { zh: '昨天', en: 'Yesterday' },
+    today: { zh: '今天', en: 'Today' },
+    tomorrow: { zh: '明天', en: 'Tomorrow' },
+    dayAfterTomorrow: { zh: '后天', en: 'Day +2' },
+    finished: { zh: '已完场', en: 'Finished' },
+    live: { zh: '进行中', en: 'Live' },
+    pending: { zh: '待开赛', en: 'Scheduled' },
+    details: { zh: '详情', en: 'Details' },
+    hitRate: { zh: '已赛命中率', en: 'Settled Hit Rate' },
+    selectedMatches: { zh: '当前筛选场次', en: 'Filtered Matches' },
+    highTrust: { zh: '高可信推荐', en: 'High Trust Tips' },
+    avgTrust: { zh: '平均可信度', en: 'Average Trust' },
+    settledPicks: { zh: '条已结算预测', en: 'settled picks' },
+    matchUnit: { zh: '场', en: 'matches' },
+    tipUnit: { zh: '条', en: 'tips' },
+    statusTime: { zh: '时间 / 状态', en: 'Time / Status' },
+    teams: { zh: '对阵双方', en: 'Teams' },
+    oddsHeader: { zh: '胜平负 SP', en: '1X2 Odds' },
+    trustHeader: { zh: '可信度', en: 'Trust' },
+    unlockTitle: { zh: '点击模拟升级解锁', en: 'Click to unlock' },
+    hit: { zh: '命中', en: 'Hit' },
+    leagueMatches: { zh: '场比赛', en: 'matches' }
+  };
+
+  const t = (key: keyof typeof translations) => translations[key][language] || '';
+
+  const availableCountries = useMemo(() => {
+    const seen = new Set<string>();
+    const source = matches.length > 0 ? matches.map((match) => match.countryId) : countries.map((country) => country.id);
+
+    return source.reduce<Country[]>((list, countryId) => {
+      if (seen.has(countryId)) return list;
+      seen.add(countryId);
+      list.push(getCountryById(countryId));
+      return list;
+    }, []);
+  }, [matches]);
+
+  const effectiveSelectedDate = useMemo(() => {
+    const selectedDateHasMatches = matches.some((match) => getMatchDay(match) === selectedDate);
+    if (selectedDateHasMatches || selectedDate !== todayStr) return selectedDate;
+
+    return matches
+      .map(getMatchDay)
+      .filter((date) => date >= todayStr)
+      .sort()[0] || selectedDate;
+  }, [matches, selectedDate, todayStr]);
+
   const filteredMatches = useMemo(() => {
-    return matches.filter(m => {
-      // 日期过滤：使用自然日期 (北京时间 YYYY-MM-DD)，使用更直观的开赛日期分类
-      const matchDay = m.kickoffTime.split('T')[0];
-      if (matchDay !== selectedDate) return false;
-
-      // 国家过滤 (多选)
-      if (selectedCountries.length > 0 && !selectedCountries.includes(m.countryId)) {
-        return false;
-      }
-
-      return true;
+    return matches.filter((match) => {
+      if (getMatchDay(match) !== effectiveSelectedDate) return false;
+      return selectedCountries.length === 0 || selectedCountries.includes(match.countryId);
     });
-  }, [selectedDate, selectedCountries, matches]);
+  }, [effectiveSelectedDate, selectedCountries, matches]);
 
-  // 对过滤后的数据进行排序
   const sortedMatches = useMemo(() => {
     const sorted = [...filteredMatches];
+
     sorted.sort((a, b) => {
-      let comparison = 0;
+      let comparison: number;
+
       if (sortBy === 'time') {
         comparison = new Date(a.kickoffTime).getTime() - new Date(b.kickoffTime).getTime();
       } else if (sortBy === 'trust') {
-        // 取得各自的最佳预测可信度
-        const aBest = a.predictions.find(p => p.marketType === 'BEST')?.trustScore || 0;
-        const bBest = b.predictions.find(p => p.marketType === 'BEST')?.trustScore || 0;
-        comparison = aBest - bBest;
-      } else if (sortBy === 'odds') {
-        const aBestOdds = a.predictions.find(p => p.marketType === 'BEST')?.odds || 0;
-        const bBestOdds = b.predictions.find(p => p.marketType === 'BEST')?.odds || 0;
-        comparison = aBestOdds - bBestOdds;
+        comparison = getBestTrust(a) - getBestTrust(b);
+      } else {
+        comparison = getBestOdds(a) - getBestOdds(b);
       }
+
       return sortOrder === 'asc' ? comparison : -comparison;
     });
+
     return sorted;
   }, [filteredMatches, sortBy, sortOrder]);
 
-  // 按联赛 + 国家对比赛分组
   const groupedMatches = useMemo(() => {
-    const groups: { [key: string]: { league: any; country: any; matches: Match[] } } = {};
-    
-    sortedMatches.forEach(m => {
-      const key = `${m.countryId}_${m.leagueId}`;
+    const groups: Record<string, { league: League; country: Country; matches: Match[] }> = {};
+
+    sortedMatches.forEach((match) => {
+      const key = `${match.countryId}_${match.leagueId}`;
+
       if (!groups[key]) {
-        const leagueObj = leagues.find(l => l.id === m.leagueId);
-        const countryObj = countries.find(c => c.id === m.countryId);
         groups[key] = {
-          league: leagueObj,
-          country: countryObj,
+          league: getLeagueById(match.leagueId),
+          country: getCountryById(match.countryId),
           matches: []
         };
       }
-      groups[key].matches.push(m);
+
+      groups[key].matches.push(match);
     });
 
     return Object.values(groups);
   }, [sortedMatches]);
 
-  // 国家过滤勾选切换
+  const settledPredictions = useMemo(() => {
+    return matches
+      .flatMap((match) => match.predictions)
+      .filter((prediction) => prediction.resultStatus !== 'PENDING');
+  }, [matches]);
+
+  const hitRate = useMemo(() => {
+    if (settledPredictions.length === 0) return null;
+    const won = settledPredictions.filter((prediction) => prediction.resultStatus === 'WON').length;
+    return ((won / settledPredictions.length) * 100).toFixed(1);
+  }, [settledPredictions]);
+
+  const avgTrust = useMemo(() => {
+    if (sortedMatches.length === 0) return null;
+    const total = sortedMatches.reduce((sum, match) => sum + getBestTrust(match), 0);
+    return Math.round(total / sortedMatches.length);
+  }, [sortedMatches]);
+
+  const highTrustCount = useMemo(() => {
+    return sortedMatches.filter((match) => getBestTrust(match) >= 78).length;
+  }, [sortedMatches]);
+
   const handleCountryToggle = (countryId: string) => {
-    if (selectedCountries.includes(countryId)) {
-      setSelectedCountries(selectedCountries.filter(id => id !== countryId));
-    } else {
-      setSelectedCountries([...selectedCountries, countryId]);
-    }
+    setSelectedCountries((current) => (
+      current.includes(countryId)
+        ? current.filter((id) => id !== countryId)
+        : [...current, countryId]
+    ));
   };
 
   const handleResetFilters = () => {
@@ -103,415 +208,361 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
     setSortOrder('asc');
   };
 
-  // 词条翻译
-  const translations = {
-    premiumNotice: {
-      zh: '您当前使用的是免费版本。部分活跃的 AI 高级稳胆、大小球和GG预测已锁定。升级到 PRO 会员即可解锁全站 100% 数据！',
-      en: 'You are currently on Free Mode. Advanced AI Best Tips, Goals, and GG Predictions are locked. Upgrade to PRO to unlock all data!'
-    },
-    upgradeBtn: { zh: '立即升级 PRO', en: 'Upgrade to PRO' },
-    filterTitle: { zh: '国家/联赛筛选', en: 'Filter by Countries' },
-    allCountries: { zh: '全部国家', en: 'All Countries' },
-    sortTitle: { zh: '排序与过滤', en: 'Sort & Filters' },
-    time: { zh: '时间', en: 'Time' },
-    trust: { zh: '可信度', en: 'Trust' },
-    odds: { zh: '赔率', en: 'Odds' },
-    reset: { zh: '重置筛选', en: 'Reset' },
-    noMatches: { zh: '今天没有已排程的比赛预测。', en: 'No scheduled matches found for this day.' },
-    yesterday: { zh: '昨天', en: 'Yesterday' },
-    today: { zh: '今天', en: 'Today' },
-    tomorrow: { zh: '明天', en: 'Tomorrow' },
-    finished: { zh: '已结束', en: 'Finished' },
-    details: { zh: '详情', en: 'Details' }
+  const handleSortChange = (nextSort: SortBy) => {
+    if (nextSort === sortBy) return;
+    setSortBy(nextSort);
+    setSortOrder(nextSort === 'time' ? 'asc' : 'desc');
   };
 
-  const t = (key: keyof typeof translations) => {
-    return translations[key][language] || '';
-  };
-
-  // 辅助渲染预测格子
-  const renderPredictionCell = (match: Match, marketType: '1X2' | 'GOALS' | 'GG_NG' | 'BEST') => {
+  const renderPredictionCell = (match: Match, marketType: PredictionDetail['marketType']) => {
     const isFinished = match.status === 'FINISHED';
-    const pred = match.predictions.find((p: PredictionDetail) => p.marketType === marketType);
+    const pred = match.predictions.find((prediction) => prediction.marketType === marketType);
 
-    if (!pred) return '-';
+    if (!pred) return <span className="prediction-tip">-</span>;
 
-    // 免费锁定逻辑：如果是活跃比赛，且是 PREMIUM 预测，且用户不是 VIP，则锁定
     const isLocked = !isFinished && pred.visibilityStatus === 'PREMIUM' && !isPremium;
 
     if (isLocked) {
       return (
-        <div 
-          onClick={(e) => {
-            e.stopPropagation();
-            togglePremium(); // 点击锁一键升级
+        <button
+          type="button"
+          className="locked-tip"
+          onClick={(event) => {
+            event.stopPropagation();
+            togglePremium();
           }}
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.25rem',
-            color: 'hsl(var(--premium))', cursor: 'pointer', background: 'hsl(var(--premium) / 0.1)',
-            padding: '0.35rem 0.5rem', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '600',
-            border: '1px solid hsl(var(--premium) / 0.2)'
-          }}
-          title={language === 'zh' ? '点击模拟升级解锁' : 'Click to unlock'}
+          title={t('unlockTitle')}
         >
           <Lock size={12} />
-          <span>PRO</span>
-        </div>
+          PRO
+        </button>
       );
     }
 
-    // 已结束比赛，显示是否命中
     const showResult = isFinished && pred.resultStatus === 'WON';
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.15rem' }}>
-        <span style={{ 
-          fontSize: '0.825rem', 
-          fontWeight: '700', 
-          color: showResult ? 'hsl(var(--primary))' : 'hsl(var(--text-primary))',
-          textAlign: 'center'
-        }}>
-          {pred.tipCode}
+      <div className={`prediction-cell ${showResult ? 'is-hit' : ''}`}>
+        <span className="prediction-tip">
+          {getPredictionTipDisplay(pred, language, true)}
         </span>
-        <span style={{ fontSize: '0.7rem', color: 'hsl(var(--text-muted))' }}>
-          @{pred.odds.toFixed(2)}
-        </span>
+        <span className="prediction-odds">SP {pred.odds.toFixed(2)}</span>
+        {showResult && <span className="mini-hit">{t('hit')}</span>}
       </div>
     );
   };
 
+  const dateOptions = [
+    { label: t('yesterday'), date: yesterdayStr },
+    { label: t('today'), date: todayStr },
+    { label: t('tomorrow'), date: tomorrowStr },
+    { label: t('dayAfterTomorrow'), date: dayAfterTomorrowStr }
+  ];
+
+  const metrics = [
+    {
+      label: t('hitRate'),
+      value: hitRate ? `${hitRate}%` : '--',
+      note: `${settledPredictions.length} ${t('settledPicks')}`,
+      icon: BarChart3,
+      tone: 'success'
+    },
+    {
+      label: t('selectedMatches'),
+      value: String(sortedMatches.length),
+      note: formatShortDate(effectiveSelectedDate, language),
+      icon: CalendarDays,
+      tone: 'accent'
+    },
+    {
+      label: t('highTrust'),
+      value: String(highTrustCount),
+      note: language === 'zh' ? '可信度 >=78%' : 'Trust >=78%',
+      icon: ShieldCheck,
+      tone: 'premium'
+    },
+    {
+      label: t('avgTrust'),
+      value: avgTrust === null ? '--' : `${avgTrust}%`,
+      note: language === 'zh' ? `按${t(sortBy)}排序` : `Sorted by ${t(sortBy)}`,
+      icon: Activity,
+      tone: ''
+    }
+  ];
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-      
-      {/* 1. 顶部统计与订阅横幅 */}
+    <div className="dashboard-stack">
       {!isPremium && (
-        <div className="card premium-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', padding: '1.25rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', maxWidth: '800px' }}>
-            <div style={{ backgroundColor: 'hsl(var(--premium) / 0.15)', color: 'hsl(var(--premium))', padding: '0.5rem', borderRadius: '10px' }}>
+        <section className="notice-banner" aria-label="PRO notice">
+          <div className="notice-copy">
+            <span className="notice-icon">
               <Sparkles size={20} />
-            </div>
-            <p style={{ fontSize: '0.875rem', color: 'hsl(var(--text-primary))', lineHeight: '1.5' }}>
-              {t('premiumNotice')}
-            </p>
+            </span>
+            <p className="notice-text">{t('premiumNotice')}</p>
           </div>
-          <button onClick={togglePremium} className="btn btn-premium" style={{ whiteSpace: 'nowrap' }}>
+          <button type="button" onClick={togglePremium} className="btn btn-premium">
             {t('upgradeBtn')}
           </button>
-        </div>
+        </section>
       )}
 
-      {/* 顶部统计卡片 */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
-        <div className="card" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ fontSize: '2rem' }}>📊</div>
-          <div>
-            <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>昨日命中率 (Yesterday accuracy)</div>
-            <div style={{ fontSize: '1.5rem', fontWeight: '800', color: 'hsl(var(--primary))' }}>82.3%</div>
-          </div>
-        </div>
-        <div className="card" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ fontSize: '2rem' }}>⚽</div>
-          <div>
-            <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>今日预测场次 (Total Predictions)</div>
-            <div style={{ fontSize: '1.5rem', fontWeight: '800', color: 'hsl(var(--accent))' }}>18 场 (Matches)</div>
-          </div>
-        </div>
-        <div className="card" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ fontSize: '2rem' }}>🏆</div>
-          <div>
-            <div style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>累计红单 (Total Hits)</div>
-            <div style={{ fontSize: '1.5rem', fontWeight: '800', color: 'hsl(var(--primary))' }}>4,923+</div>
-          </div>
-        </div>
-      </div>
+      <section className="metrics-grid" aria-label="Dashboard summary">
+        {metrics.map((metric) => {
+          const Icon = metric.icon;
 
-      {/* 2. 日期横向切换器 */}
-      <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', paddingBottom: '0.25rem' }}>
-        {[
-          { label: t('yesterday'), date: yesterdayStr },
-          { label: t('today'), date: todayStr },
-          { label: t('tomorrow'), date: tomorrowStr },
-          { label: getDateStringOffset(2), date: dayAfterTomorrowStr }
-        ].map((d, index) => (
+          return (
+            <article key={metric.label} className="metric-card">
+              <div className="metric-head">
+                <span className="metric-label">{metric.label}</span>
+                <span className={`metric-icon ${metric.tone}`}>
+                  <Icon size={20} />
+                </span>
+              </div>
+              <div>
+                <div className="metric-value">{metric.value}</div>
+                <div className="metric-note">{metric.note}</div>
+              </div>
+            </article>
+          );
+        })}
+      </section>
+
+      <section className="date-strip" aria-label="Date filters">
+        {dateOptions.map((option) => (
           <button
-            key={index}
-            onClick={() => setSelectedDate(d.date)}
-            className="btn"
-            style={{
-              padding: '0.75rem 1.5rem',
-              borderRadius: '12px',
-              backgroundColor: selectedDate === d.date ? 'hsl(var(--primary))' : 'hsl(var(--bg-card))',
-              color: selectedDate === d.date ? '#000' : 'hsl(var(--text-primary))',
-              border: '1px solid hsl(var(--border))',
-              minWidth: '120px'
-            }}
+            key={option.date}
+            type="button"
+            onClick={() => setSelectedDate(option.date)}
+            className={`date-pill ${effectiveSelectedDate === option.date ? 'active' : ''}`}
           >
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.85rem', fontWeight: '700' }}>{d.label}</span>
-              <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>{d.date}</span>
-            </div>
+            <span className="date-label">{option.label}</span>
+            <span className="date-value">{formatShortDate(option.date, language)}</span>
           </button>
         ))}
-      </div>
+      </section>
 
-      {/* 3. 过滤器与排序器 */}
-      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', padding: '1.25rem' }}>
-        
-        {/* 国家多选 */}
-        <div>
-          <span style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))', display: 'block', marginBottom: '0.75rem', fontWeight: '600' }}>
+      <section className="panel filters-panel" aria-label="Filters">
+        <div className="panel-row is-stacked">
+          <span className="panel-label">
+            <Trophy size={16} />
             {t('filterTitle')}
           </span>
-          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <div className="chip-row">
             <button
+              type="button"
               onClick={() => setSelectedCountries([])}
-              className="btn btn-secondary"
-              style={{
-                padding: '0.35rem 0.75rem',
-                fontSize: '0.8rem',
-                borderRadius: '8px',
-                backgroundColor: selectedCountries.length === 0 ? 'hsl(var(--accent) / 0.15)' : 'transparent',
-                borderColor: selectedCountries.length === 0 ? 'hsl(var(--accent))' : 'hsl(var(--border))',
-                color: selectedCountries.length === 0 ? 'hsl(var(--text-primary))' : 'hsl(var(--text-secondary))'
-              }}
+              className={`filter-chip ${selectedCountries.length === 0 ? 'active' : ''}`}
             >
               {t('allCountries')}
             </button>
-            {countries.map(c => {
-              const isSelected = selectedCountries.includes(c.id);
+            {availableCountries.map((country) => {
+              const isSelected = selectedCountries.includes(country.id);
+
               return (
                 <button
-                  key={c.id}
-                  onClick={() => handleCountryToggle(c.id)}
-                  className="btn btn-secondary"
-                  style={{
-                    padding: '0.35rem 0.75rem',
-                    fontSize: '0.8rem',
-                    borderRadius: '8px',
-                    backgroundColor: isSelected ? 'hsl(var(--accent) / 0.15)' : 'transparent',
-                    borderColor: isSelected ? 'hsl(var(--accent))' : 'hsl(var(--border))',
-                    color: isSelected ? 'hsl(var(--text-primary))' : 'hsl(var(--text-secondary))',
-                    display: 'flex', alignItems: 'center', gap: '0.25rem'
-                  }}
+                  key={country.id}
+                  type="button"
+                  onClick={() => handleCountryToggle(country.id)}
+                  className={`filter-chip ${isSelected ? 'active' : ''}`}
                 >
-                  <span>{c.flag}</span>
-                  <span>{c.name[language]}</span>
+                  <span>{country.flag}</span>
+                  <span>{country.name[language]}</span>
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* 排序器 */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', borderTop: '1px solid hsl(var(--border))', paddingTop: '1rem' }}>
-          
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <SlidersHorizontal size={16} style={{ color: 'hsl(var(--text-secondary))' }} />
-            <span style={{ fontSize: '0.85rem', color: 'hsl(var(--text-secondary))', fontWeight: '600' }}>
-              {t('sortTitle')}:
+        <div className="panel-row">
+          <div className="sort-controls">
+            <span className="panel-label">
+              <SlidersHorizontal size={16} />
+              {t('sortTitle')}
             </span>
-            <div style={{ display: 'flex', gap: '0.25rem', backgroundColor: 'hsl(var(--bg))', padding: '0.25rem', borderRadius: '8px', border: '1px solid hsl(var(--border))' }}>
-              {['time', 'trust', 'odds'].map(s => (
+            <div className="segmented">
+              {SORT_OPTIONS.map((option) => (
                 <button
-                  key={s}
-                  onClick={() => setSortBy(s)}
-                  className="btn"
-                  style={{
-                    padding: '0.25rem 0.6rem',
-                    fontSize: '0.75rem',
-                    borderRadius: '6px',
-                    backgroundColor: sortBy === s ? 'hsl(var(--border))' : 'transparent',
-                    color: sortBy === s ? 'hsl(var(--text-primary))' : 'hsl(var(--text-secondary))',
-                  }}
+                  key={option}
+                  type="button"
+                  onClick={() => handleSortChange(option)}
+                  className={`segment-btn ${sortBy === option ? 'active' : ''}`}
                 >
-                  {t(s as any)}
+                  {t(option)}
                 </button>
               ))}
             </div>
-
-            {/* 升序/降序 */}
             <button
-              onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-              className="btn btn-secondary"
-              style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', borderRadius: '6px' }}
+              type="button"
+              onClick={() => setSortOrder((current) => (current === 'asc' ? 'desc' : 'asc'))}
+              className="sort-order-btn"
+              aria-label={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
             >
-              {sortOrder === 'asc' ? '▲' : '▼'}
+              {sortOrder === 'asc' ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+              {sortOrder === 'asc' ? 'ASC' : 'DESC'}
             </button>
           </div>
 
-          <button onClick={handleResetFilters} className="btn btn-secondary" style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem', borderRadius: '8px' }}>
+          <button type="button" onClick={handleResetFilters} className="reset-btn">
+            <RotateCcw size={14} />
             {t('reset')}
           </button>
         </div>
+      </section>
 
-      </div>
-
-      {/* 4. 比赛预测分组列表 */}
       {groupedMatches.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: '3rem', color: 'hsl(var(--text-secondary))' }}>
-          <Calendar size={40} style={{ marginBottom: '1rem', color: 'hsl(var(--border))' }} />
-          <p>{t('noMatches')}</p>
-        </div>
+        <section className="empty-state">
+          <div>
+            <CalendarDays size={40} />
+            <p>{t('noMatches')}</p>
+          </div>
+        </section>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          {groupedMatches.map((group, gIdx) => (
-            <div key={gIdx} className="card" style={{ padding: '0', overflow: 'hidden' }}>
-              
-              {/* 分组头部：国旗、国家、联赛名称 */}
-              <div style={{
-                backgroundColor: 'hsl(var(--bg-card-hover))',
-                padding: '0.75rem 1.25rem',
-                borderBottom: '1px solid hsl(var(--border))',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                fontWeight: '700',
-                fontSize: '0.875rem'
-              }}>
-                <span>{group.country?.flag}</span>
-                <span style={{ color: 'hsl(var(--text-secondary))' }}>{group.country?.name[language]}</span>
-                <span style={{ color: 'hsl(var(--text-muted))' }}>/</span>
-                <span style={{ color: 'hsl(var(--primary))' }}>{group.league?.name[language]}</span>
+        <section className="league-stack" aria-label="Match predictions">
+          {groupedMatches.map((group) => (
+            <article key={`${group.country.id}_${group.league.id}`} className="league-card">
+              <header className="league-header">
+                <div className="league-title">
+                  <span>{group.country.flag}</span>
+                  <strong>{group.league.name[language]}</strong>
+                  <span className="league-meta">{group.country.name[language]}</span>
+                </div>
+                <span className="league-count">
+                  {group.matches.length} {t('leagueMatches')}
+                </span>
+              </header>
+
+              <div className="table-scroll">
+                <table className="responsive-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '132px' }}>{t('statusTime')}</th>
+                      <th>{t('teams')}</th>
+                      <th style={{ width: '108px', textAlign: 'center' }}>{t('oddsHeader')}</th>
+                      <th style={{ width: '92px', textAlign: 'center' }}>{getMarketLabel('1X2', language)}</th>
+                      <th style={{ width: '100px', textAlign: 'center' }}>{getMarketLabel('GOALS', language)}</th>
+                      <th style={{ width: '110px', textAlign: 'center' }}>{getMarketLabel('GG_NG', language)}</th>
+                      <th style={{ width: '98px', textAlign: 'center' }}>{getMarketLabel('BEST', language)}</th>
+                      <th style={{ width: '92px', textAlign: 'center' }}>{t('trustHeader')}</th>
+                      <th style={{ width: '84px' }} />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {group.matches.map((match) => {
+                      const homeTeam = getTeamById(match.homeTeamId);
+                      const awayTeam = getTeamById(match.awayTeamId);
+                      const isLive = match.status === 'LIVE';
+                      const isFinished = match.status === 'FINISHED';
+                      const score = `${match.scoreHome ?? '-'}:${match.scoreAway ?? '-'}`;
+                      const bestTrust = getBestTrust(match);
+                      const formattedTime = new Date(match.kickoffTime).toLocaleTimeString(
+                        language === 'zh' ? 'zh-CN' : 'en-US',
+                        { hour: '2-digit', minute: '2-digit', hour12: false }
+                      );
+
+                      return (
+                        <tr
+                          key={match.id}
+                          className="match-row"
+                          onClick={() => onSelectMatch(match.id)}
+                        >
+                          <td className="match-time-cell" data-label={t('statusTime')}>
+                            <div className="time-stack">
+                              {isLive ? (
+                                <span className="badge badge-live">{t('live')} {score}</span>
+                              ) : isFinished ? (
+                                <span className="badge">{t('finished')} {score}</span>
+                              ) : (
+                                <>
+                                  <span className="kickoff-time">{formattedTime}</span>
+                                  <span className="status-note">{t('pending')}</span>
+                                </>
+                              )}
+                            </div>
+                          </td>
+
+                          <td className="match-teams-cell" data-label={t('teams')}>
+                            <div className="team-stack">
+                              <div className="team-line">
+                                <TeamBadge team={homeTeam} size="sm" />
+                                <span className="team-name">{homeTeam.name[language]}</span>
+                              </div>
+                              <div className="team-line">
+                                <TeamBadge team={awayTeam} size="sm" />
+                                <span className="team-name">{awayTeam.name[language]}</span>
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="match-odds-cell" data-label={t('oddsHeader')} style={{ textAlign: 'center' }}>
+                            <div className="odds-stack">
+                              {getSportteryOddsRows(match.odds, language).map((row) => (
+                                <span key={row.label} className="odds-row">
+                                  <strong>{row.label}</strong>
+                                  <span>{row.value.toFixed(2)}</span>
+                                </span>
+                              ))}
+                              {match.oddsSource && (
+                                <span className="odds-source" title={match.oddsUpdatedAt || match.oddsSource}>
+                                  {language === 'zh' ? '官方HAD' : 'Official HAD'}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+
+                          <td className="match-market-cell" data-label={getMarketLabel('1X2', language)} style={{ textAlign: 'center' }}>
+                            {renderPredictionCell(match, '1X2')}
+                          </td>
+
+                          <td className="match-market-cell" data-label={getMarketLabel('GOALS', language)} style={{ textAlign: 'center' }}>
+                            {renderPredictionCell(match, 'GOALS')}
+                          </td>
+
+                          <td className="match-market-cell" data-label={getMarketLabel('GG_NG', language)} style={{ textAlign: 'center' }}>
+                            {renderPredictionCell(match, 'GG_NG')}
+                          </td>
+
+                          <td className="match-market-cell" data-label={getMarketLabel('BEST', language)} style={{ textAlign: 'center' }}>
+                            {renderPredictionCell(match, 'BEST')}
+                          </td>
+
+                          <td className="match-trust-cell" data-label={t('trustHeader')} style={{ textAlign: 'center' }}>
+                            <div
+                              className="trust-meter"
+                              style={{
+                                '--trust': `${bestTrust}%`,
+                                '--trust-color': getTrustColor(bestTrust)
+                              } as React.CSSProperties}
+                            >
+                              <span className="trust-value">{bestTrust}%</span>
+                              <span className="trust-bar">
+                                <span />
+                              </span>
+                            </div>
+                          </td>
+
+                          <td className="match-action-cell" style={{ textAlign: 'right' }}>
+                            <button
+                              type="button"
+                              className="details-button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                onSelectMatch(match.id);
+                              }}
+                            >
+                              {t('details')}
+                              <ArrowRight size={13} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-
-              {/* 比赛表格 */}
-              <table className="responsive-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: '120px' }}>时间 / 状态</th>
-                    <th>交战双方</th>
-                    <th style={{ textAlign: 'center', width: '80px' }}>1X2 赔率</th>
-                    <th style={{ textAlign: 'center', width: '80px' }}>1X2 Tip</th>
-                    <th style={{ textAlign: 'center', width: '80px' }}>Goals Tip</th>
-                    <th style={{ textAlign: 'center', width: '80px' }}>GG Tip</th>
-                    <th style={{ textAlign: 'center', width: '90px' }}>Best Tip</th>
-                    <th style={{ textAlign: 'center', width: '90px' }}>Trust 可信度</th>
-                    <th style={{ width: '80px' }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {group.matches.map((match) => {
-                    const homeTeam = teams.find(t => t.id === match.homeTeamId)!;
-                    const awayTeam = teams.find(t => t.id === match.awayTeamId)!;
-                    const isLive = match.status === 'LIVE';
-                    const isFinished = match.status === 'FINISHED';
-                    const formattedTime = new Date(match.kickoffTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
-                    
-                    // 获取该比赛的最佳推荐可信度
-                    const bestTrust = match.predictions.find(p => p.marketType === 'BEST')?.trustScore || 0;
-
-                    return (
-                      <tr 
-                        key={match.id} 
-                        onClick={() => onSelectMatch(match.id)}
-                        style={{ cursor: 'pointer', transition: 'background-color 0.2s' }}
-                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'hsl(var(--bg-card-hover) / 0.5)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
-                      >
-                        {/* 状态/时间 */}
-                        <td data-label="状态/时间">
-                          {isLive ? (
-                            <span className="badge badge-live">LIVE {match.scoreHome}:{match.scoreAway}</span>
-                          ) : isFinished ? (
-                            <span className="badge" style={{ backgroundColor: 'hsl(var(--border))', color: 'hsl(var(--text-secondary))' }}>
-                              {t('finished')} ({match.scoreHome}:{match.scoreAway})
-                            </span>
-                          ) : (
-                            <span style={{ fontSize: '0.85rem', color: 'hsl(var(--text-primary))', fontWeight: '500' }}>
-                              {formattedTime}
-                            </span>
-                          )}
-                        </td>
-
-                        {/* 对阵队伍 */}
-                        <td data-label="对阵双方">
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                              <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: homeTeam.color }} />
-                              <span style={{ fontWeight: '600', fontSize: '0.9rem' }}>{homeTeam.name[language]}</span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                              <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: awayTeam.color }} />
-                              <span style={{ fontWeight: '600', fontSize: '0.9rem' }}>{awayTeam.name[language]}</span>
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* 1X2 赔率 */}
-                        <td data-label="1X2 赔率" style={{ textAlign: 'center' }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem', fontSize: '0.75rem', color: 'hsl(var(--text-secondary))' }}>
-                            <span>1: {match.odds.odds1.toFixed(2)}</span>
-                            <span>X: {match.odds.oddsX.toFixed(2)}</span>
-                            <span>2: {match.odds.odds2.toFixed(2)}</span>
-                          </div>
-                        </td>
-
-                        {/* 1X2 Tip */}
-                        <td data-label="1X2 Tip" style={{ textAlign: 'center' }}>
-                          {renderPredictionCell(match, '1X2')}
-                        </td>
-
-                        {/* Goals Tip */}
-                        <td data-label="Goals Tip" style={{ textAlign: 'center' }}>
-                          {renderPredictionCell(match, 'GOALS')}
-                        </td>
-
-                        {/* GG Tip */}
-                        <td data-label="GG Tip" style={{ textAlign: 'center' }}>
-                          {renderPredictionCell(match, 'GG_NG')}
-                        </td>
-
-                        {/* Best Tip */}
-                        <td data-label="Best Tip" style={{ textAlign: 'center' }}>
-                          {renderPredictionCell(match, 'BEST')}
-                        </td>
-
-                        {/* Trust 可信度 */}
-                        <td data-label="可信度" style={{ textAlign: 'center' }}>
-                          <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center' }}>
-                            <span style={{ 
-                              fontSize: '0.85rem', 
-                              fontWeight: '800', 
-                              color: bestTrust >= 80 ? 'hsl(var(--primary))' : (bestTrust >= 65 ? 'hsl(var(--accent))' : 'hsl(var(--text-secondary))')
-                            }}>
-                              {bestTrust}%
-                            </span>
-                            {/* 进度条 */}
-                            <div style={{ width: '40px', height: '3px', backgroundColor: 'hsl(var(--border))', borderRadius: '2px', marginTop: '0.2rem', overflow: 'hidden' }}>
-                              <div style={{ 
-                                width: `${bestTrust}%`, 
-                                height: '100%', 
-                                backgroundColor: bestTrust >= 80 ? 'hsl(var(--primary))' : (bestTrust >= 65 ? 'hsl(var(--accent))' : 'hsl(var(--text-secondary))')
-                              }} />
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* 详情入口 */}
-                        <td style={{ textAlign: 'right' }}>
-                          <button 
-                            className="btn btn-secondary" 
-                            style={{ padding: '0.35rem 0.65rem', fontSize: '0.75rem', borderRadius: '6px' }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onSelectMatch(match.id);
-                            }}
-                          >
-                            {t('details')}
-                          </button>
-                        </td>
-
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-
-            </div>
+            </article>
           ))}
-        </div>
+        </section>
       )}
-
     </div>
   );
 };

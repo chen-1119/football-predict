@@ -29,9 +29,9 @@ export interface Country {
 }
 
 export interface Odds {
-  odds1: number; // 主胜赔率
-  oddsX: number; // 平局赔率
-  odds2: number; // 客胜赔率
+  odds1: number; // 胜 SP
+  oddsX: number; // 平 SP
+  odds2: number; // 负 SP
 }
 
 export interface PredictionDetail {
@@ -112,6 +112,11 @@ export interface Match {
   scoreHome?: number;
   scoreAway?: number;
   odds: Odds;
+  oddsSource?: string;
+  oddsPoolCode?: string;
+  oddsSourceMethod?: string;
+  oddsUpdatedAt?: string;
+  oddsSourceUrl?: string;
   predictions: PredictionDetail[];
   stats?: MatchStats;
   recentForm?: {
@@ -120,6 +125,26 @@ export interface Match {
   };
   h2h?: H2HRecord[];
   standings?: StandingRow[];
+  matchDate?: string;
+  homeTeamName?: string;
+  homeTeamNameEn?: string;
+  homeTeamLogo?: string;
+  homeTeamColor?: string;
+  awayTeamName?: string;
+  awayTeamNameEn?: string;
+  awayTeamLogo?: string;
+  awayTeamColor?: string;
+  leagueName?: string;
+  leagueNameEn?: string;
+  leagueShortName?: string;
+  leagueShortNameEn?: string;
+  countryName?: string;
+  countryNameEn?: string;
+  countryFlag?: string;
+  source?: string;
+  sourceMethod?: string;
+  sourceMatchId?: string;
+  matchNo?: string;
 }
 
 // 模拟的基础实体数据
@@ -188,7 +213,7 @@ const generateMockH2H = (hId: string, aId: string): H2HRecord[] => {
 };
 
 // 模拟的近期战绩
-const generateMockForm = (_tId: string): TeamRecentForm => {
+const generateMockForm = (): TeamRecentForm => {
   return {
     recentMatches: [
       { opponentId: 'opp1', opponentName: { zh: '对手A', en: 'Opponent A' }, isHome: true, ourScore: 2, oppScore: 1, date: '2026-05-20', competition: { zh: '联赛', en: 'League' } },
@@ -214,18 +239,15 @@ const generateMockForm = (_tId: string): TeamRecentForm => {
 // 模拟的联赛积分榜数据
 const generateMockStandings = (leagueId: string): StandingRow[] => {
   // 我们只用当前定义的几只球队简单排出积分榜
-  let targetTeamIds: string[] = [];
-  if (leagueId === 'epl') {
-    targetTeamIds = ['mci', 'ars', 'liv', 'che', 'avl', 'tot', 'mun', 'cry'];
-  } else if (leagueId === 'laliga') {
-    targetTeamIds = ['rma', 'bar', 'atm', 'rso'];
-  } else if (leagueId === 'bundesliga') {
-    targetTeamIds = ['fcb', 'b04', 'bvb'];
-  } else if (leagueId === 'seriea') {
-    targetTeamIds = ['int', 'mil', 'juv'];
-  } else {
-    targetTeamIds = ['mci', 'rma', 'fcb', 'liv', 'bar', 'int'];
-  }
+  const targetTeamIds = leagueId === 'epl'
+    ? ['mci', 'ars', 'liv', 'che', 'avl', 'tot', 'mun', 'cry']
+    : leagueId === 'laliga'
+      ? ['rma', 'bar', 'atm', 'rso']
+      : leagueId === 'bundesliga'
+        ? ['fcb', 'b04', 'bvb']
+        : leagueId === 'seriea'
+          ? ['int', 'mil', 'juv']
+          : ['mci', 'rma', 'fcb', 'liv', 'bar', 'int'];
   
   return targetTeamIds.map((tId, idx) => {
     const wins = 25 - idx * 2 - Math.floor(Math.random() * 2);
@@ -290,20 +312,28 @@ const generateMatchPool = (): Match[] => {
 
     const homeTeam = teams.find(t => t.id === scheme.homeId)!;
     const awayTeam = teams.find(t => t.id === scheme.awayId)!;
+    const sfpPicks = [
+      { code: '1', odds: scheme.odds.odds1, zh: `胜(3) ${homeTeam.shortName.zh}`, en: `Home Win (${homeTeam.shortName.en})` },
+      { code: 'X', odds: scheme.odds.oddsX, zh: '平(1)', en: 'Draw' },
+      { code: '2', odds: scheme.odds.odds2, zh: `负(0) ${awayTeam.shortName.zh}`, en: `Away Win (${awayTeam.shortName.en})` }
+    ].sort((a, b) => a.odds - b.odds);
+    const sfpPick = sfpPicks[0];
+    const totalGoalsPick = scheme.score ? Math.min(scheme.score[0] + scheme.score[1], 7) : 3 + (index % 2);
+    const totalGoalsCode = totalGoalsPick >= 7 ? '7+' : String(totalGoalsPick);
 
     // 默认预测详情
     const predictions: PredictionDetail[] = [
       {
         marketType: '1X2',
-        tipCode: scheme.odds.odds1 < scheme.odds.odds2 ? '1' : '2',
+        tipCode: sfpPick.code,
         tipLabel: {
-          zh: scheme.odds.odds1 < scheme.odds.odds2 ? `主胜 (${homeTeam.shortName.zh})` : `客胜 (${awayTeam.shortName.zh})`,
-          en: scheme.odds.odds1 < scheme.odds.odds2 ? `Home Win (${homeTeam.shortName.en})` : `Away Win (${awayTeam.shortName.en})`
+          zh: sfpPick.zh,
+          en: sfpPick.en
         },
-        odds: scheme.odds.odds1 < scheme.odds.odds2 ? scheme.odds.odds1 : scheme.odds.odds2,
+        odds: sfpPick.odds,
         trustScore: Math.floor(60 + Math.random() * 30),
         explanation: {
-          zh: `${homeTeam.shortName.zh}近期在主场战绩斐然，核心攻击群状态火热。反观${awayTeam.shortName.zh}防守线近期饱受漏洞困扰，本场倾向于实力更占优的一方全取三分。`,
+          zh: `基于胜平负 SP，当前倾向为 ${sfpPick.zh}。模型同时参考赛程状态、主客场和近期攻防数据。`,
           en: `${homeTeam.shortName.en} has been dominant at home recently, with key attackers in red-hot form. On the other hand, ${awayTeam.shortName.en} is struggling with defensive issues. We expect the stronger side to secure all three points.`
         },
         visibilityStatus: 'FREE',
@@ -311,21 +341,21 @@ const generateMatchPool = (): Match[] => {
       },
       {
         marketType: 'GOALS',
-        tipCode: 'O2.5',
-        tipLabel: { zh: '大于 2.5 球', en: 'Over 2.5 Goals' },
+        tipCode: totalGoalsCode,
+        tipLabel: { zh: totalGoalsCode === '7+' ? '总进球数 7+' : `总进球数 ${totalGoalsCode}球`, en: totalGoalsCode === '7+' ? 'Total Goals 7+' : `Total Goals ${totalGoalsCode}` },
         odds: 1.68 + (index % 5) * 0.05,
         trustScore: Math.floor(55 + Math.random() * 35),
         explanation: {
-          zh: '双方均主张攻势足球，近期比赛得失球数较多，大球可信度极高。',
+          zh: '总进球数参考来自胜平负 SP、双方近期进失球和节奏模型。',
           en: 'Both teams play open offensive football. Their recent matches have seen plenty of goals, making the Over 2.5 market highly viable.'
         },
         visibilityStatus: 'PREMIUM', // 高级预测锁定
-        resultStatus: scheme.status === 'FINISHED' ? (scheme.score && (scheme.score[0] + scheme.score[1] > 2.5) ? 'WON' : 'LOST') : 'PENDING'
+        resultStatus: scheme.status === 'FINISHED' ? (scheme.score && (totalGoalsCode === '7+' ? scheme.score[0] + scheme.score[1] >= 7 : scheme.score[0] + scheme.score[1] === Number(totalGoalsCode)) ? 'WON' : 'LOST') : 'PENDING'
       },
       {
         marketType: 'GG_NG',
         tipCode: 'GG',
-        tipLabel: { zh: '双方进球 (GG)', en: 'Both Teams to Score (GG)' },
+        tipLabel: { zh: '双方进球 是', en: 'Both Teams to Score' },
         odds: 1.75 + (index % 3) * 0.08,
         trustScore: Math.floor(58 + Math.random() * 30),
         explanation: {
@@ -338,7 +368,7 @@ const generateMatchPool = (): Match[] => {
     ];
 
     // 添加 Best Tip (这在 Nerdytips 是最核心最亮眼的推荐)
-    // 根据赔率与可信度综合生成一个
+    // 根据 SP 与可信度综合生成一个
     const bestChoice = predictions[0].trustScore > 75 ? predictions[0] : (predictions[1].trustScore > predictions[2].trustScore ? predictions[1] : predictions[2]);
     
     // 克隆并置为 Best
@@ -346,13 +376,13 @@ const generateMatchPool = (): Match[] => {
       marketType: 'BEST',
       tipCode: bestChoice.tipCode,
       tipLabel: {
-        zh: `稳胆: ${bestChoice.tipLabel.zh}`,
+        zh: `稳胆 ${bestChoice.tipLabel.zh}`,
         en: `Best: ${bestChoice.tipLabel.en}`
       },
       odds: bestChoice.odds,
       trustScore: Math.min(99, bestChoice.trustScore + 2), // Best Tip 信度偏高一点点
       explanation: {
-        zh: `【AI 精选】这是本场比赛数学模型跑出的最高价值推荐。结合了两队伤停、战意和赔率倾斜，防守兜底极佳。`,
+        zh: `【AI 精选】这是本场比赛数学模型跑出的最高价值推荐。结合了两队伤停、战意和 SP 倾斜，防守兜底极佳。`,
         en: `[AI Choice] This is the highest-value recommendation computed by our model for this match. Balanced for form, motivation, and line movements.`
       },
       visibilityStatus: 'PREMIUM', // Best Tip 活跃比赛需要是 Premium
@@ -387,8 +417,8 @@ const generateMatchPool = (): Match[] => {
       predictions,
       stats,
       recentForm: {
-        home: generateMockForm(scheme.homeId),
-        away: generateMockForm(scheme.awayId)
+        home: generateMockForm(),
+        away: generateMockForm()
       },
       h2h: generateMockH2H(scheme.homeId, scheme.awayId),
       standings: generateMockStandings(scheme.leagueId)
@@ -407,15 +437,13 @@ export const getMatchesByDate = (dateStr: string): Match[] => {
 
 // 全局投注术语
 export const bettingGlossary = [
-  { term: '1', name: { zh: '主胜', en: 'Home Win' }, desc: { zh: '预测主队在常规时间（90分钟加伤停补时）内赢得比赛。', en: 'Predict the home team to win in regular time.' } },
-  { term: 'X', name: { zh: '平局', en: 'Draw' }, desc: { zh: '预测比赛在常规时间结束时为平局。', en: 'Predict the match to end in a draw.' } },
-  { term: '2', name: { zh: '客胜', en: 'Away Win' }, desc: { zh: '预测客队在常规时间（90分钟加伤停补时）内赢得比赛。', en: 'Predict the away team to win in regular time.' } },
-  { term: '1X', name: { zh: '主胜或平局', en: 'Double Chance 1X' }, desc: { zh: '双重机会，只要主队不败（主胜或平局）即命中。', en: 'Win if home team wins or draws (home team double chance).' } },
-  { term: 'X2', name: { zh: '客胜或平局', en: 'Double Chance X2' }, desc: { zh: '双重机会，只要客队不败（客胜或平局）即命中。', en: 'Win if away team wins or draws (away team double chance).' } },
-  { term: 'GG', name: { zh: '双方进球', en: 'Both Teams to Score (GG)' }, desc: { zh: '预测交战双方均能取得至少一个进球。', en: 'Both teams will score at least one goal.' } },
-  { term: 'NG', name: { zh: '至少一方未进球', en: 'No Goal (NG)' }, desc: { zh: '预测至少有一只球队无法破门（比分可能包含 0）。', en: 'At least one of the teams will not score a goal.' } },
-  { term: 'O1.5 / O2.5', name: { zh: '大于1.5 / 2.5', en: 'Over 1.5 / 2.5 Goals' }, desc: { zh: '预测全场两队总进球数大于 1.5 或 2.5 球（如 2球以上或 3球以上）。', en: 'Predict total match goals to be greater than 1.5 or 2.5.' } },
-  { term: 'U2.5 / U3.5', name: { zh: '小于2.5 / 3.5', en: 'Under 2.5 / 3.5 Goals' }, desc: { zh: '预测全场两队总进球数小于 2.5 或 3.5 球。', en: 'Predict total match goals to be less than 2.5 or 3.5.' } },
+  { term: '胜(3)', name: { zh: '主队胜', en: 'Home Win' }, desc: { zh: '竞彩足球胜平负选项，表示主队在全场90分钟（含伤停补时）内获胜。', en: 'The home team wins in regular time.' } },
+  { term: '平(1)', name: { zh: '平局', en: 'Draw' }, desc: { zh: '竞彩足球胜平负选项，表示比赛在全场90分钟（含伤停补时）结束时为平局。', en: 'The match ends in a draw in regular time.' } },
+  { term: '负(0)', name: { zh: '主队负', en: 'Away Win' }, desc: { zh: '竞彩足球胜平负选项，表示主队在全场90分钟（含伤停补时）内告负。', en: 'The away team wins in regular time.' } },
+  { term: 'SP', name: { zh: '固定奖金指数', en: 'Starting Price' }, desc: { zh: '页面中的胜平负 SP 来自官方竞彩数据源或其同步快照，表示对应选项的固定奖金指数。', en: 'Displayed odds value for the selected market.' } },
+  { term: '总进球数', name: { zh: '0/1/2/3/4/5/6/7+', en: 'Total Goals' }, desc: { zh: '预测全场90分钟（含伤停补时）主客队进球数之和，竞彩常见选项为 0、1、2、3、4、5、6、7+。', en: 'Predict the total number of goals in regular time.' } },
+  { term: 'GG', name: { zh: '双方进球参考', en: 'Both Teams to Score' }, desc: { zh: '模型拓展参考项，不作为竞彩官方标准玩法展示。表示双方是否都能进球。', en: 'Model reference for whether both teams score.' } },
+  { term: 'NG', name: { zh: '双方进球否', en: 'No Both Teams to Score' }, desc: { zh: '模型拓展参考项，表示至少一方没有进球。', en: 'At least one team does not score.' } },
 ];
 
 export function registerTeam(t: Team) {

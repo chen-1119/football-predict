@@ -1,11 +1,9 @@
 import React, { useState } from 'react';
-import { useApp } from '../context/AppContext';
-import { 
-  teams, 
-  leagues, 
-  countries 
-} from '../services/mockData';
+import { useApp } from '../context/AppContextCore';
 import type { PredictionDetail } from '../services/mockData';
+import { getMarketLabel, getPredictionTipDisplay, getSportteryOddsRows } from '../services/bettingDisplay';
+import { getCountryById, getLeagueById, getTeamById } from '../services/entities';
+import { TeamBadge } from '../components/TeamBadge';
 import { ArrowLeft, Lock, Trophy } from 'lucide-react';
 
 interface MatchDetailProps {
@@ -31,10 +29,10 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     );
   }
 
-  const homeTeam = teams.find(t => t.id === match.homeTeamId)!;
-  const awayTeam = teams.find(t => t.id === match.awayTeamId)!;
-  const league = leagues.find(l => l.id === match.leagueId)!;
-  const country = countries.find(c => c.id === match.countryId)!;
+  const homeTeam = getTeamById(match.homeTeamId);
+  const awayTeam = getTeamById(match.awayTeamId);
+  const league = getLeagueById(match.leagueId);
+  const country = getCountryById(match.countryId);
   
   const isFinished = match.status === 'FINISHED';
   const isLive = match.status === 'LIVE';
@@ -52,7 +50,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     standingsTab: { zh: '联赛积分榜', en: 'Standings' },
     market: { zh: '推荐市场', en: 'Market' },
     tip: { zh: '推荐选项', en: 'Tip' },
-    odds: { zh: '赔率', en: 'Odds' },
+    odds: { zh: 'SP', en: 'Odds' },
     trust: { zh: '可信度', en: 'Confidence' },
     analysis: { zh: '模型深度解析', en: 'AI Analysis' },
     scorePrediction: { zh: 'AI 比分推演', en: 'AI Score Prediction' },
@@ -112,10 +110,10 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
               fontWeight: '700', 
               letterSpacing: '0.5px' 
             }}>
-              {pred.marketType === 'BEST' ? '⭐️ BEST TIP' : `${pred.marketType} Market`}
+              {getMarketLabel(pred.marketType, language)}
             </span>
             <h4 style={{ fontSize: '1.1rem', fontWeight: '800', color: pred.marketType === 'BEST' ? 'hsl(var(--primary))' : 'hsl(var(--text-primary))', marginTop: '0.2rem' }}>
-              {pred.tipLabel[language]}
+              {getPredictionTipDisplay(pred, language)}
             </h4>
           </div>
           
@@ -190,13 +188,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
         }}>
           {/* 主队 */}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', minWidth: '150px' }}>
-            <div style={{ 
-              width: '64px', height: '64px', borderRadius: '16px', backgroundColor: homeTeam.color,
-              display: 'flex', alignItems: 'center', justifySelf: 'center', justifyContent: 'center',
-              fontWeight: '800', color: '#000', fontSize: '1.75rem', border: '2px solid rgba(255,255,255,0.1)'
-            }}>
-              {homeTeam.logo}
-            </div>
+            <TeamBadge team={homeTeam} size="lg" />
             <h3 style={{ fontSize: '1.25rem', fontWeight: '800', fontFamily: 'var(--font-title)' }}>
               {homeTeam.name[language]}
             </h3>
@@ -237,13 +229,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
 
           {/* 客队 */}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', minWidth: '150px' }}>
-            <div style={{ 
-              width: '64px', height: '64px', borderRadius: '16px', backgroundColor: awayTeam.color,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontWeight: '800', color: '#000', fontSize: '1.75rem', border: '2px solid rgba(255,255,255,0.1)'
-            }}>
-              {awayTeam.logo}
-            </div>
+            <TeamBadge team={awayTeam} size="lg" />
             <h3 style={{ fontSize: '1.25rem', fontWeight: '800', fontFamily: 'var(--font-title)' }}>
               {awayTeam.name[language]}
             </h3>
@@ -254,7 +240,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
 
         </div>
 
-        {/* 底部赔率展示 */}
+        {/* 底部 SP 展示 */}
         <div style={{ 
           borderTop: '1px solid hsl(var(--border))', 
           width: '100%', 
@@ -264,9 +250,18 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
           gap: '2rem',
           fontSize: '0.875rem'
         }}>
-          <div>1胜: <span style={{ fontWeight: '700', color: 'hsl(var(--accent))' }}>{match.odds.odds1.toFixed(2)}</span></div>
-          <div>平局: <span style={{ fontWeight: '700', color: 'hsl(var(--accent))' }}>{match.odds.oddsX.toFixed(2)}</span></div>
-          <div>2胜: <span style={{ fontWeight: '700', color: 'hsl(var(--accent))' }}>{match.odds.odds2.toFixed(2)}</span></div>
+          {getSportteryOddsRows(match.odds, language).map((row) => (
+            <div key={row.label}>
+              {row.label} <span style={{ color: 'hsl(var(--text-muted))' }}>{row.hint}</span>:{' '}
+              <span style={{ fontWeight: '700', color: 'hsl(var(--accent))' }}>{row.value.toFixed(2)}</span>
+            </div>
+          ))}
+          {match.oddsSource && (
+            <div style={{ color: 'hsl(var(--success))', fontWeight: 700 }}>
+              {language === 'zh' ? '官方HAD' : 'Official HAD'}
+              {match.oddsUpdatedAt ? ` · ${match.oddsUpdatedAt}` : ''}
+            </div>
+          )}
         </div>
 
       </div>
@@ -527,7 +522,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
               </thead>
               <tbody>
                 {match.standings.map((row) => {
-                  const teamObj = teams.find(t => t.id === row.teamId)!;
+                  const teamObj = getTeamById(row.teamId);
                   const isCurrentMatchTeam = teamObj.id === homeTeam.id || teamObj.id === awayTeam.id;
 
                   return (

@@ -4,10 +4,13 @@ const https = require("https");
 
 const SPORTTERY_BASE = "https://webapi.sporttery.cn";
 const CURRENT_URL = `${SPORTTERY_BASE}/gateway/uniform/football/getMatchListV1.qry?clientCode=3001`;
+const CALCULATOR_URL = `${SPORTTERY_BASE}/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c`;
 const PAGE_SIZE = Math.max(1, Number(process.env.SPORTTERY_PAGE_SIZE || 80));
 const PAGE_DEPTH = Math.max(1, Number(process.env.SPORTTERY_PAGE_DEPTH || 16));
 const WINDOW_BACK_DAYS = Math.max(0, Number(process.env.MATCH_WINDOW_BACK_DAYS || 7));
 const WINDOW_FORWARD_DAYS = Math.max(1, Number(process.env.MATCH_WINDOW_FORWARD_DAYS || 14));
+const ODDS_HISTORY_RETENTION_DAYS = Math.max(1, Number(process.env.ODDS_HISTORY_RETENTION_DAYS || 180));
+const ODDS_HISTORY_BUCKET_MINUTES = Math.max(1, Number(process.env.ODDS_HISTORY_BUCKET_MINUTES || 60));
 const METHODS = (process.env.SPORTTERY_METHODS || "concern,live,result,all")
   .split(",")
   .map((x) => x.trim())
@@ -52,7 +55,110 @@ function seeded(seed) {
 }
 
 function colorFromName(name) {
-  return `#${hashString(name).slice(0, 6).padEnd(6, "0")}`;
+  let hash = 2166136261;
+  const text = String(name || "");
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `#${(hash >>> 8).toString(16).slice(0, 6).padStart(6, "0")}`;
+}
+
+const FIFA_TO_ISO = {
+  ALB: "AL",
+  ALG: "DZ",
+  ARG: "AR",
+  ARM: "AM",
+  AUS: "AU",
+  AUT: "AT",
+  BEL: "BE",
+  BIH: "BA",
+  BRA: "BR",
+  BUL: "BG",
+  CAN: "CA",
+  CHI: "CL",
+  CHN: "CN",
+  CIV: "CI",
+  COL: "CO",
+  CRC: "CR",
+  CRO: "HR",
+  CYP: "CY",
+  CZE: "CZ",
+  DEN: "DK",
+  ECU: "EC",
+  ENG: "GB",
+  ESP: "ES",
+  FRA: "FR",
+  GER: "DE",
+  GRE: "GR",
+  HUN: "HU",
+  IRL: "IE",
+  ISR: "IL",
+  ITA: "IT",
+  JOR: "JO",
+  JPN: "JP",
+  KOR: "KR",
+  MEX: "MX",
+  NED: "NL",
+  NGA: "NG",
+  NIR: "GB",
+  NOR: "NO",
+  PER: "PE",
+  POL: "PL",
+  POR: "PT",
+  QAT: "QA",
+  ROU: "RO",
+  SCO: "GB",
+  SRB: "RS",
+  SLO: "SI",
+  SUI: "CH",
+  SVK: "SK",
+  SWE: "SE",
+  TUR: "TR",
+  UKR: "UA",
+  URU: "UY",
+  USA: "US",
+  WAL: "GB",
+};
+
+const TEAM_NAME_TO_ISO = {
+  "斯洛文尼亚": "SI",
+  "塞浦路斯": "CY",
+  "瑞典": "SE",
+  "希腊": "GR",
+  "法国": "FR",
+  "科特迪瓦": "CI",
+  "墨西哥": "MX",
+  "塞尔维亚": "RS",
+  "哥伦比亚": "CO",
+  "哥斯达黎加": "CR",
+  "荷兰": "NL",
+  "西班牙": "ES",
+  "意大利": "IT",
+  "英格兰": "GB",
+  "德国": "DE",
+  "葡萄牙": "PT",
+  "巴西": "BR",
+  "阿根廷": "AR",
+  "美国": "US",
+  "日本": "JP",
+  "韩国": "KR",
+  "丹麦": "DK",
+  "波兰": "PL",
+  "尼日利亚": "NG",
+  "秘鲁": "PE",
+  "北爱尔兰": "GB",
+};
+
+function flagEmojiFromIso(isoCode) {
+  const code = normText(isoCode).toUpperCase();
+  if (!/^[A-Z]{2}$/.test(code)) return "";
+  return String.fromCodePoint(...code.split("").map((letter) => 127397 + letter.charCodeAt(0)));
+}
+
+function teamLogo(teamName, teamCode) {
+  const isoCode = FIFA_TO_ISO[normText(teamCode).toUpperCase()] || TEAM_NAME_TO_ISO[normText(teamName)] || "";
+  return flagEmojiFromIso(isoCode) || normText(teamName, "FC").slice(0, 2).toUpperCase();
 }
 
 function scoreFromSections(section) {
@@ -103,25 +209,29 @@ function sanitizeOdds(raw) {
   return null;
 }
 
-function oddsFromList(oddsList, fallback = {}) {
-  const rows = Array.isArray(oddsList) ? oddsList : [];
-  const row =
+function sportteryHadOdds(row, sourceUrl, sourceMethod) {
+  const rows = Array.isArray(row?.oddsList) ? row.oddsList : [];
+  const hadRow =
     rows.find((item) => String(item?.poolCode || "").toUpperCase() === "HAD") ||
-    rows.find((item) => item?.h || item?.d || item?.a) ||
-    {};
-  return sanitizeOdds({
-    odds1: row.h ?? fallback.h,
-    oddsX: row.d ?? fallback.d,
-    odds2: row.a ?? fallback.a,
+    row?.had ||
+    (row?.h || row?.d || row?.a ? row : null);
+  const odds = sanitizeOdds({
+    odds1: hadRow?.h,
+    oddsX: hadRow?.d,
+    odds2: hadRow?.a,
   });
-}
 
-function fallbackOdds(seedKey) {
-  const rand = seeded(seedKey);
+  if (!odds) return null;
+
+  const updateDate = normText(hadRow?.updateDate);
+  const updateTime = normText(hadRow?.updateTime);
   return {
-    odds1: Number((1.65 + rand() * 2.2).toFixed(2)),
-    oddsX: Number((2.9 + rand() * 1.3).toFixed(2)),
-    odds2: Number((1.65 + rand() * 2.2).toFixed(2)),
+    odds,
+    oddsSource: "sporttery:HAD",
+    oddsPoolCode: "HAD",
+    oddsSourceMethod: sourceMethod,
+    oddsUpdatedAt: [updateDate, updateTime].filter(Boolean).join(" ") || undefined,
+    oddsSourceUrl: sourceUrl,
   };
 }
 
@@ -138,6 +248,8 @@ function resultStatus(match, expected) {
   if (!Number.isFinite(match.scoreHome) || !Number.isFinite(match.scoreAway)) return "PENDING";
   const total = match.scoreHome + match.scoreAway;
   const actual1x2 = match.scoreHome > match.scoreAway ? "1" : match.scoreHome < match.scoreAway ? "2" : "X";
+  if (/^[0-6]$/.test(expected)) return total === Number(expected) ? "WON" : "LOST";
+  if (expected === "7+") return total >= 7 ? "WON" : "LOST";
   if (expected === "O2.5") return total > 2.5 ? "WON" : "LOST";
   if (expected === "U2.5") return total < 2.5 ? "WON" : "LOST";
   if (expected === "GG") return match.scoreHome > 0 && match.scoreAway > 0 ? "WON" : "LOST";
@@ -235,15 +347,15 @@ function buildPageUrl(method, pageNo = null, pageType = null) {
   return `${SPORTTERY_BASE}/gateway/uniform/fb/getMatchDataPageListV1.qry?${params.toString()}`;
 }
 
-function flatten(payload, sourceMethod) {
+function flatten(payload, sourceMethod, sourceUrl) {
   const rows = [];
   for (const day of payload?.value?.matchInfoList || []) {
-    for (const row of day.subMatchList || []) rows.push(mapSportteryRow(row, sourceMethod));
+    for (const row of day.subMatchList || []) rows.push(mapSportteryRow(row, sourceMethod, sourceUrl));
   }
   return rows;
 }
 
-function mapSportteryRow(row, sourceMethod) {
+function mapSportteryRow(row, sourceMethod, sourceUrl) {
   const sectionScore = scoreFromSections(row.sectionsNo999 || row.sectionsNo1);
   const scoreHome = toNum(row.homeScore, sectionScore.home);
   const scoreAway = toNum(row.awayScore, sectionScore.away);
@@ -253,52 +365,67 @@ function mapSportteryRow(row, sourceMethod) {
   const matchId = String(row.matchId || `${row.matchDate}-${homeTeam}-${awayTeam}`);
   const status = statusFromSporttery(row.matchStatus, row.sellStatus, row.matchStatusName);
   const kickoffTime = parseKickoff(row.matchDate, row.matchTime);
-  const odds = oddsFromList(row.oddsList, { h: row.h, d: row.d, a: row.a }) || fallbackOdds(`${matchId}-${homeTeam}-${awayTeam}`);
+  const oddsInfo = sportteryHadOdds(row, sourceUrl, sourceMethod);
   return {
     sourceMethod,
     sourceMatchId: matchId,
     matchNo: normText(row.matchNumStr),
     homeTeam,
     awayTeam,
+    homeTeamCode: normText(row.homeTeamCode || row.homeTeamAbbEnName),
+    awayTeamCode: normText(row.awayTeamCode || row.awayTeamAbbEnName),
     leagueName,
     leagueCode: String(row.leagueId || ""),
     kickoffTime,
     status,
     scoreHome,
     scoreAway,
-    odds,
+    odds: oddsInfo?.odds || null,
+    oddsSource: oddsInfo?.oddsSource,
+    oddsPoolCode: oddsInfo?.oddsPoolCode,
+    oddsSourceMethod: oddsInfo?.oddsSourceMethod,
+    oddsUpdatedAt: oddsInfo?.oddsUpdatedAt,
+    oddsSourceUrl: oddsInfo?.oddsSourceUrl,
   };
 }
 
 async function fetchCurrentMatches() {
   const urls = [
-    CURRENT_URL,
-    ...(process.env.SPORTTERY_SOURCE_URLS || "").split(",").map((x) => x.trim()).filter(Boolean),
-    process.env.SPORTTERY_PROXY_URL || "",
+    { url: CALCULATOR_URL, method: "calculator" },
+    { url: CURRENT_URL, method: "current" },
+    ...(process.env.SPORTTERY_SOURCE_URLS || "")
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .map((url) => ({ url, method: "current" })),
+    process.env.SPORTTERY_PROXY_URL ? { url: process.env.SPORTTERY_PROXY_URL, method: "proxy" } : null,
   ].filter(Boolean);
-  for (const url of urls) {
+  const allMatches = [];
+  for (const item of urls) {
     try {
-      const payload = await httpGetJson(url, "concern");
-      const matches = flatten(payload, "current");
+      const payload = await httpGetJson(item.url, "concern");
+      const matches = flatten(payload, item.method, item.url);
       if (matches.length) {
-        console.log(`Sporttery current ok: ${matches.length}`);
-        return matches;
+        console.log(`Sporttery ${item.method} ok: ${matches.length}`);
+        allMatches.push(...matches);
       }
     } catch (error) {
-      console.log(`Sporttery current failed: ${error.message || error}`);
+      console.log(`Sporttery ${item.method} failed: ${error.message || error}`);
     }
   }
-  return [];
+  return allMatches;
 }
 
 async function fetchMethodMatches(method) {
-  const payloads = [await httpGetJson(buildPageUrl(method), method)];
+  const firstUrl = buildPageUrl(method);
+  const payloads = [{ payload: await httpGetJson(firstUrl, method), url: firstUrl }];
   if (method === "all" || method === "result") {
     for (let page = 1; page < PAGE_DEPTH; page += 1) {
       try {
-        const payload = await httpGetJson(buildPageUrl(method, page, 0), method);
+        const pageUrl = buildPageUrl(method, page, 0);
+        const payload = await httpGetJson(pageUrl, method);
         if (!(payload?.value?.matchInfoList || []).length) break;
-        payloads.push(payload);
+        payloads.push({ payload, url: pageUrl });
         const hasMore = payload?.value?.prePage && String(payload.value.prePage) !== "0";
         if (!hasMore) break;
       } catch (error) {
@@ -307,7 +434,7 @@ async function fetchMethodMatches(method) {
       }
     }
   }
-  const matches = payloads.flatMap((payload) => flatten(payload, method));
+  const matches = payloads.flatMap((entry) => flatten(entry.payload, method, entry.url));
   console.log(`Sporttery ${method} ok: ${matches.length}`);
   return matches;
 }
@@ -315,10 +442,25 @@ async function fetchMethodMatches(method) {
 function mergeMatch(prev, next) {
   const nextHasScore = Number.isFinite(next.scoreHome) && Number.isFinite(next.scoreAway);
   const prevHasScore = Number.isFinite(prev.scoreHome) && Number.isFinite(prev.scoreAway);
+  const oddsRank = (match) => {
+    if (!sanitizeOdds(match.odds)) return 0;
+    if (match.oddsUpdatedAt) return 4;
+    if (match.oddsSourceMethod === "calculator") return 3;
+    if (match.oddsSourceMethod === "current") return 2;
+    return 1;
+  };
+  const oddsMatch = oddsRank(next) >= oddsRank(prev) ? next : prev;
   return {
     ...prev,
     ...next,
-    odds: sanitizeOdds(next.odds) ? next.odds : prev.odds,
+    odds: oddsMatch.odds || null,
+    oddsSource: oddsMatch.oddsSource,
+    oddsPoolCode: oddsMatch.oddsPoolCode,
+    oddsSourceMethod: oddsMatch.oddsSourceMethod,
+    oddsUpdatedAt: oddsMatch.oddsUpdatedAt,
+    oddsSourceUrl: oddsMatch.oddsSourceUrl,
+    homeTeamCode: next.homeTeamCode || prev.homeTeamCode,
+    awayTeamCode: next.awayTeamCode || prev.awayTeamCode,
     scoreHome: nextHasScore ? next.scoreHome : prevHasScore ? prev.scoreHome : next.scoreHome,
     scoreAway: nextHasScore ? next.scoreAway : prevHasScore ? prev.scoreAway : next.scoreAway,
   };
@@ -343,9 +485,9 @@ function dedupeMatches(matches) {
 function predictionSet(match) {
   const probabilities = impliedProbabilities(match.odds);
   const picks = [
-    ["1", probabilities.home, match.odds.odds1, `主胜 (${match.homeTeam})`, `Home Win (${match.homeTeam})`],
-    ["X", probabilities.draw, match.odds.oddsX, "平局", "Draw"],
-    ["2", probabilities.away, match.odds.odds2, `客胜 (${match.awayTeam})`, `Away Win (${match.awayTeam})`],
+    ["1", probabilities.home, match.odds.odds1, `胜(3) ${match.homeTeam}`, `Home Win (${match.homeTeam})`],
+    ["X", probabilities.draw, match.odds.oddsX, "平(1)", "Draw"],
+    ["2", probabilities.away, match.odds.odds2, `负(0) ${match.awayTeam}`, `Away Win (${match.awayTeam})`],
   ].sort((a, b) => b[1] - a[1]);
   const best1x2 = picks[0];
   const baseTrust = clamp(Math.round(best1x2[1] * 100 + 18), 55, 94);
@@ -353,9 +495,10 @@ function predictionSet(match) {
   const homeLambda = clamp(0.75 + probabilities.home * 2.2 + rand() * 0.35, 0.6, 2.8);
   const awayLambda = clamp(0.65 + probabilities.away * 2.1 + rand() * 0.35, 0.5, 2.6);
   const totalLambda = homeLambda + awayLambda;
-  const goalsTip = totalLambda >= 2.55 ? "O2.5" : "U2.5";
+  const goalsTip = totalLambda >= 6.5 ? "7+" : String(clamp(Math.round(totalLambda), 0, 6));
   const ggTip = (1 - Math.exp(-homeLambda)) * (1 - Math.exp(-awayLambda)) >= 0.48 ? "GG" : "NG";
-  const goalsOdds = Number((goalsTip === "O2.5" ? 1.72 + rand() * 0.35 : 1.78 + rand() * 0.38).toFixed(2));
+  const goalsDistance = goalsTip === "7+" ? Math.abs(totalLambda - 7) : Math.abs(totalLambda - Number(goalsTip));
+  const goalsOdds = Number((1.65 + goalsDistance * 0.35 + rand() * 0.28).toFixed(2));
   const ggOdds = Number((ggTip === "GG" ? 1.75 + rand() * 0.3 : 1.8 + rand() * 0.32).toFixed(2));
 
   const oneXTwo = {
@@ -365,7 +508,7 @@ function predictionSet(match) {
     odds: best1x2[2],
     trustScore: baseTrust,
     explanation: {
-      zh: `基于官方竞彩赔率和赛程状态，${match.homeTeam} vs ${match.awayTeam} 当前 1X2 隐含概率最高方向为 ${best1x2[3]}。`,
+      zh: `基于官方竞彩胜平负 SP 和赛程状态，${match.homeTeam} vs ${match.awayTeam} 当前隐含概率最高方向为 ${best1x2[3]}。`,
       en: `Based on official match data and 1X2 odds, the strongest direction is ${best1x2[4]}.`,
     },
     visibilityStatus: "FREE",
@@ -375,11 +518,11 @@ function predictionSet(match) {
   const goals = {
     marketType: "GOALS",
     tipCode: goalsTip,
-    tipLabel: goalsTip === "O2.5" ? { zh: "大于 2.5 球", en: "Over 2.5 Goals" } : { zh: "小于 2.5 球", en: "Under 2.5 Goals" },
+    tipLabel: { zh: goalsTip === "7+" ? "总进球数 7+" : `总进球数 ${goalsTip}球`, en: goalsTip === "7+" ? "Total Goals 7+" : `Total Goals ${goalsTip}` },
     odds: goalsOdds,
-    trustScore: clamp(Math.round((goalsTip === "O2.5" ? totalLambda / 3.2 : 1 - totalLambda / 3.4) * 100), 55, 88),
+    trustScore: clamp(Math.round((1 - Math.min(goalsDistance, 2.5) / 3) * 100), 55, 88),
     explanation: {
-      zh: `进球模型以双方胜平负概率反推预期进球，当前总进球期望约 ${totalLambda.toFixed(2)}。`,
+      zh: `总进球数参考以胜平负 SP 反推预期进球，当前总进球期望约 ${totalLambda.toFixed(2)}。`,
       en: `The goals model derives expected goals from the win/draw/loss market. Estimated total goals: ${totalLambda.toFixed(2)}.`,
     },
     visibilityStatus: "PREMIUM",
@@ -389,11 +532,11 @@ function predictionSet(match) {
   const gg = {
     marketType: "GG_NG",
     tipCode: ggTip,
-    tipLabel: ggTip === "GG" ? { zh: "双方进球 (GG)", en: "Both Teams to Score (GG)" } : { zh: "至少一方零封 (NG)", en: "No Goal (NG)" },
+    tipLabel: ggTip === "GG" ? { zh: "双方进球 是", en: "Both Teams to Score" } : { zh: "双方进球 否", en: "No Both Teams to Score" },
     odds: ggOdds,
     trustScore: clamp(Math.round((ggTip === "GG" ? 0.58 : 0.56) * 100 + rand() * 20), 55, 86),
     explanation: {
-      zh: `BTTS 判断来自主客队预期进球分布，主队约 ${homeLambda.toFixed(2)}，客队约 ${awayLambda.toFixed(2)}。`,
+      zh: `双方进球参考来自主客队预期进球分布，主队约 ${homeLambda.toFixed(2)}，客队约 ${awayLambda.toFixed(2)}。`,
       en: `BTTS is estimated from goal distribution: home ${homeLambda.toFixed(2)}, away ${awayLambda.toFixed(2)}.`,
     },
     visibilityStatus: "PREMIUM",
@@ -403,11 +546,11 @@ function predictionSet(match) {
   const best = {
     marketType: "BEST",
     tipCode: oneXTwo.tipCode,
-    tipLabel: { zh: `稳胆: ${oneXTwo.tipLabel.zh}`, en: `Best: ${oneXTwo.tipLabel.en}` },
+    tipLabel: { zh: `稳胆 ${oneXTwo.tipLabel.zh}`, en: `Best: ${oneXTwo.tipLabel.en}` },
     odds: oneXTwo.odds,
     trustScore: clamp(oneXTwo.trustScore + 2, 57, 96),
     explanation: {
-      zh: `AI 精选优先使用官方竞彩实时数据，不再混入本地模拟比赛。本场综合赔率、状态和进球模型后推荐 ${oneXTwo.tipLabel.zh}。`,
+      zh: `AI 精选优先使用官方竞彩实时数据，不再混入本地模拟比赛。本场综合胜平负 SP、状态和进球模型后推荐 ${oneXTwo.tipLabel.zh}。`,
       en: `The best tip uses official Sporttery data without local fake fixtures. Recommended: ${oneXTwo.tipLabel.en}.`,
     },
     visibilityStatus: "PREMIUM",
@@ -517,9 +660,11 @@ function toAppMatch(match) {
     matchDate: match.kickoffTime.slice(0, 10),
     homeTeamName: match.homeTeam,
     homeTeamNameEn: match.homeTeam,
+    homeTeamLogo: teamLogo(match.homeTeam, match.homeTeamCode),
     homeTeamColor: colorFromName(match.homeTeam),
     awayTeamName: match.awayTeam,
     awayTeamNameEn: match.awayTeam,
+    awayTeamLogo: teamLogo(match.awayTeam, match.awayTeamCode),
     awayTeamColor: colorFromName(match.awayTeam),
     leagueName: match.leagueName,
     leagueNameEn: meta.leagueNameEn,
@@ -532,6 +677,11 @@ function toAppMatch(match) {
     sourceMethod: match.sourceMethod,
     sourceMatchId: match.sourceMatchId,
     matchNo: match.matchNo,
+    oddsSource: match.oddsSource,
+    oddsPoolCode: match.oddsPoolCode,
+    oddsSourceMethod: match.oddsSourceMethod,
+    oddsUpdatedAt: match.oddsUpdatedAt,
+    oddsSourceUrl: match.oddsSourceUrl,
   };
 }
 
@@ -563,21 +713,140 @@ function loadExistingMatches() {
   }
 }
 
+function isTrustedOddsMatch(match) {
+  return (
+    match?.source === "sporttery" &&
+    match?.oddsSource === "sporttery:HAD" &&
+    String(match?.oddsSourceUrl || "").includes("webapi.sporttery.cn") &&
+    Boolean(sanitizeOdds(match?.odds))
+  );
+}
+
+function captureBucketIso(capturedAt) {
+  const time = Date.parse(capturedAt);
+  const bucketMs = ODDS_HISTORY_BUCKET_MINUTES * 60 * 1000;
+  return new Date(Math.floor(time / bucketMs) * bucketMs).toISOString();
+}
+
+function loadOddsHistory(publicDir) {
+  const file = path.join(publicDir, "odds-history.json");
+  if (!fs.existsSync(file)) {
+    return { version: 1, source: "sporttery:HAD", rows: [] };
+  }
+
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+    return {
+      version: 1,
+      source: "sporttery:HAD",
+      rows: Array.isArray(parsed?.rows) ? parsed.rows : [],
+    };
+  } catch {
+    return { version: 1, source: "sporttery:HAD", rows: [] };
+  }
+}
+
+function oddsHistoryRow(match, capturedAt) {
+  const odds = sanitizeOdds(match?.odds);
+  const sourceMatchId = normText(match?.sourceMatchId || String(match?.id || "").replace(/^sporttery_/, ""));
+  if (!sourceMatchId || !odds || !isTrustedOddsMatch(match)) return null;
+
+  return {
+    capturedAt,
+    captureBucket: captureBucketIso(capturedAt),
+    sourceMatchId,
+    matchNo: normText(match.matchNo),
+    kickoffTime: match.kickoffTime,
+    status: match.status,
+    leagueName: match.leagueName,
+    countryName: match.countryName,
+    homeTeamId: match.homeTeamId,
+    awayTeamId: match.awayTeamId,
+    homeTeamName: match.homeTeamName,
+    awayTeamName: match.awayTeamName,
+    homeTeamLogo: match.homeTeamLogo,
+    awayTeamLogo: match.awayTeamLogo,
+    odds1: odds.odds1,
+    oddsX: odds.oddsX,
+    odds2: odds.odds2,
+    oddsSource: match.oddsSource,
+    oddsSourceMethod: match.oddsSourceMethod,
+    oddsUpdatedAt: match.oddsUpdatedAt,
+    oddsSourceUrl: match.oddsSourceUrl,
+  };
+}
+
+function appendOddsHistory(publicDir, matches, capturedAt) {
+  const history = loadOddsHistory(publicDir);
+  const cutoff = Date.parse(capturedAt) - ODDS_HISTORY_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+  const byMatchAndBucket = new Map();
+
+  for (const row of history.rows) {
+    const rowTime = Date.parse(row?.capturedAt);
+    const sourceMatchId = normText(row?.sourceMatchId);
+    const captureBucket = normText(row?.captureBucket);
+    if (!Number.isFinite(rowTime) || rowTime < cutoff || !sourceMatchId || !captureBucket) continue;
+    byMatchAndBucket.set(`${sourceMatchId}|${captureBucket}`, {
+      ...row,
+      sourceMatchId,
+      captureBucket,
+    });
+  }
+
+  let appended = 0;
+  let updated = 0;
+  for (const match of matches) {
+    const row = oddsHistoryRow(match, capturedAt);
+    if (!row) continue;
+    const key = `${row.sourceMatchId}|${row.captureBucket}`;
+    const existing = byMatchAndBucket.get(key);
+    if (!existing) {
+      appended += 1;
+    } else if (JSON.stringify(existing) !== JSON.stringify(row)) {
+      updated += 1;
+    }
+    byMatchAndBucket.set(key, row);
+  }
+
+  const rows = Array.from(byMatchAndBucket.values()).sort((a, b) => {
+    const byTime = Date.parse(a.capturedAt) - Date.parse(b.capturedAt);
+    if (byTime !== 0) return byTime;
+    return String(a.sourceMatchId).localeCompare(String(b.sourceMatchId));
+  });
+
+  const payload = {
+    version: 1,
+    source: "sporttery:HAD",
+    updatedAt: capturedAt,
+    retentionDays: ODDS_HISTORY_RETENTION_DAYS,
+    bucketMinutes: ODDS_HISTORY_BUCKET_MINUTES,
+    rows,
+  };
+  fs.writeFileSync(path.join(publicDir, "odds-history.json"), JSON.stringify(payload, null, 2), "utf8");
+  return { rows: rows.length, appended, updated };
+}
+
 async function sync() {
+  const capturedAt = new Date().toISOString();
   const allRawMatches = await fetchSportteryMatches();
   const rawMatches = allRawMatches.filter(inMatchWindow);
-  let output = rawMatches.map(toAppMatch);
+  const rawMatchesWithOdds = rawMatches.filter((match) => sanitizeOdds(match.odds));
+  const usedFreshOdds = rawMatchesWithOdds.length > 0;
+  let output = rawMatchesWithOdds.map(toAppMatch);
 
   if (!output.length) {
-    output = loadExistingMatches();
+    output = loadExistingMatches().filter(isTrustedOddsMatch);
     if (!output.length) throw new Error("Sporttery returned no matches and no existing matches.json is available.");
-    console.log(`Sporttery returned no matches; kept existing matches.json (${output.length}).`);
+    console.log(`Sporttery returned no trusted odds; kept existing trusted matches.json (${output.length}).`);
   }
 
   const publicDir = path.join(__dirname, "..", "public");
   fs.mkdirSync(publicDir, { recursive: true });
   const outputPath = path.join(publicDir, "matches.json");
   fs.writeFileSync(outputPath, JSON.stringify(output, null, 2), "utf8");
+  const oddsHistory = usedFreshOdds
+    ? appendOddsHistory(publicDir, output, capturedAt)
+    : { rows: loadOddsHistory(publicDir).rows.length, appended: 0, updated: 0, skipped: "no fresh official odds" };
 
   const byStatus = output.reduce((acc, match) => {
     acc[match.status] = (acc[match.status] || 0) + 1;
@@ -590,7 +859,9 @@ async function sync() {
         source: "sporttery",
         count: output.length,
         scanned: allRawMatches.length,
+        skippedWithoutOfficialOdds: rawMatches.length - rawMatchesWithOdds.length,
         window: { backDays: WINDOW_BACK_DAYS, forwardDays: WINDOW_FORWARD_DAYS },
+        oddsHistory,
         byStatus,
       },
       null,

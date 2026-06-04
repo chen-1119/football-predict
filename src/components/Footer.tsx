@@ -1,5 +1,5 @@
 import React from 'react';
-import { useApp } from '../context/AppContext';
+import { useApp } from '../context/AppContextCore';
 import { Smartphone } from 'lucide-react';
 
 export const Footer: React.FC = () => {
@@ -10,6 +10,9 @@ export const Footer: React.FC = () => {
     terms: { zh: '服务条款', en: 'Terms of Service' },
     privacy: { zh: '隐私政策', en: 'Privacy Policy' },
     popularLeagues: { zh: '顶级联赛', en: 'Popular Leagues' },
+    contact: { zh: '联系方式', en: 'Contact' },
+    contactName: { zh: '微信：何先生', en: 'WeChat: Mr. He' },
+    contactDesc: { zh: '扫码添加微信，获取赛事数据、合作与会员咨询。', en: 'Scan to add WeChat for data, partnership, and membership inquiries.' },
     epl: { zh: '英格兰超级联赛 (英超)', en: 'Premier League' },
     laliga: { zh: '西班牙甲级联赛 (西甲)', en: 'La Liga' },
     bundesliga: { zh: '德国甲级联赛 (德甲)', en: 'Bundesliga' },
@@ -20,8 +23,6 @@ export const Footer: React.FC = () => {
       zh: '提示：本平台仅提供人工智能数据分析与预测推荐，所有数据不代表平台绝对保证。足球比赛瞬息万变，请保持娱乐心态，理性博彩，禁止未满 18 岁未成年人参与下注。切勿盲目跟单，量力而行。',
       en: 'Disclaimer: This platform provides AI data predictions and analytics for informational and entertainment purposes only. Football matches are highly unpredictable. Please gamble responsibly. strictly 18+. Do not bet more than you can afford to lose.'
     },
-    appTitle: { zh: '移动端 App 下载', en: 'Download App' },
-    appDesc: { zh: '获取更快的推送通知与独家高级稳胆', en: 'Get faster push notifications & exclusive VIP tips' },
     copyright: { zh: '© 2026 AI 足球预测. 保留所有权利。本项目为产品形态复刻版。', en: '© 2026 AI Predict. All rights reserved. Replica product edition.' }
   };
 
@@ -47,12 +48,12 @@ export const Footer: React.FC = () => {
                 Ω
               </div>
               <span className="primary-gradient-text" style={{ fontSize: '1.2rem' }}>
-                AI Predict
+                {language === 'zh' ? 'AI 足球预测' : 'AI Predict'}
               </span>
             </div>
             <p style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.875rem', lineHeight: '1.6' }}>
               {language === 'zh' 
-                ? '我们利用先进的深度学习预测算法模型，对全球数以百计的赛事赔率、伤停、xG数据进行深度挖掘，为您提供最高质量的赛前推演。'
+                ? '我们利用先进的深度学习预测算法模型，对全球数以百计的赛事 SP、伤停、xG 数据进行深度挖掘，为您提供最高质量的赛前推演。'
                 : 'We leverage state-of-the-art deep learning predictive models to mine odds, injuries, and xG data, delivering elite football analytics daily.'
               }
             </p>
@@ -72,22 +73,33 @@ export const Footer: React.FC = () => {
             </ul>
           </div>
 
-          {/* App Download Info */}
+          {/* Contact */}
           <div>
             <h4 style={{ color: 'hsl(var(--text-primary))', marginBottom: '1rem', fontSize: '0.95rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
               <Smartphone size={16} />
-              {t('appTitle')}
+              {t('contact')}
             </h4>
-            <p style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.85rem', marginBottom: '1rem' }}>
-              {t('appDesc')}
+            <p style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.85rem', marginBottom: '0.85rem', lineHeight: '1.5' }}>
+              {t('contactDesc')}
             </p>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <a href="#" className="btn btn-secondary" style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                <span>App Store</span>
-              </a>
-              <a href="#" className="btn btn-secondary" style={{ padding: '0.4rem 0.75rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                <span>Google Play</span>
-              </a>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem' }}>
+              <img
+                src="./contact-qr.jpg"
+                alt={t('contactName')}
+                loading="lazy"
+                style={{
+                  width: '108px',
+                  height: '108px',
+                  objectFit: 'cover',
+                  borderRadius: '8px',
+                  border: '1px solid hsl(var(--border))',
+                  backgroundColor: '#fff'
+                }}
+              />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                <span style={{ color: 'hsl(var(--text-primary))', fontWeight: 700, fontSize: '0.9rem' }}>{t('contactName')}</span>
+                <span style={{ color: 'hsl(var(--text-muted))', fontSize: '0.78rem' }}>{language === 'zh' ? '微信扫码添加' : 'Scan with WeChat'}</span>
+              </div>
             </div>
           </div>
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useApp } from '../context/AppContext';
+import { useApp } from '../context/AppContextCore';
 import { LogIn, UserPlus, Key, User as UserIcon } from 'lucide-react';
 
 interface AuthProps {

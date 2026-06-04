@@ -1,7 +1,9 @@
 import React from 'react';
-import { useApp } from '../context/AppContext';
-import { teams } from '../services/mockData';
+import { useApp } from '../context/AppContextCore';
 import type { Match } from '../services/mockData';
+import { getPredictionTipDisplay } from '../services/bettingDisplay';
+import { getTeamById } from '../services/entities';
+import { TeamBadge } from '../components/TeamBadge';
 import { Lock, Trophy, Calendar } from 'lucide-react';
 
 interface BestTipsProps {
@@ -32,7 +34,7 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
     },
     unlockBtn: { zh: '模拟升级 PRO 立即解锁', en: 'Simulate Pro to Unlock' },
     confidence: { zh: '模型信赖度', en: 'Model Confidence' },
-    odds: { zh: '首选赔率', en: 'Primary Odds' },
+    odds: { zh: '首选SP', en: 'Primary Odds' },
     kickoff: { zh: '开赛', en: 'Kickoff' },
     viewDetail: { zh: '查看深度数据统计', en: 'Analyze Match Stats' },
     noTips: { zh: '今日暂无稳胆推荐发布。请稍后再试。', en: 'No VIP tips published yet for today. Check back later.' }
@@ -64,8 +66,8 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '2rem' }}>
           {activeBestMatches.map((match) => {
-            const homeTeam = teams.find(t => t.id === match.homeTeamId)!;
-            const awayTeam = teams.find(t => t.id === match.awayTeamId)!;
+            const homeTeam = getTeamById(match.homeTeamId);
+            const awayTeam = getTeamById(match.awayTeamId);
             const bestPred = match.predictions.find(p => p.marketType === 'BEST')!;
             
             const isLocked = !isPremium;
@@ -88,11 +90,11 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
                 <div style={{ display: 'flex', justifySelf: 'stretch', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: homeTeam.color }} />
+                      <TeamBadge team={homeTeam} size="sm" />
                       <span style={{ fontWeight: '800', fontSize: '1.1rem' }}>{homeTeam.name[language]}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: awayTeam.color }} />
+                      <TeamBadge team={awayTeam} size="sm" />
                       <span style={{ fontWeight: '800', fontSize: '1.1rem' }}>{awayTeam.name[language]}</span>
                     </div>
                   </div>
@@ -138,12 +140,12 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
                     gap: '0.75rem'
                   }}>
                     
-                    {/* 首选推荐和赔率 */}
+                    {/* 首选推荐和 SP */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
                         <span style={{ fontSize: '0.7rem', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', fontWeight: '700' }}>⭐️ {t('title')}</span>
                         <h4 style={{ fontSize: '1.25rem', fontWeight: '900', color: 'hsl(var(--primary))', marginTop: '0.1rem' }}>
-                          {bestPred.tipLabel[language].replace('稳胆: ', '')}
+                          {getPredictionTipDisplay(bestPred, language)}
                         </h4>
                       </div>
                       <div style={{ textAlign: 'right' }}>

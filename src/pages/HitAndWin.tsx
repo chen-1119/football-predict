@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { useApp } from '../context/AppContext';
-import { teams } from '../services/mockData';
+import React, { useState } from 'react';
+import { useApp } from '../context/AppContextCore';
+import type { HitAndWinPick, HitAndWinSubmission } from '../context/AppContextCore';
 import type { Match } from '../services/mockData';
+import { getTeamById } from '../services/entities';
+import { TeamBadge } from '../components/TeamBadge';
 import { Trophy, Send, Check, ShieldAlert } from 'lucide-react';
 
 interface HitAndWinProps {
@@ -17,21 +19,14 @@ export const HitAndWin: React.FC<HitAndWinProps> = ({ onGoToAuth }) => {
   }, [matches]);
 
   // 用户当前的选择 { [matchId]: '1' | 'X' | '2' }
-  const [selections, setSelections] = useState<{ [matchId: string]: string }>({});
+  const [selections, setSelections] = useState<HitAndWinSubmission>(() => hitAndWinSubmission ?? {});
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  // 如果已经提交过，载入历史记录
-  useEffect(() => {
-    if (hitAndWinSubmission) {
-      setSelections(hitAndWinSubmission);
-    }
-  }, [hitAndWinSubmission]);
 
   const translations = {
     title: { zh: '命中赢奖 • 终身 VIP 大挑战', en: 'Hit & Win • Lifetime VIP Challenge' },
     rulesCard: { zh: '挑战规则', en: 'Rules & Rewards' },
     rule1: { zh: '1. 平台每日精选 10 场热门赛事。', en: '1. We feature 10 selected matches daily.' },
-    rule2: { zh: '2. 针对每场比赛，选择您的 1(主胜) / X(平局) / 2(客胜) 预测。', en: '2. Pick 1 (Home), X (Draw), or 2 (Away) for each match.' },
+    rule2: { zh: '2. 针对每场比赛，选择胜(3) / 平(1) / 负(0) 预测。', en: '2. Pick Home, Draw, or Away for each match.' },
     rule3: { zh: '3. 每日仅限提交一张竞猜票据，提交后不可修改。', en: '3. Strictly 1 ticket per day. No edits after submission.' },
     rule4: { zh: '4. 全部 10 场预测完美命中，即刻赢取平台【终身免费 PRO 订阅】！', en: '4. Predict all 10 correctly and win Lifetime PRO Membership!' },
     notLoggedIn: { zh: '您当前未登录。提交预测前请先登录账户。', en: 'You are not logged in. Please sign in to submit.' },
@@ -46,7 +41,7 @@ export const HitAndWin: React.FC<HitAndWinProps> = ({ onGoToAuth }) => {
     return translations[key][language] || '';
   };
 
-  const handleSelect = (matchId: string, pick: '1' | 'X' | '2') => {
+  const handleSelect = (matchId: string, pick: HitAndWinPick) => {
     if (hitAndWinSubmission) return; // 已提交不可更改
     setSelections({
       ...selections,
@@ -131,8 +126,8 @@ export const HitAndWin: React.FC<HitAndWinProps> = ({ onGoToAuth }) => {
       {/* 10 场比赛卡片列表 */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         {hitMatches.map((match, index) => {
-          const homeTeam = teams.find(t => t.id === match.homeTeamId)!;
-          const awayTeam = teams.find(t => t.id === match.awayTeamId)!;
+          const homeTeam = getTeamById(match.homeTeamId);
+          const awayTeam = getTeamById(match.awayTeamId);
           const userPick = selections[match.id];
           const isSubmitted = !!hitAndWinSubmission;
 
@@ -160,8 +155,12 @@ export const HitAndWin: React.FC<HitAndWinProps> = ({ onGoToAuth }) => {
                   {index + 1}
                 </span>
                 <div>
-                  <div style={{ fontWeight: '700', fontSize: '0.95rem' }}>
-                    {homeTeam.shortName[language]} vs {awayTeam.shortName[language]}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontWeight: '700', fontSize: '0.95rem', flexWrap: 'wrap' }}>
+                    <TeamBadge team={homeTeam} size="sm" />
+                    <span>{homeTeam.shortName[language]}</span>
+                    <span style={{ color: 'hsl(var(--text-muted))' }}>vs</span>
+                    <TeamBadge team={awayTeam} size="sm" />
+                    <span>{awayTeam.shortName[language]}</span>
                   </div>
                   <span style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>
                     {new Date(match.kickoffTime).toLocaleDateString()} {new Date(match.kickoffTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}
@@ -171,17 +170,17 @@ export const HitAndWin: React.FC<HitAndWinProps> = ({ onGoToAuth }) => {
 
               {/* 右侧：1 / X / 2 竞猜单选钮组 */}
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                {[
-                  { key: '1', label: language === 'zh' ? '主胜 (1)' : 'Home (1)', odds: match.odds.odds1 },
-                  { key: 'X', label: language === 'zh' ? '平局 (X)' : 'Draw (X)', odds: match.odds.oddsX },
-                  { key: '2', label: language === 'zh' ? '客胜 (2)' : 'Away (2)', odds: match.odds.odds2 },
-                ].map(opt => {
+                {([
+                  { key: '1', label: language === 'zh' ? '胜(3)' : 'Home', odds: match.odds.odds1 },
+                  { key: 'X', label: language === 'zh' ? '平(1)' : 'Draw', odds: match.odds.oddsX },
+                  { key: '2', label: language === 'zh' ? '负(0)' : 'Away', odds: match.odds.odds2 },
+                ] satisfies { key: HitAndWinPick; label: string; odds: number }[]).map(opt => {
                   const isChosen = userPick === opt.key;
                   return (
                     <button
                       key={opt.key}
                       disabled={isSubmitted}
-                      onClick={() => handleSelect(match.id, opt.key as any)}
+                      onClick={() => handleSelect(match.id, opt.key)}
                       className="btn"
                       style={{
                         padding: '0.5rem 1rem',

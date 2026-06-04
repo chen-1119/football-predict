@@ -1,39 +1,71 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Match } from '../services/mockData';
 import { matchesPool, registerTeam, registerLeague, registerCountry } from '../services/mockData';
+import { AppContext } from './AppContextCore';
+import type { HitAndWinSubmission, Language, User } from './AppContextCore';
 
-export type Language = 'zh' | 'en';
+type SyncedMatch = Match & {
+  homeTeamName?: string;
+  homeTeamNameEn?: string;
+  homeTeamLogo?: string;
+  homeTeamColor?: string;
+  awayTeamName?: string;
+  awayTeamNameEn?: string;
+  awayTeamLogo?: string;
+  awayTeamColor?: string;
+  leagueName?: string;
+  leagueNameEn?: string;
+  leagueShortName?: string;
+  leagueShortNameEn?: string;
+  countryName?: string;
+  countryNameEn?: string;
+  countryFlag?: string;
+};
 
-export interface User {
-  username: string;
-  isPremium: boolean;
-}
+const readStoredLanguage = (): Language => {
+  const savedLang = localStorage.getItem('nerdy_lang');
+  return savedLang === 'zh' || savedLang === 'en' ? savedLang : 'zh';
+};
 
-export interface AppContextType {
-  language: Language;
-  setLanguage: (lang: Language) => void;
-  currentUser: User | null;
-  setCurrentUser: (user: User | null) => void;
-  isPremium: boolean;
-  togglePremium: () => void;
-  dailySlipCount: number;
-  incrementSlipCount: () => boolean; // 返回是否成功（如果超出额度返回 false）
-  hitAndWinSubmission: { [matchId: string]: string } | null; // 记录今天的竞猜：{ matchId: '1' | 'X' | '2' }
-  submitHitAndWin: (selections: { [matchId: string]: string }) => boolean;
-  login: (username: string) => void;
-  register: (username: string) => void;
-  logout: () => void;
-  matches: Match[];
-}
+const readJsonFromStorage = <T,>(key: string): T | null => {
+  const savedValue = localStorage.getItem(key);
+  if (!savedValue) return null;
 
-const AppContext = createContext<AppContextType | undefined>(undefined);
+  try {
+    return JSON.parse(savedValue) as T;
+  } catch {
+    return null;
+  }
+};
+
+const readStoredUser = (): User | null => readJsonFromStorage<User>('nerdy_user');
+
+const readStoredDailySlipCount = (): number => {
+  const savedCount = Number(localStorage.getItem('nerdy_slip_count'));
+  return Number.isFinite(savedCount) ? savedCount : 0;
+};
+
+const readStoredHitAndWinSubmission = (): HitAndWinSubmission | null => {
+  return readJsonFromStorage<HitAndWinSubmission>('nerdy_hw_submission');
+};
+
+const isSyncedMatchArray = (data: unknown): data is SyncedMatch[] => {
+  return Array.isArray(data);
+};
+
+const formatError = (error: unknown): string => {
+  if (error instanceof Error) {
+    return [error.message, error.stack].filter(Boolean).join('\n');
+  }
+  return String(error);
+};
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [language, setLanguageState] = useState<Language>('zh');
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [isPremium, setIsPremium] = useState<boolean>(false);
-  const [dailySlipCount, setDailySlipCount] = useState<number>(0);
-  const [hitAndWinSubmission, setHitAndWinSubmission] = useState<{ [matchId: string]: string } | null>(null);
+  const [language, setLanguageState] = useState<Language>(readStoredLanguage);
+  const [currentUser, setCurrentUser] = useState<User | null>(readStoredUser);
+  const [isPremium, setIsPremium] = useState<boolean>(() => currentUser?.isPremium ?? false);
+  const [dailySlipCount, setDailySlipCount] = useState<number>(readStoredDailySlipCount);
+  const [hitAndWinSubmission, setHitAndWinSubmission] = useState<HitAndWinSubmission | null>(readStoredHitAndWinSubmission);
   const [matches, setMatches] = useState<Match[]>(matchesPool);
 
   // 从 matches.json 加载数据并动态扩展球队、联赛、国家列表
@@ -43,17 +75,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
         return res.json();
       })
-      .then((data: Match[]) => {
+      .then((data: unknown) => {
         try {
-          if (Array.isArray(data) && data.length > 0) {
+          if (isSyncedMatchArray(data) && data.length > 0) {
             // 动态注册抓取到的真实球队、联赛及国家，保证前端UI组件能正常获取信息且不会因空对象红屏崩溃
-            data.forEach((m: any) => {
+            data.forEach((m) => {
               if (m.homeTeamId) {
                 registerTeam({
                   id: m.homeTeamId,
                   name: { zh: m.homeTeamName || '未知主队', en: m.homeTeamNameEn || 'Home Team' },
                   shortName: { zh: m.homeTeamName || '未知', en: m.homeTeamNameEn || 'Home' },
-                  logo: (m.homeTeamName || 'FC').substring(0, 2),
+                  logo: m.homeTeamLogo || (m.homeTeamName || 'FC').substring(0, 2),
                   value: '50M €',
                   color: m.homeTeamColor || '#7f8c8d'
                 });
@@ -63,7 +95,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   id: m.awayTeamId,
                   name: { zh: m.awayTeamName || '未知客队', en: m.awayTeamNameEn || 'Away Team' },
                   shortName: { zh: m.awayTeamName || '未知', en: m.awayTeamNameEn || 'Away' },
-                  logo: (m.awayTeamName || 'FC').substring(0, 2),
+                  logo: m.awayTeamLogo || (m.awayTeamName || 'FC').substring(0, 2),
                   value: '50M €',
                   color: m.awayTeamColor || '#95a5a6'
                 });
@@ -87,45 +119,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             });
             setMatches(data);
           }
-        } catch (e: any) {
-          console.error(e);
-          alert(`数据处理错误 (Data Processing Error):\n${e.message}\n${e.stack}`);
+        } catch (error: unknown) {
+          console.error(error);
+          alert(`Data Processing Error:\n${formatError(error)}`);
         }
       })
-      .catch((err: any) => {
-        console.error(err);
-        alert(`数据加载错误 (Fetch Error):\n${err.message || err}`);
+      .catch((error: unknown) => {
+        console.error(error);
+        alert(`Fetch Error:\n${formatError(error)}`);
         // 降级使用静态 mock 引擎数据
         console.log('Using static fallback matchesPool data.');
       });
-  }, []);
-
-  // 从 localStorage 恢复状态
-  useEffect(() => {
-    const savedLang = localStorage.getItem('nerdy_lang');
-    if (savedLang === 'zh' || savedLang === 'en') {
-      setLanguageState(savedLang);
-    }
-    const savedUser = localStorage.getItem('nerdy_user');
-    if (savedUser) {
-      try {
-        const u = JSON.parse(savedUser) as User;
-        setCurrentUser(u);
-        setIsPremium(u.isPremium);
-      } catch (e) {
-        // ignore
-      }
-    }
-    const savedCount = localStorage.getItem('nerdy_slip_count');
-    if (savedCount) {
-      setDailySlipCount(parseInt(savedCount));
-    }
-    const savedHW = localStorage.getItem('nerdy_hw_submission');
-    if (savedHW) {
-      try {
-        setHitAndWinSubmission(JSON.parse(savedHW));
-      } catch (e) {}
-    }
   }, []);
 
   const setLanguage = (lang: Language) => {
@@ -153,7 +157,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return true;
   };
 
-  const submitHitAndWin = (selections: { [matchId: string]: string }): boolean => {
+  const submitHitAndWin = (selections: HitAndWinSubmission): boolean => {
     setHitAndWinSubmission(selections);
     localStorage.setItem('nerdy_hw_submission', JSON.stringify(selections));
     return true;
@@ -200,12 +204,4 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       {children}
     </AppContext.Provider>
   );
-};
-
-export const useApp = () => {
-  const context = useContext(AppContext);
-  if (!context) {
-    throw new Error('useApp must be used within an AppProvider');
-  }
-  return context;
 };

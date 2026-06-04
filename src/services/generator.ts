@@ -1,7 +1,7 @@
 import type { Match, PredictionDetail } from './mockData';
 
 export interface GeneratorParams {
-  targetOdds: number; // 目标总赔率
+  targetOdds: number; // 目标总SP
   matchCount: 'auto' | 2 | 5 | 10 | 15; // 比赛数量
   marketTypes: string[]; // ['1X2', 'GOALS', 'GG_NG', 'BEST']
   minOdds: number;
@@ -28,17 +28,16 @@ export interface BetSlipResult {
 
 // 模拟串关生成算法
 export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetSlipResult {
-  let {
-    targetOdds,
+  const {
     matchCount,
     marketTypes,
     minOdds,
     maxOdds,
     timeWindow,
-    minTrust,
     onlyImportantLeagues,
     isPremiumUser
   } = params;
+  let { targetOdds, minTrust } = params;
 
   // 1. 免费限制强制校正
   if (!isPremiumUser) {
@@ -52,7 +51,7 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
   const maxTime = new Date();
   maxTime.setDate(now.getDate() + parseInt(timeWindow));
 
-  let candidateMatches = matches.filter(m => {
+  const candidateMatches = matches.filter(m => {
     if (m.status !== 'SCHEDULED') return false;
     const kickoff = new Date(m.kickoffTime);
     if (kickoff < now || kickoff > maxTime) return false;
@@ -66,7 +65,7 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
     m.predictions.forEach(p => {
       // 筛选市场类型
       if (!marketTypes.includes(p.marketType)) return;
-      // 筛选赔率范围
+      // 筛选 SP 范围
       if (p.odds < minOdds || p.odds > maxOdds) return;
       // 筛选可信度
       if (p.trustScore < minTrust) return;
@@ -87,26 +86,23 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
       averageTrust: 0,
       isSuccess: false,
       message: {
-        zh: '未找到符合当前筛选条件的比赛预测。请放宽赔率或可信度限制再试。',
+        zh: '未找到符合当前筛选条件的比赛预测。请放宽 SP 或可信度限制再试。',
         en: 'No predictions matching your criteria were found. Please loosen the odds or confidence limits.'
       }
     };
   }
 
-  // 4. 开始匹配组合。目标是找到一组 Selection，其乘积（总赔率）尽可能接近 targetOdds，且没有重复的 matchId。
+  // 4. 开始匹配组合。目标是找到一组 Selection，其乘积（总SP）尽可能接近 targetOdds，且没有重复的 matchId。
   // 我们使用贪心法结合随机微调来寻找最佳组合。
   
   // 决定最终要挑选的比赛数量范围
-  let targetCountMin = 2;
-  let targetCountMax = 5;
-  if (matchCount === 'auto') {
-    if (targetOdds <= 3) { targetCountMin = 2; targetCountMax = 3; }
-    else if (targetOdds <= 8) { targetCountMin = 3; targetCountMax = 5; }
-    else { targetCountMin = 4; targetCountMax = 8; }
-  } else {
-    targetCountMin = matchCount;
-    targetCountMax = matchCount;
-  }
+  const [targetCountMin, targetCountMax] = matchCount === 'auto'
+    ? targetOdds <= 3
+      ? [2, 3]
+      : targetOdds <= 8
+        ? [3, 5]
+        : [4, 8]
+    : [matchCount, matchCount];
 
   let bestCombination: SelectionResult[] = [];
   let bestDiff = Infinity;
@@ -123,8 +119,8 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
     for (const sel of shuffled) {
       if (usedMatchIds.has(sel.match.id)) continue;
       
-      // 如果加进去后，赔率是否会过高？ 
-      // 除非还没达到最小数量，否则如果赔率已经超过目标赔率太多，就跳过
+      // 如果加进去后，SP 是否会过高？
+      // 除非还没达到最小数量，否则如果 SP 已经超过目标总SP太多，就跳过
       const nextOdds = currentOdds * sel.prediction.odds;
       if (tempSelections.length >= targetCountMax && nextOdds > targetOdds) {
         break;
@@ -142,14 +138,14 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
           bestCombination = [...tempSelections];
           bestOdds = currentOdds;
         }
-        // 如果赔率已经非常接近，可以提前退出
+        // 如果 SP 已经非常接近，可以提前退出
         if (diff < 0.1) break;
       }
     }
   }
 
   if (bestCombination.length < targetCountMin) {
-    // 如果无法凑齐数量，直接用当前赔率最接近的一组
+    // 如果无法凑齐数量，直接用当前 SP 最接近的一组
     // 或者返回错误
     return {
       selections: [],
@@ -157,7 +153,7 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
       averageTrust: 0,
       isSuccess: false,
       message: {
-        zh: '匹配不到合适数量的串关组合，请调整目标赔率或增加比赛窗口。',
+        zh: '匹配不到合适数量的串关组合，请调整目标总SP或增加比赛窗口。',
         en: 'Could not match a slip with enough selections. Please adjust target odds or increase time window.'
       }
     };
