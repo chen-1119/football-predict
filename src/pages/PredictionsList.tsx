@@ -102,7 +102,6 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
     statusTime: { zh: '时间 / 状态', en: 'Time / Status' },
     teams: { zh: '对阵双方', en: 'Teams' },
     oddsHeader: { zh: '胜平负 SP', en: '1X2 Odds' },
-    noOdds: { zh: '赛果记录', en: 'Result only' },
     trustHeader: { zh: '可信度', en: 'Trust' },
     unlockTitle: { zh: '点击模拟升级解锁', en: 'Click to unlock' },
     hit: { zh: '命中', en: 'Hit' },
@@ -517,7 +516,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
                                   </span>
                                 ))
                               ) : (
-                                <span className="odds-source">{t('noOdds')}</span>
+                                <span className="status-note">--</span>
                               )}
                               {match.oddsSource && (
                                 <span className="odds-source" title={match.oddsUpdatedAt || match.oddsSource}>

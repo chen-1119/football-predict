@@ -735,7 +735,7 @@ function toAppMatch(match) {
     status: match.status,
     scoreHome,
     scoreAway,
-    odds,
+    odds: odds || undefined,
     predictions: model.predictions,
     stats: {
       xG: {

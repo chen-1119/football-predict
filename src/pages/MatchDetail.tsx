@@ -264,34 +264,30 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
         </div>
 
         {/* 底部 SP 展示 */}
-        <div style={{ 
-          borderTop: '1px solid hsl(var(--border))', 
-          width: '100%', 
-          paddingTop: '1rem',
-          display: 'flex',
-          justifyContent: 'center',
-          gap: '2rem',
-          fontSize: '0.875rem'
-        }}>
-          {oddsRows.length > 0 ? (
-            oddsRows.map((row) => (
+        {oddsRows.length > 0 && (
+          <div style={{
+            borderTop: '1px solid hsl(var(--border))',
+            width: '100%',
+            paddingTop: '1rem',
+            display: 'flex',
+            justifyContent: 'center',
+            gap: '2rem',
+            fontSize: '0.875rem'
+          }}>
+            {oddsRows.map((row) => (
               <div key={row.label}>
                 {row.label} <span style={{ color: 'hsl(var(--text-muted))' }}>{row.hint}</span>:{' '}
                 <span style={{ fontWeight: '700', color: 'hsl(var(--accent))' }}>{row.value.toFixed(2)}</span>
               </div>
-            ))
-          ) : (
-            <div style={{ color: 'hsl(var(--text-muted))', fontWeight: 700 }}>
-              {language === 'zh' ? '官方赛果记录，暂无 SP 快照' : 'Official result record, no SP snapshot'}
-            </div>
-          )}
-          {match.oddsSource && (
-            <div style={{ color: 'hsl(var(--success))', fontWeight: 700 }}>
-              {language === 'zh' ? '官方HAD' : 'Official HAD'}
-              {match.oddsUpdatedAt ? ` · ${match.oddsUpdatedAt}` : ''}
-            </div>
-          )}
-        </div>
+            ))}
+            {match.oddsSource && (
+              <div style={{ color: 'hsl(var(--success))', fontWeight: 700 }}>
+                {language === 'zh' ? '官方HAD' : 'Official HAD'}
+                {match.oddsUpdatedAt ? ` · ${match.oddsUpdatedAt}` : ''}
+              </div>
+            )}
+          </div>
+        )}
 
       </div>
 
@@ -349,8 +345,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
             ) : (
               <div className="card" style={{ color: 'hsl(var(--text-secondary))', lineHeight: 1.6 }}>
                 {language === 'zh'
-                  ? '这场是官方赛果历史记录。由于此前没有本项目定时抓取到的官方 SP 快照，所以不用于模型赔率回测。'
-                  : 'This is an official result record. No scheduled SP snapshot was captured by this project, so it is not used for odds backtesting.'}
+                  ? '这场是官方历史赛果记录，只展示比分与赛程信息。'
+                  : 'This is an official historical result record with score and schedule information only.'}
               </div>
             )}
 
