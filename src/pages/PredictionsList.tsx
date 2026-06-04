@@ -32,8 +32,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
   // 1. 过滤 & 分类数据
   const filteredMatches = useMemo(() => {
     return matches.filter(m => {
-      // 日期过滤
-      const matchDay = (m as any).matchDate || m.kickoffTime.split('T')[0];
+      // 日期过滤：使用自然日期 (北京时间 YYYY-MM-DD)，使用更直观的开赛日期分类
+      const matchDay = m.kickoffTime.split('T')[0];
       if (matchDay !== selectedDate) return false;
 
       // 国家过滤 (多选)
@@ -43,7 +43,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
 
       return true;
     });
-  }, [selectedDate, selectedCountries]);
+  }, [selectedDate, selectedCountries, matches]);
 
   // 对过滤后的数据进行排序
   const sortedMatches = useMemo(() => {

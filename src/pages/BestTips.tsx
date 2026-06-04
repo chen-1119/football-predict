@@ -18,7 +18,7 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
       if (isFinished) return false; // 稳胆页主要展示活跃的未开始比赛
       return m.predictions.some(p => p.marketType === 'BEST');
     });
-  }, []);
+  }, [matches]);
 
   const translations = {
     title: { zh: '每日稳胆 VIP 推荐', en: 'Daily Best VIP Tips' },
