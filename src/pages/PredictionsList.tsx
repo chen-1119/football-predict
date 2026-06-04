@@ -14,7 +14,7 @@ import {
   Trophy
 } from 'lucide-react';
 import { useApp } from '../context/AppContextCore';
-import { countries, getDateStringOffset } from '../services/mockData';
+import { getDateStringOffset, leagues } from '../services/mockData';
 import type { Country, League, Match, PredictionDetail } from '../services/mockData';
 import { getMarketLabel, getPredictionTipDisplay, getSportteryPoolRows } from '../services/bettingDisplay';
 import { getCountryById, getLeagueById, getTeamById } from '../services/entities';
@@ -66,7 +66,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
   const dayAfterTomorrowStr = getDateStringOffset(2);
 
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
-  const [selectedCountries, setSelectedCountries] = useState<string[]>([]);
+  const [selectedLeagues, setSelectedLeagues] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<SortBy>('time');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
@@ -76,8 +76,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
       en: 'Free mode is active. Some best tips, total goals, and BTTS references are locked. Upgrade to PRO for full model data.'
     },
     upgradeBtn: { zh: '解锁 PRO', en: 'Unlock PRO' },
-    filterTitle: { zh: '国家 / 联赛筛选', en: 'Country / League Filters' },
-    allCountries: { zh: '全部国家', en: 'All Countries' },
+    filterTitle: { zh: '赛事筛选', en: 'Competition Filters' },
+    allLeagues: { zh: '全部赛事', en: 'All Competitions' },
     sortTitle: { zh: '排序', en: 'Sort' },
     time: { zh: '开赛时间', en: 'Time' },
     trust: { zh: '可信度', en: 'Trust' },
@@ -111,18 +111,6 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
 
   const t = (key: keyof typeof translations) => translations[key][language] || '';
 
-  const availableCountries = useMemo(() => {
-    const seen = new Set<string>();
-    const source = matches.length > 0 ? matches.map((match) => match.countryId) : countries.map((country) => country.id);
-
-    return source.reduce<Country[]>((list, countryId) => {
-      if (seen.has(countryId)) return list;
-      seen.add(countryId);
-      list.push(getCountryById(countryId));
-      return list;
-    }, []);
-  }, [matches]);
-
   const effectiveSelectedDate = useMemo(() => {
     const selectedDateHasMatches = matches.some((match) => getMatchDay(match) === selectedDate);
     if (selectedDateHasMatches || selectedDate !== todayStr) return selectedDate;
@@ -133,12 +121,30 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
       .sort()[0] || selectedDate;
   }, [matches, selectedDate, todayStr]);
 
+  const availableLeagues = useMemo(() => {
+    const seen = new Set<string>();
+    const matchesForDate = matches.filter((match) => getMatchDay(match) === effectiveSelectedDate);
+    const source = matchesForDate.length > 0
+      ? matchesForDate.map((match) => match.leagueId)
+      : leagues.map((league) => league.id);
+
+    return source.reduce<League[]>((list, leagueId) => {
+      if (seen.has(leagueId)) return list;
+      seen.add(leagueId);
+      list.push(getLeagueById(leagueId));
+      return list;
+    }, []).sort((a, b) => a.name[language].localeCompare(b.name[language], language === 'zh' ? 'zh-CN' : 'en-US'));
+  }, [effectiveSelectedDate, language, matches]);
+
+  const availableLeagueIds = new Set(availableLeagues.map((league) => league.id));
+  const effectiveSelectedLeagues = selectedLeagues.filter((leagueId) => availableLeagueIds.has(leagueId));
+
   const filteredMatches = useMemo(() => {
     return matches.filter((match) => {
       if (getMatchDay(match) !== effectiveSelectedDate) return false;
-      return selectedCountries.length === 0 || selectedCountries.includes(match.countryId);
+      return effectiveSelectedLeagues.length === 0 || effectiveSelectedLeagues.includes(match.leagueId);
     });
-  }, [effectiveSelectedDate, selectedCountries, matches]);
+  }, [effectiveSelectedDate, effectiveSelectedLeagues, matches]);
 
   const sortedMatches = useMemo(() => {
     const sorted = [...filteredMatches];
@@ -203,16 +209,16 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
     return sortedMatches.filter((match) => getBestTrust(match) >= 78).length;
   }, [sortedMatches]);
 
-  const handleCountryToggle = (countryId: string) => {
-    setSelectedCountries((current) => (
-      current.includes(countryId)
-        ? current.filter((id) => id !== countryId)
-        : [...current, countryId]
+  const handleLeagueToggle = (leagueId: string) => {
+    setSelectedLeagues((current) => (
+      current.includes(leagueId)
+        ? current.filter((id) => id !== leagueId)
+        : [...current, leagueId]
     ));
   };
 
   const handleResetFilters = () => {
-    setSelectedCountries([]);
+    setSelectedLeagues([]);
     setSortBy('time');
     setSortOrder('asc');
   };
@@ -397,23 +403,25 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
           <div className="chip-row">
             <button
               type="button"
-              onClick={() => setSelectedCountries([])}
-              className={`filter-chip ${selectedCountries.length === 0 ? 'active' : ''}`}
+              onClick={() => setSelectedLeagues([])}
+              className={`filter-chip ${effectiveSelectedLeagues.length === 0 ? 'active' : ''}`}
             >
-              {t('allCountries')}
+              {t('allLeagues')}
             </button>
-            {availableCountries.map((country) => {
-              const isSelected = selectedCountries.includes(country.id);
+            {availableLeagues.map((league) => {
+              const isSelected = effectiveSelectedLeagues.includes(league.id);
+              const country = getCountryById(league.countryId);
+              const leagueLabel = league.shortName[language] || league.name[language];
 
               return (
                 <button
-                  key={country.id}
+                  key={league.id}
                   type="button"
-                  onClick={() => handleCountryToggle(country.id)}
+                  onClick={() => handleLeagueToggle(league.id)}
                   className={`filter-chip ${isSelected ? 'active' : ''}`}
                 >
                   <span>{country.flag}</span>
-                  <span>{country.name[language]}</span>
+                  <span>{leagueLabel}</span>
                 </button>
               );
             })}

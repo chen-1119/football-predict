@@ -372,6 +372,23 @@ function resultStatus(match, expected) {
 
 function leagueMeta(leagueName) {
   const name = normText(leagueName, "足球赛事");
+  const countryNameZh = {
+    England: "英格兰",
+    Spain: "西班牙",
+    Germany: "德国",
+    Italy: "意大利",
+    France: "法国",
+    Europe: "欧洲",
+    China: "中国",
+    Japan: "日本",
+    Korea: "韩国",
+    Sweden: "瑞典",
+    Finland: "芬兰",
+    Norway: "挪威",
+    Portugal: "葡萄牙",
+    "South America": "南美",
+    World: "国际",
+  };
   const rules = [
     [/英超|Premier League/i, ["eng", "England", "🇬🇧", "Premier League", "英超"]],
     [/西甲|La Liga/i, ["esp", "Spain", "🇪🇸", "La Liga", "西甲"]],
@@ -380,9 +397,15 @@ function leagueMeta(leagueName) {
     [/法甲|Ligue 1/i, ["fra", "France", "🇫🇷", "Ligue 1", "法甲"]],
     [/欧冠|Champions/i, ["eur", "Europe", "🇪🇺", "UEFA Champions League", "欧冠"]],
     [/欧联|Europa/i, ["eur", "Europe", "🇪🇺", "UEFA Europa League", "欧联"]],
+    [/欧协联|Conference/i, ["eur", "Europe", "🇪🇺", "UEFA Conference League", "欧协联"]],
+    [/解放者杯|Libertadores/i, ["sam", "South America", "🌎", "Copa Libertadores", "解放者杯"]],
     [/中超|Chinese/i, ["chn", "China", "🇨🇳", "Chinese Super League", "中超"]],
     [/日职|J1|日本/i, ["jpn", "Japan", "🇯🇵", "Japan", "日职"]],
     [/韩|K League/i, ["kor", "Korea", "🇰🇷", "K League", "韩职"]],
+    [/瑞超|Allsvenskan/i, ["swe", "Sweden", "🇸🇪", "Swedish Allsvenskan", "瑞超"]],
+    [/芬超|Veikkausliiga/i, ["fin", "Finland", "🇫🇮", "Finnish Veikkausliiga", "芬超"]],
+    [/挪超|Eliteserien/i, ["nor", "Norway", "🇳🇴", "Norwegian Eliteserien", "挪超"]],
+    [/葡超|Primeira|Liga Portugal/i, ["por", "Portugal", "🇵🇹", "Primeira Liga", "葡超"]],
     [/国际|友谊|世预|世界杯/i, ["world", "World", "🌐", "International", "国际赛"]],
   ];
   for (const [pattern, meta] of rules) {
@@ -390,7 +413,7 @@ function leagueMeta(leagueName) {
       return {
         countryId: meta[0],
         countryNameEn: meta[1],
-        countryName: meta[1] === "World" ? "国际" : meta[1],
+        countryName: countryNameZh[meta[1]] || meta[1],
         countryFlag: meta[2],
         leagueNameEn: meta[3],
         leagueShortName: meta[4],
