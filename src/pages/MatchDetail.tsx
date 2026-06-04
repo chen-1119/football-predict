@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContextCore';
 import type { PredictionDetail } from '../services/mockData';
-import { getMarketLabel, getPredictionTipDisplay, getSportteryOddsRows } from '../services/bettingDisplay';
+import { getMarketLabel, getPredictionTipDisplay, getSportteryPoolRows } from '../services/bettingDisplay';
 import { getCountryById, getLeagueById, getTeamById } from '../services/entities';
 import { TeamBadge } from '../components/TeamBadge';
 import { ArrowLeft, Lock, Trophy } from 'lucide-react';
@@ -78,7 +78,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   const t = (key: keyof typeof translations) => {
     return translations[key][language] || '';
   };
-  const oddsRows = getSportteryOddsRows(match.odds, language);
+  const poolRows = getSportteryPoolRows(match, language);
+  const hasPredictions = match.predictions.length > 0;
 
   // 渲染预测详细行
   const renderPredictionBlock = (pred: PredictionDetail) => {
@@ -264,28 +265,51 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
         </div>
 
         {/* 底部 SP 展示 */}
-        {oddsRows.length > 0 && (
+        {poolRows.length > 0 && (
           <div style={{
             borderTop: '1px solid hsl(var(--border))',
             width: '100%',
             paddingTop: '1rem',
             display: 'flex',
             justifyContent: 'center',
-            gap: '2rem',
             fontSize: '0.875rem'
           }}>
-            {oddsRows.map((row) => (
-              <div key={row.label}>
-                {row.label} <span style={{ color: 'hsl(var(--text-muted))' }}>{row.hint}</span>:{' '}
-                <span style={{ fontWeight: '700', color: 'hsl(var(--accent))' }}>{row.value.toFixed(2)}</span>
+            <div className="detail-pool-table">
+              <div className="sporttery-pool-head">
+                <span>{language === 'zh' ? '让球' : 'Line'}</span>
+                <span>{language === 'zh' ? '胜' : 'H'}</span>
+                <span>{language === 'zh' ? '平' : 'D'}</span>
+                <span>{language === 'zh' ? '负' : 'A'}</span>
+                <span>{language === 'zh' ? '支持率' : 'Prob.'}</span>
               </div>
-            ))}
-            {match.oddsSource && (
-              <div style={{ color: 'hsl(var(--success))', fontWeight: 700 }}>
-                {language === 'zh' ? '官方HAD' : 'Official HAD'}
-                {match.oddsUpdatedAt ? ` · ${match.oddsUpdatedAt}` : ''}
+              {poolRows.map((row) => (
+                <div key={row.poolCode} className={`sporttery-pool-row ${row.odds ? '' : 'is-closed'}`}>
+                  <span className="pool-line">{row.handicap || '--'}</span>
+                  {row.odds ? (
+                    <>
+                      <strong>{row.odds.odds1.toFixed(2)}</strong>
+                      <strong>{row.odds.oddsX.toFixed(2)}</strong>
+                      <strong>{row.odds.odds2.toFixed(2)}</strong>
+                      <span className="pool-prob">
+                        {row.probabilities
+                          ? `${row.probabilities.home}/${row.probabilities.draw}/${row.probabilities.away}%`
+                          : '--'}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span>{language === 'zh' ? '未开售' : 'Closed'}</span>
+                      <span>--</span>
+                      <span>--</span>
+                      <span>--</span>
+                    </>
+                  )}
+                </div>
+              ))}
+              <div className="odds-source detail-odds-source">
+                {language === 'zh' ? '官方竞彩 HAD / HHAD' : 'Official Sporttery HAD / HHAD'}
               </div>
-            )}
+            </div>
           </div>
         )}
 
@@ -308,45 +332,51 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
             
             {/* 比分推演卡片 */}
-            <div className="card" style={{ 
-              background: 'linear-gradient(135deg, hsl(var(--primary) / 0.05) 0%, transparent 100%)',
-              borderColor: 'hsl(var(--primary) / 0.2)',
-              position: 'relative',
-              overflow: 'hidden'
-            }}>
-              {!isPremium && !isFinished && (
-                <div className="lock-overlay">
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', textAlign: 'center' }}>
-                    <Lock size={16} style={{ color: 'hsl(var(--premium))' }} />
-                    <span style={{ fontSize: '0.75rem', color: 'hsl(var(--text-secondary))' }}>
-                      {language === 'zh' ? '比分预测属高级会员独享' : 'Score prediction is locked'}
-                    </span>
+            {hasPredictions && (
+              <div className="card" style={{
+                background: 'linear-gradient(135deg, hsl(var(--primary) / 0.05) 0%, transparent 100%)',
+                borderColor: 'hsl(var(--primary) / 0.2)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}>
+                {!isPremium && !isFinished && (
+                  <div className="lock-overlay">
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', textAlign: 'center' }}>
+                      <Lock size={16} style={{ color: 'hsl(var(--premium))' }} />
+                      <span style={{ fontSize: '0.75rem', color: 'hsl(var(--text-secondary))' }}>
+                        {language === 'zh' ? '比分预测属高级会员独享' : 'Score prediction is locked'}
+                      </span>
+                    </div>
                   </div>
+                )}
+                <h4 style={{ fontSize: '0.9rem', color: 'hsl(var(--primary))', textTransform: 'uppercase', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Trophy size={16} />
+                  {t('scorePrediction')}
+                </h4>
+                <div style={{ fontSize: '2.5rem', fontWeight: '900', fontFamily: 'var(--font-title)', margin: '0.75rem 0', filter: (!isPremium && !isFinished) ? 'blur(4px)' : 'none' }}>
+                  {/* 模拟生成的比分 */}
+                  {isFinished ? `${match.scoreHome} - ${match.scoreAway}` : '2 - 1'}
                 </div>
-              )}
-              <h4 style={{ fontSize: '0.9rem', color: 'hsl(var(--primary))', textTransform: 'uppercase', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Trophy size={16} />
-                {t('scorePrediction')}
-              </h4>
-              <div style={{ fontSize: '2.5rem', fontWeight: '900', fontFamily: 'var(--font-title)', margin: '0.75rem 0', filter: (!isPremium && !isFinished) ? 'blur(4px)' : 'none' }}>
-                {/* 模拟生成的比分 */}
-                {isFinished ? `${match.scoreHome} - ${match.scoreAway}` : '2 - 1'}
+                <p style={{ fontSize: '0.825rem', color: 'hsl(var(--text-secondary))', filter: (!isPremium && !isFinished) ? 'blur(4px)' : 'none' }}>
+                  {language === 'zh'
+                    ? '模型结合双方 xG 演进曲线、防守反击效率得出本场最可能之最终比分。'
+                    : 'Derived from xG progression models and tactical defensive transitions.'}
+                </p>
               </div>
-              <p style={{ fontSize: '0.825rem', color: 'hsl(var(--text-secondary))', filter: (!isPremium && !isFinished) ? 'blur(4px)' : 'none' }}>
-                {language === 'zh' 
-                  ? '模型结合双方 xG 演进曲线、防守反击效率得出本场最可能之最终比分。'
-                  : 'Derived from xG progression models and tactical defensive transitions.'}
-              </p>
-            </div>
+            )}
 
             {/* 预测列表 */}
-            {match.predictions.length > 0 ? (
+            {hasPredictions ? (
               match.predictions.map(pred => renderPredictionBlock(pred))
             ) : (
               <div className="card" style={{ color: 'hsl(var(--text-secondary))', lineHeight: 1.6 }}>
                 {language === 'zh'
-                  ? '这场是官方历史赛果记录，只展示比分与赛程信息。'
-                  : 'This is an official historical result record with score and schedule information only.'}
+                  ? isFinished
+                    ? '这场是官方历史赛果记录，只展示比分与赛程信息。'
+                    : '本场普通胜平负暂未开售，当前先展示官方让球胜平负赔率；HAD 开售后再生成模型推荐。'
+                  : isFinished
+                    ? 'This is an official historical result record with score and schedule information only.'
+                    : 'The standard 1X2 pool is not on sale yet. Official handicap 1X2 odds are shown, and model tips will be generated after HAD opens.'}
               </div>
             )}
 

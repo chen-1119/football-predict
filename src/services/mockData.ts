@@ -113,11 +113,18 @@ export interface Match {
   scoreHome?: number;
   scoreAway?: number;
   odds?: Odds | null;
+  handicapOdds?: Odds | null;
+  handicapLine?: string;
   oddsSource?: string;
   oddsPoolCode?: string;
   oddsSourceMethod?: string;
   oddsUpdatedAt?: string;
   oddsSourceUrl?: string;
+  handicapOddsSource?: string;
+  handicapOddsPoolCode?: string;
+  handicapOddsSourceMethod?: string;
+  handicapOddsUpdatedAt?: string;
+  handicapOddsSourceUrl?: string;
   predictions: PredictionDetail[];
   stats?: MatchStats;
   recentForm?: {

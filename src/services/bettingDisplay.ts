@@ -1,6 +1,17 @@
 import type { Odds, PredictionDetail } from './mockData';
 
 type Language = 'zh' | 'en';
+export type SportteryOddsPoolCode = 'HAD' | 'HHAD';
+
+export interface SportteryOddsPoolDisplay {
+  poolCode: SportteryOddsPoolCode;
+  label: string;
+  handicap: string;
+  odds?: Odds | null;
+  source?: string;
+  updatedAt?: string;
+  probabilities?: { home: number; draw: number; away: number };
+}
 
 const sportteryResultLabels = {
   '1': {
@@ -89,4 +100,52 @@ export function getSportteryOddsRows(odds: Odds | null | undefined, language: La
     { label: 'Draw', hint: 'Draw', value: odds.oddsX },
     { label: 'Away', hint: 'Away Win', value: odds.odds2 }
   ];
+}
+
+export function getImpliedProbabilities(odds: Odds | null | undefined) {
+  if (!odds) return undefined;
+
+  const home = 1 / odds.odds1;
+  const draw = 1 / odds.oddsX;
+  const away = 1 / odds.odds2;
+  const total = home + draw + away || 1;
+
+  return {
+    home: Math.round((home / total) * 100),
+    draw: Math.round((draw / total) * 100),
+    away: Math.round((away / total) * 100)
+  };
+}
+
+export function getSportteryPoolRows(match: {
+  odds?: Odds | null;
+  oddsSource?: string;
+  oddsUpdatedAt?: string;
+  handicapOdds?: Odds | null;
+  handicapLine?: string;
+  handicapOddsSource?: string;
+  handicapOddsUpdatedAt?: string;
+}, language: Language): SportteryOddsPoolDisplay[] {
+  const rows: SportteryOddsPoolDisplay[] = [
+    {
+      poolCode: 'HAD',
+      label: language === 'zh' ? '胜平负' : '1X2',
+      handicap: '0',
+      odds: match.odds,
+      source: match.oddsSource,
+      updatedAt: match.oddsUpdatedAt,
+      probabilities: getImpliedProbabilities(match.odds)
+    },
+    {
+      poolCode: 'HHAD',
+      label: language === 'zh' ? '让球胜平负' : 'Handicap 1X2',
+      handicap: match.handicapLine || '',
+      odds: match.handicapOdds,
+      source: match.handicapOddsSource,
+      updatedAt: match.handicapOddsUpdatedAt,
+      probabilities: getImpliedProbabilities(match.handicapOdds)
+    }
+  ];
+  const hasAnyOdds = rows.some((row) => row.odds);
+  return hasAnyOdds ? rows.filter((row) => row.odds || row.poolCode === 'HAD') : [];
 }

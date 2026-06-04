@@ -312,29 +312,39 @@ function sanitizeOdds(raw) {
   return null;
 }
 
-function sportteryHadOdds(row, sourceUrl, sourceMethod) {
+function sportteryPoolOdds(row, poolCode, sourceUrl, sourceMethod) {
   const rows = Array.isArray(row?.oddsList) ? row.oddsList : [];
-  const hadRow =
-    rows.find((item) => String(item?.poolCode || "").toUpperCase() === "HAD") ||
-    row?.had ||
-    (row?.h || row?.d || row?.a ? row : null);
+  const code = String(poolCode).toUpperCase();
+  const poolRow =
+    rows.find((item) => String(item?.poolCode || "").toUpperCase() === code) ||
+    row?.[code.toLowerCase()] ||
+    (code === "HAD" && (row?.h || row?.d || row?.a) ? row : null);
   const odds = sanitizeOdds({
-    odds1: hadRow?.h,
-    oddsX: hadRow?.d,
-    odds2: hadRow?.a,
+    odds1: poolRow?.h,
+    oddsX: poolRow?.d,
+    odds2: poolRow?.a,
   });
 
   if (!odds) return null;
 
-  const updateDate = normText(hadRow?.updateDate);
-  const updateTime = normText(hadRow?.updateTime);
+  const updateDate = normText(poolRow?.updateDate);
+  const updateTime = normText(poolRow?.updateTime);
+  const handicap = code === "HAD" ? "0" : normText(poolRow?.goalLine || poolRow?.goalLineValue || row?.hhad?.goalLine, "");
   return {
     odds,
-    oddsSource: "sporttery:HAD",
-    oddsPoolCode: "HAD",
+    handicap,
+    oddsSource: `sporttery:${code}`,
+    oddsPoolCode: code,
     oddsSourceMethod: sourceMethod,
     oddsUpdatedAt: [updateDate, updateTime].filter(Boolean).join(" ") || undefined,
     oddsSourceUrl: sourceUrl,
+  };
+}
+
+function sportteryOddsInfo(row, sourceUrl, sourceMethod) {
+  return {
+    had: sportteryPoolOdds(row, "HAD", sourceUrl, sourceMethod),
+    hhad: sportteryPoolOdds(row, "HHAD", sourceUrl, sourceMethod),
   };
 }
 
@@ -469,7 +479,7 @@ function mapSportteryRow(row, sourceMethod, sourceUrl) {
   const status = statusFromSporttery(row.matchStatus, row.sellStatus, row.matchStatusName);
   const kickoffTime = parseKickoff(row.matchDate, row.matchTime);
   const businessDate = normText(row.businessDate || row.matchNumDate || row.matchDate);
-  const oddsInfo = sportteryHadOdds(row, sourceUrl, sourceMethod);
+  const oddsInfo = sportteryOddsInfo(row, sourceUrl, sourceMethod);
   return {
     sourceMethod,
     sourceUrl,
@@ -489,12 +499,19 @@ function mapSportteryRow(row, sourceMethod, sourceUrl) {
     status,
     scoreHome,
     scoreAway,
-    odds: oddsInfo?.odds || null,
-    oddsSource: oddsInfo?.oddsSource,
-    oddsPoolCode: oddsInfo?.oddsPoolCode,
-    oddsSourceMethod: oddsInfo?.oddsSourceMethod,
-    oddsUpdatedAt: oddsInfo?.oddsUpdatedAt,
-    oddsSourceUrl: oddsInfo?.oddsSourceUrl,
+    odds: oddsInfo.had?.odds || null,
+    oddsSource: oddsInfo.had?.oddsSource,
+    oddsPoolCode: oddsInfo.had?.oddsPoolCode,
+    oddsSourceMethod: oddsInfo.had?.oddsSourceMethod,
+    oddsUpdatedAt: oddsInfo.had?.oddsUpdatedAt,
+    oddsSourceUrl: oddsInfo.had?.oddsSourceUrl,
+    handicapOdds: oddsInfo.hhad?.odds || null,
+    handicapLine: oddsInfo.hhad?.handicap,
+    handicapOddsSource: oddsInfo.hhad?.oddsSource,
+    handicapOddsPoolCode: oddsInfo.hhad?.oddsPoolCode,
+    handicapOddsSourceMethod: oddsInfo.hhad?.oddsSourceMethod,
+    handicapOddsUpdatedAt: oddsInfo.hhad?.oddsUpdatedAt,
+    handicapOddsSourceUrl: oddsInfo.hhad?.oddsSourceUrl,
   };
 }
 
@@ -558,7 +575,15 @@ function mergeMatch(prev, next) {
     if (match.oddsSourceMethod === "current") return 2;
     return 1;
   };
+  const handicapOddsRank = (match) => {
+    if (!sanitizeOdds(match.handicapOdds)) return 0;
+    if (match.handicapOddsUpdatedAt) return 4;
+    if (match.handicapOddsSourceMethod === "calculator") return 3;
+    if (match.handicapOddsSourceMethod === "current") return 2;
+    return 1;
+  };
   const oddsMatch = oddsRank(next) >= oddsRank(prev) ? next : prev;
+  const handicapOddsMatch = handicapOddsRank(next) >= handicapOddsRank(prev) ? next : prev;
   return {
     ...prev,
     ...next,
@@ -568,6 +593,13 @@ function mergeMatch(prev, next) {
     oddsSourceMethod: oddsMatch.oddsSourceMethod,
     oddsUpdatedAt: oddsMatch.oddsUpdatedAt,
     oddsSourceUrl: oddsMatch.oddsSourceUrl,
+    handicapOdds: handicapOddsMatch.handicapOdds || null,
+    handicapLine: handicapOddsMatch.handicapLine,
+    handicapOddsSource: handicapOddsMatch.handicapOddsSource,
+    handicapOddsPoolCode: handicapOddsMatch.handicapOddsPoolCode,
+    handicapOddsSourceMethod: handicapOddsMatch.handicapOddsSourceMethod,
+    handicapOddsUpdatedAt: handicapOddsMatch.handicapOddsUpdatedAt,
+    handicapOddsSourceUrl: handicapOddsMatch.handicapOddsSourceUrl,
     homeTeamCode: next.homeTeamCode || prev.homeTeamCode,
     awayTeamCode: next.awayTeamCode || prev.awayTeamCode,
     homeTeamLogo: next.homeTeamLogo || prev.homeTeamLogo,
@@ -716,6 +748,7 @@ function toAppMatch(match) {
   const awayTeamId = `team_${hashString(match.awayTeam)}`;
   const leagueId = `league_${hashString(match.leagueName)}`;
   const odds = sanitizeOdds(match.odds);
+  const handicapOdds = sanitizeOdds(match.handicapOdds);
   const model = odds
     ? predictionSet({ ...match, odds })
     : { predictions: [], homeLambda: match.scoreHome ?? 0, awayLambda: match.scoreAway ?? 0 };
@@ -736,6 +769,7 @@ function toAppMatch(match) {
     scoreHome,
     scoreAway,
     odds: odds || undefined,
+    handicapOdds: handicapOdds || undefined,
     predictions: model.predictions,
     stats: {
       xG: {
@@ -808,6 +842,12 @@ function toAppMatch(match) {
     oddsSourceMethod: match.oddsSourceMethod,
     oddsUpdatedAt: match.oddsUpdatedAt,
     oddsSourceUrl: match.oddsSourceUrl,
+    handicapLine: match.handicapLine,
+    handicapOddsSource: match.handicapOddsSource,
+    handicapOddsPoolCode: match.handicapOddsPoolCode,
+    handicapOddsSourceMethod: match.handicapOddsSourceMethod,
+    handicapOddsUpdatedAt: match.handicapOddsUpdatedAt,
+    handicapOddsSourceUrl: match.handicapOddsSourceUrl,
   };
 }
 
@@ -855,6 +895,10 @@ function isOfficialResultMatch(match) {
     Number.isFinite(match?.scoreAway) &&
     String(match?.sourceUrl || "").includes("webapi.sporttery.cn")
   );
+}
+
+function hasOfficialDisplayOdds(match) {
+  return Boolean(sanitizeOdds(match?.odds) || sanitizeOdds(match?.handicapOdds));
 }
 
 function captureBucketIso(capturedAt) {
@@ -966,8 +1010,9 @@ async function sync() {
   const allRawMatches = await fetchSportteryMatches();
   const rawMatches = allRawMatches.filter(inMatchWindow);
   const rawMatchesWithOdds = rawMatches.filter((match) => sanitizeOdds(match.odds));
+  const rawMatchesWithHandicapOdds = rawMatches.filter((match) => sanitizeOdds(match.handicapOdds));
   const rawResultMatches = rawMatches.filter(isOfficialResultMatch);
-  const rawMatchesForOutput = rawMatches.filter((match) => sanitizeOdds(match.odds) || isOfficialResultMatch(match));
+  const rawMatchesForOutput = rawMatches.filter((match) => hasOfficialDisplayOdds(match) || isOfficialResultMatch(match));
   const usedFreshOdds = rawMatchesWithOdds.length > 0;
   let output = rawMatchesForOutput.map(toAppMatch);
 
@@ -997,6 +1042,7 @@ async function sync() {
         count: output.length,
         scanned: allRawMatches.length,
         officialOddsMatches: rawMatchesWithOdds.length,
+        officialHandicapOddsMatches: rawMatchesWithHandicapOdds.length,
         officialResultMatches: rawResultMatches.length,
         skippedWithoutOfficialOdds: rawMatches.length - rawMatchesWithOdds.length,
         window: { backDays: WINDOW_BACK_DAYS, forwardDays: WINDOW_FORWARD_DAYS },

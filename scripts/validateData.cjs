@@ -24,19 +24,30 @@ if (!Array.isArray(matches) || matches.length === 0) {
 for (const match of matches) {
   const oddsValues = [match.odds?.odds1, match.odds?.oddsX, match.odds?.odds2];
   const hasOfficialOdds = match.oddsSource === "sporttery:HAD";
+  const handicapOddsValues = [match.handicapOdds?.odds1, match.handicapOdds?.oddsX, match.handicapOdds?.odds2];
+  const hasOfficialHandicapOdds = match.handicapOddsSource === "sporttery:HHAD";
   const hasValidOdds = oddsValues.every((value) => Number.isFinite(value) && value > 1.01);
+  const hasValidHandicapOdds = handicapOddsValues.every((value) => Number.isFinite(value) && value > 1.01);
   const isResultOnly = match.status === "FINISHED" && !hasOfficialOdds;
 
-  if (!hasValidOdds && !isResultOnly) {
+  if (!hasValidOdds && !hasValidHandicapOdds && !isResultOnly) {
     errors.push(`${match.id}: invalid SP values ${JSON.stringify(match.odds)}`);
   }
 
-  if (match.source === "sporttery" && !isResultOnly && !hasOfficialOdds) {
-    errors.push(`${match.id}: missing official Sporttery HAD odds source`);
+  if (match.source === "sporttery" && !isResultOnly && !hasOfficialOdds && !hasOfficialHandicapOdds) {
+    errors.push(`${match.id}: missing official Sporttery odds source`);
   }
 
   if (hasOfficialOdds && !String(match.oddsSourceUrl || "").includes("webapi.sporttery.cn")) {
     errors.push(`${match.id}: missing official Sporttery odds source URL`);
+  }
+
+  if (hasOfficialHandicapOdds && !String(match.handicapOddsSourceUrl || "").includes("webapi.sporttery.cn")) {
+    errors.push(`${match.id}: missing official Sporttery handicap odds source URL`);
+  }
+
+  if (hasOfficialHandicapOdds && !String(match.handicapLine || "")) {
+    errors.push(`${match.id}: missing official Sporttery handicap line`);
   }
 
   if (isResultOnly) {
@@ -125,11 +136,12 @@ const statuses = matches.reduce((acc, match) => {
   return acc;
 }, {});
 const officialOddsCount = matches.filter((match) => match.oddsSource === "sporttery:HAD").length;
+const officialHandicapOddsCount = matches.filter((match) => match.handicapOddsSource === "sporttery:HHAD").length;
 const resultOnlyCount = matches.filter((match) => match.status === "FINISHED" && match.oddsSource !== "sporttery:HAD").length;
 
 console.log(
   JSON.stringify(
-    { ok: true, count: matches.length, statuses, officialOddsCount, resultOnlyCount, oddsHistoryRows: oddsHistoryRows.length },
+    { ok: true, count: matches.length, statuses, officialOddsCount, officialHandicapOddsCount, resultOnlyCount, oddsHistoryRows: oddsHistoryRows.length },
     null,
     2
   )

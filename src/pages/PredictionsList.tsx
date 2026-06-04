@@ -16,7 +16,7 @@ import {
 import { useApp } from '../context/AppContextCore';
 import { countries, getDateStringOffset } from '../services/mockData';
 import type { Country, League, Match, PredictionDetail } from '../services/mockData';
-import { getMarketLabel, getPredictionTipDisplay, getSportteryOddsRows } from '../services/bettingDisplay';
+import { getMarketLabel, getPredictionTipDisplay, getSportteryPoolRows } from '../services/bettingDisplay';
 import { getCountryById, getLeagueById, getTeamById } from '../services/entities';
 import { TeamBadge } from '../components/TeamBadge';
 
@@ -34,7 +34,7 @@ const getBestPrediction = (match: Match) => match.predictions.find((p) => p.mark
 
 const getBestTrust = (match: Match) => getBestPrediction(match)?.trustScore || 0;
 
-const getBestOdds = (match: Match) => getBestPrediction(match)?.odds || 0;
+const getBestOdds = (match: Match) => getBestPrediction(match)?.odds || match.odds?.odds1 || match.handicapOdds?.odds1 || 0;
 
 const getTrustColor = (score: number) => {
   if (score >= 80) return '156 70% 44%';
@@ -101,7 +101,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
     tipUnit: { zh: '条', en: 'tips' },
     statusTime: { zh: '时间 / 状态', en: 'Time / Status' },
     teams: { zh: '对阵双方', en: 'Teams' },
-    oddsHeader: { zh: '胜平负 SP', en: '1X2 Odds' },
+    oddsHeader: { zh: '胜平负 / 让球', en: '1X2 / Handicap' },
+    closed: { zh: '未开售', en: 'Closed' },
     trustHeader: { zh: '可信度', en: 'Trust' },
     unlockTitle: { zh: '点击模拟升级解锁', en: 'Click to unlock' },
     hit: { zh: '命中', en: 'Hit' },
@@ -452,7 +453,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
                     <tr>
                       <th style={{ width: '132px' }}>{t('statusTime')}</th>
                       <th>{t('teams')}</th>
-                      <th style={{ width: '108px', textAlign: 'center' }}>{t('oddsHeader')}</th>
+                      <th style={{ width: '260px', textAlign: 'center' }}>{t('oddsHeader')}</th>
                       <th style={{ width: '92px', textAlign: 'center' }}>{getMarketLabel('1X2', language)}</th>
                       <th style={{ width: '100px', textAlign: 'center' }}>{getMarketLabel('GOALS', language)}</th>
                       <th style={{ width: '110px', textAlign: 'center' }}>{getMarketLabel('GG_NG', language)}</th>
@@ -470,7 +471,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
                       const score = `${match.scoreHome ?? '-'}:${match.scoreAway ?? '-'}`;
                       const bestTrust = getBestTrust(match);
                       const formattedTime = formatKickoffTime(match.kickoffTime, language);
-                      const oddsRows = getSportteryOddsRows(match.odds, language);
+                      const poolRows = getSportteryPoolRows(match, language);
 
                       return (
                         <tr
@@ -507,23 +508,43 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
                           </td>
 
                           <td className="match-odds-cell" data-label={t('oddsHeader')} style={{ textAlign: 'center' }}>
-                            <div className="odds-stack">
-                              {oddsRows.length > 0 ? (
-                                oddsRows.map((row) => (
-                                  <span key={row.label} className="odds-row">
-                                    <strong>{row.label}</strong>
-                                    <span>{row.value.toFixed(2)}</span>
-                                  </span>
-                                ))
-                              ) : (
-                                <span className="status-note">--</span>
-                              )}
-                              {match.oddsSource && (
-                                <span className="odds-source" title={match.oddsUpdatedAt || match.oddsSource}>
-                                  {language === 'zh' ? '官方HAD' : 'Official HAD'}
-                                </span>
-                              )}
-                            </div>
+                            {poolRows.length > 0 ? (
+                              <div className="sporttery-pool-stack">
+                                <div className="sporttery-pool-head">
+                                  <span>{language === 'zh' ? '让球' : 'Line'}</span>
+                                  <span>{language === 'zh' ? '胜' : 'H'}</span>
+                                  <span>{language === 'zh' ? '平' : 'D'}</span>
+                                  <span>{language === 'zh' ? '负' : 'A'}</span>
+                                  <span>{language === 'zh' ? '支持率' : 'Prob.'}</span>
+                                </div>
+                                {poolRows.map((row) => (
+                                  <div key={row.poolCode} className={`sporttery-pool-row ${row.odds ? '' : 'is-closed'}`}>
+                                    <span className="pool-line">{row.handicap || '--'}</span>
+                                    {row.odds ? (
+                                      <>
+                                        <strong>{row.odds.odds1.toFixed(2)}</strong>
+                                        <strong>{row.odds.oddsX.toFixed(2)}</strong>
+                                        <strong>{row.odds.odds2.toFixed(2)}</strong>
+                                        <span className="pool-prob">
+                                          {row.probabilities
+                                            ? `${row.probabilities.home}/${row.probabilities.draw}/${row.probabilities.away}%`
+                                            : '--'}
+                                        </span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span className="pool-closed">{t('closed')}</span>
+                                        <span>--</span>
+                                        <span>--</span>
+                                        <span>--</span>
+                                      </>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="status-note">--</span>
+                            )}
                           </td>
 
                           <td className="match-market-cell" data-label={getMarketLabel('1X2', language)} style={{ textAlign: 'center' }}>
