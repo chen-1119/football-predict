@@ -1,6 +1,6 @@
 import React from 'react';
 import { useApp } from '../context/AppContextCore';
-import type { Match } from '../services/mockData';
+import type { Match, PredictionDetail } from '../services/mockData';
 import { getPredictionTipDisplay } from '../services/bettingDisplay';
 import { getTeamById } from '../services/entities';
 import { TeamBadge } from '../components/TeamBadge';
@@ -23,25 +23,44 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
   }, [matches]);
 
   const translations = {
-    title: { zh: '高可信精选 VIP 推荐', en: 'Daily Best VIP Tips' },
+    title: { zh: 'AI 精选赛前观察', en: 'AI Pre-match Shortlist' },
     subtitle: { 
-      zh: '由高维度数学预测模型每日精选，仅挑选可信度 80% 以上的最稳赛事推荐。历史长期盈利率标杆。', 
-      en: 'Selected daily by our multi-layered mathematical models, featuring only 80%+ confidence choices.' 
+      zh: '展示当前模型保留的精选、观察与价值方向；每条结论都需要结合官方 SP、风险标签和临场变化复核。', 
+      en: 'Shows model shortlist, watch, and value directions. Every pick should be checked against official SP, risk tags, and late movement.' 
     },
     lockedNotice: {
-      zh: '高可信精选推荐为 PRO 订阅专享。升级即可全天候解锁全部模型首选、高阶比分推演和进球数据预测。',
-      en: 'Daily Best Tips are locked for Free users. Upgrade to PRO to reveal all high-confidence model selections.'
+      zh: 'PRO 可查看完整精选说明、赔率依据、风险标签和比分/进球侧参考。',
+      en: 'PRO reveals full shortlist notes, odds basis, risk tags, and score/goals references.'
     },
     unlockBtn: { zh: '模拟升级 PRO 立即解锁', en: 'Simulate Pro to Unlock' },
     confidence: { zh: '模型信赖度', en: 'Model Confidence' },
     odds: { zh: '首选SP', en: 'Primary Odds' },
     kickoff: { zh: '开赛', en: 'Kickoff' },
     viewDetail: { zh: '查看深度数据统计', en: 'Analyze Match Stats' },
-    noTips: { zh: '今日暂无高可信推荐发布。请稍后再试。', en: 'No VIP tips published yet for today. Check back later.' }
+    noTips: { zh: '当前暂无可用精选或观察结论。请稍后再试。', en: 'No shortlist or watch note is available yet. Check back later.' }
   };
 
   const t = (key: keyof typeof translations) => {
     return translations[key][language] || '';
+  };
+
+  const getBestCardNote = (prediction: PredictionDetail) => {
+    const riskCount = prediction.riskTags?.length || 0;
+    if (prediction.tipCode === 'WATCH') {
+      return language === 'zh'
+        ? `未达到强推阈值，当前只作观察；${riskCount ? `已触发 ${riskCount} 个风险标签。` : '等待下一次官方 SP 快照复核。'}`
+        : `Below the strong-pick threshold; watch only. ${riskCount ? `${riskCount} risk tags triggered.` : 'Wait for the next official SP snapshot.'}`;
+    }
+
+    if (prediction.trustScore >= 84) {
+      return language === 'zh'
+        ? '可列入赛前候选，但仍需临场 SP 和让球盘共同确认。'
+        : 'Shortlist candidate, still requiring late SP and handicap confirmation.';
+    }
+
+    return language === 'zh'
+      ? '模型当前首选，不等同于稳胆；请结合风险标签和详情页复盘。'
+      : 'Current model lean, not a banker; review risk tags and detail analysis.';
   };
 
   return (
@@ -69,6 +88,7 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
             const homeTeam = getTeamById(match.homeTeamId);
             const awayTeam = getTeamById(match.awayTeamId);
             const bestPred = match.predictions.find(p => p.marketType === 'BEST')!;
+            const hasDisplayOdds = Number.isFinite(bestPred.odds) && bestPred.odds > 0;
             
             const isLocked = !isPremium;
             const formattedTime = new Date(match.kickoffTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -143,14 +163,16 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
                     {/* 首选推荐和 SP */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
-                        <span style={{ fontSize: '0.7rem', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', fontWeight: '700' }}>⭐️ {t('title')}</span>
+                        <span style={{ fontSize: '0.7rem', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', fontWeight: '700' }}>{t('title')}</span>
                         <h4 style={{ fontSize: '1.25rem', fontWeight: '900', color: 'hsl(var(--primary))', marginTop: '0.1rem' }}>
                           {getPredictionTipDisplay(bestPred, language)}
                         </h4>
                       </div>
                       <div style={{ textAlign: 'right' }}>
                         <span style={{ fontSize: '0.7rem', color: 'hsl(var(--text-muted))' }}>{t('odds')}</span>
-                        <div style={{ fontSize: '1.3rem', fontWeight: '900', color: 'hsl(var(--accent))' }}>@{bestPred.odds.toFixed(2)}</div>
+                        <div style={{ fontSize: '1.3rem', fontWeight: '900', color: 'hsl(var(--accent))' }}>
+                          {hasDisplayOdds ? `@${bestPred.odds.toFixed(2)}` : (language === 'zh' ? '观察' : 'Watch')}
+                        </div>
                       </div>
                     </div>
 
@@ -180,7 +202,7 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
                       <div>
                         <span style={{ fontSize: '0.7rem', color: 'hsl(var(--text-muted))', display: 'block' }}>{t('confidence')}</span>
                         <span style={{ fontSize: '0.825rem', color: 'hsl(var(--text-secondary))', fontWeight: '500' }}>
-                          数学期望概率极高，适合单场大仓或串关胆码。
+                          {getBestCardNote(bestPred)}
                         </span>
                       </div>
 

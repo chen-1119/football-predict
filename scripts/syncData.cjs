@@ -12,8 +12,8 @@ const WINDOW_FORWARD_DAYS = Math.max(1, Number(process.env.MATCH_WINDOW_FORWARD_
 const ODDS_HISTORY_RETENTION_DAYS = Math.max(1, Number(process.env.ODDS_HISTORY_RETENTION_DAYS || 365));
 const ODDS_HISTORY_BUCKET_MINUTES = Math.max(1, Number(process.env.ODDS_HISTORY_BUCKET_MINUTES || 5));
 const PAGE_POLL_SECONDS = Math.max(15, Number(process.env.PAGE_POLL_SECONDS || 60));
-const ANALYST_PROMPT_VERSION = "professional-football-analyst-v4";
-const PREDICTION_POLICY_VERSION = "pre-match-value-gate-v4";
+const ANALYST_PROMPT_VERSION = "professional-football-analyst-v5";
+const PREDICTION_POLICY_VERSION = "pre-match-value-gate-v5";
 const METHODS = (process.env.SPORTTERY_METHODS || "concern,live,result,all")
   .split(",")
   .map((x) => x.trim())
@@ -1039,6 +1039,181 @@ function selectAnalystOneXTwo(match, picks, probabilities, hhadProbabilities) {
   };
 }
 
+function chooseNarrative(match, salt, builders) {
+  const rand = seeded(`${match.sourceMatchId}-${salt}`);
+  const idx = Math.min(builders.length - 1, Math.floor(rand() * builders.length));
+  return builders[idx]();
+}
+
+function buildBestNarrative(match, context) {
+  const {
+    oneXTwo,
+    bestShouldWatch,
+    analystSelection,
+    bestIsSteady,
+    bestHasWeakHandicap,
+    bestHasThinEdge,
+    riskTags,
+    probabilityGap,
+    modelProbabilityGap,
+    bestHandicapSupport,
+    totalLambda,
+    over25Probability,
+    bttsProbability,
+    score,
+    hhadProbabilities
+  } = context;
+  const tipZh = oneXTwo.tipLabel.zh;
+  const tipEn = oneXTwo.tipLabel.en;
+  const marketGapZh = `${pct(probabilityGap)} 个百分点`;
+  const modelGapZh = `${pct(modelProbabilityGap)} 个百分点`;
+  const marketGapEn = `${pct(probabilityGap)} points`;
+  const modelGapEn = `${pct(modelProbabilityGap)} points`;
+  const handicapZh = bestHandicapSupport === null
+    ? "让球盘暂时不足以验证同向强度"
+    : `让球同向支持约 ${pct(bestHandicapSupport)}%`;
+  const handicapEn = bestHandicapSupport === null
+    ? "handicap confirmation is unavailable"
+    : `same-side handicap support is about ${pct(bestHandicapSupport)}%`;
+  const riskTextZh = riskTags.length ? riskTags.map((tag) => tag.zh).join("、") : "暂无明显风险标签";
+  const riskTextEn = riskTags.length ? riskTags.map((tag) => tag.en).join(", ") : "no major risk tag";
+  const hhadTextZh = hhadProbabilities
+    ? `让球盘去水支持约 主胜 ${pct(hhadProbabilities.home)}% / 平 ${pct(hhadProbabilities.draw)}% / 客胜 ${pct(hhadProbabilities.away)}%`
+    : "让球盘暂无可用去水支持率";
+  const hhadTextEn = hhadProbabilities
+    ? `handicap normalized support is home ${pct(hhadProbabilities.home)}% / draw ${pct(hhadProbabilities.draw)}% / away ${pct(hhadProbabilities.away)}%`
+    : "handicap normalized support is unavailable";
+  const goalsZh = `进球侧：比分热区 ${score.home}-${score.away}，总期望 ${totalLambda.toFixed(2)}，大 2.5 约 ${pct(over25Probability)}%，双方进球约 ${pct(bttsProbability)}%。`;
+  const goalsEn = `Goals: score heat zone ${score.home}-${score.away}, total xG ${totalLambda.toFixed(2)}, over 2.5 about ${pct(over25Probability)}%, BTTS about ${pct(bttsProbability)}%.`;
+  const lateRiskZh = `临场复核：${riskTextZh}。如果赛前 SP 继续降赔但让球支持不上来，仍按观察处理。`;
+  const lateRiskEn = `Late check: ${riskTextEn}. If SP shortens without handicap confirmation, keep this as watch-only.`;
+
+  if (bestShouldWatch) {
+    const subtype = bestHasWeakHandicap ? "weak-handicap" : bestHasThinEdge ? "thin-edge" : "stacked-risk";
+    const explanation = chooseNarrative(match, `best-watch-${subtype}`, [
+      () => ({
+        zh: `这场先不把${tipZh}包装成高可信。HAD 方向虽然清楚，但${handicapZh}，盘口确认不够完整。`,
+        en: `This is not packaged as high confidence. ${tipEn} leads the HAD read, but ${handicapEn}, so confirmation is incomplete.`
+      }),
+      () => ({
+        zh: `${tipZh}是当前主线，但它更像“需要跟盘”的方向：模型领先 ${modelGapZh}，真正的问题在让球盘是否愿意继续同向。`,
+        en: `${tipEn} is the current main lean, but it needs market tracking: model edge is ${modelGapEn}, and the key question is handicap confirmation.`
+      }),
+      () => ({
+        zh: `这场有正路倾向，但不适合硬写成稳胆。${handicapZh}，风险标签为 ${riskTextZh}，先按观察单处理。`,
+        en: `There is a favorite lean, but not a banker. ${handicapEn}; risk tags: ${riskTextEn}. Keep it in watch mode.`
+      }),
+      () => ({
+        zh: `模型没有否定${tipZh}，只是拒绝把它抬到高可信：市场第一方向领先 ${marketGapZh}，但让球验证和风险项还没闭合。`,
+        en: `The model is not rejecting ${tipEn}; it is refusing to upgrade it. Market lead is ${marketGapEn}, but handicap and risk checks are not closed.`
+      })
+    ]);
+
+    return {
+      explanation,
+      analysisItems: [
+        {
+          zh: bestHasWeakHandicap
+            ? `降级原因：${tipZh}对应 ${handicapZh}；${hhadTextZh}，和普通胜平负主线存在温差。`
+            : bestHasThinEdge
+              ? `降级原因：模型首选优势约 ${modelGapZh}，未达到强推荐阈值；市场主线领先约 ${marketGapZh}。`
+              : `降级原因：风险标签叠加为 ${riskTextZh}，当前不适合只给单一方向。`,
+          en: bestHasWeakHandicap
+            ? `Downgrade reason: ${tipEn} has ${handicapEn}; ${hhadTextEn}, not fully aligned with HAD.`
+            : bestHasThinEdge
+              ? `Downgrade reason: model edge is about ${modelGapEn}, below the strong-pick threshold; market lead is about ${marketGapEn}.`
+              : `Downgrade reason: risk tags overlap: ${riskTextEn}. A single pick is not justified yet.`
+        },
+        { zh: goalsZh, en: goalsEn },
+        { zh: lateRiskZh, en: lateRiskEn }
+      ]
+    };
+  }
+
+  if (analystSelection.isContrarian) {
+    const isDrawValue = analystSelection.mode === "value-draw";
+    const explanation = chooseNarrative(match, `best-contrarian-${analystSelection.mode}`, [
+      () => ({
+        zh: isDrawValue
+          ? `这场重点不是追低赔，而是平局拉力。主线没有拉开足够距离，让球盘也没有把正路完全坐实。`
+          : `低赔方向有热度，但让球盘没有同步确认。模型把${tipZh}保留为价值观察，而不是常规正路。`,
+        en: isDrawValue
+          ? `The key is draw pressure rather than chasing the lowest SP. The main line has not separated enough, and handicap support is incomplete.`
+          : `The low-SP side is warm, but handicap support does not fully confirm it. ${tipEn} is kept as value-watch, not a standard favorite.`
+      }),
+      () => ({
+        zh: isDrawValue
+          ? `平局在这场不是陪衬项：胜平负差距偏窄，正路让球支持偏弱，因此优先看防平价值。`
+          : `${tipZh}属于盘口分歧下的冷门观察。它不是最高确定性方向，但比机械追随热门更有赔率解释空间。`,
+        en: isDrawValue
+          ? `The draw is not a filler here: the 1X2 spread is narrow and favorite handicap support is weak, so draw cover has value.`
+          : `${tipEn} is an upset watch under market disagreement. It is not high-certainty, but has more price logic than blindly following the favorite.`
+      })
+    ]);
+
+    return {
+      explanation,
+      analysisItems: [
+        {
+          zh: `盘口分歧：${analystSelection.reason.zh.replace(/^专业修正：/, "")} 市场主线领先约 ${marketGapZh}，模型首选优势约 ${modelGapZh}。`,
+          en: `Market disagreement: ${analystSelection.reason.en.replace(/^Analyst adjustment: /, "")} Market lead is about ${marketGapEn}; model edge is about ${modelGapEn}.`
+        },
+        { zh: goalsZh, en: goalsEn },
+        {
+          zh: `风险边界：这是价值观察，不是高确定性推荐；若临场平局 SP 被明显抬高或让球盘重新支持热门，需要下调权重。`,
+          en: `Risk boundary: this is value-watch, not high certainty. If late draw SP drifts or handicap support returns to the favorite, downgrade it.`
+        }
+      ]
+    };
+  }
+
+  if (bestIsSteady) {
+    const explanation = chooseNarrative(match, "best-steady", [
+      () => ({
+        zh: `这场能进入候选，不是因为赔率低，而是官方 SP、模型概率和风险标签没有互相打架：${tipZh}同时得到多项支持。`,
+        en: `This makes the shortlist not because the odds are low, but because official SP, model probability, and risk checks are aligned for ${tipEn}.`
+      }),
+      () => ({
+        zh: `${tipZh}是本场较完整的一条主线：市场领先 ${marketGapZh}，模型领先 ${modelGapZh}，风险标签控制在低位。`,
+        en: `${tipEn} is the cleanest main line here: market edge ${marketGapEn}, model edge ${modelGapEn}, and risk tags remain contained.`
+      }),
+      () => ({
+        zh: `这场的优势来自一致性。普通胜平负、进球模型和风险过滤都没有明显反向信号，${tipZh}可列入赛前候选。`,
+        en: `The edge comes from alignment. 1X2, goal model, and risk filter do not send a strong opposite signal, so ${tipEn} stays on the shortlist.`
+      })
+    ]);
+
+    return {
+      explanation,
+      analysisItems: [
+        { zh: `主线确认：市场第一方向领先约 ${marketGapZh}，模型第一方向领先约 ${modelGapZh}，${handicapZh}。`, en: `Main-line check: market edge about ${marketGapEn}, model edge about ${modelGapEn}, ${handicapEn}.` },
+        { zh: goalsZh, en: goalsEn },
+        { zh: `风险提示：即便进入候选，也只代表赛前概率更优；临场若出现 ${riskTextZh} 加重，需要重新降级。`, en: `Risk note: shortlist only means better pre-match probability. If ${riskTextEn} worsens late, downgrade it.` }
+      ]
+    };
+  }
+
+  const explanation = chooseNarrative(match, "best-model-lean", [
+    () => ({
+      zh: `${tipZh}是模型首选，但还不到“稳”的级别。当前优势来自概率排序，后续仍要看 SP 是否继续支持。`,
+      en: `${tipEn} is the model lean, but not a steady pick. The edge comes from probability ranking and still needs late SP support.`
+    }),
+    () => ({
+      zh: `这场有方向，但不是强方向。${tipZh}领先第二选择约 ${modelGapZh}，足够进入跟踪，不足以直接升为高可信。`,
+      en: `There is a lean, not a strong lean. ${tipEn} leads the second option by about ${modelGapEn}, enough to track but not enough to upgrade.`
+    })
+  ]);
+
+  return {
+    explanation,
+    analysisItems: [
+      { zh: `模型排序：${tipZh}暂列第一，市场主线领先约 ${marketGapZh}，模型优势约 ${modelGapZh}。`, en: `Model ranking: ${tipEn} is first, market lead about ${marketGapEn}, model edge about ${modelGapEn}.` },
+      { zh: goalsZh, en: goalsEn },
+      { zh: `观察点：${riskTextZh}；若临场 SP 与让球盘分歧扩大，不建议强行升档。`, en: `Watch point: ${riskTextEn}. If late SP and handicap diverge further, do not upgrade it.` }
+    ]
+  };
+}
+
 function predictionSet(match) {
   const probabilities = impliedProbabilities(match.odds);
   const hhadProbabilities = sanitizeOdds(match.handicapOdds) ? impliedProbabilities(match.handicapOdds) : null;
@@ -1245,6 +1420,23 @@ function predictionSet(match) {
     : bestHasThinEdge
       ? "Watch first: thin 1X2 edge"
       : "Watch first: stacked risk";
+  const bestNarrative = buildBestNarrative(match, {
+    oneXTwo,
+    bestShouldWatch,
+    analystSelection,
+    bestIsSteady,
+    bestHasWeakHandicap,
+    bestHasThinEdge,
+    riskTags,
+    probabilityGap,
+    modelProbabilityGap,
+    bestHandicapSupport,
+    totalLambda,
+    over25Probability,
+    bttsProbability,
+    score,
+    hhadProbabilities
+  });
 
   const best = {
     marketType: "BEST",
@@ -1255,44 +1447,8 @@ function predictionSet(match) {
     },
     odds: bestShouldWatch ? 0 : oneXTwo.odds,
     trustScore: bestTrustScore,
-    explanation: {
-      zh: bestShouldWatch
-        ? `AI 精选触发价值门槛：${oneXTwo.tipLabel.zh} 虽是当前概率首选，但让球确认、概率差或风险标签不足以支持单独推荐，本场不硬给正路，先观察。`
-        : analystSelection.isContrarian
-        ? `AI 分析不只追随低赔正路。本场触发盘口分歧/防平修正，精选方向降级为价值观察：${oneXTwo.tipLabel.zh}。`
-        : bestIsSteady
-          ? `AI 精选优先使用中国竞彩网官方实时 SP。本场综合胜平负支持率、SP 分布、Elo、预期进球和风险标签后，列为稳妥方向：${oneXTwo.tipLabel.zh}。`
-          : `AI 精选优先使用中国竞彩网官方实时 SP。本场综合胜平负支持率、SP 分布、Elo、预期进球和防平风险后，仅列为模型首选：${oneXTwo.tipLabel.zh}，不列入高可信候选。`,
-      en: bestShouldWatch
-        ? `The value gate was triggered. ${oneXTwo.tipLabel.en} is the probability leader, but handicap confirmation, edge, or risk filters are not strong enough for a single pick.`
-        : analystSelection.isContrarian
-        ? `The model does not blindly follow the lowest SP. Market-disagreement checks downgraded this to a value-watch: ${oneXTwo.tipLabel.en}.`
-        : bestIsSteady
-          ? `The best tip uses official Sporttery data, Elo, and goal distribution. Steady lean: ${oneXTwo.tipLabel.en}.`
-          : `The best tip uses official Sporttery data, Elo, and goal distribution. This is a model lean, not a banker: ${oneXTwo.tipLabel.en}.`,
-    },
-    analysisItems: [
-      {
-        zh: bestShouldWatch
-          ? `核心理由：正路方向为 ${oneXTwo.tipLabel.zh}，但模型首选优势约 ${pct(modelProbabilityGap)} 个百分点，让球同向支持${bestHandicapSupport === null ? "不足以验证" : `约 ${pct(bestHandicapSupport)}%`}，因此降级为观察。`
-          : analystSelection.isContrarian
-          ? `核心理由：${analystSelection.reason.zh}`
-          : `核心理由：${oneXTwo.tipLabel.zh} 是当前模型最终概率首选，市场主线优势约 ${pct(probabilityGap)} 个百分点，模型首选优势约 ${pct(modelProbabilityGap)} 个百分点。`,
-        en: bestShouldWatch
-          ? `Core reason: ${oneXTwo.tipLabel.en} is the probability leader, but model edge is about ${pct(modelProbabilityGap)} points and handicap confirmation is weak.`
-          : analystSelection.isContrarian
-          ? `Core reason: ${analystSelection.reason.en}`
-          : `Core reason: ${oneXTwo.tipLabel.en} is the final model leader. Market edge is about ${pct(probabilityGap)} points; model edge is about ${pct(modelProbabilityGap)} points.`,
-      },
-      {
-        zh: `进球侧参考：模型比分热区 ${score.home}-${score.away}，总进球期望 ${totalLambda.toFixed(2)}，大 2.5 概率约 ${pct(over25Probability)}%。`,
-        en: `Goals side: score heat zone ${score.home}-${score.away}, total xG ${totalLambda.toFixed(2)}, over 2.5 around ${pct(over25Probability)}%.`,
-      },
-      {
-        zh: `风险提示：赛前若主胜/客胜 SP 大幅升高或平局 SP 明显下压，应降低单关仓位或等待下一次快照。`,
-        en: `Risk note: if the selected SP rises sharply or draw SP drops late, reduce stake or wait for the next snapshot.`,
-      },
-    ],
+    explanation: bestNarrative.explanation,
+    analysisItems: bestNarrative.analysisItems,
     riskTags,
     visibilityStatus: bestShouldWatch ? "FREE" : "PREMIUM",
     resultStatus: bestShouldWatch ? "PENDING" : oneXTwo.resultStatus,
@@ -1430,6 +1586,21 @@ function applyPredictionPersistence(match, existing, capturedAt) {
     },
   };
 
+  if (started && existingPredictions.length) {
+    return {
+      ...match,
+      predictions: settlePredictionsForMatch(match, existingPredictions),
+      projectedScoreHome: existing?.projectedScoreHome ?? match.projectedScoreHome,
+      projectedScoreAway: existing?.projectedScoreAway ?? match.projectedScoreAway,
+      stats: existing?.stats || match.stats,
+      probabilityModel: existing?.probabilityModel || match.probabilityModel,
+      predictionMeta: {
+        ...(existing?.predictionMeta || generatedMeta),
+        lockedAt: existing?.predictionMeta?.lockedAt || capturedAt,
+      },
+    };
+  }
+
   if (!existingPredictions.length || !nextPredictions.length) {
     return { ...match, predictionMeta: generatedMeta };
   }
@@ -1437,20 +1608,6 @@ function applyPredictionPersistence(match, existing, capturedAt) {
   const sameDirection = predictionSignature(existingPredictions) === predictionSignature(nextPredictions);
   const policyChanged = existing?.predictionMeta?.policyVersion !== PREDICTION_POLICY_VERSION
     || existing?.predictionMeta?.promptVersion !== ANALYST_PROMPT_VERSION;
-  if (started) {
-    return {
-      ...match,
-      predictions: settlePredictionsForMatch(match, existingPredictions),
-      projectedScoreHome: existing?.projectedScoreHome ?? match.projectedScoreHome,
-      projectedScoreAway: existing?.projectedScoreAway ?? match.projectedScoreAway,
-      stats: existing?.stats || match.stats,
-      probabilityModel: started ? (existing?.probabilityModel || match.probabilityModel) : match.probabilityModel,
-      predictionMeta: {
-        ...(existing?.predictionMeta || generatedMeta),
-        lockedAt: started ? (existing?.predictionMeta?.lockedAt || capturedAt) : existing?.predictionMeta?.lockedAt,
-      },
-    };
-  }
 
   if (sameDirection && !policyChanged) {
     return { ...match, predictionMeta: generatedMeta };
@@ -1462,8 +1619,8 @@ function applyPredictionPersistence(match, existing, capturedAt) {
       predictionMeta: {
         ...generatedMeta,
         updateReason: {
-          zh: "预测策略升级为市场 + Elo + Poisson 集成，未开赛比赛允许刷新模型说明和推荐分级。",
-          en: "Prediction policy upgraded to the market + Elo + Poisson ensemble, so unstarted matches can refresh model notes and recommendation grading.",
+          zh: "精选说明升级为分场景盘口叙事，未开赛比赛允许刷新赛前分析文案和风险表达。",
+          en: "Best-tip notes were upgraded to scenario-based market narratives, so unstarted matches can refresh analysis copy and risk wording.",
         },
       },
     };
