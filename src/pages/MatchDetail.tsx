@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContextCore';
-import type { Match, PredictionDetail } from '../services/mockData';
+import type { Match, OutcomeProbability, PredictionDetail } from '../services/mockData';
 import {
   getMarketLabel,
   getPredictionCodeHint,
@@ -383,9 +383,40 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   const predictionMetaLabel = predictionMeta?.lockedAt
     ? (language === 'zh' ? '赛前预测已锁定' : 'Pre-match pick locked')
     : (language === 'zh' ? '赛前预测监控中' : 'Pre-match pick monitoring');
+  const probabilityModel = match.probabilityModel;
   const projectedScoreText = hasScore
     ? officialScoreText
     : `${match.projectedScoreHome ?? Math.round(match.stats?.xG.home ?? 1)} - ${match.projectedScoreAway ?? Math.round(match.stats?.xG.away ?? 1)}`;
+
+  const formatProbabilityValue = (value: number | null | undefined) => {
+    if (!Number.isFinite(value)) return '--';
+    return `${Number(value).toFixed(1).replace(/\.0$/, '')}%`;
+  };
+
+  const outcomeLabels: { key: keyof OutcomeProbability; zh: string; en: string }[] = [
+    { key: 'home', zh: '主胜', en: 'Home' },
+    { key: 'draw', zh: '平局', en: 'Draw' },
+    { key: 'away', zh: '客胜', en: 'Away' }
+  ];
+
+  const renderOutcomeTriplet = (probabilities: OutcomeProbability | null | undefined) => (
+    <div className="probability-triplet">
+      {outcomeLabels.map((item) => {
+        const value = probabilities?.[item.key];
+        const width = Number.isFinite(value) ? Math.max(4, Number(value)) : 0;
+
+        return (
+          <div key={item.key} className="probability-outcome">
+            <div>
+              <span>{item[language]}</span>
+              <strong>{formatProbabilityValue(value)}</strong>
+            </div>
+            <em style={{ width: `${width}%` }} />
+          </div>
+        );
+      })}
+    </div>
+  );
 
   // 渲染预测详细行
   const renderPredictionBlock = (pred: PredictionDetail) => {
@@ -810,6 +841,80 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                   {predictionMeta.updateReason && (
                     <em>{predictionMeta.updateReason[language]}</em>
                   )}
+                </p>
+              </div>
+            )}
+
+            {probabilityModel && (
+              <div className="card probability-model-card">
+                <div className="probability-model-head">
+                  <div>
+                    <span className="review-kicker">
+                      {language === 'zh' ? '概率预测系统' : 'Probability Forecast'}
+                    </span>
+                    <h3>{language === 'zh' ? '赛前概率分布' : 'Pre-Match Probability Distribution'}</h3>
+                    <p>{probabilityModel.basis[language]}</p>
+                  </div>
+                  <span>{probabilityModel.version}</span>
+                </div>
+
+                <div className="probability-model-grid">
+                  <section className="probability-panel is-wide">
+                    <h4>{language === 'zh' ? '胜平负概率' : '1X2 Probability'}</h4>
+                    {renderOutcomeTriplet(probabilityModel.oneXTwo.final)}
+                    <div className="probability-subline">
+                      <span>
+                        {language === 'zh' ? '市场去水' : 'Market'}：
+                        {outcomeLabels.map((item) => `${item[language]} ${formatProbabilityValue(probabilityModel.oneXTwo.market?.[item.key])}`).join(' / ')}
+                      </span>
+                      <span>
+                        Poisson：
+                        {outcomeLabels.map((item) => `${item[language]} ${formatProbabilityValue(probabilityModel.oneXTwo.poisson?.[item.key])}`).join(' / ')}
+                      </span>
+                    </div>
+                  </section>
+
+                  <section className="probability-panel">
+                    <h4>{language === 'zh' ? '比分分布' : 'Score Distribution'}</h4>
+                    <div className="score-probability-list">
+                      {probabilityModel.scoreDistribution.slice(0, 5).map((scoreItem) => (
+                        <span key={scoreItem.label}>
+                          <strong>{scoreItem.label}</strong>
+                          {formatProbabilityValue(scoreItem.probability)}
+                        </span>
+                      ))}
+                    </div>
+                  </section>
+
+                  <section className="probability-panel">
+                    <h4>{language === 'zh' ? '进球与双方进球' : 'Goals & BTTS'}</h4>
+                    <div className="probability-pair-grid">
+                      <span>{language === 'zh' ? '大 2.5' : 'Over 2.5'} <strong>{formatProbabilityValue(probabilityModel.goalLines.over25)}</strong></span>
+                      <span>{language === 'zh' ? '小 2.5' : 'Under 2.5'} <strong>{formatProbabilityValue(probabilityModel.goalLines.under25)}</strong></span>
+                      <span>{language === 'zh' ? '双方进球 是' : 'BTTS Yes'} <strong>{formatProbabilityValue(probabilityModel.bothTeamsToScore.yes)}</strong></span>
+                      <span>{language === 'zh' ? '双方进球 否' : 'BTTS No'} <strong>{formatProbabilityValue(probabilityModel.bothTeamsToScore.no)}</strong></span>
+                    </div>
+                  </section>
+
+                  <section className="probability-panel">
+                    <h4>{language === 'zh' ? '让球概率' : 'Handicap Probability'}</h4>
+                    {probabilityModel.handicap ? (
+                      <>
+                        <div className="handicap-probability-line">
+                          {language === 'zh' ? '让球' : 'Line'} <strong>{probabilityModel.handicap.line}</strong>
+                        </div>
+                        {renderOutcomeTriplet(probabilityModel.handicap.market || probabilityModel.handicap.poisson)}
+                      </>
+                    ) : (
+                      <p className="probability-empty">
+                        {language === 'zh' ? '该项数据不足：暂无官方让球盘。' : 'Data insufficient: no official handicap pool yet.'}
+                      </p>
+                    )}
+                  </section>
+                </div>
+
+                <p className="probability-calibration-note">
+                  {probabilityModel.calibration[language]}
                 </p>
               </div>
             )}

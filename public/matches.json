@@ -9,6 +9,89 @@
     "status": "SCHEDULED",
     "projectedScoreHome": 1,
     "projectedScoreAway": 2,
+    "probabilityModel": {
+      "version": "market-poisson-baseline-v1",
+      "generatedAt": "2026-06-05T07:16:33.221Z",
+      "basis": {
+        "zh": "市场隐含概率 + Poisson 比分分布基准；暂未接入 Elo、xG、伤停、首发和校准器。",
+        "en": "Market-implied probability plus Poisson score baseline; Elo, xG, injuries, lineups, and calibration are not connected yet."
+      },
+      "oneXTwo": {
+        "market": {
+          "home": 18.1,
+          "draw": 22.1,
+          "away": 59.8
+        },
+        "poisson": {
+          "home": 22.4,
+          "draw": 20.3,
+          "away": 57.4
+        },
+        "final": {
+          "home": 19.3,
+          "draw": 21.6,
+          "away": 59.1
+        }
+      },
+      "scoreDistribution": [
+        {
+          "home": 1,
+          "away": 2,
+          "label": "1-2",
+          "probability": 9.5
+        },
+        {
+          "home": 1,
+          "away": 1,
+          "label": "1-1",
+          "probability": 8.7
+        },
+        {
+          "home": 0,
+          "away": 2,
+          "label": "0-2",
+          "probability": 7.2
+        },
+        {
+          "home": 1,
+          "away": 3,
+          "label": "1-3",
+          "probability": 6.9
+        },
+        {
+          "home": 0,
+          "away": 1,
+          "label": "0-1",
+          "probability": 6.6
+        }
+      ],
+      "goalLines": {
+        "over25": 67.9,
+        "under25": 32.1
+      },
+      "bothTeamsToScore": {
+        "yes": 64.9,
+        "no": 35.1
+      },
+      "handicap": {
+        "line": "+1",
+        "market": {
+          "home": 38.5,
+          "draw": 26.5,
+          "away": 35
+        },
+        "poisson": {
+          "home": 42.6,
+          "draw": 21.9,
+          "away": 35.5
+        }
+      },
+      "calibration": {
+        "status": "baseline",
+        "zh": "当前为未校准基准概率；后续需要用时间滚动回测做 Brier / log loss / reliability 校准。",
+        "en": "This is an uncalibrated baseline; rolling backtests with Brier, log loss, and reliability calibration are needed next."
+      }
+    },
     "odds": {
       "odds1": 4.9,
       "oddsX": 4,
@@ -252,16 +335,16 @@
       }
     },
     "oddsTrend": {
-      "sampleSize": 7,
+      "sampleSize": 8,
       "firstCapturedAt": "2026-06-05T01:53:50.822Z",
-      "lastCapturedAt": "2026-06-05T07:00:33.351Z",
+      "lastCapturedAt": "2026-06-05T07:15:46.083Z",
       "odds1Change": 0.05,
       "oddsXChange": 0.1,
       "odds2Change": -0.02,
       "direction": "mixed",
       "summary": {
-        "zh": "SP 快照 7 次：主胜 +0.05，平局 +0.10，客胜 -0.02；盘口存在波动，需继续观察临场快照。",
-        "en": "7 SP snapshots: home +0.05, draw +0.10, away -0.02. The market is moving; keep watching late snapshots."
+        "zh": "SP 快照 8 次：主胜 +0.05，平局 +0.10，客胜 -0.02；盘口存在波动，需继续观察临场快照。",
+        "en": "8 SP snapshots: home +0.05, draw +0.10, away -0.02. The market is moving; keep watching late snapshots."
       }
     }
   },
@@ -275,6 +358,89 @@
     "status": "SCHEDULED",
     "projectedScoreHome": 2,
     "projectedScoreAway": 1,
+    "probabilityModel": {
+      "version": "market-poisson-baseline-v1",
+      "generatedAt": "2026-06-05T07:16:33.221Z",
+      "basis": {
+        "zh": "市场隐含概率 + Poisson 比分分布基准；暂未接入 Elo、xG、伤停、首发和校准器。",
+        "en": "Market-implied probability plus Poisson score baseline; Elo, xG, injuries, lineups, and calibration are not connected yet."
+      },
+      "oneXTwo": {
+        "market": {
+          "home": 56.1,
+          "draw": 25.7,
+          "away": 18.3
+        },
+        "poisson": {
+          "home": 59,
+          "draw": 20.7,
+          "away": 20.3
+        },
+        "final": {
+          "home": 56.9,
+          "draw": 24.3,
+          "away": 18.8
+        }
+      },
+      "scoreDistribution": [
+        {
+          "home": 2,
+          "away": 1,
+          "label": "2-1",
+          "probability": 9.8
+        },
+        {
+          "home": 1,
+          "away": 1,
+          "label": "1-1",
+          "probability": 9.4
+        },
+        {
+          "home": 2,
+          "away": 0,
+          "label": "2-0",
+          "probability": 8.5
+        },
+        {
+          "home": 1,
+          "away": 0,
+          "label": "1-0",
+          "probability": 8.1
+        },
+        {
+          "home": 3,
+          "away": 1,
+          "label": "3-1",
+          "probability": 6.9
+        }
+      ],
+      "goalLines": {
+        "over25": 63,
+        "under25": 37
+      },
+      "bothTeamsToScore": {
+        "yes": 60,
+        "no": 40
+      },
+      "handicap": {
+        "line": "-1",
+        "market": {
+          "home": 29.9,
+          "draw": 27.7,
+          "away": 42.4
+        },
+        "poisson": {
+          "home": 36.2,
+          "draw": 22.8,
+          "away": 41
+        }
+      },
+      "calibration": {
+        "status": "baseline",
+        "zh": "当前为未校准基准概率；后续需要用时间滚动回测做 Brier / log loss / reliability 校准。",
+        "en": "This is an uncalibrated baseline; rolling backtests with Brier, log loss, and reliability calibration are needed next."
+      }
+    },
     "odds": {
       "odds1": 1.58,
       "oddsX": 3.45,
@@ -518,16 +684,16 @@
       }
     },
     "oddsTrend": {
-      "sampleSize": 7,
+      "sampleSize": 8,
       "firstCapturedAt": "2026-06-05T01:53:50.822Z",
-      "lastCapturedAt": "2026-06-05T07:00:33.351Z",
+      "lastCapturedAt": "2026-06-05T07:15:46.083Z",
       "odds1Change": 0,
       "oddsXChange": 0,
       "odds2Change": 0,
       "direction": "flat",
       "summary": {
-        "zh": "SP 快照 7 次：主胜 0.00，平局 0.00，客胜 0.00；整体波动很小。",
-        "en": "7 SP snapshots: home 0.00, draw 0.00, away 0.00. Overall movement is small."
+        "zh": "SP 快照 8 次：主胜 0.00，平局 0.00，客胜 0.00；整体波动很小。",
+        "en": "8 SP snapshots: home 0.00, draw 0.00, away 0.00. Overall movement is small."
       }
     }
   },
@@ -541,6 +707,89 @@
     "status": "SCHEDULED",
     "projectedScoreHome": 2,
     "projectedScoreAway": 1,
+    "probabilityModel": {
+      "version": "market-poisson-baseline-v1",
+      "generatedAt": "2026-06-05T07:16:33.221Z",
+      "basis": {
+        "zh": "市场隐含概率 + Poisson 比分分布基准；暂未接入 Elo、xG、伤停、首发和校准器。",
+        "en": "Market-implied probability plus Poisson score baseline; Elo, xG, injuries, lineups, and calibration are not connected yet."
+      },
+      "oneXTwo": {
+        "market": {
+          "home": 62.4,
+          "draw": 23,
+          "away": 14.5
+        },
+        "poisson": {
+          "home": 66.4,
+          "draw": 17.9,
+          "away": 15.7
+        },
+        "final": {
+          "home": 63.5,
+          "draw": 21.6,
+          "away": 14.9
+        }
+      },
+      "scoreDistribution": [
+        {
+          "home": 2,
+          "away": 1,
+          "label": "2-1",
+          "probability": 9.5
+        },
+        {
+          "home": 2,
+          "away": 0,
+          "label": "2-0",
+          "probability": 8.6
+        },
+        {
+          "home": 1,
+          "away": 1,
+          "label": "1-1",
+          "probability": 7.8
+        },
+        {
+          "home": 3,
+          "away": 1,
+          "label": "3-1",
+          "probability": 7.7
+        },
+        {
+          "home": 1,
+          "away": 0,
+          "label": "1-0",
+          "probability": 7.1
+        }
+      ],
+      "goalLines": {
+        "over25": 68.6,
+        "under25": 31.4
+      },
+      "bothTeamsToScore": {
+        "yes": 61.1,
+        "no": 38.9
+      },
+      "handicap": {
+        "line": "-1",
+        "market": {
+          "home": 35.7,
+          "draw": 28.2,
+          "away": 36.1
+        },
+        "poisson": {
+          "home": 44.4,
+          "draw": 22,
+          "away": 33.6
+        }
+      },
+      "calibration": {
+        "status": "baseline",
+        "zh": "当前为未校准基准概率；后续需要用时间滚动回测做 Brier / log loss / reliability 校准。",
+        "en": "This is an uncalibrated baseline; rolling backtests with Brier, log loss, and reliability calibration are needed next."
+      }
+    },
     "odds": {
       "odds1": 1.42,
       "oddsX": 3.85,
@@ -784,16 +1033,16 @@
       }
     },
     "oddsTrend": {
-      "sampleSize": 7,
+      "sampleSize": 8,
       "firstCapturedAt": "2026-06-05T01:53:50.822Z",
-      "lastCapturedAt": "2026-06-05T07:00:33.351Z",
+      "lastCapturedAt": "2026-06-05T07:15:46.083Z",
       "odds1Change": 0.02,
       "oddsXChange": -0.05,
       "odds2Change": -0.2,
       "direction": "away",
       "summary": {
-        "zh": "SP 快照 7 次：主胜 +0.02，平局 -0.05，客胜 -0.20；客胜 SP 下调，市场支持有所增强。",
-        "en": "7 SP snapshots: home +0.02, draw -0.05, away -0.20. away win SP shortened, indicating stronger market support."
+        "zh": "SP 快照 8 次：主胜 +0.02，平局 -0.05，客胜 -0.20；客胜 SP 下调，市场支持有所增强。",
+        "en": "8 SP snapshots: home +0.02, draw -0.05, away -0.20. away win SP shortened, indicating stronger market support."
       }
     }
   },
@@ -807,6 +1056,89 @@
     "status": "SCHEDULED",
     "projectedScoreHome": 2,
     "projectedScoreAway": 1,
+    "probabilityModel": {
+      "version": "market-poisson-baseline-v1",
+      "generatedAt": "2026-06-05T07:16:33.221Z",
+      "basis": {
+        "zh": "市场隐含概率 + Poisson 比分分布基准；暂未接入 Elo、xG、伤停、首发和校准器。",
+        "en": "Market-implied probability plus Poisson score baseline; Elo, xG, injuries, lineups, and calibration are not connected yet."
+      },
+      "oneXTwo": {
+        "market": {
+          "home": 61,
+          "draw": 23.3,
+          "away": 15.7
+        },
+        "poisson": {
+          "home": 62.2,
+          "draw": 19.5,
+          "away": 18.3
+        },
+        "final": {
+          "home": 61.4,
+          "draw": 22.2,
+          "away": 16.4
+        }
+      },
+      "scoreDistribution": [
+        {
+          "home": 2,
+          "away": 1,
+          "label": "2-1",
+          "probability": 9.7
+        },
+        {
+          "home": 1,
+          "away": 1,
+          "label": "1-1",
+          "probability": 8.7
+        },
+        {
+          "home": 2,
+          "away": 0,
+          "label": "2-0",
+          "probability": 8.6
+        },
+        {
+          "home": 1,
+          "away": 0,
+          "label": "1-0",
+          "probability": 7.7
+        },
+        {
+          "home": 3,
+          "away": 1,
+          "label": "3-1",
+          "probability": 7.3
+        }
+      ],
+      "goalLines": {
+        "over25": 65.5,
+        "under25": 34.5
+      },
+      "bothTeamsToScore": {
+        "yes": 60.7,
+        "no": 39.3
+      },
+      "handicap": {
+        "line": "-1",
+        "market": {
+          "home": 34.8,
+          "draw": 27.7,
+          "away": 37.6
+        },
+        "poisson": {
+          "home": 39.6,
+          "draw": 22.5,
+          "away": 37.8
+        }
+      },
+      "calibration": {
+        "status": "baseline",
+        "zh": "当前为未校准基准概率；后续需要用时间滚动回测做 Brier / log loss / reliability 校准。",
+        "en": "This is an uncalibrated baseline; rolling backtests with Brier, log loss, and reliability calibration are needed next."
+      }
+    },
     "odds": {
       "odds1": 1.45,
       "oddsX": 3.8,
@@ -1050,16 +1382,16 @@
       }
     },
     "oddsTrend": {
-      "sampleSize": 7,
+      "sampleSize": 8,
       "firstCapturedAt": "2026-06-05T01:53:50.822Z",
-      "lastCapturedAt": "2026-06-05T07:00:33.351Z",
+      "lastCapturedAt": "2026-06-05T07:15:46.083Z",
       "odds1Change": -0.02,
       "oddsXChange": 0.1,
       "odds2Change": 0.05,
       "direction": "mixed",
       "summary": {
-        "zh": "SP 快照 7 次：主胜 -0.02，平局 +0.10，客胜 +0.05；盘口存在波动，需继续观察临场快照。",
-        "en": "7 SP snapshots: home -0.02, draw +0.10, away +0.05. The market is moving; keep watching late snapshots."
+        "zh": "SP 快照 8 次：主胜 -0.02，平局 +0.10，客胜 +0.05；盘口存在波动，需继续观察临场快照。",
+        "en": "8 SP snapshots: home -0.02, draw +0.10, away +0.05. The market is moving; keep watching late snapshots."
       }
     }
   },
@@ -1073,6 +1405,89 @@
     "status": "SCHEDULED",
     "projectedScoreHome": 1,
     "projectedScoreAway": 1,
+    "probabilityModel": {
+      "version": "market-poisson-baseline-v1",
+      "generatedAt": "2026-06-05T07:16:33.224Z",
+      "basis": {
+        "zh": "市场隐含概率 + Poisson 比分分布基准；暂未接入 Elo、xG、伤停、首发和校准器。",
+        "en": "Market-implied probability plus Poisson score baseline; Elo, xG, injuries, lineups, and calibration are not connected yet."
+      },
+      "oneXTwo": {
+        "market": {
+          "home": 42,
+          "draw": 27.7,
+          "away": 30.3
+        },
+        "poisson": {
+          "home": 44.1,
+          "draw": 23.7,
+          "away": 32.2
+        },
+        "final": {
+          "home": 42.6,
+          "draw": 26.6,
+          "away": 30.9
+        }
+      },
+      "scoreDistribution": [
+        {
+          "home": 1,
+          "away": 1,
+          "label": "1-1",
+          "probability": 10.8
+        },
+        {
+          "home": 2,
+          "away": 1,
+          "label": "2-1",
+          "probability": 9.1
+        },
+        {
+          "home": 1,
+          "away": 0,
+          "label": "1-0",
+          "probability": 7.7
+        },
+        {
+          "home": 1,
+          "away": 2,
+          "label": "1-2",
+          "probability": 7.6
+        },
+        {
+          "home": 2,
+          "away": 0,
+          "label": "2-0",
+          "probability": 6.5
+        }
+      ],
+      "goalLines": {
+        "over25": 59.6,
+        "under25": 40.4
+      },
+      "bothTeamsToScore": {
+        "yes": 61.4,
+        "no": 38.6
+      },
+      "handicap": {
+        "line": "-1",
+        "market": {
+          "home": 18.5,
+          "draw": 24.3,
+          "away": 57.2
+        },
+        "poisson": {
+          "home": 23,
+          "draw": 21.1,
+          "away": 55.9
+        }
+      },
+      "calibration": {
+        "status": "baseline",
+        "zh": "当前为未校准基准概率；后续需要用时间滚动回测做 Brier / log loss / reliability 校准。",
+        "en": "This is an uncalibrated baseline; rolling backtests with Brier, log loss, and reliability calibration are needed next."
+      }
+    },
     "odds": {
       "odds1": 2.11,
       "oddsX": 3.2,
@@ -1326,16 +1741,16 @@
       }
     },
     "oddsTrend": {
-      "sampleSize": 7,
+      "sampleSize": 8,
       "firstCapturedAt": "2026-06-05T01:53:50.822Z",
-      "lastCapturedAt": "2026-06-05T07:00:33.351Z",
+      "lastCapturedAt": "2026-06-05T07:15:46.083Z",
       "odds1Change": 0,
       "oddsXChange": 0,
       "odds2Change": 0,
       "direction": "flat",
       "summary": {
-        "zh": "SP 快照 7 次：主胜 0.00，平局 0.00，客胜 0.00；整体波动很小。",
-        "en": "7 SP snapshots: home 0.00, draw 0.00, away 0.00. Overall movement is small."
+        "zh": "SP 快照 8 次：主胜 0.00，平局 0.00，客胜 0.00；整体波动很小。",
+        "en": "8 SP snapshots: home 0.00, draw 0.00, away 0.00. Overall movement is small."
       }
     }
   },
@@ -1349,6 +1764,89 @@
     "status": "SCHEDULED",
     "projectedScoreHome": 1,
     "projectedScoreAway": 1,
+    "probabilityModel": {
+      "version": "market-poisson-baseline-v1",
+      "generatedAt": "2026-06-05T07:16:33.225Z",
+      "basis": {
+        "zh": "市场隐含概率 + Poisson 比分分布基准；暂未接入 Elo、xG、伤停、首发和校准器。",
+        "en": "Market-implied probability plus Poisson score baseline; Elo, xG, injuries, lineups, and calibration are not connected yet."
+      },
+      "oneXTwo": {
+        "market": {
+          "home": 45.9,
+          "draw": 27.3,
+          "away": 26.8
+        },
+        "poisson": {
+          "home": 50.8,
+          "draw": 23.2,
+          "away": 26
+        },
+        "final": {
+          "home": 47.3,
+          "draw": 26.1,
+          "away": 26.6
+        }
+      },
+      "scoreDistribution": [
+        {
+          "home": 1,
+          "away": 1,
+          "label": "1-1",
+          "probability": 10.8
+        },
+        {
+          "home": 2,
+          "away": 1,
+          "label": "2-1",
+          "probability": 9.6
+        },
+        {
+          "home": 1,
+          "away": 0,
+          "label": "1-0",
+          "probability": 8.9
+        },
+        {
+          "home": 2,
+          "away": 0,
+          "label": "2-0",
+          "probability": 7.9
+        },
+        {
+          "home": 1,
+          "away": 2,
+          "label": "1-2",
+          "probability": 6.6
+        }
+      ],
+      "goalLines": {
+        "over25": 57.8,
+        "under25": 42.2
+      },
+      "bothTeamsToScore": {
+        "yes": 58.6,
+        "no": 41.4
+      },
+      "handicap": {
+        "line": "-1",
+        "market": {
+          "home": 21.6,
+          "draw": 25,
+          "away": 53.4
+        },
+        "poisson": {
+          "home": 28.1,
+          "draw": 22.7,
+          "away": 49.2
+        }
+      },
+      "calibration": {
+        "status": "baseline",
+        "zh": "当前为未校准基准概率；后续需要用时间滚动回测做 Brier / log loss / reliability 校准。",
+        "en": "This is an uncalibrated baseline; rolling backtests with Brier, log loss, and reliability calibration are needed next."
+      }
+    },
     "odds": {
       "odds1": 1.93,
       "oddsX": 3.25,
@@ -1590,16 +2088,16 @@
       }
     },
     "oddsTrend": {
-      "sampleSize": 7,
+      "sampleSize": 8,
       "firstCapturedAt": "2026-06-05T01:53:50.822Z",
-      "lastCapturedAt": "2026-06-05T07:00:33.351Z",
+      "lastCapturedAt": "2026-06-05T07:15:46.083Z",
       "odds1Change": 0,
       "oddsXChange": 0,
       "odds2Change": 0,
       "direction": "flat",
       "summary": {
-        "zh": "SP 快照 7 次：主胜 0.00，平局 0.00，客胜 0.00；整体波动很小。",
-        "en": "7 SP snapshots: home 0.00, draw 0.00, away 0.00. Overall movement is small."
+        "zh": "SP 快照 8 次：主胜 0.00，平局 0.00，客胜 0.00；整体波动很小。",
+        "en": "8 SP snapshots: home 0.00, draw 0.00, away 0.00. Overall movement is small."
       }
     }
   },
@@ -1613,6 +2111,89 @@
     "status": "SCHEDULED",
     "projectedScoreHome": 2,
     "projectedScoreAway": 1,
+    "probabilityModel": {
+      "version": "market-poisson-baseline-v1",
+      "generatedAt": "2026-06-05T07:16:33.225Z",
+      "basis": {
+        "zh": "市场隐含概率 + Poisson 比分分布基准；暂未接入 Elo、xG、伤停、首发和校准器。",
+        "en": "Market-implied probability plus Poisson score baseline; Elo, xG, injuries, lineups, and calibration are not connected yet."
+      },
+      "oneXTwo": {
+        "market": {
+          "home": 47.4,
+          "draw": 28.1,
+          "away": 24.5
+        },
+        "poisson": {
+          "home": 53.3,
+          "draw": 21.3,
+          "away": 25.4
+        },
+        "final": {
+          "home": 49.1,
+          "draw": 26.2,
+          "away": 24.7
+        }
+      },
+      "scoreDistribution": [
+        {
+          "home": 2,
+          "away": 1,
+          "label": "2-1",
+          "probability": 9.4
+        },
+        {
+          "home": 1,
+          "away": 1,
+          "label": "1-1",
+          "probability": 9.2
+        },
+        {
+          "home": 2,
+          "away": 0,
+          "label": "2-0",
+          "probability": 6.9
+        },
+        {
+          "home": 1,
+          "away": 0,
+          "label": "1-0",
+          "probability": 6.7
+        },
+        {
+          "home": 3,
+          "away": 1,
+          "label": "3-1",
+          "probability": 6.5
+        }
+      ],
+      "goalLines": {
+        "over25": 66.5,
+        "under25": 33.5
+      },
+      "bothTeamsToScore": {
+        "yes": 65,
+        "no": 35
+      },
+      "handicap": {
+        "line": "-1",
+        "market": {
+          "home": 22.1,
+          "draw": 26.4,
+          "away": 51.5
+        },
+        "poisson": {
+          "home": 31.6,
+          "draw": 21.7,
+          "away": 46.7
+        }
+      },
+      "calibration": {
+        "status": "baseline",
+        "zh": "当前为未校准基准概率；后续需要用时间滚动回测做 Brier / log loss / reliability 校准。",
+        "en": "This is an uncalibrated baseline; rolling backtests with Brier, log loss, and reliability calibration are needed next."
+      }
+    },
     "odds": {
       "odds1": 1.87,
       "oddsX": 3.15,
@@ -1844,16 +2425,16 @@
       }
     },
     "oddsTrend": {
-      "sampleSize": 7,
+      "sampleSize": 8,
       "firstCapturedAt": "2026-06-05T01:53:50.822Z",
-      "lastCapturedAt": "2026-06-05T07:00:33.351Z",
+      "lastCapturedAt": "2026-06-05T07:15:46.083Z",
       "odds1Change": 0,
       "oddsXChange": 0,
       "odds2Change": 0,
       "direction": "flat",
       "summary": {
-        "zh": "SP 快照 7 次：主胜 0.00，平局 0.00，客胜 0.00；整体波动很小。",
-        "en": "7 SP snapshots: home 0.00, draw 0.00, away 0.00. Overall movement is small."
+        "zh": "SP 快照 8 次：主胜 0.00，平局 0.00，客胜 0.00；整体波动很小。",
+        "en": "8 SP snapshots: home 0.00, draw 0.00, away 0.00. Overall movement is small."
       }
     }
   },
@@ -1867,6 +2448,89 @@
     "status": "SCHEDULED",
     "projectedScoreHome": 1,
     "projectedScoreAway": 1,
+    "probabilityModel": {
+      "version": "market-poisson-baseline-v1",
+      "generatedAt": "2026-06-05T07:16:33.225Z",
+      "basis": {
+        "zh": "市场隐含概率 + Poisson 比分分布基准；暂未接入 Elo、xG、伤停、首发和校准器。",
+        "en": "Market-implied probability plus Poisson score baseline; Elo, xG, injuries, lineups, and calibration are not connected yet."
+      },
+      "oneXTwo": {
+        "market": {
+          "home": 42.4,
+          "draw": 27.7,
+          "away": 29.9
+        },
+        "poisson": {
+          "home": 48.4,
+          "draw": 23.5,
+          "away": 28.2
+        },
+        "final": {
+          "home": 44.1,
+          "draw": 26.5,
+          "away": 29.4
+        }
+      },
+      "scoreDistribution": [
+        {
+          "home": 1,
+          "away": 1,
+          "label": "1-1",
+          "probability": 10.8
+        },
+        {
+          "home": 2,
+          "away": 1,
+          "label": "2-1",
+          "probability": 9.5
+        },
+        {
+          "home": 1,
+          "away": 0,
+          "label": "1-0",
+          "probability": 8.4
+        },
+        {
+          "home": 2,
+          "away": 0,
+          "label": "2-0",
+          "probability": 7.4
+        },
+        {
+          "home": 1,
+          "away": 2,
+          "label": "1-2",
+          "probability": 6.9
+        }
+      ],
+      "goalLines": {
+        "over25": 58.3,
+        "under25": 41.7
+      },
+      "bothTeamsToScore": {
+        "yes": 59.7,
+        "no": 40.3
+      },
+      "handicap": {
+        "line": "-1",
+        "market": {
+          "home": 18.9,
+          "draw": 24.3,
+          "away": 56.8
+        },
+        "poisson": {
+          "home": 26.2,
+          "draw": 22.2,
+          "away": 51.6
+        }
+      },
+      "calibration": {
+        "status": "baseline",
+        "zh": "当前为未校准基准概率；后续需要用时间滚动回测做 Brier / log loss / reliability 校准。",
+        "en": "This is an uncalibrated baseline; rolling backtests with Brier, log loss, and reliability calibration are needed next."
+      }
+    },
     "odds": {
       "odds1": 2.09,
       "oddsX": 3.2,
@@ -2112,16 +2776,16 @@
       }
     },
     "oddsTrend": {
-      "sampleSize": 7,
+      "sampleSize": 8,
       "firstCapturedAt": "2026-06-05T01:53:50.822Z",
-      "lastCapturedAt": "2026-06-05T07:00:33.351Z",
+      "lastCapturedAt": "2026-06-05T07:15:46.083Z",
       "odds1Change": 0,
       "oddsXChange": 0,
       "odds2Change": 0,
       "direction": "flat",
       "summary": {
-        "zh": "SP 快照 7 次：主胜 0.00，平局 0.00，客胜 0.00；整体波动很小。",
-        "en": "7 SP snapshots: home 0.00, draw 0.00, away 0.00. Overall movement is small."
+        "zh": "SP 快照 8 次：主胜 0.00，平局 0.00，客胜 0.00；整体波动很小。",
+        "en": "8 SP snapshots: home 0.00, draw 0.00, away 0.00. Overall movement is small."
       }
     }
   },
@@ -2135,6 +2799,89 @@
     "status": "SCHEDULED",
     "projectedScoreHome": 1,
     "projectedScoreAway": 1,
+    "probabilityModel": {
+      "version": "market-poisson-baseline-v1",
+      "generatedAt": "2026-06-05T07:16:33.225Z",
+      "basis": {
+        "zh": "市场隐含概率 + Poisson 比分分布基准；暂未接入 Elo、xG、伤停、首发和校准器。",
+        "en": "Market-implied probability plus Poisson score baseline; Elo, xG, injuries, lineups, and calibration are not connected yet."
+      },
+      "oneXTwo": {
+        "market": {
+          "home": 49.5,
+          "draw": 25.7,
+          "away": 24.9
+        },
+        "poisson": {
+          "home": 47.8,
+          "draw": 22.1,
+          "away": 30.1
+        },
+        "final": {
+          "home": 49,
+          "draw": 24.7,
+          "away": 26.3
+        }
+      },
+      "scoreDistribution": [
+        {
+          "home": 1,
+          "away": 1,
+          "label": "1-1",
+          "probability": 9.5
+        },
+        {
+          "home": 2,
+          "away": 1,
+          "label": "2-1",
+          "probability": 9.1
+        },
+        {
+          "home": 1,
+          "away": 2,
+          "label": "1-2",
+          "probability": 7.1
+        },
+        {
+          "home": 2,
+          "away": 2,
+          "label": "2-2",
+          "probability": 6.8
+        },
+        {
+          "home": 1,
+          "away": 0,
+          "label": "1-0",
+          "probability": 6.4
+        }
+      ],
+      "goalLines": {
+        "over25": 66.1,
+        "under25": 33.9
+      },
+      "bothTeamsToScore": {
+        "yes": 66,
+        "no": 34
+      },
+      "handicap": {
+        "line": "-1",
+        "market": {
+          "home": 24.8,
+          "draw": 25.7,
+          "away": 49.5
+        },
+        "poisson": {
+          "home": 26.8,
+          "draw": 20.9,
+          "away": 52.2
+        }
+      },
+      "calibration": {
+        "status": "baseline",
+        "zh": "当前为未校准基准概率；后续需要用时间滚动回测做 Brier / log loss / reliability 校准。",
+        "en": "This is an uncalibrated baseline; rolling backtests with Brier, log loss, and reliability calibration are needed next."
+      }
+    },
     "odds": {
       "odds1": 1.79,
       "oddsX": 3.45,
@@ -2358,16 +3105,16 @@
       }
     },
     "oddsTrend": {
-      "sampleSize": 7,
+      "sampleSize": 8,
       "firstCapturedAt": "2026-06-05T01:53:50.822Z",
-      "lastCapturedAt": "2026-06-05T07:00:33.351Z",
+      "lastCapturedAt": "2026-06-05T07:15:46.083Z",
       "odds1Change": 0,
       "oddsXChange": 0,
       "odds2Change": 0,
       "direction": "flat",
       "summary": {
-        "zh": "SP 快照 7 次：主胜 0.00，平局 0.00，客胜 0.00；整体波动很小。",
-        "en": "7 SP snapshots: home 0.00, draw 0.00, away 0.00. Overall movement is small."
+        "zh": "SP 快照 8 次：主胜 0.00，平局 0.00，客胜 0.00；整体波动很小。",
+        "en": "8 SP snapshots: home 0.00, draw 0.00, away 0.00. Overall movement is small."
       }
     }
   },
@@ -2381,6 +3128,89 @@
     "status": "SCHEDULED",
     "projectedScoreHome": 1,
     "projectedScoreAway": 1,
+    "probabilityModel": {
+      "version": "market-poisson-baseline-v1",
+      "generatedAt": "2026-06-05T07:16:33.225Z",
+      "basis": {
+        "zh": "市场隐含概率 + Poisson 比分分布基准；暂未接入 Elo、xG、伤停、首发和校准器。",
+        "en": "Market-implied probability plus Poisson score baseline; Elo, xG, injuries, lineups, and calibration are not connected yet."
+      },
+      "oneXTwo": {
+        "market": {
+          "home": 28.6,
+          "draw": 24.6,
+          "away": 46.8
+        },
+        "poisson": {
+          "home": 33.2,
+          "draw": 22.7,
+          "away": 44.1
+        },
+        "final": {
+          "home": 29.9,
+          "draw": 24.1,
+          "away": 46.1
+        }
+      },
+      "scoreDistribution": [
+        {
+          "home": 1,
+          "away": 1,
+          "label": "1-1",
+          "probability": 9.9
+        },
+        {
+          "home": 1,
+          "away": 2,
+          "label": "1-2",
+          "probability": 8.9
+        },
+        {
+          "home": 2,
+          "away": 1,
+          "label": "2-1",
+          "probability": 7.6
+        },
+        {
+          "home": 2,
+          "away": 2,
+          "label": "2-2",
+          "probability": 6.8
+        },
+        {
+          "home": 0,
+          "away": 1,
+          "label": "0-1",
+          "probability": 6.4
+        }
+      ],
+      "goalLines": {
+        "over25": 64.6,
+        "under25": 35.4
+      },
+      "bothTeamsToScore": {
+        "yes": 65.4,
+        "no": 34.6
+      },
+      "handicap": {
+        "line": "+1",
+        "market": {
+          "home": 52.1,
+          "draw": 23.9,
+          "away": 23.9
+        },
+        "poisson": {
+          "home": 55.9,
+          "draw": 20.4,
+          "away": 23.7
+        }
+      },
+      "calibration": {
+        "status": "baseline",
+        "zh": "当前为未校准基准概率；后续需要用时间滚动回测做 Brier / log loss / reliability 校准。",
+        "en": "This is an uncalibrated baseline; rolling backtests with Brier, log loss, and reliability calibration are needed next."
+      }
+    },
     "odds": {
       "odds1": 3.1,
       "oddsX": 3.6,
@@ -2604,16 +3434,16 @@
       }
     },
     "oddsTrend": {
-      "sampleSize": 7,
+      "sampleSize": 8,
       "firstCapturedAt": "2026-06-05T01:53:50.822Z",
-      "lastCapturedAt": "2026-06-05T07:00:33.351Z",
+      "lastCapturedAt": "2026-06-05T07:15:46.083Z",
       "odds1Change": 0,
       "oddsXChange": 0,
       "odds2Change": 0,
       "direction": "flat",
       "summary": {
-        "zh": "SP 快照 7 次：主胜 0.00，平局 0.00，客胜 0.00；整体波动很小。",
-        "en": "7 SP snapshots: home 0.00, draw 0.00, away 0.00. Overall movement is small."
+        "zh": "SP 快照 8 次：主胜 0.00，平局 0.00，客胜 0.00；整体波动很小。",
+        "en": "8 SP snapshots: home 0.00, draw 0.00, away 0.00. Overall movement is small."
       }
     }
   }

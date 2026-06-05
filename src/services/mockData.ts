@@ -70,6 +70,49 @@ export interface PredictionMeta {
   updateReason?: MultiLangString;
 }
 
+export interface OutcomeProbability {
+  home: number;
+  draw: number;
+  away: number;
+}
+
+export interface ScoreProbability {
+  home: number;
+  away: number;
+  label: string;
+  probability: number;
+}
+
+export interface MatchProbabilityModel {
+  version: string;
+  generatedAt?: string;
+  basis: MultiLangString;
+  oneXTwo: {
+    market: OutcomeProbability | null;
+    poisson: OutcomeProbability | null;
+    final: OutcomeProbability | null;
+  };
+  scoreDistribution: ScoreProbability[];
+  goalLines: {
+    over25: number;
+    under25: number;
+  };
+  bothTeamsToScore: {
+    yes: number;
+    no: number;
+  };
+  handicap?: {
+    line: string;
+    market: OutcomeProbability | null;
+    poisson: OutcomeProbability | null;
+  } | null;
+  calibration: {
+    status: 'baseline' | 'calibrated' | 'backtesting';
+    zh: string;
+    en: string;
+  };
+}
+
 export interface H2HRecord {
   date: string;
   homeScore: number;
@@ -151,6 +194,7 @@ export interface Match {
   handicapOddsSourceUrl?: string;
   predictions: PredictionDetail[];
   predictionMeta?: PredictionMeta;
+  probabilityModel?: MatchProbabilityModel;
   stats?: MatchStats;
   recentForm?: {
     home: TeamRecentForm;

@@ -1554,6 +1554,150 @@ button.status-pill:hover {
   font-weight: 850;
 }
 
+.probability-model-card {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.probability-model-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: start;
+}
+
+.probability-model-head h3 {
+  margin-top: 0.28rem;
+  color: hsl(var(--text-primary));
+  font-family: var(--font-title);
+  font-size: 1.08rem;
+  font-weight: 950;
+}
+
+.probability-model-head p {
+  color: hsl(var(--text-secondary));
+  font-size: 0.8rem;
+  line-height: 1.58;
+}
+
+.probability-model-head > span {
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  color: hsl(var(--text-muted));
+  font-size: 0.68rem;
+  font-weight: 850;
+  padding: 0.24rem 0.48rem;
+  white-space: nowrap;
+}
+
+.probability-model-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) repeat(2, minmax(0, 1fr));
+  gap: 0.62rem;
+}
+
+.probability-panel {
+  display: grid;
+  align-content: start;
+  gap: 0.55rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--bg));
+  padding: 0.72rem;
+}
+
+.probability-panel.is-wide {
+  grid-row: span 2;
+}
+
+.probability-panel h4 {
+  color: hsl(var(--text-primary));
+  font-size: 0.82rem;
+  font-weight: 950;
+}
+
+.probability-triplet {
+  display: grid;
+  gap: 0.46rem;
+}
+
+.probability-outcome {
+  display: grid;
+  gap: 0.24rem;
+}
+
+.probability-outcome div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.probability-outcome span,
+.probability-subline,
+.probability-empty,
+.probability-calibration-note {
+  color: hsl(var(--text-muted));
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+
+.probability-outcome strong {
+  color: hsl(var(--text-primary));
+  font-family: var(--font-title);
+  font-size: 0.92rem;
+}
+
+.probability-outcome em {
+  display: block;
+  height: 6px;
+  max-width: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, hsl(var(--primary)), hsl(var(--accent)));
+}
+
+.probability-subline {
+  display: grid;
+  gap: 0.26rem;
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 0.55rem;
+}
+
+.score-probability-list,
+.probability-pair-grid {
+  display: grid;
+  gap: 0.42rem;
+}
+
+.score-probability-list span,
+.probability-pair-grid span,
+.handicap-probability-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 7px;
+  background: hsl(var(--bg-card));
+  color: hsl(var(--text-secondary));
+  font-size: 0.74rem;
+  font-weight: 780;
+  padding: 0.4rem 0.52rem;
+}
+
+.score-probability-list strong,
+.probability-pair-grid strong,
+.handicap-probability-line strong {
+  color: hsl(var(--primary));
+  font-family: var(--font-title);
+  font-size: 0.9rem;
+}
+
+.probability-calibration-note {
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 0.72rem;
+}
+
 .insight-card {
   display: grid;
   gap: 1rem;
@@ -2688,12 +2832,18 @@ button.status-pill:hover {
   }
 
   .prediction-policy-note,
+  .probability-model-head,
   .professional-framework-head {
     grid-template-columns: 1fr;
   }
 
+  .probability-model-grid,
   .professional-framework-grid {
     grid-template-columns: 1fr;
+  }
+
+  .probability-panel.is-wide {
+    grid-row: auto;
   }
 
   .insight-head {

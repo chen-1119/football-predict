@@ -410,6 +410,10 @@ function pct(value) {
   return Math.round(value * 100);
 }
 
+function pct1(value) {
+  return Number((clamp(value, 0, 1) * 100).toFixed(1));
+}
+
 function poissonProbability(lambda, goals) {
   let factorial = 1;
   for (let i = 2; i <= goals; i += 1) factorial *= i;
@@ -434,6 +438,136 @@ function projectedScore(homeLambda, awayLambda) {
     }
   }
   return best;
+}
+
+function scoreMatrix(homeLambda, awayLambda, maxGoals = 8) {
+  const rows = [];
+  for (let home = 0; home <= maxGoals; home += 1) {
+    for (let away = 0; away <= maxGoals; away += 1) {
+      rows.push({
+        home,
+        away,
+        probability: poissonProbability(homeLambda, home) * poissonProbability(awayLambda, away),
+      });
+    }
+  }
+  return rows;
+}
+
+function poissonOutcomeProbabilities(homeLambda, awayLambda) {
+  const matrix = scoreMatrix(homeLambda, awayLambda, 10);
+  const totals = matrix.reduce((acc, row) => {
+    if (row.home > row.away) acc.home += row.probability;
+    else if (row.home === row.away) acc.draw += row.probability;
+    else acc.away += row.probability;
+    acc.mass += row.probability;
+    return acc;
+  }, { home: 0, draw: 0, away: 0, mass: 0 });
+  const mass = totals.mass || 1;
+  return {
+    home: totals.home / mass,
+    draw: totals.draw / mass,
+    away: totals.away / mass,
+  };
+}
+
+function topScoreProbabilities(homeLambda, awayLambda, limit = 5) {
+  return scoreMatrix(homeLambda, awayLambda, 8)
+    .sort((a, b) => b.probability - a.probability)
+    .slice(0, limit)
+    .map((row) => ({
+      home: row.home,
+      away: row.away,
+      label: `${row.home}-${row.away}`,
+      probability: pct1(row.probability),
+    }));
+}
+
+function parseHandicapLine(line) {
+  const value = Number(String(line || "").replace(/[^\d.+-]/g, ""));
+  return Number.isFinite(value) ? value : null;
+}
+
+function handicapOutcomeProbabilities(homeLambda, awayLambda, line) {
+  const handicap = parseHandicapLine(line);
+  if (handicap === null) return null;
+
+  const matrix = scoreMatrix(homeLambda, awayLambda, 10);
+  const totals = matrix.reduce((acc, row) => {
+    const adjustedHome = row.home + handicap;
+    if (adjustedHome > row.away) acc.home += row.probability;
+    else if (adjustedHome === row.away) acc.draw += row.probability;
+    else acc.away += row.probability;
+    acc.mass += row.probability;
+    return acc;
+  }, { home: 0, draw: 0, away: 0, mass: 0 });
+  const mass = totals.mass || 1;
+  return {
+    home: totals.home / mass,
+    draw: totals.draw / mass,
+    away: totals.away / mass,
+  };
+}
+
+function blendOutcomeProbabilities(market, poisson) {
+  const blended = {
+    home: market.home * 0.72 + poisson.home * 0.28,
+    draw: market.draw * 0.72 + poisson.draw * 0.28,
+    away: market.away * 0.72 + poisson.away * 0.28,
+  };
+  const total = blended.home + blended.draw + blended.away || 1;
+  return {
+    home: blended.home / total,
+    draw: blended.draw / total,
+    away: blended.away / total,
+  };
+}
+
+function asPercentTriplet(probabilities) {
+  if (!probabilities) return null;
+  return {
+    home: pct1(probabilities.home),
+    draw: pct1(probabilities.draw),
+    away: pct1(probabilities.away),
+  };
+}
+
+function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLambda, awayLambda, over25Probability, bttsProbability) {
+  const poisson1x2 = poissonOutcomeProbabilities(homeLambda, awayLambda);
+  const final1x2 = blendOutcomeProbabilities(probabilities, poisson1x2);
+  const handicapPoisson = handicapOutcomeProbabilities(homeLambda, awayLambda, match.handicapLine);
+  return {
+    version: "market-poisson-baseline-v1",
+    generatedAt: new Date().toISOString(),
+    basis: {
+      zh: "市场隐含概率 + Poisson 比分分布基准；暂未接入 Elo、xG、伤停、首发和校准器。",
+      en: "Market-implied probability plus Poisson score baseline; Elo, xG, injuries, lineups, and calibration are not connected yet.",
+    },
+    oneXTwo: {
+      market: asPercentTriplet(probabilities),
+      poisson: asPercentTriplet(poisson1x2),
+      final: asPercentTriplet(final1x2),
+    },
+    scoreDistribution: topScoreProbabilities(homeLambda, awayLambda, 5),
+    goalLines: {
+      over25: pct1(over25Probability),
+      under25: pct1(1 - over25Probability),
+    },
+    bothTeamsToScore: {
+      yes: pct1(bttsProbability),
+      no: pct1(1 - bttsProbability),
+    },
+    handicap: match.handicapLine ? {
+      line: match.handicapLine,
+      market: asPercentTriplet(hhadProbabilities),
+      poisson: asPercentTriplet(handicapPoisson),
+    } : null,
+    calibration: {
+      status: "baseline",
+      zh: "当前为未校准基准概率；后续需要用时间滚动回测做 Brier / log loss / reliability 校准。",
+      en: "This is an uncalibrated baseline; rolling backtests with Brier, log loss, and reliability calibration are needed next.",
+    },
+  };
 }
 
 function resultStatus(match, expected, marketType = "") {
@@ -833,6 +967,7 @@ function predictionSet(match) {
   const goalsOdds = Number(clamp(1 / Math.max(goalsProbability, 0.08), 1.2, 12.5).toFixed(2));
   const ggOdds = Number(clamp(1 / Math.max(ggTipProbability, 0.15), 1.2, 8).toFixed(2));
   const score = projectedScore(homeLambda, awayLambda);
+  const probabilityModel = buildProbabilityModel(match, probabilities, hhadProbabilities, homeLambda, awayLambda, over25Probability, bttsProbability);
   const probabilityTextZh = `主胜 ${pct(probabilities.home)}% / 平局 ${pct(probabilities.draw)}% / 客胜 ${pct(probabilities.away)}%`;
   const probabilityTextEn = `home ${pct(probabilities.home)}% / draw ${pct(probabilities.draw)}% / away ${pct(probabilities.away)}%`;
   const oddsText = `${match.odds.odds1.toFixed(2)} / ${match.odds.oddsX.toFixed(2)} / ${match.odds.odds2.toFixed(2)}`;
@@ -1001,7 +1136,7 @@ function predictionSet(match) {
     resultStatus: oneXTwo.resultStatus,
   };
 
-  return { predictions: [oneXTwo, goals, gg, best], homeLambda, awayLambda, projectedScore: score };
+  return { predictions: [oneXTwo, goals, gg, best], homeLambda, awayLambda, projectedScore: score, probabilityModel };
 }
 
 function toAppMatch(match) {
@@ -1014,7 +1149,7 @@ function toAppMatch(match) {
   const hasPredictionModel = Boolean(odds);
   const model = odds
     ? predictionSet({ ...match, odds })
-    : { predictions: [], homeLambda: match.scoreHome ?? 0, awayLambda: match.scoreAway ?? 0 };
+    : { predictions: [], homeLambda: match.scoreHome ?? 0, awayLambda: match.scoreAway ?? 0, probabilityModel: undefined };
   const scoreHome = Number.isFinite(match.scoreHome) ? match.scoreHome : undefined;
   const scoreAway = Number.isFinite(match.scoreAway) ? match.scoreAway : undefined;
   const rand = seeded(match.sourceMatchId);
@@ -1033,6 +1168,7 @@ function toAppMatch(match) {
     scoreAway,
     projectedScoreHome: model.projectedScore?.home,
     projectedScoreAway: model.projectedScore?.away,
+    probabilityModel: model.probabilityModel,
     odds: odds || undefined,
     handicapOdds: handicapOdds || undefined,
     predictions: model.predictions,
@@ -1144,6 +1280,7 @@ function applyPredictionPersistence(match, existing, capturedAt) {
       projectedScoreHome: existing?.projectedScoreHome ?? match.projectedScoreHome,
       projectedScoreAway: existing?.projectedScoreAway ?? match.projectedScoreAway,
       stats: existing?.stats || match.stats,
+      probabilityModel: started ? (existing?.probabilityModel || match.probabilityModel) : match.probabilityModel,
       predictionMeta: {
         ...(existing?.predictionMeta || generatedMeta),
         lockedAt: started ? (existing?.predictionMeta?.lockedAt || capturedAt) : existing?.predictionMeta?.lockedAt,
