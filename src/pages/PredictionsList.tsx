@@ -29,7 +29,7 @@ type SortBy = 'time' | 'trust' | 'odds';
 type SignalFilter = 'all' | MatchSignalCategory;
 
 const SORT_OPTIONS: SortBy[] = ['time', 'trust', 'odds'];
-const SIGNAL_FILTERS: SignalFilter[] = ['all', 'steady', 'watch', 'avoid', 'unavailable'];
+const SIGNAL_FILTERS: SignalFilter[] = ['all', 'steady', 'watch', 'avoid', 'unavailable', 'finished'];
 
 const getMatchDay = (match: Match): string => match.matchDate || match.businessDate || match.kickoffDate || match.kickoffTime.slice(0, 10) || '';
 
@@ -174,6 +174,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
     teams: { zh: '对阵双方', en: 'Teams' },
     oddsHeader: { zh: '胜平负 / 让球', en: '1X2 / Handicap' },
     closed: { zh: '未开售', en: 'Closed' },
+    archivedOdds: { zh: '赛果归档', en: 'Archived' },
     trustHeader: { zh: '可信度', en: 'Trust' },
     unlockTitle: { zh: '点击模拟升级解锁', en: 'Click to unlock' },
     hit: { zh: '命中', en: 'Hit' },
@@ -235,8 +236,12 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
       counts.all += 1;
       counts[signal.category] += 1;
       return counts;
-    }, { all: 0, steady: 0, watch: 0, avoid: 0, unavailable: 0 });
+    }, { all: 0, steady: 0, watch: 0, avoid: 0, unavailable: 0, finished: 0 });
   }, [baseFilteredMatches]);
+
+  const visibleSignalFilters = useMemo(() => {
+    return SIGNAL_FILTERS.filter((filter) => filter === 'all' || signalCounts[filter] > 0 || signalFilter === filter);
+  }, [signalCounts, signalFilter]);
 
   const filteredMatches = useMemo(() => {
     if (signalFilter === 'all') return baseFilteredMatches;
@@ -406,7 +411,9 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
     {
       label: t('signalSummary'),
       value: `${signalCounts.steady}/${signalCounts.watch}/${signalCounts.avoid}`,
-      note: language === 'zh' ? '高信 / 观 / 避' : 'High / Watch / Avoid',
+      note: signalCounts.finished > 0
+        ? (language === 'zh' ? `高信 / 观 / 避 · 完 ${signalCounts.finished}` : `High / Watch / Avoid · F ${signalCounts.finished}`)
+        : (language === 'zh' ? '高信 / 观 / 避' : 'High / Watch / Avoid'),
       icon: ShieldCheck,
       tone: 'premium'
     },
@@ -613,7 +620,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
             {t('signalTitle')}
           </span>
           <div className="chip-row">
-            {SIGNAL_FILTERS.map((filter) => (
+            {visibleSignalFilters.map((filter) => (
               <button
                 key={filter}
                 type="button"
@@ -788,7 +795,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
                                       </>
                                     ) : (
                                       <>
-                                        <span className="pool-closed">{t('closed')}</span>
+                                        <span className="pool-closed">{isFinished ? t('archivedOdds') : t('closed')}</span>
                                         <span>--</span>
                                         <span>--</span>
                                         <span>--</span>

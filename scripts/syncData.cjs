@@ -354,6 +354,18 @@ function statusFromSporttery(matchStatus, sellStatus, statusName = "", kickoffTi
   return "SCHEDULED";
 }
 
+function normalizeStatusWithScore(status, kickoffTime, scoreHome, scoreAway) {
+  if (status === "FINISHED") return status;
+  const kickoffAt = Date.parse(kickoffTime);
+  const hasScore = Number.isFinite(scoreHome) && Number.isFinite(scoreAway);
+  if (!Number.isFinite(kickoffAt) || !hasScore) return status;
+
+  const elapsedMinutes = Math.floor((Date.now() - kickoffAt) / 60000);
+  if (elapsedMinutes >= 125) return "FINISHED";
+  if (elapsedMinutes >= 0) return "LIVE";
+  return status;
+}
+
 function sanitizeOdds(raw) {
   const odds1 = toNum(raw?.odds1, null);
   const oddsX = toNum(raw?.oddsX, null);
@@ -807,7 +819,8 @@ function mapSportteryRow(row, sourceMethod, sourceUrl) {
   const leagueName = normText(row.leagueAllName || row.leagueAbbName, "足球赛事");
   const matchId = String(row.matchId || `${row.matchDate}-${homeTeam}-${awayTeam}`);
   const kickoffTime = parseKickoff(row.matchDate, row.matchTime);
-  const status = statusFromSporttery(row.matchStatus, row.sellStatus, row.matchStatusName, kickoffTime);
+  const rawStatus = statusFromSporttery(row.matchStatus, row.sellStatus, row.matchStatusName, kickoffTime);
+  const status = normalizeStatusWithScore(rawStatus, kickoffTime, scoreHome, scoreAway);
   const businessDate = normText(row.businessDate || row.matchNumDate || row.matchDate);
   const oddsInfo = sportteryOddsInfo(row, sourceUrl, sourceMethod);
   return {
@@ -1424,7 +1437,7 @@ function applyPredictionPersistence(match, existing, capturedAt) {
   const sameDirection = predictionSignature(existingPredictions) === predictionSignature(nextPredictions);
   const policyChanged = existing?.predictionMeta?.policyVersion !== PREDICTION_POLICY_VERSION
     || existing?.predictionMeta?.promptVersion !== ANALYST_PROMPT_VERSION;
-  if (started || (sameDirection && !policyChanged)) {
+  if (started) {
     return {
       ...match,
       predictions: settlePredictionsForMatch(match, existingPredictions),
@@ -1437,6 +1450,10 @@ function applyPredictionPersistence(match, existing, capturedAt) {
         lockedAt: started ? (existing?.predictionMeta?.lockedAt || capturedAt) : existing?.predictionMeta?.lockedAt,
       },
     };
+  }
+
+  if (sameDirection && !policyChanged) {
+    return { ...match, predictionMeta: generatedMeta };
   }
 
   if (sameDirection && policyChanged) {

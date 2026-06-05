@@ -745,7 +745,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                     </>
                   ) : (
                     <>
-                      <span>{language === 'zh' ? '未开售' : 'Closed'}</span>
+                      <span>{isFinished ? (language === 'zh' ? '赛果归档' : 'Archived') : (language === 'zh' ? '未开售' : 'Closed')}</span>
                       <span>--</span>
                       <span>--</span>
                       <span>--</span>

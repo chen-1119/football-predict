@@ -16,7 +16,7 @@ export const ContactDock: React.FC = () => {
   }, []);
 
   const translations = {
-    open: { zh: '联系', en: 'Contact' },
+    open: { zh: '微信联系', en: 'Contact' },
     title: { zh: '联系方式', en: 'Contact' },
     kicker: { zh: '微信咨询', en: 'WeChat' },
     name: { zh: '何先生', en: 'Mr. He' },
@@ -44,6 +44,7 @@ export const ContactDock: React.FC = () => {
       <button
         type="button"
         className="contact-dock-button"
+        aria-label={t('open') as string}
         aria-expanded={isOpen}
         aria-controls="contact-drawer"
         onClick={() => setIsOpen(true)}

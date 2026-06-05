@@ -1,6 +1,6 @@
 import type { Match, MultiLangString } from './mockData';
 
-export type MatchSignalCategory = 'steady' | 'watch' | 'avoid' | 'unavailable';
+export type MatchSignalCategory = 'steady' | 'watch' | 'avoid' | 'unavailable' | 'finished';
 
 export interface MatchSignal {
   category: MatchSignalCategory;
@@ -15,7 +15,8 @@ const labels: Record<MatchSignalCategory, MultiLangString> = {
   steady: { zh: '高可信候选', en: 'High confidence' },
   watch: { zh: '观察', en: 'Watch' },
   avoid: { zh: '避坑', en: 'Avoid' },
-  unavailable: { zh: '待开售', en: 'Pending' }
+  unavailable: { zh: '待开售', en: 'Pending' },
+  finished: { zh: '已完场', en: 'Finished' }
 };
 
 const hasRisk = (riskNames: string[], keyword: string) => {
@@ -44,6 +45,20 @@ const finalProbabilityGap = (match: Match) => {
 };
 
 export function getMatchSignal(match: Match): MatchSignal {
+  if (match.status === 'FINISHED') {
+    return {
+      category: 'finished',
+      label: labels.finished,
+      note: {
+        zh: '本场已完场，当前只保留赛果、历史复盘与已生成的赛前预测记录。',
+        en: 'This match is finished. Keep the result, review data, and any pre-match prediction record.'
+      },
+      tone: 'muted',
+      trustScore: 0,
+      riskCount: 0
+    };
+  }
+
   const best = match.predictions.find((prediction) => prediction.marketType === 'BEST');
 
   if (!best) {

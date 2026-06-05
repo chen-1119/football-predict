@@ -255,13 +255,15 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
     steady: { zh: '可列入候选', en: 'Candidate' },
     watch: { zh: '观察为主', en: 'Watch' },
     avoid: { zh: '降低优先级', en: 'Lower priority' },
-    unavailable: { zh: '等待开售', en: 'Wait for sale' }
+    unavailable: { zh: '等待开售', en: 'Wait for sale' },
+    finished: { zh: '赛后复盘', en: 'Post-match review' }
   };
   const toneByCategory: Record<typeof signal.category, InsightTone> = {
     steady: 'success',
     watch: 'warning',
     avoid: 'danger',
-    unavailable: 'muted'
+    unavailable: 'muted',
+    finished: 'muted'
   };
   const trustScore = primary?.trustScore || 0;
   const insightScore = primary
@@ -287,6 +289,46 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
     riskTextZh,
     riskTextEn
   });
+
+  if (!primary && match.status === 'FINISHED') {
+    return {
+      title: { zh: '赛果归档', en: 'Result archived' },
+      summary: {
+        zh: '本场已完场，历史库仅保留官方赛果与可用赔率快照，不再按未开售比赛生成推荐。',
+        en: 'This match is finished. The history store keeps official result and available SP snapshots without generating a pending-sale pick.'
+      },
+      action,
+      score: null,
+      tone,
+      metrics: [
+        { label: { zh: '主推', en: 'Pick' }, value: { zh: '--', en: '--' }, tone: 'muted' },
+        { label: { zh: '官方SP', en: 'Official SP' }, value: { zh: hadProbabilities ? '已归档' : '无快照', en: hadProbabilities ? 'Archived' : 'No snapshot' }, tone: hadProbabilities ? 'success' : 'muted' },
+        { label: { zh: '让球SP', en: 'Handicap SP' }, value: { zh: hhadProbabilities ? '已归档' : '无快照', en: hhadProbabilities ? 'Archived' : 'No snapshot' }, tone: hhadProbabilities ? 'success' : 'muted' },
+        { label: { zh: '历史样本', en: 'History sample' }, value: { zh: sampleText, en: sampleText }, tone: sampleEnough ? 'success' : 'warning' }
+      ],
+      drivers: [
+        {
+          title: { zh: '归档状态', en: 'Archive state' },
+          body: {
+            zh: '完场比赛不显示“待开售”。若历史记录没有官方 SP 快照，页面只展示赛果与复盘样本。',
+            en: 'Finished matches are not shown as pending sale. If no official SP snapshot exists, only result and review samples are shown.'
+          },
+          tone: 'muted'
+        }
+      ],
+      watchpoints: [
+        {
+          title: { zh: '复盘建议', en: 'Review note' },
+          body: {
+            zh: '后续回测只使用开赛前已保存的预测与 SP 快照，避免赛后补赔率造成数据泄漏。',
+            en: 'Backtesting should only use pre-kickoff predictions and SP snapshots to avoid post-match data leakage.'
+          },
+          tone: 'muted'
+        }
+      ],
+      framework
+    };
+  }
 
   if (!primary) {
     return {
