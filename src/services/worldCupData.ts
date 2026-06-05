@@ -1,5 +1,6 @@
-import type { Match, PredictionDetail } from './mockData';
-import { getLeagueById } from './entities';
+import type { Match, MultiLangString, PredictionDetail } from './mockData';
+import { getImpliedProbabilities } from './bettingDisplay';
+import { getLeagueById, getTeamById } from './entities';
 
 export const WORLD_CUP_OFFICIAL = {
   name: {
@@ -80,6 +81,53 @@ export const WORLD_CUP_PIPELINE_CARDS = [
   }
 ];
 
+export const WORLD_CUP_CONTENT_LANES = [
+  {
+    status: { zh: '已上线', en: 'Live' },
+    title: { zh: '世界杯首页推荐', en: 'Home Spotlight' },
+    items: {
+      zh: ['首页专栏入口', '当前观察场次', 'SP 与模型倾向'],
+      en: ['Home entry', 'Watch matches', 'SP and model lean']
+    }
+  },
+  {
+    status: { zh: '持续补强', en: 'Growing' },
+    title: { zh: '赛前分析内容', en: 'Pre-match Analysis' },
+    items: {
+      zh: ['冠军候选观察', '冷门雷达', '让球与赔率快照'],
+      en: ['Contender watch', 'Upset radar', 'Handicap and SP snapshots']
+    }
+  },
+  {
+    status: { zh: '下一步', en: 'Next' },
+    title: { zh: '世界杯正赛数据', en: 'Tournament Data' },
+    items: {
+      zh: ['分组赛程', '晋级路径概率', '赛后复盘评分'],
+      en: ['Groups and fixtures', 'Route probabilities', 'Post-match scoring']
+    }
+  }
+];
+
+export interface WorldCupContender {
+  teamId: string;
+  matchId: string;
+  opponentId: string;
+  score: number;
+  support: number | null;
+  trust: number;
+  reason: MultiLangString;
+}
+
+export interface WorldCupUpsetRadar {
+  matchId: string;
+  favoriteTeamId: string;
+  underdogTeamId: string;
+  favoriteSupport: number;
+  underdogOdds: number;
+  riskScore: number;
+  reason: MultiLangString;
+}
+
 const WORLD_CUP_MATCH_PATTERN = /世界杯|世预|国际赛|国际|友谊|国家队|world cup|qualification|qualifier|international|friendly|fifa|national/i;
 
 export function getBestPrediction(match: Match): PredictionDetail | undefined {
@@ -140,4 +188,98 @@ export function getDaysUntilWorldCup(now = new Date()): number {
   const start = new Date(`${WORLD_CUP_OFFICIAL.startDate}T00:00:00-05:00`).getTime();
   const diff = start - now.getTime();
   return Math.max(0, Math.ceil(diff / 86_400_000));
+}
+
+const clamp = (value: number, min = 0, max = 99) => Math.min(max, Math.max(min, value));
+
+const teamReason = (teamId: string, support: number | null, trust: number): MultiLangString => {
+  const team = getTeamById(teamId);
+  const supportText = support === null ? '--' : `${support}%`;
+  const trustText = trust ? `${trust}%` : '--';
+
+  return {
+    zh: `${team.shortName.zh} 当前 SP 支持率 ${supportText}，模型可信 ${trustText}，先列入世界杯观察池。`,
+    en: `${team.shortName.en} is in the watch pool with SP support ${supportText} and model trust ${trustText}.`
+  };
+};
+
+export function getWorldCupContenders(matches: Match[], max = 6): WorldCupContender[] {
+  const active = getWorldCupWatchMatches(matches, 12);
+  const byTeam = new Map<string, WorldCupContender>();
+
+  active.forEach((match) => {
+    const prediction = getBestPrediction(match);
+    const trust = prediction?.trustScore || 0;
+    const probabilities = getImpliedProbabilities(match.odds);
+    const entries: Array<{ side: 'home' | 'away'; teamId: string; opponentId: string; support: number | null }> = [
+      { side: 'home', teamId: match.homeTeamId, opponentId: match.awayTeamId, support: probabilities?.home ?? null },
+      { side: 'away', teamId: match.awayTeamId, opponentId: match.homeTeamId, support: probabilities?.away ?? null }
+    ];
+
+    entries.forEach((entry) => {
+      const support = entry.support ?? 42;
+      const trendBoost = match.oddsTrend?.direction === entry.side ? 6 : 0;
+      const score = clamp(Math.round(support * 0.58 + trust * 0.34 + trendBoost));
+      const contender: WorldCupContender = {
+        teamId: entry.teamId,
+        opponentId: entry.opponentId,
+        matchId: match.id,
+        score,
+        support: entry.support,
+        trust,
+        reason: teamReason(entry.teamId, entry.support, trust)
+      };
+
+      const existing = byTeam.get(entry.teamId);
+      if (!existing || existing.score < contender.score) {
+        byTeam.set(entry.teamId, contender);
+      }
+    });
+  });
+
+  return Array.from(byTeam.values())
+    .sort((a, b) => b.score - a.score)
+    .slice(0, max);
+}
+
+export function getWorldCupUpsetRadar(matches: Match[], max = 5): WorldCupUpsetRadar[] {
+  return getWorldCupWatchMatches(matches, 16)
+    .map((match) => {
+      if (!match.odds) return null;
+
+      const probabilities = getImpliedProbabilities(match.odds);
+      if (!probabilities) return null;
+
+      const sides = [
+        { side: 'home' as const, teamId: match.homeTeamId, support: probabilities.home, odds: match.odds.odds1 },
+        { side: 'away' as const, teamId: match.awayTeamId, support: probabilities.away, odds: match.odds.odds2 }
+      ].sort((a, b) => b.support - a.support);
+
+      const favorite = sides[0];
+      const underdog = sides[1];
+      if (!favorite || !underdog) return null;
+      if (favorite.support < 44 && underdog.odds < 3.1) return null;
+
+      const favoriteTeam = getTeamById(favorite.teamId);
+      const underdogTeam = getTeamById(underdog.teamId);
+      const trendPenalty = match.oddsTrend?.direction === 'mixed' ? 8 : 0;
+      const lineBoost = match.handicapLine && match.handicapLine !== '0' ? 5 : 0;
+      const riskScore = clamp(Math.round((100 - favorite.support) * 0.52 + underdog.odds * 7 + trendPenalty + lineBoost), 0, 95);
+
+      return {
+        matchId: match.id,
+        favoriteTeamId: favorite.teamId,
+        underdogTeamId: underdog.teamId,
+        favoriteSupport: favorite.support,
+        underdogOdds: underdog.odds,
+        riskScore,
+        reason: {
+          zh: `${favoriteTeam.shortName.zh} 热度 ${favorite.support}%，${underdogTeam.shortName.zh} SP ${underdog.odds.toFixed(2)}，重点看让球与临场降赔。`,
+          en: `${favoriteTeam.shortName.en} has ${favorite.support}% market support; ${underdogTeam.shortName.en} sits at SP ${underdog.odds.toFixed(2)}. Track handicap and late movement.`
+        }
+      };
+    })
+    .filter((item): item is WorldCupUpsetRadar => Boolean(item))
+    .sort((a, b) => b.riskScore - a.riskScore)
+    .slice(0, max);
 }

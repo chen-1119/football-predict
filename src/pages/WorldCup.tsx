@@ -18,8 +18,11 @@ import {
   getBestPrediction,
   getDaysUntilWorldCup,
   getMatchTrust,
+  getWorldCupContenders,
   getWorldCupRecentResults,
+  getWorldCupUpsetRadar,
   getWorldCupWatchMatches,
+  WORLD_CUP_CONTENT_LANES,
   WORLD_CUP_OFFICIAL,
   WORLD_CUP_PIPELINE_CARDS,
   WORLD_CUP_STAGE_CARDS
@@ -75,6 +78,8 @@ const getTopLean = (matches: Match[], language: 'zh' | 'en') => {
 export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
   const { language, matches, dataSync } = useApp();
   const watchMatches = useMemo(() => getWorldCupWatchMatches(matches, 6), [matches]);
+  const contenders = useMemo(() => getWorldCupContenders(matches, 6), [matches]);
+  const upsetRadar = useMemo(() => getWorldCupUpsetRadar(matches, 5), [matches]);
   const recentResults = useMemo(() => getWorldCupRecentResults(matches, 4), [matches]);
   const daysLeft = getDaysUntilWorldCup();
   const activeCount = watchMatches.filter((match) => match.status !== 'FINISHED').length;
@@ -105,6 +110,19 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
     recentTitle: { zh: '近期复盘入口', en: 'Recent Review' },
     recentEmpty: { zh: '历史库暂无相关完赛记录。', en: 'No settled related records yet.' },
     pipelineTitle: { zh: '预测系统', en: 'Forecast System' },
+    contenderTitle: { zh: '冠军候选观察', en: 'Contender Watch' },
+    contenderSubtitle: {
+      zh: '不是提前断言冠军，而是把当前国际赛/世界杯相关场次里市场支持、模型可信和走势更强的球队提出来跟踪。',
+      en: 'Not a champion call yet. This ranks teams from current World Cup-related fixtures by market support, model trust and movement.'
+    },
+    contenderEmpty: { zh: '等待更多官方赛程与 SP 快照。', en: 'Waiting for more official fixtures and SP snapshots.' },
+    radarTitle: { zh: '冷门雷达', en: 'Upset Radar' },
+    radarSubtitle: {
+      zh: '专门找热门过热、让球拉扯、弱势方 SP 较高但仍有复核价值的场次。',
+      en: 'Tracks overheated favourites, handicap tension and higher-SP underdogs worth review.'
+    },
+    radarEmpty: { zh: '当前没有明显冷门观察点。', en: 'No clear upset watch points right now.' },
+    contentTitle: { zh: '内容升级路线', en: 'Content Roadmap' },
     sync: { zh: '数据同步', en: 'Data Sync' },
     active: { zh: '观察场次', en: 'Watch matches' },
     trust: { zh: '平均可信', en: 'Average trust' },
@@ -162,6 +180,83 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
           <span>{t('trust')}</span>
           <strong>{averageTrust ? `${averageTrust}%` : '--'}</strong>
         </article>
+      </section>
+
+      <section className="worldcup-scout-grid">
+        <div className="worldcup-section">
+          <div className="worldcup-section-head">
+            <div>
+              <span className="worldcup-kicker">
+                <Trophy size={15} />
+                {t('contenderTitle')}
+              </span>
+              <p>{t('contenderSubtitle')}</p>
+            </div>
+          </div>
+
+          {contenders.length === 0 ? (
+            <div className="worldcup-empty">{t('contenderEmpty')}</div>
+          ) : (
+            <div className="worldcup-contender-list">
+              {contenders.map((item) => {
+                const team = getTeamById(item.teamId);
+                const opponent = getTeamById(item.opponentId);
+
+                return (
+                  <button key={`${item.teamId}_${item.matchId}`} type="button" className="worldcup-contender-card" onClick={() => onSelectMatch(item.matchId)}>
+                    <span className="worldcup-contender-team">
+                      <TeamBadge team={team} size="sm" />
+                      <strong>{team.name[language]}</strong>
+                      <small>vs {opponent.shortName[language]}</small>
+                    </span>
+                    <span className="worldcup-scorebar" style={{ '--score': `${item.score}%` } as React.CSSProperties}>
+                      <span />
+                    </span>
+                    <span className="worldcup-contender-meta">
+                      <b>{item.score}</b>
+                      <small>SP {item.support === null ? '--' : `${item.support}%`} / {t('trust')} {item.trust || '--'}%</small>
+                    </span>
+                    <p>{item.reason[language]}</p>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="worldcup-section">
+          <div className="worldcup-section-head">
+            <div>
+              <span className="worldcup-kicker">
+                <Activity size={15} />
+                {t('radarTitle')}
+              </span>
+              <p>{t('radarSubtitle')}</p>
+            </div>
+          </div>
+
+          {upsetRadar.length === 0 ? (
+            <div className="worldcup-empty">{t('radarEmpty')}</div>
+          ) : (
+            <div className="worldcup-radar-list">
+              {upsetRadar.map((item) => {
+                const favorite = getTeamById(item.favoriteTeamId);
+                const underdog = getTeamById(item.underdogTeamId);
+
+                return (
+                  <button key={`${item.matchId}_${item.underdogTeamId}`} type="button" onClick={() => onSelectMatch(item.matchId)}>
+                    <span className="worldcup-radar-score">{item.riskScore}</span>
+                    <span className="worldcup-radar-copy">
+                      <strong>{underdog.shortName[language]} vs {favorite.shortName[language]}</strong>
+                      <small>{item.reason[language]}</small>
+                    </span>
+                    <ArrowRight size={13} />
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </section>
 
       <section className="worldcup-section">
@@ -306,6 +401,30 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
               })}
             </div>
           )}
+        </div>
+      </section>
+
+      <section className="worldcup-section">
+        <div className="worldcup-section-head">
+          <div>
+            <span className="worldcup-kicker">
+              <ListChecks size={15} />
+              {t('contentTitle')}
+            </span>
+          </div>
+        </div>
+        <div className="worldcup-lane-grid">
+          {WORLD_CUP_CONTENT_LANES.map((lane) => (
+            <article key={lane.title.en} className="worldcup-lane-card">
+              <span>{lane.status[language]}</span>
+              <strong>{lane.title[language]}</strong>
+              <ul>
+                {lane.items[language].map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </article>
+          ))}
         </div>
       </section>
     </div>
