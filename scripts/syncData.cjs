@@ -195,7 +195,7 @@ function flagEmojiFromIso(isoCode) {
   return String.fromCodePoint(...code.split("").map((letter) => 127397 + letter.charCodeAt(0)));
 }
 
-const J_LEAGUE_LOGO_BASE = "/team-logos/jleague";
+const J_LEAGUE_LOGO_BASE = "./team-logos/jleague";
 
 const CLUB_LOGO_BY_NAME = {
   "\u9e7f\u5c9b\u9e7f\u89d2": `${J_LEAGUE_LOGO_BASE}/kashima-antlers.png`,

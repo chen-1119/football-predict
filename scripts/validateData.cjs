@@ -100,7 +100,7 @@ for (const match of matches) {
       [match.homeTeamName, match.homeTeamLogo, match.homeTeamLogoType],
       [match.awayTeamName, match.awayTeamLogo, match.awayTeamLogoType],
     ]) {
-      if (logoType !== "crest" || !/^(?:https?:\/\/|\/)/.test(String(logo || ""))) {
+      if (logoType !== "crest" || !/^(?:https?:\/\/|\/|\.\/)/.test(String(logo || ""))) {
         errors.push(`${match.id}: J-League club logo must be a crest image (${teamName || "unknown team"}).`);
       }
     }
