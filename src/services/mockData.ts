@@ -87,11 +87,25 @@ export interface MatchProbabilityModel {
   version: string;
   generatedAt?: string;
   basis: MultiLangString;
+  ensembleWeights?: {
+    market: number;
+    elo: number;
+    poisson: number;
+  };
   oneXTwo: {
     market: OutcomeProbability | null;
+    elo?: OutcomeProbability | null;
     poisson: OutcomeProbability | null;
     final: OutcomeProbability | null;
   };
+  elo?: {
+    homeRating: number;
+    awayRating: number;
+    diff: number;
+    homeMatches: number;
+    awayMatches: number;
+    lastUpdatedAt?: string;
+  } | null;
   scoreDistribution: ScoreProbability[];
   goalLines: {
     over25: number;
@@ -474,7 +488,7 @@ const generateMatchPool = (): Match[] => {
       marketType: 'BEST',
       tipCode: bestChoice.tipCode,
       tipLabel: {
-        zh: `稳胆 ${bestChoice.tipLabel.zh}`,
+        zh: `模型首选 ${bestChoice.tipLabel.zh}`,
         en: `Best: ${bestChoice.tipLabel.en}`
       },
       odds: bestChoice.odds,

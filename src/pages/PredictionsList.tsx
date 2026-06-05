@@ -118,7 +118,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
 
   const translations = {
     premiumNotice: {
-      zh: '当前为免费模式，部分精选稳胆、总进球数和双方进球参考已锁定。升级 PRO 可查看完整模型数据。',
+      zh: '当前为免费模式，部分精选推荐、总进球数和双方进球参考已锁定。升级 PRO 可查看完整模型数据。',
       en: 'Free mode is active. Some best tips, total goals, and BTTS references are locked. Upgrade to PRO for full model data.'
     },
     upgradeBtn: { zh: '解锁 PRO', en: 'Unlock PRO' },
@@ -126,7 +126,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
     allLeagues: { zh: '全部赛事', en: 'All Competitions' },
     signalTitle: { zh: '推荐分组', en: 'Signal' },
     allSignals: { zh: '全部分组', en: 'All Signals' },
-    steady: { zh: '稳胆候选', en: 'Steady' },
+    steady: { zh: '高可信候选', en: 'High confidence' },
     watch: { zh: '观察', en: 'Watch' },
     avoid: { zh: '避坑', en: 'Avoid' },
     unavailable: { zh: '待开售', en: 'Pending' },
@@ -403,7 +403,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
     {
       label: t('signalSummary'),
       value: `${signalCounts.steady}/${signalCounts.watch}/${signalCounts.avoid}`,
-      note: language === 'zh' ? '稳 / 观 / 避' : 'Steady / Watch / Avoid',
+      note: language === 'zh' ? '高信 / 观 / 避' : 'High / Watch / Avoid',
       icon: ShieldCheck,
       tone: 'premium'
     },

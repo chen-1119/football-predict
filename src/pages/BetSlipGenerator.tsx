@@ -64,7 +64,7 @@ export const BetSlipGenerator: React.FC = () => {
       en: 'Free Mode active: Max 1 slip/day, target odds capped at 2.00, trust capped at 65%.'
     },
     premiumUnlockNotice: {
-      zh: '升级至 VIP：解锁 150x 超高总SP串关、全选比赛场次、最高 100% 可信度筛选及稳胆组合！',
+      zh: '升级至 VIP：解锁 150x 超高总SP串关、全选比赛场次、高可信度筛选及精选组合！',
       en: 'Upgrade to PRO: Unlock up to 150x cumulative odds, customize counts, and access elite algorithms.'
     },
     targetOddsLabel: { zh: '目标总SP', en: 'Target Combined Odds' },
@@ -275,7 +275,7 @@ export const BetSlipGenerator: React.FC = () => {
                 { id: 'BEST', label: getMarketLabel('BEST', language) }
               ].map(m => {
                 const isSelected = selectedMarkets.includes(m.id);
-                // 免费限制：不能选 BEST 稳胆
+                // 免费限制：不能选 BEST 精选
                 const isMarketLocked = !isPremium && m.id === 'BEST';
 
                 return (

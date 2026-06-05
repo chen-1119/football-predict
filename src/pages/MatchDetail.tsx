@@ -399,6 +399,17 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     { key: 'away', zh: '客胜', en: 'Away' }
   ];
 
+  const formatModelWeight = (value: number | null | undefined) => {
+    if (!Number.isFinite(value)) return '--';
+    return `${Math.round(Number(value) * 100)}%`;
+  };
+
+  const renderOutcomeLine = (probabilities: OutcomeProbability | null | undefined) => {
+    return outcomeLabels
+      .map((item) => `${item[language]} ${formatProbabilityValue(probabilities?.[item.key])}`)
+      .join(' / ');
+  };
+
   const renderOutcomeTriplet = (probabilities: OutcomeProbability | null | undefined) => (
     <div className="probability-triplet">
       {outcomeLabels.map((item) => {
@@ -865,12 +876,34 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                     <div className="probability-subline">
                       <span>
                         {language === 'zh' ? '市场去水' : 'Market'}：
-                        {outcomeLabels.map((item) => `${item[language]} ${formatProbabilityValue(probabilityModel.oneXTwo.market?.[item.key])}`).join(' / ')}
+                        {renderOutcomeLine(probabilityModel.oneXTwo.market)}
                       </span>
+                      {probabilityModel.oneXTwo.elo && (
+                        <span>
+                          Elo：
+                          {renderOutcomeLine(probabilityModel.oneXTwo.elo)}
+                          {probabilityModel.elo && (
+                            <>
+                              {' '}
+                              {language === 'zh'
+                                ? `评级 ${probabilityModel.elo.homeRating}/${probabilityModel.elo.awayRating}，样本 ${probabilityModel.elo.homeMatches}/${probabilityModel.elo.awayMatches}`
+                                : `rating ${probabilityModel.elo.homeRating}/${probabilityModel.elo.awayRating}, sample ${probabilityModel.elo.homeMatches}/${probabilityModel.elo.awayMatches}`}
+                            </>
+                          )}
+                      </span>
+                      )}
                       <span>
                         Poisson：
-                        {outcomeLabels.map((item) => `${item[language]} ${formatProbabilityValue(probabilityModel.oneXTwo.poisson?.[item.key])}`).join(' / ')}
+                        {renderOutcomeLine(probabilityModel.oneXTwo.poisson)}
                       </span>
+                      {probabilityModel.ensembleWeights && (
+                        <span className="probability-weight-line">
+                          {language === 'zh' ? '集成权重' : 'Ensemble weights'}：
+                          {language === 'zh'
+                            ? `市场 ${formatModelWeight(probabilityModel.ensembleWeights.market)} / Elo ${formatModelWeight(probabilityModel.ensembleWeights.elo)} / Poisson ${formatModelWeight(probabilityModel.ensembleWeights.poisson)}`
+                            : `market ${formatModelWeight(probabilityModel.ensembleWeights.market)} / Elo ${formatModelWeight(probabilityModel.ensembleWeights.elo)} / Poisson ${formatModelWeight(probabilityModel.ensembleWeights.poisson)}`}
+                        </span>
+                      )}
                     </div>
                   </section>
 

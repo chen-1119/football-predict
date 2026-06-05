@@ -17,19 +17,19 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
   const activeBestMatches = React.useMemo(() => {
     return matches.filter((m: Match) => {
       const isFinished = m.status === 'FINISHED';
-      if (isFinished) return false; // 稳胆页主要展示活跃的未开始比赛
+      if (isFinished) return false; // 精选页主要展示活跃的未开始比赛
       return m.predictions.some(p => p.marketType === 'BEST');
     });
   }, [matches]);
 
   const translations = {
-    title: { zh: '每日稳胆 VIP 推荐', en: 'Daily Best VIP Tips' },
+    title: { zh: '高可信精选 VIP 推荐', en: 'Daily Best VIP Tips' },
     subtitle: { 
       zh: '由高维度数学预测模型每日精选，仅挑选可信度 80% 以上的最稳赛事推荐。历史长期盈利率标杆。', 
       en: 'Selected daily by our multi-layered mathematical models, featuring only 80%+ confidence choices.' 
     },
     lockedNotice: {
-      zh: '每日稳胆推荐为 PRO 订阅专享。升级即可全天候解锁全部最佳胆码、高阶比分推演和进球数据预测。',
+      zh: '高可信精选推荐为 PRO 订阅专享。升级即可全天候解锁全部模型首选、高阶比分推演和进球数据预测。',
       en: 'Daily Best Tips are locked for Free users. Upgrade to PRO to reveal all high-confidence model selections.'
     },
     unlockBtn: { zh: '模拟升级 PRO 立即解锁', en: 'Simulate Pro to Unlock' },
@@ -37,7 +37,7 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
     odds: { zh: '首选SP', en: 'Primary Odds' },
     kickoff: { zh: '开赛', en: 'Kickoff' },
     viewDetail: { zh: '查看深度数据统计', en: 'Analyze Match Stats' },
-    noTips: { zh: '今日暂无稳胆推荐发布。请稍后再试。', en: 'No VIP tips published yet for today. Check back later.' }
+    noTips: { zh: '今日暂无高可信推荐发布。请稍后再试。', en: 'No VIP tips published yet for today. Check back later.' }
   };
 
   const t = (key: keyof typeof translations) => {
@@ -57,7 +57,7 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
         </p>
       </div>
 
-      {/* 稳胆卡片列表 */}
+      {/* 精选卡片列表 */}
       {activeBestMatches.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: '4rem 2rem', color: 'hsl(var(--text-secondary))' }}>
           <Calendar size={40} style={{ marginBottom: '1rem', color: 'hsl(var(--border))' }} />

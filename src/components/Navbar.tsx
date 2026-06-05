@@ -37,7 +37,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
   const translations = {
     brand: { zh: 'AI 足球预测', en: 'AI Football' },
     subtitle: { zh: '竞彩数据看板', en: 'Prediction Desk' },
-    bestTips: { zh: '每日稳胆', en: 'Best Tips' },
+    bestTips: { zh: '高可信精选', en: 'Best Tips' },
     predictions: { zh: '赛事预测', en: 'Predictions' },
     generator: { zh: '投注单', en: 'Bet Slip' },
     hitAndWin: { zh: '命中挑战', en: 'Hit & Win' },

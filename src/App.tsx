@@ -58,7 +58,7 @@ function AppContent() {
             <MatchDetail 
               matchId={activeMatchId}
               onBack={() => {
-                // 如果是从“稳胆”来的就返回稳胆，否则返回预测列表
+                // 如果是从精选页来的就返回精选，否则返回预测列表
                 setCurrentTab('predictions');
                 setActiveMatchId(null);
               }}

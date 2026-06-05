@@ -12,7 +12,7 @@ export interface MatchSignal {
 }
 
 const labels: Record<MatchSignalCategory, MultiLangString> = {
-  steady: { zh: '稳胆候选', en: 'Steady' },
+  steady: { zh: '高可信候选', en: 'High confidence' },
   watch: { zh: '观察', en: 'Watch' },
   avoid: { zh: '避坑', en: 'Avoid' },
   unavailable: { zh: '待开售', en: 'Pending' }
@@ -20,6 +20,27 @@ const labels: Record<MatchSignalCategory, MultiLangString> = {
 
 const hasRisk = (riskNames: string[], keyword: string) => {
   return riskNames.some((name) => name.includes(keyword));
+};
+
+const pickProbability = (match: Match, tipCode: string) => {
+  const final = match.probabilityModel?.oneXTwo.final;
+  if (!final) return null;
+  const value = tipCode === '1'
+    ? final.home
+    : tipCode === 'X'
+      ? final.draw
+      : tipCode === '2'
+        ? final.away
+        : null;
+  return Number.isFinite(value) ? Number(value) : null;
+};
+
+const finalProbabilityGap = (match: Match) => {
+  const final = match.probabilityModel?.oneXTwo.final;
+  if (!final) return null;
+  const values = [final.home, final.draw, final.away].filter(Number.isFinite).map(Number).sort((a, b) => b - a);
+  if (values.length < 2) return null;
+  return values[0] - values[1];
 };
 
 export function getMatchSignal(match: Match): MatchSignal {
@@ -46,14 +67,35 @@ export function getMatchSignal(match: Match): MatchSignal {
   const hasDrawRisk = hasRisk(riskNames, '防平');
   const hasWeakHandicap = hasRisk(riskNames, '让球支持不足');
   const hasOverheated = hasRisk(riskNames, '热门过热');
+  const selectedProbability = pickProbability(match, best.tipCode);
+  const final = match.probabilityModel?.oneXTwo.final;
+  const topProbability = final
+    ? Math.max(final.home ?? 0, final.draw ?? 0, final.away ?? 0)
+    : null;
+  const probabilityGap = finalProbabilityGap(match);
+  const selectedIsNotModelLeader = selectedProbability !== null
+    && topProbability !== null
+    && selectedProbability + 0.5 < topProbability;
+  const probabilityTooLow = topProbability !== null && topProbability < 54;
+  const probabilityEdgeWeak = probabilityGap !== null && probabilityGap < 7;
 
-  if ((hasDrawRisk && hasWeakHandicap) || (trendIsMixed && trustScore < 82) || (riskTags.length >= 3 && trustScore < 86)) {
+  if (
+    selectedIsNotModelLeader
+    || (probabilityTooLow && (hasDrawRisk || hasWeakHandicap || riskTags.length >= 2))
+    || (hasDrawRisk && hasWeakHandicap)
+    || (trendIsMixed && trustScore < 82)
+    || (riskTags.length >= 3 && trustScore < 86)
+  ) {
     return {
       category: 'avoid',
       label: labels.avoid,
       note: {
-        zh: '风险标签叠加，建议降低优先级或等待临场 SP。',
-        en: 'Multiple risk tags overlap. Lower priority or wait for late SP.'
+        zh: selectedIsNotModelLeader
+          ? '精选方向与最终概率首选不一致，先降级避坑，等待下一次 SP 快照确认。'
+          : '风险标签叠加，建议降低优先级或等待临场 SP。',
+        en: selectedIsNotModelLeader
+          ? 'The selected pick is not aligned with the final probability leader. Downgrade and wait for the next SP snapshot.'
+          : 'Multiple risk tags overlap. Lower priority or wait for late SP.'
       },
       tone: 'danger',
       trustScore,
@@ -61,13 +103,38 @@ export function getMatchSignal(match: Match): MatchSignal {
     };
   }
 
-  if (trustScore >= 84 && riskTags.length <= 1 && !trendIsMixed && !hasOverheated) {
+  if (probabilityTooLow || probabilityEdgeWeak) {
+    return {
+      category: 'watch',
+      label: labels.watch,
+      note: {
+        zh: probabilityTooLow
+          ? '最终概率未到高可信门槛，当前只适合观察，不强行给稳妥方向。'
+          : '第一方向与第二方向差距偏小，防平或防冷价值仍需要保留。',
+        en: probabilityTooLow
+          ? 'The final probability is below the steady threshold, so this remains a watch.'
+          : 'The top two outcomes are too close. Keep draw/upset protection in view.'
+      },
+      tone: 'warning',
+      trustScore,
+      riskCount: riskTags.length
+    };
+  }
+
+  if (
+    trustScore >= 84
+    && riskTags.length <= 1
+    && !trendIsMixed
+    && !hasOverheated
+    && selectedProbability !== null
+    && selectedProbability >= 58
+  ) {
     return {
       category: 'steady',
       label: labels.steady,
       note: {
-        zh: '官方 SP、模型可信度和风险标签相对一致。',
-        en: 'Official SP, model confidence, and risk tags are aligned.'
+        zh: '官方 SP、最终概率、模型可信度和风险标签相对一致，可列入高可信候选。',
+        en: 'Official SP, final probability, model confidence, and risk tags are aligned.'
       },
       tone: 'success',
       trustScore,
