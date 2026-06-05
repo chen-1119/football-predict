@@ -308,8 +308,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           historyLoaded: historyCount > 0,
           historyLoading: false,
           historyCount,
-          totalCount: current.currentCount + historyCount,
-          lastCheckedAt: new Date().toISOString()
+          totalCount: current.currentCount + historyCount
         }));
       } catch (error: unknown) {
         console.warn('History data is unavailable; current matches remain usable.', error);
@@ -318,8 +317,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ...current,
           historyLoaded: false,
           historyLoading: false,
-          error: formatError(error),
-          lastCheckedAt: new Date().toISOString()
+          error: formatError(error)
         }));
       }
     };
