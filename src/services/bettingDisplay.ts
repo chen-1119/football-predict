@@ -13,9 +13,6 @@ export interface SportteryOddsPoolDisplay {
   probabilities?: { home: number; draw: number; away: number };
 }
 
-const BEST_VALUE_PREFIX_ZH = '\u4ef7\u503c\u89c2\u5bdf';
-const BEST_STEADY_PREFIX_ZH = '\u7a33\u80c6';
-
 const sportteryResultLabels = {
   '1': {
     zhCompact: '主胜',
@@ -56,19 +53,29 @@ export function getPredictionTipDisplay(
   language: Language,
   compact = false
 ): string {
+  if (prediction.marketType === 'BEST') {
+    if (language === 'zh') {
+      const label = prediction.tipLabel.zh
+        .replace(/^稳胆[:：]?\s*/, '高可信 ')
+        .replace(/^稳妥方向\s+/, '高可信 ');
+
+      if (!compact) return label;
+
+      return label
+        .replace(/^(模型首选|价值观察|高可信)\s+(主胜|平局|客胜).*/, '$1 $2')
+        .replace(/^观察为主\s+.*/, '观察为主');
+    }
+
+    return compact
+      ? prediction.tipLabel.en.replace(/:.*/, '')
+      : prediction.tipLabel.en;
+  }
+
   const sportteryLabel = sportteryResultLabels[prediction.tipCode as keyof typeof sportteryResultLabels];
 
-  if ((prediction.marketType === '1X2' || prediction.marketType === 'BEST') && sportteryLabel) {
+  if (prediction.marketType === '1X2' && sportteryLabel) {
     if (language === 'zh') {
-      const bestPrefix = prediction.tipLabel.zh.includes(BEST_VALUE_PREFIX_ZH)
-        ? BEST_VALUE_PREFIX_ZH
-        : BEST_STEADY_PREFIX_ZH;
-
-      return prediction.marketType === 'BEST' && !compact
-        ? `${bestPrefix} ${sportteryLabel.zhCompact}`
-        : compact
-          ? sportteryLabel.zhCompact
-          : sportteryLabel.zhFull;
+      return compact ? sportteryLabel.zhCompact : sportteryLabel.zhFull;
     }
 
     return compact ? sportteryLabel.enCompact : sportteryLabel.enFull;
@@ -88,10 +95,7 @@ export function getPredictionTipDisplay(
     if (prediction.tipCode === 'NG') return language === 'zh' ? '双方进球 否' : 'No both teams score';
   }
 
-  const label = prediction.tipLabel[language];
-  return prediction.marketType === 'BEST' && language === 'zh'
-    ? label.replace(/^稳胆[:：]\s*/, '')
-    : label;
+  return prediction.tipLabel[language];
 }
 
 export function getPredictionCodeHint(prediction: PredictionDetail, language: Language): string {
@@ -102,6 +106,10 @@ export function getPredictionCodeHint(prediction: PredictionDetail, language: La
 }
 
 export function getPredictionValueLabel(prediction: PredictionDetail, language: Language): string {
+  if (prediction.marketType === 'BEST' && (!Number.isFinite(prediction.odds) || prediction.odds <= 0)) {
+    return language === 'zh' ? '建议' : 'Advice';
+  }
+
   if (prediction.marketType === '1X2' || prediction.marketType === 'BEST') {
     return 'SP';
   }

@@ -435,6 +435,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     const isLocked = !isFinished && pred.visibilityStatus === 'PREMIUM' && !isPremium;
     const codeHint = getPredictionCodeHint(pred, language);
     const valueLabel = getPredictionValueLabel(pred, language);
+    const hasDisplayOdds = Number.isFinite(pred.odds) && pred.odds > 0;
 
     return (
       <div 
@@ -498,10 +499,12 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                 {getResultLabel(pred.resultStatus, language)}
               </span>
             )}
-            <div style={{ textAlign: 'right' }}>
-              <span style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))', display: 'block' }}>{valueLabel}</span>
-              <span style={{ fontSize: '1.1rem', fontWeight: '800', color: 'hsl(var(--accent))' }}>{pred.odds.toFixed(2)}</span>
-            </div>
+            {hasDisplayOdds && (
+              <div style={{ textAlign: 'right' }}>
+                <span style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))', display: 'block' }}>{valueLabel}</span>
+                <span style={{ fontSize: '1.1rem', fontWeight: '800', color: 'hsl(var(--accent))' }}>{pred.odds.toFixed(2)}</span>
+              </div>
+            )}
             <div style={{ textAlign: 'right' }}>
               <span style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))', display: 'block' }}>{t('trust')}</span>
               <span style={{ fontSize: '1.1rem', fontWeight: '800', color: 'hsl(var(--primary))' }}>{pred.trustScore}%</span>

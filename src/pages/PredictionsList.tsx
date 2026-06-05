@@ -349,13 +349,16 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
     }
 
     const showResult = isFinished && pred.resultStatus === 'WON';
+    const hasDisplayOdds = Number.isFinite(pred.odds) && pred.odds > 0;
 
     return (
       <div className={`prediction-cell ${showResult ? 'is-hit' : ''}`}>
         <span className="prediction-tip">
           {getPredictionTipDisplay(pred, language, true)}
         </span>
-        <span className="prediction-odds">{getPredictionValueLabel(pred, language)} {pred.odds.toFixed(2)}</span>
+        {hasDisplayOdds && (
+          <span className="prediction-odds">{getPredictionValueLabel(pred, language)} {pred.odds.toFixed(2)}</span>
+        )}
         {showResult && <span className="mini-hit">{t('hit')}</span>}
       </div>
     );

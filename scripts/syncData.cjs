@@ -12,8 +12,8 @@ const WINDOW_FORWARD_DAYS = Math.max(1, Number(process.env.MATCH_WINDOW_FORWARD_
 const ODDS_HISTORY_RETENTION_DAYS = Math.max(1, Number(process.env.ODDS_HISTORY_RETENTION_DAYS || 365));
 const ODDS_HISTORY_BUCKET_MINUTES = Math.max(1, Number(process.env.ODDS_HISTORY_BUCKET_MINUTES || 5));
 const PAGE_POLL_SECONDS = Math.max(15, Number(process.env.PAGE_POLL_SECONDS || 60));
-const ANALYST_PROMPT_VERSION = "professional-football-analyst-v3";
-const PREDICTION_POLICY_VERSION = "pre-match-probability-ensemble-v3";
+const ANALYST_PROMPT_VERSION = "professional-football-analyst-v4";
+const PREDICTION_POLICY_VERSION = "pre-match-value-gate-v4";
 const METHODS = (process.env.SPORTTERY_METHODS || "concern,live,result,all")
   .split(",")
   .map((x) => x.trim())
@@ -1200,33 +1200,59 @@ function predictionSet(match) {
     && modelProbabilityGap >= 0.07
     && baseTrust >= 84
     && riskTags.length <= 1;
-  const bestPrefix = analystSelection.isContrarian
+  const bestHandicapSupport = hhadSupportForPick(hhadProbabilities, oneXTwo.tipCode);
+  const bestHasWeakHandicap = ["1", "2"].includes(oneXTwo.tipCode)
+    && bestHandicapSupport !== null
+    && bestHandicapSupport < 0.38;
+  const bestHasThinEdge = modelProbabilityGap < 0.08 || best1x2[1] < 0.54;
+  const bestShouldWatch = !analystSelection.isContrarian
+    && !bestIsSteady
+    && (bestHasWeakHandicap || bestHasThinEdge || riskTags.length >= 2);
+  const bestPrefix = bestShouldWatch
+    ? { zh: "观察为主", en: "Watch first" }
+    : analystSelection.isContrarian
     ? { zh: "价值观察", en: "Value watch" }
     : bestIsSteady
       ? { zh: "稳妥方向", en: "Steady lean" }
       : { zh: "模型首选", en: "Model lean" };
-  const bestTrustScore = analystSelection.isContrarian
+  const bestTrustScore = bestShouldWatch
+    ? clamp(Math.round(oneXTwo.trustScore - 12), 45, 72)
+    : analystSelection.isContrarian
     ? clamp(oneXTwo.trustScore, 54, 76)
     : bestIsSteady
       ? clamp(oneXTwo.trustScore + 2, 57, 96)
       : clamp(oneXTwo.trustScore - 4, 52, 82);
+  const bestWatchLabelZh = bestHasWeakHandicap
+    ? "观察为主 防正路过热"
+    : bestHasThinEdge
+      ? "观察为主 胜平负差距小"
+      : "观察为主 风险叠加";
+  const bestWatchLabelEn = bestHasWeakHandicap
+    ? "Watch first: favorite overheated"
+    : bestHasThinEdge
+      ? "Watch first: thin 1X2 edge"
+      : "Watch first: stacked risk";
 
   const best = {
     marketType: "BEST",
-    tipCode: oneXTwo.tipCode,
+    tipCode: bestShouldWatch ? "WATCH" : oneXTwo.tipCode,
     tipLabel: {
-      zh: `${bestPrefix.zh} ${oneXTwo.tipLabel.zh}`,
-      en: `${bestPrefix.en}: ${oneXTwo.tipLabel.en}`,
+      zh: bestShouldWatch ? bestWatchLabelZh : `${bestPrefix.zh} ${oneXTwo.tipLabel.zh}`,
+      en: bestShouldWatch ? bestWatchLabelEn : `${bestPrefix.en}: ${oneXTwo.tipLabel.en}`,
     },
-    odds: oneXTwo.odds,
+    odds: bestShouldWatch ? 0 : oneXTwo.odds,
     trustScore: bestTrustScore,
     explanation: {
-      zh: analystSelection.isContrarian
+      zh: bestShouldWatch
+        ? `AI 精选触发价值门槛：${oneXTwo.tipLabel.zh} 虽是当前概率首选，但让球确认、概率差或风险标签不足以支持单独推荐，本场不硬给正路，先观察。`
+        : analystSelection.isContrarian
         ? `AI 分析不只追随低赔正路。本场触发盘口分歧/防平修正，精选方向降级为价值观察：${oneXTwo.tipLabel.zh}。`
         : bestIsSteady
           ? `AI 精选优先使用中国竞彩网官方实时 SP。本场综合胜平负支持率、SP 分布、Elo、预期进球和风险标签后，列为稳妥方向：${oneXTwo.tipLabel.zh}。`
           : `AI 精选优先使用中国竞彩网官方实时 SP。本场综合胜平负支持率、SP 分布、Elo、预期进球和防平风险后，仅列为模型首选：${oneXTwo.tipLabel.zh}，不列入高可信候选。`,
-      en: analystSelection.isContrarian
+      en: bestShouldWatch
+        ? `The value gate was triggered. ${oneXTwo.tipLabel.en} is the probability leader, but handicap confirmation, edge, or risk filters are not strong enough for a single pick.`
+        : analystSelection.isContrarian
         ? `The model does not blindly follow the lowest SP. Market-disagreement checks downgraded this to a value-watch: ${oneXTwo.tipLabel.en}.`
         : bestIsSteady
           ? `The best tip uses official Sporttery data, Elo, and goal distribution. Steady lean: ${oneXTwo.tipLabel.en}.`
@@ -1234,10 +1260,14 @@ function predictionSet(match) {
     },
     analysisItems: [
       {
-        zh: analystSelection.isContrarian
+        zh: bestShouldWatch
+          ? `核心理由：正路方向为 ${oneXTwo.tipLabel.zh}，但模型首选优势约 ${pct(modelProbabilityGap)} 个百分点，让球同向支持${bestHandicapSupport === null ? "不足以验证" : `约 ${pct(bestHandicapSupport)}%`}，因此降级为观察。`
+          : analystSelection.isContrarian
           ? `核心理由：${analystSelection.reason.zh}`
           : `核心理由：${oneXTwo.tipLabel.zh} 是当前模型最终概率首选，市场主线优势约 ${pct(probabilityGap)} 个百分点，模型首选优势约 ${pct(modelProbabilityGap)} 个百分点。`,
-        en: analystSelection.isContrarian
+        en: bestShouldWatch
+          ? `Core reason: ${oneXTwo.tipLabel.en} is the probability leader, but model edge is about ${pct(modelProbabilityGap)} points and handicap confirmation is weak.`
+          : analystSelection.isContrarian
           ? `Core reason: ${analystSelection.reason.en}`
           : `Core reason: ${oneXTwo.tipLabel.en} is the final model leader. Market edge is about ${pct(probabilityGap)} points; model edge is about ${pct(modelProbabilityGap)} points.`,
       },
@@ -1251,8 +1281,8 @@ function predictionSet(match) {
       },
     ],
     riskTags,
-    visibilityStatus: "PREMIUM",
-    resultStatus: oneXTwo.resultStatus,
+    visibilityStatus: bestShouldWatch ? "FREE" : "PREMIUM",
+    resultStatus: bestShouldWatch ? "PENDING" : oneXTwo.resultStatus,
   };
 
   return { predictions: [oneXTwo, goals, gg, best], homeLambda, awayLambda, projectedScore: score, probabilityModel };

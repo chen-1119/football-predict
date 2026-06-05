@@ -60,6 +60,20 @@ export function getMatchSignal(match: Match): MatchSignal {
     };
   }
 
+  if (best.tipCode === 'WATCH') {
+    return {
+      category: 'watch',
+      label: labels.watch,
+      note: {
+        zh: 'AI精选触发价值门槛：当前不输出单一胜平负方向，先观察盘口与临场 SP。',
+        en: 'The value gate was triggered. No single 1X2 pick is promoted yet; watch late SP and handicap movement.'
+      },
+      tone: 'warning',
+      trustScore: best.trustScore || 0,
+      riskCount: best.riskTags?.length || 0
+    };
+  }
+
   const riskTags = best.riskTags || [];
   const riskNames = riskTags.map((tag) => tag.zh);
   const trustScore = best.trustScore || 0;
