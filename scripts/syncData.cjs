@@ -977,8 +977,7 @@ async function fetchSportteryMatches() {
   return dedupeMatches(lists.flat());
 }
 
-function loadExistingMatches() {
-  const file = path.join(__dirname, "..", "public", "matches.json");
+function readJsonArray(file) {
   if (!fs.existsSync(file)) return [];
   try {
     const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
@@ -986,6 +985,23 @@ function loadExistingMatches() {
   } catch {
     return [];
   }
+}
+
+function loadExistingMatches() {
+  const publicDir = path.join(__dirname, "..", "public");
+  const files = [
+    path.join(publicDir, "matches.json"),
+    path.join(publicDir, "data", "matches-current.json"),
+    path.join(publicDir, "data", "matches-history.json"),
+  ];
+  const byId = new Map();
+  for (const file of files) {
+    for (const match of readJsonArray(file)) {
+      const key = normText(match?.sourceMatchId || String(match?.id || "").replace(/^sporttery_/, ""));
+      if (key && !byId.has(key)) byId.set(key, match);
+    }
+  }
+  return Array.from(byId.values());
 }
 
 function isTrustedOddsMatch(match) {
@@ -1032,6 +1048,67 @@ function loadOddsHistory(publicDir) {
   } catch {
     return { version: 1, source: "sporttery:HAD", rows: [] };
   }
+}
+
+function latestOddsSnapshotForMatch(match, historyRows) {
+  const sourceMatchId = normText(match?.sourceMatchId || String(match?.id || "").replace(/^sporttery_/, ""));
+  if (!sourceMatchId) return null;
+
+  const kickoffAt = Date.parse(match.kickoffTime);
+  const rows = historyRows
+    .filter((row) => normText(row?.sourceMatchId) === sourceMatchId)
+    .filter((row) => sanitizeOdds({ odds1: row?.odds1, oddsX: row?.oddsX, odds2: row?.odds2 }))
+    .sort((a, b) => Date.parse(a.capturedAt) - Date.parse(b.capturedAt));
+
+  if (!rows.length) return null;
+
+  const beforeKickoff = Number.isFinite(kickoffAt)
+    ? rows.filter((row) => Date.parse(row.capturedAt) <= kickoffAt)
+    : rows;
+  return beforeKickoff.at(-1) || rows.at(-1) || null;
+}
+
+function enrichRawMatchWithPredictionSnapshot(match, existingBySourceId, historyRows) {
+  if (sanitizeOdds(match.odds)) return match;
+
+  const sourceMatchId = normText(match?.sourceMatchId || String(match?.id || "").replace(/^sporttery_/, ""));
+  const existing = existingBySourceId.get(sourceMatchId);
+  const existingOdds = sanitizeOdds(existing?.odds);
+  if (existingOdds) {
+    return {
+      ...match,
+      odds: existingOdds,
+      oddsSource: existing.oddsSource || "sporttery:HAD",
+      oddsPoolCode: existing.oddsPoolCode || "HAD",
+      oddsSourceMethod: existing.oddsSourceMethod || "preserved",
+      oddsUpdatedAt: existing.oddsUpdatedAt,
+      oddsSourceUrl: existing.oddsSourceUrl,
+      handicapOdds: sanitizeOdds(existing.handicapOdds) || match.handicapOdds,
+      handicapLine: existing.handicapLine || match.handicapLine,
+      handicapOddsSource: existing.handicapOddsSource || match.handicapOddsSource,
+      handicapOddsPoolCode: existing.handicapOddsPoolCode || match.handicapOddsPoolCode,
+      handicapOddsSourceMethod: existing.handicapOddsSourceMethod || match.handicapOddsSourceMethod,
+      handicapOddsUpdatedAt: existing.handicapOddsUpdatedAt || match.handicapOddsUpdatedAt,
+      handicapOddsSourceUrl: existing.handicapOddsSourceUrl || match.handicapOddsSourceUrl,
+    };
+  }
+
+  const snapshot = latestOddsSnapshotForMatch(match, historyRows);
+  if (!snapshot) return match;
+
+  return {
+    ...match,
+    odds: {
+      odds1: Number(snapshot.odds1),
+      oddsX: Number(snapshot.oddsX),
+      odds2: Number(snapshot.odds2),
+    },
+    oddsSource: "sporttery:HAD",
+    oddsPoolCode: "HAD",
+    oddsSourceMethod: "snapshot",
+    oddsUpdatedAt: snapshot.oddsUpdatedAt || snapshot.capturedAt,
+    oddsSourceUrl: snapshot.oddsSourceUrl,
+  };
 }
 
 function oddsHistoryRow(match, capturedAt) {
@@ -1189,7 +1266,7 @@ function attachOddsTrends(matches, publicDir) {
 }
 
 function splitMatchesForOutput(matches) {
-  const current = matches.filter((match) => match.status !== "FINISHED" || hasOfficialDisplayOdds(match));
+  const current = matches.filter((match) => match.status !== "FINISHED");
   const history = matches.filter((match) => match.status === "FINISHED");
   return { current, history };
 }
@@ -1237,6 +1314,16 @@ function buildTeamIndex(matches) {
 
 async function sync() {
   const capturedAt = new Date().toISOString();
+  const publicDir = path.join(__dirname, "..", "public");
+  const dataDir = path.join(publicDir, "data");
+  fs.mkdirSync(publicDir, { recursive: true });
+  const existingMatches = loadExistingMatches();
+  const existingBySourceId = new Map(
+    existingMatches
+      .map((match) => [normText(match?.sourceMatchId || String(match?.id || "").replace(/^sporttery_/, "")), match])
+      .filter(([sourceMatchId]) => sourceMatchId)
+  );
+  const oddsHistoryBeforeSync = loadOddsHistory(publicDir);
   const allRawMatches = await fetchSportteryMatches();
   const rawMatches = allRawMatches.filter(inMatchWindow);
   const rawMatchesWithOdds = rawMatches.filter((match) => sanitizeOdds(match.odds));
@@ -1244,17 +1331,16 @@ async function sync() {
   const rawResultMatches = rawMatches.filter(isOfficialResultMatch);
   const rawMatchesForOutput = rawMatches.filter((match) => hasOfficialDisplayOdds(match) || isOfficialResultMatch(match));
   const usedFreshOdds = rawMatchesWithOdds.length > 0;
-  let output = rawMatchesForOutput.map(toAppMatch);
+  let output = rawMatchesForOutput
+    .map((match) => enrichRawMatchWithPredictionSnapshot(match, existingBySourceId, oddsHistoryBeforeSync.rows))
+    .map(toAppMatch);
 
   if (!output.length) {
-    output = loadExistingMatches().filter(isTrustedOddsMatch);
+    output = existingMatches.filter(isTrustedOddsMatch);
     if (!output.length) throw new Error("Sporttery returned no matches and no existing matches.json is available.");
     console.log(`Sporttery returned no trusted odds; kept existing trusted matches.json (${output.length}).`);
   }
 
-  const publicDir = path.join(__dirname, "..", "public");
-  const dataDir = path.join(publicDir, "data");
-  fs.mkdirSync(publicDir, { recursive: true });
   const oddsHistory = usedFreshOdds
     ? appendOddsHistory(publicDir, output, capturedAt)
     : { rows: loadOddsHistory(publicDir).rows.length, appended: 0, updated: 0, skipped: "no fresh official odds" };

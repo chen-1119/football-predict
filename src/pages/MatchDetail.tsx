@@ -105,6 +105,12 @@ const formatSquadValue = (value: string | undefined, language: Language) => {
   return `Squad value: ${rawValue}`;
 };
 
+const getResultLabel = (resultStatus: PredictionDetail['resultStatus'], language: Language) => {
+  if (resultStatus === 'WON') return language === 'zh' ? '命中' : 'Hit';
+  if (resultStatus === 'LOST') return language === 'zh' ? '未中' : 'Miss';
+  return language === 'zh' ? '待结算' : 'Pending';
+};
+
 const isFinishedWithScore = (match: Match): match is FinishedMatch => {
   return match.status === 'FINISHED' && Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway);
 };
@@ -341,6 +347,11 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   };
   const poolRows = getSportteryPoolRows(match, language);
   const hasPredictions = match.predictions.length > 0;
+  const settledPredictions = match.predictions.filter((prediction) => prediction.resultStatus !== 'PENDING');
+  const wonPredictions = settledPredictions.filter((prediction) => prediction.resultStatus === 'WON');
+  const bestReviewPrediction = match.predictions.find((prediction) => prediction.marketType === 'BEST')
+    || match.predictions.find((prediction) => prediction.marketType === '1X2');
+  const reviewHitRate = settledPredictions.length > 0 ? Math.round((wonPredictions.length / settledPredictions.length) * 100) : null;
   const homeValueText = formatSquadValue(homeTeam.value, language);
   const awayValueText = formatSquadValue(awayTeam.value, language);
   const homeHistory = buildTeamHistory(matches, homeTeam.id, match, language);
@@ -422,6 +433,11 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
           </div>
           
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+            {isFinished && (
+              <span className={`prediction-result-pill is-${pred.resultStatus.toLowerCase()}`}>
+                {getResultLabel(pred.resultStatus, language)}
+              </span>
+            )}
             <div style={{ textAlign: 'right' }}>
               <span style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))', display: 'block' }}>{valueLabel}</span>
               <span style={{ fontSize: '1.1rem', fontWeight: '800', color: 'hsl(var(--accent))' }}>{pred.odds.toFixed(2)}</span>
@@ -704,6 +720,43 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
         {/* Tab 1: AI 推荐 */}
         {activeTab === 'predictions' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            {isFinished && hasPredictions && (
+              <div className="card review-card">
+                <div className="review-head">
+                  <div>
+                    <span className="review-kicker">{language === 'zh' ? '赛后复盘' : 'Post-match Review'}</span>
+                    <h3>{language === 'zh' ? 'AI 推荐结果回看' : 'AI Prediction Review'}</h3>
+                    <p>
+                      {language === 'zh'
+                        ? `基于赛前官方 SP 快照生成的推荐已按最终比分 ${officialScoreText} 自动结算。`
+                        : `Tips generated from pre-match official SP snapshots have been settled against the final score ${officialScoreText}.`}
+                    </p>
+                  </div>
+                  <div className="review-score">
+                    <span>{language === 'zh' ? '本场命中率' : 'Hit rate'}</span>
+                    <strong>{reviewHitRate === null ? '--' : `${reviewHitRate}%`}</strong>
+                  </div>
+                </div>
+                <div className="review-grid">
+                  <div>
+                    <span>{language === 'zh' ? '已结算推荐' : 'Settled tips'}</span>
+                    <strong>{wonPredictions.length}/{settledPredictions.length}</strong>
+                  </div>
+                  <div>
+                    <span>{language === 'zh' ? '主推结果' : 'Main pick'}</span>
+                    <strong>{bestReviewPrediction ? getResultLabel(bestReviewPrediction.resultStatus, language) : '--'}</strong>
+                  </div>
+                  <div>
+                    <span>{language === 'zh' ? '赛前快照' : 'SP snapshots'}</span>
+                    <strong>{match.oddsTrend?.sampleSize || '--'}</strong>
+                  </div>
+                </div>
+                {match.oddsTrend && (
+                  <p className="review-trend">{match.oddsTrend.summary[language]}</p>
+                )}
+              </div>
+            )}
+
             <div className={`card signal-summary-card is-${matchSignal.category}`}>
               <div>
                 <span className={`signal-badge is-${matchSignal.category}`}>{matchSignal.label[language]}</span>

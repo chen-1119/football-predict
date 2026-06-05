@@ -1678,6 +1678,100 @@ button.status-pill:hover {
   font-weight: 900;
 }
 
+.review-card {
+  display: grid;
+  gap: 0.9rem;
+  border-color: hsl(var(--primary) / 0.24);
+  background: linear-gradient(135deg, hsl(var(--primary) / 0.07), hsl(var(--bg-card)));
+}
+
+.review-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: start;
+}
+
+.review-kicker {
+  color: hsl(var(--primary));
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.review-head h3 {
+  margin-top: 0.28rem;
+  color: hsl(var(--text-primary));
+  font-family: var(--font-title);
+  font-size: 1.08rem;
+}
+
+.review-head p,
+.review-trend {
+  color: hsl(var(--text-secondary));
+  font-size: 0.8rem;
+  line-height: 1.58;
+}
+
+.review-score {
+  display: grid;
+  justify-items: end;
+}
+
+.review-score span,
+.review-grid span {
+  color: hsl(var(--text-muted));
+  font-size: 0.7rem;
+  font-weight: 850;
+}
+
+.review-score strong {
+  color: hsl(var(--primary));
+  font-family: var(--font-title);
+  font-size: 2rem;
+}
+
+.review-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.review-grid div {
+  display: grid;
+  gap: 0.15rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--bg));
+  padding: 0.62rem;
+}
+
+.review-grid strong {
+  color: hsl(var(--text-primary));
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+
+.prediction-result-pill {
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  background: hsl(var(--bg));
+  color: hsl(var(--text-secondary));
+  font-size: 0.7rem;
+  font-weight: 900;
+  padding: 0.18rem 0.52rem;
+  white-space: nowrap;
+}
+
+.prediction-result-pill.is-won {
+  border-color: hsl(var(--success) / 0.4);
+  color: hsl(var(--success));
+}
+
+.prediction-result-pill.is-lost {
+  border-color: hsl(var(--danger) / 0.35);
+  color: hsl(var(--danger));
+}
+
 .sp-trend-box {
   display: grid;
   gap: 0.28rem;
@@ -2429,6 +2523,19 @@ button.status-pill:hover {
 
   .insight-score {
     justify-items: start;
+  }
+
+  .review-head {
+    grid-template-columns: 1fr;
+    gap: 0.65rem;
+  }
+
+  .review-score {
+    justify-items: start;
+  }
+
+  .review-grid {
+    grid-template-columns: 1fr;
   }
 
   .insight-metric-grid {
