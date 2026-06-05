@@ -449,8 +449,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
     {
       label: t('dataRefresh'),
       value: language === 'zh'
-        ? `后台约 ${dataSync.backendRefreshMinutes || 5} 分钟 / 页面 ${dataSync.refreshIntervalSeconds || 60} 秒`
-        : `Backend ~${dataSync.backendRefreshMinutes || 5}m / Page ${dataSync.refreshIntervalSeconds || 60}s`
+        ? `页面检查 ${formatSyncTime(dataSync.lastCheckedAt, language)} / 每 ${dataSync.refreshIntervalSeconds || 60} 秒 / 后台约 ${dataSync.backendRefreshMinutes || 5} 分钟`
+        : `Checked ${formatSyncTime(dataSync.lastCheckedAt, language)} / Every ${dataSync.refreshIntervalSeconds || 60}s / Backend ~${dataSync.backendRefreshMinutes || 5}m`
     }
   ];
 
@@ -719,8 +719,10 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
                                 <span className="team-name">{awayTeam.name[language]}</span>
                               </div>
                               <div className="match-signal-line">
-                                <span className={`signal-badge is-${signal.category}`}>{signal.label[language]}</span>
-                                {signal.riskCount > 0 && (
+                                <span className={`signal-badge ${isFinished ? 'is-finished' : `is-${signal.category}`}`}>
+                                  {isFinished ? t('finished') : signal.label[language]}
+                                </span>
+                                {!isFinished && signal.riskCount > 0 && (
                                   <span className="signal-risk-count">
                                     {language === 'zh' ? `风险 ${signal.riskCount}` : `${signal.riskCount} risks`}
                                   </span>
