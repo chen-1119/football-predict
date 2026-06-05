@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   ArrowRight,
@@ -76,6 +76,15 @@ const formatSyncTime = (isoTime: string | undefined, language: 'zh' | 'en') => {
   });
 };
 
+const getNextCheckSeconds = (lastCheckedAt: string | undefined, refreshIntervalSeconds: number | undefined, nowMs: number) => {
+  if (!lastCheckedAt) return null;
+  const lastCheckedMs = Date.parse(lastCheckedAt);
+  if (!Number.isFinite(lastCheckedMs)) return null;
+  const intervalSeconds = refreshIntervalSeconds || 60;
+  const intervalMs = intervalSeconds * 1000;
+  return Math.min(intervalSeconds, Math.max(0, Math.ceil((lastCheckedMs + intervalMs - nowMs) / 1000)));
+};
+
 const hasOfficialScore = (match: Match) => Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway);
 
 const minutesSinceKickoff = (match: Match) => {
@@ -86,6 +95,7 @@ const minutesSinceKickoff = (match: Match) => {
 
 export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch }) => {
   const { language, isPremium, togglePremium, matches, dataSync } = useApp();
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
   const yesterdayStr = getDateStringOffset(-1);
   const todayStr = getDateStringOffset(0);
@@ -97,6 +107,14 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
   const [signalFilter, setSignalFilter] = useState<SignalFilter>('all');
   const [sortBy, setSortBy] = useState<SortBy>('time');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, []);
 
   const translations = {
     premiumNotice: {
@@ -141,6 +159,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
     dataFallback: { zh: '本地兜底', en: 'Fallback' },
     dataUpdated: { zh: '更新', en: 'Updated' },
     dataRefresh: { zh: '刷新', en: 'Refresh' },
+    dataNextCheck: { zh: '下次检查', en: 'Next check' },
     dataCurrentLoading: { zh: '正在加载中国竞彩网赛程', en: 'Loading Sporttery schedule' },
     dataHistoryLoading: { zh: '历史结果后台补齐中', en: 'History loading in background' },
     dataHistoryReady: { zh: '当前赛程与历史库已就绪', en: 'Current schedule and history are ready' },
@@ -451,6 +470,15 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
       value: language === 'zh'
         ? `页面检查 ${formatSyncTime(dataSync.lastCheckedAt, language)} / 每 ${dataSync.refreshIntervalSeconds || 60} 秒 / 后台约 ${dataSync.backendRefreshMinutes || 5} 分钟`
         : `Checked ${formatSyncTime(dataSync.lastCheckedAt, language)} / Every ${dataSync.refreshIntervalSeconds || 60}s / Backend ~${dataSync.backendRefreshMinutes || 5}m`
+    },
+    {
+      label: t('dataNextCheck'),
+      value: (() => {
+        const seconds = getNextCheckSeconds(dataSync.lastCheckedAt, dataSync.refreshIntervalSeconds, nowMs);
+        if (seconds === null) return '--';
+        if (seconds === 0) return language === 'zh' ? '检查中' : 'Checking';
+        return `${seconds}s`;
+      })()
     }
   ];
 
