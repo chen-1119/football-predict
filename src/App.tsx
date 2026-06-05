@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { AppProvider } from './context/AppContext';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
+import { ContactDock } from './components/ContactDock';
 import { GlossaryModal } from './components/GlossaryModal';
 
 // 导入页面
@@ -90,6 +91,8 @@ function AppContent() {
 
       {/* 底部声明 */}
       <Footer />
+
+      <ContactDock />
 
       {/* 全局弹窗 */}
       <GlossaryModal 
