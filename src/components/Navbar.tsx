@@ -2,6 +2,7 @@ import React from 'react';
 import {
   Globe,
   HelpCircle,
+  Flag,
   ListChecks,
   LogOut,
   ShieldCheck,
@@ -18,15 +19,16 @@ interface NavbarProps {
   openGlossary: () => void;
 }
 
-type NavTab = 'best' | 'predictions' | 'generator' | 'hitwin';
+type NavTab = 'best' | 'predictions' | 'worldcup' | 'generator' | 'hitwin';
 
 const navItems: Array<{
   key: NavTab;
-  labelKey: 'bestTips' | 'predictions' | 'generator' | 'hitAndWin';
+  labelKey: 'bestTips' | 'predictions' | 'worldCup' | 'generator' | 'hitAndWin';
   icon: React.ComponentType<{ size?: number }>;
 }> = [
   { key: 'best', labelKey: 'bestTips', icon: Trophy },
   { key: 'predictions', labelKey: 'predictions', icon: ListChecks },
+  { key: 'worldcup', labelKey: 'worldCup', icon: Flag },
   { key: 'generator', labelKey: 'generator', icon: Ticket },
   { key: 'hitwin', labelKey: 'hitAndWin', icon: Target }
 ];
@@ -35,6 +37,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
   const { language, setLanguage, currentUser, isPremium, togglePremium, logout } = useApp();
 
   const translations = {
+    worldCup: { zh: '世界杯', en: 'World Cup' },
     brand: { zh: 'AI 足球预测', en: 'AI Football' },
     subtitle: { zh: '竞彩数据看板', en: 'Prediction Desk' },
     bestTips: { zh: '高可信精选', en: 'Best Tips' },

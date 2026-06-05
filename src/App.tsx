@@ -12,6 +12,7 @@ import { BetSlipGenerator } from './pages/BetSlipGenerator';
 import { HitAndWin } from './pages/HitAndWin';
 import { Auth } from './pages/Auth';
 import { MatchDetail } from './pages/MatchDetail';
+import { WorldCup } from './pages/WorldCup';
 
 function AppContent() {
   const [currentTab, setCurrentTab] = useState<string>('predictions');
@@ -24,6 +25,16 @@ function AppContent() {
       case 'predictions':
         return (
           <PredictionsList 
+            onOpenWorldCup={() => setCurrentTab('worldcup')}
+            onSelectMatch={(matchId) => {
+              setActiveMatchId(matchId);
+              setCurrentTab('detail');
+            }}
+          />
+        );
+      case 'worldcup':
+        return (
+          <WorldCup
             onSelectMatch={(matchId) => {
               setActiveMatchId(matchId);
               setCurrentTab('detail');
@@ -66,9 +77,9 @@ function AppContent() {
             />
           );
         }
-        return <PredictionsList onSelectMatch={(id) => { setActiveMatchId(id); setCurrentTab('detail'); }} />;
+        return <PredictionsList onOpenWorldCup={() => setCurrentTab('worldcup')} onSelectMatch={(id) => { setActiveMatchId(id); setCurrentTab('detail'); }} />;
       default:
-        return <PredictionsList onSelectMatch={(id) => { setActiveMatchId(id); setCurrentTab('detail'); }} />;
+        return <PredictionsList onOpenWorldCup={() => setCurrentTab('worldcup')} onSelectMatch={(id) => { setActiveMatchId(id); setCurrentTab('detail'); }} />;
     }
   };
 

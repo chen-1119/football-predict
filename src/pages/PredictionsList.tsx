@@ -20,9 +20,11 @@ import { getMarketLabel, getPredictionTipDisplay, getPredictionValueLabel, getSp
 import { getCountryById, getLeagueById, getTeamById } from '../services/entities';
 import { getMatchSignal, type MatchSignalCategory } from '../services/matchSignal';
 import { TeamBadge } from '../components/TeamBadge';
+import { WorldCupSpotlight } from '../components/WorldCupSpotlight';
 
 interface PredictionsListProps {
   onSelectMatch: (matchId: string) => void;
+  onOpenWorldCup: () => void;
 }
 
 type SortBy = 'time' | 'trust' | 'odds';
@@ -93,7 +95,7 @@ const minutesSinceKickoff = (match: Match) => {
   return Math.floor((Date.now() - kickoffAt) / 60000);
 };
 
-export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch }) => {
+export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch, onOpenWorldCup }) => {
   const { language, isPremium, togglePremium, matches, dataSync } = useApp();
   const [nowMs, setNowMs] = useState(() => Date.now());
 
@@ -507,6 +509,13 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
           </button>
         </section>
       )}
+
+      <WorldCupSpotlight
+        matches={matches}
+        language={language}
+        onOpenWorldCup={onOpenWorldCup}
+        onSelectMatch={onSelectMatch}
+      />
 
       <section className="metrics-grid" aria-label="Dashboard summary">
         {metrics.map((metric) => {
