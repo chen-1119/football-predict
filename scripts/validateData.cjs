@@ -12,7 +12,9 @@ const rootMatches = fs.existsSync(matchesPath) ? readJson(matchesPath) : [];
 const currentMatches = fs.existsSync(currentMatchesPath) ? readJson(currentMatchesPath) : rootMatches;
 const historyMatches = fs.existsSync(historyMatchesPath) ? readJson(historyMatchesPath) : [];
 const matches = Array.from(new Map([...currentMatches, ...historyMatches].map((match) => [match.id, match])).values());
+const currentMatchIds = new Set(currentMatches.map((match) => match.id));
 const hexColor = /^#[0-9a-fA-F]{6}$/;
+const jLeagueText = /(?:\u65e5\u804c|\u65e5\u8054|\u65e5\u672c)/;
 const staleText = /胜\(3\)|平\(1\)|负\(0\)|当前 1X2|大于 2\.5|小于 2\.5|Both Teams to Score \(GG\)|稳胆:/;
 
 function expectedSportterySp(match, tipCode) {
@@ -91,6 +93,17 @@ for (const match of matches) {
 
   if (!hexColor.test(match.homeTeamColor || "") || !hexColor.test(match.awayTeamColor || "")) {
     errors.push(`${match.id}: invalid team color ${match.homeTeamColor}/${match.awayTeamColor}`);
+  }
+
+  if (currentMatchIds.has(match.id) && jLeagueText.test(String(match.leagueName || ""))) {
+    for (const [teamName, logo, logoType] of [
+      [match.homeTeamName, match.homeTeamLogo, match.homeTeamLogoType],
+      [match.awayTeamName, match.awayTeamLogo, match.awayTeamLogoType],
+    ]) {
+      if (logoType !== "crest" || !/^(?:https?:\/\/|\/)/.test(String(logo || ""))) {
+        errors.push(`${match.id}: J-League club logo must be a crest image (${teamName || "unknown team"}).`);
+      }
+    }
   }
 
   const sportteryPick = match.predictions?.find((prediction) => prediction.marketType === "1X2");
