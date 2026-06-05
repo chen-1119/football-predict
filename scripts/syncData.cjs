@@ -274,7 +274,11 @@ function parseKickoff(matchDate, matchTime) {
   const date = normText(matchDate);
   const time = normText(matchTime);
   if (!date) return new Date().toISOString();
-  const hhmm = /^\d{2}:\d{2}$/.test(time) ? `${time}:00` : "00:00:00";
+  const hhmm = /^\d{2}:\d{2}$/.test(time)
+    ? `${time}:00`
+    : /^\d{2}:\d{2}:\d{2}$/.test(time)
+      ? time
+      : "00:00:00";
   return `${date}T${hhmm}+08:00`;
 }
 
@@ -293,14 +297,22 @@ function inMatchWindow(match) {
   return t >= start && t < end;
 }
 
-function statusFromSporttery(matchStatus, sellStatus, statusName = "") {
-  const raw = String(sellStatus || matchStatus || statusName || "").trim();
-  const lower = raw.toLowerCase();
-  if (["playing", "live", "inplay", "firsthalf", "secondhalf"].includes(lower)) return "LIVE";
-  if (["finished", "result", "ended", "completed"].includes(lower)) return "FINISHED";
-  if (["4", "5", "6", "7", "8", "9"].includes(raw)) return "LIVE";
-  if (["10", "11", "12", "13"].includes(raw)) return "FINISHED";
-  if (String(statusName || "").includes("完成")) return "FINISHED";
+function statusFromSporttery(matchStatus, sellStatus, statusName = "", kickoffTime = "") {
+  const matchRaw = String(matchStatus || "").trim();
+  const sellRaw = String(sellStatus || "").trim();
+  const nameRaw = String(statusName || "").trim();
+  const lower = `${matchRaw} ${sellRaw} ${nameRaw}`.toLowerCase();
+  const kickoffAt = Date.parse(kickoffTime);
+  const kickoffStarted = Number.isFinite(kickoffAt) && Date.now() >= kickoffAt;
+
+  if (["finished", "result", "ended", "completed"].some((status) => lower.includes(status))) return "FINISHED";
+  if (["10", "11", "12", "13"].includes(matchRaw)) return "FINISHED";
+  if (nameRaw.includes("完成") || nameRaw.includes("完场") || nameRaw.includes("赛果")) return "FINISHED";
+
+  if (["playing", "live", "inplay", "firsthalf", "secondhalf"].some((status) => lower.includes(status))) return "LIVE";
+  if (["4", "5", "6", "7", "8", "9"].includes(matchRaw)) return "LIVE";
+  if (matchRaw === "3" || sellRaw === "3" || nameRaw.includes("暂停销售")) return kickoffStarted ? "LIVE" : "SCHEDULED";
+  if (kickoffStarted && ["selling", "sell"].some((status) => lower.includes(status))) return "LIVE";
   return "SCHEDULED";
 }
 
@@ -529,8 +541,8 @@ function mapSportteryRow(row, sourceMethod, sourceUrl) {
   const awayTeam = normText(row.awayTeamAllName || row.awayTeamAbbName, "客队");
   const leagueName = normText(row.leagueAllName || row.leagueAbbName, "足球赛事");
   const matchId = String(row.matchId || `${row.matchDate}-${homeTeam}-${awayTeam}`);
-  const status = statusFromSporttery(row.matchStatus, row.sellStatus, row.matchStatusName);
   const kickoffTime = parseKickoff(row.matchDate, row.matchTime);
+  const status = statusFromSporttery(row.matchStatus, row.sellStatus, row.matchStatusName, kickoffTime);
   const businessDate = normText(row.businessDate || row.matchNumDate || row.matchDate);
   const oddsInfo = sportteryOddsInfo(row, sourceUrl, sourceMethod);
   return {

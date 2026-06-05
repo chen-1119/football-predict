@@ -31,7 +31,7 @@ type SignalFilter = 'all' | MatchSignalCategory;
 const SORT_OPTIONS: SortBy[] = ['time', 'trust', 'odds'];
 const SIGNAL_FILTERS: SignalFilter[] = ['all', 'steady', 'watch', 'avoid', 'unavailable'];
 
-const getMatchDay = (match: Match): string => match.kickoffDate || match.kickoffTime.slice(0, 10) || match.matchDate || match.businessDate || '';
+const getMatchDay = (match: Match): string => match.matchDate || match.businessDate || match.kickoffDate || match.kickoffTime.slice(0, 10) || '';
 
 const getBestPrediction = (match: Match) => match.predictions.find((p) => p.marketType === 'BEST');
 
@@ -154,6 +154,14 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
   const effectiveSelectedDate = useMemo(() => {
     const selectedDateHasMatches = matches.some((match) => getMatchDay(match) === selectedDate);
     if (selectedDateHasMatches || selectedDate !== todayStr) return selectedDate;
+
+    const activeOfficialDate = matches
+      .filter((match) => match.status !== 'FINISHED')
+      .map(getMatchDay)
+      .filter(Boolean)
+      .sort()
+      .at(-1);
+    if (activeOfficialDate) return activeOfficialDate;
 
     return matches
       .map(getMatchDay)
