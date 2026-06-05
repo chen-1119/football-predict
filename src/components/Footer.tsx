@@ -1,6 +1,6 @@
 import React from 'react';
 import { useApp } from '../context/AppContextCore';
-import { ExternalLink, ShieldAlert, Smartphone } from 'lucide-react';
+import { Crown, Database, ExternalLink, Handshake, MessageCircle, ScanLine, ShieldAlert } from 'lucide-react';
 
 export const Footer: React.FC = () => {
   const { language } = useApp();
@@ -21,10 +21,12 @@ export const Footer: React.FC = () => {
       zh: ['国际赛', '英超', '西甲', '德甲', '意甲', '法甲'],
       en: ['International', 'EPL', 'La Liga', 'Bundesliga', 'Serie A', 'Ligue 1']
     },
-    contact: { zh: '联系咨询', en: 'Contact' },
-    contactName: { zh: '微信：何先生', en: 'WeChat: Mr. He' },
-    contactDesc: { zh: '赛事数据、合作、会员咨询', en: 'Data, partnership, and membership inquiries' },
-    scan: { zh: '扫码添加微信', en: 'Scan with WeChat' },
+    contact: { zh: '联系方式', en: 'Contact' },
+    contactKicker: { zh: '微信咨询', en: 'WeChat' },
+    contactName: { zh: '何先生', en: 'Mr. He' },
+    contactDesc: { zh: '赛事数据、合作与会员服务', en: 'Data, partnership, and membership service' },
+    scan: { zh: '微信扫一扫添加', en: 'Scan with WeChat' },
+    contactNote: { zh: '添加时备注：足球预测', en: 'Add note: Football prediction' },
     responsible: { zh: '18+ 理性提示', en: '18+ Notice' },
     warning: {
       zh: '本平台仅提供数据分析与预测参考，不保证赛果。请保持娱乐心态，禁止未成年人参与，切勿盲目跟单。',
@@ -39,6 +41,17 @@ export const Footer: React.FC = () => {
   const t = (key: keyof typeof translations) => translations[key][language];
   const dataItems = t('dataItems') as string[];
   const leagueItems = t('leagueItems') as string[];
+  const contactItems = language === 'zh'
+    ? [
+      { label: '赛事数据', icon: Database },
+      { label: '合作咨询', icon: Handshake },
+      { label: '会员服务', icon: Crown }
+    ]
+    : [
+      { label: 'Match data', icon: Database },
+      { label: 'Partnership', icon: Handshake },
+      { label: 'Membership', icon: Crown }
+    ];
 
   return (
     <footer className="site-footer">
@@ -72,15 +85,29 @@ export const Footer: React.FC = () => {
 
           <section className="footer-contact">
             <div className="footer-section-title">
-              <Smartphone size={15} />
+              <MessageCircle size={15} />
               <h3>{t('contact') as string}</h3>
             </div>
             <div className="footer-contact-card">
-              <img src="./contact-qr.jpg" alt={t('contactName') as string} loading="lazy" />
-              <div>
+              <div className="footer-qr-frame">
+                <img src="./contact-qr-code.jpg" alt={t('scan') as string} loading="lazy" />
+              </div>
+              <div className="footer-contact-copy">
+                <span className="footer-contact-kicker">
+                  <ScanLine size={13} />
+                  {t('contactKicker') as string}
+                </span>
                 <strong>{t('contactName') as string}</strong>
-                <span>{t('contactDesc') as string}</span>
-                <small>{t('scan') as string}</small>
+                <p>{t('contactDesc') as string}</p>
+                <div className="footer-contact-tags">
+                  {contactItems.map(({ label, icon: Icon }) => (
+                    <span key={label}>
+                      <Icon size={12} />
+                      {label}
+                    </span>
+                  ))}
+                </div>
+                <small>{t('contactNote') as string}</small>
               </div>
             </div>
           </section>

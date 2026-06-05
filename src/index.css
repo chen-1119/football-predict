@@ -2240,43 +2240,100 @@ button.status-pill:hover {
 
 .footer-contact-card {
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
-  gap: 0.75rem;
+  grid-template-columns: 108px minmax(0, 1fr);
+  gap: 0.9rem;
   align-items: center;
   border: 1px solid hsl(var(--border));
-  border-radius: 10px;
-  background: hsl(var(--bg));
-  padding: 0.55rem;
+  border-radius: var(--radius);
+  background:
+    linear-gradient(135deg, hsl(var(--primary) / 0.08), transparent 46%),
+    hsl(var(--bg));
+  padding: 0.75rem;
 }
 
-.footer-contact-card img {
-  width: 72px;
-  height: 72px;
+.footer-qr-frame {
+  display: grid;
+  width: 108px;
+  height: 108px;
+  place-items: center;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: #fff;
+  padding: 0.36rem;
+}
+
+.footer-qr-frame img {
+  width: 92px;
+  height: 92px;
   object-fit: cover;
-  border-radius: 7px;
+  border-radius: 6px;
   background: #fff;
 }
 
-.footer-contact-card div {
+.footer-contact-copy {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 0.2rem;
+  justify-content: center;
+  gap: 0.28rem;
 }
 
-.footer-contact-card strong {
+.footer-contact-kicker {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.28rem;
+  border: 1px solid hsl(var(--primary) / 0.26);
+  border-radius: 999px;
+  background: hsl(var(--primary) / 0.09);
+  color: hsl(var(--primary));
+  font-size: 0.68rem;
+  font-weight: 900;
+  padding: 0.16rem 0.42rem;
+}
+
+.footer-contact-copy strong {
   overflow: hidden;
   color: hsl(var(--text-primary));
-  font-size: 0.84rem;
-  font-weight: 900;
+  font-family: var(--font-title);
+  font-size: 1.05rem;
+  font-weight: 950;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.footer-contact-card span,
-.footer-contact-card small {
+.footer-contact-copy p {
+  color: hsl(var(--text-secondary));
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.footer-contact-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.32rem;
+  margin-top: 0.1rem;
+}
+
+.footer-contact-tags span {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  gap: 0.24rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  background: hsl(var(--bg-card));
+  color: hsl(var(--text-secondary));
+  font-size: 0.67rem;
+  font-weight: 820;
+  padding: 0.18rem 0.42rem;
+  white-space: nowrap;
+}
+
+.footer-contact-copy small {
   color: hsl(var(--text-muted));
-  font-size: 0.72rem;
+  font-size: 0.7rem;
+  font-weight: 750;
   line-height: 1.36;
 }
 
@@ -2748,12 +2805,34 @@ button.status-pill:hover {
   }
 
   .footer-contact-card {
-    grid-template-columns: 64px minmax(0, 1fr);
+    grid-template-columns: 86px minmax(0, 1fr);
+    gap: 0.68rem;
+    padding: 0.65rem;
   }
 
-  .footer-contact-card img {
-    width: 64px;
-    height: 64px;
+  .footer-qr-frame {
+    width: 86px;
+    height: 86px;
+    padding: 0.28rem;
+  }
+
+  .footer-qr-frame img {
+    width: 74px;
+    height: 74px;
+  }
+
+  .footer-contact-copy strong {
+    font-size: 0.98rem;
+  }
+
+  .footer-contact-tags {
+    gap: 0.26rem;
+  }
+
+  .footer-contact-tags span {
+    min-height: 22px;
+    font-size: 0.64rem;
+    padding: 0.14rem 0.34rem;
   }
 
   .footer-notice {
