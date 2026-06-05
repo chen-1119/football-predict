@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { Match } from '../services/mockData';
 import { matchesPool, registerTeam, registerLeague, registerCountry } from '../services/mockData';
 import { AppContext } from './AppContextCore';
@@ -160,6 +160,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [dailySlipCount, setDailySlipCount] = useState<number>(readStoredDailySlipCount);
   const [hitAndWinSubmission, setHitAndWinSubmission] = useState<HitAndWinSubmission | null>(readStoredHitAndWinSubmission);
   const [matches, setMatches] = useState<Match[]>([]);
+  const lastMetaRef = useRef<{ sourceUpdatedAt?: string; finishedCount?: number }>({});
   const [dataSync, setDataSync] = useState<DataSyncState>({
     currentLoaded: false,
     historyLoaded: false,
@@ -197,14 +198,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (cancelled) return 0;
 
       try {
-        if (isSyncedMatchArray(data) && data.length > 0) {
+        if (isSyncedMatchArray(data)) {
+          if (data.length === 0) {
+            if (mode === 'current') {
+              setMatches((current) => current.filter((match) => match.status === 'FINISHED'));
+            }
+            return 0;
+          }
+
           registerSyncedMatches(data);
           setMatches((current) => {
             if (mode === 'current') {
               const nextIds = new Set(data.map((match) => match.id));
               const retained = current.filter((match) => {
                 if (nextIds.has(match.id)) return false;
-                return match.status === 'FINISHED' || match.status === 'LIVE';
+                return match.status === 'FINISHED';
               });
               return mergeMatches(retained, data);
             }
@@ -234,6 +242,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           fetchSyncMeta()
         ]);
         const currentCount = applyData(data, 'current');
+        const metaState = metaToState(meta, checkedAt);
+        const finishedCount = meta?.byStatus?.FINISHED;
+        const shouldRefreshHistory = !isInitial && Boolean(metaState.sourceUpdatedAt) && (
+          lastMetaRef.current.sourceUpdatedAt !== metaState.sourceUpdatedAt ||
+          (typeof finishedCount === 'number' && lastMetaRef.current.finishedCount !== finishedCount)
+        );
+        lastMetaRef.current = {
+          sourceUpdatedAt: metaState.sourceUpdatedAt,
+          finishedCount
+        };
         if (cancelled) return;
         setDataSync((current) => ({
           ...current,
@@ -242,8 +260,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           currentCount,
           totalCount: current.historyCount + currentCount,
           error: undefined,
-          ...metaToState(meta, checkedAt)
+          ...metaState
         }));
+        if (shouldRefreshHistory) {
+          window.setTimeout(() => {
+            void loadHistory();
+          }, 250);
+        }
       } catch (error: unknown) {
         if (cancelled) return;
         console.error(error);

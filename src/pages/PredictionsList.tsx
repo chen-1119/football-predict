@@ -130,6 +130,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
     dataCurrent: { zh: '当前赛程', en: 'Current' },
     dataHistory: { zh: '历史库', en: 'History' },
     dataTotal: { zh: '总数据', en: 'Total' },
+    dataStatus: { zh: '状态', en: 'Status' },
     dataLoading: { zh: '加载中', en: 'Loading' },
     dataSyncing: { zh: '同步中', en: 'Syncing' },
     dataReady: { zh: '已加载', en: 'Ready' },
@@ -430,6 +431,12 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
     {
       label: t('dataTotal'),
       value: `${matches.length || dataSync.totalCount} ${t('matchUnit')}`
+    },
+    {
+      label: t('dataStatus'),
+      value: language === 'zh'
+        ? `完 ${dataSync.byStatus?.FINISHED || 0} / 赛 ${dataSync.byStatus?.LIVE || 0} / 待 ${dataSync.byStatus?.SCHEDULED || 0}`
+        : `F ${dataSync.byStatus?.FINISHED || 0} / L ${dataSync.byStatus?.LIVE || 0} / S ${dataSync.byStatus?.SCHEDULED || 0}`
     },
     {
       label: t('dataUpdated'),

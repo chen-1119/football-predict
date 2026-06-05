@@ -5,9 +5,14 @@ on:
     - cron: '*/5 * * * *' # 每 5 分钟自动同步一次；GitHub 可能会有排队延迟
   workflow_dispatch: # 支持在 GitHub 控制台手动点击触发
 
+concurrency:
+  group: football-data-sync
+  cancel-in-progress: true
+
 jobs:
   sync-data:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write # 赋予 actions 写入与推送代码的权限
     steps:
