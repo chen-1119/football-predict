@@ -24,6 +24,29 @@ function expectedSportterySp(match, tipCode) {
   return undefined;
 }
 
+function expectedPredictionResult(match, prediction) {
+  if (match.status !== "FINISHED") return "PENDING";
+  if (!Number.isFinite(match.scoreHome) || !Number.isFinite(match.scoreAway)) return "PENDING";
+  const total = match.scoreHome + match.scoreAway;
+  const actual1x2 = match.scoreHome > match.scoreAway ? "1" : match.scoreHome < match.scoreAway ? "2" : "X";
+  const code = prediction.tipCode;
+
+  if ((prediction.marketType === "1X2" || prediction.marketType === "BEST") && ["1", "X", "2"].includes(code)) {
+    return code === actual1x2 ? "WON" : "LOST";
+  }
+  if (prediction.marketType === "GOALS") {
+    if (/^[0-6]$/.test(code)) return total === Number(code) ? "WON" : "LOST";
+    if (code === "7+") return total >= 7 ? "WON" : "LOST";
+    if (code === "O2.5") return total > 2.5 ? "WON" : "LOST";
+    if (code === "U2.5") return total < 2.5 ? "WON" : "LOST";
+  }
+  if (prediction.marketType === "GG_NG") {
+    if (code === "GG") return match.scoreHome > 0 && match.scoreAway > 0 ? "WON" : "LOST";
+    if (code === "NG") return match.scoreHome === 0 || match.scoreAway === 0 ? "WON" : "LOST";
+  }
+  return prediction.resultStatus;
+}
+
 const errors = [];
 let oddsHistoryRows = [];
 
@@ -116,6 +139,12 @@ for (const match of matches) {
   for (const prediction of match.predictions || []) {
     if (staleText.test(JSON.stringify(prediction))) {
       errors.push(`${match.id}: stale betting copy in ${prediction.marketType}`);
+    }
+    if (match.status === "FINISHED") {
+      const expectedResult = expectedPredictionResult(match, prediction);
+      if (prediction.resultStatus !== expectedResult) {
+        errors.push(`${match.id}: ${prediction.marketType} resultStatus ${prediction.resultStatus} should be ${expectedResult}`);
+      }
     }
   }
 }

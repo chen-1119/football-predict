@@ -153,6 +153,19 @@ const formatCoverageDate = (date: string, language: Language) => {
   });
 };
 
+const formatPolicyTimestamp = (value: string | undefined, language: Language) => {
+  if (!value || Number.isNaN(Date.parse(value))) return '--';
+
+  return new Date(value).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'Asia/Shanghai'
+  });
+};
+
 const getHistoryCoverageLabel = (allMatches: Match[], language: Language) => {
   const dates = allMatches
     .filter(isFinishedWithScore)
@@ -365,6 +378,11 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     h2hSampleSize: headToHead.sampleSize,
     coverageLabel: historyCoverageLabel
   });
+  const predictionMeta = match.predictionMeta;
+  const predictionMetaTime = predictionMeta?.lockedAt || predictionMeta?.updatedAt || predictionMeta?.generatedAt;
+  const predictionMetaLabel = predictionMeta?.lockedAt
+    ? (language === 'zh' ? '赛前预测已锁定' : 'Pre-match pick locked')
+    : (language === 'zh' ? '赛前预测监控中' : 'Pre-match pick monitoring');
   const projectedScoreText = hasScore
     ? officialScoreText
     : `${match.projectedScoreHome ?? Math.round(match.stats?.xG.home ?? 1)} - ${match.projectedScoreAway ?? Math.round(match.stats?.xG.away ?? 1)}`;
@@ -775,6 +793,27 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
               )}
             </div>
 
+            {predictionMeta && (
+              <div className="prediction-policy-note">
+                <div>
+                  <strong>{predictionMetaLabel}</strong>
+                  <span>
+                    {language === 'zh'
+                      ? `时间：${formatPolicyTimestamp(predictionMetaTime, language)}`
+                      : `Time: ${formatPolicyTimestamp(predictionMetaTime, language)}`}
+                  </span>
+                </div>
+                <p>
+                  {predictionMeta.dataPolicy?.[language] || (language === 'zh'
+                    ? '开赛前仅在官方 SP/盘口信号发生实质变化时更新；开赛后只结算结果，不回写旧推荐。'
+                    : 'Before kickoff, updates only happen on material official SP/market changes; after kickoff, only settlement is added.')}
+                  {predictionMeta.updateReason && (
+                    <em>{predictionMeta.updateReason[language]}</em>
+                  )}
+                </p>
+              </div>
+            )}
+
             <div className={`card insight-card is-${matchInsight.tone}`}>
               <div className="insight-head">
                 <div>
@@ -820,6 +859,31 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                     ))}
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <div className="card professional-framework-card">
+              <div className="professional-framework-head">
+                <div>
+                  <span className="review-kicker">
+                    {language === 'zh' ? '专业提示词 v1' : 'Professional prompt v1'}
+                  </span>
+                  <h3>{language === 'zh' ? '12项赛前分析框架' : '12-Point Pre-Match Framework'}</h3>
+                  <p>
+                    {language === 'zh'
+                      ? '每项只使用已接入的官方赛程、SP、让球、快照与历史赛果；缺失数据会直接标记不足。'
+                      : 'Each point uses connected official schedule, SP, handicap, snapshots, and results only. Missing data is marked explicitly.'}
+                  </p>
+                </div>
+                <span>{predictionMeta?.promptVersion || 'professional-football-analyst-v1'}</span>
+              </div>
+              <div className="professional-framework-grid">
+                {matchInsight.framework.map((point) => (
+                  <div key={point.title.zh} className={`professional-framework-item is-${point.tone}`}>
+                    <strong>{point.title[language]}</strong>
+                    <p>{point.body[language]}</p>
+                  </div>
+                ))}
               </div>
             </div>
             

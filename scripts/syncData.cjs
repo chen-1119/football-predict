@@ -12,6 +12,8 @@ const WINDOW_FORWARD_DAYS = Math.max(1, Number(process.env.MATCH_WINDOW_FORWARD_
 const ODDS_HISTORY_RETENTION_DAYS = Math.max(1, Number(process.env.ODDS_HISTORY_RETENTION_DAYS || 365));
 const ODDS_HISTORY_BUCKET_MINUTES = Math.max(1, Number(process.env.ODDS_HISTORY_BUCKET_MINUTES || 5));
 const PAGE_POLL_SECONDS = Math.max(15, Number(process.env.PAGE_POLL_SECONDS || 60));
+const ANALYST_PROMPT_VERSION = "professional-football-analyst-v1";
+const PREDICTION_POLICY_VERSION = "pre-match-lock-v1";
 const METHODS = (process.env.SPORTTERY_METHODS || "concern,live,result,all")
   .split(",")
   .map((x) => x.trim())
@@ -434,11 +436,14 @@ function projectedScore(homeLambda, awayLambda) {
   return best;
 }
 
-function resultStatus(match, expected) {
+function resultStatus(match, expected, marketType = "") {
   if (match.status !== "FINISHED") return "PENDING";
   if (!Number.isFinite(match.scoreHome) || !Number.isFinite(match.scoreAway)) return "PENDING";
   const total = match.scoreHome + match.scoreAway;
   const actual1x2 = match.scoreHome > match.scoreAway ? "1" : match.scoreHome < match.scoreAway ? "2" : "X";
+  if ((marketType === "1X2" || marketType === "BEST" || marketType === "") && ["1", "X", "2"].includes(expected)) {
+    return expected === actual1x2 ? "WON" : "LOST";
+  }
   if (/^[0-6]$/.test(expected)) return total === Number(expected) ? "WON" : "LOST";
   if (expected === "7+") return total >= 7 ? "WON" : "LOST";
   if (expected === "O2.5") return total > 2.5 ? "WON" : "LOST";
@@ -729,6 +734,74 @@ function dedupeMatches(matches) {
   return Array.from(map.values()).sort((a, b) => new Date(a.kickoffTime) - new Date(b.kickoffTime));
 }
 
+function pickByCode(picks, code) {
+  return picks.find((pick) => pick[0] === code);
+}
+
+function hhadSupportForPick(hhadProbabilities, code) {
+  if (!hhadProbabilities) return null;
+  if (code === "1") return hhadProbabilities.home;
+  if (code === "X") return hhadProbabilities.draw;
+  if (code === "2") return hhadProbabilities.away;
+  return null;
+}
+
+function selectAnalystOneXTwo(match, picks, probabilities, hhadProbabilities) {
+  const marketLeader = picks[0];
+  const runnerUp = picks[1];
+  const drawPick = pickByCode(picks, "X");
+  const homePick = pickByCode(picks, "1");
+  const awayPick = pickByCode(picks, "2");
+  const leaderGap = marketLeader[1] - runnerUp[1];
+  const leaderHandicapSupport = hhadSupportForPick(hhadProbabilities, marketLeader[0]);
+  const weakHandicapSupport = marketLeader[0] !== "X" && leaderHandicapSupport !== null && leaderHandicapSupport < 0.42;
+  const drawIsLive = drawPick && drawPick[1] >= 0.27 && marketLeader[1] <= 0.46 && (marketLeader[1] - drawPick[1]) <= 0.16;
+  const underdogPick = [homePick, awayPick]
+    .filter(Boolean)
+    .filter((pick) => pick[0] !== marketLeader[0])
+    .sort((a, b) => b[1] - a[1])[0];
+  const underdogHandicapSupport = underdogPick ? hhadSupportForPick(hhadProbabilities, underdogPick[0]) : null;
+  const underdogIsLive = underdogPick
+    && marketLeader[1] <= 0.44
+    && underdogPick[1] >= 0.30
+    && (marketLeader[1] - underdogPick[1]) <= 0.12
+    && (underdogHandicapSupport === null || underdogHandicapSupport >= 0.4);
+
+  if (drawIsLive && (weakHandicapSupport || leaderGap <= 0.13)) {
+    return {
+      pick: drawPick,
+      mode: "value-draw",
+      isContrarian: true,
+      reason: {
+        zh: `专业修正：不机械追随最低 SP。本场胜平负首选与平局差距不大，平局去水支持率约 ${pct(probabilities.draw)}%，且让球盘对正路支持不足，稳妥方向降为防平观察。`,
+        en: `Analyst adjustment: not blindly following the lowest SP. The draw is live at about ${pct(probabilities.draw)}% normalized support, and handicap support for the market favorite is weak.`,
+      },
+    };
+  }
+
+  if (underdogIsLive && weakHandicapSupport) {
+    return {
+      pick: underdogPick,
+      mode: "value-underdog",
+      isContrarian: true,
+      reason: {
+        zh: `专业修正：正路热度与让球盘存在分歧，非热门方向去水支持率约 ${pct(underdogPick[1])}%，本场更适合做冷门价值观察。`,
+        en: `Analyst adjustment: the favorite is not fully confirmed by handicap support; the non-favorite side is kept as value-watch.`,
+      },
+    };
+  }
+
+  return {
+    pick: marketLeader,
+    mode: "market-leader",
+    isContrarian: false,
+    reason: {
+      zh: `市场主线：最低 SP 方向与去水支持率一致，暂未触发足够强的冷门或防平修正。`,
+      en: `Market lead: the lowest-SP side remains aligned with normalized support; no strong draw/upset adjustment was triggered.`,
+    },
+  };
+}
+
 function predictionSet(match) {
   const probabilities = impliedProbabilities(match.odds);
   const picks = [
@@ -736,10 +809,16 @@ function predictionSet(match) {
     ["X", probabilities.draw, match.odds.oddsX, "平局", "Draw"],
     ["2", probabilities.away, match.odds.odds2, `客胜 ${match.awayTeam}`, `Away Win (${match.awayTeam})`],
   ].sort((a, b) => b[1] - a[1]);
-  const best1x2 = picks[0];
-  const second1x2 = picks[1];
-  const probabilityGap = best1x2[1] - second1x2[1];
-  const baseTrust = clamp(Math.round(best1x2[1] * 100 + probabilityGap * 55 + 12), 52, 93);
+  const hhadProbabilities = sanitizeOdds(match.handicapOdds) ? impliedProbabilities(match.handicapOdds) : null;
+  const marketLeader = picks[0];
+  const marketSecond = picks[1];
+  const analystSelection = selectAnalystOneXTwo(match, picks, probabilities, hhadProbabilities);
+  const best1x2 = analystSelection.pick;
+  const probabilityGap = marketLeader[1] - marketSecond[1];
+  const selectionDiscount = Math.max(0, marketLeader[1] - best1x2[1]);
+  const baseTrust = analystSelection.isContrarian
+    ? clamp(Math.round(best1x2[1] * 100 + 31 - selectionDiscount * 42), 54, 76)
+    : clamp(Math.round(best1x2[1] * 100 + probabilityGap * 55 + 12), 52, 93);
   const rand = seeded(`${match.sourceMatchId}-${match.homeTeam}-${match.awayTeam}`);
   const homeLambda = clamp(0.75 + probabilities.home * 2.2 + rand() * 0.35, 0.6, 2.8);
   const awayLambda = clamp(0.65 + probabilities.away * 2.1 + rand() * 0.35, 0.5, 2.6);
@@ -769,7 +848,6 @@ function predictionSet(match) {
   const drawRiskEn = probabilities.draw >= 0.28
     ? "Draw support is high, so cover the draw risk."
     : "Draw support is not dominant, but late SP movement still matters.";
-  const hhadProbabilities = sanitizeOdds(match.handicapOdds) ? impliedProbabilities(match.handicapOdds) : null;
   const riskTags = [];
 
   if (probabilities.draw >= 0.28) {
@@ -790,6 +868,9 @@ function predictionSet(match) {
   if (bttsProbability >= 0.45 && bttsProbability < 0.65) {
     riskTags.push({ zh: "进球临界", en: "Goal-model borderline" });
   }
+  if (analystSelection.isContrarian) {
+    riskTags.push({ zh: "盘口分歧", en: "Market disagreement" });
+  }
 
   const oneXTwo = {
     marketType: "1X2",
@@ -807,8 +888,12 @@ function predictionSet(match) {
         en: `Official HAD SP: ${oddsText}; normalized support is about ${probabilityTextEn}.`,
       },
       {
-        zh: `胜平负差距：首选方向领先第二方向约 ${pct(probabilityGap)} 个百分点，当前模型可信度 ${baseTrust}%。`,
-        en: `1X2 separation: the top side leads the second side by about ${pct(probabilityGap)} percentage points. Model confidence: ${baseTrust}%.`,
+        zh: analystSelection.isContrarian
+          ? `${analystSelection.reason.zh} 当前模型可信度 ${baseTrust}%，该方向属于价值观察而非高确定性稳胆。`
+          : `胜平负差距：市场主线领先第二方向约 ${pct(probabilityGap)} 个百分点，当前模型可信度 ${baseTrust}%。`,
+        en: analystSelection.isContrarian
+          ? `${analystSelection.reason.en} Model confidence is ${baseTrust}%; this is a value-watch, not a high-certainty banker.`
+          : `1X2 separation: the market lead is ahead by about ${pct(probabilityGap)} percentage points. Model confidence: ${baseTrust}%.`,
       },
       {
         zh: `${drawRiskZh} ${sourceTextZh}。`,
@@ -817,7 +902,7 @@ function predictionSet(match) {
     ],
     riskTags,
     visibilityStatus: "FREE",
-    resultStatus: resultStatus(match, best1x2[0]),
+    resultStatus: resultStatus(match, best1x2[0], "1X2"),
   };
 
   const goals = {
@@ -842,7 +927,7 @@ function predictionSet(match) {
     ],
     riskTags: riskTags.filter((tag) => tag.zh === "进球临界"),
     visibilityStatus: "PREMIUM",
-    resultStatus: resultStatus(match, goalsTip),
+    resultStatus: resultStatus(match, goalsTip, "GOALS"),
   };
 
   const gg = {
@@ -871,23 +956,36 @@ function predictionSet(match) {
     ],
     riskTags: riskTags.filter((tag) => tag.zh === "进球临界"),
     visibilityStatus: "PREMIUM",
-    resultStatus: resultStatus(match, ggTip),
+    resultStatus: resultStatus(match, ggTip, "GG_NG"),
   };
 
   const best = {
     marketType: "BEST",
     tipCode: oneXTwo.tipCode,
-    tipLabel: { zh: `稳胆 ${oneXTwo.tipLabel.zh}`, en: `Best: ${oneXTwo.tipLabel.en}` },
+    tipLabel: {
+      zh: analystSelection.isContrarian ? `价值观察 ${oneXTwo.tipLabel.zh}` : `稳胆 ${oneXTwo.tipLabel.zh}`,
+      en: analystSelection.isContrarian ? `Value watch: ${oneXTwo.tipLabel.en}` : `Best: ${oneXTwo.tipLabel.en}`,
+    },
     odds: oneXTwo.odds,
-    trustScore: clamp(oneXTwo.trustScore + 2, 57, 96),
+    trustScore: analystSelection.isContrarian
+      ? clamp(oneXTwo.trustScore, 54, 76)
+      : clamp(oneXTwo.trustScore + 2, 57, 96),
     explanation: {
-      zh: `AI 精选优先使用中国竞彩网官方实时 SP。本场综合胜平负支持率、SP 分布、预期进球和防平风险后，首选 ${oneXTwo.tipLabel.zh}。`,
-      en: `The best tip uses official Sporttery data without local fake fixtures. Recommended: ${oneXTwo.tipLabel.en}.`,
+      zh: analystSelection.isContrarian
+        ? `AI 分析不只追随低赔正路。本场触发盘口分歧/防平修正，精选方向降级为价值观察：${oneXTwo.tipLabel.zh}。`
+        : `AI 精选优先使用中国竞彩网官方实时 SP。本场综合胜平负支持率、SP 分布、预期进球和防平风险后，首选 ${oneXTwo.tipLabel.zh}。`,
+      en: analystSelection.isContrarian
+        ? `The model does not blindly follow the lowest SP. Market-disagreement checks downgraded this to a value-watch: ${oneXTwo.tipLabel.en}.`
+        : `The best tip uses official Sporttery data without local fake fixtures. Recommended: ${oneXTwo.tipLabel.en}.`,
     },
     analysisItems: [
       {
-        zh: `核心理由：${oneXTwo.tipLabel.zh} 是当前官方 HAD 去水概率最高方向，且首选优势约 ${pct(probabilityGap)} 个百分点。`,
-        en: `Core reason: ${oneXTwo.tipLabel.en} is the highest normalized HAD direction, leading by about ${pct(probabilityGap)} points.`,
+        zh: analystSelection.isContrarian
+          ? `核心理由：${analystSelection.reason.zh}`
+          : `核心理由：${oneXTwo.tipLabel.zh} 是当前官方 HAD 去水概率最高方向，且市场主线优势约 ${pct(probabilityGap)} 个百分点。`,
+        en: analystSelection.isContrarian
+          ? `Core reason: ${analystSelection.reason.en}`
+          : `Core reason: ${oneXTwo.tipLabel.en} is the highest normalized HAD direction, leading by about ${pct(probabilityGap)} points.`,
       },
       {
         zh: `进球侧参考：模型比分热区 ${score.home}-${score.away}，总进球期望 ${totalLambda.toFixed(2)}，大 2.5 概率约 ${pct(over25Probability)}%。`,
@@ -992,6 +1090,76 @@ function toAppMatch(match) {
     handicapOddsSourceMethod: match.handicapOddsSourceMethod,
     handicapOddsUpdatedAt: match.handicapOddsUpdatedAt,
     handicapOddsSourceUrl: match.handicapOddsSourceUrl,
+  };
+}
+
+function kickoffHasStarted(match, capturedAt) {
+  const kickoffAt = Date.parse(match?.kickoffTime);
+  const capturedTime = Date.parse(capturedAt);
+  return Number.isFinite(kickoffAt) && Number.isFinite(capturedTime) && capturedTime >= kickoffAt;
+}
+
+function predictionSignature(predictions) {
+  const byMarket = new Map((predictions || []).map((prediction) => [prediction.marketType, prediction]));
+  return ["1X2", "BEST", "GOALS", "GG_NG"]
+    .map((marketType) => {
+      const prediction = byMarket.get(marketType);
+      return prediction ? `${marketType}:${prediction.tipCode}` : `${marketType}:-`;
+    })
+    .join("|");
+}
+
+function settlePredictionsForMatch(match, predictions) {
+  return (predictions || []).map((prediction) => ({
+    ...prediction,
+    resultStatus: resultStatus(match, prediction.tipCode, prediction.marketType),
+  }));
+}
+
+function applyPredictionPersistence(match, existing, capturedAt) {
+  const existingPredictions = Array.isArray(existing?.predictions) ? existing.predictions : [];
+  const nextPredictions = Array.isArray(match?.predictions) ? match.predictions : [];
+  const started = kickoffHasStarted(match, capturedAt) || match.status === "LIVE" || match.status === "FINISHED";
+  const generatedMeta = {
+    policyVersion: PREDICTION_POLICY_VERSION,
+    promptVersion: ANALYST_PROMPT_VERSION,
+    generatedAt: existing?.predictionMeta?.generatedAt || capturedAt,
+    updatedAt: capturedAt,
+    lockedAt: started ? (existing?.predictionMeta?.lockedAt || capturedAt) : undefined,
+    dataPolicy: {
+      zh: "仅使用已接入的中国竞彩网官方 SP、让球 SP、赛果和 SP 快照；伤停、首发、天气、裁判等未接入数据明确视为不足，不编造。",
+      en: "Uses connected official Sporttery SP, handicap SP, results, and SP snapshots only. Injuries, lineups, weather, and referee data are treated as unavailable unless connected.",
+    },
+  };
+
+  if (!existingPredictions.length || !nextPredictions.length) {
+    return { ...match, predictionMeta: generatedMeta };
+  }
+
+  const sameDirection = predictionSignature(existingPredictions) === predictionSignature(nextPredictions);
+  if (started || sameDirection) {
+    return {
+      ...match,
+      predictions: settlePredictionsForMatch(match, existingPredictions),
+      projectedScoreHome: existing?.projectedScoreHome ?? match.projectedScoreHome,
+      projectedScoreAway: existing?.projectedScoreAway ?? match.projectedScoreAway,
+      stats: existing?.stats || match.stats,
+      predictionMeta: {
+        ...(existing?.predictionMeta || generatedMeta),
+        lockedAt: started ? (existing?.predictionMeta?.lockedAt || capturedAt) : existing?.predictionMeta?.lockedAt,
+      },
+    };
+  }
+
+  return {
+    ...match,
+    predictionMeta: {
+      ...generatedMeta,
+      updateReason: {
+        zh: "赛前赔率/盘口信号发生实质偏差，允许更新赛前预测。",
+        en: "Pre-match odds or market signals changed materially, so the pre-match prediction was updated.",
+      },
+    },
   };
 }
 
@@ -1368,7 +1536,11 @@ async function sync() {
   const usedFreshOdds = rawMatchesWithOdds.length > 0;
   let output = rawMatchesForOutput
     .map((match) => enrichRawMatchWithPredictionSnapshot(match, existingBySourceId, oddsHistoryBeforeSync.rows))
-    .map(toAppMatch);
+    .map((match) => {
+      const appMatch = toAppMatch(match);
+      const existing = existingBySourceId.get(normText(appMatch?.sourceMatchId || String(appMatch?.id || "").replace(/^sporttery_/, "")));
+      return applyPredictionPersistence(appMatch, existing, capturedAt);
+    });
 
   if (!output.length) {
     output = existingMatches.filter(isTrustedOddsMatch);

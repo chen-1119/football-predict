@@ -13,6 +13,9 @@ export interface SportteryOddsPoolDisplay {
   probabilities?: { home: number; draw: number; away: number };
 }
 
+const BEST_VALUE_PREFIX_ZH = '\u4ef7\u503c\u89c2\u5bdf';
+const BEST_STEADY_PREFIX_ZH = '\u7a33\u80c6';
+
 const sportteryResultLabels = {
   '1': {
     zhCompact: '主胜',
@@ -42,7 +45,7 @@ export function getMarketLabel(marketType: PredictionDetail['marketType'], langu
     '1X2': { zh: '胜平负', en: '1X2' },
     GOALS: { zh: '总进球数', en: 'Total Goals' },
     GG_NG: { zh: '双方进球参考', en: 'BTTS Reference' },
-    BEST: { zh: '精选稳胆', en: 'Best Tip' }
+    BEST: { zh: 'AI精选', en: 'Best Tip' }
   };
 
   return labels[marketType][language];
@@ -57,8 +60,12 @@ export function getPredictionTipDisplay(
 
   if ((prediction.marketType === '1X2' || prediction.marketType === 'BEST') && sportteryLabel) {
     if (language === 'zh') {
+      const bestPrefix = prediction.tipLabel.zh.includes(BEST_VALUE_PREFIX_ZH)
+        ? BEST_VALUE_PREFIX_ZH
+        : BEST_STEADY_PREFIX_ZH;
+
       return prediction.marketType === 'BEST' && !compact
-        ? `稳胆 ${sportteryLabel.zhCompact}`
+        ? `${bestPrefix} ${sportteryLabel.zhCompact}`
         : compact
           ? sportteryLabel.zhCompact
           : sportteryLabel.zhFull;

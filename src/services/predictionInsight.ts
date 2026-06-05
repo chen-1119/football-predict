@@ -26,6 +26,7 @@ export interface MatchInsight {
   metrics: MatchInsightMetric[];
   drivers: MatchInsightPoint[];
   watchpoints: MatchInsightPoint[];
+  framework: MatchInsightPoint[];
 }
 
 export interface MatchInsightContext {
@@ -61,6 +62,163 @@ const oddsText = (odds: Odds | null | undefined) => {
 };
 
 const percentText = (value: number | null) => (value === null ? '--' : `${value}%`);
+
+const dataGap = {
+  zh: '该项数据不足：当前未接入可验证的官方伤停、预计首发、天气、裁判、xG/xGA 或技术统计，不编造。',
+  en: 'Data insufficient: verified injuries, lineups, weather, referee, xG/xGA, and event stats are not connected, so they are not invented.'
+};
+
+const buildProfessionalFramework = ({
+  match,
+  context,
+  primary,
+  tipZh,
+  tipEn,
+  action,
+  trustScore,
+  hadSupport,
+  hhadSupport,
+  sampleText,
+  sampleEnough,
+  trendText,
+  riskTextZh,
+  riskTextEn
+}: {
+  match: Match;
+  context: MatchInsightContext;
+  primary?: PredictionDetail;
+  tipZh: string;
+  tipEn: string;
+  action: MultiLangString;
+  trustScore: number;
+  hadSupport: number | null;
+  hhadSupport: number | null;
+  sampleText: string;
+  sampleEnough: boolean;
+  trendText: MultiLangString | null;
+  riskTextZh: string;
+  riskTextEn: string;
+}): MatchInsightPoint[] => {
+  const hasPrimary = Boolean(primary);
+  const latestOdds = oddsText(match.odds);
+  const latestHandicapOdds = oddsText(match.handicapOdds);
+  const trendZh = match.oddsTrend && trendText
+    ? `已记录 ${match.oddsTrend.sampleSize} 次官方 SP 快照，走势为${trendText.zh}。${match.oddsTrend.summary.zh}`
+    : '官方 SP 快照样本仍在积累，先以最新 HAD / HHAD 为准。';
+  const trendEn = match.oddsTrend && trendText
+    ? `${match.oddsTrend.sampleSize} official SP snapshots recorded; movement is ${trendText.en}. ${match.oddsTrend.summary.en}`
+    : 'SP snapshots are still accumulating; use latest HAD / HHAD first.';
+  const unavailableTone: InsightTone = 'muted';
+
+  return [
+    {
+      title: { zh: '一、比赛基本面', en: '1. Fixture Baseline' },
+      body: {
+        zh: `${match.leagueName || '赛事'}：${match.homeTeamName || '主队'} vs ${match.awayTeamName || '客队'}。排名、积分、净胜球和阶段目标暂未接入，因此不把这些当作结论依据。`,
+        en: `${match.leagueNameEn || match.leagueName || 'Fixture'}: ${match.homeTeamName || 'Home'} vs ${match.awayTeamName || 'Away'}. Table rank, points, goal difference, and phase targets are not connected.`
+      },
+      tone: 'warning'
+    },
+    {
+      title: { zh: '二、近期状态', en: '2. Recent Form' },
+      body: {
+        zh: sampleEnough
+          ? `近一年官方历史样本：主队 ${context.homeSampleSize} 场、客队 ${context.awaySampleSize} 场、交锋 ${context.h2hSampleSize} 场；样本用于辅助，不替代实时阵容和过程数据。`
+          : `近一年官方历史样本偏少：${sampleText}，该部分只作辅助。${dataGap.zh}`,
+        en: sampleEnough
+          ? `Last-year official samples: home ${context.homeSampleSize}, away ${context.awaySampleSize}, H2H ${context.h2hSampleSize}; useful support, not a substitute for lineups or process data.`
+          : `Small last-year sample: ${sampleText}; secondary only. ${dataGap.en}`
+      },
+      tone: sampleEnough ? 'success' : 'warning'
+    },
+    {
+      title: { zh: '三、主客场表现', en: '3. Home/Away' },
+      body: {
+        zh: `当前只从近一年已完场官方结果追溯球队样本，未接入完整主客场积分榜和旅行数据。覆盖：${context.coverageLabel}。`,
+        en: `Uses synced official finished results only. Full home/away table and travel data are not connected. Coverage: ${context.coverageLabel}.`
+      },
+      tone: 'warning'
+    },
+    {
+      title: { zh: '四、进攻能力', en: '4. Attack' },
+      body: {
+        zh: hasPrimary
+          ? `用官方 SP 反推进攻热区和总进球倾向，当前主推为 ${tipZh}，HAD 去水支持约 ${percentText(hadSupport)}。射门、射正、关键传球等过程数据不足。`
+          : `HAD 暂未形成主推方向。${dataGap.zh}`,
+        en: hasPrimary
+          ? `Attack read is derived from official SP and goal heat zones. Main lean: ${tipEn}, HAD support ${percentText(hadSupport)}. Shots, SOT, and key passes are unavailable.`
+          : `No HAD-based main lean yet. ${dataGap.en}`
+      },
+      tone: hasPrimary ? 'warning' : unavailableTone
+    },
+    {
+      title: { zh: '五、防守能力', en: '5. Defense' },
+      body: {
+        zh: '防守稳定性只参考官方赛果、比分和 SP 风险标签；被射门、xGA、门将状态、定位球防守暂未接入。',
+        en: 'Defensive stability uses official results, scores, and SP risk tags only. Shots allowed, xGA, goalkeeper form, and set-piece defense are unavailable.'
+      },
+      tone: unavailableTone
+    },
+    {
+      title: { zh: '六、伤停与首发', en: '6. Injuries / XI' },
+      body: dataGap,
+      tone: unavailableTone
+    },
+    {
+      title: { zh: '七、战术克制', en: '7. Tactics' },
+      body: {
+        zh: '阵型、高压、反击、边路/中路倾向和关键对位暂未接入可验证来源，本场不编造战术细节。',
+        en: 'Formations, pressing, transition style, wing/central routes, and key matchups are not connected from verified sources.'
+      },
+      tone: unavailableTone
+    },
+    {
+      title: { zh: '八、赛程体能与战意', en: '8. Schedule / Motivation' },
+      body: {
+        zh: '开赛时间来自中国竞彩网；休息天数、连续客场、杯赛轮换、争冠/保级/晋级战意暂未接入，暂不强行推断。',
+        en: 'Kickoff is from Sporttery. Rest days, travel sequence, rotation pressure, and motivation are not connected.'
+      },
+      tone: unavailableTone
+    },
+    {
+      title: { zh: '九、历史交锋', en: '9. H2H' },
+      body: {
+        zh: context.h2hSampleSize > 0
+          ? `近一年已匹配双方正式交锋 ${context.h2hSampleSize} 场；样本会因阵容/教练变化降低参考价值。`
+          : '近一年官方历史库暂未匹配到双方直接交锋，不能用历史印象替代实时数据。',
+        en: context.h2hSampleSize > 0
+          ? `${context.h2hSampleSize} direct H2H records matched in the last year; coaching/lineup changes can reduce value.`
+          : 'No direct H2H found in the last-year official history set.'
+      },
+      tone: context.h2hSampleSize > 0 ? 'success' : 'warning'
+    },
+    {
+      title: { zh: '十、天气场地裁判', en: '10. Weather / Referee' },
+      body: dataGap,
+      tone: unavailableTone
+    },
+    {
+      title: { zh: '十一、赔率盘口', en: '11. Odds / Market' },
+      body: {
+        zh: `官方 HAD：${latestOdds}；官方 HHAD：${latestHandicapOdds}；让球同向支持约 ${hhadSupport === null ? '--' : `${hhadSupport}%`}。${trendZh}`,
+        en: `Official HAD: ${latestOdds}; official HHAD: ${latestHandicapOdds}; handicap same-side support ${hhadSupport === null ? '--' : `${hhadSupport}%`}. ${trendEn}`
+      },
+      tone: hhadSupport !== null && hhadSupport >= 42 ? 'success' : 'warning'
+    },
+    {
+      title: { zh: '十二、综合结论', en: '12. Verdict' },
+      body: {
+        zh: hasPrimary
+          ? `稳妥方向：${action.zh}，不夸大确定性；激进方向：${tipZh}，可信度 ${trustScore || '--'}%。风险点：${riskTextZh}。`
+          : `稳妥方向：等待 HAD 开售或下一次官方快照；激进方向：暂无。风险点：${riskTextZh}。`,
+        en: hasPrimary
+          ? `Conservative: ${action.en}; aggressive: ${tipEn}, confidence ${trustScore || '--'}%. Risks: ${riskTextEn}.`
+          : `Conservative: wait for HAD or next official snapshot. Aggressive: none. Risks: ${riskTextEn}.`
+      },
+      tone: hasPrimary ? 'warning' : unavailableTone
+    }
+  ];
+};
 
 const getPrimaryPrediction = (match: Match): PredictionDetail | undefined => {
   return match.predictions.find((prediction) => prediction.marketType === 'BEST')
@@ -113,6 +271,22 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
   const tipEn = primary ? getPredictionTipDisplay(primary, 'en', true) : '--';
   const action = actionByCategory[signal.category];
   const tone = toneByCategory[signal.category];
+  const framework = buildProfessionalFramework({
+    match,
+    context,
+    primary,
+    tipZh,
+    tipEn,
+    action,
+    trustScore,
+    hadSupport,
+    hhadSupport,
+    sampleText,
+    sampleEnough,
+    trendText,
+    riskTextZh,
+    riskTextEn
+  });
 
   if (!primary) {
     return {
@@ -149,7 +323,8 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
           },
           tone: 'muted'
         }
-      ]
+      ],
+      framework
     };
   }
 
@@ -227,6 +402,7 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
         },
         tone: sampleEnough ? 'success' : 'warning'
       }
-    ]
+    ],
+    framework
   };
 }

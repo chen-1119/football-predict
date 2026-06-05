@@ -1517,6 +1517,43 @@ button.status-pill:hover {
   padding-top: 0.72rem;
 }
 
+.prediction-policy-note {
+  display: grid;
+  grid-template-columns: minmax(0, 0.38fr) minmax(0, 1fr);
+  gap: 0.8rem;
+  align-items: start;
+  border: 1px solid hsl(var(--primary) / 0.22);
+  border-radius: var(--radius);
+  background: hsl(var(--primary) / 0.055);
+  padding: 0.78rem 0.9rem;
+}
+
+.prediction-policy-note div {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.prediction-policy-note strong {
+  color: hsl(var(--primary));
+  font-size: 0.84rem;
+  font-weight: 950;
+}
+
+.prediction-policy-note span,
+.prediction-policy-note p {
+  color: hsl(var(--text-secondary));
+  font-size: 0.76rem;
+  line-height: 1.55;
+}
+
+.prediction-policy-note em {
+  display: block;
+  margin-top: 0.28rem;
+  color: hsl(var(--premium));
+  font-style: normal;
+  font-weight: 850;
+}
+
 .insight-card {
   display: grid;
   gap: 1rem;
@@ -1682,6 +1719,77 @@ button.status-pill:hover {
   color: hsl(var(--text-primary));
   font-size: 0.78rem;
   font-weight: 900;
+}
+
+.professional-framework-card {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.professional-framework-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: start;
+}
+
+.professional-framework-head h3 {
+  margin-top: 0.28rem;
+  color: hsl(var(--text-primary));
+  font-family: var(--font-title);
+  font-size: 1.08rem;
+  font-weight: 950;
+}
+
+.professional-framework-head p {
+  color: hsl(var(--text-secondary));
+  font-size: 0.8rem;
+  line-height: 1.58;
+}
+
+.professional-framework-head > span {
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  color: hsl(var(--text-muted));
+  font-size: 0.68rem;
+  font-weight: 850;
+  padding: 0.24rem 0.48rem;
+  white-space: nowrap;
+}
+
+.professional-framework-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.professional-framework-item {
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--bg));
+  padding: 0.68rem;
+}
+
+.professional-framework-item.is-warning {
+  border-color: hsl(var(--premium) / 0.32);
+}
+
+.professional-framework-item.is-success {
+  border-color: hsl(var(--success) / 0.3);
+}
+
+.professional-framework-item strong {
+  display: block;
+  margin-bottom: 0.26rem;
+  color: hsl(var(--text-primary));
+  font-size: 0.77rem;
+  font-weight: 950;
+}
+
+.professional-framework-item p {
+  color: hsl(var(--text-secondary));
+  font-size: 0.75rem;
+  line-height: 1.55;
 }
 
 .review-card {
@@ -2520,6 +2628,15 @@ button.status-pill:hover {
   .signal-summary-card {
     grid-template-columns: 1fr;
     gap: 0.7rem;
+  }
+
+  .prediction-policy-note,
+  .professional-framework-head {
+    grid-template-columns: 1fr;
+  }
+
+  .professional-framework-grid {
+    grid-template-columns: 1fr;
   }
 
   .insight-head {

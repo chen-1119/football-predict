@@ -60,6 +60,16 @@ export interface MatchStats {
   redCards: { home: number; away: number };
 }
 
+export interface PredictionMeta {
+  policyVersion?: string;
+  promptVersion?: string;
+  generatedAt?: string;
+  updatedAt?: string;
+  lockedAt?: string;
+  dataPolicy?: MultiLangString;
+  updateReason?: MultiLangString;
+}
+
 export interface H2HRecord {
   date: string;
   homeScore: number;
@@ -140,6 +150,7 @@ export interface Match {
   handicapOddsUpdatedAt?: string;
   handicapOddsSourceUrl?: string;
   predictions: PredictionDetail[];
+  predictionMeta?: PredictionMeta;
   stats?: MatchStats;
   recentForm?: {
     home: TeamRecentForm;
