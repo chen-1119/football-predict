@@ -33,6 +33,10 @@ const SIGNAL_FILTERS: SignalFilter[] = ['all', 'steady', 'watch', 'avoid', 'unav
 
 const getMatchDay = (match: Match): string => match.matchDate || match.businessDate || match.kickoffDate || match.kickoffTime.slice(0, 10) || '';
 
+const getKickoffDay = (match: Match): string => match.kickoffDate || match.kickoffTime.slice(0, 10) || '';
+
+const matchBelongsToDate = (match: Match, date: string) => getMatchDay(match) === date || getKickoffDay(match) === date;
+
 const getBestPrediction = (match: Match) => match.predictions.find((p) => p.marketType === 'BEST');
 
 const getBestTrust = (match: Match) => getBestPrediction(match)?.trustScore || 0;
@@ -164,7 +168,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
   };
 
   const effectiveSelectedDate = useMemo(() => {
-    const selectedDateHasMatches = matches.some((match) => getMatchDay(match) === selectedDate);
+    const selectedDateHasMatches = matches.some((match) => matchBelongsToDate(match, selectedDate));
     if (selectedDateHasMatches || selectedDate !== todayStr) return selectedDate;
 
     const activeOfficialDate = matches
@@ -183,7 +187,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
 
   const availableLeagues = useMemo(() => {
     const seen = new Set<string>();
-    const matchesForDate = matches.filter((match) => getMatchDay(match) === effectiveSelectedDate);
+    const matchesForDate = matches.filter((match) => matchBelongsToDate(match, effectiveSelectedDate));
     const source = matchesForDate.length > 0
       ? matchesForDate.map((match) => match.leagueId)
       : leagues.map((league) => league.id);
@@ -201,7 +205,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
 
   const baseFilteredMatches = useMemo(() => {
     return matches.filter((match) => {
-      if (getMatchDay(match) !== effectiveSelectedDate) return false;
+      if (!matchBelongsToDate(match, effectiveSelectedDate)) return false;
       return effectiveSelectedLeagues.length === 0 || effectiveSelectedLeagues.includes(match.leagueId);
     });
   }, [effectiveSelectedDate, effectiveSelectedLeagues, matches]);
