@@ -19,6 +19,11 @@ export interface DataSyncState {
   totalCount: number;
   error?: string;
   updatedAt?: string;
+  lastCheckedAt?: string;
+  sourceUpdatedAt?: string;
+  refreshIntervalSeconds?: number;
+  backendRefreshMinutes?: number;
+  byStatus?: Partial<Record<Match['status'], number>>;
 }
 
 export interface AppContextType {

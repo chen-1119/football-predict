@@ -26,6 +26,19 @@ type SyncedMatch = Match & {
   awayTeamValue?: string;
 };
 
+type SyncMeta = {
+  updatedAt?: string;
+  capturedAt?: string;
+  byStatus?: Partial<Record<Match['status'], number>>;
+  refreshPolicy?: {
+    workflowMinutes?: number;
+    pagePollSeconds?: number;
+  };
+};
+
+const CURRENT_REFRESH_MS = 60 * 1000;
+const HISTORY_REFRESH_MS = 5 * 60 * 1000;
+
 const readStoredLanguage = (): Language => {
   const savedLang = localStorage.getItem('nerdy_lang');
   return savedLang === 'zh' || savedLang === 'en' ? savedLang : 'zh';
@@ -160,13 +173,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     let cancelled = false;
 
-    const applyData = (data: unknown, mode: 'replace' | 'append') => {
+    const metaToState = (meta: SyncMeta | null, checkedAt: string) => {
+      const sourceUpdatedAt = meta?.updatedAt || meta?.capturedAt;
+      return {
+        updatedAt: sourceUpdatedAt || checkedAt,
+        sourceUpdatedAt,
+        lastCheckedAt: checkedAt,
+        refreshIntervalSeconds: meta?.refreshPolicy?.pagePollSeconds || CURRENT_REFRESH_MS / 1000,
+        backendRefreshMinutes: meta?.refreshPolicy?.workflowMinutes || 5,
+        byStatus: meta?.byStatus
+      };
+    };
+
+    const fetchSyncMeta = async (): Promise<SyncMeta | null> => {
+      try {
+        return await fetchJson<SyncMeta>('./data/sync-meta.json');
+      } catch {
+        return null;
+      }
+    };
+
+    const applyData = (data: unknown, mode: 'current' | 'history') => {
       if (cancelled) return 0;
 
       try {
         if (isSyncedMatchArray(data) && data.length > 0) {
           registerSyncedMatches(data);
-          setMatches((current) => (mode === 'replace' ? data : mergeMatches(current, data)));
+          setMatches((current) => {
+            if (mode === 'current') {
+              const nextIds = new Set(data.map((match) => match.id));
+              const retained = current.filter((match) => {
+                if (nextIds.has(match.id)) return false;
+                return match.status === 'FINISHED' || match.status === 'LIVE';
+              });
+              return mergeMatches(retained, data);
+            }
+
+            return mergeMatches(current, data);
+          });
           return data.length;
         }
       } catch (error: unknown) {
@@ -175,71 +219,105 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ...current,
           historyLoading: false,
           error: formatError(error),
-          updatedAt: new Date().toISOString()
+          lastCheckedAt: new Date().toISOString()
         }));
       }
 
       return 0;
     };
 
-    fetchFirstAvailable<unknown>(['./data/matches-current.json', './matches.json'])
-      .then((data) => {
-        const currentCount = applyData(data, 'replace');
+    const loadCurrent = async (isInitial = false) => {
+      const checkedAt = new Date().toISOString();
+      try {
+        const [data, meta] = await Promise.all([
+          fetchFirstAvailable<unknown>(['./data/matches-current.json', './matches.json']),
+          fetchSyncMeta()
+        ]);
+        const currentCount = applyData(data, 'current');
+        if (cancelled) return;
         setDataSync((current) => ({
           ...current,
           currentLoaded: currentCount > 0,
-          historyLoading: true,
+          historyLoading: isInitial ? true : current.historyLoading,
           currentCount,
-          totalCount: currentCount,
+          totalCount: current.historyCount + currentCount,
           error: undefined,
-          updatedAt: new Date().toISOString()
+          ...metaToState(meta, checkedAt)
         }));
-
-        window.setTimeout(() => {
-          fetchJson<unknown>('./data/matches-history.json')
-            .then((historyData) => {
-              const historyCount = applyData(historyData, 'append');
-              setDataSync((current) => ({
-                ...current,
-                historyLoaded: historyCount > 0,
-                historyLoading: false,
-                historyCount,
-                totalCount: current.currentCount + historyCount,
-                updatedAt: new Date().toISOString()
-              }));
-            })
-            .catch((error: unknown) => {
-              console.warn('History data is unavailable; current matches remain usable.', error);
-              setDataSync((current) => ({
-                ...current,
-                historyLoaded: false,
-                historyLoading: false,
-                error: formatError(error),
-                updatedAt: new Date().toISOString()
-              }));
-            });
-        }, 250);
-      })
-      .catch((error: unknown) => {
+      } catch (error: unknown) {
         if (cancelled) return;
         console.error(error);
-        setMatches(matchesPool);
-        setDataSync({
-          currentLoaded: false,
+
+        if (isInitial) {
+          setMatches(matchesPool);
+          setDataSync({
+            currentLoaded: false,
+            historyLoaded: false,
+            historyLoading: false,
+            currentCount: 0,
+            historyCount: 0,
+            totalCount: matchesPool.length,
+            error: formatError(error),
+            lastCheckedAt: checkedAt,
+            refreshIntervalSeconds: CURRENT_REFRESH_MS / 1000,
+            backendRefreshMinutes: 5
+          });
+          // 降级使用静态 mock 引擎数据
+          console.log('Using static fallback matchesPool data.');
+          return;
+        }
+
+        setDataSync((current) => ({
+          ...current,
+          error: formatError(error),
+          lastCheckedAt: checkedAt
+        }));
+      }
+    };
+
+    const loadHistory = async () => {
+      try {
+        const historyData = await fetchJson<unknown>('./data/matches-history.json');
+        const historyCount = applyData(historyData, 'history');
+        if (cancelled) return;
+        setDataSync((current) => ({
+          ...current,
+          historyLoaded: historyCount > 0,
+          historyLoading: false,
+          historyCount,
+          totalCount: current.currentCount + historyCount,
+          lastCheckedAt: new Date().toISOString()
+        }));
+      } catch (error: unknown) {
+        console.warn('History data is unavailable; current matches remain usable.', error);
+        if (cancelled) return;
+        setDataSync((current) => ({
+          ...current,
           historyLoaded: false,
           historyLoading: false,
-          currentCount: 0,
-          historyCount: 0,
-          totalCount: matchesPool.length,
           error: formatError(error),
-          updatedAt: new Date().toISOString()
-        });
-        // 降级使用静态 mock 引擎数据
-        console.log('Using static fallback matchesPool data.');
-      });
+          lastCheckedAt: new Date().toISOString()
+        }));
+      }
+    };
+
+    void loadCurrent(true).then(() => {
+      window.setTimeout(() => {
+        void loadHistory();
+      }, 250);
+    });
+
+    const currentTimer = window.setInterval(() => {
+      void loadCurrent(false);
+    }, CURRENT_REFRESH_MS);
+    const historyTimer = window.setInterval(() => {
+      void loadHistory();
+    }, HISTORY_REFRESH_MS);
 
     return () => {
       cancelled = true;
+      window.clearInterval(currentTimer);
+      window.clearInterval(historyTimer);
     };
   }, []);
 

@@ -72,6 +72,14 @@ const formatSyncTime = (isoTime: string | undefined, language: 'zh' | 'en') => {
   });
 };
 
+const hasOfficialScore = (match: Match) => Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway);
+
+const minutesSinceKickoff = (match: Match) => {
+  const kickoffAt = new Date(match.kickoffTime).getTime();
+  if (!Number.isFinite(kickoffAt)) return 0;
+  return Math.floor((Date.now() - kickoffAt) / 60000);
+};
+
 export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch }) => {
   const { language, isPremium, togglePremium, matches, dataSync } = useApp();
 
@@ -127,6 +135,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
     dataReady: { zh: '已加载', en: 'Ready' },
     dataFallback: { zh: '本地兜底', en: 'Fallback' },
     dataUpdated: { zh: '更新', en: 'Updated' },
+    dataRefresh: { zh: '刷新', en: 'Refresh' },
     dataCurrentLoading: { zh: '正在加载中国竞彩网赛程', en: 'Loading Sporttery schedule' },
     dataHistoryLoading: { zh: '历史结果后台补齐中', en: 'History loading in background' },
     dataHistoryReady: { zh: '当前赛程与历史库已就绪', en: 'Current schedule and history are ready' },
@@ -136,6 +145,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
     matchUnit: { zh: '场', en: 'matches' },
     tipUnit: { zh: '条', en: 'tips' },
     statusTime: { zh: '时间 / 状态', en: 'Time / Status' },
+    liveScorePending: { zh: '赛中待比分', en: 'Live, score pending' },
+    awaitingResult: { zh: '等待官方赛果', en: 'Awaiting official result' },
     teams: { zh: '对阵双方', en: 'Teams' },
     oddsHeader: { zh: '胜平负 / 让球', en: '1X2 / Handicap' },
     closed: { zh: '未开售', en: 'Closed' },
@@ -422,7 +433,13 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
     },
     {
       label: t('dataUpdated'),
-      value: formatSyncTime(dataSync.updatedAt, language)
+      value: formatSyncTime(dataSync.sourceUpdatedAt || dataSync.updatedAt, language)
+    },
+    {
+      label: t('dataRefresh'),
+      value: language === 'zh'
+        ? `后台约 ${dataSync.backendRefreshMinutes || 5} 分钟 / 页面 ${dataSync.refreshIntervalSeconds || 60} 秒`
+        : `Backend ~${dataSync.backendRefreshMinutes || 5}m / Page ${dataSync.refreshIntervalSeconds || 60}s`
     }
   ];
 
@@ -647,7 +664,13 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
                       const awayTeam = getTeamById(match.awayTeamId);
                       const isLive = match.status === 'LIVE';
                       const isFinished = match.status === 'FINISHED';
-                      const score = `${match.scoreHome ?? '-'}:${match.scoreAway ?? '-'}`;
+                      const hasScore = hasOfficialScore(match);
+                      const score = hasScore ? `${match.scoreHome}:${match.scoreAway}` : '--:--';
+                      const liveText = hasScore
+                        ? `${t('live')} ${score}`
+                        : minutesSinceKickoff(match) >= 130
+                          ? t('awaitingResult')
+                          : t('liveScorePending');
                       const bestTrust = getBestTrust(match);
                       const formattedTime = formatKickoffTime(match.kickoffTime, language);
                       const poolRows = getSportteryPoolRows(match, language);
@@ -662,7 +685,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch 
                           <td className="match-time-cell" data-label={t('statusTime')}>
                             <div className="time-stack">
                               {isLive ? (
-                                <span className="badge badge-live">{t('live')} {score}</span>
+                                <span className={hasScore ? 'badge badge-live' : 'badge'}>{liveText}</span>
                               ) : isFinished ? (
                                 <span className="badge">{t('finished')} {score}</span>
                               ) : (

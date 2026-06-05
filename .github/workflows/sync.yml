@@ -2,7 +2,7 @@ name: Auto Sync Football Data
 
 on:
   schedule:
-    - cron: '0 */3 * * *' # 每 3 小时自动同步一次
+    - cron: '*/5 * * * *' # 每 5 分钟自动同步一次；GitHub 可能会有排队延迟
   workflow_dispatch: # 支持在 GitHub 控制台手动点击触发
 
 jobs:
@@ -27,6 +27,9 @@ jobs:
           MATCH_WINDOW_BACK_DAYS: 365
           SPORTTERY_PAGE_DEPTH: 120
           ODDS_HISTORY_RETENTION_DAYS: 365
+          ODDS_HISTORY_BUCKET_MINUTES: 5
+          SYNC_WORKFLOW_MINUTES: 5
+          PAGE_POLL_SECONDS: 60
         run: node scripts/syncData.cjs
 
       - name: Validate Prediction Data

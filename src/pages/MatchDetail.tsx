@@ -109,6 +109,14 @@ const isFinishedWithScore = (match: Match): match is FinishedMatch => {
   return match.status === 'FINISHED' && Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway);
 };
 
+const hasOfficialScore = (match: Match) => Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway);
+
+const minutesSinceKickoff = (match: Match) => {
+  const kickoffAt = new Date(match.kickoffTime).getTime();
+  if (!Number.isFinite(kickoffAt)) return 0;
+  return Math.floor((Date.now() - kickoffAt) / 60000);
+};
+
 const getMatchSortTime = (match: Match) => new Date(match.kickoffTime).getTime();
 
 const getHistoryStartTime = (match: Match) => {
@@ -287,6 +295,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   
   const isFinished = match.status === 'FINISHED';
   const isLive = match.status === 'LIVE';
+  const hasScore = hasOfficialScore(match);
+  const officialScoreText = hasScore ? `${match.scoreHome} - ${match.scoreAway}` : '-- : --';
   
   const formattedDate = new Date(match.kickoffTime).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US', {
     weekday: 'long',
@@ -344,8 +354,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     h2hSampleSize: headToHead.sampleSize,
     coverageLabel: historyCoverageLabel
   });
-  const projectedScoreText = isFinished
-    ? `${match.scoreHome} - ${match.scoreAway}`
+  const projectedScoreText = hasScore
+    ? officialScoreText
     : `${match.projectedScoreHome ?? Math.round(match.stats?.xG.home ?? 1)} - ${match.projectedScoreAway ?? Math.round(match.stats?.xG.away ?? 1)}`;
 
   // 渲染预测详细行
@@ -578,18 +588,26 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
             {isFinished ? (
               <div>
                 <div style={{ fontSize: '3rem', fontWeight: '900', letterSpacing: '4px', fontFamily: 'var(--font-title)', color: 'hsl(var(--primary))' }}>
-                  {match.scoreHome} - {match.scoreAway}
+                  {officialScoreText}
                 </div>
                 <span className="badge" style={{ backgroundColor: 'hsl(var(--border))', color: 'hsl(var(--text-secondary))' }}>
-                  {language === 'zh' ? '已结束' : 'Finished'}
+                  {hasScore
+                    ? (language === 'zh' ? '已结束' : 'Finished')
+                    : (language === 'zh' ? '官方赛果待更新' : 'Official result pending')}
                 </span>
               </div>
             ) : isLive ? (
               <div>
                 <div style={{ fontSize: '3rem', fontWeight: '900', letterSpacing: '4px', fontFamily: 'var(--font-title)', color: 'hsl(var(--danger))' }}>
-                  {match.scoreHome} - {match.scoreAway}
+                  {officialScoreText}
                 </div>
-                <span className="badge badge-live">LIVE</span>
+                <span className={hasScore ? 'badge badge-live' : 'badge'}>
+                  {hasScore
+                    ? (language === 'zh' ? '进行中' : 'Live')
+                    : minutesSinceKickoff(match) >= 130
+                      ? (language === 'zh' ? '等待官方赛果' : 'Awaiting official result')
+                      : (language === 'zh' ? '赛中待比分' : 'Live, score pending')}
+                </span>
               </div>
             ) : (
               <div>

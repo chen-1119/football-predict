@@ -10,13 +10,14 @@ const PAGE_DEPTH = Math.max(1, Number(process.env.SPORTTERY_PAGE_DEPTH || 120));
 const WINDOW_BACK_DAYS = Math.max(0, Number(process.env.MATCH_WINDOW_BACK_DAYS || 365));
 const WINDOW_FORWARD_DAYS = Math.max(1, Number(process.env.MATCH_WINDOW_FORWARD_DAYS || 14));
 const ODDS_HISTORY_RETENTION_DAYS = Math.max(1, Number(process.env.ODDS_HISTORY_RETENTION_DAYS || 365));
-const ODDS_HISTORY_BUCKET_MINUTES = Math.max(1, Number(process.env.ODDS_HISTORY_BUCKET_MINUTES || 60));
+const ODDS_HISTORY_BUCKET_MINUTES = Math.max(1, Number(process.env.ODDS_HISTORY_BUCKET_MINUTES || 5));
+const PAGE_POLL_SECONDS = Math.max(15, Number(process.env.PAGE_POLL_SECONDS || 60));
 const METHODS = (process.env.SPORTTERY_METHODS || "concern,live,result,all")
   .split(",")
   .map((x) => x.trim())
   .filter(Boolean);
 
-const STATUS_PRIORITY = { LIVE: 5, FINISHED: 4, SCHEDULED: 2 };
+const STATUS_PRIORITY = { FINISHED: 6, LIVE: 5, SCHEDULED: 2 };
 
 function normText(value, fallback = "") {
   if (value === null || value === undefined) return fallback;
@@ -1261,13 +1262,6 @@ async function sync() {
   const split = splitMatchesForOutput(output);
   const teamIndex = buildTeamIndex(output);
   const oddsHistoryPayload = loadOddsHistory(publicDir);
-
-  writeJson(path.join(publicDir, "matches.json"), split.current);
-  writeJson(path.join(dataDir, "matches-current.json"), split.current);
-  writeJson(path.join(dataDir, "matches-history.json"), split.history);
-  writeJson(path.join(dataDir, "team-index.json"), teamIndex);
-  writeJson(path.join(dataDir, "odds-history.json"), oddsHistoryPayload);
-
   const byStatus = output.reduce((acc, match) => {
     acc[match.status] = (acc[match.status] || 0) + 1;
     return acc;
@@ -1276,6 +1270,38 @@ async function sync() {
     .map((match) => match.matchDate || match.businessDate || String(match.kickoffTime || "").slice(0, 10))
     .filter(Boolean)
     .sort();
+  const syncMeta = {
+    version: 1,
+    source: "sporttery",
+    updatedAt: capturedAt,
+    capturedAt,
+    officialOddsMatches: rawMatchesWithOdds.length,
+    officialHandicapOddsMatches: rawMatchesWithHandicapOdds.length,
+    officialResultMatches: rawResultMatches.length,
+    skippedWithoutOfficialOdds: rawMatches.length - rawMatchesWithOdds.length,
+    byStatus,
+    coverage: { first: outputDates[0], last: outputDates[outputDates.length - 1] },
+    window: { backDays: WINDOW_BACK_DAYS, forwardDays: WINDOW_FORWARD_DAYS },
+    files: {
+      current: split.current.length,
+      history: split.history.length,
+      teams: teamIndex.teams.length,
+    },
+    refreshPolicy: {
+      workflowMinutes: Math.max(5, Number(process.env.SYNC_WORKFLOW_MINUTES || 5)),
+      pagePollSeconds: PAGE_POLL_SECONDS,
+      oddsHistoryBucketMinutes: ODDS_HISTORY_BUCKET_MINUTES,
+      note: "GitHub Pages serves static JSON. The page checks for newer JSON regularly; GitHub Actions refreshes the source files on schedule.",
+    },
+    oddsHistory,
+  };
+
+  writeJson(path.join(publicDir, "matches.json"), split.current);
+  writeJson(path.join(dataDir, "matches-current.json"), split.current);
+  writeJson(path.join(dataDir, "matches-history.json"), split.history);
+  writeJson(path.join(dataDir, "team-index.json"), teamIndex);
+  writeJson(path.join(dataDir, "odds-history.json"), oddsHistoryPayload);
+  writeJson(path.join(dataDir, "sync-meta.json"), syncMeta);
   console.log(
     JSON.stringify(
       {
