@@ -7,6 +7,7 @@ import {
   getBestPrediction,
   getDaysUntilWorldCup,
   getWorldCupWatchMatches,
+  WORLD_CUP_GROUPS,
   WORLD_CUP_OFFICIAL
 } from '../services/worldCupData';
 import { TeamBadge } from './TeamBadge';
@@ -45,16 +46,16 @@ export const WorldCupSpotlight: React.FC<WorldCupSpotlightProps> = ({
 
   const copy = {
     kicker: { zh: '世界杯专栏', en: 'World Cup Desk' },
-    title: { zh: '2026 世界杯观察池已开启', en: 'World Cup 2026 watch pool is live' },
+    title: { zh: '世界杯小组赛与淘汰赛预测已接入', en: 'Group and knockout forecasts are live' },
     subtitle: {
-      zh: '48 队、104 场、12 个小组；当前先接入竞彩国际赛与世界杯相关赛程，后续世界杯正赛自动进入推荐池。',
-      en: '48 teams, 104 matches, 12 groups; Sporttery international and World Cup-related fixtures feed this pool first.'
+      zh: '先展示 12 组基准预测、32 强路径和争冠层级；世界杯竞彩 SP 上线后，单场模型会自动滚动修正。',
+      en: 'Shows 12 group baselines, Round-of-32 route and title tiers; Sporttery SP will update match models when available.'
     },
     countdown: { zh: '距开赛', en: 'Kickoff in' },
     days: { zh: '天', en: 'days' },
     format: { zh: '12组 x 4队', en: '12 groups x 4' },
     fixtures: { zh: '104场', en: '104 matches' },
-    official: { zh: '官方赛程窗口', en: 'Official window' },
+    official: { zh: '32强路径', en: 'R32 route' },
     enter: { zh: '进入专栏', en: 'Open Desk' },
     match: { zh: '今日观察', en: 'Watch match' },
     noMatch: { zh: '等待中国竞彩网同步世界杯相关赛程', en: 'Waiting for World Cup-related Sporttery fixtures' },
@@ -86,6 +87,7 @@ export const WorldCupSpotlight: React.FC<WorldCupSpotlightProps> = ({
             {t('format')}
           </span>
           <span>{t('fixtures')}</span>
+          <span>{WORLD_CUP_GROUPS.length} {language === 'zh' ? '个小组预测' : 'group forecasts'}</span>
           <span>{WORLD_CUP_OFFICIAL.startDate} - {WORLD_CUP_OFFICIAL.finalDate}</span>
         </div>
       </div>

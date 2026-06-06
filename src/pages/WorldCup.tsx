@@ -18,14 +18,19 @@ import {
   getBestPrediction,
   getDaysUntilWorldCup,
   getMatchTrust,
+  getWorldCupGroupForecasts,
+  getWorldCupKnockoutForecast,
+  getWorldCupProjectedQualifiers,
   getWorldCupContenders,
   getWorldCupRecentResults,
   getWorldCupUpsetRadar,
   getWorldCupWatchMatches,
+  WORLD_CUP_KNOCKOUT_ROUNDS,
   WORLD_CUP_CONTENT_LANES,
   WORLD_CUP_OFFICIAL,
   WORLD_CUP_PIPELINE_CARDS,
-  WORLD_CUP_STAGE_CARDS
+  WORLD_CUP_STAGE_CARDS,
+  type WorldCupTeamSeed
 } from '../services/worldCupData';
 import { TeamBadge } from '../components/TeamBadge';
 
@@ -75,12 +80,94 @@ const getTopLean = (matches: Match[], language: 'zh' | 'en') => {
   return `${home.shortName[language]} vs ${away.shortName[language]} / ${getPredictionTipDisplay(top.prediction, language)}`;
 };
 
+const worldCupFlagCodes: Record<string, string> = {
+  mexico: 'mx',
+  'south-africa': 'za',
+  'south-korea': 'kr',
+  czechia: 'cz',
+  canada: 'ca',
+  switzerland: 'ch',
+  qatar: 'qa',
+  bosnia: 'ba',
+  brazil: 'br',
+  morocco: 'ma',
+  haiti: 'ht',
+  scotland: 'gb-sct',
+  usa: 'us',
+  turkey: 'tr',
+  australia: 'au',
+  paraguay: 'py',
+  germany: 'de',
+  curacao: 'cw',
+  'ivory-coast': 'ci',
+  ecuador: 'ec',
+  netherlands: 'nl',
+  japan: 'jp',
+  sweden: 'se',
+  tunisia: 'tn',
+  belgium: 'be',
+  egypt: 'eg',
+  iran: 'ir',
+  'new-zealand': 'nz',
+  spain: 'es',
+  'cape-verde': 'cv',
+  'saudi-arabia': 'sa',
+  uruguay: 'uy',
+  france: 'fr',
+  senegal: 'sn',
+  norway: 'no',
+  iraq: 'iq',
+  argentina: 'ar',
+  algeria: 'dz',
+  austria: 'at',
+  jordan: 'jo',
+  portugal: 'pt',
+  uzbekistan: 'uz',
+  colombia: 'co',
+  'dr-congo': 'cd',
+  england: 'gb-eng',
+  croatia: 'hr',
+  ghana: 'gh',
+  panama: 'pa'
+};
+
+const getFlagLabel = (code: string) => {
+  if (code === 'gb-eng') return 'ENG';
+  if (code === 'gb-sct') return 'SCO';
+  return code.toUpperCase();
+};
+
+const WorldCupFlag = ({ team }: { team: Pick<WorldCupTeamSeed, 'id' | 'flag' | 'name'> }) => {
+  const code = worldCupFlagCodes[team.id];
+  const label = code ? getFlagLabel(code) : team.flag;
+  const customFlagClass = team.id === 'morocco' ? 'is-morocco' : '';
+
+  return (
+    <span className={`worldcup-team-flag ${customFlagClass}`.trim()} title={team.name.zh}>
+      <b>{label}</b>
+      {code && !customFlagClass && (
+        <img
+          src={`https://flagcdn.com/${code}.svg`}
+          alt=""
+          loading="lazy"
+          onError={(event) => {
+            event.currentTarget.style.display = 'none';
+          }}
+        />
+      )}
+    </span>
+  );
+};
+
 export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
   const { language, matches, dataSync } = useApp();
   const watchMatches = useMemo(() => getWorldCupWatchMatches(matches, 6), [matches]);
   const contenders = useMemo(() => getWorldCupContenders(matches, 6), [matches]);
   const upsetRadar = useMemo(() => getWorldCupUpsetRadar(matches, 5), [matches]);
   const recentResults = useMemo(() => getWorldCupRecentResults(matches, 4), [matches]);
+  const groupForecasts = useMemo(() => getWorldCupGroupForecasts(), []);
+  const projectedQualifiers = useMemo(() => getWorldCupProjectedQualifiers(groupForecasts), [groupForecasts]);
+  const knockoutForecast = useMemo(() => getWorldCupKnockoutForecast(groupForecasts), [groupForecasts]);
   const daysLeft = getDaysUntilWorldCup();
   const activeCount = watchMatches.filter((match) => match.status !== 'FINISHED').length;
   const averageTrust = Math.round(
@@ -88,11 +175,11 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
   );
 
   const copy = {
-    kicker: { zh: 'World Cup Desk', en: 'World Cup Desk' },
+    kicker: { zh: '世界杯专题', en: 'World Cup Desk' },
     title: { zh: '2026 世界杯专栏', en: 'World Cup 2026 Desk' },
     subtitle: {
-      zh: '先做轻量赛事入口：官方赛制、竞彩国际赛观察、SP 快照、模型倾向和赛后复盘都集中到这里。',
-      en: 'A lightweight tournament hub for format, Sporttery watch matches, SP snapshots, model leans and post-match review.'
+      zh: '小组赛预测、32 强晋级路径、淘汰赛轮次、争冠层级和竞彩观察场次集中展示；实时 SP 上线后自动进入单场模型。',
+      en: 'Group forecasts, Round-of-32 routes, knockout rounds, title tiers and Sporttery watch matches in one place; live SP joins match models when available.'
     },
     host: { zh: '举办地', en: 'Host' },
     countdown: { zh: '距开赛', en: 'Kickoff in' },
@@ -101,6 +188,26 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
     matches: { zh: '总场次', en: 'Matches' },
     venues: { zh: '举办城市球场', en: 'Host venues' },
     stageTitle: { zh: '赛制与晋级路径', en: 'Format and Route' },
+    groupTitle: { zh: '小组赛预测', en: 'Group Forecast' },
+    groupSubtitle: {
+      zh: '这是世界杯专题的基准预测：先用当前分组、FIFA 排名、东道主加成和杯赛路径做轻量模型；中国竞彩网世界杯 SP 上线后，单场赔率会自动并入模型。',
+      en: 'This is the tournament baseline: current groups, FIFA ranking, host boost and route structure first; Sporttery World Cup SP will merge into match-level models once available.'
+    },
+    baseline: { zh: '基准版，不替代临场 SP', en: 'Baseline, not a late-market replacement' },
+    rank: { zh: '排名', en: 'Rank' },
+    points: { zh: '预计积分', en: 'Projected pts' },
+    advance: { zh: '晋级', en: 'Advance' },
+    winGroup: { zh: '头名', en: 'Win group' },
+    bestThird: { zh: '最佳第三候选', en: 'Best third candidates' },
+    knockoutTitle: { zh: '淘汰赛路径预测', en: 'Knockout Route Forecast' },
+    knockoutSubtitle: {
+      zh: '32 强路径先按小组基准预测生成，后续会随官方赛程、SP 快照、伤停与赛果自动滚动更新。',
+      en: 'The Round-of-32 route starts from group baselines, then rolls with official fixtures, SP snapshots, injuries and results.'
+    },
+    routeTitle: { zh: '争冠路径池', en: 'Title Route Pool' },
+    champion: { zh: '夺冠', en: 'Champion' },
+    round16: { zh: '16强', en: 'R16' },
+    semi: { zh: '四强', en: 'Semi' },
     watchTitle: { zh: '当前推荐观察池', en: 'Current Watch Pool' },
     watchSubtitle: {
       zh: '优先展示中国竞彩网同步到的世界杯、世预赛、国际赛相关场次；没有世界杯正赛时，用国际赛作为赛前模型校准样本。',
@@ -180,6 +287,118 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
           <span>{t('trust')}</span>
           <strong>{averageTrust ? `${averageTrust}%` : '--'}</strong>
         </article>
+      </section>
+
+      <section className="worldcup-section">
+        <div className="worldcup-section-head">
+          <div>
+            <span className="worldcup-kicker">
+              <ListChecks size={15} />
+              {t('groupTitle')}
+            </span>
+            <p>{t('groupSubtitle')}</p>
+          </div>
+          <span className="worldcup-sync-pill">{t('baseline')}</span>
+        </div>
+
+        <div className="worldcup-group-grid">
+          {groupForecasts.map((group) => (
+            <article key={group.id} className="worldcup-group-card">
+              <header>
+                <span>Group {group.id}</span>
+                <strong>{group.dates[language]}</strong>
+              </header>
+              <p>{group.headline[language]}</p>
+              <div className="worldcup-group-team-list">
+                {group.teams.map((team) => (
+                  <div key={team.id} className="worldcup-group-team-row">
+                    <WorldCupFlag team={team} />
+                    <span className="worldcup-team-copy">
+                      <strong>{team.name[language]}</strong>
+                      <small>
+                        {t('rank')} {team.fifaRank} · {t('points')} {team.projectedPoints} · {t('winGroup')} {team.groupWinProbability}%
+                      </small>
+                      <em>{team.routeLabel[language]}</em>
+                    </span>
+                    <span className="worldcup-team-prob">
+                      <b>{team.advanceProbability}%</b>
+                      <small>{t('advance')}</small>
+                    </span>
+                    <span className="worldcup-team-meter" style={{ '--advance': `${team.advanceProbability}%` } as React.CSSProperties}>
+                      <span />
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </article>
+          ))}
+        </div>
+
+        <div className="worldcup-third-lane">
+          <span>{t('bestThird')}</span>
+          <div>
+            {projectedQualifiers.bestThird.map((team) => (
+              <strong key={team.id}>
+                <WorldCupFlag team={team} />
+                {team.shortName[language]} <small>{team.advanceProbability}%</small>
+              </strong>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="worldcup-knockout-grid">
+        <div className="worldcup-section">
+          <div className="worldcup-section-head">
+            <div>
+              <span className="worldcup-kicker">
+                <Trophy size={15} />
+                {t('knockoutTitle')}
+              </span>
+              <p>{t('knockoutSubtitle')}</p>
+            </div>
+          </div>
+          <div className="worldcup-round-list">
+            {WORLD_CUP_KNOCKOUT_ROUNDS.map((round) => (
+              <article key={round.id}>
+                <span>{round.dates[language]}</span>
+                <strong>{round.title[language]}</strong>
+                <small>{round.matches} {language === 'zh' ? '场' : 'matches'}</small>
+                <p>{round.detail[language]}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+
+        <div className="worldcup-section">
+          <div className="worldcup-section-head">
+            <div>
+              <span className="worldcup-kicker">
+                <ShieldCheck size={15} />
+                {t('routeTitle')}
+              </span>
+            </div>
+          </div>
+          <div className="worldcup-route-list">
+            {knockoutForecast.slice(0, 10).map((item) => (
+              <article key={item.team.id}>
+                <WorldCupFlag team={item.team} />
+                <span className="worldcup-route-copy">
+                  <strong>{item.team.name[language]}</strong>
+                  <small>{item.tier[language]} · Group {item.team.groupId}</small>
+                </span>
+                <span className="worldcup-route-probs">
+                  <b>{item.champion}%</b>
+                  <small>{t('champion')}</small>
+                </span>
+                <div className="worldcup-route-bars">
+                  <span>{t('round16')} {item.round16}%</span>
+                  <span>{t('semi')} {item.semiFinal}%</span>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
       </section>
 
       <section className="worldcup-scout-grid">
