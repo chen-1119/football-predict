@@ -9,6 +9,8 @@
     "lint": "eslint .",
     "sync:data": "node scripts/syncData.cjs",
     "sync:watch": "node scripts/watchSync.cjs",
+    "cf:sync:deploy": "npx wrangler deploy --config cloudflare/sync-trigger/wrangler.jsonc",
+    "cf:sync:dev": "npx wrangler dev --config cloudflare/sync-trigger/wrangler.jsonc --test-scheduled",
     "validate:data": "node scripts/validateData.cjs",
     "verify:odds": "node scripts/checkSportteryOdds.cjs",
     "preview": "vite preview"

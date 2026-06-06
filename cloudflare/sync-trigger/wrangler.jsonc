@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "football-predict-sync-trigger",
+  "main": "src/index.js",
+  "compatibility_date": "2026-06-06",
+  "observability": {
+    "enabled": true
+  },
+  "triggers": {
+    "crons": [
+      "*/5 * * * *"
+    ]
+  },
+  "vars": {
+    "GITHUB_OWNER": "chen-1119",
+    "GITHUB_REPO": "football-predict",
+    "GITHUB_WORKFLOW_ID": "sync.yml",
+    "GITHUB_REF": "main",
+    "MIN_SECONDS_BETWEEN_DISPATCHES": "240"
+  }
+}

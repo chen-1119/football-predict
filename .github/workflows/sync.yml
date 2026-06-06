@@ -16,6 +16,11 @@ on:
       - 'public/matches.json'
       - 'public/odds-history.json'
   workflow_dispatch:
+    inputs:
+      source:
+        description: Trigger source, such as cloudflare-cron or manual.
+        required: false
+        default: manual
 
 concurrency:
   group: football-data-sync
