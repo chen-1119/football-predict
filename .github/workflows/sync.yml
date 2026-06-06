@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -50,7 +52,7 @@ jobs:
           git add public/matches.json public/odds-history.json public/data
           if ! git diff-index --quiet HEAD; then
             git commit -m "chore: auto sync sports predictions matches [skip ci]"
-            git push
+            git push origin HEAD:main
           else
             echo "No changes in predictions data."
           fi

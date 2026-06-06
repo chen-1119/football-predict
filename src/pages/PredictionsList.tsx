@@ -14,7 +14,7 @@ import {
   Trophy
 } from 'lucide-react';
 import { useApp } from '../context/AppContextCore';
-import { getDateStringOffset, leagues } from '../services/mockData';
+import { formatBeijingDateString, getDateStringOffset, leagues } from '../services/mockData';
 import type { Country, League, Match, PredictionDetail } from '../services/mockData';
 import { getMarketLabel, getPredictionTipDisplay, getPredictionValueLabel, getSportteryPoolRows } from '../services/bettingDisplay';
 import { getCountryById, getLeagueById, getTeamById } from '../services/entities';
@@ -67,6 +67,12 @@ const formatKickoffTime = (kickoffTime: string, language: 'zh' | 'en') => {
   );
 };
 
+const offsetDateString = (date: string, offsetDays: number) => {
+  const time = Date.parse(`${date}T00:00:00+08:00`);
+  if (!Number.isFinite(time)) return getDateStringOffset(offsetDays);
+  return formatBeijingDateString(new Date(time + offsetDays * 24 * 60 * 60 * 1000));
+};
+
 const formatSyncTime = (isoTime: string | undefined, language: 'zh' | 'en') => {
   if (!isoTime) return '--';
 
@@ -87,6 +93,23 @@ const getNextCheckSeconds = (lastCheckedAt: string | undefined, refreshIntervalS
   return Math.min(intervalSeconds, Math.max(0, Math.ceil((lastCheckedMs + intervalMs - nowMs) / 1000)));
 };
 
+const getDataAgeMinutes = (isoTime: string | undefined, nowMs: number) => {
+  if (!isoTime) return null;
+  const sourceMs = Date.parse(isoTime);
+  if (!Number.isFinite(sourceMs)) return null;
+  return Math.max(0, Math.floor((nowMs - sourceMs) / 60000));
+};
+
+const formatAgeMinutes = (minutes: number | null, language: 'zh' | 'en') => {
+  if (minutes === null) return '--';
+  if (minutes < 60) return language === 'zh' ? `${minutes} 分钟` : `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return language === 'zh'
+    ? `${hours} 小时${rest ? ` ${rest} 分钟` : ''}`
+    : `${hours}h${rest ? ` ${rest}m` : ''}`;
+};
+
 const hasOfficialScore = (match: Match) => Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway);
 
 const minutesSinceKickoff = (match: Match) => {
@@ -99,12 +122,21 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
   const { language, isPremium, togglePremium, matches, dataSync } = useApp();
   const [nowMs, setNowMs] = useState(() => Date.now());
 
-  const yesterdayStr = getDateStringOffset(-1);
-  const todayStr = getDateStringOffset(0);
-  const tomorrowStr = getDateStringOffset(1);
-  const dayAfterTomorrowStr = getDateStringOffset(2);
+  const systemTodayStr = getDateStringOffset(0);
+  const activeOfficialDate = useMemo(() => {
+    return matches
+      .filter((match) => match.status !== 'FINISHED')
+      .map(getMatchDay)
+      .filter(Boolean)
+      .sort()[0] || '';
+  }, [matches]);
+  const todayStr = activeOfficialDate && activeOfficialDate >= systemTodayStr ? activeOfficialDate : systemTodayStr;
+  const yesterdayStr = offsetDateString(todayStr, -1);
+  const tomorrowStr = offsetDateString(todayStr, 1);
+  const dayAfterTomorrowStr = offsetDateString(todayStr, 2);
 
-  const [selectedDate, setSelectedDate] = useState<string>(todayStr);
+  const [selectedDate, setSelectedDate] = useState<string>(() => getDateStringOffset(0));
+  const [hasManualDateSelection, setHasManualDateSelection] = useState(false);
   const [selectedLeagues, setSelectedLeagues] = useState<string[]>([]);
   const [signalFilter, setSignalFilter] = useState<SignalFilter>('all');
   const [sortBy, setSortBy] = useState<SortBy>('time');
@@ -190,22 +222,16 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
   };
 
   const effectiveSelectedDate = useMemo(() => {
+    if (!hasManualDateSelection && activeOfficialDate) return activeOfficialDate;
+
     const selectedDateHasMatches = matches.some((match) => matchBelongsToDate(match, selectedDate));
     if (selectedDateHasMatches || selectedDate !== todayStr) return selectedDate;
-
-    const activeOfficialDate = matches
-      .filter((match) => match.status !== 'FINISHED')
-      .map(getMatchDay)
-      .filter(Boolean)
-      .sort()
-      .at(-1);
-    if (activeOfficialDate) return activeOfficialDate;
 
     return matches
       .map(getMatchDay)
       .filter((date) => date >= todayStr)
       .sort()[0] || selectedDate;
-  }, [matches, selectedDate, todayStr]);
+  }, [activeOfficialDate, hasManualDateSelection, matches, selectedDate, todayStr]);
 
   const availableLeagues = useMemo(() => {
     const seen = new Set<string>();
@@ -430,15 +456,26 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
 
   const dataSyncSummary = dataSync.error && !dataSync.currentLoaded
     ? t('dataFallbackNote')
-    : dataSync.error && dataSync.currentLoaded && !dataSync.historyLoaded
-      ? t('dataHistoryUnavailable')
-      : dataSync.historyLoading
-      ? t('dataHistoryLoading')
-      : dataSync.historyLoaded
-        ? t('dataHistoryReady')
-        : t('dataCurrentLoading');
+    : (() => {
+      const sourceAgeMinutes = getDataAgeMinutes(dataSync.sourceUpdatedAt || dataSync.updatedAt, nowMs);
+      const staleThresholdMinutes = Math.max((dataSync.backendRefreshMinutes || 5) * 4, 20);
+      const isDataStale = dataSync.currentLoaded && sourceAgeMinutes !== null && sourceAgeMinutes > staleThresholdMinutes;
+      if (isDataStale) {
+        return language === 'zh'
+          ? `数据源已 ${formatAgeMinutes(sourceAgeMinutes, language)} 未发布新快照，可能是 GitHub 定时同步未执行。`
+          : `Source data is ${formatAgeMinutes(sourceAgeMinutes, language)} old; the scheduled GitHub sync may not have run.`;
+      }
+      if (dataSync.error && dataSync.currentLoaded && !dataSync.historyLoaded) return t('dataHistoryUnavailable');
+      if (dataSync.historyLoading) return t('dataHistoryLoading');
+      if (dataSync.historyLoaded) return t('dataHistoryReady');
+      return t('dataCurrentLoading');
+    })();
 
-  const dataSyncTone = dataSync.error
+  const sourceAgeMinutes = getDataAgeMinutes(dataSync.sourceUpdatedAt || dataSync.updatedAt, nowMs);
+  const staleThresholdMinutes = Math.max((dataSync.backendRefreshMinutes || 5) * 4, 20);
+  const isDataStale = dataSync.currentLoaded && sourceAgeMinutes !== null && sourceAgeMinutes > staleThresholdMinutes;
+
+  const dataSyncTone = dataSync.error || isDataStale
     ? 'is-warning'
     : dataSync.historyLoading
       ? 'is-loading'
@@ -475,7 +512,9 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     },
     {
       label: t('dataUpdated'),
-      value: formatSyncTime(dataSync.sourceUpdatedAt || dataSync.updatedAt, language)
+      value: sourceAgeMinutes !== null
+        ? `${formatSyncTime(dataSync.sourceUpdatedAt || dataSync.updatedAt, language)} / ${formatAgeMinutes(sourceAgeMinutes, language)}`
+        : formatSyncTime(dataSync.sourceUpdatedAt || dataSync.updatedAt, language)
     },
     {
       label: t('dataRefresh'),
@@ -560,7 +599,10 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
             <button
               key={option.date}
               type="button"
-              onClick={() => setSelectedDate(option.date)}
+              onClick={() => {
+                setHasManualDateSelection(true);
+                setSelectedDate(option.date);
+              }}
               className={`date-chip ${effectiveSelectedDate === option.date ? 'active' : ''}`}
             >
               <span className="date-label">{option.label}</span>
@@ -575,7 +617,10 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
               aria-label={language === 'zh' ? '历史日期' : 'History dates'}
               value={selectedHistoryDate}
               onChange={(event) => {
-                if (event.target.value) setSelectedDate(event.target.value);
+                if (event.target.value) {
+                  setHasManualDateSelection(true);
+                  setSelectedDate(event.target.value);
+                }
               }}
             >
               <option value="">{language === 'zh' ? '历史日期' : 'History'}</option>
