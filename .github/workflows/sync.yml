@@ -2,8 +2,20 @@ name: Auto Sync Football Data
 
 on:
   schedule:
-    - cron: '*/5 * * * *' # 每 5 分钟自动同步一次；GitHub 可能会有排队延迟
-  workflow_dispatch: # 支持在 GitHub 控制台手动点击触发
+    # GitHub scheduled jobs can queue or skip at busy minute marks; offset the run.
+    - cron: '2-59/5 * * * *'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/sync.yml'
+      - 'scripts/syncData.cjs'
+      - 'scripts/checkSportteryOdds.cjs'
+      - 'scripts/validateData.cjs'
+      - 'public/data/**'
+      - 'public/matches.json'
+      - 'public/odds-history.json'
+  workflow_dispatch:
 
 concurrency:
   group: football-data-sync
