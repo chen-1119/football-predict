@@ -218,6 +218,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     trustHeader: { zh: '可信度', en: 'Trust' },
     unlockTitle: { zh: '点击模拟升级解锁', en: 'Click to unlock' },
     hit: { zh: '命中', en: 'Hit' },
+    miss: { zh: '未中', en: 'Miss' },
     leagueMatches: { zh: '场比赛', en: 'matches' }
   };
 
@@ -388,18 +389,22 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
       );
     }
 
-    const showResult = isFinished && pred.resultStatus === 'WON';
+    const showHit = isFinished && pred.resultStatus === 'WON';
+    const showMiss = isFinished && pred.resultStatus === 'LOST';
+    const showFinishedWatch = isFinished && pred.tipCode === 'WATCH';
     const hasDisplayOdds = Number.isFinite(pred.odds) && pred.odds > 0;
 
     return (
-      <div className={`prediction-cell ${showResult ? 'is-hit' : ''}`}>
+      <div className={`prediction-cell ${showHit ? 'is-hit' : ''} ${showMiss ? 'is-miss' : ''} ${showFinishedWatch ? 'is-watch-review' : ''}`}>
         <span className="prediction-tip">
           {getPredictionTipDisplay(pred, language, true)}
         </span>
         {hasDisplayOdds && (
           <span className="prediction-odds">{getPredictionValueLabel(pred, language)} {pred.odds.toFixed(2)}</span>
         )}
-        {showResult && <span className="mini-hit">{t('hit')}</span>}
+        {showHit && <span className="mini-hit">{t('hit')}</span>}
+        {showMiss && <span className="mini-miss">{t('miss')}</span>}
+        {showFinishedWatch && <span className="mini-watch">{t('watch')}</span>}
       </div>
     );
   };

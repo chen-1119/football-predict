@@ -1330,6 +1330,14 @@ button.status-pill:hover {
   color: hsl(var(--success));
 }
 
+.prediction-cell.is-miss .prediction-tip {
+  color: hsl(var(--danger));
+}
+
+.prediction-cell.is-watch-review .prediction-tip {
+  color: hsl(var(--text-muted));
+}
+
 .prediction-tip {
   color: hsl(var(--text-primary));
   font-size: 0.82rem;
@@ -2226,6 +2234,24 @@ button.status-pill:hover {
   font-size: 0.66rem;
   font-weight: 850;
   padding: 0.08rem 0.34rem;
+}
+
+.mini-miss,
+.mini-watch {
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 850;
+  padding: 0.08rem 0.34rem;
+}
+
+.mini-miss {
+  background: hsl(var(--danger) / 0.12);
+  color: hsl(var(--danger));
+}
+
+.mini-watch {
+  background: hsl(var(--muted) / 0.18);
+  color: hsl(var(--text-muted));
 }
 
 .locked-tip {
