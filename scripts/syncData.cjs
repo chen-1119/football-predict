@@ -1943,6 +1943,27 @@ function splitMatchesForOutput(matches) {
   return { current, history };
 }
 
+function staleOrPartialFetchReason(existingMatches, nextMatches, rawMatchesWithOdds, rawResultMatches) {
+  if (existingMatches.length < 100) return "";
+
+  const existingSplit = splitMatchesForOutput(existingMatches);
+  const nextSplit = splitMatchesForOutput(nextMatches);
+
+  if (rawMatchesWithOdds.length === 0 && nextMatches.length < existingMatches.length) {
+    return `fresh Sporttery odds unavailable; keeping existing ${existingMatches.length} matches`;
+  }
+
+  if (
+    existingSplit.history.length >= 100 &&
+    nextSplit.history.length < existingSplit.history.length * 0.8 &&
+    rawResultMatches.length < existingSplit.history.length * 0.8
+  ) {
+    return `fresh result coverage ${rawResultMatches.length} is far below existing history ${existingSplit.history.length}`;
+  }
+
+  return "";
+}
+
 function buildTeamIndex(matches) {
   const byTeam = new Map();
   const upsert = (match, side) => {
@@ -2013,15 +2034,22 @@ async function sync() {
       return applyPredictionPersistence(appMatch, existing, capturedAt);
     });
 
+  let keptExistingReason = staleOrPartialFetchReason(existingMatches, output, rawMatchesWithOdds, rawResultMatches);
+
   if (!output.length) {
-    output = existingMatches.filter(isTrustedOddsMatch);
+    output = existingMatches;
+    keptExistingReason = "Sporttery returned no publishable matches; kept existing match store";
     if (!output.length) throw new Error("Sporttery returned no matches and no existing matches.json is available.");
-    console.log(`Sporttery returned no trusted odds; kept existing trusted matches.json (${output.length}).`);
+    console.log(`${keptExistingReason} (${output.length}).`);
+  } else if (keptExistingReason) {
+    const freshCount = output.length;
+    output = existingMatches;
+    console.log(`${keptExistingReason}; ignored partial fresh output (${freshCount}).`);
   }
 
-  const oddsHistory = usedFreshOdds
+  const oddsHistory = usedFreshOdds && !keptExistingReason
     ? appendOddsHistory(publicDir, output, capturedAt)
-    : { rows: loadOddsHistory(publicDir).rows.length, appended: 0, updated: 0, skipped: "no fresh official odds" };
+    : { rows: loadOddsHistory(publicDir).rows.length, appended: 0, updated: 0, skipped: keptExistingReason || "no fresh official odds" };
   output = attachOddsTrends(output, publicDir);
   const split = splitMatchesForOutput(output);
   const teamIndex = buildTeamIndex(output);
@@ -2058,6 +2086,14 @@ async function sync() {
       note: "GitHub Pages serves static JSON. The page checks for newer JSON regularly; GitHub Actions refreshes the source files on schedule.",
     },
     oddsHistory,
+    ...(keptExistingReason ? {
+      fallback: {
+        keptExisting: true,
+        reason: keptExistingReason,
+        existingMatches: existingMatches.length,
+        freshPublishableMatches: rawMatchesForOutput.length,
+      },
+    } : {}),
   };
 
   writeJson(path.join(publicDir, "matches.json"), split.current);
