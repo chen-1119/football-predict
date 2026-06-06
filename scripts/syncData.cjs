@@ -12,8 +12,8 @@ const WINDOW_FORWARD_DAYS = Math.max(1, Number(process.env.MATCH_WINDOW_FORWARD_
 const ODDS_HISTORY_RETENTION_DAYS = Math.max(1, Number(process.env.ODDS_HISTORY_RETENTION_DAYS || 365));
 const ODDS_HISTORY_BUCKET_MINUTES = Math.max(1, Number(process.env.ODDS_HISTORY_BUCKET_MINUTES || 5));
 const PAGE_POLL_SECONDS = Math.max(15, Number(process.env.PAGE_POLL_SECONDS || 30));
-const ANALYST_PROMPT_VERSION = "professional-football-analyst-v5";
-const PREDICTION_POLICY_VERSION = "pre-match-value-gate-v7";
+const ANALYST_PROMPT_VERSION = "professional-football-analyst-v6";
+const PREDICTION_POLICY_VERSION = "pre-match-quality-gate-v8";
 const METHODS = (process.env.SPORTTERY_METHODS || "concern,live,result,all")
   .split(",")
   .map((x) => x.trim())
@@ -975,6 +975,97 @@ function hhadSupportForPick(hhadProbabilities, code) {
   return null;
 }
 
+function matchVolatilityProfile(match) {
+  const text = [
+    match.leagueName,
+    match.leagueNameEn,
+    match.leagueShortName,
+    match.countryName,
+    match.countryNameEn,
+    match.homeTeam,
+    match.awayTeam,
+  ].filter(Boolean).join(" ");
+
+  return {
+    isInternational: /(\u56fd\u9645|\u53cb\u8c0a|\u4e16\u754c\u676f|\u4e16\u9884|\u56fd\u5bb6|international|friendly|world cup|qualifier|fifa)/i.test(text),
+    isJapan: /(\u65e5\u804c|\u65e5\u8054|\u65e5\u672c|j1|j2|japan)/i.test(text),
+  };
+}
+
+function evaluateOneXTwoGate(context) {
+  const {
+    match,
+    pick,
+    probabilities,
+    hhadProbabilities,
+    probabilityGap,
+    modelProbabilityGap,
+    riskTags,
+    analystSelection,
+  } = context;
+
+  const code = pick[0];
+  const odds = pick[2];
+  const profile = matchVolatilityProfile(match);
+  const isSidePick = code === "1" || code === "2";
+  const pickProbability = code === "1"
+    ? probabilities.home
+    : code === "X"
+      ? probabilities.draw
+      : probabilities.away;
+  const handicapSupport = hhadSupportForPick(hhadProbabilities, code);
+  const reasons = [];
+
+  if (analystSelection.isContrarian) reasons.push("contrarian");
+  if (code === "X") reasons.push("draw-is-not-single-pick");
+  if (!isSidePick) reasons.push("no-side-pick");
+  if (isSidePick && handicapSupport === null) reasons.push("missing-handicap-confirmation");
+  if (isSidePick && handicapSupport !== null && handicapSupport < 0.56) reasons.push("weak-handicap-confirmation");
+  if (probabilities.draw >= 0.24) reasons.push("draw-pressure");
+  if (probabilityGap < 0.2) reasons.push("thin-market-edge");
+  if (modelProbabilityGap < 0.14) reasons.push("thin-model-edge");
+  if (riskTags.length > 0) reasons.push("risk-tags");
+  if (isSidePick && odds <= 1.45) reasons.push("low-odds-no-value");
+  if (profile.isInternational && isSidePick && odds <= 1.7) reasons.push("international-low-odds");
+  if (profile.isJapan && isSidePick && odds <= 2.05) reasons.push("jleague-volatile-favorite");
+
+  const strongSidePick = isSidePick
+    && !analystSelection.isContrarian
+    && pickProbability >= 0.62
+    && probabilityGap >= 0.24
+    && modelProbabilityGap >= 0.18
+    && handicapSupport !== null
+    && handicapSupport >= 0.58
+    && probabilities.draw <= 0.22
+    && odds > 1.45
+    && odds <= 2.35
+    && riskTags.length === 0;
+
+  const stricterProfileOk = (!profile.isInternational || (pickProbability >= 0.68 && handicapSupport >= 0.62 && odds > 1.7))
+    && (!profile.isJapan || (pickProbability >= 0.66 && handicapSupport >= 0.62 && odds > 2.05));
+
+  return {
+    promote: Boolean(strongSidePick && stricterProfileOk),
+    reasons,
+    handicapSupport,
+    profile,
+  };
+}
+
+function evaluateGoalsGate(goalsProbability, over25Probability, bttsProbability) {
+  const reasons = [];
+  const edge = Math.abs(over25Probability - 0.5);
+
+  if (goalsProbability < 0.58) reasons.push("thin-goal-edge");
+  if (edge < 0.08) reasons.push("near-coin-flip-total");
+  if (bttsProbability >= 0.46 && bttsProbability <= 0.56) reasons.push("btts-borderline");
+
+  return {
+    promote: goalsProbability >= 0.58 && edge >= 0.08 && !(bttsProbability >= 0.48 && bttsProbability <= 0.53),
+    reasons,
+  };
+}
+
 function selectAnalystOneXTwo(match, picks, probabilities, hhadProbabilities) {
   const marketLeader = picks[0];
   const runnerUp = picks[1];
@@ -1310,15 +1401,52 @@ function predictionSet(match) {
     riskTags.push({ zh: "盘口分歧", en: "Market disagreement" });
   }
 
-  const oneXTwo = {
-    marketType: "1X2",
+  const oneXTwoGate = evaluateOneXTwoGate({
+    match,
+    pick: best1x2,
+    probabilities,
+    hhadProbabilities,
+    probabilityGap,
+    modelProbabilityGap,
+    riskTags,
+    analystSelection,
+  });
+  const oneXTwoWatchLabel = {
+    zh: "\u89c2\u5bdf\u4e3a\u4e3b \u80dc\u5e73\u8d1f\u4e0d\u5f3a\u63a8",
+    en: "Watch first: no 1X2 pick",
+  };
+  const oneXTwoRiskTags = oneXTwoGate.promote
+    ? riskTags
+    : [
+        ...riskTags,
+        { zh: "\u63a8\u8350\u95e8\u69db\u672a\u8fc7", en: "Recommendation gate not met" },
+      ];
+  const oneXTwoTrust = oneXTwoGate.promote
+    ? baseTrust
+    : clamp(baseTrust - 18, 42, 64);
+  const oneXTwoGateZh = `推荐闸门：模型优势约 ${pct(modelProbabilityGap)} 个百分点，市场优势约 ${pct(probabilityGap)} 个百分点，让球同向支持${oneXTwoGate.handicapSupport === null ? "不足" : `约 ${pct(oneXTwoGate.handicapSupport)}%`}；未达到强推条件，暂不输出单一胜平负方向。`;
+  const oneXTwoGateEn = `Recommendation gate: model edge is about ${pct(modelProbabilityGap)} points, market edge about ${pct(probabilityGap)} points, same-side handicap support ${oneXTwoGate.handicapSupport === null ? "unavailable" : `about ${pct(oneXTwoGate.handicapSupport)}%`}; no single 1X2 pick is promoted.`;
+  const modelLean = {
     tipCode: best1x2[0],
     tipLabel: { zh: best1x2[3], en: best1x2[4] },
     odds: best1x2[2],
     trustScore: baseTrust,
+    resultStatus: resultStatus(match, best1x2[0], "1X2"),
+  };
+
+  const oneXTwo = {
+    marketType: "1X2",
+    tipCode: oneXTwoGate.promote ? modelLean.tipCode : "WATCH",
+    tipLabel: oneXTwoGate.promote ? modelLean.tipLabel : oneXTwoWatchLabel,
+    odds: oneXTwoGate.promote ? modelLean.odds : 0,
+    trustScore: oneXTwoTrust,
     explanation: {
-      zh: `本场以中国竞彩网官方 HAD 胜平负 SP 为主轴，去水后最高支持方向为${best1x2[3]}。模型同时参考主客预期进球、平局拉力和赔率分布，不使用本地模拟赛果回填。`,
-      en: `This pick is anchored to official Sporttery HAD odds. After removing overround, the strongest direction is ${best1x2[4]}.`,
+      zh: oneXTwoGate.promote
+        ? `本场以中国竞彩网官方 HAD 胜平负 SP 为主轴，去水后最高支持方向为${best1x2[3]}。模型同时参考主客预期进球、平局拉力和赔率分布，不使用本地模拟赛果回填。`
+        : "本场胜平负未通过推荐闸门：低赔、平局压力、让球确认或风险标签存在不一致，只保留为赛前观察项。",
+      en: oneXTwoGate.promote
+        ? `This pick is anchored to official Sporttery HAD odds. After removing overround, the strongest direction is ${best1x2[4]}.`
+        : "This 1X2 market did not pass the recommendation gate. Low odds, draw pressure, handicap confirmation, or risk tags are not aligned, so it remains watch-only.",
     },
     analysisItems: [
       {
@@ -1326,10 +1454,14 @@ function predictionSet(match) {
         en: `Official HAD SP: ${oddsText}; normalized support is about ${probabilityTextEn}.`,
       },
       {
-        zh: analystSelection.isContrarian
+        zh: !oneXTwoGate.promote
+          ? oneXTwoGateZh
+          : analystSelection.isContrarian
           ? `${analystSelection.reason.zh} 当前模型可信度 ${baseTrust}%，该方向属于价值观察而非高确定性推荐。`
           : `胜平负差距：市场主线领先第二方向约 ${pct(probabilityGap)} 个百分点，当前模型可信度 ${baseTrust}%。`,
-        en: analystSelection.isContrarian
+        en: !oneXTwoGate.promote
+          ? oneXTwoGateEn
+          : analystSelection.isContrarian
           ? `${analystSelection.reason.en} Model confidence is ${baseTrust}%; this is a value-watch, not a high-certainty banker.`
           : `1X2 separation: the market lead is ahead by about ${pct(probabilityGap)} percentage points. Model confidence: ${baseTrust}%.`,
       },
@@ -1338,52 +1470,79 @@ function predictionSet(match) {
         en: `${drawRiskEn} ${sourceTextEn}.`,
       },
     ],
-    riskTags,
+    riskTags: oneXTwoRiskTags,
     visibilityStatus: "FREE",
-    resultStatus: resultStatus(match, best1x2[0], "1X2"),
+    resultStatus: oneXTwoGate.promote ? modelLean.resultStatus : "PENDING",
   };
+
+  const goalsGate = evaluateGoalsGate(goalsProbability, over25Probability, bttsProbability);
+  const goalsWatchLabel = {
+    zh: "观察为主 进球数不强推",
+    en: "Watch first: no total-goals pick",
+  };
+  const goalsRiskTags = goalsGate.promote
+    ? riskTags.filter((tag) => tag.en === "Goal-model borderline")
+    : [
+        ...riskTags.filter((tag) => tag.en === "Goal-model borderline"),
+        { zh: "进球闸门未过", en: "Goals gate not met" },
+      ];
 
   const goals = {
     marketType: "GOALS",
-    tipCode: goalsTip,
-    tipLabel: goalsTipLabel,
-    odds: goalsOdds,
-    trustScore: clamp(Math.round(goalsProbability * 100 + 12), 50, 78),
+    tipCode: goalsGate.promote ? goalsTip : "WATCH",
+    tipLabel: goalsGate.promote ? goalsTipLabel : goalsWatchLabel,
+    odds: goalsGate.promote ? goalsOdds : 0,
+    trustScore: goalsGate.promote
+      ? clamp(Math.round(goalsProbability * 100 + 12), 50, 78)
+      : clamp(Math.round(goalsProbability * 100 - 2), 42, 58),
     explanation: {
-      zh: `进球趋势为模型参考项，基于胜平负 SP 反推出主队 ${homeLambda.toFixed(2)}、客队 ${awayLambda.toFixed(2)} 的预期进球，当前总进球期望约 ${totalLambda.toFixed(2)}。`,
-      en: `The goals trend derives expected goals from 1X2 odds: home ${homeLambda.toFixed(2)}, away ${awayLambda.toFixed(2)}, total ${totalLambda.toFixed(2)}.`,
+      zh: goalsGate.promote
+        ? `进球趋势为模型参考项，基于胜平负 SP 反推出主队 ${homeLambda.toFixed(2)}、客队 ${awayLambda.toFixed(2)} 的预期进球，当前总进球期望约 ${totalLambda.toFixed(2)}。`
+        : `进球趋势未通过推荐闸门：总进球期望约 ${totalLambda.toFixed(2)}，大 2.5 概率约 ${pct(over25Probability)}%，边际不足时不强行给大/小球方向。`,
+      en: goalsGate.promote
+        ? `The goals trend derives expected goals from 1X2 odds: home ${homeLambda.toFixed(2)}, away ${awayLambda.toFixed(2)}, total ${totalLambda.toFixed(2)}.`
+        : `The goals trend did not pass the recommendation gate. Total expected goals are about ${totalLambda.toFixed(2)}, over 2.5 probability about ${pct(over25Probability)}%, so no over/under pick is promoted.`,
     },
     analysisItems: [
       {
-        zh: `比分热区：${score.home}-${score.away} 附近；${goalsTipLabel.zh} 的模型概率约 ${pct(goalsProbability)}%。`,
-        en: `Score heat zone: around ${score.home}-${score.away}; model probability for ${goalsTipLabel.en} is about ${pct(goalsProbability)}%.`,
+        zh: goalsGate.promote
+          ? `比分热区：${score.home}-${score.away} 附近；${goalsTipLabel.zh} 的模型概率约 ${pct(goalsProbability)}%。`
+          : `比分热区：${score.home}-${score.away} 附近；候选方向 ${goalsTipLabel.zh} 的模型概率约 ${pct(goalsProbability)}%，低于强推阈值。`,
+        en: goalsGate.promote
+          ? `Score heat zone: around ${score.home}-${score.away}; model probability for ${goalsTipLabel.en} is about ${pct(goalsProbability)}%.`
+          : `Score heat zone: around ${score.home}-${score.away}; candidate ${goalsTipLabel.en} is about ${pct(goalsProbability)}%, below the promotion threshold.`,
       },
       {
         zh: `大 2.5 球概率约 ${pct(over25Probability)}%，该指标用于走势参考，不等同于官方总进球 SP。`,
         en: `Over 2.5 probability is about ${pct(over25Probability)}%. This is a model reference, not official Sporttery total-goals SP.`,
       },
     ],
-    riskTags: riskTags.filter((tag) => tag.en === "Goal-model borderline"),
-    visibilityStatus: "PREMIUM",
-    resultStatus: resultStatus(match, goalsTip, "GOALS"),
+    riskTags: goalsRiskTags,
+    visibilityStatus: goalsGate.promote ? "PREMIUM" : "FREE",
+    resultStatus: goalsGate.promote ? resultStatus(match, goalsTip, "GOALS") : "PENDING",
   };
 
-  const bestIsSteady = !analystSelection.isContrarian
+  const bestIsSteady = oneXTwoGate.promote
+    && !analystSelection.isContrarian
     && best1x2[1] >= 0.58
-    && modelProbabilityGap >= 0.07
+    && modelProbabilityGap >= 0.18
     && baseTrust >= 84
-    && riskTags.length <= 1;
-  const bestHandicapSupport = hhadSupportForPick(hhadProbabilities, oneXTwo.tipCode);
-  const bestHasWeakHandicap = ["1", "2"].includes(oneXTwo.tipCode)
+    && riskTags.length === 0;
+  const bestHandicapSupport = hhadSupportForPick(hhadProbabilities, modelLean.tipCode);
+  const bestHasWeakHandicap = ["1", "2"].includes(modelLean.tipCode)
     && bestHandicapSupport !== null
-    && bestHandicapSupport < 0.42;
-  const bestHasThinEdge = modelProbabilityGap < 0.08 || best1x2[1] < 0.54;
-  const bestHasOverheatedFavorite = ["1", "2"].includes(oneXTwo.tipCode)
-    && oneXTwo.odds <= 1.55
+    && bestHandicapSupport < 0.58;
+  const bestHasThinEdge = modelProbabilityGap < 0.18 || best1x2[1] < 0.62;
+  const bestHasOverheatedFavorite = ["1", "2"].includes(modelLean.tipCode)
+    && modelLean.odds <= 1.7
     && (bestHandicapSupport === null || bestHandicapSupport < 0.48 || riskTags.length >= 1);
-  const bestShouldWatch = !analystSelection.isContrarian
-    && !bestIsSteady
-    && (bestHasWeakHandicap || bestHasThinEdge || bestHasOverheatedFavorite || riskTags.length >= 2);
+  const bestShouldWatch = !bestIsSteady
+    || !oneXTwoGate.promote
+    || analystSelection.isContrarian
+    || bestHasWeakHandicap
+    || bestHasThinEdge
+    || bestHasOverheatedFavorite
+    || riskTags.length > 0;
   const bestPrefix = bestShouldWatch
     ? { zh: "观察为主", en: "Watch first" }
     : analystSelection.isContrarian
@@ -1398,18 +1557,22 @@ function predictionSet(match) {
     : bestIsSteady
       ? clamp(oneXTwo.trustScore + 2, 57, 96)
       : clamp(oneXTwo.trustScore - 4, 52, 82);
-  const bestWatchLabelZh = bestHasWeakHandicap
+  const bestWatchLabelZh = !oneXTwoGate.promote
+    ? "观察为主 推荐闸门未过"
+    : bestHasWeakHandicap
     ? "观察为主 防正路过热"
     : bestHasThinEdge
       ? "观察为主 胜平负差距小"
       : "观察为主 风险叠加";
-  const bestWatchLabelEn = bestHasWeakHandicap
+  const bestWatchLabelEn = !oneXTwoGate.promote
+    ? "Watch first: gate not met"
+    : bestHasWeakHandicap
     ? "Watch first: favorite overheated"
     : bestHasThinEdge
       ? "Watch first: thin 1X2 edge"
       : "Watch first: stacked risk";
   const bestNarrative = buildBestNarrative(match, {
-    oneXTwo,
+    oneXTwo: modelLean,
     bestShouldWatch,
     analystSelection,
     bestIsSteady,
@@ -1428,18 +1591,18 @@ function predictionSet(match) {
 
   const best = {
     marketType: "BEST",
-    tipCode: bestShouldWatch ? "WATCH" : oneXTwo.tipCode,
+    tipCode: bestShouldWatch ? "WATCH" : modelLean.tipCode,
     tipLabel: {
-      zh: bestShouldWatch ? bestWatchLabelZh : `${bestPrefix.zh} ${oneXTwo.tipLabel.zh}`,
-      en: bestShouldWatch ? bestWatchLabelEn : `${bestPrefix.en}: ${oneXTwo.tipLabel.en}`,
+      zh: bestShouldWatch ? bestWatchLabelZh : `${bestPrefix.zh} ${modelLean.tipLabel.zh}`,
+      en: bestShouldWatch ? bestWatchLabelEn : `${bestPrefix.en}: ${modelLean.tipLabel.en}`,
     },
-    odds: bestShouldWatch ? 0 : oneXTwo.odds,
+    odds: bestShouldWatch ? 0 : modelLean.odds,
     trustScore: bestTrustScore,
     explanation: bestNarrative.explanation,
     analysisItems: bestNarrative.analysisItems,
-    riskTags,
+    riskTags: bestShouldWatch ? oneXTwoRiskTags : riskTags,
     visibilityStatus: bestShouldWatch ? "FREE" : "PREMIUM",
-    resultStatus: bestShouldWatch ? "PENDING" : oneXTwo.resultStatus,
+    resultStatus: bestShouldWatch ? "PENDING" : modelLean.resultStatus,
   };
 
   return { predictions: [oneXTwo, goals, best], homeLambda, awayLambda, projectedScore: score, probabilityModel };

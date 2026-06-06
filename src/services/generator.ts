@@ -69,6 +69,7 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
     getVisiblePredictions(m).forEach(p => {
       // 筛选市场类型
       if (!enabledMarketTypes.includes(p.marketType)) return;
+      if (p.tipCode === 'WATCH' || p.odds <= 0) return;
       // 筛选 SP 范围
       if (p.odds < minOdds || p.odds > maxOdds) return;
       // 筛选可信度

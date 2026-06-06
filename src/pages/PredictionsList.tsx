@@ -184,7 +184,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     live: { zh: '进行中', en: 'Live' },
     pending: { zh: '待开赛', en: 'Scheduled' },
     details: { zh: '详情', en: 'Details' },
-    hitRate: { zh: '可结算命中率', en: 'Scored Hit Rate' },
+    hitRate: { zh: 'AI精选命中率', en: 'Best Tip Hit Rate' },
     selectedMatches: { zh: '当前筛选场次', en: 'Filtered Matches' },
     signalSummary: { zh: '推荐分组', en: 'Signal Split' },
     avgTrust: { zh: '平均可信度', en: 'Average Trust' },
@@ -322,17 +322,18 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     return Object.values(groups);
   }, [sortedMatches]);
 
-  const settledPredictions = useMemo(() => {
+  const settledBestPredictions = useMemo(() => {
     return matches
       .flatMap((match) => getVisiblePredictions(match))
+      .filter((prediction) => prediction.marketType === 'BEST')
       .filter(isScoredPrediction);
   }, [matches]);
 
   const hitRate = useMemo(() => {
-    if (settledPredictions.length === 0) return null;
-    const won = settledPredictions.filter((prediction) => prediction.resultStatus === 'WON').length;
-    return ((won / settledPredictions.length) * 100).toFixed(1);
-  }, [settledPredictions]);
+    if (settledBestPredictions.length === 0) return null;
+    const won = settledBestPredictions.filter((prediction) => prediction.resultStatus === 'WON').length;
+    return ((won / settledBestPredictions.length) * 100).toFixed(1);
+  }, [settledBestPredictions]);
 
   const avgTrust = useMemo(() => {
     const trustScores = sortedMatches.map(getBestTrust).filter((score) => score > 0);
@@ -431,7 +432,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     {
       label: t('hitRate'),
       value: hitRate ? `${hitRate}%` : '--',
-      note: `${settledPredictions.length} ${t('settledPicks')}`,
+      note: `${settledBestPredictions.length} ${t('settledPicks')}`,
       icon: BarChart3,
       tone: 'success'
     },
