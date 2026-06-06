@@ -13,7 +13,7 @@ const ODDS_HISTORY_RETENTION_DAYS = Math.max(1, Number(process.env.ODDS_HISTORY_
 const ODDS_HISTORY_BUCKET_MINUTES = Math.max(1, Number(process.env.ODDS_HISTORY_BUCKET_MINUTES || 5));
 const PAGE_POLL_SECONDS = Math.max(15, Number(process.env.PAGE_POLL_SECONDS || 60));
 const ANALYST_PROMPT_VERSION = "professional-football-analyst-v5";
-const PREDICTION_POLICY_VERSION = "pre-match-value-gate-v5";
+const PREDICTION_POLICY_VERSION = "pre-match-value-gate-v6";
 const METHODS = (process.env.SPORTTERY_METHODS || "concern,live,result,all")
   .split(",")
   .map((x) => x.trim())
@@ -1224,12 +1224,8 @@ function predictionSet(match) {
   const goalsTip = totalLambda >= 6.5 ? "7+" : String(clamp(Math.round(totalLambda), 0, 6));
   const over25Probability = clamp(1 - [0, 1, 2].reduce((sum, goals) => sum + poissonProbability(totalLambda, goals), 0), 0, 1);
   const bttsProbability = clamp((1 - Math.exp(-homeLambda)) * (1 - Math.exp(-awayLambda)), 0, 1);
-  const bttsYesThreshold = 0.6;
-  const ggTip = bttsProbability >= bttsYesThreshold ? "GG" : "NG";
-  const ggTipProbability = ggTip === "GG" ? bttsProbability : 1 - bttsProbability;
   const goalsProbability = totalGoalsProbability(totalLambda, goalsTip);
   const goalsOdds = Number(clamp(1 / Math.max(goalsProbability, 0.08), 1.2, 12.5).toFixed(2));
-  const ggOdds = Number(clamp(1 / Math.max(ggTipProbability, 0.15), 1.2, 8).toFixed(2));
   const score = projectedScore(homeLambda, awayLambda);
   const probabilityModel = buildProbabilityModel(match, probabilities, hhadProbabilities, homeLambda, awayLambda, over25Probability, bttsProbability);
   const modelProbabilities = {
@@ -1354,35 +1350,6 @@ function predictionSet(match) {
     resultStatus: resultStatus(match, goalsTip, "GOALS"),
   };
 
-  const gg = {
-    marketType: "GG_NG",
-    tipCode: ggTip,
-    tipLabel: ggTip === "GG" ? { zh: "双方进球 是", en: "Both Teams to Score" } : { zh: "双方进球 否", en: "No Both Teams to Score" },
-    odds: ggOdds,
-    trustScore: clamp(Math.round(ggTipProbability * 100 + 16), 55, 86),
-    explanation: {
-      zh: ggTip === "GG"
-        ? `双方进球为模型参考项，使用主客队进球分布估算。当前双方均有进球概率约 ${pct(bttsProbability)}%，已超过 ${pct(bttsYesThreshold)}% 保守阈值，模型倾向是。`
-        : `双方进球为模型参考项，使用主客队进球分布估算。当前双方均有进球概率约 ${pct(bttsProbability)}%，未超过 ${pct(bttsYesThreshold)}% 保守阈值，模型倾向否。`,
-      en: ggTip === "GG"
-        ? `BTTS is estimated from goal distribution. Current BTTS probability is about ${pct(bttsProbability)}%, above the ${pct(bttsYesThreshold)}% conservative threshold, leaning yes.`
-        : `BTTS is estimated from goal distribution. Current BTTS probability is about ${pct(bttsProbability)}%, below the ${pct(bttsYesThreshold)}% conservative threshold, leaning no.`,
-    },
-    analysisItems: [
-      {
-        zh: `主队预期进球 ${homeLambda.toFixed(2)}，客队预期进球 ${awayLambda.toFixed(2)}；若客队预期低于 1 球，双方进球命中波动会更大。`,
-        en: `Home xG ${homeLambda.toFixed(2)}, away xG ${awayLambda.toFixed(2)}. BTTS volatility rises when either side projects below 1.0 xG.`,
-      },
-      {
-        zh: `该玩法不是中国竞彩网标准胜平负 SP，页面以“参考指数”展示，避免和官方 SP 混淆。`,
-        en: `This is shown as a model index, not official Sporttery SP.`,
-      },
-    ],
-    riskTags: riskTags.filter((tag) => tag.zh === "进球临界"),
-    visibilityStatus: "PREMIUM",
-    resultStatus: resultStatus(match, ggTip, "GG_NG"),
-  };
-
   const bestIsSteady = !analystSelection.isContrarian
     && best1x2[1] >= 0.58
     && modelProbabilityGap >= 0.07
@@ -1454,7 +1421,7 @@ function predictionSet(match) {
     resultStatus: bestShouldWatch ? "PENDING" : oneXTwo.resultStatus,
   };
 
-  return { predictions: [oneXTwo, goals, gg, best], homeLambda, awayLambda, projectedScore: score, probabilityModel };
+  return { predictions: [oneXTwo, goals, best], homeLambda, awayLambda, projectedScore: score, probabilityModel };
 }
 
 function toAppMatch(match) {
@@ -1555,7 +1522,7 @@ function kickoffHasStarted(match, capturedAt) {
 
 function predictionSignature(predictions) {
   const byMarket = new Map((predictions || []).map((prediction) => [prediction.marketType, prediction]));
-  return ["1X2", "BEST", "GOALS", "GG_NG"]
+  return ["1X2", "BEST", "GOALS"]
     .map((marketType) => {
       const prediction = byMarket.get(marketType);
       return prediction ? `${marketType}:${prediction.tipCode}` : `${marketType}:-`;
@@ -1570,9 +1537,13 @@ function settlePredictionsForMatch(match, predictions) {
   }));
 }
 
+function enabledPredictions(predictions) {
+  return (predictions || []).filter((prediction) => prediction.marketType !== "GG_NG");
+}
+
 function applyPredictionPersistence(match, existing, capturedAt) {
-  const existingPredictions = Array.isArray(existing?.predictions) ? existing.predictions : [];
-  const nextPredictions = Array.isArray(match?.predictions) ? match.predictions : [];
+  const existingPredictions = enabledPredictions(Array.isArray(existing?.predictions) ? existing.predictions : []);
+  const nextPredictions = enabledPredictions(Array.isArray(match?.predictions) ? match.predictions : []);
   const started = kickoffHasStarted(match, capturedAt) || match.status === "LIVE" || match.status === "FINISHED";
   const generatedMeta = {
     policyVersion: PREDICTION_POLICY_VERSION,

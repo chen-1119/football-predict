@@ -19,6 +19,7 @@ import type { Country, League, Match, PredictionDetail } from '../services/mockD
 import { getMarketLabel, getPredictionTipDisplay, getPredictionValueLabel, getSportteryPoolRows } from '../services/bettingDisplay';
 import { getCountryById, getLeagueById, getTeamById } from '../services/entities';
 import { getMatchSignal, type MatchSignalCategory } from '../services/matchSignal';
+import { getVisiblePrediction, getVisiblePredictions } from '../services/predictionVisibility';
 import { TeamBadge } from '../components/TeamBadge';
 import { WorldCupSpotlight } from '../components/WorldCupSpotlight';
 
@@ -39,7 +40,7 @@ const getKickoffDay = (match: Match): string => match.kickoffDate || match.kicko
 
 const matchBelongsToDate = (match: Match, date: string) => getMatchDay(match) === date || getKickoffDay(match) === date;
 
-const getBestPrediction = (match: Match) => match.predictions.find((p) => p.marketType === 'BEST');
+const getBestPrediction = (match: Match) => getVisiblePrediction(match, 'BEST');
 
 const getBestTrust = (match: Match) => getBestPrediction(match)?.trustScore || 0;
 
@@ -152,8 +153,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
 
   const translations = {
     premiumNotice: {
-      zh: '当前为免费模式，部分精选推荐、总进球数和双方进球参考已锁定。升级 PRO 可查看完整模型数据。',
-      en: 'Free mode is active. Some best tips, total goals, and BTTS references are locked. Upgrade to PRO for full model data.'
+      zh: '当前为免费模式，部分精选推荐和总进球数参考已锁定。升级 PRO 可查看完整模型数据。',
+      en: 'Free mode is active. Some best tips and total-goals references are locked. Upgrade to PRO for full model data.'
     },
     upgradeBtn: { zh: '解锁 PRO', en: 'Unlock PRO' },
     filterTitle: { zh: '赛事筛选', en: 'Competition Filters' },
@@ -318,7 +319,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
 
   const settledPredictions = useMemo(() => {
     return matches
-      .flatMap((match) => match.predictions)
+      .flatMap((match) => getVisiblePredictions(match))
       .filter((prediction) => prediction.resultStatus !== 'PENDING');
   }, [matches]);
 
@@ -358,7 +359,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
 
   const renderPredictionCell = (match: Match, marketType: PredictionDetail['marketType']) => {
     const isFinished = match.status === 'FINISHED';
-    const pred = match.predictions.find((prediction) => prediction.marketType === marketType);
+    const pred = getVisiblePrediction(match, marketType);
 
     if (!pred) return <span className="prediction-tip">-</span>;
 
@@ -755,7 +756,6 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
                       <th style={{ width: '260px', textAlign: 'center' }}>{t('oddsHeader')}</th>
                       <th style={{ width: '92px', textAlign: 'center' }}>{getMarketLabel('1X2', language)}</th>
                       <th style={{ width: '100px', textAlign: 'center' }}>{getMarketLabel('GOALS', language)}</th>
-                      <th style={{ width: '110px', textAlign: 'center' }}>{getMarketLabel('GG_NG', language)}</th>
                       <th style={{ width: '98px', textAlign: 'center' }}>{getMarketLabel('BEST', language)}</th>
                       <th style={{ width: '92px', textAlign: 'center' }}>{t('trustHeader')}</th>
                       <th style={{ width: '84px' }} />
@@ -869,10 +869,6 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
 
                           <td className="match-market-cell" data-label={getMarketLabel('GOALS', language)} style={{ textAlign: 'center' }}>
                             {renderPredictionCell(match, 'GOALS')}
-                          </td>
-
-                          <td className="match-market-cell" data-label={getMarketLabel('GG_NG', language)} style={{ textAlign: 'center' }}>
-                            {renderPredictionCell(match, 'GG_NG')}
                           </td>
 
                           <td className="match-market-cell" data-label={getMarketLabel('BEST', language)} style={{ textAlign: 'center' }}>

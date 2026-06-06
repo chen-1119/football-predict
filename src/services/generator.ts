@@ -1,9 +1,10 @@
 import type { Match, PredictionDetail } from './mockData';
+import { getVisiblePredictions, isPredictionMarketEnabled } from './predictionVisibility';
 
 export interface GeneratorParams {
   targetOdds: number; // 目标总SP
   matchCount: 'auto' | 2 | 5 | 10 | 15; // 比赛数量
-  marketTypes: string[]; // ['1X2', 'GOALS', 'GG_NG', 'BEST']
+  marketTypes: string[]; // ['1X2', 'GOALS', 'BEST']
   minOdds: number;
   maxOdds: number;
   timeWindow: '1' | '2' | '3'; // 未来几天天数
@@ -38,6 +39,9 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
     isPremiumUser
   } = params;
   let { targetOdds, minTrust } = params;
+  const enabledMarketTypes = marketTypes.filter((marketType) => (
+    isPredictionMarketEnabled(marketType as PredictionDetail['marketType'])
+  ));
 
   // 1. 免费限制强制校正
   if (!isPremiumUser) {
@@ -62,9 +66,9 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
   // 3. 筛选预测池
   const candidateSelections: SelectionResult[] = [];
   candidateMatches.forEach(m => {
-    m.predictions.forEach(p => {
+    getVisiblePredictions(m).forEach(p => {
       // 筛选市场类型
-      if (!marketTypes.includes(p.marketType)) return;
+      if (!enabledMarketTypes.includes(p.marketType)) return;
       // 筛选 SP 范围
       if (p.odds < minOdds || p.odds > maxOdds) return;
       // 筛选可信度

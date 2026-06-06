@@ -8,6 +8,7 @@ import { getTeamById } from '../services/entities';
 import { TeamBadge } from '../components/TeamBadge';
 
 type TimeWindow = '1' | '2' | '3';
+const ENABLED_BET_SLIP_MARKETS = ['1X2', 'GOALS', 'BEST'];
 
 interface SlipMeta {
   id: string;
@@ -40,7 +41,7 @@ export const BetSlipGenerator: React.FC = () => {
   // 表单状态
   const [targetOdds, setTargetOdds] = useState<number>(2.00);
   const [matchCount, setMatchCount] = useState<'auto' | 2 | 5 | 10 | 15>('auto');
-  const [selectedMarkets, setSelectedMarkets] = useState<string[]>(['1X2', 'GOALS', 'GG_NG', 'BEST']);
+  const [selectedMarkets, setSelectedMarkets] = useState<string[]>(ENABLED_BET_SLIP_MARKETS);
   const [minOdds, setMinOdds] = useState<number>(1.20);
   const [maxOdds, setMaxOdds] = useState<number>(3.00);
   const [timeWindow, setTimeWindow] = useState<TimeWindow>('3');
@@ -137,7 +138,7 @@ export const BetSlipGenerator: React.FC = () => {
   const handleReset = () => {
     setTargetOdds(2.00);
     setMatchCount('auto');
-    setSelectedMarkets(['1X2', 'GOALS', 'GG_NG', 'BEST']);
+    setSelectedMarkets(ENABLED_BET_SLIP_MARKETS);
     setMinOdds(1.20);
     setMaxOdds(3.00);
     setTimeWindow('3');
@@ -271,7 +272,6 @@ export const BetSlipGenerator: React.FC = () => {
               {[
                 { id: '1X2', label: getMarketLabel('1X2', language) },
                 { id: 'GOALS', label: getMarketLabel('GOALS', language) },
-                { id: 'GG_NG', label: getMarketLabel('GG_NG', language) },
                 { id: 'BEST', label: getMarketLabel('BEST', language) }
               ].map(m => {
                 const isSelected = selectedMarkets.includes(m.id);

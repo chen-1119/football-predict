@@ -554,8 +554,6 @@ export const bettingGlossary = [
   { term: '客胜', name: { zh: '客队胜（代码0）', en: 'Away Win' }, desc: { zh: '竞彩足球胜平负选项，表示主队在全场90分钟（含伤停补时）内告负，也就是客队获胜；官方赛果代码为 0。', en: 'The away team wins in regular time.' } },
   { term: 'SP', name: { zh: '固定奖金指数', en: 'Starting Price' }, desc: { zh: '页面中的胜平负 SP 来自官方竞彩数据源或其同步快照，表示对应选项的固定奖金指数。', en: 'Displayed odds value for the selected market.' } },
   { term: '总进球数', name: { zh: '0/1/2/3/4/5/6/7+', en: 'Total Goals' }, desc: { zh: '预测全场90分钟（含伤停补时）主客队进球数之和，竞彩常见选项为 0、1、2、3、4、5、6、7+。', en: 'Predict the total number of goals in regular time.' } },
-  { term: 'GG', name: { zh: '双方进球参考', en: 'Both Teams to Score' }, desc: { zh: '模型拓展参考项，不作为竞彩官方标准玩法展示。表示双方是否都能进球。', en: 'Model reference for whether both teams score.' } },
-  { term: 'NG', name: { zh: '双方进球否', en: 'No Both Teams to Score' }, desc: { zh: '模型拓展参考项，表示至少一方没有进球。', en: 'At least one team does not score.' } },
 ];
 
 export function registerTeam(t: Team) {

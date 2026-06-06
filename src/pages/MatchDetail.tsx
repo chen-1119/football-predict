@@ -12,6 +12,7 @@ import {
 import { getCountryById, getLeagueById, getTeamById } from '../services/entities';
 import { getMatchSignal } from '../services/matchSignal';
 import { buildMatchInsight } from '../services/predictionInsight';
+import { getVisiblePrediction, getVisiblePredictions } from '../services/predictionVisibility';
 import { TeamBadge } from '../components/TeamBadge';
 import { ArrowLeft, Lock, Trophy } from 'lucide-react';
 
@@ -359,11 +360,12 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     return translations[key][language] || '';
   };
   const poolRows = getSportteryPoolRows(match, language);
-  const hasPredictions = match.predictions.length > 0;
-  const settledPredictions = match.predictions.filter((prediction) => prediction.resultStatus !== 'PENDING');
+  const visiblePredictions = getVisiblePredictions(match);
+  const hasPredictions = visiblePredictions.length > 0;
+  const settledPredictions = visiblePredictions.filter((prediction) => prediction.resultStatus !== 'PENDING');
   const wonPredictions = settledPredictions.filter((prediction) => prediction.resultStatus === 'WON');
-  const bestReviewPrediction = match.predictions.find((prediction) => prediction.marketType === 'BEST')
-    || match.predictions.find((prediction) => prediction.marketType === '1X2');
+  const bestReviewPrediction = getVisiblePrediction(match, 'BEST')
+    || getVisiblePrediction(match, '1X2');
   const reviewHitRate = settledPredictions.length > 0 ? Math.round((wonPredictions.length / settledPredictions.length) * 100) : null;
   const homeValueText = formatSquadValue(homeTeam.value, language);
   const awayValueText = formatSquadValue(awayTeam.value, language);
@@ -923,12 +925,10 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                   </section>
 
                   <section className="probability-panel">
-                    <h4>{language === 'zh' ? '进球与双方进球' : 'Goals & BTTS'}</h4>
+                    <h4>{language === 'zh' ? '进球概率' : 'Goal Probability'}</h4>
                     <div className="probability-pair-grid">
                       <span>{language === 'zh' ? '大 2.5' : 'Over 2.5'} <strong>{formatProbabilityValue(probabilityModel.goalLines.over25)}</strong></span>
                       <span>{language === 'zh' ? '小 2.5' : 'Under 2.5'} <strong>{formatProbabilityValue(probabilityModel.goalLines.under25)}</strong></span>
-                      <span>{language === 'zh' ? '双方进球 是' : 'BTTS Yes'} <strong>{formatProbabilityValue(probabilityModel.bothTeamsToScore.yes)}</strong></span>
-                      <span>{language === 'zh' ? '双方进球 否' : 'BTTS No'} <strong>{formatProbabilityValue(probabilityModel.bothTeamsToScore.no)}</strong></span>
                     </div>
                   </section>
 
@@ -1063,7 +1063,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
 
             {/* 预测列表 */}
             {hasPredictions ? (
-              match.predictions.map(pred => renderPredictionBlock(pred))
+              visiblePredictions.map(pred => renderPredictionBlock(pred))
             ) : (
               <div className="card" style={{ color: 'hsl(var(--text-secondary))', lineHeight: 1.6 }}>
                 {language === 'zh'
