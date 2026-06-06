@@ -36,7 +36,7 @@ type SyncMeta = {
   };
 };
 
-const CURRENT_REFRESH_MS = 60 * 1000;
+const CURRENT_REFRESH_MS = 30 * 1000;
 const HISTORY_REFRESH_MS = 5 * 60 * 1000;
 
 const readStoredLanguage = (): Language => {
@@ -78,7 +78,14 @@ const formatError = (error: unknown): string => {
 };
 
 const fetchJson = async <T,>(url: string): Promise<T> => {
-  const res = await fetch(`${url}?t=${Date.now()}`);
+  const cacheBuster = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const res = await fetch(`${url}?v=${cacheBuster}`, {
+    cache: 'no-store',
+    headers: {
+      'cache-control': 'no-cache',
+      pragma: 'no-cache'
+    }
+  });
   if (!res.ok) throw new Error(`${url}: HTTP ${res.status} ${res.statusText}`);
   return res.json() as Promise<T>;
 };
@@ -161,6 +168,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [hitAndWinSubmission, setHitAndWinSubmission] = useState<HitAndWinSubmission | null>(readStoredHitAndWinSubmission);
   const [matches, setMatches] = useState<Match[]>([]);
   const lastMetaRef = useRef<{ sourceUpdatedAt?: string; finishedCount?: number }>({});
+  const refreshMsRef = useRef(CURRENT_REFRESH_MS);
   const [dataSync, setDataSync] = useState<DataSyncState>({
     currentLoaded: false,
     historyLoaded: false,
@@ -176,11 +184,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const metaToState = (meta: SyncMeta | null, checkedAt: string) => {
       const sourceUpdatedAt = meta?.updatedAt || meta?.capturedAt;
+      const configuredPollSeconds = meta?.refreshPolicy?.pagePollSeconds || CURRENT_REFRESH_MS / 1000;
+      const pagePollSeconds = Math.min(30, Math.max(15, configuredPollSeconds));
+      refreshMsRef.current = pagePollSeconds * 1000;
+
       return {
         updatedAt: sourceUpdatedAt || checkedAt,
         sourceUpdatedAt,
         lastCheckedAt: checkedAt,
-        refreshIntervalSeconds: meta?.refreshPolicy?.pagePollSeconds || CURRENT_REFRESH_MS / 1000,
+        refreshIntervalSeconds: pagePollSeconds,
         backendRefreshMinutes: meta?.refreshPolicy?.workflowMinutes || 5,
         byStatus: meta?.byStatus
       };
@@ -328,16 +340,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }, 250);
     });
 
-    const currentTimer = window.setInterval(() => {
-      void loadCurrent(false);
-    }, CURRENT_REFRESH_MS);
+    let currentTimer: number | undefined;
+    const scheduleCurrentRefresh = () => {
+      currentTimer = window.setTimeout(() => {
+        void loadCurrent(false).finally(() => {
+          if (!cancelled) scheduleCurrentRefresh();
+        });
+      }, refreshMsRef.current);
+    };
+    scheduleCurrentRefresh();
+
+    const refreshOnWake = () => {
+      if (document.visibilityState === 'visible') {
+        void loadCurrent(false);
+      }
+    };
+    window.addEventListener('focus', refreshOnWake);
+    document.addEventListener('visibilitychange', refreshOnWake);
+
     const historyTimer = window.setInterval(() => {
       void loadHistory();
     }, HISTORY_REFRESH_MS);
 
     return () => {
       cancelled = true;
-      window.clearInterval(currentTimer);
+      if (currentTimer) window.clearTimeout(currentTimer);
+      window.removeEventListener('focus', refreshOnWake);
+      document.removeEventListener('visibilitychange', refreshOnWake);
       window.clearInterval(historyTimer);
     };
   }, []);

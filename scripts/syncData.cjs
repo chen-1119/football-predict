@@ -11,9 +11,9 @@ const WINDOW_BACK_DAYS = Math.max(0, Number(process.env.MATCH_WINDOW_BACK_DAYS |
 const WINDOW_FORWARD_DAYS = Math.max(1, Number(process.env.MATCH_WINDOW_FORWARD_DAYS || 14));
 const ODDS_HISTORY_RETENTION_DAYS = Math.max(1, Number(process.env.ODDS_HISTORY_RETENTION_DAYS || 365));
 const ODDS_HISTORY_BUCKET_MINUTES = Math.max(1, Number(process.env.ODDS_HISTORY_BUCKET_MINUTES || 5));
-const PAGE_POLL_SECONDS = Math.max(15, Number(process.env.PAGE_POLL_SECONDS || 60));
+const PAGE_POLL_SECONDS = Math.max(15, Number(process.env.PAGE_POLL_SECONDS || 30));
 const ANALYST_PROMPT_VERSION = "professional-football-analyst-v5";
-const PREDICTION_POLICY_VERSION = "pre-match-value-gate-v6";
+const PREDICTION_POLICY_VERSION = "pre-match-value-gate-v7";
 const METHODS = (process.env.SPORTTERY_METHODS || "concern,live,result,all")
   .split(",")
   .map((x) => x.trim())
@@ -432,15 +432,6 @@ function poissonProbability(lambda, goals) {
   return (Math.exp(-lambda) * lambda ** goals) / factorial;
 }
 
-function totalGoalsProbability(lambda, goalsTip) {
-  if (goalsTip === "7+") {
-    let under7 = 0;
-    for (let goals = 0; goals <= 6; goals += 1) under7 += poissonProbability(lambda, goals);
-    return clamp(1 - under7, 0, 1);
-  }
-  return clamp(poissonProbability(lambda, Number(goalsTip)), 0, 1);
-}
-
 function projectedScore(homeLambda, awayLambda) {
   let best = { home: 0, away: 0, probability: 0 };
   for (let home = 0; home <= 5; home += 1) {
@@ -673,6 +664,7 @@ function buildEloSnapshots(matches) {
 }
 
 function resultStatus(match, expected, marketType = "") {
+  if (expected === "WATCH") return "PENDING";
   if (match.status !== "FINISHED") return "PENDING";
   if (!Number.isFinite(match.scoreHome) || !Number.isFinite(match.scoreAway)) return "PENDING";
   const total = match.scoreHome + match.scoreAway;
@@ -1218,14 +1210,24 @@ function predictionSet(match) {
   const probabilities = impliedProbabilities(match.odds);
   const hhadProbabilities = sanitizeOdds(match.handicapOdds) ? impliedProbabilities(match.handicapOdds) : null;
   const rand = seeded(`${match.sourceMatchId}-${match.homeTeam}-${match.awayTeam}`);
-  const homeLambda = clamp(0.75 + probabilities.home * 2.2 + rand() * 0.35, 0.6, 2.8);
-  const awayLambda = clamp(0.65 + probabilities.away * 2.1 + rand() * 0.35, 0.5, 2.6);
+  const favoriteProbability = Math.max(probabilities.home, probabilities.draw, probabilities.away);
+  const totalLambdaSeed = 2.55
+    + (0.25 - probabilities.draw) * 0.95
+    + (favoriteProbability - 0.5) * 0.75
+    + (rand() - 0.5) * 0.28;
+  const totalLambdaBase = clamp(totalLambdaSeed, 1.75, 3.25);
+  const homeShare = clamp(0.5 + (probabilities.home - probabilities.away) * 0.52, 0.24, 0.76);
+  const homeLambda = clamp(totalLambdaBase * homeShare, 0.35, 2.8);
+  const awayLambda = clamp(totalLambdaBase - homeLambda, 0.3, 2.6);
   const totalLambda = homeLambda + awayLambda;
-  const goalsTip = totalLambda >= 6.5 ? "7+" : String(clamp(Math.round(totalLambda), 0, 6));
   const over25Probability = clamp(1 - [0, 1, 2].reduce((sum, goals) => sum + poissonProbability(totalLambda, goals), 0), 0, 1);
   const bttsProbability = clamp((1 - Math.exp(-homeLambda)) * (1 - Math.exp(-awayLambda)), 0, 1);
-  const goalsProbability = totalGoalsProbability(totalLambda, goalsTip);
-  const goalsOdds = Number(clamp(1 / Math.max(goalsProbability, 0.08), 1.2, 12.5).toFixed(2));
+  const goalsTip = over25Probability >= 0.52 ? "O2.5" : "U2.5";
+  const goalsProbability = goalsTip === "O2.5" ? over25Probability : 1 - over25Probability;
+  const goalsOdds = Number(clamp(1 / Math.max(goalsProbability, 0.36), 1.2, 2.78).toFixed(2));
+  const goalsTipLabel = goalsTip === "O2.5"
+    ? { zh: "总进球 3+", en: "Total Goals 3+" }
+    : { zh: "总进球 0-2", en: "Total Goals 0-2" };
   const score = projectedScore(homeLambda, awayLambda);
   const probabilityModel = buildProbabilityModel(match, probabilities, hhadProbabilities, homeLambda, awayLambda, over25Probability, bttsProbability);
   const modelProbabilities = {
@@ -1250,9 +1252,25 @@ function predictionSet(match) {
   const probabilityGap = marketLeader[1] - marketSecond[1];
   const modelProbabilityGap = picks[0][1] - picks[1][1];
   const selectionDiscount = Math.max(0, marketLeader[1] - best1x2[1]);
-  const baseTrust = analystSelection.isContrarian
+  const candidateHandicapSupport = hhadSupportForPick(hhadProbabilities, best1x2[0]);
+  const candidateIsLowOddsFavorite = ["1", "2"].includes(best1x2[0]) && best1x2[2] <= 1.55;
+  const candidateIsOverheated = ["1", "2"].includes(best1x2[0]) && best1x2[2] <= 1.35;
+  const candidateHasWeakHandicap = ["1", "2"].includes(best1x2[0])
+    && candidateHandicapSupport !== null
+    && candidateHandicapSupport < 0.42;
+  const rawTrust = analystSelection.isContrarian
     ? clamp(Math.round(best1x2[1] * 100 + 31 - selectionDiscount * 42), 54, 76)
     : clamp(Math.round(best1x2[1] * 100 + modelProbabilityGap * 48 + 10), 52, 93);
+  const trustPenalty =
+    (candidateIsOverheated ? 11 : candidateIsLowOddsFavorite ? 5 : 0)
+    + (candidateHasWeakHandicap ? 9 : 0)
+    + (probabilities.draw >= 0.28 ? 4 : 0)
+    + (bttsProbability >= 0.45 && bttsProbability < 0.65 ? 3 : 0);
+  const baseTrust = clamp(
+    rawTrust - trustPenalty,
+    analystSelection.isContrarian ? 50 : 48,
+    candidateIsOverheated || candidateHasWeakHandicap ? 82 : 91
+  );
   const probabilityTextZh = `主胜 ${pct(probabilities.home)}% / 平局 ${pct(probabilities.draw)}% / 客胜 ${pct(probabilities.away)}%`;
   const probabilityTextEn = `home ${pct(probabilities.home)}% / draw ${pct(probabilities.draw)}% / away ${pct(probabilities.away)}%`;
   const oddsText = `${match.odds.odds1.toFixed(2)} / ${match.odds.oddsX.toFixed(2)} / ${match.odds.odds2.toFixed(2)}`;
@@ -1328,24 +1346,24 @@ function predictionSet(match) {
   const goals = {
     marketType: "GOALS",
     tipCode: goalsTip,
-    tipLabel: { zh: goalsTip === "7+" ? "总进球数 7+" : `总进球数 ${goalsTip}球`, en: goalsTip === "7+" ? "Total Goals 7+" : `Total Goals ${goalsTip}` },
+    tipLabel: goalsTipLabel,
     odds: goalsOdds,
-    trustScore: clamp(Math.round(goalsProbability * 100 + 45), 50, 82),
+    trustScore: clamp(Math.round(goalsProbability * 100 + 12), 50, 78),
     explanation: {
-      zh: `总进球数为模型参考项，基于胜平负 SP 反推出主队 ${homeLambda.toFixed(2)}、客队 ${awayLambda.toFixed(2)} 的预期进球，当前总进球期望约 ${totalLambda.toFixed(2)}。`,
-      en: `The goals model derives expected goals from 1X2 odds: home ${homeLambda.toFixed(2)}, away ${awayLambda.toFixed(2)}, total ${totalLambda.toFixed(2)}.`,
+      zh: `进球趋势为模型参考项，基于胜平负 SP 反推出主队 ${homeLambda.toFixed(2)}、客队 ${awayLambda.toFixed(2)} 的预期进球，当前总进球期望约 ${totalLambda.toFixed(2)}。`,
+      en: `The goals trend derives expected goals from 1X2 odds: home ${homeLambda.toFixed(2)}, away ${awayLambda.toFixed(2)}, total ${totalLambda.toFixed(2)}.`,
     },
     analysisItems: [
       {
-        zh: `比分热区：${score.home}-${score.away} 附近；总进球 ${goalsTip} 的模型概率约 ${pct(goalsProbability)}%。`,
-        en: `Score heat zone: around ${score.home}-${score.away}; model probability for total goals ${goalsTip} is about ${pct(goalsProbability)}%.`,
+        zh: `比分热区：${score.home}-${score.away} 附近；${goalsTipLabel.zh} 的模型概率约 ${pct(goalsProbability)}%。`,
+        en: `Score heat zone: around ${score.home}-${score.away}; model probability for ${goalsTipLabel.en} is about ${pct(goalsProbability)}%.`,
       },
       {
-        zh: `大 2.5 球概率约 ${pct(over25Probability)}%，该指标用于走势参考，不等同于中国竞彩网官方总进球 SP。`,
+        zh: `大 2.5 球概率约 ${pct(over25Probability)}%，该指标用于走势参考，不等同于官方总进球 SP。`,
         en: `Over 2.5 probability is about ${pct(over25Probability)}%. This is a model reference, not official Sporttery total-goals SP.`,
       },
     ],
-    riskTags: riskTags.filter((tag) => tag.zh === "进球临界"),
+    riskTags: riskTags.filter((tag) => tag.en === "Goal-model borderline"),
     visibilityStatus: "PREMIUM",
     resultStatus: resultStatus(match, goalsTip, "GOALS"),
   };
@@ -1358,11 +1376,14 @@ function predictionSet(match) {
   const bestHandicapSupport = hhadSupportForPick(hhadProbabilities, oneXTwo.tipCode);
   const bestHasWeakHandicap = ["1", "2"].includes(oneXTwo.tipCode)
     && bestHandicapSupport !== null
-    && bestHandicapSupport < 0.38;
+    && bestHandicapSupport < 0.42;
   const bestHasThinEdge = modelProbabilityGap < 0.08 || best1x2[1] < 0.54;
+  const bestHasOverheatedFavorite = ["1", "2"].includes(oneXTwo.tipCode)
+    && oneXTwo.odds <= 1.55
+    && (bestHandicapSupport === null || bestHandicapSupport < 0.48 || riskTags.length >= 1);
   const bestShouldWatch = !analystSelection.isContrarian
     && !bestIsSteady
-    && (bestHasWeakHandicap || bestHasThinEdge || riskTags.length >= 2);
+    && (bestHasWeakHandicap || bestHasThinEdge || bestHasOverheatedFavorite || riskTags.length >= 2);
   const bestPrefix = bestShouldWatch
     ? { zh: "观察为主", en: "Watch first" }
     : analystSelection.isContrarian
@@ -1533,7 +1554,9 @@ function predictionSignature(predictions) {
 function settlePredictionsForMatch(match, predictions) {
   return (predictions || []).map((prediction) => ({
     ...prediction,
-    resultStatus: resultStatus(match, prediction.tipCode, prediction.marketType),
+    resultStatus: prediction.marketType === "BEST" && prediction.tipCode === "WATCH"
+      ? "PENDING"
+      : resultStatus(match, prediction.tipCode, prediction.marketType),
   }));
 }
 

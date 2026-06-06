@@ -112,6 +112,10 @@ const getResultLabel = (resultStatus: PredictionDetail['resultStatus'], language
   return language === 'zh' ? '待结算' : 'Pending';
 };
 
+const isScoredPrediction = (prediction: PredictionDetail) => (
+  prediction.resultStatus !== 'PENDING' && prediction.tipCode !== 'WATCH'
+);
+
 const isFinishedWithScore = (match: Match): match is FinishedMatch => {
   return match.status === 'FINISHED' && Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway);
 };
@@ -362,9 +366,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   const poolRows = getSportteryPoolRows(match, language);
   const visiblePredictions = getVisiblePredictions(match);
   const hasPredictions = visiblePredictions.length > 0;
-  const settledPredictions = visiblePredictions.filter((prediction) => prediction.resultStatus !== 'PENDING');
+  const settledPredictions = visiblePredictions.filter(isScoredPrediction);
   const wonPredictions = settledPredictions.filter((prediction) => prediction.resultStatus === 'WON');
-  const bestReviewPrediction = getVisiblePrediction(match, 'BEST')
+  const bestReviewPrediction = visiblePredictions.find((prediction) => prediction.marketType === 'BEST' && prediction.tipCode !== 'WATCH')
     || getVisiblePrediction(match, '1X2');
   const reviewHitRate = settledPredictions.length > 0 ? Math.round((wonPredictions.length / settledPredictions.length) * 100) : null;
   const homeValueText = formatSquadValue(homeTeam.value, language);

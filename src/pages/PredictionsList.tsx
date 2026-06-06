@@ -46,6 +46,10 @@ const getBestTrust = (match: Match) => getBestPrediction(match)?.trustScore || 0
 
 const getBestOdds = (match: Match) => getBestPrediction(match)?.odds || match.odds?.odds1 || match.handicapOdds?.odds1 || 0;
 
+const isScoredPrediction = (prediction: PredictionDetail) => (
+  prediction.resultStatus !== 'PENDING' && prediction.tipCode !== 'WATCH'
+);
+
 const getTrustColor = (score: number) => {
   if (score >= 80) return '156 70% 44%';
   if (score >= 68) return '41 88% 56%';
@@ -80,6 +84,7 @@ const formatSyncTime = (isoTime: string | undefined, language: 'zh' | 'en') => {
   return new Date(isoTime).toLocaleTimeString(language === 'zh' ? 'zh-CN' : 'en-US', {
     hour: '2-digit',
     minute: '2-digit',
+    second: '2-digit',
     hour12: false,
     timeZone: 'Asia/Shanghai'
   });
@@ -179,7 +184,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     live: { zh: '进行中', en: 'Live' },
     pending: { zh: '待开赛', en: 'Scheduled' },
     details: { zh: '详情', en: 'Details' },
-    hitRate: { zh: '已赛命中率', en: 'Settled Hit Rate' },
+    hitRate: { zh: '可结算命中率', en: 'Scored Hit Rate' },
     selectedMatches: { zh: '当前筛选场次', en: 'Filtered Matches' },
     signalSummary: { zh: '推荐分组', en: 'Signal Split' },
     avgTrust: { zh: '平均可信度', en: 'Average Trust' },
@@ -192,15 +197,15 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     dataSyncing: { zh: '同步中', en: 'Syncing' },
     dataReady: { zh: '已加载', en: 'Ready' },
     dataFallback: { zh: '本地兜底', en: 'Fallback' },
-    dataUpdated: { zh: '更新', en: 'Updated' },
-    dataRefresh: { zh: '刷新', en: 'Refresh' },
+    dataUpdated: { zh: '数据源', en: 'Source' },
+    dataRefresh: { zh: '页面自检', en: 'Page check' },
     dataNextCheck: { zh: '下次检查', en: 'Next check' },
     dataCurrentLoading: { zh: '正在加载中国竞彩网赛程', en: 'Loading Sporttery schedule' },
     dataHistoryLoading: { zh: '历史结果后台补齐中', en: 'History loading in background' },
     dataHistoryReady: { zh: '当前赛程与历史库已就绪', en: 'Current schedule and history are ready' },
     dataHistoryUnavailable: { zh: '当前赛程已就绪，历史库暂不可用', en: 'Current schedule ready, history unavailable' },
     dataFallbackNote: { zh: '官方数据暂不可用，已启用兜底数据', en: 'Official data unavailable, using fallback' },
-    settledPicks: { zh: '条已结算预测', en: 'settled picks' },
+    settledPicks: { zh: '条方向预测', en: 'scored picks' },
     matchUnit: { zh: '场', en: 'matches' },
     tipUnit: { zh: '条', en: 'tips' },
     statusTime: { zh: '时间 / 状态', en: 'Time / Status' },
@@ -320,7 +325,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
   const settledPredictions = useMemo(() => {
     return matches
       .flatMap((match) => getVisiblePredictions(match))
-      .filter((prediction) => prediction.resultStatus !== 'PENDING');
+      .filter(isScoredPrediction);
   }, [matches]);
 
   const hitRate = useMemo(() => {
@@ -520,8 +525,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     {
       label: t('dataRefresh'),
       value: language === 'zh'
-        ? `页面检查 ${formatSyncTime(dataSync.lastCheckedAt, language)} / 每 ${dataSync.refreshIntervalSeconds || 60} 秒 / 后台约 ${dataSync.backendRefreshMinutes || 5} 分钟`
-        : `Checked ${formatSyncTime(dataSync.lastCheckedAt, language)} / Every ${dataSync.refreshIntervalSeconds || 60}s / Backend ~${dataSync.backendRefreshMinutes || 5}m`
+        ? `${formatSyncTime(dataSync.lastCheckedAt, language)} / 每 ${dataSync.refreshIntervalSeconds || 30} 秒 / 后台约 ${dataSync.backendRefreshMinutes || 5} 分钟`
+        : `${formatSyncTime(dataSync.lastCheckedAt, language)} / Every ${dataSync.refreshIntervalSeconds || 30}s / Backend ~${dataSync.backendRefreshMinutes || 5}m`
     },
     {
       label: t('dataNextCheck'),

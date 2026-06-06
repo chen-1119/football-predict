@@ -36,7 +36,7 @@ jobs:
           ODDS_HISTORY_RETENTION_DAYS: 365
           ODDS_HISTORY_BUCKET_MINUTES: 5
           SYNC_WORKFLOW_MINUTES: 5
-          PAGE_POLL_SECONDS: 60
+          PAGE_POLL_SECONDS: 30
         run: node scripts/syncData.cjs
 
       - name: Validate Prediction Data

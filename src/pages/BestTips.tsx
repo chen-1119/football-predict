@@ -23,13 +23,13 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
   }, [matches]);
 
   const translations = {
-    title: { zh: 'AI 精选赛前观察', en: 'AI Pre-match Shortlist' },
+    title: { zh: 'AI 赛前观察', en: 'AI Pre-match Watch' },
     subtitle: { 
-      zh: '展示当前模型保留的精选、观察与价值方向；每条结论都需要结合官方 SP、风险标签和临场变化复核。', 
+      zh: '展示当前模型保留的候选方向、观察项与风险点；低赔热门不会直接包装成高可信。', 
       en: 'Shows model shortlist, watch, and value directions. Every pick should be checked against official SP, risk tags, and late movement.' 
     },
     lockedNotice: {
-      zh: 'PRO 可查看完整精选说明、赔率依据、风险标签和比分/进球侧参考。',
+      zh: 'PRO 可查看完整赛前说明、赔率依据、风险标签和比分/进球侧参考。',
       en: 'PRO reveals full shortlist notes, odds basis, risk tags, and score/goals references.'
     },
     unlockBtn: { zh: '模拟升级 PRO 立即解锁', en: 'Simulate Pro to Unlock' },

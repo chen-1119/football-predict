@@ -25,6 +25,7 @@ function expectedSportterySp(match, tipCode) {
 }
 
 function expectedPredictionResult(match, prediction) {
+  if (prediction.tipCode === "WATCH") return "PENDING";
   if (match.status !== "FINISHED") return "PENDING";
   if (!Number.isFinite(match.scoreHome) || !Number.isFinite(match.scoreAway)) return "PENDING";
   const total = match.scoreHome + match.scoreAway;
