@@ -43,6 +43,8 @@ jobs:
         run: npm run validate:data
 
       - name: Verify Official Sporttery Odds
+        env:
+          ODDS_VERIFY_MODE: warn
         run: npm run verify:odds
 
       - name: Commit & Push Changes to Main

@@ -178,7 +178,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     totalCount: 0
   });
 
-  // 先加载当前赛程，历史赛果后台补齐；队名保持中国竞彩网同步值，不做别名覆盖。
+  // Load current matches first, then fill historical results in the background.
   useEffect(() => {
     let cancelled = false;
 

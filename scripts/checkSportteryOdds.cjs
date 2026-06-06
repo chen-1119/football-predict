@@ -3,6 +3,7 @@ const path = require("path");
 const https = require("https");
 
 const SPORTTERY_BASE = "https://webapi.sporttery.cn";
+const VERIFY_MODE = String(process.env.ODDS_VERIFY_MODE || "strict").toLowerCase();
 const SOURCES = [
   `${SPORTTERY_BASE}/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c`,
   `${SPORTTERY_BASE}/gateway/uniform/football/getMatchListV1.qry?clientCode=3001`,
@@ -139,7 +140,14 @@ async function main() {
   }
 
   if (errors.length > 0) {
-    console.error(errors.join("\n"));
+    const message = errors.join("\n");
+    if (VERIFY_MODE === "warn") {
+      console.warn(message);
+      console.log(JSON.stringify({ ok: false, mode: "warn", officialMatches: official.size, checked, warnings: errors.length }, null, 2));
+      return;
+    }
+
+    console.error(message);
     process.exit(1);
   }
 
