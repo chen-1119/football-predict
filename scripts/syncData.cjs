@@ -13,7 +13,7 @@ const ODDS_HISTORY_RETENTION_DAYS = Math.max(1, Number(process.env.ODDS_HISTORY_
 const ODDS_HISTORY_BUCKET_MINUTES = Math.max(1, Number(process.env.ODDS_HISTORY_BUCKET_MINUTES || 5));
 const PAGE_POLL_SECONDS = Math.max(15, Number(process.env.PAGE_POLL_SECONDS || 30));
 const ANALYST_PROMPT_VERSION = "professional-football-analyst-v6";
-const PREDICTION_POLICY_VERSION = "pre-match-quality-gate-v11";
+const PREDICTION_POLICY_VERSION = "pre-match-quality-gate-v12";
 const FORM_LOOKBACK_MATCHES = 12;
 const METHODS = (process.env.SPORTTERY_METHODS || "concern,live,result,all")
   .split(",")
@@ -624,11 +624,18 @@ function calibrateOutcomeProbabilities(match, probabilities, marketProbabilities
   const reasons = [];
   const adjustments = [];
   const profile = matchVolatilityProfile(match);
+  const profileKey = predictionProfileKey(match);
   const health = match.predictionHealth;
   const marketLeader = outcomeLeader(marketProbabilities);
   const modelLeader = outcomeLeader(adjusted);
   const homeFavoriteBucket = health?.homeFavorite;
   const oneXTwoBucket = health?.byMarket?.["1X2"];
+  const modelTipBucket = health?.oneXTwo?.byTip?.[modelLeader.code];
+  const profileBucket = health?.oneXTwo?.byProfile?.[profileKey];
+  const marketLeaderOdds = Number(match.odds?.[`odds${marketLeader.code}`]);
+  const marketLeaderOddsBucket = predictionOddsBucket(marketLeaderOdds);
+  const oddsBucket = health?.oneXTwo?.byOddsBucket?.[marketLeaderOddsBucket];
+  const lowSpSideBucket = health?.oneXTwo?.lowSpSide;
 
   const applyPenalty = (code, penalty, reason) => {
     const before = adjusted[code === "1" ? "home" : code === "X" ? "draw" : "away"];
@@ -649,16 +656,36 @@ function calibrateOutcomeProbabilities(match, probabilities, marketProbabilities
     applyPenalty("1", missPressure, "home-favorite-hit-rate-cooldown");
   }
 
+  if (modelTipBucket?.cooldown && modelLeader.code !== "X") {
+    const missPressure = modelTipBucket.hitRate === null ? 0.035 : clamp((0.44 - modelTipBucket.hitRate) * 0.2, 0.018, 0.05);
+    applyPenalty(modelLeader.code, missPressure, `tip-${modelLeader.code}-hit-rate-cooldown`);
+  }
+
+  if (profileBucket?.cooldown && modelLeader.code !== "X") {
+    const missPressure = profileBucket.hitRate === null ? 0.025 : clamp((0.44 - profileBucket.hitRate) * 0.16, 0.015, 0.04);
+    applyPenalty(modelLeader.code, missPressure, `${profileKey}-1x2-hit-rate-cooldown`);
+  }
+
+  if (oddsBucket?.cooldown && marketLeader.code !== "X") {
+    const missPressure = oddsBucket.hitRate === null ? 0.025 : clamp((0.44 - oddsBucket.hitRate) * 0.16, 0.015, 0.04);
+    applyPenalty(marketLeader.code, missPressure, `${marketLeaderOddsBucket}-hit-rate-cooldown`);
+  }
+
+  if (lowSpSideBucket?.cooldown && marketLeader.code !== "X" && marketLeaderOdds <= 1.7) {
+    const missPressure = lowSpSideBucket.hitRate === null ? 0.025 : clamp((0.44 - lowSpSideBucket.hitRate) * 0.16, 0.015, 0.04);
+    applyPenalty(marketLeader.code, missPressure, "low-sp-side-hit-rate-cooldown");
+  }
+
   if (oneXTwoBucket?.cooldown && modelLeader.code !== "X") {
     const missPressure = oneXTwoBucket.hitRate === null ? 0.035 : clamp((0.45 - oneXTwoBucket.hitRate) * 0.22, 0.02, 0.055);
     applyPenalty(modelLeader.code, missPressure, "one-x-two-hit-rate-cooldown");
   }
 
-  if (profile.isInternational && marketLeader.code !== "X" && Number(match.odds?.[`odds${marketLeader.code}`]) <= 1.7) {
+  if (profile.isInternational && marketLeader.code !== "X" && marketLeaderOdds <= 1.7) {
     applyPenalty(marketLeader.code, 0.03, "international-low-sp-shrink");
   }
 
-  if (profile.isJapan && marketLeader.code !== "X" && Number(match.odds?.[`odds${marketLeader.code}`]) <= 2.05) {
+  if (profile.isJapan && marketLeader.code !== "X" && marketLeaderOdds <= 2.05) {
     applyPenalty(marketLeader.code, 0.04, "jleague-favorite-shrink");
   }
 
@@ -673,6 +700,10 @@ function calibrateOutcomeProbabilities(match, probabilities, marketProbabilities
 function calibrateGoalProbabilities(match, over25Probability, bttsProbability) {
   const profile = matchVolatilityProfile(match);
   const goalsBucket = match.predictionHealth?.byMarket?.GOALS;
+  const profileKey = predictionProfileKey(match);
+  const profileBucket = match.predictionHealth?.goals?.byProfile?.[profileKey];
+  const directionKey = over25Probability >= 0.5 ? "O2.5" : "U2.5";
+  const directionBucket = match.predictionHealth?.goals?.byTip?.[directionKey];
   let over25 = over25Probability;
   let btts = bttsProbability;
   const reasons = [];
@@ -681,6 +712,16 @@ function calibrateGoalProbabilities(match, over25Probability, bttsProbability) {
   if (goalsBucket?.cooldown) {
     shrinkFactor *= 0.55;
     reasons.push("goals-hit-rate-cooldown");
+  }
+
+  if (directionBucket?.cooldown) {
+    shrinkFactor *= 0.76;
+    reasons.push(`${directionKey}-hit-rate-cooldown`);
+  }
+
+  if (profileBucket?.cooldown) {
+    shrinkFactor *= 0.8;
+    reasons.push(`${profileKey}-goals-hit-rate-cooldown`);
   }
 
   if (profile.isInternational) {
@@ -728,7 +769,7 @@ function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLamb
   const final1x2 = outcomeCalibration.probabilities;
   const handicapPoisson = handicapOutcomeProbabilities(homeLambda, awayLambda, match.handicapLine);
   return {
-    version: "market-elo-form-calibrated-poisson-v3",
+    version: "market-elo-form-bucket-calibrated-poisson-v4",
     generatedAt: new Date().toISOString(),
     basis: {
       zh: "市场隐含概率 + Elo 强度快照 + 近况攻防 form + Poisson 比分分布 + 命中率冷却校准集成；暂未接入 xG、伤停、首发和正式离线校准器。",
@@ -778,7 +819,15 @@ function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLamb
       version: match.predictionHealth.version,
       total: match.predictionHealth.total,
       byMarket: match.predictionHealth.byMarket,
+      byTip: match.predictionHealth.byTip,
+      byProfile: match.predictionHealth.byProfile,
+      byMarketProfile: match.predictionHealth.byMarketProfile,
+      byOddsBucket: match.predictionHealth.byOddsBucket,
+      oneXTwo: match.predictionHealth.oneXTwo,
+      goals: match.predictionHealth.goals,
       homeFavorite: match.predictionHealth.homeFavorite,
+      awayFavorite: match.predictionHealth.awayFavorite,
+      lowSpSide: match.predictionHealth.lowSpSide,
       under25: match.predictionHealth.under25,
     } : null,
     scoreDistribution: topScoreProbabilities(homeLambda, awayLambda, 5),
@@ -1031,8 +1080,25 @@ function resultStatus(match, expected, marketType = "") {
   return expected === actual1x2 ? "WON" : "LOST";
 }
 
+function predictionProfileKey(match) {
+  const profile = matchVolatilityProfile(match);
+  if (profile.isJapan) return "japan";
+  if (profile.isInternational) return "international";
+  return "other";
+}
+
+function predictionOddsBucket(odds) {
+  const value = Number(odds);
+  if (!Number.isFinite(value) || value <= 0) return "unknown";
+  if (value <= 1.45) return "sp_le_1_45";
+  if (value <= 1.7) return "sp_1_46_1_70";
+  if (value <= 2.05) return "sp_1_71_2_05";
+  if (value <= 2.6) return "sp_2_06_2_60";
+  return "sp_gt_2_60";
+}
+
 function buildPredictionHealth(existingMatches) {
-  const summarize = (rows) => {
+  const summarize = (rows, minSettled = 8, minHitRate = 0.45) => {
     const settledRows = rows.filter((row) => row.resultStatus === "WON" || row.resultStatus === "LOST");
     const won = settledRows.filter((row) => row.resultStatus === "WON").length;
     const lost = settledRows.filter((row) => row.resultStatus === "LOST").length;
@@ -1043,8 +1109,18 @@ function buildPredictionHealth(existingMatches) {
       won,
       lost,
       hitRate: hitRate === null ? null : Number(hitRate.toFixed(3)),
-      cooldown: settled >= 8 && hitRate < 0.45,
+      cooldown: settled >= minSettled && hitRate < minHitRate,
     };
+  };
+  const summarizeBy = (items, keyFn, minSettled = 5, minHitRate = 0.42) => {
+    const output = {};
+    for (const row of items) {
+      const key = keyFn(row);
+      if (!key) continue;
+      if (!output[key]) output[key] = [];
+      output[key].push(row);
+    }
+    return Object.fromEntries(Object.entries(output).map(([key, group]) => [key, summarize(group, minSettled, minHitRate)]));
   };
 
   const rows = [];
@@ -1052,9 +1128,18 @@ function buildPredictionHealth(existingMatches) {
     for (const prediction of match.predictions || []) {
       if (!prediction || prediction.tipCode === "WATCH") continue;
       if (prediction.resultStatus !== "WON" && prediction.resultStatus !== "LOST") continue;
+      const profileKey = predictionProfileKey(match);
+      const odds = Number(prediction.odds || 0);
       rows.push({
         marketType: prediction.marketType,
         tipCode: prediction.tipCode,
+        odds,
+        oddsBucket: predictionOddsBucket(odds),
+        profileKey,
+        isSidePick: prediction.tipCode === "1" || prediction.tipCode === "2",
+        isHomePick: prediction.tipCode === "1",
+        isAwayPick: prediction.tipCode === "2",
+        isLowSpSide: (prediction.tipCode === "1" || prediction.tipCode === "2") && odds > 0 && odds <= 1.7,
         resultStatus: prediction.resultStatus,
       });
     }
@@ -1066,12 +1151,28 @@ function buildPredictionHealth(existingMatches) {
   }
 
   return {
-    version: "settled-prediction-health-v1",
+    version: "settled-prediction-health-v2",
     generatedAt: new Date().toISOString(),
     total: summarize(rows),
     byMarket,
-    homeFavorite: summarize(rows.filter((row) => row.tipCode === "1")),
-    under25: summarize(rows.filter((row) => row.tipCode === "U2.5")),
+    byTip: summarizeBy(rows, (row) => row.tipCode, 5, 0.42),
+    byProfile: summarizeBy(rows, (row) => row.profileKey, 5, 0.42),
+    byMarketProfile: summarizeBy(rows, (row) => `${row.marketType}:${row.profileKey}`, 5, 0.42),
+    byOddsBucket: summarizeBy(rows.filter((row) => row.isSidePick), (row) => row.oddsBucket, 5, 0.42),
+    oneXTwo: {
+      byTip: summarizeBy(rows.filter((row) => row.marketType === "1X2"), (row) => row.tipCode, 5, 0.42),
+      byProfile: summarizeBy(rows.filter((row) => row.marketType === "1X2"), (row) => row.profileKey, 5, 0.42),
+      byOddsBucket: summarizeBy(rows.filter((row) => row.marketType === "1X2" && row.isSidePick), (row) => row.oddsBucket, 5, 0.42),
+      lowSpSide: summarize(rows.filter((row) => row.marketType === "1X2" && row.isLowSpSide), 5, 0.42),
+    },
+    goals: {
+      byTip: summarizeBy(rows.filter((row) => row.marketType === "GOALS"), (row) => row.tipCode, 5, 0.42),
+      byProfile: summarizeBy(rows.filter((row) => row.marketType === "GOALS"), (row) => row.profileKey, 5, 0.42),
+    },
+    homeFavorite: summarize(rows.filter((row) => row.tipCode === "1"), 5, 0.42),
+    awayFavorite: summarize(rows.filter((row) => row.tipCode === "2"), 5, 0.42),
+    lowSpSide: summarize(rows.filter((row) => row.isLowSpSide), 5, 0.42),
+    under25: summarize(rows.filter((row) => row.tipCode === "U2.5"), 5, 0.42),
   };
 }
 
@@ -1409,7 +1510,17 @@ function evaluateOneXTwoGate(context) {
       ? probabilities.draw
       : probabilities.away;
   const handicapSupport = hhadSupportForPick(hhadProbabilities, code);
-  const oneXTwoCooldown = Boolean(predictionHealth?.byMarket?.["1X2"]?.cooldown || predictionHealth?.homeFavorite?.cooldown);
+  const profileKey = predictionProfileKey(match);
+  const oddsBucket = predictionOddsBucket(odds);
+  const directionCooldown = Boolean(
+    predictionHealth?.oneXTwo?.byTip?.[code]?.cooldown
+    || predictionHealth?.oneXTwo?.byProfile?.[profileKey]?.cooldown
+    || predictionHealth?.oneXTwo?.byOddsBucket?.[oddsBucket]?.cooldown
+    || (isSidePick && odds <= 1.7 && predictionHealth?.oneXTwo?.lowSpSide?.cooldown)
+    || (code === "1" && predictionHealth?.homeFavorite?.cooldown)
+    || (code === "2" && predictionHealth?.awayFavorite?.cooldown)
+  );
+  const oneXTwoCooldown = Boolean(predictionHealth?.byMarket?.["1X2"]?.cooldown || directionCooldown);
   const reasons = [];
 
   if (analystSelection.isContrarian) reasons.push("contrarian");
@@ -1424,6 +1535,7 @@ function evaluateOneXTwoGate(context) {
   if (isSidePick && odds <= 1.45) reasons.push("low-odds-no-value");
   if (profile.isInternational && isSidePick && odds <= 1.7) reasons.push("international-low-odds");
   if (profile.isJapan && isSidePick && odds <= 2.05) reasons.push("jleague-volatile-favorite");
+  if (directionCooldown) reasons.push("direction-hit-rate-cooldown");
   if (oneXTwoCooldown) reasons.push("recent-1x2-hit-rate-cooldown");
 
   const minPickProbability = oneXTwoCooldown ? 0.7 : 0.62;
@@ -1455,16 +1567,22 @@ function evaluateOneXTwoGate(context) {
   };
 }
 
-function evaluateGoalsGate(goalsProbability, over25Probability, bttsProbability, predictionHealth) {
+function evaluateGoalsGate(match, goalsTip, goalsProbability, over25Probability, bttsProbability, predictionHealth) {
   const reasons = [];
   const edge = Math.abs(over25Probability - 0.5);
-  const goalsCooldown = Boolean(predictionHealth?.byMarket?.GOALS?.cooldown);
+  const profileKey = predictionProfileKey(match);
+  const directionCooldown = Boolean(
+    predictionHealth?.goals?.byTip?.[goalsTip]?.cooldown
+    || predictionHealth?.goals?.byProfile?.[profileKey]?.cooldown
+  );
+  const goalsCooldown = Boolean(predictionHealth?.byMarket?.GOALS?.cooldown || directionCooldown);
   const minProbability = goalsCooldown ? 0.68 : 0.63;
   const minEdge = goalsCooldown ? 0.18 : 0.13;
 
   if (goalsProbability < minProbability) reasons.push("thin-goal-edge");
   if (edge < minEdge) reasons.push("near-coin-flip-total");
   if (bttsProbability >= 0.46 && bttsProbability <= 0.56) reasons.push("btts-borderline");
+  if (directionCooldown) reasons.push("direction-goals-hit-rate-cooldown");
   if (goalsCooldown) reasons.push("recent-goals-hit-rate-cooldown");
 
   return {
@@ -1898,7 +2016,7 @@ function predictionSet(match) {
     resultStatus: oneXTwoGate.promote ? modelLean.resultStatus : "PENDING",
   };
 
-  const goalsGate = evaluateGoalsGate(goalsProbability, over25Probability, bttsProbability, match.predictionHealth);
+  const goalsGate = evaluateGoalsGate(match, goalsTip, goalsProbability, over25Probability, bttsProbability, match.predictionHealth);
   const goalsWatchLabel = {
     zh: "观察为主 进球数不强推",
     en: "Watch first: no total-goals pick",

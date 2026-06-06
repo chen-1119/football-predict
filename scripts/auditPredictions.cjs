@@ -23,6 +23,29 @@ function score(match) {
     : "-";
 }
 
+function profileKey(match) {
+  const text = [
+    match.leagueName,
+    match.leagueNameEn,
+    match.leagueShortName,
+    match.countryName,
+    match.countryNameEn,
+  ].filter(Boolean).join(" ");
+  if (/(\u65e5\u804c|\u65e5\u8054|\u65e5\u672c|j1|j2|japan)/i.test(text)) return "japan";
+  if (/(\u56fd\u9645|\u53cb\u8c0a|\u4e16\u754c\u676f|\u4e16\u9884|\u56fd\u5bb6|international|friendly|world cup|qualifier|fifa)/i.test(text)) return "international";
+  return "other";
+}
+
+function oddsBucket(odds) {
+  const value = Number(odds);
+  if (!Number.isFinite(value) || value <= 0) return "unknown";
+  if (value <= 1.45) return "sp<=1.45";
+  if (value <= 1.7) return "1.46-1.70";
+  if (value <= 2.05) return "1.71-2.05";
+  if (value <= 2.6) return "2.06-2.60";
+  return "sp>2.60";
+}
+
 function rows() {
   return matches.flatMap((match) => (match.predictions || [])
     .filter((prediction) => enabledMarkets.has(prediction.marketType))
@@ -36,6 +59,8 @@ function rows() {
       market: prediction.marketType,
       tip: prediction.tipCode,
       odds: prediction.odds,
+      oddsBucket: oddsBucket(prediction.odds),
+      profile: profileKey(match),
       trust: prediction.trustScore,
       result: prediction.resultStatus,
       policy: match.predictionMeta?.policyVersion || "none",
@@ -74,8 +99,14 @@ console.log("\nSettled by market");
 console.table(summarize(settled, (row) => row.market));
 console.log("\nSettled by policy");
 console.table(summarize(settled, (row) => row.policy));
+console.log("\nSettled by league profile");
+console.table(summarize(settled, (row) => row.profile));
 console.log("\nSettled 1X2 by tip");
 console.table(summarize(settled.filter((row) => row.market === "1X2"), (row) => row.tip));
+console.log("\nSettled 1X2 by SP bucket");
+console.table(summarize(settled.filter((row) => row.market === "1X2" && ["1", "2"].includes(row.tip)), (row) => row.oddsBucket));
+console.log("\nSettled GOALS by tip");
+console.table(summarize(settled.filter((row) => row.market === "GOALS"), (row) => row.tip));
 console.log("\nRecent settled rows");
 console.table(settled
   .sort((a, b) => `${b.date}${b.time}${b.match}${b.market}`.localeCompare(`${a.date}${a.time}${a.match}${a.market}`))

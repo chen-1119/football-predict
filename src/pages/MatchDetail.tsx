@@ -988,6 +988,20 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                             </span>
                           );
                         })}
+                        {probabilityModel.modelHealth.homeFavorite && (
+                          <span>
+                            {language === 'zh' ? '主胜桶' : 'Home bucket'}
+                            <strong>{formatHealthRate(probabilityModel.modelHealth.homeFavorite.hitRate)}</strong>
+                            <em>{probabilityModel.modelHealth.homeFavorite.settled || 0} {language === 'zh' ? '条' : 'settled'}</em>
+                          </span>
+                        )}
+                        {probabilityModel.modelHealth.lowSpSide && (
+                          <span>
+                            {language === 'zh' ? '低赔边' : 'Low-SP side'}
+                            <strong>{formatHealthRate(probabilityModel.modelHealth.lowSpSide.hitRate)}</strong>
+                            <em>{probabilityModel.modelHealth.lowSpSide.settled || 0} {language === 'zh' ? '条' : 'settled'}</em>
+                          </span>
+                        )}
                         {(probabilityModel.modelHealth.byMarket['1X2']?.cooldown || probabilityModel.modelHealth.byMarket.GOALS?.cooldown) && (
                           <span>
                             {language === 'zh' ? '冷却' : 'Cooldown'}

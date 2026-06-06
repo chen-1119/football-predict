@@ -239,6 +239,7 @@ const trendLabel = (direction: Match['oddsTrend'] extends infer T ? T extends { 
 
 export function buildMatchInsight(match: Match, context: MatchInsightContext): MatchInsight {
   const primary = getPrimaryPrediction(match);
+  const isWatchOnly = primary?.tipCode === 'WATCH';
   const signal = getMatchSignal(match);
   const resultCode = isResultCode(primary?.tipCode) ? primary.tipCode : undefined;
   const hadProbabilities = getImpliedProbabilities(match.odds);
@@ -363,6 +364,72 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
             zh: '先记录盘面快照，等待普通胜平负开售或临场 SP 更新。',
             en: 'Record the market snapshot first, then wait for HAD or late SP updates.'
           },
+          tone: 'muted'
+        }
+      ],
+      framework
+    };
+  }
+
+  if (isWatchOnly) {
+    return {
+      title: { zh: 'AI 综合观察', en: 'AI Watch Brief' },
+      summary: {
+        zh: `${action.zh}：当前推荐闸门未通过，不输出单一胜平负主线。模型只保留赛前观察，继续跟踪官方 SP、让球盘和命中率冷却状态。风险标签：${riskTextZh}。`,
+        en: `${action.en}: the recommendation gate is not met, so no single 1X2 main lean is published. Keep this as pre-match watch and track official SP, handicap confirmation, and hit-rate cooldown. Risk tags: ${riskTextEn}.`
+      },
+      action,
+      score: insightScore,
+      tone,
+      metrics: [
+        { label: { zh: '主线状态', en: 'Main line' }, value: { zh: '观察', en: 'Watch' }, tone: 'warning' },
+        { label: { zh: 'HAD支持', en: 'HAD support' }, value: { zh: '不输出', en: 'No pick' }, tone: 'muted' },
+        { label: { zh: '让球验证', en: 'Handicap check' }, value: { zh: hhadProbabilities ? '已记录' : '未开售', en: hhadProbabilities ? 'Tracked' : 'Closed' }, tone: hhadProbabilities ? 'warning' : 'muted' },
+        { label: { zh: '历史样本', en: 'History sample' }, value: { zh: sampleText, en: sampleText }, tone: sampleEnough ? 'success' : 'warning' }
+      ],
+      drivers: [
+        {
+          title: { zh: '推荐闸门', en: 'Recommendation gate' },
+          body: primary.explanation || {
+            zh: '当前低赔、平局压力、让球确认或命中率分桶存在分歧，因此保持观察。',
+            en: 'Low SP, draw pressure, handicap confirmation, or hit-rate buckets are not aligned, so this remains watch-only.'
+          },
+          tone: 'warning'
+        },
+        {
+          title: { zh: '盘口验证', en: 'Market validation' },
+          body: {
+            zh: `官方 HAD：${oddsText(match.odds)}；官方 HHAD：${oddsText(match.handicapOdds)}。观察态不展示“主线支持率”，避免把未通过闸门的方向包装成推荐。`,
+            en: `Official HAD: ${oddsText(match.odds)}; official HHAD: ${oddsText(match.handicapOdds)}. Watch mode does not show a main-line support rate, so an unqualified direction is not packaged as a pick.`
+          },
+          tone: 'muted'
+        },
+        {
+          title: { zh: 'SP走势', en: 'SP movement' },
+          body: match.oddsTrend && trendText
+            ? {
+              zh: `已记录 ${match.oddsTrend.sampleSize} 次官方快照，走势为${trendText.zh}。${match.oddsTrend.summary.zh}`,
+              en: `${match.oddsTrend.sampleSize} official snapshots recorded; movement is ${trendText.en}. ${match.oddsTrend.summary.en}`
+            }
+            : {
+              zh: '当前快照数量不足，先等待下一次官方 SP 快照。',
+              en: 'Not enough snapshots yet; wait for the next official SP capture.'
+            },
+          tone: match.oddsTrend?.direction === 'mixed' ? 'warning' : 'muted'
+        }
+      ],
+      watchpoints: [
+        {
+          title: { zh: '后续观察', en: 'Next check' },
+          body: {
+            zh: '如果临场 SP 与让球盘继续分歧，保持观察；只有概率、盘口和历史分桶同时修复，才允许升档。',
+            en: 'If late SP and handicap remain split, keep watching. Upgrade only when probability, market confirmation, and historical buckets all improve.'
+          },
+          tone: 'warning'
+        },
+        {
+          title: { zh: '数据边界', en: 'Data boundary' },
+          body: dataGap,
           tone: 'muted'
         }
       ],

@@ -182,7 +182,23 @@ export interface MatchProbabilityModel {
     version: string;
     total: PredictionHealthBucket;
     byMarket: Record<string, PredictionHealthBucket>;
+    byTip?: Record<string, PredictionHealthBucket>;
+    byProfile?: Record<string, PredictionHealthBucket>;
+    byMarketProfile?: Record<string, PredictionHealthBucket>;
+    byOddsBucket?: Record<string, PredictionHealthBucket>;
+    oneXTwo?: {
+      byTip?: Record<string, PredictionHealthBucket>;
+      byProfile?: Record<string, PredictionHealthBucket>;
+      byOddsBucket?: Record<string, PredictionHealthBucket>;
+      lowSpSide?: PredictionHealthBucket;
+    };
+    goals?: {
+      byTip?: Record<string, PredictionHealthBucket>;
+      byProfile?: Record<string, PredictionHealthBucket>;
+    };
     homeFavorite: PredictionHealthBucket;
+    awayFavorite?: PredictionHealthBucket;
+    lowSpSide?: PredictionHealthBucket;
     under25: PredictionHealthBucket;
   } | null;
   scoreDistribution: ScoreProbability[];
