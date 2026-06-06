@@ -418,6 +418,16 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     return `${Math.round(Number(value) * 100)}%`;
   };
 
+  const formatDecimal = (value: number | null | undefined) => {
+    if (!Number.isFinite(value)) return '--';
+    return Number(value).toFixed(2).replace(/\.00$/, '');
+  };
+
+  const formatHealthRate = (value: number | null | undefined) => {
+    if (!Number.isFinite(value)) return '--';
+    return `${(Number(value) * 100).toFixed(1).replace(/\.0$/, '')}%`;
+  };
+
   const renderOutcomeLine = (probabilities: OutcomeProbability | null | undefined) => {
     return outcomeLabels
       .map((item) => `${item[language]} ${formatProbabilityValue(probabilities?.[item.key])}`)
@@ -946,6 +956,64 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
 
                   <section className="probability-panel">
                     <h4>{language === 'zh' ? '让球概率' : 'Handicap Probability'}</h4>
+                    {probabilityModel.lambdaBlend && (
+                      <div className="probability-pair-grid" style={{ marginBottom: '0.75rem' }}>
+                        <span>
+                          {language === 'zh' ? '市场期望' : 'Market xG'}
+                          <strong>{formatDecimal(probabilityModel.lambdaBlend.marketHomeLambda)} / {formatDecimal(probabilityModel.lambdaBlend.marketAwayLambda)}</strong>
+                        </span>
+                        <span>
+                          {language === 'zh' ? '近况期望' : 'Form xG'}
+                          <strong>{formatDecimal(probabilityModel.lambdaBlend.formHomeLambda)} / {formatDecimal(probabilityModel.lambdaBlend.formAwayLambda)}</strong>
+                        </span>
+                        <span>
+                          {language === 'zh' ? '修正权重' : 'Form weight'}
+                          <strong>{formatModelWeight(probabilityModel.lambdaBlend.formWeight)}</strong>
+                        </span>
+                        <span>
+                          {language === 'zh' ? '样本' : 'Samples'}
+                          <strong>{probabilityModel.form?.home.sampleSize || 0} / {probabilityModel.form?.away.sampleSize || 0}</strong>
+                        </span>
+                      </div>
+                    )}
+                    {probabilityModel.modelHealth && (
+                      <div className="probability-pair-grid" style={{ marginBottom: '0.75rem' }}>
+                        {(['1X2', 'GOALS', 'BEST'] as const).map((marketKey) => {
+                          const bucket = probabilityModel.modelHealth?.byMarket?.[marketKey];
+                          return (
+                            <span key={marketKey}>
+                              {marketKey}
+                              <strong>{formatHealthRate(bucket?.hitRate)}</strong>
+                              <em>{bucket?.settled || 0} {language === 'zh' ? '条' : 'settled'}</em>
+                            </span>
+                          );
+                        })}
+                        {(probabilityModel.modelHealth.byMarket['1X2']?.cooldown || probabilityModel.modelHealth.byMarket.GOALS?.cooldown) && (
+                          <span>
+                            {language === 'zh' ? '冷却' : 'Cooldown'}
+                            <strong>{language === 'zh' ? '开启' : 'On'}</strong>
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {(probabilityModel.calibrationAdjustment?.oneXTwo?.applied || probabilityModel.calibrationAdjustment?.goals?.applied) && (
+                      <div className="probability-pair-grid" style={{ marginBottom: '0.75rem' }}>
+                        {probabilityModel.calibrationAdjustment?.oneXTwo?.applied && (
+                          <span>
+                            {language === 'zh' ? '胜平负校准' : '1X2 calibration'}
+                            <strong>{language === 'zh' ? '已降温' : 'Active'}</strong>
+                            <em>{probabilityModel.calibrationAdjustment.oneXTwo.adjustments.length} {language === 'zh' ? '项' : 'rules'}</em>
+                          </span>
+                        )}
+                        {probabilityModel.calibrationAdjustment?.goals?.applied && (
+                          <span>
+                            {language === 'zh' ? '进球校准' : 'Goals calibration'}
+                            <strong>{formatModelWeight(probabilityModel.calibrationAdjustment.goals.shrinkFactor)}</strong>
+                            <em>{probabilityModel.calibrationAdjustment.goals.before.over25}% {'to'} {probabilityModel.calibrationAdjustment.goals.after.over25}%</em>
+                          </span>
+                        )}
+                      </div>
+                    )}
                     {probabilityModel.handicap ? (
                       <>
                         <div className="handicap-probability-line">

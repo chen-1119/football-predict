@@ -13,7 +13,8 @@ const ODDS_HISTORY_RETENTION_DAYS = Math.max(1, Number(process.env.ODDS_HISTORY_
 const ODDS_HISTORY_BUCKET_MINUTES = Math.max(1, Number(process.env.ODDS_HISTORY_BUCKET_MINUTES || 5));
 const PAGE_POLL_SECONDS = Math.max(15, Number(process.env.PAGE_POLL_SECONDS || 30));
 const ANALYST_PROMPT_VERSION = "professional-football-analyst-v6";
-const PREDICTION_POLICY_VERSION = "pre-match-quality-gate-v9";
+const PREDICTION_POLICY_VERSION = "pre-match-quality-gate-v11";
+const FORM_LOOKBACK_MATCHES = 12;
 const METHODS = (process.env.SPORTTERY_METHODS || "concern,live,result,all")
   .split(",")
   .map((x) => x.trim())
@@ -522,12 +523,56 @@ function normalizeOutcomeProbabilities(probabilities) {
   };
 }
 
-function blendOutcomeProbabilities(market, poisson, eloSnapshot) {
+function formConfidence(formSnapshot) {
+  const sampleSize = Number(formSnapshot?.sampleSize || 0);
+  if (sampleSize <= 0) return 0;
+  return clamp(sampleSize / 24, 0, 1);
+}
+
+function blendLambdasWithForm(match, marketHomeLambda, marketAwayLambda) {
+  const form = match.formSnapshot;
+  const confidence = formConfidence(form);
+  if (!form || confidence <= 0) {
+    return {
+      homeLambda: marketHomeLambda,
+      awayLambda: marketAwayLambda,
+      formWeight: 0,
+      formHomeLambda: null,
+      formAwayLambda: null,
+    };
+  }
+
+  const homeAttack = Number.isFinite(form.home?.goalsForAvg) ? form.home.goalsForAvg : marketHomeLambda;
+  const homeDefense = Number.isFinite(form.home?.goalsAgainstAvg) ? form.home.goalsAgainstAvg : marketAwayLambda;
+  const awayAttack = Number.isFinite(form.away?.goalsForAvg) ? form.away.goalsForAvg : marketAwayLambda;
+  const awayDefense = Number.isFinite(form.away?.goalsAgainstAvg) ? form.away.goalsAgainstAvg : marketHomeLambda;
+  const formHomeLambda = clamp(homeAttack * 0.58 + awayDefense * 0.42, 0.25, 3.2);
+  const formAwayLambda = clamp(awayAttack * 0.58 + homeDefense * 0.42, 0.25, 3.2);
+  const profile = matchVolatilityProfile(match);
+  const maxWeight = profile.isInternational ? 0.22 : 0.36;
+  const formWeight = clamp(confidence * maxWeight, 0, maxWeight);
+
+  return {
+    homeLambda: clamp(marketHomeLambda * (1 - formWeight) + formHomeLambda * formWeight, 0.25, 3.4),
+    awayLambda: clamp(marketAwayLambda * (1 - formWeight) + formAwayLambda * formWeight, 0.25, 3.4),
+    formWeight: Number(formWeight.toFixed(3)),
+    formHomeLambda: Number(formHomeLambda.toFixed(2)),
+    formAwayLambda: Number(formAwayLambda.toFixed(2)),
+  };
+}
+
+function blendOutcomeProbabilities(market, poisson, eloSnapshot, formSnapshot) {
   const elo = normalizeOutcomeProbabilities(eloSnapshot?.probabilities);
   const eloSample = (eloSnapshot?.homeMatches || 0) + (eloSnapshot?.awayMatches || 0);
-  const weights = elo && eloSample >= 6
-    ? { market: 0.58, elo: 0.24, poisson: 0.18 }
-    : { market: 0.72, elo: 0, poisson: 0.28 };
+  const formSample = Number(formSnapshot?.sampleSize || 0);
+  const formReady = formSample >= 8;
+  const weights = elo && eloSample >= 6 && formReady
+    ? { market: 0.54, elo: 0.2, poisson: 0.26 }
+    : elo && eloSample >= 6
+      ? { market: 0.58, elo: 0.24, poisson: 0.18 }
+      : formReady
+        ? { market: 0.62, elo: 0, poisson: 0.38 }
+        : { market: 0.72, elo: 0, poisson: 0.28 };
   const blended = {
     home: market.home * weights.market + (elo?.home || 0) * weights.elo + poisson.home * weights.poisson,
     draw: market.draw * weights.market + (elo?.draw || 0) * weights.elo + poisson.draw * weights.poisson,
@@ -544,6 +589,129 @@ function blendOutcomeProbabilities(market, poisson, eloSnapshot) {
   };
 }
 
+function outcomeLeader(probabilities) {
+  return [
+    { code: "1", probability: probabilities.home },
+    { code: "X", probability: probabilities.draw },
+    { code: "2", probability: probabilities.away },
+  ].sort((a, b) => b.probability - a.probability)[0];
+}
+
+function redistributeOutcomePenalty(probabilities, code, penalty) {
+  const adjusted = { ...probabilities };
+  const safePenalty = clamp(penalty, 0, Math.max(0, adjusted[code === "1" ? "home" : code === "X" ? "draw" : "away"] - 0.05));
+  if (safePenalty <= 0) return adjusted;
+
+  if (code === "1") {
+    adjusted.home -= safePenalty;
+    adjusted.draw += safePenalty * 0.55;
+    adjusted.away += safePenalty * 0.45;
+  } else if (code === "2") {
+    adjusted.away -= safePenalty;
+    adjusted.draw += safePenalty * 0.55;
+    adjusted.home += safePenalty * 0.45;
+  } else {
+    adjusted.draw -= safePenalty;
+    adjusted.home += safePenalty * 0.5;
+    adjusted.away += safePenalty * 0.5;
+  }
+
+  return normalizeOutcomeProbabilities(adjusted);
+}
+
+function calibrateOutcomeProbabilities(match, probabilities, marketProbabilities) {
+  let adjusted = normalizeOutcomeProbabilities(probabilities);
+  const reasons = [];
+  const adjustments = [];
+  const profile = matchVolatilityProfile(match);
+  const health = match.predictionHealth;
+  const marketLeader = outcomeLeader(marketProbabilities);
+  const modelLeader = outcomeLeader(adjusted);
+  const homeFavoriteBucket = health?.homeFavorite;
+  const oneXTwoBucket = health?.byMarket?.["1X2"];
+
+  const applyPenalty = (code, penalty, reason) => {
+    const before = adjusted[code === "1" ? "home" : code === "X" ? "draw" : "away"];
+    adjusted = redistributeOutcomePenalty(adjusted, code, penalty);
+    const after = adjusted[code === "1" ? "home" : code === "X" ? "draw" : "away"];
+    if (after < before) {
+      reasons.push(reason);
+      adjustments.push({
+        code,
+        reason,
+        penalty: Number((before - after).toFixed(3)),
+      });
+    }
+  };
+
+  if (homeFavoriteBucket?.cooldown && marketLeader.code === "1") {
+    const missPressure = homeFavoriteBucket.hitRate === null ? 0.06 : clamp((0.45 - homeFavoriteBucket.hitRate) * 0.3, 0.025, 0.08);
+    applyPenalty("1", missPressure, "home-favorite-hit-rate-cooldown");
+  }
+
+  if (oneXTwoBucket?.cooldown && modelLeader.code !== "X") {
+    const missPressure = oneXTwoBucket.hitRate === null ? 0.035 : clamp((0.45 - oneXTwoBucket.hitRate) * 0.22, 0.02, 0.055);
+    applyPenalty(modelLeader.code, missPressure, "one-x-two-hit-rate-cooldown");
+  }
+
+  if (profile.isInternational && marketLeader.code !== "X" && Number(match.odds?.[`odds${marketLeader.code}`]) <= 1.7) {
+    applyPenalty(marketLeader.code, 0.03, "international-low-sp-shrink");
+  }
+
+  if (profile.isJapan && marketLeader.code !== "X" && Number(match.odds?.[`odds${marketLeader.code}`]) <= 2.05) {
+    applyPenalty(marketLeader.code, 0.04, "jleague-favorite-shrink");
+  }
+
+  return {
+    probabilities: normalizeOutcomeProbabilities(adjusted),
+    applied: adjustments.length > 0,
+    reasons,
+    adjustments,
+  };
+}
+
+function calibrateGoalProbabilities(match, over25Probability, bttsProbability) {
+  const profile = matchVolatilityProfile(match);
+  const goalsBucket = match.predictionHealth?.byMarket?.GOALS;
+  let over25 = over25Probability;
+  let btts = bttsProbability;
+  const reasons = [];
+  let shrinkFactor = 1;
+
+  if (goalsBucket?.cooldown) {
+    shrinkFactor *= 0.55;
+    reasons.push("goals-hit-rate-cooldown");
+  }
+
+  if (profile.isInternational) {
+    shrinkFactor *= 0.82;
+    reasons.push("international-goal-volatility");
+  }
+
+  if (shrinkFactor < 1) {
+    over25 = 0.5 + (over25 - 0.5) * shrinkFactor;
+    btts = 0.5 + (btts - 0.5) * shrinkFactor;
+  }
+
+  return {
+    over25: clamp(over25, 0.05, 0.95),
+    btts: clamp(btts, 0.05, 0.95),
+    meta: {
+      applied: shrinkFactor < 1,
+      reasons,
+      shrinkFactor: Number(shrinkFactor.toFixed(3)),
+      before: {
+        over25: pct1(over25Probability),
+        btts: pct1(bttsProbability),
+      },
+      after: {
+        over25: pct1(over25),
+        btts: pct1(btts),
+      },
+    },
+  };
+}
+
 function asPercentTriplet(probabilities) {
   if (!probabilities) return null;
   return {
@@ -553,19 +721,37 @@ function asPercentTriplet(probabilities) {
   };
 }
 
-function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLambda, awayLambda, over25Probability, bttsProbability) {
+function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLambda, awayLambda, over25Probability, bttsProbability, lambdaBlend, goalCalibration) {
   const poisson1x2 = poissonOutcomeProbabilities(homeLambda, awayLambda);
-  const blended = blendOutcomeProbabilities(probabilities, poisson1x2, match.eloSnapshot);
-  const final1x2 = blended.probabilities;
+  const blended = blendOutcomeProbabilities(probabilities, poisson1x2, match.eloSnapshot, match.formSnapshot);
+  const outcomeCalibration = calibrateOutcomeProbabilities(match, blended.probabilities, probabilities);
+  const final1x2 = outcomeCalibration.probabilities;
   const handicapPoisson = handicapOutcomeProbabilities(homeLambda, awayLambda, match.handicapLine);
   return {
-    version: "market-elo-poisson-v1",
+    version: "market-elo-form-calibrated-poisson-v3",
     generatedAt: new Date().toISOString(),
     basis: {
-      zh: "市场隐含概率 + Elo 强度快照 + Poisson 比分分布集成；暂未接入 xG、伤停、首发和校准器。",
-      en: "Market-implied probability, Elo strength snapshot, and Poisson score baseline; xG, injuries, lineups, and calibration are not connected yet.",
+      zh: "市场隐含概率 + Elo 强度快照 + 近况攻防 form + Poisson 比分分布 + 命中率冷却校准集成；暂未接入 xG、伤停、首发和正式离线校准器。",
+      en: "Market-implied probability, Elo strength snapshot, rolling form attack/defence, Poisson score distribution, and hit-rate cooldown calibration; xG, injuries, lineups, and offline calibration are not connected yet.",
     },
     ensembleWeights: blended.weights,
+    calibrationAdjustment: {
+      oneXTwo: {
+        applied: outcomeCalibration.applied,
+        reasons: outcomeCalibration.reasons,
+        adjustments: outcomeCalibration.adjustments,
+        before: asPercentTriplet(blended.probabilities),
+        after: asPercentTriplet(final1x2),
+      },
+      goals: goalCalibration?.meta || null,
+    },
+    lambdaBlend: lambdaBlend ? {
+      marketHomeLambda: Number(lambdaBlend.marketHomeLambda.toFixed(2)),
+      marketAwayLambda: Number(lambdaBlend.marketAwayLambda.toFixed(2)),
+      formHomeLambda: lambdaBlend.formHomeLambda,
+      formAwayLambda: lambdaBlend.formAwayLambda,
+      formWeight: lambdaBlend.formWeight,
+    } : undefined,
     oneXTwo: {
       market: asPercentTriplet(probabilities),
       elo: asPercentTriplet(match.eloSnapshot?.probabilities),
@@ -579,6 +765,21 @@ function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLamb
       homeMatches: match.eloSnapshot.homeMatches,
       awayMatches: match.eloSnapshot.awayMatches,
       lastUpdatedAt: match.eloSnapshot.lastUpdatedAt,
+    } : null,
+    form: match.formSnapshot ? {
+      version: match.formSnapshot.version,
+      lookbackMatches: match.formSnapshot.lookbackMatches,
+      sampleSize: match.formSnapshot.sampleSize,
+      home: match.formSnapshot.home,
+      away: match.formSnapshot.away,
+      h2h: match.formSnapshot.h2h,
+    } : null,
+    modelHealth: match.predictionHealth ? {
+      version: match.predictionHealth.version,
+      total: match.predictionHealth.total,
+      byMarket: match.predictionHealth.byMarket,
+      homeFavorite: match.predictionHealth.homeFavorite,
+      under25: match.predictionHealth.under25,
     } : null,
     scoreDistribution: topScoreProbabilities(homeLambda, awayLambda, 5),
     goalLines: {
@@ -596,8 +797,8 @@ function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLamb
     } : null,
     calibration: {
       status: "baseline",
-      zh: "当前为未校准基准概率；后续需要用时间滚动回测做 Brier / log loss / reliability 校准。",
-      en: "This is an uncalibrated baseline; rolling backtests with Brier, log loss, and reliability calibration are needed next.",
+      zh: "当前为轻量级赛前校准：已加入历史 form 修正和近期命中率冷却；后续仍需要用时间滚动回测做 Brier / log loss / reliability 正式校准。",
+      en: "This is a lightweight pre-match calibration with rolling-form correction and recent hit-rate cooldown; Brier, log loss, and reliability calibration are still needed.",
     },
   };
 }
@@ -614,6 +815,156 @@ function eloOutcomeProbabilities(homeRating, awayRating, homeAdvantage = 62) {
   return normalizeOutcomeProbabilities({ home, draw, away });
 }
 
+function teamKey(teamName) {
+  return normText(teamName).toLowerCase();
+}
+
+function pairKey(homeTeam, awayTeam) {
+  return [teamKey(homeTeam), teamKey(awayTeam)].sort().join("__");
+}
+
+function summarizeTeamForm(rows, key) {
+  const recent = rows.slice(-FORM_LOOKBACK_MATCHES);
+  const empty = {
+    sampleSize: 0,
+    wins: 0,
+    draws: 0,
+    losses: 0,
+    pointsPerMatch: null,
+    goalsForAvg: null,
+    goalsAgainstAvg: null,
+    goalDiffAvg: null,
+    over25Rate: null,
+    bttsRate: null,
+    cleanSheetRate: null,
+    failedScoreRate: null,
+  };
+  if (!recent.length) return empty;
+
+  const totals = recent.reduce((acc, row) => {
+    const isHome = row.homeKey === key;
+    const goalsFor = isHome ? row.scoreHome : row.scoreAway;
+    const goalsAgainst = isHome ? row.scoreAway : row.scoreHome;
+    const totalGoals = row.scoreHome + row.scoreAway;
+    const points = goalsFor > goalsAgainst ? 3 : goalsFor === goalsAgainst ? 1 : 0;
+    acc.wins += points === 3 ? 1 : 0;
+    acc.draws += points === 1 ? 1 : 0;
+    acc.losses += points === 0 ? 1 : 0;
+    acc.points += points;
+    acc.goalsFor += goalsFor;
+    acc.goalsAgainst += goalsAgainst;
+    acc.over25 += totalGoals >= 3 ? 1 : 0;
+    acc.btts += row.scoreHome > 0 && row.scoreAway > 0 ? 1 : 0;
+    acc.cleanSheet += goalsAgainst === 0 ? 1 : 0;
+    acc.failedScore += goalsFor === 0 ? 1 : 0;
+    return acc;
+  }, {
+    wins: 0,
+    draws: 0,
+    losses: 0,
+    points: 0,
+    goalsFor: 0,
+    goalsAgainst: 0,
+    over25: 0,
+    btts: 0,
+    cleanSheet: 0,
+    failedScore: 0,
+  });
+
+  const sampleSize = recent.length;
+  return {
+    sampleSize,
+    wins: totals.wins,
+    draws: totals.draws,
+    losses: totals.losses,
+    pointsPerMatch: Number((totals.points / sampleSize).toFixed(2)),
+    goalsForAvg: Number((totals.goalsFor / sampleSize).toFixed(2)),
+    goalsAgainstAvg: Number((totals.goalsAgainst / sampleSize).toFixed(2)),
+    goalDiffAvg: Number(((totals.goalsFor - totals.goalsAgainst) / sampleSize).toFixed(2)),
+    over25Rate: Number((totals.over25 / sampleSize).toFixed(3)),
+    bttsRate: Number((totals.btts / sampleSize).toFixed(3)),
+    cleanSheetRate: Number((totals.cleanSheet / sampleSize).toFixed(3)),
+    failedScoreRate: Number((totals.failedScore / sampleSize).toFixed(3)),
+  };
+}
+
+function summarizeHeadToHead(rows) {
+  const recent = rows.slice(-8);
+  if (!recent.length) {
+    return {
+      sampleSize: 0,
+      over25Rate: null,
+      bttsRate: null,
+      drawRate: null,
+    };
+  }
+
+  const totals = recent.reduce((acc, row) => {
+    const totalGoals = row.scoreHome + row.scoreAway;
+    acc.over25 += totalGoals >= 3 ? 1 : 0;
+    acc.btts += row.scoreHome > 0 && row.scoreAway > 0 ? 1 : 0;
+    acc.draws += row.scoreHome === row.scoreAway ? 1 : 0;
+    return acc;
+  }, { over25: 0, btts: 0, draws: 0 });
+
+  return {
+    sampleSize: recent.length,
+    over25Rate: Number((totals.over25 / recent.length).toFixed(3)),
+    bttsRate: Number((totals.btts / recent.length).toFixed(3)),
+    drawRate: Number((totals.draws / recent.length).toFixed(3)),
+  };
+}
+
+function buildFormSnapshots(matches) {
+  const teamHistory = new Map();
+  const h2hHistory = new Map();
+  const snapshots = new Map();
+  const readRows = (map, key) => map.get(key) || [];
+  const appendRow = (map, key, row) => {
+    const rows = map.get(key) || [];
+    rows.push(row);
+    if (rows.length > 40) rows.splice(0, rows.length - 40);
+    map.set(key, rows);
+  };
+
+  const sorted = [...matches].sort((a, b) => Date.parse(a.kickoffTime) - Date.parse(b.kickoffTime));
+  for (const match of sorted) {
+    const sourceMatchId = normText(match.sourceMatchId);
+    const homeKey = teamKey(match.homeTeam);
+    const awayKey = teamKey(match.awayTeam);
+    if (!sourceMatchId || !homeKey || !awayKey) continue;
+
+    const homeForm = summarizeTeamForm(readRows(teamHistory, homeKey), homeKey);
+    const awayForm = summarizeTeamForm(readRows(teamHistory, awayKey), awayKey);
+    const h2h = summarizeHeadToHead(readRows(h2hHistory, pairKey(match.homeTeam, match.awayTeam)));
+    const sampleSize = homeForm.sampleSize + awayForm.sampleSize;
+    snapshots.set(sourceMatchId, {
+      version: "rolling-form-v1",
+      lookbackMatches: FORM_LOOKBACK_MATCHES,
+      sampleSize,
+      home: homeForm,
+      away: awayForm,
+      h2h,
+    });
+
+    if (match.status !== "FINISHED" || !Number.isFinite(match.scoreHome) || !Number.isFinite(match.scoreAway)) continue;
+
+    const row = {
+      sourceMatchId,
+      homeKey,
+      awayKey,
+      kickoffTime: match.kickoffTime,
+      scoreHome: match.scoreHome,
+      scoreAway: match.scoreAway,
+    };
+    appendRow(teamHistory, homeKey, row);
+    appendRow(teamHistory, awayKey, row);
+    appendRow(h2hHistory, pairKey(match.homeTeam, match.awayTeam), row);
+  }
+
+  return snapshots;
+}
+
 function buildEloSnapshots(matches) {
   const baseRating = 1500;
   const kFactor = 22;
@@ -621,7 +972,6 @@ function buildEloSnapshots(matches) {
   const counts = new Map();
   const snapshots = new Map();
 
-  const teamKey = (teamName) => normText(teamName).toLowerCase();
   const ratingFor = (key) => ratings.get(key) ?? baseRating;
   const countFor = (key) => counts.get(key) ?? 0;
   const setRating = (key, value) => ratings.set(key, value);
@@ -679,6 +1029,50 @@ function resultStatus(match, expected, marketType = "") {
   if (expected === "GG") return match.scoreHome > 0 && match.scoreAway > 0 ? "WON" : "LOST";
   if (expected === "NG") return match.scoreHome === 0 || match.scoreAway === 0 ? "WON" : "LOST";
   return expected === actual1x2 ? "WON" : "LOST";
+}
+
+function buildPredictionHealth(existingMatches) {
+  const summarize = (rows) => {
+    const settledRows = rows.filter((row) => row.resultStatus === "WON" || row.resultStatus === "LOST");
+    const won = settledRows.filter((row) => row.resultStatus === "WON").length;
+    const lost = settledRows.filter((row) => row.resultStatus === "LOST").length;
+    const settled = won + lost;
+    const hitRate = settled ? won / settled : null;
+    return {
+      settled,
+      won,
+      lost,
+      hitRate: hitRate === null ? null : Number(hitRate.toFixed(3)),
+      cooldown: settled >= 8 && hitRate < 0.45,
+    };
+  };
+
+  const rows = [];
+  for (const match of existingMatches || []) {
+    for (const prediction of match.predictions || []) {
+      if (!prediction || prediction.tipCode === "WATCH") continue;
+      if (prediction.resultStatus !== "WON" && prediction.resultStatus !== "LOST") continue;
+      rows.push({
+        marketType: prediction.marketType,
+        tipCode: prediction.tipCode,
+        resultStatus: prediction.resultStatus,
+      });
+    }
+  }
+
+  const byMarket = {};
+  for (const marketType of ["1X2", "GOALS", "BEST"]) {
+    byMarket[marketType] = summarize(rows.filter((row) => row.marketType === marketType));
+  }
+
+  return {
+    version: "settled-prediction-health-v1",
+    generatedAt: new Date().toISOString(),
+    total: summarize(rows),
+    byMarket,
+    homeFavorite: summarize(rows.filter((row) => row.tipCode === "1")),
+    under25: summarize(rows.filter((row) => row.tipCode === "U2.5")),
+  };
 }
 
 function leagueMeta(leagueName) {
@@ -1002,6 +1396,7 @@ function evaluateOneXTwoGate(context) {
     modelProbabilityGap,
     riskTags,
     analystSelection,
+    predictionHealth,
   } = context;
 
   const code = pick[0];
@@ -1014,6 +1409,7 @@ function evaluateOneXTwoGate(context) {
       ? probabilities.draw
       : probabilities.away;
   const handicapSupport = hhadSupportForPick(hhadProbabilities, code);
+  const oneXTwoCooldown = Boolean(predictionHealth?.byMarket?.["1X2"]?.cooldown || predictionHealth?.homeFavorite?.cooldown);
   const reasons = [];
 
   if (analystSelection.isContrarian) reasons.push("contrarian");
@@ -1028,15 +1424,22 @@ function evaluateOneXTwoGate(context) {
   if (isSidePick && odds <= 1.45) reasons.push("low-odds-no-value");
   if (profile.isInternational && isSidePick && odds <= 1.7) reasons.push("international-low-odds");
   if (profile.isJapan && isSidePick && odds <= 2.05) reasons.push("jleague-volatile-favorite");
+  if (oneXTwoCooldown) reasons.push("recent-1x2-hit-rate-cooldown");
+
+  const minPickProbability = oneXTwoCooldown ? 0.7 : 0.62;
+  const minProbabilityGap = oneXTwoCooldown ? 0.3 : 0.24;
+  const minModelGap = oneXTwoCooldown ? 0.24 : 0.18;
+  const minHandicapSupport = oneXTwoCooldown ? 0.64 : 0.58;
+  const maxDrawPressure = oneXTwoCooldown ? 0.2 : 0.22;
 
   const strongSidePick = isSidePick
     && !analystSelection.isContrarian
-    && pickProbability >= 0.62
-    && probabilityGap >= 0.24
-    && modelProbabilityGap >= 0.18
+    && pickProbability >= minPickProbability
+    && probabilityGap >= minProbabilityGap
+    && modelProbabilityGap >= minModelGap
     && handicapSupport !== null
-    && handicapSupport >= 0.58
-    && probabilities.draw <= 0.22
+    && handicapSupport >= minHandicapSupport
+    && probabilities.draw <= maxDrawPressure
     && odds > 1.45
     && odds <= 2.35
     && riskTags.length === 0;
@@ -1052,16 +1455,20 @@ function evaluateOneXTwoGate(context) {
   };
 }
 
-function evaluateGoalsGate(goalsProbability, over25Probability, bttsProbability) {
+function evaluateGoalsGate(goalsProbability, over25Probability, bttsProbability, predictionHealth) {
   const reasons = [];
   const edge = Math.abs(over25Probability - 0.5);
+  const goalsCooldown = Boolean(predictionHealth?.byMarket?.GOALS?.cooldown);
+  const minProbability = goalsCooldown ? 0.68 : 0.63;
+  const minEdge = goalsCooldown ? 0.18 : 0.13;
 
-  if (goalsProbability < 0.63) reasons.push("thin-goal-edge");
-  if (edge < 0.13) reasons.push("near-coin-flip-total");
+  if (goalsProbability < minProbability) reasons.push("thin-goal-edge");
+  if (edge < minEdge) reasons.push("near-coin-flip-total");
   if (bttsProbability >= 0.46 && bttsProbability <= 0.56) reasons.push("btts-borderline");
+  if (goalsCooldown) reasons.push("recent-goals-hit-rate-cooldown");
 
   return {
-    promote: goalsProbability >= 0.63 && edge >= 0.13 && !(bttsProbability >= 0.46 && bttsProbability <= 0.56),
+    promote: goalsProbability >= minProbability && edge >= minEdge && !(bttsProbability >= 0.46 && bttsProbability <= 0.56),
     reasons,
   };
 }
@@ -1308,11 +1715,21 @@ function predictionSet(match) {
     + (rand() - 0.5) * 0.28;
   const totalLambdaBase = clamp(totalLambdaSeed, 1.75, 3.25);
   const homeShare = clamp(0.5 + (probabilities.home - probabilities.away) * 0.52, 0.24, 0.76);
-  const homeLambda = clamp(totalLambdaBase * homeShare, 0.35, 2.8);
-  const awayLambda = clamp(totalLambdaBase - homeLambda, 0.3, 2.6);
+  const marketHomeLambda = clamp(totalLambdaBase * homeShare, 0.35, 2.8);
+  const marketAwayLambda = clamp(totalLambdaBase - marketHomeLambda, 0.3, 2.6);
+  const lambdaBlend = {
+    marketHomeLambda,
+    marketAwayLambda,
+    ...blendLambdasWithForm(match, marketHomeLambda, marketAwayLambda),
+  };
+  const homeLambda = lambdaBlend.homeLambda;
+  const awayLambda = lambdaBlend.awayLambda;
   const totalLambda = homeLambda + awayLambda;
-  const over25Probability = clamp(1 - [0, 1, 2].reduce((sum, goals) => sum + poissonProbability(totalLambda, goals), 0), 0, 1);
-  const bttsProbability = clamp((1 - Math.exp(-homeLambda)) * (1 - Math.exp(-awayLambda)), 0, 1);
+  const rawOver25Probability = clamp(1 - [0, 1, 2].reduce((sum, goals) => sum + poissonProbability(totalLambda, goals), 0), 0, 1);
+  const rawBttsProbability = clamp((1 - Math.exp(-homeLambda)) * (1 - Math.exp(-awayLambda)), 0, 1);
+  const goalCalibration = calibrateGoalProbabilities(match, rawOver25Probability, rawBttsProbability);
+  const over25Probability = goalCalibration.over25;
+  const bttsProbability = goalCalibration.btts;
   const goalsTip = over25Probability >= 0.52 ? "O2.5" : "U2.5";
   const goalsProbability = goalsTip === "O2.5" ? over25Probability : 1 - over25Probability;
   const goalsOdds = Number(clamp(1 / Math.max(goalsProbability, 0.36), 1.2, 2.78).toFixed(2));
@@ -1320,7 +1737,7 @@ function predictionSet(match) {
     ? { zh: "大2.5球（≥3球）", en: "Over 2.5 goals" }
     : { zh: "小2.5球（≤2球）", en: "Under 2.5 goals" };
   const score = projectedScore(homeLambda, awayLambda);
-  const probabilityModel = buildProbabilityModel(match, probabilities, hhadProbabilities, homeLambda, awayLambda, over25Probability, bttsProbability);
+  const probabilityModel = buildProbabilityModel(match, probabilities, hhadProbabilities, homeLambda, awayLambda, over25Probability, bttsProbability, lambdaBlend, goalCalibration);
   const modelProbabilities = {
     home: (probabilityModel.oneXTwo.final?.home || pct1(probabilities.home)) / 100,
     draw: (probabilityModel.oneXTwo.final?.draw || pct1(probabilities.draw)) / 100,
@@ -1410,15 +1827,21 @@ function predictionSet(match) {
     modelProbabilityGap,
     riskTags,
     analystSelection,
+    predictionHealth: match.predictionHealth,
   });
   const oneXTwoWatchLabel = {
     zh: "\u89c2\u5bdf\u4e3a\u4e3b \u80dc\u5e73\u8d1f\u4e0d\u5f3a\u63a8",
     en: "Watch first: no 1X2 pick",
   };
+  const oneXTwoHealthCooldown = Boolean(match.predictionHealth?.byMarket?.["1X2"]?.cooldown || match.predictionHealth?.homeFavorite?.cooldown);
+  const healthCooldownTag = oneXTwoHealthCooldown
+    ? [{ zh: "\u8fd1\u671f\u547d\u4e2d\u7387\u51b7\u5374", en: "Recent hit-rate cooldown" }]
+    : [];
   const oneXTwoRiskTags = oneXTwoGate.promote
     ? riskTags
     : [
         ...riskTags,
+        ...healthCooldownTag,
         { zh: "\u63a8\u8350\u95e8\u69db\u672a\u8fc7", en: "Recommendation gate not met" },
       ];
   const oneXTwoTrust = oneXTwoGate.promote
@@ -1475,7 +1898,7 @@ function predictionSet(match) {
     resultStatus: oneXTwoGate.promote ? modelLean.resultStatus : "PENDING",
   };
 
-  const goalsGate = evaluateGoalsGate(goalsProbability, over25Probability, bttsProbability);
+  const goalsGate = evaluateGoalsGate(goalsProbability, over25Probability, bttsProbability, match.predictionHealth);
   const goalsWatchLabel = {
     zh: "观察为主 进球数不强推",
     en: "Watch first: no total-goals pick",
@@ -1484,6 +1907,7 @@ function predictionSet(match) {
     ? riskTags.filter((tag) => tag.en === "Goal-model borderline")
     : [
         ...riskTags.filter((tag) => tag.en === "Goal-model borderline"),
+        ...(match.predictionHealth?.byMarket?.GOALS?.cooldown ? [{ zh: "进球命中率冷却", en: "Goals hit-rate cooldown" }] : []),
         { zh: "进球闸门未过", en: "Goals gate not met" },
       ];
 
@@ -2129,6 +2553,30 @@ function staleOrPartialFetchReason(existingMatches, nextMatches, rawMatchesWithO
   return "";
 }
 
+function matchStoreKey(match) {
+  return normText(match?.sourceMatchId || String(match?.id || "").replace(/^sporttery_/, ""));
+}
+
+function mergeFreshWithExistingStore(existingMatches, freshMatches) {
+  const byId = new Map();
+  const orderedIds = [];
+  const upsert = (match, preferFresh = false) => {
+    const key = matchStoreKey(match);
+    if (!key) return;
+    if (!byId.has(key)) orderedIds.push(key);
+    const previous = byId.get(key);
+    byId.set(key, previous && !preferFresh ? previous : { ...previous, ...match });
+  };
+
+  for (const match of existingMatches || []) upsert(match, false);
+  for (const match of freshMatches || []) upsert(match, true);
+
+  return orderedIds
+    .map((key) => byId.get(key))
+    .filter(Boolean)
+    .sort((a, b) => Date.parse(a.kickoffTime || 0) - Date.parse(b.kickoffTime || 0));
+}
+
 function buildTeamIndex(matches) {
   const byTeam = new Map();
   const upsert = (match, side) => {
@@ -2176,9 +2624,10 @@ async function sync() {
   const dataDir = path.join(publicDir, "data");
   fs.mkdirSync(publicDir, { recursive: true });
   const existingMatches = loadExistingMatches();
+  const predictionHealth = buildPredictionHealth(existingMatches);
   const existingBySourceId = new Map(
     existingMatches
-      .map((match) => [normText(match?.sourceMatchId || String(match?.id || "").replace(/^sporttery_/, "")), match])
+      .map((match) => [matchStoreKey(match), match])
       .filter(([sourceMatchId]) => sourceMatchId)
   );
   const oddsHistoryBeforeSync = loadOddsHistory(publicDir);
@@ -2189,10 +2638,12 @@ async function sync() {
   const rawResultMatches = rawMatches.filter(isOfficialResultMatch);
   const rawMatchesForOutput = rawMatches.filter((match) => hasOfficialDisplayOdds(match) || isOfficialResultMatch(match));
   const eloSnapshots = buildEloSnapshots(rawMatches);
+  const formSnapshots = buildFormSnapshots(rawMatches);
   const usedFreshOdds = rawMatchesWithOdds.length > 0;
   let output = rawMatchesForOutput
     .map((match) => enrichRawMatchWithPredictionSnapshot(match, existingBySourceId, oddsHistoryBeforeSync.rows))
     .map((match) => ({ ...match, eloSnapshot: eloSnapshots.get(normText(match.sourceMatchId)) || null }))
+    .map((match) => ({ ...match, formSnapshot: formSnapshots.get(normText(match.sourceMatchId)) || null, predictionHealth }))
     .map((match) => {
       const appMatch = toAppMatch(match);
       const existing = existingBySourceId.get(normText(appMatch?.sourceMatchId || String(appMatch?.id || "").replace(/^sporttery_/, "")));
@@ -2200,6 +2651,7 @@ async function sync() {
     });
 
   let keptExistingReason = staleOrPartialFetchReason(existingMatches, output, rawMatchesWithOdds, rawResultMatches);
+  let mergedPartialFresh = false;
 
   if (!output.length) {
     output = existingMatches;
@@ -2208,11 +2660,12 @@ async function sync() {
     console.log(`${keptExistingReason} (${output.length}).`);
   } else if (keptExistingReason) {
     const freshCount = output.length;
-    output = existingMatches;
-    console.log(`${keptExistingReason}; ignored partial fresh output (${freshCount}).`);
+    output = mergeFreshWithExistingStore(existingMatches, output);
+    mergedPartialFresh = true;
+    console.log(`${keptExistingReason}; merged ${freshCount} fresh rows with existing store (${output.length}).`);
   }
 
-  const oddsHistory = usedFreshOdds && !keptExistingReason
+  const oddsHistory = usedFreshOdds && (mergedPartialFresh || !keptExistingReason)
     ? appendOddsHistory(publicDir, output, capturedAt)
     : { rows: loadOddsHistory(publicDir).rows.length, appended: 0, updated: 0, skipped: keptExistingReason || "no fresh official odds" };
   output = attachOddsTrends(output, publicDir);
@@ -2254,6 +2707,7 @@ async function sync() {
     ...(keptExistingReason ? {
       fallback: {
         keptExisting: true,
+        mergedPartialFresh,
         reason: keptExistingReason,
         existingMatches: existingMatches.length,
         freshPublishableMatches: rawMatchesForOutput.length,

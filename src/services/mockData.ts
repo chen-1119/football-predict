@@ -92,6 +92,39 @@ export interface MatchProbabilityModel {
     elo: number;
     poisson: number;
   };
+  calibrationAdjustment?: {
+    oneXTwo?: {
+      applied: boolean;
+      reasons: string[];
+      adjustments: Array<{
+        code: string;
+        reason: string;
+        penalty: number;
+      }>;
+      before: OutcomeProbability | null;
+      after: OutcomeProbability | null;
+    };
+    goals?: {
+      applied: boolean;
+      reasons: string[];
+      shrinkFactor: number;
+      before: {
+        over25: number;
+        btts: number;
+      };
+      after: {
+        over25: number;
+        btts: number;
+      };
+    } | null;
+  };
+  lambdaBlend?: {
+    marketHomeLambda: number;
+    marketAwayLambda: number;
+    formHomeLambda: number | null;
+    formAwayLambda: number | null;
+    formWeight: number;
+  };
   oneXTwo: {
     market: OutcomeProbability | null;
     elo?: OutcomeProbability | null;
@@ -105,6 +138,52 @@ export interface MatchProbabilityModel {
     homeMatches: number;
     awayMatches: number;
     lastUpdatedAt?: string;
+  } | null;
+  form?: {
+    version: string;
+    lookbackMatches: number;
+    sampleSize: number;
+    home: {
+      sampleSize: number;
+      wins: number;
+      draws: number;
+      losses: number;
+      pointsPerMatch: number | null;
+      goalsForAvg: number | null;
+      goalsAgainstAvg: number | null;
+      goalDiffAvg: number | null;
+      over25Rate: number | null;
+      bttsRate: number | null;
+      cleanSheetRate: number | null;
+      failedScoreRate: number | null;
+    };
+    away: {
+      sampleSize: number;
+      wins: number;
+      draws: number;
+      losses: number;
+      pointsPerMatch: number | null;
+      goalsForAvg: number | null;
+      goalsAgainstAvg: number | null;
+      goalDiffAvg: number | null;
+      over25Rate: number | null;
+      bttsRate: number | null;
+      cleanSheetRate: number | null;
+      failedScoreRate: number | null;
+    };
+    h2h: {
+      sampleSize: number;
+      over25Rate: number | null;
+      bttsRate: number | null;
+      drawRate: number | null;
+    };
+  } | null;
+  modelHealth?: {
+    version: string;
+    total: PredictionHealthBucket;
+    byMarket: Record<string, PredictionHealthBucket>;
+    homeFavorite: PredictionHealthBucket;
+    under25: PredictionHealthBucket;
   } | null;
   scoreDistribution: ScoreProbability[];
   goalLines: {
@@ -125,6 +204,14 @@ export interface MatchProbabilityModel {
     zh: string;
     en: string;
   };
+}
+
+export interface PredictionHealthBucket {
+  settled: number;
+  won: number;
+  lost: number;
+  hitRate: number | null;
+  cooldown: boolean;
 }
 
 export interface H2HRecord {
