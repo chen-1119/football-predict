@@ -1,674 +1,5 @@
 [
   {
-    "id": "sporttery_2040127",
-    "homeTeamId": "team_p6wuou",
-    "awayTeamId": "team_14kclwv",
-    "leagueId": "league_hd77lw",
-    "countryId": "jpn",
-    "kickoffTime": "2026-06-06T16:00:00+08:00",
-    "status": "SCHEDULED",
-    "projectedScoreHome": 1,
-    "projectedScoreAway": 1,
-    "probabilityModel": {
-      "version": "market-elo-poisson-v1",
-      "generatedAt": "2026-06-06T07:26:07.935Z",
-      "basis": {
-        "zh": "市场隐含概率 + Elo 强度快照 + Poisson 比分分布集成；暂未接入 xG、伤停、首发和校准器。",
-        "en": "Market-implied probability, Elo strength snapshot, and Poisson score baseline; xG, injuries, lineups, and calibration are not connected yet."
-      },
-      "ensembleWeights": {
-        "market": 0.58,
-        "elo": 0.24,
-        "poisson": 0.18
-      },
-      "oneXTwo": {
-        "market": {
-          "home": 43.4,
-          "draw": 30.1,
-          "away": 26.5
-        },
-        "elo": {
-          "home": 43.3,
-          "draw": 27.9,
-          "away": 28.8
-        },
-        "poisson": {
-          "home": 50.5,
-          "draw": 23.4,
-          "away": 26.1
-        },
-        "final": {
-          "home": 44.7,
-          "draw": 28.4,
-          "away": 27
-        }
-      },
-      "elo": {
-        "homeRating": 1488,
-        "awayRating": 1479,
-        "diff": 71,
-        "homeMatches": 6,
-        "awayMatches": 4,
-        "lastUpdatedAt": "2026-06-06T16:00:00+08:00"
-      },
-      "scoreDistribution": [
-        {
-          "home": 1,
-          "away": 1,
-          "label": "1-1",
-          "probability": 10.9
-        },
-        {
-          "home": 2,
-          "away": 1,
-          "label": "2-1",
-          "probability": 9.6
-        },
-        {
-          "home": 1,
-          "away": 0,
-          "label": "1-0",
-          "probability": 9
-        },
-        {
-          "home": 2,
-          "away": 0,
-          "label": "2-0",
-          "probability": 8
-        },
-        {
-          "home": 1,
-          "away": 2,
-          "label": "1-2",
-          "probability": 6.6
-        }
-      ],
-      "goalLines": {
-        "over25": 57.2,
-        "under25": 42.8
-      },
-      "bothTeamsToScore": {
-        "yes": 58.2,
-        "no": 41.8
-      },
-      "handicap": {
-        "line": "-1",
-        "market": {
-          "home": 19.7,
-          "draw": 24.3,
-          "away": 56.1
-        },
-        "poisson": {
-          "home": 27.7,
-          "draw": 22.7,
-          "away": 49.5
-        }
-      },
-      "calibration": {
-        "status": "baseline",
-        "zh": "当前为未校准基准概率；后续需要用时间滚动回测做 Brier / log loss / reliability 校准。",
-        "en": "This is an uncalibrated baseline; rolling backtests with Brier, log loss, and reliability calibration are needed next."
-      }
-    },
-    "odds": {
-      "odds1": 2.04,
-      "oddsX": 2.94,
-      "odds2": 3.34
-    },
-    "handicapOdds": {
-      "odds1": 4.5,
-      "oddsX": 3.65,
-      "odds2": 1.58
-    },
-    "predictions": [
-      {
-        "marketType": "1X2",
-        "tipCode": "1",
-        "tipLabel": {
-          "zh": "主胜 横滨水手",
-          "en": "Home Win (横滨水手)"
-        },
-        "odds": 2.04,
-        "trustScore": 63,
-        "explanation": {
-          "zh": "本场以中国竞彩网官方 HAD 胜平负 SP 为主轴，去水后最高支持方向为主胜 横滨水手。模型同时参考主客预期进球、平局拉力和赔率分布，不使用本地模拟赛果回填。",
-          "en": "This pick is anchored to official Sporttery HAD odds. After removing overround, the strongest direction is Home Win (横滨水手)."
-        },
-        "analysisItems": [
-          {
-            "zh": "官方 HAD SP：主胜 2.04 / 平局 2.94 / 客胜 3.34；去水支持率约 主胜 43% / 平局 30% / 客胜 27%。",
-            "en": "Official HAD SP: 2.04 / 2.94 / 3.34; normalized support is about home 43% / draw 30% / away 27%."
-          },
-          {
-            "zh": "胜平负差距：市场主线领先第二方向约 13 个百分点，当前模型可信度 63%。",
-            "en": "1X2 separation: the market lead is ahead by about 13 percentage points. Model confidence: 63%."
-          },
-          {
-            "zh": "平局支持率偏高，胜平负方向需要防平。 官方 SP 更新时间：2026-06-06 14:14:50。",
-            "en": "Draw support is high, so cover the draw risk. Official SP updated at 2026-06-06 14:14:50."
-          }
-        ],
-        "riskTags": [
-          {
-            "zh": "防平",
-            "en": "Draw risk"
-          },
-          {
-            "zh": "让球支持不足",
-            "en": "Handicap support weak"
-          },
-          {
-            "zh": "进球临界",
-            "en": "Goal-model borderline"
-          }
-        ],
-        "visibilityStatus": "FREE",
-        "resultStatus": "PENDING"
-      },
-      {
-        "marketType": "GOALS",
-        "tipCode": "3",
-        "tipLabel": {
-          "zh": "总进球数 3球",
-          "en": "Total Goals 3"
-        },
-        "odds": 4.46,
-        "trustScore": 67,
-        "explanation": {
-          "zh": "总进球数为模型参考项，基于胜平负 SP 反推出主队 1.77、客队 1.21 的预期进球，当前总进球期望约 2.98。",
-          "en": "The goals model derives expected goals from 1X2 odds: home 1.77, away 1.21, total 2.98."
-        },
-        "analysisItems": [
-          {
-            "zh": "比分热区：1-1 附近；总进球 3 的模型概率约 22%。",
-            "en": "Score heat zone: around 1-1; model probability for total goals 3 is about 22%."
-          },
-          {
-            "zh": "大 2.5 球概率约 57%，该指标用于走势参考，不等同于中国竞彩网官方总进球 SP。",
-            "en": "Over 2.5 probability is about 57%. This is a model reference, not official Sporttery total-goals SP."
-          }
-        ],
-        "riskTags": [
-          {
-            "zh": "进球临界",
-            "en": "Goal-model borderline"
-          }
-        ],
-        "visibilityStatus": "PREMIUM",
-        "resultStatus": "PENDING"
-      },
-      {
-        "marketType": "BEST",
-        "tipCode": "WATCH",
-        "tipLabel": {
-          "zh": "观察为主 防正路过热",
-          "en": "Watch first: favorite overheated"
-        },
-        "odds": 0,
-        "trustScore": 51,
-        "explanation": {
-          "zh": "这场有正路倾向，但不适合硬写成稳胆。让球同向支持约 20%，风险标签为 防平、让球支持不足、进球临界，先按观察单处理。",
-          "en": "There is a favorite lean, but not a banker. same-side handicap support is about 20%; risk tags: Draw risk, Handicap support weak, Goal-model borderline. Keep it in watch mode."
-        },
-        "analysisItems": [
-          {
-            "zh": "降级原因：主胜 横滨水手对应 让球同向支持约 20%；让球盘去水支持约 主胜 20% / 平 24% / 客胜 56%，和普通胜平负主线存在温差。",
-            "en": "Downgrade reason: Home Win (横滨水手) has same-side handicap support is about 20%; handicap normalized support is home 20% / draw 24% / away 56%, not fully aligned with HAD."
-          },
-          {
-            "zh": "进球侧：比分热区 1-1，总期望 2.98，大 2.5 约 57%，双方进球约 58%。",
-            "en": "Goals: score heat zone 1-1, total xG 2.98, over 2.5 about 57%, BTTS about 58%."
-          },
-          {
-            "zh": "临场复核：防平、让球支持不足、进球临界。如果赛前 SP 继续降赔但让球支持不上来，仍按观察处理。",
-            "en": "Late check: Draw risk, Handicap support weak, Goal-model borderline. If SP shortens without handicap confirmation, keep this as watch-only."
-          }
-        ],
-        "riskTags": [
-          {
-            "zh": "防平",
-            "en": "Draw risk"
-          },
-          {
-            "zh": "让球支持不足",
-            "en": "Handicap support weak"
-          },
-          {
-            "zh": "进球临界",
-            "en": "Goal-model borderline"
-          }
-        ],
-        "visibilityStatus": "FREE",
-        "resultStatus": "PENDING"
-      }
-    ],
-    "stats": {
-      "xG": {
-        "home": 1.77,
-        "away": 1.21
-      },
-      "possession": {
-        "home": 51,
-        "away": 49
-      },
-      "shots": {
-        "home": 13,
-        "away": 10
-      },
-      "shotsOnTarget": {
-        "home": 3,
-        "away": 5
-      },
-      "corners": {
-        "home": 5,
-        "away": 6
-      },
-      "fouls": {
-        "home": 11,
-        "away": 8
-      },
-      "offsides": {
-        "home": 0,
-        "away": 2
-      },
-      "yellowCards": {
-        "home": 2,
-        "away": 2
-      },
-      "redCards": {
-        "home": 0,
-        "away": 0
-      }
-    },
-    "matchDate": "2026-06-06",
-    "kickoffDate": "2026-06-06",
-    "businessDate": "2026-06-06",
-    "homeTeamName": "横滨水手",
-    "homeTeamNameEn": "横滨水手",
-    "homeTeamLogo": "./team-logos/jleague/yokohama-f-marinos.png",
-    "homeTeamLogoType": "crest",
-    "homeTeamColor": "#5acb2d",
-    "awayTeamName": "清水鼓动",
-    "awayTeamNameEn": "清水鼓动",
-    "awayTeamLogo": "./team-logos/jleague/shimizu-s-pulse.png",
-    "awayTeamLogoType": "crest",
-    "awayTeamColor": "#92332d",
-    "leagueName": "日职",
-    "leagueNameEn": "Japan",
-    "leagueShortName": "日职",
-    "leagueShortNameEn": "Japan",
-    "countryName": "日本",
-    "countryNameEn": "Japan",
-    "countryFlag": "🇯🇵",
-    "source": "sporttery",
-    "sourceMethod": "all",
-    "sourceUrl": "https://webapi.sporttery.cn/gateway/uniform/fb/getMatchDataPageListV1.qry?method=all&pageSize=80",
-    "sourceMatchId": "2040127",
-    "matchNo": "周六204",
-    "oddsSource": "sporttery:HAD",
-    "oddsPoolCode": "HAD",
-    "oddsSourceMethod": "calculator",
-    "oddsUpdatedAt": "2026-06-06 14:14:50",
-    "oddsSourceUrl": "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c",
-    "handicapLine": "-1",
-    "handicapOddsSource": "sporttery:HHAD",
-    "handicapOddsPoolCode": "HHAD",
-    "handicapOddsSourceMethod": "calculator",
-    "handicapOddsUpdatedAt": "2026-06-06 14:14:57",
-    "handicapOddsSourceUrl": "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c",
-    "predictionMeta": {
-      "policyVersion": "pre-match-value-gate-v6",
-      "promptVersion": "professional-football-analyst-v5",
-      "generatedAt": "2026-06-05T06:49:51.684Z",
-      "updatedAt": "2026-06-06T07:25:22.562Z",
-      "dataPolicy": {
-        "zh": "仅使用已接入的中国竞彩网官方 SP、让球 SP、赛果和 SP 快照；伤停、首发、天气、裁判等未接入数据明确视为不足，不编造。",
-        "en": "Uses connected official Sporttery SP, handicap SP, results, and SP snapshots only. Injuries, lineups, weather, and referee data are treated as unavailable unless connected."
-      },
-      "updateReason": {
-        "zh": "精选说明升级为分场景盘口叙事，未开赛比赛允许刷新赛前分析文案和风险表达。",
-        "en": "Best-tip notes were upgraded to scenario-based market narratives, so unstarted matches can refresh analysis copy and risk wording."
-      }
-    },
-    "oddsTrend": {
-      "sampleSize": 15,
-      "firstCapturedAt": "2026-06-05T01:53:50.822Z",
-      "lastCapturedAt": "2026-06-06T07:25:22.562Z",
-      "odds1Change": -0.05,
-      "oddsXChange": -0.26,
-      "odds2Change": 0.38,
-      "direction": "draw",
-      "summary": {
-        "zh": "SP 快照 15 次：主胜 -0.05，平局 -0.26，客胜 +0.38；平局 SP 下调，市场支持有所增强。",
-        "en": "15 SP snapshots: home -0.05, draw -0.26, away +0.38. draw SP shortened, indicating stronger market support."
-      }
-    }
-  },
-  {
-    "id": "sporttery_2040128",
-    "homeTeamId": "team_1baf9kp",
-    "awayTeamId": "team_1gg44jb",
-    "leagueId": "league_hd77lw",
-    "countryId": "jpn",
-    "kickoffTime": "2026-06-06T17:00:00+08:00",
-    "status": "SCHEDULED",
-    "projectedScoreHome": 1,
-    "projectedScoreAway": 1,
-    "probabilityModel": {
-      "version": "market-elo-poisson-v1",
-      "generatedAt": "2026-06-06T07:26:07.936Z",
-      "basis": {
-        "zh": "市场隐含概率 + Elo 强度快照 + Poisson 比分分布集成；暂未接入 xG、伤停、首发和校准器。",
-        "en": "Market-implied probability, Elo strength snapshot, and Poisson score baseline; xG, injuries, lineups, and calibration are not connected yet."
-      },
-      "ensembleWeights": {
-        "market": 0.58,
-        "elo": 0.24,
-        "poisson": 0.18
-      },
-      "oneXTwo": {
-        "market": {
-          "home": 51.5,
-          "draw": 25.3,
-          "away": 23.2
-        },
-        "elo": {
-          "home": 49,
-          "draw": 26.2,
-          "away": 24.8
-        },
-        "poisson": {
-          "home": 49.5,
-          "draw": 21.9,
-          "away": 28.6
-        },
-        "final": {
-          "home": 50.5,
-          "draw": 24.9,
-          "away": 24.5
-        }
-      },
-      "elo": {
-        "homeRating": 1535,
-        "awayRating": 1478,
-        "diff": 119,
-        "homeMatches": 9,
-        "awayMatches": 8,
-        "lastUpdatedAt": "2026-06-06T17:00:00+08:00"
-      },
-      "scoreDistribution": [
-        {
-          "home": 1,
-          "away": 1,
-          "label": "1-1",
-          "probability": 9.4
-        },
-        {
-          "home": 2,
-          "away": 1,
-          "label": "2-1",
-          "probability": 9.2
-        },
-        {
-          "home": 1,
-          "away": 2,
-          "label": "1-2",
-          "probability": 6.8
-        },
-        {
-          "home": 2,
-          "away": 2,
-          "label": "2-2",
-          "probability": 6.7
-        },
-        {
-          "home": 1,
-          "away": 0,
-          "label": "1-0",
-          "probability": 6.4
-        }
-      ],
-      "goalLines": {
-        "over25": 66.3,
-        "under25": 33.7
-      },
-      "bothTeamsToScore": {
-        "yes": 65.8,
-        "no": 34.2
-      },
-      "handicap": {
-        "line": "-1",
-        "market": {
-          "home": 26.1,
-          "draw": 26.1,
-          "away": 47.9
-        },
-        "poisson": {
-          "home": 28.3,
-          "draw": 21.2,
-          "away": 50.5
-        }
-      },
-      "calibration": {
-        "status": "baseline",
-        "zh": "当前为未校准基准概率；后续需要用时间滚动回测做 Brier / log loss / reliability 校准。",
-        "en": "This is an uncalibrated baseline; rolling backtests with Brier, log loss, and reliability calibration are needed next."
-      }
-    },
-    "odds": {
-      "odds1": 1.72,
-      "oddsX": 3.5,
-      "odds2": 3.82
-    },
-    "handicapOdds": {
-      "odds1": 3.4,
-      "oddsX": 3.4,
-      "odds2": 1.85
-    },
-    "predictions": [
-      {
-        "marketType": "1X2",
-        "tipCode": "1",
-        "tipLabel": {
-          "zh": "主胜 柏太阳神",
-          "en": "Home Win (柏太阳神)"
-        },
-        "odds": 1.72,
-        "trustScore": 73,
-        "explanation": {
-          "zh": "本场以中国竞彩网官方 HAD 胜平负 SP 为主轴，去水后最高支持方向为主胜 柏太阳神。模型同时参考主客预期进球、平局拉力和赔率分布，不使用本地模拟赛果回填。",
-          "en": "This pick is anchored to official Sporttery HAD odds. After removing overround, the strongest direction is Home Win (柏太阳神)."
-        },
-        "analysisItems": [
-          {
-            "zh": "官方 HAD SP：主胜 1.72 / 平局 3.50 / 客胜 3.82；去水支持率约 主胜 52% / 平局 25% / 客胜 23%。",
-            "en": "Official HAD SP: 1.72 / 3.50 / 3.82; normalized support is about home 52% / draw 25% / away 23%."
-          },
-          {
-            "zh": "胜平负差距：市场主线领先第二方向约 26 个百分点，当前模型可信度 73%。",
-            "en": "1X2 separation: the market lead is ahead by about 26 percentage points. Model confidence: 73%."
-          },
-          {
-            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 官方 SP 更新时间：2026-06-06 14:34:55。",
-            "en": "Draw support is not dominant, but late SP movement still matters. Official SP updated at 2026-06-06 14:34:55."
-          }
-        ],
-        "riskTags": [
-          {
-            "zh": "让球支持不足",
-            "en": "Handicap support weak"
-          }
-        ],
-        "visibilityStatus": "FREE",
-        "resultStatus": "PENDING"
-      },
-      {
-        "marketType": "GOALS",
-        "tipCode": "3",
-        "tipLabel": {
-          "zh": "总进球数 3球",
-          "en": "Total Goals 3"
-        },
-        "odds": 4.58,
-        "trustScore": 67,
-        "explanation": {
-          "zh": "总进球数为模型参考项，基于胜平负 SP 反推出主队 1.96、客队 1.45 的预期进球，当前总进球期望约 3.41。",
-          "en": "The goals model derives expected goals from 1X2 odds: home 1.96, away 1.45, total 3.41."
-        },
-        "analysisItems": [
-          {
-            "zh": "比分热区：1-1 附近；总进球 3 的模型概率约 22%。",
-            "en": "Score heat zone: around 1-1; model probability for total goals 3 is about 22%."
-          },
-          {
-            "zh": "大 2.5 球概率约 66%，该指标用于走势参考，不等同于中国竞彩网官方总进球 SP。",
-            "en": "Over 2.5 probability is about 66%. This is a model reference, not official Sporttery total-goals SP."
-          }
-        ],
-        "riskTags": [],
-        "visibilityStatus": "PREMIUM",
-        "resultStatus": "PENDING"
-      },
-      {
-        "marketType": "BEST",
-        "tipCode": "WATCH",
-        "tipLabel": {
-          "zh": "观察为主 防正路过热",
-          "en": "Watch first: favorite overheated"
-        },
-        "odds": 0,
-        "trustScore": 61,
-        "explanation": {
-          "zh": "主胜 柏太阳神是当前主线，但它更像“需要跟盘”的方向：模型领先 26 个百分点，真正的问题在让球盘是否愿意继续同向。",
-          "en": "Home Win (柏太阳神) is the current main lean, but it needs market tracking: model edge is 26 points, and the key question is handicap confirmation."
-        },
-        "analysisItems": [
-          {
-            "zh": "降级原因：主胜 柏太阳神对应 让球同向支持约 26%；让球盘去水支持约 主胜 26% / 平 26% / 客胜 48%，和普通胜平负主线存在温差。",
-            "en": "Downgrade reason: Home Win (柏太阳神) has same-side handicap support is about 26%; handicap normalized support is home 26% / draw 26% / away 48%, not fully aligned with HAD."
-          },
-          {
-            "zh": "进球侧：比分热区 1-1，总期望 3.41，大 2.5 约 66%，双方进球约 66%。",
-            "en": "Goals: score heat zone 1-1, total xG 3.41, over 2.5 about 66%, BTTS about 66%."
-          },
-          {
-            "zh": "临场复核：让球支持不足。如果赛前 SP 继续降赔但让球支持不上来，仍按观察处理。",
-            "en": "Late check: Handicap support weak. If SP shortens without handicap confirmation, keep this as watch-only."
-          }
-        ],
-        "riskTags": [
-          {
-            "zh": "让球支持不足",
-            "en": "Handicap support weak"
-          }
-        ],
-        "visibilityStatus": "FREE",
-        "resultStatus": "PENDING"
-      }
-    ],
-    "stats": {
-      "xG": {
-        "home": 1.96,
-        "away": 1.45
-      },
-      "possession": {
-        "home": 51,
-        "away": 49
-      },
-      "shots": {
-        "home": 15,
-        "away": 10
-      },
-      "shotsOnTarget": {
-        "home": 4,
-        "away": 4
-      },
-      "corners": {
-        "home": 3,
-        "away": 3
-      },
-      "fouls": {
-        "home": 11,
-        "away": 12
-      },
-      "offsides": {
-        "home": 0,
-        "away": 3
-      },
-      "yellowCards": {
-        "home": 0,
-        "away": 1
-      },
-      "redCards": {
-        "home": 0,
-        "away": 0
-      }
-    },
-    "matchDate": "2026-06-06",
-    "kickoffDate": "2026-06-06",
-    "businessDate": "2026-06-06",
-    "homeTeamName": "柏太阳神",
-    "homeTeamNameEn": "柏太阳神",
-    "homeTeamLogo": "./team-logos/jleague/kashiwa-reysol.png",
-    "homeTeamLogoType": "crest",
-    "homeTeamColor": "#aa6f44",
-    "awayTeamName": "京都不死鸟",
-    "awayTeamNameEn": "京都不死鸟",
-    "awayTeamLogo": "./team-logos/jleague/kyoto-sanga.png",
-    "awayTeamLogoType": "crest",
-    "awayTeamColor": "#bd064f",
-    "leagueName": "日职",
-    "leagueNameEn": "Japan",
-    "leagueShortName": "日职",
-    "leagueShortNameEn": "Japan",
-    "countryName": "日本",
-    "countryNameEn": "Japan",
-    "countryFlag": "🇯🇵",
-    "source": "sporttery",
-    "sourceMethod": "all",
-    "sourceUrl": "https://webapi.sporttery.cn/gateway/uniform/fb/getMatchDataPageListV1.qry?method=all&pageSize=80",
-    "sourceMatchId": "2040128",
-    "matchNo": "周六205",
-    "oddsSource": "sporttery:HAD",
-    "oddsPoolCode": "HAD",
-    "oddsSourceMethod": "calculator",
-    "oddsUpdatedAt": "2026-06-06 14:34:55",
-    "oddsSourceUrl": "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c",
-    "handicapLine": "-1",
-    "handicapOddsSource": "sporttery:HHAD",
-    "handicapOddsPoolCode": "HHAD",
-    "handicapOddsSourceMethod": "calculator",
-    "handicapOddsUpdatedAt": "2026-06-06 14:35:04",
-    "handicapOddsSourceUrl": "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c",
-    "predictionMeta": {
-      "policyVersion": "pre-match-value-gate-v6",
-      "promptVersion": "professional-football-analyst-v5",
-      "generatedAt": "2026-06-05T06:49:51.684Z",
-      "updatedAt": "2026-06-06T07:25:22.562Z",
-      "dataPolicy": {
-        "zh": "仅使用已接入的中国竞彩网官方 SP、让球 SP、赛果和 SP 快照；伤停、首发、天气、裁判等未接入数据明确视为不足，不编造。",
-        "en": "Uses connected official Sporttery SP, handicap SP, results, and SP snapshots only. Injuries, lineups, weather, and referee data are treated as unavailable unless connected."
-      },
-      "updateReason": {
-        "zh": "精选说明升级为分场景盘口叙事，未开赛比赛允许刷新赛前分析文案和风险表达。",
-        "en": "Best-tip notes were upgraded to scenario-based market narratives, so unstarted matches can refresh analysis copy and risk wording."
-      }
-    },
-    "oddsTrend": {
-      "sampleSize": 15,
-      "firstCapturedAt": "2026-06-05T01:53:50.822Z",
-      "lastCapturedAt": "2026-06-06T07:25:22.562Z",
-      "odds1Change": -0.07,
-      "oddsXChange": 0.05,
-      "odds2Change": 0.26,
-      "direction": "home",
-      "summary": {
-        "zh": "SP 快照 15 次：主胜 -0.07，平局 +0.05，客胜 +0.26；主胜 SP 下调，市场支持有所增强。",
-        "en": "15 SP snapshots: home -0.07, draw +0.05, away +0.26. home win SP shortened, indicating stronger market support."
-      }
-    }
-  },
-  {
     "id": "sporttery_2040129",
     "homeTeamId": "team_1gaa2z6",
     "awayTeamId": "team_154mdot",
@@ -680,7 +11,7 @@
     "projectedScoreAway": 1,
     "probabilityModel": {
       "version": "market-elo-poisson-v1",
-      "generatedAt": "2026-06-06T07:26:07.936Z",
+      "generatedAt": "2026-06-06T09:23:04.735Z",
       "basis": {
         "zh": "市场隐含概率 + Elo 强度快照 + Poisson 比分分布集成；暂未接入 xG、伤停、首发和校准器。",
         "en": "Market-implied probability, Elo strength snapshot, and Poisson score baseline; xG, injuries, lineups, and calibration are not connected yet."
@@ -692,8 +23,8 @@
       },
       "oneXTwo": {
         "market": {
-          "home": 27.9,
-          "draw": 27.3,
+          "home": 28.6,
+          "draw": 26.7,
           "away": 44.7
         },
         "elo": {
@@ -702,14 +33,14 @@
           "away": 31.9
         },
         "poisson": {
-          "home": 33.7,
-          "draw": 23,
-          "away": 43.3
+          "home": 26.9,
+          "draw": 26.4,
+          "away": 46.7
         },
         "final": {
-          "home": 31.6,
-          "draw": 27,
-          "away": 41.4
+          "home": 30.7,
+          "draw": 27.2,
+          "away": 42
         }
       },
       "elo": {
@@ -725,51 +56,51 @@
           "home": 1,
           "away": 1,
           "label": "1-1",
-          "probability": 10.1
-        },
-        {
-          "home": 1,
-          "away": 2,
-          "label": "1-2",
-          "probability": 8.8
-        },
-        {
-          "home": 2,
-          "away": 1,
-          "label": "2-1",
-          "probability": 7.7
-        },
-        {
-          "home": 2,
-          "away": 2,
-          "label": "2-2",
-          "probability": 6.7
+          "probability": 12.5
         },
         {
           "home": 0,
           "away": 1,
           "label": "0-1",
-          "probability": 6.7
+          "probability": 12.1
+        },
+        {
+          "home": 1,
+          "away": 2,
+          "label": "1-2",
+          "probability": 9.1
+        },
+        {
+          "home": 0,
+          "away": 2,
+          "label": "0-2",
+          "probability": 8.8
+        },
+        {
+          "home": 1,
+          "away": 0,
+          "label": "1-0",
+          "probability": 8.6
         }
       ],
       "goalLines": {
-        "over25": 63.4,
-        "under25": 36.6
+        "over25": 45.1,
+        "under25": 54.9
       },
       "bothTeamsToScore": {
-        "yes": 64.5,
-        "no": 35.5
+        "yes": 49.2,
+        "no": 50.8
       },
       "handicap": {
         "line": "+1",
         "market": {
-          "home": 53.7,
-          "draw": 24.6,
-          "away": 21.7
+          "home": 54.7,
+          "draw": 23.9,
+          "away": 21.4
         },
         "poisson": {
-          "home": 56.7,
-          "draw": 20.4,
+          "home": 53.3,
+          "draw": 23.8,
           "away": 22.9
         }
       },
@@ -780,14 +111,14 @@
       }
     },
     "odds": {
-      "odds1": 3.17,
-      "oddsX": 3.24,
+      "odds1": 3.1,
+      "oddsX": 3.32,
       "odds2": 1.98
     },
     "handicapOdds": {
-      "odds1": 1.65,
-      "oddsX": 3.6,
-      "odds2": 4.08
+      "odds1": 1.62,
+      "oddsX": 3.7,
+      "odds2": 4.15
     },
     "predictions": [
       {
@@ -797,24 +128,24 @@
           "zh": "平局",
           "en": "Draw"
         },
-        "odds": 3.24,
-        "trustScore": 54,
+        "odds": 3.32,
+        "trustScore": 51,
         "explanation": {
           "zh": "本场以中国竞彩网官方 HAD 胜平负 SP 为主轴，去水后最高支持方向为平局。模型同时参考主客预期进球、平局拉力和赔率分布，不使用本地模拟赛果回填。",
           "en": "This pick is anchored to official Sporttery HAD odds. After removing overround, the strongest direction is Draw."
         },
         "analysisItems": [
           {
-            "zh": "官方 HAD SP：主胜 3.17 / 平局 3.24 / 客胜 1.98；去水支持率约 主胜 28% / 平局 27% / 客胜 45%。",
-            "en": "Official HAD SP: 3.17 / 3.24 / 1.98; normalized support is about home 28% / draw 27% / away 45%."
+            "zh": "官方 HAD SP：主胜 3.10 / 平局 3.32 / 客胜 1.98；去水支持率约 主胜 29% / 平局 27% / 客胜 45%。",
+            "en": "Official HAD SP: 3.10 / 3.32 / 1.98; normalized support is about home 29% / draw 27% / away 45%."
           },
           {
-            "zh": "专业修正：不机械追随最低 SP。本场胜平负首选与平局差距不大，平局去水支持率约 27%，且让球盘对正路支持不足，稳妥方向降为防平观察。 当前模型可信度 54%，该方向属于价值观察而非高确定性推荐。",
-            "en": "Analyst adjustment: not blindly following the lowest SP. The draw is live at about 27% normalized support, and handicap support for the market favorite is weak. Model confidence is 54%; this is a value-watch, not a high-certainty banker."
+            "zh": "专业修正：不机械追随最低 SP。本场胜平负首选与平局差距不大，平局去水支持率约 27%，且让球盘对正路支持不足，稳妥方向降为防平观察。 当前模型可信度 51%，该方向属于价值观察而非高确定性推荐。",
+            "en": "Analyst adjustment: not blindly following the lowest SP. The draw is live at about 27% normalized support, and handicap support for the market favorite is weak. Model confidence is 51%; this is a value-watch, not a high-certainty banker."
           },
           {
-            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 官方 SP 更新时间：2026-06-06 13:22:44。",
-            "en": "Draw support is not dominant, but late SP movement still matters. Official SP updated at 2026-06-06 13:22:44."
+            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 官方 SP 更新时间：2026-06-06 16:52:15。",
+            "en": "Draw support is not dominant, but late SP movement still matters. Official SP updated at 2026-06-06 16:52:15."
           }
         ],
         "riskTags": [
@@ -832,25 +163,25 @@
       },
       {
         "marketType": "GOALS",
-        "tipCode": "3",
+        "tipCode": "U2.5",
         "tipLabel": {
-          "zh": "总进球数 3球",
-          "en": "Total Goals 3"
+          "zh": "总进球 0-2",
+          "en": "Total Goals 0-2"
         },
-        "odds": 4.51,
+        "odds": 1.82,
         "trustScore": 67,
         "explanation": {
-          "zh": "总进球数为模型参考项，基于胜平负 SP 反推出主队 1.52、客队 1.75 的预期进球，当前总进球期望约 3.27。",
-          "en": "The goals model derives expected goals from 1X2 odds: home 1.52, away 1.75, total 3.27."
+          "zh": "进球趋势为模型参考项，基于胜平负 SP 反推出主队 1.03、客队 1.45 的预期进球，当前总进球期望约 2.48。",
+          "en": "The goals trend derives expected goals from 1X2 odds: home 1.03, away 1.45, total 2.48."
         },
         "analysisItems": [
           {
-            "zh": "比分热区：1-1 附近；总进球 3 的模型概率约 22%。",
-            "en": "Score heat zone: around 1-1; model probability for total goals 3 is about 22%."
+            "zh": "比分热区：1-1 附近；总进球 0-2 的模型概率约 55%。",
+            "en": "Score heat zone: around 1-1; model probability for Total Goals 0-2 is about 55%."
           },
           {
-            "zh": "大 2.5 球概率约 63%，该指标用于走势参考，不等同于中国竞彩网官方总进球 SP。",
-            "en": "Over 2.5 probability is about 63%. This is a model reference, not official Sporttery total-goals SP."
+            "zh": "大 2.5 球概率约 45%，该指标用于走势参考，不等同于官方总进球 SP。",
+            "en": "Over 2.5 probability is about 45%. This is a model reference, not official Sporttery total-goals SP."
           }
         ],
         "riskTags": [
@@ -869,7 +200,7 @@
           "zh": "价值观察 平局",
           "en": "Value watch: Draw"
         },
-        "odds": 3.24,
+        "odds": 3.32,
         "trustScore": 54,
         "explanation": {
           "zh": "平局在这场不是陪衬项：胜平负差距偏窄，正路让球支持偏弱，因此优先看防平价值。",
@@ -877,12 +208,12 @@
         },
         "analysisItems": [
           {
-            "zh": "盘口分歧：不机械追随最低 SP。本场胜平负首选与平局差距不大，平局去水支持率约 27%，且让球盘对正路支持不足，稳妥方向降为防平观察。 市场主线领先约 17 个百分点，模型首选优势约 10 个百分点。",
-            "en": "Market disagreement: not blindly following the lowest SP. The draw is live at about 27% normalized support, and handicap support for the market favorite is weak. Market lead is about 17 points; model edge is about 10 points."
+            "zh": "盘口分歧：不机械追随最低 SP。本场胜平负首选与平局差距不大，平局去水支持率约 27%，且让球盘对正路支持不足，稳妥方向降为防平观察。 市场主线领先约 16 个百分点，模型首选优势约 11 个百分点。",
+            "en": "Market disagreement: not blindly following the lowest SP. The draw is live at about 27% normalized support, and handicap support for the market favorite is weak. Market lead is about 16 points; model edge is about 11 points."
           },
           {
-            "zh": "进球侧：比分热区 1-1，总期望 3.27，大 2.5 约 63%，双方进球约 65%。",
-            "en": "Goals: score heat zone 1-1, total xG 3.27, over 2.5 about 63%, BTTS about 65%."
+            "zh": "进球侧：比分热区 1-1，总期望 2.48，大 2.5 约 45%，双方进球约 49%。",
+            "en": "Goals: score heat zone 1-1, total xG 2.48, over 2.5 about 45%, BTTS about 49%."
           },
           {
             "zh": "风险边界：这是价值观察，不是高确定性推荐；若临场平局 SP 被明显抬高或让球盘重新支持热门，需要下调权重。",
@@ -905,20 +236,20 @@
     ],
     "stats": {
       "xG": {
-        "home": 1.52,
-        "away": 1.75
+        "home": 1.03,
+        "away": 1.45
       },
       "possession": {
         "home": 51,
         "away": 49
       },
       "shots": {
-        "home": 12,
-        "away": 11
+        "home": 9,
+        "away": 9
       },
       "shotsOnTarget": {
-        "home": 3,
-        "away": 4
+        "home": 2,
+        "away": 3
       },
       "corners": {
         "home": 7,
@@ -969,39 +300,35 @@
     "oddsSource": "sporttery:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "calculator",
-    "oddsUpdatedAt": "2026-06-06 13:22:44",
+    "oddsUpdatedAt": "2026-06-06 16:52:15",
     "oddsSourceUrl": "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c",
     "handicapLine": "+1",
     "handicapOddsSource": "sporttery:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "calculator",
-    "handicapOddsUpdatedAt": "2026-06-06 13:22:52",
+    "handicapOddsUpdatedAt": "2026-06-06 16:13:26",
     "handicapOddsSourceUrl": "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c",
     "predictionMeta": {
-      "policyVersion": "pre-match-value-gate-v6",
+      "policyVersion": "pre-match-value-gate-v7",
       "promptVersion": "professional-football-analyst-v5",
       "generatedAt": "2026-06-05T06:49:51.684Z",
-      "updatedAt": "2026-06-06T07:25:22.562Z",
+      "updatedAt": "2026-06-06T09:22:17.429Z",
       "dataPolicy": {
         "zh": "仅使用已接入的中国竞彩网官方 SP、让球 SP、赛果和 SP 快照；伤停、首发、天气、裁判等未接入数据明确视为不足，不编造。",
         "en": "Uses connected official Sporttery SP, handicap SP, results, and SP snapshots only. Injuries, lineups, weather, and referee data are treated as unavailable unless connected."
-      },
-      "updateReason": {
-        "zh": "精选说明升级为分场景盘口叙事，未开赛比赛允许刷新赛前分析文案和风险表达。",
-        "en": "Best-tip notes were upgraded to scenario-based market narratives, so unstarted matches can refresh analysis copy and risk wording."
       }
     },
     "oddsTrend": {
-      "sampleSize": 15,
+      "sampleSize": 17,
       "firstCapturedAt": "2026-06-05T01:53:50.822Z",
-      "lastCapturedAt": "2026-06-06T07:25:22.562Z",
-      "odds1Change": 0.07,
-      "oddsXChange": -0.36,
+      "lastCapturedAt": "2026-06-06T09:22:17.429Z",
+      "odds1Change": 0,
+      "oddsXChange": -0.28,
       "odds2Change": 0.09,
       "direction": "draw",
       "summary": {
-        "zh": "SP 快照 15 次：主胜 +0.07，平局 -0.36，客胜 +0.09；平局 SP 下调，市场支持有所增强。",
-        "en": "15 SP snapshots: home +0.07, draw -0.36, away +0.09. draw SP shortened, indicating stronger market support."
+        "zh": "SP 快照 17 次：主胜 0.00，平局 -0.28，客胜 +0.09；平局 SP 下调，市场支持有所增强。",
+        "en": "17 SP snapshots: home 0.00, draw -0.28, away +0.09. draw SP shortened, indicating stronger market support."
       }
     }
   },
@@ -1014,10 +341,10 @@
     "kickoffTime": "2026-06-06T21:00:00+08:00",
     "status": "SCHEDULED",
     "projectedScoreHome": 2,
-    "projectedScoreAway": 1,
+    "projectedScoreAway": 0,
     "probabilityModel": {
       "version": "market-elo-poisson-v1",
-      "generatedAt": "2026-06-06T07:26:07.936Z",
+      "generatedAt": "2026-06-06T09:23:04.735Z",
       "basis": {
         "zh": "市场隐含概率 + Elo 强度快照 + Poisson 比分分布集成；暂未接入 xG、伤停、首发和校准器。",
         "en": "Market-implied probability, Elo strength snapshot, and Poisson score baseline; xG, injuries, lineups, and calibration are not connected yet."
@@ -1029,9 +356,9 @@
       },
       "oneXTwo": {
         "market": {
-          "home": 72,
-          "draw": 18.6,
-          "away": 9.4
+          "home": 73.2,
+          "draw": 17.9,
+          "away": 8.9
         },
         "elo": {
           "home": 48.2,
@@ -1039,14 +366,14 @@
           "away": 25.3
         },
         "poisson": {
-          "home": 68,
-          "draw": 17.2,
-          "away": 14.8
+          "home": 71.1,
+          "draw": 18.4,
+          "away": 10.5
         },
         "final": {
-          "home": 65.5,
-          "draw": 20.3,
-          "away": 14.2
+          "home": 66.8,
+          "draw": 20,
+          "away": 13.2
         }
       },
       "elo": {
@@ -1060,54 +387,54 @@
       "scoreDistribution": [
         {
           "home": 2,
-          "away": 1,
-          "label": "2-1",
-          "probability": 9.4
-        },
-        {
-          "home": 2,
           "away": 0,
           "label": "2-0",
-          "probability": 8.4
-        },
-        {
-          "home": 3,
-          "away": 1,
-          "label": "3-1",
-          "probability": 7.8
+          "probability": 13.8
         },
         {
           "home": 1,
-          "away": 1,
-          "label": "1-1",
-          "probability": 7.4
+          "away": 0,
+          "label": "1-0",
+          "probability": 13
         },
         {
           "home": 3,
           "away": 0,
           "label": "3-0",
-          "probability": 7.1
+          "probability": 9.8
+        },
+        {
+          "home": 2,
+          "away": 1,
+          "label": "2-1",
+          "probability": 9.3
+        },
+        {
+          "home": 1,
+          "away": 1,
+          "label": "1-1",
+          "probability": 8.7
         }
       ],
       "goalLines": {
-        "over25": 70.2,
-        "under25": 29.8
+        "over25": 53,
+        "under25": 47
       },
       "bothTeamsToScore": {
-        "yes": 61.6,
-        "no": 38.4
+        "yes": 43.1,
+        "no": 56.9
       },
       "handicap": {
         "line": "-1",
         "market": {
-          "home": 46.7,
-          "draw": 26.5,
-          "away": 26.9
+          "home": 47.6,
+          "draw": 26.4,
+          "away": 26
         },
         "poisson": {
           "home": 46.4,
-          "draw": 21.6,
-          "away": 32
+          "draw": 24.7,
+          "away": 28.9
         }
       },
       "calibration": {
@@ -1117,14 +444,14 @@
       }
     },
     "odds": {
-      "odds1": 1.23,
-      "oddsX": 4.75,
-      "odds2": 9.4
+      "odds1": 1.21,
+      "oddsX": 4.95,
+      "odds2": 9.9
     },
     "handicapOdds": {
-      "odds1": 1.9,
+      "odds1": 1.86,
       "oddsX": 3.35,
-      "odds2": 3.3
+      "odds2": 3.41
     },
     "predictions": [
       {
@@ -1134,34 +461,30 @@
           "zh": "主胜 比利时",
           "en": "Home Win (比利时)"
         },
-        "odds": 1.23,
-        "trustScore": 93,
+        "odds": 1.21,
+        "trustScore": 82,
         "explanation": {
           "zh": "本场以中国竞彩网官方 HAD 胜平负 SP 为主轴，去水后最高支持方向为主胜 比利时。模型同时参考主客预期进球、平局拉力和赔率分布，不使用本地模拟赛果回填。",
           "en": "This pick is anchored to official Sporttery HAD odds. After removing overround, the strongest direction is Home Win (比利时)."
         },
         "analysisItems": [
           {
-            "zh": "官方 HAD SP：主胜 1.23 / 平局 4.75 / 客胜 9.40；去水支持率约 主胜 72% / 平局 19% / 客胜 9%。",
-            "en": "Official HAD SP: 1.23 / 4.75 / 9.40; normalized support is about home 72% / draw 19% / away 9%."
+            "zh": "官方 HAD SP：主胜 1.21 / 平局 4.95 / 客胜 9.90；去水支持率约 主胜 73% / 平局 18% / 客胜 9%。",
+            "en": "Official HAD SP: 1.21 / 4.95 / 9.90; normalized support is about home 73% / draw 18% / away 9%."
           },
           {
-            "zh": "胜平负差距：市场主线领先第二方向约 53 个百分点，当前模型可信度 93%。",
-            "en": "1X2 separation: the market lead is ahead by about 53 percentage points. Model confidence: 93%."
+            "zh": "胜平负差距：市场主线领先第二方向约 55 个百分点，当前模型可信度 82%。",
+            "en": "1X2 separation: the market lead is ahead by about 55 percentage points. Model confidence: 82%."
           },
           {
-            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 官方 SP 更新时间：2026-06-06 13:55:06。",
-            "en": "Draw support is not dominant, but late SP movement still matters. Official SP updated at 2026-06-06 13:55:06."
+            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 官方 SP 更新时间：2026-06-06 15:43:37。",
+            "en": "Draw support is not dominant, but late SP movement still matters. Official SP updated at 2026-06-06 15:43:37."
           }
         ],
         "riskTags": [
           {
             "zh": "热门过热",
             "en": "Heavy favorite"
-          },
-          {
-            "zh": "进球临界",
-            "en": "Goal-model borderline"
           }
         ],
         "visibilityStatus": "FREE",
@@ -1169,33 +492,28 @@
       },
       {
         "marketType": "GOALS",
-        "tipCode": "4",
+        "tipCode": "O2.5",
         "tipLabel": {
-          "zh": "总进球数 4球",
-          "en": "Total Goals 4"
+          "zh": "总进球 3+",
+          "en": "Total Goals 3+"
         },
-        "odds": 5.22,
-        "trustScore": 64,
+        "odds": 1.89,
+        "trustScore": 65,
         "explanation": {
-          "zh": "总进球数为模型参考项，基于胜平负 SP 反推出主队 2.52、客队 1.11 的预期进球，当前总进球期望约 3.62。",
-          "en": "The goals model derives expected goals from 1X2 odds: home 2.52, away 1.11, total 3.62."
+          "zh": "进球趋势为模型参考项，基于胜平负 SP 反推出主队 2.13、客队 0.67 的预期进球，当前总进球期望约 2.80。",
+          "en": "The goals trend derives expected goals from 1X2 odds: home 2.13, away 0.67, total 2.80."
         },
         "analysisItems": [
           {
-            "zh": "比分热区：2-1 附近；总进球 4 的模型概率约 19%。",
-            "en": "Score heat zone: around 2-1; model probability for total goals 4 is about 19%."
+            "zh": "比分热区：2-0 附近；总进球 3+ 的模型概率约 53%。",
+            "en": "Score heat zone: around 2-0; model probability for Total Goals 3+ is about 53%."
           },
           {
-            "zh": "大 2.5 球概率约 70%，该指标用于走势参考，不等同于中国竞彩网官方总进球 SP。",
-            "en": "Over 2.5 probability is about 70%. This is a model reference, not official Sporttery total-goals SP."
+            "zh": "大 2.5 球概率约 53%，该指标用于走势参考，不等同于官方总进球 SP。",
+            "en": "Over 2.5 probability is about 53%. This is a model reference, not official Sporttery total-goals SP."
           }
         ],
-        "riskTags": [
-          {
-            "zh": "进球临界",
-            "en": "Goal-model borderline"
-          }
-        ],
+        "riskTags": [],
         "visibilityStatus": "PREMIUM",
         "resultStatus": "PENDING"
       },
@@ -1207,33 +525,29 @@
           "en": "Watch first: stacked risk"
         },
         "odds": 0,
-        "trustScore": 72,
+        "trustScore": 70,
         "explanation": {
-          "zh": "这场有正路倾向，但不适合硬写成稳胆。让球同向支持约 47%，风险标签为 热门过热、进球临界，先按观察单处理。",
-          "en": "There is a favorite lean, but not a banker. same-side handicap support is about 47%; risk tags: Heavy favorite, Goal-model borderline. Keep it in watch mode."
+          "zh": "这场有正路倾向，但不适合硬写成稳胆。让球同向支持约 48%，风险标签为 热门过热，先按观察单处理。",
+          "en": "There is a favorite lean, but not a banker. same-side handicap support is about 48%; risk tags: Heavy favorite. Keep it in watch mode."
         },
         "analysisItems": [
           {
-            "zh": "降级原因：风险标签叠加为 热门过热、进球临界，当前不适合只给单一方向。",
-            "en": "Downgrade reason: risk tags overlap: Heavy favorite, Goal-model borderline. A single pick is not justified yet."
+            "zh": "降级原因：风险标签叠加为 热门过热，当前不适合只给单一方向。",
+            "en": "Downgrade reason: risk tags overlap: Heavy favorite. A single pick is not justified yet."
           },
           {
-            "zh": "进球侧：比分热区 2-1，总期望 3.62，大 2.5 约 70%，双方进球约 62%。",
-            "en": "Goals: score heat zone 2-1, total xG 3.62, over 2.5 about 70%, BTTS about 62%."
+            "zh": "进球侧：比分热区 2-0，总期望 2.80，大 2.5 约 53%，双方进球约 43%。",
+            "en": "Goals: score heat zone 2-0, total xG 2.80, over 2.5 about 53%, BTTS about 43%."
           },
           {
-            "zh": "临场复核：热门过热、进球临界。如果赛前 SP 继续降赔但让球支持不上来，仍按观察处理。",
-            "en": "Late check: Heavy favorite, Goal-model borderline. If SP shortens without handicap confirmation, keep this as watch-only."
+            "zh": "临场复核：热门过热。如果赛前 SP 继续降赔但让球支持不上来，仍按观察处理。",
+            "en": "Late check: Heavy favorite. If SP shortens without handicap confirmation, keep this as watch-only."
           }
         ],
         "riskTags": [
           {
             "zh": "热门过热",
             "en": "Heavy favorite"
-          },
-          {
-            "zh": "进球临界",
-            "en": "Goal-model borderline"
           }
         ],
         "visibilityStatus": "FREE",
@@ -1242,19 +556,19 @@
     ],
     "stats": {
       "xG": {
-        "home": 2.52,
-        "away": 1.11
+        "home": 2.13,
+        "away": 0.67
       },
       "possession": {
         "home": 51,
         "away": 49
       },
       "shots": {
-        "home": 18,
-        "away": 7
+        "home": 16,
+        "away": 5
       },
       "shotsOnTarget": {
-        "home": 7,
+        "home": 6,
         "away": 4
       },
       "corners": {
@@ -1308,39 +622,35 @@
     "oddsSource": "sporttery:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "calculator",
-    "oddsUpdatedAt": "2026-06-06 13:55:06",
+    "oddsUpdatedAt": "2026-06-06 15:43:37",
     "oddsSourceUrl": "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c",
     "handicapLine": "-1",
     "handicapOddsSource": "sporttery:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "calculator",
-    "handicapOddsUpdatedAt": "2026-06-06 13:54:48",
+    "handicapOddsUpdatedAt": "2026-06-06 15:43:31",
     "handicapOddsSourceUrl": "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c",
     "predictionMeta": {
-      "policyVersion": "pre-match-value-gate-v6",
+      "policyVersion": "pre-match-value-gate-v7",
       "promptVersion": "professional-football-analyst-v5",
       "generatedAt": "2026-06-06T06:45:14.394Z",
-      "updatedAt": "2026-06-06T07:25:22.562Z",
+      "updatedAt": "2026-06-06T09:22:17.429Z",
       "dataPolicy": {
         "zh": "仅使用已接入的中国竞彩网官方 SP、让球 SP、赛果和 SP 快照；伤停、首发、天气、裁判等未接入数据明确视为不足，不编造。",
         "en": "Uses connected official Sporttery SP, handicap SP, results, and SP snapshots only. Injuries, lineups, weather, and referee data are treated as unavailable unless connected."
-      },
-      "updateReason": {
-        "zh": "精选说明升级为分场景盘口叙事，未开赛比赛允许刷新赛前分析文案和风险表达。",
-        "en": "Best-tip notes were upgraded to scenario-based market narratives, so unstarted matches can refresh analysis copy and risk wording."
       }
     },
     "oddsTrend": {
-      "sampleSize": 2,
+      "sampleSize": 4,
       "firstCapturedAt": "2026-06-06T06:45:14.394Z",
-      "lastCapturedAt": "2026-06-06T07:25:22.562Z",
-      "odds1Change": 0,
-      "oddsXChange": 0,
-      "odds2Change": 0,
-      "direction": "flat",
+      "lastCapturedAt": "2026-06-06T09:22:17.429Z",
+      "odds1Change": -0.02,
+      "oddsXChange": 0.2,
+      "odds2Change": 0.5,
+      "direction": "mixed",
       "summary": {
-        "zh": "SP 快照 2 次：主胜 0.00，平局 0.00，客胜 0.00；整体波动很小。",
-        "en": "2 SP snapshots: home 0.00, draw 0.00, away 0.00. Overall movement is small."
+        "zh": "SP 快照 4 次：主胜 -0.02，平局 +0.20，客胜 +0.50；盘口存在波动，需继续观察临场快照。",
+        "en": "4 SP snapshots: home -0.02, draw +0.20, away +0.50. The market is moving; keep watching late snapshots."
       }
     }
   },
@@ -1353,10 +663,10 @@
     "kickoffTime": "2026-06-07T01:45:00+08:00",
     "status": "SCHEDULED",
     "projectedScoreHome": 2,
-    "projectedScoreAway": 1,
+    "projectedScoreAway": 0,
     "probabilityModel": {
       "version": "market-elo-poisson-v1",
-      "generatedAt": "2026-06-06T07:26:07.936Z",
+      "generatedAt": "2026-06-06T09:23:04.735Z",
       "basis": {
         "zh": "市场隐含概率 + Elo 强度快照 + Poisson 比分分布集成；暂未接入 xG、伤停、首发和校准器。",
         "en": "Market-implied probability, Elo strength snapshot, and Poisson score baseline; xG, injuries, lineups, and calibration are not connected yet."
@@ -1378,14 +688,14 @@
           "away": 27.9
         },
         "poisson": {
-          "home": 70.4,
-          "draw": 16.7,
-          "away": 13
+          "home": 70.8,
+          "draw": 18.7,
+          "away": 10.5
         },
         "final": {
-          "home": 75.1,
-          "draw": 15.9,
-          "away": 8.9
+          "home": 75.2,
+          "draw": 16.5,
+          "away": 8.3
         }
       },
       "elo": {
@@ -1399,42 +709,42 @@
       "scoreDistribution": [
         {
           "home": 2,
-          "away": 1,
-          "label": "2-1",
-          "probability": 9.4
-        },
-        {
-          "home": 2,
           "away": 0,
           "label": "2-0",
-          "probability": 9.4
+          "probability": 13.9
         },
         {
-          "home": 3,
-          "away": 1,
-          "label": "3-1",
-          "probability": 7.9
+          "home": 1,
+          "away": 0,
+          "label": "1-0",
+          "probability": 13.3
         },
         {
           "home": 3,
           "away": 0,
           "label": "3-0",
-          "probability": 7.9
+          "probability": 9.7
+        },
+        {
+          "home": 2,
+          "away": 1,
+          "label": "2-1",
+          "probability": 9.2
         },
         {
           "home": 1,
           "away": 1,
           "label": "1-1",
-          "probability": 7.5
+          "probability": 8.8
         }
       ],
       "goalLines": {
-        "over25": 68.3,
-        "under25": 31.7
+        "over25": 52.1,
+        "under25": 47.9
       },
       "bothTeamsToScore": {
-        "yes": 58.2,
-        "no": 41.8
+        "yes": 42.5,
+        "no": 57.5
       },
       "handicap": {
         "line": "-2",
@@ -1444,9 +754,9 @@
           "away": 41.8
         },
         "poisson": {
-          "home": 28.4,
-          "draw": 20.2,
-          "away": 51.4
+          "home": 24.3,
+          "draw": 21.6,
+          "away": 54.1
         }
       },
       "calibration": {
@@ -1474,7 +784,7 @@
           "en": "Home Win (葡萄牙)"
         },
         "odds": 1.15,
-        "trustScore": 93,
+        "trustScore": 73,
         "explanation": {
           "zh": "本场以中国竞彩网官方 HAD 胜平负 SP 为主轴，去水后最高支持方向为主胜 葡萄牙。模型同时参考主客预期进球、平局拉力和赔率分布，不使用本地模拟赛果回填。",
           "en": "This pick is anchored to official Sporttery HAD odds. After removing overround, the strongest direction is Home Win (葡萄牙)."
@@ -1485,8 +795,8 @@
             "en": "Official HAD SP: 1.15 / 5.65 / 12.00; normalized support is about home 77% / draw 16% / away 7%."
           },
           {
-            "zh": "胜平负差距：市场主线领先第二方向约 61 个百分点，当前模型可信度 93%。",
-            "en": "1X2 separation: the market lead is ahead by about 61 percentage points. Model confidence: 93%."
+            "zh": "胜平负差距：市场主线领先第二方向约 61 个百分点，当前模型可信度 73%。",
+            "en": "1X2 separation: the market lead is ahead by about 61 percentage points. Model confidence: 73%."
           },
           {
             "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 官方 SP 更新时间：2026-06-06 09:47:04。",
@@ -1501,10 +811,6 @@
           {
             "zh": "让球支持不足",
             "en": "Handicap support weak"
-          },
-          {
-            "zh": "进球临界",
-            "en": "Goal-model borderline"
           }
         ],
         "visibilityStatus": "FREE",
@@ -1512,33 +818,28 @@
       },
       {
         "marketType": "GOALS",
-        "tipCode": "4",
+        "tipCode": "O2.5",
         "tipLabel": {
-          "zh": "总进球数 4球",
-          "en": "Total Goals 4"
+          "zh": "总进球 3+",
+          "en": "Total Goals 3+"
         },
-        "odds": 5.28,
+        "odds": 1.92,
         "trustScore": 64,
         "explanation": {
-          "zh": "总进球数为模型参考项，基于胜平负 SP 反推出主队 2.52、客队 1.00 的预期进球，当前总进球期望约 3.52。",
-          "en": "The goals model derives expected goals from 1X2 odds: home 2.52, away 1.00, total 3.52."
+          "zh": "进球趋势为模型参考项，基于胜平负 SP 反推出主队 2.10、客队 0.66 的预期进球，当前总进球期望约 2.76。",
+          "en": "The goals trend derives expected goals from 1X2 odds: home 2.10, away 0.66, total 2.76."
         },
         "analysisItems": [
           {
-            "zh": "比分热区：2-1 附近；总进球 4 的模型概率约 19%。",
-            "en": "Score heat zone: around 2-1; model probability for total goals 4 is about 19%."
+            "zh": "比分热区：2-0 附近；总进球 3+ 的模型概率约 52%。",
+            "en": "Score heat zone: around 2-0; model probability for Total Goals 3+ is about 52%."
           },
           {
-            "zh": "大 2.5 球概率约 68%，该指标用于走势参考，不等同于中国竞彩网官方总进球 SP。",
-            "en": "Over 2.5 probability is about 68%. This is a model reference, not official Sporttery total-goals SP."
+            "zh": "大 2.5 球概率约 52%，该指标用于走势参考，不等同于官方总进球 SP。",
+            "en": "Over 2.5 probability is about 52%. This is a model reference, not official Sporttery total-goals SP."
           }
         ],
-        "riskTags": [
-          {
-            "zh": "进球临界",
-            "en": "Goal-model borderline"
-          }
-        ],
+        "riskTags": [],
         "visibilityStatus": "PREMIUM",
         "resultStatus": "PENDING"
       },
@@ -1550,10 +851,10 @@
           "en": "Watch first: favorite overheated"
         },
         "odds": 0,
-        "trustScore": 72,
+        "trustScore": 61,
         "explanation": {
-          "zh": "这场有正路倾向，但不适合硬写成稳胆。让球同向支持约 35%，风险标签为 热门过热、让球支持不足、进球临界，先按观察单处理。",
-          "en": "There is a favorite lean, but not a banker. same-side handicap support is about 35%; risk tags: Heavy favorite, Handicap support weak, Goal-model borderline. Keep it in watch mode."
+          "zh": "这场有正路倾向，但不适合硬写成稳胆。让球同向支持约 35%，风险标签为 热门过热、让球支持不足，先按观察单处理。",
+          "en": "There is a favorite lean, but not a banker. same-side handicap support is about 35%; risk tags: Heavy favorite, Handicap support weak. Keep it in watch mode."
         },
         "analysisItems": [
           {
@@ -1561,12 +862,12 @@
             "en": "Downgrade reason: Home Win (葡萄牙) has same-side handicap support is about 35%; handicap normalized support is home 35% / draw 24% / away 42%, not fully aligned with HAD."
           },
           {
-            "zh": "进球侧：比分热区 2-1，总期望 3.52，大 2.5 约 68%，双方进球约 58%。",
-            "en": "Goals: score heat zone 2-1, total xG 3.52, over 2.5 about 68%, BTTS about 58%."
+            "zh": "进球侧：比分热区 2-0，总期望 2.76，大 2.5 约 52%，双方进球约 43%。",
+            "en": "Goals: score heat zone 2-0, total xG 2.76, over 2.5 about 52%, BTTS about 43%."
           },
           {
-            "zh": "临场复核：热门过热、让球支持不足、进球临界。如果赛前 SP 继续降赔但让球支持不上来，仍按观察处理。",
-            "en": "Late check: Heavy favorite, Handicap support weak, Goal-model borderline. If SP shortens without handicap confirmation, keep this as watch-only."
+            "zh": "临场复核：热门过热、让球支持不足。如果赛前 SP 继续降赔但让球支持不上来，仍按观察处理。",
+            "en": "Late check: Heavy favorite, Handicap support weak. If SP shortens without handicap confirmation, keep this as watch-only."
           }
         ],
         "riskTags": [
@@ -1577,10 +878,6 @@
           {
             "zh": "让球支持不足",
             "en": "Handicap support weak"
-          },
-          {
-            "zh": "进球临界",
-            "en": "Goal-model borderline"
           }
         ],
         "visibilityStatus": "FREE",
@@ -1589,16 +886,16 @@
     ],
     "stats": {
       "xG": {
-        "home": 2.52,
-        "away": 1
+        "home": 2.1,
+        "away": 0.66
       },
       "possession": {
         "home": 51,
         "away": 49
       },
       "shots": {
-        "home": 15,
-        "away": 9
+        "home": 12,
+        "away": 7
       },
       "shotsOnTarget": {
         "home": 7,
@@ -1663,30 +960,26 @@
     "handicapOddsUpdatedAt": "2026-06-06 14:44:46",
     "handicapOddsSourceUrl": "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c",
     "predictionMeta": {
-      "policyVersion": "pre-match-value-gate-v6",
+      "policyVersion": "pre-match-value-gate-v7",
       "promptVersion": "professional-football-analyst-v5",
       "generatedAt": "2026-06-06T06:45:14.394Z",
-      "updatedAt": "2026-06-06T07:25:22.562Z",
+      "updatedAt": "2026-06-06T09:22:17.429Z",
       "dataPolicy": {
         "zh": "仅使用已接入的中国竞彩网官方 SP、让球 SP、赛果和 SP 快照；伤停、首发、天气、裁判等未接入数据明确视为不足，不编造。",
         "en": "Uses connected official Sporttery SP, handicap SP, results, and SP snapshots only. Injuries, lineups, weather, and referee data are treated as unavailable unless connected."
-      },
-      "updateReason": {
-        "zh": "精选说明升级为分场景盘口叙事，未开赛比赛允许刷新赛前分析文案和风险表达。",
-        "en": "Best-tip notes were upgraded to scenario-based market narratives, so unstarted matches can refresh analysis copy and risk wording."
       }
     },
     "oddsTrend": {
-      "sampleSize": 2,
+      "sampleSize": 4,
       "firstCapturedAt": "2026-06-06T06:45:14.394Z",
-      "lastCapturedAt": "2026-06-06T07:25:22.562Z",
+      "lastCapturedAt": "2026-06-06T09:22:17.429Z",
       "odds1Change": 0,
       "oddsXChange": 0,
       "odds2Change": 0,
       "direction": "flat",
       "summary": {
-        "zh": "SP 快照 2 次：主胜 0.00，平局 0.00，客胜 0.00；整体波动很小。",
-        "en": "2 SP snapshots: home 0.00, draw 0.00, away 0.00. Overall movement is small."
+        "zh": "SP 快照 4 次：主胜 0.00，平局 0.00，客胜 0.00；整体波动很小。",
+        "en": "4 SP snapshots: home 0.00, draw 0.00, away 0.00. Overall movement is small."
       }
     }
   },
@@ -1702,7 +995,7 @@
     "projectedScoreAway": 1,
     "probabilityModel": {
       "version": "market-elo-poisson-v1",
-      "generatedAt": "2026-06-06T07:26:07.936Z",
+      "generatedAt": "2026-06-06T09:23:04.735Z",
       "basis": {
         "zh": "市场隐含概率 + Elo 强度快照 + Poisson 比分分布集成；暂未接入 xG、伤停、首发和校准器。",
         "en": "Market-implied probability, Elo strength snapshot, and Poisson score baseline; xG, injuries, lineups, and calibration are not connected yet."
@@ -1714,9 +1007,9 @@
       },
       "oneXTwo": {
         "market": {
-          "home": 34.4,
-          "draw": 30.8,
-          "away": 34.7
+          "home": 33.5,
+          "draw": 32.8,
+          "away": 33.7
         },
         "elo": {
           "home": 41.9,
@@ -1724,14 +1017,14 @@
           "away": 29.8
         },
         "poisson": {
-          "home": 40.5,
-          "draw": 23.9,
-          "away": 35.6
+          "home": 35.6,
+          "draw": 28.5,
+          "away": 35.9
         },
         "final": {
-          "home": 37.3,
-          "draw": 29,
-          "away": 33.7
+          "home": 35.9,
+          "draw": 31,
+          "away": 33.2
         }
       },
       "elo": {
@@ -1747,52 +1040,52 @@
           "home": 1,
           "away": 1,
           "label": "1-1",
-          "probability": 10.9
-        },
-        {
-          "home": 2,
-          "away": 1,
-          "label": "2-1",
-          "probability": 8.7
-        },
-        {
-          "home": 1,
-          "away": 2,
-          "label": "1-2",
-          "probability": 8.1
-        },
-        {
-          "home": 1,
-          "away": 0,
-          "label": "1-0",
-          "probability": 7.3
+          "probability": 13.3
         },
         {
           "home": 0,
           "away": 1,
           "label": "0-1",
-          "probability": 6.8
+          "probability": 11.6
+        },
+        {
+          "home": 1,
+          "away": 0,
+          "label": "1-0",
+          "probability": 11.6
+        },
+        {
+          "home": 0,
+          "away": 0,
+          "label": "0-0",
+          "probability": 10.2
+        },
+        {
+          "home": 1,
+          "away": 2,
+          "label": "1-2",
+          "probability": 7.6
         }
       ],
       "goalLines": {
-        "over25": 59.6,
-        "under25": 40.4
+        "over25": 40.1,
+        "under25": 59.9
       },
       "bothTeamsToScore": {
-        "yes": 61.8,
-        "no": 38.2
+        "yes": 46.4,
+        "no": 53.6
       },
       "handicap": {
         "line": "+1",
         "market": {
-          "home": 63.7,
-          "draw": 21.3,
-          "away": 15
+          "home": 64.6,
+          "draw": 20.8,
+          "away": 14.5
         },
         "poisson": {
-          "home": 64.4,
-          "draw": 18.8,
-          "away": 16.8
+          "home": 64.1,
+          "draw": 21.1,
+          "away": 14.8
         }
       },
       "calibration": {
@@ -1802,14 +1095,14 @@
       }
     },
     "odds": {
-      "odds1": 2.57,
-      "oddsX": 2.87,
-      "odds2": 2.55
+      "odds1": 2.65,
+      "oddsX": 2.7,
+      "odds2": 2.63
     },
     "handicapOdds": {
-      "odds1": 1.39,
-      "oddsX": 4.15,
-      "odds2": 5.9
+      "odds1": 1.37,
+      "oddsX": 4.25,
+      "odds2": 6.1
     },
     "predictions": [
       {
@@ -1819,24 +1112,24 @@
           "zh": "平局",
           "en": "Draw"
         },
-        "odds": 2.87,
-        "trustScore": 58,
+        "odds": 2.7,
+        "trustScore": 54,
         "explanation": {
           "zh": "本场以中国竞彩网官方 HAD 胜平负 SP 为主轴，去水后最高支持方向为平局。模型同时参考主客预期进球、平局拉力和赔率分布，不使用本地模拟赛果回填。",
           "en": "This pick is anchored to official Sporttery HAD odds. After removing overround, the strongest direction is Draw."
         },
         "analysisItems": [
           {
-            "zh": "官方 HAD SP：主胜 2.57 / 平局 2.87 / 客胜 2.55；去水支持率约 主胜 34% / 平局 31% / 客胜 35%。",
-            "en": "Official HAD SP: 2.57 / 2.87 / 2.55; normalized support is about home 34% / draw 31% / away 35%."
+            "zh": "官方 HAD SP：主胜 2.65 / 平局 2.70 / 客胜 2.63；去水支持率约 主胜 33% / 平局 33% / 客胜 34%。",
+            "en": "Official HAD SP: 2.65 / 2.70 / 2.63; normalized support is about home 33% / draw 33% / away 34%."
           },
           {
-            "zh": "专业修正：不机械追随最低 SP。本场胜平负首选与平局差距不大，平局去水支持率约 29%，且让球盘对正路支持不足，稳妥方向降为防平观察。 当前模型可信度 58%，该方向属于价值观察而非高确定性推荐。",
-            "en": "Analyst adjustment: not blindly following the lowest SP. The draw is live at about 29% normalized support, and handicap support for the market favorite is weak. Model confidence is 58%; this is a value-watch, not a high-certainty banker."
+            "zh": "专业修正：不机械追随最低 SP。本场胜平负首选与平局差距不大，平局去水支持率约 31%，且让球盘对正路支持不足，稳妥方向降为防平观察。 当前模型可信度 54%，该方向属于价值观察而非高确定性推荐。",
+            "en": "Analyst adjustment: not blindly following the lowest SP. The draw is live at about 31% normalized support, and handicap support for the market favorite is weak. Model confidence is 54%; this is a value-watch, not a high-certainty banker."
           },
           {
-            "zh": "平局支持率偏高，胜平负方向需要防平。 官方 SP 更新时间：2026-06-06 13:40:44。",
-            "en": "Draw support is high, so cover the draw risk. Official SP updated at 2026-06-06 13:40:44."
+            "zh": "平局支持率偏高，胜平负方向需要防平。 官方 SP 更新时间：2026-06-06 17:06:58。",
+            "en": "Draw support is high, so cover the draw risk. Official SP updated at 2026-06-06 17:06:58."
           }
         ],
         "riskTags": [
@@ -1862,25 +1155,25 @@
       },
       {
         "marketType": "GOALS",
-        "tipCode": "3",
+        "tipCode": "U2.5",
         "tipLabel": {
-          "zh": "总进球数 3球",
-          "en": "Total Goals 3"
+          "zh": "总进球 0-2",
+          "en": "Total Goals 0-2"
         },
-        "odds": 4.47,
-        "trustScore": 67,
+        "odds": 1.67,
+        "trustScore": 72,
         "explanation": {
-          "zh": "总进球数为模型参考项，基于胜平负 SP 反推出主队 1.60、客队 1.49 的预期进球，当前总进球期望约 3.09。",
-          "en": "The goals model derives expected goals from 1X2 odds: home 1.60, away 1.49, total 3.09."
+          "zh": "进球趋势为模型参考项，基于胜平负 SP 反推出主队 1.14、客队 1.15 的预期进球，当前总进球期望约 2.29。",
+          "en": "The goals trend derives expected goals from 1X2 odds: home 1.14, away 1.15, total 2.29."
         },
         "analysisItems": [
           {
-            "zh": "比分热区：1-1 附近；总进球 3 的模型概率约 22%。",
-            "en": "Score heat zone: around 1-1; model probability for total goals 3 is about 22%."
+            "zh": "比分热区：1-1 附近；总进球 0-2 的模型概率约 60%。",
+            "en": "Score heat zone: around 1-1; model probability for Total Goals 0-2 is about 60%."
           },
           {
-            "zh": "大 2.5 球概率约 60%，该指标用于走势参考，不等同于中国竞彩网官方总进球 SP。",
-            "en": "Over 2.5 probability is about 60%. This is a model reference, not official Sporttery total-goals SP."
+            "zh": "大 2.5 球概率约 40%，该指标用于走势参考，不等同于官方总进球 SP。",
+            "en": "Over 2.5 probability is about 40%. This is a model reference, not official Sporttery total-goals SP."
           }
         ],
         "riskTags": [
@@ -1899,20 +1192,20 @@
           "zh": "价值观察 平局",
           "en": "Value watch: Draw"
         },
-        "odds": 2.87,
-        "trustScore": 58,
+        "odds": 2.7,
+        "trustScore": 54,
         "explanation": {
           "zh": "这场重点不是追低赔，而是平局拉力。主线没有拉开足够距离，让球盘也没有把正路完全坐实。",
           "en": "The key is draw pressure rather than chasing the lowest SP. The main line has not separated enough, and handicap support is incomplete."
         },
         "analysisItems": [
           {
-            "zh": "盘口分歧：不机械追随最低 SP。本场胜平负首选与平局差距不大，平局去水支持率约 29%，且让球盘对正路支持不足，稳妥方向降为防平观察。 市场主线领先约 0 个百分点，模型首选优势约 4 个百分点。",
-            "en": "Market disagreement: not blindly following the lowest SP. The draw is live at about 29% normalized support, and handicap support for the market favorite is weak. Market lead is about 0 points; model edge is about 4 points."
+            "zh": "盘口分歧：不机械追随最低 SP。本场胜平负首选与平局差距不大，平局去水支持率约 31%，且让球盘对正路支持不足，稳妥方向降为防平观察。 市场主线领先约 0 个百分点，模型首选优势约 3 个百分点。",
+            "en": "Market disagreement: not blindly following the lowest SP. The draw is live at about 31% normalized support, and handicap support for the market favorite is weak. Market lead is about 0 points; model edge is about 3 points."
           },
           {
-            "zh": "进球侧：比分热区 1-1，总期望 3.09，大 2.5 约 60%，双方进球约 62%。",
-            "en": "Goals: score heat zone 1-1, total xG 3.09, over 2.5 about 60%, BTTS about 62%."
+            "zh": "进球侧：比分热区 1-1，总期望 2.29，大 2.5 约 40%，双方进球约 46%。",
+            "en": "Goals: score heat zone 1-1, total xG 2.29, over 2.5 about 40%, BTTS about 46%."
           },
           {
             "zh": "风险边界：这是价值观察，不是高确定性推荐；若临场平局 SP 被明显抬高或让球盘重新支持热门，需要下调权重。",
@@ -1943,19 +1236,19 @@
     ],
     "stats": {
       "xG": {
-        "home": 1.6,
-        "away": 1.49
+        "home": 1.14,
+        "away": 1.15
       },
       "possession": {
         "home": 51,
         "away": 49
       },
       "shots": {
-        "home": 10,
-        "away": 11
+        "home": 7,
+        "away": 9
       },
       "shotsOnTarget": {
-        "home": 6,
+        "home": 5,
         "away": 3
       },
       "corners": {
@@ -2009,39 +1302,35 @@
     "oddsSource": "sporttery:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "calculator",
-    "oddsUpdatedAt": "2026-06-06 13:40:44",
+    "oddsUpdatedAt": "2026-06-06 17:06:58",
     "oddsSourceUrl": "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c",
     "handicapLine": "+1",
     "handicapOddsSource": "sporttery:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "calculator",
-    "handicapOddsUpdatedAt": "2026-06-06 13:40:50",
+    "handicapOddsUpdatedAt": "2026-06-06 15:58:24",
     "handicapOddsSourceUrl": "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c",
     "predictionMeta": {
-      "policyVersion": "pre-match-value-gate-v6",
+      "policyVersion": "pre-match-value-gate-v7",
       "promptVersion": "professional-football-analyst-v5",
       "generatedAt": "2026-06-06T06:45:14.394Z",
-      "updatedAt": "2026-06-06T07:25:22.562Z",
+      "updatedAt": "2026-06-06T09:22:17.429Z",
       "dataPolicy": {
         "zh": "仅使用已接入的中国竞彩网官方 SP、让球 SP、赛果和 SP 快照；伤停、首发、天气、裁判等未接入数据明确视为不足，不编造。",
         "en": "Uses connected official Sporttery SP, handicap SP, results, and SP snapshots only. Injuries, lineups, weather, and referee data are treated as unavailable unless connected."
-      },
-      "updateReason": {
-        "zh": "精选说明升级为分场景盘口叙事，未开赛比赛允许刷新赛前分析文案和风险表达。",
-        "en": "Best-tip notes were upgraded to scenario-based market narratives, so unstarted matches can refresh analysis copy and risk wording."
       }
     },
     "oddsTrend": {
-      "sampleSize": 2,
+      "sampleSize": 4,
       "firstCapturedAt": "2026-06-06T06:45:14.394Z",
-      "lastCapturedAt": "2026-06-06T07:25:22.562Z",
-      "odds1Change": 0,
-      "oddsXChange": 0,
-      "odds2Change": 0,
-      "direction": "flat",
+      "lastCapturedAt": "2026-06-06T09:22:17.429Z",
+      "odds1Change": 0.08,
+      "oddsXChange": -0.17,
+      "odds2Change": 0.08,
+      "direction": "draw",
       "summary": {
-        "zh": "SP 快照 2 次：主胜 0.00，平局 0.00，客胜 0.00；整体波动很小。",
-        "en": "2 SP snapshots: home 0.00, draw 0.00, away 0.00. Overall movement is small."
+        "zh": "SP 快照 4 次：主胜 +0.08，平局 -0.17，客胜 +0.08；平局 SP 下调，市场支持有所增强。",
+        "en": "4 SP snapshots: home +0.08, draw -0.17, away +0.08. draw SP shortened, indicating stronger market support."
       }
     }
   },
@@ -2053,11 +1342,11 @@
     "countryId": "world",
     "kickoffTime": "2026-06-07T02:30:00+08:00",
     "status": "SCHEDULED",
-    "projectedScoreHome": 1,
+    "projectedScoreHome": 0,
     "projectedScoreAway": 1,
     "probabilityModel": {
       "version": "market-elo-poisson-v1",
-      "generatedAt": "2026-06-06T07:26:07.936Z",
+      "generatedAt": "2026-06-06T09:23:04.736Z",
       "basis": {
         "zh": "市场隐含概率 + Elo 强度快照 + Poisson 比分分布集成；暂未接入 xG、伤停、首发和校准器。",
         "en": "Market-implied probability, Elo strength snapshot, and Poisson score baseline; xG, injuries, lineups, and calibration are not connected yet."
@@ -2069,9 +1358,9 @@
       },
       "oneXTwo": {
         "market": {
-          "home": 18.1,
-          "draw": 22.9,
-          "away": 59
+          "home": 18.4,
+          "draw": 23.3,
+          "away": 58.3
         },
         "elo": {
           "home": 37.2,
@@ -2079,14 +1368,14 @@
           "away": 33.1
         },
         "poisson": {
-          "home": 28,
-          "draw": 21.7,
-          "away": 50.3
+          "home": 14.8,
+          "draw": 21.2,
+          "away": 64
         },
         "final": {
-          "home": 24.5,
-          "draw": 24.3,
-          "away": 51.2
+          "home": 22.3,
+          "draw": 24.5,
+          "away": 53.2
         }
       },
       "elo": {
@@ -2099,55 +1388,55 @@
       },
       "scoreDistribution": [
         {
+          "home": 0,
+          "away": 1,
+          "label": "0-1",
+          "probability": 12.6
+        },
+        {
+          "home": 0,
+          "away": 2,
+          "label": "0-2",
+          "probability": 12.2
+        },
+        {
           "home": 1,
           "away": 1,
           "label": "1-1",
-          "probability": 9.2
+          "probability": 10.1
         },
         {
           "home": 1,
           "away": 2,
           "label": "1-2",
-          "probability": 9.2
-        },
-        {
-          "home": 2,
-          "away": 1,
-          "label": "2-1",
-          "probability": 6.7
-        },
-        {
-          "home": 2,
-          "away": 2,
-          "label": "2-2",
-          "probability": 6.7
+          "probability": 9.7
         },
         {
           "home": 0,
-          "away": 1,
-          "label": "0-1",
-          "probability": 6.4
+          "away": 3,
+          "label": "0-3",
+          "probability": 7.8
         }
       ],
       "goalLines": {
-        "over25": 66.8,
-        "under25": 33.2
+        "over25": 51.3,
+        "under25": 48.7
       },
       "bothTeamsToScore": {
-        "yes": 66.1,
-        "no": 33.9
+        "yes": 47.1,
+        "no": 52.9
       },
       "handicap": {
         "line": "+1",
         "market": {
-          "home": 39.4,
+          "home": 40.2,
           "draw": 24.9,
-          "away": 35.7
+          "away": 34.8
         },
         "poisson": {
-          "home": 49.7,
-          "draw": 21.3,
-          "away": 29
+          "home": 36,
+          "draw": 25.2,
+          "away": 38.8
         }
       },
       "calibration": {
@@ -2157,14 +1446,14 @@
       }
     },
     "odds": {
-      "odds1": 4.9,
-      "oddsX": 3.86,
-      "odds2": 1.5
+      "odds1": 4.8,
+      "oddsX": 3.8,
+      "odds2": 1.52
     },
     "handicapOdds": {
-      "odds1": 2.25,
+      "odds1": 2.2,
       "oddsX": 3.55,
-      "odds2": 2.48
+      "odds2": 2.54
     },
     "predictions": [
       {
@@ -2174,30 +1463,34 @@
           "zh": "客胜 德国",
           "en": "Away Win (德国)"
         },
-        "odds": 1.5,
-        "trustScore": 74,
+        "odds": 1.52,
+        "trustScore": 60,
         "explanation": {
           "zh": "本场以中国竞彩网官方 HAD 胜平负 SP 为主轴，去水后最高支持方向为客胜 德国。模型同时参考主客预期进球、平局拉力和赔率分布，不使用本地模拟赛果回填。",
           "en": "This pick is anchored to official Sporttery HAD odds. After removing overround, the strongest direction is Away Win (德国)."
         },
         "analysisItems": [
           {
-            "zh": "官方 HAD SP：主胜 4.90 / 平局 3.86 / 客胜 1.50；去水支持率约 主胜 18% / 平局 23% / 客胜 59%。",
-            "en": "Official HAD SP: 4.90 / 3.86 / 1.50; normalized support is about home 18% / draw 23% / away 59%."
+            "zh": "官方 HAD SP：主胜 4.80 / 平局 3.80 / 客胜 1.52；去水支持率约 主胜 18% / 平局 23% / 客胜 58%。",
+            "en": "Official HAD SP: 4.80 / 3.80 / 1.52; normalized support is about home 18% / draw 23% / away 58%."
           },
           {
-            "zh": "胜平负差距：市场主线领先第二方向约 36 个百分点，当前模型可信度 74%。",
-            "en": "1X2 separation: the market lead is ahead by about 36 percentage points. Model confidence: 74%."
+            "zh": "胜平负差距：市场主线领先第二方向约 35 个百分点，当前模型可信度 60%。",
+            "en": "1X2 separation: the market lead is ahead by about 35 percentage points. Model confidence: 60%."
           },
           {
-            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 官方 SP 更新时间：2026-06-06 13:16:07。",
-            "en": "Draw support is not dominant, but late SP movement still matters. Official SP updated at 2026-06-06 13:16:07."
+            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 官方 SP 更新时间：2026-06-06 16:23:09。",
+            "en": "Draw support is not dominant, but late SP movement still matters. Official SP updated at 2026-06-06 16:23:09."
           }
         ],
         "riskTags": [
           {
             "zh": "让球支持不足",
             "en": "Handicap support weak"
+          },
+          {
+            "zh": "进球临界",
+            "en": "Goal-model borderline"
           }
         ],
         "visibilityStatus": "FREE",
@@ -2205,28 +1498,33 @@
       },
       {
         "marketType": "GOALS",
-        "tipCode": "3",
+        "tipCode": "U2.5",
         "tipLabel": {
-          "zh": "总进球数 3球",
-          "en": "Total Goals 3"
+          "zh": "总进球 0-2",
+          "en": "Total Goals 0-2"
         },
-        "odds": 4.6,
-        "trustScore": 67,
+        "odds": 2.06,
+        "trustScore": 61,
         "explanation": {
-          "zh": "总进球数为模型参考项，基于胜平负 SP 反推出主队 1.45、客队 1.99 的预期进球，当前总进球期望约 3.44。",
-          "en": "The goals model derives expected goals from 1X2 odds: home 1.45, away 1.99, total 3.44."
+          "zh": "进球趋势为模型参考项，基于胜平负 SP 反推出主队 0.80、客队 1.93 的预期进球，当前总进球期望约 2.73。",
+          "en": "The goals trend derives expected goals from 1X2 odds: home 0.80, away 1.93, total 2.73."
         },
         "analysisItems": [
           {
-            "zh": "比分热区：1-1 附近；总进球 3 的模型概率约 22%。",
-            "en": "Score heat zone: around 1-1; model probability for total goals 3 is about 22%."
+            "zh": "比分热区：0-1 附近；总进球 0-2 的模型概率约 49%。",
+            "en": "Score heat zone: around 0-1; model probability for Total Goals 0-2 is about 49%."
           },
           {
-            "zh": "大 2.5 球概率约 67%，该指标用于走势参考，不等同于中国竞彩网官方总进球 SP。",
-            "en": "Over 2.5 probability is about 67%. This is a model reference, not official Sporttery total-goals SP."
+            "zh": "大 2.5 球概率约 51%，该指标用于走势参考，不等同于官方总进球 SP。",
+            "en": "Over 2.5 probability is about 51%. This is a model reference, not official Sporttery total-goals SP."
           }
         ],
-        "riskTags": [],
+        "riskTags": [
+          {
+            "zh": "进球临界",
+            "en": "Goal-model borderline"
+          }
+        ],
         "visibilityStatus": "PREMIUM",
         "resultStatus": "PENDING"
       },
@@ -2238,29 +1536,33 @@
           "en": "Watch first: favorite overheated"
         },
         "odds": 0,
-        "trustScore": 62,
+        "trustScore": 48,
         "explanation": {
-          "zh": "这场先不把客胜 德国包装成高可信。HAD 方向虽然清楚，但让球同向支持约 36%，盘口确认不够完整。",
-          "en": "This is not packaged as high confidence. Away Win (德国) leads the HAD read, but same-side handicap support is about 36%, so confirmation is incomplete."
+          "zh": "这场先不把客胜 德国包装成高可信。HAD 方向虽然清楚，但让球同向支持约 35%，盘口确认不够完整。",
+          "en": "This is not packaged as high confidence. Away Win (德国) leads the HAD read, but same-side handicap support is about 35%, so confirmation is incomplete."
         },
         "analysisItems": [
           {
-            "zh": "降级原因：客胜 德国对应 让球同向支持约 36%；让球盘去水支持约 主胜 39% / 平 25% / 客胜 36%，和普通胜平负主线存在温差。",
-            "en": "Downgrade reason: Away Win (德国) has same-side handicap support is about 36%; handicap normalized support is home 39% / draw 25% / away 36%, not fully aligned with HAD."
+            "zh": "降级原因：客胜 德国对应 让球同向支持约 35%；让球盘去水支持约 主胜 40% / 平 25% / 客胜 35%，和普通胜平负主线存在温差。",
+            "en": "Downgrade reason: Away Win (德国) has same-side handicap support is about 35%; handicap normalized support is home 40% / draw 25% / away 35%, not fully aligned with HAD."
           },
           {
-            "zh": "进球侧：比分热区 1-1，总期望 3.44，大 2.5 约 67%，双方进球约 66%。",
-            "en": "Goals: score heat zone 1-1, total xG 3.44, over 2.5 about 67%, BTTS about 66%."
+            "zh": "进球侧：比分热区 0-1，总期望 2.73，大 2.5 约 51%，双方进球约 47%。",
+            "en": "Goals: score heat zone 0-1, total xG 2.73, over 2.5 about 51%, BTTS about 47%."
           },
           {
-            "zh": "临场复核：让球支持不足。如果赛前 SP 继续降赔但让球支持不上来，仍按观察处理。",
-            "en": "Late check: Handicap support weak. If SP shortens without handicap confirmation, keep this as watch-only."
+            "zh": "临场复核：让球支持不足、进球临界。如果赛前 SP 继续降赔但让球支持不上来，仍按观察处理。",
+            "en": "Late check: Handicap support weak, Goal-model borderline. If SP shortens without handicap confirmation, keep this as watch-only."
           }
         ],
         "riskTags": [
           {
             "zh": "让球支持不足",
             "en": "Handicap support weak"
+          },
+          {
+            "zh": "进球临界",
+            "en": "Goal-model borderline"
           }
         ],
         "visibilityStatus": "FREE",
@@ -2269,19 +1571,19 @@
     ],
     "stats": {
       "xG": {
-        "home": 1.45,
-        "away": 1.99
+        "home": 0.8,
+        "away": 1.93
       },
       "possession": {
         "home": 51,
         "away": 49
       },
       "shots": {
-        "home": 9,
-        "away": 13
+        "home": 5,
+        "away": 12
       },
       "shotsOnTarget": {
-        "home": 2,
+        "home": 1,
         "away": 6
       },
       "corners": {
@@ -2335,39 +1637,35 @@
     "oddsSource": "sporttery:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "calculator",
-    "oddsUpdatedAt": "2026-06-06 13:16:07",
+    "oddsUpdatedAt": "2026-06-06 16:23:09",
     "oddsSourceUrl": "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c",
     "handicapLine": "+1",
     "handicapOddsSource": "sporttery:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "calculator",
-    "handicapOddsUpdatedAt": "2026-06-06 13:16:16",
+    "handicapOddsUpdatedAt": "2026-06-06 16:23:16",
     "handicapOddsSourceUrl": "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c",
     "predictionMeta": {
-      "policyVersion": "pre-match-value-gate-v6",
+      "policyVersion": "pre-match-value-gate-v7",
       "promptVersion": "professional-football-analyst-v5",
       "generatedAt": "2026-06-06T06:45:14.394Z",
-      "updatedAt": "2026-06-06T07:25:22.562Z",
+      "updatedAt": "2026-06-06T09:22:17.429Z",
       "dataPolicy": {
         "zh": "仅使用已接入的中国竞彩网官方 SP、让球 SP、赛果和 SP 快照；伤停、首发、天气、裁判等未接入数据明确视为不足，不编造。",
         "en": "Uses connected official Sporttery SP, handicap SP, results, and SP snapshots only. Injuries, lineups, weather, and referee data are treated as unavailable unless connected."
-      },
-      "updateReason": {
-        "zh": "精选说明升级为分场景盘口叙事，未开赛比赛允许刷新赛前分析文案和风险表达。",
-        "en": "Best-tip notes were upgraded to scenario-based market narratives, so unstarted matches can refresh analysis copy and risk wording."
       }
     },
     "oddsTrend": {
-      "sampleSize": 2,
+      "sampleSize": 4,
       "firstCapturedAt": "2026-06-06T06:45:14.394Z",
-      "lastCapturedAt": "2026-06-06T07:25:22.562Z",
-      "odds1Change": 0,
-      "oddsXChange": 0,
-      "odds2Change": 0,
-      "direction": "flat",
+      "lastCapturedAt": "2026-06-06T09:22:17.429Z",
+      "odds1Change": -0.1,
+      "oddsXChange": -0.06,
+      "odds2Change": 0.02,
+      "direction": "home",
       "summary": {
-        "zh": "SP 快照 2 次：主胜 0.00，平局 0.00，客胜 0.00；整体波动很小。",
-        "en": "2 SP snapshots: home 0.00, draw 0.00, away 0.00. Overall movement is small."
+        "zh": "SP 快照 4 次：主胜 -0.10，平局 -0.06，客胜 +0.02；主胜 SP 下调，市场支持有所增强。",
+        "en": "4 SP snapshots: home -0.10, draw -0.06, away +0.02. home win SP shortened, indicating stronger market support."
       }
     }
   },
@@ -2379,11 +1677,11 @@
     "countryId": "world",
     "kickoffTime": "2026-06-07T03:00:00+08:00",
     "status": "SCHEDULED",
-    "projectedScoreHome": 1,
-    "projectedScoreAway": 2,
+    "projectedScoreHome": 0,
+    "projectedScoreAway": 1,
     "probabilityModel": {
       "version": "market-elo-poisson-v1",
-      "generatedAt": "2026-06-06T07:26:07.936Z",
+      "generatedAt": "2026-06-06T09:23:04.736Z",
       "basis": {
         "zh": "市场隐含概率 + Elo 强度快照 + Poisson 比分分布集成；暂未接入 xG、伤停、首发和校准器。",
         "en": "Market-implied probability, Elo strength snapshot, and Poisson score baseline; xG, injuries, lineups, and calibration are not connected yet."
@@ -2405,14 +1703,14 @@
           "away": 29.7
         },
         "poisson": {
-          "home": 23.6,
-          "draw": 21.2,
-          "away": 55.2
+          "home": 12.2,
+          "draw": 20.2,
+          "away": 67.6
         },
         "final": {
-          "home": 23,
-          "draw": 24.5,
-          "away": 52.5
+          "home": 21,
+          "draw": 24.3,
+          "away": 54.7
         }
       },
       "elo": {
@@ -2425,55 +1723,55 @@
       },
       "scoreDistribution": [
         {
-          "home": 1,
-          "away": 2,
-          "label": "1-2",
-          "probability": 9.6
-        },
-        {
-          "home": 1,
+          "home": 0,
           "away": 1,
-          "label": "1-1",
-          "probability": 9.3
+          "label": "0-1",
+          "probability": 13.7
         },
         {
           "home": 0,
           "away": 2,
           "label": "0-2",
-          "probability": 7.4
-        },
-        {
-          "home": 0,
-          "away": 1,
-          "label": "0-1",
-          "probability": 7.2
+          "probability": 13.5
         },
         {
           "home": 1,
+          "away": 1,
+          "label": "1-1",
+          "probability": 9.5
+        },
+        {
+          "home": 1,
+          "away": 2,
+          "label": "1-2",
+          "probability": 9.4
+        },
+        {
+          "home": 0,
           "away": 3,
-          "label": "1-3",
-          "probability": 6.6
+          "label": "0-3",
+          "probability": 8.9
         }
       ],
       "goalLines": {
-        "over25": 65.2,
-        "under25": 34.8
+        "over25": 50,
+        "under25": 50
       },
       "bothTeamsToScore": {
-        "yes": 63.3,
-        "no": 36.7
+        "yes": 43.2,
+        "no": 56.8
       },
       "handicap": {
         "line": "+1",
         "market": {
-          "home": 37.8,
-          "draw": 27.7,
-          "away": 34.5
+          "home": 37.7,
+          "draw": 28.6,
+          "away": 33.8
         },
         "poisson": {
-          "home": 44.8,
-          "draw": 22.1,
-          "away": 33.1
+          "home": 32.4,
+          "draw": 25.5,
+          "away": 42.1
         }
       },
       "calibration": {
@@ -2489,8 +1787,8 @@
     },
     "handicapOdds": {
       "odds1": 2.35,
-      "oddsX": 3.2,
-      "odds2": 2.57
+      "oddsX": 3.1,
+      "odds2": 2.62
     },
     "predictions": [
       {
@@ -2501,7 +1799,7 @@
           "en": "Away Win (瑞士)"
         },
         "odds": 1.45,
-        "trustScore": 76,
+        "trustScore": 65,
         "explanation": {
           "zh": "本场以中国竞彩网官方 HAD 胜平负 SP 为主轴，去水后最高支持方向为客胜 瑞士。模型同时参考主客预期进球、平局拉力和赔率分布，不使用本地模拟赛果回填。",
           "en": "This pick is anchored to official Sporttery HAD odds. After removing overround, the strongest direction is Away Win (瑞士)."
@@ -2512,8 +1810,8 @@
             "en": "Official HAD SP: 5.90 / 3.70 / 1.45; normalized support is about home 15% / draw 24% / away 61%."
           },
           {
-            "zh": "胜平负差距：市场主线领先第二方向约 37 个百分点，当前模型可信度 76%。",
-            "en": "1X2 separation: the market lead is ahead by about 37 percentage points. Model confidence: 76%."
+            "zh": "胜平负差距：市场主线领先第二方向约 37 个百分点，当前模型可信度 65%。",
+            "en": "1X2 separation: the market lead is ahead by about 37 percentage points. Model confidence: 65%."
           },
           {
             "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 官方 SP 更新时间：2026-06-06 09:47:04。",
@@ -2524,10 +1822,6 @@
           {
             "zh": "让球支持不足",
             "en": "Handicap support weak"
-          },
-          {
-            "zh": "进球临界",
-            "en": "Goal-model borderline"
           }
         ],
         "visibilityStatus": "FREE",
@@ -2535,33 +1829,28 @@
       },
       {
         "marketType": "GOALS",
-        "tipCode": "3",
+        "tipCode": "U2.5",
         "tipLabel": {
-          "zh": "总进球数 3球",
-          "en": "Total Goals 3"
+          "zh": "总进球 0-2",
+          "en": "Total Goals 0-2"
         },
-        "odds": 4.55,
-        "trustScore": 67,
+        "odds": 2,
+        "trustScore": 62,
         "explanation": {
-          "zh": "总进球数为模型参考项，基于胜平负 SP 反推出主队 1.29、客队 2.06 的预期进球，当前总进球期望约 3.36。",
-          "en": "The goals model derives expected goals from 1X2 odds: home 1.29, away 2.06, total 3.36."
+          "zh": "进球趋势为模型参考项，基于胜平负 SP 反推出主队 0.70、客队 1.98 的预期进球，当前总进球期望约 2.67。",
+          "en": "The goals trend derives expected goals from 1X2 odds: home 0.70, away 1.98, total 2.67."
         },
         "analysisItems": [
           {
-            "zh": "比分热区：1-2 附近；总进球 3 的模型概率约 22%。",
-            "en": "Score heat zone: around 1-2; model probability for total goals 3 is about 22%."
+            "zh": "比分热区：0-1 附近；总进球 0-2 的模型概率约 50%。",
+            "en": "Score heat zone: around 0-1; model probability for Total Goals 0-2 is about 50%."
           },
           {
-            "zh": "大 2.5 球概率约 65%，该指标用于走势参考，不等同于中国竞彩网官方总进球 SP。",
-            "en": "Over 2.5 probability is about 65%. This is a model reference, not official Sporttery total-goals SP."
+            "zh": "大 2.5 球概率约 50%，该指标用于走势参考，不等同于官方总进球 SP。",
+            "en": "Over 2.5 probability is about 50%. This is a model reference, not official Sporttery total-goals SP."
           }
         ],
-        "riskTags": [
-          {
-            "zh": "进球临界",
-            "en": "Goal-model borderline"
-          }
-        ],
+        "riskTags": [],
         "visibilityStatus": "PREMIUM",
         "resultStatus": "PENDING"
       },
@@ -2573,33 +1862,29 @@
           "en": "Watch first: favorite overheated"
         },
         "odds": 0,
-        "trustScore": 64,
+        "trustScore": 53,
         "explanation": {
-          "zh": "这场先不把客胜 瑞士包装成高可信。HAD 方向虽然清楚，但让球同向支持约 35%，盘口确认不够完整。",
-          "en": "This is not packaged as high confidence. Away Win (瑞士) leads the HAD read, but same-side handicap support is about 35%, so confirmation is incomplete."
+          "zh": "这场先不把客胜 瑞士包装成高可信。HAD 方向虽然清楚，但让球同向支持约 34%，盘口确认不够完整。",
+          "en": "This is not packaged as high confidence. Away Win (瑞士) leads the HAD read, but same-side handicap support is about 34%, so confirmation is incomplete."
         },
         "analysisItems": [
           {
-            "zh": "降级原因：客胜 瑞士对应 让球同向支持约 35%；让球盘去水支持约 主胜 38% / 平 28% / 客胜 35%，和普通胜平负主线存在温差。",
-            "en": "Downgrade reason: Away Win (瑞士) has same-side handicap support is about 35%; handicap normalized support is home 38% / draw 28% / away 35%, not fully aligned with HAD."
+            "zh": "降级原因：客胜 瑞士对应 让球同向支持约 34%；让球盘去水支持约 主胜 38% / 平 29% / 客胜 34%，和普通胜平负主线存在温差。",
+            "en": "Downgrade reason: Away Win (瑞士) has same-side handicap support is about 34%; handicap normalized support is home 38% / draw 29% / away 34%, not fully aligned with HAD."
           },
           {
-            "zh": "进球侧：比分热区 1-2，总期望 3.36，大 2.5 约 65%，双方进球约 63%。",
-            "en": "Goals: score heat zone 1-2, total xG 3.36, over 2.5 about 65%, BTTS about 63%."
+            "zh": "进球侧：比分热区 0-1，总期望 2.67，大 2.5 约 50%，双方进球约 43%。",
+            "en": "Goals: score heat zone 0-1, total xG 2.67, over 2.5 about 50%, BTTS about 43%."
           },
           {
-            "zh": "临场复核：让球支持不足、进球临界。如果赛前 SP 继续降赔但让球支持不上来，仍按观察处理。",
-            "en": "Late check: Handicap support weak, Goal-model borderline. If SP shortens without handicap confirmation, keep this as watch-only."
+            "zh": "临场复核：让球支持不足。如果赛前 SP 继续降赔但让球支持不上来，仍按观察处理。",
+            "en": "Late check: Handicap support weak. If SP shortens without handicap confirmation, keep this as watch-only."
           }
         ],
         "riskTags": [
           {
             "zh": "让球支持不足",
             "en": "Handicap support weak"
-          },
-          {
-            "zh": "进球临界",
-            "en": "Goal-model borderline"
           }
         ],
         "visibilityStatus": "FREE",
@@ -2608,19 +1893,19 @@
     ],
     "stats": {
       "xG": {
-        "home": 1.29,
-        "away": 2.06
+        "home": 0.7,
+        "away": 1.98
       },
       "possession": {
         "home": 51,
         "away": 49
       },
       "shots": {
-        "home": 8,
-        "away": 12
+        "home": 5,
+        "away": 11
       },
       "shotsOnTarget": {
-        "home": 2,
+        "home": 1,
         "away": 5
       },
       "corners": {
@@ -2680,33 +1965,29 @@
     "handicapOddsSource": "sporttery:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "calculator",
-    "handicapOddsUpdatedAt": "2026-06-06 09:47:04",
+    "handicapOddsUpdatedAt": "2026-06-06 16:35:33",
     "handicapOddsSourceUrl": "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c",
     "predictionMeta": {
-      "policyVersion": "pre-match-value-gate-v6",
+      "policyVersion": "pre-match-value-gate-v7",
       "promptVersion": "professional-football-analyst-v5",
       "generatedAt": "2026-06-06T06:45:14.394Z",
-      "updatedAt": "2026-06-06T07:25:22.562Z",
+      "updatedAt": "2026-06-06T09:22:17.429Z",
       "dataPolicy": {
         "zh": "仅使用已接入的中国竞彩网官方 SP、让球 SP、赛果和 SP 快照；伤停、首发、天气、裁判等未接入数据明确视为不足，不编造。",
         "en": "Uses connected official Sporttery SP, handicap SP, results, and SP snapshots only. Injuries, lineups, weather, and referee data are treated as unavailable unless connected."
-      },
-      "updateReason": {
-        "zh": "精选说明升级为分场景盘口叙事，未开赛比赛允许刷新赛前分析文案和风险表达。",
-        "en": "Best-tip notes were upgraded to scenario-based market narratives, so unstarted matches can refresh analysis copy and risk wording."
       }
     },
     "oddsTrend": {
-      "sampleSize": 2,
+      "sampleSize": 4,
       "firstCapturedAt": "2026-06-06T06:45:14.394Z",
-      "lastCapturedAt": "2026-06-06T07:25:22.562Z",
+      "lastCapturedAt": "2026-06-06T09:22:17.429Z",
       "odds1Change": 0,
       "oddsXChange": 0,
       "odds2Change": 0,
       "direction": "flat",
       "summary": {
-        "zh": "SP 快照 2 次：主胜 0.00，平局 0.00，客胜 0.00；整体波动很小。",
-        "en": "2 SP snapshots: home 0.00, draw 0.00, away 0.00. Overall movement is small."
+        "zh": "SP 快照 4 次：主胜 0.00，平局 0.00，客胜 0.00；整体波动很小。",
+        "en": "4 SP snapshots: home 0.00, draw 0.00, away 0.00. Overall movement is small."
       }
     }
   },
@@ -2722,7 +2003,7 @@
     "projectedScoreAway": 1,
     "probabilityModel": {
       "version": "market-elo-poisson-v1",
-      "generatedAt": "2026-06-06T07:26:07.937Z",
+      "generatedAt": "2026-06-06T09:23:04.736Z",
       "basis": {
         "zh": "市场隐含概率 + Elo 强度快照 + Poisson 比分分布集成；暂未接入 xG、伤停、首发和校准器。",
         "en": "Market-implied probability, Elo strength snapshot, and Poisson score baseline; xG, injuries, lineups, and calibration are not connected yet."
@@ -2744,14 +2025,14 @@
           "away": 29.6
         },
         "poisson": {
-          "home": 37.2,
-          "draw": 22.4,
-          "away": 40.4
+          "home": 27.2,
+          "draw": 25.8,
+          "away": 47
         },
         "final": {
-          "home": 32.6,
-          "draw": 28,
-          "away": 39.3
+          "home": 30.8,
+          "draw": 28.7,
+          "away": 40.5
         }
       },
       "elo": {
@@ -2767,40 +2048,40 @@
           "home": 1,
           "away": 1,
           "label": "1-1",
-          "probability": 9.4
-        },
-        {
-          "home": 1,
-          "away": 2,
-          "label": "1-2",
-          "probability": 8.3
-        },
-        {
-          "home": 2,
-          "away": 1,
-          "label": "2-1",
-          "probability": 7.9
-        },
-        {
-          "home": 2,
-          "away": 2,
-          "label": "2-2",
-          "probability": 7
+          "probability": 12.3
         },
         {
           "home": 0,
           "away": 1,
           "label": "0-1",
-          "probability": 5.6
+          "probability": 11.3
+        },
+        {
+          "home": 1,
+          "away": 2,
+          "label": "1-2",
+          "probability": 9.2
+        },
+        {
+          "home": 0,
+          "away": 2,
+          "label": "0-2",
+          "probability": 8.5
+        },
+        {
+          "home": 1,
+          "away": 0,
+          "label": "1-0",
+          "probability": 8.1
         }
       ],
       "goalLines": {
-        "over25": 67.2,
-        "under25": 32.8
+        "over25": 47.8,
+        "under25": 52.2
       },
       "bothTeamsToScore": {
-        "yes": 67.6,
-        "no": 32.4
+        "yes": 51.4,
+        "no": 48.6
       },
       "handicap": {
         "line": "+1",
@@ -2810,9 +2091,9 @@
           "away": 19.3
         },
         "poisson": {
-          "home": 59.6,
-          "draw": 19.2,
-          "away": 21.2
+          "home": 53,
+          "draw": 23.4,
+          "away": 23.6
         }
       },
       "calibration": {
@@ -2840,7 +2121,7 @@
           "en": "Draw"
         },
         "odds": 2.98,
-        "trustScore": 54,
+        "trustScore": 50,
         "explanation": {
           "zh": "本场以中国竞彩网官方 HAD 胜平负 SP 为主轴，去水后最高支持方向为平局。模型同时参考主客预期进球、平局拉力和赔率分布，不使用本地模拟赛果回填。",
           "en": "This pick is anchored to official Sporttery HAD odds. After removing overround, the strongest direction is Draw."
@@ -2851,8 +2132,8 @@
             "en": "Official HAD SP: 3.25 / 2.98 / 2.06; normalized support is about home 27% / draw 30% / away 43%."
           },
           {
-            "zh": "专业修正：不机械追随最低 SP。本场胜平负首选与平局差距不大，平局去水支持率约 28%，且让球盘对正路支持不足，稳妥方向降为防平观察。 当前模型可信度 54%，该方向属于价值观察而非高确定性推荐。",
-            "en": "Analyst adjustment: not blindly following the lowest SP. The draw is live at about 28% normalized support, and handicap support for the market favorite is weak. Model confidence is 54%; this is a value-watch, not a high-certainty banker."
+            "zh": "专业修正：不机械追随最低 SP。本场胜平负首选与平局差距不大，平局去水支持率约 29%，且让球盘对正路支持不足，稳妥方向降为防平观察。 当前模型可信度 50%，该方向属于价值观察而非高确定性推荐。",
+            "en": "Analyst adjustment: not blindly following the lowest SP. The draw is live at about 29% normalized support, and handicap support for the market favorite is weak. Model confidence is 50%; this is a value-watch, not a high-certainty banker."
           },
           {
             "zh": "平局支持率偏高，胜平负方向需要防平。 官方 SP 更新时间：2026-06-06 14:58:23。",
@@ -2865,6 +2146,10 @@
             "en": "Draw risk"
           },
           {
+            "zh": "进球临界",
+            "en": "Goal-model borderline"
+          },
+          {
             "zh": "盘口分歧",
             "en": "Market disagreement"
           }
@@ -2874,28 +2159,33 @@
       },
       {
         "marketType": "GOALS",
-        "tipCode": "3",
+        "tipCode": "U2.5",
         "tipLabel": {
-          "zh": "总进球数 3球",
-          "en": "Total Goals 3"
+          "zh": "总进球 0-2",
+          "en": "Total Goals 0-2"
         },
-        "odds": 4.61,
-        "trustScore": 67,
+        "odds": 1.91,
+        "trustScore": 64,
         "explanation": {
-          "zh": "总进球数为模型参考项，基于胜平负 SP 反推出主队 1.69、客队 1.77 的预期进球，当前总进球期望约 3.46。",
-          "en": "The goals model derives expected goals from 1X2 odds: home 1.69, away 1.77, total 3.46."
+          "zh": "进球趋势为模型参考项，基于胜平负 SP 反推出主队 1.08、客队 1.50 的预期进球，当前总进球期望约 2.58。",
+          "en": "The goals trend derives expected goals from 1X2 odds: home 1.08, away 1.50, total 2.58."
         },
         "analysisItems": [
           {
-            "zh": "比分热区：1-1 附近；总进球 3 的模型概率约 22%。",
-            "en": "Score heat zone: around 1-1; model probability for total goals 3 is about 22%."
+            "zh": "比分热区：1-1 附近；总进球 0-2 的模型概率约 52%。",
+            "en": "Score heat zone: around 1-1; model probability for Total Goals 0-2 is about 52%."
           },
           {
-            "zh": "大 2.5 球概率约 67%，该指标用于走势参考，不等同于中国竞彩网官方总进球 SP。",
-            "en": "Over 2.5 probability is about 67%. This is a model reference, not official Sporttery total-goals SP."
+            "zh": "大 2.5 球概率约 48%，该指标用于走势参考，不等同于官方总进球 SP。",
+            "en": "Over 2.5 probability is about 48%. This is a model reference, not official Sporttery total-goals SP."
           }
         ],
-        "riskTags": [],
+        "riskTags": [
+          {
+            "zh": "进球临界",
+            "en": "Goal-model borderline"
+          }
+        ],
         "visibilityStatus": "PREMIUM",
         "resultStatus": "PENDING"
       },
@@ -2914,12 +2204,12 @@
         },
         "analysisItems": [
           {
-            "zh": "盘口分歧：不机械追随最低 SP。本场胜平负首选与平局差距不大，平局去水支持率约 28%，且让球盘对正路支持不足，稳妥方向降为防平观察。 市场主线领先约 13 个百分点，模型首选优势约 7 个百分点。",
-            "en": "Market disagreement: not blindly following the lowest SP. The draw is live at about 28% normalized support, and handicap support for the market favorite is weak. Market lead is about 13 points; model edge is about 7 points."
+            "zh": "盘口分歧：不机械追随最低 SP。本场胜平负首选与平局差距不大，平局去水支持率约 29%，且让球盘对正路支持不足，稳妥方向降为防平观察。 市场主线领先约 13 个百分点，模型首选优势约 10 个百分点。",
+            "en": "Market disagreement: not blindly following the lowest SP. The draw is live at about 29% normalized support, and handicap support for the market favorite is weak. Market lead is about 13 points; model edge is about 10 points."
           },
           {
-            "zh": "进球侧：比分热区 1-1，总期望 3.46，大 2.5 约 67%，双方进球约 68%。",
-            "en": "Goals: score heat zone 1-1, total xG 3.46, over 2.5 about 67%, BTTS about 68%."
+            "zh": "进球侧：比分热区 1-1，总期望 2.58，大 2.5 约 48%，双方进球约 51%。",
+            "en": "Goals: score heat zone 1-1, total xG 2.58, over 2.5 about 48%, BTTS about 51%."
           },
           {
             "zh": "风险边界：这是价值观察，不是高确定性推荐；若临场平局 SP 被明显抬高或让球盘重新支持热门，需要下调权重。",
@@ -2932,6 +2222,10 @@
             "en": "Draw risk"
           },
           {
+            "zh": "进球临界",
+            "en": "Goal-model borderline"
+          },
+          {
             "zh": "盘口分歧",
             "en": "Market disagreement"
           }
@@ -2942,20 +2236,20 @@
     ],
     "stats": {
       "xG": {
-        "home": 1.69,
-        "away": 1.77
+        "home": 1.08,
+        "away": 1.5
       },
       "possession": {
         "home": 51,
         "away": 49
       },
       "shots": {
-        "home": 11,
-        "away": 13
+        "home": 8,
+        "away": 11
       },
       "shotsOnTarget": {
-        "home": 3,
-        "away": 4
+        "home": 2,
+        "away": 3
       },
       "corners": {
         "home": 3,
@@ -3017,30 +2311,26 @@
     "handicapOddsUpdatedAt": "2026-06-06 14:58:29",
     "handicapOddsSourceUrl": "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c",
     "predictionMeta": {
-      "policyVersion": "pre-match-value-gate-v6",
+      "policyVersion": "pre-match-value-gate-v7",
       "promptVersion": "professional-football-analyst-v5",
       "generatedAt": "2026-06-06T06:45:14.394Z",
-      "updatedAt": "2026-06-06T07:25:22.562Z",
+      "updatedAt": "2026-06-06T09:22:17.429Z",
       "dataPolicy": {
         "zh": "仅使用已接入的中国竞彩网官方 SP、让球 SP、赛果和 SP 快照；伤停、首发、天气、裁判等未接入数据明确视为不足，不编造。",
         "en": "Uses connected official Sporttery SP, handicap SP, results, and SP snapshots only. Injuries, lineups, weather, and referee data are treated as unavailable unless connected."
-      },
-      "updateReason": {
-        "zh": "精选说明升级为分场景盘口叙事，未开赛比赛允许刷新赛前分析文案和风险表达。",
-        "en": "Best-tip notes were upgraded to scenario-based market narratives, so unstarted matches can refresh analysis copy and risk wording."
       }
     },
     "oddsTrend": {
-      "sampleSize": 2,
+      "sampleSize": 4,
       "firstCapturedAt": "2026-06-06T06:45:14.394Z",
-      "lastCapturedAt": "2026-06-06T07:25:22.562Z",
+      "lastCapturedAt": "2026-06-06T09:22:17.429Z",
       "odds1Change": 0.12,
       "oddsXChange": 0,
       "odds2Change": -0.05,
       "direction": "away",
       "summary": {
-        "zh": "SP 快照 2 次：主胜 +0.12，平局 0.00，客胜 -0.05；客胜 SP 下调，市场支持有所增强。",
-        "en": "2 SP snapshots: home +0.12, draw 0.00, away -0.05. away win SP shortened, indicating stronger market support."
+        "zh": "SP 快照 4 次：主胜 +0.12，平局 0.00，客胜 -0.05；客胜 SP 下调，市场支持有所增强。",
+        "en": "4 SP snapshots: home +0.12, draw 0.00, away -0.05. away win SP shortened, indicating stronger market support."
       }
     }
   },
@@ -3053,9 +2343,9 @@
     "kickoffTime": "2026-06-07T04:00:00+08:00",
     "status": "SCHEDULED",
     "handicapOdds": {
-      "odds1": 1.92,
+      "odds1": 1.88,
       "oddsX": 3.8,
-      "odds2": 2.9
+      "odds2": 3
     },
     "predictions": [],
     "matchDate": "2026-06-06",
@@ -3088,13 +2378,13 @@
     "handicapOddsSource": "sporttery:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "calculator",
-    "handicapOddsUpdatedAt": "2026-06-06 14:29:45",
+    "handicapOddsUpdatedAt": "2026-06-06 16:13:53",
     "handicapOddsSourceUrl": "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c",
     "predictionMeta": {
-      "policyVersion": "pre-match-value-gate-v6",
+      "policyVersion": "pre-match-value-gate-v7",
       "promptVersion": "professional-football-analyst-v5",
       "generatedAt": "2026-06-06T06:45:14.394Z",
-      "updatedAt": "2026-06-06T07:25:22.562Z",
+      "updatedAt": "2026-06-06T09:22:17.429Z",
       "dataPolicy": {
         "zh": "仅使用已接入的中国竞彩网官方 SP、让球 SP、赛果和 SP 快照；伤停、首发、天气、裁判等未接入数据明确视为不足，不编造。",
         "en": "Uses connected official Sporttery SP, handicap SP, results, and SP snapshots only. Injuries, lineups, weather, and referee data are treated as unavailable unless connected."
@@ -3109,11 +2399,11 @@
     "countryId": "world",
     "kickoffTime": "2026-06-07T04:00:00+08:00",
     "status": "SCHEDULED",
-    "projectedScoreHome": 1,
+    "projectedScoreHome": 0,
     "projectedScoreAway": 2,
     "probabilityModel": {
       "version": "market-elo-poisson-v1",
-      "generatedAt": "2026-06-06T07:26:07.937Z",
+      "generatedAt": "2026-06-06T09:23:04.736Z",
       "basis": {
         "zh": "市场隐含概率 + Elo 强度快照 + Poisson 比分分布集成；暂未接入 xG、伤停、首发和校准器。",
         "en": "Market-implied probability, Elo strength snapshot, and Poisson score baseline; xG, injuries, lineups, and calibration are not connected yet."
@@ -3135,14 +2425,14 @@
           "away": 29.3
         },
         "poisson": {
-          "home": 20.2,
-          "draw": 20.6,
-          "away": 59.2
+          "home": 10.7,
+          "draw": 19.4,
+          "away": 70
         },
         "final": {
-          "home": 21.5,
-          "draw": 22.5,
-          "away": 56
+          "home": 19.7,
+          "draw": 22.3,
+          "away": 57.9
         }
       },
       "elo": {
@@ -3155,55 +2445,55 @@
       },
       "scoreDistribution": [
         {
-          "home": 1,
-          "away": 2,
-          "label": "1-2",
-          "probability": 9.8
-        },
-        {
-          "home": 1,
-          "away": 1,
-          "label": "1-1",
-          "probability": 9.3
-        },
-        {
           "home": 0,
           "away": 2,
           "label": "0-2",
-          "probability": 8.5
+          "probability": 14.3
         },
         {
           "home": 0,
           "away": 1,
           "label": "0-1",
-          "probability": 8.1
+          "probability": 14.1
+        },
+        {
+          "home": 0,
+          "away": 3,
+          "label": "0-3",
+          "probability": 9.6
         },
         {
           "home": 1,
-          "away": 3,
-          "label": "1-3",
-          "probability": 6.9
+          "away": 2,
+          "label": "1-2",
+          "probability": 9.1
+        },
+        {
+          "home": 1,
+          "away": 1,
+          "label": "1-1",
+          "probability": 9
         }
       ],
       "goalLines": {
-        "over25": 63.2,
-        "under25": 36.8
+        "over25": 49.7,
+        "under25": 50.3
       },
       "bothTeamsToScore": {
-        "yes": 60.1,
-        "no": 39.9
+        "yes": 41,
+        "no": 59
       },
       "handicap": {
         "line": "+1",
         "market": {
           "home": 32.3,
-          "draw": 26.1,
-          "away": 41.6
+          "draw": 26.8,
+          "away": 40.8
         },
         "poisson": {
-          "home": 40.8,
-          "draw": 22.8,
-          "away": 36.4
+          "home": 30,
+          "draw": 25.4,
+          "away": 44.5
         }
       },
       "calibration": {
@@ -3219,8 +2509,8 @@
     },
     "handicapOdds": {
       "odds1": 2.74,
-      "oddsX": 3.4,
-      "odds2": 2.13
+      "oddsX": 3.3,
+      "odds2": 2.17
     },
     "predictions": [
       {
@@ -3231,7 +2521,7 @@
           "en": "Away Win (苏格兰)"
         },
         "odds": 1.34,
-        "trustScore": 82,
+        "trustScore": 65,
         "explanation": {
           "zh": "本场以中国竞彩网官方 HAD 胜平负 SP 为主轴，去水后最高支持方向为客胜 苏格兰。模型同时参考主客预期进球、平局拉力和赔率分布，不使用本地模拟赛果回填。",
           "en": "This pick is anchored to official Sporttery HAD odds. After removing overround, the strongest direction is Away Win (苏格兰)."
@@ -3242,8 +2532,8 @@
             "en": "Official HAD SP: 6.75 / 4.25 / 1.34; normalized support is about home 13% / draw 21% / away 66%."
           },
           {
-            "zh": "胜平负差距：市场主线领先第二方向约 45 个百分点，当前模型可信度 82%。",
-            "en": "1X2 separation: the market lead is ahead by about 45 percentage points. Model confidence: 82%."
+            "zh": "胜平负差距：市场主线领先第二方向约 45 个百分点，当前模型可信度 65%。",
+            "en": "1X2 separation: the market lead is ahead by about 45 percentage points. Model confidence: 65%."
           },
           {
             "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 官方 SP 更新时间：2026-06-06 14:08:52。",
@@ -3254,10 +2544,6 @@
           {
             "zh": "让球支持不足",
             "en": "Handicap support weak"
-          },
-          {
-            "zh": "进球临界",
-            "en": "Goal-model borderline"
           }
         ],
         "visibilityStatus": "FREE",
@@ -3265,33 +2551,28 @@
       },
       {
         "marketType": "GOALS",
-        "tipCode": "3",
+        "tipCode": "U2.5",
         "tipLabel": {
-          "zh": "总进球数 3球",
-          "en": "Total Goals 3"
+          "zh": "总进球 0-2",
+          "en": "Total Goals 0-2"
         },
-        "odds": 4.51,
-        "trustScore": 67,
+        "odds": 1.99,
+        "trustScore": 62,
         "explanation": {
-          "zh": "总进球数为模型参考项，基于胜平负 SP 反推出主队 1.15、客队 2.10 的预期进球，当前总进球期望约 3.26。",
-          "en": "The goals model derives expected goals from 1X2 odds: home 1.15, away 2.10, total 3.26."
+          "zh": "进球趋势为模型参考项，基于胜平负 SP 反推出主队 0.64、客队 2.02 的预期进球，当前总进球期望约 2.66。",
+          "en": "The goals trend derives expected goals from 1X2 odds: home 0.64, away 2.02, total 2.66."
         },
         "analysisItems": [
           {
-            "zh": "比分热区：1-2 附近；总进球 3 的模型概率约 22%。",
-            "en": "Score heat zone: around 1-2; model probability for total goals 3 is about 22%."
+            "zh": "比分热区：0-2 附近；总进球 0-2 的模型概率约 50%。",
+            "en": "Score heat zone: around 0-2; model probability for Total Goals 0-2 is about 50%."
           },
           {
-            "zh": "大 2.5 球概率约 63%，该指标用于走势参考，不等同于中国竞彩网官方总进球 SP。",
-            "en": "Over 2.5 probability is about 63%. This is a model reference, not official Sporttery total-goals SP."
+            "zh": "大 2.5 球概率约 50%，该指标用于走势参考，不等同于官方总进球 SP。",
+            "en": "Over 2.5 probability is about 50%. This is a model reference, not official Sporttery total-goals SP."
           }
         ],
-        "riskTags": [
-          {
-            "zh": "进球临界",
-            "en": "Goal-model borderline"
-          }
-        ],
+        "riskTags": [],
         "visibilityStatus": "PREMIUM",
         "resultStatus": "PENDING"
       },
@@ -3299,37 +2580,33 @@
         "marketType": "BEST",
         "tipCode": "WATCH",
         "tipLabel": {
-          "zh": "观察为主 风险叠加",
-          "en": "Watch first: stacked risk"
+          "zh": "观察为主 防正路过热",
+          "en": "Watch first: favorite overheated"
         },
         "odds": 0,
-        "trustScore": 70,
+        "trustScore": 53,
         "explanation": {
-          "zh": "模型没有否定客胜 苏格兰，只是拒绝把它抬到高可信：市场第一方向领先 45 个百分点，但让球验证和风险项还没闭合。",
-          "en": "The model is not rejecting Away Win (苏格兰); it is refusing to upgrade it. Market lead is 45 points, but handicap and risk checks are not closed."
+          "zh": "客胜 苏格兰是当前主线，但它更像“需要跟盘”的方向：模型领先 36 个百分点，真正的问题在让球盘是否愿意继续同向。",
+          "en": "Away Win (苏格兰) is the current main lean, but it needs market tracking: model edge is 36 points, and the key question is handicap confirmation."
         },
         "analysisItems": [
           {
-            "zh": "降级原因：风险标签叠加为 让球支持不足、进球临界，当前不适合只给单一方向。",
-            "en": "Downgrade reason: risk tags overlap: Handicap support weak, Goal-model borderline. A single pick is not justified yet."
+            "zh": "降级原因：客胜 苏格兰对应 让球同向支持约 41%；让球盘去水支持约 主胜 32% / 平 27% / 客胜 41%，和普通胜平负主线存在温差。",
+            "en": "Downgrade reason: Away Win (苏格兰) has same-side handicap support is about 41%; handicap normalized support is home 32% / draw 27% / away 41%, not fully aligned with HAD."
           },
           {
-            "zh": "进球侧：比分热区 1-2，总期望 3.26，大 2.5 约 63%，双方进球约 60%。",
-            "en": "Goals: score heat zone 1-2, total xG 3.26, over 2.5 about 63%, BTTS about 60%."
+            "zh": "进球侧：比分热区 0-2，总期望 2.66，大 2.5 约 50%，双方进球约 41%。",
+            "en": "Goals: score heat zone 0-2, total xG 2.66, over 2.5 about 50%, BTTS about 41%."
           },
           {
-            "zh": "临场复核：让球支持不足、进球临界。如果赛前 SP 继续降赔但让球支持不上来，仍按观察处理。",
-            "en": "Late check: Handicap support weak, Goal-model borderline. If SP shortens without handicap confirmation, keep this as watch-only."
+            "zh": "临场复核：让球支持不足。如果赛前 SP 继续降赔但让球支持不上来，仍按观察处理。",
+            "en": "Late check: Handicap support weak. If SP shortens without handicap confirmation, keep this as watch-only."
           }
         ],
         "riskTags": [
           {
             "zh": "让球支持不足",
             "en": "Handicap support weak"
-          },
-          {
-            "zh": "进球临界",
-            "en": "Goal-model borderline"
           }
         ],
         "visibilityStatus": "FREE",
@@ -3338,19 +2615,19 @@
     ],
     "stats": {
       "xG": {
-        "home": 1.15,
-        "away": 2.1
+        "home": 0.64,
+        "away": 2.02
       },
       "possession": {
         "home": 51,
         "away": 49
       },
       "shots": {
-        "home": 9,
+        "home": 6,
         "away": 12
       },
       "shotsOnTarget": {
-        "home": 2,
+        "home": 1,
         "away": 5
       },
       "corners": {
@@ -3409,33 +2686,29 @@
     "handicapOddsSource": "sporttery:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "calculator",
-    "handicapOddsUpdatedAt": "2026-06-06 14:09:04",
+    "handicapOddsUpdatedAt": "2026-06-06 15:59:09",
     "handicapOddsSourceUrl": "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c",
     "predictionMeta": {
-      "policyVersion": "pre-match-value-gate-v6",
+      "policyVersion": "pre-match-value-gate-v7",
       "promptVersion": "professional-football-analyst-v5",
       "generatedAt": "2026-06-06T06:45:14.394Z",
-      "updatedAt": "2026-06-06T07:25:22.562Z",
+      "updatedAt": "2026-06-06T09:22:17.429Z",
       "dataPolicy": {
         "zh": "仅使用已接入的中国竞彩网官方 SP、让球 SP、赛果和 SP 快照；伤停、首发、天气、裁判等未接入数据明确视为不足，不编造。",
         "en": "Uses connected official Sporttery SP, handicap SP, results, and SP snapshots only. Injuries, lineups, weather, and referee data are treated as unavailable unless connected."
-      },
-      "updateReason": {
-        "zh": "精选说明升级为分场景盘口叙事，未开赛比赛允许刷新赛前分析文案和风险表达。",
-        "en": "Best-tip notes were upgraded to scenario-based market narratives, so unstarted matches can refresh analysis copy and risk wording."
       }
     },
     "oddsTrend": {
-      "sampleSize": 2,
+      "sampleSize": 4,
       "firstCapturedAt": "2026-06-06T06:45:14.394Z",
-      "lastCapturedAt": "2026-06-06T07:25:22.562Z",
+      "lastCapturedAt": "2026-06-06T09:22:17.429Z",
       "odds1Change": 0,
       "oddsXChange": 0,
       "odds2Change": 0,
       "direction": "flat",
       "summary": {
-        "zh": "SP 快照 2 次：主胜 0.00，平局 0.00，客胜 0.00；整体波动很小。",
-        "en": "2 SP snapshots: home 0.00, draw 0.00, away 0.00. Overall movement is small."
+        "zh": "SP 快照 4 次：主胜 0.00，平局 0.00，客胜 0.00；整体波动很小。",
+        "en": "4 SP snapshots: home 0.00, draw 0.00, away 0.00. Overall movement is small."
       }
     }
   },
@@ -3448,10 +2721,10 @@
     "kickoffTime": "2026-06-07T06:00:00+08:00",
     "status": "SCHEDULED",
     "projectedScoreHome": 2,
-    "projectedScoreAway": 1,
+    "projectedScoreAway": 0,
     "probabilityModel": {
       "version": "market-elo-poisson-v1",
-      "generatedAt": "2026-06-06T07:26:07.937Z",
+      "generatedAt": "2026-06-06T09:23:04.736Z",
       "basis": {
         "zh": "市场隐含概率 + Elo 强度快照 + Poisson 比分分布集成；暂未接入 xG、伤停、首发和校准器。",
         "en": "Market-implied probability, Elo strength snapshot, and Poisson score baseline; xG, injuries, lineups, and calibration are not connected yet."
@@ -3473,14 +2746,14 @@
           "away": 30
         },
         "poisson": {
-          "home": 68.4,
-          "draw": 17.1,
-          "away": 14.5
+          "home": 71,
+          "draw": 18.6,
+          "away": 10.5
         },
         "final": {
-          "home": 65.1,
-          "draw": 20.2,
-          "away": 14.7
+          "home": 65.6,
+          "draw": 20.4,
+          "away": 14
         }
       },
       "elo": {
@@ -3494,54 +2767,54 @@
       "scoreDistribution": [
         {
           "home": 2,
-          "away": 1,
-          "label": "2-1",
-          "probability": 9.3
-        },
-        {
-          "home": 2,
           "away": 0,
           "label": "2-0",
-          "probability": 8.5
-        },
-        {
-          "home": 3,
-          "away": 1,
-          "label": "3-1",
-          "probability": 7.9
+          "probability": 13.8
         },
         {
           "home": 1,
-          "away": 1,
-          "label": "1-1",
-          "probability": 7.4
+          "away": 0,
+          "label": "1-0",
+          "probability": 13.1
         },
         {
           "home": 3,
           "away": 0,
           "label": "3-0",
-          "probability": 7.2
+          "probability": 9.8
+        },
+        {
+          "home": 2,
+          "away": 1,
+          "label": "2-1",
+          "probability": 9.2
+        },
+        {
+          "home": 1,
+          "away": 1,
+          "label": "1-1",
+          "probability": 8.7
         }
       ],
       "goalLines": {
-        "over25": 70.2,
-        "under25": 29.8
+        "over25": 52.6,
+        "under25": 47.4
       },
       "bothTeamsToScore": {
-        "yes": 61.3,
-        "no": 38.7
+        "yes": 42.8,
+        "no": 57.2
       },
       "handicap": {
         "line": "-1",
         "market": {
-          "home": 50.7,
-          "draw": 24.3,
-          "away": 25
+          "home": 51.5,
+          "draw": 23.9,
+          "away": 24.6
         },
         "poisson": {
-          "home": 46.9,
-          "draw": 21.5,
-          "away": 31.6
+          "home": 46.2,
+          "draw": 24.8,
+          "away": 29
         }
       },
       "calibration": {
@@ -3556,9 +2829,9 @@
       "odds2": 10.5
     },
     "handicapOdds": {
-      "odds1": 1.75,
-      "oddsX": 3.65,
-      "odds2": 3.55
+      "odds1": 1.72,
+      "oddsX": 3.7,
+      "odds2": 3.6
     },
     "predictions": [
       {
@@ -3569,7 +2842,7 @@
           "en": "Home Win (巴西)"
         },
         "odds": 1.2,
-        "trustScore": 93,
+        "trustScore": 82,
         "explanation": {
           "zh": "本场以中国竞彩网官方 HAD 胜平负 SP 为主轴，去水后最高支持方向为主胜 巴西。模型同时参考主客预期进球、平局拉力和赔率分布，不使用本地模拟赛果回填。",
           "en": "This pick is anchored to official Sporttery HAD odds. After removing overround, the strongest direction is Home Win (巴西)."
@@ -3580,8 +2853,8 @@
             "en": "Official HAD SP: 1.20 / 5.00 / 10.50; normalized support is about home 74% / draw 18% / away 8%."
           },
           {
-            "zh": "胜平负差距：市场主线领先第二方向约 56 个百分点，当前模型可信度 93%。",
-            "en": "1X2 separation: the market lead is ahead by about 56 percentage points. Model confidence: 93%."
+            "zh": "胜平负差距：市场主线领先第二方向约 56 个百分点，当前模型可信度 82%。",
+            "en": "1X2 separation: the market lead is ahead by about 56 percentage points. Model confidence: 82%."
           },
           {
             "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 官方 SP 更新时间：2026-06-06 09:47:04。",
@@ -3592,10 +2865,6 @@
           {
             "zh": "热门过热",
             "en": "Heavy favorite"
-          },
-          {
-            "zh": "进球临界",
-            "en": "Goal-model borderline"
           }
         ],
         "visibilityStatus": "FREE",
@@ -3603,33 +2872,28 @@
       },
       {
         "marketType": "GOALS",
-        "tipCode": "4",
+        "tipCode": "O2.5",
         "tipLabel": {
-          "zh": "总进球数 4球",
-          "en": "Total Goals 4"
+          "zh": "总进球 3+",
+          "en": "Total Goals 3+"
         },
-        "odds": 5.22,
-        "trustScore": 64,
+        "odds": 1.9,
+        "trustScore": 65,
         "explanation": {
-          "zh": "总进球数为模型参考项，基于胜平负 SP 反推出主队 2.53、客队 1.10 的预期进球，当前总进球期望约 3.62。",
-          "en": "The goals model derives expected goals from 1X2 odds: home 2.53, away 1.10, total 3.62."
+          "zh": "进球趋势为模型参考项，基于胜平负 SP 反推出主队 2.11、客队 0.67 的预期进球，当前总进球期望约 2.78。",
+          "en": "The goals trend derives expected goals from 1X2 odds: home 2.11, away 0.67, total 2.78."
         },
         "analysisItems": [
           {
-            "zh": "比分热区：2-1 附近；总进球 4 的模型概率约 19%。",
-            "en": "Score heat zone: around 2-1; model probability for total goals 4 is about 19%."
+            "zh": "比分热区：2-0 附近；总进球 3+ 的模型概率约 53%。",
+            "en": "Score heat zone: around 2-0; model probability for Total Goals 3+ is about 53%."
           },
           {
-            "zh": "大 2.5 球概率约 70%，该指标用于走势参考，不等同于中国竞彩网官方总进球 SP。",
-            "en": "Over 2.5 probability is about 70%. This is a model reference, not official Sporttery total-goals SP."
+            "zh": "大 2.5 球概率约 53%，该指标用于走势参考，不等同于官方总进球 SP。",
+            "en": "Over 2.5 probability is about 53%. This is a model reference, not official Sporttery total-goals SP."
           }
         ],
-        "riskTags": [
-          {
-            "zh": "进球临界",
-            "en": "Goal-model borderline"
-          }
-        ],
+        "riskTags": [],
         "visibilityStatus": "PREMIUM",
         "resultStatus": "PENDING"
       },
@@ -3641,33 +2905,29 @@
           "en": "Watch first: stacked risk"
         },
         "odds": 0,
-        "trustScore": 72,
+        "trustScore": 70,
         "explanation": {
           "zh": "主胜 巴西是当前主线，但它更像“需要跟盘”的方向：模型领先 45 个百分点，真正的问题在让球盘是否愿意继续同向。",
           "en": "Home Win (巴西) is the current main lean, but it needs market tracking: model edge is 45 points, and the key question is handicap confirmation."
         },
         "analysisItems": [
           {
-            "zh": "降级原因：风险标签叠加为 热门过热、进球临界，当前不适合只给单一方向。",
-            "en": "Downgrade reason: risk tags overlap: Heavy favorite, Goal-model borderline. A single pick is not justified yet."
+            "zh": "降级原因：风险标签叠加为 热门过热，当前不适合只给单一方向。",
+            "en": "Downgrade reason: risk tags overlap: Heavy favorite. A single pick is not justified yet."
           },
           {
-            "zh": "进球侧：比分热区 2-1，总期望 3.62，大 2.5 约 70%，双方进球约 61%。",
-            "en": "Goals: score heat zone 2-1, total xG 3.62, over 2.5 about 70%, BTTS about 61%."
+            "zh": "进球侧：比分热区 2-0，总期望 2.78，大 2.5 约 53%，双方进球约 43%。",
+            "en": "Goals: score heat zone 2-0, total xG 2.78, over 2.5 about 53%, BTTS about 43%."
           },
           {
-            "zh": "临场复核：热门过热、进球临界。如果赛前 SP 继续降赔但让球支持不上来，仍按观察处理。",
-            "en": "Late check: Heavy favorite, Goal-model borderline. If SP shortens without handicap confirmation, keep this as watch-only."
+            "zh": "临场复核：热门过热。如果赛前 SP 继续降赔但让球支持不上来，仍按观察处理。",
+            "en": "Late check: Heavy favorite. If SP shortens without handicap confirmation, keep this as watch-only."
           }
         ],
         "riskTags": [
           {
             "zh": "热门过热",
             "en": "Heavy favorite"
-          },
-          {
-            "zh": "进球临界",
-            "en": "Goal-model borderline"
           }
         ],
         "visibilityStatus": "FREE",
@@ -3676,19 +2936,19 @@
     ],
     "stats": {
       "xG": {
-        "home": 2.53,
-        "away": 1.1
+        "home": 2.11,
+        "away": 0.67
       },
       "possession": {
         "home": 51,
         "away": 49
       },
       "shots": {
-        "home": 17,
-        "away": 9
+        "home": 15,
+        "away": 7
       },
       "shotsOnTarget": {
-        "home": 5,
+        "home": 4,
         "away": 2
       },
       "corners": {
@@ -3747,33 +3007,29 @@
     "handicapOddsSource": "sporttery:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "calculator",
-    "handicapOddsUpdatedAt": "2026-06-06 09:47:04",
+    "handicapOddsUpdatedAt": "2026-06-06 16:01:36",
     "handicapOddsSourceUrl": "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c",
     "predictionMeta": {
-      "policyVersion": "pre-match-value-gate-v6",
+      "policyVersion": "pre-match-value-gate-v7",
       "promptVersion": "professional-football-analyst-v5",
       "generatedAt": "2026-06-06T06:45:14.394Z",
-      "updatedAt": "2026-06-06T07:25:22.562Z",
+      "updatedAt": "2026-06-06T09:22:17.429Z",
       "dataPolicy": {
         "zh": "仅使用已接入的中国竞彩网官方 SP、让球 SP、赛果和 SP 快照；伤停、首发、天气、裁判等未接入数据明确视为不足，不编造。",
         "en": "Uses connected official Sporttery SP, handicap SP, results, and SP snapshots only. Injuries, lineups, weather, and referee data are treated as unavailable unless connected."
-      },
-      "updateReason": {
-        "zh": "精选说明升级为分场景盘口叙事，未开赛比赛允许刷新赛前分析文案和风险表达。",
-        "en": "Best-tip notes were upgraded to scenario-based market narratives, so unstarted matches can refresh analysis copy and risk wording."
       }
     },
     "oddsTrend": {
-      "sampleSize": 2,
+      "sampleSize": 4,
       "firstCapturedAt": "2026-06-06T06:45:14.394Z",
-      "lastCapturedAt": "2026-06-06T07:25:22.562Z",
+      "lastCapturedAt": "2026-06-06T09:22:17.429Z",
       "odds1Change": 0,
       "oddsXChange": 0,
       "odds2Change": 0,
       "direction": "flat",
       "summary": {
-        "zh": "SP 快照 2 次：主胜 0.00，平局 0.00，客胜 0.00；整体波动很小。",
-        "en": "2 SP snapshots: home 0.00, draw 0.00, away 0.00. Overall movement is small."
+        "zh": "SP 快照 4 次：主胜 0.00，平局 0.00，客胜 0.00；整体波动很小。",
+        "en": "4 SP snapshots: home 0.00, draw 0.00, away 0.00. Overall movement is small."
       }
     }
   },
@@ -3785,11 +3041,11 @@
     "countryId": "world",
     "kickoffTime": "2026-06-07T06:00:00+08:00",
     "status": "SCHEDULED",
-    "projectedScoreHome": 1,
-    "projectedScoreAway": 2,
+    "projectedScoreHome": 0,
+    "projectedScoreAway": 1,
     "probabilityModel": {
       "version": "market-elo-poisson-v1",
-      "generatedAt": "2026-06-06T07:26:07.937Z",
+      "generatedAt": "2026-06-06T09:23:04.736Z",
       "basis": {
         "zh": "市场隐含概率 + Elo 强度快照 + Poisson 比分分布集成；暂未接入 xG、伤停、首发和校准器。",
         "en": "Market-implied probability, Elo strength snapshot, and Poisson score baseline; xG, injuries, lineups, and calibration are not connected yet."
@@ -3801,9 +3057,9 @@
       },
       "oneXTwo": {
         "market": {
-          "home": 16.1,
-          "draw": 24,
-          "away": 59.9
+          "home": 15.4,
+          "draw": 23.5,
+          "away": 61.1
         },
         "elo": {
           "home": 37.8,
@@ -3811,14 +3067,14 @@
           "away": 32.6
         },
         "poisson": {
-          "home": 19.3,
-          "draw": 20,
-          "away": 60.7
+          "home": 12.5,
+          "draw": 21.2,
+          "away": 66.2
         },
         "final": {
-          "home": 17,
+          "home": 14.6,
           "draw": 22.9,
-          "away": 60.1
+          "away": 62.5
         }
       },
       "elo": {
@@ -3831,55 +3087,55 @@
       },
       "scoreDistribution": [
         {
-          "home": 1,
-          "away": 2,
-          "label": "1-2",
-          "probability": 9.8
-        },
-        {
-          "home": 1,
+          "home": 0,
           "away": 1,
-          "label": "1-1",
-          "probability": 9
+          "label": "0-1",
+          "probability": 14.7
         },
         {
           "home": 0,
           "away": 2,
           "label": "0-2",
-          "probability": 8.5
-        },
-        {
-          "home": 0,
-          "away": 1,
-          "label": "0-1",
-          "probability": 7.8
+          "probability": 13.8
         },
         {
           "home": 1,
+          "away": 1,
+          "label": "1-1",
+          "probability": 9.8
+        },
+        {
+          "home": 1,
+          "away": 2,
+          "label": "1-2",
+          "probability": 9.2
+        },
+        {
+          "home": 0,
           "away": 3,
-          "label": "1-3",
-          "probability": 7.1
+          "label": "0-3",
+          "probability": 8.6
         }
       ],
       "goalLines": {
-        "over25": 64.7,
-        "under25": 35.3
+        "over25": 46.8,
+        "under25": 53.2
       },
       "bothTeamsToScore": {
-        "yes": 60.7,
-        "no": 39.3
+        "yes": 41.3,
+        "no": 58.7
       },
       "handicap": {
         "line": "+1",
         "market": {
-          "home": 39,
-          "draw": 27.2,
-          "away": 33.8
+          "home": 38.5,
+          "draw": 28.1,
+          "away": 33.4
         },
         "poisson": {
-          "home": 39.3,
-          "draw": 22.6,
-          "away": 38.1
+          "home": 33.8,
+          "draw": 26.1,
+          "away": 40.1
         }
       },
       "calibration": {
@@ -3889,14 +3145,14 @@
       }
     },
     "odds": {
-      "odds1": 5.5,
-      "oddsX": 3.7,
-      "odds2": 1.48
+      "odds1": 5.75,
+      "oddsX": 3.76,
+      "odds2": 1.45
     },
     "handicapOdds": {
-      "odds1": 2.27,
-      "oddsX": 3.25,
-      "odds2": 2.62
+      "odds1": 2.3,
+      "oddsX": 3.15,
+      "odds2": 2.65
     },
     "predictions": [
       {
@@ -3906,34 +3162,30 @@
           "zh": "客胜 土耳其",
           "en": "Away Win (土耳其)"
         },
-        "odds": 1.48,
-        "trustScore": 88,
+        "odds": 1.45,
+        "trustScore": 78,
         "explanation": {
           "zh": "本场以中国竞彩网官方 HAD 胜平负 SP 为主轴，去水后最高支持方向为客胜 土耳其。模型同时参考主客预期进球、平局拉力和赔率分布，不使用本地模拟赛果回填。",
           "en": "This pick is anchored to official Sporttery HAD odds. After removing overround, the strongest direction is Away Win (土耳其)."
         },
         "analysisItems": [
           {
-            "zh": "官方 HAD SP：主胜 5.50 / 平局 3.70 / 客胜 1.48；去水支持率约 主胜 16% / 平局 24% / 客胜 60%。",
-            "en": "Official HAD SP: 5.50 / 3.70 / 1.48; normalized support is about home 16% / draw 24% / away 60%."
+            "zh": "官方 HAD SP：主胜 5.75 / 平局 3.76 / 客胜 1.45；去水支持率约 主胜 15% / 平局 24% / 客胜 61%。",
+            "en": "Official HAD SP: 5.75 / 3.76 / 1.45; normalized support is about home 15% / draw 24% / away 61%."
           },
           {
-            "zh": "胜平负差距：市场主线领先第二方向约 36 个百分点，当前模型可信度 88%。",
-            "en": "1X2 separation: the market lead is ahead by about 36 percentage points. Model confidence: 88%."
+            "zh": "胜平负差距：市场主线领先第二方向约 38 个百分点，当前模型可信度 78%。",
+            "en": "1X2 separation: the market lead is ahead by about 38 percentage points. Model confidence: 78%."
           },
           {
-            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 官方 SP 更新时间：2026-06-06 09:47:04。",
-            "en": "Draw support is not dominant, but late SP movement still matters. Official SP updated at 2026-06-06 09:47:04."
+            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 官方 SP 更新时间：2026-06-06 16:16:07。",
+            "en": "Draw support is not dominant, but late SP movement still matters. Official SP updated at 2026-06-06 16:16:07."
           }
         ],
         "riskTags": [
           {
             "zh": "让球支持不足",
             "en": "Handicap support weak"
-          },
-          {
-            "zh": "进球临界",
-            "en": "Goal-model borderline"
           }
         ],
         "visibilityStatus": "FREE",
@@ -3941,33 +3193,28 @@
       },
       {
         "marketType": "GOALS",
-        "tipCode": "3",
+        "tipCode": "U2.5",
         "tipLabel": {
-          "zh": "总进球数 3球",
-          "en": "Total Goals 3"
+          "zh": "总进球 0-2",
+          "en": "Total Goals 0-2"
         },
-        "odds": 4.54,
-        "trustScore": 67,
+        "odds": 1.88,
+        "trustScore": 65,
         "explanation": {
-          "zh": "总进球数为模型参考项，基于胜平负 SP 反推出主队 1.15、客队 2.18 的预期进球，当前总进球期望约 3.33。",
-          "en": "The goals model derives expected goals from 1X2 odds: home 1.15, away 2.18, total 3.33."
+          "zh": "进球趋势为模型参考项，基于胜平负 SP 反推出主队 0.67、客队 1.88 的预期进球，当前总进球期望约 2.55。",
+          "en": "The goals trend derives expected goals from 1X2 odds: home 0.67, away 1.88, total 2.55."
         },
         "analysisItems": [
           {
-            "zh": "比分热区：1-2 附近；总进球 3 的模型概率约 22%。",
-            "en": "Score heat zone: around 1-2; model probability for total goals 3 is about 22%."
+            "zh": "比分热区：0-1 附近；总进球 0-2 的模型概率约 53%。",
+            "en": "Score heat zone: around 0-1; model probability for Total Goals 0-2 is about 53%."
           },
           {
-            "zh": "大 2.5 球概率约 65%，该指标用于走势参考，不等同于中国竞彩网官方总进球 SP。",
-            "en": "Over 2.5 probability is about 65%. This is a model reference, not official Sporttery total-goals SP."
+            "zh": "大 2.5 球概率约 47%，该指标用于走势参考，不等同于官方总进球 SP。",
+            "en": "Over 2.5 probability is about 47%. This is a model reference, not official Sporttery total-goals SP."
           }
         ],
-        "riskTags": [
-          {
-            "zh": "进球临界",
-            "en": "Goal-model borderline"
-          }
-        ],
+        "riskTags": [],
         "visibilityStatus": "PREMIUM",
         "resultStatus": "PENDING"
       },
@@ -3979,33 +3226,29 @@
           "en": "Watch first: favorite overheated"
         },
         "odds": 0,
-        "trustScore": 72,
+        "trustScore": 66,
         "explanation": {
-          "zh": "这场先不把客胜 土耳其包装成高可信。HAD 方向虽然清楚，但让球同向支持约 34%，盘口确认不够完整。",
-          "en": "This is not packaged as high confidence. Away Win (土耳其) leads the HAD read, but same-side handicap support is about 34%, so confirmation is incomplete."
+          "zh": "这场先不把客胜 土耳其包装成高可信。HAD 方向虽然清楚，但让球同向支持约 33%，盘口确认不够完整。",
+          "en": "This is not packaged as high confidence. Away Win (土耳其) leads the HAD read, but same-side handicap support is about 33%, so confirmation is incomplete."
         },
         "analysisItems": [
           {
-            "zh": "降级原因：客胜 土耳其对应 让球同向支持约 34%；让球盘去水支持约 主胜 39% / 平 27% / 客胜 34%，和普通胜平负主线存在温差。",
-            "en": "Downgrade reason: Away Win (土耳其) has same-side handicap support is about 34%; handicap normalized support is home 39% / draw 27% / away 34%, not fully aligned with HAD."
+            "zh": "降级原因：客胜 土耳其对应 让球同向支持约 33%；让球盘去水支持约 主胜 38% / 平 28% / 客胜 33%，和普通胜平负主线存在温差。",
+            "en": "Downgrade reason: Away Win (土耳其) has same-side handicap support is about 33%; handicap normalized support is home 38% / draw 28% / away 33%, not fully aligned with HAD."
           },
           {
-            "zh": "进球侧：比分热区 1-2，总期望 3.33，大 2.5 约 65%，双方进球约 61%。",
-            "en": "Goals: score heat zone 1-2, total xG 3.33, over 2.5 about 65%, BTTS about 61%."
+            "zh": "进球侧：比分热区 0-1，总期望 2.55，大 2.5 约 47%，双方进球约 41%。",
+            "en": "Goals: score heat zone 0-1, total xG 2.55, over 2.5 about 47%, BTTS about 41%."
           },
           {
-            "zh": "临场复核：让球支持不足、进球临界。如果赛前 SP 继续降赔但让球支持不上来，仍按观察处理。",
-            "en": "Late check: Handicap support weak, Goal-model borderline. If SP shortens without handicap confirmation, keep this as watch-only."
+            "zh": "临场复核：让球支持不足。如果赛前 SP 继续降赔但让球支持不上来，仍按观察处理。",
+            "en": "Late check: Handicap support weak. If SP shortens without handicap confirmation, keep this as watch-only."
           }
         ],
         "riskTags": [
           {
             "zh": "让球支持不足",
             "en": "Handicap support weak"
-          },
-          {
-            "zh": "进球临界",
-            "en": "Goal-model borderline"
           }
         ],
         "visibilityStatus": "FREE",
@@ -4014,20 +3257,20 @@
     ],
     "stats": {
       "xG": {
-        "home": 1.15,
-        "away": 2.18
+        "home": 0.67,
+        "away": 1.88
       },
       "possession": {
         "home": 51,
         "away": 49
       },
       "shots": {
-        "home": 9,
-        "away": 14
+        "home": 7,
+        "away": 13
       },
       "shotsOnTarget": {
-        "home": 3,
-        "away": 7
+        "home": 2,
+        "away": 6
       },
       "corners": {
         "home": 3,
@@ -4079,39 +3322,35 @@
     "oddsSource": "sporttery:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "calculator",
-    "oddsUpdatedAt": "2026-06-06 09:47:04",
+    "oddsUpdatedAt": "2026-06-06 16:16:07",
     "oddsSourceUrl": "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c",
     "handicapLine": "+1",
     "handicapOddsSource": "sporttery:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "calculator",
-    "handicapOddsUpdatedAt": "2026-06-06 09:47:04",
+    "handicapOddsUpdatedAt": "2026-06-06 16:16:00",
     "handicapOddsSourceUrl": "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c",
     "predictionMeta": {
-      "policyVersion": "pre-match-value-gate-v6",
+      "policyVersion": "pre-match-value-gate-v7",
       "promptVersion": "professional-football-analyst-v5",
       "generatedAt": "2026-06-06T06:45:14.394Z",
-      "updatedAt": "2026-06-06T07:25:22.562Z",
+      "updatedAt": "2026-06-06T09:22:17.429Z",
       "dataPolicy": {
         "zh": "仅使用已接入的中国竞彩网官方 SP、让球 SP、赛果和 SP 快照；伤停、首发、天气、裁判等未接入数据明确视为不足，不编造。",
         "en": "Uses connected official Sporttery SP, handicap SP, results, and SP snapshots only. Injuries, lineups, weather, and referee data are treated as unavailable unless connected."
-      },
-      "updateReason": {
-        "zh": "精选说明升级为分场景盘口叙事，未开赛比赛允许刷新赛前分析文案和风险表达。",
-        "en": "Best-tip notes were upgraded to scenario-based market narratives, so unstarted matches can refresh analysis copy and risk wording."
       }
     },
     "oddsTrend": {
-      "sampleSize": 2,
+      "sampleSize": 4,
       "firstCapturedAt": "2026-06-06T06:45:14.394Z",
-      "lastCapturedAt": "2026-06-06T07:25:22.562Z",
-      "odds1Change": 0,
-      "oddsXChange": 0,
-      "odds2Change": 0,
-      "direction": "flat",
+      "lastCapturedAt": "2026-06-06T09:22:17.429Z",
+      "odds1Change": 0.25,
+      "oddsXChange": 0.06,
+      "odds2Change": -0.03,
+      "direction": "away",
       "summary": {
-        "zh": "SP 快照 2 次：主胜 0.00，平局 0.00，客胜 0.00；整体波动很小。",
-        "en": "2 SP snapshots: home 0.00, draw 0.00, away 0.00. Overall movement is small."
+        "zh": "SP 快照 4 次：主胜 +0.25，平局 +0.06，客胜 -0.03；客胜 SP 下调，市场支持有所增强。",
+        "en": "4 SP snapshots: home +0.25, draw +0.06, away -0.03. away win SP shortened, indicating stronger market support."
       }
     }
   },
@@ -4162,10 +3401,10 @@
     "handicapOddsUpdatedAt": "2026-06-06 09:58:58",
     "handicapOddsSourceUrl": "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c",
     "predictionMeta": {
-      "policyVersion": "pre-match-value-gate-v6",
+      "policyVersion": "pre-match-value-gate-v7",
       "promptVersion": "professional-football-analyst-v5",
       "generatedAt": "2026-06-06T06:45:14.394Z",
-      "updatedAt": "2026-06-06T07:25:22.562Z",
+      "updatedAt": "2026-06-06T09:22:17.429Z",
       "dataPolicy": {
         "zh": "仅使用已接入的中国竞彩网官方 SP、让球 SP、赛果和 SP 快照；伤停、首发、天气、裁判等未接入数据明确视为不足，不编造。",
         "en": "Uses connected official Sporttery SP, handicap SP, results, and SP snapshots only. Injuries, lineups, weather, and referee data are treated as unavailable unless connected."
