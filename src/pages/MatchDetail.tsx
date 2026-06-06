@@ -135,7 +135,7 @@ const getHistoryStartTime = (match: Match) => {
 };
 
 const getMatchDateValue = (match: Match) => {
-  return match.matchDate || match.kickoffDate || match.businessDate || match.kickoffTime.slice(0, 10);
+  return match.kickoffDate || match.kickoffTime.slice(0, 10) || match.matchDate || match.businessDate || '';
 };
 
 const formatHistoryDate = (match: Match, language: Language) => {
@@ -182,7 +182,14 @@ const getHistoryCoverageLabel = (allMatches: Match[], language: Language) => {
     return language === 'zh' ? '暂无官方历史覆盖' : 'no official history coverage yet';
   }
 
-  return `${formatCoverageDate(dates[0], language)} - ${formatCoverageDate(dates[dates.length - 1], language)}`;
+  const firstDate = dates[0];
+  const lastDate = dates[dates.length - 1];
+
+  if (!firstDate || !lastDate) {
+    return language === 'zh' ? '暂无官方历史覆盖' : 'no official history coverage yet';
+  }
+
+  return `${formatCoverageDate(firstDate, language)} - ${formatCoverageDate(lastDate, language)}`;
 };
 
 const getTeamNameInMatch = (match: Match, teamId: string, language: Language) => {
@@ -332,8 +339,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     hour12: false,
     timeZone: 'Asia/Shanghai'
   });
-  const businessDateLabel = match.matchDate
-    ? new Date(`${match.matchDate}T00:00:00+08:00`).toLocaleDateString(language === 'zh' ? 'zh-CN' : 'en-US', {
+  const businessDateValue = match.businessDate || match.matchDate;
+  const businessDateLabel = businessDateValue
+    ? new Date(`${businessDateValue}T00:00:00+08:00`).toLocaleDateString(language === 'zh' ? 'zh-CN' : 'en-US', {
       month: '2-digit',
       day: '2-digit',
       weekday: 'short',

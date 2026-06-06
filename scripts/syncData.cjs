@@ -13,7 +13,7 @@ const ODDS_HISTORY_RETENTION_DAYS = Math.max(1, Number(process.env.ODDS_HISTORY_
 const ODDS_HISTORY_BUCKET_MINUTES = Math.max(1, Number(process.env.ODDS_HISTORY_BUCKET_MINUTES || 5));
 const PAGE_POLL_SECONDS = Math.max(15, Number(process.env.PAGE_POLL_SECONDS || 30));
 const ANALYST_PROMPT_VERSION = "professional-football-analyst-v6";
-const PREDICTION_POLICY_VERSION = "pre-match-quality-gate-v8";
+const PREDICTION_POLICY_VERSION = "pre-match-quality-gate-v9";
 const METHODS = (process.env.SPORTTERY_METHODS || "concern,live,result,all")
   .split(",")
   .map((x) => x.trim())
@@ -1056,12 +1056,12 @@ function evaluateGoalsGate(goalsProbability, over25Probability, bttsProbability)
   const reasons = [];
   const edge = Math.abs(over25Probability - 0.5);
 
-  if (goalsProbability < 0.58) reasons.push("thin-goal-edge");
-  if (edge < 0.08) reasons.push("near-coin-flip-total");
+  if (goalsProbability < 0.63) reasons.push("thin-goal-edge");
+  if (edge < 0.13) reasons.push("near-coin-flip-total");
   if (bttsProbability >= 0.46 && bttsProbability <= 0.56) reasons.push("btts-borderline");
 
   return {
-    promote: goalsProbability >= 0.58 && edge >= 0.08 && !(bttsProbability >= 0.48 && bttsProbability <= 0.53),
+    promote: goalsProbability >= 0.63 && edge >= 0.13 && !(bttsProbability >= 0.46 && bttsProbability <= 0.56),
     reasons,
   };
 }
@@ -1317,8 +1317,8 @@ function predictionSet(match) {
   const goalsProbability = goalsTip === "O2.5" ? over25Probability : 1 - over25Probability;
   const goalsOdds = Number(clamp(1 / Math.max(goalsProbability, 0.36), 1.2, 2.78).toFixed(2));
   const goalsTipLabel = goalsTip === "O2.5"
-    ? { zh: "总进球 3+", en: "Total Goals 3+" }
-    : { zh: "总进球 0-2", en: "Total Goals 0-2" };
+    ? { zh: "大2.5球（≥3球）", en: "Over 2.5 goals" }
+    : { zh: "小2.5球（≤2球）", en: "Under 2.5 goals" };
   const score = projectedScore(homeLambda, awayLambda);
   const probabilityModel = buildProbabilityModel(match, probabilities, hhadProbabilities, homeLambda, awayLambda, over25Probability, bttsProbability);
   const modelProbabilities = {
@@ -1625,6 +1625,8 @@ function toAppMatch(match) {
   const possessionHome = 48 + Math.floor(rand() * 12);
   const homeLogo = teamLogoInfo(match.homeTeam, match.homeTeamCode, match.homeTeamLogo);
   const awayLogo = teamLogoInfo(match.awayTeam, match.awayTeamCode, match.awayTeamLogo);
+  const kickoffDate = match.matchDate || String(match.kickoffTime || "").slice(0, 10);
+  const businessDate = match.businessDate || kickoffDate;
   return {
     id: `sporttery_${match.sourceMatchId}`,
     homeTeamId,
@@ -1657,9 +1659,9 @@ function toAppMatch(match) {
       redCards: { home: 0, away: 0 },
     },
     } : {}),
-    matchDate: match.businessDate || match.matchDate || match.kickoffTime.slice(0, 10),
-    kickoffDate: match.matchDate || match.kickoffTime.slice(0, 10),
-    businessDate: match.businessDate || match.matchDate || match.kickoffTime.slice(0, 10),
+    matchDate: kickoffDate,
+    kickoffDate,
+    businessDate,
     homeTeamName: match.homeTeam,
     homeTeamNameEn: match.homeTeam,
     homeTeamLogo: homeLogo.logo,
@@ -2146,7 +2148,7 @@ function buildTeamIndex(matches) {
       firstMatchDate: "",
       lastMatchDate: "",
     };
-    const date = match.matchDate || match.businessDate || String(match.kickoffTime || "").slice(0, 10);
+    const date = match.kickoffDate || String(match.kickoffTime || "").slice(0, 10) || match.matchDate || match.businessDate;
     existing.matchCount += 1;
     if (match.status === "FINISHED") existing.finishedCount += 1;
     if (date && (!existing.firstMatchDate || date < existing.firstMatchDate)) existing.firstMatchDate = date;
@@ -2222,7 +2224,7 @@ async function sync() {
     return acc;
   }, {});
   const outputDates = output
-    .map((match) => match.matchDate || match.businessDate || String(match.kickoffTime || "").slice(0, 10))
+    .map((match) => match.kickoffDate || String(match.kickoffTime || "").slice(0, 10) || match.matchDate || match.businessDate)
     .filter(Boolean)
     .sort();
   const syncMeta = {

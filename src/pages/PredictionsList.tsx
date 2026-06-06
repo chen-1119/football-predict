@@ -34,11 +34,11 @@ type SignalFilter = 'all' | MatchSignalCategory;
 const SORT_OPTIONS: SortBy[] = ['time', 'trust', 'odds'];
 const SIGNAL_FILTERS: SignalFilter[] = ['all', 'steady', 'watch', 'avoid', 'unavailable', 'finished'];
 
-const getMatchDay = (match: Match): string => match.matchDate || match.businessDate || match.kickoffDate || match.kickoffTime.slice(0, 10) || '';
-
 const getKickoffDay = (match: Match): string => match.kickoffDate || match.kickoffTime.slice(0, 10) || '';
 
-const matchBelongsToDate = (match: Match, date: string) => getMatchDay(match) === date || getKickoffDay(match) === date;
+const getMatchDay = (match: Match): string => getKickoffDay(match) || match.matchDate || match.businessDate || '';
+
+const matchBelongsToDate = (match: Match, date: string) => getMatchDay(match) === date;
 
 const getBestPrediction = (match: Match) => getVisiblePrediction(match, 'BEST');
 

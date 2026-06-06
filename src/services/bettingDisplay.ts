@@ -40,7 +40,7 @@ const sportteryResultLabels = {
 export function getMarketLabel(marketType: PredictionDetail['marketType'], language: Language): string {
   const labels: Record<PredictionDetail['marketType'], Record<Language, string>> = {
     '1X2': { zh: '胜平负', en: '1X2' },
-    GOALS: { zh: '总进球数', en: 'Total Goals' },
+    GOALS: { zh: '进球参考', en: 'Goals' },
     GG_NG: { zh: '双方进球参考', en: 'BTTS Reference' },
     BEST: { zh: 'AI精选', en: 'Best Tip' }
   };
@@ -82,8 +82,8 @@ export function getPredictionTipDisplay(
   }
 
   if (prediction.marketType === 'GOALS') {
-    if (prediction.tipCode === 'O2.5') return language === 'zh' ? '总进球 3+' : 'Total Goals 3+';
-    if (prediction.tipCode === 'U2.5') return language === 'zh' ? '总进球 0-2' : 'Total Goals 0-2';
+    if (prediction.tipCode === 'O2.5') return language === 'zh' ? '大2.5球（≥3球）' : 'Over 2.5 goals';
+    if (prediction.tipCode === 'U2.5') return language === 'zh' ? '小2.5球（≤2球）' : 'Under 2.5 goals';
     if (/^[0-6]$/.test(prediction.tipCode)) {
       return language === 'zh' ? `总进球 ${prediction.tipCode}球` : `${prediction.tipCode} goals`;
     }
@@ -114,7 +114,7 @@ export function getPredictionValueLabel(prediction: PredictionDetail, language: 
     return 'SP';
   }
 
-  return language === 'zh' ? '指数' : 'Index';
+  return language === 'zh' ? '模型值' : 'Model';
 }
 
 export function getPredictionExplanationDisplay(prediction: PredictionDetail, language: Language): string {
