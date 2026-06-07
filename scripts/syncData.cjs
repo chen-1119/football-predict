@@ -2828,6 +2828,10 @@ async function sync() {
   const split = splitMatchesForOutput(output);
   const teamIndex = buildTeamIndex(output);
   const oddsHistoryPayload = loadOddsHistory(publicDir);
+  const publishedOddsMatches = split.current.filter((match) => sanitizeOdds(match.odds)).length;
+  const publishedHandicapOddsMatches = split.current.filter((match) => sanitizeOdds(match.handicapOdds)).length;
+  const publishedResultMatches = split.history.filter(isOfficialResultMatch).length
+    || split.history.filter((match) => match.status === "FINISHED" && Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway)).length;
   const byStatus = output.reduce((acc, match) => {
     acc[match.status] = (acc[match.status] || 0) + 1;
     return acc;
@@ -2846,9 +2850,9 @@ async function sync() {
     updatedAt: sourcePublishedAt,
     capturedAt: sourcePublishedAt,
     lastAttemptAt: capturedAt,
-    officialOddsMatches: rawMatchesWithOdds.length,
-    officialHandicapOddsMatches: rawMatchesWithHandicapOdds.length,
-    officialResultMatches: rawResultMatches.length,
+    officialOddsMatches: publishedOddsMatches,
+    officialHandicapOddsMatches: publishedHandicapOddsMatches,
+    officialResultMatches: publishedResultMatches,
     skippedWithoutOfficialOdds: rawMatches.length - rawMatchesWithOdds.length,
     byStatus,
     coverage: { first: outputDates[0], last: outputDates[outputDates.length - 1] },
@@ -2896,9 +2900,9 @@ async function sync() {
         source: "sporttery",
         count: output.length,
         scanned: allRawMatches.length,
-        officialOddsMatches: rawMatchesWithOdds.length,
-        officialHandicapOddsMatches: rawMatchesWithHandicapOdds.length,
-        officialResultMatches: rawResultMatches.length,
+        officialOddsMatches: publishedOddsMatches,
+        officialHandicapOddsMatches: publishedHandicapOddsMatches,
+        officialResultMatches: publishedResultMatches,
         skippedWithoutOfficialOdds: rawMatches.length - rawMatchesWithOdds.length,
         window: { backDays: WINDOW_BACK_DAYS, forwardDays: WINDOW_FORWARD_DAYS },
         coverage: { first: outputDates[0], last: outputDates[outputDates.length - 1] },
