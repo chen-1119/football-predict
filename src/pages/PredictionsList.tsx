@@ -171,8 +171,8 @@ const getGoalsLean = (match: Match, language: 'zh' | 'en') => {
 
   if (probability < 60) {
     return language === 'zh'
-      ? `不推 ${label}${probability}%`
-      : `No pick ${label} ${probability}%`;
+      ? `观察 ${label} ${probability}%`
+      : `Watch ${label} ${probability}%`;
   }
 
   return `${label} ${probability}%`;
@@ -446,6 +446,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     const won = settledBestPredictions.filter((prediction) => prediction.resultStatus === 'WON').length;
     return ((won / settledBestPredictions.length) * 100).toFixed(1);
   }, [settledBestPredictions]);
+  const settledBestLoading = dataSync.historyLoading && !dataSync.historyLoaded && settledBestPredictions.length === 0;
 
   const avgTrust = useMemo(() => {
     const trustScores = sortedMatches.map(getBestTrust).filter((score) => score > 0);
@@ -599,8 +600,10 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
   const metrics = [
     {
       label: t('hitRate'),
-      value: hitRate ? `${hitRate}%` : '--',
-      note: `${settledBestPredictions.length} ${t('settledPicks')}`,
+      value: settledBestLoading ? '...' : hitRate ? `${hitRate}%` : '--',
+      note: settledBestLoading
+        ? (language === 'zh' ? '历史复盘加载中' : 'Loading review history')
+        : `${settledBestPredictions.length} ${t('settledPicks')}`,
       icon: BarChart3,
       tone: 'success'
     },

@@ -79,7 +79,7 @@ const formatSquadValue = (value: string | undefined, language: Language) => {
   const rawValue = value?.trim();
 
   if (!rawValue || rawValue === '-' || rawValue.startsWith('#')) {
-    return language === 'zh' ? '身价数据暂缺' : 'Value unavailable';
+    return '';
   }
 
   const matchedValue = rawValue.match(/^([\d.]+)\s*([BM])\s*€$/i);
@@ -92,7 +92,7 @@ const formatSquadValue = (value: string | undefined, language: Language) => {
   const unit = matchedValue[2].toUpperCase();
 
   if (!Number.isFinite(amount)) {
-    return language === 'zh' ? '身价数据暂缺' : 'Value unavailable';
+    return '';
   }
 
   if (language === 'zh') {
@@ -683,7 +683,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
             <h3 style={{ fontSize: '1.25rem', fontWeight: '800', fontFamily: 'var(--font-title)' }}>
               {homeTeam.name[language]}
             </h3>
-            <span className="match-team-value">{homeValueText}</span>
+            {homeValueText && <span className="match-team-value">{homeValueText}</span>}
           </div>
 
           {/* 比分 / 状态 */}
@@ -730,7 +730,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
             <h3 style={{ fontSize: '1.25rem', fontWeight: '800', fontFamily: 'var(--font-title)' }}>
               {awayTeam.name[language]}
             </h3>
-            <span className="match-team-value">{awayValueText}</span>
+            {awayValueText && <span className="match-team-value">{awayValueText}</span>}
           </div>
 
         </div>
