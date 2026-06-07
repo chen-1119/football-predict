@@ -1052,6 +1052,13 @@ button.status-pill:hover {
   font-weight: 700;
 }
 
+.status-note.is-muted {
+  max-width: 7.4rem;
+  color: hsl(var(--text-muted) / 0.76);
+  font-size: 0.62rem;
+  line-height: 1.25;
+}
+
 .team-stack {
   display: flex;
   flex-direction: column;
@@ -2106,6 +2113,31 @@ button.status-pill:hover {
   font-weight: 850;
   padding: 0.24rem 0.48rem;
   white-space: nowrap;
+}
+
+.prompt-upgrade-strip {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.55rem;
+  align-items: center;
+  border: 1px solid hsl(var(--primary) / 0.2);
+  border-radius: var(--radius);
+  background: hsl(var(--primary) / 0.055);
+  padding: 0.62rem 0.72rem;
+}
+
+.prompt-upgrade-strip strong {
+  color: hsl(var(--primary));
+  font-size: 0.74rem;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.prompt-upgrade-strip span {
+  color: hsl(var(--text-secondary));
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.45;
 }
 
 .professional-framework-grid {
@@ -4380,6 +4412,10 @@ button.status-pill:hover {
   .prediction-policy-note,
   .probability-model-head,
   .professional-framework-head {
+    grid-template-columns: 1fr;
+  }
+
+  .prompt-upgrade-strip {
     grid-template-columns: 1fr;
   }
 

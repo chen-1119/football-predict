@@ -50,7 +50,7 @@ function rows() {
   return matches.flatMap((match) => (match.predictions || [])
     .filter((prediction) => enabledMarkets.has(prediction.marketType))
     .map((prediction) => ({
-      date: (match.kickoffTime || "").slice(0, 10),
+      date: match.businessDate || (match.kickoffTime || "").slice(0, 10),
       time: (match.kickoffTime || "").slice(11, 16),
       status: match.status,
       league: match.leagueName || match.leagueNameEn || match.leagueId,

@@ -33,9 +33,11 @@ type SignalFilter = 'all' | MatchSignalCategory;
 const SORT_OPTIONS: SortBy[] = ['time', 'trust', 'odds'];
 const SIGNAL_FILTERS: SignalFilter[] = ['all', 'steady', 'lean', 'value', 'watch', 'avoid', 'unavailable', 'finished'];
 
-const getKickoffDay = (match: Match): string => match.kickoffDate || match.kickoffTime.slice(0, 10) || '';
+const getKickoffDay = (match: Match): string => match.kickoffDate || match.kickoffTime.slice(0, 10) || match.matchDate || '';
 
-const getMatchDay = (match: Match): string => getKickoffDay(match) || match.matchDate || match.businessDate || '';
+const getSportteryDay = (match: Match): string => match.businessDate || getKickoffDay(match) || '';
+
+const getMatchDay = (match: Match): string => getSportteryDay(match);
 
 const matchBelongsToDate = (match: Match, date: string) => getMatchDay(match) === date;
 
@@ -62,6 +64,17 @@ const formatShortDate = (date: string, language: 'zh' | 'en') => {
     weekday: 'short',
     timeZone: 'Asia/Shanghai'
   });
+};
+
+const getSportteryMeta = (match: Match, language: 'zh' | 'en') => {
+  const labels = [
+    match.matchNo,
+    match.businessDate
+      ? `${language === 'zh' ? '竞彩日' : 'Sporttery'} ${formatShortDate(match.businessDate, language)}`
+      : ''
+  ].filter(Boolean);
+
+  return labels.join(' · ');
 };
 
 const formatKickoffTime = (kickoffTime: string, language: 'zh' | 'en') => {
@@ -954,6 +967,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
                       const formattedTime = formatKickoffTime(match.kickoffTime, language);
                       const poolRows = getSportteryPoolRows(match, language);
                       const signal = getMatchSignal(match);
+                      const sportteryMeta = getSportteryMeta(match, language);
 
                       return (
                         <tr
@@ -972,6 +986,9 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
                                   <span className="kickoff-time">{formattedTime}</span>
                                   <span className="status-note">{t('pending')}</span>
                                 </>
+                              )}
+                              {sportteryMeta && (
+                                <span className="status-note is-muted">{sportteryMeta}</span>
                               )}
                             </div>
                           </td>

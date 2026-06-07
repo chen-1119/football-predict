@@ -1106,11 +1106,24 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                   <h3>{language === 'zh' ? '12项赛前分析框架' : '12-Point Pre-Match Framework'}</h3>
                   <p>
                     {language === 'zh'
-                      ? '优先展示已入模指标：官方 SP、让球、SP 快照、Elo、近一年攻防、赛程密度与比分分布；未稳定接入的实时源不参与评分。'
-                      : 'Prioritizes scored inputs: official SP, handicap, snapshots, Elo, last-year form, schedule density, and score distribution. Unstable real-time feeds are not scored.'}
+                      ? '优先展示已入模指标：官方 SP、让球、SP 快照、Elo、近一年攻防、赛程密度与比分分布；实时源未完成稳定校验前只列入接源计划，不参与评分。'
+                      : 'Prioritizes scored inputs: official SP, handicap, snapshots, Elo, last-year form, schedule density, and score distribution. Real-time feeds stay in the source plan until they are verified.'}
                   </p>
                 </div>
                 <span>{predictionMeta?.promptVersion || 'professional-football-analyst-v1'}</span>
+              </div>
+              <div className="prompt-upgrade-strip">
+                <strong>{language === 'zh' ? '提示词补充方案' : 'Prompt Upgrade'}</strong>
+                <span>
+                  {language === 'zh'
+                    ? '赛程按竞彩日归档，按官方开赛时间排序；开赛后锁定赛前预测，只做赛果复盘。'
+                    : 'Schedules are grouped by Sporttery day, sorted by official kickoff time, and locked after kickoff for review only.'}
+                </span>
+                <span>
+                  {language === 'zh'
+                    ? '后续接源：伤停、首发、天气、裁判、xG/xGA 与外部赔率；没有稳定来源时不编造。'
+                    : 'Source plan: injuries, lineups, weather, referees, xG/xGA, and external odds. No stable feed means no fabricated input.'}
+                </span>
               </div>
               <div className="professional-framework-grid">
                 {matchInsight.framework.map((point) => (
