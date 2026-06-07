@@ -1,16 +1,10 @@
 import React, { useMemo } from 'react';
-import { ArrowRight, CalendarDays, ShieldCheck, Trophy } from 'lucide-react';
+import { ArrowRight, CalendarDays, Radio, Trophy, Zap } from 'lucide-react';
+import { TeamBadge } from './TeamBadge';
 import type { Match } from '../services/mockData';
 import { getPredictionTipDisplay, getSportteryPoolRows } from '../services/bettingDisplay';
 import { getTeamById } from '../services/entities';
-import {
-  getBestPrediction,
-  getDaysUntilWorldCup,
-  getWorldCupWatchMatches,
-  WORLD_CUP_GROUPS,
-  WORLD_CUP_OFFICIAL
-} from '../services/worldCupData';
-import { TeamBadge } from './TeamBadge';
+import { getBestPrediction, getDaysUntilWorldCup, getWorldCupWatchMatches } from '../services/worldCupData';
 
 interface WorldCupSpotlightProps {
   matches: Match[];
@@ -45,94 +39,75 @@ export const WorldCupSpotlight: React.FC<WorldCupSpotlightProps> = ({
   const daysLeft = getDaysUntilWorldCup();
 
   const copy = {
-    kicker: { zh: '世界杯专栏', en: 'World Cup Desk' },
-    title: { zh: '世界杯小组赛与淘汰赛预测已接入', en: 'Group and knockout forecasts are live' },
+    kicker: { zh: '世界杯专栏', en: 'World Cup Special' },
+    title: { zh: '2026 世界杯 · OWN THE WORLD', en: '2026 World Cup · OWN THE WORLD' },
     subtitle: {
-      zh: '首页先看 12 组分组路径、32 强晋级、争冠层级和今日观察场，世界杯正式数据更新后自动进入单场模型。',
-      en: 'Start with 12 group routes, Round-of-32 qualifiers, title tiers and today watch matches. Official World Cup data will feed match models as it updates.'
+      zh: '小组赛路线、焦点赛、实时走势和球迷互动集中展示，进入专栏看完整活动官网。',
+      en: 'Group routes, featured games, live momentum and fan play live together in one event desk.'
     },
-    countdown: { zh: '距开赛', en: 'Kickoff in' },
+    countdown: { zh: '距揭幕', en: 'Kickoff in' },
     days: { zh: '天', en: 'days' },
-    format: { zh: '12组 x 4队', en: '12 groups x 4' },
-    fixtures: { zh: '104场', en: '104 matches' },
-    official: { zh: '32强路径', en: 'R32 route' },
-    enter: { zh: '进入专栏', en: 'Open Desk' },
-    match: { zh: '今日观察', en: 'Watch match' },
-    noMatch: { zh: '等待中国竞彩网同步世界杯相关赛程', en: 'Waiting for World Cup-related Sporttery fixtures' },
-    view: { zh: '查看分析', en: 'View analysis' },
-    odds: { zh: '竞彩 SP', en: 'Sporttery SP' },
-    model: { zh: '模型倾向', en: 'Model lean' }
+    open: { zh: '进入世界杯专栏', en: 'Open World Cup' },
+    today: { zh: '当前观察', en: 'Watch match' },
+    empty: { zh: '等待官方赛程同步，先进入专栏查看世界杯活动页。', en: 'Waiting for official fixtures. Open the event page first.' },
+    model: { zh: '模型', en: 'Model' },
+    sp: { zh: 'SP', en: 'SP' }
   };
 
   const t = (key: keyof typeof copy) => copy[key][language];
 
   return (
-    <section className="worldcup-spotlight" aria-label={t('kicker')}>
-      <div className="worldcup-spotlight-main">
-        <span className="worldcup-kicker">
+    <section className="event-spotlight" aria-label={t('kicker')}>
+      <div className="event-spotlight-copy">
+        <span>
           <Trophy size={15} />
           {t('kicker')}
         </span>
-        <div>
-          <h2>{t('title')}</h2>
-          <p>{t('subtitle')}</p>
-        </div>
-        <div className="worldcup-spotlight-stats">
-          <span>
+        <h2>{t('title')}</h2>
+        <p>{t('subtitle')}</p>
+        <div className="event-spotlight-meta">
+          <b>
             <CalendarDays size={14} />
-            {t('countdown')} <strong>{daysLeft}</strong> {t('days')}
-          </span>
-          <span>
-            <ShieldCheck size={14} />
-            {t('format')}
-          </span>
-          <span>{t('fixtures')}</span>
-          <span>{WORLD_CUP_GROUPS.length} {language === 'zh' ? '个小组预测' : 'group forecasts'}</span>
-          <span>{WORLD_CUP_OFFICIAL.startDate} - {WORLD_CUP_OFFICIAL.finalDate}</span>
-        </div>
-        <div className="worldcup-spotlight-hosts" aria-hidden="true">
-          <span>CANADA</span>
-          <span>MEXICO</span>
-          <span>USA</span>
+            {t('countdown')} {daysLeft} {t('days')}
+          </b>
+          <b>
+            <Zap size={14} />
+            48 teams / 104 matches
+          </b>
+          <b>
+            <Radio size={14} />
+            Live momentum
+          </b>
         </div>
       </div>
 
-      <div className="worldcup-spotlight-side">
+      <div className="event-spotlight-card">
         {featuredMatch && homeTeam && awayTeam ? (
-          <button type="button" className="worldcup-mini-match" onClick={() => onSelectMatch(featuredMatch.id)}>
-            <span className="worldcup-mini-label">{t('match')}</span>
-            <span className="worldcup-mini-teams">
-              <span>
-                <TeamBadge team={homeTeam} size="sm" />
-                {homeTeam.name[language]}
-              </span>
-              <strong>VS</strong>
-              <span>
-                <TeamBadge team={awayTeam} size="sm" />
-                {awayTeam.name[language]}
-              </span>
-            </span>
-            <span className="worldcup-mini-meta">
+          <button type="button" onClick={() => onSelectMatch(featuredMatch.id)}>
+            <span>{t('today')}</span>
+            <strong>
+              <TeamBadge team={homeTeam} size="sm" />
+              {homeTeam.shortName[language]}
+              <em>VS</em>
+              {awayTeam.shortName[language]}
+              <TeamBadge team={awayTeam} size="sm" />
+            </strong>
+            <small>
               {formatKickoff(featuredMatch.kickoffTime, language)}
               {featuredPrediction ? ` / ${t('model')} ${getPredictionTipDisplay(featuredPrediction, language)}` : ''}
-            </span>
+            </small>
             {poolRows[0]?.odds && (
-              <span className="worldcup-mini-odds">
-                {t('odds')} {poolRows[0].odds.odds1.toFixed(2)} / {poolRows[0].odds.oddsX.toFixed(2)} / {poolRows[0].odds.odds2.toFixed(2)}
-              </span>
+              <small>
+                {t('sp')} {poolRows[0].odds.odds1.toFixed(2)} / {poolRows[0].odds.oddsX.toFixed(2)} / {poolRows[0].odds.odds2.toFixed(2)}
+              </small>
             )}
-            <span className="worldcup-mini-action">
-              {t('view')}
-              <ArrowRight size={13} />
-            </span>
           </button>
         ) : (
-          <div className="worldcup-mini-empty">{t('noMatch')}</div>
+          <p>{t('empty')}</p>
         )}
-
-        <button type="button" className="worldcup-open-button" onClick={onOpenWorldCup}>
-          {t('enter')}
-          <ArrowRight size={14} />
+        <button type="button" className="event-spotlight-open" onClick={onOpenWorldCup}>
+          {t('open')}
+          <ArrowRight size={15} />
         </button>
       </div>
     </section>
