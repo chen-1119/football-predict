@@ -267,7 +267,7 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
     active: { zh: '观察场次', en: 'Watch matches' },
     coverage: { zh: '路径覆盖', en: 'Route coverage' },
     watchSignal: { zh: '单场可信', en: 'Match trust' },
-    promoted: { zh: '已过闸门', en: 'Gate passed' },
+    promoted: { zh: '已通过筛选', en: 'Passed filters' },
     trust: { zh: '平均可信', en: 'Average trust' },
     topLean: { zh: '最高优先级', en: 'Top priority' },
     updated: { zh: '上次检查', en: 'Last checked' },

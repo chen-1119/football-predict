@@ -70,8 +70,8 @@ const signedText = (value: number | null | undefined) => {
 };
 
 const dataGap = {
-  zh: '未计分源：伤停、预计首发、天气、裁判和 xG/xGA 暂无稳定可验证接口；页面不会编造这些内容，只用官方 SP、让球 SP、SP 快照、赛果、近一年攻防、Elo 与比分分布评分。',
-  en: 'Not scored: injuries, projected XI, weather, referee, and xG/xGA do not have stable verified feeds yet. The page does not fabricate them; scoring uses official SP, handicap SP, snapshots, results, last-year form, Elo, and score distribution.'
+  zh: '伤停、预计首发、天气、裁判和 xG/xGA 还没有稳定可验证接口，当前只做接源计划，不参与评分；本页只按官方 SP、让球 SP、开赛前快照、赛果、近一年攻防、Elo 与比分分布判断。',
+  en: 'Injuries, projected XI, weather, referee, and xG/xGA do not have stable verified feeds yet, so they stay in the source plan and are not scored. This page uses official SP, handicap SP, pre-kickoff snapshots, results, last-year form, Elo, and score distribution.'
 };
 
 const probabilityText = (probabilities: { home: number; draw: number; away: number } | null | undefined) => {
@@ -224,10 +224,10 @@ const buildProfessionalFramework = ({
   const handicapProbabilities = probabilityText(model?.handicap?.market);
   const hhadLine = match.handicapLine ? `${match.handicapLine}` : '--';
   const trendZh = match.oddsTrend && trendText
-    ? `已记录 ${match.oddsTrend.sampleSize} 次官方 SP 快照，走势为${trendText.zh}。${match.oddsTrend.summary.zh}`
+    ? `${match.oddsTrend.summary.zh}`
     : '官方 SP 快照样本仍在积累，先以最新 HAD / HHAD 为准。';
   const trendEn = match.oddsTrend && trendText
-    ? `${match.oddsTrend.sampleSize} official SP snapshots recorded; movement is ${trendText.en}. ${match.oddsTrend.summary.en}`
+    ? `${match.oddsTrend.summary.en}`
     : 'SP snapshots are still accumulating; use latest HAD / HHAD first.';
   const unavailableTone: InsightTone = 'muted';
   const sampleTone: InsightTone = sampleEnough ? 'success' : 'warning';
@@ -306,7 +306,7 @@ const buildProfessionalFramework = ({
     {
       title: { zh: '十、天气场地裁判', en: '10. Weather / Referee' },
       body: {
-        zh: '外部环境暂不自动调分，避免把不可验证信息混进模型；如出现极端天气、特殊场地或裁判尺度明显异常，需要人工备注后再进入风险标签。',
+        zh: '外部环境暂不自动调分，避免把不可验证信息混进模型；如出现极端天气、特殊场地或裁判尺度明显异常，需要人工备注后再进入风险标签，不会自动编一段结论。',
         en: 'External conditions do not automatically adjust the score yet, to keep unverified information out of the model. Extreme weather, special pitch conditions, or unusual referee profile should be manually noted before affecting risk tags.'
       },
       tone: unavailableTone
@@ -324,7 +324,7 @@ const buildProfessionalFramework = ({
       body: {
         zh: hasActionablePrimary
           ? `稳妥方向：${action.zh}；主线 ${tipZh}，可信度 ${trustScore || '--'}%，最终概率 ${finalProbabilities.zh}。风险点：${riskTextZh}。`
-          : `稳妥方向：${action.zh}，不输出单一胜平负；当前最终概率 ${finalProbabilities.zh}，等待 SP/让球/历史分桶进一步同向。风险点：${riskTextZh}。`,
+          : `稳妥方向：先观察，不输出单一胜平负；当前最终概率 ${finalProbabilities.zh}，等待 SP、让球盘和历史分桶进一步同向。风险点：${riskTextZh}。`,
         en: hasActionablePrimary
           ? `Conservative: ${action.en}; main line ${tipEn}, confidence ${trustScore || '--'}%, final probability ${finalProbabilities.en}. Risks: ${riskTextEn}.`
           : `Conservative: ${action.en}, no single 1X2 pick; current final probability ${finalProbabilities.en}, wait for SP/handicap/history buckets to align. Risks: ${riskTextEn}.`
@@ -371,7 +371,7 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
     lean: { zh: '主推候选', en: 'Model lean' },
     value: { zh: '价值观察', en: 'Value watch' },
     watch: { zh: '观察为主', en: 'Watch' },
-    avoid: { zh: '降低优先级', en: 'Lower priority' },
+    avoid: { zh: '先避开', en: 'Avoid for now' },
     unavailable: { zh: '等待开售', en: 'Wait for sale' },
     finished: { zh: '赛后复盘', en: 'Post-match review' }
   };
@@ -491,25 +491,25 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
 
   if (isWatchOnly) {
     return {
-      title: { zh: 'AI 综合观察', en: 'AI Watch Brief' },
+      title: { zh: '赛前分析模式', en: 'Pre-Match Analysis Mode' },
       summary: {
-        zh: `${action.zh}：当前推荐闸门未通过，不输出单一胜平负主线。模型只保留赛前观察，继续跟踪官方 SP、让球盘和命中率冷却状态。风险标签：${riskTextZh}。`,
+        zh: `${action.zh}：这场暂时不写成单一主推。模型会保留赛前观察，重点跟踪官方 SP、让球盘和近期命中冷却；如果临场信号没有变，刷新页面也不会改原结论。风险标签：${riskTextZh}。`,
         en: `${action.en}: the recommendation gate is not met, so no single 1X2 main lean is published. Keep this as pre-match watch and track official SP, handicap confirmation, and hit-rate cooldown. Risk tags: ${riskTextEn}.`
       },
       action,
       score: insightScore,
       tone,
       metrics: [
-        { label: { zh: '主线状态', en: 'Main line' }, value: { zh: '观察', en: 'Watch' }, tone: 'warning' },
-        { label: { zh: 'HAD支持', en: 'HAD support' }, value: { zh: '不输出', en: 'No pick' }, tone: 'muted' },
-        { label: { zh: '让球验证', en: 'Handicap check' }, value: { zh: hhadProbabilities ? '已记录' : '未开售', en: hhadProbabilities ? 'Tracked' : 'Closed' }, tone: hhadProbabilities ? 'warning' : 'muted' },
+        { label: { zh: '决策状态', en: 'Decision' }, value: { zh: '观察单', en: 'Watch' }, tone: 'warning' },
+        { label: { zh: '主线输出', en: 'Main line' }, value: { zh: '不硬推', en: 'No force' }, tone: 'muted' },
+        { label: { zh: '让球校验', en: 'Handicap check' }, value: { zh: hhadProbabilities ? '已记录' : '未开售', en: hhadProbabilities ? 'Tracked' : 'Closed' }, tone: hhadProbabilities ? 'warning' : 'muted' },
         { label: { zh: '历史样本', en: 'History sample' }, value: { zh: sampleText, en: sampleText }, tone: sampleEnough ? 'success' : 'warning' }
       ],
       drivers: [
         {
-          title: { zh: '推荐闸门', en: 'Recommendation gate' },
+          title: { zh: '为什么不直接推荐', en: 'Why no pick' },
           body: primary.explanation || {
-            zh: '当前低赔、平局压力、让球确认或命中率分桶存在分歧，因此保持观察。',
+            zh: '当前低赔、平局压力、让球确认或命中率分桶存在分歧，先保留观察，不把一个方向包装成稳胆。',
             en: 'Low SP, draw pressure, handicap confirmation, or hit-rate buckets are not aligned, so this remains watch-only.'
           },
           tone: 'warning'
@@ -517,7 +517,7 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
         {
           title: { zh: '盘口验证', en: 'Market validation' },
           body: {
-            zh: `官方 HAD：${oddsText(match.odds)}；官方 HHAD：${oddsText(match.handicapOdds)}。观察态不展示“主线支持率”，避免把未通过闸门的方向包装成推荐。`,
+            zh: `官方 HAD：${oddsText(match.odds)}；官方 HHAD：${oddsText(match.handicapOdds)}。观察态只展示盘口结构和风险，不展示“主线支持率”，避免把条件未齐的方向当推荐。`,
             en: `Official HAD: ${oddsText(match.odds)}; official HHAD: ${oddsText(match.handicapOdds)}. Watch mode does not show a main-line support rate, so an unqualified direction is not packaged as a pick.`
           },
           tone: 'muted'
@@ -526,8 +526,8 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
           title: { zh: 'SP走势', en: 'SP movement' },
           body: match.oddsTrend && trendText
             ? {
-              zh: `已记录 ${match.oddsTrend.sampleSize} 次官方快照，走势为${trendText.zh}。${match.oddsTrend.summary.zh}`,
-              en: `${match.oddsTrend.sampleSize} official snapshots recorded; movement is ${trendText.en}. ${match.oddsTrend.summary.en}`
+              zh: `${match.oddsTrend.summary.zh}`,
+              en: `${match.oddsTrend.summary.en}`
             }
             : {
               zh: '当前快照数量不足，先等待下一次官方 SP 快照。',
@@ -538,15 +538,15 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
       ],
       watchpoints: [
         {
-          title: { zh: '后续观察', en: 'Next check' },
+          title: { zh: '临场触发条件', en: 'Late trigger' },
           body: {
-            zh: '如果临场 SP 与让球盘继续分歧，保持观察；只有概率、盘口和历史分桶同时修复，才允许升档。',
+            zh: '只有官方 SP、让球盘、概率优势和历史分桶同时改善，才允许从观察升为推荐；否则页面刷新也只保留原观察结论。',
             en: 'If late SP and handicap remain split, keep watching. Upgrade only when probability, market confirmation, and historical buckets all improve.'
           },
           tone: 'warning'
         },
         {
-          title: { zh: '数据边界', en: 'Data boundary' },
+          title: { zh: '暂不计分的数据', en: 'Unscored data' },
           body: dataGap,
           tone: 'muted'
         }

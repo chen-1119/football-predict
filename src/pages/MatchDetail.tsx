@@ -397,6 +397,14 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   const predictionMetaLabel = predictionMeta?.lockedAt
     ? (language === 'zh' ? '赛前预测已锁定' : 'Pre-match pick locked')
     : (language === 'zh' ? '赛前预测监控中' : 'Pre-match pick monitoring');
+  const forecastPlanSteps = predictionMeta?.forecastPlan
+    ? [
+      { key: 'baseline', label: language === 'zh' ? '总预测' : 'Baseline', body: predictionMeta.forecastPlan.baseline[language] },
+      { key: 'late', label: language === 'zh' ? '临场预测' : 'Late check', body: predictionMeta.forecastPlan.late[language] },
+      { key: 'lock', label: language === 'zh' ? '开赛锁定' : 'Kickoff lock', body: predictionMeta.forecastPlan.lock[language] },
+      { key: 'review', label: language === 'zh' ? '赛后复盘' : 'Review', body: predictionMeta.forecastPlan.review[language] }
+    ]
+    : [];
   const probabilityModel = match.probabilityModel;
   const projectedScoreText = hasScore
     ? officialScoreText
@@ -847,7 +855,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
             <div className={`card signal-summary-card is-${matchSignal.category}`}>
               <div>
                 <span className={`signal-badge is-${matchSignal.category}`}>{matchSignal.label[language]}</span>
-                <h3>{language === 'zh' ? 'AI 初筛结论' : 'AI Signal Summary'}</h3>
+                <h3>{language === 'zh' ? '赛前判断' : 'Pre-Match Read'}</h3>
                 <p>{matchSignal.note[language]}</p>
               </div>
               <div className="signal-summary-meta">
@@ -880,6 +888,16 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                     <em>{predictionMeta.updateReason[language]}</em>
                   )}
                 </p>
+                {forecastPlanSteps.length > 0 && (
+                  <div className="forecast-plan-grid">
+                    {forecastPlanSteps.map((step) => (
+                      <span key={step.key}>
+                        <b>{step.label}</b>
+                        {step.body}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -1106,22 +1124,22 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                   <h3>{language === 'zh' ? '12项赛前分析框架' : '12-Point Pre-Match Framework'}</h3>
                   <p>
                     {language === 'zh'
-                      ? '优先展示已入模指标：官方 SP、让球、SP 快照、Elo、近一年攻防、赛程密度与比分分布；实时源未完成稳定校验前只列入接源计划，不参与评分。'
+                      ? '分析优先使用已稳定入模指标：官方 SP、让球、开赛前快照、Elo、近一年攻防、赛程密度与比分分布；实时源未完成稳定校验前只列入接源计划，不参与评分。'
                       : 'Prioritizes scored inputs: official SP, handicap, snapshots, Elo, last-year form, schedule density, and score distribution. Real-time feeds stay in the source plan until they are verified.'}
                   </p>
                 </div>
                 <span>{predictionMeta?.promptVersion || 'professional-football-analyst-v1'}</span>
               </div>
               <div className="prompt-upgrade-strip">
-                <strong>{language === 'zh' ? '提示词补充方案' : 'Prompt Upgrade'}</strong>
+                <strong>{language === 'zh' ? '自动化方案' : 'Automation plan'}</strong>
                 <span>
                   {language === 'zh'
-                    ? '赛程按竞彩日归档，按官方开赛时间排序；开赛后锁定赛前预测，只做赛果复盘。'
+                    ? '后台定时采集当天赛程、赛果与 SP 快照，写入静态数据；网页刷新只读取已有预测，不会临时重算导致漂移。'
                     : 'Schedules are grouped by Sporttery day, sorted by official kickoff time, and locked after kickoff for review only.'}
                 </span>
                 <span>
                   {language === 'zh'
-                    ? '后续接源：伤停、首发、天气、裁判、xG/xGA 与外部赔率；没有稳定来源时不编造。'
+                    ? '后续接源：伤停、首发、天气、裁判、xG/xGA 与外部赔率；接入前只标注缺失，不编造内容。'
                     : 'Source plan: injuries, lineups, weather, referees, xG/xGA, and external odds. No stable feed means no fabricated input.'}
                 </span>
               </div>

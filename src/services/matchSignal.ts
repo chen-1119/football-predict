@@ -16,7 +16,7 @@ const labels: Record<MatchSignalCategory, MultiLangString> = {
   lean: { zh: '主推候选', en: 'Model lean' },
   value: { zh: '价值观察', en: 'Value watch' },
   watch: { zh: '观察', en: 'Watch' },
-  avoid: { zh: '避坑', en: 'Avoid' },
+  avoid: { zh: '先避开', en: 'Avoid for now' },
   unavailable: { zh: '待开售', en: 'Pending' },
   finished: { zh: '已完场', en: 'Finished' }
 };
@@ -98,7 +98,7 @@ export function getMatchSignal(match: Match): MatchSignal {
         category: 'avoid',
         label: labels.avoid,
         note: {
-          zh: '该场未通过推荐门槛且风险标签偏多，保留数据观察，但不进入推荐池。',
+          zh: '这场风险点偏多，先不放进推荐池；保留盘口和快照，等临场再复核。',
           en: 'The gate was not met and risk tags are stacked. Keep the data for monitoring, but do not promote it.'
         },
         tone: 'danger',
@@ -111,7 +111,7 @@ export function getMatchSignal(match: Match): MatchSignal {
       category: 'watch',
       label: labels.watch,
       note: {
-        zh: 'AI精选触发价值门槛：当前不输出单一胜平负方向，先观察盘口与临场 SP。',
+        zh: '目前只适合观察，不硬给单一胜平负方向；重点看临场 SP 和让球盘是否补强。',
         en: 'The value gate was triggered. No single 1X2 pick is promoted yet; watch late SP and handicap movement.'
       },
       tone: 'warning',
@@ -131,7 +131,7 @@ export function getMatchSignal(match: Match): MatchSignal {
         category: 'watch',
         label: labels.watch,
         note: {
-          zh: '精选已切到进球数市场，但边际或风险仍需等待下一次 SP 快照确认。',
+          zh: '进球数有参考价值，但边际不够硬，等下一次 SP 快照确认后再决定是否升级。',
           en: 'The best tip has switched to totals, but edge or risk still needs the next SP snapshot.'
         },
         tone: 'warning',
@@ -175,7 +175,7 @@ export function getMatchSignal(match: Match): MatchSignal {
       category: 'value',
       label: labels.value,
       note: {
-        zh: '这是盘口分歧下的价值方向，不按稳胆处理；重点复核临场 SP、让球盘和风险标签是否继续同向。',
+        zh: '这是盘口分歧下的价值观察，不按稳胆处理；重点复核临场 SP、让球盘和风险标签是否继续同向。',
         en: 'This is a value direction under market disagreement, not a banker. Recheck late SP, handicap and risk tags.'
       },
       tone: 'warning',
@@ -196,8 +196,8 @@ export function getMatchSignal(match: Match): MatchSignal {
       label: labels.avoid,
       note: {
         zh: selectedIsNotModelLeader
-          ? '精选方向与最终概率首选不一致，先降级避坑，等待下一次 SP 快照确认。'
-          : '风险标签叠加，建议降低优先级或等待临场 SP。',
+          ? '精选方向与最终概率首选不一致，先降级观察，等待下一次 SP 快照确认。'
+          : '风险标签叠加，先降低优先级，等临场 SP 复核。',
         en: selectedIsNotModelLeader
           ? 'The selected pick is not aligned with the final probability leader. Downgrade and wait for the next SP snapshot.'
           : 'Multiple risk tags overlap. Lower priority or wait for late SP.'
@@ -214,7 +214,7 @@ export function getMatchSignal(match: Match): MatchSignal {
       label: labels.lean,
       note: {
         zh: probabilityTooLow
-          ? '已有主方向，但最终概率未到高可信门槛，不包装成稳胆。'
+          ? '已有主方向，但最终概率未到高可信标准，不包装成稳胆。'
           : '已有主方向，但第一方向与第二方向差距偏小，需要保留防平或防冷。',
         en: probabilityTooLow
           ? 'A lean is published, but final probability is below the steady threshold.'

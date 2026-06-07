@@ -12,8 +12,8 @@ const WINDOW_FORWARD_DAYS = Math.max(1, Number(process.env.MATCH_WINDOW_FORWARD_
 const ODDS_HISTORY_RETENTION_DAYS = Math.max(1, Number(process.env.ODDS_HISTORY_RETENTION_DAYS || 365));
 const ODDS_HISTORY_BUCKET_MINUTES = Math.max(1, Number(process.env.ODDS_HISTORY_BUCKET_MINUTES || 5));
 const PAGE_POLL_SECONDS = Math.max(15, Number(process.env.PAGE_POLL_SECONDS || 30));
-const ANALYST_PROMPT_VERSION = "professional-football-analyst-v13";
-const PREDICTION_POLICY_VERSION = "sporttery-day-value-gate-v22";
+const ANALYST_PROMPT_VERSION = "professional-football-analyst-v14";
+const PREDICTION_POLICY_VERSION = "sporttery-day-value-gate-v23";
 const FORM_LOOKBACK_MATCHES = 12;
 const METHODS = (process.env.SPORTTERY_METHODS || "concern,live,result,all")
   .split(",")
@@ -21,6 +21,28 @@ const METHODS = (process.env.SPORTTERY_METHODS || "concern,live,result,all")
   .filter(Boolean);
 
 const STATUS_PRIORITY = { FINISHED: 6, LIVE: 5, SCHEDULED: 2 };
+const PREDICTION_DATA_POLICY = {
+  zh: "后台按中国竞彩网竞彩日同步赛程，页面按官方开赛时间排序。当前入模来源为官方 HAD/HHAD SP、赛果、开赛前 SP 快照、Elo、近一年同源赛果、赛程密度与比分分布；伤停、首发、天气、裁判、xG/xGA 和外部赔率未稳定接源前只作为待接入项，不参与评分，也不写成结论。赛前总预测先生成基线，临场预测只在官方 SP 或让球盘出现实质变化时更新；开赛后锁定赛前预测，只做命中复盘。",
+  en: "The background sync groups fixtures by Sporttery business day and sorts the page by official kickoff time. Scored inputs are official HAD/HHAD SP, results, pre-kickoff SP snapshots, Elo, last-year same-source results, schedule density, and score distribution. Injuries, lineups, weather, referees, xG/xGA, and external odds stay as planned feeds until stable; they are not scored or turned into conclusions. The baseline forecast is generated before kickoff, late forecast updates only on material official SP or handicap movement, and the pre-match forecast is locked after kickoff for review only.",
+};
+const FORECAST_EXECUTION_PLAN = {
+  baseline: {
+    zh: "每日同步后生成赛前基线，优先给出概率分布和是否进入推荐池。",
+    en: "After each daily sync, generate a pre-match baseline with probabilities and promotion status.",
+  },
+  late: {
+    zh: "开赛前每次快照只看实质变化，SP/让球未动则保留原结论。",
+    en: "Before kickoff, update only on material SP/handicap movement; keep the old call when nothing moved.",
+  },
+  lock: {
+    zh: "到官方开赛时间后不再改赛前方向，避免赛后修正污染命中率。",
+    en: "After official kickoff, the pre-match direction is not changed, avoiding post-match leakage.",
+  },
+  review: {
+    zh: "完场后只追加比分、命中/未中、SP 快照走势和风险标签回看。",
+    en: "After full time, append score, hit/miss, SP movement, and risk-tag review only.",
+  },
+};
 
 function normText(value, fallback = "") {
   if (value === null || value === undefined) return fallback;
@@ -2129,13 +2151,13 @@ function predictionSet(match) {
     : [
         ...riskTags,
         ...healthCooldownTag,
-        { zh: "\u63a8\u8350\u95e8\u69db\u672a\u8fc7", en: "Recommendation gate not met" },
+        { zh: "条件未齐", en: "Conditions not aligned" },
       ];
   const oneXTwoTrust = oneXTwoGate.promote
     ? baseTrust
     : clamp(baseTrust - (oneXTwoMarketHardCooldown ? 26 : 18), 34, 62);
-  const oneXTwoGateZh = `推荐闸门：模型优势约 ${pct(modelProbabilityGap)} 个百分点，市场优势约 ${pct(probabilityGap)} 个百分点，让球同向支持${oneXTwoGate.handicapSupport === null ? "不足" : `约 ${pct(oneXTwoGate.handicapSupport)}%`}；未达到强推条件，暂不输出单一胜平负方向。`;
-  const oneXTwoGateEn = `Recommendation gate: model edge is about ${pct(modelProbabilityGap)} points, market edge about ${pct(probabilityGap)} points, same-side handicap support ${oneXTwoGate.handicapSupport === null ? "unavailable" : `about ${pct(oneXTwoGate.handicapSupport)}%`}; no single 1X2 pick is promoted.`;
+  const oneXTwoGateZh = `观察理由：模型优势约 ${pct(modelProbabilityGap)} 个百分点，市场优势约 ${pct(probabilityGap)} 个百分点，让球同向支持${oneXTwoGate.handicapSupport === null ? "不足" : `约 ${pct(oneXTwoGate.handicapSupport)}%`}；条件没有同时闭合，暂不输出单一胜平负方向。`;
+  const oneXTwoGateEn = `Watch reason: model edge is about ${pct(modelProbabilityGap)} points, market edge about ${pct(probabilityGap)} points, same-side handicap support ${oneXTwoGate.handicapSupport === null ? "unavailable" : `about ${pct(oneXTwoGate.handicapSupport)}%`}; no single 1X2 pick is promoted.`;
   const modelLean = {
     tipCode: best1x2[0],
     tipLabel: { zh: best1x2[3], en: best1x2[4] },
@@ -2153,7 +2175,7 @@ function predictionSet(match) {
     explanation: {
       zh: oneXTwoGate.promote
         ? `本场以中国竞彩网官方 HAD 胜平负 SP 为主轴，去水后最高支持方向为${best1x2[3]}。模型同时参考主客预期进球、平局拉力和赔率分布，不使用本地模拟赛果回填。`
-        : "本场胜平负未通过推荐闸门：低赔、平局压力、让球确认或风险标签存在不一致，只保留为赛前观察项。",
+        : "本场胜平负条件未齐：低赔、平局压力、让球确认或风险标签存在不一致，只保留为赛前观察项。",
       en: oneXTwoGate.promote
         ? `This pick is anchored to official Sporttery HAD odds. After removing overround, the strongest direction is ${best1x2[4]}.`
         : "This 1X2 market did not pass the recommendation gate. Low odds, draw pressure, handicap confirmation, or risk tags are not aligned, so it remains watch-only.",
@@ -2195,7 +2217,7 @@ function predictionSet(match) {
     : [
         ...riskTags.filter((tag) => tag.en === "Goal-model borderline"),
         ...(isCoolingBucket(match.predictionHealth?.byMarket?.GOALS) ? [{ zh: "进球命中率冷却", en: "Goals hit-rate cooldown" }] : []),
-        { zh: "进球闸门未过", en: "Goals gate not met" },
+        { zh: "进球条件未齐", en: "Goals conditions not aligned" },
       ];
 
   const goals = {
@@ -2209,7 +2231,7 @@ function predictionSet(match) {
     explanation: {
       zh: goalsGate.promote
         ? `进球趋势为模型参考项，基于胜平负 SP 反推出主队 ${homeLambda.toFixed(2)}、客队 ${awayLambda.toFixed(2)} 的预期进球，当前总进球期望约 ${totalLambda.toFixed(2)}。`
-        : `进球趋势未通过推荐闸门：总进球期望约 ${totalLambda.toFixed(2)}，大 2.5 概率约 ${pct(over25Probability)}%，边际不足时不强行给大/小球方向。`,
+        : `进球趋势条件未齐：总进球期望约 ${totalLambda.toFixed(2)}，大 2.5 概率约 ${pct(over25Probability)}%，边际不足时不强行给大/小球方向。`,
       en: goalsGate.promote
         ? `The goals trend derives expected goals from 1X2 odds: home ${homeLambda.toFixed(2)}, away ${awayLambda.toFixed(2)}, total ${totalLambda.toFixed(2)}.`
         : `The goals trend did not pass the recommendation gate. Total expected goals are about ${totalLambda.toFixed(2)}, over 2.5 probability about ${pct(over25Probability)}%, so no over/under pick is promoted.`,
@@ -2300,7 +2322,7 @@ function predictionSet(match) {
       ? clamp(oneXTwo.trustScore + 2, 57, 96)
       : clamp(oneXTwo.trustScore - (bestHasThinEdge ? 2 : 0), 52, 82);
   const bestWatchLabelZh = !oneXTwoGate.promote
-    ? "观察为主 推荐闸门未过"
+    ? "观察为主 条件未齐"
     : bestLaneHardCooldown
     ? "观察为主 命中冷却"
     : bestHasWeakHandicap
@@ -2309,7 +2331,7 @@ function predictionSet(match) {
       ? "观察为主 胜平负差距小"
       : "观察为主 风险叠加";
   const bestWatchLabelEn = !oneXTwoGate.promote
-    ? "Watch first: gate not met"
+    ? "Watch first: conditions not aligned"
     : bestLaneHardCooldown
     ? "Watch first: hit-rate cooldown"
     : bestHasWeakHandicap
@@ -2351,7 +2373,7 @@ function predictionSet(match) {
     analysisItems: [
       ...goals.analysisItems,
       {
-        zh: "胜平负推荐闸门未过，精选不强行追正路；仅在进球数边际和回测方向同时满足时输出。",
+        zh: "胜平负条件未齐，精选不强行追正路；仅在进球数边际和回测方向同时满足时输出。",
         en: "The 1X2 gate was not met, so the best tip does not chase the favourite. Totals are promoted only when edge and historical lane agree.",
       },
     ],
@@ -2515,10 +2537,8 @@ function applyPredictionPersistence(match, existing, capturedAt) {
     generatedAt: existing?.predictionMeta?.generatedAt || capturedAt,
     updatedAt: capturedAt,
     lockedAt: started ? (existing?.predictionMeta?.lockedAt || capturedAt) : undefined,
-    dataPolicy: {
-      zh: "模型按中国竞彩网竞彩日归档，按官方开赛时间展示；已使用官方 SP、让球 SP、赛果、SP 快照、Elo、近一年历史攻防、赛程密度和比分分布。低赔强队不自动入选，必须通过让球盘同向支持、概率优势、近期命中冷却和短样本急刹校验；1X2 冷却期内，平局/冷门也必须有正向历史样本才允许升推荐。进球数优先保留回测更稳的 U2.5，高噪声大球方向从严。开赛前仅在官方 SP/盘口变化达到阈值时更新，开赛后锁定赛前预测并只做赛果复盘。外部赔率、伤停、首发、天气、裁判、xG/xGA 等进入接源计划，稳定校验前不参与评分、不编造。",
-      en: "The model is grouped by Sporttery business day and displayed by official kickoff time. It uses official Sporttery SP, handicap SP, results, SP snapshots, Elo, last-year form, schedule density, and score distribution. Low-SP favourites are not promoted by default; they must pass handicap support, probability edge, recent-hit cooldown, and short-sample emergency brakes. During a 1X2 cooldown, draws and underdogs also need positive historical evidence before promotion. Totals prefer backtested U2.5 signals, while noisy over-goals directions are tightened. Before kickoff it updates only on material official SP/handicap changes; after kickoff it locks the pre-match forecast for review. External odds, injuries, lineups, weather, referees, and xG/xGA remain in the source plan until verified, with no fabricated scoring input.",
-    },
+    dataPolicy: PREDICTION_DATA_POLICY,
+    forecastPlan: FORECAST_EXECUTION_PLAN,
   };
 
   if (started && existingPredictions.length) {
@@ -2554,8 +2574,8 @@ function applyPredictionPersistence(match, existing, capturedAt) {
       predictionMeta: {
         ...generatedMeta,
         updateReason: {
-          zh: "未开赛比赛只在官方 SP、让球或风险门槛变化时刷新；当前结论以数据监控为主，不强行包装推荐。",
-          en: "Unstarted matches refresh only when official SP, handicap, or risk gates change; the current verdict is data monitoring, not forced promotion.",
+          zh: "提示词与展示规则已升级，赛前方向未发生实质变化；保留原预测，只更新分析说明。",
+          en: "Prompt and display rules were upgraded while the pre-match direction did not materially change; the old forecast is kept and only the analysis text is refreshed.",
         },
       },
     };
@@ -2566,8 +2586,8 @@ function applyPredictionPersistence(match, existing, capturedAt) {
     predictionMeta: {
       ...generatedMeta,
       updateReason: {
-        zh: "赛前赔率/盘口信号发生实质偏差，允许更新赛前预测。",
-        en: "Pre-match odds or market signals changed materially, so the pre-match prediction was updated.",
+        zh: "赛前赔率或让球信号发生实质变化，已生成新的临场预测；开赛后将锁定这版记录。",
+        en: "Pre-match odds or handicap signals changed materially, so a new late forecast was generated and will be locked after kickoff.",
       },
     },
   };
@@ -2842,6 +2862,45 @@ function formatSpChange(value) {
   return `${rounded > 0 ? "+" : ""}${rounded.toFixed(2)}`;
 }
 
+function oddsMovePhrase(item) {
+  const amount = formatSpChange(item.change);
+  return {
+    zh: `${item.zh} ${amount}`,
+    en: `${item.en} ${amount}`,
+  };
+}
+
+function oddsTrendSummary(rows, direction, strongest, candidates) {
+  const moved = candidates
+    .filter((item) => Math.abs(item.change) >= 0.03)
+    .sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
+
+  if (direction === "flat") {
+    return {
+      zh: `已记录 ${rows.length} 次官方 SP 快照，胜平负主盘基本没动；这种场次不把静态赔率写成推荐，临场继续看让球盘是否补强。`,
+      en: `${rows.length} official SP snapshots recorded; the 1X2 board is essentially flat, so a static board is not packaged as a pick. Keep watching handicap confirmation.`,
+    };
+  }
+
+  if (direction === "mixed") {
+    const moveTextZh = moved.slice(0, 2).map((item) => oddsMovePhrase(item).zh).join("，");
+    const moveTextEn = moved.slice(0, 2).map((item) => oddsMovePhrase(item).en).join(", ");
+    return {
+      zh: `已记录 ${rows.length} 次官方 SP 快照，主要变化：${moveTextZh || "暂无单项大幅变化"}；盘面在拉扯，先按临场观察处理。`,
+      en: `${rows.length} official SP snapshots recorded. Main moves: ${moveTextEn || "no single strong move"}; the board is mixed, so keep it in late-watch mode.`,
+    };
+  }
+
+  const strongestPhrase = oddsMovePhrase(strongest);
+  const otherMoves = candidates
+    .filter((item) => item.key !== strongest.key && Math.abs(item.change) >= 0.03)
+    .slice(0, 2);
+  return {
+    zh: `已记录 ${rows.length} 次官方 SP 快照，${strongestPhrase.zh}，市场对该方向有增温迹象${otherMoves.length ? `；同步变化：${otherMoves.map((item) => oddsMovePhrase(item).zh).join("，")}` : ""}。`,
+    en: `${rows.length} official SP snapshots recorded. ${strongestPhrase.en}; that side is warming${otherMoves.length ? `, with secondary moves ${otherMoves.map((item) => oddsMovePhrase(item).en).join(", ")}` : ""}.`,
+  };
+}
+
 function oddsTrendForMatch(match, historyRows) {
   const sourceMatchId = normText(match?.sourceMatchId || String(match?.id || "").replace(/^sporttery_/, ""));
   if (!sourceMatchId) return undefined;
@@ -2867,16 +2926,6 @@ function oddsTrendForMatch(match, historyRows) {
   const strongest = candidates[0];
   const hasMove = candidates.some((item) => Math.abs(item.change) >= 0.03);
   const direction = hasMove && strongest.change < -0.02 ? strongest.key : hasMove ? "mixed" : "flat";
-  const zhInterpretation = direction === "flat"
-    ? "整体波动很小。"
-    : direction === "mixed"
-      ? "盘口存在波动，需继续观察临场快照。"
-      : `${strongest.zh} SP 下调，市场支持有所增强。`;
-  const enInterpretation = direction === "flat"
-    ? "Overall movement is small."
-    : direction === "mixed"
-      ? "The market is moving; keep watching late snapshots."
-      : `${strongest.en} SP shortened, indicating stronger market support.`;
 
   return {
     sampleSize: rows.length,
@@ -2884,10 +2933,7 @@ function oddsTrendForMatch(match, historyRows) {
     lastCapturedAt: latest.capturedAt,
     ...changes,
     direction,
-    summary: {
-      zh: `SP 快照 ${rows.length} 次：主胜 ${formatSpChange(changes.odds1Change)}，平局 ${formatSpChange(changes.oddsXChange)}，客胜 ${formatSpChange(changes.odds2Change)}；${zhInterpretation}`,
-      en: `${rows.length} SP snapshots: home ${formatSpChange(changes.odds1Change)}, draw ${formatSpChange(changes.oddsXChange)}, away ${formatSpChange(changes.odds2Change)}. ${enInterpretation}`,
-    },
+    summary: oddsTrendSummary(rows, direction, strongest, candidates),
   };
 }
 

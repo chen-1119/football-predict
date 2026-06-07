@@ -1769,6 +1769,29 @@ button.status-pill:hover {
   font-weight: 850;
 }
 
+.forecast-plan-grid {
+  grid-column: 1 / -1;
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem !important;
+  margin-top: 0.1rem;
+}
+
+.forecast-plan-grid span {
+  display: grid;
+  gap: 0.2rem;
+  border: 1px solid hsl(var(--primary) / 0.18);
+  border-radius: 8px;
+  background: hsl(var(--bg) / 0.52);
+  padding: 0.52rem 0.58rem;
+}
+
+.forecast-plan-grid b {
+  color: hsl(var(--text-primary));
+  font-size: 0.72rem;
+  font-weight: 950;
+}
+
 .probability-model-card {
   display: grid;
   gap: 0.9rem;
@@ -4429,6 +4452,10 @@ button.status-pill:hover {
     grid-template-columns: 1fr;
   }
 
+  .forecast-plan-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .prompt-upgrade-strip {
     grid-template-columns: 1fr;
   }
@@ -4610,6 +4637,10 @@ button.status-pill:hover {
 
   .worldcup-kpi-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .forecast-plan-grid {
+    grid-template-columns: 1fr;
   }
 
   .metric-card {

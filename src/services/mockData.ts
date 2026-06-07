@@ -68,6 +68,12 @@ export interface PredictionMeta {
   lockedAt?: string;
   dataPolicy?: MultiLangString;
   updateReason?: MultiLangString;
+  forecastPlan?: {
+    baseline: MultiLangString;
+    late: MultiLangString;
+    lock: MultiLangString;
+    review: MultiLangString;
+  };
 }
 
 export interface OutcomeProbability {
