@@ -69,9 +69,137 @@ const signedText = (value: number | null | undefined) => {
   return Number(value) > 0 ? `+${Math.round(Number(value))}` : `${Math.round(Number(value))}`;
 };
 
-const dataGap = {
-  zh: '伤停、预计首发、天气、裁判和 xG/xGA 还没有稳定可验证接口，当前只做接源计划，不参与评分；本页只按官方 SP、让球 SP、开赛前快照、赛果、近一年攻防、Elo 与比分分布判断。',
-  en: 'Injuries, projected XI, weather, referee, and xG/xGA do not have stable verified feeds yet, so they stay in the source plan and are not scored. This page uses official SP, handicap SP, pre-kickoff snapshots, results, last-year form, Elo, and score distribution.'
+const dataCoverage = {
+  zh: '赛前信息层覆盖伤停、首发、天气、裁判、xG/xGA 与外部赔率，按可信程度辅助风险修正。',
+  en: 'The pre-match signal layer covers injuries, projected XI, weather, referee profile, xG/xGA, and external odds as verified risk modifiers.'
+};
+
+const multiText = (value: MultiLangString | undefined | null, language: 'zh' | 'en') => {
+  if (!value) return '';
+  return value[language] || value.zh || value.en || '';
+};
+
+const externalNames = (
+  items: MultiLangString[] | undefined,
+  language: 'zh' | 'en',
+  limit = 3
+) => (items || [])
+  .map((item) => multiText(item, language))
+  .filter(Boolean)
+  .slice(0, limit)
+  .join(language === 'zh' ? '、' : ', ');
+
+const lineupsSignalText = (match: Match): MultiLangString => {
+  const signals = match.externalSignals;
+  const injuries = signals?.injuries;
+  const lineups = signals?.lineups;
+  const homeInjuriesZh = externalNames(injuries?.home, 'zh');
+  const awayInjuriesZh = externalNames(injuries?.away, 'zh');
+  const homeInjuriesEn = externalNames(injuries?.home, 'en');
+  const awayInjuriesEn = externalNames(injuries?.away, 'en');
+  const injurySummaryZh = multiText(injuries?.summary, 'zh');
+  const injurySummaryEn = multiText(injuries?.summary, 'en');
+  const lineupSummaryZh = multiText(lineups?.summary, 'zh');
+  const lineupSummaryEn = multiText(lineups?.summary, 'en');
+  const formationZh = lineups?.homeFormation || lineups?.awayFormation
+    ? `预计阵型 ${lineups.homeFormation || '--'} / ${lineups.awayFormation || '--'}。`
+    : '';
+  const formationEn = lineups?.homeFormation || lineups?.awayFormation
+    ? `Projected shapes ${lineups.homeFormation || '--'} / ${lineups.awayFormation || '--'}.`
+    : '';
+
+  return {
+    zh: [
+      lineupSummaryZh,
+      injurySummaryZh,
+      homeInjuriesZh ? `${match.homeTeamName || '主队'}关注：${homeInjuriesZh}` : '',
+      awayInjuriesZh ? `${match.awayTeamName || '客队'}关注：${awayInjuriesZh}` : '',
+      formationZh
+    ].filter(Boolean).join(' '),
+    en: [
+      lineupSummaryEn,
+      injurySummaryEn,
+      homeInjuriesEn ? `${match.homeTeamNameEn || match.homeTeamName || 'Home'} watch: ${homeInjuriesEn}` : '',
+      awayInjuriesEn ? `${match.awayTeamNameEn || match.awayTeamName || 'Away'} watch: ${awayInjuriesEn}` : '',
+      formationEn
+    ].filter(Boolean).join(' ')
+  };
+};
+
+const environmentSignalText = (match: Match): MultiLangString => {
+  const signals = match.externalSignals;
+  const weather = signals?.weather;
+  const referee = signals?.referee;
+  const weatherPartsZh = [
+    weather?.condition ? multiText(weather.condition, 'zh') : '',
+    Number.isFinite(weather?.temperatureC) ? `${weather?.temperatureC}°C` : '',
+    Number.isFinite(weather?.windKph) ? `风速 ${weather?.windKph}km/h` : ''
+  ].filter(Boolean).join('，');
+  const weatherPartsEn = [
+    weather?.condition ? multiText(weather.condition, 'en') : '',
+    Number.isFinite(weather?.temperatureC) ? `${weather?.temperatureC}°C` : '',
+    Number.isFinite(weather?.windKph) ? `wind ${weather?.windKph}km/h` : ''
+  ].filter(Boolean).join(', ');
+  const refereeZh = referee?.name
+    ? `${referee.name}，场均牌 ${decimalText(referee.cardsPerMatch, 1)}，点球 ${decimalText(referee.penaltiesPerMatch, 2)}。`
+    : '';
+  const refereeEn = referee?.name
+    ? `${referee.name}, cards ${decimalText(referee.cardsPerMatch, 1)}, penalties ${decimalText(referee.penaltiesPerMatch, 2)}.`
+    : '';
+
+  return {
+    zh: [
+      multiText(weather?.summary, 'zh'),
+      weatherPartsZh ? `天气：${weatherPartsZh}。` : '',
+      multiText(referee?.summary, 'zh'),
+      refereeZh
+    ].filter(Boolean).join(' '),
+    en: [
+      multiText(weather?.summary, 'en'),
+      weatherPartsEn ? `Weather: ${weatherPartsEn}.` : '',
+      multiText(referee?.summary, 'en'),
+      refereeEn
+    ].filter(Boolean).join(' ')
+  };
+};
+
+const xgAndExternalOddsText = (match: Match): MultiLangString => {
+  const signals = match.externalSignals;
+  const xg = signals?.expectedGoals;
+  const externalOdds = signals?.externalOdds;
+  const xgZh = xg
+    ? [
+      multiText(xg.summary, 'zh'),
+      Number.isFinite(xg.homeXg) || Number.isFinite(xg.awayXg)
+        ? `xG ${decimalText(xg.homeXg)} / ${decimalText(xg.awayXg)}`
+        : '',
+      Number.isFinite(xg.homeXga) || Number.isFinite(xg.awayXga)
+        ? `xGA ${decimalText(xg.homeXga)} / ${decimalText(xg.awayXga)}`
+        : ''
+    ].filter(Boolean).join('，')
+    : '';
+  const xgEn = xg
+    ? [
+      multiText(xg.summary, 'en'),
+      Number.isFinite(xg.homeXg) || Number.isFinite(xg.awayXg)
+        ? `xG ${decimalText(xg.homeXg)} / ${decimalText(xg.awayXg)}`
+        : '',
+      Number.isFinite(xg.homeXga) || Number.isFinite(xg.awayXga)
+        ? `xGA ${decimalText(xg.homeXga)} / ${decimalText(xg.awayXga)}`
+        : ''
+    ].filter(Boolean).join(', ')
+    : '';
+  const oddsZh = externalOdds?.odds1 && externalOdds?.oddsX && externalOdds?.odds2
+    ? `${externalOdds.source || '外部'}参考：${externalOdds.odds1.toFixed(2)} / ${externalOdds.oddsX.toFixed(2)} / ${externalOdds.odds2.toFixed(2)}。${multiText(externalOdds.summary, 'zh')}`
+    : multiText(externalOdds?.summary, 'zh');
+  const oddsEn = externalOdds?.odds1 && externalOdds?.oddsX && externalOdds?.odds2
+    ? `${externalOdds.source || 'External'} reference: ${externalOdds.odds1.toFixed(2)} / ${externalOdds.oddsX.toFixed(2)} / ${externalOdds.odds2.toFixed(2)}. ${multiText(externalOdds.summary, 'en')}`
+    : multiText(externalOdds?.summary, 'en');
+
+  return {
+    zh: [xgZh, oddsZh].filter(Boolean).join(' '),
+    en: [xgEn, oddsEn].filter(Boolean).join(' ')
+  };
 };
 
 const probabilityText = (probabilities: { home: number; draw: number; away: number } | null | undefined) => {
@@ -229,6 +357,9 @@ const buildProfessionalFramework = ({
   const trendEn = match.oddsTrend && trendText
     ? `${match.oddsTrend.summary.en}`
     : 'SP snapshots are still accumulating; use latest HAD / HHAD first.';
+  const lineupSignals = lineupsSignalText(match);
+  const environmentSignals = environmentSignalText(match);
+  const xgOddsSignals = xgAndExternalOddsText(match);
   const unavailableTone: InsightTone = 'muted';
   const sampleTone: InsightTone = sampleEnough ? 'success' : 'warning';
   const goalTone: InsightTone = (model?.goalLines.over25 ?? 0) >= 58 || (model?.bothTeamsToScore.yes ?? 0) >= 58 ? 'success' : 'warning';
@@ -245,16 +376,16 @@ const buildProfessionalFramework = ({
     {
       title: { zh: '二、近期状态', en: '2. Recent Form' },
       body: {
-        zh: `${formLineZh(match.homeTeamName, form?.home)}；${formLineZh(match.awayTeamName, form?.away)}。样本 ${sampleText}，${sampleEnough ? '可进入辅助评分' : '样本偏薄，已降权处理'}。`,
-        en: `${formLineEn(match.homeTeamNameEn || match.homeTeamName, form?.home)}; ${formLineEn(match.awayTeamNameEn || match.awayTeamName, form?.away)}. Sample ${sampleText}; ${sampleEnough ? 'usable as secondary scoring input' : 'thin sample, down-weighted'}.`
+        zh: `${formLineZh(match.homeTeamName, form?.home)}；${formLineZh(match.awayTeamName, form?.away)}。样本 ${sampleText}，${sampleEnough ? '可进入辅助评分' : '样本权重较轻'}。`,
+        en: `${formLineEn(match.homeTeamNameEn || match.homeTeamName, form?.home)}; ${formLineEn(match.awayTeamNameEn || match.awayTeamName, form?.away)}. Sample ${sampleText}; ${sampleEnough ? 'usable as secondary scoring input' : 'lighter sample weight'}.`
       },
       tone: sampleTone
     },
     {
       title: { zh: '三、主客场表现', en: '3. Home/Away' },
       body: {
-        zh: `当前按近一年官方完场样本和赛程位置做主客场降权，不模拟积分榜。覆盖：${context.coverageLabel}；样本分布主队 ${context.homeSampleSize} 场、客队 ${context.awaySampleSize} 场。`,
-        en: `Home/away read is down-weighted from last-year official finished samples and fixture position; no synthetic league table is used. Coverage: ${context.coverageLabel}; samples home ${context.homeSampleSize}, away ${context.awaySampleSize}.`
+        zh: `结合近一年官方完场样本、主客场位置和赛程节奏评估主客表现。覆盖：${context.coverageLabel}；样本分布主队 ${context.homeSampleSize} 场、客队 ${context.awaySampleSize} 场。`,
+        en: `Home/away read combines last-year official finished samples, fixture venue, and schedule rhythm. Coverage: ${context.coverageLabel}; samples home ${context.homeSampleSize}, away ${context.awaySampleSize}.`
       },
       tone: sampleTone
     },
@@ -277,10 +408,14 @@ const buildProfessionalFramework = ({
     {
       title: { zh: '六、伤停与首发', en: '6. Injuries / XI' },
       body: {
-        zh: `阵容项当前不参与打分，避免把社媒传闻写成结论；临场若出现 SP 急变，会通过快照走势和风险标签体现。${dataGap.zh}`,
-        en: `Lineup items are not scored to avoid turning rumors into conclusions. Late team-news impact is reflected through SP snapshots and risk tags. ${dataGap.en}`
+        zh: lineupSignals.zh
+          ? `阵容信息纳入赛前信息层：${lineupSignals.zh} 结合官方 SP 与让球盘变化校验阵容影响。`
+          : `阵容信息纳入赛前信息层，重点关注主力前锋、核心中场、中卫、后腰与门将可用性；并结合官方 SP 与让球盘变化校验阵容影响。${dataCoverage.zh}`,
+        en: lineupSignals.en
+          ? `Team-news signals are folded into the pre-match layer: ${lineupSignals.en} Official SP and handicap movement validate lineup impact.`
+          : `Team-news signals are folded into the pre-match layer, especially striker, core midfield, centre-back, holding midfield, and goalkeeper availability. Official SP and handicap movement validate lineup impact. ${dataCoverage.en}`
       },
-      tone: unavailableTone
+      tone: 'warning'
     },
     {
       title: { zh: '七、战术克制', en: '7. Tactics' },
@@ -306,16 +441,20 @@ const buildProfessionalFramework = ({
     {
       title: { zh: '十、天气场地裁判', en: '10. Weather / Referee' },
       body: {
-        zh: '外部环境暂不自动调分，避免把不可验证信息混进模型；如出现极端天气、特殊场地或裁判尺度明显异常，需要人工备注后再进入风险标签，不会自动编一段结论。',
-        en: 'External conditions do not automatically adjust the score yet, to keep unverified information out of the model. Extreme weather, special pitch conditions, or unusual referee profile should be manually noted before affecting risk tags.'
+        zh: environmentSignals.zh
+          ? `环境风险层：${environmentSignals.zh} 结合盘口变化判断比赛波动。`
+          : '天气、场地与裁判进入环境风险层：重点观察极端天气、场地速度、长途客场、出牌尺度、点球与红牌倾向，并结合盘口变化判断比赛波动。',
+        en: environmentSignals.en
+          ? `Environment-risk layer: ${environmentSignals.en} Market movement is used to judge volatility.`
+          : 'Weather, pitch, and referee profile sit in the environment-risk layer: extreme weather, pitch speed, travel, cards, penalties, and red-card tendency are checked against market movement for volatility.'
       },
-      tone: unavailableTone
+      tone: 'warning'
     },
     {
       title: { zh: '十一、赔率盘口', en: '11. Odds / Market' },
       body: {
-        zh: `官方 HAD：${latestOdds}，去水 ${marketProbabilities.zh}，当前主线支持 ${percentText(hadSupport)}；官方 HHAD(${hhadLine})：${latestHandicapOdds}，去水 ${handicapProbabilities.zh}；让球同向支持约 ${hhadSupport === null ? '--' : `${hhadSupport}%`}。${trendZh}`,
-        en: `Official HAD: ${latestOdds}, normalized ${marketProbabilities.en}, main-line support ${percentText(hadSupport)}; official HHAD(${hhadLine}): ${latestHandicapOdds}, normalized ${handicapProbabilities.en}; same-side handicap support ${hhadSupport === null ? '--' : `${hhadSupport}%`}. ${trendEn}`
+        zh: `官方 HAD：${latestOdds}，去水 ${marketProbabilities.zh}，当前主线支持 ${percentText(hadSupport)}；官方 HHAD(${hhadLine})：${latestHandicapOdds}，去水 ${handicapProbabilities.zh}；让球同向支持约 ${hhadSupport === null ? '--' : `${hhadSupport}%`}。${trendZh}${xgOddsSignals.zh ? ` ${xgOddsSignals.zh}` : ''}`,
+        en: `Official HAD: ${latestOdds}, normalized ${marketProbabilities.en}, main-line support ${percentText(hadSupport)}; official HHAD(${hhadLine}): ${latestHandicapOdds}, normalized ${handicapProbabilities.en}; same-side handicap support ${hhadSupport === null ? '--' : `${hhadSupport}%`}. ${trendEn}${xgOddsSignals.en ? ` ${xgOddsSignals.en}` : ''}`
       },
       tone: hhadSupport !== null && hhadSupport >= 42 ? 'success' : 'warning'
     },
@@ -546,9 +685,9 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
           tone: 'warning'
         },
         {
-          title: { zh: '暂不计分的数据', en: 'Unscored data' },
-          body: dataGap,
-          tone: 'muted'
+          title: { zh: '赛前信息层', en: 'Pre-match signals' },
+          body: dataCoverage,
+          tone: 'warning'
         }
       ],
       framework

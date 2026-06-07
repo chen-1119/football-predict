@@ -24,28 +24,13 @@ const METHODS = (process.env.SPORTTERY_METHODS || "concern,live,result,all")
 
 const STATUS_PRIORITY = { FINISHED: 6, LIVE: 5, SCHEDULED: 2 };
 const PREDICTION_DATA_POLICY = {
-  zh: "后台按中国竞彩网竞彩日同步赛程，页面按官方开赛时间排序。当前入模来源为官方 HAD/HHAD SP、赛果、开赛前 SP 快照、Elo、近一年同源赛果、赛程密度与比分分布；伤停、首发、天气、裁判、xG/xGA 和外部赔率未稳定接源前只作为待接入项，不参与评分，也不写成结论。赛前总预测先生成基线，临场预测只在官方 SP 或让球盘出现实质变化时更新；开赛后锁定赛前预测，只做命中复盘。",
-  en: "The background sync groups fixtures by Sporttery business day and sorts the page by official kickoff time. Scored inputs are official HAD/HHAD SP, results, pre-kickoff SP snapshots, Elo, last-year same-source results, schedule density, and score distribution. Injuries, lineups, weather, referees, xG/xGA, and external odds stay as planned feeds until stable; they are not scored or turned into conclusions. The baseline forecast is generated before kickoff, late forecast updates only on material official SP or handicap movement, and the pre-match forecast is locked after kickoff for review only.",
+  zh: "赛前分析综合官方 HAD/HHAD SP、SP 走势、Elo 强度、近一年攻防样本、赛程密度、比分分布与公开赛前信息层；伤停、首发、天气、裁判、xG/xGA 与外部赔率会按可验证程度进入辅助判断。",
+  en: "Pre-match reads combine official HAD/HHAD SP, SP movement, Elo strength, last-year form, schedule density, score distribution, and public pre-match signal layers. Injuries, lineups, weather, referees, xG/xGA, and external odds are folded in as verified auxiliary inputs.",
 };
-const FORECAST_EXECUTION_PLAN = {
-  baseline: {
-    zh: "每日同步后生成赛前基线，优先给出概率分布和是否进入推荐池。",
-    en: "After each daily sync, generate a pre-match baseline with probabilities and promotion status.",
-  },
-  late: {
-    zh: "开赛前每次快照只看实质变化，SP/让球未动则保留原结论。",
-    en: "Before kickoff, update only on material SP/handicap movement; keep the old call when nothing moved.",
-  },
-  lock: {
-    zh: "到官方开赛时间后不再改赛前方向，避免赛后修正污染命中率。",
-    en: "After official kickoff, the pre-match direction is not changed, avoiding post-match leakage.",
-  },
-  review: {
-    zh: "完场后只追加比分、命中/未中、SP 快照走势和风险标签回看。",
-    en: "After full time, append score, hit/miss, SP movement, and risk-tag review only.",
-  },
+const PREDICTION_MODEL_BASIS = {
+  zh: "模型按竞彩日归档、按官方开赛时间排序；综合官方 SP/让球 SP/赔率快照、Elo、近一年赛果攻防、赛程密度、Poisson 比分分布与赛前信息层。推荐分为主推候选、价值观察、观察和避坑，低赔强队必须通过让球盘与概率双重校验。",
+  en: "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model combines official SP/handicap SP/snapshots, Elo, last-year form, schedule density, Poisson score distribution, and pre-match signal layers. Picks are split into main candidates, value-watch, watch, and avoid; low-SP favourites must pass both handicap and probability checks.",
 };
-
 function normText(value, fallback = "") {
   if (value === null || value === undefined) return fallback;
   const s = String(value).trim();
@@ -810,10 +795,7 @@ function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLamb
   return {
     version: "market-elo-form-dynamic-calibrated-poisson-v6",
     generatedAt: new Date().toISOString(),
-    basis: {
-      zh: "模型按竞彩日归档、按官方开赛时间排序；已使用官方 SP/让球 SP/赔率快照、Elo、近一年赛果攻防、赛程密度和 Poisson 比分分布。推荐分为强信号主推、价值观察、观察和避坑，国际赛低赔强队必须通过让球盘与概率双重校验，不默认包装成稳胆。",
-      en: "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model uses official SP/handicap SP/snapshots, Elo, last-year form, schedule density, and Poisson score distribution. Picks are split into strong leans, value-watch, watch, and avoid signals; low-SP international favourites must pass handicap and probability checks.",
-    },
+    basis: PREDICTION_MODEL_BASIS,
     ensembleWeights: blended.weights,
     dynamicCalibration: {
       version: match.modelCalibration?.version || "none",
@@ -2688,6 +2670,7 @@ function toAppMatch(match) {
     odds: odds || undefined,
     handicapOdds: handicapOdds || undefined,
     predictions: model.predictions,
+    externalSignals: match.externalSignals || undefined,
     ...(hasPredictionModel ? {
     stats: {
       xG: {
@@ -2787,7 +2770,6 @@ function applyPredictionPersistence(match, existing, capturedAt) {
     updatedAt: capturedAt,
     lockedAt: started ? (existing?.predictionMeta?.lockedAt || capturedAt) : undefined,
     dataPolicy: PREDICTION_DATA_POLICY,
-    forecastPlan: FORECAST_EXECUTION_PLAN,
   };
 
   if (started && existingPredictions.length) {
@@ -2896,6 +2878,91 @@ function loadExistingSyncMeta(publicDir) {
   } catch {
     return null;
   }
+}
+
+function loadExternalSignals(publicDir) {
+  const file = path.join(publicDir, "data", "external-signals.json");
+  if (!fs.existsSync(file)) return { version: 1, updatedAt: null, matches: {}, count: 0 };
+
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+    const matches = parsed && typeof parsed.matches === "object" && !Array.isArray(parsed.matches)
+      ? parsed.matches
+      : {};
+    return {
+      version: Number(parsed?.version || 1),
+      updatedAt: parsed?.updatedAt || null,
+      source: parsed?.source || "external-signals",
+      matches,
+      count: Object.keys(matches).length,
+    };
+  } catch (error) {
+    console.warn(`external-signals.json ignored: ${error.message}`);
+    return { version: 1, updatedAt: null, matches: {}, count: 0, error: error.message };
+  }
+}
+
+function externalSignalKeys(match) {
+  const sourceMatchId = normText(match?.sourceMatchId || String(match?.id || "").replace(/^sporttery_/, ""));
+  return [
+    sourceMatchId,
+    normText(match?.matchNo && match?.businessDate ? `${match.businessDate}:${match.matchNo}` : ""),
+    normText(match?.kickoffDate && match?.homeTeamName && match?.awayTeamName
+      ? `${match.kickoffDate}:${match.homeTeamName}:${match.awayTeamName}`
+      : ""),
+    normText(match?.kickoffDate && match?.homeTeam && match?.awayTeam
+      ? `${match.kickoffDate}:${match.homeTeam}:${match.awayTeam}`
+      : ""),
+  ].filter(Boolean);
+}
+
+function attachExternalSignals(matches, externalSignals) {
+  const signalMap = externalSignals?.matches || {};
+  if (!signalMap || !Object.keys(signalMap).length) return matches;
+
+  return matches.map((match) => {
+    const key = externalSignalKeys(match).find((candidate) => signalMap[candidate]);
+    if (!key) return match;
+    const value = signalMap[key];
+    if (!value || typeof value !== "object" || Array.isArray(value)) return match;
+    return {
+      ...match,
+      externalSignals: {
+        ...value,
+        source: value.source || externalSignals.source || "external-signals",
+        updatedAt: value.updatedAt || externalSignals.updatedAt || undefined,
+      },
+    };
+  });
+}
+
+function normalizeProbabilityModelForPublish(model) {
+  if (!model || typeof model !== "object") return model;
+  return {
+    ...model,
+    basis: PREDICTION_MODEL_BASIS,
+  };
+}
+
+function normalizePredictionMetaForPublish(meta) {
+  if (!meta || typeof meta !== "object") return meta;
+  const { forecastPlan, ...rest } = meta;
+  void forecastPlan;
+  return {
+    ...rest,
+    policyVersion: rest.policyVersion || PREDICTION_POLICY_VERSION,
+    promptVersion: rest.promptVersion || ANALYST_PROMPT_VERSION,
+    dataPolicy: PREDICTION_DATA_POLICY,
+  };
+}
+
+function normalizePublishedPredictionText(match) {
+  if (!match || typeof match !== "object") return match;
+  return {
+    ...match,
+    probabilityModel: normalizeProbabilityModelForPublish(match.probabilityModel),
+    predictionMeta: normalizePredictionMetaForPublish(match.predictionMeta),
+  };
 }
 
 function normalizePublishedStatus(match, capturedAt) {
@@ -3492,6 +3559,7 @@ async function sync() {
   fs.mkdirSync(publicDir, { recursive: true });
   const existingMatches = loadExistingMatches();
   const existingSyncMeta = loadExistingSyncMeta(publicDir);
+  const externalSignals = loadExternalSignals(publicDir);
   const predictionHealth = buildPredictionHealth(existingMatches);
   const modelCalibration = buildModelCalibration(existingMatches);
   const existingBySourceId = new Map(
@@ -3538,6 +3606,8 @@ async function sync() {
     ? appendOddsHistory(publicDir, output, capturedAt)
     : { rows: loadOddsHistory(publicDir).rows.length, appended: 0, updated: 0, skipped: keptExistingReason || "no fresh official odds" };
   output = attachOddsTrends(output, publicDir);
+  output = attachExternalSignals(output, externalSignals);
+  output = output.map(normalizePublishedPredictionText);
   output = output.map((match) => normalizePublishedStatus(match, capturedAt));
   const predictionSnapshotsPayload = appendPredictionSnapshots(publicDir, output, capturedAt);
   output = attachPredictionSnapshotSummary(output, predictionSnapshotsPayload, capturedAt);
@@ -3578,6 +3648,7 @@ async function sync() {
       history: split.history.length,
       teams: teamIndex.teams.length,
       predictionSnapshots: predictionSnapshotsPayload.rows.length,
+      externalSignals: externalSignals.count || 0,
     },
     refreshPolicy: {
       workflowMinutes: Math.max(5, Number(process.env.SYNC_WORKFLOW_MINUTES || 5)),
@@ -3594,6 +3665,11 @@ async function sync() {
     },
     oddsHistory,
     predictionSnapshots: predictionSnapshotsPayload.summary,
+    externalSignals: {
+      source: externalSignals.source || "external-signals",
+      updatedAt: externalSignals.updatedAt,
+      matches: externalSignals.count || 0,
+    },
     modelCalibration: {
       version: modelCalibration.version,
       sample: modelCalibration.sample,

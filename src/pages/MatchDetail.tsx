@@ -397,14 +397,6 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   const predictionMetaLabel = predictionMeta?.lockedAt
     ? (language === 'zh' ? '赛前预测已锁定' : 'Pre-match pick locked')
     : (language === 'zh' ? '赛前预测监控中' : 'Pre-match pick monitoring');
-  const forecastPlanSteps = predictionMeta?.forecastPlan
-    ? [
-      { key: 'baseline', label: language === 'zh' ? '总预测' : 'Baseline', body: predictionMeta.forecastPlan.baseline[language] },
-      { key: 'late', label: language === 'zh' ? '临场预测' : 'Late check', body: predictionMeta.forecastPlan.late[language] },
-      { key: 'lock', label: language === 'zh' ? '开赛锁定' : 'Kickoff lock', body: predictionMeta.forecastPlan.lock[language] },
-      { key: 'review', label: language === 'zh' ? '赛后复盘' : 'Review', body: predictionMeta.forecastPlan.review[language] }
-    ]
-    : [];
   const probabilityModel = match.probabilityModel;
   const projectedScoreText = hasScore
     ? officialScoreText
@@ -442,28 +434,11 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     return `${pct > 0 ? '+' : ''}${pct}%`;
   };
 
-  const snapshotPhaseLabels: Record<string, { zh: string; en: string }> = {
-    baseline: { zh: '基础预测', en: 'Baseline' },
-    mid: { zh: '盘中复核', en: 'Mid check' },
-    late: { zh: '临场预测', en: 'Late forecast' },
-    final: { zh: '开赛前最终版', en: 'Final pre-kickoff' },
-    locked: { zh: '开赛锁定', en: 'Kickoff locked' },
-    review: { zh: '赛后复盘', en: 'Post-match review' }
-  };
-
   const calibrationReasonLabels: Record<string, { zh: string; en: string }> = {
     'very-cold-profile': { zh: '同类比赛近期很冷，推荐门槛明显收紧', en: 'Very cold profile: gates tightened' },
     'cold-profile': { zh: '同类比赛命中偏低，推荐门槛已收紧', en: 'Cold profile: gates tightened' },
     'hot-profile': { zh: '同类比赛表现较好，允许小幅放宽', en: 'Hot profile: gates slightly relaxed' },
     'neutral-profile': { zh: '同类表现中性，使用常规门槛', en: 'Neutral profile: normal gates' }
-  };
-
-  const renderSnapshotPhases = (phases: Record<string, number> | undefined) => {
-    const entries = Object.entries(phases || {});
-    if (!entries.length) return '--';
-    return entries
-      .map(([phase, count]) => `${snapshotPhaseLabels[phase]?.[language] || phase} ${count}`)
-      .join(' / ');
   };
 
   const renderOutcomeLine = (probabilities: OutcomeProbability | null | undefined) => {
@@ -918,36 +893,6 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                     <em>{predictionMeta.updateReason[language]}</em>
                   )}
                 </p>
-                {forecastPlanSteps.length > 0 && (
-                  <div className="forecast-plan-grid">
-                    {forecastPlanSteps.map((step) => (
-                      <span key={step.key}>
-                        <b>{step.label}</b>
-                        {step.body}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {predictionMeta.snapshot && (
-                  <div className="prediction-snapshot-strip">
-                    <span>
-                      <b>{language === 'zh' ? '当前版本' : 'Current phase'}</b>
-                      {snapshotPhaseLabels[predictionMeta.snapshot.phase]?.[language] || predictionMeta.snapshot.phase}
-                    </span>
-                    <span>
-                      <b>{language === 'zh' ? '保留记录' : 'Saved snapshots'}</b>
-                      {predictionMeta.snapshot.total} {language === 'zh' ? '版' : 'versions'}
-                    </span>
-                    <span>
-                      <b>{language === 'zh' ? '阶段分布' : 'Phases'}</b>
-                      {renderSnapshotPhases(predictionMeta.snapshot.phases)}
-                    </span>
-                    <span>
-                      <b>{language === 'zh' ? '最近写入' : 'Latest write'}</b>
-                      {formatPolicyTimestamp(predictionMeta.snapshot.latestAt, language)}
-                    </span>
-                  </div>
-                )}
               </div>
             )}
 
@@ -1204,23 +1149,23 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                   <h3>{language === 'zh' ? '12项赛前分析框架' : '12-Point Pre-Match Framework'}</h3>
                   <p>
                     {language === 'zh'
-                      ? '分析优先使用已稳定入模指标：官方 SP、让球、开赛前快照、Elo、近一年攻防、赛程密度与比分分布；实时源未完成稳定校验前只列入接源计划，不参与评分。'
-                      : 'Prioritizes scored inputs: official SP, handicap, snapshots, Elo, last-year form, schedule density, and score distribution. Real-time feeds stay in the source plan until they are verified.'}
+                      ? '综合官方 SP、让球、SP 走势、Elo 强度、近一年攻防、赛程密度、比分分布与赛前信息层，按可验证程度形成赛前判断。'
+                      : 'Combines official SP, handicap, SP movement, Elo strength, last-year form, schedule density, score distribution, and pre-match signal layers.'}
                   </p>
                 </div>
                 <span>{predictionMeta?.promptVersion || 'professional-football-analyst-v1'}</span>
               </div>
               <div className="prompt-upgrade-strip">
-                <strong>{language === 'zh' ? '自动化方案' : 'Automation plan'}</strong>
+                <strong>{language === 'zh' ? '数据覆盖' : 'Data coverage'}</strong>
                 <span>
                   {language === 'zh'
-                    ? '后台定时采集当天赛程、赛果与 SP 快照，写入静态数据；网页刷新只读取已有预测，不会临时重算导致漂移。'
-                    : 'Schedules are grouped by Sporttery day, sorted by official kickoff time, and locked after kickoff for review only.'}
+                    ? '官方 HAD / HHAD SP、SP 快照走势、赛果归档、Elo 强度、近一年攻防样本、赛程密度与进球模型。'
+                    : 'Official HAD / HHAD SP, SP movement, result archive, Elo strength, last-year form, schedule density, and goal model.'}
                 </span>
                 <span>
                   {language === 'zh'
-                    ? '后续接源：伤停、首发、天气、裁判、xG/xGA 与外部赔率；接入前只标注缺失，不编造内容。'
-                    : 'Source plan: injuries, lineups, weather, referees, xG/xGA, and external odds. No stable feed means no fabricated input.'}
+                    ? '伤停、首发、天气、裁判、xG/xGA 与外部赔率进入赛前信息层，随可验证信号辅助修正风险判断。'
+                    : 'Injuries, lineups, weather, referees, xG/xGA, and external odds feed the pre-match signal layer when verified.'}
                 </span>
               </div>
               <div className="professional-framework-grid">

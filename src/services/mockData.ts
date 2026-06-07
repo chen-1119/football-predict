@@ -60,6 +60,47 @@ export interface MatchStats {
   redCards: { home: number; away: number };
 }
 
+export interface ExternalMatchSignals {
+  updatedAt?: string;
+  source?: string;
+  injuries?: {
+    home?: MultiLangString[];
+    away?: MultiLangString[];
+    summary?: MultiLangString;
+  };
+  lineups?: {
+    homeFormation?: string;
+    awayFormation?: string;
+    summary?: MultiLangString;
+  };
+  weather?: {
+    temperatureC?: number;
+    condition?: MultiLangString;
+    windKph?: number;
+    summary?: MultiLangString;
+  };
+  referee?: {
+    name?: string;
+    cardsPerMatch?: number;
+    penaltiesPerMatch?: number;
+    summary?: MultiLangString;
+  };
+  expectedGoals?: {
+    homeXg?: number;
+    awayXg?: number;
+    homeXga?: number;
+    awayXga?: number;
+    summary?: MultiLangString;
+  };
+  externalOdds?: {
+    source?: string;
+    odds1?: number;
+    oddsX?: number;
+    odds2?: number;
+    summary?: MultiLangString;
+  };
+}
+
 export interface PredictionMeta {
   policyVersion?: string;
   promptVersion?: string;
@@ -355,6 +396,7 @@ export interface Match {
   predictionMeta?: PredictionMeta;
   probabilityModel?: MatchProbabilityModel;
   stats?: MatchStats;
+  externalSignals?: ExternalMatchSignals;
   recentForm?: {
     home: TeamRecentForm;
     away: TeamRecentForm;
