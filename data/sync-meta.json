@@ -1,9 +1,9 @@
 {
   "version": 1,
   "source": "sporttery",
-  "updatedAt": "2026-06-07T13:19:59.034Z",
-  "capturedAt": "2026-06-07T13:19:59.034Z",
-  "lastAttemptAt": "2026-06-07T13:55:21.145Z",
+  "updatedAt": "2026-06-07T13:55:56.267Z",
+  "capturedAt": "2026-06-07T13:55:56.267Z",
+  "lastAttemptAt": "2026-06-07T13:55:56.267Z",
   "officialOddsMatches": 4,
   "officialHandicapOddsMatches": 4,
   "officialResultMatches": 3004,
@@ -23,7 +23,8 @@
   "files": {
     "current": 4,
     "history": 3004,
-    "teams": 625
+    "teams": 625,
+    "predictionSnapshots": 27
   },
   "refreshPolicy": {
     "workflowMinutes": 5,
@@ -32,23 +33,42 @@
     "note": "GitHub Pages serves static JSON. The page checks for newer JSON regularly; GitHub Actions refreshes the source files on schedule."
   },
   "attempt": {
-    "capturedAt": "2026-06-07T13:55:21.145Z",
-    "officialOddsMatches": 0,
-    "officialHandicapOddsMatches": 0,
-    "officialResultMatches": 0,
-    "publishableMatches": 0
+    "capturedAt": "2026-06-07T13:55:56.267Z",
+    "officialOddsMatches": 4,
+    "officialHandicapOddsMatches": 4,
+    "officialResultMatches": 3004,
+    "publishableMatches": 3008
   },
   "oddsHistory": {
-    "rows": 3328,
-    "appended": 0,
-    "updated": 0,
-    "skipped": "Sporttery returned no publishable matches; kept existing match store"
+    "rows": 3490,
+    "appended": 27,
+    "updated": 0
   },
-  "fallback": {
-    "keptExisting": true,
-    "mergedPartialFresh": false,
-    "reason": "Sporttery returned no publishable matches; kept existing match store",
-    "existingMatches": 3008,
-    "freshPublishableMatches": 0
+  "predictionSnapshots": {
+    "total": 27,
+    "byPhase": {
+      "review": 23,
+      "mid": 3,
+      "baseline": 1
+    },
+    "appended": 0,
+    "updated": 27
+  },
+  "modelCalibration": {
+    "version": "rolling-calibration-v1",
+    "sample": {
+      "rows": 31,
+      "oneXTwo": 13,
+      "goals": 13,
+      "best": 5,
+      "recommendationPool": 18
+    },
+    "metrics": {
+      "oneXTwoBrier": 0.7351,
+      "oneXTwoLogLoss": 1.1931,
+      "oneXTwoHitRate": 0.308,
+      "goalsHitRate": 0.385,
+      "bestHitRate": 0.2
+    }
   }
 }

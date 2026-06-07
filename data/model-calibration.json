@@ -1,0 +1,231 @@
+{
+  "version": "rolling-calibration-v1",
+  "generatedAt": "2026-06-07T13:55:56.334Z",
+  "source": "settled-pre-match-predictions",
+  "sample": {
+    "rows": 31,
+    "oneXTwo": 13,
+    "goals": 13,
+    "best": 5,
+    "recommendationPool": 18
+  },
+  "metrics": {
+    "oneXTwoBrier": 0.7351,
+    "oneXTwoLogLoss": 1.1931,
+    "oneXTwoHitRate": 0.308,
+    "goalsHitRate": 0.385,
+    "bestHitRate": 0.2
+  },
+  "weightsByProfile": {
+    "international": {
+      "market": 0.68,
+      "elo": 0.18,
+      "poisson": 0.14,
+      "sample": 8,
+      "hitRate": 0.375
+    },
+    "japan": {
+      "market": 0.6,
+      "elo": 0.18,
+      "poisson": 0.22,
+      "sample": 5,
+      "hitRate": 0.2
+    },
+    "other": {
+      "market": 0.58,
+      "elo": 0.22,
+      "poisson": 0.2,
+      "sample": 0,
+      "hitRate": null
+    }
+  },
+  "gateByProfile": {
+    "international": {
+      "minProbabilityBoost": 0.045,
+      "minModelGapBoost": 0.025,
+      "minHandicapSupportBoost": 0.06,
+      "trustPenalty": 7,
+      "maxRiskTags": 2,
+      "goalsMinBoost": 0.04,
+      "reason": "cold-profile"
+    },
+    "japan": {
+      "minProbabilityBoost": 0.07,
+      "minModelGapBoost": 0.04,
+      "minHandicapSupportBoost": 0.05,
+      "trustPenalty": 12,
+      "maxRiskTags": 1,
+      "goalsMinBoost": 0,
+      "reason": "very-cold-profile"
+    },
+    "other": {
+      "minProbabilityBoost": 0,
+      "minModelGapBoost": 0,
+      "minHandicapSupportBoost": 0,
+      "trustPenalty": 0,
+      "maxRiskTags": 3,
+      "goalsMinBoost": 0,
+      "reason": "neutral-profile"
+    }
+  },
+  "summary": {
+    "total": {
+      "settled": 31,
+      "won": 10,
+      "lost": 21,
+      "hitRate": 0.323
+    },
+    "byMarket": {
+      "1X2": {
+        "settled": 13,
+        "won": 4,
+        "lost": 9,
+        "hitRate": 0.308
+      },
+      "GOALS": {
+        "settled": 13,
+        "won": 5,
+        "lost": 8,
+        "hitRate": 0.385
+      },
+      "BEST": {
+        "settled": 5,
+        "won": 1,
+        "lost": 4,
+        "hitRate": 0.2
+      }
+    },
+    "byProfile": {
+      "international": {
+        "settled": 20,
+        "won": 6,
+        "lost": 14,
+        "hitRate": 0.3
+      },
+      "japan": {
+        "settled": 11,
+        "won": 4,
+        "lost": 7,
+        "hitRate": 0.364
+      }
+    },
+    "byMarketProfile": {
+      "1X2:international": {
+        "settled": 8,
+        "won": 3,
+        "lost": 5,
+        "hitRate": 0.375
+      },
+      "GOALS:international": {
+        "settled": 8,
+        "won": 2,
+        "lost": 6,
+        "hitRate": 0.25
+      },
+      "BEST:international": {
+        "settled": 4,
+        "won": 1,
+        "lost": 3,
+        "hitRate": 0.25
+      },
+      "1X2:japan": {
+        "settled": 5,
+        "won": 1,
+        "lost": 4,
+        "hitRate": 0.2
+      },
+      "GOALS:japan": {
+        "settled": 5,
+        "won": 3,
+        "lost": 2,
+        "hitRate": 0.6
+      },
+      "BEST:japan": {
+        "settled": 1,
+        "won": 0,
+        "lost": 1,
+        "hitRate": 0
+      }
+    },
+    "byOddsBucket": {
+      "sp_le_1_45": {
+        "settled": 5,
+        "won": 2,
+        "lost": 3,
+        "hitRate": 0.4
+      },
+      "sp_1_71_2_05": {
+        "settled": 5,
+        "won": 1,
+        "lost": 4,
+        "hitRate": 0.2
+      },
+      "sp_1_46_1_70": {
+        "settled": 2,
+        "won": 1,
+        "lost": 1,
+        "hitRate": 0.5
+      }
+    },
+    "byTip": {
+      "1X2:1": {
+        "settled": 11,
+        "won": 3,
+        "lost": 8,
+        "hitRate": 0.273
+      },
+      "GOALS:3": {
+        "settled": 6,
+        "won": 2,
+        "lost": 4,
+        "hitRate": 0.333
+      },
+      "BEST:1": {
+        "settled": 4,
+        "won": 1,
+        "lost": 3,
+        "hitRate": 0.25
+      },
+      "GOALS:4": {
+        "settled": 2,
+        "won": 0,
+        "lost": 2,
+        "hitRate": 0
+      },
+      "1X2:2": {
+        "settled": 1,
+        "won": 1,
+        "lost": 0,
+        "hitRate": 1
+      },
+      "1X2:X": {
+        "settled": 1,
+        "won": 0,
+        "lost": 1,
+        "hitRate": 0
+      },
+      "GOALS:O2.5": {
+        "settled": 1,
+        "won": 0,
+        "lost": 1,
+        "hitRate": 0
+      },
+      "BEST:X": {
+        "settled": 1,
+        "won": 0,
+        "lost": 1,
+        "hitRate": 0
+      },
+      "GOALS:U2.5": {
+        "settled": 4,
+        "won": 3,
+        "lost": 1,
+        "hitRate": 0.75
+      }
+    }
+  },
+  "note": {
+    "zh": "该文件由已结算赛前预测自动生成，只用于动态调权和推荐闸门，不会回写赛后方向。",
+    "en": "Generated from settled pre-match predictions. It only adjusts weights and gates; it never rewrites post-match picks."
+  }
+}
