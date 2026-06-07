@@ -12,8 +12,8 @@ const WINDOW_FORWARD_DAYS = Math.max(1, Number(process.env.MATCH_WINDOW_FORWARD_
 const ODDS_HISTORY_RETENTION_DAYS = Math.max(1, Number(process.env.ODDS_HISTORY_RETENTION_DAYS || 365));
 const ODDS_HISTORY_BUCKET_MINUTES = Math.max(1, Number(process.env.ODDS_HISTORY_BUCKET_MINUTES || 5));
 const PAGE_POLL_SECONDS = Math.max(15, Number(process.env.PAGE_POLL_SECONDS || 30));
-const ANALYST_PROMPT_VERSION = "professional-football-analyst-v12";
-const PREDICTION_POLICY_VERSION = "sporttery-day-value-gate-v20";
+const ANALYST_PROMPT_VERSION = "professional-football-analyst-v13";
+const PREDICTION_POLICY_VERSION = "sporttery-day-value-gate-v21";
 const FORM_LOOKBACK_MATCHES = 12;
 const METHODS = (process.env.SPORTTERY_METHODS || "concern,live,result,all")
   .split(",")
@@ -636,6 +636,7 @@ function calibrateOutcomeProbabilities(match, probabilities, marketProbabilities
   const marketLeaderOddsBucket = predictionOddsBucket(marketLeaderOdds);
   const oddsBucket = health?.oneXTwo?.byOddsBucket?.[marketLeaderOddsBucket];
   const lowSpSideBucket = health?.oneXTwo?.lowSpSide;
+  const profileMarketBucket = health?.byMarketProfile?.[`1X2:${profileKey}`];
 
   const applyPenalty = (code, penalty, reason) => {
     const before = adjusted[code === "1" ? "home" : code === "X" ? "draw" : "away"];
@@ -651,42 +652,47 @@ function calibrateOutcomeProbabilities(match, probabilities, marketProbabilities
     }
   };
 
-  if (homeFavoriteBucket?.cooldown && marketLeader.code === "1") {
+  if (isCoolingBucket(homeFavoriteBucket) && marketLeader.code === "1") {
     const missPressure = homeFavoriteBucket.hitRate === null ? 0.06 : clamp((0.45 - homeFavoriteBucket.hitRate) * 0.3, 0.025, 0.08);
     applyPenalty("1", missPressure, "home-favorite-hit-rate-cooldown");
   }
 
-  if (modelTipBucket?.cooldown && modelLeader.code !== "X") {
+  if (isCoolingBucket(modelTipBucket) && modelLeader.code !== "X") {
     const missPressure = modelTipBucket.hitRate === null ? 0.035 : clamp((0.44 - modelTipBucket.hitRate) * 0.2, 0.018, 0.05);
     applyPenalty(modelLeader.code, missPressure, `tip-${modelLeader.code}-hit-rate-cooldown`);
   }
 
-  if (profileBucket?.cooldown && modelLeader.code !== "X") {
+  if (isCoolingBucket(profileBucket) && modelLeader.code !== "X") {
     const missPressure = profileBucket.hitRate === null ? 0.025 : clamp((0.44 - profileBucket.hitRate) * 0.16, 0.015, 0.04);
     applyPenalty(modelLeader.code, missPressure, `${profileKey}-1x2-hit-rate-cooldown`);
   }
 
-  if (oddsBucket?.cooldown && marketLeader.code !== "X") {
+  if (isCoolingBucket(oddsBucket) && marketLeader.code !== "X") {
     const missPressure = oddsBucket.hitRate === null ? 0.025 : clamp((0.44 - oddsBucket.hitRate) * 0.16, 0.015, 0.04);
     applyPenalty(marketLeader.code, missPressure, `${marketLeaderOddsBucket}-hit-rate-cooldown`);
   }
 
-  if (lowSpSideBucket?.cooldown && marketLeader.code !== "X" && marketLeaderOdds <= 1.7) {
+  if (isCoolingBucket(lowSpSideBucket) && marketLeader.code !== "X" && marketLeaderOdds <= 1.7) {
     const missPressure = lowSpSideBucket.hitRate === null ? 0.025 : clamp((0.44 - lowSpSideBucket.hitRate) * 0.16, 0.015, 0.04);
     applyPenalty(marketLeader.code, missPressure, "low-sp-side-hit-rate-cooldown");
   }
 
-  if (oneXTwoBucket?.cooldown && modelLeader.code !== "X") {
+  if (isCoolingBucket(oneXTwoBucket) && modelLeader.code !== "X") {
     const missPressure = oneXTwoBucket.hitRate === null ? 0.035 : clamp((0.45 - oneXTwoBucket.hitRate) * 0.22, 0.02, 0.055);
     applyPenalty(modelLeader.code, missPressure, "one-x-two-hit-rate-cooldown");
   }
 
+  if (isCoolingBucket(profileMarketBucket) && marketLeader.code !== "X") {
+    const missPressure = profileMarketBucket.hitRate === null ? 0.03 : clamp((0.45 - profileMarketBucket.hitRate) * 0.18, 0.02, 0.055);
+    applyPenalty(marketLeader.code, missPressure, `${profileKey}-short-form-brake`);
+  }
+
   if (profile.isInternational && marketLeader.code !== "X" && marketLeaderOdds <= 1.7) {
-    applyPenalty(marketLeader.code, 0.03, "international-low-sp-shrink");
+    applyPenalty(marketLeader.code, 0.05, "international-low-sp-shrink");
   }
 
   if (profile.isJapan && marketLeader.code !== "X" && marketLeaderOdds <= 2.05) {
-    applyPenalty(marketLeader.code, 0.04, "jleague-favorite-shrink");
+    applyPenalty(marketLeader.code, 0.07, "jleague-favorite-shrink");
   }
 
   return {
@@ -709,17 +715,17 @@ function calibrateGoalProbabilities(match, over25Probability, bttsProbability) {
   const reasons = [];
   let shrinkFactor = 1;
 
-  if (goalsBucket?.cooldown) {
+  if (isCoolingBucket(goalsBucket)) {
     shrinkFactor *= 0.55;
     reasons.push("goals-hit-rate-cooldown");
   }
 
-  if (directionBucket?.cooldown) {
+  if (isCoolingBucket(directionBucket)) {
     shrinkFactor *= 0.76;
     reasons.push(`${directionKey}-hit-rate-cooldown`);
   }
 
-  if (profileBucket?.cooldown) {
+  if (isCoolingBucket(profileBucket)) {
     shrinkFactor *= 0.8;
     reasons.push(`${profileKey}-goals-hit-rate-cooldown`);
   }
@@ -1137,6 +1143,8 @@ function buildPredictionHealth(existingMatches) {
       won,
       lost,
       hitRate: hitRate === null ? null : Number(hitRate.toFixed(3)),
+      urgentCooldown: settled >= Math.min(3, minSettled) && hitRate !== null && hitRate < Math.min(minHitRate, 0.35),
+      hot: settled >= Math.min(3, minSettled) && hitRate !== null && hitRate >= Math.max(minHitRate + 0.16, 0.58),
       cooldown: settled >= minSettled && hitRate < minHitRate,
     };
   };
@@ -1204,6 +1212,18 @@ function buildPredictionHealth(existingMatches) {
     lowSpSide: summarize(rows.filter((row) => row.isLowSpSide), 7, 0.42),
     under25: summarize(rows.filter((row) => row.tipCode === "U2.5"), 8, 0.42),
   };
+}
+
+function isCoolingBucket(bucket) {
+  return Boolean(bucket?.cooldown || bucket?.urgentCooldown);
+}
+
+function isHotBucket(bucket, minSettled = 3, minHitRate = 0.58) {
+  return Boolean(
+    bucket
+    && Number(bucket.settled || 0) >= minSettled
+    && Number(bucket.hitRate || 0) >= minHitRate
+  );
 }
 
 function leagueMeta(leagueName) {
@@ -1544,15 +1564,18 @@ function evaluateOneXTwoGate(context) {
   const handicapSupport = hhadSupportForPick(hhadProbabilities, code);
   const profileKey = predictionProfileKey(match);
   const oddsBucket = predictionOddsBucket(odds);
+  const drawHealth = predictionHealth?.oneXTwo?.byTip?.X;
+  const drawHasPositiveSample = isHotBucket(drawHealth, 3, 0.5);
   const directionCooldown = Boolean(
-    predictionHealth?.oneXTwo?.byTip?.[code]?.cooldown
-    || predictionHealth?.oneXTwo?.byProfile?.[profileKey]?.cooldown
-    || predictionHealth?.oneXTwo?.byOddsBucket?.[oddsBucket]?.cooldown
-    || (isSidePick && odds <= 1.7 && predictionHealth?.oneXTwo?.lowSpSide?.cooldown)
-    || (code === "1" && predictionHealth?.homeFavorite?.cooldown)
-    || (code === "2" && predictionHealth?.awayFavorite?.cooldown)
+    isCoolingBucket(predictionHealth?.oneXTwo?.byTip?.[code])
+    || isCoolingBucket(predictionHealth?.oneXTwo?.byProfile?.[profileKey])
+    || isCoolingBucket(predictionHealth?.oneXTwo?.byOddsBucket?.[oddsBucket])
+    || (isSidePick && odds <= 1.7 && isCoolingBucket(predictionHealth?.oneXTwo?.lowSpSide))
+    || (code === "1" && isCoolingBucket(predictionHealth?.homeFavorite))
+    || (code === "2" && isCoolingBucket(predictionHealth?.awayFavorite))
   );
-  const oneXTwoCooldown = Boolean(predictionHealth?.byMarket?.["1X2"]?.cooldown || directionCooldown);
+  const profileMarketCooldown = isCoolingBucket(predictionHealth?.byMarketProfile?.[`1X2:${profileKey}`]);
+  const oneXTwoCooldown = Boolean(isCoolingBucket(predictionHealth?.byMarket?.["1X2"]) || profileMarketCooldown || directionCooldown);
   const reasons = [];
 
   if (analystSelection.isContrarian) reasons.push("contrarian");
@@ -1569,6 +1592,8 @@ function evaluateOneXTwoGate(context) {
   if (profile.isJapan && isSidePick && odds <= 1.75) reasons.push("jleague-volatile-favorite");
   if (directionCooldown) reasons.push("direction-hit-rate-cooldown");
   if (oneXTwoCooldown) reasons.push("recent-1x2-hit-rate-cooldown");
+  if (code === "X" && oneXTwoCooldown && !drawHasPositiveSample) reasons.push("draw-no-positive-sample");
+  if (isSidePick && oneXTwoCooldown && odds <= 2.1) reasons.push("side-short-form-brake");
 
   const fragileInternationalFavorite = profile.isInternational
     && isSidePick
@@ -1598,7 +1623,9 @@ function evaluateOneXTwoGate(context) {
     && probabilities.draw <= maxDrawPressure
     && odds > 1.08
     && odds <= 2.35
-    && riskTags.length <= 3;
+    && riskTags.length <= 3
+    && !(profile.isInternational && odds <= 1.75 && oneXTwoCooldown)
+    && !(profile.isJapan && odds <= 2.1 && oneXTwoCooldown);
 
   const stricterProfileOk = (!profile.isInternational || odds > 1.35 || (pickProbability >= 0.58 && handicapSupport >= 0.3))
     && (!profile.isJapan || odds > 1.75 || (pickProbability >= 0.56 && handicapSupport >= 0.36));
@@ -1615,7 +1642,8 @@ function evaluateOneXTwoGate(context) {
     && odds <= 2.65
     && riskTags.length <= 2
     && !(profile.isInternational && odds <= 1.34)
-    && !(profile.isJapan && odds <= 1.8 && oneXTwoCooldown);
+    && !(profile.isInternational && odds <= 1.75 && oneXTwoCooldown)
+    && !(profile.isJapan && odds <= 2.1 && oneXTwoCooldown);
 
   const cooldownValueContrarianOk = oneXTwoCooldown
     && analystSelection.isContrarian
@@ -1625,7 +1653,7 @@ function evaluateOneXTwoGate(context) {
     && riskTags.length <= 5;
 
   const valueContrarianPick = analystSelection.isContrarian
-    && (!oneXTwoCooldown || cooldownValueContrarianOk)
+    && (!oneXTwoCooldown || (code === "X" && drawHasPositiveSample && cooldownValueContrarianOk))
     && pickProbability >= (code === "X" ? 0.26 : 0.29)
     && probabilityGap <= 0.18
     && modelProbabilityGap >= (code === "X" ? 0 : 0.035)
@@ -1654,14 +1682,34 @@ function evaluateOneXTwoGate(context) {
 function evaluateGoalsGate(match, goalsTip, goalsProbability, over25Probability, bttsProbability, predictionHealth) {
   const reasons = [];
   const edge = Math.abs(over25Probability - 0.5);
+  const profile = matchVolatilityProfile(match);
   const profileKey = predictionProfileKey(match);
   const directionCooldown = Boolean(
-    predictionHealth?.goals?.byTip?.[goalsTip]?.cooldown
-    || predictionHealth?.goals?.byProfile?.[profileKey]?.cooldown
+    isCoolingBucket(predictionHealth?.goals?.byTip?.[goalsTip])
+    || isCoolingBucket(predictionHealth?.goals?.byProfile?.[profileKey])
   );
-  const goalsCooldown = Boolean(predictionHealth?.byMarket?.GOALS?.cooldown || directionCooldown);
-  const minProbability = goalsCooldown ? 0.68 : 0.63;
-  const minEdge = goalsCooldown ? 0.18 : 0.13;
+  const goalsCooldown = Boolean(isCoolingBucket(predictionHealth?.byMarket?.GOALS) || directionCooldown);
+  const under25IsHot = goalsTip === "U2.5" && isHotBucket(predictionHealth?.under25, 3, 0.6);
+  let minProbability = goalsCooldown ? 0.68 : 0.63;
+  let minEdge = goalsCooldown ? 0.18 : 0.13;
+
+  if (under25IsHot) {
+    minProbability -= 0.04;
+    minEdge -= 0.03;
+    reasons.push("under25-hot-sample");
+  }
+
+  if (profile.isInternational && goalsTip === "O2.5") {
+    minProbability += 0.05;
+    minEdge += 0.03;
+    reasons.push("international-over-goals-noise");
+  }
+
+  if (profile.isJapan && goalsTip === "O2.5") {
+    minProbability += 0.03;
+    minEdge += 0.02;
+    reasons.push("jleague-over-goals-noise");
+  }
 
   if (goalsProbability < minProbability) reasons.push("thin-goal-edge");
   if (edge < minEdge) reasons.push("near-coin-flip-total");
@@ -1670,7 +1718,10 @@ function evaluateGoalsGate(match, goalsTip, goalsProbability, over25Probability,
   if (goalsCooldown) reasons.push("recent-goals-hit-rate-cooldown");
 
   return {
-    promote: goalsProbability >= minProbability && edge >= minEdge && !(bttsProbability >= 0.46 && bttsProbability <= 0.56),
+    promote: goalsProbability >= minProbability
+      && edge >= minEdge
+      && !(bttsProbability >= 0.46 && bttsProbability <= 0.56)
+      && (goalsTip === "U2.5" || goalsProbability >= minProbability + 0.04),
     reasons,
   };
 }
@@ -2053,7 +2104,10 @@ function predictionSet(match) {
     zh: "\u89c2\u5bdf\u4e3a\u4e3b \u80dc\u5e73\u8d1f\u4e0d\u5f3a\u63a8",
     en: "Watch first: no 1X2 pick",
   };
-  const oneXTwoHealthCooldown = Boolean(match.predictionHealth?.byMarket?.["1X2"]?.cooldown || match.predictionHealth?.homeFavorite?.cooldown);
+  const oneXTwoHealthCooldown = Boolean(
+    isCoolingBucket(match.predictionHealth?.byMarket?.["1X2"])
+    || isCoolingBucket(match.predictionHealth?.homeFavorite)
+  );
   const healthCooldownTag = oneXTwoHealthCooldown
     ? [{ zh: "\u8fd1\u671f\u547d\u4e2d\u7387\u51b7\u5374", en: "Recent hit-rate cooldown" }]
     : [];
@@ -2127,7 +2181,7 @@ function predictionSet(match) {
     ? riskTags.filter((tag) => tag.en === "Goal-model borderline")
     : [
         ...riskTags.filter((tag) => tag.en === "Goal-model borderline"),
-        ...(match.predictionHealth?.byMarket?.GOALS?.cooldown ? [{ zh: "进球命中率冷却", en: "Goals hit-rate cooldown" }] : []),
+        ...(isCoolingBucket(match.predictionHealth?.byMarket?.GOALS) ? [{ zh: "进球命中率冷却", en: "Goals hit-rate cooldown" }] : []),
         { zh: "进球闸门未过", en: "Goals gate not met" },
       ];
 
@@ -2405,8 +2459,8 @@ function applyPredictionPersistence(match, existing, capturedAt) {
     updatedAt: capturedAt,
     lockedAt: started ? (existing?.predictionMeta?.lockedAt || capturedAt) : undefined,
     dataPolicy: {
-      zh: "模型按中国竞彩网竞彩日归档，按官方开赛时间展示；已使用官方 SP、让球 SP、赛果、SP 快照、Elo、近一年历史攻防、赛程密度和比分分布。低赔强队不自动入选，必须通过让球盘同向支持、概率优势和近期命中冷却校验；盘口分歧下的防平价值可低权重保留。开赛前仅在官方 SP/盘口变化达到阈值时更新，开赛后锁定赛前预测并只做赛果复盘。外部赔率、伤停、首发、天气、裁判、xG/xGA 等进入接源计划，稳定校验前不参与评分、不编造。",
-      en: "The model is grouped by Sporttery business day and displayed by official kickoff time. It uses official Sporttery SP, handicap SP, results, SP snapshots, Elo, last-year form, schedule density, and score distribution. Low-SP favourites are not promoted by default; they must pass handicap support, probability-edge, and recent-hit cooldown checks. Draw-cover value under market disagreement can remain as a low-weight output. Before kickoff it updates only on material official SP/handicap changes; after kickoff it locks the pre-match forecast for review. External odds, injuries, lineups, weather, referees, and xG/xGA remain in the source plan until verified, with no fabricated scoring input.",
+      zh: "模型按中国竞彩网竞彩日归档，按官方开赛时间展示；已使用官方 SP、让球 SP、赛果、SP 快照、Elo、近一年历史攻防、赛程密度和比分分布。低赔强队不自动入选，必须通过让球盘同向支持、概率优势、近期命中冷却和短样本急刹校验；1X2 冷却期内，平局/冷门也必须有正向历史样本才允许升推荐。进球数优先保留回测更稳的 U2.5，高噪声大球方向从严。开赛前仅在官方 SP/盘口变化达到阈值时更新，开赛后锁定赛前预测并只做赛果复盘。外部赔率、伤停、首发、天气、裁判、xG/xGA 等进入接源计划，稳定校验前不参与评分、不编造。",
+      en: "The model is grouped by Sporttery business day and displayed by official kickoff time. It uses official Sporttery SP, handicap SP, results, SP snapshots, Elo, last-year form, schedule density, and score distribution. Low-SP favourites are not promoted by default; they must pass handicap support, probability edge, recent-hit cooldown, and short-sample emergency brakes. During a 1X2 cooldown, draws and underdogs also need positive historical evidence before promotion. Totals prefer backtested U2.5 signals, while noisy over-goals directions are tightened. Before kickoff it updates only on material official SP/handicap changes; after kickoff it locks the pre-match forecast for review. External odds, injuries, lineups, weather, referees, and xG/xGA remain in the source plan until verified, with no fabricated scoring input.",
     },
   };
 

@@ -295,7 +295,9 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     hitRate: { zh: '已结算精选命中率', en: 'Settled Best Hit Rate' },
     selectedMatches: { zh: '当前筛选场次', en: 'Filtered Matches' },
     signalSummary: { zh: '推荐分组', en: 'Signal Split' },
-    avgTrust: { zh: '平均可用度', en: 'Average Usability' },
+    avgTrust: { zh: '推荐质量', en: 'Pick Quality' },
+    riskPaused: { zh: '风控暂停', en: 'Risk paused' },
+    riskPausedNote: { zh: '无达标方向，等待下一轮 SP/盘口', en: 'No qualified pick; wait for next SP/handicap check' },
     dataStatusTitle: { zh: '数据同步', en: 'Data Sync' },
     dataCurrent: { zh: '当前赛程', en: 'Current' },
     dataHistory: { zh: '历史库', en: 'History' },
@@ -638,8 +640,12 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     },
     {
       label: t('avgTrust'),
-      value: avgTrust === null ? '--' : `${avgTrust}%`,
-      note: language === 'zh' ? `按${t(sortBy)}排序` : `Sorted by ${t(sortBy)}`,
+      value: recommendationCounts.pick === 0
+        ? t('riskPaused')
+        : avgTrust === null ? '--' : `${avgTrust}%`,
+      note: recommendationCounts.pick === 0
+        ? t('riskPausedNote')
+        : language === 'zh' ? `按${t(sortBy)}排序` : `Sorted by ${t(sortBy)}`,
       icon: Activity,
       tone: ''
     }
