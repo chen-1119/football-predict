@@ -2245,6 +2245,12 @@ function predictionSet(match) {
     || bestHasWeakHandicap
     || bestHasOverheatedFavorite
     || bestHasSevereRisk;
+  const goalsCanCarryBest = bestShouldWatch
+    && goalsGate.promote
+    && goals.tipCode !== "WATCH"
+    && goalsTip === "U2.5"
+    && goals.trustScore >= 62
+    && goals.riskTags.length <= 2;
   const bestPrefix = bestShouldWatch
     ? { zh: "观察为主", en: "Watch first" }
     : analystSelection.isContrarian
@@ -2306,7 +2312,30 @@ function predictionSet(match) {
     hhadProbabilities
   });
 
-  const best = {
+  const best = goalsCanCarryBest ? {
+    marketType: "BEST",
+    tipCode: goals.tipCode,
+    tipLabel: {
+      zh: `进球精选 ${goalsTipLabel.zh}`,
+      en: `Goals pick: ${goalsTipLabel.en}`,
+    },
+    odds: goals.odds,
+    trustScore: clamp(goals.trustScore, 62, 76),
+    explanation: {
+      zh: `胜平负方向处于命中率冷却或盘口分歧中，本场 AI精选切到回测更稳的进球数方向：${goalsTipLabel.zh}。`,
+      en: `The 1X2 side is under hit-rate cooldown or market disagreement, so the best tip switches to the better-tested totals lane: ${goalsTipLabel.en}.`,
+    },
+    analysisItems: [
+      ...goals.analysisItems,
+      {
+        zh: "胜平负推荐闸门未过，精选不强行追正路；仅在进球数边际和回测方向同时满足时输出。",
+        en: "The 1X2 gate was not met, so the best tip does not chase the favourite. Totals are promoted only when edge and historical lane agree.",
+      },
+    ],
+    riskTags: goals.riskTags,
+    visibilityStatus: "FREE",
+    resultStatus: resultStatus(match, goals.tipCode, "GOALS"),
+  } : {
     marketType: "BEST",
     tipCode: bestShouldWatch ? "WATCH" : modelLean.tipCode,
     tipLabel: {

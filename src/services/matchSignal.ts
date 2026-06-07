@@ -46,6 +46,10 @@ const finalProbabilityGap = (match: Match) => {
   return values[0] - values[1];
 };
 
+const isGoalsTip = (tipCode: string) => (
+  tipCode === 'O2.5' || tipCode === 'U2.5' || tipCode === '7+' || /^[0-6]$/.test(tipCode)
+);
+
 export function getMatchSignal(match: Match): MatchSignal {
   if (match.status === 'FINISHED') {
     return {
@@ -120,6 +124,35 @@ export function getMatchSignal(match: Match): MatchSignal {
   const riskNames = riskTags.map((tag) => tag.zh);
   const riskNamesEn = riskTags.map((tag) => tag.en.toLowerCase());
   const trustScore = best.trustScore || 0;
+
+  if (isGoalsTip(best.tipCode)) {
+    if (riskTags.length >= 3 || trustScore < 58) {
+      return {
+        category: 'watch',
+        label: labels.watch,
+        note: {
+          zh: '精选已切到进球数市场，但边际或风险仍需等待下一次 SP 快照确认。',
+          en: 'The best tip has switched to totals, but edge or risk still needs the next SP snapshot.'
+        },
+        tone: 'warning',
+        trustScore,
+        riskCount: riskTags.length
+      };
+    }
+
+    return {
+      category: trustScore >= 72 ? 'steady' : 'lean',
+      label: trustScore >= 72 ? labels.steady : labels.lean,
+      note: {
+        zh: '胜平负冷却时，模型优先选择回测更稳的进球数方向，不强行追正路。',
+        en: 'When 1X2 is under cooldown, the model promotes the better-tested totals lane instead of forcing the favourite.'
+      },
+      tone: 'success',
+      trustScore,
+      riskCount: riskTags.length
+    };
+  }
+
   const trendIsMixed = match.oddsTrend?.direction === 'mixed';
   const hasDrawRisk = hasRisk(riskNames, '防平');
   const hasWeakHandicap = hasRisk(riskNames, '让球支持不足');

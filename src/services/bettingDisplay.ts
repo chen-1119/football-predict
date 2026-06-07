@@ -110,6 +110,10 @@ export function getPredictionValueLabel(prediction: PredictionDetail, language: 
     return language === 'zh' ? '建议' : 'Advice';
   }
 
+  if (prediction.marketType === 'BEST' && !sportteryResultLabels[prediction.tipCode as keyof typeof sportteryResultLabels]) {
+    return language === 'zh' ? '模型值' : 'Model';
+  }
+
   if (prediction.marketType === '1X2' || prediction.marketType === 'BEST') {
     return 'SP';
   }

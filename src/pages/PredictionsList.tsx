@@ -15,7 +15,7 @@ import {
 import { useApp } from '../context/AppContextCore';
 import { formatBeijingDateString, getDateStringOffset, leagues } from '../services/mockData';
 import type { Country, League, Match, PredictionDetail } from '../services/mockData';
-import { getImpliedProbabilities, getPredictionTipDisplay, getSportteryPoolRows } from '../services/bettingDisplay';
+import { getImpliedProbabilities, getPredictionTipDisplay, getPredictionValueLabel, getSportteryPoolRows } from '../services/bettingDisplay';
 import { getCountryById, getLeagueById, getTeamById } from '../services/entities';
 import { getMatchSignal, type MatchSignalCategory } from '../services/matchSignal';
 import { getVisiblePrediction, getVisiblePredictions } from '../services/predictionVisibility';
@@ -522,7 +522,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
           ? (language === 'zh' ? '避开，不硬上' : 'Avoid')
           : (language === 'zh' ? '观察，不下手' : 'Watch, no bet');
     const primaryMeta = pickedPrediction && pickedPrediction.odds > 0 && !lockedPick
-      ? `SP ${pickedPrediction.odds.toFixed(2)}`
+      ? `${getPredictionValueLabel(pickedPrediction, language)} ${pickedPrediction.odds.toFixed(2)}`
       : leadCode && leadProbability !== null
         ? `${outcomeLabels[leadCode][language]} ${Math.round(leadProbability)}%`
         : '--';

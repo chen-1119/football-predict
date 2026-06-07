@@ -186,7 +186,7 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
     groupForecasts.length === WORLD_CUP_OFFICIAL.groups && groupForecasts.every((group) => group.teams.length === 4);
   const hasCompleteThirdLane = projectedQualifiers.bestThird.length >= 8;
   const hasKnockoutRoute = knockoutForecast.length >= 16;
-  const modelCoverageScore = Math.min(
+  const routeCoverageScore = Math.min(
     92,
     44
       + (hasCompleteGroupGrid ? 10 : 0)
@@ -201,7 +201,7 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
     kicker: { zh: '世界杯专题', en: 'World Cup Desk' },
     title: { zh: '2026 世界杯专栏', en: 'World Cup 2026 Desk' },
     subtitle: {
-      zh: '小组赛预测、32 强晋级路径、淘汰赛轮次、争冠层级和竞彩观察场次集中展示；实时 SP 上线后自动进入单场模型。',
+      zh: '小组赛预测、32 强晋级路径、淘汰赛轮次、争冠层级和竞彩观察场次集中展示；实时 SP 上线后再进入单场推荐模型。',
       en: 'Group forecasts, Round-of-32 routes, knockout rounds, title tiers and Sporttery watch matches in one place; live SP joins match models when available.'
     },
     host: { zh: '举办地', en: 'Host' },
@@ -213,11 +213,13 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
     stageTitle: { zh: '赛制与晋级路径', en: 'Format and Route' },
     groupTitle: { zh: '小组赛预测', en: 'Group Forecast' },
     groupSubtitle: {
-      zh: '当前采用 12 组联动模拟：FIFA 排名强度、东道主加成、新军降权和小组第三全局竞争一起计算；中国竞彩网世界杯 SP 上线后，单场赔率会自动并入模型。',
-      en: 'Uses a 12-group linked simulation: FIFA rank strength, host boost, debutant adjustment and global best-third competition are calculated together. Sporttery World Cup SP will merge once available.'
+      zh: '当前采用赛前路径推演：FIFA 排名强度、东道主加成、新军降权和小组第三全局竞争一起计算；世界杯 SP 上线前只看晋级概率，不包装成单场推荐。',
+      en: 'Uses pre-tournament route projection: FIFA rank strength, host boost, debutant adjustment and global best-third competition are calculated together. Sporttery World Cup SP will merge once available.'
     },
-    baseline: { zh: '联动模拟版', en: 'Linked simulation' },
+    baseline: { zh: '赛前路径推演', en: 'Route projection' },
     modelMethod: { zh: '计算说明', en: 'Method' },
+    projectionNote: { zh: '不是虚拟赛果，是开赛前用已知赛制与球队强度做晋级概率推演', en: 'Not fake results: this projects route probabilities from known format and team strength before kickoff' },
+    projectionRuns: { zh: '次路径推演', en: 'route runs' },
     rank: { zh: '排名', en: 'Rank' },
     points: { zh: '预计积分', en: 'Projected pts' },
     advance: { zh: '总晋级', en: 'Advance' },
@@ -263,9 +265,9 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
     contentTitle: { zh: '内容升级路线', en: 'Content Roadmap' },
     sync: { zh: '数据同步', en: 'Data Sync' },
     active: { zh: '观察场次', en: 'Watch matches' },
-    coverage: { zh: '模型覆盖', en: 'Model coverage' },
-    watchSignal: { zh: '单场信号', en: 'Match signal' },
-    promoted: { zh: '推荐通过', en: 'Promoted' },
+    coverage: { zh: '路径覆盖', en: 'Route coverage' },
+    watchSignal: { zh: '单场可信', en: 'Match trust' },
+    promoted: { zh: '已过闸门', en: 'Gate passed' },
     trust: { zh: '平均可信', en: 'Average trust' },
     topLean: { zh: '最高优先级', en: 'Top priority' },
     updated: { zh: '上次检查', en: 'Last checked' },
@@ -319,7 +321,7 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
         <article>
           <Activity size={18} />
           <span>{t('coverage')}</span>
-          <strong>{modelCoverageScore}%</strong>
+          <strong>{routeCoverageScore}%</strong>
           <small>
             {t('watchSignal')} {averageWatchSignal ? `${averageWatchSignal}%` : '--'} · {t('promoted')}{' '}
             {promotedWatchCount}/{Math.max(1, watchMatches.length)}
@@ -336,13 +338,13 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
             </span>
             <p>{t('groupSubtitle')}</p>
           </div>
-          <span className="worldcup-sync-pill">{t('baseline')} · {WORLD_CUP_FORECAST_MODEL.simulations.toLocaleString()}</span>
+          <span className="worldcup-sync-pill">{t('baseline')} · {WORLD_CUP_FORECAST_MODEL.simulations.toLocaleString()} {t('projectionRuns')}</span>
         </div>
 
         <div className="worldcup-model-note">
           <strong>{t('modelMethod')}</strong>
           <p>{WORLD_CUP_FORECAST_MODEL[language]}</p>
-          <span>{WORLD_CUP_FORECAST_MODEL.version}</span>
+          <span>{t('projectionNote')}</span>
         </div>
 
         <div className="worldcup-group-grid">

@@ -80,8 +80,8 @@ export interface WorldCupRouteForecast {
 export const WORLD_CUP_FORECAST_MODEL = {
   version: 'worldcup-route-monte-carlo-v2',
   simulations: 12000,
-  zh: '基准模型：FIFA 排名强度 + 东道主加成 + 新军降权 + 小组赛 12,000 次确定性模拟；每轮同时计算 12 个小组，第三名必须按积分、净胜球、进球数与强度排序争夺 8 个最佳第三名名额。',
-  en: 'Baseline model: FIFA ranking strength + host boost + debutant adjustment + 12,000 deterministic group-stage simulations. All 12 groups are simulated together, and third-placed teams compete for eight slots by points, goal difference, goals scored, and strength.'
+  zh: '基准模型：FIFA 排名强度 + 东道主加成 + 新军降权 + 小组赛 12,000 次路径推演；每轮同时计算 12 个小组，第三名必须按积分、净胜球、进球数与强度排序争夺 8 个最佳第三名名额。',
+  en: 'Baseline model: FIFA ranking strength + host boost + debutant adjustment + 12,000 route projections. All 12 groups are projected together, and third-placed teams compete for eight slots by points, goal difference, goals scored, and strength.'
 };
 
 const wcTeam = (
