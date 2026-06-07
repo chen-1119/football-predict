@@ -369,6 +369,7 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
   const actionByCategory: Record<typeof signal.category, MultiLangString> = {
     steady: { zh: '可列入候选', en: 'Candidate' },
     lean: { zh: '主推候选', en: 'Model lean' },
+    value: { zh: '价值观察', en: 'Value watch' },
     watch: { zh: '观察为主', en: 'Watch' },
     avoid: { zh: '降低优先级', en: 'Lower priority' },
     unavailable: { zh: '等待开售', en: 'Wait for sale' },
@@ -377,6 +378,7 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
   const toneByCategory: Record<typeof signal.category, InsightTone> = {
     steady: 'success',
     lean: 'success',
+    value: 'warning',
     watch: 'warning',
     avoid: 'danger',
     unavailable: 'muted',

@@ -44,7 +44,11 @@ export interface WorldCupTeamForecast extends WorldCupTeamSeed {
   projectedRank: number;
   projectedPoints: number;
   groupWinProbability: number;
+  directAdvanceProbability: number;
+  bestThirdProbability: number;
   advanceProbability: number;
+  eliminationProbability: number;
+  averageRank: number;
   routeLabel: MultiLangString;
   signal: MultiLangString;
   strengthScore: number;
@@ -72,6 +76,13 @@ export interface WorldCupRouteForecast {
   champion: number;
   tier: MultiLangString;
 }
+
+export const WORLD_CUP_FORECAST_MODEL = {
+  version: 'worldcup-route-monte-carlo-v2',
+  simulations: 12000,
+  zh: '基准模型：FIFA 排名强度 + 东道主加成 + 新军降权 + 小组赛 12,000 次确定性模拟；每轮同时计算 12 个小组，第三名必须按积分、净胜球、进球数与强度排序争夺 8 个最佳第三名名额。',
+  en: 'Baseline model: FIFA ranking strength + host boost + debutant adjustment + 12,000 deterministic group-stage simulations. All 12 groups are simulated together, and third-placed teams compete for eight slots by points, goal difference, goals scored, and strength.'
+};
 
 const wcTeam = (
   id: string,
@@ -461,10 +472,11 @@ const clamp = (value: number, min = 0, max = 99) => Math.min(max, Math.max(min, 
 const round1 = (value: number) => Math.round(value * 10) / 10;
 
 const getTeamStrengthScore = (team: WorldCupTeamSeed, groupId: string): number => {
-  const hostBoost = team.isHost ? 8 : 0;
-  const debutPenalty = team.isDebut ? -2 : 0;
-  const groupVarianceBoost = ['C', 'D', 'F', 'G', 'I', 'L'].includes(groupId) ? 1.4 : 0;
-  return 104 - team.fifaRank * 0.86 + hostBoost + debutPenalty + groupVarianceBoost;
+  const hostBoost = team.isHost ? 6.5 : 0;
+  const debutPenalty = team.isDebut ? -2.4 : 0;
+  const groupVarianceBoost = ['C', 'D', 'F', 'G', 'I', 'L'].includes(groupId) ? 1.2 : 0;
+  const rankScore = 108 - Math.log2(team.fifaRank + 1) * 10.7;
+  return round1(rankScore + hostBoost + debutPenalty + groupVarianceBoost);
 };
 
 const getRouteLabel = (rank: number, advanceProbability: number): MultiLangString => {
@@ -496,57 +508,235 @@ const getSignal = (team: WorldCupTeamSeed, rank: number): MultiLangString => {
   return team.note;
 };
 
-export function getWorldCupGroupForecasts(): WorldCupGroupForecast[] {
-  return WORLD_CUP_GROUPS.map((group) => {
-    const sorted = group.teams
-      .map((team) => ({
-        team,
-        strengthScore: getTeamStrengthScore(team, group.id)
-      }))
-      .sort((a, b) => b.strengthScore - a.strengthScore);
+const hashSeed = (input: string): number => {
+  let hash = 2166136261;
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+};
 
-    const totalWeight = sorted.reduce((sum, item) => sum + Math.exp(item.strengthScore / 15), 0);
-    const secondScore = sorted[1]?.strengthScore ?? sorted[0]?.strengthScore ?? 0;
-    const thirdScore = sorted[2]?.strengthScore ?? secondScore - 10;
+const createRng = (seed: number) => {
+  let value = seed >>> 0;
+  return () => {
+    value += 0x6D2B79F5;
+    let mixed = value;
+    mixed = Math.imul(mixed ^ (mixed >>> 15), mixed | 1);
+    mixed ^= mixed + Math.imul(mixed ^ (mixed >>> 7), mixed | 61);
+    return ((mixed ^ (mixed >>> 14)) >>> 0) / 4294967296;
+  };
+};
 
-    const teams: WorldCupTeamForecast[] = sorted.map((item, index) => {
-      const projectedRank = index + 1;
-      const groupWinProbability = clamp(Math.round((Math.exp(item.strengthScore / 15) / totalWeight) * 100), 2, 88);
-      const directBase = [88, 70, 24, 8][index] ?? 5;
-      const directAdjust = index <= 1
-        ? (item.strengthScore - secondScore) * 0.34
-        : (item.strengthScore - thirdScore) * 0.22;
-      const directProbability = clamp(Math.round(directBase + directAdjust), 4, 94);
-      const thirdBase = index === 2
-        ? clamp(Math.round(42 + (item.strengthScore - thirdScore) * 0.4), 24, 68)
-        : index === 3
-          ? clamp(Math.round(10 + (item.strengthScore - thirdScore) * 0.24), 4, 26)
-          : 0;
-      const advanceProbability = clamp(directProbability + thirdBase, 4, 97);
-      const pointsBase = [6.6, 5.2, 3.7, 1.7][index] ?? 1.5;
-      const projectedPoints = round1(clamp(pointsBase + (item.strengthScore - secondScore) / 18, 0.8, 8.1));
+const poisson = (lambda: number, rng: () => number): number => {
+  const limit = Math.exp(-lambda);
+  let product = 1;
+  let goals = 0;
+  do {
+    goals += 1;
+    product *= Math.max(0.000001, rng());
+  } while (product > limit && goals < 9);
+  return goals - 1;
+};
 
-      return {
-        ...item.team,
+type WorldCupGroupEntry = {
+  groupId: string;
+  team: WorldCupTeamSeed;
+  strengthScore: number;
+};
+
+type WorldCupSimStanding = WorldCupGroupEntry & {
+  points: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  wins: number;
+};
+
+type WorldCupSimAccumulator = {
+  groupId: string;
+  team: WorldCupTeamSeed;
+  strengthScore: number;
+  rankSum: number;
+  pointsSum: number;
+  groupWins: number;
+  directAdvance: number;
+  bestThird: number;
+  thirdPlaced: number;
+};
+
+const buildStanding = (entry: WorldCupGroupEntry): WorldCupSimStanding => ({
+  ...entry,
+  points: 0,
+  goalsFor: 0,
+  goalsAgainst: 0,
+  wins: 0
+});
+
+const goalLambdas = (teamA: WorldCupGroupEntry, teamB: WorldCupGroupEntry) => {
+  const diff = (teamA.strengthScore - teamB.strengthScore) / 20;
+  const hostTempo = teamA.team.isHost || teamB.team.isHost ? 0.05 : 0;
+  const lambdaA = clamp(1.2 + diff * 0.36 + hostTempo, 0.28, 3.05);
+  const lambdaB = clamp(1.08 - diff * 0.31 + hostTempo * 0.5, 0.24, 2.85);
+  return { lambdaA, lambdaB };
+};
+
+const addMatchResult = (home: WorldCupSimStanding, away: WorldCupSimStanding, rng: () => number) => {
+  const { lambdaA, lambdaB } = goalLambdas(home, away);
+  const homeGoals = poisson(lambdaA, rng);
+  const awayGoals = poisson(lambdaB, rng);
+
+  home.goalsFor += homeGoals;
+  home.goalsAgainst += awayGoals;
+  away.goalsFor += awayGoals;
+  away.goalsAgainst += homeGoals;
+
+  if (homeGoals > awayGoals) {
+    home.points += 3;
+    home.wins += 1;
+  } else if (homeGoals < awayGoals) {
+    away.points += 3;
+    away.wins += 1;
+  } else {
+    home.points += 1;
+    away.points += 1;
+  }
+};
+
+const rankStandings = (standings: WorldCupSimStanding[]) => {
+  return [...standings].sort((a, b) => {
+    const goalDiffA = a.goalsFor - a.goalsAgainst;
+    const goalDiffB = b.goalsFor - b.goalsAgainst;
+    return b.points - a.points
+      || goalDiffB - goalDiffA
+      || b.goalsFor - a.goalsFor
+      || b.wins - a.wins
+      || b.strengthScore - a.strengthScore
+      || a.team.id.localeCompare(b.team.id);
+  });
+};
+
+let worldCupSimulationCache: { groups: WorldCupGroupForecast[]; teams: WorldCupTeamForecast[] } | null = null;
+
+function getWorldCupSimulation() {
+  if (worldCupSimulationCache) return worldCupSimulationCache;
+
+  const groupEntries = WORLD_CUP_GROUPS.map((group) => ({
+    group,
+    entries: group.teams.map((team) => ({
+      groupId: group.id,
+      team,
+      strengthScore: getTeamStrengthScore(team, group.id)
+    }))
+  }));
+
+  const accumulators = new Map<string, WorldCupSimAccumulator>();
+  groupEntries.forEach(({ group, entries }) => {
+    entries.forEach((entry) => {
+      accumulators.set(entry.team.id, {
         groupId: group.id,
-        projectedRank,
-        projectedPoints,
-        groupWinProbability,
-        advanceProbability,
-        routeLabel: getRouteLabel(projectedRank, advanceProbability),
-        signal: getSignal(item.team, projectedRank),
-        strengthScore: item.strengthScore
-      };
+        team: entry.team,
+        strengthScore: entry.strengthScore,
+        rankSum: 0,
+        pointsSum: 0,
+        groupWins: 0,
+        directAdvance: 0,
+        bestThird: 0,
+        thirdPlaced: 0
+      });
+    });
+  });
+
+  for (let sim = 0; sim < WORLD_CUP_FORECAST_MODEL.simulations; sim += 1) {
+    const rng = createRng(hashSeed(`${WORLD_CUP_FORECAST_MODEL.version}-${sim}`));
+    const thirdPlaced: WorldCupSimStanding[] = [];
+
+    groupEntries.forEach(({ entries }) => {
+      const standings = entries.map(buildStanding);
+      for (let homeIndex = 0; homeIndex < standings.length; homeIndex += 1) {
+        for (let awayIndex = homeIndex + 1; awayIndex < standings.length; awayIndex += 1) {
+          addMatchResult(standings[homeIndex], standings[awayIndex], rng);
+        }
+      }
+
+      const ranked = rankStandings(standings);
+      ranked.forEach((row, index) => {
+        const acc = accumulators.get(row.team.id);
+        if (!acc) return;
+        acc.rankSum += index + 1;
+        acc.pointsSum += row.points;
+        if (index === 0) acc.groupWins += 1;
+        if (index <= 1) acc.directAdvance += 1;
+        if (index === 2) {
+          acc.thirdPlaced += 1;
+          thirdPlaced.push(row);
+        }
+      });
     });
 
-    return {
+    rankStandings(thirdPlaced)
+      .slice(0, 8)
+      .forEach((row) => {
+        const acc = accumulators.get(row.team.id);
+        if (acc) acc.bestThird += 1;
+      });
+  }
+
+  const forecastByTeam = new Map<string, WorldCupTeamForecast>();
+  const divisor = WORLD_CUP_FORECAST_MODEL.simulations;
+  groupEntries.forEach(({ group, entries }) => {
+    const groupForecast = entries.map((entry) => {
+      const acc = accumulators.get(entry.team.id);
+      const groupWinProbability = Math.round(((acc?.groupWins || 0) / divisor) * 100);
+      const directAdvanceProbability = Math.round(((acc?.directAdvance || 0) / divisor) * 100);
+      const bestThirdProbability = Math.round(((acc?.bestThird || 0) / divisor) * 100);
+      const advanceProbability = Math.round((((acc?.directAdvance || 0) + (acc?.bestThird || 0)) / divisor) * 100);
+      const forecast = {
+        ...entry.team,
+        groupId: group.id,
+        projectedRank: 0,
+        projectedPoints: round1((acc?.pointsSum || 0) / divisor),
+        groupWinProbability,
+        directAdvanceProbability,
+        bestThirdProbability,
+        advanceProbability,
+        eliminationProbability: clamp(100 - advanceProbability, 0, 100),
+        averageRank: round1((acc?.rankSum || 0) / divisor),
+        routeLabel: getRouteLabel(0, advanceProbability),
+        signal: entry.team.note,
+        strengthScore: entry.strengthScore
+      };
+      forecastByTeam.set(entry.team.id, forecast);
+      return forecast;
+    });
+
+    groupForecast
+      .sort((a, b) => a.averageRank - b.averageRank || b.advanceProbability - a.advanceProbability || b.strengthScore - a.strengthScore)
+      .forEach((team, index) => {
+        team.projectedRank = index + 1;
+        team.routeLabel = getRouteLabel(team.projectedRank, team.advanceProbability);
+        team.signal = getSignal(team, team.projectedRank);
+      });
+  });
+
+  worldCupSimulationCache = {
+    groups: WORLD_CUP_GROUPS.map((group) => ({
       id: group.id,
       dates: group.dates,
       venueHint: group.venueHint,
       headline: group.headline,
-      teams
-    };
-  });
+      teams: group.teams
+        .map((team) => forecastByTeam.get(team.id))
+        .filter((team): team is WorldCupTeamForecast => Boolean(team))
+        .sort((a, b) => a.projectedRank - b.projectedRank)
+    })),
+    teams: Array.from(forecastByTeam.values())
+  };
+
+  return worldCupSimulationCache;
+}
+
+export function getWorldCupGroupForecasts(): WorldCupGroupForecast[] {
+  return getWorldCupSimulation().groups;
 }
 
 export function getWorldCupProjectedQualifiers(groupForecasts = getWorldCupGroupForecasts()) {
@@ -564,7 +754,7 @@ export function getWorldCupProjectedQualifiers(groupForecasts = getWorldCupGroup
   });
 
   const bestThird = [...thirdPlaced]
-    .sort((a, b) => b.advanceProbability - a.advanceProbability || b.strengthScore - a.strengthScore)
+    .sort((a, b) => b.bestThirdProbability - a.bestThirdProbability || b.projectedPoints - a.projectedPoints || b.strengthScore - a.strengthScore)
     .slice(0, 8);
 
   return {
@@ -578,16 +768,22 @@ export function getWorldCupKnockoutForecast(groupForecasts = getWorldCupGroupFor
   const qualifiers = getWorldCupProjectedQualifiers(groupForecasts);
   const seededTeams = [...qualifiers.winners, ...qualifiers.runnersUp, ...qualifiers.bestThird]
     .sort((a, b) => b.strengthScore - a.strengthScore);
-  const championDenominator = seededTeams.reduce((sum, team) => sum + Math.exp(team.strengthScore / 13), 0);
+  const championDenominator = seededTeams.reduce((sum, team) => sum + (team.advanceProbability / 100) * Math.exp(team.strengthScore / 12.5), 0);
+  const averageStrength = seededTeams.reduce((sum, team) => sum + team.strengthScore, 0) / Math.max(1, seededTeams.length);
 
-  return seededTeams.slice(0, 16).map((team, index) => {
-    const titleBase = Math.exp(team.strengthScore / 13) / championDenominator;
+  return seededTeams.slice(0, 16).map((team) => {
+    const titleBase = ((team.advanceProbability / 100) * Math.exp(team.strengthScore / 12.5)) / championDenominator;
     const round32 = clamp(team.advanceProbability, 20, 98);
-    const round16 = clamp(Math.round(round32 * (0.78 - index * 0.012)), 12, 86);
-    const quarterFinal = clamp(Math.round(round16 * (0.68 - index * 0.009)), 7, 70);
-    const semiFinal = clamp(Math.round(quarterFinal * (0.54 - index * 0.006)), 4, 52);
-    const final = clamp(Math.round(semiFinal * (0.46 - index * 0.004)), 2, 38);
-    const champion = clamp(Math.round(titleBase * 100), 1, 24);
+    const strengthEdge = team.strengthScore - averageStrength;
+    const r32Win = clamp(0.52 + strengthEdge * 0.009 + (team.projectedRank === 1 ? 0.04 : 0) - (team.projectedRank === 3 ? 0.035 : 0), 0.24, 0.82);
+    const r16Win = clamp(0.49 + strengthEdge * 0.007, 0.22, 0.76);
+    const qfWin = clamp(0.47 + strengthEdge * 0.005, 0.2, 0.7);
+    const sfWin = clamp(0.46 + strengthEdge * 0.004, 0.18, 0.66);
+    const round16 = clamp(Math.round(round32 * r32Win), 10, 90);
+    const quarterFinal = clamp(Math.round(round16 * r16Win), 6, 76);
+    const semiFinal = clamp(Math.round(quarterFinal * qfWin), 3, 58);
+    const final = clamp(Math.round(semiFinal * sfWin), 1, 44);
+    const champion = clamp(Math.round(titleBase * 100), 1, 26);
     const tier = champion >= 10
       ? { zh: '争冠第一档', en: 'Title tier' }
       : champion >= 6

@@ -12,8 +12,8 @@ const WINDOW_FORWARD_DAYS = Math.max(1, Number(process.env.MATCH_WINDOW_FORWARD_
 const ODDS_HISTORY_RETENTION_DAYS = Math.max(1, Number(process.env.ODDS_HISTORY_RETENTION_DAYS || 365));
 const ODDS_HISTORY_BUCKET_MINUTES = Math.max(1, Number(process.env.ODDS_HISTORY_BUCKET_MINUTES || 5));
 const PAGE_POLL_SECONDS = Math.max(15, Number(process.env.PAGE_POLL_SECONDS || 30));
-const ANALYST_PROMPT_VERSION = "professional-football-analyst-v10";
-const PREDICTION_POLICY_VERSION = "actionable-tiered-market-gate-v16";
+const ANALYST_PROMPT_VERSION = "professional-football-analyst-v11";
+const PREDICTION_POLICY_VERSION = "value-tiered-market-gate-v17";
 const FORM_LOOKBACK_MATCHES = 12;
 const METHODS = (process.env.SPORTTERY_METHODS || "concern,live,result,all")
   .split(",")
@@ -772,8 +772,8 @@ function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLamb
     version: "market-elo-form-bucket-calibrated-poisson-v4",
     generatedAt: new Date().toISOString(),
     basis: {
-      zh: "模型已使用官方 SP/让球 SP/赔率快照、Elo、近一年赛果攻防和 Poisson 比分分布；外部赔率、伤停、首发、天气、裁判等仅在稳定可验证源配置后参与计算。",
-      en: "Uses official SP/handicap SP/snapshots, Elo, last-year form, and Poisson score distribution. External odds, injuries, lineups, weather, and referee data participate only when stable verified feeds are configured.",
+      zh: "模型已使用官方 SP/让球 SP/赔率快照、Elo、近一年赛果攻防、赛程密度和 Poisson 比分分布；推荐分为强信号主推、价值观察和避坑，不把所有低赔正路默认包装成稳胆。",
+      en: "Uses official SP/handicap SP/snapshots, Elo, last-year form, schedule density, and Poisson score distribution. Picks are split into strong leans, value-watch directions, and avoid signals instead of treating every low-SP favourite as a banker.",
     },
     ensembleWeights: blended.weights,
     calibrationAdjustment: {
@@ -1589,8 +1589,41 @@ function evaluateOneXTwoGate(context) {
   const stricterProfileOk = (!profile.isInternational || odds > 1.35 || (pickProbability >= 0.58 && handicapSupport >= 0.3))
     && (!profile.isJapan || odds > 1.75 || (pickProbability >= 0.56 && handicapSupport >= 0.36));
 
+  const valueSidePick = isSidePick
+    && !analystSelection.isContrarian
+    && pickProbability >= (oneXTwoCooldown ? 0.56 : 0.49)
+    && probabilityGap >= (oneXTwoCooldown ? 0.12 : 0.065)
+    && modelProbabilityGap >= (oneXTwoCooldown ? 0.095 : 0.055)
+    && handicapSupport !== null
+    && handicapSupport >= (oneXTwoCooldown ? 0.38 : 0.34)
+    && probabilities.draw <= 0.34
+    && odds > 1.25
+    && odds <= 2.65
+    && riskTags.length <= 2
+    && !(profile.isInternational && odds <= 1.34)
+    && !(profile.isJapan && odds <= 1.8 && oneXTwoCooldown);
+
+  const valueContrarianPick = analystSelection.isContrarian
+    && !oneXTwoCooldown
+    && pickProbability >= (code === "X" ? 0.26 : 0.29)
+    && probabilityGap <= 0.18
+    && modelProbabilityGap >= 0.035
+    && odds >= (code === "X" ? 2.75 : 2.3)
+    && odds <= 7.5
+    && riskTags.length <= 4
+    && (code === "X" || handicapSupport === null || handicapSupport >= 0.36);
+
+  const tier = strongSidePick && stricterProfileOk
+    ? "strong"
+    : valueSidePick
+      ? "value-side"
+      : valueContrarianPick
+        ? "value-contrarian"
+        : "watch";
+
   return {
-    promote: Boolean(strongSidePick && stricterProfileOk),
+    promote: tier !== "watch",
+    tier,
     reasons,
     handicapSupport,
     profile,
@@ -2118,13 +2151,17 @@ function predictionSet(match) {
   const bestHasWeakHandicap = ["1", "2"].includes(modelLean.tipCode)
     && bestHandicapSupport !== null
     && bestHandicapSupport < 0.3;
-  const bestHasThinEdge = modelProbabilityGap < 0.18 || best1x2[1] < 0.62;
+  const bestHasThinEdge = !analystSelection.isContrarian && (modelProbabilityGap < 0.18 || best1x2[1] < 0.62);
   const bestHasOverheatedFavorite = ["1", "2"].includes(modelLean.tipCode)
     && modelLean.odds <= 1.7
     && (bestHandicapSupport === null || bestHandicapSupport < 0.3 || riskTags.length >= 4);
-  const bestHasSevereRisk = riskTags.length >= 4
+  const severeRiskCountForBest = riskTags.filter((tag) => (
+    !analystSelection.isContrarian
+    || !["Draw risk", "Tight 1X2", "Market disagreement"].includes(tag.en)
+  )).length;
+  const bestHasSevereRisk = severeRiskCountForBest >= 4
     || (bestHasWeakHandicap && modelLean.odds <= 1.7)
-    || (modelProbabilityGap < 0.06 && best1x2[1] < 0.52);
+    || (!analystSelection.isContrarian && modelProbabilityGap < 0.06 && best1x2[1] < 0.52);
   const bestShouldWatch = !oneXTwoGate.promote
     || bestHasWeakHandicap
     || bestHasOverheatedFavorite
@@ -2343,8 +2380,8 @@ function applyPredictionPersistence(match, existing, capturedAt) {
     updatedAt: capturedAt,
     lockedAt: started ? (existing?.predictionMeta?.lockedAt || capturedAt) : undefined,
     dataPolicy: {
-      zh: "模型已使用中国竞彩网官方 SP、让球 SP、赛果、SP 快照、Elo、近一年历史攻防和比分分布；外部赔率、伤停、首发、天气、裁判等只在稳定可验证源配置后参与计算。",
-      en: "The model uses official Sporttery SP, handicap SP, results, SP snapshots, Elo, last-year form, and score distribution. External odds, injuries, lineups, weather, and referee data are used only after stable verified feeds are configured.",
+      zh: "模型已使用中国竞彩网官方 SP、让球 SP、赛果、SP 快照、Elo、近一年历史攻防、赛程密度和比分分布；输出分为强信号主推、价值观察、观察和避坑，外部赔率、伤停、首发、天气、裁判等只在稳定可验证源配置后参与计算。",
+      en: "The model uses official Sporttery SP, handicap SP, results, SP snapshots, Elo, last-year form, schedule density, and score distribution. Outputs are split into strong leans, value-watch, watch, and avoid; external odds, injuries, lineups, weather, and referee data are used only after stable verified feeds are configured.",
     },
   };
 

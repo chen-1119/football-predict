@@ -1,6 +1,6 @@
 import type { Match, MultiLangString } from './mockData';
 
-export type MatchSignalCategory = 'steady' | 'lean' | 'watch' | 'avoid' | 'unavailable' | 'finished';
+export type MatchSignalCategory = 'steady' | 'lean' | 'value' | 'watch' | 'avoid' | 'unavailable' | 'finished';
 
 export interface MatchSignal {
   category: MatchSignalCategory;
@@ -14,6 +14,7 @@ export interface MatchSignal {
 const labels: Record<MatchSignalCategory, MultiLangString> = {
   steady: { zh: '高可信候选', en: 'High confidence' },
   lean: { zh: '主推候选', en: 'Model lean' },
+  value: { zh: '价值观察', en: 'Value watch' },
   watch: { zh: '观察', en: 'Watch' },
   avoid: { zh: '避坑', en: 'Avoid' },
   unavailable: { zh: '待开售', en: 'Pending' },
@@ -117,6 +118,7 @@ export function getMatchSignal(match: Match): MatchSignal {
 
   const riskTags = best.riskTags || [];
   const riskNames = riskTags.map((tag) => tag.zh);
+  const riskNamesEn = riskTags.map((tag) => tag.en.toLowerCase());
   const trustScore = best.trustScore || 0;
   const trendIsMixed = match.oddsTrend?.direction === 'mixed';
   const hasDrawRisk = hasRisk(riskNames, '防平');
@@ -133,6 +135,21 @@ export function getMatchSignal(match: Match): MatchSignal {
     && selectedProbability + 0.5 < topProbability;
   const probabilityTooLow = topProbability !== null && topProbability < 50;
   const probabilityEdgeWeak = probabilityGap !== null && probabilityGap < 5;
+  const isValuePick = best.tipLabel.zh.includes('价值观察') || best.tipLabel.en.toLowerCase().includes('value watch') || riskNamesEn.some((name) => name.includes('market disagreement'));
+
+  if (isValuePick && trustScore >= 50 && riskTags.length <= 4) {
+    return {
+      category: 'value',
+      label: labels.value,
+      note: {
+        zh: '这是盘口分歧下的价值方向，不按稳胆处理；重点复核临场 SP、让球盘和风险标签是否继续同向。',
+        en: 'This is a value direction under market disagreement, not a banker. Recheck late SP, handicap and risk tags.'
+      },
+      tone: 'warning',
+      trustScore,
+      riskCount: riskTags.length
+    };
+  }
 
   if (
     selectedIsNotModelLeader

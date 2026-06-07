@@ -25,6 +25,7 @@ import {
   getWorldCupRecentResults,
   getWorldCupUpsetRadar,
   getWorldCupWatchMatches,
+  WORLD_CUP_FORECAST_MODEL,
   WORLD_CUP_KNOCKOUT_ROUNDS,
   WORLD_CUP_CONTENT_LANES,
   WORLD_CUP_OFFICIAL,
@@ -190,15 +191,23 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
     stageTitle: { zh: '赛制与晋级路径', en: 'Format and Route' },
     groupTitle: { zh: '小组赛预测', en: 'Group Forecast' },
     groupSubtitle: {
-      zh: '这是世界杯专题的基准预测：先用当前分组、FIFA 排名、东道主加成和杯赛路径做轻量模型；中国竞彩网世界杯 SP 上线后，单场赔率会自动并入模型。',
-      en: 'This is the tournament baseline: current groups, FIFA ranking, host boost and route structure first; Sporttery World Cup SP will merge into match-level models once available.'
+      zh: '当前采用 12 组联动模拟：FIFA 排名强度、东道主加成、新军降权和小组第三全局竞争一起计算；中国竞彩网世界杯 SP 上线后，单场赔率会自动并入模型。',
+      en: 'Uses a 12-group linked simulation: FIFA rank strength, host boost, debutant adjustment and global best-third competition are calculated together. Sporttery World Cup SP will merge once available.'
     },
-    baseline: { zh: '基准版，不替代临场 SP', en: 'Baseline, not a late-market replacement' },
+    baseline: { zh: '联动模拟版', en: 'Linked simulation' },
+    modelMethod: { zh: '计算说明', en: 'Method' },
     rank: { zh: '排名', en: 'Rank' },
     points: { zh: '预计积分', en: 'Projected pts' },
-    advance: { zh: '晋级', en: 'Advance' },
+    advance: { zh: '总晋级', en: 'Advance' },
+    direct: { zh: '前二直出', en: 'Top-two' },
+    thirdSlot: { zh: '第三补位', en: 'Best-third' },
+    eliminated: { zh: '出局', en: 'Out' },
     winGroup: { zh: '头名', en: 'Win group' },
     bestThird: { zh: '最佳第三候选', en: 'Best third candidates' },
+    bestThirdNote: {
+      zh: '显示第三补位概率：先在小组内拿第三，再和其他 11 个小组第三争 8 个名额，不等同于总晋级率。',
+      en: 'Shows best-third slot probability only: finish third first, then compete with the other 11 third-place teams for eight slots. It is not total advance probability.'
+    },
     knockoutTitle: { zh: '淘汰赛路径预测', en: 'Knockout Route Forecast' },
     knockoutSubtitle: {
       zh: '32 强路径先按小组基准预测生成，后续会随官方赛程、SP 快照、伤停与赛果自动滚动更新。',
@@ -298,7 +307,13 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
             </span>
             <p>{t('groupSubtitle')}</p>
           </div>
-          <span className="worldcup-sync-pill">{t('baseline')}</span>
+          <span className="worldcup-sync-pill">{t('baseline')} · {WORLD_CUP_FORECAST_MODEL.simulations.toLocaleString()}</span>
+        </div>
+
+        <div className="worldcup-model-note">
+          <strong>{t('modelMethod')}</strong>
+          <p>{WORLD_CUP_FORECAST_MODEL[language]}</p>
+          <span>{WORLD_CUP_FORECAST_MODEL.version}</span>
         </div>
 
         <div className="worldcup-group-grid">
@@ -316,13 +331,18 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
                     <span className="worldcup-team-copy">
                       <strong>{team.name[language]}</strong>
                       <small>
-                        {t('rank')} {team.fifaRank} · {t('points')} {team.projectedPoints} · {t('winGroup')} {team.groupWinProbability}%
+                        FIFA {team.fifaRank} · {t('points')} {team.projectedPoints} · {t('winGroup')} {team.groupWinProbability}%
                       </small>
                       <em>{team.routeLabel[language]}</em>
                     </span>
                     <span className="worldcup-team-prob">
                       <b>{team.advanceProbability}%</b>
                       <small>{t('advance')}</small>
+                    </span>
+                    <span className="worldcup-team-split">
+                      <small>{t('direct')} {team.directAdvanceProbability}%</small>
+                      <small>{t('thirdSlot')} {team.bestThirdProbability}%</small>
+                      <small>{t('eliminated')} {team.eliminationProbability}%</small>
                     </span>
                     <span className="worldcup-team-meter" style={{ '--advance': `${team.advanceProbability}%` } as React.CSSProperties}>
                       <span />
@@ -336,11 +356,12 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
 
         <div className="worldcup-third-lane">
           <span>{t('bestThird')}</span>
+          <small className="worldcup-third-note">{t('bestThirdNote')}</small>
           <div>
             {projectedQualifiers.bestThird.map((team) => (
               <strong key={team.id}>
                 <WorldCupFlag team={team} />
-                {team.shortName[language]} <small>{team.advanceProbability}%</small>
+                {team.shortName[language]} <small>{team.bestThirdProbability}%</small>
               </strong>
             ))}
           </div>

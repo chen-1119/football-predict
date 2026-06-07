@@ -876,6 +876,12 @@ button.status-pill:hover {
   color: hsl(var(--primary));
 }
 
+.signal-chip.is-value.active {
+  border-color: hsl(var(--premium) / 0.5);
+  background: hsl(var(--premium) / 0.12);
+  color: hsl(var(--premium));
+}
+
 .signal-chip.is-watch.active {
   border-color: hsl(var(--premium) / 0.5);
   background: hsl(var(--premium) / 0.11);
@@ -1093,6 +1099,12 @@ button.status-pill:hover {
   border-color: hsl(var(--primary) / 0.42);
   background: hsl(var(--primary) / 0.12);
   color: hsl(var(--primary));
+}
+
+.signal-badge.is-value {
+  border-color: hsl(var(--premium) / 0.42);
+  background: hsl(var(--premium) / 0.12);
+  color: hsl(var(--premium));
 }
 
 .signal-badge.is-watch {
@@ -1392,6 +1404,11 @@ button.status-pill:hover {
   background: hsl(var(--primary) / 0.07);
 }
 
+.decision-card.is-value {
+  border-color: hsl(var(--premium) / 0.32);
+  background: hsl(var(--premium) / 0.08);
+}
+
 .decision-card.is-watch {
   border-color: hsl(var(--premium) / 0.26);
 }
@@ -1433,6 +1450,10 @@ button.status-pill:hover {
 
 .decision-card.is-lean .decision-label {
   color: hsl(var(--primary));
+}
+
+.decision-card.is-value .decision-label {
+  color: hsl(var(--premium));
 }
 
 .decision-card.is-avoid .decision-label,
@@ -3325,6 +3346,27 @@ button.status-pill:hover {
   font-weight: 820;
 }
 
+.worldcup-team-split {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.28rem;
+}
+
+.worldcup-team-split small {
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.38rem;
+  background: hsl(var(--bg) / 0.72);
+  color: hsl(var(--text-muted));
+  font-size: 0.62rem;
+  font-weight: 820;
+  padding: 0.18rem 0.28rem;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .worldcup-team-meter {
   grid-column: 1 / -1;
   display: block;
@@ -3355,10 +3397,18 @@ button.status-pill:hover {
 }
 
 .worldcup-third-lane > div {
+  grid-column: 2;
   display: flex;
   min-width: 0;
   flex-wrap: wrap;
   gap: 0.38rem;
+}
+
+.worldcup-third-note {
+  grid-column: 2;
+  color: hsl(var(--text-muted));
+  font-size: 0.68rem;
+  line-height: 1.45;
 }
 
 .worldcup-third-lane strong {
@@ -3384,6 +3434,42 @@ button.status-pill:hover {
 .worldcup-third-lane small {
   color: hsl(var(--premium));
   font-size: 0.68rem;
+}
+
+.worldcup-model-note {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.45rem;
+  align-items: center;
+  border: 1px solid hsl(var(--primary) / 0.24);
+  border-radius: var(--radius);
+  background: hsl(var(--primary) / 0.07);
+  color: hsl(var(--text-secondary));
+  padding: 0.68rem 0.76rem;
+}
+
+.worldcup-model-note strong {
+  color: hsl(var(--primary));
+  font-family: var(--font-title);
+  font-size: 0.86rem;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.worldcup-model-note p {
+  min-width: 0;
+  color: hsl(var(--text-secondary));
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+
+.worldcup-model-note span {
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  color: hsl(var(--text-muted));
+  font-size: 0.66rem;
+  font-weight: 860;
+  padding: 0.22rem 0.44rem;
 }
 
 .worldcup-knockout-grid {
@@ -4042,6 +4128,11 @@ button.status-pill:hover {
 
   .worldcup-third-lane {
     grid-template-columns: 1fr;
+  }
+
+  .worldcup-third-note,
+  .worldcup-third-lane > div {
+    grid-column: 1;
   }
 
   .worldcup-round-list article {

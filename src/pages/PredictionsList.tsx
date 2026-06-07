@@ -31,7 +31,7 @@ type SortBy = 'time' | 'trust' | 'odds';
 type SignalFilter = 'all' | MatchSignalCategory;
 
 const SORT_OPTIONS: SortBy[] = ['time', 'trust', 'odds'];
-const SIGNAL_FILTERS: SignalFilter[] = ['all', 'steady', 'lean', 'watch', 'avoid', 'unavailable', 'finished'];
+const SIGNAL_FILTERS: SignalFilter[] = ['all', 'steady', 'lean', 'value', 'watch', 'avoid', 'unavailable', 'finished'];
 
 const getKickoffDay = (match: Match): string => match.kickoffDate || match.kickoffTime.slice(0, 10) || '';
 
@@ -207,6 +207,7 @@ const getDecisionReason = (category: MatchSignalCategory, language: 'zh' | 'en')
   const reasons: Record<MatchSignalCategory, Record<'zh' | 'en', string>> = {
     steady: { zh: '赔率、概率和风险基本同向', en: 'Odds, probability, and risk align' },
     lean: { zh: '有主方向，但不当稳胆', en: 'Main lean, not a banker' },
+    value: { zh: '盘口分歧下的价值方向', en: 'Value direction under market disagreement' },
     watch: { zh: '门槛未过，等临场SP/让球确认', en: 'Gate not met; wait for late SP/handicap' },
     avoid: { zh: '风险叠加，暂不入选', en: 'Risk stacked; skip for now' },
     unavailable: { zh: '待官方SP更新', en: 'Waiting for official SP' },
@@ -260,6 +261,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     allSignals: { zh: '全部分组', en: 'All Signals' },
     steady: { zh: '高可信候选', en: 'High confidence' },
     lean: { zh: '主推候选', en: 'Model lean' },
+    value: { zh: '价值观察', en: 'Value watch' },
     watch: { zh: '观察', en: 'Watch' },
     avoid: { zh: '避坑', en: 'Avoid' },
     unavailable: { zh: '待开售', en: 'Pending' },
@@ -363,7 +365,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
       counts.all += 1;
       counts[signal.category] += 1;
       return counts;
-    }, { all: 0, steady: 0, lean: 0, watch: 0, avoid: 0, unavailable: 0, finished: 0 });
+    }, { all: 0, steady: 0, lean: 0, value: 0, watch: 0, avoid: 0, unavailable: 0, finished: 0 });
   }, [baseFilteredMatches]);
 
   const recommendationCounts = useMemo(() => {
@@ -374,7 +376,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         counts.finished += 1;
       } else if (signal.category === 'avoid') {
         counts.avoid += 1;
-      } else if ((signal.category === 'steady' || signal.category === 'lean') && best && best.tipCode !== 'WATCH') {
+      } else if ((signal.category === 'steady' || signal.category === 'lean' || signal.category === 'value') && best && best.tipCode !== 'WATCH') {
         counts.pick += 1;
       } else {
         counts.watch += 1;
@@ -511,7 +513,9 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     const shortReason = pickedPrediction && !lockedPick
       ? signal.category === 'steady'
         ? (language === 'zh' ? '主线、概率和风险基本同向' : 'Main line, probability, and risk are aligned')
-        : (language === 'zh' ? '有主方向，但不当稳胆；看临场SP/让球' : 'Main lean, not a banker; track late SP/handicap')
+        : signal.category === 'value'
+          ? (language === 'zh' ? '价值方向，不当稳胆；看临场SP/让球' : 'Value direction, not a banker; track late SP/handicap')
+          : (language === 'zh' ? '有主方向，但不当稳胆；看临场SP/让球' : 'Main lean, not a banker; track late SP/handicap')
       : getDecisionReason(signal.category, language);
 
     return (
