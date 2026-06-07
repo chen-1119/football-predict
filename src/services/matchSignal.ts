@@ -130,15 +130,15 @@ export function getMatchSignal(match: Match): MatchSignal {
   const selectedIsNotModelLeader = selectedProbability !== null
     && topProbability !== null
     && selectedProbability + 0.5 < topProbability;
-  const probabilityTooLow = topProbability !== null && topProbability < 54;
-  const probabilityEdgeWeak = probabilityGap !== null && probabilityGap < 7;
+  const probabilityTooLow = topProbability !== null && topProbability < 50;
+  const probabilityEdgeWeak = probabilityGap !== null && probabilityGap < 5;
 
   if (
     selectedIsNotModelLeader
-    || (probabilityTooLow && (hasDrawRisk || hasWeakHandicap || riskTags.length >= 2))
+    || (probabilityTooLow && (hasDrawRisk || hasWeakHandicap || riskTags.length >= 3))
     || (hasDrawRisk && hasWeakHandicap)
-    || (trendIsMixed && trustScore < 82)
-    || (riskTags.length >= 3 && trustScore < 86)
+    || (trendIsMixed && trustScore < 60)
+    || (riskTags.length >= 4 && trustScore < 64)
   ) {
     return {
       category: 'avoid',
@@ -157,7 +157,7 @@ export function getMatchSignal(match: Match): MatchSignal {
     };
   }
 
-  if (probabilityTooLow || probabilityEdgeWeak) {
+  if (probabilityTooLow || (probabilityEdgeWeak && trustScore < 66)) {
     return {
       category: 'watch',
       label: labels.watch,
@@ -176,12 +176,12 @@ export function getMatchSignal(match: Match): MatchSignal {
   }
 
   if (
-    trustScore >= 84
-    && riskTags.length <= 1
+    trustScore >= 76
+    && riskTags.length <= 2
     && !trendIsMixed
-    && !hasOverheated
+    && !(hasOverheated && trustScore < 84)
     && selectedProbability !== null
-    && selectedProbability >= 58
+    && selectedProbability >= 54
   ) {
     return {
       category: 'steady',

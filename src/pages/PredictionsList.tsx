@@ -358,6 +358,23 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     }, { all: 0, steady: 0, watch: 0, avoid: 0, unavailable: 0, finished: 0 });
   }, [baseFilteredMatches]);
 
+  const recommendationCounts = useMemo(() => {
+    return baseFilteredMatches.reduce((counts, match) => {
+      const signal = getMatchSignal(match);
+      const best = getBestPrediction(match);
+      if (signal.category === 'finished') {
+        counts.finished += 1;
+      } else if (signal.category === 'avoid') {
+        counts.avoid += 1;
+      } else if (best && best.tipCode !== 'WATCH') {
+        counts.pick += 1;
+      } else {
+        counts.watch += 1;
+      }
+      return counts;
+    }, { pick: 0, watch: 0, avoid: 0, finished: 0 });
+  }, [baseFilteredMatches]);
+
   const visibleSignalFilters = useMemo(() => {
     return SIGNAL_FILTERS.filter((filter) => filter === 'all' || signalCounts[filter] > 0 || signalFilter === filter);
   }, [signalCounts, signalFilter]);
@@ -483,7 +500,11 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
       : leadCode && leadProbability !== null
         ? `${outcomeLabels[leadCode][language]} ${Math.round(leadProbability)}%`
         : '--';
-    const shortReason = getDecisionReason(signal.category, language);
+    const shortReason = pickedPrediction && !lockedPick
+      ? signal.category === 'steady'
+        ? (language === 'zh' ? '主线、概率和风险基本同向' : 'Main line, probability, and risk are aligned')
+        : (language === 'zh' ? '已给主方向，临场继续看SP/让球确认' : 'Main lean published; keep tracking late SP/handicap')
+      : getDecisionReason(signal.category, language);
 
     return (
       <div className={`decision-card is-${signal.category} ${pickedPrediction ? 'has-pick' : 'is-watch-only'} ${showHit ? 'is-hit' : ''} ${showMiss ? 'is-miss' : ''}`}>
@@ -580,10 +601,10 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     },
     {
       label: t('signalSummary'),
-      value: `${signalCounts.steady}/${signalCounts.watch}/${signalCounts.avoid}`,
-      note: signalCounts.finished > 0
-        ? (language === 'zh' ? `高信 / 观 / 避 · 完 ${signalCounts.finished}` : `High / Watch / Avoid · F ${signalCounts.finished}`)
-        : (language === 'zh' ? '高信 / 观 / 避' : 'High / Watch / Avoid'),
+      value: `${recommendationCounts.pick}/${recommendationCounts.watch}/${recommendationCounts.avoid}`,
+      note: recommendationCounts.finished > 0
+        ? (language === 'zh' ? `方向 / 观察 / 避坑 · 完 ${recommendationCounts.finished}` : `Pick / Watch / Avoid · F ${recommendationCounts.finished}`)
+        : (language === 'zh' ? '方向 / 观察 / 避坑' : 'Pick / Watch / Avoid'),
       icon: ShieldCheck,
       tone: 'premium'
     },
