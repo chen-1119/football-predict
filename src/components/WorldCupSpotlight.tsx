@@ -48,8 +48,8 @@ export const WorldCupSpotlight: React.FC<WorldCupSpotlightProps> = ({
     kicker: { zh: '世界杯专栏', en: 'World Cup Desk' },
     title: { zh: '世界杯小组赛与淘汰赛预测已接入', en: 'Group and knockout forecasts are live' },
     subtitle: {
-      zh: '先展示 12 组基准预测、32 强路径和争冠层级；世界杯竞彩 SP 上线后，单场模型会自动滚动修正。',
-      en: 'Shows 12 group baselines, Round-of-32 route and title tiers; Sporttery SP will update match models when available.'
+      zh: '首页先看 12 组分组路径、32 强晋级、争冠层级和今日观察场，世界杯正式数据更新后自动进入单场模型。',
+      en: 'Start with 12 group routes, Round-of-32 qualifiers, title tiers and today watch matches. Official World Cup data will feed match models as it updates.'
     },
     countdown: { zh: '距开赛', en: 'Kickoff in' },
     days: { zh: '天', en: 'days' },
@@ -89,6 +89,11 @@ export const WorldCupSpotlight: React.FC<WorldCupSpotlightProps> = ({
           <span>{t('fixtures')}</span>
           <span>{WORLD_CUP_GROUPS.length} {language === 'zh' ? '个小组预测' : 'group forecasts'}</span>
           <span>{WORLD_CUP_OFFICIAL.startDate} - {WORLD_CUP_OFFICIAL.finalDate}</span>
+        </div>
+        <div className="worldcup-spotlight-hosts" aria-hidden="true">
+          <span>CANADA</span>
+          <span>MEXICO</span>
+          <span>USA</span>
         </div>
       </div>
 

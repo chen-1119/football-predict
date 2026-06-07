@@ -201,8 +201,8 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
     kicker: { zh: '世界杯专题', en: 'World Cup Desk' },
     title: { zh: '2026 世界杯专栏', en: 'World Cup 2026 Desk' },
     subtitle: {
-      zh: '小组赛预测、32 强晋级路径、淘汰赛轮次、争冠层级和竞彩观察场次集中展示；实时 SP 上线后再进入单场推荐模型。',
-      en: 'Group forecasts, Round-of-32 routes, knockout rounds, title tiers and Sporttery watch matches in one place; live SP joins match models when available.'
+      zh: '小组赛路径、32 强晋级、淘汰赛轮次、争冠梯队和今日观察场次集中呈现；正式 SP 与赛果更新后，单场模型会持续校准。',
+      en: 'Group routes, Round-of-32 qualifiers, knockout rounds, title tiers and today watch matches in one tournament desk; match models calibrate as official SP and results update.'
     },
     host: { zh: '举办地', en: 'Host' },
     countdown: { zh: '距开赛', en: 'Kickoff in' },
@@ -213,8 +213,8 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
     stageTitle: { zh: '赛制与晋级路径', en: 'Format and Route' },
     groupTitle: { zh: '小组赛预测', en: 'Group Forecast' },
     groupSubtitle: {
-      zh: '当前采用赛前路径推演：FIFA 排名强度、东道主加成、新军降权和小组第三全局竞争一起计算；世界杯 SP 上线前只看晋级概率，不包装成单场推荐。',
-      en: 'Uses pre-tournament route projection: FIFA rank strength, host boost, debutant adjustment and global best-third competition are calculated together. Sporttery World Cup SP will merge once available.'
+      zh: '汇总 FIFA 排名强度、东道主加成、新军权重和小组第三全局竞争，展示每队晋级路径与分组压力。',
+      en: 'Combines FIFA rank strength, host boost, debutant adjustment and global best-third competition to show each team route and group pressure.'
     },
     baseline: { zh: '赛前路径推演', en: 'Route projection' },
     modelMethod: { zh: '计算说明', en: 'Method' },
@@ -262,7 +262,7 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
       en: 'Tracks overheated favourites, handicap tension and higher-SP underdogs worth review.'
     },
     radarEmpty: { zh: '当前没有明显冷门观察点。', en: 'No clear upset watch points right now.' },
-    contentTitle: { zh: '内容完善路线', en: 'Content Roadmap' },
+    contentTitle: { zh: '世界杯内容矩阵', en: 'World Cup Content Matrix' },
     sync: { zh: '数据同步', en: 'Data Sync' },
     active: { zh: '观察场次', en: 'Watch matches' },
     coverage: { zh: '路径覆盖', en: 'Route coverage' },
@@ -293,12 +293,30 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
           <div className="worldcup-hero-meta">
             <span>{t('host')}：{WORLD_CUP_OFFICIAL.host[language]}</span>
             <span>{WORLD_CUP_OFFICIAL.startDate} - {WORLD_CUP_OFFICIAL.finalDate}</span>
+            <span>{WORLD_CUP_OFFICIAL.teams} {language === 'zh' ? '队' : 'teams'} · {WORLD_CUP_OFFICIAL.matches} {language === 'zh' ? '场' : 'matches'}</span>
+          </div>
+          <div className="worldcup-hero-hosts" aria-label={language === 'zh' ? '主办国' : 'Host countries'}>
+            <span>CAN</span>
+            <span>MEX</span>
+            <span>USA</span>
           </div>
         </div>
-        <div className="worldcup-countdown-card">
-          <span>{t('countdown')}</span>
-          <strong>{daysLeft}</strong>
-          <small>{t('days')}</small>
+        <div className="worldcup-hero-visual">
+          <div className="worldcup-countdown-card">
+            <span>{t('countdown')}</span>
+            <strong>{daysLeft}</strong>
+            <small>{t('days')}</small>
+          </div>
+          <div className="worldcup-cup-emblem" aria-hidden="true">
+            <span>FIFA</span>
+            <strong>26</strong>
+            <small>WORLD CUP</small>
+          </div>
+          <div className="worldcup-route-rail" aria-hidden="true">
+            <span>GROUP</span>
+            <span>R32</span>
+            <span>FINAL</span>
+          </div>
         </div>
       </section>
 
