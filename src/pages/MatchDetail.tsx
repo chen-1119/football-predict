@@ -1028,7 +1028,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                     </div>
                   </section>
 
-                  <section className="probability-panel">
+                  <section className="probability-panel is-full">
                     <h4>{language === 'zh' ? '让球概率' : 'Handicap Probability'}</h4>
                     {probabilityModel.lambdaBlend && (
                       <div className="probability-pair-grid" style={{ marginBottom: '0.75rem' }}>

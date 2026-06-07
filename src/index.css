@@ -1874,6 +1874,10 @@ button.status-pill:hover {
   grid-row: span 2;
 }
 
+.probability-panel.is-full {
+  grid-column: 1 / -1;
+}
+
 .probability-panel h4 {
   color: hsl(var(--text-primary));
   font-size: 0.82rem;
@@ -1935,7 +1939,12 @@ button.status-pill:hover {
 .score-probability-list,
 .probability-pair-grid {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(138px, 1fr));
   gap: 0.42rem;
+}
+
+.probability-panel.is-full .probability-pair-grid {
+  grid-template-columns: repeat(auto-fit, minmax(178px, 1fr));
 }
 
 .score-probability-list span,
@@ -1954,12 +1963,33 @@ button.status-pill:hover {
   padding: 0.4rem 0.52rem;
 }
 
+.probability-pair-grid span {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-width: 0;
+}
+
 .score-probability-list strong,
 .probability-pair-grid strong,
 .handicap-probability-line strong {
   color: hsl(var(--primary));
   font-family: var(--font-title);
   font-size: 0.9rem;
+}
+
+.probability-pair-grid em {
+  grid-column: 1 / -1;
+  justify-self: end;
+  max-width: 100%;
+  color: hsl(var(--text-secondary));
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 850;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .probability-calibration-note {
