@@ -989,7 +989,7 @@ button.status-pill:hover {
 
 .responsive-table {
   width: 100%;
-  min-width: 980px;
+  min-width: 920px;
   border-collapse: collapse;
 }
 
@@ -1357,6 +1357,151 @@ button.status-pill:hover {
   color: hsl(var(--text-muted));
   font-size: 0.7rem;
   font-weight: 700;
+}
+
+.decision-card {
+  display: grid;
+  grid-template-columns: minmax(7rem, 0.85fr) minmax(9rem, 1.15fr);
+  gap: 0.45rem 0.65rem;
+  min-width: 0;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--bg) / 0.68);
+  padding: 0.55rem 0.62rem;
+}
+
+.decision-card.is-steady {
+  border-color: hsl(var(--success) / 0.34);
+  background: hsl(var(--success) / 0.08);
+}
+
+.decision-card.is-watch {
+  border-color: hsl(var(--premium) / 0.26);
+}
+
+.decision-card.is-avoid {
+  border-color: hsl(var(--danger) / 0.28);
+  background: hsl(var(--danger) / 0.06);
+}
+
+.decision-card.is-finished {
+  background: hsl(var(--bg-card-hover) / 0.52);
+}
+
+.decision-card.is-hit {
+  border-color: hsl(var(--success) / 0.5);
+}
+
+.decision-card.is-miss {
+  border-color: hsl(var(--danger) / 0.5);
+}
+
+.decision-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.decision-label {
+  color: hsl(var(--text-primary));
+  font-size: 0.88rem;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.decision-card.is-watch-only .decision-label {
+  color: hsl(var(--premium));
+}
+
+.decision-card.is-avoid .decision-label,
+.decision-card.is-miss .decision-label {
+  color: hsl(var(--danger));
+}
+
+.decision-card.is-hit .decision-label {
+  color: hsl(var(--success));
+}
+
+.decision-meta {
+  color: hsl(var(--text-muted));
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.decision-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.32rem;
+}
+
+.decision-facts span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.05rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 7px;
+  background: hsl(var(--bg-card) / 0.75);
+  color: hsl(var(--text-muted));
+  font-size: 0.64rem;
+  font-weight: 800;
+  padding: 0.28rem 0.34rem;
+}
+
+.decision-facts strong {
+  overflow: hidden;
+  color: hsl(var(--text-primary));
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1.18;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.decision-reason {
+  grid-column: 1 / -1;
+  min-width: 0;
+  color: hsl(var(--text-secondary));
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.decision-reason span {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+
+.decision-risks {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.28rem;
+}
+
+.decision-risks span {
+  border-radius: 999px;
+  background: hsl(var(--bg-card-hover));
+  color: hsl(var(--text-muted));
+  font-size: 0.64rem;
+  font-weight: 850;
+  padding: 0.12rem 0.38rem;
+}
+
+.decision-unlock {
+  grid-column: 1 / -1;
+  width: max-content;
+  border: 1px solid hsl(var(--premium) / 0.38);
+  border-radius: 999px;
+  background: hsl(var(--premium) / 0.1);
+  color: hsl(var(--premium));
+  cursor: pointer;
+  font-size: 0.68rem;
+  font-weight: 900;
+  padding: 0.16rem 0.42rem;
 }
 
 .match-team-value {
@@ -4082,8 +4227,18 @@ button.status-pill:hover {
 
   .odds-stack,
   .prediction-cell,
+  .decision-card,
   .trust-meter {
     align-items: flex-start;
+  }
+
+  .decision-card {
+    width: 100%;
+    grid-template-columns: 1fr;
+  }
+
+  .decision-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .odds-stack {

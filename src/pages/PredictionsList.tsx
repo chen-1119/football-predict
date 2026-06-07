@@ -6,7 +6,6 @@ import {
   CalendarDays,
   ChevronDown,
   ChevronUp,
-  Lock,
   RotateCcw,
   ShieldCheck,
   SlidersHorizontal,
@@ -16,7 +15,7 @@ import {
 import { useApp } from '../context/AppContextCore';
 import { formatBeijingDateString, getDateStringOffset, leagues } from '../services/mockData';
 import type { Country, League, Match, PredictionDetail } from '../services/mockData';
-import { getMarketLabel, getPredictionTipDisplay, getPredictionValueLabel, getSportteryPoolRows } from '../services/bettingDisplay';
+import { getImpliedProbabilities, getPredictionTipDisplay, getSportteryPoolRows } from '../services/bettingDisplay';
 import { getCountryById, getLeagueById, getTeamById } from '../services/entities';
 import { getMatchSignal, type MatchSignalCategory } from '../services/matchSignal';
 import { getVisiblePrediction, getVisiblePredictions } from '../services/predictionVisibility';
@@ -124,6 +123,92 @@ const minutesSinceKickoff = (match: Match) => {
   return Math.floor((Date.now() - kickoffAt) / 60000);
 };
 
+const outcomeLabels = {
+  '1': { zh: '主胜', en: 'Home' },
+  X: { zh: '平局', en: 'Draw' },
+  '2': { zh: '客胜', en: 'Away' }
+} as const;
+
+type OutcomeCode = keyof typeof outcomeLabels;
+
+const isOutcomeCode = (code: string | undefined): code is OutcomeCode => code === '1' || code === 'X' || code === '2';
+
+const getOutcomeProbability = (match: Match, code: OutcomeCode) => {
+  const final = match.probabilityModel?.oneXTwo?.final || match.probabilityModel?.oneXTwo?.market;
+  if (!final) return null;
+  const value = code === '1' ? final.home : code === 'X' ? final.draw : final.away;
+  return Number.isFinite(value) ? Number(value) : null;
+};
+
+const getLeadingOutcome = (match: Match) => {
+  const entries = (['1', 'X', '2'] as OutcomeCode[])
+    .map((code) => ({ code, probability: getOutcomeProbability(match, code) }))
+    .filter((item): item is { code: OutcomeCode; probability: number } => item.probability !== null)
+    .sort((a, b) => b.probability - a.probability);
+
+  return entries[0] || null;
+};
+
+const getHandicapSupport = (match: Match, code: string | undefined) => {
+  if (!isOutcomeCode(code)) return null;
+  const probabilities = getImpliedProbabilities(match.handicapOdds);
+  if (!probabilities) return null;
+  return code === '1' ? probabilities.home : code === 'X' ? probabilities.draw : probabilities.away;
+};
+
+const getGoalsLean = (match: Match, language: 'zh' | 'en') => {
+  const over25 = match.probabilityModel?.goalLines?.over25;
+  const under25 = match.probabilityModel?.goalLines?.under25;
+  if (!Number.isFinite(over25) || !Number.isFinite(under25)) {
+    return language === 'zh' ? '进球待观察' : 'Goals watch';
+  }
+
+  const isOver = Number(over25) >= Number(under25);
+  const probability = Math.round(isOver ? Number(over25) : Number(under25));
+  const label = language === 'zh'
+    ? (isOver ? '≥3球' : '≤2球')
+    : (isOver ? 'Over 2.5' : 'Under 2.5');
+
+  return `${label} ${probability}%`;
+};
+
+const getBttsLean = (match: Match, language: 'zh' | 'en') => {
+  const yes = match.probabilityModel?.bothTeamsToScore?.yes;
+  const no = match.probabilityModel?.bothTeamsToScore?.no;
+  if (!Number.isFinite(yes) || !Number.isFinite(no)) return '';
+  const isYes = Number(yes) >= Number(no);
+  const probability = Math.round(isYes ? Number(yes) : Number(no));
+  if (probability < 58) return '';
+  return language === 'zh'
+    ? `双方进球${isYes ? '是' : '否'} ${probability}%`
+    : `BTTS ${isYes ? 'Yes' : 'No'} ${probability}%`;
+};
+
+const getRiskTags = (match: Match, limit = 2) => {
+  const seen = new Set<string>();
+  return getVisiblePredictions(match)
+    .flatMap((prediction) => prediction.riskTags || [])
+    .filter((tag) => {
+      const key = `${tag.zh}-${tag.en}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, limit);
+};
+
+const getDecisionReason = (category: MatchSignalCategory, language: 'zh' | 'en') => {
+  const reasons: Record<MatchSignalCategory, Record<'zh' | 'en', string>> = {
+    steady: { zh: '赔率、概率和风险基本同向', en: 'Odds, probability, and risk align' },
+    watch: { zh: '门槛未过，等临场SP/让球确认', en: 'Gate not met; wait for late SP/handicap' },
+    avoid: { zh: '风险叠加，暂不入选', en: 'Risk stacked; skip for now' },
+    unavailable: { zh: '待官方SP更新', en: 'Waiting for official SP' },
+    finished: { zh: '保留赛前预测，按赛果复盘', en: 'Pre-match pick kept for review' }
+  };
+
+  return reasons[category][language];
+};
+
 export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch, onOpenWorldCup }) => {
   const { language, isPremium, togglePremium, matches, dataSync } = useApp();
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -184,10 +269,10 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     live: { zh: '进行中', en: 'Live' },
     pending: { zh: '待开赛', en: 'Scheduled' },
     details: { zh: '详情', en: 'Details' },
-    hitRate: { zh: 'AI精选命中率', en: 'Best Tip Hit Rate' },
+    hitRate: { zh: '已结算精选命中率', en: 'Settled Best Hit Rate' },
     selectedMatches: { zh: '当前筛选场次', en: 'Filtered Matches' },
     signalSummary: { zh: '推荐分组', en: 'Signal Split' },
-    avgTrust: { zh: '平均可信度', en: 'Average Trust' },
+    avgTrust: { zh: '平均可用度', en: 'Average Usability' },
     dataStatusTitle: { zh: '数据同步', en: 'Data Sync' },
     dataCurrent: { zh: '当前赛程', en: 'Current' },
     dataHistory: { zh: '历史库', en: 'History' },
@@ -215,7 +300,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     oddsHeader: { zh: '胜平负 / 让球', en: '1X2 / Handicap' },
     closed: { zh: '未开售', en: 'Closed' },
     archivedOdds: { zh: '赛果归档', en: 'Archived' },
-    trustHeader: { zh: '可信度', en: 'Trust' },
+    trustHeader: { zh: '可用度', en: 'Usability' },
     unlockTitle: { zh: '点击模拟升级解锁', en: 'Click to unlock' },
     hit: { zh: '命中', en: 'Hit' },
     miss: { zh: '未中', en: 'Miss' },
@@ -363,47 +448,93 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     setSortOrder(nextSort === 'time' ? 'asc' : 'desc');
   };
 
-  const renderPredictionCell = (match: Match, marketType: PredictionDetail['marketType']) => {
+  const renderDecisionCell = (match: Match) => {
     const isFinished = match.status === 'FINISHED';
-    const pred = getVisiblePrediction(match, marketType);
-
-    if (!pred) return <span className="prediction-tip">-</span>;
-
-    const isLocked = !isFinished && pred.visibilityStatus === 'PREMIUM' && !isPremium;
-
-    if (isLocked) {
-      return (
-        <button
-          type="button"
-          className="locked-tip"
-          onClick={(event) => {
-            event.stopPropagation();
-            togglePremium();
-          }}
-          title={t('unlockTitle')}
-        >
-          <Lock size={12} />
-          PRO
-        </button>
-      );
-    }
-
-    const showHit = isFinished && pred.resultStatus === 'WON';
-    const showMiss = isFinished && pred.resultStatus === 'LOST';
-    const showFinishedWatch = isFinished && pred.tipCode === 'WATCH';
-    const hasDisplayOdds = Number.isFinite(pred.odds) && pred.odds > 0;
+    const signal = getMatchSignal(match);
+    const best = getVisiblePrediction(match, 'BEST');
+    const oneXTwo = getVisiblePrediction(match, '1X2');
+    const goals = getVisiblePrediction(match, 'GOALS');
+    const pickedPrediction = [best, oneXTwo].find((prediction) => prediction && prediction.tipCode !== 'WATCH');
+    const lockedPick = pickedPrediction && pickedPrediction.visibilityStatus === 'PREMIUM' && !isPremium && !isFinished;
+    const leadingOutcome = getLeadingOutcome(match);
+    const leadProbability = pickedPrediction && isOutcomeCode(pickedPrediction.tipCode)
+      ? getOutcomeProbability(match, pickedPrediction.tipCode)
+      : leadingOutcome?.probability ?? null;
+    const leadCode = pickedPrediction && isOutcomeCode(pickedPrediction.tipCode)
+      ? pickedPrediction.tipCode
+      : leadingOutcome?.code;
+    const handicapSupport = getHandicapSupport(match, leadCode);
+    const riskTags = getRiskTags(match);
+    const showHit = isFinished && pickedPrediction?.resultStatus === 'WON';
+    const showMiss = isFinished && pickedPrediction?.resultStatus === 'LOST';
+    const goalsText = goals && goals.tipCode !== 'WATCH'
+      ? getPredictionTipDisplay(goals, language, true)
+      : getGoalsLean(match, language);
+    const bttsText = getBttsLean(match, language);
+    const primaryLabel = pickedPrediction && !lockedPick
+      ? getPredictionTipDisplay(pickedPrediction, language, true)
+      : signal.category === 'finished'
+        ? (language === 'zh' ? '赛后复盘' : 'Review')
+        : signal.category === 'avoid'
+          ? (language === 'zh' ? '避开，不硬上' : 'Avoid')
+          : (language === 'zh' ? '观察，不下手' : 'Watch, no bet');
+    const primaryMeta = pickedPrediction && pickedPrediction.odds > 0 && !lockedPick
+      ? `SP ${pickedPrediction.odds.toFixed(2)}`
+      : leadCode && leadProbability !== null
+        ? `${outcomeLabels[leadCode][language]} ${Math.round(leadProbability)}%`
+        : '--';
+    const shortReason = getDecisionReason(signal.category, language);
 
     return (
-      <div className={`prediction-cell ${showHit ? 'is-hit' : ''} ${showMiss ? 'is-miss' : ''} ${showFinishedWatch ? 'is-watch-review' : ''}`}>
-        <span className="prediction-tip">
-          {getPredictionTipDisplay(pred, language, true)}
-        </span>
-        {hasDisplayOdds && (
-          <span className="prediction-odds">{getPredictionValueLabel(pred, language)} {pred.odds.toFixed(2)}</span>
+      <div className={`decision-card is-${signal.category} ${pickedPrediction ? 'has-pick' : 'is-watch-only'} ${showHit ? 'is-hit' : ''} ${showMiss ? 'is-miss' : ''}`}>
+        <div className="decision-main">
+          <span className="decision-label">{lockedPick ? 'PRO' : primaryLabel}</span>
+          <span className="decision-meta">{lockedPick ? (language === 'zh' ? '高阶方向已锁' : 'Premium pick') : primaryMeta}</span>
+          {showHit && <span className="mini-hit">{t('hit')}</span>}
+          {showMiss && <span className="mini-miss">{t('miss')}</span>}
+        </div>
+
+        <div className="decision-facts">
+          <span>
+            {language === 'zh' ? '让球' : 'HHAD'}
+            <strong>{handicapSupport === null ? '--' : `${handicapSupport}%`}</strong>
+          </span>
+          <span>
+            {language === 'zh' ? '进球' : 'Goals'}
+            <strong>{goalsText}</strong>
+          </span>
+          {bttsText && (
+            <span>
+              {language === 'zh' ? '双方' : 'BTTS'}
+              <strong>{bttsText.replace(/^双方进球/, '').replace(/^BTTS\s/, '')}</strong>
+            </span>
+          )}
+        </div>
+
+        <div className="decision-reason">
+          <span>{shortReason}</span>
+        </div>
+
+        {riskTags.length > 0 && (
+          <div className="decision-risks">
+            {riskTags.map((tag) => (
+              <span key={`${tag.zh}-${tag.en}`}>{tag[language]}</span>
+            ))}
+          </div>
         )}
-        {showHit && <span className="mini-hit">{t('hit')}</span>}
-        {showMiss && <span className="mini-miss">{t('miss')}</span>}
-        {showFinishedWatch && <span className="mini-watch">{t('watch')}</span>}
+
+        {lockedPick && (
+          <button
+            type="button"
+            className="decision-unlock"
+            onClick={(event) => {
+              event.stopPropagation();
+              togglePremium();
+            }}
+          >
+            {t('unlockTitle')}
+          </button>
+        )}
       </div>
     );
   };
@@ -506,7 +637,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     },
     {
       label: t('dataHistory'),
-      value: dataSync.historyLoaded
+      value: dataSync.historyLoaded || dataSync.historyCount > 0
         ? `${dataSync.historyCount} ${t('matchUnit')}`
         : dataSync.historyLoading
           ? t('dataSyncing')
@@ -514,7 +645,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     },
     {
       label: t('dataTotal'),
-      value: `${matches.length || dataSync.totalCount} ${t('matchUnit')}`
+      value: `${dataSync.totalCount || matches.length} ${t('matchUnit')}`
     },
     {
       label: t('dataStatus'),
@@ -765,9 +896,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
                       <th style={{ width: '132px' }}>{t('statusTime')}</th>
                       <th>{t('teams')}</th>
                       <th style={{ width: '260px', textAlign: 'center' }}>{t('oddsHeader')}</th>
-                      <th style={{ width: '92px', textAlign: 'center' }}>{getMarketLabel('1X2', language)}</th>
-                      <th style={{ width: '100px', textAlign: 'center' }}>{getMarketLabel('GOALS', language)}</th>
-                      <th style={{ width: '98px', textAlign: 'center' }}>{getMarketLabel('BEST', language)}</th>
+                      <th style={{ width: '330px', textAlign: 'left' }}>{language === 'zh' ? 'AI决策' : 'AI Decision'}</th>
                       <th style={{ width: '92px', textAlign: 'center' }}>{t('trustHeader')}</th>
                       <th style={{ width: '84px' }} />
                     </tr>
@@ -874,16 +1003,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
                             )}
                           </td>
 
-                          <td className="match-market-cell" data-label={getMarketLabel('1X2', language)} style={{ textAlign: 'center' }}>
-                            {renderPredictionCell(match, '1X2')}
-                          </td>
-
-                          <td className="match-market-cell" data-label={getMarketLabel('GOALS', language)} style={{ textAlign: 'center' }}>
-                            {renderPredictionCell(match, 'GOALS')}
-                          </td>
-
-                          <td className="match-market-cell" data-label={getMarketLabel('BEST', language)} style={{ textAlign: 'center' }}>
-                            {renderPredictionCell(match, 'BEST')}
+                          <td className="match-decision-cell" data-label={language === 'zh' ? 'AI决策' : 'AI Decision'}>
+                            {renderDecisionCell(match)}
                           </td>
 
                           <td className="match-trust-cell" data-label={t('trustHeader')} style={{ textAlign: 'center' }}>

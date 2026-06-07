@@ -12,8 +12,8 @@ const WINDOW_FORWARD_DAYS = Math.max(1, Number(process.env.MATCH_WINDOW_FORWARD_
 const ODDS_HISTORY_RETENTION_DAYS = Math.max(1, Number(process.env.ODDS_HISTORY_RETENTION_DAYS || 365));
 const ODDS_HISTORY_BUCKET_MINUTES = Math.max(1, Number(process.env.ODDS_HISTORY_BUCKET_MINUTES || 5));
 const PAGE_POLL_SECONDS = Math.max(15, Number(process.env.PAGE_POLL_SECONDS || 30));
-const ANALYST_PROMPT_VERSION = "professional-football-analyst-v6";
-const PREDICTION_POLICY_VERSION = "pre-match-quality-gate-v12";
+const ANALYST_PROMPT_VERSION = "professional-football-analyst-v7";
+const PREDICTION_POLICY_VERSION = "pre-match-usability-gate-v13";
 const FORM_LOOKBACK_MATCHES = 12;
 const METHODS = (process.env.SPORTTERY_METHODS || "concern,live,result,all")
   .split(",")
@@ -2092,8 +2092,23 @@ function predictionSet(match) {
     : bestIsSteady
       ? { zh: "稳妥方向", en: "Steady lean" }
       : { zh: "模型首选", en: "Model lean" };
+  const watchUsefulnessScore = (() => {
+    const leadProbability = Math.max(modelProbabilities.home, modelProbabilities.draw, modelProbabilities.away);
+    const handicapBonus = bestHandicapSupport === null ? 0 : Math.min(10, bestHandicapSupport * 16);
+    const edgeBonus = modelProbabilityGap * 42;
+    const riskPenalty = riskTags.length * 6
+      + (oneXTwoGate.reasons || []).filter((reason) => (
+        reason.includes("cooldown")
+        || reason.includes("weak")
+        || reason.includes("thin")
+        || reason.includes("risk")
+      )).length * 3
+      + (bestHasOverheatedFavorite ? 7 : 0)
+      + (analystSelection.isContrarian ? 4 : 0);
+    return clamp(Math.round(leadProbability * 100 + edgeBonus + handicapBonus - riskPenalty), 28, 68);
+  })();
   const bestTrustScore = bestShouldWatch
-    ? clamp(Math.round(oneXTwo.trustScore - 12), 45, 72)
+    ? watchUsefulnessScore
     : analystSelection.isContrarian
     ? clamp(oneXTwo.trustScore, 54, 76)
     : bestIsSteady
@@ -2320,8 +2335,8 @@ function applyPredictionPersistence(match, existing, capturedAt) {
       predictionMeta: {
         ...generatedMeta,
         updateReason: {
-          zh: "精选说明升级为分场景盘口叙事，未开赛比赛允许刷新赛前分析文案和风险表达。",
-          en: "Best-tip notes were upgraded to scenario-based market narratives, so unstarted matches can refresh analysis copy and risk wording.",
+          zh: "未开赛比赛只在官方 SP、让球或风险门槛变化时刷新；当前结论以数据监控为主，不强行包装推荐。",
+          en: "Unstarted matches refresh only when official SP, handicap, or risk gates change; the current verdict is data monitoring, not forced promotion.",
         },
       },
     };

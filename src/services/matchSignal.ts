@@ -76,6 +76,31 @@ export function getMatchSignal(match: Match): MatchSignal {
   }
 
   if (best.tipCode === 'WATCH') {
+    const riskTags = best.riskTags || [];
+    const riskNamesEn = riskTags.map((tag) => tag.en.toLowerCase());
+    const trustScore = best.trustScore || 0;
+    const hasHardRisk = riskNamesEn.some((name) => (
+      name.includes('market disagreement')
+      || name.includes('handicap support weak')
+      || name.includes('heavy favorite')
+      || name.includes('tight 1x2')
+    ));
+    const shouldAvoid = riskTags.length >= 4 || (hasHardRisk && trustScore < 58) || trustScore < 42;
+
+    if (shouldAvoid) {
+      return {
+        category: 'avoid',
+        label: labels.avoid,
+        note: {
+          zh: '该场未通过推荐门槛且风险标签偏多，保留数据观察，但不进入推荐池。',
+          en: 'The gate was not met and risk tags are stacked. Keep the data for monitoring, but do not promote it.'
+        },
+        tone: 'danger',
+        trustScore,
+        riskCount: riskTags.length
+      };
+    }
+
     return {
       category: 'watch',
       label: labels.watch,
@@ -84,8 +109,8 @@ export function getMatchSignal(match: Match): MatchSignal {
         en: 'The value gate was triggered. No single 1X2 pick is promoted yet; watch late SP and handicap movement.'
       },
       tone: 'warning',
-      trustScore: best.trustScore || 0,
-      riskCount: best.riskTags?.length || 0
+      trustScore,
+      riskCount: riskTags.length
     };
   }
 

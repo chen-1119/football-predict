@@ -31,6 +31,11 @@ type SyncMeta = {
   capturedAt?: string;
   lastAttemptAt?: string;
   byStatus?: Partial<Record<Match['status'], number>>;
+  files?: {
+    current?: number;
+    history?: number;
+    teams?: number;
+  };
   refreshPolicy?: {
     workflowMinutes?: number;
     pagePollSeconds?: number;
@@ -104,6 +109,10 @@ const fetchFirstAvailable = async <T,>(urls: string[]): Promise<T> => {
 
   throw lastError;
 };
+
+const readMetaCount = (value: number | undefined) => (
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
+);
 
 const mergeMatches = (baseMatches: Match[], nextMatches: Match[]) => {
   const byId = new Map<string, Match>();
@@ -257,6 +266,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ]);
         const currentCount = applyData(data, 'current');
         const metaState = metaToState(meta, checkedAt);
+        const metaCurrentCount = readMetaCount(meta?.files?.current);
+        const metaHistoryCount = readMetaCount(meta?.files?.history);
         const finishedCount = meta?.byStatus?.FINISHED;
         const shouldRefreshHistory = !isInitial && Boolean(metaState.sourceUpdatedAt) && (
           lastMetaRef.current.sourceUpdatedAt !== metaState.sourceUpdatedAt ||
@@ -271,8 +282,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ...current,
           currentLoaded: currentCount > 0,
           historyLoading: isInitial ? true : current.historyLoading,
-          currentCount,
-          totalCount: current.historyCount + currentCount,
+          currentCount: metaCurrentCount ?? currentCount,
+          historyCount: Math.max(current.historyCount, metaHistoryCount ?? 0),
+          totalCount: (metaCurrentCount ?? currentCount) + Math.max(current.historyCount, metaHistoryCount ?? 0),
           error: undefined,
           ...metaState
         }));
