@@ -3,7 +3,7 @@
   "source": "sporttery",
   "updatedAt": "2026-06-07T14:36:46.398Z",
   "capturedAt": "2026-06-07T14:36:46.398Z",
-  "lastAttemptAt": "2026-06-07T14:36:46.398Z",
+  "lastAttemptAt": "2026-06-07T14:38:30.235Z",
   "officialOddsMatches": 4,
   "officialHandicapOddsMatches": 4,
   "officialResultMatches": 3004,
@@ -34,16 +34,17 @@
     "note": "GitHub Pages serves static JSON. The page checks for newer JSON regularly; GitHub Actions refreshes the source files on schedule."
   },
   "attempt": {
-    "capturedAt": "2026-06-07T14:36:46.398Z",
-    "officialOddsMatches": 4,
-    "officialHandicapOddsMatches": 4,
-    "officialResultMatches": 3004,
-    "publishableMatches": 3008
+    "capturedAt": "2026-06-07T14:38:30.235Z",
+    "officialOddsMatches": 0,
+    "officialHandicapOddsMatches": 0,
+    "officialResultMatches": 0,
+    "publishableMatches": 0
   },
   "oddsHistory": {
     "rows": 3679,
-    "appended": 27,
-    "updated": 0
+    "appended": 0,
+    "updated": 0,
+    "skipped": "Sporttery returned no publishable matches; kept existing match store"
   },
   "predictionSnapshots": {
     "total": 29,
@@ -76,5 +77,12 @@
       "goalsHitRate": 0.385,
       "bestHitRate": 0.2
     }
+  },
+  "fallback": {
+    "keptExisting": true,
+    "mergedPartialFresh": false,
+    "reason": "Sporttery returned no publishable matches; kept existing match store",
+    "existingMatches": 3008,
+    "freshPublishableMatches": 0
   }
 }
