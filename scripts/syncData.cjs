@@ -1462,16 +1462,16 @@ function mergeMatch(prev, next) {
   const prevHasScore = Number.isFinite(prev.scoreHome) && Number.isFinite(prev.scoreAway);
   const oddsRank = (match) => {
     if (!sanitizeOdds(match.odds)) return 0;
-    if (match.oddsUpdatedAt) return 4;
-    if (match.oddsSourceMethod === "calculator") return 3;
-    if (match.oddsSourceMethod === "current") return 2;
+    if (match.oddsSourceMethod === "current") return 5;
+    if (match.oddsSourceMethod === "calculator") return 4;
+    if (match.oddsUpdatedAt) return 3;
     return 1;
   };
   const handicapOddsRank = (match) => {
     if (!sanitizeOdds(match.handicapOdds)) return 0;
-    if (match.handicapOddsUpdatedAt) return 4;
-    if (match.handicapOddsSourceMethod === "calculator") return 3;
-    if (match.handicapOddsSourceMethod === "current") return 2;
+    if (match.handicapOddsSourceMethod === "current") return 5;
+    if (match.handicapOddsSourceMethod === "calculator") return 4;
+    if (match.handicapOddsUpdatedAt) return 3;
     return 1;
   };
   const oddsMatch = oddsRank(next) >= oddsRank(prev) ? next : prev;
