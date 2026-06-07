@@ -10,16 +10,36 @@
     "projectedScoreHome": 2,
     "projectedScoreAway": 0,
     "probabilityModel": {
-      "version": "market-elo-form-bucket-calibrated-poisson-v5",
-      "generatedAt": "2026-06-07T13:20:01.857Z",
+      "version": "market-elo-form-dynamic-calibrated-poisson-v6",
+      "generatedAt": "2026-06-07T13:50:55.546Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序；已使用官方 SP/让球 SP/赔率快照、Elo、近一年赛果攻防、赛程密度和 Poisson 比分分布。推荐分为强信号主推、价值观察、观察和避坑，国际赛低赔强队必须通过让球盘与概率双重校验，不默认包装成稳胆。",
         "en": "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model uses official SP/handicap SP/snapshots, Elo, last-year form, schedule density, and Poisson score distribution. Picks are split into strong leans, value-watch, watch, and avoid signals; low-SP international favourites must pass handicap and probability checks."
       },
       "ensembleWeights": {
-        "market": 0.58,
-        "elo": 0.24,
-        "poisson": 0.18
+        "market": 0.68,
+        "elo": 0.18,
+        "poisson": 0.14
+      },
+      "dynamicCalibration": {
+        "version": "rolling-calibration-v1",
+        "profileKey": "international",
+        "gate": {
+          "minProbabilityBoost": 0.045,
+          "minModelGapBoost": 0.025,
+          "minHandicapSupportBoost": 0.06,
+          "trustPenalty": 7,
+          "maxRiskTags": 2,
+          "goalsMinBoost": 0.04,
+          "reason": "cold-profile"
+        },
+        "metrics": {
+          "oneXTwoBrier": 0.7351,
+          "oneXTwoLogLoss": 1.1931,
+          "oneXTwoHitRate": 0.308,
+          "goalsHitRate": 0.385,
+          "bestHitRate": 0.2
+        }
       },
       "calibrationAdjustment": {
         "oneXTwo": {
@@ -59,14 +79,14 @@
             }
           ],
           "before": {
-            "home": 62.7,
-            "draw": 22,
-            "away": 15.2
+            "home": 64.6,
+            "draw": 21.5,
+            "away": 13.9
           },
           "after": {
-            "home": 44.3,
-            "draw": 32.2,
-            "away": 23.6
+            "home": 46.2,
+            "draw": 31.6,
+            "away": 22.2
           }
         },
         "goals": {
@@ -111,9 +131,9 @@
           "away": 12.1
         },
         "final": {
-          "home": 44.3,
-          "draw": 32.2,
-          "away": 23.6
+          "home": 46.2,
+          "draw": 31.6,
+          "away": 22.2
         }
       },
       "elo": {
@@ -657,8 +677,8 @@
             "en": "Official HAD SP: 1.26 / 4.45 / 9.00; normalized support is about home 70% / draw 20% / away 10%."
           },
           {
-            "zh": "观察理由：模型优势约 12 个百分点，市场优势约 50 个百分点，让球同向支持约 30%；条件没有同时闭合，暂不输出单一胜平负方向。",
-            "en": "Watch reason: model edge is about 12 points, market edge about 50 points, same-side handicap support about 30%; no single 1X2 pick is promoted."
+            "zh": "观察理由：模型优势约 15 个百分点，市场优势约 50 个百分点，让球同向支持约 42%；条件没有同时闭合，暂不输出单一胜平负方向。",
+            "en": "Watch reason: model edge is about 15 points, market edge about 50 points, same-side handicap support about 42%; no single 1X2 pick is promoted."
           },
           {
             "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 官方 SP 来自本次中国竞彩网同步快照。",
@@ -667,12 +687,16 @@
         ],
         "riskTags": [
           {
-            "zh": "进球临界",
-            "en": "Goal-model borderline"
+            "zh": "国际赛低赔",
+            "en": "International low-SP favorite"
           },
           {
-            "zh": "盘口分歧",
-            "en": "Market disagreement"
+            "zh": "让球支持不足",
+            "en": "Handicap support weak"
+          },
+          {
+            "zh": "进球临界",
+            "en": "Goal-model borderline"
           },
           {
             "zh": "近期命中率冷却",
@@ -736,31 +760,35 @@
         "odds": 0,
         "trustScore": 22,
         "explanation": {
-          "zh": "模型没有否定防平参考 平局，只是拒绝把它抬到主推：市场第一方向领先 50 个百分点，但让球验证和风险项还没闭合。",
-          "en": "The model is not rejecting draw-cover reference Draw; it is refusing to upgrade it. Market lead is 50 points, but handicap and risk checks are not closed."
+          "zh": "这场有正路倾向，但不适合硬写成稳胆。让球同向支持约 42%，风险标签为 国际赛低赔、让球支持不足、进球临界，先按观察单处理。",
+          "en": "There is a favorite lean, but not a banker. same-side handicap support is about 42%; risk tags: International low-SP favorite, Handicap support weak, Goal-model borderline. Keep it in watch mode."
         },
         "analysisItems": [
           {
-            "zh": "降级原因：风险标签叠加为 进球临界、盘口分歧，当前不适合只给单一方向。",
-            "en": "Downgrade reason: risk tags overlap: Goal-model borderline, Market disagreement. A single pick is not justified yet."
+            "zh": "降级原因：模型首选优势约 15 个百分点，未达到强推荐阈值；市场主线领先约 50 个百分点。",
+            "en": "Downgrade reason: model edge is about 15 points, below the strong-pick threshold; market lead is about 50 points."
           },
           {
             "zh": "进球侧：比分热区 2-0，总期望 2.71，大 2.5 约 50%，双方进球约 48%。",
             "en": "Goals: score heat zone 2-0, total xG 2.71, over 2.5 about 50%, BTTS about 48%."
           },
           {
-            "zh": "临场复核：进球临界、盘口分歧。如果赛前 SP 继续降赔但让球支持不上来，仍按观察处理。",
-            "en": "Late check: Goal-model borderline, Market disagreement. If SP shortens without handicap confirmation, keep this as watch-only."
+            "zh": "临场复核：国际赛低赔、让球支持不足、进球临界。如果赛前 SP 继续降赔但让球支持不上来，仍按观察处理。",
+            "en": "Late check: International low-SP favorite, Handicap support weak, Goal-model borderline. If SP shortens without handicap confirmation, keep this as watch-only."
           }
         ],
         "riskTags": [
           {
-            "zh": "进球临界",
-            "en": "Goal-model borderline"
+            "zh": "国际赛低赔",
+            "en": "International low-SP favorite"
           },
           {
-            "zh": "盘口分歧",
-            "en": "Market disagreement"
+            "zh": "让球支持不足",
+            "en": "Handicap support weak"
+          },
+          {
+            "zh": "进球临界",
+            "en": "Goal-model borderline"
           },
           {
             "zh": "近期命中率冷却",
@@ -856,10 +884,10 @@
     "handicapOddsSourceMethod": "current",
     "handicapOddsSourceUrl": "https://webapi.sporttery.cn/gateway/uniform/football/getMatchListV1.qry?clientCode=3001",
     "predictionMeta": {
-      "policyVersion": "sporttery-day-value-gate-v23",
-      "promptVersion": "professional-football-analyst-v14",
+      "policyVersion": "sporttery-day-dynamic-calibration-v24",
+      "promptVersion": "professional-football-analyst-v15",
       "generatedAt": "2026-06-07T01:23:00.992Z",
-      "updatedAt": "2026-06-07T13:19:59.034Z",
+      "updatedAt": "2026-06-07T13:49:44.340Z",
       "dataPolicy": {
         "zh": "后台按中国竞彩网竞彩日同步赛程，页面按官方开赛时间排序。当前入模来源为官方 HAD/HHAD SP、赛果、开赛前 SP 快照、Elo、近一年同源赛果、赛程密度与比分分布；伤停、首发、天气、裁判、xG/xGA 和外部赔率未稳定接源前只作为待接入项，不参与评分，也不写成结论。赛前总预测先生成基线，临场预测只在官方 SP 或让球盘出现实质变化时更新；开赛后锁定赛前预测，只做命中复盘。",
         "en": "The background sync groups fixtures by Sporttery business day and sorts the page by official kickoff time. Scored inputs are official HAD/HHAD SP, results, pre-kickoff SP snapshots, Elo, last-year same-source results, schedule density, and score distribution. Injuries, lineups, weather, referees, xG/xGA, and external odds stay as planned feeds until stable; they are not scored or turned into conclusions. The baseline forecast is generated before kickoff, late forecast updates only on material official SP or handicap movement, and the pre-match forecast is locked after kickoff for review only."
@@ -882,22 +910,27 @@
           "en": "After full time, append score, hit/miss, SP movement, and risk-tag review only."
         }
       },
-      "updateReason": {
-        "zh": "提示词与展示规则已升级，赛前方向未发生实质变化；保留原预测，只更新分析说明。",
-        "en": "Prompt and display rules were upgraded while the pre-match direction did not materially change; the old forecast is kept and only the analysis text is refreshed."
+      "snapshot": {
+        "phase": "mid",
+        "total": 1,
+        "phases": {
+          "mid": 1
+        },
+        "latestAt": "2026-06-07T13:49:44.340Z",
+        "latestSignature": "1X2:WATCH|BEST:WATCH|GOALS:WATCH|1.26/4.45/9.00|-1.00:2.11/2.96/3.15|46/32/22"
       }
     },
     "oddsTrend": {
-      "sampleSize": 104,
+      "sampleSize": 109,
       "firstCapturedAt": "2026-06-07T01:23:00.992Z",
-      "lastCapturedAt": "2026-06-07T13:19:59.034Z",
+      "lastCapturedAt": "2026-06-07T13:49:44.340Z",
       "odds1Change": 0,
       "oddsXChange": -0.1,
       "odds2Change": 0.25,
       "direction": "draw",
       "summary": {
-        "zh": "已记录 104 次官方 SP 快照，平局 -0.10，市场对该方向有增温迹象；同步变化：客胜 +0.25。",
-        "en": "104 official SP snapshots recorded. draw -0.10; that side is warming, with secondary moves away win +0.25."
+        "zh": "已记录 109 次官方 SP 快照，平局 -0.10，市场对该方向有增温迹象；同步变化：客胜 +0.25。",
+        "en": "109 official SP snapshots recorded. draw -0.10; that side is warming, with secondary moves away win +0.25."
       }
     }
   },
@@ -912,39 +945,65 @@
     "projectedScoreHome": 1,
     "projectedScoreAway": 1,
     "probabilityModel": {
-      "version": "market-elo-form-bucket-calibrated-poisson-v5",
-      "generatedAt": "2026-06-07T13:20:01.858Z",
+      "version": "market-elo-form-dynamic-calibrated-poisson-v6",
+      "generatedAt": "2026-06-07T13:50:55.547Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序；已使用官方 SP/让球 SP/赔率快照、Elo、近一年赛果攻防、赛程密度和 Poisson 比分分布。推荐分为强信号主推、价值观察、观察和避坑，国际赛低赔强队必须通过让球盘与概率双重校验，不默认包装成稳胆。",
         "en": "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model uses official SP/handicap SP/snapshots, Elo, last-year form, schedule density, and Poisson score distribution. Picks are split into strong leans, value-watch, watch, and avoid signals; low-SP international favourites must pass handicap and probability checks."
       },
       "ensembleWeights": {
-        "market": 0.54,
-        "elo": 0.2,
-        "poisson": 0.26
+        "market": 0.68,
+        "elo": 0.18,
+        "poisson": 0.14
+      },
+      "dynamicCalibration": {
+        "version": "rolling-calibration-v1",
+        "profileKey": "international",
+        "gate": {
+          "minProbabilityBoost": 0.045,
+          "minModelGapBoost": 0.025,
+          "minHandicapSupportBoost": 0.06,
+          "trustPenalty": 7,
+          "maxRiskTags": 2,
+          "goalsMinBoost": 0.04,
+          "reason": "cold-profile"
+        },
+        "metrics": {
+          "oneXTwoBrier": 0.7351,
+          "oneXTwoLogLoss": 1.1931,
+          "oneXTwoHitRate": 0.308,
+          "goalsHitRate": 0.385,
+          "bestHitRate": 0.2
+        }
       },
       "calibrationAdjustment": {
         "oneXTwo": {
           "applied": true,
           "reasons": [
+            "tip-1-hit-rate-cooldown",
             "one-x-two-hit-rate-cooldown"
           ],
           "adjustments": [
             {
-              "code": "2",
+              "code": "1",
+              "reason": "tip-1-hit-rate-cooldown",
+              "penalty": 0.033
+            },
+            {
+              "code": "1",
               "reason": "one-x-two-hit-rate-cooldown",
               "penalty": 0.031
             }
           ],
           "before": {
-            "home": 34.9,
-            "draw": 30,
-            "away": 35.1
+            "home": 34.8,
+            "draw": 30.8,
+            "away": 34.4
           },
           "after": {
-            "home": 36.3,
-            "draw": 31.7,
-            "away": 32
+            "home": 28.3,
+            "draw": 34.4,
+            "away": 37.3
           }
         },
         "goals": {
@@ -956,27 +1015,27 @@
           ],
           "shrinkFactor": 0.361,
           "before": {
-            "over25": 40.5,
-            "btts": 46.7
+            "over25": 40.2,
+            "btts": 46.5
           },
           "after": {
-            "over25": 46.6,
-            "btts": 48.8
+            "over25": 46.5,
+            "btts": 48.7
           }
         }
       },
       "lambdaBlend": {
-        "marketHomeLambda": 1.08,
-        "marketAwayLambda": 1.24,
+        "marketHomeLambda": 1.1,
+        "marketAwayLambda": 1.22,
         "formHomeLambda": 1.19,
         "formAwayLambda": 0.91,
         "formWeight": 0.11
       },
       "oneXTwo": {
         "market": {
-          "home": 30.6,
-          "draw": 32.2,
-          "away": 37.2
+          "home": 31.2,
+          "draw": 32.5,
+          "away": 36.3
         },
         "elo": {
           "home": 49.1,
@@ -984,14 +1043,14 @@
           "away": 24.7
         },
         "poisson": {
-          "home": 33.1,
-          "draw": 28.3,
-          "away": 38.6
+          "home": 33.9,
+          "draw": 28.4,
+          "away": 37.8
         },
         "final": {
-          "home": 36.3,
-          "draw": 31.7,
-          "away": 32
+          "home": 28.3,
+          "draw": 34.4,
+          "away": 37.3
         }
       },
       "elo": {
@@ -1451,52 +1510,52 @@
           "home": 1,
           "away": 1,
           "label": "1-1",
-          "probability": 13.2
+          "probability": 13.3
         },
         {
           "home": 0,
           "away": 1,
           "label": "0-1",
-          "probability": 12.1
+          "probability": 12
         },
         {
           "home": 1,
           "away": 0,
           "label": "1-0",
-          "probability": 10.9
+          "probability": 11.2
         },
         {
           "home": 0,
           "away": 0,
           "label": "0-0",
-          "probability": 10
+          "probability": 10.1
         },
         {
           "home": 1,
           "away": 2,
           "label": "1-2",
-          "probability": 8
+          "probability": 7.9
         }
       ],
       "goalLines": {
-        "over25": 46.6,
-        "under25": 53.4
+        "over25": 46.5,
+        "under25": 53.5
       },
       "bothTeamsToScore": {
-        "yes": 48.8,
-        "no": 51.2
+        "yes": 48.7,
+        "no": 51.3
       },
       "handicap": {
         "line": "+1.00",
         "market": {
-          "home": 62.4,
-          "draw": 21.1,
-          "away": 16.6
+          "home": 63.2,
+          "draw": 20.8,
+          "away": 15.9
         },
         "poisson": {
-          "home": 61.4,
-          "draw": 22,
-          "away": 16.6
+          "home": 62.2,
+          "draw": 21.8,
+          "away": 16
         }
       },
       "calibration": {
@@ -1506,14 +1565,14 @@
       }
     },
     "odds": {
-      "odds1": 2.9,
-      "oddsX": 2.75,
-      "odds2": 2.38
+      "odds1": 2.84,
+      "oddsX": 2.72,
+      "odds2": 2.44
     },
     "handicapOdds": {
-      "odds1": 1.42,
-      "oddsX": 4.2,
-      "odds2": 5.35
+      "odds1": 1.4,
+      "oddsX": 4.25,
+      "odds2": 5.55
     },
     "predictions": [
       {
@@ -1531,12 +1590,12 @@
         },
         "analysisItems": [
           {
-            "zh": "官方 HAD SP：主胜 2.90 / 平局 2.75 / 客胜 2.38；去水支持率约 主胜 31% / 平局 32% / 客胜 37%。",
-            "en": "Official HAD SP: 2.90 / 2.75 / 2.38; normalized support is about home 31% / draw 32% / away 37%."
+            "zh": "官方 HAD SP：主胜 2.84 / 平局 2.72 / 客胜 2.44；去水支持率约 主胜 31% / 平局 33% / 客胜 36%。",
+            "en": "Official HAD SP: 2.84 / 2.72 / 2.44; normalized support is about home 31% / draw 33% / away 36%."
           },
           {
-            "zh": "观察理由：模型优势约 4 个百分点，市场优势约 5 个百分点，让球同向支持约 21%；条件没有同时闭合，暂不输出单一胜平负方向。",
-            "en": "Watch reason: model edge is about 4 points, market edge about 5 points, same-side handicap support about 21%; no single 1X2 pick is promoted."
+            "zh": "观察理由：模型优势约 3 个百分点，市场优势约 4 个百分点，让球同向支持约 21%；条件没有同时闭合，暂不输出单一胜平负方向。",
+            "en": "Watch reason: model edge is about 3 points, market edge about 4 points, same-side handicap support about 21%; no single 1X2 pick is promoted."
           },
           {
             "zh": "平局支持率偏高，胜平负方向需要防平。 官方 SP 来自本次中国竞彩网同步快照。",
@@ -1580,19 +1639,19 @@
           "en": "Watch first: no total-goals pick"
         },
         "odds": 0,
-        "trustScore": 51,
+        "trustScore": 52,
         "explanation": {
-          "zh": "进球趋势条件未齐：总进球期望约 2.30，大 2.5 概率约 47%，边际不足时不强行给大/小球方向。",
-          "en": "The goals trend did not pass the recommendation gate. Total expected goals are about 2.30, over 2.5 probability about 47%, so no over/under pick is promoted."
+          "zh": "进球趋势条件未齐：总进球期望约 2.29，大 2.5 概率约 46%，边际不足时不强行给大/小球方向。",
+          "en": "The goals trend did not pass the recommendation gate. Total expected goals are about 2.29, over 2.5 probability about 46%, so no over/under pick is promoted."
         },
         "analysisItems": [
           {
-            "zh": "比分热区：1-1 附近；候选方向 小2.5球（≤2球） 的模型概率约 53%，低于强推阈值。",
-            "en": "Score heat zone: around 1-1; candidate Under 2.5 goals is about 53%, below the promotion threshold."
+            "zh": "比分热区：1-1 附近；候选方向 小2.5球（≤2球） 的模型概率约 54%，低于强推阈值。",
+            "en": "Score heat zone: around 1-1; candidate Under 2.5 goals is about 54%, below the promotion threshold."
           },
           {
-            "zh": "大 2.5 球概率约 47%，该指标用于走势参考，不等同于官方总进球 SP。",
-            "en": "Over 2.5 probability is about 47%. This is a model reference, not official Sporttery total-goals SP."
+            "zh": "大 2.5 球概率约 46%，该指标用于走势参考，不等同于官方总进球 SP。",
+            "en": "Over 2.5 probability is about 46%. This is a model reference, not official Sporttery total-goals SP."
           }
         ],
         "riskTags": [
@@ -1622,8 +1681,8 @@
         "odds": 0,
         "trustScore": 22,
         "explanation": {
-          "zh": "防平参考 平局只能作为参考，不是主推结论：模型差距约 4 个百分点，真正的问题在让球盘是否愿意继续同向。",
-          "en": "draw-cover reference Draw is a reference only, not the main pick: model edge is 4 points, and the key question is handicap confirmation."
+          "zh": "防平参考 平局只能作为参考，不是主推结论：模型差距约 3 个百分点，真正的问题在让球盘是否愿意继续同向。",
+          "en": "draw-cover reference Draw is a reference only, not the main pick: model edge is 3 points, and the key question is handicap confirmation."
         },
         "analysisItems": [
           {
@@ -1631,8 +1690,8 @@
             "en": "Downgrade reason: risk tags overlap: Draw risk, Tight 1X2, Goal-model borderline, Market disagreement. A single pick is not justified yet."
           },
           {
-            "zh": "进球侧：比分热区 1-1，总期望 2.30，大 2.5 约 47%，双方进球约 49%。",
-            "en": "Goals: score heat zone 1-1, total xG 2.30, over 2.5 about 47%, BTTS about 49%."
+            "zh": "进球侧：比分热区 1-1，总期望 2.29，大 2.5 约 46%，双方进球约 49%。",
+            "en": "Goals: score heat zone 1-1, total xG 2.29, over 2.5 about 46%, BTTS about 49%."
           },
           {
             "zh": "临场复核：防平、胜负接近、进球临界、盘口分歧。如果赛前 SP 继续降赔但让球支持不上来，仍按观察处理。",
@@ -1675,8 +1734,8 @@
     ],
     "stats": {
       "xG": {
-        "home": 1.1,
-        "away": 1.21
+        "home": 1.11,
+        "away": 1.19
       },
       "possession": {
         "home": 51,
@@ -1749,10 +1808,10 @@
     "handicapOddsSourceMethod": "current",
     "handicapOddsSourceUrl": "https://webapi.sporttery.cn/gateway/uniform/football/getMatchListV1.qry?clientCode=3001",
     "predictionMeta": {
-      "policyVersion": "sporttery-day-value-gate-v23",
-      "promptVersion": "professional-football-analyst-v14",
+      "policyVersion": "sporttery-day-dynamic-calibration-v24",
+      "promptVersion": "professional-football-analyst-v15",
       "generatedAt": "2026-06-07T01:23:00.992Z",
-      "updatedAt": "2026-06-07T13:19:59.034Z",
+      "updatedAt": "2026-06-07T13:49:44.340Z",
       "dataPolicy": {
         "zh": "后台按中国竞彩网竞彩日同步赛程，页面按官方开赛时间排序。当前入模来源为官方 HAD/HHAD SP、赛果、开赛前 SP 快照、Elo、近一年同源赛果、赛程密度与比分分布；伤停、首发、天气、裁判、xG/xGA 和外部赔率未稳定接源前只作为待接入项，不参与评分，也不写成结论。赛前总预测先生成基线，临场预测只在官方 SP 或让球盘出现实质变化时更新；开赛后锁定赛前预测，只做命中复盘。",
         "en": "The background sync groups fixtures by Sporttery business day and sorts the page by official kickoff time. Scored inputs are official HAD/HHAD SP, results, pre-kickoff SP snapshots, Elo, last-year same-source results, schedule density, and score distribution. Injuries, lineups, weather, referees, xG/xGA, and external odds stay as planned feeds until stable; they are not scored or turned into conclusions. The baseline forecast is generated before kickoff, late forecast updates only on material official SP or handicap movement, and the pre-match forecast is locked after kickoff for review only."
@@ -1775,22 +1834,27 @@
           "en": "After full time, append score, hit/miss, SP movement, and risk-tag review only."
         }
       },
-      "updateReason": {
-        "zh": "赛前赔率或让球信号发生实质变化，已生成新的临场预测；开赛后将锁定这版记录。",
-        "en": "Pre-match odds or handicap signals changed materially, so a new late forecast was generated and will be locked after kickoff."
+      "snapshot": {
+        "phase": "mid",
+        "total": 1,
+        "phases": {
+          "mid": 1
+        },
+        "latestAt": "2026-06-07T13:49:44.340Z",
+        "latestSignature": "1X2:WATCH|BEST:WATCH|GOALS:WATCH|2.84/2.72/2.44|+1.00:1.40/4.25/5.55|28/34/37"
       }
     },
     "oddsTrend": {
-      "sampleSize": 104,
+      "sampleSize": 109,
       "firstCapturedAt": "2026-06-07T01:23:00.992Z",
-      "lastCapturedAt": "2026-06-07T13:19:59.034Z",
-      "odds1Change": -0.25,
-      "oddsXChange": -0.35,
-      "odds2Change": 0.33,
+      "lastCapturedAt": "2026-06-07T13:49:44.340Z",
+      "odds1Change": -0.31,
+      "oddsXChange": -0.38,
+      "odds2Change": 0.39,
       "direction": "draw",
       "summary": {
-        "zh": "已记录 104 次官方 SP 快照，平局 -0.35，市场对该方向有增温迹象；同步变化：主胜 -0.25，客胜 +0.33。",
-        "en": "104 official SP snapshots recorded. draw -0.35; that side is warming, with secondary moves home win -0.25, away win +0.33."
+        "zh": "已记录 109 次官方 SP 快照，平局 -0.38，市场对该方向有增温迹象；同步变化：主胜 -0.31，客胜 +0.39。",
+        "en": "109 official SP snapshots recorded. draw -0.38; that side is warming, with secondary moves home win -0.31, away win +0.39."
       }
     }
   },
@@ -1805,16 +1869,36 @@
     "projectedScoreHome": 1,
     "projectedScoreAway": 1,
     "probabilityModel": {
-      "version": "market-elo-form-bucket-calibrated-poisson-v5",
-      "generatedAt": "2026-06-07T13:20:01.858Z",
+      "version": "market-elo-form-dynamic-calibrated-poisson-v6",
+      "generatedAt": "2026-06-07T13:50:55.547Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序；已使用官方 SP/让球 SP/赔率快照、Elo、近一年赛果攻防、赛程密度和 Poisson 比分分布。推荐分为强信号主推、价值观察、观察和避坑，国际赛低赔强队必须通过让球盘与概率双重校验，不默认包装成稳胆。",
         "en": "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model uses official SP/handicap SP/snapshots, Elo, last-year form, schedule density, and Poisson score distribution. Picks are split into strong leans, value-watch, watch, and avoid signals; low-SP international favourites must pass handicap and probability checks."
       },
       "ensembleWeights": {
-        "market": 0.58,
-        "elo": 0.24,
-        "poisson": 0.18
+        "market": 0.68,
+        "elo": 0.18,
+        "poisson": 0.14
+      },
+      "dynamicCalibration": {
+        "version": "rolling-calibration-v1",
+        "profileKey": "international",
+        "gate": {
+          "minProbabilityBoost": 0.045,
+          "minModelGapBoost": 0.025,
+          "minHandicapSupportBoost": 0.06,
+          "trustPenalty": 7,
+          "maxRiskTags": 2,
+          "goalsMinBoost": 0.04,
+          "reason": "cold-profile"
+        },
+        "metrics": {
+          "oneXTwoBrier": 0.7351,
+          "oneXTwoLogLoss": 1.1931,
+          "oneXTwoHitRate": 0.308,
+          "goalsHitRate": 0.385,
+          "bestHitRate": 0.2
+        }
       },
       "calibrationAdjustment": {
         "oneXTwo": {
@@ -1842,14 +1926,14 @@
             }
           ],
           "before": {
-            "home": 39.2,
-            "draw": 29.7,
-            "away": 31.1
+            "home": 38.2,
+            "draw": 30.3,
+            "away": 31.5
           },
           "after": {
-            "home": 27.3,
-            "draw": 36.3,
-            "away": 36.5
+            "home": 26.3,
+            "draw": 36.9,
+            "away": 36.9
           }
         },
         "goals": {
@@ -1861,27 +1945,27 @@
           ],
           "shrinkFactor": 0.361,
           "before": {
-            "over25": 43.2,
-            "btts": 48.7
+            "over25": 42.9,
+            "btts": 48.6
           },
           "after": {
-            "over25": 47.5,
+            "over25": 47.4,
             "btts": 49.5
           }
         }
       },
       "lambdaBlend": {
-        "marketHomeLambda": 1.34,
-        "marketAwayLambda": 1.11,
+        "marketHomeLambda": 1.31,
+        "marketAwayLambda": 1.13,
         "formHomeLambda": 0.53,
         "formAwayLambda": 1.19,
         "formWeight": 0.055
       },
       "oneXTwo": {
         "market": {
-          "home": 39.2,
-          "draw": 30.5,
-          "away": 30.3
+          "home": 38,
+          "draw": 31.1,
+          "away": 31
         },
         "elo": {
           "home": 38.3,
@@ -1889,14 +1973,14 @@
           "away": 32.3
         },
         "poisson": {
-          "home": 40.5,
-          "draw": 27.5,
-          "away": 32
+          "home": 39.4,
+          "draw": 27.6,
+          "away": 33
         },
         "final": {
-          "home": 27.3,
-          "draw": 36.3,
-          "away": 36.5
+          "home": 26.3,
+          "draw": 36.9,
+          "away": 36.9
         }
       },
       "elo": {
@@ -2362,30 +2446,30 @@
           "home": 1,
           "away": 0,
           "label": "1-0",
-          "probability": 11.6
+          "probability": 11.5
         },
         {
           "home": 0,
           "away": 1,
           "label": "0-1",
-          "probability": 10
+          "probability": 10.3
         },
         {
           "home": 0,
           "away": 0,
           "label": "0-0",
-          "probability": 9
+          "probability": 9.1
         },
         {
           "home": 2,
           "away": 1,
           "label": "2-1",
-          "probability": 8.4
+          "probability": 8.2
         }
       ],
       "goalLines": {
-        "over25": 47.5,
-        "under25": 52.5
+        "over25": 47.4,
+        "under25": 52.6
       },
       "bothTeamsToScore": {
         "yes": 49.5,
@@ -2394,14 +2478,14 @@
       "handicap": {
         "line": "-1.00",
         "market": {
-          "home": 17.4,
-          "draw": 22.4,
-          "away": 60.2
+          "home": 16.7,
+          "draw": 21.8,
+          "away": 61.5
         },
         "poisson": {
-          "home": 18.2,
-          "draw": 22.3,
-          "away": 59.5
+          "home": 17.4,
+          "draw": 22,
+          "away": 60.6
         }
       },
       "calibration": {
@@ -2411,14 +2495,14 @@
       }
     },
     "odds": {
-      "odds1": 2.26,
-      "oddsX": 2.9,
-      "odds2": 2.92
+      "odds1": 2.33,
+      "oddsX": 2.85,
+      "odds2": 2.86
     },
     "handicapOdds": {
-      "odds1": 5.1,
-      "oddsX": 3.95,
-      "odds2": 1.47
+      "odds1": 5.3,
+      "oddsX": 4.06,
+      "odds2": 1.44
     },
     "predictions": [
       {
@@ -2436,12 +2520,12 @@
         },
         "analysisItems": [
           {
-            "zh": "官方 HAD SP：主胜 2.26 / 平局 2.90 / 客胜 2.92；去水支持率约 主胜 39% / 平局 31% / 客胜 30%。",
-            "en": "Official HAD SP: 2.26 / 2.90 / 2.92; normalized support is about home 39% / draw 31% / away 30%."
+            "zh": "官方 HAD SP：主胜 2.33 / 平局 2.85 / 客胜 2.86；去水支持率约 主胜 38% / 平局 31% / 客胜 31%。",
+            "en": "Official HAD SP: 2.33 / 2.85 / 2.86; normalized support is about home 38% / draw 31% / away 31%."
           },
           {
-            "zh": "观察理由：模型优势约 0 个百分点，市场优势约 9 个百分点，让球同向支持约 22%；条件没有同时闭合，暂不输出单一胜平负方向。",
-            "en": "Watch reason: model edge is about 0 points, market edge about 9 points, same-side handicap support about 22%; no single 1X2 pick is promoted."
+            "zh": "观察理由：模型优势约 0 个百分点，市场优势约 7 个百分点，让球同向支持约 22%；条件没有同时闭合，暂不输出单一胜平负方向。",
+            "en": "Watch reason: model edge is about 0 points, market edge about 7 points, same-side handicap support about 22%; no single 1X2 pick is promoted."
           },
           {
             "zh": "平局支持率偏高，胜平负方向需要防平。 官方 SP 来自本次中国竞彩网同步快照。",
@@ -2485,19 +2569,19 @@
           "en": "Watch first: no total-goals pick"
         },
         "odds": 0,
-        "trustScore": 50,
+        "trustScore": 51,
         "explanation": {
-          "zh": "进球趋势条件未齐：总进球期望约 2.41，大 2.5 概率约 48%，边际不足时不强行给大/小球方向。",
-          "en": "The goals trend did not pass the recommendation gate. Total expected goals are about 2.41, over 2.5 probability about 48%, so no over/under pick is promoted."
+          "zh": "进球趋势条件未齐：总进球期望约 2.39，大 2.5 概率约 47%，边际不足时不强行给大/小球方向。",
+          "en": "The goals trend did not pass the recommendation gate. Total expected goals are about 2.39, over 2.5 probability about 47%, so no over/under pick is promoted."
         },
         "analysisItems": [
           {
-            "zh": "比分热区：1-1 附近；候选方向 小2.5球（≤2球） 的模型概率约 52%，低于强推阈值。",
-            "en": "Score heat zone: around 1-1; candidate Under 2.5 goals is about 52%, below the promotion threshold."
+            "zh": "比分热区：1-1 附近；候选方向 小2.5球（≤2球） 的模型概率约 53%，低于强推阈值。",
+            "en": "Score heat zone: around 1-1; candidate Under 2.5 goals is about 53%, below the promotion threshold."
           },
           {
-            "zh": "大 2.5 球概率约 48%，该指标用于走势参考，不等同于官方总进球 SP。",
-            "en": "Over 2.5 probability is about 48%. This is a model reference, not official Sporttery total-goals SP."
+            "zh": "大 2.5 球概率约 47%，该指标用于走势参考，不等同于官方总进球 SP。",
+            "en": "Over 2.5 probability is about 47%. This is a model reference, not official Sporttery total-goals SP."
           }
         ],
         "riskTags": [
@@ -2527,8 +2611,8 @@
         "odds": 0,
         "trustScore": 22,
         "explanation": {
-          "zh": "模型没有否定防平参考 平局，只是拒绝把它抬到主推：市场第一方向领先 9 个百分点，但让球验证和风险项还没闭合。",
-          "en": "The model is not rejecting draw-cover reference Draw; it is refusing to upgrade it. Market lead is 9 points, but handicap and risk checks are not closed."
+          "zh": "模型没有否定防平参考 平局，只是拒绝把它抬到主推：市场第一方向领先 7 个百分点，但让球验证和风险项还没闭合。",
+          "en": "The model is not rejecting draw-cover reference Draw; it is refusing to upgrade it. Market lead is 7 points, but handicap and risk checks are not closed."
         },
         "analysisItems": [
           {
@@ -2536,8 +2620,8 @@
             "en": "Downgrade reason: risk tags overlap: Draw risk, Tight 1X2, Goal-model borderline, Market disagreement. A single pick is not justified yet."
           },
           {
-            "zh": "进球侧：比分热区 1-1，总期望 2.41，大 2.5 约 48%，双方进球约 50%。",
-            "en": "Goals: score heat zone 1-1, total xG 2.41, over 2.5 about 48%, BTTS about 50%."
+            "zh": "进球侧：比分热区 1-1，总期望 2.39，大 2.5 约 47%，双方进球约 49%。",
+            "en": "Goals: score heat zone 1-1, total xG 2.39, over 2.5 about 47%, BTTS about 49%."
           },
           {
             "zh": "临场复核：防平、胜负接近、进球临界、盘口分歧。如果赛前 SP 继续降赔但让球支持不上来，仍按观察处理。",
@@ -2580,8 +2664,8 @@
     ],
     "stats": {
       "xG": {
-        "home": 1.29,
-        "away": 1.12
+        "home": 1.26,
+        "away": 1.13
       },
       "possession": {
         "home": 51,
@@ -2589,11 +2673,11 @@
       },
       "shots": {
         "home": 7,
-        "away": 8
+        "away": 9
       },
       "shotsOnTarget": {
         "home": 3,
-        "away": 3
+        "away": 4
       },
       "corners": {
         "home": 7,
@@ -2655,10 +2739,10 @@
     "handicapOddsSourceMethod": "current",
     "handicapOddsSourceUrl": "https://webapi.sporttery.cn/gateway/uniform/football/getMatchListV1.qry?clientCode=3001",
     "predictionMeta": {
-      "policyVersion": "sporttery-day-value-gate-v23",
-      "promptVersion": "professional-football-analyst-v14",
+      "policyVersion": "sporttery-day-dynamic-calibration-v24",
+      "promptVersion": "professional-football-analyst-v15",
       "generatedAt": "2026-06-07T01:23:00.992Z",
-      "updatedAt": "2026-06-07T13:19:59.034Z",
+      "updatedAt": "2026-06-07T13:49:44.340Z",
       "dataPolicy": {
         "zh": "后台按中国竞彩网竞彩日同步赛程，页面按官方开赛时间排序。当前入模来源为官方 HAD/HHAD SP、赛果、开赛前 SP 快照、Elo、近一年同源赛果、赛程密度与比分分布；伤停、首发、天气、裁判、xG/xGA 和外部赔率未稳定接源前只作为待接入项，不参与评分，也不写成结论。赛前总预测先生成基线，临场预测只在官方 SP 或让球盘出现实质变化时更新；开赛后锁定赛前预测，只做命中复盘。",
         "en": "The background sync groups fixtures by Sporttery business day and sorts the page by official kickoff time. Scored inputs are official HAD/HHAD SP, results, pre-kickoff SP snapshots, Elo, last-year same-source results, schedule density, and score distribution. Injuries, lineups, weather, referees, xG/xGA, and external odds stay as planned feeds until stable; they are not scored or turned into conclusions. The baseline forecast is generated before kickoff, late forecast updates only on material official SP or handicap movement, and the pre-match forecast is locked after kickoff for review only."
@@ -2681,22 +2765,27 @@
           "en": "After full time, append score, hit/miss, SP movement, and risk-tag review only."
         }
       },
-      "updateReason": {
-        "zh": "赛前赔率或让球信号发生实质变化，已生成新的临场预测；开赛后将锁定这版记录。",
-        "en": "Pre-match odds or handicap signals changed materially, so a new late forecast was generated and will be locked after kickoff."
+      "snapshot": {
+        "phase": "mid",
+        "total": 1,
+        "phases": {
+          "mid": 1
+        },
+        "latestAt": "2026-06-07T13:49:44.340Z",
+        "latestSignature": "1X2:WATCH|BEST:WATCH|GOALS:WATCH|2.33/2.85/2.86|-1.00:5.30/4.06/1.44|26/37/37"
       }
     },
     "oddsTrend": {
-      "sampleSize": 104,
+      "sampleSize": 109,
       "firstCapturedAt": "2026-06-07T01:23:00.992Z",
-      "lastCapturedAt": "2026-06-07T13:19:59.034Z",
-      "odds1Change": 0.4,
-      "oddsXChange": -0.25,
-      "odds2Change": -0.73,
+      "lastCapturedAt": "2026-06-07T13:49:44.340Z",
+      "odds1Change": 0.47,
+      "oddsXChange": -0.3,
+      "odds2Change": -0.79,
       "direction": "away",
       "summary": {
-        "zh": "已记录 104 次官方 SP 快照，客胜 -0.73，市场对该方向有增温迹象；同步变化：平局 -0.25，主胜 +0.40。",
-        "en": "104 official SP snapshots recorded. away win -0.73; that side is warming, with secondary moves draw -0.25, home win +0.40."
+        "zh": "已记录 109 次官方 SP 快照，客胜 -0.79，市场对该方向有增温迹象；同步变化：平局 -0.30，主胜 +0.47。",
+        "en": "109 official SP snapshots recorded. away win -0.79; that side is warming, with secondary moves draw -0.30, home win +0.47."
       }
     }
   },
@@ -2711,16 +2800,36 @@
     "projectedScoreHome": 2,
     "projectedScoreAway": 0,
     "probabilityModel": {
-      "version": "market-elo-form-bucket-calibrated-poisson-v5",
-      "generatedAt": "2026-06-07T13:20:01.858Z",
+      "version": "market-elo-form-dynamic-calibrated-poisson-v6",
+      "generatedAt": "2026-06-07T13:50:55.547Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序；已使用官方 SP/让球 SP/赔率快照、Elo、近一年赛果攻防、赛程密度和 Poisson 比分分布。推荐分为强信号主推、价值观察、观察和避坑，国际赛低赔强队必须通过让球盘与概率双重校验，不默认包装成稳胆。",
         "en": "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model uses official SP/handicap SP/snapshots, Elo, last-year form, schedule density, and Poisson score distribution. Picks are split into strong leans, value-watch, watch, and avoid signals; low-SP international favourites must pass handicap and probability checks."
       },
       "ensembleWeights": {
-        "market": 0.72,
-        "elo": 0,
-        "poisson": 0.28
+        "market": 0.68,
+        "elo": 0.18,
+        "poisson": 0.14
+      },
+      "dynamicCalibration": {
+        "version": "rolling-calibration-v1",
+        "profileKey": "international",
+        "gate": {
+          "minProbabilityBoost": 0.045,
+          "minModelGapBoost": 0.025,
+          "minHandicapSupportBoost": 0.06,
+          "trustPenalty": 7,
+          "maxRiskTags": 2,
+          "goalsMinBoost": 0.04,
+          "reason": "cold-profile"
+        },
+        "metrics": {
+          "oneXTwoBrier": 0.7351,
+          "oneXTwoLogLoss": 1.1931,
+          "oneXTwoHitRate": 0.308,
+          "goalsHitRate": 0.385,
+          "bestHitRate": 0.2
+        }
       },
       "calibrationAdjustment": {
         "oneXTwo": {
@@ -2760,14 +2869,14 @@
             }
           ],
           "before": {
-            "home": 76.9,
-            "draw": 15.6,
-            "away": 7.5
+            "home": 71.3,
+            "draw": 17.6,
+            "away": 11.2
           },
           "after": {
-            "home": 58.4,
-            "draw": 25.7,
-            "away": 15.9
+            "home": 52.8,
+            "draw": 27.7,
+            "away": 19.5
           }
         },
         "goals": {
@@ -2812,9 +2921,9 @@
           "away": 10.7
         },
         "final": {
-          "home": 58.4,
-          "draw": 25.7,
-          "away": 15.9
+          "home": 52.8,
+          "draw": 27.7,
+          "away": 19.5
         }
       },
       "elo": {
@@ -3347,7 +3456,7 @@
           "en": "Watch first: no 1X2 pick"
         },
         "odds": 0,
-        "trustScore": 35,
+        "trustScore": 34,
         "explanation": {
           "zh": "本场胜平负条件未齐：低赔、平局压力、让球确认或风险标签存在不一致，只保留为赛前观察项。",
           "en": "This 1X2 market did not pass the recommendation gate. Low odds, draw pressure, handicap confirmation, or risk tags are not aligned, so it remains watch-only."
@@ -3358,8 +3467,8 @@
             "en": "Official HAD SP: 1.12 / 6.05 / 14.00; normalized support is about home 79% / draw 15% / away 6%."
           },
           {
-            "zh": "观察理由：模型优势约 33 个百分点，市场优势约 64 个百分点，让球同向支持约 34%；条件没有同时闭合，暂不输出单一胜平负方向。",
-            "en": "Watch reason: model edge is about 33 points, market edge about 64 points, same-side handicap support about 34%; no single 1X2 pick is promoted."
+            "zh": "观察理由：模型优势约 25 个百分点，市场优势约 64 个百分点，让球同向支持约 34%；条件没有同时闭合，暂不输出单一胜平负方向。",
+            "en": "Watch reason: model edge is about 25 points, market edge about 64 points, same-side handicap support about 34%; no single 1X2 pick is promoted."
           },
           {
             "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 官方 SP 来自本次中国竞彩网同步快照。",
@@ -3443,15 +3552,15 @@
           "en": "Watch first: conditions not aligned"
         },
         "odds": 0,
-        "trustScore": 26,
+        "trustScore": 22,
         "explanation": {
           "zh": "这场有正路倾向，但不适合硬写成稳胆。让球同向支持约 34%，风险标签为 热门过热、国际赛低赔、让球支持不足、进球临界，先按观察单处理。",
           "en": "There is a favorite lean, but not a banker. same-side handicap support is about 34%; risk tags: Heavy favorite, International low-SP favorite, Handicap support weak, Goal-model borderline. Keep it in watch mode."
         },
         "analysisItems": [
           {
-            "zh": "降级原因：模型首选优势约 33 个百分点，未达到强推荐阈值；市场主线领先约 64 个百分点。",
-            "en": "Downgrade reason: model edge is about 33 points, below the strong-pick threshold; market lead is about 64 points."
+            "zh": "降级原因：模型首选优势约 25 个百分点，未达到强推荐阈值；市场主线领先约 64 个百分点。",
+            "en": "Downgrade reason: model edge is about 25 points, below the strong-pick threshold; market lead is about 64 points."
           },
           {
             "zh": "进球侧：比分热区 2-0，总期望 2.92，大 2.5 约 52%，双方进球约 48%。",
@@ -3573,10 +3682,10 @@
     "handicapOddsSourceMethod": "current",
     "handicapOddsSourceUrl": "https://webapi.sporttery.cn/gateway/uniform/football/getMatchListV1.qry?clientCode=3001",
     "predictionMeta": {
-      "policyVersion": "sporttery-day-value-gate-v23",
-      "promptVersion": "professional-football-analyst-v14",
+      "policyVersion": "sporttery-day-dynamic-calibration-v24",
+      "promptVersion": "professional-football-analyst-v15",
       "generatedAt": "2026-06-07T01:23:00.992Z",
-      "updatedAt": "2026-06-07T13:19:59.034Z",
+      "updatedAt": "2026-06-07T13:49:44.340Z",
       "dataPolicy": {
         "zh": "后台按中国竞彩网竞彩日同步赛程，页面按官方开赛时间排序。当前入模来源为官方 HAD/HHAD SP、赛果、开赛前 SP 快照、Elo、近一年同源赛果、赛程密度与比分分布；伤停、首发、天气、裁判、xG/xGA 和外部赔率未稳定接源前只作为待接入项，不参与评分，也不写成结论。赛前总预测先生成基线，临场预测只在官方 SP 或让球盘出现实质变化时更新；开赛后锁定赛前预测，只做命中复盘。",
         "en": "The background sync groups fixtures by Sporttery business day and sorts the page by official kickoff time. Scored inputs are official HAD/HHAD SP, results, pre-kickoff SP snapshots, Elo, last-year same-source results, schedule density, and score distribution. Injuries, lineups, weather, referees, xG/xGA, and external odds stay as planned feeds until stable; they are not scored or turned into conclusions. The baseline forecast is generated before kickoff, late forecast updates only on material official SP or handicap movement, and the pre-match forecast is locked after kickoff for review only."
@@ -3599,22 +3708,27 @@
           "en": "After full time, append score, hit/miss, SP movement, and risk-tag review only."
         }
       },
-      "updateReason": {
-        "zh": "提示词与展示规则已升级，赛前方向未发生实质变化；保留原预测，只更新分析说明。",
-        "en": "Prompt and display rules were upgraded while the pre-match direction did not materially change; the old forecast is kept and only the analysis text is refreshed."
+      "snapshot": {
+        "phase": "baseline",
+        "total": 1,
+        "phases": {
+          "baseline": 1
+        },
+        "latestAt": "2026-06-07T13:49:44.340Z",
+        "latestSignature": "1X2:WATCH|BEST:WATCH|GOALS:WATCH|1.12/6.05/14.00|-2.00:2.58/3.34/2.26|53/28/20"
       }
     },
     "oddsTrend": {
-      "sampleSize": 104,
+      "sampleSize": 109,
       "firstCapturedAt": "2026-06-07T01:23:00.992Z",
-      "lastCapturedAt": "2026-06-07T13:19:59.034Z",
+      "lastCapturedAt": "2026-06-07T13:49:44.340Z",
       "odds1Change": -0.03,
       "oddsXChange": 0.45,
       "odds2Change": 1.5,
       "direction": "home",
       "summary": {
-        "zh": "已记录 104 次官方 SP 快照，主胜 -0.03，市场对该方向有增温迹象；同步变化：平局 +0.45，客胜 +1.50。",
-        "en": "104 official SP snapshots recorded. home win -0.03; that side is warming, with secondary moves draw +0.45, away win +1.50."
+        "zh": "已记录 109 次官方 SP 快照，主胜 -0.03，市场对该方向有增温迹象；同步变化：平局 +0.45，客胜 +1.50。",
+        "en": "109 official SP snapshots recorded. home win -0.03; that side is warming, with secondary moves draw +0.45, away win +1.50."
       }
     }
   }

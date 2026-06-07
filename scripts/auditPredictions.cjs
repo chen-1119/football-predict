@@ -8,6 +8,14 @@ const files = ["matches-current.json", "matches-history.json"]
 
 const matches = files.flatMap((file) => JSON.parse(fs.readFileSync(file, "utf8")));
 const enabledMarkets = new Set(["1X2", "GOALS", "BEST"]);
+const calibrationFile = path.join(dataDir, "model-calibration.json");
+const snapshotsFile = path.join(dataDir, "prediction-snapshots.json");
+const modelCalibration = fs.existsSync(calibrationFile)
+  ? JSON.parse(fs.readFileSync(calibrationFile, "utf8"))
+  : null;
+const predictionSnapshots = fs.existsSync(snapshotsFile)
+  ? JSON.parse(fs.readFileSync(snapshotsFile, "utf8"))
+  : null;
 
 function teamName(match, side) {
   return match[`${side}TeamName`] || match[`${side}TeamNameEn`] || match[`${side}TeamId`] || side;
@@ -107,6 +115,52 @@ console.log("\nSettled 1X2 by SP bucket");
 console.table(summarize(settled.filter((row) => row.market === "1X2" && ["1", "2"].includes(row.tip)), (row) => row.oddsBucket));
 console.log("\nSettled GOALS by tip");
 console.table(summarize(settled.filter((row) => row.market === "GOALS"), (row) => row.tip));
+if (modelCalibration) {
+  console.log("\nModel calibration");
+  console.table([{
+    version: modelCalibration.version,
+    rows: modelCalibration.sample?.rows || 0,
+    oneXTwo: modelCalibration.sample?.oneXTwo || 0,
+    goals: modelCalibration.sample?.goals || 0,
+    best: modelCalibration.sample?.best || 0,
+    oneXTwoHit: modelCalibration.metrics?.oneXTwoHitRate === null || modelCalibration.metrics?.oneXTwoHitRate === undefined
+      ? "-"
+      : `${(modelCalibration.metrics.oneXTwoHitRate * 100).toFixed(1)}%`,
+    goalsHit: modelCalibration.metrics?.goalsHitRate === null || modelCalibration.metrics?.goalsHitRate === undefined
+      ? "-"
+      : `${(modelCalibration.metrics.goalsHitRate * 100).toFixed(1)}%`,
+    bestHit: modelCalibration.metrics?.bestHitRate === null || modelCalibration.metrics?.bestHitRate === undefined
+      ? "-"
+      : `${(modelCalibration.metrics.bestHitRate * 100).toFixed(1)}%`,
+    brier: modelCalibration.metrics?.oneXTwoBrier ?? "-",
+    logLoss: modelCalibration.metrics?.oneXTwoLogLoss ?? "-",
+  }]);
+  console.log("\nDynamic gates");
+  console.table(Object.entries(modelCalibration.gateByProfile || {}).map(([profile, gate]) => ({
+    profile,
+    reason: gate.reason,
+    minProbabilityBoost: gate.minProbabilityBoost,
+    minModelGapBoost: gate.minModelGapBoost,
+    minHandicapSupportBoost: gate.minHandicapSupportBoost,
+    trustPenalty: gate.trustPenalty,
+    maxRiskTags: gate.maxRiskTags,
+    goalsMinBoost: gate.goalsMinBoost,
+  })));
+}
+if (predictionSnapshots) {
+  console.log("\nPrediction snapshots");
+  console.table([{
+    rows: predictionSnapshots.summary?.total || predictionSnapshots.rows?.length || 0,
+    appended: predictionSnapshots.summary?.appended || 0,
+    updated: predictionSnapshots.summary?.updated || 0,
+    baseline: predictionSnapshots.summary?.byPhase?.baseline || 0,
+    mid: predictionSnapshots.summary?.byPhase?.mid || 0,
+    late: predictionSnapshots.summary?.byPhase?.late || 0,
+    final: predictionSnapshots.summary?.byPhase?.final || 0,
+    locked: predictionSnapshots.summary?.byPhase?.locked || 0,
+    review: predictionSnapshots.summary?.byPhase?.review || 0,
+  }]);
+}
 console.log("\nRecent settled rows");
 console.table(settled
   .sort((a, b) => `${b.date}${b.time}${b.match}${b.market}`.localeCompare(`${a.date}${a.time}${a.match}${a.market}`))

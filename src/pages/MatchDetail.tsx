@@ -436,6 +436,36 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     return `${(Number(value) * 100).toFixed(1).replace(/\.0$/, '')}%`;
   };
 
+  const formatSignedPercentBoost = (value: number | null | undefined) => {
+    if (!Number.isFinite(value) || Number(value) === 0) return '0';
+    const pct = Math.round(Number(value) * 100);
+    return `${pct > 0 ? '+' : ''}${pct}%`;
+  };
+
+  const snapshotPhaseLabels: Record<string, { zh: string; en: string }> = {
+    baseline: { zh: '基础预测', en: 'Baseline' },
+    mid: { zh: '盘中复核', en: 'Mid check' },
+    late: { zh: '临场预测', en: 'Late forecast' },
+    final: { zh: '开赛前最终版', en: 'Final pre-kickoff' },
+    locked: { zh: '开赛锁定', en: 'Kickoff locked' },
+    review: { zh: '赛后复盘', en: 'Post-match review' }
+  };
+
+  const calibrationReasonLabels: Record<string, { zh: string; en: string }> = {
+    'very-cold-profile': { zh: '同类比赛近期很冷，推荐门槛明显收紧', en: 'Very cold profile: gates tightened' },
+    'cold-profile': { zh: '同类比赛命中偏低，推荐门槛已收紧', en: 'Cold profile: gates tightened' },
+    'hot-profile': { zh: '同类比赛表现较好，允许小幅放宽', en: 'Hot profile: gates slightly relaxed' },
+    'neutral-profile': { zh: '同类表现中性，使用常规门槛', en: 'Neutral profile: normal gates' }
+  };
+
+  const renderSnapshotPhases = (phases: Record<string, number> | undefined) => {
+    const entries = Object.entries(phases || {});
+    if (!entries.length) return '--';
+    return entries
+      .map(([phase, count]) => `${snapshotPhaseLabels[phase]?.[language] || phase} ${count}`)
+      .join(' / ');
+  };
+
   const renderOutcomeLine = (probabilities: OutcomeProbability | null | undefined) => {
     return outcomeLabels
       .map((item) => `${item[language]} ${formatProbabilityValue(probabilities?.[item.key])}`)
@@ -898,6 +928,26 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                     ))}
                   </div>
                 )}
+                {predictionMeta.snapshot && (
+                  <div className="prediction-snapshot-strip">
+                    <span>
+                      <b>{language === 'zh' ? '当前版本' : 'Current phase'}</b>
+                      {snapshotPhaseLabels[predictionMeta.snapshot.phase]?.[language] || predictionMeta.snapshot.phase}
+                    </span>
+                    <span>
+                      <b>{language === 'zh' ? '保留记录' : 'Saved snapshots'}</b>
+                      {predictionMeta.snapshot.total} {language === 'zh' ? '版' : 'versions'}
+                    </span>
+                    <span>
+                      <b>{language === 'zh' ? '阶段分布' : 'Phases'}</b>
+                      {renderSnapshotPhases(predictionMeta.snapshot.phases)}
+                    </span>
+                    <span>
+                      <b>{language === 'zh' ? '最近写入' : 'Latest write'}</b>
+                      {formatPolicyTimestamp(predictionMeta.snapshot.latestAt, language)}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -947,6 +997,12 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                           {language === 'zh'
                             ? `市场 ${formatModelWeight(probabilityModel.ensembleWeights.market)} / Elo ${formatModelWeight(probabilityModel.ensembleWeights.elo)} / Poisson ${formatModelWeight(probabilityModel.ensembleWeights.poisson)}`
                             : `market ${formatModelWeight(probabilityModel.ensembleWeights.market)} / Elo ${formatModelWeight(probabilityModel.ensembleWeights.elo)} / Poisson ${formatModelWeight(probabilityModel.ensembleWeights.poisson)}`}
+                        </span>
+                      )}
+                      {probabilityModel.dynamicCalibration && (
+                        <span className="probability-weight-line">
+                          {language === 'zh' ? '动态校准' : 'Dynamic calibration'}：
+                          {calibrationReasonLabels[probabilityModel.dynamicCalibration.gate?.reason || 'neutral-profile']?.[language] || probabilityModel.dynamicCalibration.gate?.reason || '--'}
                         </span>
                       )}
                     </div>
@@ -1026,6 +1082,30 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                             <strong>{language === 'zh' ? '开启' : 'On'}</strong>
                           </span>
                         )}
+                      </div>
+                    )}
+                    {probabilityModel.dynamicCalibration && (
+                      <div className="probability-pair-grid" style={{ marginBottom: '0.75rem' }}>
+                        <span>
+                          {language === 'zh' ? '场景' : 'Profile'}
+                          <strong>{probabilityModel.dynamicCalibration.profileKey}</strong>
+                          <em>{probabilityModel.dynamicCalibration.version}</em>
+                        </span>
+                        <span>
+                          {language === 'zh' ? '胜平负命中' : '1X2 hit'}
+                          <strong>{formatHealthRate(probabilityModel.dynamicCalibration.metrics?.oneXTwoHitRate)}</strong>
+                          <em>Brier {probabilityModel.dynamicCalibration.metrics?.oneXTwoBrier ?? '--'}</em>
+                        </span>
+                        <span>
+                          {language === 'zh' ? '推荐惩罚' : 'Trust brake'}
+                          <strong>{probabilityModel.dynamicCalibration.gate?.trustPenalty || 0}</strong>
+                          <em>{language === 'zh' ? '分' : 'pts'}</em>
+                        </span>
+                        <span>
+                          {language === 'zh' ? '门槛变化' : 'Gate shift'}
+                          <strong>{formatSignedPercentBoost(probabilityModel.dynamicCalibration.gate?.minProbabilityBoost)}</strong>
+                          <em>{language === 'zh' ? `让球 ${formatSignedPercentBoost(probabilityModel.dynamicCalibration.gate?.minHandicapSupportBoost)}` : `HHAD ${formatSignedPercentBoost(probabilityModel.dynamicCalibration.gate?.minHandicapSupportBoost)}`}</em>
+                        </span>
                       </div>
                     )}
                     {(probabilityModel.calibrationAdjustment?.oneXTwo?.applied || probabilityModel.calibrationAdjustment?.goals?.applied) && (

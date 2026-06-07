@@ -1792,6 +1792,32 @@ button.status-pill:hover {
   font-weight: 950;
 }
 
+.prediction-snapshot-strip {
+  grid-column: 1 / -1;
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem !important;
+  margin-top: 0.05rem;
+}
+
+.prediction-snapshot-strip span {
+  display: grid;
+  gap: 0.18rem;
+  border: 1px solid hsl(var(--accent) / 0.2);
+  border-radius: 8px;
+  background: hsl(var(--bg) / 0.6);
+  padding: 0.48rem 0.56rem;
+  color: hsl(var(--text-secondary));
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.prediction-snapshot-strip b {
+  color: hsl(var(--accent));
+  font-size: 0.68rem;
+  font-weight: 950;
+}
+
 .probability-model-card {
   display: grid;
   gap: 0.9rem;
@@ -4456,6 +4482,10 @@ button.status-pill:hover {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .prediction-snapshot-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .prompt-upgrade-strip {
     grid-template-columns: 1fr;
   }
@@ -4640,6 +4670,10 @@ button.status-pill:hover {
   }
 
   .forecast-plan-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .prediction-snapshot-strip {
     grid-template-columns: 1fr;
   }
 

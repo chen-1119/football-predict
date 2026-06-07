@@ -66,6 +66,13 @@ export interface PredictionMeta {
   generatedAt?: string;
   updatedAt?: string;
   lockedAt?: string;
+  snapshot?: {
+    phase: 'baseline' | 'mid' | 'late' | 'final' | 'locked' | 'review';
+    total: number;
+    phases: Record<string, number>;
+    latestAt?: string;
+    latestSignature?: string;
+  };
   dataPolicy?: MultiLangString;
   updateReason?: MultiLangString;
   forecastPlan?: {
@@ -97,6 +104,26 @@ export interface MatchProbabilityModel {
     market: number;
     elo: number;
     poisson: number;
+  };
+  dynamicCalibration?: {
+    version: string;
+    profileKey: string;
+    gate: {
+      minProbabilityBoost?: number;
+      minModelGapBoost?: number;
+      minHandicapSupportBoost?: number;
+      trustPenalty?: number;
+      maxRiskTags?: number;
+      goalsMinBoost?: number;
+      reason?: string;
+    } | null;
+    metrics: {
+      oneXTwoBrier?: number | null;
+      oneXTwoLogLoss?: number | null;
+      oneXTwoHitRate?: number | null;
+      goalsHitRate?: number | null;
+      bestHitRate?: number | null;
+    } | null;
   };
   calibrationAdjustment?: {
     oneXTwo?: {

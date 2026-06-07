@@ -12,9 +12,11 @@ const WINDOW_FORWARD_DAYS = Math.max(1, Number(process.env.MATCH_WINDOW_FORWARD_
 const ODDS_HISTORY_RETENTION_DAYS = Math.max(1, Number(process.env.ODDS_HISTORY_RETENTION_DAYS || 365));
 const ODDS_HISTORY_BUCKET_MINUTES = Math.max(1, Number(process.env.ODDS_HISTORY_BUCKET_MINUTES || 5));
 const PAGE_POLL_SECONDS = Math.max(15, Number(process.env.PAGE_POLL_SECONDS || 30));
-const ANALYST_PROMPT_VERSION = "professional-football-analyst-v14";
-const PREDICTION_POLICY_VERSION = "sporttery-day-value-gate-v23";
+const ANALYST_PROMPT_VERSION = "professional-football-analyst-v15";
+const PREDICTION_POLICY_VERSION = "sporttery-day-dynamic-calibration-v24";
 const FORM_LOOKBACK_MATCHES = 12;
+const PREDICTION_SNAPSHOT_RETENTION_DAYS = Math.max(30, Number(process.env.PREDICTION_SNAPSHOT_RETENTION_DAYS || 365));
+const PREDICTION_SNAPSHOT_MAX_ROWS = Math.max(500, Number(process.env.PREDICTION_SNAPSHOT_MAX_ROWS || 5000));
 const METHODS = (process.env.SPORTTERY_METHODS || "concern,live,result,all")
   .split(",")
   .map((x) => x.trim())
@@ -583,18 +585,26 @@ function blendLambdasWithForm(match, marketHomeLambda, marketAwayLambda) {
   };
 }
 
-function blendOutcomeProbabilities(market, poisson, eloSnapshot, formSnapshot) {
+function blendOutcomeProbabilities(match, market, poisson, eloSnapshot, formSnapshot) {
   const elo = normalizeOutcomeProbabilities(eloSnapshot?.probabilities);
   const eloSample = (eloSnapshot?.homeMatches || 0) + (eloSnapshot?.awayMatches || 0);
   const formSample = Number(formSnapshot?.sampleSize || 0);
   const formReady = formSample >= 8;
-  const weights = elo && eloSample >= 6 && formReady
+  let weights = elo && eloSample >= 6 && formReady
     ? { market: 0.54, elo: 0.2, poisson: 0.26 }
     : elo && eloSample >= 6
       ? { market: 0.58, elo: 0.24, poisson: 0.18 }
       : formReady
         ? { market: 0.62, elo: 0, poisson: 0.38 }
         : { market: 0.72, elo: 0, poisson: 0.28 };
+  const calibrated = profileCalibration(match).weights;
+  if (calibrated && Number(calibrated.sample || 0) >= 5) {
+    weights = {
+      market: calibrated.market,
+      elo: elo ? calibrated.elo : 0,
+      poisson: calibrated.poisson + (elo ? 0 : calibrated.elo),
+    };
+  }
   const blended = {
     home: market.home * weights.market + (elo?.home || 0) * weights.elo + poisson.home * weights.poisson,
     draw: market.draw * weights.market + (elo?.draw || 0) * weights.elo + poisson.draw * weights.poisson,
@@ -792,18 +802,25 @@ function asPercentTriplet(probabilities) {
 
 function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLambda, awayLambda, over25Probability, bttsProbability, lambdaBlend, goalCalibration) {
   const poisson1x2 = poissonOutcomeProbabilities(homeLambda, awayLambda);
-  const blended = blendOutcomeProbabilities(probabilities, poisson1x2, match.eloSnapshot, match.formSnapshot);
+  const blended = blendOutcomeProbabilities(match, probabilities, poisson1x2, match.eloSnapshot, match.formSnapshot);
   const outcomeCalibration = calibrateOutcomeProbabilities(match, blended.probabilities, probabilities);
   const final1x2 = outcomeCalibration.probabilities;
   const handicapPoisson = handicapOutcomeProbabilities(homeLambda, awayLambda, match.handicapLine);
+  const calibration = profileCalibration(match);
   return {
-    version: "market-elo-form-bucket-calibrated-poisson-v5",
+    version: "market-elo-form-dynamic-calibrated-poisson-v6",
     generatedAt: new Date().toISOString(),
     basis: {
       zh: "模型按竞彩日归档、按官方开赛时间排序；已使用官方 SP/让球 SP/赔率快照、Elo、近一年赛果攻防、赛程密度和 Poisson 比分分布。推荐分为强信号主推、价值观察、观察和避坑，国际赛低赔强队必须通过让球盘与概率双重校验，不默认包装成稳胆。",
       en: "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model uses official SP/handicap SP/snapshots, Elo, last-year form, schedule density, and Poisson score distribution. Picks are split into strong leans, value-watch, watch, and avoid signals; low-SP international favourites must pass handicap and probability checks.",
     },
     ensembleWeights: blended.weights,
+    dynamicCalibration: {
+      version: match.modelCalibration?.version || "none",
+      profileKey: calibration.profileKey,
+      gate: calibration.gate || null,
+      metrics: calibration.metrics || null,
+    },
     calibrationAdjustment: {
       oneXTwo: {
         applied: outcomeCalibration.applied,
@@ -1258,6 +1275,227 @@ function hardCoolingBucket(bucket, minSettled = 5, maxHitRate = 0.42) {
   return settled >= minSettled && hitRate !== null && hitRate < maxHitRate;
 }
 
+function predictionRowsFromMatches(existingMatches) {
+  const rows = [];
+  for (const match of existingMatches || []) {
+    if (match?.status !== "FINISHED") continue;
+    if (!Number.isFinite(match.scoreHome) || !Number.isFinite(match.scoreAway)) continue;
+    const actual = match.scoreHome > match.scoreAway ? "1" : match.scoreHome < match.scoreAway ? "2" : "X";
+    const totalGoals = match.scoreHome + match.scoreAway;
+    const finalProbabilities = match.probabilityModel?.oneXTwo?.final;
+    const marketProbabilities = match.probabilityModel?.oneXTwo?.market;
+    const profileKey = predictionProfileKey(match);
+
+    for (const prediction of match.predictions || []) {
+      if (!prediction || prediction.tipCode === "WATCH") continue;
+      if (prediction.resultStatus !== "WON" && prediction.resultStatus !== "LOST") continue;
+      const isOneXTwo = prediction.marketType === "1X2" || prediction.marketType === "BEST";
+      const probability = isOneXTwo && finalProbabilities
+        ? prediction.tipCode === "1"
+          ? finalProbabilities.home
+          : prediction.tipCode === "X"
+            ? finalProbabilities.draw
+            : prediction.tipCode === "2"
+              ? finalProbabilities.away
+              : null
+        : null;
+      rows.push({
+        sourceMatchId: normText(match.sourceMatchId || String(match.id || "").replace(/^sporttery_/, "")),
+        marketType: prediction.marketType,
+        tipCode: prediction.tipCode,
+        odds: Number(prediction.odds || 0),
+        oddsBucket: predictionOddsBucket(prediction.odds),
+        profileKey,
+        policyVersion: match.predictionMeta?.policyVersion || "unknown",
+        promptVersion: match.predictionMeta?.promptVersion || "unknown",
+        resultStatus: prediction.resultStatus,
+        kickoffTime: match.kickoffTime,
+        actual,
+        totalGoals,
+        probability,
+        finalProbabilities,
+        marketProbabilities,
+      });
+    }
+  }
+  return rows;
+}
+
+function summarizeCalibrationRows(rows) {
+  const won = rows.filter((row) => row.resultStatus === "WON").length;
+  const lost = rows.filter((row) => row.resultStatus === "LOST").length;
+  const settled = won + lost;
+  return {
+    settled,
+    won,
+    lost,
+    hitRate: settled ? Number((won / settled).toFixed(3)) : null,
+  };
+}
+
+function summarizeCalibrationBy(rows, keyFn) {
+  const groups = new Map();
+  for (const row of rows) {
+    const key = keyFn(row);
+    if (!key) continue;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(row);
+  }
+  return Object.fromEntries(
+    Array.from(groups.entries()).map(([key, group]) => [key, summarizeCalibrationRows(group)])
+  );
+}
+
+function brierScore(rows) {
+  const scored = rows.filter((row) => row.finalProbabilities && ["1", "X", "2"].includes(row.actual));
+  if (!scored.length) return null;
+  const total = scored.reduce((sum, row) => {
+    const actual = {
+      home: row.actual === "1" ? 1 : 0,
+      draw: row.actual === "X" ? 1 : 0,
+      away: row.actual === "2" ? 1 : 0,
+    };
+    const probabilities = row.finalProbabilities;
+    return sum
+      + Math.pow((probabilities.home || 0) / 100 - actual.home, 2)
+      + Math.pow((probabilities.draw || 0) / 100 - actual.draw, 2)
+      + Math.pow((probabilities.away || 0) / 100 - actual.away, 2);
+  }, 0);
+  return Number((total / scored.length).toFixed(4));
+}
+
+function logLossScore(rows) {
+  const scored = rows.filter((row) => row.finalProbabilities && ["1", "X", "2"].includes(row.actual));
+  if (!scored.length) return null;
+  const total = scored.reduce((sum, row) => {
+    const probability = row.actual === "1"
+      ? row.finalProbabilities.home
+      : row.actual === "X"
+        ? row.finalProbabilities.draw
+        : row.finalProbabilities.away;
+    return sum - Math.log(clamp((probability || 1) / 100, 0.01, 0.99));
+  }, 0);
+  return Number((total / scored.length).toFixed(4));
+}
+
+function calibrationWeightForProfile(summary, profileKey) {
+  const profile = summary.byProfile?.[profileKey];
+  const marketProfile = summary.byMarketProfile?.[`1X2:${profileKey}`];
+  const settled = Number(marketProfile?.settled || profile?.settled || 0);
+  const hitRate = Number.isFinite(marketProfile?.hitRate) ? marketProfile.hitRate : profile?.hitRate;
+
+  let market = 0.58;
+  let elo = 0.22;
+  let poisson = 0.2;
+  if (profileKey === "international") {
+    market = 0.62;
+    elo = 0.2;
+    poisson = 0.18;
+  } else if (profileKey === "japan") {
+    market = 0.6;
+    elo = 0.18;
+    poisson = 0.22;
+  }
+
+  if (settled >= 8 && hitRate !== null && hitRate < 0.38) {
+    market += 0.06;
+    elo -= 0.02;
+    poisson -= 0.04;
+  } else if (settled >= 8 && hitRate !== null && hitRate >= 0.55) {
+    market -= 0.04;
+    poisson += 0.04;
+  }
+
+  const total = market + elo + poisson;
+  return {
+    market: Number((market / total).toFixed(3)),
+    elo: Number((elo / total).toFixed(3)),
+    poisson: Number((poisson / total).toFixed(3)),
+    sample: settled,
+    hitRate: hitRate ?? null,
+  };
+}
+
+function calibrationGateForProfile(summary, profileKey) {
+  const profile = summary.byMarketProfile?.[`1X2:${profileKey}`] || summary.byProfile?.[profileKey];
+  const goalsProfile = summary.byMarketProfile?.[`GOALS:${profileKey}`];
+  const settled = Number(profile?.settled || 0);
+  const hitRate = Number.isFinite(profile?.hitRate) ? profile.hitRate : null;
+  const goalsHitRate = Number.isFinite(goalsProfile?.hitRate) ? goalsProfile.hitRate : null;
+  const cold = settled >= 5 && hitRate !== null && hitRate < 0.4;
+  const veryCold = settled >= 5 && hitRate !== null && hitRate < 0.32;
+  const hot = settled >= 5 && hitRate !== null && hitRate >= 0.56;
+
+  return {
+    minProbabilityBoost: veryCold ? 0.07 : cold ? 0.045 : hot ? -0.015 : 0,
+    minModelGapBoost: veryCold ? 0.04 : cold ? 0.025 : hot ? -0.01 : 0,
+    minHandicapSupportBoost: profileKey === "international" ? (cold ? 0.06 : 0.035) : profileKey === "japan" ? (cold ? 0.05 : 0.025) : cold ? 0.025 : 0,
+    trustPenalty: veryCold ? 12 : cold ? 7 : 0,
+    maxRiskTags: veryCold ? 1 : cold ? 2 : 3,
+    goalsMinBoost: goalsHitRate !== null && goalsProfile?.settled >= 5 && goalsHitRate < 0.4 ? 0.04 : 0,
+    reason: veryCold ? "very-cold-profile" : cold ? "cold-profile" : hot ? "hot-profile" : "neutral-profile",
+  };
+}
+
+function buildModelCalibration(existingMatches) {
+  const rows = predictionRowsFromMatches(existingMatches);
+  const oneXTwoRows = rows.filter((row) => row.marketType === "1X2");
+  const bestRows = rows.filter((row) => row.marketType === "BEST");
+  const goalsRows = rows.filter((row) => row.marketType === "GOALS");
+  const summary = {
+    total: summarizeCalibrationRows(rows),
+    byMarket: summarizeCalibrationBy(rows, (row) => row.marketType),
+    byProfile: summarizeCalibrationBy(rows, (row) => row.profileKey),
+    byMarketProfile: summarizeCalibrationBy(rows, (row) => `${row.marketType}:${row.profileKey}`),
+    byOddsBucket: summarizeCalibrationBy(rows.filter((row) => row.marketType === "1X2" && ["1", "2"].includes(row.tipCode)), (row) => row.oddsBucket),
+    byTip: summarizeCalibrationBy(rows, (row) => `${row.marketType}:${row.tipCode}`),
+  };
+  const profiles = ["international", "japan", "other"];
+  const weightsByProfile = Object.fromEntries(profiles.map((profileKey) => [profileKey, calibrationWeightForProfile(summary, profileKey)]));
+  const gateByProfile = Object.fromEntries(profiles.map((profileKey) => [profileKey, calibrationGateForProfile(summary, profileKey)]));
+  const oneXTwoBrier = brierScore(oneXTwoRows);
+  const oneXTwoLogLoss = logLossScore(oneXTwoRows);
+  const recommendationPool = [...oneXTwoRows, ...bestRows].filter((row) => row.tipCode !== "WATCH");
+
+  return {
+    version: "rolling-calibration-v1",
+    generatedAt: new Date().toISOString(),
+    source: "settled-pre-match-predictions",
+    sample: {
+      rows: rows.length,
+      oneXTwo: oneXTwoRows.length,
+      goals: goalsRows.length,
+      best: bestRows.length,
+      recommendationPool: recommendationPool.length,
+    },
+    metrics: {
+      oneXTwoBrier,
+      oneXTwoLogLoss,
+      oneXTwoHitRate: summary.byMarket["1X2"]?.hitRate ?? null,
+      goalsHitRate: summary.byMarket.GOALS?.hitRate ?? null,
+      bestHitRate: summary.byMarket.BEST?.hitRate ?? null,
+    },
+    weightsByProfile,
+    gateByProfile,
+    summary,
+    note: {
+      zh: "该文件由已结算赛前预测自动生成，只用于动态调权和推荐闸门，不会回写赛后方向。",
+      en: "Generated from settled pre-match predictions. It only adjusts weights and gates; it never rewrites post-match picks.",
+    },
+  };
+}
+
+function profileCalibration(match) {
+  const profileKey = predictionProfileKey(match);
+  const calibration = match.modelCalibration;
+  return {
+    profileKey,
+    weights: calibration?.weightsByProfile?.[profileKey],
+    gate: calibration?.gateByProfile?.[profileKey],
+    metrics: calibration?.metrics,
+  };
+}
+
 function leagueMeta(leagueName) {
   const name = normText(leagueName, "足球赛事");
   const countryNameZh = {
@@ -1595,6 +1833,7 @@ function evaluateOneXTwoGate(context) {
       : probabilities.away;
   const handicapSupport = hhadSupportForPick(hhadProbabilities, code);
   const profileKey = predictionProfileKey(match);
+  const dynamicGate = profileCalibration(match).gate || {};
   const oddsBucket = predictionOddsBucket(odds);
   const drawHealth = predictionHealth?.oneXTwo?.byTip?.X;
   const drawHasPositiveSample = isHotBucket(drawHealth, 3, 0.5);
@@ -1626,6 +1865,7 @@ function evaluateOneXTwoGate(context) {
   if (oneXTwoCooldown) reasons.push("recent-1x2-hit-rate-cooldown");
   if (code === "X" && oneXTwoCooldown && !drawHasPositiveSample) reasons.push("draw-no-positive-sample");
   if (isSidePick && oneXTwoCooldown && odds <= 2.1) reasons.push("side-short-form-brake");
+  if (dynamicGate.reason && dynamicGate.reason !== "neutral-profile") reasons.push(dynamicGate.reason);
 
   const fragileInternationalFavorite = profile.isInternational
     && isSidePick
@@ -1639,11 +1879,12 @@ function evaluateOneXTwoGate(context) {
     );
   if (fragileInternationalFavorite) reasons.push("fragile-international-favorite");
 
-  const minPickProbability = oneXTwoCooldown ? 0.58 : 0.52;
-  const minProbabilityGap = oneXTwoCooldown ? 0.14 : 0.08;
-  const minModelGap = oneXTwoCooldown ? 0.1 : 0.06;
-  const minHandicapSupport = oneXTwoCooldown ? 0.38 : 0.3;
+  const minPickProbability = (oneXTwoCooldown ? 0.58 : 0.52) + Number(dynamicGate.minProbabilityBoost || 0);
+  const minProbabilityGap = (oneXTwoCooldown ? 0.14 : 0.08) + Number(dynamicGate.minModelGapBoost || 0);
+  const minModelGap = (oneXTwoCooldown ? 0.1 : 0.06) + Number(dynamicGate.minModelGapBoost || 0);
+  const minHandicapSupport = (oneXTwoCooldown ? 0.38 : 0.3) + Number(dynamicGate.minHandicapSupportBoost || 0);
   const maxDrawPressure = oneXTwoCooldown ? 0.32 : 0.36;
+  const maxGateRiskTags = Number.isFinite(dynamicGate.maxRiskTags) ? Number(dynamicGate.maxRiskTags) : 3;
 
   const strongSidePick = isSidePick
     && !analystSelection.isContrarian
@@ -1655,7 +1896,7 @@ function evaluateOneXTwoGate(context) {
     && probabilities.draw <= maxDrawPressure
     && odds > 1.08
     && odds <= 2.35
-    && riskTags.length <= 3
+    && riskTags.length <= maxGateRiskTags
     && !(profile.isInternational && odds <= 1.75 && oneXTwoCooldown)
     && !(profile.isJapan && odds <= 2.1 && oneXTwoCooldown);
 
@@ -1672,7 +1913,7 @@ function evaluateOneXTwoGate(context) {
     && probabilities.draw <= 0.34
     && odds > 1.25
     && odds <= 2.65
-    && riskTags.length <= 2
+    && riskTags.length <= Math.max(1, maxGateRiskTags - 1)
     && !(profile.isInternational && odds <= 1.34)
     && !(profile.isInternational && odds <= 1.75 && oneXTwoCooldown)
     && !(profile.isJapan && odds <= 2.1 && oneXTwoCooldown);
@@ -1724,6 +1965,12 @@ function evaluateGoalsGate(match, goalsTip, goalsProbability, over25Probability,
   const under25IsHot = goalsTip === "U2.5" && isHotBucket(predictionHealth?.under25, 3, 0.6);
   let minProbability = goalsCooldown ? 0.68 : 0.63;
   let minEdge = goalsCooldown ? 0.18 : 0.13;
+  const dynamicGate = profileCalibration(match).gate || {};
+  if (Number(dynamicGate.goalsMinBoost || 0) > 0) {
+    minProbability += Number(dynamicGate.goalsMinBoost || 0);
+    minEdge += Number(dynamicGate.goalsMinBoost || 0) * 0.5;
+    reasons.push("dynamic-goals-cooldown");
+  }
 
   if (under25IsHot) {
     minProbability -= 0.04;
@@ -2065,6 +2312,7 @@ function predictionSet(match) {
   const candidateHasWeakHandicap = ["1", "2"].includes(best1x2[0])
     && candidateHandicapSupport !== null
     && candidateHandicapSupport < 0.42;
+  const dynamicGate = profileCalibration(match).gate || {};
   const rawTrust = analystSelection.isContrarian
     ? clamp(Math.round(best1x2[1] * 100 + 31 - selectionDiscount * 42), 54, 76)
     : clamp(Math.round(best1x2[1] * 100 + modelProbabilityGap * 48 + 10), 52, 93);
@@ -2072,7 +2320,8 @@ function predictionSet(match) {
     (candidateIsOverheated ? 11 : candidateIsLowOddsFavorite ? 5 : 0)
     + (candidateHasWeakHandicap ? 9 : 0)
     + (probabilities.draw >= 0.28 ? 4 : 0)
-    + (bttsProbability >= 0.45 && bttsProbability < 0.65 ? 3 : 0);
+    + (bttsProbability >= 0.45 && bttsProbability < 0.65 ? 3 : 0)
+    + Number(dynamicGate.trustPenalty || 0);
   const baseTrust = clamp(
     rawTrust - trustPenalty,
     analystSelection.isContrarian ? 50 : 48,
@@ -2845,6 +3094,205 @@ function appendOddsHistory(publicDir, matches, capturedAt) {
   return { rows: rows.length, appended, updated };
 }
 
+function loadPredictionSnapshots(publicDir) {
+  const files = [
+    path.join(publicDir, "data", "prediction-snapshots.json"),
+    path.join(publicDir, "prediction-snapshots.json"),
+  ];
+  for (const file of files) {
+    if (!fs.existsSync(file)) continue;
+    try {
+      const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+      return {
+        version: 1,
+        source: "sporttery:prediction-snapshots",
+        rows: Array.isArray(parsed?.rows) ? parsed.rows : [],
+      };
+    } catch {
+      return { version: 1, source: "sporttery:prediction-snapshots", rows: [] };
+    }
+  }
+  return { version: 1, source: "sporttery:prediction-snapshots", rows: [] };
+}
+
+function predictionPhase(match, capturedAt) {
+  const kickoffAt = Date.parse(match?.kickoffTime);
+  const capturedTime = Date.parse(capturedAt);
+  if (match?.status === "FINISHED") return "review";
+  if (!Number.isFinite(kickoffAt) || !Number.isFinite(capturedTime)) return "baseline";
+  const minutesToKickoff = Math.floor((kickoffAt - capturedTime) / 60000);
+  if (minutesToKickoff <= 0 || match?.status === "LIVE") return "locked";
+  if (minutesToKickoff <= 30) return "final";
+  if (minutesToKickoff <= 90) return "late";
+  if (minutesToKickoff <= 360) return "mid";
+  return "baseline";
+}
+
+function snapshotTip(predictions, marketType) {
+  const prediction = (predictions || []).find((item) => item.marketType === marketType);
+  if (!prediction) return null;
+  return {
+    tipCode: prediction.tipCode,
+    tipLabel: prediction.tipLabel,
+    odds: prediction.odds || 0,
+    trustScore: prediction.trustScore || 0,
+    resultStatus: prediction.resultStatus,
+    riskCount: (prediction.riskTags || []).length,
+  };
+}
+
+function snapshotSignatureForMatch(match) {
+  const odds = sanitizeOdds(match?.odds);
+  const handicapOdds = sanitizeOdds(match?.handicapOdds);
+  const final = match?.probabilityModel?.oneXTwo?.final;
+  const tipSignature = predictionSignature(match?.predictions || []);
+  const oddsSignature = odds
+    ? `${odds.odds1.toFixed(2)}/${odds.oddsX.toFixed(2)}/${odds.odds2.toFixed(2)}`
+    : "--";
+  const hhadSignature = handicapOdds
+    ? `${match.handicapLine || ""}:${handicapOdds.odds1.toFixed(2)}/${handicapOdds.oddsX.toFixed(2)}/${handicapOdds.odds2.toFixed(2)}`
+    : "--";
+  const probabilitySignature = final
+    ? `${Math.round(final.home)}/${Math.round(final.draw)}/${Math.round(final.away)}`
+    : "--";
+  return `${tipSignature}|${oddsSignature}|${hhadSignature}|${probabilitySignature}`;
+}
+
+function predictionSnapshotRow(match, capturedAt) {
+  const sourceMatchId = normText(match?.sourceMatchId || String(match?.id || "").replace(/^sporttery_/, ""));
+  const predictions = enabledPredictions(match?.predictions || []);
+  if (!sourceMatchId || predictions.length === 0) return null;
+  const phase = predictionPhase(match, capturedAt);
+  const signature = snapshotSignatureForMatch(match);
+  const finalProbabilities = match?.probabilityModel?.oneXTwo?.final || null;
+  return {
+    capturedAt,
+    firstSeenAt: capturedAt,
+    lastSeenAt: capturedAt,
+    seenCount: 1,
+    phase,
+    signature,
+    policyVersion: match.predictionMeta?.policyVersion || PREDICTION_POLICY_VERSION,
+    promptVersion: match.predictionMeta?.promptVersion || ANALYST_PROMPT_VERSION,
+    sourceMatchId,
+    matchId: match.id,
+    matchNo: match.matchNo,
+    businessDate: match.businessDate,
+    kickoffTime: match.kickoffTime,
+    status: match.status,
+    leagueName: match.leagueName,
+    homeTeamName: match.homeTeamName,
+    awayTeamName: match.awayTeamName,
+    scoreHome: Number.isFinite(match.scoreHome) ? match.scoreHome : null,
+    scoreAway: Number.isFinite(match.scoreAway) ? match.scoreAway : null,
+    odds: sanitizeOdds(match.odds),
+    handicapLine: match.handicapLine,
+    handicapOdds: sanitizeOdds(match.handicapOdds),
+    oddsTrend: match.oddsTrend || null,
+    probabilityFinal: finalProbabilities,
+    probabilityModelVersion: match.probabilityModel?.version || null,
+    best: snapshotTip(predictions, "BEST"),
+    oneXTwo: snapshotTip(predictions, "1X2"),
+    goals: snapshotTip(predictions, "GOALS"),
+  };
+}
+
+function appendPredictionSnapshots(publicDir, matches, capturedAt) {
+  const history = loadPredictionSnapshots(publicDir);
+  const cutoff = Date.parse(capturedAt) - PREDICTION_SNAPSHOT_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+  const byKey = new Map();
+
+  for (const row of history.rows) {
+    const rowTime = Date.parse(row?.lastSeenAt || row?.capturedAt);
+    const sourceMatchId = normText(row?.sourceMatchId);
+    const phase = normText(row?.phase);
+    const signature = normText(row?.signature);
+    if (!Number.isFinite(rowTime) || rowTime < cutoff || !sourceMatchId || !phase || !signature) continue;
+    byKey.set(`${sourceMatchId}|${phase}|${signature}`, row);
+  }
+
+  let appended = 0;
+  let updated = 0;
+  for (const match of matches || []) {
+    const row = predictionSnapshotRow(match, capturedAt);
+    if (!row) continue;
+    const key = `${row.sourceMatchId}|${row.phase}|${row.signature}`;
+    const existing = byKey.get(key);
+    if (existing) {
+      updated += 1;
+      byKey.set(key, {
+        ...existing,
+        ...row,
+        firstSeenAt: existing.firstSeenAt || existing.capturedAt || row.firstSeenAt,
+        lastSeenAt: capturedAt,
+        seenCount: Number(existing.seenCount || 1) + 1,
+      });
+    } else {
+      appended += 1;
+      byKey.set(key, row);
+    }
+  }
+
+  const rows = Array.from(byKey.values())
+    .sort((a, b) => Date.parse(a.firstSeenAt || a.capturedAt) - Date.parse(b.firstSeenAt || b.capturedAt))
+    .slice(-PREDICTION_SNAPSHOT_MAX_ROWS);
+  const byPhase = rows.reduce((acc, row) => {
+    acc[row.phase] = (acc[row.phase] || 0) + 1;
+    return acc;
+  }, {});
+  const payload = {
+    version: 1,
+    source: "sporttery:prediction-snapshots",
+    updatedAt: capturedAt,
+    retentionDays: PREDICTION_SNAPSHOT_RETENTION_DAYS,
+    maxRows: PREDICTION_SNAPSHOT_MAX_ROWS,
+    rows,
+    summary: {
+      total: rows.length,
+      byPhase,
+      appended,
+      updated,
+    },
+  };
+  return payload;
+}
+
+function attachPredictionSnapshotSummary(matches, snapshotPayload, capturedAt) {
+  const rowsByMatch = new Map();
+  for (const row of snapshotPayload?.rows || []) {
+    const key = normText(row?.sourceMatchId);
+    if (!key) continue;
+    if (!rowsByMatch.has(key)) rowsByMatch.set(key, []);
+    rowsByMatch.get(key).push(row);
+  }
+
+  return (matches || []).map((match) => {
+    const sourceMatchId = normText(match?.sourceMatchId || String(match?.id || "").replace(/^sporttery_/, ""));
+    const rows = rowsByMatch.get(sourceMatchId) || [];
+    const phases = rows.reduce((acc, row) => {
+      acc[row.phase] = (acc[row.phase] || 0) + 1;
+      return acc;
+    }, {});
+    const latest = rows
+      .slice()
+      .sort((a, b) => Date.parse(b.lastSeenAt || b.capturedAt) - Date.parse(a.lastSeenAt || a.capturedAt))[0];
+
+    return {
+      ...match,
+      predictionMeta: {
+        ...(match.predictionMeta || {}),
+        snapshot: {
+          phase: predictionPhase(match, capturedAt),
+          total: rows.length,
+          phases,
+          latestAt: latest?.lastSeenAt || latest?.capturedAt,
+          latestSignature: latest?.signature,
+        },
+      },
+    };
+  });
+}
+
 function writeJson(file, payload) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify(payload, null, 2), "utf8");
@@ -3045,6 +3493,7 @@ async function sync() {
   const existingMatches = loadExistingMatches();
   const existingSyncMeta = loadExistingSyncMeta(publicDir);
   const predictionHealth = buildPredictionHealth(existingMatches);
+  const modelCalibration = buildModelCalibration(existingMatches);
   const existingBySourceId = new Map(
     existingMatches
       .map((match) => [matchStoreKey(match), match])
@@ -3063,7 +3512,7 @@ async function sync() {
   let output = rawMatchesForOutput
     .map((match) => enrichRawMatchWithPredictionSnapshot(match, existingBySourceId, oddsHistoryBeforeSync.rows))
     .map((match) => ({ ...match, eloSnapshot: eloSnapshots.get(normText(match.sourceMatchId)) || null }))
-    .map((match) => ({ ...match, formSnapshot: formSnapshots.get(normText(match.sourceMatchId)) || null, predictionHealth }))
+    .map((match) => ({ ...match, formSnapshot: formSnapshots.get(normText(match.sourceMatchId)) || null, predictionHealth, modelCalibration }))
     .map((match) => {
       const appMatch = toAppMatch(match);
       const existing = existingBySourceId.get(normText(appMatch?.sourceMatchId || String(appMatch?.id || "").replace(/^sporttery_/, "")));
@@ -3090,6 +3539,8 @@ async function sync() {
     : { rows: loadOddsHistory(publicDir).rows.length, appended: 0, updated: 0, skipped: keptExistingReason || "no fresh official odds" };
   output = attachOddsTrends(output, publicDir);
   output = output.map((match) => normalizePublishedStatus(match, capturedAt));
+  const predictionSnapshotsPayload = appendPredictionSnapshots(publicDir, output, capturedAt);
+  output = attachPredictionSnapshotSummary(output, predictionSnapshotsPayload, capturedAt);
   const split = splitMatchesForOutput(output);
   const teamIndex = buildTeamIndex(output);
   const oddsHistoryPayload = loadOddsHistory(publicDir);
@@ -3126,6 +3577,7 @@ async function sync() {
       current: split.current.length,
       history: split.history.length,
       teams: teamIndex.teams.length,
+      predictionSnapshots: predictionSnapshotsPayload.rows.length,
     },
     refreshPolicy: {
       workflowMinutes: Math.max(5, Number(process.env.SYNC_WORKFLOW_MINUTES || 5)),
@@ -3141,6 +3593,12 @@ async function sync() {
       publishableMatches: rawMatchesForOutput.length,
     },
     oddsHistory,
+    predictionSnapshots: predictionSnapshotsPayload.summary,
+    modelCalibration: {
+      version: modelCalibration.version,
+      sample: modelCalibration.sample,
+      metrics: modelCalibration.metrics,
+    },
     ...(keptExistingReason ? {
       fallback: {
         keptExisting: true,
@@ -3157,6 +3615,8 @@ async function sync() {
   writeJson(path.join(dataDir, "matches-history.json"), split.history);
   writeJson(path.join(dataDir, "team-index.json"), teamIndex);
   writeJson(path.join(dataDir, "odds-history.json"), oddsHistoryPayload);
+  writeJson(path.join(dataDir, "prediction-snapshots.json"), predictionSnapshotsPayload);
+  writeJson(path.join(dataDir, "model-calibration.json"), modelCalibration);
   writeJson(path.join(dataDir, "sync-meta.json"), syncMeta);
   console.log(
     JSON.stringify(
