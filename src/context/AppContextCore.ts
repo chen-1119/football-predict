@@ -7,7 +7,6 @@ export type HitAndWinSubmission = Record<string, HitAndWinPick>;
 
 export interface User {
   username: string;
-  isPremium: boolean;
 }
 
 export interface DataSyncState {
@@ -32,10 +31,6 @@ export interface AppContextType {
   setLanguage: (lang: Language) => void;
   currentUser: User | null;
   setCurrentUser: (user: User | null) => void;
-  isPremium: boolean;
-  togglePremium: () => void;
-  dailySlipCount: number;
-  incrementSlipCount: () => boolean;
   hitAndWinSubmission: HitAndWinSubmission | null;
   submitHitAndWin: (selections: HitAndWinSubmission) => boolean;
   login: (username: string) => void;

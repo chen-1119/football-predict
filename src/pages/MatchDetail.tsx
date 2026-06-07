@@ -14,7 +14,7 @@ import { getMatchSignal } from '../services/matchSignal';
 import { buildMatchInsight } from '../services/predictionInsight';
 import { getVisiblePrediction, getVisiblePredictions } from '../services/predictionVisibility';
 import { TeamBadge } from '../components/TeamBadge';
-import { ArrowLeft, Lock, Trophy } from 'lucide-react';
+import { ArrowLeft, Trophy } from 'lucide-react';
 
 interface MatchDetailProps {
   matchId: string;
@@ -302,7 +302,7 @@ const buildHeadToHead = (
 };
 
 export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => {
-  const { language, isPremium, togglePremium, matches } = useApp();
+  const { language, matches } = useApp();
   const [activeTab, setActiveTab] = useState<'predictions' | 'stats' | 'form' | 'h2h' | 'standings'>('predictions');
 
   // 获取比赛详情
@@ -364,8 +364,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     scorePrediction: { zh: 'AI 比分推演', en: 'AI Score Prediction' },
     teamValue: { zh: '阵容估值', en: 'Squad Value' },
     kickoff: { zh: '开赛时间', en: 'Kickoff' },
-    lockedText: { zh: '此高阶 AI 预测数据仅对高级会员公开。一键模拟升级以解锁。', en: 'This advanced AI prediction is for Premium members only. Click to simulate unlock.' },
-    unlockBtn: { zh: '解锁所有预测', en: 'Unlock All Data' }
+    referenceText: { zh: '预测内容仅供赛前参考，请结合临场信息理性判断。', en: 'Forecasts are for pre-match reference only; use late information and your own judgment.' }
   };
 
   const t = (key: keyof typeof translations) => {
@@ -468,8 +467,6 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
 
   // 渲染预测详细行
   const renderPredictionBlock = (pred: PredictionDetail) => {
-    // 免费版对活跃比赛的高级推荐锁定
-    const isLocked = !isFinished && pred.visibilityStatus === 'PREMIUM' && !isPremium;
     const codeHint = getPredictionCodeHint(pred, language);
     const valueLabel = getPredictionValueLabel(pred, language);
     const hasDisplayOdds = Number.isFinite(pred.odds) && pred.odds > 0;
@@ -481,32 +478,14 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
         style={{ 
           position: 'relative', 
           backgroundColor: 'hsl(var(--bg))', 
-          borderColor: isLocked ? 'hsl(var(--premium) / 0.3)' : 'hsl(var(--border))',
+          borderColor: 'hsl(var(--border))',
           display: 'flex',
           flexDirection: 'column',
           gap: '1rem',
           overflow: 'hidden'
         }}
       >
-        {isLocked && (
-          <div className="lock-overlay">
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', padding: '1rem', textAlign: 'center' }}>
-              <Lock size={20} style={{ color: 'hsl(var(--premium))' }} />
-              <span style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', fontWeight: '500', maxWidth: '300px' }}>
-                {t('lockedText')}
-              </span>
-              <button 
-                onClick={togglePremium} 
-                className="btn btn-premium" 
-                style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem' }}
-              >
-                {t('unlockBtn')}
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', filter: isLocked ? 'blur(3px)' : 'none' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
           <div>
             <span style={{ 
               fontSize: '0.75rem', 
@@ -549,7 +528,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
           </div>
         </div>
 
-        <div style={{ borderTop: '1px solid hsl(var(--border))', paddingTop: '0.75rem', filter: isLocked ? 'blur(3px)' : 'none' }}>
+        <div style={{ borderTop: '1px solid hsl(var(--border))', paddingTop: '0.75rem' }}>
           <span style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))', display: 'block', marginBottom: '0.25rem', fontWeight: '600' }}>
             {t('analysis')}
           </span>
@@ -1186,27 +1165,20 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                 position: 'relative',
                 overflow: 'hidden'
               }}>
-                {!isPremium && !isFinished && (
-                  <div className="lock-overlay">
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', textAlign: 'center' }}>
-                      <Lock size={16} style={{ color: 'hsl(var(--premium))' }} />
-                      <span style={{ fontSize: '0.75rem', color: 'hsl(var(--text-secondary))' }}>
-                        {language === 'zh' ? '比分预测属高级会员独享' : 'Score prediction is locked'}
-                      </span>
-                    </div>
-                  </div>
-                )}
                 <h4 style={{ fontSize: '0.9rem', color: 'hsl(var(--primary))', textTransform: 'uppercase', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <Trophy size={16} />
                   {t('scorePrediction')}
                 </h4>
-                <div style={{ fontSize: '2.5rem', fontWeight: '900', fontFamily: 'var(--font-title)', margin: '0.75rem 0', filter: (!isPremium && !isFinished) ? 'blur(4px)' : 'none' }}>
+                <div style={{ fontSize: '2.5rem', fontWeight: '900', fontFamily: 'var(--font-title)', margin: '0.75rem 0' }}>
                   {projectedScoreText}
                 </div>
-                <p style={{ fontSize: '0.825rem', color: 'hsl(var(--text-secondary))', filter: (!isPremium && !isFinished) ? 'blur(4px)' : 'none' }}>
+                <p style={{ fontSize: '0.825rem', color: 'hsl(var(--text-secondary))' }}>
                   {language === 'zh'
                     ? `模型基于官方 SP 反推预期进球，当前热区约 ${match.stats?.xG.home?.toFixed(2) ?? '--'} : ${match.stats?.xG.away?.toFixed(2) ?? '--'}。`
                     : `Derived from official SP-implied xG. Current heat zone is about ${match.stats?.xG.home?.toFixed(2) ?? '--'} : ${match.stats?.xG.away?.toFixed(2) ?? '--'}.`}
+                </p>
+                <p style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))', marginTop: '0.5rem' }}>
+                  {t('referenceText')}
                 </p>
               </div>
             )}

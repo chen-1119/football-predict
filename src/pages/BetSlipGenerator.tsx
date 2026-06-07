@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContextCore';
 import { generateBetSlip } from '../services/generator';
 import type { BetSlipResult } from '../services/generator';
-import { Sparkles, RefreshCw, Copy, Check, Lock, ShieldAlert, Award } from 'lucide-react';
+import { Sparkles, RefreshCw, Copy, Check, ShieldAlert, Award } from 'lucide-react';
 import { getMarketLabel, getPredictionTipDisplay } from '../services/bettingDisplay';
 import { getTeamById } from '../services/entities';
 import { TeamBadge } from '../components/TeamBadge';
@@ -36,7 +36,7 @@ const createSlipMeta = (result: BetSlipResult): SlipMeta => {
 };
 
 export const BetSlipGenerator: React.FC = () => {
-  const { language, isPremium, togglePremium, dailySlipCount, incrementSlipCount, matches } = useApp();
+  const { language, matches } = useApp();
 
   // 表单状态
   const [targetOdds, setTargetOdds] = useState<number>(2.00);
@@ -45,7 +45,7 @@ export const BetSlipGenerator: React.FC = () => {
   const [minOdds, setMinOdds] = useState<number>(1.20);
   const [maxOdds, setMaxOdds] = useState<number>(3.00);
   const [timeWindow, setTimeWindow] = useState<TimeWindow>('3');
-  const [minTrust, setMinTrust] = useState<number>(60);
+  const [minTrust, setMinTrust] = useState<number>(45);
   const [onlyImportant, setOnlyImportant] = useState<boolean>(true);
   
   // 生成结果
@@ -55,19 +55,13 @@ export const BetSlipGenerator: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const translations = {
-    title: { zh: 'AI 投注单串关生成器', en: 'AI Bet Slip Generator' },
+    title: { zh: 'AI 串关参考生成器', en: 'AI Accumulator Reference' },
     subtitle: { 
-      zh: '依托深度学习预测引擎，智能扫描未来 72 小时内的海量预测，为您一键组合最佳串关。', 
-      en: 'Generate optimized accumulators based on mathematical confidence levels and target odds instantly.' 
+      zh: '公开开放当前模型的串关组合能力，按 SP、可信度、时间窗口筛选候选方向；结果仅供赛前参考。',
+      en: 'Open accumulator builder using SP, confidence, and time-window filters. Results are for pre-match reference only.' 
     },
-    freeLimitNotice: {
-      zh: '当前为免费模式：每日限量生成 1 张，总SP上限为 2.00，可信度上限 65%。',
-      en: 'Free Mode active: Max 1 slip/day, target odds capped at 2.00, trust capped at 65%.'
-    },
-    premiumUnlockNotice: {
-      zh: '升级至 VIP：解锁 150x 超高总SP串关、全选比赛场次、高可信度筛选及精选组合！',
-      en: 'Upgrade to PRO: Unlock up to 150x cumulative odds, customize counts, and access elite algorithms.'
-    },
+    openNotice: { zh: '当前为公开体验版：所有筛选项与模型参考暂时开放。', en: 'Open preview: all filters and model references are temporarily available.' },
+    referenceNotice: { zh: '提示：页面内容只供足球数据研究和赛前讨论参考，不构成投注建议。', en: 'Note: this page is for football data research and pre-match discussion only, not betting advice.' },
     targetOddsLabel: { zh: '目标总SP', en: 'Target Combined Odds' },
     matchCountLabel: { zh: '串关比赛数量', en: 'Number of Selections' },
     auto: { zh: '智能推荐 (Auto)', en: 'Auto' },
@@ -77,16 +71,15 @@ export const BetSlipGenerator: React.FC = () => {
     timeWindowLabel: { zh: '比赛时间窗口', en: 'Time Window' },
     minTrustLabel: { zh: '最低可信度要求', en: 'Min Confidence Threshold' },
     onlyImportantLabel: { zh: '仅限顶级联赛', en: 'Only Elite Leagues' },
-    generateBtn: { zh: 'AI 一键生成投注单', en: 'Generate Accumulator' },
+    generateBtn: { zh: 'AI 一键生成参考组合', en: 'Generate Reference Combo' },
     resetBtn: { zh: '重置配置', en: 'Reset Filters' },
-    copyBtn: { zh: '复制投注单', en: 'Copy Bet Slip' },
+    copyBtn: { zh: '复制参考组合', en: 'Copy Combo' },
     copiedText: { zh: '已复制！', en: 'Copied!' },
-    slipTitle: { zh: 'AI 生成投注票据 (Accumulator Ticket)', en: 'AI Smart Ticket' },
-    slipSummary: { zh: '投注汇总', en: 'Summary' },
+    slipTitle: { zh: 'AI 参考组合票据', en: 'AI Reference Ticket' },
+    slipSummary: { zh: '参考汇总', en: 'Summary' },
     totalOdds: { zh: '总SP', en: 'Total Odds' },
     avgTrust: { zh: '平均可信度', en: 'Avg Confidence' },
-    activeSlip: { zh: '今日已用免费生成额度：', en: 'Daily Free Slip Count:' },
-    outOfQuota: { zh: '您已达到今日免费生成上限 (1张)。模拟升级 PRO 即可无限制生成！', en: 'You reached the free limit (1/day). Simulate Pro to unlock unlimited!' }
+    activeSlip: { zh: '公开体验：', en: 'Open Preview:' }
   };
 
   const t = (key: keyof typeof translations) => {
@@ -106,12 +99,6 @@ export const BetSlipGenerator: React.FC = () => {
   const handleGenerate = () => {
     setErrorMsg(null);
 
-    // 检查额度
-    if (!isPremium && dailySlipCount >= 1) {
-      setErrorMsg(t('outOfQuota'));
-      return;
-    }
-
     const result = generateBetSlip({
       targetOdds,
       matchCount,
@@ -121,13 +108,10 @@ export const BetSlipGenerator: React.FC = () => {
       timeWindow,
       minTrust,
       onlyImportantLeagues: onlyImportant,
-      onlyOddsDropping: false,
-      isPremiumUser: isPremium
+      onlyOddsDropping: false
     }, matches);
 
     if (result.isSuccess) {
-      // 扣减额度
-      incrementSlipCount();
       setSlipMeta(createSlipMeta(result));
     } else {
       setSlipMeta(null);
@@ -142,7 +126,7 @@ export const BetSlipGenerator: React.FC = () => {
     setMinOdds(1.20);
     setMaxOdds(3.00);
     setTimeWindow('3');
-    setMinTrust(60);
+    setMinTrust(45);
     setOnlyImportant(true);
     setGenerationResult(null);
     setSlipMeta(null);
@@ -175,33 +159,28 @@ export const BetSlipGenerator: React.FC = () => {
         </p>
       </div>
 
-      {/* 免费/付费提示 */}
+      {/* 参考提示 */}
       <div className="card premium-card" style={{ 
         display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', padding: '1.25rem',
-        borderColor: isPremium ? 'hsl(var(--primary) / 0.3)' : 'hsl(var(--premium) / 0.3)'
+        borderColor: 'hsl(var(--primary) / 0.3)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', maxWidth: '750px' }}>
           <div style={{ 
-            backgroundColor: isPremium ? 'hsl(var(--primary) / 0.15)' : 'hsl(var(--premium) / 0.15)', 
-            color: isPremium ? 'hsl(var(--primary))' : 'hsl(var(--premium))', 
+            backgroundColor: 'hsl(var(--primary) / 0.15)', 
+            color: 'hsl(var(--primary))', 
             padding: '0.5rem', borderRadius: '10px' 
           }}>
             <Award size={20} />
           </div>
           <div>
             <p style={{ fontSize: '0.85rem', color: 'hsl(var(--text-primary))', fontWeight: '700' }}>
-              {isPremium ? (language === 'zh' ? '您当前是 VIP 会员：解锁无限制高总SP串关！' : 'PRO Mode Active: Unlimited slips and high odds unlocked!') : t('freeLimitNotice')}
+              {t('openNotice')}
             </p>
             <p style={{ fontSize: '0.75rem', color: 'hsl(var(--text-secondary))', marginTop: '0.15rem' }}>
-              {!isPremium ? t('premiumUnlockNotice') : (language === 'zh' ? '您可以设置最高达 150 总SP，可信度阈值高至 100%' : 'You can configure up to 150 odds and 100% confidence.')}
+              {t('referenceNotice')}
             </p>
           </div>
         </div>
-        {!isPremium && (
-          <button onClick={togglePremium} className="btn btn-premium" style={{ whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
-            {language === 'zh' ? '升级 PRO' : 'Simulate Pro'}
-          </button>
-        )}
       </div>
 
       {/* 双栏布局 */}
@@ -219,7 +198,7 @@ export const BetSlipGenerator: React.FC = () => {
             <input 
               type="range" 
               min="1.50" 
-              max={isPremium ? "150.00" : "2.00"} 
+              max="150.00" 
               step="0.05"
               value={targetOdds} 
               onChange={(e) => setTargetOdds(parseFloat(e.target.value))}
@@ -227,8 +206,7 @@ export const BetSlipGenerator: React.FC = () => {
             />
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'hsl(var(--text-muted))', marginTop: '0.2rem' }}>
               <span>@1.50</span>
-              {!isPremium && <span>{language === 'zh' ? '免费上限: @2.00' : 'Free Limit: @2.00'}</span>}
-              <span>{isPremium ? '@150.00' : '@2.00'}</span>
+              <span>@150.00</span>
             </div>
           </div>
 
@@ -238,12 +216,9 @@ export const BetSlipGenerator: React.FC = () => {
             <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
               {(['auto', 2, 5, 10, 15] as const).map((cnt) => {
                 const isSelected = matchCount === cnt;
-                // 免费版限制除了 auto/2 之外的其他数量
-                const isCntLocked = !isPremium && cnt !== 'auto' && cnt !== 2;
                 return (
                   <button
                     key={cnt}
-                    disabled={isCntLocked}
                     onClick={() => setMatchCount(cnt)}
                     className="btn btn-secondary"
                     style={{
@@ -252,13 +227,12 @@ export const BetSlipGenerator: React.FC = () => {
                       borderRadius: '8px',
                       backgroundColor: isSelected ? 'hsl(var(--accent) / 0.15)' : 'transparent',
                       borderColor: isSelected ? 'hsl(var(--accent))' : 'hsl(var(--border))',
-                      color: isCntLocked ? 'hsl(var(--text-muted))' : (isSelected ? 'hsl(var(--text-primary))' : 'hsl(var(--text-secondary))'),
-                      cursor: isCntLocked ? 'not-allowed' : 'pointer',
+                      color: isSelected ? 'hsl(var(--text-primary))' : 'hsl(var(--text-secondary))',
+                      cursor: 'pointer',
                       display: 'flex', alignItems: 'center', gap: '0.25rem'
                     }}
                   >
                     <span>{cnt === 'auto' ? t('auto') : `${cnt}场`}</span>
-                    {isCntLocked && <Lock size={10} style={{ color: 'hsl(var(--premium))' }} />}
                   </button>
                 );
               })}
@@ -275,13 +249,9 @@ export const BetSlipGenerator: React.FC = () => {
                 { id: 'BEST', label: getMarketLabel('BEST', language) }
               ].map(m => {
                 const isSelected = selectedMarkets.includes(m.id);
-                // 免费限制：不能选 BEST 精选
-                const isMarketLocked = !isPremium && m.id === 'BEST';
-
                 return (
                   <button
                     key={m.id}
-                    disabled={isMarketLocked}
                     onClick={() => handleMarketToggle(m.id)}
                     className="btn btn-secondary"
                     style={{
@@ -290,13 +260,12 @@ export const BetSlipGenerator: React.FC = () => {
                       borderRadius: '8px',
                       backgroundColor: isSelected ? 'hsl(var(--accent) / 0.15)' : 'transparent',
                       borderColor: isSelected ? 'hsl(var(--accent))' : 'hsl(var(--border))',
-                      color: isMarketLocked ? 'hsl(var(--text-muted))' : (isSelected ? 'hsl(var(--text-primary))' : 'hsl(var(--text-secondary))'),
-                      cursor: isMarketLocked ? 'not-allowed' : 'pointer',
+                      color: isSelected ? 'hsl(var(--text-primary))' : 'hsl(var(--text-secondary))',
+                      cursor: 'pointer',
                       display: 'flex', alignItems: 'center', gap: '0.25rem'
                     }}
                   >
                     <span>{m.label}</span>
-                    {isMarketLocked && <Lock size={10} style={{ color: 'hsl(var(--premium))' }} />}
                   </button>
                 );
               })}
@@ -311,17 +280,16 @@ export const BetSlipGenerator: React.FC = () => {
             </div>
             <input 
               type="range" 
-              min="50" 
-              max={isPremium ? "95" : "65"} 
+              min="35" 
+              max="95" 
               step="5"
               value={minTrust} 
               onChange={(e) => setMinTrust(parseInt(e.target.value))}
               style={{ width: '100%', accentColor: 'hsl(var(--primary))' }}
             />
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'hsl(var(--text-muted))', marginTop: '0.2rem' }}>
-              <span>50%</span>
-              {!isPremium && <span>{language === 'zh' ? '免费上限: 65%' : 'Free Limit: 65%'}</span>}
-              <span>{isPremium ? '95%' : '65%'}</span>
+              <span>35%</span>
+              <span>95%</span>
             </div>
           </div>
 
@@ -399,8 +367,8 @@ export const BetSlipGenerator: React.FC = () => {
 
           {/* 额度提示 */}
           <div style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))', textAlign: 'center', marginTop: '0.25rem' }}>
-            {t('activeSlip')} <span style={{ color: isPremium ? 'hsl(var(--primary))' : 'hsl(var(--premium))', fontWeight: 'bold' }}>
-              {isPremium ? 'Unlimited (PRO)' : `${dailySlipCount}/1`}
+            {t('activeSlip')} <span style={{ color: 'hsl(var(--primary))', fontWeight: 'bold' }}>
+              {language === 'zh' ? '不限次数' : 'Unlimited'}
             </span>
           </div>
 
@@ -533,7 +501,7 @@ export const BetSlipGenerator: React.FC = () => {
             <div className="card" style={{ borderStyle: 'dashed', textAlign: 'center', padding: '5rem 2rem', color: 'hsl(var(--text-muted))' }}>
               <Sparkles size={40} style={{ marginBottom: '1rem', color: 'hsl(var(--border))', animation: 'float 3s infinite ease-in-out' }} />
               <h4 style={{ color: 'hsl(var(--text-secondary))', marginBottom: '0.5rem', fontWeight: '600' }}>
-                {language === 'zh' ? '等待生成投注单' : 'Awaiting Accumulator Generation'}
+                {language === 'zh' ? '等待生成参考组合' : 'Awaiting Accumulator Generation'}
               </h4>
               <p style={{ fontSize: '0.8rem' }}>
                 {language === 'zh' ? '在左侧配置您的风险偏好、目标总SP以及可筛选市场，AI 算法将在几毫秒内为您输出最佳串关组合。' : 'Configure filters on the left. AI algorithms will compile the optimal ticket in milliseconds.'}

@@ -4,14 +4,14 @@ import type { Match, PredictionDetail } from '../services/mockData';
 import { getPredictionTipDisplay } from '../services/bettingDisplay';
 import { getTeamById } from '../services/entities';
 import { TeamBadge } from '../components/TeamBadge';
-import { Lock, Trophy, Calendar } from 'lucide-react';
+import { Trophy, Calendar } from 'lucide-react';
 
 interface BestTipsProps {
   onSelectMatch: (matchId: string) => void;
 }
 
 export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
-  const { language, isPremium, togglePremium, matches } = useApp();
+  const { language, matches } = useApp();
 
   // 筛选出所有今天和明天的比赛中的 BEST 推荐
   const activeBestMatches = React.useMemo(() => {
@@ -28,11 +28,6 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
       zh: '展示当前模型保留的候选方向、观察项与风险点；低赔热门不会直接包装成高可信。', 
       en: 'Shows model shortlist, watch, and value directions. Every pick should be checked against official SP, risk tags, and late movement.' 
     },
-    lockedNotice: {
-      zh: 'PRO 可查看完整赛前说明、赔率依据、风险标签和比分/进球侧参考。',
-      en: 'PRO reveals full shortlist notes, odds basis, risk tags, and score/goals references.'
-    },
-    unlockBtn: { zh: '模拟升级 PRO 立即解锁', en: 'Simulate Pro to Unlock' },
     confidence: { zh: '模型信赖度', en: 'Model Confidence' },
     odds: { zh: '首选SP', en: 'Primary Odds' },
     kickoff: { zh: '开赛', en: 'Kickoff' },
@@ -90,7 +85,6 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
             const bestPred = match.predictions.find(p => p.marketType === 'BEST')!;
             const hasDisplayOdds = Number.isFinite(bestPred.odds) && bestPred.odds > 0;
             
-            const isLocked = !isPremium;
             const formattedTime = new Date(match.kickoffTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
 
             return (
@@ -102,7 +96,7 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
                   flexDirection: 'column', 
                   gap: '1.5rem', 
                   padding: '2rem',
-                  borderColor: isLocked ? 'hsl(var(--premium) / 0.4)' : 'hsl(var(--primary) / 0.4)'
+                  borderColor: 'hsl(var(--primary) / 0.36)'
                 }}
               >
                 
@@ -126,31 +120,7 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
                   </div>
                 </div>
 
-                {/* 锁定提示 overlay / 预测结果 */}
-                {isLocked ? (
-                  <div style={{ 
-                    backgroundColor: 'hsl(var(--bg))', 
-                    border: '1px solid hsl(var(--premium) / 0.2)', 
-                    borderRadius: '12px', 
-                    padding: '1.5rem',
-                    textAlign: 'center',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '0.75rem',
-                    position: 'relative'
-                  }}>
-                    <Lock size={24} style={{ color: 'hsl(var(--premium))' }} />
-                    <p style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', lineHeight: '1.5', maxWidth: '280px' }}>
-                      {t('lockedNotice')}
-                    </p>
-                    <button onClick={togglePremium} className="btn btn-premium" style={{ fontSize: '0.8rem', padding: '0.5rem 1rem' }}>
-                      {t('unlockBtn')}
-                    </button>
-                  </div>
-                ) : (
-                  /* 解锁后的黄金显示区 */
-                  <div style={{ 
+                <div style={{ 
                     backgroundColor: 'hsl(var(--primary) / 0.05)', 
                     border: '1px solid hsl(var(--primary) / 0.2)', 
                     borderRadius: '12px', 
@@ -158,7 +128,7 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '0.75rem'
-                  }}>
+                }}>
                     
                     {/* 首选推荐和 SP */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -208,8 +178,7 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
 
                     </div>
 
-                  </div>
-                )}
+                </div>
 
                 {/* 底部详情跳转 */}
                 <button 

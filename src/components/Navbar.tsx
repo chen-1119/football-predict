@@ -5,7 +5,6 @@ import {
   Flag,
   ListChecks,
   LogOut,
-  ShieldCheck,
   Target,
   Ticket,
   Trophy,
@@ -34,7 +33,7 @@ const navItems: Array<{
 ];
 
 export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openGlossary }) => {
-  const { language, setLanguage, currentUser, isPremium, togglePremium, logout } = useApp();
+  const { language, setLanguage, currentUser, logout } = useApp();
 
   const translations = {
     worldCup: { zh: '世界杯', en: 'World Cup' },
@@ -45,9 +44,6 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
     generator: { zh: '投注单', en: 'Bet Slip' },
     hitAndWin: { zh: '命中挑战', en: 'Hit & Win' },
     login: { zh: '登录', en: 'Login' },
-    premium: { zh: 'PRO', en: 'PRO' },
-    free: { zh: '免费版', en: 'Free' },
-    togglePrem: { zh: '切换 PRO 预览', en: 'Toggle PRO Preview' },
     help: { zh: '术语', en: 'Glossary' },
     language: { zh: '切换语言', en: 'Switch Language' },
     logout: { zh: '退出登录', en: 'Logout' }
@@ -100,16 +96,6 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
           >
             <Globe size={15} />
             <span>{language === 'zh' ? 'EN' : '中文'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={togglePremium}
-            className={`status-pill ${isPremium ? 'is-premium' : ''}`}
-            title={t('togglePrem')}
-          >
-            <ShieldCheck size={15} />
-            <span>{isPremium ? t('premium') : t('free')}</span>
           </button>
 
           {currentUser ? (

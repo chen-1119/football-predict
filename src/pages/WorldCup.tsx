@@ -262,7 +262,7 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
       en: 'Tracks overheated favourites, handicap tension and higher-SP underdogs worth review.'
     },
     radarEmpty: { zh: '当前没有明显冷门观察点。', en: 'No clear upset watch points right now.' },
-    contentTitle: { zh: '内容升级路线', en: 'Content Roadmap' },
+    contentTitle: { zh: '内容完善路线', en: 'Content Roadmap' },
     sync: { zh: '数据同步', en: 'Data Sync' },
     active: { zh: '观察场次', en: 'Watch matches' },
     coverage: { zh: '路径覆盖', en: 'Route coverage' },

@@ -65,8 +65,8 @@ export const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
           </h3>
           <p style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', marginTop: '0.25rem' }}>
             {isLoginView 
-              ? (language === 'zh' ? '登录后可保存您的投注单历史和提交命中赢奖活动。' : 'Sign in to save slips and participate in Hit & Win.')
-              : (language === 'zh' ? '开启您的 AI 足球预测精准之旅。' : 'Start your journey with elite AI predictions.')
+              ? (language === 'zh' ? '登录后可保存参考组合历史，并参与世界杯预测墙复盘。' : 'Sign in to save reference combos and join the World Cup prediction wall.')
+              : (language === 'zh' ? '开启您的 AI 足球数据观察之旅。' : 'Start your AI football data journey.')
             }
           </p>
         </div>

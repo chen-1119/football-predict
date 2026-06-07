@@ -231,7 +231,7 @@ const getDecisionReason = (category: MatchSignalCategory, language: 'zh' | 'en')
 };
 
 export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch, onOpenWorldCup }) => {
-  const { language, isPremium, togglePremium, matches, dataSync } = useApp();
+  const { language, matches, dataSync } = useApp();
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   const systemTodayStr = getDateStringOffset(0);
@@ -263,11 +263,10 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
   }, []);
 
   const translations = {
-    premiumNotice: {
-      zh: '当前为免费模式，部分精选推荐和总进球数参考已锁定。升级 PRO 可查看完整模型数据。',
-      en: 'Free mode is active. Some best tips and total-goals references are locked. Upgrade to PRO for full model data.'
+    referenceNotice: {
+      zh: '模型预测仅供赛前参考，不构成任何投注建议；请结合临场信息理性判断。',
+      en: 'Forecasts are for pre-match reference only and are not betting advice. Use late information and your own judgment.'
     },
-    upgradeBtn: { zh: '解锁 PRO', en: 'Unlock PRO' },
     filterTitle: { zh: '赛事筛选', en: 'Competition Filters' },
     allLeagues: { zh: '全部赛事', en: 'All Competitions' },
     signalTitle: { zh: '推荐分组', en: 'Signal' },
@@ -328,7 +327,6 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     closed: { zh: '未开售', en: 'Closed' },
     archivedOdds: { zh: '赛果归档', en: 'Archived' },
     trustHeader: { zh: '可用度', en: 'Usability' },
-    unlockTitle: { zh: '点击模拟升级解锁', en: 'Click to unlock' },
     hit: { zh: '命中', en: 'Hit' },
     miss: { zh: '未中', en: 'Miss' },
     leagueMatches: { zh: '场比赛', en: 'matches' }
@@ -509,7 +507,6 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     const oneXTwo = getVisiblePrediction(match, '1X2');
     const goals = getVisiblePrediction(match, 'GOALS');
     const pickedPrediction = [best, oneXTwo].find((prediction) => prediction && prediction.tipCode !== 'WATCH');
-    const lockedPick = pickedPrediction && pickedPrediction.visibilityStatus === 'PREMIUM' && !isPremium && !isFinished;
     const leadingOutcome = getLeadingOutcome(match);
     const leadProbability = pickedPrediction && isOutcomeCode(pickedPrediction.tipCode)
       ? getOutcomeProbability(match, pickedPrediction.tipCode)
@@ -525,19 +522,19 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
       ? getPredictionTipDisplay(goals, language, true)
       : getGoalsLean(match, language);
     const bttsText = getBttsLean(match, language);
-    const primaryLabel = pickedPrediction && !lockedPick
+    const primaryLabel = pickedPrediction
       ? getPredictionTipDisplay(pickedPrediction, language, true)
       : signal.category === 'finished'
         ? (language === 'zh' ? '赛后复盘' : 'Review')
         : signal.category === 'avoid'
           ? (language === 'zh' ? '避开，不硬上' : 'Avoid')
           : (language === 'zh' ? '观察，不下手' : 'Watch, no bet');
-    const primaryMeta = pickedPrediction && pickedPrediction.odds > 0 && !lockedPick
+    const primaryMeta = pickedPrediction && pickedPrediction.odds > 0
       ? `${getPredictionValueLabel(pickedPrediction, language)} ${pickedPrediction.odds.toFixed(2)}`
       : leadCode && leadProbability !== null
         ? `${outcomeLabels[leadCode][language]} ${Math.round(leadProbability)}%`
         : '--';
-    const shortReason = pickedPrediction && !lockedPick
+    const shortReason = pickedPrediction
       ? signal.category === 'steady'
         ? (language === 'zh' ? '主线、概率和风险基本同向' : 'Main line, probability, and risk are aligned')
         : signal.category === 'value'
@@ -548,8 +545,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     return (
       <div className={`decision-card is-${signal.category} ${pickedPrediction ? 'has-pick' : 'is-watch-only'} ${showHit ? 'is-hit' : ''} ${showMiss ? 'is-miss' : ''}`}>
         <div className="decision-main">
-          <span className="decision-label">{lockedPick ? 'PRO' : primaryLabel}</span>
-          <span className="decision-meta">{lockedPick ? (language === 'zh' ? '高阶方向已锁' : 'Premium pick') : primaryMeta}</span>
+          <span className="decision-label">{primaryLabel}</span>
+          <span className="decision-meta">{primaryMeta}</span>
           {showHit && <span className="mini-hit">{t('hit')}</span>}
           {showMiss && <span className="mini-miss">{t('miss')}</span>}
         </div>
@@ -583,18 +580,6 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
           </div>
         )}
 
-        {lockedPick && (
-          <button
-            type="button"
-            className="decision-unlock"
-            onClick={(event) => {
-              event.stopPropagation();
-              togglePremium();
-            }}
-          >
-            {t('unlockTitle')}
-          </button>
-        )}
       </div>
     );
   };
@@ -752,19 +737,14 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
 
   return (
     <div className="dashboard-stack">
-      {!isPremium && (
-        <section className="notice-banner" aria-label="PRO notice">
+      <section className="notice-banner" aria-label="reference notice">
           <div className="notice-copy">
             <span className="notice-icon">
               <Sparkles size={20} />
             </span>
-            <p className="notice-text">{t('premiumNotice')}</p>
+            <p className="notice-text">{t('referenceNotice')}</p>
           </div>
-          <button type="button" onClick={togglePremium} className="btn btn-premium">
-            {t('upgradeBtn')}
-          </button>
-        </section>
-      )}
+      </section>
 
       <WorldCupSpotlight
         matches={matches}

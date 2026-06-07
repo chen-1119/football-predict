@@ -63,11 +63,6 @@ const readJsonFromStorage = <T,>(key: string): T | null => {
 
 const readStoredUser = (): User | null => readJsonFromStorage<User>('nerdy_user');
 
-const readStoredDailySlipCount = (): number => {
-  const savedCount = Number(localStorage.getItem('nerdy_slip_count'));
-  return Number.isFinite(savedCount) ? savedCount : 0;
-};
-
 const readStoredHitAndWinSubmission = (): HitAndWinSubmission | null => {
   return readJsonFromStorage<HitAndWinSubmission>('nerdy_hw_submission');
 };
@@ -173,8 +168,6 @@ const registerSyncedMatches = (data: SyncedMatch[]) => {
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>(readStoredLanguage);
   const [currentUser, setCurrentUser] = useState<User | null>(readStoredUser);
-  const [isPremium, setIsPremium] = useState<boolean>(() => currentUser?.isPremium ?? false);
-  const [dailySlipCount, setDailySlipCount] = useState<number>(readStoredDailySlipCount);
   const [hitAndWinSubmission, setHitAndWinSubmission] = useState<HitAndWinSubmission | null>(readStoredHitAndWinSubmission);
   const [matches, setMatches] = useState<Match[]>([]);
   const lastMetaRef = useRef<{ sourceUpdatedAt?: string; finishedCount?: number }>({});
@@ -390,26 +383,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('nerdy_lang', lang);
   };
 
-  const togglePremium = () => {
-    const nextPremium = !isPremium;
-    setIsPremium(nextPremium);
-    if (currentUser) {
-      const updatedUser = { ...currentUser, isPremium: nextPremium };
-      setCurrentUser(updatedUser);
-      localStorage.setItem('nerdy_user', JSON.stringify(updatedUser));
-    }
-  };
-
-  const incrementSlipCount = (): boolean => {
-    if (!isPremium && dailySlipCount >= 1) {
-      return false; // 免费限制每天只能生成 1 张
-    }
-    const nextCount = dailySlipCount + 1;
-    setDailySlipCount(nextCount);
-    localStorage.setItem('nerdy_slip_count', nextCount.toString());
-    return true;
-  };
-
   const submitHitAndWin = (selections: HitAndWinSubmission): boolean => {
     setHitAndWinSubmission(selections);
     localStorage.setItem('nerdy_hw_submission', JSON.stringify(selections));
@@ -417,9 +390,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const login = (username: string) => {
-    const u: User = { username, isPremium: false }; // 默认新登录为免费用户
+    const u: User = { username };
     setCurrentUser(u);
-    setIsPremium(false);
     localStorage.setItem('nerdy_user', JSON.stringify(u));
   };
 
@@ -429,8 +401,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const logout = () => {
     setCurrentUser(null);
-    setIsPremium(false);
-    setDailySlipCount(0);
     setHitAndWinSubmission(null);
     localStorage.removeItem('nerdy_user');
     localStorage.removeItem('nerdy_slip_count');
@@ -443,10 +413,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setLanguage,
       currentUser,
       setCurrentUser,
-      isPremium,
-      togglePremium,
-      dailySlipCount,
-      incrementSlipCount,
       hitAndWinSubmission,
       submitHitAndWin,
       login,

@@ -131,7 +131,7 @@ export function getMatchSignal(match: Match): MatchSignal {
         category: 'watch',
         label: labels.watch,
         note: {
-          zh: '进球数有参考价值，但边际不够硬，等下一次 SP 快照确认后再决定是否升级。',
+          zh: '进球数有参考价值，但边际不够硬，等下一次 SP 快照确认后再决定是否提升优先级。',
           en: 'The best tip has switched to totals, but edge or risk still needs the next SP snapshot.'
         },
         tone: 'warning',

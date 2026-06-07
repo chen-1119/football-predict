@@ -11,7 +11,6 @@ export interface GeneratorParams {
   minTrust: number; // 最低可信度
   onlyImportantLeagues: boolean;
   onlyOddsDropping: boolean;
-  isPremiumUser: boolean;
 }
 
 export interface SelectionResult {
@@ -27,6 +26,67 @@ export interface BetSlipResult {
   message: { zh: string; en: string };
 }
 
+const officialPickLabels: Record<string, { zh: string; en: string }> = {
+  '1': { zh: '胜', en: 'Home win' },
+  X: { zh: '平', en: 'Draw' },
+  '2': { zh: '负', en: 'Away win' }
+};
+
+const buildOfficialOddsFallback = (
+  match: Match,
+  minOdds: number,
+  maxOdds: number,
+  minTrust: number
+): SelectionResult | null => {
+  if (!match.odds) return null;
+
+  const outcomes = [
+    { code: '1', odds: match.odds.odds1 },
+    { code: 'X', odds: match.odds.oddsX },
+    { code: '2', odds: match.odds.odds2 }
+  ].filter((outcome) => Number.isFinite(outcome.odds) && outcome.odds > 0);
+
+  if (outcomes.length === 0) return null;
+
+  const impliedTotal = outcomes.reduce((sum, outcome) => sum + (1 / outcome.odds), 0);
+  const best = outcomes
+    .filter((outcome) => outcome.odds >= minOdds && outcome.odds <= maxOdds)
+    .sort((a, b) => a.odds - b.odds)[0];
+
+  if (!best || impliedTotal <= 0) return null;
+
+  const marketSupport = Math.round((1 / best.odds / impliedTotal) * 100);
+  const trustScore = Math.min(58, Math.max(35, marketSupport));
+  if (trustScore < minTrust) return null;
+
+  const label = officialPickLabels[best.code] || { zh: best.code, en: best.code };
+
+  return {
+    match,
+    prediction: {
+      marketType: '1X2',
+      tipCode: best.code,
+      tipLabel: label,
+      odds: best.odds,
+      trustScore,
+      explanation: {
+        zh: `模型暂无强推方向，按官方 SP 领先项生成观察参考：${label.zh}，需结合临场变化复核。`,
+        en: `No strong model pick is available. This is an official-SP fallback watch reference: ${label.en}. Recheck late movement.`
+      },
+      analysisItems: [
+        { zh: '官方 SP 领先项', en: 'Official SP leading outcome' },
+        { zh: '模型观察兜底，不作为强推', en: 'Watch-only fallback, not a strong pick' }
+      ],
+      riskTags: [
+        { zh: '仅供参考', en: 'Reference only' },
+        { zh: '需临场复核', en: 'Needs late review' }
+      ],
+      visibilityStatus: 'FREE',
+      resultStatus: 'PENDING'
+    }
+  };
+};
+
 // 模拟串关生成算法
 export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetSlipResult {
   const {
@@ -35,22 +95,14 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
     minOdds,
     maxOdds,
     timeWindow,
-    onlyImportantLeagues,
-    isPremiumUser
+    onlyImportantLeagues
   } = params;
   let { targetOdds, minTrust } = params;
   const enabledMarketTypes = marketTypes.filter((marketType) => (
     isPredictionMarketEnabled(marketType as PredictionDetail['marketType'])
   ));
 
-  // 1. 免费限制强制校正
-  if (!isPremiumUser) {
-    targetOdds = Math.min(2.00, targetOdds);
-    minTrust = Math.max(minTrust, 50); // 免费用户无法选择极高阈值，限制可信度上限在 65% 的池子里
-    // 免费版最高可信度其实 PRD 提到是 "限制为 65%"。我们此处限制它只能匹配 trustScore <= 68 的推荐，或者在生成时限制最高可信度
-  }
-
-  // 2. 筛选比赛范围：未来 timeWindow 天内的未开始比赛
+  // 1. 筛选比赛范围：未来 timeWindow 天内的未开始比赛
   const now = new Date();
   const maxTime = new Date();
   maxTime.setDate(now.getDate() + parseInt(timeWindow));
@@ -63,7 +115,7 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
     return true;
   });
 
-  // 3. 筛选预测池
+  // 2. 筛选预测池
   const candidateSelections: SelectionResult[] = [];
   candidateMatches.forEach(m => {
     getVisiblePredictions(m).forEach(p => {
@@ -74,15 +126,19 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
       if (p.odds < minOdds || p.odds > maxOdds) return;
       // 筛选可信度
       if (p.trustScore < minTrust) return;
-      // 免费用户过滤掉 trustScore > 65% 的（PRD: "免费可信度限制为 65%"，即免费用户生成的串关可信度不会高于 65%，或者只能用低于65%的可信度推荐）
-      if (!isPremiumUser && p.trustScore > 65) return;
-
       candidateSelections.push({
         match: m,
         prediction: p
       });
     });
   });
+
+  if (candidateSelections.length === 0 && enabledMarketTypes.some((marketType) => marketType === '1X2' || marketType === 'BEST')) {
+    candidateMatches.forEach((match) => {
+      const fallbackSelection = buildOfficialOddsFallback(match, minOdds, maxOdds, minTrust);
+      if (fallbackSelection) candidateSelections.push(fallbackSelection);
+    });
+  }
 
   if (candidateSelections.length === 0) {
     return {
@@ -97,13 +153,13 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
     };
   }
 
-  // 4. 开始匹配组合。目标是找到一组 Selection，其乘积（总SP）尽可能接近 targetOdds，且没有重复的 matchId。
+  // 3. 开始匹配组合。目标是找到一组 Selection，其乘积（总SP）尽可能接近 targetOdds，且没有重复的 matchId。
   // 我们使用贪心法结合随机微调来寻找最佳组合。
   
   // 决定最终要挑选的比赛数量范围
   const [targetCountMin, targetCountMax] = matchCount === 'auto'
     ? targetOdds <= 3
-      ? [2, 3]
+      ? [1, 3]
       : targetOdds <= 8
         ? [3, 5]
         : [4, 8]
@@ -174,8 +230,8 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
     averageTrust,
     isSuccess: true,
     message: {
-      zh: 'AI 投注单生成成功！',
-      en: 'AI Bet Slip generated successfully!'
+      zh: 'AI 参考组合生成成功！',
+      en: 'AI reference combo generated successfully!'
     }
   };
 }

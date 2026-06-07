@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Crown, Database, Handshake, MessageCircle, ScanLine, X } from 'lucide-react';
+import { Database, Handshake, MessageCircle, ScanLine, Trophy, X } from 'lucide-react';
 import { useApp } from '../context/AppContextCore';
 
 export const ContactDock: React.FC = () => {
@@ -21,21 +21,21 @@ export const ContactDock: React.FC = () => {
     kicker: { zh: '微信咨询', en: 'WeChat' },
     name: { zh: '何先生', en: 'Mr. He' },
     desc: {
-      zh: '扫码添加微信，咨询赛事数据、合作与会员服务。',
-      en: 'Scan to add WeChat for match data, partnership, and membership service.'
+      zh: '扫码添加微信，咨询赛事数据、合作与世界杯预测交流。',
+      en: 'Scan to add WeChat for match data, partnership, and World Cup prediction discussion.'
     },
     scan: { zh: '微信扫一扫添加', en: 'Scan with WeChat' },
     note: { zh: '添加时备注：足球预测', en: 'Add note: Football prediction' },
     close: { zh: '关闭联系方式', en: 'Close contact panel' },
     items: {
-      zh: ['赛事数据', '合作咨询', '会员服务'],
-      en: ['Match data', 'Partnership', 'Membership']
+      zh: ['赛事数据', '合作咨询', '世界杯预测'],
+      en: ['Match data', 'Partnership', 'World Cup picks']
     }
   };
 
   const t = (key: keyof typeof translations) => translations[key][language];
   const contactItems = (t('items') as string[]).map((label, index) => {
-    const icons = [Database, Handshake, Crown];
+    const icons = [Database, Handshake, Trophy];
     return { label, Icon: icons[index] };
   });
 
