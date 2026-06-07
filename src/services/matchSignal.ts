@@ -1,6 +1,6 @@
 import type { Match, MultiLangString } from './mockData';
 
-export type MatchSignalCategory = 'steady' | 'watch' | 'avoid' | 'unavailable' | 'finished';
+export type MatchSignalCategory = 'steady' | 'lean' | 'watch' | 'avoid' | 'unavailable' | 'finished';
 
 export interface MatchSignal {
   category: MatchSignalCategory;
@@ -13,6 +13,7 @@ export interface MatchSignal {
 
 const labels: Record<MatchSignalCategory, MultiLangString> = {
   steady: { zh: '高可信候选', en: 'High confidence' },
+  lean: { zh: '主推候选', en: 'Model lean' },
   watch: { zh: '观察', en: 'Watch' },
   avoid: { zh: '避坑', en: 'Avoid' },
   unavailable: { zh: '待开售', en: 'Pending' },
@@ -159,17 +160,17 @@ export function getMatchSignal(match: Match): MatchSignal {
 
   if (probabilityTooLow || (probabilityEdgeWeak && trustScore < 66)) {
     return {
-      category: 'watch',
-      label: labels.watch,
+      category: 'lean',
+      label: labels.lean,
       note: {
         zh: probabilityTooLow
-          ? '最终概率未到高可信门槛，当前只适合观察，不强行给稳妥方向。'
-          : '第一方向与第二方向差距偏小，防平或防冷价值仍需要保留。',
+          ? '已有主方向，但最终概率未到高可信门槛，不包装成稳胆。'
+          : '已有主方向，但第一方向与第二方向差距偏小，需要保留防平或防冷。',
         en: probabilityTooLow
-          ? 'The final probability is below the steady threshold, so this remains a watch.'
-          : 'The top two outcomes are too close. Keep draw/upset protection in view.'
+          ? 'A lean is published, but final probability is below the steady threshold.'
+          : 'A lean is published, but the top two outcomes are close.'
       },
-      tone: 'warning',
+      tone: 'success',
       trustScore,
       riskCount: riskTags.length
     };
@@ -197,13 +198,13 @@ export function getMatchSignal(match: Match): MatchSignal {
   }
 
   return {
-    category: 'watch',
-    label: labels.watch,
+    category: 'lean',
+    label: labels.lean,
     note: {
-      zh: '有明确倾向，但仍存在风险标签或 SP 走势待观察。',
-      en: 'There is a lean, but risk tags or SP movement still need monitoring.'
+      zh: '已给主方向，但仍存在风险标签或 SP 走势待复核。',
+      en: 'A main lean is published, while risk tags or SP movement still need checking.'
     },
-    tone: 'warning',
+    tone: 'success',
     trustScore,
     riskCount: riskTags.length
   };

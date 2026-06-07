@@ -64,8 +64,8 @@ const oddsText = (odds: Odds | null | undefined) => {
 const percentText = (value: number | null) => (value === null ? '--' : `${value}%`);
 
 const dataGap = {
-  zh: '该项数据不足：当前未接入可验证的官方伤停、预计首发、天气、裁判、xG/xGA 或技术统计，不编造。',
-  en: 'Data insufficient: verified injuries, lineups, weather, referee, xG/xGA, and event stats are not connected, so they are not invented.'
+  zh: '已入模字段：官方 SP、让球 SP、SP 快照、赛果、近一年攻防、Elo 与比分分布。伤停、首发、天气、裁判、xG/xGA 等只在有稳定可验证来源时启用。',
+  en: 'Model inputs: official SP, handicap SP, SP snapshots, results, last-year form, Elo, and score distribution. Injuries, lineups, weather, referee, and xG/xGA are enabled only with stable verified feeds.'
 };
 
 const buildProfessionalFramework = ({
@@ -254,6 +254,7 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
   const trendText = match.oddsTrend ? trendLabel(match.oddsTrend.direction) : null;
   const actionByCategory: Record<typeof signal.category, MultiLangString> = {
     steady: { zh: '可列入候选', en: 'Candidate' },
+    lean: { zh: '主推候选', en: 'Model lean' },
     watch: { zh: '观察为主', en: 'Watch' },
     avoid: { zh: '降低优先级', en: 'Lower priority' },
     unavailable: { zh: '等待开售', en: 'Wait for sale' },
@@ -261,6 +262,7 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
   };
   const toneByCategory: Record<typeof signal.category, InsightTone> = {
     steady: 'success',
+    lean: 'success',
     watch: 'warning',
     avoid: 'danger',
     unavailable: 'muted',

@@ -12,8 +12,8 @@ const WINDOW_FORWARD_DAYS = Math.max(1, Number(process.env.MATCH_WINDOW_FORWARD_
 const ODDS_HISTORY_RETENTION_DAYS = Math.max(1, Number(process.env.ODDS_HISTORY_RETENTION_DAYS || 365));
 const ODDS_HISTORY_BUCKET_MINUTES = Math.max(1, Number(process.env.ODDS_HISTORY_BUCKET_MINUTES || 5));
 const PAGE_POLL_SECONDS = Math.max(15, Number(process.env.PAGE_POLL_SECONDS || 30));
-const ANALYST_PROMPT_VERSION = "professional-football-analyst-v8";
-const PREDICTION_POLICY_VERSION = "actionable-tiered-market-gate-v14";
+const ANALYST_PROMPT_VERSION = "professional-football-analyst-v9";
+const PREDICTION_POLICY_VERSION = "actionable-tiered-market-gate-v15";
 const FORM_LOOKBACK_MATCHES = 12;
 const METHODS = (process.env.SPORTTERY_METHODS || "concern,live,result,all")
   .split(",")
@@ -772,8 +772,8 @@ function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLamb
     version: "market-elo-form-bucket-calibrated-poisson-v4",
     generatedAt: new Date().toISOString(),
     basis: {
-      zh: "已接入官方 SP/让球 SP/赔率快照、Elo、近一年赛果攻防和 Poisson 比分分布；伤停、首发、天气、裁判、第三方公司赔率需稳定 API 后才进入模型。",
-      en: "Uses official SP/handicap SP/snapshots, Elo, last-year result form, and Poisson score distribution. Injuries, lineups, weather, referee, and third-party bookmaker odds require stable API feeds before entering the model.",
+      zh: "模型已使用官方 SP/让球 SP/赔率快照、Elo、近一年赛果攻防和 Poisson 比分分布；外部赔率、伤停、首发、天气、裁判等仅在稳定可验证源配置后参与计算。",
+      en: "Uses official SP/handicap SP/snapshots, Elo, last-year form, and Poisson score distribution. External odds, injuries, lineups, weather, and referee data participate only when stable verified feeds are configured.",
     },
     ensembleWeights: blended.weights,
     calibrationAdjustment: {
@@ -1695,25 +1695,39 @@ function buildBestNarrative(match, context) {
   const goalsEn = `Goals: score heat zone ${score.home}-${score.away}, total xG ${totalLambda.toFixed(2)}, over 2.5 about ${pct(over25Probability)}%, BTTS about ${pct(bttsProbability)}%.`;
   const lateRiskZh = `临场复核：${riskTextZh}。如果赛前 SP 继续降赔但让球支持不上来，仍按观察处理。`;
   const lateRiskEn = `Late check: ${riskTextEn}. If SP shortens without handicap confirmation, keep this as watch-only.`;
+  const watchTipZh = analystSelection.isContrarian
+    ? analystSelection.mode === "value-draw"
+      ? `防平参考 ${tipZh}`
+      : `冷门参考 ${tipZh}`
+    : tipZh;
+  const watchTipEn = analystSelection.isContrarian
+    ? analystSelection.mode === "value-draw"
+      ? `draw-cover reference ${tipEn}`
+      : `upset reference ${tipEn}`
+    : tipEn;
 
   if (bestShouldWatch) {
     const subtype = bestHasWeakHandicap ? "weak-handicap" : bestHasThinEdge ? "thin-edge" : "stacked-risk";
     const explanation = chooseNarrative(match, `best-watch-${subtype}`, [
       () => ({
-        zh: `这场先不把${tipZh}包装成高可信。HAD 方向虽然清楚，但${handicapZh}，盘口确认不够完整。`,
-        en: `This is not packaged as high confidence. ${tipEn} leads the HAD read, but ${handicapEn}, so confirmation is incomplete.`
+        zh: analystSelection.isContrarian
+          ? `这场先不把${watchTipZh}包装成主推。它的意义是提醒防平/防冷，主盘与让球盘还没有形成完整共振。`
+          : `这场先不把${watchTipZh}包装成高可信。HAD 方向虽然清楚，但${handicapZh}，盘口确认不够完整。`,
+        en: analystSelection.isContrarian
+          ? `This is not packaged as a main pick. ${watchTipEn} is used as draw/upset protection because 1X2 and handicap are not fully aligned.`
+          : `This is not packaged as high confidence. ${watchTipEn} leads the HAD read, but ${handicapEn}, so confirmation is incomplete.`
       }),
       () => ({
-        zh: `${tipZh}是当前主线，但它更像“需要跟盘”的方向：模型领先 ${modelGapZh}，真正的问题在让球盘是否愿意继续同向。`,
-        en: `${tipEn} is the current main lean, but it needs market tracking: model edge is ${modelGapEn}, and the key question is handicap confirmation.`
+        zh: `${watchTipZh}只能作为参考，不是主推结论：模型差距约 ${modelGapZh}，真正的问题在让球盘是否愿意继续同向。`,
+        en: `${watchTipEn} is a reference only, not the main pick: model edge is ${modelGapEn}, and the key question is handicap confirmation.`
       }),
       () => ({
         zh: `这场有正路倾向，但不适合硬写成稳胆。${handicapZh}，风险标签为 ${riskTextZh}，先按观察单处理。`,
         en: `There is a favorite lean, but not a banker. ${handicapEn}; risk tags: ${riskTextEn}. Keep it in watch mode.`
       }),
       () => ({
-        zh: `模型没有否定${tipZh}，只是拒绝把它抬到高可信：市场第一方向领先 ${marketGapZh}，但让球验证和风险项还没闭合。`,
-        en: `The model is not rejecting ${tipEn}; it is refusing to upgrade it. Market lead is ${marketGapEn}, but handicap and risk checks are not closed.`
+        zh: `模型没有否定${watchTipZh}，只是拒绝把它抬到主推：市场第一方向领先 ${marketGapZh}，但让球验证和风险项还没闭合。`,
+        en: `The model is not rejecting ${watchTipEn}; it is refusing to upgrade it. Market lead is ${marketGapEn}, but handicap and risk checks are not closed.`
       })
     ]);
 
@@ -2297,8 +2311,8 @@ function applyPredictionPersistence(match, existing, capturedAt) {
     updatedAt: capturedAt,
     lockedAt: started ? (existing?.predictionMeta?.lockedAt || capturedAt) : undefined,
     dataPolicy: {
-      zh: "模型已使用中国竞彩网官方 SP、让球 SP、赛果、SP 快照、Elo、近一年历史攻防和比分分布；伤停、首发、天气、裁判及第三方赔率需要稳定 API 源后接入，不用猜测数据凑结论。",
-      en: "The model uses official Sporttery SP, handicap SP, results, SP snapshots, Elo, last-year form, and score distribution. Injuries, lineups, weather, referee, and third-party odds require stable API feeds and are not guessed.",
+      zh: "模型已使用中国竞彩网官方 SP、让球 SP、赛果、SP 快照、Elo、近一年历史攻防和比分分布；外部赔率、伤停、首发、天气、裁判等只在稳定可验证源配置后参与计算。",
+      en: "The model uses official Sporttery SP, handicap SP, results, SP snapshots, Elo, last-year form, and score distribution. External odds, injuries, lineups, weather, and referee data are used only after stable verified feeds are configured.",
     },
   };
 
