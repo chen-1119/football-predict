@@ -20,6 +20,7 @@ export interface DataSyncState {
   error?: string;
   updatedAt?: string;
   lastCheckedAt?: string;
+  lastAttemptAt?: string;
   sourceUpdatedAt?: string;
   refreshIntervalSeconds?: number;
   backendRefreshMinutes?: number;

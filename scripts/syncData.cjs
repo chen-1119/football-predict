@@ -2383,6 +2383,27 @@ function loadExistingMatches() {
   return Array.from(byId.values());
 }
 
+function loadExistingSyncMeta(publicDir) {
+  const file = path.join(publicDir, "data", "sync-meta.json");
+  if (!fs.existsSync(file)) return null;
+
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizePublishedStatus(match, capturedAt) {
+  if (!match || match.status === "FINISHED" || match.status === "LIVE") return match;
+  const kickoffMs = Date.parse(match.kickoffTime);
+  const capturedMs = Date.parse(capturedAt);
+  if (!Number.isFinite(kickoffMs) || !Number.isFinite(capturedMs)) return match;
+  if (capturedMs < kickoffMs) return match;
+  return { ...match, status: "LIVE" };
+}
+
 function isTrustedOddsMatch(match) {
   return (
     match?.source === "sporttery" &&
@@ -2742,6 +2763,7 @@ async function sync() {
   const dataDir = path.join(publicDir, "data");
   fs.mkdirSync(publicDir, { recursive: true });
   const existingMatches = loadExistingMatches();
+  const existingSyncMeta = loadExistingSyncMeta(publicDir);
   const predictionHealth = buildPredictionHealth(existingMatches);
   const existingBySourceId = new Map(
     existingMatches
@@ -2787,6 +2809,7 @@ async function sync() {
     ? appendOddsHistory(publicDir, output, capturedAt)
     : { rows: loadOddsHistory(publicDir).rows.length, appended: 0, updated: 0, skipped: keptExistingReason || "no fresh official odds" };
   output = attachOddsTrends(output, publicDir);
+  output = output.map((match) => normalizePublishedStatus(match, capturedAt));
   const split = splitMatchesForOutput(output);
   const teamIndex = buildTeamIndex(output);
   const oddsHistoryPayload = loadOddsHistory(publicDir);
@@ -2798,11 +2821,16 @@ async function sync() {
     .map((match) => match.kickoffDate || String(match.kickoffTime || "").slice(0, 10) || match.matchDate || match.businessDate)
     .filter(Boolean)
     .sort();
+  const shouldPreserveSourceTimestamp = Boolean(keptExistingReason && !mergedPartialFresh);
+  const sourcePublishedAt = shouldPreserveSourceTimestamp
+    ? (existingSyncMeta?.updatedAt || existingSyncMeta?.capturedAt || capturedAt)
+    : capturedAt;
   const syncMeta = {
     version: 1,
     source: "sporttery",
-    updatedAt: capturedAt,
-    capturedAt,
+    updatedAt: sourcePublishedAt,
+    capturedAt: sourcePublishedAt,
+    lastAttemptAt: capturedAt,
     officialOddsMatches: rawMatchesWithOdds.length,
     officialHandicapOddsMatches: rawMatchesWithHandicapOdds.length,
     officialResultMatches: rawResultMatches.length,
@@ -2820,6 +2848,13 @@ async function sync() {
       pagePollSeconds: PAGE_POLL_SECONDS,
       oddsHistoryBucketMinutes: ODDS_HISTORY_BUCKET_MINUTES,
       note: "GitHub Pages serves static JSON. The page checks for newer JSON regularly; GitHub Actions refreshes the source files on schedule.",
+    },
+    attempt: {
+      capturedAt,
+      officialOddsMatches: rawMatchesWithOdds.length,
+      officialHandicapOddsMatches: rawMatchesWithHandicapOdds.length,
+      officialResultMatches: rawResultMatches.length,
+      publishableMatches: rawMatchesForOutput.length,
     },
     oddsHistory,
     ...(keptExistingReason ? {

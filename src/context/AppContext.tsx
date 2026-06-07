@@ -29,6 +29,7 @@ type SyncedMatch = Match & {
 type SyncMeta = {
   updatedAt?: string;
   capturedAt?: string;
+  lastAttemptAt?: string;
   byStatus?: Partial<Record<Match['status'], number>>;
   refreshPolicy?: {
     workflowMinutes?: number;
@@ -192,6 +193,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updatedAt: sourceUpdatedAt || checkedAt,
         sourceUpdatedAt,
         lastCheckedAt: checkedAt,
+        lastAttemptAt: meta?.lastAttemptAt,
         refreshIntervalSeconds: pagePollSeconds,
         backendRefreshMinutes: meta?.refreshPolicy?.workflowMinutes || 5,
         byStatus: meta?.byStatus

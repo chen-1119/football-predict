@@ -136,7 +136,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
       .filter(Boolean)
       .sort()[0] || '';
   }, [matches]);
-  const todayStr = activeOfficialDate && activeOfficialDate >= systemTodayStr ? activeOfficialDate : systemTodayStr;
+  const todayStr = systemTodayStr;
   const yesterdayStr = offsetDateString(todayStr, -1);
   const tomorrowStr = offsetDateString(todayStr, 1);
   const dayAfterTomorrowStr = offsetDateString(todayStr, 2);
@@ -228,17 +228,16 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     return translations[filter][language];
   };
 
-  const effectiveSelectedDate = useMemo(() => {
-    if (!hasManualDateSelection && activeOfficialDate) return activeOfficialDate;
-
-    const selectedDateHasMatches = matches.some((match) => matchBelongsToDate(match, selectedDate));
-    if (selectedDateHasMatches || selectedDate !== todayStr) return selectedDate;
-
-    return matches
-      .map(getMatchDay)
-      .filter((date) => date >= todayStr)
-      .sort()[0] || selectedDate;
-  }, [activeOfficialDate, hasManualDateSelection, matches, selectedDate, todayStr]);
+  const selectedDateHasMatches = matches.some((match) => matchBelongsToDate(match, selectedDate));
+  const nextAvailableDate = matches
+    .map(getMatchDay)
+    .filter((date) => date >= todayStr)
+    .sort()[0] || selectedDate;
+  const effectiveSelectedDate = !hasManualDateSelection && activeOfficialDate
+    ? activeOfficialDate
+    : selectedDateHasMatches || selectedDate !== todayStr
+      ? selectedDate
+      : nextAvailableDate;
 
   const availableLeagues = useMemo(() => {
     const seen = new Set<string>();
@@ -473,9 +472,10 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
       const staleThresholdMinutes = Math.max((dataSync.backendRefreshMinutes || 5) * 4, 20);
       const isDataStale = dataSync.currentLoaded && sourceAgeMinutes !== null && sourceAgeMinutes > staleThresholdMinutes;
       if (isDataStale) {
+        const lastAttemptLabel = formatSyncTime(dataSync.lastAttemptAt || dataSync.lastCheckedAt, language);
         return language === 'zh'
-          ? `数据源已 ${formatAgeMinutes(sourceAgeMinutes, language)} 未发布新快照，可能是 GitHub 定时同步未执行。`
-          : `Source data is ${formatAgeMinutes(sourceAgeMinutes, language)} old; the scheduled GitHub sync may not have run.`;
+          ? `数据源已 ${formatAgeMinutes(sourceAgeMinutes, language)} 未发布新快照；后台最近检查 ${lastAttemptLabel}。`
+          : `Source data is ${formatAgeMinutes(sourceAgeMinutes, language)} old; last background check ${lastAttemptLabel}.`;
       }
       if (dataSync.error && dataSync.currentLoaded && !dataSync.historyLoaded) return t('dataHistoryUnavailable');
       if (dataSync.historyLoading) return t('dataHistoryLoading');
@@ -531,8 +531,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     {
       label: t('dataRefresh'),
       value: language === 'zh'
-        ? `${formatSyncTime(dataSync.lastCheckedAt, language)} / 每 ${dataSync.refreshIntervalSeconds || 30} 秒 / 后台约 ${dataSync.backendRefreshMinutes || 5} 分钟`
-        : `${formatSyncTime(dataSync.lastCheckedAt, language)} / Every ${dataSync.refreshIntervalSeconds || 30}s / Backend ~${dataSync.backendRefreshMinutes || 5}m`
+        ? `页面 ${formatSyncTime(dataSync.lastCheckedAt, language)} / 后台 ${formatSyncTime(dataSync.lastAttemptAt || dataSync.sourceUpdatedAt || dataSync.updatedAt, language)} / 每 ${dataSync.refreshIntervalSeconds || 30} 秒`
+        : `Page ${formatSyncTime(dataSync.lastCheckedAt, language)} / Backend ${formatSyncTime(dataSync.lastAttemptAt || dataSync.sourceUpdatedAt || dataSync.updatedAt, language)} / Every ${dataSync.refreshIntervalSeconds || 30}s`
     },
     {
       label: t('dataNextCheck'),
