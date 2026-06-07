@@ -13,7 +13,7 @@ const ODDS_HISTORY_RETENTION_DAYS = Math.max(1, Number(process.env.ODDS_HISTORY_
 const ODDS_HISTORY_BUCKET_MINUTES = Math.max(1, Number(process.env.ODDS_HISTORY_BUCKET_MINUTES || 5));
 const PAGE_POLL_SECONDS = Math.max(15, Number(process.env.PAGE_POLL_SECONDS || 30));
 const ANALYST_PROMPT_VERSION = "professional-football-analyst-v13";
-const PREDICTION_POLICY_VERSION = "sporttery-day-value-gate-v21";
+const PREDICTION_POLICY_VERSION = "sporttery-day-value-gate-v22";
 const FORM_LOOKBACK_MATCHES = 12;
 const METHODS = (process.env.SPORTTERY_METHODS || "concern,live,result,all")
   .split(",")
@@ -1226,6 +1226,16 @@ function isHotBucket(bucket, minSettled = 3, minHitRate = 0.58) {
   );
 }
 
+function bucketHitRate(bucket) {
+  return Number.isFinite(bucket?.hitRate) ? bucket.hitRate : null;
+}
+
+function hardCoolingBucket(bucket, minSettled = 5, maxHitRate = 0.42) {
+  const settled = Number(bucket?.settled || 0);
+  const hitRate = bucketHitRate(bucket);
+  return settled >= minSettled && hitRate !== null && hitRate < maxHitRate;
+}
+
 function leagueMeta(leagueName) {
   const name = normText(leagueName, "足球赛事");
   const countryNameZh = {
@@ -2108,6 +2118,9 @@ function predictionSet(match) {
     isCoolingBucket(match.predictionHealth?.byMarket?.["1X2"])
     || isCoolingBucket(match.predictionHealth?.homeFavorite)
   );
+  const oneXTwoMarketHardCooldown = hardCoolingBucket(match.predictionHealth?.byMarket?.["1X2"], 8, 0.42);
+  const bestMarketHardCooldown = hardCoolingBucket(match.predictionHealth?.byMarket?.BEST, 5, 0.45);
+  const homeFavoriteHardCooldown = hardCoolingBucket(match.predictionHealth?.homeFavorite, 6, 0.42);
   const healthCooldownTag = oneXTwoHealthCooldown
     ? [{ zh: "\u8fd1\u671f\u547d\u4e2d\u7387\u51b7\u5374", en: "Recent hit-rate cooldown" }]
     : [];
@@ -2120,7 +2133,7 @@ function predictionSet(match) {
       ];
   const oneXTwoTrust = oneXTwoGate.promote
     ? baseTrust
-    : clamp(baseTrust - 18, 42, 64);
+    : clamp(baseTrust - (oneXTwoMarketHardCooldown ? 26 : 18), 34, 62);
   const oneXTwoGateZh = `推荐闸门：模型优势约 ${pct(modelProbabilityGap)} 个百分点，市场优势约 ${pct(probabilityGap)} 个百分点，让球同向支持${oneXTwoGate.handicapSupport === null ? "不足" : `约 ${pct(oneXTwoGate.handicapSupport)}%`}；未达到强推条件，暂不输出单一胜平负方向。`;
   const oneXTwoGateEn = `Recommendation gate: model edge is about ${pct(modelProbabilityGap)} points, market edge about ${pct(probabilityGap)} points, same-side handicap support ${oneXTwoGate.handicapSupport === null ? "unavailable" : `about ${pct(oneXTwoGate.handicapSupport)}%`}; no single 1X2 pick is promoted.`;
   const modelLean = {
@@ -2241,7 +2254,13 @@ function predictionSet(match) {
   const bestHasSevereRisk = severeRiskCountForBest >= 4
     || (bestHasWeakHandicap && modelLean.odds <= 1.7)
     || (!analystSelection.isContrarian && modelProbabilityGap < 0.06 && best1x2[1] < 0.52);
+  const bestLaneHardCooldown = Boolean(
+    bestMarketHardCooldown
+    || oneXTwoMarketHardCooldown
+    || (modelLean.tipCode === "1" && homeFavoriteHardCooldown)
+  );
   const bestShouldWatch = !oneXTwoGate.promote
+    || bestLaneHardCooldown
     || bestHasWeakHandicap
     || bestHasOverheatedFavorite
     || bestHasSevereRisk;
@@ -2274,7 +2293,7 @@ function predictionSet(match) {
     return clamp(Math.round(leadProbability * 100 + edgeBonus + handicapBonus - riskPenalty), 28, 68);
   })();
   const bestTrustScore = bestShouldWatch
-    ? watchUsefulnessScore
+    ? clamp(watchUsefulnessScore - (bestLaneHardCooldown ? 12 : 0), 22, 62)
     : analystSelection.isContrarian
     ? clamp(oneXTwo.trustScore, 54, 76)
     : bestIsSteady
@@ -2282,6 +2301,8 @@ function predictionSet(match) {
       : clamp(oneXTwo.trustScore - (bestHasThinEdge ? 2 : 0), 52, 82);
   const bestWatchLabelZh = !oneXTwoGate.promote
     ? "观察为主 推荐闸门未过"
+    : bestLaneHardCooldown
+    ? "观察为主 命中冷却"
     : bestHasWeakHandicap
     ? "观察为主 防正路过热"
     : bestHasThinEdge
@@ -2289,6 +2310,8 @@ function predictionSet(match) {
       : "观察为主 风险叠加";
   const bestWatchLabelEn = !oneXTwoGate.promote
     ? "Watch first: gate not met"
+    : bestLaneHardCooldown
+    ? "Watch first: hit-rate cooldown"
     : bestHasWeakHandicap
     ? "Watch first: favorite overheated"
     : bestHasThinEdge
@@ -2346,7 +2369,12 @@ function predictionSet(match) {
     trustScore: bestTrustScore,
     explanation: bestNarrative.explanation,
     analysisItems: bestNarrative.analysisItems,
-    riskTags: bestShouldWatch ? oneXTwoRiskTags : riskTags,
+    riskTags: bestShouldWatch
+      ? [
+          ...oneXTwoRiskTags,
+          ...(bestLaneHardCooldown ? [{ zh: "精选赛道冷却", en: "Best-lane hit-rate cooldown" }] : []),
+        ]
+      : riskTags,
     visibilityStatus: "FREE",
     resultStatus: bestShouldWatch ? "PENDING" : modelLean.resultStatus,
   };

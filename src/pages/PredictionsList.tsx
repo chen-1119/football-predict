@@ -295,9 +295,11 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     hitRate: { zh: '已结算精选命中率', en: 'Settled Best Hit Rate' },
     selectedMatches: { zh: '当前筛选场次', en: 'Filtered Matches' },
     signalSummary: { zh: '推荐分组', en: 'Signal Split' },
-    avgTrust: { zh: '推荐质量', en: 'Pick Quality' },
+    avgTrust: { zh: '推荐池健康', en: 'Pick Pool Health' },
     riskPaused: { zh: '风控暂停', en: 'Risk paused' },
     riskPausedNote: { zh: '无达标方向，等待下一轮 SP/盘口', en: 'No qualified pick; wait for next SP/handicap check' },
+    hitCooling: { zh: '命中冷却', en: 'Cooling' },
+    hitCoolingNote: { zh: '精选命中偏低，暂不放宽闸门', en: 'Best-tip hit rate is low; gates stay tight' },
     dataStatusTitle: { zh: '数据同步', en: 'Data Sync' },
     dataCurrent: { zh: '当前赛程', en: 'Current' },
     dataHistory: { zh: '历史库', en: 'History' },
@@ -456,12 +458,21 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
       .filter(isScoredPrediction);
   }, [matches]);
 
-  const hitRate = useMemo(() => {
-    if (settledBestPredictions.length === 0) return null;
+  const settledBestStats = useMemo(() => {
+    if (settledBestPredictions.length === 0) {
+      return { total: 0, won: 0, lost: 0, hitRate: null as number | null };
+    }
     const won = settledBestPredictions.filter((prediction) => prediction.resultStatus === 'WON').length;
-    return ((won / settledBestPredictions.length) * 100).toFixed(1);
+    const lost = settledBestPredictions.length - won;
+    return {
+      total: settledBestPredictions.length,
+      won,
+      lost,
+      hitRate: (won / settledBestPredictions.length) * 100
+    };
   }, [settledBestPredictions]);
   const settledBestLoading = dataSync.historyLoading && !dataSync.historyLoaded && settledBestPredictions.length === 0;
+  const bestHitCooling = settledBestStats.total >= 5 && settledBestStats.hitRate !== null && settledBestStats.hitRate < 45;
 
   const avgTrust = useMemo(() => {
     const trustScores = sortedMatches.map(getBestTrust).filter((score) => score > 0);
@@ -615,12 +626,16 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
   const metrics = [
     {
       label: t('hitRate'),
-      value: settledBestLoading ? '...' : hitRate ? `${hitRate}%` : '--',
+      value: settledBestLoading
+        ? '...'
+        : settledBestStats.hitRate !== null ? `${settledBestStats.hitRate.toFixed(1)}%` : '--',
       note: settledBestLoading
         ? (language === 'zh' ? '历史复盘加载中' : 'Loading review history')
-        : `${settledBestPredictions.length} ${t('settledPicks')}`,
+        : settledBestStats.total > 0
+          ? `${settledBestStats.won}/${settledBestStats.total} ${language === 'zh' ? '命中' : 'won'} · ${settledBestStats.total} ${t('settledPicks')}`
+          : `0 ${t('settledPicks')}`,
       icon: BarChart3,
-      tone: 'success'
+      tone: bestHitCooling ? 'danger' : 'success'
     },
     {
       label: t('selectedMatches'),
@@ -640,14 +655,18 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     },
     {
       label: t('avgTrust'),
-      value: recommendationCounts.pick === 0
+      value: bestHitCooling
+        ? t('hitCooling')
+        : recommendationCounts.pick === 0
         ? t('riskPaused')
         : avgTrust === null ? '--' : `${avgTrust}%`,
-      note: recommendationCounts.pick === 0
+      note: bestHitCooling
+        ? t('hitCoolingNote')
+        : recommendationCounts.pick === 0
         ? t('riskPausedNote')
         : language === 'zh' ? `按${t(sortBy)}排序` : `Sorted by ${t(sortBy)}`,
       icon: Activity,
-      tone: ''
+      tone: bestHitCooling ? 'danger' : ''
     }
   ];
 
