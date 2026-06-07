@@ -171,8 +171,30 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
   const knockoutForecast = useMemo(() => getWorldCupKnockoutForecast(groupForecasts), [groupForecasts]);
   const daysLeft = getDaysUntilWorldCup();
   const activeCount = watchMatches.filter((match) => match.status !== 'FINISHED').length;
-  const averageTrust = Math.round(
-    watchMatches.reduce((sum, match) => sum + getMatchTrust(match), 0) / Math.max(1, watchMatches.length)
+  const watchTrustScores = watchMatches.map((match) => getMatchTrust(match)).filter((score) => score > 0);
+  const averageWatchSignal = Math.round(
+    watchTrustScores.reduce((sum, score) => sum + score, 0) / Math.max(1, watchTrustScores.length)
+  );
+  const promotedWatchCount = watchMatches.filter((match) => {
+    const prediction = getBestPrediction(match);
+    return prediction && prediction.tipCode !== 'WATCH';
+  }).length;
+  const hasSportteryOdds = watchMatches.some((match) =>
+    getSportteryPoolRows(match, language).some((row) => row.odds)
+  );
+  const hasCompleteGroupGrid =
+    groupForecasts.length === WORLD_CUP_OFFICIAL.groups && groupForecasts.every((group) => group.teams.length === 4);
+  const hasCompleteThirdLane = projectedQualifiers.bestThird.length >= 8;
+  const hasKnockoutRoute = knockoutForecast.length >= 16;
+  const modelCoverageScore = Math.min(
+    92,
+    44
+      + (hasCompleteGroupGrid ? 10 : 0)
+      + (hasCompleteThirdLane ? 7 : 0)
+      + (hasKnockoutRoute ? 7 : 0)
+      + (WORLD_CUP_FORECAST_MODEL.simulations >= 10000 ? 5 : 0)
+      + (hasSportteryOdds ? 5 : 0)
+      + (dataSync.historyLoaded ? 4 : 0)
   );
 
   const copy = {
@@ -241,6 +263,9 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
     contentTitle: { zh: '内容升级路线', en: 'Content Roadmap' },
     sync: { zh: '数据同步', en: 'Data Sync' },
     active: { zh: '观察场次', en: 'Watch matches' },
+    coverage: { zh: '模型覆盖', en: 'Model coverage' },
+    watchSignal: { zh: '单场信号', en: 'Match signal' },
+    promoted: { zh: '推荐通过', en: 'Promoted' },
     trust: { zh: '平均可信', en: 'Average trust' },
     topLean: { zh: '最高优先级', en: 'Top priority' },
     updated: { zh: '上次检查', en: 'Last checked' },
@@ -293,8 +318,12 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
         </article>
         <article>
           <Activity size={18} />
-          <span>{t('trust')}</span>
-          <strong>{averageTrust ? `${averageTrust}%` : '--'}</strong>
+          <span>{t('coverage')}</span>
+          <strong>{modelCoverageScore}%</strong>
+          <small>
+            {t('watchSignal')} {averageWatchSignal ? `${averageWatchSignal}%` : '--'} · {t('promoted')}{' '}
+            {promotedWatchCount}/{Math.max(1, watchMatches.length)}
+          </small>
         </article>
       </section>
 
