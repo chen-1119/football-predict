@@ -1037,7 +1037,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                       </>
                     ) : (
                       <p className="probability-empty">
-                        {language === 'zh' ? '该项数据不足：暂无官方让球盘。' : 'Data insufficient: no official handicap pool yet.'}
+                        {language === 'zh' ? '暂无官方让球盘，先以 HAD 与比分分布观察。' : 'No official handicap pool yet; use HAD and score distribution first.'}
                       </p>
                     )}
                   </section>
@@ -1101,13 +1101,13 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
               <div className="professional-framework-head">
                 <div>
                   <span className="review-kicker">
-                    {language === 'zh' ? '专业提示词 v1' : 'Professional prompt v1'}
+                    {language === 'zh' ? '专业分析框架' : 'Professional framework'}
                   </span>
                   <h3>{language === 'zh' ? '12项赛前分析框架' : '12-Point Pre-Match Framework'}</h3>
                   <p>
                     {language === 'zh'
-                      ? '每项只使用已接入的官方赛程、SP、让球、快照与历史赛果；缺失数据会直接标记不足。'
-                      : 'Each point uses connected official schedule, SP, handicap, snapshots, and results only. Missing data is marked explicitly.'}
+                      ? '优先展示已入模指标：官方 SP、让球、SP 快照、Elo、近一年攻防、赛程密度与比分分布；未稳定接入的实时源不参与评分。'
+                      : 'Prioritizes scored inputs: official SP, handicap, snapshots, Elo, last-year form, schedule density, and score distribution. Unstable real-time feeds are not scored.'}
                   </p>
                 </div>
                 <span>{predictionMeta?.promptVersion || 'professional-football-analyst-v1'}</span>
@@ -1360,8 +1360,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
           ) : (
             <div className="card data-quality-note">
               {language === 'zh'
-                ? '暂未接入中国竞彩网官方积分榜数据，因此不展示模拟排名，避免误导判断。'
-                : 'Official standings are not connected yet, so no simulated table is shown.'}
+                ? '本场官网没有返回可用积分榜，页面改用 Elo 强度、官方 SP 和近一年赛果做强弱参考，不展示模拟排名。'
+                : 'No usable official table was returned for this fixture, so the page uses Elo strength, official SP, and last-year results instead of a simulated table.'}
             </div>
           )
         )}

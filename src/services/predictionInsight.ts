@@ -61,11 +61,121 @@ const oddsText = (odds: Odds | null | undefined) => {
   return `${odds.odds1.toFixed(2)} / ${odds.oddsX.toFixed(2)} / ${odds.odds2.toFixed(2)}`;
 };
 
-const percentText = (value: number | null) => (value === null ? '--' : `${value}%`);
+const percentText = (value: number | null | undefined) => (Number.isFinite(value) ? `${Math.round(Number(value))}%` : '--');
+const decimalText = (value: number | null | undefined, digits = 2) => (Number.isFinite(value) ? Number(value).toFixed(digits) : '--');
+const rateText = (value: number | null | undefined) => (Number.isFinite(value) ? `${Math.round(Number(value) * 100)}%` : '--');
+const signedText = (value: number | null | undefined) => {
+  if (!Number.isFinite(value)) return '--';
+  return Number(value) > 0 ? `+${Math.round(Number(value))}` : `${Math.round(Number(value))}`;
+};
 
 const dataGap = {
-  zh: '已入模字段：官方 SP、让球 SP、SP 快照、赛果、近一年攻防、Elo 与比分分布。伤停、首发、天气、裁判、xG/xGA 等只在有稳定可验证来源时启用。',
-  en: 'Model inputs: official SP, handicap SP, SP snapshots, results, last-year form, Elo, and score distribution. Injuries, lineups, weather, referee, and xG/xGA are enabled only with stable verified feeds.'
+  zh: '未计分源：伤停、预计首发、天气、裁判和 xG/xGA 暂无稳定可验证接口；页面不会编造这些内容，只用官方 SP、让球 SP、SP 快照、赛果、近一年攻防、Elo 与比分分布评分。',
+  en: 'Not scored: injuries, projected XI, weather, referee, and xG/xGA do not have stable verified feeds yet. The page does not fabricate them; scoring uses official SP, handicap SP, snapshots, results, last-year form, Elo, and score distribution.'
+};
+
+const probabilityText = (probabilities: { home: number; draw: number; away: number } | null | undefined) => {
+  if (!probabilities) return { zh: '--', en: '--' };
+  return {
+    zh: `主 ${percentText(probabilities.home)} / 平 ${percentText(probabilities.draw)} / 客 ${percentText(probabilities.away)}`,
+    en: `H ${percentText(probabilities.home)} / D ${percentText(probabilities.draw)} / A ${percentText(probabilities.away)}`
+  };
+};
+
+const dateText = (iso: string | null | undefined) => {
+  if (!iso) return '--';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '--';
+  return `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
+};
+
+type FormSide = NonNullable<NonNullable<Match['probabilityModel']>['form']>['home'];
+
+const recordText = (form: FormSide | undefined | null) => {
+  if (!form || !form.sampleSize) return '0-0-0';
+  return `${form.wins}-${form.draws}-${form.losses}`;
+};
+
+const formLineZh = (name: string | undefined, form: FormSide | undefined | null) => {
+  const team = name || '球队';
+  if (!form || !form.sampleSize) {
+    return `${team}暂无近一年同源完场样本`;
+  }
+
+  return `${team}${form.sampleSize}场 ${recordText(form)}，场均${decimalText(form.goalsForAvg)}进/${decimalText(form.goalsAgainstAvg)}失，PPG ${decimalText(form.pointsPerMatch)}，大2.5 ${rateText(form.over25Rate)}，双方进球 ${rateText(form.bttsRate)}`;
+};
+
+const formLineEn = (name: string | undefined, form: FormSide | undefined | null) => {
+  const team = name || 'Team';
+  if (!form || !form.sampleSize) {
+    return `${team}: no last-year same-source finished sample`;
+  }
+
+  return `${team}: ${form.sampleSize} matches ${recordText(form)}, ${decimalText(form.goalsForAvg)} GF/${decimalText(form.goalsAgainstAvg)} GA per match, PPG ${decimalText(form.pointsPerMatch)}, over 2.5 ${rateText(form.over25Rate)}, BTTS ${rateText(form.bttsRate)}`;
+};
+
+const restLineZh = (name: string | undefined, form: FormSide | undefined | null) => {
+  const team = name || '球队';
+  const rest = Number.isFinite(form?.restDays)
+    ? `距离上一场约 ${form?.restDays} 天`
+    : '暂无上一场时间';
+  return `${team}：${rest}，近14天 ${form?.matchesLast14 ?? 0} 场，近30天 ${form?.matchesLast30 ?? 0} 场，上一场 ${dateText(form?.lastMatchAt)}`;
+};
+
+const restLineEn = (name: string | undefined, form: FormSide | undefined | null) => {
+  const team = name || 'Team';
+  const rest = Number.isFinite(form?.restDays)
+    ? `about ${form?.restDays} days since last match`
+    : 'no comparable previous match time';
+  return `${team}: ${rest}, ${form?.matchesLast14 ?? 0} match(es) in 14 days, ${form?.matchesLast30 ?? 0} in 30 days, previous ${dateText(form?.lastMatchAt)}`;
+};
+
+const rankOrStrengthLine = (match: Match) => {
+  const model = match.probabilityModel;
+  const hasRank = Boolean(match.homeRank || match.awayRank);
+  if (hasRank) {
+    return {
+      zh: `官网排名：${match.homeTeamName || '主队'} ${match.homeRank || '--'}，${match.awayTeamName || '客队'} ${match.awayRank || '--'}；最终概率 ${probabilityText(model?.oneXTwo.final).zh}。`,
+      en: `Official rank: ${match.homeTeamNameEn || 'Home'} ${match.homeRank || '--'}, ${match.awayTeamNameEn || 'Away'} ${match.awayRank || '--'}; final probability ${probabilityText(model?.oneXTwo.final).en}.`
+    };
+  }
+
+  if (model?.elo) {
+    return {
+      zh: `本场官网没有返回积分排名，改用 Elo 强度：${model.elo.homeRating} vs ${model.elo.awayRating}，主场修正后差值 ${signedText(model.elo.diff)}；最终概率 ${probabilityText(model.oneXTwo.final).zh}。`,
+      en: `No official table rank returned for this fixture, so Elo strength is used: ${model.elo.homeRating} vs ${model.elo.awayRating}, home-adjusted diff ${signedText(model.elo.diff)}; final probability ${probabilityText(model.oneXTwo.final).en}.`
+    };
+  }
+
+  return {
+    zh: `以官方 HAD 去水概率做基础强弱：${probabilityText(model?.oneXTwo.market).zh}。`,
+    en: `Baseline strength uses normalized official HAD: ${probabilityText(model?.oneXTwo.market).en}.`
+  };
+};
+
+const goalModelLine = (match: Match) => {
+  const model = match.probabilityModel;
+  const lambda = model?.lambdaBlend;
+  const scoreTop = model?.scoreDistribution?.slice(0, 3).map((score) => `${score.label} ${percentText(score.probability)}`).join('、') || '--';
+  return {
+    zh: `预期进球：主 ${decimalText(lambda?.marketHomeLambda)} / 客 ${decimalText(lambda?.marketAwayLambda)}，历史修正权重 ${percentText(lambda ? lambda.formWeight * 100 : null)}；大2.5 ${percentText(model?.goalLines.over25)}，双方进球 ${percentText(model?.bothTeamsToScore.yes)}，高频比分 ${scoreTop}。`,
+    en: `Expected goals: home ${decimalText(lambda?.marketHomeLambda)} / away ${decimalText(lambda?.marketAwayLambda)}, form weight ${percentText(lambda ? lambda.formWeight * 100 : null)}; over 2.5 ${percentText(model?.goalLines.over25)}, BTTS ${percentText(model?.bothTeamsToScore.yes)}, top scores ${scoreTop}.`
+  };
+};
+
+const h2hLine = (match: Match, context: MatchInsightContext) => {
+  const h2h = match.probabilityModel?.form?.h2h;
+  if (!h2h || !h2h.sampleSize) {
+    return {
+      zh: `近一年同源历史库未匹配到直接交锋，当前更看重双方各自 ${context.homeSampleSize}/${context.awaySampleSize} 场样本和盘口快照。`,
+      en: `No direct H2H matched in the last-year same-source history set, so the model weights each side's ${context.homeSampleSize}/${context.awaySampleSize} samples and SP snapshots more.`
+    };
+  }
+
+  return {
+    zh: `近一年直接交锋 ${h2h.sampleSize} 场，最近一次 ${dateText(h2h.lastMeetingAt)}；大2.5 ${rateText(h2h.over25Rate)}，双方进球 ${rateText(h2h.bttsRate)}，平局率 ${rateText(h2h.drawRate)}。`,
+    en: `${h2h.sampleSize} direct H2H records in the last year, latest ${dateText(h2h.lastMeetingAt)}; over 2.5 ${rateText(h2h.over25Rate)}, BTTS ${rateText(h2h.bttsRate)}, draw rate ${rateText(h2h.drawRate)}.`
+  };
 };
 
 const buildProfessionalFramework = ({
@@ -99,9 +209,20 @@ const buildProfessionalFramework = ({
   riskTextZh: string;
   riskTextEn: string;
 }): MatchInsightPoint[] => {
+  const model = match.probabilityModel;
+  const form = model?.form;
   const hasPrimary = Boolean(primary);
+  const isWatchOnly = primary?.tipCode === 'WATCH';
+  const hasActionablePrimary = Boolean(primary && !isWatchOnly);
   const latestOdds = oddsText(match.odds);
   const latestHandicapOdds = oddsText(match.handicapOdds);
+  const rankLine = rankOrStrengthLine(match);
+  const goalLine = goalModelLine(match);
+  const directH2h = h2hLine(match, context);
+  const finalProbabilities = probabilityText(model?.oneXTwo.final);
+  const marketProbabilities = probabilityText(model?.oneXTwo.market);
+  const handicapProbabilities = probabilityText(model?.handicap?.market);
+  const hhadLine = match.handicapLine ? `${match.handicapLine}` : '--';
   const trendZh = match.oddsTrend && trendText
     ? `已记录 ${match.oddsTrend.sampleSize} 次官方 SP 快照，走势为${trendText.zh}。${match.oddsTrend.summary.zh}`
     : '官方 SP 快照样本仍在积累，先以最新 HAD / HHAD 为准。';
@@ -109,113 +230,106 @@ const buildProfessionalFramework = ({
     ? `${match.oddsTrend.sampleSize} official SP snapshots recorded; movement is ${trendText.en}. ${match.oddsTrend.summary.en}`
     : 'SP snapshots are still accumulating; use latest HAD / HHAD first.';
   const unavailableTone: InsightTone = 'muted';
+  const sampleTone: InsightTone = sampleEnough ? 'success' : 'warning';
+  const goalTone: InsightTone = (model?.goalLines.over25 ?? 0) >= 58 || (model?.bothTeamsToScore.yes ?? 0) >= 58 ? 'success' : 'warning';
 
   return [
     {
       title: { zh: '一、比赛基本面', en: '1. Fixture Baseline' },
       body: {
-        zh: `${match.leagueName || '赛事'}：${match.homeTeamName || '主队'} vs ${match.awayTeamName || '客队'}。排名、积分、净胜球和阶段目标暂未接入，因此不把这些当作结论依据。`,
-        en: `${match.leagueNameEn || match.leagueName || 'Fixture'}: ${match.homeTeamName || 'Home'} vs ${match.awayTeamName || 'Away'}. Table rank, points, goal difference, and phase targets are not connected.`
+        zh: `${match.leagueName || '赛事'}：${match.homeTeamName || '主队'} vs ${match.awayTeamName || '客队'}。${rankLine.zh}`,
+        en: `${match.leagueNameEn || match.leagueName || 'Fixture'}: ${match.homeTeamName || 'Home'} vs ${match.awayTeamName || 'Away'}. ${rankLine.en}`
       },
-      tone: 'warning'
+      tone: model?.elo || match.homeRank || match.awayRank ? 'success' : 'warning'
     },
     {
       title: { zh: '二、近期状态', en: '2. Recent Form' },
       body: {
-        zh: sampleEnough
-          ? `近一年官方历史样本：主队 ${context.homeSampleSize} 场、客队 ${context.awaySampleSize} 场、交锋 ${context.h2hSampleSize} 场；样本用于辅助，不替代实时阵容和过程数据。`
-          : `近一年官方历史样本偏少：${sampleText}，该部分只作辅助。${dataGap.zh}`,
-        en: sampleEnough
-          ? `Last-year official samples: home ${context.homeSampleSize}, away ${context.awaySampleSize}, H2H ${context.h2hSampleSize}; useful support, not a substitute for lineups or process data.`
-          : `Small last-year sample: ${sampleText}; secondary only. ${dataGap.en}`
+        zh: `${formLineZh(match.homeTeamName, form?.home)}；${formLineZh(match.awayTeamName, form?.away)}。样本 ${sampleText}，${sampleEnough ? '可进入辅助评分' : '样本偏薄，已降权处理'}。`,
+        en: `${formLineEn(match.homeTeamNameEn || match.homeTeamName, form?.home)}; ${formLineEn(match.awayTeamNameEn || match.awayTeamName, form?.away)}. Sample ${sampleText}; ${sampleEnough ? 'usable as secondary scoring input' : 'thin sample, down-weighted'}.`
       },
-      tone: sampleEnough ? 'success' : 'warning'
+      tone: sampleTone
     },
     {
       title: { zh: '三、主客场表现', en: '3. Home/Away' },
       body: {
-        zh: `当前只从近一年已完场官方结果追溯球队样本，未接入完整主客场积分榜和旅行数据。覆盖：${context.coverageLabel}。`,
-        en: `Uses synced official finished results only. Full home/away table and travel data are not connected. Coverage: ${context.coverageLabel}.`
+        zh: `当前按近一年官方完场样本和赛程位置做主客场降权，不模拟积分榜。覆盖：${context.coverageLabel}；样本分布主队 ${context.homeSampleSize} 场、客队 ${context.awaySampleSize} 场。`,
+        en: `Home/away read is down-weighted from last-year official finished samples and fixture position; no synthetic league table is used. Coverage: ${context.coverageLabel}; samples home ${context.homeSampleSize}, away ${context.awaySampleSize}.`
       },
-      tone: 'warning'
+      tone: sampleTone
     },
     {
       title: { zh: '四、进攻能力', en: '4. Attack' },
       body: {
-        zh: hasPrimary
-          ? `用官方 SP 反推进攻热区和总进球倾向，当前主推为 ${tipZh}，HAD 去水支持约 ${percentText(hadSupport)}。射门、射正、关键传球等过程数据不足。`
-          : `HAD 暂未形成主推方向。${dataGap.zh}`,
-        en: hasPrimary
-          ? `Attack read is derived from official SP and goal heat zones. Main lean: ${tipEn}, HAD support ${percentText(hadSupport)}. Shots, SOT, and key passes are unavailable.`
-          : `No HAD-based main lean yet. ${dataGap.en}`
+        zh: `${goalLine.zh} 近况进攻：${match.homeTeamName || '主队'}场均 ${decimalText(form?.home.goalsForAvg)}，${match.awayTeamName || '客队'}场均 ${decimalText(form?.away.goalsForAvg)}。`,
+        en: `${goalLine.en} Recent attack: ${match.homeTeamNameEn || 'Home'} ${decimalText(form?.home.goalsForAvg)} per match, ${match.awayTeamNameEn || 'Away'} ${decimalText(form?.away.goalsForAvg)} per match.`
       },
-      tone: hasPrimary ? 'warning' : unavailableTone
+      tone: goalTone
     },
     {
       title: { zh: '五、防守能力', en: '5. Defense' },
       body: {
-        zh: '防守稳定性只参考官方赛果、比分和 SP 风险标签；被射门、xGA、门将状态、定位球防守暂未接入。',
-        en: 'Defensive stability uses official results, scores, and SP risk tags only. Shots allowed, xGA, goalkeeper form, and set-piece defense are unavailable.'
+        zh: `${match.homeTeamName || '主队'}场均失 ${decimalText(form?.home.goalsAgainstAvg)}，零封 ${rateText(form?.home.cleanSheetRate)}，被零封 ${rateText(form?.home.failedScoreRate)}；${match.awayTeamName || '客队'}场均失 ${decimalText(form?.away.goalsAgainstAvg)}，零封 ${rateText(form?.away.cleanSheetRate)}，被零封 ${rateText(form?.away.failedScoreRate)}。`,
+        en: `${match.homeTeamNameEn || 'Home'} concedes ${decimalText(form?.home.goalsAgainstAvg)}, clean sheets ${rateText(form?.home.cleanSheetRate)}, failed to score ${rateText(form?.home.failedScoreRate)}; ${match.awayTeamNameEn || 'Away'} concedes ${decimalText(form?.away.goalsAgainstAvg)}, clean sheets ${rateText(form?.away.cleanSheetRate)}, failed to score ${rateText(form?.away.failedScoreRate)}.`
       },
-      tone: unavailableTone
+      tone: form?.home.sampleSize || form?.away.sampleSize ? 'success' : 'warning'
     },
     {
       title: { zh: '六、伤停与首发', en: '6. Injuries / XI' },
-      body: dataGap,
+      body: {
+        zh: `阵容项当前不参与打分，避免把社媒传闻写成结论；临场若出现 SP 急变，会通过快照走势和风险标签体现。${dataGap.zh}`,
+        en: `Lineup items are not scored to avoid turning rumors into conclusions. Late team-news impact is reflected through SP snapshots and risk tags. ${dataGap.en}`
+      },
       tone: unavailableTone
     },
     {
       title: { zh: '七、战术克制', en: '7. Tactics' },
       body: {
-        zh: '阵型、高压、反击、边路/中路倾向和关键对位暂未接入可验证来源，本场不编造战术细节。',
-        en: 'Formations, pressing, transition style, wing/central routes, and key matchups are not connected from verified sources.'
+        zh: `用进球分布替代空泛战术判断：大2.5 ${percentText(model?.goalLines.over25)}、双方进球 ${percentText(model?.bothTeamsToScore.yes)}、最终平局概率 ${percentText(model?.oneXTwo.final?.draw)}。${(model?.goalLines.over25 ?? 0) >= 55 ? '节奏倾向开放。' : '节奏不宜高估。'}`,
+        en: `Goal distribution is used instead of vague tactical claims: over 2.5 ${percentText(model?.goalLines.over25)}, BTTS ${percentText(model?.bothTeamsToScore.yes)}, final draw probability ${percentText(model?.oneXTwo.final?.draw)}. ${(model?.goalLines.over25 ?? 0) >= 55 ? 'Tempo leans open.' : 'Tempo should not be overestimated.'}`
       },
-      tone: unavailableTone
+      tone: goalTone
     },
     {
       title: { zh: '八、赛程体能与战意', en: '8. Schedule / Motivation' },
       body: {
-        zh: '开赛时间来自中国竞彩网；休息天数、连续客场、杯赛轮换、争冠/保级/晋级战意暂未接入，暂不强行推断。',
-        en: 'Kickoff is from Sporttery. Rest days, travel sequence, rotation pressure, and motivation are not connected.'
+        zh: `${restLineZh(match.homeTeamName, form?.home)}；${restLineZh(match.awayTeamName, form?.away)}。杯赛/争冠/保级动机仅在可验证赛程阶段明确时才加权。`,
+        en: `${restLineEn(match.homeTeamNameEn || match.homeTeamName, form?.home)}; ${restLineEn(match.awayTeamNameEn || match.awayTeamName, form?.away)}. Cup/title/relegation motivation is weighted only when the fixture stage is verifiable.`
       },
-      tone: unavailableTone
+      tone: sampleTone
     },
     {
       title: { zh: '九、历史交锋', en: '9. H2H' },
-      body: {
-        zh: context.h2hSampleSize > 0
-          ? `近一年已匹配双方正式交锋 ${context.h2hSampleSize} 场；样本会因阵容/教练变化降低参考价值。`
-          : '近一年官方历史库暂未匹配到双方直接交锋，不能用历史印象替代实时数据。',
-        en: context.h2hSampleSize > 0
-          ? `${context.h2hSampleSize} direct H2H records matched in the last year; coaching/lineup changes can reduce value.`
-          : 'No direct H2H found in the last-year official history set.'
-      },
+      body: directH2h,
       tone: context.h2hSampleSize > 0 ? 'success' : 'warning'
     },
     {
       title: { zh: '十、天气场地裁判', en: '10. Weather / Referee' },
-      body: dataGap,
+      body: {
+        zh: '外部环境暂不自动调分，避免把不可验证信息混进模型；如出现极端天气、特殊场地或裁判尺度明显异常，需要人工备注后再进入风险标签。',
+        en: 'External conditions do not automatically adjust the score yet, to keep unverified information out of the model. Extreme weather, special pitch conditions, or unusual referee profile should be manually noted before affecting risk tags.'
+      },
       tone: unavailableTone
     },
     {
       title: { zh: '十一、赔率盘口', en: '11. Odds / Market' },
       body: {
-        zh: `官方 HAD：${latestOdds}；官方 HHAD：${latestHandicapOdds}；让球同向支持约 ${hhadSupport === null ? '--' : `${hhadSupport}%`}。${trendZh}`,
-        en: `Official HAD: ${latestOdds}; official HHAD: ${latestHandicapOdds}; handicap same-side support ${hhadSupport === null ? '--' : `${hhadSupport}%`}. ${trendEn}`
+        zh: `官方 HAD：${latestOdds}，去水 ${marketProbabilities.zh}，当前主线支持 ${percentText(hadSupport)}；官方 HHAD(${hhadLine})：${latestHandicapOdds}，去水 ${handicapProbabilities.zh}；让球同向支持约 ${hhadSupport === null ? '--' : `${hhadSupport}%`}。${trendZh}`,
+        en: `Official HAD: ${latestOdds}, normalized ${marketProbabilities.en}, main-line support ${percentText(hadSupport)}; official HHAD(${hhadLine}): ${latestHandicapOdds}, normalized ${handicapProbabilities.en}; same-side handicap support ${hhadSupport === null ? '--' : `${hhadSupport}%`}. ${trendEn}`
       },
       tone: hhadSupport !== null && hhadSupport >= 42 ? 'success' : 'warning'
     },
     {
       title: { zh: '十二、综合结论', en: '12. Verdict' },
       body: {
-        zh: hasPrimary
-          ? `稳妥方向：${action.zh}，不夸大确定性；激进方向：${tipZh}，可信度 ${trustScore || '--'}%。风险点：${riskTextZh}。`
-          : `稳妥方向：等待 HAD 开售或下一次官方快照；激进方向：暂无。风险点：${riskTextZh}。`,
-        en: hasPrimary
-          ? `Conservative: ${action.en}; aggressive: ${tipEn}, confidence ${trustScore || '--'}%. Risks: ${riskTextEn}.`
-          : `Conservative: wait for HAD or next official snapshot. Aggressive: none. Risks: ${riskTextEn}.`
+        zh: hasActionablePrimary
+          ? `稳妥方向：${action.zh}；主线 ${tipZh}，可信度 ${trustScore || '--'}%，最终概率 ${finalProbabilities.zh}。风险点：${riskTextZh}。`
+          : `稳妥方向：${action.zh}，不输出单一胜平负；当前最终概率 ${finalProbabilities.zh}，等待 SP/让球/历史分桶进一步同向。风险点：${riskTextZh}。`,
+        en: hasActionablePrimary
+          ? `Conservative: ${action.en}; main line ${tipEn}, confidence ${trustScore || '--'}%, final probability ${finalProbabilities.en}. Risks: ${riskTextEn}.`
+          : `Conservative: ${action.en}, no single 1X2 pick; current final probability ${finalProbabilities.en}, wait for SP/handicap/history buckets to align. Risks: ${riskTextEn}.`
       },
-      tone: hasPrimary ? 'warning' : unavailableTone
+      tone: hasPrimary ? (isWatchOnly ? 'warning' : 'success') : unavailableTone
     }
   ];
 };

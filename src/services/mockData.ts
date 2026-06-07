@@ -156,6 +156,10 @@ export interface MatchProbabilityModel {
       bttsRate: number | null;
       cleanSheetRate: number | null;
       failedScoreRate: number | null;
+      lastMatchAt?: string | null;
+      restDays?: number | null;
+      matchesLast14?: number;
+      matchesLast30?: number;
     };
     away: {
       sampleSize: number;
@@ -170,12 +174,17 @@ export interface MatchProbabilityModel {
       bttsRate: number | null;
       cleanSheetRate: number | null;
       failedScoreRate: number | null;
+      lastMatchAt?: string | null;
+      restDays?: number | null;
+      matchesLast14?: number;
+      matchesLast30?: number;
     };
     h2h: {
       sampleSize: number;
       over25Rate: number | null;
       bttsRate: number | null;
       drawRate: number | null;
+      lastMeetingAt?: string | null;
     };
   } | null;
   modelHealth?: {
@@ -324,12 +333,14 @@ export interface Match {
   businessDate?: string;
   homeTeamName?: string;
   homeTeamNameEn?: string;
+  homeRank?: string;
   homeTeamLogo?: string;
   homeTeamLogoType?: 'flag' | 'crest' | 'crest-placeholder';
   homeTeamCountryIso?: string;
   homeTeamColor?: string;
   awayTeamName?: string;
   awayTeamNameEn?: string;
+  awayRank?: string;
   awayTeamLogo?: string;
   awayTeamLogoType?: 'flag' | 'crest' | 'crest-placeholder';
   awayTeamCountryIso?: string;

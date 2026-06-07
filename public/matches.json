@@ -11,7 +11,7 @@
     "projectedScoreAway": 0,
     "probabilityModel": {
       "version": "market-elo-form-bucket-calibrated-poisson-v4",
-      "generatedAt": "2026-06-07T09:17:24.329Z",
+      "generatedAt": "2026-06-07T09:40:34.636Z",
       "basis": {
         "zh": "模型已使用官方 SP/让球 SP/赔率快照、Elo、近一年赛果攻防和 Poisson 比分分布；外部赔率、伤停、首发、天气、裁判等仅在稳定可验证源配置后参与计算。",
         "en": "Uses official SP/handicap SP/snapshots, Elo, last-year form, and Poisson score distribution. External odds, injuries, lineups, weather, and referee data participate only when stable verified feeds are configured."
@@ -114,7 +114,11 @@
           "over25Rate": 0.667,
           "bttsRate": 0.667,
           "cleanSheetRate": 0,
-          "failedScoreRate": 0.333
+          "failedScoreRate": 0.333,
+          "lastMatchAt": "2026-06-03T00:00:00+08:00",
+          "restDays": 5,
+          "matchesLast14": 1,
+          "matchesLast30": 1
         },
         "away": {
           "sampleSize": 3,
@@ -128,13 +132,18 @@
           "over25Rate": 0.333,
           "bttsRate": 0.667,
           "cleanSheetRate": 0,
-          "failedScoreRate": 0.333
+          "failedScoreRate": 0.333,
+          "lastMatchAt": "2026-06-05T00:00:00+08:00",
+          "restDays": 3,
+          "matchesLast14": 1,
+          "matchesLast30": 1
         },
         "h2h": {
           "sampleSize": 0,
           "over25Rate": null,
           "bttsRate": null,
-          "drawRate": null
+          "drawRate": null,
+          "lastMeetingAt": null
         }
       },
       "modelHealth": {
@@ -659,12 +668,14 @@
     "businessDate": "2026-06-07",
     "homeTeamName": "克罗地亚",
     "homeTeamNameEn": "克罗地亚",
+    "homeRank": "",
     "homeTeamLogo": "https://flagcdn.com/w80/hr.png",
     "homeTeamLogoType": "flag",
     "homeTeamCountryIso": "HR",
     "homeTeamColor": "#6f85f4",
     "awayTeamName": "斯洛文尼亚",
     "awayTeamNameEn": "斯洛文尼亚",
+    "awayRank": "",
     "awayTeamLogo": "https://flagcdn.com/w80/si.png",
     "awayTeamLogoType": "flag",
     "awayTeamCountryIso": "SI",
@@ -693,26 +704,26 @@
     "handicapOddsUpdatedAt": "2026-06-07 14:56:16",
     "handicapOddsSourceUrl": "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c",
     "predictionMeta": {
-      "policyVersion": "actionable-tiered-market-gate-v15",
-      "promptVersion": "professional-football-analyst-v9",
+      "policyVersion": "actionable-tiered-market-gate-v16",
+      "promptVersion": "professional-football-analyst-v10",
       "generatedAt": "2026-06-07T01:23:00.992Z",
-      "updatedAt": "2026-06-07T09:16:31.097Z",
+      "updatedAt": "2026-06-07T09:39:37.415Z",
       "dataPolicy": {
         "zh": "模型已使用中国竞彩网官方 SP、让球 SP、赛果、SP 快照、Elo、近一年历史攻防和比分分布；外部赔率、伤停、首发、天气、裁判等只在稳定可验证源配置后参与计算。",
         "en": "The model uses official Sporttery SP, handicap SP, results, SP snapshots, Elo, last-year form, and score distribution. External odds, injuries, lineups, weather, and referee data are used only after stable verified feeds are configured."
       }
     },
     "oddsTrend": {
-      "sampleSize": 84,
+      "sampleSize": 88,
       "firstCapturedAt": "2026-06-07T01:23:00.992Z",
-      "lastCapturedAt": "2026-06-07T09:16:31.097Z",
+      "lastCapturedAt": "2026-06-07T09:39:37.415Z",
       "odds1Change": 0,
       "oddsXChange": -0.1,
       "odds2Change": 0.25,
       "direction": "draw",
       "summary": {
-        "zh": "SP 快照 84 次：主胜 0.00，平局 -0.10，客胜 +0.25；平局 SP 下调，市场支持有所增强。",
-        "en": "84 SP snapshots: home 0.00, draw -0.10, away +0.25. draw SP shortened, indicating stronger market support."
+        "zh": "SP 快照 88 次：主胜 0.00，平局 -0.10，客胜 +0.25；平局 SP 下调，市场支持有所增强。",
+        "en": "88 SP snapshots: home 0.00, draw -0.10, away +0.25. draw SP shortened, indicating stronger market support."
       }
     }
   },
@@ -728,7 +739,7 @@
     "projectedScoreAway": 1,
     "probabilityModel": {
       "version": "market-elo-form-bucket-calibrated-poisson-v4",
-      "generatedAt": "2026-06-07T09:17:24.329Z",
+      "generatedAt": "2026-06-07T09:40:34.637Z",
       "basis": {
         "zh": "模型已使用官方 SP/让球 SP/赔率快照、Elo、近一年赛果攻防和 Poisson 比分分布；外部赔率、伤停、首发、天气、裁判等仅在稳定可验证源配置后参与计算。",
         "en": "Uses official SP/handicap SP/snapshots, Elo, last-year form, and Poisson score distribution. External odds, injuries, lineups, weather, and referee data participate only when stable verified feeds are configured."
@@ -823,7 +834,11 @@
           "over25Rate": 0.222,
           "bttsRate": 0.333,
           "cleanSheetRate": 0.667,
-          "failedScoreRate": 0.222
+          "failedScoreRate": 0.222,
+          "lastMatchAt": "2026-04-01T02:00:00+08:00",
+          "restDays": 68,
+          "matchesLast14": 0,
+          "matchesLast30": 0
         },
         "away": {
           "sampleSize": 3,
@@ -837,13 +852,18 @@
           "over25Rate": 0.667,
           "bttsRate": 0.667,
           "cleanSheetRate": 0.333,
-          "failedScoreRate": 0.333
+          "failedScoreRate": 0.333,
+          "lastMatchAt": "2026-06-02T01:00:00+08:00",
+          "restDays": 6,
+          "matchesLast14": 1,
+          "matchesLast30": 1
         },
         "h2h": {
           "sampleSize": 0,
           "over25Rate": null,
           "bttsRate": null,
-          "drawRate": null
+          "drawRate": null,
+          "lastMeetingAt": null
         }
       },
       "modelHealth": {
@@ -1414,11 +1434,13 @@
     "businessDate": "2026-06-07",
     "homeTeamName": "摩洛哥",
     "homeTeamNameEn": "摩洛哥",
+    "homeRank": "",
     "homeTeamLogo": "MCO",
     "homeTeamLogoType": "crest-placeholder",
     "homeTeamColor": "#cd1aba",
     "awayTeamName": "挪威",
     "awayTeamNameEn": "挪威",
+    "awayRank": "",
     "awayTeamLogo": "https://flagcdn.com/w80/no.png",
     "awayTeamLogoType": "flag",
     "awayTeamCountryIso": "NO",
@@ -1447,26 +1469,26 @@
     "handicapOddsUpdatedAt": "2026-06-07 15:51:33",
     "handicapOddsSourceUrl": "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c",
     "predictionMeta": {
-      "policyVersion": "actionable-tiered-market-gate-v15",
-      "promptVersion": "professional-football-analyst-v9",
+      "policyVersion": "actionable-tiered-market-gate-v16",
+      "promptVersion": "professional-football-analyst-v10",
       "generatedAt": "2026-06-07T01:23:00.992Z",
-      "updatedAt": "2026-06-07T09:16:31.097Z",
+      "updatedAt": "2026-06-07T09:39:37.415Z",
       "dataPolicy": {
         "zh": "模型已使用中国竞彩网官方 SP、让球 SP、赛果、SP 快照、Elo、近一年历史攻防和比分分布；外部赔率、伤停、首发、天气、裁判等只在稳定可验证源配置后参与计算。",
         "en": "The model uses official Sporttery SP, handicap SP, results, SP snapshots, Elo, last-year form, and score distribution. External odds, injuries, lineups, weather, and referee data are used only after stable verified feeds are configured."
       }
     },
     "oddsTrend": {
-      "sampleSize": 84,
+      "sampleSize": 88,
       "firstCapturedAt": "2026-06-07T01:23:00.992Z",
-      "lastCapturedAt": "2026-06-07T09:16:31.097Z",
+      "lastCapturedAt": "2026-06-07T09:39:37.415Z",
       "odds1Change": -0.1,
       "oddsXChange": -0.18,
       "odds2Change": 0.13,
       "direction": "draw",
       "summary": {
-        "zh": "SP 快照 84 次：主胜 -0.10，平局 -0.18，客胜 +0.13；平局 SP 下调，市场支持有所增强。",
-        "en": "84 SP snapshots: home -0.10, draw -0.18, away +0.13. draw SP shortened, indicating stronger market support."
+        "zh": "SP 快照 88 次：主胜 -0.10，平局 -0.18，客胜 +0.13；平局 SP 下调，市场支持有所增强。",
+        "en": "88 SP snapshots: home -0.10, draw -0.18, away +0.13. draw SP shortened, indicating stronger market support."
       }
     }
   },
@@ -1482,7 +1504,7 @@
     "projectedScoreAway": 1,
     "probabilityModel": {
       "version": "market-elo-form-bucket-calibrated-poisson-v4",
-      "generatedAt": "2026-06-07T09:17:24.330Z",
+      "generatedAt": "2026-06-07T09:40:34.637Z",
       "basis": {
         "zh": "模型已使用官方 SP/让球 SP/赔率快照、Elo、近一年赛果攻防和 Poisson 比分分布；外部赔率、伤停、首发、天气、裁判等仅在稳定可验证源配置后参与计算。",
         "en": "Uses official SP/handicap SP/snapshots, Elo, last-year form, and Poisson score distribution. External odds, injuries, lineups, weather, and referee data participate only when stable verified feeds are configured."
@@ -1577,7 +1599,11 @@
           "over25Rate": 0.333,
           "bttsRate": 0.333,
           "cleanSheetRate": 0.333,
-          "failedScoreRate": 0.667
+          "failedScoreRate": 0.667,
+          "lastMatchAt": "2026-06-05T01:00:00+08:00",
+          "restDays": 3,
+          "matchesLast14": 1,
+          "matchesLast30": 1
         },
         "away": {
           "sampleSize": 3,
@@ -1591,13 +1617,18 @@
           "over25Rate": 0,
           "bttsRate": 0.333,
           "cleanSheetRate": 0.667,
-          "failedScoreRate": 0
+          "failedScoreRate": 0,
+          "lastMatchAt": "2026-06-04T02:45:00+08:00",
+          "restDays": 4,
+          "matchesLast14": 1,
+          "matchesLast30": 1
         },
         "h2h": {
           "sampleSize": 0,
           "over25Rate": null,
           "bttsRate": null,
-          "drawRate": null
+          "drawRate": null,
+          "lastMeetingAt": null
         }
       },
       "modelHealth": {
@@ -2160,12 +2191,14 @@
     "businessDate": "2026-06-07",
     "homeTeamName": "希腊",
     "homeTeamNameEn": "希腊",
+    "homeRank": "",
     "homeTeamLogo": "https://flagcdn.com/w80/gr.png",
     "homeTeamLogoType": "flag",
     "homeTeamCountryIso": "GR",
     "homeTeamColor": "#be738f",
     "awayTeamName": "意大利",
     "awayTeamNameEn": "意大利",
+    "awayRank": "",
     "awayTeamLogo": "https://flagcdn.com/w80/it.png",
     "awayTeamLogoType": "flag",
     "awayTeamCountryIso": "IT",
@@ -2194,26 +2227,26 @@
     "handicapOddsUpdatedAt": "2026-06-07 16:51:12",
     "handicapOddsSourceUrl": "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c",
     "predictionMeta": {
-      "policyVersion": "actionable-tiered-market-gate-v15",
-      "promptVersion": "professional-football-analyst-v9",
+      "policyVersion": "actionable-tiered-market-gate-v16",
+      "promptVersion": "professional-football-analyst-v10",
       "generatedAt": "2026-06-07T01:23:00.992Z",
-      "updatedAt": "2026-06-07T09:16:31.097Z",
+      "updatedAt": "2026-06-07T09:39:37.415Z",
       "dataPolicy": {
         "zh": "模型已使用中国竞彩网官方 SP、让球 SP、赛果、SP 快照、Elo、近一年历史攻防和比分分布；外部赔率、伤停、首发、天气、裁判等只在稳定可验证源配置后参与计算。",
         "en": "The model uses official Sporttery SP, handicap SP, results, SP snapshots, Elo, last-year form, and score distribution. External odds, injuries, lineups, weather, and referee data are used only after stable verified feeds are configured."
       }
     },
     "oddsTrend": {
-      "sampleSize": 84,
+      "sampleSize": 88,
       "firstCapturedAt": "2026-06-07T01:23:00.992Z",
-      "lastCapturedAt": "2026-06-07T09:16:31.097Z",
+      "lastCapturedAt": "2026-06-07T09:39:37.415Z",
       "odds1Change": 0.24,
       "oddsXChange": -0.15,
       "odds2Change": -0.52,
       "direction": "away",
       "summary": {
-        "zh": "SP 快照 84 次：主胜 +0.24，平局 -0.15，客胜 -0.52；客胜 SP 下调，市场支持有所增强。",
-        "en": "84 SP snapshots: home +0.24, draw -0.15, away -0.52. away win SP shortened, indicating stronger market support."
+        "zh": "SP 快照 88 次：主胜 +0.24，平局 -0.15，客胜 -0.52；客胜 SP 下调，市场支持有所增强。",
+        "en": "88 SP snapshots: home +0.24, draw -0.15, away -0.52. away win SP shortened, indicating stronger market support."
       }
     }
   },
@@ -2229,7 +2262,7 @@
     "projectedScoreAway": 0,
     "probabilityModel": {
       "version": "market-elo-form-bucket-calibrated-poisson-v4",
-      "generatedAt": "2026-06-07T09:17:24.330Z",
+      "generatedAt": "2026-06-07T09:40:34.637Z",
       "basis": {
         "zh": "模型已使用官方 SP/让球 SP/赔率快照、Elo、近一年赛果攻防和 Poisson 比分分布；外部赔率、伤停、首发、天气、裁判等仅在稳定可验证源配置后参与计算。",
         "en": "Uses official SP/handicap SP/snapshots, Elo, last-year form, and Poisson score distribution. External odds, injuries, lineups, weather, and referee data participate only when stable verified feeds are configured."
@@ -2332,7 +2365,11 @@
           "over25Rate": 1,
           "bttsRate": 1,
           "cleanSheetRate": 0,
-          "failedScoreRate": 0
+          "failedScoreRate": 0,
+          "lastMatchAt": "2026-06-02T07:00:00+08:00",
+          "restDays": 6,
+          "matchesLast14": 1,
+          "matchesLast30": 1
         },
         "away": {
           "sampleSize": 1,
@@ -2346,13 +2383,18 @@
           "over25Rate": 1,
           "bttsRate": 1,
           "cleanSheetRate": 0,
-          "failedScoreRate": 0
+          "failedScoreRate": 0,
+          "lastMatchAt": "2026-05-31T21:00:00+08:00",
+          "restDays": 7,
+          "matchesLast14": 1,
+          "matchesLast30": 1
         },
         "h2h": {
           "sampleSize": 0,
           "over25Rate": null,
           "bttsRate": null,
-          "drawRate": null
+          "drawRate": null,
+          "lastMeetingAt": null
         }
       },
       "modelHealth": {
@@ -2907,12 +2949,14 @@
     "businessDate": "2026-06-07",
     "homeTeamName": "哥伦比亚",
     "homeTeamNameEn": "哥伦比亚",
+    "homeRank": "",
     "homeTeamLogo": "https://flagcdn.com/w80/co.png",
     "homeTeamLogoType": "flag",
     "homeTeamCountryIso": "CO",
     "homeTeamColor": "#d2e921",
     "awayTeamName": "约旦",
     "awayTeamNameEn": "约旦",
+    "awayRank": "",
     "awayTeamLogo": "https://flagcdn.com/w80/jo.png",
     "awayTeamLogoType": "flag",
     "awayTeamCountryIso": "JO",
@@ -2941,26 +2985,26 @@
     "handicapOddsUpdatedAt": "2026-06-07 16:54:34",
     "handicapOddsSourceUrl": "https://webapi.sporttery.cn/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c",
     "predictionMeta": {
-      "policyVersion": "actionable-tiered-market-gate-v15",
-      "promptVersion": "professional-football-analyst-v9",
+      "policyVersion": "actionable-tiered-market-gate-v16",
+      "promptVersion": "professional-football-analyst-v10",
       "generatedAt": "2026-06-07T01:23:00.992Z",
-      "updatedAt": "2026-06-07T09:16:31.097Z",
+      "updatedAt": "2026-06-07T09:39:37.415Z",
       "dataPolicy": {
         "zh": "模型已使用中国竞彩网官方 SP、让球 SP、赛果、SP 快照、Elo、近一年历史攻防和比分分布；外部赔率、伤停、首发、天气、裁判等只在稳定可验证源配置后参与计算。",
         "en": "The model uses official Sporttery SP, handicap SP, results, SP snapshots, Elo, last-year form, and score distribution. External odds, injuries, lineups, weather, and referee data are used only after stable verified feeds are configured."
       }
     },
     "oddsTrend": {
-      "sampleSize": 84,
+      "sampleSize": 88,
       "firstCapturedAt": "2026-06-07T01:23:00.992Z",
-      "lastCapturedAt": "2026-06-07T09:16:31.097Z",
+      "lastCapturedAt": "2026-06-07T09:39:37.415Z",
       "odds1Change": 0,
       "oddsXChange": 0,
       "odds2Change": 0,
       "direction": "flat",
       "summary": {
-        "zh": "SP 快照 84 次：主胜 0.00，平局 0.00，客胜 0.00；整体波动很小。",
-        "en": "84 SP snapshots: home 0.00, draw 0.00, away 0.00. Overall movement is small."
+        "zh": "SP 快照 88 次：主胜 0.00，平局 0.00，客胜 0.00；整体波动很小。",
+        "en": "88 SP snapshots: home 0.00, draw 0.00, away 0.00. Overall movement is small."
       }
     }
   }

@@ -12,8 +12,8 @@ const WINDOW_FORWARD_DAYS = Math.max(1, Number(process.env.MATCH_WINDOW_FORWARD_
 const ODDS_HISTORY_RETENTION_DAYS = Math.max(1, Number(process.env.ODDS_HISTORY_RETENTION_DAYS || 365));
 const ODDS_HISTORY_BUCKET_MINUTES = Math.max(1, Number(process.env.ODDS_HISTORY_BUCKET_MINUTES || 5));
 const PAGE_POLL_SECONDS = Math.max(15, Number(process.env.PAGE_POLL_SECONDS || 30));
-const ANALYST_PROMPT_VERSION = "professional-football-analyst-v9";
-const PREDICTION_POLICY_VERSION = "actionable-tiered-market-gate-v15";
+const ANALYST_PROMPT_VERSION = "professional-football-analyst-v10";
+const PREDICTION_POLICY_VERSION = "actionable-tiered-market-gate-v16";
 const FORM_LOOKBACK_MATCHES = 12;
 const METHODS = (process.env.SPORTTERY_METHODS || "concern,live,result,all")
   .split(",")
@@ -872,8 +872,26 @@ function pairKey(homeTeam, awayTeam) {
   return [teamKey(homeTeam), teamKey(awayTeam)].sort().join("__");
 }
 
-function summarizeTeamForm(rows, key) {
+function daysBetween(fromIso, toIso) {
+  const from = Date.parse(fromIso);
+  const to = Date.parse(toIso);
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to < from) return null;
+  return Math.floor((to - from) / 86400000);
+}
+
+function countSince(rows, kickoffTime, days) {
+  const kickoff = Date.parse(kickoffTime);
+  if (!Number.isFinite(kickoff)) return 0;
+  const from = kickoff - days * 86400000;
+  return rows.filter((row) => {
+    const time = Date.parse(row.kickoffTime);
+    return Number.isFinite(time) && time < kickoff && time >= from;
+  }).length;
+}
+
+function summarizeTeamForm(rows, key, kickoffTime) {
   const recent = rows.slice(-FORM_LOOKBACK_MATCHES);
+  const last = rows[rows.length - 1];
   const empty = {
     sampleSize: 0,
     wins: 0,
@@ -887,6 +905,10 @@ function summarizeTeamForm(rows, key) {
     bttsRate: null,
     cleanSheetRate: null,
     failedScoreRate: null,
+    lastMatchAt: last?.kickoffTime || null,
+    restDays: last?.kickoffTime ? daysBetween(last.kickoffTime, kickoffTime) : null,
+    matchesLast14: countSince(rows, kickoffTime, 14),
+    matchesLast30: countSince(rows, kickoffTime, 30),
   };
   if (!recent.length) return empty;
 
@@ -934,6 +956,10 @@ function summarizeTeamForm(rows, key) {
     bttsRate: Number((totals.btts / sampleSize).toFixed(3)),
     cleanSheetRate: Number((totals.cleanSheet / sampleSize).toFixed(3)),
     failedScoreRate: Number((totals.failedScore / sampleSize).toFixed(3)),
+    lastMatchAt: last?.kickoffTime || null,
+    restDays: last?.kickoffTime ? daysBetween(last.kickoffTime, kickoffTime) : null,
+    matchesLast14: countSince(rows, kickoffTime, 14),
+    matchesLast30: countSince(rows, kickoffTime, 30),
   };
 }
 
@@ -945,6 +971,7 @@ function summarizeHeadToHead(rows) {
       over25Rate: null,
       bttsRate: null,
       drawRate: null,
+      lastMeetingAt: null,
     };
   }
 
@@ -961,6 +988,7 @@ function summarizeHeadToHead(rows) {
     over25Rate: Number((totals.over25 / recent.length).toFixed(3)),
     bttsRate: Number((totals.btts / recent.length).toFixed(3)),
     drawRate: Number((totals.draws / recent.length).toFixed(3)),
+    lastMeetingAt: recent[recent.length - 1]?.kickoffTime || null,
   };
 }
 
@@ -983,8 +1011,8 @@ function buildFormSnapshots(matches) {
     const awayKey = teamKey(match.awayTeam);
     if (!sourceMatchId || !homeKey || !awayKey) continue;
 
-    const homeForm = summarizeTeamForm(readRows(teamHistory, homeKey), homeKey);
-    const awayForm = summarizeTeamForm(readRows(teamHistory, awayKey), awayKey);
+    const homeForm = summarizeTeamForm(readRows(teamHistory, homeKey), homeKey, match.kickoffTime);
+    const awayForm = summarizeTeamForm(readRows(teamHistory, awayKey), awayKey, match.kickoffTime);
     const h2h = summarizeHeadToHead(readRows(h2hHistory, pairKey(match.homeTeam, match.awayTeam)));
     const sampleSize = homeForm.sampleSize + awayForm.sampleSize;
     snapshots.set(sourceMatchId, {
@@ -1319,6 +1347,8 @@ function mapSportteryRow(row, sourceMethod, sourceUrl) {
     matchDate: normText(row.matchDate),
     homeTeam,
     awayTeam,
+    homeRank: normText(row.homeRank),
+    awayRank: normText(row.awayRank),
     homeTeamCode: normText(row.homeTeamCode || row.homeTeamAbbEnName),
     awayTeamCode: normText(row.awayTeamCode || row.awayTeamAbbEnName),
     homeTeamLogo: normText(row.homeTeamLogo || row.homeTeamLogoUrl || row.homeLogoUrl || row.homeTeamFlag),
@@ -2235,12 +2265,14 @@ function toAppMatch(match) {
     businessDate,
     homeTeamName: match.homeTeam,
     homeTeamNameEn: match.homeTeam,
+    homeRank: match.homeRank,
     homeTeamLogo: homeLogo.logo,
     homeTeamLogoType: homeLogo.logoType,
     homeTeamCountryIso: homeLogo.countryIso,
     homeTeamColor: colorFromName(match.homeTeam),
     awayTeamName: match.awayTeam,
     awayTeamNameEn: match.awayTeam,
+    awayRank: match.awayRank,
     awayTeamLogo: awayLogo.logo,
     awayTeamLogoType: awayLogo.logoType,
     awayTeamCountryIso: awayLogo.countryIso,
