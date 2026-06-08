@@ -54,6 +54,7 @@ type SyncMeta = {
 type RuntimeConfig = {
   dataApiBase?: string;
   apiBase?: string;
+  eventStreamPath?: string;
   disableDataApi?: boolean;
   preferDataApi?: boolean;
   historyPreferStatic?: boolean;
@@ -227,6 +228,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const preferApiRef = useRef(ENV_PREFER_DATA_API);
   const historyPreferStaticRef = useRef(true);
   const pollSecondsOverrideRef = useRef<number | null>(null);
+  const eventStreamPathRef = useRef<string | null>(null);
   const apiFailureCountRef = useRef(0);
   const [dataSync, setDataSync] = useState<DataSyncState>({
     currentLoaded: false,
@@ -294,6 +296,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         apiBaseRef.current = normalizeApiBase(config.dataApiBase || config.apiBase);
         preferApiRef.current = config.preferDataApi ?? true;
         historyPreferStaticRef.current = config.historyPreferStatic ?? true;
+        eventStreamPathRef.current = config.eventStreamPath || null;
         if (typeof config.currentPollSeconds === 'number' && Number.isFinite(config.currentPollSeconds)) {
           pollSecondsOverrideRef.current = Math.min(30, Math.max(10, config.currentPollSeconds));
           refreshMsRef.current = pollSecondsOverrideRef.current * 1000;
@@ -457,7 +460,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return options.preferStatic ? [...staticCandidates, apiCandidate] : [apiCandidate, ...staticCandidates];
     };
 
-    void loadRuntimeConfig().finally(() => loadCurrent(true)).then(() => {
+    let eventSource: EventSource | undefined;
+    let eventRefreshTimer: number | undefined;
+
+    const refreshFromServerEvent = (type: string) => {
+      if (eventRefreshTimer) window.clearTimeout(eventRefreshTimer);
+      eventRefreshTimer = window.setTimeout(() => {
+        if (cancelled) return;
+        setDataSync((current) => ({
+          ...current,
+          liveUpdates: 'sse',
+          lastServerEventAt: new Date().toISOString(),
+          lastServerEventType: type
+        }));
+        void loadCurrent(false).then(() => {
+          if (type === 'sync_completed' || type === 'gpt_prediction_completed') {
+            void loadHistory();
+          }
+        });
+      }, 350);
+    };
+
+    const openEventStream = () => {
+      if (apiDisabledRef.current || typeof EventSource === 'undefined') return;
+      const apiBase = apiBaseRef.current || '/api';
+      const configuredPath = eventStreamPathRef.current;
+      const streamUrl = configuredPath
+        ? (configuredPath.startsWith('http') ? configuredPath : configuredPath)
+        : `${apiBase}/events`;
+      eventSource = new EventSource(streamUrl);
+      eventSource.onopen = () => {
+        if (cancelled) return;
+        setDataSync((current) => ({ ...current, liveUpdates: 'sse' }));
+      };
+      eventSource.onerror = () => {
+        if (cancelled) return;
+        setDataSync((current) => ({ ...current, liveUpdates: 'poll' }));
+      };
+      const handleServerEvent = (event: MessageEvent) => {
+        refreshFromServerEvent(event.type || 'message');
+      };
+      eventSource.addEventListener('sync_completed', handleServerEvent);
+      eventSource.addEventListener('sync_failed', handleServerEvent);
+      eventSource.addEventListener('gpt_prediction_completed', handleServerEvent);
+    };
+
+    void loadRuntimeConfig().finally(() => {
+      openEventStream();
+      return loadCurrent(true);
+    }).then(() => {
       window.setTimeout(() => {
         void loadHistory();
       }, 250);
@@ -488,6 +539,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => {
       cancelled = true;
       if (currentTimer) window.clearTimeout(currentTimer);
+      if (eventRefreshTimer) window.clearTimeout(eventRefreshTimer);
+      eventSource?.close();
       window.removeEventListener('focus', refreshOnWake);
       document.removeEventListener('visibilitychange', refreshOnWake);
       window.clearInterval(historyTimer);

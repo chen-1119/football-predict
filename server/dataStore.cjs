@@ -344,6 +344,7 @@ const buildMatchSnapshot = (match, source, dataset = "current") => {
   const result = resultFor(match);
   const stats = statsSummaryFor(match);
   const projectedScore = projectedScoreFor(match);
+  const rawMatchSignature = dataset === "current" ? hashPayload(match) : null;
   const payload = {
     dataset,
     fixture: {
@@ -360,6 +361,7 @@ const buildMatchSnapshot = (match, source, dataset = "current") => {
     score,
     result,
     projectedScore,
+    rawMatchSignature,
     odds: pickOdds(match.odds),
     handicapLine: match.handicapLine ?? match.handicap ?? null,
     handicapOdds: pickOdds(match.handicapOdds),
@@ -415,6 +417,8 @@ const buildMatchSnapshot = (match, source, dataset = "current") => {
     stats,
     external: payload.external,
     dataCompleteness: dataCompletenessFor(match, prediction),
+    rawMatchSignature,
+    match,
     signature
   };
 };
@@ -770,6 +774,28 @@ const readTimelineRows = async (storeDir, table, id, limit) => {
   return Array.from(unique.values());
 };
 
+const getLatestCurrentMatches = async (storeDir) => {
+  try {
+    const text = await fsp.readFile(tablePathFor(storeDir, TABLES.matchSnapshots), "utf8");
+    const latest = new Map();
+    for (const line of text.trim().split(/\n+/).filter(Boolean)) {
+      const row = safeJsonParse(line, null);
+      if (!row || row.dataset !== "current" || !row.match || typeof row.match !== "object") continue;
+      const key = row.matchId || row.sourceMatchId || row.match.id;
+      if (!key) continue;
+      const previous = latest.get(key);
+      if (!previous || Date.parse(row.at || "") >= Date.parse(previous.at || "")) {
+        latest.set(key, row);
+      }
+    }
+    return Array.from(latest.values())
+      .map((row) => row.match)
+      .sort((a, b) => Date.parse(a.kickoffTime || "") - Date.parse(b.kickoffTime || ""));
+  } catch {
+    return [];
+  }
+};
+
 const getMatchTimeline = async (storeDir, id, limit = 120) => {
   const matchId = String(id || "").trim();
   if (!matchId) return [];
@@ -793,6 +819,7 @@ module.exports = {
   TABLES,
   ensureDataStore,
   getDataStoreStatus,
+  getLatestCurrentMatches,
   getMatchTimeline,
   persistDataSnapshot,
   readDataStoreRows

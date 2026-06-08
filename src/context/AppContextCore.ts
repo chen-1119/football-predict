@@ -29,6 +29,9 @@ export interface DataSyncState {
   syncTriggered?: boolean;
   dataApiSource?: string;
   dataChannel?: 'api' | 'static' | 'mock';
+  liveUpdates?: 'sse' | 'poll';
+  lastServerEventAt?: string;
+  lastServerEventType?: string;
   dataApiBase?: string;
   lastDataUrl?: string;
   apiFailureCount?: number;

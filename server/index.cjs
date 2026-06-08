@@ -8,6 +8,7 @@ const {
   TABLES,
   ensureDataStore,
   getDataStoreStatus,
+  getLatestCurrentMatches,
   getMatchTimeline,
   persistDataSnapshot,
   readDataStoreRows
@@ -61,6 +62,7 @@ let predictRunning = false;
 let lastSync = null;
 let lastPredictionRun = null;
 let lastDataPersist = null;
+const sseClients = new Set();
 
 const nowIso = () => new Date().toISOString();
 
@@ -103,6 +105,21 @@ const ensureGeneratedFiles = async () => {
   }
 };
 
+const writeSse = (res, event, data) => {
+  res.write(`event: ${event}\n`);
+  res.write(`data: ${JSON.stringify(data)}\n\n`);
+};
+
+const broadcastEvent = (event) => {
+  for (const res of Array.from(sseClients)) {
+    try {
+      writeSse(res, event.type || "message", event);
+    } catch {
+      sseClients.delete(res);
+    }
+  }
+};
+
 const appendEvent = async (event) => {
   await ensureStore();
   const row = {
@@ -111,6 +128,7 @@ const appendEvent = async (event) => {
     ...event
   };
   await fsp.appendFile(path.join(storeDir, "events.jsonl"), `${JSON.stringify(row)}\n`);
+  broadcastEvent(row);
   return row;
 };
 
@@ -128,6 +146,35 @@ const send = (res, status, body, headers = {}) => {
 const sendJson = (res, payload, status = 200) => {
   send(res, status, JSON.stringify(payload, null, 2), {
     "content-type": "application/json; charset=utf-8"
+  });
+};
+
+const handleEventStream = (req, res) => {
+  res.writeHead(200, {
+    "access-control-allow-origin": "*",
+    "cache-control": "no-store",
+    "connection": "keep-alive",
+    "content-type": "text/event-stream; charset=utf-8"
+  });
+  writeSse(res, "hello", {
+    ok: true,
+    service: "football-predict-server",
+    at: nowIso(),
+    syncRunning,
+    lastSync
+  });
+  sseClients.add(res);
+  const heartbeat = setInterval(() => {
+    try {
+      writeSse(res, "heartbeat", { at: nowIso(), syncRunning });
+    } catch {
+      clearInterval(heartbeat);
+      sseClients.delete(res);
+    }
+  }, 25_000);
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    sseClients.delete(res);
   });
 };
 
@@ -448,8 +495,7 @@ const runGptPredictions = async ({ matchIds = [], limit = 8, source = "server-ma
   }
 };
 
-const mergeGptIntoMatches = async () => {
-  const matches = await readJsonFile(path.join(dataDir, "matches-current.json"), []);
+const mergeGptIntoMatches = async (matches) => {
   const gpt = await readGptPredictions();
   if (!Array.isArray(matches)) return matches;
   const byId = new Map((gpt.rows || []).map((row) => [row.matchId, row]));
@@ -457,6 +503,17 @@ const mergeGptIntoMatches = async () => {
     const gptPrediction = byId.get(match.id);
     return gptPrediction ? { ...match, gptPrediction } : match;
   });
+};
+
+const readCurrentMatches = async () => {
+  if (process.env.CURRENT_MATCH_SOURCE !== "json") {
+    const dbMatches = await getLatestCurrentMatches(storeDir);
+    if (dbMatches.length > 0) {
+      return mergeGptIntoMatches(dbMatches);
+    }
+  }
+  const fileMatches = await readJsonFile(path.join(dataDir, "matches-current.json"), []);
+  return mergeGptIntoMatches(fileMatches);
 };
 
 const readRecentEvents = async (limit = 50, type = "") => {
@@ -610,6 +667,10 @@ const sendFile = async (res, filePath) => {
 const handleApi = async (req, res, url) => {
   if (req.method === "OPTIONS") return send(res, 204, "");
 
+  if (url.pathname === "/api/events") {
+    return handleEventStream(req, res);
+  }
+
   if (url.pathname === "/api/health") {
     return sendJson(res, await getHealth());
   }
@@ -619,7 +680,7 @@ const handleApi = async (req, res, url) => {
   }
 
   if (url.pathname === "/api/matches/current") {
-    return sendJson(res, await mergeGptIntoMatches());
+    return sendJson(res, await readCurrentMatches());
   }
 
   if (url.pathname === "/api/db/events") {
@@ -723,6 +784,7 @@ const handleApi = async (req, res, url) => {
 const handleRuntimeConfig = (res) => {
   return sendJson(res, {
     dataApiBase: publicApiBase,
+    eventStreamPath: `${publicApiBase}/events`,
     preferDataApi: true,
     historyPreferStatic: true,
     currentPollSeconds: Number(process.env.PAGE_POLL_SECONDS || 20)
