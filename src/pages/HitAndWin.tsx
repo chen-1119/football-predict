@@ -70,6 +70,18 @@ const scoreEntry = (entry: CommunityPredictionEntry, matches: Match[]) => {
   };
 };
 
+const createCommunityPredictionEntry = (
+  nickname: string,
+  comment: string,
+  selections: HitAndWinSubmission
+): CommunityPredictionEntry => ({
+  id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+  nickname: nickname.trim().slice(0, 20),
+  comment: comment.trim().slice(0, 140),
+  createdAt: new Date().toISOString(),
+  selections
+});
+
 export const HitAndWin: React.FC<HitAndWinProps> = () => {
   const { language, matches } = useApp();
 
@@ -142,13 +154,7 @@ export const HitAndWin: React.FC<HitAndWinProps> = () => {
       return;
     }
 
-    const entry: CommunityPredictionEntry = {
-      id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      nickname: nickname.trim().slice(0, 20),
-      comment: comment.trim().slice(0, 140),
-      createdAt: new Date().toISOString(),
-      selections
-    };
+    const entry = createCommunityPredictionEntry(nickname, comment, selections);
     const nextEntries = [entry, ...entries].slice(0, 30);
     setEntries(nextEntries);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(nextEntries));

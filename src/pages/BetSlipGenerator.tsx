@@ -1,14 +1,24 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContextCore';
 import { generateBetSlip } from '../services/generator';
-import type { BetSlipResult } from '../services/generator';
+import type { BetSlipMarketType, BetSlipResult } from '../services/generator';
 import { Sparkles, RefreshCw, Copy, Check, ShieldAlert, Award } from 'lucide-react';
-import { getMarketLabel, getPredictionTipDisplay } from '../services/bettingDisplay';
+import {
+  getMarketLabel,
+  getPredictionMarketLabel,
+  getPredictionTipDisplay,
+  getPredictionValueLabel
+} from '../services/bettingDisplay';
 import { getTeamById } from '../services/entities';
 import { TeamBadge } from '../components/TeamBadge';
 
 type TimeWindow = '1' | '2' | '3';
-const ENABLED_BET_SLIP_MARKETS = ['1X2', 'GOALS', 'BEST'];
+const ENABLED_BET_SLIP_MARKETS: BetSlipMarketType[] = ['1X2', 'HHAD', 'GOALS', 'BEST'];
+
+const getBetSlipMarketLabel = (market: BetSlipMarketType, language: 'zh' | 'en') => {
+  if (market === 'HHAD') return language === 'zh' ? '让球' : 'Handicap';
+  return getMarketLabel(market, language);
+};
 
 interface SlipMeta {
   id: string;
@@ -41,7 +51,7 @@ export const BetSlipGenerator: React.FC = () => {
   // 表单状态
   const [targetOdds, setTargetOdds] = useState<number>(2.00);
   const [matchCount, setMatchCount] = useState<'auto' | 2 | 5 | 10 | 15>('auto');
-  const [selectedMarkets, setSelectedMarkets] = useState<string[]>(ENABLED_BET_SLIP_MARKETS);
+  const [selectedMarkets, setSelectedMarkets] = useState<BetSlipMarketType[]>(ENABLED_BET_SLIP_MARKETS);
   const [minOdds, setMinOdds] = useState<number>(1.20);
   const [maxOdds, setMaxOdds] = useState<number>(3.00);
   const [timeWindow, setTimeWindow] = useState<TimeWindow>('3');
@@ -56,18 +66,18 @@ export const BetSlipGenerator: React.FC = () => {
 
   const translations = {
     title: { zh: 'AI 串关参考生成器', en: 'AI Accumulator Reference' },
-    subtitle: { 
-      zh: '公开开放当前模型的串关组合能力，按 SP、可信度、时间窗口筛选候选方向；结果仅供赛前参考。',
+    subtitle: {
+      zh: '按胜平负、让球、进球模型、SP/参考值、可信度和时间窗口筛选候选方向；结果仅供赛前参考。',
       en: 'Open accumulator builder using SP, confidence, and time-window filters. Results are for pre-match reference only.' 
     },
     openNotice: { zh: '当前为公开体验版：所有筛选项与模型参考暂时开放。', en: 'Open preview: all filters and model references are temporarily available.' },
     referenceNotice: { zh: '提示：页面内容只供足球数据研究和赛前讨论参考，不构成投注建议。', en: 'Note: this page is for football data research and pre-match discussion only, not betting advice.' },
-    targetOddsLabel: { zh: '目标总SP', en: 'Target Combined Odds' },
+    targetOddsLabel: { zh: '目标组合值', en: 'Target Combined Value' },
     matchCountLabel: { zh: '串关比赛数量', en: 'Number of Selections' },
     auto: { zh: '智能推荐 (Auto)', en: 'Auto' },
     marketsLabel: { zh: '包含预测市场', en: 'Markets to Include' },
-    minOddsLabel: { zh: '单场最低SP', en: 'Min Single Odds' },
-    maxOddsLabel: { zh: '单场最高SP', en: 'Max Single Odds' },
+    minOddsLabel: { zh: '单场最低值', en: 'Min Single Value' },
+    maxOddsLabel: { zh: '单场最高值', en: 'Max Single Value' },
     timeWindowLabel: { zh: '比赛时间窗口', en: 'Time Window' },
     minTrustLabel: { zh: '最低可信度要求', en: 'Min Confidence Threshold' },
     onlyImportantLabel: { zh: '仅限顶级联赛', en: 'Only Elite Leagues' },
@@ -77,7 +87,7 @@ export const BetSlipGenerator: React.FC = () => {
     copiedText: { zh: '已复制！', en: 'Copied!' },
     slipTitle: { zh: 'AI 参考组合票据', en: 'AI Reference Ticket' },
     slipSummary: { zh: '参考汇总', en: 'Summary' },
-    totalOdds: { zh: '总SP', en: 'Total Odds' },
+    totalOdds: { zh: '组合总值', en: 'Total Value' },
     avgTrust: { zh: '平均可信度', en: 'Avg Confidence' },
     activeSlip: { zh: '公开体验：', en: 'Open Preview:' }
   };
@@ -86,7 +96,7 @@ export const BetSlipGenerator: React.FC = () => {
     return translations[key][language] || '';
   };
 
-  const handleMarketToggle = (market: string) => {
+  const handleMarketToggle = (market: BetSlipMarketType) => {
     if (selectedMarkets.includes(market)) {
       if (selectedMarkets.length > 1) {
         setSelectedMarkets(selectedMarkets.filter(m => m !== market));
@@ -138,8 +148,8 @@ export const BetSlipGenerator: React.FC = () => {
     const text = generationResult.selections.map(s => {
       const homeTeam = getTeamById(s.match.homeTeamId);
       const awayTeam = getTeamById(s.match.awayTeamId);
-      return `${homeTeam.shortName[language]} vs ${awayTeam.shortName[language]} | ${getMarketLabel(s.prediction.marketType, language)}: ${getPredictionTipDisplay(s.prediction, language)} @${s.prediction.odds}`;
-    }).join('\n') + `\n总SP: @${generationResult.totalOdds}`;
+      return `${homeTeam.shortName[language]} vs ${awayTeam.shortName[language]} | ${getPredictionMarketLabel(s.prediction, language)}: ${getPredictionTipDisplay(s.prediction, language)} @${s.prediction.odds}`;
+    }).join('\n') + `\n${t('totalOdds')}: @${generationResult.totalOdds}`;
 
     navigator.clipboard.writeText(text);
     setCopied(true);
@@ -244,9 +254,10 @@ export const BetSlipGenerator: React.FC = () => {
             <label className="form-label">{t('marketsLabel')}</label>
             <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
               {[
-                { id: '1X2', label: getMarketLabel('1X2', language) },
-                { id: 'GOALS', label: getMarketLabel('GOALS', language) },
-                { id: 'BEST', label: getMarketLabel('BEST', language) }
+                { id: '1X2' as const, label: getBetSlipMarketLabel('1X2', language) },
+                { id: 'HHAD' as const, label: getBetSlipMarketLabel('HHAD', language) },
+                { id: 'GOALS' as const, label: language === 'zh' ? '进球数' : getBetSlipMarketLabel('GOALS', language) },
+                { id: 'BEST' as const, label: getBetSlipMarketLabel('BEST', language) }
               ].map(m => {
                 const isSelected = selectedMarkets.includes(m.id);
                 return (
@@ -440,7 +451,7 @@ export const BetSlipGenerator: React.FC = () => {
                         {/* 比赛名和时间 */}
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem', color: 'hsl(var(--text-secondary))' }}>
                           <span>{new Date(sel.match.kickoffTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
-                          <span style={{ fontWeight: '600' }}>{getMarketLabel(sel.prediction.marketType, language)}</span>
+                          <span style={{ fontWeight: '600' }}>{getPredictionMarketLabel(sel.prediction, language)}</span>
                         </div>
                         {/* 对阵队伍 */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap', fontWeight: '700', fontSize: '0.9rem', color: 'hsl(var(--text-primary))' }}>
@@ -456,10 +467,15 @@ export const BetSlipGenerator: React.FC = () => {
                             {getPredictionTipDisplay(sel.prediction, language)}
                           </span>
                           <div style={{ display: 'flex', gap: '0.75rem', fontSize: '0.8rem' }}>
-                            <span>SP: <strong style={{ color: 'hsl(var(--accent))' }}>@{sel.prediction.odds.toFixed(2)}</strong></span>
+                            <span>{getPredictionValueLabel(sel.prediction, language)}: <strong style={{ color: 'hsl(var(--accent))' }}>@{sel.prediction.odds.toFixed(2)}</strong></span>
                             <span>可信度: <strong style={{ color: 'hsl(var(--primary))' }}>{sel.prediction.trustScore}%</strong></span>
                           </div>
                         </div>
+                        {sel.prediction.explanation?.[language] && (
+                          <p style={{ margin: 0, fontSize: '0.75rem', color: 'hsl(var(--text-secondary))', lineHeight: 1.5 }}>
+                            {sel.prediction.explanation[language]}
+                          </p>
+                        )}
                       </div>
                     );
                   })}
@@ -504,7 +520,7 @@ export const BetSlipGenerator: React.FC = () => {
                 {language === 'zh' ? '等待生成参考组合' : 'Awaiting Accumulator Generation'}
               </h4>
               <p style={{ fontSize: '0.8rem' }}>
-                {language === 'zh' ? '在左侧配置您的风险偏好、目标总SP以及可筛选市场，AI 算法将在几毫秒内为您输出最佳串关组合。' : 'Configure filters on the left. AI algorithms will compile the optimal ticket in milliseconds.'}
+                {language === 'zh' ? '在左侧配置风险偏好、目标组合值以及可筛选市场，AI 算法将在几毫秒内输出参考组合。' : 'Configure filters on the left. AI algorithms will compile the optimal ticket in milliseconds.'}
               </p>
             </div>
           )}
