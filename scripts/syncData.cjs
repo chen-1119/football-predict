@@ -129,6 +129,18 @@ const PREDICTION_ANALYST_FRAMEWORK = Object.freeze({
     en: "The verdict must split conservative and aggressive directions; 1X2 and handicap views must stay consistent; missing data is labelled and no pick is forced.",
   },
 });
+
+const SPORTTERY_REQUEST_HEADERS = Object.freeze({
+  "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1",
+  Accept: "application/json, text/plain, */*",
+  "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+  "Accept-Encoding": "identity",
+  Referer: "https://m.sporttery.cn/mjc/zqhh/?tab=all",
+  Origin: "https://m.sporttery.cn",
+  "Sec-Fetch-Site": "same-site",
+  "Sec-Fetch-Mode": "cors",
+  "Sec-Fetch-Dest": "empty",
+});
 function normText(value, fallback = "") {
   if (value === null || value === undefined) return fallback;
   const s = String(value).trim();
@@ -1671,45 +1683,41 @@ function leagueMeta(leagueName) {
 
 function httpGetJson(url, tab = "concern") {
   return new Promise((resolve, reject) => {
-    const req = https.get(
-      url,
-      {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124 Safari/537.36",
-          Referer: `https://m.sporttery.cn/mjc/zqsj/?tab=${encodeURIComponent(tab)}`,
-          Origin: "https://m.sporttery.cn",
-          Accept: "application/json, text/plain, */*",
-          "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-        },
+    const req = https.request(url, {
+      method: "GET",
+      headers: {
+        ...SPORTTERY_REQUEST_HEADERS,
+        Referer: `https://m.sporttery.cn/mjc/zqhh/?tab=${encodeURIComponent(tab || "all")}`,
       },
-      (res) => {
-        let body = "";
-        res.setEncoding("utf8");
-        res.on("data", (chunk) => {
-          body += chunk;
-        });
-        res.on("end", () => {
-          if (res.statusCode < 200 || res.statusCode >= 300) {
-            reject(new Error(`${url} -> HTTP ${res.statusCode}`));
+    }, (res) => {
+      let body = "";
+      res.setEncoding("utf8");
+      res.on("data", (chunk) => {
+        body += chunk;
+      });
+      res.on("end", () => {
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          const preview = body ? ` ${body.slice(0, 160).replace(/\s+/g, " ")}` : "";
+          reject(new Error(`${url} -> HTTP ${res.statusCode}${preview}`));
+          return;
+        }
+        try {
+          const payload = JSON.parse(body);
+          if (payload?.success === false) {
+            reject(new Error(`sporttery_api_${payload.errorCode || "unknown"}`));
             return;
           }
-          try {
-            const payload = JSON.parse(body);
-            if (payload?.success === false) {
-              reject(new Error(`sporttery_api_${payload.errorCode || "unknown"}`));
-              return;
-            }
-            resolve(payload);
-          } catch (error) {
-            reject(error);
-          }
-        });
-      }
-    );
+          resolve(payload);
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
     req.setTimeout(20000, () => {
       req.destroy(new Error(`timeout: ${url}`));
     });
     req.on("error", reject);
+    req.end();
   });
 }
 
@@ -1796,10 +1804,8 @@ async function fetchCurrentMatches() {
     try {
       const payload = await httpGetJson(item.url, "concern");
       const matches = flatten(payload, item.method, item.url);
-      if (matches.length) {
-        console.log(`Sporttery ${item.method} ok: ${matches.length}`);
-        allMatches.push(...matches);
-      }
+      console.log(`Sporttery ${item.method} ok: ${matches.length}`);
+      if (matches.length) allMatches.push(...matches);
     } catch (error) {
       console.log(`Sporttery ${item.method} failed: ${error.message || error}`);
     }
@@ -2925,11 +2931,20 @@ function applyPredictionPersistence(match, existing, capturedAt) {
   }
 
   const sameDirection = predictionSignature(existingPredictions) === predictionSignature(nextPredictions);
+  const sameSnapshot = snapshotSignatureForMatch(existing || {}) === snapshotSignatureForMatch(match || {});
   const policyChanged = existing?.predictionMeta?.policyVersion !== PREDICTION_POLICY_VERSION
     || existing?.predictionMeta?.promptVersion !== ANALYST_PROMPT_VERSION;
 
-  if (sameDirection && !policyChanged) {
-    return { ...match, predictionMeta: generatedMeta };
+  if (sameSnapshot && !policyChanged) {
+    return {
+      ...match,
+      predictions: existingPredictions,
+      projectedScoreHome: existing?.projectedScoreHome ?? match.projectedScoreHome,
+      projectedScoreAway: existing?.projectedScoreAway ?? match.projectedScoreAway,
+      stats: existing?.stats || match.stats,
+      probabilityModel: existing?.probabilityModel || match.probabilityModel,
+      predictionMeta: existing?.predictionMeta || generatedMeta,
+    };
   }
 
   if (sameDirection && policyChanged) {
@@ -3008,6 +3023,16 @@ function loadExistingSyncMeta(publicDir) {
   try {
     const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
     return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function loadExistingJsonObject(file) {
+  if (!fs.existsSync(file)) return null;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
   } catch {
     return null;
   }
@@ -3317,13 +3342,30 @@ function loadPredictionSnapshots(publicDir) {
       return {
         version: 1,
         source: "sporttery:prediction-snapshots",
+        updatedAt: parsed?.updatedAt || null,
+        retentionDays: Number(parsed?.retentionDays || PREDICTION_SNAPSHOT_RETENTION_DAYS),
+        maxRows: Number(parsed?.maxRows || PREDICTION_SNAPSHOT_MAX_ROWS),
         rows: Array.isArray(parsed?.rows) ? parsed.rows : [],
       };
     } catch {
-      return { version: 1, source: "sporttery:prediction-snapshots", rows: [] };
+      return {
+        version: 1,
+        source: "sporttery:prediction-snapshots",
+        updatedAt: null,
+        retentionDays: PREDICTION_SNAPSHOT_RETENTION_DAYS,
+        maxRows: PREDICTION_SNAPSHOT_MAX_ROWS,
+        rows: [],
+      };
     }
   }
-  return { version: 1, source: "sporttery:prediction-snapshots", rows: [] };
+  return {
+    version: 1,
+    source: "sporttery:prediction-snapshots",
+    updatedAt: null,
+    retentionDays: PREDICTION_SNAPSHOT_RETENTION_DAYS,
+    maxRows: PREDICTION_SNAPSHOT_MAX_ROWS,
+    rows: [],
+  };
 }
 
 function predictionPhase(match, capturedAt) {
@@ -3408,6 +3450,17 @@ function predictionSnapshotRow(match, capturedAt) {
   };
 }
 
+function predictionSnapshotComparable(row) {
+  if (!row || typeof row !== "object") return "";
+  return JSON.stringify({
+    ...row,
+    capturedAt: undefined,
+    firstSeenAt: undefined,
+    lastSeenAt: undefined,
+    seenCount: undefined,
+  });
+}
+
 function appendPredictionSnapshots(publicDir, matches, capturedAt) {
   const history = loadPredictionSnapshots(publicDir);
   const cutoff = Date.parse(capturedAt) - PREDICTION_SNAPSHOT_RETENTION_DAYS * 24 * 60 * 60 * 1000;
@@ -3430,14 +3483,16 @@ function appendPredictionSnapshots(publicDir, matches, capturedAt) {
     const key = `${row.sourceMatchId}|${row.phase}|${row.signature}`;
     const existing = byKey.get(key);
     if (existing) {
-      updated += 1;
-      byKey.set(key, {
-        ...existing,
-        ...row,
-        firstSeenAt: existing.firstSeenAt || existing.capturedAt || row.firstSeenAt,
-        lastSeenAt: capturedAt,
-        seenCount: Number(existing.seenCount || 1) + 1,
-      });
+      if (predictionSnapshotComparable(existing) !== predictionSnapshotComparable(row)) {
+        updated += 1;
+        byKey.set(key, {
+          ...existing,
+          ...row,
+          firstSeenAt: existing.firstSeenAt || existing.capturedAt || row.firstSeenAt,
+          lastSeenAt: capturedAt,
+          seenCount: Number(existing.seenCount || 1) + 1,
+        });
+      }
     } else {
       appended += 1;
       byKey.set(key, row);
@@ -3454,7 +3509,7 @@ function appendPredictionSnapshots(publicDir, matches, capturedAt) {
   const payload = {
     version: 1,
     source: "sporttery:prediction-snapshots",
-    updatedAt: capturedAt,
+    updatedAt: appended || updated ? capturedAt : (history.updatedAt || capturedAt),
     retentionDays: PREDICTION_SNAPSHOT_RETENTION_DAYS,
     maxRows: PREDICTION_SNAPSHOT_MAX_ROWS,
     rows,
@@ -3505,8 +3560,30 @@ function attachPredictionSnapshotSummary(matches, snapshotPayload, capturedAt) {
 }
 
 function writeJson(file, payload) {
+  const next = `${JSON.stringify(payload, null, 2)}\n`;
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, JSON.stringify(payload, null, 2), "utf8");
+  if (fs.existsSync(file)) {
+    const previous = fs.readFileSync(file, "utf8");
+    if (previous === next) return false;
+  }
+  fs.writeFileSync(file, next, "utf8");
+  return true;
+}
+
+function preserveRootTimestamps(next, existing, keys) {
+  if (!next || !existing || typeof next !== "object" || typeof existing !== "object") return next;
+  const sanitizedNext = { ...next };
+  const sanitizedExisting = { ...existing };
+  for (const key of keys) {
+    delete sanitizedNext[key];
+    delete sanitizedExisting[key];
+  }
+  if (JSON.stringify(sanitizedNext) !== JSON.stringify(sanitizedExisting)) return next;
+  const merged = { ...next };
+  for (const key of keys) {
+    if (existing[key] !== undefined) merged[key] = existing[key];
+  }
+  return merged;
 }
 
 function spChange(value) {
@@ -3703,9 +3780,11 @@ async function sync() {
   fs.mkdirSync(publicDir, { recursive: true });
   const existingMatches = loadExistingMatches();
   const existingSyncMeta = loadExistingSyncMeta(publicDir);
+  const existingModelCalibration = loadExistingJsonObject(path.join(dataDir, "model-calibration.json"));
+  const existingTeamIndex = loadExistingJsonObject(path.join(dataDir, "team-index.json"));
   const externalSignals = loadExternalSignals(publicDir);
   const predictionHealth = buildPredictionHealth(existingMatches);
-  const modelCalibration = buildModelCalibration(existingMatches);
+  const modelCalibration = preserveRootTimestamps(buildModelCalibration(existingMatches), existingModelCalibration, ["generatedAt"]);
   const existingBySourceId = new Map(
     existingMatches
       .map((match) => [matchStoreKey(match), match])
@@ -3760,7 +3839,7 @@ async function sync() {
   const predictionSnapshotsPayload = appendPredictionSnapshots(publicDir, output, capturedAt);
   output = attachPredictionSnapshotSummary(output, predictionSnapshotsPayload, capturedAt);
   const split = splitMatchesForOutput(output);
-  const teamIndex = buildTeamIndex(output);
+  const teamIndex = preserveRootTimestamps(buildTeamIndex(output), existingTeamIndex, ["updatedAt"]);
   const oddsHistoryPayload = loadOddsHistory(publicDir);
   const publishedOddsMatches = split.current.filter((match) => sanitizeOdds(match.odds)).length;
   const publishedHandicapOddsMatches = split.current.filter((match) => sanitizeOdds(match.handicapOdds)).length;

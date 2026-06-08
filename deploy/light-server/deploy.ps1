@@ -111,9 +111,14 @@ cat /tmp/football-health.json
 $remotePath = "/tmp/football-deploy-$([guid]::NewGuid().ToString("N")).sh"
 $temp = New-TemporaryFile
 try {
-  Set-Content -LiteralPath $temp -Value $remoteScript -Encoding UTF8
+  $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+  [System.IO.File]::WriteAllText($temp, $remoteScript, $utf8NoBom)
   scp -i $resolvedKey.Path -o StrictHostKeyChecking=accept-new $temp "${target}:$remotePath"
-  ssh @sshBase "bash $remotePath; rm -f $remotePath"
+  if ($User -eq "root") {
+    ssh @sshBase "bash $remotePath; rm -f $remotePath"
+  } else {
+    ssh @sshBase "sudo bash $remotePath; rm -f $remotePath"
+  }
   Write-Host ""
   Write-Host "Deployment finished."
   Write-Host "URL: http://$HostName/"

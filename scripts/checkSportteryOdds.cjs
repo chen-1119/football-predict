@@ -8,6 +8,17 @@ const SOURCES = [
   `${SPORTTERY_BASE}/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c`,
   `${SPORTTERY_BASE}/gateway/uniform/football/getMatchListV1.qry?clientCode=3001`,
 ];
+const SPORTTERY_REQUEST_HEADERS = Object.freeze({
+  "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1",
+  Accept: "application/json, text/plain, */*",
+  "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+  "Accept-Encoding": "identity",
+  Referer: "https://m.sporttery.cn/mjc/zqhh/?tab=all",
+  Origin: "https://m.sporttery.cn",
+  "Sec-Fetch-Site": "same-site",
+  "Sec-Fetch-Mode": "cors",
+  "Sec-Fetch-Dest": "empty",
+});
 
 function toNum(value) {
   if (value === null || value === undefined || value === "") return null;
@@ -39,40 +50,30 @@ function officialHadOdds(row) {
 
 function httpGetJson(url) {
   return new Promise((resolve, reject) => {
-    const req = https.get(
-      url,
-      {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124 Safari/537.36",
-          Referer: "https://www.sporttery.cn/",
-          Origin: "https://www.sporttery.cn",
-          Accept: "application/json, text/plain, */*",
-          "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-        },
-      },
-      (res) => {
-        let body = "";
-        res.setEncoding("utf8");
-        res.on("data", (chunk) => {
-          body += chunk;
-        });
-        res.on("end", () => {
-          if (res.statusCode < 200 || res.statusCode >= 300) {
-            reject(new Error(`${url} -> HTTP ${res.statusCode}`));
-            return;
-          }
-          try {
-            resolve(JSON.parse(body));
-          } catch (error) {
-            reject(error);
-          }
-        });
-      }
-    );
+    const req = https.request(url, { method: "GET", headers: SPORTTERY_REQUEST_HEADERS }, (res) => {
+      let body = "";
+      res.setEncoding("utf8");
+      res.on("data", (chunk) => {
+        body += chunk;
+      });
+      res.on("end", () => {
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          const preview = body ? ` ${body.slice(0, 160).replace(/\s+/g, " ")}` : "";
+          reject(new Error(`${url} -> HTTP ${res.statusCode}${preview}`));
+          return;
+        }
+        try {
+          resolve(JSON.parse(body));
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
     req.setTimeout(20000, () => {
       req.destroy(new Error(`timeout: ${url}`));
     });
     req.on("error", reject);
+    req.end();
   });
 }
 
@@ -137,6 +138,17 @@ async function main() {
 
   if (checked === 0 && official.size > 0) {
     errors.push("No local matches overlap with current official Sporttery odds.");
+  }
+
+  if (official.size === 0) {
+    console.log(JSON.stringify({
+      ok: true,
+      officialMatches: 0,
+      checked: 0,
+      unavailable: true,
+      note: "Sporttery returned no official HAD rows for the current verification window.",
+    }, null, 2));
+    return;
   }
 
   if (errors.length > 0) {
