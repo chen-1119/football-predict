@@ -5203,6 +5203,8 @@ body {
   position: relative;
   isolation: isolate;
   gap: 1.15rem;
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 .worldcup-page::before {
@@ -5219,12 +5221,15 @@ body {
 
 .worldcup-kicker {
   width: max-content;
+  max-width: 100%;
   border: 1px solid hsl(var(--wc-gold) / 0.28);
   border-radius: 999px;
   background: hsl(var(--wc-gold) / 0.08);
   color: hsl(var(--wc-gold));
+  overflow-wrap: anywhere;
   letter-spacing: 0;
   padding: 0.2rem 0.48rem;
+  white-space: normal;
 }
 
 .worldcup-spotlight,
@@ -5321,6 +5326,8 @@ body {
   font-size: 0.72rem;
   font-weight: 950;
   padding: 0.26rem 0.58rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
   white-space: nowrap;
 }
 
@@ -5758,6 +5765,14 @@ body {
 }
 
 @media (max-width: 1100px) {
+  .worldcup-spotlight,
+  .worldcup-hero-panel,
+  .worldcup-two-col,
+  .worldcup-scout-grid,
+  .worldcup-knockout-grid {
+    grid-template-columns: 1fr;
+  }
+
   .worldcup-spotlight-side {
     border-left: 0;
     border-top: 1px solid hsl(var(--wc-cream) / 0.12);
@@ -5776,14 +5791,29 @@ body {
 
 @media (max-width: 768px) {
   .worldcup-page::before {
-    right: -0.85rem;
-    left: -0.85rem;
+    right: 0;
+    left: 0;
   }
 
   .worldcup-spotlight,
   .worldcup-hero-panel,
   .worldcup-section {
     padding: 0.9rem;
+  }
+
+  .worldcup-kicker,
+  .worldcup-sync-pill,
+  .worldcup-card-lines span,
+  .worldcup-third-lane strong {
+    max-width: 100%;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .worldcup-sync-pill {
+    align-self: stretch;
+    justify-content: center;
+    border-radius: 0.55rem;
   }
 
   .worldcup-hero-panel::after {
@@ -5812,7 +5842,18 @@ body {
   }
 
   .worldcup-route-rail {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.36rem;
+    justify-content: stretch;
+  }
+
+  .worldcup-route-rail span {
+    white-space: normal;
+  }
+
+  .worldcup-route-rail span:not(:last-child)::after {
+    display: none;
   }
 
   .worldcup-model-note {
@@ -5836,6 +5877,7 @@ body {
     min-height: 28px;
     font-size: 0.66rem;
     padding: 0.22rem 0.42rem;
+    white-space: normal;
   }
 
   .worldcup-hero-copy h1 {
@@ -5843,6 +5885,10 @@ body {
   }
 
   .worldcup-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .worldcup-route-rail {
     grid-template-columns: 1fr;
   }
 }

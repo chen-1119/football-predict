@@ -170,29 +170,127 @@ const compactNumber = (value) => {
 
 const pickOdds = (odds) => {
   if (!odds) return null;
-  return {
+  const compact = {
     odds1: compactNumber(odds.odds1),
     oddsX: compactNumber(odds.oddsX),
     odds2: compactNumber(odds.odds2)
   };
+  return Object.values(compact).some((value) => value !== null) ? compact : null;
 };
 
 const scoreFor = (match) => ({
-  home: match.scoreHome ?? match.homeScore ?? match.fullScoreHome ?? match.result?.scoreHome ?? null,
-  away: match.scoreAway ?? match.awayScore ?? match.fullScoreAway ?? match.result?.scoreAway ?? null
+  home: compactNumber(match.scoreHome ?? match.homeScore ?? match.fullScoreHome ?? match.result?.scoreHome),
+  away: compactNumber(match.scoreAway ?? match.awayScore ?? match.fullScoreAway ?? match.result?.scoreAway)
 });
 
+const hasCompleteOdds = (odds) => {
+  const compact = pickOdds(odds);
+  return Boolean(compact && compact.odds1 !== null && compact.oddsX !== null && compact.odds2 !== null);
+};
+
+const resultFor = (match) => {
+  const score = scoreFor(match);
+  const hasScore = score.home !== null && score.away !== null;
+  const totalGoals = hasScore ? compactNumber(score.home + score.away) : null;
+  const goalDiff = hasScore ? compactNumber(score.home - score.away) : null;
+  const resultCode = !hasScore ? null : score.home > score.away ? "1" : score.home < score.away ? "2" : "X";
+  return {
+    hasScore,
+    resultCode,
+    scoreText: hasScore ? `${score.home}:${score.away}` : null,
+    totalGoals,
+    goalDiff,
+    bothTeamsScored: hasScore ? score.home > 0 && score.away > 0 : null
+  };
+};
+
+const projectedScoreFor = (match) => ({
+  home: compactNumber(match.projectedScoreHome ?? match.projectedHomeScore),
+  away: compactNumber(match.projectedScoreAway ?? match.projectedAwayScore)
+});
+
+const metricPair = (stats, key) => {
+  const metric = stats?.[key];
+  if (!metric || typeof metric !== "object") return null;
+  const pair = {
+    home: compactNumber(metric.home),
+    away: compactNumber(metric.away)
+  };
+  return pair.home !== null || pair.away !== null ? pair : null;
+};
+
+const statsSummaryFor = (match) => {
+  const stats = match.stats;
+  if (!stats || typeof stats !== "object") return null;
+  return {
+    xG: metricPair(stats, "xG"),
+    possession: metricPair(stats, "possession"),
+    shots: metricPair(stats, "shots"),
+    shotsOnTarget: metricPair(stats, "shotsOnTarget"),
+    corners: metricPair(stats, "corners"),
+    fouls: metricPair(stats, "fouls"),
+    yellowCards: metricPair(stats, "yellowCards"),
+    redCards: metricPair(stats, "redCards")
+  };
+};
+
+const normalizeMarketType = (value) => String(value || "").trim().toUpperCase().replace(/[\s_-]+/g, "");
+
+const predictionItemsFor = (match) => {
+  if (Array.isArray(match.predictions)) {
+    return match.predictions.filter((item) => item && typeof item === "object");
+  }
+  return [];
+};
+
+const findPredictionItem = (items, aliases) => {
+  const normalizedAliases = aliases.map(normalizeMarketType);
+  return items.find((item) => normalizedAliases.includes(normalizeMarketType(item.marketType || item.market || item.type))) || null;
+};
+
+const summarizePredictionItem = (item) => {
+  if (!item || typeof item !== "object") return null;
+  return {
+    marketType: item.marketType || item.market || item.type || null,
+    tipCode: item.tipCode || null,
+    odds: compactNumber(item.odds),
+    trustScore: compactNumber(item.trustScore),
+    resultStatus: item.resultStatus || null,
+    riskCount: Number.isFinite(Number(item.riskCount)) ? Number(item.riskCount) : null,
+    visibilityStatus: item.visibilityStatus || null
+  };
+};
+
 const predictionSummaryFor = (match) => {
-  const predictions = match.predictions || {};
+  const predictions = match.predictions && !Array.isArray(match.predictions) ? match.predictions : {};
+  const predictionItems = predictionItemsFor(match);
+  const best = predictions.best
+    || findPredictionItem(predictionItems, ["BEST", "MAIN", "RECOMMENDATION"])
+    || predictionItems.find((item) => item.tipCode && item.tipCode !== "WATCH")
+    || predictionItems[0]
+    || null;
+  const oneXTwo = predictions.oneXTwo
+    || predictions["1X2"]
+    || findPredictionItem(predictionItems, ["1X2", "HAD", "ONEXTWO"])
+    || null;
+  const goals = predictions.goals
+    || predictions.totalGoals
+    || findPredictionItem(predictionItems, ["GOALS", "TOTALGOALS", "TOTAL"])
+    || null;
   const probabilityFinal = match.probabilityModel?.oneXTwo?.final || match.probabilityFinal || null;
   return {
-    main: predictions.best?.tipCode || predictions.oneXTwo?.tipCode || null,
-    oneXTwo: predictions.oneXTwo?.tipCode || null,
-    goals: predictions.goals?.tipCode || null,
-    trustScore: predictions.best?.trustScore ?? predictions.oneXTwo?.trustScore ?? null,
+    main: best?.tipCode || oneXTwo?.tipCode || null,
+    oneXTwo: oneXTwo?.tipCode || null,
+    goals: goals?.tipCode || null,
+    trustScore: compactNumber(best?.trustScore ?? oneXTwo?.trustScore),
     confidence: match.predictionMeta?.confidence ?? match.probabilityModel?.confidence ?? null,
     probabilityFinal,
-    modelVersion: match.probabilityModel?.version || match.predictionMeta?.modelVersion || null
+    modelVersion: match.probabilityModel?.version || match.predictionMeta?.modelVersion || null,
+    details: {
+      best: summarizePredictionItem(best),
+      oneXTwo: summarizePredictionItem(oneXTwo),
+      goals: summarizePredictionItem(goals)
+    }
   };
 };
 
@@ -202,17 +300,66 @@ const externalSummaryFor = (match) => {
   return {
     source: signals.source || "external",
     updatedAt: signals.updatedAt || null,
+    sourceMatchId: signals.sourceMatchId || null,
+    fixtureId: signals.fixtureId || null,
+    buyEndTime: signals.buyEndTime || null,
     hasExternalOdds: Boolean(signals.externalOdds || signals.bookmakerOdds?.had || signals.bookmakerOdds?.hhad),
     hasBookmakerHad: Boolean(signals.bookmakerOdds?.had),
-    hasBookmakerHhad: Boolean(signals.bookmakerOdds?.hhad)
+    hasBookmakerHhad: Boolean(signals.bookmakerOdds?.hhad),
+    handicapLine: signals.handicapLine ?? signals.bookmakerOdds?.hhad?.handicapLine ?? null
   };
 };
 
-const buildMatchSnapshot = (match, source) => {
+const dataCompletenessFor = (match, prediction) => {
   const score = scoreFor(match);
+  const hasBaseFixture = Boolean((match.id || match.sourceMatchId) && match.kickoffTime && match.homeTeamName && match.awayTeamName);
+  const isResultLike = ["FINISHED", "LIVE", "PENDING_RESULT"].includes(String(match.status || "").toUpperCase());
+  const bookmakerOdds = match.externalSignals?.bookmakerOdds || {};
+  const checks = {
+    hasBaseFixture,
+    hasLeague: Boolean(match.leagueName || match.leagueId),
+    hasScore: score.home !== null && score.away !== null,
+    hasOfficialHadOdds: hasCompleteOdds(match.odds),
+    hasOfficialHhadOdds: hasCompleteOdds(match.handicapOdds),
+    hasExternalHadOdds: hasCompleteOdds(bookmakerOdds.had || match.externalSignals?.externalOdds),
+    hasExternalHhadOdds: hasCompleteOdds(bookmakerOdds.hhad),
+    hasPrediction: Boolean(prediction?.main || prediction?.oneXTwo || prediction?.goals),
+    hasProbabilityModel: Boolean(match.probabilityModel || prediction?.probabilityFinal),
+    hasStats: Boolean(match.stats && typeof match.stats === "object")
+  };
+  const missing = [];
+  if (!checks.hasBaseFixture) missing.push("baseFixture");
+  if (!checks.hasLeague) missing.push("league");
+  if (isResultLike && !checks.hasScore) missing.push("score");
+  if (!checks.hasOfficialHadOdds) missing.push("officialHadOdds");
+  if (!checks.hasOfficialHhadOdds) missing.push("officialHhadOdds");
+  if (!checks.hasPrediction) missing.push("prediction");
+  if (!checks.hasProbabilityModel) missing.push("probabilityModel");
+  return { ...checks, missing };
+};
+
+const buildMatchSnapshot = (match, source, dataset = "current") => {
+  const score = scoreFor(match);
+  const prediction = predictionSummaryFor(match);
+  const result = resultFor(match);
+  const stats = statsSummaryFor(match);
+  const projectedScore = projectedScoreFor(match);
   const payload = {
+    dataset,
+    fixture: {
+      matchId: match.id || null,
+      sourceMatchId: match.sourceMatchId || null,
+      matchNo: match.matchNo || null,
+      businessDate: match.businessDate || match.matchDate || null,
+      kickoffTime: match.kickoffTime || null,
+      leagueName: match.leagueName || null,
+      homeTeamName: match.homeTeamName || null,
+      awayTeamName: match.awayTeamName || null
+    },
     status: match.status || null,
     score,
+    result,
+    projectedScore,
     odds: pickOdds(match.odds),
     handicapLine: match.handicapLine ?? match.handicap ?? null,
     handicapOdds: pickOdds(match.handicapOdds),
@@ -223,7 +370,8 @@ const buildMatchSnapshot = (match, source) => {
       oddsXChange: compactNumber(match.oddsTrend.oddsXChange),
       odds2Change: compactNumber(match.oddsTrend.odds2Change)
     } : null,
-    prediction: predictionSummaryFor(match),
+    prediction,
+    stats,
     external: externalSummaryFor(match)
   };
   const signature = hashPayload(payload);
@@ -231,40 +379,68 @@ const buildMatchSnapshot = (match, source) => {
     id: crypto.randomUUID(),
     at: nowIso(),
     source,
+    dataset,
     matchId: match.id || null,
     sourceMatchId: match.sourceMatchId || null,
     matchNo: match.matchNo || null,
+    matchDate: match.matchDate || null,
+    kickoffDate: match.kickoffDate || null,
     businessDate: match.businessDate || match.matchDate || null,
     kickoffTime: match.kickoffTime || null,
+    leagueId: match.leagueId || null,
     leagueName: match.leagueName || null,
+    countryId: match.countryId || null,
+    countryName: match.countryName || null,
+    homeTeamId: match.homeTeamId || null,
     homeTeamName: match.homeTeamName || null,
+    awayTeamId: match.awayTeamId || null,
     awayTeamName: match.awayTeamName || null,
+    matchSource: match.source || null,
+    sourceMethod: match.sourceMethod || null,
+    sourceUrl: match.sourceUrl || null,
     status: match.status || null,
     scoreHome: score.home,
     scoreAway: score.away,
+    result,
+    projectedScore,
     odds: payload.odds,
+    oddsSource: match.oddsSource || null,
+    oddsUpdatedAt: match.oddsUpdatedAt || match.odds?.updatedAt || null,
     handicapLine: payload.handicapLine,
     handicapOdds: payload.handicapOdds,
+    handicapOddsSource: match.handicapOddsSource || null,
+    handicapOddsUpdatedAt: match.handicapOddsUpdatedAt || match.handicapOdds?.updatedAt || null,
     oddsTrend: payload.oddsTrend,
     prediction: payload.prediction,
+    stats,
     external: payload.external,
+    dataCompleteness: dataCompletenessFor(match, prediction),
     signature
   };
 };
 
-const buildOddsSnapshots = (match, source) => {
+const buildOddsSnapshots = (match, source, dataset = "current") => {
   const common = {
     at: nowIso(),
     source,
+    dataset,
     matchId: match.id || null,
     sourceMatchId: match.sourceMatchId || null,
     matchNo: match.matchNo || null,
+    matchDate: match.matchDate || null,
+    kickoffDate: match.kickoffDate || null,
     businessDate: match.businessDate || match.matchDate || null,
     kickoffTime: match.kickoffTime || null,
+    leagueId: match.leagueId || null,
     leagueName: match.leagueName || null,
+    countryId: match.countryId || null,
+    countryName: match.countryName || null,
+    homeTeamId: match.homeTeamId || null,
     homeTeamName: match.homeTeamName || null,
+    awayTeamId: match.awayTeamId || null,
     awayTeamName: match.awayTeamName || null,
-    status: match.status || null
+    status: match.status || null,
+    matchSource: match.source || null
   };
   const rows = [];
   const add = (pool, bookmaker, handicap, odds, updatedAt, origin) => {
@@ -308,6 +484,111 @@ const buildOddsSnapshots = (match, source) => {
   );
   return rows;
 };
+
+const poolForOddsHistory = (row) => {
+  const raw = `${row.pool || row.poolCode || row.oddsPoolCode || row.oddsSource || ""}`.toUpperCase();
+  return raw.includes("HHAD") ? "HHAD" : "HAD";
+};
+
+const bookmakerForOddsHistory = (row) => {
+  const raw = `${row.bookmaker || row.oddsSource || row.origin || ""}`.toLowerCase();
+  if (raw.includes("500")) return "500.com";
+  return "sporttery";
+};
+
+const matchIdForOddsHistory = (row) => {
+  if (row.matchId) return row.matchId;
+  if (row.sourceMatchId && String(row.sourceMatchId).startsWith("sporttery_")) return row.sourceMatchId;
+  return row.sourceMatchId ? `sporttery_${row.sourceMatchId}` : null;
+};
+
+const buildOddsHistorySnapshot = (row, source) => {
+  const compactOdds = pickOdds(row);
+  if (!compactOdds) return null;
+  const pool = poolForOddsHistory(row);
+  const bookmaker = bookmakerForOddsHistory(row);
+  const handicap = row.handicapLine ?? row.handicap ?? (pool === "HAD" ? 0 : null);
+  const origin = row.oddsSource || row.origin || `${bookmaker}:${pool}`;
+  const payload = {
+    pool,
+    bookmaker,
+    handicap,
+    odds: compactOdds,
+    capturedAt: row.capturedAt || null,
+    updatedAt: row.oddsUpdatedAt || row.updatedAt || null,
+    origin
+  };
+  return {
+    id: crypto.randomUUID(),
+    at: row.capturedAt || nowIso(),
+    persistedAt: nowIso(),
+    source,
+    dataset: "odds-history",
+    matchId: matchIdForOddsHistory(row),
+    sourceMatchId: row.sourceMatchId || null,
+    matchNo: row.matchNo || null,
+    businessDate: row.businessDate || row.matchDate || null,
+    kickoffTime: row.kickoffTime || null,
+    leagueId: row.leagueId || null,
+    leagueName: row.leagueName || null,
+    countryId: row.countryId || null,
+    countryName: row.countryName || null,
+    homeTeamId: row.homeTeamId || null,
+    homeTeamName: row.homeTeamName || null,
+    awayTeamId: row.awayTeamId || null,
+    awayTeamName: row.awayTeamName || null,
+    status: row.status || null,
+    pool,
+    bookmaker,
+    handicap,
+    odds1: compactOdds.odds1,
+    oddsX: compactOdds.oddsX,
+    odds2: compactOdds.odds2,
+    oddsUpdatedAt: row.oddsUpdatedAt || row.updatedAt || null,
+    oddsCapturedAt: row.capturedAt || null,
+    captureBucket: row.captureBucket || null,
+    origin,
+    sourceMethod: row.oddsSourceMethod || null,
+    sourceUrl: row.oddsSourceUrl || null,
+    signature: hashPayload(payload)
+  };
+};
+
+const oddsKeyFor = (oddsRow) => {
+  const matchKey = oddsRow.matchId || oddsRow.sourceMatchId || "unknown-match";
+  return `${matchKey}:${oddsRow.bookmaker || "unknown"}:${oddsRow.pool || "unknown"}:${oddsRow.handicap ?? 0}`;
+};
+
+const persistOddsSnapshotRow = async (storeDir, state, oddsRow, mode = "latest") => {
+  const oddsKey = oddsKeyFor(oddsRow);
+  const stateKey = mode === "event"
+    ? `${oddsKey}:${oddsRow.at || ""}:${oddsRow.signature}`
+    : oddsKey;
+  if (mode === "event" ? state.latestOddsSignatures[stateKey] : state.latestOddsSignatures[stateKey] === oddsRow.signature) {
+    return false;
+  }
+  await appendRow(storeDir, TABLES.oddsSnapshots, oddsRow);
+  state.latestOddsSignatures[stateKey] = mode === "event" ? nowIso() : oddsRow.signature;
+  state.counts.oddsSnapshots += 1;
+  return true;
+};
+
+const summarizeStatuses = (rows) => rows.reduce((acc, match) => {
+  const key = match.status || "UNKNOWN";
+  acc[key] = (acc[key] || 0) + 1;
+  return acc;
+}, {});
+
+const summarizeDataCompleteness = (rows) => rows.reduce((acc, match) => {
+  const prediction = predictionSummaryFor(match);
+  const completeness = dataCompletenessFor(match, prediction);
+  acc.total += 1;
+  for (const [key, value] of Object.entries(completeness)) {
+    if (key === "missing") continue;
+    if (value) acc[key] = (acc[key] || 0) + 1;
+  }
+  return acc;
+}, { total: 0 });
 
 const persistPredictionRows = async (storeDir, state, rows, source) => {
   let appended = 0;
@@ -368,11 +649,9 @@ const persistDataSnapshot = async ({ storeDir, dataDir, source = "server-sync", 
   const externalSignals = await readJsonFile(path.join(dataDir, "external-signals.json"), null);
   const matches = Array.isArray(current) ? current : [];
   const historicalMatches = Array.isArray(history) ? history : [];
-  const statuses = matches.reduce((acc, match) => {
-    const key = match.status || "UNKNOWN";
-    acc[key] = (acc[key] || 0) + 1;
-    return acc;
-  }, {});
+  const oddsHistoryRows = Array.isArray(oddsHistory.rows) ? oddsHistory.rows : Array.isArray(oddsHistory) ? oddsHistory : [];
+  const statuses = summarizeStatuses(matches);
+  const historyStatuses = summarizeStatuses(historicalMatches);
   const runSignature = hashPayload({
     matches: matches.map((match) => ({
       id: match.id,
@@ -381,6 +660,13 @@ const persistDataSnapshot = async ({ storeDir, dataDir, source = "server-sync", 
       odds: pickOdds(match.odds),
       hhad: pickOdds(match.handicapOdds),
       prediction: predictionSummaryFor(match)
+    })),
+    history: historicalMatches.map((match) => ({
+      id: match.id,
+      status: match.status,
+      score: scoreFor(match),
+      odds: pickOdds(match.odds),
+      hhad: pickOdds(match.handicapOdds)
     })),
     metaUpdatedAt: syncMeta.updatedAt || syncMeta.capturedAt || null,
     externalUpdatedAt: externalSignals?.updatedAt || null
@@ -394,12 +680,18 @@ const persistDataSnapshot = async ({ storeDir, dataDir, source = "server-sync", 
     counts: {
       current: matches.length,
       history: historicalMatches.length,
-      oddsHistoryRows: Array.isArray(oddsHistory.rows) ? oddsHistory.rows.length : 0,
+      allMatches: matches.length + historicalMatches.length,
+      oddsHistoryRows: oddsHistoryRows.length,
       predictionSnapshots: Array.isArray(predictionSnapshots.rows) ? predictionSnapshots.rows.length : 0,
       gptPredictions: Array.isArray(gptPredictions.rows) ? gptPredictions.rows.length : 0,
       externalSignals: externalSignals?.matches ? Object.keys(externalSignals.matches).length : 0
     },
     statuses,
+    historyStatuses,
+    dataCompleteness: {
+      current: summarizeDataCompleteness(matches),
+      history: summarizeDataCompleteness(historicalMatches)
+    },
     meta: {
       updatedAt: syncMeta.updatedAt || null,
       capturedAt: syncMeta.capturedAt || null,
@@ -414,8 +706,9 @@ const persistDataSnapshot = async ({ storeDir, dataDir, source = "server-sync", 
 
   let matchSnapshots = 0;
   let oddsSnapshots = 0;
-  for (const match of matches) {
-    const row = buildMatchSnapshot(match, source);
+
+  const persistMatch = async (match, dataset) => {
+    const row = buildMatchSnapshot(match, source, dataset);
     const matchKey = row.matchId || row.sourceMatchId || `${row.homeTeamName}-${row.awayTeamName}-${row.kickoffTime}`;
     if (matchKey && state.latestMatchSignatures[matchKey] !== row.signature) {
       await appendRow(storeDir, TABLES.matchSnapshots, row);
@@ -424,19 +717,31 @@ const persistDataSnapshot = async ({ storeDir, dataDir, source = "server-sync", 
       matchSnapshots += 1;
     }
 
-    for (const oddsRow of buildOddsSnapshots(match, source)) {
-      const oddsKey = `${oddsRow.matchId || oddsRow.sourceMatchId}:${oddsRow.bookmaker}:${oddsRow.pool}:${oddsRow.handicap ?? 0}`;
-      if (state.latestOddsSignatures[oddsKey] === oddsRow.signature) continue;
-      await appendRow(storeDir, TABLES.oddsSnapshots, oddsRow);
-      state.latestOddsSignatures[oddsKey] = oddsRow.signature;
-      state.counts.oddsSnapshots += 1;
+    for (const oddsRow of buildOddsSnapshots(match, source, dataset)) {
+      if (await persistOddsSnapshotRow(storeDir, state, oddsRow, "latest")) {
+        oddsSnapshots += 1;
+      }
+    }
+  };
+
+  for (const match of matches) {
+    await persistMatch(match, "current");
+  }
+  for (const match of historicalMatches) {
+    await persistMatch(match, "history");
+  }
+
+  for (const row of oddsHistoryRows) {
+    const oddsRow = buildOddsHistorySnapshot(row, source);
+    if (!oddsRow) continue;
+    if (await persistOddsSnapshotRow(storeDir, state, oddsRow, "event")) {
       oddsSnapshots += 1;
     }
   }
 
   const predictionRows = [
-    ...(Array.isArray(predictionSnapshots.rows) ? predictionSnapshots.rows.slice(0, 300) : []),
-    ...(Array.isArray(gptPredictions.rows) ? gptPredictions.rows.slice(0, 300) : [])
+    ...(Array.isArray(predictionSnapshots.rows) ? predictionSnapshots.rows.slice(-500) : []),
+    ...(Array.isArray(gptPredictions.rows) ? gptPredictions.rows.slice(-500) : [])
   ];
   const predictionRuns = await persistPredictionRows(storeDir, state, predictionRows, source);
   const nextState = await writeState(storeDir, state);
@@ -453,19 +758,29 @@ const persistDataSnapshot = async ({ storeDir, dataDir, source = "server-sync", 
   };
 };
 
+const readTimelineRows = async (storeDir, table, id, limit) => {
+  const [byMatchId, bySourceMatchId] = await Promise.all([
+    readDataStoreRows(storeDir, table, { matchId: id, limit }),
+    readDataStoreRows(storeDir, table, { sourceMatchId: id, limit })
+  ]);
+  const unique = new Map();
+  for (const row of [...byMatchId, ...bySourceMatchId]) {
+    unique.set(row.id || hashPayload(row), row);
+  }
+  return Array.from(unique.values());
+};
+
 const getMatchTimeline = async (storeDir, id, limit = 120) => {
   const matchId = String(id || "").trim();
   if (!matchId) return [];
-  const [matchRows, officialOdds, hhadOdds, predictionRows] = await Promise.all([
-    readDataStoreRows(storeDir, TABLES.matchSnapshots, { matchId, limit }),
-    readDataStoreRows(storeDir, TABLES.oddsSnapshots, { matchId, limit }),
-    readDataStoreRows(storeDir, TABLES.oddsSnapshots, { sourceMatchId: matchId, limit }),
-    readDataStoreRows(storeDir, TABLES.predictionRuns, { matchId, limit })
+  const [matchRows, oddsRows, predictionRows] = await Promise.all([
+    readTimelineRows(storeDir, TABLES.matchSnapshots, matchId, limit),
+    readTimelineRows(storeDir, TABLES.oddsSnapshots, matchId, limit),
+    readTimelineRows(storeDir, TABLES.predictionRuns, matchId, limit)
   ]);
   const rows = [
     ...matchRows.map((row) => ({ type: "match", ...row })),
-    ...officialOdds.map((row) => ({ type: "odds", ...row })),
-    ...hhadOdds.map((row) => ({ type: "odds", ...row })),
+    ...oddsRows.map((row) => ({ type: "odds", ...row })),
     ...predictionRows.map((row) => ({ type: "prediction", ...row }))
   ];
   const unique = new Map(rows.map((row) => [`${row.type}:${row.id}`, row]));
