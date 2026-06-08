@@ -72,6 +72,7 @@ jobs:
           git add public/matches.json public/odds-history.json public/data
           if ! git diff-index --quiet HEAD; then
             git commit -m "chore: auto sync sports predictions matches [skip ci]"
+            git pull --rebase origin main
             git push origin HEAD:main
           else
             echo "No changes in predictions data."
