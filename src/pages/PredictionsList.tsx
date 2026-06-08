@@ -39,7 +39,12 @@ const getSportteryDay = (match: Match): string => match.businessDate || getKicko
 
 const getMatchDay = (match: Match): string => getSportteryDay(match);
 
-const matchBelongsToDate = (match: Match, date: string) => getMatchDay(match) === date;
+const isActiveResultStatus = (match: Match) => match.status === 'LIVE' || match.status === 'PENDING_RESULT';
+
+const matchBelongsToDate = (match: Match, date: string) => (
+  getMatchDay(match) === date ||
+  (isActiveResultStatus(match) && getKickoffDay(match) === date)
+);
 
 const getBestPrediction = (match: Match) => getVisiblePrediction(match, 'BEST');
 
@@ -236,6 +241,14 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
 
   const systemTodayStr = getDateStringOffset(0);
   const activeOfficialDate = useMemo(() => {
+    const activeByKickoffDay = matches
+      .filter((match) => isActiveResultStatus(match))
+      .map(getKickoffDay)
+      .filter(Boolean)
+      .sort()[0];
+
+    if (activeByKickoffDay) return activeByKickoffDay;
+
     return matches
       .filter((match) => match.status !== 'FINISHED')
       .map(getMatchDay)
@@ -593,7 +606,9 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
 
   const historyDateOptions = (() => {
     const quickDates = new Set(quickDateOptions.map((option) => option.date));
-    const matchDates = matches.map(getMatchDay).filter(Boolean);
+    const matchDates = matches
+      .flatMap((match) => [getMatchDay(match), isActiveResultStatus(match) ? getKickoffDay(match) : ''])
+      .filter(Boolean);
     const historyDates = Array.from(new Set(matchDates))
       .filter((date) => !quickDates.has(date))
       .sort((a, b) => b.localeCompare(a));

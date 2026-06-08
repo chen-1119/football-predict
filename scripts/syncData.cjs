@@ -416,6 +416,34 @@ function scoreFromSections(section) {
   return { home: Number(match[1]), away: Number(match[2]) };
 }
 
+function scoreFromRow(row) {
+  const sectionScore = scoreFromSections(
+    row.sectionsNo999 ||
+    row.sectionsNo1 ||
+    row.fullScore ||
+    row.finalScore ||
+    row.matchScore ||
+    row.currentScore ||
+    row.liveScore ||
+    row.score
+  );
+  const home = toNum(
+    row.homeScore,
+    toNum(
+      row.homeTeamScore,
+      toNum(row.homeGoals, toNum(row.homeGoal, toNum(row.homeFullScore, toNum(row.homeLiveScore, sectionScore.home))))
+    )
+  );
+  const away = toNum(
+    row.awayScore,
+    toNum(
+      row.awayTeamScore,
+      toNum(row.awayGoals, toNum(row.awayGoal, toNum(row.awayFullScore, toNum(row.awayLiveScore, sectionScore.away))))
+    )
+  );
+  return { home, away };
+}
+
 function parseKickoff(matchDate, matchTime) {
   const date = normText(matchDate);
   const time = normText(matchTime);
@@ -450,15 +478,18 @@ function statusFromSporttery(matchStatus, sellStatus, statusName = "", kickoffTi
   const lower = `${matchRaw} ${sellRaw} ${nameRaw}`.toLowerCase();
   const kickoffAt = Date.parse(kickoffTime);
   const kickoffStarted = Number.isFinite(kickoffAt) && Date.now() >= kickoffAt;
+  const hasAnyName = (names) => names.some((name) => nameRaw.includes(name));
 
   if (["finished", "result", "ended", "completed"].some((status) => lower.includes(status))) return "FINISHED";
-  if (matchRaw === "10" || nameRaw.includes("待开奖") || nameRaw.includes("待赛果")) return "PENDING_RESULT";
+  if (matchRaw === "10" || hasAnyName(["待开奖", "待赛果", "待派奖", "等待开奖"])) return "PENDING_RESULT";
   if (["11", "12", "13"].includes(matchRaw)) return "FINISHED";
-  if (nameRaw.includes("完成") || nameRaw.includes("完场") || nameRaw.includes("赛果")) return "FINISHED";
+  if (hasAnyName(["完成", "完场", "赛果", "已开奖", "已派奖"])) return "FINISHED";
 
   if (["playing", "live", "inplay", "firsthalf", "secondhalf"].some((status) => lower.includes(status))) return "LIVE";
+  if (hasAnyName(["进行中", "比赛中", "上半场", "下半场", "中场", "加时", "点球", "暂停"])) return "LIVE";
   if (["4", "5", "6", "7", "8", "9"].includes(matchRaw)) return "LIVE";
   if (matchRaw === "3" || sellRaw === "3" || nameRaw.includes("暂停销售")) return kickoffStarted ? "LIVE" : "SCHEDULED";
+  if (kickoffStarted && ["2", "3"].includes(matchRaw)) return "LIVE";
   if (kickoffStarted && ["selling", "sell"].some((status) => lower.includes(status))) return "LIVE";
   return "SCHEDULED";
 }
@@ -1700,9 +1731,9 @@ function flatten(payload, sourceMethod, sourceUrl) {
 }
 
 function mapSportteryRow(row, sourceMethod, sourceUrl) {
-  const sectionScore = scoreFromSections(row.sectionsNo999 || row.sectionsNo1);
-  const scoreHome = toNum(row.homeScore, sectionScore.home);
-  const scoreAway = toNum(row.awayScore, sectionScore.away);
+  const rowScore = scoreFromRow(row);
+  const scoreHome = rowScore.home;
+  const scoreAway = rowScore.away;
   const homeTeam = normText(row.homeTeamAllName || row.homeTeamAbbName, "主队");
   const awayTeam = normText(row.awayTeamAllName || row.awayTeamAbbName, "客队");
   const leagueName = normText(row.leagueAllName || row.leagueAbbName, "足球赛事");
@@ -3082,6 +3113,8 @@ function normalizePublishedStatus(match, capturedAt) {
   }
   if (match.status === "PENDING_RESULT") return match;
   if (capturedMs < kickoffMs) return match;
+  if (hasScore && elapsedMinutes >= 125) return { ...match, status: "FINISHED" };
+  if (!hasScore && elapsedMinutes >= 125) return { ...match, status: "PENDING_RESULT" };
   return { ...match, status: "LIVE" };
 }
 
