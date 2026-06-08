@@ -20,16 +20,18 @@ import { TeamBadge } from '../components/TeamBadge';
 import { useApp } from '../context/AppContextCore';
 import { getPredictionTipDisplay, getSportteryPoolRows } from '../services/bettingDisplay';
 import { getLeagueById, getTeamById } from '../services/entities';
-import type { Match, MultiLangString } from '../services/mockData';
+import type { Match, MultiLangString, Team } from '../services/mockData';
 import {
   getBestPrediction,
   getDaysUntilWorldCup,
   getMatchTrust,
   getWorldCupContenders,
+  getWorldCupFixtureForecast,
   getWorldCupGroupForecasts,
   getWorldCupKnockoutForecast,
   getWorldCupProjectedQualifiers,
   getWorldCupRecentResults,
+  getWorldCupSeededFixtures,
   getWorldCupUpsetRadar,
   getWorldCupWatchMatches,
   isWorldCupRelevantMatch,
@@ -39,6 +41,7 @@ import {
   WORLD_CUP_OFFICIAL,
   WORLD_CUP_PIPELINE_CARDS,
   WORLD_CUP_STAGE_CARDS,
+  type WorldCupGroupForecast,
   type WorldCupTeamForecast
 } from '../services/worldCupData';
 
@@ -172,15 +175,53 @@ const GroupTeamRow = ({ team, language }: { team: WorldCupTeamForecast; language
   );
 };
 
-const MatchCard = ({ match, language, onSelectMatch }: { match: Match; language: Locale; onSelectMatch: (id: string) => void }) => {
-  const home = getTeamById(match.homeTeamId);
-  const away = getTeamById(match.awayTeamId);
+const getDisplayTeam = (match: Match, side: 'home' | 'away'): Team => {
+  const isHome = side === 'home';
+  const registered = getTeamById(isHome ? match.homeTeamId : match.awayTeamId);
+  const syncedName = isHome ? match.homeTeamName : match.awayTeamName;
+  const syncedNameEn = isHome ? match.homeTeamNameEn : match.awayTeamNameEn;
+  const syncedLogo = isHome ? match.homeTeamLogo : match.awayTeamLogo;
+  const syncedLogoType = isHome ? match.homeTeamLogoType : match.awayTeamLogoType;
+  const isUnknown = registered.shortName.zh === '未知' && registered.shortName.en === 'Unknown';
+
+  if (!isUnknown || !syncedName) return registered;
+
+  return {
+    id: isHome ? match.homeTeamId : match.awayTeamId,
+    name: { zh: syncedName, en: syncedNameEn || syncedName },
+    shortName: { zh: syncedName, en: syncedNameEn || syncedName },
+    logo: syncedLogo || syncedName,
+    logoType: syncedLogoType,
+    value: '',
+    color: isHome ? '#0f9f6e' : '#2563eb'
+  };
+};
+
+const MatchCard = ({
+  match,
+  language,
+  groupForecasts,
+  onSelectMatch
+}: {
+  match: Match;
+  language: Locale;
+  groupForecasts: WorldCupGroupForecast[];
+  onSelectMatch: (id: string) => void;
+}) => {
+  const home = getDisplayTeam(match, 'home');
+  const away = getDisplayTeam(match, 'away');
   const league = getLeagueById(match.leagueId);
   const prediction = getBestPrediction(match);
-  const trust = getMatchTrust(match);
+  const forecast = prediction ? null : getWorldCupFixtureForecast(match, groupForecasts);
+  const trust = getMatchTrust(match) || forecast?.trust || 0;
   const pools = getSportteryPoolRows(match, language);
   const had = pools.find((pool) => pool.poolCode === 'HAD');
   const hhad = pools.find((pool) => pool.poolCode === 'HHAD');
+  const recommendation = prediction
+    ? getPredictionTipDisplay(prediction, language, true)
+    : forecast
+      ? pickText(forecast.tip, language)
+      : copy.waiting[language];
 
   return (
     <article className="worldcup-match-card">
@@ -201,8 +242,13 @@ const MatchCard = ({ match, language, onSelectMatch }: { match: Match; language:
       </button>
       <div className="worldcup-card-lines">
         <span>{league.shortName[language]}</span>
-        <span>{copy.recommendation[language]} {prediction ? getPredictionTipDisplay(prediction, language, true) : copy.waiting[language]}</span>
+        <span>{copy.recommendation[language]} {recommendation}</span>
         <span>{copy.trust[language]} {trust ? `${trust}%` : '--'}</span>
+        {forecast && (
+          <span>
+            {language === 'zh' ? '模型' : 'Model'} {formatPercent(forecast.homeAdvanceProbability)} / {formatPercent(forecast.awayAdvanceProbability)}
+          </span>
+        )}
       </div>
       {had?.odds ? (
         <div className="worldcup-odds-strip">
@@ -213,7 +259,9 @@ const MatchCard = ({ match, language, onSelectMatch }: { match: Match; language:
           <span>{had.updatedAt ? formatDateTime(had.updatedAt, language) : copy.sp[language]}</span>
         </div>
       ) : (
-        <div className="worldcup-odds-strip is-empty">{copy.waiting[language]} HAD SP</div>
+        <div className="worldcup-odds-strip is-empty">
+          {forecast ? pickText(forecast.detail, language) : `${copy.waiting[language]} HAD SP`}
+        </div>
       )}
       {hhad?.odds && (
         <div className="worldcup-odds-strip">
@@ -240,14 +288,22 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
   const groupForecasts = useMemo(() => getWorldCupGroupForecasts(), []);
   const qualifiers = useMemo(() => getWorldCupProjectedQualifiers(groupForecasts), [groupForecasts]);
   const knockoutRoutes = useMemo(() => getWorldCupKnockoutForecast(groupForecasts), [groupForecasts]);
-  const allWorldCupMatches = useMemo(
+  const seededWorldCupMatches = useMemo(() => getWorldCupSeededFixtures(), []);
+  const syncedWorldCupMatches = useMemo(
     () => matches.filter(isWorldCupRelevantMatch).sort((a, b) => Date.parse(a.kickoffTime) - Date.parse(b.kickoffTime)),
     [matches]
   );
-  const watchMatches = useMemo(() => getWorldCupWatchMatches(matches, 8), [matches]);
-  const recentResults = useMemo(() => getWorldCupRecentResults(matches, 5), [matches]);
-  const contenders = useMemo(() => getWorldCupContenders(matches, 5), [matches]);
-  const upsetRadar = useMemo(() => getWorldCupUpsetRadar(matches, 5), [matches]);
+  const allWorldCupMatches = syncedWorldCupMatches.length ? syncedWorldCupMatches : seededWorldCupMatches;
+  const watchMatches = useMemo(() => getWorldCupWatchMatches(allWorldCupMatches, 8), [allWorldCupMatches]);
+  const fixtureMatches = useMemo(
+    () => watchMatches.length
+      ? watchMatches
+      : allWorldCupMatches.filter((match) => match.status !== 'FINISHED' && match.status !== 'PENDING_RESULT').slice(0, 8),
+    [allWorldCupMatches, watchMatches]
+  );
+  const recentResults = useMemo(() => getWorldCupRecentResults(allWorldCupMatches, 5), [allWorldCupMatches]);
+  const contenders = useMemo(() => getWorldCupContenders(allWorldCupMatches, 5), [allWorldCupMatches]);
+  const upsetRadar = useMemo(() => getWorldCupUpsetRadar(allWorldCupMatches, 5), [allWorldCupMatches]);
 
   const bestThird = qualifiers.bestThird;
   const updatedAt = dataSync.sourceUpdatedAt || dataSync.updatedAt || dataSync.lastCheckedAt;
@@ -265,7 +321,7 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
     { icon: CalendarDays, label: copy.kpis.matches[language], value: WORLD_CUP_OFFICIAL.matches, detail: `${WORLD_CUP_OFFICIAL.startDate} - ${WORLD_CUP_OFFICIAL.finalDate}` },
     { icon: Flag, label: copy.kpis.groups[language], value: WORLD_CUP_OFFICIAL.groups, detail: language === 'zh' ? '12 组 x 4 队' : '12 groups x 4 teams' },
     { icon: Trophy, label: copy.kpis.venues[language], value: WORLD_CUP_OFFICIAL.venues, detail: language === 'zh' ? '加拿大 / 墨西哥 / 美国' : 'Canada / Mexico / USA' },
-    { icon: Target, label: copy.kpis.sporttery[language], value: allWorldCupMatches.length || watchMatches.length, detail: watchMatches.length ? (language === 'zh' ? '已进入观察池' : 'In watch pool') : copy.waiting[language] },
+    { icon: Target, label: copy.kpis.sporttery[language], value: allWorldCupMatches.length || fixtureMatches.length, detail: fixtureMatches.length ? (language === 'zh' ? '已进入观察池' : 'In watch pool') : copy.waiting[language] },
     { icon: Route, label: language === 'zh' ? '晋级名额' : 'Knockout Spots', value: 32, detail: language === 'zh' ? '前二 24 + 第三名 8' : 'Top two 24 + third-place 8' },
     { icon: BarChart3, label: language === 'zh' ? '路径推演' : 'Route Runs', value: WORLD_CUP_FORECAST_MODEL.simulations.toLocaleString(), detail: WORLD_CUP_FORECAST_MODEL.version },
     { icon: RefreshCw, label: copy.kpis.update[language], value: pageCheckedAt ? formatDateTime(pageCheckedAt, language) : '--', detail: updatedAt ? `${language === 'zh' ? '源' : 'Source'} ${formatDateTime(updatedAt, language)}` : '--' }
@@ -285,7 +341,7 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
             <span><strong>{WORLD_CUP_OFFICIAL.teams}</strong> {copy.kpis.teams[language]}</span>
             <span><strong>{WORLD_CUP_OFFICIAL.matches}</strong> {copy.kpis.matches[language]}</span>
             <span><strong>{WORLD_CUP_OFFICIAL.groups}</strong> {copy.kpis.groups[language]}</span>
-            <span><strong>{allWorldCupMatches.length || watchMatches.length}</strong> {copy.kpis.sporttery[language]}</span>
+            <span><strong>{allWorldCupMatches.length || fixtureMatches.length}</strong> {copy.kpis.sporttery[language]}</span>
             <span className="worldcup-sync-pill">
               <RefreshCw size={14} />
               {pageCheckedAt ? formatDateTime(pageCheckedAt, language) : '--'}
@@ -298,24 +354,30 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
           </div>
         </div>
         <div className="worldcup-spotlight-side">
-          {watchMatches.length ? (
-            watchMatches.slice(0, 3).map((match) => (
-              <button className="worldcup-mini-match" type="button" key={match.id} onClick={() => onSelectMatch(match.id)}>
-                <span className="worldcup-mini-label">{formatDateTime(match.kickoffTime, language)}</span>
-                <span className="worldcup-mini-teams">
-                  <span>{getTeamById(match.homeTeamId).shortName[language]}</span>
-                  <b>VS</b>
-                  <span>{getTeamById(match.awayTeamId).shortName[language]}</span>
-                </span>
-                <span className="worldcup-mini-meta">
-                  {getBestPrediction(match) ? getPredictionTipDisplay(getBestPrediction(match)!, language, true) : copy.waiting[language]}
-                </span>
-                <span className="worldcup-mini-action">
-                  {copy.more[language]}
-                  <ChevronRight size={15} />
-                </span>
-              </button>
-            ))
+          {fixtureMatches.length ? (
+            fixtureMatches.slice(0, 3).map((match) => {
+              const home = getDisplayTeam(match, 'home');
+              const away = getDisplayTeam(match, 'away');
+              const forecast = getWorldCupFixtureForecast(match, groupForecasts);
+              const prediction = getBestPrediction(match);
+              return (
+                <button className="worldcup-mini-match" type="button" key={match.id} onClick={() => onSelectMatch(match.id)}>
+                  <span className="worldcup-mini-label">{formatDateTime(match.kickoffTime, language)}</span>
+                  <span className="worldcup-mini-teams">
+                    <span>{home.shortName[language]}</span>
+                    <b>VS</b>
+                    <span>{away.shortName[language]}</span>
+                  </span>
+                  <span className="worldcup-mini-meta">
+                    {prediction ? getPredictionTipDisplay(prediction, language, true) : forecast ? pickText(forecast.tip, language) : copy.waiting[language]}
+                  </span>
+                  <span className="worldcup-mini-action">
+                    {copy.more[language]}
+                    <ChevronRight size={15} />
+                  </span>
+                </button>
+              );
+            })
           ) : (
             knockoutRoutes.slice(0, 3).map((route) => (
               <div className="worldcup-mini-match" key={`fallback-${route.team.id}`}>
@@ -520,10 +582,10 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
           </div>
           <span className="worldcup-sync-pill">{updatedAt ? formatDateTime(updatedAt, language) : copy.waiting[language]}</span>
         </div>
-        {watchMatches.length ? (
+        {fixtureMatches.length ? (
           <div className="worldcup-match-grid">
-            {watchMatches.map((match) => (
-              <MatchCard key={match.id} match={match} language={language} onSelectMatch={onSelectMatch} />
+            {fixtureMatches.map((match) => (
+              <MatchCard key={match.id} match={match} language={language} groupForecasts={groupForecasts} onSelectMatch={onSelectMatch} />
             ))}
           </div>
         ) : (

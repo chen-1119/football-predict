@@ -30,13 +30,16 @@ export function TeamBadge({ team, size = 'md', className = '' }: TeamBadgeProps)
       title={visual.label}
     >
       {shouldRenderImage ? (
-        <img
-          src={visual.logo}
-          alt={visual.label}
-          loading="lazy"
-          referrerPolicy="no-referrer"
-          onError={() => setFailedLogo(visual.logo)}
-        />
+        <>
+          <span className="team-badge-fallback">{visual.fallbackText}</span>
+          <img
+            src={visual.logo}
+            alt={visual.label}
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            onError={() => setFailedLogo(visual.logo)}
+          />
+        </>
       ) : (
         <span>{visual.isImage ? visual.fallbackText : visual.logo}</span>
       )}

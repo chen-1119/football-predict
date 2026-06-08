@@ -1156,6 +1156,7 @@ button.status-pill:hover {
 
 .team-badge {
   display: inline-flex;
+  position: relative;
   width: 30px;
   height: 30px;
   flex: 0 0 auto;
@@ -1221,13 +1222,31 @@ button.status-pill:hover {
 }
 
 .team-badge img {
+  position: relative;
+  z-index: 2;
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
+.team-badge-fallback {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.12rem;
+}
+
 .team-badge-flag img {
   object-fit: cover;
+}
+
+.team-badge-flag span {
+  font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", var(--font-title);
+  font-size: 1rem;
+  text-transform: none;
 }
 
 .team-badge-crest img {
@@ -3396,7 +3415,8 @@ button.status-pill:hover {
 .worldcup-team-flag b {
   position: relative;
   z-index: 0;
-  font-family: var(--font-title);
+  font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", var(--font-title);
+  font-size: 0.98rem;
   line-height: 1;
 }
 
@@ -5798,7 +5818,12 @@ body {
   .worldcup-spotlight,
   .worldcup-hero-panel,
   .worldcup-section {
+    width: 100%;
     padding: 0.9rem;
+  }
+
+  .worldcup-section-head {
+    align-items: stretch;
   }
 
   .worldcup-kicker,
@@ -5826,6 +5851,13 @@ body {
 
   .worldcup-hero-copy p {
     font-size: 0.88rem;
+  }
+
+  .worldcup-kpi-grid article,
+  .worldcup-stage-card,
+  .worldcup-mini-match,
+  .worldcup-group-card > p {
+    min-height: 0;
   }
 
   .worldcup-hero-visual {
@@ -5865,8 +5897,50 @@ body {
     width: auto;
   }
 
+  .worldcup-group-team-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .worldcup-team-prob {
+    grid-column: 2;
+    align-items: flex-start;
+  }
+
+  .worldcup-team-split {
+    grid-template-columns: 1fr;
+  }
+
   .worldcup-round-list article {
     grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .worldcup-match-card header,
+  .worldcup-result-list button {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .worldcup-card-lines {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .worldcup-card-lines span,
+  .worldcup-odds-strip {
+    border-radius: 0.55rem;
+    white-space: normal;
+  }
+
+  .worldcup-odds-strip {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    line-height: 1.45;
+    text-align: left;
+  }
+
+  .worldcup-odds-strip strong {
+    min-width: 2.2rem;
   }
 }
 
@@ -5882,6 +5956,19 @@ body {
 
   .worldcup-hero-copy h1 {
     font-size: 1.68rem;
+  }
+
+  .team-badge-sm.team-badge-flag {
+    width: 30px;
+    height: 22px;
+  }
+
+  .team-badge-flag span {
+    font-size: 0.82rem;
+  }
+
+  .worldcup-teams-button {
+    padding: 0.52rem;
   }
 
   .worldcup-kpi-grid {
@@ -7638,6 +7725,11 @@ body {
   position: relative;
   z-index: 1;
   font-weight: 950;
+}
+
+.team-badge .team-badge-fallback {
+  position: absolute;
+  z-index: 1;
 }
 
 @media (max-width: 1100px) {

@@ -77,6 +77,16 @@ export interface WorldCupRouteForecast {
   tier: MultiLangString;
 }
 
+export interface WorldCupFixtureForecast {
+  home: WorldCupTeamForecast;
+  away: WorldCupTeamForecast;
+  tip: MultiLangString;
+  detail: MultiLangString;
+  trust: number;
+  homeAdvanceProbability: number;
+  awayAdvanceProbability: number;
+}
+
 export const WORLD_CUP_FORECAST_MODEL = {
   version: 'worldcup-route-monte-carlo-v2',
   simulations: 12000,
@@ -417,6 +427,83 @@ const isWithinWorldCupWindow = (kickoffTime?: string): boolean => {
   return time >= WORLD_CUP_START_MS && time <= WORLD_CUP_END_MS;
 };
 
+const WORLD_CUP_GROUP_PAIRINGS: Array<[number, number]> = [
+  [0, 1],
+  [2, 3],
+  [0, 2],
+  [1, 3],
+  [0, 3],
+  [1, 2]
+];
+
+const WORLD_CUP_SEED_START_MS = Date.parse('2026-06-12T03:00:00+08:00');
+const WORLD_CUP_SEED_TIME_OFFSETS = [0, 3, 6, 20].map((hours) => hours * 60 * 60 * 1000);
+
+const seededKickoffTime = (index: number) => {
+  const dayOffset = Math.floor(index / WORLD_CUP_SEED_TIME_OFFSETS.length) * 24 * 60 * 60 * 1000;
+  const timeOffset = WORLD_CUP_SEED_TIME_OFFSETS[index % WORLD_CUP_SEED_TIME_OFFSETS.length];
+  return new Date(WORLD_CUP_SEED_START_MS + dayOffset + timeOffset).toISOString();
+};
+
+export function getWorldCupSeededFixtures(max = 72): Match[] {
+  let index = 0;
+  const fixtures: Match[] = [];
+
+  WORLD_CUP_GROUPS.forEach((group) => {
+    WORLD_CUP_GROUP_PAIRINGS.forEach(([homeIndex, awayIndex], roundIndex) => {
+      const home = group.teams[homeIndex];
+      const away = group.teams[awayIndex];
+      if (!home || !away) return;
+      const kickoffTime = seededKickoffTime(index);
+      fixtures.push({
+        id: `wc2026_seed_${group.id}_${roundIndex + 1}`,
+        homeTeamId: `wc2026_${home.id}`,
+        awayTeamId: `wc2026_${away.id}`,
+        leagueId: 'worldcup2026',
+        countryId: 'worldcup2026',
+        kickoffTime,
+        status: 'SCHEDULED',
+        odds: null,
+        handicapOdds: null,
+        predictions: [],
+        matchDate: kickoffTime.slice(0, 10),
+        kickoffDate: kickoffTime.slice(0, 10),
+        businessDate: kickoffTime.slice(0, 10),
+        homeTeamName: home.shortName.zh,
+        homeTeamNameEn: home.shortName.en,
+        homeTeamLogo: home.flag,
+        homeTeamLogoType: 'flag',
+        awayTeamName: away.shortName.zh,
+        awayTeamNameEn: away.shortName.en,
+        awayTeamLogo: away.flag,
+        awayTeamLogoType: 'flag',
+        leagueName: '世界杯',
+        leagueNameEn: 'FIFA World Cup',
+        leagueShortName: `世界杯 Group ${group.id}`,
+        leagueShortNameEn: `World Cup Group ${group.id}`,
+        countryName: '世界杯',
+        countryNameEn: 'World Cup',
+        countryFlag: '🏆',
+        source: 'worldcup-seed',
+        sourceMethod: 'worldcup-route-seed',
+        sourceMatchId: `wc2026-${group.id}-${roundIndex + 1}`,
+        matchNo: `G${group.id}-${roundIndex + 1}`,
+        predictionMeta: {
+          policyVersion: WORLD_CUP_FORECAST_MODEL.version,
+          generatedAt: kickoffTime,
+          dataPolicy: {
+            zh: '世界杯专题赛程种子；官方竞彩 SP 开售后自动由同步数据覆盖。',
+            en: 'World Cup fixture seed; official Sporttery SP replaces it after release.'
+          }
+        }
+      });
+      index += 1;
+    });
+  });
+
+  return fixtures.slice(0, max);
+}
+
 export function getBestPrediction(match: Match): PredictionDetail | undefined {
   return match.predictions.find((prediction) => prediction.marketType === 'BEST')
     || match.predictions.find((prediction) => prediction.marketType === '1X2');
@@ -475,6 +562,8 @@ export function getDaysUntilWorldCup(now = new Date()): number {
 const clamp = (value: number, min = 0, max = 99) => Math.min(max, Math.max(min, value));
 
 const round1 = (value: number) => Math.round(value * 10) / 10;
+
+const percentLabel = (value: number) => `${Math.round(value)}%`;
 
 const getTeamStrengthScore = (team: WorldCupTeamSeed, groupId: string): number => {
   const hostBoost = team.isHost ? 6.5 : 0;
@@ -742,6 +831,100 @@ function getWorldCupSimulation() {
 
 export function getWorldCupGroupForecasts(): WorldCupGroupForecast[] {
   return getWorldCupSimulation().groups;
+}
+
+const normalizeWorldCupTeamKey = (value?: string) => (
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, '')
+    .replace(/[·.()（）'’\-_/]/g, '')
+    .replace(/国家队|男子|男足|女子|女足|队$/g, '')
+);
+
+const getMatchTeamCandidates = (match: Match, side: 'home' | 'away') => {
+  const isHome = side === 'home';
+  const team = getTeamById(isHome ? match.homeTeamId : match.awayTeamId);
+  return [
+    isHome ? match.homeTeamName : match.awayTeamName,
+    isHome ? match.homeTeamNameEn : match.awayTeamNameEn,
+    team.shortName.zh,
+    team.shortName.en,
+    team.name.zh,
+    team.name.en
+  ];
+};
+
+const findWorldCupTeamForecast = (
+  match: Match,
+  side: 'home' | 'away',
+  groupForecasts: WorldCupGroupForecast[]
+) => {
+  const teams = groupForecasts.flatMap((group) => group.teams);
+  const byKey = new Map<string, WorldCupTeamForecast>();
+  teams.forEach((team) => {
+    [team.id, team.name.zh, team.name.en, team.shortName.zh, team.shortName.en].forEach((value) => {
+      byKey.set(normalizeWorldCupTeamKey(value), team);
+    });
+  });
+
+  for (const value of getMatchTeamCandidates(match, side)) {
+    const direct = byKey.get(normalizeWorldCupTeamKey(value));
+    if (direct) return direct;
+  }
+
+  return null;
+};
+
+export function getWorldCupFixtureForecast(
+  match: Match,
+  groupForecasts = getWorldCupGroupForecasts()
+): WorldCupFixtureForecast | null {
+  if (!isWorldCupRelevantMatch(match)) return null;
+  const home = findWorldCupTeamForecast(match, 'home', groupForecasts);
+  const away = findWorldCupTeamForecast(match, 'away', groupForecasts);
+  if (!home || !away) return null;
+
+  const homeHostBoost = home.isHost ? 3.5 : 0;
+  const awayHostBoost = away.isHost ? 3.5 : 0;
+  const edge = (home.strengthScore - away.strengthScore)
+    + (home.advanceProbability - away.advanceProbability) * 0.14
+    + homeHostBoost
+    - awayHostBoost;
+  const absEdge = Math.abs(edge);
+  const trust = Math.round(clamp(54 + absEdge * 1.65, 55, 78));
+  const homeText = home.shortName;
+  const awayText = away.shortName;
+
+  const tip = absEdge < 4
+    ? {
+        zh: '均势防平',
+        en: 'Balanced draw cover'
+      }
+    : edge > 0
+      ? {
+          zh: `${homeText.zh}不败`,
+          en: `${homeText.en} double chance`
+        }
+      : {
+          zh: `${awayText.zh}不败`,
+          en: `${awayText.en} double chance`
+        };
+
+  return {
+    home,
+    away,
+    tip,
+    trust,
+    homeAdvanceProbability: home.advanceProbability,
+    awayAdvanceProbability: away.advanceProbability,
+    detail: {
+      zh: `世界杯模型：${homeText.zh}晋级 ${percentLabel(home.advanceProbability)}，${awayText.zh}晋级 ${percentLabel(away.advanceProbability)}；未开售 SP 时先按小组强度和东道主权重展示。`,
+      en: `World Cup model: ${homeText.en} advance ${percentLabel(home.advanceProbability)}, ${awayText.en} advance ${percentLabel(away.advanceProbability)}. Before SP release, display uses group strength and host weighting.`
+    }
+  };
 }
 
 export function getWorldCupProjectedQualifiers(groupForecasts = getWorldCupGroupForecasts()) {

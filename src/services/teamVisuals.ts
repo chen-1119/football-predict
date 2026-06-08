@@ -69,10 +69,13 @@ const FLAG_CODE_BY_NAME: Record<string, string> = {
   austria: 'at',
   cv: 'cv',
   cvi: 'cv',
+  curacao: 'cw',
+  cotedivoire: 'ci',
   egy: 'eg',
   belgium: 'be',
   bolivia: 'bo',
   bosnia: 'ba',
+  bosniaandherzegovina: 'ba',
   brazil: 'br',
   bulgaria: 'bg',
   canada: 'ca',
@@ -81,6 +84,8 @@ const FLAG_CODE_BY_NAME: Record<string, string> = {
   colombia: 'co',
   croatia: 'hr',
   cyprus: 'cy',
+  czechia: 'cz',
+  czechrepublic: 'cz',
   denmark: 'dk',
   ecuador: 'ec',
   egypt: 'eg',
@@ -89,6 +94,7 @@ const FLAG_CODE_BY_NAME: Record<string, string> = {
   france: 'fr',
   georgia: 'ge',
   germany: 'de',
+  ghana: 'gh',
   greece: 'gr',
   haiti: 'ht',
   hat: 'ht',
@@ -97,10 +103,13 @@ const FLAG_CODE_BY_NAME: Record<string, string> = {
   ira: 'ir',
   ireland: 'ie',
   iran: 'ir',
+  iraq: 'iq',
   italy: 'it',
   japan: 'jp',
   jordan: 'jo',
   kazakhstan: 'kz',
+  korea: 'kr',
+  korearepublic: 'kr',
   mexico: 'mx',
   montenegro: 'me',
   mco: 'ma',
@@ -109,17 +118,21 @@ const FLAG_CODE_BY_NAME: Record<string, string> = {
   northernireland: 'gb-nir',
   northmacedonia: 'mk',
   norway: 'no',
+  nigeria: 'ng',
   panama: 'pa',
   paraguay: 'py',
   pgy: 'py',
+  peru: 'pe',
   poland: 'pl',
   portugal: 'pt',
+  qatar: 'qa',
   romania: 'ro',
   rsa: 'za',
   sar: 'sa',
   saudiarabia: 'sa',
   scotland: 'gb-sct',
   serbia: 'rs',
+  senegal: 'sn',
   singapore: 'sg',
   slovakia: 'sk',
   slovenia: 'si',
@@ -130,8 +143,10 @@ const FLAG_CODE_BY_NAME: Record<string, string> = {
   thailand: 'th',
   tunisia: 'tn',
   turkey: 'tr',
+  uruguay: 'uy',
   usa: 'us',
   unitedstates: 'us',
+  uzbekistan: 'uz',
   venezuela: 've',
   wales: 'gb-wls',
   阿根廷: 'ar',
@@ -148,8 +163,11 @@ const FLAG_CODE_BY_NAME: Record<string, string> = {
   中国: 'cn',
   哥伦比亚: 'co',
   克罗地亚: 'hr',
+  库拉索: 'cw',
   塞浦路斯: 'cy',
   丹麦: 'dk',
+  刚果民主共和国: 'cd',
+  刚果金: 'cd',
   厄瓜多尔: 'ec',
   埃及: 'eg',
   英格兰: 'gb-eng',
@@ -157,18 +175,23 @@ const FLAG_CODE_BY_NAME: Record<string, string> = {
   法国: 'fr',
   格鲁吉亚: 'ge',
   德国: 'de',
+  加纳: 'gh',
   希腊: 'gr',
   海地: 'ht',
   匈牙利: 'hu',
   冰岛: 'is',
+  科特迪瓦: 'ci',
   爱尔兰: 'ie',
   伊朗: 'ir',
+  伊拉克: 'iq',
   意大利: 'it',
   日本: 'jp',
   约旦: 'jo',
   哈萨: 'kz',
   哈萨克斯坦: 'kz',
+  韩国: 'kr',
   墨西哥: 'mx',
+  捷克: 'cz',
   黑山: 'me',
   摩洛: 'ma',
   摩洛哥: 'ma',
@@ -176,15 +199,19 @@ const FLAG_CODE_BY_NAME: Record<string, string> = {
   北爱尔兰: 'gb-nir',
   北马其顿: 'mk',
   挪威: 'no',
+  尼日利亚: 'ng',
   巴拿马: 'pa',
   巴拉圭: 'py',
+  秘鲁: 'pe',
   波兰: 'pl',
   葡萄牙: 'pt',
+  卡塔尔: 'qa',
   罗马尼亚: 'ro',
   沙特: 'sa',
   沙特阿拉伯: 'sa',
   苏格兰: 'gb-sct',
   塞尔维亚: 'rs',
+  塞内加尔: 'sn',
   新加坡: 'sg',
   斯洛伐克: 'sk',
   斯洛文尼亚: 'si',
@@ -195,7 +222,10 @@ const FLAG_CODE_BY_NAME: Record<string, string> = {
   泰国: 'th',
   突尼斯: 'tn',
   土耳其: 'tr',
+  乌拉圭: 'uy',
   美国: 'us',
+  乌兹别克: 'uz',
+  乌兹别克斯坦: 'uz',
   委内: 've',
   委内瑞拉: 've',
   威尔士: 'gb-wls',
@@ -218,12 +248,33 @@ const normalizeToken = (value?: string) => (
   String(value || '')
     .trim()
     .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/\s+/g, '')
     .replace(/[·.()（）'’\-_/]/g, '')
     .replace(/国家队|男子|男足|女子|女足|队$/g, '')
 );
 
-const flagUrl = (code: string) => `https://flagcdn.com/w80/${code.toLowerCase()}.png`;
+const isoFromFlagUrl = (value?: string) => {
+  const match = String(value || '').match(/flagcdn\.com\/(?:w\d+\/)?([a-z]{2}(?:-[a-z]{3})?)\.png/i);
+  return match?.[1]?.toLowerCase() || '';
+};
+const FLAG_FALLBACK_BY_CODE: Record<string, string> = {
+  'gb-eng': 'ENG',
+  'gb-nir': 'NIR',
+  'gb-sct': 'SCO',
+  'gb-wls': 'WAL',
+  xk: 'XK'
+};
+const flagFallbackForCode = (code: string) => {
+  const normalized = code.toLowerCase();
+  const mapped = FLAG_FALLBACK_BY_CODE[normalized];
+  if (mapped) return mapped;
+  if (/^[a-z]{2}$/.test(normalized)) {
+    return String.fromCodePoint(...normalized.toUpperCase().split('').map((letter) => 127397 + letter.charCodeAt(0)));
+  }
+  return code.toUpperCase();
+};
 const findClubCrest = (...values: Array<string | undefined>) => {
   for (const value of values) {
     const raw = String(value || '').trim();
@@ -238,6 +289,8 @@ export function resolveCountryIso(...values: Array<string | undefined>) {
   for (const value of values) {
     const raw = String(value || '').trim();
     if (!raw) continue;
+    const fromFlagUrl = isoFromFlagUrl(raw);
+    if (fromFlagUrl) return fromFlagUrl;
     const normalized = normalizeToken(raw);
     const direct = FLAG_CODE_BY_NAME[raw] || FLAG_CODE_BY_NAME[normalized];
     if (direct) return direct;
@@ -272,11 +325,11 @@ export function resolveTeamVisual(team?: Team): TeamVisual {
 
   if (isoFromName && (safeTeam.logoType === 'flag' || rawLogo.includes('flagcdn.com') || !isImageLogo(rawLogo))) {
     return {
-      logo: flagUrl(isoFromName),
+      logo: flagFallbackForCode(isoFromName),
       label,
-      fallbackText,
+      fallbackText: flagFallbackForCode(isoFromName),
       logoType: 'flag',
-      isImage: true
+      isImage: false
     };
   }
 
@@ -291,6 +344,17 @@ export function resolveTeamVisual(team?: Team): TeamVisual {
   }
 
   if (isImageLogo(rawLogo)) {
+    const flagIso = isoFromFlagUrl(rawLogo);
+    if (flagIso) {
+      return {
+        logo: flagFallbackForCode(flagIso),
+        label,
+        fallbackText: flagFallbackForCode(flagIso),
+        logoType: 'flag',
+        isImage: false
+      };
+    }
+
     return {
       logo: rawLogo,
       label,
@@ -313,11 +377,11 @@ export function resolveTeamVisual(team?: Team): TeamVisual {
   const iso = resolveCountryIso(rawLogo);
   if (iso) {
     return {
-      logo: flagUrl(iso),
+      logo: flagFallbackForCode(iso),
       label,
-      fallbackText,
+      fallbackText: flagFallbackForCode(iso),
       logoType: 'flag',
-      isImage: true
+      isImage: false
     };
   }
 
