@@ -405,7 +405,17 @@ export interface WorldCupUpsetRadar {
   reason: MultiLangString;
 }
 
-const WORLD_CUP_MATCH_PATTERN = /世界杯|世预|国际赛|国际|友谊|国家队|world cup|qualification|qualifier|international|friendly|fifa|national/i;
+const WORLD_CUP_COMPETITION_PATTERN = /世界杯|FIFA\s*World\s*Cup|World\s*Cup/i;
+const WORLD_CUP_EXCLUDE_PATTERN = /世预|预选|资格|外围赛|友谊|国际赛|国家联赛|qualification|qualifier|qualifying|friendly|international friendly|nations league/i;
+const WORLD_CUP_START_MS = Date.parse(`${WORLD_CUP_OFFICIAL.startDate}T00:00:00-12:00`);
+const WORLD_CUP_END_MS = Date.parse(`${WORLD_CUP_OFFICIAL.finalDate}T23:59:59+14:00`);
+
+const isWithinWorldCupWindow = (kickoffTime?: string): boolean => {
+  if (!kickoffTime) return false;
+  const time = Date.parse(kickoffTime);
+  if (!Number.isFinite(time)) return false;
+  return time >= WORLD_CUP_START_MS && time <= WORLD_CUP_END_MS;
+};
 
 export function getBestPrediction(match: Match): PredictionDetail | undefined {
   return match.predictions.find((prediction) => prediction.marketType === 'BEST')
@@ -420,28 +430,26 @@ export function isWorldCupRelevantMatch(match: Match): boolean {
   const league = getLeagueById(match.leagueId);
   const text = [
     match.leagueId,
-    match.countryId,
     match.leagueName,
     match.leagueNameEn,
     match.leagueShortName,
     match.leagueShortNameEn,
-    match.countryName,
-    match.countryNameEn,
     league.name.zh,
     league.name.en,
     league.shortName.zh,
     league.shortName.en
   ].filter(Boolean).join(' ');
 
-  return WORLD_CUP_MATCH_PATTERN.test(text);
+  return WORLD_CUP_COMPETITION_PATTERN.test(text)
+    && !WORLD_CUP_EXCLUDE_PATTERN.test(text)
+    && isWithinWorldCupWindow(match.kickoffTime);
 }
 
 export function getWorldCupWatchMatches(matches: Match[], max = 6): Match[] {
   const active = matches.filter((match) => match.status !== 'FINISHED' && match.status !== 'PENDING_RESULT');
   const relevant = active.filter(isWorldCupRelevantMatch);
-  const source = relevant.length > 0 ? relevant : active;
 
-  return [...source]
+  return [...relevant]
     .sort((a, b) => {
       const timeDiff = new Date(a.kickoffTime).getTime() - new Date(b.kickoffTime).getTime();
       if (timeDiff !== 0) return timeDiff;
@@ -452,11 +460,8 @@ export function getWorldCupWatchMatches(matches: Match[], max = 6): Match[] {
 
 export function getWorldCupRecentResults(matches: Match[], max = 4): Match[] {
   const relevantFinished = matches.filter((match) => match.status === 'FINISHED' && isWorldCupRelevantMatch(match));
-  const source = relevantFinished.length > 0
-    ? relevantFinished
-    : matches.filter((match) => match.status === 'FINISHED');
 
-  return [...source]
+  return [...relevantFinished]
     .sort((a, b) => new Date(b.kickoffTime).getTime() - new Date(a.kickoffTime).getTime())
     .slice(0, max);
 }

@@ -92,7 +92,8 @@ const TeamCodeCard = ({
   align?: 'left' | 'right';
 }) => (
   <div className={`event-team-card is-${align}`} style={{ '--team-color': team.color } as React.CSSProperties}>
-    <span className="event-team-seed">{language === 'zh' ? `种子 ${team.seed}` : `Seed ${team.seed}`}</span>
+    <span className="event-team-flag" aria-hidden="true">{team.flag ?? team.code}</span>
+    <span className="event-team-seed">{language === 'zh' ? `FIFA 排名 ${team.seed}` : `FIFA rank ${team.seed}`}</span>
     <strong>{text(team.name, language)}</strong>
     <small>{team.code}</small>
   </div>
@@ -120,18 +121,18 @@ const copy = {
   countdown: { zh: '距开赛', en: 'Kickoff in' },
   days: { zh: '天', en: 'days' },
   featured: { zh: '焦点对决', en: 'Featured Match' },
-  liveBuildUp: { zh: '赛前热身', en: 'Live build-up' },
-  probabilityScan: { zh: '市场概率扫描', en: 'Market probability scan' },
-  matchCenter: { zh: '实时比赛中心', en: 'Live Match Center' },
-  liveStatus: { zh: "68' / 转换压力升高", en: "68' / transition pressure rising" },
-  livePulse: { zh: '近 10 分钟势头 +18', en: 'Momentum +18 in last 10 minutes' },
-  momentum: { zh: '比赛势头', en: 'Momentum' },
+  liveBuildUp: { zh: '赛前焦点', en: 'Pre-match focus' },
+  probabilityScan: { zh: '开售后接入官方 SP', en: 'Official SP after release' },
+  matchCenter: { zh: '赛前数据中心', en: 'Pre-match Data Center' },
+  liveStatus: { zh: '世界杯正赛未开赛 / 等待官方临场数据', en: 'Tournament not started / awaiting official live data' },
+  livePulse: { zh: '开赛后自动切换比分、事件和走势', en: 'Live score, events and momentum switch on after kickoff' },
+  momentum: { zh: '赛事时间线', en: 'Tournament Timeline' },
   tournamentHub: { zh: '赛事枢纽', en: 'Tournament Hub' },
-  hubTitle: { zh: '积分、晋级路线和球员榜单一屏呈现', en: 'Standings, route and leaders in one view' },
+  hubTitle: { zh: '分组、晋级路线和球队指数一屏呈现', en: 'Groups, route and team index in one view' },
   groupPulse: { zh: '小组脉搏', en: 'Group Pulse' },
   ptsGd: { zh: '积分 / 净胜球', en: 'Pts / GD' },
   groupPrefix: { zh: '小组', en: 'Group' },
-  playerIndex: { zh: '球员指数', en: 'Player Index' },
+  playerIndex: { zh: '球队指数', en: 'Team Index' },
   fanZone: { zh: '球迷互动区', en: 'Fan Zone' },
   fanTitle: { zh: '预测比分、参与投票、冲击榜单', en: 'Predict. Vote. Climb the stand.' },
   fanSubtitle: {
@@ -141,9 +142,9 @@ const copy = {
   fanPoll: { zh: '球迷投票', en: 'Fan poll' },
   leaderboard: { zh: '球迷榜单', en: 'Leaderboard' },
   schedule: { zh: '赛程日历', en: 'Match Schedule' },
-  scheduleTitle: { zh: '按比赛状态快速筛选', en: 'Matchday flow with status chips' },
+  scheduleTitle: { zh: '按官方赛程状态快速筛选', en: 'Official matchday flow with status chips' },
   highlights: { zh: '高光与资讯', en: 'Highlights / News' },
-  highlightTitle: { zh: '视频高光、战术短评和球迷资讯', en: 'Video energy, tactical bites and fan news' },
+  highlightTitle: { zh: '赛程速览、规则说明和球迷互动', en: 'Schedule notes, rules and fan activity' },
   footerBrand: { zh: '主宰世界', en: 'Own the World' },
   footerSchedule: { zh: '赛程', en: 'Schedule' },
   footerFanZone: { zh: '球迷区', en: 'Fan Zone' },
@@ -153,12 +154,12 @@ const copy = {
     zh: '本页面为世界杯专题活动页与数据可视化看板。预测与互动内容仅供娱乐和研究参考，请理性看球。',
     en: 'This page is an event-site prototype and data visualization desk. Forecasts and fan content are for entertainment and research only.'
   },
-  actualFixtures: { zh: '已接入当前赛程', en: 'Connected fixtures' },
+  actualFixtures: { zh: '世界杯竞彩场次', en: 'World Cup fixtures' },
   prediction: { zh: '模型倾向', en: 'Model lean' },
   trust: { zh: '可信度', en: 'Trust' },
   noFixtures: {
-    zh: '当前暂无世界杯相关竞彩赛程，页面先展示专题样例。',
-    en: 'No World Cup-related live fixtures yet. Showing event-site samples.'
+    zh: '当前暂无已开售的世界杯竞彩场次；页面展示官方赛程与分组专题，开售后会自动并入实时 SP。',
+    en: 'No released World Cup Sporttery fixtures yet. Official schedule and group content are shown until SP is available.'
   }
 };
 
@@ -278,9 +279,9 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
             {copy.matchCenter[language]}
           </span>
           <div className="event-scoreline">
-            <span>BRA</span>
-            <strong>2 : 1</strong>
-            <span>FRA</span>
+            <span>{featuredMatch.home.code}</span>
+            <strong>VS</strong>
+            <span>{featuredMatch.away.code}</span>
           </div>
           <small>{copy.liveStatus[language]}</small>
           <div className="event-live-pulse">
