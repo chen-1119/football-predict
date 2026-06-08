@@ -1,7 +1,7 @@
 {
   "version": 1,
   "source": "sporttery:prediction-snapshots",
-  "updatedAt": "2026-06-08T17:15:34.687Z",
+  "updatedAt": "2026-06-08T17:40:33.985Z",
   "retentionDays": 365,
   "maxRows": 5000,
   "rows": [
@@ -11677,19 +11677,87 @@
         "resultStatus": "PENDING",
         "riskCount": 3
       }
+    },
+    {
+      "capturedAt": "2026-06-08T17:40:33.985Z",
+      "firstSeenAt": "2026-06-08T17:40:33.985Z",
+      "lastSeenAt": "2026-06-08T17:40:33.985Z",
+      "seenCount": 1,
+      "phase": "late",
+      "signature": "1X2:HHAD:1|BEST:HHAD:1|GOALS::WATCH|--|-2.00:1.96/3.43/3.05|39/31/31",
+      "policyVersion": "sporttery-day-dynamic-calibration-v24",
+      "promptVersion": "professional-football-analyst-v16",
+      "sourceMatchId": "2040146",
+      "matchId": "sporttery_2040146",
+      "matchNo": "周一202",
+      "businessDate": "2026-06-08",
+      "kickoffTime": "2026-06-09T03:10:00+08:00",
+      "status": "SCHEDULED",
+      "leagueName": "国际赛",
+      "homeTeamName": "法国",
+      "awayTeamName": "北爱尔兰",
+      "scoreHome": null,
+      "scoreAway": null,
+      "odds": null,
+      "handicapLine": "-2.00",
+      "handicapOdds": {
+        "odds1": 1.96,
+        "oddsX": 3.43,
+        "odds2": 3.05
+      },
+      "oddsTrend": null,
+      "probabilityFinal": {
+        "home": 38.8,
+        "draw": 30.5,
+        "away": 30.7
+      },
+      "probabilityModelVersion": "market-elo-form-dynamic-calibrated-poisson-v6",
+      "best": {
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "模型首选 让球主胜 法国",
+          "en": "Model lean: Handicap Home Win (法国)"
+        },
+        "odds": 1.96,
+        "trustScore": 52,
+        "resultStatus": "PENDING",
+        "riskCount": 1
+      },
+      "oneXTwo": {
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "让球主胜 法国",
+          "en": "Handicap Home Win (法国)"
+        },
+        "odds": 1.96,
+        "trustScore": 47,
+        "resultStatus": "PENDING",
+        "riskCount": 1
+      },
+      "goals": {
+        "tipCode": "WATCH",
+        "tipLabel": {
+          "zh": "观察为主 进球数不强推",
+          "en": "Watch first: no total-goals pick"
+        },
+        "odds": 0,
+        "trustScore": 54,
+        "resultStatus": "PENDING",
+        "riskCount": 3
+      }
     }
   ],
   "summary": {
-    "total": 144,
+    "total": 145,
     "byPhase": {
       "review": 54,
       "mid": 8,
       "baseline": 65,
-      "late": 5,
+      "late": 6,
       "final": 5,
       "locked": 7
     },
-    "appended": 0,
+    "appended": 1,
     "updated": 0
   }
 }
