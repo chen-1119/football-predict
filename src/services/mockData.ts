@@ -129,6 +129,76 @@ export interface ExternalMatchSignals {
     matchedAt?: string | null;
     lastCheckedAt?: string;
   };
+  fiveHundred?: {
+    source?: string;
+    updatedAt?: string;
+    fixtureId?: string;
+    infoMatchId?: string;
+    matchNo?: string;
+    sale?: {
+      buyEndTime?: string;
+      availability?: Record<string, boolean>;
+    };
+    rank?: {
+      home?: {
+        teamName?: string;
+        fifaRank?: number | null;
+        fifaPoints?: number | null;
+        sampleMonth?: string | null;
+      } | null;
+      away?: {
+        teamName?: string;
+        fifaRank?: number | null;
+        fifaPoints?: number | null;
+        sampleMonth?: string | null;
+      } | null;
+    };
+    recentForm?: {
+      home?: {
+        sampleSize?: number;
+        record?: string;
+        goalsForAvg?: number | null;
+        goalsAgainstAvg?: number | null;
+        over25Rate?: number | null;
+        bttsRate?: number | null;
+      } | null;
+      away?: {
+        sampleSize?: number;
+        record?: string;
+        goalsForAvg?: number | null;
+        goalsAgainstAvg?: number | null;
+        over25Rate?: number | null;
+        bttsRate?: number | null;
+      } | null;
+    };
+    futureSchedule?: {
+      home?: { nextGapDays?: number | null } | null;
+      away?: { nextGapDays?: number | null } | null;
+    };
+    europeOdds?: {
+      companies?: number;
+      currentAverage?: Odds | null;
+      currentProbabilityAverage?: { home: number; draw: number; away: number } | null;
+      summary?: string;
+    };
+    asianHandicap?: {
+      companies?: number;
+      currentAverageLine?: number | null;
+      initialAverageLine?: number | null;
+      lineMovement?: number | null;
+      summary?: string;
+    };
+    marketConsensus?: {
+      riskLevel?: 'low' | 'medium' | 'high' | string;
+      homeProbabilityGap?: number | null;
+      handicapLineGap?: number | null;
+      notes?: string[];
+    };
+    macauTip?: {
+      pick?: string | null;
+      summary?: string;
+    };
+  };
 }
 
 export interface PredictionMeta {

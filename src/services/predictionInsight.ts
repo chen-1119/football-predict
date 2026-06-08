@@ -202,6 +202,89 @@ const xgAndExternalOddsText = (match: Match): MultiLangString => {
   };
 };
 
+const percentageFromRatio = (value: number | null | undefined) => {
+  if (!Number.isFinite(value)) return '--';
+  const numeric = Number(value);
+  return `${Math.round(Math.abs(numeric) <= 1 ? numeric * 100 : numeric)}%`;
+};
+
+const fiveHundredBasicsText = (match: Match): MultiLangString => {
+  const signal = match.externalSignals?.fiveHundred;
+  if (!signal) return { zh: '', en: '' };
+
+  const homeRank = signal.rank?.home?.fifaRank;
+  const awayRank = signal.rank?.away?.fifaRank;
+  const homeForm = signal.recentForm?.home;
+  const awayForm = signal.recentForm?.away;
+  const homeGap = signal.futureSchedule?.home?.nextGapDays;
+  const awayGap = signal.futureSchedule?.away?.nextGapDays;
+  const zhParts = [
+    Number.isFinite(homeRank) || Number.isFinite(awayRank)
+      ? `500补充排名：${match.homeTeamName || '主队'} ${homeRank ?? '--'}，${match.awayTeamName || '客队'} ${awayRank ?? '--'}。`
+      : '',
+    homeForm?.sampleSize || awayForm?.sampleSize
+      ? `500近况：${match.homeTeamName || '主队'} ${homeForm?.sampleSize ?? 0}场${homeForm?.record || '--'}，${match.awayTeamName || '客队'} ${awayForm?.sampleSize ?? 0}场${awayForm?.record || '--'}。`
+      : '',
+    Number.isFinite(homeGap) || Number.isFinite(awayGap)
+      ? `后续赛程间隔：主${homeGap ?? '--'}天 / 客${awayGap ?? '--'}天。`
+      : ''
+  ].filter(Boolean);
+  const enParts = [
+    Number.isFinite(homeRank) || Number.isFinite(awayRank)
+      ? `500 rank supplement: ${match.homeTeamNameEn || match.homeTeamName || 'Home'} ${homeRank ?? '--'}, ${match.awayTeamNameEn || match.awayTeamName || 'Away'} ${awayRank ?? '--'}.`
+      : '',
+    homeForm?.sampleSize || awayForm?.sampleSize
+      ? `500 recent form: ${match.homeTeamNameEn || match.homeTeamName || 'Home'} ${homeForm?.sampleSize ?? 0} matches ${homeForm?.record || '--'}, ${match.awayTeamNameEn || match.awayTeamName || 'Away'} ${awayForm?.sampleSize ?? 0} matches ${awayForm?.record || '--'}.`
+      : '',
+    Number.isFinite(homeGap) || Number.isFinite(awayGap)
+      ? `Next fixture gap: home ${homeGap ?? '--'}d / away ${awayGap ?? '--'}d.`
+      : ''
+  ].filter(Boolean);
+
+  return {
+    zh: zhParts.join(' '),
+    en: enParts.join(' ')
+  };
+};
+
+const fiveHundredMarketText = (match: Match): MultiLangString => {
+  const signal = match.externalSignals?.fiveHundred;
+  if (!signal) return { zh: '', en: '' };
+
+  const europe = signal.europeOdds;
+  const asian = signal.asianHandicap;
+  const consensus = signal.marketConsensus;
+  const europeAverage = europe?.currentAverage;
+  const europeProbability = europe?.currentProbabilityAverage;
+  const notes = consensus?.notes || [];
+  const risk = consensus?.riskLevel || 'low';
+  const zhParts = [
+    europeAverage
+      ? `500欧赔均值(${europe?.companies || 0}家)：${oddsText(europeAverage)}，折算 ${percentageFromRatio(europeProbability?.home)} / ${percentageFromRatio(europeProbability?.draw)} / ${percentageFromRatio(europeProbability?.away)}。`
+      : '',
+    Number.isFinite(asian?.currentAverageLine)
+      ? `500亚盘均线(${asian?.companies || 0}家)：${decimalText(asian?.currentAverageLine, 2)}，变化 ${decimalText(asian?.lineMovement, 2)}。`
+      : '',
+    notes.length ? `盘口备注：${notes.join('；')}。` : '',
+    `500风险层级：${risk}。`
+  ].filter(Boolean);
+  const enParts = [
+    europeAverage
+      ? `500 Europe average (${europe?.companies || 0} books): ${oddsText(europeAverage)}, implied ${percentageFromRatio(europeProbability?.home)} / ${percentageFromRatio(europeProbability?.draw)} / ${percentageFromRatio(europeProbability?.away)}.`
+      : '',
+    Number.isFinite(asian?.currentAverageLine)
+      ? `500 Asian line average (${asian?.companies || 0} books): ${decimalText(asian?.currentAverageLine, 2)}, movement ${decimalText(asian?.lineMovement, 2)}.`
+      : '',
+    notes.length ? `Market notes: ${notes.join('; ')}.` : '',
+    `500 risk layer: ${risk}.`
+  ].filter(Boolean);
+
+  return {
+    zh: zhParts.join(' '),
+    en: enParts.join(' ')
+  };
+};
+
 const probabilityText = (probabilities: { home: number; draw: number; away: number } | null | undefined) => {
   if (!probabilities) return { zh: '--', en: '--' };
   return {
@@ -374,6 +457,8 @@ const buildProfessionalFramework = ({
   const lineupSignals = lineupsSignalText(match);
   const environmentSignals = environmentSignalText(match);
   const xgOddsSignals = xgAndExternalOddsText(match);
+  const fiveHundredBasics = fiveHundredBasicsText(match);
+  const fiveHundredMarket = fiveHundredMarketText(match);
   const unavailableTone: InsightTone = 'muted';
   const sampleTone: InsightTone = sampleEnough ? 'success' : 'warning';
   const goalTone: InsightTone = (model?.goalLines.over25 ?? 0) >= 58 || (model?.bothTeamsToScore.yes ?? 0) >= 58 ? 'success' : 'warning';
@@ -382,10 +467,10 @@ const buildProfessionalFramework = ({
     {
       title: { zh: '一、比赛基本面', en: '1. Fixture Baseline' },
       body: {
-        zh: `${match.leagueName || '赛事'}：${match.homeTeamName || '主队'} vs ${match.awayTeamName || '客队'}。${rankLine.zh}`,
-        en: `${match.leagueNameEn || match.leagueName || 'Fixture'}: ${match.homeTeamName || 'Home'} vs ${match.awayTeamName || 'Away'}. ${rankLine.en}`
+        zh: `${match.leagueName || '赛事'}：${match.homeTeamName || '主队'} vs ${match.awayTeamName || '客队'}。${rankLine.zh}${fiveHundredBasics.zh ? ` ${fiveHundredBasics.zh}` : ''}`,
+        en: `${match.leagueNameEn || match.leagueName || 'Fixture'}: ${match.homeTeamName || 'Home'} vs ${match.awayTeamName || 'Away'}. ${rankLine.en}${fiveHundredBasics.en ? ` ${fiveHundredBasics.en}` : ''}`
       },
-      tone: model?.elo || match.homeRank || match.awayRank ? 'success' : 'warning'
+      tone: model?.elo || match.homeRank || match.awayRank || fiveHundredBasics.zh ? 'success' : 'warning'
     },
     {
       title: { zh: '二、近期状态', en: '2. Recent Form' },
@@ -467,8 +552,8 @@ const buildProfessionalFramework = ({
     {
       title: { zh: '十一、赔率盘口', en: '11. Odds / Market' },
       body: {
-        zh: `${marketAnchorNote.zh}${trendZh}${xgOddsSignals.zh ? ` ${xgOddsSignals.zh}` : ''}`,
-        en: `${marketAnchorNote.en} ${trendEn}${xgOddsSignals.en ? ` ${xgOddsSignals.en}` : ''}`
+        zh: `${marketAnchorNote.zh}${trendZh}${xgOddsSignals.zh ? ` ${xgOddsSignals.zh}` : ''}${fiveHundredMarket.zh ? ` ${fiveHundredMarket.zh}` : ''}`,
+        en: `${marketAnchorNote.en} ${trendEn}${xgOddsSignals.en ? ` ${xgOddsSignals.en}` : ''}${fiveHundredMarket.en ? ` ${fiveHundredMarket.en}` : ''}`
       },
       tone: marketToneSupport !== null && marketToneSupport >= 42 ? 'success' : 'warning'
     },

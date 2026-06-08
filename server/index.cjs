@@ -30,6 +30,7 @@ const adminToken = process.env.ADMIN_TOKEN || "";
 const allowLocalAdmin = process.env.ALLOW_LOCAL_ADMIN === "1";
 const publicApiBase = process.env.PUBLIC_DATA_API_BASE || "/api";
 const enable500Sync = process.env.ENABLE_500_SYNC !== "0";
+const enable500DetailsSync = process.env.ENABLE_500_DETAILS_SYNC === "1";
 const enableApiFootballSync = process.env.ENABLE_API_FOOTBALL_SYNC === "1";
 const requireExternalSignals = process.env.REQUIRE_EXTERNAL_SIGNALS !== "0";
 
@@ -43,6 +44,7 @@ const apiFiles = {
   "/api/model/calibration": path.join(dataDir, "model-calibration.json"),
   "/api/teams/index": path.join(dataDir, "team-index.json"),
   "/api/data/external-signals": path.join(dataDir, "external-signals.json"),
+  "/api/data/five-hundred-details": path.join(dataDir, "five-hundred-details.json"),
   "/api/data/api-football": path.join(dataDir, "api-football-meta.json")
 };
 
@@ -275,6 +277,9 @@ const runSync = async (source = "server-cron") => {
     const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
     if (enable500Sync) {
       await runCommand(npmCommand, ["run", "sync:500"]);
+    }
+    if (enable500DetailsSync) {
+      await runCommand(npmCommand, ["run", "sync:500:details"]);
     }
     if (enableApiFootballSync) {
       await runCommand(npmCommand, ["run", "sync:api-football"]);
@@ -562,6 +567,7 @@ const matchHasExternalSignal = (match) => {
     || signals.bookmakerOdds?.hhad
     || signals.bookmakerOdds?.apiFootball
     || signals.apiFootball
+    || signals.fiveHundred
     || signals.injuries
     || signals.lineups
   );
@@ -580,6 +586,7 @@ const getSourceHealth = async () => {
     ? external.matches
     : {};
   const source500 = external?.sources?.["500.com:jczq"] || {};
+  const source500Details = external?.sources?.["500.com:details"] || {};
   const sourceApiFootball = external?.sources?.["api-football"] || {};
   const externalCount = Object.keys(externalMatches).length;
   const externalAge = minutesSince(external?.updatedAt);
@@ -605,6 +612,7 @@ const getSourceHealth = async () => {
     checkedAt: nowIso(),
     mode: {
       enable500Sync,
+      enable500DetailsSync,
       enableApiFootballSync,
       requireExternalSignals,
       skipSportteryFetch: process.env.SKIP_SPORTTERY_FETCH === "1",
@@ -624,6 +632,12 @@ const getSourceHealth = async () => {
       fiveHundredRows: source500.rows || 0,
       fiveHundredMapped: source500.mapped || 0,
       fiveHundredUrl: source500.url || null,
+      fiveHundredDetailsUpdatedAt: source500Details.updatedAt || null,
+      fiveHundredDetailsRows: source500Details.updated || 0,
+      fiveHundredDetailsCachedMerged: source500Details.cachedMerged || 0,
+      fiveHundredDetailsRequestedPages: source500Details.requestedPages || 0,
+      fiveHundredDetailsRefreshMinutes: source500Details.refreshMinutes || 0,
+      fiveHundredDetailsErrors: source500Details.errors || 0,
       apiFootballConfigured: Boolean(process.env.API_FOOTBALL_KEY || process.env.APISPORTS_KEY),
       apiFootballEnabled: enableApiFootballSync,
       apiFootballUpdatedAt: sourceApiFootball.updatedAt || apiFootballMeta?.finishedAt || null,

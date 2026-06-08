@@ -13,7 +13,7 @@ import { getTeamById } from '../services/entities';
 import { TeamBadge } from '../components/TeamBadge';
 
 type TimeWindow = '1' | '2' | '3';
-const ENABLED_BET_SLIP_MARKETS: BetSlipMarketType[] = ['1X2', 'HHAD', 'BEST'];
+const ENABLED_BET_SLIP_MARKETS: BetSlipMarketType[] = ['1X2', 'HHAD'];
 
 const getBetSlipMarketLabel = (market: BetSlipMarketType, language: 'zh' | 'en') => {
   if (market === 'HHAD') return language === 'zh' ? '让球' : 'Handicap';
@@ -255,8 +255,7 @@ export const BetSlipGenerator: React.FC = () => {
             <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
               {[
                 { id: '1X2' as const, label: getBetSlipMarketLabel('1X2', language) },
-                { id: 'HHAD' as const, label: getBetSlipMarketLabel('HHAD', language) },
-                { id: 'BEST' as const, label: getBetSlipMarketLabel('BEST', language) }
+                { id: 'HHAD' as const, label: getBetSlipMarketLabel('HHAD', language) }
               ].map(m => {
                 const isSelected = selectedMarkets.includes(m.id);
                 return (

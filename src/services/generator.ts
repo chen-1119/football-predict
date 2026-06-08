@@ -1,13 +1,13 @@
 import type { Match, PredictionDetail } from './mockData';
-import { getResolvedMatchOdds, normalizeOdds } from './bettingDisplay';
+import { normalizeOdds } from './bettingDisplay';
 import { getVisiblePredictions } from './predictionVisibility';
 
-export type BetSlipMarketType = '1X2' | 'HHAD' | 'BEST';
+export type BetSlipMarketType = '1X2' | 'HHAD';
 
 export interface GeneratorParams {
   targetOdds: number; // 目标总SP
   matchCount: 'auto' | 2 | 5 | 10 | 15; // 比赛数量
-  marketTypes: string[]; // ['1X2', 'HHAD', 'BEST']
+  marketTypes: string[]; // ['1X2', 'HHAD']
   minOdds: number;
   maxOdds: number;
   timeWindow: '1' | '2' | '3'; // 未来几天天数
@@ -43,7 +43,7 @@ const officialHandicapPickLabels: Record<string, { zh: string; en: string }> = {
 };
 
 const isBetSlipMarketType = (marketType: string): marketType is BetSlipMarketType => (
-  marketType === '1X2' || marketType === 'HHAD' || marketType === 'BEST'
+  marketType === '1X2' || marketType === 'HHAD'
 );
 
 const isSportteryOutcomeTip = (tipCode: string | undefined) => (
@@ -51,15 +51,38 @@ const isSportteryOutcomeTip = (tipCode: string | undefined) => (
 );
 
 const selectionMarketKey = (prediction: PredictionDetail): BetSlipMarketType | null => {
-  if ((prediction.marketType !== '1X2' && prediction.marketType !== 'BEST') || !isSportteryOutcomeTip(prediction.tipCode)) {
+  if (prediction.marketType !== '1X2' || !isSportteryOutcomeTip(prediction.tipCode)) {
     return null;
   }
 
-  if ((prediction.marketType === '1X2' || prediction.marketType === 'BEST') && prediction.oddsPoolCode === 'HHAD') {
+  if (prediction.oddsPoolCode === 'HHAD') {
     return 'HHAD';
   }
 
-  return prediction.marketType === 'BEST' ? 'BEST' : '1X2';
+  return '1X2';
+};
+
+const getOfficialSportteryPool = (match: Match, pool: 'HAD' | 'HHAD') => {
+  const signals = match.externalSignals;
+  const bookmakerOdds = signals?.bookmakerOdds;
+  const odds = pool === 'HAD'
+    ? normalizeOdds(match.odds) || normalizeOdds(bookmakerOdds?.had)
+    : normalizeOdds(match.handicapOdds) || normalizeOdds(bookmakerOdds?.hhad);
+
+  if (!odds) return null;
+
+  return {
+    odds,
+    handicap: pool === 'HHAD'
+      ? match.handicapLine || bookmakerOdds?.hhad?.handicapLine || signals?.handicapLine
+      : undefined,
+    source: pool === 'HAD'
+      ? match.oddsSource || bookmakerOdds?.had?.source
+      : match.handicapOddsSource || bookmakerOdds?.hhad?.source,
+    updatedAt: pool === 'HAD'
+      ? match.oddsUpdatedAt || bookmakerOdds?.had?.updatedAt
+      : match.handicapOddsUpdatedAt || bookmakerOdds?.hhad?.updatedAt
+  };
 };
 
 const probabilityForCode = (
@@ -110,10 +133,9 @@ const getOfficialPickCandidates = (
   minOdds: number,
   maxOdds: number
 ): SelectionResult[] => {
-  const resolved = getResolvedMatchOdds(match);
-  const resolvedPool = pool === 'HAD' ? resolved.had : resolved.hhad;
-  const odds = normalizeOdds(resolvedPool?.odds);
-  if (!odds) return [];
+  const resolvedPool = getOfficialSportteryPool(match, pool);
+  if (!resolvedPool) return [];
+  const odds = resolvedPool.odds;
 
   const marketProbabilities = impliedProbabilities(odds);
   const modelProbabilities = pool === 'HAD'
@@ -159,7 +181,7 @@ const getOfficialPickCandidates = (
         prediction: {
           marketType: '1X2' as const,
           oddsPoolCode: pool,
-          handicapLine: pool === 'HHAD' ? resolved.hhad?.handicap || match.handicapLine : undefined,
+          handicapLine: pool === 'HHAD' ? resolvedPool.handicap || match.handicapLine : undefined,
           tipCode: outcome.code,
           tipLabel: label,
           odds: outcome.odds,
@@ -344,7 +366,7 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
       // 筛选市场类型
       const marketKey = selectionMarketKey(p);
       if (!marketKey) return;
-      if (!includesMarket(marketKey) && !(p.marketType === 'BEST' && includesMarket('BEST'))) return;
+      if (!includesMarket(marketKey)) return;
       if (p.tipCode === 'WATCH' || p.odds <= 0) return;
       // 筛选 SP 范围
       if (p.odds < minOdds || p.odds > maxOdds) return;
@@ -357,11 +379,11 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
       });
     });
 
-    if (includesMarket('1X2') || includesMarket('BEST')) {
+    if (includesMarket('1X2')) {
       candidateSelections.push(...getOfficialPickCandidates(m, 'HAD', minOdds, maxOdds));
     }
 
-    if (includesMarket('HHAD') || includesMarket('BEST')) {
+    if (includesMarket('HHAD')) {
       candidateSelections.push(...getOfficialPickCandidates(m, 'HHAD', minOdds, maxOdds));
     }
   });
@@ -372,8 +394,7 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
 
   if (filteredSelections.length === 0) {
     const hasOfficialOdds = candidateMatches.some((match) => {
-      const resolved = getResolvedMatchOdds(match);
-      return Boolean(resolved.had?.odds || resolved.hhad?.odds);
+      return Boolean(getOfficialSportteryPool(match, 'HAD') || getOfficialSportteryPool(match, 'HHAD'));
     });
     const zhReason = candidateMatches.length === 0
       ? '未来时间窗口内没有可用未开赛比赛。'
