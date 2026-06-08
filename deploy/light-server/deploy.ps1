@@ -100,6 +100,7 @@ $remoteScript += @"
 cp deploy/light-server/football-predict.service /etc/systemd/system/football-predict.service
 systemctl daemon-reload
 systemctl enable --now football-predict
+systemctl restart football-predict
 
 if [ -n "$Domain" ]; then
   cp deploy/light-server/nginx.conf /etc/nginx/sites-available/football-predict
