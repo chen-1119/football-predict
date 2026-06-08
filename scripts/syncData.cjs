@@ -1789,6 +1789,11 @@ function mapSportteryRow(row, sourceMethod, sourceUrl) {
 }
 
 async function fetchCurrentMatches() {
+  if (process.env.SKIP_SPORTTERY_FETCH === "1") {
+    console.log("Sporttery fetch skipped by SKIP_SPORTTERY_FETCH=1; using existing store and external signals.");
+    return [];
+  }
+
   const urls = [
     { url: CALCULATOR_URL, method: "calculator" },
     { url: CURRENT_URL, method: "current" },
@@ -2973,6 +2978,11 @@ function applyPredictionPersistence(match, existing, capturedAt) {
 }
 
 async function fetchSportteryMatches() {
+  if (process.env.SKIP_SPORTTERY_FETCH === "1") {
+    console.log("Sporttery fetch skipped by SKIP_SPORTTERY_FETCH=1; using existing store and external signals.");
+    return [];
+  }
+
   const lists = [];
   const current = await fetchCurrentMatches();
   if (current.length) lists.push(current);
