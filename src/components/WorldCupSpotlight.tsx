@@ -40,13 +40,15 @@ export const WorldCupSpotlight: React.FC<WorldCupSpotlightProps> = ({
 
   const copy = {
     kicker: { zh: '世界杯专栏', en: 'World Cup Special' },
-    title: { zh: '2026 世界杯 · OWN THE WORLD', en: '2026 World Cup · OWN THE WORLD' },
+    title: { zh: '2026 世界杯 · 主宰世界', en: '2026 World Cup · Own the World' },
     subtitle: {
       zh: '小组赛路线、焦点赛、实时走势和球迷互动集中展示，进入专栏看完整活动官网。',
       en: 'Group routes, featured games, live momentum and fan play live together in one event desk.'
     },
     countdown: { zh: '距揭幕', en: 'Kickoff in' },
     days: { zh: '天', en: 'days' },
+    teams: { zh: '48 支球队 / 104 场比赛', en: '48 teams / 104 matches' },
+    momentum: { zh: '实时走势', en: 'Live momentum' },
     open: { zh: '进入世界杯专栏', en: 'Open World Cup' },
     today: { zh: '当前观察', en: 'Watch match' },
     empty: { zh: '等待官方赛程同步，先进入专栏查看世界杯活动页。', en: 'Waiting for official fixtures. Open the event page first.' },
@@ -72,11 +74,11 @@ export const WorldCupSpotlight: React.FC<WorldCupSpotlightProps> = ({
           </b>
           <b>
             <Zap size={14} />
-            48 teams / 104 matches
+            {t('teams')}
           </b>
           <b>
             <Radio size={14} />
-            Live momentum
+            {t('momentum')}
           </b>
         </div>
       </div>

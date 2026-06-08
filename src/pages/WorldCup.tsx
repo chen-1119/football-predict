@@ -30,16 +30,21 @@ import {
   fanRanks,
   fanTasks,
   featuredMatch,
+  highlightTypeLabels,
   highlights,
   liveMetrics,
   liveTimeline,
   momentumPoints,
   playerLeaders,
   roadToFinal,
+  scheduleFilterLabels,
   scheduleFilters,
   scheduleMatches,
+  scheduleStatusLabels,
+  standingStatusLabels,
   standings,
   type EventTeam,
+  type EventText,
   type ScheduleMatch,
   type Tone
 } from '../services/worldCupExperience';
@@ -52,6 +57,7 @@ type Locale = 'zh' | 'en';
 type FilterKey = (typeof scheduleFilters)[number];
 
 const toneClass = (tone: Tone) => `is-${tone}`;
+const text = (value: EventText, language: Locale) => value[language];
 
 const formatDateTime = (isoTime: string, language: Locale) => {
   return new Date(isoTime).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US', {
@@ -66,7 +72,7 @@ const formatDateTime = (isoTime: string, language: Locale) => {
 };
 
 const formatMatchStatus = (status: string, language: Locale) => {
-  const statusMap: Record<string, { zh: string; en: string }> = {
+  const statusMap: Record<string, EventText> = {
     FINISHED: { zh: '已完场', en: 'Finished' },
     LIVE: { zh: '进行中', en: 'Live' },
     PENDING_RESULT: { zh: '待赛果', en: 'Result pending' },
@@ -76,10 +82,18 @@ const formatMatchStatus = (status: string, language: Locale) => {
   return statusMap[status]?.[language] ?? (language === 'zh' ? '待开赛' : 'Scheduled');
 };
 
-const TeamCodeCard = ({ team, align = 'left' }: { team: EventTeam; align?: 'left' | 'right' }) => (
+const TeamCodeCard = ({
+  team,
+  language,
+  align = 'left'
+}: {
+  team: EventTeam;
+  language: Locale;
+  align?: 'left' | 'right';
+}) => (
   <div className={`event-team-card is-${align}`} style={{ '--team-color': team.color } as React.CSSProperties}>
-    <span className="event-team-seed">Seed {team.seed}</span>
-    <strong>{team.name}</strong>
+    <span className="event-team-seed">{language === 'zh' ? `种子 ${team.seed}` : `Seed ${team.seed}`}</span>
+    <strong>{text(team.name, language)}</strong>
     <small>{team.code}</small>
   </div>
 );
@@ -91,41 +105,72 @@ const SignalBar = ({ value, tone }: { value: number; tone: Tone }) => (
 );
 
 const copy = {
-  heroKicker: { zh: '2026 世界杯活动官网', en: '2026 World Cup Event' },
-  heroTitle: { zh: 'OWN THE WORLD', en: 'OWN THE WORLD' },
+  heroKicker: { zh: '2026 世界杯专题', en: '2026 World Cup Event' },
+  heroTitle: { zh: '主宰世界', en: 'Own the World' },
   heroSubtitle: {
-    zh: '一屏看懂焦点赛、实时走势、晋级路线、球迷挑战和赛程动态。不是普通预测表，而是为世界杯做的高能互动看板。',
+    zh: '一屏看懂焦点赛、实时走势、晋级路线、球迷挑战和赛程动态。这里不是普通预测表，而是为世界杯准备的沉浸式赛事看板。',
     en: 'A high-energy command center for featured matches, live momentum, qualification routes, fan challenges and matchday flow.'
   },
   heroCta: { zh: '进入赛程中心', en: 'Explore matches' },
   heroAltCta: { zh: '查看球迷区', en: 'Open fan zone' },
-  countdown: { zh: '距揭幕', en: 'Kickoff in' },
+  hostCountries: { zh: '加拿大 / 墨西哥 / 美国', en: 'Canada / Mexico / USA' },
+  teamCount: { zh: '48 支球队', en: '48 teams' },
+  matchCount: { zh: '104 场比赛', en: '104 matches' },
+  stadiumLabel: { zh: '全球足球之夜', en: 'Global football night' },
+  countdown: { zh: '距开赛', en: 'Kickoff in' },
+  days: { zh: '天', en: 'days' },
   featured: { zh: '焦点对决', en: 'Featured Match' },
+  liveBuildUp: { zh: '赛前热身', en: 'Live build-up' },
+  probabilityScan: { zh: '市场概率扫描', en: 'Market probability scan' },
   matchCenter: { zh: '实时比赛中心', en: 'Live Match Center' },
+  liveStatus: { zh: "68' / 转换压力升高", en: "68' / transition pressure rising" },
+  livePulse: { zh: '近 10 分钟势头 +18', en: 'Momentum +18 in last 10 minutes' },
+  momentum: { zh: '比赛势头', en: 'Momentum' },
   tournamentHub: { zh: '赛事枢纽', en: 'Tournament Hub' },
+  hubTitle: { zh: '积分、晋级路线和球员榜单一屏呈现', en: 'Standings, route and leaders in one view' },
+  groupPulse: { zh: '小组脉搏', en: 'Group Pulse' },
+  ptsGd: { zh: '积分 / 净胜球', en: 'Pts / GD' },
+  groupPrefix: { zh: '小组', en: 'Group' },
+  playerIndex: { zh: '球员指数', en: 'Player Index' },
   fanZone: { zh: '球迷互动区', en: 'Fan Zone' },
+  fanTitle: { zh: '预测比分、参与投票、冲击榜单', en: 'Predict. Vote. Climb the stand.' },
+  fanSubtitle: {
+    zh: '比分选择、球迷任务、投票热度和积分榜放在一起，让世界杯专题更像活动场，而不是一张静态表。',
+    en: 'Score picks, fan missions, voting heat and reward progress sit together so this feels like a campaign, not a static table.'
+  },
+  fanPoll: { zh: '球迷投票', en: 'Fan poll' },
+  leaderboard: { zh: '球迷榜单', en: 'Leaderboard' },
   schedule: { zh: '赛程日历', en: 'Match Schedule' },
+  scheduleTitle: { zh: '按比赛状态快速筛选', en: 'Matchday flow with status chips' },
   highlights: { zh: '高光与资讯', en: 'Highlights / News' },
+  highlightTitle: { zh: '视频高光、战术短评和球迷资讯', en: 'Video energy, tactical bites and fan news' },
+  footerBrand: { zh: '主宰世界', en: 'Own the World' },
+  footerSchedule: { zh: '赛程', en: 'Schedule' },
+  footerFanZone: { zh: '球迷区', en: 'Fan Zone' },
+  footerTerms: { zh: '服务条款', en: 'Terms' },
+  footerPrivacy: { zh: '隐私政策', en: 'Privacy' },
   footerDisclaimer: {
-    zh: '本页面为活动官网原型与赛事数据可视化展示，预测与互动内容仅供娱乐和研究参考，请理性看球。',
+    zh: '本页面为世界杯专题活动页与数据可视化看板。预测与互动内容仅供娱乐和研究参考，请理性看球。',
     en: 'This page is an event-site prototype and data visualization desk. Forecasts and fan content are for entertainment and research only.'
   },
   actualFixtures: { zh: '已接入当前赛程', en: 'Connected fixtures' },
-  openAnalysis: { zh: '进入分析', en: 'Open analysis' },
   prediction: { zh: '模型倾向', en: 'Model lean' },
   trust: { zh: '可信度', en: 'Trust' },
-  noFixtures: { zh: '当前暂无世界杯相关竞彩赛程，页面先展示活动官网样例。', en: 'No World Cup-related live fixtures yet. Showing event-site samples.' }
+  noFixtures: {
+    zh: '当前暂无世界杯相关竞彩赛程，页面先展示专题样例。',
+    en: 'No World Cup-related live fixtures yet. Showing event-site samples.'
+  }
 };
 
 export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
   const { language, matches, dataSync } = useApp();
   const shouldReduceMotion = useReducedMotion();
-  const [activeFilter, setActiveFilter] = useState<FilterKey>('All');
+  const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
   const [selectedScore, setSelectedScore] = useState('2 - 1');
   const daysLeft = getDaysUntilWorldCup();
   const actualWorldCupMatches = useMemo(() => getWorldCupWatchMatches(matches, 4), [matches]);
   const filteredSchedule = useMemo(() => {
-    if (activeFilter === 'All') return scheduleMatches;
+    if (activeFilter === 'all') return scheduleMatches;
     return scheduleMatches.filter((match) => match.status === activeFilter);
   }, [activeFilter]);
 
@@ -166,9 +211,9 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
             </a>
           </div>
           <div className="event-hero-badges" aria-label="Event meta">
-            <span>Canada / Mexico / USA</span>
-            <span>48 teams</span>
-            <span>104 matches</span>
+            <span>{copy.hostCountries[language]}</span>
+            <span>{copy.teamCount[language]}</span>
+            <span>{copy.matchCount[language]}</span>
           </div>
         </div>
 
@@ -177,12 +222,12 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
             <span className="event-ring" />
             <span className="event-field-lines" />
             <strong>26</strong>
-            <small>Global football night</small>
+            <small>{copy.stadiumLabel[language]}</small>
           </div>
           <div className="event-countdown">
             <small>{copy.countdown[language]}</small>
             <strong>{daysLeft}</strong>
-            <span>days</span>
+            <span>{copy.days[language]}</span>
           </div>
         </div>
       </motion.section>
@@ -193,33 +238,33 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
             <Flame size={16} />
             {copy.featured[language]}
           </span>
-          <h2>Brazil vs France</h2>
-          <p>{featuredMatch.stage} / {featuredMatch.venue} / {featuredMatch.kickoff}</p>
+          <h2>{text(featuredMatch.home.name, language)} vs {text(featuredMatch.away.name, language)}</h2>
+          <p>{text(featuredMatch.stage, language)} / {text(featuredMatch.venue, language)} / {text(featuredMatch.kickoff, language)}</p>
         </div>
 
         <div className="event-featured-grid">
-          <TeamCodeCard team={featuredMatch.home} />
+          <TeamCodeCard team={featuredMatch.home} language={language} />
           <div className="event-versus">
-            <span>LIVE BUILD-UP</span>
+            <span>{copy.liveBuildUp[language]}</span>
             <strong>VS</strong>
-            <small>market probability scan</small>
+            <small>{copy.probabilityScan[language]}</small>
           </div>
-          <TeamCodeCard team={featuredMatch.away} align="right" />
+          <TeamCodeCard team={featuredMatch.away} language={language} align="right" />
         </div>
 
         <div className="event-count-strip">
           {featuredMatch.countdown.map((item) => (
-            <span key={item.label}>
+            <span key={item.label.en}>
               <strong>{item.value}</strong>
-              <small>{item.label}</small>
+              <small>{text(item.label, language)}</small>
             </span>
           ))}
         </div>
 
         <div className="event-odds-strip">
           {featuredMatch.odds.map((item) => (
-            <span key={item.label}>
-              <small>{item.label}</small>
+            <span key={item.label.en}>
+              <small>{text(item.label, language)}</small>
               <strong>{item.value}</strong>
             </span>
           ))}
@@ -237,18 +282,18 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
             <strong>2 : 1</strong>
             <span>FRA</span>
           </div>
-          <small>68' / transition pressure rising</small>
+          <small>{copy.liveStatus[language]}</small>
           <div className="event-live-pulse">
             <Activity size={16} />
-            Momentum +18 in last 10 minutes
+            {copy.livePulse[language]}
           </div>
         </div>
 
         <div className="event-metrics">
           {liveMetrics.map((metric) => (
-            <article key={metric.label}>
+            <article key={metric.label.en}>
               <header>
-                <span>{metric.label}</span>
+                <span>{text(metric.label, language)}</span>
                 <strong>{metric.home}{metric.suffix ?? ''} / {metric.away}{metric.suffix ?? ''}</strong>
               </header>
               <div className="event-dual-meter">
@@ -261,7 +306,7 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
 
         <div className="event-momentum-card">
           <header>
-            <span>Momentum</span>
+            <span>{copy.momentum[language]}</span>
             <Gauge size={18} />
           </header>
           <div className="event-momentum-bars">
@@ -276,8 +321,8 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
             <article key={item.minute} className={toneClass(item.tone)}>
               <span>{item.minute}</span>
               <div>
-                <strong>{item.title}</strong>
-                <p>{item.detail}</p>
+                <strong>{text(item.title, language)}</strong>
+                <p>{text(item.detail, language)}</p>
               </div>
             </article>
           ))}
@@ -290,33 +335,33 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
             <ShieldCheck size={16} />
             {copy.tournamentHub[language]}
           </span>
-          <h2>Standings, route and leaders in one view</h2>
+          <h2>{copy.hubTitle[language]}</h2>
         </div>
 
         <div className="event-hub-grid">
           <div className="event-standings">
             <header>
-              <strong>Group Pulse</strong>
-              <span>Pts / GD</span>
+              <strong>{copy.groupPulse[language]}</strong>
+              <span>{copy.ptsGd[language]}</span>
             </header>
             {standings.map((row) => (
-              <article key={`${row.group}-${row.team.name}`}>
-                <span>Group {row.group}</span>
+              <article key={`${row.group}-${row.team.code}`}>
+                <span>{copy.groupPrefix[language]} {row.group}</span>
                 <b>{row.team.code}</b>
                 <strong>{row.points}</strong>
                 <small>{row.goalDiff}</small>
-                <em>{row.status}</em>
+                <em>{text(standingStatusLabels[row.status], language)}</em>
               </article>
             ))}
           </div>
 
           <div className="event-road">
             {roadToFinal.map((node) => (
-              <article key={node.round}>
-                <span>{node.date}</span>
-                <strong>{node.round}</strong>
-                <small>{node.teams}</small>
-                <p>{node.highlight}</p>
+              <article key={node.round.en}>
+                <span>{text(node.date, language)}</span>
+                <strong>{text(node.round, language)}</strong>
+                <small>{text(node.teams, language)}</small>
+                <p>{text(node.highlight, language)}</p>
               </article>
             ))}
           </div>
@@ -324,14 +369,14 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
           <div className="event-leaders">
             <header>
               <Medal size={18} />
-              <strong>Player Index</strong>
+              <strong>{copy.playerIndex[language]}</strong>
             </header>
             {playerLeaders.map((player) => (
-              <article key={player.name} className={toneClass(player.tone)}>
-                <span>{player.name}</span>
+              <article key={player.name.en} className={toneClass(player.tone)}>
+                <span>{text(player.name, language)}</span>
                 <div>
                   <strong>{player.value}</strong>
-                  <small>{player.team} / {player.stat}</small>
+                  <small>{text(player.team, language)} / {text(player.stat, language)}</small>
                 </div>
               </article>
             ))}
@@ -345,8 +390,8 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
             <Sparkles size={16} />
             {copy.fanZone[language]}
           </span>
-          <h2>Predict. Vote. Climb the stand.</h2>
-          <p>Score picks, fan missions, voting heat and reward progress sit together so this feels like a campaign, not a static table.</p>
+          <h2>{copy.fanTitle[language]}</h2>
+          <p>{copy.fanSubtitle[language]}</p>
           <div className="event-score-picker">
             {['1 - 0', '2 - 1', '1 - 1', '3 - 2'].map((score) => (
               <button
@@ -364,12 +409,12 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
         <div className="event-fan-panel">
           <header>
             <Vote size={18} />
-            <strong>Fan poll</strong>
+            <strong>{copy.fanPoll[language]}</strong>
             <span>{selectedScore}</span>
           </header>
           {fanPoll.map((option) => (
-            <article key={option.label}>
-              <span>{option.label}</span>
+            <article key={option.label.en}>
+              <span>{text(option.label, language)}</span>
               <SignalBar value={option.value} tone={option.tone} />
               <strong>{option.value}%</strong>
             </article>
@@ -378,12 +423,12 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
 
         <div className="event-task-list">
           {fanTasks.map((task) => (
-            <article key={task.title} className={toneClass(task.tone)}>
+            <article key={task.title.en} className={toneClass(task.tone)}>
               <header>
                 <Gift size={17} />
-                <span>{task.reward}</span>
+                <span>{text(task.reward, language)}</span>
               </header>
-              <strong>{task.title}</strong>
+              <strong>{text(task.title, language)}</strong>
               <SignalBar value={task.progress} tone={task.tone} />
             </article>
           ))}
@@ -392,14 +437,14 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
         <div className="event-rank-list">
           <header>
             <Star size={18} />
-            <strong>Leaderboard</strong>
+            <strong>{copy.leaderboard[language]}</strong>
           </header>
           {fanRanks.map((rank, index) => (
-            <article key={rank.name}>
+            <article key={rank.name.en}>
               <span>{String(index + 1).padStart(2, '0')}</span>
-              <strong>{rank.name}</strong>
+              <strong>{text(rank.name, language)}</strong>
               <b>{rank.points}</b>
-              <small>{rank.streak}</small>
+              <small>{text(rank.streak, language)}</small>
             </article>
           ))}
         </div>
@@ -411,7 +456,7 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
             <CalendarDays size={16} />
             {copy.schedule[language]}
           </span>
-          <h2>Matchday flow with status chips</h2>
+          <h2>{copy.scheduleTitle[language]}</h2>
           <p>{copy.actualFixtures[language]} / {updatedAt}</p>
         </div>
 
@@ -423,14 +468,14 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
               className={activeFilter === filter ? 'active' : ''}
               onClick={() => setActiveFilter(filter)}
             >
-              {filter}
+              {text(scheduleFilterLabels[filter], language)}
             </button>
           ))}
         </div>
 
         <div className="event-schedule-grid">
           {filteredSchedule.map((match) => (
-            <ScheduleCard key={match.id} match={match} />
+            <ScheduleCard key={match.id} match={match} language={language} />
           ))}
         </div>
 
@@ -484,18 +529,18 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
             <Play size={16} />
             {copy.highlights[language]}
           </span>
-          <h2>Video energy, tactical bites and fan news</h2>
+          <h2>{copy.highlightTitle[language]}</h2>
         </div>
         <div className="event-highlight-grid">
           {highlights.map((item) => (
-            <article key={item.title} className={toneClass(item.tone)}>
-              <span>{item.type}</span>
+            <article key={item.title.en} className={toneClass(item.tone)}>
+              <span>{text(highlightTypeLabels[item.type], language)}</span>
               <div className="event-video-mark">
-                {item.type === 'Video' ? <Play size={26} /> : <Zap size={26} />}
+                {item.type === 'video' ? <Play size={26} /> : <Zap size={26} />}
               </div>
-              <strong>{item.title}</strong>
-              <p>{item.detail}</p>
-              <small>{item.meta}</small>
+              <strong>{text(item.title, language)}</strong>
+              <p>{text(item.detail, language)}</p>
+              <small>{text(item.meta, language)}</small>
             </article>
           ))}
         </div>
@@ -504,37 +549,37 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
       <footer className="event-footer">
         <div>
           <span className="event-brand-mark">AI</span>
-          <strong>OWN THE WORLD</strong>
+          <strong>{copy.footerBrand[language]}</strong>
           <p>{copy.footerDisclaimer[language]}</p>
         </div>
         <nav aria-label="World Cup footer">
-          <a href="#event-schedule">Schedule</a>
-          <a href="#event-fans">Fan Zone</a>
-          <a href="#top">Terms</a>
-          <a href="#top">Privacy</a>
+          <a href="#event-schedule">{copy.footerSchedule[language]}</a>
+          <a href="#event-fans">{copy.footerFanZone[language]}</a>
+          <a href="#top">{copy.footerTerms[language]}</a>
+          <a href="#top">{copy.footerPrivacy[language]}</a>
         </nav>
       </footer>
     </div>
   );
 };
 
-const ScheduleCard = ({ match }: { match: ScheduleMatch }) => (
+const ScheduleCard = ({ match, language }: { match: ScheduleMatch; language: Locale }) => (
   <article className={`event-schedule-card ${toneClass(match.tone)}`}>
     <header>
-      <span>{match.status}</span>
-      <strong>{match.time}</strong>
+      <span>{text(scheduleStatusLabels[match.status], language)}</span>
+      <strong>{text(match.time, language)}</strong>
     </header>
     <div className="event-schedule-teams">
-      <TeamCodeCard team={match.home} />
+      <TeamCodeCard team={match.home} language={language} />
       <div>
         <b>{match.score ?? 'VS'}</b>
-        <small>{match.stage}</small>
+        <small>{text(match.stage, language)}</small>
       </div>
-      <TeamCodeCard team={match.away} align="right" />
+      <TeamCodeCard team={match.away} language={language} align="right" />
     </div>
     <div className="event-schedule-tags">
       {match.tags.map((tag) => (
-        <span key={tag}>{tag}</span>
+        <span key={tag.en}>{text(tag, language)}</span>
       ))}
     </div>
   </article>
