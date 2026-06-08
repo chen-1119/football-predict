@@ -15,7 +15,12 @@ $ErrorActionPreference = "Stop"
 
 function New-RandomToken {
   $bytes = New-Object byte[] 32
-  [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+  $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+  try {
+    $rng.GetBytes($bytes)
+  } finally {
+    $rng.Dispose()
+  }
   return [Convert]::ToHexString($bytes).ToLowerInvariant()
 }
 
@@ -73,7 +78,7 @@ sed -i "s|^PORT=.*|PORT=8788|" deploy/light-server/env
 sed -i "s|^ENABLE_SYNC_CRON=.*|ENABLE_SYNC_CRON=1|" deploy/light-server/env
 sed -i "s|^ENABLE_500_SYNC=.*|ENABLE_500_SYNC=1|" deploy/light-server/env
 sed -i "s|^REQUIRE_EXTERNAL_SIGNALS=.*|REQUIRE_EXTERNAL_SIGNALS=1|" deploy/light-server/env
-sed -i "s|^SKIP_SPORTTERY_FETCH=.*|SKIP_SPORTTERY_FETCH=1|" deploy/light-server/env
+sed -i "s|^SKIP_SPORTTERY_FETCH=.*|SKIP_SPORTTERY_FETCH=0|" deploy/light-server/env
 sed -i "s|^SOURCE_MAX_AGE_MINUTES=.*|SOURCE_MAX_AGE_MINUTES=20|" deploy/light-server/env
 sed -i "s|^SOURCE_MIN_EXTERNAL_COVERAGE=.*|SOURCE_MIN_EXTERNAL_COVERAGE=0.50|" deploy/light-server/env
 sed -i "s|^ADMIN_TOKEN=.*|ADMIN_TOKEN=$AdminToken|" deploy/light-server/env
@@ -117,6 +122,7 @@ $remotePath = "/tmp/football-deploy-$([guid]::NewGuid().ToString("N")).sh"
 $temp = New-TemporaryFile
 try {
   $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+  $remoteScript = $remoteScript -replace "`r`n", "`n" -replace "`r", "`n"
   [System.IO.File]::WriteAllText($temp, $remoteScript, $utf8NoBom)
   scp -i $resolvedKey.Path -o StrictHostKeyChecking=accept-new $temp "${target}:$remotePath"
   if ($User -eq "root") {

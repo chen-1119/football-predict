@@ -4,6 +4,14 @@ const fsp = require("node:fs/promises");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
 const crypto = require("node:crypto");
+const {
+  TABLES,
+  ensureDataStore,
+  getDataStoreStatus,
+  getMatchTimeline,
+  persistDataSnapshot,
+  readDataStoreRows
+} = require("./dataStore.cjs");
 
 const rootDir = path.resolve(__dirname, "..");
 const publicDir = path.join(rootDir, "public");
@@ -52,6 +60,7 @@ let syncRunning = false;
 let predictRunning = false;
 let lastSync = null;
 let lastPredictionRun = null;
+let lastDataPersist = null;
 
 const nowIso = () => new Date().toISOString();
 
@@ -66,6 +75,7 @@ const safeJsonParse = (text, fallback = null) => {
 const ensureStore = async () => {
   await fsp.mkdir(storeDir, { recursive: true });
   await fsp.mkdir(snapshotsDir, { recursive: true });
+  await ensureDataStore(storeDir);
 };
 
 const readJsonFile = async (filePath, fallback = null) => {
@@ -232,7 +242,17 @@ const runSync = async (source = "server-cron") => {
       REQUIRE_EXTERNAL_SIGNALS: requireExternalSignals ? "1" : "0"
     });
     await captureCurrentSnapshot(source);
-    lastSync = { ok: true, source, startedAt, finishedAt: nowIso() };
+    const sourceHealth = await getSourceHealth().catch((error) => ({
+      ok: false,
+      error: error.message || String(error)
+    }));
+    lastDataPersist = await persistDataSnapshot({
+      storeDir,
+      dataDir,
+      source,
+      sourceHealth
+    });
+    lastSync = { ok: true, source, startedAt, finishedAt: nowIso(), dataStore: lastDataPersist };
     await appendEvent({ type: "sync_completed", ...lastSync });
     return lastSync;
   } catch (error) {
@@ -393,13 +413,23 @@ const runGptPredictions = async ({ matchIds = [], limit = 8, source = "server-ma
     const payload = await writeGptPredictions(Array.from(rowsById.values()).sort((a, b) => {
       return Date.parse(b.generatedAt || "") - Date.parse(a.generatedAt || "");
     }));
+    lastDataPersist = await persistDataSnapshot({
+      storeDir,
+      dataDir,
+      source,
+      sourceHealth: await getSourceHealth().catch((error) => ({
+        ok: false,
+        error: error.message || String(error)
+      }))
+    });
     lastPredictionRun = {
       ok: true,
       source,
       startedAt,
       finishedAt: nowIso(),
       requested: candidates.length,
-      generated: results.length
+      generated: results.length,
+      dataStore: lastDataPersist
     };
     await appendEvent({ type: "gpt_prediction_completed", ...lastPredictionRun });
     return { ...lastPredictionRun, payload };
@@ -543,6 +573,7 @@ const getHealth = async () => {
     predictRunning,
     lastSync,
     lastPredictionRun,
+    lastDataPersist,
     api: {
       publicApiBase,
       gptConfigured: Boolean(process.env.GPT_RELAY_BASE_URL && process.env.GPT_RELAY_API_KEY),
@@ -550,6 +581,7 @@ const getHealth = async () => {
       syncCron: process.env.ENABLE_SYNC_CRON === "1" ? `${syncIntervalSeconds}s` : "off",
       gptCron: process.env.ENABLE_GPT_CRON === "1" ? `${gptIntervalSeconds}s` : "off"
     },
+    database: await getDataStoreStatus(storeDir),
     files: {
       current: await fileInfo(path.join(dataDir, "matches-current.json")),
       history: await fileInfo(path.join(dataDir, "matches-history.json")),
@@ -597,6 +629,62 @@ const handleApi = async (req, res, url) => {
     });
   }
 
+  if (url.pathname === "/api/db/status") {
+    return sendJson(res, await getDataStoreStatus(storeDir));
+  }
+
+  if (url.pathname === "/api/db/sync-runs") {
+    return sendJson(res, {
+      ok: true,
+      rows: await readDataStoreRows(storeDir, TABLES.syncRuns, {
+        limit: url.searchParams.get("limit") || 80
+      })
+    });
+  }
+
+  if (url.pathname === "/api/db/match-snapshots") {
+    return sendJson(res, {
+      ok: true,
+      rows: await readDataStoreRows(storeDir, TABLES.matchSnapshots, {
+        limit: url.searchParams.get("limit") || 120,
+        matchId: url.searchParams.get("matchId") || "",
+        sourceMatchId: url.searchParams.get("sourceMatchId") || ""
+      })
+    });
+  }
+
+  if (url.pathname === "/api/db/odds-snapshots") {
+    return sendJson(res, {
+      ok: true,
+      rows: await readDataStoreRows(storeDir, TABLES.oddsSnapshots, {
+        limit: url.searchParams.get("limit") || 120,
+        matchId: url.searchParams.get("matchId") || "",
+        sourceMatchId: url.searchParams.get("sourceMatchId") || "",
+        pool: url.searchParams.get("pool") || ""
+      })
+    });
+  }
+
+  if (url.pathname === "/api/db/prediction-runs") {
+    return sendJson(res, {
+      ok: true,
+      rows: await readDataStoreRows(storeDir, TABLES.predictionRuns, {
+        limit: url.searchParams.get("limit") || 120,
+        matchId: url.searchParams.get("matchId") || "",
+        sourceMatchId: url.searchParams.get("sourceMatchId") || ""
+      })
+    });
+  }
+
+  const matchHistoryRoute = url.pathname.match(/^\/api\/matches\/([^/]+)\/timeline$/);
+  if (matchHistoryRoute) {
+    return sendJson(res, {
+      ok: true,
+      matchId: decodeURIComponent(matchHistoryRoute[1]),
+      rows: await getMatchTimeline(storeDir, decodeURIComponent(matchHistoryRoute[1]), url.searchParams.get("limit") || 120)
+    });
+  }
+
   if (url.pathname === "/api/analytics/summary") {
     return sendJson(res, {
       ok: true,
@@ -604,6 +692,7 @@ const handleApi = async (req, res, url) => {
       calibration: await readJsonFile(path.join(dataDir, "model-calibration.json"), null),
       syncMeta: await readJsonFile(path.join(dataDir, "sync-meta.json"), null),
       gptPredictions: await readGptPredictions(),
+      database: await getDataStoreStatus(storeDir),
       recentEvents: await readRecentEvents(20)
     });
   }

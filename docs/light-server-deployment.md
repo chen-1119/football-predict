@@ -107,6 +107,7 @@ Runtime data is stored in two places:
 
 - Public data used by the website: `public/data/*.json` and `public/matches.json`.
 - Server-only event/snapshot store: `SERVER_STORE_DIR`, default `/var/lib/football-predict`.
+- Server-side JSONL data store: `SERVER_STORE_DIR/db/*.jsonl`, used for sync runs, match state changes, odds snapshots, and prediction runs. This keeps a replayable history for later model calibration without exposing internal automation text on the public page.
 
 Useful API endpoints:
 
@@ -115,6 +116,12 @@ Useful API endpoints:
 - `/api/odds/history`
 - `/api/predictions/gpt`
 - `/api/db/events`
+- `/api/db/status`
+- `/api/db/sync-runs`
+- `/api/db/match-snapshots?matchId=sporttery_2040145`
+- `/api/db/odds-snapshots?matchId=sporttery_2040145`
+- `/api/db/prediction-runs?matchId=sporttery_2040145`
+- `/api/matches/sporttery_2040145/timeline`
 - `/api/analytics/summary`
 - `/api/health`
 
