@@ -2,12 +2,12 @@ import type { Match, PredictionDetail } from './mockData';
 import { getResolvedMatchOdds, normalizeOdds } from './bettingDisplay';
 import { getVisiblePredictions } from './predictionVisibility';
 
-export type BetSlipMarketType = '1X2' | 'HHAD' | 'GOALS' | 'BEST';
+export type BetSlipMarketType = '1X2' | 'HHAD' | 'BEST';
 
 export interface GeneratorParams {
   targetOdds: number; // 目标总SP
   matchCount: 'auto' | 2 | 5 | 10 | 15; // 比赛数量
-  marketTypes: string[]; // ['1X2', 'HHAD', 'GOALS', 'BEST']
+  marketTypes: string[]; // ['1X2', 'HHAD', 'BEST']
   minOdds: number;
   maxOdds: number;
   timeWindow: '1' | '2' | '3'; // 未来几天天数
@@ -19,7 +19,7 @@ export interface GeneratorParams {
 export interface SelectionResult {
   match: Match;
   prediction: PredictionDetail;
-  generatedFrom?: 'model' | 'official-odds' | 'existing-prediction';
+  generatedFrom?: 'official-odds' | 'existing-prediction';
 }
 
 export interface BetSlipResult {
@@ -43,15 +43,23 @@ const officialHandicapPickLabels: Record<string, { zh: string; en: string }> = {
 };
 
 const isBetSlipMarketType = (marketType: string): marketType is BetSlipMarketType => (
-  marketType === '1X2' || marketType === 'HHAD' || marketType === 'GOALS' || marketType === 'BEST'
+  marketType === '1X2' || marketType === 'HHAD' || marketType === 'BEST'
 );
 
-const selectionMarketKey = (prediction: PredictionDetail): BetSlipMarketType => {
+const isSportteryOutcomeTip = (tipCode: string | undefined) => (
+  tipCode === '1' || tipCode === 'X' || tipCode === '2'
+);
+
+const selectionMarketKey = (prediction: PredictionDetail): BetSlipMarketType | null => {
+  if ((prediction.marketType !== '1X2' && prediction.marketType !== 'BEST') || !isSportteryOutcomeTip(prediction.tipCode)) {
+    return null;
+  }
+
   if ((prediction.marketType === '1X2' || prediction.marketType === 'BEST') && prediction.oddsPoolCode === 'HHAD') {
     return 'HHAD';
   }
 
-  return prediction.marketType === 'GG_NG' ? 'GOALS' : prediction.marketType;
+  return prediction.marketType === 'BEST' ? 'BEST' : '1X2';
 };
 
 const probabilityForCode = (
@@ -95,11 +103,6 @@ const probabilityGap = (entries: Array<{ probability: number }>) => {
 };
 
 const clampTrust = (value: number) => Math.min(88, Math.max(35, Math.round(value)));
-
-const fairModelOdds = (probabilityPercent: number) => {
-  const probability = Math.min(86, Math.max(18, probabilityPercent)) / 100;
-  return Number((1 / probability).toFixed(2));
-};
 
 const getOfficialPickCandidates = (
   match: Match,
@@ -192,54 +195,6 @@ const getOfficialPickCandidates = (
   return outcomes;
 };
 
-const getGoalsCandidates = (
-  match: Match,
-  minOdds: number,
-  maxOdds: number
-): SelectionResult[] => {
-  const goalLines = match.probabilityModel?.goalLines;
-  if (!goalLines || !Number.isFinite(goalLines.over25) || !Number.isFinite(goalLines.under25)) return [];
-
-  const over25 = Number(goalLines.over25);
-  const under25 = Number(goalLines.under25);
-  const isOver = over25 >= under25;
-  const probability = isOver ? over25 : under25;
-  const odds = fairModelOdds(probability);
-  if (odds < minOdds || odds > maxOdds) return [];
-
-  const trustScore = clampTrust(probability + Math.max(0, Math.abs(over25 - under25) - 3) * 0.9);
-  const tipCode = isOver ? 'O2.5' : 'U2.5';
-  const tipLabel = isOver
-    ? { zh: '大2.5球', en: 'Over 2.5 goals' }
-    : { zh: '小2.5球', en: 'Under 2.5 goals' };
-
-  return [{
-    match,
-    generatedFrom: 'model',
-    prediction: {
-      marketType: 'GOALS',
-      tipCode,
-      tipLabel,
-      odds,
-      trustScore,
-      explanation: {
-        zh: `进球模型倾向${tipLabel.zh}，概率约 ${Math.round(probability)}%；该值为模型参考值，不是官方总进球 SP。`,
-        en: `The goal model leans ${tipLabel.en} at about ${Math.round(probability)}%; this is a model reference value, not official total-goals odds.`
-      },
-      analysisItems: [
-        { zh: '由比分分布与大小球概率派生', en: 'Derived from score distribution and goal-line probabilities' },
-        { zh: '用于串关参考，不替代官方盘口', en: 'Accumulator reference, not a replacement for official markets' }
-      ],
-      riskTags: [
-        { zh: '模型参考值', en: 'Model reference value' },
-        { zh: '需临场复核', en: 'Needs late review' }
-      ],
-      visibilityStatus: 'FREE',
-      resultStatus: 'PENDING'
-    }
-  }];
-};
-
 const dedupeSelections = (selections: SelectionResult[]) => {
   const byKey = new Map<string, SelectionResult>();
   for (const selection of selections) {
@@ -264,7 +219,7 @@ const selectionScore = (selection: SelectionResult) => {
     : selection.generatedFrom === 'official-odds'
       ? 3
       : 0;
-  const marketBoost = selection.prediction.oddsPoolCode === 'HHAD' ? 2 : selection.prediction.marketType === 'GOALS' ? -1 : 0;
+  const marketBoost = selection.prediction.oddsPoolCode === 'HHAD' ? 2 : 0;
   return selection.prediction.trustScore + sourceBoost + marketBoost;
 };
 
@@ -355,7 +310,7 @@ const findBestCombination = (
   return { selections: best, totalOdds: bestRank.totalOdds };
 };
 
-// 串关参考生成算法：先构建可投注/可参考候选，再用确定性组合搜索贴近目标总值。
+// 串关参考生成算法：只用官方 HAD/HHAD SP 候选，再用确定性组合搜索贴近目标总值。
 export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetSlipResult {
   const {
     matchCount,
@@ -388,6 +343,7 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
     getVisiblePredictions(m).forEach(p => {
       // 筛选市场类型
       const marketKey = selectionMarketKey(p);
+      if (!marketKey) return;
       if (!includesMarket(marketKey) && !(p.marketType === 'BEST' && includesMarket('BEST'))) return;
       if (p.tipCode === 'WATCH' || p.odds <= 0) return;
       // 筛选 SP 范围
@@ -408,10 +364,6 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
     if (includesMarket('HHAD') || includesMarket('BEST')) {
       candidateSelections.push(...getOfficialPickCandidates(m, 'HHAD', minOdds, maxOdds));
     }
-
-    if (includesMarket('GOALS') || includesMarket('BEST')) {
-      candidateSelections.push(...getGoalsCandidates(m, minOdds, maxOdds));
-    }
   });
 
   const filteredSelections = dedupeSelections(candidateSelections)
@@ -423,17 +375,16 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
       const resolved = getResolvedMatchOdds(match);
       return Boolean(resolved.had?.odds || resolved.hhad?.odds);
     });
-    const hasGoalModel = candidateMatches.some((match) => match.probabilityModel?.goalLines);
     const zhReason = candidateMatches.length === 0
       ? '未来时间窗口内没有可用未开赛比赛。'
-      : hasOfficialOdds || hasGoalModel
-        ? '当前窗口内有赛程，但盘口/进球模型未达到你设置的 SP 或可信度要求。'
-        : '当前窗口内有赛程，但胜平负、让球和进球模型还没有可用于串关的赔率或概率。';
+      : hasOfficialOdds
+        ? '当前窗口内有赛程，但胜平负/让球盘口未达到你设置的 SP 或可信度要求。'
+        : '当前窗口内有赛程，但胜平负和让球胜平负还没有可用于串关的官方 SP。';
     const enReason = candidateMatches.length === 0
       ? 'There are no scheduled matches in the selected time window.'
-      : hasOfficialOdds || hasGoalModel
-        ? 'Matches exist, but the available odds/model values do not pass your odds or confidence filters.'
-        : 'Matches exist, but 1X2, handicap, and goal-model candidates are not available yet.';
+      : hasOfficialOdds
+        ? 'Matches exist, but 1X2/handicap odds do not pass your odds or confidence filters.'
+        : 'Matches exist, but official 1X2 and handicap SP are not available yet.';
     return {
       selections: [],
       totalOdds: 1,
@@ -447,7 +398,6 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
   }
 
   // 3. 开始匹配组合。目标是找到一组 Selection，其乘积（总SP）尽可能接近 targetOdds，且没有重复的 matchId。
-  // 我们使用贪心法结合随机微调来寻找最佳组合。
   
   // 决定最终要挑选的比赛数量范围
   const [targetCountMin, targetCountMax] = matchCount === 'auto'

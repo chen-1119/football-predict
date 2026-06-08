@@ -13,7 +13,7 @@ import { getTeamById } from '../services/entities';
 import { TeamBadge } from '../components/TeamBadge';
 
 type TimeWindow = '1' | '2' | '3';
-const ENABLED_BET_SLIP_MARKETS: BetSlipMarketType[] = ['1X2', 'HHAD', 'GOALS', 'BEST'];
+const ENABLED_BET_SLIP_MARKETS: BetSlipMarketType[] = ['1X2', 'HHAD', 'BEST'];
 
 const getBetSlipMarketLabel = (market: BetSlipMarketType, language: 'zh' | 'en') => {
   if (market === 'HHAD') return language === 'zh' ? '让球' : 'Handicap';
@@ -67,7 +67,7 @@ export const BetSlipGenerator: React.FC = () => {
   const translations = {
     title: { zh: 'AI 串关参考生成器', en: 'AI Accumulator Reference' },
     subtitle: {
-      zh: '按胜平负、让球、进球模型、SP/参考值、可信度和时间窗口筛选候选方向；结果仅供赛前参考。',
+      zh: '只按官方胜平负、让球胜平负 SP、可信度和时间窗口筛选候选方向；结果仅供赛前参考。',
       en: 'Open accumulator builder using SP, confidence, and time-window filters. Results are for pre-match reference only.' 
     },
     openNotice: { zh: '当前为公开体验版：所有筛选项与模型参考暂时开放。', en: 'Open preview: all filters and model references are temporarily available.' },
@@ -256,7 +256,6 @@ export const BetSlipGenerator: React.FC = () => {
               {[
                 { id: '1X2' as const, label: getBetSlipMarketLabel('1X2', language) },
                 { id: 'HHAD' as const, label: getBetSlipMarketLabel('HHAD', language) },
-                { id: 'GOALS' as const, label: language === 'zh' ? '进球数' : getBetSlipMarketLabel('GOALS', language) },
                 { id: 'BEST' as const, label: getBetSlipMarketLabel('BEST', language) }
               ].map(m => {
                 const isSelected = selectedMarkets.includes(m.id);
