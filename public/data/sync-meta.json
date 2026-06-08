@@ -1,16 +1,16 @@
 {
   "version": 1,
   "source": "sporttery",
-  "updatedAt": "2026-06-08T01:41:34.904Z",
-  "capturedAt": "2026-06-08T01:41:34.904Z",
-  "lastAttemptAt": "2026-06-08T12:00:33.958Z",
-  "officialOddsMatches": 0,
-  "officialHandicapOddsMatches": 0,
+  "updatedAt": "2026-06-08T11:54:40.740Z",
+  "capturedAt": "2026-06-08T11:54:40.740Z",
+  "lastAttemptAt": "2026-06-08T11:54:40.740Z",
+  "officialOddsMatches": 21,
+  "officialHandicapOddsMatches": 27,
   "officialResultMatches": 3004,
-  "skippedWithoutOfficialOdds": 0,
+  "skippedWithoutOfficialOdds": 3041,
   "byStatus": {
-    "SCHEDULED": 32,
-    "FINISHED": 3004
+    "FINISHED": 3004,
+    "SCHEDULED": 32
   },
   "coverage": {
     "first": "2025-11-20",
@@ -24,45 +24,44 @@
     "current": 32,
     "history": 3004,
     "teams": 629,
-    "predictionSnapshots": 51,
-    "externalSignals": 0
+    "predictionSnapshots": 141,
+    "externalSignals": 135
   },
   "refreshPolicy": {
     "workflowMinutes": 5,
-    "pagePollSeconds": 30,
+    "pagePollSeconds": 20,
     "oddsHistoryBucketMinutes": 5,
     "note": "GitHub Pages serves static JSON. The page checks for newer JSON regularly; GitHub Actions refreshes the source files on schedule."
   },
   "attempt": {
-    "capturedAt": "2026-06-08T12:00:33.958Z",
-    "officialOddsMatches": 0,
-    "officialHandicapOddsMatches": 0,
-    "officialResultMatches": 0,
-    "publishableMatches": 0
+    "capturedAt": "2026-06-08T11:54:40.740Z",
+    "officialOddsMatches": 21,
+    "officialHandicapOddsMatches": 27,
+    "officialResultMatches": 3004,
+    "publishableMatches": 3036
   },
   "oddsHistory": {
-    "rows": 6379,
-    "appended": 0,
-    "updated": 0,
-    "skipped": "Sporttery returned no publishable matches; kept existing match store"
+    "rows": 8971,
+    "appended": 48,
+    "updated": 0
   },
   "predictionSnapshots": {
-    "total": 51,
+    "total": 141,
     "byPhase": {
-      "review": 27,
+      "review": 54,
       "mid": 6,
-      "baseline": 2,
+      "baseline": 65,
       "late": 4,
       "final": 5,
       "locked": 7
     },
     "appended": 0,
-    "updated": 0
+    "updated": 48
   },
   "externalSignals": {
-    "source": "external-pre-match-signals",
-    "updatedAt": null,
-    "matches": 0
+    "source": "external-signals",
+    "updatedAt": "2026-06-08T11:54:40.658Z",
+    "matches": 135
   },
   "modelCalibration": {
     "version": "rolling-calibration-v1",
@@ -80,12 +79,5 @@
       "goalsHitRate": 0.385,
       "bestHitRate": 0.2
     }
-  },
-  "fallback": {
-    "keptExisting": true,
-    "mergedPartialFresh": false,
-    "reason": "Sporttery returned no publishable matches; kept existing match store",
-    "existingMatches": 3036,
-    "freshPublishableMatches": 0
   }
 }

@@ -44,6 +44,14 @@ Important fields:
 - `ADMIN_TOKEN=<long random token>`
 - `ENABLE_GPT_CRON=1` only after the GPT relay is ready.
 - `GPT_RELAY_BASE_URL`, `GPT_RELAY_API_KEY`, `GPT_MODEL`.
+- `ENABLE_API_FOOTBALL_SYNC=1` only after `API_FOOTBALL_KEY` is configured.
+- `API_FOOTBALL_MAX_CALLS_PER_SYNC`, `API_FOOTBALL_INJURY_REFRESH_MINUTES`,
+  `API_FOOTBALL_ODDS_REFRESH_MINUTES`, and `API_FOOTBALL_LINEUP_REFRESH_MINUTES`
+  keep the supplemental API usage bounded.
+
+The Sporttery sync remains the primary source for fixtures, scores, and official
+HAD/HHAD SP. API-FOOTBALL is used only as a supplemental signal layer for
+fixture mapping, injuries, lineups, and reference bookmaker odds.
 
 The GPT relay must expose an OpenAI-compatible chat completions endpoint, for example:
 

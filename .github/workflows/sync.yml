@@ -46,6 +46,19 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
+      - name: Run Supplemental Signal Sync
+        continue-on-error: true
+        env:
+          ENABLE_API_FOOTBALL_SYNC: ${{ vars.ENABLE_API_FOOTBALL_SYNC || '0' }}
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          API_FOOTBALL_MAX_CALLS_PER_SYNC: ${{ vars.API_FOOTBALL_MAX_CALLS_PER_SYNC || '35' }}
+          API_FOOTBALL_INJURY_REFRESH_MINUTES: ${{ vars.API_FOOTBALL_INJURY_REFRESH_MINUTES || '360' }}
+          API_FOOTBALL_ODDS_REFRESH_MINUTES: ${{ vars.API_FOOTBALL_ODDS_REFRESH_MINUTES || '180' }}
+          API_FOOTBALL_LINEUP_REFRESH_MINUTES: ${{ vars.API_FOOTBALL_LINEUP_REFRESH_MINUTES || '20' }}
+        run: |
+          npm run sync:500
+          npm run sync:api-football
+
       - name: Run Data Scraper & Predictor
         env:
           MATCH_WINDOW_BACK_DAYS: 365

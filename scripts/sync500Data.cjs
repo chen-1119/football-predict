@@ -179,16 +179,43 @@ function readExisting() {
     return { version: 1, source: "external-signals", matches: {} };
   }
   try {
-    const parsed = JSON.parse(fs.readFileSync(OUTPUT_FILE, "utf8"));
+    const parsed = JSON.parse(withFileRetry(() => fs.readFileSync(OUTPUT_FILE, "utf8"), `read ${OUTPUT_FILE}`));
     return parsed && typeof parsed === "object" ? parsed : { version: 1, source: "external-signals", matches: {} };
   } catch {
     return { version: 1, source: "external-signals", matches: {} };
   }
 }
 
+function sleepMs(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function withFileRetry(operation, label) {
+  let lastError;
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    try {
+      return operation();
+    } catch (error) {
+      lastError = error;
+      if (attempt < 5) sleepMs(80 + attempt * 120);
+    }
+  }
+  throw new Error(`${label}: ${lastError?.message || lastError}`);
+}
+
 function writeJson(file, payload) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+  const tmpFile = `${file}.${process.pid}.${Date.now()}.tmp`;
+  withFileRetry(() => {
+    fs.writeFileSync(tmpFile, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
+    try {
+      fs.renameSync(tmpFile, file);
+    } catch (error) {
+      fs.copyFileSync(tmpFile, file);
+      fs.unlinkSync(tmpFile);
+      void error;
+    }
+  }, `write ${file}`);
 }
 
 async function main() {

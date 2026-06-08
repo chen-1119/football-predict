@@ -1010,12 +1010,26 @@ button.status-pill:hover {
 .table-scroll {
   width: 100%;
   overflow-x: auto;
+  scrollbar-gutter: stable;
 }
 
 .responsive-table {
   width: 100%;
   min-width: 920px;
   border-collapse: collapse;
+}
+
+.responsive-table th:last-child,
+.match-action-cell {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  background: hsl(var(--bg-card) / 0.96);
+  box-shadow: -14px 0 20px hsl(var(--bg) / 0.72);
+}
+
+.responsive-table th:last-child {
+  z-index: 3;
 }
 
 .responsive-table th,
@@ -1244,9 +1258,10 @@ button.status-pill:hover {
 }
 
 .team-badge-flag span {
-  font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", var(--font-title);
-  font-size: 1rem;
-  text-transform: none;
+  font-family: var(--font-title);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .team-badge-crest img {
@@ -3418,6 +3433,26 @@ button.status-pill:hover {
   font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", var(--font-title);
   font-size: 0.98rem;
   line-height: 1;
+}
+
+.worldcup-team-flag.team-badge {
+  flex: 0 0 2rem;
+  width: 2rem;
+  height: 1.45rem;
+  padding: 0;
+  border-radius: 0.32rem;
+}
+
+.worldcup-team-flag.team-badge img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.worldcup-team-flag.team-badge .team-badge-fallback {
+  font-size: 0.52rem;
 }
 
 .worldcup-team-flag.is-morocco {
@@ -7641,6 +7676,25 @@ body {
   border-left-color: hsl(var(--primary));
 }
 
+.responsive-table th:last-child,
+.match-row .match-action-cell {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  background: hsl(var(--bg-card) / 0.96);
+  box-shadow: -14px 0 20px hsl(var(--bg) / 0.72);
+}
+
+.responsive-table th:last-child {
+  z-index: 3;
+}
+
+.match-row:hover .match-action-cell {
+  background:
+    linear-gradient(90deg, hsl(var(--wc-emerald) / 0.08), hsl(var(--bg-card) / 0.96)),
+    hsl(var(--bg-card) / 0.96);
+}
+
 .team-line {
   min-width: 0;
   gap: 0.58rem;
@@ -7663,11 +7717,19 @@ body {
   width: 38px;
   height: 28px;
   border-radius: 5px;
-  background: hsl(var(--wc-cream) / 0.08);
+  background:
+    linear-gradient(135deg, hsl(var(--wc-cream) / 0.2), transparent 42%),
+    linear-gradient(160deg, color-mix(in srgb, var(--team-color) 72%, hsl(var(--bg-card)) 28%), hsl(var(--bg-card)));
+  color: hsl(var(--wc-cream));
 }
 
 .team-badge-flag img {
   object-fit: cover;
+}
+
+.team-badge-flag span {
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
 }
 
 .team-badge-crest {
@@ -7719,6 +7781,10 @@ body {
   width: 94px;
   height: 62px;
   border-radius: 8px;
+}
+
+.team-badge-lg.team-badge-flag span {
+  font-size: 1rem;
 }
 
 .team-badge span {

@@ -1,5 +1,5 @@
 import type { Match, MultiLangString, Odds, PredictionDetail } from './mockData';
-import { getImpliedProbabilities, getPredictionTipDisplay } from './bettingDisplay';
+import { getImpliedProbabilities, getPredictionTipDisplay, getResolvedMatchOdds } from './bettingDisplay';
 import { getMatchSignal } from './matchSignal';
 
 type ResultCode = '1' | 'X' | '2';
@@ -342,8 +342,9 @@ const buildProfessionalFramework = ({
   const hasPrimary = Boolean(primary);
   const isWatchOnly = primary?.tipCode === 'WATCH';
   const hasActionablePrimary = Boolean(primary && !isWatchOnly);
-  const latestOdds = oddsText(match.odds);
-  const latestHandicapOdds = oddsText(match.handicapOdds);
+  const resolvedOdds = getResolvedMatchOdds(match);
+  const latestOdds = oddsText(resolvedOdds.had?.odds);
+  const latestHandicapOdds = oddsText(resolvedOdds.hhad?.odds);
   const rankLine = rankOrStrengthLine(match);
   const goalLine = goalModelLine(match);
   const directH2h = h2hLine(match, context);
@@ -351,6 +352,19 @@ const buildProfessionalFramework = ({
   const marketProbabilities = probabilityText(model?.oneXTwo.market);
   const handicapProbabilities = probabilityText(model?.handicap?.market);
   const hhadLine = match.handicapLine ? `${match.handicapLine}` : '--';
+  const primaryUsesHhad = primary?.oddsPoolCode === 'HHAD';
+  const hadReferenceZh = latestOdds === '--' ? '普通胜平负未开售' : `普通胜平负 SP ${latestOdds} 仅作参考`;
+  const hadReferenceEn = latestOdds === '--' ? 'HAD is not on sale' : `HAD SP ${latestOdds} is reference only`;
+  const marketAnchorNote = primaryUsesHhad
+    ? {
+      zh: `${hadReferenceZh}；官方 HHAD(${hhadLine})：${latestHandicapOdds}，去水 ${handicapProbabilities.zh}，当前让球主线支持 ${percentText(hadSupport)}。`,
+      en: `${hadReferenceEn}; official HHAD(${hhadLine}): ${latestHandicapOdds}, normalized ${handicapProbabilities.en}, handicap anchor support ${percentText(hadSupport)}.`
+    }
+    : {
+      zh: `官方 HAD：${latestOdds}，去水 ${marketProbabilities.zh}，当前主线支持 ${percentText(hadSupport)}；官方 HHAD(${hhadLine})：${latestHandicapOdds}，去水 ${handicapProbabilities.zh}；让球同向支持约 ${hhadSupport === null ? '--' : `${hhadSupport}%`}。`,
+      en: `Official HAD: ${latestOdds}, normalized ${marketProbabilities.en}, main-line support ${percentText(hadSupport)}; official HHAD(${hhadLine}): ${latestHandicapOdds}, normalized ${handicapProbabilities.en}; same-side handicap support ${hhadSupport === null ? '--' : `${hhadSupport}%`}.`
+    };
+  const marketToneSupport = primaryUsesHhad ? hadSupport : hhadSupport;
   const trendZh = match.oddsTrend && trendText
     ? `${match.oddsTrend.summary.zh}`
     : '官方 SP 快照样本仍在积累，先以最新 HAD / HHAD 为准。';
@@ -453,10 +467,10 @@ const buildProfessionalFramework = ({
     {
       title: { zh: '十一、赔率盘口', en: '11. Odds / Market' },
       body: {
-        zh: `官方 HAD：${latestOdds}，去水 ${marketProbabilities.zh}，当前主线支持 ${percentText(hadSupport)}；官方 HHAD(${hhadLine})：${latestHandicapOdds}，去水 ${handicapProbabilities.zh}；让球同向支持约 ${hhadSupport === null ? '--' : `${hhadSupport}%`}。${trendZh}${xgOddsSignals.zh ? ` ${xgOddsSignals.zh}` : ''}`,
-        en: `Official HAD: ${latestOdds}, normalized ${marketProbabilities.en}, main-line support ${percentText(hadSupport)}; official HHAD(${hhadLine}): ${latestHandicapOdds}, normalized ${handicapProbabilities.en}; same-side handicap support ${hhadSupport === null ? '--' : `${hhadSupport}%`}. ${trendEn}${xgOddsSignals.en ? ` ${xgOddsSignals.en}` : ''}`
+        zh: `${marketAnchorNote.zh}${trendZh}${xgOddsSignals.zh ? ` ${xgOddsSignals.zh}` : ''}`,
+        en: `${marketAnchorNote.en} ${trendEn}${xgOddsSignals.en ? ` ${xgOddsSignals.en}` : ''}`
       },
-      tone: hhadSupport !== null && hhadSupport >= 42 ? 'success' : 'warning'
+      tone: marketToneSupport !== null && marketToneSupport >= 42 ? 'success' : 'warning'
     },
     {
       title: { zh: '十二、综合结论', en: '12. Verdict' },
@@ -495,10 +509,25 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
   const isWatchOnly = primary?.tipCode === 'WATCH';
   const signal = getMatchSignal(match);
   const resultCode = isResultCode(primary?.tipCode) ? primary.tipCode : undefined;
-  const hadProbabilities = getImpliedProbabilities(match.odds);
-  const hhadProbabilities = getImpliedProbabilities(match.handicapOdds);
+  const resolvedOdds = getResolvedMatchOdds(match);
+  const latestHadOdds = oddsText(resolvedOdds.had?.odds);
+  const latestHhadOdds = oddsText(resolvedOdds.hhad?.odds);
+  const hadProbabilities = getImpliedProbabilities(resolvedOdds.had?.odds);
+  const hhadProbabilities = getImpliedProbabilities(resolvedOdds.hhad?.odds);
   const hadSupport = pickProbability(hadProbabilities, resultCode);
   const hhadSupport = pickProbability(hhadProbabilities, resultCode);
+  const primaryUsesHhad = primary?.oddsPoolCode === 'HHAD';
+  const mainSupport = primaryUsesHhad ? hhadSupport : hadSupport;
+  const mainOddsText = primaryUsesHhad ? latestHhadOdds : latestHadOdds;
+  const mainSupportLabel = primaryUsesHhad
+    ? { zh: '让球支持', en: 'HHAD support' }
+    : { zh: 'HAD支持', en: 'HAD support' };
+  const mainAnchorLabel = primaryUsesHhad
+    ? { zh: '让球胜平负主线', en: 'Handicap 1X2 anchor' }
+    : { zh: '胜平负主线', en: '1X2 anchor' };
+  const mainOddsLabel = primaryUsesHhad
+    ? { zh: `官方 HHAD(${match.handicapLine || '--'}) SP`, en: `Official HHAD(${match.handicapLine || '--'}) SP` }
+    : { zh: '官方 HAD SP', en: 'Official HAD SP' };
   const riskTags = primary?.riskTags || [];
   const riskTextZh = riskTags.length ? riskTags.map((tag) => tag.zh).join('、') : '暂无明显风险标签';
   const riskTextEn = riskTags.length ? riskTags.map((tag) => tag.en).join(', ') : 'no major risk tags';
@@ -539,7 +568,7 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
     tipEn,
     action,
     trustScore,
-    hadSupport,
+    hadSupport: mainSupport,
     hhadSupport,
     sampleText,
     sampleEnough,
@@ -608,8 +637,8 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
         {
           title: { zh: '当前盘面', en: 'Market state' },
           body: {
-            zh: `官方让球胜平负 SP 为 ${oddsText(match.handicapOdds)}，普通胜平负开售后再生成模型推荐。`,
-            en: `Official handicap SP is ${oddsText(match.handicapOdds)}. Model pick will be generated after HAD opens.`
+            zh: `官方让球胜平负 SP 为 ${latestHhadOdds}，普通胜平负开售后再生成模型推荐。`,
+            en: `Official handicap SP is ${latestHhadOdds}. Model pick will be generated after HAD opens.`
           },
           tone: hhadProbabilities ? 'warning' : 'muted'
         }
@@ -656,8 +685,8 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
         {
           title: { zh: '盘口验证', en: 'Market validation' },
           body: {
-            zh: `官方 HAD：${oddsText(match.odds)}；官方 HHAD：${oddsText(match.handicapOdds)}。观察态只展示盘口结构和风险，不展示“主线支持率”，避免把条件未齐的方向当推荐。`,
-            en: `Official HAD: ${oddsText(match.odds)}; official HHAD: ${oddsText(match.handicapOdds)}. Watch mode does not show a main-line support rate, so an unqualified direction is not packaged as a pick.`
+            zh: `官方 HAD：${latestHadOdds}；官方 HHAD：${latestHhadOdds}。观察态只展示盘口结构和风险，不展示“主线支持率”，避免把条件未齐的方向当推荐。`,
+            en: `Official HAD: ${latestHadOdds}; official HHAD: ${latestHhadOdds}. Watch mode does not show a main-line support rate, so an unqualified direction is not packaged as a pick.`
           },
           tone: 'muted'
         },
@@ -696,8 +725,8 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
 
   const handicapBody = hhadSupport === null
     ? {
-      zh: '让球胜平负暂未形成可用验证，当前以 HAD 主盘为准。',
-      en: 'No usable handicap check yet, so HAD remains the anchor.'
+      zh: primaryUsesHhad ? '普通胜平负暂未开售，本场直接以让球胜平负作为预测锚点。' : '让球胜平负暂未形成可用验证，当前以 HAD 主盘为准。',
+      en: primaryUsesHhad ? 'Standard 1X2 is not open, so HHAD is used as the prediction anchor.' : 'No usable handicap check yet, so HAD remains the anchor.'
     }
     : {
       zh: `让球盘同方向支持率约 ${hhadSupport}%，${hhadSupport >= 42 ? '与主线基本同向。' : '对主线支持偏弱，需要降温。'}`,
@@ -707,26 +736,26 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
   return {
     title: { zh: 'AI 综合判断', en: 'AI Decision Brief' },
     summary: {
-      zh: `${action.zh}：当前主线为 ${tipZh}，HAD 去水支持率 ${percentText(hadSupport)}，模型可信度 ${trustScore || '--'}%。风险标签：${riskTextZh}。`,
-      en: `${action.en}: main lean is ${tipEn}, HAD normalized support ${percentText(hadSupport)}, model confidence ${trustScore || '--'}%. Risk tags: ${riskTextEn}.`
+      zh: `${action.zh}：当前主线为 ${tipZh}，${mainSupportLabel.zh} ${percentText(mainSupport)}，模型可信度 ${trustScore || '--'}%。风险标签：${riskTextZh}。`,
+      en: `${action.en}: main lean is ${tipEn}, ${mainSupportLabel.en} ${percentText(mainSupport)}, model confidence ${trustScore || '--'}%. Risk tags: ${riskTextEn}.`
     },
     action,
     score: insightScore,
     tone,
     metrics: [
       { label: { zh: '主推', en: 'Pick' }, value: { zh: tipZh, en: tipEn }, tone },
-      { label: { zh: 'HAD支持', en: 'HAD support' }, value: { zh: percentText(hadSupport), en: percentText(hadSupport) }, tone: hadSupport !== null && hadSupport >= 50 ? 'success' : 'warning' },
+      { label: mainSupportLabel, value: { zh: percentText(mainSupport), en: percentText(mainSupport) }, tone: mainSupport !== null && mainSupport >= 50 ? 'success' : 'warning' },
       { label: { zh: '让球验证', en: 'Handicap check' }, value: { zh: hhadSupport === null ? '--' : `${hhadSupport}%`, en: hhadSupport === null ? '--' : `${hhadSupport}%` }, tone: hhadSupport !== null && hhadSupport >= 42 ? 'success' : 'warning' },
       { label: { zh: '历史样本', en: 'History sample' }, value: { zh: sampleText, en: sampleText }, tone: sampleEnough ? 'success' : 'warning' }
     ],
     drivers: [
       {
-        title: { zh: '胜平负主线', en: '1X2 anchor' },
+        title: mainAnchorLabel,
         body: {
-          zh: `官方 HAD SP 为 ${oddsText(match.odds)}，${resultCode ? resultLabels[resultCode].zh : '首选方向'}去水支持率约 ${percentText(hadSupport)}。`,
-          en: `Official HAD SP is ${oddsText(match.odds)}; ${resultCode ? resultLabels[resultCode].en : 'top direction'} normalized support is about ${percentText(hadSupport)}.`
+          zh: `${mainOddsLabel.zh} 为 ${mainOddsText}，${resultCode ? resultLabels[resultCode].zh : '首选方向'}去水支持率约 ${percentText(mainSupport)}。`,
+          en: `${mainOddsLabel.en} is ${mainOddsText}; ${resultCode ? resultLabels[resultCode].en : 'top direction'} normalized support is about ${percentText(mainSupport)}.`
         },
-        tone: hadSupport !== null && hadSupport >= 50 ? 'success' : 'warning'
+        tone: mainSupport !== null && mainSupport >= 50 ? 'success' : 'warning'
       },
       {
         title: { zh: '让球验证', en: 'Handicap validation' },

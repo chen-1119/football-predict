@@ -65,6 +65,7 @@ const CLUB_CREST_BY_NAME: Record<string, string> = {
 
 const FLAG_CODE_BY_NAME: Record<string, string> = {
   argentina: 'ar',
+  algeria: 'dz',
   australia: 'au',
   austria: 'at',
   cv: 'cv',
@@ -270,11 +271,9 @@ const flagFallbackForCode = (code: string) => {
   const normalized = code.toLowerCase();
   const mapped = FLAG_FALLBACK_BY_CODE[normalized];
   if (mapped) return mapped;
-  if (/^[a-z]{2}$/.test(normalized)) {
-    return String.fromCodePoint(...normalized.toUpperCase().split('').map((letter) => 127397 + letter.charCodeAt(0)));
-  }
   return code.toUpperCase();
 };
+const flagUrl = (code: string) => `https://flagcdn.com/w80/${code.toLowerCase()}.png`;
 const findClubCrest = (...values: Array<string | undefined>) => {
   for (const value of values) {
     const raw = String(value || '').trim();
@@ -347,11 +346,11 @@ export function resolveTeamVisual(team?: Team): TeamVisual {
     const flagIso = isoFromFlagUrl(rawLogo);
     if (flagIso) {
       return {
-        logo: flagFallbackForCode(flagIso),
+        logo: rawLogo,
         label,
         fallbackText: flagFallbackForCode(flagIso),
         logoType: 'flag',
-        isImage: false
+        isImage: true
       };
     }
 

@@ -15,7 +15,7 @@ import {
 import { useApp } from '../context/AppContextCore';
 import { formatBeijingDateString, getDateStringOffset, leagues } from '../services/mockData';
 import type { Country, League, Match, PredictionDetail } from '../services/mockData';
-import { getImpliedProbabilities, getPredictionTipDisplay, getPredictionValueLabel, getSportteryPoolRows } from '../services/bettingDisplay';
+import { getImpliedProbabilities, getPredictionTipDisplay, getPredictionValueLabel, getResolvedMatchOdds, getSportteryPoolRows } from '../services/bettingDisplay';
 import { getCountryById, getLeagueById, getTeamById } from '../services/entities';
 import { getMatchSignal, type MatchSignalCategory } from '../services/matchSignal';
 import { getVisiblePrediction, getVisiblePredictions } from '../services/predictionVisibility';
@@ -50,7 +50,10 @@ const getBestPrediction = (match: Match) => getVisiblePrediction(match, 'BEST');
 
 const getBestTrust = (match: Match) => getBestPrediction(match)?.trustScore || 0;
 
-const getBestOdds = (match: Match) => getBestPrediction(match)?.odds || match.odds?.odds1 || match.handicapOdds?.odds1 || 0;
+const getBestOdds = (match: Match) => {
+  const resolvedOdds = getResolvedMatchOdds(match);
+  return getBestPrediction(match)?.odds || resolvedOdds.had?.odds.odds1 || resolvedOdds.hhad?.odds.odds1 || 0;
+};
 
 const isScoredPrediction = (prediction: PredictionDetail) => (
   prediction.resultStatus !== 'PENDING' && prediction.tipCode !== 'WATCH'
@@ -169,7 +172,7 @@ const getLeadingOutcome = (match: Match) => {
 
 const getHandicapSupport = (match: Match, code: string | undefined) => {
   if (!isOutcomeCode(code)) return null;
-  const probabilities = getImpliedProbabilities(match.handicapOdds);
+  const probabilities = getImpliedProbabilities(getResolvedMatchOdds(match).hhad?.odds);
   if (!probabilities) return null;
   return code === '1' ? probabilities.home : code === 'X' ? probabilities.draw : probabilities.away;
 };

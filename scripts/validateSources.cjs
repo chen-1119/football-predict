@@ -35,8 +35,9 @@ function matchHasExternalSignal(match) {
   if (!signals || typeof signals !== "object") return false;
   const had = signals.bookmakerOdds?.had;
   const hhad = signals.bookmakerOdds?.hhad;
+  const apiFootball = signals.bookmakerOdds?.apiFootball || signals.apiFootball;
   const external = signals.externalOdds;
-  return Boolean(had || hhad || external);
+  return Boolean(had || hhad || apiFootball || external || signals.injuries || signals.lineups);
 }
 
 const errors = [];
@@ -50,6 +51,7 @@ const externalMatches = external?.matches && typeof external.matches === "object
   : {};
 const externalCount = Object.keys(externalMatches).length;
 const source500 = external?.sources?.["500.com:jczq"] || {};
+const sourceApiFootball = external?.sources?.["api-football"] || {};
 const externalAge = ageMinutes(external?.updatedAt);
 const currentCount = Array.isArray(current) ? current.length : 0;
 const currentWithExternal = Array.isArray(current) ? current.filter(matchHasExternalSignal).length : 0;
@@ -106,6 +108,9 @@ const payload = {
     fiveHundredRows: source500.rows || 0,
     fiveHundredMapped: source500.mapped || 0,
     fiveHundredUrl: source500.url || null,
+    apiFootballUpdatedAt: sourceApiFootball.updatedAt || null,
+    apiFootballMappedSignals: sourceApiFootball.mappedSignals || 0,
+    apiFootballCallsThisSync: sourceApiFootball.callsThisSync || 0,
   },
   currentMatches: {
     count: currentCount,

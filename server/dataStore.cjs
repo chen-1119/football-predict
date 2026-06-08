@@ -301,11 +301,21 @@ const externalSummaryFor = (match) => {
     source: signals.source || "external",
     updatedAt: signals.updatedAt || null,
     sourceMatchId: signals.sourceMatchId || null,
-    fixtureId: signals.fixtureId || null,
+    fixtureId: signals.fixtureId || signals.apiFootball?.fixtureId || null,
+    apiFootball: signals.apiFootball ? {
+      fixtureId: signals.apiFootball.fixtureId || null,
+      confidence: compactNumber(signals.apiFootball.confidence),
+      leagueName: signals.apiFootball.leagueName || null,
+      homeTeamName: signals.apiFootball.homeTeamName || null,
+      awayTeamName: signals.apiFootball.awayTeamName || null
+    } : null,
     buyEndTime: signals.buyEndTime || null,
-    hasExternalOdds: Boolean(signals.externalOdds || signals.bookmakerOdds?.had || signals.bookmakerOdds?.hhad),
+    hasExternalOdds: Boolean(signals.externalOdds || signals.bookmakerOdds?.had || signals.bookmakerOdds?.hhad || signals.bookmakerOdds?.apiFootball),
     hasBookmakerHad: Boolean(signals.bookmakerOdds?.had),
     hasBookmakerHhad: Boolean(signals.bookmakerOdds?.hhad),
+    hasApiFootballOdds: Boolean(signals.bookmakerOdds?.apiFootball),
+    hasInjuries: Boolean(signals.injuries),
+    hasLineups: Boolean(signals.lineups),
     handicapLine: signals.handicapLine ?? signals.bookmakerOdds?.hhad?.handicapLine ?? null
   };
 };
@@ -321,7 +331,7 @@ const dataCompletenessFor = (match, prediction) => {
     hasScore: score.home !== null && score.away !== null,
     hasOfficialHadOdds: hasCompleteOdds(match.odds),
     hasOfficialHhadOdds: hasCompleteOdds(match.handicapOdds),
-    hasExternalHadOdds: hasCompleteOdds(bookmakerOdds.had || match.externalSignals?.externalOdds),
+    hasExternalHadOdds: hasCompleteOdds(bookmakerOdds.had || bookmakerOdds.apiFootball?.had || match.externalSignals?.externalOdds),
     hasExternalHhadOdds: hasCompleteOdds(bookmakerOdds.hhad),
     hasPrediction: Boolean(prediction?.main || prediction?.oneXTwo || prediction?.goals),
     hasProbabilityModel: Boolean(match.probabilityModel || prediction?.probabilityFinal),
@@ -478,6 +488,14 @@ const buildOddsSnapshots = (match, source, dataset = "current") => {
 
   const bookmakerOdds = match.externalSignals?.bookmakerOdds || {};
   add("HAD", "500.com", 0, bookmakerOdds.had, match.externalSignals?.updatedAt, "500.com:jczq");
+  add(
+    "HAD",
+    bookmakerOdds.apiFootball?.bookmaker || "api-football",
+    0,
+    bookmakerOdds.apiFootball?.had,
+    bookmakerOdds.apiFootball?.updatedAt || match.externalSignals?.updatedAt,
+    "api-football:odds"
+  );
   add(
     "HHAD",
     "500.com",

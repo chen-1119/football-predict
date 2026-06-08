@@ -179,7 +179,9 @@ const registerSyncedMatches = (data: SyncedMatch[]) => {
         id: m.homeTeamId,
         name: { zh: m.homeTeamName || '未知主队', en: m.homeTeamNameEn || m.homeTeamName || 'Home Team' },
         shortName: { zh: m.homeTeamName || '未知', en: m.homeTeamNameEn || m.homeTeamName || 'Home' },
-        logo: m.homeTeamLogo || m.homeTeamCountryIso || (m.homeTeamName || 'FC').substring(0, 2),
+        logo: m.homeTeamLogoType === 'flag' && m.homeTeamCountryIso
+          ? m.homeTeamCountryIso
+          : m.homeTeamLogo || m.homeTeamCountryIso || (m.homeTeamName || 'FC').substring(0, 2),
         logoType: m.homeTeamLogoType || (m.homeTeamCountryIso ? 'flag' : undefined),
         value: m.homeTeamValue || '',
         color: m.homeTeamColor || '#7f8c8d'
@@ -191,7 +193,9 @@ const registerSyncedMatches = (data: SyncedMatch[]) => {
         id: m.awayTeamId,
         name: { zh: m.awayTeamName || '未知客队', en: m.awayTeamNameEn || m.awayTeamName || 'Away Team' },
         shortName: { zh: m.awayTeamName || '未知', en: m.awayTeamNameEn || m.awayTeamName || 'Away' },
-        logo: m.awayTeamLogo || m.awayTeamCountryIso || (m.awayTeamName || 'FC').substring(0, 2),
+        logo: m.awayTeamLogoType === 'flag' && m.awayTeamCountryIso
+          ? m.awayTeamCountryIso
+          : m.awayTeamLogo || m.awayTeamCountryIso || (m.awayTeamName || 'FC').substring(0, 2),
         logoType: m.awayTeamLogoType || (m.awayTeamCountryIso ? 'flag' : undefined),
         value: m.awayTeamValue || '',
         color: m.awayTeamColor || '#95a5a6'

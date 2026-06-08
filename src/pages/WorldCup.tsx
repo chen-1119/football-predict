@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { TeamBadge } from '../components/TeamBadge';
 import { useApp } from '../context/AppContextCore';
-import { getPredictionTipDisplay, getSportteryPoolRows } from '../services/bettingDisplay';
+import { getPredictionTipDisplay, getSportteryPoolRows, type SportteryOddsPoolDisplay } from '../services/bettingDisplay';
 import { getLeagueById, getTeamById } from '../services/entities';
 import type { Match, MultiLangString, Team } from '../services/mockData';
 import {
@@ -136,10 +136,22 @@ const getStatusLabel = (match: Match, language: Locale) => {
 
 const getTeamName = (team: WorldCupTeamForecast, language: Locale) => pickText(team.shortName, language);
 
-const TeamFlag = ({ team, language }: { team: WorldCupTeamForecast; language: Locale }) => (
-  <span className={`worldcup-team-flag ${team.id === 'morocco' ? 'is-morocco' : ''}`} aria-label={getTeamName(team, language)}>
-    <b>{team.flag}</b>
-  </span>
+const toWorldCupBadgeTeam = (team: WorldCupTeamForecast): Team => ({
+  id: `worldcup_${team.id}`,
+  name: team.name,
+  shortName: team.shortName,
+  logo: team.id,
+  logoType: 'flag',
+  value: '',
+  color: '#0f9f6e'
+});
+
+const TeamFlag = ({ team }: { team: WorldCupTeamForecast }) => (
+  <TeamBadge
+    team={toWorldCupBadgeTeam(team)}
+    size="sm"
+    className={`worldcup-team-flag ${team.id === 'morocco' ? 'is-morocco' : ''}`}
+  />
 );
 
 const GroupTeamRow = ({ team, language }: { team: WorldCupTeamForecast; language: Locale }) => {
@@ -151,7 +163,7 @@ const GroupTeamRow = ({ team, language }: { team: WorldCupTeamForecast; language
 
   return (
     <article className="worldcup-group-team-row">
-      <TeamFlag team={team} language={language} />
+      <TeamFlag team={team} />
       <div className="worldcup-team-copy">
         <strong>{getTeamName(team, language)}</strong>
         <small>
@@ -175,6 +187,70 @@ const GroupTeamRow = ({ team, language }: { team: WorldCupTeamForecast; language
   );
 };
 
+type WorldCupCardRecommendation = {
+  label: string;
+  detail: string;
+};
+
+const getMarketRecommendation = (
+  pools: SportteryOddsPoolDisplay[],
+  language: Locale
+): WorldCupCardRecommendation | null => {
+  const had = pools.find((pool) => pool.poolCode === 'HAD' && pool.odds && pool.probabilities);
+  const hhad = pools.find((pool) => pool.poolCode === 'HHAD' && pool.odds && pool.probabilities);
+  const labels = {
+    home: language === 'zh' ? '主胜' : 'Home',
+    draw: language === 'zh' ? '平局' : 'Draw',
+    away: language === 'zh' ? '客胜' : 'Away'
+  };
+
+  if (had?.probabilities) {
+    const ranked = ([
+      { key: 'home' as const, value: had.probabilities.home },
+      { key: 'draw' as const, value: had.probabilities.draw },
+      { key: 'away' as const, value: had.probabilities.away }
+    ]).sort((a, b) => b.value - a.value);
+    const leader = ranked[0];
+    const gap = leader.value - ranked[1].value;
+    const hhadText = hhad?.probabilities
+      ? (language === 'zh'
+          ? `让球${hhad.handicap || '--'}：${hhad.probabilities.home}/${hhad.probabilities.draw}/${hhad.probabilities.away}%`
+          : `HHAD ${hhad.handicap || '--'}: ${hhad.probabilities.home}/${hhad.probabilities.draw}/${hhad.probabilities.away}%`)
+      : (language === 'zh' ? '让球盘待确认' : 'handicap pending');
+    const label = leader.key === 'draw' || gap < 6
+      ? (language === 'zh' ? '均势防平' : 'Tight draw watch')
+      : gap >= 18
+        ? (language === 'zh' ? `${labels[leader.key]}倾向` : `${labels[leader.key]} lean`)
+        : (language === 'zh' ? `${labels[leader.key]}优先，防平` : `${labels[leader.key]} first, cover draw`);
+
+    return {
+      label,
+      detail: language === 'zh'
+        ? `HAD 去水：${had.probabilities.home}/${had.probabilities.draw}/${had.probabilities.away}%，概率差 ${gap} 个点；${hhadText}。`
+        : `HAD normalized ${had.probabilities.home}/${had.probabilities.draw}/${had.probabilities.away}%, gap ${gap} pts; ${hhadText}.`
+    };
+  }
+
+  if (hhad?.probabilities) {
+    const ranked = ([
+      { key: 'home' as const, value: hhad.probabilities.home },
+      { key: 'draw' as const, value: hhad.probabilities.draw },
+      { key: 'away' as const, value: hhad.probabilities.away }
+    ]).sort((a, b) => b.value - a.value);
+
+    return {
+      label: language === 'zh'
+        ? `让球盘观察 ${hhad.handicap || ''}`.trim()
+        : `HHAD watch ${hhad.handicap || ''}`.trim(),
+      detail: language === 'zh'
+        ? `普通胜平负未开售，先看让球盘 ${labels[ranked[0].key]} 方向，去水 ${hhad.probabilities.home}/${hhad.probabilities.draw}/${hhad.probabilities.away}%。`
+        : `1X2 is not released; handicap market leans ${labels[ranked[0].key]} with normalized ${hhad.probabilities.home}/${hhad.probabilities.draw}/${hhad.probabilities.away}%.`
+    };
+  }
+
+  return null;
+};
+
 const getDisplayTeam = (match: Match, side: 'home' | 'away'): Team => {
   const isHome = side === 'home';
   const registered = getTeamById(isHome ? match.homeTeamId : match.awayTeamId);
@@ -182,6 +258,7 @@ const getDisplayTeam = (match: Match, side: 'home' | 'away'): Team => {
   const syncedNameEn = isHome ? match.homeTeamNameEn : match.awayTeamNameEn;
   const syncedLogo = isHome ? match.homeTeamLogo : match.awayTeamLogo;
   const syncedLogoType = isHome ? match.homeTeamLogoType : match.awayTeamLogoType;
+  const syncedCountryIso = isHome ? match.homeTeamCountryIso : match.awayTeamCountryIso;
   const isUnknown = registered.shortName.zh === '未知' && registered.shortName.en === 'Unknown';
 
   if (!isUnknown || !syncedName) return registered;
@@ -190,7 +267,9 @@ const getDisplayTeam = (match: Match, side: 'home' | 'away'): Team => {
     id: isHome ? match.homeTeamId : match.awayTeamId,
     name: { zh: syncedName, en: syncedNameEn || syncedName },
     shortName: { zh: syncedName, en: syncedNameEn || syncedName },
-    logo: syncedLogo || syncedName,
+    logo: syncedLogoType === 'flag' && syncedCountryIso
+      ? syncedCountryIso
+      : syncedLogo || syncedCountryIso || syncedName,
     logoType: syncedLogoType,
     value: '',
     color: isHome ? '#0f9f6e' : '#2563eb'
@@ -211,17 +290,26 @@ const MatchCard = ({
   const home = getDisplayTeam(match, 'home');
   const away = getDisplayTeam(match, 'away');
   const league = getLeagueById(match.leagueId);
+  const leagueLabel = (language === 'zh'
+    ? match.leagueName || match.leagueShortName
+    : match.leagueNameEn || match.leagueShortNameEn)
+    || league.shortName[language];
   const prediction = getBestPrediction(match);
   const forecast = prediction ? null : getWorldCupFixtureForecast(match, groupForecasts);
   const trust = getMatchTrust(match) || forecast?.trust || 0;
   const pools = getSportteryPoolRows(match, language);
   const had = pools.find((pool) => pool.poolCode === 'HAD');
   const hhad = pools.find((pool) => pool.poolCode === 'HHAD');
-  const recommendation = prediction
-    ? getPredictionTipDisplay(prediction, language, true)
+  const actionablePrediction = prediction && prediction.tipCode !== 'WATCH' ? prediction : null;
+  const marketRecommendation = getMarketRecommendation(pools, language);
+  const recommendation = actionablePrediction
+    ? getPredictionTipDisplay(actionablePrediction, language, true)
+    : marketRecommendation
+      ? marketRecommendation.label
     : forecast
       ? pickText(forecast.tip, language)
       : copy.waiting[language];
+  const cardDetail = marketRecommendation?.detail || (forecast ? pickText(forecast.detail, language) : `${copy.waiting[language]} HAD SP`);
 
   return (
     <article className="worldcup-match-card">
@@ -241,7 +329,7 @@ const MatchCard = ({
         </span>
       </button>
       <div className="worldcup-card-lines">
-        <span>{league.shortName[language]}</span>
+        <span>{leagueLabel}</span>
         <span>{copy.recommendation[language]} {recommendation}</span>
         <span>{copy.trust[language]} {trust ? `${trust}%` : '--'}</span>
         {forecast && (
@@ -260,7 +348,7 @@ const MatchCard = ({
         </div>
       ) : (
         <div className="worldcup-odds-strip is-empty">
-          {forecast ? pickText(forecast.detail, language) : `${copy.waiting[language]} HAD SP`}
+          {cardDetail}
         </div>
       )}
       {hhad?.odds && (
@@ -360,6 +448,10 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
               const away = getDisplayTeam(match, 'away');
               const forecast = getWorldCupFixtureForecast(match, groupForecasts);
               const prediction = getBestPrediction(match);
+              const marketRecommendation = getMarketRecommendation(getSportteryPoolRows(match, language), language);
+              const miniRecommendation = prediction && prediction.tipCode !== 'WATCH'
+                ? getPredictionTipDisplay(prediction, language, true)
+                : marketRecommendation?.label || (forecast ? pickText(forecast.tip, language) : copy.waiting[language]);
               return (
                 <button className="worldcup-mini-match" type="button" key={match.id} onClick={() => onSelectMatch(match.id)}>
                   <span className="worldcup-mini-label">{formatDateTime(match.kickoffTime, language)}</span>
@@ -369,7 +461,7 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
                     <span>{away.shortName[language]}</span>
                   </span>
                   <span className="worldcup-mini-meta">
-                    {prediction ? getPredictionTipDisplay(prediction, language, true) : forecast ? pickText(forecast.tip, language) : copy.waiting[language]}
+                    {miniRecommendation}
                   </span>
                   <span className="worldcup-mini-action">
                     {copy.more[language]}
@@ -514,7 +606,7 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
           <div>
             {bestThird.map((team) => (
               <strong key={team.id}>
-                <TeamFlag team={team} language={language} />
+                <TeamFlag team={team} />
                 {getTeamName(team, language)}
                 <small>{formatPercent(team.bestThirdProbability)} / {team.projectedPoints.toFixed(1)}分</small>
               </strong>
@@ -549,7 +641,7 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
           <div className="worldcup-route-list">
             {knockoutRoutes.slice(0, 10).map((route) => (
               <article key={route.team.id}>
-                <TeamFlag team={route.team} language={language} />
+                <TeamFlag team={route.team} />
                 <div className="worldcup-route-copy">
                   <strong>{getTeamName(route.team, language)}</strong>
                   <small>{pickText(route.tier, language)} / Group {route.team.groupId}</small>

@@ -1,4 +1,4 @@
-import type { Odds, PredictionDetail } from './mockData';
+import type { ExternalMatchSignals, Odds, PredictionDetail } from './mockData';
 
 type Language = 'zh' | 'en';
 export type SportteryOddsPoolCode = 'HAD' | 'HHAD';
@@ -11,6 +11,76 @@ export interface SportteryOddsPoolDisplay {
   source?: string;
   updatedAt?: string;
   probabilities?: { home: number; draw: number; away: number };
+}
+
+export interface MatchOddsInput {
+  odds?: Odds | null;
+  oddsSource?: string;
+  oddsUpdatedAt?: string;
+  handicapOdds?: Odds | null;
+  handicapLine?: string;
+  handicapOddsSource?: string;
+  handicapOddsUpdatedAt?: string;
+  externalSignals?: ExternalMatchSignals;
+}
+
+export interface ResolvedMatchOdds {
+  had?: {
+    odds: Odds;
+    source?: string;
+    updatedAt?: string;
+  };
+  hhad?: {
+    odds: Odds;
+    handicap?: string;
+    source?: string;
+    updatedAt?: string;
+  };
+}
+
+const isFiniteOdd = (value: unknown) => Number.isFinite(Number(value)) && Number(value) > 1;
+
+export const normalizeOdds = (value?: Partial<Odds> | null): Odds | null => {
+  if (!value || !isFiniteOdd(value.odds1) || !isFiniteOdd(value.oddsX) || !isFiniteOdd(value.odds2)) {
+    return null;
+  }
+
+  return {
+    odds1: Number(value.odds1),
+    oddsX: Number(value.oddsX),
+    odds2: Number(value.odds2)
+  };
+};
+
+export function getResolvedMatchOdds(match: MatchOddsInput): ResolvedMatchOdds {
+  const signals = match.externalSignals;
+  const bookmakerOdds = signals?.bookmakerOdds;
+  const officialHad = normalizeOdds(match.odds);
+  const officialHhad = normalizeOdds(match.handicapOdds);
+  const externalHad = normalizeOdds(bookmakerOdds?.had || bookmakerOdds?.apiFootball?.had);
+  const externalHhad = normalizeOdds(bookmakerOdds?.hhad);
+  const externalOdds = normalizeOdds(signals?.externalOdds);
+  const externalOddsLooksLikeHad = Boolean(externalOdds && !externalHhad && !signals?.handicapLine);
+  const had = officialHad || externalHad || (externalOddsLooksLikeHad ? externalOdds : null);
+  const hhad = officialHhad || externalHhad || (!officialHad && !externalHad && signals?.handicapLine ? externalOdds : null);
+
+  return {
+    had: had
+      ? {
+          odds: had,
+          source: match.oddsSource || bookmakerOdds?.had?.source || bookmakerOdds?.apiFootball?.source || signals?.externalOdds?.source || signals?.source,
+          updatedAt: match.oddsUpdatedAt || bookmakerOdds?.had?.updatedAt || bookmakerOdds?.apiFootball?.updatedAt || signals?.updatedAt
+        }
+      : undefined,
+    hhad: hhad
+      ? {
+          odds: hhad,
+          handicap: match.handicapLine || bookmakerOdds?.hhad?.handicapLine || signals?.handicapLine,
+          source: match.handicapOddsSource || bookmakerOdds?.hhad?.source || signals?.source,
+          updatedAt: match.handicapOddsUpdatedAt || bookmakerOdds?.hhad?.updatedAt || signals?.updatedAt
+        }
+      : undefined
+  };
 }
 
 const sportteryResultLabels = {
@@ -37,6 +107,30 @@ const sportteryResultLabels = {
   }
 } as const;
 
+const sportteryHandicapResultLabels = {
+  '1': {
+    zhCompact: '让球主胜',
+    zhFull: '让球主胜',
+    zhCodeHint: '让球代码 3',
+    enCompact: 'HHAD Home',
+    enFull: 'Handicap Home Win'
+  },
+  X: {
+    zhCompact: '让球平',
+    zhFull: '让球平',
+    zhCodeHint: '让球代码 1',
+    enCompact: 'HHAD Draw',
+    enFull: 'Handicap Draw'
+  },
+  '2': {
+    zhCompact: '让球客胜',
+    zhFull: '让球客胜',
+    zhCodeHint: '让球代码 0',
+    enCompact: 'HHAD Away',
+    enFull: 'Handicap Away Win'
+  }
+} as const;
+
 export function getMarketLabel(marketType: PredictionDetail['marketType'], language: Language): string {
   const labels: Record<PredictionDetail['marketType'], Record<Language, string>> = {
     '1X2': { zh: '胜平负', en: '1X2' },
@@ -48,11 +142,36 @@ export function getMarketLabel(marketType: PredictionDetail['marketType'], langu
   return labels[marketType][language];
 }
 
+export function getPredictionMarketLabel(prediction: PredictionDetail, language: Language): string {
+  if (
+    prediction.oddsPoolCode === 'HHAD' &&
+    (prediction.marketType === '1X2' || prediction.marketType === 'BEST') &&
+    sportteryResultLabels[prediction.tipCode as keyof typeof sportteryResultLabels]
+  ) {
+    return prediction.marketType === 'BEST'
+      ? (language === 'zh' ? 'AI精选 · 让球' : 'Best Tip · HHAD')
+      : (language === 'zh' ? '让球胜平负' : 'Handicap 1X2');
+  }
+
+  return getMarketLabel(prediction.marketType, language);
+}
+
 export function getPredictionTipDisplay(
   prediction: PredictionDetail,
   language: Language,
   compact = false
 ): string {
+  const handicapLabel = prediction.oddsPoolCode === 'HHAD'
+    ? sportteryHandicapResultLabels[prediction.tipCode as keyof typeof sportteryHandicapResultLabels]
+    : undefined;
+  if ((prediction.marketType === '1X2' || prediction.marketType === 'BEST') && handicapLabel) {
+    if (language === 'zh') {
+      return compact ? handicapLabel.zhCompact : handicapLabel.zhFull;
+    }
+
+    return compact ? handicapLabel.enCompact : handicapLabel.enFull;
+  }
+
   if (prediction.marketType === 'BEST') {
     if (language === 'zh') {
       const label = prediction.tipLabel.zh
@@ -99,7 +218,9 @@ export function getPredictionTipDisplay(
 }
 
 export function getPredictionCodeHint(prediction: PredictionDetail, language: Language): string {
-  const sportteryLabel = sportteryResultLabels[prediction.tipCode as keyof typeof sportteryResultLabels];
+  const sportteryLabel = prediction.oddsPoolCode === 'HHAD'
+    ? sportteryHandicapResultLabels[prediction.tipCode as keyof typeof sportteryHandicapResultLabels]
+    : sportteryResultLabels[prediction.tipCode as keyof typeof sportteryResultLabels];
 
   if (!sportteryLabel || (prediction.marketType !== '1X2' && prediction.marketType !== 'BEST')) return '';
   return language === 'zh' ? sportteryLabel.zhCodeHint : '';
@@ -115,7 +236,9 @@ export function getPredictionValueLabel(prediction: PredictionDetail, language: 
   }
 
   if (prediction.marketType === '1X2' || prediction.marketType === 'BEST') {
-    return 'SP';
+    return prediction.oddsPoolCode === 'HHAD'
+      ? (language === 'zh' ? '让球SP' : 'HHAD SP')
+      : 'SP';
   }
 
   return language === 'zh' ? '模型值' : 'Model';
@@ -151,11 +274,12 @@ export function getSportteryOddsRows(odds: Odds | null | undefined, language: La
 }
 
 export function getImpliedProbabilities(odds: Odds | null | undefined) {
-  if (!odds) return undefined;
+  const normalized = normalizeOdds(odds);
+  if (!normalized) return undefined;
 
-  const home = 1 / odds.odds1;
-  const draw = 1 / odds.oddsX;
-  const away = 1 / odds.odds2;
+  const home = 1 / normalized.odds1;
+  const draw = 1 / normalized.oddsX;
+  const away = 1 / normalized.odds2;
   const total = home + draw + away || 1;
 
   return {
@@ -165,33 +289,26 @@ export function getImpliedProbabilities(odds: Odds | null | undefined) {
   };
 }
 
-export function getSportteryPoolRows(match: {
-  odds?: Odds | null;
-  oddsSource?: string;
-  oddsUpdatedAt?: string;
-  handicapOdds?: Odds | null;
-  handicapLine?: string;
-  handicapOddsSource?: string;
-  handicapOddsUpdatedAt?: string;
-}, language: Language): SportteryOddsPoolDisplay[] {
+export function getSportteryPoolRows(match: MatchOddsInput, language: Language): SportteryOddsPoolDisplay[] {
+  const resolved = getResolvedMatchOdds(match);
   const rows: SportteryOddsPoolDisplay[] = [
     {
       poolCode: 'HAD',
       label: language === 'zh' ? '胜平负' : '1X2',
       handicap: '0',
-      odds: match.odds,
-      source: match.oddsSource,
-      updatedAt: match.oddsUpdatedAt,
-      probabilities: getImpliedProbabilities(match.odds)
+      odds: resolved.had?.odds || null,
+      source: resolved.had?.source,
+      updatedAt: resolved.had?.updatedAt,
+      probabilities: getImpliedProbabilities(resolved.had?.odds)
     },
     {
       poolCode: 'HHAD',
       label: language === 'zh' ? '让球胜平负' : 'Handicap 1X2',
-      handicap: match.handicapLine || '',
-      odds: match.handicapOdds,
-      source: match.handicapOddsSource,
-      updatedAt: match.handicapOddsUpdatedAt,
-      probabilities: getImpliedProbabilities(match.handicapOdds)
+      handicap: resolved.hhad?.handicap || '',
+      odds: resolved.hhad?.odds || null,
+      source: resolved.hhad?.source,
+      updatedAt: resolved.hhad?.updatedAt,
+      probabilities: getImpliedProbabilities(resolved.hhad?.odds)
     }
   ];
   const hasAnyOdds = rows.some((row) => row.odds);

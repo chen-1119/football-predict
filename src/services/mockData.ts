@@ -37,6 +37,8 @@ export interface Odds {
 
 export interface PredictionDetail {
   marketType: '1X2' | 'GOALS' | 'GG_NG' | 'BEST';
+  oddsPoolCode?: 'HAD' | 'HHAD';
+  handicapLine?: string;
   tipCode: string; // 比如 '1', 'X', '2', '1X', 'X2', 'O1.5', 'O2.5', 'U2.5', 'GG', 'NG'
   tipLabel: MultiLangString;
   odds: number;
@@ -63,6 +65,8 @@ export interface MatchStats {
 export interface ExternalMatchSignals {
   updatedAt?: string;
   source?: string;
+  leagueName?: string;
+  handicapLine?: string;
   injuries?: {
     home?: MultiLangString[];
     away?: MultiLangString[];
@@ -98,6 +102,32 @@ export interface ExternalMatchSignals {
     oddsX?: number;
     odds2?: number;
     summary?: MultiLangString;
+  };
+  bookmakerOdds?: {
+    had?: Odds & { source?: string; updatedAt?: string };
+    hhad?: Odds & { source?: string; handicapLine?: string; updatedAt?: string };
+    apiFootball?: {
+      source?: string;
+      bookmaker?: string;
+      bet?: string;
+      updatedAt?: string;
+      had?: Odds;
+      summary?: MultiLangString;
+    };
+  };
+  apiFootball?: {
+    fixtureId?: number;
+    leagueId?: number;
+    leagueName?: string;
+    season?: number;
+    homeTeamId?: number;
+    awayTeamId?: number;
+    homeTeamName?: string;
+    awayTeamName?: string;
+    fixtureDate?: string;
+    confidence?: number;
+    matchedAt?: string | null;
+    lastCheckedAt?: string;
   };
 }
 

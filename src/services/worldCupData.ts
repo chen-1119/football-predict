@@ -515,20 +515,29 @@ export function getMatchTrust(match: Match): number {
 
 export function isWorldCupRelevantMatch(match: Match): boolean {
   const league = getLeagueById(match.leagueId);
-  const text = [
+  const fields = [
     match.leagueId,
     match.leagueName,
     match.leagueNameEn,
     match.leagueShortName,
     match.leagueShortNameEn,
+    match.externalSignals?.leagueName,
     league.name.zh,
     league.name.en,
     league.shortName.zh,
     league.shortName.en
-  ].filter(Boolean).join(' ');
+  ].filter(Boolean);
+  const text = fields.join(' ');
+  const hasExplicitWorldCupField = fields.some((value) => {
+    const normalized = String(value || '').trim();
+    return normalized === '世界杯'
+      || /^世界杯\s+/i.test(normalized)
+      || /^FIFA\s+World\s+Cup$/i.test(normalized)
+      || /^World\s+Cup(\s+|$)/i.test(normalized);
+  });
 
   return WORLD_CUP_COMPETITION_PATTERN.test(text)
-    && !WORLD_CUP_EXCLUDE_PATTERN.test(text)
+    && (hasExplicitWorldCupField || !WORLD_CUP_EXCLUDE_PATTERN.test(text))
     && isWithinWorldCupWindow(match.kickoffTime);
 }
 
@@ -898,20 +907,27 @@ export function getWorldCupFixtureForecast(
   const homeText = home.shortName;
   const awayText = away.shortName;
 
-  const tip = absEdge < 4
+  const stronger = edge >= 0 ? homeText : awayText;
+  const weaker = edge >= 0 ? awayText : homeText;
+  const tip = absEdge >= 18
     ? {
-        zh: '均势防平',
-        en: 'Balanced draw cover'
+        zh: `${stronger.zh}胜面占优`,
+        en: `${stronger.en} win lean`
       }
-    : edge > 0
+    : absEdge >= 10
       ? {
-          zh: `${homeText.zh}不败`,
-          en: `${homeText.en} double chance`
+          zh: `${stronger.zh}优先，防平`,
+          en: `${stronger.en} first, cover draw`
         }
-      : {
-          zh: `${awayText.zh}不败`,
-          en: `${awayText.en} double chance`
-        };
+      : absEdge >= 5
+        ? {
+            zh: `${stronger.zh}小优，谨慎让球`,
+            en: `${stronger.en} small edge, handicap caution`
+          }
+        : {
+            zh: '均势防平',
+            en: 'Balanced draw watch'
+          };
 
   return {
     home,
@@ -921,8 +937,8 @@ export function getWorldCupFixtureForecast(
     homeAdvanceProbability: home.advanceProbability,
     awayAdvanceProbability: away.advanceProbability,
     detail: {
-      zh: `世界杯模型：${homeText.zh}晋级 ${percentLabel(home.advanceProbability)}，${awayText.zh}晋级 ${percentLabel(away.advanceProbability)}；未开售 SP 时先按小组强度和东道主权重展示。`,
-      en: `World Cup model: ${homeText.en} advance ${percentLabel(home.advanceProbability)}, ${awayText.en} advance ${percentLabel(away.advanceProbability)}. Before SP release, display uses group strength and host weighting.`
+      zh: `世界杯模型：${homeText.zh}晋级 ${percentLabel(home.advanceProbability)}，${awayText.zh}晋级 ${percentLabel(away.advanceProbability)}；强弱差 ${Math.round(absEdge)}，${weaker.zh}仍保留防冷权重，未开售 SP 时只作赛程观察。`,
+      en: `World Cup model: ${homeText.en} advance ${percentLabel(home.advanceProbability)}, ${awayText.en} advance ${percentLabel(away.advanceProbability)}; strength gap ${Math.round(absEdge)}, ${weaker.en} still keeps upset weight. Before SP release this stays fixture watch only.`
     }
   };
 }

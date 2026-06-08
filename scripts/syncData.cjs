@@ -691,6 +691,43 @@ function handicapOutcomeProbabilities(homeLambda, awayLambda, line) {
   };
 }
 
+function scoreOutcomeWithHandicap(home, away, handicap) {
+  const diff = home + handicap - away;
+  if (Math.abs(diff) < 1e-9) return "X";
+  return diff > 0 ? "1" : "2";
+}
+
+function alignedScoreForHandicapPick(homeLambda, awayLambda, line, code) {
+  const handicap = parseHandicapLine(line);
+  if (handicap === null || !["1", "X", "2"].includes(code)) return null;
+
+  return scoreMatrix(homeLambda, awayLambda, 8)
+    .filter((row) => scoreOutcomeWithHandicap(row.home, row.away, handicap) === code)
+    .sort((a, b) => {
+      const probabilityDiff = b.probability - a.probability;
+      if (Math.abs(probabilityDiff) > 0.000001) return probabilityDiff;
+      return (a.home + a.away) - (b.home + b.away);
+    })[0] || null;
+}
+
+function alignLambdaToScore(currentLambda, goals, maxLambda) {
+  return clamp(currentLambda * 0.25 + (goals + 0.35) * 0.75, 0.25, maxLambda);
+}
+
+function alignedHandicapForecast(homeLambda, awayLambda, line, code) {
+  const score = alignedScoreForHandicapPick(homeLambda, awayLambda, line, code);
+  if (!score) return null;
+
+  return {
+    score: {
+      home: score.home,
+      away: score.away
+    },
+    homeLambda: alignLambdaToScore(homeLambda, score.home, 5.2),
+    awayLambda: alignLambdaToScore(awayLambda, score.away, 5.2)
+  };
+}
+
 function normalizeOutcomeProbabilities(probabilities) {
   if (!probabilities) return null;
   const total = probabilities.home + probabilities.draw + probabilities.away || 1;
@@ -1292,6 +1329,13 @@ function resultStatus(match, expected, marketType = "") {
   if (!Number.isFinite(match.scoreHome) || !Number.isFinite(match.scoreAway)) return "PENDING";
   const total = match.scoreHome + match.scoreAway;
   const actual1x2 = match.scoreHome > match.scoreAway ? "1" : match.scoreHome < match.scoreAway ? "2" : "X";
+  if ((marketType === "HHAD" || marketType === "BEST_HHAD") && ["1", "X", "2"].includes(expected)) {
+    const handicap = parseHandicapLine(match.handicapLine);
+    if (handicap === null) return "PENDING";
+    const adjustedHome = match.scoreHome + handicap;
+    const actualHhad = adjustedHome > match.scoreAway ? "1" : adjustedHome < match.scoreAway ? "2" : "X";
+    return expected === actualHhad ? "WON" : "LOST";
+  }
   if ((marketType === "1X2" || marketType === "BEST" || marketType === "") && ["1", "X", "2"].includes(expected)) {
     return expected === actual1x2 ? "WON" : "LOST";
   }
@@ -1356,8 +1400,11 @@ function buildPredictionHealth(existingMatches) {
       if (prediction.resultStatus !== "WON" && prediction.resultStatus !== "LOST") continue;
       const profileKey = predictionProfileKey(match);
       const odds = Number(prediction.odds || 0);
+      const marketType = prediction.oddsPoolCode === "HHAD" && prediction.marketType === "1X2"
+        ? "HHAD"
+        : prediction.marketType;
       rows.push({
-        marketType: prediction.marketType,
+        marketType,
         tipCode: prediction.tipCode,
         odds,
         oddsBucket: predictionOddsBucket(odds),
@@ -1372,7 +1419,7 @@ function buildPredictionHealth(existingMatches) {
   }
 
   const byMarket = {};
-  for (const marketType of ["1X2", "GOALS", "BEST"]) {
+  for (const marketType of ["1X2", "HHAD", "GOALS", "BEST"]) {
     const minSettled = marketType === "BEST" ? 5 : 10;
     const minHitRate = marketType === "BEST" ? 0.5 : 0.4;
     byMarket[marketType] = summarize(rows.filter((row) => row.marketType === marketType), minSettled, minHitRate);
@@ -2401,8 +2448,17 @@ function buildBestNarrative(match, context) {
 }
 
 function predictionSet(match) {
-  const probabilities = impliedProbabilities(match.odds);
-  const hhadProbabilities = sanitizeOdds(match.handicapOdds) ? impliedProbabilities(match.handicapOdds) : null;
+  const hadOdds = sanitizeOdds(match.odds);
+  const hhadOdds = sanitizeOdds(match.handicapOdds);
+  const anchorOdds = hadOdds || hhadOdds;
+  const anchorPoolCode = hadOdds ? "HAD" : "HHAD";
+  const anchorIsHhad = anchorPoolCode === "HHAD";
+  const anchorHandicapLine = anchorIsHhad ? (match.handicapLine || "") : "0";
+  const anchorMarketType = anchorIsHhad ? "HHAD" : "1X2";
+  const anchorLabelZh = anchorIsHhad ? `官方 HHAD 让球胜平负(${anchorHandicapLine || "--"})` : "中国竞彩网官方 HAD 胜平负";
+  const anchorLabelEn = anchorIsHhad ? `official Sporttery HHAD (${anchorHandicapLine || "--"})` : "official Sporttery HAD";
+  const probabilities = impliedProbabilities(anchorOdds);
+  const hhadProbabilities = hhadOdds ? impliedProbabilities(hhadOdds) : null;
   const rand = seeded(`${match.sourceMatchId}-${match.homeTeam}-${match.awayTeam}`);
   const favoriteProbability = Math.max(probabilities.home, probabilities.draw, probabilities.away);
   const totalLambdaSeed = 2.55
@@ -2418,8 +2474,22 @@ function predictionSet(match) {
     marketAwayLambda,
     ...blendLambdasWithForm(match, marketHomeLambda, marketAwayLambda),
   };
-  const homeLambda = lambdaBlend.homeLambda;
-  const awayLambda = lambdaBlend.awayLambda;
+  let homeLambda = lambdaBlend.homeLambda;
+  let awayLambda = lambdaBlend.awayLambda;
+  let score = projectedScore(homeLambda, awayLambda);
+  const anchorMarketLeaderCode = anchorIsHhad ? outcomeLeader(probabilities).code : "";
+  const alignedForecast = anchorIsHhad
+    ? alignedHandicapForecast(homeLambda, awayLambda, match.handicapLine, anchorMarketLeaderCode)
+    : null;
+  if (alignedForecast) {
+    homeLambda = alignedForecast.homeLambda;
+    awayLambda = alignedForecast.awayLambda;
+    score = alignedForecast.score;
+    lambdaBlend.marketHomeLambda = alignedForecast.homeLambda;
+    lambdaBlend.marketAwayLambda = alignedForecast.awayLambda;
+    lambdaBlend.homeLambda = alignedForecast.homeLambda;
+    lambdaBlend.awayLambda = alignedForecast.awayLambda;
+  }
   const totalLambda = homeLambda + awayLambda;
   const rawOver25Probability = clamp(1 - [0, 1, 2].reduce((sum, goals) => sum + poissonProbability(totalLambda, goals), 0), 0, 1);
   const rawBttsProbability = clamp((1 - Math.exp(-homeLambda)) * (1 - Math.exp(-awayLambda)), 0, 1);
@@ -2432,22 +2502,33 @@ function predictionSet(match) {
   const goalsTipLabel = goalsTip === "O2.5"
     ? { zh: "大2.5球（≥3球）", en: "Over 2.5 goals" }
     : { zh: "小2.5球（≤2球）", en: "Under 2.5 goals" };
-  const score = projectedScore(homeLambda, awayLambda);
   const probabilityModel = buildProbabilityModel(match, probabilities, hhadProbabilities, homeLambda, awayLambda, over25Probability, bttsProbability, lambdaBlend, goalCalibration);
-  const modelProbabilities = {
-    home: (probabilityModel.oneXTwo.final?.home || pct1(probabilities.home)) / 100,
-    draw: (probabilityModel.oneXTwo.final?.draw || pct1(probabilities.draw)) / 100,
-    away: (probabilityModel.oneXTwo.final?.away || pct1(probabilities.away)) / 100,
-  };
+  const modelProbabilities = anchorIsHhad
+    ? {
+      home: probabilities.home,
+      draw: probabilities.draw,
+      away: probabilities.away,
+    }
+    : {
+      home: (probabilityModel.oneXTwo.final?.home || pct1(probabilities.home)) / 100,
+      draw: (probabilityModel.oneXTwo.final?.draw || pct1(probabilities.draw)) / 100,
+      away: (probabilityModel.oneXTwo.final?.away || pct1(probabilities.away)) / 100,
+    };
+  const homePickLabelZh = anchorIsHhad ? `让球主胜 ${match.homeTeam}` : `主胜 ${match.homeTeam}`;
+  const drawPickLabelZh = anchorIsHhad ? "让球平" : "平局";
+  const awayPickLabelZh = anchorIsHhad ? `让球客胜 ${match.awayTeam}` : `客胜 ${match.awayTeam}`;
+  const homePickLabelEn = anchorIsHhad ? `Handicap Home Win (${match.homeTeam})` : `Home Win (${match.homeTeam})`;
+  const drawPickLabelEn = anchorIsHhad ? "Handicap Draw" : "Draw";
+  const awayPickLabelEn = anchorIsHhad ? `Handicap Away Win (${match.awayTeam})` : `Away Win (${match.awayTeam})`;
   const picks = [
-    ["1", modelProbabilities.home, match.odds.odds1, `主胜 ${match.homeTeam}`, `Home Win (${match.homeTeam})`],
-    ["X", modelProbabilities.draw, match.odds.oddsX, "平局", "Draw"],
-    ["2", modelProbabilities.away, match.odds.odds2, `客胜 ${match.awayTeam}`, `Away Win (${match.awayTeam})`],
+    ["1", modelProbabilities.home, anchorOdds.odds1, homePickLabelZh, homePickLabelEn],
+    ["X", modelProbabilities.draw, anchorOdds.oddsX, drawPickLabelZh, drawPickLabelEn],
+    ["2", modelProbabilities.away, anchorOdds.odds2, awayPickLabelZh, awayPickLabelEn],
   ].sort((a, b) => b[1] - a[1]);
   const marketPicks = [
-    ["1", probabilities.home, match.odds.odds1],
-    ["X", probabilities.draw, match.odds.oddsX],
-    ["2", probabilities.away, match.odds.odds2],
+    ["1", probabilities.home, anchorOdds.odds1],
+    ["X", probabilities.draw, anchorOdds.oddsX],
+    ["2", probabilities.away, anchorOdds.odds2],
   ].sort((a, b) => b[1] - a[1]);
   const marketLeader = marketPicks[0];
   const marketSecond = marketPicks[1];
@@ -2479,13 +2560,14 @@ function predictionSet(match) {
   );
   const probabilityTextZh = `主胜 ${pct(probabilities.home)}% / 平局 ${pct(probabilities.draw)}% / 客胜 ${pct(probabilities.away)}%`;
   const probabilityTextEn = `home ${pct(probabilities.home)}% / draw ${pct(probabilities.draw)}% / away ${pct(probabilities.away)}%`;
-  const oddsText = `${match.odds.odds1.toFixed(2)} / ${match.odds.oddsX.toFixed(2)} / ${match.odds.odds2.toFixed(2)}`;
-  const sourceTextZh = match.oddsUpdatedAt
-    ? `官方 SP 更新时间：${match.oddsUpdatedAt}`
-    : "官方 SP 来自本次中国竞彩网同步快照";
-  const sourceTextEn = match.oddsUpdatedAt
-    ? `Official SP updated at ${match.oddsUpdatedAt}`
-    : "Official SP came from this Sporttery sync snapshot";
+  const oddsText = `${anchorOdds.odds1.toFixed(2)} / ${anchorOdds.oddsX.toFixed(2)} / ${anchorOdds.odds2.toFixed(2)}`;
+  const sourceUpdatedAt = anchorIsHhad ? match.handicapOddsUpdatedAt : match.oddsUpdatedAt;
+  const sourceTextZh = sourceUpdatedAt
+    ? `${anchorLabelZh} SP 更新时间：${sourceUpdatedAt}`
+    : `${anchorLabelZh} SP 来自本次中国竞彩网同步快照`;
+  const sourceTextEn = sourceUpdatedAt
+    ? `${anchorLabelEn} SP updated at ${sourceUpdatedAt}`
+    : `${anchorLabelEn} SP came from this Sporttery sync snapshot`;
   const drawRiskZh = probabilities.draw >= 0.28
     ? "平局支持率偏高，胜平负方向需要防平。"
     : "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。";
@@ -2531,21 +2613,29 @@ function predictionSet(match) {
     analystSelection,
     predictionHealth: match.predictionHealth,
   });
+  const anchorGatePromote = anchorIsHhad
+    && marketLeader[1] >= 0.38
+    && modelProbabilityGap >= 0.06
+    && riskTags.length <= 5;
+  const oneXTwoPromote = oneXTwoGate.promote || anchorGatePromote;
   const oneXTwoWatchLabel = {
-    zh: "\u89c2\u5bdf\u4e3a\u4e3b \u80dc\u5e73\u8d1f\u4e0d\u5f3a\u63a8",
-    en: "Watch first: no 1X2 pick",
+    zh: anchorIsHhad ? "观察为主 让球盘不强推" : "\u89c2\u5bdf\u4e3a\u4e3b \u80dc\u5e73\u8d1f\u4e0d\u5f3a\u63a8",
+    en: anchorIsHhad ? "Watch first: no HHAD pick" : "Watch first: no 1X2 pick",
   };
   const oneXTwoHealthCooldown = Boolean(
-    isCoolingBucket(match.predictionHealth?.byMarket?.["1X2"])
-    || isCoolingBucket(match.predictionHealth?.homeFavorite)
+    !anchorIsHhad
+    && (
+      isCoolingBucket(match.predictionHealth?.byMarket?.["1X2"])
+      || isCoolingBucket(match.predictionHealth?.homeFavorite)
+    )
   );
-  const oneXTwoMarketHardCooldown = hardCoolingBucket(match.predictionHealth?.byMarket?.["1X2"], 8, 0.42);
-  const bestMarketHardCooldown = hardCoolingBucket(match.predictionHealth?.byMarket?.BEST, 5, 0.45);
-  const homeFavoriteHardCooldown = hardCoolingBucket(match.predictionHealth?.homeFavorite, 6, 0.42);
+  const oneXTwoMarketHardCooldown = !anchorIsHhad && hardCoolingBucket(match.predictionHealth?.byMarket?.["1X2"], 8, 0.42);
+  const bestMarketHardCooldown = !anchorIsHhad && hardCoolingBucket(match.predictionHealth?.byMarket?.BEST, 5, 0.45);
+  const homeFavoriteHardCooldown = !anchorIsHhad && hardCoolingBucket(match.predictionHealth?.homeFavorite, 6, 0.42);
   const healthCooldownTag = oneXTwoHealthCooldown
     ? [{ zh: "\u8fd1\u671f\u547d\u4e2d\u7387\u51b7\u5374", en: "Recent hit-rate cooldown" }]
     : [];
-  const oneXTwoRiskTags = oneXTwoGate.promote
+  const oneXTwoRiskTags = oneXTwoPromote
     ? riskTags
     : [
         ...riskTags,
@@ -2554,43 +2644,51 @@ function predictionSet(match) {
       ];
   const oneXTwoTrust = oneXTwoGate.promote
     ? baseTrust
-    : clamp(baseTrust - (oneXTwoMarketHardCooldown ? 26 : 18), 34, 62);
-  const oneXTwoGateZh = `观察理由：模型优势约 ${pct(modelProbabilityGap)} 个百分点，市场优势约 ${pct(probabilityGap)} 个百分点，让球同向支持${oneXTwoGate.handicapSupport === null ? "不足" : `约 ${pct(oneXTwoGate.handicapSupport)}%`}；条件没有同时闭合，暂不输出单一胜平负方向。`;
-  const oneXTwoGateEn = `Watch reason: model edge is about ${pct(modelProbabilityGap)} points, market edge about ${pct(probabilityGap)} points, same-side handicap support ${oneXTwoGate.handicapSupport === null ? "unavailable" : `about ${pct(oneXTwoGate.handicapSupport)}%`}; no single 1X2 pick is promoted.`;
+    : oneXTwoPromote
+      ? clamp(baseTrust - 6, 46, 72)
+      : clamp(baseTrust - (oneXTwoMarketHardCooldown ? 26 : 18), 34, 62);
+  const oneXTwoGateZh = anchorIsHhad
+    ? `观察理由：普通胜平负未开售，本场改用让球盘作为市场锚点；模型优势约 ${pct(modelProbabilityGap)} 个百分点，市场优势约 ${pct(probabilityGap)} 个百分点，条件未完全闭合时不强推单一让球方向。`
+    : `观察理由：模型优势约 ${pct(modelProbabilityGap)} 个百分点，市场优势约 ${pct(probabilityGap)} 个百分点，让球同向支持${oneXTwoGate.handicapSupport === null ? "不足" : `约 ${pct(oneXTwoGate.handicapSupport)}%`}；条件没有同时闭合，暂不输出单一胜平负方向。`;
+  const oneXTwoGateEn = anchorIsHhad
+    ? `Watch reason: standard 1X2 is not open, so the handicap board is used as the market anchor. Model edge is about ${pct(modelProbabilityGap)} points and market edge about ${pct(probabilityGap)} points; no single HHAD pick is forced.`
+    : `Watch reason: model edge is about ${pct(modelProbabilityGap)} points, market edge about ${pct(probabilityGap)} points, same-side handicap support ${oneXTwoGate.handicapSupport === null ? "unavailable" : `about ${pct(oneXTwoGate.handicapSupport)}%`}; no single 1X2 pick is promoted.`;
   const modelLean = {
     tipCode: best1x2[0],
     tipLabel: { zh: best1x2[3], en: best1x2[4] },
     odds: best1x2[2],
     trustScore: baseTrust,
-    resultStatus: resultStatus(match, best1x2[0], "1X2"),
+    resultStatus: resultStatus(match, best1x2[0], anchorMarketType),
   };
 
   const oneXTwo = {
     marketType: "1X2",
-    tipCode: oneXTwoGate.promote ? modelLean.tipCode : "WATCH",
-    tipLabel: oneXTwoGate.promote ? modelLean.tipLabel : oneXTwoWatchLabel,
-    odds: oneXTwoGate.promote ? modelLean.odds : 0,
+    oddsPoolCode: anchorPoolCode,
+    handicapLine: anchorHandicapLine,
+    tipCode: oneXTwoPromote ? modelLean.tipCode : "WATCH",
+    tipLabel: oneXTwoPromote ? modelLean.tipLabel : oneXTwoWatchLabel,
+    odds: oneXTwoPromote ? modelLean.odds : 0,
     trustScore: oneXTwoTrust,
     explanation: {
-      zh: oneXTwoGate.promote
-        ? `本场以中国竞彩网官方 HAD 胜平负 SP 为主轴，去水后最高支持方向为${best1x2[3]}。模型同时参考主客预期进球、平局拉力和赔率分布，不使用本地模拟赛果回填。`
-        : "本场胜平负条件未齐：低赔、平局压力、让球确认或风险标签存在不一致，只保留为赛前观察项。",
-      en: oneXTwoGate.promote
-        ? `This pick is anchored to official Sporttery HAD odds. After removing overround, the strongest direction is ${best1x2[4]}.`
-        : "This 1X2 market did not pass the recommendation gate. Low odds, draw pressure, handicap confirmation, or risk tags are not aligned, so it remains watch-only.",
+      zh: oneXTwoPromote
+        ? `本场以${anchorLabelZh} SP 为主轴，去水后最高支持方向为${best1x2[3]}。模型同时参考主客预期进球、平局拉力和赔率分布，不使用本地模拟赛果回填。`
+        : `${anchorLabelZh}条件未齐：低赔、平局压力、让球确认或风险标签存在不一致，只保留为赛前观察项。`,
+      en: oneXTwoPromote
+        ? `This pick is anchored to ${anchorLabelEn} odds. After removing overround, the strongest direction is ${best1x2[4]}.`
+        : `This ${anchorIsHhad ? "HHAD" : "1X2"} market did not pass the recommendation gate. Low odds, draw pressure, handicap confirmation, or risk tags are not aligned, so it remains watch-only.`,
     },
     analysisItems: [
       {
-        zh: `官方 HAD SP：主胜 ${match.odds.odds1.toFixed(2)} / 平局 ${match.odds.oddsX.toFixed(2)} / 客胜 ${match.odds.odds2.toFixed(2)}；去水支持率约 ${probabilityTextZh}。`,
-        en: `Official HAD SP: ${oddsText}; normalized support is about ${probabilityTextEn}.`,
+        zh: `${anchorLabelZh} SP：${anchorIsHhad ? "让球主胜" : "主胜"} ${anchorOdds.odds1.toFixed(2)} / ${anchorIsHhad ? "让球平" : "平局"} ${anchorOdds.oddsX.toFixed(2)} / ${anchorIsHhad ? "让球客胜" : "客胜"} ${anchorOdds.odds2.toFixed(2)}；去水支持率约 ${probabilityTextZh}。`,
+        en: `${anchorLabelEn} SP: ${oddsText}; normalized support is about ${probabilityTextEn}.`,
       },
       {
-        zh: !oneXTwoGate.promote
+        zh: !oneXTwoPromote
           ? oneXTwoGateZh
           : analystSelection.isContrarian
           ? `${analystSelection.reason.zh} 当前模型可信度 ${baseTrust}%，该方向属于价值观察而非高确定性推荐。`
           : `胜平负差距：市场主线领先第二方向约 ${pct(probabilityGap)} 个百分点，当前模型可信度 ${baseTrust}%。`,
-        en: !oneXTwoGate.promote
+        en: !oneXTwoPromote
           ? oneXTwoGateEn
           : analystSelection.isContrarian
           ? `${analystSelection.reason.en} Model confidence is ${baseTrust}%; this is a value-watch, not a high-certainty banker.`
@@ -2603,7 +2701,7 @@ function predictionSet(match) {
     ],
     riskTags: oneXTwoRiskTags,
     visibilityStatus: "FREE",
-    resultStatus: oneXTwoGate.promote ? modelLean.resultStatus : "PENDING",
+    resultStatus: oneXTwoPromote ? modelLean.resultStatus : "PENDING",
   };
 
   const goalsGate = evaluateGoalsGate(match, goalsTip, goalsProbability, over25Probability, bttsProbability, match.predictionHealth);
@@ -2654,7 +2752,7 @@ function predictionSet(match) {
     resultStatus: goalsGate.promote ? resultStatus(match, goalsTip, "GOALS") : "PENDING",
   };
 
-  const bestIsSteady = oneXTwoGate.promote
+  const bestIsSteady = oneXTwoPromote
     && !analystSelection.isContrarian
     && best1x2[1] >= 0.58
     && modelProbabilityGap >= 0.18
@@ -2680,7 +2778,7 @@ function predictionSet(match) {
     || oneXTwoMarketHardCooldown
     || (modelLean.tipCode === "1" && homeFavoriteHardCooldown)
   );
-  const bestShouldWatch = !oneXTwoGate.promote
+  const bestShouldWatch = !oneXTwoPromote
     || bestLaneHardCooldown
     || bestHasWeakHandicap
     || bestHasOverheatedFavorite
@@ -2720,7 +2818,7 @@ function predictionSet(match) {
     : bestIsSteady
       ? clamp(oneXTwo.trustScore + 2, 57, 96)
       : clamp(oneXTwo.trustScore - (bestHasThinEdge ? 2 : 0), 52, 82);
-  const bestWatchLabelZh = !oneXTwoGate.promote
+  const bestWatchLabelZh = !oneXTwoPromote
     ? "观察为主 条件未齐"
     : bestLaneHardCooldown
     ? "观察为主 命中冷却"
@@ -2729,7 +2827,7 @@ function predictionSet(match) {
     : bestHasThinEdge
       ? "观察为主 胜平负差距小"
       : "观察为主 风险叠加";
-  const bestWatchLabelEn = !oneXTwoGate.promote
+  const bestWatchLabelEn = !oneXTwoPromote
     ? "Watch first: conditions not aligned"
     : bestLaneHardCooldown
     ? "Watch first: hit-rate cooldown"
@@ -2781,6 +2879,8 @@ function predictionSet(match) {
     resultStatus: resultStatus(match, goals.tipCode, "GOALS"),
   } : {
     marketType: "BEST",
+    oddsPoolCode: anchorPoolCode,
+    handicapLine: anchorHandicapLine,
     tipCode: bestShouldWatch ? "WATCH" : modelLean.tipCode,
     tipLabel: {
       zh: bestShouldWatch ? bestWatchLabelZh : `${bestPrefix.zh} ${modelLean.tipLabel.zh}`,
@@ -2810,9 +2910,9 @@ function toAppMatch(match) {
   const leagueId = `league_${hashString(match.leagueName)}`;
   const odds = sanitizeOdds(match.odds);
   const handicapOdds = sanitizeOdds(match.handicapOdds);
-  const hasPredictionModel = Boolean(odds);
-  const model = odds
-    ? predictionSet({ ...match, odds })
+  const hasPredictionModel = Boolean(odds || handicapOdds);
+  const model = hasPredictionModel
+    ? predictionSet({ ...match, odds, handicapOdds })
     : { predictions: [], homeLambda: match.scoreHome ?? 0, awayLambda: match.scoreAway ?? 0, probabilityModel: undefined };
   const scoreHome = Number.isFinite(match.scoreHome) ? match.scoreHome : undefined;
   const scoreAway = Number.isFinite(match.scoreAway) ? match.scoreAway : undefined;
@@ -2909,9 +3009,16 @@ function predictionSignature(predictions) {
   return ["1X2", "BEST", "GOALS"]
     .map((marketType) => {
       const prediction = byMarket.get(marketType);
-      return prediction ? `${marketType}:${prediction.tipCode}` : `${marketType}:-`;
+      return prediction ? `${marketType}:${prediction.oddsPoolCode || ""}:${prediction.tipCode}` : `${marketType}:-`;
     })
     .join("|");
+}
+
+function resultMarketForPrediction(prediction) {
+  if (prediction?.oddsPoolCode === "HHAD" && ["1", "X", "2"].includes(prediction.tipCode)) {
+    return prediction.marketType === "BEST" ? "BEST_HHAD" : "HHAD";
+  }
+  return prediction?.marketType || "";
 }
 
 function settlePredictionsForMatch(match, predictions) {
@@ -2919,7 +3026,7 @@ function settlePredictionsForMatch(match, predictions) {
     ...prediction,
     resultStatus: prediction.marketType === "BEST" && prediction.tipCode === "WATCH"
       ? "PENDING"
-      : resultStatus(match, prediction.tipCode, prediction.marketType),
+      : resultStatus(match, prediction.tipCode, resultMarketForPrediction(prediction)),
   }));
 }
 
@@ -3595,14 +3702,41 @@ function attachPredictionSnapshotSummary(matches, snapshotPayload, capturedAt) {
   });
 }
 
+function sleepMs(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function withFileRetry(operation, label) {
+  let lastError;
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    try {
+      return operation();
+    } catch (error) {
+      lastError = error;
+      if (attempt < 5) sleepMs(80 + attempt * 120);
+    }
+  }
+  throw new Error(`${label}: ${lastError?.message || lastError}`);
+}
+
 function writeJson(file, payload) {
   const next = `${JSON.stringify(payload, null, 2)}\n`;
   fs.mkdirSync(path.dirname(file), { recursive: true });
   if (fs.existsSync(file)) {
-    const previous = fs.readFileSync(file, "utf8");
+    const previous = withFileRetry(() => fs.readFileSync(file, "utf8"), `read ${file}`);
     if (previous === next) return false;
   }
-  fs.writeFileSync(file, next, "utf8");
+  const tmpFile = `${file}.${process.pid}.${Date.now()}.tmp`;
+  withFileRetry(() => {
+    fs.writeFileSync(tmpFile, next, "utf8");
+    try {
+      fs.renameSync(tmpFile, file);
+    } catch (error) {
+      fs.copyFileSync(tmpFile, file);
+      fs.unlinkSync(tmpFile);
+      void error;
+    }
+  }, `write ${file}`);
   return true;
 }
 

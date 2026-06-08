@@ -30,6 +30,7 @@ const adminToken = process.env.ADMIN_TOKEN || "";
 const allowLocalAdmin = process.env.ALLOW_LOCAL_ADMIN === "1";
 const publicApiBase = process.env.PUBLIC_DATA_API_BASE || "/api";
 const enable500Sync = process.env.ENABLE_500_SYNC !== "0";
+const enableApiFootballSync = process.env.ENABLE_API_FOOTBALL_SYNC === "1";
 const requireExternalSignals = process.env.REQUIRE_EXTERNAL_SIGNALS !== "0";
 
 const apiFiles = {
@@ -41,7 +42,8 @@ const apiFiles = {
   "/api/predictions/gpt": path.join(dataDir, "gpt-predictions.json"),
   "/api/model/calibration": path.join(dataDir, "model-calibration.json"),
   "/api/teams/index": path.join(dataDir, "team-index.json"),
-  "/api/data/external-signals": path.join(dataDir, "external-signals.json")
+  "/api/data/external-signals": path.join(dataDir, "external-signals.json"),
+  "/api/data/api-football": path.join(dataDir, "api-football-meta.json")
 };
 
 const mimeTypes = {
@@ -273,6 +275,9 @@ const runSync = async (source = "server-cron") => {
     const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
     if (enable500Sync) {
       await runCommand(npmCommand, ["run", "sync:500"]);
+    }
+    if (enableApiFootballSync) {
+      await runCommand(npmCommand, ["run", "sync:api-football"]);
     }
     const syncEnv = {
       PAGE_POLL_SECONDS: process.env.PAGE_POLL_SECONDS || "20",
@@ -551,7 +556,15 @@ const minutesSince = (iso) => {
 const matchHasExternalSignal = (match) => {
   const signals = match?.externalSignals;
   if (!signals || typeof signals !== "object") return false;
-  return Boolean(signals.externalOdds || signals.bookmakerOdds?.had || signals.bookmakerOdds?.hhad);
+  return Boolean(
+    signals.externalOdds
+    || signals.bookmakerOdds?.had
+    || signals.bookmakerOdds?.hhad
+    || signals.bookmakerOdds?.apiFootball
+    || signals.apiFootball
+    || signals.injuries
+    || signals.lineups
+  );
 };
 
 const getSourceHealth = async () => {
@@ -561,11 +574,13 @@ const getSourceHealth = async () => {
   const minCurrentMatches = Math.max(0, Number(process.env.SOURCE_MIN_CURRENT_MATCHES || 1));
   const minCurrentCoverage = Math.max(0, Math.min(1, Number(process.env.SOURCE_MIN_EXTERNAL_COVERAGE || 0.5)));
   const external = await readJsonFile(path.join(dataDir, "external-signals.json"), null);
+  const apiFootballMeta = await readJsonFile(path.join(dataDir, "api-football-meta.json"), null);
   const current = await readJsonFile(path.join(dataDir, "matches-current.json"), []);
   const externalMatches = external?.matches && typeof external.matches === "object" && !Array.isArray(external.matches)
     ? external.matches
     : {};
   const source500 = external?.sources?.["500.com:jczq"] || {};
+  const sourceApiFootball = external?.sources?.["api-football"] || {};
   const externalCount = Object.keys(externalMatches).length;
   const externalAge = minutesSince(external?.updatedAt);
   const currentCount = Array.isArray(current) ? current.length : 0;
@@ -590,6 +605,7 @@ const getSourceHealth = async () => {
     checkedAt: nowIso(),
     mode: {
       enable500Sync,
+      enableApiFootballSync,
       requireExternalSignals,
       skipSportteryFetch: process.env.SKIP_SPORTTERY_FETCH === "1",
     },
@@ -608,6 +624,14 @@ const getSourceHealth = async () => {
       fiveHundredRows: source500.rows || 0,
       fiveHundredMapped: source500.mapped || 0,
       fiveHundredUrl: source500.url || null,
+      apiFootballConfigured: Boolean(process.env.API_FOOTBALL_KEY || process.env.APISPORTS_KEY),
+      apiFootballEnabled: enableApiFootballSync,
+      apiFootballUpdatedAt: sourceApiFootball.updatedAt || apiFootballMeta?.finishedAt || null,
+      apiFootballMappedSignals: sourceApiFootball.mappedSignals || apiFootballMeta?.signalsMapped || 0,
+      apiFootballCallsThisSync: apiFootballMeta?.callsThisSync || 0,
+      apiFootballCallsTodayEstimate: apiFootballMeta?.callsTodayEstimate || 0,
+      apiFootballFixtureDatesSkippedByAccess: apiFootballMeta?.fixtureDatesSkippedByAccess || 0,
+      apiFootballAccess: apiFootballMeta?.apiAccess?.fixtures || null,
     },
     currentMatches: {
       count: currentCount,
@@ -621,6 +645,7 @@ const getSourceHealth = async () => {
 const getHealth = async () => {
   const meta = await readJsonFile(path.join(dataDir, "sync-meta.json"), null);
   const gpt = await readGptPredictions();
+  const apiFootballMeta = await readJsonFile(path.join(dataDir, "api-football-meta.json"), null);
   const sources = await getSourceHealth();
   return {
     ok: sources.ok,
@@ -633,6 +658,12 @@ const getHealth = async () => {
     lastDataPersist,
     api: {
       publicApiBase,
+      apiFootballConfigured: Boolean(process.env.API_FOOTBALL_KEY || process.env.APISPORTS_KEY),
+      apiFootballEnabled: enableApiFootballSync,
+      apiFootballLastRun: apiFootballMeta?.finishedAt || null,
+      apiFootballCallsTodayEstimate: apiFootballMeta?.callsTodayEstimate || 0,
+      apiFootballFixtureDatesSkippedByAccess: apiFootballMeta?.fixtureDatesSkippedByAccess || 0,
+      apiFootballAccess: apiFootballMeta?.apiAccess?.fixtures || null,
       gptConfigured: Boolean(process.env.GPT_RELAY_BASE_URL && process.env.GPT_RELAY_API_KEY),
       adminProtected: Boolean(adminToken),
       syncCron: process.env.ENABLE_SYNC_CRON === "1" ? `${syncIntervalSeconds}s` : "off",

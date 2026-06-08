@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useApp } from '../context/AppContextCore';
-import type { Match, OutcomeProbability, PredictionDetail } from '../services/mockData';
+import type { Match, OutcomeProbability, PredictionDetail, Team } from '../services/mockData';
 import {
-  getMarketLabel,
   getPredictionCodeHint,
   getPredictionExplanationDisplay,
+  getPredictionMarketLabel,
   getPredictionValueLabel,
   getPredictionTipDisplay,
   getSportteryPoolRows
@@ -15,6 +15,7 @@ import { buildMatchInsight } from '../services/predictionInsight';
 import { getVisiblePrediction, getVisiblePredictions } from '../services/predictionVisibility';
 import { TeamBadge } from '../components/TeamBadge';
 import { ArrowLeft, Trophy } from 'lucide-react';
+import { getWorldCupSeededFixtures } from '../services/worldCupData';
 
 interface MatchDetailProps {
   matchId: string;
@@ -32,6 +33,7 @@ const HISTORY_LOOKBACK_DAYS = 365;
 const TEAM_HISTORY_DISPLAY_LIMIT = 12;
 const H2H_DISPLAY_LIMIT = 10;
 const MIN_RATE_SAMPLE_SIZE = 3;
+const fallbackColor = '#64748b';
 
 interface TeamHistoryResult {
   id: string;
@@ -201,6 +203,33 @@ const getTeamNameInMatch = (match: Match, teamId: string, language: Language) =>
   return fallback || team.shortName[language] || team.name[language];
 };
 
+const getDisplayTeam = (match: Match, side: 'home' | 'away'): Team => {
+  const isHome = side === 'home';
+  const teamId = isHome ? match.homeTeamId : match.awayTeamId;
+  const registered = getTeamById(teamId);
+  const syncedName = isHome ? match.homeTeamName : match.awayTeamName;
+  const syncedNameEn = isHome ? match.homeTeamNameEn : match.awayTeamNameEn;
+  const syncedLogo = isHome ? match.homeTeamLogo : match.awayTeamLogo;
+  const syncedLogoType = isHome ? match.homeTeamLogoType : match.awayTeamLogoType;
+  const syncedCountryIso = isHome ? match.homeTeamCountryIso : match.awayTeamCountryIso;
+  const syncedColor = isHome ? match.homeTeamColor : match.awayTeamColor;
+  const isUnknown = registered.shortName.en === 'Unknown';
+
+  if (!isUnknown || !syncedName) return registered;
+
+  return {
+    id: teamId,
+    name: { zh: syncedName, en: syncedNameEn || syncedName },
+    shortName: { zh: syncedName, en: syncedNameEn || syncedName },
+    logo: syncedLogoType === 'flag' && syncedCountryIso
+      ? syncedCountryIso
+      : syncedLogo || syncedCountryIso || syncedName.slice(0, 2),
+    logoType: syncedLogoType,
+    value: '',
+    color: syncedColor || fallbackColor
+  };
+};
+
 const getCompetitionName = (match: Match, language: Language) => {
   const league = getLeagueById(match.leagueId);
   return (language === 'zh' ? match.leagueShortName || match.leagueName : match.leagueShortNameEn || match.leagueNameEn) || league.shortName[language] || league.name[language];
@@ -306,7 +335,11 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   const [activeTab, setActiveTab] = useState<'predictions' | 'stats' | 'form' | 'h2h' | 'standings'>('predictions');
 
   // 获取比赛详情
-  const match = matches.find(m => m.id === matchId);
+  const match = useMemo(
+    () => matches.find((item) => item.id === matchId)
+      || getWorldCupSeededFixtures(104).find((item) => item.id === matchId),
+    [matchId, matches]
+  );
 
   if (!match) {
     return (
@@ -319,8 +352,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     );
   }
 
-  const homeTeam = getTeamById(match.homeTeamId);
-  const awayTeam = getTeamById(match.awayTeamId);
+  const homeTeam = getDisplayTeam(match, 'home');
+  const awayTeam = getDisplayTeam(match, 'away');
   const league = getLeagueById(match.leagueId);
   const country = getCountryById(match.countryId);
   
@@ -505,7 +538,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
               fontWeight: '700', 
               letterSpacing: '0.5px' 
             }}>
-              {getMarketLabel(pred.marketType, language)}
+              {getPredictionMarketLabel(pred, language)}
             </span>
             <h4 style={{ fontSize: '1.1rem', fontWeight: '800', color: pred.marketType === 'BEST' ? 'hsl(var(--primary))' : 'hsl(var(--text-primary))', marginTop: '0.2rem' }}>
               {getPredictionTipDisplay(pred, language)}
