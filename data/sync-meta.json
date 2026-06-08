@@ -3,14 +3,14 @@
   "source": "sporttery",
   "updatedAt": "2026-06-08T01:41:34.904Z",
   "capturedAt": "2026-06-08T01:41:34.904Z",
-  "lastAttemptAt": "2026-06-08T01:41:34.904Z",
+  "lastAttemptAt": "2026-06-08T01:44:23.723Z",
   "officialOddsMatches": 0,
   "officialHandicapOddsMatches": 0,
   "officialResultMatches": 3004,
-  "skippedWithoutOfficialOdds": 3062,
+  "skippedWithoutOfficialOdds": 0,
   "byStatus": {
-    "FINISHED": 3004,
-    "SCHEDULED": 32
+    "SCHEDULED": 32,
+    "FINISHED": 3004
   },
   "coverage": {
     "first": "2025-11-20",
@@ -34,17 +34,17 @@
     "note": "GitHub Pages serves static JSON. The page checks for newer JSON regularly; GitHub Actions refreshes the source files on schedule."
   },
   "attempt": {
-    "capturedAt": "2026-06-08T01:41:34.904Z",
+    "capturedAt": "2026-06-08T01:44:23.723Z",
     "officialOddsMatches": 0,
     "officialHandicapOddsMatches": 0,
-    "officialResultMatches": 3004,
-    "publishableMatches": 3036
+    "officialResultMatches": 0,
+    "publishableMatches": 0
   },
   "oddsHistory": {
     "rows": 6379,
     "appended": 0,
     "updated": 0,
-    "skipped": "no fresh official odds"
+    "skipped": "Sporttery returned no publishable matches; kept existing match store"
   },
   "predictionSnapshots": {
     "total": 51,
@@ -80,5 +80,12 @@
       "goalsHitRate": 0.385,
       "bestHitRate": 0.2
     }
+  },
+  "fallback": {
+    "keptExisting": true,
+    "mergedPartialFresh": false,
+    "reason": "Sporttery returned no publishable matches; kept existing match store",
+    "existingMatches": 3036,
+    "freshPublishableMatches": 0
   }
 }
