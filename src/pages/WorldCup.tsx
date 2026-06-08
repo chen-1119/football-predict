@@ -1,383 +1,507 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import {
-  Activity,
-  ArrowRight,
-  BadgeCheck,
+  BarChart3,
   CalendarDays,
   ChevronRight,
-  Flame,
+  Flag,
   Gauge,
-  Gift,
   Medal,
-  Play,
-  Radio,
+  RefreshCw,
+  Route,
   ShieldCheck,
   Sparkles,
-  Star,
+  Target,
   Trophy,
   Users,
-  Vote,
   Zap
 } from 'lucide-react';
 import { TeamBadge } from '../components/TeamBadge';
 import { useApp } from '../context/AppContextCore';
 import { getPredictionTipDisplay, getSportteryPoolRows } from '../services/bettingDisplay';
 import { getLeagueById, getTeamById } from '../services/entities';
-import { getBestPrediction, getDaysUntilWorldCup, getMatchTrust, getWorldCupWatchMatches } from '../services/worldCupData';
+import type { Match, MultiLangString } from '../services/mockData';
 import {
-  fanPoll,
-  fanRanks,
-  fanTasks,
-  featuredMatch,
-  highlightTypeLabels,
-  highlights,
-  liveMetrics,
-  liveTimeline,
-  momentumPoints,
-  playerLeaders,
-  roadToFinal,
-  scheduleFilterLabels,
-  scheduleFilters,
-  scheduleMatches,
-  scheduleStatusLabels,
-  standingStatusLabels,
-  standings,
-  type EventTeam,
-  type EventText,
-  type ScheduleMatch,
-  type Tone
-} from '../services/worldCupExperience';
+  getBestPrediction,
+  getDaysUntilWorldCup,
+  getMatchTrust,
+  getWorldCupContenders,
+  getWorldCupGroupForecasts,
+  getWorldCupKnockoutForecast,
+  getWorldCupProjectedQualifiers,
+  getWorldCupRecentResults,
+  getWorldCupUpsetRadar,
+  getWorldCupWatchMatches,
+  isWorldCupRelevantMatch,
+  WORLD_CUP_CONTENT_LANES,
+  WORLD_CUP_FORECAST_MODEL,
+  WORLD_CUP_KNOCKOUT_ROUNDS,
+  WORLD_CUP_OFFICIAL,
+  WORLD_CUP_PIPELINE_CARDS,
+  WORLD_CUP_STAGE_CARDS,
+  type WorldCupTeamForecast
+} from '../services/worldCupData';
 
 interface WorldCupProps {
   onSelectMatch: (matchId: string) => void;
 }
 
 type Locale = 'zh' | 'en';
-type FilterKey = (typeof scheduleFilters)[number];
 
-const toneClass = (tone: Tone) => `is-${tone}`;
-const text = (value: EventText, language: Locale) => value[language];
+const copy = {
+  kicker: { zh: '2026 世界杯专题', en: 'World Cup 2026' },
+  heroTitle: { zh: '世界杯预测中台', en: 'World Cup Forecast Desk' },
+  heroSubtitle: {
+    zh: '小组赛路径、最佳第三名、32 强路线、竞彩开售场次和赛后复盘集中展示。世界杯只展示世界杯内容，开售后自动并入官方 SP 与临场信号。',
+    en: 'Groups, best third-place routes, Round of 32 pathing, released Sporttery fixtures and post-match review in one desk.'
+  },
+  countdown: { zh: '距开赛', en: 'Kickoff in' },
+  days: { zh: '天', en: 'days' },
+  kpis: {
+    teams: { zh: '参赛队', en: 'Teams' },
+    matches: { zh: '总场次', en: 'Matches' },
+    groups: { zh: '小组', en: 'Groups' },
+    venues: { zh: '举办城市/球场', en: 'Venues' },
+    sporttery: { zh: '竞彩开售场次', en: 'Sporttery Fixtures' },
+    update: { zh: '数据刷新', en: 'Data Refresh' }
+  },
+  stage: { zh: '赛制与阶段', en: 'Format & Stages' },
+  stageDesc: { zh: '按官方 48 队赛制展示：12 组小组赛，前二直通，8 个最佳第三名补进 32 强。', en: '48 teams, 12 groups, top two plus eight best third-place teams to the Round of 32.' },
+  model: { zh: '路径推演', en: 'Route Projection' },
+  groups: { zh: '小组赛预测', en: 'Group Forecasts' },
+  groupsDesc: { zh: '使用球队强度、东道主加成、新军降权和小组全局竞争进行路径推演；世界杯 SP 上线后会自动进入单场概率。', en: 'Uses team strength, host boost, debutant adjustment and full-group competition.' },
+  bestThird: { zh: '最佳第三名竞争线', en: 'Best Third-Place Lane' },
+  bestThirdNote: { zh: '第三名不是固定晋级，按积分、净胜球、进球数和强度排序抢 8 个名额。', en: 'Third-place teams compete for eight spots by points, goal difference, goals and strength.' },
+  knockout: { zh: '淘汰赛路线', en: 'Knockout Route' },
+  knockoutDesc: { zh: '先用小组路径生成 32 强候选，再估算 16 强、8 强、4 强、决赛和冠军层级。', en: 'Group projections seed the Round of 32, then estimate later-round paths.' },
+  fixtures: { zh: '世界杯竞彩场次', en: 'World Cup Sporttery Fixtures' },
+  fixturesDesc: { zh: '只展示世界杯正赛窗口内的竞彩场次；未开售时保留赛制与路径预测，开售后接入 SP、让球和临场变化。', en: 'Only released tournament fixtures are shown here; SP and handicap join after release.' },
+  noFixtures: { zh: '当前还没有已开售的世界杯正赛竞彩场次；页面先展示赛制、小组路径和淘汰赛推演，开售后会自动出现单场卡片。', en: 'No released World Cup Sporttery fixtures yet. Format and route projections remain visible until SP is available.' },
+  contenders: { zh: '争冠观察', en: 'Contender Watch' },
+  upset: { zh: '爆冷雷达', en: 'Upset Radar' },
+  dataStatus: { zh: '数据覆盖', en: 'Data Coverage' },
+  dataStatusDesc: { zh: '已覆盖世界杯结构、小组路径、晋级规则、淘汰赛路线和当前竞彩场次；官方 SP、让球、赛果、临场赔率在开售/完场后并入。', en: 'Covers structure, group pathing, rules, knockout routes and released fixtures.' },
+  pipeline: { zh: '专题数据流', en: 'Data Pipeline' },
+  recent: { zh: '赛果复盘', en: 'Recent Reviews' },
+  more: { zh: '查看详情', en: 'Details' },
+  noRecent: { zh: '世界杯正赛尚未产生可复盘赛果。', en: 'No tournament results to review yet.' },
+  trust: { zh: '可信', en: 'Trust' },
+  sp: { zh: 'SP', en: 'SP' },
+  recommendation: { zh: '模型倾向', en: 'Model Lean' },
+  waiting: { zh: '待开售', en: 'Awaiting release' },
+  disclaimer: { zh: '提示：本页为赛事数据分析与预测展示，仅供参考和娱乐研究使用，请理性看球。', en: 'Forecasts are for data analysis, reference and entertainment only.' }
+} as const;
 
-const formatDateTime = (isoTime: string, language: Locale) => {
-  return new Date(isoTime).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US', {
+const pickText = (value: MultiLangString, language: Locale) => value[language] || value.zh || value.en;
+
+const formatPercent = (value: number | null | undefined) => {
+  if (!Number.isFinite(value ?? NaN)) return '--';
+  return `${Math.round(value as number)}%`;
+};
+
+const formatDateTime = (isoTime: string | undefined, language: Locale) => {
+  if (!isoTime) return '--';
+  const timestamp = Date.parse(isoTime);
+  if (!Number.isFinite(timestamp)) return '--';
+  return new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', {
+    timeZone: 'Asia/Shanghai',
     month: '2-digit',
     day: '2-digit',
     weekday: 'short',
     hour: '2-digit',
     minute: '2-digit',
-    hour12: false,
-    timeZone: 'Asia/Shanghai'
-  });
+    hour12: false
+  }).format(timestamp);
 };
 
-const formatMatchStatus = (status: string, language: Locale) => {
-  const statusMap: Record<string, EventText> = {
-    FINISHED: { zh: '已完场', en: 'Finished' },
-    LIVE: { zh: '进行中', en: 'Live' },
-    PENDING_RESULT: { zh: '待赛果', en: 'Result pending' },
-    SCHEDULED: { zh: '待开赛', en: 'Scheduled' }
-  };
-
-  return statusMap[status]?.[language] ?? (language === 'zh' ? '待开赛' : 'Scheduled');
+const getStatusLabel = (match: Match, language: Locale) => {
+  if (match.status === 'FINISHED') {
+    const score = Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway)
+      ? ` ${match.scoreHome}:${match.scoreAway}`
+      : '';
+    return language === 'zh' ? `已完场${score}` : `Finished${score}`;
+  }
+  if (match.status === 'LIVE') {
+    const score = Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway)
+      ? ` ${match.scoreHome}:${match.scoreAway}`
+      : '';
+    return language === 'zh' ? `进行中${score}` : `Live${score}`;
+  }
+  if (match.status === 'PENDING_RESULT') return language === 'zh' ? '待赛果' : 'Result pending';
+  return language === 'zh' ? '待开赛' : 'Scheduled';
 };
 
-const TeamCodeCard = ({
-  team,
-  language,
-  align = 'left'
-}: {
-  team: EventTeam;
-  language: Locale;
-  align?: 'left' | 'right';
-}) => (
-  <div className={`event-team-card is-${align}`} style={{ '--team-color': team.color } as React.CSSProperties}>
-    <span className="event-team-flag" aria-hidden="true">{team.flag ?? team.code}</span>
-    <span className="event-team-seed">{language === 'zh' ? `FIFA 排名 ${team.seed}` : `FIFA rank ${team.seed}`}</span>
-    <strong>{text(team.name, language)}</strong>
-    <small>{team.code}</small>
-  </div>
-);
+const getTeamName = (team: WorldCupTeamForecast, language: Locale) => pickText(team.shortName, language);
 
-const SignalBar = ({ value, tone }: { value: number; tone: Tone }) => (
-  <span className={`event-signal-bar ${toneClass(tone)}`} style={{ '--value': `${value}%` } as React.CSSProperties}>
-    <span />
+const TeamFlag = ({ team, language }: { team: WorldCupTeamForecast; language: Locale }) => (
+  <span className={`worldcup-team-flag ${team.id === 'morocco' ? 'is-morocco' : ''}`} aria-label={getTeamName(team, language)}>
+    <b>{team.flag}</b>
   </span>
 );
 
-const copy = {
-  heroKicker: { zh: '2026 世界杯专题', en: '2026 World Cup Event' },
-  heroTitle: { zh: '主宰世界', en: 'Own the World' },
-  heroSubtitle: {
-    zh: '一屏看懂焦点赛、实时走势、晋级路线、球迷挑战和赛程动态。这里不是普通预测表，而是为世界杯准备的沉浸式赛事看板。',
-    en: 'A high-energy command center for featured matches, live momentum, qualification routes, fan challenges and matchday flow.'
-  },
-  heroCta: { zh: '进入赛程中心', en: 'Explore matches' },
-  heroAltCta: { zh: '查看球迷区', en: 'Open fan zone' },
-  hostCountries: { zh: '加拿大 / 墨西哥 / 美国', en: 'Canada / Mexico / USA' },
-  teamCount: { zh: '48 支球队', en: '48 teams' },
-  matchCount: { zh: '104 场比赛', en: '104 matches' },
-  stadiumLabel: { zh: '全球足球之夜', en: 'Global football night' },
-  countdown: { zh: '距开赛', en: 'Kickoff in' },
-  days: { zh: '天', en: 'days' },
-  featured: { zh: '焦点对决', en: 'Featured Match' },
-  liveBuildUp: { zh: '赛前焦点', en: 'Pre-match focus' },
-  probabilityScan: { zh: '开售后接入官方 SP', en: 'Official SP after release' },
-  matchCenter: { zh: '赛前数据中心', en: 'Pre-match Data Center' },
-  liveStatus: { zh: '世界杯正赛未开赛 / 等待官方临场数据', en: 'Tournament not started / awaiting official live data' },
-  livePulse: { zh: '开赛后自动切换比分、事件和走势', en: 'Live score, events and momentum switch on after kickoff' },
-  momentum: { zh: '赛事时间线', en: 'Tournament Timeline' },
-  tournamentHub: { zh: '赛事枢纽', en: 'Tournament Hub' },
-  hubTitle: { zh: '分组、晋级路线和球队指数一屏呈现', en: 'Groups, route and team index in one view' },
-  groupPulse: { zh: '小组脉搏', en: 'Group Pulse' },
-  ptsGd: { zh: '积分 / 净胜球', en: 'Pts / GD' },
-  groupPrefix: { zh: '小组', en: 'Group' },
-  playerIndex: { zh: '球队指数', en: 'Team Index' },
-  fanZone: { zh: '球迷互动区', en: 'Fan Zone' },
-  fanTitle: { zh: '预测比分、参与投票、冲击榜单', en: 'Predict. Vote. Climb the stand.' },
-  fanSubtitle: {
-    zh: '比分选择、球迷任务、投票热度和积分榜放在一起，让世界杯专题更像活动场，而不是一张静态表。',
-    en: 'Score picks, fan missions, voting heat and reward progress sit together so this feels like a campaign, not a static table.'
-  },
-  fanPoll: { zh: '球迷投票', en: 'Fan poll' },
-  leaderboard: { zh: '球迷榜单', en: 'Leaderboard' },
-  schedule: { zh: '赛程日历', en: 'Match Schedule' },
-  scheduleTitle: { zh: '按官方赛程状态快速筛选', en: 'Official matchday flow with status chips' },
-  highlights: { zh: '高光与资讯', en: 'Highlights / News' },
-  highlightTitle: { zh: '赛程速览、规则说明和球迷互动', en: 'Schedule notes, rules and fan activity' },
-  footerBrand: { zh: '主宰世界', en: 'Own the World' },
-  footerSchedule: { zh: '赛程', en: 'Schedule' },
-  footerFanZone: { zh: '球迷区', en: 'Fan Zone' },
-  footerTerms: { zh: '服务条款', en: 'Terms' },
-  footerPrivacy: { zh: '隐私政策', en: 'Privacy' },
-  footerDisclaimer: {
-    zh: '本页面为世界杯专题活动页与数据可视化看板。预测与互动内容仅供娱乐和研究参考，请理性看球。',
-    en: 'This page is an event-site prototype and data visualization desk. Forecasts and fan content are for entertainment and research only.'
-  },
-  actualFixtures: { zh: '世界杯竞彩场次', en: 'World Cup fixtures' },
-  prediction: { zh: '模型倾向', en: 'Model lean' },
-  trust: { zh: '可信度', en: 'Trust' },
-  noFixtures: {
-    zh: '当前暂无已开售的世界杯竞彩场次；页面展示官方赛程与分组专题，开售后会自动并入实时 SP。',
-    en: 'No released World Cup Sporttery fixtures yet. Official schedule and group content are shown until SP is available.'
-  }
+const GroupTeamRow = ({ team, language }: { team: WorldCupTeamForecast; language: Locale }) => {
+  const status = team.projectedRank <= 2
+    ? (language === 'zh' ? '直通区' : 'Direct')
+    : team.projectedRank === 3
+      ? (language === 'zh' ? '第三名竞争' : 'Third-place race')
+      : (language === 'zh' ? '出局风险' : 'Elimination risk');
+
+  return (
+    <article className="worldcup-group-team-row">
+      <TeamFlag team={team} language={language} />
+      <div className="worldcup-team-copy">
+        <strong>{getTeamName(team, language)}</strong>
+        <small>
+          FIFA {team.fifaRank} / {language === 'zh' ? '均分' : 'Pts'} {team.projectedPoints.toFixed(1)}
+        </small>
+        <em>{status}</em>
+      </div>
+      <div className="worldcup-team-prob">
+        <b>{formatPercent(team.advanceProbability)}</b>
+        <small>{language === 'zh' ? '晋级' : 'Advance'}</small>
+      </div>
+      <div className="worldcup-team-split">
+        <small>{language === 'zh' ? '头名' : 'Win'} {formatPercent(team.groupWinProbability)}</small>
+        <small>{language === 'zh' ? '直通' : 'Top 2'} {formatPercent(team.directAdvanceProbability)}</small>
+        <small>{language === 'zh' ? '第三线' : 'Best 3rd'} {formatPercent(team.bestThirdProbability)}</small>
+      </div>
+      <span className="worldcup-team-meter" aria-hidden="true">
+        <span style={{ '--advance': `${team.advanceProbability}%` } as React.CSSProperties} />
+      </span>
+    </article>
+  );
+};
+
+const MatchCard = ({ match, language, onSelectMatch }: { match: Match; language: Locale; onSelectMatch: (id: string) => void }) => {
+  const home = getTeamById(match.homeTeamId);
+  const away = getTeamById(match.awayTeamId);
+  const league = getLeagueById(match.leagueId);
+  const prediction = getBestPrediction(match);
+  const trust = getMatchTrust(match);
+  const pools = getSportteryPoolRows(match, language);
+  const had = pools.find((pool) => pool.poolCode === 'HAD');
+  const hhad = pools.find((pool) => pool.poolCode === 'HHAD');
+
+  return (
+    <article className="worldcup-match-card">
+      <header>
+        <span>{formatDateTime(match.kickoffTime, language)}</span>
+        <strong>{getStatusLabel(match, language)}</strong>
+      </header>
+      <button className="worldcup-teams-button" type="button" onClick={() => onSelectMatch(match.id)}>
+        <span>
+          <TeamBadge team={home} size="sm" />
+          {home.shortName[language]}
+        </span>
+        <b>VS</b>
+        <span>
+          {away.shortName[language]}
+          <TeamBadge team={away} size="sm" />
+        </span>
+      </button>
+      <div className="worldcup-card-lines">
+        <span>{league.shortName[language]}</span>
+        <span>{copy.recommendation[language]} {prediction ? getPredictionTipDisplay(prediction, language, true) : copy.waiting[language]}</span>
+        <span>{copy.trust[language]} {trust ? `${trust}%` : '--'}</span>
+      </div>
+      {had?.odds ? (
+        <div className="worldcup-odds-strip">
+          <span>HAD</span>
+          <strong>{had.odds.odds1.toFixed(2)}</strong>
+          <strong>{had.odds.oddsX.toFixed(2)}</strong>
+          <strong>{had.odds.odds2.toFixed(2)}</strong>
+          <span>{had.updatedAt ? formatDateTime(had.updatedAt, language) : copy.sp[language]}</span>
+        </div>
+      ) : (
+        <div className="worldcup-odds-strip is-empty">{copy.waiting[language]} HAD SP</div>
+      )}
+      {hhad?.odds && (
+        <div className="worldcup-odds-strip">
+          <span>HHAD {hhad.handicap}</span>
+          <strong>{hhad.odds.odds1.toFixed(2)}</strong>
+          <strong>{hhad.odds.oddsX.toFixed(2)}</strong>
+          <strong>{hhad.odds.odds2.toFixed(2)}</strong>
+          <span>{hhad.updatedAt ? formatDateTime(hhad.updatedAt, language) : copy.sp[language]}</span>
+        </div>
+      )}
+      <button className="worldcup-card-action" type="button" onClick={() => onSelectMatch(match.id)}>
+        {copy.more[language]}
+        <ChevronRight size={16} />
+      </button>
+    </article>
+  );
 };
 
 export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
   const { language, matches, dataSync } = useApp();
   const shouldReduceMotion = useReducedMotion();
-  const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
-  const [selectedScore, setSelectedScore] = useState('2 - 1');
   const daysLeft = getDaysUntilWorldCup();
-  const actualWorldCupMatches = useMemo(() => getWorldCupWatchMatches(matches, 4), [matches]);
-  const filteredSchedule = useMemo(() => {
-    if (activeFilter === 'all') return scheduleMatches;
-    return scheduleMatches.filter((match) => match.status === activeFilter);
-  }, [activeFilter]);
+
+  const groupForecasts = useMemo(() => getWorldCupGroupForecasts(), []);
+  const qualifiers = useMemo(() => getWorldCupProjectedQualifiers(groupForecasts), [groupForecasts]);
+  const knockoutRoutes = useMemo(() => getWorldCupKnockoutForecast(groupForecasts), [groupForecasts]);
+  const allWorldCupMatches = useMemo(
+    () => matches.filter(isWorldCupRelevantMatch).sort((a, b) => Date.parse(a.kickoffTime) - Date.parse(b.kickoffTime)),
+    [matches]
+  );
+  const watchMatches = useMemo(() => getWorldCupWatchMatches(matches, 8), [matches]);
+  const recentResults = useMemo(() => getWorldCupRecentResults(matches, 5), [matches]);
+  const contenders = useMemo(() => getWorldCupContenders(matches, 5), [matches]);
+  const upsetRadar = useMemo(() => getWorldCupUpsetRadar(matches, 5), [matches]);
+
+  const bestThird = qualifiers.bestThird;
+  const updatedAt = dataSync.sourceUpdatedAt || dataSync.updatedAt || dataSync.lastCheckedAt;
+  const pageCheckedAt = dataSync.lastCheckedAt;
 
   const reveal = (delay = 0) => shouldReduceMotion ? {} : {
-    initial: { opacity: 0, y: 28 },
+    initial: { opacity: 0, y: 22 },
     whileInView: { opacity: 1, y: 0 },
-    viewport: { once: true, amount: 0.18 },
-    transition: { duration: 0.6, delay }
+    viewport: { once: true, amount: 0.16 },
+    transition: { duration: 0.46, delay }
   };
 
-  const updatedAt = dataSync.lastCheckedAt ? formatDateTime(dataSync.lastCheckedAt, language) : '--';
+  const kpis = [
+    { icon: Users, label: copy.kpis.teams[language], value: WORLD_CUP_OFFICIAL.teams, detail: pickText(WORLD_CUP_OFFICIAL.host, language) },
+    { icon: CalendarDays, label: copy.kpis.matches[language], value: WORLD_CUP_OFFICIAL.matches, detail: `${WORLD_CUP_OFFICIAL.startDate} - ${WORLD_CUP_OFFICIAL.finalDate}` },
+    { icon: Flag, label: copy.kpis.groups[language], value: WORLD_CUP_OFFICIAL.groups, detail: language === 'zh' ? '12 组 x 4 队' : '12 groups x 4 teams' },
+    { icon: Trophy, label: copy.kpis.venues[language], value: WORLD_CUP_OFFICIAL.venues, detail: language === 'zh' ? '加拿大 / 墨西哥 / 美国' : 'Canada / Mexico / USA' },
+    { icon: Target, label: copy.kpis.sporttery[language], value: allWorldCupMatches.length || watchMatches.length, detail: watchMatches.length ? (language === 'zh' ? '已进入观察池' : 'In watch pool') : copy.waiting[language] },
+    { icon: Route, label: language === 'zh' ? '晋级名额' : 'Knockout Spots', value: 32, detail: language === 'zh' ? '前二 24 + 第三名 8' : 'Top two 24 + third-place 8' },
+    { icon: BarChart3, label: language === 'zh' ? '路径推演' : 'Route Runs', value: WORLD_CUP_FORECAST_MODEL.simulations.toLocaleString(), detail: WORLD_CUP_FORECAST_MODEL.version },
+    { icon: RefreshCw, label: copy.kpis.update[language], value: pageCheckedAt ? formatDateTime(pageCheckedAt, language) : '--', detail: updatedAt ? `${language === 'zh' ? '源' : 'Source'} ${formatDateTime(updatedAt, language)}` : '--' }
+  ];
 
   return (
-    <div id="top" className="event-page">
-      <div className="event-sky" aria-hidden="true">
-        <span className="event-beam event-beam-a" />
-        <span className="event-beam event-beam-b" />
-        <span className="event-speed-lines" />
-        <span className="event-particles" />
-      </div>
-
-      <motion.section className="event-hero" {...reveal()}>
-        <div className="event-hero-copy">
-          <span className="event-eyebrow">
+    <div id="top" className="worldcup-page">
+      <motion.section className="worldcup-spotlight" {...reveal()}>
+        <div className="worldcup-spotlight-main">
+          <span className="worldcup-kicker">
             <Trophy size={16} />
-            {copy.heroKicker[language]}
+            {copy.kicker[language]}
           </span>
-          <h1>{copy.heroTitle[language]}</h1>
+          <h2>{copy.heroTitle[language]}</h2>
           <p>{copy.heroSubtitle[language]}</p>
-          <div className="event-hero-actions">
-            <a href="#event-schedule" className="event-action is-primary">
-              {copy.heroCta[language]}
-              <ArrowRight size={17} />
-            </a>
-            <a href="#event-fans" className="event-action">
-              {copy.heroAltCta[language]}
-              <Users size={17} />
-            </a>
+          <div className="worldcup-spotlight-stats">
+            <span><strong>{WORLD_CUP_OFFICIAL.teams}</strong> {copy.kpis.teams[language]}</span>
+            <span><strong>{WORLD_CUP_OFFICIAL.matches}</strong> {copy.kpis.matches[language]}</span>
+            <span><strong>{WORLD_CUP_OFFICIAL.groups}</strong> {copy.kpis.groups[language]}</span>
+            <span><strong>{allWorldCupMatches.length || watchMatches.length}</strong> {copy.kpis.sporttery[language]}</span>
+            <span className="worldcup-sync-pill">
+              <RefreshCw size={14} />
+              {pageCheckedAt ? formatDateTime(pageCheckedAt, language) : '--'}
+            </span>
           </div>
-          <div className="event-hero-badges" aria-label="Event meta">
-            <span>{copy.hostCountries[language]}</span>
-            <span>{copy.teamCount[language]}</span>
-            <span>{copy.matchCount[language]}</span>
+          <div className="worldcup-spotlight-hosts">
+            <span>加拿大</span>
+            <span>墨西哥</span>
+            <span>美国</span>
           </div>
         </div>
+        <div className="worldcup-spotlight-side">
+          {watchMatches.length ? (
+            watchMatches.slice(0, 3).map((match) => (
+              <button className="worldcup-mini-match" type="button" key={match.id} onClick={() => onSelectMatch(match.id)}>
+                <span className="worldcup-mini-label">{formatDateTime(match.kickoffTime, language)}</span>
+                <span className="worldcup-mini-teams">
+                  <span>{getTeamById(match.homeTeamId).shortName[language]}</span>
+                  <b>VS</b>
+                  <span>{getTeamById(match.awayTeamId).shortName[language]}</span>
+                </span>
+                <span className="worldcup-mini-meta">
+                  {getBestPrediction(match) ? getPredictionTipDisplay(getBestPrediction(match)!, language, true) : copy.waiting[language]}
+                </span>
+                <span className="worldcup-mini-action">
+                  {copy.more[language]}
+                  <ChevronRight size={15} />
+                </span>
+              </button>
+            ))
+          ) : (
+            knockoutRoutes.slice(0, 3).map((route) => (
+              <div className="worldcup-mini-match" key={`fallback-${route.team.id}`}>
+                <span className="worldcup-mini-label">{language === 'zh' ? '争冠路径观察' : 'Title route watch'}</span>
+                <span className="worldcup-mini-teams">
+                  <span>{route.team.flag} {getTeamName(route.team, language)}</span>
+                  <b>{formatPercent(route.champion)}</b>
+                  <span>{language === 'zh' ? '冠军概率' : 'champion'}</span>
+                </span>
+                <span className="worldcup-mini-meta">
+                  Group {route.team.groupId} / 32强 {formatPercent(route.round32)} / 8强 {formatPercent(route.quarterFinal)}
+                </span>
+                <span className="worldcup-mini-action">
+                  {copy.waiting[language]} SP
+                  <ChevronRight size={15} />
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      </motion.section>
 
-        <div className="event-hero-visual">
-          <div className="event-stadium-card">
-            <span className="event-ring" />
-            <span className="event-field-lines" />
-            <strong>26</strong>
-            <small>{copy.stadiumLabel[language]}</small>
+      <motion.section className="worldcup-hero-panel" {...reveal(0.03)}>
+        <div className="worldcup-hero-copy">
+          <span className="worldcup-kicker">
+            <Sparkles size={16} />
+            {pickText(WORLD_CUP_OFFICIAL.name, language)}
+          </span>
+          <h1>OWN THE WORLD</h1>
+          <p>{copy.groupsDesc[language]}</p>
+          <div className="worldcup-hero-meta">
+            <span>48 队</span>
+            <span>104 场</span>
+            <span>32 强路线</span>
+            <span>最佳第三名</span>
+            <span>竞彩开售后更新 SP</span>
           </div>
-          <div className="event-countdown">
-            <small>{copy.countdown[language]}</small>
+          <div className="worldcup-hero-hosts">
+            <span>CA 加拿大</span>
+            <span>MX 墨西哥</span>
+            <span>US 美国</span>
+          </div>
+        </div>
+        <div className="worldcup-hero-visual">
+          <div className="worldcup-countdown-card">
+            <span>{copy.countdown[language]}</span>
             <strong>{daysLeft}</strong>
-            <span>{copy.days[language]}</span>
+            <small>{copy.days[language]}</small>
+          </div>
+          <div className="worldcup-cup-emblem" aria-hidden="true">
+            <span>2026</span>
+            <strong>WC</strong>
+            <small>AI FORECAST</small>
+          </div>
+          <div className="worldcup-route-rail">
+            <span>小组赛</span>
+            <span>32 强</span>
+            <span>16 强</span>
+            <span>8 强</span>
+            <span>决赛</span>
           </div>
         </div>
       </motion.section>
 
-      <motion.section className="event-featured" {...reveal(0.05)}>
-        <div className="event-section-head">
-          <span className="event-eyebrow">
-            <Flame size={16} />
-            {copy.featured[language]}
-          </span>
-          <h2>{text(featuredMatch.home.name, language)} vs {text(featuredMatch.away.name, language)}</h2>
-          <p>{text(featuredMatch.stage, language)} / {text(featuredMatch.venue, language)} / {text(featuredMatch.kickoff, language)}</p>
-        </div>
+      <motion.div className="worldcup-kpi-grid" {...reveal(0.05)}>
+        {kpis.map((item) => (
+          <article key={item.label}>
+            <item.icon size={22} />
+            <span>{item.label}</span>
+            <strong>{item.value}</strong>
+            <small>{item.detail}</small>
+          </article>
+        ))}
+      </motion.div>
 
-        <div className="event-featured-grid">
-          <TeamCodeCard team={featuredMatch.home} language={language} />
-          <div className="event-versus">
-            <span>{copy.liveBuildUp[language]}</span>
-            <strong>VS</strong>
-            <small>{copy.probabilityScan[language]}</small>
+      <motion.section className="worldcup-section" {...reveal(0.07)}>
+        <div className="worldcup-section-head">
+          <div>
+            <span className="worldcup-kicker">
+              <ShieldCheck size={16} />
+              {copy.stage[language]}
+            </span>
+            <p>{copy.stageDesc[language]}</p>
           </div>
-          <TeamCodeCard team={featuredMatch.away} language={language} align="right" />
+          <span className="worldcup-sync-pill">{copy.dataStatus[language]}</span>
         </div>
-
-        <div className="event-count-strip">
-          {featuredMatch.countdown.map((item) => (
-            <span key={item.label.en}>
-              <strong>{item.value}</strong>
-              <small>{text(item.label, language)}</small>
-            </span>
+        <div className="worldcup-stage-grid">
+          {WORLD_CUP_STAGE_CARDS.map((stage) => (
+            <article className="worldcup-stage-card" key={pickText(stage.title, language)}>
+              <span>{pickText(stage.title, language)}</span>
+              <strong>{pickText(stage.value, language)}</strong>
+              <p>{pickText(stage.detail, language)}</p>
+            </article>
           ))}
         </div>
-
-        <div className="event-odds-strip">
-          {featuredMatch.odds.map((item) => (
-            <span key={item.label.en}>
-              <small>{text(item.label, language)}</small>
-              <strong>{item.value}</strong>
-            </span>
-          ))}
+        <div className="worldcup-model-note">
+          <strong>{copy.model[language]}</strong>
+          <p>{language === 'zh' ? WORLD_CUP_FORECAST_MODEL.zh : WORLD_CUP_FORECAST_MODEL.en}</p>
+          <span>{WORLD_CUP_FORECAST_MODEL.version} / {WORLD_CUP_FORECAST_MODEL.simulations.toLocaleString()} 次</span>
         </div>
       </motion.section>
 
-      <motion.section className="event-live" {...reveal(0.08)}>
-        <div className="event-live-score">
-          <span className="event-eyebrow">
-            <Radio size={16} />
-            {copy.matchCenter[language]}
+      <motion.section className="worldcup-section" {...reveal(0.09)}>
+        <div className="worldcup-section-head">
+          <div>
+            <span className="worldcup-kicker">
+              <BarChart3 size={16} />
+              {copy.groups[language]}
+            </span>
+            <p>{copy.groupsDesc[language]}</p>
+          </div>
+          <span className="worldcup-sync-pill">
+            {language === 'zh' ? `直通 ${qualifiers.winners.length + qualifiers.runnersUp.length} / 第三名 ${bestThird.length}` : `Direct ${qualifiers.winners.length + qualifiers.runnersUp.length} / third ${bestThird.length}`}
           </span>
-          <div className="event-scoreline">
-            <span>{featuredMatch.home.code}</span>
-            <strong>VS</strong>
-            <span>{featuredMatch.away.code}</span>
-          </div>
-          <small>{copy.liveStatus[language]}</small>
-          <div className="event-live-pulse">
-            <Activity size={16} />
-            {copy.livePulse[language]}
-          </div>
         </div>
-
-        <div className="event-metrics">
-          {liveMetrics.map((metric) => (
-            <article key={metric.label.en}>
+        <div className="worldcup-group-grid">
+          {groupForecasts.map((group) => (
+            <article className="worldcup-group-card" key={group.id}>
               <header>
-                <span>{text(metric.label, language)}</span>
-                <strong>{metric.home}{metric.suffix ?? ''} / {metric.away}{metric.suffix ?? ''}</strong>
+                <span>Group {group.id}</span>
+                <strong>{pickText(group.dates, language)}</strong>
               </header>
-              <div className="event-dual-meter">
-                <span style={{ width: `${Math.min(100, metric.home)}%` }} />
-                <b style={{ width: `${Math.min(100, metric.away)}%` }} />
+              <p>{pickText(group.headline, language)}</p>
+              <div className="worldcup-group-team-list">
+                {group.teams.map((team) => (
+                  <GroupTeamRow key={team.id} team={team} language={language} />
+                ))}
               </div>
             </article>
           ))}
         </div>
-
-        <div className="event-momentum-card">
-          <header>
-            <span>{copy.momentum[language]}</span>
-            <Gauge size={18} />
-          </header>
-          <div className="event-momentum-bars">
-            {momentumPoints.map((point, index) => (
-              <span key={`${point}-${index}`} style={{ height: `${point}%` }} />
+        <div className="worldcup-third-lane">
+          <span>{copy.bestThird[language]}</span>
+          <div>
+            {bestThird.map((team) => (
+              <strong key={team.id}>
+                <TeamFlag team={team} language={language} />
+                {getTeamName(team, language)}
+                <small>{formatPercent(team.bestThirdProbability)} / {team.projectedPoints.toFixed(1)}分</small>
+              </strong>
             ))}
           </div>
-        </div>
-
-        <div className="event-timeline">
-          {liveTimeline.map((item) => (
-            <article key={item.minute} className={toneClass(item.tone)}>
-              <span>{item.minute}</span>
-              <div>
-                <strong>{text(item.title, language)}</strong>
-                <p>{text(item.detail, language)}</p>
-              </div>
-            </article>
-          ))}
+          <p className="worldcup-third-note">{copy.bestThirdNote[language]}</p>
         </div>
       </motion.section>
 
-      <motion.section className="event-hub" {...reveal(0.1)}>
-        <div className="event-section-head">
-          <span className="event-eyebrow">
-            <ShieldCheck size={16} />
-            {copy.tournamentHub[language]}
-          </span>
-          <h2>{copy.hubTitle[language]}</h2>
+      <motion.section className="worldcup-section" {...reveal(0.11)}>
+        <div className="worldcup-section-head">
+          <div>
+            <span className="worldcup-kicker">
+              <Route size={16} />
+              {copy.knockout[language]}
+            </span>
+            <p>{copy.knockoutDesc[language]}</p>
+          </div>
+          <span className="worldcup-sync-pill">32 强路径</span>
         </div>
-
-        <div className="event-hub-grid">
-          <div className="event-standings">
-            <header>
-              <strong>{copy.groupPulse[language]}</strong>
-              <span>{copy.ptsGd[language]}</span>
-            </header>
-            {standings.map((row) => (
-              <article key={`${row.group}-${row.team.code}`}>
-                <span>{copy.groupPrefix[language]} {row.group}</span>
-                <b>{row.team.code}</b>
-                <strong>{row.points}</strong>
-                <small>{row.goalDiff}</small>
-                <em>{text(standingStatusLabels[row.status], language)}</em>
+        <div className="worldcup-knockout-grid">
+          <div className="worldcup-round-list">
+            {WORLD_CUP_KNOCKOUT_ROUNDS.map((round) => (
+              <article key={round.id}>
+                <span>{pickText(round.dates, language)}</span>
+                <strong>{pickText(round.title, language)}</strong>
+                <small>{round.matches} 场</small>
+                <p>{pickText(round.detail, language)}</p>
               </article>
             ))}
           </div>
-
-          <div className="event-road">
-            {roadToFinal.map((node) => (
-              <article key={node.round.en}>
-                <span>{text(node.date, language)}</span>
-                <strong>{text(node.round, language)}</strong>
-                <small>{text(node.teams, language)}</small>
-                <p>{text(node.highlight, language)}</p>
-              </article>
-            ))}
-          </div>
-
-          <div className="event-leaders">
-            <header>
-              <Medal size={18} />
-              <strong>{copy.playerIndex[language]}</strong>
-            </header>
-            {playerLeaders.map((player) => (
-              <article key={player.name.en} className={toneClass(player.tone)}>
-                <span>{text(player.name, language)}</span>
-                <div>
-                  <strong>{player.value}</strong>
-                  <small>{text(player.team, language)} / {text(player.stat, language)}</small>
+          <div className="worldcup-route-list">
+            {knockoutRoutes.slice(0, 10).map((route) => (
+              <article key={route.team.id}>
+                <TeamFlag team={route.team} language={language} />
+                <div className="worldcup-route-copy">
+                  <strong>{getTeamName(route.team, language)}</strong>
+                  <small>{pickText(route.tier, language)} / Group {route.team.groupId}</small>
+                </div>
+                <div className="worldcup-route-probs">
+                  <b>{formatPercent(route.champion)}</b>
+                  <small>{language === 'zh' ? '冠军' : 'Champion'}</small>
+                </div>
+                <div className="worldcup-route-bars">
+                  <span>32强 {formatPercent(route.round32)}</span>
+                  <span>16强 {formatPercent(route.round16)}</span>
+                  <span>8强 {formatPercent(route.quarterFinal)}</span>
+                  <span>4强 {formatPercent(route.semiFinal)}</span>
+                  <span>决赛 {formatPercent(route.final)}</span>
                 </div>
               </article>
             ))}
@@ -385,203 +509,139 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
         </div>
       </motion.section>
 
-      <motion.section id="event-fans" className="event-fans" {...reveal(0.12)}>
-        <div className="event-fan-copy">
-          <span className="event-eyebrow">
-            <Sparkles size={16} />
-            {copy.fanZone[language]}
-          </span>
-          <h2>{copy.fanTitle[language]}</h2>
-          <p>{copy.fanSubtitle[language]}</p>
-          <div className="event-score-picker">
-            {['1 - 0', '2 - 1', '1 - 1', '3 - 2'].map((score) => (
-              <button
-                key={score}
-                type="button"
-                className={selectedScore === score ? 'active' : ''}
-                onClick={() => setSelectedScore(score)}
-              >
-                {score}
-              </button>
+      <motion.section className="worldcup-section" {...reveal(0.13)}>
+        <div className="worldcup-section-head">
+          <div>
+            <span className="worldcup-kicker">
+              <Target size={16} />
+              {copy.fixtures[language]}
+            </span>
+            <p>{copy.fixturesDesc[language]}</p>
+          </div>
+          <span className="worldcup-sync-pill">{updatedAt ? formatDateTime(updatedAt, language) : copy.waiting[language]}</span>
+        </div>
+        {watchMatches.length ? (
+          <div className="worldcup-match-grid">
+            {watchMatches.map((match) => (
+              <MatchCard key={match.id} match={match} language={language} onSelectMatch={onSelectMatch} />
             ))}
           </div>
-        </div>
-
-        <div className="event-fan-panel">
-          <header>
-            <Vote size={18} />
-            <strong>{copy.fanPoll[language]}</strong>
-            <span>{selectedScore}</span>
-          </header>
-          {fanPoll.map((option) => (
-            <article key={option.label.en}>
-              <span>{text(option.label, language)}</span>
-              <SignalBar value={option.value} tone={option.tone} />
-              <strong>{option.value}%</strong>
-            </article>
-          ))}
-        </div>
-
-        <div className="event-task-list">
-          {fanTasks.map((task) => (
-            <article key={task.title.en} className={toneClass(task.tone)}>
-              <header>
-                <Gift size={17} />
-                <span>{text(task.reward, language)}</span>
-              </header>
-              <strong>{text(task.title, language)}</strong>
-              <SignalBar value={task.progress} tone={task.tone} />
-            </article>
-          ))}
-        </div>
-
-        <div className="event-rank-list">
-          <header>
-            <Star size={18} />
-            <strong>{copy.leaderboard[language]}</strong>
-          </header>
-          {fanRanks.map((rank, index) => (
-            <article key={rank.name.en}>
-              <span>{String(index + 1).padStart(2, '0')}</span>
-              <strong>{text(rank.name, language)}</strong>
-              <b>{rank.points}</b>
-              <small>{text(rank.streak, language)}</small>
-            </article>
-          ))}
-        </div>
+        ) : (
+          <div className="worldcup-empty">{copy.noFixtures[language]}</div>
+        )}
       </motion.section>
 
-      <motion.section id="event-schedule" className="event-schedule" {...reveal(0.14)}>
-        <div className="event-section-head">
-          <span className="event-eyebrow">
-            <CalendarDays size={16} />
-            {copy.schedule[language]}
-          </span>
-          <h2>{copy.scheduleTitle[language]}</h2>
-          <p>{copy.actualFixtures[language]} / {updatedAt}</p>
+      <motion.section className="worldcup-section" {...reveal(0.15)}>
+        <div className="worldcup-section-head">
+          <div>
+            <span className="worldcup-kicker">
+              <Gauge size={16} />
+              {copy.contenders[language]} / {copy.upset[language]}
+            </span>
+            <p>{copy.dataStatusDesc[language]}</p>
+          </div>
+          <span className="worldcup-sync-pill">{copy.disclaimer[language]}</span>
         </div>
-
-        <div className="event-filter-row">
-          {scheduleFilters.map((filter) => (
-            <button
-              key={filter}
-              type="button"
-              className={activeFilter === filter ? 'active' : ''}
-              onClick={() => setActiveFilter(filter)}
-            >
-              {text(scheduleFilterLabels[filter], language)}
-            </button>
-          ))}
-        </div>
-
-        <div className="event-schedule-grid">
-          {filteredSchedule.map((match) => (
-            <ScheduleCard key={match.id} match={match} language={language} />
-          ))}
-        </div>
-
-        <div className="event-connected-fixtures">
-          <header>
-            <BadgeCheck size={18} />
-            <strong>{copy.actualFixtures[language]}</strong>
-          </header>
-          {actualWorldCupMatches.length === 0 ? (
-            <p>{copy.noFixtures[language]}</p>
-          ) : (
-            actualWorldCupMatches.map((match) => {
-              const home = getTeamById(match.homeTeamId);
-              const away = getTeamById(match.awayTeamId);
-              const league = getLeagueById(match.leagueId);
-              const prediction = getBestPrediction(match);
-              const trust = getMatchTrust(match);
-              const poolRows = getSportteryPoolRows(match, language);
-              const odds = poolRows.find((row) => row.odds)?.odds;
-
+        <div className="worldcup-scout-grid">
+          <div className="worldcup-contender-list">
+            {contenders.length ? contenders.map((item) => {
+              const team = getTeamById(item.teamId);
+              const opponent = getTeamById(item.opponentId);
               return (
-                <button key={match.id} type="button" onClick={() => onSelectMatch(match.id)}>
-                  <span className="event-fixture-time">
-                    {formatDateTime(match.kickoffTime, language)}
-                    <small>{formatMatchStatus(match.status, language)}</small>
+                <button className="worldcup-contender-card" type="button" key={`${item.matchId}-${item.teamId}`} onClick={() => onSelectMatch(item.matchId)}>
+                  <span className="worldcup-contender-team">
+                    <TeamBadge team={team} size="sm" />
+                    <strong>{team.shortName[language]}</strong>
+                    <small>vs {opponent.shortName[language]}</small>
                   </span>
-                  <span className="event-fixture-teams">
-                    <TeamBadge team={home} size="sm" />
-                    <strong>{home.shortName[language]} vs {away.shortName[language]}</strong>
-                    <TeamBadge team={away} size="sm" />
+                  <span className="worldcup-scorebar" aria-hidden="true">
+                    <span style={{ '--score': `${item.score}%` } as React.CSSProperties} />
                   </span>
-                  <span className="event-fixture-meta">
-                    {league.name[language]}
-                    <small>{copy.prediction[language]} {prediction ? getPredictionTipDisplay(prediction, language) : '--'}</small>
+                  <span className="worldcup-contender-meta">
+                    <b>{item.score}</b>
+                    <small>{copy.trust[language]}</small>
                   </span>
-                  <span className="event-fixture-odds">
-                    {odds ? `${odds.odds1.toFixed(2)} / ${odds.oddsX.toFixed(2)} / ${odds.odds2.toFixed(2)}` : 'SP --'}
-                    <small>{copy.trust[language]} {trust ? `${trust}%` : '--'}</small>
-                  </span>
-                  <ChevronRight size={18} />
+                  <p>{pickText(item.reason, language)}</p>
                 </button>
               );
-            })
-          )}
+            }) : <div className="worldcup-empty">世界杯 SP 开售后生成争冠观察池。</div>}
+          </div>
+          <div className="worldcup-radar-list">
+            {upsetRadar.length ? upsetRadar.map((item) => {
+              const favorite = getTeamById(item.favoriteTeamId);
+              const underdog = getTeamById(item.underdogTeamId);
+              return (
+                <button type="button" key={`${item.matchId}-${item.underdogTeamId}`} onClick={() => onSelectMatch(item.matchId)}>
+                  <span className="worldcup-radar-score">{item.riskScore}</span>
+                  <span className="worldcup-radar-copy">
+                    <strong>{underdog.shortName[language]} vs {favorite.shortName[language]}</strong>
+                    <small>{pickText(item.reason, language)}</small>
+                  </span>
+                  <ChevronRight size={16} />
+                </button>
+              );
+            }) : <div className="worldcup-empty">开售场次不足时不强行给爆冷结论。</div>}
+          </div>
         </div>
       </motion.section>
 
-      <motion.section className="event-highlights" {...reveal(0.16)}>
-        <div className="event-section-head">
-          <span className="event-eyebrow">
-            <Play size={16} />
-            {copy.highlights[language]}
-          </span>
-          <h2>{copy.highlightTitle[language]}</h2>
+      <motion.section className="worldcup-section" {...reveal(0.17)}>
+        <div className="worldcup-section-head">
+          <div>
+            <span className="worldcup-kicker">
+              <Zap size={16} />
+              {copy.pipeline[language]}
+            </span>
+            <p>{copy.dataStatusDesc[language]}</p>
+          </div>
         </div>
-        <div className="event-highlight-grid">
-          {highlights.map((item) => (
-            <article key={item.title.en} className={toneClass(item.tone)}>
-              <span>{text(highlightTypeLabels[item.type], language)}</span>
-              <div className="event-video-mark">
-                {item.type === 'video' ? <Play size={26} /> : <Zap size={26} />}
-              </div>
-              <strong>{text(item.title, language)}</strong>
-              <p>{text(item.detail, language)}</p>
-              <small>{text(item.meta, language)}</small>
+        <div className="worldcup-two-col">
+          <div className="worldcup-pipeline-list">
+            {WORLD_CUP_PIPELINE_CARDS.map((card) => (
+              <article key={pickText(card.title, language)}>
+                <span>{pickText(card.value, language)}</span>
+                <strong>{pickText(card.title, language)}</strong>
+                <p>{pickText(card.detail, language)}</p>
+              </article>
+            ))}
+          </div>
+          <div className="worldcup-result-list">
+            {recentResults.length ? recentResults.map((match) => (
+              <button type="button" key={match.id} onClick={() => onSelectMatch(match.id)}>
+                <span>
+                  {getTeamById(match.homeTeamId).shortName[language]} {match.scoreHome}:{match.scoreAway} {getTeamById(match.awayTeamId).shortName[language]}
+                </span>
+                <strong>{copy.recent[language]}</strong>
+              </button>
+            )) : <div className="worldcup-empty">{copy.noRecent[language]}</div>}
+          </div>
+        </div>
+      </motion.section>
+
+      <motion.section className="worldcup-section" {...reveal(0.19)}>
+        <div className="worldcup-section-head">
+          <div>
+            <span className="worldcup-kicker">
+              <Medal size={16} />
+              {copy.dataStatus[language]}
+            </span>
+            <p>{copy.disclaimer[language]}</p>
+          </div>
+        </div>
+        <div className="worldcup-lane-grid">
+          {WORLD_CUP_CONTENT_LANES.map((lane) => (
+            <article className="worldcup-lane-card" key={pickText(lane.title, language)}>
+              <span>{pickText(lane.status, language)}</span>
+              <strong>{pickText(lane.title, language)}</strong>
+              <ul>
+                {lane.items[language].map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
             </article>
           ))}
         </div>
       </motion.section>
-
-      <footer className="event-footer">
-        <div>
-          <span className="event-brand-mark">AI</span>
-          <strong>{copy.footerBrand[language]}</strong>
-          <p>{copy.footerDisclaimer[language]}</p>
-        </div>
-        <nav aria-label="World Cup footer">
-          <a href="#event-schedule">{copy.footerSchedule[language]}</a>
-          <a href="#event-fans">{copy.footerFanZone[language]}</a>
-          <a href="#top">{copy.footerTerms[language]}</a>
-          <a href="#top">{copy.footerPrivacy[language]}</a>
-        </nav>
-      </footer>
     </div>
   );
 };
-
-const ScheduleCard = ({ match, language }: { match: ScheduleMatch; language: Locale }) => (
-  <article className={`event-schedule-card ${toneClass(match.tone)}`}>
-    <header>
-      <span>{text(scheduleStatusLabels[match.status], language)}</span>
-      <strong>{text(match.time, language)}</strong>
-    </header>
-    <div className="event-schedule-teams">
-      <TeamCodeCard team={match.home} language={language} />
-      <div>
-        <b>{match.score ?? 'VS'}</b>
-        <small>{text(match.stage, language)}</small>
-      </div>
-      <TeamCodeCard team={match.away} language={language} align="right" />
-    </div>
-    <div className="event-schedule-tags">
-      {match.tags.map((tag) => (
-        <span key={tag.en}>{text(tag, language)}</span>
-      ))}
-    </div>
-  </article>
-);
