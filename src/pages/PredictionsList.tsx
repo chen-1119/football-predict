@@ -322,6 +322,10 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     dataReady: { zh: '已加载', en: 'Ready' },
     dataFallback: { zh: '本地兜底', en: 'Fallback' },
     dataUpdated: { zh: '数据源', en: 'Source' },
+    dataChannel: { zh: '通道', en: 'Channel' },
+    dataChannelApi: { zh: '实时接口', en: 'Live API' },
+    dataChannelStatic: { zh: '静态快照', en: 'Static snapshot' },
+    dataChannelMock: { zh: '兜底样例', en: 'Fallback sample' },
     dataRefresh: { zh: '页面自检', en: 'Page check' },
     dataNextCheck: { zh: '下次检查', en: 'Next check' },
     dataCurrentLoading: { zh: '正在加载中国竞彩网赛程', en: 'Loading Sporttery schedule' },
@@ -677,15 +681,17 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         ? Math.max(0, Math.floor(dataSync.sourceAgeSeconds / 60))
         : getDataAgeMinutes(dataSync.sourceUpdatedAt || dataSync.updatedAt, nowMs);
       const staleThresholdMinutes = Math.max((dataSync.backendRefreshMinutes || 5) * 3, 10);
-      const isDataStale = dataSync.currentLoaded && (
-        dataSync.sourceStale ||
-        (sourceAgeMinutes !== null && sourceAgeMinutes > staleThresholdMinutes)
-      );
+      const isDataStale = dataSync.currentLoaded && sourceAgeMinutes !== null && sourceAgeMinutes > staleThresholdMinutes;
       if (isDataStale) {
         const lastAttemptLabel = formatSyncTime(dataSync.lastAttemptAt || dataSync.lastCheckedAt, language);
         return language === 'zh'
           ? `数据源已 ${formatAgeMinutes(sourceAgeMinutes, language)} 未发布新快照；后台最近检查 ${lastAttemptLabel}。`
           : `Source data is ${formatAgeMinutes(sourceAgeMinutes, language)} old; last background check ${lastAttemptLabel}.`;
+      }
+      if (dataSync.dataChannel === 'static') {
+        return language === 'zh'
+          ? '当前使用静态快照展示；实时接口恢复后会自动切回。'
+          : 'Using the static snapshot now; it will switch back to the live API automatically.';
       }
       if (dataSync.error && dataSync.currentLoaded && !dataSync.historyLoaded) return t('dataHistoryUnavailable');
       if (dataSync.historyLoading) return t('dataHistoryLoading');
@@ -697,10 +703,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     ? Math.max(0, Math.floor(dataSync.sourceAgeSeconds / 60))
     : getDataAgeMinutes(dataSync.sourceUpdatedAt || dataSync.updatedAt, nowMs);
   const staleThresholdMinutes = Math.max((dataSync.backendRefreshMinutes || 5) * 3, 10);
-  const isDataStale = dataSync.currentLoaded && (
-    dataSync.sourceStale ||
-    (sourceAgeMinutes !== null && sourceAgeMinutes > staleThresholdMinutes)
-  );
+  const isDataStale = dataSync.currentLoaded && sourceAgeMinutes !== null && sourceAgeMinutes > staleThresholdMinutes;
 
   const dataSyncTone = dataSync.error || isDataStale
     ? 'is-warning'
@@ -711,6 +714,16 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         : '';
 
   const dataSyncItems = [
+    {
+      label: t('dataChannel'),
+      value: dataSync.dataChannel === 'api'
+        ? t('dataChannelApi')
+        : dataSync.dataChannel === 'static'
+          ? t('dataChannelStatic')
+          : dataSync.dataChannel === 'mock'
+            ? t('dataChannelMock')
+            : '--'
+    },
     {
       label: t('dataCurrent'),
       value: dataSync.currentLoaded

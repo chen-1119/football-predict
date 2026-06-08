@@ -1,14 +1,12 @@
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import type { Team } from '../services/mockData';
+import { resolveTeamVisual } from '../services/teamVisuals';
 
 interface TeamBadgeProps {
   team?: Team;
   size?: 'sm' | 'md' | 'lg';
   className?: string;
 }
-
-const isImageLogo = (logo: string) => /^(https?:\/\/|\/|\.\/)/.test(logo);
-const isFlagEmoji = (logo: string) => /\p{Regional_Indicator}/u.test(logo);
 
 export function TeamBadge({ team, size = 'md', className = '' }: TeamBadgeProps) {
   const safeTeam = team ?? {
@@ -19,17 +17,28 @@ export function TeamBadge({ team, size = 'md', className = '' }: TeamBadgeProps)
     value: '-',
     color: '#64748b'
   };
-  const logo = safeTeam.logo || safeTeam.shortName.en || safeTeam.name.en || '?';
-  const label = safeTeam.shortName.zh || safeTeam.shortName.en || safeTeam.name.zh || safeTeam.name.en;
+  const [failedLogo, setFailedLogo] = useState<string | null>(null);
+  const visual = resolveTeamVisual(safeTeam);
   const style = { '--team-color': safeTeam.color } as CSSProperties;
-  const logoType = safeTeam.logoType || (isFlagEmoji(logo) ? 'flag' : isImageLogo(logo) ? 'crest' : 'crest-placeholder');
+  const shouldRenderImage = visual.isImage && failedLogo !== visual.logo;
 
   return (
-    <span className={`team-badge team-badge-${size} team-badge-${logoType} ${className}`.trim()} style={style} title={label}>
-      {isImageLogo(logo) ? (
-        <img src={logo} alt={label} loading="lazy" />
+    <span
+      className={`team-badge team-badge-${size} team-badge-${visual.logoType} ${className}`.trim()}
+      data-logo-kind={visual.logoType}
+      style={style}
+      title={visual.label}
+    >
+      {shouldRenderImage ? (
+        <img
+          src={visual.logo}
+          alt={visual.label}
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={() => setFailedLogo(visual.logo)}
+        />
       ) : (
-        <span>{logo}</span>
+        <span>{visual.isImage ? visual.fallbackText : visual.logo}</span>
       )}
     </span>
   );

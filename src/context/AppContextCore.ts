@@ -28,6 +28,10 @@ export interface DataSyncState {
   sourceStale?: boolean;
   syncTriggered?: boolean;
   dataApiSource?: string;
+  dataChannel?: 'api' | 'static' | 'mock';
+  dataApiBase?: string;
+  lastDataUrl?: string;
+  apiFailureCount?: number;
 }
 
 export interface AppContextType {

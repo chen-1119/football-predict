@@ -55,12 +55,30 @@ type RuntimeConfig = {
   dataApiBase?: string;
   apiBase?: string;
   disableDataApi?: boolean;
+  preferDataApi?: boolean;
+  historyPreferStatic?: boolean;
+  currentPollSeconds?: number;
 };
 
 const CURRENT_REFRESH_MS = 30 * 1000;
 const HISTORY_REFRESH_MS = 5 * 60 * 1000;
+const DATA_FETCH_TIMEOUT_MS = 12 * 1000;
 const ENV_DATA_API_BASE = import.meta.env.VITE_DATA_API_BASE;
 const ENV_DISABLE_DATA_API = import.meta.env.VITE_DISABLE_DATA_API === '1';
+const ENV_PREFER_DATA_API = import.meta.env.VITE_PREFER_DATA_API !== '0';
+
+type DataChannel = 'api' | 'static' | 'mock';
+
+type DataCandidate = {
+  url: string;
+  channel: Exclude<DataChannel, 'mock'>;
+};
+
+type DataFetchResult<T> = {
+  data: T;
+  url: string;
+  channel: Exclude<DataChannel, 'mock'>;
+};
 
 const readStoredLanguage = (): Language => {
   const savedLang = localStorage.getItem('nerdy_lang');
@@ -97,23 +115,32 @@ const formatError = (error: unknown): string => {
 
 const fetchJson = async <T,>(url: string): Promise<T> => {
   const cacheBuster = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const res = await fetch(`${url}?v=${cacheBuster}`, {
-    cache: 'no-store',
-    headers: {
-      'cache-control': 'no-cache',
-      pragma: 'no-cache'
-    }
-  });
-  if (!res.ok) throw new Error(`${url}: HTTP ${res.status} ${res.statusText}`);
-  return res.json() as Promise<T>;
+  const separator = url.includes('?') ? '&' : '?';
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), DATA_FETCH_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(`${url}${separator}v=${cacheBuster}`, {
+      cache: 'no-store',
+      signal: controller.signal
+    });
+    if (!res.ok) throw new Error(`${url}: HTTP ${res.status} ${res.statusText}`);
+    return res.json() as Promise<T>;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 };
 
-const fetchFirstAvailable = async <T,>(urls: string[]): Promise<T> => {
+const fetchFirstAvailable = async <T,>(candidates: DataCandidate[]): Promise<DataFetchResult<T>> => {
   let lastError: unknown;
 
-  for (const url of urls) {
+  for (const candidate of candidates) {
     try {
-      return await fetchJson<T>(url);
+      return {
+        data: await fetchJson<T>(candidate.url),
+        url: candidate.url,
+        channel: candidate.channel
+      };
     } catch (error) {
       lastError = error;
     }
@@ -197,6 +224,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const refreshMsRef = useRef(CURRENT_REFRESH_MS);
   const apiBaseRef = useRef<string | null>(normalizeApiBase(ENV_DATA_API_BASE));
   const apiDisabledRef = useRef(ENV_DISABLE_DATA_API);
+  const preferApiRef = useRef(ENV_PREFER_DATA_API);
+  const historyPreferStaticRef = useRef(true);
+  const pollSecondsOverrideRef = useRef<number | null>(null);
+  const apiFailureCountRef = useRef(0);
   const [dataSync, setDataSync] = useState<DataSyncState>({
     currentLoaded: false,
     historyLoaded: false,
@@ -210,10 +241,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     let cancelled = false;
 
-    const metaToState = (meta: SyncMeta | null, checkedAt: string) => {
+    const metaToState = (
+      meta: SyncMeta | null,
+      checkedAt: string,
+      fetchInfo?: Pick<DataFetchResult<unknown>, 'url' | 'channel'>
+    ) => {
       const sourceUpdatedAt = meta?.api?.freshnessTime || meta?.lastAttemptAt || meta?.updatedAt || meta?.capturedAt;
-      const configuredPollSeconds = meta?.refreshPolicy?.pagePollSeconds || CURRENT_REFRESH_MS / 1000;
-      const pagePollSeconds = Math.min(30, Math.max(15, configuredPollSeconds));
+      const configuredPollSeconds =
+        pollSecondsOverrideRef.current ||
+        meta?.refreshPolicy?.pagePollSeconds ||
+        CURRENT_REFRESH_MS / 1000;
+      const pagePollSeconds = Math.min(30, Math.max(10, configuredPollSeconds));
       refreshMsRef.current = pagePollSeconds * 1000;
 
       return {
@@ -227,13 +265,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         sourceAgeSeconds: meta?.api?.ageSeconds,
         sourceStale: meta?.api?.stale,
         syncTriggered: meta?.api?.syncTriggered,
-        dataApiSource: meta?.api?.source
+        dataApiSource: meta?.api?.source,
+        dataChannel: fetchInfo?.channel,
+        lastDataUrl: fetchInfo?.url,
+        dataApiBase: apiBaseRef.current || undefined,
+        apiFailureCount: apiFailureCountRef.current
       };
     };
 
     const fetchSyncMeta = async (): Promise<SyncMeta | null> => {
       try {
-        return await fetchFirstAvailable<SyncMeta>(dataUrls('/sync-meta', ['./data/sync-meta.json']));
+        return (await fetchFirstAvailable<SyncMeta>(dataUrls('/sync-meta', ['./data/sync-meta.json']))).data;
       } catch {
         return null;
       }
@@ -250,6 +292,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
 
         apiBaseRef.current = normalizeApiBase(config.dataApiBase || config.apiBase);
+        preferApiRef.current = config.preferDataApi ?? true;
+        historyPreferStaticRef.current = config.historyPreferStatic ?? true;
+        if (typeof config.currentPollSeconds === 'number' && Number.isFinite(config.currentPollSeconds)) {
+          pollSecondsOverrideRef.current = Math.min(30, Math.max(10, config.currentPollSeconds));
+          refreshMsRef.current = pollSecondsOverrideRef.current * 1000;
+        }
       } catch {
         // Runtime config is optional; same-origin /api remains the first fast path.
       }
@@ -298,12 +346,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const loadCurrent = async (isInitial = false) => {
       const checkedAt = new Date().toISOString();
       try {
-        const [data, meta] = await Promise.all([
+        const [dataResult, meta] = await Promise.all([
           fetchFirstAvailable<unknown>(dataUrls('/matches/current', ['./data/matches-current.json', './matches.json'])),
           fetchSyncMeta()
         ]);
-        const currentCount = applyData(data, 'current');
-        const metaState = metaToState(meta, checkedAt);
+        apiFailureCountRef.current = dataResult.channel === 'api' ? 0 : apiFailureCountRef.current + 1;
+        const currentCount = applyData(dataResult.data, 'current');
+        const metaState = metaToState(meta, checkedAt, dataResult);
         const metaCurrentCount = readMetaCount(meta?.files?.current);
         const metaHistoryCount = readMetaCount(meta?.files?.history);
         const finishedCount = meta?.byStatus?.FINISHED;
@@ -347,7 +396,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             error: formatError(error),
             lastCheckedAt: checkedAt,
             refreshIntervalSeconds: CURRENT_REFRESH_MS / 1000,
-            backendRefreshMinutes: 5
+            backendRefreshMinutes: 5,
+            dataChannel: 'mock',
+            apiFailureCount: apiFailureCountRef.current
           });
           // 降级使用静态 mock 引擎数据
           console.log('Using static fallback matchesPool data.');
@@ -364,15 +415,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const loadHistory = async () => {
       try {
-        const historyData = await fetchFirstAvailable<unknown>(dataUrls('/matches/history', ['./data/matches-history.json']));
-        const historyCount = applyData(historyData, 'history');
+        const historyData = await fetchFirstAvailable<unknown>(
+          dataUrls('/matches/history', ['./data/matches-history.json'], {
+            preferStatic: historyPreferStaticRef.current
+          })
+        );
+        const historyCount = applyData(historyData.data, 'history');
         if (cancelled) return;
         setDataSync((current) => ({
           ...current,
           historyLoaded: historyCount > 0,
           historyLoading: false,
           historyCount,
-          totalCount: current.currentCount + historyCount
+          totalCount: current.currentCount + historyCount,
+          dataChannel: current.dataChannel || historyData.channel,
+          lastDataUrl: current.lastDataUrl || historyData.url
         }));
       } catch (error: unknown) {
         console.warn('History data is unavailable; current matches remain usable.', error);
@@ -386,12 +443,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     };
 
-    const dataUrls = (endpoint: string, staticUrls: string[]) => {
-      if (apiDisabledRef.current) return staticUrls;
+    const dataUrls = (
+      endpoint: string,
+      staticUrls: string[],
+      options: { preferStatic?: boolean } = {}
+    ): DataCandidate[] => {
+      const staticCandidates = staticUrls.map((url) => ({ url, channel: 'static' as const }));
+      if (apiDisabledRef.current || !preferApiRef.current) return staticCandidates;
 
       const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
       const apiBase = apiBaseRef.current || '/api';
-      return [`${apiBase}${normalizedEndpoint}`, ...staticUrls];
+      const apiCandidate = { url: `${apiBase}${normalizedEndpoint}`, channel: 'api' as const };
+      return options.preferStatic ? [...staticCandidates, apiCandidate] : [apiCandidate, ...staticCandidates];
     };
 
     void loadRuntimeConfig().finally(() => loadCurrent(true)).then(() => {

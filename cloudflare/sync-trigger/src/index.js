@@ -1,5 +1,7 @@
 const DEFAULT_RECENT_RUN_SECONDS = 240;
 const DEFAULT_PUBLIC_DATA_CACHE_SECONDS = 20;
+const DEFAULT_CURRENT_DATA_CACHE_SECONDS = 5;
+const DEFAULT_HISTORY_DATA_CACHE_SECONDS = 180;
 const DEFAULT_STALE_DATA_SECONDS = 360;
 
 const corsHeaders = {
@@ -24,6 +26,8 @@ const readConfig = (env) => ({
   ref: env.GITHUB_REF || "main",
   recentRunSeconds: Number(env.MIN_SECONDS_BETWEEN_DISPATCHES || DEFAULT_RECENT_RUN_SECONDS),
   publicDataCacheSeconds: Number(env.PUBLIC_DATA_CACHE_SECONDS || DEFAULT_PUBLIC_DATA_CACHE_SECONDS),
+  currentDataCacheSeconds: Number(env.CURRENT_DATA_CACHE_SECONDS || DEFAULT_CURRENT_DATA_CACHE_SECONDS),
+  historyDataCacheSeconds: Number(env.HISTORY_DATA_CACHE_SECONDS || DEFAULT_HISTORY_DATA_CACHE_SECONDS),
   staleDataSeconds: Number(env.STALE_DATA_SECONDS || DEFAULT_STALE_DATA_SECONDS)
 });
 
@@ -138,21 +142,35 @@ const publicDataFileMap = {
   "teams/index": "public/data/team-index.json"
 };
 
-const rawGithubUrl = (config, filePath) => {
-  const cacheBucket = Math.floor(Date.now() / Math.max(5, config.publicDataCacheSeconds) / 1000);
+const getResourceCacheSeconds = (config, key) => {
+  if (key === "sync-meta" || key === "matches/current" || key === "matches/root") {
+    return Math.max(3, config.currentDataCacheSeconds);
+  }
+
+  if (key === "matches/history" || key === "odds/history" || key === "predictions/snapshots") {
+    return Math.max(30, config.historyDataCacheSeconds);
+  }
+
+  return Math.max(5, config.publicDataCacheSeconds);
+};
+
+const rawGithubUrl = (config, filePath, cacheSeconds) => {
+  const cacheBucket = Math.floor(Date.now() / Math.max(3, cacheSeconds) / 1000);
   return `https://raw.githubusercontent.com/${config.owner}/${config.repo}/${config.ref}/${filePath}?v=${cacheBucket}`;
 };
 
-const fetchPublicJson = async (env, filePath) => {
+const fetchPublicJson = async (env, filePath, key = "sync-meta") => {
   const config = readConfig(env);
-  const response = await fetch(rawGithubUrl(config, filePath), {
+  const cacheSeconds = getResourceCacheSeconds(config, key);
+  const response = await fetch(rawGithubUrl(config, filePath, cacheSeconds), {
     headers: {
       "accept": "application/json",
+      "cache-control": "no-cache",
       "user-agent": "football-predict-data-api"
     },
     cf: {
       cacheEverything: true,
-      cacheTtl: config.publicDataCacheSeconds
+      cacheTtl: cacheSeconds
     }
   });
 
@@ -240,7 +258,7 @@ const fetchPublicApi = async (env, pathname, ctx) => {
   if (!filePath) return json({ ok: false, error: "unknown api resource", key }, 404);
 
   try {
-    const payload = await fetchPublicJson(env, filePath);
+    const payload = await fetchPublicJson(env, filePath, key);
     if (key === "sync-meta") {
       const config = readConfig(env);
       let latestRun = null;
@@ -262,7 +280,8 @@ const fetchPublicApi = async (env, pathname, ctx) => {
         api: {
           ...health,
           syncTriggered,
-          source: "cloudflare-worker"
+          source: "cloudflare-worker",
+          cacheSeconds: getResourceCacheSeconds(config, key)
         }
       });
     }
@@ -275,7 +294,7 @@ const fetchPublicApi = async (env, pathname, ctx) => {
   } catch (error) {
     if (key === "matches/current") {
       try {
-        return json(await fetchPublicJson(env, publicDataFileMap["matches/root"]));
+        return json(await fetchPublicJson(env, publicDataFileMap["matches/root"], "matches/root"));
       } catch {
         // Preserve the original error below.
       }
@@ -318,6 +337,20 @@ export default {
         cron: "* * * * * guarded by MIN_SECONDS_BETWEEN_DISPATCHES",
         api: ["/api/sync-meta", "/api/matches/current", "/api/matches/history"],
         workflow: `${env.GITHUB_OWNER || "chen-1119"}/${env.GITHUB_REPO || "football-predict"}/${env.GITHUB_WORKFLOW_ID || "sync.yml"}`,
+        checkedAt: new Date().toISOString()
+      });
+    }
+
+    if (url.pathname === "/api/health") {
+      return json({
+        ok: true,
+        worker: "football-predict-sync-trigger",
+        config: {
+          minSecondsBetweenDispatches: Number(env.MIN_SECONDS_BETWEEN_DISPATCHES || DEFAULT_RECENT_RUN_SECONDS),
+          currentDataCacheSeconds: Number(env.CURRENT_DATA_CACHE_SECONDS || DEFAULT_CURRENT_DATA_CACHE_SECONDS),
+          historyDataCacheSeconds: Number(env.HISTORY_DATA_CACHE_SECONDS || DEFAULT_HISTORY_DATA_CACHE_SECONDS),
+          staleDataSeconds: Number(env.STALE_DATA_SECONDS || DEFAULT_STALE_DATA_SECONDS)
+        },
         checkedAt: new Date().toISOString()
       });
     }

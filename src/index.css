@@ -7263,3 +7263,417 @@ body {
     grid-column: auto;
   }
 }
+
+/* App shell refresh v3 */
+body {
+  background:
+    linear-gradient(90deg, hsl(var(--wc-red) / 0.7) 0 8%, hsl(var(--wc-gold) / 0.86) 8% 18%, hsl(var(--wc-emerald) / 0.8) 18% 31%, hsl(var(--wc-blue) / 0.72) 31% 44%, hsl(288 82% 60% / 0.62) 44% 56%, transparent 56%) top / 100% 3px no-repeat,
+    linear-gradient(120deg, hsl(var(--wc-emerald) / 0.12), transparent 28rem),
+    linear-gradient(250deg, hsl(var(--wc-blue) / 0.1), transparent 34rem),
+    repeating-linear-gradient(90deg, hsl(var(--wc-cream) / 0.025) 0 1px, transparent 1px 96px),
+    repeating-linear-gradient(0deg, hsl(var(--wc-cream) / 0.018) 0 1px, transparent 1px 112px),
+    linear-gradient(180deg, hsl(158 30% 7%) 0%, hsl(45 16% 7%) 46%, hsl(160 20% 6%) 100%);
+}
+
+#root {
+  position: relative;
+  overflow-x: clip;
+}
+
+#root::before {
+  content: "";
+  position: fixed;
+  inset: 3px 0 auto;
+  z-index: 0;
+  height: 310px;
+  pointer-events: none;
+  background:
+    linear-gradient(105deg, transparent 0 9%, hsl(var(--wc-emerald) / 0.1) 9.3% 9.7%, transparent 10% 100%),
+    linear-gradient(72deg, transparent 0 28%, hsl(var(--wc-gold) / 0.08) 28.2% 28.55%, transparent 29% 100%),
+    linear-gradient(180deg, hsl(var(--wc-cream) / 0.06), transparent 72%);
+  mask-image: linear-gradient(180deg, black, transparent);
+}
+
+.app-frame {
+  position: relative;
+  z-index: 1;
+}
+
+.nav-shell.container {
+  max-width: 1680px;
+}
+
+.page-main.container {
+  max-width: 1560px;
+  padding-top: clamp(1.1rem, 1.8vw, 2rem);
+}
+
+.glass-header {
+  border-bottom: 1px solid hsl(var(--wc-cream) / 0.13);
+  background:
+    linear-gradient(90deg, hsl(var(--wc-emerald) / 0.16), transparent 26%, hsl(var(--wc-blue) / 0.08) 58%, hsl(var(--wc-gold) / 0.1)),
+    rgba(10, 12, 11, 0.82);
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.34), inset 0 -1px 0 hsl(var(--wc-cream) / 0.035);
+}
+
+.nav-shell {
+  min-height: 64px;
+}
+
+.brand-button {
+  gap: 0.66rem;
+}
+
+.brand-mark {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-color: hsl(var(--wc-emerald) / 0.58);
+  background:
+    linear-gradient(135deg, hsl(var(--wc-emerald) / 0.34), hsl(var(--wc-blue) / 0.12)),
+    hsl(158 34% 10%);
+  color: hsl(var(--primary));
+  box-shadow: 0 0 28px hsl(var(--wc-emerald) / 0.16), inset 0 0 0 1px hsl(var(--wc-cream) / 0.08);
+}
+
+.brand-title {
+  font-family: var(--font-title);
+  font-size: clamp(1.05rem, 1.4vw, 1.42rem);
+  font-weight: 950;
+}
+
+.brand-subtitle {
+  margin-top: -0.2rem;
+  color: hsl(var(--text-secondary));
+  font-size: 0.74rem;
+  font-weight: 820;
+}
+
+.nav-links {
+  gap: 0.18rem;
+  padding: 0.22rem;
+  border-color: hsl(var(--wc-cream) / 0.12);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, hsl(var(--wc-cream) / 0.055), hsl(var(--bg-card) / 0.88)),
+    hsl(var(--bg-card));
+}
+
+.nav-link {
+  min-height: 38px;
+  border-radius: 7px;
+  font-size: 0.84rem;
+  font-weight: 900;
+}
+
+.nav-link.active {
+  border-color: hsl(var(--wc-emerald) / 0.5);
+  background:
+    linear-gradient(135deg, hsl(var(--wc-emerald) / 0.26), hsl(var(--wc-blue) / 0.1)),
+    hsl(156 35% 12%);
+  color: hsl(var(--primary));
+  box-shadow: 0 0 24px hsl(var(--wc-emerald) / 0.12), inset 0 -2px 0 hsl(var(--primary));
+}
+
+.nav-actions {
+  gap: 0.45rem;
+}
+
+.status-pill,
+.user-chip,
+.icon-button {
+  min-height: 38px;
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, hsl(var(--wc-cream) / 0.045), transparent),
+    hsl(var(--bg-card) / 0.86);
+}
+
+.user-chip {
+  max-width: min(220px, 18vw);
+}
+
+.card,
+.panel,
+.league-card,
+.metric-card,
+.form-summary-card,
+.probability-panel,
+.prediction-detail-card,
+.professional-framework-card,
+.review-card,
+.team-history-card,
+.h2h-card,
+.data-sync-strip,
+.date-toolbar,
+.filters-panel,
+.notice-banner {
+  border-color: hsl(var(--wc-cream) / 0.13);
+  background:
+    linear-gradient(180deg, hsl(var(--wc-cream) / 0.045), transparent 48%),
+    linear-gradient(135deg, hsl(var(--wc-emerald) / 0.055), transparent 42%, hsl(var(--wc-blue) / 0.035)),
+    hsl(var(--bg-card) / 0.9);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.24), inset 0 1px 0 hsl(var(--wc-cream) / 0.045);
+}
+
+.league-card,
+.filters-panel,
+.date-toolbar,
+.data-sync-strip {
+  overflow: hidden;
+}
+
+.league-card::before,
+.filters-panel::before,
+.date-toolbar::before,
+.data-sync-strip::before {
+  width: 3px;
+  background: linear-gradient(180deg, hsl(var(--wc-emerald)), hsl(var(--wc-gold)) 52%, hsl(var(--wc-blue)));
+}
+
+.league-header {
+  min-height: 58px;
+  border-bottom-color: hsl(var(--wc-cream) / 0.11);
+  background:
+    linear-gradient(90deg, hsl(var(--wc-emerald) / 0.16), transparent 48%, hsl(var(--wc-gold) / 0.07)),
+    hsl(42 13% 12%);
+}
+
+.league-title {
+  gap: 0.45rem;
+}
+
+.league-title strong {
+  font-size: 1.02rem;
+  letter-spacing: 0;
+}
+
+.league-count,
+.signal-summary-meta span,
+.date-chip,
+.filter-chip,
+.segment-btn,
+.sort-order-btn,
+.reset-btn {
+  border-radius: 999px;
+}
+
+.responsive-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.responsive-table th {
+  height: 54px;
+  color: hsl(var(--text-muted));
+  font-size: 0.78rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.responsive-table td {
+  border-bottom-color: hsl(var(--wc-cream) / 0.09);
+}
+
+.match-row td {
+  background: hsl(var(--bg-card) / 0.34);
+  transition: background-color 0.18s ease, border-color 0.18s ease;
+}
+
+.match-row:hover td {
+  background:
+    linear-gradient(90deg, hsl(var(--wc-emerald) / 0.08), transparent 52%),
+    hsl(var(--bg-card) / 0.62);
+}
+
+.match-row:hover td:first-child {
+  border-left-color: hsl(var(--primary));
+}
+
+.team-line {
+  min-width: 0;
+  gap: 0.58rem;
+}
+
+.team-name {
+  font-size: 0.96rem;
+  font-weight: 920;
+}
+
+.team-badge {
+  position: relative;
+  width: 31px;
+  height: 31px;
+  border-color: color-mix(in srgb, var(--team-color) 46%, hsl(var(--wc-cream)) 22%);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.28), inset 0 1px 0 hsl(var(--wc-cream) / 0.12);
+}
+
+.team-badge-flag {
+  width: 38px;
+  height: 28px;
+  border-radius: 5px;
+  background: hsl(var(--wc-cream) / 0.08);
+}
+
+.team-badge-flag img {
+  object-fit: cover;
+}
+
+.team-badge-crest {
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 50% 34%, hsl(var(--wc-cream) / 0.18), transparent 34%),
+    hsl(var(--bg-card));
+}
+
+.team-badge-crest img {
+  padding: 2px;
+}
+
+.team-badge-crest-placeholder {
+  border-radius: 999px;
+  clip-path: none;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--team-color) 78%, #0c0f0d 22%), hsl(var(--bg-card))),
+    hsl(var(--bg-card));
+}
+
+.team-badge-crest-placeholder::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border: 1px solid hsl(var(--wc-cream) / 0.16);
+  border-radius: 999px;
+}
+
+.team-badge-sm {
+  width: 25px;
+  height: 25px;
+  font-size: 0.64rem;
+}
+
+.team-badge-sm.team-badge-flag {
+  width: 34px;
+  height: 24px;
+}
+
+.team-badge-lg {
+  width: 72px;
+  height: 72px;
+  border-radius: 999px;
+  font-size: 1.42rem;
+}
+
+.team-badge-lg.team-badge-flag {
+  width: 94px;
+  height: 62px;
+  border-radius: 8px;
+}
+
+.team-badge span {
+  position: relative;
+  z-index: 1;
+  font-weight: 950;
+}
+
+@media (max-width: 1100px) {
+  .nav-shell.container,
+  .page-main.container {
+    max-width: 100%;
+  }
+
+  .glass-header {
+    position: sticky;
+  }
+
+  .nav-shell {
+    flex-direction: row;
+    flex-wrap: wrap;
+    min-height: auto;
+    padding-top: 0.7rem;
+    padding-bottom: 0.7rem;
+  }
+
+  .brand-button {
+    flex: 1 1 auto;
+  }
+
+  .nav-links {
+    order: 3;
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .nav-actions {
+    flex: 0 0 auto;
+    width: auto;
+  }
+}
+
+@media (max-width: 768px) {
+  body {
+    background:
+      linear-gradient(90deg, hsl(var(--wc-red) / 0.7), hsl(var(--wc-gold) / 0.8) 28%, hsl(var(--wc-emerald) / 0.8) 62%, hsl(var(--wc-blue) / 0.72)) top / 100% 3px no-repeat,
+      linear-gradient(180deg, hsl(158 30% 7%), hsl(42 15% 7%) 58%, hsl(var(--bg)));
+  }
+
+  #root::before {
+    height: 180px;
+  }
+
+  .glass-header {
+    position: sticky;
+  }
+
+  .nav-shell {
+    gap: 0.55rem;
+  }
+
+  .brand-mark {
+    width: 36px;
+    height: 36px;
+  }
+
+  .nav-links {
+    display: flex;
+    gap: 0.25rem;
+    padding: 0.2rem;
+    overflow-x: auto;
+  }
+
+  .nav-link {
+    min-width: max-content;
+    min-height: 36px;
+    padding: 0.42rem 0.58rem;
+    white-space: nowrap;
+  }
+
+  .nav-actions .status-pill span,
+  .nav-actions .user-chip span {
+    display: none;
+  }
+
+  .page-main.container {
+    padding-inline: 0.85rem;
+    padding-top: 0.85rem;
+  }
+
+  .responsive-table th {
+    height: auto;
+  }
+
+  .match-row td {
+    background: hsl(var(--bg-card) / 0.64);
+  }
+
+  .team-badge-lg {
+    width: 58px;
+    height: 58px;
+  }
+
+  .team-badge-lg.team-badge-flag {
+    width: 78px;
+    height: 52px;
+  }
+}
