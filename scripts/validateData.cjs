@@ -75,12 +75,13 @@ for (const match of matches) {
   const hasValidOdds = oddsValues.every((value) => Number.isFinite(value) && value > 1.01);
   const hasValidHandicapOdds = handicapOddsValues.every((value) => Number.isFinite(value) && value > 1.01);
   const isResultOnly = match.status === "FINISHED" && !hasOfficialOdds;
+  const isScheduleOnly = match.source === "sporttery" && match.status !== "FINISHED" && !hasOfficialOdds && !hasOfficialHandicapOdds;
 
-  if (!hasValidOdds && !hasValidHandicapOdds && !isResultOnly) {
+  if (!hasValidOdds && !hasValidHandicapOdds && !isResultOnly && !isScheduleOnly) {
     errors.push(`${match.id}: invalid SP values ${JSON.stringify(match.odds)}`);
   }
 
-  if (match.source === "sporttery" && !isResultOnly && !hasOfficialOdds && !hasOfficialHandicapOdds) {
+  if (match.source === "sporttery" && !isResultOnly && !isScheduleOnly && !hasOfficialOdds && !hasOfficialHandicapOdds) {
     errors.push(`${match.id}: missing official Sporttery odds source`);
   }
 
@@ -108,6 +109,18 @@ for (const match of matches) {
     }
     if (match.stats) {
       errors.push(`${match.id}: result-only match must not contain simulated model stats`);
+    }
+  }
+
+  if (isScheduleOnly) {
+    if (!String(match.sourceUrl || "").includes("webapi.sporttery.cn")) {
+      errors.push(`${match.id}: schedule-only match is missing official source URL`);
+    }
+    if ((match.predictions || []).length > 0) {
+      errors.push(`${match.id}: schedule-only match must not contain model predictions`);
+    }
+    if (match.stats) {
+      errors.push(`${match.id}: schedule-only match must not contain simulated model stats`);
     }
   }
 

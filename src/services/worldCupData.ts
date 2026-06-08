@@ -437,7 +437,7 @@ export function isWorldCupRelevantMatch(match: Match): boolean {
 }
 
 export function getWorldCupWatchMatches(matches: Match[], max = 6): Match[] {
-  const active = matches.filter((match) => match.status !== 'FINISHED');
+  const active = matches.filter((match) => match.status !== 'FINISHED' && match.status !== 'PENDING_RESULT');
   const relevant = active.filter(isWorldCupRelevantMatch);
   const source = relevant.length > 0 ? relevant : active;
 

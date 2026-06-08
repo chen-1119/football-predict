@@ -709,8 +709,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     {
       label: t('dataStatus'),
       value: language === 'zh'
-        ? `完 ${dataSync.byStatus?.FINISHED || 0} / 赛 ${dataSync.byStatus?.LIVE || 0} / 待 ${dataSync.byStatus?.SCHEDULED || 0}`
-        : `F ${dataSync.byStatus?.FINISHED || 0} / L ${dataSync.byStatus?.LIVE || 0} / S ${dataSync.byStatus?.SCHEDULED || 0}`
+        ? `完 ${dataSync.byStatus?.FINISHED || 0} / 赛 ${dataSync.byStatus?.LIVE || 0} / 待果 ${dataSync.byStatus?.PENDING_RESULT || 0} / 待 ${dataSync.byStatus?.SCHEDULED || 0}`
+        : `F ${dataSync.byStatus?.FINISHED || 0} / L ${dataSync.byStatus?.LIVE || 0} / R ${dataSync.byStatus?.PENDING_RESULT || 0} / S ${dataSync.byStatus?.SCHEDULED || 0}`
     },
     {
       label: t('dataUpdated'),
@@ -961,6 +961,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
                       const awayTeam = getTeamById(match.awayTeamId);
                       const isLive = match.status === 'LIVE';
                       const isFinished = match.status === 'FINISHED';
+                      const isPendingResult = match.status === 'PENDING_RESULT';
                       const hasScore = hasOfficialScore(match);
                       const score = hasScore ? `${match.scoreHome}:${match.scoreAway}` : '--:--';
                       const liveText = hasScore
@@ -982,7 +983,9 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
                         >
                           <td className="match-time-cell" data-label={t('statusTime')}>
                             <div className="time-stack">
-                              {isLive ? (
+                              {isPendingResult ? (
+                                <span className="badge">{t('awaitingResult')}</span>
+                              ) : isLive ? (
                                 <span className={hasScore ? 'badge badge-live' : 'badge'}>{liveText}</span>
                               ) : isFinished ? (
                                 <span className="badge">{t('finished')} {score}</span>
@@ -1010,7 +1013,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
                               </div>
                               <div className="match-signal-line">
                                 <span className={`signal-badge ${isFinished ? 'is-finished' : `is-${signal.category}`}`}>
-                                  {isFinished ? t('finished') : signal.label[language]}
+                                  {isFinished ? t('finished') : isPendingResult ? t('awaitingResult') : signal.label[language]}
                                 </span>
                                 {!isFinished && signal.riskCount > 0 && (
                                   <span className="signal-risk-count">

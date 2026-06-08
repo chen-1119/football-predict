@@ -326,6 +326,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   
   const isFinished = match.status === 'FINISHED';
   const isLive = match.status === 'LIVE';
+  const isPendingResult = match.status === 'PENDING_RESULT';
   const hasScore = hasOfficialScore(match);
   const officialScoreText = hasScore ? `${match.scoreHome} - ${match.scoreAway}` : '-- : --';
   
@@ -689,6 +690,15 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                   {hasScore
                     ? (language === 'zh' ? '已结束' : 'Finished')
                     : (language === 'zh' ? '官方赛果待更新' : 'Official result pending')}
+                </span>
+              </div>
+            ) : isPendingResult ? (
+              <div>
+                <div style={{ fontSize: '2.25rem', fontWeight: '800', color: 'hsl(var(--text-secondary))', fontFamily: 'var(--font-title)' }}>
+                  VS
+                </div>
+                <span className="badge" style={{ backgroundColor: 'hsl(var(--border))', color: 'hsl(var(--text-secondary))' }}>
+                  {language === 'zh' ? '等待官方赛果' : 'Awaiting official result'}
                 </span>
               </div>
             ) : isLive ? (

@@ -12,8 +12,13 @@ const WINDOW_FORWARD_DAYS = Math.max(1, Number(process.env.MATCH_WINDOW_FORWARD_
 const ODDS_HISTORY_RETENTION_DAYS = Math.max(1, Number(process.env.ODDS_HISTORY_RETENTION_DAYS || 365));
 const ODDS_HISTORY_BUCKET_MINUTES = Math.max(1, Number(process.env.ODDS_HISTORY_BUCKET_MINUTES || 5));
 const PAGE_POLL_SECONDS = Math.max(15, Number(process.env.PAGE_POLL_SECONDS || 30));
-const ANALYST_PROMPT_VERSION = "professional-football-analyst-v15";
+const ANALYST_PROMPT_VERSION = "professional-football-analyst-v16";
 const PREDICTION_POLICY_VERSION = "sporttery-day-dynamic-calibration-v24";
+const ANALYST_RUNTIME = Object.freeze({
+  model: "5.5",
+  reasoningEffort: "high",
+  promptDocument: "docs/professional-analysis-prompt.md",
+});
 const FORM_LOOKBACK_MATCHES = 12;
 const PREDICTION_SNAPSHOT_RETENTION_DAYS = Math.max(30, Number(process.env.PREDICTION_SNAPSHOT_RETENTION_DAYS || 365));
 const PREDICTION_SNAPSHOT_MAX_ROWS = Math.max(500, Number(process.env.PREDICTION_SNAPSHOT_MAX_ROWS || 5000));
@@ -22,7 +27,7 @@ const METHODS = (process.env.SPORTTERY_METHODS || "concern,live,result,all")
   .map((x) => x.trim())
   .filter(Boolean);
 
-const STATUS_PRIORITY = { FINISHED: 6, LIVE: 5, SCHEDULED: 2 };
+const STATUS_PRIORITY = { FINISHED: 6, LIVE: 5, PENDING_RESULT: 4, SCHEDULED: 2 };
 const PREDICTION_DATA_POLICY = {
   zh: "赛前分析综合官方 HAD/HHAD SP、SP 走势、Elo 强度、近一年攻防样本、赛程密度、比分分布与公开赛前信息层；伤停、首发、天气、裁判、xG/xGA 与外部赔率会按可验证程度进入辅助判断。",
   en: "Pre-match reads combine official HAD/HHAD SP, SP movement, Elo strength, last-year form, schedule density, score distribution, and public pre-match signal layers. Injuries, lineups, weather, referees, xG/xGA, and external odds are folded in as verified auxiliary inputs.",
@@ -31,6 +36,99 @@ const PREDICTION_MODEL_BASIS = {
   zh: "模型按竞彩日归档、按官方开赛时间排序；综合官方 SP/让球 SP/赔率快照、Elo、近一年赛果攻防、赛程密度、Poisson 比分分布与赛前信息层。推荐分为主推候选、价值观察、观察和避坑，低赔强队必须通过让球盘与概率双重校验。",
   en: "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model combines official SP/handicap SP/snapshots, Elo, last-year form, schedule density, Poisson score distribution, and pre-match signal layers. Picks are split into main candidates, value-watch, watch, and avoid; low-SP favourites must pass both handicap and probability checks.",
 };
+const ANALYST_OUTPUT_SECTIONS = Object.freeze([
+  { id: "baseline", zh: "一、比赛基本面分析", en: "1. Fixture baseline" },
+  { id: "recent-form", zh: "二、近期状态分析", en: "2. Recent form" },
+  { id: "home-away", zh: "三、主客场表现分析", en: "3. Home and away split" },
+  { id: "attack", zh: "四、进攻能力分析", en: "4. Attack" },
+  { id: "defense", zh: "五、防守能力分析", en: "5. Defense" },
+  { id: "lineup", zh: "六、伤停与首发阵容分析", en: "6. Injuries and starting XI" },
+  { id: "tactics", zh: "七、战术风格与克制关系分析", en: "7. Tactical matchup" },
+  { id: "schedule-motivation", zh: "八、赛程体能与战意分析", en: "8. Schedule, fitness, motivation" },
+  { id: "h2h", zh: "九、历史交锋分析", en: "9. Head to head" },
+  { id: "environment-referee", zh: "十、天气、场地与裁判因素", en: "10. Weather, pitch, referee" },
+  { id: "market", zh: "十一、赔率与盘口分析", en: "11. Odds and market" },
+  { id: "verdict", zh: "十二、综合判断与预测结论", en: "12. Verdict" },
+]);
+const PROBABILITY_FORECASTING_PRINCIPLES = Object.freeze({
+  zh: [
+    "先输出胜平负、比分分布、大小球、双方进球和让球概率，不把任务简化成只猜胜负。",
+    "官方 SP 去水概率是最低基准，Elo 强度、Poisson 比分模型、近一年攻防和赛程密度只在赛前可得时参与集成。",
+    "推荐阈值跟随 model-calibration 动态变化；低命中联赛、市场或方向自动降权并提高概率差与让球支持要求。",
+    "回测必须按时间滚动，严禁赛后 xG、赛后射门、最终排名、未公开首发或时间点不一致的临场赔率泄漏。",
+    "评估以 log loss、Brier score、校准误差和分桶可靠性为主，命中率只作为辅助观察。",
+  ],
+  en: [
+    "Output 1X2, score distribution, totals, BTTS, and handicap probabilities first instead of reducing the task to one winner.",
+    "Official de-vigged SP is the baseline; Elo, Poisson score modelling, last-year attack/defense form, and schedule density enter only when available before kickoff.",
+    "Recommendation gates follow model-calibration dynamically; cold leagues, markets, or directions are down-weighted with higher probability-gap and handicap-support requirements.",
+    "Backtests must be time-ordered and must not leak post-match xG, post-match shots, final table rank, unpublished lineups, or late odds into earlier forecast nodes.",
+    "Evaluate with log loss, Brier score, calibration error, and bucket reliability; hit rate is only a secondary diagnostic.",
+  ],
+});
+const FORECAST_TARGET_SCHEMA = Object.freeze([
+  { id: "one-x-two", zh: "胜平负：主胜、平局、客胜三项概率", en: "1X2: home, draw, away probabilities" },
+  { id: "score-distribution", zh: "比分分布：2-3 个最高概率比分", en: "Score distribution: top 2-3 scorelines" },
+  { id: "goal-lines", zh: "大小球：大/小 2.5 概率", en: "Goal line: over/under 2.5 probabilities" },
+  { id: "btts", zh: "双方进球：BTTS Yes/No 概率", en: "BTTS: yes/no probabilities" },
+  { id: "handicap", zh: "让球概率：当前官方让球线支持率", en: "Handicap: support at the current official line" },
+]);
+const MODELING_STACK = Object.freeze([
+  { id: "market-baseline", zh: "赔率基准：官方 SP 去水隐含概率", en: "Market baseline: de-vigged official SP probabilities" },
+  { id: "elo", zh: "Elo/Glicko 强度：球队动态评分、主场优势和强弱差", en: "Elo/Glicko strength: dynamic rating, home advantage, team gap" },
+  { id: "poisson", zh: "Poisson/Dixon-Coles：进球期望、比分矩阵、大小球和让球聚合", en: "Poisson/Dixon-Coles: goal expectations, score matrix, totals, handicap aggregation" },
+  { id: "ml", zh: "机器学习层：仅在基准稳定并完成时间滚动回测后加入", en: "ML layer: added only after stable baselines and time-ordered backtests" },
+  { id: "ensemble", zh: "集成层：用滚动验证集优化 market/Elo/Poisson/ML 权重", en: "Ensemble: optimize market/Elo/Poisson/ML weights on rolling validation" },
+  { id: "calibration", zh: "校准层：可靠性曲线、Platt、isotonic、联赛和赔率分桶", en: "Calibration: reliability curves, Platt, isotonic, league and odds buckets" },
+]);
+const FEATURE_PRIORITY = Object.freeze([
+  "market-implied-probability",
+  "long-term-team-strength",
+  "xg-xga-gap-when-connected",
+  "home-away-split-and-travel",
+  "injuries-and-lineup-quality",
+  "rest-days-and-schedule-density",
+  "style-matchup",
+  "motivation",
+  "weather-and-pitch",
+  "referee-tendency",
+]);
+const QUALITY_STANDARDS = Object.freeze({
+  zh: [
+    "必须输出概率，而不是只输出胜负结论。",
+    "必须按时间滚动回测，不能随机切分。",
+    "必须校准概率，并按联赛、场景和赔率区间分桶评估。",
+    "必须避免未来信息泄漏。",
+    "必须长期接近或优于简单赔率基准，否则不升格为推荐。",
+    "必须保留赛前快照，赛后只结算和复盘，不改写原方向。",
+  ],
+  en: [
+    "Output probabilities, not just a winner.",
+    "Use time-ordered rolling backtests, not random splits.",
+    "Calibrate probabilities and evaluate by league, profile, and odds bucket.",
+    "Avoid future-information leakage.",
+    "Approach or beat the simple market baseline long term before promoting recommendations.",
+    "Keep pre-match snapshots; after kickoff only settle and review, never rewrite the original direction.",
+  ],
+});
+const PREDICTION_ANALYST_FRAMEWORK = Object.freeze({
+  version: ANALYST_PROMPT_VERSION,
+  role: {
+    zh: "专业足球赛事分析师",
+    en: "Professional football analyst",
+  },
+  runtime: ANALYST_RUNTIME,
+  outputSections: ANALYST_OUTPUT_SECTIONS,
+  probabilityPrinciples: PROBABILITY_FORECASTING_PRINCIPLES,
+  forecastTargets: FORECAST_TARGET_SCHEMA,
+  modelingStack: MODELING_STACK,
+  featurePriority: FEATURE_PRIORITY,
+  qualityStandards: QUALITY_STANDARDS,
+  finalVerdict: {
+    zh: "结论必须区分稳妥方向和激进方向；胜平负与让球方向保持一致；数据不足时明确标注，不为推荐而硬推。",
+    en: "The verdict must split conservative and aggressive directions; 1X2 and handicap views must stay consistent; missing data is labelled and no pick is forced.",
+  },
+});
 function normText(value, fallback = "") {
   if (value === null || value === undefined) return fallback;
   const s = String(value).trim();
@@ -354,7 +452,8 @@ function statusFromSporttery(matchStatus, sellStatus, statusName = "", kickoffTi
   const kickoffStarted = Number.isFinite(kickoffAt) && Date.now() >= kickoffAt;
 
   if (["finished", "result", "ended", "completed"].some((status) => lower.includes(status))) return "FINISHED";
-  if (["10", "11", "12", "13"].includes(matchRaw)) return "FINISHED";
+  if (matchRaw === "10" || nameRaw.includes("待开奖") || nameRaw.includes("待赛果")) return "PENDING_RESULT";
+  if (["11", "12", "13"].includes(matchRaw)) return "FINISHED";
   if (nameRaw.includes("完成") || nameRaw.includes("完场") || nameRaw.includes("赛果")) return "FINISHED";
 
   if (["playing", "live", "inplay", "firsthalf", "secondhalf"].some((status) => lower.includes(status))) return "LIVE";
@@ -365,9 +464,10 @@ function statusFromSporttery(matchStatus, sellStatus, statusName = "", kickoffTi
 }
 
 function normalizeStatusWithScore(status, kickoffTime, scoreHome, scoreAway) {
-  if (status === "FINISHED") return status;
-  const kickoffAt = Date.parse(kickoffTime);
   const hasScore = Number.isFinite(scoreHome) && Number.isFinite(scoreAway);
+  if (status === "FINISHED") return status;
+  if (status === "PENDING_RESULT") return hasScore ? "FINISHED" : status;
+  const kickoffAt = Date.parse(kickoffTime);
   if (!Number.isFinite(kickoffAt) || !hasScore) return status;
 
   const elapsedMinutes = Math.floor((Date.now() - kickoffAt) / 60000);
@@ -2770,6 +2870,8 @@ function applyPredictionPersistence(match, existing, capturedAt) {
     updatedAt: capturedAt,
     lockedAt: started ? (existing?.predictionMeta?.lockedAt || capturedAt) : undefined,
     dataPolicy: PREDICTION_DATA_POLICY,
+    analystRuntime: ANALYST_RUNTIME,
+    analystFramework: PREDICTION_ANALYST_FRAMEWORK,
   };
 
   if (started && existingPredictions.length) {
@@ -2953,6 +3055,8 @@ function normalizePredictionMetaForPublish(meta) {
     policyVersion: rest.policyVersion || PREDICTION_POLICY_VERSION,
     promptVersion: rest.promptVersion || ANALYST_PROMPT_VERSION,
     dataPolicy: PREDICTION_DATA_POLICY,
+    analystRuntime: rest.analystRuntime || ANALYST_RUNTIME,
+    analystFramework: rest.analystFramework || PREDICTION_ANALYST_FRAMEWORK,
   };
 }
 
@@ -2966,10 +3070,17 @@ function normalizePublishedPredictionText(match) {
 }
 
 function normalizePublishedStatus(match, capturedAt) {
-  if (!match || match.status === "FINISHED" || match.status === "LIVE") return match;
+  if (!match) return match;
   const kickoffMs = Date.parse(match.kickoffTime);
   const capturedMs = Date.parse(capturedAt);
+  const hasScore = Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway);
   if (!Number.isFinite(kickoffMs) || !Number.isFinite(capturedMs)) return match;
+  const elapsedMinutes = Math.floor((capturedMs - kickoffMs) / 60000);
+  if (match.status === "FINISHED") return hasScore ? match : { ...match, status: "PENDING_RESULT" };
+  if (match.status === "LIVE") {
+    return !hasScore && elapsedMinutes >= 125 ? { ...match, status: "PENDING_RESULT" } : match;
+  }
+  if (match.status === "PENDING_RESULT") return match;
   if (capturedMs < kickoffMs) return match;
   return { ...match, status: "LIVE" };
 }
@@ -3573,7 +3684,11 @@ async function sync() {
   const rawMatchesWithOdds = rawMatches.filter((match) => sanitizeOdds(match.odds));
   const rawMatchesWithHandicapOdds = rawMatches.filter((match) => sanitizeOdds(match.handicapOdds));
   const rawResultMatches = rawMatches.filter(isOfficialResultMatch);
-  const rawMatchesForOutput = rawMatches.filter((match) => hasOfficialDisplayOdds(match) || isOfficialResultMatch(match));
+  const rawMatchesForOutput = rawMatches.filter((match) => (
+    match.status !== "FINISHED" ||
+    hasOfficialDisplayOdds(match) ||
+    isOfficialResultMatch(match)
+  ));
   const eloSnapshots = buildEloSnapshots(rawMatches);
   const formSnapshots = buildFormSnapshots(rawMatches);
   const usedFreshOdds = rawMatchesWithOdds.length > 0;

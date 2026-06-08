@@ -69,6 +69,7 @@ const formatMatchStatus = (status: string, language: Locale) => {
   const statusMap: Record<string, { zh: string; en: string }> = {
     FINISHED: { zh: '已完场', en: 'Finished' },
     LIVE: { zh: '进行中', en: 'Live' },
+    PENDING_RESULT: { zh: '待赛果', en: 'Result pending' },
     SCHEDULED: { zh: '待开赛', en: 'Scheduled' }
   };
 

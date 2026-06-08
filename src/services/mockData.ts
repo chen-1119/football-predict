@@ -364,7 +364,7 @@ export interface Match {
   leagueId: string;
   countryId: string;
   kickoffTime: string; // ISO string
-  status: 'SCHEDULED' | 'LIVE' | 'FINISHED';
+  status: 'SCHEDULED' | 'LIVE' | 'PENDING_RESULT' | 'FINISHED';
   scoreHome?: number;
   scoreAway?: number;
   projectedScoreHome?: number;
