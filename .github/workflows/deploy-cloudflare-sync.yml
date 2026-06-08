@@ -2,14 +2,6 @@ name: Deploy Cloudflare Sync Worker
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/deploy-cloudflare-sync.yml'
-      - 'cloudflare/sync-trigger/**'
-      - 'package.json'
-      - 'package-lock.json'
 
 jobs:
   deploy-worker:
