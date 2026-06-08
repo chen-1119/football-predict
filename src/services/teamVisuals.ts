@@ -324,11 +324,11 @@ export function resolveTeamVisual(team?: Team): TeamVisual {
 
   if (isoFromName && (safeTeam.logoType === 'flag' || rawLogo.includes('flagcdn.com') || !isImageLogo(rawLogo))) {
     return {
-      logo: flagFallbackForCode(isoFromName),
+      logo: flagUrl(isoFromName),
       label,
       fallbackText: flagFallbackForCode(isoFromName),
       logoType: 'flag',
-      isImage: false
+      isImage: true
     };
   }
 
@@ -376,11 +376,11 @@ export function resolveTeamVisual(team?: Team): TeamVisual {
   const iso = resolveCountryIso(rawLogo);
   if (iso) {
     return {
-      logo: flagFallbackForCode(iso),
+      logo: flagUrl(iso),
       label,
       fallbackText: flagFallbackForCode(iso),
       logoType: 'flag',
-      isImage: false
+      isImage: true
     };
   }
 
