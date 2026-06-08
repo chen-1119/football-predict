@@ -673,9 +673,14 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
   const dataSyncSummary = dataSync.error && !dataSync.currentLoaded
     ? t('dataFallbackNote')
     : (() => {
-      const sourceAgeMinutes = getDataAgeMinutes(dataSync.sourceUpdatedAt || dataSync.updatedAt, nowMs);
-      const staleThresholdMinutes = Math.max((dataSync.backendRefreshMinutes || 5) * 4, 20);
-      const isDataStale = dataSync.currentLoaded && sourceAgeMinutes !== null && sourceAgeMinutes > staleThresholdMinutes;
+      const sourceAgeMinutes = typeof dataSync.sourceAgeSeconds === 'number'
+        ? Math.max(0, Math.floor(dataSync.sourceAgeSeconds / 60))
+        : getDataAgeMinutes(dataSync.sourceUpdatedAt || dataSync.updatedAt, nowMs);
+      const staleThresholdMinutes = Math.max((dataSync.backendRefreshMinutes || 5) * 3, 10);
+      const isDataStale = dataSync.currentLoaded && (
+        dataSync.sourceStale ||
+        (sourceAgeMinutes !== null && sourceAgeMinutes > staleThresholdMinutes)
+      );
       if (isDataStale) {
         const lastAttemptLabel = formatSyncTime(dataSync.lastAttemptAt || dataSync.lastCheckedAt, language);
         return language === 'zh'
@@ -688,9 +693,14 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
       return t('dataCurrentLoading');
     })();
 
-  const sourceAgeMinutes = getDataAgeMinutes(dataSync.sourceUpdatedAt || dataSync.updatedAt, nowMs);
-  const staleThresholdMinutes = Math.max((dataSync.backendRefreshMinutes || 5) * 4, 20);
-  const isDataStale = dataSync.currentLoaded && sourceAgeMinutes !== null && sourceAgeMinutes > staleThresholdMinutes;
+  const sourceAgeMinutes = typeof dataSync.sourceAgeSeconds === 'number'
+    ? Math.max(0, Math.floor(dataSync.sourceAgeSeconds / 60))
+    : getDataAgeMinutes(dataSync.sourceUpdatedAt || dataSync.updatedAt, nowMs);
+  const staleThresholdMinutes = Math.max((dataSync.backendRefreshMinutes || 5) * 3, 10);
+  const isDataStale = dataSync.currentLoaded && (
+    dataSync.sourceStale ||
+    (sourceAgeMinutes !== null && sourceAgeMinutes > staleThresholdMinutes)
+  );
 
   const dataSyncTone = dataSync.error || isDataStale
     ? 'is-warning'

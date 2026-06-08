@@ -30,6 +30,15 @@ type SyncMeta = {
   updatedAt?: string;
   capturedAt?: string;
   lastAttemptAt?: string;
+  api?: {
+    checkedAt?: string;
+    freshnessTime?: string | null;
+    ageSeconds?: number | null;
+    stale?: boolean;
+    staleAfterSeconds?: number;
+    syncTriggered?: boolean;
+    source?: string;
+  };
   byStatus?: Partial<Record<Match['status'], number>>;
   files?: {
     current?: number;
@@ -202,7 +211,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let cancelled = false;
 
     const metaToState = (meta: SyncMeta | null, checkedAt: string) => {
-      const sourceUpdatedAt = meta?.updatedAt || meta?.capturedAt;
+      const sourceUpdatedAt = meta?.api?.freshnessTime || meta?.lastAttemptAt || meta?.updatedAt || meta?.capturedAt;
       const configuredPollSeconds = meta?.refreshPolicy?.pagePollSeconds || CURRENT_REFRESH_MS / 1000;
       const pagePollSeconds = Math.min(30, Math.max(15, configuredPollSeconds));
       refreshMsRef.current = pagePollSeconds * 1000;
@@ -214,7 +223,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         lastAttemptAt: meta?.lastAttemptAt,
         refreshIntervalSeconds: pagePollSeconds,
         backendRefreshMinutes: meta?.refreshPolicy?.workflowMinutes || 5,
-        byStatus: meta?.byStatus
+        byStatus: meta?.byStatus,
+        sourceAgeSeconds: meta?.api?.ageSeconds,
+        sourceStale: meta?.api?.stale,
+        syncTriggered: meta?.api?.syncTriggered,
+        dataApiSource: meta?.api?.source
       };
     };
 

@@ -24,6 +24,10 @@ export interface DataSyncState {
   refreshIntervalSeconds?: number;
   backendRefreshMinutes?: number;
   byStatus?: Partial<Record<Match['status'], number>>;
+  sourceAgeSeconds?: number | null;
+  sourceStale?: boolean;
+  syncTriggered?: boolean;
+  dataApiSource?: string;
 }
 
 export interface AppContextType {

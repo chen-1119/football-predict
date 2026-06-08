@@ -1,5 +1,6 @@
 const DEFAULT_RECENT_RUN_SECONDS = 240;
 const DEFAULT_PUBLIC_DATA_CACHE_SECONDS = 20;
+const DEFAULT_STALE_DATA_SECONDS = 360;
 
 const corsHeaders = {
   "access-control-allow-origin": "*",
@@ -22,7 +23,8 @@ const readConfig = (env) => ({
   workflowId: env.GITHUB_WORKFLOW_ID || "sync.yml",
   ref: env.GITHUB_REF || "main",
   recentRunSeconds: Number(env.MIN_SECONDS_BETWEEN_DISPATCHES || DEFAULT_RECENT_RUN_SECONDS),
-  publicDataCacheSeconds: Number(env.PUBLIC_DATA_CACHE_SECONDS || DEFAULT_PUBLIC_DATA_CACHE_SECONDS)
+  publicDataCacheSeconds: Number(env.PUBLIC_DATA_CACHE_SECONDS || DEFAULT_PUBLIC_DATA_CACHE_SECONDS),
+  staleDataSeconds: Number(env.STALE_DATA_SECONDS || DEFAULT_STALE_DATA_SECONDS)
 });
 
 const githubRequest = async (env, path, init = {}) => {
@@ -162,6 +164,43 @@ const fetchPublicJson = async (env, filePath) => {
   return response.json();
 };
 
+const parseTimeMs = (value) => {
+  const parsed = Date.parse(value || "");
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const getSyncHealth = (meta, config) => {
+  const checkedAt = new Date().toISOString();
+  const freshnessTime =
+    parseTimeMs(meta?.lastAttemptAt) ??
+    parseTimeMs(meta?.updatedAt) ??
+    parseTimeMs(meta?.capturedAt);
+  const ageSeconds = freshnessTime === null
+    ? null
+    : Math.max(0, Math.floor((Date.now() - freshnessTime) / 1000));
+  const stale = ageSeconds === null || ageSeconds > config.staleDataSeconds;
+
+  return {
+    checkedAt,
+    freshnessTime: freshnessTime === null ? null : new Date(freshnessTime).toISOString(),
+    ageSeconds,
+    stale,
+    staleAfterSeconds: config.staleDataSeconds,
+    triggerGuardSeconds: config.recentRunSeconds
+  };
+};
+
+const triggerStaleSync = (env, ctx, health, source) => {
+  if (!health.stale || !ctx?.waitUntil || !env.GITHUB_TOKEN) return false;
+
+  ctx.waitUntil(
+    triggerSync(env, source).catch((error) => {
+      console.error("Stale data sync dispatch failed:", error);
+    })
+  );
+  return true;
+};
+
 const withApiMeta = (payload, filePath) => ({
   ok: true,
   file: filePath,
@@ -174,13 +213,32 @@ const resolveApiKey = (pathname) => {
   return normalized || "sync-meta";
 };
 
-const fetchPublicApi = async (env, pathname) => {
+const fetchPublicApi = async (env, pathname, ctx) => {
   const key = resolveApiKey(pathname);
   const filePath = publicDataFileMap[key];
   if (!filePath) return json({ ok: false, error: "unknown api resource", key }, 404);
 
   try {
     const payload = await fetchPublicJson(env, filePath);
+    if (key === "sync-meta") {
+      const config = readConfig(env);
+      const health = getSyncHealth(payload, config);
+      const syncTriggered = triggerStaleSync(env, ctx, health, "cloudflare-api-stale");
+      return json({
+        ...payload,
+        refreshPolicy: {
+          ...(payload?.refreshPolicy || {}),
+          workflowMinutes: Math.max(1, Math.round(config.recentRunSeconds / 60)),
+          pagePollSeconds: Math.min(30, Math.max(15, payload?.refreshPolicy?.pagePollSeconds || 30))
+        },
+        api: {
+          ...health,
+          syncTriggered,
+          source: "cloudflare-worker"
+        }
+      });
+    }
+
     const directPayloadKeys = new Set(["sync-meta", "matches/current", "matches/history", "matches/root"]);
     if (directPayloadKeys.has(key)) {
       return json(payload);
@@ -218,7 +276,7 @@ export default {
     );
   },
 
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
     if (request.method === "OPTIONS") {
@@ -237,11 +295,11 @@ export default {
     }
 
     if (url.pathname.startsWith("/api/")) {
-      return fetchPublicApi(env, url.pathname);
+      return fetchPublicApi(env, url.pathname, ctx);
     }
 
     if (publicDataFileMap[resolveApiKey(`/api${url.pathname}`)]) {
-      return fetchPublicApi(env, `/api${url.pathname}`);
+      return fetchPublicApi(env, `/api${url.pathname}`, ctx);
     }
 
     if (url.pathname === "/trigger") {
