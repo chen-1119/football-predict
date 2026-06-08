@@ -169,12 +169,30 @@ const parseTimeMs = (value) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-const getSyncHealth = (meta, config) => {
+const runFreshnessMs = (run) => (
+  parseTimeMs(run?.updated_at) ??
+  parseTimeMs(run?.run_started_at) ??
+  parseTimeMs(run?.created_at)
+);
+
+const summarizeRun = (run) => run ? {
+  id: run.id,
+  status: run.status,
+  conclusion: run.conclusion,
+  updatedAt: run.updated_at,
+  startedAt: run.run_started_at,
+  createdAt: run.created_at,
+  url: run.html_url
+} : null;
+
+const getSyncHealth = (meta, config, latestRun = null) => {
   const checkedAt = new Date().toISOString();
-  const freshnessTime =
+  const metaFreshnessTime =
     parseTimeMs(meta?.lastAttemptAt) ??
     parseTimeMs(meta?.updatedAt) ??
     parseTimeMs(meta?.capturedAt);
+  const workflowFreshnessTime = runFreshnessMs(latestRun);
+  const freshnessTime = Math.max(metaFreshnessTime || 0, workflowFreshnessTime || 0) || null;
   const ageSeconds = freshnessTime === null
     ? null
     : Math.max(0, Math.floor((Date.now() - freshnessTime) / 1000));
@@ -183,10 +201,13 @@ const getSyncHealth = (meta, config) => {
   return {
     checkedAt,
     freshnessTime: freshnessTime === null ? null : new Date(freshnessTime).toISOString(),
+    metaFreshnessTime: metaFreshnessTime === null ? null : new Date(metaFreshnessTime).toISOString(),
+    workflowFreshnessTime: workflowFreshnessTime === null ? null : new Date(workflowFreshnessTime).toISOString(),
     ageSeconds,
     stale,
     staleAfterSeconds: config.staleDataSeconds,
-    triggerGuardSeconds: config.recentRunSeconds
+    triggerGuardSeconds: config.recentRunSeconds,
+    latestWorkflowRun: summarizeRun(latestRun)
   };
 };
 
@@ -222,7 +243,14 @@ const fetchPublicApi = async (env, pathname, ctx) => {
     const payload = await fetchPublicJson(env, filePath);
     if (key === "sync-meta") {
       const config = readConfig(env);
-      const health = getSyncHealth(payload, config);
+      let latestRun = null;
+      try {
+        const runs = env.GITHUB_TOKEN ? await getRecentRuns(env, config) : [];
+        latestRun = runs[0] || null;
+      } catch (error) {
+        console.warn("Unable to read latest workflow run:", error.message || error);
+      }
+      const health = getSyncHealth(payload, config, latestRun);
       const syncTriggered = triggerStaleSync(env, ctx, health, "cloudflare-api-stale");
       return json({
         ...payload,
