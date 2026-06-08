@@ -20,6 +20,8 @@ const snapshotRetentionDays = Math.max(1, Number(process.env.SNAPSHOT_RETENTION_
 const adminToken = process.env.ADMIN_TOKEN || "";
 const allowLocalAdmin = process.env.ALLOW_LOCAL_ADMIN === "1";
 const publicApiBase = process.env.PUBLIC_DATA_API_BASE || "/api";
+const enable500Sync = process.env.ENABLE_500_SYNC !== "0";
+const requireExternalSignals = process.env.REQUIRE_EXTERNAL_SIGNALS !== "0";
 
 const apiFiles = {
   "/api/sync-meta": path.join(dataDir, "sync-meta.json"),
@@ -29,7 +31,8 @@ const apiFiles = {
   "/api/predictions/snapshots": path.join(dataDir, "prediction-snapshots.json"),
   "/api/predictions/gpt": path.join(dataDir, "gpt-predictions.json"),
   "/api/model/calibration": path.join(dataDir, "model-calibration.json"),
-  "/api/teams/index": path.join(dataDir, "team-index.json")
+  "/api/teams/index": path.join(dataDir, "team-index.json"),
+  "/api/data/external-signals": path.join(dataDir, "external-signals.json")
 };
 
 const mimeTypes = {
@@ -210,11 +213,24 @@ const runSync = async (source = "server-cron") => {
   const startedAt = nowIso();
   try {
     await appendEvent({ type: "sync_started", source });
-    await runCommand("node", ["scripts/syncData.cjs"], {
+    const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+    if (enable500Sync) {
+      await runCommand(npmCommand, ["run", "sync:500"]);
+    }
+    const syncEnv = {
       PAGE_POLL_SECONDS: process.env.PAGE_POLL_SECONDS || "20",
       SYNC_WORKFLOW_MINUTES: String(Math.max(1, Math.round(syncIntervalSeconds / 60)))
+    };
+    if (process.env.SKIP_SPORTTERY_FETCH === "1") {
+      syncEnv.SKIP_SPORTTERY_FETCH = "1";
+    }
+    await runCommand("node", ["scripts/syncData.cjs"], {
+      ...syncEnv
     });
-    await runCommand(process.platform === "win32" ? "npm.cmd" : "npm", ["run", "validate:data"]);
+    await runCommand(npmCommand, ["run", "validate:data"]);
+    await runCommand(npmCommand, ["run", "validate:sources"], {
+      REQUIRE_EXTERNAL_SIGNALS: requireExternalSignals ? "1" : "0"
+    });
     await captureCurrentSnapshot(source);
     lastSync = { ok: true, source, startedAt, finishedAt: nowIso() };
     await appendEvent({ type: "sync_completed", ...lastSync });
@@ -439,11 +455,88 @@ const fileInfo = async (filePath) => {
   }
 };
 
+const minutesSince = (iso) => {
+  const time = Date.parse(iso || "");
+  if (!Number.isFinite(time)) return Infinity;
+  return (Date.now() - time) / 60000;
+};
+
+const matchHasExternalSignal = (match) => {
+  const signals = match?.externalSignals;
+  if (!signals || typeof signals !== "object") return false;
+  return Boolean(signals.externalOdds || signals.bookmakerOdds?.had || signals.bookmakerOdds?.hhad);
+};
+
+const getSourceHealth = async () => {
+  const maxAgeMinutes = Math.max(1, Number(process.env.SOURCE_MAX_AGE_MINUTES || 20));
+  const minExternalRows = Math.max(0, Number(process.env.SOURCE_MIN_500_ROWS || 1));
+  const minExternalMapped = Math.max(0, Number(process.env.SOURCE_MIN_500_MAPPED || 1));
+  const minCurrentMatches = Math.max(0, Number(process.env.SOURCE_MIN_CURRENT_MATCHES || 1));
+  const minCurrentCoverage = Math.max(0, Math.min(1, Number(process.env.SOURCE_MIN_EXTERNAL_COVERAGE || 0.5)));
+  const external = await readJsonFile(path.join(dataDir, "external-signals.json"), null);
+  const current = await readJsonFile(path.join(dataDir, "matches-current.json"), []);
+  const externalMatches = external?.matches && typeof external.matches === "object" && !Array.isArray(external.matches)
+    ? external.matches
+    : {};
+  const source500 = external?.sources?.["500.com:jczq"] || {};
+  const externalCount = Object.keys(externalMatches).length;
+  const externalAge = minutesSince(external?.updatedAt);
+  const currentCount = Array.isArray(current) ? current.length : 0;
+  const currentWithExternal = Array.isArray(current) ? current.filter(matchHasExternalSignal).length : 0;
+  const currentCoverage = currentCount > 0 ? currentWithExternal / currentCount : 0;
+  const errors = [];
+
+  if (requireExternalSignals) {
+    if (!external) errors.push("external-signals missing");
+    if (external && externalAge > maxAgeMinutes) errors.push(`external-signals stale ${externalAge.toFixed(1)}m`);
+    if ((source500.rows || 0) < minExternalRows) errors.push(`500 rows ${source500.rows || 0} < ${minExternalRows}`);
+    if ((source500.mapped || 0) < minExternalMapped) errors.push(`500 mapped ${source500.mapped || 0} < ${minExternalMapped}`);
+    if (currentCount > 0 && currentCoverage < minCurrentCoverage) {
+      errors.push(`external coverage ${(currentCoverage * 100).toFixed(1)}% < ${(minCurrentCoverage * 100).toFixed(1)}%`);
+    }
+  }
+  if (!Array.isArray(current)) errors.push("current matches invalid");
+  if (currentCount < minCurrentMatches) errors.push(`current matches ${currentCount} < ${minCurrentMatches}`);
+
+  return {
+    ok: errors.length === 0,
+    checkedAt: nowIso(),
+    mode: {
+      enable500Sync,
+      requireExternalSignals,
+      skipSportteryFetch: process.env.SKIP_SPORTTERY_FETCH === "1",
+    },
+    thresholds: {
+      maxAgeMinutes,
+      minExternalRows,
+      minExternalMapped,
+      minCurrentMatches,
+      minCurrentCoverage,
+    },
+    externalSignals: {
+      exists: Boolean(external),
+      updatedAt: external?.updatedAt || null,
+      ageMinutes: Number.isFinite(externalAge) ? Number(externalAge.toFixed(2)) : null,
+      matchKeys: externalCount,
+      fiveHundredRows: source500.rows || 0,
+      fiveHundredMapped: source500.mapped || 0,
+      fiveHundredUrl: source500.url || null,
+    },
+    currentMatches: {
+      count: currentCount,
+      withExternalSignals: currentWithExternal,
+      externalCoverage: Number(currentCoverage.toFixed(4)),
+    },
+    errors,
+  };
+};
+
 const getHealth = async () => {
   const meta = await readJsonFile(path.join(dataDir, "sync-meta.json"), null);
   const gpt = await readGptPredictions();
+  const sources = await getSourceHealth();
   return {
-    ok: true,
+    ok: sources.ok,
     service: "football-predict-server",
     checkedAt: nowIso(),
     syncRunning,
@@ -464,6 +557,7 @@ const getHealth = async () => {
       gptPredictions: await fileInfo(path.join(dataDir, "gpt-predictions.json"))
     },
     meta,
+    sources,
     gptRows: Array.isArray(gpt.rows) ? gpt.rows.length : 0
   };
 };
@@ -486,6 +580,10 @@ const handleApi = async (req, res, url) => {
 
   if (url.pathname === "/api/health") {
     return sendJson(res, await getHealth());
+  }
+
+  if (url.pathname === "/api/data/sources") {
+    return sendJson(res, await getSourceHealth());
   }
 
   if (url.pathname === "/api/matches/current") {

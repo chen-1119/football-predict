@@ -71,6 +71,11 @@ cp deploy/light-server/env.example deploy/light-server/env
 sed -i "s|^HOST=.*|HOST=127.0.0.1|" deploy/light-server/env
 sed -i "s|^PORT=.*|PORT=8788|" deploy/light-server/env
 sed -i "s|^ENABLE_SYNC_CRON=.*|ENABLE_SYNC_CRON=1|" deploy/light-server/env
+sed -i "s|^ENABLE_500_SYNC=.*|ENABLE_500_SYNC=1|" deploy/light-server/env
+sed -i "s|^REQUIRE_EXTERNAL_SIGNALS=.*|REQUIRE_EXTERNAL_SIGNALS=1|" deploy/light-server/env
+sed -i "s|^SKIP_SPORTTERY_FETCH=.*|SKIP_SPORTTERY_FETCH=1|" deploy/light-server/env
+sed -i "s|^SOURCE_MAX_AGE_MINUTES=.*|SOURCE_MAX_AGE_MINUTES=20|" deploy/light-server/env
+sed -i "s|^SOURCE_MIN_EXTERNAL_COVERAGE=.*|SOURCE_MIN_EXTERNAL_COVERAGE=0.50|" deploy/light-server/env
 sed -i "s|^ADMIN_TOKEN=.*|ADMIN_TOKEN=$AdminToken|" deploy/light-server/env
 sed -i "s|^ALLOW_LOCAL_ADMIN=.*|ALLOW_LOCAL_ADMIN=0|" deploy/light-server/env
 "@
