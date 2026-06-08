@@ -124,6 +124,37 @@ export interface PredictionMeta {
   };
 }
 
+export interface GptPredictionRecord {
+  matchId: string;
+  generatedAt: string;
+  source?: string;
+  relay?: {
+    ok?: boolean;
+    skipped?: boolean;
+    reason?: string;
+    model?: string;
+    parsed?: {
+      summary?: string;
+      probabilities?: {
+        home?: number;
+        draw?: number;
+        away?: number;
+        over25?: number;
+        bttsYes?: number;
+      };
+      recommendation?: {
+        market?: string;
+        pick?: string;
+        confidence?: number;
+        risk?: string;
+      };
+      reasons?: string[];
+      missingData?: string[];
+      reviewPlan?: string;
+    };
+  };
+}
+
 export interface OutcomeProbability {
   home: number;
   draw: number;
@@ -394,6 +425,7 @@ export interface Match {
   handicapOddsSourceUrl?: string;
   predictions: PredictionDetail[];
   predictionMeta?: PredictionMeta;
+  gptPrediction?: GptPredictionRecord;
   probabilityModel?: MatchProbabilityModel;
   stats?: MatchStats;
   externalSignals?: ExternalMatchSignals;

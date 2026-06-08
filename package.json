@@ -9,6 +9,8 @@
     "lint": "eslint src vite.config.ts",
     "sync:data": "node scripts/syncData.cjs",
     "sync:watch": "node scripts/watchSync.cjs",
+    "server": "node server/index.cjs",
+    "server:prod": "npm run build && node server/index.cjs",
     "audit:predictions": "node scripts/auditPredictions.cjs",
     "cf:sync:deploy": "npx wrangler deploy --config cloudflare/sync-trigger/wrangler.jsonc",
     "cf:sync:dev": "npx wrangler dev --config cloudflare/sync-trigger/wrangler.jsonc --test-scheduled",

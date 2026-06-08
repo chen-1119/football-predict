@@ -397,6 +397,10 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   const predictionMetaLabel = predictionMeta?.lockedAt
     ? (language === 'zh' ? '赛前预测已锁定' : 'Pre-match pick locked')
     : (language === 'zh' ? '赛前预测监控中' : 'Pre-match pick monitoring');
+  const gptPrediction = match.gptPrediction;
+  const gptParsed = gptPrediction?.relay?.parsed;
+  const gptRecommendation = gptParsed?.recommendation;
+  const gptProbabilities = gptParsed?.probabilities;
   const probabilityModel = match.probabilityModel;
   const projectedScoreText = hasScore
     ? officialScoreText
@@ -405,6 +409,12 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   const formatProbabilityValue = (value: number | null | undefined) => {
     if (!Number.isFinite(value)) return '--';
     return `${Number(value).toFixed(1).replace(/\.0$/, '')}%`;
+  };
+
+  const formatGptProbability = (value: number | null | undefined) => {
+    if (!Number.isFinite(value)) return '--';
+    const normalized = Number(value) <= 1 ? Number(value) * 100 : Number(value);
+    return `${normalized.toFixed(1).replace(/\.0$/, '')}%`;
   };
 
   const outcomeLabels: { key: keyof OutcomeProbability; zh: string; en: string }[] = [
@@ -881,6 +891,84 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                   {predictionMeta.updateReason && (
                     <em>{predictionMeta.updateReason[language]}</em>
                   )}
+                </p>
+              </div>
+            )}
+
+            {gptParsed && (
+              <div className="card probability-model-card">
+                <div className="probability-model-head">
+                  <div>
+                    <span className="review-kicker">
+                      {language === 'zh' ? 'AI 增强分析' : 'AI Enhanced Read'}
+                    </span>
+                    <h3>{language === 'zh' ? '赛前文字研判' : 'Pre-Match Analyst Note'}</h3>
+                    <p>{gptParsed.summary || (language === 'zh' ? '已生成赛前分析。' : 'Pre-match analysis generated.')}</p>
+                  </div>
+                  <span>{gptPrediction?.relay?.model || 'GPT'}</span>
+                </div>
+
+                <div className="probability-model-grid">
+                  <section className="probability-panel">
+                    <h4>{language === 'zh' ? '方向' : 'Pick'}</h4>
+                    <div className="probability-pair-grid">
+                      <span>
+                        {language === 'zh' ? '市场' : 'Market'}
+                        <strong>{gptRecommendation?.market || '--'}</strong>
+                      </span>
+                      <span>
+                        {language === 'zh' ? '选择' : 'Pick'}
+                        <strong>{gptRecommendation?.pick || '--'}</strong>
+                      </span>
+                      <span>
+                        {language === 'zh' ? '置信度' : 'Confidence'}
+                        <strong>{formatGptProbability(gptRecommendation?.confidence)}</strong>
+                      </span>
+                      <span>
+                        {language === 'zh' ? '风险' : 'Risk'}
+                        <strong>{gptRecommendation?.risk || '--'}</strong>
+                      </span>
+                    </div>
+                  </section>
+
+                  <section className="probability-panel">
+                    <h4>{language === 'zh' ? '概率' : 'Probabilities'}</h4>
+                    <div className="probability-pair-grid">
+                      <span>{language === 'zh' ? '主胜' : 'Home'} <strong>{formatGptProbability(gptProbabilities?.home)}</strong></span>
+                      <span>{language === 'zh' ? '平局' : 'Draw'} <strong>{formatGptProbability(gptProbabilities?.draw)}</strong></span>
+                      <span>{language === 'zh' ? '客胜' : 'Away'} <strong>{formatGptProbability(gptProbabilities?.away)}</strong></span>
+                      <span>{language === 'zh' ? '大2.5' : 'Over 2.5'} <strong>{formatGptProbability(gptProbabilities?.over25)}</strong></span>
+                    </div>
+                  </section>
+
+                  <section className="probability-panel is-wide">
+                    <h4>{language === 'zh' ? '分析依据' : 'Reasons'}</h4>
+                    <ul className="prediction-analysis-list">
+                      {(gptParsed.reasons || []).slice(0, 6).map((reason, index) => (
+                        <li key={`gpt-reason-${index}`}>{reason}</li>
+                      ))}
+                      {(gptParsed.reasons || []).length === 0 && (
+                        <li>{language === 'zh' ? '暂无额外文字依据。' : 'No extra analyst reasons yet.'}</li>
+                      )}
+                    </ul>
+                  </section>
+
+                  {gptParsed.missingData && gptParsed.missingData.length > 0 && (
+                    <section className="probability-panel">
+                      <h4>{language === 'zh' ? '待补数据' : 'Missing Data'}</h4>
+                      <ul className="prediction-analysis-list">
+                        {gptParsed.missingData.slice(0, 5).map((item, index) => (
+                          <li key={`gpt-missing-${index}`}>{item}</li>
+                        ))}
+                      </ul>
+                    </section>
+                  )}
+                </div>
+
+                <p className="probability-calibration-note">
+                  {language === 'zh'
+                    ? `生成时间：${formatPolicyTimestamp(gptPrediction?.generatedAt, language)}。仅供赛前参考，不构成投注建议。`
+                    : `Generated at ${formatPolicyTimestamp(gptPrediction?.generatedAt, language)}. For pre-match reference only.`}
                 </p>
               </div>
             )}

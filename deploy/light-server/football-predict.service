@@ -1,0 +1,18 @@
+[Unit]
+Description=Football Predict full-stack service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/football-predict
+EnvironmentFile=/opt/football-predict/deploy/light-server/env
+ExecStart=/usr/bin/node /opt/football-predict/server/index.cjs
+Restart=always
+RestartSec=5
+User=football
+Group=football
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

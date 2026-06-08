@@ -1,73 +1,40 @@
-# React + TypeScript + Vite
+# AI Football Predict
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+足球赛事数据看板与赛前预测项目。前端使用 React + TypeScript + Vite，生产部署可以使用内置轻量 Node 服务提供静态页面、实时数据 API、定时采集、GPT 中转预测和历史快照落库。
 
-Currently, two official plugins are available:
+## Local Development
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Data Sync
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run sync:data
+npm run validate:data
 ```
+
+## Full-Stack Server
+
+```bash
+npm run build
+npm run server
+```
+
+Useful endpoints:
+
+- `GET /api/health`
+- `GET /api/matches/current`
+- `GET /api/matches/history`
+- `GET /api/odds/history`
+- `GET /api/predictions/gpt`
+- `POST /api/admin/sync?token=ADMIN_TOKEN`
+- `POST /api/admin/predict?token=ADMIN_TOKEN`
+
+The browser reads `/data/runtime-config.json` at startup. When served by `server/index.cjs`, this runtime config points the app to `/api` and enables regular polling.
+
+## Lightweight Server Deployment
+
+See [docs/light-server-deployment.md](docs/light-server-deployment.md).
