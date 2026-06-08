@@ -460,6 +460,24 @@ const fixtureAccessSkipReason = (cache, date) => {
   return "";
 };
 
+const rememberInjuryAccessError = (cache, error) => {
+  const message = error?.message || String(error);
+  if (!/do not have access|not have access|forbidden|plan/i.test(message)) return;
+  cache.apiAccess = {
+    ...(cache.apiAccess || {}),
+    injuries: {
+      updatedAt: nowIso(),
+      reason: message
+    }
+  };
+};
+
+const injuryAccessSkipReason = (cache) => {
+  const access = cache.apiAccess?.injuries;
+  if (!access || !isFresh(access.updatedAt, ACCESS_ERROR_REFRESH_MINUTES)) return "";
+  return access.reason || "API-Football injuries skipped because current plan does not allow this request.";
+};
+
 const appendError = (cache, error) => {
   cache.errors.push({
     at: nowIso(),
@@ -698,7 +716,38 @@ const buildInjuriesByFixture = (mappedMatches, response) => {
   return result;
 };
 
+const mergeApiPiece = (apiPieces, fixtureId, piece) => {
+  if (!piece || !fixtureId) return;
+  apiPieces[String(fixtureId)] = {
+    ...(apiPieces[String(fixtureId)] || {}),
+    ...piece
+  };
+};
+
+const cachedApiPieces = (signalState) => {
+  if (!signalState || typeof signalState !== "object") return null;
+  const pieces = {};
+  if (signalState.injuries) pieces.injuries = signalState.injuries;
+  if (signalState.lineups) pieces.lineups = signalState.lineups;
+  if (signalState.apiFootballOdds) pieces.apiFootballOdds = signalState.apiFootballOdds;
+  return Object.keys(pieces).length ? pieces : null;
+};
+
+const hydrateCachedApiPieces = (mappedMatches, cache, apiPieces) => {
+  for (const entry of mappedMatches) {
+    const fixtureId = String(entry.map.fixtureId);
+    const pieces = cachedApiPieces(cache.fixtureSignals[fixtureId]);
+    if (pieces) mergeApiPiece(apiPieces, fixtureId, pieces);
+  }
+};
+
 const fetchInjuries = async (mappedMatches, cache, stats, apiPieces) => {
+  const skipReason = injuryAccessSkipReason(cache);
+  if (skipReason) {
+    stats.injurySkippedByAccess = (stats.injurySkippedByAccess || 0) + 1;
+    return;
+  }
+
   const due = mappedMatches
     .filter((entry) => shouldFetchInjuries(entry.match, cache.fixtureSignals[entry.map.fixtureId]))
     .map((entry) => entry.map.fixtureId);
@@ -710,24 +759,22 @@ const fetchInjuries = async (mappedMatches, cache, stats, apiPieces) => {
       const { payload, rateLimit } = await apiGet(cache, "/injuries", { ids: ids.join("-") });
       const byFixture = buildInjuriesByFixture(mappedMatches, payload.response);
       for (const fixtureId of ids) {
+        const injuries = byFixture.get(String(fixtureId)) || null;
         cache.fixtureSignals[fixtureId] = {
           ...(cache.fixtureSignals[fixtureId] || {}),
           injuriesFetchedAt: nowIso(),
-          injuriesRows: byFixture.get(String(fixtureId)) ? (
-            (byFixture.get(String(fixtureId)).home || []).length + (byFixture.get(String(fixtureId)).away || []).length
-          ) : 0,
+          injuriesRows: injuries ? ((injuries.home || []).length + (injuries.away || []).length) : 0,
           injuriesRateLimit: rateLimit
         };
-        if (byFixture.has(String(fixtureId))) {
-          apiPieces[String(fixtureId)] = {
-            ...(apiPieces[String(fixtureId)] || {}),
-            injuries: byFixture.get(String(fixtureId))
-          };
+        if (injuries) {
+          cache.fixtureSignals[fixtureId].injuries = injuries;
+          mergeApiPiece(apiPieces, fixtureId, { injuries });
         }
       }
       stats.injuryCalls += 1;
     } catch (error) {
       appendError(cache, error);
+      rememberInjuryAccessError(cache, error);
     }
   }
 };
@@ -762,10 +809,8 @@ const fetchLineups = async (mappedMatches, cache, stats, apiPieces) => {
         lineupsRateLimit: rateLimit
       };
       if (lineups) {
-        apiPieces[fixtureId] = {
-          ...(apiPieces[fixtureId] || {}),
-          lineups
-        };
+        cache.fixtureSignals[fixtureId].lineups = lineups;
+        mergeApiPiece(apiPieces, fixtureId, { lineups });
       }
       stats.lineupCalls += 1;
     } catch (error) {
@@ -832,17 +877,16 @@ const fetchOdds = async (mappedMatches, cache, stats, apiPieces) => {
       };
       if (oneXTwo) {
         const summary = `API-FOOTBALL ${oneXTwo.bookmaker} 1X2: ${oneXTwo.odds.odds1.toFixed(2)} / ${oneXTwo.odds.oddsX.toFixed(2)} / ${oneXTwo.odds.odds2.toFixed(2)}.`;
-        apiPieces[fixtureId] = {
-          ...(apiPieces[fixtureId] || {}),
-          apiFootballOdds: {
-            source: "api-football",
-            bookmaker: oneXTwo.bookmaker,
-            bet: oneXTwo.bet,
-            updatedAt: oneXTwo.updatedAt,
-            had: oneXTwo.odds,
-            summary: multi(summary)
-          }
+        const apiFootballOdds = {
+          source: "api-football",
+          bookmaker: oneXTwo.bookmaker,
+          bet: oneXTwo.bet,
+          updatedAt: oneXTwo.updatedAt,
+          had: oneXTwo.odds,
+          summary: multi(summary)
         };
+        cache.fixtureSignals[fixtureId].apiFootballOdds = apiFootballOdds;
+        mergeApiPiece(apiPieces, fixtureId, { apiFootballOdds });
       }
       stats.oddsCalls += 1;
     } catch (error) {
@@ -851,13 +895,20 @@ const fetchOdds = async (mappedMatches, cache, stats, apiPieces) => {
   }
 };
 
+const mergeSourceName = (existingSource, nextSource) => {
+  const parts = String(existingSource || "")
+    .split("+")
+    .concat(String(nextSource || "").split("+"))
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return uniq(parts).join("+") || nextSource || existingSource || "api-football";
+};
+
 const mergeSignal = (existing, apiSignal) => {
   const next = {
     ...(existing && typeof existing === "object" ? existing : {}),
     ...apiSignal,
-    source: existing?.source && existing.source !== "api-football"
-      ? `${existing.source}+api-football`
-      : "api-football",
+    source: mergeSourceName(existing?.source, "api-football"),
     updatedAt: apiSignal.updatedAt || existing?.updatedAt || nowIso(),
     apiFootball: {
       ...(existing?.apiFootball || {}),
@@ -952,6 +1003,7 @@ const mergeExternalSignals = (matches, cache, apiPieces, stats) => {
       mappedSignals: stats.signalsMapped,
       callsThisSync: stats.callsThisSync,
       injuryCalls: stats.injuryCalls,
+      injurySkippedByAccess: stats.injurySkippedByAccess || 0,
       lineupCalls: stats.lineupCalls,
       oddsCalls: stats.oddsCalls,
       maxCallsPerSync: MAX_CALLS_PER_SYNC
@@ -997,6 +1049,7 @@ const main = async () => {
     mappedMatches: 0,
     signalsMapped: 0,
     injuryCalls: 0,
+    injurySkippedByAccess: 0,
     lineupCalls: 0,
     oddsCalls: 0,
     callsThisSync: 0,
@@ -1034,6 +1087,7 @@ const main = async () => {
     await fetchInjuries(mappedMatches, cache, stats, apiPieces);
     await fetchLineups(mappedMatches, cache, stats, apiPieces);
     await fetchOdds(mappedMatches, cache, stats, apiPieces);
+    hydrateCachedApiPieces(mappedMatches, cache, apiPieces);
     stats.callsThisSync = Math.max(0, cache.requestLedger.count - startingCalls);
 
     mergeExternalSignals(matches, cache, apiPieces, stats);
