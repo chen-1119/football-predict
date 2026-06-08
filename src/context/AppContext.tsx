@@ -42,8 +42,16 @@ type SyncMeta = {
   };
 };
 
+type RuntimeConfig = {
+  dataApiBase?: string;
+  apiBase?: string;
+  disableDataApi?: boolean;
+};
+
 const CURRENT_REFRESH_MS = 30 * 1000;
 const HISTORY_REFRESH_MS = 5 * 60 * 1000;
+const ENV_DATA_API_BASE = import.meta.env.VITE_DATA_API_BASE;
+const ENV_DISABLE_DATA_API = import.meta.env.VITE_DISABLE_DATA_API === '1';
 
 const readStoredLanguage = (): Language => {
   const savedLang = localStorage.getItem('nerdy_lang');
@@ -103,6 +111,12 @@ const fetchFirstAvailable = async <T,>(urls: string[]): Promise<T> => {
   }
 
   throw lastError;
+};
+
+const normalizeApiBase = (value: string | undefined): string | null => {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  return trimmed.replace(/\/+$/, '');
 };
 
 const readMetaCount = (value: number | undefined) => (
@@ -172,6 +186,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [matches, setMatches] = useState<Match[]>([]);
   const lastMetaRef = useRef<{ sourceUpdatedAt?: string; finishedCount?: number }>({});
   const refreshMsRef = useRef(CURRENT_REFRESH_MS);
+  const apiBaseRef = useRef<string | null>(normalizeApiBase(ENV_DATA_API_BASE));
+  const apiDisabledRef = useRef(ENV_DISABLE_DATA_API);
   const [dataSync, setDataSync] = useState<DataSyncState>({
     currentLoaded: false,
     historyLoaded: false,
@@ -204,9 +220,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const fetchSyncMeta = async (): Promise<SyncMeta | null> => {
       try {
-        return await fetchJson<SyncMeta>('./data/sync-meta.json');
+        return await fetchFirstAvailable<SyncMeta>(dataUrls('/sync-meta', ['./data/sync-meta.json']));
       } catch {
         return null;
+      }
+    };
+
+    const loadRuntimeConfig = async () => {
+      if (apiBaseRef.current || apiDisabledRef.current) return;
+
+      try {
+        const config = await fetchJson<RuntimeConfig>('./data/runtime-config.json');
+        if (config.disableDataApi) {
+          apiDisabledRef.current = true;
+          return;
+        }
+
+        apiBaseRef.current = normalizeApiBase(config.dataApiBase || config.apiBase);
+      } catch {
+        // Runtime config is optional; same-origin /api remains the first fast path.
       }
     };
 
@@ -254,7 +286,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const checkedAt = new Date().toISOString();
       try {
         const [data, meta] = await Promise.all([
-          fetchFirstAvailable<unknown>(['./data/matches-current.json', './matches.json']),
+          fetchFirstAvailable<unknown>(dataUrls('/matches/current', ['./data/matches-current.json', './matches.json'])),
           fetchSyncMeta()
         ]);
         const currentCount = applyData(data, 'current');
@@ -319,7 +351,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const loadHistory = async () => {
       try {
-        const historyData = await fetchJson<unknown>('./data/matches-history.json');
+        const historyData = await fetchFirstAvailable<unknown>(dataUrls('/matches/history', ['./data/matches-history.json']));
         const historyCount = applyData(historyData, 'history');
         if (cancelled) return;
         setDataSync((current) => ({
@@ -341,7 +373,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     };
 
-    void loadCurrent(true).then(() => {
+    const dataUrls = (endpoint: string, staticUrls: string[]) => {
+      if (apiDisabledRef.current) return staticUrls;
+
+      const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+      const apiBase = apiBaseRef.current || '/api';
+      return [`${apiBase}${normalizedEndpoint}`, ...staticUrls];
+    };
+
+    void loadRuntimeConfig().finally(() => loadCurrent(true)).then(() => {
       window.setTimeout(() => {
         void loadHistory();
       }, 250);

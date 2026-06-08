@@ -78,6 +78,8 @@ jobs:
           fi
 
       - name: Build Project
+        env:
+          VITE_DATA_API_BASE: ${{ vars.DATA_API_BASE }}
         run: npm run build
 
       - name: Deploy to GitHub Pages
