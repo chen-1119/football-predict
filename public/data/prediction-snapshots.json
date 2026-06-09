@@ -1,7 +1,7 @@
 {
   "version": 1,
   "source": "sporttery:prediction-snapshots",
-  "updatedAt": "2026-06-09T00:30:28.159Z",
+  "updatedAt": "2026-06-09T01:30:30.376Z",
   "retentionDays": 365,
   "maxRows": 5000,
   "rows": [
@@ -12185,19 +12185,87 @@
         "resultStatus": "PENDING",
         "riskCount": 3
       }
+    },
+    {
+      "capturedAt": "2026-06-09T01:30:30.376Z",
+      "firstSeenAt": "2026-06-09T01:30:30.376Z",
+      "lastSeenAt": "2026-06-09T01:30:30.376Z",
+      "seenCount": 1,
+      "phase": "final",
+      "signature": "1X2:HHAD:WATCH|BEST:HHAD:WATCH|GOALS::WATCH|--|+2.00:2.50/3.46/2.27|34/26/41",
+      "policyVersion": "sporttery-day-dynamic-calibration-v24",
+      "promptVersion": "professional-football-analyst-v16",
+      "sourceMatchId": "2040147",
+      "matchId": "sporttery_2040147",
+      "matchNo": "周一203",
+      "businessDate": "2026-06-08",
+      "kickoffTime": "2026-06-09T10:00:00+08:00",
+      "status": "SCHEDULED",
+      "leagueName": "国际赛",
+      "homeTeamName": "秘鲁",
+      "awayTeamName": "西班牙",
+      "scoreHome": null,
+      "scoreAway": null,
+      "odds": null,
+      "handicapLine": "+2.00",
+      "handicapOdds": {
+        "odds1": 2.5,
+        "oddsX": 3.46,
+        "odds2": 2.27
+      },
+      "oddsTrend": null,
+      "probabilityFinal": {
+        "home": 33.6,
+        "draw": 25.8,
+        "away": 40.6
+      },
+      "probabilityModelVersion": "market-elo-form-dynamic-calibrated-poisson-v6",
+      "best": {
+        "tipCode": "WATCH",
+        "tipLabel": {
+          "zh": "观察为主 条件未齐",
+          "en": "Watch first: conditions not aligned"
+        },
+        "odds": 0,
+        "trustScore": 28,
+        "resultStatus": "PENDING",
+        "riskCount": 4
+      },
+      "oneXTwo": {
+        "tipCode": "WATCH",
+        "tipLabel": {
+          "zh": "观察为主 让球盘不强推",
+          "en": "Watch first: no HHAD pick"
+        },
+        "odds": 0,
+        "trustScore": 34,
+        "resultStatus": "PENDING",
+        "riskCount": 4
+      },
+      "goals": {
+        "tipCode": "WATCH",
+        "tipLabel": {
+          "zh": "观察为主 进球数不强推",
+          "en": "Watch first: no total-goals pick"
+        },
+        "odds": 0,
+        "trustScore": 54,
+        "resultStatus": "PENDING",
+        "riskCount": 3
+      }
     }
   ],
   "summary": {
-    "total": 151,
+    "total": 152,
     "byPhase": {
       "review": 54,
       "mid": 9,
       "baseline": 65,
       "late": 7,
-      "final": 7,
+      "final": 8,
       "locked": 9
     },
-    "appended": 0,
+    "appended": 1,
     "updated": 0
   }
 }
