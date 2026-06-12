@@ -1,0 +1,1 @@
+var e=[`GOALS`,`GG_NG`];function t(t){return!e.includes(t)}function n(e){return(e.predictions||[]).filter(e=>t(e.marketType))}function r(e,r){if(t(r))return n(e).find(e=>e.marketType===r)}export{n,r as t};
