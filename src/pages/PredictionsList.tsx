@@ -515,7 +515,13 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
 
   const watchlistMatches = useMemo(() => {
     return baseFilteredMatches
-      .filter((match) => !isActionableRecommendation(match) && match.status === 'SCHEDULED')
+      .filter((match) => {
+        if (isActionableRecommendation(match) || match.status !== 'SCHEDULED') return false;
+        const best = getBestPrediction(match);
+        const hasReferenceLean = Boolean(best && best.tipCode !== 'WATCH');
+        const hasOneXTwoOdds = Boolean(getResolvedMatchOdds(match).had?.odds);
+        return hasReferenceLean || hasOneXTwoOdds;
+      })
       .sort((a, b) => {
         const score = (match: Match) => {
           const signal = getMatchSignal(match);
@@ -535,8 +541,12 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         if (Math.abs(scoreDiff) > 0) return scoreDiff;
         return Date.parse(a.kickoffTime) - Date.parse(b.kickoffTime);
       })
-      .slice(0, 3);
   }, [baseFilteredMatches]);
+
+  const hasQualifiedPicks = actionableMatches.length > 0;
+  const observationMatches = useMemo(() => (
+    watchlistMatches.slice(0, hasQualifiedPicks ? 3 : 6)
+  ), [hasQualifiedPicks, watchlistMatches]);
 
   const groupedMatches = useMemo(() => {
     const groups: Record<string, { league: League; country: Country; matches: Match[] }> = {};
@@ -1219,37 +1229,55 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         )}
       </section>
 
-      <section className={`recommendation-panel ${actionableMatches.length === 0 ? 'is-empty' : ''}`} aria-label={t('recommended')}>
+      <section className={`recommendation-panel ${!hasQualifiedPicks ? 'is-empty' : ''}`} aria-label={t('recommended')}>
         <div className="recommendation-panel-head">
           <div>
             <span className="panel-kicker">{formatShortDate(effectiveSelectedDate, language)}</span>
-            <strong>{language === 'zh' ? '精选推荐池' : 'Qualified Pick Pool'}</strong>
+            <strong>{hasQualifiedPicks
+              ? (language === 'zh' ? '精选推荐池' : 'Qualified Pick Pool')
+              : (language === 'zh' ? '赛前观察池' : 'Pre-match Watch Pool')}</strong>
           </div>
           <span className="recommendation-count">
-            {actionableMatches.length} {language === 'zh' ? '场达标' : 'qualified'}
+            {hasQualifiedPicks
+              ? `${actionableMatches.length} ${language === 'zh' ? '场达标' : 'qualified'}`
+              : `${observationMatches.length} ${language === 'zh' ? '场参考' : 'reference'}`}
           </span>
         </div>
 
-        {actionableMatches.length > 0 ? (
+        {hasQualifiedPicks ? (
           <div className="recommendation-grid">
             {actionableMatches.slice(0, 3).map((match) => renderRecommendationCard(match, 'pick'))}
           </div>
+        ) : observationMatches.length > 0 ? (
+          <>
+            <div className="recommendation-empty-copy is-observation">
+              <strong>{language === 'zh' ? '暂无精选，不空场' : 'No top pool, still useful'}</strong>
+              <span>
+                {language === 'zh'
+                  ? '以下只作为赛前观察，精选门槛不放宽；完整校验原因进详情页看。'
+                  : 'These are pre-match references only. The top-pool gate stays strict; full validation reasons are in the detail page.'}
+              </span>
+            </div>
+            <div className="recommendation-grid is-observation">
+              {observationMatches.map((match) => renderRecommendationCard(match, 'watch'))}
+            </div>
+          </>
         ) : (
           <div className="recommendation-empty-copy">
-            <strong>{language === 'zh' ? '本期不硬推' : 'No forced pick'}</strong>
+            <strong>{language === 'zh' ? '等待数据同步' : 'Waiting for data'}</strong>
             <span>
               {language === 'zh'
-                ? '官方胜平负 SP、概率优势或近期命中冷却未同时过线，先保留参考。'
-                : 'Official 1X2 SP, probability edge, or hit-rate cooling did not pass together.'}
+                ? '当前没有可展示的胜平负参考方向，等下一轮官方 SP 更新。'
+                : 'No displayable 1X2 reference lean yet. Wait for the next official SP update.'}
             </span>
           </div>
         )}
 
-        {watchlistMatches.length > 0 && (
+        {hasQualifiedPicks && observationMatches.length > 0 && (
           <div className="watchlist-strip">
-            <span>{language === 'zh' ? '普通参考（不进精选池）' : 'Reference picks outside top pool'}</span>
+            <span>{language === 'zh' ? '赛前观察（不进精选池）' : 'Pre-match references outside top pool'}</span>
             <div className="watchlist-row">
-              {watchlistMatches.map((match) => renderRecommendationCard(match, 'watch'))}
+              {observationMatches.map((match) => renderRecommendationCard(match, 'watch'))}
             </div>
           </div>
         )}

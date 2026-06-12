@@ -1323,6 +1323,18 @@ button.status-pill:hover {
   font-weight: 760;
 }
 
+.recommendation-empty-copy.is-observation {
+  border-style: solid;
+  border-color: hsl(var(--premium) / 0.28);
+  background:
+    linear-gradient(90deg, hsl(var(--premium) / 0.09), transparent),
+    hsl(var(--bg) / 0.5);
+}
+
+.recommendation-grid.is-observation {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .watchlist-strip {
   display: grid;
   gap: 0.46rem;
