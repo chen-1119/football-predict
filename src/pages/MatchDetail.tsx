@@ -1022,8 +1022,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     ? scoreDistributionCandidates.find((score) => getScoreOutcomeCode(score) === scoreBindingOutcomeCode)
       || (projectedScoreCandidate && getScoreOutcomeCode(projectedScoreCandidate) === scoreBindingOutcomeCode ? projectedScoreCandidate : null)
     : null;
-  const firstScoreCandidate = alignedScoreCandidate
-    || projectedScoreCandidate
+  const firstScoreCandidate = projectedScoreCandidate
+    || alignedScoreCandidate
     || scoreDistributionCandidates[0]
     || null;
   const firstScoreKey = firstScoreCandidate ? scoreCandidateKey(firstScoreCandidate) : '';
