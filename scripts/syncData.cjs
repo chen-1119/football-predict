@@ -3610,8 +3610,8 @@ function buildBestNarrative(match, context) {
     : "handicap normalized support is unavailable";
   const goalsZh = `进球侧：比分热区 ${score.home}-${score.away}，总期望 ${totalLambda.toFixed(2)}，大 2.5 约 ${pct(over25Probability)}%，双方进球约 ${pct(bttsProbability)}%。`;
   const goalsEn = `Goals: score heat zone ${score.home}-${score.away}, total xG ${totalLambda.toFixed(2)}, over 2.5 about ${pct(over25Probability)}%, BTTS about ${pct(bttsProbability)}%.`;
-  const lateRiskZh = `临场复核：${riskTextZh}。如果赛前 SP 继续降赔但让球支持不上来，仍按观察处理。`;
-  const lateRiskEn = `Late check: ${riskTextEn}. If SP shortens without handicap confirmation, keep this as watch-only.`;
+  const lateRiskZh = `临场复核：${riskTextZh}。如果赛前 SP 继续降赔但让球支持不上来，仍按参考处理。`;
+  const lateRiskEn = `Late check: ${riskTextEn}. If SP shortens without handicap confirmation, keep this as reference-only.`;
   const watchTipZh = analystSelection.isContrarian
     ? analystSelection.mode === "value-draw"
       ? `防平参考 ${tipZh}`
@@ -4006,11 +4006,11 @@ function predictionSetWithoutOfficialOdds(match) {
     trustScore,
     explanation: {
       zh: shouldPromote
-        ? `本场胜平负暂未开售，先用球队强弱、历史样本和比分分布给出赛前观察方向：${bestPick.labelZh}。该值不是官方 SP，不进入串关。`
-        : "本场胜平负暂未开售，模型差距不够厚，暂时只保留观察位，等待中国竞彩网 SP/让球 SP 更新。",
+        ? `本场胜平负暂未开售，先用球队强弱、历史样本和比分分布给出参考方向：${bestPick.labelZh}。该值不是官方 SP，不进入串关。`
+        : "本场胜平负暂未开售，模型差距不够厚，暂时只保留参考位，等待中国竞彩网 SP/让球 SP 更新。",
       en: shouldPromote
         ? `Official 1X2 is not open yet. Team strength, history, and score distribution lean to ${bestPick.labelEn}. This is not official SP and is excluded from parlays.`
-        : "Official 1X2 is not open yet and the model edge is thin, so this remains watch-only until Sporttery SP/handicap SP updates.",
+        : "Official 1X2 is not open yet and the model edge is thin, so this remains reference-only until Sporttery SP/handicap SP updates.",
     },
     analysisItems: [
       {
@@ -4313,8 +4313,8 @@ function predictionSet(match) {
       ? clamp(baseTrust - 6, 46, 72)
       : clamp(baseTrust - (oneXTwoMarketHardCooldown ? 26 : 18), 34, 62);
   const oneXTwoGateZh = anchorIsHhad
-    ? `观察理由：普通胜平负未开售，本场按独立 Poisson 让球概率给参考方向；模型优势约 ${pct(modelProbabilityGap)} 个百分点，盘口仅作校验，条件未完全闭合时不强推单一让球方向。`
-    : `观察理由：独立模型优势约 ${pct(modelProbabilityGap)} 个百分点，市场分歧约 ${pct(probabilityGap)} 个百分点，让球同向支持${oneXTwoGate.handicapSupport === null ? "不足" : `约 ${pct(oneXTwoGate.handicapSupport)}%`}；条件没有同时闭合，暂不输出单一胜平负方向。`;
+    ? `参考理由：普通胜平负未开售，本场按独立 Poisson 让球概率给参考方向；模型优势约 ${pct(modelProbabilityGap)} 个百分点，盘口仅作校验，条件未完全闭合时不强推单一让球方向。`
+    : `参考理由：独立模型优势约 ${pct(modelProbabilityGap)} 个百分点，市场分歧约 ${pct(probabilityGap)} 个百分点，让球同向支持${oneXTwoGate.handicapSupport === null ? "不足" : `约 ${pct(oneXTwoGate.handicapSupport)}%`}；条件没有同时闭合，暂不输出单一胜平负方向。`;
   const oneXTwoGateEn = anchorIsHhad
     ? `Watch reason: standard 1X2 is not open, so the reference direction comes from independent Poisson handicap probabilities. Model edge is about ${pct(modelProbabilityGap)} points; the board is only a validation layer.`
     : `Watch reason: independent model edge is about ${pct(modelProbabilityGap)} points, market disagreement about ${pct(probabilityGap)} points, same-side handicap support ${oneXTwoGate.handicapSupport === null ? "unavailable" : `about ${pct(oneXTwoGate.handicapSupport)}%`}; no single 1X2 pick is promoted.`;
@@ -4343,7 +4343,7 @@ function predictionSet(match) {
     explanation: {
       zh: oneXTwoPromote
         ? `本场先由独立模型给出${best1x2[3]}方向；${anchorLabelZh} SP 只用于校验市场分歧、价值差和风险标签，不作为预测主轴。`
-        : `${anchorLabelZh}条件未齐：低赔、平局压力、让球确认或风险标签存在不一致，只保留为赛前观察项。`,
+        : `${anchorLabelZh}条件未齐：低赔、平局压力、让球确认或风险标签存在不一致，只保留为参考推荐。`,
       en: oneXTwoPromote
         ? `This pick comes from the independent model as ${best1x2[4]}. ${anchorLabelEn} odds are used only for market disagreement, value gap, and risk tags.`
         : `Reference lean: ${modelLean.tipLabel.en}. This ${anchorIsHhad ? "HHAD" : "1X2"} market did not pass the strong recommendation gate, so the direction is shown for user judgement only.`,
@@ -5341,6 +5341,34 @@ function attachExternalSignals(matches, externalSignals) {
   });
 }
 
+function applyExternalResultSignal(match) {
+  const resultScore = fiveHundredResultScore(match?.externalSignals);
+  if (!resultScore) return match;
+
+  const hasScore = Number.isFinite(match?.scoreHome) && Number.isFinite(match?.scoreAway);
+  const currentResultSource = normText(match?.resultSource || match?.externalSignals?.fiveHundred?.result?.source);
+  if (hasScore && isOfficialResultMatch(match)) return match;
+  if (hasScore && match.status === "FINISHED" && !currentResultSource.startsWith("500.com")) return match;
+
+  const settled = {
+    ...match,
+    status: "FINISHED",
+    scoreHome: resultScore.scoreHome,
+    scoreAway: resultScore.scoreAway,
+    resultSource: resultScore.source,
+    resultUpdatedAt: resultScore.updatedAt || match?.resultUpdatedAt,
+  };
+
+  if (Array.isArray(match?.predictions) && match.predictions.length) {
+    return {
+      ...settled,
+      predictions: settlePredictionsForMatch(settled, match.predictions),
+    };
+  }
+
+  return settled;
+}
+
 function normalizeProbabilityModelForPublish(model) {
   if (!model || typeof model !== "object") return model;
   return {
@@ -5375,6 +5403,47 @@ function normalizePublishedPredictionText(match) {
     ...enriched,
     probabilityModel: normalizeProbabilityModelForPublish(enriched.probabilityModel),
     predictionMeta: normalizePredictionMetaForPublish(enriched.predictionMeta),
+  };
+}
+
+const REFERENCE_COPY_REPLACEMENTS = Object.freeze([
+  ["赛前观察项", "参考推荐"],
+  ["赛前观察方向", "参考方向"],
+  ["只保留观察位", "只保留参考位"],
+  ["保留赛前观察", "保留参考方向"],
+  ["观察理由：", "参考理由："],
+  ["观察处理", "参考处理"],
+  ["watch-only", "reference-only"],
+  ["pre-match watch", "reference-only"],
+  ["Pre-match watch", "Reference-only"],
+]);
+
+function sanitizeReferenceCopyText(text) {
+  if (typeof text !== "string") return text;
+  return REFERENCE_COPY_REPLACEMENTS.reduce(
+    (current, [from, to]) => current.split(from).join(to),
+    text
+  );
+}
+
+function sanitizeReferenceCopyValue(value) {
+  if (typeof value === "string") return sanitizeReferenceCopyText(value);
+  if (Array.isArray(value)) return value.map(sanitizeReferenceCopyValue);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [key, sanitizeReferenceCopyValue(entry)])
+  );
+}
+
+function sanitizePublishedReferenceCopy(match) {
+  if (!match || typeof match !== "object") return match;
+  return {
+    ...match,
+    predictions: Array.isArray(match.predictions)
+      ? match.predictions.map(sanitizeReferenceCopyValue)
+      : match.predictions,
+    oddsTrend: match.oddsTrend ? sanitizeReferenceCopyValue(match.oddsTrend) : match.oddsTrend,
+    predictionMeta: match.predictionMeta ? sanitizeReferenceCopyValue(match.predictionMeta) : match.predictionMeta,
   };
 }
 
@@ -5924,8 +5993,8 @@ function oddsTrendSummary(rows, direction, strongest, candidates) {
     const moveTextZh = moved.slice(0, 2).map((item) => oddsMovePhrase(item).zh).join("，");
     const moveTextEn = moved.slice(0, 2).map((item) => oddsMovePhrase(item).en).join(", ");
     return {
-      zh: `已记录 ${rows.length} 次官方 SP 快照，主要变化：${moveTextZh || "暂无单项大幅变化"}；盘面在拉扯，先按临场观察处理。`,
-      en: `${rows.length} official SP snapshots recorded. Main moves: ${moveTextEn || "no single strong move"}; the board is mixed, so keep it in late-watch mode.`,
+      zh: `已记录 ${rows.length} 次官方 SP 快照，主要变化：${moveTextZh || "暂无单项大幅变化"}；盘面在拉扯，先按参考处理。`,
+      en: `${rows.length} official SP snapshots recorded. Main moves: ${moveTextEn || "no single strong move"}; the board is mixed, so keep it as reference-only.`,
     };
   }
 
@@ -6337,7 +6406,9 @@ async function sync() {
     : { rows: loadOddsHistory(publicDir).rows.length, appended: 0, updated: 0, skipped: keptExistingReason || "no fresh official odds" };
   output = attachOddsTrends(output, publicDir);
   output = attachExternalSignals(output, externalSignals);
+  output = output.map(applyExternalResultSignal);
   output = output.map(normalizePublishedPredictionText);
+  output = output.map(sanitizePublishedReferenceCopy);
   output = output.map((match) => normalizePublishedStatus(match, capturedAt));
   const predictionSnapshotsPayload = appendPredictionSnapshots(publicDir, output, capturedAt);
   output = attachPredictionSnapshotSummary(output, predictionSnapshotsPayload, capturedAt);
@@ -6357,6 +6428,7 @@ async function sync() {
   const publishedReferenceHandicapOddsMatches = split.current.filter((match) => String(match?.handicapOddsSource || "").startsWith("500.com")).length;
   const publishedResultMatches = split.history.filter(isOfficialResultMatch).length
     || split.history.filter((match) => match.status === "FINISHED" && Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway)).length;
+  const publishedFallbackResultMatches = split.history.filter(isFallbackResultMatch).length;
   const byStatus = output.reduce((acc, match) => {
     acc[match.status] = (acc[match.status] || 0) + 1;
     return acc;
@@ -6404,7 +6476,7 @@ async function sync() {
       officialOddsMatches: rawMatchesWithOdds.length,
       officialHandicapOddsMatches: rawMatchesWithHandicapOdds.length,
       officialResultMatches: rawResultMatches.length,
-      fallbackResultMatches: rawFallbackResultMatches.length,
+      fallbackResultMatches: publishedFallbackResultMatches,
       publishableMatches: rawMatchesForOutput.length,
       fiveHundredFallbackMatches: rawFiveHundredFallbackForOutput.length,
       combinedPublishableMatches: combinedRawMatchesForOutput.length,
@@ -6439,7 +6511,7 @@ async function sync() {
         freshPublishableMatches: combinedRawMatchesForOutput.length,
         sportteryPublishableMatches: rawMatchesForOutput.length,
         fiveHundredFallbackMatches: rawFiveHundredFallbackForOutput.length,
-        fiveHundredResultMatches: rawFallbackResultMatches.length,
+        fiveHundredResultMatches: publishedFallbackResultMatches,
       },
     } : {}),
   };
@@ -6467,7 +6539,7 @@ async function sync() {
         displayHandicapOddsMatches: publishedHandicapOddsMatches,
         referenceOddsMatches: publishedReferenceOddsMatches,
         referenceHandicapOddsMatches: publishedReferenceHandicapOddsMatches,
-        fallbackResultMatches: rawFallbackResultMatches.length,
+        fallbackResultMatches: publishedFallbackResultMatches,
         officialResultMatches: publishedResultMatches,
         skippedWithoutOfficialOdds: rawMatches.length - rawMatchesWithOdds.length,
         window: { backDays: WINDOW_BACK_DAYS, forwardDays: WINDOW_FORWARD_DAYS },

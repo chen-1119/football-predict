@@ -184,7 +184,7 @@ export const momentumPoints = [28, 36, 44, 52, 61, 69, 76, 83, 78, 72, 66, 59];
 
 export const standingStatusLabels: Record<StandingStatus, EventText> = {
   qualified: zhEn('晋级观察', 'Advance watch'),
-  watch: zhEn('赛前观察', 'Pre-match watch'),
+  watch: zhEn('参考', 'Reference'),
   pressure: zhEn('压力观察', 'Pressure watch')
 };
 

@@ -752,10 +752,10 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
       summary: {
         zh: isReferenceOnly
           ? `${action.zh}：参考方向为 ${tipZh}，模型可信度 ${trustScore || '--'}%。当前不进强推池，重点跟踪官方 SP、让球盘和近期命中冷却。风险标签：${riskTextZh}。`
-          : `${action.zh}：这场暂时不写成单一主推。模型会保留赛前观察，重点跟踪官方 SP、让球盘和近期命中冷却；如果临场信号没有变，刷新页面也不会改原结论。风险标签：${riskTextZh}。`,
+          : `${action.zh}：这场暂时不写成单一主推。模型会保留参考方向，重点跟踪官方 SP、让球盘和近期命中冷却；如果临场信号没有变，刷新页面也不会改原结论。风险标签：${riskTextZh}。`,
         en: isReferenceOnly
           ? `${action.en}: reference lean is ${tipEn}, model confidence ${trustScore || '--'}%. It stays out of the strong-pick pool; track official SP, handicap confirmation, and hit-rate cooldown. Risk tags: ${riskTextEn}.`
-          : `${action.en}: the recommendation gate is not met, so no single 1X2 main lean is published. Keep this as pre-match watch and track official SP, handicap confirmation, and hit-rate cooldown. Risk tags: ${riskTextEn}.`
+          : `${action.en}: the recommendation gate is not met, so no single 1X2 main lean is published. Keep this as reference-only and track official SP, handicap confirmation, and hit-rate cooldown. Risk tags: ${riskTextEn}.`
       },
       action,
       score: insightScore,

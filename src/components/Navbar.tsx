@@ -39,7 +39,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
     worldCup: { zh: '世界杯', en: 'World Cup' },
     brand: { zh: '足球数据看板', en: 'Matchday Desk' },
     subtitle: { zh: '竞彩赛程 / SP / 盘口', en: 'Fixtures / SP / Odds' },
-    bestTips: { zh: '赛前观察', en: 'Pre-match Watch' },
+    bestTips: { zh: '今日参考', en: 'Daily References' },
     predictions: { zh: '赛事预测', en: 'Predictions' },
     generator: { zh: '投注单', en: 'Bet Slip' },
     hitAndWin: { zh: '命中挑战', en: 'Hit & Win' },
