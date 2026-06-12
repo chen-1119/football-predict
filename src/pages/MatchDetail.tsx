@@ -758,6 +758,11 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     { key: 'draw', zh: '平局', en: 'Draw' },
     { key: 'away', zh: '客胜', en: 'Away' }
   ];
+  const handicapOutcomeLabels: { key: keyof OutcomeProbability; zh: string; en: string }[] = [
+    { key: 'home', zh: '让球主胜', en: 'HHAD Home' },
+    { key: 'draw', zh: '让球平', en: 'HHAD Draw' },
+    { key: 'away', zh: '让球客胜', en: 'HHAD Away' }
+  ];
 
   const formatModelWeight = (value: number | null | undefined) => {
     if (!Number.isFinite(value)) return '--';
@@ -787,15 +792,21 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     'neutral-profile': { zh: '同类表现中性，使用常规门槛', en: 'Neutral profile: normal gates' }
   };
 
-  const renderOutcomeLine = (probabilities: OutcomeProbability | null | undefined) => {
-    return outcomeLabels
+  const renderOutcomeLine = (
+    probabilities: OutcomeProbability | null | undefined,
+    labels = outcomeLabels
+  ) => {
+    return labels
       .map((item) => `${item[language]} ${formatProbabilityValue(probabilities?.[item.key])}`)
       .join(' / ');
   };
 
-  const renderOutcomeTriplet = (probabilities: OutcomeProbability | null | undefined) => (
+  const renderOutcomeTriplet = (
+    probabilities: OutcomeProbability | null | undefined,
+    labels = outcomeLabels
+  ) => (
     <div className="probability-triplet">
-      {outcomeLabels.map((item) => {
+      {labels.map((item) => {
         const value = probabilities?.[item.key];
         const width = Number.isFinite(value) ? Math.max(4, Number(value)) : 0;
 
@@ -960,6 +971,22 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
         ? hhadPoolRow.probabilities.draw
         : hhadPoolRow.probabilities.away
     : null;
+  const primaryOutcomeKey = primaryOutcomeCode === '1'
+    ? 'home'
+    : primaryOutcomeCode === 'X'
+      ? 'draw'
+      : primaryOutcomeCode === '2'
+        ? 'away'
+        : undefined;
+  const handicapProbabilityLeader = hhadPoolRow?.probabilities
+    ? handicapOutcomeLabels
+      .map((item) => ({
+        ...item,
+        probability: hhadPoolRow.probabilities?.[item.key] ?? null
+      }))
+      .filter((item): item is typeof handicapOutcomeLabels[number] & { probability: number } => Number.isFinite(item.probability))
+      .sort((a, b) => b.probability - a.probability)[0]
+    : null;
   const handicapValidationText = hhadPoolRow?.odds
     ? supportForPrimaryOutcome !== null
       ? (language === 'zh'
@@ -967,6 +994,17 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
         : `${primaryOutcomeTitle} · line ${hhadPoolRow.handicap || '--'} · ${supportForPrimaryOutcome >= 42 ? 'supported' : 'weak support'} ${supportForPrimaryOutcome}%`)
       : `${language === 'zh' ? '让球' : 'Line'} ${hhadPoolRow.handicap || '--'} · ${hhadPoolRow.probabilities ? `${hhadPoolRow.probabilities.home}/${hhadPoolRow.probabilities.draw}/${hhadPoolRow.probabilities.away}%` : '--'}`
     : (language === 'zh' ? '暂无官方让球盘，先不作为精选验证。' : 'No official handicap pool yet, so it cannot validate a top pick.');
+  const handicapValidationNote = hhadPoolRow?.odds
+    ? handicapProbabilityLeader && primaryOutcomeKey && handicapProbabilityLeader.key !== primaryOutcomeKey
+      ? (language === 'zh'
+        ? `让球盘最高为${handicapProbabilityLeader.zh} ${handicapProbabilityLeader.probability}%，说明盘口没有同向支持胜平负主方向；这里只做验证，不改成推荐方向。`
+        : `${handicapProbabilityLeader.en} leads the handicap pool at ${handicapProbabilityLeader.probability}%. That means the line does not support the 1X2 lean, and it is validation only, not a rewritten pick.`)
+      : (language === 'zh'
+        ? '让球盘只做精选校验，不会强行改掉胜平负推荐方向。'
+        : 'Handicap is used as top-pool validation and does not forcibly rewrite the 1X2 lean.')
+    : (language === 'zh'
+      ? '暂无官方让球盘，先不作为精选验证。'
+      : 'No official handicap pool yet, so it cannot validate a top pick.');
   const transparentRiskTags = (
     primaryOutcomePrediction?.riskTags?.length
       ? primaryOutcomePrediction.riskTags
@@ -1783,11 +1821,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                 <section className="decision-transparent-panel">
                   <h4>{language === 'zh' ? '让球盘支持' : 'Handicap validation'}</h4>
                   <strong>{handicapValidationText}</strong>
-                  <p>
-                    {language === 'zh'
-                      ? '让球盘只做风控验证，不会强行改掉独立模型首方向。'
-                      : 'Handicap is used as risk validation and does not forcibly rewrite the independent model leader.'}
-                  </p>
+                  <p>{handicapValidationNote}</p>
                 </section>
 
                 <section className="decision-transparent-panel">
@@ -2172,7 +2206,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                         <div className="handicap-probability-line">
                           {language === 'zh' ? '让球' : 'Line'} <strong>{probabilityModel.handicap.line}</strong>
                         </div>
-                        {renderOutcomeTriplet(probabilityModel.handicap.market || probabilityModel.handicap.poisson)}
+                        {renderOutcomeTriplet(probabilityModel.handicap.market || probabilityModel.handicap.poisson, handicapOutcomeLabels)}
                       </>
                     ) : (
                       <p className="probability-empty">

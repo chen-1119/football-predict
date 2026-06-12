@@ -1436,15 +1436,20 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
                             {poolRows.length > 0 ? (
                               <div className="sporttery-pool-stack">
                                 <div className="sporttery-pool-head">
-                                  <span>{language === 'zh' ? '让球' : 'Line'}</span>
+                                  <span>{language === 'zh' ? '盘口' : 'Market'}</span>
                                   <span>{language === 'zh' ? '胜' : 'H'}</span>
                                   <span>{language === 'zh' ? '平' : 'D'}</span>
                                   <span>{language === 'zh' ? '负' : 'A'}</span>
                                   <span>{language === 'zh' ? '支持率' : 'Prob.'}</span>
                                 </div>
-                                {poolRows.map((row) => (
-                                  <div key={row.poolCode} className={`sporttery-pool-row ${row.odds ? '' : 'is-closed'}`}>
-                                    <span className="pool-line">{row.handicap || '--'}</span>
+                                {poolRows.map((row) => {
+                                  const rowMarketLabel = row.poolCode === 'HHAD'
+                                    ? (language === 'zh' ? `让球 ${row.handicap || '--'}` : `HHAD ${row.handicap || '--'}`)
+                                    : (language === 'zh' ? '胜平负' : '1X2');
+
+                                  return (
+                                    <div key={row.poolCode} className={`sporttery-pool-row ${row.odds ? '' : 'is-closed'}`}>
+                                      <span className="pool-line">{rowMarketLabel}</span>
                                     {row.odds ? (
                                       <>
                                         <strong>{row.odds.odds1.toFixed(2)}</strong>
@@ -1464,8 +1469,9 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
                                         <span>--</span>
                                       </>
                                     )}
-                                  </div>
-                                ))}
+                                    </div>
+                                  );
+                                })}
                               </div>
                             ) : (
                               <span className="status-note">--</span>
