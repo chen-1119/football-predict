@@ -32,18 +32,25 @@ type SignalFilter = 'recommended' | 'all' | MatchSignalCategory;
 const SORT_OPTIONS: SortBy[] = ['time', 'odds'];
 const SIGNAL_FILTERS: SignalFilter[] = ['recommended', 'all', 'steady', 'lean', 'value', 'watch', 'avoid', 'unavailable', 'finished'];
 
-const getKickoffDay = (match: Match): string => match.kickoffDate || match.kickoffTime.slice(0, 10) || match.matchDate || '';
+const getKickoffDay = (match: Match): string => (
+  match.kickoffDate || String(match.kickoffTime || '').slice(0, 10) || match.matchDate || ''
+);
 
 const getSportteryDay = (match: Match): string => match.businessDate || getKickoffDay(match) || '';
 
 const getMatchDateCandidates = (match: Match): string[] => {
-  const sportteryDay = getSportteryDay(match);
   const kickoffDay = getKickoffDay(match);
-  // Sporttery issue day is the sale/listing day; late-night matches can kick off on the next calendar day.
-  return Array.from(new Set([sportteryDay, kickoffDay].filter(Boolean)));
+  // The fixture board is grouped by actual kickoff day. Sporttery issue day is shown as metadata/archives.
+  return Array.from(new Set([kickoffDay].filter(Boolean)));
 };
 
 const matchBelongsToDate = (match: Match, date: string) => getMatchDateCandidates(match).includes(date);
+
+const compareDateKey = (a: string, b: string) => {
+  if (!a || !b) return 0;
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
+};
 
 const getBestPrediction = (match: Match) => getVisiblePrediction(match, 'BEST');
 
@@ -133,14 +140,23 @@ const formatShortDate = (date: string, language: 'zh' | 'en') => {
 };
 
 const getSportteryMeta = (match: Match, language: 'zh' | 'en') => {
+  const sportteryDay = getSportteryDay(match);
+  const kickoffDay = getKickoffDay(match);
+  const isCrossDayIssue = Boolean(sportteryDay && kickoffDay && sportteryDay !== kickoffDay);
   const labels = [
     match.matchNo,
-    match.businessDate
-      ? `${language === 'zh' ? '竞彩日' : 'Sporttery'} ${formatShortDate(match.businessDate, language)}`
+    sportteryDay
+      ? `${language === 'zh' ? '竞彩日' : 'Sporttery day'} ${formatShortDate(sportteryDay, language)}`
+      : '',
+    isCrossDayIssue && kickoffDay
+      ? `${language === 'zh' ? '开赛日' : 'Kickoff day'} ${formatShortDate(kickoffDay, language)}`
+      : '',
+    isCrossDayIssue && sportteryDay
+      ? `${language === 'zh' ? '归档' : 'Review archive'} ${formatShortDate(sportteryDay, language)}`
       : ''
   ].filter(Boolean);
 
-  return labels.join(' · ');
+  return labels.join(' / ');
 };
 
 const formatKickoffTime = (kickoffTime: string, language: 'zh' | 'en') => {
@@ -427,6 +443,23 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     }, { pick: 0, reference: 0, avoid: 0, unavailable: 0, finished: 0 });
   }, [baseFilteredMatches]);
 
+  const dateIdentityCounts = useMemo(() => {
+    return baseFilteredMatches.reduce((counts, match) => {
+      const sportteryDay = getSportteryDay(match);
+      const kickoffDay = getKickoffDay(match);
+      const sportteryVsSelected = compareDateKey(sportteryDay, effectiveSelectedDate);
+      const sportteryVsKickoff = compareDateKey(sportteryDay, kickoffDay);
+
+      counts.kickoff += 1;
+      if (sportteryVsSelected < 0) counts.previousIssue += 1;
+      else if (sportteryVsSelected === 0) counts.sameIssue += 1;
+      else if (sportteryVsSelected > 0) counts.futureIssue += 1;
+      if (sportteryVsKickoff !== 0) counts.crossDay += 1;
+
+      return counts;
+    }, { kickoff: 0, previousIssue: 0, sameIssue: 0, futureIssue: 0, crossDay: 0 });
+  }, [baseFilteredMatches, effectiveSelectedDate]);
+
   const visibleSignalFilters = useMemo(() => {
     return SIGNAL_FILTERS.filter((filter) => filter === 'recommended' || filter === 'all' || signalCounts[filter] > 0 || signalFilter === filter);
   }, [signalCounts, signalFilter]);
@@ -538,6 +571,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     const best = getBestPrediction(match);
     const leadingOutcome = getLeadingOutcome(match);
     const poolRows = getSportteryPoolRows(match, language).filter((row) => row.odds);
+    const sportteryMeta = getSportteryMeta(match, language);
     const fallbackDirectionLabel = leadingOutcome ? outcomeLabels[leadingOutcome.code][language] : '';
     const hasReferenceLean = Boolean((best && best.tipCode !== 'WATCH') || fallbackDirectionLabel);
     const isPromotedPick = mode === 'pick' && hasReferenceLean && isActionableRecommendation(match);
@@ -592,8 +626,10 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
       >
         <span className="recommendation-time">
           {formatKickoffTime(match.kickoffTime, language)}
-          {match.matchNo ? ` · ${match.matchNo}` : ''}
         </span>
+        {sportteryMeta && (
+          <span className="recommendation-issue-meta">{sportteryMeta}</span>
+        )}
         <span className="recommendation-teams">
           <span className="recommendation-team">
             <TeamBadge team={homeTeam} size="sm" />
@@ -933,6 +969,22 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         : dataSync.currentLoaded
           ? (language === 'zh' ? '竞彩源正常' : 'Source ready')
           : (language === 'zh' ? '等待同步' : 'Waiting');
+  const selectedDateIsToday = effectiveSelectedDate === todayStr;
+  const kickoffDayLabel = selectedDateIsToday
+    ? (language === 'zh' ? '今日开赛' : 'Today kickoffs')
+    : (language === 'zh' ? '本日开赛' : 'Kickoffs');
+  const previousIssueLabel = selectedDateIsToday
+    ? (language === 'zh' ? '昨日延续' : 'prior issue')
+    : (language === 'zh' ? '前期延续' : 'prior issue');
+  const sameIssueLabel = selectedDateIsToday
+    ? (language === 'zh' ? '今日竞彩' : 'today issue')
+    : (language === 'zh' ? '本日竞彩' : 'same issue');
+  const issueSplitText = language === 'zh'
+    ? `${previousIssueLabel} ${dateIdentityCounts.previousIssue} / ${sameIssueLabel} ${dateIdentityCounts.sameIssue}`
+    : `${previousIssueLabel} ${dateIdentityCounts.previousIssue} / ${sameIssueLabel} ${dateIdentityCounts.sameIssue}`;
+  const kickoffMetricNote = language === 'zh'
+    ? `${formatShortDate(effectiveSelectedDate, language)} · 按实际开赛日排序 · 跨竞彩日 ${dateIdentityCounts.crossDay}`
+    : `${formatShortDate(effectiveSelectedDate, language)} · sorted by kickoff day · cross-issue ${dateIdentityCounts.crossDay}`;
   const dashboardStatusItems = [
     {
       label: language === 'zh' ? '数据更新' : 'Updated',
@@ -943,8 +995,12 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
       value: dashboardSourceStatus
     },
     {
-      label: language === 'zh' ? '今日比赛' : 'Today',
+      label: kickoffDayLabel,
       value: `${baseFilteredMatches.length} ${t('matchUnit')}`
+    },
+    {
+      label: language === 'zh' ? '竞彩归属' : 'Issue split',
+      value: issueSplitText
     },
     {
       label: language === 'zh' ? '预测锁定' : 'Lock',
@@ -954,11 +1010,9 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
 
   const metrics = [
     {
-      label: language === 'zh' ? '今日比赛' : 'Today Matches',
+      label: kickoffDayLabel,
       value: String(baseFilteredMatches.length),
-      note: language === 'zh'
-        ? `${formatShortDate(effectiveSelectedDate, language)} · 按开赛时间排序`
-        : `${formatShortDate(effectiveSelectedDate, language)} · sorted by kickoff`,
+      note: kickoffMetricNote,
       icon: CalendarDays,
       tone: 'accent'
     },
