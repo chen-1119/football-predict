@@ -38,8 +38,9 @@ const getSportteryDay = (match: Match): string => match.businessDate || getKicko
 
 const getMatchDateCandidates = (match: Match): string[] => {
   const sportteryDay = getSportteryDay(match);
+  const kickoffDay = getKickoffDay(match);
   // Sporttery issue day is the sale/listing day; late-night matches can kick off on the next calendar day.
-  return sportteryDay ? [sportteryDay] : [];
+  return Array.from(new Set([sportteryDay, kickoffDay].filter(Boolean)));
 };
 
 const matchBelongsToDate = (match: Match, date: string) => getMatchDateCandidates(match).includes(date);

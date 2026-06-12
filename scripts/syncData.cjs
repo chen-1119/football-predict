@@ -4828,6 +4828,45 @@ function predictionContentLocked(match, capturedAt = new Date().toISOString()) {
   );
 }
 
+const LOCKED_PREDICTION_CONTENT_FIELDS = Object.freeze([
+  "probabilityModel",
+  "projectedScoreHome",
+  "projectedScoreAway",
+  "stats",
+  "gptPrediction",
+  "odds",
+  "oddsSource",
+  "oddsPoolCode",
+  "oddsSourceMethod",
+  "oddsUpdatedAt",
+  "oddsSourceUrl",
+  "handicapOdds",
+  "handicapLine",
+  "handicapOddsSource",
+  "handicapOddsPoolCode",
+  "handicapOddsSourceMethod",
+  "handicapOddsUpdatedAt",
+  "handicapOddsSourceUrl",
+  "oddsTrend",
+]);
+
+const LOCKED_PUBLISHED_IDENTITY_FIELDS = Object.freeze([
+  "id",
+  "source",
+  "sourceMethod",
+  "sourceUrl",
+  "sourceMatchId",
+]);
+
+function pickDefinedFields(source, keys) {
+  const picked = {};
+  if (!source) return picked;
+  for (const key of keys) {
+    if (source[key] !== undefined) picked[key] = source[key];
+  }
+  return picked;
+}
+
 const LOCKED_PREDICTION_UPDATE_REASON = Object.freeze({
   zh: "竞彩截止或开赛后，历史预测已冻结；后续同步只更新赛果和命中结算，不重算推荐、概率和预测比分。",
   en: "After Sporttery cutoff or kickoff, the historical forecast is frozen; later syncs only settle results and never recalculate picks, probabilities, or projected score.",
@@ -4843,35 +4882,25 @@ const MARKET_UNCHANGED_PREDICTION_UPDATE_REASON = Object.freeze({
   en: "Official SP and handicap signals did not materially change, so the pre-match direction is preserved; analysis versions may update, but the recommendation direction is not recalculated.",
 });
 
-function preserveLockedPredictionContent(next, existing) {
-  if (!existing || !predictionContentLocked(existing)) return next;
+function preserveLockedPredictionContent(next, existing, force = false) {
+  if (!existing || (!force && !predictionContentLocked(existing))) return next;
   const existingPredictions = enabledPredictions(Array.isArray(existing?.predictions) ? existing.predictions : []);
   const settledPredictions = existingPredictions.length && next?.status === "FINISHED"
     ? settlePredictionsForMatch(next, existingPredictions)
     : existingPredictions;
-  const {
-    predictions,
-    probabilityModel,
-    projectedScoreHome,
-    projectedScoreAway,
-    stats,
-    gptPrediction,
-    ...nextWithoutPredictionContent
-  } = next || {};
-  void predictions;
-  void probabilityModel;
-  void projectedScoreHome;
-  void projectedScoreAway;
-  void stats;
-  void gptPrediction;
+  const nextWithoutPredictionContent = { ...(next || {}) };
+  delete nextWithoutPredictionContent.predictions;
+  for (const key of LOCKED_PREDICTION_CONTENT_FIELDS) {
+    delete nextWithoutPredictionContent[key];
+  }
+  const identityFields = shouldPreferPublishedIdentity(existing, next)
+    ? pickDefinedFields(existing, LOCKED_PUBLISHED_IDENTITY_FIELDS)
+    : {};
   return {
     ...nextWithoutPredictionContent,
+    ...identityFields,
+    ...pickDefinedFields(existing, LOCKED_PREDICTION_CONTENT_FIELDS),
     predictions: settledPredictions,
-    ...(existing.probabilityModel ? { probabilityModel: existing.probabilityModel } : {}),
-    ...(existing.projectedScoreHome !== undefined ? { projectedScoreHome: existing.projectedScoreHome } : {}),
-    ...(existing.projectedScoreAway !== undefined ? { projectedScoreAway: existing.projectedScoreAway } : {}),
-    ...(existing.stats ? { stats: existing.stats } : {}),
-    ...(existing.gptPrediction ? { gptPrediction: existing.gptPrediction } : {}),
     predictionMeta: {
       ...(existing.predictionMeta || next.predictionMeta || {}),
       lockedAt: existing.predictionMeta?.lockedAt || next.predictionMeta?.lockedAt,
@@ -4941,13 +4970,8 @@ function applyPredictionPersistence(match, existing, capturedAt) {
   }
 
   if (locked && existingPredictions.length) {
-    return {
+    const lockedMatch = preserveLockedPredictionContent({
       ...match,
-      predictions: started ? settlePredictionsForMatch(match, existingPredictions) : existingPredictions,
-      projectedScoreHome: existing?.projectedScoreHome ?? match.projectedScoreHome,
-      projectedScoreAway: existing?.projectedScoreAway ?? match.projectedScoreAway,
-      stats: existing?.stats || match.stats,
-      probabilityModel: existing?.probabilityModel || match.probabilityModel,
       predictionMeta: {
         ...(existing?.predictionMeta || generatedMeta),
         lockedAt: existing?.predictionMeta?.lockedAt || capturedAt,
@@ -4955,6 +4979,10 @@ function applyPredictionPersistence(match, existing, capturedAt) {
         cutoffTime: existing?.predictionMeta?.cutoffTime || cutoffTime,
         updateReason: LOCKED_PREDICTION_UPDATE_REASON,
       },
+    }, existing, true);
+    return {
+      ...lockedMatch,
+      predictions: started ? settlePredictionsForMatch(match, existingPredictions) : existingPredictions,
     };
   }
 
@@ -5089,10 +5117,30 @@ function loadExistingMatches() {
   for (const file of files) {
     for (const match of readJsonArray(file)) {
       const key = normText(match?.sourceMatchId || String(match?.id || "").replace(/^sporttery_/, ""));
-      if (key && !byId.has(key)) byId.set(key, match);
+      if (!key) continue;
+      const existing = byId.get(key);
+      if (!existing || shouldPreferPublishedIdentity(match, existing)) byId.set(key, match);
     }
   }
   return Array.from(byId.values());
+}
+
+function publishedIdentityRank(match) {
+  let rank = 0;
+  if (String(match?.id || "").startsWith("sporttery_")) rank += 8;
+  if (match?.source === "sporttery") rank += 4;
+  if (hasPublishedOfficialOdds(match)) rank += 2;
+  if (match?.predictionMeta?.lockedAt || match?.predictionMeta?.snapshot?.latestSignature) rank += 1;
+  return rank;
+}
+
+function shouldPreferPublishedIdentity(candidate, existing) {
+  const candidateRank = publishedIdentityRank(candidate);
+  const existingRank = publishedIdentityRank(existing);
+  if (candidateRank !== existingRank) return candidateRank > existingRank;
+  const candidateUpdated = Date.parse(candidate?.predictionMeta?.updatedAt || candidate?.oddsUpdatedAt || candidate?.kickoffTime || "");
+  const existingUpdated = Date.parse(existing?.predictionMeta?.updatedAt || existing?.oddsUpdatedAt || existing?.kickoffTime || "");
+  return Number.isFinite(candidateUpdated) && Number.isFinite(existingUpdated) && candidateUpdated > existingUpdated;
 }
 
 function loadExistingSyncMeta(publicDir) {
@@ -5692,6 +5740,9 @@ function appendPredictionSnapshots(publicDir, matches, capturedAt) {
   let appended = 0;
   let updated = 0;
   for (const match of matches || []) {
+    if (match?.predictionMeta?.lockedAt && match?.predictionMeta?.snapshot?.latestSignature) {
+      continue;
+    }
     const row = predictionSnapshotRow(match, capturedAt);
     if (!row) continue;
     const key = `${row.sourceMatchId}|${row.phase}|${row.signature}`;
@@ -5749,6 +5800,16 @@ function attachPredictionSnapshotSummary(matches, snapshotPayload, capturedAt) {
   return (matches || []).map((match) => {
     const sourceMatchId = normText(match?.sourceMatchId || String(match?.id || "").replace(/^sporttery_/, ""));
     const rows = rowsByMatch.get(sourceMatchId) || [];
+    const lockedSnapshot = match?.predictionMeta?.snapshot;
+    if (predictionContentLocked(match, capturedAt) && lockedSnapshot?.latestSignature) {
+      return {
+        ...match,
+        predictionMeta: {
+          ...(match.predictionMeta || {}),
+          snapshot: lockedSnapshot,
+        },
+      };
+    }
     const phases = rows.reduce((acc, row) => {
       acc[row.phase] = (acc[row.phase] || 0) + 1;
       return acc;
@@ -5922,8 +5983,40 @@ function attachOddsTrends(matches, publicDir) {
   });
 }
 
-function splitMatchesForOutput(matches) {
-  const current = matches.filter((match) => match.status !== "FINISHED");
+const SHANGHAI_DATE_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  timeZone: "Asia/Shanghai",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+function shanghaiDateKey(value) {
+  const time = Date.parse(value);
+  if (!Number.isFinite(time)) return "";
+  const parts = SHANGHAI_DATE_FORMATTER.formatToParts(new Date(time))
+    .reduce((acc, part) => {
+      if (part.type !== "literal") acc[part.type] = part.value;
+      return acc;
+    }, {});
+  return parts.year && parts.month && parts.day ? `${parts.year}-${parts.month}-${parts.day}` : "";
+}
+
+function outputDateCandidates(match) {
+  return Array.from(new Set([
+    normText(match?.businessDate),
+    normText(match?.kickoffDate),
+    normText(match?.matchDate),
+    shanghaiDateKey(match?.kickoffTime),
+  ].filter(Boolean)));
+}
+
+function isSameOutputDay(match, capturedAt) {
+  const today = shanghaiDateKey(capturedAt);
+  return Boolean(today && outputDateCandidates(match).includes(today));
+}
+
+function splitMatchesForOutput(matches, capturedAt = new Date().toISOString()) {
+  const current = matches.filter((match) => match.status !== "FINISHED" || isSameOutputDay(match, capturedAt));
   const history = matches.filter((match) => match.status === "FINISHED");
   return { current, history };
 }
@@ -6248,7 +6341,7 @@ async function sync() {
   output = output.map((match) => normalizePublishedStatus(match, capturedAt));
   const predictionSnapshotsPayload = appendPredictionSnapshots(publicDir, output, capturedAt);
   output = attachPredictionSnapshotSummary(output, predictionSnapshotsPayload, capturedAt);
-  const split = splitMatchesForOutput(output);
+  const split = splitMatchesForOutput(output, capturedAt);
   const teamIndex = preserveRootTimestamps(buildTeamIndex(output), existingTeamIndex, ["updatedAt"]);
   const oddsHistoryPayload = loadOddsHistory(publicDir);
   const publishedOddsMatches = split.current.filter((match) => sanitizeOdds(match.odds)).length;
