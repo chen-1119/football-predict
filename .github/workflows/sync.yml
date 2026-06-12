@@ -95,6 +95,7 @@ jobs:
 
       - name: Build Project
         env:
+          VITE_BASE_PATH: /football-predict/
           VITE_DATA_API_BASE: ${{ vars.DATA_API_BASE }}
         run: npm run build
 

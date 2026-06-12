@@ -32,6 +32,9 @@ jobs:
         run: npm run validate:data
 
       - name: Build Project
+        env:
+          VITE_BASE_PATH: /football-predict/
+          VITE_DATA_API_BASE: ${{ vars.DATA_API_BASE }}
         run: npm run build
 
       - name: Deploy to GitHub Pages
