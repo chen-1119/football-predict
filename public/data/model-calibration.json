@@ -1,28 +1,28 @@
 {
   "version": "rolling-calibration-v1",
-  "generatedAt": "2026-06-11T21:21:11.651Z",
+  "generatedAt": "2026-06-12T00:16:17.082Z",
   "source": "settled-pre-match-predictions",
   "sample": {
-    "rows": 35,
-    "oneXTwo": 15,
+    "rows": 31,
+    "oneXTwo": 13,
     "goals": 13,
-    "best": 7,
-    "recommendationPool": 22
+    "best": 5,
+    "recommendationPool": 18
   },
   "metrics": {
-    "oneXTwoBrier": 0.699,
-    "oneXTwoLogLoss": 1.1425,
-    "oneXTwoHitRate": 0.4,
+    "oneXTwoBrier": 0.7351,
+    "oneXTwoLogLoss": 1.1931,
+    "oneXTwoHitRate": 0.308,
     "goalsHitRate": 0.385,
-    "bestHitRate": 0.429
+    "bestHitRate": 0.2
   },
   "weightsByProfile": {
     "international": {
-      "market": 0.62,
-      "elo": 0.2,
-      "poisson": 0.18,
-      "sample": 10,
-      "hitRate": 0.5
+      "market": 0.68,
+      "elo": 0.18,
+      "poisson": 0.14,
+      "sample": 8,
+      "hitRate": 0.375
     },
     "japan": {
       "market": 0.6,
@@ -41,13 +41,13 @@
   },
   "gateByProfile": {
     "international": {
-      "minProbabilityBoost": 0.04,
-      "minModelGapBoost": 0.025,
-      "minHandicapSupportBoost": 0.06,
-      "trustPenalty": 6,
-      "maxRiskTags": 2,
+      "minProbabilityBoost": 0.085,
+      "minModelGapBoost": 0.05,
+      "minHandicapSupportBoost": 0.085,
+      "trustPenalty": 13,
+      "maxRiskTags": 1,
       "goalsMinBoost": 0.07,
-      "reason": "neutral-profile+strategy:international"
+      "reason": "cold-profile+strategy:international"
     },
     "japan": {
       "minProbabilityBoost": 0.11,
@@ -70,17 +70,17 @@
   },
   "summary": {
     "total": {
-      "settled": 35,
-      "won": 14,
+      "settled": 31,
+      "won": 10,
       "lost": 21,
-      "hitRate": 0.4
+      "hitRate": 0.323
     },
     "byMarket": {
       "1X2": {
-        "settled": 15,
-        "won": 6,
+        "settled": 13,
+        "won": 4,
         "lost": 9,
-        "hitRate": 0.4
+        "hitRate": 0.308
       },
       "GOALS": {
         "settled": 13,
@@ -89,18 +89,18 @@
         "hitRate": 0.385
       },
       "BEST": {
-        "settled": 7,
-        "won": 3,
+        "settled": 5,
+        "won": 1,
         "lost": 4,
-        "hitRate": 0.429
+        "hitRate": 0.2
       }
     },
     "byProfile": {
       "international": {
-        "settled": 24,
-        "won": 10,
+        "settled": 20,
+        "won": 6,
         "lost": 14,
-        "hitRate": 0.417
+        "hitRate": 0.3
       },
       "japan": {
         "settled": 11,
@@ -111,10 +111,10 @@
     },
     "byMarketProfile": {
       "1X2:international": {
-        "settled": 10,
-        "won": 5,
+        "settled": 8,
+        "won": 3,
         "lost": 5,
-        "hitRate": 0.5
+        "hitRate": 0.375
       },
       "GOALS:international": {
         "settled": 8,
@@ -123,10 +123,10 @@
         "hitRate": 0.25
       },
       "BEST:international": {
-        "settled": 6,
-        "won": 3,
+        "settled": 4,
+        "won": 1,
         "lost": 3,
-        "hitRate": 0.5
+        "hitRate": 0.25
       },
       "1X2:japan": {
         "settled": 5,
@@ -155,30 +155,24 @@
         "hitRate": 0.4
       },
       "sp_1_71_2_05": {
-        "settled": 6,
-        "won": 2,
+        "settled": 5,
+        "won": 1,
         "lost": 4,
-        "hitRate": 0.333
+        "hitRate": 0.2
       },
       "sp_1_46_1_70": {
         "settled": 2,
         "won": 1,
         "lost": 1,
         "hitRate": 0.5
-      },
-      "sp_2_06_2_60": {
-        "settled": 1,
-        "won": 1,
-        "lost": 0,
-        "hitRate": 1
       }
     },
     "byTip": {
       "1X2:1": {
-        "settled": 13,
-        "won": 5,
+        "settled": 11,
+        "won": 3,
         "lost": 8,
-        "hitRate": 0.385
+        "hitRate": 0.273
       },
       "GOALS:3": {
         "settled": 6,
@@ -187,10 +181,10 @@
         "hitRate": 0.333
       },
       "BEST:1": {
-        "settled": 6,
-        "won": 3,
+        "settled": 4,
+        "won": 1,
         "lost": 3,
-        "hitRate": 0.5
+        "hitRate": 0.25
       },
       "GOALS:4": {
         "settled": 2,
