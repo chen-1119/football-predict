@@ -1235,12 +1235,12 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
             <span className="panel-kicker">{formatShortDate(effectiveSelectedDate, language)}</span>
             <strong>{hasQualifiedPicks
               ? (language === 'zh' ? '精选推荐池' : 'Qualified Pick Pool')
-              : (language === 'zh' ? '赛前观察池' : 'Pre-match Watch Pool')}</strong>
+              : (language === 'zh' ? '今日参考' : 'Today References')}</strong>
           </div>
           <span className="recommendation-count">
             {hasQualifiedPicks
               ? `${actionableMatches.length} ${language === 'zh' ? '场达标' : 'qualified'}`
-              : `${observationMatches.length} ${language === 'zh' ? '场参考' : 'reference'}`}
+              : `${observationMatches.length} ${language === 'zh' ? '场可看' : 'to review'}`}
           </span>
         </div>
 
@@ -1251,11 +1251,11 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         ) : observationMatches.length > 0 ? (
           <>
             <div className="recommendation-empty-copy is-observation">
-              <strong>{language === 'zh' ? '暂无精选，不空场' : 'No top pool, still useful'}</strong>
+              <strong>{language === 'zh' ? '暂无精选推荐' : 'No featured picks'}</strong>
               <span>
                 {language === 'zh'
-                  ? '以下只作为赛前观察，精选门槛不放宽；完整校验原因进详情页看。'
-                  : 'These are pre-match references only. The top-pool gate stays strict; full validation reasons are in the detail page.'}
+                  ? '已保留可参考方向；模型概率、官方 SP 与让球校验可进详情页查看。'
+                  : 'Reference leans are still shown. Open details for model probability, official SP, and handicap validation.'}
               </span>
             </div>
             <div className="recommendation-grid is-observation">
@@ -1275,7 +1275,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
 
         {hasQualifiedPicks && observationMatches.length > 0 && (
           <div className="watchlist-strip">
-            <span>{language === 'zh' ? '赛前观察（不进精选池）' : 'Pre-match references outside top pool'}</span>
+            <span>{language === 'zh' ? '其他参考方向' : 'Other reference leans'}</span>
             <div className="watchlist-row">
               {observationMatches.map((match) => renderRecommendationCard(match, 'watch'))}
             </div>
