@@ -1,6 +1,12 @@
 import type { Match, MultiLangString, PredictionDetail } from './mockData';
 import { getImpliedProbabilities } from './bettingDisplay';
 import { getLeagueById, getTeamById } from './entities';
+import {
+  KIMI_WORLD_CUP_DATASET,
+  getKimiWorldCupFixtureSeeds,
+  getKimiWorldCupTeamProfile,
+  type KimiWorldCupTeamProfile
+} from './worldCupKimiDataset';
 
 export const WORLD_CUP_OFFICIAL = {
   name: {
@@ -29,6 +35,7 @@ export interface WorldCupTeamSeed {
   isHost?: boolean;
   isDebut?: boolean;
   note: MultiLangString;
+  kimiProfile?: KimiWorldCupTeamProfile | null;
 }
 
 export interface WorldCupGroupSeed {
@@ -88,8 +95,9 @@ export interface WorldCupFixtureForecast {
 }
 
 export const WORLD_CUP_FORECAST_MODEL = {
-  version: 'worldcup-route-monte-carlo-v2',
+  version: 'worldcup-route-monte-carlo-v3-kimi-prior',
   simulations: 12000,
+  dataSignature: KIMI_WORLD_CUP_DATASET.signature,
   zh: '基准模型：FIFA 排名强度 + 东道主加成 + 新军降权 + 小组赛 12,000 次路径推演；每轮同时计算 12 个小组，第三名必须按积分、净胜球、进球数与强度排序争夺 8 个最佳第三名名额。',
   en: 'Baseline model: FIFA ranking strength + host boost + debutant adjustment + 12,000 route projections. All 12 groups are projected together, and third-placed teams compete for eight slots by points, goal difference, goals scored, and strength.'
 };
@@ -103,16 +111,29 @@ const wcTeam = (
   noteZh: string,
   noteEn: string,
   options: Pick<WorldCupTeamSeed, 'isHost' | 'isDebut'> = {}
-): WorldCupTeamSeed => ({
-  id,
-  name: { zh, en },
-  shortName: { zh, en },
-  flag,
-  fifaRank,
-  confederation: '',
-  note: { zh: noteZh, en: noteEn },
-  ...options
-});
+): WorldCupTeamSeed => {
+  const kimiProfile = getKimiWorldCupTeamProfile(id)
+    || getKimiWorldCupTeamProfile(zh)
+    || getKimiWorldCupTeamProfile(en);
+
+  return {
+    id,
+    name: {
+      zh: kimiProfile?.nameZh || zh,
+      en: kimiProfile?.nameEn || en
+    },
+    shortName: {
+      zh: kimiProfile?.nameZh || zh,
+      en: kimiProfile?.nameEn || en
+    },
+    flag,
+    fifaRank: kimiProfile?.fifaRank || fifaRank,
+    confederation: kimiProfile?.confederation || '',
+    note: { zh: noteZh, en: noteEn },
+    kimiProfile,
+    ...options
+  };
+};
 
 export const WORLD_CUP_GROUPS: WorldCupGroupSeed[] = [
   {
@@ -446,6 +467,80 @@ const seededKickoffTime = (index: number) => {
 };
 
 export function getWorldCupSeededFixtures(max = 72): Match[] {
+  const teamByKey = new Map(WORLD_CUP_GROUPS.flatMap((group) => group.teams.map((team) => [team.id, team])));
+  const kimiFixtures = getKimiWorldCupFixtureSeeds()
+    .filter((fixture) => fixture.matchNo <= 72)
+    .map<Match | null>((fixture, index) => {
+      const home = teamByKey.get(fixture.homeKey);
+      const away = teamByKey.get(fixture.awayKey);
+      if (!home || !away) return null;
+      const homeProfile = getKimiWorldCupTeamProfile(fixture.homeKey);
+      const awayProfile = getKimiWorldCupTeamProfile(fixture.awayKey);
+      const kickoffTime = fixture.kickoffTime || seededKickoffTime(index);
+
+      return {
+        id: `wc2026_kimi_${fixture.matchNo}`,
+        homeTeamId: `wc2026_${fixture.homeKey}`,
+        awayTeamId: `wc2026_${fixture.awayKey}`,
+        leagueId: 'worldcup2026',
+        countryId: 'worldcup2026',
+        kickoffTime,
+        status: 'SCHEDULED',
+        odds: null,
+        handicapOdds: null,
+        predictions: [],
+        matchDate: kickoffTime.slice(0, 10),
+        kickoffDate: kickoffTime.slice(0, 10),
+        businessDate: kickoffTime.slice(0, 10),
+        homeTeamName: homeProfile?.nameZh || home.shortName.zh,
+        homeTeamNameEn: homeProfile?.nameEn || home.shortName.en,
+        homeTeamLogo: home.flag,
+        homeTeamLogoType: 'flag',
+        awayTeamName: awayProfile?.nameZh || away.shortName.zh,
+        awayTeamNameEn: awayProfile?.nameEn || away.shortName.en,
+        awayTeamLogo: away.flag,
+        awayTeamLogoType: 'flag',
+        leagueName: '世界杯',
+        leagueNameEn: 'FIFA World Cup',
+        leagueShortName: `世界杯 Group ${fixture.group}`,
+        leagueShortNameEn: `World Cup Group ${fixture.group}`,
+        countryName: '世界杯',
+        countryNameEn: 'World Cup',
+        countryFlag: '🏆',
+        source: 'worldcup-seed',
+        sourceMethod: 'kimi-worldcup-fixture-fallback',
+        sourceMatchId: `kimi-wc2026-${fixture.matchNo}`,
+        matchNo: `WC${fixture.matchNo}`,
+        externalSignals: {
+          source: 'kimi-worldcup-dataset',
+          worldCupPrior: {
+            source: KIMI_WORLD_CUP_DATASET.version,
+            signature: KIMI_WORLD_CUP_DATASET.signature,
+            fixture: {
+              matchNo: fixture.matchNo,
+              sourceQuality: fixture.sourceQuality,
+              venue: fixture.venue,
+              city: fixture.city,
+              note: fixture.note
+            },
+            home: homeProfile,
+            away: awayProfile
+          }
+        } as Match['externalSignals'],
+        predictionMeta: {
+          policyVersion: WORLD_CUP_FORECAST_MODEL.version,
+          generatedAt: kickoffTime,
+          dataPolicy: {
+            zh: '世界杯专题赛程种子；官方竞彩 SP 开售后自动由同步数据覆盖。',
+            en: 'World Cup fixture seed; official Sporttery SP replaces it after release.'
+          }
+        }
+      };
+    })
+    .filter((match): match is Match => Boolean(match));
+
+  if (kimiFixtures.length) return kimiFixtures.slice(0, max);
+
   let index = 0;
   const fixtures: Match[] = [];
 
@@ -574,12 +669,34 @@ const round1 = (value: number) => Math.round(value * 10) / 10;
 
 const percentLabel = (value: number) => `${Math.round(value)}%`;
 
+const getKimiStrengthScore = (profile: KimiWorldCupTeamProfile | null | undefined) => {
+  if (!profile) return null;
+
+  const normalized = Number(profile.modelStrengthNormalized);
+  if (!Number.isFinite(normalized)) return null;
+
+  const groupOutlook = profile.groupOutlook;
+  const advanceBoost = Number.isFinite(groupOutlook?.advanceProbability ?? NaN)
+    ? ((Number(groupOutlook?.advanceProbability) - 50) / 50) * 4.8
+    : 0;
+  const groupWinBoost = Number.isFinite(groupOutlook?.groupWinProbability ?? NaN)
+    ? ((Number(groupOutlook?.groupWinProbability) - 25) / 75) * 3.2
+    : 0;
+
+  return clamp(35 + normalized * 62 + advanceBoost + groupWinBoost, 32, 101);
+};
+
 const getTeamStrengthScore = (team: WorldCupTeamSeed, groupId: string): number => {
   const hostBoost = team.isHost ? 6.5 : 0;
   const debutPenalty = team.isDebut ? -2.4 : 0;
   const groupVarianceBoost = ['C', 'D', 'F', 'G', 'I', 'L'].includes(groupId) ? 1.2 : 0;
   const rankScore = 108 - Math.log2(team.fifaRank + 1) * 10.7;
-  return round1(rankScore + hostBoost + debutPenalty + groupVarianceBoost);
+  const kimiScore = getKimiStrengthScore(team.kimiProfile);
+  const baseScore = kimiScore === null
+    ? rankScore
+    : rankScore * 0.42 + kimiScore * 0.58;
+
+  return round1(baseScore + hostBoost + debutPenalty + groupVarianceBoost);
 };
 
 const getRouteLabel = (rank: number, advanceProbability: number): MultiLangString => {

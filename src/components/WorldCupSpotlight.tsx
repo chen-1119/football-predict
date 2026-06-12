@@ -34,16 +34,17 @@ export const WorldCupSpotlight: React.FC<WorldCupSpotlightProps> = ({
   const featuredMatch = watchMatches[0];
   const featuredPrediction = featuredMatch ? getBestPrediction(featuredMatch) : undefined;
   const poolRows = featuredMatch ? getSportteryPoolRows(featuredMatch, language) : [];
+  const featuredOddsRow = poolRows.find((row) => row.odds);
   const homeTeam = featuredMatch ? getTeamById(featuredMatch.homeTeamId) : null;
   const awayTeam = featuredMatch ? getTeamById(featuredMatch.awayTeamId) : null;
   const daysLeft = getDaysUntilWorldCup();
 
   const copy = {
-    kicker: { zh: '世界杯专栏', en: 'World Cup Special' },
-    title: { zh: '2026 世界杯 · 主宰世界', en: '2026 World Cup · Own the World' },
+    kicker: { zh: '世界杯专题', en: 'World Cup Special' },
+    title: { zh: '世界因足球而沸腾', en: 'Football Unites The World' },
     subtitle: {
-      zh: '小组赛路线、焦点赛、实时走势和球迷互动集中展示，进入专栏看完整活动官网。',
-      en: 'Group routes, featured games, live momentum and fan play live together in one event desk.'
+      zh: '热爱不分国界，荣耀即将开战；进入专题看诸神黄昏、小组路径、竞彩开售场次与淘汰赛推演。',
+      en: 'Passion has no borders. Open the desk for the last dance, group paths, released fixtures and knockout routes.'
     },
     countdown: { zh: '距揭幕', en: 'Kickoff in' },
     days: { zh: '天', en: 'days' },
@@ -98,9 +99,9 @@ export const WorldCupSpotlight: React.FC<WorldCupSpotlightProps> = ({
               {formatKickoff(featuredMatch.kickoffTime, language)}
               {featuredPrediction ? ` / ${t('model')} ${getPredictionTipDisplay(featuredPrediction, language)}` : ''}
             </small>
-            {poolRows[0]?.odds && (
+            {featuredOddsRow?.odds && (
               <small>
-                {t('sp')} {poolRows[0].odds.odds1.toFixed(2)} / {poolRows[0].odds.oddsX.toFixed(2)} / {poolRows[0].odds.odds2.toFixed(2)}
+                {t('sp')} {featuredOddsRow.odds.odds1.toFixed(2)} / {featuredOddsRow.odds.oddsX.toFixed(2)} / {featuredOddsRow.odds.odds2.toFixed(2)}
               </small>
             )}
           </button>

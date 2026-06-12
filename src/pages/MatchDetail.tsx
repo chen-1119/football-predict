@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../context/AppContextCore';
-import type { Match, OutcomeProbability, PredictionDetail, Team } from '../services/mockData';
+import type { League, Match, OutcomeProbability, PredictionDetail, ScoreProbability, Team } from '../services/mockData';
 import {
   getPredictionCodeHint,
   getPredictionExplanationDisplay,
@@ -10,9 +10,10 @@ import {
   getSportteryPoolRows
 } from '../services/bettingDisplay';
 import { getCountryById, getLeagueById, getTeamById } from '../services/entities';
-import { getMatchSignal } from '../services/matchSignal';
+import { getMatchSignal, isActionableRecommendation } from '../services/matchSignal';
 import { buildMatchInsight } from '../services/predictionInsight';
 import { getVisiblePrediction, getVisiblePredictions } from '../services/predictionVisibility';
+import { getAccessAuthHeaders } from '../services/accessControl';
 import { TeamBadge } from '../components/TeamBadge';
 import { ArrowLeft, Trophy } from 'lucide-react';
 import { getWorldCupSeededFixtures } from '../services/worldCupData';
@@ -23,6 +24,79 @@ interface MatchDetailProps {
 }
 
 type Language = 'zh' | 'en';
+type PredictionView = 'summary' | 'tips' | 'model' | 'factors' | 'weather';
+
+type WeatherSignal = {
+  source?: string;
+  updatedAt?: string;
+  verified?: boolean;
+  confidence?: string;
+  condition?: string | { zh?: string; en?: string };
+  temperatureC?: number | null;
+  windKph?: number | null;
+  windGustKph?: number | null;
+  humidity?: number | null;
+  precipitationMm?: number | null;
+  riskLevel?: 'low' | 'medium' | 'high' | string;
+  summary?: string | { zh?: string; en?: string };
+  impact?: string | { zh?: string; en?: string };
+};
+
+type ScoreRecommendationCandidate = {
+  home: number;
+  away: number;
+  label: string;
+  probability: number | null;
+  source: 'model' | 'locked';
+};
+
+type HistoricalTrainingRow = {
+  id: string;
+  source?: string;
+  division?: string;
+  tournament?: string;
+  neutral?: boolean;
+  kickoffTime: string;
+  date?: string;
+  homeKey: string;
+  awayKey: string;
+  homeName?: string;
+  awayName?: string;
+  homeNameZh?: string;
+  awayNameZh?: string;
+  scoreHome: number;
+  scoreAway: number;
+};
+
+type HistoricalTrainingDetail = {
+  version?: string;
+  source?: string;
+  rows?: number;
+  lastMatchDate?: string;
+  windowDays?: number;
+  windowEnd?: string;
+  homeKey?: string;
+  awayKey?: string;
+  home?: {
+    key?: string;
+    name?: string;
+    nameZh?: string;
+    rows?: HistoricalTrainingRow[];
+  };
+  away?: {
+    key?: string;
+    name?: string;
+    nameZh?: string;
+    rows?: HistoricalTrainingRow[];
+  };
+  h2h?: {
+    rows?: HistoricalTrainingRow[];
+  };
+};
+
+type MatchWithHistoricalTraining = Match & {
+  historicalTrainingDetail?: HistoricalTrainingDetail;
+};
 
 type FinishedMatch = Match & {
   scoreHome: number;
@@ -116,6 +190,7 @@ const getResultLabel = (resultStatus: PredictionDetail['resultStatus'], language
 
 const isScoredPrediction = (prediction: PredictionDetail) => (
   prediction.resultStatus !== 'PENDING' && prediction.tipCode !== 'WATCH'
+  && prediction.recommendationAction !== 'reference'
 );
 
 const isFinishedWithScore = (match: Match): match is FinishedMatch => {
@@ -123,6 +198,25 @@ const isFinishedWithScore = (match: Match): match is FinishedMatch => {
 };
 
 const hasOfficialScore = (match: Match) => Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway);
+
+const isOutcomeTipCode = (tipCode: string | undefined): tipCode is '1' | 'X' | '2' => (
+  tipCode === '1' || tipCode === 'X' || tipCode === '2'
+);
+
+const getScoreOutcomeCode = (score: Pick<ScoreProbability, 'home' | 'away'>): '1' | 'X' | '2' => {
+  if (score.home > score.away) return '1';
+  if (score.home < score.away) return '2';
+  return 'X';
+};
+
+const dedupeScoreCandidates = <T extends { label: string }>(scores: T[]) => {
+  const seen = new Set<string>();
+  return scores.filter((score) => {
+    if (seen.has(score.label)) return false;
+    seen.add(score.label);
+    return true;
+  });
+};
 
 const minutesSinceKickoff = (match: Match) => {
   const kickoffAt = new Date(match.kickoffTime).getTime();
@@ -140,9 +234,7 @@ const getMatchDateValue = (match: Match) => {
   return match.kickoffDate || match.kickoffTime.slice(0, 10) || match.matchDate || match.businessDate || '';
 };
 
-const formatHistoryDate = (match: Match, language: Language) => {
-  const date = getMatchDateValue(match);
-
+const formatHistoryDateValue = (date: string, language: Language) => {
   return new Date(`${date}T00:00:00+08:00`).toLocaleDateString(language === 'zh' ? 'zh-CN' : 'en-US', {
     month: '2-digit',
     day: '2-digit',
@@ -151,8 +243,14 @@ const formatHistoryDate = (match: Match, language: Language) => {
   });
 };
 
-const formatCoverageDate = (date: string, language: Language) => {
-  return new Date(`${date}T00:00:00+08:00`).toLocaleDateString(language === 'zh' ? 'zh-CN' : 'en-US', {
+const formatHistoryDate = (match: Match, language: Language) => {
+  const date = getMatchDateValue(match);
+
+  return formatHistoryDateValue(date, language);
+};
+
+const formatCoverageTime = (time: number, language: Language) => {
+  return new Date(time).toLocaleDateString(language === 'zh' ? 'zh-CN' : 'en-US', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -160,10 +258,31 @@ const formatCoverageDate = (date: string, language: Language) => {
   });
 };
 
-const formatPolicyTimestamp = (value: string | undefined, language: Language) => {
-  if (!value || Number.isNaN(Date.parse(value))) return '--';
+const getOneYearWindowLabel = (match: Match, language: Language) => {
+  const kickoff = getMatchSortTime(match);
+  if (!Number.isFinite(kickoff)) return language === 'zh' ? '\u8fd1\u4e00\u5e74' : 'last year';
+  const start = kickoff - HISTORY_LOOKBACK_DAYS * 24 * 60 * 60 * 1000;
+  return `${formatCoverageTime(start, language)} - ${formatCoverageTime(kickoff, language)}`;
+};
 
-  return new Date(value).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US', {
+const normalizePolicyTimestamp = (value: string | undefined) => (
+  value && /^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(value)
+    ? `${value.replace(/\s+/, 'T')}+08:00`
+    : value
+);
+
+const parsePolicyTimestamp = (value: string | undefined) => {
+  const normalized = normalizePolicyTimestamp(value);
+  if (!normalized) return null;
+  const parsed = Date.parse(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const formatPolicyTimestamp = (value: string | undefined, language: Language) => {
+  const normalized = normalizePolicyTimestamp(value);
+  if (!normalized || Number.isNaN(Date.parse(normalized))) return '--';
+
+  return new Date(normalized).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US', {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
@@ -171,27 +290,6 @@ const formatPolicyTimestamp = (value: string | undefined, language: Language) =>
     hour12: false,
     timeZone: 'Asia/Shanghai'
   });
-};
-
-const getHistoryCoverageLabel = (allMatches: Match[], language: Language) => {
-  const dates = allMatches
-    .filter(isFinishedWithScore)
-    .map(getMatchDateValue)
-    .filter(Boolean)
-    .sort();
-
-  if (dates.length === 0) {
-    return language === 'zh' ? '暂无官方历史覆盖' : 'no official history coverage yet';
-  }
-
-  const firstDate = dates[0];
-  const lastDate = dates[dates.length - 1];
-
-  if (!firstDate || !lastDate) {
-    return language === 'zh' ? '暂无官方历史覆盖' : 'no official history coverage yet';
-  }
-
-  return `${formatCoverageDate(firstDate, language)} - ${formatCoverageDate(lastDate, language)}`;
 };
 
 const getTeamNameInMatch = (match: Match, teamId: string, language: Language) => {
@@ -233,6 +331,21 @@ const getDisplayTeam = (match: Match, side: 'home' | 'away'): Team => {
 const getCompetitionName = (match: Match, language: Language) => {
   const league = getLeagueById(match.leagueId);
   return (language === 'zh' ? match.leagueShortName || match.leagueName : match.leagueShortNameEn || match.leagueNameEn) || league.shortName[language] || league.name[language];
+};
+
+const getDisplayLeague = (match: Match): League => {
+  const base = getLeagueById(match.leagueId);
+  const nameZh = match.leagueName || match.leagueShortName || base.name.zh;
+  const nameEn = match.leagueNameEn || match.leagueName || match.leagueShortNameEn || base.name.en;
+  const shortZh = match.leagueShortName || match.leagueName || base.shortName.zh || nameZh;
+  const shortEn = match.leagueShortNameEn || match.leagueNameEn || match.leagueName || base.shortName.en || nameEn;
+
+  return {
+    ...base,
+    name: { zh: nameZh, en: nameEn },
+    shortName: { zh: shortZh, en: shortEn },
+    countryId: match.countryId || base.countryId
+  };
 };
 
 const buildTeamHistory = (
@@ -330,21 +443,176 @@ const buildHeadToHead = (
   };
 };
 
+const getHistoricalTrainingDate = (row: HistoricalTrainingRow) => (
+  row.date || String(row.kickoffTime || '').slice(0, 10)
+);
+
+const getHistoricalTrainingName = (
+  row: HistoricalTrainingRow,
+  side: 'home' | 'away',
+  language: Language
+) => {
+  if (side === 'home') {
+    return language === 'zh' ? row.homeNameZh || row.homeName || row.homeKey : row.homeName || row.homeNameZh || row.homeKey;
+  }
+  return language === 'zh' ? row.awayNameZh || row.awayName || row.awayKey : row.awayName || row.awayNameZh || row.awayKey;
+};
+
+const getHistoricalCompetition = (row: HistoricalTrainingRow) => {
+  return row.tournament || row.division || 'Historical';
+};
+
+const summarizeHistoryRows = (rows: TeamHistoryResult[]): TeamHistorySummary => {
+  const wins = rows.filter((item) => item.result === 'win').length;
+  const draws = rows.filter((item) => item.result === 'draw').length;
+  const losses = rows.length - wins - draws;
+  const over25 = rows.filter((item) => item.ourScore + item.oppScore >= 3).length;
+  const bothScore = rows.filter((item) => item.ourScore > 0 && item.oppScore > 0).length;
+  const hasRateSample = rows.length >= MIN_RATE_SAMPLE_SIZE;
+
+  return {
+    rows: rows.slice(0, TEAM_HISTORY_DISPLAY_LIMIT),
+    sampleSize: rows.length,
+    wins,
+    draws,
+    losses,
+    over25Count: over25,
+    bothScoreCount: bothScore,
+    over25Rate: hasRateSample ? Math.round((over25 / rows.length) * 100) : null,
+    bothScoreRate: hasRateSample ? Math.round((bothScore / rows.length) * 100) : null
+  };
+};
+
+const buildTeamHistoryFromTraining = (
+  rows: HistoricalTrainingRow[] | undefined,
+  teamKey: string | undefined,
+  language: Language
+): TeamHistorySummary | null => {
+  if (!teamKey || !rows?.length) return null;
+
+  const mappedRows = rows
+    .filter((row) => Number.isFinite(row.scoreHome) && Number.isFinite(row.scoreAway))
+    .filter((row) => row.homeKey === teamKey || row.awayKey === teamKey)
+    .sort((a, b) => Date.parse(b.kickoffTime) - Date.parse(a.kickoffTime))
+    .map<TeamHistoryResult>((row) => {
+      const isHomeSide = row.homeKey === teamKey;
+      const ourScore = isHomeSide ? row.scoreHome : row.scoreAway;
+      const oppScore = isHomeSide ? row.scoreAway : row.scoreHome;
+      const result = ourScore > oppScore ? 'win' : ourScore === oppScore ? 'draw' : 'loss';
+
+      return {
+        id: row.id,
+        dateLabel: formatHistoryDateValue(getHistoricalTrainingDate(row), language),
+        competition: getHistoricalCompetition(row),
+        opponentName: getHistoricalTrainingName(row, isHomeSide ? 'away' : 'home', language),
+        venueLabel: row.neutral
+          ? (language === 'zh' ? '中' : 'N')
+          : isHomeSide ? (language === 'zh' ? '主' : 'H') : (language === 'zh' ? '客' : 'A'),
+        ourScore,
+        oppScore,
+        result
+      };
+    });
+
+  return summarizeHistoryRows(mappedRows);
+};
+
+const buildHeadToHeadFromTraining = (
+  rows: HistoricalTrainingRow[] | undefined,
+  language: Language
+): HeadToHeadSummary | null => {
+  if (!rows?.length) return null;
+
+  const mappedRows = rows
+    .filter((row) => Number.isFinite(row.scoreHome) && Number.isFinite(row.scoreAway))
+    .sort((a, b) => Date.parse(b.kickoffTime) - Date.parse(a.kickoffTime))
+    .map<HeadToHeadResult>((row) => ({
+      id: row.id,
+      dateLabel: formatHistoryDateValue(getHistoricalTrainingDate(row), language),
+      competition: getHistoricalCompetition(row),
+      homeName: getHistoricalTrainingName(row, 'home', language),
+      awayName: getHistoricalTrainingName(row, 'away', language),
+      homeScore: row.scoreHome,
+      awayScore: row.scoreAway
+    }));
+
+  return {
+    rows: mappedRows.slice(0, H2H_DISPLAY_LIMIT),
+    sampleSize: mappedRows.length
+  };
+};
+
 export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => {
-  const { language, matches } = useApp();
+  const { language, matches, dataSync } = useApp();
   const [activeTab, setActiveTab] = useState<'predictions' | 'stats' | 'form' | 'h2h' | 'standings'>('predictions');
+  const [nowMs] = useState(() => Date.now());
+  const [predictionViewState, setPredictionViewState] = useState<{ matchId: string; view: PredictionView }>(() => ({
+    matchId,
+    view: 'summary'
+  }));
+  const predictionView = predictionViewState.matchId === matchId ? predictionViewState.view : 'summary';
+  const setPredictionView = (view: PredictionView) => {
+    setPredictionViewState({ matchId, view });
+  };
+  const [fullMatch, setFullMatch] = useState<Match | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    const loadDetail = async () => {
+      try {
+        const accessHeaders = getAccessAuthHeaders();
+        const response = await fetch(`/api/matches/${encodeURIComponent(matchId)}`, {
+          cache: 'no-store',
+          headers: Object.keys(accessHeaders).length ? accessHeaders : undefined,
+          signal: controller.signal
+        });
+        const data = response.ok ? await response.json() : null;
+        if (!cancelled && data?.id === matchId) {
+          setFullMatch(data as Match);
+          return;
+        }
+      } catch {
+        // Static deployments may not expose the detail API; fall back to the public snapshot.
+      }
+
+      try {
+        const accessHeaders = getAccessAuthHeaders();
+        const response = await fetch('/data/matches-current.json', {
+          cache: 'no-store',
+          headers: Object.keys(accessHeaders).length ? accessHeaders : undefined,
+          signal: controller.signal
+        });
+        const data = response.ok ? await response.json() : [];
+        const rows = Array.isArray(data) ? data : [];
+        const snapshotMatch = rows.find((item) => item?.id === matchId);
+        if (!cancelled && snapshotMatch) setFullMatch(snapshotMatch as Match);
+      } catch {
+        // Context data remains the final fallback.
+      }
+    };
+
+    loadDetail();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [matchId]);
+
 
   // 获取比赛详情
   const match = useMemo(
-    () => matches.find((item) => item.id === matchId)
+    () => (fullMatch?.id === matchId ? fullMatch : null)
+      || matches.find((item) => item.id === matchId)
       || getWorldCupSeededFixtures(104).find((item) => item.id === matchId),
-    [matchId, matches]
+    [fullMatch, matchId, matches]
   );
 
   if (!match) {
     return (
       <div className="card" style={{ padding: '3rem', textAlign: 'center' }}>
-        <p>{language === 'zh' ? '比赛不存在' : 'Match not found'}</p>
+        <p>{!dataSync.currentLoaded ? (language === 'zh' ? '正在加载比赛详情...' : 'Loading match detail...') : (language === 'zh' ? '比赛不存在' : 'Match not found')}</p>
         <button onClick={onBack} className="btn btn-secondary" style={{ marginTop: '1rem' }}>
           <ArrowLeft size={16} /> {language === 'zh' ? '返回列表' : 'Back'}
         </button>
@@ -354,7 +622,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
 
   const homeTeam = getDisplayTeam(match, 'home');
   const awayTeam = getDisplayTeam(match, 'away');
-  const league = getLeagueById(match.leagueId);
+  const league = getDisplayLeague(match);
   const country = getCountryById(match.countryId);
   
   const isFinished = match.status === 'FINISHED';
@@ -411,13 +679,39 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   const wonPredictions = settledPredictions.filter((prediction) => prediction.resultStatus === 'WON');
   const bestReviewPrediction = visiblePredictions.find((prediction) => prediction.marketType === 'BEST' && prediction.tipCode !== 'WATCH')
     || getVisiblePrediction(match, '1X2');
+  const oneXTwoPrediction = visiblePredictions.find((prediction) => prediction.marketType === '1X2' && isOutcomeTipCode(prediction.tipCode))
+    || getVisiblePrediction(match, '1X2');
+  const primaryOutcomePrediction = isOutcomeTipCode(oneXTwoPrediction?.tipCode)
+    ? oneXTwoPrediction
+    : bestReviewPrediction && isOutcomeTipCode(bestReviewPrediction.tipCode)
+      ? bestReviewPrediction
+      : undefined;
+  const goalsPrediction = visiblePredictions.find((prediction) => prediction.marketType === 'GOALS');
   const reviewHitRate = settledPredictions.length > 0 ? Math.round((wonPredictions.length / settledPredictions.length) * 100) : null;
   const homeValueText = formatSquadValue(homeTeam.value, language);
   const awayValueText = formatSquadValue(awayTeam.value, language);
-  const homeHistory = buildTeamHistory(matches, homeTeam.id, match, language);
-  const awayHistory = buildTeamHistory(matches, awayTeam.id, match, language);
-  const headToHead = buildHeadToHead(matches, homeTeam.id, awayTeam.id, match, language);
-  const historyCoverageLabel = getHistoryCoverageLabel(matches, language);
+  const historicalTrainingDetail = (match as MatchWithHistoricalTraining).historicalTrainingDetail;
+  const trainingHomeHistory = buildTeamHistoryFromTraining(
+    historicalTrainingDetail?.home?.rows,
+    historicalTrainingDetail?.home?.key || historicalTrainingDetail?.homeKey,
+    language
+  );
+  const trainingAwayHistory = buildTeamHistoryFromTraining(
+    historicalTrainingDetail?.away?.rows,
+    historicalTrainingDetail?.away?.key || historicalTrainingDetail?.awayKey,
+    language
+  );
+  const trainingHeadToHead = buildHeadToHeadFromTraining(historicalTrainingDetail?.h2h?.rows, language);
+  const fallbackHomeHistory = buildTeamHistory(matches, homeTeam.id, match, language);
+  const fallbackAwayHistory = buildTeamHistory(matches, awayTeam.id, match, language);
+  const fallbackHeadToHead = buildHeadToHead(matches, homeTeam.id, awayTeam.id, match, language);
+  const homeHistory = trainingHomeHistory?.sampleSize ? trainingHomeHistory : fallbackHomeHistory;
+  const awayHistory = trainingAwayHistory?.sampleSize ? trainingAwayHistory : fallbackAwayHistory;
+  const headToHead = trainingHeadToHead || fallbackHeadToHead;
+  const historyCoverageLabel = getOneYearWindowLabel(match, language);
+  const historyDataSourceLabel = historicalTrainingDetail
+    ? (language === 'zh' ? '长期历史训练库' : 'long-run training history')
+    : (language === 'zh' ? '已同步竞彩历史库' : 'synced Sporttery history');
   const matchSignal = getMatchSignal(match);
   const matchInsight = buildMatchInsight(match, {
     homeSampleSize: homeHistory.sampleSize,
@@ -426,18 +720,26 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     coverageLabel: historyCoverageLabel
   });
   const predictionMeta = match.predictionMeta;
-  const predictionMetaTime = predictionMeta?.lockedAt || predictionMeta?.updatedAt || predictionMeta?.generatedAt;
-  const predictionMetaLabel = predictionMeta?.lockedAt
-    ? (language === 'zh' ? '赛前预测已锁定' : 'Pre-match pick locked')
-    : (language === 'zh' ? '赛前预测监控中' : 'Pre-match pick monitoring');
+  const predictionLockedByCutoff = predictionMeta?.lockedReason === 'cutoff';
   const gptPrediction = match.gptPrediction;
   const gptParsed = gptPrediction?.relay?.parsed;
   const gptRecommendation = gptParsed?.recommendation;
   const gptProbabilities = gptParsed?.probabilities;
   const probabilityModel = match.probabilityModel;
-  const projectedScoreText = hasScore
-    ? officialScoreText
-    : `${match.projectedScoreHome ?? Math.round(match.stats?.xG.home ?? 1)} - ${match.projectedScoreAway ?? Math.round(match.stats?.xG.away ?? 1)}`;
+  const calculationTrace = probabilityModel?.calculationTrace;
+  const probabilityModelIsModelOnly = Boolean(
+    probabilityModel?.version?.includes('model-only') ||
+    (!match.odds && !match.handicapOdds)
+  );
+  const hasProjectedScore = Number.isFinite(match.projectedScoreHome) && Number.isFinite(match.projectedScoreAway);
+  const projectedScoreText = hasProjectedScore
+    ? `${match.projectedScoreHome} - ${match.projectedScoreAway}`
+    : probabilityModel
+      ? `${Math.round(match.stats?.xG.home ?? 1)} - ${Math.round(match.stats?.xG.away ?? 1)}`
+      : '--';
+  const actualScoreText = hasScore
+    ? (language === 'zh' ? `实际赛果：${officialScoreText}` : `Final score: ${officialScoreText}`)
+    : '';
 
   const formatProbabilityValue = (value: number | null | undefined) => {
     if (!Number.isFinite(value)) return '--';
@@ -509,7 +811,512 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     </div>
   );
 
+  const probabilityForPredictionTip = (prediction: PredictionDetail | undefined) => {
+    if (!prediction || !['1', 'X', '2'].includes(prediction.tipCode)) return null;
+    const source = prediction.oddsPoolCode === 'HHAD'
+      ? (probabilityModel?.handicap?.poisson || probabilityModel?.handicap?.market)
+      : probabilityModel?.oneXTwo?.final;
+    const key = prediction.tipCode === '1' ? 'home' : prediction.tipCode === 'X' ? 'draw' : 'away';
+    return source?.[key] ?? null;
+  };
+
+  const recommendationActionLabel = (prediction: PredictionDetail | undefined) => {
+    const action = prediction?.recommendationAction;
+    if (prediction?.tipCode === 'WATCH') return language === 'zh' ? '观察' : 'Watch';
+    if (action === 'recommend') return language === 'zh' ? '主推' : 'Main';
+    return language === 'zh' ? '参考' : 'Reference';
+  };
+
+  const primaryOutcomeProbability = probabilityForPredictionTip(primaryOutcomePrediction);
+  const primaryOutcomeTitle = primaryOutcomePrediction
+    ? getPredictionTipDisplay(primaryOutcomePrediction, language)
+    : '--';
+  const primaryOutcomeMarket = primaryOutcomePrediction
+    ? getPredictionMarketLabel(primaryOutcomePrediction, language)
+    : (language === 'zh' ? '胜平负' : '1X2');
+  const primaryOutcomeOdds = Number.isFinite(primaryOutcomePrediction?.odds) && Number(primaryOutcomePrediction?.odds) > 0
+    ? Number(primaryOutcomePrediction?.odds).toFixed(2)
+    : '--';
+  const primaryOutcomeRiskCount = primaryOutcomePrediction?.riskTags?.length ?? matchSignal.riskCount;
+  const primaryOutcomeTrust = primaryOutcomePrediction?.trustScore ?? matchSignal.trustScore ?? null;
+  const primaryOutcomeCode = isOutcomeTipCode(primaryOutcomePrediction?.tipCode) ? primaryOutcomePrediction.tipCode : undefined;
+  const scoreDistributionCandidates: ScoreRecommendationCandidate[] = (probabilityModel?.scoreDistribution || []).map((score) => ({
+    home: score.home,
+    away: score.away,
+    label: score.label,
+    probability: Number.isFinite(score.probability) ? score.probability : null,
+    source: 'model'
+  }));
+  const projectedScoreDistributionMatch = scoreDistributionCandidates.find((score) => score.label === projectedScoreText);
+  const projectedScoreCandidate: ScoreRecommendationCandidate | null = hasProjectedScore
+    ? {
+      home: Number(match.projectedScoreHome),
+      away: Number(match.projectedScoreAway),
+      label: projectedScoreText,
+      probability: projectedScoreDistributionMatch?.probability ?? null,
+      source: 'locked'
+    }
+    : null;
+  const alignedScoreCandidate = primaryOutcomeCode
+    ? scoreDistributionCandidates.find((score) => getScoreOutcomeCode(score) === primaryOutcomeCode)
+      || (projectedScoreCandidate && getScoreOutcomeCode(projectedScoreCandidate) === primaryOutcomeCode ? projectedScoreCandidate : null)
+    : null;
+  const firstScoreCandidate = alignedScoreCandidate
+    || projectedScoreCandidate
+    || scoreDistributionCandidates[0]
+    || null;
+  const secondScoreCandidate = scoreDistributionCandidates.find((score) => score.label !== firstScoreCandidate?.label)
+    || (projectedScoreCandidate && projectedScoreCandidate.label !== firstScoreCandidate?.label ? projectedScoreCandidate : null);
+  const scoreRecommendations = dedupeScoreCandidates(
+    [firstScoreCandidate, secondScoreCandidate].filter((score): score is ScoreRecommendationCandidate => Boolean(score))
+  ).slice(0, 2).map((score, index) => {
+    const alignsWithOutcome = primaryOutcomeCode ? getScoreOutcomeCode(score) === primaryOutcomeCode : false;
+    return {
+      ...score,
+      tone: alignsWithOutcome ? 'aligned' : 'alternate',
+      tag: alignsWithOutcome
+        ? (language === 'zh' ? '方向一致' : 'Aligned')
+        : index === 0
+          ? (language === 'zh' ? '模型首选' : 'Model top')
+          : (language === 'zh' ? '备选热区' : 'Alt zone')
+    };
+  });
+  const scoreAlignmentNote = primaryOutcomeCode && scoreRecommendations.some((score) => score.tone === 'aligned')
+    ? (language === 'zh'
+      ? `比分一按「${primaryOutcomeTitle}」方向优先筛选，比分二保留模型热区参考。`
+      : `Score one is aligned with ${primaryOutcomeTitle}; score two keeps the model heat-zone reference.`)
+    : (language === 'zh'
+      ? '当前胜平负方向不足以绑定比分，展示模型热区前两位。'
+      : 'The 1X2 direction is not strong enough to bind scores, so the top model zones are shown.');
+  const over25Probability = probabilityModel?.goalLines?.over25;
+  const under25Probability = probabilityModel?.goalLines?.under25;
+  const inferredGoalsTipCode = Number.isFinite(over25Probability) && Number.isFinite(under25Probability)
+    ? Number(over25Probability) >= Number(under25Probability)
+      ? 'O2.5'
+      : 'U2.5'
+    : '';
+  const inferredGoalsLeanText = inferredGoalsTipCode === 'O2.5'
+    ? (language === 'zh' ? '大2.5球' : 'Over 2.5 goals')
+    : inferredGoalsTipCode === 'U2.5'
+      ? (language === 'zh' ? '小2.5球' : 'Under 2.5 goals')
+      : (language === 'zh' ? '进球参考' : 'Goals lean');
+  const goalsLeanText = goalsPrediction
+    ? getPredictionTipDisplay(goalsPrediction, language, true)
+    : inferredGoalsLeanText;
+  const goalsDisplayCode = goalsPrediction?.tipCode || inferredGoalsTipCode || '--';
+  const goalsLeanProbability = goalsPrediction?.tipCode === 'O2.5'
+    ? over25Probability
+    : goalsPrediction?.tipCode === 'U2.5'
+      ? under25Probability
+      : inferredGoalsTipCode === 'O2.5'
+        ? over25Probability
+        : inferredGoalsTipCode === 'U2.5'
+          ? under25Probability
+          : null;
+  const goalsPredictionOdds = Number.isFinite(goalsPrediction?.odds) && Number(goalsPrediction?.odds) > 0
+    ? Number(goalsPrediction?.odds).toFixed(2)
+    : '--';
+  const goalsPredictionTrust = goalsPrediction?.trustScore ?? null;
+  const recommendationTipPredictions = visiblePredictions.filter((prediction) => (
+    prediction.tipCode !== 'WATCH'
+    && (prediction.marketType === 'GOALS' || prediction.marketType === 'GG_NG')
+  ));
+  const lockedTagText = predictionMeta?.lockedAt
+    ? (language === 'zh' ? '已锁定' : 'Locked')
+    : (language === 'zh' ? '赛前监控' : 'Monitoring');
+  const isQualifiedPick = match.status === 'SCHEDULED' && isActionableRecommendation(match);
+  const decisionPoolStatus = isQualifiedPick
+    ? (language === 'zh' ? '进精选池' : 'Top pool')
+    : matchSignal.category === 'avoid'
+      ? (language === 'zh' ? '避开观察' : 'Avoid watch')
+      : match.status === 'FINISHED'
+        ? (language === 'zh' ? '已锁定复盘' : 'Locked review')
+        : (language === 'zh' ? '不进精选池' : 'Not in top pool');
+  const decisionDirectionText = primaryOutcomePrediction
+    ? `${isQualifiedPick
+      ? (language === 'zh' ? '推荐方向' : 'Pick')
+      : (language === 'zh' ? '参考倾向' : 'Reference lean')} ${primaryOutcomeTitle}`
+    : matchSignal.category === 'avoid'
+      ? (language === 'zh' ? '避开观察' : 'Avoid watch')
+      : (language === 'zh' ? '等待确认' : 'Await confirmation');
+  const hadPoolRow = poolRows.find((row) => row.poolCode === 'HAD');
+  const hhadPoolRow = poolRows.find((row) => row.poolCode === 'HHAD');
+  const independentOutcomeProbabilities = calculationTrace?.outcome?.raw
+    || probabilityModel?.oneXTwo.teamStrength
+    || probabilityModel?.oneXTwo.poisson
+    || probabilityModel?.oneXTwo.final;
+  const officialSpProbabilities = hadPoolRow?.probabilities
+    ? {
+      home: hadPoolRow.probabilities.home,
+      draw: hadPoolRow.probabilities.draw,
+      away: hadPoolRow.probabilities.away
+    }
+    : probabilityModel?.oneXTwo.market;
+  const supportForPrimaryOutcome = primaryOutcomeCode && hhadPoolRow?.probabilities
+    ? primaryOutcomeCode === '1'
+      ? hhadPoolRow.probabilities.home
+      : primaryOutcomeCode === 'X'
+        ? hhadPoolRow.probabilities.draw
+        : hhadPoolRow.probabilities.away
+    : null;
+  const handicapValidationText = hhadPoolRow?.odds
+    ? supportForPrimaryOutcome !== null
+      ? (language === 'zh'
+        ? `${primaryOutcomeTitle} · 让球 ${hhadPoolRow.handicap || '--'} · ${supportForPrimaryOutcome >= 42 ? '有支持' : '支持不足'} ${supportForPrimaryOutcome}%`
+        : `${primaryOutcomeTitle} · line ${hhadPoolRow.handicap || '--'} · ${supportForPrimaryOutcome >= 42 ? 'supported' : 'weak support'} ${supportForPrimaryOutcome}%`)
+      : `${language === 'zh' ? '让球' : 'Line'} ${hhadPoolRow.handicap || '--'} · ${hhadPoolRow.probabilities ? `${hhadPoolRow.probabilities.home}/${hhadPoolRow.probabilities.draw}/${hhadPoolRow.probabilities.away}%` : '--'}`
+    : (language === 'zh' ? '暂无官方让球盘，先不作为精选验证。' : 'No official handicap pool yet, so it cannot validate a top pick.');
+  const transparentRiskTags = (
+    primaryOutcomePrediction?.riskTags?.length
+      ? primaryOutcomePrediction.riskTags
+      : visiblePredictions.flatMap((prediction) => prediction.riskTags || [])
+  ).filter((tag, index, list) => (
+    list.findIndex((item) => item.zh === tag.zh && item.en === tag.en) === index
+  )).slice(0, 6);
+  const transparentDecisionReason = isQualifiedPick
+    ? (language === 'zh'
+      ? '模型概率、官方 SP、让球盘和风险标签同时通过，本场进入精选池。'
+      : 'Model probability, official SP, handicap validation, and risk tags passed together, so this fixture enters the top pool.')
+    : matchSignal.category === 'avoid'
+      ? (language === 'zh'
+        ? '模型方向保留，但风险标签叠加或盘口验证不足，先列为避开观察。'
+        : 'The model direction is kept, but risk tags or handicap validation are weak, so this is an avoid watch.')
+      : primaryOutcomePrediction
+        ? (language === 'zh'
+          ? '模型主线仍有方向，但低赔、让球或风险校验未同时通过，仅作参考。'
+          : 'The model has a main lean, but SP, handicap, or risk validation did not pass together, so it stays reference only.')
+        : matchSignal.note[language];
+  const predictionVersionText = predictionMeta?.strategyVersion
+    || predictionMeta?.policyVersion
+    || predictionMeta?.promptVersion
+    || probabilityModel?.version
+    || '--';
+  const predictionGeneratedAt = predictionMeta?.generatedAt
+    || probabilityModel?.generatedAt
+    || gptPrediction?.generatedAt
+    || predictionMeta?.updatedAt;
+  const predictionCutoffRaw = predictionMeta?.cutoffTime || match.buyEndTime;
+  const predictionCutoffMs = parsePolicyTimestamp(predictionCutoffRaw);
+  const predictionCutoffPassed = predictionCutoffMs !== null && nowMs >= predictionCutoffMs;
+  const predictionIsLocked = Boolean(predictionMeta?.lockedAt)
+    || predictionLockedByCutoff
+    || match.status !== 'SCHEDULED'
+    || predictionCutoffPassed;
+
   // 渲染预测详细行
+  const externalSignals = match.externalSignals as (Match['externalSignals'] & {
+    weather?: WeatherSignal;
+    venue?: { name?: string; city?: string; summary?: string | { zh?: string; en?: string } };
+  }) | undefined;
+  const weatherSignal = externalSignals?.weather;
+  const fiveHundredSignal = externalSignals?.fiveHundred;
+  const localizedSignalText = (
+    value: string | { zh?: string; en?: string } | undefined,
+    fallback = ''
+  ) => (typeof value === 'string' ? value : value?.[language] || value?.zh || value?.en || fallback);
+  const weatherSummary = localizedSignalText(weatherSignal?.summary);
+  const weatherImpactText = localizedSignalText(weatherSignal?.impact);
+  const venueSummary = typeof externalSignals?.venue?.summary === 'string'
+    ? externalSignals.venue.summary
+    : externalSignals?.venue?.summary?.[language];
+  const weatherVerified = Boolean(
+    weatherSignal &&
+    (weatherSummary || weatherSignal.condition || Number.isFinite(weatherSignal.temperatureC) || Number.isFinite(weatherSignal.windKph))
+  );
+  const weatherVenueConfirmed = weatherSignal?.verified !== false && weatherSignal?.confidence !== 'estimated-location';
+  const weatherSourceStatus = !weatherVerified
+    ? 'missing'
+    : weatherSignal?.source && weatherVenueConfirmed
+      ? 'live'
+      : 'estimated';
+  const weatherStatusLabel = weatherSourceStatus === 'live'
+    ? (language === 'zh' ? '实时' : 'Live')
+    : weatherSourceStatus === 'estimated'
+      ? (language === 'zh' ? '估算' : 'Estimated')
+      : (language === 'zh' ? '缺失' : 'Missing');
+  const weatherStatusDetail = weatherSourceStatus === 'live'
+    ? (language === 'zh' ? '实时天气源 + 球场定位' : 'Live source + venue located')
+    : weatherSourceStatus === 'estimated'
+      ? (language === 'zh' ? '天气字段已接入，场地/定位为估算' : 'Weather fields loaded; venue/location estimated')
+      : (language === 'zh' ? '暂无可验证实时天气' : 'No verified live weather');
+  const weatherStatusDescription = weatherSourceStatus === 'live'
+    ? (language === 'zh'
+      ? '本场有可追溯天气来源和球场定位，天气只作为风险层修正，不单独推翻胜平负方向。'
+      : 'This fixture has a traceable weather source and venue location. Weather is used as a risk modifier only.')
+    : weatherSourceStatus === 'estimated'
+      ? (language === 'zh'
+        ? '本场天气来自估算位置或待确认场地，只做弱提示，不直接加权改动主预测。'
+        : 'Weather is based on an estimated location or unconfirmed venue, so it is treated as a weak signal.')
+      : (language === 'zh'
+        ? '本场没有可验证天气字段，系统按中性天气处理，避免把猜测写进概率。'
+        : 'No verified weather field is available, so the model treats weather as neutral.');
+  const weatherConditionLabel = localizedSignalText(
+    weatherSignal?.condition,
+    weatherVerified ? '--' : (language === 'zh' ? '未接入' : 'Not connected')
+  );
+  const weatherRiskTone = weatherSignal?.riskLevel === 'high'
+    ? 'danger'
+    : weatherSignal?.riskLevel === 'medium'
+      ? 'warning'
+      : weatherVerified
+        ? 'success'
+        : 'neutral';
+  const worldCupPrior = probabilityModel?.worldCupPrior
+    || match.worldCupPrior
+    || externalSignals?.worldCupPrior
+    || null;
+  const worldCupPriorWeight = probabilityModel?.ensembleWeights?.worldCupPrior;
+  const worldCupPriorStrengthDiff = Number(worldCupPrior?.strengthDiff);
+  const worldCupPriorHomeName = language === 'zh'
+    ? worldCupPrior?.home?.nameZh || worldCupPrior?.home?.nameEn
+    : worldCupPrior?.home?.nameEn || worldCupPrior?.home?.nameZh;
+  const worldCupPriorAwayName = language === 'zh'
+    ? worldCupPrior?.away?.nameZh || worldCupPrior?.away?.nameEn
+    : worldCupPrior?.away?.nameEn || worldCupPrior?.away?.nameZh;
+  const worldCupPriorSignature = worldCupPrior?.signature
+    ? worldCupPrior.signature.split('|').slice(-1)[0]
+    : '';
+  const weatherSourceLabel = weatherSignal?.source
+    ? `${weatherSignal.source} · ${weatherStatusDetail}`
+    : weatherStatusDetail;
+  const weatherImpactLabel = weatherVerified
+    ? (weatherVenueConfirmed
+      ? (language === 'zh' ? '已进入赛前信息层' : 'Included in pre-match signal layer')
+      : (language === 'zh' ? '已接入，场地待确认' : 'Loaded, venue needs confirmation'))
+    : (language === 'zh' ? '未验证，不参与概率加权' : 'Unverified, not weighted in probabilities');
+  const weatherMetrics = [
+    {
+      label: language === 'zh' ? '来源状态' : 'Source',
+      value: weatherStatusLabel
+    },
+    {
+      label: language === 'zh' ? '天气' : 'Condition',
+      value: weatherConditionLabel
+    },
+    {
+      label: language === 'zh' ? '温度' : 'Temp',
+      value: Number.isFinite(weatherSignal?.temperatureC) ? `${weatherSignal?.temperatureC}℃` : '--'
+    },
+    {
+      label: language === 'zh' ? '风速' : 'Wind',
+      value: Number.isFinite(weatherSignal?.windKph) ? `${weatherSignal?.windKph} km/h` : '--'
+    },
+    {
+      label: language === 'zh' ? '降水' : 'Rain',
+      value: Number.isFinite(weatherSignal?.precipitationMm) ? `${weatherSignal?.precipitationMm} mm` : '--'
+    }
+  ];
+  const predictionNavItems: Array<{ key: PredictionView; label: string; detail: string }> = [
+    {
+      key: 'summary',
+      label: language === 'zh' ? '概览' : 'Summary',
+      detail: matchSignal.trustScore ? `${matchSignal.trustScore}%` : '--'
+    },
+    {
+      key: 'tips',
+      label: language === 'zh' ? '推荐' : 'Tips',
+      detail: language === 'zh' ? '比分/进球' : 'Score/Goals'
+    },
+    {
+      key: 'model',
+      label: language === 'zh' ? '模型' : 'Model',
+      detail: probabilityModel?.version?.split('-').slice(0, 2).join('-') || '--'
+    },
+    {
+      key: 'factors',
+      label: language === 'zh' ? '因素' : 'Factors',
+      detail: `${matchInsight.drivers.length}/${matchInsight.watchpoints.length}`
+    },
+    {
+      key: 'weather',
+      label: language === 'zh' ? '天气' : 'Weather',
+      detail: weatherStatusLabel
+    }
+  ];
+  const factorCards = [
+    {
+      title: language === 'zh' ? '官方 SP / 让球' : 'Official SP / handicap',
+      value: poolRows.filter((row) => row.odds).length ? `${poolRows.filter((row) => row.odds).length}/${poolRows.length}` : '--',
+      tone: poolRows.some((row) => row.odds) ? 'success' : 'warning',
+      body: language === 'zh'
+        ? '胜平负与让球 SP 只做市场校验；模型先用强度、Elo、近况和 Poisson 生成独立概率，再比较 SP 是否偏离。'
+        : 'HAD and HHAD SP are market validation only; the model first builds independent probabilities from strength, Elo, form, and Poisson, then checks SP divergence.'
+    },
+    {
+      title: language === 'zh' ? 'Elo / 长期样本' : 'Elo / long sample',
+      value: probabilityModel?.elo ? `${probabilityModel.elo.homeRating}/${probabilityModel.elo.awayRating}` : '--',
+      tone: probabilityModel?.elo ? 'success' : 'neutral',
+      body: language === 'zh'
+        ? `当前长期训练库样本 ${probabilityModel?.elo?.historicalSource?.rows || probabilityModel?.form?.historicalSource?.rows || '--'} 行，主要用于强弱差与状态先验。`
+        : `Historical training rows: ${probabilityModel?.elo?.historicalSource?.rows || probabilityModel?.form?.historicalSource?.rows || '--'}, used for strength and form priors.`
+    },
+    ...(worldCupPrior ? [{
+      title: language === 'zh' ? '世界杯先验' : 'World Cup prior',
+      value: Number.isFinite(worldCupPriorWeight) ? formatModelWeight(worldCupPriorWeight) : (language === 'zh' ? '已接入' : 'Loaded'),
+      tone: 'success',
+      body: language === 'zh'
+        ? `Kimi 数据集已匹配 ${worldCupPriorHomeName || '主队'} vs ${worldCupPriorAwayName || '客队'}，强度差 ${Number.isFinite(worldCupPriorStrengthDiff) ? worldCupPriorStrengthDiff.toFixed(3) : '--'}，签名 ${worldCupPriorSignature || '--'}；只作为世界杯赛前先验，不覆盖 Elo、近况和 Poisson。`
+        : `Kimi dataset matched ${worldCupPriorHomeName || 'home'} vs ${worldCupPriorAwayName || 'away'}, strength diff ${Number.isFinite(worldCupPriorStrengthDiff) ? worldCupPriorStrengthDiff.toFixed(3) : '--'}, signature ${worldCupPriorSignature || '--'}; used as a World Cup pre-match prior without replacing Elo, form, or Poisson.`
+    }] : []),
+    {
+      title: language === 'zh' ? '近况攻防' : 'Recent form',
+      value: probabilityModel?.form ? `${formatDecimal(probabilityModel.form.home.goalsForAvg)} / ${formatDecimal(probabilityModel.form.away.goalsForAvg)}` : '--',
+      tone: probabilityModel?.form ? 'success' : 'neutral',
+      body: language === 'zh'
+        ? '近一年滚动样本修正预期进球，与 Elo、长期样本一起改变 Poisson 热区。'
+        : 'Rolling form adjusts expected goals and score heat zones together with Elo and long-run samples.'
+    },
+    {
+      title: language === 'zh' ? '阵容信息' : 'Lineups',
+      value: externalSignals?.lineups ? (language === 'zh' ? '已接入' : 'Loaded') : '--',
+      tone: externalSignals?.lineups ? 'success' : 'neutral',
+      body: externalSignals?.lineups?.summary?.[language]
+        || (language === 'zh' ? '未拿到可验证首发/伤停时，只作为待补信息，不调整概率。' : 'Without verified lineups or injuries, this remains missing data and does not adjust probabilities.')
+    },
+    {
+      title: language === 'zh' ? '外部均赔' : 'External odds',
+      value: fiveHundredSignal?.europeOdds?.companies ? `${fiveHundredSignal.europeOdds.companies}` : '--',
+      tone: fiveHundredSignal?.europeOdds?.companies ? 'success' : 'neutral',
+      body: fiveHundredSignal?.europeOdds?.summary
+        || externalSignals?.externalOdds?.summary?.[language]
+        || (language === 'zh' ? '外部均赔用于交叉验证官方 SP 是否偏离，不单独生成推荐。' : 'External average odds cross-check official SP divergence; they do not create picks alone.')
+    },
+    {
+      title: language === 'zh' ? '天气 / 场地' : 'Weather / pitch',
+      value: weatherVerified ? `${weatherStatusLabel} · ${weatherConditionLabel}` : weatherStatusLabel,
+      tone: weatherRiskTone,
+      body: weatherVerified
+        ? (weatherSummary || weatherImpactText || weatherStatusDescription)
+        : weatherStatusDescription
+    }
+  ];
+
+  const renderCalculationFormulaPanel = () => {
+    const trace = calculationTrace;
+    if (!trace) return null;
+
+    const components = trace.outcome?.components || [];
+    const modelComponents = components.filter((component) => component.role === 'model' && Number(component.weight) > 0);
+    const marketComponent = components.find((component) => component.key === 'market');
+    const lambdaValues = trace.expectedGoals?.values;
+    const goalValues = trace.goals?.values;
+    const expressions = trace.outcome?.expressions;
+    const topScores = trace.poisson?.topScores?.slice(0, 3) || [];
+
+    return (
+      <section className="probability-panel is-full formula-panel">
+        <div className="formula-panel-head">
+          <div>
+            <h4>{language === 'zh' ? '计算公式' : 'Calculation Formula'}</h4>
+            <p>
+              {trace.policy?.[language] || (language === 'zh'
+                ? '先计算独立模型概率，再做风险校准；SP 只做市场校验。'
+                : 'Compute independent model probabilities first, then calibrate risk; SP is validation only.')}
+            </p>
+          </div>
+          <span>{trace.version}</span>
+        </div>
+
+        <div className="formula-card-grid">
+          <article className="formula-card is-primary">
+            <span>{language === 'zh' ? '胜平负总公式' : '1X2 formula'}</span>
+            <code>{trace.outcome?.formula?.[language] || 'P_final=calibrate(normalize(sum(w_i*P_i)))'}</code>
+            <p>
+              {language === 'zh'
+                ? '主胜、平局、客胜分别套用同一条公式，最后归一化并应用冷却/风险校准。'
+                : 'Home, draw, and away use the same formula, then normalization and risk calibration are applied.'}
+            </p>
+          </article>
+
+          <article className="formula-card">
+            <span>{language === 'zh' ? '本场代入' : 'This match'}</span>
+            <ul className="formula-expression-list">
+              <li>{language === 'zh' ? '主胜' : 'Home'}: <strong>{expressions?.home || '--'}</strong></li>
+              <li>{language === 'zh' ? '平局' : 'Draw'}: <strong>{expressions?.draw || '--'}</strong></li>
+              <li>{language === 'zh' ? '客胜' : 'Away'}: <strong>{expressions?.away || '--'}</strong></li>
+            </ul>
+            {trace.outcome?.calibration?.applied && (
+              <p>
+                {language === 'zh'
+                  ? `已触发 ${trace.outcome.calibration.adjustments?.length || 0} 条风险校准。`
+                  : `${trace.outcome.calibration.adjustments?.length || 0} risk calibration rules applied.`}
+              </p>
+            )}
+          </article>
+
+          <article className="formula-card">
+            <span>{language === 'zh' ? '组件权重' : 'Component weights'}</span>
+            <div className="formula-component-list">
+              {modelComponents.map((component) => (
+                <div key={component.key}>
+                  <b>{component.label?.[language] || component.key}</b>
+                  <strong>{formatModelWeight(component.weight)}</strong>
+                  <em>{renderOutcomeLine(component.probabilities)}</em>
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <article className="formula-card">
+            <span>{language === 'zh' ? '进球期望 lambda' : 'Expected goals lambda'}</span>
+            <code>{trace.expectedGoals?.formula?.[language] || '--'}</code>
+            <p>
+              {language === 'zh' ? '独立初值' : 'Independent seed'}:
+              {' '}
+              <strong>{formatDecimal(lambdaValues?.independentHome)} / {formatDecimal(lambdaValues?.independentAway)}</strong>
+              {' · '}
+              {language === 'zh' ? '最终' : 'Final'}:
+              {' '}
+              <strong>{formatDecimal(lambdaValues?.finalHome)} / {formatDecimal(lambdaValues?.finalAway)}</strong>
+            </p>
+            <p>
+              {language === 'zh' ? '联赛权重' : 'League weight'} {formatModelWeight(lambdaValues?.leagueWeight)}
+              {' · '}
+              {language === 'zh' ? '近况权重' : 'Form weight'} {formatModelWeight(lambdaValues?.formWeight)}
+            </p>
+          </article>
+
+          <article className="formula-card">
+            <span>{language === 'zh' ? 'Poisson 比分' : 'Poisson score'}</span>
+            <code>{trace.poisson?.formula?.[language] || '--'}</code>
+            <p>
+              lambda H/A:
+              {' '}
+              <strong>{formatDecimal(trace.poisson?.lambdas?.home)} / {formatDecimal(trace.poisson?.lambdas?.away)}</strong>
+            </p>
+            <div className="formula-score-list">
+              {topScores.map((score) => (
+                <b key={score.label}>{score.label} {formatProbabilityValue(score.probability)}</b>
+              ))}
+            </div>
+          </article>
+
+          <article className="formula-card">
+            <span>{language === 'zh' ? '大小球 / SP 规则' : 'Goals / SP rule'}</span>
+            <code>{trace.goals?.formula?.[language] || '--'}</code>
+            <p>
+              {language === 'zh' ? '大2.5' : 'Over2.5'} <strong>{formatProbabilityValue(goalValues?.over25)}</strong>
+              {' · BTTS '}
+              <strong>{formatProbabilityValue(goalValues?.bttsYes)}</strong>
+            </p>
+            <p>
+              <strong>{trace.marketUse?.formula || 'marketWeight=0'}</strong>
+              {' · '}
+              {trace.marketUse?.[language] || (language === 'zh' ? 'SP 只做校验。' : 'SP is validation only.')}
+            </p>
+            {marketComponent && (
+              <p>
+                {language === 'zh' ? '市场概率' : 'Market'}:
+                {' '}
+                {renderOutcomeLine(marketComponent.probabilities)}
+              </p>
+            )}
+          </article>
+        </div>
+      </section>
+    );
+  };
+
   const renderPredictionBlock = (pred: PredictionDetail) => {
     const codeHint = getPredictionCodeHint(pred, language);
     const valueLabel = getPredictionValueLabel(pred, language);
@@ -518,9 +1325,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     return (
       <div 
         key={pred.marketType}
-        className="card" 
-        style={{ 
-          position: 'relative', 
+        className="card prediction-tip-card"
+        style={{
+          position: 'relative',
           backgroundColor: 'hsl(var(--bg))', 
           borderColor: 'hsl(var(--border))',
           display: 'flex',
@@ -546,7 +1353,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
             {codeHint && <span className="prediction-code-hint">{codeHint}</span>}
             {pred.riskTags && pred.riskTags.length > 0 && (
               <div className="risk-tag-row">
-                {pred.riskTags.map((tag) => (
+                {pred.riskTags.slice(0, 2).map((tag) => (
                   <span key={`${pred.marketType}-${tag.zh}`} className="risk-tag">{tag[language]}</span>
                 ))}
               </div>
@@ -581,7 +1388,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
           </p>
           {pred.analysisItems && pred.analysisItems.length > 0 && (
             <ul className="prediction-analysis-list">
-              {pred.analysisItems.map((item, index) => (
+              {pred.analysisItems.slice(0, 2).map((item, index) => (
                 <li key={`${pred.marketType}-${index}`}>{item[language]}</li>
               ))}
             </ul>
@@ -624,11 +1431,11 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
       <p>
         {summary.sampleSize
           ? (language === 'zh'
-            ? `近一年窗口已匹配 ${summary.sampleSize} 场官方已完场记录，列表展示最近 ${summary.rows.length} 场。历史库覆盖：${historyCoverageLabel}。`
-            : `${summary.sampleSize} finished official records found in the last-year window. Showing latest ${summary.rows.length}. History coverage: ${historyCoverageLabel}.`)
+            ? `近一年窗口已匹配 ${summary.sampleSize} 场已完场记录，列表展示最近 ${summary.rows.length} 场。统计窗口：${historyCoverageLabel}，来源：${historyDataSourceLabel}。`
+            : `${summary.sampleSize} finished records found in the last-year window. Showing latest ${summary.rows.length}. Window: ${historyCoverageLabel}; source: ${historyDataSourceLabel}.`)
           : (language === 'zh'
-            ? `近一年历史库暂无该队已完场记录。历史库覆盖：${historyCoverageLabel}。`
-            : `No finished official records in the last-year window. History coverage: ${historyCoverageLabel}.`)}
+            ? `近一年窗口暂无该队已完场记录。统计窗口：${historyCoverageLabel}，来源：${historyDataSourceLabel}。`
+            : `No finished records in the last-year window. Window: ${historyCoverageLabel}; source: ${historyDataSourceLabel}.`)}
       </p>
     </div>
   );
@@ -662,10 +1469,10 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+    <div className="match-detail-shell" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
       
       {/* 1. 面包屑与返回 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="detail-topbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ fontSize: '0.825rem', color: 'hsl(var(--text-secondary))' }}>
           {language === 'zh' ? '首页' : 'Home'} / {country.name[language]} / {league.name[language]} / {homeTeam.shortName[language]} vs {awayTeam.shortName[language]}
         </div>
@@ -676,9 +1483,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
       </div>
 
       {/* 2. 比赛详情头部看板 */}
-      <div className="card" style={{ 
+      <div className="card match-hero-card" style={{
         background: 'linear-gradient(135deg, hsl(var(--bg-card)) 0%, hsl(var(--bg-card-hover)) 100%)',
-        display: 'flex', 
+        display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         padding: '2.5rem 1.5rem',
@@ -704,17 +1511,17 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
         </div>
 
         {/* 球队比分对阵大面板 */}
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-around', 
-          alignItems: 'center', 
-          width: '100%', 
+        <div className="matchup-board" style={{
+          display: 'flex',
+          justifyContent: 'space-around',
+          alignItems: 'center',
+          width: '100%',
           maxWidth: '700px',
           flexWrap: 'wrap',
           gap: '1.5rem'
         }}>
           {/* 主队 */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', minWidth: '150px' }}>
+          <div className="matchup-team" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', minWidth: '150px' }}>
             <TeamBadge team={homeTeam} size="lg" />
             <h3 style={{ fontSize: '1.25rem', fontWeight: '800', fontFamily: 'var(--font-title)' }}>
               {homeTeam.name[language]}
@@ -723,7 +1530,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
           </div>
 
           {/* 比分 / 状态 */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+          <div className="matchup-status" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
             {isFinished ? (
               <div>
                 <div style={{ fontSize: '3rem', fontWeight: '900', letterSpacing: '4px', fontFamily: 'var(--font-title)', color: 'hsl(var(--primary))' }}>
@@ -770,7 +1577,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
           </div>
 
           {/* 客队 */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', minWidth: '150px' }}>
+          <div className="matchup-team" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', minWidth: '150px' }}>
             <TeamBadge team={awayTeam} size="lg" />
             <h3 style={{ fontSize: '1.25rem', fontWeight: '800', fontFamily: 'var(--font-title)' }}>
               {awayTeam.name[language]}
@@ -838,20 +1645,172 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
       </div>
 
       {/* 3. 导航 Tabs */}
-      <div className="tabs-container">
-        <button className={`tab-btn ${activeTab === 'predictions' ? 'active' : ''}`} onClick={() => setActiveTab('predictions')}>{t('predictionsTab')}</button>
-        <button className={`tab-btn ${activeTab === 'stats' ? 'active' : ''}`} onClick={() => setActiveTab('stats')}>{t('statsTab')}</button>
-        <button className={`tab-btn ${activeTab === 'form' ? 'active' : ''}`} onClick={() => setActiveTab('form')}>{t('formTab')}</button>
-        <button className={`tab-btn ${activeTab === 'h2h' ? 'active' : ''}`} onClick={() => setActiveTab('h2h')}>{t('h2hTab')}</button>
-        <button className={`tab-btn ${activeTab === 'standings' ? 'active' : ''}`} onClick={() => setActiveTab('standings')}>{t('standingsTab')}</button>
+      <div className="tabs-container detail-tabs-nav" role="tablist" aria-label={language === 'zh' ? '详情导航' : 'Detail sections'}>
+        <button type="button" role="tab" aria-selected={activeTab === 'predictions'} className={`tab-btn ${activeTab === 'predictions' ? 'active' : ''}`} onClick={() => setActiveTab('predictions')}>{t('predictionsTab')}</button>
+        <button type="button" role="tab" aria-selected={activeTab === 'stats'} className={`tab-btn ${activeTab === 'stats' ? 'active' : ''}`} onClick={() => setActiveTab('stats')}>{t('statsTab')}</button>
+        <button type="button" role="tab" aria-selected={activeTab === 'form'} className={`tab-btn ${activeTab === 'form' ? 'active' : ''}`} onClick={() => setActiveTab('form')}>{t('formTab')}</button>
+        <button type="button" role="tab" aria-selected={activeTab === 'h2h'} className={`tab-btn ${activeTab === 'h2h' ? 'active' : ''}`} onClick={() => setActiveTab('h2h')}>{t('h2hTab')}</button>
+        <button type="button" role="tab" aria-selected={activeTab === 'standings'} className={`tab-btn ${activeTab === 'standings' ? 'active' : ''}`} onClick={() => setActiveTab('standings')}>{t('standingsTab')}</button>
       </div>
 
       {/* 4. Tab 内容区域 */}
-      <div>
+      <div className="detail-tab-panel" role="tabpanel">
         
         {/* Tab 1: AI 推荐 */}
         {activeTab === 'predictions' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          <div className="prediction-view-stack" data-view={predictionView} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <div className="prediction-view-nav" role="tablist" aria-label={language === 'zh' ? '预测数据导航' : 'Prediction data navigation'}>
+              {predictionNavItems.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={predictionView === item.key}
+                  className={`prediction-view-tab ${predictionView === item.key ? 'active' : ''}`}
+                  onClick={() => setPredictionView(item.key)}
+                >
+                  <span>{item.label}</span>
+                  <strong>{item.detail}</strong>
+                </button>
+              ))}
+            </div>
+            <div className="card recommendation-overview-card recommendation-outcome-card">
+              <section className="recommendation-overview-panel is-outcome">
+                <div className="recommendation-overview-head">
+                  <span>{language === 'zh' ? '胜平负推荐' : '1X2 Recommendation'}</span>
+                  <b>{recommendationActionLabel(primaryOutcomePrediction)}</b>
+                </div>
+                <strong className="recommendation-overview-main">{primaryOutcomeTitle}</strong>
+                <p>{primaryOutcomePrediction?.explanation?.[language] || matchSignal.note[language]}</p>
+                <div className="recommendation-mini-tags">
+                  <span>{primaryOutcomeMarket}</span>
+                  <span>{language === 'zh' ? '模型' : 'Model'} {formatProbabilityValue(primaryOutcomeProbability)}</span>
+                  <span>SP {primaryOutcomeOdds}</span>
+                  <span>{language === 'zh' ? '可信' : 'Trust'} {primaryOutcomeTrust === null ? '--' : `${primaryOutcomeTrust}%`}</span>
+                  <span>{language === 'zh' ? '风险' : 'Risk'} {primaryOutcomeRiskCount}</span>
+                </div>
+              </section>
+            </div>
+
+            <div className="card recommendation-score-card">
+              <section className="recommendation-overview-panel is-score">
+                <div className="recommendation-overview-head">
+                  <span>{language === 'zh' ? '比分推演' : 'Score Projection'}</span>
+                  <b>{lockedTagText}</b>
+                </div>
+                <div className="recommendation-score-list">
+                  {scoreRecommendations.length ? scoreRecommendations.map((score, index) => (
+                    <div key={score.label} className={`recommendation-score-option is-${score.tone}`}>
+                      <span>{index === 0 ? (language === 'zh' ? '比分一' : 'Score 1') : (language === 'zh' ? '比分二' : 'Score 2')}</span>
+                      <strong>{score.label}</strong>
+                      <em>{score.tag} · {formatProbabilityValue(score.probability)}</em>
+                    </div>
+                  )) : (
+                    <div className="recommendation-score-option is-empty">
+                      <span>{language === 'zh' ? '比分' : 'Score'}</span>
+                      <strong>{projectedScoreText}</strong>
+                      <em>{language === 'zh' ? '等待模型分布' : 'Waiting for distribution'}</em>
+                    </div>
+                  )}
+                </div>
+                {actualScoreText && (
+                  <p className="recommendation-score-final">
+                    {actualScoreText} · {language === 'zh' ? '预测不回写' : 'not rewritten'}
+                  </p>
+                )}
+                <p>{scoreAlignmentNote}</p>
+                <div className="recommendation-mini-tags">
+                  <span>{language === 'zh' ? '方向' : 'Direction'} {primaryOutcomeTitle}</span>
+                  <span>{language === 'zh' ? '热区' : 'xG'} {formatDecimal(match.stats?.xG.home)} : {formatDecimal(match.stats?.xG.away)}</span>
+                  <span>{language === 'zh' ? '大2.5' : 'Over2.5'} {formatProbabilityValue(probabilityModel?.goalLines?.over25)}</span>
+                  <span>BTTS {formatProbabilityValue(probabilityModel?.bothTeamsToScore?.yes)}</span>
+                  <span>{goalsLeanText}</span>
+                </div>
+              </section>
+
+              <section className="recommendation-overview-panel is-goals">
+                <div className="recommendation-overview-head">
+                  <span>{language === 'zh' ? '进球数推荐' : 'Goals Recommendation'}</span>
+                  <b>{goalsPrediction ? recommendationActionLabel(goalsPrediction) : (language === 'zh' ? '参考' : 'Reference')}</b>
+                </div>
+                <strong className="recommendation-goals-main">{goalsLeanText}</strong>
+                <p>
+                  {language === 'zh'
+                    ? '进球数单独放在推荐页，结合大/小球、双方进球和 xG 热区判断，不和胜平负方向混在一起。'
+                    : 'Goals are separated in the tips view, combining totals, BTTS, and xG heat zones without mixing into the 1X2 direction.'}
+                </p>
+                <div className="recommendation-mini-tags">
+                  <span>{language === 'zh' ? '进球数' : 'Goals'} {goalsDisplayCode}</span>
+                  <span>{language === 'zh' ? '模型' : 'Model'} {formatProbabilityValue(goalsLeanProbability)}</span>
+                  <span>SP {goalsPredictionOdds}</span>
+                  <span>{language === 'zh' ? '可信' : 'Trust'} {goalsPredictionTrust === null ? '--' : `${goalsPredictionTrust}%`}</span>
+                  <span>{language === 'zh' ? '大2.5' : 'Over2.5'} {formatProbabilityValue(probabilityModel?.goalLines?.over25)}</span>
+                  <span>{language === 'zh' ? '小2.5' : 'Under2.5'} {formatProbabilityValue(probabilityModel?.goalLines?.under25)}</span>
+                  <span>BTTS {formatProbabilityValue(probabilityModel?.bothTeamsToScore?.yes)}</span>
+                </div>
+              </section>
+            </div>
+
+            <div className="card decision-transparent-card">
+              <div className="decision-transparent-head">
+                <div>
+                  <span className="review-kicker">{language === 'zh' ? '模型分析' : 'Model Analysis'}</span>
+                  <h3>{decisionDirectionText}</h3>
+                  <p>{transparentDecisionReason}</p>
+                </div>
+                <span className={`decision-pool-pill is-${isQualifiedPick ? 'qualified' : matchSignal.category}`}>
+                  {decisionPoolStatus}
+                </span>
+              </div>
+
+              <div className="decision-transparent-grid">
+                <section className="decision-transparent-panel">
+                  <h4>{language === 'zh' ? '独立模型概率' : 'Independent model'}</h4>
+                  {renderOutcomeTriplet(independentOutcomeProbabilities)}
+                </section>
+
+                <section className="decision-transparent-panel">
+                  <h4>{language === 'zh' ? '官方 SP 隐含概率' : 'Official SP implied'}</h4>
+                  {renderOutcomeTriplet(officialSpProbabilities)}
+                  <p>
+                    {hadPoolRow?.odds
+                      ? `${language === 'zh' ? '胜平负' : '1X2'} ${hadPoolRow.odds.odds1.toFixed(2)} / ${hadPoolRow.odds.oddsX.toFixed(2)} / ${hadPoolRow.odds.odds2.toFixed(2)}`
+                      : (language === 'zh' ? '普通胜平负暂未开售。' : 'Standard 1X2 is not on sale yet.')}
+                  </p>
+                </section>
+
+                <section className="decision-transparent-panel">
+                  <h4>{language === 'zh' ? '让球盘支持' : 'Handicap validation'}</h4>
+                  <strong>{handicapValidationText}</strong>
+                  <p>
+                    {language === 'zh'
+                      ? '让球盘只做风控验证，不会强行改掉独立模型首方向。'
+                      : 'Handicap is used as risk validation and does not forcibly rewrite the independent model leader.'}
+                  </p>
+                </section>
+
+                <section className="decision-transparent-panel">
+                  <h4>{language === 'zh' ? '进球模型' : 'Goals model'}</h4>
+                  <strong>{goalsLeanText}</strong>
+                  <p>
+                    {language === 'zh'
+                      ? `大2.5 ${formatProbabilityValue(over25Probability)} / 小2.5 ${formatProbabilityValue(under25Probability)} / BTTS ${formatProbabilityValue(probabilityModel?.bothTeamsToScore?.yes)}`
+                      : `Over2.5 ${formatProbabilityValue(over25Probability)} / Under2.5 ${formatProbabilityValue(under25Probability)} / BTTS ${formatProbabilityValue(probabilityModel?.bothTeamsToScore?.yes)}`}
+                  </p>
+                </section>
+              </div>
+
+              <div className="decision-risk-row">
+                <span>{language === 'zh' ? '风险标签' : 'Risk tags'}</span>
+                <div>
+                  {transparentRiskTags.length > 0 ? transparentRiskTags.map((tag) => (
+                    <b key={`${tag.zh}-${tag.en}`}>{tag[language]}</b>
+                  )) : (
+                    <b>{language === 'zh' ? '暂无硬风险标签' : 'No hard risk tag'}</b>
+                  )}
+                </div>
+              </div>
+            </div>
             {isFinished && hasPredictions && (
               <div className="card review-card">
                 <div className="review-head">
@@ -907,26 +1866,26 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
               )}
             </div>
 
-            {predictionMeta && (
-              <div className="prediction-policy-note">
-                <div>
-                  <strong>{predictionMetaLabel}</strong>
-                  <span>
-                    {language === 'zh'
-                      ? `时间：${formatPolicyTimestamp(predictionMetaTime, language)}`
-                      : `Time: ${formatPolicyTimestamp(predictionMetaTime, language)}`}
-                  </span>
-                </div>
-                <p>
-                  {predictionMeta.dataPolicy?.[language] || (language === 'zh'
-                    ? '开赛前仅在官方 SP/盘口信号发生实质变化时更新；开赛后只结算结果，不回写旧推荐。'
-                    : 'Before kickoff, updates only happen on material official SP/market changes; after kickoff, only settlement is added.')}
-                  {predictionMeta.updateReason && (
-                    <em>{predictionMeta.updateReason[language]}</em>
-                  )}
-                </p>
+            <div className="prediction-policy-note">
+              <div>
+                <strong>{predictionIsLocked
+                  ? (language === 'zh' ? '预测状态：已锁定' : 'Prediction status: locked')
+                  : (language === 'zh' ? '预测状态：赛前监控中' : 'Prediction status: monitoring')}</strong>
+                <span>
+                  {language === 'zh'
+                    ? `当前版本：${predictionVersionText} / 生成时间：${formatPolicyTimestamp(predictionGeneratedAt, language)} / 竞彩截止：${formatPolicyTimestamp(predictionCutoffRaw, language)}`
+                    : `Version: ${predictionVersionText} / Generated: ${formatPolicyTimestamp(predictionGeneratedAt, language)} / Cutoff: ${formatPolicyTimestamp(predictionCutoffRaw, language)}`}
+                </span>
               </div>
-            )}
+              <p>
+                {predictionMeta?.dataPolicy?.[language] || (language === 'zh'
+                  ? '竞彩截止前允许临场变盘校验；截止后本场预测方向不再修改，只更新赛果与命中状态。'
+                  : 'Before cutoff, late market changes may be validated; after cutoff, the prediction direction is not modified, only result settlement is updated.')}
+                {predictionMeta?.updateReason && (
+                  <em>{predictionMeta.updateReason[language]}</em>
+                )}
+              </p>
+            </div>
 
             {gptParsed && (
               <div className="card probability-model-card">
@@ -1025,9 +1984,17 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                     {renderOutcomeTriplet(probabilityModel.oneXTwo.final)}
                     <div className="probability-subline">
                       <span>
-                        {language === 'zh' ? '市场去水' : 'Market'}：
+                        {probabilityModelIsModelOnly
+                          ? (language === 'zh' ? '模型基准' : 'Model baseline')
+                          : (language === 'zh' ? '市场去水' : 'Market')}：
                         {renderOutcomeLine(probabilityModel.oneXTwo.market)}
                       </span>
+                      {probabilityModel.oneXTwo.teamStrength && (
+                        <span>
+                          {language === 'zh' ? '独立强度：' : 'Team strength: '}
+                          {renderOutcomeLine(probabilityModel.oneXTwo.teamStrength)}
+                        </span>
+                      )}
                       {probabilityModel.oneXTwo.elo && (
                         <span>
                           Elo：
@@ -1046,12 +2013,26 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                         Poisson：
                         {renderOutcomeLine(probabilityModel.oneXTwo.poisson)}
                       </span>
+                      {probabilityModel.oneXTwo.worldCupPrior && (
+                        <span>
+                          {language === 'zh' ? 'Kimi 世界杯先验：' : 'Kimi World Cup prior: '}
+                          {renderOutcomeLine(probabilityModel.oneXTwo.worldCupPrior)}
+                          {Number.isFinite(worldCupPriorStrengthDiff) && (
+                            <>
+                              {' '}
+                              {language === 'zh'
+                                ? `强度差 ${worldCupPriorStrengthDiff.toFixed(3)}`
+                                : `strength diff ${worldCupPriorStrengthDiff.toFixed(3)}`}
+                            </>
+                          )}
+                        </span>
+                      )}
                       {probabilityModel.ensembleWeights && (
                         <span className="probability-weight-line">
                           {language === 'zh' ? '集成权重' : 'Ensemble weights'}：
                           {language === 'zh'
-                            ? `市场 ${formatModelWeight(probabilityModel.ensembleWeights.market)} / Elo ${formatModelWeight(probabilityModel.ensembleWeights.elo)} / Poisson ${formatModelWeight(probabilityModel.ensembleWeights.poisson)}`
-                            : `market ${formatModelWeight(probabilityModel.ensembleWeights.market)} / Elo ${formatModelWeight(probabilityModel.ensembleWeights.elo)} / Poisson ${formatModelWeight(probabilityModel.ensembleWeights.poisson)}`}
+                            ? `独立强度 ${formatModelWeight(probabilityModel.ensembleWeights.teamStrength)} / Elo ${formatModelWeight(probabilityModel.ensembleWeights.elo)} / Poisson ${formatModelWeight(probabilityModel.ensembleWeights.poisson)}${Number.isFinite(probabilityModel.ensembleWeights.worldCupPrior) ? ` / 世界杯先验 ${formatModelWeight(probabilityModel.ensembleWeights.worldCupPrior)}` : ''} / SP校验 ${formatModelWeight(probabilityModel.ensembleWeights.market)}`
+                            : `team strength ${formatModelWeight(probabilityModel.ensembleWeights.teamStrength)} / Elo ${formatModelWeight(probabilityModel.ensembleWeights.elo)} / Poisson ${formatModelWeight(probabilityModel.ensembleWeights.poisson)}${Number.isFinite(probabilityModel.ensembleWeights.worldCupPrior) ? ` / World Cup prior ${formatModelWeight(probabilityModel.ensembleWeights.worldCupPrior)}` : ''} / SP validation ${formatModelWeight(probabilityModel.ensembleWeights.market)}`}
                         </span>
                       )}
                       {probabilityModel.dynamicCalibration && (
@@ -1062,6 +2043,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                       )}
                     </div>
                   </section>
+
+                  {renderCalculationFormulaPanel()}
 
                   <section className="probability-panel">
                     <h4>{language === 'zh' ? '比分分布' : 'Score Distribution'}</h4>
@@ -1088,7 +2071,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                     {probabilityModel.lambdaBlend && (
                       <div className="probability-pair-grid" style={{ marginBottom: '0.75rem' }}>
                         <span>
-                          {language === 'zh' ? '市场期望' : 'Market xG'}
+                          {probabilityModelIsModelOnly
+                            ? (language === 'zh' ? '模型期望' : 'Model xG')
+                            : (language === 'zh' ? '市场期望' : 'Market xG')}
                           <strong>{formatDecimal(probabilityModel.lambdaBlend.marketHomeLambda)} / {formatDecimal(probabilityModel.lambdaBlend.marketAwayLambda)}</strong>
                         </span>
                         <span>
@@ -1197,10 +2182,37 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                 </div>
 
                 <p className="probability-calibration-note">
-                  {probabilityModel.calibration[language]}
+                  {probabilityModel.calibration?.[language] || (language === 'zh'
+                    ? '概率先由独立强度、Elo、Poisson、世界杯先验生成，再按滚动命中表现做风险校准；SP 只参与市场分歧校验。'
+                    : 'Probabilities are generated from independent strength, Elo, Poisson, and World Cup priors, then risk-calibrated by rolling results; SP is market-divergence validation only.')}
                 </p>
               </div>
             )}
+
+            <div className="card factor-analysis-card">
+              <div className="factor-analysis-head">
+                <div>
+                  <span className="review-kicker">
+                    {language === 'zh' ? '影响因素拆解' : 'Factor breakdown'}
+                  </span>
+                  <h3>{language === 'zh' ? '模型如何分析这场比赛' : 'How this match is analyzed'}</h3>
+                  <p>
+                    {language === 'zh'
+                      ? '推荐不是单点判断，而是先用长期强弱、近况、进球分布、世界杯先验和可验证赛前信息生成独立概率，再用官方 SP 与外部均赔做分歧校验。'
+                      : 'The pick is not a single signal: independent probability is built from long-run strength, form, goal distribution, World Cup priors, and verified pre-match information; official SP and external odds validate divergence.'}
+                  </p>
+                </div>
+              </div>
+              <div className="factor-card-grid">
+                {factorCards.map((item) => (
+                  <div key={item.title} className={`factor-card is-${item.tone}`}>
+                    <span>{item.title}</span>
+                    <strong>{item.value}</strong>
+                    <p>{item.body}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
 
             <div className={`card insight-card is-${matchInsight.tone}`}>
               <div className="insight-head">
@@ -1259,8 +2271,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                   <h3>{language === 'zh' ? '12项赛前分析框架' : '12-Point Pre-Match Framework'}</h3>
                   <p>
                     {language === 'zh'
-                      ? '综合官方 SP、让球、SP 走势、Elo 强度、近一年攻防、赛程密度、比分分布与赛前信息层，按可验证程度形成赛前判断。'
-                      : 'Combines official SP, handicap, SP movement, Elo strength, last-year form, schedule density, score distribution, and pre-match signal layers.'}
+                      ? '综合 Elo 强度、近一年攻防、赛程密度、比分分布、世界杯先验与赛前信息层生成判断；官方 SP、让球和走势只做校验与风险标记。'
+                      : 'Combines Elo strength, last-year form, schedule density, score distribution, World Cup priors, and pre-match signals; official SP, handicap, and movement are validation and risk markers only.'}
                   </p>
                 </div>
                 <span>{predictionMeta?.promptVersion || 'professional-football-analyst-v1'}</span>
@@ -1289,8 +2301,74 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
             </div>
             
             {/* 比分推演卡片 */}
+            <div className={`card weather-analysis-card is-${weatherRiskTone}`}>
+              <div className="weather-analysis-head">
+                <div>
+                  <span className="review-kicker">
+                    {language === 'zh' ? '天气与场地因素' : 'Weather and pitch factors'}
+                  </span>
+                  <h3>{weatherImpactLabel}</h3>
+                  <p>
+                    {weatherVerified
+                      ? (weatherSummary || (language === 'zh' ? '已读取天气信号，当前仅作为赛前风险层修正。' : 'Weather signal is loaded and used as a pre-match risk modifier.'))
+                      : (language === 'zh'
+                        ? '当前赛程没有可验证的实时天气/场地字段，所以模型不会因为天气改动胜平负或进球概率。页面保留这个模块，是为了明确哪些因素暂未进入计算。'
+                        : 'No verified live weather or pitch field is available for this fixture, so probabilities are not changed by weather. This module is shown to make missing factors explicit.')}
+                  </p>
+                </div>
+                <div className="weather-source-stack">
+                  <span className={`weather-source-badge is-${weatherSourceStatus}`}>{weatherStatusLabel}</span>
+                  <span>{weatherSourceLabel}</span>
+                </div>
+              </div>
+
+              <p className={`weather-status-note is-${weatherSourceStatus}`}>{weatherStatusDescription}</p>
+
+              <div className="weather-metric-grid">
+                {weatherMetrics.map((item) => (
+                  <div key={item.label} className="weather-metric">
+                    <span>{item.label}</span>
+                    <strong>{item.value}</strong>
+                  </div>
+                ))}
+              </div>
+
+              <div className="weather-rule-grid">
+                <section>
+                  <h4>{language === 'zh' ? '当前处理' : 'Current handling'}</h4>
+                  <p>
+                    {weatherVerified
+                      ? (language === 'zh'
+                        ? '天气只进入风险层：恶劣天气会压低进球信心、提高让球不确定性；不会单独推翻独立模型主线。'
+                        : 'Weather only enters the risk layer: severe weather lowers goal confidence and increases handicap uncertainty, but does not override the independent model.')
+                      : (language === 'zh'
+                        ? '无验证天气时，系统按“中性天气”处理，避免把猜测写进概率。'
+                        : 'Without verified weather, the system treats weather as neutral to avoid injecting guesses into probabilities.')}
+                  </p>
+                </section>
+                <section>
+                  <h4>{language === 'zh' ? '后续接入规则' : 'Planned rules'}</h4>
+                  <p>
+                    {language === 'zh'
+                      ? '大雨/积水：下调大球与强让球；大风：降低传中和远射稳定性；高温高湿：提高后程体能风险；低温雪地：提高冷门和失误风险。'
+                      : 'Heavy rain lowers over-goals and strong handicap confidence; wind reduces crossing/shot stability; heat and humidity raise late fatigue risk; cold or snow raises upset/error risk.'}
+                  </p>
+                </section>
+                <section>
+                  <h4>{language === 'zh' ? '场地信息' : 'Venue info'}</h4>
+                  <p>
+                    {venueSummary
+                      || externalSignals?.venue?.name
+                      || (language === 'zh'
+                        ? '暂无可验证场地/草皮信息，暂不参与加权。'
+                        : 'No verified venue or pitch data yet, so no pitch weighting is applied.')}
+                  </p>
+                </section>
+              </div>
+            </div>
+
             {hasPredictions && (
-              <div className="card" style={{
+              <div className="card score-projection-card" style={{
                 background: 'linear-gradient(135deg, hsl(var(--primary) / 0.05) 0%, transparent 100%)',
                 borderColor: 'hsl(var(--primary) / 0.2)',
                 position: 'relative',
@@ -1303,10 +2381,17 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                 <div style={{ fontSize: '2.5rem', fontWeight: '900', fontFamily: 'var(--font-title)', margin: '0.75rem 0' }}>
                   {projectedScoreText}
                 </div>
+                {actualScoreText && (
+                  <p style={{ fontSize: '0.78rem', color: 'hsl(var(--primary))', fontWeight: 850, marginBottom: '0.45rem' }}>
+                    {actualScoreText}
+                    {' · '}
+                    {language === 'zh' ? '预测比分不回写' : 'forecast score is not rewritten'}
+                  </p>
+                )}
                 <p style={{ fontSize: '0.825rem', color: 'hsl(var(--text-secondary))' }}>
                   {language === 'zh'
-                    ? `模型基于官方 SP 反推预期进球，当前热区约 ${match.stats?.xG.home?.toFixed(2) ?? '--'} : ${match.stats?.xG.away?.toFixed(2) ?? '--'}。`
-                    : `Derived from official SP-implied xG. Current heat zone is about ${match.stats?.xG.home?.toFixed(2) ?? '--'} : ${match.stats?.xG.away?.toFixed(2) ?? '--'}.`}
+                    ? `模型基于独立 lambda 与 Poisson 比分分布推演，当前热区约 ${match.stats?.xG.home?.toFixed(2) ?? '--'} : ${match.stats?.xG.away?.toFixed(2) ?? '--'}。`
+                    : `Derived from independent lambdas and the Poisson score distribution. Current heat zone is about ${match.stats?.xG.home?.toFixed(2) ?? '--'} : ${match.stats?.xG.away?.toFixed(2) ?? '--'}.`}
                 </p>
                 <p style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))', marginTop: '0.5rem' }}>
                   {t('referenceText')}
@@ -1315,17 +2400,17 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
             )}
 
             {/* 预测列表 */}
-            {hasPredictions ? (
-              visiblePredictions.map(pred => renderPredictionBlock(pred))
+            {recommendationTipPredictions.length ? (
+              recommendationTipPredictions.map(pred => renderPredictionBlock(pred))
             ) : (
-              <div className="card" style={{ color: 'hsl(var(--text-secondary))', lineHeight: 1.6 }}>
+              <div className="card prediction-empty-card" style={{ color: 'hsl(var(--text-secondary))', lineHeight: 1.6 }}>
                 {language === 'zh'
                   ? isFinished
                     ? '这场是官方历史赛果记录，只展示比分与赛程信息。'
-                    : '本场普通胜平负暂未开售，当前先展示官方让球胜平负赔率；HAD 开售后再生成模型推荐。'
+                    : '这场暂时没有可展示的比分或进球数推荐。'
                   : isFinished
                     ? 'This is an official historical result record with score and schedule information only.'
-                    : 'The standard 1X2 pool is not on sale yet. Official handicap 1X2 odds are shown, and model tips will be generated after HAD opens.'}
+                    : 'No score or goals recommendation is currently available for this fixture.'}
               </div>
             )}
 
@@ -1392,8 +2477,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                   <h4>{language === 'zh' ? '双方近一年官方赛果' : 'Last-Year Official Team Results'}</h4>
                   <p>
                     {language === 'zh'
-                      ? `从已同步的中国竞彩网历史赛果中追溯近一年同队比赛，单队最多展示最近 ${TEAM_HISTORY_DISPLAY_LIMIT} 场。当前历史库覆盖：${historyCoverageLabel}。`
-                      : `Matched from synced official Sporttery results in the last-year window. Showing up to ${TEAM_HISTORY_DISPLAY_LIMIT} recent matches per team. Coverage: ${historyCoverageLabel}.`}
+                      ? `按开赛时间往前 365 天追溯同队比赛，单队最多展示最近 ${TEAM_HISTORY_DISPLAY_LIMIT} 场。统计窗口：${historyCoverageLabel}，来源：${historyDataSourceLabel}。`
+                      : `Matched by the 365-day window before kickoff. Showing up to ${TEAM_HISTORY_DISPLAY_LIMIT} recent matches per team. Window: ${historyCoverageLabel}; source: ${historyDataSourceLabel}.`}
                   </p>
                 </div>
               </div>
@@ -1413,8 +2498,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                 <h3>{language === 'zh' ? '近一年直接交锋' : 'Last-Year Head-to-Head'}</h3>
                 <p>
                   {language === 'zh'
-                    ? `仅展示当前历史库里近一年已同步到的双方正式交锋结果，最多展示 ${H2H_DISPLAY_LIMIT} 场。当前历史库覆盖：${historyCoverageLabel}。`
-                    : `Only official head-to-head results in the last-year window are shown, up to ${H2H_DISPLAY_LIMIT} matches. Coverage: ${historyCoverageLabel}.`}
+                    ? `仅展示开赛前 365 天窗口内的双方直接交锋，最多展示 ${H2H_DISPLAY_LIMIT} 场。统计窗口：${historyCoverageLabel}，来源：${historyDataSourceLabel}。`
+                    : `Only direct head-to-head results inside the 365-day pre-kickoff window are shown, up to ${H2H_DISPLAY_LIMIT} matches. Window: ${historyCoverageLabel}; source: ${historyDataSourceLabel}.`}
                 </p>
               </div>
             </div>
@@ -1438,8 +2523,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
             ) : (
               <div className="history-empty">
                 {language === 'zh'
-                  ? '近一年官方历史库暂未匹配到这两队的直接交锋。'
-                  : 'No direct head-to-head result found in the last-year official history window.'}
+                  ? '近一年窗口暂未匹配到这两队的直接交锋。'
+                  : 'No direct head-to-head result found in the last-year window.'}
               </div>
             )}
             {headToHead.sampleSize > headToHead.rows.length && (
@@ -1519,8 +2604,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
           ) : (
             <div className="card data-quality-note">
               {language === 'zh'
-                ? '本场官网没有返回可用积分榜，页面改用 Elo 强度、官方 SP 和近一年赛果做强弱参考，不展示模拟排名。'
-                : 'No usable official table was returned for this fixture, so the page uses Elo strength, official SP, and last-year results instead of a simulated table.'}
+                ? '本场官网没有返回可用积分榜，页面改用 Elo 强度、长期样本和近一年赛果做强弱参考，不展示模拟排名。'
+                : 'No usable official table was returned for this fixture, so the page uses Elo strength, long-run samples, and last-year results instead of a simulated table.'}
             </div>
           )
         )}

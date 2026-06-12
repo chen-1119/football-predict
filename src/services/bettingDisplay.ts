@@ -11,6 +11,7 @@ export interface SportteryOddsPoolDisplay {
   source?: string;
   updatedAt?: string;
   probabilities?: { home: number; draw: number; away: number };
+  unavailableReason?: 'closed' | 'archived';
 }
 
 export interface MatchOddsInput {
@@ -291,6 +292,7 @@ export function getImpliedProbabilities(odds: Odds | null | undefined) {
 
 export function getSportteryPoolRows(match: MatchOddsInput, language: Language): SportteryOddsPoolDisplay[] {
   const resolved = getResolvedMatchOdds(match);
+  const isArchived = (match as MatchOddsInput & { status?: string }).status === 'FINISHED';
   const rows: SportteryOddsPoolDisplay[] = [
     {
       poolCode: 'HAD',
@@ -299,7 +301,8 @@ export function getSportteryPoolRows(match: MatchOddsInput, language: Language):
       odds: resolved.had?.odds || null,
       source: resolved.had?.source,
       updatedAt: resolved.had?.updatedAt,
-      probabilities: getImpliedProbabilities(resolved.had?.odds)
+      probabilities: getImpliedProbabilities(resolved.had?.odds),
+      unavailableReason: resolved.had?.odds ? undefined : (isArchived ? 'archived' : 'closed')
     },
     {
       poolCode: 'HHAD',
@@ -308,9 +311,9 @@ export function getSportteryPoolRows(match: MatchOddsInput, language: Language):
       odds: resolved.hhad?.odds || null,
       source: resolved.hhad?.source,
       updatedAt: resolved.hhad?.updatedAt,
-      probabilities: getImpliedProbabilities(resolved.hhad?.odds)
+      probabilities: getImpliedProbabilities(resolved.hhad?.odds),
+      unavailableReason: resolved.hhad?.odds ? undefined : (isArchived ? 'archived' : 'closed')
     }
   ];
-  const hasAnyOdds = rows.some((row) => row.odds);
-  return hasAnyOdds ? rows.filter((row) => row.odds || row.poolCode === 'HAD') : [];
+  return rows;
 }

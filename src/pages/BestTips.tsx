@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContextCore';
 import type { Match, PredictionDetail } from '../services/mockData';
 import { getPredictionTipDisplay } from '../services/bettingDisplay';
 import { getTeamById } from '../services/entities';
+import { isActionableRecommendation } from '../services/matchSignal';
 import { TeamBadge } from '../components/TeamBadge';
 import { Trophy, Calendar } from 'lucide-react';
 
@@ -13,26 +14,36 @@ interface BestTipsProps {
 export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
   const { language, matches } = useApp();
 
-  // 筛选出所有今天和明天的比赛中的 BEST 推荐
   const activeBestMatches = React.useMemo(() => {
-    return matches.filter((m: Match) => {
-      const isFinished = m.status === 'FINISHED';
-      if (isFinished) return false; // 精选页主要展示活跃的未开始比赛
-      return m.predictions.some(p => p.marketType === 'BEST');
-    });
+    return matches
+      .filter(isActionableRecommendation)
+      .sort((a: Match, b: Match) => {
+        const aTrust = a.predictions.find((prediction) => prediction.marketType === 'BEST')?.trustScore || 0;
+        const bTrust = b.predictions.find((prediction) => prediction.marketType === 'BEST')?.trustScore || 0;
+        if (bTrust !== aTrust) return bTrust - aTrust;
+        return Date.parse(a.kickoffTime) - Date.parse(b.kickoffTime);
+      });
+  }, [matches]);
+
+  const referenceOutsidePool = React.useMemo(() => {
+    return matches.filter((match: Match) => {
+      if (match.status !== 'SCHEDULED' || isActionableRecommendation(match)) return false;
+      const best = match.predictions.find((prediction) => prediction.marketType === 'BEST');
+      return Boolean(best && best.tipCode !== 'WATCH');
+    }).length;
   }, [matches]);
 
   const translations = {
-    title: { zh: 'AI 赛前观察', en: 'AI Pre-match Watch' },
-    subtitle: { 
-      zh: '展示当前模型保留的候选方向、观察项与风险点；低赔热门不会直接包装成高可信。', 
-      en: 'Shows model shortlist, watch, and value directions. Every pick should be checked against official SP, risk tags, and late movement.' 
+    title: { zh: '精选推荐池', en: 'Qualified Pick Pool' },
+    subtitle: {
+      zh: '只收录模型概率、官方 SP、让球盘、风险标签同时通过的场次。其余有方向但风控未通过的比赛，保留在赛事列表作为参考。',
+      en: 'Only fixtures where model probability, official SP, handicap, and risk tags pass together are shown here. Reference leans stay on the fixture list.'
     },
     confidence: { zh: '模型信赖度', en: 'Model Confidence' },
     odds: { zh: '首选SP', en: 'Primary Odds' },
     kickoff: { zh: '开赛', en: 'Kickoff' },
     viewDetail: { zh: '查看深度数据统计', en: 'Analyze Match Stats' },
-    noTips: { zh: '当前暂无可用精选或观察结论。请稍后再试。', en: 'No shortlist or watch note is available yet. Check back later.' }
+    noTips: { zh: '本期暂无达标精选。可回到赛事列表查看参考方向与避开观察。', en: 'No fixture passes the qualified-pick gate. Check the fixture list for reference leans and avoid watches.' }
   };
 
   const t = (key: keyof typeof translations) => {
@@ -41,6 +52,12 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
 
   const getBestCardNote = (prediction: PredictionDetail) => {
     const riskCount = prediction.riskTags?.length || 0;
+    if (prediction.recommendationAction === 'reference') {
+      return language === 'zh'
+        ? `参考倾向，未进强推池；${riskCount ? `已触发 ${riskCount} 个风险标签。` : '请结合临场 SP 和让球盘自行判断。'}`
+        : `Reference lean, outside the strong-pick pool. ${riskCount ? `${riskCount} risk tags triggered.` : 'Use late SP and handicap movement for judgement.'}`;
+    }
+
     if (prediction.tipCode === 'WATCH') {
       return language === 'zh'
         ? `未达到强推阈值，当前只作观察；${riskCount ? `已触发 ${riskCount} 个风险标签。` : '等待下一次官方 SP 快照复核。'}`
@@ -69,6 +86,16 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
         <p style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.9rem', marginTop: '0.5rem', lineHeight: '1.6' }}>
           {t('subtitle')}
         </p>
+        <div className="best-pool-summary">
+          <span>
+            {language === 'zh' ? '本期精选' : 'Qualified'}
+            <strong>{activeBestMatches.length}</strong>
+          </span>
+          <span>
+            {language === 'zh' ? '参考未入池' : 'Reference outside'}
+            <strong>{referenceOutsidePool}</strong>
+          </span>
+        </div>
       </div>
 
       {/* 精选卡片列表 */}

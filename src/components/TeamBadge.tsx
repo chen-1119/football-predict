@@ -18,9 +18,11 @@ export function TeamBadge({ team, size = 'md', className = '' }: TeamBadgeProps)
     color: '#64748b'
   };
   const [failedLogo, setFailedLogo] = useState<string | null>(null);
+  const [loadedLogo, setLoadedLogo] = useState<string | null>(null);
   const visual = resolveTeamVisual(safeTeam);
   const style = { '--team-color': safeTeam.color } as CSSProperties;
   const shouldRenderImage = visual.isImage && failedLogo !== visual.logo;
+  const imageLoaded = loadedLogo === visual.logo;
 
   return (
     <span
@@ -33,15 +35,19 @@ export function TeamBadge({ team, size = 'md', className = '' }: TeamBadgeProps)
         <>
           <span className="team-badge-fallback">{visual.fallbackText}</span>
           <img
+            className={`team-badge-img ${imageLoaded ? 'is-loaded' : ''}`.trim()}
             src={visual.logo}
             alt={visual.label}
             loading="lazy"
             referrerPolicy="no-referrer"
+            onLoad={() => setLoadedLogo(visual.logo)}
             onError={() => setFailedLogo(visual.logo)}
           />
         </>
       ) : (
-        <span>{visual.isImage ? visual.fallbackText : visual.logo}</span>
+        <span className={visual.isImage ? 'team-badge-fallback' : undefined}>
+          {visual.isImage ? visual.fallbackText : visual.logo}
+        </span>
       )}
     </span>
   );

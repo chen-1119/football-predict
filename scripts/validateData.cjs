@@ -24,6 +24,16 @@ function expectedSportterySp(match, tipCode) {
   return undefined;
 }
 
+function parseHandicapLine(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(String(value).replace(/[^\d.+-]/g, ""));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function hasFiveHundredResult(match) {
+  return String(match?.resultSource || match?.externalSignals?.fiveHundred?.result?.source || "").startsWith("500.com");
+}
+
 function expectedPredictionResult(match, prediction) {
   if (prediction.tipCode === "WATCH") return "PENDING";
   if (match.status !== "FINISHED") return "PENDING";
@@ -31,6 +41,14 @@ function expectedPredictionResult(match, prediction) {
   const total = match.scoreHome + match.scoreAway;
   const actual1x2 = match.scoreHome > match.scoreAway ? "1" : match.scoreHome < match.scoreAway ? "2" : "X";
   const code = prediction.tipCode;
+
+  if (prediction.oddsPoolCode === "HHAD" && ["1", "X", "2"].includes(code)) {
+    const handicap = parseHandicapLine(match.handicapLine);
+    if (handicap === null) return "PENDING";
+    const adjustedHome = match.scoreHome + handicap;
+    const actualHhad = adjustedHome > match.scoreAway ? "1" : adjustedHome < match.scoreAway ? "2" : "X";
+    return code === actualHhad ? "WON" : "LOST";
+  }
 
   if ((prediction.marketType === "1X2" || prediction.marketType === "BEST") && ["1", "X", "2"].includes(code)) {
     return code === actual1x2 ? "WON" : "LOST";
@@ -46,6 +64,24 @@ function expectedPredictionResult(match, prediction) {
     if (code === "NG") return match.scoreHome === 0 || match.scoreAway === 0 ? "WON" : "LOST";
   }
   return prediction.resultStatus;
+}
+
+function isModelOnlyReference(match) {
+  const predictions = Array.isArray(match?.predictions) ? match.predictions : [];
+  if (!predictions.length) return false;
+
+  const modelOnlyVersion = String(match?.probabilityModel?.version || "").includes("model-only");
+  const hasModelOnlyTag = predictions.some((prediction) => (
+    Array.isArray(prediction?.riskTags) &&
+    prediction.riskTags.some((tag) => /No official SP|Model-only reference/i.test(`${tag?.en || ""} ${tag?.zh || ""}`))
+  ));
+  const allowedPredictions = predictions.every((prediction) => (
+    ["1X2", "BEST"].includes(prediction?.marketType) &&
+    Number(prediction?.odds || 0) === 0 &&
+    (prediction?.tipCode === "WATCH" || ["1", "X", "2"].includes(prediction?.tipCode))
+  ));
+
+  return modelOnlyVersion && hasModelOnlyTag && allowedPredictions;
 }
 
 const errors = [];
@@ -75,6 +111,7 @@ for (const match of matches) {
   const hasValidOdds = oddsValues.every((value) => Number.isFinite(value) && value > 1.01);
   const hasValidHandicapOdds = handicapOddsValues.every((value) => Number.isFinite(value) && value > 1.01);
   const isResultOnly = match.status === "FINISHED" && !hasOfficialOdds;
+  const isFiveHundredResult = isResultOnly && hasFiveHundredResult(match);
   const isScheduleOnly = match.source === "sporttery" && match.status !== "FINISHED" && !hasOfficialOdds && !hasOfficialHandicapOdds;
 
   if (!hasValidOdds && !hasValidHandicapOdds && !isResultOnly && !isScheduleOnly) {
@@ -101,25 +138,26 @@ for (const match of matches) {
     if (!Number.isFinite(match.scoreHome) || !Number.isFinite(match.scoreAway)) {
       errors.push(`${match.id}: result-only match is missing final score`);
     }
-    if (!String(match.sourceUrl || "").includes("webapi.sporttery.cn")) {
+    if (!isFiveHundredResult && !String(match.sourceUrl || "").includes("webapi.sporttery.cn")) {
       errors.push(`${match.id}: result-only match is missing official result URL`);
     }
-    if ((match.predictions || []).length > 0) {
+    if (!isFiveHundredResult && (match.predictions || []).length > 0) {
       errors.push(`${match.id}: result-only match must not contain model predictions`);
     }
-    if (match.stats) {
+    if (!isFiveHundredResult && match.stats) {
       errors.push(`${match.id}: result-only match must not contain simulated model stats`);
     }
   }
 
   if (isScheduleOnly) {
+    const hasAllowedModelOnlyReference = isModelOnlyReference(match);
     if (!String(match.sourceUrl || "").includes("webapi.sporttery.cn")) {
       errors.push(`${match.id}: schedule-only match is missing official source URL`);
     }
-    if ((match.predictions || []).length > 0) {
+    if ((match.predictions || []).length > 0 && !hasAllowedModelOnlyReference) {
       errors.push(`${match.id}: schedule-only match must not contain model predictions`);
     }
-    if (match.stats) {
+    if (match.stats && !hasAllowedModelOnlyReference) {
       errors.push(`${match.id}: schedule-only match must not contain simulated model stats`);
     }
   }

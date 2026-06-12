@@ -5,16 +5,28 @@ const dataDir = path.join(__dirname, "..", "public", "data");
 const files = ["matches-current.json", "matches-history.json"]
   .map((file) => path.join(dataDir, file))
   .filter((file) => fs.existsSync(file));
+const currentFile = path.join(dataDir, "matches-current.json");
 
 const matches = files.flatMap((file) => JSON.parse(fs.readFileSync(file, "utf8")));
+const currentMatches = fs.existsSync(currentFile)
+  ? JSON.parse(fs.readFileSync(currentFile, "utf8"))
+  : [];
 const enabledMarkets = new Set(["1X2", "GOALS", "BEST"]);
 const calibrationFile = path.join(dataDir, "model-calibration.json");
+const strategyFile = path.join(dataDir, "model-strategy.json");
 const snapshotsFile = path.join(dataDir, "prediction-snapshots.json");
+const syncMetaFile = path.join(dataDir, "sync-meta.json");
 const modelCalibration = fs.existsSync(calibrationFile)
   ? JSON.parse(fs.readFileSync(calibrationFile, "utf8"))
   : null;
+const modelStrategy = fs.existsSync(strategyFile)
+  ? JSON.parse(fs.readFileSync(strategyFile, "utf8"))
+  : null;
 const predictionSnapshots = fs.existsSync(snapshotsFile)
   ? JSON.parse(fs.readFileSync(snapshotsFile, "utf8"))
+  : null;
+const syncMeta = fs.existsSync(syncMetaFile)
+  ? JSON.parse(fs.readFileSync(syncMetaFile, "utf8"))
   : null;
 
 function teamName(match, side) {
@@ -103,6 +115,23 @@ const settled = allRows.filter((row) => row.result !== "PENDING" && row.tip !== 
 const active = allRows.filter((row) => row.status !== "FINISHED");
 
 console.log(`Prediction audit: ${matches.length} matches, ${allRows.length} prediction rows, ${settled.length} settled rows.`);
+if (syncMeta?.historicalTraining || currentMatches.length) {
+  const scheduled = currentMatches.filter((match) => match.status === "SCHEDULED");
+  const auditScope = scheduled.length ? scheduled : currentMatches;
+  console.log("\nHistorical training");
+  console.table([{
+    version: syncMeta?.historicalTraining?.version || "-",
+    source: syncMeta?.historicalTraining?.source || "-",
+    rows: syncMeta?.historicalTraining?.rows || 0,
+    lastMatchDate: syncMeta?.historicalTraining?.lastMatchDate || "-",
+    scheduled: scheduled.length,
+    eloHistorical: auditScope.filter((match) => match.probabilityModel?.elo?.historicalSource).length,
+    formHistorical: auditScope.filter((match) => match.probabilityModel?.form?.historicalSource).length,
+    leaguePrior: auditScope.filter((match) => match.probabilityModel?.leaguePrior).length,
+    lambdaLeagueWeight: auditScope.filter((match) => Number(match.probabilityModel?.lambdaBlend?.leagueWeight) > 0).length,
+    trainingSignature: auditScope.filter((match) => Boolean(match.predictionMeta?.trainingSignature)).length,
+  }]);
+}
 console.log("\nSettled by market");
 console.table(summarize(settled, (row) => row.market));
 console.log("\nSettled by policy");
@@ -146,6 +175,43 @@ if (modelCalibration) {
     maxRiskTags: gate.maxRiskTags,
     goalsMinBoost: gate.goalsMinBoost,
   })));
+}
+if (modelStrategy) {
+  console.log("\nSelf-optimization strategy");
+  console.table([{
+    version: modelStrategy.version,
+    onlineEffect: modelStrategy.activation?.onlineEffect || "-",
+    mode: modelStrategy.activation?.mode || "-",
+    officialRows: modelStrategy.sample?.officialRows || 0,
+    recommendationRows: modelStrategy.sample?.recommendationRows || 0,
+    bestRows: modelStrategy.sample?.bestRows || 0,
+    activeProfileGates: modelStrategy.activeGates?.profile || 0,
+    activeMarketGates: modelStrategy.activeGates?.market || 0,
+    activeOddsBucketGates: modelStrategy.activeGates?.oddsBucket || 0,
+    activeTipGates: modelStrategy.activeGates?.tip || 0,
+  }]);
+  const activeRules = [
+    ...Object.values(modelStrategy.gateByProfile || {}),
+    ...Object.values(modelStrategy.gateByMarket || {}),
+    ...Object.values(modelStrategy.gateByOddsBucket || {}),
+    ...Object.values(modelStrategy.gateByTip || {}),
+  ].filter((rule) => rule.onlineAction === "tighten");
+  if (activeRules.length) {
+    console.log("\nActive self-optimization rules");
+    console.table(activeRules.slice(0, 20).map((rule) => ({
+      key: rule.key,
+      rows: rule.settled ?? rule.sample?.overall?.settled ?? 0,
+      hitRate: rule.hitRate === null || rule.hitRate === undefined
+        ? "-"
+        : `${(rule.hitRate * 100).toFixed(1)}%`,
+      roi: rule.roi ?? "-",
+      probabilityBoost: rule.adjustments?.minProbabilityBoost || 0,
+      modelGapBoost: rule.adjustments?.minModelGapBoost || 0,
+      trustPenalty: rule.adjustments?.trustPenalty || 0,
+      riskDelta: rule.adjustments?.maxRiskTagsDelta || 0,
+      reasons: (rule.reasons || []).slice(0, 2).join(", "),
+    })));
+  }
 }
 if (predictionSnapshots) {
   console.log("\nPrediction snapshots");

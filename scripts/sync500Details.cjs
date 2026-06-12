@@ -12,6 +12,7 @@ const EXTERNAL_SIGNALS_FILE = path.join(DATA_DIR, "external-signals.json");
 const SOURCE_URL = process.env.FIVE_HUNDRED_JCZQ_URL || "https://trade.500.com/jczq/";
 const MAX_MATCHES = Math.max(1, Number(process.env.FIVE_HUNDRED_DETAILS_MAX_MATCHES || 8));
 const REFRESH_MINUTES = Math.max(30, Number(process.env.FIVE_HUNDRED_DETAILS_REFRESH_MINUTES || 180));
+const RESULT_LOOKBACK_HOURS = Math.max(1, Number(process.env.FIVE_HUNDRED_RESULT_LOOKBACK_HOURS || 48));
 const DETAIL_TIMEOUT_SECONDS = Math.max(5, Number(process.env.FIVE_HUNDRED_DETAILS_TIMEOUT_SECONDS || 10));
 const MAX_ERRORS = Math.max(1, Number(process.env.FIVE_HUNDRED_DETAILS_MAX_ERRORS || 3));
 const USER_AGENT = process.env.FIVE_HUNDRED_USER_AGENT
@@ -191,6 +192,19 @@ const parseOdds = (rowHtml, type) => {
   return odds.odds1 && odds.oddsX && odds.odds2 ? odds : null;
 };
 
+const parseScore = (value) => {
+  const match = String(value || "").match(/(\d+)\s*[:：]\s*(\d+)/);
+  return match ? { home: Number(match[1]), away: Number(match[2]) } : null;
+};
+
+const scoreFromTradeRow = (rowHtml) => {
+  const html = String(rowHtml || "");
+  const scoreHtml = (html.match(/<a[^>]*class="[^"]*\bscore\b[^"]*"[^>]*>([\s\S]*?)<\/a>/i) || [])[1]
+    || (html.match(/<i[^>]*class="[^"]*\bteam-vs\b[^"]*"[^>]*>([\s\S]*?)<\/i>/i) || [])[1]
+    || "";
+  return parseScore(textOnly(scoreHtml));
+};
+
 const availabilityFor = (raw) => {
   const output = {};
   String(raw || "").split(",").forEach((pair) => {
@@ -210,7 +224,7 @@ const signalKeys = (match) => {
 
 const parseTradeRows = (html) => {
   const rows = [];
-  const re = /<tr\s+class="bet-tb-tr"([^>]*)>([\s\S]*?)<\/tr>/g;
+  const re = /<tr\b([^>]*class="[^"]*\bbet-tb-tr\b[^"]*"[^>]*)>([\s\S]*?)<\/tr>/gi;
   let match;
   while ((match = re.exec(html))) {
     const attrs = parseAttrs(match[1]);
@@ -218,6 +232,8 @@ const parseTradeRows = (html) => {
     const fixtureId = norm(attrs["data-fixtureid"]);
     const sourceMatchId = norm(attrs["data-id"]);
     if (!fixtureId || !sourceMatchId) continue;
+    const score = scoreFromTradeRow(rowHtml);
+    const isEnded = norm(attrs["data-isend"]) === "1" || /\bbet-tb-end\b/.test(match[0]);
     const links = {};
     const linkRe = /href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
     let linkMatch;
@@ -245,6 +261,12 @@ const parseTradeRows = (html) => {
       matchTime: norm(attrs["data-matchtime"]),
       kickoffTime: attrs["data-matchdate"] && attrs["data-matchtime"] ? `${norm(attrs["data-matchdate"])}T${norm(attrs["data-matchtime"])}:00+08:00` : "",
       buyEndTime: norm(attrs["data-buyendtime"]),
+      status: score ? "FINISHED" : "SCHEDULED",
+      scoreHome: score?.home ?? null,
+      scoreAway: score?.away ?? null,
+      resultSource: score ? "500.com:jczq-result" : undefined,
+      resultUpdatedAt: score ? nowIso() : undefined,
+      isEnded,
       handicapLine: norm(attrs["data-rangqiu"]),
       availability: availabilityFor(attrs["data-subactive"]),
       had: parseOdds(rowHtml, "nspf"),
@@ -253,6 +275,55 @@ const parseTradeRows = (html) => {
     });
   }
   return rows;
+};
+
+const buildDateUrl = (date) => {
+  const url = new URL(SOURCE_URL);
+  if (!/\/index\.php$/i.test(url.pathname)) {
+    url.pathname = `${url.pathname.replace(/\/+$/, "")}/index.php`;
+  }
+  url.searchParams.set("date", date);
+  return url.toString();
+};
+
+const isRecentResultCandidate = (match) => {
+  const kickoff = Date.parse(match?.kickoffTime || "");
+  if (!Number.isFinite(kickoff)) return false;
+  const ageHours = (Date.now() - kickoff) / 3600000;
+  return ageHours >= 0 && ageHours <= RESULT_LOOKBACK_HOURS;
+};
+
+const uniqueBySourceMatchId = (rows) => {
+  const byId = new Map();
+  const scoreRank = (row) => (Number.isFinite(row?.scoreHome) && Number.isFinite(row?.scoreAway) ? 2 : row?.isEnded ? 1 : 0);
+  for (const row of rows) {
+    if (!row?.sourceMatchId) continue;
+    const previous = byId.get(row.sourceMatchId);
+    byId.set(row.sourceMatchId, !previous || scoreRank(row) >= scoreRank(previous) ? { ...previous, ...row } : previous);
+  }
+  return Array.from(byId.values());
+};
+
+const fetchRecentResultRows = async (existingDetails) => {
+  const dates = new Set();
+  for (const match of Object.values(existingDetails?.matches || {})) {
+    if (!isRecentResultCandidate(match)) continue;
+    const date = norm(match.processDate || match.matchDate || String(match.kickoffTime || "").slice(0, 10));
+    if (date) dates.add(date);
+  }
+
+  const rows = [];
+  const errors = [];
+  for (const date of dates) {
+    try {
+      const html = await httpGetHtml(buildDateUrl(date), SOURCE_URL);
+      rows.push(...parseTradeRows(html));
+    } catch (error) {
+      errors.push({ date, message: error.message || String(error) });
+    }
+  }
+
+  return { rows, errors, dates: Array.from(dates) };
 };
 
 const extractTables = (html) => {
@@ -306,11 +377,6 @@ const parseFifaRanks = (tables, matchInfo) => {
     home: parseOne(rankTables[0], matchInfo.homeTeamName),
     away: parseOne(rankTables[1], matchInfo.awayTeamName),
   };
-};
-
-const parseScore = (value) => {
-  const match = String(value || "").match(/(\d+)\s*[:：]\s*(\d+)/);
-  return match ? { home: Number(match[1]), away: Number(match[2]) } : null;
 };
 
 const rowTexts = (tableBody) => {
@@ -699,6 +765,16 @@ const buildDetailSignal = (match, details, updatedAt) => {
         buyEndTime: match.buyEndTime,
         availability: match.availability,
       },
+      ...(Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway) ? {
+        result: {
+          source: match.resultSource || "500.com:jczq-result",
+          updatedAt,
+          status: "FINISHED",
+          scoreHome: match.scoreHome,
+          scoreAway: match.scoreAway,
+          scoreText: `${match.scoreHome}:${match.scoreAway}`,
+        },
+      } : {}),
       rank: analysis?.rank || undefined,
       recentForm: analysis?.recentForm || undefined,
       futureSchedule: analysis?.futureSchedule || undefined,
@@ -773,8 +849,10 @@ const selectTargets = (rows, cache) => {
 const main = async () => {
   const updatedAt = nowIso();
   const tradeHtml = await httpGetHtml(SOURCE_URL, "https://www.500.com/");
-  const tradeRows = parseTradeRows(tradeHtml);
+  const currentTradeRows = parseTradeRows(tradeHtml);
   const existingDetails = readJson(DETAILS_FILE, { version: 1, source: "500.com:details", matches: {} });
+  const recentResults = await fetchRecentResultRows(existingDetails);
+  const tradeRows = uniqueBySourceMatchId([...currentTradeRows, ...recentResults.rows]);
   const targets = selectTargets(tradeRows, existingDetails);
   const detailsMatches = { ...(existingDetails.matches || {}) };
   const external = readJson(EXTERNAL_SIGNALS_FILE, { version: 1, source: "external-signals", matches: {}, sources: {} });
@@ -788,9 +866,24 @@ const main = async () => {
   const mergeCachedSignal = (match, cached) => {
     if (!cached?.signal) return;
     const kickoff = Date.parse(match.kickoffTime || cached.kickoffTime || "");
-    if (Number.isFinite(kickoff) && kickoff + 2 * 3600000 < Date.now()) return;
+    const hasMatchResult = Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway);
+    const hasCachedResult = Number.isFinite(cached.signal?.fiveHundred?.result?.scoreHome)
+      && Number.isFinite(cached.signal?.fiveHundred?.result?.scoreAway);
+    if (!hasMatchResult && !hasCachedResult && Number.isFinite(kickoff) && kickoff + 2 * 3600000 < Date.now()) return;
+    const signal = hasMatchResult
+      ? buildDetailSignal(match, cached.details || {}, updatedAt)
+      : cached.signal;
+    if (hasMatchResult) {
+      detailsMatches[match.sourceMatchId] = {
+        ...cached,
+        ...match,
+        updatedAt,
+        details: cached.details || {},
+        signal,
+      };
+    }
     for (const key of signalKeys(match)) {
-      externalMatches[key] = mergeSignal(externalMatches[key], cached.signal);
+      externalMatches[key] = mergeSignal(externalMatches[key], signal);
     }
     mergedCacheIds.add(match.sourceMatchId || cached.sourceMatchId);
     cachedMerged += 1;
@@ -845,11 +938,13 @@ const main = async () => {
     refreshMinutes: REFRESH_MINUTES,
     timeoutSeconds: DETAIL_TIMEOUT_SECONDS,
     maxErrors: MAX_ERRORS,
-    scannedRows: tradeRows.length,
+    scannedRows: currentTradeRows.length,
+    resultArchiveDates: recentResults.dates,
+    resultRows: recentResults.rows.filter((row) => Number.isFinite(row.scoreHome) && Number.isFinite(row.scoreAway)).length,
     updated,
     cachedMerged,
     requestedPages,
-    errors,
+    errors: [...recentResults.errors, ...errors],
     matches: detailsMatches,
   };
   writeJson(DETAILS_FILE, detailsPayload);
@@ -863,14 +958,16 @@ const main = async () => {
       "500.com:details": {
         url: SOURCE_URL,
         updatedAt,
-        scannedRows: tradeRows.length,
+        scannedRows: currentTradeRows.length,
+        resultArchiveDates: recentResults.dates,
+        resultRows: recentResults.rows.filter((row) => Number.isFinite(row.scoreHome) && Number.isFinite(row.scoreAway)).length,
         updated,
         cachedMerged,
         requestedPages,
         refreshMinutes: REFRESH_MINUTES,
         timeoutSeconds: DETAIL_TIMEOUT_SECONDS,
         maxErrors: MAX_ERRORS,
-        errors: errors.length,
+        errors: recentResults.errors.length + errors.length,
       },
     },
     matches: externalMatches,
@@ -880,12 +977,14 @@ const main = async () => {
   console.log(JSON.stringify({
     ok: errors.length === 0,
     source: "500.com:details",
-    scannedRows: tradeRows.length,
+    scannedRows: currentTradeRows.length,
+    resultArchiveDates: recentResults.dates,
+    resultRows: recentResults.rows.filter((row) => Number.isFinite(row.scoreHome) && Number.isFinite(row.scoreAway)).length,
     targets: targets.length,
     updated,
     cachedMerged,
     requestedPages,
-    errors,
+    errors: [...recentResults.errors, ...errors],
     output: path.relative(PROJECT_ROOT, DETAILS_FILE),
   }, null, 2));
 };

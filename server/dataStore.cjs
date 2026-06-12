@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const fsp = require("node:fs/promises");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const readline = require("node:readline");
 
 const STATE_FILE = "state.json";
 const TABLES = {
@@ -9,6 +10,13 @@ const TABLES = {
   matchSnapshots: "match-snapshots",
   oddsSnapshots: "odds-snapshots",
   predictionRuns: "prediction-runs"
+};
+
+const TABLE_COUNT_KEYS = {
+  [TABLES.syncRuns]: "syncRuns",
+  [TABLES.matchSnapshots]: "matchSnapshots",
+  [TABLES.oddsSnapshots]: "oddsSnapshots",
+  [TABLES.predictionRuns]: "predictionRuns"
 };
 
 const nowIso = () => new Date().toISOString();
@@ -88,15 +96,22 @@ const appendRow = async (storeDir, table, row) => {
   await fsp.appendFile(tablePathFor(storeDir, table), `${JSON.stringify(row)}\n`);
 };
 
-const countLines = async (filePath) => {
-  try {
-    const text = await fsp.readFile(filePath, "utf8");
-    if (!text.trim()) return 0;
-    return text.trim().split(/\n+/).length;
-  } catch {
-    return 0;
-  }
-};
+const countLines = async (filePath) => new Promise((resolve) => {
+  let rows = 0;
+  let hasBytes = false;
+  let lastByte = null;
+  const stream = fs.createReadStream(filePath);
+
+  stream.on("data", (chunk) => {
+    hasBytes = true;
+    lastByte = chunk[chunk.length - 1];
+    for (let index = 0; index < chunk.length; index += 1) {
+      if (chunk[index] === 10) rows += 1;
+    }
+  });
+  stream.on("end", () => resolve(hasBytes && lastByte !== 10 ? rows + 1 : rows));
+  stream.on("error", () => resolve(0));
+});
 
 const readJsonFile = async (filePath, fallback = null) => {
   try {
@@ -110,22 +125,28 @@ const clampLimit = (limit, max = 500) => Math.max(1, Math.min(max, Number(limit 
 
 const readDataStoreRows = async (storeDir, table, options = {}) => {
   const limit = clampLimit(options.limit);
+  const rows = [];
   try {
-    const text = await fsp.readFile(tablePathFor(storeDir, table), "utf8");
+    const stream = fs.createReadStream(tablePathFor(storeDir, table), { encoding: "utf8" });
+    const lines = readline.createInterface({
+      input: stream,
+      crlfDelay: Infinity
+    });
     const matchId = String(options.matchId || "").trim();
     const sourceMatchId = String(options.sourceMatchId || "").trim();
     const pool = String(options.pool || "").trim().toUpperCase();
-    const rows = text
-      .trim()
-      .split(/\n+/)
-      .filter(Boolean)
-      .map((line) => safeJsonParse(line, null))
-      .filter(Boolean)
-      .filter((row) => !matchId || String(row.matchId || "") === matchId)
-      .filter((row) => !sourceMatchId || String(row.sourceMatchId || "") === sourceMatchId)
-      .filter((row) => !pool || String(row.pool || "").toUpperCase() === pool)
-      .slice(-limit)
-      .reverse();
+
+    for await (const line of lines) {
+      if (!line) continue;
+      const row = safeJsonParse(line, null);
+      if (!row) continue;
+      if (matchId && String(row.matchId || "") !== matchId) continue;
+      if (sourceMatchId && String(row.sourceMatchId || "") !== sourceMatchId) continue;
+      if (pool && String(row.pool || "").toUpperCase() !== pool) continue;
+      rows.push(row);
+      if (rows.length > limit) rows.shift();
+    }
+
     return rows;
   } catch {
     return [];
@@ -135,16 +156,19 @@ const readDataStoreRows = async (storeDir, table, options = {}) => {
 const getDataStoreStatus = async (storeDir) => {
   await ensureDataStore(storeDir);
   const state = await readState(storeDir);
+  const stateCounts = state.counts || createState().counts;
   const dbDir = dbDirFor(storeDir);
   const files = {};
   for (const table of Object.values(TABLES)) {
     const filePath = tablePathFor(storeDir, table);
+    const countKey = TABLE_COUNT_KEYS[table];
+    const storedRows = countKey ? stateCounts[countKey] : null;
     try {
       const stat = await fsp.stat(filePath);
       files[table] = {
         exists: true,
         bytes: stat.size,
-        rows: await countLines(filePath),
+        rows: Number.isFinite(storedRows) ? storedRows : await countLines(filePath),
         updatedAt: stat.mtime.toISOString()
       };
     } catch {
@@ -794,9 +818,15 @@ const readTimelineRows = async (storeDir, table, id, limit) => {
 
 const getLatestCurrentMatches = async (storeDir) => {
   try {
-    const text = await fsp.readFile(tablePathFor(storeDir, TABLES.matchSnapshots), "utf8");
     const latest = new Map();
-    for (const line of text.trim().split(/\n+/).filter(Boolean)) {
+    const stream = fs.createReadStream(tablePathFor(storeDir, TABLES.matchSnapshots), { encoding: "utf8" });
+    const lines = readline.createInterface({
+      input: stream,
+      crlfDelay: Infinity
+    });
+
+    for await (const line of lines) {
+      if (!line) continue;
       const row = safeJsonParse(line, null);
       if (!row || row.dataset !== "current" || !row.match || typeof row.match !== "object") continue;
       const key = row.matchId || row.sourceMatchId || row.match.id;

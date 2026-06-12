@@ -1,6 +1,6 @@
 import type { Match, PredictionDetail } from './mockData';
 
-export const DISABLED_PREDICTION_MARKETS: PredictionDetail['marketType'][] = ['GG_NG'];
+export const DISABLED_PREDICTION_MARKETS: PredictionDetail['marketType'][] = ['GOALS', 'GG_NG'];
 
 export function isPredictionMarketEnabled(marketType: PredictionDetail['marketType']) {
   return !DISABLED_PREDICTION_MARKETS.includes(marketType);

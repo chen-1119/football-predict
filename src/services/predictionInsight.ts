@@ -423,8 +423,9 @@ const buildProfessionalFramework = ({
   const model = match.probabilityModel;
   const form = model?.form;
   const hasPrimary = Boolean(primary);
+  const isReferenceOnly = primary?.recommendationAction === 'reference' || primary?.recommendationTier === 'reference';
   const isWatchOnly = primary?.tipCode === 'WATCH';
-  const hasActionablePrimary = Boolean(primary && !isWatchOnly);
+  const hasActionablePrimary = Boolean(primary && !isWatchOnly && !isReferenceOnly);
   const resolvedOdds = getResolvedMatchOdds(match);
   const latestOdds = oddsText(resolvedOdds.had?.odds);
   const latestHandicapOdds = oddsText(resolvedOdds.hhad?.odds);
@@ -567,7 +568,7 @@ const buildProfessionalFramework = ({
           ? `Conservative: ${action.en}; main line ${tipEn}, confidence ${trustScore || '--'}%, final probability ${finalProbabilities.en}. Risks: ${riskTextEn}.`
           : `Conservative: ${action.en}, no single 1X2 pick; current final probability ${finalProbabilities.en}, wait for SP/handicap/history buckets to align. Risks: ${riskTextEn}.`
       },
-      tone: hasPrimary ? (isWatchOnly ? 'warning' : 'success') : unavailableTone
+      tone: hasPrimary ? (isWatchOnly || isReferenceOnly ? 'warning' : 'success') : unavailableTone
     }
   ];
 };
@@ -591,6 +592,7 @@ const trendLabel = (direction: Match['oddsTrend'] extends infer T ? T extends { 
 
 export function buildMatchInsight(match: Match, context: MatchInsightContext): MatchInsight {
   const primary = getPrimaryPrediction(match);
+  const isReferenceOnly = primary?.recommendationAction === 'reference' || primary?.recommendationTier === 'reference';
   const isWatchOnly = primary?.tipCode === 'WATCH';
   const signal = getMatchSignal(match);
   const resultCode = isResultCode(primary?.tipCode) ? primary.tipCode : undefined;
@@ -742,25 +744,31 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
     };
   }
 
-  if (isWatchOnly) {
+  if (isWatchOnly || isReferenceOnly) {
     return {
-      title: { zh: '赛前分析模式', en: 'Pre-Match Analysis Mode' },
+      title: isReferenceOnly
+        ? { zh: 'AI 参考倾向', en: 'AI Reference Lean' }
+        : { zh: '赛前分析模式', en: 'Pre-Match Analysis Mode' },
       summary: {
-        zh: `${action.zh}：这场暂时不写成单一主推。模型会保留赛前观察，重点跟踪官方 SP、让球盘和近期命中冷却；如果临场信号没有变，刷新页面也不会改原结论。风险标签：${riskTextZh}。`,
-        en: `${action.en}: the recommendation gate is not met, so no single 1X2 main lean is published. Keep this as pre-match watch and track official SP, handicap confirmation, and hit-rate cooldown. Risk tags: ${riskTextEn}.`
+        zh: isReferenceOnly
+          ? `${action.zh}：参考方向为 ${tipZh}，模型可信度 ${trustScore || '--'}%。当前不进强推池，重点跟踪官方 SP、让球盘和近期命中冷却。风险标签：${riskTextZh}。`
+          : `${action.zh}：这场暂时不写成单一主推。模型会保留赛前观察，重点跟踪官方 SP、让球盘和近期命中冷却；如果临场信号没有变，刷新页面也不会改原结论。风险标签：${riskTextZh}。`,
+        en: isReferenceOnly
+          ? `${action.en}: reference lean is ${tipEn}, model confidence ${trustScore || '--'}%. It stays out of the strong-pick pool; track official SP, handicap confirmation, and hit-rate cooldown. Risk tags: ${riskTextEn}.`
+          : `${action.en}: the recommendation gate is not met, so no single 1X2 main lean is published. Keep this as pre-match watch and track official SP, handicap confirmation, and hit-rate cooldown. Risk tags: ${riskTextEn}.`
       },
       action,
       score: insightScore,
       tone,
       metrics: [
-        { label: { zh: '决策状态', en: 'Decision' }, value: { zh: '观察单', en: 'Watch' }, tone: 'warning' },
-        { label: { zh: '主线输出', en: 'Main line' }, value: { zh: '不硬推', en: 'No force' }, tone: 'muted' },
+        { label: { zh: '决策状态', en: 'Decision' }, value: isReferenceOnly ? { zh: '参考单', en: 'Reference' } : { zh: '观察单', en: 'Watch' }, tone: 'warning' },
+        { label: { zh: '主线输出', en: 'Main line' }, value: isReferenceOnly ? { zh: tipZh, en: tipEn } : { zh: '不硬推', en: 'No force' }, tone: isReferenceOnly ? 'warning' : 'muted' },
         { label: { zh: '让球校验', en: 'Handicap check' }, value: { zh: hhadProbabilities ? '已记录' : '未开售', en: hhadProbabilities ? 'Tracked' : 'Closed' }, tone: hhadProbabilities ? 'warning' : 'muted' },
         { label: { zh: '历史样本', en: 'History sample' }, value: { zh: sampleText, en: sampleText }, tone: sampleEnough ? 'success' : 'warning' }
       ],
       drivers: [
         {
-          title: { zh: '为什么不直接推荐', en: 'Why no pick' },
+          title: isReferenceOnly ? { zh: '为什么仅作参考', en: 'Why reference only' } : { zh: '为什么不直接推荐', en: 'Why no pick' },
           body: primary.explanation || {
             zh: '当前低赔、平局压力、让球确认或命中率分桶存在分歧，先保留观察，不把一个方向包装成稳胆。',
             en: 'Low SP, draw pressure, handicap confirmation, or hit-rate buckets are not aligned, so this remains watch-only.'
@@ -770,8 +778,12 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
         {
           title: { zh: '盘口验证', en: 'Market validation' },
           body: {
-            zh: `官方 HAD：${latestHadOdds}；官方 HHAD：${latestHhadOdds}。观察态只展示盘口结构和风险，不展示“主线支持率”，避免把条件未齐的方向当推荐。`,
-            en: `Official HAD: ${latestHadOdds}; official HHAD: ${latestHhadOdds}. Watch mode does not show a main-line support rate, so an unqualified direction is not packaged as a pick.`
+            zh: isReferenceOnly
+              ? `官方 HAD：${latestHadOdds}；官方 HHAD：${latestHhadOdds}。参考态展示模型倾向，但不把条件未齐的方向包装成强推。`
+              : `官方 HAD：${latestHadOdds}；官方 HHAD：${latestHhadOdds}。观察态只展示盘口结构和风险，不展示“主线支持率”，避免把条件未齐的方向当推荐。`,
+            en: isReferenceOnly
+              ? `Official HAD: ${latestHadOdds}; official HHAD: ${latestHhadOdds}. Reference mode shows the model lean without packaging an unqualified direction as a strong pick.`
+              : `Official HAD: ${latestHadOdds}; official HHAD: ${latestHhadOdds}. Watch mode does not show a main-line support rate, so an unqualified direction is not packaged as a pick.`
           },
           tone: 'muted'
         },

@@ -1,145 +1,175 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ArrowRight, Clock, Key, Loader2, MessageCircle, ShieldCheck } from 'lucide-react';
 import { useApp } from '../context/AppContextCore';
-import { LogIn, UserPlus, Key, User as UserIcon } from 'lucide-react';
+import { formatAccessCode } from '../services/accessControl';
 
 interface AuthProps {
   onSuccess: () => void;
 }
 
+const formatRemaining = (milliseconds: number, language: 'zh' | 'en') => {
+  const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (language === 'zh') {
+    return `${hours}小时 ${minutes}分 ${seconds}秒`;
+  }
+
+  return `${hours}h ${minutes}m ${seconds}s`;
+};
+
+const formatExpiry = (value: string | undefined, language: 'zh' | 'en') => {
+  if (!value || Number.isNaN(Date.parse(value))) return '--';
+  return new Date(value).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'Asia/Shanghai'
+  });
+};
+
 export const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
-  const { language, login, register } = useApp();
-  const [isLoginView, setIsLoginView] = useState<boolean>(true);
-  const [username, setUsername] = useState<string>('');
-  const [password, setPassword] = useState<string>('');
+  const { language, accessSession, isAccessVerified, verifyAccessCode, clearAccessSession } = useApp();
+  const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const qrSrc = `${import.meta.env.BASE_URL}contact-qr-code.jpg`;
+
+  useEffect(() => {
+    if (!isAccessVerified) return;
+    const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [isAccessVerified]);
+
+  const remainingMs = useMemo(() => {
+    const expiresAt = Date.parse(accessSession?.expiresAt || '');
+    return Number.isFinite(expiresAt) ? expiresAt - nowMs : 0;
+  }, [accessSession?.expiresAt, nowMs]);
 
   const translations = {
-    loginTitle: { zh: '登录您的账户', en: 'Log In to Your Account' },
-    registerTitle: { zh: '创建新账户', en: 'Create New Account' },
-    usernameLabel: { zh: '用户名 / 电子邮箱', en: 'Username / Email' },
-    passwordLabel: { zh: '密码', en: 'Password' },
-    loginBtn: { zh: '立即登录', en: 'Sign In' },
-    registerBtn: { zh: '立即注册', en: 'Sign Up' },
-    toggleToRegister: { zh: '还没有账户？立即注册', en: 'No account? Register now' },
-    toggleToLogin: { zh: '已有账户？立即登录', en: 'Already have an account? Sign In' },
-    fieldsRequired: { zh: '请输入完整的用户名和密码！', en: 'Please fill in all fields!' },
-    pwTooShort: { zh: '密码长度不能少于 6 位！', en: 'Password must be at least 6 characters!' }
+    title: { zh: '推荐内容访问校验', en: 'Recommendation Access' },
+    subtitle: {
+      zh: '输入从微信获取的校验码后，可在有效期内查看推荐内容。',
+      en: 'Enter the code received on WeChat to view recommendation content during its valid window.'
+    },
+    codeLabel: { zh: '6 小时校验码', en: '6-hour access code' },
+    codePlaceholder: { zh: 'XXXX-XXXX-XXXX', en: 'XXXX-XXXX-XXXX' },
+    submit: { zh: '验证并进入', en: 'Verify and enter' },
+    submitting: { zh: '正在验证', en: 'Verifying' },
+    contactTitle: { zh: '联系微信获取校验码', en: 'Contact on WeChat for a code' },
+    contactNote: {
+      zh: '扫码添加微信，确认后会收到一个从生成时刻起 6 小时有效的校验码。',
+      en: 'Scan the WeChat QR code. After confirmation, you will receive a code valid for 6 hours from generation.'
+    },
+    verified: { zh: '已通过校验', en: 'Access verified' },
+    expiresAt: { zh: '失效时间', en: 'Expires at' },
+    remaining: { zh: '剩余有效期', en: 'Time remaining' },
+    continue: { zh: '进入推荐内容', en: 'Open recommendations' },
+    changeCode: { zh: '更换校验码', en: 'Use another code' },
+    emptyCode: { zh: '请输入校验码', en: 'Please enter an access code' }
   };
 
-  const t = (key: keyof typeof translations) => {
-    return translations[key][language] || '';
-  };
+  const t = (key: keyof typeof translations) => translations[key][language] || '';
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError(null);
 
-    if (!username.trim() || !password.trim()) {
-      setError(t('fieldsRequired'));
+    if (!code.trim()) {
+      setError(t('emptyCode'));
       return;
     }
 
-    if (password.length < 6) {
-      setError(t('pwTooShort'));
-      return;
+    setIsSubmitting(true);
+    try {
+      await verifyAccessCode(code);
+      onSuccess();
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : String(submitError));
+    } finally {
+      setIsSubmitting(false);
     }
-
-    if (isLoginView) {
-      login(username);
-    } else {
-      register(username);
-    }
-
-    // 成功后回调
-    onSuccess();
   };
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh', padding: '2rem 0' }}>
-      <div className="card" style={{ width: '100%', maxWidth: '420px', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        
-        {/* Title */}
-        <div style={{ textAlign: 'center' }}>
-          <h3 style={{ fontSize: '1.5rem', fontWeight: '800', fontFamily: 'var(--font-title)' }} className="gradient-text">
-            {isLoginView ? t('loginTitle') : t('registerTitle')}
-          </h3>
-          <p style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', marginTop: '0.25rem' }}>
-            {isLoginView 
-              ? (language === 'zh' ? '登录后可保存参考组合历史，并参与世界杯预测墙复盘。' : 'Sign in to save reference combos and join the World Cup prediction wall.')
-              : (language === 'zh' ? '开启您的 AI 足球数据观察之旅。' : 'Start your AI football data journey.')
-            }
-          </p>
+    <div className="access-page">
+      <section className="access-card card">
+        <div className="access-copy">
+          <span className="access-kicker">
+            <ShieldCheck size={16} />
+            {t('title')}
+          </span>
+          <h2>{isAccessVerified ? t('verified') : t('title')}</h2>
+          <p>{t('subtitle')}</p>
         </div>
 
-        {/* Error Alert */}
-        {error && (
-          <div style={{
-            backgroundColor: 'hsl(var(--danger) / 0.15)',
-            border: '1px solid hsl(var(--danger) / 0.3)',
-            color: 'hsl(var(--danger))',
-            padding: '0.75rem',
-            borderRadius: '10px',
-            fontSize: '0.8rem',
-            fontWeight: '600',
-            textAlign: 'center'
-          }}>
-            {error}
+        {isAccessVerified ? (
+          <div className="access-verified-panel">
+            <div className="access-status-grid">
+              <span>
+                <Clock size={16} />
+                {t('remaining')}
+                <strong>{formatRemaining(remainingMs, language)}</strong>
+              </span>
+              <span>
+                <ShieldCheck size={16} />
+                {t('expiresAt')}
+                <strong>{formatExpiry(accessSession?.expiresAt, language)}</strong>
+              </span>
+            </div>
+            <div className="access-action-row">
+              <button type="button" onClick={onSuccess} className="btn btn-primary">
+                <ArrowRight size={16} />
+                <span>{t('continue')}</span>
+              </button>
+              <button type="button" onClick={clearAccessSession} className="btn btn-secondary">
+                <Key size={16} />
+                <span>{t('changeCode')}</span>
+              </button>
+            </div>
           </div>
-        )}
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          
-          <div className="form-group">
-            <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-              <UserIcon size={14} />
-              <span>{t('usernameLabel')}</span>
-            </label>
-            <input 
-              type="text" 
-              className="form-input"
-              placeholder="e.g. nerd_footballer"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+        ) : (
+          <form onSubmit={handleSubmit} className="access-form">
+            <label className="form-label" htmlFor="access-code">
               <Key size={14} />
-              <span>{t('passwordLabel')}</span>
+              <span>{t('codeLabel')}</span>
             </label>
-            <input 
-              type="password" 
-              className="form-input"
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+            <input
+              id="access-code"
+              type="text"
+              className="form-input access-code-input"
+              value={code}
+              onChange={(event) => setCode(formatAccessCode(event.target.value))}
+              placeholder={t('codePlaceholder')}
+              autoComplete="one-time-code"
+              inputMode="text"
             />
-          </div>
 
-          <button type="submit" className="btn btn-primary" style={{ width: '100%', height: '44px', marginTop: '0.5rem' }}>
-            {isLoginView ? <LogIn size={16} /> : <UserPlus size={16} />}
-            <span>{isLoginView ? t('loginBtn') : t('registerBtn')}</span>
-          </button>
+            {error && <div className="access-error" role="alert">{error}</div>}
 
-        </form>
+            <button type="submit" className="btn btn-primary access-submit" disabled={isSubmitting}>
+              {isSubmitting ? <Loader2 size={16} className="spin-icon" /> : <ShieldCheck size={16} />}
+              <span>{isSubmitting ? t('submitting') : t('submit')}</span>
+            </button>
+          </form>
+        )}
+      </section>
 
-        {/* Form Toggle */}
-        <div style={{ borderTop: '1px solid hsl(var(--border))', paddingTop: '1rem', textAlign: 'center' }}>
-          <button 
-            onClick={() => {
-              setIsLoginView(!isLoginView);
-              setError(null);
-            }}
-            className="btn btn-secondary"
-            style={{ border: 'none', background: 'none', color: 'hsl(var(--accent))', fontSize: '0.8rem', fontWeight: '500' }}
-          >
-            {isLoginView ? t('toggleToRegister') : t('toggleToLogin')}
-          </button>
+      <aside className="access-contact-panel">
+        <div>
+          <span className="access-kicker">
+            <MessageCircle size={16} />
+            {t('contactTitle')}
+          </span>
+          <p>{t('contactNote')}</p>
         </div>
-
-      </div>
+        <img src={qrSrc} alt={t('contactTitle')} />
+      </aside>
     </div>
   );
 };

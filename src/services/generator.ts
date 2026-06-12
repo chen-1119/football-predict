@@ -1,6 +1,7 @@
 import type { Match, PredictionDetail } from './mockData';
 import { normalizeOdds } from './bettingDisplay';
 import { getVisiblePredictions } from './predictionVisibility';
+import { isActionableRecommendation } from './matchSignal';
 
 export type BetSlipMarketType = '1X2' | 'HHAD';
 
@@ -19,7 +20,7 @@ export interface GeneratorParams {
 export interface SelectionResult {
   match: Match;
   prediction: PredictionDetail;
-  generatedFrom?: 'official-odds' | 'existing-prediction';
+  generatedFrom?: 'reference-odds' | 'existing-prediction';
 }
 
 export interface BetSlipResult {
@@ -50,6 +51,8 @@ const isSportteryOutcomeTip = (tipCode: string | undefined) => (
   tipCode === '1' || tipCode === 'X' || tipCode === '2'
 );
 
+const isOfficialSportterySource = (source?: string) => String(source || '').startsWith('sporttery:');
+
 const selectionMarketKey = (prediction: PredictionDetail): BetSlipMarketType | null => {
   if (prediction.marketType !== '1X2' || !isSportteryOutcomeTip(prediction.tipCode)) {
     return null;
@@ -71,14 +74,17 @@ const getOfficialSportteryPool = (match: Match, pool: 'HAD' | 'HHAD') => {
 
   if (!odds) return null;
 
+  const source = pool === 'HAD'
+    ? match.oddsSource || bookmakerOdds?.had?.source
+    : match.handicapOddsSource || bookmakerOdds?.hhad?.source;
+
   return {
     odds,
     handicap: pool === 'HHAD'
       ? match.handicapLine || bookmakerOdds?.hhad?.handicapLine || signals?.handicapLine
       : undefined,
-    source: pool === 'HAD'
-      ? match.oddsSource || bookmakerOdds?.had?.source
-      : match.handicapOddsSource || bookmakerOdds?.hhad?.source,
+    source,
+    isOfficial: isOfficialSportterySource(source),
     updatedAt: pool === 'HAD'
       ? match.oddsUpdatedAt || bookmakerOdds?.had?.updatedAt
       : match.handicapOddsUpdatedAt || bookmakerOdds?.hhad?.updatedAt
@@ -146,14 +152,16 @@ const getOfficialPickCandidates = (
   const sourceEntries = modelEntries.length ? modelEntries : marketEntries;
   const gap = probabilityGap(sourceEntries);
   const labels = pool === 'HAD' ? officialPickLabels : officialHandicapPickLabels;
+  const sourceNameZh = resolvedPool.isOfficial ? '官方' : '500 网参考';
+  const sourceNameEn = resolvedPool.isOfficial ? 'official' : '500.com reference';
   const explanationPrefix = pool === 'HAD'
     ? {
-        zh: '按官方胜平负 SP 与模型概率生成候选方向',
-        en: 'Candidate generated from official 1X2 SP and model probability'
+        zh: `按${sourceNameZh}胜平负 SP 与模型概率生成候选方向`,
+        en: `Candidate generated from ${sourceNameEn} 1X2 SP and model probability`
       }
     : {
-        zh: '按官方让球胜平负 SP 与让球概率生成候选方向',
-        en: 'Candidate generated from official handicap 1X2 SP and handicap probability'
+        zh: `按${sourceNameZh}让球胜平负 SP 与让球概率生成候选方向`,
+        en: `Candidate generated from ${sourceNameEn} handicap 1X2 SP and handicap probability`
       };
 
   const outcomes = [
@@ -177,7 +185,7 @@ const getOfficialPickCandidates = (
 
       const selection: SelectionResult = {
         match,
-        generatedFrom: 'official-odds',
+        generatedFrom: 'reference-odds',
         prediction: {
           marketType: '1X2' as const,
           oddsPoolCode: pool,
@@ -192,14 +200,15 @@ const getOfficialPickCandidates = (
           },
           analysisItems: [
             pool === 'HAD'
-              ? { zh: '官方胜平负已开售', en: 'Official 1X2 is on sale' }
-              : { zh: '官方让球胜平负已开售', en: 'Official handicap 1X2 is on sale' },
+              ? { zh: resolvedPool.isOfficial ? '官方胜平负已开售' : '500 网胜平负参考可用', en: resolvedPool.isOfficial ? 'Official 1X2 is on sale' : '500.com 1X2 reference is available' }
+              : { zh: resolvedPool.isOfficial ? '官方让球胜平负已开售' : '500 网让球胜平负参考可用', en: resolvedPool.isOfficial ? 'Official handicap 1X2 is on sale' : '500.com handicap 1X2 reference is available' },
             modelEntries.length
               ? { zh: '模型概率参与筛选', en: 'Model probability included in ranking' }
-              : { zh: '模型概率不足时使用官方去水概率', en: 'Official de-vig probability used when model signal is limited' }
+              : { zh: `模型概率不足时使用${sourceNameZh}去水概率`, en: `${sourceNameEn} de-vig probability used when model signal is limited` }
           ],
           riskTags: [
             { zh: '仅供赛前参考', en: 'Pre-match reference only' },
+            ...(resolvedPool.isOfficial ? [] : [{ zh: '非官方参考源', en: 'Non-official reference' }]),
             ...(isLeader ? [] : [{ zh: '非第一概率方向', en: 'Not the top probability lane' }])
           ],
           visibilityStatus: 'FREE',
@@ -238,7 +247,7 @@ const dedupeSelections = (selections: SelectionResult[]) => {
 const selectionScore = (selection: SelectionResult) => {
   const sourceBoost = selection.generatedFrom === 'existing-prediction'
     ? 6
-    : selection.generatedFrom === 'official-odds'
+    : selection.generatedFrom === 'reference-odds'
       ? 3
       : 0;
   const marketBoost = selection.prediction.oddsPoolCode === 'HHAD' ? 2 : 0;
@@ -251,6 +260,27 @@ const sortSelections = (a: SelectionResult, b: SelectionResult) => {
   const timeDiff = Date.parse(a.match.kickoffTime) - Date.parse(b.match.kickoffTime);
   if (Math.abs(timeDiff) > 0) return timeDiff;
   return a.prediction.odds - b.prediction.odds;
+};
+
+const selectionPassesQualityGate = (selection: SelectionResult, minTrust: number) => {
+  if (!isActionableRecommendation(selection.match)) return false;
+
+  const pool = selection.prediction.oddsPoolCode === 'HHAD' ? 'HHAD' : 'HAD';
+  const officialPool = getOfficialSportteryPool(selection.match, pool);
+  if (!officialPool?.isOfficial) return false;
+  if (selection.prediction.trustScore < Math.max(62, minTrust)) return false;
+
+  const riskTags = selection.prediction.riskTags || [];
+  const hasNonOfficialRisk = riskTags.some((tag) => {
+    const en = (tag.en || '').toLowerCase();
+    return en.includes('non-official') || en.includes('not the top probability');
+  });
+  if (hasNonOfficialRisk) return false;
+  if (riskTags.length > 2) return false;
+
+  if (selection.generatedFrom === 'existing-prediction') return true;
+
+  return selection.prediction.odds >= 1.35 && selection.prediction.odds <= 3.2;
 };
 
 const rankCombination = (
@@ -332,7 +362,7 @@ const findBestCombination = (
   return { selections: best, totalOdds: bestRank.totalOdds };
 };
 
-// 串关参考生成算法：只用官方 HAD/HHAD SP 候选，再用确定性组合搜索贴近目标总值。
+// 串关参考生成算法：只用 HAD/HHAD 参考 SP 候选，再用确定性组合搜索贴近目标总值。
 export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetSlipResult {
   const {
     matchCount,
@@ -372,6 +402,7 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
       if (p.odds < minOdds || p.odds > maxOdds) return;
       // 筛选可信度
       if (p.trustScore < minTrust) return;
+      if (!isActionableRecommendation(m)) return;
       candidateSelections.push({
         match: m,
         prediction: p,
@@ -389,23 +420,23 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
   });
 
   const filteredSelections = dedupeSelections(candidateSelections)
-    .filter((selection) => selection.prediction.trustScore >= minTrust)
+    .filter((selection) => selectionPassesQualityGate(selection, minTrust))
     .sort(sortSelections);
 
   if (filteredSelections.length === 0) {
-    const hasOfficialOdds = candidateMatches.some((match) => {
+    const hasReferenceOdds = candidateMatches.some((match) => {
       return Boolean(getOfficialSportteryPool(match, 'HAD') || getOfficialSportteryPool(match, 'HHAD'));
     });
     const zhReason = candidateMatches.length === 0
       ? '未来时间窗口内没有可用未开赛比赛。'
-      : hasOfficialOdds
+      : hasReferenceOdds
         ? '当前窗口内有赛程，但胜平负/让球盘口未达到你设置的 SP 或可信度要求。'
-        : '当前窗口内有赛程，但胜平负和让球胜平负还没有可用于串关的官方 SP。';
+        : '当前窗口内有赛程，但胜平负和让球胜平负还没有可用于串关的参考 SP。';
     const enReason = candidateMatches.length === 0
       ? 'There are no scheduled matches in the selected time window.'
-      : hasOfficialOdds
+      : hasReferenceOdds
         ? 'Matches exist, but 1X2/handicap odds do not pass your odds or confidence filters.'
-        : 'Matches exist, but official 1X2 and handicap SP are not available yet.';
+        : 'Matches exist, but 1X2 and handicap reference SP are not available yet.';
     return {
       selections: [],
       totalOdds: 1,

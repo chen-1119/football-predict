@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const https = require("https");
+const { spawn } = require("child_process");
 
 const SPORTTERY_BASE = "https://webapi.sporttery.cn";
 const CURRENT_URL = `${SPORTTERY_BASE}/gateway/uniform/football/getMatchListV1.qry?clientCode=3001`;
@@ -13,7 +14,7 @@ const ODDS_HISTORY_RETENTION_DAYS = Math.max(1, Number(process.env.ODDS_HISTORY_
 const ODDS_HISTORY_BUCKET_MINUTES = Math.max(1, Number(process.env.ODDS_HISTORY_BUCKET_MINUTES || 5));
 const PAGE_POLL_SECONDS = Math.max(15, Number(process.env.PAGE_POLL_SECONDS || 30));
 const ANALYST_PROMPT_VERSION = "professional-football-analyst-v16";
-const PREDICTION_POLICY_VERSION = "sporttery-day-dynamic-calibration-v24";
+const PREDICTION_POLICY_VERSION = "sporttery-day-formula-trace-v31";
 const ANALYST_RUNTIME = Object.freeze({
   model: "5.5",
   reasoningEffort: "high",
@@ -29,12 +30,12 @@ const METHODS = (process.env.SPORTTERY_METHODS || "concern,live,result,all")
 
 const STATUS_PRIORITY = { FINISHED: 6, LIVE: 5, PENDING_RESULT: 4, SCHEDULED: 2 };
 const PREDICTION_DATA_POLICY = {
-  zh: "赛前分析综合官方 HAD/HHAD SP、SP 走势、Elo 强度、近一年攻防样本、赛程密度、比分分布与公开赛前信息层；伤停、首发、天气、裁判、xG/xGA 与外部赔率会按可验证程度进入辅助判断。",
-  en: "Pre-match reads combine official HAD/HHAD SP, SP movement, Elo strength, last-year form, schedule density, score distribution, and public pre-match signal layers. Injuries, lineups, weather, referees, xG/xGA, and external odds are folded in as verified auxiliary inputs.",
+  zh: "竞彩截止前，赛前分析先由 Elo 强度、长期历史样本、近一年状态、赛程密度、世界杯先验、比分分布与公开赛前信息层生成独立预测；官方 HAD/HHAD SP 和 SP 走势只用于校验市场分歧与价值风险。截止后保留历史预测，只结算赛果，不回写旧推荐。",
+  en: "Before the Sporttery cutoff, pre-match reads first build an independent forecast from Elo strength, long-run history, recent form, schedule density, World Cup priors, score distribution, and public pre-match signals. Official HAD/HHAD SP and SP movement are used only to validate market disagreement and value risk. After cutoff, the historical prediction is kept and only settlement is added.",
 };
 const PREDICTION_MODEL_BASIS = {
-  zh: "模型按竞彩日归档、按官方开赛时间排序；综合官方 SP/让球 SP/赔率快照、Elo、近一年赛果攻防、赛程密度、Poisson 比分分布与赛前信息层。推荐分为主推候选、价值观察、观察和避坑，低赔强队必须通过让球盘与概率双重校验。",
-  en: "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model combines official SP/handicap SP/snapshots, Elo, last-year form, schedule density, Poisson score distribution, and pre-match signal layers. Picks are split into main candidates, value-watch, watch, and avoid; low-SP favourites must pass both handicap and probability checks.",
+  zh: "模型按竞彩日归档、按官方开赛时间排序；先用 Elo、长期历史样本、近一年状态、世界杯先验、赛程密度与 Poisson 比分分布生成独立足球预测。官方 SP/让球 SP 只用于市场校验、价值差比较和风险标签，不再驱动最终概率。",
+  en: "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model first builds an independent football forecast from Elo, long-run history, recent form, World Cup priors, and Poisson score distribution. Official SP/handicap SP are used only for market validation, value comparison, and risk tags; they do not drive the final probability.",
 };
 const ANALYST_OUTPUT_SECTIONS = Object.freeze([
   { id: "baseline", zh: "一、比赛基本面分析", en: "1. Fixture baseline" },
@@ -53,14 +54,14 @@ const ANALYST_OUTPUT_SECTIONS = Object.freeze([
 const PROBABILITY_FORECASTING_PRINCIPLES = Object.freeze({
   zh: [
     "先输出胜平负、比分分布、大小球、双方进球和让球概率，不把任务简化成只猜胜负。",
-    "官方 SP 去水概率是最低基准，Elo 强度、Poisson 比分模型、近一年攻防和赛程密度只在赛前可得时参与集成。",
+    "独立概率先由 Elo 强度、Poisson 比分模型、近一年攻防、长期历史样本、世界杯先验和赛程密度生成；官方 SP 只作为市场校验和价值差参考。",
     "推荐阈值跟随 model-calibration 动态变化；低命中联赛、市场或方向自动降权并提高概率差与让球支持要求。",
     "回测必须按时间滚动，严禁赛后 xG、赛后射门、最终排名、未公开首发或时间点不一致的临场赔率泄漏。",
     "评估以 log loss、Brier score、校准误差和分桶可靠性为主，命中率只作为辅助观察。",
   ],
   en: [
     "Output 1X2, score distribution, totals, BTTS, and handicap probabilities first instead of reducing the task to one winner.",
-    "Official de-vigged SP is the baseline; Elo, Poisson score modelling, last-year attack/defense form, and schedule density enter only when available before kickoff.",
+    "Independent probabilities are generated first from Elo strength, Poisson score modelling, last-year attack/defense form, long-run history, World Cup priors, and schedule density; official SP is only market validation and value-gap reference.",
     "Recommendation gates follow model-calibration dynamically; cold leagues, markets, or directions are down-weighted with higher probability-gap and handicap-support requirements.",
     "Backtests must be time-ordered and must not leak post-match xG, post-match shots, final table rank, unpublished lineups, or late odds into earlier forecast nodes.",
     "Evaluate with log loss, Brier score, calibration error, and bucket reliability; hit rate is only a secondary diagnostic.",
@@ -74,16 +75,16 @@ const FORECAST_TARGET_SCHEMA = Object.freeze([
   { id: "handicap", zh: "让球概率：当前官方让球线支持率", en: "Handicap: support at the current official line" },
 ]);
 const MODELING_STACK = Object.freeze([
-  { id: "market-baseline", zh: "赔率基准：官方 SP 去水隐含概率", en: "Market baseline: de-vigged official SP probabilities" },
+  { id: "independent-baseline", zh: "独立基准：Elo、历史样本、世界杯先验与 Poisson 概率", en: "Independent baseline: Elo, historical samples, World Cup priors, and Poisson probabilities" },
   { id: "elo", zh: "Elo/Glicko 强度：球队动态评分、主场优势和强弱差", en: "Elo/Glicko strength: dynamic rating, home advantage, team gap" },
   { id: "poisson", zh: "Poisson/Dixon-Coles：进球期望、比分矩阵、大小球和让球聚合", en: "Poisson/Dixon-Coles: goal expectations, score matrix, totals, handicap aggregation" },
   { id: "ml", zh: "机器学习层：仅在基准稳定并完成时间滚动回测后加入", en: "ML layer: added only after stable baselines and time-ordered backtests" },
-  { id: "ensemble", zh: "集成层：用滚动验证集优化 market/Elo/Poisson/ML 权重", en: "Ensemble: optimize market/Elo/Poisson/ML weights on rolling validation" },
-  { id: "calibration", zh: "校准层：可靠性曲线、Platt、isotonic、联赛和赔率分桶", en: "Calibration: reliability curves, Platt, isotonic, league and odds buckets" },
+  { id: "ensemble", zh: "集成层：用滚动验证集优化强度/Elo/Poisson/ML 权重", en: "Ensemble: optimize strength/Elo/Poisson/ML weights on rolling validation" },
+  { id: "calibration", zh: "校准层：可靠性曲线、Platt、isotonic、联赛和场景分桶", en: "Calibration: reliability curves, Platt, isotonic, league and profile buckets" },
 ]);
 const FEATURE_PRIORITY = Object.freeze([
-  "market-implied-probability",
   "long-term-team-strength",
+  "independent-model-probability",
   "xg-xga-gap-when-connected",
   "home-away-split-and-travel",
   "injuries-and-lineup-quality",
@@ -141,6 +142,17 @@ const SPORTTERY_REQUEST_HEADERS = Object.freeze({
   "Sec-Fetch-Mode": "cors",
   "Sec-Fetch-Dest": "empty",
 });
+
+function sportteryOutboundProxy() {
+  return normText(process.env.SPORTTERY_OUTBOUND_PROXY || process.env.SPORTTERY_HTTP_PROXY || "");
+}
+
+function curlHeaderArgs(tab = "all") {
+  return Object.entries({
+    ...SPORTTERY_REQUEST_HEADERS,
+    Referer: `https://m.sporttery.cn/mjc/zqhh/?tab=${encodeURIComponent(tab || "all")}`,
+  }).flatMap(([key, value]) => ["-H", `${key}: ${value}`]);
+}
 function normText(value, fallback = "") {
   if (value === null || value === undefined) return fallback;
   const s = String(value).trim();
@@ -346,6 +358,32 @@ function flagEmojiFromIso(isoCode) {
 const J_LEAGUE_LOGO_BASE = "./team-logos/jleague";
 
 const CLUB_LOGO_BY_NAME = {
+  "\u5766\u4f69\u96f7\u5c71\u732b": "https://media.api-sports.io/football/teams/1163.png",
+  "Ilves": "https://media.api-sports.io/football/teams/1163.png",
+  "TPS\u56fe\u5c14\u5e93": "https://upload.wikimedia.org/wikipedia/en/3/30/Turun_Palloseura_logo.png",
+  "TPS Turku": "https://upload.wikimedia.org/wikipedia/en/3/30/Turun_Palloseura_logo.png",
+  "Turun Palloseura": "https://upload.wikimedia.org/wikipedia/en/3/30/Turun_Palloseura_logo.png",
+  "\u56fd\u9645\u56fe\u5c14\u5e93": "https://media.api-sports.io/football/teams/1164.png",
+  "Inter Turku": "https://media.api-sports.io/football/teams/1164.png",
+  "AC\u5965\u5362": "https://upload.wikimedia.org/wikipedia/commons/d/d5/AC_Oulu_logo.svg",
+  "AC Oulu": "https://upload.wikimedia.org/wikipedia/commons/d/d5/AC_Oulu_logo.svg",
+  "\u96c5\u7f57": "https://upload.wikimedia.org/wikipedia/en/9/9f/FF_Jaro_logotype.svg",
+  "FF Jaro": "https://upload.wikimedia.org/wikipedia/en/9/9f/FF_Jaro_logotype.svg",
+  "\u8d6b\u5c14\u8f9b\u57fa": "https://media.api-sports.io/football/teams/649.png",
+  "HJK Helsinki": "https://media.api-sports.io/football/teams/649.png",
+  "\u74e6\u8428": "https://media.api-sports.io/football/teams/650.png",
+  "VPS": "https://media.api-sports.io/football/teams/650.png",
+  "\u5e93\u5965\u76ae\u5965": "https://media.api-sports.io/football/teams/1165.png",
+  "KuPS": "https://media.api-sports.io/football/teams/1165.png",
+  "\u739b\u4e3d\u6e2f": "https://upload.wikimedia.org/wikipedia/en/0/00/IFK_Mariehamnin_logo.svg",
+  "IFK Mariehamn": "https://upload.wikimedia.org/wikipedia/en/0/00/IFK_Mariehamnin_logo.svg",
+  "\u8d6b\u5c14\u8f9b\u57fa\u706b\u82b1": "https://upload.wikimedia.org/wikipedia/commons/d/d0/IF_Gnistan_logo.svg",
+  "IF Gnistan": "https://upload.wikimedia.org/wikipedia/commons/d/d0/IF_Gnistan_logo.svg",
+  "Gnistan": "https://upload.wikimedia.org/wikipedia/commons/d/d0/IF_Gnistan_logo.svg",
+  "\u62c9\u8d6b\u8482": "https://media.api-sports.io/football/teams/1166.png",
+  "Lahti": "https://media.api-sports.io/football/teams/1166.png",
+  "\u585e\u4f0a\u5948\u7ea6\u57fa": "https://media.api-sports.io/football/teams/689.png",
+  "SJK": "https://media.api-sports.io/football/teams/689.png",
   "\u9e7f\u5c9b\u9e7f\u89d2": `${J_LEAGUE_LOGO_BASE}/kashima-antlers.png`,
   "\u795e\u6237\u80dc\u5229\u8239": `${J_LEAGUE_LOGO_BASE}/vissel-kobe.png`,
   "\u753a\u7530\u6cfd\u7ef4\u4e9a": `${J_LEAGUE_LOGO_BASE}/machida-zelvia.png`,
@@ -494,6 +532,46 @@ function parseKickoff(matchDate, matchTime) {
   return `${date}T${hhmm}+08:00`;
 }
 
+const SPORTTERY_WEEKDAY_INDEX = {
+  日: 0,
+  天: 0,
+  一: 1,
+  二: 2,
+  三: 3,
+  四: 4,
+  五: 5,
+  六: 6
+};
+
+function beijingDateOffset(ymd, offsetDays) {
+  const baseMs = Date.parse(`${ymd}T00:00:00+08:00`);
+  if (!Number.isFinite(baseMs)) return "";
+  return new Date(baseMs + offsetDays * 24 * 60 * 60 * 1000 + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function beijingWeekday(ymd) {
+  const baseMs = Date.parse(`${ymd}T00:00:00+08:00`);
+  if (!Number.isFinite(baseMs)) return null;
+  return new Date(baseMs + 8 * 60 * 60 * 1000).getUTCDay();
+}
+
+function inferSportteryBusinessDate(matchNo, kickoffDate) {
+  const rawMatchNo = normText(matchNo);
+  const ymd = normText(kickoffDate);
+  if (!rawMatchNo || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return "";
+
+  const weekdayMatch = rawMatchNo.match(/周([日天一二三四五六])/);
+  const targetWeekday = weekdayMatch ? SPORTTERY_WEEKDAY_INDEX[weekdayMatch[1]] : undefined;
+  if (targetWeekday === undefined) return "";
+
+  for (let offset = 0; offset >= -6; offset -= 1) {
+    const candidate = beijingDateOffset(ymd, offset);
+    if (candidate && beijingWeekday(candidate) === targetWeekday) return candidate;
+  }
+
+  return "";
+}
+
 function beijingStartOfToday() {
   const now = new Date();
   const beijing = new Date(now.getTime() + 8 * 60 * 60 * 1000);
@@ -522,6 +600,7 @@ function statusFromSporttery(matchStatus, sellStatus, statusName = "", kickoffTi
   if (matchRaw === "10" || hasAnyName(["待开奖", "待赛果", "待派奖", "等待开奖"])) return "PENDING_RESULT";
   if (["11", "12", "13"].includes(matchRaw)) return "FINISHED";
   if (hasAnyName(["完成", "完场", "赛果", "已开奖", "已派奖"])) return "FINISHED";
+  if (!kickoffStarted) return "SCHEDULED";
 
   if (["playing", "live", "inplay", "firsthalf", "secondhalf"].some((status) => lower.includes(status))) return "LIVE";
   if (hasAnyName(["进行中", "比赛中", "上半场", "下半场", "中场", "加时", "点球", "暂停"])) return "LIVE";
@@ -776,30 +855,103 @@ function blendLambdasWithForm(match, marketHomeLambda, marketAwayLambda) {
   };
 }
 
+function blendLambdasWithLeaguePrior(match, marketHomeLambda, marketAwayLambda) {
+  const prior = match.leaguePrior;
+  const matches = Number(prior?.matches || 0);
+  if (!prior || matches < 120) {
+    return {
+      homeLambda: marketHomeLambda,
+      awayLambda: marketAwayLambda,
+      leagueWeight: 0,
+      leagueHomeLambda: null,
+      leagueAwayLambda: null,
+      leaguePriorKey: null,
+    };
+  }
+
+  const priorHome = Number(prior.homeGoalsAvg);
+  const priorAway = Number(prior.awayGoalsAvg);
+  if (!Number.isFinite(priorHome) || !Number.isFinite(priorAway)) {
+    return {
+      homeLambda: marketHomeLambda,
+      awayLambda: marketAwayLambda,
+      leagueWeight: 0,
+      leagueHomeLambda: null,
+      leagueAwayLambda: null,
+      leaguePriorKey: null,
+    };
+  }
+
+  const sourceWeight = prior.source === "historical-global-prior" ? 0.08 : 0.16;
+  const sampleWeight = clamp(Math.log10(matches) / 4, 0.08, sourceWeight);
+  return {
+    homeLambda: clamp(marketHomeLambda * (1 - sampleWeight) + priorHome * sampleWeight, 0.25, 3.4),
+    awayLambda: clamp(marketAwayLambda * (1 - sampleWeight) + priorAway * sampleWeight, 0.25, 3.4),
+    leagueWeight: Number(sampleWeight.toFixed(3)),
+    leagueHomeLambda: Number(priorHome.toFixed(2)),
+    leagueAwayLambda: Number(priorAway.toFixed(2)),
+    leaguePriorKey: prior.key || prior.source || "historical-prior",
+  };
+}
+
+function independentBaseLambdas(match, probabilities) {
+  const rand = seeded(`${match.sourceMatchId}-${match.homeTeam}-${match.awayTeam}-independent-lambda`);
+  const profile = matchVolatilityProfile(match);
+  const strengthEdge = clamp(Number(probabilities.home || 0) - Number(probabilities.away || 0), -0.62, 0.62);
+  const drawPressure = clamp(Number(probabilities.draw || 0), 0.16, 0.34);
+  const baseTotal = profile.isInternational ? 2.34 : 2.52;
+  const totalLambda = clamp(
+    baseTotal
+      + Math.abs(strengthEdge) * 0.46
+      + (0.26 - drawPressure) * 0.38
+      + (rand() - 0.5) * 0.16,
+    1.62,
+    3.28
+  );
+  const homeShare = clamp(
+    0.5 + strengthEdge * 0.58 + (profile.isInternational ? 0.008 : 0.035) + (rand() - 0.5) * 0.035,
+    0.22,
+    0.78
+  );
+
+  return {
+    homeLambda: clamp(totalLambda * homeShare, 0.28, 3.2),
+    awayLambda: clamp(totalLambda * (1 - homeShare), 0.28, 3.2),
+    totalLambda: Number(totalLambda.toFixed(2)),
+    homeShare: Number(homeShare.toFixed(3)),
+  };
+}
+
 function blendOutcomeProbabilities(match, market, poisson, eloSnapshot, formSnapshot) {
+  const teamStrength = syntheticModelOnlyProbabilities(match);
   const elo = normalizeOutcomeProbabilities(eloSnapshot?.probabilities);
   const eloSample = (eloSnapshot?.homeMatches || 0) + (eloSnapshot?.awayMatches || 0);
   const formSample = Number(formSnapshot?.sampleSize || 0);
+  const worldCupPrior = worldCupPriorOutcomeProbabilities(match);
   const formReady = formSample >= 8;
   let weights = elo && eloSample >= 6 && formReady
-    ? { market: 0.54, elo: 0.2, poisson: 0.26 }
+    ? { market: 0, teamStrength: 0.22, elo: 0.34, poisson: 0.44 }
     : elo && eloSample >= 6
-      ? { market: 0.58, elo: 0.24, poisson: 0.18 }
+      ? { market: 0, teamStrength: 0.32, elo: 0.38, poisson: 0.3 }
       : formReady
-        ? { market: 0.62, elo: 0, poisson: 0.38 }
-        : { market: 0.72, elo: 0, poisson: 0.28 };
-  const calibrated = profileCalibration(match).weights;
-  if (calibrated && Number(calibrated.sample || 0) >= 5) {
+        ? { market: 0, teamStrength: 0.46, elo: 0, poisson: 0.54 }
+        : { market: 0, teamStrength: 0.58, elo: 0, poisson: 0.42 };
+  const worldCupPriorWeight = worldCupPrior
+    ? 0.18
+    : 0;
+  if (worldCupPriorWeight > 0) {
     weights = {
-      market: calibrated.market,
-      elo: elo ? calibrated.elo : 0,
-      poisson: calibrated.poisson + (elo ? 0 : calibrated.elo),
+      market: Number((weights.market * (1 - worldCupPriorWeight)).toFixed(3)),
+      teamStrength: Number((weights.teamStrength * (1 - worldCupPriorWeight)).toFixed(3)),
+      elo: Number((weights.elo * (1 - worldCupPriorWeight)).toFixed(3)),
+      poisson: Number((weights.poisson * (1 - worldCupPriorWeight)).toFixed(3)),
+      worldCupPrior: worldCupPriorWeight,
     };
   }
   const blended = {
-    home: market.home * weights.market + (elo?.home || 0) * weights.elo + poisson.home * weights.poisson,
-    draw: market.draw * weights.market + (elo?.draw || 0) * weights.elo + poisson.draw * weights.poisson,
-    away: market.away * weights.market + (elo?.away || 0) * weights.elo + poisson.away * weights.poisson,
+    home: market.home * weights.market + teamStrength.home * weights.teamStrength + (elo?.home || 0) * weights.elo + poisson.home * weights.poisson + (worldCupPrior?.home || 0) * (weights.worldCupPrior || 0),
+    draw: market.draw * weights.market + teamStrength.draw * weights.teamStrength + (elo?.draw || 0) * weights.elo + poisson.draw * weights.poisson + (worldCupPrior?.draw || 0) * (weights.worldCupPrior || 0),
+    away: market.away * weights.market + teamStrength.away * weights.teamStrength + (elo?.away || 0) * weights.elo + poisson.away * weights.poisson + (worldCupPrior?.away || 0) * (weights.worldCupPrior || 0),
   };
   const total = blended.home + blended.draw + blended.away || 1;
   return {
@@ -809,6 +961,7 @@ function blendOutcomeProbabilities(match, market, poisson, eloSnapshot, formSnap
       away: blended.away / total,
     },
     weights,
+    teamStrength,
   };
 }
 
@@ -991,6 +1144,353 @@ function asPercentTriplet(probabilities) {
   };
 }
 
+function formulaNumber(value, digits = 3) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  return Number(numeric.toFixed(digits));
+}
+
+function formulaPercent(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "--";
+  return `${numeric.toFixed(1).replace(/\.0$/, "")}%`;
+}
+
+function formulaWeight(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "0";
+  return numeric.toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+function formulaOutcomeExpression(side, components, resultPercent) {
+  const terms = components
+    .filter((component) => Number(component.weight) > 0 && component.probabilities)
+    .map((component) => `${formulaWeight(component.weight)}*${formulaPercent(component.probabilities?.[side])}`);
+  return `${terms.length ? terms.join(" + ") : "0"} = ${formulaPercent(resultPercent)}`;
+}
+
+function buildProbabilityCalculationTrace(match, context) {
+  const weights = context.weights || {};
+  const teamStrength = asPercentTriplet(context.teamStrength);
+  const market = asPercentTriplet(context.market);
+  const elo = asPercentTriplet(context.elo);
+  const poisson = asPercentTriplet(context.poisson);
+  const worldCupPrior = asPercentTriplet(context.worldCupPrior);
+  const raw = asPercentTriplet(context.raw);
+  const final = asPercentTriplet(context.final);
+  const officialOddsAvailable = Boolean(sanitizeOdds(match.odds) || sanitizeOdds(match.handicapOdds));
+  const componentRows = [
+    {
+      key: "teamStrength",
+      label: { zh: "球队强度/长期样本", en: "Team strength / long sample" },
+      weight: formulaNumber(weights.teamStrength || 0, 3),
+      probabilities: teamStrength,
+      role: "model",
+    },
+    {
+      key: "elo",
+      label: { zh: "Elo 强弱差", en: "Elo strength gap" },
+      weight: formulaNumber(weights.elo || 0, 3),
+      probabilities: elo,
+      role: "model",
+    },
+    {
+      key: "poisson",
+      label: { zh: "Poisson 比分分布", en: "Poisson score distribution" },
+      weight: formulaNumber(weights.poisson || 0, 3),
+      probabilities: poisson,
+      role: "model",
+    },
+    {
+      key: "worldCupPrior",
+      label: { zh: "世界杯先验", en: "World Cup prior" },
+      weight: formulaNumber(weights.worldCupPrior || 0, 3),
+      probabilities: worldCupPrior,
+      role: "model",
+    },
+    {
+      key: "market",
+      label: { zh: "官方 SP 去水", en: "Official SP de-vig" },
+      weight: formulaNumber(weights.market || 0, 3),
+      probabilities: market,
+      role: officialOddsAvailable ? "validation-only" : "unavailable",
+    },
+  ].filter((component) => component.probabilities || component.key === "market");
+
+  const lambdaBlend = context.lambdaBlend || {};
+  const calibration = context.outcomeCalibration || {};
+  const calibrationAdjustments = Array.isArray(calibration.adjustments)
+    ? calibration.adjustments.map((adjustment) => ({
+      code: adjustment.code,
+      reason: adjustment.reason,
+      penalty: formulaNumber(adjustment.penalty, 3),
+    }))
+    : [];
+
+  return {
+    version: "formula-trace-v2",
+    policy: {
+      zh: "公式先算独立足球概率，官方 SP 只做市场校验和风险提示，权重固定为 0。",
+      en: "The formula first computes independent football probabilities. Official SP is validation and risk context only, with weight fixed at 0.",
+    },
+    outcome: {
+      formula: {
+        zh: "P_raw(o)=w_strength*S(o)+w_elo*E(o)+w_poisson*Q(o)+w_wc*W(o)；P_final(o)=calibrate(normalize(P_raw(o)))。",
+        en: "P_raw(o)=w_strength*S(o)+w_elo*E(o)+w_poisson*Q(o)+w_wc*W(o); P_final(o)=calibrate(normalize(P_raw(o))).",
+      },
+      weights: {
+        market: formulaNumber(weights.market || 0, 3),
+        teamStrength: formulaNumber(weights.teamStrength || 0, 3),
+        elo: formulaNumber(weights.elo || 0, 3),
+        poisson: formulaNumber(weights.poisson || 0, 3),
+        worldCupPrior: formulaNumber(weights.worldCupPrior || 0, 3),
+      },
+      components: componentRows,
+      raw,
+      final,
+      expressions: raw ? {
+        home: formulaOutcomeExpression("home", componentRows, raw.home),
+        draw: formulaOutcomeExpression("draw", componentRows, raw.draw),
+        away: formulaOutcomeExpression("away", componentRows, raw.away),
+      } : null,
+      calibration: {
+        applied: Boolean(calibration.applied),
+        reasons: calibration.reasons || [],
+        adjustments: calibrationAdjustments,
+        before: asPercentTriplet(context.raw),
+        after: final,
+      },
+    },
+    expectedGoals: {
+      formula: {
+        zh: "lambda0 来自独立强度差和战平压力；lambda_league=(1-wL)*lambda0+wL*leagueAvg；lambda_final=(1-wF)*lambda_league+wF*formLambda。",
+        en: "lambda0 comes from independent strength edge and draw pressure; lambda_league=(1-wL)*lambda0+wL*leagueAvg; lambda_final=(1-wF)*lambda_league+wF*formLambda.",
+      },
+      values: {
+        independentHome: formulaNumber(lambdaBlend.independentHomeLambda ?? lambdaBlend.marketHomeLambda, 2),
+        independentAway: formulaNumber(lambdaBlend.independentAwayLambda ?? lambdaBlend.marketAwayLambda, 2),
+        independentTotal: formulaNumber(lambdaBlend.independentTotalLambda, 2),
+        independentHomeShare: formulaNumber(lambdaBlend.independentHomeShare, 3),
+        leagueHome: formulaNumber(lambdaBlend.leagueHomeLambda, 2),
+        leagueAway: formulaNumber(lambdaBlend.leagueAwayLambda, 2),
+        leagueWeight: formulaNumber(lambdaBlend.leagueWeight || 0, 3),
+        formHome: formulaNumber(lambdaBlend.formHomeLambda, 2),
+        formAway: formulaNumber(lambdaBlend.formAwayLambda, 2),
+        formWeight: formulaNumber(lambdaBlend.formWeight || 0, 3),
+        finalHome: formulaNumber(context.homeLambda, 2),
+        finalAway: formulaNumber(context.awayLambda, 2),
+      },
+    },
+    poisson: {
+      formula: {
+        zh: "P(score h-a)=Pois(h;lambda_home)*Pois(a;lambda_away)，其中 Pois(k;lambda)=e^-lambda*lambda^k/k!。",
+        en: "P(score h-a)=Pois(h;lambda_home)*Pois(a;lambda_away), where Pois(k;lambda)=e^-lambda*lambda^k/k!.",
+      },
+      lambdas: {
+        home: formulaNumber(context.homeLambda, 2),
+        away: formulaNumber(context.awayLambda, 2),
+      },
+      topScores: context.scoreDistribution || [],
+    },
+    goals: {
+      formula: {
+        zh: "P(大2.5)=1-sum_{g=0..2}Pois(g;lambda_home+lambda_away)；P(BTTS)=(1-e^-lambda_home)*(1-e^-lambda_away)。",
+        en: "P(Over2.5)=1-sum_{g=0..2}Pois(g;lambda_home+lambda_away); P(BTTS)=(1-e^-lambda_home)*(1-e^-lambda_away).",
+      },
+      values: {
+        over25: pct1(context.over25Probability),
+        under25: pct1(1 - context.over25Probability),
+        bttsYes: pct1(context.bttsProbability),
+        bttsNo: pct1(1 - context.bttsProbability),
+      },
+    },
+    marketUse: {
+      formula: "marketWeight=0",
+      zh: "SP 不进入最终概率加权，只用于比较模型方向与市场是否偏离，并生成风险/价值提示。",
+      en: "SP is not weighted into final probabilities; it only compares model direction against the market for risk/value notes.",
+    },
+  };
+}
+
+function buildCalculationTraceFromPublishedModel(match, model) {
+  if (!model || typeof model !== "object") return null;
+
+  const weights = model.ensembleWeights || {};
+  const oneXTwo = model.oneXTwo || {};
+  const componentRows = [
+    {
+      key: "teamStrength",
+      label: { zh: "球队强度/长期样本", en: "Team strength / long sample" },
+      weight: formulaNumber(weights.teamStrength || 0, 3),
+      probabilities: oneXTwo.teamStrength || null,
+      role: "model",
+    },
+    {
+      key: "elo",
+      label: { zh: "Elo 强弱差", en: "Elo strength gap" },
+      weight: formulaNumber(weights.elo || 0, 3),
+      probabilities: oneXTwo.elo || null,
+      role: "model",
+    },
+    {
+      key: "poisson",
+      label: { zh: "Poisson 比分分布", en: "Poisson score distribution" },
+      weight: formulaNumber(weights.poisson || 0, 3),
+      probabilities: oneXTwo.poisson || null,
+      role: "model",
+    },
+    {
+      key: "worldCupPrior",
+      label: { zh: "世界杯先验", en: "World Cup prior" },
+      weight: formulaNumber(weights.worldCupPrior || 0, 3),
+      probabilities: oneXTwo.worldCupPrior || null,
+      role: "model",
+    },
+    {
+      key: "market",
+      label: { zh: "官方 SP 去水", en: "Official SP de-vig" },
+      weight: formulaNumber(weights.market || 0, 3),
+      probabilities: oneXTwo.market || null,
+      role: oneXTwo.market ? "validation-only" : "unavailable",
+    },
+  ].filter((component) => component.probabilities || component.key === "market");
+
+  const final = oneXTwo.final || null;
+  const lambdaBlend = model.lambdaBlend || {};
+  const finalHomeLambda = Number.isFinite(Number(lambdaBlend.finalHomeLambda))
+    ? Number(lambdaBlend.finalHomeLambda)
+    : Number.isFinite(Number(match?.stats?.xG?.home))
+      ? Number(match.stats.xG.home)
+      : null;
+  const finalAwayLambda = Number.isFinite(Number(lambdaBlend.finalAwayLambda))
+    ? Number(lambdaBlend.finalAwayLambda)
+    : Number.isFinite(Number(match?.stats?.xG?.away))
+      ? Number(match.stats.xG.away)
+      : null;
+  const calibration = model.calibrationAdjustment?.oneXTwo || {};
+
+  const expressionResult = calibration.before || final;
+
+  return {
+    version: "formula-trace-v2",
+    policy: {
+      zh: "公式先算独立足球概率，官方 SP 只做市场校验和风险提示，权重固定为 0。",
+      en: "The formula first computes independent football probabilities. Official SP is validation and risk context only, with weight fixed at 0.",
+    },
+    outcome: {
+      formula: {
+        zh: "P_raw(o)=w_strength*S(o)+w_elo*E(o)+w_poisson*Q(o)+w_wc*W(o)；P_final(o)=calibrate(normalize(P_raw(o)))。",
+        en: "P_raw(o)=w_strength*S(o)+w_elo*E(o)+w_poisson*Q(o)+w_wc*W(o); P_final(o)=calibrate(normalize(P_raw(o))).",
+      },
+      weights: {
+        market: formulaNumber(weights.market || 0, 3),
+        teamStrength: formulaNumber(weights.teamStrength || 0, 3),
+        elo: formulaNumber(weights.elo || 0, 3),
+        poisson: formulaNumber(weights.poisson || 0, 3),
+        worldCupPrior: formulaNumber(weights.worldCupPrior || 0, 3),
+      },
+      components: componentRows,
+      raw: calibration.before || final,
+      final,
+      expressions: expressionResult ? {
+        home: formulaOutcomeExpression("home", componentRows, expressionResult.home),
+        draw: formulaOutcomeExpression("draw", componentRows, expressionResult.draw),
+        away: formulaOutcomeExpression("away", componentRows, expressionResult.away),
+      } : null,
+      calibration: {
+        applied: Boolean(calibration.applied),
+        reasons: calibration.reasons || [],
+        adjustments: (calibration.adjustments || []).map((adjustment) => ({
+          code: adjustment.code,
+          reason: adjustment.reason,
+          penalty: formulaNumber(adjustment.penalty, 3),
+        })),
+        before: calibration.before || final,
+        after: calibration.after || final,
+      },
+    },
+    expectedGoals: {
+      formula: {
+        zh: "lambda0 来自独立强度差和战平压力；lambda_league=(1-wL)*lambda0+wL*leagueAvg；lambda_final=(1-wF)*lambda_league+wF*formLambda。",
+        en: "lambda0 comes from independent strength edge and draw pressure; lambda_league=(1-wL)*lambda0+wL*leagueAvg; lambda_final=(1-wF)*lambda_league+wF*formLambda.",
+      },
+      values: {
+        independentHome: formulaNumber(lambdaBlend.independentHomeLambda ?? lambdaBlend.marketHomeLambda, 2),
+        independentAway: formulaNumber(lambdaBlend.independentAwayLambda ?? lambdaBlend.marketAwayLambda, 2),
+        independentTotal: formulaNumber(lambdaBlend.independentTotalLambda, 2),
+        independentHomeShare: formulaNumber(lambdaBlend.independentHomeShare, 3),
+        leagueHome: formulaNumber(lambdaBlend.leagueHomeLambda, 2),
+        leagueAway: formulaNumber(lambdaBlend.leagueAwayLambda, 2),
+        leagueWeight: formulaNumber(lambdaBlend.leagueWeight || 0, 3),
+        formHome: formulaNumber(lambdaBlend.formHomeLambda, 2),
+        formAway: formulaNumber(lambdaBlend.formAwayLambda, 2),
+        formWeight: formulaNumber(lambdaBlend.formWeight || 0, 3),
+        finalHome: formulaNumber(finalHomeLambda, 2),
+        finalAway: formulaNumber(finalAwayLambda, 2),
+      },
+    },
+    poisson: {
+      formula: {
+        zh: "P(score h-a)=Pois(h;lambda_home)*Pois(a;lambda_away)，其中 Pois(k;lambda)=e^-lambda*lambda^k/k!。",
+        en: "P(score h-a)=Pois(h;lambda_home)*Pois(a;lambda_away), where Pois(k;lambda)=e^-lambda*lambda^k/k!.",
+      },
+      lambdas: {
+        home: formulaNumber(finalHomeLambda, 2),
+        away: formulaNumber(finalAwayLambda, 2),
+      },
+      topScores: model.scoreDistribution || [],
+    },
+    goals: {
+      formula: {
+        zh: "P(大2.5)=1-sum_{g=0..2}Pois(g;lambda_home+lambda_away)；P(BTTS)=(1-e^-lambda_home)*(1-e^-lambda_away)。",
+        en: "P(Over2.5)=1-sum_{g=0..2}Pois(g;lambda_home+lambda_away); P(BTTS)=(1-e^-lambda_home)*(1-e^-lambda_away).",
+      },
+      values: {
+        over25: formulaNumber(model.goalLines?.over25, 1),
+        under25: formulaNumber(model.goalLines?.under25, 1),
+        bttsYes: formulaNumber(model.bothTeamsToScore?.yes, 1),
+        bttsNo: formulaNumber(model.bothTeamsToScore?.no, 1),
+      },
+    },
+    marketUse: {
+      formula: "marketWeight=0",
+      zh: "SP 不进入最终概率加权，只用于比较模型方向与市场是否偏离，并生成风险/价值提示。",
+      en: "SP is not weighted into final probabilities; it only compares model direction against the market for risk/value notes.",
+    },
+  };
+}
+
+function compactWorldCupPriorForModel(prior) {
+  if (!prior) return null;
+  const compactSide = (side) => side ? {
+    key: side.key,
+    nameZh: side.nameZh,
+    nameEn: side.nameEn,
+    group: side.group,
+    fifaRank: side.fifaRank,
+    elo: side.elo,
+    squadValueM: side.squadValueM,
+    avgAge: side.avgAge,
+    corePlayer: side.corePlayer,
+    qualityTier: side.qualityTier,
+    modelStrengthNormalized: side.modelStrengthNormalized,
+    recent10: side.recent10,
+    groupOutlook: side.groupOutlook,
+  } : null;
+
+  return {
+    source: prior.source,
+    version: prior.version,
+    signature: prior.signature,
+    policy: prior.policy,
+    rawPolicy: prior.rawPolicy,
+    strengthDiff: prior.strengthDiff,
+    fixture: prior.fixture,
+    home: compactSide(prior.home),
+    away: compactSide(prior.away),
+  };
+}
+
 function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLambda, awayLambda, over25Probability, bttsProbability, lambdaBlend, goalCalibration) {
   const poisson1x2 = poissonOutcomeProbabilities(homeLambda, awayLambda);
   const blended = blendOutcomeProbabilities(match, probabilities, poisson1x2, match.eloSnapshot, match.formSnapshot);
@@ -998,16 +1498,42 @@ function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLamb
   const final1x2 = outcomeCalibration.probabilities;
   const handicapPoisson = handicapOutcomeProbabilities(homeLambda, awayLambda, match.handicapLine);
   const calibration = profileCalibration(match);
+  const worldCupPrior = worldCupPriorOutcomeProbabilities(match);
+  const scoreDistribution = topScoreProbabilities(homeLambda, awayLambda, 5);
+  const calculationTrace = buildProbabilityCalculationTrace(match, {
+    weights: blended.weights,
+    teamStrength: blended.teamStrength,
+    market: probabilities,
+    elo: match.eloSnapshot?.probabilities,
+    poisson: poisson1x2,
+    worldCupPrior,
+    raw: blended.probabilities,
+    final: final1x2,
+    outcomeCalibration,
+    lambdaBlend,
+    homeLambda,
+    awayLambda,
+    over25Probability,
+    bttsProbability,
+    scoreDistribution,
+  });
   return {
-    version: "market-elo-form-dynamic-calibrated-poisson-v6",
+    version: "independent-elo-form-poisson-v7",
     generatedAt: new Date().toISOString(),
     basis: PREDICTION_MODEL_BASIS,
     ensembleWeights: blended.weights,
+    calculationTrace,
     dynamicCalibration: {
       version: match.modelCalibration?.version || "none",
       profileKey: calibration.profileKey,
       gate: calibration.gate || null,
       metrics: calibration.metrics || null,
+      strategy: calibration.strategy ? {
+        version: calibration.strategy.version,
+        generatedAt: calibration.strategy.generatedAt,
+        onlineEffect: calibration.strategy.activation?.onlineEffect || "unknown",
+        activeGates: calibration.strategy.activeGates || null,
+      } : null,
     },
     calibrationAdjustment: {
       oneXTwo: {
@@ -1022,22 +1548,34 @@ function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLamb
     lambdaBlend: lambdaBlend ? {
       marketHomeLambda: Number(lambdaBlend.marketHomeLambda.toFixed(2)),
       marketAwayLambda: Number(lambdaBlend.marketAwayLambda.toFixed(2)),
+      independentHomeLambda: lambdaBlend.independentHomeLambda,
+      independentAwayLambda: lambdaBlend.independentAwayLambda,
+      independentTotalLambda: lambdaBlend.independentTotalLambda,
+      independentHomeShare: lambdaBlend.independentHomeShare,
+      leagueHomeLambda: lambdaBlend.leagueHomeLambda,
+      leagueAwayLambda: lambdaBlend.leagueAwayLambda,
+      leagueWeight: lambdaBlend.leagueWeight || 0,
+      leaguePriorKey: lambdaBlend.leaguePriorKey || null,
       formHomeLambda: lambdaBlend.formHomeLambda,
       formAwayLambda: lambdaBlend.formAwayLambda,
       formWeight: lambdaBlend.formWeight,
     } : undefined,
     oneXTwo: {
       market: asPercentTriplet(probabilities),
+      teamStrength: asPercentTriplet(blended.teamStrength),
       elo: asPercentTriplet(match.eloSnapshot?.probabilities),
       poisson: asPercentTriplet(poisson1x2),
+      worldCupPrior: asPercentTriplet(worldCupPrior),
       final: asPercentTriplet(final1x2),
     },
+    worldCupPrior: compactWorldCupPriorForModel(match.worldCupPrior || match.externalSignals?.worldCupPrior),
     elo: match.eloSnapshot ? {
       homeRating: Math.round(match.eloSnapshot.homeRating),
       awayRating: Math.round(match.eloSnapshot.awayRating),
       diff: Math.round(match.eloSnapshot.diff),
       homeMatches: match.eloSnapshot.homeMatches,
       awayMatches: match.eloSnapshot.awayMatches,
+      historicalSource: match.eloSnapshot.historicalSource || null,
       lastUpdatedAt: match.eloSnapshot.lastUpdatedAt,
     } : null,
     form: match.formSnapshot ? {
@@ -1047,6 +1585,21 @@ function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLamb
       home: match.formSnapshot.home,
       away: match.formSnapshot.away,
       h2h: match.formSnapshot.h2h,
+      historicalSource: match.formSnapshot.historicalSource || null,
+    } : null,
+    leaguePrior: match.leaguePrior ? {
+      key: match.leaguePrior.key,
+      source: match.leaguePrior.source,
+      matches: match.leaguePrior.matches,
+      homeGoalsAvg: match.leaguePrior.homeGoalsAvg,
+      awayGoalsAvg: match.leaguePrior.awayGoalsAvg,
+      totalGoalsAvg: match.leaguePrior.totalGoalsAvg,
+      over25Rate: match.leaguePrior.over25Rate,
+      bttsRate: match.leaguePrior.bttsRate,
+      drawRate: match.leaguePrior.drawRate,
+      lastMatchDate: match.leaguePrior.lastMatchDate,
+      trainingVersion: match.leaguePrior.trainingVersion,
+      trainingSignature: match.leaguePrior.trainingSignature,
     } : null,
     modelHealth: match.predictionHealth ? {
       version: match.predictionHealth.version,
@@ -1063,7 +1616,7 @@ function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLamb
       lowSpSide: match.predictionHealth.lowSpSide,
       under25: match.predictionHealth.under25,
     } : null,
-    scoreDistribution: topScoreProbabilities(homeLambda, awayLambda, 5),
+    scoreDistribution,
     goalLines: {
       over25: pct1(over25Probability),
       under25: pct1(1 - over25Probability),
@@ -1097,12 +1650,399 @@ function eloOutcomeProbabilities(homeRating, awayRating, homeAdvantage = 62) {
   return normalizeOutcomeProbabilities({ home, draw, away });
 }
 
+const TEAM_KEY_ALIASES = Object.freeze({
+  "阿根廷": "argentina",
+  "冰岛": "iceland",
+  "葡萄牙": "portugal",
+  "尼日利亚": "nigeria",
+  "英格兰": "england",
+  "哥斯达黎加": "costa rica",
+  "墨西哥": "mexico",
+  "南非": "south africa",
+  "韩国": "south korea",
+  "捷克": "czech republic",
+  "加拿大": "canada",
+  "波黑": "bosnia and herzegovina",
+  "美国": "united states",
+  "巴拉圭": "paraguay",
+  "卡塔尔": "qatar",
+  "瑞士": "switzerland",
+  "巴西": "brazil",
+  "摩洛哥": "morocco",
+  "海地": "haiti",
+  "苏格兰": "scotland",
+  "澳大利亚": "australia",
+  "土耳其": "turkey",
+  "德国": "germany",
+  "库拉索": "curacao",
+  "荷兰": "netherlands",
+  "日本": "japan",
+  "瑞典": "sweden",
+  "突尼斯": "tunisia",
+  "西班牙": "spain",
+  "佛得角": "cape verde",
+  "比利时": "belgium",
+  "埃及": "egypt",
+  "沙特阿拉伯": "saudi arabia",
+  "乌拉圭": "uruguay",
+  "伊朗": "iran",
+  "新西兰": "new zealand",
+  "丹麦": "denmark",
+  "塞内加尔": "senegal",
+  "哥伦比亚": "colombia",
+  "克罗地亚": "croatia",
+  "法国": "france",
+  "加纳": "ghana",
+  "挪威": "norway",
+  "喀麦隆": "cameroon",
+  "意大利": "italy",
+  "洪都拉斯": "honduras",
+  "智利": "chile",
+  "牙买加": "jamaica",
+  "波兰": "poland",
+  "阿尔及利亚": "algeria",
+  "中国": "china",
+  "泰国": "thailand",
+  "匈牙利": "hungary",
+  "哈萨克": "kazakhstan",
+});
+
+const CURRENT_TEAM_KEY_ALIASES = Object.freeze({
+  "\u963f\u6839\u5ef7": "argentina",
+  "\u51b0\u5c9b": "iceland",
+  "\u8461\u8404\u7259": "portugal",
+  "\u5c3c\u65e5\u5229\u4e9a": "nigeria",
+  "\u82f1\u683c\u5170": "england",
+  "\u54e5\u65af\u8fbe\u9ece\u52a0": "costa rica",
+  "\u58a8\u897f\u54e5": "mexico",
+  "\u5357\u975e": "south africa",
+  "\u97e9\u56fd": "south korea",
+  "\u6377\u514b": "czech republic",
+  "\u52a0\u62ff\u5927": "canada",
+  "\u6ce2\u9ed1": "bosnia and herzegovina",
+  "\u7f8e\u56fd": "united states",
+  "\u5df4\u62c9\u572d": "paraguay",
+  "\u5361\u5854\u5c14": "qatar",
+  "\u745e\u58eb": "switzerland",
+  "\u5df4\u897f": "brazil",
+  "\u6469\u6d1b\u54e5": "morocco",
+  "\u6d77\u5730": "haiti",
+  "\u82cf\u683c\u5170": "scotland",
+  "\u6fb3\u5927\u5229\u4e9a": "australia",
+  "\u571f\u8033\u5176": "turkey",
+  "\u5fb7\u56fd": "germany",
+  "\u5e93\u62c9\u7d22": "curacao",
+  "\u8377\u5170": "netherlands",
+  "\u65e5\u672c": "japan",
+  "\u745e\u5178": "sweden",
+  "\u7a81\u5c3c\u65af": "tunisia",
+  "\u897f\u73ed\u7259": "spain",
+  "\u4f5b\u5f97\u89d2": "cape verde",
+  "\u6bd4\u5229\u65f6": "belgium",
+  "\u57c3\u53ca": "egypt",
+  "\u6c99\u7279\u963f\u62c9\u4f2f": "saudi arabia",
+  "\u4e4c\u62c9\u572d": "uruguay",
+  "\u4f0a\u6717": "iran",
+  "\u65b0\u897f\u5170": "new zealand",
+  "\u4e39\u9ea6": "denmark",
+  "\u585e\u5185\u52a0\u5c14": "senegal",
+  "\u54e5\u4f26\u6bd4\u4e9a": "colombia",
+  "\u514b\u7f57\u5730\u4e9a": "croatia",
+  "\u6cd5\u56fd": "france",
+  "\u52a0\u7eb3": "ghana",
+  "\u632a\u5a01": "norway",
+  "\u5580\u9ea6\u9686": "cameroon",
+  "\u610f\u5927\u5229": "italy",
+  "\u6d2a\u90fd\u62c9\u65af": "honduras",
+  "\u667a\u5229": "chile",
+  "\u7259\u4e70\u52a0": "jamaica",
+  "\u6ce2\u5170": "poland",
+  "\u963f\u5c14\u53ca\u5229\u4e9a": "algeria",
+  "\u4e2d\u56fd": "china",
+  "\u6cf0\u56fd": "thailand",
+  "\u5308\u7259\u5229": "hungary",
+  "\u54c8\u8428\u514b": "kazakhstan",
+});
+
+function normalizedTeamKey(teamName) {
+  return normText(teamName)
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/\b(fc|cf|afc|sc|club)\b/g, " ")
+    .replace(/[^a-z0-9\u4e00-\u9fff]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
 function teamKey(teamName) {
-  return normText(teamName).toLowerCase();
+  const key = normalizedTeamKey(teamName);
+  return CURRENT_TEAM_KEY_ALIASES[key] || TEAM_KEY_ALIASES[key] || key;
 }
 
 function pairKey(homeTeam, awayTeam) {
   return [teamKey(homeTeam), teamKey(awayTeam)].sort().join("__");
+}
+
+function matchSideTeamName(match, side) {
+  return side === "home"
+    ? (match.homeTeamName || match.homeTeam || match.homeName || "")
+    : (match.awayTeamName || match.awayTeam || match.awayName || "");
+}
+
+const KIMI_WORLD_CUP_KEY_ALIASES = Object.freeze({
+  "united-states": "usa",
+  "czech-republic": "czechia",
+  "bosnia-and-herzegovina": "bosnia",
+  "south-africa": "south-africa",
+  "south-korea": "south-korea",
+  "saudi-arabia": "saudi-arabia",
+  "new-zealand": "new-zealand",
+  "cape-verde": "cape-verde",
+  "ivory-coast": "ivory-coast",
+  "dr-congo": "dr-congo",
+  "democratic-republic-of-congo": "dr-congo",
+  "congo-dr": "dr-congo",
+});
+
+function kimiWorldCupKey(value) {
+  const key = teamKey(value).replace(/\s+/g, "-");
+  return KIMI_WORLD_CUP_KEY_ALIASES[key] || key;
+}
+
+function worldCupTeamMap(dataset) {
+  const map = new Map();
+  for (const team of dataset?.teams || []) {
+    [
+      team.key,
+      team.nameZh,
+      team.nameEn,
+    ].filter(Boolean).forEach((value) => {
+      map.set(kimiWorldCupKey(value), team);
+    });
+  }
+  return map;
+}
+
+function compactWorldCupTeamPrior(team) {
+  if (!team) return null;
+  return {
+    key: team.key,
+    nameZh: team.nameZh,
+    nameEn: team.nameEn,
+    group: team.group,
+    fifaRank: team.fifaRank,
+    elo: team.elo,
+    squadValueM: team.squadValueM,
+    avgAge: team.avgAge,
+    corePlayer: team.corePlayer,
+    qualityTier: team.qualityTier,
+    recent10: team.recent10,
+    groupOutlook: team.groupOutlook,
+    modelStrengthNormalized: team.modelStrengthNormalized,
+  };
+}
+
+function fixturePriorForMatch(dataset, match) {
+  const homeKey = kimiWorldCupKey(matchSideTeamName(match, "home"));
+  const awayKey = kimiWorldCupKey(matchSideTeamName(match, "away"));
+  return (dataset?.fixtures || []).find((fixture) => {
+    const fixtureHome = kimiWorldCupKey(fixture.homeKey || fixture.homeNameZh);
+    const fixtureAway = kimiWorldCupKey(fixture.awayKey || fixture.awayNameZh);
+    return fixtureHome === homeKey && fixtureAway === awayKey;
+  }) || null;
+}
+
+function isWorldCupMatchCandidate(match) {
+  const text = [
+    match.leagueName,
+    match.leagueNameEn,
+    match.leagueShortName,
+    match.countryName,
+    match.countryNameEn,
+    match.externalSignals?.leagueName,
+  ].filter(Boolean).join(" ");
+  return /世界杯|FIFA\s*World\s*Cup|World\s*Cup/i.test(text);
+}
+
+function worldCupPriorForMatch(dataset, match) {
+  if (!dataset?.teams || !isWorldCupMatchCandidate(match)) return null;
+  const teams = worldCupTeamMap(dataset);
+  const home = teams.get(kimiWorldCupKey(matchSideTeamName(match, "home")));
+  const away = teams.get(kimiWorldCupKey(matchSideTeamName(match, "away")));
+  if (!home || !away) return null;
+
+  const fixture = fixturePriorForMatch(dataset, match);
+  const homeStrength = Number(home.modelStrengthNormalized);
+  const awayStrength = Number(away.modelStrengthNormalized);
+  return {
+    source: "kimi-worldcup-dataset",
+    version: dataset.version,
+    signature: dataset.signature,
+    policy: dataset.quality?.curated?.policy || "pre-match-prior",
+    rawPolicy: dataset.quality?.raw?.policy || "audit-only",
+    strengthDiff: Number.isFinite(homeStrength) && Number.isFinite(awayStrength)
+      ? Number((homeStrength - awayStrength).toFixed(4))
+      : null,
+    fixture: fixture ? {
+      matchNo: fixture.matchNo,
+      kickoffLabel: fixture.kickoffLabel,
+      kickoffTime: fixture.kickoffTime,
+      venue: fixture.venue,
+      city: fixture.city,
+      sourceQuality: fixture.sourceQuality,
+      note: fixture.note,
+    } : null,
+    home: compactWorldCupTeamPrior(home),
+    away: compactWorldCupTeamPrior(away),
+  };
+}
+
+function attachWorldCupPrior(match, dataset) {
+  const worldCupPrior = worldCupPriorForMatch(dataset, match);
+  if (!worldCupPrior) return match;
+  return {
+    ...match,
+    worldCupPrior,
+    externalSignals: {
+      ...(match.externalSignals || {}),
+      worldCupPrior,
+    },
+  };
+}
+
+function loadHistoricalTrainingIndex() {
+  const file = path.join(__dirname, "..", "server-data", "training", "historical-training-index.json");
+  if (!fs.existsSync(file)) return null;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function loadWorldCupKimiDataset() {
+  const candidates = [
+    path.join(__dirname, "..", "server-data", "worldcup", "kimi-worldcup-dataset.json"),
+    path.join(__dirname, "..", "public", "data", "worldcup-kimi-dataset.json"),
+  ];
+
+  for (const file of candidates) {
+    if (!fs.existsSync(file)) continue;
+    try {
+      const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+    } catch {
+      // Try the next location.
+    }
+  }
+  return null;
+}
+
+function worldCupDatasetSummary(dataset) {
+  if (!dataset) return null;
+  return {
+    version: dataset.version || "unknown",
+    source: dataset.source?.zipFile || "kimi-worldcup-dataset",
+    signature: dataset.signature || null,
+    teams: Array.isArray(dataset.teams) ? dataset.teams.length : 0,
+    fixtures: Array.isArray(dataset.fixtures) ? dataset.fixtures.length : 0,
+    policy: dataset.quality?.curated?.policy || "pre-match-prior",
+    rawPolicy: dataset.quality?.raw?.policy || null,
+  };
+}
+
+function trainingSourceSummary(trainingIndex) {
+  if (!trainingIndex) return null;
+  const source = trainingIndex.source?.name || "historical-training";
+  const rows = trainingIndex.sample?.rows || 0;
+  const lastMatchDate = trainingIndex.sample?.lastMatchDate || null;
+  return {
+    version: trainingIndex.version,
+    source,
+    rows,
+    lastMatchDate,
+    signature: [trainingIndex.version || "unknown", source, rows, lastMatchDate || "none"].join("|"),
+  };
+}
+
+function seedTeamHistoryFromTraining(teamHistory, trainingIndex) {
+  if (!trainingIndex?.teams) return 0;
+  let seeded = 0;
+  for (const [key, team] of Object.entries(trainingIndex.teams)) {
+    const recent = Array.isArray(team?.recent) ? team.recent : [];
+    if (!key || !recent.length) continue;
+    teamHistory.set(key, recent.slice(-40));
+    seeded += 1;
+  }
+  return seeded;
+}
+
+function seedEloFromTraining(ratings, counts, trainingIndex) {
+  if (!trainingIndex?.teams) return 0;
+  let seeded = 0;
+  for (const [key, team] of Object.entries(trainingIndex.teams)) {
+    const rating = Number(team?.latestElo);
+    if (!key || !Number.isFinite(rating)) continue;
+    ratings.set(key, rating);
+    counts.set(key, Number(team?.matches || 0));
+    seeded += 1;
+  }
+  return seeded;
+}
+
+function leaguePriorKey(value) {
+  return teamKey(value);
+}
+
+function leaguePriorForMatch(trainingIndex, match) {
+  if (!trainingIndex?.leaguePriors) return null;
+  const trainingSource = trainingSourceSummary(trainingIndex);
+  const profile = matchVolatilityProfile(match);
+  if (profile.isInternational) {
+    const prior = trainingIndex.leaguePriors.international;
+    return prior && Number(prior.matches || 0) >= 500 ? {
+      ...prior,
+      key: "international",
+      source: "historical-international-prior",
+      trainingVersion: trainingIndex.version,
+      trainingSignature: trainingSource?.signature || trainingIndex.version || null,
+    } : null;
+  }
+
+  const candidates = [
+    match.countryNameEn,
+    match.countryName,
+    match.leagueNameEn,
+    match.leagueName,
+  ].map(leaguePriorKey).filter(Boolean);
+
+  for (const key of candidates) {
+    const prior = trainingIndex.leaguePriors.countries?.[key];
+    if (prior && Number(prior.matches || 0) >= 120) {
+      return {
+        ...prior,
+        key,
+        source: "historical-country-prior",
+        trainingVersion: trainingIndex.version,
+        trainingSignature: trainingSource?.signature || trainingIndex.version || null,
+      };
+    }
+  }
+
+  const global = trainingIndex.leaguePriors.global;
+  if (global && Number(global.matches || 0) >= 1000) {
+    return {
+      ...global,
+      key: "global",
+      source: "historical-global-prior",
+      trainingVersion: trainingIndex.version,
+      trainingSignature: trainingSource?.signature || trainingIndex.version || null,
+    };
+  }
+  return null;
 }
 
 function daysBetween(fromIso, toIso) {
@@ -1225,10 +2165,12 @@ function summarizeHeadToHead(rows) {
   };
 }
 
-function buildFormSnapshots(matches) {
+function buildFormSnapshots(matches, historicalTraining = null) {
   const teamHistory = new Map();
   const h2hHistory = new Map();
   const snapshots = new Map();
+  const seededTeams = seedTeamHistoryFromTraining(teamHistory, historicalTraining);
+  const historicalSource = trainingSourceSummary(historicalTraining);
   const readRows = (map, key) => map.get(key) || [];
   const appendRow = (map, key, row) => {
     const rows = map.get(key) || [];
@@ -1249,9 +2191,10 @@ function buildFormSnapshots(matches) {
     const h2h = summarizeHeadToHead(readRows(h2hHistory, pairKey(match.homeTeam, match.awayTeam)));
     const sampleSize = homeForm.sampleSize + awayForm.sampleSize;
     snapshots.set(sourceMatchId, {
-      version: "rolling-form-v1",
+      version: historicalSource ? "rolling-form-v2-historical-seeded" : "rolling-form-v1",
       lookbackMatches: FORM_LOOKBACK_MATCHES,
       sampleSize,
+      historicalSource: historicalSource ? { ...historicalSource, seededTeams } : null,
       home: homeForm,
       away: awayForm,
       h2h,
@@ -1275,12 +2218,14 @@ function buildFormSnapshots(matches) {
   return snapshots;
 }
 
-function buildEloSnapshots(matches) {
+function buildEloSnapshots(matches, historicalTraining = null) {
   const baseRating = 1500;
   const kFactor = 22;
   const ratings = new Map();
   const counts = new Map();
   const snapshots = new Map();
+  const seededTeams = seedEloFromTraining(ratings, counts, historicalTraining);
+  const historicalSource = trainingSourceSummary(historicalTraining);
 
   const ratingFor = (key) => ratings.get(key) ?? baseRating;
   const countFor = (key) => counts.get(key) ?? 0;
@@ -1298,12 +2243,14 @@ function buildEloSnapshots(matches) {
     const awayRating = ratingFor(awayKey);
     const probabilities = eloOutcomeProbabilities(homeRating, awayRating);
     snapshots.set(sourceMatchId, {
+      version: historicalSource ? "elo-v2-historical-seeded" : "elo-v1-window",
       homeRating,
       awayRating,
       diff: homeRating - awayRating + 62,
       probabilities,
       homeMatches: countFor(homeKey),
       awayMatches: countFor(awayKey),
+      historicalSource: historicalSource ? { ...historicalSource, seededTeams } : null,
       lastUpdatedAt: match.kickoffTime,
     });
 
@@ -1346,6 +2293,11 @@ function resultStatus(match, expected, marketType = "") {
   if (expected === "GG") return match.scoreHome > 0 && match.scoreAway > 0 ? "WON" : "LOST";
   if (expected === "NG") return match.scoreHome === 0 || match.scoreAway === 0 ? "WON" : "LOST";
   return expected === actual1x2 ? "WON" : "LOST";
+}
+
+function isReferencePrediction(prediction) {
+  return prediction?.recommendationAction === "reference"
+    || prediction?.recommendationTier === "reference";
 }
 
 function predictionProfileKey(match) {
@@ -1397,6 +2349,7 @@ function buildPredictionHealth(existingMatches) {
   for (const match of existingMatches || []) {
     for (const prediction of match.predictions || []) {
       if (!prediction || prediction.tipCode === "WATCH") continue;
+      if (isReferencePrediction(prediction)) continue;
       if (prediction.resultStatus !== "WON" && prediction.resultStatus !== "LOST") continue;
       const profileKey = predictionProfileKey(match);
       const odds = Number(prediction.odds || 0);
@@ -1486,6 +2439,7 @@ function predictionRowsFromMatches(existingMatches) {
 
     for (const prediction of match.predictions || []) {
       if (!prediction || prediction.tipCode === "WATCH") continue;
+      if (isReferencePrediction(prediction)) continue;
       if (prediction.resultStatus !== "WON" && prediction.resultStatus !== "LOST") continue;
       const isOneXTwo = prediction.marketType === "1X2" || prediction.marketType === "BEST";
       const probability = isOneXTwo && finalProbabilities
@@ -1683,6 +2637,108 @@ function buildModelCalibration(existingMatches) {
   };
 }
 
+function strategyRuleIsActive(rule) {
+  return Boolean(rule && rule.onlineAction === "tighten" && rule.adjustments);
+}
+
+function roundGate(value) {
+  if (!Number.isFinite(value)) return 0;
+  return Number(value.toFixed(3));
+}
+
+function mergeCalibrationGate(baseGate, strategyGate) {
+  if (!strategyRuleIsActive(strategyGate)) return baseGate;
+  const base = baseGate || {};
+  const rawAdjustment = strategyGate.adjustments || {};
+  const adjustment = {
+    minProbabilityBoost: clamp(Number(rawAdjustment.minProbabilityBoost || 0), 0, 0.04),
+    minModelGapBoost: clamp(Number(rawAdjustment.minModelGapBoost || 0), 0, 0.025),
+    minHandicapSupportBoost: clamp(Number(rawAdjustment.minHandicapSupportBoost || 0), 0, 0.025),
+    trustPenalty: clamp(Number(rawAdjustment.trustPenalty || 0), 0, 6),
+    maxRiskTagsDelta: clamp(Number(rawAdjustment.maxRiskTagsDelta || 0), -1, 0),
+    goalsMinBoost: clamp(Number(rawAdjustment.goalsMinBoost || 0), 0, 0.03),
+  };
+  const baseMaxRiskTags = Number.isFinite(base.maxRiskTags) ? Number(base.maxRiskTags) : 3;
+  const maxRiskTagsDelta = Number(adjustment.maxRiskTagsDelta || 0);
+  return {
+    ...base,
+    minProbabilityBoost: roundGate(clamp(Number(base.minProbabilityBoost || 0) + Number(adjustment.minProbabilityBoost || 0), -0.02, 0.11)),
+    minModelGapBoost: roundGate(clamp(Number(base.minModelGapBoost || 0) + Number(adjustment.minModelGapBoost || 0), -0.02, 0.07)),
+    minHandicapSupportBoost: roundGate(clamp(Number(base.minHandicapSupportBoost || 0) + Number(adjustment.minHandicapSupportBoost || 0), -0.02, 0.09)),
+    trustPenalty: Math.round(clamp(Number(base.trustPenalty || 0) + Number(adjustment.trustPenalty || 0), 0, 18)),
+    maxRiskTags: Math.round(clamp(baseMaxRiskTags + maxRiskTagsDelta, 1, 5)),
+    goalsMinBoost: roundGate(clamp(Number(base.goalsMinBoost || 0) + Number(adjustment.goalsMinBoost || 0), -0.02, 0.07)),
+    reason: [base.reason, `strategy:${strategyGate.key || "profile"}`].filter(Boolean).join("+"),
+  };
+}
+
+function applyModelStrategyToCalibration(calibration, strategy) {
+  if (!calibration || !strategy || strategy.activation?.onlineEffect === "shadow") return calibration;
+  const next = {
+    ...calibration,
+    strategy: {
+      version: strategy.version,
+      generatedAt: strategy.generatedAt,
+      activation: strategy.activation,
+      sample: strategy.sample,
+      activeGates: strategy.activeGates,
+      gateByMarket: strategy.gateByMarket || {},
+      gateByOddsBucket: strategy.gateByOddsBucket || {},
+      gateByTip: strategy.gateByTip || {},
+      gateByProfile: strategy.gateByProfile || {},
+    },
+  };
+  next.gateByProfile = { ...(calibration.gateByProfile || {}) };
+  for (const [profileKey, rule] of Object.entries(strategy.gateByProfile || {})) {
+    next.gateByProfile[profileKey] = mergeCalibrationGate(next.gateByProfile[profileKey], rule);
+  }
+  return next;
+}
+
+function combineStrategyRules(rules) {
+  const activeRules = rules.filter(strategyRuleIsActive);
+  const combined = {
+    minProbabilityBoost: 0,
+    minModelGapBoost: 0,
+    minHandicapSupportBoost: 0,
+    trustPenalty: 0,
+    maxRiskTagsDelta: 0,
+    goalsMinBoost: 0,
+    reasons: [],
+  };
+
+  for (const rule of activeRules) {
+    const adjustment = rule.adjustments || {};
+    combined.minProbabilityBoost += Math.max(0, Number(adjustment.minProbabilityBoost || 0));
+    combined.minModelGapBoost += Math.max(0, Number(adjustment.minModelGapBoost || 0));
+    combined.minHandicapSupportBoost += Math.max(0, Number(adjustment.minHandicapSupportBoost || 0));
+    combined.trustPenalty += Math.max(0, Number(adjustment.trustPenalty || 0));
+    combined.maxRiskTagsDelta += Math.min(0, Number(adjustment.maxRiskTagsDelta || 0));
+    combined.goalsMinBoost += Math.max(0, Number(adjustment.goalsMinBoost || 0));
+    combined.reasons.push(`strategy:${rule.key || "rule"}`);
+  }
+
+  return {
+    minProbabilityBoost: roundGate(clamp(combined.minProbabilityBoost, 0, 0.08)),
+    minModelGapBoost: roundGate(clamp(combined.minModelGapBoost, 0, 0.06)),
+    minHandicapSupportBoost: roundGate(clamp(combined.minHandicapSupportBoost, 0, 0.07)),
+    trustPenalty: Math.round(clamp(combined.trustPenalty, 0, 12)),
+    maxRiskTagsDelta: Math.round(clamp(combined.maxRiskTagsDelta, -2, 0)),
+    goalsMinBoost: roundGate(clamp(combined.goalsMinBoost, 0, 0.06)),
+    reasons: combined.reasons,
+  };
+}
+
+function strategyGateForPrediction(match, marketType, tipCode, oddsBucket) {
+  const strategy = match.modelCalibration?.strategy;
+  if (!strategy || strategy.activation?.onlineEffect === "shadow") return combineStrategyRules([]);
+  return combineStrategyRules([
+    strategy.gateByMarket?.[marketType],
+    strategy.gateByOddsBucket?.[oddsBucket],
+    strategy.gateByTip?.[`${marketType}:${tipCode}`],
+  ]);
+}
+
 function profileCalibration(match) {
   const profileKey = predictionProfileKey(match);
   const calibration = match.modelCalibration;
@@ -1691,6 +2747,7 @@ function profileCalibration(match) {
     weights: calibration?.weightsByProfile?.[profileKey],
     gate: calibration?.gateByProfile?.[profileKey],
     metrics: calibration?.metrics,
+    strategy: calibration?.strategy || null,
   };
 }
 
@@ -1755,6 +2812,9 @@ function leagueMeta(leagueName) {
 }
 
 function httpGetJson(url, tab = "concern") {
+  const proxy = sportteryOutboundProxy();
+  if (proxy) return httpGetJsonViaCurl(url, tab, proxy);
+
   return new Promise((resolve, reject) => {
     const req = https.request(url, {
       method: "GET",
@@ -1794,6 +2854,56 @@ function httpGetJson(url, tab = "concern") {
   });
 }
 
+function httpGetJsonViaCurl(url, tab, proxy) {
+  return new Promise((resolve, reject) => {
+    const args = [
+      "-fsSL",
+      "--connect-timeout",
+      String(Math.max(3, Number(process.env.SPORTTERY_CURL_CONNECT_TIMEOUT_SECONDS || 8))),
+      "--max-time",
+      String(Math.max(8, Number(process.env.SPORTTERY_CURL_MAX_TIME_SECONDS || 25))),
+      "--proxy",
+      proxy,
+      ...curlHeaderArgs(tab),
+      url,
+    ];
+
+    const child = spawn(process.env.CURL_BIN || "curl", args, {
+      cwd: process.cwd(),
+      env: process.env,
+      shell: false,
+    });
+
+    let body = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      body += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", reject);
+    child.on("exit", (code) => {
+      if (code !== 0) {
+        reject(new Error(`${url} -> curl proxy exited ${code}${stderr ? ` ${stderr.slice(0, 220).replace(/\s+/g, " ")}` : ""}`));
+        return;
+      }
+      try {
+        const payload = JSON.parse(body);
+        if (payload?.success === false) {
+          reject(new Error(`sporttery_api_${payload.errorCode || "unknown"}`));
+          return;
+        }
+        resolve(payload);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  });
+}
+
 function buildPageUrl(method, pageNo = null, pageType = null) {
   const params = new URLSearchParams();
   params.set("method", method);
@@ -1822,15 +2932,21 @@ function mapSportteryRow(row, sourceMethod, sourceUrl) {
   const kickoffTime = parseKickoff(row.matchDate, row.matchTime);
   const rawStatus = statusFromSporttery(row.matchStatus, row.sellStatus, row.matchStatusName, kickoffTime);
   const status = normalizeStatusWithScore(rawStatus, kickoffTime, scoreHome, scoreAway);
-  const businessDate = normText(row.businessDate || row.matchNumDate || row.matchDate);
+  const matchNo = normText(row.matchNumStr);
+  const matchDate = normText(row.matchDate);
+  const businessDate = normText(row.businessDate || row.matchNumDate)
+    || inferSportteryBusinessDate(matchNo, matchDate)
+    || matchDate;
   const oddsInfo = sportteryOddsInfo(row, sourceUrl, sourceMethod);
   return {
+    source: "sporttery",
     sourceMethod,
     sourceUrl,
     sourceMatchId: matchId,
-    matchNo: normText(row.matchNumStr),
+    matchNo,
     businessDate,
-    matchDate: normText(row.matchDate),
+    matchDate,
+    buyEndTime: normText(row.buyEndTime || row.matchEndTime || row.sellEndTime || row.stopSaleTime || row.endTime),
     homeTeam,
     awayTeam,
     homeRank: normText(row.homeRank),
@@ -1953,7 +3069,10 @@ function mergeMatch(prev, next) {
     awayTeamCode: next.awayTeamCode || prev.awayTeamCode,
     homeTeamLogo: next.homeTeamLogo || prev.homeTeamLogo,
     awayTeamLogo: next.awayTeamLogo || prev.awayTeamLogo,
-    businessDate: next.businessDate || prev.businessDate,
+    businessDate: inferSportteryBusinessDate(next.matchNo || prev.matchNo, next.matchDate || prev.matchDate)
+      || next.businessDate
+      || prev.businessDate,
+    buyEndTime: next.buyEndTime || prev.buyEndTime,
     matchDate: next.matchDate || prev.matchDate,
     sourceUrl: next.sourceUrl || prev.sourceUrl,
     scoreHome: nextHasScore ? next.scoreHome : prevHasScore ? prev.scoreHome : next.scoreHome,
@@ -1989,6 +3108,36 @@ function hhadSupportForPick(hhadProbabilities, code) {
   return null;
 }
 
+function outcomeProbabilityForCode(probabilities, code) {
+  if (!probabilities) return null;
+  if (code === "1") return Number(probabilities.home);
+  if (code === "X") return Number(probabilities.draw);
+  if (code === "2") return Number(probabilities.away);
+  return null;
+}
+
+function pickValueProfile(pick, modelProbabilities, marketProbabilities) {
+  const code = pick?.[0];
+  const odds = Number(pick?.[2]);
+  const modelProbability = outcomeProbabilityForCode(modelProbabilities, code);
+  const marketProbability = outcomeProbabilityForCode(marketProbabilities, code);
+  const probabilityEdge = Number.isFinite(modelProbability) && Number.isFinite(marketProbability)
+    ? modelProbability - marketProbability
+    : null;
+  const expectedValue = Number.isFinite(modelProbability) && Number.isFinite(odds)
+    ? modelProbability * odds - 1
+    : null;
+
+  return {
+    code,
+    odds,
+    modelProbability,
+    marketProbability,
+    probabilityEdge,
+    expectedValue,
+  };
+}
+
 function matchVolatilityProfile(match) {
   const text = [
     match.leagueName,
@@ -2011,27 +3160,34 @@ function evaluateOneXTwoGate(context) {
     match,
     pick,
     probabilities,
+    modelProbabilities,
     hhadProbabilities,
     probabilityGap,
     modelProbabilityGap,
     riskTags,
     analystSelection,
     predictionHealth,
+    marketType = "1X2",
   } = context;
 
   const code = pick[0];
   const odds = pick[2];
   const profile = matchVolatilityProfile(match);
   const isSidePick = code === "1" || code === "2";
-  const pickProbability = code === "1"
-    ? probabilities.home
-    : code === "X"
-      ? probabilities.draw
-      : probabilities.away;
+  const valueProfile = pickValueProfile(pick, modelProbabilities || probabilities, probabilities);
+  const pickProbability = Number.isFinite(valueProfile.modelProbability)
+    ? valueProfile.modelProbability
+    : outcomeProbabilityForCode(probabilities, code);
+  const marketPickProbability = Number.isFinite(valueProfile.marketProbability)
+    ? valueProfile.marketProbability
+    : outcomeProbabilityForCode(probabilities, code);
+  const probabilityEdge = Number.isFinite(valueProfile.probabilityEdge) ? valueProfile.probabilityEdge : 0;
+  const expectedValue = Number.isFinite(valueProfile.expectedValue) ? valueProfile.expectedValue : null;
   const handicapSupport = hhadSupportForPick(hhadProbabilities, code);
   const profileKey = predictionProfileKey(match);
   const dynamicGate = profileCalibration(match).gate || {};
   const oddsBucket = predictionOddsBucket(odds);
+  const strategyGate = strategyGateForPrediction(match, marketType, code, oddsBucket);
   const drawHealth = predictionHealth?.oneXTwo?.byTip?.X;
   const drawHasPositiveSample = isHotBucket(drawHealth, 3, 0.5);
   const directionCooldown = Boolean(
@@ -2054,6 +3210,8 @@ function evaluateOneXTwoGate(context) {
   if (probabilities.draw >= 0.3) reasons.push("draw-pressure");
   if (probabilityGap < 0.1) reasons.push("thin-market-edge");
   if (modelProbabilityGap < 0.07) reasons.push("thin-model-edge");
+  if (probabilityEdge < 0.015) reasons.push("no-model-market-edge");
+  if (expectedValue !== null && expectedValue < 0.01) reasons.push("negative-or-flat-ev");
   if (riskTags.length > 0) reasons.push("risk-tags");
   if (isSidePick && odds <= 1.25) reasons.push("low-odds-no-value");
   if (profile.isInternational && isSidePick && odds <= 1.35) reasons.push("international-low-odds");
@@ -2063,6 +3221,7 @@ function evaluateOneXTwoGate(context) {
   if (code === "X" && oneXTwoCooldown && !drawHasPositiveSample) reasons.push("draw-no-positive-sample");
   if (isSidePick && oneXTwoCooldown && odds <= 2.1) reasons.push("side-short-form-brake");
   if (dynamicGate.reason && dynamicGate.reason !== "neutral-profile") reasons.push(dynamicGate.reason);
+  if (strategyGate.reasons.length) reasons.push(...strategyGate.reasons);
 
   const fragileInternationalFavorite = profile.isInternational
     && isSidePick
@@ -2076,18 +3235,24 @@ function evaluateOneXTwoGate(context) {
     );
   if (fragileInternationalFavorite) reasons.push("fragile-international-favorite");
 
-  const minPickProbability = (oneXTwoCooldown ? 0.58 : 0.52) + Number(dynamicGate.minProbabilityBoost || 0);
-  const minProbabilityGap = (oneXTwoCooldown ? 0.14 : 0.08) + Number(dynamicGate.minModelGapBoost || 0);
-  const minModelGap = (oneXTwoCooldown ? 0.1 : 0.06) + Number(dynamicGate.minModelGapBoost || 0);
-  const minHandicapSupport = (oneXTwoCooldown ? 0.38 : 0.3) + Number(dynamicGate.minHandicapSupportBoost || 0);
+  const minPickProbability = (oneXTwoCooldown ? 0.58 : 0.52) + Number(dynamicGate.minProbabilityBoost || 0) + Number(strategyGate.minProbabilityBoost || 0);
+  const minProbabilityGap = (oneXTwoCooldown ? 0.14 : 0.08) + Number(dynamicGate.minModelGapBoost || 0) + Number(strategyGate.minModelGapBoost || 0);
+  const minModelGap = (oneXTwoCooldown ? 0.1 : 0.06) + Number(dynamicGate.minModelGapBoost || 0) + Number(strategyGate.minModelGapBoost || 0);
+  const minHandicapSupport = (oneXTwoCooldown ? 0.38 : 0.3) + Number(dynamicGate.minHandicapSupportBoost || 0) + Number(strategyGate.minHandicapSupportBoost || 0);
+  const minValueEdge = (odds <= 1.45 ? 0.045 : odds <= 1.7 ? 0.032 : 0.02)
+    + Number(dynamicGate.minModelGapBoost || 0) * 0.35
+    + Number(strategyGate.minModelGapBoost || 0) * 0.35;
+  const minExpectedValue = odds <= 1.45 ? 0.045 : odds <= 1.7 ? 0.03 : 0.015;
   const maxDrawPressure = oneXTwoCooldown ? 0.32 : 0.36;
-  const maxGateRiskTags = Number.isFinite(dynamicGate.maxRiskTags) ? Number(dynamicGate.maxRiskTags) : 3;
+  const maxGateRiskTags = Math.max(0, (Number.isFinite(dynamicGate.maxRiskTags) ? Number(dynamicGate.maxRiskTags) : 3) + Number(strategyGate.maxRiskTagsDelta || 0));
 
   const strongSidePick = isSidePick
     && !analystSelection.isContrarian
     && pickProbability >= minPickProbability
     && probabilityGap >= minProbabilityGap
     && modelProbabilityGap >= minModelGap
+    && probabilityEdge >= minValueEdge
+    && (expectedValue === null || expectedValue >= minExpectedValue)
     && handicapSupport !== null
     && handicapSupport >= minHandicapSupport
     && probabilities.draw <= maxDrawPressure
@@ -2105,6 +3270,8 @@ function evaluateOneXTwoGate(context) {
     && pickProbability >= (oneXTwoCooldown ? 0.56 : 0.49)
     && probabilityGap >= (oneXTwoCooldown ? 0.12 : 0.065)
     && modelProbabilityGap >= (oneXTwoCooldown ? 0.095 : 0.055)
+    && probabilityEdge >= Math.max(0.026, minValueEdge - 0.006)
+    && (expectedValue === null || expectedValue >= Math.max(0.02, minExpectedValue))
     && handicapSupport !== null
     && handicapSupport >= (oneXTwoCooldown ? 0.38 : 0.34)
     && probabilities.draw <= 0.34
@@ -2120,6 +3287,8 @@ function evaluateOneXTwoGate(context) {
     && code === "X"
     && pickProbability >= 0.285
     && probabilityGap <= 0.14
+    && probabilityEdge >= 0.018
+    && (expectedValue === null || expectedValue >= 0.035)
     && riskTags.length <= 5;
 
   const valueContrarianPick = analystSelection.isContrarian
@@ -2127,6 +3296,8 @@ function evaluateOneXTwoGate(context) {
     && pickProbability >= (code === "X" ? 0.26 : 0.29)
     && probabilityGap <= 0.18
     && modelProbabilityGap >= (code === "X" ? 0 : 0.035)
+    && probabilityEdge >= (code === "X" ? 0.018 : 0.028)
+    && (expectedValue === null || expectedValue >= (code === "X" ? 0.035 : 0.045))
     && odds >= (code === "X" ? 2.75 : 2.3)
     && odds <= 7.5
     && riskTags.length <= 4
@@ -2145,6 +3316,13 @@ function evaluateOneXTwoGate(context) {
     tier,
     reasons,
     handicapSupport,
+    valueProfile: {
+      ...valueProfile,
+      modelProbability: Number.isFinite(pickProbability) ? pickProbability : null,
+      marketProbability: Number.isFinite(marketPickProbability) ? marketPickProbability : null,
+      probabilityEdge,
+      expectedValue,
+    },
     profile,
   };
 }
@@ -2163,10 +3341,17 @@ function evaluateGoalsGate(match, goalsTip, goalsProbability, over25Probability,
   let minProbability = goalsCooldown ? 0.68 : 0.63;
   let minEdge = goalsCooldown ? 0.18 : 0.13;
   const dynamicGate = profileCalibration(match).gate || {};
+  const strategyGate = strategyGateForPrediction(match, "GOALS", goalsTip, "unknown");
   if (Number(dynamicGate.goalsMinBoost || 0) > 0) {
     minProbability += Number(dynamicGate.goalsMinBoost || 0);
     minEdge += Number(dynamicGate.goalsMinBoost || 0) * 0.5;
     reasons.push("dynamic-goals-cooldown");
+  }
+  if (Number(strategyGate.goalsMinBoost || strategyGate.minProbabilityBoost || 0) > 0) {
+    const boost = Number(strategyGate.goalsMinBoost || strategyGate.minProbabilityBoost || 0);
+    minProbability += boost;
+    minEdge += boost * 0.5;
+    reasons.push(...strategyGate.reasons);
   }
 
   if (under25IsHot) {
@@ -2199,6 +3384,127 @@ function evaluateGoalsGate(match, goalsTip, goalsProbability, over25Probability,
       && !(bttsProbability >= 0.46 && bttsProbability <= 0.56)
       && (goalsTip === "U2.5" || goalsProbability >= minProbability + 0.04),
     reasons,
+  };
+}
+
+function selectValueAwareOneXTwo(match, picks, modelProbabilities, marketProbabilities, hhadProbabilities) {
+  const modelLeader = picks[0];
+  const profiles = picks.map((pick, index) => {
+    const value = pickValueProfile(pick, modelProbabilities, marketProbabilities);
+    const handicapSupport = hhadSupportForPick(hhadProbabilities, pick[0]);
+    return {
+      pick,
+      code: pick[0],
+      modelRank: index + 1,
+      handicapSupport,
+      ...value,
+      score: (
+        Math.max(0, Number(value.probabilityEdge || 0)) * 2.2
+        + Math.max(0, Math.min(Number(value.expectedValue || 0), 0.28)) * 0.85
+        + Number(value.modelProbability || 0) * 0.18
+        + (index === 0 ? 0.025 : 0)
+        - (pick[0] === "X" ? 0.015 : 0)
+      ),
+    };
+  });
+  const marketLeaderProfile = [...profiles]
+    .sort((a, b) => Number(b.marketProbability || 0) - Number(a.marketProbability || 0))[0];
+  const marketLeader = marketLeaderProfile?.pick || modelLeader;
+  const leaderGap = Number(marketLeaderProfile?.marketProbability || 0)
+    - Math.max(...profiles.filter((item) => item.code !== marketLeader?.[0]).map((item) => Number(item.marketProbability || 0)), 0);
+  const leaderHandicapSupport = hhadSupportForPick(hhadProbabilities, marketLeader?.[0]);
+  const weakHandicapSupport = marketLeader?.[0] !== "X" && leaderHandicapSupport !== null && leaderHandicapSupport < 0.42;
+  const modelLeaderProbability = Number(modelLeader?.[1] || 0);
+  const marketLeaderOdds = Number(marketLeader?.[2] || 0);
+  const marketLeaderIsLowOddsSide = (marketLeader?.[0] === "1" || marketLeader?.[0] === "2")
+    && marketLeaderOdds > 0
+    && marketLeaderOdds <= 1.45;
+  const protectedFavorite = marketLeaderIsLowOddsSide && modelLeader?.[0] === marketLeader?.[0];
+
+  const qualifiesValue = (profile) => {
+    const edge = Number(profile.probabilityEdge || 0);
+    const ev = Number(profile.expectedValue || 0);
+    const modelProbability = Number(profile.modelProbability || 0);
+    const odds = Number(profile.odds || 0);
+    const isDraw = profile.code === "X";
+    const isSide = profile.code === "1" || profile.code === "2";
+    const maxModelDiscount = modelLeaderProbability - modelProbability;
+    const minEdge = isDraw ? 0.018 : odds <= 1.45 ? 0.05 : odds <= 1.7 ? 0.035 : 0.026;
+    const minEv = isDraw ? 0.035 : odds <= 1.45 ? 0.05 : odds <= 1.7 ? 0.032 : 0.025;
+    const minProbability = isDraw ? 0.245 : odds <= 1.7 ? 0.44 : 0.29;
+    return edge >= minEdge
+      && ev >= minEv
+      && modelProbability >= minProbability
+      && maxModelDiscount <= (isDraw ? 0.12 : 0.14)
+      && odds >= (isDraw ? 2.65 : 1.32)
+      && odds <= (isDraw ? 6.8 : 5.8)
+      && (!isSide || profile.handicapSupport === null || profile.handicapSupport >= 0.34);
+  };
+
+  const keepsLowOddsFavoriteDirection = (profile) => {
+    if (!protectedFavorite || profile.code === marketLeader?.[0]) return true;
+    return Number(profile.modelProbability || 0) >= modelLeaderProbability + 0.015;
+  };
+
+  const valueCandidate = profiles
+    .filter(qualifiesValue)
+    .filter(keepsLowOddsFavoriteDirection)
+    .sort((a, b) => b.score - a.score)[0];
+
+  if (valueCandidate) {
+    const isContrarian = valueCandidate.code !== marketLeader?.[0];
+    const edgeTextZh = `${pct(valueCandidate.probabilityEdge || 0)} 个百分点`;
+    const edgeTextEn = `${pct(valueCandidate.probabilityEdge || 0)} points`;
+    const evText = `${Math.round(Number(valueCandidate.expectedValue || 0) * 100)}%`;
+    return {
+      pick: valueCandidate.pick,
+      mode: isContrarian
+        ? (valueCandidate.code === "X" ? "value-draw" : "value-underdog")
+        : "value-market",
+      isContrarian,
+      valueProfile: valueCandidate,
+      reason: {
+        zh: isContrarian
+          ? `价值修正：不直接跟随最低 SP，候选方向模型概率比市场隐含概率高约 ${edgeTextZh}，EV 约 ${evText}，因此只按价值方向观察。`
+          : `价值确认：独立模型先给出该方向，市场只是同步支持；模型概率比市场隐含概率高约 ${edgeTextZh}，EV 约 ${evText}，通过价值边际检查。`,
+        en: isContrarian
+          ? `Value adjustment: not blindly following the lowest SP. The candidate is about ${edgeTextEn} above market-implied probability with EV around ${evText}, so it is kept as value-watch.`
+          : `Value confirmation: the independent model gives this direction first and the market only agrees; model probability is about ${edgeTextEn} above market-implied probability with EV around ${evText}.`,
+      },
+    };
+  }
+
+  const drawProfile = profiles.find((profile) => profile.code === "X");
+  const drawIsLive = drawProfile
+    && Number(drawProfile.modelProbability || 0) >= 0.27
+    && Number(drawProfile.probabilityEdge || 0) >= 0.012
+    && Number(drawProfile.expectedValue || 0) >= 0.025
+    && Number(marketLeaderProfile?.marketProbability || 0) <= 0.46
+    && (Number(modelLeader?.[1] || 0) - Number(drawProfile.modelProbability || 0)) <= 0.16;
+
+  if (drawIsLive && keepsLowOddsFavoriteDirection(drawProfile) && (weakHandicapSupport || leaderGap <= 0.13)) {
+    return {
+      pick: drawProfile.pick,
+      mode: "value-draw",
+      isContrarian: true,
+      valueProfile: drawProfile,
+      reason: {
+        zh: `防平修正：最低 SP 方向让球确认不足，平局模型概率较市场高约 ${pct(drawProfile.probabilityEdge || 0)} 个百分点，先降级为价值观察。`,
+        en: `Draw adjustment: the lowest-SP side lacks handicap confirmation, while draw model probability is about ${pct(drawProfile.probabilityEdge || 0)} points above market.`,
+      },
+    };
+  }
+
+  const modelLeaderProfile = profiles.find((profile) => profile.code === modelLeader?.[0]) || profiles[0];
+  return {
+    pick: modelLeader,
+    mode: "model-leader",
+    isContrarian: false,
+    valueProfile: modelLeaderProfile,
+    reason: {
+      zh: "模型首位：当前没有发现足够强的冷门/防平价值边际；若该方向只是最低 SP 但边际不足，后续风控会降级为观察。",
+      en: "Model lead: no strong draw/upset value edge was found. If this is merely the lowest-SP side without value edge, the gate will downgrade it to watch.",
+    },
   };
 }
 
@@ -2349,12 +3655,12 @@ function buildBestNarrative(match, context) {
           zh: bestHasWeakHandicap
             ? `降级原因：${tipZh}对应 ${handicapZh}；${hhadTextZh}，和普通胜平负主线存在温差。`
             : bestHasThinEdge
-              ? `降级原因：模型首选优势约 ${modelGapZh}，未达到强推荐阈值；市场主线领先约 ${marketGapZh}。`
+              ? `降级原因：独立模型首选优势约 ${modelGapZh}，未达到强推荐阈值；市场差距约 ${marketGapZh}，仅作为校验。`
               : `降级原因：风险标签叠加为 ${riskTextZh}，当前不适合只给单一方向。`,
           en: bestHasWeakHandicap
             ? `Downgrade reason: ${tipEn} has ${handicapEn}; ${hhadTextEn}, not fully aligned with HAD.`
             : bestHasThinEdge
-              ? `Downgrade reason: model edge is about ${modelGapEn}, below the strong-pick threshold; market lead is about ${marketGapEn}.`
+              ? `Downgrade reason: independent model edge is about ${modelGapEn}, below the strong-pick threshold; market gap is about ${marketGapEn} and is validation only.`
               : `Downgrade reason: risk tags overlap: ${riskTextEn}. A single pick is not justified yet.`
         },
         { zh: goalsZh, en: goalsEn },
@@ -2388,8 +3694,8 @@ function buildBestNarrative(match, context) {
       explanation,
       analysisItems: [
         {
-          zh: `盘口分歧：${analystSelection.reason.zh.replace(/^专业修正：/, "")} 市场主线领先约 ${marketGapZh}，模型首选优势约 ${modelGapZh}。`,
-          en: `Market disagreement: ${analystSelection.reason.en.replace(/^Analyst adjustment: /, "")} Market lead is about ${marketGapEn}; model edge is about ${modelGapEn}.`
+          zh: `盘口分歧：${analystSelection.reason.zh.replace(/^专业修正：/, "")} 市场差异约 ${marketGapZh}，只用于解释分歧；独立模型首选优势约 ${modelGapZh}。`,
+          en: `Market disagreement: ${analystSelection.reason.en.replace(/^Analyst adjustment: /, "")} Market gap is about ${marketGapEn} and is explanatory only; independent model edge is about ${modelGapEn}.`
         },
         { zh: goalsZh, en: goalsEn },
         {
@@ -2440,10 +3746,349 @@ function buildBestNarrative(match, context) {
   return {
     explanation,
     analysisItems: [
-      { zh: `模型排序：${tipZh}暂列第一，市场主线领先约 ${marketGapZh}，模型优势约 ${modelGapZh}。`, en: `Model ranking: ${tipEn} is first, market lead about ${marketGapEn}, model edge about ${modelGapEn}.` },
+      { zh: `独立模型排序：${tipZh}暂列第一，模型优势约 ${modelGapZh}；市场差距约 ${marketGapZh}，仅用于校验风险。`, en: `Independent model ranking: ${tipEn} is first with model edge about ${modelGapEn}; market gap is about ${marketGapEn} and is used only for risk validation.` },
       { zh: goalsZh, en: goalsEn },
       { zh: `观察点：${riskTextZh}；若临场 SP 与让球盘分歧扩大，不建议强行升档。`, en: `Watch point: ${riskTextEn}. If late SP and handicap diverge further, do not upgrade it.` }
     ]
+  };
+}
+
+const MODEL_ONLY_TEAM_STRENGTH = new Map(Object.entries({
+  "阿根廷": 0.92,
+  "法国": 0.9,
+  "英格兰": 0.88,
+  "葡萄牙": 0.87,
+  "巴西": 0.87,
+  "西班牙": 0.86,
+  "德国": 0.82,
+  "荷兰": 0.81,
+  "比利时": 0.78,
+  "克罗地亚": 0.76,
+  "意大利": 0.75,
+  "乌拉圭": 0.73,
+  "哥伦比亚": 0.72,
+  "丹麦": 0.7,
+  "瑞士": 0.69,
+  "美国": 0.66,
+  "墨西哥": 0.65,
+  "日本": 0.65,
+  "韩国": 0.62,
+  "尼日利亚": 0.62,
+  "匈牙利": 0.61,
+  "塞内加尔": 0.61,
+  "摩洛哥": 0.61,
+  "波兰": 0.6,
+  "奥地利": 0.6,
+  "捷克": 0.57,
+  "哥斯达黎加": 0.5,
+  "冰岛": 0.47,
+  "南非": 0.45,
+  "中国": 0.38,
+  "哈萨克斯坦": 0.34,
+  "泰国": 0.34,
+}));
+
+function canonicalTeamNameForModel(value) {
+  return normText(value).toLowerCase().replace(/\s+/g, "");
+}
+
+function rankToStrength(rank) {
+  const value = toNum(rank);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  return clamp(1 - (value - 1) / 140, 0.22, 0.94);
+}
+
+function externalFifaRank(match, side) {
+  const rank = match.externalSignals?.fiveHundred?.rank?.[side]?.fifaRank;
+  return Number.isFinite(Number(rank)) ? Number(rank) : null;
+}
+
+function worldCupPriorSide(match, side) {
+  const prior = match.worldCupPrior || match.externalSignals?.worldCupPrior;
+  return prior?.[side] || null;
+}
+
+function worldCupPriorStrength(match, side) {
+  const strength = Number(worldCupPriorSide(match, side)?.modelStrengthNormalized);
+  return Number.isFinite(strength) ? clamp(strength, 0.18, 0.96) : null;
+}
+
+function worldCupPriorOutcomeProbabilities(match) {
+  const home = worldCupPriorSide(match, "home");
+  const away = worldCupPriorSide(match, "away");
+  const homeStrength = Number(home?.modelStrengthNormalized);
+  const awayStrength = Number(away?.modelStrengthNormalized);
+  if (!Number.isFinite(homeStrength) || !Number.isFinite(awayStrength)) return null;
+
+  const homeAdvance = Number(home?.groupOutlook?.advanceProbability);
+  const awayAdvance = Number(away?.groupOutlook?.advanceProbability);
+  const advanceDiff = Number.isFinite(homeAdvance) && Number.isFinite(awayAdvance)
+    ? (homeAdvance - awayAdvance) / 100
+    : 0;
+  const diff = clamp((homeStrength - awayStrength) * 0.82 + advanceDiff * 0.14, -0.38, 0.38);
+  const draw = clamp(0.27 - Math.abs(diff) * 0.18, 0.18, 0.3);
+  const homeProbability = clamp((1 - draw) * (0.5 + diff), 0.08, 0.84);
+  const awayProbability = clamp(1 - draw - homeProbability, 0.08, 0.84);
+  return normalizeOutcomeProbabilities({
+    home: homeProbability,
+    draw,
+    away: awayProbability,
+  });
+}
+
+function teamModelStrength(match, side, rand) {
+  const priorStrength = worldCupPriorStrength(match, side);
+  if (priorStrength !== null) return priorStrength;
+
+  const name = side === "home" ? match.homeTeam : match.awayTeam;
+  const directRank = side === "home" ? match.homeRank : match.awayRank;
+  const rankStrength = rankToStrength(directRank) || rankToStrength(externalFifaRank(match, side));
+  if (rankStrength !== null) return rankStrength;
+
+  const normalizedName = canonicalTeamNameForModel(name);
+  for (const [teamName, strength] of MODEL_ONLY_TEAM_STRENGTH.entries()) {
+    if (normalizedName.includes(canonicalTeamNameForModel(teamName))) return strength;
+  }
+
+  return clamp(0.47 + (rand() - 0.5) * 0.12, 0.32, 0.62);
+}
+
+function syntheticModelOnlyProbabilities(match) {
+  const rand = seeded(`${match.sourceMatchId}-${match.homeTeam}-${match.awayTeam}-model-only`);
+  const profile = matchVolatilityProfile(match);
+  const homeStrength = teamModelStrength(match, "home", rand);
+  const awayStrength = teamModelStrength(match, "away", rand);
+  const homeAdvantage = profile.isInternational ? 0.012 : 0.055;
+  const strengthDiff = clamp((homeStrength - awayStrength) * 0.62 + homeAdvantage + (rand() - 0.5) * 0.045, -0.34, 0.34);
+  const draw = clamp(0.255 - Math.abs(strengthDiff) * 0.18 + (rand() - 0.5) * 0.035, 0.18, 0.3);
+  const home = clamp((1 - draw) * clamp(0.5 + strengthDiff, 0.16, 0.84), 0.08, 0.82);
+  const away = clamp(1 - draw - home, 0.08, 0.82);
+  return normalizeOutcomeProbabilities({ home, draw, away });
+}
+
+function oneXTwoCodeForScore(home, away) {
+  if (home > away) return "1";
+  if (home < away) return "2";
+  return "X";
+}
+
+function alignedScoreForOneXTwoPick(homeLambda, awayLambda, code) {
+  if (!["1", "X", "2"].includes(code)) return null;
+
+  return scoreMatrix(homeLambda, awayLambda, 8)
+    .filter((row) => oneXTwoCodeForScore(row.home, row.away) === code)
+    .sort((a, b) => {
+      const probabilityDiff = b.probability - a.probability;
+      if (Math.abs(probabilityDiff) > 0.000001) return probabilityDiff;
+      return (a.home + a.away) - (b.home + b.away);
+    })[0] || null;
+}
+
+function alignedModelOnlyForecast(homeLambda, awayLambda, code) {
+  const score = alignedScoreForOneXTwoPick(homeLambda, awayLambda, code);
+  if (!score) return null;
+
+  return {
+    score: { home: score.home, away: score.away },
+    homeLambda: alignLambdaToScore(homeLambda, score.home, 4.4),
+    awayLambda: alignLambdaToScore(awayLambda, score.away, 4.4),
+  };
+}
+
+function modelOnlyPickEntries(probabilities) {
+  return [
+    { code: "1", probability: probabilities.home, labelZh: "主胜", labelEn: "Home win" },
+    { code: "X", probability: probabilities.draw, labelZh: "平局", labelEn: "Draw" },
+    { code: "2", probability: probabilities.away, labelZh: "客胜", labelEn: "Away win" },
+  ].sort((a, b) => b.probability - a.probability);
+}
+
+function buildModelOnlyProbabilityModel(match, probabilities, homeLambda, awayLambda) {
+  const rawOver25Probability = clamp(1 - [0, 1, 2].reduce((sum, goals) => sum + poissonProbability(homeLambda + awayLambda, goals), 0), 0, 1);
+  const rawBttsProbability = clamp((1 - Math.exp(-homeLambda)) * (1 - Math.exp(-awayLambda)), 0, 1);
+  const goalCalibration = calibrateGoalProbabilities(match, rawOver25Probability, rawBttsProbability);
+  const lambdaBlend = {
+    marketHomeLambda: homeLambda,
+    marketAwayLambda: awayLambda,
+    homeLambda,
+    awayLambda,
+    formWeight: 0,
+    formHomeLambda: null,
+    formAwayLambda: null,
+  };
+  const probabilityModel = buildProbabilityModel(
+    match,
+    probabilities,
+    null,
+    homeLambda,
+    awayLambda,
+    goalCalibration.over25,
+    goalCalibration.btts,
+    lambdaBlend,
+    goalCalibration
+  );
+
+  return {
+    probabilityModel: {
+      ...probabilityModel,
+      version: "model-only-no-official-sp-v1",
+      basis: {
+        zh: "未开售模型参考：官方 SP/让球 SP 暂无时，按球队强弱、历史样本、赛程与 Poisson 比分分布生成观察方向；不作为串关 SP。",
+        en: "Model-only reference while official SP/handicap SP is unavailable. It uses team strength, historical samples, schedule context, and Poisson score distribution, and is not a parlay SP."
+      },
+      calibration: {
+        status: "baseline",
+        zh: "当前为未开售低权重参考；开售后会切回中国竞彩网官方 SP/让球 SP 重新评估。",
+        en: "Low-weight reference before official prices open; once Sporttery SP/handicap SP is available, the model switches back to official-odds evaluation."
+      }
+    },
+    over25Probability: goalCalibration.over25,
+    bttsProbability: goalCalibration.btts,
+  };
+}
+
+function predictionSetWithoutOfficialOdds(match) {
+  const probabilities = syntheticModelOnlyProbabilities(match);
+  const leader = outcomeLeader(probabilities);
+  const rand = seeded(`${match.sourceMatchId}-model-only-goals`);
+  const totalLambdaSeed = 2.18 + (1 - probabilities.draw) * 0.38 + Math.abs(probabilities.home - probabilities.away) * 0.52 + (rand() - 0.5) * 0.22;
+  const totalLambda = clamp(totalLambdaSeed, 1.65, 3.35);
+  const sideBias = clamp((probabilities.home - probabilities.away) * 1.45, -0.75, 0.75);
+  let homeLambda = clamp(totalLambda / 2 + sideBias, 0.35, 3.2);
+  let awayLambda = clamp(totalLambda - homeLambda, 0.35, 3.2);
+  let score = projectedScore(homeLambda, awayLambda);
+  let aligned = alignedModelOnlyForecast(homeLambda, awayLambda, leader.code);
+  if (aligned) {
+    homeLambda = aligned.homeLambda;
+    awayLambda = aligned.awayLambda;
+    score = aligned.score;
+  }
+
+  let modelBundle = buildModelOnlyProbabilityModel(match, probabilities, homeLambda, awayLambda);
+  let picks = modelOnlyPickEntries(modelBundle.probabilityModel.oneXTwo.final || asPercentTriplet(probabilities));
+  const modelLeader = picks[0];
+  const scoreCode = oneXTwoCodeForScore(score.home, score.away);
+  if (scoreCode !== modelLeader.code) {
+    aligned = alignedModelOnlyForecast(homeLambda, awayLambda, modelLeader.code);
+    if (aligned) {
+      homeLambda = aligned.homeLambda;
+      awayLambda = aligned.awayLambda;
+      score = aligned.score;
+      modelBundle = buildModelOnlyProbabilityModel(match, probabilities, homeLambda, awayLambda);
+      picks = modelOnlyPickEntries(modelBundle.probabilityModel.oneXTwo.final || asPercentTriplet(probabilities));
+    }
+  }
+
+  const bestPick = picks[0];
+  const secondPick = picks[1];
+  const probabilityGap = Math.max(0, bestPick.probability - secondPick.probability);
+  const bestProbability = Number(bestPick.probability);
+  const trustScore = clamp(Math.round(bestProbability + probabilityGap * 0.75 + 5), 45, 78);
+  const shouldPromote = bestProbability >= 39 && probabilityGap >= 4;
+  const riskTags = [
+    { zh: "未开售无官方SP", en: "No official SP" },
+    { zh: "仅模型参考", en: "Model-only reference" },
+    ...(probabilityGap < 8 ? [{ zh: "优势不厚", en: "Thin edge" }] : []),
+  ];
+  const final = modelBundle.probabilityModel.oneXTwo.final || { home: 0, draw: 0, away: 0 };
+  const probabilityTextZh = `主胜 ${Number(final.home || 0).toFixed(1)}% / 平 ${Number(final.draw || 0).toFixed(1)}% / 客胜 ${Number(final.away || 0).toFixed(1)}%`;
+  const probabilityTextEn = `home ${Number(final.home || 0).toFixed(1)}% / draw ${Number(final.draw || 0).toFixed(1)}% / away ${Number(final.away || 0).toFixed(1)}%`;
+  const tipLabel = {
+    zh: shouldPromote ? `模型参考 ${bestPick.labelZh}` : "观察为主 等待官方SP",
+    en: shouldPromote ? `Model reference: ${bestPick.labelEn}` : "Watch first: wait for official SP",
+  };
+
+  const oneXTwo = {
+    marketType: "1X2",
+    tipCode: shouldPromote ? bestPick.code : "WATCH",
+    tipLabel,
+    odds: 0,
+    trustScore,
+    explanation: {
+      zh: shouldPromote
+        ? `本场胜平负暂未开售，先用球队强弱、历史样本和比分分布给出赛前观察方向：${bestPick.labelZh}。该值不是官方 SP，不进入串关。`
+        : "本场胜平负暂未开售，模型差距不够厚，暂时只保留观察位，等待中国竞彩网 SP/让球 SP 更新。",
+      en: shouldPromote
+        ? `Official 1X2 is not open yet. Team strength, history, and score distribution lean to ${bestPick.labelEn}. This is not official SP and is excluded from parlays.`
+        : "Official 1X2 is not open yet and the model edge is thin, so this remains watch-only until Sporttery SP/handicap SP updates.",
+    },
+    analysisItems: [
+      {
+        zh: `模型概率：${probabilityTextZh}；第一方向领先第二方向约 ${probabilityGap.toFixed(1)} 个百分点。`,
+        en: `Model probabilities: ${probabilityTextEn}; the first lane leads the second by about ${probabilityGap.toFixed(1)} points.`,
+      },
+      {
+        zh: `比分热区已和方向校准在 ${score.home}-${score.away} 附近，避免出现方向与比分互相打架。`,
+        en: `Score heat is aligned around ${score.home}-${score.away}, keeping the scoreline consistent with the directional lean.`,
+      },
+      {
+        zh: "开售后优先读取中国竞彩网 HAD/HHAD SP，并用官方赔率重算；当前内容只做赛前讨论参考。",
+        en: "Once Sporttery HAD/HHAD opens, official SP is used first and this model-only read is recalculated.",
+      },
+    ],
+    riskTags,
+    visibilityStatus: "FREE",
+    resultStatus: shouldPromote ? resultStatus(match, bestPick.code, "1X2") : "PENDING",
+  };
+
+  const best = {
+    marketType: "BEST",
+    tipCode: oneXTwo.tipCode,
+    tipLabel: {
+      zh: shouldPromote ? `模型参考 ${bestPick.labelZh}` : "观察为主 等待官方SP",
+      en: shouldPromote ? `Model reference: ${bestPick.labelEn}` : "Watch first: wait for official SP",
+    },
+    odds: 0,
+    trustScore: clamp(trustScore - (shouldPromote ? 0 : 8), 35, 76),
+    explanation: oneXTwo.explanation,
+    analysisItems: oneXTwo.analysisItems,
+    riskTags,
+    visibilityStatus: "FREE",
+    resultStatus: oneXTwo.resultStatus,
+  };
+
+  return {
+    predictions: [oneXTwo, best],
+    homeLambda,
+    awayLambda,
+    projectedScore: score,
+    probabilityModel: modelBundle.probabilityModel,
+  };
+}
+
+function oddsAnchorSourceInfo(match, isHhad, handicapLine) {
+  const source = isHhad ? match.handicapOddsSource : match.oddsSource;
+  const isSporttery = String(source || "").startsWith("sporttery:");
+  const isFiveHundred = String(source || "").startsWith("500.com");
+  if (isSporttery) {
+    return {
+      source,
+      isOfficial: true,
+      labelZh: isHhad ? `官方 HHAD 让球胜平负(${handicapLine || "--"})` : "中国竞彩网官方 HAD 胜平负",
+      labelEn: isHhad ? `official Sporttery HHAD (${handicapLine || "--"})` : "official Sporttery HAD",
+      snapshotZh: "本次中国竞彩网同步快照",
+      snapshotEn: "this Sporttery sync snapshot",
+    };
+  }
+
+  if (isFiveHundred) {
+    return {
+      source,
+      isOfficial: false,
+      labelZh: isHhad ? `500 网 HHAD 让球胜平负参考(${handicapLine || "--"})` : "500 网 HAD 胜平负参考",
+      labelEn: isHhad ? `500.com HHAD reference (${handicapLine || "--"})` : "500.com HAD reference",
+      snapshotZh: "本次 500 网参考快照",
+      snapshotEn: "this 500.com reference snapshot",
+    };
+  }
+
+  return {
+    source,
+    isOfficial: false,
+    labelZh: isHhad ? `让球胜平负参考(${handicapLine || "--"})` : "胜平负参考",
+    labelEn: isHhad ? `handicap 1X2 reference (${handicapLine || "--"})` : "1X2 reference",
+    snapshotZh: "本次参考数据快照",
+    snapshotEn: "this reference snapshot",
   };
 }
 
@@ -2455,32 +4100,34 @@ function predictionSet(match) {
   const anchorIsHhad = anchorPoolCode === "HHAD";
   const anchorHandicapLine = anchorIsHhad ? (match.handicapLine || "") : "0";
   const anchorMarketType = anchorIsHhad ? "HHAD" : "1X2";
-  const anchorLabelZh = anchorIsHhad ? `官方 HHAD 让球胜平负(${anchorHandicapLine || "--"})` : "中国竞彩网官方 HAD 胜平负";
-  const anchorLabelEn = anchorIsHhad ? `official Sporttery HHAD (${anchorHandicapLine || "--"})` : "official Sporttery HAD";
+  const anchorSourceInfo = oddsAnchorSourceInfo(match, anchorIsHhad, anchorHandicapLine);
+  const anchorLabelZh = anchorSourceInfo.labelZh;
+  const anchorLabelEn = anchorSourceInfo.labelEn;
   const probabilities = impliedProbabilities(anchorOdds);
   const hhadProbabilities = hhadOdds ? impliedProbabilities(hhadOdds) : null;
-  const rand = seeded(`${match.sourceMatchId}-${match.homeTeam}-${match.awayTeam}`);
-  const favoriteProbability = Math.max(probabilities.home, probabilities.draw, probabilities.away);
-  const totalLambdaSeed = 2.55
-    + (0.25 - probabilities.draw) * 0.95
-    + (favoriteProbability - 0.5) * 0.75
-    + (rand() - 0.5) * 0.28;
-  const totalLambdaBase = clamp(totalLambdaSeed, 1.75, 3.25);
-  const homeShare = clamp(0.5 + (probabilities.home - probabilities.away) * 0.52, 0.24, 0.76);
-  const marketHomeLambda = clamp(totalLambdaBase * homeShare, 0.35, 2.8);
-  const marketAwayLambda = clamp(totalLambdaBase - marketHomeLambda, 0.3, 2.6);
+  const independentProbabilities = syntheticModelOnlyProbabilities(match);
+  const independentLambda = independentBaseLambdas(match, independentProbabilities);
+  const marketHomeLambda = independentLambda.homeLambda;
+  const marketAwayLambda = independentLambda.awayLambda;
+  const leagueLambda = blendLambdasWithLeaguePrior(match, independentLambda.homeLambda, independentLambda.awayLambda);
+  const formLambda = blendLambdasWithForm(match, leagueLambda.homeLambda, leagueLambda.awayLambda);
   const lambdaBlend = {
     marketHomeLambda,
     marketAwayLambda,
-    ...blendLambdasWithForm(match, marketHomeLambda, marketAwayLambda),
+    independentHomeLambda: Number(independentLambda.homeLambda.toFixed(2)),
+    independentAwayLambda: Number(independentLambda.awayLambda.toFixed(2)),
+    independentTotalLambda: independentLambda.totalLambda,
+    independentHomeShare: independentLambda.homeShare,
+    leagueHomeLambda: leagueLambda.leagueHomeLambda,
+    leagueAwayLambda: leagueLambda.leagueAwayLambda,
+    leagueWeight: leagueLambda.leagueWeight,
+    leaguePriorKey: leagueLambda.leaguePriorKey,
+    ...formLambda,
   };
   let homeLambda = lambdaBlend.homeLambda;
   let awayLambda = lambdaBlend.awayLambda;
   let score = projectedScore(homeLambda, awayLambda);
-  const anchorMarketLeaderCode = anchorIsHhad ? outcomeLeader(probabilities).code : "";
-  const alignedForecast = anchorIsHhad
-    ? alignedHandicapForecast(homeLambda, awayLambda, match.handicapLine, anchorMarketLeaderCode)
-    : null;
+  const alignedForecast = null;
   if (alignedForecast) {
     homeLambda = alignedForecast.homeLambda;
     awayLambda = alignedForecast.awayLambda;
@@ -2503,17 +4150,19 @@ function predictionSet(match) {
     ? { zh: "大2.5球（≥3球）", en: "Over 2.5 goals" }
     : { zh: "小2.5球（≤2球）", en: "Under 2.5 goals" };
   const probabilityModel = buildProbabilityModel(match, probabilities, hhadProbabilities, homeLambda, awayLambda, over25Probability, bttsProbability, lambdaBlend, goalCalibration);
-  const modelProbabilities = anchorIsHhad
+  const finalOneXTwoProbabilities = {
+    home: (probabilityModel.oneXTwo.final?.home || pct1(independentProbabilities.home)) / 100,
+    draw: (probabilityModel.oneXTwo.final?.draw || pct1(independentProbabilities.draw)) / 100,
+    away: (probabilityModel.oneXTwo.final?.away || pct1(independentProbabilities.away)) / 100,
+  };
+  const hhadModelProbabilities = anchorIsHhad && probabilityModel.handicap?.poisson
     ? {
-      home: probabilities.home,
-      draw: probabilities.draw,
-      away: probabilities.away,
+      home: Number(probabilityModel.handicap.poisson.home || 0) / 100,
+      draw: Number(probabilityModel.handicap.poisson.draw || 0) / 100,
+      away: Number(probabilityModel.handicap.poisson.away || 0) / 100,
     }
-    : {
-      home: (probabilityModel.oneXTwo.final?.home || pct1(probabilities.home)) / 100,
-      draw: (probabilityModel.oneXTwo.final?.draw || pct1(probabilities.draw)) / 100,
-      away: (probabilityModel.oneXTwo.final?.away || pct1(probabilities.away)) / 100,
-    };
+    : null;
+  const modelProbabilities = hhadModelProbabilities || finalOneXTwoProbabilities;
   const homePickLabelZh = anchorIsHhad ? `让球主胜 ${match.homeTeam}` : `主胜 ${match.homeTeam}`;
   const drawPickLabelZh = anchorIsHhad ? "让球平" : "平局";
   const awayPickLabelZh = anchorIsHhad ? `让球客胜 ${match.awayTeam}` : `客胜 ${match.awayTeam}`;
@@ -2532,11 +4181,12 @@ function predictionSet(match) {
   ].sort((a, b) => b[1] - a[1]);
   const marketLeader = marketPicks[0];
   const marketSecond = marketPicks[1];
-  const analystSelection = selectAnalystOneXTwo(match, picks, modelProbabilities, hhadProbabilities);
+  const analystSelection = selectValueAwareOneXTwo(match, picks, modelProbabilities, probabilities, hhadProbabilities);
   const best1x2 = analystSelection.pick;
   const probabilityGap = marketLeader[1] - marketSecond[1];
   const modelProbabilityGap = picks[0][1] - picks[1][1];
-  const selectionDiscount = Math.max(0, marketLeader[1] - best1x2[1]);
+  const selectedMarketProbability = outcomeProbabilityForCode(probabilities, best1x2[0]) || 0;
+  const selectionDiscount = Math.max(0, marketLeader[1] - selectedMarketProbability);
   const candidateHandicapSupport = hhadSupportForPick(hhadProbabilities, best1x2[0]);
   const candidateIsLowOddsFavorite = ["1", "2"].includes(best1x2[0]) && best1x2[2] <= 1.55;
   const candidateIsOverheated = ["1", "2"].includes(best1x2[0]) && best1x2[2] <= 1.35;
@@ -2544,6 +4194,7 @@ function predictionSet(match) {
     && candidateHandicapSupport !== null
     && candidateHandicapSupport < 0.42;
   const dynamicGate = profileCalibration(match).gate || {};
+  const oneXTwoStrategyGate = strategyGateForPrediction(match, anchorMarketType, best1x2[0], predictionOddsBucket(best1x2[2]));
   const rawTrust = analystSelection.isContrarian
     ? clamp(Math.round(best1x2[1] * 100 + 31 - selectionDiscount * 42), 54, 76)
     : clamp(Math.round(best1x2[1] * 100 + modelProbabilityGap * 48 + 10), 52, 93);
@@ -2552,7 +4203,8 @@ function predictionSet(match) {
     + (candidateHasWeakHandicap ? 9 : 0)
     + (probabilities.draw >= 0.28 ? 4 : 0)
     + (bttsProbability >= 0.45 && bttsProbability < 0.65 ? 3 : 0)
-    + Number(dynamicGate.trustPenalty || 0);
+    + Number(dynamicGate.trustPenalty || 0)
+    + Number(oneXTwoStrategyGate.trustPenalty || 0);
   const baseTrust = clamp(
     rawTrust - trustPenalty,
     analystSelection.isContrarian ? 50 : 48,
@@ -2564,10 +4216,10 @@ function predictionSet(match) {
   const sourceUpdatedAt = anchorIsHhad ? match.handicapOddsUpdatedAt : match.oddsUpdatedAt;
   const sourceTextZh = sourceUpdatedAt
     ? `${anchorLabelZh} SP 更新时间：${sourceUpdatedAt}`
-    : `${anchorLabelZh} SP 来自本次中国竞彩网同步快照`;
+    : `${anchorLabelZh} SP 来自${anchorSourceInfo.snapshotZh}`;
   const sourceTextEn = sourceUpdatedAt
     ? `${anchorLabelEn} SP updated at ${sourceUpdatedAt}`
-    : `${anchorLabelEn} SP came from this Sporttery sync snapshot`;
+    : `${anchorLabelEn} SP came from ${anchorSourceInfo.snapshotEn}`;
   const drawRiskZh = probabilities.draw >= 0.28
     ? "平局支持率偏高，胜平负方向需要防平。"
     : "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。";
@@ -2576,6 +4228,20 @@ function predictionSet(match) {
     : "Draw support is not dominant, but late SP movement still matters.";
   const volatilityProfile = matchVolatilityProfile(match);
   const riskTags = [];
+  const candidateValueProfile = analystSelection.valueProfile || pickValueProfile(best1x2, modelProbabilities, probabilities);
+  const candidateProbabilityEdge = Number(candidateValueProfile?.probabilityEdge);
+  const candidateExpectedValue = Number(candidateValueProfile?.expectedValue);
+
+  if (!anchorSourceInfo.isOfficial) {
+    riskTags.push({ zh: "非官方参考源", en: "Non-official reference" });
+  }
+
+  if (Number.isFinite(candidateProbabilityEdge) && candidateProbabilityEdge < 0.015) {
+    riskTags.push({ zh: "价值边际不足", en: "No value edge" });
+  }
+  if (Number.isFinite(candidateExpectedValue) && candidateExpectedValue < 0.01) {
+    riskTags.push({ zh: "EV不足", en: "Flat expected value" });
+  }
 
   if (probabilities.draw >= 0.28) {
     riskTags.push({ zh: "防平", en: "Draw risk" });
@@ -2606,18 +4272,17 @@ function predictionSet(match) {
     match,
     pick: best1x2,
     probabilities,
+    modelProbabilities,
     hhadProbabilities,
     probabilityGap,
     modelProbabilityGap,
     riskTags,
     analystSelection,
     predictionHealth: match.predictionHealth,
+    marketType: anchorMarketType,
   });
-  const anchorGatePromote = anchorIsHhad
-    && marketLeader[1] >= 0.38
-    && modelProbabilityGap >= 0.06
-    && riskTags.length <= 5;
-  const oneXTwoPromote = oneXTwoGate.promote || anchorGatePromote;
+  const anchorGatePromote = false;
+  const oneXTwoPromote = !anchorIsHhad && (oneXTwoGate.promote || anchorGatePromote);
   const oneXTwoWatchLabel = {
     zh: anchorIsHhad ? "观察为主 让球盘不强推" : "\u89c2\u5bdf\u4e3a\u4e3b \u80dc\u5e73\u8d1f\u4e0d\u5f3a\u63a8",
     en: anchorIsHhad ? "Watch first: no HHAD pick" : "Watch first: no 1X2 pick",
@@ -2648,11 +4313,11 @@ function predictionSet(match) {
       ? clamp(baseTrust - 6, 46, 72)
       : clamp(baseTrust - (oneXTwoMarketHardCooldown ? 26 : 18), 34, 62);
   const oneXTwoGateZh = anchorIsHhad
-    ? `观察理由：普通胜平负未开售，本场改用让球盘作为市场锚点；模型优势约 ${pct(modelProbabilityGap)} 个百分点，市场优势约 ${pct(probabilityGap)} 个百分点，条件未完全闭合时不强推单一让球方向。`
-    : `观察理由：模型优势约 ${pct(modelProbabilityGap)} 个百分点，市场优势约 ${pct(probabilityGap)} 个百分点，让球同向支持${oneXTwoGate.handicapSupport === null ? "不足" : `约 ${pct(oneXTwoGate.handicapSupport)}%`}；条件没有同时闭合，暂不输出单一胜平负方向。`;
+    ? `观察理由：普通胜平负未开售，本场按独立 Poisson 让球概率给参考方向；模型优势约 ${pct(modelProbabilityGap)} 个百分点，盘口仅作校验，条件未完全闭合时不强推单一让球方向。`
+    : `观察理由：独立模型优势约 ${pct(modelProbabilityGap)} 个百分点，市场分歧约 ${pct(probabilityGap)} 个百分点，让球同向支持${oneXTwoGate.handicapSupport === null ? "不足" : `约 ${pct(oneXTwoGate.handicapSupport)}%`}；条件没有同时闭合，暂不输出单一胜平负方向。`;
   const oneXTwoGateEn = anchorIsHhad
-    ? `Watch reason: standard 1X2 is not open, so the handicap board is used as the market anchor. Model edge is about ${pct(modelProbabilityGap)} points and market edge about ${pct(probabilityGap)} points; no single HHAD pick is forced.`
-    : `Watch reason: model edge is about ${pct(modelProbabilityGap)} points, market edge about ${pct(probabilityGap)} points, same-side handicap support ${oneXTwoGate.handicapSupport === null ? "unavailable" : `about ${pct(oneXTwoGate.handicapSupport)}%`}; no single 1X2 pick is promoted.`;
+    ? `Watch reason: standard 1X2 is not open, so the reference direction comes from independent Poisson handicap probabilities. Model edge is about ${pct(modelProbabilityGap)} points; the board is only a validation layer.`
+    : `Watch reason: independent model edge is about ${pct(modelProbabilityGap)} points, market disagreement about ${pct(probabilityGap)} points, same-side handicap support ${oneXTwoGate.handicapSupport === null ? "unavailable" : `about ${pct(oneXTwoGate.handicapSupport)}%`}; no single 1X2 pick is promoted.`;
   const modelLean = {
     tipCode: best1x2[0],
     tipLabel: { zh: best1x2[3], en: best1x2[4] },
@@ -2660,22 +4325,28 @@ function predictionSet(match) {
     trustScore: baseTrust,
     resultStatus: resultStatus(match, best1x2[0], anchorMarketType),
   };
+  const oneXTwoReferenceLabel = {
+    zh: `\u53c2\u8003\u503e\u5411 ${modelLean.tipLabel.zh}`,
+    en: `Reference lean: ${modelLean.tipLabel.en}`,
+  };
 
   const oneXTwo = {
     marketType: "1X2",
     oddsPoolCode: anchorPoolCode,
     handicapLine: anchorHandicapLine,
-    tipCode: oneXTwoPromote ? modelLean.tipCode : "WATCH",
-    tipLabel: oneXTwoPromote ? modelLean.tipLabel : oneXTwoWatchLabel,
-    odds: oneXTwoPromote ? modelLean.odds : 0,
+    tipCode: modelLean.tipCode,
+    tipLabel: oneXTwoPromote ? modelLean.tipLabel : oneXTwoReferenceLabel,
+    odds: modelLean.odds,
     trustScore: oneXTwoTrust,
+    recommendationAction: oneXTwoPromote ? "recommend" : "reference",
+    recommendationTier: oneXTwoPromote ? oneXTwoGate.tier : "reference",
     explanation: {
       zh: oneXTwoPromote
-        ? `本场以${anchorLabelZh} SP 为主轴，去水后最高支持方向为${best1x2[3]}。模型同时参考主客预期进球、平局拉力和赔率分布，不使用本地模拟赛果回填。`
+        ? `本场先由独立模型给出${best1x2[3]}方向；${anchorLabelZh} SP 只用于校验市场分歧、价值差和风险标签，不作为预测主轴。`
         : `${anchorLabelZh}条件未齐：低赔、平局压力、让球确认或风险标签存在不一致，只保留为赛前观察项。`,
       en: oneXTwoPromote
-        ? `This pick is anchored to ${anchorLabelEn} odds. After removing overround, the strongest direction is ${best1x2[4]}.`
-        : `This ${anchorIsHhad ? "HHAD" : "1X2"} market did not pass the recommendation gate. Low odds, draw pressure, handicap confirmation, or risk tags are not aligned, so it remains watch-only.`,
+        ? `This pick comes from the independent model as ${best1x2[4]}. ${anchorLabelEn} odds are used only for market disagreement, value gap, and risk tags.`
+        : `Reference lean: ${modelLean.tipLabel.en}. This ${anchorIsHhad ? "HHAD" : "1X2"} market did not pass the strong recommendation gate, so the direction is shown for user judgement only.`,
     },
     analysisItems: [
       {
@@ -2687,12 +4358,12 @@ function predictionSet(match) {
           ? oneXTwoGateZh
           : analystSelection.isContrarian
           ? `${analystSelection.reason.zh} 当前模型可信度 ${baseTrust}%，该方向属于价值观察而非高确定性推荐。`
-          : `胜平负差距：市场主线领先第二方向约 ${pct(probabilityGap)} 个百分点，当前模型可信度 ${baseTrust}%。`,
+          : `独立模型差距：第一方向领先第二方向约 ${pct(modelProbabilityGap)} 个百分点；市场差距仅作校验，当前模型可信度 ${baseTrust}%。`,
         en: !oneXTwoPromote
           ? oneXTwoGateEn
           : analystSelection.isContrarian
           ? `${analystSelection.reason.en} Model confidence is ${baseTrust}%; this is a value-watch, not a high-certainty banker.`
-          : `1X2 separation: the market lead is ahead by about ${pct(probabilityGap)} percentage points. Model confidence: ${baseTrust}%.`,
+          : `Independent model separation: the top direction leads by about ${pct(modelProbabilityGap)} percentage points; market separation is validation only. Model confidence: ${baseTrust}%.`,
       },
       {
         zh: `${drawRiskZh} ${sourceTextZh}。`,
@@ -2701,13 +4372,17 @@ function predictionSet(match) {
     ],
     riskTags: oneXTwoRiskTags,
     visibilityStatus: "FREE",
-    resultStatus: oneXTwoPromote ? modelLean.resultStatus : "PENDING",
+    resultStatus: modelLean.resultStatus,
   };
 
   const goalsGate = evaluateGoalsGate(match, goalsTip, goalsProbability, over25Probability, bttsProbability, match.predictionHealth);
   const goalsWatchLabel = {
     zh: "观察为主 进球数不强推",
     en: "Watch first: no total-goals pick",
+  };
+  const goalsReferenceLabel = {
+    zh: `\u8fdb\u7403\u53c2\u8003 ${goalsTipLabel.zh}`,
+    en: `Goals reference: ${goalsTipLabel.en}`,
   };
   const goalsRiskTags = goalsGate.promote
     ? riskTags.filter((tag) => tag.en === "Goal-model borderline")
@@ -2719,12 +4394,14 @@ function predictionSet(match) {
 
   const goals = {
     marketType: "GOALS",
-    tipCode: goalsGate.promote ? goalsTip : "WATCH",
-    tipLabel: goalsGate.promote ? goalsTipLabel : goalsWatchLabel,
-    odds: goalsGate.promote ? goalsOdds : 0,
+    tipCode: goalsTip,
+    tipLabel: goalsGate.promote ? goalsTipLabel : goalsReferenceLabel,
+    odds: goalsOdds,
     trustScore: goalsGate.promote
       ? clamp(Math.round(goalsProbability * 100 + 12), 50, 78)
       : clamp(Math.round(goalsProbability * 100 - 2), 42, 58),
+    recommendationAction: goalsGate.promote ? "recommend" : "reference",
+    recommendationTier: goalsGate.promote ? "goals" : "reference",
     explanation: {
       zh: goalsGate.promote
         ? `进球趋势为模型参考项，基于胜平负 SP 反推出主队 ${homeLambda.toFixed(2)}、客队 ${awayLambda.toFixed(2)} 的预期进球，当前总进球期望约 ${totalLambda.toFixed(2)}。`
@@ -2749,7 +4426,7 @@ function predictionSet(match) {
     ],
     riskTags: goalsRiskTags,
     visibilityStatus: goalsGate.promote ? "PREMIUM" : "FREE",
-    resultStatus: goalsGate.promote ? resultStatus(match, goalsTip, "GOALS") : "PENDING",
+    resultStatus: resultStatus(match, goalsTip, "GOALS"),
   };
 
   const bestIsSteady = oneXTwoPromote
@@ -2863,6 +4540,8 @@ function predictionSet(match) {
     },
     odds: goals.odds,
     trustScore: clamp(goals.trustScore, 62, 76),
+    recommendationAction: "recommend",
+    recommendationTier: "goals",
     explanation: {
       zh: `胜平负方向处于命中率冷却或盘口分歧中，本场 AI精选切到回测更稳的进球数方向：${goalsTipLabel.zh}。`,
       en: `The 1X2 side is under hit-rate cooldown or market disagreement, so the best tip switches to the better-tested totals lane: ${goalsTipLabel.en}.`,
@@ -2881,13 +4560,15 @@ function predictionSet(match) {
     marketType: "BEST",
     oddsPoolCode: anchorPoolCode,
     handicapLine: anchorHandicapLine,
-    tipCode: bestShouldWatch ? "WATCH" : modelLean.tipCode,
+    tipCode: modelLean.tipCode,
     tipLabel: {
-      zh: bestShouldWatch ? bestWatchLabelZh : `${bestPrefix.zh} ${modelLean.tipLabel.zh}`,
-      en: bestShouldWatch ? bestWatchLabelEn : `${bestPrefix.en}: ${modelLean.tipLabel.en}`,
+      zh: bestShouldWatch ? `\u53c2\u8003\u503e\u5411 ${modelLean.tipLabel.zh}` : `${bestPrefix.zh} ${modelLean.tipLabel.zh}`,
+      en: bestShouldWatch ? `Reference lean: ${modelLean.tipLabel.en}` : `${bestPrefix.en}: ${modelLean.tipLabel.en}`,
     },
-    odds: bestShouldWatch ? 0 : modelLean.odds,
+    odds: modelLean.odds,
     trustScore: bestTrustScore,
+    recommendationAction: bestShouldWatch ? "reference" : "recommend",
+    recommendationTier: bestShouldWatch ? "reference" : bestPrefix.en.toLowerCase().replace(/\s+/g, "-").replace(/:$/, ""),
     explanation: bestNarrative.explanation,
     analysisItems: bestNarrative.analysisItems,
     riskTags: bestShouldWatch
@@ -2897,10 +4578,34 @@ function predictionSet(match) {
         ]
       : riskTags,
     visibilityStatus: "FREE",
-    resultStatus: bestShouldWatch ? "PENDING" : modelLean.resultStatus,
+    resultStatus: modelLean.resultStatus,
   };
 
   return { predictions: [oneXTwo, goals, best], homeLambda, awayLambda, projectedScore: score, probabilityModel };
+}
+
+function shouldBuildModelOnlyReference(match) {
+  const kickoffMs = Date.parse(match?.kickoffTime);
+  if (!Number.isFinite(kickoffMs)) return false;
+  const now = Date.now();
+  const forwardMs = (WINDOW_FORWARD_DAYS + 1) * 24 * 60 * 60 * 1000;
+  const recentGraceMs = 3 * 60 * 60 * 1000;
+  return (
+    (!match?.source || match.source === "sporttery") &&
+    match?.status === "SCHEDULED" &&
+    kickoffMs >= now - recentGraceMs &&
+    kickoffMs <= now + forwardMs
+  );
+}
+
+function emptyPredictionSet() {
+  return {
+    predictions: [],
+    homeLambda: 0,
+    awayLambda: 0,
+    projectedScore: undefined,
+    probabilityModel: undefined,
+  };
 }
 
 function toAppMatch(match) {
@@ -2908,12 +4613,20 @@ function toAppMatch(match) {
   const homeTeamId = `team_${hashString(match.homeTeam)}`;
   const awayTeamId = `team_${hashString(match.awayTeam)}`;
   const leagueId = `league_${hashString(match.leagueName)}`;
+  const hasOfficialDisplayOdds = match.oddsSource === "sporttery:HAD" || match.handicapOddsSource === "sporttery:HHAD";
+  const hasFiveHundredDisplayOdds = String(match.oddsSource || "").startsWith("500.com")
+    || String(match.handicapOddsSource || "").startsWith("500.com");
+  const appSource = !hasOfficialDisplayOdds && hasFiveHundredDisplayOdds
+    ? "five-hundred"
+    : match.source || (String(match.sourceMethod || "").startsWith("500") ? "five-hundred" : "sporttery");
   const odds = sanitizeOdds(match.odds);
   const handicapOdds = sanitizeOdds(match.handicapOdds);
   const hasPredictionModel = Boolean(odds || handicapOdds);
   const model = hasPredictionModel
     ? predictionSet({ ...match, odds, handicapOdds })
-    : { predictions: [], homeLambda: match.scoreHome ?? 0, awayLambda: match.scoreAway ?? 0, probabilityModel: undefined };
+    : shouldBuildModelOnlyReference(match)
+      ? predictionSetWithoutOfficialOdds({ ...match, odds: undefined, handicapOdds: undefined })
+      : emptyPredictionSet();
   const scoreHome = Number.isFinite(match.scoreHome) ? match.scoreHome : undefined;
   const scoreAway = Number.isFinite(match.scoreAway) ? match.scoreAway : undefined;
   const rand = seeded(match.sourceMatchId);
@@ -2921,9 +4634,11 @@ function toAppMatch(match) {
   const homeLogo = teamLogoInfo(match.homeTeam, match.homeTeamCode, match.homeTeamLogo);
   const awayLogo = teamLogoInfo(match.awayTeam, match.awayTeamCode, match.awayTeamLogo);
   const kickoffDate = match.matchDate || String(match.kickoffTime || "").slice(0, 10);
-  const businessDate = match.businessDate || kickoffDate;
+  const businessDate = inferSportteryBusinessDate(match.matchNo, kickoffDate)
+    || match.businessDate
+    || kickoffDate;
   return {
-    id: `sporttery_${match.sourceMatchId}`,
+    id: `${appSource === "five-hundred" ? "fivehundred" : "sporttery"}_${match.sourceMatchId}`,
     homeTeamId,
     awayTeamId,
     leagueId,
@@ -2938,12 +4653,15 @@ function toAppMatch(match) {
     odds: odds || undefined,
     handicapOdds: handicapOdds || undefined,
     predictions: model.predictions,
-    externalSignals: match.externalSignals || undefined,
-    ...(hasPredictionModel ? {
+    worldCupPrior: match.worldCupPrior || undefined,
+    externalSignals: match.worldCupPrior
+      ? { ...(match.externalSignals || {}), worldCupPrior: match.worldCupPrior }
+      : match.externalSignals || undefined,
+    ...(model.probabilityModel ? {
     stats: {
       xG: {
-        home: Number((scoreHome ?? model.homeLambda).toFixed(2)),
-        away: Number((scoreAway ?? model.awayLambda).toFixed(2)),
+        home: Number((Number.isFinite(model.homeLambda) ? model.homeLambda : (scoreHome ?? 0)).toFixed(2)),
+        away: Number((Number.isFinite(model.awayLambda) ? model.awayLambda : (scoreAway ?? 0)).toFixed(2)),
       },
       possession: { home: possessionHome, away: 100 - possessionHome },
       shots: { home: Math.floor(model.homeLambda * 6 + rand() * 4), away: Math.floor(model.awayLambda * 6 + rand() * 4) },
@@ -2958,6 +4676,7 @@ function toAppMatch(match) {
     matchDate: kickoffDate,
     kickoffDate,
     businessDate,
+    buyEndTime: match.buyEndTime || match.externalSignals?.buyEndTime || match.externalSignals?.fiveHundred?.sale?.buyEndTime,
     homeTeamName: match.homeTeam,
     homeTeamNameEn: match.homeTeam,
     homeRank: match.homeRank,
@@ -2979,7 +4698,7 @@ function toAppMatch(match) {
     countryName: meta.countryName,
     countryNameEn: meta.countryNameEn,
     countryFlag: meta.countryFlag,
-    source: "sporttery",
+    source: appSource,
     sourceMethod: match.sourceMethod,
     sourceUrl: match.sourceUrl,
     sourceMatchId: match.sourceMatchId,
@@ -2998,10 +4717,64 @@ function toAppMatch(match) {
   };
 }
 
+function modelStrategySummary(modelCalibration) {
+  return modelCalibration?.strategy ? {
+    version: modelCalibration.strategy.version,
+    generatedAt: modelCalibration.strategy.generatedAt,
+    onlineEffect: modelCalibration.strategy.activation?.onlineEffect || "unknown",
+    activeGates: modelCalibration.strategy.activeGates || null,
+  } : null;
+}
+
+function attachCalibrationMetadataToAppMatch(match, modelCalibration) {
+  if (!match?.probabilityModel || !modelCalibration) return match;
+  const profileKey = predictionProfileKey(match);
+  return {
+    ...match,
+    probabilityModel: {
+      ...match.probabilityModel,
+      dynamicCalibration: {
+        ...(match.probabilityModel.dynamicCalibration || {}),
+        version: modelCalibration.version,
+        profileKey,
+        gate: modelCalibration.gateByProfile?.[profileKey] || match.probabilityModel.dynamicCalibration?.gate || null,
+        metrics: modelCalibration.metrics || match.probabilityModel.dynamicCalibration?.metrics || null,
+        strategy: modelStrategySummary(modelCalibration),
+      },
+    },
+  };
+}
+
 function kickoffHasStarted(match, capturedAt) {
   const kickoffAt = Date.parse(match?.kickoffTime);
   const capturedTime = Date.parse(capturedAt);
   return Number.isFinite(kickoffAt) && Number.isFinite(capturedTime) && capturedTime >= kickoffAt;
+}
+
+function parseBeijingDateTime(value) {
+  const raw = normText(value);
+  if (!raw) return NaN;
+  if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(raw)) {
+    return Date.parse(`${raw.replace(/\s+/, "T")}+08:00`);
+  }
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(raw) && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(raw)) {
+    return Date.parse(`${raw}+08:00`);
+  }
+  return Date.parse(raw);
+}
+
+function matchCutoffValue(match) {
+  return match?.buyEndTime
+    || match?.externalSignals?.buyEndTime
+    || match?.externalSignals?.fiveHundred?.sale?.buyEndTime
+    || match?.kickoffTime
+    || "";
+}
+
+function cutoffHasPassed(match, capturedAt) {
+  const cutoffAt = parseBeijingDateTime(matchCutoffValue(match));
+  const capturedTime = Date.parse(capturedAt);
+  return Number.isFinite(cutoffAt) && Number.isFinite(capturedTime) && capturedTime >= cutoffAt;
 }
 
 function predictionSignature(predictions) {
@@ -3009,9 +4782,21 @@ function predictionSignature(predictions) {
   return ["1X2", "BEST", "GOALS"]
     .map((marketType) => {
       const prediction = byMarket.get(marketType);
-      return prediction ? `${marketType}:${prediction.oddsPoolCode || ""}:${prediction.tipCode}` : `${marketType}:-`;
+      return prediction ? `${marketType}:${prediction.oddsPoolCode || ""}:${prediction.tipCode}:${prediction.recommendationAction || "recommend"}` : `${marketType}:-`;
     })
     .join("|");
+}
+
+function marketSignalSignatureForMatch(match) {
+  const odds = sanitizeOdds(match?.odds);
+  const handicapOdds = sanitizeOdds(match?.handicapOdds);
+  const oddsSignature = odds
+    ? `${odds.odds1.toFixed(2)}/${odds.oddsX.toFixed(2)}/${odds.odds2.toFixed(2)}`
+    : "--";
+  const hhadSignature = handicapOdds
+    ? `${match?.handicapLine || ""}:${handicapOdds.odds1.toFixed(2)}/${handicapOdds.oddsX.toFixed(2)}/${handicapOdds.odds2.toFixed(2)}`
+    : "--";
+  return `${oddsSignature}|${hhadSignature}`;
 }
 
 function resultMarketForPrediction(prediction) {
@@ -3030,6 +4815,73 @@ function settlePredictionsForMatch(match, predictions) {
   }));
 }
 
+function predictionContentLocked(match, capturedAt = new Date().toISOString()) {
+  const reason = normText(match?.predictionMeta?.lockedReason);
+  return Boolean(
+    match?.predictionMeta?.lockedAt
+    || reason
+    || match?.status === "LIVE"
+    || match?.status === "PENDING_RESULT"
+    || match?.status === "FINISHED"
+    || kickoffHasStarted(match, capturedAt)
+    || cutoffHasPassed(match, capturedAt)
+  );
+}
+
+const LOCKED_PREDICTION_UPDATE_REASON = Object.freeze({
+  zh: "竞彩截止或开赛后，历史预测已冻结；后续同步只更新赛果和命中结算，不重算推荐、概率和预测比分。",
+  en: "After Sporttery cutoff or kickoff, the historical forecast is frozen; later syncs only settle results and never recalculate picks, probabilities, or projected score.",
+});
+
+const NO_PRE_CUTOFF_PREDICTION_REASON = Object.freeze({
+  zh: "\u7ade\u5f69\u622a\u6b62\u6216\u5f00\u8d5b\u524d\u6ca1\u6709\u53ef\u7528\u7684\u5386\u53f2\u9884\u6d4b\u5feb\u7167\uff1b\u4e0d\u5728\u622a\u6b62\u540e\u8865\u751f\u65b0\u63a8\u8350\uff0c\u53ea\u4fdd\u7559\u8d5b\u7a0b\u4e0e\u7ed3\u679c\u4fe1\u606f\u3002",
+  en: "No usable pre-cutoff prediction snapshot exists; no new recommendation is backfilled after cutoff or kickoff, and only schedule/result data is kept.",
+});
+
+const MARKET_UNCHANGED_PREDICTION_UPDATE_REASON = Object.freeze({
+  zh: "\u5b98\u65b9 SP \u6216\u8ba9\u7403\u76d8\u6ca1\u6709\u5b9e\u8d28\u53d8\u5316\uff0c\u539f\u8d5b\u524d\u65b9\u5411\u7ee7\u7eed\u4fdd\u7559\uff1b\u5206\u6790\u7248\u672c\u53ef\u66f4\u65b0\uff0c\u4f46\u4e0d\u91cd\u7b97\u63a8\u8350\u65b9\u5411\u3002",
+  en: "Official SP and handicap signals did not materially change, so the pre-match direction is preserved; analysis versions may update, but the recommendation direction is not recalculated.",
+});
+
+function preserveLockedPredictionContent(next, existing) {
+  if (!existing || !predictionContentLocked(existing)) return next;
+  const existingPredictions = enabledPredictions(Array.isArray(existing?.predictions) ? existing.predictions : []);
+  const settledPredictions = existingPredictions.length && next?.status === "FINISHED"
+    ? settlePredictionsForMatch(next, existingPredictions)
+    : existingPredictions;
+  const {
+    predictions,
+    probabilityModel,
+    projectedScoreHome,
+    projectedScoreAway,
+    stats,
+    gptPrediction,
+    ...nextWithoutPredictionContent
+  } = next || {};
+  void predictions;
+  void probabilityModel;
+  void projectedScoreHome;
+  void projectedScoreAway;
+  void stats;
+  void gptPrediction;
+  return {
+    ...nextWithoutPredictionContent,
+    predictions: settledPredictions,
+    ...(existing.probabilityModel ? { probabilityModel: existing.probabilityModel } : {}),
+    ...(existing.projectedScoreHome !== undefined ? { projectedScoreHome: existing.projectedScoreHome } : {}),
+    ...(existing.projectedScoreAway !== undefined ? { projectedScoreAway: existing.projectedScoreAway } : {}),
+    ...(existing.stats ? { stats: existing.stats } : {}),
+    ...(existing.gptPrediction ? { gptPrediction: existing.gptPrediction } : {}),
+    predictionMeta: {
+      ...(existing.predictionMeta || next.predictionMeta || {}),
+      lockedAt: existing.predictionMeta?.lockedAt || next.predictionMeta?.lockedAt,
+      lockedReason: existing.predictionMeta?.lockedReason || next.predictionMeta?.lockedReason,
+      cutoffTime: existing.predictionMeta?.cutoffTime || next.predictionMeta?.cutoffTime,
+      updateReason: LOCKED_PREDICTION_UPDATE_REASON,
+    },
+  };
+}
+
 function enabledPredictions(predictions) {
   return (predictions || []).filter((prediction) => prediction.marketType !== "GG_NG");
 }
@@ -3038,21 +4890,60 @@ function applyPredictionPersistence(match, existing, capturedAt) {
   const existingPredictions = enabledPredictions(Array.isArray(existing?.predictions) ? existing.predictions : []);
   const nextPredictions = enabledPredictions(Array.isArray(match?.predictions) ? match.predictions : []);
   const started = kickoffHasStarted(match, capturedAt) || match.status === "LIVE" || match.status === "FINISHED";
+  const cutoffPassed = cutoffHasPassed(match, capturedAt);
+  const locked = started || cutoffPassed;
+  const cutoffTime = matchCutoffValue(match) || undefined;
+  const lockedReason = cutoffPassed ? "cutoff" : started ? "kickoff" : undefined;
+  const strategyVersion = match?.probabilityModel?.dynamicCalibration?.strategy?.version || "none";
+  const trainingVersion = match?.probabilityModel?.leaguePrior?.trainingVersion
+    || match?.probabilityModel?.form?.historicalSource?.version
+    || match?.probabilityModel?.elo?.historicalSource?.version
+    || "none";
+  const trainingSource = match?.probabilityModel?.form?.historicalSource?.source
+    || match?.probabilityModel?.elo?.historicalSource?.source
+    || match?.probabilityModel?.leaguePrior?.source
+    || "none";
+  const trainingSignature = match?.probabilityModel?.leaguePrior?.trainingSignature
+    || match?.probabilityModel?.form?.historicalSource?.signature
+    || match?.probabilityModel?.elo?.historicalSource?.signature
+    || trainingVersion;
+  const worldCupPriorSignature = match?.probabilityModel?.worldCupPrior?.signature || null;
+  const dataSignature = [trainingSignature, worldCupPriorSignature].filter(Boolean).join("|") || trainingVersion;
   const generatedMeta = {
     policyVersion: PREDICTION_POLICY_VERSION,
     promptVersion: ANALYST_PROMPT_VERSION,
+    strategyVersion,
+    trainingVersion,
+    trainingSource,
+    trainingSignature: dataSignature,
+    worldCupPriorSignature,
     generatedAt: existing?.predictionMeta?.generatedAt || capturedAt,
     updatedAt: capturedAt,
-    lockedAt: started ? (existing?.predictionMeta?.lockedAt || capturedAt) : undefined,
+    lockedAt: locked ? (existing?.predictionMeta?.lockedAt || capturedAt) : undefined,
+    lockedReason,
+    cutoffTime,
     dataPolicy: PREDICTION_DATA_POLICY,
     analystRuntime: ANALYST_RUNTIME,
     analystFramework: PREDICTION_ANALYST_FRAMEWORK,
   };
 
-  if (started && existingPredictions.length) {
+  if (isOfficialResultMatch(match) && !hasOfficialDisplayOdds(match)) {
+    const { stats, probabilityModel, projectedScoreHome, projectedScoreAway, ...rest } = match;
+    void stats;
+    void probabilityModel;
+    void projectedScoreHome;
+    void projectedScoreAway;
+    return {
+      ...rest,
+      predictions: [],
+      predictionMeta: generatedMeta,
+    };
+  }
+
+  if (locked && existingPredictions.length) {
     return {
       ...match,
-      predictions: settlePredictionsForMatch(match, existingPredictions),
+      predictions: started ? settlePredictionsForMatch(match, existingPredictions) : existingPredictions,
       projectedScoreHome: existing?.projectedScoreHome ?? match.projectedScoreHome,
       projectedScoreAway: existing?.projectedScoreAway ?? match.projectedScoreAway,
       stats: existing?.stats || match.stats,
@@ -3060,6 +4951,40 @@ function applyPredictionPersistence(match, existing, capturedAt) {
       predictionMeta: {
         ...(existing?.predictionMeta || generatedMeta),
         lockedAt: existing?.predictionMeta?.lockedAt || capturedAt,
+        lockedReason: lockedReason === "cutoff" ? "cutoff" : (existing?.predictionMeta?.lockedReason || lockedReason),
+        cutoffTime: existing?.predictionMeta?.cutoffTime || cutoffTime,
+        updateReason: LOCKED_PREDICTION_UPDATE_REASON,
+      },
+    };
+  }
+
+  if (locked) {
+    const {
+      predictions,
+      probabilityModel,
+      projectedScoreHome,
+      projectedScoreAway,
+      stats,
+      ...matchWithoutPredictionContent
+    } = match;
+    void predictions;
+    void probabilityModel;
+    void projectedScoreHome;
+    void projectedScoreAway;
+    void stats;
+    return {
+      ...matchWithoutPredictionContent,
+      predictions: [],
+      ...(existing?.probabilityModel ? { probabilityModel: existing.probabilityModel } : {}),
+      ...(existing?.projectedScoreHome !== undefined ? { projectedScoreHome: existing.projectedScoreHome } : {}),
+      ...(existing?.projectedScoreAway !== undefined ? { projectedScoreAway: existing.projectedScoreAway } : {}),
+      ...(existing?.stats ? { stats: existing.stats } : {}),
+      predictionMeta: {
+        ...(existing?.predictionMeta || generatedMeta),
+        lockedAt: existing?.predictionMeta?.lockedAt || capturedAt,
+        lockedReason,
+        cutoffTime: existing?.predictionMeta?.cutoffTime || cutoffTime,
+        updateReason: NO_PRE_CUTOFF_PREDICTION_REASON,
       },
     };
   }
@@ -3069,11 +4994,15 @@ function applyPredictionPersistence(match, existing, capturedAt) {
   }
 
   const sameDirection = predictionSignature(existingPredictions) === predictionSignature(nextPredictions);
-  const sameSnapshot = snapshotSignatureForMatch(existing || {}) === snapshotSignatureForMatch(match || {});
+  const sameMarketSignals = marketSignalSignatureForMatch(existing || {}) === marketSignalSignatureForMatch(match || {});
+  const existingProbabilityStrategyVersion = existing?.probabilityModel?.dynamicCalibration?.strategy?.version || "none";
   const policyChanged = existing?.predictionMeta?.policyVersion !== PREDICTION_POLICY_VERSION
-    || existing?.predictionMeta?.promptVersion !== ANALYST_PROMPT_VERSION;
+    || existing?.predictionMeta?.promptVersion !== ANALYST_PROMPT_VERSION
+    || (existing?.predictionMeta?.strategyVersion || "none") !== strategyVersion
+    || existingProbabilityStrategyVersion !== strategyVersion
+    || (existing?.predictionMeta?.trainingSignature || existing?.predictionMeta?.trainingVersion || "none") !== (dataSignature || "none");
 
-  if (sameSnapshot && !policyChanged) {
+  if (sameMarketSignals) {
     return {
       ...match,
       predictions: existingPredictions,
@@ -3081,7 +5010,14 @@ function applyPredictionPersistence(match, existing, capturedAt) {
       projectedScoreAway: existing?.projectedScoreAway ?? match.projectedScoreAway,
       stats: existing?.stats || match.stats,
       probabilityModel: existing?.probabilityModel || match.probabilityModel,
-      predictionMeta: existing?.predictionMeta || generatedMeta,
+      predictionMeta: {
+        ...(existing?.predictionMeta || generatedMeta),
+        updatedAt: capturedAt,
+        dataPolicy: PREDICTION_DATA_POLICY,
+        analystRuntime: ANALYST_RUNTIME,
+        analystFramework: PREDICTION_ANALYST_FRAMEWORK,
+        updateReason: MARKET_UNCHANGED_PREDICTION_UPDATE_REASON,
+      },
     };
   }
 
@@ -3203,6 +5139,126 @@ function loadExternalSignals(publicDir) {
   }
 }
 
+function fallbackSourceUpdatedAt(signal, externalSignals) {
+  return signal?.updatedAt
+    || signal?.bookmakerOdds?.had?.updatedAt
+    || signal?.bookmakerOdds?.hhad?.updatedAt
+    || signal?.externalOdds?.updatedAt
+    || externalSignals?.updatedAt
+    || new Date().toISOString();
+}
+
+function fiveHundredMatchUrl(signal, kind = "analysis") {
+  return signal?.fiveHundred?.urls?.[kind]
+    || signal?.fiveHundred?.urls?.analysis
+    || "https://trade.500.com/jczq/";
+}
+
+function signalFallbackId(signal) {
+  return normText(signal?.sourceMatchId || signal?.matchId || signal?.fixtureId || "");
+}
+
+function fiveHundredResultScore(signal) {
+  const result = signal?.fiveHundred?.result || signal?.result || {};
+  const home = toNum(result.scoreHome, toNum(signal?.scoreHome, null));
+  const away = toNum(result.scoreAway, toNum(signal?.scoreAway, null));
+  return Number.isFinite(home) && Number.isFinite(away)
+    ? {
+      scoreHome: home,
+      scoreAway: away,
+      source: result.source || signal?.resultSource || "500.com:jczq-result",
+      updatedAt: result.updatedAt || signal?.updatedAt,
+    }
+    : null;
+}
+
+function buildFiveHundredFallbackMatches(externalSignals) {
+  if (process.env.ENABLE_500_MATCH_FALLBACK === "0") return [];
+
+  const signals = externalSignals?.matches || {};
+  const seen = new Set();
+  const rows = [];
+  const now = Date.now();
+  const staleStartedGraceMs = 3 * 60 * 60 * 1000;
+  const resultLookbackMs = Math.max(6, Number(process.env.FIVE_HUNDRED_RESULT_OUTPUT_LOOKBACK_HOURS || 72)) * 60 * 60 * 1000;
+
+  for (const signal of Object.values(signals)) {
+    if (!signal || typeof signal !== "object" || Array.isArray(signal)) continue;
+
+    const sourceMatchId = signalFallbackId(signal);
+    if (!sourceMatchId || seen.has(sourceMatchId)) continue;
+
+    const kickoffTime = normText(signal.kickoffTime);
+    const kickoffMs = Date.parse(kickoffTime);
+    const resultScore = fiveHundredResultScore(signal);
+    const resultIsFresh = resultScore && Number.isFinite(kickoffMs) && kickoffMs >= now - resultLookbackMs;
+    if (!Number.isFinite(kickoffMs) || (!resultIsFresh && kickoffMs < now - staleStartedGraceMs)) continue;
+
+    const homeTeam = normText(signal.homeTeamName || signal.homeTeam);
+    const awayTeam = normText(signal.awayTeamName || signal.awayTeam);
+    if (!homeTeam || !awayTeam) continue;
+
+    const bookmakerOdds = signal.bookmakerOdds || {};
+    const hadOdds = sanitizeOdds(bookmakerOdds.had)
+      || (!signal.handicapLine ? sanitizeOdds(signal.externalOdds) : null);
+    const hhadOdds = sanitizeOdds(bookmakerOdds.hhad)
+      || (!hadOdds && signal.handicapLine ? sanitizeOdds(signal.externalOdds) : null);
+    if (!resultScore && !hadOdds && !hhadOdds) continue;
+
+    const updatedAt = fallbackSourceUpdatedAt(signal, externalSignals);
+    const matchDate = kickoffTime.slice(0, 10);
+    const matchNo = normText(signal.matchNo);
+    const businessDate = inferSportteryBusinessDate(matchNo, matchDate) || matchDate;
+    seen.add(sourceMatchId);
+    rows.push({
+      source: "five-hundred",
+      sourceMethod: "500-fallback",
+      sourceUrl: fiveHundredMatchUrl(signal, "analysis"),
+      sourceMatchId,
+      fixtureId: normText(signal.fixtureId),
+      matchNo,
+      businessDate,
+      matchDate,
+      buyEndTime: normText(signal.buyEndTime || signal.fiveHundred?.sale?.buyEndTime),
+      homeTeam,
+      awayTeam,
+      homeRank: normText(signal.fiveHundred?.rank?.home?.fifaRank),
+      awayRank: normText(signal.fiveHundred?.rank?.away?.fifaRank),
+      homeTeamCode: normText(signal.homeTeamCode),
+      awayTeamCode: normText(signal.awayTeamCode),
+      leagueName: normText(signal.leagueName, "足球赛事"),
+      kickoffTime,
+      status: resultScore ? "FINISHED" : "SCHEDULED",
+      scoreHome: resultScore?.scoreHome,
+      scoreAway: resultScore?.scoreAway,
+      resultSource: resultScore?.source,
+      resultUpdatedAt: resultScore?.updatedAt,
+      odds: hadOdds,
+      oddsSource: hadOdds ? "500.com:HAD" : undefined,
+      oddsPoolCode: hadOdds ? "HAD" : undefined,
+      oddsSourceMethod: hadOdds ? "500-fallback" : undefined,
+      oddsUpdatedAt: hadOdds ? updatedAt : undefined,
+      oddsSourceUrl: hadOdds ? fiveHundredMatchUrl(signal, "europeOdds") : undefined,
+      handicapOdds: hhadOdds,
+      handicapLine: hhadOdds
+        ? normText(bookmakerOdds.hhad?.handicapLine || signal.handicapLine)
+        : undefined,
+      handicapOddsSource: hhadOdds ? "500.com:HHAD" : undefined,
+      handicapOddsPoolCode: hhadOdds ? "HHAD" : undefined,
+      handicapOddsSourceMethod: hhadOdds ? "500-fallback" : undefined,
+      handicapOddsUpdatedAt: hhadOdds ? updatedAt : undefined,
+      handicapOddsSourceUrl: hhadOdds ? fiveHundredMatchUrl(signal, "asianHandicap") : undefined,
+      externalSignals: {
+        ...signal,
+        source: signal.source || externalSignals?.source || "external-signals",
+        updatedAt,
+      },
+    });
+  }
+
+  return dedupeMatches(rows);
+}
+
 function externalSignalKeys(match) {
   const sourceMatchId = normText(match?.sourceMatchId || String(match?.id || "").replace(/^sporttery_/, ""));
   return [
@@ -3241,7 +5297,12 @@ function normalizeProbabilityModelForPublish(model) {
   if (!model || typeof model !== "object") return model;
   return {
     ...model,
-    basis: PREDICTION_MODEL_BASIS,
+    basis: String(model.version || "").includes("model-only")
+      ? (model.basis || {
+        zh: "未开售模型参考：官方 SP/让球 SP 暂无时，按球队强弱、历史样本、赛程与 Poisson 比分分布生成观察方向；不作为串关 SP。",
+        en: "Model-only reference while official SP/handicap SP is unavailable. It uses team strength, historical samples, schedule context, and Poisson score distribution, and is not a parlay SP.",
+      })
+      : PREDICTION_MODEL_BASIS,
   };
 }
 
@@ -3261,10 +5322,11 @@ function normalizePredictionMetaForPublish(meta) {
 
 function normalizePublishedPredictionText(match) {
   if (!match || typeof match !== "object") return match;
+  const enriched = enrichPublishedCalculationTrace(match);
   return {
-    ...match,
-    probabilityModel: normalizeProbabilityModelForPublish(match.probabilityModel),
-    predictionMeta: normalizePredictionMetaForPublish(match.predictionMeta),
+    ...enriched,
+    probabilityModel: normalizeProbabilityModelForPublish(enriched.probabilityModel),
+    predictionMeta: normalizePredictionMetaForPublish(enriched.predictionMeta),
   };
 }
 
@@ -3301,6 +5363,15 @@ function isOfficialResultMatch(match) {
     Number.isFinite(match?.scoreHome) &&
     Number.isFinite(match?.scoreAway) &&
     String(match?.sourceUrl || "").includes("webapi.sporttery.cn")
+  );
+}
+
+function isFallbackResultMatch(match) {
+  return (
+    match?.status === "FINISHED" &&
+    Number.isFinite(match?.scoreHome) &&
+    Number.isFinite(match?.scoreAway) &&
+    String(match?.resultSource || match?.externalSignals?.fiveHundred?.result?.source || "").startsWith("500.com")
   );
 }
 
@@ -3469,7 +5540,7 @@ function appendOddsHistory(publicDir, matches, capturedAt) {
     bucketMinutes: ODDS_HISTORY_BUCKET_MINUTES,
     rows,
   };
-  fs.writeFileSync(path.join(publicDir, "odds-history.json"), JSON.stringify(payload, null, 2), "utf8");
+  writeJson(path.join(publicDir, "odds-history.json"), payload);
   return { rows: rows.length, appended, updated };
 }
 
@@ -3882,6 +5953,149 @@ function matchStoreKey(match) {
   return normText(match?.sourceMatchId || String(match?.id || "").replace(/^sporttery_/, ""));
 }
 
+function hasPublishedOfficialOdds(match) {
+  return match?.oddsSource === "sporttery:HAD" || match?.handicapOddsSource === "sporttery:HHAD";
+}
+
+function hasPublishedReferenceOdds(match) {
+  return String(match?.oddsSource || "").startsWith("500.com")
+    || String(match?.handicapOddsSource || "").startsWith("500.com");
+}
+
+function predictionInputFromPublishedMatch(match) {
+  return {
+    ...match,
+    homeTeam: match.homeTeam || match.homeTeamName,
+    awayTeam: match.awayTeam || match.awayTeamName,
+    leagueName: match.leagueName || match.leagueShortName,
+    leagueNameEn: match.leagueNameEn || match.leagueShortNameEn,
+    countryName: match.countryName,
+    countryNameEn: match.countryNameEn,
+  };
+}
+
+function rebuildPublishedPredictionModel(match) {
+  if (predictionContentLocked(match)) return match;
+  const odds = sanitizeOdds(match?.odds);
+  const handicapOdds = sanitizeOdds(match?.handicapOdds);
+  if (!odds && !handicapOdds) return match;
+
+  const rebuilt = predictionSet(predictionInputFromPublishedMatch({ ...match, odds, handicapOdds }));
+  return {
+    ...match,
+    predictions: rebuilt.predictions,
+    probabilityModel: rebuilt.probabilityModel,
+    projectedScoreHome: rebuilt.projectedScore?.home,
+    projectedScoreAway: rebuilt.projectedScore?.away,
+  };
+}
+
+function enrichPublishedCalculationTrace(match) {
+  if (!match?.probabilityModel) return match;
+  if (match.probabilityModel.calculationTrace?.version === "formula-trace-v2") return match;
+
+  const calculationTrace = buildCalculationTraceFromPublishedModel(match, match.probabilityModel);
+  if (!calculationTrace) return match;
+
+  return {
+    ...match,
+    probabilityModel: {
+      ...match.probabilityModel,
+      calculationTrace,
+    },
+  };
+}
+
+function publishedOddsForPrediction(match, prediction) {
+  const odds = prediction?.oddsPoolCode === "HHAD" ? match?.handicapOdds : match?.odds;
+  if (prediction?.tipCode === "1") return odds?.odds1;
+  if (prediction?.tipCode === "X") return odds?.oddsX;
+  if (prediction?.tipCode === "2") return odds?.odds2;
+  return undefined;
+}
+
+function predictionsAlignWithPublishedOdds(match) {
+  for (const prediction of match?.predictions || []) {
+    if (!["1X2", "BEST"].includes(prediction?.marketType)) continue;
+    if (!["1", "X", "2"].includes(prediction?.tipCode)) continue;
+    if (!Number.isFinite(Number(prediction?.odds)) || Number(prediction?.odds) <= 0) continue;
+    const expected = publishedOddsForPrediction(match, prediction);
+    if (!Number.isFinite(Number(expected))) continue;
+    if (Math.abs(Number(expected) - Number(prediction.odds)) > 1e-9) return false;
+  }
+  return true;
+}
+
+function mergePublishedMatches(existing, fresh) {
+  if (!existing) return fresh;
+
+  const merged = { ...existing, ...fresh };
+  const existingHasOfficial = hasPublishedOfficialOdds(existing);
+  const freshHasOfficial = hasPublishedOfficialOdds(fresh);
+  const freshIsReference = hasPublishedReferenceOdds(fresh);
+  const existingPredictionLocked = predictionContentLocked(existing);
+  const predictionPolicyChanged = existing?.predictionMeta?.policyVersion !== fresh?.predictionMeta?.policyVersion
+    || existing?.predictionMeta?.promptVersion !== fresh?.predictionMeta?.promptVersion
+    || existing?.predictionMeta?.trainingSignature !== fresh?.predictionMeta?.trainingSignature;
+
+  if (existingHasOfficial && !freshHasOfficial && freshIsReference) {
+    Object.assign(merged, {
+      id: existing.id,
+      source: existing.source,
+      oddsTrend: existing.oddsTrend,
+    });
+
+    if (existingPredictionLocked) {
+      Object.assign(merged, preserveLockedPredictionContent(merged, existing));
+    } else if (!predictionPolicyChanged) {
+      Object.assign(merged, {
+        predictions: merged.status === "FINISHED"
+          ? settlePredictionsForMatch(merged, existing.predictions)
+          : existing.predictions,
+        probabilityModel: existing.probabilityModel,
+        projectedScoreHome: existing.projectedScoreHome,
+        projectedScoreAway: existing.projectedScoreAway,
+        stats: existing.stats,
+      });
+    }
+  }
+
+  if (existing.oddsSource === "sporttery:HAD" && fresh.oddsSource !== "sporttery:HAD") {
+    Object.assign(merged, {
+      odds: existing.odds,
+      oddsSource: existing.oddsSource,
+      oddsPoolCode: existing.oddsPoolCode,
+      oddsSourceMethod: existing.oddsSourceMethod,
+      oddsUpdatedAt: existing.oddsUpdatedAt,
+      oddsSourceUrl: existing.oddsSourceUrl,
+    });
+  }
+
+  if (existing.handicapOddsSource === "sporttery:HHAD" && fresh.handicapOddsSource !== "sporttery:HHAD") {
+    Object.assign(merged, {
+      handicapOdds: existing.handicapOdds,
+      handicapLine: existing.handicapLine,
+      handicapOddsSource: existing.handicapOddsSource,
+      handicapOddsPoolCode: existing.handicapOddsPoolCode,
+      handicapOddsSourceMethod: existing.handicapOddsSourceMethod,
+      handicapOddsUpdatedAt: existing.handicapOddsUpdatedAt,
+      handicapOddsSourceUrl: existing.handicapOddsSourceUrl,
+    });
+  }
+
+  if (
+    existingHasOfficial
+    && !freshHasOfficial
+    && freshIsReference
+    && !existingPredictionLocked
+    && (predictionPolicyChanged || !predictionsAlignWithPublishedOdds(merged))
+  ) {
+    return rebuildPublishedPredictionModel(merged);
+  }
+
+  return existingPredictionLocked ? preserveLockedPredictionContent(merged, existing) : merged;
+}
+
 function mergeFreshWithExistingStore(existingMatches, freshMatches) {
   const byId = new Map();
   const orderedIds = [];
@@ -3890,7 +6104,7 @@ function mergeFreshWithExistingStore(existingMatches, freshMatches) {
     if (!key) return;
     if (!byId.has(key)) orderedIds.push(key);
     const previous = byId.get(key);
-    byId.set(key, previous && !preferFresh ? previous : { ...previous, ...match });
+    byId.set(key, previous && !preferFresh ? previous : mergePublishedMatches(previous, match));
   };
 
   for (const match of existingMatches || []) upsert(match, false);
@@ -3951,10 +6165,18 @@ async function sync() {
   const existingMatches = loadExistingMatches();
   const existingSyncMeta = loadExistingSyncMeta(publicDir);
   const existingModelCalibration = loadExistingJsonObject(path.join(dataDir, "model-calibration.json"));
+  const existingModelStrategy = loadExistingJsonObject(path.join(dataDir, "model-strategy.json"))
+    || loadExistingJsonObject(path.join(__dirname, "..", "server-data", "model-strategy.json"));
   const existingTeamIndex = loadExistingJsonObject(path.join(dataDir, "team-index.json"));
   const externalSignals = loadExternalSignals(publicDir);
+  const historicalTraining = loadHistoricalTrainingIndex();
+  const worldCupKimiDataset = loadWorldCupKimiDataset();
   const predictionHealth = buildPredictionHealth(existingMatches);
-  const modelCalibration = preserveRootTimestamps(buildModelCalibration(existingMatches), existingModelCalibration, ["generatedAt"]);
+  const modelCalibration = preserveRootTimestamps(
+    applyModelStrategyToCalibration(buildModelCalibration(existingMatches), existingModelStrategy),
+    existingModelCalibration,
+    ["generatedAt"]
+  );
   const existingBySourceId = new Map(
     existingMatches
       .map((match) => [matchStoreKey(match), match])
@@ -3963,23 +6185,41 @@ async function sync() {
   const oddsHistoryBeforeSync = loadOddsHistory(publicDir);
   const allRawMatches = await fetchSportteryMatches();
   const rawMatches = allRawMatches.filter(inMatchWindow);
+  const rawFiveHundredFallbackMatches = buildFiveHundredFallbackMatches(externalSignals).filter(inMatchWindow);
   const rawMatchesWithOdds = rawMatches.filter((match) => sanitizeOdds(match.odds));
   const rawMatchesWithHandicapOdds = rawMatches.filter((match) => sanitizeOdds(match.handicapOdds));
   const rawResultMatches = rawMatches.filter(isOfficialResultMatch);
+  const rawFallbackResultMatches = rawFiveHundredFallbackMatches.filter(isFallbackResultMatch);
   const rawMatchesForOutput = rawMatches.filter((match) => (
     match.status !== "FINISHED" ||
     hasOfficialDisplayOdds(match) ||
     isOfficialResultMatch(match)
   ));
-  const eloSnapshots = buildEloSnapshots(rawMatches);
-  const formSnapshots = buildFormSnapshots(rawMatches);
+  const rawFiveHundredFallbackForOutput = rawFiveHundredFallbackMatches.filter((match) => (
+    (match.status !== "FINISHED" && hasOfficialDisplayOdds(match)) ||
+    isFallbackResultMatch(match)
+  ));
+  const combinedRawMatchesForOutput = dedupeMatches([
+    ...rawFiveHundredFallbackForOutput,
+    ...rawMatchesForOutput,
+  ]);
+  const modelingRawMatches = rawMatches.length ? rawMatches : rawFiveHundredFallbackMatches;
+  const eloSnapshots = buildEloSnapshots(modelingRawMatches, historicalTraining);
+  const formSnapshots = buildFormSnapshots(modelingRawMatches, historicalTraining);
   const usedFreshOdds = rawMatchesWithOdds.length > 0;
-  let output = rawMatchesForOutput
+  let output = combinedRawMatchesForOutput
     .map((match) => enrichRawMatchWithPredictionSnapshot(match, existingBySourceId, oddsHistoryBeforeSync.rows))
+    .map((match) => attachWorldCupPrior(match, worldCupKimiDataset))
     .map((match) => ({ ...match, eloSnapshot: eloSnapshots.get(normText(match.sourceMatchId)) || null }))
-    .map((match) => ({ ...match, formSnapshot: formSnapshots.get(normText(match.sourceMatchId)) || null, predictionHealth, modelCalibration }))
+    .map((match) => ({
+      ...match,
+      formSnapshot: formSnapshots.get(normText(match.sourceMatchId)) || null,
+      leaguePrior: leaguePriorForMatch(historicalTraining, match),
+      predictionHealth,
+      modelCalibration,
+    }))
     .map((match) => {
-      const appMatch = toAppMatch(match);
+      const appMatch = attachCalibrationMetadataToAppMatch(toAppMatch(match), modelCalibration);
       const existing = existingBySourceId.get(normText(appMatch?.sourceMatchId || String(appMatch?.id || "").replace(/^sporttery_/, "")));
       return applyPredictionPersistence(appMatch, existing, capturedAt);
     });
@@ -4013,6 +6253,15 @@ async function sync() {
   const oddsHistoryPayload = loadOddsHistory(publicDir);
   const publishedOddsMatches = split.current.filter((match) => sanitizeOdds(match.odds)).length;
   const publishedHandicapOddsMatches = split.current.filter((match) => sanitizeOdds(match.handicapOdds)).length;
+  const publishedOfficialOddsMatches = split.current.filter(isTrustedOddsMatch).length;
+  const publishedOfficialHandicapOddsMatches = split.current.filter((match) => (
+    match?.source === "sporttery" &&
+    match?.handicapOddsSource === "sporttery:HHAD" &&
+    String(match?.handicapOddsSourceUrl || "").includes("webapi.sporttery.cn") &&
+    Boolean(sanitizeOdds(match?.handicapOdds))
+  )).length;
+  const publishedReferenceOddsMatches = split.current.filter((match) => String(match?.oddsSource || "").startsWith("500.com")).length;
+  const publishedReferenceHandicapOddsMatches = split.current.filter((match) => String(match?.handicapOddsSource || "").startsWith("500.com")).length;
   const publishedResultMatches = split.history.filter(isOfficialResultMatch).length
     || split.history.filter((match) => match.status === "FINISHED" && Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway)).length;
   const byStatus = output.reduce((acc, match) => {
@@ -4033,8 +6282,12 @@ async function sync() {
     updatedAt: sourcePublishedAt,
     capturedAt: sourcePublishedAt,
     lastAttemptAt: capturedAt,
-    officialOddsMatches: publishedOddsMatches,
-    officialHandicapOddsMatches: publishedHandicapOddsMatches,
+    officialOddsMatches: publishedOfficialOddsMatches,
+    officialHandicapOddsMatches: publishedOfficialHandicapOddsMatches,
+    displayOddsMatches: publishedOddsMatches,
+    displayHandicapOddsMatches: publishedHandicapOddsMatches,
+    referenceOddsMatches: publishedReferenceOddsMatches,
+    referenceHandicapOddsMatches: publishedReferenceHandicapOddsMatches,
     officialResultMatches: publishedResultMatches,
     skippedWithoutOfficialOdds: rawMatches.length - rawMatchesWithOdds.length,
     byStatus,
@@ -4058,7 +6311,10 @@ async function sync() {
       officialOddsMatches: rawMatchesWithOdds.length,
       officialHandicapOddsMatches: rawMatchesWithHandicapOdds.length,
       officialResultMatches: rawResultMatches.length,
+      fallbackResultMatches: rawFallbackResultMatches.length,
       publishableMatches: rawMatchesForOutput.length,
+      fiveHundredFallbackMatches: rawFiveHundredFallbackForOutput.length,
+      combinedPublishableMatches: combinedRawMatchesForOutput.length,
     },
     oddsHistory,
     predictionSnapshots: predictionSnapshotsPayload.summary,
@@ -4072,13 +6328,25 @@ async function sync() {
       sample: modelCalibration.sample,
       metrics: modelCalibration.metrics,
     },
+    modelStrategy: modelCalibration.strategy ? {
+      version: modelCalibration.strategy.version,
+      generatedAt: modelCalibration.strategy.generatedAt,
+      activation: modelCalibration.strategy.activation,
+      sample: modelCalibration.strategy.sample,
+      activeGates: modelCalibration.strategy.activeGates,
+    } : null,
+    historicalTraining: trainingSourceSummary(historicalTraining),
+    worldCupKimiData: worldCupDatasetSummary(worldCupKimiDataset),
     ...(keptExistingReason ? {
       fallback: {
         keptExisting: true,
         mergedPartialFresh,
         reason: keptExistingReason,
         existingMatches: existingMatches.length,
-        freshPublishableMatches: rawMatchesForOutput.length,
+        freshPublishableMatches: combinedRawMatchesForOutput.length,
+        sportteryPublishableMatches: rawMatchesForOutput.length,
+        fiveHundredFallbackMatches: rawFiveHundredFallbackForOutput.length,
+        fiveHundredResultMatches: rawFallbackResultMatches.length,
       },
     } : {}),
   };
@@ -4090,6 +6358,7 @@ async function sync() {
   writeJson(path.join(dataDir, "odds-history.json"), oddsHistoryPayload);
   writeJson(path.join(dataDir, "prediction-snapshots.json"), predictionSnapshotsPayload);
   writeJson(path.join(dataDir, "model-calibration.json"), modelCalibration);
+  if (modelCalibration.strategy) writeJson(path.join(dataDir, "model-strategy.json"), modelCalibration.strategy);
   writeJson(path.join(dataDir, "sync-meta.json"), syncMeta);
   console.log(
     JSON.stringify(
@@ -4098,8 +6367,14 @@ async function sync() {
         source: "sporttery",
         count: output.length,
         scanned: allRawMatches.length,
-        officialOddsMatches: publishedOddsMatches,
-        officialHandicapOddsMatches: publishedHandicapOddsMatches,
+        fiveHundredFallbackScanned: rawFiveHundredFallbackMatches.length,
+        officialOddsMatches: publishedOfficialOddsMatches,
+        officialHandicapOddsMatches: publishedOfficialHandicapOddsMatches,
+        displayOddsMatches: publishedOddsMatches,
+        displayHandicapOddsMatches: publishedHandicapOddsMatches,
+        referenceOddsMatches: publishedReferenceOddsMatches,
+        referenceHandicapOddsMatches: publishedReferenceHandicapOddsMatches,
+        fallbackResultMatches: rawFallbackResultMatches.length,
         officialResultMatches: publishedResultMatches,
         skippedWithoutOfficialOdds: rawMatches.length - rawMatchesWithOdds.length,
         window: { backDays: WINDOW_BACK_DAYS, forwardDays: WINDOW_FORWARD_DAYS },
@@ -4110,6 +6385,8 @@ async function sync() {
           teams: teamIndex.teams.length,
         },
         oddsHistory,
+        historicalTraining: trainingSourceSummary(historicalTraining),
+        worldCupKimiData: worldCupDatasetSummary(worldCupKimiDataset),
         byStatus,
       },
       null,

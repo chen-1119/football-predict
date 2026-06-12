@@ -3,6 +3,14 @@ import type { Match } from '../services/mockData';
 import { matchesPool, registerTeam, registerLeague, registerCountry } from '../services/mockData';
 import { AppContext } from './AppContextCore';
 import type { DataSyncState, HitAndWinSubmission, Language, User } from './AppContextCore';
+import {
+  clearStoredAccessSession,
+  getAccessAuthHeaders,
+  isAccessSessionValid,
+  persistAccessSession,
+  readStoredAccessSession,
+  type AccessSession
+} from '../services/accessControl';
 
 type SyncedMatch = Match & {
   homeTeamName?: string;
@@ -47,6 +55,24 @@ type SyncMeta = {
     history?: number;
     teams?: number;
   };
+  attempt?: {
+    officialOddsMatches?: number;
+    officialHandicapOddsMatches?: number;
+    officialResultMatches?: number;
+    publishableMatches?: number;
+    fiveHundredFallbackMatches?: number;
+    combinedPublishableMatches?: number;
+  };
+  fallback?: {
+    keptExisting?: boolean;
+    mergedPartialFresh?: boolean;
+    reason?: string;
+    existingMatches?: number;
+    freshPublishableMatches?: number;
+    sportteryPublishableMatches?: number;
+    fiveHundredFallbackMatches?: number;
+    fiveHundredResultMatches?: number;
+  };
   refreshPolicy?: {
     workflowMinutes?: number;
     pagePollSeconds?: number;
@@ -59,7 +85,6 @@ type RuntimeConfig = {
   eventStreamPath?: string;
   disableDataApi?: boolean;
   preferDataApi?: boolean;
-  historyPreferStatic?: boolean;
   currentPollSeconds?: number;
 };
 
@@ -69,6 +94,17 @@ const DATA_FETCH_TIMEOUT_MS = 12 * 1000;
 const ENV_DATA_API_BASE = import.meta.env.VITE_DATA_API_BASE;
 const ENV_DISABLE_DATA_API = import.meta.env.VITE_DISABLE_DATA_API === '1';
 const ENV_PREFER_DATA_API = import.meta.env.VITE_PREFER_DATA_API !== '0';
+const ENV_ENABLE_MOCK_FALLBACK = import.meta.env.DEV && import.meta.env.VITE_ENABLE_MOCK_FALLBACK === '1';
+
+const emptyDataSyncState = (): DataSyncState => ({
+  currentLoading: false,
+  currentLoaded: false,
+  historyLoaded: false,
+  historyLoading: false,
+  currentCount: 0,
+  historyCount: 0,
+  totalCount: 0
+});
 
 type DataChannel = 'api' | 'static' | 'mock';
 
@@ -116,15 +152,19 @@ const formatError = (error: unknown): string => {
   return String(error);
 };
 
-const fetchJson = async <T,>(url: string): Promise<T> => {
+const fetchJson = async <T,>(url: string, accessToken = ''): Promise<T> => {
   const cacheBuster = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const separator = url.includes('?') ? '&' : '?';
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), DATA_FETCH_TIMEOUT_MS);
 
   try {
+    const accessHeaders = accessToken
+      ? { authorization: `Bearer ${accessToken}` }
+      : getAccessAuthHeaders();
     const res = await fetch(`${url}${separator}v=${cacheBuster}`, {
       cache: 'no-store',
+      headers: Object.keys(accessHeaders).length ? accessHeaders : undefined,
       signal: controller.signal
     });
     if (!res.ok) throw new Error(`${url}: HTTP ${res.status} ${res.statusText}`);
@@ -134,13 +174,13 @@ const fetchJson = async <T,>(url: string): Promise<T> => {
   }
 };
 
-const fetchFirstAvailable = async <T,>(candidates: DataCandidate[]): Promise<DataFetchResult<T>> => {
+const fetchFirstAvailable = async <T,>(candidates: DataCandidate[], accessToken = ''): Promise<DataFetchResult<T>> => {
   let lastError: unknown;
 
   for (const candidate of candidates) {
     try {
       return {
-        data: await fetchJson<T>(candidate.url),
+        data: await fetchJson<T>(candidate.url, accessToken),
         url: candidate.url,
         channel: candidate.channel
       };
@@ -150,6 +190,10 @@ const fetchFirstAvailable = async <T,>(candidates: DataCandidate[]): Promise<Dat
   }
 
   throw lastError;
+};
+
+const isUnauthorizedFetchError = (error: unknown) => {
+  return error instanceof Error && /\bHTTP 401\b/.test(error.message);
 };
 
 const normalizeApiBase = (value: string | undefined): string | null => {
@@ -224,30 +268,85 @@ const registerSyncedMatches = (data: SyncedMatch[]) => {
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [language, setLanguageState] = useState<Language>(readStoredLanguage);
-  const [currentUser, setCurrentUser] = useState<User | null>(readStoredUser);
+  const [accessSession, setAccessSession] = useState<AccessSession | null>(readStoredAccessSession);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => (
+    isAccessSessionValid(readStoredAccessSession()) ? readStoredUser() : null
+  ));
   const [hitAndWinSubmission, setHitAndWinSubmission] = useState<HitAndWinSubmission | null>(readStoredHitAndWinSubmission);
   const [matches, setMatches] = useState<Match[]>([]);
+  const isAccessVerified = isAccessSessionValid(accessSession);
   const lastMetaRef = useRef<{ sourceUpdatedAt?: string; finishedCount?: number }>({});
   const refreshMsRef = useRef(CURRENT_REFRESH_MS);
   const apiBaseRef = useRef<string | null>(normalizeApiBase(ENV_DATA_API_BASE));
   const apiDisabledRef = useRef(ENV_DISABLE_DATA_API);
   const preferApiRef = useRef(ENV_PREFER_DATA_API);
-  const historyPreferStaticRef = useRef(true);
   const pollSecondsOverrideRef = useRef<number | null>(null);
   const eventStreamPathRef = useRef<string | null>(null);
   const apiFailureCountRef = useRef(0);
-  const [dataSync, setDataSync] = useState<DataSyncState>({
-    currentLoaded: false,
-    historyLoaded: false,
-    historyLoading: false,
-    currentCount: 0,
-    historyCount: 0,
-    totalCount: 0
-  });
+  const [dataSync, setDataSync] = useState<DataSyncState>(emptyDataSyncState);
+
+  const clearAccessSession = () => {
+    setAccessSession(null);
+    setCurrentUser(null);
+    clearStoredAccessSession();
+    localStorage.removeItem('nerdy_user');
+  };
+
+  const verifyAccessCode = async (code: string): Promise<AccessSession> => {
+    const response = await fetch('/api/access/verify', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ code })
+    });
+    const payload = await response.json().catch(() => null);
+
+    if (!response.ok || !payload?.session?.token || !payload.session.expiresAt) {
+      throw new Error(payload?.error || (language === 'zh' ? '校验码无效或已过期' : 'Invalid or expired access code'));
+    }
+
+    const session = payload.session as AccessSession;
+    persistAccessSession(session);
+    setAccessSession(session);
+    const verifiedUser = { username: language === 'zh' ? '已认证' : 'Verified' };
+    setCurrentUser(verifiedUser);
+    localStorage.setItem('nerdy_user', JSON.stringify(verifiedUser));
+    return session;
+  };
+
+  useEffect(() => {
+    if (!accessSession) return;
+    const expiresAt = Date.parse(accessSession.expiresAt);
+    const delay = expiresAt - Date.now();
+
+    if (!Number.isFinite(expiresAt) || delay <= 0) {
+      setAccessSession(null);
+      setCurrentUser(null);
+      clearStoredAccessSession();
+      localStorage.removeItem('nerdy_user');
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setAccessSession(null);
+      setCurrentUser(null);
+      clearStoredAccessSession();
+      localStorage.removeItem('nerdy_user');
+    }, Math.min(delay + 1000, 2_147_483_647));
+
+    return () => window.clearTimeout(timer);
+  }, [accessSession]);
 
   // Load current matches first, then fill historical results in the background.
   useEffect(() => {
+    if (!isAccessVerified) {
+      lastMetaRef.current = {};
+      setMatches([]);
+      setDataSync(emptyDataSyncState());
+      return;
+    }
+
     let cancelled = false;
+    const activeAccessToken = accessSession?.token || '';
 
     const metaToState = (
       meta: SyncMeta | null,
@@ -277,13 +376,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         dataChannel: fetchInfo?.channel,
         lastDataUrl: fetchInfo?.url,
         dataApiBase: apiBaseRef.current || undefined,
-        apiFailureCount: apiFailureCountRef.current
+        apiFailureCount: apiFailureCountRef.current,
+        sourceAttempt: meta?.attempt,
+        sourceFallback: meta?.fallback
       };
     };
 
     const fetchSyncMeta = async (): Promise<SyncMeta | null> => {
       try {
-        return (await fetchFirstAvailable<SyncMeta>(dataUrls('/sync-meta', ['./data/sync-meta.json']))).data;
+        return (await fetchFirstAvailable<SyncMeta>(dataUrls('/sync-meta', ['./data/sync-meta.json']), activeAccessToken)).data;
       } catch {
         return null;
       }
@@ -293,7 +394,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (apiBaseRef.current || apiDisabledRef.current) return;
 
       try {
-        const config = await fetchJson<RuntimeConfig>('./data/runtime-config.json');
+        const config = await fetchJson<RuntimeConfig>('./data/runtime-config.json', activeAccessToken);
         if (config.disableDataApi) {
           apiDisabledRef.current = true;
           return;
@@ -301,7 +402,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         apiBaseRef.current = normalizeApiBase(config.dataApiBase || config.apiBase);
         preferApiRef.current = config.preferDataApi ?? true;
-        historyPreferStaticRef.current = config.historyPreferStatic ?? true;
         eventStreamPathRef.current = config.eventStreamPath || null;
         if (typeof config.currentPollSeconds === 'number' && Number.isFinite(config.currentPollSeconds)) {
           pollSecondsOverrideRef.current = Math.min(30, Math.max(10, config.currentPollSeconds));
@@ -354,10 +454,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const loadCurrent = async (isInitial = false) => {
       const checkedAt = new Date().toISOString();
+      if (!cancelled) {
+        setDataSync((current) => ({
+          ...current,
+          currentLoading: true,
+          error: isInitial ? undefined : current.error,
+          lastCheckedAt: checkedAt
+        }));
+      }
       try {
-        const [dataResult, meta] = await Promise.all([
-          fetchFirstAvailable<unknown>(dataUrls('/matches/current', ['./data/matches-current.json', './matches.json'])),
-          fetchSyncMeta()
+        const [dataResult, meta, sourceHealth] = await Promise.all([
+          fetchFirstAvailable<unknown>(dataUrls('/matches/current?view=list', ['./data/matches-current.json', './matches.json']), activeAccessToken),
+          fetchSyncMeta(),
+          fetchSourceHealth()
         ]);
         apiFailureCountRef.current = dataResult.channel === 'api' ? 0 : apiFailureCountRef.current + 1;
         const currentCount = applyData(dataResult.data, 'current');
@@ -376,12 +485,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (cancelled) return;
         setDataSync((current) => ({
           ...current,
+          currentLoading: false,
           currentLoaded: currentCount > 0,
           historyLoading: isInitial ? true : current.historyLoading,
           currentCount: metaCurrentCount ?? currentCount,
           historyCount: Math.max(current.historyCount, metaHistoryCount ?? 0),
           totalCount: (metaCurrentCount ?? currentCount) + Math.max(current.historyCount, metaHistoryCount ?? 0),
           error: undefined,
+          sourceHealth: sourceHealth || current.sourceHealth,
           ...metaState
         }));
         if (shouldRefreshHistory) {
@@ -393,9 +504,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (cancelled) return;
         console.error(error);
 
-        if (isInitial) {
+        apiFailureCountRef.current += 1;
+
+        if (isUnauthorizedFetchError(error)) {
+          setAccessSession(null);
+          setCurrentUser(null);
+          clearStoredAccessSession();
+          localStorage.removeItem('nerdy_user');
+        }
+
+        if (isInitial && ENV_ENABLE_MOCK_FALLBACK) {
           setMatches(matchesPool);
           setDataSync({
+            currentLoading: false,
             currentLoaded: false,
             historyLoaded: false,
             historyLoading: false,
@@ -414,8 +535,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return;
         }
 
+        if (isInitial) {
+          setMatches([]);
+          setDataSync({
+            currentLoading: false,
+            currentLoaded: false,
+            historyLoaded: false,
+            historyLoading: false,
+            currentCount: 0,
+            historyCount: 0,
+            totalCount: 0,
+            error: formatError(error),
+            lastCheckedAt: checkedAt,
+            refreshIntervalSeconds: CURRENT_REFRESH_MS / 1000,
+            backendRefreshMinutes: 5,
+            apiFailureCount: apiFailureCountRef.current
+          });
+          console.warn('Initial match data unavailable; mock fallback is disabled.');
+          return;
+        }
+
         setDataSync((current) => ({
           ...current,
+          currentLoading: false,
           error: formatError(error),
           lastCheckedAt: checkedAt
         }));
@@ -425,9 +567,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const loadHistory = async () => {
       try {
         const historyData = await fetchFirstAvailable<unknown>(
-          dataUrls('/matches/history', ['./data/matches-history.json'], {
-            preferStatic: historyPreferStaticRef.current
-          })
+          dataUrls('/matches/history?view=list&limit=600', [], {
+            preferStatic: false
+          }),
+          activeAccessToken
         );
         const historyCount = applyData(historyData.data, 'history');
         if (cancelled) return;
@@ -464,6 +607,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const apiBase = apiBaseRef.current || '/api';
       const apiCandidate = { url: `${apiBase}${normalizedEndpoint}`, channel: 'api' as const };
       return options.preferStatic ? [...staticCandidates, apiCandidate] : [apiCandidate, ...staticCandidates];
+    };
+
+    const fetchSourceHealth = async (): Promise<DataSyncState['sourceHealth'] | undefined> => {
+      try {
+        const result = await fetchFirstAvailable<DataSyncState['sourceHealth']>(dataUrls('/data/sources', []), activeAccessToken);
+        return result.data;
+      } catch {
+        return undefined;
+      }
     };
 
     let eventSource: EventSource | undefined;
@@ -551,7 +703,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       document.removeEventListener('visibilitychange', refreshOnWake);
       window.clearInterval(historyTimer);
     };
-  }, []);
+  }, [isAccessVerified, accessSession?.token]);
 
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);
@@ -575,9 +727,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const logout = () => {
-    setCurrentUser(null);
+    clearAccessSession();
     setHitAndWinSubmission(null);
-    localStorage.removeItem('nerdy_user');
     localStorage.removeItem('nerdy_slip_count');
     localStorage.removeItem('nerdy_hw_submission');
   };
@@ -588,8 +739,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setLanguage,
       currentUser,
       setCurrentUser,
+      accessSession,
+      isAccessVerified,
       hitAndWinSubmission,
       submitHitAndWin,
+      verifyAccessCode,
+      clearAccessSession,
       login,
       register,
       logout,

@@ -37,16 +37,16 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
 
   const translations = {
     worldCup: { zh: '世界杯', en: 'World Cup' },
-    brand: { zh: 'AI 足球预测', en: 'AI Football' },
-    subtitle: { zh: '竞彩数据看板', en: 'Prediction Desk' },
+    brand: { zh: '足球数据看板', en: 'Matchday Desk' },
+    subtitle: { zh: '竞彩赛程 / SP / 盘口', en: 'Fixtures / SP / Odds' },
     bestTips: { zh: '赛前观察', en: 'Pre-match Watch' },
     predictions: { zh: '赛事预测', en: 'Predictions' },
     generator: { zh: '投注单', en: 'Bet Slip' },
     hitAndWin: { zh: '命中挑战', en: 'Hit & Win' },
-    login: { zh: '登录', en: 'Login' },
+    login: { zh: '校验', en: 'Verify' },
     help: { zh: '术语', en: 'Glossary' },
     language: { zh: '切换语言', en: 'Switch Language' },
-    logout: { zh: '退出登录', en: 'Logout' }
+    logout: { zh: '退出校验', en: 'Clear access' }
   };
 
   const t = (key: keyof typeof translations) => translations[key][language] || '';
@@ -61,7 +61,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
           onClick={() => setCurrentTab('predictions')}
           aria-label={t('brand')}
         >
-          <span className="brand-mark">AI</span>
+          <span className="brand-mark">90</span>
           <span className="brand-copy">
             <span className="brand-title">{t('brand')}</span>
             <span className="brand-subtitle">{t('subtitle')}</span>

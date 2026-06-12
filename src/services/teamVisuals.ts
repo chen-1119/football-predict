@@ -11,6 +11,33 @@ type TeamVisual = {
 };
 
 const CLUB_CREST_BY_NAME: Record<string, string> = {
+  'acoulu': 'https://upload.wikimedia.org/wikipedia/commons/d/d5/AC_Oulu_logo.svg',
+  'ffjaro': 'https://upload.wikimedia.org/wikipedia/en/9/9f/FF_Jaro_logotype.svg',
+  'gnistan': 'https://upload.wikimedia.org/wikipedia/commons/d/d0/IF_Gnistan_logo.svg',
+  'hjkhelsinki': 'https://media.api-sports.io/football/teams/649.png',
+  'ifgnistan': 'https://upload.wikimedia.org/wikipedia/commons/d/d0/IF_Gnistan_logo.svg',
+  'ifkmariehamn': 'https://upload.wikimedia.org/wikipedia/en/0/00/IFK_Mariehamnin_logo.svg',
+  'ilves': 'https://media.api-sports.io/football/teams/1163.png',
+  'interturku': 'https://media.api-sports.io/football/teams/1164.png',
+  'kups': 'https://media.api-sports.io/football/teams/1165.png',
+  'lahti': 'https://media.api-sports.io/football/teams/1166.png',
+  'sjk': 'https://media.api-sports.io/football/teams/689.png',
+  'tps': 'https://upload.wikimedia.org/wikipedia/en/3/30/Turun_Palloseura_logo.png',
+  'tpsturku': 'https://upload.wikimedia.org/wikipedia/en/3/30/Turun_Palloseura_logo.png',
+  'turunpalloseura': 'https://upload.wikimedia.org/wikipedia/en/3/30/Turun_Palloseura_logo.png',
+  'vps': 'https://media.api-sports.io/football/teams/650.png',
+  'AC奥卢': 'https://upload.wikimedia.org/wikipedia/commons/d/d5/AC_Oulu_logo.svg',
+  'TPS图尔库': 'https://upload.wikimedia.org/wikipedia/en/3/30/Turun_Palloseura_logo.png',
+  '国际图尔库': 'https://media.api-sports.io/football/teams/1164.png',
+  '坦佩雷山猫': 'https://media.api-sports.io/football/teams/1163.png',
+  '塞伊奈约基': 'https://media.api-sports.io/football/teams/689.png',
+  '库奥皮奥': 'https://media.api-sports.io/football/teams/1165.png',
+  '拉赫蒂': 'https://media.api-sports.io/football/teams/1166.png',
+  '瓦萨': 'https://media.api-sports.io/football/teams/650.png',
+  '玛丽港': 'https://upload.wikimedia.org/wikipedia/en/0/00/IFK_Mariehamnin_logo.svg',
+  '赫尔辛基': 'https://media.api-sports.io/football/teams/649.png',
+  '赫尔辛基火花': 'https://upload.wikimedia.org/wikipedia/commons/d/d0/IF_Gnistan_logo.svg',
+  '雅罗': 'https://upload.wikimedia.org/wikipedia/en/9/9f/FF_Jaro_logotype.svg',
   albirexniigata: '/team-logos/jleague/albirex-niigata.png',
   avispafukuoka: '/team-logos/jleague/avispa-fukuoka.png',
   cerezoosaka: '/team-logos/jleague/cerezo-osaka.png',
@@ -83,6 +110,8 @@ const FLAG_CODE_BY_NAME: Record<string, string> = {
   chile: 'cl',
   china: 'cn',
   colombia: 'co',
+  costarica: 'cr',
+  crc: 'cr',
   croatia: 'hr',
   cyprus: 'cy',
   czechia: 'cz',
@@ -163,6 +192,8 @@ const FLAG_CODE_BY_NAME: Record<string, string> = {
   智利: 'cl',
   中国: 'cn',
   哥伦比亚: 'co',
+  哥斯达: 'cr',
+  哥斯达黎加: 'cr',
   克罗地亚: 'hr',
   库拉索: 'cw',
   塞浦路斯: 'cy',
@@ -260,18 +291,29 @@ const isoFromFlagUrl = (value?: string) => {
   const match = String(value || '').match(/flagcdn\.com\/(?:w\d+\/)?([a-z]{2}(?:-[a-z]{3})?)\.png/i);
   return match?.[1]?.toLowerCase() || '';
 };
+const regionalFlag = (...tags: number[]) => String.fromCodePoint(0x1f3f4, ...tags, 0xe007f);
+
 const FLAG_FALLBACK_BY_CODE: Record<string, string> = {
-  'gb-eng': 'ENG',
-  'gb-nir': 'NIR',
-  'gb-sct': 'SCO',
-  'gb-wls': 'WAL',
+  'gb-eng': regionalFlag(0xe0067, 0xe0062, 0xe0065, 0xe006e, 0xe0067),
+  'gb-nir': '🇬🇧',
+  'gb-sct': regionalFlag(0xe0067, 0xe0062, 0xe0073, 0xe0063, 0xe0074),
+  'gb-wls': regionalFlag(0xe0067, 0xe0062, 0xe0077, 0xe006c, 0xe0073),
   xk: 'XK'
 };
+
+const flagEmojiForCode = (code: string) => {
+  const normalized = code.toUpperCase();
+  if (!/^[A-Z]{2}$/.test(normalized)) return '';
+  return Array.from(normalized)
+    .map((char) => String.fromCodePoint(0x1f1e6 + char.charCodeAt(0) - 65))
+    .join('');
+};
+
 const flagFallbackForCode = (code: string) => {
   const normalized = code.toLowerCase();
   const mapped = FLAG_FALLBACK_BY_CODE[normalized];
   if (mapped) return mapped;
-  return code.toUpperCase();
+  return flagEmojiForCode(normalized) || code.toUpperCase();
 };
 const flagUrl = (code: string) => `https://flagcdn.com/w80/${code.toLowerCase()}.png`;
 const findClubCrest = (...values: Array<string | undefined>) => {

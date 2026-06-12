@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   ArrowRight,
-  BarChart3,
   CalendarDays,
   ChevronDown,
   ChevronUp,
@@ -14,10 +13,10 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContextCore';
 import { formatBeijingDateString, getDateStringOffset, leagues } from '../services/mockData';
-import type { Country, League, Match, PredictionDetail } from '../services/mockData';
+import type { Country, League, Match, PredictionDetail, Team } from '../services/mockData';
 import { getImpliedProbabilities, getPredictionTipDisplay, getPredictionValueLabel, getResolvedMatchOdds, getSportteryPoolRows } from '../services/bettingDisplay';
 import { getCountryById, getLeagueById, getTeamById } from '../services/entities';
-import { getMatchSignal, type MatchSignalCategory } from '../services/matchSignal';
+import { getMatchSignal, isActionableRecommendation, type MatchSignalCategory } from '../services/matchSignal';
 import { getVisiblePrediction, getVisiblePredictions } from '../services/predictionVisibility';
 import { TeamBadge } from '../components/TeamBadge';
 import { WorldCupSpotlight } from '../components/WorldCupSpotlight';
@@ -27,43 +26,101 @@ interface PredictionsListProps {
   onOpenWorldCup: () => void;
 }
 
-type SortBy = 'time' | 'trust' | 'odds';
-type SignalFilter = 'all' | MatchSignalCategory;
+type SortBy = 'time' | 'odds';
+type SignalFilter = 'recommended' | 'all' | MatchSignalCategory;
 
-const SORT_OPTIONS: SortBy[] = ['time', 'trust', 'odds'];
-const SIGNAL_FILTERS: SignalFilter[] = ['all', 'steady', 'lean', 'value', 'watch', 'avoid', 'unavailable', 'finished'];
+const SORT_OPTIONS: SortBy[] = ['time', 'odds'];
+const SIGNAL_FILTERS: SignalFilter[] = ['recommended', 'all', 'steady', 'lean', 'value', 'watch', 'avoid', 'unavailable', 'finished'];
 
 const getKickoffDay = (match: Match): string => match.kickoffDate || match.kickoffTime.slice(0, 10) || match.matchDate || '';
 
 const getSportteryDay = (match: Match): string => match.businessDate || getKickoffDay(match) || '';
 
-const getMatchDay = (match: Match): string => getSportteryDay(match);
+const getMatchDateCandidates = (match: Match): string[] => {
+  const sportteryDay = getSportteryDay(match);
+  // Sporttery issue day is the sale/listing day; late-night matches can kick off on the next calendar day.
+  return sportteryDay ? [sportteryDay] : [];
+};
 
-const isActiveResultStatus = (match: Match) => match.status === 'LIVE' || match.status === 'PENDING_RESULT';
-
-const matchBelongsToDate = (match: Match, date: string) => (
-  getMatchDay(match) === date ||
-  (isActiveResultStatus(match) && getKickoffDay(match) === date)
-);
+const matchBelongsToDate = (match: Match, date: string) => getMatchDateCandidates(match).includes(date);
 
 const getBestPrediction = (match: Match) => getVisiblePrediction(match, 'BEST');
 
 const getBestTrust = (match: Match) => getBestPrediction(match)?.trustScore || 0;
+
+const getMatchDisplayTeam = (match: Match, side: 'home' | 'away'): Team => {
+  const base = getTeamById(side === 'home' ? match.homeTeamId : match.awayTeamId);
+  const teamName = side === 'home' ? match.homeTeamName : match.awayTeamName;
+  const teamNameEn = side === 'home' ? match.homeTeamNameEn : match.awayTeamNameEn;
+  const teamLogo = side === 'home' ? match.homeTeamLogo : match.awayTeamLogo;
+  const teamLogoType = side === 'home' ? match.homeTeamLogoType : match.awayTeamLogoType;
+  const teamCountryIso = side === 'home' ? match.homeTeamCountryIso : match.awayTeamCountryIso;
+  const teamColor = side === 'home' ? match.homeTeamColor : match.awayTeamColor;
+  const teamValue = side === 'home' ? match.homeTeamValue : match.awayTeamValue;
+  const nameZh = teamName || base.name.zh;
+  const nameEn = teamNameEn || teamName || base.name.en;
+
+  return {
+    ...base,
+    name: { zh: nameZh, en: nameEn },
+    shortName: { zh: nameZh, en: nameEn },
+    logo: teamLogoType === 'flag' && teamCountryIso
+      ? teamCountryIso
+      : teamLogo || teamCountryIso || base.logo,
+    logoType: teamLogoType || base.logoType || (teamCountryIso ? 'flag' : undefined),
+    value: teamValue || base.value,
+    color: teamColor || base.color
+  };
+};
+
+const getMatchDisplayLeague = (match: Match): League => {
+  const base = getLeagueById(match.leagueId);
+  const nameZh = match.leagueName || match.leagueShortName || base.name.zh;
+  const nameEn = match.leagueNameEn || match.leagueName || match.leagueShortNameEn || base.name.en;
+  const shortZh = match.leagueShortName || match.leagueName || base.shortName.zh || nameZh;
+  const shortEn = match.leagueShortNameEn || match.leagueNameEn || match.leagueName || base.shortName.en || nameEn;
+
+  return {
+    ...base,
+    name: { zh: nameZh, en: nameEn },
+    shortName: { zh: shortZh, en: shortEn },
+    countryId: match.countryId || base.countryId
+  };
+};
 
 const getBestOdds = (match: Match) => {
   const resolvedOdds = getResolvedMatchOdds(match);
   return getBestPrediction(match)?.odds || resolvedOdds.had?.odds.odds1 || resolvedOdds.hhad?.odds.odds1 || 0;
 };
 
-const isScoredPrediction = (prediction: PredictionDetail) => (
-  prediction.resultStatus !== 'PENDING' && prediction.tipCode !== 'WATCH'
+const isReferenceOnlyPrediction = (prediction?: PredictionDetail) => (
+  prediction?.recommendationAction === 'reference' || prediction?.recommendationTier === 'reference'
 );
 
-const getTrustColor = (score: number) => {
-  if (score >= 80) return '156 70% 44%';
-  if (score >= 68) return '41 88% 56%';
-  return '196 76% 48%';
+const getRecommendationTipDisplay = (
+  prediction: PredictionDetail,
+  language: 'zh' | 'en',
+  compact = true
+) => {
+  const label = getPredictionTipDisplay(prediction, language, compact);
+  if (!isReferenceOnlyPrediction(prediction)) return label;
+
+  if (language === 'zh') {
+    const normalized = label.replace(/^参考推荐/, '参考倾向');
+    if (normalized.startsWith('参考倾向')) return normalized;
+    return `参考倾向 ${normalized.replace(/^(模型首选|价值观察|高可信)\s*/, '')}`;
+  }
+
+  return label.startsWith('Reference lean')
+    ? label
+    : `Reference lean ${label.replace(/^Reference pick\s*/i, '')}`;
 };
+
+const stripDirectionPrefix = (label: string, language: 'zh' | 'en') => (
+  language === 'zh'
+    ? label.replace(/^(推荐方向|参考倾向|参考推荐|模型首选|价值观察|高可信|主推)\s*/, '')
+    : label.replace(/^(Pick|Reference lean|Reference pick|Model lean|Value watch|High confidence)[:：]?\s*/i, '')
+);
 
 const formatShortDate = (date: string, language: 'zh' | 'en') => {
   return new Date(`${date}T00:00:00+08:00`).toLocaleDateString(language === 'zh' ? 'zh-CN' : 'en-US', {
@@ -177,41 +234,7 @@ const getHandicapSupport = (match: Match, code: string | undefined) => {
   return code === '1' ? probabilities.home : code === 'X' ? probabilities.draw : probabilities.away;
 };
 
-const getGoalsLean = (match: Match, language: 'zh' | 'en') => {
-  const over25 = match.probabilityModel?.goalLines?.over25;
-  const under25 = match.probabilityModel?.goalLines?.under25;
-  if (!Number.isFinite(over25) || !Number.isFinite(under25)) {
-    return language === 'zh' ? '进球待观察' : 'Goals watch';
-  }
-
-  const isOver = Number(over25) >= Number(under25);
-  const probability = Math.round(isOver ? Number(over25) : Number(under25));
-  const label = language === 'zh'
-    ? (isOver ? '≥3球' : '≤2球')
-    : (isOver ? 'Over 2.5' : 'Under 2.5');
-
-  if (probability < 60) {
-    return language === 'zh'
-      ? `观察 ${label} ${probability}%`
-      : `Watch ${label} ${probability}%`;
-  }
-
-  return `${label} ${probability}%`;
-};
-
-const getBttsLean = (match: Match, language: 'zh' | 'en') => {
-  const yes = match.probabilityModel?.bothTeamsToScore?.yes;
-  const no = match.probabilityModel?.bothTeamsToScore?.no;
-  if (!Number.isFinite(yes) || !Number.isFinite(no)) return '';
-  const isYes = Number(yes) >= Number(no);
-  const probability = Math.round(isYes ? Number(yes) : Number(no));
-  if (probability < 58) return '';
-  return language === 'zh'
-    ? `双方进球${isYes ? '是' : '否'} ${probability}%`
-    : `BTTS ${isYes ? 'Yes' : 'No'} ${probability}%`;
-};
-
-const getRiskTags = (match: Match, limit = 2) => {
+const getRiskTags = (match: Match, limit = 3) => {
   const seen = new Set<string>();
   return getVisiblePredictions(match)
     .flatMap((prediction) => prediction.riskTags || [])
@@ -243,28 +266,12 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   const systemTodayStr = getDateStringOffset(0);
-  const activeOfficialDate = useMemo(() => {
-    const activeByKickoffDay = matches
-      .filter((match) => isActiveResultStatus(match))
-      .map(getKickoffDay)
-      .filter(Boolean)
-      .sort()[0];
-
-    if (activeByKickoffDay) return activeByKickoffDay;
-
-    return matches
-      .filter((match) => match.status !== 'FINISHED')
-      .map(getMatchDay)
-      .filter(Boolean)
-      .sort()[0] || '';
-  }, [matches]);
   const todayStr = systemTodayStr;
   const yesterdayStr = offsetDateString(todayStr, -1);
   const tomorrowStr = offsetDateString(todayStr, 1);
   const dayAfterTomorrowStr = offsetDateString(todayStr, 2);
 
   const [selectedDate, setSelectedDate] = useState<string>(() => getDateStringOffset(0));
-  const [hasManualDateSelection, setHasManualDateSelection] = useState(false);
   const [selectedLeagues, setSelectedLeagues] = useState<string[]>([]);
   const [signalFilter, setSignalFilter] = useState<SignalFilter>('all');
   const [sortBy, setSortBy] = useState<SortBy>('time');
@@ -286,6 +293,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     filterTitle: { zh: '赛事筛选', en: 'Competition Filters' },
     allLeagues: { zh: '全部赛事', en: 'All Competitions' },
     signalTitle: { zh: '推荐分组', en: 'Signal' },
+    recommended: { zh: '精选推荐', en: 'Qualified picks' },
     allSignals: { zh: '全部分组', en: 'All Signals' },
     steady: { zh: '高可信候选', en: 'High confidence' },
     lean: { zh: '主推候选', en: 'Model lean' },
@@ -299,6 +307,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     odds: { zh: 'SP 值', en: 'Odds' },
     reset: { zh: '重置', en: 'Reset' },
     noMatches: { zh: '这个日期暂无可用比赛预测。', en: 'No scheduled matches found for this day.' },
+    noQualifiedPicks: { zh: '本期没有达到精选门槛的推荐，先不硬推。可切到全部分组查看观察名单。', en: 'No pick passes the quality gate for this issue. Switch to all signals for the watchlist.' },
     yesterday: { zh: '昨天', en: 'Yesterday' },
     today: { zh: '今天', en: 'Today' },
     tomorrow: { zh: '明天', en: 'Tomorrow' },
@@ -310,7 +319,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     hitRate: { zh: '已结算精选命中率', en: 'Settled Best Hit Rate' },
     selectedMatches: { zh: '当前筛选场次', en: 'Filtered Matches' },
     signalSummary: { zh: '推荐分组', en: 'Signal Split' },
-    avgTrust: { zh: '推荐池健康', en: 'Pick Pool Health' },
+    avgTrust: { zh: '今日状态', en: 'Today Status' },
     riskPaused: { zh: '风控暂停', en: 'Risk paused' },
     riskPausedNote: { zh: '无达标方向，等待下一轮 SP/盘口', en: 'No qualified pick; wait for next SP/handicap check' },
     hitCooling: { zh: '命中冷却', en: 'Cooling' },
@@ -323,19 +332,19 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     dataLoading: { zh: '加载中', en: 'Loading' },
     dataSyncing: { zh: '同步中', en: 'Syncing' },
     dataReady: { zh: '已加载', en: 'Ready' },
-    dataFallback: { zh: '本地兜底', en: 'Fallback' },
+    dataFallback: { zh: '加载失败', en: 'Unavailable' },
     dataUpdated: { zh: '数据源', en: 'Source' },
     dataChannel: { zh: '通道', en: 'Channel' },
     dataChannelApi: { zh: '实时接口', en: 'Live API' },
     dataChannelStatic: { zh: '静态快照', en: 'Static snapshot' },
-    dataChannelMock: { zh: '兜底样例', en: 'Fallback sample' },
+    dataChannelMock: { zh: '开发样例', en: 'Dev sample' },
     dataRefresh: { zh: '页面自检', en: 'Page check' },
     dataNextCheck: { zh: '下次检查', en: 'Next check' },
     dataCurrentLoading: { zh: '正在加载中国竞彩网赛程', en: 'Loading Sporttery schedule' },
     dataHistoryLoading: { zh: '历史结果后台补齐中', en: 'History loading in background' },
     dataHistoryReady: { zh: '当前赛程与历史库已就绪', en: 'Current schedule and history are ready' },
     dataHistoryUnavailable: { zh: '当前赛程已就绪，历史库暂不可用', en: 'Current schedule ready, history unavailable' },
-    dataFallbackNote: { zh: '官方数据暂不可用，已启用兜底数据', en: 'Official data unavailable, using fallback' },
+    dataFallbackNote: { zh: '官方数据暂不可用，已停止展示兜底样例，请稍后刷新', en: 'Official data unavailable; sample fallback is disabled. Please refresh later' },
     settledPicks: { zh: '条方向预测', en: 'scored picks' },
     matchUnit: { zh: '场', en: 'matches' },
     tipUnit: { zh: '条', en: 'tips' },
@@ -346,7 +355,6 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     oddsHeader: { zh: '胜平负 / 让球', en: '1X2 / Handicap' },
     closed: { zh: '未开售', en: 'Closed' },
     archivedOdds: { zh: '赛果归档', en: 'Archived' },
-    trustHeader: { zh: '可用度', en: 'Usability' },
     hit: { zh: '命中', en: 'Hit' },
     miss: { zh: '未中', en: 'Miss' },
     leagueMatches: { zh: '场比赛', en: 'matches' }
@@ -354,32 +362,27 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
 
   const t = (key: keyof typeof translations) => translations[key][language] || '';
   const getSignalFilterLabel = (filter: SignalFilter) => {
+    if (filter === 'recommended') return t('recommended');
     if (filter === 'all') return t('allSignals');
     return translations[filter][language];
   };
 
-  const selectedDateHasMatches = matches.some((match) => matchBelongsToDate(match, selectedDate));
-  const nextAvailableDate = matches
-    .map(getMatchDay)
-    .filter((date) => date >= todayStr)
-    .sort()[0] || selectedDate;
-  const effectiveSelectedDate = !hasManualDateSelection && activeOfficialDate
-    ? activeOfficialDate
-    : selectedDateHasMatches || selectedDate !== todayStr
-      ? selectedDate
-      : nextAvailableDate;
+  const effectiveSelectedDate = selectedDate;
 
   const availableLeagues = useMemo(() => {
     const seen = new Set<string>();
     const matchesForDate = matches.filter((match) => matchBelongsToDate(match, effectiveSelectedDate));
-    const source = matchesForDate.length > 0
-      ? matchesForDate.map((match) => match.leagueId)
-      : leagues.map((league) => league.id);
+    if (matchesForDate.length === 0) {
+      return leagues
+        .filter((league) => !seen.has(league.id) && seen.add(league.id))
+        .sort((a, b) => a.name[language].localeCompare(b.name[language], language === 'zh' ? 'zh-CN' : 'en-US'));
+    }
 
-    return source.reduce<League[]>((list, leagueId) => {
+    return matchesForDate.reduce<League[]>((list, match) => {
+      const leagueId = match.leagueId;
       if (seen.has(leagueId)) return list;
       seen.add(leagueId);
-      list.push(getLeagueById(leagueId));
+      list.push(getMatchDisplayLeague(match));
       return list;
     }, []).sort((a, b) => a.name[language].localeCompare(b.name[language], language === 'zh' ? 'zh-CN' : 'en-US'));
   }, [effectiveSelectedDate, language, matches]);
@@ -398,9 +401,10 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     return baseFilteredMatches.reduce<Record<SignalFilter, number>>((counts, match) => {
       const signal = getMatchSignal(match);
       counts.all += 1;
+      if (isActionableRecommendation(match)) counts.recommended += 1;
       counts[signal.category] += 1;
       return counts;
-    }, { all: 0, steady: 0, lean: 0, value: 0, watch: 0, avoid: 0, unavailable: 0, finished: 0 });
+    }, { recommended: 0, all: 0, steady: 0, lean: 0, value: 0, watch: 0, avoid: 0, unavailable: 0, finished: 0 });
   }, [baseFilteredMatches]);
 
   const recommendationCounts = useMemo(() => {
@@ -409,22 +413,25 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
       const best = getBestPrediction(match);
       if (signal.category === 'finished') {
         counts.finished += 1;
+      } else if (isActionableRecommendation(match) && best && best.tipCode !== 'WATCH') {
+        counts.pick += 1;
       } else if (signal.category === 'avoid') {
         counts.avoid += 1;
-      } else if ((signal.category === 'steady' || signal.category === 'lean' || signal.category === 'value') && best && best.tipCode !== 'WATCH') {
-        counts.pick += 1;
+      } else if (best && best.tipCode !== 'WATCH') {
+        counts.reference += 1;
       } else {
-        counts.watch += 1;
+        counts.unavailable += 1;
       }
       return counts;
-    }, { pick: 0, watch: 0, avoid: 0, finished: 0 });
+    }, { pick: 0, reference: 0, avoid: 0, unavailable: 0, finished: 0 });
   }, [baseFilteredMatches]);
 
   const visibleSignalFilters = useMemo(() => {
-    return SIGNAL_FILTERS.filter((filter) => filter === 'all' || signalCounts[filter] > 0 || signalFilter === filter);
+    return SIGNAL_FILTERS.filter((filter) => filter === 'recommended' || filter === 'all' || signalCounts[filter] > 0 || signalFilter === filter);
   }, [signalCounts, signalFilter]);
 
   const filteredMatches = useMemo(() => {
+    if (signalFilter === 'recommended') return baseFilteredMatches.filter(isActionableRecommendation);
     if (signalFilter === 'all') return baseFilteredMatches;
     return baseFilteredMatches.filter((match) => getMatchSignal(match).category === signalFilter);
   }, [baseFilteredMatches, signalFilter]);
@@ -437,8 +444,6 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
 
       if (sortBy === 'time') {
         comparison = new Date(a.kickoffTime).getTime() - new Date(b.kickoffTime).getTime();
-      } else if (sortBy === 'trust') {
-        comparison = getBestTrust(a) - getBestTrust(b);
       } else {
         comparison = getBestOdds(a) - getBestOdds(b);
       }
@@ -449,6 +454,41 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     return sorted;
   }, [filteredMatches, sortBy, sortOrder]);
 
+  const actionableMatches = useMemo(() => {
+    return baseFilteredMatches
+      .filter(isActionableRecommendation)
+      .sort((a, b) => {
+        const trustDiff = getBestTrust(b) - getBestTrust(a);
+        if (Math.abs(trustDiff) > 0) return trustDiff;
+        return Date.parse(a.kickoffTime) - Date.parse(b.kickoffTime);
+      });
+  }, [baseFilteredMatches]);
+
+  const watchlistMatches = useMemo(() => {
+    return baseFilteredMatches
+      .filter((match) => !isActionableRecommendation(match) && match.status === 'SCHEDULED')
+      .sort((a, b) => {
+        const score = (match: Match) => {
+          const signal = getMatchSignal(match);
+          const categoryScore: Record<MatchSignalCategory, number> = {
+            steady: 90,
+            lean: 80,
+            value: 70,
+            watch: 50,
+            avoid: 20,
+            unavailable: 10,
+            finished: 0
+          };
+          const hasOdds = match.odds || match.handicapOdds ? 8 : 0;
+          return (categoryScore[signal.category] || 0) + getBestTrust(match) + hasOdds - signal.riskCount * 3;
+        };
+        const scoreDiff = score(b) - score(a);
+        if (Math.abs(scoreDiff) > 0) return scoreDiff;
+        return Date.parse(a.kickoffTime) - Date.parse(b.kickoffTime);
+      })
+      .slice(0, 3);
+  }, [baseFilteredMatches]);
+
   const groupedMatches = useMemo(() => {
     const groups: Record<string, { league: League; country: Country; matches: Match[] }> = {};
 
@@ -457,7 +497,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
 
       if (!groups[key]) {
         groups[key] = {
-          league: getLeagueById(match.leagueId),
+          league: getMatchDisplayLeague(match),
           country: getCountryById(match.countryId),
           matches: []
         };
@@ -467,36 +507,6 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     });
 
     return Object.values(groups);
-  }, [sortedMatches]);
-
-  const settledBestPredictions = useMemo(() => {
-    return matches
-      .flatMap((match) => getVisiblePredictions(match))
-      .filter((prediction) => prediction.marketType === 'BEST')
-      .filter(isScoredPrediction);
-  }, [matches]);
-
-  const settledBestStats = useMemo(() => {
-    if (settledBestPredictions.length === 0) {
-      return { total: 0, won: 0, lost: 0, hitRate: null as number | null };
-    }
-    const won = settledBestPredictions.filter((prediction) => prediction.resultStatus === 'WON').length;
-    const lost = settledBestPredictions.length - won;
-    return {
-      total: settledBestPredictions.length,
-      won,
-      lost,
-      hitRate: (won / settledBestPredictions.length) * 100
-    };
-  }, [settledBestPredictions]);
-  const settledBestLoading = dataSync.historyLoading && !dataSync.historyLoaded && settledBestPredictions.length === 0;
-  const bestHitCooling = settledBestStats.total >= 5 && settledBestStats.hitRate !== null && settledBestStats.hitRate < 45;
-
-  const avgTrust = useMemo(() => {
-    const trustScores = sortedMatches.map(getBestTrust).filter((score) => score > 0);
-    if (trustScores.length === 0) return null;
-    const total = trustScores.reduce((sum, score) => sum + score, 0);
-    return Math.round(total / trustScores.length);
   }, [sortedMatches]);
 
   const handleLeagueToggle = (leagueId: string) => {
@@ -520,12 +530,101 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     setSortOrder(nextSort === 'time' ? 'asc' : 'desc');
   };
 
+  const renderRecommendationCard = (match: Match, mode: 'pick' | 'watch') => {
+    const homeTeam = getMatchDisplayTeam(match, 'home');
+    const awayTeam = getMatchDisplayTeam(match, 'away');
+    const signal = getMatchSignal(match);
+    const best = getBestPrediction(match);
+    const leadingOutcome = getLeadingOutcome(match);
+    const poolRows = getSportteryPoolRows(match, language).filter((row) => row.odds);
+    const fallbackDirectionLabel = leadingOutcome ? outcomeLabels[leadingOutcome.code][language] : '';
+    const hasReferenceLean = Boolean((best && best.tipCode !== 'WATCH') || fallbackDirectionLabel);
+    const isPromotedPick = mode === 'pick' && hasReferenceLean && isActionableRecommendation(match);
+    const isReferenceOnly = isReferenceOnlyPrediction(best);
+    const directionLabel = best
+      ? stripDirectionPrefix(getRecommendationTipDisplay(best, language, true), language)
+      : fallbackDirectionLabel;
+    const referenceLeanText = hasReferenceLean && !isPromotedPick && best
+      ? language === 'zh'
+        ? `状态：${signal.category === 'avoid' ? '避开观察' : '不进精选池'}`
+        : `Status: ${signal.category === 'avoid' ? 'avoid watch' : 'not in top pool'}`
+      : '';
+    const cautionText = signal.category === 'avoid'
+      ? (language === 'zh' ? '风险偏高，降低优先级' : 'Higher risk; lower priority')
+      : (language === 'zh' ? '等待临场 SP/让球确认' : 'Await late SP/handicap check');
+    const pickText = hasReferenceLean && best
+      ? language === 'zh'
+        ? `${isPromotedPick ? '推荐方向' : '参考倾向'} ${directionLabel}`
+        : `${isPromotedPick ? 'Pick' : 'Reference lean'} ${directionLabel}`
+      : signal.category === 'avoid'
+        ? (language === 'zh' ? '参考倾向待确认' : 'Reference lean pending')
+        : (language === 'zh' ? '等待确认，暂不精选' : 'Await confirmation');
+    const statusBadge = isPromotedPick
+      ? (language === 'zh' ? '进精选池' : 'Top pool')
+      : signal.category === 'avoid'
+        ? (language === 'zh' ? '避开观察' : 'Avoid watch')
+        : (language === 'zh' ? '不进精选池' : 'Not in top pool');
+    const oddsText = poolRows.length > 0
+      ? poolRows.slice(0, 2).map((row) => {
+        const label = row.poolCode === 'HHAD'
+          ? (language === 'zh' ? '让球' : 'HHAD')
+          : (language === 'zh' ? '胜平负' : '1X2');
+        return row.odds
+          ? `${label} ${row.odds.odds1.toFixed(2)}/${row.odds.oddsX.toFixed(2)}/${row.odds.odds2.toFixed(2)}`
+          : '';
+      }).filter(Boolean).join(' · ')
+      : (language === 'zh' ? '未开售' : 'Closed');
+    const reason = isPromotedPick
+      ? signal.note[language]
+      : isReferenceOnly
+        ? (language === 'zh'
+          ? '主方向保留，但风控未通过精选门槛，仅作参考。'
+          : 'The main direction is kept, but the risk gate did not pass, so it remains reference only.')
+        : getDecisionReason(signal.category, language);
+
+    return (
+      <button
+        key={match.id}
+        type="button"
+        className={`recommendation-card is-${mode} is-${signal.category}`}
+        onClick={() => onSelectMatch(match.id)}
+      >
+        <span className="recommendation-time">
+          {formatKickoffTime(match.kickoffTime, language)}
+          {match.matchNo ? ` · ${match.matchNo}` : ''}
+        </span>
+        <span className="recommendation-teams">
+          <span className="recommendation-team">
+            <TeamBadge team={homeTeam} size="sm" />
+            <span className="recommendation-team-name">{homeTeam.name[language]}</span>
+          </span>
+          <strong>VS</strong>
+          <span className="recommendation-team">
+            <TeamBadge team={awayTeam} size="sm" />
+            <span className="recommendation-team-name">{awayTeam.name[language]}</span>
+          </span>
+        </span>
+        <span className="recommendation-pick-row">
+          <strong>{pickText}</strong>
+          <span className={`signal-badge is-${signal.category}`}>{statusBadge}</span>
+        </span>
+        {referenceLeanText && (
+          <span className="recommendation-reference-lean">{referenceLeanText}</span>
+        )}
+        {mode === 'watch' && (
+          <span className={`recommendation-caution is-${signal.category}`}>{cautionText}</span>
+        )}
+        <span className="recommendation-odds">{oddsText}</span>
+        <span className="recommendation-reason">{reason}</span>
+      </button>
+    );
+  };
+
   const renderDecisionCell = (match: Match) => {
     const isFinished = match.status === 'FINISHED';
     const signal = getMatchSignal(match);
     const best = getVisiblePrediction(match, 'BEST');
     const oneXTwo = getVisiblePrediction(match, '1X2');
-    const goals = getVisiblePrediction(match, 'GOALS');
     const pickedPrediction = [best, oneXTwo].find((prediction) => prediction && prediction.tipCode !== 'WATCH');
     const leadingOutcome = getLeadingOutcome(match);
     const leadProbability = pickedPrediction && isOutcomeCode(pickedPrediction.tipCode)
@@ -538,32 +637,48 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     const riskTags = getRiskTags(match);
     const showHit = isFinished && pickedPrediction?.resultStatus === 'WON';
     const showMiss = isFinished && pickedPrediction?.resultStatus === 'LOST';
-    const goalsText = goals && goals.tipCode !== 'WATCH'
-      ? getPredictionTipDisplay(goals, language, true)
-      : getGoalsLean(match, language);
-    const bttsText = getBttsLean(match, language);
+    const isReferencePick = isReferenceOnlyPrediction(pickedPrediction);
+    const isPromotedPick = !isFinished && isActionableRecommendation(match);
+    const poolStatus = isPromotedPick
+      ? (language === 'zh' ? '进精选池' : 'Top pool')
+      : signal.category === 'avoid'
+        ? (language === 'zh' ? '避开观察' : 'Avoid watch')
+        : (language === 'zh' ? '不进精选池' : 'Not in top pool');
+    const directionLabel = pickedPrediction
+      ? stripDirectionPrefix(getRecommendationTipDisplay(pickedPrediction, language, true), language)
+      : '';
     const primaryLabel = pickedPrediction
-      ? getPredictionTipDisplay(pickedPrediction, language, true)
+      ? language === 'zh'
+        ? `${isPromotedPick ? '推荐方向' : '参考倾向'} ${directionLabel}`
+        : `${isPromotedPick ? 'Pick' : 'Reference lean'} ${directionLabel}`
+      : leadingOutcome
+        ? language === 'zh'
+          ? `参考倾向 ${outcomeLabels[leadingOutcome.code][language]}`
+          : `Reference lean ${outcomeLabels[leadingOutcome.code][language]}`
       : signal.category === 'finished'
         ? (language === 'zh' ? '赛后复盘' : 'Review')
         : signal.category === 'avoid'
-          ? (language === 'zh' ? '避开，不硬上' : 'Avoid')
-          : (language === 'zh' ? '观察，不下手' : 'Watch, no bet');
+          ? (language === 'zh' ? '普通参考，暂不精选' : 'Reference only')
+          : (language === 'zh' ? '等待确认，暂不精选' : 'Await confirmation');
     const primaryMeta = pickedPrediction && pickedPrediction.odds > 0
       ? `${getPredictionValueLabel(pickedPrediction, language)} ${pickedPrediction.odds.toFixed(2)}`
       : leadCode && leadProbability !== null
         ? `${outcomeLabels[leadCode][language]} ${Math.round(leadProbability)}%`
         : '--';
     const shortReason = pickedPrediction
-      ? signal.category === 'steady'
-        ? (language === 'zh' ? '主线、概率和风险基本同向' : 'Main line, probability, and risk are aligned')
-        : signal.category === 'value'
-          ? (language === 'zh' ? '价值方向，不当稳胆；看临场SP/让球' : 'Value direction, not a banker; track late SP/handicap')
-          : (language === 'zh' ? '有主方向，但不当稳胆；看临场SP/让球' : 'Main lean, not a banker; track late SP/handicap')
+      ? isReferencePick
+        ? signal.category === 'avoid'
+          ? (language === 'zh' ? '不进精选池：风险项偏多，但保留模型参考方向' : 'Not in top pool: risk is high, but keep the model direction')
+          : (language === 'zh' ? '不进精选池：普通推荐，等临场SP/让球确认' : 'Not in top pool: reference pick, await late SP/handicap')
+        : signal.category === 'steady'
+          ? (language === 'zh' ? '主线、概率和风险基本同向' : 'Main line, probability, and risk are aligned')
+          : signal.category === 'value'
+            ? (language === 'zh' ? '价值方向，不当稳胆；看临场SP/让球' : 'Value direction, not a banker; track late SP/handicap')
+            : (language === 'zh' ? '有主方向，但不当稳胆；看临场SP/让球' : 'Main lean, not a banker; track late SP/handicap')
       : getDecisionReason(signal.category, language);
 
     return (
-      <div className={`decision-card is-${signal.category} ${pickedPrediction ? 'has-pick' : 'is-watch-only'} ${showHit ? 'is-hit' : ''} ${showMiss ? 'is-miss' : ''}`}>
+      <div className={`decision-card is-${signal.category} ${pickedPrediction ? 'has-pick' : 'is-watch-only'} ${isReferencePick ? 'is-reference' : ''} ${showHit ? 'is-hit' : ''} ${showMiss ? 'is-miss' : ''}`}>
         <div className="decision-main">
           <span className="decision-label">{primaryLabel}</span>
           <span className="decision-meta">{primaryMeta}</span>
@@ -573,19 +688,17 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
 
         <div className="decision-facts">
           <span>
+            {language === 'zh' ? '模型' : 'Model'}
+            <strong>{leadProbability === null ? '--' : `${Math.round(leadProbability)}%`}</strong>
+          </span>
+          <span>
             {language === 'zh' ? '让球' : 'HHAD'}
             <strong>{handicapSupport === null ? '--' : `${handicapSupport}%`}</strong>
           </span>
           <span>
-            {language === 'zh' ? '进球' : 'Goals'}
-            <strong>{goalsText}</strong>
+            {language === 'zh' ? '状态' : 'Status'}
+            <strong>{poolStatus}</strong>
           </span>
-          {bttsText && (
-            <span>
-              {language === 'zh' ? '双方' : 'BTTS'}
-              <strong>{bttsText.replace(/^双方进球/, '').replace(/^BTTS\s/, '')}</strong>
-            </span>
-          )}
         </div>
 
         <div className="decision-reason">
@@ -614,7 +727,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
   const historyDateOptions = (() => {
     const quickDates = new Set(quickDateOptions.map((option) => option.date));
     const matchDates = matches
-      .flatMap((match) => [getMatchDay(match), isActiveResultStatus(match) ? getKickoffDay(match) : ''])
+      .flatMap(getMatchDateCandidates)
       .filter(Boolean);
     const historyDates = Array.from(new Set(matchDates))
       .filter((date) => !quickDates.has(date))
@@ -630,54 +743,23 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
 
   const selectedHistoryDate = historyDateOptions.some((option) => option.date === effectiveSelectedDate) ? effectiveSelectedDate : '';
 
-  const metrics = [
-    {
-      label: t('hitRate'),
-      value: settledBestLoading
-        ? '...'
-        : settledBestStats.hitRate !== null ? `${settledBestStats.hitRate.toFixed(1)}%` : '--',
-      note: settledBestLoading
-        ? (language === 'zh' ? '历史复盘加载中' : 'Loading review history')
-        : settledBestStats.total > 0
-          ? `${settledBestStats.won}/${settledBestStats.total} ${language === 'zh' ? '命中' : 'won'} · ${settledBestStats.total} ${t('settledPicks')}`
-          : `0 ${t('settledPicks')}`,
-      icon: BarChart3,
-      tone: bestHitCooling ? 'danger' : 'success'
-    },
-    {
-      label: t('selectedMatches'),
-      value: String(sortedMatches.length),
-      note: formatShortDate(effectiveSelectedDate, language),
-      icon: CalendarDays,
-      tone: 'accent'
-    },
-    {
-      label: t('signalSummary'),
-      value: `${recommendationCounts.pick}/${recommendationCounts.watch}/${recommendationCounts.avoid}`,
-      note: recommendationCounts.finished > 0
-        ? (language === 'zh' ? `方向 / 观察 / 避坑 · 完 ${recommendationCounts.finished}` : `Pick / Watch / Avoid · F ${recommendationCounts.finished}`)
-        : (language === 'zh' ? '方向 / 观察 / 避坑' : 'Pick / Watch / Avoid'),
-      icon: ShieldCheck,
-      tone: 'premium'
-    },
-    {
-      label: t('avgTrust'),
-      value: bestHitCooling
-        ? t('hitCooling')
-        : recommendationCounts.pick === 0
-        ? t('riskPaused')
-        : avgTrust === null ? '--' : `${avgTrust}%`,
-      note: bestHitCooling
-        ? t('hitCoolingNote')
-        : recommendationCounts.pick === 0
-        ? t('riskPausedNote')
-        : language === 'zh' ? `按${t(sortBy)}排序` : `Sorted by ${t(sortBy)}`,
-      icon: Activity,
-      tone: bestHitCooling ? 'danger' : ''
-    }
-  ];
+  const sourceFallback = dataSync.sourceFallback;
+  const hasSourceFallback = Boolean(
+    sourceFallback?.keptExisting ||
+    ((sourceFallback?.sportteryPublishableMatches ?? null) === 0 && (sourceFallback?.fiveHundredFallbackMatches ?? 0) > 0)
+  );
+  const sourceFallbackLabel = language === 'zh'
+    ? `官方源本轮不可用，当前为锁定快照 + 500 校验；不展示 mock 样例。`
+    : `Official source is unavailable this run; showing a locked snapshot plus 500.com checks, with no mock samples.`;
 
-  const dataSyncSummary = dataSync.error && !dataSync.currentLoaded
+  const isCurrentDataLoading = Boolean(
+    dataSync.currentLoading ||
+    (!dataSync.currentLoaded && !dataSync.error && !dataSync.lastCheckedAt)
+  );
+
+  const dataSyncSummary = isCurrentDataLoading
+    ? t('dataCurrentLoading')
+    : dataSync.error && !dataSync.currentLoaded
     ? t('dataFallbackNote')
     : (() => {
       const sourceAgeMinutes = typeof dataSync.sourceAgeSeconds === 'number'
@@ -691,6 +773,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
           ? `数据源已 ${formatAgeMinutes(sourceAgeMinutes, language)} 未发布新快照；后台最近检查 ${lastAttemptLabel}。`
           : `Source data is ${formatAgeMinutes(sourceAgeMinutes, language)} old; last background check ${lastAttemptLabel}.`;
       }
+      if (hasSourceFallback) return sourceFallbackLabel;
       if (dataSync.dataChannel === 'static') {
         return language === 'zh'
           ? '当前使用静态快照展示；实时接口恢复后会自动切回。'
@@ -708,7 +791,9 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
   const staleThresholdMinutes = Math.max((dataSync.backendRefreshMinutes || 5) * 3, 10);
   const isDataStale = dataSync.currentLoaded && sourceAgeMinutes !== null && sourceAgeMinutes > staleThresholdMinutes;
 
-  const dataSyncTone = dataSync.error || isDataStale
+  const dataSyncTone = isCurrentDataLoading
+    ? 'is-loading'
+    : dataSync.error || isDataStale || hasSourceFallback
     ? 'is-warning'
     : dataSync.historyLoading
       ? 'is-loading'
@@ -729,7 +814,9 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     },
     {
       label: t('dataCurrent'),
-      value: dataSync.currentLoaded
+      value: isCurrentDataLoading
+        ? t('dataLoading')
+        : dataSync.currentLoaded
         ? `${dataSync.currentCount} ${t('matchUnit')}`
         : dataSync.error
           ? t('dataFallback')
@@ -776,8 +863,167 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     }
   ];
 
+  const activeSourceMatches = matches.filter((match) => match.status !== 'FINISHED');
+  const sourceHealth = dataSync.sourceHealth;
+  const sourceCurrentCount = sourceHealth?.currentMatches?.count || activeSourceMatches.length || dataSync.currentCount || 0;
+  const sourceExternalCount = sourceHealth?.currentMatches?.withExternalSignals
+    ?? activeSourceMatches.filter((match) => match.externalSignals && Object.keys(match.externalSignals).length > 0).length;
+  const sourceCoverage = typeof sourceHealth?.currentMatches?.externalCoverage === 'number'
+    ? Math.round(sourceHealth.currentMatches.externalCoverage * 100)
+    : sourceCurrentCount > 0
+      ? Math.round((sourceExternalCount / sourceCurrentCount) * 100)
+      : 0;
+  const officialOddsCount = activeSourceMatches.filter((match) => match.odds || match.handicapOdds).length;
+  const fiveHundredDetailsCount = Math.max(
+    sourceHealth?.externalSignals?.fiveHundredDetailsCachedMerged ?? 0,
+    activeSourceMatches.filter((match) => match.externalSignals?.fiveHundred).length
+  );
+  const fiveHundredErrors = sourceHealth?.externalSignals?.fiveHundredDetailsErrors || 0;
+  const apiFootballMapped = Math.max(
+    sourceHealth?.externalSignals?.apiFootballMappedSignals ?? 0,
+    activeSourceMatches.filter((match) => match.externalSignals?.apiFootball).length
+  );
+  const apiFootballCallsThisSync = sourceHealth?.externalSignals?.apiFootballCallsThisSync ?? 0;
+  const apiFootballCallsToday = sourceHealth?.externalSignals?.apiFootballCallsTodayEstimate ?? 0;
+  const sourceHealthItems = [
+    ...(hasSourceFallback ? [{
+      label: language === 'zh' ? '官方源状态' : 'Official source',
+      value: language === 'zh' ? '锁定快照' : 'Locked',
+      note: language === 'zh'
+        ? `本轮官方 ${sourceFallback?.sportteryPublishableMatches ?? 0} 场，500补充 ${sourceFallback?.fiveHundredFallbackMatches ?? 0} 场`
+        : `${sourceFallback?.sportteryPublishableMatches ?? 0} official this run, ${sourceFallback?.fiveHundredFallbackMatches ?? 0} from 500.com`
+    }] : []),
+    {
+      label: language === 'zh' ? '官方竞彩' : 'Sporttery',
+      value: `${officialOddsCount}/${sourceCurrentCount}`,
+      note: language === 'zh' ? 'HAD / HHAD 官方SP' : 'HAD / HHAD official SP'
+    },
+    {
+      label: language === 'zh' ? '500详情' : '500 detail',
+      value: `${fiveHundredDetailsCount}/${sourceCurrentCount}`,
+      note: fiveHundredErrors > 0
+        ? (language === 'zh' ? `限频保护 ${fiveHundredErrors} 条` : `${fiveHundredErrors} throttled`)
+        : (language === 'zh' ? '缓存合并可用' : 'cache merged')
+    },
+    {
+      label: 'API-Football',
+      value: `${apiFootballMapped}`,
+      note: language === 'zh'
+        ? `本轮 ${apiFootballCallsThisSync} 次 / 今日约 ${apiFootballCallsToday} 次`
+        : `${apiFootballCallsThisSync} this sync / ${apiFootballCallsToday} today`
+    },
+    {
+      label: language === 'zh' ? '外部覆盖' : 'Coverage',
+      value: `${sourceCoverage}%`,
+      note: `${sourceExternalCount}/${sourceCurrentCount}`
+    }
+  ];
+
+  const dashboardUpdatedAt = formatSyncTime(
+    dataSync.sourceUpdatedAt || dataSync.updatedAt || dataSync.lastCheckedAt,
+    language
+  );
+  const dashboardSourceStatus = isCurrentDataLoading
+    ? (language === 'zh' ? '数据同步中' : 'Syncing')
+    : dataSync.error && !dataSync.currentLoaded
+      ? (language === 'zh' ? '校验状态异常' : 'Validation issue')
+      : sourceHealth?.ok === false || hasSourceFallback
+        ? (language === 'zh' ? '快照保护' : 'Snapshot guard')
+        : dataSync.currentLoaded
+          ? (language === 'zh' ? '竞彩源正常' : 'Source ready')
+          : (language === 'zh' ? '等待同步' : 'Waiting');
+  const dashboardStatusItems = [
+    {
+      label: language === 'zh' ? '数据更新' : 'Updated',
+      value: dashboardUpdatedAt
+    },
+    {
+      label: language === 'zh' ? '数据源状态' : 'Source',
+      value: dashboardSourceStatus
+    },
+    {
+      label: language === 'zh' ? '今日比赛' : 'Today',
+      value: `${baseFilteredMatches.length} ${t('matchUnit')}`
+    },
+    {
+      label: language === 'zh' ? '预测锁定' : 'Lock',
+      value: language === 'zh' ? '按竞彩截止' : 'By cutoff'
+    }
+  ];
+
+  const metrics = [
+    {
+      label: language === 'zh' ? '今日比赛' : 'Today Matches',
+      value: String(baseFilteredMatches.length),
+      note: language === 'zh'
+        ? `${formatShortDate(effectiveSelectedDate, language)} · 按开赛时间排序`
+        : `${formatShortDate(effectiveSelectedDate, language)} · sorted by kickoff`,
+      icon: CalendarDays,
+      tone: 'accent'
+    },
+    {
+      label: language === 'zh' ? '精选推荐' : 'Qualified Picks',
+      value: String(recommendationCounts.pick),
+      note: language === 'zh' ? '模型、SP、让球与风险同时通过' : 'Model, SP, handicap, and risk all pass',
+      icon: ShieldCheck,
+      tone: 'success'
+    },
+    {
+      label: language === 'zh' ? '参考推荐' : 'Reference Picks',
+      value: String(recommendationCounts.reference),
+      note: language === 'zh' ? '有方向，但不进精选池' : 'Has a lean, outside top pool',
+      icon: Sparkles,
+      tone: 'premium'
+    },
+    {
+      label: language === 'zh' ? '避开观察' : 'Avoid Watch',
+      value: String(recommendationCounts.avoid),
+      note: recommendationCounts.unavailable > 0
+        ? (language === 'zh' ? `另有 ${recommendationCounts.unavailable} 场待开售/待确认` : `${recommendationCounts.unavailable} pending sale/confirmation`)
+        : (language === 'zh' ? '风险标签触发，降低优先级' : 'Risk tags triggered, lower priority'),
+      icon: Activity,
+      tone: recommendationCounts.avoid > 0 ? 'danger' : ''
+    }
+  ];
+
+  const emptyStateText = isCurrentDataLoading
+    ? (language === 'zh'
+      ? '数据同步中，正在读取今日赛程、官方 SP 与盘口快照。'
+      : 'Data is syncing: loading today schedule, official SP, and market snapshots.')
+    : (!dataSync.currentLoaded && dataSync.error) || sourceHealth?.ok === false
+      ? (language === 'zh'
+        ? '校验状态异常：当前数据源未通过完整性检查，请稍后刷新。'
+        : 'Validation issue: the current source did not pass completeness checks. Try again shortly.')
+      : baseFilteredMatches.length === 0
+        ? (effectiveSelectedDate === todayStr
+          ? (language === 'zh' ? '今日暂无开售赛事，数据会继续自动同步。' : 'No on-sale fixtures today. Sync will keep checking.')
+          : (language === 'zh' ? '当前日期暂无开售赛事。' : 'No on-sale fixtures for this date.'))
+        : signalFilter === 'recommended'
+          ? t('noQualifiedPicks')
+          : t('noMatches');
+
   return (
     <div className="dashboard-stack">
+      <section className="dashboard-hero" aria-label={language === 'zh' ? '足球数据看板' : 'Football data dashboard'}>
+        <div className="dashboard-hero-copy">
+          <span>{language === 'zh' ? '竞彩赛程 / SP / 盘口 / AI 决策' : 'Schedule / SP / Handicap / AI Decision'}</span>
+          <h1>{language === 'zh' ? '足球数据看板' : 'Football Data Board'}</h1>
+          <p>
+            {language === 'zh'
+              ? '核心是赛前决策校验：展示今日比赛、模型方向、官方 SP 与让球验证；截止后预测不回改，只做赛果复盘。'
+              : 'A pre-match decision board: today fixtures, model lean, official SP, and handicap validation. After cutoff, predictions are locked for review only.'}
+          </p>
+        </div>
+        <div className="dashboard-hero-status">
+          {dashboardStatusItems.map((item) => (
+            <span key={item.label}>
+              {item.label}
+              <strong>{item.value}</strong>
+            </span>
+          ))}
+        </div>
+      </section>
+
       <section className="notice-banner" aria-label="reference notice">
           <div className="notice-copy">
             <span className="notice-icon">
@@ -822,7 +1068,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
           <span>{dataSyncSummary}</span>
         </div>
         <div className="data-sync-items">
-          {dataSyncItems.map((item) => (
+          {dataSyncItems.slice(0, 3).map((item) => (
             <span key={item.label}>
               {item.label}
               <strong>{item.value}</strong>
@@ -831,16 +1077,51 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         </div>
       </section>
 
+      <details className={`source-health-panel source-health-details ${sourceHealth?.ok === false || hasSourceFallback ? 'is-warning' : 'is-ready'}`} aria-label={language === 'zh' ? '数据源状态' : 'Data source status'}>
+        <summary className="source-health-head">
+          <div>
+            <strong>{language === 'zh' ? '数据源状态' : 'Data source status'}</strong>
+            <span>
+              {hasSourceFallback
+                ? (language === 'zh'
+                  ? `官方源保留快照 · 500补充 ${sourceFallback?.fiveHundredFallbackMatches ?? 0} 场`
+                  : `Official source locked · ${sourceFallback?.fiveHundredFallbackMatches ?? 0} from 500.com`)
+                : language === 'zh'
+                ? `官方 SP ${officialOddsCount}/${sourceCurrentCount} · 外部覆盖 ${sourceCoverage}%`
+                : `Official SP ${officialOddsCount}/${sourceCurrentCount} · Coverage ${sourceCoverage}%`}
+            </span>
+          </div>
+          <span className="source-health-time">
+            {sourceHealth?.checkedAt
+              ? `${language === 'zh' ? '检查' : 'Checked'} ${formatSyncTime(sourceHealth.checkedAt, language)}`
+              : '--'}
+          </span>
+        </summary>
+        <div className="source-health-grid">
+          {sourceHealthItems.map((item) => (
+            <article key={item.label} className="source-health-item">
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+              <small>{item.note}</small>
+            </article>
+          ))}
+        </div>
+        {sourceHealth?.errors && sourceHealth.errors.length > 0 && (
+          <div className="source-health-errors">
+            {sourceHealth.errors.slice(0, 3).map((error) => (
+              <span key={error}>{error}</span>
+            ))}
+          </div>
+        )}
+      </details>
+
       <section className="date-toolbar" aria-label="Date filters">
         <div className="date-quick-row">
           {quickDateOptions.map((option) => (
             <button
               key={option.date}
               type="button"
-              onClick={() => {
-                setHasManualDateSelection(true);
-                setSelectedDate(option.date);
-              }}
+              onClick={() => setSelectedDate(option.date)}
               className={`date-chip ${effectiveSelectedDate === option.date ? 'active' : ''}`}
             >
               <span className="date-label">{option.label}</span>
@@ -856,7 +1137,6 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
               value={selectedHistoryDate}
               onChange={(event) => {
                 if (event.target.value) {
-                  setHasManualDateSelection(true);
                   setSelectedDate(event.target.value);
                 }
               }}
@@ -869,6 +1149,42 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
               ))}
             </select>
           </label>
+        )}
+      </section>
+
+      <section className={`recommendation-panel ${actionableMatches.length === 0 ? 'is-empty' : ''}`} aria-label={t('recommended')}>
+        <div className="recommendation-panel-head">
+          <div>
+            <span className="panel-kicker">{formatShortDate(effectiveSelectedDate, language)}</span>
+            <strong>{language === 'zh' ? '精选推荐池' : 'Qualified Pick Pool'}</strong>
+          </div>
+          <span className="recommendation-count">
+            {actionableMatches.length} {language === 'zh' ? '场达标' : 'qualified'}
+          </span>
+        </div>
+
+        {actionableMatches.length > 0 ? (
+          <div className="recommendation-grid">
+            {actionableMatches.slice(0, 3).map((match) => renderRecommendationCard(match, 'pick'))}
+          </div>
+        ) : (
+          <div className="recommendation-empty-copy">
+            <strong>{language === 'zh' ? '本期不硬推' : 'No forced pick'}</strong>
+            <span>
+              {language === 'zh'
+                ? '官方 SP、概率优势、让球验证或近期命中冷却未同时过线，先保留观察。'
+                : 'Official SP, probability edge, handicap check, or hit-rate cooling did not pass together.'}
+            </span>
+          </div>
+        )}
+
+        {watchlistMatches.length > 0 && (
+          <div className="watchlist-strip">
+            <span>{language === 'zh' ? '普通参考（不进精选池）' : 'Reference picks outside top pool'}</span>
+            <div className="watchlist-row">
+              {watchlistMatches.map((match) => renderRecommendationCard(match, 'watch'))}
+            </div>
+          </div>
         )}
       </section>
 
@@ -966,7 +1282,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         <section className="empty-state">
           <div>
             <CalendarDays size={40} />
-            <p>{!dataSync.currentLoaded && !dataSync.error ? t('dataCurrentLoading') : t('noMatches')}</p>
+            <p>{emptyStateText}</p>
           </div>
         </section>
       ) : (
@@ -991,15 +1307,14 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
                       <th style={{ width: '132px' }}>{t('statusTime')}</th>
                       <th>{t('teams')}</th>
                       <th style={{ width: '260px', textAlign: 'center' }}>{t('oddsHeader')}</th>
-                      <th style={{ width: '330px', textAlign: 'left' }}>{language === 'zh' ? 'AI决策' : 'AI Decision'}</th>
-                      <th style={{ width: '92px', textAlign: 'center' }}>{t('trustHeader')}</th>
+                      <th style={{ width: '380px', textAlign: 'left' }}>{language === 'zh' ? 'AI决策' : 'AI Decision'}</th>
                       <th style={{ width: '84px' }} />
                     </tr>
                   </thead>
                   <tbody>
                     {group.matches.map((match) => {
-                      const homeTeam = getTeamById(match.homeTeamId);
-                      const awayTeam = getTeamById(match.awayTeamId);
+                      const homeTeam = getMatchDisplayTeam(match, 'home');
+                      const awayTeam = getMatchDisplayTeam(match, 'away');
                       const isLive = match.status === 'LIVE';
                       const isFinished = match.status === 'FINISHED';
                       const isPendingResult = match.status === 'PENDING_RESULT';
@@ -1010,7 +1325,6 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
                         : minutesSinceKickoff(match) >= 130
                           ? t('awaitingResult')
                           : t('liveScorePending');
-                      const bestTrust = getBestTrust(match);
                       const formattedTime = formatKickoffTime(match.kickoffTime, language);
                       const poolRows = getSportteryPoolRows(match, language);
                       const signal = getMatchSignal(match);
@@ -1107,25 +1421,6 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
 
                           <td className="match-decision-cell" data-label={language === 'zh' ? 'AI决策' : 'AI Decision'}>
                             {renderDecisionCell(match)}
-                          </td>
-
-                          <td className="match-trust-cell" data-label={t('trustHeader')} style={{ textAlign: 'center' }}>
-                            {bestTrust > 0 ? (
-                              <div
-                                className="trust-meter"
-                                style={{
-                                  '--trust': `${bestTrust}%`,
-                                  '--trust-color': getTrustColor(bestTrust)
-                                } as React.CSSProperties}
-                              >
-                                <span className="trust-value">{bestTrust}%</span>
-                                <span className="trust-bar">
-                                  <span />
-                                </span>
-                              </div>
-                            ) : (
-                              <span className="status-note">--</span>
-                            )}
                           </td>
 
                           <td className="match-action-cell" style={{ textAlign: 'right' }}>

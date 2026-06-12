@@ -65,7 +65,7 @@ export const BetSlipGenerator: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const translations = {
-    title: { zh: 'AI 串关参考生成器', en: 'AI Accumulator Reference' },
+    title: { zh: '串关参考生成器', en: 'Accumulator Reference' },
     subtitle: {
       zh: '只按官方胜平负、让球胜平负 SP、可信度和时间窗口筛选候选方向；结果仅供赛前参考。',
       en: 'Open accumulator builder using SP, confidence, and time-window filters. Results are for pre-match reference only.' 
@@ -81,11 +81,11 @@ export const BetSlipGenerator: React.FC = () => {
     timeWindowLabel: { zh: '比赛时间窗口', en: 'Time Window' },
     minTrustLabel: { zh: '最低可信度要求', en: 'Min Confidence Threshold' },
     onlyImportantLabel: { zh: '仅限顶级联赛', en: 'Only Elite Leagues' },
-    generateBtn: { zh: 'AI 一键生成参考组合', en: 'Generate Reference Combo' },
+    generateBtn: { zh: '生成参考组合', en: 'Generate Reference Combo' },
     resetBtn: { zh: '重置配置', en: 'Reset Filters' },
     copyBtn: { zh: '复制参考组合', en: 'Copy Combo' },
     copiedText: { zh: '已复制！', en: 'Copied!' },
-    slipTitle: { zh: 'AI 参考组合票据', en: 'AI Reference Ticket' },
+    slipTitle: { zh: '参考组合票据', en: 'Reference Ticket' },
     slipSummary: { zh: '参考汇总', en: 'Summary' },
     totalOdds: { zh: '组合总值', en: 'Total Value' },
     avgTrust: { zh: '平均可信度', en: 'Avg Confidence' },
@@ -518,7 +518,7 @@ export const BetSlipGenerator: React.FC = () => {
                 {language === 'zh' ? '等待生成参考组合' : 'Awaiting Accumulator Generation'}
               </h4>
               <p style={{ fontSize: '0.8rem' }}>
-                {language === 'zh' ? '在左侧配置风险偏好、目标组合值以及可筛选市场，AI 算法将在几毫秒内输出参考组合。' : 'Configure filters on the left. AI algorithms will compile the optimal ticket in milliseconds.'}
+                {language === 'zh' ? '在左侧配置风险偏好、目标组合值以及可筛选市场，模型会筛出更匹配的参考组合。' : 'Configure filters on the left. The model will compile a better matched reference ticket.'}
               </p>
             </div>
           )}

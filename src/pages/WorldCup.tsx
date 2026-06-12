@@ -17,6 +17,7 @@ import {
   Zap
 } from 'lucide-react';
 import { TeamBadge } from '../components/TeamBadge';
+import { WorldCupLastDance } from '../components/WorldCupLastDance';
 import { useApp } from '../context/AppContextCore';
 import { getPredictionTipDisplay, getSportteryPoolRows, type SportteryOddsPoolDisplay } from '../services/bettingDisplay';
 import { getLeagueById, getTeamById } from '../services/entities';
@@ -52,11 +53,11 @@ interface WorldCupProps {
 type Locale = 'zh' | 'en';
 
 const copy = {
-  kicker: { zh: '2026 世界杯专题', en: 'World Cup 2026' },
-  heroTitle: { zh: '世界杯预测中台', en: 'World Cup Forecast Desk' },
+  kicker: { zh: '2026 诸神黄昏', en: 'World Cup 2026' },
+  heroTitle: { zh: '世界因足球而沸腾', en: 'Football Unites The World' },
   heroSubtitle: {
-    zh: '小组赛路径、最佳第三名、32 强路线、竞彩开售场次和赛后复盘集中展示。世界杯只展示世界杯内容，开售后自动并入官方 SP 与临场信号。',
-    en: 'Groups, best third-place routes, Round of 32 pathing, released Sporttery fixtures and post-match review in one desk.'
+    zh: '热爱不分国界，荣耀即将开战。诸神黄昏的最后一舞，新王加冕的第一步，都在这张赛前看板里。',
+    en: 'Passion has no borders. Glory is about to begin, with one last dance for legends and a first step for the next era.'
   },
   countdown: { zh: '距开赛', en: 'Kickoff in' },
   days: { zh: '天', en: 'days' },
@@ -398,10 +399,9 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
   const pageCheckedAt = dataSync.lastCheckedAt;
 
   const reveal = (delay = 0) => shouldReduceMotion ? {} : {
-    initial: { opacity: 0, y: 22 },
-    whileInView: { opacity: 1, y: 0 },
-    viewport: { once: true, amount: 0.16 },
-    transition: { duration: 0.46, delay }
+    initial: false,
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.32, delay: Math.min(delay, 0.08) }
   };
 
   const kpis = [
@@ -492,13 +492,17 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
         </div>
       </motion.section>
 
+      <motion.div {...reveal(0.015)}>
+        <WorldCupLastDance language={language} />
+      </motion.div>
+
       <motion.section className="worldcup-hero-panel" {...reveal(0.03)}>
         <div className="worldcup-hero-copy">
           <span className="worldcup-kicker">
             <Sparkles size={16} />
             {pickText(WORLD_CUP_OFFICIAL.name, language)}
           </span>
-          <h1>OWN THE WORLD</h1>
+          <h1>THE LAST DANCE</h1>
           <p>{copy.groupsDesc[language]}</p>
           <div className="worldcup-hero-meta">
             <span>48 队</span>
@@ -522,7 +526,7 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
           <div className="worldcup-cup-emblem" aria-hidden="true">
             <span>2026</span>
             <strong>WC</strong>
-            <small>AI FORECAST</small>
+            <small>MATCH DESK</small>
           </div>
           <div className="worldcup-route-rail">
             <span>小组赛</span>

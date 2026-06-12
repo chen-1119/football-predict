@@ -43,6 +43,8 @@ export interface PredictionDetail {
   tipLabel: MultiLangString;
   odds: number;
   trustScore: number; // 0-100
+  recommendationAction?: 'recommend' | 'reference';
+  recommendationTier?: string;
   explanation: MultiLangString;
   analysisItems?: MultiLangString[];
   riskTags?: MultiLangString[];
@@ -78,10 +80,18 @@ export interface ExternalMatchSignals {
     summary?: MultiLangString;
   };
   weather?: {
+    source?: string;
+    updatedAt?: string;
+    verified?: boolean;
+    confidence?: string;
     temperatureC?: number;
     condition?: MultiLangString;
     windKph?: number;
+    windGustKph?: number;
+    precipitationMm?: number;
+    riskLevel?: 'low' | 'medium' | 'high' | string;
     summary?: MultiLangString;
+    impact?: MultiLangString;
   };
   referee?: {
     name?: string;
@@ -128,6 +138,17 @@ export interface ExternalMatchSignals {
     confidence?: number;
     matchedAt?: string | null;
     lastCheckedAt?: string;
+  };
+  worldCupPrior?: {
+    source?: string;
+    version?: string;
+    signature?: string;
+    policy?: string;
+    rawPolicy?: string;
+    strengthDiff?: number | null;
+    fixture?: WorldCupPriorSummary['fixture'];
+    home?: WorldCupPriorTeamSummary | null;
+    away?: WorldCupPriorTeamSummary | null;
   };
   fiveHundred?: {
     source?: string;
@@ -204,9 +225,15 @@ export interface ExternalMatchSignals {
 export interface PredictionMeta {
   policyVersion?: string;
   promptVersion?: string;
+  strategyVersion?: string;
+  trainingVersion?: string;
+  trainingSource?: string;
+  trainingSignature?: string;
   generatedAt?: string;
   updatedAt?: string;
   lockedAt?: string;
+  lockedReason?: 'cutoff' | 'kickoff' | 'started' | string;
+  cutoffTime?: string;
   snapshot?: {
     phase: 'baseline' | 'mid' | 'late' | 'final' | 'locked' | 'review';
     total: number;
@@ -268,15 +295,145 @@ export interface ScoreProbability {
   probability: number;
 }
 
+export interface WorldCupPriorTeamSummary {
+  key?: string;
+  nameZh?: string;
+  nameEn?: string;
+  group?: string;
+  fifaRank?: number | null;
+  elo?: number | null;
+  squadValueM?: number | null;
+  avgAge?: number | null;
+  corePlayer?: string | null;
+  qualityTier?: string;
+  modelStrengthNormalized?: number | null;
+  recent10?: {
+    raw?: string;
+    wins?: number;
+    draws?: number;
+    losses?: number;
+    points?: number;
+  } | null;
+  groupOutlook?: {
+    group?: string;
+    projectedRank?: number;
+    projectedPoints?: number;
+    advanceProbability?: number;
+    groupWinProbability?: number;
+  } | null;
+}
+
+export interface WorldCupPriorSummary {
+  source?: string;
+  version?: string;
+  signature?: string;
+  policy?: string;
+  rawPolicy?: string;
+  strengthDiff?: number | null;
+  fixture?: {
+    matchNo?: number;
+    kickoffLabel?: string;
+    kickoffTime?: string;
+    venue?: string;
+    city?: string;
+    sourceQuality?: string;
+    note?: string;
+  } | null;
+  home?: WorldCupPriorTeamSummary | null;
+  away?: WorldCupPriorTeamSummary | null;
+}
+
+export interface ProbabilityFormulaComponent {
+  key: string;
+  label: MultiLangString;
+  weight: number | null;
+  probabilities: OutcomeProbability | null;
+  role: 'model' | 'validation-only' | 'unavailable' | string;
+}
+
+export interface ProbabilityCalculationTrace {
+  version: string;
+  policy?: MultiLangString;
+  outcome?: {
+    formula?: MultiLangString;
+    weights?: {
+      market?: number | null;
+      teamStrength?: number | null;
+      elo?: number | null;
+      poisson?: number | null;
+      worldCupPrior?: number | null;
+    };
+    components?: ProbabilityFormulaComponent[];
+    raw?: OutcomeProbability | null;
+    final?: OutcomeProbability | null;
+    expressions?: {
+      home?: string;
+      draw?: string;
+      away?: string;
+    } | null;
+    calibration?: {
+      applied?: boolean;
+      reasons?: string[];
+      adjustments?: Array<{
+        code?: string;
+        reason?: string;
+        penalty?: number | null;
+      }>;
+      before?: OutcomeProbability | null;
+      after?: OutcomeProbability | null;
+    };
+  };
+  expectedGoals?: {
+    formula?: MultiLangString;
+    values?: {
+      independentHome?: number | null;
+      independentAway?: number | null;
+      independentTotal?: number | null;
+      independentHomeShare?: number | null;
+      leagueHome?: number | null;
+      leagueAway?: number | null;
+      leagueWeight?: number | null;
+      formHome?: number | null;
+      formAway?: number | null;
+      formWeight?: number | null;
+      finalHome?: number | null;
+      finalAway?: number | null;
+    };
+  };
+  poisson?: {
+    formula?: MultiLangString;
+    lambdas?: {
+      home?: number | null;
+      away?: number | null;
+    };
+    topScores?: ScoreProbability[];
+  };
+  goals?: {
+    formula?: MultiLangString;
+    values?: {
+      over25?: number | null;
+      under25?: number | null;
+      bttsYes?: number | null;
+      bttsNo?: number | null;
+    };
+  };
+  marketUse?: MultiLangString & {
+    formula?: string;
+  };
+}
+
 export interface MatchProbabilityModel {
   version: string;
   generatedAt?: string;
   basis: MultiLangString;
   ensembleWeights?: {
     market: number;
+    teamStrength?: number;
     elo: number;
     poisson: number;
+    worldCupPrior?: number;
   };
+  calculationTrace?: ProbabilityCalculationTrace;
   dynamicCalibration?: {
     version: string;
     profileKey: string;
@@ -295,6 +452,18 @@ export interface MatchProbabilityModel {
       oneXTwoHitRate?: number | null;
       goalsHitRate?: number | null;
       bestHitRate?: number | null;
+    } | null;
+    strategy?: {
+      version?: string;
+      generatedAt?: string;
+      onlineEffect?: string;
+      activeGates?: {
+        profile?: number;
+        market?: number;
+        marketProfile?: number;
+        oddsBucket?: number;
+        tip?: number;
+      } | null;
     } | null;
   };
   calibrationAdjustment?: {
@@ -326,28 +495,55 @@ export interface MatchProbabilityModel {
   lambdaBlend?: {
     marketHomeLambda: number;
     marketAwayLambda: number;
+    independentHomeLambda?: number | null;
+    independentAwayLambda?: number | null;
+    independentTotalLambda?: number | null;
+    independentHomeShare?: number | null;
+    leagueHomeLambda?: number | null;
+    leagueAwayLambda?: number | null;
+    leagueWeight?: number;
+    leaguePriorKey?: string | null;
     formHomeLambda: number | null;
     formAwayLambda: number | null;
     formWeight: number;
   };
   oneXTwo: {
     market: OutcomeProbability | null;
+    teamStrength?: OutcomeProbability | null;
     elo?: OutcomeProbability | null;
     poisson: OutcomeProbability | null;
+    worldCupPrior?: OutcomeProbability | null;
     final: OutcomeProbability | null;
   };
+  worldCupPrior?: WorldCupPriorSummary | null;
   elo?: {
     homeRating: number;
     awayRating: number;
     diff: number;
     homeMatches: number;
     awayMatches: number;
+    historicalSource?: {
+      version?: string;
+      source?: string;
+      rows?: number;
+      lastMatchDate?: string | null;
+      seededTeams?: number;
+      signature?: string;
+    } | null;
     lastUpdatedAt?: string;
   } | null;
   form?: {
     version: string;
     lookbackMatches: number;
     sampleSize: number;
+    historicalSource?: {
+      version?: string;
+      source?: string;
+      rows?: number;
+      lastMatchDate?: string | null;
+      seededTeams?: number;
+      signature?: string;
+    } | null;
     home: {
       sampleSize: number;
       wins: number;
@@ -391,6 +587,20 @@ export interface MatchProbabilityModel {
       drawRate: number | null;
       lastMeetingAt?: string | null;
     };
+  } | null;
+  leaguePrior?: {
+    key?: string | null;
+    source?: string;
+    matches?: number;
+    homeGoalsAvg?: number;
+    awayGoalsAvg?: number;
+    totalGoalsAvg?: number;
+    over25Rate?: number;
+    bttsRate?: number;
+    drawRate?: number;
+    lastMatchDate?: string | null;
+    trainingVersion?: string;
+    trainingSignature?: string;
   } | null;
   modelHealth?: {
     version: string;
@@ -529,6 +739,7 @@ export interface Match {
   probabilityModel?: MatchProbabilityModel;
   stats?: MatchStats;
   externalSignals?: ExternalMatchSignals;
+  worldCupPrior?: WorldCupPriorSummary | null;
   recentForm?: {
     home: TeamRecentForm;
     away: TeamRecentForm;
@@ -538,6 +749,7 @@ export interface Match {
   matchDate?: string;
   kickoffDate?: string;
   businessDate?: string;
+  buyEndTime?: string;
   homeTeamName?: string;
   homeTeamNameEn?: string;
   homeRank?: string;
@@ -878,9 +1090,24 @@ export const bettingGlossary = [
 ];
 
 export function registerTeam(t: Team) {
-  if (!teams.some(existing => existing.id === t.id)) {
+  const existing = teams.find(team => team.id === t.id);
+  if (!existing) {
     teams.push(t);
+    return;
   }
+
+  existing.name = {
+    zh: t.name.zh || existing.name.zh,
+    en: t.name.en || existing.name.en
+  };
+  existing.shortName = {
+    zh: t.shortName.zh || existing.shortName.zh,
+    en: t.shortName.en || existing.shortName.en
+  };
+  if (t.logo && t.logo !== '?') existing.logo = t.logo;
+  if (t.logoType) existing.logoType = t.logoType;
+  if (t.value) existing.value = t.value;
+  if (t.color) existing.color = t.color;
 }
 
 export function registerLeague(l: League) {

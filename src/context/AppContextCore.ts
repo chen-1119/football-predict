@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react';
 import type { Match } from '../services/mockData';
+import type { AccessSession } from '../services/accessControl';
 
 export type Language = 'zh' | 'en';
 export type HitAndWinPick = '1' | 'X' | '2';
@@ -10,6 +11,7 @@ export interface User {
 }
 
 export interface DataSyncState {
+  currentLoading?: boolean;
   currentLoaded: boolean;
   historyLoaded: boolean;
   historyLoading: boolean;
@@ -35,6 +37,52 @@ export interface DataSyncState {
   dataApiBase?: string;
   lastDataUrl?: string;
   apiFailureCount?: number;
+  sourceAttempt?: {
+    officialOddsMatches?: number;
+    officialHandicapOddsMatches?: number;
+    officialResultMatches?: number;
+    publishableMatches?: number;
+    fiveHundredFallbackMatches?: number;
+    combinedPublishableMatches?: number;
+  };
+  sourceFallback?: {
+    keptExisting?: boolean;
+    mergedPartialFresh?: boolean;
+    reason?: string;
+    existingMatches?: number;
+    freshPublishableMatches?: number;
+    sportteryPublishableMatches?: number;
+    fiveHundredFallbackMatches?: number;
+    fiveHundredResultMatches?: number;
+  };
+  sourceHealth?: {
+    ok?: boolean;
+    checkedAt?: string;
+    mode?: {
+      enable500Sync?: boolean;
+      enable500DetailsSync?: boolean;
+      enableApiFootballSync?: boolean;
+      requireExternalSignals?: boolean;
+      skipSportteryFetch?: boolean;
+    };
+    externalSignals?: {
+      fiveHundredRows?: number;
+      fiveHundredMapped?: number;
+      fiveHundredDetailsCachedMerged?: number;
+      fiveHundredDetailsErrors?: number;
+      apiFootballConfigured?: boolean;
+      apiFootballEnabled?: boolean;
+      apiFootballMappedSignals?: number;
+      apiFootballCallsThisSync?: number;
+      apiFootballCallsTodayEstimate?: number;
+    };
+    currentMatches?: {
+      count?: number;
+      withExternalSignals?: number;
+      externalCoverage?: number;
+    };
+    errors?: string[];
+  };
 }
 
 export interface AppContextType {
@@ -42,8 +90,12 @@ export interface AppContextType {
   setLanguage: (lang: Language) => void;
   currentUser: User | null;
   setCurrentUser: (user: User | null) => void;
+  accessSession: AccessSession | null;
+  isAccessVerified: boolean;
   hitAndWinSubmission: HitAndWinSubmission | null;
   submitHitAndWin: (selections: HitAndWinSubmission) => boolean;
+  verifyAccessCode: (code: string) => Promise<AccessSession>;
+  clearAccessSession: () => void;
   login: (username: string) => void;
   register: (username: string) => void;
   logout: () => void;
