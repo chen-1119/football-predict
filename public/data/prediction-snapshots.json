@@ -1,7 +1,7 @@
 {
   "version": 1,
   "source": "sporttery:prediction-snapshots",
-  "updatedAt": "2026-06-12T10:44:37.850Z",
+  "updatedAt": "2026-06-12T13:01:58.605Z",
   "retentionDays": 365,
   "maxRows": 5000,
   "rows": [
@@ -20485,19 +20485,103 @@
         "resultStatus": "PENDING",
         "riskCount": 2
       }
+    },
+    {
+      "capturedAt": "2026-06-12T13:01:58.605Z",
+      "firstSeenAt": "2026-06-12T13:01:58.605Z",
+      "lastSeenAt": "2026-06-12T13:01:58.605Z",
+      "seenCount": 1,
+      "phase": "mid",
+      "signature": "1X2:HAD:1:reference|BEST:HAD:1:reference|GOALS::U2.5:reference|1.62/3.32/4.75|-1.00:3.04/3.30/2.01|37/28/35",
+      "policyVersion": "sporttery-day-formula-trace-v33",
+      "promptVersion": "professional-football-analyst-v16",
+      "sourceMatchId": "2040164",
+      "matchId": "sporttery_2040164",
+      "matchNo": "周五003",
+      "businessDate": "2026-06-12",
+      "kickoffTime": "2026-06-13T03:00:00+08:00",
+      "status": "SCHEDULED",
+      "leagueName": "世界杯",
+      "homeTeamName": "加拿大",
+      "awayTeamName": "波黑",
+      "scoreHome": null,
+      "scoreAway": null,
+      "odds": {
+        "odds1": 1.62,
+        "oddsX": 3.32,
+        "odds2": 4.75
+      },
+      "handicapLine": "-1.00",
+      "handicapOdds": {
+        "odds1": 3.04,
+        "oddsX": 3.3,
+        "odds2": 2.01
+      },
+      "oddsTrend": {
+        "sampleSize": 681,
+        "firstCapturedAt": "2026-06-08T07:04:18.034Z",
+        "lastCapturedAt": "2026-06-12T01:41:12.466Z",
+        "odds1Change": 0.03,
+        "oddsXChange": -0.06,
+        "odds2Change": -0.15,
+        "direction": "away",
+        "summary": {
+          "zh": "已记录 681 次官方 SP 快照，客胜 -0.15，市场对该方向有增温迹象；同步变化：平局 -0.06，主胜 +0.03。",
+          "en": "681 official SP snapshots recorded. away win -0.15; that side is warming, with secondary moves draw -0.06, home win +0.03."
+        }
+      },
+      "probabilityFinal": {
+        "home": 37.3,
+        "draw": 28,
+        "away": 34.8
+      },
+      "probabilityModelVersion": "independent-elo-form-poisson-v7",
+      "best": {
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "参考倾向 主胜 加拿大",
+          "en": "Reference lean: Home Win (加拿大)"
+        },
+        "odds": 1.62,
+        "trustScore": 28,
+        "resultStatus": "PENDING",
+        "riskCount": 6
+      },
+      "oneXTwo": {
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "参考倾向 主胜 加拿大",
+          "en": "Reference lean: Home Win (加拿大)"
+        },
+        "odds": 1.62,
+        "trustScore": 38,
+        "resultStatus": "PENDING",
+        "riskCount": 6
+      },
+      "goals": {
+        "tipCode": "U2.5",
+        "tipLabel": {
+          "zh": "进球参考 小2.5球（≤2球）",
+          "en": "Goals reference: Under 2.5 goals"
+        },
+        "odds": 1.76,
+        "trustScore": 55,
+        "resultStatus": "PENDING",
+        "riskCount": 2
+      }
     }
   ],
   "summary": {
-    "total": 256,
+    "total": 257,
     "byPhase": {
       "review": 85,
-      "mid": 12,
+      "mid": 13,
       "baseline": 127,
       "late": 9,
       "final": 9,
       "locked": 14
     },
-    "appended": 0,
+    "appended": 1,
     "updated": 0
   }
 }
