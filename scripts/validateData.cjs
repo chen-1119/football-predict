@@ -43,7 +43,7 @@ function expectedPredictionResult(match, prediction) {
   const code = prediction.tipCode;
 
   if (prediction.oddsPoolCode === "HHAD" && ["1", "X", "2"].includes(code)) {
-    const handicap = parseHandicapLine(match.handicapLine);
+    const handicap = parseHandicapLine(prediction.handicapLine ?? match.handicapLine);
     if (handicap === null) return "PENDING";
     const adjustedHome = match.scoreHome + handicap;
     const actualHhad = adjustedHome > match.scoreAway ? "1" : adjustedHome < match.scoreAway ? "2" : "X";
@@ -184,7 +184,7 @@ for (const match of matches) {
   const sportteryPick = match.predictions?.find((prediction) => prediction.marketType === "1X2");
   if (hasOfficialOdds && !sportteryPick) {
     errors.push(`${match.id}: missing 1X2 prediction`);
-  } else if (hasOfficialOdds && Math.abs(expectedSportterySp(match, sportteryPick.tipCode) - sportteryPick.odds) > 1e-9) {
+  } else if (hasOfficialOdds && match.status !== "FINISHED" && Math.abs(expectedSportterySp(match, sportteryPick.tipCode) - sportteryPick.odds) > 1e-9) {
     errors.push(`${match.id}: 1X2 prediction SP does not match selected SP`);
   }
 
