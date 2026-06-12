@@ -974,8 +974,12 @@ const main = async () => {
   };
   writeJson(EXTERNAL_SIGNALS_FILE, externalPayload);
 
+  const allErrors = [...recentResults.errors, ...errors];
+  const hasUsableDetails = updated > 0 || cachedMerged > 0;
+
   console.log(JSON.stringify({
-    ok: errors.length === 0,
+    ok: allErrors.length === 0 || hasUsableDetails,
+    degraded: allErrors.length > 0 && hasUsableDetails,
     source: "500.com:details",
     scannedRows: currentTradeRows.length,
     resultArchiveDates: recentResults.dates,
@@ -984,7 +988,8 @@ const main = async () => {
     updated,
     cachedMerged,
     requestedPages,
-    errors: [...recentResults.errors, ...errors],
+    warnings: allErrors.length > 0 && hasUsableDetails ? allErrors : [],
+    errors: hasUsableDetails ? [] : allErrors,
     output: path.relative(PROJECT_ROOT, DETAILS_FILE),
   }, null, 2));
 };
