@@ -852,6 +852,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   const primaryOutcomeRiskCount = primaryOutcomePrediction?.riskTags?.length ?? matchSignal.riskCount;
   const primaryOutcomeTrust = primaryOutcomePrediction?.trustScore ?? matchSignal.trustScore ?? null;
   const primaryOutcomeCode = isOutcomeTipCode(primaryOutcomePrediction?.tipCode) ? primaryOutcomePrediction.tipCode : undefined;
+  const primaryOutcomeIsHandicap = primaryOutcomePrediction?.oddsPoolCode === 'HHAD';
+  const scoreBindingOutcomeCode = primaryOutcomeIsHandicap ? undefined : primaryOutcomeCode;
   const scoreDistributionCandidates: ScoreRecommendationCandidate[] = (probabilityModel?.scoreDistribution || []).map((score) => ({
     home: score.home,
     away: score.away,
@@ -869,9 +871,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
       source: 'locked'
     }
     : null;
-  const alignedScoreCandidate = primaryOutcomeCode
-    ? scoreDistributionCandidates.find((score) => getScoreOutcomeCode(score) === primaryOutcomeCode)
-      || (projectedScoreCandidate && getScoreOutcomeCode(projectedScoreCandidate) === primaryOutcomeCode ? projectedScoreCandidate : null)
+  const alignedScoreCandidate = scoreBindingOutcomeCode
+    ? scoreDistributionCandidates.find((score) => getScoreOutcomeCode(score) === scoreBindingOutcomeCode)
+      || (projectedScoreCandidate && getScoreOutcomeCode(projectedScoreCandidate) === scoreBindingOutcomeCode ? projectedScoreCandidate : null)
     : null;
   const firstScoreCandidate = alignedScoreCandidate
     || projectedScoreCandidate
@@ -882,7 +884,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   const scoreRecommendations = dedupeScoreCandidates(
     [firstScoreCandidate, secondScoreCandidate].filter((score): score is ScoreRecommendationCandidate => Boolean(score))
   ).slice(0, 2).map((score, index) => {
-    const alignsWithOutcome = primaryOutcomeCode ? getScoreOutcomeCode(score) === primaryOutcomeCode : false;
+    const alignsWithOutcome = scoreBindingOutcomeCode ? getScoreOutcomeCode(score) === scoreBindingOutcomeCode : false;
     return {
       ...score,
       tone: alignsWithOutcome ? 'aligned' : 'alternate',
@@ -893,13 +895,20 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
           : (language === 'zh' ? '备选热区' : 'Alt zone')
     };
   });
-  const scoreAlignmentNote = primaryOutcomeCode && scoreRecommendations.some((score) => score.tone === 'aligned')
+  const scoreAlignmentNote = primaryOutcomeIsHandicap
     ? (language === 'zh'
-      ? `比分一按「${primaryOutcomeTitle}」方向优先筛选，比分二保留模型热区参考。`
-      : `Score one is aligned with ${primaryOutcomeTitle}; score two keeps the model heat-zone reference.`)
-    : (language === 'zh'
-      ? '当前胜平负方向不足以绑定比分，展示模型热区前两位。'
-      : 'The 1X2 direction is not strong enough to bind scores, so the top model zones are shown.');
+      ? '当前主展示来自让球参考，比分不按让球结果硬绑定；比分仍按90分钟胜平负热区展示。'
+      : 'The main display comes from handicap reference, so scores are not forced to match the handicap result; they still follow the regular-time 1X2 heat zone.')
+    : scoreBindingOutcomeCode && scoreRecommendations.some((score) => score.tone === 'aligned')
+      ? (language === 'zh'
+        ? `比分一按「${primaryOutcomeTitle}」方向优先筛选，比分二保留模型热区参考。`
+        : `Score one is aligned with ${primaryOutcomeTitle}; score two keeps the model heat-zone reference.`)
+      : (language === 'zh'
+        ? '当前胜平负方向不足以绑定比分，展示模型热区前两位。'
+        : 'The 1X2 direction is not strong enough to bind scores, so the top model zones are shown.');
+  const scoreDirectionLabel = primaryOutcomeIsHandicap
+    ? (language === 'zh' ? '比分独立热区' : 'Score heat zone')
+    : `${language === 'zh' ? '方向' : 'Direction'} ${primaryOutcomeTitle}`;
   const over25Probability = probabilityModel?.goalLines?.over25;
   const under25Probability = probabilityModel?.goalLines?.under25;
   const inferredGoalsTipCode = Number.isFinite(over25Probability) && Number.isFinite(under25Probability)
@@ -995,13 +1004,17 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
       : `${language === 'zh' ? '让球' : 'Line'} ${hhadPoolRow.handicap || '--'} · ${hhadPoolRow.probabilities ? `${hhadPoolRow.probabilities.home}/${hhadPoolRow.probabilities.draw}/${hhadPoolRow.probabilities.away}%` : '--'}`
     : (language === 'zh' ? '暂无官方让球盘，先不作为精选验证。' : 'No official handicap pool yet, so it cannot validate a top pick.');
   const handicapValidationNote = hhadPoolRow?.odds
-    ? handicapProbabilityLeader && primaryOutcomeKey && handicapProbabilityLeader.key !== primaryOutcomeKey
+    ? primaryOutcomeIsHandicap
       ? (language === 'zh'
-        ? `让球盘最高为${handicapProbabilityLeader.zh} ${handicapProbabilityLeader.probability}%，说明盘口没有同向支持胜平负主方向；这里只做验证，不改成推荐方向。`
-        : `${handicapProbabilityLeader.en} leads the handicap pool at ${handicapProbabilityLeader.probability}%. That means the line does not support the 1X2 lean, and it is validation only, not a rewritten pick.`)
-      : (language === 'zh'
-        ? '让球盘只做精选校验，不会强行改掉胜平负推荐方向。'
-        : 'Handicap is used as top-pool validation and does not forcibly rewrite the 1X2 lean.')
+        ? '当前为让球参考。让球结果不等同90分钟胜平负，比分预测仍按常规赛果独立展示。'
+        : 'This is a handicap reference. Handicap result is not the same as regular-time 1X2, so score projection remains a separate regular-result view.')
+      : handicapProbabilityLeader && primaryOutcomeKey && handicapProbabilityLeader.key !== primaryOutcomeKey
+        ? (language === 'zh'
+          ? `让球盘最高为${handicapProbabilityLeader.zh} ${handicapProbabilityLeader.probability}%，说明盘口没有同向支持胜平负主方向；这里只做验证，不改成推荐方向。`
+          : `${handicapProbabilityLeader.en} leads the handicap pool at ${handicapProbabilityLeader.probability}%. That means the line does not support the 1X2 lean, and it is validation only, not a rewritten pick.`)
+        : (language === 'zh'
+          ? '让球盘只做精选校验，不会强行改掉胜平负推荐方向。'
+          : 'Handicap is used as top-pool validation and does not forcibly rewrite the 1X2 lean.')
     : (language === 'zh'
       ? '暂无官方让球盘，先不作为精选验证。'
       : 'No official handicap pool yet, so it cannot validate a top pick.');
@@ -1025,6 +1038,13 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
           ? '模型主线仍有方向，但低赔、让球或风险校验未同时通过，仅作参考。'
           : 'The model has a main lean, but SP, handicap, or risk validation did not pass together, so it stays reference only.')
         : matchSignal.note[language];
+  const decisionConsistencyNote = primaryOutcomeIsHandicap
+    ? (language === 'zh'
+      ? '一致性口径：让球参考不改写90分钟胜平负；比分按常规赛果热区展示，二者分层阅读。'
+      : 'Consistency rule: handicap reference does not rewrite regular-time 1X2; score follows the regular-result heat zone and should be read separately.')
+    : (language === 'zh'
+      ? '一致性口径：胜平负是主方向，比分优先贴合该方向；让球盘只做验证，不反向改写推荐。'
+      : 'Consistency rule: 1X2 is the main direction, scores are aligned first, and handicap only validates instead of rewriting the pick.');
   const predictionVersionText = predictionMeta?.strategyVersion
     || predictionMeta?.policyVersion
     || predictionMeta?.promptVersion
@@ -1716,7 +1736,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
             <div className="card recommendation-overview-card recommendation-outcome-card">
               <section className="recommendation-overview-panel is-outcome">
                 <div className="recommendation-overview-head">
-                  <span>{language === 'zh' ? '胜平负推荐' : '1X2 Recommendation'}</span>
+                  <span>{primaryOutcomeIsHandicap
+                    ? (language === 'zh' ? '让球参考' : 'Handicap Reference')
+                    : (language === 'zh' ? '胜平负推荐' : '1X2 Recommendation')}</span>
                   <b>{recommendationActionLabel(primaryOutcomePrediction)}</b>
                 </div>
                 <strong className="recommendation-overview-main">{primaryOutcomeTitle}</strong>
@@ -1759,7 +1781,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                 )}
                 <p>{scoreAlignmentNote}</p>
                 <div className="recommendation-mini-tags">
-                  <span>{language === 'zh' ? '方向' : 'Direction'} {primaryOutcomeTitle}</span>
+                  <span>{scoreDirectionLabel}</span>
                   <span>{language === 'zh' ? '热区' : 'xG'} {formatDecimal(match.stats?.xG.home)} : {formatDecimal(match.stats?.xG.away)}</span>
                   <span>{language === 'zh' ? '大2.5' : 'Over2.5'} {formatProbabilityValue(probabilityModel?.goalLines?.over25)}</span>
                   <span>BTTS {formatProbabilityValue(probabilityModel?.bothTeamsToScore?.yes)}</span>
@@ -1796,6 +1818,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                   <span className="review-kicker">{language === 'zh' ? '模型分析' : 'Model Analysis'}</span>
                   <h3>{decisionDirectionText}</h3>
                   <p>{transparentDecisionReason}</p>
+                  <p>{decisionConsistencyNote}</p>
                 </div>
                 <span className={`decision-pool-pill is-${isQualifiedPick ? 'qualified' : matchSignal.category}`}>
                   {decisionPoolStatus}

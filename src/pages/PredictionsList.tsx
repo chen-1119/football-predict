@@ -387,8 +387,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     awaitingResult: { zh: '等待官方赛果', en: 'Awaiting official result' },
     teams: { zh: '对阵双方', en: 'Teams' },
     oddsHeader: { zh: '胜平负 SP', en: '1X2 SP' },
-    closed: { zh: '未开售', en: 'Closed' },
-    archivedOdds: { zh: '赛果归档', en: 'Archived' },
+    closed: { zh: '等待官方SP', en: 'SP pending' },
+    archivedOdds: { zh: '胜平负归档', en: '1X2 archived' },
     hit: { zh: '命中', en: 'Hit' },
     miss: { zh: '未中', en: 'Miss' },
     leagueMatches: { zh: '场比赛', en: 'matches' }
@@ -630,7 +630,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
           ? `${language === 'zh' ? '胜平负' : '1X2'} ${row.odds.odds1.toFixed(2)}/${row.odds.oddsX.toFixed(2)}/${row.odds.odds2.toFixed(2)}`
           : ''
       )).filter(Boolean).join(' · ')
-      : (language === 'zh' ? '未开售' : 'Closed');
+      : (language === 'zh' ? '胜平负未开售' : '1X2 SP pending');
     const reason = isPromotedPick
       ? signal.note[language]
       : isReferenceOnly
