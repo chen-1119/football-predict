@@ -715,6 +715,68 @@ function scoreMatrix(homeLambda, awayLambda, maxGoals = 8) {
   return rows;
 }
 
+function representativeScoreRank(row, homeLambda, awayLambda, modeProbability, preferredCode) {
+  const totalLambda = homeLambda + awayLambda;
+  const totalGoals = row.home + row.away;
+  const probabilityScore = row.probability / Math.max(modeProbability, 0.000001);
+  const lambdaCloseness = 1 - Math.min(1, (Math.abs(row.home - homeLambda) + Math.abs(row.away - awayLambda)) / 4);
+  const totalCloseness = 1 - Math.min(1, Math.abs(totalGoals - totalLambda) / 3);
+  const diffCloseness = 1 - Math.min(1, Math.abs((row.home - row.away) - (homeLambda - awayLambda)) / 3);
+  let rank = probabilityScore * 0.52 + lambdaCloseness * 0.22 + totalCloseness * 0.16 + diffCloseness * 0.1;
+
+  if (preferredCode && oneXTwoCodeForScore(row.home, row.away) === preferredCode) rank += 0.12;
+  if (totalLambda >= 2.45 && totalGoals >= 3) rank += 0.08;
+  if (totalLambda >= 2.75 && totalGoals >= 4) rank += 0.05;
+  if (totalLambda <= 2.05 && totalGoals <= 2) rank += 0.05;
+  if (totalLambda >= 2.45 && totalGoals <= 1) rank -= 0.22;
+  if (totalLambda >= 2.15 && row.home === 0 && row.away === 0) rank -= 0.18;
+  if (homeLambda >= 1.55 && row.home >= 2) rank += 0.05;
+  if (awayLambda >= 1.55 && row.away >= 2) rank += 0.05;
+
+  return rank;
+}
+
+function representativeProjectedScore(homeLambda, awayLambda, preferredCode = null) {
+  const matrix = scoreMatrix(homeLambda, awayLambda, 8);
+  const mode = matrix.reduce((best, row) => (row.probability > best.probability ? row : best), matrix[0]);
+  const modeProbability = mode?.probability || 0.000001;
+  let cleanPreferredCode = ["1", "X", "2"].includes(preferredCode) ? preferredCode : null;
+  if (cleanPreferredCode) {
+    const modeCode = oneXTwoCodeForScore(mode.home, mode.away);
+    const directionalBest = matrix
+      .filter((row) => oneXTwoCodeForScore(row.home, row.away) === cleanPreferredCode)
+      .sort((a, b) => b.probability - a.probability)[0];
+    const lambdaDiff = homeLambda - awayLambda;
+    const conflictsWithLambda = (cleanPreferredCode === "1" && lambdaDiff < -0.18)
+      || (cleanPreferredCode === "2" && lambdaDiff > 0.18);
+    const supportThreshold = cleanPreferredCode === modeCode
+      ? 0.38
+      : conflictsWithLambda
+        ? 0.82
+        : 0.64;
+
+    if (!directionalBest || directionalBest.probability < modeProbability * supportThreshold) {
+      cleanPreferredCode = null;
+    }
+  }
+  const directionalPool = cleanPreferredCode
+    ? matrix.filter((row) => oneXTwoCodeForScore(row.home, row.away) === cleanPreferredCode)
+    : matrix;
+  const minProbability = modeProbability * (cleanPreferredCode ? 0.2 : 0.42);
+  const plausible = directionalPool.filter((row) => (
+    row.probability >= minProbability
+    && row.home + row.away <= 7
+  ));
+  const pool = plausible.length ? plausible : directionalPool.length ? directionalPool : matrix;
+
+  return [...pool].sort((a, b) => {
+    const rankDiff = representativeScoreRank(b, homeLambda, awayLambda, modeProbability, cleanPreferredCode)
+      - representativeScoreRank(a, homeLambda, awayLambda, modeProbability, cleanPreferredCode);
+    if (Math.abs(rankDiff) > 0.000001) return rankDiff;
+    return b.probability - a.probability;
+  })[0] || projectedScore(homeLambda, awayLambda);
+}
+
 function poissonOutcomeProbabilities(homeLambda, awayLambda) {
   const matrix = scoreMatrix(homeLambda, awayLambda, 10);
   const totals = matrix.reduce((acc, row) => {
@@ -823,10 +885,63 @@ function formConfidence(formSnapshot) {
   return clamp(sampleSize / 24, 0, 1);
 }
 
+function recentFormNumber(value, fallback) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function recentFormCandidate(form, marketHomeLambda, marketAwayLambda, confidence, source) {
+  if (!form?.home || !form?.away || confidence <= 0) return null;
+
+  const homeAttack = recentFormNumber(form.home.goalsForAvg, marketHomeLambda);
+  const homeDefense = recentFormNumber(form.home.goalsAgainstAvg, marketAwayLambda);
+  const awayAttack = recentFormNumber(form.away.goalsForAvg, marketAwayLambda);
+  const awayDefense = recentFormNumber(form.away.goalsAgainstAvg, marketHomeLambda);
+
+  return {
+    homeLambda: clamp(homeAttack * 0.58 + awayDefense * 0.42, 0.25, 3.6),
+    awayLambda: clamp(awayAttack * 0.58 + homeDefense * 0.42, 0.25, 3.6),
+    confidence,
+    source,
+  };
+}
+
+function fiveHundredRecentFormSnapshot(match) {
+  const recentForm = match?.externalSignals?.fiveHundred?.recentForm;
+  if (!recentForm?.home || !recentForm?.away) return null;
+
+  const homeSample = Number(recentForm.home.sampleSize || 0);
+  const awaySample = Number(recentForm.away.sampleSize || 0);
+  const pairedSample = Math.min(homeSample, awaySample);
+  if (!Number.isFinite(pairedSample) || pairedSample <= 0) return null;
+
+  return {
+    home: recentForm.home,
+    away: recentForm.away,
+    sampleSize: pairedSample,
+    confidence: clamp(pairedSample / 12, 0, 1),
+  };
+}
+
 function blendLambdasWithForm(match, marketHomeLambda, marketAwayLambda) {
-  const form = match.formSnapshot;
-  const confidence = formConfidence(form);
-  if (!form || confidence <= 0) {
+  const trainingCandidate = recentFormCandidate(
+    match.formSnapshot,
+    marketHomeLambda,
+    marketAwayLambda,
+    formConfidence(match.formSnapshot),
+    "training-history"
+  );
+  const fiveHundredForm = fiveHundredRecentFormSnapshot(match);
+  const fiveHundredCandidate = recentFormCandidate(
+    fiveHundredForm,
+    marketHomeLambda,
+    marketAwayLambda,
+    fiveHundredForm?.confidence || 0,
+    "500-recent-form"
+  );
+  const candidates = [trainingCandidate, fiveHundredCandidate].filter(Boolean);
+
+  if (!candidates.length) {
     return {
       homeLambda: marketHomeLambda,
       awayLambda: marketAwayLambda,
@@ -836,15 +951,21 @@ function blendLambdasWithForm(match, marketHomeLambda, marketAwayLambda) {
     };
   }
 
-  const homeAttack = Number.isFinite(form.home?.goalsForAvg) ? form.home.goalsForAvg : marketHomeLambda;
-  const homeDefense = Number.isFinite(form.home?.goalsAgainstAvg) ? form.home.goalsAgainstAvg : marketAwayLambda;
-  const awayAttack = Number.isFinite(form.away?.goalsForAvg) ? form.away.goalsForAvg : marketAwayLambda;
-  const awayDefense = Number.isFinite(form.away?.goalsAgainstAvg) ? form.away.goalsAgainstAvg : marketHomeLambda;
-  const formHomeLambda = clamp(homeAttack * 0.58 + awayDefense * 0.42, 0.25, 3.2);
-  const formAwayLambda = clamp(awayAttack * 0.58 + homeDefense * 0.42, 0.25, 3.2);
+  const confidenceTotal = candidates.reduce((sum, item) => sum + item.confidence, 0) || 1;
+  const formHomeLambda = clamp(
+    candidates.reduce((sum, item) => sum + item.homeLambda * item.confidence, 0) / confidenceTotal,
+    0.25,
+    3.6
+  );
+  const formAwayLambda = clamp(
+    candidates.reduce((sum, item) => sum + item.awayLambda * item.confidence, 0) / confidenceTotal,
+    0.25,
+    3.6
+  );
   const profile = matchVolatilityProfile(match);
-  const maxWeight = profile.isInternational ? 0.22 : 0.36;
-  const formWeight = clamp(confidence * maxWeight, 0, maxWeight);
+  const maxWeight = profile.isInternational ? 0.34 : 0.42;
+  const strongestConfidence = Math.max(...candidates.map((item) => item.confidence));
+  const formWeight = clamp(strongestConfidence * maxWeight, 0, maxWeight);
 
   return {
     homeLambda: clamp(marketHomeLambda * (1 - formWeight) + formHomeLambda * formWeight, 0.25, 3.4),
@@ -852,6 +973,7 @@ function blendLambdasWithForm(match, marketHomeLambda, marketAwayLambda) {
     formWeight: Number(formWeight.toFixed(3)),
     formHomeLambda: Number(formHomeLambda.toFixed(2)),
     formAwayLambda: Number(formAwayLambda.toFixed(2)),
+    formSource: candidates.map((item) => item.source).join("+"),
   };
 }
 
@@ -3956,12 +4078,12 @@ function predictionSetWithoutOfficialOdds(match) {
   const sideBias = clamp((probabilities.home - probabilities.away) * 1.45, -0.75, 0.75);
   let homeLambda = clamp(totalLambda / 2 + sideBias, 0.35, 3.2);
   let awayLambda = clamp(totalLambda - homeLambda, 0.35, 3.2);
-  let score = projectedScore(homeLambda, awayLambda);
+  let score = representativeProjectedScore(homeLambda, awayLambda, leader.code);
   let aligned = alignedModelOnlyForecast(homeLambda, awayLambda, leader.code);
   if (aligned) {
     homeLambda = aligned.homeLambda;
     awayLambda = aligned.awayLambda;
-    score = aligned.score;
+    score = representativeProjectedScore(homeLambda, awayLambda, leader.code);
   }
 
   let modelBundle = buildModelOnlyProbabilityModel(match, probabilities, homeLambda, awayLambda);
@@ -3973,7 +4095,7 @@ function predictionSetWithoutOfficialOdds(match) {
     if (aligned) {
       homeLambda = aligned.homeLambda;
       awayLambda = aligned.awayLambda;
-      score = aligned.score;
+      score = representativeProjectedScore(homeLambda, awayLambda, modelLeader.code);
       modelBundle = buildModelOnlyProbabilityModel(match, probabilities, homeLambda, awayLambda);
       picks = modelOnlyPickEntries(modelBundle.probabilityModel.oneXTwo.final || asPercentTriplet(probabilities));
     }
@@ -4183,6 +4305,7 @@ function predictionSet(match) {
   const marketSecond = marketPicks[1];
   const analystSelection = selectValueAwareOneXTwo(match, picks, modelProbabilities, probabilities, hhadProbabilities);
   const best1x2 = analystSelection.pick;
+  score = representativeProjectedScore(homeLambda, awayLambda, anchorIsHhad ? null : best1x2[0]);
   const probabilityGap = marketLeader[1] - marketSecond[1];
   const modelProbabilityGap = picks[0][1] - picks[1][1];
   const selectedMarketProbability = outcomeProbabilityForCode(probabilities, best1x2[0]) || 0;

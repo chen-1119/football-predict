@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../context/AppContextCore';
-import type { League, Match, OutcomeProbability, PredictionDetail, ScoreProbability, Team } from '../services/mockData';
+import type { FiveHundredRecentFormRow, League, Match, OutcomeProbability, PredictionDetail, ScoreProbability, Team } from '../services/mockData';
 import {
   getPredictionCodeHint,
   getPredictionExplanationDisplay,
@@ -484,6 +484,76 @@ const summarizeHistoryRows = (rows: TeamHistoryResult[]): TeamHistorySummary => 
   };
 };
 
+const normalizeHistoryTeamName = (value: string | undefined) => (
+  String(value || '').replace(/\s+/g, '').toLowerCase()
+);
+
+const parseFiveHundredScore = (scoreText: string | undefined) => {
+  const matched = String(scoreText || '').match(/(\d+)\s*[:：]\s*(\d+)/);
+  if (!matched) return null;
+
+  const home = Number(matched[1]);
+  const away = Number(matched[2]);
+  if (!Number.isFinite(home) || !Number.isFinite(away)) return null;
+
+  return { home, away };
+};
+
+const normalizeFiveHundredHistoryDate = (date: string | undefined) => {
+  const raw = String(date || '').trim();
+  const shortDate = raw.match(/^(\d{2})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+  if (shortDate) {
+    return `20${shortDate[1]}-${shortDate[2].padStart(2, '0')}-${shortDate[3].padStart(2, '0')}`;
+  }
+
+  const fullDate = raw.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if (fullDate) {
+    return `${fullDate[1]}-${fullDate[2].padStart(2, '0')}-${fullDate[3].padStart(2, '0')}`;
+  }
+
+  return '';
+};
+
+const buildTeamHistoryFromFiveHundred = (
+  rows: FiveHundredRecentFormRow[] | undefined,
+  teamName: string | undefined,
+  language: Language
+): TeamHistorySummary | null => {
+  const normalizedTeam = normalizeHistoryTeamName(teamName);
+  if (!rows?.length || !normalizedTeam) return null;
+
+  const mappedRows = rows
+    .map<TeamHistoryResult | null>((row, index) => {
+      const score = parseFiveHundredScore(row.scoreText);
+      if (!score) return null;
+
+      const homeName = row.homeTeamName || '';
+      const awayName = row.awayTeamName || '';
+      const isHomeSide = normalizeHistoryTeamName(homeName) === normalizedTeam;
+      const isAwaySide = normalizeHistoryTeamName(awayName) === normalizedTeam;
+      if (!isHomeSide && !isAwaySide) return null;
+
+      const ourScore = isHomeSide ? score.home : score.away;
+      const oppScore = isHomeSide ? score.away : score.home;
+      const normalizedDate = normalizeFiveHundredHistoryDate(row.date);
+      const result = ourScore > oppScore ? 'win' : ourScore === oppScore ? 'draw' : 'loss';
+
+      return {
+        id: `500-form-${normalizedTeam}-${normalizedDate || index}-${index}`,
+        dateLabel: normalizedDate ? formatHistoryDateValue(normalizedDate, language) : '--',
+        competition: row.competition || (language === 'zh' ? '近期战绩' : 'Recent form'),
+        opponentName: isHomeSide ? awayName : homeName,
+        venueLabel: isHomeSide ? (language === 'zh' ? '主' : 'H') : (language === 'zh' ? '客' : 'A'),
+        ourScore,
+        oppScore,
+        result
+      };
+    })
+    .filter((row): row is TeamHistoryResult => Boolean(row));
+
+  return mappedRows.length ? summarizeHistoryRows(mappedRows) : null;
+};
+
 const buildTeamHistoryFromTraining = (
   rows: HistoricalTrainingRow[] | undefined,
   teamKey: string | undefined,
@@ -664,7 +734,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     odds: { zh: 'SP', en: 'Odds' },
     trust: { zh: '可信度', en: 'Confidence' },
     analysis: { zh: '模型深度解析', en: 'AI Analysis' },
-    scorePrediction: { zh: 'AI 比分推演', en: 'AI Score Prediction' },
+    scorePrediction: { zh: '比分热区', en: 'Score Heat Zone' },
     teamValue: { zh: '阵容估值', en: 'Squad Value' },
     kickoff: { zh: '开赛时间', en: 'Kickoff' },
     referenceText: { zh: '预测内容仅供赛前参考，请结合临场信息理性判断。', en: 'Forecasts are for pre-match reference only; use late information and your own judgment.' }
@@ -703,16 +773,42 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     language
   );
   const trainingHeadToHead = buildHeadToHeadFromTraining(historicalTrainingDetail?.h2h?.rows, language);
+  const fiveHundredRecentForm = match.externalSignals?.fiveHundred?.recentForm;
+  const fiveHundredHomeHistory = buildTeamHistoryFromFiveHundred(
+    fiveHundredRecentForm?.home?.rows,
+    match.homeTeamName || homeTeam.shortName.zh || homeTeam.shortName[language],
+    language
+  );
+  const fiveHundredAwayHistory = buildTeamHistoryFromFiveHundred(
+    fiveHundredRecentForm?.away?.rows,
+    match.awayTeamName || awayTeam.shortName.zh || awayTeam.shortName[language],
+    language
+  );
   const fallbackHomeHistory = buildTeamHistory(matches, homeTeam.id, match, language);
   const fallbackAwayHistory = buildTeamHistory(matches, awayTeam.id, match, language);
   const fallbackHeadToHead = buildHeadToHead(matches, homeTeam.id, awayTeam.id, match, language);
-  const homeHistory = trainingHomeHistory?.sampleSize ? trainingHomeHistory : fallbackHomeHistory;
-  const awayHistory = trainingAwayHistory?.sampleSize ? trainingAwayHistory : fallbackAwayHistory;
+  const homeHistory = trainingHomeHistory?.sampleSize
+    ? trainingHomeHistory
+    : fiveHundredHomeHistory?.sampleSize
+      ? fiveHundredHomeHistory
+      : fallbackHomeHistory;
+  const awayHistory = trainingAwayHistory?.sampleSize
+    ? trainingAwayHistory
+    : fiveHundredAwayHistory?.sampleSize
+      ? fiveHundredAwayHistory
+      : fallbackAwayHistory;
   const headToHead = trainingHeadToHead || fallbackHeadToHead;
   const historyCoverageLabel = getOneYearWindowLabel(match, language);
-  const historyDataSourceLabel = historicalTrainingDetail
+  const historySource = trainingHomeHistory?.sampleSize || trainingAwayHistory?.sampleSize || trainingHeadToHead?.sampleSize
+    ? 'training'
+    : fiveHundredHomeHistory?.sampleSize || fiveHundredAwayHistory?.sampleSize
+      ? 'five-hundred'
+      : 'synced';
+  const historyDataSourceLabel = historySource === 'training'
     ? (language === 'zh' ? '长期历史训练库' : 'long-run training history')
-    : (language === 'zh' ? '已同步竞彩历史库' : 'synced Sporttery history');
+    : historySource === 'five-hundred'
+      ? (language === 'zh' ? '500 近期战绩' : '500.com recent form')
+      : (language === 'zh' ? '已同步竞彩历史库' : 'synced Sporttery history');
   const matchSignal = getMatchSignal(match);
   const matchInsight = buildMatchInsight(match, {
     homeSampleSize: homeHistory.sampleSize,

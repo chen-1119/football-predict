@@ -64,6 +64,19 @@ export interface MatchStats {
   redCards: { home: number; away: number };
 }
 
+export interface FiveHundredRecentFormRow {
+  competition?: string;
+  date?: string;
+  homeTeamName?: string;
+  scoreText?: string;
+  awayTeamName?: string;
+  handicap?: string;
+  halfTime?: string;
+  result?: string;
+  handicapResult?: string;
+  totalGoalsResult?: string;
+}
+
 export interface ExternalMatchSignals {
   updatedAt?: string;
   source?: string;
@@ -182,6 +195,7 @@ export interface ExternalMatchSignals {
         goalsAgainstAvg?: number | null;
         over25Rate?: number | null;
         bttsRate?: number | null;
+        rows?: FiveHundredRecentFormRow[];
       } | null;
       away?: {
         sampleSize?: number;
@@ -190,6 +204,7 @@ export interface ExternalMatchSignals {
         goalsAgainstAvg?: number | null;
         over25Rate?: number | null;
         bttsRate?: number | null;
+        rows?: FiveHundredRecentFormRow[];
       } | null;
     };
     futureSchedule?: {
