@@ -37,6 +37,9 @@ jobs:
           VITE_DATA_API_BASE: ${{ vars.DATA_API_BASE }}
         run: npm run build
 
+      - name: Prepare SPA Fallback
+        run: cp dist/index.html dist/404.html
+
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
