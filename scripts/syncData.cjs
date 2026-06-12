@@ -14,7 +14,7 @@ const ODDS_HISTORY_RETENTION_DAYS = Math.max(1, Number(process.env.ODDS_HISTORY_
 const ODDS_HISTORY_BUCKET_MINUTES = Math.max(1, Number(process.env.ODDS_HISTORY_BUCKET_MINUTES || 5));
 const PAGE_POLL_SECONDS = Math.max(15, Number(process.env.PAGE_POLL_SECONDS || 30));
 const ANALYST_PROMPT_VERSION = "professional-football-analyst-v16";
-const PREDICTION_POLICY_VERSION = "sporttery-day-formula-trace-v31";
+const PREDICTION_POLICY_VERSION = "sporttery-day-formula-trace-v32";
 const ANALYST_RUNTIME = Object.freeze({
   model: "5.5",
   reasoningEffort: "high",
@@ -1095,6 +1095,33 @@ function outcomeLeader(probabilities) {
   ].sort((a, b) => b.probability - a.probability)[0];
 }
 
+function outcomeKeyForCode(code) {
+  if (code === "1") return "home";
+  if (code === "X") return "draw";
+  if (code === "2") return "away";
+  return null;
+}
+
+function preserveOutcomeLeader(probabilities, code, minGap = 0.006) {
+  const key = outcomeKeyForCode(code);
+  const normalized = normalizeOutcomeProbabilities(probabilities);
+  if (!key) return normalized;
+
+  const otherKeys = ["home", "draw", "away"].filter((item) => item !== key);
+  const maxOther = Math.max(...otherKeys.map((item) => Number(normalized[item] || 0)));
+  if (Number(normalized[key] || 0) >= maxOther + minGap) return normalized;
+
+  const target = clamp(maxOther + minGap, 0.08, 0.82);
+  const otherTotal = otherKeys.reduce((sum, item) => sum + Number(normalized[item] || 0), 0) || 1;
+  const remaining = Math.max(0.02, 1 - target);
+  return normalizeOutcomeProbabilities({
+    ...normalized,
+    [key]: target,
+    [otherKeys[0]]: remaining * (Number(normalized[otherKeys[0]] || 0) / otherTotal),
+    [otherKeys[1]]: remaining * (Number(normalized[otherKeys[1]] || 0) / otherTotal),
+  });
+}
+
 function redistributeOutcomePenalty(probabilities, code, penalty) {
   const adjusted = { ...probabilities };
   const safePenalty = clamp(penalty, 0, Math.max(0, adjusted[code === "1" ? "home" : code === "X" ? "draw" : "away"] - 0.05));
@@ -1126,6 +1153,7 @@ function calibrateOutcomeProbabilities(match, probabilities, marketProbabilities
   const health = match.predictionHealth;
   const marketLeader = outcomeLeader(marketProbabilities);
   const modelLeader = outcomeLeader(adjusted);
+  const preCalibrationLeader = modelLeader;
   const homeFavoriteBucket = health?.homeFavorite;
   const oneXTwoBucket = health?.byMarket?.["1X2"];
   const modelTipBucket = health?.oneXTwo?.byTip?.[modelLeader.code];
@@ -1191,6 +1219,17 @@ function calibrateOutcomeProbabilities(match, probabilities, marketProbabilities
 
   if (profile.isJapan && marketLeader.code !== "X" && marketLeaderOdds <= 2.05) {
     applyPenalty(marketLeader.code, 0.07, "jleague-favorite-shrink");
+  }
+
+  const postCalibrationLeader = outcomeLeader(adjusted);
+  if (preCalibrationLeader?.code && postCalibrationLeader?.code && preCalibrationLeader.code !== postCalibrationLeader.code) {
+    adjusted = preserveOutcomeLeader(adjusted, preCalibrationLeader.code);
+    reasons.push("calibration-leader-preserved");
+    adjustments.push({
+      code: preCalibrationLeader.code,
+      reason: "calibration-leader-preserved",
+      penalty: 0,
+    });
   }
 
   return {
@@ -3322,9 +3361,10 @@ function evaluateOneXTwoGate(context) {
   );
   const profileMarketCooldown = isCoolingBucket(predictionHealth?.byMarketProfile?.[`1X2:${profileKey}`]);
   const oneXTwoCooldown = Boolean(isCoolingBucket(predictionHealth?.byMarket?.["1X2"]) || profileMarketCooldown || directionCooldown);
+  const hasSelectionDisagreement = Boolean(analystSelection.isContrarian || analystSelection.hasValueDisagreement);
   const reasons = [];
 
-  if (analystSelection.isContrarian) reasons.push("contrarian");
+  if (hasSelectionDisagreement) reasons.push("market-disagreement");
   if (code === "X") reasons.push("draw-is-not-single-pick");
   if (!isSidePick) reasons.push("no-side-pick");
   if (isSidePick && handicapSupport === null) reasons.push("missing-handicap-confirmation");
@@ -3369,7 +3409,7 @@ function evaluateOneXTwoGate(context) {
   const maxGateRiskTags = Math.max(0, (Number.isFinite(dynamicGate.maxRiskTags) ? Number(dynamicGate.maxRiskTags) : 3) + Number(strategyGate.maxRiskTagsDelta || 0));
 
   const strongSidePick = isSidePick
-    && !analystSelection.isContrarian
+    && !hasSelectionDisagreement
     && pickProbability >= minPickProbability
     && probabilityGap >= minProbabilityGap
     && modelProbabilityGap >= minModelGap
@@ -3388,7 +3428,7 @@ function evaluateOneXTwoGate(context) {
     && (!profile.isJapan || odds > 1.75 || (pickProbability >= 0.56 && handicapSupport >= 0.36));
 
   const valueSidePick = isSidePick
-    && !analystSelection.isContrarian
+    && !hasSelectionDisagreement
     && pickProbability >= (oneXTwoCooldown ? 0.56 : 0.49)
     && probabilityGap >= (oneXTwoCooldown ? 0.12 : 0.065)
     && modelProbabilityGap >= (oneXTwoCooldown ? 0.095 : 0.055)
@@ -3532,6 +3572,7 @@ function selectValueAwareOneXTwo(match, picks, modelProbabilities, marketProbabi
   const marketLeaderProfile = [...profiles]
     .sort((a, b) => Number(b.marketProbability || 0) - Number(a.marketProbability || 0))[0];
   const marketLeader = marketLeaderProfile?.pick || modelLeader;
+  const modelLeaderProfile = profiles.find((profile) => profile.code === modelLeader?.[0]) || profiles[0];
   const leaderGap = Number(marketLeaderProfile?.marketProbability || 0)
     - Math.max(...profiles.filter((item) => item.code !== marketLeader?.[0]).map((item) => Number(item.marketProbability || 0)), 0);
   const leaderHandicapSupport = hhadSupportForPick(hhadProbabilities, marketLeader?.[0]);
@@ -3574,22 +3615,31 @@ function selectValueAwareOneXTwo(match, picks, modelProbabilities, marketProbabi
     .sort((a, b) => b.score - a.score)[0];
 
   if (valueCandidate) {
+    const changesModelLeader = valueCandidate.code !== modelLeader?.[0];
     const isContrarian = valueCandidate.code !== marketLeader?.[0];
     const edgeTextZh = `${pct(valueCandidate.probabilityEdge || 0)} 个百分点`;
     const edgeTextEn = `${pct(valueCandidate.probabilityEdge || 0)} points`;
     const evText = `${Math.round(Number(valueCandidate.expectedValue || 0) * 100)}%`;
     return {
-      pick: valueCandidate.pick,
-      mode: isContrarian
+      pick: changesModelLeader ? modelLeader : valueCandidate.pick,
+      mode: changesModelLeader
+        ? "model-leader-value-disagreement"
+        : isContrarian
         ? (valueCandidate.code === "X" ? "value-draw" : "value-underdog")
         : "value-market",
-      isContrarian,
-      valueProfile: valueCandidate,
+      isContrarian: changesModelLeader ? false : isContrarian,
+      hasValueDisagreement: changesModelLeader || isContrarian,
+      valueProfile: changesModelLeader ? modelLeaderProfile : valueCandidate,
+      disagreementProfile: changesModelLeader ? valueCandidate : null,
       reason: {
-        zh: isContrarian
+        zh: changesModelLeader
+          ? `价值分歧：候选方向的模型概率比市场隐含概率高约 ${edgeTextZh}，EV 约 ${evText}；该信号只作为盘口分歧和风险校验，不改写模型首位方向。`
+          : isContrarian
           ? `价值修正：不直接跟随最低 SP，候选方向模型概率比市场隐含概率高约 ${edgeTextZh}，EV 约 ${evText}，因此只按价值方向观察。`
           : `价值确认：独立模型先给出该方向，市场只是同步支持；模型概率比市场隐含概率高约 ${edgeTextZh}，EV 约 ${evText}，通过价值边际检查。`,
-        en: isContrarian
+        en: changesModelLeader
+          ? `Value disagreement: the candidate is about ${edgeTextEn} above market-implied probability with EV around ${evText}. This is kept as market-disagreement risk only and does not rewrite the model-leading direction.`
+          : isContrarian
           ? `Value adjustment: not blindly following the lowest SP. The candidate is about ${edgeTextEn} above market-implied probability with EV around ${evText}, so it is kept as value-watch.`
           : `Value confirmation: the independent model gives this direction first and the market only agrees; model probability is about ${edgeTextEn} above market-implied probability with EV around ${evText}.`,
       },
@@ -3606,22 +3656,24 @@ function selectValueAwareOneXTwo(match, picks, modelProbabilities, marketProbabi
 
   if (drawIsLive && keepsLowOddsFavoriteDirection(drawProfile) && (weakHandicapSupport || leaderGap <= 0.13)) {
     return {
-      pick: drawProfile.pick,
+      pick: modelLeader,
       mode: "value-draw",
-      isContrarian: true,
-      valueProfile: drawProfile,
+      isContrarian: false,
+      hasValueDisagreement: true,
+      valueProfile: modelLeaderProfile,
+      disagreementProfile: drawProfile,
       reason: {
-        zh: `防平修正：最低 SP 方向让球确认不足，平局模型概率较市场高约 ${pct(drawProfile.probabilityEdge || 0)} 个百分点，先降级为价值观察。`,
-        en: `Draw adjustment: the lowest-SP side lacks handicap confirmation, while draw model probability is about ${pct(drawProfile.probabilityEdge || 0)} points above market.`,
+        zh: `防平分歧：最低 SP 方向让球确认不足，平局模型概率较市场高约 ${pct(drawProfile.probabilityEdge || 0)} 个百分点；该信号只提示防平，不改写模型首位方向。`,
+        en: `Draw disagreement: the lowest-SP side lacks handicap confirmation, while draw model probability is about ${pct(drawProfile.probabilityEdge || 0)} points above market. This flags draw cover only and does not rewrite the model leader.`,
       },
     };
   }
 
-  const modelLeaderProfile = profiles.find((profile) => profile.code === modelLeader?.[0]) || profiles[0];
   return {
     pick: modelLeader,
     mode: "model-leader",
     isContrarian: false,
+    hasValueDisagreement: false,
     valueProfile: modelLeaderProfile,
     reason: {
       zh: "模型首位：当前没有发现足够强的冷门/防平价值边际；若该方向只是最低 SP 但边际不足，后续风控会降级为观察。",
@@ -4304,10 +4356,11 @@ function predictionSet(match) {
   const marketLeader = marketPicks[0];
   const marketSecond = marketPicks[1];
   const analystSelection = selectValueAwareOneXTwo(match, picks, modelProbabilities, probabilities, hhadProbabilities);
+  const hasSelectionDisagreement = Boolean(analystSelection.isContrarian || analystSelection.hasValueDisagreement);
   const best1x2 = analystSelection.pick;
   score = representativeProjectedScore(homeLambda, awayLambda, anchorIsHhad ? null : best1x2[0]);
   const probabilityGap = marketLeader[1] - marketSecond[1];
-  const modelProbabilityGap = picks[0][1] - picks[1][1];
+  const modelProbabilityGap = Math.max(0, picks[0][1] - picks[1][1]);
   const selectedMarketProbability = outcomeProbabilityForCode(probabilities, best1x2[0]) || 0;
   const selectionDiscount = Math.max(0, marketLeader[1] - selectedMarketProbability);
   const candidateHandicapSupport = hhadSupportForPick(hhadProbabilities, best1x2[0]);
@@ -4318,7 +4371,7 @@ function predictionSet(match) {
     && candidateHandicapSupport < 0.42;
   const dynamicGate = profileCalibration(match).gate || {};
   const oneXTwoStrategyGate = strategyGateForPrediction(match, anchorMarketType, best1x2[0], predictionOddsBucket(best1x2[2]));
-  const rawTrust = analystSelection.isContrarian
+  const rawTrust = hasSelectionDisagreement
     ? clamp(Math.round(best1x2[1] * 100 + 31 - selectionDiscount * 42), 54, 76)
     : clamp(Math.round(best1x2[1] * 100 + modelProbabilityGap * 48 + 10), 52, 93);
   const trustPenalty =
@@ -4330,7 +4383,7 @@ function predictionSet(match) {
     + Number(oneXTwoStrategyGate.trustPenalty || 0);
   const baseTrust = clamp(
     rawTrust - trustPenalty,
-    analystSelection.isContrarian ? 50 : 48,
+    hasSelectionDisagreement ? 50 : 48,
     candidateIsOverheated || candidateHasWeakHandicap ? 82 : 91
   );
   const probabilityTextZh = `主胜 ${pct(probabilities.home)}% / 平局 ${pct(probabilities.draw)}% / 客胜 ${pct(probabilities.away)}%`;
@@ -4387,7 +4440,7 @@ function predictionSet(match) {
   if (bttsProbability >= 0.45 && bttsProbability < 0.65) {
     riskTags.push({ zh: "进球临界", en: "Goal-model borderline" });
   }
-  if (analystSelection.isContrarian) {
+  if (hasSelectionDisagreement) {
     riskTags.push({ zh: "盘口分歧", en: "Market disagreement" });
   }
 
@@ -4553,7 +4606,7 @@ function predictionSet(match) {
   };
 
   const bestIsSteady = oneXTwoPromote
-    && !analystSelection.isContrarian
+    && !hasSelectionDisagreement
     && best1x2[1] >= 0.58
     && modelProbabilityGap >= 0.18
     && baseTrust >= 84
@@ -4562,17 +4615,17 @@ function predictionSet(match) {
   const bestHasWeakHandicap = ["1", "2"].includes(modelLean.tipCode)
     && bestHandicapSupport !== null
     && bestHandicapSupport < 0.3;
-  const bestHasThinEdge = !analystSelection.isContrarian && (modelProbabilityGap < 0.18 || best1x2[1] < 0.62);
+  const bestHasThinEdge = !hasSelectionDisagreement && (modelProbabilityGap < 0.18 || best1x2[1] < 0.62);
   const bestHasOverheatedFavorite = ["1", "2"].includes(modelLean.tipCode)
     && modelLean.odds <= 1.7
     && (bestHandicapSupport === null || bestHandicapSupport < 0.3 || riskTags.length >= 4);
   const severeRiskCountForBest = riskTags.filter((tag) => (
-    !analystSelection.isContrarian
+    !hasSelectionDisagreement
     || !["Draw risk", "Tight 1X2", "Market disagreement"].includes(tag.en)
   )).length;
   const bestHasSevereRisk = severeRiskCountForBest >= 4
     || (bestHasWeakHandicap && modelLean.odds <= 1.7)
-    || (!analystSelection.isContrarian && modelProbabilityGap < 0.06 && best1x2[1] < 0.52);
+    || (!hasSelectionDisagreement && modelProbabilityGap < 0.06 && best1x2[1] < 0.52);
   const bestLaneHardCooldown = Boolean(
     bestMarketHardCooldown
     || oneXTwoMarketHardCooldown
@@ -4608,12 +4661,12 @@ function predictionSet(match) {
         || reason.includes("risk")
       )).length * 3
       + (bestHasOverheatedFavorite ? 7 : 0)
-      + (analystSelection.isContrarian ? 4 : 0);
+      + (hasSelectionDisagreement ? 4 : 0);
     return clamp(Math.round(leadProbability * 100 + edgeBonus + handicapBonus - riskPenalty), 28, 68);
   })();
   const bestTrustScore = bestShouldWatch
     ? clamp(watchUsefulnessScore - (bestLaneHardCooldown ? 12 : 0), 22, 62)
-    : analystSelection.isContrarian
+    : hasSelectionDisagreement
     ? clamp(oneXTwo.trustScore, 54, 76)
     : bestIsSteady
       ? clamp(oneXTwo.trustScore + 2, 57, 96)
@@ -5153,7 +5206,7 @@ function applyPredictionPersistence(match, existing, capturedAt) {
     || existingProbabilityStrategyVersion !== strategyVersion
     || (existing?.predictionMeta?.trainingSignature || existing?.predictionMeta?.trainingVersion || "none") !== (dataSignature || "none");
 
-  if (sameMarketSignals) {
+  if (sameMarketSignals && !policyChanged) {
     return {
       ...match,
       predictions: existingPredictions,
