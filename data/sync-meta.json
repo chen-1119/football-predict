@@ -1,9 +1,9 @@
 {
   "version": 1,
   "source": "sporttery",
-  "updatedAt": "2026-06-12T01:41:12.466Z",
-  "capturedAt": "2026-06-12T01:41:12.466Z",
-  "lastAttemptAt": "2026-06-12T01:41:12.466Z",
+  "updatedAt": "2026-06-12T01:43:35.527Z",
+  "capturedAt": "2026-06-12T01:43:35.527Z",
+  "lastAttemptAt": "2026-06-12T01:43:35.527Z",
   "officialOddsMatches": 21,
   "officialHandicapOddsMatches": 26,
   "displayOddsMatches": 21,
@@ -11,7 +11,7 @@
   "referenceOddsMatches": 0,
   "referenceHandicapOddsMatches": 0,
   "officialResultMatches": 2942,
-  "skippedWithoutOfficialOdds": 10,
+  "skippedWithoutOfficialOdds": 0,
   "byStatus": {
     "FINISHED": 2948,
     "PENDING_RESULT": 3,
@@ -28,47 +28,48 @@
   "files": {
     "current": 33,
     "history": 2948,
-    "teams": 626,
-    "predictionSnapshots": 227,
+    "teams": 627,
+    "predictionSnapshots": 234,
     "externalSignals": 155
   },
   "refreshPolicy": {
     "workflowMinutes": 5,
-    "pagePollSeconds": 20,
+    "pagePollSeconds": 30,
     "oddsHistoryBucketMinutes": 5,
     "note": "GitHub Pages serves static JSON. The page checks for newer JSON regularly; GitHub Actions refreshes the source files on schedule."
   },
   "attempt": {
-    "capturedAt": "2026-06-12T01:41:12.466Z",
-    "officialOddsMatches": 19,
-    "officialHandicapOddsMatches": 23,
+    "capturedAt": "2026-06-12T01:43:35.527Z",
+    "officialOddsMatches": 0,
+    "officialHandicapOddsMatches": 0,
     "officialResultMatches": 0,
     "fallbackResultMatches": 0,
-    "publishableMatches": 29,
+    "publishableMatches": 0,
     "fiveHundredFallbackMatches": 22,
-    "combinedPublishableMatches": 29
+    "combinedPublishableMatches": 22
   },
   "oddsHistory": {
     "rows": 40613,
-    "appended": 48,
-    "updated": 0
+    "appended": 0,
+    "updated": 0,
+    "skipped": "fresh Sporttery odds unavailable; keeping existing 2980 matches"
   },
   "predictionSnapshots": {
-    "total": 227,
+    "total": 234,
     "byPhase": {
       "review": 83,
       "mid": 12,
-      "baseline": 100,
+      "baseline": 107,
       "late": 9,
       "final": 9,
       "locked": 14
     },
-    "appended": 0,
-    "updated": 19
+    "appended": 7,
+    "updated": 1
   },
   "externalSignals": {
     "source": "external-signals",
-    "updatedAt": "2026-06-12T01:41:04.547Z",
+    "updatedAt": "2026-06-12T01:43:32.807Z",
     "matches": 155
   },
   "modelCalibration": {
@@ -115,13 +116,7 @@
       "tip": 3
     }
   },
-  "historicalTraining": {
-    "version": "historical-training-v1",
-    "source": "xgabora/Club-Football-Match-Data-2000-2025 + martj42/international_results",
-    "rows": 279932,
-    "lastMatchDate": "2026-06-08",
-    "signature": "historical-training-v1|xgabora/Club-Football-Match-Data-2000-2025 + martj42/international_results|279932|2026-06-08"
-  },
+  "historicalTraining": null,
   "worldCupKimiData": {
     "version": "kimi-worldcup-dataset-v1",
     "source": "Kimi_Agent_2026 世界杯数据全景数据.zip",
@@ -134,10 +129,10 @@
   "fallback": {
     "keptExisting": true,
     "mergedPartialFresh": true,
-    "reason": "fresh result coverage 0 is far below existing history 2948",
+    "reason": "fresh Sporttery odds unavailable; keeping existing 2980 matches",
     "existingMatches": 2980,
-    "freshPublishableMatches": 29,
-    "sportteryPublishableMatches": 29,
+    "freshPublishableMatches": 22,
+    "sportteryPublishableMatches": 0,
     "fiveHundredFallbackMatches": 22,
     "fiveHundredResultMatches": 0
   }
