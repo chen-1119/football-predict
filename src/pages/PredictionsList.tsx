@@ -40,8 +40,15 @@ const getSportteryDay = (match: Match): string => match.businessDate || getKicko
 
 const getMatchDateCandidates = (match: Match): string[] => {
   const kickoffDay = getKickoffDay(match);
-  // The fixture board is grouped by actual kickoff day. Sporttery issue day is shown as metadata/archives.
-  return Array.from(new Set([kickoffDay].filter(Boolean)));
+  const sportteryDay = getSportteryDay(match);
+  const shouldAlsoShowOnSportteryDay = match.status === 'SCHEDULED' || match.status === 'LIVE';
+
+  // Pre-match users think in both Sporttery issue day and actual kickoff day.
+  // Cross-midnight fixtures should stay visible on the issue day, then remain findable by kickoff day.
+  return Array.from(new Set([
+    kickoffDay,
+    shouldAlsoShowOnSportteryDay ? sportteryDay : ''
+  ].filter(Boolean)));
 };
 
 const matchBelongsToDate = (match: Match, date: string) => getMatchDateCandidates(match).includes(date);
@@ -808,8 +815,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     ((sourceFallback?.sportteryPublishableMatches ?? null) === 0 && (sourceFallback?.fiveHundredFallbackMatches ?? 0) > 0)
   );
   const sourceFallbackLabel = language === 'zh'
-    ? `官方源本轮不可用，当前为锁定快照 + 500 校验；不展示 mock 样例。`
-    : `Official source is unavailable this run; showing a locked snapshot plus 500.com checks, with no mock samples.`;
+    ? `后台已检查，官方竞彩本轮未返回新的开售数据；当前使用锁定快照 + 500 校验。`
+    : `Backend checked successfully, but Sporttery returned no fresh on-sale data; using the locked snapshot plus 500.com checks.`;
 
   const isCurrentDataLoading = Boolean(
     dataSync.currentLoading ||
@@ -900,7 +907,9 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         : `F ${dataSync.byStatus?.FINISHED || 0} / L ${dataSync.byStatus?.LIVE || 0} / R ${dataSync.byStatus?.PENDING_RESULT || 0} / S ${dataSync.byStatus?.SCHEDULED || 0}`
     },
     {
-      label: t('dataUpdated'),
+      label: hasSourceFallback
+        ? (language === 'zh' ? '后台检查' : 'Backend check')
+        : t('dataUpdated'),
       value: sourceAgeMinutes !== null
         ? `${formatSyncTime(dataSync.sourceUpdatedAt || dataSync.updatedAt, language)} / ${formatAgeMinutes(sourceAgeMinutes, language)}`
         : formatSyncTime(dataSync.sourceUpdatedAt || dataSync.updatedAt, language)
@@ -993,8 +1002,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
           : (language === 'zh' ? '等待同步' : 'Waiting');
   const selectedDateIsToday = effectiveSelectedDate === todayStr;
   const kickoffDayLabel = selectedDateIsToday
-    ? (language === 'zh' ? '今日开赛' : 'Today kickoffs')
-    : (language === 'zh' ? '本日开赛' : 'Kickoffs');
+    ? (language === 'zh' ? '今日相关' : 'Today slate')
+    : (language === 'zh' ? '本日相关' : 'Selected slate');
   const previousIssueLabel = selectedDateIsToday
     ? (language === 'zh' ? '昨日延续' : 'prior issue')
     : (language === 'zh' ? '前期延续' : 'prior issue');
@@ -1005,8 +1014,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     ? `${previousIssueLabel} ${dateIdentityCounts.previousIssue} / ${sameIssueLabel} ${dateIdentityCounts.sameIssue}`
     : `${previousIssueLabel} ${dateIdentityCounts.previousIssue} / ${sameIssueLabel} ${dateIdentityCounts.sameIssue}`;
   const kickoffMetricNote = language === 'zh'
-    ? `${formatShortDate(effectiveSelectedDate, language)} · 按实际开赛日排序 · 跨竞彩日 ${dateIdentityCounts.crossDay}`
-    : `${formatShortDate(effectiveSelectedDate, language)} · sorted by kickoff day · cross-issue ${dateIdentityCounts.crossDay}`;
+    ? `${formatShortDate(effectiveSelectedDate, language)} · 含跨夜竞彩日 · 按开赛时间排序`
+    : `${formatShortDate(effectiveSelectedDate, language)} · includes cross-midnight issue day · sorted by kickoff`;
   const dashboardStatusItems = [
     {
       label: language === 'zh' ? '数据更新' : 'Updated',
