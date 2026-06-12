@@ -1,7 +1,7 @@
 {
   "version": 1,
   "source": "sporttery:prediction-snapshots",
-  "updatedAt": "2026-06-12T00:33:52.019Z",
+  "updatedAt": "2026-06-12T00:57:53.338Z",
   "retentionDays": 365,
   "maxRows": 5000,
   "rows": [
@@ -17235,19 +17235,103 @@
         "resultStatus": "PENDING",
         "riskCount": 3
       }
+    },
+    {
+      "capturedAt": "2026-06-12T00:57:53.338Z",
+      "firstSeenAt": "2026-06-12T00:57:53.338Z",
+      "lastSeenAt": "2026-06-12T00:57:53.338Z",
+      "seenCount": 1,
+      "phase": "review",
+      "signature": "1X2:HAD:WATCH:recommend|BEST:HAD:WATCH:recommend|GOALS::WATCH:recommend|1.34/3.92/7.85|-1.00:2.20/3.28/2.70|45/33/22",
+      "policyVersion": "sporttery-day-dynamic-calibration-v24",
+      "promptVersion": "professional-football-analyst-v16",
+      "sourceMatchId": "2040162",
+      "matchId": "sporttery_2040162",
+      "matchNo": "周四001",
+      "businessDate": "2026-06-11",
+      "kickoffTime": "2026-06-12T03:00:00+08:00",
+      "status": "FINISHED",
+      "leagueName": "世界杯",
+      "homeTeamName": "墨西哥",
+      "awayTeamName": "南非",
+      "scoreHome": 2,
+      "scoreAway": 0,
+      "odds": {
+        "odds1": 1.34,
+        "oddsX": 3.92,
+        "odds2": 7.85
+      },
+      "handicapLine": "-1.00",
+      "handicapOdds": {
+        "odds1": 2.2,
+        "oddsX": 3.28,
+        "odds2": 2.7
+      },
+      "oddsTrend": {
+        "sampleSize": 675,
+        "firstCapturedAt": "2026-06-08T07:04:18.034Z",
+        "lastCapturedAt": "2026-06-11T23:46:11.538Z",
+        "odds1Change": -0.08,
+        "oddsXChange": 0.53,
+        "odds2Change": 1.15,
+        "direction": "home",
+        "summary": {
+          "zh": "已记录 675 次官方 SP 快照，主胜 -0.08，市场对该方向有增温迹象；同步变化：平局 +0.53，客胜 +1.15。",
+          "en": "675 official SP snapshots recorded. home win -0.08; that side is warming, with secondary moves draw +0.53, away win +1.15."
+        }
+      },
+      "probabilityFinal": {
+        "home": 44.6,
+        "draw": 33.1,
+        "away": 22.4
+      },
+      "probabilityModelVersion": "market-elo-form-dynamic-calibrated-poisson-v6",
+      "best": {
+        "tipCode": "WATCH",
+        "tipLabel": {
+          "zh": "观察为主 条件未齐",
+          "en": "Watch first: conditions not aligned"
+        },
+        "odds": 0,
+        "trustScore": 22,
+        "resultStatus": "PENDING",
+        "riskCount": 5
+      },
+      "oneXTwo": {
+        "tipCode": "WATCH",
+        "tipLabel": {
+          "zh": "观察为主 胜平负不强推",
+          "en": "Watch first: no 1X2 pick"
+        },
+        "odds": 0,
+        "trustScore": 34,
+        "resultStatus": "PENDING",
+        "riskCount": 4
+      },
+      "goals": {
+        "tipCode": "WATCH",
+        "tipLabel": {
+          "zh": "观察为主 进球数不强推",
+          "en": "Watch first: no total-goals pick"
+        },
+        "odds": 0,
+        "trustScore": 47,
+        "resultStatus": "PENDING",
+        "riskCount": 3
+      }
     }
   ],
   "summary": {
-    "total": 213,
+    "total": 214,
     "byPhase": {
-      "review": 82,
+      "review": 83,
       "mid": 12,
       "baseline": 87,
       "late": 9,
       "final": 9,
       "locked": 14
     },
-    "appended": 0,
+    "appended": 1,
     "updated": 0
   }
 }
