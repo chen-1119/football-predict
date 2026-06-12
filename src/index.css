@@ -11266,10 +11266,49 @@ body {
   text-align: center;
 }
 
+.generated-code-field {
+  appearance: none;
+  outline: none;
+  cursor: text;
+}
+
+.generated-code-field:focus {
+  border-color: hsl(var(--primary) / 0.66);
+  box-shadow: 0 0 0 3px hsl(var(--primary) / 0.16);
+}
+
 .generated-expiry {
   color: hsl(var(--text-secondary));
   font-size: 0.86rem;
   font-weight: 700;
+}
+
+.access-copy-hint,
+.access-copy-feedback {
+  color: hsl(var(--text-secondary));
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+.access-copy-feedback {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  padding: 0.32rem 0.62rem;
+  font-weight: 750;
+}
+
+.access-copy-feedback.is-success {
+  border-color: hsl(var(--success) / 0.28);
+  background: hsl(var(--success) / 0.1);
+  color: hsl(var(--success));
+}
+
+.access-copy-feedback.is-warning {
+  border-color: hsl(var(--warning) / 0.34);
+  background: hsl(var(--warning) / 0.1);
+  color: hsl(var(--warning));
 }
 
 .access-code-table-card {

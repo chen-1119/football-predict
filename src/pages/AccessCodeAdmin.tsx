@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Ban, Check, Clipboard, KeyRound, Loader2, Plus, RefreshCw, ShieldCheck } from 'lucide-react';
 import { useApp } from '../context/AppContextCore';
+import { copyText } from '../services/clipboard';
 import { buildApiUrl } from '../services/runtimeUrls';
 
 type GeneratedAccessCode = {
@@ -50,6 +51,8 @@ const getStatusLabel = (status: AccessCodeRow['status'], language: 'zh' | 'en') 
 export const AccessCodeAdmin: React.FC = () => {
   const { language } = useApp();
   const queryToken = useMemo(() => new URLSearchParams(window.location.search).get('token') || '', []);
+  const generatedCodeInputRef = useRef<HTMLInputElement | null>(null);
+  const copyResetTimerRef = useRef<number | null>(null);
   const [adminToken, setAdminToken] = useState(() => queryToken || sessionStorage.getItem('football_admin_token') || '');
   const [label, setLabel] = useState('');
   const [generatedCode, setGeneratedCode] = useState<GeneratedAccessCode | null>(null);
@@ -59,6 +62,7 @@ export const AccessCodeAdmin: React.FC = () => {
   const [isLoadingRows, setIsLoadingRows] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState<{ tone: 'success' | 'warning'; text: string } | null>(null);
 
   const translations = {
     title: { zh: '校验码生成', en: 'Access Code Generator' },
@@ -78,6 +82,8 @@ export const AccessCodeAdmin: React.FC = () => {
     latest: { zh: '最新校验码', en: 'Latest code' },
     copy: { zh: '复制', en: 'Copy' },
     copied: { zh: '已复制', en: 'Copied' },
+    copyManual: { zh: '复制受限，已选中校验码，请手动复制。', en: 'Copy is blocked. The code is selected for manual copy.' },
+    copyHint: { zh: '点击校验码可全选。若浏览器限制剪贴板，请长按或使用系统复制。', en: 'Click the code to select it. If the browser blocks clipboard access, long-press or use system copy.' },
     expiresAt: { zh: '失效时间', en: 'Expires at' },
     recent: { zh: '最近生成记录', en: 'Recent codes' },
     refresh: { zh: '刷新', en: 'Refresh' },
@@ -92,6 +98,25 @@ export const AccessCodeAdmin: React.FC = () => {
   };
 
   const t = (key: keyof typeof translations) => translations[key][language] || '';
+
+  const selectGeneratedCode = () => {
+    const input = generatedCodeInputRef.current;
+    if (!input) return;
+    input.focus();
+    input.select();
+    input.setSelectionRange(0, input.value.length);
+  };
+
+  const showCopyFeedback = (feedback: { tone: 'success' | 'warning'; text: string }) => {
+    if (copyResetTimerRef.current) {
+      window.clearTimeout(copyResetTimerRef.current);
+    }
+    setCopyFeedback(feedback);
+    copyResetTimerRef.current = window.setTimeout(() => {
+      setCopied(false);
+      setCopyFeedback(null);
+    }, feedback.tone === 'success' ? 1800 : 4200);
+  };
 
   const adminHeaders = () => ({
     'content-type': 'application/json',
@@ -133,11 +158,20 @@ export const AccessCodeAdmin: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (copyResetTimerRef.current) {
+        window.clearTimeout(copyResetTimerRef.current);
+      }
+    };
+  }, []);
+
   const handleGenerate = async (event: React.FormEvent) => {
     event.preventDefault();
     setError(null);
     setIsGenerating(true);
     setCopied(false);
+    setCopyFeedback(null);
     try {
       const response = await fetch(buildApiUrl('/api/admin/access-codes'), {
         method: 'POST',
@@ -158,9 +192,16 @@ export const AccessCodeAdmin: React.FC = () => {
 
   const copyCode = async () => {
     if (!generatedCode?.code) return;
-    await navigator.clipboard.writeText(generatedCode.code);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1600);
+    setError(null);
+    const result = await copyText(generatedCode.code);
+    if (result.ok) {
+      setCopied(true);
+      showCopyFeedback({ tone: 'success', text: t('copied') });
+      return;
+    }
+    setCopied(false);
+    selectGeneratedCode();
+    showCopyFeedback({ tone: 'warning', text: t('copyManual') });
   };
 
   const revokeCode = async (codeId: string) => {
@@ -234,10 +275,20 @@ export const AccessCodeAdmin: React.FC = () => {
           <span className="access-kicker">{t('latest')}</span>
           {generatedCode ? (
             <>
-              <strong className="generated-code">{generatedCode.code}</strong>
+              <input
+                ref={generatedCodeInputRef}
+                className="generated-code generated-code-field"
+                type="text"
+                value={generatedCode.code}
+                readOnly
+                aria-label={t('latest')}
+                onFocus={(event) => event.currentTarget.select()}
+                onClick={(event) => event.currentTarget.select()}
+              />
               <span className="generated-expiry">
                 {t('expiresAt')}: {formatDateTime(generatedCode.expiresAt, language)}
               </span>
+              <span className="access-copy-hint">{t('copyHint')}</span>
               <div className="access-action-row">
                 <button type="button" className="btn btn-secondary" onClick={copyCode}>
                   {copied ? <Check size={16} /> : <Clipboard size={16} />}
@@ -253,6 +304,11 @@ export const AccessCodeAdmin: React.FC = () => {
                   <span>{generatedCode.status === 'revoked' || generatedCode.revokedAt ? t('revoked') : t('revoke')}</span>
                 </button>
               </div>
+              {copyFeedback && (
+                <span className={`access-copy-feedback is-${copyFeedback.tone}`} role="status">
+                  {copyFeedback.text}
+                </span>
+              )}
             </>
           ) : (
             <p>{t('subtitle')}</p>
