@@ -1,20 +1,24 @@
 {
   "version": 1,
   "source": "sporttery",
-  "updatedAt": "2026-06-08T11:54:40.740Z",
-  "capturedAt": "2026-06-08T11:54:40.740Z",
-  "lastAttemptAt": "2026-06-12T00:07:45.631Z",
+  "updatedAt": "2026-06-12T00:16:16.811Z",
+  "capturedAt": "2026-06-12T00:16:16.811Z",
+  "lastAttemptAt": "2026-06-12T00:16:16.811Z",
   "officialOddsMatches": 21,
-  "officialHandicapOddsMatches": 27,
-  "officialResultMatches": 3004,
+  "officialHandicapOddsMatches": 26,
+  "displayOddsMatches": 21,
+  "displayHandicapOddsMatches": 26,
+  "referenceOddsMatches": 0,
+  "referenceHandicapOddsMatches": 0,
+  "officialResultMatches": 2942,
   "skippedWithoutOfficialOdds": 0,
   "byStatus": {
-    "PENDING_RESULT": 9,
-    "SCHEDULED": 23,
-    "FINISHED": 3004
+    "FINISHED": 2947,
+    "PENDING_RESULT": 4,
+    "SCHEDULED": 23
   },
   "coverage": {
-    "first": "2025-11-20",
+    "first": "2025-11-22",
     "last": "2026-06-17"
   },
   "window": {
@@ -22,10 +26,10 @@
     "forwardDays": 14
   },
   "files": {
-    "current": 32,
-    "history": 3004,
-    "teams": 629,
-    "predictionSnapshots": 158,
+    "current": 27,
+    "history": 2947,
+    "teams": 627,
+    "predictionSnapshots": 212,
     "externalSignals": 160
   },
   "refreshPolicy": {
@@ -35,34 +39,37 @@
     "note": "GitHub Pages serves static JSON. The page checks for newer JSON regularly; GitHub Actions refreshes the source files on schedule."
   },
   "attempt": {
-    "capturedAt": "2026-06-12T00:07:45.631Z",
+    "capturedAt": "2026-06-12T00:16:16.811Z",
     "officialOddsMatches": 0,
     "officialHandicapOddsMatches": 0,
     "officialResultMatches": 0,
-    "publishableMatches": 0
+    "fallbackResultMatches": 5,
+    "publishableMatches": 0,
+    "fiveHundredFallbackMatches": 28,
+    "combinedPublishableMatches": 28
   },
   "oddsHistory": {
-    "rows": 8971,
+    "rows": 40326,
     "appended": 0,
     "updated": 0,
-    "skipped": "Sporttery returned no publishable matches; kept existing match store"
+    "skipped": "fresh Sporttery odds unavailable; keeping existing 2974 matches"
   },
   "predictionSnapshots": {
-    "total": 158,
+    "total": 212,
     "byPhase": {
-      "review": 54,
-      "mid": 11,
-      "baseline": 65,
+      "review": 82,
+      "mid": 12,
+      "baseline": 87,
       "late": 8,
       "final": 9,
-      "locked": 11
+      "locked": 14
     },
-    "appended": 0,
+    "appended": 54,
     "updated": 0
   },
   "externalSignals": {
     "source": "external-signals",
-    "updatedAt": "2026-06-12T00:07:43.475Z",
+    "updatedAt": "2026-06-12T00:16:15.008Z",
     "matches": 160
   },
   "modelCalibration": {
@@ -82,11 +89,51 @@
       "bestHitRate": 0.2
     }
   },
+  "modelStrategy": {
+    "version": "self-optimization-v1",
+    "generatedAt": "2026-06-09T14:31:31.124Z",
+    "activation": {
+      "mode": "cooling-only",
+      "onlineEffect": "guarded-active",
+      "minimumRowsForRule": 3,
+      "minimumRowsForProfile": 5,
+      "minimumRowsForLoosening": 100,
+      "note": "Only tightening rules are applied online until a bucket reaches the loosening sample floor."
+    },
+    "sample": {
+      "matches": 3028,
+      "settledRows": 31,
+      "officialRows": 31,
+      "recommendationRows": 18,
+      "bestRows": 5,
+      "goalsRows": 13
+    },
+    "activeGates": {
+      "profile": 2,
+      "market": 3,
+      "marketProfile": 4,
+      "oddsBucket": 2,
+      "tip": 3
+    }
+  },
+  "historicalTraining": null,
+  "worldCupKimiData": {
+    "version": "kimi-worldcup-dataset-v1",
+    "source": "Kimi_Agent_2026 世界杯数据全景数据.zip",
+    "signature": "kimi-worldcup-dataset-v1|065363d19babce35|teams:48|fixtures:104",
+    "teams": 48,
+    "fixtures": 104,
+    "policy": "usable-as-pre-match-prior",
+    "rawPolicy": "audit-only"
+  },
   "fallback": {
     "keptExisting": true,
-    "mergedPartialFresh": false,
-    "reason": "Sporttery returned no publishable matches; kept existing match store",
-    "existingMatches": 3036,
-    "freshPublishableMatches": 0
+    "mergedPartialFresh": true,
+    "reason": "fresh Sporttery odds unavailable; keeping existing 2974 matches",
+    "existingMatches": 2974,
+    "freshPublishableMatches": 28,
+    "sportteryPublishableMatches": 0,
+    "fiveHundredFallbackMatches": 28,
+    "fiveHundredResultMatches": 5
   }
 }
