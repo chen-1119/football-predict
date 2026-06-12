@@ -14,6 +14,7 @@ import { getMatchSignal, isActionableRecommendation } from '../services/matchSig
 import { buildMatchInsight } from '../services/predictionInsight';
 import { getVisiblePrediction, getVisiblePredictions } from '../services/predictionVisibility';
 import { getAccessAuthHeaders } from '../services/accessControl';
+import { buildApiUrl, buildStaticUrl } from '../services/runtimeUrls';
 import { TeamBadge } from '../components/TeamBadge';
 import { ArrowLeft, Trophy } from 'lucide-react';
 import { getWorldCupSeededFixtures } from '../services/worldCupData';
@@ -562,7 +563,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     const loadDetail = async () => {
       try {
         const accessHeaders = getAccessAuthHeaders();
-        const response = await fetch(`/api/matches/${encodeURIComponent(matchId)}`, {
+        const response = await fetch(buildApiUrl(`/api/matches/${encodeURIComponent(matchId)}`), {
           cache: 'no-store',
           headers: Object.keys(accessHeaders).length ? accessHeaders : undefined,
           signal: controller.signal
@@ -578,7 +579,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
 
       try {
         const accessHeaders = getAccessAuthHeaders();
-        const response = await fetch('/data/matches-current.json', {
+        const response = await fetch(buildStaticUrl('data/matches-current.json'), {
           cache: 'no-store',
           headers: Object.keys(accessHeaders).length ? accessHeaders : undefined,
           signal: controller.signal

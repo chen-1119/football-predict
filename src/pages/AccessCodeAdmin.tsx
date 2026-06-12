@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Ban, Check, Clipboard, KeyRound, Loader2, Plus, RefreshCw, ShieldCheck } from 'lucide-react';
 import { useApp } from '../context/AppContextCore';
+import { buildApiUrl } from '../services/runtimeUrls';
 
 type GeneratedAccessCode = {
   id: string;
@@ -101,7 +102,7 @@ export const AccessCodeAdmin: React.FC = () => {
     setIsLoadingRows(true);
     setError(null);
     try {
-      const response = await fetch('/api/admin/access-codes', {
+      const response = await fetch(buildApiUrl('/api/admin/access-codes'), {
         headers: adminHeaders(),
         cache: 'no-store'
       });
@@ -138,7 +139,7 @@ export const AccessCodeAdmin: React.FC = () => {
     setIsGenerating(true);
     setCopied(false);
     try {
-      const response = await fetch('/api/admin/access-codes', {
+      const response = await fetch(buildApiUrl('/api/admin/access-codes'), {
         method: 'POST',
         headers: adminHeaders(),
         body: JSON.stringify({ label: label.trim() })
@@ -166,7 +167,7 @@ export const AccessCodeAdmin: React.FC = () => {
     setError(null);
     setRevokingId(codeId);
     try {
-      const response = await fetch(`/api/admin/access-codes/${encodeURIComponent(codeId)}/revoke`, {
+      const response = await fetch(buildApiUrl(`/api/admin/access-codes/${encodeURIComponent(codeId)}/revoke`), {
         method: 'POST',
         headers: adminHeaders()
       });

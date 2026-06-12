@@ -11,6 +11,7 @@ import {
   readStoredAccessSession,
   type AccessSession
 } from '../services/accessControl';
+import { buildApiUrl, buildStaticUrl, getDataApiBase, normalizeRuntimeBase } from '../services/runtimeUrls';
 
 type SyncedMatch = Match & {
   homeTeamName?: string;
@@ -91,7 +92,7 @@ type RuntimeConfig = {
 const CURRENT_REFRESH_MS = 30 * 1000;
 const HISTORY_REFRESH_MS = 5 * 60 * 1000;
 const DATA_FETCH_TIMEOUT_MS = 12 * 1000;
-const ENV_DATA_API_BASE = import.meta.env.VITE_DATA_API_BASE;
+const ENV_DATA_API_BASE = getDataApiBase();
 const ENV_DISABLE_DATA_API = import.meta.env.VITE_DISABLE_DATA_API === '1';
 const ENV_PREFER_DATA_API = import.meta.env.VITE_PREFER_DATA_API !== '0';
 const ENV_ENABLE_MOCK_FALLBACK = import.meta.env.DEV && import.meta.env.VITE_ENABLE_MOCK_FALLBACK === '1';
@@ -196,11 +197,7 @@ const isUnauthorizedFetchError = (error: unknown) => {
   return error instanceof Error && /\bHTTP 401\b/.test(error.message);
 };
 
-const normalizeApiBase = (value: string | undefined): string | null => {
-  const trimmed = value?.trim();
-  if (!trimmed) return null;
-  return trimmed.replace(/\/+$/, '');
-};
+const normalizeApiBase = normalizeRuntimeBase;
 
 const readMetaCount = (value: number | undefined) => (
   typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
@@ -277,7 +274,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const isAccessVerified = isAccessSessionValid(accessSession);
   const lastMetaRef = useRef<{ sourceUpdatedAt?: string; finishedCount?: number }>({});
   const refreshMsRef = useRef(CURRENT_REFRESH_MS);
-  const apiBaseRef = useRef<string | null>(normalizeApiBase(ENV_DATA_API_BASE));
+  const apiBaseRef = useRef<string | null>(ENV_DATA_API_BASE);
   const apiDisabledRef = useRef(ENV_DISABLE_DATA_API);
   const preferApiRef = useRef(ENV_PREFER_DATA_API);
   const pollSecondsOverrideRef = useRef<number | null>(null);
@@ -293,7 +290,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const verifyAccessCode = async (code: string): Promise<AccessSession> => {
-    const response = await fetch('/api/access/verify', {
+    const response = await fetch(buildApiUrl('/api/access/verify'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ code })
@@ -384,7 +381,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const fetchSyncMeta = async (): Promise<SyncMeta | null> => {
       try {
-        return (await fetchFirstAvailable<SyncMeta>(dataUrls('/sync-meta', ['./data/sync-meta.json']), activeAccessToken)).data;
+        return (await fetchFirstAvailable<SyncMeta>(dataUrls('/sync-meta', [buildStaticUrl('data/sync-meta.json')]), activeAccessToken)).data;
       } catch {
         return null;
       }
@@ -394,7 +391,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (apiBaseRef.current || apiDisabledRef.current) return;
 
       try {
-        const config = await fetchJson<RuntimeConfig>('./data/runtime-config.json', activeAccessToken);
+        const config = await fetchJson<RuntimeConfig>(buildStaticUrl('data/runtime-config.json'), activeAccessToken);
         if (config.disableDataApi) {
           apiDisabledRef.current = true;
           return;
@@ -464,7 +461,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       try {
         const [dataResult, meta, sourceHealth] = await Promise.all([
-          fetchFirstAvailable<unknown>(dataUrls('/matches/current?view=list', ['./data/matches-current.json', './matches.json']), activeAccessToken),
+          fetchFirstAvailable<unknown>(
+            dataUrls('/matches/current?view=list', [buildStaticUrl('data/matches-current.json'), buildStaticUrl('matches.json')]),
+            activeAccessToken
+          ),
           fetchSyncMeta(),
           fetchSourceHealth()
         ]);
