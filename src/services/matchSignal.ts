@@ -15,8 +15,8 @@ const labels: Record<MatchSignalCategory, MultiLangString> = {
   steady: { zh: '高可信候选', en: 'High confidence' },
   lean: { zh: '主推候选', en: 'Model lean' },
   value: { zh: '价值观察', en: 'Value watch' },
-  watch: { zh: '观察', en: 'Watch' },
-  avoid: { zh: '先避开', en: 'Avoid for now' },
+  watch: { zh: '参考', en: 'Reference' },
+  avoid: { zh: '保留推荐', en: 'Kept recommendation' },
   unavailable: { zh: '待开售', en: 'Pending' },
   finished: { zh: '已完场', en: 'Finished' }
 };
@@ -152,7 +152,7 @@ export function getMatchSignal(match: Match): MatchSignal {
             ? 'A reference lean is shown, but risk tags are stacked. It stays out of the strong-pick pool; use late SP and handicap movement for judgement.'
             : 'The gate was not met and risk tags are stacked. Keep the data for monitoring, but do not promote it.'
         },
-        tone: 'danger',
+        tone: 'warning',
         trustScore,
         riskCount: riskTags.length
       };
@@ -266,12 +266,12 @@ export function getMatchSignal(match: Match): MatchSignal {
       note: {
         zh: selectedIsNotModelLeader
           ? '精选方向与最终概率首选不一致，先降级观察，等待下一次 SP 快照确认。'
-          : '风险标签叠加，先降低优先级，等临场 SP 复核。',
+          : '条件未达到精选池标准，保留推荐方向，等临场 SP 复核。',
         en: selectedIsNotModelLeader
           ? 'The selected pick is not aligned with the final probability leader. Downgrade and wait for the next SP snapshot.'
           : 'Multiple risk tags overlap. Lower priority or wait for late SP.'
       },
-      tone: 'danger',
+      tone: 'warning',
       trustScore,
       riskCount: riskTags.length
     };

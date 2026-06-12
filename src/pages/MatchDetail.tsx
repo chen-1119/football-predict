@@ -823,7 +823,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
 
   const recommendationActionLabel = (prediction: PredictionDetail | undefined) => {
     const action = prediction?.recommendationAction;
-    if (prediction?.tipCode === 'WATCH') return language === 'zh' ? '观察' : 'Watch';
+    if (prediction?.tipCode === 'WATCH') return language === 'zh' ? '参考' : 'Reference';
     if (action === 'recommend') return language === 'zh' ? '主推' : 'Main';
     return language === 'zh' ? '参考' : 'Reference';
   };
@@ -929,7 +929,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   const decisionPoolStatus = isQualifiedPick
     ? (language === 'zh' ? '进精选池' : 'Top pool')
     : matchSignal.category === 'avoid'
-      ? (language === 'zh' ? '避开观察' : 'Avoid watch')
+      ? (language === 'zh' ? '保留推荐' : 'Kept recommendation')
       : match.status === 'FINISHED'
         ? (language === 'zh' ? '已锁定复盘' : 'Locked review')
         : (language === 'zh' ? '不进精选池' : 'Not in top pool');
@@ -938,7 +938,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
       ? (language === 'zh' ? '推荐方向' : 'Pick')
       : (language === 'zh' ? '参考倾向' : 'Reference lean')} ${primaryOutcomeTitle}`
     : matchSignal.category === 'avoid'
-      ? (language === 'zh' ? '避开观察' : 'Avoid watch')
+      ? (language === 'zh' ? '保留推荐' : 'Kept recommendation')
       : (language === 'zh' ? '等待确认' : 'Await confirmation');
   const hadPoolRow = poolRows.find((row) => row.poolCode === 'HAD');
   const hhadPoolRow = poolRows.find((row) => row.poolCode === 'HHAD');
@@ -980,8 +980,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
       : 'Model probability, official SP, handicap validation, and risk tags passed together, so this fixture enters the top pool.')
     : matchSignal.category === 'avoid'
       ? (language === 'zh'
-        ? '模型方向保留，但风险标签叠加或盘口验证不足，先列为避开观察。'
-        : 'The model direction is kept, but risk tags or handicap validation are weak, so this is an avoid watch.')
+        ? '模型方向保留，暂不进入精选池，作为赛前参考推荐展示。'
+        : 'The model direction is kept out of the top pool and shown as a pre-match reference recommendation.')
       : primaryOutcomePrediction
         ? (language === 'zh'
           ? '模型主线仍有方向，但低赔、让球或风险校验未同时通过，仅作参考。'

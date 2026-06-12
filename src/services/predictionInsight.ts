@@ -625,8 +625,8 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
     steady: { zh: '可列入候选', en: 'Candidate' },
     lean: { zh: '主推候选', en: 'Model lean' },
     value: { zh: '价值观察', en: 'Value watch' },
-    watch: { zh: '观察为主', en: 'Watch' },
-    avoid: { zh: '先避开', en: 'Avoid for now' },
+    watch: { zh: '参考为主', en: 'Reference' },
+    avoid: { zh: '保留推荐', en: 'Kept recommendation' },
     unavailable: { zh: '等待开售', en: 'Wait for sale' },
     finished: { zh: '赛后复盘', en: 'Post-match review' }
   };
@@ -635,7 +635,7 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
     lean: 'success',
     value: 'warning',
     watch: 'warning',
-    avoid: 'danger',
+    avoid: 'warning',
     unavailable: 'muted',
     finished: 'muted'
   };
@@ -761,7 +761,7 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
       score: insightScore,
       tone,
       metrics: [
-        { label: { zh: '决策状态', en: 'Decision' }, value: isReferenceOnly ? { zh: '参考单', en: 'Reference' } : { zh: '观察单', en: 'Watch' }, tone: 'warning' },
+        { label: { zh: '决策状态', en: 'Decision' }, value: { zh: '参考单', en: 'Reference' }, tone: 'warning' },
         { label: { zh: '主线输出', en: 'Main line' }, value: isReferenceOnly ? { zh: tipZh, en: tipEn } : { zh: '不硬推', en: 'No force' }, tone: isReferenceOnly ? 'warning' : 'muted' },
         { label: { zh: '让球校验', en: 'Handicap check' }, value: { zh: hhadProbabilities ? '已记录' : '未开售', en: hhadProbabilities ? 'Tracked' : 'Closed' }, tone: hhadProbabilities ? 'warning' : 'muted' },
         { label: { zh: '历史样本', en: 'History sample' }, value: { zh: sampleText, en: sampleText }, tone: sampleEnough ? 'success' : 'warning' }
@@ -770,8 +770,8 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
         {
           title: isReferenceOnly ? { zh: '为什么仅作参考', en: 'Why reference only' } : { zh: '为什么不直接推荐', en: 'Why no pick' },
           body: primary.explanation || {
-            zh: '当前低赔、平局压力、让球确认或命中率分桶存在分歧，先保留观察，不把一个方向包装成稳胆。',
-            en: 'Low SP, draw pressure, handicap confirmation, or hit-rate buckets are not aligned, so this remains watch-only.'
+            zh: '当前低赔、平局压力、让球确认或命中率分桶存在分歧，仅作参考，不把一个方向包装成稳胆。',
+            en: 'Low SP, draw pressure, handicap confirmation, or hit-rate buckets are not aligned, so this remains reference-only.'
           },
           tone: 'warning'
         },
@@ -780,10 +780,10 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
           body: {
             zh: isReferenceOnly
               ? `官方 HAD：${latestHadOdds}；官方 HHAD：${latestHhadOdds}。参考态展示模型倾向，但不把条件未齐的方向包装成强推。`
-              : `官方 HAD：${latestHadOdds}；官方 HHAD：${latestHhadOdds}。观察态只展示盘口结构和风险，不展示“主线支持率”，避免把条件未齐的方向当推荐。`,
+              : `官方 HAD：${latestHadOdds}；官方 HHAD：${latestHhadOdds}。参考态只展示盘口结构和风险，不展示“主线支持率”，避免把条件未齐的方向当推荐。`,
             en: isReferenceOnly
               ? `Official HAD: ${latestHadOdds}; official HHAD: ${latestHhadOdds}. Reference mode shows the model lean without packaging an unqualified direction as a strong pick.`
-              : `Official HAD: ${latestHadOdds}; official HHAD: ${latestHhadOdds}. Watch mode does not show a main-line support rate, so an unqualified direction is not packaged as a pick.`
+              : `Official HAD: ${latestHadOdds}; official HHAD: ${latestHhadOdds}. Reference mode does not show a main-line support rate, so an unqualified direction is not packaged as a pick.`
           },
           tone: 'muted'
         },

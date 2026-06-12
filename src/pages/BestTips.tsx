@@ -43,7 +43,7 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
     odds: { zh: '首选SP', en: 'Primary Odds' },
     kickoff: { zh: '开赛', en: 'Kickoff' },
     viewDetail: { zh: '查看深度数据统计', en: 'Analyze Match Stats' },
-    noTips: { zh: '本期暂无达标精选。可回到赛事列表查看参考方向与避开观察。', en: 'No fixture passes the qualified-pick gate. Check the fixture list for reference leans and avoid watches.' }
+    noTips: { zh: '本期暂无达标精选。可回到赛事列表查看参考方向与保留推荐。', en: 'No fixture passes the qualified-pick gate. Check the fixture list for reference leans and kept recommendations.' }
   };
 
   const t = (key: keyof typeof translations) => {

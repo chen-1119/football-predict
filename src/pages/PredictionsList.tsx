@@ -270,7 +270,7 @@ const getDecisionReason = (category: MatchSignalCategory, language: 'zh' | 'en')
     lean: { zh: '有主方向，但不当稳胆', en: 'Main lean, not a banker' },
     value: { zh: '盘口分歧下的价值方向', en: 'Value direction under market disagreement' },
     watch: { zh: '条件未齐，等临场SP/让球确认', en: 'Conditions not aligned; wait for late SP/handicap' },
-    avoid: { zh: '风险叠加，暂不入选', en: 'Risk stacked; skip for now' },
+    avoid: { zh: '保留推荐，暂不进精选池', en: 'Kept recommendation, outside top pool' },
     unavailable: { zh: '待官方SP更新', en: 'Waiting for official SP' },
     finished: { zh: '保留赛前预测，按赛果复盘', en: 'Pre-match pick kept for review' }
   };
@@ -315,8 +315,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     steady: { zh: '高可信候选', en: 'High confidence' },
     lean: { zh: '主推候选', en: 'Model lean' },
     value: { zh: '价值观察', en: 'Value watch' },
-    watch: { zh: '观察', en: 'Watch' },
-    avoid: { zh: '避坑', en: 'Avoid' },
+    watch: { zh: '参考', en: 'Reference' },
+    avoid: { zh: '保留推荐', en: 'Kept rec.' },
     unavailable: { zh: '待开售', en: 'Pending' },
     sortTitle: { zh: '排序', en: 'Sort' },
     time: { zh: '开赛时间', en: 'Time' },
@@ -324,7 +324,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     odds: { zh: 'SP 值', en: 'Odds' },
     reset: { zh: '重置', en: 'Reset' },
     noMatches: { zh: '这个日期暂无可用比赛预测。', en: 'No scheduled matches found for this day.' },
-    noQualifiedPicks: { zh: '本期没有达到精选门槛的推荐，先不硬推。可切到全部分组查看观察名单。', en: 'No pick passes the quality gate for this issue. Switch to all signals for the watchlist.' },
+    noQualifiedPicks: { zh: '本期没有达到精选门槛的推荐，先不硬推。可切到全部分组查看参考列表。', en: 'No pick passes the quality gate for this issue. Switch to all signals for the reference list.' },
     yesterday: { zh: '昨天', en: 'Yesterday' },
     today: { zh: '今天', en: 'Today' },
     tomorrow: { zh: '明天', en: 'Tomorrow' },
@@ -432,8 +432,6 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         counts.finished += 1;
       } else if (isActionableRecommendation(match) && best && best.tipCode !== 'WATCH') {
         counts.pick += 1;
-      } else if (signal.category === 'avoid') {
-        counts.avoid += 1;
       } else if (best && best.tipCode !== 'WATCH') {
         counts.reference += 1;
       } else {
@@ -581,11 +579,11 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
       : fallbackDirectionLabel;
     const referenceLeanText = hasReferenceLean && !isPromotedPick && best
       ? language === 'zh'
-        ? `状态：${signal.category === 'avoid' ? '避开观察' : '不进精选池'}`
-        : `Status: ${signal.category === 'avoid' ? 'avoid watch' : 'not in top pool'}`
+        ? '状态：保留推荐'
+        : 'Status: kept recommendation'
       : '';
     const cautionText = signal.category === 'avoid'
-      ? (language === 'zh' ? '风险偏高，降低优先级' : 'Higher risk; lower priority')
+      ? (language === 'zh' ? '保留推荐，不进精选池' : 'Kept recommendation, outside top pool')
       : (language === 'zh' ? '等待临场 SP/让球确认' : 'Await late SP/handicap check');
     const pickText = hasReferenceLean && best
       ? language === 'zh'
@@ -597,7 +595,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     const statusBadge = isPromotedPick
       ? (language === 'zh' ? '进精选池' : 'Top pool')
       : signal.category === 'avoid'
-        ? (language === 'zh' ? '避开观察' : 'Avoid watch')
+        ? (language === 'zh' ? '保留推荐' : 'Kept rec.')
         : (language === 'zh' ? '不进精选池' : 'Not in top pool');
     const oddsText = poolRows.length > 0
       ? poolRows.slice(0, 2).map((row) => {
@@ -679,7 +677,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     const poolStatus = isPromotedPick
       ? (language === 'zh' ? '进精选池' : 'Top pool')
       : signal.category === 'avoid'
-        ? (language === 'zh' ? '避开观察' : 'Avoid watch')
+        ? (language === 'zh' ? '保留推荐' : 'Kept rec.')
         : (language === 'zh' ? '不进精选池' : 'Not in top pool');
     const directionLabel = pickedPrediction
       ? stripDirectionPrefix(getRecommendationTipDisplay(pickedPrediction, language, true), language)
@@ -705,7 +703,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     const shortReason = pickedPrediction
       ? isReferencePick
         ? signal.category === 'avoid'
-          ? (language === 'zh' ? '不进精选池：风险项偏多，但保留模型参考方向' : 'Not in top pool: risk is high, but keep the model direction')
+          ? (language === 'zh' ? '保留推荐：方向保留，不进精选池' : 'Kept recommendation: direction kept outside top pool')
           : (language === 'zh' ? '不进精选池：普通推荐，等临场SP/让球确认' : 'Not in top pool: reference pick, await late SP/handicap')
         : signal.category === 'steady'
           ? (language === 'zh' ? '主线、概率和风险基本同向' : 'Main line, probability, and risk are aligned')
@@ -1031,13 +1029,13 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
       tone: 'premium'
     },
     {
-      label: language === 'zh' ? '避开观察' : 'Avoid Watch',
-      value: String(recommendationCounts.avoid),
+      label: language === 'zh' ? '待确认' : 'Pending',
+      value: String(recommendationCounts.unavailable),
       note: recommendationCounts.unavailable > 0
         ? (language === 'zh' ? `另有 ${recommendationCounts.unavailable} 场待开售/待确认` : `${recommendationCounts.unavailable} pending sale/confirmation`)
-        : (language === 'zh' ? '风险标签触发，降低优先级' : 'Risk tags triggered, lower priority'),
+        : (language === 'zh' ? '暂无额外待确认场次' : 'No extra pending fixtures'),
       icon: Activity,
-      tone: recommendationCounts.avoid > 0 ? 'danger' : ''
+      tone: recommendationCounts.unavailable > 0 ? 'premium' : ''
     }
   ];
 
@@ -1227,7 +1225,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
             <strong>{language === 'zh' ? '本期不硬推' : 'No forced pick'}</strong>
             <span>
               {language === 'zh'
-                ? '官方 SP、概率优势、让球验证或近期命中冷却未同时过线，先保留观察。'
+                ? '官方 SP、概率优势、让球验证或近期命中冷却未同时过线，先保留参考。'
                 : 'Official SP, probability edge, handicap check, or hit-rate cooling did not pass together.'}
             </span>
           </div>
