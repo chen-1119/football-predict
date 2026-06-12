@@ -613,6 +613,38 @@ const buildHeadToHeadFromTraining = (
   };
 };
 
+const parseFreshnessTime = (value: string | undefined) => {
+  const parsed = value ? Date.parse(value) : NaN;
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const getMatchFreshnessTime = (match: Match | null | undefined) => {
+  if (!match) return 0;
+
+  return Math.max(
+    parseFreshnessTime(match.predictionMeta?.updatedAt),
+    parseFreshnessTime(match.predictionMeta?.generatedAt),
+    parseFreshnessTime(match.predictionMeta?.lockedAt),
+    parseFreshnessTime(match.externalSignals?.updatedAt),
+    parseFreshnessTime(match.oddsUpdatedAt),
+    parseFreshnessTime(match.handicapOddsUpdatedAt),
+    parseFreshnessTime(match.oddsTrend?.lastCapturedAt)
+  );
+};
+
+const selectFreshestMatch = (
+  detailMatch: Match | null,
+  contextMatch: Match | undefined,
+  seededMatch: Match | undefined
+) => {
+  if (!detailMatch) return contextMatch || seededMatch;
+  if (!contextMatch) return detailMatch;
+
+  const detailFreshness = getMatchFreshnessTime(detailMatch);
+  const contextFreshness = getMatchFreshnessTime(contextMatch);
+  return contextFreshness > detailFreshness + 1000 ? contextMatch : detailMatch;
+};
+
 export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => {
   const { language, matches, dataSync } = useApp();
   const [activeTab, setActiveTab] = useState<'predictions' | 'stats' | 'form' | 'h2h' | 'standings'>('predictions');
@@ -626,14 +658,17 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     setPredictionViewState({ matchId, view });
   };
   const [fullMatch, setFullMatch] = useState<Match | null>(null);
+  const detailRefreshKey = dataSync.sourceUpdatedAt || dataSync.updatedAt || '';
 
   useEffect(() => {
     let cancelled = false;
     const controller = new AbortController();
+    const version = encodeURIComponent(detailRefreshKey || String(Date.now()));
+    const versionedUrl = (url: string) => `${url}${url.includes('?') ? '&' : '?'}v=${version}`;
     const loadDetail = async () => {
       try {
         const accessHeaders = getAccessAuthHeaders();
-        const response = await fetch(buildApiUrl(`/api/matches/${encodeURIComponent(matchId)}`), {
+        const response = await fetch(versionedUrl(buildApiUrl(`/api/matches/${encodeURIComponent(matchId)}`)), {
           cache: 'no-store',
           headers: Object.keys(accessHeaders).length ? accessHeaders : undefined,
           signal: controller.signal
@@ -649,7 +684,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
 
       try {
         const accessHeaders = getAccessAuthHeaders();
-        const response = await fetch(buildStaticUrl('data/matches-current.json'), {
+        const response = await fetch(versionedUrl(buildStaticUrl('data/matches-current.json')), {
           cache: 'no-store',
           headers: Object.keys(accessHeaders).length ? accessHeaders : undefined,
           signal: controller.signal
@@ -669,16 +704,16 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
       cancelled = true;
       controller.abort();
     };
-  }, [matchId]);
+  }, [detailRefreshKey, matchId]);
 
 
   // 获取比赛详情
-  const match = useMemo(
-    () => (fullMatch?.id === matchId ? fullMatch : null)
-      || matches.find((item) => item.id === matchId)
-      || getWorldCupSeededFixtures(104).find((item) => item.id === matchId),
-    [fullMatch, matchId, matches]
-  );
+  const match = useMemo(() => {
+    const detailMatch = fullMatch?.id === matchId ? fullMatch : null;
+    const contextMatch = matches.find((item) => item.id === matchId);
+    const seededMatch = getWorldCupSeededFixtures(104).find((item) => item.id === matchId);
+    return selectFreshestMatch(detailMatch, contextMatch, seededMatch);
+  }, [fullMatch, matchId, matches]);
 
   if (!match) {
     return (
