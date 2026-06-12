@@ -210,11 +210,20 @@ const getScoreOutcomeCode = (score: Pick<ScoreProbability, 'home' | 'away'>): '1
   return 'X';
 };
 
-const dedupeScoreCandidates = <T extends { label: string }>(scores: T[]) => {
+const scoreCandidateKey = (score: Pick<ScoreProbability, 'home' | 'away'> & { label?: string }) => (
+  Number.isFinite(score.home) && Number.isFinite(score.away)
+    ? `${score.home}-${score.away}`
+    : String(score.label || '').replace(/\s+/g, '')
+);
+
+const scoreCandidateLabel = (score: Pick<ScoreProbability, 'home' | 'away'>) => `${score.home}-${score.away}`;
+
+const dedupeScoreCandidates = <T extends Pick<ScoreProbability, 'home' | 'away'> & { label?: string }>(scores: T[]) => {
   const seen = new Set<string>();
   return scores.filter((score) => {
-    if (seen.has(score.label)) return false;
-    seen.add(score.label);
+    const key = scoreCandidateKey(score);
+    if (seen.has(key)) return false;
+    seen.add(key);
     return true;
   });
 };
@@ -864,10 +873,15 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     (!match.odds && !match.handicapOdds)
   );
   const hasProjectedScore = Number.isFinite(match.projectedScoreHome) && Number.isFinite(match.projectedScoreAway);
-  const projectedScoreText = hasProjectedScore
-    ? `${match.projectedScoreHome} - ${match.projectedScoreAway}`
+  const projectedScoreLabel = hasProjectedScore
+    ? `${match.projectedScoreHome}-${match.projectedScoreAway}`
     : probabilityModel
-      ? `${Math.round(match.stats?.xG.home ?? 1)} - ${Math.round(match.stats?.xG.away ?? 1)}`
+      ? `${Math.round(match.stats?.xG.home ?? 1)}-${Math.round(match.stats?.xG.away ?? 1)}`
+      : '--';
+  const projectedScoreText = hasProjectedScore
+    ? projectedScoreLabel
+    : probabilityModel
+      ? projectedScoreLabel
       : '--';
   const actualScoreText = hasScore
     ? (language === 'zh' ? `实际赛果：${officialScoreText}` : `Final score: ${officialScoreText}`)
@@ -988,16 +1002,18 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   const scoreDistributionCandidates: ScoreRecommendationCandidate[] = (probabilityModel?.scoreDistribution || []).map((score) => ({
     home: score.home,
     away: score.away,
-    label: score.label,
+    label: scoreCandidateLabel(score),
     probability: Number.isFinite(score.probability) ? score.probability : null,
     source: 'model'
   }));
-  const projectedScoreDistributionMatch = scoreDistributionCandidates.find((score) => score.label === projectedScoreText);
+  const projectedScoreDistributionMatch = scoreDistributionCandidates.find((score) => (
+    score.home === Number(match.projectedScoreHome) && score.away === Number(match.projectedScoreAway)
+  ));
   const projectedScoreCandidate: ScoreRecommendationCandidate | null = hasProjectedScore
     ? {
       home: Number(match.projectedScoreHome),
       away: Number(match.projectedScoreAway),
-      label: projectedScoreText,
+      label: projectedScoreLabel,
       probability: projectedScoreDistributionMatch?.probability ?? null,
       source: 'locked'
     }
@@ -1010,8 +1026,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     || projectedScoreCandidate
     || scoreDistributionCandidates[0]
     || null;
-  const secondScoreCandidate = scoreDistributionCandidates.find((score) => score.label !== firstScoreCandidate?.label)
-    || (projectedScoreCandidate && projectedScoreCandidate.label !== firstScoreCandidate?.label ? projectedScoreCandidate : null);
+  const firstScoreKey = firstScoreCandidate ? scoreCandidateKey(firstScoreCandidate) : '';
+  const secondScoreCandidate = scoreDistributionCandidates.find((score) => scoreCandidateKey(score) !== firstScoreKey)
+    || (projectedScoreCandidate && scoreCandidateKey(projectedScoreCandidate) !== firstScoreKey ? projectedScoreCandidate : null);
   const scoreRecommendations = dedupeScoreCandidates(
     [firstScoreCandidate, secondScoreCandidate].filter((score): score is ScoreRecommendationCandidate => Boolean(score))
   ).slice(0, 2).map((score, index) => {

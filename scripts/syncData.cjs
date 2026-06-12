@@ -14,7 +14,7 @@ const ODDS_HISTORY_RETENTION_DAYS = Math.max(1, Number(process.env.ODDS_HISTORY_
 const ODDS_HISTORY_BUCKET_MINUTES = Math.max(1, Number(process.env.ODDS_HISTORY_BUCKET_MINUTES || 5));
 const PAGE_POLL_SECONDS = Math.max(15, Number(process.env.PAGE_POLL_SECONDS || 30));
 const ANALYST_PROMPT_VERSION = "professional-football-analyst-v16";
-const PREDICTION_POLICY_VERSION = "sporttery-day-formula-trace-v32";
+const PREDICTION_POLICY_VERSION = "sporttery-day-formula-trace-v33";
 const ANALYST_RUNTIME = Object.freeze({
   model: "5.5",
   reasoningEffort: "high",
@@ -715,9 +715,11 @@ function scoreMatrix(homeLambda, awayLambda, maxGoals = 8) {
   return rows;
 }
 
-function representativeScoreRank(row, homeLambda, awayLambda, modeProbability, preferredCode) {
+function representativeScoreRank(row, homeLambda, awayLambda, modeProbability, preferredCode, context = {}) {
   const totalLambda = homeLambda + awayLambda;
   const totalGoals = row.home + row.away;
+  const over25Probability = Number(context.over25Probability);
+  const bttsProbability = Number(context.bttsProbability);
   const probabilityScore = row.probability / Math.max(modeProbability, 0.000001);
   const lambdaCloseness = 1 - Math.min(1, (Math.abs(row.home - homeLambda) + Math.abs(row.away - awayLambda)) / 4);
   const totalCloseness = 1 - Math.min(1, Math.abs(totalGoals - totalLambda) / 3);
@@ -732,11 +734,21 @@ function representativeScoreRank(row, homeLambda, awayLambda, modeProbability, p
   if (totalLambda >= 2.15 && row.home === 0 && row.away === 0) rank -= 0.18;
   if (homeLambda >= 1.55 && row.home >= 2) rank += 0.05;
   if (awayLambda >= 1.55 && row.away >= 2) rank += 0.05;
+  if (Number.isFinite(over25Probability)) {
+    if (over25Probability >= 0.56 && totalGoals >= 3) rank += 0.16;
+    else if (over25Probability >= 0.5 && totalGoals >= 3) rank += 0.09;
+    if (over25Probability <= 0.46 && totalGoals <= 2) rank += 0.11;
+    if (over25Probability <= 0.42 && totalGoals >= 4) rank -= 0.14;
+  }
+  if (Number.isFinite(bttsProbability)) {
+    if (bttsProbability >= 0.52 && row.home > 0 && row.away > 0) rank += 0.14;
+    if (bttsProbability <= 0.45 && (row.home === 0 || row.away === 0)) rank += 0.08;
+  }
 
   return rank;
 }
 
-function representativeProjectedScore(homeLambda, awayLambda, preferredCode = null) {
+function representativeProjectedScore(homeLambda, awayLambda, preferredCode = null, context = {}) {
   const matrix = scoreMatrix(homeLambda, awayLambda, 8);
   const mode = matrix.reduce((best, row) => (row.probability > best.probability ? row : best), matrix[0]);
   const modeProbability = mode?.probability || 0.000001;
@@ -770,8 +782,8 @@ function representativeProjectedScore(homeLambda, awayLambda, preferredCode = nu
   const pool = plausible.length ? plausible : directionalPool.length ? directionalPool : matrix;
 
   return [...pool].sort((a, b) => {
-    const rankDiff = representativeScoreRank(b, homeLambda, awayLambda, modeProbability, cleanPreferredCode)
-      - representativeScoreRank(a, homeLambda, awayLambda, modeProbability, cleanPreferredCode);
+    const rankDiff = representativeScoreRank(b, homeLambda, awayLambda, modeProbability, cleanPreferredCode, context)
+      - representativeScoreRank(a, homeLambda, awayLambda, modeProbability, cleanPreferredCode, context);
     if (Math.abs(rankDiff) > 0.000001) return rankDiff;
     return b.probability - a.probability;
   })[0] || projectedScore(homeLambda, awayLambda);
@@ -794,9 +806,59 @@ function poissonOutcomeProbabilities(homeLambda, awayLambda) {
   };
 }
 
-function topScoreProbabilities(homeLambda, awayLambda, limit = 5) {
-  return scoreMatrix(homeLambda, awayLambda, 8)
-    .sort((a, b) => b.probability - a.probability)
+function topScoreProbabilities(homeLambda, awayLambda, limit = 5, context = {}) {
+  const matrix = scoreMatrix(homeLambda, awayLambda, 8)
+    .filter((row) => row.home + row.away <= 8);
+  const mode = matrix.reduce((best, row) => (row.probability > best.probability ? row : best), matrix[0]);
+  const modeProbability = mode?.probability || 0.000001;
+  const ranked = matrix
+    .map((row) => ({
+      ...row,
+      rank: representativeScoreRank(row, homeLambda, awayLambda, modeProbability, null, context),
+    }))
+    .sort((a, b) => {
+      const rankDiff = b.rank - a.rank;
+      if (Math.abs(rankDiff) > 0.000001) return rankDiff;
+      return b.probability - a.probability;
+    });
+  const over25Probability = Number(context.over25Probability);
+  const bttsProbability = Number(context.bttsProbability);
+  const selected = [];
+  const seen = new Set();
+  const scoreKey = (row) => `${row.home}-${row.away}`;
+  const addCandidate = (predicate, minRatio = 0.22) => {
+    const candidate = ranked.find((row) => (
+      !seen.has(scoreKey(row))
+      && row.probability >= modeProbability * minRatio
+      && predicate(row)
+    ));
+    if (candidate) {
+      selected.push(candidate);
+      seen.add(scoreKey(candidate));
+    }
+  };
+
+  addCandidate(() => true, 0);
+  if (Number.isFinite(over25Probability)) {
+    if (over25Probability >= 0.5) addCandidate((row) => row.home + row.away >= 3, 0.18);
+    if (over25Probability <= 0.49) addCandidate((row) => row.home + row.away <= 2, 0.18);
+  }
+  if (Number.isFinite(bttsProbability)) {
+    if (bttsProbability >= 0.5) addCandidate((row) => row.home > 0 && row.away > 0, 0.18);
+    if (bttsProbability <= 0.45) addCandidate((row) => row.home === 0 || row.away === 0, 0.18);
+  }
+  for (const code of ["1", "X", "2"]) {
+    if (selected.length >= Math.max(3, limit)) break;
+    addCandidate((row) => oneXTwoCodeForScore(row.home, row.away) === code, 0.24);
+  }
+  for (const row of ranked) {
+    if (selected.length >= limit) break;
+    if (seen.has(scoreKey(row))) continue;
+    selected.push(row);
+    seen.add(scoreKey(row));
+  }
+
+  return selected
     .slice(0, limit)
     .map((row) => ({
       home: row.home,
@@ -1660,7 +1722,10 @@ function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLamb
   const handicapPoisson = handicapOutcomeProbabilities(homeLambda, awayLambda, match.handicapLine);
   const calibration = profileCalibration(match);
   const worldCupPrior = worldCupPriorOutcomeProbabilities(match);
-  const scoreDistribution = topScoreProbabilities(homeLambda, awayLambda, 5);
+  const scoreDistribution = topScoreProbabilities(homeLambda, awayLambda, 6, {
+    over25Probability,
+    bttsProbability,
+  });
   const calculationTrace = buildProbabilityCalculationTrace(match, {
     weights: blended.weights,
     teamStrength: blended.teamStrength,
@@ -4358,7 +4423,10 @@ function predictionSet(match) {
   const analystSelection = selectValueAwareOneXTwo(match, picks, modelProbabilities, probabilities, hhadProbabilities);
   const hasSelectionDisagreement = Boolean(analystSelection.isContrarian || analystSelection.hasValueDisagreement);
   const best1x2 = analystSelection.pick;
-  score = representativeProjectedScore(homeLambda, awayLambda, anchorIsHhad ? null : best1x2[0]);
+  score = representativeProjectedScore(homeLambda, awayLambda, anchorIsHhad ? null : best1x2[0], {
+    over25Probability,
+    bttsProbability,
+  });
   const probabilityGap = marketLeader[1] - marketSecond[1];
   const modelProbabilityGap = Math.max(0, picks[0][1] - picks[1][1]);
   const selectedMarketProbability = outcomeProbabilityForCode(probabilities, best1x2[0]) || 0;
