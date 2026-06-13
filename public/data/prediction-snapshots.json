@@ -1,7 +1,7 @@
 {
   "version": 1,
   "source": "sporttery:prediction-snapshots",
-  "updatedAt": "2026-06-13T06:34:49.343Z",
+  "updatedAt": "2026-06-13T07:49:00.189Z",
   "retentionDays": 365,
   "maxRows": 5000,
   "rows": [
@@ -21361,19 +21361,91 @@
         "resultStatus": "PENDING",
         "riskCount": 3
       }
+    },
+    {
+      "capturedAt": "2026-06-13T07:49:00.189Z",
+      "firstSeenAt": "2026-06-13T07:49:00.189Z",
+      "lastSeenAt": "2026-06-13T07:49:00.189Z",
+      "seenCount": 1,
+      "phase": "baseline",
+      "signature": "1X2:HAD:1:reference|BEST:HAD:1:reference|GOALS::U2.5:reference|3.10/3.05/2.09|1:1.58/3.75/4.35|38/28/34",
+      "policyVersion": "sporttery-day-formula-trace-v33",
+      "promptVersion": "professional-football-analyst-v16",
+      "sourceMatchId": "2040213",
+      "matchId": "fivehundred_2040213",
+      "matchNo": "周六204",
+      "businessDate": "2026-06-13",
+      "kickoffTime": "2026-06-13T22:00:00+08:00",
+      "status": "SCHEDULED",
+      "leagueName": "芬兰超级联赛",
+      "homeTeamName": "瓦萨",
+      "awayTeamName": "库奥皮奥",
+      "scoreHome": null,
+      "scoreAway": null,
+      "odds": {
+        "odds1": 3.1,
+        "oddsX": 3.05,
+        "odds2": 2.09
+      },
+      "handicapLine": "1",
+      "handicapOdds": {
+        "odds1": 1.58,
+        "oddsX": 3.75,
+        "odds2": 4.35
+      },
+      "oddsTrend": null,
+      "probabilityFinal": {
+        "home": 38,
+        "draw": 27.9,
+        "away": 34
+      },
+      "probabilityModelVersion": "independent-elo-form-poisson-v7",
+      "best": {
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "参考倾向 主胜 瓦萨",
+          "en": "Reference lean: Home Win (瓦萨)"
+        },
+        "odds": 3.1,
+        "trustScore": 22,
+        "resultStatus": "PENDING",
+        "riskCount": 7
+      },
+      "oneXTwo": {
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "参考倾向 主胜 瓦萨",
+          "en": "Reference lean: Home Win (瓦萨)"
+        },
+        "odds": 3.1,
+        "trustScore": 34,
+        "resultStatus": "PENDING",
+        "riskCount": 6
+      },
+      "goals": {
+        "tipCode": "U2.5",
+        "tipLabel": {
+          "zh": "进球参考 小2.5球（≤2球）",
+          "en": "Goals reference: Under 2.5 goals"
+        },
+        "odds": 1.94,
+        "trustScore": 49,
+        "resultStatus": "PENDING",
+        "riskCount": 3
+      }
     }
   ],
   "summary": {
-    "total": 268,
+    "total": 269,
     "byPhase": {
       "review": 85,
       "mid": 18,
-      "baseline": 133,
+      "baseline": 134,
       "late": 9,
       "final": 9,
       "locked": 14
     },
-    "appended": 0,
+    "appended": 1,
     "updated": 0
   }
 }
