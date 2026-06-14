@@ -1,7 +1,7 @@
 {
   "version": 1,
   "source": "sporttery:prediction-snapshots",
-  "updatedAt": "2026-06-14T03:59:55.795Z",
+  "updatedAt": "2026-06-14T11:00:30.823Z",
   "retentionDays": 365,
   "maxRows": 5000,
   "rows": [
@@ -23925,19 +23925,87 @@
         "resultStatus": "PENDING",
         "riskCount": 2
       }
+    },
+    {
+      "capturedAt": "2026-06-14T11:00:30.823Z",
+      "firstSeenAt": "2026-06-14T11:00:30.823Z",
+      "lastSeenAt": "2026-06-14T11:00:30.823Z",
+      "seenCount": 1,
+      "phase": "mid",
+      "signature": "1X2:HHAD:2:reference|BEST:HHAD:2:reference|GOALS::U2.5:reference|--|-3.00:1.90/4.60/2.59|67/20/13",
+      "policyVersion": "sporttery-day-formula-trace-v33",
+      "promptVersion": "professional-football-analyst-v16",
+      "sourceMatchId": "2040170",
+      "matchId": "sporttery_2040170",
+      "matchNo": "周日009",
+      "businessDate": "2026-06-14",
+      "kickoffTime": "2026-06-15T01:00:00+08:00",
+      "status": "SCHEDULED",
+      "leagueName": "世界杯",
+      "homeTeamName": "德国",
+      "awayTeamName": "库拉索",
+      "scoreHome": null,
+      "scoreAway": null,
+      "odds": null,
+      "handicapLine": "-3.00",
+      "handicapOdds": {
+        "odds1": 1.9,
+        "oddsX": 4.6,
+        "odds2": 2.59
+      },
+      "oddsTrend": null,
+      "probabilityFinal": {
+        "home": 67,
+        "draw": 20.3,
+        "away": 12.8
+      },
+      "probabilityModelVersion": "independent-elo-form-poisson-v7",
+      "best": {
+        "tipCode": "2",
+        "tipLabel": {
+          "zh": "参考倾向 让球客胜 库拉索",
+          "en": "Reference lean: Handicap Away Win (库拉索)"
+        },
+        "odds": 2.59,
+        "trustScore": 62,
+        "resultStatus": "PENDING",
+        "riskCount": 3
+      },
+      "oneXTwo": {
+        "tipCode": "2",
+        "tipLabel": {
+          "zh": "参考倾向 让球客胜 库拉索",
+          "en": "Reference lean: Handicap Away Win (库拉索)"
+        },
+        "odds": 2.59,
+        "trustScore": 49,
+        "resultStatus": "PENDING",
+        "riskCount": 3
+      },
+      "goals": {
+        "tipCode": "U2.5",
+        "tipLabel": {
+          "zh": "进球参考 小2.5球（≤2球）",
+          "en": "Goals reference: Under 2.5 goals"
+        },
+        "odds": 2.04,
+        "trustScore": 47,
+        "resultStatus": "PENDING",
+        "riskCount": 1
+      }
     }
   ],
   "summary": {
-    "total": 303,
+    "total": 304,
     "byPhase": {
       "review": 85,
-      "mid": 35,
+      "mid": 36,
       "baseline": 136,
       "late": 17,
       "final": 15,
       "locked": 15
     },
-    "appended": 0,
+    "appended": 1,
     "updated": 0
   }
 }
