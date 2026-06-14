@@ -1,7 +1,7 @@
 {
   "version": 1,
   "source": "sporttery:prediction-snapshots",
-  "updatedAt": "2026-06-14T11:00:30.823Z",
+  "updatedAt": "2026-06-14T14:03:37.716Z",
   "retentionDays": 365,
   "maxRows": 5000,
   "rows": [
@@ -23993,19 +23993,103 @@
         "resultStatus": "PENDING",
         "riskCount": 1
       }
+    },
+    {
+      "capturedAt": "2026-06-14T14:03:37.716Z",
+      "firstSeenAt": "2026-06-14T14:03:37.716Z",
+      "lastSeenAt": "2026-06-14T14:03:37.716Z",
+      "seenCount": 1,
+      "phase": "mid",
+      "signature": "1X2:HAD:1:reference|BEST:HAD:1:reference|GOALS::U2.5:reference|1.75/3.30/3.92|-1.00:3.50/3.45/1.81|39/29/31",
+      "policyVersion": "sporttery-day-formula-trace-v33",
+      "promptVersion": "professional-football-analyst-v16",
+      "sourceMatchId": "2040171",
+      "matchId": "sporttery_2040171",
+      "matchNo": "周日010",
+      "businessDate": "2026-06-14",
+      "kickoffTime": "2026-06-15T04:00:00+08:00",
+      "status": "SCHEDULED",
+      "leagueName": "世界杯",
+      "homeTeamName": "荷兰",
+      "awayTeamName": "日本",
+      "scoreHome": null,
+      "scoreAway": null,
+      "odds": {
+        "odds1": 1.75,
+        "oddsX": 3.3,
+        "odds2": 3.92
+      },
+      "handicapLine": "-1.00",
+      "handicapOdds": {
+        "odds1": 3.5,
+        "oddsX": 3.45,
+        "odds2": 1.81
+      },
+      "oddsTrend": {
+        "sampleSize": 681,
+        "firstCapturedAt": "2026-06-08T07:04:18.034Z",
+        "lastCapturedAt": "2026-06-12T01:41:12.466Z",
+        "odds1Change": 0.03,
+        "oddsXChange": 0,
+        "odds2Change": -0.18,
+        "direction": "away",
+        "summary": {
+          "zh": "已记录 681 次官方 SP 快照，客胜 -0.18，市场对该方向有增温迹象；同步变化：主胜 +0.03。",
+          "en": "681 official SP snapshots recorded. away win -0.18; that side is warming, with secondary moves home win +0.03."
+        }
+      },
+      "probabilityFinal": {
+        "home": 39.2,
+        "draw": 29.4,
+        "away": 31.4
+      },
+      "probabilityModelVersion": "independent-elo-form-poisson-v7",
+      "best": {
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "参考倾向 主胜 荷兰",
+          "en": "Reference lean: Home Win (荷兰)"
+        },
+        "odds": 1.75,
+        "trustScore": 28,
+        "resultStatus": "PENDING",
+        "riskCount": 6
+      },
+      "oneXTwo": {
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "参考倾向 主胜 荷兰",
+          "en": "Reference lean: Home Win (荷兰)"
+        },
+        "odds": 1.75,
+        "trustScore": 40,
+        "resultStatus": "PENDING",
+        "riskCount": 6
+      },
+      "goals": {
+        "tipCode": "U2.5",
+        "tipLabel": {
+          "zh": "进球参考 小2.5球（≤2球）",
+          "en": "Goals reference: Under 2.5 goals"
+        },
+        "odds": 1.83,
+        "trustScore": 53,
+        "resultStatus": "PENDING",
+        "riskCount": 2
+      }
     }
   ],
   "summary": {
-    "total": 304,
+    "total": 305,
     "byPhase": {
       "review": 85,
-      "mid": 36,
+      "mid": 37,
       "baseline": 136,
       "late": 17,
       "final": 15,
       "locked": 15
     },
-    "appended": 0,
+    "appended": 1,
     "updated": 0
   }
 }
