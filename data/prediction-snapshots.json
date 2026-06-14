@@ -1,7 +1,7 @@
 {
   "version": 1,
   "source": "sporttery:prediction-snapshots",
-  "updatedAt": "2026-06-14T03:29:54.841Z",
+  "updatedAt": "2026-06-14T03:59:55.795Z",
   "retentionDays": 365,
   "maxRows": 5000,
   "rows": [
@@ -23841,19 +23841,103 @@
         "resultStatus": "PENDING",
         "riskCount": 2
       }
+    },
+    {
+      "capturedAt": "2026-06-14T03:59:55.795Z",
+      "firstSeenAt": "2026-06-14T03:59:55.795Z",
+      "lastSeenAt": "2026-06-14T03:59:55.795Z",
+      "seenCount": 1,
+      "phase": "locked",
+      "signature": "1X2:HAD:2:reference|BEST:HAD:2:reference|GOALS::U2.5:reference|5.15/3.45/1.55|+1.00:2.11/3.25/2.88|35/28/37",
+      "policyVersion": "sporttery-day-formula-trace-v33",
+      "promptVersion": "professional-football-analyst-v16",
+      "sourceMatchId": "2040169",
+      "matchId": "sporttery_2040169",
+      "matchNo": "周六008",
+      "businessDate": "2026-06-13",
+      "kickoffTime": "2026-06-14T12:00:00+08:00",
+      "status": "SCHEDULED",
+      "leagueName": "世界杯",
+      "homeTeamName": "澳大利亚",
+      "awayTeamName": "土耳其",
+      "scoreHome": null,
+      "scoreAway": null,
+      "odds": {
+        "odds1": 5.15,
+        "oddsX": 3.45,
+        "odds2": 1.55
+      },
+      "handicapLine": "+1.00",
+      "handicapOdds": {
+        "odds1": 2.11,
+        "oddsX": 3.25,
+        "odds2": 2.88
+      },
+      "oddsTrend": {
+        "sampleSize": 681,
+        "firstCapturedAt": "2026-06-08T07:04:18.034Z",
+        "lastCapturedAt": "2026-06-12T01:41:12.466Z",
+        "odds1Change": 0,
+        "oddsXChange": 0,
+        "odds2Change": 0,
+        "direction": "flat",
+        "summary": {
+          "zh": "已记录 681 次官方 SP 快照，胜平负主盘基本没动；这种场次不把静态赔率写成推荐，临场继续看让球盘是否补强。",
+          "en": "681 official SP snapshots recorded; the 1X2 board is essentially flat, so a static board is not packaged as a pick. Keep watching handicap confirmation."
+        }
+      },
+      "probabilityFinal": {
+        "home": 34.5,
+        "draw": 28.1,
+        "away": 37.3
+      },
+      "probabilityModelVersion": "independent-elo-form-poisson-v7",
+      "best": {
+        "tipCode": "2",
+        "tipLabel": {
+          "zh": "参考倾向 客胜 土耳其",
+          "en": "Reference lean: Away Win (土耳其)"
+        },
+        "odds": 1.55,
+        "trustScore": 28,
+        "resultStatus": "PENDING",
+        "riskCount": 6
+      },
+      "oneXTwo": {
+        "tipCode": "2",
+        "tipLabel": {
+          "zh": "参考倾向 客胜 土耳其",
+          "en": "Reference lean: Away Win (土耳其)"
+        },
+        "odds": 1.55,
+        "trustScore": 34,
+        "resultStatus": "PENDING",
+        "riskCount": 6
+      },
+      "goals": {
+        "tipCode": "U2.5",
+        "tipLabel": {
+          "zh": "进球参考 小2.5球（≤2球）",
+          "en": "Goals reference: Under 2.5 goals"
+        },
+        "odds": 1.92,
+        "trustScore": 50,
+        "resultStatus": "PENDING",
+        "riskCount": 2
+      }
     }
   ],
   "summary": {
-    "total": 302,
+    "total": 303,
     "byPhase": {
       "review": 85,
       "mid": 35,
       "baseline": 136,
       "late": 17,
       "final": 15,
-      "locked": 14
+      "locked": 15
     },
-    "appended": 0,
+    "appended": 1,
     "updated": 0
   }
 }
