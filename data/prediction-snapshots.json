@@ -1,7 +1,7 @@
 {
   "version": 1,
   "source": "sporttery:prediction-snapshots",
-  "updatedAt": "2026-06-14T14:03:37.716Z",
+  "updatedAt": "2026-06-15T10:02:31.153Z",
   "retentionDays": 365,
   "maxRows": 5000,
   "rows": [
@@ -24077,19 +24077,87 @@
         "resultStatus": "PENDING",
         "riskCount": 2
       }
+    },
+    {
+      "capturedAt": "2026-06-15T10:02:31.153Z",
+      "firstSeenAt": "2026-06-15T10:02:31.153Z",
+      "lastSeenAt": "2026-06-15T10:02:31.153Z",
+      "seenCount": 1,
+      "phase": "mid",
+      "signature": "1X2:HHAD:2:reference|BEST:HHAD:2:reference|GOALS::O2.5:reference|--|-2.00:1.82/4.00/3.03|69/19/13",
+      "policyVersion": "sporttery-day-formula-trace-v33",
+      "promptVersion": "professional-football-analyst-v16",
+      "sourceMatchId": "2040174",
+      "matchId": "sporttery_2040174",
+      "matchNo": "周一013",
+      "businessDate": "2026-06-15",
+      "kickoffTime": "2026-06-16T00:00:00+08:00",
+      "status": "SCHEDULED",
+      "leagueName": "世界杯",
+      "homeTeamName": "西班牙",
+      "awayTeamName": "佛得角",
+      "scoreHome": null,
+      "scoreAway": null,
+      "odds": null,
+      "handicapLine": "-2.00",
+      "handicapOdds": {
+        "odds1": 1.82,
+        "oddsX": 4,
+        "odds2": 3.03
+      },
+      "oddsTrend": null,
+      "probabilityFinal": {
+        "home": 68.5,
+        "draw": 19,
+        "away": 12.5
+      },
+      "probabilityModelVersion": "independent-elo-form-poisson-v7",
+      "best": {
+        "tipCode": "2",
+        "tipLabel": {
+          "zh": "参考倾向 让球客胜 佛得角",
+          "en": "Reference lean: Handicap Away Win (佛得角)"
+        },
+        "odds": 3.03,
+        "trustScore": 60,
+        "resultStatus": "PENDING",
+        "riskCount": 3
+      },
+      "oneXTwo": {
+        "tipCode": "2",
+        "tipLabel": {
+          "zh": "参考倾向 让球客胜 佛得角",
+          "en": "Reference lean: Handicap Away Win (佛得角)"
+        },
+        "odds": 3.03,
+        "trustScore": 55,
+        "resultStatus": "PENDING",
+        "riskCount": 3
+      },
+      "goals": {
+        "tipCode": "O2.5",
+        "tipLabel": {
+          "zh": "进球参考 大2.5球（≥3球）",
+          "en": "Goals reference: Over 2.5 goals"
+        },
+        "odds": 1.9,
+        "trustScore": 51,
+        "resultStatus": "PENDING",
+        "riskCount": 2
+      }
     }
   ],
   "summary": {
-    "total": 305,
+    "total": 306,
     "byPhase": {
       "review": 85,
-      "mid": 37,
+      "mid": 38,
       "baseline": 136,
       "late": 17,
       "final": 15,
       "locked": 15
     },
-    "appended": 0,
+    "appended": 1,
     "updated": 0
   }
 }
