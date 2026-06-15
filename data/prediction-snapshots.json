@@ -1,7 +1,7 @@
 {
   "version": 1,
   "source": "sporttery:prediction-snapshots",
-  "updatedAt": "2026-06-15T10:02:31.153Z",
+  "updatedAt": "2026-06-15T12:59:26.205Z",
   "retentionDays": 365,
   "maxRows": 5000,
   "rows": [
@@ -24145,19 +24145,103 @@
         "resultStatus": "PENDING",
         "riskCount": 2
       }
+    },
+    {
+      "capturedAt": "2026-06-15T12:59:26.205Z",
+      "firstSeenAt": "2026-06-15T12:59:26.205Z",
+      "lastSeenAt": "2026-06-15T12:59:26.205Z",
+      "seenCount": 1,
+      "phase": "mid",
+      "signature": "1X2:HAD:1:reference|BEST:HAD:1:reference|GOALS::U2.5:reference|1.46/3.65/5.85|-1.00:2.65/3.15/2.30|49/26/25",
+      "policyVersion": "sporttery-day-formula-trace-v33",
+      "promptVersion": "professional-football-analyst-v16",
+      "sourceMatchId": "2040175",
+      "matchId": "sporttery_2040175",
+      "matchNo": "周一014",
+      "businessDate": "2026-06-15",
+      "kickoffTime": "2026-06-16T03:00:00+08:00",
+      "status": "SCHEDULED",
+      "leagueName": "世界杯",
+      "homeTeamName": "比利时",
+      "awayTeamName": "埃及",
+      "scoreHome": null,
+      "scoreAway": null,
+      "odds": {
+        "odds1": 1.46,
+        "oddsX": 3.65,
+        "odds2": 5.85
+      },
+      "handicapLine": "-1.00",
+      "handicapOdds": {
+        "odds1": 2.65,
+        "oddsX": 3.15,
+        "odds2": 2.3
+      },
+      "oddsTrend": {
+        "sampleSize": 681,
+        "firstCapturedAt": "2026-06-08T07:04:18.034Z",
+        "lastCapturedAt": "2026-06-12T01:41:12.466Z",
+        "odds1Change": 0,
+        "oddsXChange": 0,
+        "odds2Change": 0,
+        "direction": "flat",
+        "summary": {
+          "zh": "已记录 681 次官方 SP 快照，胜平负主盘基本没动；这种场次不把静态赔率写成推荐，临场继续看让球盘是否补强。",
+          "en": "681 official SP snapshots recorded; the 1X2 board is essentially flat, so a static board is not packaged as a pick. Keep watching handicap confirmation."
+        }
+      },
+      "probabilityFinal": {
+        "home": 49.4,
+        "draw": 25.8,
+        "away": 24.8
+      },
+      "probabilityModelVersion": "independent-elo-form-poisson-v7",
+      "best": {
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "参考倾向 主胜 比利时",
+          "en": "Reference lean: Home Win (比利时)"
+        },
+        "odds": 1.46,
+        "trustScore": 31,
+        "resultStatus": "PENDING",
+        "riskCount": 5
+      },
+      "oneXTwo": {
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "参考倾向 主胜 比利时",
+          "en": "Reference lean: Home Win (比利时)"
+        },
+        "odds": 1.46,
+        "trustScore": 36,
+        "resultStatus": "PENDING",
+        "riskCount": 5
+      },
+      "goals": {
+        "tipCode": "U2.5",
+        "tipLabel": {
+          "zh": "进球参考 小2.5球（≤2球）",
+          "en": "Goals reference: Under 2.5 goals"
+        },
+        "odds": 2.02,
+        "trustScore": 47,
+        "resultStatus": "PENDING",
+        "riskCount": 2
+      }
     }
   ],
   "summary": {
-    "total": 306,
+    "total": 307,
     "byPhase": {
       "review": 85,
-      "mid": 38,
+      "mid": 39,
       "baseline": 136,
       "late": 17,
       "final": 15,
       "locked": 15
     },
-    "appended": 0,
+    "appended": 1,
     "updated": 0
   }
 }
