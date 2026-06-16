@@ -1,36 +1,37 @@
 {
   "version": 1,
   "source": "sporttery",
-  "updatedAt": "2026-06-16T08:16:29.265Z",
-  "capturedAt": "2026-06-16T08:16:29.265Z",
-  "lastAttemptAt": "2026-06-16T08:16:29.265Z",
-  "officialOddsMatches": 10,
-  "officialHandicapOddsMatches": 12,
-  "displayOddsMatches": 20,
-  "displayHandicapOddsMatches": 22,
-  "referenceOddsMatches": 10,
-  "referenceHandicapOddsMatches": 10,
-  "officialResultMatches": 2945,
+  "updatedAt": "2026-06-16T08:17:02.062Z",
+  "capturedAt": "2026-06-16T08:17:02.062Z",
+  "lastAttemptAt": "2026-06-16T08:17:02.062Z",
+  "officialOddsMatches": 14,
+  "officialHandicapOddsMatches": 16,
+  "displayOddsMatches": 14,
+  "displayHandicapOddsMatches": 16,
+  "referenceOddsMatches": 0,
+  "referenceHandicapOddsMatches": 0,
+  "officialResultMatches": 2966,
   "skippedWithoutOfficialOdds": 0,
   "byStatus": {
-    "FINISHED": 2965,
-    "PENDING_RESULT": 7,
-    "SCHEDULED": 12
+    "FINISHED": 2972,
+    "SCHEDULED": 38
   },
   "coverage": {
     "first": "2025-11-22",
-    "last": "2026-06-18"
+    "last": "2026-06-23"
   },
   "window": {
     "backDays": 365,
     "forwardDays": 14
   },
   "files": {
-    "current": 23,
-    "history": 2965,
-    "teams": 630,
-    "predictionSnapshots": 311,
-    "externalSignals": 205
+    "current": 42,
+    "history": 2972,
+    "teams": 629,
+    "predictionSnapshots": 1015,
+    "postMatchReviews": 2972,
+    "externalSignals": 231,
+    "preMatchSignals": 42
   },
   "refreshPolicy": {
     "workflowMinutes": 5,
@@ -39,59 +40,188 @@
     "note": "GitHub Pages serves static JSON. The page checks for newer JSON regularly; GitHub Actions refreshes the source files on schedule."
   },
   "attempt": {
-    "capturedAt": "2026-06-16T08:16:29.265Z",
+    "capturedAt": "2026-06-16T08:17:02.062Z",
     "officialOddsMatches": 0,
     "officialHandicapOddsMatches": 0,
     "officialResultMatches": 0,
-    "fallbackResultMatches": 23,
+    "fallbackResultMatches": 29,
     "publishableMatches": 0,
-    "fiveHundredFallbackMatches": 24,
-    "combinedPublishableMatches": 24
+    "fiveHundredFallbackMatches": 30,
+    "combinedPublishableMatches": 30
   },
   "oddsHistory": {
-    "rows": 40613,
+    "rows": 76789,
     "appended": 0,
     "updated": 0,
-    "skipped": "fresh Sporttery odds unavailable; keeping existing 2984 matches"
+    "skipped": "fresh Sporttery odds unavailable; keeping existing 3010 matches"
   },
   "predictionSnapshots": {
-    "total": 311,
+    "total": 1015,
     "byPhase": {
       "review": 85,
-      "mid": 39,
-      "baseline": 140,
-      "late": 17,
-      "final": 15,
-      "locked": 15
+      "mid": 101,
+      "baseline": 764,
+      "late": 28,
+      "final": 23,
+      "locked": 14
     },
     "appended": 0,
-    "updated": 0
+    "updated": 7
+  },
+  "postMatchReviews": {
+    "total": 2972,
+    "bestWon": 7,
+    "bestLost": 14,
+    "handicapHit": 1,
+    "missedHandicapLane": 6,
+    "diagnosis": {
+      "neutral-review": 2941,
+      "best-miss": 14,
+      "draw-risk-underestimated": 12,
+      "goals-underestimated": 13,
+      "best-hit": 7,
+      "handicap-lane-suppressed": 6,
+      "goals-overestimated": 3,
+      "handicap-hit": 1
+    }
   },
   "externalSignals": {
-    "source": "external-signals",
-    "updatedAt": "2026-06-16T08:16:27.832Z",
-    "matches": 205
+    "source": "external-signals+pre-match-signals",
+    "updatedAt": "2026-06-16T08:16:51.180Z",
+    "matches": 231
+  },
+  "preMatchSignals": {
+    "source": "pre-match-signal-layer",
+    "updatedAt": "2026-06-16T08:16:51.180Z",
+    "matches": 42
   },
   "modelCalibration": {
     "version": "rolling-calibration-v1",
     "sample": {
-      "rows": 33,
+      "rows": 21,
       "oneXTwo": 14,
-      "goals": 13,
-      "best": 6,
-      "recommendationPool": 20
+      "goals": 0,
+      "best": 7,
+      "recommendationPool": 21
     },
     "metrics": {
       "oneXTwoBrier": 0.7227,
       "oneXTwoLogLoss": 1.1755,
       "oneXTwoHitRate": 0.286,
-      "goalsHitRate": 0.385,
-      "bestHitRate": 0.167
+      "goalsHitRate": null,
+      "bestHitRate": 0.143
+    },
+    "scoreCalibration": {
+      "version": "score-calibration-v2",
+      "sample": {
+        "rows": 46,
+        "recentRows": 4,
+        "totalProjectedRows": 46,
+        "sampleDays": 14,
+        "recentDays": 2,
+        "rollingDays": 14,
+        "minRows": 12,
+        "exactHitRate": 0.152,
+        "top3ExactHitRate": 0.326,
+        "outcomeHitRate": 0.543,
+        "top3OutcomeHitRate": 0.848,
+        "over25HitRate": 0.5,
+        "top3Over25HitRate": 0.783,
+        "totalBandHitRate": 0.239,
+        "top3TotalBandHitRate": 0.565,
+        "avgActualGoals": 2.72,
+        "avgProjectedGoals": 2.09,
+        "actualOver25Rate": 0.522,
+        "projectedOver25Rate": 0.326,
+        "actualBttsRate": 0.674,
+        "projectedBttsRate": 0.457,
+        "projectedLowScoreRate": 0.674,
+        "actualScores": {
+          "1-1": 11,
+          "2-1": 7,
+          "1-2": 4,
+          "0-0": 3,
+          "0-1": 3,
+          "2-0": 3,
+          "2-2": 3,
+          "0-2": 1,
+          "0-3": 1,
+          "0-4": 1,
+          "1-0": 1,
+          "1-3": 1,
+          "2-3": 1,
+          "2-5": 1,
+          "3-0": 1,
+          "3-1": 1,
+          "4-1": 1,
+          "5-0": 1,
+          "5-1": 1
+        },
+        "projectedScores": {
+          "1-1": 10,
+          "2-0": 9,
+          "1-0": 8,
+          "2-1": 8,
+          "0-1": 3,
+          "1-2": 3,
+          "3-0": 3,
+          "0-2": 1,
+          "0-3": 1
+        },
+        "actualBands": {
+          "2": 15,
+          "3": 13,
+          "4+": 11,
+          "0-1": 7
+        },
+        "projectedBands": {
+          "2": 20,
+          "3": 15,
+          "0-1": 11
+        },
+        "actualShapes": {
+          "draw-btts": 14,
+          "one-goal-btts": 11,
+          "low-0-1": 7,
+          "clear-clean-sheet": 6,
+          "clear-btts-open": 5,
+          "open-4plus": 3
+        },
+        "projectedShapes": {
+          "clear-clean-sheet": 14,
+          "low-0-1": 11,
+          "one-goal-btts": 11,
+          "draw-btts": 10
+        }
+      },
+      "adjustments": {
+        "totalLambdaAdjustment": 0.047,
+        "over25ProbabilityShift": 0.024,
+        "bttsProbabilityShift": 0.017,
+        "lowScoreRankPenalty": 0.028,
+        "openScoreRankBoost": 0.046,
+        "bttsRankBoost": 0.02,
+        "bandRankBoosts": {
+          "4+": 0.043
+        },
+        "shapeRankBoosts": {
+          "clear-clean-sheet": -0.016
+        }
+      },
+      "reasons": [
+        "recent-actual-goals-above-projection",
+        "recent-over25-above-projection",
+        "recent-btts-above-projection",
+        "rolling-score-sample-for-hit-rate",
+        "top3-score-covers-more-than-primary",
+        "score-total-band-hit-rate-adjustment",
+        "score-shape-hit-rate-adjustment"
+      ]
     }
   },
   "modelStrategy": {
     "version": "self-optimization-v1",
-    "generatedAt": "2026-06-09T14:31:31.124Z",
+    "generatedAt": "2026-06-13T07:27:28.872Z",
     "activation": {
       "mode": "cooling-only",
       "onlineEffect": "guarded-active",
@@ -101,22 +231,28 @@
       "note": "Only tightening rules are applied online until a bucket reaches the loosening sample floor."
     },
     "sample": {
-      "matches": 3028,
-      "settledRows": 31,
-      "officialRows": 31,
-      "recommendationRows": 18,
-      "bestRows": 5,
-      "goalsRows": 13
+      "matches": 2980,
+      "settledRows": 45,
+      "officialRows": 45,
+      "recommendationRows": 28,
+      "bestRows": 10,
+      "goalsRows": 17
     },
     "activeGates": {
       "profile": 2,
-      "market": 3,
-      "marketProfile": 4,
-      "oddsBucket": 2,
-      "tip": 3
+      "market": 0,
+      "marketProfile": 2,
+      "oddsBucket": 3,
+      "tip": 1
     }
   },
-  "historicalTraining": null,
+  "historicalTraining": {
+    "version": "historical-training-v1",
+    "source": "xgabora/Club-Football-Match-Data-2000-2025 + martj42/international_results",
+    "rows": 279932,
+    "lastMatchDate": "2026-06-08",
+    "signature": "historical-training-v1|xgabora/Club-Football-Match-Data-2000-2025 + martj42/international_results|279932|2026-06-08"
+  },
   "worldCupKimiData": {
     "version": "kimi-worldcup-dataset-v1",
     "source": "Kimi_Agent_2026 世界杯数据全景数据.zip",
@@ -129,11 +265,11 @@
   "fallback": {
     "keptExisting": true,
     "mergedPartialFresh": true,
-    "reason": "fresh Sporttery odds unavailable; keeping existing 2984 matches",
-    "existingMatches": 2984,
-    "freshPublishableMatches": 24,
+    "reason": "fresh Sporttery odds unavailable; keeping existing 3010 matches",
+    "existingMatches": 3010,
+    "freshPublishableMatches": 30,
     "sportteryPublishableMatches": 0,
-    "fiveHundredFallbackMatches": 24,
-    "fiveHundredResultMatches": 23
+    "fiveHundredFallbackMatches": 30,
+    "fiveHundredResultMatches": 29
   }
 }

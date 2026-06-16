@@ -1,6 +1,11 @@
 {
-  "dataApiBase": "https://football-predict-sync-trigger.football-predict-1339809579.workers.dev/api",
+  "dataApiBase": "/api",
+  "eventStreamPath": "/api/events",
   "preferDataApi": true,
   "historyPreferStatic": false,
-  "currentPollSeconds": 20
+  "currentPollSeconds": 15,
+  "access": {
+    "required": true,
+    "ttlSeconds": 43200
+  }
 }
