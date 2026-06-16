@@ -84,6 +84,58 @@ export function getResolvedMatchOdds(match: MatchOddsInput): ResolvedMatchOdds {
   };
 }
 
+const isSportteryPoolSource = (source: string | undefined, pool: SportteryOddsPoolCode) => {
+  const normalized = String(source || '').toLowerCase();
+  const expected = `sporttery:${pool.toLowerCase()}`;
+  return normalized === expected || normalized.startsWith(`${expected}:`);
+};
+
+export function getOfficialMatchOdds(match: MatchOddsInput): ResolvedMatchOdds {
+  const had = isSportteryPoolSource(match.oddsSource, 'HAD')
+    ? normalizeOdds(match.odds)
+    : null;
+  const hhad = isSportteryPoolSource(match.handicapOddsSource, 'HHAD')
+    ? normalizeOdds(match.handicapOdds)
+    : null;
+
+  return {
+    had: had
+      ? {
+          odds: had,
+          source: match.oddsSource,
+          updatedAt: match.oddsUpdatedAt
+        }
+      : undefined,
+    hhad: hhad
+      ? {
+          odds: hhad,
+          handicap: match.handicapLine,
+          source: match.handicapOddsSource,
+          updatedAt: match.handicapOddsUpdatedAt
+        }
+      : undefined
+  };
+}
+
+export function getOfficialResultPoolAvailability(match: MatchOddsInput) {
+  const official = getOfficialMatchOdds(match);
+  return {
+    hasHad: Boolean(official.had?.odds),
+    hasHhad: Boolean(official.hhad?.odds)
+  };
+}
+
+export function isPredictionOfficialResultPoolAvailable(
+  match: MatchOddsInput,
+  prediction: Pick<PredictionDetail, 'tipCode' | 'oddsPoolCode'> | undefined
+) {
+  if (!prediction || !['1', 'X', '2'].includes(prediction.tipCode)) return false;
+  const { hasHad, hasHhad } = getOfficialResultPoolAvailability(match);
+  if (prediction.oddsPoolCode === 'HHAD') return hasHhad;
+  if (!hasHad && hasHhad) return false;
+  return hasHad;
+}
+
 const sportteryResultLabels = {
   '1': {
     zhCompact: '主胜',
@@ -137,7 +189,7 @@ export function getMarketLabel(marketType: PredictionDetail['marketType'], langu
     '1X2': { zh: '胜平负', en: '1X2' },
     GOALS: { zh: '进球参考', en: 'Goals' },
     GG_NG: { zh: '双方进球参考', en: 'BTTS Reference' },
-    BEST: { zh: 'AI精选', en: 'Best Tip' }
+    BEST: { zh: 'AI推荐', en: 'AI Pick' }
   };
 
   return labels[marketType][language];
@@ -150,7 +202,7 @@ export function getPredictionMarketLabel(prediction: PredictionDetail, language:
     sportteryResultLabels[prediction.tipCode as keyof typeof sportteryResultLabels]
   ) {
     return prediction.marketType === 'BEST'
-      ? (language === 'zh' ? 'AI精选 · 让球' : 'Best Tip · Handicap Result')
+      ? (language === 'zh' ? 'AI推荐 · 让球' : 'AI Pick · Handicap Result')
       : (language === 'zh' ? '让球' : 'Handicap Result');
   }
 
@@ -336,7 +388,7 @@ export function getImpliedProbabilities(odds: Odds | null | undefined) {
 }
 
 export function getSportteryPoolRows(match: MatchOddsInput, language: Language): SportteryOddsPoolDisplay[] {
-  const resolved = getResolvedMatchOdds(match);
+  const resolved = getOfficialMatchOdds(match);
   const isArchived = (match as MatchOddsInput & { status?: string }).status === 'FINISHED';
   const rows: SportteryOddsPoolDisplay[] = [
     {

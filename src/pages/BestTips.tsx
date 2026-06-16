@@ -2,9 +2,8 @@ import React from 'react';
 import { Calendar, Trophy } from 'lucide-react';
 import { TeamBadge } from '../components/TeamBadge';
 import { useApp } from '../context/AppContextCore';
-import { getPredictionTipDisplay, getPredictionValueLabel, getResolvedMatchOdds } from '../services/bettingDisplay';
+import { getPredictionTipDisplay, getPredictionValueLabel, isPredictionOfficialResultPoolAvailable } from '../services/bettingDisplay';
 import { getTeamById } from '../services/entities';
-import { isActionableRecommendation } from '../services/matchSignal';
 import type { Match, PredictionDetail } from '../services/mockData';
 import { getVisiblePredictions } from '../services/predictionVisibility';
 
@@ -12,12 +11,9 @@ interface BestTipsProps {
   onSelectMatch: (matchId: string) => void;
 }
 
-type TipTier = 'pick' | 'reference';
-
 type TipCard = {
   match: Match;
   prediction: PredictionDetail;
-  tier: TipTier;
   rankScore: number;
 };
 
@@ -33,13 +29,7 @@ const marketPriority = (prediction: PredictionDetail) => {
 const isOutcomeTipCode = (tipCode: string | undefined) => tipCode === '1' || tipCode === 'X' || tipCode === '2';
 
 const isPredictionPoolAvailable = (match: Match, prediction: PredictionDetail) => {
-  const resolvedOdds = getResolvedMatchOdds(match);
-  const hasHad = Boolean(resolvedOdds.had?.odds);
-  const hasHhad = Boolean(resolvedOdds.hhad?.odds);
-
-  if (prediction.oddsPoolCode === 'HHAD') return hasHhad;
-  if (!hasHad && hasHhad) return false;
-  return hasHad || !hasHhad;
+  return isPredictionOfficialResultPoolAvailable(match, prediction);
 };
 
 const getCandidatePrediction = (match: Match) => {
@@ -69,14 +59,12 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
       .map((match) => {
         const prediction = getCandidatePrediction(match);
         if (!prediction) return null;
-        const tier: TipTier = isActionableRecommendation(match) ? 'pick' : 'reference';
         const kickoffAt = Date.parse(match.kickoffTime);
         const timeScore = Number.isFinite(kickoffAt) ? Math.max(0, 100 - Math.floor((kickoffAt - now) / 36e5)) : 0;
         return {
           match,
           prediction,
-          tier,
-          rankScore: (tier === 'pick' ? 1000 : 0) + (prediction.trustScore || 0) * 3 - marketPriority(prediction) * 20 + timeScore
+          rankScore: (prediction.trustScore || 0) * 3 - marketPriority(prediction) * 20 + timeScore
         };
       })
       .filter((card): card is TipCard => Boolean(card))
@@ -86,14 +74,11 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
       });
   }, [matches]);
 
-  const pickCount = tipCards.filter((card) => card.tier === 'pick').length;
-  const referenceCount = tipCards.length - pickCount;
-
   const translations = {
-    title: { zh: '今日参考推荐', en: 'Today Reference Picks' },
+    title: { zh: '今日推荐', en: 'Today Picks' },
     subtitle: {
-      zh: '强推优先展示；没有强推时，自动降级展示可参考方向，页面不再留空。',
-      en: 'Strong picks come first; when none qualify, reference recommendations are still shown.'
+      zh: '只展示官方已开售玩法的推荐；胜平负未开售时，不会显示主胜/平/客胜。',
+      en: 'Only on-sale official markets are shown. If 1X2 is not on sale, no home/draw/away pick is displayed.'
     },
     confidence: { zh: '模型可信', en: 'Model Trust' },
     odds: { zh: 'SP', en: 'Odds' },
@@ -104,24 +89,16 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
       en: 'No pre-match recommendation is available yet. The page will update after sync.'
     },
     pick: { zh: '推荐', en: 'Pick' },
-    reference: { zh: '参考', en: 'Reference' },
-    pickCount: { zh: '推荐', en: 'Picks' },
-    referenceCount: { zh: '参考', en: 'References' }
+    pickCount: { zh: '推荐', en: 'Picks' }
   };
 
   const t = (key: keyof typeof translations) => translations[key][language] || '';
 
   const getBestCardNote = (card: TipCard) => {
     const riskCount = card.prediction.riskTags?.length || 0;
-    if (card.tier === 'pick') {
-      return language === 'zh'
-        ? '模型、SP 和风险门槛通过，作为优先推荐展示。'
-        : 'Model, SP, and risk gates passed; shown as a priority pick.';
-    }
-
     return language === 'zh'
-      ? `模型有方向，作为次级参考展示${riskCount ? `；风险标签 ${riskCount} 个` : ''}。`
-      : `The model has a direction, shown as a secondary reference${riskCount ? ` with ${riskCount} risk tags` : ''}.`;
+      ? `按已开售玩法给出推荐${riskCount ? `；风险标签 ${riskCount} 个` : ''}。`
+      : `Pick uses an on-sale market${riskCount ? ` with ${riskCount} risk tags` : ''}.`;
   };
 
   return (
@@ -136,11 +113,7 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
         <div className="best-pool-summary">
           <span>
             {t('pickCount')}
-            <strong>{pickCount}</strong>
-          </span>
-          <span>
-            {t('referenceCount')}
-            <strong>{referenceCount}</strong>
+            <strong>{tipCards.length}</strong>
           </span>
         </div>
       </div>
@@ -172,7 +145,7 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
                   flexDirection: 'column',
                   gap: '1.5rem',
                   padding: '2rem',
-                  borderColor: card.tier === 'pick' ? 'hsl(var(--primary) / 0.42)' : 'hsl(var(--accent) / 0.36)'
+                  borderColor: 'hsl(var(--primary) / 0.42)'
                 }}
               >
                 <div style={{ display: 'flex', justifySelf: 'stretch', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -195,8 +168,8 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
 
                 <div
                   style={{
-                    backgroundColor: card.tier === 'pick' ? 'hsl(var(--primary) / 0.06)' : 'hsl(var(--accent) / 0.06)',
-                    border: `1px solid ${card.tier === 'pick' ? 'hsl(var(--primary) / 0.22)' : 'hsl(var(--accent) / 0.22)'}`,
+                    backgroundColor: 'hsl(var(--primary) / 0.06)',
+                    border: '1px solid hsl(var(--primary) / 0.22)',
                     borderRadius: '12px',
                     padding: '1.25rem',
                     display: 'flex',
@@ -207,7 +180,7 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
                     <div>
                       <span style={{ fontSize: '0.7rem', color: 'hsl(var(--text-secondary))', textTransform: 'uppercase', fontWeight: '700' }}>
-                        {card.tier === 'pick' ? t('pick') : t('reference')} · {getPredictionValueLabel(prediction, language)}
+                        {t('pick')} · {getPredictionValueLabel(prediction, language)}
                       </span>
                       <h4 style={{ fontSize: '1.25rem', fontWeight: '900', color: 'hsl(var(--primary))', marginTop: '0.1rem' }}>
                         {getPredictionTipDisplay(prediction, language)}
@@ -216,7 +189,7 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
                     <div style={{ textAlign: 'right' }}>
                       <span style={{ fontSize: '0.7rem', color: 'hsl(var(--text-muted))' }}>{t('odds')}</span>
                       <div style={{ fontSize: '1.3rem', fontWeight: '900', color: 'hsl(var(--accent))' }}>
-                        {hasDisplayOdds ? `@${prediction.odds.toFixed(2)}` : (language === 'zh' ? '参考' : 'Ref')}
+                        {hasDisplayOdds ? `@${prediction.odds.toFixed(2)}` : (language === 'zh' ? '待SP' : 'SP pending')}
                       </div>
                     </div>
                   </div>
@@ -233,7 +206,7 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
                         <path
                           d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                           fill="none"
-                          stroke={card.tier === 'pick' ? 'hsl(var(--primary))' : 'hsl(var(--accent))'}
+                          stroke="hsl(var(--primary))"
                           strokeDasharray={`${prediction.trustScore || 0}, 100`}
                           strokeWidth="3.5"
                         />

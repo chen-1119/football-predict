@@ -1,5 +1,6 @@
 import type { Match, MultiLangString } from './mockData';
 import { buildPreMatchRisk } from './preMatchRisk';
+import { isPredictionOfficialResultPoolAvailable } from './bettingDisplay';
 
 export type MatchSignalCategory = 'steady' | 'lean' | 'value' | 'watch' | 'avoid' | 'unavailable' | 'finished';
 
@@ -15,9 +16,9 @@ export interface MatchSignal {
 const labels: Record<MatchSignalCategory, MultiLangString> = {
   steady: { zh: '高可信候选', en: 'High confidence' },
   lean: { zh: '主推候选', en: 'Model lean' },
-  value: { zh: '价值观察', en: 'Value watch' },
-  watch: { zh: '参考', en: 'Reference' },
-  avoid: { zh: '保留推荐', en: 'Kept recommendation' },
+  value: { zh: '有冷门变量', en: 'Upset variables' },
+  watch: { zh: '待开售', en: 'Pending sale' },
+  avoid: { zh: '临场复核', en: 'Late recheck' },
   unavailable: { zh: '待开售', en: 'Pending' },
   finished: { zh: '已完场', en: 'Finished' }
 };
@@ -70,19 +71,13 @@ const isReferencePrediction = (prediction: Match['predictions'][number] | undefi
   prediction?.recommendationAction === 'reference' || prediction?.recommendationTier === 'reference'
 );
 
-const hasOfficialOddsForPrediction = (match: Match, prediction: Match['predictions'][number]) => {
-  const poolCode = prediction.oddsPoolCode || 'HAD';
-  if (poolCode === 'HHAD') return String(match.handicapOddsSource || '').startsWith('sporttery:');
-  return String(match.oddsSource || '').startsWith('sporttery:');
-};
-
 export function isActionableRecommendation(match: Match): boolean {
   if (match.status !== 'SCHEDULED') return false;
 
   const best = match.predictions.find((prediction) => prediction.marketType === 'BEST');
   if (!best || best.tipCode === 'WATCH' || !isOutcomeTip(best.tipCode)) return false;
   if (isReferencePrediction(best)) return false;
-  if (!hasOfficialOddsForPrediction(match, best)) return false;
+  if (!isPredictionOfficialResultPoolAvailable(match, best)) return false;
 
   const signal = getMatchSignal(match);
   if (signal.category !== 'steady' && signal.category !== 'lean') return false;
@@ -169,14 +164,14 @@ export function getMatchSignal(match: Match): MatchSignal {
         note: {
           zh: bestIsReference
             ? (preMatchRisk.score >= 55
-              ? `本场冷门风险 ${preMatchRisk.score}，参考方向保留但不进强推池；重点复核${preMatchRisk.primaryReason.zh}。`
-              : '本场给出参考倾向，但风险项偏多；不放进强推池，用户可结合临场 SP 和让球盘自行取舍。')
-            : '这场风险点偏多，先不放进推荐池；保留盘口和快照，等临场再复核。',
+              ? `本场冷门风险 ${preMatchRisk.score}，推荐方向需要临场复核；重点看${preMatchRisk.primaryReason.zh}。`
+              : '本场有推荐方向，但风险项偏多，需要结合临场 SP 和让球盘复核。')
+            : '这场风险点偏多，保留盘口和快照，等临场再复核。',
           en: bestIsReference
             ? (preMatchRisk.score >= 55
-              ? `Upset risk is ${preMatchRisk.score}. Keep the reference lean out of the strong pool and recheck ${preMatchRisk.primaryReason.en}.`
-              : 'A reference lean is shown, but risk tags are stacked. It stays out of the strong-pick pool; use late SP and handicap movement for judgement.')
-            : 'The gate was not met and risk tags are stacked. Keep the data for monitoring, but do not promote it.'
+              ? `Upset risk is ${preMatchRisk.score}. Recheck ${preMatchRisk.primaryReason.en} before kickoff.`
+              : 'A direction is shown, but risk tags are stacked. Use late SP and handicap movement for judgement.')
+            : 'Risk tags are stacked. Keep the data for monitoring and recheck late.'
         },
         tone: 'warning',
         trustScore,
@@ -189,11 +184,11 @@ export function getMatchSignal(match: Match): MatchSignal {
       label: labels.watch,
       note: {
         zh: bestIsReference
-          ? '已给出模型参考倾向，但价值边际未达到强推门槛；重点看临场 SP 和让球盘是否继续同向。'
-          : '目前只适合观察，不硬给单一胜平负方向；重点看临场 SP 和让球盘是否补强。',
+          ? '已给出模型方向，但价值边际不厚；重点看临场 SP 和让球盘是否继续同向。'
+          : '等待官方 SP 或让球盘补强后再给出方向。',
         en: bestIsReference
-          ? 'A model reference lean is shown, but value edge is below the strong-pick gate; watch late SP and handicap alignment.'
-          : 'The value gate was triggered. No single 1X2 pick is promoted yet; watch late SP and handicap movement.'
+          ? 'A model direction is shown, but the edge is thin; watch late SP and handicap alignment.'
+          : 'Wait for official SP or handicap movement before publishing a direction.'
       },
       tone: 'warning',
       trustScore,
@@ -211,8 +206,8 @@ export function getMatchSignal(match: Match): MatchSignal {
       category: 'watch',
       label: labels.watch,
       note: {
-        zh: '当前可信度没有达到推荐池门槛，只保留盘口观察，等待下一轮 SP 快照确认。',
-        en: 'Confidence is below the recommendation gate; keep it as a market watch until the next SP snapshot.'
+        zh: '当前可信度不足，等待下一轮 SP 快照确认。',
+        en: 'Confidence is thin; wait for the next SP snapshot.'
       },
       tone: 'warning',
       trustScore,
@@ -278,10 +273,10 @@ export function getMatchSignal(match: Match): MatchSignal {
       label: labels.avoid,
       note: {
         zh: selectedIsNotModelLeader
-          ? '精选方向与最终概率首选不一致，先降级观察，等待下一次 SP 快照确认。'
+          ? '当前方向与最终概率首选不一致，等待下一次 SP 快照确认。'
           : preMatchRisk.score >= 55
             ? `冷门风险 ${preMatchRisk.score} 偏高，先降级为参考；重点复核${preMatchRisk.primaryReason.zh}。`
-          : '条件未达到精选池标准，保留推荐方向，等临场 SP 复核。',
+          : '条件没有完全同向，推荐方向需要临场 SP 复核。',
         en: selectedIsNotModelLeader
           ? 'The selected pick is not aligned with the final probability leader. Downgrade and wait for the next SP snapshot.'
           : preMatchRisk.score >= 55

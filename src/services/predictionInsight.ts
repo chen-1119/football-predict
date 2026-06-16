@@ -479,7 +479,7 @@ const buildProfessionalFramework = ({
   const handicapProbabilities = probabilityText(model?.handicap?.market);
   const hhadLine = match.handicapLine ? `${match.handicapLine}` : '--';
   const primaryUsesHhad = primary?.oddsPoolCode === 'HHAD';
-  const hadReferenceZh = latestOdds === '--' ? '普通胜平负未开售' : `普通胜平负 SP ${latestOdds} 仅作参考`;
+  const hadReferenceZh = latestOdds === '--' ? '普通胜平负未开售' : `普通胜平负 SP ${latestOdds} 用于校验`;
   const hadReferenceEn = latestOdds === '--' ? 'HAD is not on sale' : `HAD SP ${latestOdds} is reference only`;
   const marketAnchorNote = primaryUsesHhad
     ? {
@@ -696,11 +696,11 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
   const sampleEnough = context.homeSampleSize >= 3 && context.awaySampleSize >= 3;
   const trendText = match.oddsTrend ? trendLabel(match.oddsTrend.direction) : null;
   const actionByCategory: Record<typeof signal.category, MultiLangString> = {
-    steady: { zh: '可列入候选', en: 'Candidate' },
-    lean: { zh: '主推候选', en: 'Model lean' },
-    value: { zh: '价值观察', en: 'Value watch' },
-    watch: { zh: '参考为主', en: 'Reference' },
-    avoid: { zh: '保留推荐', en: 'Kept recommendation' },
+    steady: { zh: '推荐', en: 'Pick' },
+    lean: { zh: '推荐', en: 'Pick' },
+    value: { zh: '冷门复核', en: 'Upset recheck' },
+    watch: { zh: '待开售', en: 'Pending sale' },
+    avoid: { zh: '临场复核', en: 'Late recheck' },
     unavailable: { zh: '等待开售', en: 'Wait for sale' },
     finished: { zh: '赛后复盘', en: 'Post-match review' }
   };
@@ -821,31 +821,31 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
   if (isWatchOnly || isReferenceOnly) {
     return {
       title: isReferenceOnly
-        ? { zh: 'AI 参考倾向', en: 'AI Reference Lean' }
+        ? { zh: 'AI 推荐方向', en: 'AI Pick Direction' }
         : { zh: '赛前分析模式', en: 'Pre-Match Analysis Mode' },
       summary: {
         zh: isReferenceOnly
-          ? `${action.zh}：参考方向为 ${tipZh}，模型可信度 ${trustScore || '--'}%。当前不进强推池，重点跟踪官方 SP、让球盘和近期命中冷却。风险标签：${riskTextZh}。`
-          : `${action.zh}：这场暂时不写成单一主推。模型会保留参考方向，重点跟踪官方 SP、让球盘和近期命中冷却；如果临场信号没有变，刷新页面也不会改原结论。风险标签：${riskTextZh}。`,
+          ? `${action.zh}：推荐方向为 ${tipZh}，模型可信度 ${trustScore || '--'}%。重点跟踪官方 SP、让球盘和近期命中冷却。风险标签：${riskTextZh}。`
+          : `${action.zh}：当前等待官方 SP 或临场信号补强；如果临场信号没有变，刷新页面也不会硬改原结论。风险标签：${riskTextZh}。`,
         en: isReferenceOnly
-          ? `${action.en}: reference lean is ${tipEn}, model confidence ${trustScore || '--'}%. It stays out of the strong-pick pool; track official SP, handicap confirmation, and hit-rate cooldown. Risk tags: ${riskTextEn}.`
-          : `${action.en}: the recommendation gate is not met, so no single 1X2 main lean is published. Keep this as reference-only and track official SP, handicap confirmation, and hit-rate cooldown. Risk tags: ${riskTextEn}.`
+          ? `${action.en}: pick direction is ${tipEn}, model confidence ${trustScore || '--'}%. Track official SP, handicap confirmation, and hit-rate cooldown. Risk tags: ${riskTextEn}.`
+          : `${action.en}: wait for official SP or late signals before forcing a single side. Risk tags: ${riskTextEn}.`
       },
       action,
       score: insightScore,
       tone,
       metrics: [
-        { label: { zh: '决策状态', en: 'Decision' }, value: { zh: '参考单', en: 'Reference' }, tone: 'warning' },
+        { label: { zh: '决策状态', en: 'Decision' }, value: { zh: '需复核', en: 'Recheck' }, tone: 'warning' },
         { label: { zh: '主线输出', en: 'Main line' }, value: isReferenceOnly ? { zh: tipZh, en: tipEn } : { zh: '不硬推', en: 'No force' }, tone: isReferenceOnly ? 'warning' : 'muted' },
         { label: { zh: '让球校验', en: 'Handicap check' }, value: { zh: hhadProbabilities ? '已记录' : '未开售', en: hhadProbabilities ? 'Tracked' : 'Closed' }, tone: hhadProbabilities ? 'warning' : 'muted' },
         { label: { zh: '历史样本', en: 'History sample' }, value: { zh: sampleText, en: sampleText }, tone: sampleEnough ? 'success' : 'warning' }
       ],
       drivers: [
         {
-          title: isReferenceOnly ? { zh: '为什么仅作参考', en: 'Why reference only' } : { zh: '为什么不直接推荐', en: 'Why no pick' },
+          title: isReferenceOnly ? { zh: '为什么需要复核', en: 'Why recheck' } : { zh: '为什么不直接推荐', en: 'Why no pick' },
           body: primary.explanation || {
-            zh: '当前低赔、平局压力、让球确认或命中率分桶存在分歧，仅作参考，不把一个方向包装成稳胆。',
-            en: 'Low SP, draw pressure, handicap confirmation, or hit-rate buckets are not aligned, so this remains reference-only.'
+            zh: '当前低赔、平局压力、让球确认或命中率分桶存在分歧，推荐方向需要临场复核。',
+            en: 'Low SP, draw pressure, handicap confirmation, or hit-rate buckets are not aligned, so the pick needs a late recheck.'
           },
           tone: 'warning'
         },

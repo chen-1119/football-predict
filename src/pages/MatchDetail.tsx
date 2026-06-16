@@ -2,10 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../context/AppContextCore';
 import type { FiveHundredRecentFormRow, League, Match, OutcomeProbability, PredictionDetail, ScoreProbability, Team } from '../services/mockData';
 import {
+  getOfficialMatchOdds,
+  getOfficialResultPoolAvailability,
   getPredictionMarketLabel,
   getPredictionTipDisplay,
-  getResolvedMatchOdds,
-  getSportteryPoolRows
+  getSportteryPoolRows,
+  isPredictionOfficialResultPoolAvailable
 } from '../services/bettingDisplay';
 import { getCountryById, getLeagueById, getTeamById } from '../services/entities';
 import { getMatchSignal, isActionableRecommendation } from '../services/matchSignal';
@@ -13,6 +15,7 @@ import { buildMatchInsight } from '../services/predictionInsight';
 import { getVisiblePrediction, getVisiblePredictions } from '../services/predictionVisibility';
 import { getAccessAuthHeaders } from '../services/accessControl';
 import { buildApiUrl, buildStaticUrl } from '../services/runtimeUrls';
+import { buildFiveHundredDisplay } from '../services/fiveHundredDisplay';
 import { TeamBadge } from '../components/TeamBadge';
 import { ArrowLeft, Trophy } from 'lucide-react';
 import { getWorldCupSeededFixtures } from '../services/worldCupData';
@@ -221,7 +224,7 @@ const handicapTipLabel = (code: OutcomeCode) => {
 };
 
 const getOutcomeOddsValue = (match: Match, poolCode: 'HAD' | 'HHAD', code: OutcomeCode) => {
-  const resolvedOdds = getResolvedMatchOdds(match);
+  const resolvedOdds = getOfficialMatchOdds(match);
   const odds = poolCode === 'HHAD' ? resolvedOdds.hhad?.odds : resolvedOdds.had?.odds;
   const value = code === '1' ? odds?.odds1 : code === 'X' ? odds?.oddsX : odds?.odds2;
   return Number.isFinite(value) ? Number(value) : 0;
@@ -312,11 +315,11 @@ const getHandicapOverridePrediction = (match: Match, promotedPrediction?: Predic
     recommendationAction: 'reference',
     recommendationTier: 'handicap-override-reference',
     explanation: {
-      zh: `普通胜平负仅作参考，让球模型和官方让球盘同向，主展示切换为${label.zh}。`,
-      en: `The raw 1X2 lean is reference-only; model and official HHAD point the same way, so the primary display switches to ${label.en}.`
+      zh: `普通胜平负不作为本场主推荐，让球模型和官方让球盘同向，推荐切换为${label.zh}。`,
+      en: `The raw 1X2 lane is not used as the main pick; model and official HHAD align, so the pick switches to ${label.en}.`
     },
     analysisItems: [],
-    riskTags: [{ zh: '让球接管参考', en: 'HHAD override reference' }],
+    riskTags: [{ zh: '让球接管推荐', en: 'HHAD override pick' }],
     visibilityStatus: 'FREE',
     resultStatus: handicapResultStatus(match, read.modelTop.code)
   };
@@ -338,8 +341,8 @@ const getHandicapMarketReferencePrediction = (match: Match): PredictionDetail | 
     recommendationAction: 'reference',
     recommendationTier: 'handicap-market-reference',
     explanation: {
-      zh: `普通胜平负未开售，本场只按让球胜平负展示参考：${label.zh}。`,
-      en: `Standard 1X2 is not on sale, so this fixture is shown only through HHAD: ${label.en}.`
+      zh: `普通胜平负未开售，本场只按让球胜平负推荐：${label.zh}。`,
+      en: `Standard 1X2 is not on sale, so this fixture is recommended through HHAD: ${label.en}.`
     },
     analysisItems: [],
     riskTags: [{ zh: '仅让球开售', en: 'HHAD only' }],
@@ -932,14 +935,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     return translations[key][language] || '';
   };
   const poolRows = getSportteryPoolRows(match, language);
-  const resolvedResultOdds = getResolvedMatchOdds(match);
-  const hasHadResultPool = Boolean(resolvedResultOdds.had?.odds);
-  const hasHhadResultPool = Boolean(resolvedResultOdds.hhad?.odds);
+  const { hasHad: hasHadResultPool, hasHhad: hasHhadResultPool } = getOfficialResultPoolAvailability(match);
   const isPredictionResultPoolAvailable = (prediction: PredictionDetail | undefined) => {
-    if (!prediction || !isOutcomeTipCode(prediction.tipCode)) return false;
-    if (prediction.oddsPoolCode === 'HHAD') return hasHhadResultPool;
-    if (!hasHadResultPool && hasHhadResultPool) return false;
-    return hasHadResultPool || !hasHhadResultPool;
+    return isPredictionOfficialResultPoolAvailable(match, prediction);
   };
   const visiblePredictions = getVisiblePredictions(match);
   const hasPredictions = visiblePredictions.length > 0;
@@ -972,7 +970,10 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     : bestOutcomePrediction && isOutcomeTipCode(bestOutcomePrediction.tipCode)
       ? bestOutcomePrediction
       : undefined;
-  const primaryOutcomePrediction = getHandicapOverridePrediction(match, rawPrimaryOutcomePrediction)
+  const handicapOverridePrediction = hasHhadResultPool
+    ? getHandicapOverridePrediction(match, rawPrimaryOutcomePrediction)
+    : undefined;
+  const primaryOutcomePrediction = handicapOverridePrediction
     || rawPrimaryOutcomePrediction
     || (!hasHadResultPool && hasHhadResultPool ? getHandicapMarketReferencePrediction(match) : undefined);
   const reviewHitRate = settledPredictions.length > 0 ? Math.round((wonPredictions.length / settledPredictions.length) * 100) : null;
@@ -1156,10 +1157,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   };
 
   const recommendationActionLabel = (prediction: PredictionDetail | undefined) => {
-    const action = prediction?.recommendationAction;
-    if (prediction?.tipCode === 'WATCH') return language === 'zh' ? '参考' : 'Reference';
-    if (action === 'recommend') return language === 'zh' ? '主推' : 'Main';
-    return language === 'zh' ? '参考' : 'Reference';
+    if (!prediction || prediction.tipCode === 'WATCH') return language === 'zh' ? '待开售' : 'Pending';
+    return language === 'zh' ? '推荐' : 'Pick';
   };
 
   const primaryOutcomeProbability = probabilityForPredictionTip(primaryOutcomePrediction);
@@ -1224,8 +1223,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   });
   const scoreAlignmentNote = primaryOutcomeIsHandicap
     ? (language === 'zh'
-      ? '当前主展示来自让球参考，比分不按让球结果硬绑定；比分仍按90分钟胜平负热区展示。'
-      : 'The main display comes from handicap reference, so scores are not forced to match the handicap result; they still follow the regular-time 1X2 heat zone.')
+      ? '当前推荐来自让球胜平负，比分不按让球结果硬绑定；比分仍按90分钟常规赛果热区展示。'
+      : 'The recommendation uses HHAD, so scores are not forced to match the handicap result; they still follow regular-time 1X2 heat.')
     : scoreBindingOutcomeCode && scoreRecommendations.some((score) => score.tone === 'aligned')
       ? (language === 'zh'
         ? `比分一按「${primaryOutcomeTitle}」方向优先筛选，比分二保留模型热区参考。`
@@ -1241,21 +1240,19 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     : (language === 'zh' ? '赛前监控' : 'Monitoring');
   const isQualifiedPick = match.status === 'SCHEDULED' && isActionableRecommendation(match);
   const decisionPoolStatus = isQualifiedPick
-    ? (language === 'zh' ? '进精选池' : 'Top pool')
+    ? (primaryOutcomeIsHandicap ? (language === 'zh' ? '让球' : 'HHAD') : (language === 'zh' ? '胜平负' : '1X2'))
     : matchSignal.category === 'avoid'
-      ? (language === 'zh' ? '保留推荐' : 'Kept recommendation')
+      ? (primaryOutcomeIsHandicap ? (language === 'zh' ? '让球' : 'HHAD') : (language === 'zh' ? '胜平负' : '1X2'))
       : match.status === 'FINISHED'
         ? (language === 'zh' ? '已锁定复盘' : 'Locked review')
-        : (language === 'zh' ? '不进精选池' : 'Not in top pool');
+        : primaryOutcomePrediction
+          ? (primaryOutcomeIsHandicap ? (language === 'zh' ? '让球' : 'HHAD') : (language === 'zh' ? '胜平负' : '1X2'))
+          : (language === 'zh' ? '待开售' : 'Pending');
   const decisionDirectionText = primaryOutcomePrediction
-    ? `${isHandicapMarketReference
-      ? (language === 'zh' ? '盘口参考' : 'Market reference')
-      : isQualifiedPick
-        ? (language === 'zh' ? '推荐方向' : 'Pick')
-        : (language === 'zh' ? '参考倾向' : 'Reference lean')} ${primaryOutcomeTitle}`
+    ? `${language === 'zh' ? '推荐方向' : 'Pick'} ${primaryOutcomeTitle}`
     : matchSignal.category === 'avoid'
-      ? (language === 'zh' ? '保留推荐' : 'Kept recommendation')
-      : (language === 'zh' ? '等待确认' : 'Await confirmation');
+      ? (language === 'zh' ? '推荐待临场复核' : 'Pick needs late recheck')
+      : (language === 'zh' ? '待官方开售' : 'Pending official sale');
   const hadPoolRow = poolRows.find((row) => row.poolCode === 'HAD');
   const hhadPoolRow = poolRows.find((row) => row.poolCode === 'HHAD');
   const independentOutcomeProbabilities = primaryOutcomeIsHandicap
@@ -1330,26 +1327,26 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
         ? `${primaryOutcomeTitle} · 让球 ${hhadPoolRow.handicap || '--'} · ${supportForPrimaryOutcome >= 42 ? '有支持' : '支持不足'} ${supportForPrimaryOutcome}%`
         : `${primaryOutcomeTitle} · line ${hhadPoolRow.handicap || '--'} · ${supportForPrimaryOutcome >= 42 ? 'supported' : 'weak support'} ${supportForPrimaryOutcome}%`)
       : `${language === 'zh' ? '让球' : 'Line'} ${hhadPoolRow.handicap || '--'} · ${hhadPoolRow.probabilities ? `${hhadPoolRow.probabilities.home}/${hhadPoolRow.probabilities.draw}/${hhadPoolRow.probabilities.away}%` : '--'}`
-    : (language === 'zh' ? '暂无官方让球盘，先不作为精选验证。' : 'No official handicap pool yet, so it cannot validate a top pick.');
+    : (language === 'zh' ? '暂无官方让球盘，先不作为推荐校验。' : 'No official handicap pool yet, so it cannot validate the pick.');
   const handicapValidationNote = hhadPoolRow?.odds
     ? primaryOutcomeIsHandicap
       ? (handicapProbabilityLeader && primaryOutcomeKey && handicapProbabilityLeader.key !== primaryOutcomeKey
         ? (language === 'zh'
-          ? `当前为让球结果参考；官方让球SP最高项是${handicapProbabilityLeader.zh} ${handicapProbabilityLeader.probability}%，与本参考方向不同，说明盘口分歧大，只能观察。`
-          : `This is a handicap-result reference. Official HHAD is led by ${handicapProbabilityLeader.en} at ${handicapProbabilityLeader.probability}%, which conflicts with this reference direction, so it stays watch-only.`)
+          ? `当前推荐为让球结果；官方让球SP最高项是${handicapProbabilityLeader.zh} ${handicapProbabilityLeader.probability}%，与本方向不同，说明盘口分歧大，需要临场复核。`
+          : `The pick uses HHAD. Official HHAD is led by ${handicapProbabilityLeader.en} at ${handicapProbabilityLeader.probability}%, which conflicts with this direction, so recheck late.`)
         : (language === 'zh'
-          ? '当前为让球结果参考。让球结果不等同90分钟胜平负，比分预测仍按常规赛果独立展示。'
-          : 'This is a handicap-result reference. Handicap result is not the same as regular-time 1X2, so score projection remains a separate regular-result view.'))
+          ? '当前推荐为让球结果。让球结果不等同90分钟胜平负，比分预测仍按常规赛果独立展示。'
+          : 'The pick uses HHAD. Handicap result is not the same as regular-time 1X2, so score projection remains separate.'))
       : handicapProbabilityLeader && primaryOutcomeKey && handicapProbabilityLeader.key !== primaryOutcomeKey
         ? (language === 'zh'
           ? `让球盘最高为${handicapProbabilityLeader.zh} ${handicapProbabilityLeader.probability}%，说明盘口没有同向支持胜平负主方向；这里只做验证，不改成推荐方向。`
           : `${handicapProbabilityLeader.en} leads the handicap pool at ${handicapProbabilityLeader.probability}%. That means the line does not support the 1X2 lean, and it is validation only, not a rewritten pick.`)
         : (language === 'zh'
-          ? '让球盘只做精选校验，不会强行改掉胜平负推荐方向。'
-          : 'Handicap is used as top-pool validation and does not forcibly rewrite the 1X2 lean.')
+          ? '让球盘只做校验，不会强行改掉胜平负推荐方向。'
+          : 'Handicap is validation and does not forcibly rewrite the 1X2 pick.')
     : (language === 'zh'
-      ? '暂无官方让球盘，先不作为精选验证。'
-      : 'No official handicap pool yet, so it cannot validate a top pick.');
+      ? '暂无官方让球盘，先不作为推荐校验。'
+      : 'No official handicap pool yet, so it cannot validate the pick.');
   const transparentRiskTags = (
     primaryOutcomePrediction?.riskTags?.length
       ? primaryOutcomePrediction.riskTags
@@ -1359,29 +1356,29 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   )).slice(0, 6);
   const transparentDecisionReason = isQualifiedPick
     ? (language === 'zh'
-      ? '模型概率、官方 SP、让球盘和风险标签同时通过，本场进入精选池。'
-      : 'Model probability, official SP, handicap validation, and risk tags passed together, so this fixture enters the top pool.')
+      ? '模型概率、官方 SP、让球盘和风险标签基本同向，本场按已开售玩法给出推荐。'
+      : 'Model probability, official SP, handicap validation, and risk tags align, so the on-sale market is used for the pick.')
     : isHandicapMarketReference
       ? (language === 'zh'
-        ? '普通胜平负未开售，只展示已开售让球盘的参考方向；模型概率放在下方对照，不进入精选池。'
-        : 'Standard 1X2 is not on sale, so only the available HHAD market reference is shown; model probability stays below as comparison.')
+        ? '普通胜平负未开售，本场直接按已开售让球胜平负给出推荐；模型概率放在下方对照。'
+        : 'Standard 1X2 is not on sale, so the recommendation uses the available HHAD market; model probability is shown below.')
     : matchSignal.category === 'avoid'
       ? (language === 'zh'
-        ? '模型方向保留，暂不进入精选池，作为赛前参考推荐展示。'
-        : 'The model direction is kept out of the top pool and shown as a pre-match reference recommendation.')
+        ? '模型方向有风险，本场推荐需要结合临场 SP、首发和盘口变化复核。'
+        : 'The model direction carries risk; recheck late SP, lineups, and market movement.')
       : primaryOutcomePrediction
         ? (language === 'zh'
-          ? '模型主线仍有方向，但低赔、让球或风险校验未同时通过，仅作参考。'
-          : 'The model has a main lean, but SP, handicap, or risk validation did not pass together, so it stays reference only.')
+          ? '模型主线有方向，但仍需要临场复核低赔、让球和风险标签。'
+          : 'The model has a main direction, but late SP, handicap, and risk tags still need rechecking.')
         : matchSignal.note[language];
   const decisionConsistencyNote = primaryOutcomeIsHandicap
     ? isHandicapMarketReference
       ? (language === 'zh'
-        ? '一致性口径：这不是普通胜平负推荐，也不是模型强推；仅按已开售让球胜平负展示。'
-        : 'Consistency rule: this is not a standard 1X2 home pick or a strong model pick; it only reflects the available HHAD market.')
+        ? '一致性口径：普通胜平负未开售时，不显示主胜/平/客胜，只显示让胜/让平/让负。'
+        : 'Consistency rule: when 1X2 is not on sale, do not show home/draw/away; show HHAD only.')
       : (language === 'zh'
-        ? '一致性口径：让球参考不改写90分钟胜平负；比分按常规赛果热区展示，二者分层阅读。'
-        : 'Consistency rule: handicap reference does not rewrite regular-time 1X2; score follows the regular-result heat zone and should be read separately.')
+        ? '一致性口径：让球推荐不改写90分钟胜平负；比分按常规赛果热区展示。'
+        : 'Consistency rule: HHAD does not rewrite regular-time 1X2; score follows regular-result heat.')
     : (language === 'zh'
       ? '一致性口径：胜平负是主方向，比分优先贴合该方向；让球盘只做验证，不反向改写推荐。'
       : 'Consistency rule: 1X2 is the main direction, scores are aligned first, and handicap only validates instead of rewriting the pick.');
@@ -1409,6 +1406,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   }) | undefined;
   const weatherSignal = externalSignals?.weather;
   const fiveHundredSignal = externalSignals?.fiveHundred;
+  const fiveHundredDisplay = buildFiveHundredDisplay(match, language);
   const localizedSignalText = (
     value: string | { zh?: string; en?: string } | undefined,
     fallback = ''
@@ -1805,6 +1803,13 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
       tone: externalSignals?.lineups ? 'success' : 'neutral',
       body: externalSignals?.lineups?.summary?.[language]
         || (language === 'zh' ? '未拿到可验证首发/伤停时，只作为待补信息，不调整概率。' : 'Without verified lineups or injuries, this remains missing data and does not adjust probabilities.')
+    },
+    {
+      title: language === 'zh' ? '500网数据' : '500.com data',
+      value: fiveHundredDisplay.visible ? fiveHundredDisplay.summaryLabel : '--',
+      tone: fiveHundredDisplay.visible ? fiveHundredDisplay.tone : 'neutral',
+      body: fiveHundredDisplay.summaryBody
+        || (language === 'zh' ? '500网欧赔、亚盘、近况和阵容用于赛前校验，不单独生成推荐。' : '500.com odds, Asian lines, form, and projected XI validate the pre-match read; they do not create picks alone.')
     },
     {
       title: language === 'zh' ? '外部均赔' : 'External odds',
@@ -2230,7 +2235,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
               <section className="recommendation-overview-panel is-outcome">
                 <div className="recommendation-overview-head">
                   <span>{primaryOutcomeIsHandicap
-                    ? (language === 'zh' ? '让球参考' : 'Handicap Reference')
+                    ? (language === 'zh' ? '让球推荐' : 'Handicap Pick')
                     : (language === 'zh' ? '胜平负推荐' : '1X2 Recommendation')}</span>
                   <b>{recommendationActionLabel(primaryOutcomePrediction)}</b>
                 </div>
@@ -2323,6 +2328,52 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                 </div>
               </div>
             </div>
+
+            {fiveHundredDisplay.visible && (
+              <div className={`card five-hundred-signal-card is-${fiveHundredDisplay.tone}`}>
+                <div className="five-hundred-signal-head">
+                  <div>
+                    <span className="review-kicker">
+                      {language === 'zh' ? '500网赛前数据' : '500.com pre-match data'}
+                    </span>
+                    <h3>{fiveHundredDisplay.summaryLabel}</h3>
+                    <p>
+                      {language === 'zh'
+                        ? '先把500网能拿到的盘口、欧赔、近期战绩、排名和预计名单放到页面上；这些信号参与校验和降级，不直接覆盖模型主方向。'
+                        : '500.com market, odds, form, ranking, and projected XI are surfaced here first. They validate and downgrade confidence without overriding the model alone.'}
+                    </p>
+                  </div>
+                  <span className={`five-hundred-source-badge is-${fiveHundredDisplay.tone}`}>
+                    {fiveHundredDisplay.badge}
+                  </span>
+                </div>
+
+                <div className="five-hundred-signal-grid">
+                  {fiveHundredDisplay.panels.map((panel) => (
+                    <section key={panel.key} className={`five-hundred-signal-panel is-${panel.tone}`}>
+                      <span>{panel.title}</span>
+                      <strong>{panel.value}</strong>
+                      <p>{panel.body}</p>
+                      {panel.tags.length > 0 && (
+                        <div className="five-hundred-chip-row">
+                          {panel.tags.map((tag) => (
+                            <b key={`${panel.key}-${tag}`}>{tag}</b>
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  ))}
+                </div>
+
+                {fiveHundredDisplay.chips.length > 0 && (
+                  <div className="five-hundred-chip-row is-summary">
+                    {fiveHundredDisplay.chips.slice(0, 8).map((chip) => (
+                      <b key={chip}>{chip}</b>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className={`card pre-match-risk-card is-${upsetRiskTone}`}>
               <div className="pre-match-risk-head">

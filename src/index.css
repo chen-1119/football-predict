@@ -1414,6 +1414,7 @@ button.status-pill:hover {
 
 .recommendation-reference-lean,
 .recommendation-diagnosis,
+.recommendation-500-hint,
 .recommendation-caution {
   display: inline-flex;
   align-items: center;
@@ -1451,6 +1452,25 @@ button.status-pill:hover {
 }
 
 .recommendation-diagnosis.is-danger {
+  border-color: hsl(var(--danger) / 0.34);
+  background: hsl(var(--danger) / 0.09);
+  color: hsl(var(--danger));
+}
+
+.recommendation-500-hint {
+  border: 1px solid hsl(var(--primary) / 0.28);
+  background: hsl(var(--primary) / 0.08);
+  color: hsl(var(--primary));
+}
+
+.recommendation-500-hint.is-warning,
+.recommendation-500-hint.is-neutral {
+  border-color: hsl(var(--premium) / 0.34);
+  background: hsl(var(--premium) / 0.1);
+  color: hsl(var(--premium));
+}
+
+.recommendation-500-hint.is-danger {
   border-color: hsl(var(--danger) / 0.34);
   background: hsl(var(--danger) / 0.09);
   color: hsl(var(--danger));
@@ -2278,7 +2298,7 @@ button.status-pill:hover {
 
 .decision-facts {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
   gap: 0.32rem;
 }
 
@@ -2316,6 +2336,19 @@ button.status-pill:hover {
 }
 
 .decision-risk-fact.is-danger strong {
+  color: hsl(var(--danger));
+}
+
+.decision-500-fact.is-success strong {
+  color: hsl(var(--primary));
+}
+
+.decision-500-fact.is-warning strong,
+.decision-500-fact.is-neutral strong {
+  color: hsl(var(--premium));
+}
+
+.decision-500-fact.is-danger strong {
   color: hsl(var(--danger));
 }
 
@@ -10947,6 +10980,138 @@ body {
   padding: 0.18rem 0.5rem;
 }
 
+.five-hundred-signal-card {
+  display: grid;
+  gap: 0.86rem;
+  border-color: hsl(var(--primary) / 0.24);
+  background:
+    linear-gradient(135deg, hsl(var(--primary) / 0.08), transparent 44%),
+    hsl(var(--bg-card));
+  padding: 0.95rem;
+}
+
+.five-hundred-signal-card.is-warning {
+  border-color: hsl(var(--premium) / 0.34);
+}
+
+.five-hundred-signal-card.is-danger {
+  border-color: hsl(var(--danger) / 0.34);
+}
+
+.five-hundred-signal-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.8rem;
+  align-items: start;
+}
+
+.five-hundred-signal-head h3 {
+  margin-top: 0.2rem;
+  color: hsl(var(--text-primary));
+  font-family: var(--font-title);
+  font-size: clamp(1.12rem, 2.8vw, 1.5rem);
+  font-weight: 950;
+  line-height: 1.13;
+}
+
+.five-hundred-signal-head p,
+.five-hundred-signal-panel p {
+  color: hsl(var(--text-secondary));
+  font-size: 0.78rem;
+  font-weight: 720;
+  line-height: 1.58;
+}
+
+.five-hundred-source-badge {
+  border: 1px solid hsl(var(--primary) / 0.34);
+  border-radius: 999px;
+  background: hsl(var(--primary) / 0.11);
+  color: hsl(var(--primary));
+  font-size: 0.72rem;
+  font-weight: 920;
+  padding: 0.24rem 0.62rem;
+  white-space: nowrap;
+}
+
+.five-hundred-source-badge.is-warning,
+.five-hundred-source-badge.is-neutral {
+  border-color: hsl(var(--premium) / 0.34);
+  background: hsl(var(--premium) / 0.11);
+  color: hsl(var(--premium));
+}
+
+.five-hundred-source-badge.is-danger {
+  border-color: hsl(var(--danger) / 0.34);
+  background: hsl(var(--danger) / 0.11);
+  color: hsl(var(--danger));
+}
+
+.five-hundred-signal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.58rem;
+}
+
+.five-hundred-signal-panel {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 0.42rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--bg) / 0.48);
+  padding: 0.72rem;
+}
+
+.five-hundred-signal-panel.is-success {
+  border-color: hsl(var(--success) / 0.28);
+}
+
+.five-hundred-signal-panel.is-warning {
+  border-color: hsl(var(--premium) / 0.34);
+}
+
+.five-hundred-signal-panel.is-danger {
+  border-color: hsl(var(--danger) / 0.34);
+}
+
+.five-hundred-signal-panel > span {
+  color: hsl(var(--text-muted));
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.five-hundred-signal-panel > strong {
+  overflow-wrap: anywhere;
+  color: hsl(var(--text-primary));
+  font-family: var(--font-title);
+  font-size: 1.02rem;
+  font-weight: 950;
+}
+
+.five-hundred-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.08rem;
+}
+
+.five-hundred-chip-row.is-summary {
+  border-top: 1px solid hsl(var(--border));
+  margin-top: 0;
+  padding-top: 0.72rem;
+}
+
+.five-hundred-chip-row b {
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  background: hsl(var(--bg-card) / 0.68);
+  color: hsl(var(--text-muted));
+  font-size: 0.66rem;
+  font-weight: 850;
+  padding: 0.16rem 0.44rem;
+}
+
 .pre-match-risk-card {
   display: grid;
   gap: 0.86rem;
@@ -11083,6 +11248,7 @@ body {
 .prediction-view-stack > .recommendation-overview-card,
 .prediction-view-stack > .recommendation-score-card,
 .prediction-view-stack > .decision-transparent-card,
+.prediction-view-stack > .five-hundred-signal-card,
 .prediction-view-stack > .pre-match-risk-card,
 .prediction-view-stack > .signal-summary-card,
 .prediction-view-stack > .prediction-policy-note,
@@ -11100,6 +11266,7 @@ body {
 .prediction-view-stack[data-view="summary"] > .review-card,
 .prediction-view-stack[data-view="summary"] > .recommendation-overview-card,
 .prediction-view-stack[data-view="summary"] > .decision-transparent-card,
+.prediction-view-stack[data-view="summary"] > .five-hundred-signal-card,
 .prediction-view-stack[data-view="summary"] > .pre-match-risk-card,
 .prediction-view-stack[data-view="summary"] > .signal-summary-card,
 .prediction-view-stack[data-view="summary"] > .prediction-policy-note {
@@ -11120,6 +11287,7 @@ body {
 
 .prediction-view-stack[data-view="model"] > .probability-model-card,
 .prediction-view-stack[data-view="factors"] > .factor-analysis-card,
+.prediction-view-stack[data-view="factors"] > .five-hundred-signal-card,
 .prediction-view-stack[data-view="factors"] > .pre-match-risk-card,
 .prediction-view-stack[data-view="factors"] > .insight-card,
 .prediction-view-stack[data-view="factors"] > .professional-framework-card,
@@ -11404,6 +11572,7 @@ body {
   }
 
   .factor-analysis-head,
+  .five-hundred-signal-head,
   .pre-match-risk-head,
   .weather-analysis-head,
   .prediction-policy-note {
@@ -11419,6 +11588,7 @@ body {
   }
 
   .factor-card-grid,
+  .five-hundred-signal-grid,
   .pre-match-risk-grid,
   .weather-metric-grid,
   .weather-rule-grid {
