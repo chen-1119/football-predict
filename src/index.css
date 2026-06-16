@@ -724,6 +724,156 @@ button.status-pill:hover {
   font-weight: 650;
 }
 
+.decision-lanes-panel {
+  display: grid;
+  gap: 0.78rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--bg-card));
+  padding: 0.95rem;
+}
+
+.decision-lanes-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.decision-lanes-head > div {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.decision-lanes-head strong {
+  color: hsl(var(--text-primary));
+  font-family: var(--font-title);
+  font-size: 1.05rem;
+  font-weight: 920;
+}
+
+.decision-lanes-head > span:last-child {
+  color: hsl(var(--text-muted));
+  font-size: 0.72rem;
+  font-weight: 820;
+  line-height: 1.4;
+  text-align: right;
+}
+
+.decision-lane-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.decision-lane-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "icon kicker"
+    "icon value"
+    "note note";
+  gap: 0.16rem 0.55rem;
+  min-height: 126px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--bg) / 0.62);
+  color: hsl(var(--text-secondary));
+  cursor: pointer;
+  padding: 0.78rem;
+  text-align: left;
+  transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.18s ease;
+}
+
+.decision-lane-card:hover:not(:disabled) {
+  border-color: hsl(var(--primary) / 0.42);
+  background: hsl(var(--bg-card-hover));
+  transform: translateY(-1px);
+}
+
+.decision-lane-card:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.decision-lane-icon {
+  grid-area: icon;
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid hsl(var(--primary) / 0.26);
+  border-radius: 8px;
+  background: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary));
+}
+
+.decision-lane-kicker {
+  grid-area: kicker;
+  min-width: 0;
+  color: hsl(var(--text-muted));
+  font-size: 0.72rem;
+  font-weight: 860;
+}
+
+.decision-lane-card strong {
+  grid-area: value;
+  min-width: 0;
+  color: hsl(var(--text-primary));
+  font-family: var(--font-title);
+  font-size: 1.34rem;
+  font-weight: 920;
+  line-height: 1.15;
+}
+
+.decision-lane-card small {
+  grid-area: note;
+  display: -webkit-box;
+  min-height: 2.24rem;
+  overflow: hidden;
+  color: hsl(var(--text-muted));
+  font-size: 0.74rem;
+  font-weight: 720;
+  line-height: 1.5;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.decision-lane-card.is-success {
+  border-color: hsl(var(--success) / 0.3);
+}
+
+.decision-lane-card.is-success .decision-lane-icon {
+  border-color: hsl(var(--success) / 0.3);
+  background: hsl(var(--success) / 0.1);
+  color: hsl(var(--success));
+}
+
+.decision-lane-card.is-handicap {
+  border-color: hsl(var(--accent) / 0.3);
+}
+
+.decision-lane-card.is-handicap .decision-lane-icon {
+  border-color: hsl(var(--accent) / 0.3);
+  background: hsl(var(--accent) / 0.1);
+  color: hsl(var(--accent));
+}
+
+.decision-lane-card.is-goals {
+  border-color: hsl(var(--premium) / 0.32);
+}
+
+.decision-lane-card.is-goals .decision-lane-icon {
+  border-color: hsl(var(--premium) / 0.32);
+  background: hsl(var(--premium) / 0.1);
+  color: hsl(var(--premium));
+}
+
+.decision-lane-card.is-watch {
+  border-color: hsl(var(--border));
+}
+
 .data-sync-strip {
   display: flex;
   align-items: center;
@@ -1263,6 +1413,7 @@ button.status-pill:hover {
 }
 
 .recommendation-reference-lean,
+.recommendation-diagnosis,
 .recommendation-caution {
   display: inline-flex;
   align-items: center;
@@ -1278,6 +1429,31 @@ button.status-pill:hover {
 .recommendation-reference-lean {
   background: hsl(var(--bg-card-hover));
   color: hsl(var(--text-muted));
+}
+
+.recommendation-diagnosis {
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--bg-card-hover) / 0.72);
+  color: hsl(var(--text-muted));
+}
+
+.recommendation-diagnosis.is-success {
+  border-color: hsl(var(--success) / 0.3);
+  background: hsl(var(--success) / 0.08);
+  color: hsl(var(--success));
+}
+
+.recommendation-diagnosis.is-warning,
+.recommendation-diagnosis.is-neutral {
+  border-color: hsl(var(--premium) / 0.34);
+  background: hsl(var(--premium) / 0.1);
+  color: hsl(var(--premium));
+}
+
+.recommendation-diagnosis.is-danger {
+  border-color: hsl(var(--danger) / 0.34);
+  background: hsl(var(--danger) / 0.09);
+  color: hsl(var(--danger));
 }
 
 .recommendation-caution {
@@ -2102,7 +2278,7 @@ button.status-pill:hover {
 
 .decision-facts {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.32rem;
 }
 
@@ -2128,6 +2304,19 @@ button.status-pill:hover {
   line-height: 1.18;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.decision-risk-fact.is-success strong {
+  color: hsl(var(--success));
+}
+
+.decision-risk-fact.is-warning strong,
+.decision-risk-fact.is-neutral strong {
+  color: hsl(var(--premium));
+}
+
+.decision-risk-fact.is-danger strong {
+  color: hsl(var(--danger));
 }
 
 .decision-reason {
@@ -3087,6 +3276,103 @@ button.status-pill:hover {
   color: hsl(var(--text-primary));
   font-size: 0.9rem;
   font-weight: 900;
+}
+
+.post-review-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.post-review-panel {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 0.5rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--bg) / 0.56);
+  padding: 0.72rem;
+}
+
+.post-review-panel h4 {
+  margin: 0;
+  color: hsl(var(--text-primary));
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.post-review-panel p {
+  margin: 0;
+  color: hsl(var(--text-secondary));
+  font-size: 0.76rem;
+  font-weight: 720;
+  line-height: 1.55;
+}
+
+.post-review-row-list,
+.post-review-chip-list {
+  display: grid;
+  gap: 0.42rem;
+}
+
+.post-review-row {
+  display: grid;
+  gap: 0.16rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--bg-card) / 0.68);
+  padding: 0.48rem 0.54rem;
+}
+
+.post-review-row.is-won {
+  border-color: hsl(var(--success) / 0.42);
+  background: hsl(var(--success) / 0.08);
+}
+
+.post-review-row.is-lost {
+  border-color: hsl(var(--danger) / 0.32);
+  background: hsl(var(--danger) / 0.06);
+}
+
+.post-review-row span,
+.post-review-row em {
+  color: hsl(var(--text-muted));
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 820;
+}
+
+.post-review-row strong {
+  color: hsl(var(--text-primary));
+  font-size: 0.78rem;
+  font-weight: 900;
+  line-height: 1.3;
+}
+
+.post-review-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.post-review-chip-list span {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  border: 1px solid hsl(var(--primary) / 0.24);
+  border-radius: 999px;
+  background: hsl(var(--primary) / 0.08);
+  color: hsl(var(--text-secondary));
+  font-size: 0.7rem;
+  font-weight: 850;
+  line-height: 1.25;
+  padding: 0.2rem 0.52rem;
+}
+
+.post-review-chip-list.is-muted span {
+  border-color: hsl(var(--border));
+  background: hsl(var(--bg-card) / 0.66);
+  color: hsl(var(--text-muted));
 }
 
 .prediction-result-pill {
@@ -4856,6 +5142,10 @@ button.status-pill:hover {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .decision-lane-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .worldcup-spotlight,
   .worldcup-hero-panel,
   .worldcup-two-col,
@@ -5094,6 +5384,23 @@ button.status-pill:hover {
     gap: 0.65rem;
   }
 
+  .decision-lanes-panel {
+    padding: 0.82rem;
+  }
+
+  .decision-lanes-head {
+    flex-direction: column;
+  }
+
+  .decision-lanes-head > span:last-child {
+    text-align: left;
+  }
+
+  .decision-lane-card {
+    min-height: 118px;
+    padding: 0.72rem;
+  }
+
   .metric-card {
     min-height: 104px;
     padding: 0.85rem;
@@ -5314,6 +5621,10 @@ button.status-pill:hover {
   .signal-summary-card {
     grid-template-columns: 1fr;
     gap: 0.7rem;
+  }
+
+  .post-review-detail-grid {
+    grid-template-columns: 1fr;
   }
 
   .prediction-policy-note,
@@ -5567,6 +5878,10 @@ button.status-pill:hover {
 
   .metrics-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .decision-lane-grid {
+    grid-template-columns: 1fr;
   }
 
   .worldcup-spotlight {
@@ -10632,10 +10947,143 @@ body {
   padding: 0.18rem 0.5rem;
 }
 
+.pre-match-risk-card {
+  display: grid;
+  gap: 0.86rem;
+  border-color: hsl(var(--accent) / 0.22);
+  background:
+    linear-gradient(135deg, hsl(var(--primary) / 0.07), transparent 46%),
+    hsl(var(--bg-card));
+  padding: 0.95rem;
+}
+
+.pre-match-risk-card.is-warning {
+  border-color: hsl(var(--premium) / 0.34);
+}
+
+.pre-match-risk-card.is-danger {
+  border-color: hsl(var(--danger) / 0.34);
+}
+
+.pre-match-risk-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.8rem;
+  align-items: start;
+}
+
+.pre-match-risk-head h3 {
+  margin-top: 0.2rem;
+  color: hsl(var(--text-primary));
+  font-family: var(--font-title);
+  font-size: clamp(1.12rem, 2.8vw, 1.55rem);
+  font-weight: 950;
+  line-height: 1.13;
+}
+
+.pre-match-risk-head p,
+.pre-match-risk-panel p {
+  color: hsl(var(--text-secondary));
+  font-size: 0.78rem;
+  font-weight: 720;
+  line-height: 1.58;
+}
+
+.pre-match-risk-score {
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  background: hsl(var(--bg) / 0.58);
+  color: hsl(var(--text-secondary));
+  font-size: 0.72rem;
+  font-weight: 920;
+  padding: 0.24rem 0.62rem;
+  white-space: nowrap;
+}
+
+.pre-match-risk-score.is-success {
+  border-color: hsl(var(--success) / 0.34);
+  background: hsl(var(--success) / 0.11);
+  color: hsl(var(--success));
+}
+
+.pre-match-risk-score.is-warning,
+.pre-match-risk-score.is-neutral {
+  border-color: hsl(var(--premium) / 0.34);
+  background: hsl(var(--premium) / 0.11);
+  color: hsl(var(--premium));
+}
+
+.pre-match-risk-score.is-danger {
+  border-color: hsl(var(--danger) / 0.34);
+  background: hsl(var(--danger) / 0.11);
+  color: hsl(var(--danger));
+}
+
+.pre-match-risk-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.58rem;
+}
+
+.pre-match-risk-panel {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 0.42rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--bg) / 0.48);
+  padding: 0.72rem;
+}
+
+.pre-match-risk-panel.is-success {
+  border-color: hsl(var(--success) / 0.28);
+}
+
+.pre-match-risk-panel.is-warning {
+  border-color: hsl(var(--premium) / 0.34);
+}
+
+.pre-match-risk-panel.is-danger {
+  border-color: hsl(var(--danger) / 0.34);
+}
+
+.pre-match-risk-panel > span {
+  color: hsl(var(--text-muted));
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.pre-match-risk-panel > strong {
+  color: hsl(var(--text-primary));
+  font-family: var(--font-title);
+  font-size: 1.02rem;
+  font-weight: 950;
+  overflow-wrap: anywhere;
+}
+
+.pre-match-risk-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.08rem;
+}
+
+.pre-match-risk-tags b {
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  background: hsl(var(--bg-card) / 0.68);
+  color: hsl(var(--text-muted));
+  font-size: 0.66rem;
+  font-weight: 850;
+  padding: 0.16rem 0.44rem;
+}
+
 .prediction-view-stack > .review-card,
 .prediction-view-stack > .recommendation-overview-card,
 .prediction-view-stack > .recommendation-score-card,
 .prediction-view-stack > .decision-transparent-card,
+.prediction-view-stack > .pre-match-risk-card,
 .prediction-view-stack > .signal-summary-card,
 .prediction-view-stack > .prediction-policy-note,
 .prediction-view-stack > .probability-model-card,
@@ -10652,6 +11100,7 @@ body {
 .prediction-view-stack[data-view="summary"] > .review-card,
 .prediction-view-stack[data-view="summary"] > .recommendation-overview-card,
 .prediction-view-stack[data-view="summary"] > .decision-transparent-card,
+.prediction-view-stack[data-view="summary"] > .pre-match-risk-card,
 .prediction-view-stack[data-view="summary"] > .signal-summary-card,
 .prediction-view-stack[data-view="summary"] > .prediction-policy-note {
   display: grid !important;
@@ -10671,6 +11120,7 @@ body {
 
 .prediction-view-stack[data-view="model"] > .probability-model-card,
 .prediction-view-stack[data-view="factors"] > .factor-analysis-card,
+.prediction-view-stack[data-view="factors"] > .pre-match-risk-card,
 .prediction-view-stack[data-view="factors"] > .insight-card,
 .prediction-view-stack[data-view="factors"] > .professional-framework-card,
 .prediction-view-stack[data-view="weather"] > .weather-analysis-card {
@@ -10954,6 +11404,7 @@ body {
   }
 
   .factor-analysis-head,
+  .pre-match-risk-head,
   .weather-analysis-head,
   .prediction-policy-note {
     grid-template-columns: 1fr !important;
@@ -10968,6 +11419,7 @@ body {
   }
 
   .factor-card-grid,
+  .pre-match-risk-grid,
   .weather-metric-grid,
   .weather-rule-grid {
     grid-template-columns: 1fr;

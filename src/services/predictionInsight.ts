@@ -374,6 +374,47 @@ const goalModelLine = (match: Match) => {
   };
 };
 
+const contextSignalLines = (match: Match) => {
+  const contextSignals = match.probabilityModel?.contextSignals;
+  const attack = contextSignals?.attackIntent;
+  const ranking = contextSignals?.rankingPressure;
+  const discipline = contextSignals?.discipline;
+  const dataGaps = contextSignals?.dataGaps;
+  const attackZh = attack
+    ? `进攻欲望：主 ${attack.home ?? '--'} / 客 ${attack.away ?? '--'} / 总 ${attack.total ?? '--'}，lambda 微调 ${decimalText(attack.lambdaTotalAdjustment, 3)}。`
+    : '进攻欲望：暂无可用结构化信号。';
+  const attackEn = attack
+    ? `Attack intent: home ${attack.home ?? '--'} / away ${attack.away ?? '--'} / total ${attack.total ?? '--'}, lambda adjustment ${decimalText(attack.lambdaTotalAdjustment, 3)}.`
+    : 'Attack intent: no structured signal available.';
+  const rankingZh = ranking
+    ? `排名/战意压力：主 ${ranking.home ?? '--'} / 客 ${ranking.away ?? '--'}，最高压力 ${ranking.maxPressure ?? '--'}，轮换风险 ${percentText(Number(ranking.rotationRisk ?? 0) * 100)}。`
+    : '排名/战意压力：暂无可用结构化信号。';
+  const rankingEn = ranking
+    ? `Ranking/motivation pressure: home ${ranking.home ?? '--'} / away ${ranking.away ?? '--'}, max pressure ${ranking.maxPressure ?? '--'}, rotation risk ${percentText(Number(ranking.rotationRisk ?? 0) * 100)}.`
+    : 'Ranking/motivation pressure: no structured signal available.';
+  const disciplineZh = discipline
+    ? `纪律风险：预计黄牌 ${decimalText(discipline.expectedYellowCards?.total, 1)}，红牌风险 ${percentText(Number(discipline.redCardRisk?.total ?? 0) * 100)}，犯规压力 ${discipline.foulPressure ?? '--'}。`
+    : '纪律风险：暂无裁判/牌数结构化信号。';
+  const disciplineEn = discipline
+    ? `Discipline risk: expected yellows ${decimalText(discipline.expectedYellowCards?.total, 1)}, red-card risk ${percentText(Number(discipline.redCardRisk?.total ?? 0) * 100)}, foul pressure ${discipline.foulPressure ?? '--'}.`
+    : 'Discipline risk: no structured card/referee signal available.';
+  const missingZh = (dataGaps?.missing || []).slice(0, 4).map((item) => item.zh || item.key).filter(Boolean).join('、');
+  const missingEn = (dataGaps?.missing || []).slice(0, 4).map((item) => item.en || item.key).filter(Boolean).join(', ');
+  const gapZh = dataGaps
+    ? `数据完整度 ${dataGaps.coverageScore ?? '--'}，质量 ${dataGaps.sourceQuality || '--'}；主要缺口：${missingZh || '暂无关键缺口'}。缺口会降低信心分，不会用估算数据冒充真实源。`
+    : '数据缺口：暂无结构化缺口画像。';
+  const gapEn = dataGaps
+    ? `Data coverage ${dataGaps.coverageScore ?? '--'}, quality ${dataGaps.sourceQuality || '--'}; main gaps: ${missingEn || 'no major gap'}. Gaps reduce confidence and estimated data is not treated as verified source.`
+    : 'Data gaps: no structured gap profile available.';
+
+  return {
+    attack: { zh: attackZh, en: attackEn },
+    ranking: { zh: rankingZh, en: rankingEn },
+    discipline: { zh: disciplineZh, en: disciplineEn },
+    dataGaps: { zh: gapZh, en: gapEn }
+  };
+};
+
 const h2hLine = (match: Match, context: MatchInsightContext) => {
   const h2h = match.probabilityModel?.form?.h2h;
   if (!h2h || !h2h.sampleSize) {
@@ -431,6 +472,7 @@ const buildProfessionalFramework = ({
   const latestHandicapOdds = oddsText(resolvedOdds.hhad?.odds);
   const rankLine = rankOrStrengthLine(match);
   const goalLine = goalModelLine(match);
+  const contextLines = contextSignalLines(match);
   const directH2h = h2hLine(match, context);
   const finalProbabilities = probabilityText(model?.oneXTwo.final);
   const marketProbabilities = probabilityText(model?.oneXTwo.market);
@@ -498,6 +540,15 @@ const buildProfessionalFramework = ({
       tone: goalTone
     },
     {
+      title: { zh: '四补、进攻欲望', en: '4b. Attack Intent' },
+      body: contextLines.attack,
+      tone: (model?.contextSignals?.attackIntent?.total ?? 50) >= 62
+        ? 'success'
+        : (model?.contextSignals?.attackIntent?.total ?? 50) <= 42
+          ? 'warning'
+          : 'muted'
+    },
+    {
       title: { zh: '五、防守能力', en: '5. Defense' },
       body: {
         zh: `${match.homeTeamName || '主队'}场均失 ${decimalText(form?.home.goalsAgainstAvg)}，零封 ${rateText(form?.home.cleanSheetRate)}，被零封 ${rateText(form?.home.failedScoreRate)}；${match.awayTeamName || '客队'}场均失 ${decimalText(form?.away.goalsAgainstAvg)}，零封 ${rateText(form?.away.cleanSheetRate)}，被零封 ${rateText(form?.away.failedScoreRate)}。`,
@@ -518,6 +569,15 @@ const buildProfessionalFramework = ({
       tone: 'warning'
     },
     {
+      title: { zh: '六补、数据缺口校验', en: '6b. Data Gap Check' },
+      body: contextLines.dataGaps,
+      tone: model?.contextSignals?.dataGaps?.sourceQuality === 'low'
+        ? 'danger'
+        : model?.contextSignals?.dataGaps?.sourceQuality === 'medium'
+          ? 'warning'
+          : 'success'
+    },
+    {
       title: { zh: '七、战术克制', en: '7. Tactics' },
       body: {
         zh: `用进球分布替代空泛战术判断：大2.5 ${percentText(model?.goalLines.over25)}、双方进球 ${percentText(model?.bothTeamsToScore.yes)}、最终平局概率 ${percentText(model?.oneXTwo.final?.draw)}。${(model?.goalLines.over25 ?? 0) >= 55 ? '节奏倾向开放。' : '节奏不宜高估。'}`,
@@ -532,6 +592,11 @@ const buildProfessionalFramework = ({
         en: `${restLineEn(match.homeTeamNameEn || match.homeTeamName, form?.home)}; ${restLineEn(match.awayTeamNameEn || match.awayTeamName, form?.away)}. Cup/title/relegation motivation is weighted only when the fixture stage is verifiable.`
       },
       tone: sampleTone
+    },
+    {
+      title: { zh: '八补、排名战意压力', en: '8b. Ranking Pressure' },
+      body: contextLines.ranking,
+      tone: (model?.contextSignals?.rankingPressure?.maxPressure ?? 0) >= 70 ? 'warning' : 'muted'
     },
     {
       title: { zh: '九、历史交锋', en: '9. H2H' },
@@ -549,6 +614,15 @@ const buildProfessionalFramework = ({
           : 'Weather, pitch, and referee profile sit in the environment-risk layer: extreme weather, pitch speed, travel, cards, penalties, and red-card tendency are checked against market movement for volatility.'
       },
       tone: 'warning'
+    },
+    {
+      title: { zh: '十补、纪律与红牌风险', en: '10b. Cards / Red-Card Risk' },
+      body: contextLines.discipline,
+      tone: (model?.contextSignals?.discipline?.redCardRisk?.total ?? 0) >= 0.17
+        ? 'danger'
+        : (model?.contextSignals?.discipline?.expectedYellowCards?.total ?? 0) >= 5.2
+          ? 'warning'
+          : 'muted'
     },
     {
       title: { zh: '十一、赔率盘口', en: '11. Odds / Market' },

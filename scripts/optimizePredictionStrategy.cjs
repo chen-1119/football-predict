@@ -81,6 +81,38 @@ function matchKey(match) {
   return normText(match?.sourceMatchId || String(match?.id || "").replace(/^sporttery_/, ""));
 }
 
+function matchIdentity(match) {
+  return matchKey(match) || [
+    match?.kickoffTime,
+    match?.homeTeamName || match?.homeTeamNameEn || match?.homeTeamId,
+    match?.awayTeamName || match?.awayTeamNameEn || match?.awayTeamId,
+  ].filter(Boolean).join("|");
+}
+
+function matchQuality(match) {
+  let score = 0;
+  if (match?.status === "FINISHED") score += 40;
+  if (Number.isFinite(match?.scoreHome) && Number.isFinite(match?.scoreAway)) score += 30;
+  if (match?.predictionMeta?.lockedAt) score += 8;
+  if (Array.isArray(match?.predictions) && match.predictions.length) score += 6;
+  if (match?.probabilityModel?.scoreDistribution?.length) score += 4;
+  if (match?.odds || match?.handicapOdds) score += 2;
+  return score;
+}
+
+function dedupeMatches(matches) {
+  const byId = new Map();
+  for (const match of matches || []) {
+    const key = normText(matchIdentity(match));
+    if (!key) continue;
+    const previous = byId.get(key);
+    if (!previous || matchQuality(match) >= matchQuality(previous)) {
+      byId.set(key, match);
+    }
+  }
+  return [...byId.values()];
+}
+
 function probabilityForTip(match, prediction) {
   const oneXTwo = match?.probabilityModel?.oneXTwo?.final;
   if (!oneXTwo) return null;
@@ -433,10 +465,11 @@ function buildStrategy(matches) {
 const matchFiles = ["matches-current.json", "matches-history.json"]
   .map((file) => path.join(publicDataDir, file))
   .filter((file) => fs.existsSync(file));
-const matches = matchFiles.flatMap((file) => {
+const rawMatches = matchFiles.flatMap((file) => {
   const parsed = readJson(file, []);
   return Array.isArray(parsed) ? parsed : [];
 });
+const matches = dedupeMatches(rawMatches);
 
 const strategy = buildStrategy(matches);
 for (const file of outputFiles) writeJson(file, strategy);

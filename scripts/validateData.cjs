@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 
 const publicDir = path.join(__dirname, "..", "public");
+const distDir = path.join(__dirname, "..", "dist");
 const matchesPath = path.join(publicDir, "matches.json");
 const currentMatchesPath = path.join(publicDir, "data", "matches-current.json");
 const historyMatchesPath = path.join(publicDir, "data", "matches-history.json");
@@ -255,6 +256,34 @@ if (fs.existsSync(dataOddsHistoryPath)) {
   const dataHistory = readJson(dataOddsHistoryPath);
   if (rootHistory && JSON.stringify(rootHistory.rows || []) !== JSON.stringify(dataHistory.rows || [])) {
     errors.push("public/data/odds-history.json must mirror public/odds-history.json rows.");
+  }
+}
+
+if (fs.existsSync(distDir)) {
+  for (const fileName of [
+    "matches.json",
+    "odds-history.json",
+    "data/matches-current.json",
+    "data/matches-history.json",
+    "data/team-index.json",
+    "data/odds-history.json",
+    "data/prediction-snapshots.json",
+    "data/model-calibration.json",
+    "data/model-strategy.json",
+    "data/sync-meta.json",
+  ]) {
+    const publicFile = path.join(publicDir, fileName);
+    const distFile = path.join(distDir, fileName);
+    if (!fs.existsSync(publicFile) && !fs.existsSync(distFile)) continue;
+    if (!fs.existsSync(publicFile) || !fs.existsSync(distFile)) {
+      errors.push(`dist/${fileName} must mirror public/${fileName}.`);
+      continue;
+    }
+    const publicText = fs.readFileSync(publicFile, "utf8");
+    const distText = fs.readFileSync(distFile, "utf8");
+    if (publicText !== distText) {
+      errors.push(`dist/${fileName} is stale; rerun sync:data to mirror current public data.`);
+    }
   }
 }
 

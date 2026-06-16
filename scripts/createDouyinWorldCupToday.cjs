@@ -365,7 +365,7 @@ async function captureWebsitePredictions() {
               const session = {
                 token: "codex-online-preview",
                 issuedAt: new Date().toISOString(),
-                expiresAt: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
+                expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(),
                 codeId: "codex"
               };
               localStorage.setItem("football_access_session", JSON.stringify({
@@ -414,7 +414,7 @@ async function captureWebsitePredictions() {
               if (path === "/api/sync-meta" || path === "/data/sync-meta.json") return jsonResponse(syncMeta);
               if (path === "/api/data/sources") return jsonResponse(sourceHealth);
               if (path === "/api/access/status") {
-                return jsonResponse({ ok: true, authorized: true, expiresAt: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString() });
+                return jsonResponse({ ok: true, authorized: true, expiresAt: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString() });
               }
               if (path === "/api/events") return new Response("", { status: 204 });
               if (originalFetch) {

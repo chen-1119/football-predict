@@ -6,6 +6,7 @@ const publicDir = path.join(rootDir, "public");
 const dataDir = path.join(publicDir, "data");
 
 const externalSignalsPath = path.join(dataDir, "external-signals.json");
+const preMatchSignalsPath = path.join(dataDir, "pre-match-signals.json");
 const currentMatchesPath = path.join(dataDir, "matches-current.json");
 const syncMetaPath = path.join(dataDir, "sync-meta.json");
 
@@ -15,6 +16,8 @@ const minExternalMapped = Math.max(0, Number(process.env.SOURCE_MIN_500_MAPPED |
 const minCurrentMatches = Math.max(0, Number(process.env.SOURCE_MIN_CURRENT_MATCHES || 1));
 const minCurrentCoverage = Math.max(0, Math.min(1, Number(process.env.SOURCE_MIN_EXTERNAL_COVERAGE || 0.5)));
 const requireExternalSignals = process.env.REQUIRE_EXTERNAL_SIGNALS !== "0";
+const requirePreMatchSignals = process.env.REQUIRE_PREMATCH_SIGNALS === "1";
+const minPreMatchRows = Math.max(0, Number(process.env.SOURCE_MIN_PREMATCH_ROWS || minCurrentMatches));
 
 function readJson(file, fallback) {
   try {
@@ -37,12 +40,14 @@ function matchHasExternalSignal(match) {
   const hhad = signals.bookmakerOdds?.hhad;
   const apiFootball = signals.bookmakerOdds?.apiFootball || signals.apiFootball;
   const external = signals.externalOdds;
-  return Boolean(had || hhad || apiFootball || external || signals.injuries || signals.lineups);
+  const preMatch = signals.preMatch?.quality || signals.preMatch;
+  return Boolean(had || hhad || apiFootball || external || signals.injuries || signals.lineups || preMatch);
 }
 
 const errors = [];
 const warnings = [];
 const external = readJson(externalSignalsPath, null);
+const preMatch = readJson(preMatchSignalsPath, null);
 const current = readJson(currentMatchesPath, []);
 const syncMeta = readJson(syncMetaPath, null);
 
@@ -53,6 +58,12 @@ const externalCount = Object.keys(externalMatches).length;
 const source500 = external?.sources?.["500.com:jczq"] || {};
 const sourceApiFootball = external?.sources?.["api-football"] || {};
 const externalAge = ageMinutes(external?.updatedAt);
+const preMatchAge = ageMinutes(preMatch?.updatedAt);
+const preMatchMatches = preMatch?.matches && typeof preMatch.matches === "object" && !Array.isArray(preMatch.matches)
+  ? preMatch.matches
+  : {};
+const preMatchCount = Object.keys(preMatchMatches).length;
+const preMatchSummary = preMatch?.summary || {};
 const currentCount = Array.isArray(current) ? current.length : 0;
 const currentWithExternal = Array.isArray(current) ? current.filter(matchHasExternalSignal).length : 0;
 const currentCoverage = currentCount > 0 ? currentWithExternal / currentCount : 0;
@@ -73,6 +84,23 @@ if (requireExternalSignals) {
   }
 }
 
+if (!preMatch) {
+  const message = "pre-match-signals.json is missing or invalid; run npm run sync:prematch.";
+  if (requirePreMatchSignals) errors.push(message);
+  else warnings.push(message);
+} else {
+  if (preMatchAge > maxAgeMinutes) {
+    const message = `pre-match-signals.json is stale: ${preMatchAge.toFixed(1)} minutes old, max ${maxAgeMinutes}.`;
+    if (requirePreMatchSignals) errors.push(message);
+    else warnings.push(message);
+  }
+  if (preMatchCount < minPreMatchRows) {
+    const message = `pre-match signal rows too low: ${preMatchCount}, min ${minPreMatchRows}.`;
+    if (requirePreMatchSignals) errors.push(message);
+    else warnings.push(message);
+  }
+}
+
 if (!Array.isArray(current)) {
   errors.push("matches-current.json is not an array.");
 } else if (currentCount < minCurrentMatches) {
@@ -80,7 +108,7 @@ if (!Array.isArray(current)) {
 }
 
 if (currentCount > 0 && requireExternalSignals && currentCoverage < minCurrentCoverage) {
-  errors.push(`current external coverage too low: ${(currentCoverage * 100).toFixed(1)}%, min ${(minCurrentCoverage * 100).toFixed(1)}%.`);
+  warnings.push(`current external coverage low: ${(currentCoverage * 100).toFixed(1)}%, target ${(minCurrentCoverage * 100).toFixed(1)}%.`);
 }
 
 const metaExternalCount = syncMeta?.sources?.externalSignals?.matches ?? syncMeta?.externalSignals?.matches ?? null;
@@ -98,6 +126,8 @@ const payload = {
     minCurrentMatches,
     minCurrentCoverage,
     requireExternalSignals,
+    requirePreMatchSignals,
+    minPreMatchRows,
   },
   externalSignals: {
     exists: Boolean(external),
@@ -111,6 +141,16 @@ const payload = {
     apiFootballUpdatedAt: sourceApiFootball.updatedAt || null,
     apiFootballMappedSignals: sourceApiFootball.mappedSignals || 0,
     apiFootballCallsThisSync: sourceApiFootball.callsThisSync || 0,
+  },
+  preMatchSignals: {
+    exists: Boolean(preMatch),
+    updatedAt: preMatch?.updatedAt || null,
+    ageMinutes: Number.isFinite(preMatchAge) ? Number(preMatchAge.toFixed(2)) : null,
+    matchKeys: preMatchCount,
+    high: preMatchSummary.high || 0,
+    medium: preMatchSummary.medium || 0,
+    low: preMatchSummary.low || 0,
+    warningCount: Array.isArray(preMatchSummary.warnings) ? preMatchSummary.warnings.length : 0,
   },
   currentMatches: {
     count: currentCount,

@@ -9,11 +9,22 @@ export const normalizeRuntimeBase = (value: string | undefined): string | null =
 
 export const getDataApiBase = () => normalizeRuntimeBase(import.meta.env.VITE_DATA_API_BASE);
 
+const getLocalPreviewApiBase = () => {
+  if (typeof window === 'undefined') return null;
+
+  const { hostname, port, protocol } = window.location;
+  const isLocalHost = hostname === '127.0.0.1' || hostname === 'localhost' || hostname === '::1';
+  const isVitePreviewPort = ['4173', '4174', '5173', '5174', '5175', '5176'].includes(port);
+  if (!isLocalHost || !isVitePreviewPort) return null;
+
+  return `${protocol}//${hostname}:8788`;
+};
+
 export const buildApiUrl = (endpoint: string) => {
   if (ABSOLUTE_URL_RE.test(endpoint)) return endpoint;
 
   const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  const apiBase = getDataApiBase();
+  const apiBase = getDataApiBase() || (normalizedEndpoint.startsWith('/api/') ? getLocalPreviewApiBase() : null);
   if (!apiBase) return normalizedEndpoint;
 
   if (apiBase.endsWith('/api') && normalizedEndpoint.startsWith('/api/')) {

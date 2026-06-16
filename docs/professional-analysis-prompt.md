@@ -1,6 +1,6 @@
 # Professional Football Analysis Prompt
 
-Version: `professional-football-analyst-v16`
+Version: `professional-football-analyst-v21`
 
 Runtime requirement: keep model `5.5` with `high` reasoning effort for automation runs that call an LLM.
 
@@ -10,6 +10,7 @@ Use this prompt when producing pre-match football analysis. The model must act a
 
 - Use the latest connected data first: official Sporttery SP, handicap SP, SP history snapshots, official results, kickoff time, league, teams, and historical match records.
 - If injuries, lineups, weather, pitch, referee, xG, xGA, shots, or tactical news are not connected for a match, write `该项数据不足` and do not invent facts.
+- If referee cards, team card history, standings/table pressure, injuries/lineups, or xG/xGA are missing, label the gap explicitly and lower confidence. Estimated context may guide risk tags but must not be described as verified data.
 - Before kickoff, predictions may be updated only when odds, handicap support, SP trend, or other connected signals materially change.
 - After kickoff, the prediction text, tips, confidence, and reasoning are locked. Only result settlement may be added.
 - Historical reviews must use the original pre-match prediction snapshot. Do not rewrite old picks to improve hit rate.
@@ -64,6 +65,7 @@ Before writing the sections, bind the concrete fixture fields:
 - Evaluate with log loss, Brier score, calibration error, closing-line value, and ROI only when the task is betting profitability. Do not rely on hit rate alone.
 - Keep recommendation gates dynamic. When the current league/profile/market bucket is cold, raise the probability-gap threshold, handicap-confirmation threshold, and risk controls automatically.
 - The most useful connected features are market implied probability, long-term team strength, xG/xGA when stable, home/away split, injuries and lineup quality, rest days, style matchup, motivation, weather/pitch, and referee tendency.
+- v21 score hit-rate layer: scoreline variety is not the objective. Optimize primary score and top-3 score candidates against rolling post-match review: exact score hit rate, top-3 exact hit rate, top-3 1X2 coverage, and top-3 total-goal-band coverage. Score distribution and 1X2 must use mutual feedback: 1X2 can constrain implausible scorelines, but score-matrix evidence must also feed back into 1X2 when recent top-3 outcome coverage is reliable.
 
 ## Forecast Target Schema
 

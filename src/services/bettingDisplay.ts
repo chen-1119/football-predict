@@ -110,25 +110,25 @@ const sportteryResultLabels = {
 
 const sportteryHandicapResultLabels = {
   '1': {
-    zhCompact: '让球主胜',
-    zhFull: '让球主胜',
-    zhCodeHint: '让球代码 3',
+    zhCompact: '让胜',
+    zhFull: '让胜',
+    zhCodeHint: '让胜 · 代码3',
     enCompact: 'HHAD Home',
-    enFull: 'Handicap Home Win'
+    enFull: 'Handicap-adjusted Home Win'
   },
   X: {
-    zhCompact: '让球平',
-    zhFull: '让球平',
-    zhCodeHint: '让球代码 1',
+    zhCompact: '让平',
+    zhFull: '让平',
+    zhCodeHint: '让平 · 代码1',
     enCompact: 'HHAD Draw',
-    enFull: 'Handicap Draw'
+    enFull: 'Handicap-adjusted Draw'
   },
   '2': {
-    zhCompact: '让球客胜',
-    zhFull: '让球客胜',
-    zhCodeHint: '让球代码 0',
+    zhCompact: '让负',
+    zhFull: '让负',
+    zhCodeHint: '让负 · 代码0',
     enCompact: 'HHAD Away',
-    enFull: 'Handicap Away Win'
+    enFull: 'Handicap-adjusted Away Win'
   }
 } as const;
 
@@ -150,12 +150,54 @@ export function getPredictionMarketLabel(prediction: PredictionDetail, language:
     sportteryResultLabels[prediction.tipCode as keyof typeof sportteryResultLabels]
   ) {
     return prediction.marketType === 'BEST'
-      ? (language === 'zh' ? 'AI精选 · 让球' : 'Best Tip · HHAD')
-      : (language === 'zh' ? '让球胜平负' : 'Handicap 1X2');
+      ? (language === 'zh' ? 'AI精选 · 让球' : 'Best Tip · Handicap Result')
+      : (language === 'zh' ? '让球' : 'Handicap Result');
   }
 
   return getMarketLabel(prediction.marketType, language);
 }
+
+const parseHandicapNumber = (handicapLine: string | undefined) => {
+  const value = Number(String(handicapLine || '').replace(/[^\d.+-]/g, ''));
+  return Number.isFinite(value) ? value : null;
+};
+
+const formatHandicapForCopy = (line: number) => {
+  const abs = Math.abs(line);
+  const value = Number.isInteger(abs) ? String(abs) : abs.toFixed(2).replace(/\.?0+$/, '');
+  return `${line > 0 ? '+' : '-'}${value}`;
+};
+
+const getHandicapSemanticTip = (
+  prediction: PredictionDetail,
+  language: Language,
+  compact: boolean
+) => {
+  if (prediction.oddsPoolCode !== 'HHAD') return null;
+  const line = parseHandicapNumber(prediction.handicapLine);
+  if (line === null || line === 0) return null;
+  const lineText = formatHandicapForCopy(line);
+
+  if (language === 'zh') {
+    if (prediction.tipCode === '1') return '让胜';
+    if (prediction.tipCode === 'X') return '让平';
+    if (prediction.tipCode === '2') return '让负';
+  }
+
+  if (line < 0) {
+    if (prediction.tipCode === '1') return compact ? 'Handicap home' : `Home wins after ${lineText} handicap`;
+    if (prediction.tipCode === 'X') return compact ? 'Handicap draw' : `Draw after ${lineText} handicap`;
+    if (prediction.tipCode === '2') return compact ? 'Handicap away' : `Away wins after ${lineText} handicap`;
+  }
+
+  if (line > 0) {
+    if (prediction.tipCode === '1') return compact ? 'Handicap home' : `Home wins after ${lineText} handicap`;
+    if (prediction.tipCode === 'X') return compact ? 'Handicap draw' : `Draw after ${lineText} handicap`;
+    if (prediction.tipCode === '2') return compact ? 'Handicap away' : `Away wins after ${lineText} handicap`;
+  }
+
+  return null;
+};
 
 export function getPredictionTipDisplay(
   prediction: PredictionDetail,
@@ -166,6 +208,9 @@ export function getPredictionTipDisplay(
     ? sportteryHandicapResultLabels[prediction.tipCode as keyof typeof sportteryHandicapResultLabels]
     : undefined;
   if ((prediction.marketType === '1X2' || prediction.marketType === 'BEST') && handicapLabel) {
+    const semanticTip = getHandicapSemanticTip(prediction, language, compact);
+    if (semanticTip) return semanticTip;
+
     if (language === 'zh') {
       return compact ? handicapLabel.zhCompact : handicapLabel.zhFull;
     }
@@ -306,7 +351,7 @@ export function getSportteryPoolRows(match: MatchOddsInput, language: Language):
     },
     {
       poolCode: 'HHAD',
-      label: language === 'zh' ? '让球胜平负' : 'Handicap 1X2',
+      label: language === 'zh' ? '让球' : 'Handicap Result',
       handicap: resolved.hhad?.handicap || '',
       odds: resolved.hhad?.odds || null,
       source: resolved.hhad?.source,

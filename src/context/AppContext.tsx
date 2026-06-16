@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { Match } from '../services/mockData';
-import { matchesPool, registerTeam, registerLeague, registerCountry } from '../services/mockData';
+import { getDateStringOffset, matchesPool, registerTeam, registerLeague, registerCountry } from '../services/mockData';
 import { AppContext } from './AppContextCore';
 import type { DataSyncState, HitAndWinSubmission, Language, User } from './AppContextCore';
 import {
@@ -175,13 +175,21 @@ const fetchJson = async <T,>(url: string, accessToken = ''): Promise<T> => {
   }
 };
 
-const fetchFirstAvailable = async <T,>(candidates: DataCandidate[], accessToken = ''): Promise<DataFetchResult<T>> => {
+type DataFetchValidator<T> = (data: T, candidate: DataCandidate) => void;
+
+const fetchFirstAvailable = async <T,>(
+  candidates: DataCandidate[],
+  accessToken = '',
+  validate?: DataFetchValidator<T>
+): Promise<DataFetchResult<T>> => {
   let lastError: unknown;
 
   for (const candidate of candidates) {
     try {
+      const data = await fetchJson<T>(candidate.url, accessToken);
+      validate?.(data, candidate);
       return {
-        data: await fetchJson<T>(candidate.url, accessToken),
+        data,
         url: candidate.url,
         channel: candidate.channel
       };
@@ -195,6 +203,29 @@ const fetchFirstAvailable = async <T,>(candidates: DataCandidate[], accessToken 
 
 const isUnauthorizedFetchError = (error: unknown) => {
   return error instanceof Error && /\bHTTP 401\b/.test(error.message);
+};
+
+const matchDateKeys = (match: Pick<Match, 'kickoffDate' | 'businessDate' | 'matchDate' | 'kickoffTime'>) => {
+  const kickoffDate = match.kickoffDate || String(match.kickoffTime || '').slice(0, 10) || match.matchDate || '';
+  return [kickoffDate, match.businessDate || ''].filter(Boolean);
+};
+
+const assertFreshCurrentMatches = (data: unknown, candidate: DataCandidate) => {
+  if (!isSyncedMatchArray(data)) {
+    throw new Error(`${candidate.url}: current payload is not a match array`);
+  }
+  if (data.length === 0) {
+    throw new Error(`${candidate.url}: current payload is empty`);
+  }
+
+  const newestDate = data
+    .flatMap(matchDateKeys)
+    .sort()
+    .at(-1);
+  const staleBeforeDate = getDateStringOffset(-1);
+  if (newestDate && newestDate < staleBeforeDate) {
+    throw new Error(`${candidate.url}: stale current payload (${newestDate})`);
+  }
 };
 
 const normalizeApiBase = normalizeRuntimeBase;
@@ -463,7 +494,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const [dataResult, meta, sourceHealth] = await Promise.all([
           fetchFirstAvailable<unknown>(
             dataUrls('/matches/current?view=list', [buildStaticUrl('data/matches-current.json'), buildStaticUrl('matches.json')]),
-            activeAccessToken
+            activeAccessToken,
+            assertFreshCurrentMatches
           ),
           fetchSyncMeta(),
           fetchSourceHealth()
@@ -567,7 +599,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const loadHistory = async () => {
       try {
         const historyData = await fetchFirstAvailable<unknown>(
-          dataUrls('/matches/history?view=list&limit=600', [buildStaticUrl('data/matches-history.json')], {
+          dataUrls('/matches/history?view=list&limit=600', [], {
             preferStatic: false
           }),
           activeAccessToken

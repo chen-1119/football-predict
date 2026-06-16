@@ -5,6 +5,10 @@ const crypto = require("node:crypto");
 const readline = require("node:readline");
 
 const STATE_FILE = "state.json";
+const CURRENT_MATCHES_FILE = "current-matches.json";
+const HISTORY_LIST_FILE = "history-list.json";
+const MATCH_INDEX_FILE = "latest-match-index.json";
+const LATEST_MATCH_DIR = "latest-matches";
 const TABLES = {
   syncRuns: "sync-runs",
   matchSnapshots: "match-snapshots",
@@ -64,6 +68,9 @@ const hashPayload = (payload) => {
 const dbDirFor = (storeDir) => path.join(storeDir, "db");
 const statePathFor = (storeDir) => path.join(dbDirFor(storeDir), STATE_FILE);
 const tablePathFor = (storeDir, table) => path.join(dbDirFor(storeDir), `${table}.jsonl`);
+const materializedPathFor = (storeDir, fileName) => path.join(dbDirFor(storeDir), fileName);
+const latestMatchDirFor = (storeDir) => path.join(dbDirFor(storeDir), LATEST_MATCH_DIR);
+const latestMatchFileFor = (storeDir, fileName) => path.join(latestMatchDirFor(storeDir), fileName);
 
 const ensureDataStore = async (storeDir) => {
   const dbDir = dbDirFor(storeDir);
@@ -89,6 +96,13 @@ const writeState = async (storeDir, state) => {
   };
   await fsp.writeFile(statePathFor(storeDir), `${JSON.stringify(nextState, null, 2)}\n`);
   return nextState;
+};
+
+const writeJsonAtomic = async (filePath, payload) => {
+  await fsp.mkdir(path.dirname(filePath), { recursive: true });
+  const tempPath = `${filePath}.tmp-${process.pid}-${Date.now()}`;
+  await fsp.writeFile(tempPath, `${JSON.stringify(payload)}\n`);
+  await fsp.rename(tempPath, filePath);
 };
 
 const appendRow = async (storeDir, table, row) => {
@@ -173,6 +187,21 @@ const getDataStoreStatus = async (storeDir) => {
       };
     } catch {
       files[table] = { exists: false, bytes: 0, rows: 0, updatedAt: null };
+    }
+  }
+  for (const fileName of [CURRENT_MATCHES_FILE, HISTORY_LIST_FILE, MATCH_INDEX_FILE]) {
+    const filePath = materializedPathFor(storeDir, fileName);
+    try {
+      const stat = await fsp.stat(filePath);
+      const parsed = await readJsonFile(filePath, null);
+      files[fileName] = {
+        exists: true,
+        bytes: stat.size,
+        rows: Array.isArray(parsed?.rows) ? parsed.rows.length : parsed?.matches ? Object.keys(parsed.matches).length : 0,
+        updatedAt: stat.mtime.toISOString()
+      };
+    } catch {
+      files[fileName] = { exists: false, bytes: 0, rows: 0, updatedAt: null };
     }
   }
   return {
@@ -454,6 +483,156 @@ const buildMatchSnapshot = (match, source, dataset = "current") => {
     rawMatchSignature,
     match,
     signature
+  };
+};
+
+const compactPredictionForList = (prediction) => {
+  if (!prediction || typeof prediction !== "object") return null;
+  return {
+    marketType: prediction.marketType,
+    oddsPoolCode: prediction.oddsPoolCode,
+    handicapLine: prediction.handicapLine,
+    tipCode: prediction.tipCode,
+    tipLabel: prediction.tipLabel,
+    odds: prediction.odds,
+    trustScore: prediction.trustScore,
+    resultStatus: prediction.resultStatus,
+    recommendationAction: prediction.recommendationAction,
+    recommendationTier: prediction.recommendationTier,
+    valueLabel: prediction.valueLabel,
+    riskTags: Array.isArray(prediction.riskTags) ? prediction.riskTags.slice(0, 3) : []
+  };
+};
+
+const compactMatchForHistoryList = (match) => ({
+  id: match.id,
+  sourceMatchId: match.sourceMatchId,
+  homeTeamId: match.homeTeamId,
+  awayTeamId: match.awayTeamId,
+  leagueId: match.leagueId,
+  countryId: match.countryId,
+  kickoffTime: match.kickoffTime,
+  kickoffDate: match.kickoffDate,
+  businessDate: match.businessDate,
+  matchDate: match.matchDate,
+  status: match.status,
+  scoreHome: match.scoreHome,
+  scoreAway: match.scoreAway,
+  projectedScoreHome: match.projectedScoreHome,
+  projectedScoreAway: match.projectedScoreAway,
+  homeTeamName: match.homeTeamName,
+  homeTeamNameEn: match.homeTeamNameEn,
+  homeTeamLogo: match.homeTeamLogo,
+  homeTeamLogoType: match.homeTeamLogoType,
+  homeTeamCountryIso: match.homeTeamCountryIso,
+  homeTeamColor: match.homeTeamColor,
+  awayTeamName: match.awayTeamName,
+  awayTeamNameEn: match.awayTeamNameEn,
+  awayTeamLogo: match.awayTeamLogo,
+  awayTeamLogoType: match.awayTeamLogoType,
+  awayTeamCountryIso: match.awayTeamCountryIso,
+  awayTeamColor: match.awayTeamColor,
+  leagueName: match.leagueName,
+  leagueNameEn: match.leagueNameEn,
+  leagueShortName: match.leagueShortName,
+  leagueShortNameEn: match.leagueShortNameEn,
+  countryName: match.countryName,
+  countryNameEn: match.countryNameEn,
+  countryFlag: match.countryFlag,
+  matchNo: match.matchNo,
+  odds: match.odds,
+  handicapOdds: match.handicapOdds,
+  handicapLine: match.handicapLine,
+  predictions: Array.isArray(match.predictions)
+    ? match.predictions
+      .filter((prediction) => prediction.marketType === "BEST" || prediction.marketType === "1X2")
+      .map(compactPredictionForList)
+      .filter(Boolean)
+    : []
+});
+
+const sortedHistoryList = (rows) => (Array.isArray(rows) ? rows : [])
+  .slice()
+  .sort((a, b) => Date.parse(b.kickoffTime || b.matchDate || 0) - Date.parse(a.kickoffTime || a.matchDate || 0))
+  .map(compactMatchForHistoryList);
+
+const materializedMatchFileName = (match) => {
+  const key = String(match?.id || match?.sourceMatchId || `${match?.homeTeamName || ""}-${match?.awayTeamName || ""}-${match?.kickoffTime || ""}`);
+  return `${hashPayload({ key })}.json`;
+};
+
+const matchAliases = (match) => Array.from(new Set([
+  match?.id,
+  match?.sourceMatchId
+].filter(Boolean).map(String)));
+
+const writeMaterializedMatches = async (storeDir, current, history, source) => {
+  const updatedAt = nowIso();
+  const latestDir = latestMatchDirFor(storeDir);
+  await fsp.mkdir(latestDir, { recursive: true });
+
+  const index = {
+    version: 1,
+    updatedAt,
+    source,
+    currentCount: Array.isArray(current) ? current.length : 0,
+    historyCount: Array.isArray(history) ? history.length : 0,
+    matches: {}
+  };
+
+  const writeOne = async (match, dataset) => {
+    if (!match || typeof match !== "object") return;
+    const aliases = matchAliases(match);
+    if (!aliases.length) return;
+    const file = materializedMatchFileName(match);
+    await writeJsonAtomic(latestMatchFileFor(storeDir, file), {
+      version: 1,
+      updatedAt,
+      dataset,
+      match
+    });
+    for (const alias of aliases) {
+      index.matches[alias] = {
+        file,
+        dataset,
+        matchId: match.id || null,
+        sourceMatchId: match.sourceMatchId || null,
+        matchNo: match.matchNo || null,
+        businessDate: match.businessDate || match.matchDate || null,
+        kickoffTime: match.kickoffTime || null,
+        status: match.status || null,
+        updatedAt
+      };
+    }
+  };
+
+  for (const match of Array.isArray(history) ? history : []) {
+    await writeOne(match, "history");
+  }
+  for (const match of Array.isArray(current) ? current : []) {
+    await writeOne(match, "current");
+  }
+
+  await Promise.all([
+    writeJsonAtomic(materializedPathFor(storeDir, CURRENT_MATCHES_FILE), {
+      version: 1,
+      updatedAt,
+      source,
+      rows: Array.isArray(current) ? current : []
+    }),
+    writeJsonAtomic(materializedPathFor(storeDir, HISTORY_LIST_FILE), {
+      version: 1,
+      updatedAt,
+      source,
+      rows: sortedHistoryList(history)
+    }),
+    writeJsonAtomic(materializedPathFor(storeDir, MATCH_INDEX_FILE), index)
+  ]);
+
+  return {
+    currentRows: index.currentCount,
+    historyRows: index.historyCount,
+    indexedMatches: Object.keys(index.matches).length
   };
 };
 
@@ -790,6 +969,7 @@ const persistDataSnapshot = async ({ storeDir, dataDir, source = "server-sync", 
     ...(Array.isArray(gptPredictions.rows) ? gptPredictions.rows.slice(-500) : [])
   ];
   const predictionRuns = await persistPredictionRows(storeDir, state, predictionRows, source);
+  const materialized = await writeMaterializedMatches(storeDir, matches, historicalMatches, source);
   const nextState = await writeState(storeDir, state);
 
   return {
@@ -800,6 +980,7 @@ const persistDataSnapshot = async ({ storeDir, dataDir, source = "server-sync", 
     matchSnapshots,
     oddsSnapshots,
     predictionRuns,
+    materialized,
     counts: nextState.counts
   };
 };
@@ -817,6 +998,13 @@ const readTimelineRows = async (storeDir, table, id, limit) => {
 };
 
 const getLatestCurrentMatches = async (storeDir) => {
+  const materialized = await readJsonFile(materializedPathFor(storeDir, CURRENT_MATCHES_FILE), null);
+  if (Array.isArray(materialized?.rows) && materialized.rows.length > 0) {
+    return materialized.rows
+      .slice()
+      .sort((a, b) => Date.parse(a.kickoffTime || "") - Date.parse(b.kickoffTime || ""));
+  }
+
   try {
     const latest = new Map();
     const stream = fs.createReadStream(tablePathFor(storeDir, TABLES.matchSnapshots), { encoding: "utf8" });
@@ -844,6 +1032,34 @@ const getLatestCurrentMatches = async (storeDir) => {
   }
 };
 
+const getHistoryMatchesForList = async (storeDir, limit = 600) => {
+  const safeLimit = clampLimit(limit, 1200);
+  const materialized = await readJsonFile(materializedPathFor(storeDir, HISTORY_LIST_FILE), null);
+  return Array.isArray(materialized?.rows) ? materialized.rows.slice(0, safeLimit) : [];
+};
+
+const getLatestMatchById = async (storeDir, id) => {
+  const matchId = String(id || "").trim();
+  if (!matchId) return null;
+  const index = await readJsonFile(materializedPathFor(storeDir, MATCH_INDEX_FILE), null);
+  const entry = index?.matches?.[matchId];
+  if (!entry?.file) return null;
+  const payload = await readJsonFile(latestMatchFileFor(storeDir, entry.file), null);
+  return payload?.match && typeof payload.match === "object" ? payload.match : null;
+};
+
+const readOddsHistoryRows = async (storeDir, options = {}) => {
+  const rows = await readDataStoreRows(storeDir, TABLES.oddsSnapshots, {
+    limit: options.limit || 200,
+    matchId: options.matchId || "",
+    sourceMatchId: options.sourceMatchId || "",
+    pool: options.pool || ""
+  });
+  return rows
+    .slice()
+    .sort((a, b) => Date.parse(b.at || b.oddsCapturedAt || "") - Date.parse(a.at || a.oddsCapturedAt || ""));
+};
+
 const getMatchTimeline = async (storeDir, id, limit = 120) => {
   const matchId = String(id || "").trim();
   if (!matchId) return [];
@@ -867,8 +1083,11 @@ module.exports = {
   TABLES,
   ensureDataStore,
   getDataStoreStatus,
+  getHistoryMatchesForList,
   getLatestCurrentMatches,
+  getLatestMatchById,
   getMatchTimeline,
   persistDataSnapshot,
+  readOddsHistoryRows,
   readDataStoreRows
 };

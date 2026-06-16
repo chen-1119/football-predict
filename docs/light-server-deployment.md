@@ -46,17 +46,24 @@ Important fields:
   server falls back to `ADMIN_TOKEN`. `ALLOW_LOCAL_ADMIN` never authorizes code
   generation.
 - `ACCESS_CODE_SECRET=<another long random secret>`
-- `ACCESS_CODE_TTL_SECONDS=21600` for 6-hour recommendation access codes.
+- `ACCESS_CODE_TTL_SECONDS=43200` for 12-hour recommendation access codes.
 - `ENABLE_GPT_CRON=1` only after the GPT relay is ready.
 - `GPT_RELAY_BASE_URL`, `GPT_RELAY_API_KEY`, `GPT_MODEL`.
 - `ENABLE_API_FOOTBALL_SYNC=1` only after `API_FOOTBALL_KEY` is configured.
 - `API_FOOTBALL_MAX_CALLS_PER_SYNC`, `API_FOOTBALL_INJURY_REFRESH_MINUTES`,
   `API_FOOTBALL_ODDS_REFRESH_MINUTES`, and `API_FOOTBALL_LINEUP_REFRESH_MINUTES`
   keep the supplemental API usage bounded.
+- `ENABLE_PREMATCH_SIGNALS_SYNC=1` runs the pre-match signal quality layer after
+  supplemental sources and before the main match materialization.
+- `REQUIRE_PREMATCH_SIGNALS=0` keeps missing pre-match sources as recommendation
+  downgrade signals instead of making the whole service fail health checks.
 
 The Sporttery sync remains the primary source for fixtures, scores, and official
 HAD/HHAD SP. API-FOOTBALL is used only as a supplemental signal layer for
 fixture mapping, injuries, lineups, and reference bookmaker odds.
+`sync:prematch` merges referee/card, lineup, injury, xG, weather, market, and
+motivation availability into `pre-match-signals.json`, then `sync:data` applies
+that score to cold-index and recommendation downgrade logic.
 
 The GPT relay must expose an OpenAI-compatible chat completions endpoint, for example:
 
@@ -123,7 +130,7 @@ curl -X POST "http://127.0.0.1:8788/api/admin/access-codes?token=$ACCESS_CODE_AD
 
 Send the returned `code` to the user on WeChat. The user enters it at
 `https://your-domain.com/auth`; the admin page is `https://your-domain.com/codes`.
-The plain code is returned only once and expires 6 hours after generation by
+The plain code is returned only once and expires 12 hours after generation by
 default.
 
 ## 7. Data Storage
@@ -133,12 +140,23 @@ Runtime data is stored in two places:
 - Public data used by the website: `public/data/*.json` and `public/matches.json`.
 - Server-only event/snapshot store: `SERVER_STORE_DIR`, default `/var/lib/football-predict`.
 - Server-side JSONL data store: `SERVER_STORE_DIR/db/*.jsonl`, used for sync runs, match state changes, odds snapshots, and prediction runs. This keeps a replayable history for later model calibration without exposing internal automation text on the public page.
+- Server-side materialized indexes: `SERVER_STORE_DIR/db/current-matches.json`, `history-list.json`, `latest-match-index.json`, and `latest-matches/*.json`. The web API reads these first so list/detail pages do not need to load the 40MB+ history package.
+
+Large static payloads are intentionally disabled in production. Use the API instead:
+
+- `/data/matches-history.json` -> `/api/matches/history?view=list&limit=600`
+- `/odds-history.json` and `/data/odds-history.json` -> `/api/odds/history?matchId=...&limit=200`
+- `/data/external-signals.json` -> `/api/data/external-signals?limit=120` or `?matchId=...`
+- `/data/five-hundred-details.json` -> `/api/data/five-hundred-details?limit=80` or `?matchId=...`
 
 Useful API endpoints:
 
-- `/api/matches/current`
-- `/api/matches/history`
-- `/api/odds/history`
+- `/api/matches/current?view=list`
+- `/api/matches/history?view=list&limit=600`
+- `/api/matches/sporttery_2040145`
+- `/api/odds/history?matchId=sporttery_2040145&limit=200`
+- `/api/data/external-signals?limit=120`
+- `/api/data/five-hundred-details?limit=80`
 - `/api/predictions/gpt`
 - `/api/db/events`
 - `/api/db/status`
@@ -185,8 +203,10 @@ Then restart and test:
 ```bash
 sudo systemctl restart football-predict
 cd /opt/football-predict
+npm run sync:prematch
 npm run sync:data
 npm run validate:data
+npm run validate:sources
 curl http://127.0.0.1:8788/api/health
 ```
 

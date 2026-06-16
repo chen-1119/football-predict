@@ -1,4 +1,5 @@
 import type { Match, MultiLangString } from './mockData';
+import { buildPreMatchRisk } from './preMatchRisk';
 
 export type MatchSignalCategory = 'steady' | 'lean' | 'value' | 'watch' | 'avoid' | 'unavailable' | 'finished';
 
@@ -25,8 +26,21 @@ const hasRisk = (riskNames: string[], keyword: string) => {
   return riskNames.some((name) => name.includes(keyword));
 };
 
-const pickProbability = (match: Match, tipCode: string) => {
-  const final = match.probabilityModel?.oneXTwo.final;
+const getProbabilitySource = (match: Match, prediction?: Match['predictions'][number]) => {
+  if (prediction?.oddsPoolCode === 'HHAD') {
+    return match.probabilityModel?.handicap?.scoreImplied
+      || match.probabilityModel?.handicap?.poisson
+      || match.probabilityModel?.handicap?.market
+      || null;
+  }
+
+  return match.probabilityModel?.oneXTwo.final || null;
+};
+
+const pickProbability = (match: Match, predictionOrTip: Match['predictions'][number] | string | undefined) => {
+  const prediction = typeof predictionOrTip === 'string' ? undefined : predictionOrTip;
+  const tipCode = typeof predictionOrTip === 'string' ? predictionOrTip : predictionOrTip?.tipCode;
+  const final = getProbabilitySource(match, prediction);
   if (!final) return null;
   const value = tipCode === '1'
     ? final.home
@@ -38,8 +52,8 @@ const pickProbability = (match: Match, tipCode: string) => {
   return Number.isFinite(value) ? Number(value) : null;
 };
 
-const finalProbabilityGap = (match: Match) => {
-  const final = match.probabilityModel?.oneXTwo.final;
+const finalProbabilityGap = (match: Match, prediction?: Match['predictions'][number]) => {
+  const final = getProbabilitySource(match, prediction);
   if (!final) return null;
   const values = [final.home, final.draw, final.away].filter(Number.isFinite).map(Number).sort((a, b) => b - a);
   if (values.length < 2) return null;
@@ -73,17 +87,21 @@ export function isActionableRecommendation(match: Match): boolean {
   const signal = getMatchSignal(match);
   if (signal.category !== 'steady' && signal.category !== 'lean') return false;
 
+  const preMatchRisk = buildPreMatchRisk(match);
+  if (preMatchRisk.score >= 55 || (preMatchRisk.shouldDowngrade && best.trustScore < 78)) return false;
+
   const riskCount = best.riskTags?.length || 0;
-  const probability = pickProbability(match, best.tipCode);
-  const gap = finalProbabilityGap(match);
+  const probability = pickProbability(match, best);
+  const gap = finalProbabilityGap(match, best);
+  const bestIsHandicap = best.oddsPoolCode === 'HHAD';
   const hasHardRisk = (best.riskTags || []).some((tag) => {
     const zh = tag.zh || '';
     const en = (tag.en || '').toLowerCase();
-    return zh.includes('盘口分歧')
-      || zh.includes('让球支持不足')
+    return (!bestIsHandicap && zh.includes('盘口分歧'))
+      || (!bestIsHandicap && zh.includes('让球支持不足'))
       || zh.includes('热门过热')
-      || en.includes('market disagreement')
-      || en.includes('handicap support weak')
+      || (!bestIsHandicap && en.includes('market disagreement'))
+      || (!bestIsHandicap && en.includes('handicap support weak'))
       || en.includes('heavy favorite');
   });
 
@@ -127,6 +145,7 @@ export function getMatchSignal(match: Match): MatchSignal {
   }
 
   const bestIsReference = isReferencePrediction(best);
+  const preMatchRisk = buildPreMatchRisk(match);
 
   if (best.tipCode === 'WATCH' || bestIsReference) {
     const riskTags = best.riskTags || [];
@@ -138,7 +157,10 @@ export function getMatchSignal(match: Match): MatchSignal {
       || name.includes('heavy favorite')
       || name.includes('tight 1x2')
     ));
-    const shouldAvoid = riskTags.length >= 4 || (hasHardRisk && trustScore < 58) || trustScore < 42;
+    const shouldAvoid = riskTags.length >= 4
+      || (hasHardRisk && trustScore < 58)
+      || trustScore < 42
+      || preMatchRisk.score >= 55;
 
     if (shouldAvoid) {
       return {
@@ -146,15 +168,19 @@ export function getMatchSignal(match: Match): MatchSignal {
         label: labels.avoid,
         note: {
           zh: bestIsReference
-            ? '本场给出参考倾向，但风险项偏多；不放进强推池，用户可结合临场 SP 和让球盘自行取舍。'
+            ? (preMatchRisk.score >= 55
+              ? `本场冷门风险 ${preMatchRisk.score}，参考方向保留但不进强推池；重点复核${preMatchRisk.primaryReason.zh}。`
+              : '本场给出参考倾向，但风险项偏多；不放进强推池，用户可结合临场 SP 和让球盘自行取舍。')
             : '这场风险点偏多，先不放进推荐池；保留盘口和快照，等临场再复核。',
           en: bestIsReference
-            ? 'A reference lean is shown, but risk tags are stacked. It stays out of the strong-pick pool; use late SP and handicap movement for judgement.'
+            ? (preMatchRisk.score >= 55
+              ? `Upset risk is ${preMatchRisk.score}. Keep the reference lean out of the strong pool and recheck ${preMatchRisk.primaryReason.en}.`
+              : 'A reference lean is shown, but risk tags are stacked. It stays out of the strong-pick pool; use late SP and handicap movement for judgement.')
             : 'The gate was not met and risk tags are stacked. Keep the data for monitoring, but do not promote it.'
         },
         tone: 'warning',
         trustScore,
-        riskCount: riskTags.length
+        riskCount: riskTags.length + (preMatchRisk.score >= 42 ? 1 : 0)
       };
     }
 
@@ -171,7 +197,7 @@ export function getMatchSignal(match: Match): MatchSignal {
       },
       tone: 'warning',
       trustScore,
-      riskCount: riskTags.length
+      riskCount: riskTags.length + (preMatchRisk.score >= 42 ? 1 : 0)
     };
   }
 
@@ -195,43 +221,29 @@ export function getMatchSignal(match: Match): MatchSignal {
   }
 
   if (isGoalsTip(best.tipCode)) {
-    if (riskTags.length >= 3 || trustScore < 58) {
-      return {
-        category: 'watch',
-        label: labels.watch,
-        note: {
-          zh: '进球数有参考价值，但边际不够硬，等下一次 SP 快照确认后再决定是否提升优先级。',
-          en: 'The best tip has switched to totals, but edge or risk still needs the next SP snapshot.'
-        },
-        tone: 'warning',
-        trustScore,
-        riskCount: riskTags.length
-      };
-    }
-
     return {
-      category: trustScore >= 72 ? 'steady' : 'lean',
-      label: trustScore >= 72 ? labels.steady : labels.lean,
+      category: preMatchRisk.score >= 55 ? 'avoid' : 'watch',
+      label: preMatchRisk.score >= 55 ? labels.avoid : labels.watch,
       note: {
-        zh: '胜平负冷却时，模型优先选择回测更稳的进球数方向，不强行追正路。',
-        en: 'When 1X2 is under cooldown, the model promotes the better-tested totals lane instead of forcing the favourite.'
+        zh: '进球数只保留为模型校验，不作为页面推荐；当前等待胜平负或让球方向达到门槛。',
+        en: 'Goal totals are kept as model validation only, not as page recommendations; wait for a qualified 1X2 or HHAD direction.'
       },
-      tone: 'success',
+      tone: 'warning',
       trustScore,
-      riskCount: riskTags.length
+      riskCount: riskTags.length + (preMatchRisk.score >= 42 ? 1 : 0)
     };
   }
 
   const trendIsMixed = match.oddsTrend?.direction === 'mixed';
   const hasDrawRisk = hasRisk(riskNames, '防平');
-  const hasWeakHandicap = hasRisk(riskNames, '让球支持不足');
+  const hasWeakHandicap = best.oddsPoolCode !== 'HHAD' && hasRisk(riskNames, '让球支持不足');
   const hasOverheated = hasRisk(riskNames, '热门过热');
-  const selectedProbability = pickProbability(match, best.tipCode);
-  const final = match.probabilityModel?.oneXTwo.final;
+  const selectedProbability = pickProbability(match, best);
+  const final = getProbabilitySource(match, best);
   const topProbability = final
     ? Math.max(final.home ?? 0, final.draw ?? 0, final.away ?? 0)
     : null;
-  const probabilityGap = finalProbabilityGap(match);
+  const probabilityGap = finalProbabilityGap(match, best);
   const selectedIsNotModelLeader = selectedProbability !== null
     && topProbability !== null
     && selectedProbability + 0.5 < topProbability;
@@ -259,6 +271,7 @@ export function getMatchSignal(match: Match): MatchSignal {
     || (hasDrawRisk && hasWeakHandicap)
     || (trendIsMixed && trustScore < 60)
     || (riskTags.length >= 4 && trustScore < 64)
+    || (preMatchRisk.score >= 55 && trustScore < 78)
   ) {
     return {
       category: 'avoid',
@@ -266,14 +279,18 @@ export function getMatchSignal(match: Match): MatchSignal {
       note: {
         zh: selectedIsNotModelLeader
           ? '精选方向与最终概率首选不一致，先降级观察，等待下一次 SP 快照确认。'
+          : preMatchRisk.score >= 55
+            ? `冷门风险 ${preMatchRisk.score} 偏高，先降级为参考；重点复核${preMatchRisk.primaryReason.zh}。`
           : '条件未达到精选池标准，保留推荐方向，等临场 SP 复核。',
         en: selectedIsNotModelLeader
           ? 'The selected pick is not aligned with the final probability leader. Downgrade and wait for the next SP snapshot.'
+          : preMatchRisk.score >= 55
+            ? `Upset risk ${preMatchRisk.score} is elevated. Downgrade to reference and recheck ${preMatchRisk.primaryReason.en}.`
           : 'Multiple risk tags overlap. Lower priority or wait for late SP.'
       },
       tone: 'warning',
       trustScore,
-      riskCount: riskTags.length
+      riskCount: riskTags.length + (preMatchRisk.score >= 42 ? 1 : 0)
     };
   }
 
@@ -291,7 +308,7 @@ export function getMatchSignal(match: Match): MatchSignal {
       },
       tone: 'success',
       trustScore,
-      riskCount: riskTags.length
+      riskCount: riskTags.length + (preMatchRisk.score >= 42 ? 1 : 0)
     };
   }
 
@@ -300,6 +317,7 @@ export function getMatchSignal(match: Match): MatchSignal {
     && riskTags.length <= 2
     && !trendIsMixed
     && !(hasOverheated && trustScore < 84)
+    && preMatchRisk.score < 42
     && selectedProbability !== null
     && selectedProbability >= 54
   ) {
@@ -325,6 +343,6 @@ export function getMatchSignal(match: Match): MatchSignal {
     },
     tone: 'success',
     trustScore,
-    riskCount: riskTags.length
+    riskCount: riskTags.length + (preMatchRisk.score >= 42 ? 1 : 0)
   };
 }

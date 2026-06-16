@@ -52,6 +52,110 @@ export interface PredictionDetail {
   resultStatus: 'WON' | 'LOST' | 'PENDING';
 }
 
+export interface MatchContextSignals {
+  version?: string;
+  trustPenalty?: number;
+  rankingPressure?: {
+    version?: string;
+    source?: string;
+    dataQuality?: string;
+    homeRank?: number | null;
+    awayRank?: number | null;
+    rankGap?: number | null;
+    homeAdvanceProbability?: number | null;
+    awayAdvanceProbability?: number | null;
+    home?: number;
+    away?: number;
+    maxPressure?: number;
+    edge?: number;
+    rotationRisk?: number;
+    reasons?: string[];
+  };
+  attackIntent?: {
+    version?: string;
+    source?: string;
+    dataQuality?: string;
+    home?: number;
+    away?: number;
+    total?: number;
+    edge?: number;
+    lambdaTotalAdjustment?: number;
+    over25Shift?: number;
+    bttsShift?: number;
+    reasons?: string[];
+  };
+  discipline?: {
+    version?: string;
+    source?: string;
+    dataQuality?: string;
+    expectedYellowCards?: { home?: number; away?: number; total?: number };
+    redCardRisk?: { home?: number; away?: number; total?: number };
+    expectedFouls?: { home?: number; away?: number; total?: number };
+    foulPressure?: number;
+    trustPenalty?: number;
+    reasons?: string[];
+  };
+  dataGaps?: {
+    version?: string;
+    coverageScore?: number;
+    sourceQuality?: 'high' | 'medium' | 'low' | string;
+    severeMissingCount?: number;
+    trustPenalty?: number;
+    connected?: {
+      referee?: boolean;
+      teamCards?: boolean;
+      standings?: boolean;
+      motivationStage?: boolean;
+      lineup?: boolean;
+      injuries?: boolean;
+      xg?: boolean;
+      weather?: boolean;
+      officialOdds?: boolean;
+      externalMarket?: boolean;
+    };
+    missing?: Array<{
+      key?: string;
+      zh?: string;
+      en?: string;
+      severity?: 'low' | 'medium' | 'high' | string;
+      weight?: number;
+    }>;
+    primaryGaps?: string[];
+    note?: string;
+    preMatchQuality?: {
+      version?: string;
+      score?: number;
+      sourceQuality?: 'high' | 'medium' | 'low' | string;
+      severeMissingCount?: number;
+      trustPenalty?: number;
+      lowQuality?: string[];
+      missing?: Array<{
+        key?: string;
+        zh?: string;
+        en?: string;
+        severity?: 'low' | 'medium' | 'high' | string;
+        weight?: number;
+      }>;
+      summary?: MultiLangString;
+    };
+  };
+  lambdaAdjustment?: {
+    applied?: boolean;
+    total?: number;
+    home?: number;
+    away?: number;
+    homeShare?: number;
+    reason?: string;
+  };
+  goalAdjustment?: {
+    applied?: boolean;
+    over25Shift?: number;
+    bttsShift?: number;
+    cardDrag?: number;
+    reasons?: string[];
+  };
+}
+
 export interface MatchStats {
   xG: { home: number; away: number };
   possession: { home: number; away: number };
@@ -62,6 +166,10 @@ export interface MatchStats {
   offsides: { home: number; away: number };
   yellowCards: { home: number; away: number };
   redCards: { home: number; away: number };
+  attackIntent?: MatchContextSignals['attackIntent'];
+  rankingPressure?: MatchContextSignals['rankingPressure'];
+  discipline?: MatchContextSignals['discipline'];
+  dataGaps?: MatchContextSignals['dataGaps'];
 }
 
 export interface FiveHundredRecentFormRow {
@@ -82,6 +190,59 @@ export interface ExternalMatchSignals {
   source?: string;
   leagueName?: string;
   handicapLine?: string;
+  preMatch?: {
+    version?: string;
+    source?: string;
+    updatedAt?: string;
+    quality?: {
+      version?: string;
+      score?: number;
+      sourceQuality?: 'high' | 'medium' | 'low' | string;
+      severeMissingCount?: number;
+      trustPenalty?: number;
+      connected?: Record<string, boolean>;
+      lowQuality?: string[];
+      missing?: Array<{
+        key?: string;
+        zh?: string;
+        en?: string;
+        severity?: 'low' | 'medium' | 'high' | string;
+        weight?: number;
+      }>;
+      components?: Record<string, {
+        key?: string;
+        label?: MultiLangString;
+        status?: 'verified' | 'partial' | 'estimated' | 'missing' | string;
+        score?: number;
+        source?: string;
+        note?: MultiLangString;
+      }>;
+      summary?: MultiLangString;
+    };
+    qualitySummary?: MultiLangString;
+    discipline?: {
+      source?: string;
+      dataQuality?: string;
+      homeCardsPerMatch?: number | null;
+      awayCardsPerMatch?: number | null;
+      expectedYellowCards?: { home?: number; away?: number; total?: number };
+      redCardRisk?: { home?: number; away?: number; total?: number };
+      sample?: { home?: number; away?: number };
+      trustPenalty?: number;
+      summary?: MultiLangString;
+    };
+  };
+  discipline?: {
+    source?: string;
+    dataQuality?: string;
+    homeCardsPerMatch?: number | null;
+    awayCardsPerMatch?: number | null;
+    expectedYellowCards?: { home?: number; away?: number; total?: number };
+    redCardRisk?: { home?: number; away?: number; total?: number };
+    sample?: { home?: number; away?: number };
+    trustPenalty?: number;
+    summary?: MultiLangString;
+  };
   injuries?: {
     home?: MultiLangString[];
     away?: MultiLangString[];
@@ -369,6 +530,7 @@ export interface ProbabilityFormulaComponent {
 export interface ProbabilityCalculationTrace {
   version: string;
   policy?: MultiLangString;
+  contextSignals?: MatchContextSignals | null;
   outcome?: {
     formula?: MultiLangString;
     weights?: {
@@ -376,6 +538,7 @@ export interface ProbabilityCalculationTrace {
       teamStrength?: number | null;
       elo?: number | null;
       poisson?: number | null;
+      scoreFeedback?: number | null;
       worldCupPrior?: number | null;
     };
     components?: ProbabilityFormulaComponent[];
@@ -385,6 +548,19 @@ export interface ProbabilityCalculationTrace {
       home?: string;
       draw?: string;
       away?: string;
+    } | null;
+    scoreFeedback?: {
+      applied?: boolean;
+      weight?: number | null;
+      reasons?: string[];
+      before?: OutcomeProbability | null;
+      scoreImplied?: OutcomeProbability | null;
+      after?: OutcomeProbability | null;
+      leaders?: {
+        before?: string | null;
+        score?: string | null;
+        after?: string | null;
+      } | null;
     } | null;
     calibration?: {
       applied?: boolean;
@@ -446,6 +622,7 @@ export interface MatchProbabilityModel {
     teamStrength?: number;
     elo: number;
     poisson: number;
+    scoreFeedback?: number;
     worldCupPrior?: number;
   };
   calculationTrace?: ProbabilityCalculationTrace;
@@ -481,6 +658,27 @@ export interface MatchProbabilityModel {
       } | null;
     } | null;
   };
+  scoreCalibration?: {
+    version?: string;
+    source?: string;
+    sample?: {
+      rows?: number;
+      recentRows?: number;
+      sampleDays?: number | null;
+      exactHitRate?: number | null;
+      top3ExactHitRate?: number | null;
+      outcomeHitRate?: number | null;
+      top3OutcomeHitRate?: number | null;
+      totalBandHitRate?: number | null;
+      top3TotalBandHitRate?: number | null;
+    };
+    adjustments?: {
+      totalLambdaAdjustment?: number;
+      bandRankBoosts?: Record<string, number>;
+      shapeRankBoosts?: Record<string, number>;
+    };
+    reasons?: string[];
+  } | null;
   calibrationAdjustment?: {
     oneXTwo?: {
       applied: boolean;
@@ -492,6 +690,19 @@ export interface MatchProbabilityModel {
       }>;
       before: OutcomeProbability | null;
       after: OutcomeProbability | null;
+      scoreFeedback?: {
+        applied?: boolean;
+        weight?: number | null;
+        reasons?: string[];
+        before?: OutcomeProbability | null;
+        scoreImplied?: OutcomeProbability | null;
+        after?: OutcomeProbability | null;
+        leaders?: {
+          before?: string | null;
+          score?: string | null;
+          after?: string | null;
+        } | null;
+      };
     };
     goals?: {
       applied: boolean;
@@ -521,12 +732,19 @@ export interface MatchProbabilityModel {
     formHomeLambda: number | null;
     formAwayLambda: number | null;
     formWeight: number;
+    scoreTotalLambdaAdjustment?: number | null;
+    scoreCalibrationVersion?: string | null;
+    contextTotalLambdaAdjustment?: number | null;
+    contextHomeLambdaAdjustment?: number | null;
+    contextAwayLambdaAdjustment?: number | null;
   };
+  contextSignals?: MatchContextSignals | null;
   oneXTwo: {
     market: OutcomeProbability | null;
     teamStrength?: OutcomeProbability | null;
     elo?: OutcomeProbability | null;
     poisson: OutcomeProbability | null;
+    scoreImplied?: OutcomeProbability | null;
     worldCupPrior?: OutcomeProbability | null;
     final: OutcomeProbability | null;
   };
@@ -653,6 +871,7 @@ export interface MatchProbabilityModel {
     line: string;
     market: OutcomeProbability | null;
     poisson: OutcomeProbability | null;
+    scoreImplied?: OutcomeProbability | null;
   } | null;
   calibration: {
     status: 'baseline' | 'calibrated' | 'backtesting';
@@ -711,6 +930,73 @@ export interface StandingRow {
   goalsFor: number;
   goalsAgainst: number;
   points: number;
+}
+
+export interface PostMatchReview {
+  version: string;
+  generatedAt: string;
+  matchId: string;
+  sourceMatchId?: string | null;
+  matchNo?: string | null;
+  teams: {
+    home: string;
+    away: string;
+  };
+  finalScore: string;
+  actual: {
+    had: { code: string; label: MultiLangString };
+    hhad?: { code: string; label: MultiLangString; handicapLine?: string | null } | null;
+    goals: { code: string; label: MultiLangString };
+    btts: { code: string; label: MultiLangString };
+  };
+  predictionReview: {
+    settled: number;
+    won: number;
+    hitRate: number | null;
+    bestStatus?: 'WON' | 'LOST' | 'PENDING' | null;
+    oneXTwoStatus?: 'WON' | 'LOST' | 'PENDING' | null;
+    handicapHit?: boolean;
+    missedHandicapLane?: boolean;
+    rows: Array<{
+      marketType: PredictionDetail['marketType'];
+      oddsPoolCode?: 'HAD' | 'HHAD';
+      handicapLine?: string;
+      tipCode: string;
+      tipLabel: MultiLangString;
+      actualCode?: string | null;
+      actualLabel?: MultiLangString;
+      resultStatus: 'WON' | 'LOST' | 'PENDING';
+      trustScore?: number;
+      recommendationAction?: 'recommend' | 'reference';
+      recommendationTier?: string;
+    }>;
+  };
+  scoreReview: {
+    projectedScore?: string | null;
+    actualScore: string;
+    exactTop1: boolean;
+    exactTop3: boolean;
+    top3: string[];
+    totalGoalDelta?: number | null;
+  };
+  eventFactors: {
+    sourceStatus: string;
+    goals?: {
+      count: number;
+      summary: MultiLangString;
+    };
+    penalties?: { available: boolean; count?: number | null };
+    var?: { available: boolean; count?: number | null };
+    yellowCards?: { available: boolean; total?: number | null };
+    redCards?: { available: boolean; total?: number | null };
+    corners?: { available: boolean; total?: number | null };
+    shots?: { available: boolean; total?: number | null };
+    xg?: { available: boolean; home?: number | null; away?: number | null };
+    referee?: { available: boolean; name?: string | null };
+  };
+  modelDiagnosis: Array<{ code: string; zh: string; en: string }>;
+  nextAdjustment: Array<{ code: string; zh: string; en: string }>;
+  dataGaps: Array<{ key: string; zh: string; en: string }>;
 }
 
 export interface Match {
@@ -793,6 +1079,7 @@ export interface Match {
   sourceUrl?: string;
   sourceMatchId?: string;
   matchNo?: string;
+  postMatchReview?: PostMatchReview;
 }
 
 // 模拟的基础实体数据

@@ -9,9 +9,12 @@ const {
   TABLES,
   ensureDataStore,
   getDataStoreStatus,
+  getHistoryMatchesForList,
   getLatestCurrentMatches,
+  getLatestMatchById,
   getMatchTimeline,
   persistDataSnapshot,
+  readOddsHistoryRows,
   readDataStoreRows
 } = require("./dataStore.cjs");
 
@@ -34,7 +37,7 @@ const snapshotRetentionDays = Math.max(1, Number(process.env.SNAPSHOT_RETENTION_
 const adminToken = process.env.ADMIN_TOKEN || "";
 const allowLocalAdmin = process.env.ALLOW_LOCAL_ADMIN === "1";
 const accessCodeAdminToken = process.env.ACCESS_CODE_ADMIN_TOKEN || adminToken;
-const accessCodeTtlSeconds = Math.max(60, Number(process.env.ACCESS_CODE_TTL_SECONDS || 6 * 60 * 60));
+const accessCodeTtlSeconds = Math.max(60, Number(process.env.ACCESS_CODE_TTL_SECONDS || 12 * 60 * 60));
 const accessCodeSecret = process.env.ACCESS_CODE_SECRET
   || process.env.ACCESS_SESSION_SECRET
   || adminToken
@@ -45,6 +48,7 @@ const enable500Sync = process.env.ENABLE_500_SYNC !== "0";
 const enable500DetailsSync = process.env.ENABLE_500_DETAILS_SYNC === "1";
 const enableWeatherSync = process.env.ENABLE_WEATHER_SYNC !== "0";
 const enableApiFootballSync = process.env.ENABLE_API_FOOTBALL_SYNC === "1";
+const enablePreMatchSignalsSync = process.env.ENABLE_PREMATCH_SIGNALS_SYNC !== "0";
 const requireExternalSignals = process.env.REQUIRE_EXTERNAL_SIGNALS !== "0";
 const historicalLookbackDays = 365;
 
@@ -60,6 +64,7 @@ const apiFiles = {
   "/api/teams/index": path.join(dataDir, "team-index.json"),
   "/api/data/external-signals": path.join(dataDir, "external-signals.json"),
   "/api/data/five-hundred-details": path.join(dataDir, "five-hundred-details.json"),
+  "/api/data/pre-match-signals": path.join(dataDir, "pre-match-signals.json"),
   "/api/data/api-football": path.join(dataDir, "api-football-meta.json")
 };
 
@@ -157,7 +162,14 @@ const appendEvent = async (event) => {
     at: nowIso(),
     ...event
   };
-  await fsp.appendFile(path.join(storeDir, "events.jsonl"), `${JSON.stringify(row)}\n`);
+  try {
+    await fsp.appendFile(path.join(storeDir, "events.jsonl"), `${JSON.stringify(row)}\n`);
+  } catch (error) {
+    console.warn("[football-server] failed to append event log", {
+      code: error?.code,
+      message: error?.message || String(error)
+    });
+  }
   broadcastEvent(row);
   return row;
 };
@@ -467,7 +479,7 @@ const send = (res, status, body, headers = {}) => {
 };
 
 const sendJson = (res, payload, status = 200) => {
-  send(res, status, JSON.stringify(payload, null, 2), {
+  send(res, status, JSON.stringify(payload), {
     "content-type": "application/json; charset=utf-8"
   });
 };
@@ -475,7 +487,7 @@ const sendJson = (res, payload, status = 200) => {
 const getStaticCacheControl = (filePath, ext) => {
   if (ext === ".html") return "no-store";
   const distRelative = path.relative(distDir, filePath).replace(/\\/g, "/");
-  if (distRelative.startsWith("assets/")) return "public, max-age=31536000, immutable";
+  if (distRelative.startsWith("assets/")) return "no-store";
   if (filePath.startsWith(dataDir) || ext === ".json") return "no-store";
   return "public, max-age=3600";
 };
@@ -824,6 +836,9 @@ const runSync = async (source = "server-cron") => {
     if (enableApiFootballSync) {
       await runCommand(npmCommand, ["run", "sync:api-football"]);
     }
+    if (enablePreMatchSignalsSync) {
+      await runCommand(npmCommand, ["run", "sync:prematch"]);
+    }
     const syncEnv = {
       PAGE_POLL_SECONDS: process.env.PAGE_POLL_SECONDS || "20",
       SYNC_WORKFLOW_MINUTES: String(Math.max(1, Math.round(syncIntervalSeconds / 60)))
@@ -1068,7 +1083,7 @@ const readCurrentFileMatches = async () => {
 };
 
 const readCurrentMatches = async () => {
-  if (process.env.CURRENT_MATCH_SOURCE === "db") {
+  if (process.env.CURRENT_MATCH_SOURCE !== "file") {
     const dbMatches = await getLatestCurrentMatches(storeDir);
     if (dbMatches.length > 0) {
       return mergeGptIntoMatches(dbMatches);
@@ -1180,12 +1195,13 @@ const compactHistoryMatchForList = (match) => ({
 });
 
 const readHistoryMatchesForList = async (limit = 600) => {
-  if (process.env.ENABLE_HISTORY_LIST_API !== "1") {
-    return [];
+  const safeLimit = Math.max(1, Math.min(1200, Number(limit || 600)));
+  const dbRows = await getHistoryMatchesForList(storeDir, safeLimit);
+  if (dbRows.length > 0) {
+    return dbRows;
   }
 
   const filePath = path.join(dataDir, "matches-history.json");
-  const safeLimit = Math.max(1, Math.min(1200, Number(limit || 600)));
   const stat = await fsp.stat(filePath);
 
   if (
@@ -1219,9 +1235,133 @@ const readMatchById = async (matchId) => {
   const currentMatch = Array.isArray(current) ? current.find((match) => match.id === decodedId) : null;
   if (currentMatch) return enrichMatchHistoricalTraining(currentMatch);
 
+  const dbMatch = await getLatestMatchById(storeDir, decodedId);
+  if (dbMatch) return enrichMatchHistoricalTraining(dbMatch);
+
   const history = await readJsonFile(path.join(dataDir, "matches-history.json"), []);
   const historyMatch = Array.isArray(history) ? history.find((match) => match.id === decodedId) || null : null;
   return historyMatch ? enrichMatchHistoricalTraining(historyMatch) : null;
+};
+
+const readOddsHistoryPage = async (url) => {
+  const limit = Math.max(1, Math.min(500, Number(url.searchParams.get("limit") || 200)));
+  const rows = await readOddsHistoryRows(storeDir, {
+    limit,
+    matchId: url.searchParams.get("matchId") || "",
+    sourceMatchId: url.searchParams.get("sourceMatchId") || "",
+    pool: url.searchParams.get("pool") || ""
+  });
+  return {
+    ok: true,
+    source: "server-db",
+    limit,
+    rows,
+    note: "odds history is paginated from the server data store; full static payload is disabled"
+  };
+};
+
+const summarizeExternalSignal = (matchId, signal) => ({
+  matchId,
+  source: signal?.source || null,
+  updatedAt: signal?.updatedAt || null,
+  sourceMatchId: signal?.sourceMatchId || null,
+  fixtureId: signal?.fixtureId || signal?.apiFootball?.fixtureId || null,
+  handicapLine: signal?.handicapLine ?? signal?.bookmakerOdds?.hhad?.handicapLine ?? null,
+  hasHad: Boolean(signal?.bookmakerOdds?.had || signal?.externalOdds),
+  hasHhad: Boolean(signal?.bookmakerOdds?.hhad),
+  hasApiFootball: Boolean(signal?.apiFootball || signal?.bookmakerOdds?.apiFootball),
+  hasFiveHundred: Boolean(signal?.fiveHundred),
+  hasLineups: Boolean(signal?.lineups),
+  hasInjuries: Boolean(signal?.injuries),
+  buyEndTime: signal?.buyEndTime || null
+});
+
+const readExternalSignalsPage = async (url) => {
+  const payload = await readJsonFile(path.join(dataDir, "external-signals.json"), { matches: {} });
+  const matches = payload?.matches && typeof payload.matches === "object" && !Array.isArray(payload.matches)
+    ? payload.matches
+    : {};
+  const matchId = url.searchParams.get("matchId") || url.searchParams.get("sourceMatchId") || "";
+  if (matchId) {
+    return {
+      ok: true,
+      version: payload.version || 1,
+      source: payload.source || "external-signals",
+      updatedAt: payload.updatedAt || null,
+      sources: payload.sources || {},
+      matchId,
+      signal: matches[matchId] || null
+    };
+  }
+
+  const limit = Math.max(1, Math.min(500, Number(url.searchParams.get("limit") || 120)));
+  const offset = Math.max(0, Number(url.searchParams.get("offset") || 0));
+  const entries = Object.entries(matches);
+  return {
+    ok: true,
+    version: payload.version || 1,
+    source: payload.source || "external-signals",
+    updatedAt: payload.updatedAt || null,
+    sources: payload.sources || {},
+    total: entries.length,
+    limit,
+    offset,
+    rows: entries.slice(offset, offset + limit).map(([id, signal]) => summarizeExternalSignal(id, signal))
+  };
+};
+
+const summarizeFiveHundredDetail = (matchId, detail) => ({
+  matchId,
+  sourceMatchId: detail?.sourceMatchId || matchId,
+  fixtureId: detail?.fixtureId || null,
+  infoMatchId: detail?.infoMatchId || null,
+  matchNo: detail?.matchNo || null,
+  matchDate: detail?.matchDate || null,
+  kickoffTime: detail?.kickoffTime || null,
+  leagueName: detail?.leagueName || null,
+  homeTeamName: detail?.homeTeamName || null,
+  awayTeamName: detail?.awayTeamName || null,
+  buyEndTime: detail?.buyEndTime || null,
+  handicapLine: detail?.handicapLine ?? null,
+  had: detail?.had || null,
+  hhad: detail?.hhad || null,
+  availability: detail?.availability || null
+});
+
+const readFiveHundredDetailsPage = async (url) => {
+  const payload = await readJsonFile(path.join(dataDir, "five-hundred-details.json"), { matches: {} });
+  const matches = payload?.matches && typeof payload.matches === "object" && !Array.isArray(payload.matches)
+    ? payload.matches
+    : {};
+  const matchId = url.searchParams.get("matchId") || url.searchParams.get("sourceMatchId") || "";
+  if (matchId) {
+    return {
+      ok: true,
+      version: payload.version || 1,
+      source: payload.source || "500.com:details",
+      updatedAt: payload.updatedAt || null,
+      matchId,
+      detail: matches[matchId] || null
+    };
+  }
+
+  const limit = Math.max(1, Math.min(300, Number(url.searchParams.get("limit") || 80)));
+  const offset = Math.max(0, Number(url.searchParams.get("offset") || 0));
+  const entries = Object.entries(matches);
+  return {
+    ok: true,
+    version: payload.version || 1,
+    source: payload.source || "500.com:details",
+    updatedAt: payload.updatedAt || null,
+    total: entries.length,
+    limit,
+    offset,
+    scannedRows: payload.scannedRows || 0,
+    resultRows: payload.resultRows || 0,
+    cachedMerged: payload.cachedMerged || 0,
+    errors: Array.isArray(payload.errors) ? payload.errors.slice(0, 5) : [],
+    rows: entries.slice(offset, offset + limit).map(([id, detail]) => summarizeFiveHundredDetail(id, detail))
+  };
 };
 
 const readRecentEvents = async (limit = 50, type = "") => {
@@ -1318,6 +1458,7 @@ const getSourceHealth = async () => {
     : 0;
   const currentCoverage = currentCount > 0 ? currentWithExternal / currentCount : 0;
   const errors = [];
+  const warnings = [];
 
   if (requireExternalSignals) {
     if (!external) errors.push("external-signals missing");
@@ -1325,7 +1466,7 @@ const getSourceHealth = async () => {
     if ((source500.rows || 0) < minExternalRows) errors.push(`500 rows ${source500.rows || 0} < ${minExternalRows}`);
     if ((source500.mapped || 0) < minExternalMapped) errors.push(`500 mapped ${source500.mapped || 0} < ${minExternalMapped}`);
     if (currentCount > 0 && currentCoverage < minCurrentCoverage) {
-      errors.push(`external coverage ${(currentCoverage * 100).toFixed(1)}% < ${(minCurrentCoverage * 100).toFixed(1)}%`);
+      warnings.push(`external coverage ${(currentCoverage * 100).toFixed(1)}% < ${(minCurrentCoverage * 100).toFixed(1)}%`);
     }
   }
   if (!Array.isArray(current)) errors.push("current matches invalid");
@@ -1338,6 +1479,7 @@ const getSourceHealth = async () => {
     mode: {
       enable500Sync,
       enable500DetailsSync,
+      enablePreMatchSignalsSync,
       enableApiFootballSync,
       requireExternalSignals,
       skipSportteryFetch: process.env.SKIP_SPORTTERY_FETCH === "1",
@@ -1377,6 +1519,7 @@ const getSourceHealth = async () => {
       withExternalSignals: currentWithExternal,
       externalCoverage: Number(currentCoverage.toFixed(4)),
     },
+    warnings,
     errors,
   };
   sourceHealthCache = { key: cacheKey, value: health };
@@ -1428,11 +1571,30 @@ const getHealth = async () => {
 const sendFile = async (res, filePath) => {
   try {
     const ext = path.extname(filePath).toLowerCase();
-    const data = await fsp.readFile(filePath);
-    send(res, 200, data, {
-      "content-type": mimeTypes[ext] || "application/octet-stream",
-      "cache-control": getStaticCacheControl(filePath, ext)
+    const stat = await fsp.stat(filePath);
+    const request = res.__request;
+    const acceptEncoding = String(request?.headers?.["accept-encoding"] || "");
+    const contentType = mimeTypes[ext] || "application/octet-stream";
+    const shouldGzip = request?.method !== "HEAD"
+      && stat.size >= 1024
+      && isCompressibleType(contentType)
+      && /\bgzip\b/i.test(acceptEncoding);
+    const headers = {
+      "access-control-allow-origin": "*",
+      "access-control-allow-methods": "GET, POST, OPTIONS",
+      "access-control-allow-headers": "authorization, content-type, x-access-token",
+      "cache-control": getStaticCacheControl(filePath, ext),
+      "content-type": contentType,
+      ...(shouldGzip ? { "content-encoding": "gzip", "vary": "Accept-Encoding" } : { "content-length": stat.size })
+    };
+    res.writeHead(200, headers);
+    if (request?.method === "HEAD") return res.end();
+    const stream = fs.createReadStream(filePath);
+    stream.on("error", () => {
+      if (!res.headersSent) sendJson(res, { ok: false, error: "not found" }, 404);
+      else res.destroy();
     });
+    return shouldGzip ? stream.pipe(zlib.createGzip()).pipe(res) : stream.pipe(res);
   } catch {
     sendJson(res, { ok: false, error: "not found" }, 404);
   }
@@ -1510,6 +1672,18 @@ const handleApi = async (req, res, url) => {
 
   if (url.pathname === "/api/matches/history") {
     return sendJson(res, await readHistoryMatchesForList(url.searchParams.get("limit") || 600));
+  }
+
+  if (url.pathname === "/api/odds/history") {
+    return sendJson(res, await readOddsHistoryPage(url));
+  }
+
+  if (url.pathname === "/api/data/external-signals") {
+    return sendJson(res, await readExternalSignalsPage(url));
+  }
+
+  if (url.pathname === "/api/data/five-hundred-details") {
+    return sendJson(res, await readFiveHundredDetailsPage(url));
   }
 
   const matchDetailRoute = url.pathname.match(/^\/api\/matches\/([^/]+)$/);
@@ -1636,8 +1810,21 @@ const handleStatic = async (req, res, url) => {
   if (url.pathname === "/data/runtime-config.json") return handleRuntimeConfig(res);
 
   const pathname = decodeURIComponent(url.pathname);
-  if (pathname === "/data/matches-history.json") {
-    return sendJson(res, { ok: false, error: "history static payload disabled; use /api/matches/history" }, 410);
+  const disabledLargeStaticPayloads = new Map([
+    ["/data/matches-history.json", "/api/matches/history?view=list&limit=600"],
+    ["/data/odds-history.json", "/api/odds/history?limit=200"],
+    ["/odds-history.json", "/api/odds/history?limit=200"],
+    ["/data/post-match-reviews.json", "/api/matches/{matchId}"],
+    ["/data/external-signals.json", "/api/data/external-signals?limit=120"],
+    ["/data/five-hundred-details.json", "/api/data/five-hundred-details?limit=80"]
+  ]);
+  const replacementApi = disabledLargeStaticPayloads.get(pathname);
+  if (replacementApi) {
+    return sendJson(res, {
+      ok: false,
+      error: "large static payload disabled",
+      use: replacementApi
+    }, 410);
   }
 
   if (isProtectedStaticDataPath(pathname) && !hasRecommendationAccess(req, url)) {
