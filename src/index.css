@@ -1490,6 +1490,44 @@ button.status-pill:hover {
   font-weight: 900;
 }
 
+.recommendation-companion-line,
+.decision-companion-line {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  border: 1px solid hsl(var(--premium) / 0.26);
+  border-radius: 7px;
+  background: hsl(var(--premium) / 0.08);
+  color: hsl(var(--premium));
+  font-size: 0.7rem;
+  font-weight: 850;
+  line-height: 1.35;
+  padding: 0.26rem 0.42rem;
+}
+
+.recommendation-companion-line span,
+.decision-companion-line span {
+  color: hsl(var(--text-secondary));
+}
+
+.recommendation-companion-line strong,
+.decision-companion-line strong {
+  color: hsl(var(--premium));
+  font-size: 0.76rem;
+  font-weight: 940;
+}
+
+.recommendation-companion-line em,
+.decision-companion-line em {
+  min-width: 0;
+  overflow: hidden;
+  color: hsl(var(--text-muted));
+  font-style: normal;
+  text-overflow: ellipsis;
+}
+
 .recommendation-caution {
   border: 1px solid hsl(var(--premium) / 0.36);
   background: hsl(var(--premium) / 0.1);
@@ -2308,6 +2346,17 @@ button.status-pill:hover {
   color: hsl(var(--text-muted));
   font-size: 0.72rem;
   font-weight: 800;
+}
+
+.decision-companion-line {
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 0.14rem;
+  padding: 0.24rem 0.38rem;
+}
+
+.decision-companion-line em {
+  max-width: 100%;
 }
 
 .decision-facts {

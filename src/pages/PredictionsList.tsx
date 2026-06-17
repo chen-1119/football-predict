@@ -22,10 +22,8 @@ import {
 } from '../services/bettingDisplay';
 import { getCountryById, getLeagueById, getTeamById } from '../services/entities';
 import { getMatchSignal, type MatchSignalCategory } from '../services/matchSignal';
-import { buildPreMatchRisk } from '../services/preMatchRisk';
-import { getVisiblePrediction, getVisiblePredictions } from '../services/predictionVisibility';
-import { buildPublicRecommendationCopy, getPublicRiskTags } from '../services/recommendationCopy';
-import { buildFiveHundredDisplay } from '../services/fiveHundredDisplay';
+import { getVisiblePrediction } from '../services/predictionVisibility';
+import { buildPublicRecommendationCopy } from '../services/recommendationCopy';
 import { getAvailableResultPools, getDisplayRecommendation } from '../services/displayRecommendation';
 import { TeamBadge } from '../components/TeamBadge';
 import { WorldCupSpotlight } from '../components/WorldCupSpotlight';
@@ -213,23 +211,6 @@ const minutesSinceKickoff = (match: Match) => {
 
 const getHomePageOddsRows = (match: Match, language: 'zh' | 'en') => (
   getSportteryPoolRows(match, language).filter((row) => row.odds)
-);
-
-const getRiskTags = (match: Match, limit = 3) => {
-  const seen = new Set<string>();
-  return getVisiblePredictions(match)
-    .flatMap((prediction) => prediction.riskTags || [])
-    .filter((tag) => {
-      const key = `${tag.zh}-${tag.en}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .slice(0, limit);
-};
-
-const getHomePageRiskTags = (match: Match, limit = 3) => (
-  getPublicRiskTags(getRiskTags(match, limit + 6), limit)
 );
 
 const getDecisionReason = (category: MatchSignalCategory, language: 'zh' | 'en') => {
@@ -507,59 +488,10 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     setSortOrder(nextSort === 'time' ? 'asc' : 'desc');
   };
 
-  const getCardRiskHint = (
-    preMatchRisk: ReturnType<typeof buildPreMatchRisk>,
-    isFinishedMatch: boolean
-  ) => {
-    if (isFinishedMatch) {
-      return {
-        tone: 'neutral' as const,
-        label: language === 'zh' ? '已结算' : 'Settled'
-      };
-    }
-
-    const hasReason = (code: string, minWeight = 0) => preMatchRisk.reasons.some((reason) => (
-      reason.code === code && reason.weight >= minWeight
-    ));
-    const strongDraw = hasReason('draw-pressure', 18);
-    const handicapMismatch = hasReason('handicap-mismatch');
-    const mixedSp = hasReason('mixed-sp');
-    const redCardRisk = hasReason('red-card-risk');
-    const highUpset = preMatchRisk.score >= 60;
-
-    if (!highUpset && !strongDraw && !handicapMismatch && !mixedSp && !redCardRisk) {
-      return null;
-    }
-
-    const labels = language === 'zh'
-      ? [
-        highUpset ? '冷门提醒' : '防冷提醒',
-        strongDraw ? '防平' : '',
-        handicapMismatch ? '让球分歧' : '',
-        mixedSp ? 'SP分歧' : '',
-        redCardRisk ? '红牌变量' : ''
-      ]
-      : [
-        highUpset ? 'Upset alert' : 'Risk watch',
-        strongDraw ? 'draw cover' : '',
-        handicapMismatch ? 'handicap split' : '',
-        mixedSp ? 'SP split' : '',
-        redCardRisk ? 'red-card swing' : ''
-      ];
-
-    return {
-      tone: preMatchRisk.score >= 65 ? 'danger' as const : 'warning' as const,
-      label: labels.filter(Boolean).slice(0, 3).join(language === 'zh' ? ' · ' : ' / ')
-    };
-  };
-
   const renderRecommendationCard = (match: Match, mode: 'pick' | 'watch' = 'pick') => {
     const homeTeam = getMatchDisplayTeam(match, 'home');
     const awayTeam = getMatchDisplayTeam(match, 'away');
     const signal = getMatchSignal(match);
-    const preMatchRisk = buildPreMatchRisk(match);
-    const cardRiskHint = getCardRiskHint(preMatchRisk, match.status === 'FINISHED');
-    const fiveHundredDisplay = buildFiveHundredDisplay(match, language);
     const displayRecommendation = getDisplayRecommendation(match, language);
     const companionRecommendation = displayRecommendation?.companion;
     const sportteryMeta = getSportteryMeta(match, language);
@@ -578,7 +510,6 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         ? (language === 'zh' ? '推荐待临场复核' : 'Pick needs late recheck')
         : publicCopy.title;
     const statusBadge = publicCopy.marketLabel;
-    const reason = publicCopy.reasons[0] || displayRecommendation?.reason || getDecisionReason(signal.category, language);
 
     return (
       <button
@@ -608,27 +539,17 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
           <strong>{pickText}</strong>
           <span className={`signal-badge is-${signal.category}`}>{statusBadge}</span>
         </span>
-        {companionRecommendation && (
-          <span className="recommendation-companion">
-            <span>{companionRecommendation.title}</span>
-            <strong>{companionRecommendation.meta}</strong>
-          </span>
-        )}
         {mode === 'watch' && (
           <span className={`recommendation-caution is-${signal.category}`}>{cautionText}</span>
         )}
-        {cardRiskHint && (
-          <span className={`recommendation-diagnosis is-${cardRiskHint.tone}`}>
-            {cardRiskHint.label}
-          </span>
-        )}
-        {fiveHundredDisplay.cardHint && (
-          <span className={`recommendation-500-hint is-${fiveHundredDisplay.cardHint.tone}`}>
-            {fiveHundredDisplay.cardHint.label}
-          </span>
-        )}
         <span className="recommendation-odds">{publicCopy.strengthLabel} · {publicCopy.oddsLabel}</span>
-        <span className="recommendation-reason">{reason}</span>
+        {companionRecommendation && (
+          <span className="recommendation-companion-line">
+            <span>{language === 'zh' ? '让球补充' : 'HHAD add-on'}</span>
+            <strong>{companionRecommendation.label}</strong>
+            <em>{companionRecommendation.meta}</em>
+          </span>
+        )}
       </button>
     );
   };
@@ -636,13 +557,9 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
   const renderDecisionCell = (match: Match) => {
     const isFinished = match.status === 'FINISHED';
     const signal = getMatchSignal(match);
-    const preMatchRisk = buildPreMatchRisk(match);
-    const cardRiskHint = getCardRiskHint(preMatchRisk, isFinished);
-    const fiveHundredDisplay = buildFiveHundredDisplay(match, language);
     const displayRecommendation = getDisplayRecommendation(match, language);
     const companionRecommendation = displayRecommendation?.companion;
     const pickedPrediction = displayRecommendation?.prediction;
-    const riskTags = getHomePageRiskTags(match);
     const showHit = isFinished && displayRecommendation?.prediction?.resultStatus === 'WON';
     const showMiss = isFinished && displayRecommendation?.prediction?.resultStatus === 'LOST';
     const isReferencePick = false;
@@ -663,7 +580,6 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         ? (language === 'zh' ? '赛后复盘' : 'Review')
         : publicCopy.title;
     const primaryMeta = publicCopy.strengthLabel;
-    const shortReason = publicCopy.reasons[0] || displayRecommendation?.reason || getDecisionReason(signal.category, language);
     const strengthValue = language === 'zh'
       ? publicCopy.strengthLabel.replace(/^推荐强度\s*/, '')
       : publicCopy.strengthLabel.replace(/^Strength\s*/, '');
@@ -676,6 +592,13 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         <div className="decision-main">
           <span className="decision-label">{primaryLabel || fallbackPrimaryLabel}</span>
           <span className="decision-meta">{primaryMeta}</span>
+          {companionRecommendation && (
+            <span className="decision-companion-line">
+              <span>{language === 'zh' ? '让球补充' : 'HHAD add-on'}</span>
+              <strong>{companionRecommendation.label}</strong>
+              <em>{companionRecommendation.meta}</em>
+            </span>
+          )}
           {showHit && <span className="mini-hit">{t('hit')}</span>}
           {showMiss && <span className="mini-miss">{t('miss')}</span>}
         </div>
@@ -693,44 +616,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
             {language === 'zh' ? '玩法' : 'Market'}
             <strong>{poolStatus}</strong>
           </span>
-          {companionRecommendation && (
-            <span className="decision-companion-fact">
-              {language === 'zh' ? '让球' : 'HHAD'}
-              <strong>{companionRecommendation.label}</strong>
-            </span>
-          )}
-          {cardRiskHint && (
-            <span className={`decision-risk-fact is-${cardRiskHint.tone}`}>
-              {isFinished ? (language === 'zh' ? '复盘' : 'Review') : (language === 'zh' ? '防冷' : 'Risk')}
-              <strong>{cardRiskHint.label}</strong>
-            </span>
-          )}
-          {fiveHundredDisplay.cardHint && (
-            <span className={`decision-500-fact is-${fiveHundredDisplay.cardHint.tone}`}>
-              500
-              <strong>{fiveHundredDisplay.cardHint.label.replace(/^500[:：]\s*/, '')}</strong>
-            </span>
-          )}
         </div>
-
-        <div className="decision-reason">
-          <span>{shortReason}</span>
-        </div>
-
-        {companionRecommendation && (
-          <div className="decision-companion">
-            <span>{companionRecommendation.title}</span>
-            <strong>{companionRecommendation.meta}</strong>
-          </div>
-        )}
-
-        {riskTags.length > 0 && (
-          <div className="decision-risks">
-            {riskTags.map((tag) => (
-              <span key={`${tag.zh}-${tag.en}`}>{tag[language]}</span>
-            ))}
-          </div>
-        )}
 
       </div>
     );
