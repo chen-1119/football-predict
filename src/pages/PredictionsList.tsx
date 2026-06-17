@@ -24,7 +24,7 @@ import { getCountryById, getLeagueById, getTeamById } from '../services/entities
 import { getMatchSignal, type MatchSignalCategory } from '../services/matchSignal';
 import { getVisiblePrediction } from '../services/predictionVisibility';
 import { buildPublicRecommendationCopy } from '../services/recommendationCopy';
-import { getAvailableResultPools, getDisplayRecommendation } from '../services/displayRecommendation';
+import { getAvailableResultPools, getDisplayRecommendation, getListHandicapSupplement } from '../services/displayRecommendation';
 import { TeamBadge } from '../components/TeamBadge';
 import { WorldCupSpotlight } from '../components/WorldCupSpotlight';
 
@@ -493,7 +493,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     const awayTeam = getMatchDisplayTeam(match, 'away');
     const signal = getMatchSignal(match);
     const displayRecommendation = getDisplayRecommendation(match, language);
-    const companionRecommendation = displayRecommendation?.companion;
+    const companionRecommendation = displayRecommendation?.companion
+      || getListHandicapSupplement(match, language, displayRecommendation?.prediction);
     const sportteryMeta = getSportteryMeta(match, language);
     const hasReferenceLean = Boolean(displayRecommendation);
     const directionLabel = displayRecommendation?.label || '';
@@ -558,7 +559,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     const isFinished = match.status === 'FINISHED';
     const signal = getMatchSignal(match);
     const displayRecommendation = getDisplayRecommendation(match, language);
-    const companionRecommendation = displayRecommendation?.companion;
+    const companionRecommendation = displayRecommendation?.companion
+      || getListHandicapSupplement(match, language, displayRecommendation?.prediction);
     const pickedPrediction = displayRecommendation?.prediction;
     const showHit = isFinished && displayRecommendation?.prediction?.resultStatus === 'WON';
     const showMiss = isFinished && displayRecommendation?.prediction?.resultStatus === 'LOST';

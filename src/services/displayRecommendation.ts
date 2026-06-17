@@ -332,6 +332,72 @@ const buildHandicapCompanionFromPrediction = (
   };
 };
 
+export const getListHandicapSupplement = (
+  match: Match,
+  language: Language,
+  primaryPrediction?: PredictionDetail
+): DisplayRecommendationCompanion | null => {
+  const { hasHhad } = getAvailableResultPools(match);
+  if (!hasHhad || primaryPrediction?.oddsPoolCode === 'HHAD') return null;
+
+  const predictions = match.predictions || [];
+  const pairedOutcomePrediction = primaryPrediction || predictions.find((prediction) => (
+    prediction.marketType === '1X2'
+    && prediction.oddsPoolCode !== 'HHAD'
+    && isPredictionPoolAvailable(match, prediction)
+    && isOutcomeCode(prediction.tipCode)
+  ));
+  const handicapPrediction = predictions.find((prediction) => (
+    prediction.marketType === 'BEST'
+    && prediction.oddsPoolCode === 'HHAD'
+    && isPredictionPoolAvailable(match, prediction)
+    && isOutcomeCode(prediction.tipCode)
+  )) || predictions.find((prediction) => (
+    prediction.oddsPoolCode === 'HHAD'
+    && isPredictionPoolAvailable(match, prediction)
+    && isOutcomeCode(prediction.tipCode)
+  ));
+
+  if (handicapPrediction) {
+    return buildHandicapCompanionFromPrediction(match, handicapPrediction, pairedOutcomePrediction, language);
+  }
+
+  const read = getHandicapRead(match);
+  const top = read.modelTop || read.marketTop;
+  if (!top) return null;
+
+  const label = getSimpleHandicapLabel(top.code, language);
+  const probability = Number.isFinite(top.probability) ? Number(top.probability) : null;
+  const prediction: PredictionDetail = {
+    marketType: '1X2',
+    oddsPoolCode: 'HHAD',
+    handicapLine: match.handicapLine,
+    tipCode: top.code,
+    tipLabel: { zh: getSimpleHandicapLabel(top.code, 'zh'), en: getSimpleHandicapLabel(top.code, 'en') },
+    odds: getOutcomeOddsValue(match, 'HHAD', top.code),
+    trustScore: Math.round(probability || 0),
+    recommendationAction: 'reference',
+    recommendationTier: 'handicap-companion',
+    explanation: { zh: '', en: '' },
+    visibilityStatus: 'FREE',
+    resultStatus: 'PENDING'
+  };
+
+  return {
+    kind: 'handicap',
+    prediction,
+    tipCode: top.code,
+    label,
+    title: language === 'zh' ? `附加推荐 ${label}` : `Add-on ${label}`,
+    meta: `${formatHandicapLine(match.handicapLine, language)} · ${formatDisplayMeta(prediction, probability, language)}`,
+    probability,
+    support: read.marketSupport,
+    reason: pairedOutcomePrediction && isOutcomeCode(pairedOutcomePrediction.tipCode)
+      ? getCompanionReason(match, pairedOutcomePrediction, top.code, language)
+      : getDisplayReasonForKind('handicap', language)
+  };
+};
+
 const getHandicapOverride = (match: Match, promotedPrediction?: PredictionDetail) => {
   if (promotedPrediction?.oddsPoolCode === 'HHAD' && !isHandicapMarketContradicted(match, promotedPrediction)) {
     return null;
