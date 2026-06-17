@@ -1,7 +1,7 @@
 {
   "version": 1,
   "source": "sporttery:prediction-snapshots",
-  "updatedAt": "2026-06-17T10:47:43.746Z",
+  "updatedAt": "2026-06-17T11:02:32.919Z",
   "retentionDays": 365,
   "maxRows": 5000,
   "rows": [
@@ -82448,19 +82448,103 @@
         "resultStatus": "PENDING",
         "riskCount": 3
       }
+    },
+    {
+      "capturedAt": "2026-06-17T11:02:32.919Z",
+      "firstSeenAt": "2026-06-17T11:02:32.919Z",
+      "lastSeenAt": "2026-06-17T11:02:32.919Z",
+      "seenCount": 1,
+      "phase": "mid",
+      "signature": "1X2:HAD:1:reference|BEST:HAD:1:recommend|GOALS::U2.5:reference|1.13/5.86/13.50|-2.00:2.66/3.94/2.00|63/23/14",
+      "policyVersion": "sporttery-day-formula-trace-v52",
+      "promptVersion": "professional-football-analyst-v21",
+      "sourceMatchId": "2040182",
+      "matchId": "sporttery_2040182",
+      "matchNo": "周三021",
+      "businessDate": "2026-06-17",
+      "kickoffTime": "2026-06-18T01:00:00+08:00",
+      "status": "SCHEDULED",
+      "leagueName": "世界杯",
+      "homeTeamName": "葡萄牙",
+      "awayTeamName": "刚果(金)",
+      "scoreHome": null,
+      "scoreAway": null,
+      "odds": {
+        "odds1": 1.13,
+        "oddsX": 5.86,
+        "odds2": 13.5
+      },
+      "handicapLine": "-2.00",
+      "handicapOdds": {
+        "odds1": 2.66,
+        "oddsX": 3.94,
+        "odds2": 2
+      },
+      "oddsTrend": {
+        "sampleSize": 1358,
+        "firstCapturedAt": "2026-06-08T07:04:18.034Z",
+        "lastCapturedAt": "2026-06-16T08:16:10.871Z",
+        "odds1Change": -0.01,
+        "oddsXChange": 0.16,
+        "odds2Change": 0.5,
+        "direction": "mixed",
+        "summary": {
+          "zh": "已记录 1358 次官方 SP 快照，主要变化：客胜 +0.50，平局 +0.16；盘面在拉扯，先按参考处理。",
+          "en": "1358 official SP snapshots recorded. Main moves: away win +0.50, draw +0.16; the board is mixed, so keep it as reference-only."
+        }
+      },
+      "probabilityFinal": {
+        "home": 62.9,
+        "draw": 23,
+        "away": 14.1
+      },
+      "probabilityModelVersion": "unified-poisson-bayes-v52",
+      "best": {
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "主推 主胜 葡萄牙",
+          "en": "Main pick: Home win 葡萄牙"
+        },
+        "odds": 1.13,
+        "trustScore": 86,
+        "resultStatus": "PENDING",
+        "riskCount": 4
+      },
+      "oneXTwo": {
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "参考倾向 主胜 葡萄牙",
+          "en": "Reference lean: Home Win (葡萄牙)"
+        },
+        "odds": 1.13,
+        "trustScore": 34,
+        "resultStatus": "PENDING",
+        "riskCount": 4
+      },
+      "goals": {
+        "tipCode": "U2.5",
+        "tipLabel": {
+          "zh": "进球参考 小2.5球（≤2球）",
+          "en": "Goals reference: Under 2.5 goals"
+        },
+        "odds": 2.05,
+        "trustScore": 47,
+        "resultStatus": "PENDING",
+        "riskCount": 3
+      }
     }
   ],
   "summary": {
-    "total": 1054,
+    "total": 1055,
     "byPhase": {
       "review": 85,
-      "mid": 110,
+      "mid": 111,
       "baseline": 792,
       "late": 29,
       "final": 24,
       "locked": 14
     },
-    "appended": 0,
+    "appended": 1,
     "updated": 0
   }
 }
