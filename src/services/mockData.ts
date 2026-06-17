@@ -747,6 +747,7 @@ export interface MatchProbabilityModel {
     scoreImplied?: OutcomeProbability | null;
     worldCupPrior?: OutcomeProbability | null;
     final: OutcomeProbability | null;
+    unifiedPosterior?: OutcomeProbability | null;
   };
   worldCupPrior?: WorldCupPriorSummary | null;
   elo?: {
@@ -872,6 +873,7 @@ export interface MatchProbabilityModel {
     market: OutcomeProbability | null;
     poisson: OutcomeProbability | null;
     scoreImplied?: OutcomeProbability | null;
+    unifiedPosterior?: OutcomeProbability | null;
   } | null;
   calibration: {
     status: 'baseline' | 'calibrated' | 'backtesting';

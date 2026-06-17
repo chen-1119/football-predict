@@ -1415,6 +1415,7 @@ button.status-pill:hover {
 .recommendation-reference-lean,
 .recommendation-diagnosis,
 .recommendation-500-hint,
+.recommendation-companion,
 .recommendation-caution {
   display: inline-flex;
   align-items: center;
@@ -1474,6 +1475,19 @@ button.status-pill:hover {
   border-color: hsl(var(--danger) / 0.34);
   background: hsl(var(--danger) / 0.09);
   color: hsl(var(--danger));
+}
+
+.recommendation-companion {
+  gap: 0.35rem;
+  border: 1px solid hsl(var(--premium) / 0.3);
+  background: hsl(var(--premium) / 0.09);
+  color: hsl(var(--premium));
+}
+
+.recommendation-companion strong {
+  color: hsl(var(--text-primary));
+  font-size: 0.68rem;
+  font-weight: 900;
 }
 
 .recommendation-caution {
@@ -2352,6 +2366,10 @@ button.status-pill:hover {
   color: hsl(var(--danger));
 }
 
+.decision-companion-fact strong {
+  color: hsl(var(--premium));
+}
+
 .decision-reason {
   grid-column: 1 / -1;
   min-width: 0;
@@ -2366,6 +2384,35 @@ button.status-pill:hover {
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 1;
+}
+
+.decision-companion {
+  grid-column: 1 / -1;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border: 1px solid hsl(var(--premium) / 0.26);
+  border-radius: 7px;
+  background: hsl(var(--premium) / 0.08);
+  color: hsl(var(--premium));
+  font-size: 0.68rem;
+  font-weight: 850;
+  padding: 0.28rem 0.42rem;
+}
+
+.decision-companion span,
+.decision-companion strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.decision-companion strong {
+  color: hsl(var(--text-primary));
+  font-weight: 900;
 }
 
 .decision-risks {
@@ -10708,6 +10755,31 @@ body {
   border-color: hsl(var(--premium) / 0.26);
 }
 
+.recommendation-companion-panel {
+  display: grid;
+  gap: 0.28rem;
+  border: 1px solid hsl(var(--premium) / 0.28);
+  border-radius: 8px;
+  background: hsl(var(--premium) / 0.08);
+  padding: 0.58rem 0.64rem;
+}
+
+.recommendation-companion-panel span,
+.recommendation-companion-panel em {
+  color: hsl(var(--premium));
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.recommendation-companion-panel strong {
+  color: hsl(var(--text-primary));
+  font-family: var(--font-title);
+  font-size: 1.12rem;
+  font-weight: 950;
+  line-height: 1.05;
+}
+
 .recommendation-overview-panel.is-goals {
   border-color: hsl(var(--primary) / 0.26);
   background:
@@ -10863,6 +10935,15 @@ body {
   border-color: hsl(var(--primary) / 0.35);
   background: hsl(var(--primary) / 0.12);
   color: hsl(var(--primary));
+}
+
+.decision-transparent-panel.is-companion {
+  border-color: hsl(var(--premium) / 0.28);
+  background: hsl(var(--premium) / 0.08);
+}
+
+.decision-transparent-panel.is-companion strong {
+  color: hsl(var(--premium));
 }
 
 .decision-transparent-card {

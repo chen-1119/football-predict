@@ -10,13 +10,7 @@ import type { Match, PredictionDetail, Team } from './mockData';
 
 type Language = 'zh' | 'en';
 
-const outcomeLabels = {
-  '1': { zh: '主胜', en: 'Home' },
-  X: { zh: '平局', en: 'Draw' },
-  '2': { zh: '客胜', en: 'Away' }
-} as const;
-
-type OutcomeCode = keyof typeof outcomeLabels;
+type OutcomeCode = '1' | 'X' | '2';
 type OutcomeProbabilityTriplet = {
   home?: number | null;
   draw?: number | null;
@@ -24,6 +18,18 @@ type OutcomeProbabilityTriplet = {
 } | null | undefined;
 
 type DisplayRecommendationKind = 'prediction' | 'handicap' | 'outcome' | 'score';
+
+export interface DisplayRecommendationCompanion {
+  kind: 'handicap';
+  prediction: PredictionDetail;
+  tipCode: string;
+  label: string;
+  title: string;
+  meta: string;
+  probability: number | null;
+  support: number | null;
+  reason: string;
+}
 
 export interface DisplayRecommendation {
   kind: DisplayRecommendationKind;
@@ -34,6 +40,7 @@ export interface DisplayRecommendation {
   probability: number | null;
   support: number | null;
   reason: string;
+  companion?: DisplayRecommendationCompanion;
 }
 
 type RankedOutcome = { code: OutcomeCode; probability: number };
@@ -80,10 +87,10 @@ const getRankedOutcomeProbabilities = (probabilities: OutcomeProbabilityTriplet)
 
 const getOutcomeProbability = (match: Match, code: OutcomeCode, prediction?: PredictionDetail) => {
   const final = prediction?.oddsPoolCode === 'HHAD'
-    ? match.probabilityModel?.handicap?.scoreImplied
-      || match.probabilityModel?.handicap?.poisson
-      || match.probabilityModel?.handicap?.market
-    : match.probabilityModel?.oneXTwo?.final || match.probabilityModel?.oneXTwo?.market;
+    ? getHandicapModelProbabilities(match)
+    : match.probabilityModel?.oneXTwo?.unifiedPosterior
+      || match.probabilityModel?.oneXTwo?.final
+      || match.probabilityModel?.oneXTwo?.market;
   if (!final) return null;
   const value = code === '1' ? final.home : code === 'X' ? final.draw : final.away;
   return Number.isFinite(value) ? Number(value) : null;
@@ -93,11 +100,16 @@ const getTopOutcomeFromProbabilities = (probabilities: OutcomeProbabilityTriplet
   getRankedOutcomeProbabilities(probabilities)[0] || null
 );
 
+const getHandicapModelProbabilities = (match: Match) => (
+  match.probabilityModel?.handicap?.unifiedPosterior
+    || match.probabilityModel?.handicap?.scoreImplied
+    || match.probabilityModel?.handicap?.poisson
+    || match.probabilityModel?.handicap?.market
+);
+
 const getHandicapRead = (match: Match) => {
   const modelRows = getRankedOutcomeProbabilities(
-    match.probabilityModel?.handicap?.scoreImplied
-      || match.probabilityModel?.handicap?.poisson
-      || match.probabilityModel?.handicap?.market
+    getHandicapModelProbabilities(match)
   );
   const resolvedOdds = getOfficialMatchOdds(match);
   const marketRows = getRankedOutcomeProbabilities(
@@ -180,6 +192,144 @@ const getSimpleOutcomeLabel = (match: Match, code: OutcomeCode, language: Langua
   if (code === '1') return `Home ${homeName}`;
   if (code === 'X') return 'Draw';
   return `Away ${awayName}`;
+};
+
+const formatHandicapLine = (line: string | undefined, language: Language) => {
+  if (!line) return language === 'zh' ? '让球' : 'HHAD';
+  return language === 'zh' ? `让球 ${line}` : `HHAD ${line}`;
+};
+
+const parseHandicapLine = (line: string | undefined) => {
+  const value = Number(String(line || '').replace(/[^\d.+-]/g, ''));
+  return Number.isFinite(value) ? value : null;
+};
+
+const getCompanionReason = (
+  match: Match,
+  primaryPrediction: PredictionDetail,
+  handicapCode: OutcomeCode,
+  language: Language
+) => {
+  const homeTeam = getMatchDisplayTeam(match, 'home');
+  const awayTeam = getMatchDisplayTeam(match, 'away');
+  const homeName = homeTeam.shortName[language] || homeTeam.name[language];
+  const awayName = awayTeam.shortName[language] || awayTeam.name[language];
+  const line = formatHandicapLine(match.handicapLine, language);
+  const handicapLabel = getSimpleHandicapLabel(handicapCode, language);
+
+  if (language === 'zh') {
+    if (primaryPrediction.tipCode === '1' && handicapCode === '2') {
+      return `胜平负主线看${homeName}取胜，但${line}提示穿盘压力，附加看${handicapLabel}。`;
+    }
+    if (primaryPrediction.tipCode === '2' && handicapCode === '1') {
+      return `胜平负主线看${awayName}取胜，但${line}提示受让一方更稳，附加看${handicapLabel}。`;
+    }
+    if (primaryPrediction.tipCode !== handicapCode) {
+      return `胜平负和${line}指向不同，主推不变，附加看${handicapLabel}。`;
+    }
+    return `胜平负和${line}同向，附加看${handicapLabel}确认穿盘方向。`;
+  }
+
+  if (primaryPrediction.tipCode === '1' && handicapCode === '2') {
+    return `The 1X2 pick stays with ${homeName}, while ${line} points to cover pressure; add ${handicapLabel}.`;
+  }
+  if (primaryPrediction.tipCode === '2' && handicapCode === '1') {
+    return `The 1X2 pick stays with ${awayName}, while ${line} favours the receiving side; add ${handicapLabel}.`;
+  }
+  if (primaryPrediction.tipCode !== handicapCode) {
+    return `1X2 and ${line} point to different reads; keep the main pick and add ${handicapLabel}.`;
+  }
+  return `1X2 and ${line} align; add ${handicapLabel} as the handicap read.`;
+};
+
+const buildHandicapCompanion = (
+  match: Match,
+  primaryPrediction: PredictionDetail | undefined,
+  language: Language
+): DisplayRecommendationCompanion | null => {
+  if (!primaryPrediction || primaryPrediction.oddsPoolCode === 'HHAD' || !isOutcomeCode(primaryPrediction.tipCode)) {
+    return null;
+  }
+
+  const read = getHandicapRead(match);
+  if (!read.modelTop) return null;
+  if (read.marketTop && read.marketTop.code !== read.modelTop.code) return null;
+
+  const lineValue = parseHandicapLine(match.handicapLine);
+  const hasMeaningfulLine = lineValue === null || Math.abs(lineValue) >= 0.5;
+  if (!hasMeaningfulLine) return null;
+
+  const support = read.marketSupport;
+  const strongHandicapRead = read.modelTop.probability >= 48
+    && read.modelGap >= 10
+    && (support === null || support >= 35);
+  const splitDeepFavorite = primaryPrediction.tipCode !== read.modelTop.code
+    && read.modelTop.probability >= 45
+    && read.modelGap >= 8
+    && (support === null || support >= 35);
+
+  if (!strongHandicapRead && !splitDeepFavorite) return null;
+
+  const label = getSimpleHandicapLabel(read.modelTop.code, language);
+  const prediction: PredictionDetail = {
+    marketType: '1X2',
+    oddsPoolCode: 'HHAD',
+    handicapLine: match.handicapLine,
+    tipCode: read.modelTop.code,
+    tipLabel: { zh: getSimpleHandicapLabel(read.modelTop.code, 'zh'), en: getSimpleHandicapLabel(read.modelTop.code, 'en') },
+    odds: getOutcomeOddsValue(match, 'HHAD', read.modelTop.code),
+    trustScore: Math.round(read.modelTop.probability),
+    recommendationAction: 'reference',
+    recommendationTier: 'handicap-companion',
+    explanation: { zh: '', en: '' },
+    visibilityStatus: 'FREE',
+    resultStatus: 'PENDING'
+  };
+
+  const lineLabel = formatHandicapLine(match.handicapLine, language);
+
+  return {
+    kind: 'handicap',
+    prediction,
+    tipCode: read.modelTop.code,
+    label,
+    title: language === 'zh' ? `附加推荐 ${label}` : `Add-on ${label}`,
+    meta: `${lineLabel} · ${formatDisplayMeta(prediction, read.modelTop.probability, language)}`,
+    probability: read.modelTop.probability,
+    support,
+    reason: getCompanionReason(match, primaryPrediction, read.modelTop.code, language)
+  };
+};
+
+const buildHandicapCompanionFromPrediction = (
+  match: Match,
+  handicapPrediction: PredictionDetail | undefined,
+  primaryPrediction: PredictionDetail | undefined,
+  language: Language
+): DisplayRecommendationCompanion | null => {
+  if (!handicapPrediction || handicapPrediction.oddsPoolCode !== 'HHAD' || !isOutcomeCode(handicapPrediction.tipCode)) {
+    return null;
+  }
+  if (!primaryPrediction || !isOutcomeCode(primaryPrediction.tipCode)) return null;
+
+  const probability = getOutcomeProbability(match, handicapPrediction.tipCode, handicapPrediction);
+  const read = getHandicapRead(match);
+  const support = read.modelTop?.code === handicapPrediction.tipCode
+    ? read.marketSupport ?? null
+    : getOneXTwoSupport(match, handicapPrediction.tipCode, handicapPrediction);
+  const label = getSimpleHandicapLabel(handicapPrediction.tipCode, language);
+
+  return {
+    kind: 'handicap',
+    prediction: handicapPrediction,
+    tipCode: handicapPrediction.tipCode,
+    label,
+    title: language === 'zh' ? `附加推荐 ${label}` : `Add-on ${label}`,
+    meta: `${formatHandicapLine(match.handicapLine, language)} · ${formatDisplayMeta(handicapPrediction, probability, language)}`,
+    probability: Number.isFinite(probability) ? Number(probability) : null,
+    support,
+    reason: getCompanionReason(match, primaryPrediction, handicapPrediction.tipCode, language)
+  };
 };
 
 const getHandicapOverride = (match: Match, promotedPrediction?: PredictionDetail) => {
@@ -305,6 +455,12 @@ export const getDisplayRecommendation = (match: Match, language: Language): Disp
     predictions.find((prediction) => prediction.marketType === 'BEST' && isPredictionPoolAvailable(match, prediction)),
     predictions.find((prediction) => prediction.marketType === '1X2' && isPredictionPoolAvailable(match, prediction))
   ].find(Boolean);
+  const pairedOutcomePrediction = predictions.find((prediction) => (
+    prediction.marketType === '1X2'
+    && prediction.oddsPoolCode !== 'HHAD'
+    && isPredictionPoolAvailable(match, prediction)
+    && isOutcomeCode(prediction.tipCode)
+  ));
   const shouldApplyLiveMarketFilter = match.status === 'SCHEDULED';
   const promotedPrediction = rawPromotedPrediction && (!shouldApplyLiveMarketFilter || !isHandicapMarketContradicted(match, rawPromotedPrediction))
     ? rawPromotedPrediction
@@ -327,6 +483,28 @@ export const getDisplayRecommendation = (match: Match, language: Language): Disp
   }
 
   if (promotedPrediction) {
+    if (promotedPrediction.oddsPoolCode === 'HHAD' && pairedOutcomePrediction) {
+      const probability = getOutcomeProbability(match, pairedOutcomePrediction.tipCode as OutcomeCode, pairedOutcomePrediction);
+      const cleanProbability = Number.isFinite(probability) ? Number(probability) : null;
+      const companion = buildHandicapCompanionFromPrediction(match, promotedPrediction, pairedOutcomePrediction, language);
+
+      return {
+        kind: 'prediction',
+        prediction: pairedOutcomePrediction,
+        tipCode: pairedOutcomePrediction.tipCode,
+        label: getSimpleOutcomeLabel(match, pairedOutcomePrediction.tipCode as OutcomeCode, language),
+        meta: formatDisplayMeta(pairedOutcomePrediction, cleanProbability, language),
+        probability: cleanProbability,
+        support: getOneXTwoSupport(match, pairedOutcomePrediction.tipCode, pairedOutcomePrediction),
+        reason: companion
+          ? (language === 'zh'
+            ? '胜平负和让球盘拆开看：先判断胜负方向，再判断是否穿盘。'
+            : '1X2 and handicap are split: first the match result, then the cover.')
+          : getDisplayReasonForKind('prediction', language),
+        companion: companion || undefined
+      };
+    }
+
     const probability = getOutcomeProbability(match, promotedPrediction.tipCode as OutcomeCode, promotedPrediction);
     const cleanProbability = Number.isFinite(probability) ? Number(probability) : null;
     const label = promotedPrediction.oddsPoolCode === 'HHAD'
@@ -343,7 +521,8 @@ export const getDisplayRecommendation = (match: Match, language: Language): Disp
       support: getOneXTwoSupport(match, promotedPrediction.tipCode, promotedPrediction),
       reason: promotedPrediction.oddsPoolCode === 'HHAD' && closeHandicapDecision
         ? getCloseHandicapReason(language)
-        : getDisplayReasonForKind('prediction', language)
+        : getDisplayReasonForKind('prediction', language),
+      companion: buildHandicapCompanion(match, promotedPrediction, language) || undefined
     };
   }
 
@@ -423,7 +602,8 @@ export const getDisplayRecommendation = (match: Match, language: Language): Disp
       meta: formatDisplayMeta(fauxPrediction, outcomeTop.probability, language),
       probability: outcomeTop.probability,
       support: getOneXTwoSupport(match, outcomeTop.code),
-      reason: getDisplayReasonForKind('outcome', language)
+      reason: getDisplayReasonForKind('outcome', language),
+      companion: buildHandicapCompanion(match, fauxPrediction, language) || undefined
     };
   }
 

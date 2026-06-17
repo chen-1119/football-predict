@@ -951,6 +951,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   const bestReviewPrediction = visiblePredictions.find((prediction) => prediction.marketType === 'BEST' && prediction.tipCode !== 'WATCH')
     || getVisiblePrediction(match, '1X2');
   const displayRecommendation = getDisplayRecommendation(match, language);
+  const companionRecommendation = displayRecommendation?.companion;
   const rawBestOutcomePrediction = visiblePredictions.find((prediction) => (
     prediction.marketType === 'BEST'
     && isPredictionResultPoolAvailable(prediction)
@@ -2102,6 +2103,14 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                   <span>{publicRecommendationCopy.oddsLabel}</span>
                   <span>{publicRecommendationCopy.statusLabel}</span>
                 </div>
+                {companionRecommendation && (
+                  <div className="recommendation-companion-panel">
+                    <span>{companionRecommendation.title}</span>
+                    <strong>{companionRecommendation.label}</strong>
+                    <p>{companionRecommendation.reason}</p>
+                    <em>{companionRecommendation.meta}</em>
+                  </div>
+                )}
               </section>
             </div>
 
@@ -2147,6 +2156,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                   {publicRecommendationCopy.reasons.map((reason) => (
                     <p key={reason}>{reason}</p>
                   ))}
+                  {companionRecommendation && (
+                    <p>{companionRecommendation.reason}</p>
+                  )}
                 </div>
                 <span className={`decision-pool-pill is-${publicRecommendationCopy.strengthTone}`}>
                   {publicRecommendationCopy.strengthLabel}
@@ -2165,6 +2177,14 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                   <strong>{publicRecommendationCopy.risks.join(language === 'zh' ? '、' : ', ')}</strong>
                   <p>{publicRecommendationCopy.updateRule}</p>
                 </section>
+
+                {companionRecommendation && (
+                  <section className="decision-transparent-panel is-companion">
+                    <h4>{language === 'zh' ? '让球补充' : 'HHAD Add-on'}</h4>
+                    <strong>{companionRecommendation.title}</strong>
+                    <p>{companionRecommendation.meta}</p>
+                  </section>
+                )}
               </div>
 
               <div className="decision-risk-row">

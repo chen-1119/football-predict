@@ -561,6 +561,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     const cardRiskHint = getCardRiskHint(preMatchRisk, match.status === 'FINISHED');
     const fiveHundredDisplay = buildFiveHundredDisplay(match, language);
     const displayRecommendation = getDisplayRecommendation(match, language);
+    const companionRecommendation = displayRecommendation?.companion;
     const sportteryMeta = getSportteryMeta(match, language);
     const hasReferenceLean = Boolean(displayRecommendation);
     const directionLabel = displayRecommendation?.label || '';
@@ -607,6 +608,12 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
           <strong>{pickText}</strong>
           <span className={`signal-badge is-${signal.category}`}>{statusBadge}</span>
         </span>
+        {companionRecommendation && (
+          <span className="recommendation-companion">
+            <span>{companionRecommendation.title}</span>
+            <strong>{companionRecommendation.meta}</strong>
+          </span>
+        )}
         {mode === 'watch' && (
           <span className={`recommendation-caution is-${signal.category}`}>{cautionText}</span>
         )}
@@ -633,6 +640,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     const cardRiskHint = getCardRiskHint(preMatchRisk, isFinished);
     const fiveHundredDisplay = buildFiveHundredDisplay(match, language);
     const displayRecommendation = getDisplayRecommendation(match, language);
+    const companionRecommendation = displayRecommendation?.companion;
     const pickedPrediction = displayRecommendation?.prediction;
     const riskTags = getHomePageRiskTags(match);
     const showHit = isFinished && displayRecommendation?.prediction?.resultStatus === 'WON';
@@ -685,6 +693,12 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
             {language === 'zh' ? '玩法' : 'Market'}
             <strong>{poolStatus}</strong>
           </span>
+          {companionRecommendation && (
+            <span className="decision-companion-fact">
+              {language === 'zh' ? '让球' : 'HHAD'}
+              <strong>{companionRecommendation.label}</strong>
+            </span>
+          )}
           {cardRiskHint && (
             <span className={`decision-risk-fact is-${cardRiskHint.tone}`}>
               {isFinished ? (language === 'zh' ? '复盘' : 'Review') : (language === 'zh' ? '防冷' : 'Risk')}
@@ -702,6 +716,13 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         <div className="decision-reason">
           <span>{shortReason}</span>
         </div>
+
+        {companionRecommendation && (
+          <div className="decision-companion">
+            <span>{companionRecommendation.title}</span>
+            <strong>{companionRecommendation.meta}</strong>
+          </div>
+        )}
 
         {riskTags.length > 0 && (
           <div className="decision-risks">
