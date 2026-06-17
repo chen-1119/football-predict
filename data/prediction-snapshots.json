@@ -1,7 +1,7 @@
 {
   "version": 1,
   "source": "sporttery:prediction-snapshots",
-  "updatedAt": "2026-06-17T11:32:41.992Z",
+  "updatedAt": "2026-06-17T11:37:31.969Z",
   "retentionDays": 365,
   "maxRows": 5000,
   "rows": [
@@ -82604,14 +82604,86 @@
         "resultStatus": "PENDING",
         "riskCount": 3
       }
+    },
+    {
+      "capturedAt": "2026-06-17T11:37:31.969Z",
+      "firstSeenAt": "2026-06-17T11:37:31.969Z",
+      "lastSeenAt": "2026-06-17T11:37:31.969Z",
+      "seenCount": 1,
+      "phase": "baseline",
+      "signature": "1X2:HAD:1:reference|BEST:HAD:1:recommend|GOALS::O2.5:reference|2.25/3.21/2.68|-1:4.70/4.00/1.50|52/24/24",
+      "policyVersion": "sporttery-day-formula-trace-v52",
+      "promptVersion": "professional-football-analyst-v21",
+      "sourceMatchId": "2040232",
+      "matchId": "fivehundred_2040232",
+      "matchNo": "周三205",
+      "businessDate": "2026-06-17",
+      "kickoffTime": "2026-06-18T02:00:00+08:00",
+      "status": "SCHEDULED",
+      "leagueName": "芬兰超级联赛",
+      "homeTeamName": "塞伊奈",
+      "awayTeamName": "瓦萨",
+      "scoreHome": null,
+      "scoreAway": null,
+      "odds": {
+        "odds1": 2.25,
+        "oddsX": 3.21,
+        "odds2": 2.68
+      },
+      "handicapLine": "-1",
+      "handicapOdds": {
+        "odds1": 4.7,
+        "oddsX": 4,
+        "odds2": 1.5
+      },
+      "oddsTrend": null,
+      "probabilityFinal": {
+        "home": 51.7,
+        "draw": 24.1,
+        "away": 24.2
+      },
+      "probabilityModelVersion": "unified-poisson-bayes-v52",
+      "best": {
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "主推 主胜 塞伊奈",
+          "en": "Main pick: Home win 塞伊奈"
+        },
+        "odds": 2.25,
+        "trustScore": 68,
+        "resultStatus": "PENDING",
+        "riskCount": 4
+      },
+      "oneXTwo": {
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "参考倾向 主胜 塞伊奈",
+          "en": "Reference lean: Home Win (塞伊奈)"
+        },
+        "odds": 2.25,
+        "trustScore": 34,
+        "resultStatus": "PENDING",
+        "riskCount": 4
+      },
+      "goals": {
+        "tipCode": "O2.5",
+        "tipLabel": {
+          "zh": "进球参考 大2.5球（≥3球）",
+          "en": "Goals reference: Over 2.5 goals"
+        },
+        "odds": 1.8,
+        "trustScore": 53,
+        "resultStatus": "PENDING",
+        "riskCount": 3
+      }
     }
   ],
   "summary": {
-    "total": 1056,
+    "total": 1057,
     "byPhase": {
       "review": 85,
       "mid": 112,
-      "baseline": 792,
+      "baseline": 793,
       "late": 29,
       "final": 24,
       "locked": 14
