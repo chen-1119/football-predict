@@ -1293,7 +1293,7 @@ const generateMatchPool = (): Match[] => {
         odds: 1.68 + (index % 5) * 0.05,
         trustScore: Math.floor(55 + Math.random() * 35),
         explanation: {
-          zh: '总进球数参考来自胜平负 SP、双方近期进失球和节奏模型。',
+          zh: '总进球数参考来自胜平负赔率、双方近期进失球和比赛节奏。',
           en: 'Both teams play open offensive football. Their recent matches have seen plenty of goals, making the Over 2.5 market highly viable.'
         },
         visibilityStatus: 'PREMIUM', // 高级预测锁定

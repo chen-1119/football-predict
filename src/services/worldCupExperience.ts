@@ -140,8 +140,8 @@ export const featuredMatch: FeaturedMatchData = {
     { label: zhEn('晋级', 'Advance'), value: '32' }
   ],
   odds: [
-    { label: zhEn('官方 SP', 'Official SP'), value: '开售后更新' },
-    { label: zhEn('模型概率', 'Model probability'), value: '赛前锁定' },
+    { label: zhEn('官方赔率', 'Official odds'), value: '开售后更新' },
+    { label: zhEn('推荐强度', 'Pick strength'), value: '赛前锁定' },
     { label: zhEn('临场复核', 'Late check'), value: '开赛前' }
   ]
 };

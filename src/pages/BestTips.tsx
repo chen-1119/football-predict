@@ -6,6 +6,7 @@ import { getPredictionTipDisplay, getPredictionValueLabel, isPredictionOfficialR
 import { getTeamById } from '../services/entities';
 import type { Match, PredictionDetail } from '../services/mockData';
 import { getVisiblePredictions } from '../services/predictionVisibility';
+import { buildPublicRecommendationCopy } from '../services/recommendationCopy';
 
 interface BestTipsProps {
   onSelectMatch: (matchId: string) => void;
@@ -80,8 +81,8 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
       zh: '只展示官方已开售玩法的推荐；胜平负未开售时，不会显示主胜/平/客胜。',
       en: 'Only on-sale official markets are shown. If 1X2 is not on sale, no home/draw/away pick is displayed.'
     },
-    confidence: { zh: '模型可信', en: 'Model Trust' },
-    odds: { zh: 'SP', en: 'Odds' },
+    confidence: { zh: '推荐强度', en: 'Pick Strength' },
+    odds: { zh: '赔率', en: 'Odds' },
     kickoff: { zh: '开赛', en: 'Kickoff' },
     viewDetail: { zh: '查看分析', en: 'Analyze' },
     noTips: {
@@ -93,13 +94,6 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
   };
 
   const t = (key: keyof typeof translations) => translations[key][language] || '';
-
-  const getBestCardNote = (card: TipCard) => {
-    const riskCount = card.prediction.riskTags?.length || 0;
-    return language === 'zh'
-      ? `按已开售玩法给出推荐${riskCount ? `；风险标签 ${riskCount} 个` : ''}。`
-      : `Pick uses an on-sale market${riskCount ? ` with ${riskCount} risk tags` : ''}.`;
-  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
@@ -130,6 +124,12 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
             const homeTeam = getTeamById(match.homeTeamId);
             const awayTeam = getTeamById(match.awayTeamId);
             const hasDisplayOdds = Number.isFinite(prediction.odds) && prediction.odds > 0;
+            const publicCopy = buildPublicRecommendationCopy(match, prediction, language, {
+              pickLabel: getPredictionTipDisplay(prediction, language)
+            });
+            const strengthValue = language === 'zh'
+              ? publicCopy.strengthLabel.replace(/^推荐强度\s*/, '')
+              : publicCopy.strengthLabel.replace(/^Strength\s*/, '');
             const formattedTime = new Date(match.kickoffTime).toLocaleTimeString(undefined, {
               hour: '2-digit',
               minute: '2-digit',
@@ -189,7 +189,7 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
                     <div style={{ textAlign: 'right' }}>
                       <span style={{ fontSize: '0.7rem', color: 'hsl(var(--text-muted))' }}>{t('odds')}</span>
                       <div style={{ fontSize: '1.3rem', fontWeight: '900', color: 'hsl(var(--accent))' }}>
-                        {hasDisplayOdds ? `@${prediction.odds.toFixed(2)}` : (language === 'zh' ? '待SP' : 'SP pending')}
+                        {hasDisplayOdds ? `@${prediction.odds.toFixed(2)}` : (language === 'zh' ? '待开售' : 'Odds pending')}
                       </div>
                     </div>
                   </div>
@@ -211,13 +211,13 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
                           strokeWidth="3.5"
                         />
                       </svg>
-                      <span style={{ position: 'absolute', fontSize: '0.75rem', fontWeight: '800' }}>{prediction.trustScore || 0}%</span>
+                      <span style={{ position: 'absolute', fontSize: '0.7rem', fontWeight: '800' }}>{strengthValue}</span>
                     </div>
 
                     <div>
                       <span style={{ fontSize: '0.7rem', color: 'hsl(var(--text-muted))', display: 'block' }}>{t('confidence')}</span>
                       <span style={{ fontSize: '0.825rem', color: 'hsl(var(--text-secondary))', fontWeight: '500' }}>
-                        {getBestCardNote(card)}
+                        {publicCopy.reasons[0]}
                       </span>
                     </div>
                   </div>

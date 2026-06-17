@@ -184,11 +184,11 @@ export function getMatchSignal(match: Match): MatchSignal {
       label: labels.watch,
       note: {
         zh: bestIsReference
-          ? '已给出模型方向，但价值边际不厚；重点看临场 SP 和让球盘是否继续同向。'
-          : '等待官方 SP 或让球盘补强后再给出方向。',
+          ? '已给出参考方向，但赔率优势不厚；重点看临场赔率和让球盘是否继续同向。'
+          : '等待官方赔率或让球盘补强后再给出方向。',
         en: bestIsReference
-          ? 'A model direction is shown, but the edge is thin; watch late SP and handicap alignment.'
-          : 'Wait for official SP or handicap movement before publishing a direction.'
+          ? 'A reference direction is shown, but the edge is thin; watch late odds and handicap alignment.'
+          : 'Wait for official odds or handicap movement before publishing a direction.'
       },
       tone: 'warning',
       trustScore,
@@ -206,8 +206,8 @@ export function getMatchSignal(match: Match): MatchSignal {
       category: 'watch',
       label: labels.watch,
       note: {
-        zh: '当前可信度不足，等待下一轮 SP 快照确认。',
-        en: 'Confidence is thin; wait for the next SP snapshot.'
+        zh: '当前推荐强度不足，等待下一轮赔率快照确认。',
+        en: 'Pick strength is thin; wait for the next odds snapshot.'
       },
       tone: 'warning',
       trustScore,
@@ -251,8 +251,8 @@ export function getMatchSignal(match: Match): MatchSignal {
       category: 'value',
       label: labels.value,
       note: {
-        zh: '这是盘口分歧下的价值观察，不按稳胆处理；重点复核临场 SP、让球盘和风险标签是否继续同向。',
-        en: 'This is a value direction under market disagreement, not a banker. Recheck late SP, handicap and risk tags.'
+        zh: '这是赔率意见不一致下的价值观察，不按稳胆处理；重点复核临场赔率、让球盘和风险提示是否继续同向。',
+        en: 'This is a value direction under market disagreement, not a banker. Recheck late odds, handicap and risk notes.'
       },
       tone: 'warning',
       trustScore,
@@ -273,15 +273,15 @@ export function getMatchSignal(match: Match): MatchSignal {
       label: labels.avoid,
       note: {
         zh: selectedIsNotModelLeader
-          ? '当前方向与最终概率首选不一致，等待下一次 SP 快照确认。'
+          ? '当前方向与综合判断首选不一致，等待下一次赔率快照确认。'
           : preMatchRisk.score >= 55
             ? `冷门风险 ${preMatchRisk.score} 偏高，先降级为参考；重点复核${preMatchRisk.primaryReason.zh}。`
-          : '条件没有完全同向，推荐方向需要临场 SP 复核。',
+          : '条件没有完全同向，推荐方向需要临场赔率复核。',
         en: selectedIsNotModelLeader
-          ? 'The selected pick is not aligned with the final probability leader. Downgrade and wait for the next SP snapshot.'
+          ? 'The selected pick is not aligned with the main read. Downgrade and wait for the next odds snapshot.'
           : preMatchRisk.score >= 55
             ? `Upset risk ${preMatchRisk.score} is elevated. Downgrade to reference and recheck ${preMatchRisk.primaryReason.en}.`
-          : 'Multiple risk tags overlap. Lower priority or wait for late SP.'
+          : 'Multiple risk notes overlap. Lower priority or wait for late odds.'
       },
       tone: 'warning',
       trustScore,
@@ -295,7 +295,7 @@ export function getMatchSignal(match: Match): MatchSignal {
       label: labels.lean,
       note: {
         zh: probabilityTooLow
-          ? '已有主方向，但最终概率未到高可信标准，不包装成稳胆。'
+          ? '已有主方向，但推荐强度未到稳胆标准，不包装成稳胆。'
           : '已有主方向，但第一方向与第二方向差距偏小，需要保留防平或防冷。',
         en: probabilityTooLow
           ? 'A lean is published, but final probability is below the steady threshold.'
@@ -320,8 +320,8 @@ export function getMatchSignal(match: Match): MatchSignal {
       category: 'steady',
       label: labels.steady,
       note: {
-        zh: '官方 SP、最终概率、模型可信度和风险标签相对一致，可列入高可信候选。',
-        en: 'Official SP, final probability, model confidence, and risk tags are aligned.'
+        zh: '官方赔率、综合判断、推荐强度和风险提示相对一致，可列入高信心候选。',
+        en: 'Official odds, main read, pick strength, and risk notes are aligned.'
       },
       tone: 'success',
       trustScore,
@@ -333,8 +333,8 @@ export function getMatchSignal(match: Match): MatchSignal {
     category: 'lean',
     label: labels.lean,
     note: {
-      zh: '已给主方向，但仍存在风险标签或 SP 走势待复核。',
-      en: 'A main lean is published, while risk tags or SP movement still need checking.'
+      zh: '已给主方向，但仍存在风险提示或赔率走势待复核。',
+      en: 'A main lean is published, while risk notes or odds movement still need checking.'
     },
     tone: 'success',
     trustScore,

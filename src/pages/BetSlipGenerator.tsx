@@ -11,6 +11,7 @@ import {
 } from '../services/bettingDisplay';
 import { getTeamById } from '../services/entities';
 import { TeamBadge } from '../components/TeamBadge';
+import { buildPublicRecommendationCopy } from '../services/recommendationCopy';
 
 type TimeWindow = '1' | '2' | '3';
 const ENABLED_BET_SLIP_MARKETS: BetSlipMarketType[] = ['1X2', 'HHAD'];
@@ -67,19 +68,19 @@ export const BetSlipGenerator: React.FC = () => {
   const translations = {
     title: { zh: '串关参考生成器', en: 'Accumulator Reference' },
     subtitle: {
-      zh: '只按官方胜平负、让球胜平负 SP、可信度和时间窗口筛选候选方向；结果仅供赛前参考。',
-      en: 'Open accumulator builder using SP, confidence, and time-window filters. Results are for pre-match reference only.' 
+      zh: '只按官方胜平负、让球胜平负赔率、推荐强度和时间窗口筛选候选方向；结果仅供赛前参考。',
+      en: 'Open accumulator builder using odds, pick strength, and time-window filters. Results are for pre-match reference only.'
     },
-    openNotice: { zh: '当前为公开体验版：所有筛选项与模型参考暂时开放。', en: 'Open preview: all filters and model references are temporarily available.' },
+    openNotice: { zh: '当前为公开体验版：所有筛选项与推荐内容暂时开放。', en: 'Open preview: all filters and recommendation content are temporarily available.' },
     referenceNotice: { zh: '提示：页面内容只供足球数据研究和赛前讨论参考，不构成投注建议。', en: 'Note: this page is for football data research and pre-match discussion only, not betting advice.' },
     targetOddsLabel: { zh: '目标组合值', en: 'Target Combined Value' },
     matchCountLabel: { zh: '串关比赛数量', en: 'Number of Selections' },
     auto: { zh: '智能推荐 (Auto)', en: 'Auto' },
-    marketsLabel: { zh: '包含预测市场', en: 'Markets to Include' },
+    marketsLabel: { zh: '包含推荐玩法', en: 'Markets to Include' },
     minOddsLabel: { zh: '单场最低值', en: 'Min Single Value' },
     maxOddsLabel: { zh: '单场最高值', en: 'Max Single Value' },
     timeWindowLabel: { zh: '比赛时间窗口', en: 'Time Window' },
-    minTrustLabel: { zh: '最低可信度要求', en: 'Min Confidence Threshold' },
+    minTrustLabel: { zh: '最低推荐强度要求', en: 'Min Pick Strength' },
     onlyImportantLabel: { zh: '仅限顶级联赛', en: 'Only Elite Leagues' },
     generateBtn: { zh: '生成参考组合', en: 'Generate Reference Combo' },
     resetBtn: { zh: '重置配置', en: 'Reset Filters' },
@@ -88,7 +89,7 @@ export const BetSlipGenerator: React.FC = () => {
     slipTitle: { zh: '参考组合票据', en: 'Reference Ticket' },
     slipSummary: { zh: '参考汇总', en: 'Summary' },
     totalOdds: { zh: '组合总值', en: 'Total Value' },
-    avgTrust: { zh: '平均可信度', en: 'Avg Confidence' },
+    avgTrust: { zh: '平均推荐强度', en: 'Avg Pick Strength' },
     activeSlip: { zh: '公开体验：', en: 'Open Preview:' }
   };
 
@@ -432,6 +433,12 @@ export const BetSlipGenerator: React.FC = () => {
                   {generationResult.selections.map((sel, sIdx) => {
                     const hTeam = getTeamById(sel.match.homeTeamId);
                     const aTeam = getTeamById(sel.match.awayTeamId);
+                    const publicCopy = buildPublicRecommendationCopy(sel.match, sel.prediction, language, {
+                      pickLabel: getPredictionTipDisplay(sel.prediction, language)
+                    });
+                    const strengthValue = language === 'zh'
+                      ? publicCopy.strengthLabel.replace(/^推荐强度\s*/, '')
+                      : publicCopy.strengthLabel.replace(/^Strength\s*/, '');
 
                     return (
                       <div 
@@ -466,14 +473,12 @@ export const BetSlipGenerator: React.FC = () => {
                           </span>
                           <div style={{ display: 'flex', gap: '0.75rem', fontSize: '0.8rem' }}>
                             <span>{getPredictionValueLabel(sel.prediction, language)}: <strong style={{ color: 'hsl(var(--accent))' }}>@{sel.prediction.odds.toFixed(2)}</strong></span>
-                            <span>可信度: <strong style={{ color: 'hsl(var(--primary))' }}>{sel.prediction.trustScore}%</strong></span>
+                            <span>推荐强度: <strong style={{ color: 'hsl(var(--primary))' }}>{strengthValue}</strong></span>
                           </div>
                         </div>
-                        {sel.prediction.explanation?.[language] && (
-                          <p style={{ margin: 0, fontSize: '0.75rem', color: 'hsl(var(--text-secondary))', lineHeight: 1.5 }}>
-                            {sel.prediction.explanation[language]}
-                          </p>
-                        )}
+                        <p style={{ margin: 0, fontSize: '0.75rem', color: 'hsl(var(--text-secondary))', lineHeight: 1.5 }}>
+                          {publicCopy.reasons[0]}
+                        </p>
                       </div>
                     );
                   })}

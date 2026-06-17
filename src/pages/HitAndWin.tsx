@@ -117,7 +117,7 @@ export const HitAndWin: React.FC<HitAndWinProps> = () => {
     submittedText: { zh: '已上传到预测墙。', en: 'Uploaded to the prediction wall.' },
     unselectedWarning: { zh: '请至少选择 1 场比赛。', en: 'Please pick at least one match.' },
     commentWarning: { zh: '请填写昵称和预测观点。', en: 'Please add a nickname and comment.' },
-    noMatches: { zh: '当前暂无可上传的赛前场次，等下一轮官方 SP 更新。', en: 'No pre-match fixtures are available yet. Check after the next official SP update.' },
+    noMatches: { zh: '当前暂无可上传的赛前场次，等下一轮官方赔率更新。', en: 'No pre-match fixtures are available yet. Check after the next official odds update.' },
     boardTitle: { zh: '大家的预测', en: 'Community Picks' },
     noEntries: { zh: '还没有人上传预测，先来占个前排。', en: 'No uploads yet. Be the first one.' },
     pickCount: { zh: '预测', en: 'Picks' },

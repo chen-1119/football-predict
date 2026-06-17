@@ -13,21 +13,20 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContextCore';
 import { formatBeijingDateString, getDateStringOffset, leagues } from '../services/mockData';
-import type { Country, League, Match, PredictionDetail, Team } from '../services/mockData';
+import type { Country, League, Match, Team } from '../services/mockData';
 import {
-  getImpliedProbabilities,
   getOfficialMatchOdds,
   getOfficialResultPoolAvailability,
   getPredictionTipDisplay,
-  getPredictionValueLabel,
-  getSportteryPoolRows,
-  isPredictionOfficialResultPoolAvailable
+  getSportteryPoolRows
 } from '../services/bettingDisplay';
 import { getCountryById, getLeagueById, getTeamById } from '../services/entities';
 import { getMatchSignal, type MatchSignalCategory } from '../services/matchSignal';
 import { buildPreMatchRisk } from '../services/preMatchRisk';
 import { getVisiblePrediction, getVisiblePredictions } from '../services/predictionVisibility';
+import { buildPublicRecommendationCopy, getPublicRiskTags } from '../services/recommendationCopy';
 import { buildFiveHundredDisplay } from '../services/fiveHundredDisplay';
+import { getAvailableResultPools, getDisplayRecommendation } from '../services/displayRecommendation';
 import { TeamBadge } from '../components/TeamBadge';
 import { WorldCupSpotlight } from '../components/WorldCupSpotlight';
 
@@ -116,18 +115,6 @@ const getMatchDisplayLeague = (match: Match): League => {
 const getBestOdds = (match: Match) => {
   const resolvedOdds = getOfficialMatchOdds(match);
   return getBestPrediction(match)?.odds || resolvedOdds.had?.odds.odds1 || resolvedOdds.hhad?.odds.odds1 || 0;
-};
-
-const isReferenceOnlyPrediction = (prediction?: PredictionDetail) => (
-  prediction?.recommendationAction === 'reference' || prediction?.recommendationTier === 'reference'
-);
-
-const getRecommendationTipDisplay = (
-  prediction: PredictionDetail,
-  language: 'zh' | 'en',
-  compact = true
-) => {
-  return getPredictionTipDisplay(prediction, language, compact);
 };
 
 const stripDirectionPrefix = (label: string, language: 'zh' | 'en') => (
@@ -224,192 +211,9 @@ const minutesSinceKickoff = (match: Match) => {
   return Math.floor((Date.now() - kickoffAt) / 60000);
 };
 
-const outcomeLabels = {
-  '1': { zh: '主胜', en: 'Home' },
-  X: { zh: '平局', en: 'Draw' },
-  '2': { zh: '客胜', en: 'Away' }
-} as const;
-
-type OutcomeCode = keyof typeof outcomeLabels;
-
-const isOutcomeCode = (code: string | undefined): code is OutcomeCode => code === '1' || code === 'X' || code === '2';
-
-type OutcomeProbabilityTriplet = {
-  home?: number | null;
-  draw?: number | null;
-  away?: number | null;
-} | null | undefined;
-
-type DisplayRecommendationKind = 'prediction' | 'handicap' | 'outcome' | 'score';
-
-interface DisplayRecommendation {
-  kind: DisplayRecommendationKind;
-  prediction?: PredictionDetail;
-  tipCode?: string;
-  label: string;
-  meta: string;
-  probability: number | null;
-  support: number | null;
-  reason: string;
-}
-
-type RankedOutcome = { code: OutcomeCode; probability: number };
-
-const getRankedOutcomeProbabilities = (probabilities: OutcomeProbabilityTriplet): RankedOutcome[] => ([
-  { code: '1' as OutcomeCode, probability: probabilities?.home },
-  { code: 'X' as OutcomeCode, probability: probabilities?.draw },
-  { code: '2' as OutcomeCode, probability: probabilities?.away }
-])
-  .map((item) => ({ ...item, probability: Number(item.probability) }))
-  .filter((item): item is RankedOutcome => Number.isFinite(item.probability))
-  .sort((a, b) => b.probability - a.probability);
-
-const getOutcomeProbability = (match: Match, code: OutcomeCode, prediction?: PredictionDetail) => {
-  const final = prediction?.oddsPoolCode === 'HHAD'
-    ? match.probabilityModel?.handicap?.scoreImplied
-      || match.probabilityModel?.handicap?.poisson
-      || match.probabilityModel?.handicap?.market
-    : match.probabilityModel?.oneXTwo?.final || match.probabilityModel?.oneXTwo?.market;
-  if (!final) return null;
-  const value = code === '1' ? final.home : code === 'X' ? final.draw : final.away;
-  return Number.isFinite(value) ? Number(value) : null;
-};
-
-const getLeadingOutcome = (match: Match) => {
-  const entries = (['1', 'X', '2'] as OutcomeCode[])
-    .map((code) => ({ code, probability: getOutcomeProbability(match, code) }))
-    .filter((item): item is { code: OutcomeCode; probability: number } => item.probability !== null)
-    .sort((a, b) => b.probability - a.probability);
-
-  if (entries.length >= 2 && entries[0].probability - entries[1].probability < 2) return null;
-
-  return entries[0] || null;
-};
-
-const getTopOutcomeFromProbabilities = (probabilities: OutcomeProbabilityTriplet) => (
-  getRankedOutcomeProbabilities(probabilities)[0] || null
-);
-
-const getHandicapRead = (match: Match) => {
-  const modelRows = getRankedOutcomeProbabilities(
-    match.probabilityModel?.handicap?.scoreImplied
-      || match.probabilityModel?.handicap?.poisson
-      || match.probabilityModel?.handicap?.market
-  );
-  const resolvedOdds = getOfficialMatchOdds(match);
-  const marketRows = getRankedOutcomeProbabilities(
-    match.probabilityModel?.handicap?.market
-      || getImpliedProbabilities(resolvedOdds.hhad?.odds)
-  );
-  const modelTop = modelRows[0] || null;
-  const modelSecond = modelRows[1] || null;
-  const marketTop = marketRows[0] || null;
-  const marketSupport = modelTop
-    ? marketRows.find((item) => item.code === modelTop.code)?.probability ?? null
-    : null;
-
-  return {
-    modelTop,
-    modelGap: modelTop && modelSecond ? modelTop.probability - modelSecond.probability : 0,
-    marketTop,
-    marketSupport,
-    modelMarketSpread: modelTop && marketSupport !== null ? Math.abs(modelTop.probability - marketSupport) : null
-  };
-};
-
-const isHandicapMarketContradicted = (match: Match, prediction?: PredictionDetail) => {
-  if (prediction?.oddsPoolCode !== 'HHAD' || !isOutcomeCode(prediction.tipCode)) return false;
-  const read = getHandicapRead(match);
-  const support = read.marketSupport;
-  return Boolean(
-    read.modelTop
-    && read.marketTop
-    && read.modelTop.code === prediction.tipCode
-    && read.marketTop.code !== prediction.tipCode
-    && support !== null
-    && support < 38
-  );
-};
-
-const getHandicapOverride = (match: Match, promotedPrediction?: PredictionDetail) => {
-  if (promotedPrediction?.oddsPoolCode === 'HHAD' && !isHandicapMarketContradicted(match, promotedPrediction)) {
-    return null;
-  }
-
-  const read = getHandicapRead(match);
-  if (!read.modelTop) return null;
-  if (read.marketTop && read.marketTop.code !== read.modelTop.code) return null;
-  if (read.marketSupport === null) return null;
-
-  const promotedIsWeak = !promotedPrediction
-    || promotedPrediction.tipCode === 'WATCH'
-    || isReferenceOnlyPrediction(promotedPrediction)
-    || Number(promotedPrediction.trustScore || 0) <= 45;
-  if (!promotedIsWeak) return null;
-
-  const modelAlignedWithMarket = read.marketTop?.code === read.modelTop.code;
-  const spreadOk = read.modelMarketSpread === null
-    || read.modelMarketSpread <= (read.modelTop.probability >= 64 ? 18 : 22);
-  const strongModel = read.modelTop.probability >= 56
-    && read.modelGap >= 15
-    && modelAlignedWithMarket
-    && read.marketSupport >= 38
-    && spreadOk;
-  const marketRescue = read.modelTop.probability >= 45
-    && read.modelGap >= 14
-    && modelAlignedWithMarket
-    && read.marketSupport >= 48;
-
-  if (!strongModel && !marketRescue) return null;
-
-  const fauxPrediction: PredictionDetail = {
-    marketType: '1X2',
-    oddsPoolCode: 'HHAD',
-    handicapLine: match.handicapLine,
-    tipCode: read.modelTop.code,
-    tipLabel: { zh: getSimpleHandicapLabel(read.modelTop.code, 'zh'), en: getSimpleHandicapLabel(read.modelTop.code, 'en') },
-    odds: getOutcomeOddsValue(match, 'HHAD', read.modelTop.code),
-    trustScore: Math.round(Math.max(read.modelTop.probability, read.marketSupport)),
-    recommendationAction: 'reference',
-    recommendationTier: 'handicap-override-reference',
-    explanation: { zh: '', en: '' },
-    visibilityStatus: 'FREE',
-    resultStatus: 'PENDING'
-  };
-
-  return { prediction: fauxPrediction, top: read.modelTop, support: read.marketSupport };
-};
-
-const getOneXTwoSupport = (match: Match, code: string | undefined, prediction?: PredictionDetail) => {
-  if (!isOutcomeCode(code)) return null;
-  const resolvedOdds = getOfficialMatchOdds(match);
-  const probabilities = getImpliedProbabilities(
-    prediction?.oddsPoolCode === 'HHAD'
-      ? resolvedOdds.hhad?.odds
-      : resolvedOdds.had?.odds
-  );
-  if (!probabilities) return null;
-  return code === '1' ? probabilities.home : code === 'X' ? probabilities.draw : probabilities.away;
-};
-
-const getOutcomeOddsValue = (match: Match, poolCode: 'HAD' | 'HHAD', code: OutcomeCode) => {
-  const resolvedOdds = getOfficialMatchOdds(match);
-  const odds = poolCode === 'HHAD' ? resolvedOdds.hhad?.odds : resolvedOdds.had?.odds;
-  const value = code === '1' ? odds?.odds1 : code === 'X' ? odds?.oddsX : odds?.odds2;
-  return Number.isFinite(value) ? Number(value) : 0;
-};
-
 const getHomePageOddsRows = (match: Match, language: 'zh' | 'en') => (
   getSportteryPoolRows(match, language).filter((row) => row.odds)
 );
-
-const getAvailableResultPools = (match: Match) => {
-  return getOfficialResultPoolAvailability(match);
-};
-
-const isPredictionPoolAvailable = (match: Match, prediction: PredictionDetail | undefined) => {
-  return isPredictionOfficialResultPoolAvailable(match, prediction);
-};
 
 const getRiskTags = (match: Match, limit = 3) => {
   const seen = new Set<string>();
@@ -425,211 +229,17 @@ const getRiskTags = (match: Match, limit = 3) => {
 };
 
 const getHomePageRiskTags = (match: Match, limit = 3) => (
-  getRiskTags(match, limit + 4)
-    .filter((tag) => {
-      const zh = tag.zh || '';
-      const en = (tag.en || '').toLowerCase();
-      return !zh.includes('让球')
-        && !zh.includes('盘口')
-        && !en.includes('handicap')
-        && !en.includes('market disagreement');
-    })
-    .slice(0, limit)
+  getPublicRiskTags(getRiskTags(match, limit + 6), limit)
 );
-
-const getSimpleOutcomeLabel = (match: Match, code: OutcomeCode, language: 'zh' | 'en') => {
-  const homeTeam = getMatchDisplayTeam(match, 'home');
-  const awayTeam = getMatchDisplayTeam(match, 'away');
-  const homeName = homeTeam.shortName[language] || homeTeam.name[language];
-  const awayName = awayTeam.shortName[language] || awayTeam.name[language];
-
-  if (language === 'zh') {
-    if (code === '1') return `主胜 ${homeName}`;
-    if (code === 'X') return '平局';
-    return `客胜 ${awayName}`;
-  }
-
-  if (code === '1') return `Home ${homeName}`;
-  if (code === 'X') return 'Draw';
-  return `Away ${awayName}`;
-};
-
-const getSimpleHandicapLabel = (code: OutcomeCode, language: 'zh' | 'en') => {
-  if (language === 'zh') {
-    if (code === '1') return '让胜';
-    if (code === 'X') return '让平';
-    return '让负';
-  }
-
-  if (code === '1') return 'Handicap home';
-  if (code === 'X') return 'Handicap draw';
-  return 'Handicap away';
-};
-
-const formatDisplayMeta = (
-  prediction: PredictionDetail | undefined,
-  probability: number | null,
-  language: 'zh' | 'en'
-) => {
-  if (prediction && Number.isFinite(prediction.odds) && prediction.odds > 0) {
-    return `${getPredictionValueLabel(prediction, language)} ${prediction.odds.toFixed(2)}`;
-  }
-  if (probability !== null && Number.isFinite(probability)) {
-    return `${language === 'zh' ? '模型' : 'Model'} ${Math.round(probability)}%`;
-  }
-  if (prediction && Number.isFinite(prediction.trustScore)) {
-    return `${language === 'zh' ? '可信' : 'Trust'} ${Math.round(prediction.trustScore)}%`;
-  }
-  return '--';
-};
-
-const getDisplayReasonForKind = (
-  kind: DisplayRecommendationKind,
-  language: 'zh' | 'en'
-) => {
-  const reasons: Record<DisplayRecommendationKind, Record<'zh' | 'en', string>> = {
-    prediction: {
-      zh: '按已开售玩法给出推荐，临场 SP 变化时再复核。',
-      en: 'Recommendation uses an on-sale market and should be rechecked against late SP.'
-    },
-    handicap: {
-      zh: '胜平负未开售或不适合主推，本场直接看让球胜平负。',
-      en: '1X2 is unavailable or weak, so this fixture uses the handicap result.'
-    },
-    outcome: {
-      zh: '让球未开售时，按胜平负已开售玩法给出方向。',
-      en: 'HHAD is unavailable, so the recommendation uses the on-sale 1X2 market.'
-    },
-    score: {
-      zh: '比分只做推演，不作为胜负推荐。',
-      en: 'Score heat is analysis only, not a result recommendation.'
-    }
-  };
-
-  return reasons[kind][language];
-};
-
-const getDisplayRecommendation = (match: Match, language: 'zh' | 'en'): DisplayRecommendation | null => {
-  const predictions = match.predictions || [];
-  const { hasHad, hasHhad } = getAvailableResultPools(match);
-  const rawPromotedPrediction = [
-    predictions.find((prediction) => prediction.marketType === 'BEST' && isPredictionPoolAvailable(match, prediction)),
-    predictions.find((prediction) => prediction.marketType === '1X2' && isPredictionPoolAvailable(match, prediction))
-  ].find(Boolean);
-  const promotedPrediction = rawPromotedPrediction && !isHandicapMarketContradicted(match, rawPromotedPrediction)
-    ? rawPromotedPrediction
-    : undefined;
-  const handicapOverride = hasHhad ? getHandicapOverride(match, promotedPrediction) : null;
-
-  if (handicapOverride) {
-    return {
-      kind: 'handicap',
-      prediction: handicapOverride.prediction,
-      tipCode: handicapOverride.top.code,
-      label: getSimpleHandicapLabel(handicapOverride.top.code, language),
-      meta: formatDisplayMeta(handicapOverride.prediction, handicapOverride.top.probability, language),
-      probability: handicapOverride.top.probability,
-      support: handicapOverride.support,
-      reason: getDisplayReasonForKind('handicap', language)
-    };
-  }
-
-  if (promotedPrediction) {
-    const probability = getOutcomeProbability(match, promotedPrediction.tipCode as OutcomeCode, promotedPrediction);
-    const cleanProbability = Number.isFinite(probability) ? Number(probability) : null;
-    const label = promotedPrediction.oddsPoolCode === 'HHAD'
-      ? getSimpleHandicapLabel(promotedPrediction.tipCode as OutcomeCode, language)
-      : getSimpleOutcomeLabel(match, promotedPrediction.tipCode as OutcomeCode, language);
-
-    return {
-      kind: 'prediction',
-      prediction: promotedPrediction,
-      tipCode: promotedPrediction.tipCode,
-      label,
-      meta: formatDisplayMeta(promotedPrediction, cleanProbability, language),
-      probability: cleanProbability,
-      support: getOneXTwoSupport(match, promotedPrediction.tipCode, promotedPrediction),
-      reason: getDisplayReasonForKind('prediction', language)
-    };
-  }
-
-  const handicapRead = hasHhad ? getHandicapRead(match) : null;
-  const handicapTop = handicapRead?.modelTop || null;
-  const handicapMarketTop = handicapRead?.marketTop || null;
-  const handicapMarketFallback = !hasHad && hasHhad ? handicapMarketTop : null;
-  const handicapFallbackAllowed = Boolean(
-    handicapTop
-    && (!handicapMarketTop || handicapMarketTop.code === handicapTop.code)
-  );
-  const handicapDisplayTop = handicapTop && handicapFallbackAllowed
-    ? handicapTop
-    : handicapMarketFallback;
-  const handicapDisplaySupport = handicapDisplayTop?.code === handicapRead?.modelTop?.code
-    ? handicapRead?.marketSupport ?? null
-    : handicapDisplayTop?.probability ?? null;
-
-  if (hasHhad && handicapDisplayTop) {
-    const fauxPrediction: PredictionDetail = {
-      marketType: '1X2',
-      oddsPoolCode: 'HHAD',
-      handicapLine: match.handicapLine,
-      tipCode: handicapDisplayTop.code,
-      tipLabel: { zh: getSimpleHandicapLabel(handicapDisplayTop.code, 'zh'), en: getSimpleHandicapLabel(handicapDisplayTop.code, 'en') },
-      odds: getOutcomeOddsValue(match, 'HHAD', handicapDisplayTop.code),
-      trustScore: Math.round(handicapDisplayTop.probability),
-      recommendationAction: 'reference',
-      recommendationTier: 'reference',
-      explanation: { zh: '', en: '' },
-      visibilityStatus: 'FREE',
-      resultStatus: 'PENDING'
-    };
-
-    return {
-      kind: 'handicap',
-      prediction: fauxPrediction,
-      tipCode: handicapDisplayTop.code,
-      label: getSimpleHandicapLabel(handicapDisplayTop.code, language),
-      meta: formatDisplayMeta(fauxPrediction, handicapDisplayTop.probability, language),
-      probability: handicapDisplayTop.probability,
-      support: handicapDisplaySupport,
-      reason: !hasHad && hasHhad
-        ? (language === 'zh'
-          ? '普通胜平负未开售，本场直接按让球胜平负推荐。'
-          : 'Standard 1X2 is not on sale, so this fixture is recommended through HHAD.')
-        : getDisplayReasonForKind('handicap', language)
-    };
-  }
-
-  const outcomeTop = hasHad ? getTopOutcomeFromProbabilities(
-    match.probabilityModel?.oneXTwo?.final
-      || match.probabilityModel?.oneXTwo?.scoreImplied
-      || match.probabilityModel?.oneXTwo?.poisson
-      || match.probabilityModel?.oneXTwo?.market
-  ) : null;
-
-  if (outcomeTop) {
-    return {
-      kind: 'outcome',
-      tipCode: outcomeTop.code,
-      label: getSimpleOutcomeLabel(match, outcomeTop.code, language),
-      meta: formatDisplayMeta(undefined, outcomeTop.probability, language),
-      probability: outcomeTop.probability,
-      support: getOneXTwoSupport(match, outcomeTop.code),
-      reason: getDisplayReasonForKind('outcome', language)
-    };
-  }
-
-  return null;
-};
 
 const getDecisionReason = (category: MatchSignalCategory, language: 'zh' | 'en') => {
   const reasons: Record<MatchSignalCategory, Record<'zh' | 'en', string>> = {
-    steady: { zh: '赔率、概率和风险基本同向', en: 'Odds, probability, and risk align' },
+    steady: { zh: '赔率、推荐和风险基本同向', en: 'Odds, pick, and risk align' },
     lean: { zh: '已按开售玩法给出方向', en: 'Direction is based on an on-sale market' },
     value: { zh: '有冷门变量，临场再复核', en: 'Upset variables exist; recheck late' },
-    watch: { zh: '等待官方 SP 开售或更新', en: 'Waiting for official SP sale or refresh' },
+    watch: { zh: '等待官方赔率开售或更新', en: 'Waiting for official odds sale or refresh' },
     avoid: { zh: '风险偏高，推荐需临场复核', en: 'Risk is elevated; recheck before kickoff' },
-    unavailable: { zh: '待官方 SP 开售', en: 'Waiting for official SP' },
+    unavailable: { zh: '待官方赔率开售', en: 'Waiting for official odds' },
     finished: { zh: '按赛果复盘', en: 'Review by final result' }
   };
 
@@ -678,8 +288,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     unavailable: { zh: '待开售', en: 'Pending' },
     sortTitle: { zh: '排序', en: 'Sort' },
     time: { zh: '开赛时间', en: 'Time' },
-    trust: { zh: '可信度', en: 'Trust' },
-    odds: { zh: 'SP 值', en: 'Odds' },
+    trust: { zh: '推荐强度', en: 'Pick Strength' },
+    odds: { zh: '赔率', en: 'Odds' },
     reset: { zh: '重置', en: 'Reset' },
     noMatches: { zh: '这个日期暂无可用比赛预测。', en: 'No scheduled matches found for this day.' },
     noQualifiedPicks: { zh: '当前没有已开售玩法可推荐的比赛。', en: 'No on-sale recommendation is available yet.' },
@@ -696,7 +306,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     signalSummary: { zh: '推荐概览', en: 'Recommendation Summary' },
     avgTrust: { zh: '今日状态', en: 'Today Status' },
     riskPaused: { zh: '风控暂停', en: 'Risk paused' },
-    riskPausedNote: { zh: '暂无已开售推荐，等待下一轮 SP', en: 'No on-sale pick yet; wait for next SP check' },
+    riskPausedNote: { zh: '暂无已开售推荐，等待下一轮赔率更新', en: 'No on-sale pick yet; wait for next odds check' },
     hitCooling: { zh: '命中冷却', en: 'Cooling' },
     hitCoolingNote: { zh: '近期命中偏低，推荐门槛保持收紧', en: 'Recent hit rate is low; gates stay tight' },
     dataStatusTitle: { zh: '数据同步', en: 'Data Sync' },
@@ -727,8 +337,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     liveScorePending: { zh: '赛中待比分', en: 'Live, score pending' },
     awaitingResult: { zh: '等待官方赛果', en: 'Awaiting official result' },
     teams: { zh: '对阵双方', en: 'Teams' },
-    oddsHeader: { zh: '胜平负/让球 SP', en: '1X2 / HHAD SP' },
-    closed: { zh: '等待官方SP', en: 'SP pending' },
+    oddsHeader: { zh: '胜平负/让球赔率', en: '1X2 / HHAD Odds' },
+    closed: { zh: '等待官方赔率', en: 'Official odds pending' },
     archivedOdds: { zh: '胜平负归档', en: '1X2 archived' },
     hit: { zh: '命中', en: 'Hit' },
     miss: { zh: '未中', en: 'Miss' },
@@ -951,35 +561,23 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     const cardRiskHint = getCardRiskHint(preMatchRisk, match.status === 'FINISHED');
     const fiveHundredDisplay = buildFiveHundredDisplay(match, language);
     const displayRecommendation = getDisplayRecommendation(match, language);
-    const poolRows = getHomePageOddsRows(match, language).filter((row) => row.odds);
     const sportteryMeta = getSportteryMeta(match, language);
     const hasReferenceLean = Boolean(displayRecommendation);
     const directionLabel = displayRecommendation?.label || '';
+    const publicCopy = buildPublicRecommendationCopy(match, displayRecommendation?.prediction, language, {
+      pickLabel: directionLabel,
+      fallbackReason: displayRecommendation?.reason || getDecisionReason(signal.category, language)
+    });
     const cautionText = hasReferenceLean
-      ? (language === 'zh' ? '按已开售玩法展示' : 'Based on an on-sale market')
-      : (language === 'zh' ? '等待官方 SP 开售' : 'Await official SP sale');
+      ? publicCopy.updateRule
+      : (language === 'zh' ? '等待官方赔率开售' : 'Await official odds');
     const pickText = hasReferenceLean && displayRecommendation
-      ? language === 'zh'
-        ? `推荐方向 ${directionLabel}`
-        : `Pick ${directionLabel}`
+      ? publicCopy.title
       : signal.category === 'avoid'
         ? (language === 'zh' ? '推荐待临场复核' : 'Pick needs late recheck')
-        : (language === 'zh' ? '待官方开售' : 'Pending official sale');
-    const statusBadge = displayRecommendation?.prediction?.oddsPoolCode === 'HHAD' || displayRecommendation?.kind === 'handicap'
-      ? (language === 'zh' ? '让球' : 'HHAD')
-      : displayRecommendation
-        ? (language === 'zh' ? '胜平负' : '1X2')
-        : (language === 'zh' ? '待开售' : 'Pending');
-    const oddsText = poolRows.length > 0
-      ? poolRows.map((row) => {
-        if (!row.odds) return '';
-        const rowLabel = row.poolCode === 'HHAD' && row.handicap
-          ? `${row.label}(${row.handicap})`
-          : row.label;
-        return `${rowLabel} ${row.odds.odds1.toFixed(2)}/${row.odds.oddsX.toFixed(2)}/${row.odds.odds2.toFixed(2)}`;
-      }).filter(Boolean).join(' · ')
-      : (language === 'zh' ? '胜平负/让球未开售' : '1X2/HHAD SP pending');
-    const reason = displayRecommendation?.reason || getDecisionReason(signal.category, language);
+        : publicCopy.title;
+    const statusBadge = publicCopy.marketLabel;
+    const reason = publicCopy.reasons[0] || displayRecommendation?.reason || getDecisionReason(signal.category, language);
 
     return (
       <button
@@ -1022,7 +620,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
             {fiveHundredDisplay.cardHint.label}
           </span>
         )}
-        <span className="recommendation-odds">{oddsText}</span>
+        <span className="recommendation-odds">{publicCopy.strengthLabel} · {publicCopy.oddsLabel}</span>
         <span className="recommendation-reason">{reason}</span>
       </button>
     );
@@ -1036,48 +634,34 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     const fiveHundredDisplay = buildFiveHundredDisplay(match, language);
     const displayRecommendation = getDisplayRecommendation(match, language);
     const pickedPrediction = displayRecommendation?.prediction;
-    const leadingOutcome = getLeadingOutcome(match);
-    const leadProbability = displayRecommendation?.probability ?? (pickedPrediction && isOutcomeCode(pickedPrediction.tipCode)
-      ? getOutcomeProbability(match, pickedPrediction.tipCode, pickedPrediction)
-      : leadingOutcome?.probability ?? null);
-    const leadCode = displayRecommendation?.tipCode && isOutcomeCode(displayRecommendation.tipCode)
-      ? displayRecommendation.tipCode
-      : pickedPrediction && isOutcomeCode(pickedPrediction.tipCode)
-      ? pickedPrediction.tipCode
-      : leadingOutcome?.code;
-    const oneXTwoSupport = displayRecommendation?.support ?? getOneXTwoSupport(match, leadCode, pickedPrediction);
     const riskTags = getHomePageRiskTags(match);
     const showHit = isFinished && displayRecommendation?.prediction?.resultStatus === 'WON';
     const showMiss = isFinished && displayRecommendation?.prediction?.resultStatus === 'LOST';
     const isReferencePick = false;
-    const poolStatus = displayRecommendation
-      ? (displayRecommendation.prediction?.oddsPoolCode === 'HHAD' || displayRecommendation.kind === 'handicap'
-        ? (language === 'zh' ? '让球' : 'HHAD')
-        : (language === 'zh' ? '胜平负' : '1X2'))
-      : isFinished
-        ? (language === 'zh' ? '复盘' : 'Review')
-        : (language === 'zh' ? '待开售' : 'Pending');
     const directionLabel = displayRecommendation?.label || (pickedPrediction
-      ? stripDirectionPrefix(getRecommendationTipDisplay(pickedPrediction, language, true), language)
+      ? stripDirectionPrefix(getPredictionTipDisplay(pickedPrediction, language, true), language)
       : '');
+    const publicCopy = buildPublicRecommendationCopy(match, pickedPrediction, language, {
+      pickLabel: directionLabel,
+      fallbackReason: displayRecommendation?.reason || getDecisionReason(signal.category, language)
+    });
+    const poolStatus = publicCopy.marketLabel;
     const primaryLabel = displayRecommendation
-      ? language === 'zh'
-        ? `推荐方向 ${directionLabel}`
-        : `Pick ${directionLabel}`
+      ? publicCopy.title
       : pickedPrediction
-        ? language === 'zh'
-          ? `推荐方向 ${directionLabel}`
-          : `Pick ${directionLabel}`
+        ? publicCopy.title
       : '';
     const fallbackPrimaryLabel = signal.category === 'finished'
         ? (language === 'zh' ? '赛后复盘' : 'Review')
-        : (language === 'zh' ? '待官方开售' : 'Pending official sale');
-    const primaryMeta = displayRecommendation?.meta || (pickedPrediction && pickedPrediction.odds > 0
-      ? `${getPredictionValueLabel(pickedPrediction, language)} ${pickedPrediction.odds.toFixed(2)}`
-      : leadCode && leadProbability !== null
-        ? `${outcomeLabels[leadCode][language]} ${Math.round(leadProbability)}%`
-        : '--');
-    const shortReason = displayRecommendation?.reason || getDecisionReason(signal.category, language);
+        : publicCopy.title;
+    const primaryMeta = publicCopy.strengthLabel;
+    const shortReason = publicCopy.reasons[0] || displayRecommendation?.reason || getDecisionReason(signal.category, language);
+    const strengthValue = language === 'zh'
+      ? publicCopy.strengthLabel.replace(/^推荐强度\s*/, '')
+      : publicCopy.strengthLabel.replace(/^Strength\s*/, '');
+    const oddsValue = language === 'zh'
+      ? publicCopy.oddsLabel.replace(/^赔率\s*/, '')
+      : publicCopy.oddsLabel.replace(/^Odds\s*/, '');
 
     return (
       <div className={`decision-card is-${signal.category} ${displayRecommendation || pickedPrediction ? 'has-pick' : 'is-watch-only'} ${isReferencePick ? 'is-reference' : ''} ${showHit ? 'is-hit' : ''} ${showMiss ? 'is-miss' : ''}`}>
@@ -1090,12 +674,12 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
 
         <div className="decision-facts">
           <span>
-            {language === 'zh' ? '模型' : 'Model'}
-            <strong>{leadProbability === null ? '--' : `${Math.round(leadProbability)}%`}</strong>
+            {language === 'zh' ? '强度' : 'Strength'}
+            <strong>{strengthValue}</strong>
           </span>
           <span>
-            {language === 'zh' ? 'SP' : 'SP'}
-            <strong>{oneXTwoSupport === null ? '--' : `${oneXTwoSupport}%`}</strong>
+            {language === 'zh' ? '赔率' : 'Odds'}
+            <strong>{oddsValue}</strong>
           </span>
           <span>
             {language === 'zh' ? '玩法' : 'Market'}
@@ -1312,7 +896,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     {
       label: language === 'zh' ? '官方竞彩' : 'Sporttery',
       value: `${officialOddsCount}/${sourceCurrentCount}`,
-      note: language === 'zh' ? '胜平负官方SP' : '1X2 official SP'
+      note: language === 'zh' ? '胜平负官方赔率' : '1X2 official odds'
     },
     {
       label: language === 'zh' ? '500详情' : '500 detail',
@@ -1422,8 +1006,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
 
   const emptyStateText = isCurrentDataLoading
     ? (language === 'zh'
-      ? '数据同步中，正在读取今日赛程与官方胜平负 SP。'
-      : 'Data is syncing: loading today schedule, official SP, and market snapshots.')
+        ? '数据同步中，正在读取今日赛程与官方赔率。'
+        : 'Data is syncing: loading today schedule, official odds, and market snapshots.')
     : (!dataSync.currentLoaded && dataSync.error) || sourceHealth?.ok === false
       ? (language === 'zh'
         ? '校验状态异常：当前数据源未通过完整性检查，请稍后刷新。'
@@ -1440,12 +1024,12 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     <div className="dashboard-stack">
       <section className="dashboard-hero" aria-label={language === 'zh' ? '足球数据看板' : 'Football data dashboard'}>
         <div className="dashboard-hero-copy">
-          <span>{language === 'zh' ? '竞彩赛程 / 胜平负 SP / AI 决策' : 'Schedule / 1X2 SP / AI Decision'}</span>
+          <span>{language === 'zh' ? '竞彩赛程 / 赔率 / 推荐' : 'Schedule / Odds / Picks'}</span>
           <h1>{language === 'zh' ? '足球数据看板' : 'Football Data Board'}</h1>
           <p>
             {language === 'zh'
-              ? '核心是赛前决策校验：展示今日比赛、模型方向与官方胜平负 SP；截止后预测不回改，只做赛果复盘。'
-              : 'A pre-match decision board: today fixtures, model lean, and official 1X2 SP. After cutoff, predictions are locked for review only.'}
+              ? '核心是赛前推荐校验：展示今日比赛、推荐方向与官方赔率；截止后方向不回改，只做赛果复盘。'
+              : 'A pre-match pick board: today fixtures, recommendation direction, and official odds. After cutoff, picks are locked for review only.'}
           </p>
         </div>
         <div className="dashboard-hero-status">
@@ -1521,8 +1105,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
                   ? `官方源保留快照 · 500补充 ${sourceFallback?.fiveHundredFallbackMatches ?? 0} 场`
                   : `Official source locked · ${sourceFallback?.fiveHundredFallbackMatches ?? 0} from 500.com`)
                 : language === 'zh'
-                ? `官方 SP ${officialOddsCount}/${sourceCurrentCount} · 外部覆盖 ${sourceCoverage}%`
-                : `Official SP ${officialOddsCount}/${sourceCurrentCount} · Coverage ${sourceCoverage}%`}
+                ? `官方赔率 ${officialOddsCount}/${sourceCurrentCount} · 外部覆盖 ${sourceCoverage}%`
+                : `Official odds ${officialOddsCount}/${sourceCurrentCount} · Coverage ${sourceCoverage}%`}
             </span>
           </div>
           <span className="source-health-time">

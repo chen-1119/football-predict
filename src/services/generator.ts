@@ -156,12 +156,12 @@ const getOfficialPickCandidates = (
   const sourceNameEn = resolvedPool.isOfficial ? 'official' : '500.com reference';
   const explanationPrefix = pool === 'HAD'
     ? {
-        zh: `按${sourceNameZh}胜平负 SP 与模型概率生成候选方向`,
-        en: `Candidate generated from ${sourceNameEn} 1X2 SP and model probability`
+        zh: `按${sourceNameZh}胜平负赔率与综合判断生成候选方向`,
+        en: `Candidate generated from ${sourceNameEn} 1X2 odds and the main read`
       }
     : {
-        zh: `按${sourceNameZh}让球胜平负 SP 与让球概率生成候选方向`,
-        en: `Candidate generated from ${sourceNameEn} handicap 1X2 SP and handicap probability`
+        zh: `按${sourceNameZh}让球胜平负赔率与让球判断生成候选方向`,
+        en: `Candidate generated from ${sourceNameEn} handicap 1X2 odds and handicap read`
       };
 
   const outcomes = [
@@ -195,16 +195,16 @@ const getOfficialPickCandidates = (
           odds: outcome.odds,
           trustScore,
           explanation: {
-            zh: `${explanationPrefix.zh}：${label.zh}，SP ${outcome.odds.toFixed(2)}，概率约 ${Math.round(selectedProbability)}%。`,
-            en: `${explanationPrefix.en}: ${label.en}, odds ${outcome.odds.toFixed(2)}, probability around ${Math.round(selectedProbability)}%.`
+            zh: `${explanationPrefix.zh}：${label.zh}，赔率 ${outcome.odds.toFixed(2)}，推荐强度约 ${Math.round(selectedProbability)}%。`,
+            en: `${explanationPrefix.en}: ${label.en}, odds ${outcome.odds.toFixed(2)}, pick strength around ${Math.round(selectedProbability)}%.`
           },
           analysisItems: [
             pool === 'HAD'
               ? { zh: resolvedPool.isOfficial ? '官方胜平负已开售' : '500 网胜平负参考可用', en: resolvedPool.isOfficial ? 'Official 1X2 is on sale' : '500.com 1X2 reference is available' }
               : { zh: resolvedPool.isOfficial ? '官方让球胜平负已开售' : '500 网让球胜平负参考可用', en: resolvedPool.isOfficial ? 'Official handicap 1X2 is on sale' : '500.com handicap 1X2 reference is available' },
             modelEntries.length
-              ? { zh: '模型概率参与筛选', en: 'Model probability included in ranking' }
-              : { zh: `模型概率不足时使用${sourceNameZh}去水概率`, en: `${sourceNameEn} de-vig probability used when model signal is limited` }
+              ? { zh: '综合判断参与筛选', en: 'Main read included in ranking' }
+              : { zh: `判断信号不足时使用${sourceNameZh}赔率参考`, en: `${sourceNameEn} odds reference used when the main read is limited` }
           ],
           riskTags: [
             { zh: '仅供赛前参考', en: 'Pre-match reference only' },
@@ -430,21 +430,21 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
     const zhReason = candidateMatches.length === 0
       ? '未来时间窗口内没有可用未开赛比赛。'
       : hasReferenceOdds
-        ? '当前窗口内有赛程，但胜平负/让球盘口未达到你设置的 SP 或可信度要求。'
-        : '当前窗口内有赛程，但胜平负和让球胜平负还没有可用于串关的参考 SP。';
+        ? '当前窗口内有赛程，但胜平负/让球赔率未达到你设置的赔率或推荐强度要求。'
+        : '当前窗口内有赛程，但胜平负和让球胜平负还没有可用于串关的参考赔率。';
     const enReason = candidateMatches.length === 0
       ? 'There are no scheduled matches in the selected time window.'
       : hasReferenceOdds
         ? 'Matches exist, but 1X2/handicap odds do not pass your odds or confidence filters.'
-        : 'Matches exist, but 1X2 and handicap reference SP are not available yet.';
+        : 'Matches exist, but 1X2 and handicap reference odds are not available yet.';
     return {
       selections: [],
       totalOdds: 1,
       averageTrust: 0,
       isSuccess: false,
       message: {
-        zh: `${zhReason} 请放宽 SP、可信度，或把时间窗口扩到明后天再试。`,
-        en: `${enReason} Please loosen odds/confidence filters or extend the time window.`
+        zh: `${zhReason} 请放宽赔率、推荐强度，或把时间窗口扩到明后天再试。`,
+        en: `${enReason} Please loosen odds/pick-strength filters or extend the time window.`
       }
     };
   }
@@ -473,8 +473,8 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
       averageTrust: 0,
       isSuccess: false,
       message: {
-        zh: `当前只有 ${filteredSelections.length} 个候选方向通过筛选，匹配不到合适数量的串关组合。请降低比赛数量、放宽 SP/可信度，或增加比赛窗口。`,
-        en: `Only ${filteredSelections.length} candidate selections passed filters. Lower the count, loosen odds/confidence, or extend the time window.`
+        zh: `当前只有 ${filteredSelections.length} 个候选方向通过筛选，匹配不到合适数量的串关组合。请降低比赛数量、放宽赔率/推荐强度，或增加比赛窗口。`,
+        en: `Only ${filteredSelections.length} candidate selections passed filters. Lower the count, loosen odds/pick-strength filters, or extend the time window.`
       }
     };
   }

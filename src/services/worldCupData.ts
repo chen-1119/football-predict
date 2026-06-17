@@ -356,19 +356,19 @@ export const WORLD_CUP_KNOCKOUT_ROUNDS: WorldCupKnockoutRound[] = [
 
 export const WORLD_CUP_PIPELINE_CARDS = [
   {
-    title: { zh: '赛前概率', en: 'Pre-match Probability' },
+    title: { zh: '赛前推荐', en: 'Pre-match Picks' },
     value: { zh: '胜平负 / 比分 / 大小球', en: '1X2 / score / goals' },
     detail: {
-      zh: '沿用赔率基准、Elo、进球模型和风险标签，不只押热门。',
-      en: 'Uses market baseline, Elo, goal model and risk tags instead of leaning only on favourites.'
+      zh: '综合赔率基准、长期强弱、进球区间和风险提示，不只押热门。',
+      en: 'Uses odds baseline, long-run strength, goal range and risk notes instead of leaning only on favourites.'
     }
   },
   {
-    title: { zh: 'SP 走势', en: 'SP Movement' },
+    title: { zh: '赔率走势', en: 'Odds Movement' },
     value: { zh: '快照留痕', en: 'Snapshot trail' },
     detail: {
-      zh: '每次同步保存官方 SP，开赛后锁定预测，赛后按当时快照复盘。',
-      en: 'Official SP snapshots are retained; picks lock after kickoff and review uses pre-match data.'
+      zh: '每次同步保存官方赔率，开赛后锁定推荐，赛后按当时快照复盘。',
+      en: 'Official odds snapshots are retained; picks lock after kickoff and review uses pre-match data.'
     }
   },
   {
@@ -394,8 +394,8 @@ export const WORLD_CUP_CONTENT_LANES = [
     status: { zh: '已上线', en: 'Live' },
     title: { zh: '世界杯首页推荐', en: 'Home Spotlight' },
     items: {
-      zh: ['首页专栏入口', '当前观察场次', 'SP 与模型倾向'],
-      en: ['Home entry', 'Watch matches', 'SP and model lean']
+      zh: ['首页专栏入口', '当前观察场次', '赔率与推荐方向'],
+      en: ['Home entry', 'Watch matches', 'odds and pick direction']
     }
   },
   {
@@ -1130,8 +1130,8 @@ const teamReason = (teamId: string, support: number | null, trust: number): Mult
   const trustText = trust ? `${trust}%` : '--';
 
   return {
-    zh: `${team.shortName.zh} 当前 SP 支持率 ${supportText}，模型可信 ${trustText}，先列入世界杯观察池。`,
-    en: `${team.shortName.en} is in the watch pool with SP support ${supportText} and model trust ${trustText}.`
+    zh: `${team.shortName.zh} 当前赔率支持 ${supportText}，推荐强度 ${trustText}，先列入世界杯观察池。`,
+    en: `${team.shortName.en} is in the watch pool with odds support ${supportText} and pick strength ${trustText}.`
   };
 };
 

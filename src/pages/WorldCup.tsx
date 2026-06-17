@@ -73,25 +73,25 @@ const copy = {
   stageDesc: { zh: '按官方 48 队赛制展示：12 组小组赛，前二直通，8 个最佳第三名补进 32 强。', en: '48 teams, 12 groups, top two plus eight best third-place teams to the Round of 32.' },
   model: { zh: '路径推演', en: 'Route Projection' },
   groups: { zh: '小组赛预测', en: 'Group Forecasts' },
-  groupsDesc: { zh: '使用球队强度、东道主加成、新军降权和小组全局竞争进行路径推演；世界杯 SP 上线后会自动进入单场概率。', en: 'Uses team strength, host boost, debutant adjustment and full-group competition.' },
+  groupsDesc: { zh: '使用球队强度、东道主加成、新军降权和小组全局竞争进行路径推演；世界杯赔率上线后会自动进入单场推荐。', en: 'Uses team strength, host boost, debutant adjustment and full-group competition.' },
   bestThird: { zh: '最佳第三名竞争线', en: 'Best Third-Place Lane' },
   bestThirdNote: { zh: '第三名不是固定晋级，按积分、净胜球、进球数和强度排序抢 8 个名额。', en: 'Third-place teams compete for eight spots by points, goal difference, goals and strength.' },
   knockout: { zh: '淘汰赛路线', en: 'Knockout Route' },
   knockoutDesc: { zh: '先用小组路径生成 32 强候选，再估算 16 强、8 强、4 强、决赛和冠军层级。', en: 'Group projections seed the Round of 32, then estimate later-round paths.' },
   fixtures: { zh: '世界杯竞彩场次', en: 'World Cup Sporttery Fixtures' },
-  fixturesDesc: { zh: '只展示世界杯正赛窗口内的竞彩场次；未开售时保留赛制与路径预测，开售后接入 SP、让球和临场变化。', en: 'Only released tournament fixtures are shown here; SP and handicap join after release.' },
-  noFixtures: { zh: '当前还没有已开售的世界杯正赛竞彩场次；页面先展示赛制、小组路径和淘汰赛推演，开售后会自动出现单场卡片。', en: 'No released World Cup Sporttery fixtures yet. Format and route projections remain visible until SP is available.' },
+  fixturesDesc: { zh: '只展示世界杯正赛窗口内的竞彩场次；未开售时保留赛制与路径预测，开售后接入赔率、让球和临场变化。', en: 'Only released tournament fixtures are shown here; odds and handicap join after release.' },
+  noFixtures: { zh: '当前还没有已开售的世界杯正赛竞彩场次；页面先展示赛制、小组路径和淘汰赛推演，开售后会自动出现单场卡片。', en: 'No released World Cup Sporttery fixtures yet. Format and route projections remain visible until odds are available.' },
   contenders: { zh: '争冠观察', en: 'Contender Watch' },
   upset: { zh: '爆冷雷达', en: 'Upset Radar' },
   dataStatus: { zh: '数据覆盖', en: 'Data Coverage' },
-  dataStatusDesc: { zh: '已覆盖世界杯结构、小组路径、晋级规则、淘汰赛路线和当前竞彩场次；官方 SP、让球、赛果、临场赔率在开售/完场后并入。', en: 'Covers structure, group pathing, rules, knockout routes and released fixtures.' },
+  dataStatusDesc: { zh: '已覆盖世界杯结构、小组路径、晋级规则、淘汰赛路线和当前竞彩场次；官方赔率、让球、赛果、临场赔率在开售/完场后并入。', en: 'Covers structure, group pathing, rules, knockout routes and released fixtures.' },
   pipeline: { zh: '专题数据流', en: 'Data Pipeline' },
   recent: { zh: '赛果复盘', en: 'Recent Reviews' },
   more: { zh: '查看详情', en: 'Details' },
   noRecent: { zh: '世界杯正赛尚未产生可复盘赛果。', en: 'No tournament results to review yet.' },
-  trust: { zh: '可信', en: 'Trust' },
-  sp: { zh: 'SP', en: 'SP' },
-  recommendation: { zh: '模型倾向', en: 'Model Lean' },
+  trust: { zh: '推荐强度', en: 'Pick Strength' },
+  sp: { zh: '赔率', en: 'Odds' },
+  recommendation: { zh: '推荐方向', en: 'Pick' },
   waiting: { zh: '待开售', en: 'Awaiting release' },
   disclaimer: { zh: '提示：本页为赛事数据分析与预测展示，仅供参考和娱乐研究使用，请理性看球。', en: 'Forecasts are for data analysis, reference and entertainment only.' }
 } as const;
@@ -310,7 +310,7 @@ const MatchCard = ({
     : forecast
       ? pickText(forecast.tip, language)
       : copy.waiting[language];
-  const cardDetail = marketRecommendation?.detail || (forecast ? pickText(forecast.detail, language) : `${copy.waiting[language]} HAD SP`);
+  const cardDetail = marketRecommendation?.detail || (forecast ? pickText(forecast.detail, language) : `${copy.waiting[language]} HAD ${copy.sp[language]}`);
 
   return (
     <article className="worldcup-match-card">
@@ -335,7 +335,7 @@ const MatchCard = ({
         <span>{copy.trust[language]} {trust ? `${trust}%` : '--'}</span>
         {forecast && (
           <span>
-            {language === 'zh' ? '模型' : 'Model'} {formatPercent(forecast.homeAdvanceProbability)} / {formatPercent(forecast.awayAdvanceProbability)}
+            {language === 'zh' ? '晋级参考' : 'Route reference'} {formatPercent(forecast.homeAdvanceProbability)} / {formatPercent(forecast.awayAdvanceProbability)}
           </span>
         )}
       </div>

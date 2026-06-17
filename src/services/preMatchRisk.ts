@@ -145,20 +145,20 @@ export function buildPreMatchRisk(match: Match): PreMatchRiskSummary {
 
   if (trustSource?.trustScore && trustSource.trustScore < 45) {
     addReason('low-trust', 14, {
-      zh: `可信度 ${trustSource.trustScore}% 偏低`,
-      en: `trust ${trustSource.trustScore}% is low`
+      zh: `推荐强度 ${trustSource.trustScore}% 偏低`,
+      en: `pick strength ${trustSource.trustScore}% is low`
     });
   }
 
   if (match.oddsTrend?.direction === 'mixed') {
     addReason('mixed-sp', 14, {
-      zh: 'SP走势分歧',
-      en: 'mixed SP movement'
+      zh: '赔率走势分歧',
+      en: 'mixed odds movement'
     });
   } else if (!match.oddsTrend || match.oddsTrend.sampleSize < 2) {
     addReason('few-sp-snapshots', 6, {
-      zh: 'SP快照不足',
-      en: 'few SP snapshots'
+      zh: '赔率快照不足',
+      en: 'few odds snapshots'
     });
   }
 
@@ -190,15 +190,15 @@ export function buildPreMatchRisk(match: Match): PreMatchRiskSummary {
   if (connectedSignalCount <= 1) {
     addReason('thin-prematch-signals', 8, {
       zh: '首发/伤停/裁判/xG待补',
-      en: 'lineup/injury/referee/xG signals are thin'
+      en: 'lineup/injury/referee/attacking-quality signals are thin'
     });
   }
 
   const riskTagCount = trustSource?.riskTags?.length || 0;
   if (riskTagCount >= 4) {
     addReason('stacked-risk-tags', 8, {
-      zh: `风险标签 ${riskTagCount} 个`,
-      en: `${riskTagCount} risk tags`
+      zh: `风险提示 ${riskTagCount} 个`,
+      en: `${riskTagCount} risk notes`
     });
   }
 
