@@ -1,7 +1,7 @@
 {
   "version": 1,
   "source": "sporttery:prediction-snapshots",
-  "updatedAt": "2026-06-18T08:29:39.034Z",
+  "updatedAt": "2026-06-18T09:29:40.702Z",
   "retentionDays": 365,
   "maxRows": 5000,
   "rows": [
@@ -84670,19 +84670,91 @@
         "resultStatus": "PENDING",
         "riskCount": 3
       }
+    },
+    {
+      "capturedAt": "2026-06-18T09:29:40.702Z",
+      "firstSeenAt": "2026-06-18T09:29:40.702Z",
+      "lastSeenAt": "2026-06-18T09:29:40.702Z",
+      "seenCount": 1,
+      "phase": "final",
+      "signature": "1X2:HAD:1:reference|BEST:HAD:1:recommend|GOALS::U2.5:reference|1.26/4.65/8.25|-1:1.96/3.40/3.08|46/25/29",
+      "policyVersion": "sporttery-day-formula-trace-v52",
+      "promptVersion": "professional-football-analyst-v21",
+      "sourceMatchId": "2040233",
+      "matchId": "fivehundred_2040233",
+      "matchNo": "周四201",
+      "businessDate": "2026-06-18",
+      "kickoffTime": "2026-06-18T17:59:00+08:00",
+      "status": "SCHEDULED",
+      "leagueName": "芬兰超级联赛",
+      "homeTeamName": "AC奥卢",
+      "awayTeamName": "玛丽港",
+      "scoreHome": null,
+      "scoreAway": null,
+      "odds": {
+        "odds1": 1.26,
+        "oddsX": 4.65,
+        "odds2": 8.25
+      },
+      "handicapLine": "-1",
+      "handicapOdds": {
+        "odds1": 1.96,
+        "oddsX": 3.4,
+        "odds2": 3.08
+      },
+      "oddsTrend": null,
+      "probabilityFinal": {
+        "home": 45.7,
+        "draw": 25.2,
+        "away": 29.1
+      },
+      "probabilityModelVersion": "unified-poisson-bayes-v52",
+      "best": {
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "主推 主胜 AC奥卢",
+          "en": "Main pick: Home win AC奥卢"
+        },
+        "odds": 1.26,
+        "trustScore": 59,
+        "resultStatus": "PENDING",
+        "riskCount": 4
+      },
+      "oneXTwo": {
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "参考倾向 主胜 AC奥卢",
+          "en": "Reference lean: Home Win (AC奥卢)"
+        },
+        "odds": 1.26,
+        "trustScore": 34,
+        "resultStatus": "PENDING",
+        "riskCount": 4
+      },
+      "goals": {
+        "tipCode": "U2.5",
+        "tipLabel": {
+          "zh": "进球参考 小2.5球（≤2球）",
+          "en": "Goals reference: Under 2.5 goals"
+        },
+        "odds": 2.05,
+        "trustScore": 47,
+        "resultStatus": "PENDING",
+        "riskCount": 3
+      }
     }
   ],
   "summary": {
-    "total": 1085,
+    "total": 1086,
     "byPhase": {
       "review": 85,
       "mid": 120,
       "baseline": 805,
       "late": 37,
-      "final": 24,
+      "final": 25,
       "locked": 14
     },
-    "appended": 0,
+    "appended": 1,
     "updated": 0
   }
 }
