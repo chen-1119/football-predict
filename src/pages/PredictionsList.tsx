@@ -24,7 +24,7 @@ import { getCountryById, getLeagueById, getTeamById } from '../services/entities
 import { getMatchSignal, type MatchSignalCategory } from '../services/matchSignal';
 import { getVisiblePrediction } from '../services/predictionVisibility';
 import { buildPublicRecommendationCopy } from '../services/recommendationCopy';
-import { getAvailableResultPools, getDisplayRecommendation, getListHandicapSupplement } from '../services/displayRecommendation';
+import { getAvailableResultPools, getDisplayRecommendation, getHandicapCompanionHeading, getListHandicapSupplement } from '../services/displayRecommendation';
 import { TeamBadge } from '../components/TeamBadge';
 import { WorldCupSpotlight } from '../components/WorldCupSpotlight';
 
@@ -546,7 +546,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         <span className="recommendation-odds">{publicCopy.strengthLabel} · {publicCopy.oddsLabel}</span>
         {companionRecommendation && (
           <span className="recommendation-companion-line">
-            <span>{language === 'zh' ? '让球补充' : 'HHAD add-on'}</span>
+            <span>{getHandicapCompanionHeading(companionRecommendation, language)}</span>
             <strong>{companionRecommendation.label}</strong>
             <em>{companionRecommendation.meta}</em>
           </span>
@@ -596,7 +596,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
           <span className="decision-meta">{primaryMeta}</span>
           {companionRecommendation && (
             <span className="decision-companion-line">
-              <span>{language === 'zh' ? '让球补充' : 'HHAD add-on'}</span>
+              <span>{getHandicapCompanionHeading(companionRecommendation, language)}</span>
               <strong>{companionRecommendation.label}</strong>
               <em>{companionRecommendation.meta}</em>
             </span>

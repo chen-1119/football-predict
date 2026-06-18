@@ -14,7 +14,7 @@ import { getMatchSignal } from '../services/matchSignal';
 import { buildMatchInsight } from '../services/predictionInsight';
 import { getVisiblePrediction, getVisiblePredictions } from '../services/predictionVisibility';
 import { buildPublicRecommendationCopy } from '../services/recommendationCopy';
-import { getDisplayRecommendation } from '../services/displayRecommendation';
+import { getDisplayRecommendation, getHandicapCompanionHeading } from '../services/displayRecommendation';
 import { getAccessAuthHeaders } from '../services/accessControl';
 import { buildApiUrl, buildStaticUrl } from '../services/runtimeUrls';
 import { buildFiveHundredDisplay } from '../services/fiveHundredDisplay';
@@ -2180,7 +2180,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
 
                 {companionRecommendation && (
                   <section className="decision-transparent-panel is-companion">
-                    <h4>{language === 'zh' ? '让球补充' : 'HHAD Add-on'}</h4>
+                    <h4>{getHandicapCompanionHeading(companionRecommendation, language)}</h4>
                     <strong>{companionRecommendation.title}</strong>
                     <p>{companionRecommendation.meta}</p>
                   </section>
