@@ -1,7 +1,7 @@
 {
   "version": 1,
   "source": "sporttery:prediction-snapshots",
-  "updatedAt": "2026-06-18T09:29:40.702Z",
+  "updatedAt": "2026-06-18T09:59:34.751Z",
   "retentionDays": 365,
   "maxRows": 5000,
   "rows": [
@@ -84742,19 +84742,103 @@
         "resultStatus": "PENDING",
         "riskCount": 3
       }
+    },
+    {
+      "capturedAt": "2026-06-18T09:59:34.751Z",
+      "firstSeenAt": "2026-06-18T09:59:34.751Z",
+      "lastSeenAt": "2026-06-18T09:59:34.751Z",
+      "seenCount": 1,
+      "phase": "mid",
+      "signature": "1X2:HAD:1:reference|BEST:HAD:1:recommend|GOALS::O2.5:reference|1.74/3.20/4.15|-1.00:3.36/3.40/1.86|46/25/29",
+      "policyVersion": "sporttery-day-formula-trace-v52",
+      "promptVersion": "professional-football-analyst-v21",
+      "sourceMatchId": "2040235",
+      "matchId": "sporttery_2040235",
+      "matchNo": "周四025",
+      "businessDate": "2026-06-18",
+      "kickoffTime": "2026-06-19T00:00:00+08:00",
+      "status": "SCHEDULED",
+      "leagueName": "世界杯",
+      "homeTeamName": "捷克",
+      "awayTeamName": "南非",
+      "scoreHome": null,
+      "scoreAway": null,
+      "odds": {
+        "odds1": 1.74,
+        "oddsX": 3.2,
+        "odds2": 4.15
+      },
+      "handicapLine": "-1.00",
+      "handicapOdds": {
+        "odds1": 3.36,
+        "oddsX": 3.4,
+        "odds2": 1.86
+      },
+      "oddsTrend": {
+        "sampleSize": 60,
+        "firstCapturedAt": "2026-06-16T01:36:10.635Z",
+        "lastCapturedAt": "2026-06-16T08:16:10.871Z",
+        "odds1Change": 0,
+        "oddsXChange": 0,
+        "odds2Change": 0,
+        "direction": "flat",
+        "summary": {
+          "zh": "已记录 60 次官方 SP 快照，胜平负主盘基本没动；这种场次不把静态赔率写成推荐，临场继续看让球盘是否补强。",
+          "en": "60 official SP snapshots recorded; the 1X2 board is essentially flat, so a static board is not packaged as a pick. Keep watching handicap confirmation."
+        }
+      },
+      "probabilityFinal": {
+        "home": 45.9,
+        "draw": 25.2,
+        "away": 29
+      },
+      "probabilityModelVersion": "unified-poisson-bayes-v52",
+      "best": {
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "主推 主胜 捷克",
+          "en": "Main pick: Home win 捷克"
+        },
+        "odds": 1.74,
+        "trustScore": 52,
+        "resultStatus": "PENDING",
+        "riskCount": 4
+      },
+      "oneXTwo": {
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "参考倾向 主胜 捷克",
+          "en": "Reference lean: Home Win (捷克)"
+        },
+        "odds": 1.74,
+        "trustScore": 34,
+        "resultStatus": "PENDING",
+        "riskCount": 4
+      },
+      "goals": {
+        "tipCode": "O2.5",
+        "tipLabel": {
+          "zh": "进球参考 大2.5球（≥3球）",
+          "en": "Goals reference: Over 2.5 goals"
+        },
+        "odds": 1.92,
+        "trustScore": 50,
+        "resultStatus": "PENDING",
+        "riskCount": 3
+      }
     }
   ],
   "summary": {
-    "total": 1086,
+    "total": 1087,
     "byPhase": {
       "review": 85,
-      "mid": 120,
+      "mid": 121,
       "baseline": 805,
       "late": 37,
       "final": 25,
       "locked": 14
     },
-    "appended": 0,
+    "appended": 1,
     "updated": 0
   }
 }
