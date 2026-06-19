@@ -1,7 +1,7 @@
 {
   "version": 1,
   "source": "sporttery:prediction-snapshots",
-  "updatedAt": "2026-06-19T03:28:30.158Z",
+  "updatedAt": "2026-06-19T03:58:33.406Z",
   "retentionDays": 365,
   "maxRows": 5000,
   "rows": [
@@ -85554,19 +85554,91 @@
         "resultStatus": "PENDING",
         "riskCount": 3
       }
+    },
+    {
+      "capturedAt": "2026-06-19T03:58:33.406Z",
+      "firstSeenAt": "2026-06-19T03:58:33.406Z",
+      "lastSeenAt": "2026-06-19T03:58:33.406Z",
+      "seenCount": 1,
+      "phase": "baseline",
+      "signature": "1X2:HAD:2:reference|BEST:HAD:2:recommend|GOALS::O2.5:reference|5.35/3.42/1.54|1:2.14/3.18/2.88|25/27/48",
+      "policyVersion": "sporttery-day-formula-trace-v52",
+      "promptVersion": "professional-football-analyst-v21",
+      "sourceMatchId": "2040240",
+      "matchId": "fivehundred_2040240",
+      "matchNo": "周五030",
+      "businessDate": "2026-06-19",
+      "kickoffTime": "2026-06-20T06:00:00+08:00",
+      "status": "SCHEDULED",
+      "leagueName": "世界杯",
+      "homeTeamName": "苏格兰",
+      "awayTeamName": "摩洛哥",
+      "scoreHome": null,
+      "scoreAway": null,
+      "odds": {
+        "odds1": 5.35,
+        "oddsX": 3.42,
+        "odds2": 1.54
+      },
+      "handicapLine": "1",
+      "handicapOdds": {
+        "odds1": 2.14,
+        "oddsX": 3.18,
+        "odds2": 2.88
+      },
+      "oddsTrend": null,
+      "probabilityFinal": {
+        "home": 25.1,
+        "draw": 26.6,
+        "away": 48.3
+      },
+      "probabilityModelVersion": "unified-poisson-bayes-v52",
+      "best": {
+        "tipCode": "2",
+        "tipLabel": {
+          "zh": "主推 客胜 摩洛哥",
+          "en": "Main pick: Away win 摩洛哥"
+        },
+        "odds": 1.54,
+        "trustScore": 63,
+        "resultStatus": "PENDING",
+        "riskCount": 4
+      },
+      "oneXTwo": {
+        "tipCode": "2",
+        "tipLabel": {
+          "zh": "参考倾向 客胜 摩洛哥",
+          "en": "Reference lean: Away Win (摩洛哥)"
+        },
+        "odds": 1.54,
+        "trustScore": 34,
+        "resultStatus": "PENDING",
+        "riskCount": 4
+      },
+      "goals": {
+        "tipCode": "O2.5",
+        "tipLabel": {
+          "zh": "进球参考 大2.5球（≥3球）",
+          "en": "Goals reference: Over 2.5 goals"
+        },
+        "odds": 1.81,
+        "trustScore": 53,
+        "resultStatus": "PENDING",
+        "riskCount": 3
+      }
     }
   ],
   "summary": {
-    "total": 1097,
+    "total": 1098,
     "byPhase": {
       "review": 85,
       "mid": 122,
-      "baseline": 814,
+      "baseline": 815,
       "late": 37,
       "final": 25,
       "locked": 14
     },
-    "appended": 0,
+    "appended": 1,
     "updated": 0
   }
 }
