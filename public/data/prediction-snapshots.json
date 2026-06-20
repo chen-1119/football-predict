@@ -1,7 +1,7 @@
 {
   "version": 1,
   "source": "sporttery:prediction-snapshots",
-  "updatedAt": "2026-06-20T07:50:52.158Z",
+  "updatedAt": "2026-06-20T08:20:53.067Z",
   "retentionDays": 365,
   "maxRows": 5000,
   "rows": [
@@ -88834,19 +88834,91 @@
         "resultStatus": "PENDING",
         "riskCount": 3
       }
+    },
+    {
+      "capturedAt": "2026-06-20T08:20:53.067Z",
+      "firstSeenAt": "2026-06-20T08:20:53.067Z",
+      "lastSeenAt": "2026-06-20T08:20:53.067Z",
+      "seenCount": 1,
+      "phase": "baseline",
+      "signature": "1X2:HAD:1:reference|BEST:HAD:1:recommend|GOALS::O2.5:reference|1.53/3.83/4.65|-1:2.69/3.32/2.19|56/24/20",
+      "policyVersion": "sporttery-day-formula-trace-v52",
+      "promptVersion": "professional-football-analyst-v21",
+      "sourceMatchId": "2040243",
+      "matchId": "fivehundred_2040243",
+      "matchNo": "周六033",
+      "businessDate": "2026-06-20",
+      "kickoffTime": "2026-06-21T01:00:00+08:00",
+      "status": "SCHEDULED",
+      "leagueName": "世界杯",
+      "homeTeamName": "荷兰",
+      "awayTeamName": "瑞典",
+      "scoreHome": null,
+      "scoreAway": null,
+      "odds": {
+        "odds1": 1.53,
+        "oddsX": 3.83,
+        "odds2": 4.65
+      },
+      "handicapLine": "-1",
+      "handicapOdds": {
+        "odds1": 2.69,
+        "oddsX": 3.32,
+        "odds2": 2.19
+      },
+      "oddsTrend": null,
+      "probabilityFinal": {
+        "home": 55.6,
+        "draw": 24.2,
+        "away": 20.2
+      },
+      "probabilityModelVersion": "unified-poisson-bayes-v52",
+      "best": {
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "主推 主胜 荷兰",
+          "en": "Main pick: Home win 荷兰"
+        },
+        "odds": 1.53,
+        "trustScore": 75,
+        "resultStatus": "PENDING",
+        "riskCount": 4
+      },
+      "oneXTwo": {
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "参考倾向 主胜 荷兰",
+          "en": "Reference lean: Home Win (荷兰)"
+        },
+        "odds": 1.53,
+        "trustScore": 34,
+        "resultStatus": "PENDING",
+        "riskCount": 4
+      },
+      "goals": {
+        "tipCode": "O2.5",
+        "tipLabel": {
+          "zh": "进球参考 大2.5球（≥3球）",
+          "en": "Goals reference: Over 2.5 goals"
+        },
+        "odds": 1.69,
+        "trustScore": 57,
+        "resultStatus": "PENDING",
+        "riskCount": 3
+      }
     }
   ],
   "summary": {
-    "total": 1143,
+    "total": 1144,
     "byPhase": {
       "review": 85,
       "mid": 123,
-      "baseline": 859,
+      "baseline": 860,
       "late": 37,
       "final": 25,
       "locked": 14
     },
-    "appended": 0,
+    "appended": 1,
     "updated": 0
   }
 }
