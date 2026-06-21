@@ -1,7 +1,7 @@
 {
   "version": 1,
   "source": "sporttery:prediction-snapshots",
-  "updatedAt": "2026-06-20T22:01:53.007Z",
+  "updatedAt": "2026-06-21T02:10:09.254Z",
   "retentionDays": 365,
   "maxRows": 5000,
   "rows": [
@@ -89838,19 +89838,91 @@
         "resultStatus": "PENDING",
         "riskCount": 3
       }
+    },
+    {
+      "capturedAt": "2026-06-21T02:10:09.254Z",
+      "firstSeenAt": "2026-06-21T02:10:09.254Z",
+      "lastSeenAt": "2026-06-21T02:10:09.254Z",
+      "seenCount": 1,
+      "phase": "baseline",
+      "signature": "1X2:HAD:1:reference|BEST:HAD:1:recommend|GOALS::U2.5:reference|1.45/3.80/5.65|-1:2.45/3.45/2.32|58/25/17",
+      "policyVersion": "sporttery-day-formula-trace-v52",
+      "promptVersion": "professional-football-analyst-v21",
+      "sourceMatchId": "2040251",
+      "matchId": "fivehundred_2040251",
+      "matchNo": "周一041",
+      "businessDate": "2026-06-22",
+      "kickoffTime": "2026-06-23T01:00:00+08:00",
+      "status": "SCHEDULED",
+      "leagueName": "世界杯",
+      "homeTeamName": "阿根廷",
+      "awayTeamName": "奥地利",
+      "scoreHome": null,
+      "scoreAway": null,
+      "odds": {
+        "odds1": 1.45,
+        "oddsX": 3.8,
+        "odds2": 5.65
+      },
+      "handicapLine": "-1",
+      "handicapOdds": {
+        "odds1": 2.45,
+        "oddsX": 3.45,
+        "odds2": 2.32
+      },
+      "oddsTrend": null,
+      "probabilityFinal": {
+        "home": 58.4,
+        "draw": 24.7,
+        "away": 16.9
+      },
+      "probabilityModelVersion": "unified-poisson-bayes-v52",
+      "best": {
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "主推 主胜 阿根廷",
+          "en": "Main pick: Home win 阿根廷"
+        },
+        "odds": 1.45,
+        "trustScore": 76,
+        "resultStatus": "PENDING",
+        "riskCount": 5
+      },
+      "oneXTwo": {
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "参考倾向 主胜 阿根廷",
+          "en": "Reference lean: Home Win (阿根廷)"
+        },
+        "odds": 1.45,
+        "trustScore": 34,
+        "resultStatus": "PENDING",
+        "riskCount": 4
+      },
+      "goals": {
+        "tipCode": "U2.5",
+        "tipLabel": {
+          "zh": "进球参考 小2.5球（≤2球）",
+          "en": "Goals reference: Under 2.5 goals"
+        },
+        "odds": 1.8,
+        "trustScore": 54,
+        "resultStatus": "PENDING",
+        "riskCount": 2
+      }
     }
   ],
   "summary": {
-    "total": 1157,
+    "total": 1158,
     "byPhase": {
       "review": 85,
       "mid": 127,
-      "baseline": 869,
+      "baseline": 870,
       "late": 37,
       "final": 25,
       "locked": 14
     },
-    "appended": 0,
+    "appended": 1,
     "updated": 0
   }
 }
