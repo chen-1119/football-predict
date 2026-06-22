@@ -36209,8 +36209,605 @@
     "countryId": "world",
     "kickoffTime": "2026-06-23T01:00:00+08:00",
     "status": "SCHEDULED",
-    "projectedScoreHome": 2,
-    "projectedScoreAway": 0,
+    "worldCupPrior": {
+      "source": "kimi-worldcup-dataset",
+      "version": "kimi-worldcup-dataset-v1",
+      "signature": "kimi-worldcup-dataset-v1|065363d19babce35|teams:48|fixtures:104",
+      "policy": "usable-as-pre-match-prior",
+      "rawPolicy": "audit-only",
+      "strengthDiff": 0.316,
+      "fixture": null,
+      "home": {
+        "key": "argentina",
+        "nameZh": "阿根廷",
+        "nameEn": "Argentina",
+        "group": "J",
+        "fifaRank": 3,
+        "elo": 2050,
+        "squadValueM": 874,
+        "avgAge": 28.9,
+        "corePlayer": "Lautaro Martinez",
+        "qualityTier": "verified",
+        "recent10": {
+          "raw": "9胜1平0负",
+          "wins": 9,
+          "draws": 1,
+          "losses": 0,
+          "points": 28
+        },
+        "groupOutlook": {
+          "group": "G",
+          "projectedRank": 1,
+          "projectedPoints": 6.6,
+          "wins": 1.9,
+          "draws": 0.8,
+          "losses": 0.2,
+          "goalsFor": 4.6,
+          "goalsAgainst": 2.1,
+          "goalDiff": 2.5,
+          "advanceProbability": 95,
+          "groupWinProbability": 60
+        },
+        "modelStrengthNormalized": 0.9467
+      },
+      "away": {
+        "key": "austria",
+        "nameZh": "奥地利",
+        "nameEn": "Austria",
+        "group": "J",
+        "fifaRank": 24,
+        "elo": 1685,
+        "squadValueM": 147.6,
+        "avgAge": 27.5,
+        "corePlayer": "Virtanen",
+        "qualityTier": "estimated",
+        "recent10": {
+          "raw": "8胜0平1负",
+          "wins": 8,
+          "draws": 0,
+          "losses": 1,
+          "points": 24
+        },
+        "groupOutlook": {
+          "group": "G",
+          "projectedRank": 2,
+          "projectedPoints": 3.8,
+          "wins": 1,
+          "draws": 0.9,
+          "losses": 1.1,
+          "goalsFor": 3.6,
+          "goalsAgainst": 3.8,
+          "goalDiff": -0.2,
+          "advanceProbability": 90,
+          "groupWinProbability": 25
+        },
+        "modelStrengthNormalized": 0.6307
+      }
+    },
+    "externalSignals": {
+      "source": "500.com:jczq",
+      "updatedAt": "2026-06-22T13:54:53.215Z",
+      "sourceMatchId": "2040251",
+      "fixtureId": "1359216",
+      "matchNo": "周一041",
+      "leagueName": "世界杯",
+      "homeTeamName": "阿根廷",
+      "awayTeamName": "奥地利",
+      "kickoffTime": "2026-06-23T01:00:00+08:00",
+      "buyEndTime": "2026-06-22 22:00:00",
+      "handicapLine": "-1",
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.31,
+        "oddsX": 4.2,
+        "odds2": 7.85,
+        "summary": {
+          "zh": "500彩票网胜平负参考：1.31 / 4.20 / 7.85",
+          "en": "500.com 1X2 reference: 1.31 / 4.20 / 7.85"
+        }
+      },
+      "bookmakerOdds": {
+        "had": {
+          "odds1": 1.31,
+          "oddsX": 4.2,
+          "odds2": 7.85
+        },
+        "hhad": {
+          "odds1": 2.11,
+          "oddsX": 3.25,
+          "odds2": 2.88
+        }
+      },
+      "venue": {
+        "name": "Estadio Akron",
+        "city": "Guadalajara",
+        "country": "Mexico",
+        "latitude": 20.6819,
+        "longitude": -103.4628,
+        "verified": false,
+        "source": "world-cup-host-rotation-estimate",
+        "summary": {
+          "zh": "Estadio Akron，Guadalajara。当前为场地估算，后续可用官方球场覆盖。",
+          "en": "Estadio Akron, Guadalajara. Venue is estimated and can be replaced by official venue data."
+        }
+      },
+      "weather": {
+        "source": "open-meteo",
+        "provider": "open-meteo",
+        "updatedAt": "2026-06-22T13:54:53.215Z",
+        "forecastTime": "2026-06-22T17:00Z",
+        "verified": false,
+        "confidence": "estimated-location",
+        "locationSource": "world-cup-host-rotation-estimate",
+        "condition": {
+          "zh": "少云",
+          "en": "Partly cloudy"
+        },
+        "temperatureC": 21.8,
+        "windKph": 8.2,
+        "windGustKph": 27,
+        "precipitationMm": 0,
+        "weatherCode": 1,
+        "riskLevel": "low",
+        "summary": {
+          "zh": "Guadalajara 场地估算天气：少云，21.8C，风速 8.2km/h，降水 0mm，环境低风险。",
+          "en": "Guadalajara venue estimated weather: Partly cloudy, 21.8C, wind 8.2km/h, precipitation 0mm, low risk."
+        },
+        "impact": {
+          "zh": "天气扰动较低，按中性环境处理。",
+          "en": "Weather disruption is low and treated as a neutral environment."
+        }
+      },
+      "preMatch": {
+        "version": "sync-pre-match-signals-v50",
+        "source": "pre-match-signal-layer",
+        "updatedAt": "2026-06-16T08:16:51.180Z",
+        "sourceMatchId": "2040251",
+        "matchId": "sporttery_2040251",
+        "matchNo": "周一041",
+        "kickoffTime": "2026-06-23T01:00:00+08:00",
+        "homeTeamName": "阿根廷",
+        "awayTeamName": "奥地利",
+        "quality": {
+          "version": "pre-match-quality-v50",
+          "score": 10,
+          "sourceQuality": "low",
+          "severeMissingCount": 3,
+          "trustPenalty": 14,
+          "components": {
+            "referee": {
+              "key": "referee",
+              "label": {
+                "zh": "裁判牌数",
+                "en": "Referee cards"
+              },
+              "status": "missing",
+              "score": 0,
+              "source": "missing",
+              "note": {
+                "zh": "未接入真实裁判牌数",
+                "en": "No verified referee card profile"
+              }
+            },
+            "teamCards": {
+              "key": "teamCards",
+              "label": {
+                "zh": "球队牌数历史",
+                "en": "Team card history"
+              },
+              "status": "missing",
+              "score": 0,
+              "source": "missing",
+              "note": {
+                "zh": "未形成可用球队黄红牌样本",
+                "en": "No usable team card sample"
+              }
+            },
+            "lineup": {
+              "key": "lineup",
+              "label": {
+                "zh": "首发/预计阵容",
+                "en": "Lineup"
+              },
+              "status": "missing",
+              "score": 0,
+              "source": "missing",
+              "note": {
+                "zh": "未接入首发或预计名单",
+                "en": "No lineup or projected XI"
+              }
+            },
+            "injuries": {
+              "key": "injuries",
+              "label": {
+                "zh": "伤停",
+                "en": "Injuries"
+              },
+              "status": "missing",
+              "score": 0,
+              "source": "missing",
+              "note": {
+                "zh": "未接入伤停",
+                "en": "No injury signal"
+              }
+            },
+            "xg": {
+              "key": "xg",
+              "label": {
+                "zh": "xG/xGA",
+                "en": "xG/xGA"
+              },
+              "status": "missing",
+              "score": 0,
+              "source": "missing",
+              "note": {
+                "zh": "未接入赛前 xG/xGA",
+                "en": "No pre-match xG/xGA"
+              }
+            },
+            "weather": {
+              "key": "weather",
+              "label": {
+                "zh": "天气/场地",
+                "en": "Weather/pitch"
+              },
+              "status": "estimated",
+              "score": 48,
+              "source": "open-meteo",
+              "note": {
+                "zh": "Guadalajara 场地估算天气：毛毛雨，22.5C，风速 3.8km/h，降水 0.1mm，环境低风险。",
+                "en": "Guadalajara venue estimated weather: Drizzle, 22.5C, wind 3.8km/h, precipitation 0.1mm, low risk."
+              }
+            },
+            "market": {
+              "key": "market",
+              "label": {
+                "zh": "盘口校验",
+                "en": "Market validation"
+              },
+              "status": "missing",
+              "score": 0,
+              "source": "missing",
+              "note": {
+                "zh": "缺少盘口校验源",
+                "en": "No market validation source"
+              }
+            },
+            "motivation": {
+              "key": "motivation",
+              "label": {
+                "zh": "排名/战意",
+                "en": "Table/motivation"
+              },
+              "status": "estimated",
+              "score": 62,
+              "source": "rank-stage-context",
+              "note": {
+                "zh": "已接入排名或赛程阶段信息",
+                "en": "Rank or stage context loaded"
+              }
+            }
+          },
+          "missing": [
+            {
+              "key": "referee",
+              "zh": "缺少裁判牌数",
+              "en": "Missing Referee cards",
+              "severity": "medium",
+              "weight": 10
+            },
+            {
+              "key": "teamCards",
+              "zh": "缺少球队牌数历史",
+              "en": "Missing Team card history",
+              "severity": "medium",
+              "weight": 10
+            },
+            {
+              "key": "lineup",
+              "zh": "缺少首发/预计阵容",
+              "en": "Missing Lineup",
+              "severity": "high",
+              "weight": 15
+            },
+            {
+              "key": "injuries",
+              "zh": "缺少伤停",
+              "en": "Missing Injuries",
+              "severity": "high",
+              "weight": 15
+            },
+            {
+              "key": "xg",
+              "zh": "缺少xG/xGA",
+              "en": "Missing xG/xGA",
+              "severity": "medium",
+              "weight": 14
+            },
+            {
+              "key": "market",
+              "zh": "缺少盘口校验",
+              "en": "Missing Market validation",
+              "severity": "high",
+              "weight": 18
+            }
+          ],
+          "lowQuality": [
+            "weather",
+            "motivation"
+          ],
+          "connected": {
+            "referee": false,
+            "teamCards": false,
+            "lineup": false,
+            "injuries": false,
+            "xg": false,
+            "weather": true,
+            "market": false,
+            "motivation": true
+          },
+          "summary": {
+            "zh": "赛前数据质量 10/100，缺口偏多。",
+            "en": "Pre-match data quality 10/100, low coverage."
+          }
+        },
+        "qualitySummary": {
+          "zh": "赛前数据质量 10/100，缺口偏多。",
+          "en": "Pre-match data quality 10/100, low coverage."
+        }
+      }
+    },
+    "matchDate": "2026-06-23",
+    "kickoffDate": "2026-06-23",
+    "businessDate": "2026-06-22",
+    "homeTeamName": "阿根廷",
+    "homeTeamNameEn": "阿根廷",
+    "homeRank": "",
+    "homeTeamLogo": "https://flagcdn.com/w80/ar.png",
+    "homeTeamLogoType": "flag",
+    "homeTeamCountryIso": "AR",
+    "homeTeamColor": "#3dfefb",
+    "awayTeamName": "奥地利",
+    "awayTeamNameEn": "奥地利",
+    "awayRank": "",
+    "awayTeamLogo": "https://flagcdn.com/w80/at.png",
+    "awayTeamLogoType": "flag",
+    "awayTeamCountryIso": "AT",
+    "awayTeamColor": "#96b20b",
+    "leagueName": "世界杯",
+    "leagueNameEn": "International",
+    "leagueShortName": "国际赛",
+    "leagueShortNameEn": "Internationa",
+    "countryName": "国际",
+    "countryNameEn": "World",
+    "countryFlag": "🌐",
+    "source": "five-hundred",
+    "sourceMethod": "500-fallback",
+    "sourceUrl": "https://trade.500.com/jczq/",
+    "sourceMatchId": "2040251",
+    "matchNo": "周一041",
+    "predictionMeta": {
+      "policyVersion": "sporttery-day-formula-trace-v52",
+      "promptVersion": "professional-football-analyst-v21",
+      "strategyVersion": "self-optimization-v1",
+      "trainingVersion": "none",
+      "trainingSource": "none",
+      "trainingSignature": "none|kimi-worldcup-dataset-v1|065363d19babce35|teams:48|fixtures:104|score-calibration-v2:0.046:{\"3\":-0.019,\"4+\":0.053}:{\"clear-btts-open\":0.037,\"one-goal-btts\":-0.016}",
+      "worldCupPriorSignature": "kimi-worldcup-dataset-v1|065363d19babce35|teams:48|fixtures:104",
+      "scoreCalibrationSignature": "score-calibration-v2:0.046:{\"3\":-0.019,\"4+\":0.053}:{\"clear-btts-open\":0.037,\"one-goal-btts\":-0.016}",
+      "generatedAt": "2026-06-15T06:21:14.261Z",
+      "updatedAt": "2026-06-22T13:54:54.571Z",
+      "cutoffTime": "2026-06-22 22:00:00",
+      "dataPolicy": {
+        "zh": "竞彩截止前，赛前分析先由 Elo 强度、长期历史样本、近一年状态、赛程密度、世界杯先验、比分分布与公开赛前信息层生成独立预测；官方 HAD/HHAD SP 和 SP 走势只用于校验市场分歧与价值风险。截止后保留历史预测，只结算赛果，不回写旧推荐。",
+        "en": "Before the Sporttery cutoff, pre-match reads first build an independent forecast from Elo strength, long-run history, recent form, schedule density, World Cup priors, score distribution, and public pre-match signals. Official HAD/HHAD SP and SP movement are used only to validate market disagreement and value risk. After cutoff, the historical prediction is kept and only settlement is added."
+      },
+      "analystRuntime": {
+        "model": "5.5",
+        "reasoningEffort": "high",
+        "promptDocument": "docs/professional-analysis-prompt.md"
+      },
+      "analystFramework": {
+        "version": "professional-football-analyst-v21",
+        "role": {
+          "zh": "专业足球赛事分析师",
+          "en": "Professional football analyst"
+        },
+        "runtime": {
+          "model": "5.5",
+          "reasoningEffort": "high",
+          "promptDocument": "docs/professional-analysis-prompt.md"
+        },
+        "outputSections": [
+          {
+            "id": "baseline",
+            "zh": "一、比赛基本面分析",
+            "en": "1. Fixture baseline"
+          },
+          {
+            "id": "recent-form",
+            "zh": "二、近期状态分析",
+            "en": "2. Recent form"
+          },
+          {
+            "id": "home-away",
+            "zh": "三、主客场表现分析",
+            "en": "3. Home and away split"
+          },
+          {
+            "id": "attack",
+            "zh": "四、进攻能力分析",
+            "en": "4. Attack"
+          },
+          {
+            "id": "defense",
+            "zh": "五、防守能力分析",
+            "en": "5. Defense"
+          },
+          {
+            "id": "lineup",
+            "zh": "六、伤停与首发阵容分析",
+            "en": "6. Injuries and starting XI"
+          },
+          {
+            "id": "tactics",
+            "zh": "七、战术风格与克制关系分析",
+            "en": "7. Tactical matchup"
+          },
+          {
+            "id": "schedule-motivation",
+            "zh": "八、赛程体能与战意分析",
+            "en": "8. Schedule, fitness, motivation"
+          },
+          {
+            "id": "h2h",
+            "zh": "九、历史交锋分析",
+            "en": "9. Head to head"
+          },
+          {
+            "id": "environment-referee",
+            "zh": "十、天气、场地与裁判因素",
+            "en": "10. Weather, pitch, referee"
+          },
+          {
+            "id": "market",
+            "zh": "十一、赔率与盘口分析",
+            "en": "11. Odds and market"
+          },
+          {
+            "id": "verdict",
+            "zh": "十二、综合判断与预测结论",
+            "en": "12. Verdict"
+          }
+        ],
+        "probabilityPrinciples": {
+          "zh": [
+            "先输出胜平负、比分分布、大小球、双方进球和让球概率，不把任务简化成只猜胜负。",
+            "独立概率先由 Elo 强度、Poisson 比分模型、近一年攻防、长期历史样本、世界杯先验和赛程密度生成；官方 SP 只作为市场校验和价值差参考。",
+            "推荐阈值跟随 model-calibration 动态变化；低命中联赛、市场或方向自动降权并提高概率差与让球支持要求。",
+            "回测必须按时间滚动，严禁赛后 xG、赛后射门、最终排名、未公开首发或时间点不一致的临场赔率泄漏。",
+            "评估以 log loss、Brier score、校准误差和分桶可靠性为主，命中率只作为辅助观察。"
+          ],
+          "en": [
+            "Output 1X2, score distribution, totals, BTTS, and handicap probabilities first instead of reducing the task to one winner.",
+            "Independent probabilities are generated first from Elo strength, Poisson score modelling, last-year attack/defense form, long-run history, World Cup priors, and schedule density; official SP is only market validation and value-gap reference.",
+            "Recommendation gates follow model-calibration dynamically; cold leagues, markets, or directions are down-weighted with higher probability-gap and handicap-support requirements.",
+            "Backtests must be time-ordered and must not leak post-match xG, post-match shots, final table rank, unpublished lineups, or late odds into earlier forecast nodes.",
+            "Evaluate with log loss, Brier score, calibration error, and bucket reliability; hit rate is only a secondary diagnostic."
+          ]
+        },
+        "forecastTargets": [
+          {
+            "id": "one-x-two",
+            "zh": "胜平负：主胜、平局、客胜三项概率",
+            "en": "1X2: home, draw, away probabilities"
+          },
+          {
+            "id": "score-distribution",
+            "zh": "比分分布：2-3 个最高概率比分",
+            "en": "Score distribution: top 2-3 scorelines"
+          },
+          {
+            "id": "goal-lines",
+            "zh": "大小球：大/小 2.5 概率",
+            "en": "Goal line: over/under 2.5 probabilities"
+          },
+          {
+            "id": "btts",
+            "zh": "双方进球：BTTS Yes/No 概率",
+            "en": "BTTS: yes/no probabilities"
+          },
+          {
+            "id": "handicap",
+            "zh": "让球概率：当前官方让球线支持率",
+            "en": "Handicap: support at the current official line"
+          }
+        ],
+        "modelingStack": [
+          {
+            "id": "independent-baseline",
+            "zh": "独立基准：Elo、历史样本、世界杯先验与 Poisson 概率",
+            "en": "Independent baseline: Elo, historical samples, World Cup priors, and Poisson probabilities"
+          },
+          {
+            "id": "elo",
+            "zh": "Elo/Glicko 强度：球队动态评分、主场优势和强弱差",
+            "en": "Elo/Glicko strength: dynamic rating, home advantage, team gap"
+          },
+          {
+            "id": "poisson",
+            "zh": "Poisson/Dixon-Coles：进球期望、比分矩阵、大小球和让球聚合",
+            "en": "Poisson/Dixon-Coles: goal expectations, score matrix, totals, handicap aggregation"
+          },
+          {
+            "id": "ml",
+            "zh": "机器学习层：仅在基准稳定并完成时间滚动回测后加入",
+            "en": "ML layer: added only after stable baselines and time-ordered backtests"
+          },
+          {
+            "id": "ensemble",
+            "zh": "集成层：用滚动验证集优化强度/Elo/Poisson/ML 权重",
+            "en": "Ensemble: optimize strength/Elo/Poisson/ML weights on rolling validation"
+          },
+          {
+            "id": "calibration",
+            "zh": "校准层：可靠性曲线、Platt、isotonic、联赛和场景分桶",
+            "en": "Calibration: reliability curves, Platt, isotonic, league and profile buckets"
+          }
+        ],
+        "featurePriority": [
+          "long-term-team-strength",
+          "independent-model-probability",
+          "xg-xga-gap-when-connected",
+          "home-away-split-and-travel",
+          "injuries-and-lineup-quality",
+          "rest-days-and-schedule-density",
+          "style-matchup",
+          "motivation",
+          "ranking-pressure-and-attack-intent",
+          "discipline-cards-and-red-card-risk",
+          "weather-and-pitch",
+          "referee-tendency"
+        ],
+        "qualityStandards": {
+          "zh": [
+            "必须输出概率，而不是只输出胜负结论。",
+            "必须按时间滚动回测，不能随机切分。",
+            "必须校准概率，并按联赛、场景和赔率区间分桶评估。",
+            "必须避免未来信息泄漏。",
+            "必须长期接近或优于简单赔率基准，否则不升格为推荐。",
+            "必须保留赛前快照，赛后只结算和复盘，不改写原方向。"
+          ],
+          "en": [
+            "Output probabilities, not just a winner.",
+            "Use time-ordered rolling backtests, not random splits.",
+            "Calibrate probabilities and evaluate by league, profile, and odds bucket.",
+            "Avoid future-information leakage.",
+            "Approach or beat the simple market baseline long term before promoting recommendations.",
+            "Keep pre-match snapshots; after kickoff only settle and review, never rewrite the original direction."
+          ]
+        },
+        "finalVerdict": {
+          "zh": "结论必须区分稳妥方向和激进方向；胜平负与让球方向保持一致；数据不足时明确标注，不为推荐而硬推。",
+          "en": "The verdict must split conservative and aggressive directions; 1X2 and handicap views must stay consistent; missing data is labelled and no pick is forced."
+        }
+      },
+      "updateReason": {
+        "zh": "竞彩截止或开赛后，历史预测已冻结；后续同步只更新赛果和命中结算，不重算推荐、概率和预测比分。",
+        "en": "After Sporttery cutoff or kickoff, the historical forecast is frozen; later syncs only settle results and never recalculate picks, probabilities, or projected score."
+      },
+      "snapshot": {
+        "phase": "mid",
+        "total": 21,
+        "phases": {
+          "baseline": 17,
+          "mid": 4
+        },
+        "latestAt": "2026-06-22T13:45:20.074Z",
+        "latestSignature": "1X2:HAD:1:reference|BEST:HAD:1:recommend|GOALS::U2.5:reference|1.31/4.20/7.85|-1:2.11/3.25/2.88|58/25/17"
+      }
+    },
+    "buyEndTime": "2026-06-22 22:00:00",
     "probabilityModel": {
       "version": "unified-poisson-bayes-v52",
       "generatedAt": "2026-06-22T13:55:07.944Z",
@@ -37335,502 +37932,8 @@
         "policy": "single-main-recommendation; score-matrix-first; bayesian-posterior; references-not-backups"
       }
     },
-    "predictions": [
-      {
-        "marketType": "1X2",
-        "oddsPoolCode": "HAD",
-        "handicapLine": "0",
-        "tipCode": "1",
-        "tipLabel": {
-          "zh": "参考倾向 主胜 阿根廷",
-          "en": "Reference lean: Home Win (阿根廷)"
-        },
-        "odds": 1.31,
-        "trustScore": 34,
-        "recommendationAction": "reference",
-        "recommendationTier": "posterior-reference",
-        "explanation": {
-          "zh": "胜平负作为统一后验验证项展示，页面主推只看 AI 精选这一条。",
-          "en": "1X2 is shown as a unified-posterior reference; the page main pick is the BEST row only."
-        },
-        "analysisItems": [
-          {
-            "zh": "500 网 HAD 胜平负参考 SP：主胜 1.31 / 平局 4.20 / 客胜 7.85；去水支持率约 主胜 68% / 平局 21% / 客胜 11%。",
-            "en": "500.com HAD reference SP: 1.31 / 4.20 / 7.85; normalized support is about home 68% / draw 21% / away 11%."
-          },
-          {
-            "zh": "参考理由：独立模型优势约 34 个百分点，市场分歧约 47 个百分点，让球同向支持约 42%；条件没有同时闭合，暂不输出单一胜平负方向。",
-            "en": "Watch reason: independent model edge is about 34 points, market disagreement about 47 points, same-side handicap support about 42%; no single 1X2 pick is promoted."
-          },
-          {
-            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 500 网 HAD 胜平负参考 SP 更新时间：2026-06-22T13:54:48.440Z。",
-            "en": "Draw support is not dominant, but late SP movement still matters. 500.com HAD reference SP updated at 2026-06-22T13:54:48.440Z."
-          }
-        ],
-        "riskTags": [
-          {
-            "zh": "非官方参考源",
-            "en": "Non-official reference"
-          },
-          {
-            "zh": "价值边际不足",
-            "en": "No value edge"
-          },
-          {
-            "zh": "EV不足",
-            "en": "Flat expected value"
-          },
-          {
-            "zh": "统一后验验证项",
-            "en": "Unified posterior reference"
-          }
-        ],
-        "visibilityStatus": "FREE",
-        "resultStatus": "PENDING"
-      },
-      {
-        "marketType": "GOALS",
-        "tipCode": "U2.5",
-        "tipLabel": {
-          "zh": "进球参考 小2.5球（≤2球）",
-          "en": "Goals reference: Under 2.5 goals"
-        },
-        "odds": 1.8,
-        "trustScore": 54,
-        "recommendationAction": "reference",
-        "recommendationTier": "posterior-reference",
-        "explanation": {
-          "zh": "进球数只解释比分形态，不作为本场主推兜底。",
-          "en": "Goals explain the score shape only; they are not a backup main pick."
-        },
-        "analysisItems": [
-          {
-            "zh": "比分热区：2-0 附近；候选方向 小2.5球（≤2球） 的模型概率约 56%，低于强推阈值。",
-            "en": "Score heat zone: around 2-0; candidate Under 2.5 goals is about 56%, below the promotion threshold."
-          },
-          {
-            "zh": "大 2.5 球概率约 44%，该指标用于走势参考，不等同于官方总进球 SP。",
-            "en": "Over 2.5 probability is about 44%. This is a model reference, not official Sporttery total-goals SP."
-          }
-        ],
-        "riskTags": [
-          {
-            "zh": "进球条件未齐",
-            "en": "Goals conditions not aligned"
-          },
-          {
-            "zh": "统一后验验证项",
-            "en": "Unified posterior reference"
-          }
-        ],
-        "visibilityStatus": "FREE",
-        "resultStatus": "PENDING"
-      },
-      {
-        "marketType": "BEST",
-        "oddsPoolCode": "HAD",
-        "handicapLine": "0",
-        "tipCode": "1",
-        "tipLabel": {
-          "zh": "主推 主胜 阿根廷",
-          "en": "Main pick: Home win 阿根廷"
-        },
-        "odds": 1.31,
-        "trustScore": 76,
-        "recommendationAction": "recommend",
-        "recommendationTier": "unified-had-posterior",
-        "explanation": {
-          "zh": "统一后验主结论：先用泊松比分矩阵生成比分分布，再用贝叶斯更新融合模型概率、比分反推、赛前信号和SP校验。本场只主推 主胜 阿根廷。",
-          "en": "Unified posterior verdict: the Poisson score matrix is built first, then Bayesian updating combines model probability, score-implied probability, pre-match signals, and SP validation. Single main pick: Home win 阿根廷."
-        },
-        "analysisItems": [
-          {
-            "zh": "比分矩阵先行：主推对应热区 2-0；前三比分为 2-0 / 1-0 / 3-0。",
-            "en": "Score matrix first: pick-aligned score zone 2-0; top three 2-0 / 1-0 / 3-0."
-          },
-          {
-            "zh": "胜平负后验：主胜 62% / 平局 24% / 客胜 15%。当前主结论只按胜平负结算，不再用进球数或另一个盘口做兜底。",
-            "en": "1X2 posterior: 主胜 62% / 平局 24% / 客胜 15%. The main result settles only on this market; totals or the other pool are references, not backups."
-          },
-          {
-            "zh": "自洽规则：如果比分热区偏平局，就压低硬追胜负；如果普通胜平负未开售，就不凭空生成主胜/平/客胜主推；如果选择让球，也只显示为让胜/让平/让负。",
-            "en": "Consistency rule: draw-heavy score shapes suppress forced 1X2 sides; if 1X2 is not on sale, no raw 1X2 main pick is invented; HHAD is displayed only as HHAD home/draw/away."
-          }
-        ],
-        "riskTags": [
-          {
-            "zh": "统一后验主结论",
-            "en": "Unified posterior main pick"
-          },
-          {
-            "zh": "低比分热区",
-            "en": "Low-score zone"
-          },
-          {
-            "zh": "非官方参考源",
-            "en": "Non-official reference"
-          },
-          {
-            "zh": "价值边际不足",
-            "en": "No value edge"
-          },
-          {
-            "zh": "EV不足",
-            "en": "Flat expected value"
-          }
-        ],
-        "visibilityStatus": "FREE",
-        "resultStatus": "PENDING"
-      }
-    ],
-    "worldCupPrior": {
-      "source": "kimi-worldcup-dataset",
-      "version": "kimi-worldcup-dataset-v1",
-      "signature": "kimi-worldcup-dataset-v1|065363d19babce35|teams:48|fixtures:104",
-      "policy": "usable-as-pre-match-prior",
-      "rawPolicy": "audit-only",
-      "strengthDiff": 0.316,
-      "fixture": null,
-      "home": {
-        "key": "argentina",
-        "nameZh": "阿根廷",
-        "nameEn": "Argentina",
-        "group": "J",
-        "fifaRank": 3,
-        "elo": 2050,
-        "squadValueM": 874,
-        "avgAge": 28.9,
-        "corePlayer": "Lautaro Martinez",
-        "qualityTier": "verified",
-        "recent10": {
-          "raw": "9胜1平0负",
-          "wins": 9,
-          "draws": 1,
-          "losses": 0,
-          "points": 28
-        },
-        "groupOutlook": {
-          "group": "G",
-          "projectedRank": 1,
-          "projectedPoints": 6.6,
-          "wins": 1.9,
-          "draws": 0.8,
-          "losses": 0.2,
-          "goalsFor": 4.6,
-          "goalsAgainst": 2.1,
-          "goalDiff": 2.5,
-          "advanceProbability": 95,
-          "groupWinProbability": 60
-        },
-        "modelStrengthNormalized": 0.9467
-      },
-      "away": {
-        "key": "austria",
-        "nameZh": "奥地利",
-        "nameEn": "Austria",
-        "group": "J",
-        "fifaRank": 24,
-        "elo": 1685,
-        "squadValueM": 147.6,
-        "avgAge": 27.5,
-        "corePlayer": "Virtanen",
-        "qualityTier": "estimated",
-        "recent10": {
-          "raw": "8胜0平1负",
-          "wins": 8,
-          "draws": 0,
-          "losses": 1,
-          "points": 24
-        },
-        "groupOutlook": {
-          "group": "G",
-          "projectedRank": 2,
-          "projectedPoints": 3.8,
-          "wins": 1,
-          "draws": 0.9,
-          "losses": 1.1,
-          "goalsFor": 3.6,
-          "goalsAgainst": 3.8,
-          "goalDiff": -0.2,
-          "advanceProbability": 90,
-          "groupWinProbability": 25
-        },
-        "modelStrengthNormalized": 0.6307
-      }
-    },
-    "externalSignals": {
-      "source": "500.com:jczq",
-      "updatedAt": "2026-06-22T13:54:53.215Z",
-      "sourceMatchId": "2040251",
-      "fixtureId": "1359216",
-      "matchNo": "周一041",
-      "leagueName": "世界杯",
-      "homeTeamName": "阿根廷",
-      "awayTeamName": "奥地利",
-      "kickoffTime": "2026-06-23T01:00:00+08:00",
-      "buyEndTime": "2026-06-22 22:00:00",
-      "handicapLine": "-1",
-      "externalOdds": {
-        "source": "500.com",
-        "odds1": 1.31,
-        "oddsX": 4.2,
-        "odds2": 7.85,
-        "summary": {
-          "zh": "500彩票网胜平负参考：1.31 / 4.20 / 7.85",
-          "en": "500.com 1X2 reference: 1.31 / 4.20 / 7.85"
-        }
-      },
-      "bookmakerOdds": {
-        "had": {
-          "odds1": 1.31,
-          "oddsX": 4.2,
-          "odds2": 7.85
-        },
-        "hhad": {
-          "odds1": 2.11,
-          "oddsX": 3.25,
-          "odds2": 2.88
-        }
-      },
-      "venue": {
-        "name": "Estadio Akron",
-        "city": "Guadalajara",
-        "country": "Mexico",
-        "latitude": 20.6819,
-        "longitude": -103.4628,
-        "verified": false,
-        "source": "world-cup-host-rotation-estimate",
-        "summary": {
-          "zh": "Estadio Akron，Guadalajara。当前为场地估算，后续可用官方球场覆盖。",
-          "en": "Estadio Akron, Guadalajara. Venue is estimated and can be replaced by official venue data."
-        }
-      },
-      "weather": {
-        "source": "open-meteo",
-        "provider": "open-meteo",
-        "updatedAt": "2026-06-22T13:54:53.215Z",
-        "forecastTime": "2026-06-22T17:00Z",
-        "verified": false,
-        "confidence": "estimated-location",
-        "locationSource": "world-cup-host-rotation-estimate",
-        "condition": {
-          "zh": "少云",
-          "en": "Partly cloudy"
-        },
-        "temperatureC": 21.8,
-        "windKph": 8.2,
-        "windGustKph": 27,
-        "precipitationMm": 0,
-        "weatherCode": 1,
-        "riskLevel": "low",
-        "summary": {
-          "zh": "Guadalajara 场地估算天气：少云，21.8C，风速 8.2km/h，降水 0mm，环境低风险。",
-          "en": "Guadalajara venue estimated weather: Partly cloudy, 21.8C, wind 8.2km/h, precipitation 0mm, low risk."
-        },
-        "impact": {
-          "zh": "天气扰动较低，按中性环境处理。",
-          "en": "Weather disruption is low and treated as a neutral environment."
-        }
-      },
-      "preMatch": {
-        "version": "sync-pre-match-signals-v50",
-        "source": "pre-match-signal-layer",
-        "updatedAt": "2026-06-16T08:16:51.180Z",
-        "sourceMatchId": "2040251",
-        "matchId": "sporttery_2040251",
-        "matchNo": "周一041",
-        "kickoffTime": "2026-06-23T01:00:00+08:00",
-        "homeTeamName": "阿根廷",
-        "awayTeamName": "奥地利",
-        "quality": {
-          "version": "pre-match-quality-v50",
-          "score": 10,
-          "sourceQuality": "low",
-          "severeMissingCount": 3,
-          "trustPenalty": 14,
-          "components": {
-            "referee": {
-              "key": "referee",
-              "label": {
-                "zh": "裁判牌数",
-                "en": "Referee cards"
-              },
-              "status": "missing",
-              "score": 0,
-              "source": "missing",
-              "note": {
-                "zh": "未接入真实裁判牌数",
-                "en": "No verified referee card profile"
-              }
-            },
-            "teamCards": {
-              "key": "teamCards",
-              "label": {
-                "zh": "球队牌数历史",
-                "en": "Team card history"
-              },
-              "status": "missing",
-              "score": 0,
-              "source": "missing",
-              "note": {
-                "zh": "未形成可用球队黄红牌样本",
-                "en": "No usable team card sample"
-              }
-            },
-            "lineup": {
-              "key": "lineup",
-              "label": {
-                "zh": "首发/预计阵容",
-                "en": "Lineup"
-              },
-              "status": "missing",
-              "score": 0,
-              "source": "missing",
-              "note": {
-                "zh": "未接入首发或预计名单",
-                "en": "No lineup or projected XI"
-              }
-            },
-            "injuries": {
-              "key": "injuries",
-              "label": {
-                "zh": "伤停",
-                "en": "Injuries"
-              },
-              "status": "missing",
-              "score": 0,
-              "source": "missing",
-              "note": {
-                "zh": "未接入伤停",
-                "en": "No injury signal"
-              }
-            },
-            "xg": {
-              "key": "xg",
-              "label": {
-                "zh": "xG/xGA",
-                "en": "xG/xGA"
-              },
-              "status": "missing",
-              "score": 0,
-              "source": "missing",
-              "note": {
-                "zh": "未接入赛前 xG/xGA",
-                "en": "No pre-match xG/xGA"
-              }
-            },
-            "weather": {
-              "key": "weather",
-              "label": {
-                "zh": "天气/场地",
-                "en": "Weather/pitch"
-              },
-              "status": "estimated",
-              "score": 48,
-              "source": "open-meteo",
-              "note": {
-                "zh": "Guadalajara 场地估算天气：毛毛雨，22.5C，风速 3.8km/h，降水 0.1mm，环境低风险。",
-                "en": "Guadalajara venue estimated weather: Drizzle, 22.5C, wind 3.8km/h, precipitation 0.1mm, low risk."
-              }
-            },
-            "market": {
-              "key": "market",
-              "label": {
-                "zh": "盘口校验",
-                "en": "Market validation"
-              },
-              "status": "missing",
-              "score": 0,
-              "source": "missing",
-              "note": {
-                "zh": "缺少盘口校验源",
-                "en": "No market validation source"
-              }
-            },
-            "motivation": {
-              "key": "motivation",
-              "label": {
-                "zh": "排名/战意",
-                "en": "Table/motivation"
-              },
-              "status": "estimated",
-              "score": 62,
-              "source": "rank-stage-context",
-              "note": {
-                "zh": "已接入排名或赛程阶段信息",
-                "en": "Rank or stage context loaded"
-              }
-            }
-          },
-          "missing": [
-            {
-              "key": "referee",
-              "zh": "缺少裁判牌数",
-              "en": "Missing Referee cards",
-              "severity": "medium",
-              "weight": 10
-            },
-            {
-              "key": "teamCards",
-              "zh": "缺少球队牌数历史",
-              "en": "Missing Team card history",
-              "severity": "medium",
-              "weight": 10
-            },
-            {
-              "key": "lineup",
-              "zh": "缺少首发/预计阵容",
-              "en": "Missing Lineup",
-              "severity": "high",
-              "weight": 15
-            },
-            {
-              "key": "injuries",
-              "zh": "缺少伤停",
-              "en": "Missing Injuries",
-              "severity": "high",
-              "weight": 15
-            },
-            {
-              "key": "xg",
-              "zh": "缺少xG/xGA",
-              "en": "Missing xG/xGA",
-              "severity": "medium",
-              "weight": 14
-            },
-            {
-              "key": "market",
-              "zh": "缺少盘口校验",
-              "en": "Missing Market validation",
-              "severity": "high",
-              "weight": 18
-            }
-          ],
-          "lowQuality": [
-            "weather",
-            "motivation"
-          ],
-          "connected": {
-            "referee": false,
-            "teamCards": false,
-            "lineup": false,
-            "injuries": false,
-            "xg": false,
-            "weather": true,
-            "market": false,
-            "motivation": true
-          },
-          "summary": {
-            "zh": "赛前数据质量 10/100，缺口偏多。",
-            "en": "Pre-match data quality 10/100, low coverage."
-          }
-        },
-        "qualitySummary": {
-          "zh": "赛前数据质量 10/100，缺口偏多。",
-          "en": "Pre-match data quality 10/100, low coverage."
-        }
-      }
-    },
+    "projectedScoreHome": 2,
+    "projectedScoreAway": 0,
     "stats": {
       "xG": {
         "home": 1.82,
@@ -37986,23 +38089,544 @@
         "note": "high-variance-data-gap"
       }
     },
+    "odds": {
+      "odds1": 1.31,
+      "oddsX": 4.2,
+      "odds2": 7.85
+    },
+    "oddsSource": "500.com:HAD",
+    "oddsPoolCode": "HAD",
+    "oddsSourceMethod": "500-fallback",
+    "oddsUpdatedAt": "2026-06-22T13:54:48.440Z",
+    "oddsSourceUrl": "https://trade.500.com/jczq/",
+    "handicapOdds": {
+      "odds1": 2.11,
+      "oddsX": 3.25,
+      "odds2": 2.88
+    },
+    "handicapLine": "-1",
+    "handicapOddsSource": "500.com:HHAD",
+    "handicapOddsPoolCode": "HHAD",
+    "handicapOddsSourceMethod": "500-fallback",
+    "handicapOddsUpdatedAt": "2026-06-22T13:54:48.440Z",
+    "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
+    "predictions": [
+      {
+        "marketType": "1X2",
+        "oddsPoolCode": "HAD",
+        "handicapLine": "0",
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "参考倾向 主胜 阿根廷",
+          "en": "Reference lean: Home Win (阿根廷)"
+        },
+        "odds": 1.31,
+        "trustScore": 34,
+        "recommendationAction": "reference",
+        "recommendationTier": "posterior-reference",
+        "explanation": {
+          "zh": "胜平负作为统一后验验证项展示，页面主推只看 AI 精选这一条。",
+          "en": "1X2 is shown as a unified-posterior reference; the page main pick is the BEST row only."
+        },
+        "analysisItems": [
+          {
+            "zh": "500 网 HAD 胜平负参考 SP：主胜 1.31 / 平局 4.20 / 客胜 7.85；去水支持率约 主胜 68% / 平局 21% / 客胜 11%。",
+            "en": "500.com HAD reference SP: 1.31 / 4.20 / 7.85; normalized support is about home 68% / draw 21% / away 11%."
+          },
+          {
+            "zh": "参考理由：独立模型优势约 34 个百分点，市场分歧约 47 个百分点，让球同向支持约 42%；条件没有同时闭合，暂不输出单一胜平负方向。",
+            "en": "Watch reason: independent model edge is about 34 points, market disagreement about 47 points, same-side handicap support about 42%; no single 1X2 pick is promoted."
+          },
+          {
+            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 500 网 HAD 胜平负参考 SP 更新时间：2026-06-22T13:54:48.440Z。",
+            "en": "Draw support is not dominant, but late SP movement still matters. 500.com HAD reference SP updated at 2026-06-22T13:54:48.440Z."
+          }
+        ],
+        "riskTags": [
+          {
+            "zh": "非官方参考源",
+            "en": "Non-official reference"
+          },
+          {
+            "zh": "价值边际不足",
+            "en": "No value edge"
+          },
+          {
+            "zh": "EV不足",
+            "en": "Flat expected value"
+          },
+          {
+            "zh": "统一后验验证项",
+            "en": "Unified posterior reference"
+          }
+        ],
+        "visibilityStatus": "FREE",
+        "resultStatus": "PENDING"
+      },
+      {
+        "marketType": "GOALS",
+        "tipCode": "U2.5",
+        "tipLabel": {
+          "zh": "进球参考 小2.5球（≤2球）",
+          "en": "Goals reference: Under 2.5 goals"
+        },
+        "odds": 1.8,
+        "trustScore": 54,
+        "recommendationAction": "reference",
+        "recommendationTier": "posterior-reference",
+        "explanation": {
+          "zh": "进球数只解释比分形态，不作为本场主推兜底。",
+          "en": "Goals explain the score shape only; they are not a backup main pick."
+        },
+        "analysisItems": [
+          {
+            "zh": "比分热区：2-0 附近；候选方向 小2.5球（≤2球） 的模型概率约 56%，低于强推阈值。",
+            "en": "Score heat zone: around 2-0; candidate Under 2.5 goals is about 56%, below the promotion threshold."
+          },
+          {
+            "zh": "大 2.5 球概率约 44%，该指标用于走势参考，不等同于官方总进球 SP。",
+            "en": "Over 2.5 probability is about 44%. This is a model reference, not official Sporttery total-goals SP."
+          }
+        ],
+        "riskTags": [
+          {
+            "zh": "进球条件未齐",
+            "en": "Goals conditions not aligned"
+          },
+          {
+            "zh": "统一后验验证项",
+            "en": "Unified posterior reference"
+          }
+        ],
+        "visibilityStatus": "FREE",
+        "resultStatus": "PENDING"
+      },
+      {
+        "marketType": "BEST",
+        "oddsPoolCode": "HAD",
+        "handicapLine": "0",
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "主推 主胜 阿根廷",
+          "en": "Main pick: Home win 阿根廷"
+        },
+        "odds": 1.31,
+        "trustScore": 76,
+        "recommendationAction": "recommend",
+        "recommendationTier": "unified-had-posterior",
+        "explanation": {
+          "zh": "统一后验主结论：先用泊松比分矩阵生成比分分布，再用贝叶斯更新融合模型概率、比分反推、赛前信号和SP校验。本场只主推 主胜 阿根廷。",
+          "en": "Unified posterior verdict: the Poisson score matrix is built first, then Bayesian updating combines model probability, score-implied probability, pre-match signals, and SP validation. Single main pick: Home win 阿根廷."
+        },
+        "analysisItems": [
+          {
+            "zh": "比分矩阵先行：主推对应热区 2-0；前三比分为 2-0 / 1-0 / 3-0。",
+            "en": "Score matrix first: pick-aligned score zone 2-0; top three 2-0 / 1-0 / 3-0."
+          },
+          {
+            "zh": "胜平负后验：主胜 62% / 平局 24% / 客胜 15%。当前主结论只按胜平负结算，不再用进球数或另一个盘口做兜底。",
+            "en": "1X2 posterior: 主胜 62% / 平局 24% / 客胜 15%. The main result settles only on this market; totals or the other pool are references, not backups."
+          },
+          {
+            "zh": "自洽规则：如果比分热区偏平局，就压低硬追胜负；如果普通胜平负未开售，就不凭空生成主胜/平/客胜主推；如果选择让球，也只显示为让胜/让平/让负。",
+            "en": "Consistency rule: draw-heavy score shapes suppress forced 1X2 sides; if 1X2 is not on sale, no raw 1X2 main pick is invented; HHAD is displayed only as HHAD home/draw/away."
+          }
+        ],
+        "riskTags": [
+          {
+            "zh": "统一后验主结论",
+            "en": "Unified posterior main pick"
+          },
+          {
+            "zh": "低比分热区",
+            "en": "Low-score zone"
+          },
+          {
+            "zh": "非官方参考源",
+            "en": "Non-official reference"
+          },
+          {
+            "zh": "价值边际不足",
+            "en": "No value edge"
+          },
+          {
+            "zh": "EV不足",
+            "en": "Flat expected value"
+          }
+        ],
+        "visibilityStatus": "FREE",
+        "resultStatus": "PENDING"
+      }
+    ]
+  },
+  {
+    "id": "fivehundred_2040252",
+    "homeTeamId": "team_17xz83b",
+    "awayTeamId": "team_4r4dcl",
+    "leagueId": "league_1gj294g",
+    "countryId": "world",
+    "kickoffTime": "2026-06-23T05:00:00+08:00",
+    "status": "SCHEDULED",
+    "worldCupPrior": {
+      "source": "kimi-worldcup-dataset",
+      "version": "kimi-worldcup-dataset-v1",
+      "signature": "kimi-worldcup-dataset-v1|065363d19babce35|teams:48|fixtures:104",
+      "policy": "usable-as-pre-match-prior",
+      "rawPolicy": "audit-only",
+      "strengthDiff": 0.4965,
+      "fixture": null,
+      "home": {
+        "key": "france",
+        "nameZh": "法国",
+        "nameEn": "France",
+        "group": "I",
+        "fifaRank": 1,
+        "elo": 2100,
+        "squadValueM": 1347,
+        "avgAge": 25.3,
+        "corePlayer": "Kylian Mbappe",
+        "qualityTier": "verified",
+        "recent10": {
+          "raw": "9胜1平0负",
+          "wins": 9,
+          "draws": 1,
+          "losses": 0,
+          "points": 28
+        },
+        "groupOutlook": {
+          "group": "G",
+          "projectedRank": 1,
+          "projectedPoints": 6.6,
+          "wins": 1.9,
+          "draws": 0.9,
+          "losses": 0.2,
+          "goalsFor": 4.9,
+          "goalsAgainst": 2.4,
+          "goalDiff": 2.5,
+          "advanceProbability": 95,
+          "groupWinProbability": 60
+        },
+        "modelStrengthNormalized": 0.96
+      },
+      "away": {
+        "key": "iraq",
+        "nameZh": "伊拉克",
+        "nameEn": "Iraq",
+        "group": "I",
+        "fifaRank": 43,
+        "elo": 1575,
+        "squadValueM": 86.2,
+        "avgAge": 27.4,
+        "corePlayer": "Haydary",
+        "qualityTier": "estimated",
+        "recent10": {
+          "raw": "4胜1平4负",
+          "wins": 4,
+          "draws": 1,
+          "losses": 4,
+          "points": 13
+        },
+        "groupOutlook": {
+          "group": "G",
+          "projectedRank": 4,
+          "projectedPoints": 1.9,
+          "wins": 0.4,
+          "draws": 0.8,
+          "losses": 1.8,
+          "goalsFor": 2.5,
+          "goalsAgainst": 4.7,
+          "goalDiff": -2.2,
+          "advanceProbability": 5,
+          "groupWinProbability": 5
+        },
+        "modelStrengthNormalized": 0.4635
+      }
+    },
+    "externalSignals": {
+      "source": "500.com:jczq",
+      "updatedAt": "2026-06-22T13:54:53.215Z",
+      "sourceMatchId": "2040252",
+      "fixtureId": "1359213",
+      "matchNo": "周一042",
+      "leagueName": "世界杯",
+      "homeTeamName": "法国",
+      "awayTeamName": "伊拉克",
+      "kickoffTime": "2026-06-23T05:00:00+08:00",
+      "buyEndTime": "2026-06-22 22:00:00",
+      "handicapLine": "-3",
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 2.31,
+        "oddsX": 4.2,
+        "odds2": 2.18,
+        "summary": {
+          "zh": "500彩票网让球参考(-3)：2.31 / 4.20 / 2.18",
+          "en": "500.com handicap reference (-3): 2.31 / 4.20 / 2.18"
+        }
+      },
+      "bookmakerOdds": {
+        "hhad": {
+          "odds1": 2.31,
+          "oddsX": 4.2,
+          "odds2": 2.18
+        }
+      },
+      "venue": {
+        "name": "Estadio Akron",
+        "city": "Guadalajara",
+        "country": "Mexico",
+        "latitude": 20.6819,
+        "longitude": -103.4628,
+        "verified": false,
+        "source": "world-cup-host-rotation-estimate",
+        "summary": {
+          "zh": "Estadio Akron，Guadalajara。当前为场地估算，后续可用官方球场覆盖。",
+          "en": "Estadio Akron, Guadalajara. Venue is estimated and can be replaced by official venue data."
+        }
+      },
+      "weather": {
+        "source": "open-meteo",
+        "provider": "open-meteo",
+        "updatedAt": "2026-06-22T13:54:53.215Z",
+        "forecastTime": "2026-06-22T21:00Z",
+        "verified": false,
+        "confidence": "estimated-location",
+        "locationSource": "world-cup-host-rotation-estimate",
+        "condition": {
+          "zh": "雷阵雨",
+          "en": "Thunderstorm"
+        },
+        "temperatureC": 24.6,
+        "windKph": 8.9,
+        "windGustKph": 28.4,
+        "precipitationMm": 0.4,
+        "weatherCode": 95,
+        "riskLevel": "low",
+        "summary": {
+          "zh": "Guadalajara 场地估算天气：雷阵雨，24.6C，风速 8.9km/h，降水 0.4mm，环境低风险。",
+          "en": "Guadalajara venue estimated weather: Thunderstorm, 24.6C, wind 8.9km/h, precipitation 0.4mm, low risk."
+        },
+        "impact": {
+          "zh": "天气扰动较低，按中性环境处理。",
+          "en": "Weather disruption is low and treated as a neutral environment."
+        }
+      },
+      "preMatch": {
+        "version": "sync-pre-match-signals-v50",
+        "source": "pre-match-signal-layer",
+        "updatedAt": "2026-06-16T08:16:51.180Z",
+        "sourceMatchId": "2040252",
+        "matchId": "sporttery_2040252",
+        "matchNo": "周一042",
+        "kickoffTime": "2026-06-23T05:00:00+08:00",
+        "homeTeamName": "法国",
+        "awayTeamName": "伊拉克",
+        "quality": {
+          "version": "pre-match-quality-v50",
+          "score": 10,
+          "sourceQuality": "low",
+          "severeMissingCount": 3,
+          "trustPenalty": 14,
+          "components": {
+            "referee": {
+              "key": "referee",
+              "label": {
+                "zh": "裁判牌数",
+                "en": "Referee cards"
+              },
+              "status": "missing",
+              "score": 0,
+              "source": "missing",
+              "note": {
+                "zh": "未接入真实裁判牌数",
+                "en": "No verified referee card profile"
+              }
+            },
+            "teamCards": {
+              "key": "teamCards",
+              "label": {
+                "zh": "球队牌数历史",
+                "en": "Team card history"
+              },
+              "status": "missing",
+              "score": 0,
+              "source": "missing",
+              "note": {
+                "zh": "未形成可用球队黄红牌样本",
+                "en": "No usable team card sample"
+              }
+            },
+            "lineup": {
+              "key": "lineup",
+              "label": {
+                "zh": "首发/预计阵容",
+                "en": "Lineup"
+              },
+              "status": "missing",
+              "score": 0,
+              "source": "missing",
+              "note": {
+                "zh": "未接入首发或预计名单",
+                "en": "No lineup or projected XI"
+              }
+            },
+            "injuries": {
+              "key": "injuries",
+              "label": {
+                "zh": "伤停",
+                "en": "Injuries"
+              },
+              "status": "missing",
+              "score": 0,
+              "source": "missing",
+              "note": {
+                "zh": "未接入伤停",
+                "en": "No injury signal"
+              }
+            },
+            "xg": {
+              "key": "xg",
+              "label": {
+                "zh": "xG/xGA",
+                "en": "xG/xGA"
+              },
+              "status": "missing",
+              "score": 0,
+              "source": "missing",
+              "note": {
+                "zh": "未接入赛前 xG/xGA",
+                "en": "No pre-match xG/xGA"
+              }
+            },
+            "weather": {
+              "key": "weather",
+              "label": {
+                "zh": "天气/场地",
+                "en": "Weather/pitch"
+              },
+              "status": "estimated",
+              "score": 48,
+              "source": "open-meteo",
+              "note": {
+                "zh": "Guadalajara 场地估算天气：雷阵雨，22.7C，风速 3.5km/h，降水 0.2mm，环境低风险。",
+                "en": "Guadalajara venue estimated weather: Thunderstorm, 22.7C, wind 3.5km/h, precipitation 0.2mm, low risk."
+              }
+            },
+            "market": {
+              "key": "market",
+              "label": {
+                "zh": "盘口校验",
+                "en": "Market validation"
+              },
+              "status": "missing",
+              "score": 0,
+              "source": "missing",
+              "note": {
+                "zh": "缺少盘口校验源",
+                "en": "No market validation source"
+              }
+            },
+            "motivation": {
+              "key": "motivation",
+              "label": {
+                "zh": "排名/战意",
+                "en": "Table/motivation"
+              },
+              "status": "estimated",
+              "score": 62,
+              "source": "rank-stage-context",
+              "note": {
+                "zh": "已接入排名或赛程阶段信息",
+                "en": "Rank or stage context loaded"
+              }
+            }
+          },
+          "missing": [
+            {
+              "key": "referee",
+              "zh": "缺少裁判牌数",
+              "en": "Missing Referee cards",
+              "severity": "medium",
+              "weight": 10
+            },
+            {
+              "key": "teamCards",
+              "zh": "缺少球队牌数历史",
+              "en": "Missing Team card history",
+              "severity": "medium",
+              "weight": 10
+            },
+            {
+              "key": "lineup",
+              "zh": "缺少首发/预计阵容",
+              "en": "Missing Lineup",
+              "severity": "high",
+              "weight": 15
+            },
+            {
+              "key": "injuries",
+              "zh": "缺少伤停",
+              "en": "Missing Injuries",
+              "severity": "high",
+              "weight": 15
+            },
+            {
+              "key": "xg",
+              "zh": "缺少xG/xGA",
+              "en": "Missing xG/xGA",
+              "severity": "medium",
+              "weight": 14
+            },
+            {
+              "key": "market",
+              "zh": "缺少盘口校验",
+              "en": "Missing Market validation",
+              "severity": "high",
+              "weight": 18
+            }
+          ],
+          "lowQuality": [
+            "weather",
+            "motivation"
+          ],
+          "connected": {
+            "referee": false,
+            "teamCards": false,
+            "lineup": false,
+            "injuries": false,
+            "xg": false,
+            "weather": true,
+            "market": false,
+            "motivation": true
+          },
+          "summary": {
+            "zh": "赛前数据质量 10/100，缺口偏多。",
+            "en": "Pre-match data quality 10/100, low coverage."
+          }
+        },
+        "qualitySummary": {
+          "zh": "赛前数据质量 10/100，缺口偏多。",
+          "en": "Pre-match data quality 10/100, low coverage."
+        }
+      }
+    },
     "matchDate": "2026-06-23",
     "kickoffDate": "2026-06-23",
     "businessDate": "2026-06-22",
-    "homeTeamName": "阿根廷",
-    "homeTeamNameEn": "阿根廷",
+    "homeTeamName": "法国",
+    "homeTeamNameEn": "法国",
     "homeRank": "",
-    "homeTeamLogo": "https://flagcdn.com/w80/ar.png",
+    "homeTeamLogo": "https://flagcdn.com/w80/fr.png",
     "homeTeamLogoType": "flag",
-    "homeTeamCountryIso": "AR",
-    "homeTeamColor": "#3dfefb",
-    "awayTeamName": "奥地利",
-    "awayTeamNameEn": "奥地利",
+    "homeTeamCountryIso": "FR",
+    "homeTeamColor": "#9e6060",
+    "awayTeamName": "伊拉克",
+    "awayTeamNameEn": "伊拉克",
     "awayRank": "",
-    "awayTeamLogo": "https://flagcdn.com/w80/at.png",
+    "awayTeamLogo": "https://flagcdn.com/w80/iq.png",
     "awayTeamLogoType": "flag",
-    "awayTeamCountryIso": "AT",
-    "awayTeamColor": "#96b20b",
+    "awayTeamCountryIso": "IQ",
+    "awayTeamColor": "#1121a7",
     "leagueName": "世界杯",
     "leagueNameEn": "International",
     "leagueShortName": "国际赛",
@@ -38013,8 +38637,8 @@
     "source": "five-hundred",
     "sourceMethod": "500-fallback",
     "sourceUrl": "https://trade.500.com/jczq/",
-    "sourceMatchId": "2040251",
-    "matchNo": "周一041",
+    "sourceMatchId": "2040252",
+    "matchNo": "周一042",
     "predictionMeta": {
       "policyVersion": "sporttery-day-formula-trace-v52",
       "promptVersion": "professional-football-analyst-v21",
@@ -38222,53 +38846,20 @@
         }
       },
       "updateReason": {
-        "zh": "官方 SP 或让球盘没有实质变化，原赛前方向继续保留；分析版本可更新，但不重算推荐方向。",
-        "en": "Official SP and handicap signals did not materially change, so the pre-match direction is preserved; analysis versions may update, but the recommendation direction is not recalculated."
+        "zh": "竞彩截止或开赛后，历史预测已冻结；后续同步只更新赛果和命中结算，不重算推荐、概率和预测比分。",
+        "en": "After Sporttery cutoff or kickoff, the historical forecast is frozen; later syncs only settle results and never recalculate picks, probabilities, or projected score."
       },
       "snapshot": {
-        "phase": "mid",
-        "total": 21,
+        "phase": "baseline",
+        "total": 13,
         "phases": {
-          "baseline": 17,
-          "mid": 4
+          "baseline": 13
         },
-        "latestAt": "2026-06-22T13:45:20.074Z",
-        "latestSignature": "1X2:HAD:1:reference|BEST:HAD:1:recommend|GOALS::U2.5:reference|1.31/4.20/7.85|-1:2.11/3.25/2.88|58/25/17"
+        "latestAt": "2026-06-22T12:59:54.275Z",
+        "latestSignature": "1X2:HHAD:2:reference|BEST:HHAD:2:recommend|GOALS::U2.5:reference|--|-3:2.31/4.20/2.18|72/19/10"
       }
     },
-    "odds": {
-      "odds1": 1.31,
-      "oddsX": 4.2,
-      "odds2": 7.85
-    },
-    "handicapOdds": {
-      "odds1": 2.11,
-      "oddsX": 3.25,
-      "odds2": 2.88
-    },
     "buyEndTime": "2026-06-22 22:00:00",
-    "oddsSource": "500.com:HAD",
-    "oddsPoolCode": "HAD",
-    "oddsSourceMethod": "500-fallback",
-    "oddsUpdatedAt": "2026-06-22T13:54:48.440Z",
-    "oddsSourceUrl": "https://trade.500.com/jczq/",
-    "handicapLine": "-1",
-    "handicapOddsSource": "500.com:HHAD",
-    "handicapOddsPoolCode": "HHAD",
-    "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsUpdatedAt": "2026-06-22T13:54:48.440Z",
-    "handicapOddsSourceUrl": "https://trade.500.com/jczq/"
-  },
-  {
-    "id": "fivehundred_2040252",
-    "homeTeamId": "team_17xz83b",
-    "awayTeamId": "team_4r4dcl",
-    "leagueId": "league_1gj294g",
-    "countryId": "world",
-    "kickoffTime": "2026-06-23T05:00:00+08:00",
-    "status": "SCHEDULED",
-    "projectedScoreHome": 2,
-    "projectedScoreAway": 0,
     "probabilityModel": {
       "version": "unified-poisson-bayes-v52",
       "generatedAt": "2026-06-22T13:55:07.945Z",
@@ -39369,497 +39960,8 @@
         "policy": "single-main-recommendation; score-matrix-first; bayesian-posterior; references-not-backups"
       }
     },
-    "predictions": [
-      {
-        "marketType": "1X2",
-        "oddsPoolCode": "HHAD",
-        "handicapLine": "-3",
-        "tipCode": "2",
-        "tipLabel": {
-          "zh": "参考倾向 让负",
-          "en": "Reference lean: HHAD Away"
-        },
-        "odds": 2.18,
-        "trustScore": 38,
-        "recommendationAction": "reference",
-        "recommendationTier": "posterior-reference",
-        "explanation": {
-          "zh": "普通胜平负未开售，胜平负不生成主推；本场按让球输出主结论。",
-          "en": "Standard 1X2 is not on sale, so no raw 1X2 main pick is created; the verdict uses HHAD."
-        },
-        "analysisItems": [
-          {
-            "zh": "500 网 HHAD 让球参考(-3) SP：让胜 2.31 / 让平 4.20 / 让负 2.18；去水支持率约 主胜 38% / 平局 21% / 客胜 41%。",
-            "en": "500.com HHAD reference (-3) SP: 2.31 / 4.20 / 2.18; normalized support is about home 38% / draw 21% / away 41%."
-          },
-          {
-            "zh": "参考理由：普通胜平负未开售，本场按独立 Poisson 让球概率给参考方向；模型优势约 62 个百分点，盘口仅作校验，条件未完全闭合时不强推单一让球方向。",
-            "en": "Watch reason: standard 1X2 is not open, so the reference direction comes from independent Poisson handicap probabilities. Model edge is about 62 points; the board is only a validation layer."
-          },
-          {
-            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 500 网 HHAD 让球参考(-3) SP 更新时间：2026-06-22T13:54:48.440Z。",
-            "en": "Draw support is not dominant, but late SP movement still matters. 500.com HHAD reference (-3) SP updated at 2026-06-22T13:54:48.440Z."
-          }
-        ],
-        "riskTags": [
-          {
-            "zh": "非官方参考源",
-            "en": "Non-official reference"
-          },
-          {
-            "zh": "胜负接近",
-            "en": "Tight 1X2"
-          },
-          {
-            "zh": "让球支持不足",
-            "en": "Handicap support weak"
-          },
-          {
-            "zh": "统一后验验证项",
-            "en": "Unified posterior reference"
-          }
-        ],
-        "visibilityStatus": "FREE",
-        "resultStatus": "PENDING"
-      },
-      {
-        "marketType": "GOALS",
-        "tipCode": "U2.5",
-        "tipLabel": {
-          "zh": "进球参考 小2.5球（≤2球）",
-          "en": "Goals reference: Under 2.5 goals"
-        },
-        "odds": 1.96,
-        "trustScore": 49,
-        "recommendationAction": "reference",
-        "recommendationTier": "posterior-reference",
-        "explanation": {
-          "zh": "进球数只解释比分形态，不作为本场主推兜底。",
-          "en": "Goals explain the score shape only; they are not a backup main pick."
-        },
-        "analysisItems": [
-          {
-            "zh": "比分热区：2-0 附近；候选方向 小2.5球（≤2球） 的模型概率约 51%，低于强推阈值。",
-            "en": "Score heat zone: around 2-0; candidate Under 2.5 goals is about 51%, below the promotion threshold."
-          },
-          {
-            "zh": "大 2.5 球概率约 49%，该指标用于走势参考，不等同于官方总进球 SP。",
-            "en": "Over 2.5 probability is about 49%. This is a model reference, not official Sporttery total-goals SP."
-          }
-        ],
-        "riskTags": [
-          {
-            "zh": "进球条件未齐",
-            "en": "Goals conditions not aligned"
-          },
-          {
-            "zh": "统一后验验证项",
-            "en": "Unified posterior reference"
-          }
-        ],
-        "visibilityStatus": "FREE",
-        "resultStatus": "PENDING"
-      },
-      {
-        "marketType": "BEST",
-        "oddsPoolCode": "HHAD",
-        "handicapLine": "-3",
-        "tipCode": "2",
-        "tipLabel": {
-          "zh": "主推 让负",
-          "en": "Main pick: HHAD away"
-        },
-        "odds": 2.18,
-        "trustScore": 82,
-        "recommendationAction": "recommend",
-        "recommendationTier": "unified-hhad-posterior",
-        "explanation": {
-          "zh": "统一后验主结论：先用泊松比分矩阵生成比分分布，再用贝叶斯更新融合模型概率、比分反推、赛前信号和SP校验。普通胜平负未开售，本场只按让球给主结论。本场只主推 让负。",
-          "en": "Unified posterior verdict: the Poisson score matrix is built first, then Bayesian updating combines model probability, score-implied probability, pre-match signals, and SP validation. Single main pick: HHAD away."
-        },
-        "analysisItems": [
-          {
-            "zh": "比分矩阵先行：主推对应热区 2-0；前三比分为 2-0 / 1-0 / 3-0。",
-            "en": "Score matrix first: pick-aligned score zone 2-0; top three 2-0 / 1-0 / 3-0."
-          },
-          {
-            "zh": "让球后验：让负 73% / 让平 15% / 让胜 11%。当前主结论只按让球结算，不再用进球数或另一个盘口做兜底。",
-            "en": "HHAD posterior: 让负 73% / 让平 15% / 让胜 11%. The main result settles only on this market; totals or the other pool are references, not backups."
-          },
-          {
-            "zh": "自洽规则：如果比分热区偏平局，就压低硬追胜负；如果普通胜平负未开售，就不凭空生成主胜/平/客胜主推；如果选择让球，也只显示为让胜/让平/让负。",
-            "en": "Consistency rule: draw-heavy score shapes suppress forced 1X2 sides; if 1X2 is not on sale, no raw 1X2 main pick is invented; HHAD is displayed only as HHAD home/draw/away."
-          }
-        ],
-        "riskTags": [
-          {
-            "zh": "统一后验主结论",
-            "en": "Unified posterior main pick"
-          },
-          {
-            "zh": "低比分热区",
-            "en": "Low-score zone"
-          },
-          {
-            "zh": "非官方参考源",
-            "en": "Non-official reference"
-          },
-          {
-            "zh": "胜负接近",
-            "en": "Tight 1X2"
-          },
-          {
-            "zh": "让球支持不足",
-            "en": "Handicap support weak"
-          }
-        ],
-        "visibilityStatus": "FREE",
-        "resultStatus": "PENDING"
-      }
-    ],
-    "worldCupPrior": {
-      "source": "kimi-worldcup-dataset",
-      "version": "kimi-worldcup-dataset-v1",
-      "signature": "kimi-worldcup-dataset-v1|065363d19babce35|teams:48|fixtures:104",
-      "policy": "usable-as-pre-match-prior",
-      "rawPolicy": "audit-only",
-      "strengthDiff": 0.4965,
-      "fixture": null,
-      "home": {
-        "key": "france",
-        "nameZh": "法国",
-        "nameEn": "France",
-        "group": "I",
-        "fifaRank": 1,
-        "elo": 2100,
-        "squadValueM": 1347,
-        "avgAge": 25.3,
-        "corePlayer": "Kylian Mbappe",
-        "qualityTier": "verified",
-        "recent10": {
-          "raw": "9胜1平0负",
-          "wins": 9,
-          "draws": 1,
-          "losses": 0,
-          "points": 28
-        },
-        "groupOutlook": {
-          "group": "G",
-          "projectedRank": 1,
-          "projectedPoints": 6.6,
-          "wins": 1.9,
-          "draws": 0.9,
-          "losses": 0.2,
-          "goalsFor": 4.9,
-          "goalsAgainst": 2.4,
-          "goalDiff": 2.5,
-          "advanceProbability": 95,
-          "groupWinProbability": 60
-        },
-        "modelStrengthNormalized": 0.96
-      },
-      "away": {
-        "key": "iraq",
-        "nameZh": "伊拉克",
-        "nameEn": "Iraq",
-        "group": "I",
-        "fifaRank": 43,
-        "elo": 1575,
-        "squadValueM": 86.2,
-        "avgAge": 27.4,
-        "corePlayer": "Haydary",
-        "qualityTier": "estimated",
-        "recent10": {
-          "raw": "4胜1平4负",
-          "wins": 4,
-          "draws": 1,
-          "losses": 4,
-          "points": 13
-        },
-        "groupOutlook": {
-          "group": "G",
-          "projectedRank": 4,
-          "projectedPoints": 1.9,
-          "wins": 0.4,
-          "draws": 0.8,
-          "losses": 1.8,
-          "goalsFor": 2.5,
-          "goalsAgainst": 4.7,
-          "goalDiff": -2.2,
-          "advanceProbability": 5,
-          "groupWinProbability": 5
-        },
-        "modelStrengthNormalized": 0.4635
-      }
-    },
-    "externalSignals": {
-      "source": "500.com:jczq",
-      "updatedAt": "2026-06-22T13:54:53.215Z",
-      "sourceMatchId": "2040252",
-      "fixtureId": "1359213",
-      "matchNo": "周一042",
-      "leagueName": "世界杯",
-      "homeTeamName": "法国",
-      "awayTeamName": "伊拉克",
-      "kickoffTime": "2026-06-23T05:00:00+08:00",
-      "buyEndTime": "2026-06-22 22:00:00",
-      "handicapLine": "-3",
-      "externalOdds": {
-        "source": "500.com",
-        "odds1": 2.31,
-        "oddsX": 4.2,
-        "odds2": 2.18,
-        "summary": {
-          "zh": "500彩票网让球参考(-3)：2.31 / 4.20 / 2.18",
-          "en": "500.com handicap reference (-3): 2.31 / 4.20 / 2.18"
-        }
-      },
-      "bookmakerOdds": {
-        "hhad": {
-          "odds1": 2.31,
-          "oddsX": 4.2,
-          "odds2": 2.18
-        }
-      },
-      "venue": {
-        "name": "Estadio Akron",
-        "city": "Guadalajara",
-        "country": "Mexico",
-        "latitude": 20.6819,
-        "longitude": -103.4628,
-        "verified": false,
-        "source": "world-cup-host-rotation-estimate",
-        "summary": {
-          "zh": "Estadio Akron，Guadalajara。当前为场地估算，后续可用官方球场覆盖。",
-          "en": "Estadio Akron, Guadalajara. Venue is estimated and can be replaced by official venue data."
-        }
-      },
-      "weather": {
-        "source": "open-meteo",
-        "provider": "open-meteo",
-        "updatedAt": "2026-06-22T13:54:53.215Z",
-        "forecastTime": "2026-06-22T21:00Z",
-        "verified": false,
-        "confidence": "estimated-location",
-        "locationSource": "world-cup-host-rotation-estimate",
-        "condition": {
-          "zh": "雷阵雨",
-          "en": "Thunderstorm"
-        },
-        "temperatureC": 24.6,
-        "windKph": 8.9,
-        "windGustKph": 28.4,
-        "precipitationMm": 0.4,
-        "weatherCode": 95,
-        "riskLevel": "low",
-        "summary": {
-          "zh": "Guadalajara 场地估算天气：雷阵雨，24.6C，风速 8.9km/h，降水 0.4mm，环境低风险。",
-          "en": "Guadalajara venue estimated weather: Thunderstorm, 24.6C, wind 8.9km/h, precipitation 0.4mm, low risk."
-        },
-        "impact": {
-          "zh": "天气扰动较低，按中性环境处理。",
-          "en": "Weather disruption is low and treated as a neutral environment."
-        }
-      },
-      "preMatch": {
-        "version": "sync-pre-match-signals-v50",
-        "source": "pre-match-signal-layer",
-        "updatedAt": "2026-06-16T08:16:51.180Z",
-        "sourceMatchId": "2040252",
-        "matchId": "sporttery_2040252",
-        "matchNo": "周一042",
-        "kickoffTime": "2026-06-23T05:00:00+08:00",
-        "homeTeamName": "法国",
-        "awayTeamName": "伊拉克",
-        "quality": {
-          "version": "pre-match-quality-v50",
-          "score": 10,
-          "sourceQuality": "low",
-          "severeMissingCount": 3,
-          "trustPenalty": 14,
-          "components": {
-            "referee": {
-              "key": "referee",
-              "label": {
-                "zh": "裁判牌数",
-                "en": "Referee cards"
-              },
-              "status": "missing",
-              "score": 0,
-              "source": "missing",
-              "note": {
-                "zh": "未接入真实裁判牌数",
-                "en": "No verified referee card profile"
-              }
-            },
-            "teamCards": {
-              "key": "teamCards",
-              "label": {
-                "zh": "球队牌数历史",
-                "en": "Team card history"
-              },
-              "status": "missing",
-              "score": 0,
-              "source": "missing",
-              "note": {
-                "zh": "未形成可用球队黄红牌样本",
-                "en": "No usable team card sample"
-              }
-            },
-            "lineup": {
-              "key": "lineup",
-              "label": {
-                "zh": "首发/预计阵容",
-                "en": "Lineup"
-              },
-              "status": "missing",
-              "score": 0,
-              "source": "missing",
-              "note": {
-                "zh": "未接入首发或预计名单",
-                "en": "No lineup or projected XI"
-              }
-            },
-            "injuries": {
-              "key": "injuries",
-              "label": {
-                "zh": "伤停",
-                "en": "Injuries"
-              },
-              "status": "missing",
-              "score": 0,
-              "source": "missing",
-              "note": {
-                "zh": "未接入伤停",
-                "en": "No injury signal"
-              }
-            },
-            "xg": {
-              "key": "xg",
-              "label": {
-                "zh": "xG/xGA",
-                "en": "xG/xGA"
-              },
-              "status": "missing",
-              "score": 0,
-              "source": "missing",
-              "note": {
-                "zh": "未接入赛前 xG/xGA",
-                "en": "No pre-match xG/xGA"
-              }
-            },
-            "weather": {
-              "key": "weather",
-              "label": {
-                "zh": "天气/场地",
-                "en": "Weather/pitch"
-              },
-              "status": "estimated",
-              "score": 48,
-              "source": "open-meteo",
-              "note": {
-                "zh": "Guadalajara 场地估算天气：雷阵雨，22.7C，风速 3.5km/h，降水 0.2mm，环境低风险。",
-                "en": "Guadalajara venue estimated weather: Thunderstorm, 22.7C, wind 3.5km/h, precipitation 0.2mm, low risk."
-              }
-            },
-            "market": {
-              "key": "market",
-              "label": {
-                "zh": "盘口校验",
-                "en": "Market validation"
-              },
-              "status": "missing",
-              "score": 0,
-              "source": "missing",
-              "note": {
-                "zh": "缺少盘口校验源",
-                "en": "No market validation source"
-              }
-            },
-            "motivation": {
-              "key": "motivation",
-              "label": {
-                "zh": "排名/战意",
-                "en": "Table/motivation"
-              },
-              "status": "estimated",
-              "score": 62,
-              "source": "rank-stage-context",
-              "note": {
-                "zh": "已接入排名或赛程阶段信息",
-                "en": "Rank or stage context loaded"
-              }
-            }
-          },
-          "missing": [
-            {
-              "key": "referee",
-              "zh": "缺少裁判牌数",
-              "en": "Missing Referee cards",
-              "severity": "medium",
-              "weight": 10
-            },
-            {
-              "key": "teamCards",
-              "zh": "缺少球队牌数历史",
-              "en": "Missing Team card history",
-              "severity": "medium",
-              "weight": 10
-            },
-            {
-              "key": "lineup",
-              "zh": "缺少首发/预计阵容",
-              "en": "Missing Lineup",
-              "severity": "high",
-              "weight": 15
-            },
-            {
-              "key": "injuries",
-              "zh": "缺少伤停",
-              "en": "Missing Injuries",
-              "severity": "high",
-              "weight": 15
-            },
-            {
-              "key": "xg",
-              "zh": "缺少xG/xGA",
-              "en": "Missing xG/xGA",
-              "severity": "medium",
-              "weight": 14
-            },
-            {
-              "key": "market",
-              "zh": "缺少盘口校验",
-              "en": "Missing Market validation",
-              "severity": "high",
-              "weight": 18
-            }
-          ],
-          "lowQuality": [
-            "weather",
-            "motivation"
-          ],
-          "connected": {
-            "referee": false,
-            "teamCards": false,
-            "lineup": false,
-            "injuries": false,
-            "xg": false,
-            "weather": true,
-            "market": false,
-            "motivation": true
-          },
-          "summary": {
-            "zh": "赛前数据质量 10/100，缺口偏多。",
-            "en": "Pre-match data quality 10/100, low coverage."
-          }
-        },
-        "qualitySummary": {
-          "zh": "赛前数据质量 10/100，缺口偏多。",
-          "en": "Pre-match data quality 10/100, low coverage."
-        }
-      }
-    },
+    "projectedScoreHome": 2,
+    "projectedScoreAway": 0,
     "stats": {
       "xG": {
         "home": 2.26,
@@ -40015,23 +40117,545 @@
         "note": "high-variance-data-gap"
       }
     },
+    "handicapOdds": {
+      "odds1": 2.31,
+      "oddsX": 4.2,
+      "odds2": 2.18
+    },
+    "handicapLine": "-3",
+    "handicapOddsSource": "500.com:HHAD",
+    "handicapOddsPoolCode": "HHAD",
+    "handicapOddsSourceMethod": "500-fallback",
+    "handicapOddsUpdatedAt": "2026-06-22T13:54:48.440Z",
+    "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
+    "predictions": [
+      {
+        "marketType": "1X2",
+        "oddsPoolCode": "HHAD",
+        "handicapLine": "-3",
+        "tipCode": "2",
+        "tipLabel": {
+          "zh": "参考倾向 让负",
+          "en": "Reference lean: HHAD Away"
+        },
+        "odds": 2.18,
+        "trustScore": 38,
+        "recommendationAction": "reference",
+        "recommendationTier": "posterior-reference",
+        "explanation": {
+          "zh": "普通胜平负未开售，胜平负不生成主推；本场按让球输出主结论。",
+          "en": "Standard 1X2 is not on sale, so no raw 1X2 main pick is created; the verdict uses HHAD."
+        },
+        "analysisItems": [
+          {
+            "zh": "500 网 HHAD 让球参考(-3) SP：让胜 2.31 / 让平 4.20 / 让负 2.18；去水支持率约 主胜 38% / 平局 21% / 客胜 41%。",
+            "en": "500.com HHAD reference (-3) SP: 2.31 / 4.20 / 2.18; normalized support is about home 38% / draw 21% / away 41%."
+          },
+          {
+            "zh": "参考理由：普通胜平负未开售，本场按独立 Poisson 让球概率给参考方向；模型优势约 62 个百分点，盘口仅作校验，条件未完全闭合时不强推单一让球方向。",
+            "en": "Watch reason: standard 1X2 is not open, so the reference direction comes from independent Poisson handicap probabilities. Model edge is about 62 points; the board is only a validation layer."
+          },
+          {
+            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 500 网 HHAD 让球参考(-3) SP 更新时间：2026-06-22T13:54:48.440Z。",
+            "en": "Draw support is not dominant, but late SP movement still matters. 500.com HHAD reference (-3) SP updated at 2026-06-22T13:54:48.440Z."
+          }
+        ],
+        "riskTags": [
+          {
+            "zh": "非官方参考源",
+            "en": "Non-official reference"
+          },
+          {
+            "zh": "胜负接近",
+            "en": "Tight 1X2"
+          },
+          {
+            "zh": "让球支持不足",
+            "en": "Handicap support weak"
+          },
+          {
+            "zh": "统一后验验证项",
+            "en": "Unified posterior reference"
+          }
+        ],
+        "visibilityStatus": "FREE",
+        "resultStatus": "PENDING"
+      },
+      {
+        "marketType": "GOALS",
+        "tipCode": "U2.5",
+        "tipLabel": {
+          "zh": "进球参考 小2.5球（≤2球）",
+          "en": "Goals reference: Under 2.5 goals"
+        },
+        "odds": 1.96,
+        "trustScore": 49,
+        "recommendationAction": "reference",
+        "recommendationTier": "posterior-reference",
+        "explanation": {
+          "zh": "进球数只解释比分形态，不作为本场主推兜底。",
+          "en": "Goals explain the score shape only; they are not a backup main pick."
+        },
+        "analysisItems": [
+          {
+            "zh": "比分热区：2-0 附近；候选方向 小2.5球（≤2球） 的模型概率约 51%，低于强推阈值。",
+            "en": "Score heat zone: around 2-0; candidate Under 2.5 goals is about 51%, below the promotion threshold."
+          },
+          {
+            "zh": "大 2.5 球概率约 49%，该指标用于走势参考，不等同于官方总进球 SP。",
+            "en": "Over 2.5 probability is about 49%. This is a model reference, not official Sporttery total-goals SP."
+          }
+        ],
+        "riskTags": [
+          {
+            "zh": "进球条件未齐",
+            "en": "Goals conditions not aligned"
+          },
+          {
+            "zh": "统一后验验证项",
+            "en": "Unified posterior reference"
+          }
+        ],
+        "visibilityStatus": "FREE",
+        "resultStatus": "PENDING"
+      },
+      {
+        "marketType": "BEST",
+        "oddsPoolCode": "HHAD",
+        "handicapLine": "-3",
+        "tipCode": "2",
+        "tipLabel": {
+          "zh": "主推 让负",
+          "en": "Main pick: HHAD away"
+        },
+        "odds": 2.18,
+        "trustScore": 82,
+        "recommendationAction": "recommend",
+        "recommendationTier": "unified-hhad-posterior",
+        "explanation": {
+          "zh": "统一后验主结论：先用泊松比分矩阵生成比分分布，再用贝叶斯更新融合模型概率、比分反推、赛前信号和SP校验。普通胜平负未开售，本场只按让球给主结论。本场只主推 让负。",
+          "en": "Unified posterior verdict: the Poisson score matrix is built first, then Bayesian updating combines model probability, score-implied probability, pre-match signals, and SP validation. Single main pick: HHAD away."
+        },
+        "analysisItems": [
+          {
+            "zh": "比分矩阵先行：主推对应热区 2-0；前三比分为 2-0 / 1-0 / 3-0。",
+            "en": "Score matrix first: pick-aligned score zone 2-0; top three 2-0 / 1-0 / 3-0."
+          },
+          {
+            "zh": "让球后验：让负 73% / 让平 15% / 让胜 11%。当前主结论只按让球结算，不再用进球数或另一个盘口做兜底。",
+            "en": "HHAD posterior: 让负 73% / 让平 15% / 让胜 11%. The main result settles only on this market; totals or the other pool are references, not backups."
+          },
+          {
+            "zh": "自洽规则：如果比分热区偏平局，就压低硬追胜负；如果普通胜平负未开售，就不凭空生成主胜/平/客胜主推；如果选择让球，也只显示为让胜/让平/让负。",
+            "en": "Consistency rule: draw-heavy score shapes suppress forced 1X2 sides; if 1X2 is not on sale, no raw 1X2 main pick is invented; HHAD is displayed only as HHAD home/draw/away."
+          }
+        ],
+        "riskTags": [
+          {
+            "zh": "统一后验主结论",
+            "en": "Unified posterior main pick"
+          },
+          {
+            "zh": "低比分热区",
+            "en": "Low-score zone"
+          },
+          {
+            "zh": "非官方参考源",
+            "en": "Non-official reference"
+          },
+          {
+            "zh": "胜负接近",
+            "en": "Tight 1X2"
+          },
+          {
+            "zh": "让球支持不足",
+            "en": "Handicap support weak"
+          }
+        ],
+        "visibilityStatus": "FREE",
+        "resultStatus": "PENDING"
+      }
+    ]
+  },
+  {
+    "id": "fivehundred_2040253",
+    "homeTeamId": "team_gva4xg",
+    "awayTeamId": "team_1q33dio",
+    "leagueId": "league_1gj294g",
+    "countryId": "world",
+    "kickoffTime": "2026-06-23T08:00:00+08:00",
+    "status": "SCHEDULED",
+    "worldCupPrior": {
+      "source": "kimi-worldcup-dataset",
+      "version": "kimi-worldcup-dataset-v1",
+      "signature": "kimi-worldcup-dataset-v1|065363d19babce35|teams:48|fixtures:104",
+      "policy": "usable-as-pre-match-prior",
+      "rawPolicy": "audit-only",
+      "strengthDiff": 0.0228,
+      "fixture": null,
+      "home": {
+        "key": "norway",
+        "nameZh": "挪威",
+        "nameEn": "Norway",
+        "group": "I",
+        "fifaRank": 16,
+        "elo": 1760,
+        "squadValueM": 699.9,
+        "avgAge": 26.6,
+        "corePlayer": "Mihai",
+        "qualityTier": "estimated",
+        "recent10": {
+          "raw": "8胜1平0负",
+          "wins": 8,
+          "draws": 1,
+          "losses": 0,
+          "points": 25
+        },
+        "groupOutlook": {
+          "group": "G",
+          "projectedRank": 3,
+          "projectedPoints": 3.6,
+          "wins": 0.9,
+          "draws": 0.9,
+          "losses": 1.1,
+          "goalsFor": 3.4,
+          "goalsAgainst": 3.5,
+          "goalDiff": -0.1,
+          "advanceProbability": 50,
+          "groupWinProbability": 10
+        },
+        "modelStrengthNormalized": 0.7352
+      },
+      "away": {
+        "key": "senegal",
+        "nameZh": "塞内加尔",
+        "nameEn": "Senegal",
+        "group": "I",
+        "fifaRank": 13,
+        "elo": 1800,
+        "squadValueM": 303,
+        "avgAge": 27.6,
+        "corePlayer": "Nicolas Jackson",
+        "qualityTier": "verified",
+        "recent10": {
+          "raw": "5胜2平2负",
+          "wins": 5,
+          "draws": 2,
+          "losses": 2,
+          "points": 17
+        },
+        "groupOutlook": {
+          "group": "G",
+          "projectedRank": 2,
+          "projectedPoints": 4,
+          "wins": 1,
+          "draws": 1,
+          "losses": 1,
+          "goalsFor": 3.7,
+          "goalsAgainst": 3.9,
+          "goalDiff": -0.2,
+          "advanceProbability": 90,
+          "groupWinProbability": 25
+        },
+        "modelStrengthNormalized": 0.7124
+      }
+    },
+    "externalSignals": {
+      "source": "500.com:jczq",
+      "updatedAt": "2026-06-22T13:54:53.215Z",
+      "sourceMatchId": "2040253",
+      "fixtureId": "1359249",
+      "matchNo": "周一043",
+      "leagueName": "世界杯",
+      "homeTeamName": "挪威",
+      "awayTeamName": "塞内加尔",
+      "kickoffTime": "2026-06-23T08:00:00+08:00",
+      "buyEndTime": "2026-06-22 22:00:00",
+      "handicapLine": "-1",
+      "externalOdds": {
+        "source": "500.com",
+        "odds1": 1.97,
+        "oddsX": 3.23,
+        "odds2": 3.2,
+        "summary": {
+          "zh": "500彩票网胜平负参考：1.97 / 3.23 / 3.20",
+          "en": "500.com 1X2 reference: 1.97 / 3.23 / 3.20"
+        }
+      },
+      "bookmakerOdds": {
+        "had": {
+          "odds1": 1.97,
+          "oddsX": 3.23,
+          "odds2": 3.2
+        },
+        "hhad": {
+          "odds1": 3.9,
+          "oddsX": 3.85,
+          "odds2": 1.63
+        }
+      },
+      "venue": {
+        "name": "Estadio Akron",
+        "city": "Guadalajara",
+        "country": "Mexico",
+        "latitude": 20.6819,
+        "longitude": -103.4628,
+        "verified": false,
+        "source": "world-cup-host-rotation-estimate",
+        "summary": {
+          "zh": "Estadio Akron，Guadalajara。当前为场地估算，后续可用官方球场覆盖。",
+          "en": "Estadio Akron, Guadalajara. Venue is estimated and can be replaced by official venue data."
+        }
+      },
+      "weather": {
+        "source": "open-meteo",
+        "provider": "open-meteo",
+        "updatedAt": "2026-06-22T13:54:53.215Z",
+        "forecastTime": "2026-06-23T00:00Z",
+        "verified": false,
+        "confidence": "estimated-location",
+        "locationSource": "world-cup-host-rotation-estimate",
+        "condition": {
+          "zh": "雷阵雨",
+          "en": "Thunderstorm"
+        },
+        "temperatureC": 20.3,
+        "windKph": 9.5,
+        "windGustKph": 22.7,
+        "precipitationMm": 1.8,
+        "weatherCode": 95,
+        "riskLevel": "low",
+        "summary": {
+          "zh": "Guadalajara 场地估算天气：雷阵雨，20.3C，风速 9.5km/h，降水 1.8mm，环境低风险。",
+          "en": "Guadalajara venue estimated weather: Thunderstorm, 20.3C, wind 9.5km/h, precipitation 1.8mm, low risk."
+        },
+        "impact": {
+          "zh": "天气扰动较低，按中性环境处理。",
+          "en": "Weather disruption is low and treated as a neutral environment."
+        }
+      },
+      "preMatch": {
+        "version": "sync-pre-match-signals-v50",
+        "source": "pre-match-signal-layer",
+        "updatedAt": "2026-06-16T08:16:51.180Z",
+        "sourceMatchId": "2040253",
+        "matchId": "sporttery_2040253",
+        "matchNo": "周一043",
+        "kickoffTime": "2026-06-23T08:00:00+08:00",
+        "homeTeamName": "挪威",
+        "awayTeamName": "塞内加尔",
+        "quality": {
+          "version": "pre-match-quality-v50",
+          "score": 7,
+          "sourceQuality": "low",
+          "severeMissingCount": 3,
+          "trustPenalty": 13,
+          "components": {
+            "referee": {
+              "key": "referee",
+              "label": {
+                "zh": "裁判牌数",
+                "en": "Referee cards"
+              },
+              "status": "missing",
+              "score": 0,
+              "source": "missing",
+              "note": {
+                "zh": "未接入真实裁判牌数",
+                "en": "No verified referee card profile"
+              }
+            },
+            "teamCards": {
+              "key": "teamCards",
+              "label": {
+                "zh": "球队牌数历史",
+                "en": "Team card history"
+              },
+              "status": "missing",
+              "score": 0,
+              "source": "missing",
+              "note": {
+                "zh": "未形成可用球队黄红牌样本",
+                "en": "No usable team card sample"
+              }
+            },
+            "lineup": {
+              "key": "lineup",
+              "label": {
+                "zh": "首发/预计阵容",
+                "en": "Lineup"
+              },
+              "status": "missing",
+              "score": 0,
+              "source": "missing",
+              "note": {
+                "zh": "未接入首发或预计名单",
+                "en": "No lineup or projected XI"
+              }
+            },
+            "injuries": {
+              "key": "injuries",
+              "label": {
+                "zh": "伤停",
+                "en": "Injuries"
+              },
+              "status": "missing",
+              "score": 0,
+              "source": "missing",
+              "note": {
+                "zh": "未接入伤停",
+                "en": "No injury signal"
+              }
+            },
+            "xg": {
+              "key": "xg",
+              "label": {
+                "zh": "xG/xGA",
+                "en": "xG/xGA"
+              },
+              "status": "missing",
+              "score": 0,
+              "source": "missing",
+              "note": {
+                "zh": "未接入赛前 xG/xGA",
+                "en": "No pre-match xG/xGA"
+              }
+            },
+            "weather": {
+              "key": "weather",
+              "label": {
+                "zh": "天气/场地",
+                "en": "Weather/pitch"
+              },
+              "status": "missing",
+              "score": 0,
+              "source": "missing",
+              "note": {
+                "zh": "未接入天气/场地",
+                "en": "No weather or pitch signal"
+              }
+            },
+            "market": {
+              "key": "market",
+              "label": {
+                "zh": "盘口校验",
+                "en": "Market validation"
+              },
+              "status": "missing",
+              "score": 0,
+              "source": "missing",
+              "note": {
+                "zh": "缺少盘口校验源",
+                "en": "No market validation source"
+              }
+            },
+            "motivation": {
+              "key": "motivation",
+              "label": {
+                "zh": "排名/战意",
+                "en": "Table/motivation"
+              },
+              "status": "estimated",
+              "score": 62,
+              "source": "rank-stage-context",
+              "note": {
+                "zh": "已接入排名或赛程阶段信息",
+                "en": "Rank or stage context loaded"
+              }
+            }
+          },
+          "missing": [
+            {
+              "key": "referee",
+              "zh": "缺少裁判牌数",
+              "en": "Missing Referee cards",
+              "severity": "medium",
+              "weight": 10
+            },
+            {
+              "key": "teamCards",
+              "zh": "缺少球队牌数历史",
+              "en": "Missing Team card history",
+              "severity": "medium",
+              "weight": 10
+            },
+            {
+              "key": "lineup",
+              "zh": "缺少首发/预计阵容",
+              "en": "Missing Lineup",
+              "severity": "high",
+              "weight": 15
+            },
+            {
+              "key": "injuries",
+              "zh": "缺少伤停",
+              "en": "Missing Injuries",
+              "severity": "high",
+              "weight": 15
+            },
+            {
+              "key": "xg",
+              "zh": "缺少xG/xGA",
+              "en": "Missing xG/xGA",
+              "severity": "medium",
+              "weight": 14
+            },
+            {
+              "key": "weather",
+              "zh": "缺少天气/场地",
+              "en": "Missing Weather/pitch",
+              "severity": "medium",
+              "weight": 6
+            },
+            {
+              "key": "market",
+              "zh": "缺少盘口校验",
+              "en": "Missing Market validation",
+              "severity": "high",
+              "weight": 18
+            }
+          ],
+          "lowQuality": [
+            "motivation"
+          ],
+          "connected": {
+            "referee": false,
+            "teamCards": false,
+            "lineup": false,
+            "injuries": false,
+            "xg": false,
+            "weather": false,
+            "market": false,
+            "motivation": true
+          },
+          "summary": {
+            "zh": "赛前数据质量 7/100，缺口偏多。",
+            "en": "Pre-match data quality 7/100, low coverage."
+          }
+        },
+        "qualitySummary": {
+          "zh": "赛前数据质量 7/100，缺口偏多。",
+          "en": "Pre-match data quality 7/100, low coverage."
+        }
+      }
+    },
     "matchDate": "2026-06-23",
     "kickoffDate": "2026-06-23",
     "businessDate": "2026-06-22",
-    "homeTeamName": "法国",
-    "homeTeamNameEn": "法国",
+    "homeTeamName": "挪威",
+    "homeTeamNameEn": "挪威",
     "homeRank": "",
-    "homeTeamLogo": "https://flagcdn.com/w80/fr.png",
+    "homeTeamLogo": "https://flagcdn.com/w80/no.png",
     "homeTeamLogoType": "flag",
-    "homeTeamCountryIso": "FR",
-    "homeTeamColor": "#9e6060",
-    "awayTeamName": "伊拉克",
-    "awayTeamNameEn": "伊拉克",
+    "homeTeamCountryIso": "NO",
+    "homeTeamColor": "#3ccbf6",
+    "awayTeamName": "塞内加尔",
+    "awayTeamNameEn": "塞内加尔",
     "awayRank": "",
-    "awayTeamLogo": "https://flagcdn.com/w80/iq.png",
+    "awayTeamLogo": "https://flagcdn.com/w80/sn.png",
     "awayTeamLogoType": "flag",
-    "awayTeamCountryIso": "IQ",
-    "awayTeamColor": "#1121a7",
+    "awayTeamCountryIso": "SN",
+    "awayTeamColor": "#dfc302",
     "leagueName": "世界杯",
     "leagueNameEn": "International",
     "leagueShortName": "国际赛",
@@ -40042,8 +40666,8 @@
     "source": "five-hundred",
     "sourceMethod": "500-fallback",
     "sourceUrl": "https://trade.500.com/jczq/",
-    "sourceMatchId": "2040252",
-    "matchNo": "周一042",
+    "sourceMatchId": "2040253",
+    "matchNo": "周一043",
     "predictionMeta": {
       "policyVersion": "sporttery-day-formula-trace-v52",
       "promptVersion": "professional-football-analyst-v21",
@@ -40251,42 +40875,20 @@
         }
       },
       "updateReason": {
-        "zh": "官方 SP 或让球盘没有实质变化，原赛前方向继续保留；分析版本可更新，但不重算推荐方向。",
-        "en": "Official SP and handicap signals did not materially change, so the pre-match direction is preserved; analysis versions may update, but the recommendation direction is not recalculated."
+        "zh": "竞彩截止或开赛后，历史预测已冻结；后续同步只更新赛果和命中结算，不重算推荐、概率和预测比分。",
+        "en": "After Sporttery cutoff or kickoff, the historical forecast is frozen; later syncs only settle results and never recalculate picks, probabilities, or projected score."
       },
       "snapshot": {
         "phase": "baseline",
-        "total": 13,
+        "total": 17,
         "phases": {
-          "baseline": 13
+          "baseline": 17
         },
-        "latestAt": "2026-06-22T12:59:54.275Z",
-        "latestSignature": "1X2:HHAD:2:reference|BEST:HHAD:2:recommend|GOALS::U2.5:reference|--|-3:2.31/4.20/2.18|72/19/10"
+        "latestAt": "2026-06-22T13:45:20.074Z",
+        "latestSignature": "1X2:HAD:1:reference|BEST:HAD:1:recommend|GOALS::O2.5:reference|1.97/3.23/3.20|-1:3.90/3.85/1.63|42/26/32"
       }
     },
-    "handicapOdds": {
-      "odds1": 2.31,
-      "oddsX": 4.2,
-      "odds2": 2.18
-    },
     "buyEndTime": "2026-06-22 22:00:00",
-    "handicapLine": "-3",
-    "handicapOddsSource": "500.com:HHAD",
-    "handicapOddsPoolCode": "HHAD",
-    "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsUpdatedAt": "2026-06-22T13:54:48.440Z",
-    "handicapOddsSourceUrl": "https://trade.500.com/jczq/"
-  },
-  {
-    "id": "fivehundred_2040253",
-    "homeTeamId": "team_gva4xg",
-    "awayTeamId": "team_1q33dio",
-    "leagueId": "league_1gj294g",
-    "countryId": "world",
-    "kickoffTime": "2026-06-23T08:00:00+08:00",
-    "status": "SCHEDULED",
-    "projectedScoreHome": 2,
-    "projectedScoreAway": 1,
     "probabilityModel": {
       "version": "unified-poisson-bayes-v52",
       "generatedAt": "2026-06-22T13:55:07.946Z",
@@ -41424,6 +42026,184 @@
         "policy": "single-main-recommendation; score-matrix-first; bayesian-posterior; references-not-backups"
       }
     },
+    "projectedScoreHome": 2,
+    "projectedScoreAway": 1,
+    "stats": {
+      "xG": {
+        "home": 1.3,
+        "away": 1.18
+      },
+      "possession": {
+        "home": 56,
+        "away": 44
+      },
+      "shots": {
+        "home": 7,
+        "away": 10
+      },
+      "shotsOnTarget": {
+        "home": 5,
+        "away": 4
+      },
+      "corners": {
+        "home": 5,
+        "away": 3
+      },
+      "fouls": {
+        "home": 13.8,
+        "away": 15.6
+      },
+      "offsides": {
+        "home": 1,
+        "away": 0
+      },
+      "yellowCards": {
+        "home": 2.1,
+        "away": 2.3
+      },
+      "redCards": {
+        "home": 0.053,
+        "away": 0.06
+      },
+      "attackIntent": {
+        "home": 58,
+        "away": 54,
+        "total": 58,
+        "dataQuality": "model-with-form-rank",
+        "reasons": [
+          "lambda-total:2.48",
+          "recent-attack-form",
+          "ranking-pressure"
+        ]
+      },
+      "rankingPressure": {
+        "home": 47,
+        "away": 43,
+        "maxPressure": 47,
+        "rotationRisk": 0.34,
+        "dataQuality": "rank-connected",
+        "reasons": [
+          "group-outlook",
+          "recent-form-pressure"
+        ]
+      },
+      "discipline": {
+        "expectedYellowCards": {
+          "home": 2.1,
+          "away": 2.3,
+          "total": 4.4
+        },
+        "redCardRisk": {
+          "home": 0.053,
+          "away": 0.06,
+          "total": 0.113
+        },
+        "expectedFouls": {
+          "home": 13.8,
+          "away": 15.6,
+          "total": 29.4
+        },
+        "foulPressure": 72,
+        "dataQuality": "model-estimated",
+        "source": "model-estimated",
+        "reasons": [
+          "estimated-referee-profile",
+          "close-game",
+          "neutral-tempo"
+        ]
+      },
+      "dataGaps": {
+        "version": "data-gap-profile-v1",
+        "coverageScore": 42,
+        "sourceQuality": "low",
+        "severeMissingCount": 2,
+        "trustPenalty": 9,
+        "connected": {
+          "referee": false,
+          "teamCards": false,
+          "standings": true,
+          "motivationStage": true,
+          "lineup": false,
+          "injuries": false,
+          "xg": false,
+          "weather": false,
+          "officialOdds": false,
+          "externalMarket": false
+        },
+        "missing": [
+          {
+            "key": "referee-card-source",
+            "zh": "缺少真实裁判牌数",
+            "en": "Missing referee card source",
+            "severity": "medium",
+            "weight": 9
+          },
+          {
+            "key": "team-card-history",
+            "zh": "缺少球队黄红牌历史",
+            "en": "Missing team card history",
+            "severity": "medium",
+            "weight": 8
+          },
+          {
+            "key": "injury-lineup",
+            "zh": "缺少伤停首发",
+            "en": "Missing injuries/projected XI",
+            "severity": "high",
+            "weight": 14
+          },
+          {
+            "key": "xg-xga",
+            "zh": "缺少赛前 xG/xGA",
+            "en": "Missing pre-match xG/xGA",
+            "severity": "medium",
+            "weight": 8
+          },
+          {
+            "key": "weather-pitch",
+            "zh": "缺少天气/场地",
+            "en": "Missing weather/pitch signal",
+            "severity": "low",
+            "weight": 4
+          },
+          {
+            "key": "market-source",
+            "zh": "缺少盘口校验源",
+            "en": "Missing market validation source",
+            "severity": "high",
+            "weight": 15
+          }
+        ],
+        "primaryGaps": [
+          "referee-card-source",
+          "team-card-history",
+          "injury-lineup",
+          "xg-xga"
+        ],
+        "note": "high-variance-data-gap"
+      }
+    },
+    "odds": {
+      "odds1": 1.97,
+      "oddsX": 3.23,
+      "odds2": 3.2
+    },
+    "oddsSource": "500.com:HAD",
+    "oddsPoolCode": "HAD",
+    "oddsSourceMethod": "500-fallback",
+    "oddsUpdatedAt": "2026-06-22T13:54:48.440Z",
+    "oddsSourceUrl": "https://trade.500.com/jczq/",
+    "handicapOdds": {
+      "odds1": 3.9,
+      "oddsX": 3.85,
+      "odds2": 1.63
+    },
+    "handicapLine": "-1",
+    "handicapOddsSource": "500.com:HHAD",
+    "handicapOddsPoolCode": "HHAD",
+    "handicapOddsSourceMethod": "500-fallback",
+    "handicapOddsUpdatedAt": "2026-06-22T13:54:48.440Z",
+    "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
     "predictions": [
       {
         "marketType": "1X2",
@@ -41571,114 +42351,123 @@
         "visibilityStatus": "FREE",
         "resultStatus": "PENDING"
       }
-    ],
+    ]
+  },
+  {
+    "id": "fivehundred_2040254",
+    "homeTeamId": "team_16011kd",
+    "awayTeamId": "team_lqb0db",
+    "leagueId": "league_1gj294g",
+    "countryId": "world",
+    "kickoffTime": "2026-06-23T11:00:00+08:00",
+    "status": "SCHEDULED",
     "worldCupPrior": {
       "source": "kimi-worldcup-dataset",
       "version": "kimi-worldcup-dataset-v1",
       "signature": "kimi-worldcup-dataset-v1|065363d19babce35|teams:48|fixtures:104",
       "policy": "usable-as-pre-match-prior",
       "rawPolicy": "audit-only",
-      "strengthDiff": 0.0228,
+      "strengthDiff": -0.0436,
       "fixture": null,
       "home": {
-        "key": "norway",
-        "nameZh": "挪威",
-        "nameEn": "Norway",
-        "group": "I",
-        "fifaRank": 16,
-        "elo": 1760,
-        "squadValueM": 699.9,
-        "avgAge": 26.6,
-        "corePlayer": "Mihai",
+        "key": "jordan",
+        "nameZh": "约旦",
+        "nameEn": "Jordan",
+        "group": "J",
+        "fifaRank": 37,
+        "elo": 1615,
+        "squadValueM": 73.3,
+        "avgAge": 28.4,
+        "corePlayer": "Yoshida",
         "qualityTier": "estimated",
         "recent10": {
-          "raw": "8胜1平0负",
-          "wins": 8,
-          "draws": 1,
-          "losses": 0,
-          "points": 25
+          "raw": "4胜2平3负",
+          "wins": 4,
+          "draws": 2,
+          "losses": 3,
+          "points": 14
         },
         "groupOutlook": {
           "group": "G",
           "projectedRank": 3,
-          "projectedPoints": 3.6,
-          "wins": 0.9,
-          "draws": 0.9,
-          "losses": 1.1,
-          "goalsFor": 3.4,
-          "goalsAgainst": 3.5,
-          "goalDiff": -0.1,
+          "projectedPoints": 2.9,
+          "wins": 0.6,
+          "draws": 1,
+          "losses": 1.4,
+          "goalsFor": 3,
+          "goalsAgainst": 4.1,
+          "goalDiff": -1.1,
           "advanceProbability": 50,
           "groupWinProbability": 10
         },
-        "modelStrengthNormalized": 0.7352
+        "modelStrengthNormalized": 0.5012
       },
       "away": {
-        "key": "senegal",
-        "nameZh": "塞内加尔",
-        "nameEn": "Senegal",
-        "group": "I",
-        "fifaRank": 13,
-        "elo": 1800,
-        "squadValueM": 303,
-        "avgAge": 27.6,
-        "corePlayer": "Nicolas Jackson",
-        "qualityTier": "verified",
+        "key": "algeria",
+        "nameZh": "阿尔及利亚",
+        "nameEn": "Algeria",
+        "group": "J",
+        "fifaRank": 33,
+        "elo": 1635,
+        "squadValueM": 154.2,
+        "avgAge": 26.7,
+        "corePlayer": "Kabore",
+        "qualityTier": "estimated",
         "recent10": {
-          "raw": "5胜2平2负",
+          "raw": "5胜0平4负",
           "wins": 5,
-          "draws": 2,
-          "losses": 2,
-          "points": 17
+          "draws": 0,
+          "losses": 4,
+          "points": 15
         },
         "groupOutlook": {
           "group": "G",
-          "projectedRank": 2,
-          "projectedPoints": 4,
-          "wins": 1,
-          "draws": 1,
-          "losses": 1,
-          "goalsFor": 3.7,
-          "goalsAgainst": 3.9,
-          "goalDiff": -0.2,
-          "advanceProbability": 90,
-          "groupWinProbability": 25
+          "projectedRank": 4,
+          "projectedPoints": 2.9,
+          "wins": 0.7,
+          "draws": 0.9,
+          "losses": 1.4,
+          "goalsFor": 2.8,
+          "goalsAgainst": 4,
+          "goalDiff": -1.2,
+          "advanceProbability": 5,
+          "groupWinProbability": 5
         },
-        "modelStrengthNormalized": 0.7124
+        "modelStrengthNormalized": 0.5448
       }
     },
     "externalSignals": {
       "source": "500.com:jczq",
       "updatedAt": "2026-06-22T13:54:53.215Z",
-      "sourceMatchId": "2040253",
-      "fixtureId": "1359249",
-      "matchNo": "周一043",
+      "sourceMatchId": "2040254",
+      "fixtureId": "1359252",
+      "matchNo": "周一044",
       "leagueName": "世界杯",
-      "homeTeamName": "挪威",
-      "awayTeamName": "塞内加尔",
-      "kickoffTime": "2026-06-23T08:00:00+08:00",
+      "homeTeamName": "约旦",
+      "awayTeamName": "阿尔及利亚",
+      "kickoffTime": "2026-06-23T11:00:00+08:00",
       "buyEndTime": "2026-06-22 22:00:00",
-      "handicapLine": "-1",
+      "handicapLine": "1",
       "externalOdds": {
         "source": "500.com",
-        "odds1": 1.97,
-        "oddsX": 3.23,
-        "odds2": 3.2,
+        "odds1": 6.5,
+        "oddsX": 4.36,
+        "odds2": 1.34,
         "summary": {
-          "zh": "500彩票网胜平负参考：1.97 / 3.23 / 3.20",
-          "en": "500.com 1X2 reference: 1.97 / 3.23 / 3.20"
+          "zh": "500彩票网胜平负参考：6.50 / 4.36 / 1.34",
+          "en": "500.com 1X2 reference: 6.50 / 4.36 / 1.34"
         }
       },
       "bookmakerOdds": {
         "had": {
-          "odds1": 1.97,
-          "oddsX": 3.23,
-          "odds2": 3.2
+          "odds1": 6.5,
+          "oddsX": 4.36,
+          "odds2": 1.34
         },
         "hhad": {
-          "odds1": 3.9,
-          "oddsX": 3.85,
-          "odds2": 1.63
+          "odds1": 2.65,
+          "oddsX": 3.27,
+          "odds2": 2.24
         }
       },
       "venue": {
@@ -41698,23 +42487,23 @@
         "source": "open-meteo",
         "provider": "open-meteo",
         "updatedAt": "2026-06-22T13:54:53.215Z",
-        "forecastTime": "2026-06-23T00:00Z",
+        "forecastTime": "2026-06-23T03:00Z",
         "verified": false,
         "confidence": "estimated-location",
         "locationSource": "world-cup-host-rotation-estimate",
         "condition": {
-          "zh": "雷阵雨",
-          "en": "Thunderstorm"
+          "zh": "少云",
+          "en": "Partly cloudy"
         },
-        "temperatureC": 20.3,
-        "windKph": 9.5,
-        "windGustKph": 22.7,
-        "precipitationMm": 1.8,
-        "weatherCode": 95,
+        "temperatureC": 17.5,
+        "windKph": 1.1,
+        "windGustKph": 10.4,
+        "precipitationMm": 0,
+        "weatherCode": 2,
         "riskLevel": "low",
         "summary": {
-          "zh": "Guadalajara 场地估算天气：雷阵雨，20.3C，风速 9.5km/h，降水 1.8mm，环境低风险。",
-          "en": "Guadalajara venue estimated weather: Thunderstorm, 20.3C, wind 9.5km/h, precipitation 1.8mm, low risk."
+          "zh": "Guadalajara 场地估算天气：少云，17.5C，风速 1.1km/h，降水 0mm，环境低风险。",
+          "en": "Guadalajara venue estimated weather: Partly cloudy, 17.5C, wind 1.1km/h, precipitation 0mm, low risk."
         },
         "impact": {
           "zh": "天气扰动较低，按中性环境处理。",
@@ -41725,12 +42514,12 @@
         "version": "sync-pre-match-signals-v50",
         "source": "pre-match-signal-layer",
         "updatedAt": "2026-06-16T08:16:51.180Z",
-        "sourceMatchId": "2040253",
-        "matchId": "sporttery_2040253",
-        "matchNo": "周一043",
-        "kickoffTime": "2026-06-23T08:00:00+08:00",
-        "homeTeamName": "挪威",
-        "awayTeamName": "塞内加尔",
+        "sourceMatchId": "2040254",
+        "matchId": "sporttery_2040254",
+        "matchNo": "周一044",
+        "kickoffTime": "2026-06-23T11:00:00+08:00",
+        "homeTeamName": "约旦",
+        "awayTeamName": "阿尔及利亚",
         "quality": {
           "version": "pre-match-quality-v50",
           "score": 7,
@@ -41926,178 +42715,23 @@
         }
       }
     },
-    "stats": {
-      "xG": {
-        "home": 1.3,
-        "away": 1.18
-      },
-      "possession": {
-        "home": 56,
-        "away": 44
-      },
-      "shots": {
-        "home": 7,
-        "away": 10
-      },
-      "shotsOnTarget": {
-        "home": 5,
-        "away": 4
-      },
-      "corners": {
-        "home": 5,
-        "away": 3
-      },
-      "fouls": {
-        "home": 13.8,
-        "away": 15.6
-      },
-      "offsides": {
-        "home": 1,
-        "away": 0
-      },
-      "yellowCards": {
-        "home": 2.1,
-        "away": 2.3
-      },
-      "redCards": {
-        "home": 0.053,
-        "away": 0.06
-      },
-      "attackIntent": {
-        "home": 58,
-        "away": 54,
-        "total": 58,
-        "dataQuality": "model-with-form-rank",
-        "reasons": [
-          "lambda-total:2.48",
-          "recent-attack-form",
-          "ranking-pressure"
-        ]
-      },
-      "rankingPressure": {
-        "home": 47,
-        "away": 43,
-        "maxPressure": 47,
-        "rotationRisk": 0.34,
-        "dataQuality": "rank-connected",
-        "reasons": [
-          "group-outlook",
-          "recent-form-pressure"
-        ]
-      },
-      "discipline": {
-        "expectedYellowCards": {
-          "home": 2.1,
-          "away": 2.3,
-          "total": 4.4
-        },
-        "redCardRisk": {
-          "home": 0.053,
-          "away": 0.06,
-          "total": 0.113
-        },
-        "expectedFouls": {
-          "home": 13.8,
-          "away": 15.6,
-          "total": 29.4
-        },
-        "foulPressure": 72,
-        "dataQuality": "model-estimated",
-        "source": "model-estimated",
-        "reasons": [
-          "estimated-referee-profile",
-          "close-game",
-          "neutral-tempo"
-        ]
-      },
-      "dataGaps": {
-        "version": "data-gap-profile-v1",
-        "coverageScore": 42,
-        "sourceQuality": "low",
-        "severeMissingCount": 2,
-        "trustPenalty": 9,
-        "connected": {
-          "referee": false,
-          "teamCards": false,
-          "standings": true,
-          "motivationStage": true,
-          "lineup": false,
-          "injuries": false,
-          "xg": false,
-          "weather": false,
-          "officialOdds": false,
-          "externalMarket": false
-        },
-        "missing": [
-          {
-            "key": "referee-card-source",
-            "zh": "缺少真实裁判牌数",
-            "en": "Missing referee card source",
-            "severity": "medium",
-            "weight": 9
-          },
-          {
-            "key": "team-card-history",
-            "zh": "缺少球队黄红牌历史",
-            "en": "Missing team card history",
-            "severity": "medium",
-            "weight": 8
-          },
-          {
-            "key": "injury-lineup",
-            "zh": "缺少伤停首发",
-            "en": "Missing injuries/projected XI",
-            "severity": "high",
-            "weight": 14
-          },
-          {
-            "key": "xg-xga",
-            "zh": "缺少赛前 xG/xGA",
-            "en": "Missing pre-match xG/xGA",
-            "severity": "medium",
-            "weight": 8
-          },
-          {
-            "key": "weather-pitch",
-            "zh": "缺少天气/场地",
-            "en": "Missing weather/pitch signal",
-            "severity": "low",
-            "weight": 4
-          },
-          {
-            "key": "market-source",
-            "zh": "缺少盘口校验源",
-            "en": "Missing market validation source",
-            "severity": "high",
-            "weight": 15
-          }
-        ],
-        "primaryGaps": [
-          "referee-card-source",
-          "team-card-history",
-          "injury-lineup",
-          "xg-xga"
-        ],
-        "note": "high-variance-data-gap"
-      }
-    },
     "matchDate": "2026-06-23",
     "kickoffDate": "2026-06-23",
     "businessDate": "2026-06-22",
-    "homeTeamName": "挪威",
-    "homeTeamNameEn": "挪威",
+    "homeTeamName": "约旦",
+    "homeTeamNameEn": "约旦",
     "homeRank": "",
-    "homeTeamLogo": "https://flagcdn.com/w80/no.png",
+    "homeTeamLogo": "https://flagcdn.com/w80/jo.png",
     "homeTeamLogoType": "flag",
-    "homeTeamCountryIso": "NO",
-    "homeTeamColor": "#3ccbf6",
-    "awayTeamName": "塞内加尔",
-    "awayTeamNameEn": "塞内加尔",
+    "homeTeamCountryIso": "JO",
+    "homeTeamColor": "#975fa6",
+    "awayTeamName": "阿尔及利亚",
+    "awayTeamNameEn": "阿尔及利亚",
     "awayRank": "",
-    "awayTeamLogo": "https://flagcdn.com/w80/sn.png",
+    "awayTeamLogo": "https://flagcdn.com/w80/dz.png",
     "awayTeamLogoType": "flag",
-    "awayTeamCountryIso": "SN",
-    "awayTeamColor": "#dfc302",
+    "awayTeamCountryIso": "DZ",
+    "awayTeamColor": "#4e51a4",
     "leagueName": "世界杯",
     "leagueNameEn": "International",
     "leagueShortName": "国际赛",
@@ -42108,8 +42742,8 @@
     "source": "five-hundred",
     "sourceMethod": "500-fallback",
     "sourceUrl": "https://trade.500.com/jczq/",
-    "sourceMatchId": "2040253",
-    "matchNo": "周一043",
+    "sourceMatchId": "2040254",
+    "matchNo": "周一044",
     "predictionMeta": {
       "policyVersion": "sporttery-day-formula-trace-v52",
       "promptVersion": "professional-football-analyst-v21",
@@ -42317,52 +42951,20 @@
         }
       },
       "updateReason": {
-        "zh": "赛前赔率或让球信号发生实质变化，已生成新的临场预测；开赛后将锁定这版记录。",
-        "en": "Pre-match odds or handicap signals changed materially, so a new late forecast was generated and will be locked after kickoff."
+        "zh": "竞彩截止或开赛后，历史预测已冻结；后续同步只更新赛果和命中结算，不重算推荐、概率和预测比分。",
+        "en": "After Sporttery cutoff or kickoff, the historical forecast is frozen; later syncs only settle results and never recalculate picks, probabilities, or projected score."
       },
       "snapshot": {
         "phase": "baseline",
-        "total": 17,
+        "total": 10,
         "phases": {
-          "baseline": 17
+          "baseline": 10
         },
-        "latestAt": "2026-06-22T13:45:20.074Z",
-        "latestSignature": "1X2:HAD:1:reference|BEST:HAD:1:recommend|GOALS::O2.5:reference|1.97/3.23/3.20|-1:3.90/3.85/1.63|42/26/32"
+        "latestAt": "2026-06-22T12:59:54.275Z",
+        "latestSignature": "1X2:HAD:2:reference|BEST:HHAD:1:recommend|GOALS::U2.5:reference|6.50/4.36/1.34|1:2.65/3.27/2.24|33/29/38"
       }
     },
-    "odds": {
-      "odds1": 1.97,
-      "oddsX": 3.23,
-      "odds2": 3.2
-    },
-    "handicapOdds": {
-      "odds1": 3.9,
-      "oddsX": 3.85,
-      "odds2": 1.63
-    },
     "buyEndTime": "2026-06-22 22:00:00",
-    "oddsSource": "500.com:HAD",
-    "oddsPoolCode": "HAD",
-    "oddsSourceMethod": "500-fallback",
-    "oddsUpdatedAt": "2026-06-22T13:54:48.440Z",
-    "oddsSourceUrl": "https://trade.500.com/jczq/",
-    "handicapLine": "-1",
-    "handicapOddsSource": "500.com:HHAD",
-    "handicapOddsPoolCode": "HHAD",
-    "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsUpdatedAt": "2026-06-22T13:54:48.440Z",
-    "handicapOddsSourceUrl": "https://trade.500.com/jczq/"
-  },
-  {
-    "id": "fivehundred_2040254",
-    "homeTeamId": "team_16011kd",
-    "awayTeamId": "team_lqb0db",
-    "leagueId": "league_1gj294g",
-    "countryId": "world",
-    "kickoffTime": "2026-06-23T11:00:00+08:00",
-    "status": "SCHEDULED",
-    "projectedScoreHome": 1,
-    "projectedScoreAway": 1,
     "probabilityModel": {
       "version": "unified-poisson-bayes-v52",
       "generatedAt": "2026-06-22T13:55:07.948Z",
@@ -43512,516 +44114,8 @@
         "policy": "single-main-recommendation; score-matrix-first; bayesian-posterior; references-not-backups"
       }
     },
-    "predictions": [
-      {
-        "marketType": "1X2",
-        "oddsPoolCode": "HAD",
-        "handicapLine": "0",
-        "tipCode": "2",
-        "tipLabel": {
-          "zh": "参考倾向 客胜 阿尔及利亚",
-          "en": "Reference lean: Away Win (阿尔及利亚)"
-        },
-        "odds": 1.34,
-        "trustScore": 34,
-        "recommendationAction": "reference",
-        "recommendationTier": "posterior-reference",
-        "explanation": {
-          "zh": "胜平负作为统一后验验证项展示，页面主推只看 AI 精选这一条。",
-          "en": "1X2 is shown as a unified-posterior reference; the page main pick is the BEST row only."
-        },
-        "analysisItems": [
-          {
-            "zh": "500 网 HAD 胜平负参考 SP：主胜 6.50 / 平局 4.36 / 客胜 1.34；去水支持率约 主胜 14% / 平局 20% / 客胜 66%。",
-            "en": "500.com HAD reference SP: 6.50 / 4.36 / 1.34; normalized support is about home 14% / draw 20% / away 66%."
-          },
-          {
-            "zh": "参考理由：独立模型优势约 5 个百分点，市场分歧约 46 个百分点，让球同向支持约 40%；条件没有同时闭合，暂不输出单一胜平负方向。",
-            "en": "Watch reason: independent model edge is about 5 points, market disagreement about 46 points, same-side handicap support about 40%; no single 1X2 pick is promoted."
-          },
-          {
-            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 500 网 HAD 胜平负参考 SP 更新时间：2026-06-22T13:54:48.440Z。",
-            "en": "Draw support is not dominant, but late SP movement still matters. 500.com HAD reference SP updated at 2026-06-22T13:54:48.440Z."
-          }
-        ],
-        "riskTags": [
-          {
-            "zh": "非官方参考源",
-            "en": "Non-official reference"
-          },
-          {
-            "zh": "价值边际不足",
-            "en": "No value edge"
-          },
-          {
-            "zh": "EV不足",
-            "en": "Flat expected value"
-          },
-          {
-            "zh": "统一后验验证项",
-            "en": "Unified posterior reference"
-          }
-        ],
-        "visibilityStatus": "FREE",
-        "resultStatus": "PENDING"
-      },
-      {
-        "marketType": "GOALS",
-        "tipCode": "U2.5",
-        "tipLabel": {
-          "zh": "进球参考 小2.5球（≤2球）",
-          "en": "Goals reference: Under 2.5 goals"
-        },
-        "odds": 1.7,
-        "trustScore": 57,
-        "recommendationAction": "reference",
-        "recommendationTier": "posterior-reference",
-        "explanation": {
-          "zh": "进球数只解释比分形态，不作为本场主推兜底。",
-          "en": "Goals explain the score shape only; they are not a backup main pick."
-        },
-        "analysisItems": [
-          {
-            "zh": "比分热区：1-1 附近；候选方向 小2.5球（≤2球） 的模型概率约 59%，低于强推阈值。",
-            "en": "Score heat zone: around 1-1; candidate Under 2.5 goals is about 59%, below the promotion threshold."
-          },
-          {
-            "zh": "大 2.5 球概率约 41%，该指标用于走势参考，不等同于官方总进球 SP。",
-            "en": "Over 2.5 probability is about 41%. This is a model reference, not official Sporttery total-goals SP."
-          }
-        ],
-        "riskTags": [
-          {
-            "zh": "进球临界",
-            "en": "Goal-model borderline"
-          },
-          {
-            "zh": "进球条件未齐",
-            "en": "Goals conditions not aligned"
-          },
-          {
-            "zh": "统一后验验证项",
-            "en": "Unified posterior reference"
-          }
-        ],
-        "visibilityStatus": "FREE",
-        "resultStatus": "PENDING"
-      },
-      {
-        "marketType": "BEST",
-        "oddsPoolCode": "HHAD",
-        "handicapLine": "1",
-        "tipCode": "1",
-        "tipLabel": {
-          "zh": "主推 让胜",
-          "en": "Main pick: HHAD home"
-        },
-        "odds": 2.65,
-        "trustScore": 76,
-        "recommendationAction": "recommend",
-        "recommendationTier": "unified-hhad-posterior",
-        "explanation": {
-          "zh": "统一后验主结论：先用泊松比分矩阵生成比分分布，再用贝叶斯更新融合模型概率、比分反推、赛前信号和SP校验。普通胜平负边际不够清晰，统一后验改用让球盘作为主结论。本场只主推 让胜。",
-          "en": "Unified posterior verdict: the Poisson score matrix is built first, then Bayesian updating combines model probability, score-implied probability, pre-match signals, and SP validation. Single main pick: HHAD home."
-        },
-        "analysisItems": [
-          {
-            "zh": "比分矩阵先行：主推对应热区 1-1；前三比分为 1-1 / 1-0 / 2-1。",
-            "en": "Score matrix first: pick-aligned score zone 1-1; top three 1-1 / 1-0 / 2-1."
-          },
-          {
-            "zh": "让球后验：让胜 61% / 让平 23% / 让负 16%。当前主结论只按让球结算，不再用进球数或另一个盘口做兜底。",
-            "en": "HHAD posterior: 让胜 61% / 让平 23% / 让负 16%. The main result settles only on this market; totals or the other pool are references, not backups."
-          },
-          {
-            "zh": "自洽规则：如果比分热区偏平局，就压低硬追胜负；如果普通胜平负未开售，就不凭空生成主胜/平/客胜主推；如果选择让球，也只显示为让胜/让平/让负。",
-            "en": "Consistency rule: draw-heavy score shapes suppress forced 1X2 sides; if 1X2 is not on sale, no raw 1X2 main pick is invented; HHAD is displayed only as HHAD home/draw/away."
-          }
-        ],
-        "riskTags": [
-          {
-            "zh": "统一后验主结论",
-            "en": "Unified posterior main pick"
-          },
-          {
-            "zh": "比分防平",
-            "en": "Score draw pressure"
-          },
-          {
-            "zh": "低比分热区",
-            "en": "Low-score zone"
-          },
-          {
-            "zh": "非官方参考源",
-            "en": "Non-official reference"
-          },
-          {
-            "zh": "价值边际不足",
-            "en": "No value edge"
-          },
-          {
-            "zh": "EV不足",
-            "en": "Flat expected value"
-          }
-        ],
-        "visibilityStatus": "FREE",
-        "resultStatus": "PENDING"
-      }
-    ],
-    "worldCupPrior": {
-      "source": "kimi-worldcup-dataset",
-      "version": "kimi-worldcup-dataset-v1",
-      "signature": "kimi-worldcup-dataset-v1|065363d19babce35|teams:48|fixtures:104",
-      "policy": "usable-as-pre-match-prior",
-      "rawPolicy": "audit-only",
-      "strengthDiff": -0.0436,
-      "fixture": null,
-      "home": {
-        "key": "jordan",
-        "nameZh": "约旦",
-        "nameEn": "Jordan",
-        "group": "J",
-        "fifaRank": 37,
-        "elo": 1615,
-        "squadValueM": 73.3,
-        "avgAge": 28.4,
-        "corePlayer": "Yoshida",
-        "qualityTier": "estimated",
-        "recent10": {
-          "raw": "4胜2平3负",
-          "wins": 4,
-          "draws": 2,
-          "losses": 3,
-          "points": 14
-        },
-        "groupOutlook": {
-          "group": "G",
-          "projectedRank": 3,
-          "projectedPoints": 2.9,
-          "wins": 0.6,
-          "draws": 1,
-          "losses": 1.4,
-          "goalsFor": 3,
-          "goalsAgainst": 4.1,
-          "goalDiff": -1.1,
-          "advanceProbability": 50,
-          "groupWinProbability": 10
-        },
-        "modelStrengthNormalized": 0.5012
-      },
-      "away": {
-        "key": "algeria",
-        "nameZh": "阿尔及利亚",
-        "nameEn": "Algeria",
-        "group": "J",
-        "fifaRank": 33,
-        "elo": 1635,
-        "squadValueM": 154.2,
-        "avgAge": 26.7,
-        "corePlayer": "Kabore",
-        "qualityTier": "estimated",
-        "recent10": {
-          "raw": "5胜0平4负",
-          "wins": 5,
-          "draws": 0,
-          "losses": 4,
-          "points": 15
-        },
-        "groupOutlook": {
-          "group": "G",
-          "projectedRank": 4,
-          "projectedPoints": 2.9,
-          "wins": 0.7,
-          "draws": 0.9,
-          "losses": 1.4,
-          "goalsFor": 2.8,
-          "goalsAgainst": 4,
-          "goalDiff": -1.2,
-          "advanceProbability": 5,
-          "groupWinProbability": 5
-        },
-        "modelStrengthNormalized": 0.5448
-      }
-    },
-    "externalSignals": {
-      "source": "500.com:jczq",
-      "updatedAt": "2026-06-22T13:54:53.215Z",
-      "sourceMatchId": "2040254",
-      "fixtureId": "1359252",
-      "matchNo": "周一044",
-      "leagueName": "世界杯",
-      "homeTeamName": "约旦",
-      "awayTeamName": "阿尔及利亚",
-      "kickoffTime": "2026-06-23T11:00:00+08:00",
-      "buyEndTime": "2026-06-22 22:00:00",
-      "handicapLine": "1",
-      "externalOdds": {
-        "source": "500.com",
-        "odds1": 6.5,
-        "oddsX": 4.36,
-        "odds2": 1.34,
-        "summary": {
-          "zh": "500彩票网胜平负参考：6.50 / 4.36 / 1.34",
-          "en": "500.com 1X2 reference: 6.50 / 4.36 / 1.34"
-        }
-      },
-      "bookmakerOdds": {
-        "had": {
-          "odds1": 6.5,
-          "oddsX": 4.36,
-          "odds2": 1.34
-        },
-        "hhad": {
-          "odds1": 2.65,
-          "oddsX": 3.27,
-          "odds2": 2.24
-        }
-      },
-      "venue": {
-        "name": "Estadio Akron",
-        "city": "Guadalajara",
-        "country": "Mexico",
-        "latitude": 20.6819,
-        "longitude": -103.4628,
-        "verified": false,
-        "source": "world-cup-host-rotation-estimate",
-        "summary": {
-          "zh": "Estadio Akron，Guadalajara。当前为场地估算，后续可用官方球场覆盖。",
-          "en": "Estadio Akron, Guadalajara. Venue is estimated and can be replaced by official venue data."
-        }
-      },
-      "weather": {
-        "source": "open-meteo",
-        "provider": "open-meteo",
-        "updatedAt": "2026-06-22T13:54:53.215Z",
-        "forecastTime": "2026-06-23T03:00Z",
-        "verified": false,
-        "confidence": "estimated-location",
-        "locationSource": "world-cup-host-rotation-estimate",
-        "condition": {
-          "zh": "少云",
-          "en": "Partly cloudy"
-        },
-        "temperatureC": 17.5,
-        "windKph": 1.1,
-        "windGustKph": 10.4,
-        "precipitationMm": 0,
-        "weatherCode": 2,
-        "riskLevel": "low",
-        "summary": {
-          "zh": "Guadalajara 场地估算天气：少云，17.5C，风速 1.1km/h，降水 0mm，环境低风险。",
-          "en": "Guadalajara venue estimated weather: Partly cloudy, 17.5C, wind 1.1km/h, precipitation 0mm, low risk."
-        },
-        "impact": {
-          "zh": "天气扰动较低，按中性环境处理。",
-          "en": "Weather disruption is low and treated as a neutral environment."
-        }
-      },
-      "preMatch": {
-        "version": "sync-pre-match-signals-v50",
-        "source": "pre-match-signal-layer",
-        "updatedAt": "2026-06-16T08:16:51.180Z",
-        "sourceMatchId": "2040254",
-        "matchId": "sporttery_2040254",
-        "matchNo": "周一044",
-        "kickoffTime": "2026-06-23T11:00:00+08:00",
-        "homeTeamName": "约旦",
-        "awayTeamName": "阿尔及利亚",
-        "quality": {
-          "version": "pre-match-quality-v50",
-          "score": 7,
-          "sourceQuality": "low",
-          "severeMissingCount": 3,
-          "trustPenalty": 13,
-          "components": {
-            "referee": {
-              "key": "referee",
-              "label": {
-                "zh": "裁判牌数",
-                "en": "Referee cards"
-              },
-              "status": "missing",
-              "score": 0,
-              "source": "missing",
-              "note": {
-                "zh": "未接入真实裁判牌数",
-                "en": "No verified referee card profile"
-              }
-            },
-            "teamCards": {
-              "key": "teamCards",
-              "label": {
-                "zh": "球队牌数历史",
-                "en": "Team card history"
-              },
-              "status": "missing",
-              "score": 0,
-              "source": "missing",
-              "note": {
-                "zh": "未形成可用球队黄红牌样本",
-                "en": "No usable team card sample"
-              }
-            },
-            "lineup": {
-              "key": "lineup",
-              "label": {
-                "zh": "首发/预计阵容",
-                "en": "Lineup"
-              },
-              "status": "missing",
-              "score": 0,
-              "source": "missing",
-              "note": {
-                "zh": "未接入首发或预计名单",
-                "en": "No lineup or projected XI"
-              }
-            },
-            "injuries": {
-              "key": "injuries",
-              "label": {
-                "zh": "伤停",
-                "en": "Injuries"
-              },
-              "status": "missing",
-              "score": 0,
-              "source": "missing",
-              "note": {
-                "zh": "未接入伤停",
-                "en": "No injury signal"
-              }
-            },
-            "xg": {
-              "key": "xg",
-              "label": {
-                "zh": "xG/xGA",
-                "en": "xG/xGA"
-              },
-              "status": "missing",
-              "score": 0,
-              "source": "missing",
-              "note": {
-                "zh": "未接入赛前 xG/xGA",
-                "en": "No pre-match xG/xGA"
-              }
-            },
-            "weather": {
-              "key": "weather",
-              "label": {
-                "zh": "天气/场地",
-                "en": "Weather/pitch"
-              },
-              "status": "missing",
-              "score": 0,
-              "source": "missing",
-              "note": {
-                "zh": "未接入天气/场地",
-                "en": "No weather or pitch signal"
-              }
-            },
-            "market": {
-              "key": "market",
-              "label": {
-                "zh": "盘口校验",
-                "en": "Market validation"
-              },
-              "status": "missing",
-              "score": 0,
-              "source": "missing",
-              "note": {
-                "zh": "缺少盘口校验源",
-                "en": "No market validation source"
-              }
-            },
-            "motivation": {
-              "key": "motivation",
-              "label": {
-                "zh": "排名/战意",
-                "en": "Table/motivation"
-              },
-              "status": "estimated",
-              "score": 62,
-              "source": "rank-stage-context",
-              "note": {
-                "zh": "已接入排名或赛程阶段信息",
-                "en": "Rank or stage context loaded"
-              }
-            }
-          },
-          "missing": [
-            {
-              "key": "referee",
-              "zh": "缺少裁判牌数",
-              "en": "Missing Referee cards",
-              "severity": "medium",
-              "weight": 10
-            },
-            {
-              "key": "teamCards",
-              "zh": "缺少球队牌数历史",
-              "en": "Missing Team card history",
-              "severity": "medium",
-              "weight": 10
-            },
-            {
-              "key": "lineup",
-              "zh": "缺少首发/预计阵容",
-              "en": "Missing Lineup",
-              "severity": "high",
-              "weight": 15
-            },
-            {
-              "key": "injuries",
-              "zh": "缺少伤停",
-              "en": "Missing Injuries",
-              "severity": "high",
-              "weight": 15
-            },
-            {
-              "key": "xg",
-              "zh": "缺少xG/xGA",
-              "en": "Missing xG/xGA",
-              "severity": "medium",
-              "weight": 14
-            },
-            {
-              "key": "weather",
-              "zh": "缺少天气/场地",
-              "en": "Missing Weather/pitch",
-              "severity": "medium",
-              "weight": 6
-            },
-            {
-              "key": "market",
-              "zh": "缺少盘口校验",
-              "en": "Missing Market validation",
-              "severity": "high",
-              "weight": 18
-            }
-          ],
-          "lowQuality": [
-            "motivation"
-          ],
-          "connected": {
-            "referee": false,
-            "teamCards": false,
-            "lineup": false,
-            "injuries": false,
-            "xg": false,
-            "weather": false,
-            "market": false,
-            "motivation": true
-          },
-          "summary": {
-            "zh": "赛前数据质量 7/100，缺口偏多。",
-            "en": "Pre-match data quality 7/100, low coverage."
-          }
-        },
-        "qualitySummary": {
-          "zh": "赛前数据质量 7/100，缺口偏多。",
-          "en": "Pre-match data quality 7/100, low coverage."
-        }
-      }
-    },
+    "projectedScoreHome": 1,
+    "projectedScoreAway": 1,
     "stats": {
       "xG": {
         "home": 1.25,
@@ -44177,277 +44271,183 @@
         "note": "high-variance-data-gap"
       }
     },
-    "matchDate": "2026-06-23",
-    "kickoffDate": "2026-06-23",
-    "businessDate": "2026-06-22",
-    "homeTeamName": "约旦",
-    "homeTeamNameEn": "约旦",
-    "homeRank": "",
-    "homeTeamLogo": "https://flagcdn.com/w80/jo.png",
-    "homeTeamLogoType": "flag",
-    "homeTeamCountryIso": "JO",
-    "homeTeamColor": "#975fa6",
-    "awayTeamName": "阿尔及利亚",
-    "awayTeamNameEn": "阿尔及利亚",
-    "awayRank": "",
-    "awayTeamLogo": "https://flagcdn.com/w80/dz.png",
-    "awayTeamLogoType": "flag",
-    "awayTeamCountryIso": "DZ",
-    "awayTeamColor": "#4e51a4",
-    "leagueName": "世界杯",
-    "leagueNameEn": "International",
-    "leagueShortName": "国际赛",
-    "leagueShortNameEn": "Internationa",
-    "countryName": "国际",
-    "countryNameEn": "World",
-    "countryFlag": "🌐",
-    "source": "five-hundred",
-    "sourceMethod": "500-fallback",
-    "sourceUrl": "https://trade.500.com/jczq/",
-    "sourceMatchId": "2040254",
-    "matchNo": "周一044",
-    "predictionMeta": {
-      "policyVersion": "sporttery-day-formula-trace-v52",
-      "promptVersion": "professional-football-analyst-v21",
-      "strategyVersion": "self-optimization-v1",
-      "trainingVersion": "none",
-      "trainingSource": "none",
-      "trainingSignature": "none|kimi-worldcup-dataset-v1|065363d19babce35|teams:48|fixtures:104|score-calibration-v2:0.046:{\"3\":-0.019,\"4+\":0.053}:{\"clear-btts-open\":0.037,\"one-goal-btts\":-0.016}",
-      "worldCupPriorSignature": "kimi-worldcup-dataset-v1|065363d19babce35|teams:48|fixtures:104",
-      "scoreCalibrationSignature": "score-calibration-v2:0.046:{\"3\":-0.019,\"4+\":0.053}:{\"clear-btts-open\":0.037,\"one-goal-btts\":-0.016}",
-      "generatedAt": "2026-06-15T06:21:14.261Z",
-      "updatedAt": "2026-06-22T13:54:54.571Z",
-      "cutoffTime": "2026-06-22 22:00:00",
-      "dataPolicy": {
-        "zh": "竞彩截止前，赛前分析先由 Elo 强度、长期历史样本、近一年状态、赛程密度、世界杯先验、比分分布与公开赛前信息层生成独立预测；官方 HAD/HHAD SP 和 SP 走势只用于校验市场分歧与价值风险。截止后保留历史预测，只结算赛果，不回写旧推荐。",
-        "en": "Before the Sporttery cutoff, pre-match reads first build an independent forecast from Elo strength, long-run history, recent form, schedule density, World Cup priors, score distribution, and public pre-match signals. Official HAD/HHAD SP and SP movement are used only to validate market disagreement and value risk. After cutoff, the historical prediction is kept and only settlement is added."
-      },
-      "analystRuntime": {
-        "model": "5.5",
-        "reasoningEffort": "high",
-        "promptDocument": "docs/professional-analysis-prompt.md"
-      },
-      "analystFramework": {
-        "version": "professional-football-analyst-v21",
-        "role": {
-          "zh": "专业足球赛事分析师",
-          "en": "Professional football analyst"
-        },
-        "runtime": {
-          "model": "5.5",
-          "reasoningEffort": "high",
-          "promptDocument": "docs/professional-analysis-prompt.md"
-        },
-        "outputSections": [
-          {
-            "id": "baseline",
-            "zh": "一、比赛基本面分析",
-            "en": "1. Fixture baseline"
-          },
-          {
-            "id": "recent-form",
-            "zh": "二、近期状态分析",
-            "en": "2. Recent form"
-          },
-          {
-            "id": "home-away",
-            "zh": "三、主客场表现分析",
-            "en": "3. Home and away split"
-          },
-          {
-            "id": "attack",
-            "zh": "四、进攻能力分析",
-            "en": "4. Attack"
-          },
-          {
-            "id": "defense",
-            "zh": "五、防守能力分析",
-            "en": "5. Defense"
-          },
-          {
-            "id": "lineup",
-            "zh": "六、伤停与首发阵容分析",
-            "en": "6. Injuries and starting XI"
-          },
-          {
-            "id": "tactics",
-            "zh": "七、战术风格与克制关系分析",
-            "en": "7. Tactical matchup"
-          },
-          {
-            "id": "schedule-motivation",
-            "zh": "八、赛程体能与战意分析",
-            "en": "8. Schedule, fitness, motivation"
-          },
-          {
-            "id": "h2h",
-            "zh": "九、历史交锋分析",
-            "en": "9. Head to head"
-          },
-          {
-            "id": "environment-referee",
-            "zh": "十、天气、场地与裁判因素",
-            "en": "10. Weather, pitch, referee"
-          },
-          {
-            "id": "market",
-            "zh": "十一、赔率与盘口分析",
-            "en": "11. Odds and market"
-          },
-          {
-            "id": "verdict",
-            "zh": "十二、综合判断与预测结论",
-            "en": "12. Verdict"
-          }
-        ],
-        "probabilityPrinciples": {
-          "zh": [
-            "先输出胜平负、比分分布、大小球、双方进球和让球概率，不把任务简化成只猜胜负。",
-            "独立概率先由 Elo 强度、Poisson 比分模型、近一年攻防、长期历史样本、世界杯先验和赛程密度生成；官方 SP 只作为市场校验和价值差参考。",
-            "推荐阈值跟随 model-calibration 动态变化；低命中联赛、市场或方向自动降权并提高概率差与让球支持要求。",
-            "回测必须按时间滚动，严禁赛后 xG、赛后射门、最终排名、未公开首发或时间点不一致的临场赔率泄漏。",
-            "评估以 log loss、Brier score、校准误差和分桶可靠性为主，命中率只作为辅助观察。"
-          ],
-          "en": [
-            "Output 1X2, score distribution, totals, BTTS, and handicap probabilities first instead of reducing the task to one winner.",
-            "Independent probabilities are generated first from Elo strength, Poisson score modelling, last-year attack/defense form, long-run history, World Cup priors, and schedule density; official SP is only market validation and value-gap reference.",
-            "Recommendation gates follow model-calibration dynamically; cold leagues, markets, or directions are down-weighted with higher probability-gap and handicap-support requirements.",
-            "Backtests must be time-ordered and must not leak post-match xG, post-match shots, final table rank, unpublished lineups, or late odds into earlier forecast nodes.",
-            "Evaluate with log loss, Brier score, calibration error, and bucket reliability; hit rate is only a secondary diagnostic."
-          ]
-        },
-        "forecastTargets": [
-          {
-            "id": "one-x-two",
-            "zh": "胜平负：主胜、平局、客胜三项概率",
-            "en": "1X2: home, draw, away probabilities"
-          },
-          {
-            "id": "score-distribution",
-            "zh": "比分分布：2-3 个最高概率比分",
-            "en": "Score distribution: top 2-3 scorelines"
-          },
-          {
-            "id": "goal-lines",
-            "zh": "大小球：大/小 2.5 概率",
-            "en": "Goal line: over/under 2.5 probabilities"
-          },
-          {
-            "id": "btts",
-            "zh": "双方进球：BTTS Yes/No 概率",
-            "en": "BTTS: yes/no probabilities"
-          },
-          {
-            "id": "handicap",
-            "zh": "让球概率：当前官方让球线支持率",
-            "en": "Handicap: support at the current official line"
-          }
-        ],
-        "modelingStack": [
-          {
-            "id": "independent-baseline",
-            "zh": "独立基准：Elo、历史样本、世界杯先验与 Poisson 概率",
-            "en": "Independent baseline: Elo, historical samples, World Cup priors, and Poisson probabilities"
-          },
-          {
-            "id": "elo",
-            "zh": "Elo/Glicko 强度：球队动态评分、主场优势和强弱差",
-            "en": "Elo/Glicko strength: dynamic rating, home advantage, team gap"
-          },
-          {
-            "id": "poisson",
-            "zh": "Poisson/Dixon-Coles：进球期望、比分矩阵、大小球和让球聚合",
-            "en": "Poisson/Dixon-Coles: goal expectations, score matrix, totals, handicap aggregation"
-          },
-          {
-            "id": "ml",
-            "zh": "机器学习层：仅在基准稳定并完成时间滚动回测后加入",
-            "en": "ML layer: added only after stable baselines and time-ordered backtests"
-          },
-          {
-            "id": "ensemble",
-            "zh": "集成层：用滚动验证集优化强度/Elo/Poisson/ML 权重",
-            "en": "Ensemble: optimize strength/Elo/Poisson/ML weights on rolling validation"
-          },
-          {
-            "id": "calibration",
-            "zh": "校准层：可靠性曲线、Platt、isotonic、联赛和场景分桶",
-            "en": "Calibration: reliability curves, Platt, isotonic, league and profile buckets"
-          }
-        ],
-        "featurePriority": [
-          "long-term-team-strength",
-          "independent-model-probability",
-          "xg-xga-gap-when-connected",
-          "home-away-split-and-travel",
-          "injuries-and-lineup-quality",
-          "rest-days-and-schedule-density",
-          "style-matchup",
-          "motivation",
-          "ranking-pressure-and-attack-intent",
-          "discipline-cards-and-red-card-risk",
-          "weather-and-pitch",
-          "referee-tendency"
-        ],
-        "qualityStandards": {
-          "zh": [
-            "必须输出概率，而不是只输出胜负结论。",
-            "必须按时间滚动回测，不能随机切分。",
-            "必须校准概率，并按联赛、场景和赔率区间分桶评估。",
-            "必须避免未来信息泄漏。",
-            "必须长期接近或优于简单赔率基准，否则不升格为推荐。",
-            "必须保留赛前快照，赛后只结算和复盘，不改写原方向。"
-          ],
-          "en": [
-            "Output probabilities, not just a winner.",
-            "Use time-ordered rolling backtests, not random splits.",
-            "Calibrate probabilities and evaluate by league, profile, and odds bucket.",
-            "Avoid future-information leakage.",
-            "Approach or beat the simple market baseline long term before promoting recommendations.",
-            "Keep pre-match snapshots; after kickoff only settle and review, never rewrite the original direction."
-          ]
-        },
-        "finalVerdict": {
-          "zh": "结论必须区分稳妥方向和激进方向；胜平负与让球方向保持一致；数据不足时明确标注，不为推荐而硬推。",
-          "en": "The verdict must split conservative and aggressive directions; 1X2 and handicap views must stay consistent; missing data is labelled and no pick is forced."
-        }
-      },
-      "updateReason": {
-        "zh": "官方 SP 或让球盘没有实质变化，原赛前方向继续保留；分析版本可更新，但不重算推荐方向。",
-        "en": "Official SP and handicap signals did not materially change, so the pre-match direction is preserved; analysis versions may update, but the recommendation direction is not recalculated."
-      },
-      "snapshot": {
-        "phase": "baseline",
-        "total": 10,
-        "phases": {
-          "baseline": 10
-        },
-        "latestAt": "2026-06-22T12:59:54.275Z",
-        "latestSignature": "1X2:HAD:2:reference|BEST:HHAD:1:recommend|GOALS::U2.5:reference|6.50/4.36/1.34|1:2.65/3.27/2.24|33/29/38"
-      }
-    },
     "odds": {
       "odds1": 6.5,
       "oddsX": 4.36,
       "odds2": 1.34
     },
-    "handicapOdds": {
-      "odds1": 2.65,
-      "oddsX": 3.27,
-      "odds2": 2.24
-    },
-    "buyEndTime": "2026-06-22 22:00:00",
     "oddsSource": "500.com:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "500-fallback",
     "oddsUpdatedAt": "2026-06-22T13:54:48.440Z",
     "oddsSourceUrl": "https://trade.500.com/jczq/",
+    "handicapOdds": {
+      "odds1": 2.65,
+      "oddsX": 3.27,
+      "odds2": 2.24
+    },
     "handicapLine": "1",
     "handicapOddsSource": "500.com:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "500-fallback",
     "handicapOddsUpdatedAt": "2026-06-22T13:54:48.440Z",
-    "handicapOddsSourceUrl": "https://trade.500.com/jczq/"
+    "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
+    "predictions": [
+      {
+        "marketType": "1X2",
+        "oddsPoolCode": "HAD",
+        "handicapLine": "0",
+        "tipCode": "2",
+        "tipLabel": {
+          "zh": "参考倾向 客胜 阿尔及利亚",
+          "en": "Reference lean: Away Win (阿尔及利亚)"
+        },
+        "odds": 1.34,
+        "trustScore": 34,
+        "recommendationAction": "reference",
+        "recommendationTier": "posterior-reference",
+        "explanation": {
+          "zh": "胜平负作为统一后验验证项展示，页面主推只看 AI 精选这一条。",
+          "en": "1X2 is shown as a unified-posterior reference; the page main pick is the BEST row only."
+        },
+        "analysisItems": [
+          {
+            "zh": "500 网 HAD 胜平负参考 SP：主胜 6.50 / 平局 4.36 / 客胜 1.34；去水支持率约 主胜 14% / 平局 20% / 客胜 66%。",
+            "en": "500.com HAD reference SP: 6.50 / 4.36 / 1.34; normalized support is about home 14% / draw 20% / away 66%."
+          },
+          {
+            "zh": "参考理由：独立模型优势约 5 个百分点，市场分歧约 46 个百分点，让球同向支持约 40%；条件没有同时闭合，暂不输出单一胜平负方向。",
+            "en": "Watch reason: independent model edge is about 5 points, market disagreement about 46 points, same-side handicap support about 40%; no single 1X2 pick is promoted."
+          },
+          {
+            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 500 网 HAD 胜平负参考 SP 更新时间：2026-06-22T13:54:48.440Z。",
+            "en": "Draw support is not dominant, but late SP movement still matters. 500.com HAD reference SP updated at 2026-06-22T13:54:48.440Z."
+          }
+        ],
+        "riskTags": [
+          {
+            "zh": "非官方参考源",
+            "en": "Non-official reference"
+          },
+          {
+            "zh": "价值边际不足",
+            "en": "No value edge"
+          },
+          {
+            "zh": "EV不足",
+            "en": "Flat expected value"
+          },
+          {
+            "zh": "统一后验验证项",
+            "en": "Unified posterior reference"
+          }
+        ],
+        "visibilityStatus": "FREE",
+        "resultStatus": "PENDING"
+      },
+      {
+        "marketType": "GOALS",
+        "tipCode": "U2.5",
+        "tipLabel": {
+          "zh": "进球参考 小2.5球（≤2球）",
+          "en": "Goals reference: Under 2.5 goals"
+        },
+        "odds": 1.7,
+        "trustScore": 57,
+        "recommendationAction": "reference",
+        "recommendationTier": "posterior-reference",
+        "explanation": {
+          "zh": "进球数只解释比分形态，不作为本场主推兜底。",
+          "en": "Goals explain the score shape only; they are not a backup main pick."
+        },
+        "analysisItems": [
+          {
+            "zh": "比分热区：1-1 附近；候选方向 小2.5球（≤2球） 的模型概率约 59%，低于强推阈值。",
+            "en": "Score heat zone: around 1-1; candidate Under 2.5 goals is about 59%, below the promotion threshold."
+          },
+          {
+            "zh": "大 2.5 球概率约 41%，该指标用于走势参考，不等同于官方总进球 SP。",
+            "en": "Over 2.5 probability is about 41%. This is a model reference, not official Sporttery total-goals SP."
+          }
+        ],
+        "riskTags": [
+          {
+            "zh": "进球临界",
+            "en": "Goal-model borderline"
+          },
+          {
+            "zh": "进球条件未齐",
+            "en": "Goals conditions not aligned"
+          },
+          {
+            "zh": "统一后验验证项",
+            "en": "Unified posterior reference"
+          }
+        ],
+        "visibilityStatus": "FREE",
+        "resultStatus": "PENDING"
+      },
+      {
+        "marketType": "BEST",
+        "oddsPoolCode": "HHAD",
+        "handicapLine": "1",
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "主推 让胜",
+          "en": "Main pick: HHAD home"
+        },
+        "odds": 2.65,
+        "trustScore": 76,
+        "recommendationAction": "recommend",
+        "recommendationTier": "unified-hhad-posterior",
+        "explanation": {
+          "zh": "统一后验主结论：先用泊松比分矩阵生成比分分布，再用贝叶斯更新融合模型概率、比分反推、赛前信号和SP校验。普通胜平负边际不够清晰，统一后验改用让球盘作为主结论。本场只主推 让胜。",
+          "en": "Unified posterior verdict: the Poisson score matrix is built first, then Bayesian updating combines model probability, score-implied probability, pre-match signals, and SP validation. Single main pick: HHAD home."
+        },
+        "analysisItems": [
+          {
+            "zh": "比分矩阵先行：主推对应热区 1-1；前三比分为 1-1 / 1-0 / 2-1。",
+            "en": "Score matrix first: pick-aligned score zone 1-1; top three 1-1 / 1-0 / 2-1."
+          },
+          {
+            "zh": "让球后验：让胜 61% / 让平 23% / 让负 16%。当前主结论只按让球结算，不再用进球数或另一个盘口做兜底。",
+            "en": "HHAD posterior: 让胜 61% / 让平 23% / 让负 16%. The main result settles only on this market; totals or the other pool are references, not backups."
+          },
+          {
+            "zh": "自洽规则：如果比分热区偏平局，就压低硬追胜负；如果普通胜平负未开售，就不凭空生成主胜/平/客胜主推；如果选择让球，也只显示为让胜/让平/让负。",
+            "en": "Consistency rule: draw-heavy score shapes suppress forced 1X2 sides; if 1X2 is not on sale, no raw 1X2 main pick is invented; HHAD is displayed only as HHAD home/draw/away."
+          }
+        ],
+        "riskTags": [
+          {
+            "zh": "统一后验主结论",
+            "en": "Unified posterior main pick"
+          },
+          {
+            "zh": "比分防平",
+            "en": "Score draw pressure"
+          },
+          {
+            "zh": "低比分热区",
+            "en": "Low-score zone"
+          },
+          {
+            "zh": "非官方参考源",
+            "en": "Non-official reference"
+          },
+          {
+            "zh": "价值边际不足",
+            "en": "No value edge"
+          },
+          {
+            "zh": "EV不足",
+            "en": "Flat expected value"
+          }
+        ],
+        "visibilityStatus": "FREE",
+        "resultStatus": "PENDING"
+      }
+    ]
   },
   {
     "id": "fivehundred_2040255",
@@ -44461,7 +44461,7 @@
     "projectedScoreAway": 1,
     "probabilityModel": {
       "version": "unified-poisson-bayes-v52",
-      "generatedAt": "2026-06-22T13:55:07.952Z",
+      "generatedAt": "2026-06-22T14:01:23.359Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序；先用 Elo、长期历史样本、近一年状态、世界杯先验、赛程密度与 Poisson 比分分布生成独立足球预测。官方 SP/让球 SP 只用于市场校验、价值差比较和风险标签，不再驱动最终概率。",
         "en": "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model first builds an independent football forecast from Elo, long-run history, recent form, World Cup priors, and Poisson score distribution. Official SP/handicap SP are used only for market validation, value comparison, and risk tags; they do not drive the final probability."
@@ -45498,7 +45498,7 @@
       },
       "unifiedPosterior": {
         "version": "v52-poisson-bayes-single-main",
-        "generatedAt": "2026-06-22T13:55:07.952Z",
+        "generatedAt": "2026-06-22T14:01:23.360Z",
         "selectedMarket": "HHAD",
         "selectedCode": "2",
         "selectedLabelZh": "让负",
@@ -46191,7 +46191,7 @@
       "worldCupPriorSignature": null,
       "scoreCalibrationSignature": "score-calibration-v2:0.046:{\"3\":-0.019,\"4+\":0.053}:{\"clear-btts-open\":0.037,\"one-goal-btts\":-0.016}",
       "generatedAt": "2026-06-15T06:21:14.261Z",
-      "updatedAt": "2026-06-22T13:54:54.571Z",
+      "updatedAt": "2026-06-22T13:59:51.576Z",
       "cutoffTime": "2026-06-23 22:00:00",
       "dataPolicy": {
         "zh": "竞彩截止前，赛前分析先由 Elo 强度、长期历史样本、近一年状态、赛程密度、世界杯先验、比分分布与公开赛前信息层生成独立预测；官方 HAD/HHAD SP 和 SP 走势只用于校验市场分歧与价值风险。截止后保留历史预测，只结算赛果，不回写旧推荐。",
@@ -46426,7 +46426,7 @@
     "projectedScoreAway": 1,
     "probabilityModel": {
       "version": "unified-poisson-bayes-v52",
-      "generatedAt": "2026-06-22T13:55:07.953Z",
+      "generatedAt": "2026-06-22T14:01:23.360Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序；先用 Elo、长期历史样本、近一年状态、世界杯先验、赛程密度与 Poisson 比分分布生成独立足球预测。官方 SP/让球 SP 只用于市场校验、价值差比较和风险标签，不再驱动最终概率。",
         "en": "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model first builds an independent football forecast from Elo, long-run history, recent form, World Cup priors, and Poisson score distribution. Official SP/handicap SP are used only for market validation, value comparison, and risk tags; they do not drive the final probability."
@@ -47471,7 +47471,7 @@
       },
       "unifiedPosterior": {
         "version": "v52-poisson-bayes-single-main",
-        "generatedAt": "2026-06-22T13:55:07.953Z",
+        "generatedAt": "2026-06-22T14:01:23.361Z",
         "selectedMarket": "HHAD",
         "selectedCode": "2",
         "selectedLabelZh": "让负",
@@ -48243,7 +48243,7 @@
       "worldCupPriorSignature": "kimi-worldcup-dataset-v1|065363d19babce35|teams:48|fixtures:104",
       "scoreCalibrationSignature": "score-calibration-v2:0.046:{\"3\":-0.019,\"4+\":0.053}:{\"clear-btts-open\":0.037,\"one-goal-btts\":-0.016}",
       "generatedAt": "2026-06-15T06:21:14.261Z",
-      "updatedAt": "2026-06-22T13:54:54.571Z",
+      "updatedAt": "2026-06-22T13:59:51.576Z",
       "cutoffTime": "2026-06-23 22:00:00",
       "dataPolicy": {
         "zh": "竞彩截止前，赛前分析先由 Elo 强度、长期历史样本、近一年状态、赛程密度、世界杯先验、比分分布与公开赛前信息层生成独立预测；官方 HAD/HHAD SP 和 SP 走势只用于校验市场分歧与价值风险。截止后保留历史预测，只结算赛果，不回写旧推荐。",
@@ -48478,7 +48478,7 @@
     "projectedScoreAway": 2,
     "probabilityModel": {
       "version": "unified-poisson-bayes-v52",
-      "generatedAt": "2026-06-22T13:55:07.954Z",
+      "generatedAt": "2026-06-22T14:01:23.362Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序；先用 Elo、长期历史样本、近一年状态、世界杯先验、赛程密度与 Poisson 比分分布生成独立足球预测。官方 SP/让球 SP 只用于市场校验、价值差比较和风险标签，不再驱动最终概率。",
         "en": "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model first builds an independent football forecast from Elo, long-run history, recent form, World Cup priors, and Poisson score distribution. Official SP/handicap SP are used only for market validation, value comparison, and risk tags; they do not drive the final probability."
@@ -49534,7 +49534,7 @@
       },
       "unifiedPosterior": {
         "version": "v52-poisson-bayes-single-main",
-        "generatedAt": "2026-06-22T13:55:07.955Z",
+        "generatedAt": "2026-06-22T14:01:23.362Z",
         "selectedMarket": "HAD",
         "selectedCode": "2",
         "selectedLabelZh": "客胜 克罗地亚",
@@ -50328,7 +50328,7 @@
       "worldCupPriorSignature": "kimi-worldcup-dataset-v1|065363d19babce35|teams:48|fixtures:104",
       "scoreCalibrationSignature": "score-calibration-v2:0.046:{\"3\":-0.019,\"4+\":0.053}:{\"clear-btts-open\":0.037,\"one-goal-btts\":-0.016}",
       "generatedAt": "2026-06-15T06:21:14.261Z",
-      "updatedAt": "2026-06-22T13:54:54.571Z",
+      "updatedAt": "2026-06-22T13:59:51.576Z",
       "cutoffTime": "2026-06-23 22:00:00",
       "dataPolicy": {
         "zh": "竞彩截止前，赛前分析先由 Elo 强度、长期历史样本、近一年状态、赛程密度、世界杯先验、比分分布与公开赛前信息层生成独立预测；官方 HAD/HHAD SP 和 SP 走势只用于校验市场分歧与价值风险。截止后保留历史预测，只结算赛果，不回写旧推荐。",
@@ -50573,7 +50573,7 @@
     "projectedScoreAway": 0,
     "probabilityModel": {
       "version": "unified-poisson-bayes-v52",
-      "generatedAt": "2026-06-22T13:55:07.956Z",
+      "generatedAt": "2026-06-22T14:01:23.363Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序；先用 Elo、长期历史样本、近一年状态、世界杯先验、赛程密度与 Poisson 比分分布生成独立足球预测。官方 SP/让球 SP 只用于市场校验、价值差比较和风险标签，不再驱动最终概率。",
         "en": "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model first builds an independent football forecast from Elo, long-run history, recent form, World Cup priors, and Poisson score distribution. Official SP/handicap SP are used only for market validation, value comparison, and risk tags; they do not drive the final probability."
@@ -51629,7 +51629,7 @@
       },
       "unifiedPosterior": {
         "version": "v52-poisson-bayes-single-main",
-        "generatedAt": "2026-06-22T13:55:07.956Z",
+        "generatedAt": "2026-06-22T14:01:23.363Z",
         "selectedMarket": "HAD",
         "selectedCode": "1",
         "selectedLabelZh": "主胜 哥伦比亚",
@@ -52423,7 +52423,7 @@
       "worldCupPriorSignature": "kimi-worldcup-dataset-v1|065363d19babce35|teams:48|fixtures:104",
       "scoreCalibrationSignature": "score-calibration-v2:0.046:{\"3\":-0.019,\"4+\":0.053}:{\"clear-btts-open\":0.037,\"one-goal-btts\":-0.016}",
       "generatedAt": "2026-06-15T06:21:14.261Z",
-      "updatedAt": "2026-06-22T13:54:54.571Z",
+      "updatedAt": "2026-06-22T13:59:51.576Z",
       "cutoffTime": "2026-06-23 22:00:00",
       "dataPolicy": {
         "zh": "竞彩截止前，赛前分析先由 Elo 强度、长期历史样本、近一年状态、赛程密度、世界杯先验、比分分布与公开赛前信息层生成独立预测；官方 HAD/HHAD SP 和 SP 走势只用于校验市场分歧与价值风险。截止后保留历史预测，只结算赛果，不回写旧推荐。",
@@ -52668,7 +52668,7 @@
     "projectedScoreAway": 1,
     "probabilityModel": {
       "version": "unified-poisson-bayes-v52",
-      "generatedAt": "2026-06-22T13:55:07.957Z",
+      "generatedAt": "2026-06-22T14:01:23.364Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序；先用 Elo、长期历史样本、近一年状态、世界杯先验、赛程密度与 Poisson 比分分布生成独立足球预测。官方 SP/让球 SP 只用于市场校验、价值差比较和风险标签，不再驱动最终概率。",
         "en": "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model first builds an independent football forecast from Elo, long-run history, recent form, World Cup priors, and Poisson score distribution. Official SP/handicap SP are used only for market validation, value comparison, and risk tags; they do not drive the final probability."
@@ -53617,7 +53617,7 @@
       },
       "unifiedPosterior": {
         "version": "v52-poisson-bayes-single-main",
-        "generatedAt": "2026-06-22T13:55:07.958Z",
+        "generatedAt": "2026-06-22T14:01:23.364Z",
         "selectedMarket": "HHAD",
         "selectedCode": "2",
         "selectedLabelZh": "让负",
@@ -54224,7 +54224,7 @@
       "worldCupPriorSignature": "kimi-worldcup-dataset-v1|065363d19babce35|teams:48|fixtures:104",
       "scoreCalibrationSignature": "score-calibration-v2:0.046:{\"3\":-0.019,\"4+\":0.053}:{\"clear-btts-open\":0.037,\"one-goal-btts\":-0.016}",
       "generatedAt": "2026-06-22T03:05:49.806Z",
-      "updatedAt": "2026-06-22T13:54:54.571Z",
+      "updatedAt": "2026-06-22T13:59:51.576Z",
       "cutoffTime": "2026-06-24 22:00:00",
       "dataPolicy": {
         "zh": "竞彩截止前，赛前分析先由 Elo 强度、长期历史样本、近一年状态、赛程密度、世界杯先验、比分分布与公开赛前信息层生成独立预测；官方 HAD/HHAD SP 和 SP 走势只用于校验市场分歧与价值风险。截止后保留历史预测，只结算赛果，不回写旧推荐。",
@@ -54447,7 +54447,7 @@
     "projectedScoreAway": 0,
     "probabilityModel": {
       "version": "unified-poisson-bayes-v52",
-      "generatedAt": "2026-06-22T13:55:07.958Z",
+      "generatedAt": "2026-06-22T14:01:23.365Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序；先用 Elo、长期历史样本、近一年状态、世界杯先验、赛程密度与 Poisson 比分分布生成独立足球预测。官方 SP/让球 SP 只用于市场校验、价值差比较和风险标签，不再驱动最终概率。",
         "en": "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model first builds an independent football forecast from Elo, long-run history, recent form, World Cup priors, and Poisson score distribution. Official SP/handicap SP are used only for market validation, value comparison, and risk tags; they do not drive the final probability."
@@ -55414,7 +55414,7 @@
       },
       "unifiedPosterior": {
         "version": "v52-poisson-bayes-single-main",
-        "generatedAt": "2026-06-22T13:55:07.959Z",
+        "generatedAt": "2026-06-22T14:01:23.365Z",
         "selectedMarket": "HAD",
         "selectedCode": "1",
         "selectedLabelZh": "主胜 波黑",
@@ -56017,7 +56017,7 @@
       "worldCupPriorSignature": "kimi-worldcup-dataset-v1|065363d19babce35|teams:48|fixtures:104",
       "scoreCalibrationSignature": "score-calibration-v2:0.046:{\"3\":-0.019,\"4+\":0.053}:{\"clear-btts-open\":0.037,\"one-goal-btts\":-0.016}",
       "generatedAt": "2026-06-22T03:05:49.806Z",
-      "updatedAt": "2026-06-22T13:54:54.571Z",
+      "updatedAt": "2026-06-22T13:59:51.576Z",
       "cutoffTime": "2026-06-24 22:00:00",
       "dataPolicy": {
         "zh": "竞彩截止前，赛前分析先由 Elo 强度、长期历史样本、近一年状态、赛程密度、世界杯先验、比分分布与公开赛前信息层生成独立预测；官方 HAD/HHAD SP 和 SP 走势只用于校验市场分歧与价值风险。截止后保留历史预测，只结算赛果，不回写旧推荐。",
@@ -56240,7 +56240,7 @@
     "projectedScoreAway": 2,
     "probabilityModel": {
       "version": "unified-poisson-bayes-v52",
-      "generatedAt": "2026-06-22T13:55:07.959Z",
+      "generatedAt": "2026-06-22T14:01:23.366Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序；先用 Elo、长期历史样本、近一年状态、世界杯先验、赛程密度与 Poisson 比分分布生成独立足球预测。官方 SP/让球 SP 只用于市场校验、价值差比较和风险标签，不再驱动最终概率。",
         "en": "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model first builds an independent football forecast from Elo, long-run history, recent form, World Cup priors, and Poisson score distribution. Official SP/handicap SP are used only for market validation, value comparison, and risk tags; they do not drive the final probability."
@@ -57207,7 +57207,7 @@
       },
       "unifiedPosterior": {
         "version": "v52-poisson-bayes-single-main",
-        "generatedAt": "2026-06-22T13:55:07.960Z",
+        "generatedAt": "2026-06-22T14:01:23.366Z",
         "selectedMarket": "HAD",
         "selectedCode": "2",
         "selectedLabelZh": "客胜 巴西",
@@ -57806,7 +57806,7 @@
       "worldCupPriorSignature": "kimi-worldcup-dataset-v1|065363d19babce35|teams:48|fixtures:104",
       "scoreCalibrationSignature": "score-calibration-v2:0.046:{\"3\":-0.019,\"4+\":0.053}:{\"clear-btts-open\":0.037,\"one-goal-btts\":-0.016}",
       "generatedAt": "2026-06-22T03:05:49.806Z",
-      "updatedAt": "2026-06-22T13:54:54.571Z",
+      "updatedAt": "2026-06-22T13:59:51.576Z",
       "cutoffTime": "2026-06-24 22:00:00",
       "dataPolicy": {
         "zh": "竞彩截止前，赛前分析先由 Elo 强度、长期历史样本、近一年状态、赛程密度、世界杯先验、比分分布与公开赛前信息层生成独立预测；官方 HAD/HHAD SP 和 SP 走势只用于校验市场分歧与价值风险。截止后保留历史预测，只结算赛果，不回写旧推荐。",
@@ -58029,7 +58029,7 @@
     "projectedScoreAway": 0,
     "probabilityModel": {
       "version": "unified-poisson-bayes-v52",
-      "generatedAt": "2026-06-22T13:55:07.960Z",
+      "generatedAt": "2026-06-22T14:01:23.368Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序；先用 Elo、长期历史样本、近一年状态、世界杯先验、赛程密度与 Poisson 比分分布生成独立足球预测。官方 SP/让球 SP 只用于市场校验、价值差比较和风险标签，不再驱动最终概率。",
         "en": "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model first builds an independent football forecast from Elo, long-run history, recent form, World Cup priors, and Poisson score distribution. Official SP/handicap SP are used only for market validation, value comparison, and risk tags; they do not drive the final probability."
@@ -58985,7 +58985,7 @@
       },
       "unifiedPosterior": {
         "version": "v52-poisson-bayes-single-main",
-        "generatedAt": "2026-06-22T13:55:07.960Z",
+        "generatedAt": "2026-06-22T14:01:23.368Z",
         "selectedMarket": "HHAD",
         "selectedCode": "2",
         "selectedLabelZh": "让负",
@@ -59556,7 +59556,7 @@
       "worldCupPriorSignature": "kimi-worldcup-dataset-v1|065363d19babce35|teams:48|fixtures:104",
       "scoreCalibrationSignature": "score-calibration-v2:0.046:{\"3\":-0.019,\"4+\":0.053}:{\"clear-btts-open\":0.037,\"one-goal-btts\":-0.016}",
       "generatedAt": "2026-06-22T03:05:49.806Z",
-      "updatedAt": "2026-06-22T13:54:54.571Z",
+      "updatedAt": "2026-06-22T13:59:51.576Z",
       "cutoffTime": "2026-06-24 22:00:00",
       "dataPolicy": {
         "zh": "竞彩截止前，赛前分析先由 Elo 强度、长期历史样本、近一年状态、赛程密度、世界杯先验、比分分布与公开赛前信息层生成独立预测；官方 HAD/HHAD SP 和 SP 走势只用于校验市场分歧与价值风险。截止后保留历史预测，只结算赛果，不回写旧推荐。",
@@ -59779,7 +59779,7 @@
     "projectedScoreAway": 2,
     "probabilityModel": {
       "version": "unified-poisson-bayes-v52",
-      "generatedAt": "2026-06-22T13:55:07.961Z",
+      "generatedAt": "2026-06-22T14:01:23.369Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序；先用 Elo、长期历史样本、近一年状态、世界杯先验、赛程密度与 Poisson 比分分布生成独立足球预测。官方 SP/让球 SP 只用于市场校验、价值差比较和风险标签，不再驱动最终概率。",
         "en": "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model first builds an independent football forecast from Elo, long-run history, recent form, World Cup priors, and Poisson score distribution. Official SP/handicap SP are used only for market validation, value comparison, and risk tags; they do not drive the final probability."
@@ -60754,7 +60754,7 @@
       },
       "unifiedPosterior": {
         "version": "v52-poisson-bayes-single-main",
-        "generatedAt": "2026-06-22T13:55:07.962Z",
+        "generatedAt": "2026-06-22T14:01:23.370Z",
         "selectedMarket": "HAD",
         "selectedCode": "2",
         "selectedLabelZh": "客胜 韩国",
@@ -61365,7 +61365,7 @@
       "worldCupPriorSignature": "kimi-worldcup-dataset-v1|065363d19babce35|teams:48|fixtures:104",
       "scoreCalibrationSignature": "score-calibration-v2:0.046:{\"3\":-0.019,\"4+\":0.053}:{\"clear-btts-open\":0.037,\"one-goal-btts\":-0.016}",
       "generatedAt": "2026-06-22T03:05:49.806Z",
-      "updatedAt": "2026-06-22T13:54:54.571Z",
+      "updatedAt": "2026-06-22T13:59:51.576Z",
       "cutoffTime": "2026-06-24 22:00:00",
       "dataPolicy": {
         "zh": "竞彩截止前，赛前分析先由 Elo 强度、长期历史样本、近一年状态、赛程密度、世界杯先验、比分分布与公开赛前信息层生成独立预测；官方 HAD/HHAD SP 和 SP 走势只用于校验市场分歧与价值风险。截止后保留历史预测，只结算赛果，不回写旧推荐。",
@@ -61588,7 +61588,7 @@
     "projectedScoreAway": 2,
     "probabilityModel": {
       "version": "unified-poisson-bayes-v52",
-      "generatedAt": "2026-06-22T13:55:07.962Z",
+      "generatedAt": "2026-06-22T14:01:23.371Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序；先用 Elo、长期历史样本、近一年状态、世界杯先验、赛程密度与 Poisson 比分分布生成独立足球预测。官方 SP/让球 SP 只用于市场校验、价值差比较和风险标签，不再驱动最终概率。",
         "en": "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model first builds an independent football forecast from Elo, long-run history, recent form, World Cup priors, and Poisson score distribution. Official SP/handicap SP are used only for market validation, value comparison, and risk tags; they do not drive the final probability."
@@ -62524,7 +62524,7 @@
       },
       "unifiedPosterior": {
         "version": "v52-poisson-bayes-single-main",
-        "generatedAt": "2026-06-22T13:55:07.963Z",
+        "generatedAt": "2026-06-22T14:01:23.371Z",
         "selectedMarket": "HAD",
         "selectedCode": "2",
         "selectedLabelZh": "客胜 墨西哥",
@@ -63127,7 +63127,7 @@
       "worldCupPriorSignature": "kimi-worldcup-dataset-v1|065363d19babce35|teams:48|fixtures:104",
       "scoreCalibrationSignature": "score-calibration-v2:0.046:{\"3\":-0.019,\"4+\":0.053}:{\"clear-btts-open\":0.037,\"one-goal-btts\":-0.016}",
       "generatedAt": "2026-06-22T03:05:49.806Z",
-      "updatedAt": "2026-06-22T13:54:54.571Z",
+      "updatedAt": "2026-06-22T13:59:51.576Z",
       "cutoffTime": "2026-06-24 22:00:00",
       "dataPolicy": {
         "zh": "竞彩截止前，赛前分析先由 Elo 强度、长期历史样本、近一年状态、赛程密度、世界杯先验、比分分布与公开赛前信息层生成独立预测；官方 HAD/HHAD SP 和 SP 走势只用于校验市场分歧与价值风险。截止后保留历史预测，只结算赛果，不回写旧推荐。",
