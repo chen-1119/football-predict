@@ -1,7 +1,7 @@
 {
   "version": 1,
   "source": "sporttery:prediction-snapshots",
-  "updatedAt": "2026-06-23T05:52:56.627Z",
+  "updatedAt": "2026-06-23T05:57:53.580Z",
   "retentionDays": 365,
   "maxRows": 5000,
   "rows": [
@@ -97554,14 +97554,86 @@
         "resultStatus": "PENDING",
         "riskCount": 3
       }
+    },
+    {
+      "capturedAt": "2026-06-23T05:57:53.580Z",
+      "firstSeenAt": "2026-06-23T05:57:53.580Z",
+      "lastSeenAt": "2026-06-23T05:57:53.580Z",
+      "seenCount": 1,
+      "phase": "baseline",
+      "signature": "1X2:HAD:1:reference|BEST:HHAD:1:recommend|GOALS::U2.5:reference|3.11/3.45/1.93|1:1.66/3.85/3.74|40/26/34",
+      "policyVersion": "sporttery-day-formula-trace-v52",
+      "promptVersion": "professional-football-analyst-v21",
+      "sourceMatchId": "2040312",
+      "matchId": "fivehundred_2040312",
+      "matchNo": "周二204",
+      "businessDate": "2026-06-23",
+      "kickoffTime": "2026-06-24T00:00:00+08:00",
+      "status": "SCHEDULED",
+      "leagueName": "芬兰超级联赛",
+      "homeTeamName": "雅罗",
+      "awayTeamName": "赫尔辛基火花",
+      "scoreHome": null,
+      "scoreAway": null,
+      "odds": {
+        "odds1": 3.11,
+        "oddsX": 3.45,
+        "odds2": 1.93
+      },
+      "handicapLine": "1",
+      "handicapOdds": {
+        "odds1": 1.66,
+        "oddsX": 3.85,
+        "odds2": 3.74
+      },
+      "oddsTrend": null,
+      "probabilityFinal": {
+        "home": 40.4,
+        "draw": 25.5,
+        "away": 34.1
+      },
+      "probabilityModelVersion": "unified-poisson-bayes-v52",
+      "best": {
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "主推 让胜",
+          "en": "Main pick: HHAD home"
+        },
+        "odds": 1.66,
+        "trustScore": 82,
+        "resultStatus": "PENDING",
+        "riskCount": 5
+      },
+      "oneXTwo": {
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "参考倾向 主胜 雅罗",
+          "en": "Reference lean: Home Win (雅罗)"
+        },
+        "odds": 3.11,
+        "trustScore": 34,
+        "resultStatus": "PENDING",
+        "riskCount": 4
+      },
+      "goals": {
+        "tipCode": "U2.5",
+        "tipLabel": {
+          "zh": "进球参考 小2.5球（≤2球）",
+          "en": "Goals reference: Under 2.5 goals"
+        },
+        "odds": 1.99,
+        "trustScore": 48,
+        "resultStatus": "PENDING",
+        "riskCount": 3
+      }
     }
   ],
   "summary": {
-    "total": 1266,
+    "total": 1267,
     "byPhase": {
       "review": 85,
       "mid": 135,
-      "baseline": 960,
+      "baseline": 961,
       "late": 44,
       "final": 27,
       "locked": 15
