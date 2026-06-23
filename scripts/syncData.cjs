@@ -13,8 +13,8 @@ const WINDOW_FORWARD_DAYS = Math.max(1, Number(process.env.MATCH_WINDOW_FORWARD_
 const ODDS_HISTORY_RETENTION_DAYS = Math.max(1, Number(process.env.ODDS_HISTORY_RETENTION_DAYS || 365));
 const ODDS_HISTORY_BUCKET_MINUTES = Math.max(1, Number(process.env.ODDS_HISTORY_BUCKET_MINUTES || 5));
 const PAGE_POLL_SECONDS = Math.max(15, Number(process.env.PAGE_POLL_SECONDS || 30));
-const ANALYST_PROMPT_VERSION = "professional-football-analyst-v21";
-const PREDICTION_POLICY_VERSION = "sporttery-day-formula-trace-v52";
+const ANALYST_PROMPT_VERSION = "professional-football-analyst-v24";
+const PREDICTION_POLICY_VERSION = "sporttery-day-formula-trace-v55";
 const ANALYST_RUNTIME = Object.freeze({
   model: "5.5",
   reasoningEffort: "high",
@@ -731,6 +731,12 @@ function representativeScoreRank(row, homeLambda, awayLambda, modeProbability, p
   const attackIntentTotal = Number(contextSignals.attackIntent?.total);
   const redCardRisk = Number(contextSignals.discipline?.redCardRisk?.total);
   const rankingPressureMax = Number(contextSignals.rankingPressure?.maxPressure);
+  const worldCupGroupContext = contextSignals.worldCupGroupContext || contextSignals.rankingPressure?.worldCupGroupContext || null;
+  const groupEffects = worldCupGroupContext?.effects || {};
+  const goalDiffPushSide = groupEffects.goalDiffPushSide || null;
+  const marginPushSide = groupEffects.marginPushSide || goalDiffPushSide;
+  const groupDrawBias = Number(groupEffects.drawBias || 0);
+  const groupTotalIntentBoost = Number(groupEffects.totalIntentBoost || 0);
   const lambdaGap = Number(homeLambda) - Number(awayLambda);
   const lambdaGapAbs = Math.abs(lambdaGap);
   const probabilityScore = row.probability / Math.max(modeProbability, 0.000001);
@@ -804,6 +810,24 @@ function representativeScoreRank(row, homeLambda, awayLambda, modeProbability, p
   }
   if (Number.isFinite(rankingPressureMax) && rankingPressureMax >= 70) {
     if (totalGoals >= 2 && Math.abs(row.home - row.away) <= 2) rank += 0.025;
+  }
+  if (worldCupGroupContext?.sameGroup) {
+    if (goalDiffPushSide === "home" && row.home > 0) rank += 0.025;
+    if (goalDiffPushSide === "away" && row.away > 0) rank += 0.025;
+    if (marginPushSide === "home") {
+      if (row.home - row.away >= 2) rank += 0.1;
+      if (row.home - row.away >= 3) rank += 0.045;
+      if (row.home <= row.away) rank -= 0.055;
+    } else if (marginPushSide === "away") {
+      if (row.away - row.home >= 2) rank += 0.1;
+      if (row.away - row.home >= 3) rank += 0.045;
+      if (row.away <= row.home) rank -= 0.055;
+    }
+    if (Number.isFinite(groupDrawBias)) {
+      if (groupDrawBias >= 0.012 && row.home === row.away && totalGoals <= 4) rank += 0.055;
+      if (groupDrawBias <= -0.012 && row.home === row.away) rank -= 0.075;
+    }
+    if (Number.isFinite(groupTotalIntentBoost) && groupTotalIntentBoost >= 5 && totalGoals >= 3) rank += 0.04;
   }
   const lowScorePenalty = Number(scoreAdjustments.lowScoreRankPenalty || 0);
   const openScoreBoost = Number(scoreAdjustments.openScoreRankBoost || 0);
@@ -2012,6 +2036,7 @@ function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLamb
     bttsProbability,
     scoreCalibration: match.modelCalibration?.scoreCalibration,
     contextSignals,
+    worldCupGroupContext: contextSignals?.worldCupGroupContext || null,
   };
   const scoreDistribution = topScoreProbabilities(homeLambda, awayLambda, 6, scoreContext);
   const scoreImplied1x2 = scoreImpliedOutcomeProbabilities(homeLambda, awayLambda, scoreContext);
@@ -2043,7 +2068,7 @@ function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLamb
     contextSignals,
   });
   return {
-    version: "independent-elo-form-poisson-v7",
+    version: "independent-elo-form-poisson-v8",
     generatedAt: new Date().toISOString(),
     basis: PREDICTION_MODEL_BASIS,
     ensembleWeights: {
@@ -2104,6 +2129,7 @@ function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLamb
       goals: goalCalibration?.meta || null,
     },
     contextSignals,
+    worldCupGroupContext: contextSignals?.worldCupGroupContext || null,
     lambdaBlend: lambdaBlend ? {
       marketHomeLambda: Number(lambdaBlend.marketHomeLambda.toFixed(2)),
       marketAwayLambda: Number(lambdaBlend.marketAwayLambda.toFixed(2)),
@@ -3873,6 +3899,7 @@ function applyModelStrategyToCalibration(calibration, strategy) {
       gateByOddsBucket: strategy.gateByOddsBucket || {},
       gateByTip: strategy.gateByTip || {},
       gateByProfile: strategy.gateByProfile || {},
+      gateByWebConsensus: strategy.gateByWebConsensus || {},
     },
   };
   next.gateByProfile = { ...(calibration.gateByProfile || {}) };
@@ -3916,13 +3943,27 @@ function combineStrategyRules(rules) {
   };
 }
 
+function webConsensusStrategyKeys(match, marketType) {
+  const signal = webConsensusSignal(match);
+  if (!signal || signal.usableForModel === false) return [];
+  const buckets = Array.isArray(signal.buckets)
+    ? signal.buckets.filter((key) => normText(key).startsWith("web:") && key !== "web:usable" && key !== "web:audit-only")
+    : [];
+  return Array.from(new Set([
+    ...buckets,
+    ...buckets.map((key) => `${marketType}:${key}`),
+  ]));
+}
+
 function strategyGateForPrediction(match, marketType, tipCode, oddsBucket) {
   const strategy = match.modelCalibration?.strategy;
   if (!strategy || strategy.activation?.onlineEffect === "shadow") return combineStrategyRules([]);
+  const webRules = webConsensusStrategyKeys(match, marketType).map((key) => strategy.gateByWebConsensus?.[key]);
   return combineStrategyRules([
     strategy.gateByMarket?.[marketType],
     strategy.gateByOddsBucket?.[oddsBucket],
     strategy.gateByTip?.[`${marketType}:${tipCode}`],
+    ...webRules,
   ]);
 }
 
@@ -4392,6 +4433,20 @@ function scoreShapeFromProbabilityModel(model, handicapLine) {
   };
 }
 
+function isHandicapCodeCompatibleWithOutcomeCode(outcomeCode, handicapCode, lineValue) {
+  if (!["1", "X", "2"].includes(outcomeCode) || !["1", "X", "2"].includes(handicapCode)) return true;
+  if (!Number.isFinite(lineValue)) return true;
+  for (let margin = -20; margin <= 20; margin += 1) {
+    const outcomeMatches = (outcomeCode === "1" && margin > 0)
+      || (outcomeCode === "X" && margin === 0)
+      || (outcomeCode === "2" && margin < 0);
+    if (!outcomeMatches) continue;
+    const hhadCode = scoreOutcomeWithHandicap(margin, 0, lineValue);
+    if (hhadCode === handicapCode) return true;
+  }
+  return false;
+}
+
 function unifiedDataQuality(contextSignals) {
   const dataGaps = contextSignals?.dataGaps || {};
   const qualityScore = Number(dataGaps.preMatchQuality?.score ?? dataGaps.coverageScore);
@@ -4433,11 +4488,25 @@ function buildUnifiedOneXTwoPosterior(probabilityModel, marketProbabilities, con
   const marketWeight = clamp(0.06 + dataQuality * 0.05, 0.06, 0.12);
   const scoreWeight = scoreShape?.drawHeavy ? 0.39 : 0.34;
   const biases = {};
+  const groupContext = contextSignals?.worldCupGroupContext || contextSignals?.rankingPressure?.worldCupGroupContext;
+  const groupEffects = groupContext?.effects || {};
 
   if (scoreShape?.drawHeavy) biases.draw = (biases.draw || 0) + 0.08;
   if (scoreShape?.lowScoreHeavy) biases.draw = (biases.draw || 0) + 0.035;
   if (scoreShape?.top1Code === "1") biases.home = (biases.home || 0) + 0.035;
   if (scoreShape?.top1Code === "2") biases.away = (biases.away || 0) + 0.035;
+  if (groupContext?.sameGroup) {
+    const drawBias = Number(groupEffects.drawBias || 0);
+    const needEdge = Number(groupEffects.needEdge || 0);
+    const marginPushSide = groupEffects.marginPushSide || groupEffects.goalDiffPushSide;
+    if (Number.isFinite(drawBias)) biases.draw = (biases.draw || 0) + clamp(drawBias * 1.8, -0.07, 0.05);
+    if (Number.isFinite(needEdge) && Math.abs(needEdge) >= 6) {
+      if (needEdge > 0) biases.home = (biases.home || 0) + clamp(needEdge / 260, 0.012, 0.055);
+      if (needEdge < 0) biases.away = (biases.away || 0) + clamp(Math.abs(needEdge) / 260, 0.012, 0.055);
+    }
+    if (marginPushSide === "home") biases.home = (biases.home || 0) + 0.035;
+    if (marginPushSide === "away") biases.away = (biases.away || 0) + 0.035;
+  }
 
   return weightedLogPosterior([
     { probabilities: final, weight: 0.44 },
@@ -4451,17 +4520,166 @@ function buildUnifiedHandicapPosterior(probabilityModel, hhadProbabilities, scor
   const scoreImplied = normalizedTripletFromAny(probabilityModel?.handicap?.scoreImplied);
   const poisson = normalizedTripletFromAny(probabilityModel?.handicap?.poisson);
   const market = normalizedTripletFromAny(probabilityModel?.handicap?.market) || normalizedTripletFromAny(hhadProbabilities);
+  const groupContext = probabilityModel?.contextSignals?.worldCupGroupContext || probabilityModel?.contextSignals?.rankingPressure?.worldCupGroupContext;
+  const groupEffects = groupContext?.effects || {};
   const biases = {};
   if (scoreShape?.top1HhadCode === "1") biases.home = (biases.home || 0) + 0.055;
   if (scoreShape?.top1HhadCode === "X") biases.draw = (biases.draw || 0) + 0.055;
   if (scoreShape?.top1HhadCode === "2") biases.away = (biases.away || 0) + 0.055;
   if (scoreShape?.hhadCodeCounts?.X >= 2) biases.draw = (biases.draw || 0) + 0.04;
+  if (groupContext?.sameGroup) {
+    const drawBias = Number(groupEffects.drawBias || 0);
+    if (Number.isFinite(drawBias)) biases.draw = (biases.draw || 0) + clamp(drawBias * 1.55, -0.06, 0.045);
+    if (groupEffects.handicapPushCode === "1") biases.home = (biases.home || 0) + 0.075;
+    if (groupEffects.handicapPushCode === "2") biases.away = (biases.away || 0) + 0.075;
+  }
 
   return weightedLogPosterior([
     { probabilities: scoreImplied, weight: 0.45 },
     { probabilities: poisson, weight: 0.34 },
     { probabilities: market, weight: market ? 0.21 : 0 },
   ], biases);
+}
+
+function worldCupCandidateContextBoost(candidate, context) {
+  const groupContext = context.contextSignals?.worldCupGroupContext || context.contextSignals?.rankingPressure?.worldCupGroupContext;
+  if (!groupContext?.sameGroup) return 0;
+  const effects = groupContext.effects || {};
+  const needEdge = Number(effects.needEdge || 0);
+  const drawBias = Number(effects.drawBias || 0);
+  let boost = 0;
+
+  if (candidate.market === "HAD") {
+    if (candidate.code === "1" && needEdge >= 6) boost += clamp(needEdge / 420, 0.012, 0.045);
+    if (candidate.code === "2" && needEdge <= -6) boost += clamp(Math.abs(needEdge) / 420, 0.012, 0.045);
+    if (candidate.code === "X" && drawBias > 0.01) boost += clamp(drawBias * 1.4, 0.01, 0.035);
+    if (candidate.code === "X" && drawBias < -0.01) boost -= clamp(Math.abs(drawBias) * 1.8, 0.012, 0.05);
+  } else if (candidate.market === "HHAD") {
+    if (effects.handicapPushCode && candidate.code === effects.handicapPushCode) boost += 0.055;
+    if (effects.handicapPushCode && candidate.code !== effects.handicapPushCode && candidate.code !== "X") boost -= 0.028;
+    if (candidate.code === "X" && drawBias > 0.012) boost += 0.018;
+    if (candidate.code === "X" && drawBias < -0.012) boost -= 0.022;
+  }
+
+  return Number(clamp(boost, -0.06, 0.08).toFixed(4));
+}
+
+function candidateMarketSupport(candidate, context) {
+  const rows = candidate.market === "HHAD" ? context.hhadMarketRows : context.hadMarketRows;
+  const row = (rows || []).find((item) => item.code === candidate.code);
+  return Number.isFinite(Number(row?.probability)) ? Number(row.probability) : null;
+}
+
+function scoreCountForCandidate(candidate, scoreShape) {
+  if (candidate.market === "HHAD") return Number(scoreShape?.hhadCodeCounts?.[candidate.code] || 0);
+  return Number(scoreShape?.codeCounts?.[candidate.code] || 0);
+}
+
+function recentReviewCandidateAdjustment(candidate, context) {
+  const scoreShape = context.scoreShape || {};
+  const line = Number(scoreShape.handicap);
+  const odds = Number(candidate.odds || 0);
+  const oddsBucket = predictionOddsBucket(odds);
+  const strategyMarket = candidate.market === "HHAD" ? "HHAD" : "1X2";
+  const marketGate = strategyGateForPrediction(context.match, strategyMarket, candidate.code, oddsBucket);
+  const bestGate = strategyGateForPrediction(context.match, "BEST", candidate.code, oddsBucket);
+  const marketSupport = candidateMarketSupport(candidate, context);
+  const topSupportsCandidate = candidate.market === "HHAD"
+    ? scoreShape.top1HhadCode === candidate.code
+    : scoreShape.top1Code === candidate.code;
+  const scoreCount = scoreCountForCandidate(candidate, scoreShape);
+  const hadLeaderCode = context.hadLeader?.code;
+  const reasons = [];
+  let penalty = 0;
+  let bonus = 0;
+
+  const strategyPenalty = clamp(
+    Number(marketGate.minProbabilityBoost || 0) * 0.44
+    + Number(marketGate.minModelGapBoost || 0) * 0.35
+    + Number(marketGate.minHandicapSupportBoost || 0) * 0.32
+    + Number(marketGate.trustPenalty || 0) / 320
+    + Number(bestGate.trustPenalty || 0) / 420,
+    0,
+    0.09
+  );
+  if (strategyPenalty > 0.001) {
+    penalty += strategyPenalty;
+    reasons.push("recent-strategy-cooling");
+  }
+
+  if (candidate.market === "HHAD") {
+    if (context.hadAvailable) {
+      penalty += 0.012;
+      reasons.push("prefer-1x2-when-close");
+    }
+
+    if (Number.isFinite(odds) && odds >= 2.6) {
+      penalty += 0.075;
+      reasons.push("high-sp-handicap-cooling");
+    } else if (Number.isFinite(odds) && odds >= 2.06 && marketSupport !== null && marketSupport < 0.36) {
+      penalty += 0.035;
+      reasons.push("thin-market-support");
+    }
+
+    const opposesRawLeader = Number.isFinite(line) && (
+      (line < 0 && hadLeaderCode === "1" && candidate.code === "2")
+      || (line > 0 && hadLeaderCode === "2" && candidate.code === "1")
+    );
+    const exactMarginCount = Number(scoreShape.hhadCodeCounts?.X || 0);
+
+    if (Math.abs(line) >= 2 && opposesRawLeader) {
+      const strongCoverEvidence = topSupportsCandidate && scoreCount >= 2 && (marketSupport === null || marketSupport >= 0.42);
+      if (!strongCoverEvidence) {
+        penalty += 0.095;
+        reasons.push("deep-line-cover-risk");
+      }
+    }
+
+    if (Math.abs(line) === 1 && opposesRawLeader) {
+      if (exactMarginCount >= 1 || scoreShape.lowScoreHeavy) {
+        penalty += 0.048;
+        reasons.push("one-goal-margin-trap");
+      }
+      if (marketSupport !== null && marketSupport < 0.37) {
+        penalty += 0.035;
+        reasons.push("weak-hhad-support");
+      }
+    }
+
+    if (Math.abs(line) === 1 && candidate.code !== "X" && exactMarginCount >= 2) {
+      penalty += 0.04;
+      reasons.push("let-draw-hot-zone");
+    }
+
+    if (line > 0 && candidate.code === "1" && hadLeaderCode === "2") {
+      const underdogCoverConfirmed = topSupportsCandidate && (marketSupport === null || marketSupport >= 0.48);
+      if (!underdogCoverConfirmed) {
+        penalty += 0.06;
+        reasons.push("positive-line-underdog-risk");
+      }
+    }
+
+    if (topSupportsCandidate && scoreCount >= 2 && (marketSupport === null || marketSupport >= 0.43) && odds <= 2.6) {
+      bonus += 0.025;
+      reasons.push("hhad-score-market-confirmed");
+    }
+  }
+
+  if (candidate.market === "HAD" && odds > 0 && odds <= 1.18 && candidate.code !== "X") {
+    const drawRow = (context.hadRows || []).find((row) => row.code === "X");
+    const drawPosterior = Number(drawRow?.probability || 0);
+    if (scoreShape.drawHeavy || scoreShape.lowScoreHeavy || drawPosterior >= 0.24) {
+      penalty += 0.055;
+      reasons.push("ultra-low-sp-draw-risk");
+    }
+  }
+
+  const adjustment = clamp(bonus - penalty, -0.18, 0.045);
+  return {
+    recentReviewAdjustment: Number(adjustment.toFixed(4)),
+    recentReviewReasons: reasons.slice(0, 6),
+    recentReviewPenalty: Number(Math.max(0, penalty - bonus).toFixed(4)),
+  };
 }
 
 function unifiedCandidateScore(candidate, context) {
@@ -4497,11 +4715,15 @@ function unifiedCandidateScore(candidate, context) {
 
   const qualityPenalty = dataQuality < 0.45 ? 0.035 : dataQuality < 0.62 ? 0.018 : 0;
   const riskPenalty = Math.min(0.055, Number(contextSignals?.trustPenalty || 0) / 220);
+  const worldCupContextBoost = worldCupCandidateContextBoost(candidate, context);
+  const recentReview = recentReviewCandidateAdjustment(candidate, context);
   return {
     ...candidate,
     gap,
     consistency,
-    posteriorScore: candidate.probability + gap * 0.54 + consistency - qualityPenalty - riskPenalty,
+    worldCupContextBoost,
+    ...recentReview,
+    posteriorScore: candidate.probability + gap * 0.54 + consistency + worldCupContextBoost + recentReview.recentReviewAdjustment - qualityPenalty - riskPenalty,
   };
 }
 
@@ -4520,16 +4742,25 @@ function buildUnifiedPosteriorCandidates(match, context) {
   const hadPosterior = hadOdds
     ? buildUnifiedOneXTwoPosterior(probabilityModel, probabilities, contextSignals, scoreShape)
     : null;
-  const hhadPosterior = hhadOdds
+  let hhadPosterior = hhadOdds
     ? buildUnifiedHandicapPosterior(probabilityModel, hhadProbabilities, scoreShape)
     : null;
   const hadRows = outcomeRowsFromTriplet(hadPosterior);
-  const hhadRows = outcomeRowsFromTriplet(hhadPosterior);
+  let hhadRows = outcomeRowsFromTriplet(hhadPosterior);
+  const hhadMarketRows = hhadOdds
+    ? outcomeRowsFromTriplet(probabilityModel?.handicap?.market || hhadProbabilities)
+    : [];
+  const hadMarketRows = hadOdds
+    ? outcomeRowsFromTriplet(probabilityModel?.oneXTwo?.market || probabilities)
+    : [];
   const hadLeader = hadRows[0] || null;
   const scoredContext = {
+    match,
     scoreShape,
     hadRows,
     hhadRows,
+    hadMarketRows,
+    hhadMarketRows,
     hadLeader,
     hadAvailable: Boolean(hadOdds),
     hhadAvailable: Boolean(hhadOdds),
@@ -4571,6 +4802,112 @@ function buildUnifiedPosteriorCandidates(match, context) {
     }
   }
 
+  let outcomeConflict = null;
+  if (
+    selected?.market === "HHAD"
+    && hadBest
+    && ["1", "X", "2"].includes(hadBest.code)
+    && !isHandicapCodeCompatibleWithOutcomeCode(hadBest.code, selected.code, Number(scoreShape.handicap))
+  ) {
+    const originalSelected = selected;
+    const compatibleHhad = candidates
+      .filter((item) => item.market === "HHAD" && isHandicapCodeCompatibleWithOutcomeCode(hadBest.code, item.code, Number(scoreShape.handicap)))
+      .sort((a, b) => b.posteriorScore - a.posteriorScore);
+    const letDraw = compatibleHhad.find((item) => item.code === "X");
+    const canReturnToHad = hadBest.posteriorScore >= originalSelected.posteriorScore - 0.13
+      || scoreShape.top1Code === hadBest.code
+      || Number(originalSelected.recentReviewPenalty || 0) >= 0.14;
+    const canUseLetDraw = letDraw
+      && letDraw.posteriorScore >= originalSelected.posteriorScore - 0.12
+      && (scoreShape.top1HhadCode === "X" || Number(scoreShape.hhadCodeCounts?.X || 0) >= 1);
+
+    if (canReturnToHad) {
+      selected = {
+        ...hadBest,
+        selectionPolicy: "hhad-outcome-conflict-had-safeguard",
+      };
+      outcomeConflict = {
+        type: "hhad-outcome-conflict",
+        line: scoreShape.handicap,
+        originalMarket: originalSelected.market,
+        originalCode: originalSelected.code,
+        hadCode: hadBest.code,
+        action: "selected-had",
+      };
+    } else if (canUseLetDraw) {
+      selected = {
+        ...letDraw,
+        selectionPolicy: "hhad-outcome-conflict-let-draw-safeguard",
+      };
+      outcomeConflict = {
+        type: "hhad-outcome-conflict",
+        line: scoreShape.handicap,
+        originalMarket: originalSelected.market,
+        originalCode: originalSelected.code,
+        hadCode: hadBest.code,
+        action: "selected-compatible-hhad",
+      };
+    } else {
+      selected = {
+        ...selected,
+        selectionPolicy: "hhad-main-over-conflicting-1x2",
+        outcomeConflict: {
+          type: "hhad-outcome-conflict",
+          line: scoreShape.handicap,
+          hadCode: hadBest.code,
+          originalCode: originalSelected.code,
+          action: "kept-hhad-main",
+        },
+      };
+      outcomeConflict = selected.outcomeConflict;
+    }
+  }
+
+  let marketSafeguard = null;
+  const selectedHhadMarketSupport = selected?.market === "HHAD"
+    ? hhadMarketRows.find((row) => row.code === selected.code)?.probability ?? null
+    : null;
+  const hhadMarketLeader = hhadMarketRows[0] || null;
+  if (
+    !hadOdds
+    && selected?.market === "HHAD"
+    && hhadMarketLeader
+    && hhadMarketLeader.code !== selected.code
+    && selectedHhadMarketSupport !== null
+    && selectedHhadMarketSupport < 0.38
+  ) {
+    const originalSelected = selected;
+    hhadPosterior = normalizedTripletFromAny(probabilityModel?.handicap?.market)
+      || normalizedTripletFromAny(hhadProbabilities)
+      || hhadPosterior;
+    hhadRows = outcomeRowsFromTriplet(hhadPosterior);
+    const marketLeader = hhadRows.find((row) => row.code === hhadMarketLeader.code) || hhadMarketLeader;
+    const marketSecond = hhadRows.find((row) => row.code !== marketLeader.code);
+    const marketGap = Math.max(0, marketLeader.probability - Number(marketSecond?.probability || 0));
+    selected = {
+      market: "HHAD",
+      code: marketLeader.code,
+      probability: marketLeader.probability,
+      odds: oddsValueForCode(hhadOdds, marketLeader.code),
+      label: simpleHandicapOutcomeLabel(marketLeader.code),
+      gap: marketGap,
+      consistency: -0.015,
+      posteriorScore: marketLeader.probability + marketGap * 0.54 - 0.015,
+      selectionPolicy: "hhad-market-safeguard",
+    };
+    marketSafeguard = {
+      type: "hhad-market-safeguard",
+      originalCode: originalSelected.code,
+      originalLabelZh: originalSelected.label.zh,
+      originalLabelEn: originalSelected.label.en,
+      originalMarketSupport: selectedHhadMarketSupport,
+      marketCode: marketLeader.code,
+      marketLabelZh: selected.label.zh,
+      marketLabelEn: selected.label.en,
+      marketSupport: marketLeader.probability,
+    };
+  }
+
   return {
     selected,
     candidates: candidates.sort((a, b) => b.posteriorScore - a.posteriorScore),
@@ -4580,6 +4917,8 @@ function buildUnifiedPosteriorCandidates(match, context) {
     hhadRows,
     scoreShape,
     hhadLine,
+    marketSafeguard,
+    outcomeConflict,
   };
 }
 
@@ -4653,8 +4992,14 @@ function enforceUnifiedPosteriorRecommendation(match, context) {
   const switchNoteZh = hasHad && selectedIsHhad
     ? "普通胜平负边际不够清晰，统一后验改用让球盘作为主结论。"
     : "";
+  const marketSafeguardNoteZh = unified.marketSafeguard
+    ? `让球盘口冲突保护：模型原方向 ${unified.marketSafeguard.originalLabelZh} 的官方支持只有 ${pct(unified.marketSafeguard.originalMarketSupport || 0)}%，页面统一切到官方让球盘第一方向 ${unified.marketSafeguard.marketLabelZh}。`
+    : "";
+  const marketSafeguardNoteEn = unified.marketSafeguard
+    ? `HHAD market safeguard: the original model side ${unified.marketSafeguard.originalLabelEn} had only ${pct(unified.marketSafeguard.originalMarketSupport || 0)}% official support, so all surfaces use the official HHAD leader ${unified.marketSafeguard.marketLabelEn}.`
+    : "";
   const trustScore = clamp(
-    Math.round(selected.probability * 100 + selected.gap * 38 + Math.max(0, selected.consistency) * 95 - Number(contextSignals?.trustPenalty || 0) * 0.65),
+    Math.round(selected.probability * 100 + selected.gap * 38 + Math.max(0, selected.consistency) * 95 - Number(contextSignals?.trustPenalty || 0) * 0.65 - Number(selected.recentReviewPenalty || 0) * 120),
     48,
     selected.market === "HHAD" ? 82 : 86
   );
@@ -4671,10 +5016,10 @@ function enforceUnifiedPosteriorRecommendation(match, context) {
     odds: Number.isFinite(selected.odds) ? selected.odds : 0,
     trustScore,
     recommendationAction: "recommend",
-    recommendationTier: selectedIsHhad ? "unified-hhad-posterior" : "unified-had-posterior",
+    recommendationTier: unified.marketSafeguard ? "unified-hhad-market-safeguard" : selectedIsHhad ? "unified-hhad-posterior" : "unified-had-posterior",
     explanation: {
       zh: `统一后验主结论：先用泊松比分矩阵生成比分分布，再用贝叶斯更新融合模型概率、比分反推、赛前信号和SP校验。${onlyHhadNoteZh}${switchNoteZh}本场只主推 ${selected.label.zh}。`,
-      en: `Unified posterior verdict: the Poisson score matrix is built first, then Bayesian updating combines model probability, score-implied probability, pre-match signals, and SP validation. Single main pick: ${selected.label.en}.`,
+      en: `Unified posterior verdict: the Poisson score matrix is built first, then Bayesian updating combines model probability, score-implied probability, pre-match signals, and SP validation. ${marketSafeguardNoteEn} Single main pick: ${selected.label.en}.`,
     },
     analysisItems: [
       {
@@ -4685,6 +5030,10 @@ function enforceUnifiedPosteriorRecommendation(match, context) {
         zh: `${marketLabelZh}后验：${supportText}。当前主结论只按${marketLabelZh}结算，不再用进球数或另一个盘口做兜底。`,
         en: `${marketLabelEn} posterior: ${supportText}. The main result settles only on this market; totals or the other pool are references, not backups.`,
       },
+      ...(unified.marketSafeguard ? [{
+        zh: marketSafeguardNoteZh,
+        en: marketSafeguardNoteEn,
+      }] : []),
       {
         zh: `自洽规则：如果比分热区偏平局，就压低硬追胜负；如果普通胜平负未开售，就不凭空生成主胜/平/客胜主推；如果选择让球，也只显示为让胜/让平/让负。`,
         en: `Consistency rule: draw-heavy score shapes suppress forced 1X2 sides; if 1X2 is not on sale, no raw 1X2 main pick is invented; HHAD is displayed only as HHAD home/draw/away.`,
@@ -4730,7 +5079,7 @@ function enforceUnifiedPosteriorRecommendation(match, context) {
   );
   const unifiedProbabilityModel = {
     ...probabilityModel,
-    version: "unified-poisson-bayes-v52",
+    version: "unified-poisson-bayes-v55",
     oneXTwo: {
       ...(probabilityModel.oneXTwo || {}),
       unifiedPosterior: asPercentTriplet(unified.hadPosterior),
@@ -4740,7 +5089,7 @@ function enforceUnifiedPosteriorRecommendation(match, context) {
       unifiedPosterior: asPercentTriplet(unified.hhadPosterior),
     } : probabilityModel.handicap,
     unifiedPosterior: {
-      version: "v52-poisson-bayes-single-main",
+      version: "v55-poisson-bayes-recent-review-main",
       generatedAt: new Date().toISOString(),
       selectedMarket: selected.market,
       selectedCode: selected.code,
@@ -4749,7 +5098,13 @@ function enforceUnifiedPosteriorRecommendation(match, context) {
       selectedProbability: pct1(selected.probability),
       selectedGap: pct1(selected.gap),
       selectedPosteriorScore: Number(selected.posteriorScore.toFixed(4)),
+      selectedRecentReviewAdjustment: Number((selected.recentReviewAdjustment || 0).toFixed(4)),
+      selectedRecentReviewReasons: selected.recentReviewReasons || [],
+      selectionPolicy: selected.selectionPolicy || "unified-posterior",
+      marketSafeguard: unified.marketSafeguard,
+      outcomeConflict: unified.outcomeConflict || selected.outcomeConflict || null,
       dataQuality: Number(unifiedDataQuality(contextSignals).toFixed(3)),
+      worldCupGroupContext: contextSignals?.worldCupGroupContext || null,
       scoreShape: {
         top1: scoreShape.top1,
         selectedScore,
@@ -4765,6 +5120,9 @@ function enforceUnifiedPosteriorRecommendation(match, context) {
         probability: pct1(candidate.probability),
         gap: pct1(candidate.gap),
         posteriorScore: Number(candidate.posteriorScore.toFixed(4)),
+        worldCupContextBoost: candidate.worldCupContextBoost,
+        recentReviewAdjustment: candidate.recentReviewAdjustment,
+        recentReviewReasons: candidate.recentReviewReasons,
       })),
       policy: "single-main-recommendation; score-matrix-first; bayesian-posterior; references-not-backups",
     },
@@ -4846,6 +5204,41 @@ function sideAdvanceProbability(match, side) {
   return Number.isFinite(value) ? clamp(value, 0, 100) : null;
 }
 
+function sideGroupOutlook(match, side) {
+  return worldCupPriorSide(match, side)?.groupOutlook || null;
+}
+
+function sideWorldCupGroupProfile(match, side) {
+  const team = worldCupPriorSide(match, side);
+  const outlook = team?.groupOutlook || null;
+  if (!team || !outlook) return null;
+  const projectedRank = firstFiniteNumber(outlook.projectedRank, outlook.rank);
+  const projectedPoints = firstFiniteNumber(outlook.projectedPoints, outlook.points);
+  const goalDiff = firstFiniteNumber(outlook.goalDiff);
+  const goalsFor = firstFiniteNumber(outlook.goalsFor);
+  const goalsAgainst = firstFiniteNumber(outlook.goalsAgainst);
+  const advanceProbability = sideAdvanceProbability(match, side);
+  const groupWinProbability = firstFiniteNumber(outlook.groupWinProbability, outlook.firstProbability);
+  const strength = firstFiniteNumber(team.modelStrengthNormalized);
+
+  return {
+    side,
+    key: team.key || null,
+    nameZh: team.nameZh || null,
+    nameEn: team.nameEn || null,
+    group: team.group || outlook.group || null,
+    fifaRank: firstFiniteNumber(team.fifaRank),
+    projectedRank,
+    projectedPoints,
+    goalDiff,
+    goalsFor,
+    goalsAgainst,
+    advanceProbability,
+    groupWinProbability,
+    strength,
+  };
+}
+
 function sideFormSnapshot(match, side) {
   return match.formSnapshot?.[side] || null;
 }
@@ -4875,9 +5268,174 @@ function groupNeedPressure(advanceProbability) {
   if (!Number.isFinite(value)) return 0;
   if (value < 35) return 8;
   if (value < 50) return 5;
-  if (value > 84) return -4;
-  if (value > 72) return -2;
+  if (value > 92) return -2;
+  if (value > 80) return -1;
   return 0;
+}
+
+function groupRankNeedPressure(projectedRank) {
+  const rank = Number(projectedRank);
+  if (!Number.isFinite(rank)) return 0;
+  if (rank >= 4) return 8;
+  if (rank >= 3) return 5;
+  if (rank <= 1) return -1;
+  return 1;
+}
+
+function groupGoalDiffPressure(goalDiff) {
+  const diff = Number(goalDiff);
+  if (!Number.isFinite(diff)) return 0;
+  if (diff <= -1.5) return 10;
+  if (diff <= -0.5) return 7;
+  if (diff < 0) return 4;
+  if (diff >= 2) return -2;
+  if (diff >= 1) return -1;
+  return 1;
+}
+
+function groupPointsNeedPressure(projectedPoints) {
+  const points = Number(projectedPoints);
+  if (!Number.isFinite(points)) return 0;
+  if (points < 3) return 5;
+  if (points < 4) return 3;
+  if (points >= 5.5) return -2;
+  if (points >= 4.8) return -1;
+  return 0;
+}
+
+function groupStageNeedProfile(profile) {
+  if (!profile) return null;
+  const advanceNeed = groupNeedPressure(profile.advanceProbability);
+  const rankNeed = groupRankNeedPressure(profile.projectedRank);
+  const pointsNeed = groupPointsNeedPressure(profile.projectedPoints);
+  const goalDiffPressure = groupGoalDiffPressure(profile.goalDiff);
+  const groupWin = Number(profile.groupWinProbability);
+  const firstPlaceNeed = Number.isFinite(groupWin) && groupWin < 18 && Number(profile.advanceProbability) >= 45 ? 2 : 0;
+  const rawNeed = 50 + advanceNeed + rankNeed + pointsNeed + goalDiffPressure * 0.55 + firstPlaceNeed;
+  const needScore = Math.round(clamp(rawNeed, 34, 82));
+  const attackPush = Number(clamp((needScore - 50) * 0.28 + Math.max(0, goalDiffPressure) * 0.34, -4, 12).toFixed(2));
+  const safeButNotClinched = Number(profile.advanceProbability) >= 88 && Number(profile.projectedRank) <= 2;
+  const rotationRisk = Number((
+    Number(profile.advanceProbability) >= 94
+    && Number(profile.projectedRank) === 1
+    && Number(profile.groupWinProbability) >= 70
+    && Number(profile.goalDiff) >= 2
+      ? 0.12
+      : safeButNotClinched ? 0.04 : 0
+  ).toFixed(2));
+  const reasons = [];
+  if (advanceNeed > 0) reasons.push("qualification-pressure");
+  if (rankNeed > 1) reasons.push("projected-rank-pressure");
+  if (pointsNeed > 0) reasons.push("points-pressure");
+  if (goalDiffPressure >= 4) reasons.push("goal-difference-pressure");
+  if (safeButNotClinched) reasons.push("advance-probability-cushion");
+  if (!reasons.length) reasons.push("balanced-group-context");
+
+  return {
+    ...profile,
+    needScore,
+    goalDiffPressure,
+    attackPush,
+    rotationRisk,
+    reasons,
+  };
+}
+
+function worldCupGroupStageContext(match) {
+  const home = groupStageNeedProfile(sideWorldCupGroupProfile(match, "home"));
+  const away = groupStageNeedProfile(sideWorldCupGroupProfile(match, "away"));
+  if (!home && !away) return null;
+
+  const sameGroup = Boolean(home?.group && away?.group && home.group === away.group);
+  const homeNeed = Number(home?.needScore || 50);
+  const awayNeed = Number(away?.needScore || 50);
+  const homeGoalDiffPressure = Number(home?.goalDiffPressure || 0);
+  const awayGoalDiffPressure = Number(away?.goalDiffPressure || 0);
+  const needEdge = homeNeed - awayNeed;
+  const goalDiffPressureEdge = homeGoalDiffPressure - awayGoalDiffPressure;
+  const rankGap = Number.isFinite(Number(home?.projectedRank)) && Number.isFinite(Number(away?.projectedRank))
+    ? Number(away.projectedRank) - Number(home.projectedRank)
+    : null;
+  const pointsGap = Number.isFinite(Number(home?.projectedPoints)) && Number.isFinite(Number(away?.projectedPoints))
+    ? Number((Number(home.projectedPoints) - Number(away.projectedPoints)).toFixed(2))
+    : null;
+  const goalDiffGap = Number.isFinite(Number(home?.goalDiff)) && Number.isFinite(Number(away?.goalDiff))
+    ? Number((Number(home.goalDiff) - Number(away.goalDiff)).toFixed(2))
+    : null;
+  const advanceGap = Number.isFinite(Number(home?.advanceProbability)) && Number.isFinite(Number(away?.advanceProbability))
+    ? Number((Number(home.advanceProbability) - Number(away.advanceProbability)).toFixed(1))
+    : null;
+  const groupWinGap = Number.isFinite(Number(home?.groupWinProbability)) && Number.isFinite(Number(away?.groupWinProbability))
+    ? Number((Number(home.groupWinProbability) - Number(away.groupWinProbability)).toFixed(1))
+    : null;
+  const totalIntentBoost = sameGroup
+    ? Number(clamp(
+      (Math.max(0, homeNeed - 50) + Math.max(0, awayNeed - 50)) / 5
+        + (Math.max(0, homeGoalDiffPressure) + Math.max(0, awayGoalDiffPressure)) / 7,
+      0,
+      9
+    ).toFixed(2))
+    : 0;
+  const bothComfortable = sameGroup
+    && Number(home?.advanceProbability) >= 82
+    && Number(away?.advanceProbability) >= 82
+    && Number(home?.projectedRank) <= 2
+    && Number(away?.projectedRank) <= 2;
+  const mustChase = sameGroup && (homeNeed >= 63 || awayNeed >= 63);
+  const drawBias = Number(clamp(
+    (bothComfortable ? 0.018 : 0)
+      - (mustChase ? 0.026 : 0)
+      - totalIntentBoost * 0.002,
+    -0.04,
+    0.025
+  ).toFixed(3));
+  const goalDiffPushSide = sameGroup && Math.max(homeGoalDiffPressure, awayGoalDiffPressure) >= 6
+    ? (homeGoalDiffPressure >= awayGoalDiffPressure + 2 ? "home" : awayGoalDiffPressure >= homeGoalDiffPressure + 2 ? "away" : null)
+    : null;
+  const homeStrength = Number(home?.strength);
+  const awayStrength = Number(away?.strength);
+  const strengthEdge = Number.isFinite(homeStrength) && Number.isFinite(awayStrength)
+    ? homeStrength - awayStrength
+    : null;
+  let marginPushSide = goalDiffPushSide;
+  if (goalDiffPushSide === "home" && Number.isFinite(strengthEdge) && strengthEdge < -0.12) marginPushSide = "away";
+  if (goalDiffPushSide === "away" && Number.isFinite(strengthEdge) && strengthEdge > 0.12) marginPushSide = "home";
+  const handicapPushCode = marginPushSide === "home" ? "1" : marginPushSide === "away" ? "2" : null;
+
+  return {
+    version: "world-cup-group-stage-v1",
+    source: "world-cup-prior-group-outlook",
+    sameGroup,
+    group: sameGroup ? home?.group || away?.group || null : null,
+    home,
+    away,
+    gaps: {
+      rank: rankGap,
+      projectedPoints: pointsGap,
+      goalDiff: goalDiffGap,
+      advanceProbability: advanceGap,
+      groupWinProbability: groupWinGap,
+    },
+    effects: {
+      needEdge,
+      goalDiffPressureEdge,
+      totalIntentBoost,
+      drawBias,
+      goalDiffPushSide,
+      marginPushSide,
+      handicapPushCode,
+      strengthEdge: Number.isFinite(strengthEdge) ? Number(strengthEdge.toFixed(4)) : null,
+      homeAttackPush: Number(home?.attackPush || 0),
+      awayAttackPush: Number(away?.attackPush || 0),
+      reasons: [
+        ...(sameGroup ? ["same-group-match"] : ["cross-group-or-stage"]),
+        ...(mustChase ? ["must-chase-points"] : []),
+        ...(goalDiffPushSide ? ["goal-difference-push"] : []),
+        ...(marginPushSide && goalDiffPushSide && marginPushSide !== goalDiffPushSide ? ["open-space-favorite-margin"] : []),
+        ...(bothComfortable ? ["draw-can-be-acceptable"] : []),
+      ],
+    },
+  };
 }
 
 function rankingPressureProfile(match) {
@@ -4885,18 +5443,19 @@ function rankingPressureProfile(match) {
   const awayRank = sideRankNumber(match, "away");
   const homeAdvance = sideAdvanceProbability(match, "home");
   const awayAdvance = sideAdvanceProbability(match, "away");
+  const groupContext = worldCupGroupStageContext(match);
   const rankGap = homeRank !== null && awayRank !== null ? awayRank - homeRank : null;
   const rankPressure = Number.isFinite(rankGap) ? clamp(rankGap / 80, -1, 1) : 0;
   const homeRankPressure = rankPressure * 11;
   const awayRankPressure = -rankPressure * 11;
-  const homeNeed = formNeedPressure(match, "home") + groupNeedPressure(homeAdvance);
-  const awayNeed = formNeedPressure(match, "away") + groupNeedPressure(awayAdvance);
+  const homeNeed = formNeedPressure(match, "home") + groupNeedPressure(homeAdvance) + Math.max(-3, Number(groupContext?.home?.needScore || 50) - 50) * 0.58;
+  const awayNeed = formNeedPressure(match, "away") + groupNeedPressure(awayAdvance) + Math.max(-3, Number(groupContext?.away?.needScore || 50) - 50) * 0.58;
   const home = Math.round(clamp(50 + homeRankPressure + homeNeed, 25, 82));
   const away = Math.round(clamp(50 + awayRankPressure + awayNeed, 25, 82));
   const maxPressure = Math.max(home, away);
   const edge = home - away;
-  const homeRotationRisk = Number.isFinite(homeAdvance) && homeAdvance >= 84 ? 0.34 : 0;
-  const awayRotationRisk = Number.isFinite(awayAdvance) && awayAdvance >= 84 ? 0.34 : 0;
+  const homeRotationRisk = Number(groupContext?.home?.rotationRisk || 0);
+  const awayRotationRisk = Number(groupContext?.away?.rotationRisk || 0);
   const rotationRisk = Number((Math.max(homeRotationRisk, awayRotationRisk)).toFixed(2));
   const dataQuality = homeRank !== null || awayRank !== null || Number.isFinite(homeAdvance) || Number.isFinite(awayAdvance)
     ? "rank-connected"
@@ -4904,11 +5463,12 @@ function rankingPressureProfile(match) {
   const reasons = [];
   if (Number.isFinite(rankGap)) reasons.push(`rank-gap:${rankGap}`);
   if (Number.isFinite(homeAdvance) || Number.isFinite(awayAdvance)) reasons.push("group-outlook");
+  if (groupContext?.effects?.reasons?.length) reasons.push(...groupContext.effects.reasons);
   if (formNeedPressure(match, "home") || formNeedPressure(match, "away")) reasons.push("recent-form-pressure");
   if (!reasons.length) reasons.push("no-connected-table-rank");
 
   return {
-    version: "ranking-pressure-v1",
+    version: "ranking-pressure-v2",
     source: dataQuality === "rank-connected" ? "rank/form/world-cup-prior" : "model-estimated",
     dataQuality,
     homeRank,
@@ -4916,11 +5476,18 @@ function rankingPressureProfile(match) {
     rankGap,
     homeAdvanceProbability: homeAdvance,
     awayAdvanceProbability: awayAdvance,
+    homeProjectedRank: groupContext?.home?.projectedRank ?? null,
+    awayProjectedRank: groupContext?.away?.projectedRank ?? null,
+    homeProjectedPoints: groupContext?.home?.projectedPoints ?? null,
+    awayProjectedPoints: groupContext?.away?.projectedPoints ?? null,
+    homeGoalDiff: groupContext?.home?.goalDiff ?? null,
+    awayGoalDiff: groupContext?.away?.goalDiff ?? null,
     home,
     away,
     maxPressure,
     edge,
     rotationRisk,
+    worldCupGroupContext: groupContext,
     reasons,
   };
 }
@@ -4945,12 +5512,17 @@ function attackIntentProfile(match, homeLambda, awayLambda, over25Probability, b
   const awayForm = formAttackIntent(match, "away");
   const homePressure = Number(rankingPressure?.home || 50);
   const awayPressure = Number(rankingPressure?.away || 50);
+  const groupContext = rankingPressure?.worldCupGroupContext || worldCupGroupStageContext(match);
+  const homeGroupPush = Number(groupContext?.effects?.homeAttackPush || 0);
+  const awayGroupPush = Number(groupContext?.effects?.awayAttackPush || 0);
+  const groupTotalIntentBoost = Number(groupContext?.effects?.totalIntentBoost || 0);
   const totalLambda = Number(homeLambda) + Number(awayLambda);
   const home = Math.round(clamp(
     50
       + (Number(homeLambda) - 1.2) * 18
       + (homeForm - 50) * 0.34
-      + (homePressure - 50) * 0.14,
+      + (homePressure - 50) * 0.14
+      + homeGroupPush,
     28,
     78
   ));
@@ -4958,7 +5530,8 @@ function attackIntentProfile(match, homeLambda, awayLambda, over25Probability, b
     50
       + (Number(awayLambda) - 1.1) * 18
       + (awayForm - 50) * 0.34
-      + (awayPressure - 50) * 0.14,
+      + (awayPressure - 50) * 0.14
+      + awayGroupPush,
     28,
     78
   ));
@@ -4966,13 +5539,14 @@ function attackIntentProfile(match, homeLambda, awayLambda, over25Probability, b
     (home + away) / 2
       + (totalLambda - 2.35) * 10
       + (Number(over25Probability) - 0.5) * 20
-      + (Number(bttsProbability) - 0.5) * 12,
+      + (Number(bttsProbability) - 0.5) * 12
+      + groupTotalIntentBoost,
     30,
     82
   ));
   const edge = home - away;
-  const lambdaTotalAdjustment = Number(clamp((total - 50) * 0.0035, -0.07, 0.08).toFixed(3));
-  const over25Shift = Number(clamp((total - 50) * 0.0018, -0.025, 0.03).toFixed(3));
+  const lambdaTotalAdjustment = Number(clamp((total - 50) * 0.0035 + groupTotalIntentBoost * 0.002, -0.07, 0.105).toFixed(3));
+  const over25Shift = Number(clamp((total - 50) * 0.0018 + groupTotalIntentBoost * 0.0012, -0.025, 0.04).toFixed(3));
   const bttsShift = Number(clamp((Math.min(home, away) - 48) * 0.0015, -0.018, 0.022).toFixed(3));
   const dataQuality = match.formSnapshot?.sampleSize >= 6 || rankingPressure?.dataQuality === "rank-connected"
     ? "model-with-form-rank"
@@ -4981,15 +5555,20 @@ function attackIntentProfile(match, homeLambda, awayLambda, over25Probability, b
   if (Number.isFinite(totalLambda)) reasons.push(`lambda-total:${totalLambda.toFixed(2)}`);
   if (match.formSnapshot?.sampleSize >= 3) reasons.push("recent-attack-form");
   if (rankingPressure?.dataQuality === "rank-connected") reasons.push("ranking-pressure");
+  if (groupContext?.sameGroup) reasons.push("world-cup-group-context");
+  if (groupContext?.effects?.goalDiffPushSide) reasons.push("goal-difference-push");
 
   return {
-    version: "attack-intent-v1",
-    source: "lambda/form/ranking-pressure",
+    version: "attack-intent-v2",
+    source: "lambda/form/ranking-pressure/world-cup-group",
     dataQuality,
     home,
     away,
     total,
     edge,
+    groupTotalIntentBoost,
+    homeGroupPush,
+    awayGroupPush,
     lambdaTotalAdjustment,
     over25Shift,
     bttsShift,
@@ -5074,6 +5653,118 @@ function signalText(value) {
   return normText(value).trim();
 }
 
+function webConsensusSignal(match) {
+  const signal = match?.externalSignals?.webConsensus;
+  if (!signal || typeof signal !== "object" || Array.isArray(signal)) return null;
+  return signal;
+}
+
+function webConsensusDirectionCode(value) {
+  const text = normText(value).toLowerCase();
+  if (["1", "home", "home_win", "home-win", "主胜"].includes(text)) return "1";
+  if (["x", "draw", "tie", "平", "平局"].includes(text)) return "X";
+  if (["2", "away", "away_win", "away-win", "客胜"].includes(text)) return "2";
+  return null;
+}
+
+function webConsensusGoalsCode(value) {
+  const text = normText(value).toLowerCase();
+  if (["over", "over25", "over2.5", "o2.5", "大", "大2.5"].includes(text)) return "over25";
+  if (["under", "under25", "under2.5", "u2.5", "小", "小2.5"].includes(text)) return "under25";
+  return null;
+}
+
+function probabilityLeaderCode(probabilities) {
+  const rows = [
+    ["1", Number(probabilities?.home || 0)],
+    ["X", Number(probabilities?.draw || 0)],
+    ["2", Number(probabilities?.away || 0)],
+  ].filter(([, value]) => Number.isFinite(value));
+  if (!rows.length) return null;
+  return rows.sort((a, b) => b[1] - a[1])[0][0];
+}
+
+function webConsensusContext(match, probabilities, hhadProbabilities, over25Probability, bttsProbability) {
+  const signal = webConsensusSignal(match);
+  if (!signal) return { available: false };
+
+  const consensus = signal.consensus || {};
+  const features = signal.features || {};
+  const confidence = clamp(Number(signal.quality?.confidence ?? consensus.confidence ?? 0), 0, 1);
+  const sourceCount = Number(signal.quality?.sourceCount || signal.sources?.length || 0);
+  const usableForModel = signal.usableForModel !== false && confidence >= 0.35;
+  const directionCode = webConsensusDirectionCode(consensus.oneXTwo || consensus.direction || features.oneXTwo);
+  const goalsCode = webConsensusGoalsCode(consensus.goals || features.goalsConsensus);
+  const handicapView = normText(consensus.handicapView || features.handicapView);
+  const drawRisk = normText(consensus.drawRisk || features.drawRisk).toLowerCase();
+  const modelLeader = probabilityLeaderCode(probabilities);
+  const modelAgree = typeof features.modelAgree === "boolean"
+    ? features.modelAgree
+    : directionCode && modelLeader
+      ? directionCode === modelLeader
+      : null;
+  const favoriteMayNotCover = Boolean(features.favoriteMayNotCover || handicapView === "favorite-win-not-cover");
+  const strong = usableForModel && confidence >= 0.62 && sourceCount >= 1;
+  const reasons = [];
+  let riskPenalty = 0;
+  let lambdaTotalAdjustment = 0;
+  let over25Shift = 0;
+  let bttsShift = 0;
+
+  if (strong && goalsCode === "over25") {
+    lambdaTotalAdjustment += confidence * 0.035;
+    over25Shift += confidence * 0.012;
+    reasons.push("web-over25-consensus");
+  } else if (strong && goalsCode === "under25") {
+    lambdaTotalAdjustment -= confidence * 0.035;
+    over25Shift -= confidence * 0.012;
+    reasons.push("web-under25-consensus");
+  }
+
+  if (strong && drawRisk === "high") {
+    riskPenalty += 2;
+    bttsShift += 0.006;
+    reasons.push("web-high-draw-risk");
+  } else if (strong && drawRisk === "medium") {
+    riskPenalty += 1;
+    reasons.push("web-medium-draw-risk");
+  }
+
+  if (strong && modelAgree === false) {
+    riskPenalty += confidence >= 0.7 ? 2 : 1;
+    reasons.push("web-model-conflict");
+  }
+
+  if (strong && favoriteMayNotCover) {
+    riskPenalty += 1;
+    reasons.push("web-favorite-may-not-cover");
+  }
+
+  if (strong && modelAgree === true) {
+    reasons.push("web-model-agreement");
+  }
+
+  return {
+    available: true,
+    usableForModel,
+    confidence: Number(confidence.toFixed(3)),
+    sourceCount,
+    directionCode,
+    goalsCode,
+    handicapView,
+    drawRisk: drawRisk || null,
+    modelLeader,
+    modelAgree,
+    favoriteMayNotCover,
+    lambdaTotalAdjustment: Number(clamp(lambdaTotalAdjustment, -0.05, 0.05).toFixed(3)),
+    over25Shift: Number(clamp(over25Shift, -0.02, 0.02).toFixed(3)),
+    bttsShift: Number(clamp(bttsShift, -0.012, 0.012).toFixed(3)),
+    riskPenalty: Math.round(clamp(riskPenalty, 0, 4)),
+    buckets: Array.isArray(signal.buckets) ? signal.buckets.slice(0, 12) : [],
+    reasons,
+  };
+}
+
 function dataGapProfile(match, context) {
   const signals = match.externalSignals || {};
   const preMatchQuality = signals.preMatch?.quality || null;
@@ -5083,6 +5774,7 @@ function dataGapProfile(match, context) {
   const lineups = signals.lineups || {};
   const injuries = signals.injuries || {};
   const weather = signals.weather || {};
+  const webConsensus = signals.webConsensus || {};
   const standingConnected = Boolean(
     match.homeRank
     || match.awayRank
@@ -5121,6 +5813,12 @@ function dataGapProfile(match, context) {
     || signalText(weather.condition?.zh || weather.condition?.en)
     || hasNumericSignal(weather.temperatureC, weather.windKph, weather.precipitationMm)
   );
+  const webConsensusConnected = Boolean(
+    webConsensus
+    && typeof webConsensus === "object"
+    && webConsensus.usableForModel !== false
+    && (webConsensus.consensus || webConsensus.features || webConsensus.summary)
+  );
   const officialOddsConnected = Boolean(sanitizeOdds(match.odds) || sanitizeOdds(match.handicapOdds));
   const externalMarketConnected = Boolean(
     fiveHundred.europeOdds?.currentAverage
@@ -5146,6 +5844,8 @@ function dataGapProfile(match, context) {
   if (!xgConnected) addMissing("xg-xga", "缺少赛前 xG/xGA", "Missing pre-match xG/xGA", "medium", 8);
   if (!weatherConnected) addMissing("weather-pitch", "缺少天气/场地", "Missing weather/pitch signal", "low", 4);
   if (!officialOddsConnected && !externalMarketConnected) addMissing("market-source", "缺少盘口校验源", "Missing market validation source", "high", 15);
+
+  if (!webConsensusConnected) addMissing("web-consensus", "缺少网络观点", "Missing web consensus signal", "low", 3);
 
   const preMatchMissing = Array.isArray(preMatchQuality?.missing)
     ? preMatchQuality.missing.map((item) => ({
@@ -5187,6 +5887,7 @@ function dataGapProfile(match, context) {
     injuries: preMatchConnected.injuries ?? injuryConnected,
     xg: preMatchConnected.xg ?? xgConnected,
     weather: preMatchConnected.weather ?? weatherConnected,
+    webConsensus: preMatchConnected.webConsensus ?? webConsensusConnected,
     officialOdds: preMatchConnected.market ?? officialOddsConnected,
     externalMarket: preMatchConnected.market ?? externalMarketConnected,
   };
@@ -5221,16 +5922,19 @@ function preMatchContextSignals(match, probabilities, hhadProbabilities, homeLam
   const attackIntent = attackIntentProfile(match, homeLambda, awayLambda, over25Probability, bttsProbability, rankingPressure);
   const discipline = disciplineProfile(match, probabilities, hhadProbabilities, attackIntent, rankingPressure);
   const dataGaps = dataGapProfile(match, { rankingPressure, attackIntent, discipline });
+  const webConsensus = webConsensusContext(match, probabilities, hhadProbabilities, over25Probability, bttsProbability);
   const attackPenalty = attackIntent.total <= 42 ? 2 : 0;
   const pressurePenalty = rankingPressure.maxPressure >= 70 ? 2 : 0;
   const rotationPenalty = rankingPressure.rotationRisk >= 0.3 ? 1 : 0;
   return {
     version: dataGaps.version === "data-gap-profile-v50" ? "pre-match-context-v50" : "pre-match-context-v1",
     rankingPressure,
+    worldCupGroupContext: rankingPressure.worldCupGroupContext || null,
     attackIntent,
     discipline,
     dataGaps,
-    trustPenalty: discipline.trustPenalty + attackPenalty + pressurePenalty + rotationPenalty + Number(dataGaps.trustPenalty || 0),
+    webConsensus,
+    trustPenalty: discipline.trustPenalty + attackPenalty + pressurePenalty + rotationPenalty + Number(dataGaps.trustPenalty || 0) + Number(webConsensus.riskPenalty || 0),
   };
 }
 
@@ -5244,7 +5948,9 @@ function rawGoalProbabilities(homeLambda, awayLambda) {
 }
 
 function applyContextLambdaAdjustment(homeLambda, awayLambda, contextSignals) {
-  const totalAdjustment = Number(contextSignals?.attackIntent?.lambdaTotalAdjustment);
+  const attackAdjustment = Number(contextSignals?.attackIntent?.lambdaTotalAdjustment || 0);
+  const webAdjustment = Number(contextSignals?.webConsensus?.lambdaTotalAdjustment || 0);
+  const totalAdjustment = attackAdjustment + webAdjustment;
   if (!Number.isFinite(totalAdjustment) || Math.abs(totalAdjustment) < 0.001) {
     return {
       homeLambda,
@@ -5253,6 +5959,7 @@ function applyContextLambdaAdjustment(homeLambda, awayLambda, contextSignals) {
       totalAdjustment: 0,
       homeAdjustment: 0,
       awayAdjustment: 0,
+      reason: null,
     };
   }
   const total = Math.max(0.1, Number(homeLambda) + Number(awayLambda));
@@ -5269,28 +5976,38 @@ function applyContextLambdaAdjustment(homeLambda, awayLambda, contextSignals) {
     homeAdjustment: Number(homeAdjustment.toFixed(3)),
     awayAdjustment: Number(awayAdjustment.toFixed(3)),
     homeShare: Number(homeShare.toFixed(3)),
+    reason: [
+      Math.abs(attackAdjustment) >= 0.001 ? "attack-intent" : null,
+      Math.abs(webAdjustment) >= 0.001 ? "web-consensus" : null,
+    ].filter(Boolean).join("+"),
   };
 }
 
 function applyContextGoalAdjustments(over25Probability, bttsProbability, contextSignals) {
   const attack = contextSignals?.attackIntent || {};
   const discipline = contextSignals?.discipline || {};
+  const webConsensus = contextSignals?.webConsensus || {};
   const overShift = Number(attack.over25Shift || 0);
   const bttsShift = Number(attack.bttsShift || 0);
+  const webOverShift = Number(webConsensus.over25Shift || 0);
+  const webBttsShift = Number(webConsensus.bttsShift || 0);
   const redRisk = Number(discipline.redCardRisk?.total || 0);
   const cardDrag = redRisk >= 0.17 ? -0.008 : redRisk >= 0.12 ? -0.004 : 0;
-  const over25 = clamp(Number(over25Probability) + overShift + cardDrag, 0.05, 0.93);
-  const btts = clamp(Number(bttsProbability) + bttsShift, 0.05, 0.9);
+  const over25 = clamp(Number(over25Probability) + overShift + webOverShift + cardDrag, 0.05, 0.93);
+  const btts = clamp(Number(bttsProbability) + bttsShift + webBttsShift, 0.05, 0.9);
   return {
     over25,
     btts,
     meta: {
-      applied: Math.abs(overShift) >= 0.001 || Math.abs(bttsShift) >= 0.001 || cardDrag !== 0,
+      applied: Math.abs(overShift) >= 0.001 || Math.abs(bttsShift) >= 0.001 || Math.abs(webOverShift) >= 0.001 || Math.abs(webBttsShift) >= 0.001 || cardDrag !== 0,
       over25Shift: Number((over25 - Number(over25Probability)).toFixed(3)),
       bttsShift: Number((btts - Number(bttsProbability)).toFixed(3)),
       cardDrag,
+      webOver25Shift: Number.isFinite(webOverShift) ? Number(webOverShift.toFixed(3)) : 0,
+      webBttsShift: Number.isFinite(webBttsShift) ? Number(webBttsShift.toFixed(3)) : 0,
       reasons: [
-        "attack-intent",
+        ...(Math.abs(overShift) >= 0.001 || Math.abs(bttsShift) >= 0.001 ? ["attack-intent"] : []),
+        ...(Math.abs(webOverShift) >= 0.001 || Math.abs(webBttsShift) >= 0.001 ? ["web-consensus"] : []),
         ...(cardDrag ? ["red-card-volatility"] : []),
       ],
     },
@@ -5975,13 +6692,45 @@ function worldCupPriorOutcomeProbabilities(match) {
   const awayStrength = Number(away?.modelStrengthNormalized);
   if (!Number.isFinite(homeStrength) || !Number.isFinite(awayStrength)) return null;
 
+  const groupContext = worldCupGroupStageContext(match);
   const homeAdvance = Number(home?.groupOutlook?.advanceProbability);
   const awayAdvance = Number(away?.groupOutlook?.advanceProbability);
   const advanceDiff = Number.isFinite(homeAdvance) && Number.isFinite(awayAdvance)
     ? (homeAdvance - awayAdvance) / 100
     : 0;
-  const diff = clamp((homeStrength - awayStrength) * 0.82 + advanceDiff * 0.14, -0.38, 0.38);
-  const draw = clamp(0.27 - Math.abs(diff) * 0.18, 0.18, 0.3);
+  const homeRank = Number(home?.groupOutlook?.projectedRank);
+  const awayRank = Number(away?.groupOutlook?.projectedRank);
+  const rankDiff = Number.isFinite(homeRank) && Number.isFinite(awayRank)
+    ? clamp((awayRank - homeRank) / 6, -0.45, 0.45)
+    : 0;
+  const homePoints = Number(home?.groupOutlook?.projectedPoints);
+  const awayPoints = Number(away?.groupOutlook?.projectedPoints);
+  const pointsDiff = Number.isFinite(homePoints) && Number.isFinite(awayPoints)
+    ? clamp((homePoints - awayPoints) / 7, -0.38, 0.38)
+    : 0;
+  const homeGoalDiff = Number(home?.groupOutlook?.goalDiff);
+  const awayGoalDiff = Number(away?.groupOutlook?.goalDiff);
+  const goalDiffEdge = Number.isFinite(homeGoalDiff) && Number.isFinite(awayGoalDiff)
+    ? clamp((homeGoalDiff - awayGoalDiff) / 8, -0.34, 0.34)
+    : 0;
+  const homeGroupWin = Number(home?.groupOutlook?.groupWinProbability);
+  const awayGroupWin = Number(away?.groupOutlook?.groupWinProbability);
+  const groupWinDiff = Number.isFinite(homeGroupWin) && Number.isFinite(awayGroupWin)
+    ? clamp((homeGroupWin - awayGroupWin) / 100, -0.45, 0.45)
+    : 0;
+  const needEdge = clamp(Number(groupContext?.effects?.needEdge || 0) / 100, -0.28, 0.28);
+  const diff = clamp(
+    (homeStrength - awayStrength) * 0.72
+      + advanceDiff * 0.1
+      + rankDiff * 0.07
+      + pointsDiff * 0.055
+      + goalDiffEdge * 0.055
+      + groupWinDiff * 0.04
+      + needEdge * 0.035,
+    -0.42,
+    0.42
+  );
+  const draw = clamp(0.27 - Math.abs(diff) * 0.16 + Number(groupContext?.effects?.drawBias || 0), 0.16, 0.31);
   const homeProbability = clamp((1 - draw) * (0.5 + diff), 0.08, 0.84);
   const awayProbability = clamp(1 - draw - homeProbability, 0.08, 0.84);
   return normalizeOutcomeProbabilities({
@@ -6079,7 +6828,7 @@ function buildModelOnlyProbabilityModel(match, probabilities, homeLambda, awayLa
       home: lambdaContextAdjustment.homeAdjustment,
       away: lambdaContextAdjustment.awayAdjustment,
       homeShare: lambdaContextAdjustment.homeShare,
-      reason: "attack-intent",
+      reason: lambdaContextAdjustment.reason || "attack-intent",
     };
   }
   const contextGoalAdjustment = applyContextGoalAdjustments(over25Probability, bttsProbability, contextSignals);
@@ -6117,7 +6866,7 @@ function buildModelOnlyProbabilityModel(match, probabilities, homeLambda, awayLa
   return {
     probabilityModel: {
       ...probabilityModel,
-      version: "model-only-no-official-sp-v1",
+      version: "model-only-no-official-sp-v2",
       basis: {
         zh: "未开售模型参考：官方 SP/让球 SP 暂无时，按球队强弱、历史样本、赛程与 Poisson 比分分布生成观察方向；不作为串关 SP。",
         en: "Model-only reference while official SP/handicap SP is unavailable. It uses team strength, historical samples, schedule context, and Poisson score distribution, and is not a parlay SP."
@@ -6187,15 +6936,15 @@ function predictionSetWithoutOfficialOdds(match) {
   const shouldPromote = true;
   const riskTags = [
     { zh: "未开售无官方SP", en: "No official SP" },
-    { zh: "仅模型参考", en: "Model-only reference" },
+    { zh: "待官方赔率", en: "Waiting for official SP" },
     ...(probabilityGap < 8 ? [{ zh: "优势不厚", en: "Thin edge" }] : []),
   ];
   const final = modelBundle.probabilityModel.oneXTwo.final || { home: 0, draw: 0, away: 0 };
   const probabilityTextZh = `主胜 ${Number(final.home || 0).toFixed(1)}% / 平 ${Number(final.draw || 0).toFixed(1)}% / 客胜 ${Number(final.away || 0).toFixed(1)}%`;
   const probabilityTextEn = `home ${Number(final.home || 0).toFixed(1)}% / draw ${Number(final.draw || 0).toFixed(1)}% / away ${Number(final.away || 0).toFixed(1)}%`;
   const tipLabel = {
-    zh: shouldPromote ? `模型参考 ${bestPick.labelZh}` : "观察为主 等待官方SP",
-    en: shouldPromote ? `Model reference: ${bestPick.labelEn}` : "Watch first: wait for official SP",
+    zh: shouldPromote ? `推荐 ${bestPick.labelZh}` : "待开售 等待官方SP",
+    en: shouldPromote ? `Pick: ${bestPick.labelEn}` : "Wait for official SP",
   };
 
   const oneXTwo = {
@@ -6237,8 +6986,8 @@ function predictionSetWithoutOfficialOdds(match) {
     marketType: "BEST",
     tipCode: oneXTwo.tipCode,
     tipLabel: {
-      zh: shouldPromote ? `模型参考 ${bestPick.labelZh}` : "观察为主 等待官方SP",
-      en: shouldPromote ? `Model reference: ${bestPick.labelEn}` : "Watch first: wait for official SP",
+      zh: shouldPromote ? `主推 ${bestPick.labelZh}` : "待开售 等待官方SP",
+      en: shouldPromote ? `Main pick: ${bestPick.labelEn}` : "Wait for official SP",
     },
     odds: 0,
     trustScore: clamp(trustScore - (shouldPromote ? 0 : 8), 35, 76),
@@ -6258,9 +7007,9 @@ function predictionSetWithoutOfficialOdds(match) {
     projectedScore: score,
     probabilityModel: {
       ...modelBundle.probabilityModel,
-      version: "model-only-unified-v52",
+      version: "model-only-unified-v55",
       unifiedPosterior: {
-        version: "v52-model-only-single-main",
+        version: "v55-model-only-group-stage-main",
         generatedAt: new Date().toISOString(),
         selectedMarket: "MODEL_ONLY_1X2",
         selectedCode: bestPick.code,
@@ -6394,7 +7143,7 @@ function predictionSet(match) {
       home: lambdaContextAdjustment.homeAdjustment,
       away: lambdaContextAdjustment.awayAdjustment,
       homeShare: lambdaContextAdjustment.homeShare,
-      reason: "attack-intent",
+      reason: lambdaContextAdjustment.reason || "attack-intent",
     };
     score = projectedScore(homeLambda, awayLambda);
   }
@@ -7382,6 +8131,35 @@ function marketSignalSignatureForMatch(match) {
   return `${oddsSignature}|${hhadSignature}`;
 }
 
+function oddsSignalSignature(rawOdds) {
+  const odds = sanitizeOdds(rawOdds);
+  return odds ? `${odds.odds1.toFixed(2)}/${odds.oddsX.toFixed(2)}/${odds.odds2.toFixed(2)}` : "";
+}
+
+function handicapSignalSignature(match) {
+  const handicapOdds = sanitizeOdds(match?.handicapOdds);
+  if (!handicapOdds) return "";
+  const parsedLine = parseHandicapLine(match?.handicapLine);
+  const line = Number.isFinite(parsedLine) ? parsedLine.toFixed(2) : normText(match?.handicapLine);
+  return `${line}:${handicapOdds.odds1.toFixed(2)}/${handicapOdds.oddsX.toFixed(2)}/${handicapOdds.odds2.toFixed(2)}`;
+}
+
+function hadMarketSignalChanged(existing, fresh) {
+  const existingSignature = oddsSignalSignature(existing?.odds);
+  const freshSignature = oddsSignalSignature(fresh?.odds);
+  return Boolean(existingSignature && freshSignature && existingSignature !== freshSignature);
+}
+
+function hhadMarketSignalChanged(existing, fresh) {
+  const existingSignature = handicapSignalSignature(existing);
+  const freshSignature = handicapSignalSignature(fresh);
+  return Boolean(existingSignature && freshSignature && existingSignature !== freshSignature);
+}
+
+function marketSignalChanged(existing, fresh) {
+  return hadMarketSignalChanged(existing, fresh) || hhadMarketSignalChanged(existing, fresh);
+}
+
 function resultMarketForPrediction(prediction) {
   if (prediction?.oddsPoolCode === "HHAD" && ["1", "X", "2"].includes(prediction.tipCode)) {
     return prediction.marketType === "BEST" ? "BEST_HHAD" : "HHAD";
@@ -7615,7 +8393,7 @@ function applyPredictionPersistence(match, existing, capturedAt) {
     analystFramework: PREDICTION_ANALYST_FRAMEWORK,
   };
 
-  if (isOfficialResultMatch(match) && !hasOfficialDisplayOdds(match)) {
+  if (isOfficialResultMatch(match)) {
     const { stats, probabilityModel, projectedScoreHome, projectedScoreAway, ...rest } = match;
     void stats;
     void probabilityModel;
@@ -7739,6 +8517,35 @@ function applyPredictionPersistence(match, existing, capturedAt) {
         zh: "赛前赔率或让球信号发生实质变化，已生成新的临场预测；开赛后将锁定这版记录。",
         en: "Pre-match odds or handicap signals changed materially, so a new late forecast was generated and will be locked after kickoff.",
       },
+    },
+  };
+}
+
+function stripOfficialResultOnlyPredictionContent(match) {
+  if (!isOfficialResultMatch(match)) return match;
+  const {
+    predictions,
+    probabilityModel,
+    projectedScoreHome,
+    projectedScoreAway,
+    stats,
+    gptPrediction,
+    ...rest
+  } = match;
+  void predictions;
+  void probabilityModel;
+  void projectedScoreHome;
+  void projectedScoreAway;
+  void stats;
+  void gptPrediction;
+  return {
+    ...rest,
+    predictions: [],
+    predictionMeta: {
+      ...(match.predictionMeta || {}),
+      lockedAt: match.predictionMeta?.lockedAt || match.resultUpdatedAt || match.kickoffTime,
+      lockedReason: match.predictionMeta?.lockedReason || "result-only",
+      updateReason: NO_PRE_CUTOFF_PREDICTION_REASON,
     },
   };
 }
@@ -8109,10 +8916,11 @@ function normalizePredictionMetaForPublish(meta) {
   if (!meta || typeof meta !== "object") return meta;
   const { forecastPlan, ...rest } = meta;
   void forecastPlan;
+  const lockedMeta = Boolean(rest.lockedAt || rest.lockedReason);
   return {
     ...rest,
-    policyVersion: rest.policyVersion || PREDICTION_POLICY_VERSION,
-    promptVersion: rest.promptVersion || ANALYST_PROMPT_VERSION,
+    policyVersion: lockedMeta && rest.policyVersion ? rest.policyVersion : PREDICTION_POLICY_VERSION,
+    promptVersion: lockedMeta && rest.promptVersion ? rest.promptVersion : ANALYST_PROMPT_VERSION,
     dataPolicy: PREDICTION_DATA_POLICY,
     analystRuntime: rest.analystRuntime || ANALYST_RUNTIME,
     analystFramework: rest.analystFramework || PREDICTION_ANALYST_FRAMEWORK,
@@ -9024,6 +9832,12 @@ function mergePublishedMatches(existing, fresh, modelCalibration = null) {
   const freshHasOfficial = hasPublishedOfficialOdds(fresh);
   const freshIsReference = hasPublishedReferenceOdds(fresh);
   const existingPredictionLocked = predictionContentLocked(existing);
+  const referenceMarketChangedBeforeLock = freshIsReference
+    && !existingPredictionLocked
+    && !predictionContentLocked(fresh)
+    && marketSignalChanged(existing, fresh);
+  const referenceHadChangedBeforeLock = referenceMarketChangedBeforeLock && hadMarketSignalChanged(existing, fresh);
+  const referenceHhadChangedBeforeLock = referenceMarketChangedBeforeLock && hhadMarketSignalChanged(existing, fresh);
   const predictionPolicyChanged = existing?.predictionMeta?.policyVersion !== fresh?.predictionMeta?.policyVersion
     || existing?.predictionMeta?.promptVersion !== fresh?.predictionMeta?.promptVersion
     || existing?.predictionMeta?.trainingSignature !== fresh?.predictionMeta?.trainingSignature
@@ -9038,7 +9852,7 @@ function mergePublishedMatches(existing, fresh, modelCalibration = null) {
 
     if (existingPredictionLocked) {
       Object.assign(merged, preserveLockedPredictionContent(merged, existing));
-    } else if (!predictionPolicyChanged) {
+    } else if (!predictionPolicyChanged && !referenceMarketChangedBeforeLock) {
       Object.assign(merged, {
         predictions: merged.status === "FINISHED"
           ? settlePredictionsForMatch(merged, existing.predictions)
@@ -9052,26 +9866,30 @@ function mergePublishedMatches(existing, fresh, modelCalibration = null) {
   }
 
   if (existing.oddsSource === "sporttery:HAD" && fresh.oddsSource !== "sporttery:HAD") {
-    Object.assign(merged, {
-      odds: existing.odds,
-      oddsSource: existing.oddsSource,
-      oddsPoolCode: existing.oddsPoolCode,
-      oddsSourceMethod: existing.oddsSourceMethod,
-      oddsUpdatedAt: existing.oddsUpdatedAt,
-      oddsSourceUrl: existing.oddsSourceUrl,
-    });
+    if (!referenceHadChangedBeforeLock) {
+      Object.assign(merged, {
+        odds: existing.odds,
+        oddsSource: existing.oddsSource,
+        oddsPoolCode: existing.oddsPoolCode,
+        oddsSourceMethod: existing.oddsSourceMethod,
+        oddsUpdatedAt: existing.oddsUpdatedAt,
+        oddsSourceUrl: existing.oddsSourceUrl,
+      });
+    }
   }
 
   if (existing.handicapOddsSource === "sporttery:HHAD" && fresh.handicapOddsSource !== "sporttery:HHAD") {
-    Object.assign(merged, {
-      handicapOdds: existing.handicapOdds,
-      handicapLine: existing.handicapLine,
-      handicapOddsSource: existing.handicapOddsSource,
-      handicapOddsPoolCode: existing.handicapOddsPoolCode,
-      handicapOddsSourceMethod: existing.handicapOddsSourceMethod,
-      handicapOddsUpdatedAt: existing.handicapOddsUpdatedAt,
-      handicapOddsSourceUrl: existing.handicapOddsSourceUrl,
-    });
+    if (!referenceHhadChangedBeforeLock) {
+      Object.assign(merged, {
+        handicapOdds: existing.handicapOdds,
+        handicapLine: existing.handicapLine,
+        handicapOddsSource: existing.handicapOddsSource,
+        handicapOddsPoolCode: existing.handicapOddsPoolCode,
+        handicapOddsSourceMethod: existing.handicapOddsSourceMethod,
+        handicapOddsUpdatedAt: existing.handicapOddsUpdatedAt,
+        handicapOddsSourceUrl: existing.handicapOddsSourceUrl,
+      });
+    }
   }
 
   if (
@@ -9079,7 +9897,7 @@ function mergePublishedMatches(existing, fresh, modelCalibration = null) {
     && !freshHasOfficial
     && freshIsReference
     && !existingPredictionLocked
-    && (predictionPolicyChanged || !predictionsAlignWithPublishedOdds(merged))
+    && (referenceMarketChangedBeforeLock || predictionPolicyChanged || !predictionsAlignWithPublishedOdds(merged))
   ) {
     return rebuildPublishedPredictionModel(merged, modelCalibration);
   }
@@ -9238,6 +10056,7 @@ async function sync() {
   output = attachOddsTrends(output, publicDir);
   output = attachExternalSignals(output, externalSignals, preMatchSignals);
   output = output.map(applyExternalResultSignal);
+  output = output.map(stripOfficialResultOnlyPredictionContent);
   output = output.map((match) => rebuildPublishedPredictionModel(match, modelCalibration));
   output = output.map(normalizePublishedPredictionText);
   output = output.map(sanitizePublishedReferenceCopy);
@@ -9264,6 +10083,7 @@ async function sync() {
   const publishedResultMatches = split.history.filter(isOfficialResultMatch).length
     || split.history.filter((match) => match.status === "FINISHED" && Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway)).length;
   const publishedFallbackResultMatches = split.history.filter(isFallbackResultMatch).length;
+  const publishedWebConsensusMatches = split.current.filter((match) => Boolean(match?.externalSignals?.webConsensus)).length;
   const byStatus = output.reduce((acc, match) => {
     acc[match.status] = (acc[match.status] || 0) + 1;
     return acc;
@@ -9301,6 +10121,7 @@ async function sync() {
       postMatchReviews: postMatchReviewsPayload.rows.length,
       externalSignals: externalSignals.count || 0,
       preMatchSignals: preMatchSignals.count || 0,
+      webConsensusSignals: publishedWebConsensusMatches,
     },
     refreshPolicy: {
       workflowMinutes: Math.max(5, Number(process.env.SYNC_WORKFLOW_MINUTES || 5)),
@@ -9325,6 +10146,7 @@ async function sync() {
       source: externalSignals.source || "external-signals",
       updatedAt: externalSignals.updatedAt,
       matches: externalSignals.count || 0,
+      webConsensusMatches: publishedWebConsensusMatches,
     },
     preMatchSignals: {
       source: preMatchSignals.source || "pre-match-signals",

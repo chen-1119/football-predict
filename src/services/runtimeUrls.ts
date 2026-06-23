@@ -14,8 +14,8 @@ const getLocalPreviewApiBase = () => {
 
   const { hostname, port, protocol } = window.location;
   const isLocalHost = hostname === '127.0.0.1' || hostname === 'localhost' || hostname === '::1';
-  const isVitePreviewPort = ['4173', '4174', '5173', '5174', '5175', '5176'].includes(port);
-  if (!isLocalHost || !isVitePreviewPort) return null;
+  const isLocalFrontendPort = Boolean(port) && port !== '8788';
+  if (!isLocalHost || !isLocalFrontendPort) return null;
 
   return `${protocol}//${hostname}:8788`;
 };

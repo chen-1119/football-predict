@@ -176,6 +176,7 @@ const buildQuality = ({ match, signal, teamHistory }) => {
   const injuries = signal.injuries || {};
   const xg = signal.expectedGoals || {};
   const weather = signal.weather || {};
+  const webConsensus = signal.webConsensus || {};
   const fiveHundred = signal.fiveHundred || {};
   const marketAvailable = Boolean(
     match.odds
@@ -226,6 +227,17 @@ const buildQuality = ({ match, signal, teamHistory }) => {
   );
   const weatherVerified = Boolean(weatherAvailable && weather.verified !== false && weather.confidence !== "estimated-location");
   const xgHistoryAvailable = Boolean(historyHome?.xgRows >= 5 && historyAway?.xgRows >= 5);
+  const webConsensusAvailable = Boolean(
+    webConsensus
+    && typeof webConsensus === "object"
+    && webConsensus.usableForModel !== false
+    && (webConsensus.consensus || webConsensus.features || webConsensus.summary)
+  );
+  const webConsensusConfidence = Number(webConsensus?.quality?.confidence ?? webConsensus?.consensus?.confidence ?? 0);
+  const webConsensusVerified = webConsensusAvailable
+    && Number.isFinite(webConsensusConfidence)
+    && webConsensusConfidence >= 0.62
+    && Number(webConsensus?.quality?.sourceCount || 0) >= 1;
 
   const components = {
     referee: component({
@@ -298,6 +310,16 @@ const buildQuality = ({ match, signal, teamHistory }) => {
       source: match.odds || match.handicapOdds ? "sporttery" : marketAvailable ? "external-odds" : "missing",
       note: marketAvailable ? multi("已有胜平负/让球盘口校验源", "Market validation source available") : multi("缺少盘口校验源", "No market validation source")
     }),
+    webConsensus: component({
+      key: "webConsensus",
+      label: multi("网络观点", "Web consensus"),
+      status: componentStatus(webConsensusAvailable, webConsensusVerified, webConsensusAvailable && !webConsensusVerified),
+      score: scoreComponent(webConsensusVerified ? "verified" : webConsensusAvailable ? "partial" : "missing", 56),
+      source: webConsensusAvailable ? "web-consensus" : "missing",
+      note: webConsensusAvailable
+        ? (webConsensus.summary || multi("已接入网络观点结构化信号", "Structured web consensus loaded"))
+        : multi("未接入网络观点", "No web consensus signal")
+    }),
     motivation: component({
       key: "motivation",
       label: multi("排名/战意", "Table/motivation"),
@@ -310,13 +332,14 @@ const buildQuality = ({ match, signal, teamHistory }) => {
 
   const weights = {
     referee: 10,
-    teamCards: 10,
+    teamCards: 9,
     lineup: 15,
     injuries: 15,
-    xg: 14,
+    xg: 12,
     weather: 6,
-    market: 18,
-    motivation: 12
+    market: 16,
+    webConsensus: 8,
+    motivation: 9
   };
   const weightedScore = Object.entries(weights).reduce((sum, [key, weight]) => {
     return sum + (components[key].score * weight) / 100;
@@ -328,7 +351,11 @@ const buildQuality = ({ match, signal, teamHistory }) => {
       key: item.key,
       zh: `缺少${item.label.zh}`,
       en: `Missing ${item.label.en}`,
-      severity: item.key === "lineup" || item.key === "injuries" || item.key === "market" ? "high" : "medium",
+      severity: item.key === "lineup" || item.key === "injuries" || item.key === "market"
+        ? "high"
+        : item.key === "webConsensus" || item.key === "weather"
+          ? "low"
+          : "medium",
       weight: weights[item.key] || 5
     }));
   const lowQuality = Object.values(components)

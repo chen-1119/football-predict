@@ -20,6 +20,7 @@ import { TeamBadge } from '../components/TeamBadge';
 import { WorldCupLastDance } from '../components/WorldCupLastDance';
 import { useApp } from '../context/AppContextCore';
 import { getPredictionTipDisplay, getSportteryPoolRows, type SportteryOddsPoolDisplay } from '../services/bettingDisplay';
+import { getDisplayRecommendation } from '../services/displayRecommendation';
 import { getLeagueById, getTeamById } from '../services/entities';
 import type { Match, MultiLangString, Team } from '../services/mockData';
 import {
@@ -296,14 +297,17 @@ const MatchCard = ({
     : match.leagueNameEn || match.leagueShortNameEn)
     || league.shortName[language];
   const prediction = getBestPrediction(match);
+  const displayRecommendation = getDisplayRecommendation(match, language);
   const forecast = prediction ? null : getWorldCupFixtureForecast(match, groupForecasts);
-  const trust = getMatchTrust(match) || forecast?.trust || 0;
+  const trust = displayRecommendation?.prediction?.trustScore || getMatchTrust(match) || forecast?.trust || 0;
   const pools = getSportteryPoolRows(match, language);
   const had = pools.find((pool) => pool.poolCode === 'HAD');
   const hhad = pools.find((pool) => pool.poolCode === 'HHAD');
   const actionablePrediction = prediction && prediction.tipCode !== 'WATCH' ? prediction : null;
   const marketRecommendation = getMarketRecommendation(pools, language);
-  const recommendation = actionablePrediction
+  const recommendation = displayRecommendation
+    ? displayRecommendation.label
+    : actionablePrediction
     ? getPredictionTipDisplay(actionablePrediction, language, true)
     : marketRecommendation
       ? marketRecommendation.label
@@ -447,9 +451,12 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
               const home = getDisplayTeam(match, 'home');
               const away = getDisplayTeam(match, 'away');
               const forecast = getWorldCupFixtureForecast(match, groupForecasts);
+              const displayRecommendation = getDisplayRecommendation(match, language);
               const prediction = getBestPrediction(match);
               const marketRecommendation = getMarketRecommendation(getSportteryPoolRows(match, language), language);
-              const miniRecommendation = prediction && prediction.tipCode !== 'WATCH'
+              const miniRecommendation = displayRecommendation
+                ? displayRecommendation.label
+                : prediction && prediction.tipCode !== 'WATCH'
                 ? getPredictionTipDisplay(prediction, language, true)
                 : marketRecommendation?.label || (forecast ? pickText(forecast.tip, language) : copy.waiting[language]);
               return (

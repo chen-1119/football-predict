@@ -533,12 +533,7 @@ export const getListHandicapSupplement = (
   if (!hasHhad || primaryPrediction?.oddsPoolCode === 'HHAD') return null;
 
   const predictions = match.predictions || [];
-  const pairedOutcomePrediction = primaryPrediction || predictions.find((prediction) => (
-    prediction.marketType === '1X2'
-    && prediction.oddsPoolCode !== 'HHAD'
-    && isPredictionPoolAvailable(match, prediction)
-    && isOutcomeCode(prediction.tipCode)
-  ));
+  const pairedOutcomePrediction = getPairedOutcomePrediction(match, primaryPrediction);
   const handicapPrediction = predictions.find((prediction) => (
     prediction.marketType === 'BEST'
     && prediction.oddsPoolCode === 'HHAD'
@@ -672,6 +667,55 @@ const isPredictionPoolAvailable = (match: Match, prediction: PredictionDetail | 
   return isPredictionOfficialResultPoolAvailable(match, prediction) || isStoredOutcomePrediction(prediction);
 };
 
+const buildOutcomeReferencePrediction = (match: Match, code: OutcomeCode): PredictionDetail => ({
+  marketType: '1X2',
+  oddsPoolCode: 'HAD',
+  tipCode: code,
+  tipLabel: { zh: getSimpleOutcomeLabel(match, code, 'zh'), en: getSimpleOutcomeLabel(match, code, 'en') },
+  odds: getOutcomeOddsValue(match, 'HAD', code),
+  trustScore: Math.round(getOutcomeProbability(match, code) || 0),
+  recommendationAction: 'reference',
+  recommendationTier: 'reference',
+  explanation: { zh: '', en: '' },
+  visibilityStatus: 'FREE',
+  resultStatus: 'PENDING'
+});
+
+const getPairedOutcomePrediction = (
+  match: Match,
+  primaryPrediction?: PredictionDetail
+): PredictionDetail | undefined => {
+  if (primaryPrediction && primaryPrediction.oddsPoolCode !== 'HHAD' && isOutcomeCode(primaryPrediction.tipCode)) {
+    return primaryPrediction;
+  }
+
+  const storedOutcome = (match.predictions || []).find((prediction) => (
+    prediction.marketType === '1X2'
+    && prediction.oddsPoolCode !== 'HHAD'
+    && isPredictionPoolAvailable(match, prediction)
+    && isOutcomeCode(prediction.tipCode)
+  ));
+  if (storedOutcome) return storedOutcome;
+
+  const unified = match.probabilityModel?.unifiedPosterior;
+  if (
+    unified
+    && (unified.selectedMarket === 'HAD' || unified.selectedMarket === '1X2')
+    && isOutcomeCode(unified.selectedCode)
+  ) {
+    return buildOutcomeReferencePrediction(match, unified.selectedCode);
+  }
+
+  const outcomeTop = getTopOutcomeFromProbabilities(
+    match.probabilityModel?.oneXTwo?.unifiedPosterior
+      || match.probabilityModel?.oneXTwo?.final
+      || match.probabilityModel?.oneXTwo?.scoreImplied
+      || match.probabilityModel?.oneXTwo?.poisson
+      || match.probabilityModel?.oneXTwo?.market
+  );
+  return outcomeTop ? buildOutcomeReferencePrediction(match, outcomeTop.code) : undefined;
+};
+
 const formatDisplayMeta = (
   prediction: PredictionDetail | undefined,
   probability: number | null,
@@ -726,12 +770,7 @@ export const getDisplayRecommendation = (match: Match, language: Language): Disp
     predictions.find((prediction) => prediction.marketType === 'BEST' && isPredictionPoolAvailable(match, prediction)),
     predictions.find((prediction) => prediction.marketType === '1X2' && isPredictionPoolAvailable(match, prediction))
   ].find(Boolean);
-  const pairedOutcomePrediction = predictions.find((prediction) => (
-    prediction.marketType === '1X2'
-    && prediction.oddsPoolCode !== 'HHAD'
-    && isPredictionPoolAvailable(match, prediction)
-    && isOutcomeCode(prediction.tipCode)
-  ));
+  const pairedOutcomePrediction = getPairedOutcomePrediction(match, rawPromotedPrediction);
   const shouldApplyLiveMarketFilter = match.status === 'SCHEDULED';
   const promotedPrediction = rawPromotedPrediction && (!shouldApplyLiveMarketFilter || !isHandicapMarketContradicted(match, rawPromotedPrediction))
     ? rawPromotedPrediction
@@ -754,7 +793,17 @@ export const getDisplayRecommendation = (match: Match, language: Language): Disp
   }
 
   if (promotedPrediction) {
-    if (promotedPrediction.oddsPoolCode === 'HHAD' && pairedOutcomePrediction) {
+    const canPairPromotedHandicap = promotedPrediction.oddsPoolCode === 'HHAD'
+      && pairedOutcomePrediction
+      && isOutcomeCode(pairedOutcomePrediction.tipCode)
+      && isOutcomeCode(promotedPrediction.tipCode)
+      && isHandicapCodeCompatible(
+        pairedOutcomePrediction.tipCode,
+        promotedPrediction.tipCode,
+        parseHandicapLine(match.handicapLine)
+      );
+
+    if (canPairPromotedHandicap && pairedOutcomePrediction) {
       const probability = getOutcomeProbability(match, pairedOutcomePrediction.tipCode as OutcomeCode, pairedOutcomePrediction);
       const cleanProbability = Number.isFinite(probability) ? Number(probability) : null;
       const companion = buildHandicapCompanionFromPrediction(match, promotedPrediction, pairedOutcomePrediction, language);

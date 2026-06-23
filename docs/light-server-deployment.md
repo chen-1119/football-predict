@@ -46,7 +46,7 @@ Important fields:
   server falls back to `ADMIN_TOKEN`. `ALLOW_LOCAL_ADMIN` never authorizes code
   generation.
 - `ACCESS_CODE_SECRET=<another long random secret>`
-- `ACCESS_CODE_TTL_SECONDS=43200` for 12-hour recommendation access codes.
+- `ACCESS_CODE_TTL_SECONDS=21600` for 6-hour recommendation access codes.
 - `ENABLE_GPT_CRON=1` only after the GPT relay is ready.
 - `GPT_RELAY_BASE_URL`, `GPT_RELAY_API_KEY`, `GPT_MODEL`.
 - `ENABLE_API_FOOTBALL_SYNC=1` only after `API_FOOTBALL_KEY` is configured.
@@ -130,7 +130,7 @@ curl -X POST "http://127.0.0.1:8788/api/admin/access-codes?token=$ACCESS_CODE_AD
 
 Send the returned `code` to the user on WeChat. The user enters it at
 `https://your-domain.com/auth`; the admin page is `https://your-domain.com/codes`.
-The plain code is returned only once and expires 12 hours after generation by
+The plain code is returned only once and expires 6 hours after generation by
 default.
 
 ## 7. Data Storage

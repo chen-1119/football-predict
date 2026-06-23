@@ -41,7 +41,7 @@ function matchHasExternalSignal(match) {
   const apiFootball = signals.bookmakerOdds?.apiFootball || signals.apiFootball;
   const external = signals.externalOdds;
   const preMatch = signals.preMatch?.quality || signals.preMatch;
-  return Boolean(had || hhad || apiFootball || external || signals.injuries || signals.lineups || preMatch);
+  return Boolean(had || hhad || apiFootball || external || signals.injuries || signals.lineups || preMatch || signals.webConsensus);
 }
 
 const errors = [];
@@ -57,6 +57,7 @@ const externalMatches = external?.matches && typeof external.matches === "object
 const externalCount = Object.keys(externalMatches).length;
 const source500 = external?.sources?.["500.com:jczq"] || {};
 const sourceApiFootball = external?.sources?.["api-football"] || {};
+const sourceWebConsensus = external?.sources?.webConsensus || {};
 const externalAge = ageMinutes(external?.updatedAt);
 const preMatchAge = ageMinutes(preMatch?.updatedAt);
 const preMatchMatches = preMatch?.matches && typeof preMatch.matches === "object" && !Array.isArray(preMatch.matches)
@@ -141,6 +142,8 @@ const payload = {
     apiFootballUpdatedAt: sourceApiFootball.updatedAt || null,
     apiFootballMappedSignals: sourceApiFootball.mappedSignals || 0,
     apiFootballCallsThisSync: sourceApiFootball.callsThisSync || 0,
+    webConsensusRows: sourceWebConsensus.rows || 0,
+    webConsensusUsable: sourceWebConsensus.usable || 0,
   },
   preMatchSignals: {
     exists: Boolean(preMatch),
