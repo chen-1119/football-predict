@@ -37,7 +37,7 @@ const snapshotRetentionDays = Math.max(1, Number(process.env.SNAPSHOT_RETENTION_
 const adminToken = process.env.ADMIN_TOKEN || "";
 const allowLocalAdmin = process.env.ALLOW_LOCAL_ADMIN === "1";
 const accessCodeAdminToken = process.env.ACCESS_CODE_ADMIN_TOKEN || adminToken;
-const accessCodeTtlSeconds = Math.max(60, Number(process.env.ACCESS_CODE_TTL_SECONDS || 12 * 60 * 60));
+const accessCodeTtlSeconds = Math.max(60, Number(process.env.ACCESS_CODE_TTL_SECONDS || 6 * 60 * 60));
 const accessCodeSecret = process.env.ACCESS_CODE_SECRET
   || process.env.ACCESS_SESSION_SECRET
   || adminToken

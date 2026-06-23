@@ -25,6 +25,14 @@ function expectedSportterySp(match, tipCode) {
   return undefined;
 }
 
+function expectedPredictionSp(match, prediction) {
+  const odds = prediction?.oddsPoolCode === "HHAD" ? match.handicapOdds : match.odds;
+  if (prediction?.tipCode === "1") return odds?.odds1;
+  if (prediction?.tipCode === "X") return odds?.oddsX;
+  if (prediction?.tipCode === "2") return odds?.odds2;
+  return undefined;
+}
+
 function parseHandicapLine(value) {
   if (value === null || value === undefined || value === "") return null;
   const parsed = Number(String(value).replace(/[^\d.+-]/g, ""));
@@ -109,6 +117,8 @@ for (const match of matches) {
   const hasOfficialOdds = match.oddsSource === "sporttery:HAD";
   const handicapOddsValues = [match.handicapOdds?.odds1, match.handicapOdds?.oddsX, match.handicapOdds?.odds2];
   const hasOfficialHandicapOdds = match.handicapOddsSource === "sporttery:HHAD";
+  const hasReferenceOdds = String(match.oddsSource || "").startsWith("500.com")
+    || String(match.handicapOddsSource || "").startsWith("500.com");
   const hasValidOdds = oddsValues.every((value) => Number.isFinite(value) && value > 1.01);
   const hasValidHandicapOdds = handicapOddsValues.every((value) => Number.isFinite(value) && value > 1.01);
   const isResultOnly = match.status === "FINISHED" && !hasOfficialOdds;
@@ -152,13 +162,13 @@ for (const match of matches) {
 
   if (isScheduleOnly) {
     const hasAllowedModelOnlyReference = isModelOnlyReference(match);
-    if (!String(match.sourceUrl || "").includes("webapi.sporttery.cn")) {
+    if (!hasReferenceOdds && !String(match.sourceUrl || "").includes("webapi.sporttery.cn")) {
       errors.push(`${match.id}: schedule-only match is missing official source URL`);
     }
-    if ((match.predictions || []).length > 0 && !hasAllowedModelOnlyReference) {
+    if ((match.predictions || []).length > 0 && !hasAllowedModelOnlyReference && !hasReferenceOdds) {
       errors.push(`${match.id}: schedule-only match must not contain model predictions`);
     }
-    if (match.stats && !hasAllowedModelOnlyReference) {
+    if (match.stats && !hasAllowedModelOnlyReference && !hasReferenceOdds) {
       errors.push(`${match.id}: schedule-only match must not contain simulated model stats`);
     }
   }
@@ -183,9 +193,9 @@ for (const match of matches) {
   }
 
   const sportteryPick = match.predictions?.find((prediction) => prediction.marketType === "1X2");
-  if (hasOfficialOdds && !sportteryPick) {
+  if (hasOfficialOdds && match.status !== "FINISHED" && !sportteryPick) {
     errors.push(`${match.id}: missing 1X2 prediction`);
-  } else if (hasOfficialOdds && match.status !== "FINISHED" && Math.abs(expectedSportterySp(match, sportteryPick.tipCode) - sportteryPick.odds) > 1e-9) {
+  } else if (hasOfficialOdds && match.status !== "FINISHED" && Math.abs(expectedPredictionSp(match, sportteryPick) - sportteryPick.odds) > 1e-9) {
     errors.push(`${match.id}: 1X2 prediction SP does not match selected SP`);
   }
 

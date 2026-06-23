@@ -626,6 +626,12 @@ export interface MatchProbabilityModel {
     worldCupPrior?: number;
   };
   calculationTrace?: ProbabilityCalculationTrace;
+  unifiedPosterior?: {
+    version?: string;
+    selectedMarket?: string;
+    selectedCode?: string;
+    [key: string]: unknown;
+  } | null;
   dynamicCalibration?: {
     version: string;
     profileKey: string;

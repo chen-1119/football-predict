@@ -7,6 +7,7 @@ import { getTeamById } from '../services/entities';
 import type { Match, PredictionDetail } from '../services/mockData';
 import { getVisiblePredictions } from '../services/predictionVisibility';
 import { buildPublicRecommendationCopy } from '../services/recommendationCopy';
+import { getDisplayRecommendation } from '../services/displayRecommendation';
 
 interface BestTipsProps {
   onSelectMatch: (matchId: string) => void;
@@ -15,6 +16,7 @@ interface BestTipsProps {
 type TipCard = {
   match: Match;
   prediction: PredictionDetail;
+  pickLabel: string;
   rankScore: number;
 };
 
@@ -49,22 +51,30 @@ const getCandidatePrediction = (match: Match) => {
 
 export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
   const { language, matches } = useApp();
+  const [now, setNow] = React.useState(() => Date.now());
+
+  React.useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const tipCards = React.useMemo<TipCard[]>(() => {
-    const now = Date.now();
     return matches
       .filter((match) => {
         const kickoffAt = Date.parse(match.kickoffTime);
         return match.status === 'SCHEDULED' && (!Number.isFinite(kickoffAt) || kickoffAt >= now - FUTURE_GRACE_MS);
       })
       .map((match) => {
-        const prediction = getCandidatePrediction(match);
+        const displayRecommendation = getDisplayRecommendation(match, language);
+        const prediction = displayRecommendation?.prediction || getCandidatePrediction(match);
         if (!prediction) return null;
+        const pickLabel = displayRecommendation?.label || getPredictionTipDisplay(prediction, language);
         const kickoffAt = Date.parse(match.kickoffTime);
         const timeScore = Number.isFinite(kickoffAt) ? Math.max(0, 100 - Math.floor((kickoffAt - now) / 36e5)) : 0;
         return {
           match,
           prediction,
+          pickLabel,
           rankScore: (prediction.trustScore || 0) * 3 - marketPriority(prediction) * 20 + timeScore
         };
       })
@@ -73,7 +83,7 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
         if (b.rankScore !== a.rankScore) return b.rankScore - a.rankScore;
         return Date.parse(a.match.kickoffTime) - Date.parse(b.match.kickoffTime);
       });
-  }, [matches]);
+  }, [language, matches, now]);
 
   const translations = {
     title: { zh: '今日推荐', en: 'Today Picks' },
@@ -120,12 +130,12 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '2rem' }}>
           {tipCards.map((card) => {
-            const { match, prediction } = card;
+            const { match, prediction, pickLabel } = card;
             const homeTeam = getTeamById(match.homeTeamId);
             const awayTeam = getTeamById(match.awayTeamId);
             const hasDisplayOdds = Number.isFinite(prediction.odds) && prediction.odds > 0;
             const publicCopy = buildPublicRecommendationCopy(match, prediction, language, {
-              pickLabel: getPredictionTipDisplay(prediction, language)
+              pickLabel
             });
             const strengthValue = language === 'zh'
               ? publicCopy.strengthLabel.replace(/^推荐强度\s*/, '')
@@ -183,7 +193,7 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
                         {t('pick')} · {getPredictionValueLabel(prediction, language)}
                       </span>
                       <h4 style={{ fontSize: '1.25rem', fontWeight: '900', color: 'hsl(var(--primary))', marginTop: '0.1rem' }}>
-                        {getPredictionTipDisplay(prediction, language)}
+                        {pickLabel}
                       </h4>
                     </div>
                     <div style={{ textAlign: 'right' }}>

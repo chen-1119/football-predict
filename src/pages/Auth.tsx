@@ -57,14 +57,14 @@ export const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
       zh: '输入从微信获取的校验码后，可在有效期内查看推荐内容。',
       en: 'Enter the code received on WeChat to view recommendation content during its valid window.'
     },
-    codeLabel: { zh: '12 小时校验码', en: '12-hour access code' },
+    codeLabel: { zh: '6 小时校验码', en: '6-hour access code' },
     codePlaceholder: { zh: 'XXXX-XXXX-XXXX', en: 'XXXX-XXXX-XXXX' },
     submit: { zh: '验证并进入', en: 'Verify and enter' },
     submitting: { zh: '正在验证', en: 'Verifying' },
     contactTitle: { zh: '联系微信获取校验码', en: 'Contact on WeChat for a code' },
     contactNote: {
-      zh: '扫码添加微信，确认后会收到一个从生成时刻起 12 小时有效的校验码。',
-      en: 'Scan the WeChat QR code. After confirmation, you will receive a code valid for 12 hours from generation.'
+      zh: '扫码添加微信，确认后会收到一个从生成时刻起 6 小时有效的校验码。',
+      en: 'Scan the WeChat QR code. After confirmation, you will receive a code valid for 6 hours from generation.'
     },
     verified: { zh: '已通过校验', en: 'Access verified' },
     expiresAt: { zh: '失效时间', en: 'Expires at' },

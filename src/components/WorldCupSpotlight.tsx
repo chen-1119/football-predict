@@ -3,6 +3,7 @@ import { ArrowRight, CalendarDays, Radio, Trophy, Zap } from 'lucide-react';
 import { TeamBadge } from './TeamBadge';
 import type { Match } from '../services/mockData';
 import { getPredictionTipDisplay, getSportteryPoolRows } from '../services/bettingDisplay';
+import { getDisplayRecommendation } from '../services/displayRecommendation';
 import { getTeamById } from '../services/entities';
 import { getBestPrediction, getDaysUntilWorldCup, getWorldCupWatchMatches } from '../services/worldCupData';
 
@@ -32,6 +33,7 @@ export const WorldCupSpotlight: React.FC<WorldCupSpotlightProps> = ({
 }) => {
   const watchMatches = useMemo(() => getWorldCupWatchMatches(matches, 3), [matches]);
   const featuredMatch = watchMatches[0];
+  const featuredDisplayRecommendation = featuredMatch ? getDisplayRecommendation(featuredMatch, language) : null;
   const featuredPrediction = featuredMatch ? getBestPrediction(featuredMatch) : undefined;
   const poolRows = featuredMatch ? getSportteryPoolRows(featuredMatch, language) : [];
   const featuredOddsRow = poolRows.find((row) => row.odds);
@@ -97,7 +99,11 @@ export const WorldCupSpotlight: React.FC<WorldCupSpotlightProps> = ({
             </strong>
             <small>
               {formatKickoff(featuredMatch.kickoffTime, language)}
-              {featuredPrediction ? ` / ${t('model')} ${getPredictionTipDisplay(featuredPrediction, language)}` : ''}
+              {featuredDisplayRecommendation
+                ? ` / ${t('model')} ${featuredDisplayRecommendation.label}`
+                : featuredPrediction
+                  ? ` / ${t('model')} ${getPredictionTipDisplay(featuredPrediction, language)}`
+                  : ''}
             </small>
             {featuredOddsRow?.odds && (
               <small>

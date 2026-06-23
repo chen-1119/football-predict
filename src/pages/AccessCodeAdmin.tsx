@@ -67,8 +67,8 @@ export const AccessCodeAdmin: React.FC = () => {
   const translations = {
     title: { zh: '校验码生成', en: 'Access Code Generator' },
     subtitle: {
-      zh: '生成一个从当前时间开始 12 小时有效的校验码，发送给微信用户完成访问认证。',
-      en: 'Generate a code valid for 12 hours from now and send it to the user on WeChat.'
+      zh: '生成一个从当前时间开始 6 小时有效的校验码，发送给微信用户完成访问认证。',
+      en: 'Generate a code valid for 6 hours from now and send it to the user on WeChat.'
     },
     token: { zh: '管理员 Token', en: 'Admin token' },
     tokenHint: {
@@ -77,7 +77,7 @@ export const AccessCodeAdmin: React.FC = () => {
     },
     label: { zh: '备注', en: 'Label' },
     labelPlaceholder: { zh: '例如：张三 20:00', en: 'Example: user 20:00' },
-    generate: { zh: '生成 12 小时代码', en: 'Generate 12h code' },
+    generate: { zh: '生成 6 小时代码', en: 'Generate 6h code' },
     generating: { zh: '正在生成', en: 'Generating' },
     latest: { zh: '最新校验码', en: 'Latest code' },
     copy: { zh: '复制', en: 'Copy' },

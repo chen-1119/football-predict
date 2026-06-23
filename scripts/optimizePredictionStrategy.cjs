@@ -7,6 +7,7 @@ const PROFILE_KEYS = ["international", "japan", "other"];
 
 const MIN_RULE_ROWS = 3;
 const MIN_PROFILE_ROWS = 5;
+const WEB_CONSENSUS_MIN_RULE_ROWS = 8;
 const MIN_LOOSEN_ROWS = 100;
 const MAX_DETAIL_BOOST = 0.06;
 
@@ -122,6 +123,24 @@ function probabilityForTip(match, prediction) {
   return null;
 }
 
+function webConsensusSignal(match) {
+  const signal = match?.externalSignals?.webConsensus;
+  if (!signal || typeof signal !== "object" || Array.isArray(signal)) return null;
+  return signal;
+}
+
+function webConsensusRuleKeys(match, marketType) {
+  const signal = webConsensusSignal(match);
+  if (!signal || signal.usableForModel === false) return [];
+  const buckets = Array.isArray(signal.buckets)
+    ? signal.buckets.filter((key) => normText(key).startsWith("web:") && key !== "web:usable" && key !== "web:audit-only")
+    : [];
+  return Array.from(new Set([
+    ...buckets,
+    ...buckets.map((key) => `${marketType}:${key}`),
+  ]));
+}
+
 function predictionRows(matches) {
   const rows = [];
   for (const match of matches || []) {
@@ -148,6 +167,7 @@ function predictionRows(matches) {
         resultStatus: prediction.resultStatus,
         policyVersion: match.predictionMeta?.policyVersion || "unknown",
         probability: probabilityForTip(match, prediction),
+        webConsensusKeys: webConsensusRuleKeys(match, market),
       };
       rows.push(row);
     }
@@ -190,6 +210,23 @@ function groupSummary(rows, keyFn) {
     if (!key) continue;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(row);
+  }
+  return Object.fromEntries(
+    Array.from(groups.entries())
+      .map(([key, group]) => [key, summarizeRows(group)])
+      .sort(([a], [b]) => String(a).localeCompare(String(b)))
+  );
+}
+
+function groupSummaryMany(rows, keysFn) {
+  const groups = new Map();
+  for (const row of rows) {
+    const keys = keysFn(row);
+    for (const key of Array.isArray(keys) ? keys : [keys]) {
+      if (!key) continue;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(row);
+    }
   }
   return Object.fromEntries(
     Array.from(groups.entries())
@@ -365,6 +402,7 @@ function buildStrategy(matches) {
     byMarketProfile: groupSummary(officialRows, (row) => `${row.marketType}:${row.profileKey}`),
     byOddsBucket: groupSummary(officialRows.filter((row) => row.tipCode === "1" || row.tipCode === "2"), (row) => row.oddsBucket),
     byTip: groupSummary(officialRows, (row) => `${row.marketType}:${row.tipCode}`),
+    byWebConsensus: groupSummaryMany(officialRows, (row) => row.webConsensusKeys),
     byPolicy: groupSummary(officialRows, (row) => row.policyVersion),
   };
 
@@ -408,6 +446,12 @@ function buildStrategy(matches) {
       return [key, capDetailRule(buildRule(key, value, { marketType: market }))];
     })
   );
+  const gateByWebConsensus = Object.fromEntries(
+    Object.entries(summary.byWebConsensus).map(([key, value]) => {
+      const market = ENABLED_MARKETS.has(key.split(":")[0]) ? key.split(":")[0] : undefined;
+      return [key, capDetailRule(buildRule(key, value, { minRows: WEB_CONSENSUS_MIN_RULE_ROWS, marketType: market }))];
+    })
+  );
 
   const activeGates = {
     profile: activeRuleCount(gateByProfile),
@@ -415,6 +459,7 @@ function buildStrategy(matches) {
     marketProfile: activeRuleCount(gateByMarketProfile),
     oddsBucket: activeRuleCount(gateByOddsBucket),
     tip: activeRuleCount(gateByTip),
+    webConsensus: activeRuleCount(gateByWebConsensus),
   };
   const settledOfficialRows = officialRows.length;
 
@@ -437,6 +482,7 @@ function buildStrategy(matches) {
       recommendationRows: recommendationRows.length,
       bestRows: bestRows.length,
       goalsRows: goalsRows.length,
+      webConsensusRows: officialRows.filter((row) => Array.isArray(row.webConsensusKeys) && row.webConsensusKeys.length).length,
     },
     summary,
     activeGates,
@@ -445,6 +491,7 @@ function buildStrategy(matches) {
     gateByMarketProfile,
     gateByOddsBucket,
     gateByTip,
+    gateByWebConsensus,
     recommendations: [
       {
         id: "sample-guard",
