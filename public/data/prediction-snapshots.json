@@ -1,7 +1,7 @@
 {
   "version": 1,
   "source": "sporttery:prediction-snapshots",
-  "updatedAt": "2026-06-23T09:00:16.939Z",
+  "updatedAt": "2026-06-23T09:14:53.808Z",
   "retentionDays": 365,
   "maxRows": 5000,
   "rows": [
@@ -98622,19 +98622,159 @@
         "resultStatus": "PENDING",
         "riskCount": 3
       }
+    },
+    {
+      "capturedAt": "2026-06-23T09:14:53.808Z",
+      "firstSeenAt": "2026-06-23T09:14:53.808Z",
+      "lastSeenAt": "2026-06-23T09:14:53.808Z",
+      "seenCount": 1,
+      "phase": "baseline",
+      "signature": "1X2:HHAD:2:reference|BEST:HHAD:2:recommend|GOALS::U2.5:reference|--|-2:1.94/4.05/2.73|67/20/13",
+      "policyVersion": "sporttery-day-formula-trace-v52",
+      "promptVersion": "professional-football-analyst-v21",
+      "sourceMatchId": "2040255",
+      "matchId": "fivehundred_2040255",
+      "matchNo": "周二045",
+      "businessDate": "2026-06-23",
+      "kickoffTime": "2026-06-24T01:00:00+08:00",
+      "status": "SCHEDULED",
+      "leagueName": "世界杯",
+      "homeTeamName": "葡萄牙",
+      "awayTeamName": "乌兹别克",
+      "scoreHome": null,
+      "scoreAway": null,
+      "odds": null,
+      "handicapLine": "-2",
+      "handicapOdds": {
+        "odds1": 1.94,
+        "oddsX": 4.05,
+        "odds2": 2.73
+      },
+      "oddsTrend": null,
+      "probabilityFinal": {
+        "home": 66.6,
+        "draw": 20.4,
+        "away": 13
+      },
+      "probabilityModelVersion": "unified-poisson-bayes-v52",
+      "best": {
+        "tipCode": "2",
+        "tipLabel": {
+          "zh": "主推 让负",
+          "en": "Main pick: HHAD away"
+        },
+        "odds": 2.73,
+        "trustScore": 57,
+        "resultStatus": "PENDING",
+        "riskCount": 5
+      },
+      "oneXTwo": {
+        "tipCode": "2",
+        "tipLabel": {
+          "zh": "参考 让负",
+          "en": "Reference: HHAD away"
+        },
+        "odds": 2.73,
+        "trustScore": 34,
+        "resultStatus": "PENDING",
+        "riskCount": 4
+      },
+      "goals": {
+        "tipCode": "U2.5",
+        "tipLabel": {
+          "zh": "进球参考 小2.5球（≤2球）",
+          "en": "Goals reference: Under 2.5 goals"
+        },
+        "odds": 1.96,
+        "trustScore": 49,
+        "resultStatus": "PENDING",
+        "riskCount": 3
+      }
+    },
+    {
+      "capturedAt": "2026-06-23T09:14:53.808Z",
+      "firstSeenAt": "2026-06-23T09:14:53.808Z",
+      "lastSeenAt": "2026-06-23T09:14:53.808Z",
+      "seenCount": 1,
+      "phase": "baseline",
+      "signature": "1X2:HAD:1:reference|BEST:HAD:1:recommend|GOALS::U2.5:reference|1.35/3.90/7.60|-1:2.27/3.25/2.63|58/25/17",
+      "policyVersion": "sporttery-day-formula-trace-v52",
+      "promptVersion": "professional-football-analyst-v21",
+      "sourceMatchId": "2040258",
+      "matchId": "fivehundred_2040258",
+      "matchNo": "周二048",
+      "businessDate": "2026-06-23",
+      "kickoffTime": "2026-06-24T10:00:00+08:00",
+      "status": "SCHEDULED",
+      "leagueName": "世界杯",
+      "homeTeamName": "哥伦比亚",
+      "awayTeamName": "刚果(金)",
+      "scoreHome": null,
+      "scoreAway": null,
+      "odds": {
+        "odds1": 1.35,
+        "oddsX": 3.9,
+        "odds2": 7.6
+      },
+      "handicapLine": "-1",
+      "handicapOdds": {
+        "odds1": 2.27,
+        "oddsX": 3.25,
+        "odds2": 2.63
+      },
+      "oddsTrend": null,
+      "probabilityFinal": {
+        "home": 58,
+        "draw": 24.6,
+        "away": 17.4
+      },
+      "probabilityModelVersion": "unified-poisson-bayes-v52",
+      "best": {
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "主推 主胜 哥伦比亚",
+          "en": "Main pick: Home win 哥伦比亚"
+        },
+        "odds": 1.35,
+        "trustScore": 75,
+        "resultStatus": "PENDING",
+        "riskCount": 5
+      },
+      "oneXTwo": {
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "参考倾向 主胜 哥伦比亚",
+          "en": "Reference lean: Home Win (哥伦比亚)"
+        },
+        "odds": 1.35,
+        "trustScore": 34,
+        "resultStatus": "PENDING",
+        "riskCount": 4
+      },
+      "goals": {
+        "tipCode": "U2.5",
+        "tipLabel": {
+          "zh": "进球参考 小2.5球（≤2球）",
+          "en": "Goals reference: Under 2.5 goals"
+        },
+        "odds": 1.83,
+        "trustScore": 53,
+        "resultStatus": "PENDING",
+        "riskCount": 3
+      }
     }
   ],
   "summary": {
-    "total": 1281,
+    "total": 1283,
     "byPhase": {
       "review": 85,
       "mid": 138,
-      "baseline": 972,
+      "baseline": 974,
       "late": 44,
       "final": 27,
       "locked": 15
     },
-    "appended": 0,
+    "appended": 2,
     "updated": 0
   }
 }
