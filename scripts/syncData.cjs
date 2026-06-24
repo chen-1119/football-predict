@@ -2991,6 +2991,81 @@ function buildPredictionReviewRows(match, actuals) {
     });
 }
 
+function predictionPartsFromSnapshotSignature(signature, marketType) {
+  const part = String(signature || "").split("|").find((item) => item.startsWith(`${marketType}:`));
+  if (!part) return null;
+  const [, oddsPoolCode = "", tipCode = "", recommendationAction = "recommend"] = part.split(":");
+  return {
+    oddsPoolCode: oddsPoolCode || undefined,
+    tipCode: tipCode || "WATCH",
+    recommendationAction: recommendationAction || "recommend",
+  };
+}
+
+function predictionFromSnapshotTip(snapshot, marketType) {
+  const key = marketType === "1X2" ? "oneXTwo" : marketType.toLowerCase();
+  const tip = snapshot?.[key];
+  const parts = predictionPartsFromSnapshotSignature(snapshot?.signature, marketType) || {};
+  if (!tip && !parts.tipCode) return null;
+  const tipCode = tip?.tipCode || parts.tipCode;
+  if (!tipCode || tipCode === "WATCH") return null;
+  const oddsPoolCode = parts.oddsPoolCode || (marketType === "GOALS" ? undefined : "HAD");
+  return {
+    marketType,
+    oddsPoolCode,
+    handicapLine: oddsPoolCode === "HHAD" ? snapshot?.handicapLine : undefined,
+    tipCode,
+    tipLabel: tip?.tipLabel,
+    odds: tip?.odds || 0,
+    trustScore: tip?.trustScore,
+    recommendationAction: parts.recommendationAction || (marketType === "BEST" ? "recommend" : "reference"),
+    recommendationTier: marketType === "BEST" ? "main" : "reference",
+    riskTags: Array.from({ length: Math.max(0, Number(tip?.riskCount || 0)) }, () => ({ zh: "快照风险", en: "Snapshot risk" })),
+  };
+}
+
+function predictionsFromSnapshot(snapshot) {
+  return ["1X2", "GOALS", "BEST"]
+    .map((marketType) => predictionFromSnapshotTip(snapshot, marketType))
+    .filter(Boolean);
+}
+
+function sourceMatchKeyForReview(match) {
+  return normText(match?.sourceMatchId || String(match?.id || "").replace(/^sporttery_/, ""));
+}
+
+function buildPredictionSnapshotIndex(predictionSnapshotsPayload) {
+  const bySourceId = new Map();
+  const rows = Array.isArray(predictionSnapshotsPayload?.rows) ? predictionSnapshotsPayload.rows : [];
+  for (const row of rows) {
+    const sourceMatchId = sourceMatchKeyForReview(row);
+    if (!sourceMatchId) continue;
+    if (!bySourceId.has(sourceMatchId)) bySourceId.set(sourceMatchId, []);
+    bySourceId.get(sourceMatchId).push(row);
+  }
+  for (const snapshots of bySourceId.values()) {
+    snapshots.sort((a, b) => Date.parse(a.capturedAt || a.lastSeenAt || 0) - Date.parse(b.capturedAt || b.lastSeenAt || 0));
+  }
+  return bySourceId;
+}
+
+function fallbackPredictionsFromSnapshots(match, snapshotIndex) {
+  if (!snapshotIndex) return [];
+  const sourceMatchId = sourceMatchKeyForReview(match);
+  const snapshots = sourceMatchId ? snapshotIndex.get(sourceMatchId) || [] : [];
+  if (!snapshots.length) return [];
+  const kickoffTime = Date.parse(match?.kickoffTime || "");
+  const candidates = snapshots.filter((snapshot) => {
+    const capturedTime = Date.parse(snapshot.capturedAt || snapshot.lastSeenAt || "");
+    const predictions = predictionsFromSnapshot(snapshot);
+    if (!predictions.length) return false;
+    if (Number.isFinite(kickoffTime) && Number.isFinite(capturedTime)) return capturedTime <= kickoffTime;
+    return snapshot.phase !== "review" && snapshot.phase !== "locked";
+  });
+  const selected = candidates[candidates.length - 1] || snapshots.map((snapshot) => ({ snapshot, predictions: predictionsFromSnapshot(snapshot) })).reverse().find((item) => item.predictions.length)?.snapshot;
+  return predictionsFromSnapshot(selected);
+}
+
 function scoreReview(match, actuals) {
   const projectedHome = Number(match.projectedScoreHome);
   const projectedAway = Number(match.projectedScoreAway);
@@ -3016,11 +3091,14 @@ function scoreReview(match, actuals) {
   };
 }
 
-function buildPostMatchReview(match, capturedAt) {
+function buildPostMatchReview(match, capturedAt, snapshotIndex = null) {
   if (match.status !== "FINISHED") return null;
   const actuals = postMatchReviewActuals(match);
   if (!actuals) return null;
-  const predictionRows = buildPredictionReviewRows(match, actuals);
+  const reviewMatch = Array.isArray(match.predictions) && match.predictions.some((prediction) => prediction?.tipCode && prediction.tipCode !== "WATCH")
+    ? match
+    : { ...match, predictions: fallbackPredictionsFromSnapshots(match, snapshotIndex) };
+  const predictionRows = buildPredictionReviewRows(reviewMatch, actuals);
   const settledRows = predictionRows.filter((row) => row.resultStatus === "WON" || row.resultStatus === "LOST");
   const wonRows = settledRows.filter((row) => row.resultStatus === "WON");
   const mainRows = predictionRows.filter((row) => row.reviewRole === "main");
@@ -3145,10 +3223,11 @@ function buildPostMatchReview(match, capturedAt) {
   };
 }
 
-function attachPostMatchReviews(matches, capturedAt) {
+function attachPostMatchReviews(matches, capturedAt, predictionSnapshotsPayload = null) {
+  const snapshotIndex = buildPredictionSnapshotIndex(predictionSnapshotsPayload);
   const rows = [];
   const enriched = (matches || []).map((match) => {
-    const review = buildPostMatchReview(match, capturedAt);
+    const review = buildPostMatchReview(match, capturedAt, snapshotIndex);
     if (review) rows.push(review);
     return review ? { ...match, postMatchReview: review } : match;
   });
@@ -10056,16 +10135,16 @@ async function sync() {
   output = attachOddsTrends(output, publicDir);
   output = attachExternalSignals(output, externalSignals, preMatchSignals);
   output = output.map(applyExternalResultSignal);
-  output = output.map(stripOfficialResultOnlyPredictionContent);
   output = output.map((match) => rebuildPublishedPredictionModel(match, modelCalibration));
   output = output.map(normalizePublishedPredictionText);
   output = output.map(sanitizePublishedReferenceCopy);
   output = output.map((match) => normalizePublishedStatus(match, capturedAt));
   const predictionSnapshotsPayload = appendPredictionSnapshots(publicDir, output, capturedAt);
   output = attachPredictionSnapshotSummary(output, predictionSnapshotsPayload, capturedAt);
-  const postMatchReviews = attachPostMatchReviews(output, capturedAt);
+  const postMatchReviews = attachPostMatchReviews(output, capturedAt, predictionSnapshotsPayload);
   output = postMatchReviews.matches;
   const postMatchReviewsPayload = postMatchReviews.payload;
+  output = output.map(stripOfficialResultOnlyPredictionContent);
   const split = splitMatchesForOutput(output, capturedAt);
   const teamIndex = preserveRootTimestamps(buildTeamIndex(output), existingTeamIndex, ["updatedAt"]);
   const oddsHistoryPayload = loadOddsHistory(publicDir);
