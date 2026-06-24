@@ -23,6 +23,9 @@ const TABLE_COUNT_KEYS = {
   [TABLES.predictionRuns]: "predictionRuns"
 };
 
+const HISTORY_SNAPSHOT_RETENTION_DAYS = Math.max(1, Number(process.env.DATASTORE_HISTORY_SNAPSHOT_RETENTION_DAYS || 14));
+const STORE_FULL_MATCH_SNAPSHOTS = process.env.DATASTORE_STORE_FULL_MATCH_SNAPSHOTS === "1";
+
 const nowIso = () => new Date().toISOString();
 
 const createState = () => ({
@@ -219,6 +222,29 @@ const getDataStoreStatus = async (storeDir) => {
 const compactNumber = (value) => {
   const number = Number(value);
   return Number.isFinite(number) ? Number(number.toFixed(4)) : null;
+};
+
+const matchTimestamp = (match) => {
+  const candidates = [
+    match?.resultUpdatedAt,
+    match?.oddsUpdatedAt,
+    match?.handicapOddsUpdatedAt,
+    match?.kickoffTime,
+    match?.matchDate,
+    match?.businessDate
+  ];
+  for (const value of candidates) {
+    const time = Date.parse(value || "");
+    if (Number.isFinite(time)) return time;
+  }
+  return NaN;
+};
+
+const shouldPersistHistorySnapshot = (match, capturedAt = nowIso()) => {
+  const capturedTime = Date.parse(capturedAt);
+  const matchTime = matchTimestamp(match);
+  if (!Number.isFinite(capturedTime) || !Number.isFinite(matchTime)) return false;
+  return matchTime >= capturedTime - HISTORY_SNAPSHOT_RETENTION_DAYS * 24 * 60 * 60 * 1000;
 };
 
 const pickOdds = (odds) => {
@@ -481,7 +507,7 @@ const buildMatchSnapshot = (match, source, dataset = "current") => {
     external: payload.external,
     dataCompleteness: dataCompletenessFor(match, prediction),
     rawMatchSignature,
-    match,
+    ...(STORE_FULL_MATCH_SNAPSHOTS ? { match } : {}),
     signature
   };
 };
@@ -952,7 +978,7 @@ const persistDataSnapshot = async ({ storeDir, dataDir, source = "server-sync", 
   for (const match of matches) {
     await persistMatch(match, "current");
   }
-  for (const match of historicalMatches) {
+  for (const match of historicalMatches.filter((item) => shouldPersistHistorySnapshot(item, syncMeta.capturedAt || syncMeta.updatedAt || nowIso()))) {
     await persistMatch(match, "history");
   }
 

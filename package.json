@@ -18,6 +18,7 @@
     "sync:cloud-push": "node scripts/pushCloudSync.cjs",
     "sync:cloud-watch": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/runCloudSync.ps1",
     "sync:cloud-install-task": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/installCloudSyncTask.ps1",
+    "compact:datastore": "node scripts/compactDataStore.cjs",
     "server": "node server/index.cjs",
     "server:prod": "npm run build && node server/index.cjs",
     "audit:predictions": "node scripts/auditPredictions.cjs",
