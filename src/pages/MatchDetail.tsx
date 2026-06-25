@@ -2458,11 +2458,11 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                 <div className="review-grid">
                   <div>
                     <span>{language === 'zh' ? '已结算推荐' : 'Settled tips'}</span>
-                    <strong>{postMatchReview ? `${postMatchReview.predictionReview.won}/${postMatchReview.predictionReview.settled}` : `${wonPredictions.length}/${settledPredictions.length}`}</strong>
+                    <strong>{postMatchReview?.predictionReview ? `${postMatchReview.predictionReview.won ?? 0}/${postMatchReview.predictionReview.settled ?? 0}` : `${wonPredictions.length}/${settledPredictions.length}`}</strong>
                   </div>
                   <div>
                     <span>{language === 'zh' ? '主推结果' : 'Main pick'}</span>
-                    <strong>{postMatchReview?.predictionReview.bestStatus ? getResultLabel(postMatchReview.predictionReview.bestStatus, language) : bestReviewPrediction ? getResultLabel(bestReviewPrediction.resultStatus, language) : '--'}</strong>
+                    <strong>{postMatchReview?.predictionReview?.bestStatus ? getResultLabel(postMatchReview.predictionReview.bestStatus, language) : bestReviewPrediction ? getResultLabel(bestReviewPrediction.resultStatus, language) : '--'}</strong>
                   </div>
                   <div>
                     <span>{language === 'zh' ? '让球复盘' : 'Handicap review'}</span>
@@ -2519,7 +2519,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                     </section>
                     <section className="post-review-panel">
                       <h4>{language === 'zh' ? '事件数据' : 'Event data'}</h4>
-                      <p>{postMatchReview.eventFactors.goals?.summary[language]}</p>
+                      <p>{postMatchReview.eventFactors?.goals?.summary?.[language] || '--'}</p>
                       <div className="post-review-chip-list is-muted">
                         {postReviewDataGaps.slice(0, 4).map((item) => (
                           <span key={item.key}>{item[language]}</span>
@@ -2826,7 +2826,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                             <em>{probabilityModel.modelHealth.lowSpSide.settled || 0} {language === 'zh' ? '条' : 'settled'}</em>
                           </span>
                         )}
-                        {(probabilityModel.modelHealth.byMarket['1X2']?.cooldown || probabilityModel.modelHealth.byMarket.GOALS?.cooldown) && (
+                        {(probabilityModel.modelHealth.byMarket?.['1X2']?.cooldown || probabilityModel.modelHealth.byMarket?.GOALS?.cooldown) && (
                           <span>
                             {language === 'zh' ? '冷却' : 'Cooldown'}
                             <strong>{language === 'zh' ? '开启' : 'On'}</strong>
@@ -2870,8 +2870,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                         {probabilityModel.calibrationAdjustment?.goals?.applied && (
                           <span>
                             {language === 'zh' ? '进球校准' : 'Goals calibration'}
-                            <strong>{formatModelWeight(probabilityModel.calibrationAdjustment.goals.shrinkFactor)}</strong>
-                            <em>{probabilityModel.calibrationAdjustment.goals.before.over25}% {'to'} {probabilityModel.calibrationAdjustment.goals.after.over25}%</em>
+                            <strong>{formatModelWeight(probabilityModel.calibrationAdjustment.goals?.shrinkFactor)}</strong>
+                            <em>{probabilityModel.calibrationAdjustment.goals?.before?.over25 ?? '--'}% {'to'} {probabilityModel.calibrationAdjustment.goals?.after?.over25 ?? '--'}%</em>
                           </span>
                         )}
                       </div>
