@@ -409,6 +409,23 @@ const parseScoreLabel = (value: string | null | undefined): Pick<ScoreProbabilit
   };
 };
 
+const compactPickLabel = (value: string | null | undefined) => {
+  return String(value || '')
+    .replace(/^推荐\s+/, '')
+    .replace(/^参考倾向\s+/, '参考')
+    .replace(/\s+/g, '');
+};
+
+const compactVersionLabel = (value: string | null | undefined, language: 'zh' | 'en') => {
+  const text = String(value || '').trim();
+  if (!text) return '--';
+  const version = text.match(/v\d+/i);
+  if (version) return version[0].toUpperCase();
+  if (/unified-poisson/i.test(text)) return language === 'zh' ? '统一模型' : 'Unified';
+  if (/post-match-review/i.test(text)) return language === 'zh' ? '复盘v1' : 'Review v1';
+  return text.split('-').slice(0, 2).join('-') || text;
+};
+
 const dedupeScoreCandidates = <T extends Pick<ScoreProbability, 'home' | 'away'> & { label?: string }>(scores: T[]) => {
   const seen = new Set<string>();
   return scores.filter((score) => {
@@ -1312,16 +1329,31 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     || probabilityModel?.version
     || postMatchReview?.version
     || '--';
-  const predictionNavVersionText = probabilityModel?.version?.split('-').slice(0, 2).join('-')
-    || predictionMeta?.policyVersion?.split('-').slice(0, 3).join('-')
-    || postMatchReview?.version
-    || '--';
+  const predictionNavVersionBase = predictionMeta?.policyVersion
+    || probabilityModel?.version
+    || predictionMeta?.promptVersion
+    || postMatchReview?.version;
+  const predictionNavVersionText = [
+    compactVersionLabel(predictionNavVersionBase, language),
+    postMatchReview
+      ? (language === 'zh' ? '赛后复盘' : 'review')
+      : (predictionMeta?.lockedAt || predictionLockedByCutoff || match.status !== 'SCHEDULED')
+        ? (language === 'zh' ? '已锁定' : 'locked')
+        : (language === 'zh' ? '监控中' : 'live')
+  ].filter(Boolean).join(' · ');
   const navTrustScore = Number(primaryOutcomePrediction?.trustScore ?? primaryPostReviewRow?.trustScore ?? matchSignal.trustScore);
   const navSummaryDetail = Number.isFinite(navTrustScore) && navTrustScore > 0
     ? `${Math.round(navTrustScore)}%`
     : postMatchReview?.predictionReview?.bestStatus
       ? getResultLabel(postMatchReview.predictionReview.bestStatus, language)
       : '--';
+  const navPickBase = compactPickLabel(primaryOutcomeTitle || displayRecommendation?.label);
+  const navPickOddsValue = Number(primaryOutcomePrediction?.odds ?? primaryPostReviewRow?.odds);
+  const navPickDetail = [
+    navPickBase || (language === 'zh' ? '暂无主推' : 'No pick'),
+    primaryPostReviewRow?.resultStatus ? getResultLabel(primaryPostReviewRow.resultStatus, language) : '',
+    Number.isFinite(navPickOddsValue) && navPickOddsValue > 0 ? `SP${formatDecimal(navPickOddsValue)}` : ''
+  ].filter(Boolean).join(' · ');
   const predictionGeneratedAt = predictionMeta?.generatedAt
     || probabilityModel?.generatedAt
     || gptPrediction?.generatedAt
@@ -1690,7 +1722,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     {
       key: 'tips',
       label: language === 'zh' ? '推荐' : 'Tips',
-      detail: language === 'zh' ? '赛果/比分' : 'Result/Score'
+      detail: navPickDetail
     },
     {
       key: 'model',
@@ -2167,6 +2199,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                   type="button"
                   role="tab"
                   aria-selected={predictionView === item.key}
+                  title={`${item.label} ${item.detail}`}
                   className={`prediction-view-tab ${predictionView === item.key ? 'active' : ''}`}
                   onClick={() => setPredictionView(item.key)}
                 >
