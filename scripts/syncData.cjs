@@ -3229,7 +3229,9 @@ function attachPostMatchReviews(matches, capturedAt, predictionSnapshotsPayload 
   const enriched = (matches || []).map((match) => {
     const review = buildPostMatchReview(match, capturedAt, snapshotIndex);
     if (review) rows.push(review);
-    return review ? { ...match, postMatchReview: review } : match;
+    const { postMatchReview, ...withoutEmbeddedReview } = match || {};
+    void postMatchReview;
+    return withoutEmbeddedReview;
   });
   const summary = rows.reduce((acc, review) => {
     acc.total += 1;
