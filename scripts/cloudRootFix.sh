@@ -7,6 +7,8 @@ RAW_BASE="${RAW_BASE:-https://raw.githubusercontent.com/chen-1119/football-predi
 AUTO_REPAIR_BIN="${AUTO_REPAIR_BIN:-/usr/local/bin/football-predict-auto-repair}"
 AUTO_REPAIR_SERVICE="/etc/systemd/system/football-predict-auto-repair.service"
 AUTO_REPAIR_TIMER="/etc/systemd/system/football-predict-auto-repair.timer"
+DEPLOY_TRIGGER_FILE="${DEPLOY_TRIGGER_FILE:-/var/lib/football-predict/deploy-request.json}"
+DEPLOY_TRIGGER_PATH="/etc/systemd/system/football-predict-deploy-request.path"
 
 echo "[root-fix 1/7] install required packages"
 if command -v apt-get >/dev/null 2>&1; then
@@ -61,7 +63,7 @@ echo "[root-fix 4/7] install auto repair command"
 sudo curl -fsSL "$RAW_BASE/scripts/cloudAutoRepair.sh" -o "$AUTO_REPAIR_BIN"
 sudo chmod 755 "$AUTO_REPAIR_BIN"
 
-echo "[root-fix 5/7] install systemd timer"
+echo "[root-fix 5/7] install systemd deploy timer and trigger"
 sudo tee "$AUTO_REPAIR_SERVICE" >/dev/null <<SERVICE
 [Unit]
 Description=Football Predict auto repair and safe deploy
@@ -85,16 +87,36 @@ Description=Run Football Predict auto repair periodically
 
 [Timer]
 OnBootSec=2min
-OnUnitActiveSec=15min
-RandomizedDelaySec=60s
+OnUnitActiveSec=3min
+RandomizedDelaySec=20s
 Persistent=true
 
 [Install]
 WantedBy=timers.target
 TIMER
 
+sudo mkdir -p "$(dirname "$DEPLOY_TRIGGER_FILE")"
+sudo touch "$DEPLOY_TRIGGER_FILE"
+if id football >/dev/null 2>&1; then
+  sudo chown football:football "$DEPLOY_TRIGGER_FILE" "$(dirname "$DEPLOY_TRIGGER_FILE")" || true
+fi
+sudo chmod 664 "$DEPLOY_TRIGGER_FILE" || true
+
+sudo tee "$DEPLOY_TRIGGER_PATH" >/dev/null <<PATHUNIT
+[Unit]
+Description=Run Football Predict deploy when the web app writes a deploy request
+
+[Path]
+PathModified=$DEPLOY_TRIGGER_FILE
+Unit=football-predict-auto-repair.service
+
+[Install]
+WantedBy=multi-user.target
+PATHUNIT
+
 sudo systemctl daemon-reload
 sudo systemctl enable --now football-predict-auto-repair.timer
+sudo systemctl enable --now football-predict-deploy-request.path
 
 echo "[root-fix 6/7] run repair now"
 sudo systemctl start football-predict-auto-repair.service
@@ -102,5 +124,6 @@ sudo systemctl start football-predict-auto-repair.service
 echo "[root-fix 7/7] status"
 sudo systemctl status football-predict-auto-repair.service --no-pager -l || true
 sudo systemctl list-timers football-predict-auto-repair.timer --no-pager || true
+sudo systemctl status football-predict-deploy-request.path --no-pager -l || true
 curl -fsS http://127.0.0.1:8788/api/health | head -c 5000 || true
 echo

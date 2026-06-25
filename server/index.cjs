@@ -1591,6 +1591,26 @@ const getDeploymentInfo = async () => {
   };
 };
 
+const triggerDeployRepair = async () => {
+  const serviceName = process.env.DEPLOY_REPAIR_SERVICE || "football-predict-auto-repair.service";
+  const triggerFile = path.resolve(process.env.DEPLOY_TRIGGER_FILE || path.join(storeDir, "deploy-request.json"));
+  const requestedAt = nowIso();
+  await fsp.mkdir(path.dirname(triggerFile), { recursive: true });
+  await writeJsonFile(triggerFile, {
+    requestedAt,
+    service: serviceName,
+    currentRevision: await fsp.readFile(deploymentRevisionFile, "utf8")
+      .then((text) => text.trim())
+      .catch(() => null)
+  });
+  return {
+    ok: true,
+    service: serviceName,
+    triggerFile,
+    requestedAt
+  };
+};
+
 const getHealth = async () => {
   const meta = await readJsonFile(path.join(dataDir, "sync-meta.json"), null);
   const gpt = await readGptPredictions();
@@ -1850,6 +1870,16 @@ const handleApi = async (req, res, url) => {
       matchIds: Array.isArray(body.matchIds) ? body.matchIds : [],
       limit: body.limit || url.searchParams.get("limit") || 8
     }));
+  }
+
+  if (url.pathname === "/api/admin/deploy") {
+    if (req.method !== "POST") return sendJson(res, { ok: false, error: "method not allowed" }, 405);
+    if (!isAuthorized(req, url)) return sendJson(res, { ok: false, error: "unauthorized" }, 401);
+    const deploy = await triggerDeployRepair();
+    return sendJson(res, {
+      ...deploy,
+      deploy: await getDeploymentInfo()
+    }, deploy.ok ? 202 : 500);
   }
 
   const filePath = apiFiles[url.pathname];
