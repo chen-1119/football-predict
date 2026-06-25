@@ -29,6 +29,7 @@ interface MatchDetailProps {
 
 type Language = 'zh' | 'en';
 type PredictionView = 'summary' | 'tips' | 'model' | 'factors' | 'weather';
+type PostReviewRow = NonNullable<Match['postMatchReview']>['predictionReview']['rows'][number];
 
 type WeatherSignal = {
   source?: string;
@@ -196,6 +197,36 @@ const isScoredPrediction = (prediction: PredictionDetail) => (
   prediction.resultStatus !== 'PENDING' && prediction.tipCode !== 'WATCH'
   && prediction.recommendationAction !== 'reference'
 );
+
+const isSettledReviewStatus = (status: string | undefined) => (
+  status === 'WON' || status === 'LOST'
+);
+
+const getPrimaryPostReviewRow = (rows: PostReviewRow[]): PostReviewRow | undefined => {
+  const settledRows = rows.filter((row) => isSettledReviewStatus(row.resultStatus));
+  if (!settledRows.length) return undefined;
+  return settledRows.find((row) => row.reviewRole === 'main')
+    || settledRows.find((row) => row.marketType === 'BEST')
+    || settledRows[0];
+};
+
+const predictionFromPostReviewRow = (row: PostReviewRow | undefined): PredictionDetail | undefined => {
+  if (!row) return undefined;
+  return {
+    marketType: row.marketType,
+    oddsPoolCode: row.oddsPoolCode,
+    handicapLine: row.handicapLine,
+    tipCode: row.tipCode,
+    tipLabel: row.tipLabel,
+    odds: Number(row.odds || 0),
+    trustScore: Number(row.trustScore || 0),
+    recommendationAction: row.recommendationAction || (row.reviewRole === 'main' ? 'recommend' : 'reference'),
+    recommendationTier: row.recommendationTier || (row.reviewRole === 'main' ? 'main' : 'reference'),
+    explanation: { zh: '', en: '' },
+    visibilityStatus: 'FREE',
+    resultStatus: row.resultStatus
+  };
+};
 
 const isFinishedWithScore = (match: Match): match is FinishedMatch => {
   return match.status === 'FINISHED' && Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway);
@@ -950,8 +981,15 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   const wonPredictions = settledPredictions.filter((prediction) => prediction.resultStatus === 'WON');
   const bestReviewPrediction = visiblePredictions.find((prediction) => prediction.marketType === 'BEST' && prediction.tipCode !== 'WATCH')
     || getVisiblePrediction(match, '1X2');
+  const postMatchReview = match.postMatchReview;
+  const postReviewRows = postMatchReview?.predictionReview?.rows || [];
+  const primaryPostReviewRow = getPrimaryPostReviewRow(postReviewRows);
+  const primaryPostReviewPrediction = predictionFromPostReviewRow(primaryPostReviewRow);
+  const postReviewDiagnosis = postMatchReview?.modelDiagnosis || [];
+  const postReviewAdjustments = postMatchReview?.nextAdjustment || [];
+  const postReviewDataGaps = postMatchReview?.dataGaps || [];
   const displayRecommendation = getDisplayRecommendation(match, language);
-  const companionRecommendation = displayRecommendation?.companion;
+  const companionRecommendation = primaryPostReviewPrediction ? undefined : displayRecommendation?.companion;
   const rawBestOutcomePrediction = visiblePredictions.find((prediction) => (
     prediction.marketType === 'BEST'
     && isPredictionResultPoolAvailable(prediction)
@@ -980,16 +1018,12 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   const handicapOverridePrediction = hasHhadResultPool
     ? getHandicapOverridePrediction(match, rawPrimaryOutcomePrediction)
     : undefined;
-  const primaryOutcomePrediction = displayRecommendation?.prediction
+  const primaryOutcomePrediction = primaryPostReviewPrediction
+    || displayRecommendation?.prediction
     || handicapOverridePrediction
     || rawPrimaryOutcomePrediction
     || (!hasHadResultPool && hasHhadResultPool ? getHandicapMarketReferencePrediction(match) : undefined);
   const reviewHitRate = settledPredictions.length > 0 ? Math.round((wonPredictions.length / settledPredictions.length) * 100) : null;
-  const postMatchReview = match.postMatchReview;
-  const postReviewRows = postMatchReview?.predictionReview?.rows || [];
-  const postReviewDiagnosis = postMatchReview?.modelDiagnosis || [];
-  const postReviewAdjustments = postMatchReview?.nextAdjustment || [];
-  const postReviewDataGaps = postMatchReview?.dataGaps || [];
   const homeValueText = formatSquadValue(homeTeam.value, language);
   const awayValueText = formatSquadValue(awayTeam.value, language);
   const historicalTrainingDetail = (match as MatchWithHistoricalTraining).historicalTrainingDetail;
@@ -1162,7 +1196,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     return language === 'zh' ? '推荐' : 'Pick';
   };
 
-  const primaryOutcomeTitle = displayRecommendation?.label || (primaryOutcomePrediction
+  const primaryOutcomeTitle = primaryPostReviewRow?.tipLabel?.[language]
+    || displayRecommendation?.label || (primaryOutcomePrediction
     ? getPredictionTipDisplay(primaryOutcomePrediction, language)
     : '--');
   const primaryOutcomeCode = isOutcomeTipCode(primaryOutcomePrediction?.tipCode) ? primaryOutcomePrediction.tipCode : undefined;
@@ -1251,7 +1286,11 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     || predictionCutoffPassed;
   const publicRecommendationCopy = buildPublicRecommendationCopy(match, primaryOutcomePrediction, language, {
     pickLabel: primaryOutcomeTitle,
-    fallbackReason: displayRecommendation?.reason,
+    fallbackReason: primaryPostReviewRow
+      ? (language === 'zh'
+        ? `本场已按最终赛果 ${postMatchReview?.finalScore || officialScoreText} 自动结算，推荐状态为 ${getResultLabel(primaryPostReviewRow.resultStatus, language)}。`
+        : `Settled against final score ${postMatchReview?.finalScore || officialScoreText}; result: ${getResultLabel(primaryPostReviewRow.resultStatus, language)}.`)
+      : displayRecommendation?.reason,
     isLocked: predictionIsLocked
   });
   const publicScoreNote = language === 'zh'
