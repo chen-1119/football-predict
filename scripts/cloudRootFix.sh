@@ -33,6 +33,14 @@ ClientAliveInterval 30
 ClientAliveCountMax 3
 SSHCONF
 sudo sshd -t
+sudo systemctl daemon-reload
+sudo systemctl reset-failed ssh sshd ssh.socket sshd.socket 2>/dev/null || true
+if systemctl list-unit-files | grep -q '^ssh\.socket'; then
+  sudo systemctl disable --now ssh.socket || true
+fi
+if systemctl list-unit-files | grep -q '^sshd\.socket'; then
+  sudo systemctl disable --now sshd.socket || true
+fi
 if systemctl list-unit-files | grep -q '^ssh\.service'; then
   sudo systemctl enable --now ssh
   sudo systemctl restart ssh
@@ -42,6 +50,12 @@ elif systemctl list-unit-files | grep -q '^sshd\.service'; then
 else
   sudo systemctl enable --now ssh || sudo systemctl enable --now sshd || true
 fi
+echo "[root-fix ssh] listener"
+sudo ss -ltnp 'sport = :22' || true
+echo "[root-fix ssh] local banner"
+timeout 5 bash -c 'exec 3<>/dev/tcp/127.0.0.1/22; head -n 1 <&3' || true
+echo "[root-fix ssh] recent logs"
+sudo journalctl -u ssh -u sshd -u ssh.socket -u sshd.socket -n 80 --no-pager || true
 
 echo "[root-fix 4/7] install auto repair command"
 sudo curl -fsSL "$RAW_BASE/scripts/cloudAutoRepair.sh" -o "$AUTO_REPAIR_BIN"

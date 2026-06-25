@@ -24,6 +24,7 @@ const dataDir = path.join(publicDir, "data");
 const distDir = path.join(rootDir, "dist");
 const storeDir = path.resolve(process.env.SERVER_STORE_DIR || path.join(rootDir, "server-data"));
 const snapshotsDir = path.join(storeDir, "snapshots");
+const deploymentRevisionFile = path.join(rootDir, ".deploy-revision");
 const trainingIndexPaths = [
   path.join(storeDir, "training", "historical-training-index.json"),
   path.join(rootDir, "server-data", "training", "historical-training-index.json")
@@ -1526,6 +1527,16 @@ const getSourceHealth = async () => {
   return health;
 };
 
+const getDeploymentInfo = async () => {
+  const revision = await fsp.readFile(deploymentRevisionFile, "utf8")
+    .then((text) => text.trim())
+    .catch(() => null);
+  return {
+    revision,
+    revisionFile: await fileInfo(deploymentRevisionFile)
+  };
+};
+
 const getHealth = async () => {
   const meta = await readJsonFile(path.join(dataDir, "sync-meta.json"), null);
   const gpt = await readGptPredictions();
@@ -1535,6 +1546,7 @@ const getHealth = async () => {
     ok: sources.ok,
     service: "football-predict-server",
     checkedAt: nowIso(),
+    deploy: await getDeploymentInfo(),
     syncRunning,
     predictRunning,
     lastSync,
