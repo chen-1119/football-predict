@@ -4,6 +4,18 @@ set -euo pipefail
 APP_DIR="${APP_DIR:-/opt/football-predict}"
 SRC_DIR="${SRC_DIR:-/tmp/football-predict-src}"
 REPO_URL="${REPO_URL:-https://github.com/chen-1119/football-predict.git}"
+SERVICE_RESTARTED=0
+
+cleanup() {
+  local exit_code=$?
+  if [ "$SERVICE_RESTARTED" -ne 1 ]; then
+    echo "[cleanup] restart service after interrupted deploy"
+    sudo systemctl restart football-predict || true
+  fi
+  exit "$exit_code"
+}
+
+trap cleanup EXIT
 
 echo "[1/9] stop service"
 sudo systemctl stop football-predict || true
@@ -68,6 +80,7 @@ npm run build
 echo "[8/9] permissions and restart"
 sudo chown -R football:football "$APP_DIR" /var/lib/football-predict || true
 sudo systemctl restart football-predict
+SERVICE_RESTARTED=1
 
 echo "[9/9] verify"
 sleep 8
