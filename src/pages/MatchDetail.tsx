@@ -994,6 +994,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   const postReviewRows = postMatchReview?.predictionReview?.rows || [];
   const primaryPostReviewRow = getPrimaryPostReviewRow(postReviewRows);
   const primaryPostReviewPrediction = predictionFromPostReviewRow(primaryPostReviewRow);
+  const hasReviewPredictions = postReviewRows.length > 0;
+  const hasPredictionContent = hasPredictions || hasReviewPredictions;
   const postReviewDiagnosis = postMatchReview?.modelDiagnosis || [];
   const postReviewAdjustments = postMatchReview?.nextAdjustment || [];
   const postReviewDataGaps = postMatchReview?.dataGaps || [];
@@ -1106,20 +1108,23 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   );
   const reviewProjectedScore = parseScoreLabel(postMatchReview?.scoreReview?.projectedScore);
   const hasProjectedScore = Number.isFinite(match.projectedScoreHome) && Number.isFinite(match.projectedScoreAway);
+  const archivedScoreFallbackText = isFinished && postMatchReview
+    ? (language === 'zh' ? '赛前比分未存档' : 'Score not archived')
+    : '--';
   const projectedScoreLabel = hasProjectedScore
     ? `${match.projectedScoreHome}-${match.projectedScoreAway}`
     : reviewProjectedScore
       ? scoreCandidateLabel(reviewProjectedScore)
     : probabilityModel
       ? `${Math.round(match.stats?.xG.home ?? 1)}-${Math.round(match.stats?.xG.away ?? 1)}`
-      : '--';
+      : archivedScoreFallbackText;
   const projectedScoreText = hasProjectedScore
     ? projectedScoreLabel
     : reviewProjectedScore
       ? projectedScoreLabel
     : probabilityModel
       ? projectedScoreLabel
-      : '--';
+      : archivedScoreFallbackText;
   const actualScoreText = hasScore
     ? (language === 'zh' ? `实际赛果：${officialScoreText}` : `Final score: ${officialScoreText}`)
     : '';
@@ -1305,7 +1310,18 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     || predictionMeta?.policyVersion
     || predictionMeta?.promptVersion
     || probabilityModel?.version
+    || postMatchReview?.version
     || '--';
+  const predictionNavVersionText = probabilityModel?.version?.split('-').slice(0, 2).join('-')
+    || predictionMeta?.policyVersion?.split('-').slice(0, 3).join('-')
+    || postMatchReview?.version
+    || '--';
+  const navTrustScore = Number(primaryOutcomePrediction?.trustScore ?? primaryPostReviewRow?.trustScore ?? matchSignal.trustScore);
+  const navSummaryDetail = Number.isFinite(navTrustScore) && navTrustScore > 0
+    ? `${Math.round(navTrustScore)}%`
+    : postMatchReview?.predictionReview?.bestStatus
+      ? getResultLabel(postMatchReview.predictionReview.bestStatus, language)
+      : '--';
   const predictionGeneratedAt = predictionMeta?.generatedAt
     || probabilityModel?.generatedAt
     || gptPrediction?.generatedAt
@@ -1669,7 +1685,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     {
       key: 'summary',
       label: language === 'zh' ? '概览' : 'Summary',
-      detail: matchSignal.trustScore ? `${matchSignal.trustScore}%` : '--'
+      detail: navSummaryDetail
     },
     {
       key: 'tips',
@@ -1679,7 +1695,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     {
       key: 'model',
       label: language === 'zh' ? '版本' : 'Version',
-      detail: probabilityModel?.version?.split('-').slice(0, 2).join('-') || '--'
+      detail: predictionNavVersionText
     },
     {
       key: 'factors',
@@ -2203,7 +2219,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                     <div className="recommendation-score-option is-empty">
                       <span>{language === 'zh' ? '比分' : 'Score'}</span>
                       <strong>{projectedScoreText}</strong>
-                      <em>{language === 'zh' ? '等待模型分布' : 'Waiting for distribution'}</em>
+                      <em>{postMatchReview
+                        ? (language === 'zh' ? '比分快照缺失' : 'Score snapshot missing')
+                        : (language === 'zh' ? '等待模型分布' : 'Waiting for distribution')}</em>
                     </div>
                   )}
                 </div>
@@ -2348,7 +2366,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                 ))}
               </div>
             </div>
-            {isFinished && hasPredictions && (
+            {isFinished && hasPredictionContent && (
               <div className="card review-card">
                 <div className="review-head">
                   <div>
@@ -2451,7 +2469,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                 <p>{matchSignal.note[language]}</p>
               </div>
               <div className="signal-summary-meta">
-                <span>{language === 'zh' ? '推荐强度' : 'Pick strength'} <strong>{matchSignal.trustScore ? `${matchSignal.trustScore}%` : '--'}</strong></span>
+                <span>{language === 'zh' ? '推荐强度' : 'Pick strength'} <strong>{navSummaryDetail}</strong></span>
                 <span>{language === 'zh' ? '风险项' : 'Risks'} <strong>{matchSignal.riskCount}</strong></span>
                 {match.oddsTrend && (
                   <span>{language === 'zh' ? '赔率快照' : 'Odds snapshots'} <strong>{match.oddsTrend.sampleSize}</strong></span>
@@ -2987,7 +3005,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
               </div>
             </div>
 
-            {hasPredictions && (
+            {hasPredictionContent && (
               <div className="card score-projection-card" style={{
                 background: 'linear-gradient(135deg, hsl(var(--primary) / 0.05) 0%, transparent 100%)',
                 borderColor: 'hsl(var(--primary) / 0.2)',
