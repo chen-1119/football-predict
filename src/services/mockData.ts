@@ -971,12 +971,14 @@ export interface PostMatchReview {
       handicapLine?: string;
       tipCode: string;
       tipLabel: MultiLangString;
+      odds?: number;
       actualCode?: string | null;
       actualLabel?: MultiLangString;
       resultStatus: 'WON' | 'LOST' | 'PENDING';
       trustScore?: number;
       recommendationAction?: 'recommend' | 'reference';
       recommendationTier?: string;
+      reviewRole?: 'main' | 'reference' | string;
     }>;
   };
   scoreReview: {

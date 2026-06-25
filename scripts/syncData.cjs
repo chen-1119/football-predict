@@ -3224,6 +3224,59 @@ function buildPostMatchReview(match, capturedAt, snapshotIndex = null) {
   };
 }
 
+function compactPredictionReviewRow(row) {
+  if (!row || typeof row !== "object") return null;
+  return {
+    marketType: row.marketType,
+    oddsPoolCode: row.oddsPoolCode,
+    handicapLine: row.handicapLine,
+    tipCode: row.tipCode,
+    tipLabel: row.tipLabel,
+    odds: row.odds,
+    actualCode: row.actualCode,
+    actualLabel: row.actualLabel,
+    resultStatus: row.resultStatus,
+    trustScore: row.trustScore,
+    recommendationAction: row.recommendationAction,
+    recommendationTier: row.recommendationTier,
+    reviewRole: row.reviewRole,
+  };
+}
+
+function compactPostMatchReviewForMatch(review) {
+  if (!review || typeof review !== "object") return null;
+  return {
+    version: review.version,
+    generatedAt: review.generatedAt,
+    matchId: review.matchId,
+    sourceMatchId: review.sourceMatchId,
+    matchNo: review.matchNo,
+    teams: review.teams,
+    finalScore: review.finalScore,
+    actual: review.actual,
+    predictionReview: {
+      settled: review.predictionReview?.settled || 0,
+      won: review.predictionReview?.won || 0,
+      hitRate: review.predictionReview?.hitRate ?? null,
+      mainSettled: review.predictionReview?.mainSettled || 0,
+      mainWon: review.predictionReview?.mainWon || 0,
+      allSettled: review.predictionReview?.allSettled || 0,
+      allWon: review.predictionReview?.allWon || 0,
+      referenceSettled: review.predictionReview?.referenceSettled || 0,
+      referenceWon: review.predictionReview?.referenceWon || 0,
+      bestStatus: review.predictionReview?.bestStatus || null,
+      oneXTwoStatus: review.predictionReview?.oneXTwoStatus || null,
+      handicapHit: Boolean(review.predictionReview?.handicapHit),
+      missedHandicapLane: Boolean(review.predictionReview?.missedHandicapLane),
+      rows: (review.predictionReview?.rows || []).map(compactPredictionReviewRow).filter(Boolean),
+    },
+    scoreReview: review.scoreReview,
+    modelDiagnosis: review.modelDiagnosis || [],
+    nextAdjustment: review.nextAdjustment || [],
+    dataGaps: review.dataGaps || [],
+  };
+}
+
 function attachPostMatchReviews(matches, capturedAt, predictionSnapshotsPayload = null) {
   const snapshotIndex = buildPredictionSnapshotIndex(predictionSnapshotsPayload);
   const rows = [];
@@ -3232,7 +3285,9 @@ function attachPostMatchReviews(matches, capturedAt, predictionSnapshotsPayload 
     if (review) rows.push(review);
     const { postMatchReview, ...withoutEmbeddedReview } = match || {};
     void postMatchReview;
-    return withoutEmbeddedReview;
+    return review
+      ? { ...withoutEmbeddedReview, postMatchReview: compactPostMatchReviewForMatch(review) }
+      : withoutEmbeddedReview;
   });
   const summary = rows.reduce((acc, review) => {
     acc.total += 1;

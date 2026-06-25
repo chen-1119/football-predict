@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContextCore';
 import { formatBeijingDateString, getDateStringOffset, leagues } from '../services/mockData';
-import type { Country, League, Match, Team } from '../services/mockData';
+import type { Country, League, Match, PredictionDetail, Team } from '../services/mockData';
 import {
   getOfficialMatchOdds,
   getOfficialResultPoolAvailability,
@@ -69,6 +69,53 @@ const compareDateKey = (a: string, b: string) => {
 const getBestPrediction = (match: Match) => getVisiblePrediction(match, 'BEST');
 
 const getBestTrust = (match: Match) => getBestPrediction(match)?.trustScore || 0;
+
+type PostReviewRow = NonNullable<Match['postMatchReview']>['predictionReview']['rows'][number];
+type SettledStatus = 'WON' | 'LOST';
+
+const isSettledReviewStatus = (status: string | undefined): status is SettledStatus => (
+  status === 'WON' || status === 'LOST'
+);
+
+const reviewRowMatchesPrediction = (row: PostReviewRow, prediction: PredictionDetail | undefined) => {
+  if (!prediction) return false;
+  const sameTip = row.tipCode === prediction.tipCode;
+  const samePool = (row.oddsPoolCode || '') === (prediction.oddsPoolCode || '');
+  const sameMarket = row.marketType === prediction.marketType
+    || (prediction.marketType === '1X2' && row.marketType === 'BEST');
+  return sameTip && samePool && sameMarket;
+};
+
+const getSettledPostReviewRow = (
+  match: Match,
+  prediction: PredictionDetail | undefined
+): PostReviewRow | undefined => {
+  const rows = match.postMatchReview?.predictionReview?.rows || [];
+  const settledRows = rows.filter((row) => isSettledReviewStatus(row.resultStatus));
+  if (!settledRows.length) return undefined;
+  return settledRows.find((row) => reviewRowMatchesPrediction(row, prediction))
+    || settledRows.find((row) => row.reviewRole === 'main')
+    || settledRows.find((row) => row.marketType === 'BEST')
+    || settledRows[0];
+};
+
+const predictionFromReviewRow = (row: PostReviewRow | undefined): PredictionDetail | undefined => {
+  if (!row) return undefined;
+  return {
+    marketType: row.marketType,
+    oddsPoolCode: row.oddsPoolCode,
+    handicapLine: row.handicapLine,
+    tipCode: row.tipCode,
+    tipLabel: row.tipLabel,
+    odds: Number(row.odds || 0),
+    trustScore: Number(row.trustScore || 0),
+    recommendationAction: row.recommendationAction || (row.reviewRole === 'main' ? 'recommend' : 'reference'),
+    recommendationTier: row.recommendationTier || (row.reviewRole === 'main' ? 'main' : 'reference'),
+    explanation: { zh: '', en: '' },
+    visibilityStatus: 'FREE',
+    resultStatus: row.resultStatus
+  };
+};
 
 const getMatchDisplayTeam = (match: Match, side: 'home' | 'away'): Team => {
   const base = getTeamById(side === 'home' ? match.homeTeamId : match.awayTeamId);
@@ -556,16 +603,22 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
   };
 
   const renderDecisionCell = (match: Match) => {
-    const isFinished = match.status === 'FINISHED';
+    const hasSettledReview = Boolean(match.postMatchReview?.predictionReview?.rows?.some((row) => isSettledReviewStatus(row.resultStatus)));
+    const isFinished = match.status === 'FINISHED' || hasSettledReview;
     const signal = getMatchSignal(match);
     const displayRecommendation = getDisplayRecommendation(match, language);
+    const reviewRow = getSettledPostReviewRow(match, displayRecommendation?.prediction);
+    const reviewPrediction = predictionFromReviewRow(reviewRow);
     const companionRecommendation = displayRecommendation?.companion
-      || getListHandicapSupplement(match, language, displayRecommendation?.prediction);
-    const pickedPrediction = displayRecommendation?.prediction;
-    const showHit = isFinished && displayRecommendation?.prediction?.resultStatus === 'WON';
-    const showMiss = isFinished && displayRecommendation?.prediction?.resultStatus === 'LOST';
+      || getListHandicapSupplement(match, language, reviewPrediction || displayRecommendation?.prediction);
+    const pickedPrediction = reviewPrediction || displayRecommendation?.prediction;
+    const settledStatus = reviewRow?.resultStatus || pickedPrediction?.resultStatus;
+    const showHit = isFinished && settledStatus === 'WON';
+    const showMiss = isFinished && settledStatus === 'LOST';
     const isReferencePick = false;
-    const directionLabel = displayRecommendation?.label || (pickedPrediction
+    const directionLabel = reviewRow?.tipLabel?.[language]
+      ? stripDirectionPrefix(reviewRow.tipLabel[language], language)
+      : displayRecommendation?.label || (pickedPrediction
       ? stripDirectionPrefix(getPredictionTipDisplay(pickedPrediction, language, true), language)
       : '');
     const publicCopy = buildPublicRecommendationCopy(match, pickedPrediction, language, {
