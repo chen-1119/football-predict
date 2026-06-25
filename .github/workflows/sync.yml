@@ -69,7 +69,10 @@ jobs:
           ODDS_HISTORY_BUCKET_MINUTES: 5
           SYNC_WORKFLOW_MINUTES: 5
           PAGE_POLL_SECONDS: 30
-        run: node scripts/syncData.cjs
+        run: |
+          npm run optimize:strategy
+          node scripts/syncData.cjs
+          npm run optimize:strategy
 
       - name: Validate Prediction Data
         run: npm run validate:data

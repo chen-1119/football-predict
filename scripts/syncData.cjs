@@ -2980,6 +2980,7 @@ function buildPredictionReviewRows(match, actuals) {
         handicapLine: prediction.handicapLine || match.handicapLine || undefined,
         tipCode: prediction.tipCode,
         tipLabel: prediction.tipLabel,
+        odds: Number.isFinite(Number(prediction.odds)) ? Number(prediction.odds) : 0,
         actualCode,
         actualLabel: reviewResultLabel(actualCode, market, match),
         resultStatus: status,
@@ -3981,6 +3982,7 @@ function applyModelStrategyToCalibration(calibration, strategy) {
       gateByTip: strategy.gateByTip || {},
       gateByProfile: strategy.gateByProfile || {},
       gateByWebConsensus: strategy.gateByWebConsensus || {},
+      gateByReviewSignal: strategy.gateByReviewSignal || {},
     },
   };
   next.gateByProfile = { ...(calibration.gateByProfile || {}) };
@@ -4036,15 +4038,48 @@ function webConsensusStrategyKeys(match, marketType) {
   ]));
 }
 
+function unitProbability(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return null;
+  return number > 1.5 ? number / 100 : number;
+}
+
+function oneXTwoDrawProbability(match) {
+  const probabilities = match?.probabilityModel?.oneXTwo?.unifiedPosterior
+    || match?.probabilityModel?.oneXTwo?.final
+    || match?.probabilityModel?.oneXTwo?.market;
+  return unitProbability(probabilities?.draw);
+}
+
+function reviewSignalStrategyRules(match, marketType, tipCode, strategy) {
+  const rules = [];
+  const drawProbability = oneXTwoDrawProbability(match);
+  const isSidePick = tipCode === "1" || tipCode === "2";
+  if (marketType === "1X2" && isSidePick && drawProbability !== null && drawProbability >= 0.28) {
+    rules.push(strategy.gateByReviewSignal?.["draw-risk-underestimated"]);
+  }
+  if (marketType === "1X2" && isSidePick) {
+    rules.push(strategy.gateByReviewSignal?.["handicap-lane-suppressed"]);
+    rules.push(strategy.gateByReviewSignal?.["best-miss"]);
+  }
+  if (marketType === "GOALS") {
+    rules.push(strategy.gateByReviewSignal?.["goals-underestimated"]);
+    rules.push(strategy.gateByReviewSignal?.["goals-overestimated"]);
+  }
+  return rules;
+}
+
 function strategyGateForPrediction(match, marketType, tipCode, oddsBucket) {
   const strategy = match.modelCalibration?.strategy;
   if (!strategy || strategy.activation?.onlineEffect === "shadow") return combineStrategyRules([]);
   const webRules = webConsensusStrategyKeys(match, marketType).map((key) => strategy.gateByWebConsensus?.[key]);
+  const reviewRules = reviewSignalStrategyRules(match, marketType, tipCode, strategy);
   return combineStrategyRules([
     strategy.gateByMarket?.[marketType],
     strategy.gateByOddsBucket?.[oddsBucket],
     strategy.gateByTip?.[`${marketType}:${tipCode}`],
     ...webRules,
+    ...reviewRules,
   ]);
 }
 

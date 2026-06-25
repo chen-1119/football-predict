@@ -14,8 +14,10 @@ const MAX_DETAIL_BOOST = 0.06;
 const rootDir = path.resolve(__dirname, "..");
 const publicDataDir = path.join(rootDir, "public", "data");
 const serverDataDir = path.join(rootDir, "server-data");
+const postMatchReviewsFile = path.join(publicDataDir, "post-match-reviews.json");
 const outputFiles = [
   path.join(publicDataDir, "model-strategy.json"),
+  path.join(rootDir, "dist", "data", "model-strategy.json"),
   path.join(serverDataDir, "model-strategy.json"),
 ];
 
@@ -57,6 +59,9 @@ function profileKey(match) {
     match?.homeTeamNameEn,
     match?.awayTeamName,
     match?.awayTeamNameEn,
+    match?.teams?.home,
+    match?.teams?.away,
+    match?.matchNo,
   ].filter(Boolean).join(" ");
   if (/(\u65e5\u804c|\u65e5\u8054|\u65e5\u672c|j1|j2|japan)/i.test(text)) return "japan";
   if (/(\u56fd\u9645|\u53cb\u8c0a|\u4e16\u754c\u676f|\u4e16\u9884|\u56fd\u5bb6|international|friendly|world cup|qualifier|fifa)/i.test(text)) return "international";
@@ -175,16 +180,92 @@ function predictionRows(matches) {
   return rows.sort((a, b) => String(a.kickoffTime).localeCompare(String(b.kickoffTime)));
 }
 
+function buildMatchIndex(matches) {
+  const index = new Map();
+  for (const match of matches || []) {
+    const key = matchKey(match);
+    if (key && !index.has(key)) index.set(key, match);
+  }
+  return index;
+}
+
+function marketTypeFromReviewRow(row) {
+  if (row?.oddsPoolCode === "HHAD" && ["1", "X", "2"].includes(row?.tipCode)) return "HHAD";
+  if (row?.marketType === "BEST") return "BEST";
+  if (row?.marketType === "GOALS") return "GOALS";
+  if (row?.marketType === "GG_NG") return "BTTS";
+  return "1X2";
+}
+
+function postMatchReviewRows(reviewPayload, matches) {
+  const matchIndex = buildMatchIndex(matches);
+  const rows = [];
+  const reviews = Array.isArray(reviewPayload?.rows) ? reviewPayload.rows : [];
+  for (const review of reviews) {
+    const sourceMatchId = normText(review?.sourceMatchId);
+    const match = sourceMatchId ? matchIndex.get(sourceMatchId) : null;
+    const diagnosisCodes = (review?.modelDiagnosis || []).map((item) => item?.code).filter(Boolean);
+    const adjustmentCodes = (review?.nextAdjustment || []).map((item) => item?.code).filter(Boolean);
+    for (const prediction of review?.predictionReview?.rows || []) {
+      if (!prediction || prediction.resultStatus !== "WON" && prediction.resultStatus !== "LOST") continue;
+      const market = marketTypeFromReviewRow(prediction);
+      if (!ENABLED_MARKETS.has(market)) continue;
+      const odds = Number(prediction.odds || 0);
+      rows.push({
+        sourceMatchId,
+        kickoffTime: match?.kickoffTime || review.generatedAt || "",
+        league: match?.leagueName || match?.leagueNameEn || match?.leagueId || "",
+        profileKey: profileKey(match || review),
+        marketType: market,
+        tipCode: prediction.tipCode,
+        actualCode: prediction.actualCode || null,
+        odds,
+        oddsBucket: oddsBucket(odds),
+        trustScore: Number(prediction.trustScore || 0),
+        resultStatus: prediction.resultStatus,
+        policyVersion: match?.predictionMeta?.policyVersion || "post-match-review",
+        probability: probabilityForTip(match, prediction),
+        webConsensusKeys: match ? webConsensusRuleKeys(match, market) : [],
+        reviewRole: prediction.reviewRole || "reference",
+        fromPostMatchReview: true,
+        diagnosisCodes,
+        adjustmentCodes,
+        missedHandicapLane: Boolean(review?.predictionReview?.missedHandicapLane),
+        handicapHit: Boolean(review?.predictionReview?.handicapHit),
+      });
+    }
+  }
+  return rows;
+}
+
+function dedupePredictionRows(rows) {
+  const byKey = new Map();
+  for (const row of rows || []) {
+    const key = [
+      row.sourceMatchId,
+      row.marketType,
+      row.tipCode,
+      row.reviewRole || "",
+      row.actualCode || "",
+    ].join("|");
+    const previous = byKey.get(key);
+    if (!previous || row.fromPostMatchReview || !previous.fromPostMatchReview) {
+      byKey.set(key, row);
+    }
+  }
+  return [...byKey.values()].sort((a, b) => String(a.kickoffTime).localeCompare(String(b.kickoffTime)));
+}
+
 function summarizeRows(rows) {
   const settled = rows.length;
   const won = rows.filter((row) => row.resultStatus === "WON").length;
   const lost = rows.filter((row) => row.resultStatus === "LOST").length;
-  const stakeReturn = rows.reduce((sum, row) => {
+  const oddsRows = rows.filter((row) => Number(row.odds) > 0);
+  const stakeReturn = oddsRows.reduce((sum, row) => {
     if (row.resultStatus === "WON") return sum + Math.max(0, Number(row.odds || 0) - 1);
     if (row.resultStatus === "LOST") return sum - 1;
     return sum;
   }, 0);
-  const oddsRows = rows.filter((row) => Number(row.odds) > 0);
   const probabilityRows = rows.filter((row) => Number.isFinite(row.probability));
 
   return {
@@ -192,7 +273,7 @@ function summarizeRows(rows) {
     won,
     lost,
     hitRate: settled ? round(won / settled) : null,
-    roi: settled ? round(stakeReturn / settled) : null,
+    roi: oddsRows.length ? round(stakeReturn / oddsRows.length) : null,
     avgOdds: oddsRows.length
       ? round(oddsRows.reduce((sum, row) => sum + Number(row.odds), 0) / oddsRows.length, 2)
       : null,
@@ -380,13 +461,105 @@ function capDetailRule(rule) {
   };
 }
 
+function reviewSignalAdjustment(key, summary) {
+  const settled = Number(summary?.settled || 0);
+  if (settled < MIN_RULE_ROWS) {
+    return {
+      onlineAction: "observe",
+      sampleStatus: "low-sample",
+      reasons: [`sample<${MIN_RULE_ROWS}`],
+      adjustments: combineAdjustments([]),
+    };
+  }
+
+  const presets = {
+    "draw-risk-underestimated": {
+      reasons: ["review-draw-risk-missed"],
+      adjustments: {
+        minProbabilityBoost: 0.025,
+        minModelGapBoost: 0.015,
+        minHandicapSupportBoost: 0.02,
+        trustPenalty: 3,
+        maxRiskTagsDelta: -1,
+      },
+    },
+    "handicap-lane-suppressed": {
+      reasons: ["review-handicap-lane-was-better"],
+      adjustments: {
+        minProbabilityBoost: 0.01,
+        minModelGapBoost: 0.012,
+        minHandicapSupportBoost: 0.045,
+        trustPenalty: 3,
+        maxRiskTagsDelta: -1,
+      },
+    },
+    "best-miss": {
+      reasons: ["review-best-miss-cooling"],
+      adjustments: {
+        minProbabilityBoost: 0.02,
+        minModelGapBoost: 0.012,
+        minHandicapSupportBoost: 0.015,
+        trustPenalty: 2,
+        maxRiskTagsDelta: -1,
+      },
+    },
+    "goals-underestimated": {
+      reasons: ["review-goals-low-projection"],
+      adjustments: {
+        goalsMinBoost: 0.025,
+        trustPenalty: 2,
+      },
+    },
+    "goals-overestimated": {
+      reasons: ["review-goals-high-projection"],
+      adjustments: {
+        goalsMinBoost: 0.02,
+        trustPenalty: 2,
+      },
+    },
+  };
+  const preset = presets[key];
+  if (!preset) {
+    return {
+      onlineAction: "observe",
+      sampleStatus: "neutral",
+      reasons: ["review-signal-observed"],
+      adjustments: combineAdjustments([]),
+    };
+  }
+
+  return {
+    onlineAction: "tighten",
+    sampleStatus: settled >= MIN_LOOSEN_ROWS ? "validated" : "guarded",
+    reasons: preset.reasons,
+    adjustments: combineAdjustments([preset.adjustments]),
+  };
+}
+
+function buildReviewSignalRule(key, summary) {
+  const adjustment = reviewSignalAdjustment(key, summary);
+  return {
+    key,
+    settled: Number(summary?.settled || 0),
+    won: Number(summary?.won || 0),
+    lost: Number(summary?.lost || 0),
+    hitRate: Number.isFinite(summary?.hitRate) ? summary.hitRate : null,
+    onlineAction: adjustment.onlineAction,
+    sampleStatus: adjustment.sampleStatus,
+    reasons: adjustment.reasons,
+    adjustments: adjustment.adjustments,
+  };
+}
+
 function activeRuleCount(rulesByKey) {
   return Object.values(rulesByKey || {}).filter((rule) => rule.onlineAction === "tighten").length;
 }
 
-function buildStrategy(matches) {
-  const rows = predictionRows(matches);
-  const officialRows = rows.filter((row) => Number(row.odds) > 0);
+function buildStrategy(matches, reviewPayload) {
+  const matchRows = predictionRows(matches);
+  const reviewRows = postMatchReviewRows(reviewPayload, matches);
+  const rows = dedupePredictionRows([...matchRows, ...reviewRows]);
+  const officialRows = rows.filter((row) => row.fromPostMatchReview || Number(row.odds) > 0);
   const bestRows = officialRows.filter((row) => row.marketType === "BEST");
   const recommendationRows = officialRows.filter((row) => row.marketType === "1X2" || row.marketType === "HHAD" || row.marketType === "BEST");
   const goalsRows = officialRows.filter((row) => row.marketType === "GOALS");
@@ -403,6 +576,9 @@ function buildStrategy(matches) {
     byOddsBucket: groupSummary(officialRows.filter((row) => row.tipCode === "1" || row.tipCode === "2"), (row) => row.oddsBucket),
     byTip: groupSummary(officialRows, (row) => `${row.marketType}:${row.tipCode}`),
     byWebConsensus: groupSummaryMany(officialRows, (row) => row.webConsensusKeys),
+    byDiagnosis: groupSummaryMany(officialRows, (row) => row.diagnosisCodes || []),
+    byAdjustment: groupSummaryMany(officialRows, (row) => row.adjustmentCodes || []),
+    byReviewRole: groupSummary(officialRows, (row) => row.reviewRole || "unknown"),
     byPolicy: groupSummary(officialRows, (row) => row.policyVersion),
   };
 
@@ -452,6 +628,9 @@ function buildStrategy(matches) {
       return [key, capDetailRule(buildRule(key, value, { minRows: WEB_CONSENSUS_MIN_RULE_ROWS, marketType: market }))];
     })
   );
+  const gateByReviewSignal = Object.fromEntries(
+    Object.entries(summary.byDiagnosis).map(([key, value]) => [key, capDetailRule(buildReviewSignalRule(key, value))])
+  );
 
   const activeGates = {
     profile: activeRuleCount(gateByProfile),
@@ -460,6 +639,7 @@ function buildStrategy(matches) {
     oddsBucket: activeRuleCount(gateByOddsBucket),
     tip: activeRuleCount(gateByTip),
     webConsensus: activeRuleCount(gateByWebConsensus),
+    reviewSignal: activeRuleCount(gateByReviewSignal),
   };
   const settledOfficialRows = officialRows.length;
 
@@ -479,6 +659,7 @@ function buildStrategy(matches) {
       matches: matches.length,
       settledRows: rows.length,
       officialRows: settledOfficialRows,
+      postMatchReviewRows: reviewRows.length,
       recommendationRows: recommendationRows.length,
       bestRows: bestRows.length,
       goalsRows: goalsRows.length,
@@ -492,6 +673,7 @@ function buildStrategy(matches) {
     gateByOddsBucket,
     gateByTip,
     gateByWebConsensus,
+    gateByReviewSignal,
     recommendations: [
       {
         id: "sample-guard",
@@ -501,9 +683,11 @@ function buildStrategy(matches) {
           : "The settled official sample is still small, so automation may tighten gates but will not loosen them.",
       },
       {
-        id: "next-data-step",
-        status: "pending",
-        reason: "Import historical league data to seed Elo, form, and league priors before enabling weight optimization.",
+        id: "review-loop",
+        status: reviewRows.length >= MIN_RULE_ROWS ? "active" : "pending",
+        reason: reviewRows.length >= MIN_RULE_ROWS
+          ? "Post-match review rows are now part of the recommendation gates."
+          : "Post-match review rows are not yet enough for guarded recommendation gates.",
       },
     ],
   };
@@ -517,8 +701,9 @@ const rawMatches = matchFiles.flatMap((file) => {
   return Array.isArray(parsed) ? parsed : [];
 });
 const matches = dedupeMatches(rawMatches);
+const postMatchReviews = readJson(postMatchReviewsFile, { rows: [], summary: {} });
 
-const strategy = buildStrategy(matches);
+const strategy = buildStrategy(matches, postMatchReviews);
 for (const file of outputFiles) writeJson(file, strategy);
 
 console.log(JSON.stringify({

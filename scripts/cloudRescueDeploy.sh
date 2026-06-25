@@ -66,7 +66,9 @@ set -u
 npm run sync:500 || true
 npm run sync:500:details || true
 npm run sync:prematch || true
+npm run optimize:strategy
 NODE_OPTIONS="${NODE_OPTIONS:-} --max-old-space-size=1400" npm run sync:data
+npm run optimize:strategy
 
 echo "[6/10] validate and build in temp workspace"
 npm run validate:data
