@@ -4,6 +4,7 @@ set -euo pipefail
 APP_DIR="${APP_DIR:-/opt/football-predict}"
 SRC_DIR="${SRC_DIR:-/tmp/football-predict-src}"
 REPO_URL="${REPO_URL:-https://github.com/chen-1119/football-predict.git}"
+REVISION_FILE="${REVISION_FILE:-$APP_DIR/.deploy-revision}"
 SERVICE_RESTARTED=0
 SERVICE_STOPPED=0
 
@@ -35,6 +36,7 @@ echo "[2/10] fetch latest code"
 rm -rf "$SRC_DIR"
 git clone --depth 1 "$REPO_URL" "$SRC_DIR"
 git -C "$SRC_DIR" log --oneline -3
+DEPLOY_SHA="$(git -C "$SRC_DIR" rev-parse HEAD)"
 grep -n "withoutEmbeddedReview" "$SRC_DIR/scripts/syncData.cjs"
 
 echo "[3/10] seed temp workspace with live data"
@@ -83,6 +85,7 @@ sudo rsync -a --delete \
   --exclude='.codex-tmp' \
   --exclude='deploy/light-server/env' \
   "$SRC_DIR/" "$APP_DIR/"
+echo "$DEPLOY_SHA" | sudo tee "$REVISION_FILE" >/dev/null
 
 cd "$APP_DIR"
 
