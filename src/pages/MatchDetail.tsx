@@ -52,7 +52,7 @@ type ScoreRecommendationCandidate = {
   away: number;
   label: string;
   probability: number | null;
-  source: 'model' | 'locked';
+  source: 'model' | 'locked' | 'review';
 };
 
 type HistoricalTrainingRow = {
@@ -399,6 +399,15 @@ const scoreCandidateKey = (score: Pick<ScoreProbability, 'home' | 'away'> & { la
 );
 
 const scoreCandidateLabel = (score: Pick<ScoreProbability, 'home' | 'away'>) => `${score.home}-${score.away}`;
+
+const parseScoreLabel = (value: string | null | undefined): Pick<ScoreProbability, 'home' | 'away'> | null => {
+  const matched = String(value || '').match(/(\d+)\s*[-:：]\s*(\d+)/);
+  if (!matched) return null;
+  return {
+    home: Number(matched[1]),
+    away: Number(matched[2])
+  };
+};
 
 const dedupeScoreCandidates = <T extends Pick<ScoreProbability, 'home' | 'away'> & { label?: string }>(scores: T[]) => {
   const seen = new Set<string>();
@@ -1095,14 +1104,19 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     probabilityModel?.version?.includes('model-only') ||
     (!match.odds && !match.handicapOdds)
   );
+  const reviewProjectedScore = parseScoreLabel(postMatchReview?.scoreReview?.projectedScore);
   const hasProjectedScore = Number.isFinite(match.projectedScoreHome) && Number.isFinite(match.projectedScoreAway);
   const projectedScoreLabel = hasProjectedScore
     ? `${match.projectedScoreHome}-${match.projectedScoreAway}`
+    : reviewProjectedScore
+      ? scoreCandidateLabel(reviewProjectedScore)
     : probabilityModel
       ? `${Math.round(match.stats?.xG.home ?? 1)}-${Math.round(match.stats?.xG.away ?? 1)}`
       : '--';
   const projectedScoreText = hasProjectedScore
     ? projectedScoreLabel
+    : reviewProjectedScore
+      ? projectedScoreLabel
     : probabilityModel
       ? projectedScoreLabel
       : '--';
@@ -1210,28 +1224,45 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     probability: Number.isFinite(score.probability) ? score.probability : null,
     source: 'model'
   }));
+  const reviewScoreCandidates: ScoreRecommendationCandidate[] = (postMatchReview?.scoreReview?.top3 || [])
+    .map((label): ScoreRecommendationCandidate | null => {
+      const score = parseScoreLabel(label);
+      return score
+        ? {
+          home: score.home,
+          away: score.away,
+          label: scoreCandidateLabel(score),
+          probability: null,
+          source: 'review' as const
+        }
+        : null;
+    })
+    .filter((score): score is ScoreRecommendationCandidate => Boolean(score));
   const projectedScoreDistributionMatch = scoreDistributionCandidates.find((score) => (
     score.home === Number(match.projectedScoreHome) && score.away === Number(match.projectedScoreAway)
   ));
-  const projectedScoreCandidate: ScoreRecommendationCandidate | null = hasProjectedScore
+  const projectedScoreCandidate: ScoreRecommendationCandidate | null = hasProjectedScore || reviewProjectedScore
     ? {
-      home: Number(match.projectedScoreHome),
-      away: Number(match.projectedScoreAway),
+      home: hasProjectedScore ? Number(match.projectedScoreHome) : Number(reviewProjectedScore?.home),
+      away: hasProjectedScore ? Number(match.projectedScoreAway) : Number(reviewProjectedScore?.away),
       label: projectedScoreLabel,
       probability: projectedScoreDistributionMatch?.probability ?? null,
-      source: 'locked'
+      source: hasProjectedScore ? 'locked' : 'review'
     }
     : null;
   const alignedScoreCandidate = scoreBindingOutcomeCode
     ? scoreDistributionCandidates.find((score) => getScoreOutcomeCode(score) === scoreBindingOutcomeCode)
       || (projectedScoreCandidate && getScoreOutcomeCode(projectedScoreCandidate) === scoreBindingOutcomeCode ? projectedScoreCandidate : null)
+      || reviewScoreCandidates.find((score) => getScoreOutcomeCode(score) === scoreBindingOutcomeCode)
     : null;
   const firstScoreCandidate = projectedScoreCandidate
     || alignedScoreCandidate
+    || reviewScoreCandidates[0]
     || scoreDistributionCandidates[0]
     || null;
   const firstScoreKey = firstScoreCandidate ? scoreCandidateKey(firstScoreCandidate) : '';
-  const secondScoreCandidate = scoreDistributionCandidates.find((score) => scoreCandidateKey(score) !== firstScoreKey)
+  const secondScoreCandidate = reviewScoreCandidates.find((score) => scoreCandidateKey(score) !== firstScoreKey)
+    || scoreDistributionCandidates.find((score) => scoreCandidateKey(score) !== firstScoreKey)
     || (projectedScoreCandidate && scoreCandidateKey(projectedScoreCandidate) !== firstScoreKey ? projectedScoreCandidate : null);
   const scoreRecommendations = dedupeScoreCandidates(
     [firstScoreCandidate, secondScoreCandidate].filter((score): score is ScoreRecommendationCandidate => Boolean(score))
@@ -1242,6 +1273,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
       tone: alignsWithOutcome ? 'aligned' : 'alternate',
       tag: alignsWithOutcome
         ? (language === 'zh' ? '同向参考' : 'Aligned reference')
+        : score.source === 'review'
+          ? (language === 'zh' ? '赛前复盘' : 'Pre-match review')
         : index === 0
           ? (language === 'zh' ? '比分参考' : 'Score reference')
           : (language === 'zh' ? '备选比分' : 'Alt score')
