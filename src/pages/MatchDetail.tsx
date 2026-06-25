@@ -1013,6 +1013,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   const primaryPostReviewPrediction = predictionFromPostReviewRow(primaryPostReviewRow);
   const hasReviewPredictions = postReviewRows.length > 0;
   const hasPredictionContent = hasPredictions || hasReviewPredictions;
+  const isPredictionArchiveOnly = isFinished && !hasPredictionContent;
   const postReviewDiagnosis = postMatchReview?.modelDiagnosis || [];
   const postReviewAdjustments = postMatchReview?.nextAdjustment || [];
   const postReviewDataGaps = postMatchReview?.dataGaps || [];
@@ -1232,7 +1233,13 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     return language === 'zh' ? '推荐' : 'Pick';
   };
 
-  const primaryOutcomeTitle = primaryPostReviewRow?.tipLabel?.[language]
+  const archiveOutcomeTitle = language === 'zh' ? '赛果归档' : 'Result archive';
+  const archiveOutcomeReason = language === 'zh'
+    ? `本场已完场，最终比分 ${postMatchReview?.finalScore || officialScoreText}。系统没有保存到可用的赛前推荐快照，所以只展示赛果归档，不在赛后补造推荐。`
+    : `This match is finished with final score ${postMatchReview?.finalScore || officialScoreText}. No usable pre-match pick snapshot was archived, so only the result archive is shown.`;
+  const primaryOutcomeTitle = isPredictionArchiveOnly
+    ? archiveOutcomeTitle
+    : primaryPostReviewRow?.tipLabel?.[language]
     || displayRecommendation?.label || (primaryOutcomePrediction
     ? getPredictionTipDisplay(primaryOutcomePrediction, language)
     : '--');
@@ -1335,21 +1342,27 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     || postMatchReview?.version;
   const predictionNavVersionText = [
     compactVersionLabel(predictionNavVersionBase, language),
-    postMatchReview
+    isPredictionArchiveOnly
+      ? (language === 'zh' ? '赛果归档' : 'archive')
+      : postMatchReview
       ? (language === 'zh' ? '赛后复盘' : 'review')
       : (predictionMeta?.lockedAt || predictionLockedByCutoff || match.status !== 'SCHEDULED')
         ? (language === 'zh' ? '已锁定' : 'locked')
         : (language === 'zh' ? '监控中' : 'live')
   ].filter(Boolean).join(' · ');
   const navTrustScore = Number(primaryOutcomePrediction?.trustScore ?? primaryPostReviewRow?.trustScore ?? matchSignal.trustScore);
-  const navSummaryDetail = Number.isFinite(navTrustScore) && navTrustScore > 0
+  const navSummaryDetail = isPredictionArchiveOnly
+    ? officialScoreText.replace(/\s+/g, '')
+    : Number.isFinite(navTrustScore) && navTrustScore > 0
     ? `${Math.round(navTrustScore)}%`
     : postMatchReview?.predictionReview?.bestStatus
       ? getResultLabel(postMatchReview.predictionReview.bestStatus, language)
       : '--';
   const navPickBase = compactPickLabel(primaryOutcomeTitle || displayRecommendation?.label);
   const navPickOddsValue = Number(primaryOutcomePrediction?.odds ?? primaryPostReviewRow?.odds);
-  const navPickDetail = [
+  const navPickDetail = isPredictionArchiveOnly
+    ? (language === 'zh' ? '无赛前快照 · 只归档赛果' : 'No snapshot · result only')
+    : [
     navPickBase || (language === 'zh' ? '暂无主推' : 'No pick'),
     primaryPostReviewRow?.resultStatus ? getResultLabel(primaryPostReviewRow.resultStatus, language) : '',
     Number.isFinite(navPickOddsValue) && navPickOddsValue > 0 ? `SP${formatDecimal(navPickOddsValue)}` : ''
@@ -1367,7 +1380,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     || predictionCutoffPassed;
   const publicRecommendationCopy = buildPublicRecommendationCopy(match, primaryOutcomePrediction, language, {
     pickLabel: primaryOutcomeTitle,
-    fallbackReason: primaryPostReviewRow
+    fallbackReason: isPredictionArchiveOnly
+      ? archiveOutcomeReason
+      : primaryPostReviewRow
       ? (language === 'zh'
         ? `本场已按最终赛果 ${postMatchReview?.finalScore || officialScoreText} 自动结算，推荐状态为 ${getResultLabel(primaryPostReviewRow.resultStatus, language)}。`
         : `Settled against final score ${postMatchReview?.finalScore || officialScoreText}; result: ${getResultLabel(primaryPostReviewRow.resultStatus, language)}.`)
@@ -2211,18 +2226,30 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
             <div className="card recommendation-overview-card recommendation-outcome-card">
               <section className="recommendation-overview-panel is-outcome">
                 <div className="recommendation-overview-head">
-                  <span>{primaryOutcomeIsHandicap
+                  <span>{isPredictionArchiveOnly
+                    ? (language === 'zh' ? '赛果归档' : 'Result Archive')
+                    : primaryOutcomeIsHandicap
                     ? (language === 'zh' ? '让球推荐' : 'Handicap Pick')
                     : (language === 'zh' ? '胜平负推荐' : '1X2 Recommendation')}</span>
-                  <b>{recommendationActionLabel(primaryOutcomePrediction)}</b>
+                  <b>{isPredictionArchiveOnly ? (language === 'zh' ? '归档' : 'Archive') : recommendationActionLabel(primaryOutcomePrediction)}</b>
                 </div>
                 <strong className="recommendation-overview-main">{primaryOutcomeTitle}</strong>
-                <p>{publicRecommendationCopy.reasons[0] || matchSignal.note[language]}</p>
+                <p>{isPredictionArchiveOnly ? archiveOutcomeReason : publicRecommendationCopy.reasons[0] || matchSignal.note[language]}</p>
                 <div className="recommendation-mini-tags">
-                  <span>{publicRecommendationCopy.marketLabel}</span>
-                  <span>{publicRecommendationCopy.strengthLabel}</span>
-                  <span>{publicRecommendationCopy.oddsLabel}</span>
-                  <span>{publicRecommendationCopy.statusLabel}</span>
+                  {isPredictionArchiveOnly ? (
+                    <>
+                      <span>{language === 'zh' ? '赛果归档' : 'Result archive'}</span>
+                      <span>{language === 'zh' ? '无赛前快照' : 'No pre-match snapshot'}</span>
+                      <span>{officialScoreText}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>{publicRecommendationCopy.marketLabel}</span>
+                      <span>{publicRecommendationCopy.strengthLabel}</span>
+                      <span>{publicRecommendationCopy.oddsLabel}</span>
+                      <span>{publicRecommendationCopy.statusLabel}</span>
+                    </>
+                  )}
                 </div>
                 {companionRecommendation && (
                   <div className="recommendation-companion-panel">
@@ -2270,6 +2297,18 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                 </div>
               </section>
             </div>
+
+            {isPredictionArchiveOnly && (
+              <div className="card prediction-empty-card">
+                <h3>{language === 'zh' ? '本场仅保留赛果归档' : 'Result archive only'}</h3>
+                <p>{archiveOutcomeReason}</p>
+                <div className="recommendation-mini-tags">
+                  <span>{language === 'zh' ? '最终比分' : 'Final score'} {officialScoreText}</span>
+                  <span>{language === 'zh' ? '无赛前推荐快照' : 'No pre-match snapshot'}</span>
+                  <span>{language === 'zh' ? '不赛后补推' : 'No post-match backfill'}</span>
+                </div>
+              </div>
+            )}
 
             <div className="card decision-transparent-card">
               <div className="decision-transparent-head">
