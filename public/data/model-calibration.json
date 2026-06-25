@@ -1,6 +1,6 @@
 {
   "version": "rolling-calibration-v1",
-  "generatedAt": "2026-06-25T11:15:59.657Z",
+  "generatedAt": "2026-06-25T11:20:51.253Z",
   "source": "settled-pre-match-predictions",
   "sample": {
     "rows": 12,
@@ -59,18 +59,18 @@
       "reason": "neutral-profile+strategy:japan"
     },
     "other": {
-      "minProbabilityBoost": 0,
-      "minModelGapBoost": 0,
-      "minHandicapSupportBoost": 0,
-      "trustPenalty": 0,
-      "maxRiskTags": 3,
+      "minProbabilityBoost": 0.02,
+      "minModelGapBoost": 0.015,
+      "minHandicapSupportBoost": 0.015,
+      "trustPenalty": 3,
+      "maxRiskTags": 2,
       "goalsMinBoost": 0,
-      "reason": "neutral-profile"
+      "reason": "neutral-profile+strategy:other"
     }
   },
   "scoreCalibration": {
     "version": "score-calibration-v2",
-    "generatedAt": "2026-06-25T11:15:59.656Z",
+    "generatedAt": "2026-06-25T11:20:51.252Z",
     "source": "rolling-settled-projected-scores",
     "sample": {
       "rows": 12,
@@ -216,7 +216,7 @@
   },
   "strategy": {
     "version": "self-optimization-v1",
-    "generatedAt": "2026-06-25T11:15:59.013Z",
+    "generatedAt": "2026-06-25T11:20:50.719Z",
     "activation": {
       "mode": "cooling-only",
       "onlineEffect": "guarded-active",
@@ -236,11 +236,11 @@
       "webConsensusRows": 0
     },
     "activeGates": {
-      "profile": 1,
+      "profile": 2,
       "market": 1,
-      "marketProfile": 2,
-      "oddsBucket": 0,
-      "tip": 4,
+      "marketProfile": 3,
+      "oddsBucket": 3,
+      "tip": 3,
       "webConsensus": 0,
       "reviewSignal": 5
     },
@@ -251,8 +251,8 @@
         "won": 27,
         "lost": 23,
         "hitRate": 0.54,
-        "roi": 0.185,
-        "avgOdds": 1.45,
+        "roi": -0.196,
+        "avgOdds": 1.63,
         "onlineAction": "observe",
         "sampleStatus": "neutral",
         "reasons": [
@@ -273,8 +273,8 @@
         "won": 21,
         "lost": 20,
         "hitRate": 0.512,
-        "roi": -0.069,
-        "avgOdds": 1.51,
+        "roi": -0.275,
+        "avgOdds": 1.6,
         "onlineAction": "observe",
         "sampleStatus": "neutral",
         "reasons": [
@@ -295,8 +295,8 @@
         "won": 30,
         "lost": 27,
         "hitRate": 0.526,
-        "roi": 0.376,
-        "avgOdds": 1.85,
+        "roi": 0.059,
+        "avgOdds": 2.25,
         "onlineAction": "observe",
         "sampleStatus": "neutral",
         "reasons": [
@@ -317,8 +317,8 @@
         "won": 1,
         "lost": 9,
         "hitRate": 0.1,
-        "roi": -1,
-        "avgOdds": 2.35,
+        "roi": -0.765,
+        "avgOdds": 2.19,
         "onlineAction": "tighten",
         "sampleStatus": "guarded",
         "reasons": [
@@ -338,16 +338,16 @@
     "gateByOddsBucket": {
       "sp_1_46_1_70": {
         "key": "sp_1_46_1_70",
-        "settled": 2,
-        "won": 2,
-        "lost": 0,
-        "hitRate": 1,
-        "roi": 0.53,
-        "avgOdds": 1.53,
+        "settled": 17,
+        "won": 8,
+        "lost": 9,
+        "hitRate": 0.471,
+        "roi": -0.255,
+        "avgOdds": 1.56,
         "onlineAction": "observe",
-        "sampleStatus": "low-sample",
+        "sampleStatus": "neutral",
         "reasons": [
-          "sample<3"
+          "neutral-sample"
         ],
         "adjustments": {
           "minProbabilityBoost": 0,
@@ -360,78 +360,80 @@
       },
       "sp_1_71_2_05": {
         "key": "sp_1_71_2_05",
-        "settled": 6,
-        "won": 3,
-        "lost": 3,
-        "hitRate": 0.5,
-        "roi": -0.037,
-        "avgOdds": 1.83,
-        "onlineAction": "observe",
-        "sampleStatus": "neutral",
+        "settled": 26,
+        "won": 9,
+        "lost": 17,
+        "hitRate": 0.346,
+        "roi": -0.339,
+        "avgOdds": 1.85,
+        "onlineAction": "tighten",
+        "sampleStatus": "guarded",
         "reasons": [
-          "neutral-sample"
+          "cold-hit-rate"
         ],
         "adjustments": {
-          "minProbabilityBoost": 0,
-          "minModelGapBoost": 0,
-          "minHandicapSupportBoost": 0,
-          "trustPenalty": 0,
-          "maxRiskTagsDelta": 0,
+          "minProbabilityBoost": 0.04,
+          "minModelGapBoost": 0.025,
+          "minHandicapSupportBoost": 0.035,
+          "trustPenalty": 6,
+          "maxRiskTagsDelta": -1,
           "goalsMinBoost": 0
         }
       },
       "sp_2_06_2_60": {
         "key": "sp_2_06_2_60",
-        "settled": 2,
-        "won": 0,
-        "lost": 2,
-        "hitRate": 0,
-        "roi": -1,
-        "avgOdds": 2.35,
-        "onlineAction": "observe",
-        "sampleStatus": "low-sample",
+        "settled": 8,
+        "won": 1,
+        "lost": 7,
+        "hitRate": 0.125,
+        "roi": -0.706,
+        "avgOdds": 2.28,
+        "onlineAction": "tighten",
+        "sampleStatus": "guarded",
         "reasons": [
-          "sample<3"
+          "very-cold-hit-rate",
+          "negative-flat-stake-roi"
         ],
         "adjustments": {
-          "minProbabilityBoost": 0,
-          "minModelGapBoost": 0,
-          "minHandicapSupportBoost": 0,
-          "trustPenalty": 0,
-          "maxRiskTagsDelta": 0,
+          "minProbabilityBoost": 0.06,
+          "minModelGapBoost": 0.055,
+          "minHandicapSupportBoost": 0.06,
+          "trustPenalty": 10,
+          "maxRiskTagsDelta": -2,
+          "goalsMinBoost": 0
+        }
+      },
+      "sp_gt_2_60": {
+        "key": "sp_gt_2_60",
+        "settled": 4,
+        "won": 0,
+        "lost": 4,
+        "hitRate": 0,
+        "roi": -1,
+        "avgOdds": 3.35,
+        "onlineAction": "tighten",
+        "sampleStatus": "guarded",
+        "reasons": [
+          "very-cold-hit-rate",
+          "negative-flat-stake-roi"
+        ],
+        "adjustments": {
+          "minProbabilityBoost": 0.06,
+          "minModelGapBoost": 0.055,
+          "minHandicapSupportBoost": 0.06,
+          "trustPenalty": 10,
+          "maxRiskTagsDelta": -2,
           "goalsMinBoost": 0
         }
       },
       "sp_le_1_45": {
         "key": "sp_le_1_45",
-        "settled": 14,
-        "won": 12,
-        "lost": 2,
-        "hitRate": 0.857,
-        "roi": 0.097,
-        "avgOdds": 1.26,
-        "onlineAction": "observe",
-        "sampleStatus": "neutral",
-        "reasons": [
-          "neutral-sample"
-        ],
-        "adjustments": {
-          "minProbabilityBoost": 0,
-          "minModelGapBoost": 0,
-          "minHandicapSupportBoost": 0,
-          "trustPenalty": 0,
-          "maxRiskTagsDelta": 0,
-          "goalsMinBoost": 0
-        }
-      },
-      "unknown": {
-        "key": "unknown",
-        "settled": 75,
-        "won": 32,
-        "lost": 43,
-        "hitRate": 0.427,
-        "roi": null,
-        "avgOdds": null,
+        "settled": 44,
+        "won": 31,
+        "lost": 13,
+        "hitRate": 0.705,
+        "roi": -0.089,
+        "avgOdds": 1.28,
         "onlineAction": "observe",
         "sampleStatus": "neutral",
         "reasons": [
@@ -454,8 +456,8 @@
         "won": 22,
         "lost": 21,
         "hitRate": 0.512,
-        "roi": 0.178,
-        "avgOdds": 1.47,
+        "roi": -0.225,
+        "avgOdds": 1.64,
         "onlineAction": "observe",
         "sampleStatus": "neutral",
         "reasons": [
@@ -476,8 +478,8 @@
         "won": 5,
         "lost": 1,
         "hitRate": 0.833,
-        "roi": 0.25,
-        "avgOdds": 1.25,
+        "roi": 0.147,
+        "avgOdds": 1.37,
         "onlineAction": "observe",
         "sampleStatus": "neutral",
         "reasons": [
@@ -498,8 +500,8 @@
         "won": 0,
         "lost": 1,
         "hitRate": 0,
-        "roi": null,
-        "avgOdds": null,
+        "roi": -1,
+        "avgOdds": 3.2,
         "onlineAction": "observe",
         "sampleStatus": "low-sample",
         "reasons": [
@@ -520,8 +522,8 @@
         "won": 17,
         "lost": 16,
         "hitRate": 0.515,
-        "roi": -0.008,
-        "avgOdds": 1.51,
+        "roi": -0.259,
+        "avgOdds": 1.56,
         "onlineAction": "observe",
         "sampleStatus": "neutral",
         "reasons": [
@@ -542,19 +544,19 @@
         "won": 4,
         "lost": 3,
         "hitRate": 0.571,
-        "roi": -0.375,
-        "avgOdds": 1.5,
-        "onlineAction": "tighten",
-        "sampleStatus": "guarded",
+        "roi": -0.246,
+        "avgOdds": 1.52,
+        "onlineAction": "observe",
+        "sampleStatus": "neutral",
         "reasons": [
-          "negative-flat-stake-roi"
+          "neutral-sample"
         ],
         "adjustments": {
-          "minProbabilityBoost": 0.02,
-          "minModelGapBoost": 0.015,
-          "minHandicapSupportBoost": 0.015,
-          "trustPenalty": 3,
-          "maxRiskTagsDelta": -1,
+          "minProbabilityBoost": 0,
+          "minModelGapBoost": 0,
+          "minHandicapSupportBoost": 0,
+          "trustPenalty": 0,
+          "maxRiskTagsDelta": 0,
           "goalsMinBoost": 0
         }
       },
@@ -564,8 +566,8 @@
         "won": 0,
         "lost": 1,
         "hitRate": 0,
-        "roi": null,
-        "avgOdds": null,
+        "roi": -1,
+        "avgOdds": 3.2,
         "onlineAction": "observe",
         "sampleStatus": "low-sample",
         "reasons": [
@@ -586,8 +588,8 @@
         "won": 2,
         "lost": 4,
         "hitRate": 0.333,
-        "roi": null,
-        "avgOdds": null,
+        "roi": 0.527,
+        "avgOdds": 4.56,
         "onlineAction": "tighten",
         "sampleStatus": "guarded",
         "reasons": [
@@ -608,8 +610,8 @@
         "won": 0,
         "lost": 2,
         "hitRate": 0,
-        "roi": null,
-        "avgOdds": null,
+        "roi": -1,
+        "avgOdds": 5.24,
         "onlineAction": "observe",
         "sampleStatus": "low-sample",
         "reasons": [
@@ -630,7 +632,7 @@
         "won": 16,
         "lost": 12,
         "hitRate": 0.571,
-        "roi": 0.501,
+        "roi": 0,
         "avgOdds": 1.78,
         "onlineAction": "observe",
         "sampleStatus": "neutral",
@@ -652,8 +654,8 @@
         "won": 12,
         "lost": 9,
         "hitRate": 0.571,
-        "roi": 0.2,
-        "avgOdds": 1.95,
+        "roi": 0.104,
+        "avgOdds": 1.93,
         "onlineAction": "observe",
         "sampleStatus": "neutral",
         "reasons": [
@@ -674,8 +676,8 @@
         "won": 1,
         "lost": 6,
         "hitRate": 0.143,
-        "roi": -1,
-        "avgOdds": 2.35,
+        "roi": -0.664,
+        "avgOdds": 2.17,
         "onlineAction": "tighten",
         "sampleStatus": "guarded",
         "reasons": [
@@ -697,17 +699,18 @@
         "won": 0,
         "lost": 3,
         "hitRate": 0,
-        "roi": null,
-        "avgOdds": null,
+        "roi": -1,
+        "avgOdds": 2.25,
         "onlineAction": "tighten",
         "sampleStatus": "guarded",
         "reasons": [
-          "very-cold-hit-rate"
+          "very-cold-hit-rate",
+          "negative-flat-stake-roi"
         ],
         "adjustments": {
           "minProbabilityBoost": 0.06,
-          "minModelGapBoost": 0.04,
-          "minHandicapSupportBoost": 0.05,
+          "minModelGapBoost": 0.055,
+          "minHandicapSupportBoost": 0.06,
           "trustPenalty": 10,
           "maxRiskTagsDelta": -2,
           "goalsMinBoost": 0
@@ -723,8 +726,8 @@
             "won": 68,
             "lost": 61,
             "hitRate": 0.527,
-            "roi": 0.131,
-            "avgOdds": 1.63,
+            "roi": -0.119,
+            "avgOdds": 1.84,
             "avgTrust": 52.8,
             "avgProbability": 0.471
           },
@@ -733,8 +736,8 @@
             "won": 24,
             "lost": 15,
             "hitRate": 0.615,
-            "roi": 0.185,
-            "avgOdds": 1.45,
+            "roi": -0.101,
+            "avgOdds": 1.46,
             "avgTrust": 44.9,
             "avgProbability": 0.503
           },
@@ -743,8 +746,8 @@
             "won": 24,
             "lost": 22,
             "hitRate": 0.522,
-            "roi": 0.376,
-            "avgOdds": 1.85,
+            "roi": 0.079,
+            "avgOdds": 2.35,
             "avgTrust": 54.5,
             "avgProbability": null
           }
@@ -773,8 +776,8 @@
             "won": 4,
             "lost": 10,
             "hitRate": 0.286,
-            "roi": null,
-            "avgOdds": null,
+            "roi": -0.461,
+            "avgOdds": 2.03,
             "avgTrust": 57.7,
             "avgProbability": null
           },
@@ -783,8 +786,8 @@
             "won": 1,
             "lost": 5,
             "hitRate": 0.167,
-            "roi": null,
-            "avgOdds": null,
+            "roi": -0.66,
+            "avgOdds": 2.08,
             "avgTrust": 57.2,
             "avgProbability": null
           },
@@ -793,8 +796,8 @@
             "won": 3,
             "lost": 3,
             "hitRate": 0.5,
-            "roi": null,
-            "avgOdds": null,
+            "roi": -0.083,
+            "avgOdds": 1.82,
             "avgTrust": 64.8,
             "avgProbability": null
           }
@@ -803,7 +806,9 @@
         "sampleStatus": "guarded",
         "reasons": [
           "japan:very-cold-hit-rate",
+          "japan:negative-flat-stake-roi",
           "1X2:japan:very-cold-hit-rate",
+          "1X2:japan:negative-flat-stake-roi",
           "GOALS:japan:neutral-sample"
         ],
         "adjustments": {
@@ -823,8 +828,8 @@
             "won": 7,
             "lost": 8,
             "hitRate": 0.467,
-            "roi": null,
-            "avgOdds": null,
+            "roi": -0.241,
+            "avgOdds": 2.09,
             "avgTrust": 40.1,
             "avgProbability": null
           },
@@ -833,8 +838,8 @@
             "won": 2,
             "lost": 3,
             "hitRate": 0.4,
-            "roi": null,
-            "avgOdds": null,
+            "roi": -0.382,
+            "avgOdds": 2.45,
             "avgTrust": 34,
             "avgProbability": null
           },
@@ -843,25 +848,25 @@
             "won": 3,
             "lost": 2,
             "hitRate": 0.6,
-            "roi": null,
-            "avgOdds": null,
+            "roi": 0.04,
+            "avgOdds": 1.77,
             "avgTrust": 54,
             "avgProbability": null
           }
         },
-        "onlineAction": "observe",
-        "sampleStatus": "observe",
+        "onlineAction": "tighten",
+        "sampleStatus": "guarded",
         "reasons": [
           "other:neutral-sample",
-          "1X2:other:neutral-sample",
+          "1X2:other:negative-flat-stake-roi",
           "GOALS:other:neutral-sample"
         ],
         "adjustments": {
-          "minProbabilityBoost": 0,
-          "minModelGapBoost": 0,
-          "minHandicapSupportBoost": 0,
-          "trustPenalty": 0,
-          "maxRiskTagsDelta": 0,
+          "minProbabilityBoost": 0.02,
+          "minModelGapBoost": 0.015,
+          "minHandicapSupportBoost": 0.015,
+          "trustPenalty": 3,
+          "maxRiskTagsDelta": -1,
           "goalsMinBoost": 0
         }
       }
