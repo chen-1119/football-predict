@@ -204,6 +204,35 @@ const parseHandicapLine = (line: string | undefined) => {
   return Number.isFinite(value) ? value : null;
 };
 
+const doesPrimaryMatchMargin = (primaryCode: OutcomeCode, margin: number) => {
+  if (primaryCode === '1') return margin > 0;
+  if (primaryCode === 'X') return margin === 0;
+  return margin < 0;
+};
+
+const getHandicapCodeForMargin = (margin: number, line: number): OutcomeCode => {
+  const adjustedMargin = margin + line;
+  if (adjustedMargin > 0) return '1';
+  if (adjustedMargin < 0) return '2';
+  return 'X';
+};
+
+const isHandicapCodeCompatible = (
+  primaryCode: OutcomeCode,
+  handicapCode: OutcomeCode,
+  lineValue: number | null
+) => {
+  if (lineValue === null) return true;
+
+  for (let margin = -20; margin <= 20; margin += 1) {
+    if (doesPrimaryMatchMargin(primaryCode, margin) && getHandicapCodeForMargin(margin, lineValue) === handicapCode) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
 const getCompanionReason = (
   match: Match,
   primaryPrediction: PredictionDetail,
