@@ -487,8 +487,16 @@ const isStoredOutcomePrediction = (prediction: PredictionDetail | undefined) => 
   return Boolean(prediction && isOutcomeCode(prediction.tipCode));
 };
 
+const hasPredictionDisplayOdds = (prediction: PredictionDetail | undefined) => (
+  Number(prediction?.odds || 0) > 0
+);
+
 const isPredictionPoolAvailable = (match: Match, prediction: PredictionDetail | undefined) => {
-  return isPredictionOfficialResultPoolAvailable(match, prediction) || isStoredOutcomePrediction(prediction);
+  return Boolean(
+    prediction
+    && hasPredictionDisplayOdds(prediction)
+    && (isPredictionOfficialResultPoolAvailable(match, prediction) || isStoredOutcomePrediction(prediction))
+  );
 };
 
 const buildOutcomeReferencePrediction = (match: Match, code: OutcomeCode): PredictionDetail => ({
@@ -594,7 +602,11 @@ export const getDisplayRecommendation = (match: Match, language: Language): Disp
     predictions.find((prediction) => prediction.marketType === 'BEST' && isPredictionPoolAvailable(match, prediction)),
     predictions.find((prediction) => prediction.marketType === '1X2' && isPredictionPoolAvailable(match, prediction))
   ].find(Boolean);
-  const pairedOutcomePrediction = getPairedOutcomePrediction(match, rawPromotedPrediction);
+  const pendingPromotedPrediction = [
+    predictions.find((prediction) => prediction.marketType === 'BEST' && isStoredOutcomePrediction(prediction) && !hasPredictionDisplayOdds(prediction)),
+    predictions.find((prediction) => prediction.marketType === '1X2' && isStoredOutcomePrediction(prediction) && !hasPredictionDisplayOdds(prediction))
+  ].find(Boolean);
+  const pairedOutcomePrediction = getPairedOutcomePrediction(match, rawPromotedPrediction || pendingPromotedPrediction);
   const shouldApplyLiveMarketFilter = match.status === 'SCHEDULED';
   const promotedPrediction = rawPromotedPrediction && (!shouldApplyLiveMarketFilter || !isHandicapMarketContradicted(match, rawPromotedPrediction))
     ? rawPromotedPrediction
@@ -748,6 +760,28 @@ export const getDisplayRecommendation = (match: Match, language: Language): Disp
       support: getOneXTwoSupport(match, outcomeTop.code),
       reason: getDisplayReasonForKind('outcome', language),
       companion: buildHandicapCompanion(match, fauxPrediction, language) || undefined
+    };
+  }
+
+  if (pendingPromotedPrediction) {
+    const probability = getOutcomeProbability(match, pendingPromotedPrediction.tipCode as OutcomeCode, pendingPromotedPrediction);
+    const cleanProbability = Number.isFinite(probability) ? Number(probability) : null;
+    const label = pendingPromotedPrediction.oddsPoolCode === 'HHAD'
+      ? getSimpleHandicapLabel(pendingPromotedPrediction.tipCode as OutcomeCode, language)
+      : getSimpleOutcomeLabel(match, pendingPromotedPrediction.tipCode as OutcomeCode, language);
+
+    return {
+      kind: pendingPromotedPrediction.oddsPoolCode === 'HHAD' ? 'handicap' : 'prediction',
+      prediction: pendingPromotedPrediction,
+      tipCode: pendingPromotedPrediction.tipCode,
+      label,
+      meta: formatDisplayMeta(pendingPromotedPrediction, cleanProbability, language),
+      probability: cleanProbability,
+      support: getOneXTwoSupport(match, pendingPromotedPrediction.tipCode, pendingPromotedPrediction),
+      reason: language === 'zh'
+        ? '当前方向先保留为赛前推荐；官方 SP 开售后会按胜平负/让球盘口重新确认。'
+        : 'The pre-match direction is kept for now; once official SP opens, 1X2/HHAD markets will recheck it.',
+      companion: buildHandicapCompanion(match, pendingPromotedPrediction, language) || undefined
     };
   }
 

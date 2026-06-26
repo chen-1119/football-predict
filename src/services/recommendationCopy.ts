@@ -84,14 +84,7 @@ const strengthFromTrust = (
   }
 
   const trust = Number(prediction.trustScore || 0);
-  const isPreMarket = Number(prediction.odds || 0) <= 0 || String(prediction.recommendationTier || '').includes('model-only');
   const hardRiskCount = publicRisks.length;
-
-  if (isPreMarket) {
-    return trust >= 58
-      ? { label: { zh: '初步推荐', en: 'Early pick' }, tone: 'medium' }
-      : { label: { zh: '低信心', en: 'Low confidence' }, tone: 'low' };
-  }
 
   if (trust >= 76 && hardRiskCount <= 2) return { label: { zh: '中高', en: 'Medium-high' }, tone: 'strong' };
   if (trust >= 58) return { label: { zh: '中', en: 'Medium' }, tone: 'medium' };
@@ -123,7 +116,7 @@ export const buildPublicRecommendationCopy = (
   if (!hasPick) {
     reasons.push(language === 'zh' ? '官方赔率还没有形成可用方向，先等待开售。' : 'No usable official market is available yet.');
   } else if (oddsValue <= 0) {
-    reasons.push(language === 'zh' ? '官方赔率未完全开售，先按赛前信息给出初步方向。' : 'Official odds are not fully open, so this is an early pre-match direction.');
+    reasons.push(language === 'zh' ? '当前方向已生成，官方 SP 未开售；开售后按最新赔率复核。' : 'The direction is available, but official SP is not open yet; recheck once odds open.');
   } else if (prediction?.oddsPoolCode === 'HHAD') {
     reasons.push(language === 'zh' ? '本场按让球玩法给出主推，重点看让球线是否继续支持。' : 'The pick uses the handicap market; keep watching whether the line still supports it.');
   } else {

@@ -707,6 +707,9 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
           <span className={`recommendation-caution is-${signal.category}`}>{cautionText}</span>
         )}
         <span className="recommendation-odds">{publicCopy.strengthLabel} · {publicCopy.oddsLabel}</span>
+        {publicCopy.reasons[0] && (
+          <span className="recommendation-reason">{publicCopy.reasons[0]}</span>
+        )}
         {companionRecommendation && (
           <span className="recommendation-companion-line">
             <span>{language === 'zh' ? '让球补充' : 'HHAD add-on'}</span>
@@ -832,6 +835,11 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
             <strong>{poolStatus}</strong>
           </span>
         </div>
+        {(publicCopy.reasons[0] || displayRecommendation?.reason) && (
+          <p className="decision-reason">
+            <span>{publicCopy.reasons[0] || displayRecommendation?.reason}</span>
+          </p>
+        )}
 
       </div>
     );
