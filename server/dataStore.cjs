@@ -185,10 +185,12 @@ const getDataStoreStatus = async (storeDir) => {
     const storedRows = countKey ? stateCounts[countKey] : null;
     try {
       const stat = await fsp.stat(filePath);
+      const actualRows = await countLines(filePath);
       files[table] = {
         exists: true,
         bytes: stat.size,
-        rows: Number.isFinite(storedRows) ? storedRows : await countLines(filePath),
+        rows: actualRows,
+        stateRows: Number.isFinite(storedRows) ? storedRows : null,
         updatedAt: stat.mtime.toISOString()
       };
     } catch {
