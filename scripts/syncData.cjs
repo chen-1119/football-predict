@@ -14,7 +14,7 @@ const ODDS_HISTORY_RETENTION_DAYS = Math.max(1, Number(process.env.ODDS_HISTORY_
 const ODDS_HISTORY_BUCKET_MINUTES = Math.max(1, Number(process.env.ODDS_HISTORY_BUCKET_MINUTES || 5));
 const PAGE_POLL_SECONDS = Math.max(15, Number(process.env.PAGE_POLL_SECONDS || 30));
 const ANALYST_PROMPT_VERSION = "professional-football-analyst-v24";
-const PREDICTION_POLICY_VERSION = "sporttery-day-formula-trace-v55";
+const PREDICTION_POLICY_VERSION = "sporttery-day-formula-trace-v56";
 const ANALYST_RUNTIME = Object.freeze({
   model: "5.5",
   reasoningEffort: "high",
@@ -4657,13 +4657,13 @@ function buildUnifiedOneXTwoPosterior(probabilityModel, marketProbabilities, con
   const poisson = normalizedTripletFromAny(probabilityModel?.oneXTwo?.poisson) || final;
   const market = normalizedTripletFromAny(probabilityModel?.oneXTwo?.market) || normalizedTripletFromAny(marketProbabilities);
   const marketWeight = clamp(0.06 + dataQuality * 0.05, 0.06, 0.12);
-  const scoreWeight = scoreShape?.drawHeavy ? 0.39 : 0.34;
+  const scoreWeight = scoreShape?.drawHeavy ? 0.4 : scoreShape?.lowScoreHeavy ? 0.37 : 0.34;
   const biases = {};
   const groupContext = contextSignals?.worldCupGroupContext || contextSignals?.rankingPressure?.worldCupGroupContext;
   const groupEffects = groupContext?.effects || {};
 
-  if (scoreShape?.drawHeavy) biases.draw = (biases.draw || 0) + 0.08;
-  if (scoreShape?.lowScoreHeavy) biases.draw = (biases.draw || 0) + 0.035;
+  if (scoreShape?.drawHeavy) biases.draw = (biases.draw || 0) + 0.09;
+  if (scoreShape?.lowScoreHeavy) biases.draw = (biases.draw || 0) + 0.06;
   if (scoreShape?.top1Code === "1") biases.home = (biases.home || 0) + 0.035;
   if (scoreShape?.top1Code === "2") biases.away = (biases.away || 0) + 0.035;
   if (groupContext?.sameGroup) {
@@ -4694,10 +4694,14 @@ function buildUnifiedHandicapPosterior(probabilityModel, hhadProbabilities, scor
   const groupContext = probabilityModel?.contextSignals?.worldCupGroupContext || probabilityModel?.contextSignals?.rankingPressure?.worldCupGroupContext;
   const groupEffects = groupContext?.effects || {};
   const biases = {};
+  const line = Number(scoreShape?.handicap);
   if (scoreShape?.top1HhadCode === "1") biases.home = (biases.home || 0) + 0.055;
-  if (scoreShape?.top1HhadCode === "X") biases.draw = (biases.draw || 0) + 0.055;
+  if (scoreShape?.top1HhadCode === "X") biases.draw = (biases.draw || 0) + 0.07;
   if (scoreShape?.top1HhadCode === "2") biases.away = (biases.away || 0) + 0.055;
   if (scoreShape?.hhadCodeCounts?.X >= 2) biases.draw = (biases.draw || 0) + 0.04;
+  if (Number.isFinite(line) && Math.abs(line) >= 2 && scoreShape?.hhadCodeCounts?.X >= 1) {
+    biases.draw = (biases.draw || 0) + 0.045;
+  }
   if (groupContext?.sameGroup) {
     const drawBias = Number(groupEffects.drawBias || 0);
     if (Number.isFinite(drawBias)) biases.draw = (biases.draw || 0) + clamp(drawBias * 1.55, -0.06, 0.045);
@@ -4806,9 +4810,22 @@ function recentReviewCandidateAdjustment(candidate, context) {
       }
     }
 
+    if (Math.abs(line) >= 2 && exactMarginCount >= 1) {
+      if (candidate.code === "X") {
+        bonus += 0.035;
+        reasons.push("deep-line-let-draw-zone");
+      } else {
+        const strongWideMarginEvidence = topSupportsCandidate && scoreCount >= 2 && (marketSupport === null || marketSupport >= 0.48);
+        if (!strongWideMarginEvidence) {
+          penalty += 0.065;
+          reasons.push("deep-line-exact-margin-trap");
+        }
+      }
+    }
+
     if (Math.abs(line) === 1 && opposesRawLeader) {
       if (exactMarginCount >= 1 || scoreShape.lowScoreHeavy) {
-        penalty += 0.048;
+        penalty += 0.065;
         reasons.push("one-goal-margin-trap");
       }
       if (marketSupport !== null && marketSupport < 0.37) {
@@ -4818,8 +4835,13 @@ function recentReviewCandidateAdjustment(candidate, context) {
     }
 
     if (Math.abs(line) === 1 && candidate.code !== "X" && exactMarginCount >= 2) {
-      penalty += 0.04;
+      penalty += 0.06;
       reasons.push("let-draw-hot-zone");
+    }
+
+    if (candidate.code === "2" && scoreCount === 0 && marketSupport !== null && marketSupport < 0.45) {
+      penalty += 0.035;
+      reasons.push("hhad-away-cover-cooling");
     }
 
     if (line > 0 && candidate.code === "1" && hadLeaderCode === "2") {
@@ -4866,12 +4888,13 @@ function unifiedCandidateScore(candidate, context) {
     if ((scoreShape.codeCounts?.[candidate.code] || 0) >= 2) consistency += 0.04;
     if (scoreShape.drawHeavy && candidate.code === "X") consistency += 0.07;
     if (scoreShape.drawHeavy && candidate.code !== "X") consistency -= 0.075;
-    if (scoreShape.lowScoreHeavy && candidate.code !== "X" && candidate.probability < 0.52) consistency -= 0.025;
+    if (scoreShape.lowScoreHeavy && candidate.code === "X") consistency += 0.045;
+    if (scoreShape.lowScoreHeavy && candidate.code !== "X" && candidate.probability < 0.56) consistency -= 0.045;
   } else if (candidate.market === "HHAD") {
     if (scoreShape.top1HhadCode === candidate.code) consistency += 0.065;
     if ((scoreShape.hhadCodeCounts?.[candidate.code] || 0) >= 2) consistency += 0.04;
     if (hadAvailable) consistency -= 0.035;
-    if (scoreShape.hhadCodeCounts?.X >= 2 && candidate.code === "X") consistency += 0.035;
+    if (scoreShape.hhadCodeCounts?.X >= 2 && candidate.code === "X") consistency += 0.045;
     const line = Number(scoreShape.handicap);
     const hadCode = hadLeader?.code;
     const hhadTopCode = scoreShape.top1HhadCode;
@@ -4881,6 +4904,10 @@ function unifiedCandidateScore(candidate, context) {
     );
     if (hhadOpposesRawLeader && hhadTopCode !== candidate.code) consistency -= 0.09;
     if (hhadOpposesRawLeader && hhadTopCode === candidate.code) consistency += 0.035;
+    if (Number.isFinite(line) && Math.abs(line) >= 2 && Number(scoreShape.hhadCodeCounts?.X || 0) >= 1) {
+      if (candidate.code === "X") consistency += 0.035;
+      else consistency -= 0.035;
+    }
     if (!hhadAvailable) consistency -= 1;
   }
 
@@ -4958,16 +4985,24 @@ function buildUnifiedPosteriorCandidates(match, context) {
   const hadBest = candidates.filter((item) => item.market === "HAD").sort((a, b) => b.posteriorScore - a.posteriorScore)[0] || null;
   const hhadBest = candidates.filter((item) => item.market === "HHAD").sort((a, b) => b.posteriorScore - a.posteriorScore)[0] || null;
 
-  if (scoreShape.drawHeavy && hadBest) {
+  if ((scoreShape.drawHeavy || scoreShape.lowScoreHeavy) && hadBest) {
     const hadDraw = candidates.find((item) => item.market === "HAD" && item.code === "X");
-    if (hadDraw && hadDraw.posteriorScore >= Number(selected?.posteriorScore || 0) - 0.025) selected = hadDraw;
+    const drawWindow = scoreShape.drawHeavy ? 0.04 : 0.03;
+    if (
+      hadDraw
+      && hadDraw.probability >= 0.24
+      && hadDraw.posteriorScore >= Number(selected?.posteriorScore || 0) - drawWindow
+    ) {
+      selected = { ...hadDraw, selectionPolicy: "score-draw-risk-safeguard" };
+    }
   }
 
   if (hadBest && hhadBest && selected?.market === "HHAD") {
     const hadIsClean = hadBest.probability >= 0.39
       && hadBest.gap >= 0.055
       && scoreShape.top1Code === hadBest.code
-      && !scoreShape.drawHeavy;
+      && !scoreShape.drawHeavy
+      && !scoreShape.lowScoreHeavy;
     if (hadIsClean && hadBest.posteriorScore >= hhadBest.posteriorScore - 0.018) {
       selected = hadBest;
     }
@@ -5250,7 +5285,7 @@ function enforceUnifiedPosteriorRecommendation(match, context) {
   );
   const unifiedProbabilityModel = {
     ...probabilityModel,
-    version: "unified-poisson-bayes-v55",
+    version: "unified-poisson-bayes-v56",
     oneXTwo: {
       ...(probabilityModel.oneXTwo || {}),
       unifiedPosterior: asPercentTriplet(unified.hadPosterior),
@@ -5260,7 +5295,7 @@ function enforceUnifiedPosteriorRecommendation(match, context) {
       unifiedPosterior: asPercentTriplet(unified.hhadPosterior),
     } : probabilityModel.handicap,
     unifiedPosterior: {
-      version: "v55-poisson-bayes-recent-review-main",
+      version: "v56-score-review-draw-handicap-guard",
       generatedAt: new Date().toISOString(),
       selectedMarket: selected.market,
       selectedCode: selected.code,
@@ -7178,9 +7213,9 @@ function predictionSetWithoutOfficialOdds(match) {
     projectedScore: score,
     probabilityModel: {
       ...modelBundle.probabilityModel,
-      version: "model-only-unified-v55",
+      version: "model-only-unified-v56",
       unifiedPosterior: {
-        version: "v55-model-only-group-stage-main",
+        version: "v56-model-only-score-review-main",
         generatedAt: new Date().toISOString(),
         selectedMarket: "MODEL_ONLY_1X2",
         selectedCode: bestPick.code,
