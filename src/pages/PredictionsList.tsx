@@ -135,7 +135,7 @@ interface ParlayPreview {
   selections: SelectionResult[];
   totalOdds: number | null;
   averageTrust: number;
-  source: 'sp' | 'model';
+  source: 'sp';
 }
 
 const getDailyReviewStats = (matches: Match[]): DailyReviewStats => {
@@ -587,49 +587,20 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         ? `${matchCount} 串 · 目标组合值 ${targetOdds.toFixed(1)}`
         : `${matchCount}-leg · target ${targetOdds.toFixed(1)}`;
 
-      if (result.isSuccess && result.selections.length > 0) {
-        return {
-          key,
-          title,
-          subtitle,
-          selections: result.selections,
-          totalOdds: result.totalOdds,
-          averageTrust: result.averageTrust,
-          source: 'sp'
-        };
-      }
-
-      const modelSelections = actionableMatches
-        .map((match): SelectionResult | null => {
-          const display = getDisplayRecommendation(match, language);
-          if (!display?.prediction || display.prediction.tipCode === 'WATCH') return null;
-          return {
-            match,
-            prediction: display.prediction,
-            generatedFrom: 'existing-prediction'
-          };
-        })
-        .filter((selection): selection is SelectionResult => Boolean(selection))
-        .slice(0, matchCount);
-
-      if (modelSelections.length < matchCount) return null;
-
-      const pricedSelections = modelSelections.filter((selection) => Number(selection.prediction.odds || 0) > 0);
-      const totalOdds = pricedSelections.length === modelSelections.length
-        ? Number(modelSelections.reduce((product, selection) => product * Number(selection.prediction.odds || 1), 1).toFixed(2))
-        : null;
-      const averageTrust = Math.round(modelSelections.reduce((sum, selection) => sum + Number(selection.prediction.trustScore || 0), 0) / modelSelections.length);
+      if (
+        !result.isSuccess
+        || result.selections.length < matchCount
+        || result.selections.some((selection) => Number(selection.prediction.odds || 0) <= 0)
+      ) return null;
 
       return {
         key,
         title,
-        subtitle: language === 'zh'
-          ? `${matchCount} 串 · 模型方向，SP 待开售`
-          : `${matchCount}-leg · model picks, SP pending`,
-        selections: modelSelections,
-        totalOdds,
-        averageTrust,
-        source: 'model'
+        subtitle,
+        selections: result.selections,
+        totalOdds: result.totalOdds,
+        averageTrust: result.averageTrust,
+        source: 'sp'
       };
     };
 
@@ -637,7 +608,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
       buildCombo('steady-2', '稳健 2 串', 'Steady 2-leg', 2, 3.2, 38),
       buildCombo('value-3', '进取 3 串', 'Value 3-leg', 3, 6.0, 36)
     ].filter((combo): combo is ParlayPreview => Boolean(combo));
-  }, [actionableMatches, baseFilteredMatches, language]);
+  }, [baseFilteredMatches, language]);
 
   const groupedMatches = useMemo(() => {
     const groups: Record<string, { league: League; country: Country; matches: Match[] }> = {};
@@ -785,9 +756,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
       <footer className="parlay-card-foot">
         <span>{language === 'zh' ? '平均强度' : 'Avg strength'} {combo.averageTrust}</span>
         <span>
-          {combo.source === 'sp'
-            ? (language === 'zh' ? '按当前主推与官方/参考 SP 自动生成' : 'Generated from current picks and SP')
-            : (language === 'zh' ? 'SP 开售后自动换算组合值' : 'Total value updates after SP opens')}
+          {language === 'zh' ? '只收录已开售 SP 的方向' : 'Only opened SP legs are included'}
         </span>
       </footer>
     </article>
