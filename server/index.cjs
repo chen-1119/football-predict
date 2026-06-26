@@ -34,7 +34,10 @@ const port = Number(process.env.PORT || 8788);
 const host = process.env.HOST || "0.0.0.0";
 const syncIntervalSeconds = Math.max(60, Number(process.env.SYNC_INTERVAL_SECONDS || 300));
 const gptIntervalSeconds = Math.max(300, Number(process.env.GPT_INTERVAL_SECONDS || 900));
-const snapshotRetentionDays = Math.max(1, Number(process.env.SNAPSHOT_RETENTION_DAYS || 30));
+const snapshotRetentionDays = Math.max(1, Number(process.env.SNAPSHOT_RETENTION_DAYS || 14));
+const enableFullHistoryFileFallback = process.env.ENABLE_FULL_HISTORY_FILE_FALLBACK === "1" || process.env.NODE_ENV !== "production";
+const datastoreCompactOnSync = process.env.DATASTORE_COMPACT_ON_SYNC !== "0";
+const datastoreCompactIntervalMs = Math.max(5, Number(process.env.DATASTORE_COMPACT_INTERVAL_MINUTES || 60)) * 60 * 1000;
 const adminToken = process.env.ADMIN_TOKEN || "";
 const allowLocalAdmin = process.env.ALLOW_LOCAL_ADMIN === "1";
 const accessCodeAdminToken = process.env.ACCESS_CODE_ADMIN_TOKEN || adminToken;
@@ -87,6 +90,7 @@ let predictRunning = false;
 let lastSync = null;
 let lastPredictionRun = null;
 let lastDataPersist = null;
+let lastDataCompact = null;
 const sseClients = new Set();
 let historyListCache = null;
 let currentMatchesCache = null;
@@ -793,6 +797,35 @@ const cleanupOldSnapshots = async () => {
   }
 };
 
+const maybeCompactDataStore = async (npmCommand, source) => {
+  if (!datastoreCompactOnSync) return null;
+  const now = Date.now();
+  const previous = Date.parse(lastDataCompact?.finishedAt || "");
+  if (Number.isFinite(previous) && now - previous < datastoreCompactIntervalMs) {
+    return { ok: true, skipped: true, reason: "compact interval not reached", lastDataCompact };
+  }
+  const startedAt = nowIso();
+  try {
+    await runCommand(npmCommand, ["run", "compact:datastore"], {
+      DATA_STORE_DIR: storeDir,
+      FOOTBALL_STORE_DIR: storeDir
+    });
+    lastDataCompact = { ok: true, source, startedAt, finishedAt: nowIso() };
+    await appendEvent({ type: "datastore_compacted", ...lastDataCompact });
+    return lastDataCompact;
+  } catch (error) {
+    lastDataCompact = {
+      ok: false,
+      source,
+      startedAt,
+      finishedAt: nowIso(),
+      error: error.message || String(error)
+    };
+    await appendEvent({ type: "datastore_compact_failed", ...lastDataCompact });
+    return lastDataCompact;
+  }
+};
+
 const captureCurrentSnapshot = async (source) => {
   const matches = await readJsonFile(path.join(dataDir, "matches-current.json"), []);
   const meta = await readJsonFile(path.join(dataDir, "sync-meta.json"), {});
@@ -865,7 +898,8 @@ const runSync = async (source = "server-cron") => {
       source,
       sourceHealth
     });
-    lastSync = { ok: true, source, startedAt, finishedAt: nowIso(), dataStore: lastDataPersist };
+    const dataCompact = await maybeCompactDataStore(npmCommand, source);
+    lastSync = { ok: true, source, startedAt, finishedAt: nowIso(), dataStore: lastDataPersist, dataCompact };
     await appendEvent({ type: "sync_completed", ...lastSync });
     return lastSync;
   } catch (error) {
@@ -1255,9 +1289,11 @@ const readHistoryMatchesForList = async (limit = 600) => {
   if (dbRows.length > 0) {
     return dbRows;
   }
+  if (!enableFullHistoryFileFallback) return [];
 
   const filePath = path.join(dataDir, "matches-history.json");
-  const stat = await fsp.stat(filePath);
+  const stat = await fsp.stat(filePath).catch(() => null);
+  if (!stat) return [];
 
   if (
     historyListCache
@@ -1292,6 +1328,7 @@ const readMatchById = async (matchId) => {
 
   const dbMatch = await getLatestMatchById(storeDir, decodedId);
   if (dbMatch) return enrichMatchHistoricalTraining(dbMatch);
+  if (!enableFullHistoryFileFallback) return null;
 
   const history = await readJsonFile(path.join(dataDir, "matches-history.json"), []);
   const historyMatch = Array.isArray(history) ? history.find((match) => match.id === decodedId) || null : null;
@@ -1626,6 +1663,7 @@ const getHealth = async () => {
     lastSync,
     lastPredictionRun,
     lastDataPersist,
+    lastDataCompact,
     api: {
       publicApiBase,
       apiFootballConfigured: Boolean(process.env.API_FOOTBALL_KEY || process.env.APISPORTS_KEY),
@@ -1638,7 +1676,9 @@ const getHealth = async () => {
       adminProtected: Boolean(adminToken),
       accessCodeAdminProtected: Boolean(accessCodeAdminToken),
       syncCron: process.env.ENABLE_SYNC_CRON === "1" ? `${syncIntervalSeconds}s` : "off",
-      gptCron: process.env.ENABLE_GPT_CRON === "1" ? `${gptIntervalSeconds}s` : "off"
+      gptCron: process.env.ENABLE_GPT_CRON === "1" ? `${gptIntervalSeconds}s` : "off",
+      datastoreCompact: datastoreCompactOnSync ? `${Math.round(datastoreCompactIntervalMs / 60000)}m` : "off",
+      fullHistoryFileFallback: enableFullHistoryFileFallback
     },
     memory: process.memoryUsage(),
     database: await getDataStoreStatus(storeDir),

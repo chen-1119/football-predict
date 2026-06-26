@@ -25,6 +25,38 @@ cleanup() {
 
 trap cleanup EXIT
 
+set_env_value() {
+  local file="$1"
+  local key="$2"
+  local value="$3"
+  if [ ! -f "$file" ]; then
+    return 0
+  fi
+  if sudo grep -q "^${key}=" "$file"; then
+    sudo sed -i "s|^${key}=.*|${key}=${value}|" "$file"
+  else
+    echo "${key}=${value}" | sudo tee -a "$file" >/dev/null
+  fi
+}
+
+ensure_lightweight_runtime_env() {
+  local file="$1"
+  if [ ! -f "$file" ]; then
+    return 0
+  fi
+  set_env_value "$file" "SNAPSHOT_RETENTION_DAYS" "14"
+  set_env_value "$file" "ENABLE_FULL_HISTORY_FILE_FALLBACK" "0"
+  set_env_value "$file" "ODDS_HISTORY_RETENTION_DAYS" "30"
+  set_env_value "$file" "DATASTORE_HISTORY_SNAPSHOT_RETENTION_DAYS" "14"
+  set_env_value "$file" "DATASTORE_STORE_FULL_MATCH_SNAPSHOTS" "0"
+  set_env_value "$file" "DATASTORE_ODDS_HISTORY_RETENTION_DAYS" "30"
+  set_env_value "$file" "DATASTORE_ODDS_HISTORY_RECENT_ROWS" "12000"
+  set_env_value "$file" "DATASTORE_COMPACT_ON_SYNC" "1"
+  set_env_value "$file" "DATASTORE_COMPACT_INTERVAL_MINUTES" "60"
+  set_env_value "$file" "DATASTORE_COMPACT_RETENTION_DAYS" "14"
+  set_env_value "$file" "DATASTORE_COMPACT_MAX_ROWS" "150000"
+}
+
 install_deploy_automation() {
   echo "[automation] refresh auto repair timer and web deploy trigger"
   sudo curl -fsSL "$RAW_BASE/scripts/cloudAutoRepair.sh" -o "$AUTO_REPAIR_BIN"
@@ -122,6 +154,7 @@ echo "[4/10] install dependencies in temp workspace"
 npm ci --include=dev --no-audit --no-fund
 
 echo "[5/10] run data sync in temp workspace"
+ensure_lightweight_runtime_env "$APP_DIR/deploy/light-server/env"
 set +u
 if [ -r "$APP_DIR/deploy/light-server/env" ]; then
   set -a

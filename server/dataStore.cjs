@@ -25,6 +25,9 @@ const TABLE_COUNT_KEYS = {
 
 const HISTORY_SNAPSHOT_RETENTION_DAYS = Math.max(1, Number(process.env.DATASTORE_HISTORY_SNAPSHOT_RETENTION_DAYS || 14));
 const STORE_FULL_MATCH_SNAPSHOTS = process.env.DATASTORE_STORE_FULL_MATCH_SNAPSHOTS === "1";
+const ODDS_HISTORY_EVENT_RETENTION_DAYS = Math.max(1, Number(process.env.DATASTORE_ODDS_HISTORY_RETENTION_DAYS || 30));
+const ODDS_HISTORY_EVENT_MAX_ROWS = Math.max(1000, Number(process.env.DATASTORE_ODDS_HISTORY_RECENT_ROWS || 12000));
+const STATE_SIGNATURE_MAX_KEYS = Math.max(1000, Number(process.env.DATASTORE_STATE_SIGNATURE_MAX_KEYS || 60000));
 
 const nowIso = () => new Date().toISOString();
 
@@ -245,6 +248,59 @@ const shouldPersistHistorySnapshot = (match, capturedAt = nowIso()) => {
   const matchTime = matchTimestamp(match);
   if (!Number.isFinite(capturedTime) || !Number.isFinite(matchTime)) return false;
   return matchTime >= capturedTime - HISTORY_SNAPSHOT_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+};
+
+const oddsHistoryTimestamp = (row) => {
+  const candidates = [row?.capturedAt, row?.captureBucket, row?.oddsUpdatedAt, row?.updatedAt, row?.kickoffTime];
+  for (const value of candidates) {
+    const time = Date.parse(value || "");
+    if (Number.isFinite(time)) return time;
+  }
+  return NaN;
+};
+
+const selectRecentOddsHistoryRows = (rows, capturedAt = nowIso()) => {
+  const sourceRows = Array.isArray(rows) ? rows : [];
+  if (!sourceRows.length) return [];
+  const capturedTime = Date.parse(capturedAt);
+  const cutoff = Number.isFinite(capturedTime)
+    ? capturedTime - ODDS_HISTORY_EVENT_RETENTION_DAYS * 24 * 60 * 60 * 1000
+    : NaN;
+  const recent = [];
+  for (let index = 0; index < sourceRows.length; index += 1) {
+    const row = sourceRows[index];
+    const time = oddsHistoryTimestamp(row);
+    if (Number.isFinite(cutoff) && (!Number.isFinite(time) || time < cutoff)) continue;
+    recent.push({ row, index, time: Number.isFinite(time) ? time : 0 });
+  }
+  return recent
+    .sort((a, b) => a.time - b.time || a.index - b.index)
+    .slice(-ODDS_HISTORY_EVENT_MAX_ROWS)
+    .map((item) => item.row);
+};
+
+const pruneSignatureMap = (map, maxKeys = STATE_SIGNATURE_MAX_KEYS) => {
+  if (!map || typeof map !== "object") return { map: {}, pruned: 0 };
+  const entries = Object.entries(map);
+  if (entries.length <= maxKeys) return { map, pruned: 0 };
+  entries.sort((a, b) => {
+    const aTime = Date.parse(a[1] || "");
+    const bTime = Date.parse(b[1] || "");
+    return (Number.isFinite(aTime) ? aTime : 0) - (Number.isFinite(bTime) ? bTime : 0);
+  });
+  const keptEntries = entries.slice(-maxKeys);
+  return {
+    map: Object.fromEntries(keptEntries),
+    pruned: entries.length - keptEntries.length
+  };
+};
+
+const pruneStateSignatures = (state) => {
+  const odds = pruneSignatureMap(state.latestOddsSignatures);
+  state.latestOddsSignatures = odds.map;
+  return {
+    latestOddsSignatures: odds.pruned
+  };
 };
 
 const pickOdds = (odds) => {
@@ -954,7 +1010,11 @@ const persistDataSnapshot = async ({ storeDir, dataDir, source = "server-sync", 
   const externalSignals = await readJsonFile(path.join(dataDir, "external-signals.json"), null);
   const matches = Array.isArray(current) ? current : [];
   const historicalMatches = Array.isArray(history) ? history : [];
-  const oddsHistoryRows = Array.isArray(oddsHistory.rows) ? oddsHistory.rows : Array.isArray(oddsHistory) ? oddsHistory : [];
+  const oddsHistoryRowsRaw = Array.isArray(oddsHistory.rows) ? oddsHistory.rows : Array.isArray(oddsHistory) ? oddsHistory : [];
+  const oddsHistoryRows = selectRecentOddsHistoryRows(
+    oddsHistoryRowsRaw,
+    syncMeta.capturedAt || syncMeta.updatedAt || nowIso()
+  );
   const statuses = summarizeStatuses(matches);
   const historyStatuses = summarizeStatuses(historicalMatches);
   const runSignature = hashPayload({
@@ -986,7 +1046,8 @@ const persistDataSnapshot = async ({ storeDir, dataDir, source = "server-sync", 
       current: matches.length,
       history: historicalMatches.length,
       allMatches: matches.length + historicalMatches.length,
-      oddsHistoryRows: oddsHistoryRows.length,
+      oddsHistoryRows: oddsHistoryRowsRaw.length,
+      oddsHistoryRowsPersisted: oddsHistoryRows.length,
       predictionSnapshots: Array.isArray(predictionSnapshots.rows) ? predictionSnapshots.rows.length : 0,
       gptPredictions: Array.isArray(gptPredictions.rows) ? gptPredictions.rows.length : 0,
       externalSignals: externalSignals?.matches ? Object.keys(externalSignals.matches).length : 0
@@ -1050,6 +1111,7 @@ const persistDataSnapshot = async ({ storeDir, dataDir, source = "server-sync", 
   ];
   const predictionRuns = await persistPredictionRows(storeDir, state, predictionRows, source);
   const materialized = await writeMaterializedMatches(storeDir, matches, historicalMatches, source);
+  const prunedSignatures = pruneStateSignatures(state);
   const nextState = await writeState(storeDir, state);
 
   return {
@@ -1061,6 +1123,7 @@ const persistDataSnapshot = async ({ storeDir, dataDir, source = "server-sync", 
     oddsSnapshots,
     predictionRuns,
     materialized,
+    prunedSignatures,
     counts: nextState.counts
   };
 };
