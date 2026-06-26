@@ -133,7 +133,7 @@ interface ParlayPreview {
   title: string;
   subtitle: string;
   selections: SelectionResult[];
-  totalOdds: number | null;
+  totalOdds: number;
   averageTrust: number;
   source: 'sp';
 }
@@ -727,7 +727,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         </div>
         <div className="parlay-total">
           <span>{language === 'zh' ? '组合值' : 'Total'}</span>
-          <strong>{combo.totalOdds ? `@${combo.totalOdds.toFixed(2)}` : (language === 'zh' ? '待开售' : 'Pending')}</strong>
+          <strong>{`@${combo.totalOdds.toFixed(2)}`}</strong>
         </div>
       </header>
       <div className="parlay-leg-list">
@@ -747,7 +747,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
               <span>
                 {getPredictionMarketLabel(selection.prediction, language)}
                 <b>{getPredictionTipDisplay(selection.prediction, language, true)}</b>
-                <em>{odds > 0 ? `@${odds.toFixed(2)}` : (language === 'zh' ? '待开售' : 'Pending')}</em>
+                <em>{`@${odds.toFixed(2)}`}</em>
               </span>
             </button>
           );
