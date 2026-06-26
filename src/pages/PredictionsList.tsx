@@ -17,6 +17,7 @@ import type { Country, League, Match, PredictionDetail, Team } from '../services
 import {
   getOfficialMatchOdds,
   getOfficialResultPoolAvailability,
+  getPredictionMarketLabel,
   getPredictionTipDisplay,
   getSportteryPoolRows
 } from '../services/bettingDisplay';
@@ -25,6 +26,7 @@ import { getMatchSignal, type MatchSignalCategory } from '../services/matchSigna
 import { getVisiblePrediction } from '../services/predictionVisibility';
 import { buildPublicRecommendationCopy } from '../services/recommendationCopy';
 import { getAvailableResultPools, getDisplayRecommendation, getListHandicapSupplement } from '../services/displayRecommendation';
+import { generateBetSlip, type SelectionResult } from '../services/generator';
 import { TeamBadge } from '../components/TeamBadge';
 import { WorldCupSpotlight } from '../components/WorldCupSpotlight';
 
@@ -116,6 +118,69 @@ const predictionFromReviewRow = (row: PostReviewRow | undefined): PredictionDeta
     resultStatus: row.resultStatus
   };
 };
+
+interface DailyReviewStats {
+  finished: number;
+  settled: number;
+  won: number;
+  hitRate: number | null;
+  handicapHit: number;
+  missedHandicapLane: number;
+}
+
+interface ParlayPreview {
+  key: string;
+  title: string;
+  subtitle: string;
+  selections: SelectionResult[];
+  totalOdds: number | null;
+  averageTrust: number;
+  source: 'sp' | 'model';
+}
+
+const getDailyReviewStats = (matches: Match[]): DailyReviewStats => {
+  const stats = matches.reduce((acc, match) => {
+    const review = match.postMatchReview?.predictionReview;
+    if (match.status === 'FINISHED' || review?.rows?.some((row) => isSettledReviewStatus(row.resultStatus))) {
+      acc.finished += 1;
+    }
+    if (!review) return acc;
+
+    if (isSettledReviewStatus(review.bestStatus || undefined)) {
+      acc.settled += 1;
+      if (review.bestStatus === 'WON') acc.won += 1;
+    } else {
+      const mainRows = (review.rows || []).filter((row) => row.reviewRole === 'main' || row.marketType === 'BEST');
+      const settledMainRows = mainRows.filter((row) => isSettledReviewStatus(row.resultStatus));
+      if (settledMainRows.length > 0) {
+        acc.settled += settledMainRows.length;
+        acc.won += settledMainRows.filter((row) => row.resultStatus === 'WON').length;
+      } else if (Number(review.settled || 0) > 0) {
+        acc.settled += Number(review.settled || 0);
+        acc.won += Number(review.won || 0);
+      }
+    }
+
+    if (review.handicapHit) acc.handicapHit += 1;
+    if (review.missedHandicapLane) acc.missedHandicapLane += 1;
+    return acc;
+  }, {
+    finished: 0,
+    settled: 0,
+    won: 0,
+    handicapHit: 0,
+    missedHandicapLane: 0
+  });
+
+  return {
+    ...stats,
+    hitRate: stats.settled > 0 ? Math.round((stats.won / stats.settled) * 100) : null
+  };
+};
+
+const formatDailyRate = (value: number | null, language: 'zh' | 'en') => (
+  value === null ? (language === 'zh' ? '待结算' : 'Pending') : `${value}%`
+);
 
 const getMatchDisplayTeam = (match: Match, side: 'home' | 'away'): Team => {
   const base = getTeamById(side === 'home' ? match.homeTeamId : match.awayTeamId);
@@ -494,6 +559,86 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
 
   const hasQualifiedPicks = actionableMatches.length > 0;
 
+  const dailyReviewStats = useMemo(() => getDailyReviewStats(baseFilteredMatches), [baseFilteredMatches]);
+
+  const parlayRecommendations = useMemo<ParlayPreview[]>(() => {
+    const buildCombo = (
+      key: string,
+      titleZh: string,
+      titleEn: string,
+      matchCount: 2 | 3,
+      targetOdds: number,
+      minTrust: number
+    ): ParlayPreview | null => {
+      const result = generateBetSlip({
+        targetOdds,
+        matchCount,
+        marketTypes: ['1X2', 'HHAD'],
+        minOdds: 1.12,
+        maxOdds: 3.35,
+        timeWindow: '3',
+        minTrust,
+        onlyImportantLeagues: false,
+        onlyOddsDropping: false
+      }, baseFilteredMatches);
+
+      const title = language === 'zh' ? titleZh : titleEn;
+      const subtitle = language === 'zh'
+        ? `${matchCount} 串 · 目标组合值 ${targetOdds.toFixed(1)}`
+        : `${matchCount}-leg · target ${targetOdds.toFixed(1)}`;
+
+      if (result.isSuccess && result.selections.length > 0) {
+        return {
+          key,
+          title,
+          subtitle,
+          selections: result.selections,
+          totalOdds: result.totalOdds,
+          averageTrust: result.averageTrust,
+          source: 'sp'
+        };
+      }
+
+      const modelSelections = actionableMatches
+        .map((match): SelectionResult | null => {
+          const display = getDisplayRecommendation(match, language);
+          if (!display?.prediction || display.prediction.tipCode === 'WATCH') return null;
+          return {
+            match,
+            prediction: display.prediction,
+            generatedFrom: 'existing-prediction'
+          };
+        })
+        .filter((selection): selection is SelectionResult => Boolean(selection))
+        .slice(0, matchCount);
+
+      if (modelSelections.length < matchCount) return null;
+
+      const pricedSelections = modelSelections.filter((selection) => Number(selection.prediction.odds || 0) > 0);
+      const totalOdds = pricedSelections.length === modelSelections.length
+        ? Number(modelSelections.reduce((product, selection) => product * Number(selection.prediction.odds || 1), 1).toFixed(2))
+        : null;
+      const averageTrust = Math.round(modelSelections.reduce((sum, selection) => sum + Number(selection.prediction.trustScore || 0), 0) / modelSelections.length);
+
+      return {
+        key,
+        title,
+        subtitle: language === 'zh'
+          ? `${matchCount} 串 · 模型方向，SP 待开售`
+          : `${matchCount}-leg · model picks, SP pending`,
+        selections: modelSelections,
+        totalOdds,
+        averageTrust,
+        source: 'model'
+      };
+    };
+
+    return [
+      buildCombo('steady-2', '稳健 2 串', 'Steady 2-leg', 2, 3.2, 38),
+      buildCombo('value-3', '进取 3 串', 'Value 3-leg', 3, 6.0, 36)
+    ].filter((combo): combo is ParlayPreview => Boolean(combo));
+  }, [actionableMatches, baseFilteredMatches, language]);
+
   const groupedMatches = useMemo(() => {
     const groups: Record<string, { league: League; country: Country; matches: Match[] }> = {};
 
@@ -601,6 +746,52 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
       </button>
     );
   };
+
+  const renderParlayCard = (combo: ParlayPreview) => (
+    <article key={combo.key} className="parlay-card">
+      <header className="parlay-card-head">
+        <div>
+          <span>{combo.subtitle}</span>
+          <strong>{combo.title}</strong>
+        </div>
+        <div className="parlay-total">
+          <span>{language === 'zh' ? '组合值' : 'Total'}</span>
+          <strong>{combo.totalOdds ? `@${combo.totalOdds.toFixed(2)}` : (language === 'zh' ? '待开售' : 'Pending')}</strong>
+        </div>
+      </header>
+      <div className="parlay-leg-list">
+        {combo.selections.map((selection) => {
+          const homeTeam = getMatchDisplayTeam(selection.match, 'home');
+          const awayTeam = getMatchDisplayTeam(selection.match, 'away');
+          const odds = Number(selection.prediction.odds || 0);
+          return (
+            <button
+              key={`${combo.key}-${selection.match.id}-${selection.prediction.marketType}-${selection.prediction.tipCode}`}
+              type="button"
+              className="parlay-leg"
+              onClick={() => onSelectMatch(selection.match.id)}
+            >
+              <span className="parlay-leg-time">{formatKickoffTime(selection.match.kickoffTime, language)}</span>
+              <strong>{homeTeam.name[language]} vs {awayTeam.name[language]}</strong>
+              <span>
+                {getPredictionMarketLabel(selection.prediction, language)}
+                <b>{getPredictionTipDisplay(selection.prediction, language, true)}</b>
+                <em>{odds > 0 ? `@${odds.toFixed(2)}` : (language === 'zh' ? '待开售' : 'Pending')}</em>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <footer className="parlay-card-foot">
+        <span>{language === 'zh' ? '平均强度' : 'Avg strength'} {combo.averageTrust}</span>
+        <span>
+          {combo.source === 'sp'
+            ? (language === 'zh' ? '按当前主推与官方/参考 SP 自动生成' : 'Generated from current picks and SP')
+            : (language === 'zh' ? 'SP 开售后自动换算组合值' : 'Total value updates after SP opens')}
+        </span>
+      </footer>
+    </article>
+  );
 
   const renderDecisionCell = (match: Match) => {
     const hasSettledReview = Boolean(match.postMatchReview?.predictionReview?.rows?.some((row) => isSettledReviewStatus(row.resultStatus)));
@@ -1041,6 +1232,38 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         })}
       </section>
 
+      <section className="daily-review-panel" aria-label={language === 'zh' ? '每日复盘' : 'Daily review'}>
+        <div className="daily-review-copy">
+          <span className="panel-kicker">{formatShortDate(effectiveSelectedDate, language)}</span>
+          <strong>{language === 'zh' ? '每日复盘' : 'Daily Review'}</strong>
+          <p>
+            {dailyReviewStats.settled > 0
+              ? (language === 'zh'
+                ? `主推已结算 ${dailyReviewStats.settled} 条，命中 ${dailyReviewStats.won} 条。`
+                : `${dailyReviewStats.settled} main picks settled, ${dailyReviewStats.won} won.`)
+              : (language === 'zh' ? '等待赛果结算后自动回写命中情况。' : 'Hit results will update automatically after settlement.')}
+          </p>
+        </div>
+        <div className="daily-review-stats">
+          <span>
+            {language === 'zh' ? '主推命中' : 'Main hit'}
+            <strong>{formatDailyRate(dailyReviewStats.hitRate, language)}</strong>
+          </span>
+          <span>
+            {language === 'zh' ? '赛果' : 'Finished'}
+            <strong>{dailyReviewStats.finished}</strong>
+          </span>
+          <span>
+            {language === 'zh' ? '让球命中' : 'HHAD hit'}
+            <strong>{dailyReviewStats.handicapHit}</strong>
+          </span>
+          <span>
+            {language === 'zh' ? '漏让球' : 'Missed HHAD'}
+            <strong>{dailyReviewStats.missedHandicapLane}</strong>
+          </span>
+        </div>
+      </section>
+
       <section className={`data-sync-strip ${dataSyncTone}`} aria-label={t('dataStatusTitle')}>
         <div className="data-sync-copy">
           <span className="data-sync-dot" />
@@ -1160,6 +1383,23 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
           </div>
         )}
       </section>
+
+      {parlayRecommendations.length > 0 && (
+        <section className="parlay-panel" aria-label={language === 'zh' ? '自动多串推荐' : 'Auto accumulator picks'}>
+          <div className="recommendation-panel-head">
+            <div>
+              <span className="panel-kicker">{formatShortDate(effectiveSelectedDate, language)}</span>
+              <strong>{language === 'zh' ? '多串推荐' : 'Accumulator Picks'}</strong>
+            </div>
+            <span className="recommendation-count">
+              {parlayRecommendations.length} {language === 'zh' ? '组' : 'combos'}
+            </span>
+          </div>
+          <div className="parlay-grid">
+            {parlayRecommendations.map(renderParlayCard)}
+          </div>
+        </section>
+      )}
 
       <section className="panel filters-panel" aria-label="Filters">
         <div className="panel-row is-stacked">

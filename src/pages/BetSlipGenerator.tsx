@@ -51,7 +51,7 @@ export const BetSlipGenerator: React.FC = () => {
 
   // 表单状态
   const [targetOdds, setTargetOdds] = useState<number>(2.00);
-  const [matchCount, setMatchCount] = useState<'auto' | 2 | 5 | 10 | 15>('auto');
+  const [matchCount, setMatchCount] = useState<'auto' | 2 | 3 | 5 | 10 | 15>('auto');
   const [selectedMarkets, setSelectedMarkets] = useState<BetSlipMarketType[]>(ENABLED_BET_SLIP_MARKETS);
   const [minOdds, setMinOdds] = useState<number>(1.20);
   const [maxOdds, setMaxOdds] = useState<number>(3.00);
@@ -225,7 +225,7 @@ export const BetSlipGenerator: React.FC = () => {
           <div className="form-group">
             <label className="form-label">{t('matchCountLabel')}</label>
             <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
-              {(['auto', 2, 5, 10, 15] as const).map((cnt) => {
+              {(['auto', 2, 3, 5, 10, 15] as const).map((cnt) => {
                 const isSelected = matchCount === cnt;
                 return (
                   <button

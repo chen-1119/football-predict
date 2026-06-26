@@ -7,7 +7,7 @@ export type BetSlipMarketType = '1X2' | 'HHAD';
 
 export interface GeneratorParams {
   targetOdds: number; // 目标总SP
-  matchCount: 'auto' | 2 | 5 | 10 | 15; // 比赛数量
+  matchCount: 'auto' | 2 | 3 | 5 | 10 | 15; // 比赛数量
   marketTypes: string[]; // ['1X2', 'HHAD']
   minOdds: number;
   maxOdds: number;
