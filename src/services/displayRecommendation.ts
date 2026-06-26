@@ -764,6 +764,22 @@ export const getDisplayRecommendation = (match: Match, language: Language): Disp
   }
 
   if (pendingPromotedPrediction) {
+    const pendingHandicapCompanion = getListHandicapSupplement(match, language, pendingPromotedPrediction);
+    if (pendingHandicapCompanion && hasPredictionDisplayOdds(pendingHandicapCompanion.prediction)) {
+      return {
+        kind: 'handicap',
+        prediction: pendingHandicapCompanion.prediction,
+        tipCode: pendingHandicapCompanion.tipCode,
+        label: pendingHandicapCompanion.label,
+        meta: pendingHandicapCompanion.meta,
+        probability: pendingHandicapCompanion.probability,
+        support: pendingHandicapCompanion.support,
+        reason: language === 'zh'
+          ? '胜平负主推 SP 未开售，先按已开售让球玩法展示可用推荐。'
+          : 'The 1X2 main SP is not open, so the on-sale handicap market is shown as the actionable pick.'
+      };
+    }
+
     const probability = getOutcomeProbability(match, pendingPromotedPrediction.tipCode as OutcomeCode, pendingPromotedPrediction);
     const cleanProbability = Number.isFinite(probability) ? Number(probability) : null;
     const label = pendingPromotedPrediction.oddsPoolCode === 'HHAD'
