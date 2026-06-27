@@ -139,9 +139,20 @@ grep -n "withoutEmbeddedReview" "$SRC_DIR/scripts/syncData.cjs"
 
 echo "[3/10] seed temp workspace with live data"
 mkdir -p "$SRC_DIR/public/data"
+SEEDED_DATA_DIR="$(mktemp -d)"
+for file_name in external-signals.json five-hundred-details.json; do
+  if [ -s "$SRC_DIR/public/data/$file_name" ]; then
+    cp -f "$SRC_DIR/public/data/$file_name" "$SEEDED_DATA_DIR/$file_name"
+  fi
+done
 if [ -d "$APP_DIR/public/data" ]; then
   rsync -a "$APP_DIR/public/data/" "$SRC_DIR/public/data/"
 fi
+for file_name in external-signals.json five-hundred-details.json; do
+  if [ -s "$SEEDED_DATA_DIR/$file_name" ]; then
+    cp -f "$SEEDED_DATA_DIR/$file_name" "$SRC_DIR/public/data/$file_name"
+  fi
+done
 for file_name in matches.json odds-history.json; do
   if [ -f "$APP_DIR/public/$file_name" ]; then
     cp -f "$APP_DIR/public/$file_name" "$SRC_DIR/public/$file_name"

@@ -24,6 +24,8 @@ DEPLOY_PATHS=(
   deploy/light-server
   server-data/training
   server-data/worldcup
+  public/data/external-signals.json
+  public/data/five-hundred-details.json
   public/data/worldcup-kimi-dataset.json
 )
 
