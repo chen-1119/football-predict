@@ -26,6 +26,8 @@ const REQUEST_HEADERS = Object.freeze({
   Referer: "https://www.500.com/",
 });
 
+const curlForceIpv4 = process.env.FIVE_HUNDRED_CURL_IPV4 !== "0";
+
 const nowIso = () => new Date().toISOString();
 
 const htmlDecode = (value) => String(value || "")
@@ -124,10 +126,15 @@ const httpGetBuffer = (url, referer = SOURCE_URL) => new Promise((resolve, rejec
   req.end();
 });
 
-const curlGetBuffer = (url, referer = SOURCE_URL, cause) => {
-  try {
-    return execFileSync("curl", [
+const alternateDetailUrl = (url) => {
+  const value = String(url || "");
+  if (/^https:\/\/odds\.500\.com\//i.test(value)) return value.replace(/^https:/i, "http:");
+  return "";
+};
+
+const buildCurlArgs = (url, referer) => [
       "-fsSL",
+      ...(curlForceIpv4 ? ["-4"] : []),
       "--connect-timeout", String(Math.min(8, DETAIL_TIMEOUT_SECONDS)),
       "--max-time", String(DETAIL_TIMEOUT_SECONDS),
       "-A", USER_AGENT,
@@ -136,11 +143,25 @@ const curlGetBuffer = (url, referer = SOURCE_URL, cause) => {
       "-H", "Accept-Encoding: identity",
       "-H", `Referer: ${referer}`,
       url,
-    ], {
+];
+
+const execCurlGetBuffer = (url, referer) => execFileSync("curl", buildCurlArgs(url, referer), {
       maxBuffer: 8 * 1024 * 1024,
       stdio: ["ignore", "pipe", "pipe"],
-    });
+});
+
+const curlGetBuffer = (url, referer = SOURCE_URL, cause) => {
+  try {
+    return execCurlGetBuffer(url, referer);
   } catch (error) {
+    const alternateUrl = alternateDetailUrl(url);
+    if (alternateUrl && alternateUrl !== url) {
+      try {
+        return execCurlGetBuffer(alternateUrl, referer);
+      } catch (alternateError) {
+        throw new Error(`${cause?.message || cause || "https request failed"}; curl fallback failed: ${error.message || error}; http fallback failed: ${alternateError.message || alternateError}`);
+      }
+    }
     throw new Error(`${cause?.message || cause || "https request failed"}; curl fallback failed: ${error.message || error}`);
   }
 };
