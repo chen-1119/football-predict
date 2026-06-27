@@ -1290,7 +1290,7 @@ const generateMatchPool = (): Match[] => {
         odds: sfpPick.odds,
         trustScore: Math.floor(60 + Math.random() * 30),
         explanation: {
-          zh: `基于胜平负 SP，当前倾向为 ${sfpPick.zh}。模型同时参考赛程状态、主客场和近期攻防数据。`,
+          zh: `基于胜平负 SP，当前倾向为 ${sfpPick.zh}。系统同时参考赛程状态、主客场和近期攻防数据。`,
           en: `${homeTeam.shortName.en} has been dominant at home recently, with key attackers in red-hot form. On the other hand, ${awayTeam.shortName.en} is struggling with defensive issues. We expect the stronger side to secure all three points.`
         },
         visibilityStatus: 'FREE',
@@ -1333,13 +1333,13 @@ const generateMatchPool = (): Match[] => {
       marketType: 'BEST',
       tipCode: bestChoice.tipCode,
       tipLabel: {
-        zh: `模型首选 ${bestChoice.tipLabel.zh}`,
+        zh: `主推 ${bestChoice.tipLabel.zh}`,
         en: `Best: ${bestChoice.tipLabel.en}`
       },
       odds: bestChoice.odds,
       trustScore: Math.min(99, bestChoice.trustScore + 2), // Best Tip 信度偏高一点点
       explanation: {
-        zh: `【AI 精选】这是本场比赛数学模型跑出的最高价值推荐。结合了两队伤停、战意和 SP 倾斜，防守兜底极佳。`,
+        zh: `【主推】这是本场综合评分最高的推荐方向。结合两队伤停、战意和 SP 倾斜，保留临场复核。`,
         en: `[AI Choice] This is the highest-value recommendation computed by our model for this match. Balanced for form, motivation, and line movements.`
       },
       visibilityStatus: 'PREMIUM', // Best Tip 活跃比赛需要是 Premium

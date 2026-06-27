@@ -424,8 +424,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
 
   const translations = {
     referenceNotice: {
-      zh: '模型预测仅供赛前参考，不构成任何投注建议；请结合临场信息理性判断。',
-      en: 'Forecasts are for pre-match reference only and are not betting advice. Use late information and your own judgment.'
+      zh: '推荐内容仅供赛前数据研究和赛前讨论参考，不构成任何投注建议；请结合临场信息理性判断。',
+      en: 'Picks are for pre-match data research and discussion only, not betting advice. Use late information and your own judgment.'
     },
     filterTitle: { zh: '赛事筛选', en: 'Competition Filters' },
     allLeagues: { zh: '全部赛事', en: 'All Competitions' },
@@ -818,7 +818,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
       <footer className="parlay-card-foot">
         <span>{language === 'zh' ? '平均强度' : 'Avg strength'} {combo.averageTrust}</span>
         <span>
-          {language === 'zh' ? '只收录已开售 SP 的方向' : 'Only opened SP legs are included'}
+          {language === 'zh' ? '只收录有实际 SP 的方向' : 'Only legs with actual SP are included'}
         </span>
       </footer>
     </article>
@@ -1171,7 +1171,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     {
       label: language === 'zh' ? '有推荐' : 'Recommended',
       value: String(recommendationCounts.recommended),
-      note: language === 'zh' ? '只统计官方已开售玩法' : 'Only on-sale official markets count',
+      note: language === 'zh' ? '有可展示推荐方向' : 'Visible pick directions',
       icon: ShieldCheck,
       tone: 'success'
     },
@@ -1400,7 +1400,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
           <span className="recommendation-count">
             {hasQualifiedPicks
               ? `${actionableMatches.length} ${language === 'zh' ? '场' : 'matches'}`
-              : (language === 'zh' ? '待开售' : 'Pending sale')}
+              : (language === 'zh' ? '暂无主推' : 'No pick')}
           </span>
         </div>
 
@@ -1410,11 +1410,11 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
           </div>
         ) : (
           <div className="recommendation-empty-copy">
-            <strong>{language === 'zh' ? '等待官方开售' : 'Waiting for official sale'}</strong>
+            <strong>{language === 'zh' ? '暂无可推方向' : 'No qualified pick'}</strong>
             <span>
               {language === 'zh'
-                ? '当前没有已开售的胜平负或让球胜平负可推荐，等下一轮 SP 更新。'
-                : 'No on-sale 1X2 or HHAD recommendation is available yet. Wait for the next SP refresh.'}
+                ? '当前没有已开售且通过推荐门槛的胜平负或让球胜平负，下一轮 SP 更新后会重新筛选。'
+                : 'No on-sale 1X2 or HHAD pick has passed the gate yet. The next SP refresh will re-rank the slate.'}
             </span>
           </div>
         )}
@@ -1556,7 +1556,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
                       <th style={{ width: '132px' }}>{t('statusTime')}</th>
                       <th>{t('teams')}</th>
                       <th style={{ width: '260px', textAlign: 'center' }}>{t('oddsHeader')}</th>
-                      <th style={{ width: '380px', textAlign: 'left' }}>{language === 'zh' ? 'AI决策' : 'AI Decision'}</th>
+                      <th style={{ width: '380px', textAlign: 'left' }}>{language === 'zh' ? '推荐' : 'Pick'}</th>
                       <th style={{ width: '84px' }} />
                     </tr>
                   </thead>
@@ -1688,7 +1688,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
                             )}
                           </td>
 
-                          <td className="match-decision-cell" data-label={language === 'zh' ? 'AI决策' : 'AI Decision'}>
+                          <td className="match-decision-cell" data-label={language === 'zh' ? '推荐' : 'Pick'}>
                             {renderDecisionCell(match)}
                           </td>
 

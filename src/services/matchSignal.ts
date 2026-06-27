@@ -15,7 +15,7 @@ export interface MatchSignal {
 
 const labels: Record<MatchSignalCategory, MultiLangString> = {
   steady: { zh: '高可信候选', en: 'High confidence' },
-  lean: { zh: '主推候选', en: 'Model lean' },
+  lean: { zh: '主推候选', en: 'Main pick' },
   value: { zh: '有冷门变量', en: 'Upset variables' },
   watch: { zh: '待开售', en: 'Pending sale' },
   avoid: { zh: '临场复核', en: 'Late recheck' },
@@ -220,8 +220,8 @@ export function getMatchSignal(match: Match): MatchSignal {
       category: preMatchRisk.score >= 55 ? 'avoid' : 'watch',
       label: preMatchRisk.score >= 55 ? labels.avoid : labels.watch,
       note: {
-        zh: '进球数只保留为模型校验，不作为页面推荐；当前等待胜平负或让球方向达到门槛。',
-        en: 'Goal totals are kept as model validation only, not as page recommendations; wait for a qualified 1X2 or HHAD direction.'
+        zh: '进球数只保留为比分参考，不作为页面主推；当前等待胜平负或让球方向达到门槛。',
+        en: 'Goal totals are kept as score reference only, not as page picks; wait for a qualified 1X2 or HHAD direction.'
       },
       tone: 'warning',
       trustScore,
@@ -251,8 +251,8 @@ export function getMatchSignal(match: Match): MatchSignal {
       category: 'value',
       label: labels.value,
       note: {
-        zh: '这是赔率意见不一致下的价值观察，不按稳胆处理；重点复核临场赔率、让球盘和风险提示是否继续同向。',
-        en: 'This is a value direction under market disagreement, not a banker. Recheck late odds, handicap and risk notes.'
+        zh: '这是赔率分布不一致下的谨慎推荐，不按稳胆处理；重点复核临场赔率、让球盘和风险提示是否继续同向。',
+        en: 'This is a cautious value pick under mixed odds, not a banker. Recheck late odds, handicap and risk notes.'
       },
       tone: 'warning',
       trustScore,

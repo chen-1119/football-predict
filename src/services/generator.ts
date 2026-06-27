@@ -510,8 +510,8 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
     averageTrust,
     isSuccess: true,
     message: {
-      zh: 'AI 参考组合生成成功！',
-      en: 'AI reference combo generated successfully!'
+      zh: '参考组合生成成功！',
+      en: 'Reference combo generated successfully!'
     }
   };
 }

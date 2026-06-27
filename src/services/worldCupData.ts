@@ -135,7 +135,7 @@ export const WORLD_CUP_FORECAST_MODEL = {
   version: 'worldcup-route-monte-carlo-v3-kimi-prior',
   simulations: 12000,
   dataSignature: KIMI_WORLD_CUP_DATASET.signature,
-  zh: '基准模型：FIFA 排名强度 + 东道主加成 + 新军降权 + 小组赛 12,000 次路径推演；每轮同时计算 12 个小组，第三名必须按积分、净胜球、进球数与强度排序争夺 8 个最佳第三名名额。',
+  zh: '路径预测：FIFA 排名强度 + 东道主加成 + 新军降权 + 小组赛 12,000 次路径推演；每轮同时计算 12 个小组，第三名必须按积分、净胜球、进球数与强度排序争夺 8 个最佳第三名名额。',
   en: 'Baseline model: FIFA ranking strength + host boost + debutant adjustment + 12,000 route projections. All 12 groups are projected together, and third-placed teams compete for eight slots by points, goal difference, goals scored, and strength.'
 };
 
@@ -340,7 +340,7 @@ export const WORLD_CUP_STAGE_CARDS = [
     title: { zh: '赛程窗口', en: 'Schedule Window' },
     value: { zh: '6/11 - 7/19', en: 'Jun 11 - Jul 19' },
     detail: {
-      zh: '页面优先读取官方竞彩赛程；世界杯场次上线后自动纳入观察池。',
+      zh: '页面优先读取官方竞彩赛程；世界杯场次上线后自动纳入推荐池。',
       en: 'The page prioritizes official Sporttery fixtures and folds World Cup matches into the watch pool.'
     }
   }
@@ -366,7 +366,7 @@ export const WORLD_CUP_KNOCKOUT_ROUNDS: WorldCupKnockoutRound[] = [
     title: { zh: '四分之一决赛', en: 'Quarter-finals' },
     dates: { zh: '7/9 - 7/11', en: 'Jul 9 - Jul 11' },
     matches: 4,
-    detail: { zh: '模型重点看赛程消耗、伤停和临场赔率。', en: 'Model focus shifts to fatigue, injuries and late market movement.' }
+    detail: { zh: '重点看赛程消耗、伤停和临场赔率。', en: 'Focus shifts to fatigue, injuries and late market movement.' }
   },
   {
     id: 'sf',
@@ -431,8 +431,8 @@ export const WORLD_CUP_CONTENT_LANES = [
     status: { zh: '已上线', en: 'Live' },
     title: { zh: '世界杯首页推荐', en: 'Home Spotlight' },
     items: {
-      zh: ['首页专栏入口', '当前观察场次', '赔率与推荐方向'],
-      en: ['Home entry', 'Watch matches', 'odds and pick direction']
+      zh: ['首页专栏入口', '重点推荐场次', '赔率与推荐方向'],
+      en: ['Home entry', 'featured matches', 'odds and pick direction']
     }
   },
   {
@@ -1340,7 +1340,7 @@ export function getWorldCupRound32Pairings(groupStandings: WorldCupGroupStanding
           }
         : source === 'mixed'
           ? {
-              zh: '按当前赛果排序，未完赛部分用模型补齐。',
+              zh: '按当前赛果排序，未完赛部分用赛前预测补齐。',
               en: 'Uses current results first, with model fill-in for unfinished groups.'
             }
           : {
@@ -1401,7 +1401,7 @@ export function getWorldCupFixtureForecast(
     homeAdvanceProbability: home.advanceProbability,
     awayAdvanceProbability: away.advanceProbability,
     detail: {
-      zh: `世界杯模型：${homeText.zh}晋级 ${percentLabel(home.advanceProbability)}，${awayText.zh}晋级 ${percentLabel(away.advanceProbability)}；强弱差 ${Math.round(absEdge)}，${weaker.zh}仍保留防冷权重，未开售 SP 时只作赛程观察。`,
+      zh: `世界杯路径：${homeText.zh}晋级 ${percentLabel(home.advanceProbability)}，${awayText.zh}晋级 ${percentLabel(away.advanceProbability)}；强弱差 ${Math.round(absEdge)}，${weaker.zh}仍保留防冷权重，未开售 SP 时只作赛程跟踪。`,
       en: `World Cup model: ${homeText.en} advance ${percentLabel(home.advanceProbability)}, ${awayText.en} advance ${percentLabel(away.advanceProbability)}; strength gap ${Math.round(absEdge)}, ${weaker.en} still keeps upset weight. Before SP release this stays fixture watch only.`
     }
   };
@@ -1477,7 +1477,7 @@ const teamReason = (teamId: string, support: number | null, trust: number): Mult
   const trustText = trust ? `${trust}%` : '--';
 
   return {
-    zh: `${team.shortName.zh} 当前赔率支持 ${supportText}，推荐强度 ${trustText}，先列入世界杯观察池。`,
+    zh: `${team.shortName.zh} 当前赔率支持 ${supportText}，推荐强度 ${trustText}，先列入世界杯推荐池。`,
     en: `${team.shortName.en} is in the watch pool with odds support ${supportText} and pick strength ${trustText}.`
   };
 };

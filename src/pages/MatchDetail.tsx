@@ -350,7 +350,7 @@ const getHandicapOverridePrediction = (match: Match, promotedPrediction?: Predic
     recommendationAction: 'reference',
     recommendationTier: 'handicap-override-reference',
     explanation: {
-      zh: `普通胜平负不作为本场主推荐，让球模型和官方让球盘同向，推荐切换为${label.zh}。`,
+      zh: `普通胜平负不作为本场主推荐，让球判断和官方让球盘同向，推荐切换为${label.zh}。`,
       en: `The raw 1X2 lane is not used as the main pick; model and official HHAD align, so the pick switches to ${label.en}.`
     },
     analysisItems: [],
@@ -421,7 +421,7 @@ const compactVersionLabel = (value: string | null | undefined, language: 'zh' | 
   if (!text) return '--';
   const version = text.match(/v\d+/i);
   if (version) return version[0].toUpperCase();
-  if (/unified-poisson/i.test(text)) return language === 'zh' ? '统一模型' : 'Unified';
+  if (/unified-poisson/i.test(text)) return language === 'zh' ? '赛前推荐' : 'Pre-match pick';
   if (/post-match-review/i.test(text)) return language === 'zh' ? '复盘v1' : 'Review v1';
   return text.split('-').slice(0, 2).join('-') || text;
 };
@@ -1341,20 +1341,22 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     || probabilityModel?.version
     || postMatchReview?.version
     || '--';
+  const predictionVersionDisplayText = compactVersionLabel(predictionVersionText, language)
+    || (language === 'zh' ? '赛前推荐' : 'Pre-match pick');
   const predictionNavVersionBase = predictionMeta?.policyVersion
     || probabilityModel?.version
     || predictionMeta?.promptVersion
     || postMatchReview?.version;
-  const predictionNavVersionText = [
-    compactVersionLabel(predictionNavVersionBase, language),
-    isPredictionArchiveOnly
+  const predictionNavStatusText = isPredictionArchiveOnly
       ? (language === 'zh' ? '赛果归档' : 'archive')
       : postMatchReview
       ? (language === 'zh' ? '赛后复盘' : 'review')
       : (predictionMeta?.lockedAt || predictionLockedByCutoff || match.status !== 'SCHEDULED')
         ? (language === 'zh' ? '已锁定' : 'locked')
-        : (language === 'zh' ? '监控中' : 'live')
-  ].filter(Boolean).join(' · ');
+        : (language === 'zh' ? '监控中' : 'live');
+  const predictionNavVersionText = predictionNavVersionBase
+    ? predictionNavStatusText
+    : (language === 'zh' ? '待补齐' : 'pending');
   const navTrustScore = Number(primaryOutcomePrediction?.trustScore ?? primaryPostReviewRow?.trustScore ?? matchSignal.trustScore);
   const navSummaryDetail = isPredictionArchiveOnly
     ? officialScoreText.replace(/\s+/g, '')
@@ -1671,7 +1673,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     },
     {
       title: language === 'zh' ? '盘口变化' : 'Market movement',
-      value: match.oddsTrend ? `${match.oddsTrend.sampleSize}次快照` : (language === 'zh' ? '待观察' : 'Pending'),
+      value: match.oddsTrend ? `${match.oddsTrend.sampleSize}次快照` : (language === 'zh' ? '快照待补' : 'Snapshot pending'),
       tone: match.oddsTrend?.direction === 'mixed' ? 'warning' : match.oddsTrend ? 'success' : 'neutral',
       body: match.oddsTrend
         ? `${match.oddsTrend.summary[language]}${oddsChangeText ? `（${oddsChangeText}）` : ''}`
@@ -1746,7 +1748,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     },
     {
       key: 'model',
-      label: language === 'zh' ? '版本' : 'Version',
+      label: language === 'zh' ? '状态' : 'Status',
       detail: predictionNavVersionText
     },
     {
@@ -2286,7 +2288,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                       <strong>{projectedScoreText}</strong>
                       <em>{postMatchReview
                         ? (language === 'zh' ? '比分快照缺失' : 'Score snapshot missing')
-                        : (language === 'zh' ? '等待模型分布' : 'Waiting for distribution')}</em>
+                        : (language === 'zh' ? '等待比分分布' : 'Waiting for score distribution')}</em>
                     </div>
                   )}
                 </div>
@@ -2542,7 +2544,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
             <div className={`card signal-summary-card is-${matchSignal.category}`}>
               <div>
                 <span className={`signal-badge is-${matchSignal.category}`}>{matchSignal.label[language]}</span>
-                <h3>{language === 'zh' ? '赛前判断' : 'Pre-Match Read'}</h3>
+                <h3>{language === 'zh' ? '推荐判断' : 'Pick Read'}</h3>
                 <p>{matchSignal.note[language]}</p>
               </div>
               <div className="signal-summary-meta">
@@ -2564,8 +2566,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                   : (language === 'zh' ? '推荐状态：赛前监控中' : 'Pick status: monitoring')}</strong>
                 <span>
                   {language === 'zh'
-                    ? `当前版本：${predictionVersionText} / 生成时间：${formatPolicyTimestamp(predictionGeneratedAt, language)} / 竞彩截止：${formatPolicyTimestamp(predictionCutoffRaw, language)}`
-                    : `Version: ${predictionVersionText} / Generated: ${formatPolicyTimestamp(predictionGeneratedAt, language)} / Cutoff: ${formatPolicyTimestamp(predictionCutoffRaw, language)}`}
+                    ? `推荐体系：${predictionVersionDisplayText} / 生成时间：${formatPolicyTimestamp(predictionGeneratedAt, language)} / 竞彩截止：${formatPolicyTimestamp(predictionCutoffRaw, language)}`
+                    : `Pick system: ${predictionVersionDisplayText} / Generated: ${formatPolicyTimestamp(predictionGeneratedAt, language)} / Cutoff: ${formatPolicyTimestamp(predictionCutoffRaw, language)}`}
                 </span>
               </div>
               <p>
@@ -2964,7 +2966,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                   </div>
                 </div>
                 <div>
-                  <h4>{language === 'zh' ? '观察风险' : 'Watchpoints'}</h4>
+                  <h4>{language === 'zh' ? '风险提醒' : 'Risk notes'}</h4>
                   <div className="insight-point-list">
                     {matchInsight.watchpoints.map((point) => (
                       <div key={point.title.zh} className={`insight-point is-${point.tone}`}>
@@ -2981,7 +2983,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
               <div className="professional-framework-head">
                 <div>
                   <span className="review-kicker">
-                    {language === 'zh' ? '专业分析框架' : 'Professional framework'}
+                    {language === 'zh' ? '赛前分析框架' : 'Pre-match framework'}
                   </span>
                   <h3>{language === 'zh' ? '12项赛前分析框架' : '12-Point Pre-Match Framework'}</h3>
                   <p>
@@ -3196,8 +3198,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
           ) : (
             <div className="card data-quality-note">
               {language === 'zh'
-                ? '这场比赛当前只有官方赛果记录，没有可验证的赛前模型参数，因此不展示模拟统计。'
-                : 'This match only has an official result record, so no simulated model stats are shown.'}
+                ? '这场比赛当前只有官方赛果记录，没有可用的赛前推荐参数，因此不展示模拟统计。'
+                : 'This match only has an official result record, so no simulated pick stats are shown.'}
             </div>
           )
         )}

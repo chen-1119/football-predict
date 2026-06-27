@@ -86,7 +86,7 @@ const copy = {
   fixtures: { zh: '世界杯竞彩场次', en: 'World Cup Sporttery Fixtures' },
   fixturesDesc: { zh: '只展示世界杯正赛窗口内的竞彩场次；未开售时保留赛制与路径预测，开售后接入赔率、让球和临场变化。', en: 'Only released tournament fixtures are shown here; odds and handicap join after release.' },
   noFixtures: { zh: '当前还没有已开售的世界杯正赛竞彩场次；页面先展示赛制、小组路径和淘汰赛推演，开售后会自动出现单场卡片。', en: 'No released World Cup Sporttery fixtures yet. Format and route projections remain visible until odds are available.' },
-  contenders: { zh: '争冠观察', en: 'Contender Watch' },
+  contenders: { zh: '争冠候选', en: 'Title Candidates' },
   upset: { zh: '爆冷雷达', en: 'Upset Radar' },
   dataStatus: { zh: '数据覆盖', en: 'Data Coverage' },
   dataStatusDesc: { zh: '已覆盖世界杯结构、小组路径、晋级规则、淘汰赛路线和当前竞彩场次；官方赔率、让球、赛果、临场赔率在开售/完场后并入。', en: 'Covers structure, group pathing, rules, knockout routes and released fixtures.' },
@@ -97,7 +97,7 @@ const copy = {
   trust: { zh: '推荐强度', en: 'Pick Strength' },
   sp: { zh: '赔率', en: 'Odds' },
   recommendation: { zh: '推荐方向', en: 'Pick' },
-  waiting: { zh: '待开售', en: 'Awaiting release' },
+  waiting: { zh: '待赛程', en: 'Awaiting fixtures' },
   disclaimer: { zh: '提示：本页为赛事数据分析与预测展示，仅供参考和娱乐研究使用，请理性看球。', en: 'Forecasts are for data analysis, reference and entertainment only.' }
 } as const;
 
@@ -313,8 +313,8 @@ const getMarketRecommendation = (
 
     return {
       label: language === 'zh'
-        ? `让球盘观察 ${hhad.handicap || ''}`.trim()
-        : `HHAD watch ${hhad.handicap || ''}`.trim(),
+        ? `让球倾向 ${hhad.handicap || ''}`.trim()
+        : `HHAD lean ${hhad.handicap || ''}`.trim(),
       detail: language === 'zh'
         ? `普通胜平负未开售，先看让球盘 ${labels[ranked[0].key]} 方向，去水 ${hhad.probabilities.home}/${hhad.probabilities.draw}/${hhad.probabilities.away}%。`
         : `1X2 is not released; handicap market leans ${labels[ranked[0].key]} with normalized ${hhad.probabilities.home}/${hhad.probabilities.draw}/${hhad.probabilities.away}%.`
@@ -489,9 +489,9 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
     { icon: CalendarDays, label: copy.kpis.matches[language], value: WORLD_CUP_OFFICIAL.matches, detail: `${WORLD_CUP_OFFICIAL.startDate} - ${WORLD_CUP_OFFICIAL.finalDate}` },
     { icon: Flag, label: copy.kpis.groups[language], value: WORLD_CUP_OFFICIAL.groups, detail: language === 'zh' ? '12 组 x 4 队' : '12 groups x 4 teams' },
     { icon: Trophy, label: copy.kpis.venues[language], value: WORLD_CUP_OFFICIAL.venues, detail: language === 'zh' ? '加拿大 / 墨西哥 / 美国' : 'Canada / Mexico / USA' },
-    { icon: Target, label: copy.kpis.sporttery[language], value: allWorldCupMatches.length || fixtureMatches.length, detail: fixtureMatches.length ? (language === 'zh' ? '已进入观察池' : 'In watch pool') : copy.waiting[language] },
+    { icon: Target, label: copy.kpis.sporttery[language], value: allWorldCupMatches.length || fixtureMatches.length, detail: fixtureMatches.length ? (language === 'zh' ? '已进入推荐池' : 'In pick pool') : copy.waiting[language] },
     { icon: Route, label: language === 'zh' ? '晋级名额' : 'Knockout Spots', value: 32, detail: language === 'zh' ? '前二 24 + 第三名 8' : 'Top two 24 + third-place 8' },
-    { icon: BarChart3, label: language === 'zh' ? '路径推演' : 'Route Runs', value: WORLD_CUP_FORECAST_MODEL.simulations.toLocaleString(), detail: WORLD_CUP_FORECAST_MODEL.version },
+    { icon: BarChart3, label: language === 'zh' ? '路径推演' : 'Route Runs', value: WORLD_CUP_FORECAST_MODEL.simulations.toLocaleString(), detail: language === 'zh' ? '排名 / 净胜球 / 路径' : 'Rank / GD / routes' },
     { icon: RefreshCw, label: copy.kpis.update[language], value: pageCheckedAt ? formatDateTime(pageCheckedAt, language) : '--', detail: updatedAt ? `${language === 'zh' ? '源' : 'Source'} ${formatDateTime(updatedAt, language)}` : '--' }
   ];
 
@@ -556,7 +556,7 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
           ) : (
             knockoutRoutes.slice(0, 3).map((route) => (
               <div className="worldcup-mini-match" key={`fallback-${route.team.id}`}>
-                <span className="worldcup-mini-label">{language === 'zh' ? '争冠路径观察' : 'Title route watch'}</span>
+                <span className="worldcup-mini-label">{language === 'zh' ? '争冠路径预测' : 'Title route forecast'}</span>
                 <span className="worldcup-mini-teams">
                   <span>{route.team.flag} {getTeamName(route.team, language)}</span>
                   <b>{formatPercent(route.champion)}</b>
@@ -812,7 +812,7 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
                   <p>{pickText(item.reason, language)}</p>
                 </button>
               );
-            }) : <div className="worldcup-empty">世界杯 SP 开售后生成争冠观察池。</div>}
+            }) : <div className="worldcup-empty">世界杯 SP 开售后生成争冠候选池。</div>}
           </div>
           <div className="worldcup-radar-list">
             {upsetRadar.length ? upsetRadar.map((item) => {
