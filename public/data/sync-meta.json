@@ -1,9 +1,9 @@
 {
   "version": 1,
   "source": "sporttery",
-  "updatedAt": "2026-06-27T17:35:07.458Z",
-  "capturedAt": "2026-06-27T17:35:07.458Z",
-  "lastAttemptAt": "2026-06-27T17:35:07.458Z",
+  "updatedAt": "2026-06-27T17:38:56.328Z",
+  "capturedAt": "2026-06-27T17:38:56.328Z",
+  "lastAttemptAt": "2026-06-27T17:38:56.328Z",
   "officialOddsMatches": 0,
   "officialHandicapOddsMatches": 0,
   "displayOddsMatches": 24,
@@ -30,7 +30,7 @@
     "current": 28,
     "history": 3021,
     "teams": 629,
-    "predictionSnapshots": 1596,
+    "predictionSnapshots": 1598,
     "postMatchReviews": 3021,
     "externalSignals": 569,
     "preMatchSignals": 42,
@@ -43,7 +43,7 @@
     "note": "GitHub Pages serves static JSON. The page checks for newer JSON regularly; GitHub Actions refreshes the source files on schedule."
   },
   "attempt": {
-    "capturedAt": "2026-06-27T17:35:07.458Z",
+    "capturedAt": "2026-06-27T17:38:56.328Z",
     "officialOddsMatches": 0,
     "officialHandicapOddsMatches": 0,
     "officialResultMatches": 0,
@@ -59,17 +59,17 @@
     "skipped": "fresh Sporttery odds unavailable; keeping existing 3049 matches"
   },
   "predictionSnapshots": {
-    "total": 1596,
+    "total": 1598,
     "byPhase": {
       "review": 85,
       "mid": 178,
-      "baseline": 1233,
+      "baseline": 1235,
       "late": 54,
       "final": 31,
       "locked": 15
     },
-    "appended": 3,
-    "updated": 0
+    "appended": 2,
+    "updated": 1
   },
   "postMatchReviews": {
     "total": 3021,
@@ -90,7 +90,7 @@
   },
   "externalSignals": {
     "source": "external-signals",
-    "updatedAt": "2026-06-27T17:35:04.996Z",
+    "updatedAt": "2026-06-27T17:38:54.324Z",
     "matches": 569,
     "webConsensusMatches": 0
   },
@@ -102,106 +102,135 @@
   "modelCalibration": {
     "version": "rolling-calibration-v1",
     "sample": {
-      "rows": 12,
+      "rows": 49,
       "oneXTwo": 0,
       "goals": 0,
-      "best": 12,
-      "recommendationPool": 12
+      "best": 49,
+      "recommendationPool": 49
     },
     "metrics": {
       "oneXTwoBrier": null,
       "oneXTwoLogLoss": null,
       "oneXTwoHitRate": null,
       "goalsHitRate": null,
-      "bestHitRate": 0.667
+      "bestHitRate": 0.531
     },
     "scoreCalibration": {
       "version": "score-calibration-v2",
       "sample": {
-        "rows": 12,
-        "recentRows": 8,
-        "totalProjectedRows": 12,
+        "rows": 49,
+        "recentRows": 7,
+        "totalProjectedRows": 49,
         "sampleDays": 14,
         "recentDays": 2,
         "rollingDays": 14,
         "minRows": 12,
-        "exactHitRate": 0,
-        "top3ExactHitRate": 0.25,
-        "outcomeHitRate": 0.75,
-        "top3OutcomeHitRate": 0.917,
-        "over25HitRate": 0.667,
-        "top3Over25HitRate": 1,
-        "totalBandHitRate": 0.167,
-        "top3TotalBandHitRate": 0.667,
-        "avgActualGoals": 3.58,
-        "avgProjectedGoals": 2.67,
-        "actualOver25Rate": 0.667,
-        "projectedOver25Rate": 0.667,
-        "actualBttsRate": 0.667,
-        "projectedBttsRate": 0.75,
-        "projectedLowScoreRate": 0.333,
+        "exactHitRate": 0.082,
+        "top3ExactHitRate": 0.265,
+        "outcomeHitRate": 0.633,
+        "top3OutcomeHitRate": 0.857,
+        "over25HitRate": 0.49,
+        "top3Over25HitRate": 0.816,
+        "totalBandHitRate": 0.143,
+        "top3TotalBandHitRate": 0.571,
+        "avgActualGoals": 3.16,
+        "avgProjectedGoals": 2.45,
+        "actualOver25Rate": 0.612,
+        "projectedOver25Rate": 0.429,
+        "actualBttsRate": 0.551,
+        "projectedBttsRate": 0.531,
+        "projectedLowScoreRate": 0.571,
         "actualScores": {
-          "1-0": 2,
-          "1-1": 2,
-          "3-1": 2,
-          "1-3": 1,
-          "1-4": 1,
-          "3-0": 1,
+          "1-1": 6,
+          "0-0": 5,
+          "1-0": 4,
+          "1-3": 3,
+          "3-1": 3,
+          "0-1": 2,
+          "0-3": 2,
+          "1-4": 2,
+          "2-1": 2,
+          "2-2": 2,
+          "3-0": 2,
+          "3-2": 2,
+          "4-2": 2,
+          "5-0": 2,
+          "0-2": 1,
+          "0-4": 1,
+          "1-2": 1,
+          "1-5": 1,
+          "2-0": 1,
+          "4-0": 1,
           "4-1": 1,
-          "4-2": 1,
+          "4-3": 1,
+          "5-1": 1,
           "6-0": 1
         },
         "projectedScores": {
-          "2-1": 7,
-          "2-0": 2,
-          "0-2": 1,
-          "1-1": 1,
-          "1-2": 1
+          "2-1": 11,
+          "1-1": 10,
+          "2-0": 10,
+          "0-2": 5,
+          "1-3": 3,
+          "3-0": 3,
+          "0-1": 2,
+          "0-3": 2,
+          "1-0": 1,
+          "1-2": 1,
+          "3-1": 1
         },
         "actualBands": {
-          "2": 2,
-          "3": 1,
-          "4+": 7,
-          "0-1": 2
+          "2": 8,
+          "3": 7,
+          "4+": 23,
+          "0-1": 11
         },
         "projectedBands": {
-          "2": 4,
-          "3": 8
+          "2": 25,
+          "3": 17,
+          "4+": 4,
+          "0-1": 3
         },
         "actualShapes": {
-          "clear-btts-open": 6,
-          "draw-btts": 2,
-          "low-0-1": 2,
-          "clear-clean-sheet": 1,
-          "open-4plus": 1
+          "clear-btts-open": 13,
+          "low-0-1": 11,
+          "draw-btts": 8,
+          "open-4plus": 8,
+          "clear-clean-sheet": 6,
+          "one-goal-btts": 3
         },
         "projectedShapes": {
-          "one-goal-btts": 8,
-          "clear-clean-sheet": 3,
-          "draw-btts": 1
+          "clear-clean-sheet": 20,
+          "one-goal-btts": 12,
+          "draw-btts": 10,
+          "clear-btts-open": 4,
+          "low-0-1": 3
         }
       },
       "adjustments": {
-        "totalLambdaAdjustment": 0,
-        "over25ProbabilityShift": 0,
+        "totalLambdaAdjustment": 0.054,
+        "over25ProbabilityShift": 0.022,
         "bttsProbabilityShift": 0,
-        "lowScoreRankPenalty": 0,
-        "openScoreRankBoost": 0,
+        "lowScoreRankPenalty": 0.032,
+        "openScoreRankBoost": 0.05,
         "bttsRankBoost": 0,
         "bandRankBoosts": {
-          "2": -0.017,
-          "3": -0.055,
-          "4+": 0.095,
-          "0-1": 0.03
+          "2": -0.035,
+          "3": -0.02,
+          "4+": 0.07,
+          "0-1": 0.029
         },
         "shapeRankBoosts": {
-          "clear-btts-open": 0.1,
-          "one-goal-btts": -0.06,
+          "clear-btts-open": 0.037,
           "low-0-1": 0.033,
-          "clear-clean-sheet": -0.016
+          "open-4plus": 0.033,
+          "clear-clean-sheet": -0.026,
+          "one-goal-btts": -0.017
         }
       },
       "reasons": [
+        "recent-actual-goals-above-projection",
+        "recent-over25-above-projection",
         "rolling-score-sample-for-hit-rate",
         "top3-score-covers-more-than-primary",
         "score-total-band-hit-rate-adjustment",
@@ -211,7 +240,7 @@
   },
   "modelStrategy": {
     "version": "self-optimization-v1",
-    "generatedAt": "2026-06-27T17:35:07.387Z",
+    "generatedAt": "2026-06-27T17:38:56.255Z",
     "activation": {
       "mode": "cooling-only",
       "onlineEffect": "guarded-active",
@@ -222,19 +251,19 @@
     },
     "sample": {
       "matches": 3049,
-      "settledRows": 158,
-      "officialRows": 158,
-      "postMatchReviewRows": 124,
-      "recommendationRows": 101,
-      "bestRows": 41,
-      "goalsRows": 57,
+      "settledRows": 380,
+      "officialRows": 380,
+      "postMatchReviewRows": 235,
+      "recommendationRows": 249,
+      "bestRows": 95,
+      "goalsRows": 131,
       "webConsensusRows": 0
     },
     "activeGates": {
-      "profile": 2,
+      "profile": 1,
       "market": 1,
       "marketProfile": 3,
-      "oddsBucket": 3,
+      "oddsBucket": 2,
       "tip": 3,
       "webConsensus": 0,
       "reviewSignal": 5
