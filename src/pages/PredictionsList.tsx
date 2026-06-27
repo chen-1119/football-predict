@@ -141,6 +141,13 @@ interface ParlayPreview {
   source: 'sp';
 }
 
+interface HomePageOddsFallback {
+  label: string;
+  marketLabel: string;
+  tipLabel: string;
+  odds: number;
+}
+
 const getDailyReviewStats = (matches: Match[]): DailyReviewStats => {
   const stats = matches.reduce((acc, match) => {
     const review = match.postMatchReview?.predictionReview;
@@ -356,6 +363,25 @@ const getHomePageOddsRows = (match: Match, language: 'zh' | 'en'): SportteryOdds
   }
 
   return fallbackRows;
+};
+
+const getHomePageOddsFallback = (match: Match, language: 'zh' | 'en'): HomePageOddsFallback | null => {
+  const displayRecommendation = getDisplayRecommendation(match, language);
+  const reviewRow = getSettledPostReviewRow(match, displayRecommendation?.prediction);
+  const reviewPrediction = predictionFromReviewRow(reviewRow);
+  const prediction = reviewPrediction || displayRecommendation?.prediction || getBestPrediction(match);
+  const odds = Number(prediction?.odds || 0);
+  if (!prediction || !Number.isFinite(odds) || odds <= 0) return null;
+
+  const isReview = match.status === 'FINISHED' || Boolean(reviewRow);
+  return {
+    label: language === 'zh'
+      ? (isReview ? '赛后SP' : '推荐SP')
+      : (isReview ? 'Review SP' : 'Pick SP'),
+    marketLabel: getPredictionMarketLabel(prediction, language),
+    tipLabel: getPredictionTipDisplay(prediction, language, true),
+    odds
+  };
 };
 
 const getDecisionReason = (category: MatchSignalCategory, language: 'zh' | 'en') => {
@@ -1550,6 +1576,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
                           : t('liveScorePending');
                       const formattedTime = formatKickoffTime(match.kickoffTime, language);
                       const poolRows = getHomePageOddsRows(match, language);
+                      const oddsFallback = poolRows.length > 0 ? null : getHomePageOddsFallback(match, language);
                       const signal = getMatchSignal(match);
                       const rowRecommendation = getDisplayRecommendation(match, language);
                       const sportteryMeta = getSportteryMeta(match, language);
@@ -1649,6 +1676,12 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
                                     </div>
                                   );
                                 })}
+                              </div>
+                            ) : oddsFallback ? (
+                              <div className="odds-sp-fallback">
+                                <span>{oddsFallback.label}</span>
+                                <strong>{oddsFallback.odds.toFixed(2)}</strong>
+                                <em>{oddsFallback.marketLabel} · {oddsFallback.tipLabel}</em>
                               </div>
                             ) : (
                               <span className="status-note">{language === 'zh' ? '赔率待开售' : 'Odds pending'}</span>

@@ -2406,6 +2406,39 @@ button.status-pill:hover {
   color: hsl(var(--text-muted));
 }
 
+.odds-sp-fallback {
+  display: inline-grid;
+  min-width: 8.5rem;
+  max-width: 100%;
+  gap: 0.18rem;
+  padding: 0.52rem 0.62rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--bg) / 0.62);
+  text-align: left;
+}
+
+.odds-sp-fallback span {
+  color: hsl(var(--text-muted));
+  font-size: 0.68rem;
+  font-weight: 850;
+}
+
+.odds-sp-fallback strong {
+  color: hsl(var(--premium));
+  font-size: 1.08rem;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.odds-sp-fallback em {
+  color: hsl(var(--text-secondary));
+  font-size: 0.7rem;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
 .detail-odds-source {
   margin: 0;
   padding: 0.45rem 0.6rem;
@@ -6615,6 +6648,13 @@ body {
 
 .sporttery-pool-row + .sporttery-pool-row {
   border-top-color: hsl(var(--wc-cream) / 0.1);
+}
+
+.odds-sp-fallback {
+  border-color: hsl(var(--wc-cream) / 0.14);
+  background:
+    linear-gradient(145deg, hsl(var(--wc-emerald) / 0.055), transparent 55%),
+    hsl(var(--bg-card) / 0.88);
 }
 
 .sporttery-pool-row strong,
