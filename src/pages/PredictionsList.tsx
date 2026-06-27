@@ -15,12 +15,15 @@ import { useApp } from '../context/AppContextCore';
 import { formatBeijingDateString, getDateStringOffset, leagues } from '../services/mockData';
 import type { Country, League, Match, PredictionDetail, Team } from '../services/mockData';
 import {
+  getImpliedProbabilities,
   getOfficialMatchOdds,
   getOfficialResultPoolAvailability,
   getPredictionMarketLabel,
   getPredictionTipDisplay,
+  getResolvedMatchOdds,
   getSportteryPoolRows
 } from '../services/bettingDisplay';
+import type { SportteryOddsPoolDisplay } from '../services/bettingDisplay';
 import { getCountryById, getLeagueById, getTeamById } from '../services/entities';
 import { getMatchSignal, type MatchSignalCategory } from '../services/matchSignal';
 import { getVisiblePrediction } from '../services/predictionVisibility';
@@ -321,9 +324,39 @@ const minutesSinceKickoff = (match: Match) => {
   return Math.floor((Date.now() - kickoffAt) / 60000);
 };
 
-const getHomePageOddsRows = (match: Match, language: 'zh' | 'en') => (
-  getSportteryPoolRows(match, language).filter((row) => row.odds)
-);
+const getHomePageOddsRows = (match: Match, language: 'zh' | 'en'): SportteryOddsPoolDisplay[] => {
+  const officialRows = getSportteryPoolRows(match, language).filter((row) => row.odds);
+  if (officialRows.length > 0) return officialRows;
+
+  const resolved = getResolvedMatchOdds(match);
+  const fallbackRows: SportteryOddsPoolDisplay[] = [];
+
+  if (resolved.had?.odds) {
+    fallbackRows.push({
+      poolCode: 'HAD',
+      label: language === 'zh' ? '胜平负参考' : '1X2 ref',
+      handicap: '0',
+      odds: resolved.had.odds,
+      source: resolved.had.source,
+      updatedAt: resolved.had.updatedAt,
+      probabilities: getImpliedProbabilities(resolved.had.odds)
+    });
+  }
+
+  if (resolved.hhad?.odds) {
+    fallbackRows.push({
+      poolCode: 'HHAD',
+      label: language === 'zh' ? '让球参考' : 'Handicap ref',
+      handicap: resolved.hhad.handicap || match.handicapLine || '',
+      odds: resolved.hhad.odds,
+      source: resolved.hhad.source,
+      updatedAt: resolved.hhad.updatedAt,
+      probabilities: getImpliedProbabilities(resolved.hhad.odds)
+    });
+  }
+
+  return fallbackRows;
+};
 
 const getDecisionReason = (category: MatchSignalCategory, language: 'zh' | 'en') => {
   const reasons: Record<MatchSignalCategory, Record<'zh' | 'en', string>> = {
@@ -1618,7 +1651,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
                                 })}
                               </div>
                             ) : (
-                              <span className="status-note">--</span>
+                              <span className="status-note">{language === 'zh' ? '赔率待开售' : 'Odds pending'}</span>
                             )}
                           </td>
 
