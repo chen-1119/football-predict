@@ -10,9 +10,9 @@ const DATA_DIR = path.join(PUBLIC_DIR, "data");
 const DETAILS_FILE = path.join(DATA_DIR, "five-hundred-details.json");
 const EXTERNAL_SIGNALS_FILE = path.join(DATA_DIR, "external-signals.json");
 const SOURCE_URL = process.env.FIVE_HUNDRED_JCZQ_URL || "https://trade.500.com/jczq/";
-const MAX_MATCHES = Math.max(1, Number(process.env.FIVE_HUNDRED_DETAILS_MAX_MATCHES || 24));
+const MAX_MATCHES = Math.max(1, Number(process.env.FIVE_HUNDRED_DETAILS_MAX_MATCHES || 80));
 const REFRESH_MINUTES = Math.max(30, Number(process.env.FIVE_HUNDRED_DETAILS_REFRESH_MINUTES || 180));
-const RESULT_LOOKBACK_HOURS = Math.max(1, Number(process.env.FIVE_HUNDRED_RESULT_LOOKBACK_HOURS || 48));
+const RESULT_LOOKBACK_HOURS = Math.max(1, Number(process.env.FIVE_HUNDRED_RESULT_LOOKBACK_HOURS || 168));
 const DETAIL_TIMEOUT_SECONDS = Math.max(5, Number(process.env.FIVE_HUNDRED_DETAILS_TIMEOUT_SECONDS || 10));
 const MAX_ERRORS = Math.max(1, Number(process.env.FIVE_HUNDRED_DETAILS_MAX_ERRORS || 3));
 const USER_AGENT = process.env.FIVE_HUNDRED_USER_AGENT
@@ -55,6 +55,18 @@ const compactNumber = (value, digits = 2) => {
   const number = Number(value);
   return Number.isFinite(number) ? Number(number.toFixed(digits)) : null;
 };
+
+const hasFiniteValue = (value) => value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value));
+
+const hasUsableFiveHundredSignal = (signal) => Boolean(
+  signal?.recentForm?.home?.sampleSize
+  || signal?.recentForm?.away?.sampleSize
+  || Number(signal?.europeOdds?.companies || 0) > 0
+  || Number(signal?.asianHandicap?.companies || 0) > 0
+  || hasFiniteValue(signal?.asianHandicap?.currentAverageLine)
+  || signal?.rank?.home?.fifaRank
+  || signal?.rank?.away?.fifaRank
+);
 
 const isFresh = (iso, minutes) => {
   const time = Date.parse(iso || "");
@@ -924,15 +936,14 @@ const selectTargets = (rows, cache) => {
       const cached = cache.matches?.[row.sourceMatchId];
       const recentKickoff = Number.isFinite(kickoff) && now - kickoff <= RESULT_LOOKBACK_HOURS * 3600000;
       const hasUsableCachedDetails = Boolean(
-        cached?.signal?.fiveHundred?.recentForm
-        || cached?.signal?.fiveHundred?.europeOdds
-        || cached?.signal?.fiveHundred?.asianHandicap
-        || cached?.details?.analysis
-        || cached?.details?.europeOdds
-        || cached?.details?.asianHandicap
+        hasUsableFiveHundredSignal(cached?.signal?.fiveHundred)
+        || cached?.details?.analysis?.recentForm?.home?.sampleSize
+        || cached?.details?.analysis?.recentForm?.away?.sampleSize
+        || Number(cached?.details?.europeOdds?.companies || 0) > 0
+        || Number(cached?.details?.asianHandicap?.companies || 0) > 0
       );
       if (Number.isFinite(kickoff) && kickoff + 2 * 3600000 < now && !recentKickoff && hasUsableCachedDetails) return false;
-      return !cached || !isFresh(cached.updatedAt, REFRESH_MINUTES);
+      return !cached || !hasUsableCachedDetails || !isFresh(cached.updatedAt, REFRESH_MINUTES);
     })
     .slice(0, MAX_MATCHES);
 };
@@ -961,10 +972,12 @@ const main = async () => {
     const hasMatchResult = Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway);
     const hasCachedResult = Number.isFinite(cached.signal?.fiveHundred?.result?.scoreHome)
       && Number.isFinite(cached.signal?.fiveHundred?.result?.scoreAway);
-    if (!hasMatchResult && !hasCachedResult && Number.isFinite(kickoff) && kickoff + 2 * 3600000 < Date.now()) return;
+    const hasUsableCachedSignal = hasUsableFiveHundredSignal(cached.signal?.fiveHundred);
+    if (!hasMatchResult && !hasCachedResult && !hasUsableCachedSignal && Number.isFinite(kickoff) && kickoff + 2 * 3600000 < Date.now()) return;
     const signal = hasMatchResult
       ? buildDetailSignal(match, cached.details || {}, updatedAt)
       : cached.signal;
+    if (!hasUsableFiveHundredSignal(signal.fiveHundred)) return;
     if (hasMatchResult) {
       detailsMatches[match.sourceMatchId] = {
         ...cached,
@@ -1000,6 +1013,9 @@ const main = async () => {
       };
       requestedPages += [match.urls.analysis, match.urls.europeOdds, match.urls.asianHandicap].filter(Boolean).length;
       const signal = buildDetailSignal(match, details, updatedAt);
+      if (!hasUsableFiveHundredSignal(signal.fiveHundred)) {
+        throw new Error("empty 500 detail payload");
+      }
       const payload = {
         ...match,
         updatedAt,

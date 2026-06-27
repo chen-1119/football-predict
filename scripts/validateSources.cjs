@@ -54,13 +54,13 @@ function matchUsesFiveHundred(match) {
 function matchHasUsableFiveHundredDetails(match) {
   const signal = match?.externalSignals?.fiveHundred;
   if (!signal || typeof signal !== "object") return false;
-  const asianAverageLine = Number(signal.asianHandicap?.currentAverageLine);
+  const asianAverageLine = signal.asianHandicap?.currentAverageLine;
   return Boolean(
     signal.recentForm?.home?.sampleSize
     || signal.recentForm?.away?.sampleSize
-    || signal.europeOdds?.companies
-    || signal.asianHandicap?.companies
-    || Number.isFinite(asianAverageLine)
+    || Number(signal.europeOdds?.companies || 0) > 0
+    || Number(signal.asianHandicap?.companies || 0) > 0
+    || (asianAverageLine !== null && asianAverageLine !== undefined && asianAverageLine !== "" && Number.isFinite(Number(asianAverageLine)))
     || signal.rank?.home?.fifaRank
     || signal.rank?.away?.fifaRank
   );
