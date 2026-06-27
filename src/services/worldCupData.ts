@@ -67,7 +67,7 @@ export interface WorldCupGroupForecast extends Omit<WorldCupGroupSeed, 'teams'> 
 
 export type WorldCupStandingSource = 'actual' | 'mixed' | 'projected';
 
-export type WorldCupQualificationZone = 'direct' | 'best-third' | 'outside';
+export type WorldCupQualificationZone = 'direct' | 'best-third' | 'outside' | 'eliminated';
 
 export interface WorldCupStandingTeam extends WorldCupTeamForecast {
   played: number;
@@ -1172,7 +1172,11 @@ export function getWorldCupLiveGroupStandings(
     teams.forEach((team, index) => {
       team.actualRank = index + 1;
       team.standingSource = source;
-      team.qualificationZone = index < 2 ? 'direct' : 'outside';
+      team.qualificationZone = index < 2
+        ? 'direct'
+        : source === 'actual' && index >= 3
+          ? 'eliminated'
+          : 'outside';
     });
 
     return {
@@ -1188,11 +1192,14 @@ export function getWorldCupLiveGroupStandings(
     .sort(compareBestThirdStandings)
     .slice(0, 8);
 
+  const allGroupsComplete = standings.every((group) => group.source === 'actual');
   const bestThirdIds = new Set(bestThird.map((team) => team.id));
   standings.forEach((group) => {
     group.teams.forEach((team) => {
       if (team.actualRank === 3 && bestThirdIds.has(team.id)) {
         team.qualificationZone = 'best-third';
+      } else if (team.actualRank === 3 && allGroupsComplete) {
+        team.qualificationZone = 'eliminated';
       }
     });
   });
@@ -1289,6 +1296,7 @@ const resolveRound32Side = (
     .filter((group) => side.groupIds.includes(group.id))
     .map((group) => group.teams.find((team) => team.actualRank === 3))
     .filter((team): team is WorldCupStandingTeam => Boolean(team))
+    .filter((team) => team.qualificationZone !== 'eliminated')
     .filter((team) => !usedThirdIds.has(team.id))
     .sort(compareBestThirdStandings)[0] || null;
   if (fallbackThird) usedThirdIds.add(fallbackThird.id);

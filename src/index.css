@@ -4880,6 +4880,15 @@ button.status-pill:hover {
   white-space: nowrap;
 }
 
+.worldcup-group-team-row.is-eliminated .worldcup-team-copy em {
+  background: hsl(var(--danger) / 0.12);
+  color: hsl(var(--danger));
+}
+
+.worldcup-group-team-row.is-eliminated .worldcup-team-prob b {
+  color: hsl(var(--danger));
+}
+
 .worldcup-team-prob {
   align-items: flex-end;
 }
@@ -7324,6 +7333,10 @@ body {
 
 .worldcup-group-team-row:hover {
   border-color: hsl(var(--wc-gold) / 0.32);
+}
+
+.worldcup-group-team-row.is-eliminated {
+  border-color: hsl(var(--danger) / 0.24);
 }
 
 .worldcup-team-prob b {

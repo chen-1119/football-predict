@@ -174,7 +174,11 @@ const getStandingSourceLabel = (source: WorldCupStandingTeam['standingSource'], 
 const getQualificationLabel = (team: WorldCupStandingTeam, language: Locale) => {
   if (team.qualificationZone === 'direct') return language === 'zh' ? '直接出线区' : 'Direct lane';
   if (team.qualificationZone === 'best-third') return language === 'zh' ? '最佳第三区' : 'Best third lane';
-  return language === 'zh' ? '待追赶' : 'Chasing';
+  if (team.qualificationZone === 'eliminated') return language === 'zh' ? '出局' : 'Eliminated';
+  if (team.actualRank === 3) return language === 'zh' ? '第三名待比较' : 'Third-place pending';
+  return team.standingSource === 'projected'
+    ? (language === 'zh' ? '出局风险' : 'Elimination risk')
+    : (language === 'zh' ? '待追赶' : 'Chasing');
 };
 
 const getStandingLine = (team: WorldCupStandingTeam, language: Locale) => {
@@ -194,7 +198,7 @@ const GroupTeamRow = ({ team, language }: { team: WorldCupStandingTeam; language
   const status = getQualificationLabel(team, language);
 
   return (
-    <article className="worldcup-group-team-row">
+    <article className={`worldcup-group-team-row is-${team.qualificationZone}`}>
       <TeamFlag team={team} />
       <div className="worldcup-team-copy">
         <strong>{getTeamName(team, language)}</strong>
