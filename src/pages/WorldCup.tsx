@@ -291,7 +291,7 @@ const getMarketRecommendation = (
           : `HHAD ${hhad.handicap || '--'}: ${hhad.probabilities.home}/${hhad.probabilities.draw}/${hhad.probabilities.away}%`)
       : (language === 'zh' ? '让球盘待确认' : 'handicap pending');
     const label = leader.key === 'draw' || gap < 6
-      ? (language === 'zh' ? '均势防平' : 'Tight draw watch')
+      ? (language === 'zh' ? '均势防平' : 'Tight draw cover')
       : gap >= 18
         ? (language === 'zh' ? `${labels[leader.key]}倾向` : `${labels[leader.key]} lean`)
         : (language === 'zh' ? `${labels[leader.key]}优先，防平` : `${labels[leader.key]} first, cover draw`);

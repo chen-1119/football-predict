@@ -341,7 +341,7 @@ export const WORLD_CUP_STAGE_CARDS = [
     value: { zh: '6/11 - 7/19', en: 'Jun 11 - Jul 19' },
     detail: {
       zh: '页面优先读取官方竞彩赛程；世界杯场次上线后自动纳入推荐池。',
-      en: 'The page prioritizes official Sporttery fixtures and folds World Cup matches into the watch pool.'
+      en: 'The page prioritizes official Sporttery fixtures and folds World Cup matches into the pick pool.'
     }
   }
 ];
@@ -439,8 +439,8 @@ export const WORLD_CUP_CONTENT_LANES = [
     status: { zh: '已接入', en: 'Live' },
     title: { zh: '赛前分析内容', en: 'Pre-match Analysis' },
     items: {
-      zh: ['小组赛预测', '淘汰赛路径', '冠军候选观察'],
-      en: ['Group forecasts', 'Knockout routes', 'Contender watch']
+      zh: ['小组赛预测', '淘汰赛路径', '冠军候选'],
+      en: ['Group forecasts', 'Knockout routes', 'Contenders']
     }
   },
   {
@@ -1390,7 +1390,7 @@ export function getWorldCupFixtureForecast(
           }
         : {
             zh: '均势防平',
-            en: 'Balanced draw watch'
+            en: 'Balanced draw cover'
           };
 
   return {
@@ -1402,7 +1402,7 @@ export function getWorldCupFixtureForecast(
     awayAdvanceProbability: away.advanceProbability,
     detail: {
       zh: `世界杯路径：${homeText.zh}晋级 ${percentLabel(home.advanceProbability)}，${awayText.zh}晋级 ${percentLabel(away.advanceProbability)}；强弱差 ${Math.round(absEdge)}，${weaker.zh}仍保留防冷权重，未开售 SP 时只作赛程跟踪。`,
-      en: `World Cup model: ${homeText.en} advance ${percentLabel(home.advanceProbability)}, ${awayText.en} advance ${percentLabel(away.advanceProbability)}; strength gap ${Math.round(absEdge)}, ${weaker.en} still keeps upset weight. Before SP release this stays fixture watch only.`
+      en: `World Cup route: ${homeText.en} advance ${percentLabel(home.advanceProbability)}, ${awayText.en} advance ${percentLabel(away.advanceProbability)}; strength gap ${Math.round(absEdge)}, ${weaker.en} still keeps upset weight. Before SP release this stays as fixture tracking.`
     }
   };
 }
@@ -1478,7 +1478,7 @@ const teamReason = (teamId: string, support: number | null, trust: number): Mult
 
   return {
     zh: `${team.shortName.zh} 当前赔率支持 ${supportText}，推荐强度 ${trustText}，先列入世界杯推荐池。`,
-    en: `${team.shortName.en} is in the watch pool with odds support ${supportText} and pick strength ${trustText}.`
+    en: `${team.shortName.en} is in the pick pool with odds support ${supportText} and pick strength ${trustText}.`
   };
 };
 

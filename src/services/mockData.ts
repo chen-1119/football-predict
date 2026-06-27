@@ -1340,7 +1340,7 @@ const generateMatchPool = (): Match[] => {
       trustScore: Math.min(99, bestChoice.trustScore + 2), // Best Tip 信度偏高一点点
       explanation: {
         zh: `【主推】这是本场综合评分最高的推荐方向。结合两队伤停、战意和 SP 倾斜，保留临场复核。`,
-        en: `[AI Choice] This is the highest-value recommendation computed by our model for this match. Balanced for form, motivation, and line movements.`
+        en: `[Main Pick] This is the highest-rated pick for this match, balanced for form, motivation, and line movements.`
       },
       visibilityStatus: 'PREMIUM', // Best Tip 活跃比赛需要是 Premium
       resultStatus: bestChoice.resultStatus

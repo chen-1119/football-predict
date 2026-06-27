@@ -1846,8 +1846,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
             <h4>{language === 'zh' ? '计算公式' : 'Calculation Formula'}</h4>
             <p>
               {trace.policy?.[language] || (language === 'zh'
-                ? '先计算独立模型概率，再做风险校准；SP 只做市场校验。'
-                : 'Compute independent model probabilities first, then calibrate risk; SP is validation only.')}
+                ? '先计算基础概率，再做风险校准；SP 只做市场校验。'
+                : 'Compute baseline probabilities first, then calibrate risk; SP is validation only.')}
             </p>
           </div>
           <span>{trace.version}</span>
@@ -2585,7 +2585,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                 <div className="probability-model-head">
                   <div>
                     <span className="review-kicker">
-                      {language === 'zh' ? 'AI 增强分析' : 'AI Enhanced Read'}
+                      {language === 'zh' ? '赛前增强分析' : 'Enhanced Pre-Match Read'}
                     </span>
                     <h3>{language === 'zh' ? '赛前文字研判' : 'Pre-Match Analyst Note'}</h3>
                     <p>{gptParsed.summary || (language === 'zh' ? '已生成赛前分析。' : 'Pre-match analysis generated.')}</p>
@@ -2678,7 +2678,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                     <div className="probability-subline">
                       <span>
                         {probabilityModelIsModelOnly
-                          ? (language === 'zh' ? '模型基准' : 'Model baseline')
+                          ? (language === 'zh' ? '基础判断' : 'Baseline read')
                           : (language === 'zh' ? '市场去水' : 'Market')}：
                         {renderOutcomeLine(probabilityModel.oneXTwo.market)}
                       </span>
@@ -2789,7 +2789,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                       <div className="probability-pair-grid" style={{ marginBottom: '0.75rem' }}>
                         <span>
                           {probabilityModelIsModelOnly
-                            ? (language === 'zh' ? '模型期望' : 'Model xG')
+                            ? (language === 'zh' ? '基础期望' : 'Baseline xG')
                             : (language === 'zh' ? '市场期望' : 'Market xG')}
                           <strong>{formatDecimal(probabilityModel.lambdaBlend.marketHomeLambda)} / {formatDecimal(probabilityModel.lambdaBlend.marketAwayLambda)}</strong>
                         </span>
@@ -2892,7 +2892,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                       </>
                     ) : (
                       <p className="probability-empty">
-                        {language === 'zh' ? '暂无官方让球盘，先以 HAD 与比分分布观察。' : 'No official handicap pool yet; use HAD and score distribution first.'}
+                        {language === 'zh' ? '暂无官方让球盘，先以胜平负与比分分布参考。' : 'No official handicap pool yet; use 1X2 and score distribution first.'}
                       </p>
                     )}
                   </section>
@@ -2900,8 +2900,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
 
                 <p className="probability-calibration-note">
                   {probabilityModel.calibration?.[language] || (language === 'zh'
-                    ? '概率先由独立强度、Elo、Poisson、世界杯先验生成，再按滚动命中表现做风险校准；SP 只参与市场分歧校验。'
-                    : 'Probabilities are generated from independent strength, Elo, Poisson, and World Cup priors, then risk-calibrated by rolling results; SP is market-divergence validation only.')}
+                    ? '概率先由长期强弱、Elo、进球分布和世界杯背景生成，再按滚动命中表现做风险校准；SP 只参与市场校验。'
+                    : 'Probabilities are generated from long-run strength, Elo, score distribution, and World Cup context, then risk-calibrated by rolling results; SP is used for market validation only.')}
                 </p>
               </div>
             )}

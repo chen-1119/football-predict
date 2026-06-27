@@ -608,7 +608,7 @@ const buildProfessionalFramework = ({
       body: {
         zh: environmentSignals.zh
           ? `环境风险层：${environmentSignals.zh} 结合盘口变化判断比赛波动。`
-          : '天气、场地与裁判进入环境风险层：重点观察极端天气、场地速度、长途客场、出牌尺度、点球与红牌倾向，并结合盘口变化判断比赛波动。',
+          : '天气、场地与裁判进入环境风险层：重点留意极端天气、场地速度、长途客场、出牌尺度、点球与红牌倾向，并结合盘口变化判断比赛波动。',
         en: environmentSignals.en
           ? `Environment-risk layer: ${environmentSignals.en} Market movement is used to judge volatility.`
           : 'Weather, pitch, and referee profile sit in the environment-risk layer: extreme weather, pitch speed, travel, cards, penalties, and red-card tendency are checked against market movement for volatility.'
@@ -637,7 +637,7 @@ const buildProfessionalFramework = ({
       body: {
         zh: hasActionablePrimary
           ? `稳妥方向：${action.zh}；主线 ${tipZh}，推荐强度 ${trustScore || '--'}%，当前判断 ${finalProbabilities.zh}。风险点：${riskTextZh}。`
-          : `稳妥方向：先观察，不输出单一胜平负；当前判断 ${finalProbabilities.zh}，等待赔率、让球盘和历史表现进一步同向。风险点：${riskTextZh}。`,
+          : `稳妥方向：暂不输出单一胜平负；当前判断 ${finalProbabilities.zh}，等待赔率、让球盘和历史表现进一步同向。风险点：${riskTextZh}。`,
         en: hasActionablePrimary
           ? `Conservative: ${action.en}; main line ${tipEn}, pick strength ${trustScore || '--'}%, current read ${finalProbabilities.en}. Risks: ${riskTextEn}.`
           : `Conservative: ${action.en}, no single 1X2 pick; current read ${finalProbabilities.en}, wait for odds/handicap/history buckets to align. Risks: ${riskTextEn}.`
@@ -780,10 +780,10 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
 
   if (!primary) {
     return {
-      title: { zh: '待开售观察', en: 'Waiting for HAD' },
+      title: { zh: '等待开售', en: 'Waiting for HAD' },
       summary: {
-        zh: '普通胜平负暂未开售，当前只做盘面观察，不生成主推结论。',
-        en: 'Standard HAD is not on sale yet. This match is kept as market observation only.'
+        zh: '普通胜平负暂未开售，当前只展示盘面参考，不生成主推结论。',
+        en: 'Standard HAD is not on sale yet. This match is kept as market reference only.'
       },
       action,
       score: null,
@@ -798,8 +798,8 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
         {
           title: { zh: '当前盘面', en: 'Market state' },
           body: {
-            zh: `官方让球胜平负 SP 为 ${latestHhadOdds}，普通胜平负开售后再生成模型推荐。`,
-            en: `Official handicap SP is ${latestHhadOdds}. Model pick will be generated after HAD opens.`
+            zh: `官方让球胜平负 SP 为 ${latestHhadOdds}，普通胜平负开售后再生成推荐。`,
+            en: `Official handicap SP is ${latestHhadOdds}. A pick will be generated after HAD opens.`
           },
           tone: hhadProbabilities ? 'warning' : 'muted'
         }
@@ -879,8 +879,8 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
         {
           title: { zh: '临场触发条件', en: 'Late trigger' },
           body: {
-            zh: '只有官方赔率、让球盘、方向优势和历史表现同时改善，才允许从观察升为推荐；否则页面刷新也只保留原观察结论。',
-            en: 'If late odds and handicap remain split, keep watching. Upgrade only when edge, market confirmation, and historical buckets all improve.'
+            zh: '只有官方赔率、让球盘、方向优势和历史表现同时改善，才允许从参考提升为推荐；否则页面刷新也只保留原参考结论。',
+            en: 'If late odds and handicap remain split, keep it as reference. Upgrade only when edge, market confirmation, and historical buckets all improve.'
           },
           tone: 'warning'
         },

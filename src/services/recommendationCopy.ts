@@ -118,7 +118,7 @@ export const buildPublicRecommendationCopy = (
   } else if (oddsValue <= 0) {
     reasons.push(language === 'zh' ? '当前方向已生成，官方 SP 未开售；开售后按最新赔率复核。' : 'The direction is available, but official SP is not open yet; recheck once odds open.');
   } else if (prediction?.oddsPoolCode === 'HHAD') {
-    reasons.push(language === 'zh' ? '本场按让球玩法给出主推，重点看让球线是否继续支持。' : 'The pick uses the handicap market; keep watching whether the line still supports it.');
+    reasons.push(language === 'zh' ? '本场按让球玩法给出主推，重点看让球线是否继续支持。' : 'The pick uses the handicap market; recheck whether the line still supports it.');
   } else {
     reasons.push(language === 'zh' ? '本场按胜平负玩法给出主推，赔率和赛前信息相对支持当前方向。' : 'The pick uses 1X2; odds and pre-match information support this direction.');
   }
