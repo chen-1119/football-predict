@@ -65,6 +65,31 @@ export interface WorldCupGroupForecast extends Omit<WorldCupGroupSeed, 'teams'> 
   teams: WorldCupTeamForecast[];
 }
 
+export type WorldCupStandingSource = 'actual' | 'mixed' | 'projected';
+
+export type WorldCupQualificationZone = 'direct' | 'best-third' | 'outside';
+
+export interface WorldCupStandingTeam extends WorldCupTeamForecast {
+  played: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  goalDifference: number;
+  points: number;
+  actualRank: number;
+  standingSource: WorldCupStandingSource;
+  qualificationZone: WorldCupQualificationZone;
+}
+
+export interface WorldCupGroupStanding extends Omit<WorldCupGroupForecast, 'teams'> {
+  teams: WorldCupStandingTeam[];
+  completedMatches: number;
+  totalMatches: number;
+  source: WorldCupStandingSource;
+}
+
 export interface WorldCupKnockoutRound {
   id: 'r32' | 'r16' | 'qf' | 'sf' | 'third' | 'final';
   title: MultiLangString;
@@ -92,6 +117,18 @@ export interface WorldCupFixtureForecast {
   trust: number;
   homeAdvanceProbability: number;
   awayAdvanceProbability: number;
+}
+
+export interface WorldCupRound32Pairing {
+  matchNo: number;
+  title: MultiLangString;
+  leftLabel: MultiLangString;
+  rightLabel: MultiLangString;
+  left: WorldCupStandingTeam | null;
+  right: WorldCupStandingTeam | null;
+  source: WorldCupStandingSource;
+  confidence: number;
+  note: MultiLangString;
 }
 
 export const WORLD_CUP_FORECAST_MODEL = {
@@ -1003,6 +1040,308 @@ const findWorldCupTeamForecast = (
 
   return null;
 };
+
+const WORLD_CUP_GROUP_MATCH_TOTAL = 6;
+
+const isSettledWorldCupGroupMatch = (match: Match) => {
+  const hasScore = Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway);
+  return hasScore && (match.status === 'FINISHED' || match.status === 'PENDING_RESULT');
+};
+
+const createStandingTeam = (team: WorldCupTeamForecast): WorldCupStandingTeam => ({
+  ...team,
+  played: 0,
+  wins: 0,
+  draws: 0,
+  losses: 0,
+  goalsFor: 0,
+  goalsAgainst: 0,
+  goalDifference: 0,
+  points: 0,
+  actualRank: team.projectedRank,
+  standingSource: 'projected',
+  qualificationZone: team.projectedRank <= 2 ? 'direct' : team.projectedRank === 3 ? 'best-third' : 'outside'
+});
+
+const applyStandingResult = (
+  home: WorldCupStandingTeam,
+  away: WorldCupStandingTeam,
+  homeGoals: number,
+  awayGoals: number
+) => {
+  home.played += 1;
+  away.played += 1;
+  home.goalsFor += homeGoals;
+  home.goalsAgainst += awayGoals;
+  away.goalsFor += awayGoals;
+  away.goalsAgainst += homeGoals;
+  home.goalDifference = home.goalsFor - home.goalsAgainst;
+  away.goalDifference = away.goalsFor - away.goalsAgainst;
+
+  if (homeGoals > awayGoals) {
+    home.points += 3;
+    home.wins += 1;
+    away.losses += 1;
+  } else if (homeGoals < awayGoals) {
+    away.points += 3;
+    away.wins += 1;
+    home.losses += 1;
+  } else {
+    home.points += 1;
+    away.points += 1;
+    home.draws += 1;
+    away.draws += 1;
+  }
+};
+
+const compareActualStandings = (a: WorldCupStandingTeam, b: WorldCupStandingTeam) => (
+  b.points - a.points
+  || b.goalDifference - a.goalDifference
+  || b.goalsFor - a.goalsFor
+  || b.wins - a.wins
+  || b.strengthScore - a.strengthScore
+  || a.averageRank - b.averageRank
+  || a.id.localeCompare(b.id)
+);
+
+const adjustedThirdScore = (team: WorldCupStandingTeam) => {
+  const remainingMatches = Math.max(0, 3 - team.played);
+  const expectedPerMatch = Math.max(0.25, team.projectedPoints / 3);
+  return team.played ? team.points + remainingMatches * expectedPerMatch : team.projectedPoints;
+};
+
+const compareBestThirdStandings = (a: WorldCupStandingTeam, b: WorldCupStandingTeam) => (
+  adjustedThirdScore(b) - adjustedThirdScore(a)
+  || b.points - a.points
+  || b.goalDifference - a.goalDifference
+  || b.goalsFor - a.goalsFor
+  || b.bestThirdProbability - a.bestThirdProbability
+  || b.strengthScore - a.strengthScore
+  || a.averageRank - b.averageRank
+  || a.id.localeCompare(b.id)
+);
+
+export function getWorldCupLiveGroupStandings(
+  matches: Match[],
+  groupForecasts = getWorldCupGroupForecasts()
+): WorldCupGroupStanding[] {
+  const teamById = new Map<string, WorldCupStandingTeam>();
+  const groupById = new Map<string, WorldCupGroupStanding>();
+
+  groupForecasts.forEach((group) => {
+    const teams = group.teams.map(createStandingTeam);
+    teams.forEach((team) => teamById.set(team.id, team));
+    groupById.set(group.id, {
+      ...group,
+      teams,
+      completedMatches: 0,
+      totalMatches: WORLD_CUP_GROUP_MATCH_TOTAL,
+      source: 'projected'
+    });
+  });
+
+  matches
+    .filter((match) => isWorldCupRelevantMatch(match) && isSettledWorldCupGroupMatch(match))
+    .forEach((match) => {
+      const homeForecast = findWorldCupTeamForecast(match, 'home', groupForecasts);
+      const awayForecast = findWorldCupTeamForecast(match, 'away', groupForecasts);
+      if (!homeForecast || !awayForecast || homeForecast.groupId !== awayForecast.groupId) return;
+
+      const home = teamById.get(homeForecast.id);
+      const away = teamById.get(awayForecast.id);
+      const group = groupById.get(homeForecast.groupId);
+      if (!home || !away || !group) return;
+
+      applyStandingResult(home, away, Number(match.scoreHome), Number(match.scoreAway));
+      group.completedMatches += 1;
+    });
+
+  const standings = Array.from(groupById.values()).map((group) => {
+    const hasResults = group.completedMatches > 0;
+    const source: WorldCupStandingSource = group.completedMatches >= WORLD_CUP_GROUP_MATCH_TOTAL
+      ? 'actual'
+      : hasResults
+        ? 'mixed'
+        : 'projected';
+
+    const teams = [...group.teams]
+      .sort(hasResults
+        ? compareActualStandings
+        : (a, b) => a.projectedRank - b.projectedRank || b.advanceProbability - a.advanceProbability);
+
+    teams.forEach((team, index) => {
+      team.actualRank = index + 1;
+      team.standingSource = source;
+      team.qualificationZone = index < 2 ? 'direct' : 'outside';
+    });
+
+    return {
+      ...group,
+      teams,
+      source
+    };
+  });
+
+  const bestThird = standings
+    .map((group) => group.teams[2])
+    .filter((team): team is WorldCupStandingTeam => Boolean(team))
+    .sort(compareBestThirdStandings)
+    .slice(0, 8);
+
+  const bestThirdIds = new Set(bestThird.map((team) => team.id));
+  standings.forEach((group) => {
+    group.teams.forEach((team) => {
+      if (team.actualRank === 3 && bestThirdIds.has(team.id)) {
+        team.qualificationZone = 'best-third';
+      }
+    });
+  });
+
+  return standings.sort((a, b) => a.id.localeCompare(b.id));
+}
+
+export function getWorldCupStandingQualifiers(groupStandings: WorldCupGroupStanding[]) {
+  const winners: WorldCupStandingTeam[] = [];
+  const runnersUp: WorldCupStandingTeam[] = [];
+  const thirdPlaced: WorldCupStandingTeam[] = [];
+
+  groupStandings.forEach((group) => {
+    const first = group.teams.find((team) => team.actualRank === 1) || group.teams[0];
+    const second = group.teams.find((team) => team.actualRank === 2) || group.teams[1];
+    const third = group.teams.find((team) => team.actualRank === 3) || group.teams[2];
+    if (first) winners.push(first);
+    if (second) runnersUp.push(second);
+    if (third) thirdPlaced.push(third);
+  });
+
+  const bestThird = [...thirdPlaced].sort(compareBestThirdStandings).slice(0, 8);
+
+  return {
+    winners,
+    runnersUp,
+    bestThird
+  };
+}
+
+type WorldCupRound32SideSpec =
+  | { kind: 'rank'; groupId: string; rank: 1 | 2 }
+  | { kind: 'third'; groupIds: string[] };
+
+const WORLD_CUP_ROUND32_SLOTS: Array<{
+  matchNo: number;
+  left: WorldCupRound32SideSpec;
+  right: WorldCupRound32SideSpec;
+}> = [
+  { matchNo: 73, left: { kind: 'rank', groupId: 'A', rank: 2 }, right: { kind: 'rank', groupId: 'B', rank: 2 } },
+  { matchNo: 74, left: { kind: 'rank', groupId: 'E', rank: 1 }, right: { kind: 'third', groupIds: ['A', 'B', 'C', 'D', 'F'] } },
+  { matchNo: 75, left: { kind: 'rank', groupId: 'F', rank: 1 }, right: { kind: 'rank', groupId: 'C', rank: 2 } },
+  { matchNo: 76, left: { kind: 'rank', groupId: 'C', rank: 1 }, right: { kind: 'rank', groupId: 'F', rank: 2 } },
+  { matchNo: 77, left: { kind: 'rank', groupId: 'I', rank: 1 }, right: { kind: 'third', groupIds: ['C', 'D', 'F', 'G', 'H'] } },
+  { matchNo: 78, left: { kind: 'rank', groupId: 'E', rank: 2 }, right: { kind: 'rank', groupId: 'I', rank: 2 } },
+  { matchNo: 79, left: { kind: 'rank', groupId: 'A', rank: 1 }, right: { kind: 'third', groupIds: ['C', 'E', 'F', 'H', 'I'] } },
+  { matchNo: 80, left: { kind: 'rank', groupId: 'L', rank: 1 }, right: { kind: 'third', groupIds: ['E', 'H', 'I', 'J', 'K'] } },
+  { matchNo: 81, left: { kind: 'rank', groupId: 'D', rank: 1 }, right: { kind: 'third', groupIds: ['B', 'E', 'F', 'I', 'J'] } },
+  { matchNo: 82, left: { kind: 'rank', groupId: 'G', rank: 1 }, right: { kind: 'third', groupIds: ['A', 'E', 'H', 'I', 'J'] } },
+  { matchNo: 83, left: { kind: 'rank', groupId: 'K', rank: 2 }, right: { kind: 'rank', groupId: 'L', rank: 2 } },
+  { matchNo: 84, left: { kind: 'rank', groupId: 'H', rank: 1 }, right: { kind: 'rank', groupId: 'J', rank: 2 } },
+  { matchNo: 85, left: { kind: 'rank', groupId: 'B', rank: 1 }, right: { kind: 'third', groupIds: ['E', 'F', 'G', 'I', 'J'] } },
+  { matchNo: 86, left: { kind: 'rank', groupId: 'J', rank: 1 }, right: { kind: 'rank', groupId: 'H', rank: 2 } },
+  { matchNo: 87, left: { kind: 'rank', groupId: 'K', rank: 1 }, right: { kind: 'third', groupIds: ['D', 'E', 'I', 'J', 'L'] } },
+  { matchNo: 88, left: { kind: 'rank', groupId: 'D', rank: 2 }, right: { kind: 'rank', groupId: 'G', rank: 2 } }
+];
+
+const getRound32SideLabel = (side: WorldCupRound32SideSpec): MultiLangString => {
+  if (side.kind === 'rank') {
+    return {
+      zh: `${side.groupId}组第${side.rank}`,
+      en: `Group ${side.groupId} #${side.rank}`
+    };
+  }
+
+  return {
+    zh: `最佳第三(${side.groupIds.join('/')})`,
+    en: `Best 3rd (${side.groupIds.join('/')})`
+  };
+};
+
+const resolveRound32Side = (
+  side: WorldCupRound32SideSpec,
+  groupStandings: WorldCupGroupStanding[],
+  bestThird: WorldCupStandingTeam[],
+  usedThirdIds: Set<string>
+) => {
+  if (side.kind === 'rank') {
+    const team = groupStandings
+      .find((group) => group.id === side.groupId)
+      ?.teams.find((row) => row.actualRank === side.rank) || null;
+    return team;
+  }
+
+  const qualifiedThird = bestThird
+    .filter((team) => side.groupIds.includes(team.groupId) && !usedThirdIds.has(team.id))
+    .sort(compareBestThirdStandings)[0];
+  if (qualifiedThird) {
+    usedThirdIds.add(qualifiedThird.id);
+    return qualifiedThird;
+  }
+
+  const fallbackThird = groupStandings
+    .filter((group) => side.groupIds.includes(group.id))
+    .map((group) => group.teams.find((team) => team.actualRank === 3))
+    .filter((team): team is WorldCupStandingTeam => Boolean(team))
+    .filter((team) => !usedThirdIds.has(team.id))
+    .sort(compareBestThirdStandings)[0] || null;
+  if (fallbackThird) usedThirdIds.add(fallbackThird.id);
+  return fallbackThird;
+};
+
+const mergeStandingSource = (
+  left: WorldCupStandingTeam | null,
+  right: WorldCupStandingTeam | null
+): WorldCupStandingSource => {
+  if (left?.standingSource === 'actual' && right?.standingSource === 'actual') return 'actual';
+  if (left?.standingSource === 'projected' && right?.standingSource === 'projected') return 'projected';
+  return 'mixed';
+};
+
+export function getWorldCupRound32Pairings(groupStandings: WorldCupGroupStanding[]): WorldCupRound32Pairing[] {
+  const qualifiers = getWorldCupStandingQualifiers(groupStandings);
+  const usedThirdIds = new Set<string>();
+
+  return WORLD_CUP_ROUND32_SLOTS.map((slot) => {
+    const left = resolveRound32Side(slot.left, groupStandings, qualifiers.bestThird, usedThirdIds);
+    const right = resolveRound32Side(slot.right, groupStandings, qualifiers.bestThird, usedThirdIds);
+    const source = mergeStandingSource(left, right);
+    const confidenceBase = ((left?.advanceProbability || 50) + (right?.advanceProbability || 50)) / 2;
+    const confidencePenalty = source === 'actual' ? 0 : source === 'mixed' ? 8 : 16;
+    const confidence = Math.round(clamp(confidenceBase - confidencePenalty, 35, 92));
+
+    return {
+      matchNo: slot.matchNo,
+      title: { zh: `32强 M${slot.matchNo}`, en: `Round of 32 M${slot.matchNo}` },
+      leftLabel: getRound32SideLabel(slot.left),
+      rightLabel: getRound32SideLabel(slot.right),
+      left,
+      right,
+      source,
+      confidence,
+      note: source === 'actual'
+        ? {
+            zh: '两侧名次已按小组完赛积分榜锁定。',
+            en: 'Both sides are locked by completed group standings.'
+          }
+        : source === 'mixed'
+          ? {
+              zh: '按当前赛果排序，未完赛部分用模型补齐。',
+              en: 'Uses current results first, with model fill-in for unfinished groups.'
+            }
+          : {
+              zh: '赛果不足，当前为赛前路径推演。',
+              en: 'Not enough results yet; this is a pre-match route projection.'
+            }
+    };
+  });
+}
 
 export function getWorldCupFixtureForecast(
   match: Match,

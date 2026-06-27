@@ -31,9 +31,11 @@ import {
   getWorldCupFixtureForecast,
   getWorldCupGroupForecasts,
   getWorldCupKnockoutForecast,
-  getWorldCupProjectedQualifiers,
+  getWorldCupLiveGroupStandings,
+  getWorldCupRound32Pairings,
   getWorldCupRecentResults,
   getWorldCupSeededFixtures,
+  getWorldCupStandingQualifiers,
   getWorldCupUpsetRadar,
   getWorldCupWatchMatches,
   isWorldCupRelevantMatch,
@@ -44,6 +46,8 @@ import {
   WORLD_CUP_PIPELINE_CARDS,
   WORLD_CUP_STAGE_CARDS,
   type WorldCupGroupForecast,
+  type WorldCupRound32Pairing,
+  type WorldCupStandingTeam,
   type WorldCupTeamForecast
 } from '../services/worldCupData';
 
@@ -156,31 +160,55 @@ const TeamFlag = ({ team }: { team: WorldCupTeamForecast }) => (
   />
 );
 
-const GroupTeamRow = ({ team, language }: { team: WorldCupTeamForecast; language: Locale }) => {
-  const status = team.projectedRank <= 2
-    ? (language === 'zh' ? '直通区' : 'Direct')
-    : team.projectedRank === 3
-      ? (language === 'zh' ? '第三名竞争' : 'Third-place race')
-      : (language === 'zh' ? '出局风险' : 'Elimination risk');
+const formatGoalDiff = (value: number) => {
+  if (!Number.isFinite(value)) return '0';
+  return value > 0 ? `+${value}` : `${value}`;
+};
+
+const getStandingSourceLabel = (source: WorldCupStandingTeam['standingSource'], language: Locale) => {
+  if (source === 'actual') return language === 'zh' ? '赛果锁定' : 'Locked';
+  if (source === 'mixed') return language === 'zh' ? '赛果+预测' : 'Live + model';
+  return language === 'zh' ? '预测补位' : 'Projected';
+};
+
+const getQualificationLabel = (team: WorldCupStandingTeam, language: Locale) => {
+  if (team.qualificationZone === 'direct') return language === 'zh' ? '直接出线区' : 'Direct lane';
+  if (team.qualificationZone === 'best-third') return language === 'zh' ? '最佳第三区' : 'Best third lane';
+  return language === 'zh' ? '待追赶' : 'Chasing';
+};
+
+const getStandingLine = (team: WorldCupStandingTeam, language: Locale) => {
+  if (team.played > 0) {
+    return language === 'zh'
+      ? `${team.points}分 / ${team.played}场 / 净胜${formatGoalDiff(team.goalDifference)}`
+      : `${team.points} pts / ${team.played} played / GD ${formatGoalDiff(team.goalDifference)}`;
+  }
+
+  return language === 'zh'
+    ? `预测 ${team.projectedPoints.toFixed(1)}分 / FIFA ${team.fifaRank}`
+    : `Projected ${team.projectedPoints.toFixed(1)} pts / FIFA ${team.fifaRank}`;
+};
+
+const GroupTeamRow = ({ team, language }: { team: WorldCupStandingTeam; language: Locale }) => {
+  const hasResults = team.played > 0;
+  const status = getQualificationLabel(team, language);
 
   return (
     <article className="worldcup-group-team-row">
       <TeamFlag team={team} />
       <div className="worldcup-team-copy">
         <strong>{getTeamName(team, language)}</strong>
-        <small>
-          FIFA {team.fifaRank} / {language === 'zh' ? '均分' : 'Pts'} {team.projectedPoints.toFixed(1)}
-        </small>
+        <small>{getStandingLine(team, language)}</small>
         <em>{status}</em>
       </div>
       <div className="worldcup-team-prob">
-        <b>{formatPercent(team.advanceProbability)}</b>
-        <small>{language === 'zh' ? '晋级' : 'Advance'}</small>
+        <b>{hasResults ? team.points : formatPercent(team.advanceProbability)}</b>
+        <small>{hasResults ? (language === 'zh' ? '积分' : 'Points') : (language === 'zh' ? '晋级' : 'Advance')}</small>
       </div>
       <div className="worldcup-team-split">
-        <small>{language === 'zh' ? '头名' : 'Win'} {formatPercent(team.groupWinProbability)}</small>
-        <small>{language === 'zh' ? '直通' : 'Top 2'} {formatPercent(team.directAdvanceProbability)}</small>
-        <small>{language === 'zh' ? '第三线' : 'Best 3rd'} {formatPercent(team.bestThirdProbability)}</small>
+        <small>{language === 'zh' ? '排名' : 'Rank'} #{team.actualRank}</small>
+        <small>{hasResults ? `${team.wins}-${team.draws}-${team.losses}` : `${language === 'zh' ? '头名' : 'Win'} ${formatPercent(team.groupWinProbability)}`}</small>
+        <small>{getStandingSourceLabel(team.standingSource, language)}</small>
       </div>
       <span className="worldcup-team-meter" aria-hidden="true">
         <span style={{ '--advance': `${team.advanceProbability}%` } as React.CSSProperties} />
@@ -188,6 +216,45 @@ const GroupTeamRow = ({ team, language }: { team: WorldCupTeamForecast; language
     </article>
   );
 };
+
+const Round32Side = ({
+  team,
+  label,
+  language
+}: {
+  team: WorldCupStandingTeam | null;
+  label: MultiLangString;
+  language: Locale;
+}) => (
+  <div className="worldcup-r32-side">
+    <span>{pickText(label, language)}</span>
+    {team ? (
+      <div>
+        <TeamFlag team={team} />
+        <strong>{getTeamName(team, language)}</strong>
+        <small>{getStandingLine(team, language)}</small>
+      </div>
+    ) : (
+      <div>
+        <strong>{language === 'zh' ? '待定' : 'TBD'}</strong>
+        <small>{language === 'zh' ? '等待小组赛果' : 'Waiting for group results'}</small>
+      </div>
+    )}
+  </div>
+);
+
+const Round32PairingCard = ({ pairing, language }: { pairing: WorldCupRound32Pairing; language: Locale }) => (
+  <article className={`worldcup-r32-card is-${pairing.source}`}>
+    <header>
+      <strong>{pickText(pairing.title, language)}</strong>
+      <span>{getStandingSourceLabel(pairing.source, language)} / {formatPercent(pairing.confidence)}</span>
+    </header>
+    <Round32Side team={pairing.left} label={pairing.leftLabel} language={language} />
+    <b className="worldcup-r32-vs">VS</b>
+    <Round32Side team={pairing.right} label={pairing.rightLabel} language={language} />
+    <p>{pickText(pairing.note, language)}</p>
+  </article>
+);
 
 type WorldCupCardRecommendation = {
   label: string;
@@ -379,7 +446,6 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
   const daysLeft = getDaysUntilWorldCup();
 
   const groupForecasts = useMemo(() => getWorldCupGroupForecasts(), []);
-  const qualifiers = useMemo(() => getWorldCupProjectedQualifiers(groupForecasts), [groupForecasts]);
   const knockoutRoutes = useMemo(() => getWorldCupKnockoutForecast(groupForecasts), [groupForecasts]);
   const seededWorldCupMatches = useMemo(() => getWorldCupSeededFixtures(), []);
   const syncedWorldCupMatches = useMemo(
@@ -387,6 +453,12 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
     [matches]
   );
   const allWorldCupMatches = syncedWorldCupMatches.length ? syncedWorldCupMatches : seededWorldCupMatches;
+  const groupStandings = useMemo(
+    () => getWorldCupLiveGroupStandings(allWorldCupMatches, groupForecasts),
+    [allWorldCupMatches, groupForecasts]
+  );
+  const qualifiers = useMemo(() => getWorldCupStandingQualifiers(groupStandings), [groupStandings]);
+  const round32Pairings = useMemo(() => getWorldCupRound32Pairings(groupStandings), [groupStandings]);
   const watchMatches = useMemo(() => getWorldCupWatchMatches(allWorldCupMatches, 8), [allWorldCupMatches]);
   const fixtureMatches = useMemo(
     () => watchMatches.length
@@ -597,11 +669,11 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
           </span>
         </div>
         <div className="worldcup-group-grid">
-          {groupForecasts.map((group) => (
+          {groupStandings.map((group) => (
             <article className="worldcup-group-card" key={group.id}>
               <header>
                 <span>Group {group.id}</span>
-                <strong>{pickText(group.dates, language)}</strong>
+                <strong>{pickText(group.dates, language)} · {getStandingSourceLabel(group.source, language)}</strong>
               </header>
               <p>{pickText(group.headline, language)}</p>
               <div className="worldcup-group-team-list">
@@ -619,7 +691,7 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
               <strong key={team.id}>
                 <TeamFlag team={team} />
                 {getTeamName(team, language)}
-                <small>{formatPercent(team.bestThirdProbability)} / {team.projectedPoints.toFixed(1)}分</small>
+                <small>{team.played > 0 ? `${team.points}分 / 净胜${formatGoalDiff(team.goalDifference)}` : `${formatPercent(team.bestThirdProbability)} / ${team.projectedPoints.toFixed(1)}分`}</small>
               </strong>
             ))}
           </div>
@@ -649,27 +721,34 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
               </article>
             ))}
           </div>
-          <div className="worldcup-route-list">
-            {knockoutRoutes.slice(0, 10).map((route) => (
-              <article key={route.team.id}>
-                <TeamFlag team={route.team} />
-                <div className="worldcup-route-copy">
-                  <strong>{getTeamName(route.team, language)}</strong>
-                  <small>{pickText(route.tier, language)} / Group {route.team.groupId}</small>
-                </div>
-                <div className="worldcup-route-probs">
-                  <b>{formatPercent(route.champion)}</b>
-                  <small>{language === 'zh' ? '冠军' : 'Champion'}</small>
-                </div>
-                <div className="worldcup-route-bars">
-                  <span>32强 {formatPercent(route.round32)}</span>
-                  <span>16强 {formatPercent(route.round16)}</span>
-                  <span>8强 {formatPercent(route.quarterFinal)}</span>
-                  <span>4强 {formatPercent(route.semiFinal)}</span>
-                  <span>决赛 {formatPercent(route.final)}</span>
-                </div>
-              </article>
-            ))}
+          <div className="worldcup-knockout-detail">
+            <div className="worldcup-r32-board">
+              {round32Pairings.map((pairing) => (
+                <Round32PairingCard key={pairing.matchNo} pairing={pairing} language={language} />
+              ))}
+            </div>
+            <div className="worldcup-route-list">
+              {knockoutRoutes.slice(0, 6).map((route) => (
+                <article key={route.team.id}>
+                  <TeamFlag team={route.team} />
+                  <div className="worldcup-route-copy">
+                    <strong>{getTeamName(route.team, language)}</strong>
+                    <small>{pickText(route.tier, language)} / Group {route.team.groupId}</small>
+                  </div>
+                  <div className="worldcup-route-probs">
+                    <b>{formatPercent(route.champion)}</b>
+                    <small>{language === 'zh' ? '冠军' : 'Champion'}</small>
+                  </div>
+                  <div className="worldcup-route-bars">
+                    <span>32强 {formatPercent(route.round32)}</span>
+                    <span>16强 {formatPercent(route.round16)}</span>
+                    <span>8强 {formatPercent(route.quarterFinal)}</span>
+                    <span>4强 {formatPercent(route.semiFinal)}</span>
+                    <span>决赛 {formatPercent(route.final)}</span>
+                  </div>
+                </article>
+              ))}
+            </div>
           </div>
         </div>
       </motion.section>
