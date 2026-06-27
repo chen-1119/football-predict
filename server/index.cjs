@@ -1503,6 +1503,28 @@ const matchHasExternalSignal = (match) => {
   );
 };
 
+const matchUsesFiveHundred = (match) => (
+  String(match?.oddsSource || "").startsWith("500.com")
+  || String(match?.handicapOddsSource || "").startsWith("500.com")
+  || String(match?.externalSignals?.source || "").includes("500.com")
+  || Boolean(match?.externalSignals?.fiveHundred)
+);
+
+const matchHasUsableFiveHundredDetails = (match) => {
+  const signal = match?.externalSignals?.fiveHundred;
+  if (!signal || typeof signal !== "object") return false;
+  const asianAverageLine = Number(signal.asianHandicap?.currentAverageLine);
+  return Boolean(
+    signal.recentForm?.home?.sampleSize
+    || signal.recentForm?.away?.sampleSize
+    || signal.europeOdds?.companies
+    || signal.asianHandicap?.companies
+    || Number.isFinite(asianAverageLine)
+    || signal.rank?.home?.fifaRank
+    || signal.rank?.away?.fifaRank
+  );
+};
+
 const getSourceHealth = async () => {
   const maxAgeMinutes = Math.max(1, Number(process.env.SOURCE_MAX_AGE_MINUTES || 20));
   const minExternalRows = Math.max(0, Number(process.env.SOURCE_MIN_500_ROWS || 1));
@@ -1543,12 +1565,18 @@ const getSourceHealth = async () => {
   const currentCount = Array.isArray(current) ? current.length : 0;
   const currentWithExternal = Array.isArray(current) ? current.filter(matchHasExternalSignal).length : 0;
   const currentWithFiveHundredDetails = Array.isArray(current)
-    ? current.filter((match) => Boolean(match?.externalSignals?.fiveHundred)).length
+    ? current.filter(matchHasUsableFiveHundredDetails).length
+    : 0;
+  const currentWithFiveHundred = Array.isArray(current)
+    ? current.filter(matchUsesFiveHundred).length
     : 0;
   const currentWithApiFootball = Array.isArray(current)
     ? current.filter((match) => Boolean(match?.externalSignals?.apiFootball)).length
     : 0;
   const currentCoverage = currentCount > 0 ? currentWithExternal / currentCount : 0;
+  const currentFiveHundredDetailsCoverage = currentWithFiveHundred > 0
+    ? currentWithFiveHundredDetails / currentWithFiveHundred
+    : 1;
   const errors = [];
   const warnings = [];
 
@@ -1560,6 +1588,11 @@ const getSourceHealth = async () => {
     if (currentCount > 0 && currentCoverage < minCurrentCoverage) {
       warnings.push(`external coverage ${(currentCoverage * 100).toFixed(1)}% < ${(minCurrentCoverage * 100).toFixed(1)}%`);
     }
+  }
+  if (currentWithFiveHundred >= 3 && currentWithFiveHundredDetails === 0) {
+    errors.push("500 details coverage is zero for current 500-backed matches");
+  } else if (currentWithFiveHundred >= 3 && currentFiveHundredDetailsCoverage < 0.7) {
+    warnings.push(`500 details coverage ${(currentFiveHundredDetailsCoverage * 100).toFixed(1)}% < 70.0%`);
   }
   if (!Array.isArray(current)) errors.push("current matches invalid");
   if (currentCount < minCurrentMatches) errors.push(`current matches ${currentCount} < ${minCurrentMatches}`);
@@ -1597,6 +1630,9 @@ const getSourceHealth = async () => {
       fiveHundredDetailsRequestedPages: source500Details.requestedPages || 0,
       fiveHundredDetailsRefreshMinutes: source500Details.refreshMinutes || 0,
       fiveHundredDetailsErrors: source500Details.errors || 0,
+      fiveHundredCurrentMatches: currentWithFiveHundred,
+      fiveHundredCurrentDetailMatches: currentWithFiveHundredDetails,
+      fiveHundredCurrentDetailCoverage: Number(currentFiveHundredDetailsCoverage.toFixed(4)),
       apiFootballConfigured: Boolean(process.env.API_FOOTBALL_KEY || process.env.APISPORTS_KEY),
       apiFootballEnabled: enableApiFootballSync,
       apiFootballUpdatedAt: sourceApiFootball.updatedAt || apiFootballMeta?.finishedAt || null,
@@ -1610,6 +1646,9 @@ const getSourceHealth = async () => {
       count: currentCount,
       withExternalSignals: currentWithExternal,
       externalCoverage: Number(currentCoverage.toFixed(4)),
+      withFiveHundred: currentWithFiveHundred,
+      withFiveHundredDetails: currentWithFiveHundredDetails,
+      fiveHundredDetailsCoverage: Number(currentFiveHundredDetailsCoverage.toFixed(4)),
     },
     warnings,
     errors,

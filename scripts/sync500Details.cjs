@@ -10,7 +10,7 @@ const DATA_DIR = path.join(PUBLIC_DIR, "data");
 const DETAILS_FILE = path.join(DATA_DIR, "five-hundred-details.json");
 const EXTERNAL_SIGNALS_FILE = path.join(DATA_DIR, "external-signals.json");
 const SOURCE_URL = process.env.FIVE_HUNDRED_JCZQ_URL || "https://trade.500.com/jczq/";
-const MAX_MATCHES = Math.max(1, Number(process.env.FIVE_HUNDRED_DETAILS_MAX_MATCHES || 8));
+const MAX_MATCHES = Math.max(1, Number(process.env.FIVE_HUNDRED_DETAILS_MAX_MATCHES || 24));
 const REFRESH_MINUTES = Math.max(30, Number(process.env.FIVE_HUNDRED_DETAILS_REFRESH_MINUTES || 180));
 const RESULT_LOOKBACK_HOURS = Math.max(1, Number(process.env.FIVE_HUNDRED_RESULT_LOOKBACK_HOURS || 48));
 const DETAIL_TIMEOUT_SECONDS = Math.max(5, Number(process.env.FIVE_HUNDRED_DETAILS_TIMEOUT_SECONDS || 10));
@@ -178,6 +178,16 @@ const absoluteUrl = (href) => {
   return value;
 };
 
+const fallbackDetailUrls = (fixtureId) => {
+  const id = norm(fixtureId);
+  if (!id) return {};
+  return {
+    analysis: `https://odds.500.com/fenxi/shuju-${id}.shtml`,
+    europeOdds: `https://odds.500.com/fenxi/ouzhi-${id}.shtml`,
+    asianHandicap: `https://odds.500.com/fenxi/yazhi-${id}.shtml`,
+  };
+};
+
 const parseOdds = (rowHtml, type) => {
   const odds = {};
   const re = new RegExp(`<p[^>]*data-type="${type}"[^>]*data-value="([310])"[^>]*data-sp="([^"]*)"`, "g");
@@ -271,7 +281,10 @@ const parseTradeRows = (html) => {
       availability: availabilityFor(attrs["data-subactive"]),
       had: parseOdds(rowHtml, "nspf"),
       hhad: parseOdds(rowHtml, "spf"),
-      urls: links,
+      urls: {
+        ...fallbackDetailUrls(fixtureId),
+        ...links,
+      },
     });
   }
   return rows;
@@ -302,6 +315,54 @@ const uniqueBySourceMatchId = (rows) => {
     byId.set(row.sourceMatchId, !previous || scoreRank(row) >= scoreRank(previous) ? { ...previous, ...row } : previous);
   }
   return Array.from(byId.values());
+};
+
+const rowsFromExternalSignals = (external) => {
+  const rows = [];
+  const seen = new Set();
+  const now = Date.now();
+  const futureWindowMs = Math.max(1, Number(process.env.FIVE_HUNDRED_DETAILS_FORWARD_DAYS || 14)) * 24 * 3600000;
+  for (const signal of Object.values(external?.matches || {})) {
+    if (!signal || typeof signal !== "object" || Array.isArray(signal)) continue;
+    const sourceMatchId = norm(signal.sourceMatchId || signal.fiveHundred?.sourceMatchId || signal.matchId);
+    const fixtureId = norm(signal.fixtureId || signal.fiveHundred?.fixtureId);
+    if (!sourceMatchId || !fixtureId || seen.has(sourceMatchId)) continue;
+    const kickoff = Date.parse(signal.kickoffTime || "");
+    if (Number.isFinite(kickoff) && (kickoff < now - RESULT_LOOKBACK_HOURS * 3600000 || kickoff > now + futureWindowMs)) continue;
+    seen.add(sourceMatchId);
+    const urls = {
+      ...fallbackDetailUrls(fixtureId),
+      ...(signal.fiveHundred?.urls || {}),
+    };
+    rows.push({
+      sourceMatchId,
+      fixtureId,
+      infoMatchId: norm(signal.infoMatchId || signal.fiveHundred?.infoMatchId),
+      matchNo: norm(signal.matchNo || signal.fiveHundred?.matchNo),
+      processDate: norm(signal.processDate || signal.matchDate || String(signal.kickoffTime || "").slice(0, 10)),
+      homeTeamName: norm(signal.homeTeamName),
+      awayTeamName: norm(signal.awayTeamName),
+      homeTeamId: norm(signal.homeTeamId),
+      awayTeamId: norm(signal.awayTeamId),
+      leagueName: norm(signal.leagueName),
+      matchDate: norm(signal.matchDate || String(signal.kickoffTime || "").slice(0, 10)),
+      matchTime: norm(String(signal.kickoffTime || "").match(/T(\d{2}:\d{2})/)?.[1]),
+      kickoffTime: norm(signal.kickoffTime),
+      buyEndTime: norm(signal.buyEndTime || signal.fiveHundred?.sale?.buyEndTime),
+      status: Number.isFinite(Number(signal.scoreHome)) && Number.isFinite(Number(signal.scoreAway)) ? "FINISHED" : "SCHEDULED",
+      scoreHome: toNum(signal.scoreHome),
+      scoreAway: toNum(signal.scoreAway),
+      resultSource: signal.resultSource,
+      resultUpdatedAt: signal.resultUpdatedAt,
+      isEnded: false,
+      handicapLine: norm(signal.handicapLine),
+      availability: {},
+      had: signal.bookmakerOdds?.had || null,
+      hhad: signal.bookmakerOdds?.hhad || null,
+      urls,
+    });
+  }
+  return rows;
 };
 
 const fetchRecentResultRows = async (existingDetails) => {
@@ -839,8 +900,17 @@ const selectTargets = (rows, cache) => {
     .sort((a, b) => Date.parse(a.kickoffTime || "") - Date.parse(b.kickoffTime || ""))
     .filter((row) => {
       const kickoff = Date.parse(row.kickoffTime || "");
-      if (Number.isFinite(kickoff) && kickoff + 2 * 3600000 < now) return false;
       const cached = cache.matches?.[row.sourceMatchId];
+      const recentKickoff = Number.isFinite(kickoff) && now - kickoff <= RESULT_LOOKBACK_HOURS * 3600000;
+      const hasUsableCachedDetails = Boolean(
+        cached?.signal?.fiveHundred?.recentForm
+        || cached?.signal?.fiveHundred?.europeOdds
+        || cached?.signal?.fiveHundred?.asianHandicap
+        || cached?.details?.analysis
+        || cached?.details?.europeOdds
+        || cached?.details?.asianHandicap
+      );
+      if (Number.isFinite(kickoff) && kickoff + 2 * 3600000 < now && !recentKickoff && hasUsableCachedDetails) return false;
       return !cached || !isFresh(cached.updatedAt, REFRESH_MINUTES);
     })
     .slice(0, MAX_MATCHES);
@@ -852,10 +922,11 @@ const main = async () => {
   const currentTradeRows = parseTradeRows(tradeHtml);
   const existingDetails = readJson(DETAILS_FILE, { version: 1, source: "500.com:details", matches: {} });
   const recentResults = await fetchRecentResultRows(existingDetails);
-  const tradeRows = uniqueBySourceMatchId([...currentTradeRows, ...recentResults.rows]);
-  const targets = selectTargets(tradeRows, existingDetails);
   const detailsMatches = { ...(existingDetails.matches || {}) };
   const external = readJson(EXTERNAL_SIGNALS_FILE, { version: 1, source: "external-signals", matches: {}, sources: {} });
+  const externalRows = rowsFromExternalSignals(external);
+  const tradeRows = uniqueBySourceMatchId([...currentTradeRows, ...recentResults.rows, ...externalRows]);
+  const targets = selectTargets(tradeRows, existingDetails);
   const externalMatches = { ...(external.matches || {}) };
   const errors = [];
   let requestedPages = 1;
