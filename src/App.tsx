@@ -185,7 +185,7 @@ function RoutedContent() {
       />
 
       <main className="container page-main">
-        <RouteErrorBoundary>
+        <RouteErrorBoundary key={location.pathname}>
           <Suspense fallback={<LoadingPanel />}>
             <Routes>
               <Route path="/" element={<Navigate to="/predictions" replace />} />

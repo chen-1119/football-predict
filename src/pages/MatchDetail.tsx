@@ -1118,6 +1118,11 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
   const gptProbabilities = gptParsed?.probabilities;
   const probabilityModel = match.probabilityModel;
   const calculationTrace = probabilityModel?.calculationTrace;
+  const probabilityModelForm = probabilityModel?.form;
+  const modelHealth = probabilityModel?.modelHealth;
+  const modelHealthByMarket = modelHealth?.byMarket || {};
+  const calibrationAdjustment = probabilityModel?.calibrationAdjustment;
+  const oneXTwoCalibrationAdjustments = calibrationAdjustment?.oneXTwo?.adjustments || [];
   // Keep raw probability diagnostics available in code, but hidden from the public match page.
   const showInternalDiagnostics = false;
   const probabilityModelIsModelOnly = Boolean(
@@ -1782,8 +1787,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
     }] : []),
     {
       title: language === 'zh' ? '近况攻防' : 'Recent form',
-      value: probabilityModel?.form ? `${formatDecimal(probabilityModel.form.home.goalsForAvg)} / ${formatDecimal(probabilityModel.form.away.goalsForAvg)}` : '--',
-      tone: probabilityModel?.form ? 'success' : 'neutral',
+      value: probabilityModelForm ? `${formatDecimal(probabilityModelForm.home?.goalsForAvg)} / ${formatDecimal(probabilityModelForm.away?.goalsForAvg)}` : '--',
+      tone: probabilityModelForm ? 'success' : 'neutral',
       body: language === 'zh'
         ? '近一年攻防表现用于修正进球倾向，帮助判断比分区间是否支持当前推荐。'
         : 'Last-year attacking and defensive form adjusts the goal range and checks whether the score profile supports the pick.'
@@ -2800,10 +2805,10 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                         </span>
                       </div>
                     )}
-                    {probabilityModel.modelHealth && (
+                    {modelHealth && (
                       <div className="probability-pair-grid" style={{ marginBottom: '0.75rem' }}>
                         {(['1X2', 'GOALS', 'BEST'] as const).map((marketKey) => {
-                          const bucket = probabilityModel.modelHealth?.byMarket?.[marketKey];
+                          const bucket = modelHealthByMarket[marketKey];
                           return (
                             <span key={marketKey}>
                               {marketKey}
@@ -2812,21 +2817,21 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                             </span>
                           );
                         })}
-                        {probabilityModel.modelHealth.homeFavorite && (
+                        {modelHealth.homeFavorite && (
                           <span>
                             {language === 'zh' ? '主胜桶' : 'Home bucket'}
-                            <strong>{formatHealthRate(probabilityModel.modelHealth.homeFavorite.hitRate)}</strong>
-                            <em>{probabilityModel.modelHealth.homeFavorite.settled || 0} {language === 'zh' ? '条' : 'settled'}</em>
+                            <strong>{formatHealthRate(modelHealth.homeFavorite.hitRate)}</strong>
+                            <em>{modelHealth.homeFavorite.settled || 0} {language === 'zh' ? '条' : 'settled'}</em>
                           </span>
                         )}
-                        {probabilityModel.modelHealth.lowSpSide && (
+                        {modelHealth.lowSpSide && (
                           <span>
                             {language === 'zh' ? '低赔边' : 'Low-SP side'}
-                            <strong>{formatHealthRate(probabilityModel.modelHealth.lowSpSide.hitRate)}</strong>
-                            <em>{probabilityModel.modelHealth.lowSpSide.settled || 0} {language === 'zh' ? '条' : 'settled'}</em>
+                            <strong>{formatHealthRate(modelHealth.lowSpSide.hitRate)}</strong>
+                            <em>{modelHealth.lowSpSide.settled || 0} {language === 'zh' ? '条' : 'settled'}</em>
                           </span>
                         )}
-                        {(probabilityModel.modelHealth.byMarket?.['1X2']?.cooldown || probabilityModel.modelHealth.byMarket?.GOALS?.cooldown) && (
+                        {(modelHealthByMarket['1X2']?.cooldown || modelHealthByMarket.GOALS?.cooldown) && (
                           <span>
                             {language === 'zh' ? '冷却' : 'Cooldown'}
                             <strong>{language === 'zh' ? '开启' : 'On'}</strong>
@@ -2858,20 +2863,20 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                         </span>
                       </div>
                     )}
-                    {(probabilityModel.calibrationAdjustment?.oneXTwo?.applied || probabilityModel.calibrationAdjustment?.goals?.applied) && (
+                    {(calibrationAdjustment?.oneXTwo?.applied || calibrationAdjustment?.goals?.applied) && (
                       <div className="probability-pair-grid" style={{ marginBottom: '0.75rem' }}>
-                        {probabilityModel.calibrationAdjustment?.oneXTwo?.applied && (
+                        {calibrationAdjustment?.oneXTwo?.applied && (
                           <span>
                             {language === 'zh' ? '胜平负校准' : '1X2 calibration'}
                             <strong>{language === 'zh' ? '已降温' : 'Active'}</strong>
-                            <em>{probabilityModel.calibrationAdjustment.oneXTwo.adjustments.length} {language === 'zh' ? '项' : 'rules'}</em>
+                            <em>{oneXTwoCalibrationAdjustments.length} {language === 'zh' ? '项' : 'rules'}</em>
                           </span>
                         )}
-                        {probabilityModel.calibrationAdjustment?.goals?.applied && (
+                        {calibrationAdjustment?.goals?.applied && (
                           <span>
                             {language === 'zh' ? '进球校准' : 'Goals calibration'}
-                            <strong>{formatModelWeight(probabilityModel.calibrationAdjustment.goals?.shrinkFactor)}</strong>
-                            <em>{probabilityModel.calibrationAdjustment.goals?.before?.over25 ?? '--'}% {'to'} {probabilityModel.calibrationAdjustment.goals?.after?.over25 ?? '--'}%</em>
+                            <strong>{formatModelWeight(calibrationAdjustment.goals?.shrinkFactor)}</strong>
+                            <em>{calibrationAdjustment.goals?.before?.over25 ?? '--'}% {'to'} {calibrationAdjustment.goals?.after?.over25 ?? '--'}%</em>
                           </span>
                         )}
                       </div>

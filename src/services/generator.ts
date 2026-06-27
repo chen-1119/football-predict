@@ -1,7 +1,7 @@
 import type { Match, PredictionDetail } from './mockData';
 import { normalizeOdds } from './bettingDisplay';
 import { getVisiblePredictions } from './predictionVisibility';
-import { isActionableRecommendation } from './matchSignal';
+import { getMatchSignal } from './matchSignal';
 
 export type BetSlipMarketType = '1X2' | 'HHAD';
 
@@ -262,23 +262,43 @@ const sortSelections = (a: SelectionResult, b: SelectionResult) => {
   return a.prediction.odds - b.prediction.odds;
 };
 
+const isParlayMatchCandidate = (match: Match) => {
+  if (match.status !== 'SCHEDULED') return false;
+  const signal = getMatchSignal(match);
+  return signal.category === 'steady' || signal.category === 'lean';
+};
+
+const hasOpenSelectionOdds = (selection: SelectionResult) => {
+  const odds = Number(selection.prediction.odds || 0);
+  return Number.isFinite(odds) && odds > 1;
+};
+
 const selectionPassesQualityGate = (selection: SelectionResult, minTrust: number) => {
-  if (!isActionableRecommendation(selection.match)) return false;
+  if (!isParlayMatchCandidate(selection.match)) return false;
+  if (!hasOpenSelectionOdds(selection)) return false;
 
   const pool = selection.prediction.oddsPoolCode === 'HHAD' ? 'HHAD' : 'HAD';
   const officialPool = getOfficialSportteryPool(selection.match, pool);
-  if (!officialPool?.isOfficial) return false;
-  if (selection.prediction.trustScore < Math.max(62, minTrust)) return false;
+  if (!officialPool?.odds) return false;
+
+  const isOfficial = officialPool.isOfficial;
+  const trustFloor = isOfficial ? Math.max(62, minTrust) : Math.max(68, minTrust + 10);
+  if (selection.prediction.trustScore < trustFloor) return false;
 
   const riskTags = selection.prediction.riskTags || [];
-  const hasNonOfficialRisk = riskTags.some((tag) => {
+  const hasHardRisk = riskTags.some((tag) => {
     const en = (tag.en || '').toLowerCase();
-    return en.includes('non-official') || en.includes('not the top probability');
+    return en.includes('not the top probability')
+      || en.includes('market disagreement')
+      || en.includes('handicap support weak')
+      || en.includes('heavy favorite');
   });
-  if (hasNonOfficialRisk) return false;
-  if (riskTags.length > 2) return false;
+  if (hasHardRisk) return false;
+  if (riskTags.length > (isOfficial ? 2 : 1)) return false;
 
   if (selection.generatedFrom === 'existing-prediction') return true;
+
+  if (!isOfficial && selection.prediction.trustScore < 72) return false;
 
   return selection.prediction.odds >= 1.35 && selection.prediction.odds <= 3.2;
 };
@@ -392,6 +412,8 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
   // 2. 筛选预测池
   const candidateSelections: SelectionResult[] = [];
   candidateMatches.forEach(m => {
+    if (!isParlayMatchCandidate(m)) return;
+
     getVisiblePredictions(m).forEach(p => {
       // 筛选市场类型
       const marketKey = selectionMarketKey(p);
@@ -402,7 +424,6 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
       if (p.odds < minOdds || p.odds > maxOdds) return;
       // 筛选可信度
       if (p.trustScore < minTrust) return;
-      if (!isActionableRecommendation(m)) return;
       candidateSelections.push({
         match: m,
         prediction: p,
