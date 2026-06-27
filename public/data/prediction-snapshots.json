@@ -1,7 +1,7 @@
 {
   "version": 1,
   "source": "sporttery:prediction-snapshots",
-  "updatedAt": "2026-06-27T12:51:41.318Z",
+  "updatedAt": "2026-06-27T13:00:54.233Z",
   "retentionDays": 365,
   "maxRows": 5000,
   "rows": [
@@ -119878,19 +119878,91 @@
         "resultStatus": "PENDING",
         "riskCount": 3
       }
+    },
+    {
+      "capturedAt": "2026-06-27T13:00:54.233Z",
+      "firstSeenAt": "2026-06-27T13:00:54.233Z",
+      "lastSeenAt": "2026-06-27T13:00:54.233Z",
+      "seenCount": 1,
+      "phase": "late",
+      "signature": "1X2:HAD:1:reference|BEST:HHAD:1:recommend|GOALS::U2.5:reference|8.60/5.35/1.21|1:3.52/3.57/1.77|44/30/26",
+      "policyVersion": "sporttery-day-formula-trace-v56",
+      "promptVersion": "professional-football-analyst-v24",
+      "sourceMatchId": "2040330",
+      "matchId": "fivehundred_2040330",
+      "matchNo": "周六203",
+      "businessDate": "2026-06-27",
+      "kickoffTime": "2026-06-27T22:00:00+08:00",
+      "status": "SCHEDULED",
+      "leagueName": "芬兰超级联赛",
+      "homeTeamName": "玛丽港",
+      "awayTeamName": "国际图尔",
+      "scoreHome": null,
+      "scoreAway": null,
+      "odds": {
+        "odds1": 8.6,
+        "oddsX": 5.35,
+        "odds2": 1.21
+      },
+      "handicapLine": "1",
+      "handicapOdds": {
+        "odds1": 3.52,
+        "oddsX": 3.57,
+        "odds2": 1.77
+      },
+      "oddsTrend": null,
+      "probabilityFinal": {
+        "home": 44.4,
+        "draw": 29.5,
+        "away": 26.2
+      },
+      "probabilityModelVersion": "unified-poisson-bayes-v56",
+      "best": {
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "主推 让胜",
+          "en": "Main pick: HHAD home"
+        },
+        "odds": 3.52,
+        "trustScore": 60,
+        "resultStatus": "PENDING",
+        "riskCount": 6
+      },
+      "oneXTwo": {
+        "tipCode": "1",
+        "tipLabel": {
+          "zh": "参考倾向 主胜 玛丽港",
+          "en": "Reference lean: Home Win (玛丽港)"
+        },
+        "odds": 8.6,
+        "trustScore": 34,
+        "resultStatus": "PENDING",
+        "riskCount": 4
+      },
+      "goals": {
+        "tipCode": "U2.5",
+        "tipLabel": {
+          "zh": "进球参考 小2.5球（≤2球）",
+          "en": "Goals reference: Under 2.5 goals"
+        },
+        "odds": 1.82,
+        "trustScore": 53,
+        "resultStatus": "PENDING",
+        "riskCount": 3
+      }
     }
   ],
   "summary": {
-    "total": 1580,
+    "total": 1581,
     "byPhase": {
       "review": 85,
       "mid": 175,
       "baseline": 1226,
-      "late": 51,
+      "late": 52,
       "final": 28,
       "locked": 15
     },
-    "appended": 0,
+    "appended": 1,
     "updated": 0
   }
 }
