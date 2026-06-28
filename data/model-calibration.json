@@ -1,28 +1,28 @@
 {
   "version": "rolling-calibration-v1",
-  "generatedAt": "2026-06-28T01:26:59.823Z",
+  "generatedAt": "2026-06-28T01:31:56.714Z",
   "source": "settled-pre-match-predictions",
   "sample": {
-    "rows": 49,
+    "rows": 56,
     "oneXTwo": 0,
     "goals": 0,
-    "best": 49,
-    "recommendationPool": 49
+    "best": 56,
+    "recommendationPool": 56
   },
   "metrics": {
     "oneXTwoBrier": null,
     "oneXTwoLogLoss": null,
     "oneXTwoHitRate": null,
     "goalsHitRate": null,
-    "bestHitRate": 0.531
+    "bestHitRate": 0.5
   },
   "weightsByProfile": {
     "international": {
       "market": 0.62,
       "elo": 0.2,
       "poisson": 0.18,
-      "sample": 42,
-      "hitRate": 0.524
+      "sample": 44,
+      "hitRate": 0.523
     },
     "japan": {
       "market": 0.6,
@@ -35,8 +35,8 @@
       "market": 0.58,
       "elo": 0.22,
       "poisson": 0.2,
-      "sample": 7,
-      "hitRate": 0.571
+      "sample": 12,
+      "hitRate": 0.417
     }
   },
   "gateByProfile": {
@@ -59,134 +59,113 @@
       "reason": "neutral-profile+strategy:japan"
     },
     "other": {
-      "minProbabilityBoost": -0.015,
-      "minModelGapBoost": -0.01,
-      "minHandicapSupportBoost": 0,
-      "trustPenalty": 0,
-      "maxRiskTags": 3,
+      "minProbabilityBoost": 0.04,
+      "minModelGapBoost": 0.025,
+      "minHandicapSupportBoost": 0.025,
+      "trustPenalty": 6,
+      "maxRiskTags": 2,
       "goalsMinBoost": 0,
-      "reason": "hot-profile"
+      "reason": "neutral-profile+strategy:other"
     }
   },
   "scoreCalibration": {
     "version": "score-calibration-v2",
-    "generatedAt": "2026-06-28T01:26:59.822Z",
-    "source": "rolling-settled-projected-scores",
+    "generatedAt": "2026-06-28T01:31:56.713Z",
+    "source": "recent-settled-projected-scores",
     "sample": {
-      "rows": 49,
-      "recentRows": 7,
-      "totalProjectedRows": 49,
-      "sampleDays": 14,
+      "rows": 14,
+      "recentRows": 14,
+      "totalProjectedRows": 56,
+      "sampleDays": 2,
       "recentDays": 2,
       "rollingDays": 14,
       "minRows": 12,
-      "exactHitRate": 0.082,
-      "top3ExactHitRate": 0.265,
-      "outcomeHitRate": 0.633,
-      "top3OutcomeHitRate": 0.857,
-      "over25HitRate": 0.49,
-      "top3Over25HitRate": 0.816,
-      "totalBandHitRate": 0.143,
-      "top3TotalBandHitRate": 0.571,
-      "avgActualGoals": 3.16,
-      "avgProjectedGoals": 2.45,
-      "actualOver25Rate": 0.612,
-      "projectedOver25Rate": 0.429,
-      "actualBttsRate": 0.551,
-      "projectedBttsRate": 0.531,
-      "projectedLowScoreRate": 0.571,
+      "exactHitRate": 0.071,
+      "top3ExactHitRate": 0.357,
+      "outcomeHitRate": 0.571,
+      "top3OutcomeHitRate": 0.786,
+      "over25HitRate": 0.571,
+      "top3Over25HitRate": 0.929,
+      "totalBandHitRate": 0.286,
+      "top3TotalBandHitRate": 0.714,
+      "avgActualGoals": 3.07,
+      "avgProjectedGoals": 2.36,
+      "actualOver25Rate": 0.5,
+      "projectedOver25Rate": 0.357,
+      "actualBttsRate": 0.571,
+      "projectedBttsRate": 0.357,
+      "projectedLowScoreRate": 0.643,
       "actualScores": {
-        "1-1": 6,
-        "0-0": 5,
-        "1-0": 4,
-        "1-3": 3,
-        "3-1": 3,
-        "0-1": 2,
-        "0-3": 2,
-        "1-4": 2,
-        "2-1": 2,
-        "2-2": 2,
-        "3-0": 2,
-        "3-2": 2,
-        "4-2": 2,
-        "5-0": 2,
-        "0-2": 1,
+        "1-1": 3,
+        "0-2": 2,
+        "0-0": 1,
+        "0-1": 1,
         "0-4": 1,
-        "1-2": 1,
+        "1-4": 1,
         "1-5": 1,
-        "2-0": 1,
-        "4-0": 1,
-        "4-1": 1,
-        "4-3": 1,
-        "5-1": 1,
-        "6-0": 1
+        "2-1": 1,
+        "2-2": 1,
+        "3-2": 1,
+        "5-0": 1
       },
       "projectedScores": {
-        "2-1": 11,
-        "1-1": 10,
-        "2-0": 10,
-        "0-2": 5,
-        "1-3": 3,
-        "3-0": 3,
-        "0-1": 2,
+        "2-0": 5,
         "0-3": 2,
-        "1-0": 1,
-        "1-2": 1,
-        "3-1": 1
+        "1-1": 2,
+        "2-1": 2,
+        "0-1": 1,
+        "0-2": 1,
+        "1-3": 1
       },
       "actualBands": {
-        "2": 8,
-        "3": 7,
-        "4+": 23,
-        "0-1": 11
+        "2": 5,
+        "3": 1,
+        "4+": 6,
+        "0-1": 2
       },
       "projectedBands": {
-        "2": 25,
-        "3": 17,
-        "4+": 4,
-        "0-1": 3
+        "2": 8,
+        "3": 4,
+        "0-1": 1,
+        "4+": 1
       },
       "actualShapes": {
-        "clear-btts-open": 13,
-        "low-0-1": 11,
-        "draw-btts": 8,
-        "open-4plus": 8,
-        "clear-clean-sheet": 6,
-        "one-goal-btts": 3
+        "draw-btts": 4,
+        "open-4plus": 3,
+        "clear-btts-open": 2,
+        "clear-clean-sheet": 2,
+        "low-0-1": 2,
+        "one-goal-btts": 1
       },
       "projectedShapes": {
-        "clear-clean-sheet": 20,
-        "one-goal-btts": 12,
-        "draw-btts": 10,
-        "clear-btts-open": 4,
-        "low-0-1": 3
+        "clear-clean-sheet": 8,
+        "draw-btts": 2,
+        "one-goal-btts": 2,
+        "clear-btts-open": 1,
+        "low-0-1": 1
       }
     },
     "adjustments": {
       "totalLambdaAdjustment": 0.054,
-      "over25ProbabilityShift": 0.022,
-      "bttsProbabilityShift": 0,
+      "over25ProbabilityShift": 0,
+      "bttsProbabilityShift": 0.017,
       "lowScoreRankPenalty": 0.032,
-      "openScoreRankBoost": 0.05,
-      "bttsRankBoost": 0,
+      "openScoreRankBoost": 0.048,
+      "bttsRankBoost": 0.02,
       "bandRankBoosts": {
-        "2": -0.035,
-        "3": -0.02,
-        "4+": 0.07,
-        "0-1": 0.029
+        "2": -0.021,
+        "3": -0.021,
+        "4+": 0.064
       },
       "shapeRankBoosts": {
-        "clear-btts-open": 0.037,
-        "low-0-1": 0.033,
-        "open-4plus": 0.033,
-        "clear-clean-sheet": -0.026,
-        "one-goal-btts": -0.017
+        "open-4plus": 0.043,
+        "clear-clean-sheet": -0.039,
+        "draw-btts": 0.029
       }
     },
     "reasons": [
       "recent-actual-goals-above-projection",
-      "recent-over25-above-projection",
-      "rolling-score-sample-for-hit-rate",
+      "recent-btts-above-projection",
       "top3-score-covers-more-than-primary",
       "score-total-band-hit-rate-adjustment",
       "score-shape-hit-rate-adjustment"
@@ -194,60 +173,60 @@
   },
   "summary": {
     "total": {
-      "settled": 49,
-      "won": 26,
-      "lost": 23,
-      "hitRate": 0.531
+      "settled": 56,
+      "won": 28,
+      "lost": 28,
+      "hitRate": 0.5
     },
     "byMarket": {
       "BEST": {
-        "settled": 49,
-        "won": 26,
-        "lost": 23,
-        "hitRate": 0.531
+        "settled": 56,
+        "won": 28,
+        "lost": 28,
+        "hitRate": 0.5
       }
     },
     "byProfile": {
-      "international": {
-        "settled": 42,
-        "won": 22,
-        "lost": 20,
-        "hitRate": 0.524
-      },
       "other": {
-        "settled": 7,
-        "won": 4,
-        "lost": 3,
-        "hitRate": 0.571
+        "settled": 12,
+        "won": 5,
+        "lost": 7,
+        "hitRate": 0.417
+      },
+      "international": {
+        "settled": 44,
+        "won": 23,
+        "lost": 21,
+        "hitRate": 0.523
       }
     },
     "byMarketProfile": {
-      "BEST:international": {
-        "settled": 42,
-        "won": 22,
-        "lost": 20,
-        "hitRate": 0.524
-      },
       "BEST:other": {
-        "settled": 7,
-        "won": 4,
-        "lost": 3,
-        "hitRate": 0.571
+        "settled": 12,
+        "won": 5,
+        "lost": 7,
+        "hitRate": 0.417
+      },
+      "BEST:international": {
+        "settled": 44,
+        "won": 23,
+        "lost": 21,
+        "hitRate": 0.523
       }
     },
     "byOddsBucket": {},
     "byTip": {
       "BEST:1": {
-        "settled": 28,
-        "won": 15,
-        "lost": 13,
-        "hitRate": 0.536
+        "settled": 34,
+        "won": 17,
+        "lost": 17,
+        "hitRate": 0.5
       },
       "BEST:2": {
-        "settled": 21,
+        "settled": 22,
         "won": 11,
-        "lost": 10,
-        "hitRate": 0.524
+        "lost": 11,
+        "hitRate": 0.5
       }
     }
   },
@@ -257,7 +236,7 @@
   },
   "strategy": {
     "version": "self-optimization-v1",
-    "generatedAt": "2026-06-28T01:26:59.086Z",
+    "generatedAt": "2026-06-28T01:31:55.771Z",
     "activation": {
       "mode": "cooling-only",
       "onlineEffect": "guarded-active",
@@ -268,18 +247,18 @@
     },
     "sample": {
       "matches": 3049,
-      "settledRows": 380,
-      "officialRows": 380,
-      "postMatchReviewRows": 235,
-      "recommendationRows": 249,
-      "bestRows": 95,
-      "goalsRows": 131,
+      "settledRows": 422,
+      "officialRows": 422,
+      "postMatchReviewRows": 256,
+      "recommendationRows": 277,
+      "bestRows": 107,
+      "goalsRows": 145,
       "webConsensusRows": 0
     },
     "activeGates": {
-      "profile": 1,
+      "profile": 2,
       "market": 1,
-      "marketProfile": 3,
+      "marketProfile": 4,
       "oddsBucket": 2,
       "tip": 3,
       "webConsensus": 0,
@@ -288,12 +267,12 @@
     "gateByMarket": {
       "1X2": {
         "key": "1X2",
-        "settled": 100,
-        "won": 55,
-        "lost": 45,
-        "hitRate": 0.55,
-        "roi": -0.161,
-        "avgOdds": 1.8,
+        "settled": 112,
+        "won": 59,
+        "lost": 53,
+        "hitRate": 0.527,
+        "roi": -0.189,
+        "avgOdds": 1.95,
         "onlineAction": "observe",
         "sampleStatus": "neutral",
         "reasons": [
@@ -310,12 +289,12 @@
       },
       "BEST": {
         "key": "BEST",
-        "settled": 95,
-        "won": 49,
-        "lost": 46,
-        "hitRate": 0.516,
-        "roi": -0.199,
-        "avgOdds": 1.72,
+        "settled": 107,
+        "won": 53,
+        "lost": 54,
+        "hitRate": 0.495,
+        "roi": -0.224,
+        "avgOdds": 1.77,
         "onlineAction": "observe",
         "sampleStatus": "neutral",
         "reasons": [
@@ -332,12 +311,12 @@
       },
       "GOALS": {
         "key": "GOALS",
-        "settled": 131,
-        "won": 64,
-        "lost": 67,
-        "hitRate": 0.489,
-        "roi": -0.05,
-        "avgOdds": 2.04,
+        "settled": 145,
+        "won": 70,
+        "lost": 75,
+        "hitRate": 0.483,
+        "roi": -0.064,
+        "avgOdds": 2.03,
         "onlineAction": "observe",
         "sampleStatus": "neutral",
         "reasons": [
@@ -354,12 +333,12 @@
       },
       "HHAD": {
         "key": "HHAD",
-        "settled": 54,
+        "settled": 58,
         "won": 19,
-        "lost": 35,
-        "hitRate": 0.352,
-        "roi": -0.298,
-        "avgOdds": 2.19,
+        "lost": 39,
+        "hitRate": 0.328,
+        "roi": -0.347,
+        "avgOdds": 2.2,
         "onlineAction": "tighten",
         "sampleStatus": "guarded",
         "reasons": [
@@ -378,12 +357,12 @@
     "gateByOddsBucket": {
       "sp_1_46_1_70": {
         "key": "sp_1_46_1_70",
-        "settled": 47,
-        "won": 24,
+        "settled": 51,
+        "won": 28,
         "lost": 23,
-        "hitRate": 0.511,
-        "roi": -0.219,
-        "avgOdds": 1.56,
+        "hitRate": 0.549,
+        "roi": -0.147,
+        "avgOdds": 1.57,
         "onlineAction": "observe",
         "sampleStatus": "neutral",
         "reasons": [
@@ -400,12 +379,12 @@
       },
       "sp_1_71_2_05": {
         "key": "sp_1_71_2_05",
-        "settled": 52,
-        "won": 31,
-        "lost": 21,
-        "hitRate": 0.596,
-        "roi": 0.149,
-        "avgOdds": 1.89,
+        "settled": 64,
+        "won": 35,
+        "lost": 29,
+        "hitRate": 0.547,
+        "roi": 0.045,
+        "avgOdds": 1.88,
         "onlineAction": "observe",
         "sampleStatus": "neutral",
         "reasons": [
@@ -422,12 +401,12 @@
       },
       "sp_2_06_2_60": {
         "key": "sp_2_06_2_60",
-        "settled": 48,
+        "settled": 56,
         "won": 13,
-        "lost": 35,
-        "hitRate": 0.271,
-        "roi": -0.375,
-        "avgOdds": 2.26,
+        "lost": 43,
+        "hitRate": 0.232,
+        "roi": -0.464,
+        "avgOdds": 2.27,
         "onlineAction": "tighten",
         "sampleStatus": "guarded",
         "reasons": [
@@ -445,12 +424,12 @@
       },
       "sp_gt_2_60": {
         "key": "sp_gt_2_60",
-        "settled": 18,
+        "settled": 22,
         "won": 0,
-        "lost": 18,
+        "lost": 22,
         "hitRate": 0,
         "roi": -1,
-        "avgOdds": 3.83,
+        "avgOdds": 4.29,
         "onlineAction": "tighten",
         "sampleStatus": "guarded",
         "reasons": [
@@ -492,12 +471,12 @@
     "gateByTip": {
       "1X2:1": {
         "key": "1X2:1",
-        "settled": 71,
-        "won": 36,
-        "lost": 35,
-        "hitRate": 0.507,
-        "roi": -0.201,
-        "avgOdds": 1.89,
+        "settled": 83,
+        "won": 40,
+        "lost": 43,
+        "hitRate": 0.482,
+        "roi": -0.233,
+        "avgOdds": 2.08,
         "onlineAction": "observe",
         "sampleStatus": "neutral",
         "reasons": [
@@ -558,12 +537,12 @@
       },
       "BEST:1": {
         "key": "BEST:1",
-        "settled": 61,
-        "won": 30,
-        "lost": 31,
-        "hitRate": 0.492,
-        "roi": -0.236,
-        "avgOdds": 1.7,
+        "settled": 72,
+        "won": 34,
+        "lost": 38,
+        "hitRate": 0.472,
+        "roi": -0.257,
+        "avgOdds": 1.77,
         "onlineAction": "observe",
         "sampleStatus": "neutral",
         "reasons": [
@@ -580,11 +559,11 @@
       },
       "BEST:2": {
         "key": "BEST:2",
-        "settled": 33,
+        "settled": 34,
         "won": 19,
-        "lost": 14,
-        "hitRate": 0.576,
-        "roi": -0.106,
+        "lost": 15,
+        "hitRate": 0.559,
+        "roi": -0.132,
         "avgOdds": 1.72,
         "onlineAction": "observe",
         "sampleStatus": "neutral",
@@ -668,11 +647,11 @@
       },
       "GOALS:O2.5": {
         "key": "GOALS:O2.5",
-        "settled": 44,
+        "settled": 46,
         "won": 26,
-        "lost": 18,
-        "hitRate": 0.591,
-        "roi": 0.052,
+        "lost": 20,
+        "hitRate": 0.565,
+        "roi": 0.006,
         "avgOdds": 1.8,
         "onlineAction": "observe",
         "sampleStatus": "neutral",
@@ -690,11 +669,11 @@
       },
       "GOALS:U2.5": {
         "key": "GOALS:U2.5",
-        "settled": 79,
-        "won": 36,
-        "lost": 43,
-        "hitRate": 0.456,
-        "roi": -0.126,
+        "settled": 91,
+        "won": 42,
+        "lost": 49,
+        "hitRate": 0.462,
+        "roi": -0.117,
         "avgOdds": 1.91,
         "onlineAction": "observe",
         "sampleStatus": "neutral",
@@ -712,12 +691,12 @@
       },
       "HHAD:1": {
         "key": "HHAD:1",
-        "settled": 21,
+        "settled": 22,
         "won": 6,
-        "lost": 15,
-        "hitRate": 0.286,
-        "roi": -0.413,
-        "avgOdds": 2.2,
+        "lost": 16,
+        "hitRate": 0.273,
+        "roi": -0.44,
+        "avgOdds": 2.27,
         "onlineAction": "tighten",
         "sampleStatus": "guarded",
         "reasons": [
@@ -735,12 +714,12 @@
       },
       "HHAD:2": {
         "key": "HHAD:2",
-        "settled": 33,
+        "settled": 36,
         "won": 13,
-        "lost": 20,
-        "hitRate": 0.394,
-        "roi": -0.225,
-        "avgOdds": 2.18,
+        "lost": 23,
+        "hitRate": 0.361,
+        "roi": -0.29,
+        "avgOdds": 2.16,
         "onlineAction": "tighten",
         "sampleStatus": "guarded",
         "reasons": [
@@ -761,33 +740,33 @@
         "key": "international",
         "sample": {
           "overall": {
-            "settled": 309,
-            "won": 156,
-            "lost": 153,
-            "hitRate": 0.505,
-            "roi": -0.141,
-            "avgOdds": 1.85,
-            "avgTrust": 50.3,
-            "avgProbability": 0.459
+            "settled": 327,
+            "won": 162,
+            "lost": 165,
+            "hitRate": 0.495,
+            "roi": -0.157,
+            "avgOdds": 1.91,
+            "avgTrust": 50.1,
+            "avgProbability": 0.463
           },
           "oneXTwo": {
-            "settled": 77,
-            "won": 48,
-            "lost": 29,
-            "hitRate": 0.623,
-            "roi": -0.071,
-            "avgOdds": 1.53,
-            "avgTrust": 39.7,
-            "avgProbability": 0.481
+            "settled": 81,
+            "won": 50,
+            "lost": 31,
+            "hitRate": 0.617,
+            "roi": -0.076,
+            "avgOdds": 1.72,
+            "avgTrust": 39.4,
+            "avgProbability": 0.478
           },
           "goals": {
-            "settled": 106,
-            "won": 50,
-            "lost": 56,
-            "hitRate": 0.472,
-            "roi": -0.07,
-            "avgOdds": 2.09,
-            "avgTrust": 52.7,
+            "settled": 112,
+            "won": 52,
+            "lost": 60,
+            "hitRate": 0.464,
+            "roi": -0.087,
+            "avgOdds": 2.08,
+            "avgTrust": 52.6,
             "avgProbability": null
           }
         },
@@ -863,49 +842,50 @@
         "key": "other",
         "sample": {
           "overall": {
-            "settled": 51,
-            "won": 25,
-            "lost": 26,
-            "hitRate": 0.49,
-            "roi": -0.105,
-            "avgOdds": 2.33,
-            "avgTrust": 48,
-            "avgProbability": 0.434
+            "settled": 75,
+            "won": 33,
+            "lost": 42,
+            "hitRate": 0.44,
+            "roi": -0.194,
+            "avgOdds": 2.23,
+            "avgTrust": 47,
+            "avgProbability": 0.453
           },
           "oneXTwo": {
-            "settled": 15,
-            "won": 6,
-            "lost": 9,
-            "hitRate": 0.4,
-            "roi": -0.311,
-            "avgOdds": 3.1,
+            "settled": 23,
+            "won": 8,
+            "lost": 15,
+            "hitRate": 0.348,
+            "roi": -0.396,
+            "avgOdds": 2.74,
             "avgTrust": 34,
-            "avgProbability": 0.455
+            "avgProbability": 0.467
           },
           "goals": {
-            "settled": 17,
-            "won": 9,
-            "lost": 8,
-            "hitRate": 0.529,
-            "roi": -0.026,
-            "avgOdds": 1.85,
-            "avgTrust": 52,
+            "settled": 25,
+            "won": 13,
+            "lost": 12,
+            "hitRate": 0.52,
+            "roi": -0.032,
+            "avgOdds": 1.89,
+            "avgTrust": 50.8,
             "avgProbability": null
           }
         },
-        "onlineAction": "observe",
-        "sampleStatus": "observe",
+        "onlineAction": "tighten",
+        "sampleStatus": "guarded",
         "reasons": [
           "other:neutral-sample",
-          "1X2:other:neutral-sample",
+          "1X2:other:cold-hit-rate",
+          "1X2:other:negative-flat-stake-roi",
           "GOALS:other:neutral-sample"
         ],
         "adjustments": {
-          "minProbabilityBoost": 0,
-          "minModelGapBoost": 0,
-          "minHandicapSupportBoost": 0,
-          "trustPenalty": 0,
-          "maxRiskTagsDelta": 0,
+          "minProbabilityBoost": 0.06,
+          "minModelGapBoost": 0.04,
+          "minHandicapSupportBoost": 0.05,
+          "trustPenalty": 9,
+          "maxRiskTagsDelta": -2,
           "goalsMinBoost": 0
         }
       }
@@ -914,10 +894,10 @@
     "gateByReviewSignal": {
       "best-hit": {
         "key": "best-hit",
-        "settled": 95,
-        "won": 77,
-        "lost": 18,
-        "hitRate": 0.811,
+        "settled": 101,
+        "won": 81,
+        "lost": 20,
+        "hitRate": 0.802,
         "onlineAction": "observe",
         "sampleStatus": "neutral",
         "reasons": [
@@ -934,10 +914,10 @@
       },
       "best-miss": {
         "key": "best-miss",
-        "settled": 120,
-        "won": 23,
-        "lost": 97,
-        "hitRate": 0.192,
+        "settled": 135,
+        "won": 26,
+        "lost": 109,
+        "hitRate": 0.193,
         "onlineAction": "tighten",
         "sampleStatus": "validated",
         "reasons": [
@@ -954,10 +934,10 @@
       },
       "draw-risk-underestimated": {
         "key": "draw-risk-underestimated",
-        "settled": 66,
-        "won": 11,
-        "lost": 55,
-        "hitRate": 0.167,
+        "settled": 72,
+        "won": 13,
+        "lost": 59,
+        "hitRate": 0.181,
         "onlineAction": "tighten",
         "sampleStatus": "guarded",
         "reasons": [
@@ -994,10 +974,10 @@
       },
       "goals-underestimated": {
         "key": "goals-underestimated",
-        "settled": 57,
-        "won": 28,
-        "lost": 29,
-        "hitRate": 0.491,
+        "settled": 60,
+        "won": 30,
+        "lost": 30,
+        "hitRate": 0.5,
         "onlineAction": "tighten",
         "sampleStatus": "guarded",
         "reasons": [
@@ -1034,10 +1014,10 @@
       },
       "handicap-lane-suppressed": {
         "key": "handicap-lane-suppressed",
-        "settled": 44,
-        "won": 8,
-        "lost": 36,
-        "hitRate": 0.182,
+        "settled": 53,
+        "won": 10,
+        "lost": 43,
+        "hitRate": 0.189,
         "onlineAction": "tighten",
         "sampleStatus": "guarded",
         "reasons": [
