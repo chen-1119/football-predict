@@ -618,7 +618,7 @@ function statusFromSporttery(matchStatus, sellStatus, statusName = "", kickoffTi
 
 function normalizeStatusWithScore(status, kickoffTime, scoreHome, scoreAway) {
   const hasScore = Number.isFinite(scoreHome) && Number.isFinite(scoreAway);
-  if (status === "FINISHED") return status;
+  if (status === "FINISHED") return hasScore ? "FINISHED" : "PENDING_RESULT";
   if (status === "PENDING_RESULT") return hasScore ? "FINISHED" : status;
   const kickoffAt = Date.parse(kickoffTime);
   if (!Number.isFinite(kickoffAt) || !hasScore) return status;
@@ -9873,8 +9873,9 @@ function isSameOutputDay(match, capturedAt) {
 }
 
 function splitMatchesForOutput(matches, capturedAt = new Date().toISOString()) {
-  const current = matches.filter((match) => match.status !== "FINISHED" || isSameOutputDay(match, capturedAt));
-  const history = matches.filter((match) => match.status === "FINISHED");
+  const normalized = (matches || []).map((match) => normalizePublishedStatus(match, capturedAt));
+  const current = normalized.filter((match) => match.status !== "FINISHED" || isSameOutputDay(match, capturedAt));
+  const history = normalized.filter((match) => match.status === "FINISHED");
   return { current, history };
 }
 
