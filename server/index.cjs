@@ -49,6 +49,11 @@ const accessCodeSecret = process.env.ACCESS_CODE_SECRET
   || "football-predict-local-access-secret";
 const accessCodesFile = path.join(storeDir, "access-codes.json");
 const publicApiBase = process.env.PUBLIC_DATA_API_BASE || "/api";
+const allowQueryAdminToken = process.env.ALLOW_QUERY_ADMIN_TOKEN === "1";
+const allowedCorsOrigins = new Set(String(process.env.ALLOWED_CORS_ORIGINS || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean));
 const enable500Sync = process.env.ENABLE_500_SYNC !== "0";
 const enable500DetailsSync = process.env.ENABLE_500_DETAILS_SYNC === "1";
 const enableWeatherSync = process.env.ENABLE_WEATHER_SYNC !== "0";
@@ -98,6 +103,7 @@ const sseClients = new Set();
 let historyListCache = null;
 let currentMatchesCache = null;
 let sourceHealthCache = null;
+const rateLimitBuckets = new Map();
 
 const nowIso = () => new Date().toISOString();
 
@@ -474,12 +480,41 @@ const encodeBody = (res, status, body, headers) => {
   return { body: source, headers };
 };
 
+const securityHeaders = {
+  "x-content-type-options": "nosniff",
+  "x-frame-options": "DENY",
+  "referrer-policy": "strict-origin-when-cross-origin",
+  "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=()"
+};
+
+const getCorsHeaders = (req) => {
+  const origin = String(req?.headers?.origin || "");
+  if (!origin) return {};
+
+  let allowed = allowedCorsOrigins.has(origin);
+  if (!allowed) {
+    try {
+      const originUrl = new URL(origin);
+      allowed = originUrl.host === req.headers.host;
+    } catch {
+      allowed = false;
+    }
+  }
+
+  if (!allowed) return {};
+  return {
+    "access-control-allow-origin": origin,
+    "access-control-allow-methods": "GET, POST, OPTIONS",
+    "access-control-allow-headers": "authorization, content-type, x-access-token",
+    "vary": "Origin"
+  };
+};
+
 const send = (res, status, body, headers = {}) => {
   const encoded = encodeBody(res, status, body, headers);
   res.writeHead(status, {
-    "access-control-allow-origin": "*",
-    "access-control-allow-methods": "GET, POST, OPTIONS",
-    "access-control-allow-headers": "authorization, content-type, x-access-token",
+    ...securityHeaders,
+    ...getCorsHeaders(res.__request),
     "cache-control": "no-store",
     ...encoded.headers
   });
@@ -521,7 +556,8 @@ const getStaticCacheControl = (filePath, ext) => {
 
 const handleEventStream = (req, res) => {
   res.writeHead(200, {
-    "access-control-allow-origin": "*",
+    ...securityHeaders,
+    ...getCorsHeaders(req),
     "cache-control": "no-store",
     "connection": "keep-alive",
     "content-type": "text/event-stream; charset=utf-8"
@@ -561,11 +597,47 @@ const readRequestJson = (req) => new Promise((resolve, reject) => {
   req.on("error", reject);
 });
 
+const getClientIp = (req) => {
+  const forwarded = String(req.headers["x-forwarded-for"] || "")
+    .split(",")[0]
+    .trim();
+  return forwarded || String(req.headers["x-real-ip"] || req.socket.remoteAddress || "unknown");
+};
+
+const consumeRateLimit = (req, bucket, maxHits, windowMs) => {
+  const now = Date.now();
+  const key = `${bucket}:${getClientIp(req)}`;
+  const current = rateLimitBuckets.get(key);
+  const record = current && current.resetAt > now
+    ? current
+    : { count: 0, resetAt: now + windowMs };
+  record.count += 1;
+  rateLimitBuckets.set(key, record);
+
+  if (rateLimitBuckets.size > 5000) {
+    for (const [entryKey, entry] of rateLimitBuckets.entries()) {
+      if (entry.resetAt <= now) rateLimitBuckets.delete(entryKey);
+    }
+  }
+
+  return {
+    ok: record.count <= maxHits,
+    retryAfter: Math.max(1, Math.ceil((record.resetAt - now) / 1000))
+  };
+};
+
+const rateLimitResponse = (res, limit) => sendJson(
+  res,
+  { ok: false, error: "too many requests", retryAfter: limit.retryAfter },
+  429,
+  { "retry-after": String(limit.retryAfter) }
+);
+
 const isAuthorized = (req, url) => {
   const remote = req.socket.remoteAddress || "";
   const isLocal = remote === "127.0.0.1" || remote === "::1" || remote === "::ffff:127.0.0.1";
   if (!adminToken) return allowLocalAdmin && isLocal;
-  const queryToken = url.searchParams.get("token");
+  const queryToken = allowQueryAdminToken ? url.searchParams.get("token") : "";
   const auth = req.headers.authorization || "";
   const bearer = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7) : "";
   return queryToken === adminToken || bearer === adminToken;
@@ -573,7 +645,7 @@ const isAuthorized = (req, url) => {
 
 const isAccessCodeAdminAuthorized = (req, url) => {
   if (!accessCodeAdminToken) return false;
-  const queryToken = url.searchParams.get("token");
+  const queryToken = allowQueryAdminToken ? url.searchParams.get("token") : "";
   const auth = req.headers.authorization || "";
   const bearer = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7) : "";
   return queryToken === accessCodeAdminToken || bearer === accessCodeAdminToken;
@@ -1998,9 +2070,8 @@ const sendFile = async (res, filePath) => {
       && isCompressibleType(contentType)
       && /\bgzip\b/i.test(acceptEncoding);
     const headers = {
-      "access-control-allow-origin": "*",
-      "access-control-allow-methods": "GET, POST, OPTIONS",
-      "access-control-allow-headers": "authorization, content-type, x-access-token",
+      ...securityHeaders,
+      ...getCorsHeaders(request),
       "cache-control": getStaticCacheControl(filePath, ext),
       "content-type": contentType,
       ...(shouldGzip ? { "content-encoding": "gzip", "vary": "Accept-Encoding" } : { "content-length": stat.size })
@@ -2023,6 +2094,8 @@ const handleApi = async (req, res, url) => {
 
   if (url.pathname === "/api/access/verify") {
     if (req.method !== "POST") return sendJson(res, { ok: false, error: "method not allowed" }, 405);
+    const limit = consumeRateLimit(req, "access-verify", 12, 5 * 60 * 1000);
+    if (!limit.ok) return rateLimitResponse(res, limit);
     const body = await readRequestJson(req);
     const result = await verifyAccessCode(body.code);
     return sendJson(res, result, result.ok ? 200 : result.status || 401);
@@ -2039,6 +2112,8 @@ const handleApi = async (req, res, url) => {
 
   const accessCodeRevokeMatch = url.pathname.match(/^\/api\/admin\/access-codes\/([^/]+)\/revoke$/);
   if (accessCodeRevokeMatch) {
+    const limit = consumeRateLimit(req, "access-admin", 30, 5 * 60 * 1000);
+    if (!limit.ok) return rateLimitResponse(res, limit);
     if (!accessCodeAdminToken) {
       return sendJson(res, { ok: false, error: "access code admin token not configured" }, 503);
     }
@@ -2051,6 +2126,8 @@ const handleApi = async (req, res, url) => {
   }
 
   if (url.pathname === "/api/admin/access-codes") {
+    const limit = consumeRateLimit(req, "access-admin", 30, 5 * 60 * 1000);
+    if (!limit.ok) return rateLimitResponse(res, limit);
     if (!accessCodeAdminToken) {
       return sendJson(res, { ok: false, error: "access code admin token not configured" }, 503);
     }
@@ -2193,12 +2270,16 @@ const handleApi = async (req, res, url) => {
 
   if (url.pathname === "/api/admin/sync") {
     if (req.method !== "POST") return sendJson(res, { ok: false, error: "method not allowed" }, 405);
+    const limit = consumeRateLimit(req, "admin-heavy", 6, 10 * 60 * 1000);
+    if (!limit.ok) return rateLimitResponse(res, limit);
     if (!isAuthorized(req, url)) return sendJson(res, { ok: false, error: "unauthorized" }, 401);
     return sendJson(res, await runSync("server-manual"));
   }
 
   if (url.pathname === "/api/admin/predict") {
     if (req.method !== "POST") return sendJson(res, { ok: false, error: "method not allowed" }, 405);
+    const limit = consumeRateLimit(req, "admin-heavy", 6, 10 * 60 * 1000);
+    if (!limit.ok) return rateLimitResponse(res, limit);
     if (!isAuthorized(req, url)) return sendJson(res, { ok: false, error: "unauthorized" }, 401);
     const body = await readRequestJson(req);
     return sendJson(res, await runGptPredictions({
@@ -2210,6 +2291,8 @@ const handleApi = async (req, res, url) => {
 
   if (url.pathname === "/api/admin/deploy") {
     if (req.method !== "POST") return sendJson(res, { ok: false, error: "method not allowed" }, 405);
+    const limit = consumeRateLimit(req, "admin-heavy", 6, 10 * 60 * 1000);
+    if (!limit.ok) return rateLimitResponse(res, limit);
     if (!isAuthorized(req, url)) return sendJson(res, { ok: false, error: "unauthorized" }, 401);
     const deploy = await triggerDeployRepair();
     return sendJson(res, {

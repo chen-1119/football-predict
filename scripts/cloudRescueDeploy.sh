@@ -48,7 +48,7 @@ ensure_lightweight_runtime_env() {
   set_env_value "$file" "PAGE_POLL_SECONDS" "30"
   set_env_value "$file" "SYNC_INTERVAL_SECONDS" "600"
   set_env_value "$file" "SYNC_STARTUP_DELAY_SECONDS" "90"
-  set_env_value "$file" "ENABLE_STARTUP_SYNC" "1"
+  set_env_value "$file" "ENABLE_STARTUP_SYNC" "0"
   set_env_value "$file" "SNAPSHOT_RETENTION_DAYS" "3"
   set_env_value "$file" "CURRENT_MATCH_SOURCE" "file"
   set_env_value "$file" "ENABLE_FULL_HISTORY_FILE_FALLBACK" "0"
@@ -61,6 +61,7 @@ ensure_lightweight_runtime_env() {
   set_env_value "$file" "DATASTORE_COMPACT_INTERVAL_MINUTES" "60"
   set_env_value "$file" "DATASTORE_COMPACT_RETENTION_DAYS" "14"
   set_env_value "$file" "DATASTORE_COMPACT_MAX_ROWS" "150000"
+  set_env_value "$file" "ALLOW_QUERY_ADMIN_TOKEN" "0"
 }
 
 install_deploy_automation() {
