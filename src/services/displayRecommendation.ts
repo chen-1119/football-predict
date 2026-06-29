@@ -233,6 +233,25 @@ const isHandicapCodeCompatible = (
   return false;
 };
 
+const isShallowOppositeHandicapPick = (
+  match: Match,
+  primaryPrediction: PredictionDetail | undefined,
+  handicapCode: OutcomeCode
+) => {
+  if (!primaryPrediction || primaryPrediction.oddsPoolCode === 'HHAD' || !isOutcomeCode(primaryPrediction.tipCode)) {
+    return false;
+  }
+  if (!['1', '2'].includes(primaryPrediction.tipCode) || !['1', '2'].includes(handicapCode)) {
+    return false;
+  }
+
+  const lineValue = parseHandicapLine(match.handicapLine);
+  if (lineValue === null || Math.abs(lineValue) > 1) return false;
+
+  return (primaryPrediction.tipCode === '1' && handicapCode === '2')
+    || (primaryPrediction.tipCode === '2' && handicapCode === '1');
+};
+
 const getCompanionReason = (
   match: Match,
   primaryPrediction: PredictionDetail,
@@ -287,6 +306,7 @@ const buildHandicapCompanion = (
   const lineValue = parseHandicapLine(match.handicapLine);
   const hasMeaningfulLine = lineValue === null || Math.abs(lineValue) >= 0.5;
   if (!hasMeaningfulLine) return null;
+  if (isShallowOppositeHandicapPick(match, primaryPrediction, read.modelTop.code)) return null;
 
   const support = read.marketSupport;
   const strongHandicapRead = read.modelTop.probability >= 48
@@ -340,6 +360,7 @@ const buildHandicapCompanionFromPrediction = (
     return null;
   }
   if (!primaryPrediction || !isOutcomeCode(primaryPrediction.tipCode)) return null;
+  if (isShallowOppositeHandicapPick(match, primaryPrediction, handicapPrediction.tipCode)) return null;
 
   const probability = getOutcomeProbability(match, handicapPrediction.tipCode, handicapPrediction);
   const read = getHandicapRead(match);
@@ -389,6 +410,7 @@ export const getListHandicapSupplement = (
   const read = getHandicapRead(match);
   const top = read.modelTop || read.marketTop;
   if (!top) return null;
+  if (pairedOutcomePrediction && isShallowOppositeHandicapPick(match, pairedOutcomePrediction, top.code)) return null;
 
   const label = getSimpleHandicapLabel(top.code, language);
   const probability = Number.isFinite(top.probability) ? Number(top.probability) : null;
@@ -430,6 +452,7 @@ const getHandicapOverride = (match: Match, promotedPrediction?: PredictionDetail
   const read = getHandicapRead(match);
   if (!read.modelTop) return null;
   if (read.marketTop && read.marketTop.code !== read.modelTop.code) return null;
+  if (isShallowOppositeHandicapPick(match, promotedPrediction, read.modelTop.code)) return null;
   if (read.marketSupport === null) return null;
 
   const promotedIsWeak = !promotedPrediction
