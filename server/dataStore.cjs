@@ -1178,7 +1178,7 @@ const getLatestCurrentMatches = async (storeDir) => {
 };
 
 const getHistoryMatchesForList = async (storeDir, limit = 600) => {
-  const safeLimit = clampLimit(limit, 1200);
+  const safeLimit = clampLimit(limit, 5000);
   const materialized = await readJsonFile(materializedPathFor(storeDir, HISTORY_LIST_FILE), null);
   return Array.isArray(materialized?.rows) ? materialized.rows.slice(0, safeLimit) : [];
 };

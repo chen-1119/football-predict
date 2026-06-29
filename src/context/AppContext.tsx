@@ -599,7 +599,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const loadHistory = async () => {
       try {
         const historyData = await fetchFirstAvailable<unknown>(
-          dataUrls('/matches/history?view=list&limit=600', [buildStaticUrl('data/matches-history.json')], {
+          dataUrls('/matches/history?view=list&limit=4000', [buildStaticUrl('data/matches-history.json')], {
             preferStatic: false
           }),
           activeAccessToken

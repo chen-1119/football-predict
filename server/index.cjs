@@ -86,6 +86,8 @@ const mimeTypes = {
 };
 
 let syncRunning = false;
+let syncStartedAt = null;
+let syncSource = null;
 let predictRunning = false;
 let lastSync = null;
 let lastPredictionRun = null;
@@ -483,10 +485,29 @@ const send = (res, status, body, headers = {}) => {
   res.end(res.__request?.method === "HEAD" ? undefined : encoded.body);
 };
 
-const sendJson = (res, payload, status = 200) => {
+const shortJsonCacheHeaders = (seconds = 8) => ({
+  "cache-control": `private, max-age=${seconds}, stale-while-revalidate=${seconds * 3}`
+});
+
+const sendJson = (res, payload, status = 200, headers = {}) => {
   send(res, status, JSON.stringify(payload), {
-    "content-type": "application/json; charset=utf-8"
+    "content-type": "application/json; charset=utf-8",
+    ...headers
   });
+};
+
+const getSyncState = () => {
+  const startedAt = syncRunning ? syncStartedAt : null;
+  const ageSeconds = startedAt
+    ? Math.max(0, Math.round((Date.now() - Date.parse(startedAt)) / 1000))
+    : 0;
+  return {
+    running: syncRunning,
+    source: syncRunning ? syncSource : null,
+    startedAt,
+    ageSeconds,
+    lastSync
+  };
 };
 
 const getStaticCacheControl = (filePath, ext) => {
@@ -509,12 +530,13 @@ const handleEventStream = (req, res) => {
     service: "football-predict-server",
     at: nowIso(),
     syncRunning,
+    sync: getSyncState(),
     lastSync
   });
   sseClients.add(res);
   const heartbeat = setInterval(() => {
     try {
-      writeSse(res, "heartbeat", { at: nowIso(), syncRunning });
+      writeSse(res, "heartbeat", { at: nowIso(), syncRunning, sync: getSyncState() });
     } catch {
       clearInterval(heartbeat);
       sseClients.delete(res);
@@ -752,7 +774,8 @@ const protectedApiPaths = new Set([
   "/api/data/external-signals",
   "/api/data/five-hundred-details",
   "/api/data/api-football",
-  "/api/analytics/summary"
+  "/api/analytics/summary",
+  "/api/analytics/accuracy"
 ]);
 
 const isProtectedApiPath = (pathname) => {
@@ -850,11 +873,13 @@ const captureCurrentSnapshot = async (source) => {
 
 const runSync = async (source = "server-cron") => {
   if (syncRunning) {
-    return { ok: true, skipped: true, reason: "sync already running", lastSync };
+    return { ok: true, skipped: true, reason: "sync already running", lastSync, sync: getSyncState() };
   }
 
   syncRunning = true;
   const startedAt = nowIso();
+  syncStartedAt = startedAt;
+  syncSource = source;
   try {
     await appendEvent({ type: "sync_started", source });
     const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
@@ -914,6 +939,8 @@ const runSync = async (source = "server-cron") => {
     return lastSync;
   } finally {
     syncRunning = false;
+    syncStartedAt = null;
+    syncSource = null;
   }
 };
 
@@ -1284,7 +1311,7 @@ const compactHistoryMatchForList = (match) => ({
 });
 
 const readHistoryMatchesForList = async (limit = 600) => {
-  const safeLimit = Math.max(1, Math.min(1200, Number(limit || 600)));
+  const safeLimit = Math.max(1, Math.min(5000, Number(limit || 600)));
   const dbRows = await getHistoryMatchesForList(storeDir, safeLimit);
   if (dbRows.length > 0) {
     return dbRows;
@@ -1318,6 +1345,226 @@ const readHistoryMatchesForList = async (limit = 600) => {
     rows
   };
   return rows;
+};
+
+const normalizeFilterValue = (value) => String(value || "").trim().toLowerCase();
+
+const getMatchDateMs = (match) => {
+  const raw = match?.kickoffTime || match?.kickoffDate || match?.matchDate || match?.businessDate || "";
+  const ms = Date.parse(raw);
+  return Number.isFinite(ms) ? ms : 0;
+};
+
+const filterHistoryMatches = (rows, url) => {
+  const league = normalizeFilterValue(url.searchParams.get("league"));
+  const status = normalizeFilterValue(url.searchParams.get("status"));
+  const team = normalizeFilterValue(url.searchParams.get("team"));
+  const matchNo = normalizeFilterValue(url.searchParams.get("matchNo"));
+  const fromMs = Date.parse(url.searchParams.get("from") || "");
+  const toMs = Date.parse(url.searchParams.get("to") || "");
+  const settledOnly = url.searchParams.get("settled") === "1";
+  const hasFrom = Number.isFinite(fromMs);
+  const hasTo = Number.isFinite(toMs);
+
+  return rows.filter((match) => {
+    if (league) {
+      const text = [
+        match.leagueName,
+        match.leagueNameEn,
+        match.leagueShortName,
+        match.leagueShortNameEn,
+        match.countryName,
+        match.countryNameEn
+      ].map(normalizeFilterValue).join(" ");
+      if (!text.includes(league)) return false;
+    }
+    if (status && normalizeFilterValue(match.status) !== status) return false;
+    if (team) {
+      const text = [
+        match.homeTeamName,
+        match.homeTeamNameEn,
+        match.awayTeamName,
+        match.awayTeamNameEn
+      ].map(normalizeFilterValue).join(" ");
+      if (!text.includes(team)) return false;
+    }
+    if (matchNo && !normalizeFilterValue(match.matchNo).includes(matchNo)) return false;
+    const matchMs = getMatchDateMs(match);
+    if (hasFrom && matchMs && matchMs < fromMs) return false;
+    if (hasTo && matchMs && matchMs > toMs) return false;
+    if (settledOnly && !match.postMatchReview?.predictionReview) return false;
+    return true;
+  });
+};
+
+const readHistoryMatchesResponse = async (url) => {
+  const wantsPage = url.searchParams.has("page")
+    || url.searchParams.has("pageSize")
+    || url.searchParams.get("format") === "page";
+  const hasFilters = ["league", "status", "team", "matchNo", "from", "to", "settled"]
+    .some((key) => url.searchParams.has(key));
+  const requestedLimit = Math.max(1, Math.min(5000, Number(url.searchParams.get("limit") || 600)));
+  const page = Math.max(1, Number(url.searchParams.get("page") || 1));
+  const pageSize = Math.max(1, Math.min(200, Number(url.searchParams.get("pageSize") || requestedLimit || 80)));
+  const readLimit = wantsPage || hasFilters ? 5000 : requestedLimit;
+  const rows = filterHistoryMatches(await readHistoryMatchesForList(readLimit), url);
+
+  if (!wantsPage) {
+    return rows.slice(0, requestedLimit);
+  }
+
+  const start = (page - 1) * pageSize;
+  return {
+    ok: true,
+    source: "server-db",
+    checkedAt: nowIso(),
+    page,
+    pageSize,
+    total: rows.length,
+    hasMore: start + pageSize < rows.length,
+    rows: rows.slice(start, start + pageSize)
+  };
+};
+
+const roundRate = (value) => (
+  Number.isFinite(value) ? Number(value.toFixed(3)) : null
+);
+
+const ratio = (won, settled) => (
+  Number(settled) > 0 ? roundRate(Number(won || 0) / Number(settled)) : null
+);
+
+const isWinStatus = (status) => {
+  const normalized = normalizeFilterValue(status);
+  return normalized === "won"
+    || normalized === "hit"
+    || normalized === "win"
+    || normalized.includes("已中")
+    || (normalized.includes("命中") && !normalized.includes("未命中"));
+};
+
+const countReviewAccuracy = (rows) => {
+  const totals = {
+    reviewedMatches: 0,
+    settled: 0,
+    won: 0,
+    mainSettled: 0,
+    mainWon: 0,
+    bestSettled: 0,
+    bestWon: 0,
+    oneXTwoSettled: 0,
+    oneXTwoWon: 0,
+    byMarket: {}
+  };
+
+  for (const match of rows) {
+    const review = match?.postMatchReview?.predictionReview;
+    if (!review) continue;
+    totals.reviewedMatches += 1;
+    totals.settled += Number(review.settled || 0);
+    totals.won += Number(review.won || 0);
+    totals.mainSettled += Number(review.mainSettled || 0);
+    totals.mainWon += Number(review.mainWon || 0);
+
+    for (const row of Array.isArray(review.rows) ? review.rows : []) {
+      const market = String(row.marketType || "UNKNOWN").toUpperCase();
+      const status = row.resultStatus;
+      if (!status) continue;
+      totals.byMarket[market] ||= { settled: 0, won: 0 };
+      totals.byMarket[market].settled += 1;
+      if (isWinStatus(status)) totals.byMarket[market].won += 1;
+      if (market === "BEST") {
+        totals.bestSettled += 1;
+        if (isWinStatus(status)) totals.bestWon += 1;
+      }
+      if (market === "1X2" || market === "HAD") {
+        totals.oneXTwoSettled += 1;
+        if (isWinStatus(status)) totals.oneXTwoWon += 1;
+      }
+    }
+  }
+
+  const byMarket = Object.fromEntries(Object.entries(totals.byMarket).map(([market, item]) => [
+    market,
+    {
+      ...item,
+      hitRate: ratio(item.won, item.settled)
+    }
+  ]));
+
+  return {
+    reviewedMatches: totals.reviewedMatches,
+    settled: totals.settled,
+    won: totals.won,
+    hitRate: ratio(totals.won, totals.settled),
+    main: {
+      settled: totals.mainSettled,
+      won: totals.mainWon,
+      hitRate: ratio(totals.mainWon, totals.mainSettled)
+    },
+    best: {
+      settled: totals.bestSettled,
+      won: totals.bestWon,
+      hitRate: ratio(totals.bestWon, totals.bestSettled)
+    },
+    oneXTwo: {
+      settled: totals.oneXTwoSettled,
+      won: totals.oneXTwoWon,
+      hitRate: ratio(totals.oneXTwoWon, totals.oneXTwoSettled)
+    },
+    byMarket
+  };
+};
+
+const readAccuracyAnalytics = async () => {
+  const [strategy, calibration, syncMeta, database, rows] = await Promise.all([
+    readJsonFile(path.join(dataDir, "model-strategy.json"), null),
+    readJsonFile(path.join(dataDir, "model-calibration.json"), null),
+    readJsonFile(path.join(dataDir, "sync-meta.json"), null),
+    getDataStoreStatus(storeDir),
+    readHistoryMatchesForList(5000)
+  ]);
+  const reviewed = countReviewAccuracy(rows);
+  const finishedMatches = rows.filter((match) => {
+    const status = normalizeFilterValue(match.status);
+    return status === "finished"
+      || status === "ended"
+      || (Number.isFinite(Number(match.scoreHome)) && Number.isFinite(Number(match.scoreAway)));
+  }).length;
+
+  return {
+    ok: true,
+    checkedAt: nowIso(),
+    source: "server-db+model-strategy",
+    sample: {
+      historyRows: rows.length,
+      finishedMatches,
+      reviewedMatches: reviewed.reviewedMatches,
+      reviewCoverageRate: ratio(reviewed.reviewedMatches, finishedMatches),
+      strategy: strategy?.sample || null,
+      calibration: calibration?.sample || null
+    },
+    accuracy: {
+      postMatchReview: reviewed,
+      strategy: strategy?.summary || null,
+      calibration: calibration?.metrics || null,
+      scoreCalibration: calibration?.scoreCalibration?.sample || null
+    },
+    optimization: {
+      strategyVersion: strategy?.version || null,
+      strategyGeneratedAt: strategy?.generatedAt || null,
+      calibrationVersion: calibration?.version || null,
+      calibrationGeneratedAt: calibration?.generatedAt || null,
+      activation: strategy?.activation || null
+    },
+    sync: {
+      updatedAt: syncMeta?.updatedAt || syncMeta?.generatedAt || syncMeta?.capturedAt || null,
+      source: syncMeta?.source || null,
+      running: syncRunning,
+      state: getSyncState()
+    },
+    database
+  };
 };
 
 const readMatchById = async (matchId) => {
@@ -1698,6 +1945,7 @@ const getHealth = async () => {
     checkedAt: nowIso(),
     deploy: await getDeploymentInfo(),
     syncRunning,
+    sync: getSyncState(),
     predictRunning,
     lastSync,
     lastPredictionRun,
@@ -1832,11 +2080,11 @@ const handleApi = async (req, res, url) => {
     const matches = await readCurrentMatches();
     return sendJson(res, url.searchParams.get("view") === "list" && Array.isArray(matches)
       ? matches.map(compactMatchForList)
-      : matches);
+      : matches, 200, shortJsonCacheHeaders(6));
   }
 
   if (url.pathname === "/api/matches/history") {
-    return sendJson(res, await readHistoryMatchesForList(url.searchParams.get("limit") || 600));
+    return sendJson(res, await readHistoryMatchesResponse(url), 200, shortJsonCacheHeaders(12));
   }
 
   if (url.pathname === "/api/odds/history") {
@@ -1931,7 +2179,11 @@ const handleApi = async (req, res, url) => {
       gptPredictions: await readGptPredictions(),
       database: await getDataStoreStatus(storeDir),
       recentEvents: await readRecentEvents(20)
-    });
+    }, 200, shortJsonCacheHeaders(15));
+  }
+
+  if (url.pathname === "/api/analytics/accuracy") {
+    return sendJson(res, await readAccuracyAnalytics(), 200, shortJsonCacheHeaders(30));
   }
 
   if (url.pathname === "/api/admin/sync") {
@@ -1986,7 +2238,7 @@ const handleStatic = async (req, res, url) => {
 
   const pathname = decodeURIComponent(url.pathname);
   const disabledLargeStaticPayloads = new Map([
-    ["/data/matches-history.json", "/api/matches/history?view=list&limit=600"],
+    ["/data/matches-history.json", "/api/matches/history?view=list&limit=4000"],
     ["/data/odds-history.json", "/api/odds/history?limit=200"],
     ["/odds-history.json", "/api/odds/history?limit=200"],
     ["/data/post-match-reviews.json", "/api/matches/{matchId}"],
