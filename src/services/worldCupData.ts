@@ -1042,6 +1042,7 @@ const findWorldCupTeamForecast = (
 };
 
 const WORLD_CUP_GROUP_MATCH_TOTAL = 6;
+const WORLD_CUP_TEAM_GROUP_MATCH_TOTAL = 3;
 
 const isSettledWorldCupGroupMatch = (match: Match) => {
   const hasScore = Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway);
@@ -1160,7 +1161,8 @@ export function getWorldCupLiveGroupStandings(
 
   const standings = Array.from(groupById.values()).map((group) => {
     const hasResults = group.completedMatches > 0;
-    const source: WorldCupStandingSource = group.completedMatches >= WORLD_CUP_GROUP_MATCH_TOTAL
+    const hasFullTeamTable = group.teams.every((team) => team.played >= WORLD_CUP_TEAM_GROUP_MATCH_TOTAL);
+    const source: WorldCupStandingSource = group.completedMatches >= WORLD_CUP_GROUP_MATCH_TOTAL || hasFullTeamTable
       ? 'actual'
       : hasResults
         ? 'mixed'
