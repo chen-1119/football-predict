@@ -311,6 +311,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const pollSecondsOverrideRef = useRef<number | null>(null);
   const eventStreamPathRef = useRef<string | null>(null);
   const apiFailureCountRef = useRef(0);
+  const initialLoadRetryCountRef = useRef(0);
   const [dataSync, setDataSync] = useState<DataSyncState>(emptyDataSyncState);
 
   const clearAccessSession = () => {
@@ -368,6 +369,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (!isAccessVerified) {
       lastMetaRef.current = {};
+      initialLoadRetryCountRef.current = 0;
       setMatches([]);
       setDataSync(emptyDataSyncState());
       return;
@@ -375,6 +377,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     let cancelled = false;
     const activeAccessToken = accessSession?.token || '';
+    initialLoadRetryCountRef.current = 0;
 
     const metaToState = (
       meta: SyncMeta | null,
@@ -568,21 +571,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
 
         if (isInitial) {
-          setMatches([]);
-          setDataSync({
+          const retryCount = initialLoadRetryCountRef.current;
+          initialLoadRetryCountRef.current = retryCount + 1;
+          const shouldRetry = retryCount < 3;
+          const retryDelay = Math.min(6000, 1500 * (retryCount + 1));
+
+          setDataSync((current) => ({
+            ...current,
             currentLoading: false,
-            currentLoaded: false,
-            historyLoaded: false,
+            currentLoaded: current.currentLoaded,
+            historyLoaded: current.historyLoaded,
             historyLoading: false,
-            currentCount: 0,
-            historyCount: 0,
-            totalCount: 0,
+            currentCount: current.currentCount,
+            historyCount: current.historyCount,
+            totalCount: current.totalCount,
             error: formatError(error),
             lastCheckedAt: checkedAt,
             refreshIntervalSeconds: CURRENT_REFRESH_MS / 1000,
             backendRefreshMinutes: 5,
             apiFailureCount: apiFailureCountRef.current
-          });
+          }));
+          if (shouldRetry) {
+            window.setTimeout(() => {
+              if (cancelled) return;
+              void loadCurrent(true).then(() => {
+                void loadHistory();
+              });
+            }, retryDelay);
+          }
           console.warn('Initial match data unavailable; mock fallback is disabled.');
           return;
         }
