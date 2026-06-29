@@ -1007,6 +1007,24 @@ const normalizeWorldCupTeamKey = (value?: string) => (
     .replace(/国家队|男子|男足|女子|女足|队$/g, '')
 );
 
+const WORLD_CUP_TEAM_KEY_ALIASES = new Map([
+  ['\u4e4c\u5179\u522b\u514b', '\u4e4c\u5179\u522b\u514b\u65af\u5766'],
+  ['\u521a\u679c\u91d1', '\u521a\u679c\u6c11\u4e3b\u5171\u548c\u56fd'],
+  ['\u521a\u679c\u6c11\u4e3b', '\u521a\u679c\u6c11\u4e3b\u5171\u548c\u56fd'],
+  ['\u6c11\u4e3b\u521a\u679c', '\u521a\u679c\u6c11\u4e3b\u5171\u548c\u56fd'],
+  ['drcongo', 'drcongo'],
+  ['congodr', 'drcongo'],
+  ['drc', 'drcongo']
+].map(([alias, canonical]) => [
+  normalizeWorldCupTeamKey(alias),
+  normalizeWorldCupTeamKey(canonical)
+]));
+
+const normalizeWorldCupTeamLookupKey = (value?: string) => {
+  const normalized = normalizeWorldCupTeamKey(value);
+  return WORLD_CUP_TEAM_KEY_ALIASES.get(normalized) || normalized;
+};
+
 const getMatchTeamCandidates = (match: Match, side: 'home' | 'away') => {
   const isHome = side === 'home';
   const team = getTeamById(isHome ? match.homeTeamId : match.awayTeamId);
@@ -1029,12 +1047,12 @@ const findWorldCupTeamForecast = (
   const byKey = new Map<string, WorldCupTeamForecast>();
   teams.forEach((team) => {
     [team.id, team.name.zh, team.name.en, team.shortName.zh, team.shortName.en].forEach((value) => {
-      byKey.set(normalizeWorldCupTeamKey(value), team);
+      byKey.set(normalizeWorldCupTeamLookupKey(value), team);
     });
   });
 
   for (const value of getMatchTeamCandidates(match, side)) {
-    const direct = byKey.get(normalizeWorldCupTeamKey(value));
+    const direct = byKey.get(normalizeWorldCupTeamLookupKey(value));
     if (direct) return direct;
   }
 
