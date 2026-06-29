@@ -44,10 +44,16 @@ ensure_lightweight_runtime_env() {
   if [ ! -f "$file" ]; then
     return 0
   fi
-  set_env_value "$file" "SNAPSHOT_RETENTION_DAYS" "14"
+  set_env_value "$file" "NODE_OPTIONS" "--max-old-space-size=1024"
+  set_env_value "$file" "PAGE_POLL_SECONDS" "30"
+  set_env_value "$file" "SYNC_INTERVAL_SECONDS" "600"
+  set_env_value "$file" "SYNC_STARTUP_DELAY_SECONDS" "90"
+  set_env_value "$file" "ENABLE_STARTUP_SYNC" "1"
+  set_env_value "$file" "SNAPSHOT_RETENTION_DAYS" "3"
+  set_env_value "$file" "CURRENT_MATCH_SOURCE" "file"
   set_env_value "$file" "ENABLE_FULL_HISTORY_FILE_FALLBACK" "0"
   set_env_value "$file" "ODDS_HISTORY_RETENTION_DAYS" "30"
-  set_env_value "$file" "DATASTORE_HISTORY_SNAPSHOT_RETENTION_DAYS" "14"
+  set_env_value "$file" "DATASTORE_HISTORY_SNAPSHOT_RETENTION_DAYS" "7"
   set_env_value "$file" "DATASTORE_STORE_FULL_MATCH_SNAPSHOTS" "0"
   set_env_value "$file" "DATASTORE_ODDS_HISTORY_RETENTION_DAYS" "30"
   set_env_value "$file" "DATASTORE_ODDS_HISTORY_RECENT_ROWS" "12000"

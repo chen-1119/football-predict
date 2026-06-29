@@ -33,6 +33,7 @@ const trainingIndexPaths = [
 const port = Number(process.env.PORT || 8788);
 const host = process.env.HOST || "0.0.0.0";
 const syncIntervalSeconds = Math.max(60, Number(process.env.SYNC_INTERVAL_SECONDS || 300));
+const startupSyncDelaySeconds = Math.max(5, Number(process.env.SYNC_STARTUP_DELAY_SECONDS || 60));
 const gptIntervalSeconds = Math.max(300, Number(process.env.GPT_INTERVAL_SECONDS || 900));
 const snapshotRetentionDays = Math.max(1, Number(process.env.SNAPSHOT_RETENTION_DAYS || 14));
 const enableFullHistoryFileFallback = process.env.ENABLE_FULL_HISTORY_FILE_FALLBACK === "1" || process.env.NODE_ENV !== "production";
@@ -1145,7 +1146,7 @@ const readCurrentFileMatches = async () => {
 };
 
 const readCurrentMatches = async () => {
-  if (process.env.CURRENT_MATCH_SOURCE !== "file") {
+  if (process.env.CURRENT_MATCH_SOURCE === "db") {
     const dbMatches = await getLatestCurrentMatches(storeDir);
     if (dbMatches.length > 0) {
       return mergeGptIntoMatches(dbMatches);
@@ -1922,6 +1923,7 @@ const triggerDeployRepair = async () => {
   await writeJsonFile(triggerFile, {
     requestedAt,
     service: serviceName,
+    force: true,
     currentRevision: await fsp.readFile(deploymentRevisionFile, "utf8")
       .then((text) => text.trim())
       .catch(() => null)
@@ -1963,6 +1965,9 @@ const getHealth = async () => {
       adminProtected: Boolean(adminToken),
       accessCodeAdminProtected: Boolean(accessCodeAdminToken),
       syncCron: process.env.ENABLE_SYNC_CRON === "1" ? `${syncIntervalSeconds}s` : "off",
+      startupSyncDelay: process.env.ENABLE_SYNC_CRON === "1" && process.env.ENABLE_STARTUP_SYNC !== "0"
+        ? `${startupSyncDelaySeconds}s`
+        : "off",
       gptCron: process.env.ENABLE_GPT_CRON === "1" ? `${gptIntervalSeconds}s` : "off",
       datastoreCompact: datastoreCompactOnSync ? `${Math.round(datastoreCompactIntervalMs / 60000)}m` : "off",
       fullHistoryFileFallback: enableFullHistoryFileFallback
@@ -2271,7 +2276,9 @@ const handleStatic = async (req, res, url) => {
 
 const startTimers = () => {
   if (process.env.ENABLE_SYNC_CRON === "1") {
-    setTimeout(() => runSync("server-startup"), 1500);
+    if (process.env.ENABLE_STARTUP_SYNC !== "0") {
+      setTimeout(() => runSync("server-startup"), startupSyncDelaySeconds * 1000);
+    }
     setInterval(() => runSync("server-cron"), syncIntervalSeconds * 1000);
   }
 

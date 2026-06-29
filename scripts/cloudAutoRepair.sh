@@ -9,6 +9,7 @@ REVISION_FILE="${REVISION_FILE:-$APP_DIR/.deploy-revision}"
 LOCK_FILE="${LOCK_FILE:-/var/lock/football-predict-auto-repair.lock}"
 RESCUE_SCRIPT="${RESCUE_SCRIPT:-/tmp/cloudRescueDeploy.sh}"
 CHECK_DIR="${CHECK_DIR:-/tmp/football-predict-deploy-check}"
+DEPLOY_TRIGGER_FILE="${DEPLOY_TRIGGER_FILE:-/var/lib/football-predict/deploy-request.json}"
 DEPLOY_PATHS=(
   package.json
   package-lock.json
@@ -47,8 +48,16 @@ fi
 
 remote_sha="$(git ls-remote "$REPO_URL" refs/heads/main 2>/tmp/football-predict-ls-remote.err | awk '{print $1}' || true)"
 local_sha="$(cat "$REVISION_FILE" 2>/dev/null || true)"
+trigger_requested=0
+if [ -s "$DEPLOY_TRIGGER_FILE" ]; then
+  trigger_mtime="$(stat -c %Y "$DEPLOY_TRIGGER_FILE" 2>/dev/null || echo 0)"
+  revision_mtime="$(stat -c %Y "$REVISION_FILE" 2>/dev/null || echo 0)"
+  if [ "${trigger_mtime:-0}" -gt "${revision_mtime:-0}" ]; then
+    trigger_requested=1
+  fi
+fi
 
-echo "[auto-repair] $(timestamp) health=$health_ok local=${local_sha:-none} remote=${remote_sha:-unknown}"
+echo "[auto-repair] $(timestamp) health=$health_ok local=${local_sha:-none} remote=${remote_sha:-unknown} trigger=$trigger_requested"
 
 deploy_paths_changed() {
   if [ -z "$remote_sha" ]; then
@@ -74,6 +83,7 @@ deploy_paths_changed() {
 
 if [ "$health_ok" -eq 1 ] && [ -n "$remote_sha" ] && [ "$remote_sha" = "$local_sha" ]; then
   echo "[auto-repair] no repair needed"
+  rm -f "$DEPLOY_TRIGGER_FILE" || true
   exit 0
 fi
 
@@ -82,7 +92,7 @@ if [ "$health_ok" -eq 1 ] && [ -z "$remote_sha" ]; then
   exit 0
 fi
 
-if [ "$health_ok" -eq 1 ] && ! deploy_paths_changed; then
+if [ "$health_ok" -eq 1 ] && [ "$trigger_requested" -ne 1 ] && ! deploy_paths_changed; then
   echo "[auto-repair] only data changed; service is healthy, skip deploy"
   exit 0
 fi
@@ -105,3 +115,4 @@ echo "[auto-repair] running safe rescue deploy"
 curl -fsSL "$RAW_BASE/scripts/cloudRescueDeploy.sh" -o "$RESCUE_SCRIPT"
 chmod +x "$RESCUE_SCRIPT"
 APP_DIR="$APP_DIR" REPO_URL="$REPO_URL" REVISION_FILE="$REVISION_FILE" bash "$RESCUE_SCRIPT"
+rm -f "$DEPLOY_TRIGGER_FILE" || true
