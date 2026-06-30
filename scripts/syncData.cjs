@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const http = require("http");
 const https = require("https");
 const { spawn } = require("child_process");
 
@@ -13,6 +14,9 @@ const WINDOW_FORWARD_DAYS = Math.max(1, Number(process.env.MATCH_WINDOW_FORWARD_
 const ODDS_HISTORY_RETENTION_DAYS = Math.max(1, Number(process.env.ODDS_HISTORY_RETENTION_DAYS || 30));
 const ODDS_HISTORY_BUCKET_MINUTES = Math.max(1, Number(process.env.ODDS_HISTORY_BUCKET_MINUTES || 5));
 const PAGE_POLL_SECONDS = Math.max(15, Number(process.env.PAGE_POLL_SECONDS || 30));
+const ENABLE_CCTV_WORLDCUP_RESULTS = process.env.ENABLE_CCTV_WORLDCUP_RESULTS !== "0";
+const CCTV_WORLDCUP_INDEX_URL = process.env.CCTV_WORLDCUP_INDEX_URL || "https://worldcup.cctv.com/2026/index.shtml";
+const CCTV_WORLDCUP_MAX_MATCH_PAGES = Math.max(1, Number(process.env.CCTV_WORLDCUP_MAX_MATCH_PAGES || 12));
 const ANALYST_PROMPT_VERSION = "professional-football-analyst-v24";
 const PREDICTION_POLICY_VERSION = "sporttery-day-formula-trace-v56";
 const ANALYST_RUNTIME = Object.freeze({
@@ -4300,6 +4304,43 @@ function httpGetJsonViaCurl(url, tab, proxy) {
         reject(error);
       }
     });
+  });
+}
+
+function httpGetText(url, options = {}, redirectCount = 0) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const client = parsed.protocol === "http:" ? http : https;
+    const req = client.request(parsed, {
+      method: "GET",
+      timeout: Math.max(3000, Number(options.timeoutMs || 15000)),
+      headers: {
+        "User-Agent": "Mozilla/5.0 football-predict-result-sync/1.0",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        ...(options.headers || {}),
+      },
+    }, (res) => {
+      if ([301, 302, 303, 307, 308].includes(Number(res.statusCode)) && res.headers.location && redirectCount < 3) {
+        res.resume();
+        resolve(httpGetText(new URL(res.headers.location, parsed).toString(), options, redirectCount + 1));
+        return;
+      }
+
+      const chunks = [];
+      res.on("data", (chunk) => chunks.push(chunk));
+      res.on("end", () => {
+        const body = Buffer.concat(chunks).toString(options.encoding || "utf8");
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          reject(new Error(`${url} -> HTTP ${res.statusCode}${body ? ` ${body.slice(0, 120).replace(/\s+/g, " ")}` : ""}`));
+          return;
+        }
+        resolve(body);
+      });
+    });
+
+    req.on("timeout", () => req.destroy(new Error(`timeout: ${url}`)));
+    req.on("error", reject);
+    req.end();
   });
 }
 
@@ -9077,6 +9118,180 @@ function attachExternalSignals(matches, externalSignals, preMatchSignals = null)
   });
 }
 
+function decodeHtmlEntities(text) {
+  return String(text || "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'");
+}
+
+function htmlToText(html) {
+  return decodeHtmlEntities(html)
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function cleanCctvTeamName(value) {
+  return normText(String(value || "")
+    .replace(/^[^：:]*[：:]/, "")
+    .replace(/(点球大战|点球|总比分|回放|集锦|战报|比赛|淘汰|晋级|无缘|将战).*$/g, "")
+    .replace(/[【】\[\]（）()《》]/g, "")
+    .trim());
+}
+
+function cctvResultKey(homeTeam, awayTeam) {
+  const home = cleanCctvTeamName(homeTeam);
+  const away = cleanCctvTeamName(awayTeam);
+  return home && away ? `${home}__${away}` : "";
+}
+
+function isWorldCupMatchLike(match) {
+  const text = [
+    match?.leagueName,
+    match?.leagueShortName,
+    match?.leagueNameEn,
+    match?.countryName,
+    match?.sourceUrl,
+    match?.externalSignals?.leagueName,
+    match?.externalSignals?.fiveHundred?.urls?.analysis,
+  ].filter(Boolean).join(" ");
+  return /世界杯|World Cup|worldcup/i.test(text);
+}
+
+function parseCctvWorldCupResultPage(html, pageUrl, capturedAt) {
+  const text = htmlToText(html);
+  const rows = [];
+  const pattern = /\[世界杯\][^\[]{0,80}?[：:]\s*([^\d\s：:，。；（）()]{1,16})(\d{1,2})\s*[-:：]\s*(\d{1,2})([^\d\s：:，。；（）()]{1,16})(?:[（(]\s*点球\s*(\d{1,2})\s*[-:：]\s*(\d{1,2})\s*[）)])?/g;
+  let match;
+  while ((match = pattern.exec(text))) {
+    const homeTeam = cleanCctvTeamName(match[1]);
+    const awayTeam = cleanCctvTeamName(match[4]);
+    const scoreHome = toNum(match[2], null);
+    const scoreAway = toNum(match[3], null);
+    if (!homeTeam || !awayTeam || !Number.isFinite(scoreHome) || !Number.isFinite(scoreAway)) continue;
+    if (homeTeam.length > 12 || awayTeam.length > 12) continue;
+    const penaltiesHome = toNum(match[5], null);
+    const penaltiesAway = toNum(match[6], null);
+    rows.push({
+      source: "cctv-worldcup-result",
+      sourceUrl: pageUrl,
+      updatedAt: capturedAt,
+      homeTeam,
+      awayTeam,
+      scoreHome,
+      scoreAway,
+      ...(Number.isFinite(penaltiesHome) && Number.isFinite(penaltiesAway)
+        ? { penaltiesHome, penaltiesAway }
+        : {}),
+      summary: text.slice(Math.max(0, match.index - 30), Math.min(text.length, match.index + match[0].length + 80)),
+    });
+  }
+  return rows;
+}
+
+async function fetchCctvWorldCupResultSignals(capturedAt) {
+  const empty = { ok: false, source: "cctv-worldcup-result", updatedAt: capturedAt, rows: [], byPair: new Map(), errors: [] };
+  if (!ENABLE_CCTV_WORLDCUP_RESULTS) return { ...empty, ok: true, disabled: true };
+
+  try {
+    const indexHtml = await httpGetText(CCTV_WORLDCUP_INDEX_URL, { timeoutMs: 12000 });
+    const pageUrls = Array.from(new Set(
+      Array.from(indexHtml.matchAll(/href=["']([^"']*\/2026\/match\/\d+\/index\.shtml)["']/g))
+        .map((entry) => new URL(entry[1], CCTV_WORLDCUP_INDEX_URL).toString())
+    )).slice(0, CCTV_WORLDCUP_MAX_MATCH_PAGES);
+
+    const rows = [];
+    const errors = [];
+    for (const pageUrl of pageUrls) {
+      try {
+        const pageHtml = await httpGetText(pageUrl, { timeoutMs: 12000 });
+        rows.push(...parseCctvWorldCupResultPage(pageHtml, pageUrl, capturedAt));
+      } catch (error) {
+        errors.push(`${pageUrl}: ${error.message || error}`);
+      }
+    }
+
+    const byPair = new Map();
+    for (const row of rows) {
+      const key = cctvResultKey(row.homeTeam, row.awayTeam);
+      if (key && !byPair.has(key)) byPair.set(key, row);
+    }
+
+    console.log(`CCTV World Cup result fallback ok: pages=${pageUrls.length}, rows=${rows.length}, pairs=${byPair.size}${errors.length ? `, errors=${errors.length}` : ""}`);
+    return {
+      ok: true,
+      source: "cctv-worldcup-result",
+      updatedAt: capturedAt,
+      pages: pageUrls.length,
+      rows,
+      byPair,
+      errors,
+    };
+  } catch (error) {
+    console.log(`CCTV World Cup result fallback failed: ${error.message || error}`);
+    return { ...empty, errors: [error.message || String(error)] };
+  }
+}
+
+function findCctvWorldCupResult(match, cctvResults, capturedAt) {
+  if (!cctvResults?.byPair || cctvResults.byPair.size === 0) return null;
+  if (!isWorldCupMatchLike(match)) return null;
+  const kickoffMs = Date.parse(match?.kickoffTime || "");
+  const capturedMs = Date.parse(capturedAt || "");
+  if (!Number.isFinite(kickoffMs) || !Number.isFinite(capturedMs)) return null;
+  if (capturedMs < kickoffMs + 90 * 60 * 1000) return null;
+  if (capturedMs - kickoffMs > 7 * 24 * 60 * 60 * 1000) return null;
+
+  const home = match?.homeTeamName || match?.homeTeam;
+  const away = match?.awayTeamName || match?.awayTeam;
+  const direct = cctvResults.byPair.get(cctvResultKey(home, away));
+  if (direct) return direct;
+
+  const homeName = cleanCctvTeamName(home);
+  const awayName = cleanCctvTeamName(away);
+  return cctvResults.rows.find((row) => (
+    cleanCctvTeamName(row.homeTeam).includes(homeName) &&
+    cleanCctvTeamName(row.awayTeam).includes(awayName)
+  )) || null;
+}
+
+function applyCctvWorldCupResultSignal(match, cctvResults, capturedAt) {
+  const result = findCctvWorldCupResult(match, cctvResults, capturedAt);
+  if (!result) return match;
+
+  const hasScore = Number.isFinite(match?.scoreHome) && Number.isFinite(match?.scoreAway);
+  if (hasScore && isOfficialResultMatch(match)) return match;
+
+  const settled = {
+    ...match,
+    status: "FINISHED",
+    scoreHome: result.scoreHome,
+    scoreAway: result.scoreAway,
+    resultSource: result.source,
+    resultSourceUrl: result.sourceUrl,
+    resultUpdatedAt: result.updatedAt || match?.resultUpdatedAt,
+    externalSignals: {
+      ...(match.externalSignals || {}),
+      cctvWorldCupResult: result,
+    },
+  };
+
+  if (Array.isArray(match?.predictions) && match.predictions.length) {
+    return {
+      ...settled,
+      predictions: settlePredictionsForMatch(settled, match.predictions),
+    };
+  }
+
+  return settled;
+}
+
 function applyExternalResultSignal(match) {
   const resultScore = fiveHundredResultScore(match?.externalSignals);
   if (!resultScore) return match;
@@ -9221,11 +9436,12 @@ function isOfficialResultMatch(match) {
 }
 
 function isFallbackResultMatch(match) {
+  const resultSource = String(match?.resultSource || match?.externalSignals?.fiveHundred?.result?.source || "").toLowerCase();
   return (
     match?.status === "FINISHED" &&
     Number.isFinite(match?.scoreHome) &&
     Number.isFinite(match?.scoreAway) &&
-    String(match?.resultSource || match?.externalSignals?.fiveHundred?.result?.source || "").startsWith("500.com")
+    (resultSource.startsWith("500.com") || resultSource.startsWith("cctv-worldcup"))
   );
 }
 
@@ -10187,6 +10403,7 @@ async function sync() {
   const existingTeamIndex = loadExistingJsonObject(path.join(dataDir, "team-index.json"));
   const externalSignals = loadExternalSignals(publicDir);
   const preMatchSignals = loadPreMatchSignals(publicDir);
+  const cctvWorldCupResults = await fetchCctvWorldCupResultSignals(capturedAt);
   const historicalTraining = loadHistoricalTrainingIndex();
   const worldCupKimiDataset = loadWorldCupKimiDataset();
   const predictionHealth = buildPredictionHealth(existingMatches);
@@ -10263,6 +10480,7 @@ async function sync() {
   output = attachOddsTrends(output, publicDir);
   output = attachExternalSignals(output, externalSignals, preMatchSignals);
   output = output.map(applyExternalResultSignal);
+  output = output.map((match) => applyCctvWorldCupResultSignal(match, cctvWorldCupResults, capturedAt));
   output = output.map((match) => rebuildPublishedPredictionModel(match, modelCalibration));
   output = output.map(normalizePublishedPredictionText);
   output = output.map(sanitizePublishedReferenceCopy);
@@ -10354,6 +10572,16 @@ async function sync() {
       updatedAt: externalSignals.updatedAt,
       matches: externalSignals.count || 0,
       webConsensusMatches: publishedWebConsensusMatches,
+    },
+    cctvWorldCupResults: {
+      ok: Boolean(cctvWorldCupResults.ok),
+      enabled: ENABLE_CCTV_WORLDCUP_RESULTS,
+      source: cctvWorldCupResults.source || "cctv-worldcup-result",
+      updatedAt: cctvWorldCupResults.updatedAt || capturedAt,
+      pages: cctvWorldCupResults.pages || 0,
+      rows: Array.isArray(cctvWorldCupResults.rows) ? cctvWorldCupResults.rows.length : 0,
+      pairs: cctvWorldCupResults.byPair?.size || 0,
+      errors: (cctvWorldCupResults.errors || []).slice(0, 5),
     },
     preMatchSignals: {
       source: preMatchSignals.source || "pre-match-signals",
