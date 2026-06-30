@@ -29,7 +29,7 @@ import { getMatchSignal, type MatchSignalCategory } from '../services/matchSigna
 import { getVisiblePrediction } from '../services/predictionVisibility';
 import { buildPublicRecommendationCopy } from '../services/recommendationCopy';
 import { getAvailableResultPools, getDisplayRecommendation, getListHandicapSupplement } from '../services/displayRecommendation';
-import { generateBetSlip, type SelectionResult } from '../services/generator';
+import { generateBetSlip, type BetSlipRiskProfile, type SelectionResult } from '../services/generator';
 import { TeamBadge } from '../components/TeamBadge';
 import { WorldCupSpotlight } from '../components/WorldCupSpotlight';
 
@@ -139,6 +139,8 @@ interface ParlayPreview {
   totalOdds: number;
   averageTrust: number;
   source: 'sp';
+  tone: 'steady' | 'balanced' | 'value';
+  note: string;
 }
 
 interface HomePageOddsFallback {
@@ -625,26 +627,34 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
       key: string,
       titleZh: string,
       titleEn: string,
-      matchCount: 2 | 3,
+      matchCount: 1 | 2 | 3,
       targetOdds: number,
-      minTrust: number
+      minTrust: number,
+      riskProfile: BetSlipRiskProfile,
+      minOdds: number,
+      maxOdds: number,
+      tone: ParlayPreview['tone'],
+      noteZh: string,
+      noteEn: string
     ): ParlayPreview | null => {
       const result = generateBetSlip({
         targetOdds,
         matchCount,
         marketTypes: ['1X2', 'HHAD'],
-        minOdds: 1.12,
-        maxOdds: 3.35,
-        timeWindow: '3',
+        minOdds,
+        maxOdds,
+        timeWindow: '5',
         minTrust,
         onlyImportantLeagues: false,
-        onlyOddsDropping: false
-      }, baseFilteredMatches);
+        onlyOddsDropping: false,
+        riskProfile
+      }, matches);
 
       const title = language === 'zh' ? titleZh : titleEn;
+      const legCount = result.selections.length;
       const subtitle = language === 'zh'
-        ? `${matchCount} 串 · 目标组合值 ${targetOdds.toFixed(1)}`
-        : `${matchCount}-leg · target ${targetOdds.toFixed(1)}`;
+        ? `${legCount === 1 ? '单关' : `${legCount} 串`} · 目标组合值 ${targetOdds.toFixed(1)}`
+        : `${legCount === 1 ? 'Single' : `${legCount}-leg`} · target ${targetOdds.toFixed(1)}`;
 
       if (
         !result.isSuccess
@@ -659,15 +669,71 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         selections: result.selections,
         totalOdds: result.totalOdds,
         averageTrust: result.averageTrust,
-        source: 'sp'
+        source: 'sp',
+        tone,
+        note: language === 'zh' ? noteZh : noteEn
       };
     };
 
     return [
-      buildCombo('steady-2', '稳健 2 串', 'Steady 2-leg', 2, 3.2, 38),
-      buildCombo('value-3', '进取 3 串', 'Value 3-leg', 3, 6.0, 36)
+      buildCombo(
+        'steady-2',
+        '稳健 2 串',
+        'Steady 2-leg',
+        2,
+        3.0,
+        54,
+        'strict',
+        1.15,
+        2.45,
+        'steady',
+        '稳健档只收强方向，全部来自已开售 SP。',
+        'Strict legs only, all with open SP.'
+      ),
+      buildCombo(
+        'balanced-2',
+        '进取 2 串',
+        'Balanced 2-leg',
+        2,
+        4.2,
+        46,
+        'balanced',
+        1.25,
+        3.8,
+        'balanced',
+        '进取档允许价值方向，但仍剔除待开售。',
+        'Balanced value legs; pending-sale matches stay out.'
+      ),
+      buildCombo(
+        'bold-2',
+        '博单 2 串',
+        'Bold 2-leg',
+        2,
+        6.5,
+        40,
+        'value',
+        1.45,
+        5.5,
+        'value',
+        '博单档看高赔机会，波动更大，单独参考。',
+        'Higher-odds angle with higher volatility.'
+      ),
+      buildCombo(
+        'bold-single',
+        '博单',
+        'Bold single',
+        1,
+        2.8,
+        38,
+        'value',
+        1.8,
+        5.5,
+        'value',
+        '单关高波动机会，只选已开售 SP。',
+        'Single higher-volatility angle with open SP only.'
+      )
     ].filter((combo): combo is ParlayPreview => Boolean(combo));
-  }, [baseFilteredMatches, language]);
+  }, [matches, language]);
 
   const groupedMatches = useMemo(() => {
     const groups: Record<string, { league: League; country: Country; matches: Match[] }> = {};
@@ -781,7 +847,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
   };
 
   const renderParlayCard = (combo: ParlayPreview) => (
-    <article key={combo.key} className="parlay-card">
+    <article key={combo.key} className={`parlay-card is-${combo.tone}`}>
       <header className="parlay-card-head">
         <div>
           <span>{combo.subtitle}</span>
@@ -817,9 +883,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
       </div>
       <footer className="parlay-card-foot">
         <span>{language === 'zh' ? '平均强度' : 'Avg strength'} {combo.averageTrust}</span>
-        <span>
-          {language === 'zh' ? '只收录有实际 SP 的方向' : 'Only legs with actual SP are included'}
-        </span>
+        <span>{combo.note}</span>
       </footer>
     </article>
   );
@@ -1420,22 +1484,28 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         )}
       </section>
 
-      {parlayRecommendations.length > 0 && (
-        <section className="parlay-panel" aria-label={language === 'zh' ? '自动多串推荐' : 'Auto accumulator picks'}>
-          <div className="recommendation-panel-head">
-            <div>
-              <span className="panel-kicker">{formatShortDate(effectiveSelectedDate, language)}</span>
-              <strong>{language === 'zh' ? '多串推荐' : 'Accumulator Picks'}</strong>
-            </div>
-            <span className="recommendation-count">
-              {parlayRecommendations.length} {language === 'zh' ? '组' : 'combos'}
-            </span>
+      <section className="parlay-panel" aria-label={language === 'zh' ? '自动多串推荐' : 'Auto accumulator picks'}>
+        <div className="recommendation-panel-head">
+          <div>
+            <span className="panel-kicker">{formatShortDate(effectiveSelectedDate, language)}</span>
+            <strong>{language === 'zh' ? '多串推荐' : 'Accumulator Picks'}</strong>
           </div>
+          <span className="recommendation-count">
+            {parlayRecommendations.length} {language === 'zh' ? '组' : 'combos'}
+          </span>
+        </div>
+        {parlayRecommendations.length > 0 ? (
           <div className="parlay-grid">
             {parlayRecommendations.map(renderParlayCard)}
           </div>
-        </section>
-      )}
+        ) : (
+          <div className="parlay-empty">
+            {language === 'zh'
+              ? '当前没有已开售且通过多串门槛的 SP，开售或变盘后会自动恢复。'
+              : 'No open-SP legs currently pass the accumulator gate. It will recover after sale or odds movement.'}
+          </div>
+        )}
+      </section>
 
       <section className="panel filters-panel" aria-label="Filters">
         <div className="panel-row is-stacked">

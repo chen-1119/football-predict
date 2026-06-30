@@ -4,17 +4,19 @@ import { getVisiblePredictions } from './predictionVisibility';
 import { getMatchSignal } from './matchSignal';
 
 export type BetSlipMarketType = '1X2' | 'HHAD';
+export type BetSlipRiskProfile = 'strict' | 'balanced' | 'value';
 
 export interface GeneratorParams {
   targetOdds: number; // 目标总SP
-  matchCount: 'auto' | 2 | 3 | 5 | 10 | 15; // 比赛数量
+  matchCount: 'auto' | 1 | 2 | 3 | 5 | 10 | 15; // 比赛数量
   marketTypes: string[]; // ['1X2', 'HHAD']
   minOdds: number;
   maxOdds: number;
-  timeWindow: '1' | '2' | '3'; // 未来几天天数
+  timeWindow: '1' | '2' | '3' | '5'; // 未来几天天数
   minTrust: number; // 最低可信度
   onlyImportantLeagues: boolean;
   onlyOddsDropping: boolean;
+  riskProfile?: BetSlipRiskProfile;
 }
 
 export interface SelectionResult {
@@ -262,10 +264,13 @@ const sortSelections = (a: SelectionResult, b: SelectionResult) => {
   return a.prediction.odds - b.prediction.odds;
 };
 
-const isParlayMatchCandidate = (match: Match) => {
+const isParlayMatchCandidate = (match: Match, riskProfile: BetSlipRiskProfile = 'balanced') => {
   if (match.status !== 'SCHEDULED') return false;
   const signal = getMatchSignal(match);
-  return signal.category === 'steady' || signal.category === 'lean';
+  if (signal.category === 'steady' || signal.category === 'lean') return true;
+  if (riskProfile === 'strict') return false;
+  if (signal.category === 'value') return true;
+  return riskProfile === 'value' && signal.category === 'watch';
 };
 
 const hasOpenSelectionOdds = (selection: SelectionResult) => {
@@ -273,8 +278,18 @@ const hasOpenSelectionOdds = (selection: SelectionResult) => {
   return Number.isFinite(odds) && odds > 1;
 };
 
-const selectionPassesQualityGate = (selection: SelectionResult, minTrust: number) => {
-  if (!isParlayMatchCandidate(selection.match)) return false;
+const getTrustFloor = (isOfficial: boolean, minTrust: number, riskProfile: BetSlipRiskProfile) => {
+  if (riskProfile === 'strict') return isOfficial ? Math.max(62, minTrust) : Math.max(68, minTrust + 10);
+  if (riskProfile === 'value') return isOfficial ? Math.max(45, minTrust) : Math.max(54, minTrust + 4);
+  return isOfficial ? Math.max(54, minTrust) : Math.max(62, minTrust + 6);
+};
+
+const selectionPassesQualityGate = (
+  selection: SelectionResult,
+  minTrust: number,
+  riskProfile: BetSlipRiskProfile = 'balanced'
+) => {
+  if (!isParlayMatchCandidate(selection.match, riskProfile)) return false;
   if (!hasOpenSelectionOdds(selection)) return false;
 
   const pool = selection.prediction.oddsPoolCode === 'HHAD' ? 'HHAD' : 'HAD';
@@ -282,7 +297,7 @@ const selectionPassesQualityGate = (selection: SelectionResult, minTrust: number
   if (!officialPool?.odds) return false;
 
   const isOfficial = officialPool.isOfficial;
-  const trustFloor = isOfficial ? Math.max(62, minTrust) : Math.max(68, minTrust + 10);
+  const trustFloor = getTrustFloor(isOfficial, minTrust, riskProfile);
   if (selection.prediction.trustScore < trustFloor) return false;
 
   const riskTags = selection.prediction.riskTags || [];
@@ -293,14 +308,25 @@ const selectionPassesQualityGate = (selection: SelectionResult, minTrust: number
       || en.includes('handicap support weak')
       || en.includes('heavy favorite');
   });
-  if (hasHardRisk) return false;
-  if (riskTags.length > (isOfficial ? 2 : 1)) return false;
+  if (riskProfile === 'strict' && hasHardRisk) return false;
+  if (riskProfile === 'balanced' && hasHardRisk && selection.prediction.trustScore < 64) return false;
+  if (riskProfile === 'value' && hasHardRisk && selection.prediction.trustScore < 50) return false;
+
+  const maxRiskTags = riskProfile === 'strict'
+    ? (isOfficial ? 2 : 1)
+    : riskProfile === 'value'
+      ? 5
+      : (isOfficial ? 3 : 2);
+  if (riskTags.length > maxRiskTags) return false;
 
   if (selection.generatedFrom === 'existing-prediction') return true;
 
-  if (!isOfficial && selection.prediction.trustScore < 72) return false;
+  const referenceTrustFloor = riskProfile === 'strict' ? 72 : riskProfile === 'value' ? 58 : 66;
+  if (!isOfficial && selection.prediction.trustScore < referenceTrustFloor) return false;
 
-  return selection.prediction.odds >= 1.35 && selection.prediction.odds <= 3.2;
+  const oddsFloor = riskProfile === 'strict' ? 1.35 : riskProfile === 'value' ? 1.45 : 1.25;
+  const oddsCeiling = riskProfile === 'strict' ? 3.2 : riskProfile === 'value' ? 5.5 : 3.8;
+  return selection.prediction.odds >= oddsFloor && selection.prediction.odds <= oddsCeiling;
 };
 
 const rankCombination = (
@@ -390,7 +416,8 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
     minOdds,
     maxOdds,
     timeWindow,
-    onlyImportantLeagues
+    onlyImportantLeagues,
+    riskProfile = 'balanced'
   } = params;
   const { targetOdds, minTrust } = params;
   const enabledMarketTypes = marketTypes.filter(isBetSlipMarketType);
@@ -412,7 +439,7 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
   // 2. 筛选预测池
   const candidateSelections: SelectionResult[] = [];
   candidateMatches.forEach(m => {
-    if (!isParlayMatchCandidate(m)) return;
+    if (!isParlayMatchCandidate(m, riskProfile)) return;
 
     getVisiblePredictions(m).forEach(p => {
       // 筛选市场类型
@@ -441,7 +468,7 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
   });
 
   const filteredSelections = dedupeSelections(candidateSelections)
-    .filter((selection) => selectionPassesQualityGate(selection, minTrust))
+    .filter((selection) => selectionPassesQualityGate(selection, minTrust, riskProfile))
     .sort(sortSelections);
 
   if (filteredSelections.length === 0) {
