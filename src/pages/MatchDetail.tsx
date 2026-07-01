@@ -2691,13 +2691,13 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                 <div className="probability-model-grid">
                   <section className="probability-panel is-wide">
                     <h4>{language === 'zh' ? '胜平负概率' : '1X2 Probability'}</h4>
-                    {renderOutcomeTriplet(probabilityModel.oneXTwo.final)}
+                    {renderOutcomeTriplet(probabilityModel.oneXTwo?.final)}
                     <div className="probability-subline">
                       <span>
                         {probabilityModelIsModelOnly
                           ? (language === 'zh' ? '模型基准' : 'Model baseline')
                           : (language === 'zh' ? '市场去水' : 'Market')}：
-                        {renderOutcomeLine(probabilityModel.oneXTwo.market)}
+                        {renderOutcomeLine(probabilityModel.oneXTwo?.market)}
                       </span>
                       {probabilityModel.oneXTwo.teamStrength && (
                         <span>
@@ -2795,8 +2795,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                   <section className="probability-panel">
                     <h4>{language === 'zh' ? '进球概率' : 'Goal Probability'}</h4>
                     <div className="probability-pair-grid">
-                      <span>{language === 'zh' ? '大 2.5' : 'Over 2.5'} <strong>{formatProbabilityValue(probabilityModel.goalLines.over25)}</strong></span>
-                      <span>{language === 'zh' ? '小 2.5' : 'Under 2.5'} <strong>{formatProbabilityValue(probabilityModel.goalLines.under25)}</strong></span>
+                      <span>{language === 'zh' ? '大 2.5' : 'Over 2.5'} <strong>{formatProbabilityValue(probabilityModel.goalLines?.over25)}</strong></span>
+                      <span>{language === 'zh' ? '小 2.5' : 'Under 2.5'} <strong>{formatProbabilityValue(probabilityModel.goalLines?.under25)}</strong></span>
                     </div>
                   </section>
 

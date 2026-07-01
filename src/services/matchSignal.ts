@@ -35,7 +35,7 @@ const getProbabilitySource = (match: Match, prediction?: Match['predictions'][nu
       || null;
   }
 
-  return match.probabilityModel?.oneXTwo.final || null;
+  return match.probabilityModel?.oneXTwo?.final || null;
 };
 
 const pickProbability = (match: Match, predictionOrTip: Match['predictions'][number] | string | undefined) => {

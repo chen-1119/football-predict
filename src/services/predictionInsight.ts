@@ -346,21 +346,21 @@ const rankOrStrengthLine = (match: Match) => {
   const hasRank = Boolean(match.homeRank || match.awayRank);
   if (hasRank) {
     return {
-      zh: `官网排名：${match.homeTeamName || '主队'} ${match.homeRank || '--'}，${match.awayTeamName || '客队'} ${match.awayRank || '--'}；最终概率 ${probabilityText(model?.oneXTwo.final).zh}。`,
-      en: `Official rank: ${match.homeTeamNameEn || 'Home'} ${match.homeRank || '--'}, ${match.awayTeamNameEn || 'Away'} ${match.awayRank || '--'}; final probability ${probabilityText(model?.oneXTwo.final).en}.`
+      zh: `官网排名：${match.homeTeamName || '主队'} ${match.homeRank || '--'}，${match.awayTeamName || '客队'} ${match.awayRank || '--'}；最终概率 ${probabilityText(model?.oneXTwo?.final).zh}。`,
+      en: `Official rank: ${match.homeTeamNameEn || 'Home'} ${match.homeRank || '--'}, ${match.awayTeamNameEn || 'Away'} ${match.awayRank || '--'}; final probability ${probabilityText(model?.oneXTwo?.final).en}.`
     };
   }
 
   if (model?.elo) {
     return {
-      zh: `本场官网没有返回积分排名，改用 Elo 强度：${model.elo.homeRating} vs ${model.elo.awayRating}，主场修正后差值 ${signedText(model.elo.diff)}；最终概率 ${probabilityText(model.oneXTwo.final).zh}。`,
-      en: `No official table rank returned for this fixture, so Elo strength is used: ${model.elo.homeRating} vs ${model.elo.awayRating}, home-adjusted diff ${signedText(model.elo.diff)}; final probability ${probabilityText(model.oneXTwo.final).en}.`
+      zh: `本场官网没有返回积分排名，改用 Elo 强度：${model.elo.homeRating} vs ${model.elo.awayRating}，主场修正后差值 ${signedText(model.elo.diff)}；最终概率 ${probabilityText(model.oneXTwo?.final).zh}。`,
+      en: `No official table rank returned for this fixture, so Elo strength is used: ${model.elo.homeRating} vs ${model.elo.awayRating}, home-adjusted diff ${signedText(model.elo.diff)}; final probability ${probabilityText(model.oneXTwo?.final).en}.`
     };
   }
 
   return {
-    zh: `以官方 HAD 去水概率做基础强弱：${probabilityText(model?.oneXTwo.market).zh}。`,
-    en: `Baseline strength uses normalized official HAD: ${probabilityText(model?.oneXTwo.market).en}.`
+    zh: `以官方 HAD 去水概率做基础强弱：${probabilityText(model?.oneXTwo?.market).zh}。`,
+    en: `Baseline strength uses normalized official HAD: ${probabilityText(model?.oneXTwo?.market).en}.`
   };
 };
 
@@ -369,8 +369,8 @@ const goalModelLine = (match: Match) => {
   const lambda = model?.lambdaBlend;
   const scoreTop = model?.scoreDistribution?.slice(0, 3).map((score) => `${score.label} ${percentText(score.probability)}`).join('、') || '--';
   return {
-    zh: `预期进球：主 ${decimalText(lambda?.marketHomeLambda)} / 客 ${decimalText(lambda?.marketAwayLambda)}，历史修正权重 ${percentText(lambda ? lambda.formWeight * 100 : null)}；大2.5 ${percentText(model?.goalLines.over25)}，双方进球 ${percentText(model?.bothTeamsToScore.yes)}，高频比分 ${scoreTop}。`,
-    en: `Expected goals: home ${decimalText(lambda?.marketHomeLambda)} / away ${decimalText(lambda?.marketAwayLambda)}, form weight ${percentText(lambda ? lambda.formWeight * 100 : null)}; over 2.5 ${percentText(model?.goalLines.over25)}, BTTS ${percentText(model?.bothTeamsToScore.yes)}, top scores ${scoreTop}.`
+    zh: `预期进球：主 ${decimalText(lambda?.marketHomeLambda)} / 客 ${decimalText(lambda?.marketAwayLambda)}，历史修正权重 ${percentText(lambda ? lambda.formWeight * 100 : null)}；大2.5 ${percentText(model?.goalLines?.over25)}，双方进球 ${percentText(model?.bothTeamsToScore?.yes)}，高频比分 ${scoreTop}。`,
+    en: `Expected goals: home ${decimalText(lambda?.marketHomeLambda)} / away ${decimalText(lambda?.marketAwayLambda)}, form weight ${percentText(lambda ? lambda.formWeight * 100 : null)}; over 2.5 ${percentText(model?.goalLines?.over25)}, BTTS ${percentText(model?.bothTeamsToScore?.yes)}, top scores ${scoreTop}.`
   };
 };
 
@@ -474,8 +474,8 @@ const buildProfessionalFramework = ({
   const goalLine = goalModelLine(match);
   const contextLines = contextSignalLines(match);
   const directH2h = h2hLine(match, context);
-  const finalProbabilities = probabilityText(model?.oneXTwo.final);
-  const marketProbabilities = probabilityText(model?.oneXTwo.market);
+  const finalProbabilities = probabilityText(model?.oneXTwo?.final);
+  const marketProbabilities = probabilityText(model?.oneXTwo?.market);
   const handicapProbabilities = probabilityText(model?.handicap?.market);
   const hhadLine = match.handicapLine ? `${match.handicapLine}` : '--';
   const primaryUsesHhad = primary?.oddsPoolCode === 'HHAD';
@@ -504,7 +504,7 @@ const buildProfessionalFramework = ({
   const fiveHundredMarket = fiveHundredMarketText(match);
   const unavailableTone: InsightTone = 'muted';
   const sampleTone: InsightTone = sampleEnough ? 'success' : 'warning';
-  const goalTone: InsightTone = (model?.goalLines.over25 ?? 0) >= 58 || (model?.bothTeamsToScore.yes ?? 0) >= 58 ? 'success' : 'warning';
+  const goalTone: InsightTone = (model?.goalLines?.over25 ?? 0) >= 58 || (model?.bothTeamsToScore?.yes ?? 0) >= 58 ? 'success' : 'warning';
 
   return [
     {
@@ -580,8 +580,8 @@ const buildProfessionalFramework = ({
     {
       title: { zh: '七、战术克制', en: '7. Tactics' },
       body: {
-        zh: `用进球分布替代空泛战术判断：大2.5 ${percentText(model?.goalLines.over25)}、双方进球 ${percentText(model?.bothTeamsToScore.yes)}、最终平局概率 ${percentText(model?.oneXTwo.final?.draw)}。${(model?.goalLines.over25 ?? 0) >= 55 ? '节奏倾向开放。' : '节奏不宜高估。'}`,
-        en: `Goal distribution is used instead of vague tactical claims: over 2.5 ${percentText(model?.goalLines.over25)}, BTTS ${percentText(model?.bothTeamsToScore.yes)}, final draw probability ${percentText(model?.oneXTwo.final?.draw)}. ${(model?.goalLines.over25 ?? 0) >= 55 ? 'Tempo leans open.' : 'Tempo should not be overestimated.'}`
+        zh: `用进球分布替代空泛战术判断：大2.5 ${percentText(model?.goalLines?.over25)}、双方进球 ${percentText(model?.bothTeamsToScore?.yes)}、最终平局概率 ${percentText(model?.oneXTwo?.final?.draw)}。${(model?.goalLines?.over25 ?? 0) >= 55 ? '节奏倾向开放。' : '节奏不宜高估。'}`,
+        en: `Goal distribution is used instead of vague tactical claims: over 2.5 ${percentText(model?.goalLines?.over25)}, BTTS ${percentText(model?.bothTeamsToScore?.yes)}, final draw probability ${percentText(model?.oneXTwo?.final?.draw)}. ${(model?.goalLines?.over25 ?? 0) >= 55 ? 'Tempo leans open.' : 'Tempo should not be overestimated.'}`
       },
       tone: goalTone
     },
