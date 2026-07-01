@@ -6,12 +6,35 @@ const distDir = path.join(__dirname, "..", "dist");
 const matchesPath = path.join(publicDir, "matches.json");
 const currentMatchesPath = path.join(publicDir, "data", "matches-current.json");
 const historyMatchesPath = path.join(publicDir, "data", "matches-history.json");
+const syncMetaPath = path.join(publicDir, "data", "sync-meta.json");
 const oddsHistoryPath = path.join(publicDir, "odds-history.json");
 const dataOddsHistoryPath = path.join(publicDir, "data", "odds-history.json");
 const readJson = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
+const allowLargeStaticDist = process.env.ALLOW_LARGE_STATIC_DIST === "1";
+const disabledLargeDistPayloads = new Set([
+  "matches.json",
+  "odds-history.json",
+  "data/matches-current.json",
+  "data/matches-history.json",
+  "data/odds-history.json",
+  "data/post-match-reviews.json",
+  "data/external-signals.json",
+  "data/five-hundred-details.json",
+  "data/pre-match-signals.json",
+  "data/prediction-snapshots.json",
+  "data/model-calibration.json",
+  "data/model-strategy.json",
+  "data/api-football-cache.json",
+  "data/api-football-meta.json",
+  "data/gpt-predictions.json",
+  "data/web-consensus-signals.json",
+  "data/weather-locations.json",
+  "data/worldcup-kimi-dataset.json",
+]);
 const rootMatches = fs.existsSync(matchesPath) ? readJson(matchesPath) : [];
 const currentMatches = fs.existsSync(currentMatchesPath) ? readJson(currentMatchesPath) : rootMatches;
 const historyMatches = fs.existsSync(historyMatchesPath) ? readJson(historyMatchesPath) : [];
+const syncMeta = fs.existsSync(syncMetaPath) ? readJson(syncMetaPath) : null;
 const matches = Array.from(new Map([...currentMatches, ...historyMatches].map((match) => [match.id, match])).values());
 const currentMatchIds = new Set(currentMatches.map((match) => match.id));
 const hexColor = /^#[0-9a-fA-F]{6}$/;
@@ -106,6 +129,22 @@ if (!Array.isArray(historyMatches)) {
 
 if (!Array.isArray(matches) || matches.length === 0) {
   errors.push("combined match data must contain a non-empty array.");
+}
+
+if (syncMeta?.fallback?.keptExisting) {
+  if (syncMeta.api?.stale !== true) {
+    errors.push("sync-meta fallback must set api.stale=true.");
+  }
+  if (!syncMeta.api?.freshnessTime) {
+    errors.push("sync-meta fallback must keep api.freshnessTime for the last trusted source data.");
+  }
+  if (!syncMeta.lastAttemptAt) {
+    errors.push("sync-meta fallback must record lastAttemptAt for the failed refresh attempt.");
+  }
+}
+
+if (syncMeta?.api?.freshnessTime && !Number.isFinite(Date.parse(syncMeta.api.freshnessTime))) {
+  errors.push("sync-meta api.freshnessTime must be a valid ISO timestamp.");
 }
 
 if (Array.isArray(rootMatches) && rootMatches.length > currentMatches.length + 2) {
@@ -277,13 +316,30 @@ if (fs.existsSync(distDir)) {
     "data/matches-history.json",
     "data/team-index.json",
     "data/odds-history.json",
+    "data/post-match-reviews.json",
+    "data/external-signals.json",
+    "data/five-hundred-details.json",
+    "data/pre-match-signals.json",
     "data/prediction-snapshots.json",
     "data/model-calibration.json",
+    "data/model-evaluation.json",
     "data/model-strategy.json",
+    "data/api-football-cache.json",
+    "data/api-football-meta.json",
+    "data/gpt-predictions.json",
+    "data/web-consensus-signals.json",
+    "data/weather-locations.json",
+    "data/worldcup-kimi-dataset.json",
     "data/sync-meta.json",
   ]) {
     const publicFile = path.join(publicDir, fileName);
     const distFile = path.join(distDir, fileName);
+    if (disabledLargeDistPayloads.has(fileName) && !allowLargeStaticDist) {
+      if (fs.existsSync(distFile)) {
+        errors.push(`dist/${fileName} must be disabled; use paginated/protected API instead.`);
+      }
+      continue;
+    }
     if (!fs.existsSync(publicFile) && !fs.existsSync(distFile)) continue;
     if (!fs.existsSync(publicFile) || !fs.existsSync(distFile)) {
       errors.push(`dist/${fileName} must mirror public/${fileName}.`);

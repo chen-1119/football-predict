@@ -1,6 +1,5 @@
 const fs = require("fs");
 const path = require("path");
-const http = require("http");
 const https = require("https");
 const { spawn } = require("child_process");
 
@@ -14,9 +13,6 @@ const WINDOW_FORWARD_DAYS = Math.max(1, Number(process.env.MATCH_WINDOW_FORWARD_
 const ODDS_HISTORY_RETENTION_DAYS = Math.max(1, Number(process.env.ODDS_HISTORY_RETENTION_DAYS || 30));
 const ODDS_HISTORY_BUCKET_MINUTES = Math.max(1, Number(process.env.ODDS_HISTORY_BUCKET_MINUTES || 5));
 const PAGE_POLL_SECONDS = Math.max(15, Number(process.env.PAGE_POLL_SECONDS || 30));
-const ENABLE_CCTV_WORLDCUP_RESULTS = process.env.ENABLE_CCTV_WORLDCUP_RESULTS !== "0";
-const CCTV_WORLDCUP_INDEX_URL = process.env.CCTV_WORLDCUP_INDEX_URL || "https://worldcup.cctv.com/2026/index.shtml";
-const CCTV_WORLDCUP_MAX_MATCH_PAGES = Math.max(1, Number(process.env.CCTV_WORLDCUP_MAX_MATCH_PAGES || 12));
 const ANALYST_PROMPT_VERSION = "professional-football-analyst-v24";
 const PREDICTION_POLICY_VERSION = "sporttery-day-formula-trace-v56";
 const ANALYST_RUNTIME = Object.freeze({
@@ -622,7 +618,7 @@ function statusFromSporttery(matchStatus, sellStatus, statusName = "", kickoffTi
 
 function normalizeStatusWithScore(status, kickoffTime, scoreHome, scoreAway) {
   const hasScore = Number.isFinite(scoreHome) && Number.isFinite(scoreAway);
-  if (status === "FINISHED") return hasScore ? "FINISHED" : "PENDING_RESULT";
+  if (status === "FINISHED") return status;
   if (status === "PENDING_RESULT") return hasScore ? "FINISHED" : status;
   const kickoffAt = Date.parse(kickoffTime);
   if (!Number.isFinite(kickoffAt) || !hasScore) return status;
@@ -2984,7 +2980,6 @@ function buildPredictionReviewRows(match, actuals) {
         handicapLine: prediction.handicapLine || match.handicapLine || undefined,
         tipCode: prediction.tipCode,
         tipLabel: prediction.tipLabel,
-        odds: Number.isFinite(Number(prediction.odds)) ? Number(prediction.odds) : 0,
         actualCode,
         actualLabel: reviewResultLabel(actualCode, market, match),
         resultStatus: status,
@@ -4041,7 +4036,6 @@ function applyModelStrategyToCalibration(calibration, strategy) {
       gateByTip: strategy.gateByTip || {},
       gateByProfile: strategy.gateByProfile || {},
       gateByWebConsensus: strategy.gateByWebConsensus || {},
-      gateByReviewSignal: strategy.gateByReviewSignal || {},
     },
   };
   next.gateByProfile = { ...(calibration.gateByProfile || {}) };
@@ -4097,48 +4091,15 @@ function webConsensusStrategyKeys(match, marketType) {
   ]));
 }
 
-function unitProbability(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return null;
-  return number > 1.5 ? number / 100 : number;
-}
-
-function oneXTwoDrawProbability(match) {
-  const probabilities = match?.probabilityModel?.oneXTwo?.unifiedPosterior
-    || match?.probabilityModel?.oneXTwo?.final
-    || match?.probabilityModel?.oneXTwo?.market;
-  return unitProbability(probabilities?.draw);
-}
-
-function reviewSignalStrategyRules(match, marketType, tipCode, strategy) {
-  const rules = [];
-  const drawProbability = oneXTwoDrawProbability(match);
-  const isSidePick = tipCode === "1" || tipCode === "2";
-  if (marketType === "1X2" && isSidePick && drawProbability !== null && drawProbability >= 0.28) {
-    rules.push(strategy.gateByReviewSignal?.["draw-risk-underestimated"]);
-  }
-  if (marketType === "1X2" && isSidePick) {
-    rules.push(strategy.gateByReviewSignal?.["handicap-lane-suppressed"]);
-    rules.push(strategy.gateByReviewSignal?.["best-miss"]);
-  }
-  if (marketType === "GOALS") {
-    rules.push(strategy.gateByReviewSignal?.["goals-underestimated"]);
-    rules.push(strategy.gateByReviewSignal?.["goals-overestimated"]);
-  }
-  return rules;
-}
-
 function strategyGateForPrediction(match, marketType, tipCode, oddsBucket) {
   const strategy = match.modelCalibration?.strategy;
   if (!strategy || strategy.activation?.onlineEffect === "shadow") return combineStrategyRules([]);
   const webRules = webConsensusStrategyKeys(match, marketType).map((key) => strategy.gateByWebConsensus?.[key]);
-  const reviewRules = reviewSignalStrategyRules(match, marketType, tipCode, strategy);
   return combineStrategyRules([
     strategy.gateByMarket?.[marketType],
     strategy.gateByOddsBucket?.[oddsBucket],
     strategy.gateByTip?.[`${marketType}:${tipCode}`],
     ...webRules,
-    ...reviewRules,
   ]);
 }
 
@@ -4304,43 +4265,6 @@ function httpGetJsonViaCurl(url, tab, proxy) {
         reject(error);
       }
     });
-  });
-}
-
-function httpGetText(url, options = {}, redirectCount = 0) {
-  return new Promise((resolve, reject) => {
-    const parsed = new URL(url);
-    const client = parsed.protocol === "http:" ? http : https;
-    const req = client.request(parsed, {
-      method: "GET",
-      timeout: Math.max(3000, Number(options.timeoutMs || 15000)),
-      headers: {
-        "User-Agent": "Mozilla/5.0 football-predict-result-sync/1.0",
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        ...(options.headers || {}),
-      },
-    }, (res) => {
-      if ([301, 302, 303, 307, 308].includes(Number(res.statusCode)) && res.headers.location && redirectCount < 3) {
-        res.resume();
-        resolve(httpGetText(new URL(res.headers.location, parsed).toString(), options, redirectCount + 1));
-        return;
-      }
-
-      const chunks = [];
-      res.on("data", (chunk) => chunks.push(chunk));
-      res.on("end", () => {
-        const body = Buffer.concat(chunks).toString(options.encoding || "utf8");
-        if (res.statusCode < 200 || res.statusCode >= 300) {
-          reject(new Error(`${url} -> HTTP ${res.statusCode}${body ? ` ${body.slice(0, 120).replace(/\s+/g, " ")}` : ""}`));
-          return;
-        }
-        resolve(body);
-      });
-    });
-
-    req.on("timeout", () => req.destroy(new Error(`timeout: ${url}`)));
-    req.on("error", reject);
-    req.end();
   });
 }
 
@@ -4855,12 +4779,9 @@ function recentReviewCandidateAdjustment(candidate, context) {
       if (candidate.code === "X") {
         bonus += 0.035;
         reasons.push("deep-line-let-draw-zone");
-      } else {
-        const strongWideMarginEvidence = topSupportsCandidate && scoreCount >= 2 && (marketSupport === null || marketSupport >= 0.48);
-        if (!strongWideMarginEvidence) {
-          penalty += 0.065;
-          reasons.push("deep-line-exact-margin-trap");
-        }
+      } else if (!topSupportsCandidate || scoreCount < 2 || (marketSupport !== null && marketSupport < 0.45)) {
+        penalty += 0.065;
+        reasons.push("deep-line-exact-margin-trap");
       }
     }
 
@@ -4943,12 +4864,12 @@ function unifiedCandidateScore(candidate, context) {
       (line < 0 && hadCode === "1" && candidate.code === "2")
       || (line > 0 && hadCode === "2" && candidate.code === "1")
     );
-    if (hhadOpposesRawLeader && hhadTopCode !== candidate.code) consistency -= 0.09;
-    if (hhadOpposesRawLeader && hhadTopCode === candidate.code) consistency += 0.035;
-    if (Number.isFinite(line) && Math.abs(line) >= 2 && Number(scoreShape.hhadCodeCounts?.X || 0) >= 1) {
+    if (Number.isFinite(line) && Math.abs(line) >= 2 && scoreShape.hhadCodeCounts?.X >= 1) {
       if (candidate.code === "X") consistency += 0.035;
       else consistency -= 0.035;
     }
+    if (hhadOpposesRawLeader && hhadTopCode !== candidate.code) consistency -= 0.09;
+    if (hhadOpposesRawLeader && hhadTopCode === candidate.code) consistency += 0.035;
     if (!hhadAvailable) consistency -= 1;
   }
 
@@ -8305,6 +8226,137 @@ function modelStrategySummary(modelCalibration) {
   } : null;
 }
 
+function predictionModelVersionFor(match) {
+  return match?.probabilityModel?.version
+    || match?.predictionMeta?.modelVersion
+    || "unknown-model";
+}
+
+function predictionCalibrationVersionFor(match) {
+  return match?.probabilityModel?.dynamicCalibration?.version
+    || match?.probabilityModel?.lambdaBlend?.scoreCalibrationVersion
+    || match?.predictionMeta?.calibrationVersion
+    || "uncalibrated";
+}
+
+function compactHistoricalSource(source) {
+  if (!source || typeof source !== "object") return null;
+  return {
+    version: source.version || null,
+    source: source.source || null,
+    signature: source.signature || null,
+    rows: source.rows || source.matches || null,
+  };
+}
+
+function compactFeatureTriplet(value) {
+  if (!value || typeof value !== "object") return null;
+  return {
+    home: Number.isFinite(Number(value.home)) ? Number(Number(value.home).toFixed(3)) : null,
+    draw: Number.isFinite(Number(value.draw)) ? Number(Number(value.draw).toFixed(3)) : null,
+    away: Number.isFinite(Number(value.away)) ? Number(Number(value.away).toFixed(3)) : null,
+  };
+}
+
+function buildPredictionFeatureSnapshot(match) {
+  const model = match?.probabilityModel || {};
+  const odds = sanitizeOdds(match?.odds);
+  const handicapOdds = sanitizeOdds(match?.handicapOdds);
+  const featureSnapshot = {
+    version: "prediction-feature-snapshot-v1",
+    modelVersion: predictionModelVersionFor(match),
+    calibrationVersion: predictionCalibrationVersionFor(match),
+    cutoffTime: match?.predictionMeta?.cutoffTime || matchCutoffValue(match) || null,
+    source: match?.source || null,
+    sourceMatchId: match?.sourceMatchId || null,
+    kickoffTime: match?.kickoffTime || null,
+    market: {
+      had: odds ? {
+        odds,
+        source: match?.oddsSource || null,
+        sourceMethod: match?.oddsSourceMethod || null,
+        updatedAt: match?.oddsUpdatedAt || null,
+      } : null,
+      hhad: handicapOdds ? {
+        handicapLine: match?.handicapLine || null,
+        odds: handicapOdds,
+        source: match?.handicapOddsSource || null,
+        sourceMethod: match?.handicapOddsSourceMethod || null,
+        updatedAt: match?.handicapOddsUpdatedAt || null,
+      } : null,
+      oddsTrend: match?.oddsTrend ? {
+        sampleSize: match.oddsTrend.sampleSize || 0,
+        firstCapturedAt: match.oddsTrend.firstCapturedAt || null,
+        lastCapturedAt: match.oddsTrend.lastCapturedAt || null,
+        direction: match.oddsTrend.direction || null,
+      } : null,
+    },
+    modelInputs: {
+      oneXTwoFinal: compactFeatureTriplet(model.oneXTwo?.final),
+      market: compactFeatureTriplet(model.oneXTwo?.market),
+      poisson: compactFeatureTriplet(model.oneXTwo?.poisson),
+      elo: model.elo ? {
+        homeRating: model.elo.homeRating ?? null,
+        awayRating: model.elo.awayRating ?? null,
+        diff: model.elo.diff ?? null,
+        homeMatches: model.elo.homeMatches ?? null,
+        awayMatches: model.elo.awayMatches ?? null,
+        historicalSource: compactHistoricalSource(model.elo.historicalSource),
+      } : null,
+      form: model.form ? {
+        home: model.form.home ?? model.form.homeScore ?? null,
+        away: model.form.away ?? model.form.awayScore ?? null,
+        diff: model.form.diff ?? null,
+        historicalSource: compactHistoricalSource(model.form.historicalSource),
+      } : null,
+      leaguePrior: model.leaguePrior ? {
+        source: model.leaguePrior.source || null,
+        version: model.leaguePrior.trainingVersion || model.leaguePrior.version || null,
+        signature: model.leaguePrior.trainingSignature || model.leaguePrior.signature || null,
+      } : null,
+      lambdaBlend: model.lambdaBlend ? {
+        homeLambda: model.lambdaBlend.homeLambda ?? model.lambdaBlend.home ?? null,
+        awayLambda: model.lambdaBlend.awayLambda ?? model.lambdaBlend.away ?? null,
+        scoreCalibrationVersion: model.lambdaBlend.scoreCalibrationVersion || null,
+        scoreTotalLambdaAdjustment: model.lambdaBlend.scoreTotalLambdaAdjustment ?? null,
+      } : null,
+      worldCupPrior: model.worldCupPrior ? {
+        version: model.worldCupPrior.version || null,
+        signature: model.worldCupPrior.signature || null,
+        source: model.worldCupPrior.source || null,
+      } : null,
+      dataGaps: model.modelHealth?.dataGaps || match?.stats?.dataGaps || null,
+    },
+  };
+  return {
+    ...featureSnapshot,
+    hash: hashString(JSON.stringify(featureSnapshot)),
+  };
+}
+
+function normalizePredictionAuditMeta(meta, match) {
+  const featureSnapshot = meta?.featureSnapshot || buildPredictionFeatureSnapshot({
+    ...match,
+    predictionMeta: meta,
+  });
+  return {
+    ...meta,
+    modelVersion: meta?.modelVersion || predictionModelVersionFor(match),
+    calibrationVersion: meta?.calibrationVersion || predictionCalibrationVersionFor(match),
+    cutoffTime: meta?.cutoffTime || matchCutoffValue(match) || undefined,
+    featureSnapshot,
+    featureSnapshotHash: meta?.featureSnapshotHash || featureSnapshot?.hash || null,
+  };
+}
+
+function normalizePredictionAuditForPublish(match) {
+  if (!match?.predictionMeta) return match;
+  return {
+    ...match,
+    predictionMeta: normalizePredictionAuditMeta(match.predictionMeta, match),
+  };
+}
+
 function attachCalibrationMetadataToAppMatch(match, modelCalibration) {
   if (!match?.probabilityModel || !modelCalibration) return match;
   const profileKey = predictionProfileKey(match);
@@ -8621,7 +8673,7 @@ function applyPredictionPersistence(match, existing, capturedAt) {
     ? `${scoreCalibrationVersion}:${scoreTotalLambdaAdjustment.toFixed(3)}:${scoreBandSignature}:${scoreShapeSignature}`
     : null;
   const dataSignature = [trainingSignature, worldCupPriorSignature, scoreCalibrationSignature].filter(Boolean).join("|") || trainingVersion;
-  const generatedMeta = {
+  const generatedMeta = normalizePredictionAuditMeta({
     policyVersion: PREDICTION_POLICY_VERSION,
     promptVersion: ANALYST_PROMPT_VERSION,
     strategyVersion,
@@ -8638,7 +8690,7 @@ function applyPredictionPersistence(match, existing, capturedAt) {
     dataPolicy: PREDICTION_DATA_POLICY,
     analystRuntime: ANALYST_RUNTIME,
     analystFramework: PREDICTION_ANALYST_FRAMEWORK,
-  };
+  }, match);
 
   if (isOfficialResultMatch(match)) {
     const { stats, probabilityModel, projectedScoreHome, projectedScoreAway, ...rest } = match;
@@ -8658,7 +8710,7 @@ function applyPredictionPersistence(match, existing, capturedAt) {
     const lockedMatch = preserveLockedPredictionContent({
       ...match,
       predictionMeta: {
-        ...(existing?.predictionMeta || generatedMeta),
+        ...normalizePredictionAuditMeta(existing?.predictionMeta || generatedMeta, existing || match),
         lockedAt: existing?.predictionMeta?.lockedAt || capturedAt,
         lockedReason: lockedReason === "cutoff" ? "cutoff" : (existing?.predictionMeta?.lockedReason || lockedReason),
         cutoffTime: existing?.predictionMeta?.cutoffTime || cutoffTime,
@@ -8695,7 +8747,7 @@ function applyPredictionPersistence(match, existing, capturedAt) {
       ...(existing?.projectedScoreAway !== undefined ? { projectedScoreAway: existing.projectedScoreAway } : {}),
       ...(existing?.stats ? { stats: existing.stats } : {}),
       predictionMeta: {
-        ...(existing?.predictionMeta || generatedMeta),
+        ...normalizePredictionAuditMeta(existing?.predictionMeta || generatedMeta, existing || match),
         lockedAt: existing?.predictionMeta?.lockedAt || capturedAt,
         lockedReason,
         cutoffTime: existing?.predictionMeta?.cutoffTime || cutoffTime,
@@ -8733,7 +8785,7 @@ function applyPredictionPersistence(match, existing, capturedAt) {
       stats: existing?.stats || match.stats,
       probabilityModel: existing?.probabilityModel || match.probabilityModel,
       predictionMeta: {
-        ...(existing?.predictionMeta || generatedMeta),
+        ...normalizePredictionAuditMeta(existing?.predictionMeta || generatedMeta, existing || match),
         updatedAt: capturedAt,
         dataPolicy: PREDICTION_DATA_POLICY,
         analystRuntime: ANALYST_RUNTIME,
@@ -9118,180 +9170,6 @@ function attachExternalSignals(matches, externalSignals, preMatchSignals = null)
   });
 }
 
-function decodeHtmlEntities(text) {
-  return String(text || "")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, "\"")
-    .replace(/&#39;/g, "'");
-}
-
-function htmlToText(html) {
-  return decodeHtmlEntities(html)
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function cleanCctvTeamName(value) {
-  return normText(String(value || "")
-    .replace(/^[^：:]*[：:]/, "")
-    .replace(/(点球大战|点球|总比分|回放|集锦|战报|比赛|淘汰|晋级|无缘|将战).*$/g, "")
-    .replace(/[【】\[\]（）()《》]/g, "")
-    .trim());
-}
-
-function cctvResultKey(homeTeam, awayTeam) {
-  const home = cleanCctvTeamName(homeTeam);
-  const away = cleanCctvTeamName(awayTeam);
-  return home && away ? `${home}__${away}` : "";
-}
-
-function isWorldCupMatchLike(match) {
-  const text = [
-    match?.leagueName,
-    match?.leagueShortName,
-    match?.leagueNameEn,
-    match?.countryName,
-    match?.sourceUrl,
-    match?.externalSignals?.leagueName,
-    match?.externalSignals?.fiveHundred?.urls?.analysis,
-  ].filter(Boolean).join(" ");
-  return /世界杯|World Cup|worldcup/i.test(text);
-}
-
-function parseCctvWorldCupResultPage(html, pageUrl, capturedAt) {
-  const text = htmlToText(html);
-  const rows = [];
-  const pattern = /\[世界杯\][^\[]{0,80}?[：:]\s*([^\d\s：:，。；（）()]{1,16})(\d{1,2})\s*[-:：]\s*(\d{1,2})([^\d\s：:，。；（）()]{1,16})(?:[（(]\s*点球\s*(\d{1,2})\s*[-:：]\s*(\d{1,2})\s*[）)])?/g;
-  let match;
-  while ((match = pattern.exec(text))) {
-    const homeTeam = cleanCctvTeamName(match[1]);
-    const awayTeam = cleanCctvTeamName(match[4]);
-    const scoreHome = toNum(match[2], null);
-    const scoreAway = toNum(match[3], null);
-    if (!homeTeam || !awayTeam || !Number.isFinite(scoreHome) || !Number.isFinite(scoreAway)) continue;
-    if (homeTeam.length > 12 || awayTeam.length > 12) continue;
-    const penaltiesHome = toNum(match[5], null);
-    const penaltiesAway = toNum(match[6], null);
-    rows.push({
-      source: "cctv-worldcup-result",
-      sourceUrl: pageUrl,
-      updatedAt: capturedAt,
-      homeTeam,
-      awayTeam,
-      scoreHome,
-      scoreAway,
-      ...(Number.isFinite(penaltiesHome) && Number.isFinite(penaltiesAway)
-        ? { penaltiesHome, penaltiesAway }
-        : {}),
-      summary: text.slice(Math.max(0, match.index - 30), Math.min(text.length, match.index + match[0].length + 80)),
-    });
-  }
-  return rows;
-}
-
-async function fetchCctvWorldCupResultSignals(capturedAt) {
-  const empty = { ok: false, source: "cctv-worldcup-result", updatedAt: capturedAt, rows: [], byPair: new Map(), errors: [] };
-  if (!ENABLE_CCTV_WORLDCUP_RESULTS) return { ...empty, ok: true, disabled: true };
-
-  try {
-    const indexHtml = await httpGetText(CCTV_WORLDCUP_INDEX_URL, { timeoutMs: 12000 });
-    const pageUrls = Array.from(new Set(
-      Array.from(indexHtml.matchAll(/href=["']([^"']*\/2026\/match\/\d+\/index\.shtml)["']/g))
-        .map((entry) => new URL(entry[1], CCTV_WORLDCUP_INDEX_URL).toString())
-    )).slice(0, CCTV_WORLDCUP_MAX_MATCH_PAGES);
-
-    const rows = [];
-    const errors = [];
-    for (const pageUrl of pageUrls) {
-      try {
-        const pageHtml = await httpGetText(pageUrl, { timeoutMs: 12000 });
-        rows.push(...parseCctvWorldCupResultPage(pageHtml, pageUrl, capturedAt));
-      } catch (error) {
-        errors.push(`${pageUrl}: ${error.message || error}`);
-      }
-    }
-
-    const byPair = new Map();
-    for (const row of rows) {
-      const key = cctvResultKey(row.homeTeam, row.awayTeam);
-      if (key && !byPair.has(key)) byPair.set(key, row);
-    }
-
-    console.log(`CCTV World Cup result fallback ok: pages=${pageUrls.length}, rows=${rows.length}, pairs=${byPair.size}${errors.length ? `, errors=${errors.length}` : ""}`);
-    return {
-      ok: true,
-      source: "cctv-worldcup-result",
-      updatedAt: capturedAt,
-      pages: pageUrls.length,
-      rows,
-      byPair,
-      errors,
-    };
-  } catch (error) {
-    console.log(`CCTV World Cup result fallback failed: ${error.message || error}`);
-    return { ...empty, errors: [error.message || String(error)] };
-  }
-}
-
-function findCctvWorldCupResult(match, cctvResults, capturedAt) {
-  if (!cctvResults?.byPair || cctvResults.byPair.size === 0) return null;
-  if (!isWorldCupMatchLike(match)) return null;
-  const kickoffMs = Date.parse(match?.kickoffTime || "");
-  const capturedMs = Date.parse(capturedAt || "");
-  if (!Number.isFinite(kickoffMs) || !Number.isFinite(capturedMs)) return null;
-  if (capturedMs < kickoffMs + 90 * 60 * 1000) return null;
-  if (capturedMs - kickoffMs > 7 * 24 * 60 * 60 * 1000) return null;
-
-  const home = match?.homeTeamName || match?.homeTeam;
-  const away = match?.awayTeamName || match?.awayTeam;
-  const direct = cctvResults.byPair.get(cctvResultKey(home, away));
-  if (direct) return direct;
-
-  const homeName = cleanCctvTeamName(home);
-  const awayName = cleanCctvTeamName(away);
-  return cctvResults.rows.find((row) => (
-    cleanCctvTeamName(row.homeTeam).includes(homeName) &&
-    cleanCctvTeamName(row.awayTeam).includes(awayName)
-  )) || null;
-}
-
-function applyCctvWorldCupResultSignal(match, cctvResults, capturedAt) {
-  const result = findCctvWorldCupResult(match, cctvResults, capturedAt);
-  if (!result) return match;
-
-  const hasScore = Number.isFinite(match?.scoreHome) && Number.isFinite(match?.scoreAway);
-  if (hasScore && isOfficialResultMatch(match)) return match;
-
-  const settled = {
-    ...match,
-    status: "FINISHED",
-    scoreHome: result.scoreHome,
-    scoreAway: result.scoreAway,
-    resultSource: result.source,
-    resultSourceUrl: result.sourceUrl,
-    resultUpdatedAt: result.updatedAt || match?.resultUpdatedAt,
-    externalSignals: {
-      ...(match.externalSignals || {}),
-      cctvWorldCupResult: result,
-    },
-  };
-
-  if (Array.isArray(match?.predictions) && match.predictions.length) {
-    return {
-      ...settled,
-      predictions: settlePredictionsForMatch(settled, match.predictions),
-    };
-  }
-
-  return settled;
-}
-
 function applyExternalResultSignal(match) {
   const resultScore = fiveHundredResultScore(match?.externalSignals);
   if (!resultScore) return match;
@@ -9436,12 +9314,11 @@ function isOfficialResultMatch(match) {
 }
 
 function isFallbackResultMatch(match) {
-  const resultSource = String(match?.resultSource || match?.externalSignals?.fiveHundred?.result?.source || "").toLowerCase();
   return (
     match?.status === "FINISHED" &&
     Number.isFinite(match?.scoreHome) &&
     Number.isFinite(match?.scoreAway) &&
-    (resultSource.startsWith("500.com") || resultSource.startsWith("cctv-worldcup"))
+    String(match?.resultSource || match?.externalSignals?.fiveHundred?.result?.source || "").startsWith("500.com")
   );
 }
 
@@ -9678,6 +9555,57 @@ function snapshotTip(predictions, marketType) {
   };
 }
 
+function normalizePredictionSnapshotAudit(row) {
+  if (!row || typeof row !== "object") return row;
+  const modelVersion = row.modelVersion || row.probabilityModelVersion || "unknown-model";
+  const calibrationVersion = row.calibrationVersion || row.dynamicCalibrationVersion || "legacy-uncalibrated";
+  const cutoffTime = row.cutoffTime || row.buyEndTime || row.kickoffTime || null;
+  const featureSnapshot = row.featureSnapshot || {
+    version: "prediction-feature-snapshot-v1",
+    migrated: true,
+    modelVersion,
+    calibrationVersion,
+    cutoffTime,
+    sourceMatchId: row.sourceMatchId || null,
+    kickoffTime: row.kickoffTime || null,
+    market: {
+      had: row.odds ? {
+        odds: row.odds,
+        source: row.oddsSource || null,
+        updatedAt: row.oddsUpdatedAt || row.capturedAt || null,
+      } : null,
+      hhad: row.handicapOdds ? {
+        handicapLine: row.handicapLine || null,
+        odds: row.handicapOdds,
+        source: row.handicapOddsSource || null,
+        updatedAt: row.handicapOddsUpdatedAt || row.capturedAt || null,
+      } : null,
+      oddsTrend: row.oddsTrend ? {
+        sampleSize: row.oddsTrend.sampleSize || 0,
+        firstCapturedAt: row.oddsTrend.firstCapturedAt || null,
+        lastCapturedAt: row.oddsTrend.lastCapturedAt || null,
+        direction: row.oddsTrend.direction || null,
+      } : null,
+    },
+    modelInputs: {
+      oneXTwoFinal: compactFeatureTriplet(row.probabilityFinal),
+      market: null,
+      poisson: null,
+    },
+  };
+  const featureSnapshotWithHash = featureSnapshot.hash
+    ? featureSnapshot
+    : { ...featureSnapshot, hash: hashString(JSON.stringify(featureSnapshot)) };
+  return {
+    ...row,
+    modelVersion,
+    calibrationVersion,
+    cutoffTime,
+    featureSnapshot: featureSnapshotWithHash,
+    featureSnapshotHash: row.featureSnapshotHash || featureSnapshotWithHash.hash,
+  };
+}
+
 function snapshotSignatureForMatch(match) {
   const odds = sanitizeOdds(match?.odds);
   const handicapOdds = sanitizeOdds(match?.handicapOdds);
@@ -9702,7 +9630,7 @@ function predictionSnapshotRow(match, capturedAt) {
   const phase = predictionPhase(match, capturedAt);
   const signature = snapshotSignatureForMatch(match);
   const finalProbabilities = match?.probabilityModel?.oneXTwo?.final || null;
-  return {
+  return normalizePredictionSnapshotAudit({
     capturedAt,
     firstSeenAt: capturedAt,
     lastSeenAt: capturedAt,
@@ -9728,10 +9656,14 @@ function predictionSnapshotRow(match, capturedAt) {
     oddsTrend: match.oddsTrend || null,
     probabilityFinal: finalProbabilities,
     probabilityModelVersion: match.probabilityModel?.version || null,
+    modelVersion: predictionModelVersionFor(match),
+    calibrationVersion: predictionCalibrationVersionFor(match),
+    cutoffTime: match?.predictionMeta?.cutoffTime || matchCutoffValue(match) || null,
+    featureSnapshot: buildPredictionFeatureSnapshot(match),
     best: snapshotTip(predictions, "BEST"),
     oneXTwo: snapshotTip(predictions, "1X2"),
     goals: snapshotTip(predictions, "GOALS"),
-  };
+  });
 }
 
 function predictionSnapshotComparable(row) {
@@ -9756,7 +9688,7 @@ function appendPredictionSnapshots(publicDir, matches, capturedAt) {
     const phase = normText(row?.phase);
     const signature = normText(row?.signature);
     if (!Number.isFinite(rowTime) || rowTime < cutoff || !sourceMatchId || !phase || !signature) continue;
-    byKey.set(`${sourceMatchId}|${phase}|${signature}`, row);
+    byKey.set(`${sourceMatchId}|${phase}|${signature}`, normalizePredictionSnapshotAudit(row));
   }
 
   let appended = 0;
@@ -9899,25 +9831,41 @@ function mirrorPublishedDataToDist(publicDir) {
   const distDir = path.join(rootDir, "dist");
   if (!fs.existsSync(distDir)) return { mirrored: false, reason: "dist-missing" };
 
+  const disabledDistPayloads = [
+    "matches.json",
+    "odds-history.json",
+    "data/matches-current.json",
+    "data/matches-history.json",
+    "data/odds-history.json",
+    "data/post-match-reviews.json",
+    "data/external-signals.json",
+    "data/five-hundred-details.json",
+    "data/pre-match-signals.json",
+    "data/prediction-snapshots.json",
+    "data/model-calibration.json",
+    "data/model-strategy.json",
+    "data/api-football-cache.json",
+    "data/api-football-meta.json",
+    "data/gpt-predictions.json",
+    "data/web-consensus-signals.json",
+    "data/weather-locations.json",
+    "data/worldcup-kimi-dataset.json",
+  ];
   const copyPairs = [
-    ["matches.json", "matches.json"],
-    ["odds-history.json", "odds-history.json"],
-    ["data/matches-current.json", "data/matches-current.json"],
-    ["data/matches-history.json", "data/matches-history.json"],
     ["data/team-index.json", "data/team-index.json"],
-    ["data/odds-history.json", "data/odds-history.json"],
-    ["data/prediction-snapshots.json", "data/prediction-snapshots.json"],
-    ["data/post-match-reviews.json", "data/post-match-reviews.json"],
-    ["data/model-calibration.json", "data/model-calibration.json"],
-    ["data/model-strategy.json", "data/model-strategy.json"],
     ["data/sync-meta.json", "data/sync-meta.json"],
-    ["data/external-signals.json", "data/external-signals.json"],
-    ["data/five-hundred-details.json", "data/five-hundred-details.json"],
-    ["data/api-football-cache.json", "data/api-football-cache.json"],
-    ["data/api-football-meta.json", "data/api-football-meta.json"],
+    ["data/model-evaluation.json", "data/model-evaluation.json"],
   ];
 
   let copied = 0;
+  let removed = 0;
+  for (const relativeName of disabledDistPayloads) {
+    const target = path.join(distDir, relativeName);
+    if (!fs.existsSync(target)) continue;
+    withFileRetry(() => fs.rmSync(target, { force: true }), `remove disabled static ${target}`);
+    removed += 1;
+  }
+
   for (const [sourceName, targetName] of copyPairs) {
     const source = path.join(publicDir, sourceName);
     if (!fs.existsSync(source)) continue;
@@ -9942,7 +9890,7 @@ function mirrorPublishedDataToDist(publicDir) {
     copied += 1;
   }
 
-  return { mirrored: true, copied };
+  return { mirrored: true, copied, removed };
 }
 
 function preserveRootTimestamps(next, existing, keys) {
@@ -10089,9 +10037,8 @@ function isSameOutputDay(match, capturedAt) {
 }
 
 function splitMatchesForOutput(matches, capturedAt = new Date().toISOString()) {
-  const normalized = (matches || []).map((match) => normalizePublishedStatus(match, capturedAt));
-  const current = normalized.filter((match) => match.status !== "FINISHED" || isSameOutputDay(match, capturedAt));
-  const history = normalized.filter((match) => match.status === "FINISHED");
+  const current = matches.filter((match) => match.status !== "FINISHED" || isSameOutputDay(match, capturedAt));
+  const history = matches.filter((match) => match.status === "FINISHED");
   return { current, history };
 }
 
@@ -10403,7 +10350,6 @@ async function sync() {
   const existingTeamIndex = loadExistingJsonObject(path.join(dataDir, "team-index.json"));
   const externalSignals = loadExternalSignals(publicDir);
   const preMatchSignals = loadPreMatchSignals(publicDir);
-  const cctvWorldCupResults = await fetchCctvWorldCupResultSignals(capturedAt);
   const historicalTraining = loadHistoricalTrainingIndex();
   const worldCupKimiDataset = loadWorldCupKimiDataset();
   const predictionHealth = buildPredictionHealth(existingMatches);
@@ -10480,13 +10426,14 @@ async function sync() {
   output = attachOddsTrends(output, publicDir);
   output = attachExternalSignals(output, externalSignals, preMatchSignals);
   output = output.map(applyExternalResultSignal);
-  output = output.map((match) => applyCctvWorldCupResultSignal(match, cctvWorldCupResults, capturedAt));
   output = output.map((match) => rebuildPublishedPredictionModel(match, modelCalibration));
   output = output.map(normalizePublishedPredictionText);
   output = output.map(sanitizePublishedReferenceCopy);
   output = output.map((match) => normalizePublishedStatus(match, capturedAt));
+  output = output.map(normalizePredictionAuditForPublish);
   const predictionSnapshotsPayload = appendPredictionSnapshots(publicDir, output, capturedAt);
   output = attachPredictionSnapshotSummary(output, predictionSnapshotsPayload, capturedAt);
+  output = output.map(normalizePredictionAuditForPublish);
   const postMatchReviews = attachPostMatchReviews(output, capturedAt, predictionSnapshotsPayload);
   output = postMatchReviews.matches;
   const postMatchReviewsPayload = postMatchReviews.payload;
@@ -10521,12 +10468,60 @@ async function sync() {
   const sourcePublishedAt = shouldPreserveSourceTimestamp
     ? (existingSyncMeta?.updatedAt || existingSyncMeta?.capturedAt || capturedAt)
     : capturedAt;
+  const freshCurrentSportteryMatches = rawMatchesForOutput.filter((match) => match.status !== "FINISHED").length;
+  const currentStale = Boolean(keptExistingReason)
+    && rawMatchesWithOdds.length === 0
+    && freshCurrentSportteryMatches === 0;
+  const historyBaselineCount = Math.max(existingHistoryRows.length, split.history.length);
+  const historyStale = Boolean(keptExistingReason)
+    && historyBaselineCount >= 100
+    && rawResultMatches.length < historyBaselineCount * 0.8;
+  const partialStale = Boolean(keptExistingReason) && (!currentStale || !historyStale);
+  const sourceFreshnessTime = keptExistingReason
+    ? (existingSyncMeta?.api?.freshnessTime || existingSyncMeta?.updatedAt || existingSyncMeta?.capturedAt || sourcePublishedAt)
+    : sourcePublishedAt;
+  const currentFreshnessTime = currentStale
+    ? (existingSyncMeta?.api?.currentFreshnessTime || existingSyncMeta?.api?.freshnessTime || existingSyncMeta?.updatedAt || sourceFreshnessTime)
+    : sourcePublishedAt;
+  const historyFreshnessTime = historyStale
+    ? (existingSyncMeta?.api?.historyFreshnessTime || existingSyncMeta?.api?.freshnessTime || existingSyncMeta?.updatedAt || sourceFreshnessTime)
+    : sourcePublishedAt;
+  const sourceFreshnessMs = Date.parse(sourceFreshnessTime || "");
+  const currentFreshnessMs = Date.parse(currentFreshnessTime || "");
+  const historyFreshnessMs = Date.parse(historyFreshnessTime || "");
+  const capturedMs = Date.parse(capturedAt || "");
+  const sourceAgeSeconds = Number.isFinite(sourceFreshnessMs) && Number.isFinite(capturedMs)
+    ? Math.max(0, Math.floor((capturedMs - sourceFreshnessMs) / 1000))
+    : null;
+  const currentAgeSeconds = Number.isFinite(currentFreshnessMs) && Number.isFinite(capturedMs)
+    ? Math.max(0, Math.floor((capturedMs - currentFreshnessMs) / 1000))
+    : null;
+  const historyAgeSeconds = Number.isFinite(historyFreshnessMs) && Number.isFinite(capturedMs)
+    ? Math.max(0, Math.floor((capturedMs - historyFreshnessMs) / 1000))
+    : null;
   const syncMeta = {
     version: 1,
     source: "sporttery",
     updatedAt: sourcePublishedAt,
     capturedAt: sourcePublishedAt,
     lastAttemptAt: capturedAt,
+    api: {
+      source: "sporttery",
+      freshnessTime: sourceFreshnessTime,
+      currentFreshnessTime,
+      historyFreshnessTime,
+      sourceUpdatedAt: sourcePublishedAt,
+      lastAttemptAt: capturedAt,
+      ageSeconds: sourceAgeSeconds,
+      currentAgeSeconds,
+      historyAgeSeconds,
+      stale: Boolean(keptExistingReason),
+      currentStale,
+      historyStale,
+      partialStale,
+      syncTriggered: false,
+      ...(keptExistingReason ? { fallbackReason: keptExistingReason } : {}),
+    },
     officialOddsMatches: publishedOfficialOddsMatches,
     officialHandicapOddsMatches: publishedOfficialHandicapOddsMatches,
     displayOddsMatches: publishedOddsMatches,
@@ -10572,16 +10567,6 @@ async function sync() {
       updatedAt: externalSignals.updatedAt,
       matches: externalSignals.count || 0,
       webConsensusMatches: publishedWebConsensusMatches,
-    },
-    cctvWorldCupResults: {
-      ok: Boolean(cctvWorldCupResults.ok),
-      enabled: ENABLE_CCTV_WORLDCUP_RESULTS,
-      source: cctvWorldCupResults.source || "cctv-worldcup-result",
-      updatedAt: cctvWorldCupResults.updatedAt || capturedAt,
-      pages: cctvWorldCupResults.pages || 0,
-      rows: Array.isArray(cctvWorldCupResults.rows) ? cctvWorldCupResults.rows.length : 0,
-      pairs: cctvWorldCupResults.byPair?.size || 0,
-      errors: (cctvWorldCupResults.errors || []).slice(0, 5),
     },
     preMatchSignals: {
       source: preMatchSignals.source || "pre-match-signals",

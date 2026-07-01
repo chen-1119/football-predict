@@ -24,7 +24,7 @@ on:
 
 concurrency:
   group: football-data-sync
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   sync-data:
@@ -69,10 +69,7 @@ jobs:
           ODDS_HISTORY_BUCKET_MINUTES: 5
           SYNC_WORKFLOW_MINUTES: 5
           PAGE_POLL_SECONDS: 30
-        run: |
-          npm run optimize:strategy
-          node scripts/syncData.cjs
-          npm run optimize:strategy
+        run: node scripts/syncData.cjs
 
       - name: Validate Prediction Data
         run: npm run validate:data

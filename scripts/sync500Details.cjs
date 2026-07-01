@@ -10,9 +10,9 @@ const DATA_DIR = path.join(PUBLIC_DIR, "data");
 const DETAILS_FILE = path.join(DATA_DIR, "five-hundred-details.json");
 const EXTERNAL_SIGNALS_FILE = path.join(DATA_DIR, "external-signals.json");
 const SOURCE_URL = process.env.FIVE_HUNDRED_JCZQ_URL || "https://trade.500.com/jczq/";
-const MAX_MATCHES = Math.max(1, Number(process.env.FIVE_HUNDRED_DETAILS_MAX_MATCHES || 80));
+const MAX_MATCHES = Math.max(1, Number(process.env.FIVE_HUNDRED_DETAILS_MAX_MATCHES || 8));
 const REFRESH_MINUTES = Math.max(30, Number(process.env.FIVE_HUNDRED_DETAILS_REFRESH_MINUTES || 180));
-const RESULT_LOOKBACK_HOURS = Math.max(1, Number(process.env.FIVE_HUNDRED_RESULT_LOOKBACK_HOURS || 168));
+const RESULT_LOOKBACK_HOURS = Math.max(1, Number(process.env.FIVE_HUNDRED_RESULT_LOOKBACK_HOURS || 48));
 const DETAIL_TIMEOUT_SECONDS = Math.max(5, Number(process.env.FIVE_HUNDRED_DETAILS_TIMEOUT_SECONDS || 10));
 const MAX_ERRORS = Math.max(1, Number(process.env.FIVE_HUNDRED_DETAILS_MAX_ERRORS || 3));
 const USER_AGENT = process.env.FIVE_HUNDRED_USER_AGENT
@@ -25,8 +25,6 @@ const REQUEST_HEADERS = Object.freeze({
   "Accept-Encoding": "identity",
   Referer: "https://www.500.com/",
 });
-
-const curlForceIpv4 = process.env.FIVE_HUNDRED_CURL_IPV4 !== "0";
 
 const nowIso = () => new Date().toISOString();
 
@@ -55,18 +53,6 @@ const compactNumber = (value, digits = 2) => {
   const number = Number(value);
   return Number.isFinite(number) ? Number(number.toFixed(digits)) : null;
 };
-
-const hasFiniteValue = (value) => value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value));
-
-const hasUsableFiveHundredSignal = (signal) => Boolean(
-  signal?.recentForm?.home?.sampleSize
-  || signal?.recentForm?.away?.sampleSize
-  || Number(signal?.europeOdds?.companies || 0) > 0
-  || Number(signal?.asianHandicap?.companies || 0) > 0
-  || hasFiniteValue(signal?.asianHandicap?.currentAverageLine)
-  || signal?.rank?.home?.fifaRank
-  || signal?.rank?.away?.fifaRank
-);
 
 const isFresh = (iso, minutes) => {
   const time = Date.parse(iso || "");
@@ -138,15 +124,10 @@ const httpGetBuffer = (url, referer = SOURCE_URL) => new Promise((resolve, rejec
   req.end();
 });
 
-const alternateDetailUrl = (url) => {
-  const value = String(url || "");
-  if (/^https:\/\/odds\.500\.com\//i.test(value)) return value.replace(/^https:/i, "http:");
-  return "";
-};
-
-const buildCurlArgs = (url, referer) => [
+const curlGetBuffer = (url, referer = SOURCE_URL, cause) => {
+  try {
+    return execFileSync("curl", [
       "-fsSL",
-      ...(curlForceIpv4 ? ["-4"] : []),
       "--connect-timeout", String(Math.min(8, DETAIL_TIMEOUT_SECONDS)),
       "--max-time", String(DETAIL_TIMEOUT_SECONDS),
       "-A", USER_AGENT,
@@ -155,25 +136,11 @@ const buildCurlArgs = (url, referer) => [
       "-H", "Accept-Encoding: identity",
       "-H", `Referer: ${referer}`,
       url,
-];
-
-const execCurlGetBuffer = (url, referer) => execFileSync("curl", buildCurlArgs(url, referer), {
+    ], {
       maxBuffer: 8 * 1024 * 1024,
       stdio: ["ignore", "pipe", "pipe"],
-});
-
-const curlGetBuffer = (url, referer = SOURCE_URL, cause) => {
-  try {
-    return execCurlGetBuffer(url, referer);
+    });
   } catch (error) {
-    const alternateUrl = alternateDetailUrl(url);
-    if (alternateUrl && alternateUrl !== url) {
-      try {
-        return execCurlGetBuffer(alternateUrl, referer);
-      } catch (alternateError) {
-        throw new Error(`${cause?.message || cause || "https request failed"}; curl fallback failed: ${error.message || error}; http fallback failed: ${alternateError.message || alternateError}`);
-      }
-    }
     throw new Error(`${cause?.message || cause || "https request failed"}; curl fallback failed: ${error.message || error}`);
   }
 };
@@ -209,16 +176,6 @@ const absoluteUrl = (href) => {
   if (value.startsWith("//")) return `https:${value}`;
   if (value.startsWith("/")) return `https://odds.500.com${value}`;
   return value;
-};
-
-const fallbackDetailUrls = (fixtureId) => {
-  const id = norm(fixtureId);
-  if (!id) return {};
-  return {
-    analysis: `https://odds.500.com/fenxi/shuju-${id}.shtml`,
-    europeOdds: `https://odds.500.com/fenxi/ouzhi-${id}.shtml`,
-    asianHandicap: `https://odds.500.com/fenxi/yazhi-${id}.shtml`,
-  };
 };
 
 const parseOdds = (rowHtml, type) => {
@@ -314,10 +271,7 @@ const parseTradeRows = (html) => {
       availability: availabilityFor(attrs["data-subactive"]),
       had: parseOdds(rowHtml, "nspf"),
       hhad: parseOdds(rowHtml, "spf"),
-      urls: {
-        ...fallbackDetailUrls(fixtureId),
-        ...links,
-      },
+      urls: links,
     });
   }
   return rows;
@@ -348,54 +302,6 @@ const uniqueBySourceMatchId = (rows) => {
     byId.set(row.sourceMatchId, !previous || scoreRank(row) >= scoreRank(previous) ? { ...previous, ...row } : previous);
   }
   return Array.from(byId.values());
-};
-
-const rowsFromExternalSignals = (external) => {
-  const rows = [];
-  const seen = new Set();
-  const now = Date.now();
-  const futureWindowMs = Math.max(1, Number(process.env.FIVE_HUNDRED_DETAILS_FORWARD_DAYS || 14)) * 24 * 3600000;
-  for (const signal of Object.values(external?.matches || {})) {
-    if (!signal || typeof signal !== "object" || Array.isArray(signal)) continue;
-    const sourceMatchId = norm(signal.sourceMatchId || signal.fiveHundred?.sourceMatchId || signal.matchId);
-    const fixtureId = norm(signal.fixtureId || signal.fiveHundred?.fixtureId);
-    if (!sourceMatchId || !fixtureId || seen.has(sourceMatchId)) continue;
-    const kickoff = Date.parse(signal.kickoffTime || "");
-    if (Number.isFinite(kickoff) && (kickoff < now - RESULT_LOOKBACK_HOURS * 3600000 || kickoff > now + futureWindowMs)) continue;
-    seen.add(sourceMatchId);
-    const urls = {
-      ...fallbackDetailUrls(fixtureId),
-      ...(signal.fiveHundred?.urls || {}),
-    };
-    rows.push({
-      sourceMatchId,
-      fixtureId,
-      infoMatchId: norm(signal.infoMatchId || signal.fiveHundred?.infoMatchId),
-      matchNo: norm(signal.matchNo || signal.fiveHundred?.matchNo),
-      processDate: norm(signal.processDate || signal.matchDate || String(signal.kickoffTime || "").slice(0, 10)),
-      homeTeamName: norm(signal.homeTeamName),
-      awayTeamName: norm(signal.awayTeamName),
-      homeTeamId: norm(signal.homeTeamId),
-      awayTeamId: norm(signal.awayTeamId),
-      leagueName: norm(signal.leagueName),
-      matchDate: norm(signal.matchDate || String(signal.kickoffTime || "").slice(0, 10)),
-      matchTime: norm(String(signal.kickoffTime || "").match(/T(\d{2}:\d{2})/)?.[1]),
-      kickoffTime: norm(signal.kickoffTime),
-      buyEndTime: norm(signal.buyEndTime || signal.fiveHundred?.sale?.buyEndTime),
-      status: Number.isFinite(Number(signal.scoreHome)) && Number.isFinite(Number(signal.scoreAway)) ? "FINISHED" : "SCHEDULED",
-      scoreHome: toNum(signal.scoreHome),
-      scoreAway: toNum(signal.scoreAway),
-      resultSource: signal.resultSource,
-      resultUpdatedAt: signal.resultUpdatedAt,
-      isEnded: false,
-      handicapLine: norm(signal.handicapLine),
-      availability: {},
-      had: signal.bookmakerOdds?.had || null,
-      hhad: signal.bookmakerOdds?.hhad || null,
-      urls,
-    });
-  }
-  return rows;
 };
 
 const fetchRecentResultRows = async (existingDetails) => {
@@ -933,17 +839,9 @@ const selectTargets = (rows, cache) => {
     .sort((a, b) => Date.parse(a.kickoffTime || "") - Date.parse(b.kickoffTime || ""))
     .filter((row) => {
       const kickoff = Date.parse(row.kickoffTime || "");
+      if (Number.isFinite(kickoff) && kickoff + 2 * 3600000 < now) return false;
       const cached = cache.matches?.[row.sourceMatchId];
-      const recentKickoff = Number.isFinite(kickoff) && now - kickoff <= RESULT_LOOKBACK_HOURS * 3600000;
-      const hasUsableCachedDetails = Boolean(
-        hasUsableFiveHundredSignal(cached?.signal?.fiveHundred)
-        || cached?.details?.analysis?.recentForm?.home?.sampleSize
-        || cached?.details?.analysis?.recentForm?.away?.sampleSize
-        || Number(cached?.details?.europeOdds?.companies || 0) > 0
-        || Number(cached?.details?.asianHandicap?.companies || 0) > 0
-      );
-      if (Number.isFinite(kickoff) && kickoff + 2 * 3600000 < now && !recentKickoff && hasUsableCachedDetails) return false;
-      return !cached || !hasUsableCachedDetails || !isFresh(cached.updatedAt, REFRESH_MINUTES);
+      return !cached || !isFresh(cached.updatedAt, REFRESH_MINUTES);
     })
     .slice(0, MAX_MATCHES);
 };
@@ -954,11 +852,10 @@ const main = async () => {
   const currentTradeRows = parseTradeRows(tradeHtml);
   const existingDetails = readJson(DETAILS_FILE, { version: 1, source: "500.com:details", matches: {} });
   const recentResults = await fetchRecentResultRows(existingDetails);
+  const tradeRows = uniqueBySourceMatchId([...currentTradeRows, ...recentResults.rows]);
+  const targets = selectTargets(tradeRows, existingDetails);
   const detailsMatches = { ...(existingDetails.matches || {}) };
   const external = readJson(EXTERNAL_SIGNALS_FILE, { version: 1, source: "external-signals", matches: {}, sources: {} });
-  const externalRows = rowsFromExternalSignals(external);
-  const tradeRows = uniqueBySourceMatchId([...currentTradeRows, ...recentResults.rows, ...externalRows]);
-  const targets = selectTargets(tradeRows, existingDetails);
   const externalMatches = { ...(external.matches || {}) };
   const errors = [];
   let requestedPages = 1;
@@ -972,12 +869,10 @@ const main = async () => {
     const hasMatchResult = Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway);
     const hasCachedResult = Number.isFinite(cached.signal?.fiveHundred?.result?.scoreHome)
       && Number.isFinite(cached.signal?.fiveHundred?.result?.scoreAway);
-    const hasUsableCachedSignal = hasUsableFiveHundredSignal(cached.signal?.fiveHundred);
-    if (!hasMatchResult && !hasCachedResult && !hasUsableCachedSignal && Number.isFinite(kickoff) && kickoff + 2 * 3600000 < Date.now()) return;
+    if (!hasMatchResult && !hasCachedResult && Number.isFinite(kickoff) && kickoff + 2 * 3600000 < Date.now()) return;
     const signal = hasMatchResult
       ? buildDetailSignal(match, cached.details || {}, updatedAt)
       : cached.signal;
-    if (!hasUsableFiveHundredSignal(signal.fiveHundred)) return;
     if (hasMatchResult) {
       detailsMatches[match.sourceMatchId] = {
         ...cached,
@@ -1013,9 +908,6 @@ const main = async () => {
       };
       requestedPages += [match.urls.analysis, match.urls.europeOdds, match.urls.asianHandicap].filter(Boolean).length;
       const signal = buildDetailSignal(match, details, updatedAt);
-      if (!hasUsableFiveHundredSignal(signal.fiveHundred)) {
-        throw new Error("empty 500 detail payload");
-      }
       const payload = {
         ...match,
         updatedAt,

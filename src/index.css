@@ -1109,6 +1109,117 @@ button.status-pill:hover {
   padding: 0.22rem 0.46rem;
 }
 
+.model-governance-panel {
+  display: grid;
+  gap: 0.68rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  background: hsl(var(--bg-card));
+  padding: 0.78rem 0.85rem;
+}
+
+.model-governance-panel.is-ready {
+  border-color: hsl(var(--success) / 0.28);
+}
+
+.model-governance-panel.is-warning {
+  border-color: hsl(var(--premium) / 0.34);
+}
+
+.model-governance-panel.is-neutral {
+  border-color: hsl(var(--text-muted) / 0.22);
+}
+
+.model-governance-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.model-governance-head > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.16rem;
+}
+
+.model-governance-head strong {
+  color: hsl(var(--text-primary));
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.model-governance-head span,
+.model-governance-item small {
+  color: hsl(var(--text-muted));
+  font-size: 0.72rem;
+  font-weight: 720;
+}
+
+.model-governance-head em {
+  flex: 0 0 auto;
+  border: 1px solid hsl(var(--premium) / 0.28);
+  border-radius: 999px;
+  background: hsl(var(--premium) / 0.08);
+  color: hsl(var(--premium));
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 900;
+  padding: 0.18rem 0.52rem;
+  white-space: nowrap;
+}
+
+.model-governance-panel.is-ready .model-governance-head em {
+  border-color: hsl(var(--success) / 0.28);
+  background: hsl(var(--success) / 0.08);
+  color: hsl(var(--success));
+}
+
+.model-governance-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.model-governance-item {
+  min-width: 0;
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px);
+  background: hsl(var(--bg));
+  padding: 0.58rem 0.65rem;
+}
+
+.model-governance-item span,
+.model-governance-item strong,
+.model-governance-item small {
+  display: block;
+}
+
+.model-governance-item span {
+  color: hsl(var(--text-muted));
+  font-size: 0.7rem;
+  font-weight: 820;
+}
+
+.model-governance-item strong {
+  margin-top: 0.18rem;
+  overflow: hidden;
+  color: hsl(var(--text-primary));
+  font-family: var(--font-title);
+  font-size: 1rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-governance-item small {
+  margin-top: 0.12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .route-loading {
   display: flex;
   min-height: 220px;
@@ -1381,34 +1492,6 @@ button.status-pill:hover {
   border-radius: var(--radius);
   background: hsl(var(--bg) / 0.66);
   padding: 0.8rem;
-}
-
-.parlay-card.is-steady {
-  border-color: hsl(var(--success) / 0.26);
-}
-
-.parlay-card.is-balanced {
-  border-color: hsl(var(--primary) / 0.34);
-  background:
-    linear-gradient(135deg, hsl(var(--primary) / 0.06), transparent 42%),
-    hsl(var(--bg) / 0.66);
-}
-
-.parlay-card.is-value {
-  border-color: hsl(var(--premium) / 0.42);
-  background:
-    linear-gradient(135deg, hsl(var(--premium) / 0.08), transparent 44%),
-    hsl(var(--bg) / 0.66);
-}
-
-.parlay-empty {
-  border: 1px dashed hsl(var(--border));
-  border-radius: var(--radius);
-  background: hsl(var(--bg) / 0.45);
-  color: hsl(var(--text-secondary));
-  font-size: 0.86rem;
-  font-weight: 820;
-  padding: 0.9rem;
 }
 
 .parlay-card-head {
@@ -1841,6 +1924,27 @@ button.status-pill:hover {
 
   .source-health-details .source-health-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .model-governance-head {
+    flex-direction: column;
+  }
+
+  .model-governance-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .model-governance-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .model-governance-head em,
+  .model-governance-item strong,
+  .model-governance-item small {
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 }
 
@@ -5957,6 +6061,18 @@ button.status-pill:hover {
   }
 
   .source-health-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .model-governance-panel {
+    padding: 0.72rem;
+  }
+
+  .model-governance-head {
+    flex-direction: column;
+  }
+
+  .model-governance-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

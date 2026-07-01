@@ -189,7 +189,7 @@ export function getMarketLabel(marketType: PredictionDetail['marketType'], langu
     '1X2': { zh: '胜平负', en: '1X2' },
     GOALS: { zh: '进球参考', en: 'Goals' },
     GG_NG: { zh: '双方进球参考', en: 'BTTS Reference' },
-    BEST: { zh: '推荐', en: 'Pick' }
+    BEST: { zh: 'AI推荐', en: 'AI Pick' }
   };
 
   return labels[marketType][language];
@@ -202,7 +202,7 @@ export function getPredictionMarketLabel(prediction: PredictionDetail, language:
     sportteryResultLabels[prediction.tipCode as keyof typeof sportteryResultLabels]
   ) {
     return prediction.marketType === 'BEST'
-      ? (language === 'zh' ? '推荐 · 让球' : 'Pick · Handicap Result')
+      ? (language === 'zh' ? 'AI推荐 · 让球' : 'AI Pick · Handicap Result')
       : (language === 'zh' ? '让球' : 'Handicap Result');
   }
 
@@ -274,15 +274,13 @@ export function getPredictionTipDisplay(
     if (language === 'zh') {
       const label = prediction.tipLabel.zh
         .replace(/^稳胆[:：]?\s*/, '高可信 ')
-        .replace(/^稳妥方向\s+/, '高可信 ')
-        .replace(/^模型首选\s+/, '主推 ')
-        .replace(/^价值观察\s+/, '谨慎推荐 ');
+        .replace(/^稳妥方向\s+/, '高可信 ');
 
       if (!compact) return label;
 
       return label
-        .replace(/^(主推|谨慎推荐|高可信)\s+(主胜|平局|客胜).*/, '$1 $2')
-        .replace(/^观察为主\s+.*/, '谨慎复核');
+        .replace(/^(模型首选|价值观察|高可信)\s+(主胜|平局|客胜).*/, '$1 $2')
+        .replace(/^观察为主\s+.*/, '观察为主');
     }
 
     return compact
@@ -332,7 +330,7 @@ export function getPredictionValueLabel(prediction: PredictionDetail, language: 
   }
 
   if (prediction.marketType === 'BEST' && !sportteryResultLabels[prediction.tipCode as keyof typeof sportteryResultLabels]) {
-    return language === 'zh' ? '参考值' : 'Reference';
+    return language === 'zh' ? '模型值' : 'Model';
   }
 
   if (prediction.marketType === '1X2' || prediction.marketType === 'BEST') {
@@ -341,7 +339,7 @@ export function getPredictionValueLabel(prediction: PredictionDetail, language: 
       : 'SP';
   }
 
-  return language === 'zh' ? '参考值' : 'Reference';
+  return language === 'zh' ? '模型值' : 'Model';
 }
 
 export function getPredictionExplanationDisplay(prediction: PredictionDetail, language: Language): string {
@@ -352,10 +350,7 @@ export function getPredictionExplanationDisplay(prediction: PredictionDetail, la
   return text
     .replace(/胜\(3\)\s*/g, '主胜')
     .replace(/平\(1\)\s*/g, '平局')
-    .replace(/负\(0\)\s*/g, '客胜')
-    .replace(/【AI 精选】/g, '【主推】')
-    .replace(/数学模型跑出的最高价值推荐/g, '综合评分最高的推荐方向')
-    .replace(/模型同时参考/g, '系统同时参考');
+    .replace(/负\(0\)\s*/g, '客胜');
 }
 
 export function getSportteryOddsRows(odds: Odds | null | undefined, language: Language) {

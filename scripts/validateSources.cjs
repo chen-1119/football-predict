@@ -44,28 +44,6 @@ function matchHasExternalSignal(match) {
   return Boolean(had || hhad || apiFootball || external || signals.injuries || signals.lineups || preMatch || signals.webConsensus);
 }
 
-function matchUsesFiveHundred(match) {
-  return String(match?.oddsSource || "").startsWith("500.com")
-    || String(match?.handicapOddsSource || "").startsWith("500.com")
-    || String(match?.externalSignals?.source || "").includes("500.com")
-    || Boolean(match?.externalSignals?.fiveHundred);
-}
-
-function matchHasUsableFiveHundredDetails(match) {
-  const signal = match?.externalSignals?.fiveHundred;
-  if (!signal || typeof signal !== "object") return false;
-  const asianAverageLine = signal.asianHandicap?.currentAverageLine;
-  return Boolean(
-    signal.recentForm?.home?.sampleSize
-    || signal.recentForm?.away?.sampleSize
-    || Number(signal.europeOdds?.companies || 0) > 0
-    || Number(signal.asianHandicap?.companies || 0) > 0
-    || (asianAverageLine !== null && asianAverageLine !== undefined && asianAverageLine !== "" && Number.isFinite(Number(asianAverageLine)))
-    || signal.rank?.home?.fifaRank
-    || signal.rank?.away?.fifaRank
-  );
-}
-
 const errors = [];
 const warnings = [];
 const external = readJson(externalSignalsPath, null);
@@ -90,9 +68,6 @@ const preMatchSummary = preMatch?.summary || {};
 const currentCount = Array.isArray(current) ? current.length : 0;
 const currentWithExternal = Array.isArray(current) ? current.filter(matchHasExternalSignal).length : 0;
 const currentCoverage = currentCount > 0 ? currentWithExternal / currentCount : 0;
-const currentWithFiveHundred = Array.isArray(current) ? current.filter(matchUsesFiveHundred).length : 0;
-const currentWithFiveHundredDetails = Array.isArray(current) ? current.filter(matchHasUsableFiveHundredDetails).length : 0;
-const currentFiveHundredDetailsCoverage = currentWithFiveHundred > 0 ? currentWithFiveHundredDetails / currentWithFiveHundred : 1;
 
 if (requireExternalSignals) {
   if (!external) errors.push("external-signals.json is missing or invalid.");
@@ -137,12 +112,6 @@ if (currentCount > 0 && requireExternalSignals && currentCoverage < minCurrentCo
   warnings.push(`current external coverage low: ${(currentCoverage * 100).toFixed(1)}%, target ${(minCurrentCoverage * 100).toFixed(1)}%.`);
 }
 
-if (currentWithFiveHundred >= 3 && currentWithFiveHundredDetails === 0) {
-  errors.push("500.com detail coverage is zero for current 500-backed matches; run npm run sync:500:details before sync:data.");
-} else if (currentWithFiveHundred >= 3 && currentFiveHundredDetailsCoverage < 0.7) {
-  warnings.push(`500.com detail coverage low: ${(currentFiveHundredDetailsCoverage * 100).toFixed(1)}%, target 70.0%.`);
-}
-
 const metaExternalCount = syncMeta?.sources?.externalSignals?.matches ?? syncMeta?.externalSignals?.matches ?? null;
 if (metaExternalCount !== null && Number(metaExternalCount) !== externalCount) {
   warnings.push(`sync-meta external count ${metaExternalCount} differs from external-signals map ${externalCount}.`);
@@ -170,10 +139,6 @@ const payload = {
     fiveHundredRows: source500.rows || 0,
     fiveHundredMapped: source500.mapped || 0,
     fiveHundredUrl: source500.url || null,
-    fiveHundredDetailsUpdatedAt: external?.sources?.["500.com:details"]?.updatedAt || null,
-    fiveHundredDetailsRows: external?.sources?.["500.com:details"]?.updated || 0,
-    fiveHundredDetailsCachedMerged: external?.sources?.["500.com:details"]?.cachedMerged || 0,
-    fiveHundredDetailsErrors: external?.sources?.["500.com:details"]?.errors || 0,
     apiFootballUpdatedAt: sourceApiFootball.updatedAt || null,
     apiFootballMappedSignals: sourceApiFootball.mappedSignals || 0,
     apiFootballCallsThisSync: sourceApiFootball.callsThisSync || 0,
@@ -194,9 +159,6 @@ const payload = {
     count: currentCount,
     withExternalSignals: currentWithExternal,
     externalCoverage: Number(currentCoverage.toFixed(4)),
-    withFiveHundred: currentWithFiveHundred,
-    withFiveHundredDetails: currentWithFiveHundredDetails,
-    fiveHundredDetailsCoverage: Number(currentFiveHundredDetailsCoverage.toFixed(4)),
   },
   warnings,
   errors,

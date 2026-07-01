@@ -55,16 +55,92 @@ export interface DataSyncState {
     fiveHundredFallbackMatches?: number;
     fiveHundredResultMatches?: number;
   };
+  modelEvaluation?: {
+    ok?: boolean;
+    apiVersion?: string;
+    generatedAt?: string | null;
+    backtest?: {
+      version?: string | null;
+      generatedAt?: string | null;
+      sample?: {
+        probabilityRows?: number;
+        marketBaselineRows?: number;
+        predictionSnapshots?: number;
+      } | null;
+      shadowCandidates?: {
+        version?: string;
+        bestCandidateId?: string;
+        sample?: {
+          rows?: number;
+        };
+      } | null;
+      policy?: {
+        promotionGate?: string;
+        llmRole?: string;
+      } | null;
+    } | null;
+    calibration?: {
+      version?: string | null;
+    } | null;
+    strategy?: {
+      version?: string | null;
+      generatedAt?: string | null;
+      activation?: {
+        mode?: string;
+        onlineEffect?: string;
+        promotionGate?: {
+          status?: string;
+          reasons?: string[];
+          sample?: {
+            marketBaselineRows?: number;
+            probabilityRows?: number;
+            shadowCandidateRows?: number;
+          };
+          thresholds?: {
+            minMarketBaselineRows?: number;
+          };
+        };
+      };
+    } | null;
+    policy?: {
+      baselineRequired?: string;
+      splitPolicy?: string;
+      llmRole?: string;
+    };
+  };
   sourceHealth?: {
     ok?: boolean;
     checkedAt?: string;
     mode?: {
       enable500Sync?: boolean;
       enable500DetailsSync?: boolean;
+      enableWeatherSync?: boolean;
       enableApiFootballSync?: boolean;
+      enablePreMatchSignalsSync?: boolean;
       requireExternalSignals?: boolean;
       skipSportteryFetch?: boolean;
     };
+    sources?: Array<{
+      id?: string;
+      label?: string;
+      role?: string;
+      enabled?: boolean;
+      required?: boolean;
+      status?: string;
+      score?: number;
+      updatedAt?: string | null;
+      ageMinutes?: number | null;
+      maxAgeMinutes?: number | null;
+      stale?: boolean;
+      metrics?: Record<string, unknown>;
+    }>;
+    sourceScores?: Record<string, {
+      status?: string;
+      score?: number;
+      stale?: boolean;
+      updatedAt?: string | null;
+      ageMinutes?: number | null;
+    }>;
     externalSignals?: {
       fiveHundredRows?: number;
       fiveHundredMapped?: number;
@@ -76,10 +152,24 @@ export interface DataSyncState {
       apiFootballCallsThisSync?: number;
       apiFootballCallsTodayEstimate?: number;
     };
+    preMatchSignals?: {
+      exists?: boolean;
+      updatedAt?: string | null;
+      ageMinutes?: number | null;
+      matchKeys?: number;
+      high?: number;
+      medium?: number;
+      low?: number;
+      warningCount?: number;
+    };
     currentMatches?: {
       count?: number;
       withExternalSignals?: number;
       externalCoverage?: number;
+      withSportteryOdds?: number;
+      withFiveHundredDetails?: number;
+      withWeather?: number;
+      withPreMatchSignals?: number;
     };
     errors?: string[];
   };

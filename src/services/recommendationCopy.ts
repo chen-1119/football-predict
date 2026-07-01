@@ -16,10 +16,10 @@ export interface PublicRecommendationCopy {
 }
 
 const publicRiskLabels: Record<string, MultiLangString> = {
-  pending_sale: { zh: 'SP待补齐', en: 'SP pending' },
+  pending_sale: { zh: '等待官方赔率开售', en: 'Await official odds' },
   thin_value: { zh: '赔率优势一般', en: 'Limited price edge' },
   handicap_soft: { zh: '让球盘支持偏弱', en: 'Handicap support is soft' },
-  market_split: { zh: '临场需要复核', en: 'Late recheck needed' },
+  market_split: { zh: '盘口意见不一致', en: 'Market is split' },
   close_result: { zh: '胜负差距不大', en: 'Close result' },
   draw_cover: { zh: '需要防平', en: 'Draw cover needed' },
   goals_unclear: { zh: '进球数不稳定', en: 'Goal range is unstable' },
@@ -65,11 +65,11 @@ const cleanPickLabel = (label: string, language: Language) => {
     .replace(/^(推荐方向|主推|参考倾向|参考推荐|模型首选|价值观察|高可信)\s*/u, '')
     .replace(/^(Pick|Main pick|Reference lean|Reference pick|Model lean|Value watch|High confidence)[:：]?\s*/iu, '')
     .trim();
-  return cleaned || (language === 'zh' ? '暂无主推' : 'No pick');
+  return cleaned || (language === 'zh' ? '待确认' : 'Pending');
 };
 
 const marketLabelForPrediction = (prediction: PredictionDetail | undefined, language: Language) => {
-  if (!prediction) return language === 'zh' ? '暂无玩法' : 'No market';
+  if (!prediction) return language === 'zh' ? '待确认' : 'Pending';
   if (prediction.oddsPoolCode === 'HHAD') return language === 'zh' ? '让球玩法' : 'Handicap';
   if (prediction.marketType === 'GOALS') return language === 'zh' ? '进球数' : 'Goals';
   return language === 'zh' ? '胜平负' : '1X2';
@@ -80,7 +80,7 @@ const strengthFromTrust = (
   publicRisks: MultiLangString[]
 ): { label: MultiLangString; tone: StrengthTone } => {
   if (!prediction || prediction.tipCode === 'WATCH') {
-    return { label: { zh: '待补齐', en: 'Pending' }, tone: 'pending' };
+    return { label: { zh: '等待确认', en: 'Pending' }, tone: 'pending' };
   }
 
   const trust = Number(prediction.trustScore || 0);
@@ -107,25 +107,25 @@ export const buildPublicRecommendationCopy = (
   const oddsValue = Number(prediction?.odds || 0);
   const oddsLabel = oddsValue > 0
     ? (language === 'zh' ? `赔率 ${oddsValue.toFixed(2)}` : `Odds ${oddsValue.toFixed(2)}`)
-    : (language === 'zh' ? 'SP待开售' : 'SP pending');
+    : (language === 'zh' ? '赔率待开售' : 'Odds pending');
   const title = hasPick
     ? (language === 'zh' ? `主推 ${pickLabel}` : `Pick ${pickLabel}`)
-    : (language === 'zh' ? '暂无可推方向' : 'No qualified pick');
+    : (language === 'zh' ? '等待官方开售' : 'Await official sale');
 
   const reasons: string[] = [];
   if (!hasPick) {
-    reasons.push(language === 'zh' ? '当前还没有达到推荐门槛的已开售方向。' : 'No on-sale direction has passed the pick gate yet.');
+    reasons.push(language === 'zh' ? '官方赔率还没有形成可用方向，先等待开售。' : 'No usable official market is available yet.');
   } else if (oddsValue <= 0) {
     reasons.push(language === 'zh' ? '当前方向已生成，官方 SP 未开售；开售后按最新赔率复核。' : 'The direction is available, but official SP is not open yet; recheck once odds open.');
   } else if (prediction?.oddsPoolCode === 'HHAD') {
-    reasons.push(language === 'zh' ? '本场按让球玩法给出主推，重点看让球线是否继续支持。' : 'The pick uses the handicap market; recheck whether the line still supports it.');
+    reasons.push(language === 'zh' ? '本场按让球玩法给出主推，重点看让球线是否继续支持。' : 'The pick uses the handicap market; keep watching whether the line still supports it.');
   } else {
     reasons.push(language === 'zh' ? '本场按胜平负玩法给出主推，赔率和赛前信息相对支持当前方向。' : 'The pick uses 1X2; odds and pre-match information support this direction.');
   }
 
   if (hasPublicRisk(publicRisks, '需要防平') || hasPublicRisk(publicRisks, '胜负差距不大')) {
     reasons.push(language === 'zh' ? '胜负差距不算大，推荐强度不会拉满。' : 'The edge is not wide enough for a full-confidence pick.');
-  } else if (hasPublicRisk(publicRisks, '让球盘支持偏弱') || hasPublicRisk(publicRisks, '临场需要复核')) {
+  } else if (hasPublicRisk(publicRisks, '让球盘支持偏弱') || hasPublicRisk(publicRisks, '盘口意见不一致')) {
     reasons.push(language === 'zh' ? '盘口没有完全同向，临场需要再确认。' : 'The market is not fully aligned, so a late check matters.');
   } else if (hasPick) {
     reasons.push(language === 'zh' ? '当前方向优先级最高，但仍按临场变化调整强度。' : 'This is the top direction for now, with strength adjusted by late movement.');
@@ -159,7 +159,7 @@ export const buildPublicRecommendationCopy = (
       ? (language === 'zh' ? '赛后复盘' : 'Review')
       : oddsValue > 0
         ? (language === 'zh' ? '已开售' : 'On sale')
-        : (language === 'zh' ? 'SP待开' : 'SP pending'),
+        : (language === 'zh' ? '待开售' : 'Pending sale'),
     reasons: reasons.slice(0, 3),
     risks,
     updateRule

@@ -42,7 +42,7 @@ export const Footer: React.FC = () => {
         <div className="footer-main">
           <section className="footer-brand">
             <div className="footer-brand-row">
-              <span className="footer-mark" aria-hidden="true">90</span>
+              <span className="footer-mark" aria-hidden="true">AI</span>
               <strong>{t('brand') as string}</strong>
             </div>
             <p>{t('tagline') as string}</p>

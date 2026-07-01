@@ -2,7 +2,7 @@ const DEFAULT_RECENT_RUN_SECONDS = 240;
 const DEFAULT_PUBLIC_DATA_CACHE_SECONDS = 20;
 const DEFAULT_CURRENT_DATA_CACHE_SECONDS = 5;
 const DEFAULT_HISTORY_DATA_CACHE_SECONDS = 180;
-const DEFAULT_STALE_DATA_SECONDS = 360;
+const DEFAULT_STALE_DATA_SECONDS = 600;
 
 const corsHeaders = {
   "access-control-allow-origin": "*",
@@ -19,16 +19,32 @@ const json = (payload, status = 200) => new Response(JSON.stringify(payload, nul
   }
 });
 
+const positiveNumber = (value, fallback) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const safeSecretEqual = (actual, expected) => {
+  const left = new TextEncoder().encode(String(actual || ""));
+  const right = new TextEncoder().encode(String(expected || ""));
+  const length = Math.max(left.length, right.length);
+  let diff = left.length ^ right.length;
+  for (let index = 0; index < length; index += 1) {
+    diff |= (left[index] || 0) ^ (right[index] || 0);
+  }
+  return diff === 0;
+};
+
 const readConfig = (env) => ({
   owner: env.GITHUB_OWNER || "chen-1119",
   repo: env.GITHUB_REPO || "football-predict",
   workflowId: env.GITHUB_WORKFLOW_ID || "sync.yml",
   ref: env.GITHUB_REF || "main",
-  recentRunSeconds: Number(env.MIN_SECONDS_BETWEEN_DISPATCHES || DEFAULT_RECENT_RUN_SECONDS),
-  publicDataCacheSeconds: Number(env.PUBLIC_DATA_CACHE_SECONDS || DEFAULT_PUBLIC_DATA_CACHE_SECONDS),
-  currentDataCacheSeconds: Number(env.CURRENT_DATA_CACHE_SECONDS || DEFAULT_CURRENT_DATA_CACHE_SECONDS),
-  historyDataCacheSeconds: Number(env.HISTORY_DATA_CACHE_SECONDS || DEFAULT_HISTORY_DATA_CACHE_SECONDS),
-  staleDataSeconds: Number(env.STALE_DATA_SECONDS || DEFAULT_STALE_DATA_SECONDS)
+  recentRunSeconds: positiveNumber(env.MIN_SECONDS_BETWEEN_DISPATCHES, DEFAULT_RECENT_RUN_SECONDS),
+  publicDataCacheSeconds: positiveNumber(env.PUBLIC_DATA_CACHE_SECONDS, DEFAULT_PUBLIC_DATA_CACHE_SECONDS),
+  currentDataCacheSeconds: positiveNumber(env.CURRENT_DATA_CACHE_SECONDS, DEFAULT_CURRENT_DATA_CACHE_SECONDS),
+  historyDataCacheSeconds: positiveNumber(env.HISTORY_DATA_CACHE_SECONDS, DEFAULT_HISTORY_DATA_CACHE_SECONDS),
+  staleDataSeconds: positiveNumber(env.STALE_DATA_SECONDS, DEFAULT_STALE_DATA_SECONDS)
 });
 
 const githubRequest = async (env, path, init = {}) => {
@@ -306,12 +322,10 @@ const fetchPublicApi = async (env, pathname, ctx) => {
 const isAuthorizedManualTrigger = (request, env) => {
   if (!env.MANUAL_TRIGGER_TOKEN) return false;
 
-  const url = new URL(request.url);
-  const queryToken = url.searchParams.get("token");
   const auth = request.headers.get("authorization") || "";
   const bearerToken = auth.toLowerCase().startsWith("bearer ") ? auth.slice(7) : "";
 
-  return queryToken === env.MANUAL_TRIGGER_TOKEN || bearerToken === env.MANUAL_TRIGGER_TOKEN;
+  return safeSecretEqual(bearerToken, env.MANUAL_TRIGGER_TOKEN);
 };
 
 export default {
@@ -334,7 +348,7 @@ export default {
       return json({
         ok: true,
         worker: "football-predict-sync-trigger",
-        cron: "* * * * * guarded by MIN_SECONDS_BETWEEN_DISPATCHES",
+        cron: "*/5 * * * * guarded by MIN_SECONDS_BETWEEN_DISPATCHES",
         api: ["/api/sync-meta", "/api/matches/current", "/api/matches/history"],
         workflow: `${env.GITHUB_OWNER || "chen-1119"}/${env.GITHUB_REPO || "football-predict"}/${env.GITHUB_WORKFLOW_ID || "sync.yml"}`,
         checkedAt: new Date().toISOString()
@@ -342,14 +356,15 @@ export default {
     }
 
     if (url.pathname === "/api/health") {
+      const config = readConfig(env);
       return json({
         ok: true,
         worker: "football-predict-sync-trigger",
         config: {
-          minSecondsBetweenDispatches: Number(env.MIN_SECONDS_BETWEEN_DISPATCHES || DEFAULT_RECENT_RUN_SECONDS),
-          currentDataCacheSeconds: Number(env.CURRENT_DATA_CACHE_SECONDS || DEFAULT_CURRENT_DATA_CACHE_SECONDS),
-          historyDataCacheSeconds: Number(env.HISTORY_DATA_CACHE_SECONDS || DEFAULT_HISTORY_DATA_CACHE_SECONDS),
-          staleDataSeconds: Number(env.STALE_DATA_SECONDS || DEFAULT_STALE_DATA_SECONDS)
+          minSecondsBetweenDispatches: config.recentRunSeconds,
+          currentDataCacheSeconds: config.currentDataCacheSeconds,
+          historyDataCacheSeconds: config.historyDataCacheSeconds,
+          staleDataSeconds: config.staleDataSeconds
         },
         checkedAt: new Date().toISOString()
       });

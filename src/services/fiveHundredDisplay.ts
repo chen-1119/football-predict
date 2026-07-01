@@ -155,7 +155,7 @@ export const buildFiveHundredDisplay = (match: Match, language: Language): FiveH
     hasRank ? (language === 'zh' ? '排名' : 'rank') : '',
     hasForm ? (language === 'zh' ? '近况' : 'form') : '',
     hasLineup ? (language === 'zh' ? '预计阵容' : 'projected XI') : '',
-    showUpset ? (language === 'zh' ? '冷门提醒' : 'upset alert') : ''
+    showUpset ? (language === 'zh' ? '冷门观察' : 'upset watch') : ''
   ].filter(Boolean);
 
   const marketBodyParts = [
@@ -207,7 +207,7 @@ export const buildFiveHundredDisplay = (match: Match, language: Language): FiveH
       tags: [
         hasEurope ? (language === 'zh' ? '欧赔' : 'Europe') : '',
         hasAsian ? (language === 'zh' ? '亚盘' : 'Asian') : '',
-        showUpset ? (language === 'zh' ? '冷门提醒' : 'upset alert') : ''
+        showUpset ? (language === 'zh' ? '冷门观察' : 'upset watch') : ''
       ].filter(Boolean)
     },
     {
@@ -244,7 +244,7 @@ export const buildFiveHundredDisplay = (match: Match, language: Language): FiveH
     hasMarket ? marketValue : '',
     hasForm ? (language === 'zh' ? '近况已接入' : 'form loaded') : '',
     hasLineup ? (language === 'zh' ? '预计阵容' : 'projected XI') : '',
-    showUpset ? (language === 'zh' ? '冷门提醒' : 'upset alert') : ''
+    showUpset ? (language === 'zh' ? '冷门观察' : 'upset watch') : ''
   ].filter(Boolean);
 
   return {

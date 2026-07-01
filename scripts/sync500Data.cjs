@@ -31,13 +31,6 @@ function norm(value) {
   return htmlDecode(value).replace(/\s+/g, " ").trim();
 }
 
-function textOnly(html) {
-  return norm(String(html || "")
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]+>/g, " "));
-}
-
 function toNum(value) {
   if (value === null || value === undefined || value === "") return null;
   const n = Number(String(value).replace(/[^\d.+-]/g, ""));
@@ -92,41 +85,6 @@ function parseOdds(rowHtml, type) {
   return odds.odds1 && odds.oddsX && odds.odds2 ? odds : null;
 }
 
-function absoluteUrl(href) {
-  const value = norm(href);
-  if (!value || value === "javascript:;") return "";
-  if (/^https?:\/\//i.test(value)) return value;
-  if (value.startsWith("//")) return `https:${value}`;
-  if (value.startsWith("/")) return `https://odds.500.com${value}`;
-  return value;
-}
-
-function parseRowLinks(rowHtml) {
-  const links = {};
-  const linkRe = /href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
-  let match;
-  while ((match = linkRe.exec(rowHtml))) {
-    const href = absoluteUrl(match[1]);
-    const label = textOnly(match[2]);
-    if (!href) continue;
-    if (label === "析") links.analysis = href;
-    if (label === "欧") links.europeOdds = href;
-    if (label === "亚") links.asianHandicap = href;
-    if (label === "荐") links.recommendation = href;
-  }
-  return links;
-}
-
-function fallbackDetailUrls(fixtureId) {
-  const id = norm(fixtureId);
-  if (!id) return {};
-  return {
-    analysis: `https://odds.500.com/fenxi/shuju-${id}.shtml`,
-    europeOdds: `https://odds.500.com/fenxi/ouzhi-${id}.shtml`,
-    asianHandicap: `https://odds.500.com/fenxi/yazhi-${id}.shtml`,
-  };
-}
-
 function signalKeys(attrs) {
   const keys = new Set();
   const sourceId = norm(attrs["data-id"]);
@@ -155,11 +113,6 @@ function buildSignal(attrs, rowHtml, updatedAt) {
   const sourceMatchId = norm(attrs["data-id"]);
   const fixtureId = norm(attrs["data-fixtureid"]);
   const matchNo = norm(attrs["data-matchnum"]);
-  const infoMatchId = norm(attrs["data-infomatchid"]);
-  const urls = {
-    ...fallbackDetailUrls(fixtureId),
-    ...parseRowLinks(rowHtml),
-  };
 
   const externalOdds = had
     ? {
@@ -190,15 +143,10 @@ function buildSignal(attrs, rowHtml, updatedAt) {
     updatedAt,
     sourceMatchId,
     fixtureId,
-    infoMatchId,
     matchNo,
     leagueName,
     homeTeamName: home,
     awayTeamName: away,
-    homeTeamId: norm(attrs["data-homeid"]) || undefined,
-    awayTeamId: norm(attrs["data-awayid"]) || undefined,
-    processDate: norm(attrs["data-processdate"]) || undefined,
-    matchDate: matchDate || undefined,
     kickoffTime: matchDate && matchTime ? `${matchDate}T${matchTime}:00+08:00` : undefined,
     buyEndTime: norm(attrs["data-buyendtime"]) || undefined,
     handicapLine: handicapLine || undefined,
@@ -206,18 +154,6 @@ function buildSignal(attrs, rowHtml, updatedAt) {
     bookmakerOdds: {
       had: had || undefined,
       hhad: hhad || undefined,
-    },
-    fiveHundred: {
-      source: "500.com",
-      updatedAt,
-      sourceMatchId,
-      fixtureId,
-      infoMatchId,
-      matchNo,
-      urls: Object.keys(urls).length ? urls : undefined,
-      sale: {
-        buyEndTime: norm(attrs["data-buyendtime"]) || undefined,
-      },
     },
   };
 }
@@ -282,64 +218,6 @@ function writeJson(file, payload) {
   }, `write ${file}`);
 }
 
-function joinSource(existingSource, nextSource) {
-  return Array.from(new Set(
-    String(existingSource || "")
-      .split("+")
-      .concat(String(nextSource || "").split("+"))
-      .map((item) => item.trim())
-      .filter(Boolean)
-  )).join("+") || nextSource || existingSource || "external-signals";
-}
-
-function compactObject(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
-  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined));
-}
-
-function mergeFiveHundred(existing = {}, next = {}) {
-  const output = {
-    ...existing,
-    ...next,
-    urls: compactObject({
-      ...(existing.urls || {}),
-      ...(next.urls || {}),
-    }),
-    sale: compactObject({
-      ...(existing.sale || {}),
-      ...(next.sale || {}),
-    }),
-  };
-  if (!Object.keys(output.urls || {}).length) delete output.urls;
-  if (!Object.keys(output.sale || {}).length) delete output.sale;
-  return output;
-}
-
-function mergeSignal(existing, next) {
-  if (!existing) return next;
-  const output = {
-    ...existing,
-    ...next,
-    source: joinSource(existing.source, next.source),
-    updatedAt: next.updatedAt || existing.updatedAt || new Date().toISOString(),
-    bookmakerOdds: {
-      ...(existing.bookmakerOdds || {}),
-      ...(next.bookmakerOdds || {}),
-    },
-  };
-
-  if (existing.fiveHundred || next.fiveHundred) {
-    output.fiveHundred = mergeFiveHundred(existing.fiveHundred || {}, next.fiveHundred || {});
-  }
-  if (existing.lineups && !next.lineups) output.lineups = existing.lineups;
-  if (existing.injuries && !next.injuries) output.injuries = existing.injuries;
-  if (existing.weather && !next.weather) output.weather = existing.weather;
-  if (existing.webConsensus && !next.webConsensus) output.webConsensus = existing.webConsensus;
-  if (existing.apiFootball && !next.apiFootball) output.apiFootball = existing.apiFootball;
-  if (existing.preMatch && !next.preMatch) output.preMatch = existing.preMatch;
-  return output;
-}
-
 async function main() {
   const updatedAt = new Date().toISOString();
   const body = await httpGetBuffer(SOURCE_URL);
@@ -351,17 +229,16 @@ async function main() {
   let mapped = 0;
   for (const row of rows) {
     for (const key of row.keys) {
-      matches[key] = mergeSignal(matches[key], row.signal);
+      matches[key] = row.signal;
       mapped += 1;
     }
   }
 
   const payload = {
     version: 1,
-    source: joinSource(existing.source, "500.com:jczq"),
+    source: "external-signals",
     updatedAt,
     sources: {
-      ...(existing.sources || {}),
       "500.com:jczq": {
         url: SOURCE_URL,
         updatedAt,

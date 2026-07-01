@@ -77,16 +77,16 @@ const copy = {
   stage: { zh: '赛制与阶段', en: 'Format & Stages' },
   stageDesc: { zh: '按官方 48 队赛制展示：12 组小组赛，前二直通，8 个最佳第三名补进 32 强。', en: '48 teams, 12 groups, top two plus eight best third-place teams to the Round of 32.' },
   model: { zh: '路径推演', en: 'Route Projection' },
-  groups: { zh: '小组赛积分', en: 'Group Tables' },
-  groupsDesc: { zh: '小组积分只按官网赛果累计；未产生赛果的小组显示待确认，不用预测积分冒充官方积分。', en: 'Group tables use official results only. Groups without results stay pending instead of showing projected points.' },
+  groups: { zh: '小组赛预测', en: 'Group Forecasts' },
+  groupsDesc: { zh: '使用球队强度、东道主加成、新军降权和小组全局竞争进行路径推演；世界杯赔率上线后会自动进入单场推荐。', en: 'Uses team strength, host boost, debutant adjustment and full-group competition.' },
   bestThird: { zh: '最佳第三名竞争线', en: 'Best Third-Place Lane' },
-  bestThirdNote: { zh: '第三名不是固定晋级，按官网积分、净胜球和进球数比较；未锁定前只做当前线提示。', en: 'Third-place teams are compared by official points, goal difference and goals. Pending groups stay provisional.' },
+  bestThirdNote: { zh: '第三名不是固定晋级，按积分、净胜球、进球数和强度排序抢 8 个名额。', en: 'Third-place teams compete for eight spots by points, goal difference, goals and strength.' },
   knockout: { zh: '淘汰赛路线', en: 'Knockout Route' },
-  knockoutDesc: { zh: '32 强对位按官方规则槽位展示；球队未由官网最终积分锁定前不强行填预测队名。', en: 'Round of 32 slots follow official rules. Teams are not filled until final group tables lock them.' },
+  knockoutDesc: { zh: '先用小组路径生成 32 强候选，再估算 16 强、8 强、4 强、决赛和冠军层级。', en: 'Group projections seed the Round of 32, then estimate later-round paths.' },
   fixtures: { zh: '世界杯竞彩场次', en: 'World Cup Sporttery Fixtures' },
   fixturesDesc: { zh: '只展示世界杯正赛窗口内的竞彩场次；未开售时保留赛制与路径预测，开售后接入赔率、让球和临场变化。', en: 'Only released tournament fixtures are shown here; odds and handicap join after release.' },
   noFixtures: { zh: '当前还没有已开售的世界杯正赛竞彩场次；页面先展示赛制、小组路径和淘汰赛推演，开售后会自动出现单场卡片。', en: 'No released World Cup Sporttery fixtures yet. Format and route projections remain visible until odds are available.' },
-  contenders: { zh: '争冠候选', en: 'Title Candidates' },
+  contenders: { zh: '争冠观察', en: 'Contender Watch' },
   upset: { zh: '爆冷雷达', en: 'Upset Radar' },
   dataStatus: { zh: '数据覆盖', en: 'Data Coverage' },
   dataStatusDesc: { zh: '已覆盖世界杯结构、小组路径、晋级规则、淘汰赛路线和当前竞彩场次；官方赔率、让球、赛果、临场赔率在开售/完场后并入。', en: 'Covers structure, group pathing, rules, knockout routes and released fixtures.' },
@@ -97,7 +97,7 @@ const copy = {
   trust: { zh: '推荐强度', en: 'Pick Strength' },
   sp: { zh: '赔率', en: 'Odds' },
   recommendation: { zh: '推荐方向', en: 'Pick' },
-  waiting: { zh: '待赛程', en: 'Awaiting fixtures' },
+  waiting: { zh: '待开售', en: 'Awaiting release' },
   disclaimer: { zh: '提示：本页为赛事数据分析与预测展示，仅供参考和娱乐研究使用，请理性看球。', en: 'Forecasts are for data analysis, reference and entertainment only.' }
 } as const;
 
@@ -166,36 +166,35 @@ const formatGoalDiff = (value: number) => {
 };
 
 const getStandingSourceLabel = (source: WorldCupStandingTeam['standingSource'], language: Locale) => {
-  if (source === 'actual') return language === 'zh' ? '官网锁定' : 'Official locked';
-  if (source === 'mixed') return language === 'zh' ? '官网实时' : 'Official live';
-  return language === 'zh' ? '官网待确认' : 'Official pending';
+  if (source === 'actual') return language === 'zh' ? '赛果锁定' : 'Locked';
+  if (source === 'mixed') return language === 'zh' ? '赛果+预测' : 'Live + model';
+  return language === 'zh' ? '预测补位' : 'Projected';
 };
 
 const getQualificationLabel = (team: WorldCupStandingTeam, language: Locale) => {
-  if (team.standingSource === 'projected') return language === 'zh' ? '待官网赛果' : 'Await official results';
-  if (team.qualificationZone === 'direct') return team.standingSource === 'actual'
-    ? (language === 'zh' ? '直接出线' : 'Qualified')
-    : (language === 'zh' ? '当前前二区' : 'Current top two');
-  if (team.qualificationZone === 'best-third') return language === 'zh' ? '最佳第三晋级' : 'Best third qualified';
+  if (team.qualificationZone === 'direct') return language === 'zh' ? '直接出线区' : 'Direct lane';
+  if (team.qualificationZone === 'best-third') return language === 'zh' ? '最佳第三区' : 'Best third lane';
   if (team.qualificationZone === 'eliminated') return language === 'zh' ? '出局' : 'Eliminated';
   if (team.actualRank === 3) return language === 'zh' ? '第三名待比较' : 'Third-place pending';
-  return language === 'zh' ? '待追赶' : 'Chasing';
+  return team.standingSource === 'projected'
+    ? (language === 'zh' ? '出局风险' : 'Elimination risk')
+    : (language === 'zh' ? '待追赶' : 'Chasing');
 };
 
 const getStandingLine = (team: WorldCupStandingTeam, language: Locale) => {
-  if (team.standingSource !== 'projected') {
+  if (team.played > 0) {
     return language === 'zh'
       ? `${team.points}分 / ${team.played}场 / 净胜${formatGoalDiff(team.goalDifference)}`
       : `${team.points} pts / ${team.played} played / GD ${formatGoalDiff(team.goalDifference)}`;
   }
 
   return language === 'zh'
-    ? `官网积分待确认 / FIFA ${team.fifaRank}`
-    : `Official table pending / FIFA ${team.fifaRank}`;
+    ? `预测 ${team.projectedPoints.toFixed(1)}分 / FIFA ${team.fifaRank}`
+    : `Projected ${team.projectedPoints.toFixed(1)} pts / FIFA ${team.fifaRank}`;
 };
 
 const GroupTeamRow = ({ team, language }: { team: WorldCupStandingTeam; language: Locale }) => {
-  const hasOfficialTable = team.standingSource !== 'projected';
+  const hasResults = team.played > 0;
   const status = getQualificationLabel(team, language);
 
   return (
@@ -207,20 +206,16 @@ const GroupTeamRow = ({ team, language }: { team: WorldCupStandingTeam; language
         <em>{status}</em>
       </div>
       <div className="worldcup-team-prob">
-        <b>{hasOfficialTable ? team.points : '--'}</b>
-        <small>{language === 'zh' ? '积分' : 'Points'}</small>
+        <b>{hasResults ? team.points : formatPercent(team.advanceProbability)}</b>
+        <small>{hasResults ? (language === 'zh' ? '积分' : 'Points') : (language === 'zh' ? '晋级' : 'Advance')}</small>
       </div>
       <div className="worldcup-team-split">
-        <small>
-          {hasOfficialTable
-            ? `${language === 'zh' ? '排名' : 'Rank'} #${team.actualRank}`
-            : (language === 'zh' ? '排名待确认' : 'Rank pending')}
-        </small>
-        <small>{hasOfficialTable ? `${team.wins}-${team.draws}-${team.losses}` : `FIFA #${team.fifaRank}`}</small>
+        <small>{language === 'zh' ? '排名' : 'Rank'} #{team.actualRank}</small>
+        <small>{hasResults ? `${team.wins}-${team.draws}-${team.losses}` : `${language === 'zh' ? '头名' : 'Win'} ${formatPercent(team.groupWinProbability)}`}</small>
         <small>{getStandingSourceLabel(team.standingSource, language)}</small>
       </div>
       <span className="worldcup-team-meter" aria-hidden="true">
-        <span style={{ '--advance': `${hasOfficialTable ? Math.min(100, team.points * 12) : 0}%` } as React.CSSProperties} />
+        <span style={{ '--advance': `${team.advanceProbability}%` } as React.CSSProperties} />
       </span>
     </article>
   );
@@ -245,8 +240,8 @@ const Round32Side = ({
       </div>
     ) : (
       <div>
-        <strong>{language === 'zh' ? '待官网确认' : 'Await official'}</strong>
-        <small>{language === 'zh' ? '等待最终积分榜' : 'Waiting for final table'}</small>
+        <strong>{language === 'zh' ? '待定' : 'TBD'}</strong>
+        <small>{language === 'zh' ? '等待小组赛果' : 'Waiting for group results'}</small>
       </div>
     )}
   </div>
@@ -256,11 +251,7 @@ const Round32PairingCard = ({ pairing, language }: { pairing: WorldCupRound32Pai
   <article className={`worldcup-r32-card is-${pairing.source}`}>
     <header>
       <strong>{pickText(pairing.title, language)}</strong>
-      <span>
-        {pairing.source === 'actual'
-          ? `${getStandingSourceLabel(pairing.source, language)} / ${formatPercent(pairing.confidence)}`
-          : getStandingSourceLabel(pairing.source, language)}
-      </span>
+      <span>{getStandingSourceLabel(pairing.source, language)} / {formatPercent(pairing.confidence)}</span>
     </header>
     <Round32Side team={pairing.left} label={pairing.leftLabel} language={language} />
     <b className="worldcup-r32-vs">VS</b>
@@ -300,7 +291,7 @@ const getMarketRecommendation = (
           : `HHAD ${hhad.handicap || '--'}: ${hhad.probabilities.home}/${hhad.probabilities.draw}/${hhad.probabilities.away}%`)
       : (language === 'zh' ? '让球盘待确认' : 'handicap pending');
     const label = leader.key === 'draw' || gap < 6
-      ? (language === 'zh' ? '均势防平' : 'Tight draw cover')
+      ? (language === 'zh' ? '均势防平' : 'Tight draw watch')
       : gap >= 18
         ? (language === 'zh' ? `${labels[leader.key]}倾向` : `${labels[leader.key]} lean`)
         : (language === 'zh' ? `${labels[leader.key]}优先，防平` : `${labels[leader.key]} first, cover draw`);
@@ -322,8 +313,8 @@ const getMarketRecommendation = (
 
     return {
       label: language === 'zh'
-        ? `让球倾向 ${hhad.handicap || ''}`.trim()
-        : `HHAD lean ${hhad.handicap || ''}`.trim(),
+        ? `让球盘观察 ${hhad.handicap || ''}`.trim()
+        : `HHAD watch ${hhad.handicap || ''}`.trim(),
       detail: language === 'zh'
         ? `普通胜平负未开售，先看让球盘 ${labels[ranked[0].key]} 方向，去水 ${hhad.probabilities.home}/${hhad.probabilities.draw}/${hhad.probabilities.away}%。`
         : `1X2 is not released; handicap market leans ${labels[ranked[0].key]} with normalized ${hhad.probabilities.home}/${hhad.probabilities.draw}/${hhad.probabilities.away}%.`
@@ -498,9 +489,9 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
     { icon: CalendarDays, label: copy.kpis.matches[language], value: WORLD_CUP_OFFICIAL.matches, detail: `${WORLD_CUP_OFFICIAL.startDate} - ${WORLD_CUP_OFFICIAL.finalDate}` },
     { icon: Flag, label: copy.kpis.groups[language], value: WORLD_CUP_OFFICIAL.groups, detail: language === 'zh' ? '12 组 x 4 队' : '12 groups x 4 teams' },
     { icon: Trophy, label: copy.kpis.venues[language], value: WORLD_CUP_OFFICIAL.venues, detail: language === 'zh' ? '加拿大 / 墨西哥 / 美国' : 'Canada / Mexico / USA' },
-    { icon: Target, label: copy.kpis.sporttery[language], value: allWorldCupMatches.length || fixtureMatches.length, detail: fixtureMatches.length ? (language === 'zh' ? '已进入推荐池' : 'In pick pool') : copy.waiting[language] },
+    { icon: Target, label: copy.kpis.sporttery[language], value: allWorldCupMatches.length || fixtureMatches.length, detail: fixtureMatches.length ? (language === 'zh' ? '已进入观察池' : 'In watch pool') : copy.waiting[language] },
     { icon: Route, label: language === 'zh' ? '晋级名额' : 'Knockout Spots', value: 32, detail: language === 'zh' ? '前二 24 + 第三名 8' : 'Top two 24 + third-place 8' },
-    { icon: BarChart3, label: language === 'zh' ? '路径推演' : 'Route Runs', value: WORLD_CUP_FORECAST_MODEL.simulations.toLocaleString(), detail: language === 'zh' ? '排名 / 净胜球 / 路径' : 'Rank / GD / routes' },
+    { icon: BarChart3, label: language === 'zh' ? '路径推演' : 'Route Runs', value: WORLD_CUP_FORECAST_MODEL.simulations.toLocaleString(), detail: WORLD_CUP_FORECAST_MODEL.version },
     { icon: RefreshCw, label: copy.kpis.update[language], value: pageCheckedAt ? formatDateTime(pageCheckedAt, language) : '--', detail: updatedAt ? `${language === 'zh' ? '源' : 'Source'} ${formatDateTime(updatedAt, language)}` : '--' }
   ];
 
@@ -565,7 +556,7 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
           ) : (
             knockoutRoutes.slice(0, 3).map((route) => (
               <div className="worldcup-mini-match" key={`fallback-${route.team.id}`}>
-                <span className="worldcup-mini-label">{language === 'zh' ? '争冠路径预测' : 'Title route forecast'}</span>
+                <span className="worldcup-mini-label">{language === 'zh' ? '争冠路径观察' : 'Title route watch'}</span>
                 <span className="worldcup-mini-teams">
                   <span>{route.team.flag} {getTeamName(route.team, language)}</span>
                   <b>{formatPercent(route.champion)}</b>
@@ -678,9 +669,7 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
             <p>{copy.groupsDesc[language]}</p>
           </div>
           <span className="worldcup-sync-pill">
-            {language === 'zh'
-              ? `官网积分 ${groupStandings.filter((group) => group.source !== 'projected').length} 组 / 第三名线 ${bestThird.length}`
-              : `Official tables ${groupStandings.filter((group) => group.source !== 'projected').length} groups / third lane ${bestThird.length}`}
+            {language === 'zh' ? `直通 ${qualifiers.winners.length + qualifiers.runnersUp.length} / 第三名 ${bestThird.length}` : `Direct ${qualifiers.winners.length + qualifiers.runnersUp.length} / third ${bestThird.length}`}
           </span>
         </div>
         <div className="worldcup-group-grid">
@@ -702,20 +691,13 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
         <div className="worldcup-third-lane">
           <span>{copy.bestThird[language]}</span>
           <div>
-            {bestThird.length > 0
-              ? bestThird.map((team) => (
-                <strong key={team.id}>
-                  <TeamFlag team={team} />
-                  {getTeamName(team, language)}
-                  <small>{`${team.points}分 / 净胜${formatGoalDiff(team.goalDifference)} / ${team.goalsFor}进球`}</small>
-                </strong>
-              ))
-              : (
-                <strong>
-                  {language === 'zh' ? '待官网赛果' : 'Await official results'}
-                  <small>{language === 'zh' ? '小组赛开打后自动更新' : 'Updates after group results arrive'}</small>
-                </strong>
-              )}
+            {bestThird.map((team) => (
+              <strong key={team.id}>
+                <TeamFlag team={team} />
+                {getTeamName(team, language)}
+                <small>{team.played > 0 ? `${team.points}分 / 净胜${formatGoalDiff(team.goalDifference)}` : `${formatPercent(team.bestThirdProbability)} / ${team.projectedPoints.toFixed(1)}分`}</small>
+              </strong>
+            ))}
           </div>
           <p className="worldcup-third-note">{copy.bestThirdNote[language]}</p>
         </div>
@@ -830,7 +812,7 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
                   <p>{pickText(item.reason, language)}</p>
                 </button>
               );
-            }) : <div className="worldcup-empty">世界杯 SP 开售后生成争冠候选池。</div>}
+            }) : <div className="worldcup-empty">世界杯 SP 开售后生成争冠观察池。</div>}
           </div>
           <div className="worldcup-radar-list">
             {upsetRadar.length ? upsetRadar.map((item) => {

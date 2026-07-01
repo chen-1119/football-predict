@@ -74,6 +74,10 @@ curl -H "Authorization: Bearer <MANUAL_TRIGGER_TOKEN>" \
   "https://football-predict-sync-trigger.<your-subdomain>.workers.dev/trigger"
 ```
 
+Keep the manual token in the `Authorization` header. Do not pass it as a query
+string, because URLs are more likely to be captured in browser, proxy, and edge
+logs.
+
 Expected response:
 
 ```json

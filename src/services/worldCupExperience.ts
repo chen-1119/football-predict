@@ -183,9 +183,9 @@ export const liveTimeline: LiveEvent[] = [
 export const momentumPoints = [28, 36, 44, 52, 61, 69, 76, 83, 78, 72, 66, 59];
 
 export const standingStatusLabels: Record<StandingStatus, EventText> = {
-  qualified: zhEn('晋级参考', 'Advance reference'),
+  qualified: zhEn('晋级观察', 'Advance watch'),
   watch: zhEn('参考', 'Reference'),
-  pressure: zhEn('压力区', 'Pressure zone')
+  pressure: zhEn('压力观察', 'Pressure watch')
 };
 
 export const standings: StandingRow[] = [
@@ -221,7 +221,7 @@ export const fanTasks: FanTask[] = [
 export const fanRanks: FanRank[] = [
   { name: zhEn('北看台 09', 'North Stand 09'), points: 1280, streak: zhEn('命中 7 场', '7 hits') },
   { name: zhEn('霓虹看球团', 'Neon Ultra'), points: 1168, streak: zhEn('命中 5 场', '5 hits') },
-  { name: zhEn('金靴助手', 'Golden Boot Desk'), points: 1094, streak: zhEn('命中 4 场', '4 hits') }
+  { name: zhEn('金靴观察员', 'Golden Boot AI'), points: 1094, streak: zhEn('命中 4 场', '4 hits') }
 ];
 
 export const fanPoll: FanPollOption[] = [

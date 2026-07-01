@@ -11,6 +11,7 @@ import type { Match, PredictionDetail, Team } from './mockData';
 type Language = 'zh' | 'en';
 
 type OutcomeCode = '1' | 'X' | '2';
+type HandicapCompanionPriority = 'preferred' | 'caution' | 'supplement';
 type OutcomeProbabilityTriplet = {
   home?: number | null;
   draw?: number | null;
@@ -21,6 +22,7 @@ type DisplayRecommendationKind = 'prediction' | 'handicap' | 'outcome' | 'score'
 
 export interface DisplayRecommendationCompanion {
   kind: 'handicap';
+  priority: HandicapCompanionPriority;
   prediction: PredictionDetail;
   tipCode: string;
   label: string;
@@ -138,6 +140,92 @@ const isCloseHandicapDecision = (read: ReturnType<typeof getHandicapRead> | null
   Boolean(read?.modelTop && read?.marketTop && Number(read.marketGap) <= 1.5)
 );
 
+const isHandicapImpossibleWithPrimary = (
+  primaryPrediction: PredictionDetail | undefined,
+  displayCode: OutcomeCode,
+  lineValue: number | null
+) => (
+  Boolean(
+    primaryPrediction
+    && primaryPrediction.oddsPoolCode !== 'HHAD'
+    && isOutcomeCode(primaryPrediction.tipCode)
+    && !isHandicapCodeCompatible(primaryPrediction.tipCode, displayCode, lineValue)
+  )
+);
+
+const getHandicapCompanionPriority = ({
+  handicapPrediction,
+  primaryPrediction,
+  probability,
+  support,
+  read,
+  displayCode,
+  lineValue
+}: {
+  handicapPrediction?: PredictionDetail;
+  primaryPrediction?: PredictionDetail;
+  probability: number | null;
+  support: number | null;
+  read?: ReturnType<typeof getHandicapRead> | null;
+  displayCode: OutcomeCode;
+  lineValue: number | null;
+}): HandicapCompanionPriority => {
+  const primaryTrust = Number(primaryPrediction?.trustScore || 0);
+  const handicapTrust = Number(handicapPrediction?.trustScore || 0);
+  const isBestHandicap = handicapPrediction?.marketType === 'BEST' && handicapPrediction.oddsPoolCode === 'HHAD';
+  const impossibleWithPrimary = isHandicapImpossibleWithPrimary(primaryPrediction, displayCode, lineValue);
+  const modelAgreesWithDisplay = read?.modelTop?.code === displayCode;
+  const supportOk = support === null || support >= 34;
+  const probabilityOk = probability !== null && probability >= 48;
+  const strongModelRead = Boolean(
+    modelAgreesWithDisplay
+    && probabilityOk
+    && (read?.modelGap ?? 0) >= 8
+    && supportOk
+  );
+  const bestHandicapEdge = Boolean(
+    isBestHandicap
+    && modelAgreesWithDisplay
+    && supportOk
+    && (probability === null || probability >= 42)
+    && handicapTrust >= Math.max(54, primaryTrust + 8)
+  );
+  const weakPrimaryRescue = Boolean(
+    modelAgreesWithDisplay
+    && supportOk
+    && primaryTrust > 0
+    && primaryTrust <= 52
+    && probability !== null
+    && probability >= 45
+  );
+
+  if (impossibleWithPrimary) return 'caution';
+  return strongModelRead || bestHandicapEdge || weakPrimaryRescue ? 'preferred' : 'supplement';
+};
+
+export const getHandicapCompanionHeading = (
+  companion: DisplayRecommendationCompanion,
+  language: Language
+) => (
+  companion.priority === 'preferred'
+    ? (language === 'zh' ? '让球优先' : 'HHAD priority')
+    : companion.priority === 'caution'
+      ? (language === 'zh' ? '让球防冷' : 'HHAD caution')
+      : (language === 'zh' ? '让球补充' : 'HHAD add-on')
+);
+
+const getHandicapCompanionTitle = (
+  label: string,
+  language: Language,
+  priority: HandicapCompanionPriority
+) => (
+  priority === 'preferred'
+    ? (language === 'zh' ? `让球优先 ${label}` : `HHAD priority ${label}`)
+    : priority === 'caution'
+      ? (language === 'zh' ? `让球防冷 ${label}` : `HHAD caution ${label}`)
+      : (language === 'zh' ? `附加推荐 ${label}` : `Add-on ${label}`)
+);
+
 const getCloseHandicapReason = (language: Language) => (
   language === 'zh'
     ? '让球胜负差距很小，本场按赛前综合信息给出当前推荐。'
@@ -204,6 +292,22 @@ const parseHandicapLine = (line: string | undefined) => {
   return Number.isFinite(value) ? value : null;
 };
 
+const getHandicapOutcomeProbability = (match: Match, code: OutcomeCode) => {
+  const probabilities = getHandicapModelProbabilities(match);
+  if (!probabilities) return null;
+  const value = code === '1' ? probabilities.home : code === 'X' ? probabilities.draw : probabilities.away;
+  return Number.isFinite(value) ? Number(value) : null;
+};
+
+const getHandicapMarketSupport = (match: Match, code: OutcomeCode) => {
+  const resolvedOdds = getOfficialMatchOdds(match);
+  const probabilities = match.probabilityModel?.handicap?.market
+    || getImpliedProbabilities(resolvedOdds.hhad?.odds);
+  if (!probabilities) return null;
+  const value = code === '1' ? probabilities.home : code === 'X' ? probabilities.draw : probabilities.away;
+  return Number.isFinite(value) ? Number(value) : null;
+};
+
 const doesPrimaryMatchMargin = (primaryCode: OutcomeCode, margin: number) => {
   if (primaryCode === '1') return margin > 0;
   if (primaryCode === 'X') return margin === 0;
@@ -233,23 +337,29 @@ const isHandicapCodeCompatible = (
   return false;
 };
 
-const isShallowOppositeHandicapPick = (
+const getCompatibleHandicapCode = (
   match: Match,
   primaryPrediction: PredictionDetail | undefined,
-  handicapCode: OutcomeCode
-) => {
-  if (!primaryPrediction || primaryPrediction.oddsPoolCode === 'HHAD' || !isOutcomeCode(primaryPrediction.tipCode)) {
-    return false;
-  }
-  if (!['1', '2'].includes(primaryPrediction.tipCode) || !['1', '2'].includes(handicapCode)) {
-    return false;
+  proposedCode: OutcomeCode
+): OutcomeCode => {
+  if (!primaryPrediction || !isOutcomeCode(primaryPrediction.tipCode) || primaryPrediction.oddsPoolCode === 'HHAD') {
+    return proposedCode;
   }
 
   const lineValue = parseHandicapLine(match.handicapLine);
-  if (lineValue === null || Math.abs(lineValue) > 1) return false;
+  if (isHandicapCodeCompatible(primaryPrediction.tipCode, proposedCode, lineValue)) {
+    return proposedCode;
+  }
 
-  return (primaryPrediction.tipCode === '1' && handicapCode === '2')
-    || (primaryPrediction.tipCode === '2' && handicapCode === '1');
+  const compatibleCodes = (['1', 'X', '2'] as OutcomeCode[]).filter((code) => (
+    isHandicapCodeCompatible(primaryPrediction.tipCode as OutcomeCode, code, lineValue)
+  ));
+
+  if (compatibleCodes.includes('X')) return 'X';
+
+  return compatibleCodes
+    .map((code) => ({ code, probability: getHandicapOutcomeProbability(match, code) ?? getHandicapMarketSupport(match, code) ?? 0 }))
+    .sort((a, b) => b.probability - a.probability)[0]?.code || proposedCode;
 };
 
 const getCompanionReason = (
@@ -306,7 +416,6 @@ const buildHandicapCompanion = (
   const lineValue = parseHandicapLine(match.handicapLine);
   const hasMeaningfulLine = lineValue === null || Math.abs(lineValue) >= 0.5;
   if (!hasMeaningfulLine) return null;
-  if (isShallowOppositeHandicapPick(match, primaryPrediction, read.modelTop.code)) return null;
 
   const support = read.marketSupport;
   const strongHandicapRead = read.modelTop.probability >= 48
@@ -319,15 +428,29 @@ const buildHandicapCompanion = (
 
   if (!strongHandicapRead && !splitDeepFavorite) return null;
 
-  const label = getSimpleHandicapLabel(read.modelTop.code, language);
+  const displayCode = getCompatibleHandicapCode(match, primaryPrediction, read.modelTop.code);
+  const probability = getHandicapOutcomeProbability(match, displayCode)
+    ?? (displayCode === read.modelTop.code ? read.modelTop.probability : null);
+  const supportForDisplay = displayCode === read.modelTop.code
+    ? support
+    : getHandicapMarketSupport(match, displayCode);
+  const label = getSimpleHandicapLabel(displayCode, language);
+  const priority = getHandicapCompanionPriority({
+    primaryPrediction,
+    probability,
+    support: supportForDisplay,
+    read,
+    displayCode,
+    lineValue: parseHandicapLine(match.handicapLine)
+  });
   const prediction: PredictionDetail = {
     marketType: '1X2',
     oddsPoolCode: 'HHAD',
     handicapLine: match.handicapLine,
-    tipCode: read.modelTop.code,
-    tipLabel: { zh: getSimpleHandicapLabel(read.modelTop.code, 'zh'), en: getSimpleHandicapLabel(read.modelTop.code, 'en') },
-    odds: getOutcomeOddsValue(match, 'HHAD', read.modelTop.code),
-    trustScore: Math.round(read.modelTop.probability),
+    tipCode: displayCode,
+    tipLabel: { zh: getSimpleHandicapLabel(displayCode, 'zh'), en: getSimpleHandicapLabel(displayCode, 'en') },
+    odds: getOutcomeOddsValue(match, 'HHAD', displayCode),
+    trustScore: Math.round(probability || 0),
     recommendationAction: 'reference',
     recommendationTier: 'handicap-companion',
     explanation: { zh: '', en: '' },
@@ -339,14 +462,15 @@ const buildHandicapCompanion = (
 
   return {
     kind: 'handicap',
+    priority,
     prediction,
-    tipCode: read.modelTop.code,
+    tipCode: displayCode,
     label,
-    title: language === 'zh' ? `附加推荐 ${label}` : `Add-on ${label}`,
-    meta: `${lineLabel} · ${formatDisplayMeta(prediction, read.modelTop.probability, language)}`,
-    probability: read.modelTop.probability,
-    support,
-    reason: getCompanionReason(match, primaryPrediction, read.modelTop.code, language)
+    title: getHandicapCompanionTitle(label, language, priority),
+    meta: `${lineLabel} · ${formatDisplayMeta(prediction, probability, language)}`,
+    probability,
+    support: supportForDisplay,
+    reason: getCompanionReason(match, primaryPrediction, displayCode, language)
   };
 };
 
@@ -360,25 +484,43 @@ const buildHandicapCompanionFromPrediction = (
     return null;
   }
   if (!primaryPrediction || !isOutcomeCode(primaryPrediction.tipCode)) return null;
-  if (isShallowOppositeHandicapPick(match, primaryPrediction, handicapPrediction.tipCode)) return null;
 
-  const probability = getOutcomeProbability(match, handicapPrediction.tipCode, handicapPrediction);
+  const displayCode = getCompatibleHandicapCode(match, primaryPrediction, handicapPrediction.tipCode);
+  const adjustedPrediction: PredictionDetail = displayCode === handicapPrediction.tipCode
+    ? handicapPrediction
+    : {
+        ...handicapPrediction,
+        tipCode: displayCode,
+        tipLabel: { zh: getSimpleHandicapLabel(displayCode, 'zh'), en: getSimpleHandicapLabel(displayCode, 'en') },
+        odds: getOutcomeOddsValue(match, 'HHAD', displayCode)
+      };
+  const probability = getOutcomeProbability(match, displayCode, adjustedPrediction);
   const read = getHandicapRead(match);
-  const support = read.modelTop?.code === handicapPrediction.tipCode
+  const support = read.modelTop?.code === displayCode
     ? read.marketSupport ?? null
-    : getOneXTwoSupport(match, handicapPrediction.tipCode, handicapPrediction);
-  const label = getSimpleHandicapLabel(handicapPrediction.tipCode, language);
+    : getHandicapMarketSupport(match, displayCode);
+  const label = getSimpleHandicapLabel(displayCode, language);
+  const priority = getHandicapCompanionPriority({
+    handicapPrediction,
+    primaryPrediction,
+    probability: Number.isFinite(probability) ? Number(probability) : null,
+    support,
+    read,
+    displayCode,
+    lineValue: parseHandicapLine(match.handicapLine)
+  });
 
   return {
     kind: 'handicap',
-    prediction: handicapPrediction,
-    tipCode: handicapPrediction.tipCode,
+    priority,
+    prediction: adjustedPrediction,
+    tipCode: displayCode,
     label,
-    title: language === 'zh' ? `附加推荐 ${label}` : `Add-on ${label}`,
-    meta: `${formatHandicapLine(match.handicapLine, language)} · ${formatDisplayMeta(handicapPrediction, probability, language)}`,
+    title: getHandicapCompanionTitle(label, language, priority),
+    meta: `${formatHandicapLine(match.handicapLine, language)} · ${formatDisplayMeta(adjustedPrediction, probability, language)}`,
     probability: Number.isFinite(probability) ? Number(probability) : null,
     support,
-    reason: getCompanionReason(match, primaryPrediction, handicapPrediction.tipCode, language)
+    reason: getCompanionReason(match, primaryPrediction, displayCode, language)
   };
 };
 
@@ -410,17 +552,28 @@ export const getListHandicapSupplement = (
   const read = getHandicapRead(match);
   const top = read.modelTop || read.marketTop;
   if (!top) return null;
-  if (pairedOutcomePrediction && isShallowOppositeHandicapPick(match, pairedOutcomePrediction, top.code)) return null;
 
-  const label = getSimpleHandicapLabel(top.code, language);
-  const probability = Number.isFinite(top.probability) ? Number(top.probability) : null;
+  const displayCode = getCompatibleHandicapCode(match, pairedOutcomePrediction, top.code);
+  const label = getSimpleHandicapLabel(displayCode, language);
+  const probability = getHandicapOutcomeProbability(match, displayCode)
+    ?? (displayCode === top.code && Number.isFinite(top.probability) ? Number(top.probability) : null);
+  const support = displayCode === read.modelTop?.code ? read.marketSupport : getHandicapMarketSupport(match, displayCode);
+  const priority = getHandicapCompanionPriority({
+    handicapPrediction,
+    primaryPrediction: pairedOutcomePrediction,
+    probability,
+    support,
+    read,
+    displayCode,
+    lineValue: parseHandicapLine(match.handicapLine)
+  });
   const prediction: PredictionDetail = {
     marketType: '1X2',
     oddsPoolCode: 'HHAD',
     handicapLine: match.handicapLine,
-    tipCode: top.code,
-    tipLabel: { zh: getSimpleHandicapLabel(top.code, 'zh'), en: getSimpleHandicapLabel(top.code, 'en') },
-    odds: getOutcomeOddsValue(match, 'HHAD', top.code),
+    tipCode: displayCode,
+    tipLabel: { zh: getSimpleHandicapLabel(displayCode, 'zh'), en: getSimpleHandicapLabel(displayCode, 'en') },
+    odds: getOutcomeOddsValue(match, 'HHAD', displayCode),
     trustScore: Math.round(probability || 0),
     recommendationAction: 'reference',
     recommendationTier: 'handicap-companion',
@@ -431,15 +584,16 @@ export const getListHandicapSupplement = (
 
   return {
     kind: 'handicap',
+    priority,
     prediction,
-    tipCode: top.code,
+    tipCode: displayCode,
     label,
-    title: language === 'zh' ? `附加推荐 ${label}` : `Add-on ${label}`,
+    title: getHandicapCompanionTitle(label, language, priority),
     meta: `${formatHandicapLine(match.handicapLine, language)} · ${formatDisplayMeta(prediction, probability, language)}`,
     probability,
-    support: read.marketSupport,
+    support,
     reason: pairedOutcomePrediction && isOutcomeCode(pairedOutcomePrediction.tipCode)
-      ? getCompanionReason(match, pairedOutcomePrediction, top.code, language)
+      ? getCompanionReason(match, pairedOutcomePrediction, displayCode, language)
       : getDisplayReasonForKind('handicap', language)
   };
 };
@@ -452,7 +606,6 @@ const getHandicapOverride = (match: Match, promotedPrediction?: PredictionDetail
   const read = getHandicapRead(match);
   if (!read.modelTop) return null;
   if (read.marketTop && read.marketTop.code !== read.modelTop.code) return null;
-  if (isShallowOppositeHandicapPick(match, promotedPrediction, read.modelTop.code)) return null;
   if (read.marketSupport === null) return null;
 
   const promotedIsWeak = !promotedPrediction

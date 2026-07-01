@@ -146,6 +146,14 @@ const isSyncedMatchArray = (data: unknown): data is SyncedMatch[] => {
   return Array.isArray(data);
 };
 
+const matchRowsFromPayload = (data: unknown): SyncedMatch[] | null => {
+  if (isSyncedMatchArray(data)) return data;
+  if (data && typeof data === 'object' && isSyncedMatchArray((data as { rows?: unknown }).rows)) {
+    return (data as { rows: SyncedMatch[] }).rows;
+  }
+  return null;
+};
+
 const formatError = (error: unknown): string => {
   if (error instanceof Error) {
     return [error.message, error.stack].filter(Boolean).join('\n');
@@ -153,9 +161,27 @@ const formatError = (error: unknown): string => {
   return String(error);
 };
 
+type JsonResponseCacheEntry = {
+  etag: string;
+  data: unknown;
+};
+
+const jsonResponseCache = new Map<string, JsonResponseCacheEntry>();
+
+const isConditionalApiUrl = (url: string) => /(?:^|\/)api\/v1(?:\/|$)/.test(url);
+
+const buildFetchCacheKey = (url: string, headers: Record<string, string>) => [
+  url,
+  headers.authorization || '',
+  headers['x-access-token'] || ''
+].join('|');
+
 const fetchJson = async <T,>(url: string, accessToken = ''): Promise<T> => {
-  const cacheBuster = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const useConditionalRequest = isConditionalApiUrl(url);
   const separator = url.includes('?') ? '&' : '?';
+  const requestUrl = useConditionalRequest
+    ? url
+    : `${url}${separator}v=${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), DATA_FETCH_TIMEOUT_MS);
 
@@ -163,13 +189,31 @@ const fetchJson = async <T,>(url: string, accessToken = ''): Promise<T> => {
     const accessHeaders = accessToken
       ? { authorization: `Bearer ${accessToken}` }
       : getAccessAuthHeaders();
-    const res = await fetch(`${url}${separator}v=${cacheBuster}`, {
-      cache: 'no-store',
-      headers: Object.keys(accessHeaders).length ? accessHeaders : undefined,
+    const conditionalCacheKey = buildFetchCacheKey(url, accessHeaders);
+    const cached = useConditionalRequest ? jsonResponseCache.get(conditionalCacheKey) : null;
+    const headers = {
+      ...accessHeaders,
+      ...(cached?.etag ? { 'if-none-match': cached.etag } : {})
+    };
+    const res = await fetch(requestUrl, {
+      cache: useConditionalRequest ? 'no-cache' : 'no-store',
+      headers: Object.keys(headers).length ? headers : undefined,
       signal: controller.signal
     });
+    if (res.status === 304 && cached) {
+      return cached.data as T;
+    }
     if (!res.ok) throw new Error(`${url}: HTTP ${res.status} ${res.statusText}`);
-    return res.json() as Promise<T>;
+    const data = await res.json() as T;
+    const etag = res.headers.get('etag');
+    if (useConditionalRequest && etag) {
+      jsonResponseCache.set(conditionalCacheKey, { etag, data });
+      if (jsonResponseCache.size > 40) {
+        const oldestKey = jsonResponseCache.keys().next().value;
+        if (oldestKey) jsonResponseCache.delete(oldestKey);
+      }
+    }
+    return data;
   } finally {
     window.clearTimeout(timeout);
   }
@@ -182,6 +226,10 @@ const fetchFirstAvailable = async <T,>(
   accessToken = '',
   validate?: DataFetchValidator<T>
 ): Promise<DataFetchResult<T>> => {
+  if (!candidates.length) {
+    throw new Error('No data endpoint is available.');
+  }
+
   let lastError: unknown;
 
   for (const candidate of candidates) {
@@ -211,14 +259,15 @@ const matchDateKeys = (match: Pick<Match, 'kickoffDate' | 'businessDate' | 'matc
 };
 
 const assertFreshCurrentMatches = (data: unknown, candidate: DataCandidate) => {
-  if (!isSyncedMatchArray(data)) {
+  const rows = matchRowsFromPayload(data);
+  if (!rows) {
     throw new Error(`${candidate.url}: current payload is not a match array`);
   }
-  if (data.length === 0) {
+  if (rows.length === 0) {
     throw new Error(`${candidate.url}: current payload is empty`);
   }
 
-  const newestDate = data
+  const newestDate = rows
     .flatMap(matchDateKeys)
     .sort()
     .at(-1);
@@ -311,7 +360,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const pollSecondsOverrideRef = useRef<number | null>(null);
   const eventStreamPathRef = useRef<string | null>(null);
   const apiFailureCountRef = useRef(0);
-  const initialLoadRetryCountRef = useRef(0);
   const [dataSync, setDataSync] = useState<DataSyncState>(emptyDataSyncState);
 
   const clearAccessSession = () => {
@@ -369,7 +417,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (!isAccessVerified) {
       lastMetaRef.current = {};
-      initialLoadRetryCountRef.current = 0;
       setMatches([]);
       setDataSync(emptyDataSyncState());
       return;
@@ -377,7 +424,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     let cancelled = false;
     const activeAccessToken = accessSession?.token || '';
-    initialLoadRetryCountRef.current = 0;
 
     const metaToState = (
       meta: SyncMeta | null,
@@ -447,28 +493,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (cancelled) return 0;
 
       try {
-        if (isSyncedMatchArray(data)) {
-          if (data.length === 0) {
+        const rows = matchRowsFromPayload(data);
+        if (rows) {
+          if (rows.length === 0) {
             if (mode === 'current') {
               setMatches((current) => current.filter((match) => match.status === 'FINISHED'));
             }
             return 0;
           }
 
-          registerSyncedMatches(data);
+          registerSyncedMatches(rows);
           setMatches((current) => {
             if (mode === 'current') {
-              const nextIds = new Set(data.map((match) => match.id));
+              const nextIds = new Set(rows.map((match) => match.id));
               const retained = current.filter((match) => {
                 if (nextIds.has(match.id)) return false;
                 return match.status === 'FINISHED';
               });
-              return mergeMatches(retained, data);
+              return mergeMatches(retained, rows);
             }
 
-            return mergeMatches(current, data);
+            return mergeMatches(current, rows);
           });
-          return data.length;
+          return rows.length;
         }
       } catch (error: unknown) {
         console.error(error);
@@ -494,14 +541,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }));
       }
       try {
-        const [dataResult, meta, sourceHealth] = await Promise.all([
+        const [dataResult, meta, sourceHealth, modelEvaluation] = await Promise.all([
           fetchFirstAvailable<unknown>(
-            dataUrls('/matches/current?view=list', [buildStaticUrl('data/matches-current.json'), buildStaticUrl('matches.json')]),
+            dataUrls('/matches/current?view=list', []),
             activeAccessToken,
             assertFreshCurrentMatches
           ),
           fetchSyncMeta(),
-          fetchSourceHealth()
+          fetchSourceHealth(),
+          fetchModelEvaluation()
         ]);
         apiFailureCountRef.current = dataResult.channel === 'api' ? 0 : apiFailureCountRef.current + 1;
         const currentCount = applyData(dataResult.data, 'current');
@@ -528,6 +576,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           totalCount: (metaCurrentCount ?? currentCount) + Math.max(current.historyCount, metaHistoryCount ?? 0),
           error: undefined,
           sourceHealth: sourceHealth || current.sourceHealth,
+          modelEvaluation: modelEvaluation || current.modelEvaluation,
           ...metaState
         }));
         if (shouldRefreshHistory) {
@@ -571,34 +620,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
 
         if (isInitial) {
-          const retryCount = initialLoadRetryCountRef.current;
-          initialLoadRetryCountRef.current = retryCount + 1;
-          const shouldRetry = retryCount < 3;
-          const retryDelay = Math.min(6000, 1500 * (retryCount + 1));
-
-          setDataSync((current) => ({
-            ...current,
+          setMatches([]);
+          setDataSync({
             currentLoading: false,
-            currentLoaded: current.currentLoaded,
-            historyLoaded: current.historyLoaded,
+            currentLoaded: false,
+            historyLoaded: false,
             historyLoading: false,
-            currentCount: current.currentCount,
-            historyCount: current.historyCount,
-            totalCount: current.totalCount,
+            currentCount: 0,
+            historyCount: 0,
+            totalCount: 0,
             error: formatError(error),
             lastCheckedAt: checkedAt,
             refreshIntervalSeconds: CURRENT_REFRESH_MS / 1000,
             backendRefreshMinutes: 5,
             apiFailureCount: apiFailureCountRef.current
-          }));
-          if (shouldRetry) {
-            window.setTimeout(() => {
-              if (cancelled) return;
-              void loadCurrent(true).then(() => {
-                void loadHistory();
-              });
-            }, retryDelay);
-          }
+          });
           console.warn('Initial match data unavailable; mock fallback is disabled.');
           return;
         }
@@ -615,9 +651,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const loadHistory = async () => {
       try {
         const historyData = await fetchFirstAvailable<unknown>(
-          dataUrls('/matches/history?view=list&limit=4000', [buildStaticUrl('data/matches-history.json')], {
-            preferStatic: false
-          }),
+          dataUrls('/matches/history?view=list&limit=600', []),
           activeAccessToken
         );
         const historyCount = applyData(historyData.data, 'history');
@@ -652,14 +686,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (apiDisabledRef.current || !preferApiRef.current) return staticCandidates;
 
       const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-      const apiBase = apiBaseRef.current || '/api';
+      const apiBase = apiBaseRef.current || '/api/v1';
       const apiCandidate = { url: `${apiBase}${normalizedEndpoint}`, channel: 'api' as const };
       return options.preferStatic ? [...staticCandidates, apiCandidate] : [apiCandidate, ...staticCandidates];
     };
 
     const fetchSourceHealth = async (): Promise<DataSyncState['sourceHealth'] | undefined> => {
       try {
-        const result = await fetchFirstAvailable<DataSyncState['sourceHealth']>(dataUrls('/data/sources', []), activeAccessToken);
+        const result = await fetchFirstAvailable<DataSyncState['sourceHealth']>(dataUrls('/source-health', []), activeAccessToken);
+        return result.data;
+      } catch {
+        return undefined;
+      }
+    };
+
+    const fetchModelEvaluation = async (): Promise<DataSyncState['modelEvaluation'] | undefined> => {
+      try {
+        const result = await fetchFirstAvailable<DataSyncState['modelEvaluation']>(dataUrls('/model/evaluation', []), activeAccessToken);
         return result.data;
       } catch {
         return undefined;
@@ -689,12 +732,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const openEventStream = () => {
       if (apiDisabledRef.current || typeof EventSource === 'undefined') return;
-      const apiBase = apiBaseRef.current || '/api';
+      const apiBase = apiBaseRef.current || '/api/v1';
       const configuredPath = eventStreamPathRef.current;
       const streamUrl = configuredPath
         ? (configuredPath.startsWith('http') ? configuredPath : configuredPath)
         : `${apiBase}/events`;
-      eventSource = new EventSource(streamUrl);
+      const streamSeparator = streamUrl.includes('?') ? '&' : '?';
+      const streamWithAccess = activeAccessToken
+        ? `${streamUrl}${streamSeparator}access_token=${encodeURIComponent(activeAccessToken)}`
+        : streamUrl;
+      eventSource = new EventSource(streamWithAccess);
       eventSource.onopen = () => {
         if (cancelled) return;
         setDataSync((current) => ({ ...current, liveUpdates: 'sse' }));

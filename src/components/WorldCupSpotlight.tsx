@@ -53,9 +53,9 @@ export const WorldCupSpotlight: React.FC<WorldCupSpotlightProps> = ({
     teams: { zh: '48 支球队 / 104 场比赛', en: '48 teams / 104 matches' },
     momentum: { zh: '实时走势', en: 'Live momentum' },
     open: { zh: '进入世界杯专栏', en: 'Open World Cup' },
-    today: { zh: '重点推荐', en: 'Featured pick' },
+    today: { zh: '当前观察', en: 'Watch match' },
     empty: { zh: '等待官方赛程同步，先进入专栏查看世界杯活动页。', en: 'Waiting for official fixtures. Open the event page first.' },
-    model: { zh: '推荐', en: 'Pick' },
+    model: { zh: '模型', en: 'Model' },
     sp: { zh: 'SP', en: 'SP' }
   };
 

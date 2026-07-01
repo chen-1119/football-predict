@@ -135,7 +135,7 @@ export const WORLD_CUP_FORECAST_MODEL = {
   version: 'worldcup-route-monte-carlo-v3-kimi-prior',
   simulations: 12000,
   dataSignature: KIMI_WORLD_CUP_DATASET.signature,
-  zh: '路径预测：FIFA 排名强度 + 东道主加成 + 新军降权 + 小组赛 12,000 次路径推演；每轮同时计算 12 个小组，第三名必须按积分、净胜球、进球数与强度排序争夺 8 个最佳第三名名额。',
+  zh: '基准模型：FIFA 排名强度 + 东道主加成 + 新军降权 + 小组赛 12,000 次路径推演；每轮同时计算 12 个小组，第三名必须按积分、净胜球、进球数与强度排序争夺 8 个最佳第三名名额。',
   en: 'Baseline model: FIFA ranking strength + host boost + debutant adjustment + 12,000 route projections. All 12 groups are projected together, and third-placed teams compete for eight slots by points, goal difference, goals scored, and strength.'
 };
 
@@ -340,8 +340,8 @@ export const WORLD_CUP_STAGE_CARDS = [
     title: { zh: '赛程窗口', en: 'Schedule Window' },
     value: { zh: '6/11 - 7/19', en: 'Jun 11 - Jul 19' },
     detail: {
-      zh: '页面优先读取官方竞彩赛程；世界杯场次上线后自动纳入推荐池。',
-      en: 'The page prioritizes official Sporttery fixtures and folds World Cup matches into the pick pool.'
+      zh: '页面优先读取官方竞彩赛程；世界杯场次上线后自动纳入观察池。',
+      en: 'The page prioritizes official Sporttery fixtures and folds World Cup matches into the watch pool.'
     }
   }
 ];
@@ -366,7 +366,7 @@ export const WORLD_CUP_KNOCKOUT_ROUNDS: WorldCupKnockoutRound[] = [
     title: { zh: '四分之一决赛', en: 'Quarter-finals' },
     dates: { zh: '7/9 - 7/11', en: 'Jul 9 - Jul 11' },
     matches: 4,
-    detail: { zh: '重点看赛程消耗、伤停和临场赔率。', en: 'Focus shifts to fatigue, injuries and late market movement.' }
+    detail: { zh: '模型重点看赛程消耗、伤停和临场赔率。', en: 'Model focus shifts to fatigue, injuries and late market movement.' }
   },
   {
     id: 'sf',
@@ -431,16 +431,16 @@ export const WORLD_CUP_CONTENT_LANES = [
     status: { zh: '已上线', en: 'Live' },
     title: { zh: '世界杯首页推荐', en: 'Home Spotlight' },
     items: {
-      zh: ['首页专栏入口', '重点推荐场次', '赔率与推荐方向'],
-      en: ['Home entry', 'featured matches', 'odds and pick direction']
+      zh: ['首页专栏入口', '当前观察场次', '赔率与推荐方向'],
+      en: ['Home entry', 'Watch matches', 'odds and pick direction']
     }
   },
   {
     status: { zh: '已接入', en: 'Live' },
     title: { zh: '赛前分析内容', en: 'Pre-match Analysis' },
     items: {
-      zh: ['官网积分榜', '32强对位', '冠军候选'],
-      en: ['Official tables', 'Round of 32 slots', 'Contenders']
+      zh: ['小组赛预测', '淘汰赛路径', '冠军候选观察'],
+      en: ['Group forecasts', 'Knockout routes', 'Contender watch']
     }
   },
   {
@@ -1007,24 +1007,6 @@ const normalizeWorldCupTeamKey = (value?: string) => (
     .replace(/国家队|男子|男足|女子|女足|队$/g, '')
 );
 
-const WORLD_CUP_TEAM_KEY_ALIASES = new Map([
-  ['\u4e4c\u5179\u522b\u514b', '\u4e4c\u5179\u522b\u514b\u65af\u5766'],
-  ['\u521a\u679c\u91d1', '\u521a\u679c\u6c11\u4e3b\u5171\u548c\u56fd'],
-  ['\u521a\u679c\u6c11\u4e3b', '\u521a\u679c\u6c11\u4e3b\u5171\u548c\u56fd'],
-  ['\u6c11\u4e3b\u521a\u679c', '\u521a\u679c\u6c11\u4e3b\u5171\u548c\u56fd'],
-  ['drcongo', 'drcongo'],
-  ['congodr', 'drcongo'],
-  ['drc', 'drcongo']
-].map(([alias, canonical]) => [
-  normalizeWorldCupTeamKey(alias),
-  normalizeWorldCupTeamKey(canonical)
-]));
-
-const normalizeWorldCupTeamLookupKey = (value?: string) => {
-  const normalized = normalizeWorldCupTeamKey(value);
-  return WORLD_CUP_TEAM_KEY_ALIASES.get(normalized) || normalized;
-};
-
 const getMatchTeamCandidates = (match: Match, side: 'home' | 'away') => {
   const isHome = side === 'home';
   const team = getTeamById(isHome ? match.homeTeamId : match.awayTeamId);
@@ -1047,12 +1029,12 @@ const findWorldCupTeamForecast = (
   const byKey = new Map<string, WorldCupTeamForecast>();
   teams.forEach((team) => {
     [team.id, team.name.zh, team.name.en, team.shortName.zh, team.shortName.en].forEach((value) => {
-      byKey.set(normalizeWorldCupTeamLookupKey(value), team);
+      byKey.set(normalizeWorldCupTeamKey(value), team);
     });
   });
 
   for (const value of getMatchTeamCandidates(match, side)) {
-    const direct = byKey.get(normalizeWorldCupTeamLookupKey(value));
+    const direct = byKey.get(normalizeWorldCupTeamKey(value));
     if (direct) return direct;
   }
 
@@ -1060,7 +1042,6 @@ const findWorldCupTeamForecast = (
 };
 
 const WORLD_CUP_GROUP_MATCH_TOTAL = 6;
-const WORLD_CUP_TEAM_GROUP_MATCH_TOTAL = 3;
 
 const isSettledWorldCupGroupMatch = (match: Match) => {
   const hasScore = Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway);
@@ -1140,8 +1121,6 @@ const compareBestThirdStandings = (a: WorldCupStandingTeam, b: WorldCupStandingT
   || a.id.localeCompare(b.id)
 );
 
-const hasOfficialGroupTable = (group: WorldCupGroupStanding) => group.source !== 'projected';
-
 export function getWorldCupLiveGroupStandings(
   matches: Match[],
   groupForecasts = getWorldCupGroupForecasts()
@@ -1179,8 +1158,7 @@ export function getWorldCupLiveGroupStandings(
 
   const standings = Array.from(groupById.values()).map((group) => {
     const hasResults = group.completedMatches > 0;
-    const hasFullTeamTable = group.teams.every((team) => team.played >= WORLD_CUP_TEAM_GROUP_MATCH_TOTAL);
-    const source: WorldCupStandingSource = group.completedMatches >= WORLD_CUP_GROUP_MATCH_TOTAL || hasFullTeamTable
+    const source: WorldCupStandingSource = group.completedMatches >= WORLD_CUP_GROUP_MATCH_TOTAL
       ? 'actual'
       : hasResults
         ? 'mixed'
@@ -1209,7 +1187,6 @@ export function getWorldCupLiveGroupStandings(
   });
 
   const bestThird = standings
-    .filter(hasOfficialGroupTable)
     .map((group) => group.teams[2])
     .filter((team): team is WorldCupStandingTeam => Boolean(team))
     .sort(compareBestThirdStandings)
@@ -1219,7 +1196,7 @@ export function getWorldCupLiveGroupStandings(
   const bestThirdIds = new Set(bestThird.map((team) => team.id));
   standings.forEach((group) => {
     group.teams.forEach((team) => {
-      if (allGroupsComplete && team.actualRank === 3 && bestThirdIds.has(team.id)) {
+      if (team.actualRank === 3 && bestThirdIds.has(team.id)) {
         team.qualificationZone = 'best-third';
       } else if (team.actualRank === 3 && allGroupsComplete) {
         team.qualificationZone = 'eliminated';
@@ -1236,7 +1213,6 @@ export function getWorldCupStandingQualifiers(groupStandings: WorldCupGroupStand
   const thirdPlaced: WorldCupStandingTeam[] = [];
 
   groupStandings.forEach((group) => {
-    if (!hasOfficialGroupTable(group)) return;
     const first = group.teams.find((team) => team.actualRank === 1) || group.teams[0];
     const second = group.teams.find((team) => team.actualRank === 2) || group.teams[1];
     const third = group.teams.find((team) => team.actualRank === 3) || group.teams[2];
@@ -1299,16 +1275,14 @@ const resolveRound32Side = (
   side: WorldCupRound32SideSpec,
   groupStandings: WorldCupGroupStanding[],
   bestThird: WorldCupStandingTeam[],
-  usedThirdIds: Set<string>,
-  requireLocked = true
+  usedThirdIds: Set<string>
 ) => {
   if (side.kind === 'rank') {
-    const group = groupStandings.find((group) => group.id === side.groupId);
-    if (!group || (requireLocked && group.source !== 'actual')) return null;
-    return group.teams.find((row) => row.actualRank === side.rank) || null;
+    const team = groupStandings
+      .find((group) => group.id === side.groupId)
+      ?.teams.find((row) => row.actualRank === side.rank) || null;
+    return team;
   }
-
-  if (requireLocked && !groupStandings.every((group) => group.source === 'actual')) return null;
 
   const qualifiedThird = bestThird
     .filter((team) => side.groupIds.includes(team.groupId) && !usedThirdIds.has(team.id))
@@ -1339,17 +1313,16 @@ const mergeStandingSource = (
 };
 
 export function getWorldCupRound32Pairings(groupStandings: WorldCupGroupStanding[]): WorldCupRound32Pairing[] {
-  const allGroupsComplete = groupStandings.every((group) => group.source === 'actual');
-  const qualifiers = allGroupsComplete
-    ? getWorldCupStandingQualifiers(groupStandings)
-    : { winners: [], runnersUp: [], bestThird: [] };
+  const qualifiers = getWorldCupStandingQualifiers(groupStandings);
   const usedThirdIds = new Set<string>();
 
   return WORLD_CUP_ROUND32_SLOTS.map((slot) => {
     const left = resolveRound32Side(slot.left, groupStandings, qualifiers.bestThird, usedThirdIds);
     const right = resolveRound32Side(slot.right, groupStandings, qualifiers.bestThird, usedThirdIds);
     const source = mergeStandingSource(left, right);
-    const confidence = source === 'actual' ? 100 : source === 'mixed' ? 50 : 0;
+    const confidenceBase = ((left?.advanceProbability || 50) + (right?.advanceProbability || 50)) / 2;
+    const confidencePenalty = source === 'actual' ? 0 : source === 'mixed' ? 8 : 16;
+    const confidence = Math.round(clamp(confidenceBase - confidencePenalty, 35, 92));
 
     return {
       matchNo: slot.matchNo,
@@ -1362,17 +1335,17 @@ export function getWorldCupRound32Pairings(groupStandings: WorldCupGroupStanding
       confidence,
       note: source === 'actual'
         ? {
-            zh: '两侧名次已按官网小组最终积分榜锁定。',
-            en: 'Both sides are locked by the official final group table.'
+            zh: '两侧名次已按小组完赛积分榜锁定。',
+            en: 'Both sides are locked by completed group standings.'
           }
         : source === 'mixed'
           ? {
-              zh: '部分小组名次已锁定，其余对位等待官网最终积分确认。',
-              en: 'Some group slots are locked; the remaining sides wait for official final tables.'
+              zh: '按当前赛果排序，未完赛部分用模型补齐。',
+              en: 'Uses current results first, with model fill-in for unfinished groups.'
             }
           : {
-              zh: '官方小组最终积分未锁定，当前只展示 32 强规则槽位。',
-              en: 'Official final group tables are not locked yet; only the Round of 32 slot rules are shown.'
+              zh: '赛果不足，当前为赛前路径推演。',
+              en: 'Not enough results yet; this is a pre-match route projection.'
             }
     };
   });
@@ -1417,7 +1390,7 @@ export function getWorldCupFixtureForecast(
           }
         : {
             zh: '均势防平',
-            en: 'Balanced draw cover'
+            en: 'Balanced draw watch'
           };
 
   return {
@@ -1428,8 +1401,8 @@ export function getWorldCupFixtureForecast(
     homeAdvanceProbability: home.advanceProbability,
     awayAdvanceProbability: away.advanceProbability,
     detail: {
-      zh: `世界杯路径：${homeText.zh}晋级 ${percentLabel(home.advanceProbability)}，${awayText.zh}晋级 ${percentLabel(away.advanceProbability)}；强弱差 ${Math.round(absEdge)}，${weaker.zh}仍保留防冷权重，未开售 SP 时只作赛程跟踪。`,
-      en: `World Cup route: ${homeText.en} advance ${percentLabel(home.advanceProbability)}, ${awayText.en} advance ${percentLabel(away.advanceProbability)}; strength gap ${Math.round(absEdge)}, ${weaker.en} still keeps upset weight. Before SP release this stays as fixture tracking.`
+      zh: `世界杯模型：${homeText.zh}晋级 ${percentLabel(home.advanceProbability)}，${awayText.zh}晋级 ${percentLabel(away.advanceProbability)}；强弱差 ${Math.round(absEdge)}，${weaker.zh}仍保留防冷权重，未开售 SP 时只作赛程观察。`,
+      en: `World Cup model: ${homeText.en} advance ${percentLabel(home.advanceProbability)}, ${awayText.en} advance ${percentLabel(away.advanceProbability)}; strength gap ${Math.round(absEdge)}, ${weaker.en} still keeps upset weight. Before SP release this stays fixture watch only.`
     }
   };
 }
@@ -1504,8 +1477,8 @@ const teamReason = (teamId: string, support: number | null, trust: number): Mult
   const trustText = trust ? `${trust}%` : '--';
 
   return {
-    zh: `${team.shortName.zh} 当前赔率支持 ${supportText}，推荐强度 ${trustText}，先列入世界杯推荐池。`,
-    en: `${team.shortName.en} is in the pick pool with odds support ${supportText} and pick strength ${trustText}.`
+    zh: `${team.shortName.zh} 当前赔率支持 ${supportText}，推荐强度 ${trustText}，先列入世界杯观察池。`,
+    en: `${team.shortName.en} is in the watch pool with odds support ${supportText} and pick strength ${trustText}.`
   };
 };
 

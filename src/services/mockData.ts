@@ -401,6 +401,8 @@ export interface ExternalMatchSignals {
 export interface PredictionMeta {
   policyVersion?: string;
   promptVersion?: string;
+  modelVersion?: string;
+  calibrationVersion?: string;
   strategyVersion?: string;
   trainingVersion?: string;
   trainingSource?: string;
@@ -410,6 +412,20 @@ export interface PredictionMeta {
   lockedAt?: string;
   lockedReason?: 'cutoff' | 'kickoff' | 'started' | string;
   cutoffTime?: string;
+  featureSnapshotHash?: string | null;
+  featureSnapshot?: {
+    version?: string;
+    hash?: string;
+    migrated?: boolean;
+    modelVersion?: string | null;
+    calibrationVersion?: string | null;
+    cutoffTime?: string | null;
+    source?: string | null;
+    sourceMatchId?: string | null;
+    kickoffTime?: string | null;
+    market?: Record<string, unknown>;
+    modelInputs?: Record<string, unknown>;
+  };
   snapshot?: {
     phase: 'baseline' | 'mid' | 'late' | 'final' | 'locked' | 'review';
     total: number;
@@ -431,6 +447,45 @@ export interface GptPredictionRecord {
   matchId: string;
   generatedAt: string;
   source?: string;
+  reviewRole?: 'llm-risk-review' | string;
+  llmReview?: {
+    version?: string;
+    reviewRole?: 'llm-risk-review' | string;
+    generatedAt?: string;
+    ok?: boolean;
+    skipped?: boolean;
+    model?: string | null;
+    riskReview?: {
+      level?: 'low' | 'medium' | 'high' | 'critical' | 'unknown' | string;
+      tags?: string[];
+      summary?: string | null;
+      notes?: string[];
+    };
+    tierAdjustment?: {
+      direction?: 'none' | 'down' | 'up' | 'watchOnly' | string;
+      maxDelta?: number;
+      reason?: string | null;
+      canChangeRecommendationDirection?: boolean;
+      canChangeProbabilities?: boolean;
+    };
+    explanation?: {
+      zh?: string | null;
+      en?: string | null;
+    };
+    missingData?: string[];
+    audit?: {
+      promptVersion?: string;
+      allowedOutputs?: string[];
+      deniedOutputFields?: string[];
+      canOverrideProbabilities?: boolean;
+      canOverrideRecommendationDirection?: boolean;
+      sourceProbabilityModelVersion?: string | null;
+      sourcePredictionSignature?: string;
+      cutoffTime?: string | null;
+      lockedAt?: string | null;
+    };
+    schemaWarnings?: string[];
+  };
   relay?: {
     ok?: boolean;
     skipped?: boolean;
@@ -1290,7 +1345,7 @@ const generateMatchPool = (): Match[] => {
         odds: sfpPick.odds,
         trustScore: Math.floor(60 + Math.random() * 30),
         explanation: {
-          zh: `基于胜平负 SP，当前倾向为 ${sfpPick.zh}。系统同时参考赛程状态、主客场和近期攻防数据。`,
+          zh: `基于胜平负 SP，当前倾向为 ${sfpPick.zh}。模型同时参考赛程状态、主客场和近期攻防数据。`,
           en: `${homeTeam.shortName.en} has been dominant at home recently, with key attackers in red-hot form. On the other hand, ${awayTeam.shortName.en} is struggling with defensive issues. We expect the stronger side to secure all three points.`
         },
         visibilityStatus: 'FREE',
@@ -1333,14 +1388,14 @@ const generateMatchPool = (): Match[] => {
       marketType: 'BEST',
       tipCode: bestChoice.tipCode,
       tipLabel: {
-        zh: `主推 ${bestChoice.tipLabel.zh}`,
+        zh: `模型首选 ${bestChoice.tipLabel.zh}`,
         en: `Best: ${bestChoice.tipLabel.en}`
       },
       odds: bestChoice.odds,
       trustScore: Math.min(99, bestChoice.trustScore + 2), // Best Tip 信度偏高一点点
       explanation: {
-        zh: `【主推】这是本场综合评分最高的推荐方向。结合两队伤停、战意和 SP 倾斜，保留临场复核。`,
-        en: `[Main Pick] This is the highest-rated pick for this match, balanced for form, motivation, and line movements.`
+        zh: `【AI 精选】这是本场比赛数学模型跑出的最高价值推荐。结合了两队伤停、战意和 SP 倾斜，防守兜底极佳。`,
+        en: `[AI Choice] This is the highest-value recommendation computed by our model for this match. Balanced for form, motivation, and line movements.`
       },
       visibilityStatus: 'PREMIUM', // Best Tip 活跃比赛需要是 Premium
       resultStatus: bestChoice.resultStatus

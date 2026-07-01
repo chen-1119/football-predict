@@ -66,12 +66,12 @@ export const BetSlipGenerator: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const translations = {
-    title: { zh: '多串推荐生成器', en: 'Accumulator Picks' },
+    title: { zh: '串关参考生成器', en: 'Accumulator Reference' },
     subtitle: {
-      zh: '只从有实际 SP 的胜平负、让球胜平负里筛选候选方向；待开售和低强度方向不会进入组合。',
+      zh: '只按官方胜平负、让球胜平负赔率、推荐强度和时间窗口筛选候选方向；结果仅供赛前参考。',
       en: 'Open accumulator builder using odds, pick strength, and time-window filters. Results are for pre-match reference only.'
     },
-    openNotice: { zh: '组合只收录已形成 SP 且通过推荐门槛的方向。', en: 'Combos only include directions with available SP and a passed pick gate.' },
+    openNotice: { zh: '当前为公开体验版：所有筛选项与推荐内容暂时开放。', en: 'Open preview: all filters and recommendation content are temporarily available.' },
     referenceNotice: { zh: '提示：页面内容只供足球数据研究和赛前讨论参考，不构成投注建议。', en: 'Note: this page is for football data research and pre-match discussion only, not betting advice.' },
     targetOddsLabel: { zh: '目标组合值', en: 'Target Combined Value' },
     matchCountLabel: { zh: '串关比赛数量', en: 'Number of Selections' },
@@ -523,7 +523,7 @@ export const BetSlipGenerator: React.FC = () => {
                 {language === 'zh' ? '等待生成参考组合' : 'Awaiting Accumulator Generation'}
               </h4>
               <p style={{ fontSize: '0.8rem' }}>
-                {language === 'zh' ? '在左侧配置风险偏好、目标组合值以及可筛选市场，系统会筛出更匹配的参考组合。' : 'Configure filters on the left. The system will compile a better matched reference ticket.'}
+                {language === 'zh' ? '在左侧配置风险偏好、目标组合值以及可筛选市场，模型会筛出更匹配的参考组合。' : 'Configure filters on the left. The model will compile a better matched reference ticket.'}
               </p>
             </div>
           )}
