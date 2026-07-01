@@ -1,6 +1,6 @@
 {
   "version": "rolling-calibration-v1",
-  "generatedAt": "2026-07-01T06:03:18.338Z",
+  "generatedAt": "2026-07-01T13:17:25.900Z",
   "source": "settled-pre-match-predictions",
   "sample": {
     "rows": 63,
@@ -70,7 +70,7 @@
   },
   "scoreCalibration": {
     "version": "score-calibration-v2",
-    "generatedAt": "2026-07-01T06:03:18.337Z",
+    "generatedAt": "2026-07-01T13:17:25.899Z",
     "source": "rolling-settled-projected-scores",
     "sample": {
       "rows": 63,
@@ -257,7 +257,7 @@
   },
   "strategy": {
     "version": "self-optimization-v1",
-    "generatedAt": "2026-07-01T06:02:57.943Z",
+    "generatedAt": "2026-07-01T06:04:10.809Z",
     "activation": {
       "mode": "cooling-only",
       "onlineEffect": "guarded-active",
@@ -267,7 +267,7 @@
       "note": "Only tightening rules are applied online until a bucket reaches the loosening sample floor."
     },
     "sample": {
-      "matches": 3059,
+      "matches": 3062,
       "settledRows": 464,
       "officialRows": 464,
       "postMatchReviewRows": 277,
@@ -912,168 +912,6 @@
         }
       }
     },
-    "gateByWebConsensus": {},
-    "gateByReviewSignal": {
-      "best-hit": {
-        "key": "best-hit",
-        "settled": 116,
-        "won": 91,
-        "lost": 25,
-        "hitRate": 0.784,
-        "onlineAction": "observe",
-        "sampleStatus": "neutral",
-        "reasons": [
-          "review-signal-observed"
-        ],
-        "adjustments": {
-          "minProbabilityBoost": 0,
-          "minModelGapBoost": 0,
-          "minHandicapSupportBoost": 0,
-          "trustPenalty": 0,
-          "maxRiskTagsDelta": 0,
-          "goalsMinBoost": 0
-        }
-      },
-      "best-miss": {
-        "key": "best-miss",
-        "settled": 141,
-        "won": 26,
-        "lost": 115,
-        "hitRate": 0.184,
-        "onlineAction": "tighten",
-        "sampleStatus": "validated",
-        "reasons": [
-          "review-best-miss-cooling"
-        ],
-        "adjustments": {
-          "minProbabilityBoost": 0.02,
-          "minModelGapBoost": 0.012,
-          "minHandicapSupportBoost": 0.015,
-          "trustPenalty": 2,
-          "maxRiskTagsDelta": -1,
-          "goalsMinBoost": 0
-        }
-      },
-      "draw-risk-underestimated": {
-        "key": "draw-risk-underestimated",
-        "settled": 81,
-        "won": 17,
-        "lost": 64,
-        "hitRate": 0.21,
-        "onlineAction": "tighten",
-        "sampleStatus": "guarded",
-        "reasons": [
-          "review-draw-risk-missed"
-        ],
-        "adjustments": {
-          "minProbabilityBoost": 0.025,
-          "minModelGapBoost": 0.015,
-          "minHandicapSupportBoost": 0.02,
-          "trustPenalty": 3,
-          "maxRiskTagsDelta": -1,
-          "goalsMinBoost": 0
-        }
-      },
-      "goals-overestimated": {
-        "key": "goals-overestimated",
-        "settled": 33,
-        "won": 18,
-        "lost": 15,
-        "hitRate": 0.545,
-        "onlineAction": "tighten",
-        "sampleStatus": "guarded",
-        "reasons": [
-          "review-goals-high-projection"
-        ],
-        "adjustments": {
-          "minProbabilityBoost": 0,
-          "minModelGapBoost": 0,
-          "minHandicapSupportBoost": 0,
-          "trustPenalty": 2,
-          "maxRiskTagsDelta": 0,
-          "goalsMinBoost": 0.02
-        }
-      },
-      "goals-underestimated": {
-        "key": "goals-underestimated",
-        "settled": 66,
-        "won": 31,
-        "lost": 35,
-        "hitRate": 0.47,
-        "onlineAction": "tighten",
-        "sampleStatus": "guarded",
-        "reasons": [
-          "review-goals-low-projection"
-        ],
-        "adjustments": {
-          "minProbabilityBoost": 0,
-          "minModelGapBoost": 0,
-          "minHandicapSupportBoost": 0,
-          "trustPenalty": 2,
-          "maxRiskTagsDelta": 0,
-          "goalsMinBoost": 0.025
-        }
-      },
-      "handicap-hit": {
-        "key": "handicap-hit",
-        "settled": 35,
-        "won": 23,
-        "lost": 12,
-        "hitRate": 0.657,
-        "onlineAction": "observe",
-        "sampleStatus": "neutral",
-        "reasons": [
-          "review-signal-observed"
-        ],
-        "adjustments": {
-          "minProbabilityBoost": 0,
-          "minModelGapBoost": 0,
-          "minHandicapSupportBoost": 0,
-          "trustPenalty": 0,
-          "maxRiskTagsDelta": 0,
-          "goalsMinBoost": 0
-        }
-      },
-      "handicap-lane-suppressed": {
-        "key": "handicap-lane-suppressed",
-        "settled": 53,
-        "won": 10,
-        "lost": 43,
-        "hitRate": 0.189,
-        "onlineAction": "tighten",
-        "sampleStatus": "guarded",
-        "reasons": [
-          "review-handicap-lane-was-better"
-        ],
-        "adjustments": {
-          "minProbabilityBoost": 0.01,
-          "minModelGapBoost": 0.012,
-          "minHandicapSupportBoost": 0.045,
-          "trustPenalty": 3,
-          "maxRiskTagsDelta": -1,
-          "goalsMinBoost": 0
-        }
-      },
-      "neutral-review": {
-        "key": "neutral-review",
-        "settled": 12,
-        "won": 6,
-        "lost": 6,
-        "hitRate": 0.5,
-        "onlineAction": "observe",
-        "sampleStatus": "neutral",
-        "reasons": [
-          "review-signal-observed"
-        ],
-        "adjustments": {
-          "minProbabilityBoost": 0,
-          "minModelGapBoost": 0,
-          "minHandicapSupportBoost": 0,
-          "trustPenalty": 0,
-          "maxRiskTagsDelta": 0,
-          "goalsMinBoost": 0
-        }
-      }
-    }
+    "gateByWebConsensus": {}
   }
 }
