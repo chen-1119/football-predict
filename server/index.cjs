@@ -2832,8 +2832,14 @@ const getHealth = async () => {
   const sources = await getSourceHealth();
   const sqlite = await getSqliteReadStatus(meta);
   const currentRead = compactCurrentReadStatus(await readCurrentMatchesDetailed().catch(() => lastCurrentRead));
+  const serviceOk = Boolean(currentRead?.source && !currentRead.stale);
+  const dataOk = Boolean(sources.ok);
+  const status = serviceOk ? (dataOk ? "ok" : "degraded") : "unavailable";
   return {
-    ok: sources.ok,
+    ok: serviceOk,
+    serviceOk,
+    dataOk,
+    status,
     service: "football-predict-server",
     checkedAt: nowIso(),
     syncRunning,
@@ -3085,7 +3091,7 @@ const getPublicV1Health = async () => {
   const metaTime = currentMetaTime(health.meta);
   const maxAgeSeconds = Math.max(60, Number(process.env.V1_HEALTH_STALE_AFTER_SECONDS || 10 * 60));
   const ageSeconds = Number.isFinite(metaTime) ? Math.max(0, Math.floor((Date.now() - metaTime) / 1000)) : null;
-  const dataFresh = ageSeconds !== null && ageSeconds <= maxAgeSeconds && Boolean(health.sources?.ok);
+  const dataFresh = ageSeconds !== null && ageSeconds <= maxAgeSeconds && Boolean(health.dataOk ?? health.sources?.ok);
   const calibrationSample = Number(health.meta?.modelCalibration?.sample?.recommendationPool || 0);
   return {
     ok: Boolean(health.ok && dataFresh),
@@ -3093,7 +3099,7 @@ const getPublicV1Health = async () => {
     service: health.service,
     checkedAt: health.checkedAt,
     status: {
-      serviceOk: true,
+      serviceOk: Boolean(health.serviceOk ?? health.ok),
       dataFresh,
       recommendationReliable: calibrationSample >= Number(process.env.MODEL_RELIABILITY_MIN_ROWS || 30)
     },
