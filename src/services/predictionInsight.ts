@@ -534,8 +534,8 @@ const buildProfessionalFramework = ({
     {
       title: { zh: '四、进攻能力', en: '4. Attack' },
       body: {
-        zh: `${goalLine.zh} 近况进攻：${match.homeTeamName || '主队'}场均 ${decimalText(form?.home.goalsForAvg)}，${match.awayTeamName || '客队'}场均 ${decimalText(form?.away.goalsForAvg)}。`,
-        en: `${goalLine.en} Recent attack: ${match.homeTeamNameEn || 'Home'} ${decimalText(form?.home.goalsForAvg)} per match, ${match.awayTeamNameEn || 'Away'} ${decimalText(form?.away.goalsForAvg)} per match.`
+        zh: `${goalLine.zh} 近况进攻：${match.homeTeamName || '主队'}场均 ${decimalText(form?.home?.goalsForAvg)}，${match.awayTeamName || '客队'}场均 ${decimalText(form?.away?.goalsForAvg)}。`,
+        en: `${goalLine.en} Recent attack: ${match.homeTeamNameEn || 'Home'} ${decimalText(form?.home?.goalsForAvg)} per match, ${match.awayTeamNameEn || 'Away'} ${decimalText(form?.away?.goalsForAvg)} per match.`
       },
       tone: goalTone
     },
@@ -551,10 +551,10 @@ const buildProfessionalFramework = ({
     {
       title: { zh: '五、防守能力', en: '5. Defense' },
       body: {
-        zh: `${match.homeTeamName || '主队'}场均失 ${decimalText(form?.home.goalsAgainstAvg)}，零封 ${rateText(form?.home.cleanSheetRate)}，被零封 ${rateText(form?.home.failedScoreRate)}；${match.awayTeamName || '客队'}场均失 ${decimalText(form?.away.goalsAgainstAvg)}，零封 ${rateText(form?.away.cleanSheetRate)}，被零封 ${rateText(form?.away.failedScoreRate)}。`,
-        en: `${match.homeTeamNameEn || 'Home'} concedes ${decimalText(form?.home.goalsAgainstAvg)}, clean sheets ${rateText(form?.home.cleanSheetRate)}, failed to score ${rateText(form?.home.failedScoreRate)}; ${match.awayTeamNameEn || 'Away'} concedes ${decimalText(form?.away.goalsAgainstAvg)}, clean sheets ${rateText(form?.away.cleanSheetRate)}, failed to score ${rateText(form?.away.failedScoreRate)}.`
+        zh: `${match.homeTeamName || '主队'}场均失 ${decimalText(form?.home?.goalsAgainstAvg)}，零封 ${rateText(form?.home?.cleanSheetRate)}，被零封 ${rateText(form?.home?.failedScoreRate)}；${match.awayTeamName || '客队'}场均失 ${decimalText(form?.away?.goalsAgainstAvg)}，零封 ${rateText(form?.away?.cleanSheetRate)}，被零封 ${rateText(form?.away?.failedScoreRate)}。`,
+        en: `${match.homeTeamNameEn || 'Home'} concedes ${decimalText(form?.home?.goalsAgainstAvg)}, clean sheets ${rateText(form?.home?.cleanSheetRate)}, failed to score ${rateText(form?.home?.failedScoreRate)}; ${match.awayTeamNameEn || 'Away'} concedes ${decimalText(form?.away?.goalsAgainstAvg)}, clean sheets ${rateText(form?.away?.cleanSheetRate)}, failed to score ${rateText(form?.away?.failedScoreRate)}.`
       },
-      tone: form?.home.sampleSize || form?.away.sampleSize ? 'success' : 'warning'
+      tone: form?.home?.sampleSize || form?.away?.sampleSize ? 'success' : 'warning'
     },
     {
       title: { zh: '六、伤停与首发', en: '6. Injuries / XI' },

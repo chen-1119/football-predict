@@ -2820,7 +2820,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack }) => 
                         </span>
                         <span>
                           {language === 'zh' ? '样本' : 'Samples'}
-                          <strong>{probabilityModel.form?.home.sampleSize || 0} / {probabilityModel.form?.away.sampleSize || 0}</strong>
+                          <strong>{probabilityModel.form?.home?.sampleSize || 0} / {probabilityModel.form?.away?.sampleSize || 0}</strong>
                         </span>
                       </div>
                     )}
