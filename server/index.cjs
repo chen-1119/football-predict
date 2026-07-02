@@ -30,6 +30,7 @@ const rootDir = path.resolve(__dirname, "..");
 const publicDir = path.join(rootDir, "public");
 const dataDir = path.join(publicDir, "data");
 const distDir = path.join(rootDir, "dist");
+const deployRevisionFile = path.join(rootDir, ".deploy-revision");
 const storeDir = path.resolve(process.env.SERVER_STORE_DIR || path.join(rootDir, "server-data"));
 const sqliteDbPath = path.resolve(process.env.DATASTORE_SQLITE_PATH || path.join(storeDir, "football.db"));
 const snapshotsDir = path.join(storeDir, "snapshots");
@@ -141,6 +142,14 @@ const ensureStore = async () => {
 const readJsonFile = async (filePath, fallback = null) => {
   try {
     return JSON.parse(await fsp.readFile(filePath, "utf8"));
+  } catch {
+    return fallback;
+  }
+};
+
+const readTextFile = async (filePath, fallback = "") => {
+  try {
+    return await fsp.readFile(filePath, "utf8");
   } catch {
     return fallback;
   }
@@ -2832,6 +2841,7 @@ const getHealth = async () => {
   const sources = await getSourceHealth();
   const sqlite = await getSqliteReadStatus(meta);
   const currentRead = compactCurrentReadStatus(await readCurrentMatchesDetailed().catch(() => lastCurrentRead));
+  const deployRevision = (await readTextFile(deployRevisionFile, "")).trim() || null;
   const serviceOk = Boolean(currentRead?.source && !currentRead.stale);
   const dataOk = Boolean(sources.ok);
   const status = serviceOk ? (dataOk ? "ok" : "degraded") : "unavailable";
@@ -2848,6 +2858,11 @@ const getHealth = async () => {
     lastPredictionRun,
     lastDataPersist,
     lastDataCompact,
+    deploy: {
+      revision: deployRevision,
+      shortRevision: deployRevision ? deployRevision.slice(0, 7) : null,
+      revisionFile: await fileInfo(deployRevisionFile)
+    },
     api: {
       publicApiBase,
       apiFootballConfigured: Boolean(process.env.API_FOOTBALL_KEY || process.env.APISPORTS_KEY),
