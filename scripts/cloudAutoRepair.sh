@@ -40,7 +40,11 @@ timestamp() {
 
 health_ok=0
 if curl -fsS --max-time 8 "$HEALTH_URL" >/tmp/football-predict-health.json 2>/tmp/football-predict-health.err; then
-  health_ok=1
+  if node -e 'const fs=require("fs"); const h=JSON.parse(fs.readFileSync(process.argv[1], "utf8")); process.exit(h && h.ok !== false ? 0 : 1);' /tmp/football-predict-health.json 2>/tmp/football-predict-health.err; then
+    health_ok=1
+  else
+    health_ok=0
+  fi
 fi
 
 remote_sha="$(git ls-remote "$REPO_URL" refs/heads/main 2>/tmp/football-predict-ls-remote.err | awk '{print $1}' || true)"
@@ -98,7 +102,8 @@ if [ "$health_ok" -ne 1 ]; then
   echo "[auto-repair] local health failed; trying quick service restart first"
   sudo systemctl restart football-predict || true
   sleep 8
-  if curl -fsS --max-time 8 "$HEALTH_URL" >/tmp/football-predict-health.json 2>/tmp/football-predict-health.err; then
+  if curl -fsS --max-time 8 "$HEALTH_URL" >/tmp/football-predict-health.json 2>/tmp/football-predict-health.err \
+    && node -e 'const fs=require("fs"); const h=JSON.parse(fs.readFileSync(process.argv[1], "utf8")); process.exit(h && h.ok !== false ? 0 : 1);' /tmp/football-predict-health.json 2>/tmp/football-predict-health.err; then
     health_ok=1
     local_sha="$(cat "$REVISION_FILE" 2>/dev/null || true)"
     if [ -n "$remote_sha" ] && [ "$remote_sha" = "$local_sha" ]; then
