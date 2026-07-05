@@ -91401,7 +91401,7 @@
     "projectedScoreAway": 1,
     "probabilityModel": {
       "version": "unified-poisson-bayes-v56",
-      "generatedAt": "2026-07-05T06:37:37.331Z",
+      "generatedAt": "2026-07-05T06:42:36.243Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序；先用 Elo、长期历史样本、近一年状态、世界杯先验、赛程密度与 Poisson 比分分布生成独立足球预测。官方 SP/让球 SP 只用于市场校验、价值差比较和风险标签，不再驱动最终概率。",
         "en": "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model first builds an independent football forecast from Elo, long-run history, recent form, World Cup priors, and Poisson score distribution. Official SP/handicap SP are used only for market validation, value comparison, and risk tags; they do not drive the final probability."
@@ -91483,9 +91483,9 @@
               },
               "weight": 0,
               "probabilities": {
-                "home": 53.4,
-                "draw": 26.9,
-                "away": 19.7
+                "home": 54.3,
+                "draw": 26.8,
+                "away": 18.8
               },
               "role": "validation-only"
             },
@@ -91647,8 +91647,8 @@
               "total": 0.062
             },
             "expectedFouls": {
-              "home": 11.3,
-              "away": 14.4,
+              "home": 11.2,
+              "away": 14.5,
               "total": 25.7
             },
             "foulPressure": 60,
@@ -92026,8 +92026,8 @@
             "total": 0.062
           },
           "expectedFouls": {
-            "home": 11.3,
-            "away": 14.4,
+            "home": 11.2,
+            "away": 14.5,
             "total": 25.7
           },
           "foulPressure": 60,
@@ -92163,9 +92163,9 @@
       },
       "oneXTwo": {
         "market": {
-          "home": 53.4,
-          "draw": 26.9,
-          "away": 19.7
+          "home": 54.3,
+          "draw": 26.8,
+          "away": 18.8
         },
         "teamStrength": {
           "home": 42.1,
@@ -92194,9 +92194,9 @@
           "away": 29.6
         },
         "unifiedPosterior": {
-          "home": 48.8,
+          "home": 48.9,
           "draw": 25.9,
-          "away": 25.3
+          "away": 25.2
         }
       },
       "worldCupPrior": null,
@@ -92309,9 +92309,9 @@
       "handicap": {
         "line": "-1",
         "market": {
-          "home": 26.2,
-          "draw": 27.7,
-          "away": 46.1
+          "home": 26.4,
+          "draw": 28.4,
+          "away": 45.2
         },
         "poisson": {
           "home": 24.5,
@@ -92325,8 +92325,8 @@
         },
         "unifiedPosterior": {
           "home": 25,
-          "draw": 26.6,
-          "away": 48.5
+          "draw": 26.7,
+          "away": 48.3
         }
       },
       "calibration": {
@@ -92336,14 +92336,14 @@
       },
       "unifiedPosterior": {
         "version": "v56-score-review-draw-handicap-guard",
-        "generatedAt": "2026-07-05T06:37:37.332Z",
+        "generatedAt": "2026-07-05T06:42:36.244Z",
         "selectedMarket": "HAD",
         "selectedCode": "1",
         "selectedLabelZh": "主胜 首尔FC",
         "selectedHandicapLine": "0",
-        "selectedProbability": 48.8,
-        "selectedGap": 22.9,
-        "selectedPosteriorScore": 0.5957,
+        "selectedProbability": 48.9,
+        "selectedGap": 23,
+        "selectedPosteriorScore": 0.597,
         "selectedRecentReviewAdjustment": 0,
         "selectedRecentReviewReasons": [],
         "selectionPolicy": "unified-posterior",
@@ -92393,9 +92393,9 @@
           {
             "market": "HAD",
             "code": "1",
-            "probability": 48.8,
-            "gap": 22.9,
-            "posteriorScore": 0.5957,
+            "probability": 48.9,
+            "gap": 23,
+            "posteriorScore": 0.597,
             "worldCupContextBoost": 0,
             "recentReviewAdjustment": 0,
             "recentReviewReasons": []
@@ -92403,9 +92403,9 @@
           {
             "market": "HHAD",
             "code": "2",
-            "probability": 48.5,
-            "gap": 21.9,
-            "posteriorScore": 0.2351,
+            "probability": 48.3,
+            "gap": 21.6,
+            "posteriorScore": 0.2314,
             "worldCupContextBoost": 0,
             "recentReviewAdjustment": -0.167,
             "recentReviewReasons": [
@@ -92429,9 +92429,9 @@
           {
             "market": "HHAD",
             "code": "X",
-            "probability": 26.6,
+            "probability": 26.7,
             "gap": 0,
-            "posteriorScore": 0.0427,
+            "posteriorScore": 0.0442,
             "worldCupContextBoost": 0,
             "recentReviewAdjustment": -0.177,
             "recentReviewReasons": [
@@ -92443,9 +92443,9 @@
           {
             "market": "HAD",
             "code": "2",
-            "probability": 25.3,
+            "probability": 25.2,
             "gap": 0,
-            "posteriorScore": 0.0418,
+            "posteriorScore": 0.041,
             "worldCupContextBoost": 0,
             "recentReviewAdjustment": -0.09,
             "recentReviewReasons": [
@@ -92457,7 +92457,7 @@
             "code": "1",
             "probability": 25,
             "gap": 0,
-            "posteriorScore": -0.0382,
+            "posteriorScore": -0.0378,
             "worldCupContextBoost": 0,
             "recentReviewAdjustment": -0.177,
             "recentReviewReasons": [
@@ -92471,14 +92471,14 @@
       }
     },
     "odds": {
-      "odds1": 1.66,
+      "odds1": 1.63,
       "oddsX": 3.3,
-      "odds2": 4.5
+      "odds2": 4.7
     },
     "handicapOdds": {
-      "odds1": 3.38,
-      "oddsX": 3.2,
-      "odds2": 1.92
+      "odds1": 3.35,
+      "oddsX": 3.12,
+      "odds2": 1.96
     },
     "predictions": [
       {
@@ -92490,7 +92490,7 @@
           "zh": "参考倾向 主胜 首尔FC",
           "en": "Reference lean: Home Win (首尔FC)"
         },
-        "odds": 1.66,
+        "odds": 1.63,
         "trustScore": 34,
         "recommendationAction": "reference",
         "recommendationTier": "posterior-reference",
@@ -92500,16 +92500,16 @@
         },
         "analysisItems": [
           {
-            "zh": "500 网 HAD 胜平负参考 SP：主胜 1.66 / 平局 3.30 / 客胜 4.50；去水支持率约 主胜 53% / 平局 27% / 客胜 20%。",
-            "en": "500.com HAD reference SP: 1.66 / 3.30 / 4.50; normalized support is about home 53% / draw 27% / away 20%."
+            "zh": "500 网 HAD 胜平负参考 SP：主胜 1.63 / 平局 3.30 / 客胜 4.70；去水支持率约 主胜 54% / 平局 27% / 客胜 19%。",
+            "en": "500.com HAD reference SP: 1.63 / 3.30 / 4.70; normalized support is about home 54% / draw 27% / away 19%."
           },
           {
             "zh": "参考理由：独立模型优势约 16 个百分点，市场分歧约 27 个百分点，让球同向支持约 26%；条件没有同时闭合，暂不输出单一胜平负方向。",
             "en": "Watch reason: independent model edge is about 16 points, market disagreement about 27 points, same-side handicap support about 26%; no single 1X2 pick is promoted."
           },
           {
-            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 500 网 HAD 胜平负参考 SP 更新时间：2026-07-05T06:33:02.647Z。",
-            "en": "Draw support is not dominant, but late SP movement still matters. 500.com HAD reference SP updated at 2026-07-05T06:33:02.647Z."
+            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 500 网 HAD 胜平负参考 SP 更新时间：2026-07-05T06:41:57.828Z。",
+            "en": "Draw support is not dominant, but late SP movement still matters. 500.com HAD reference SP updated at 2026-07-05T06:41:57.828Z."
           }
         ],
         "riskTags": [
@@ -92584,7 +92584,7 @@
           "zh": "主推 主胜 首尔FC",
           "en": "Main pick: Home win 首尔FC"
         },
-        "odds": 1.66,
+        "odds": 1.63,
         "trustScore": 57,
         "recommendationAction": "recommend",
         "recommendationTier": "unified-had-posterior",
@@ -92634,7 +92634,7 @@
     ],
     "externalSignals": {
       "source": "500.com:jczq",
-      "updatedAt": "2026-07-05T06:33:02.647Z",
+      "updatedAt": "2026-07-05T06:41:57.828Z",
       "sourceMatchId": "2040405",
       "fixtureId": "1373066",
       "matchNo": "周日201",
@@ -92646,24 +92646,24 @@
       "handicapLine": "-1",
       "externalOdds": {
         "source": "500.com",
-        "odds1": 1.66,
+        "odds1": 1.63,
         "oddsX": 3.3,
-        "odds2": 4.5,
+        "odds2": 4.7,
         "summary": {
-          "zh": "500彩票网胜平负参考：1.66 / 3.30 / 4.50",
-          "en": "500.com 1X2 reference: 1.66 / 3.30 / 4.50"
+          "zh": "500彩票网胜平负参考：1.63 / 3.30 / 4.70",
+          "en": "500.com 1X2 reference: 1.63 / 3.30 / 4.70"
         }
       },
       "bookmakerOdds": {
         "had": {
-          "odds1": 1.66,
+          "odds1": 1.63,
           "oddsX": 3.3,
-          "odds2": 4.5
+          "odds2": 4.7
         },
         "hhad": {
-          "odds1": 3.38,
-          "oddsX": 3.2,
-          "odds2": 1.92
+          "odds1": 3.35,
+          "oddsX": 3.12,
+          "odds2": 1.96
         }
       }
     },
@@ -92689,8 +92689,8 @@
         "away": 6
       },
       "fouls": {
-        "home": 11.3,
-        "away": 14.4
+        "home": 11.2,
+        "away": 14.5
       },
       "offsides": {
         "home": 0,
@@ -92735,8 +92735,8 @@
           "total": 0.062
         },
         "expectedFouls": {
-          "home": 11.3,
-          "away": 14.4,
+          "home": 11.2,
+          "away": 14.5,
           "total": 25.7
         },
         "foulPressure": 60,
@@ -92858,13 +92858,13 @@
     "oddsSource": "500.com:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "500-fallback",
-    "oddsUpdatedAt": "2026-07-05T06:33:02.647Z",
+    "oddsUpdatedAt": "2026-07-05T06:41:57.828Z",
     "oddsSourceUrl": "https://trade.500.com/jczq/",
     "handicapLine": "-1",
     "handicapOddsSource": "500.com:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsUpdatedAt": "2026-07-05T06:33:02.647Z",
+    "handicapOddsUpdatedAt": "2026-07-05T06:41:57.828Z",
     "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
     "predictionMeta": {
       "policyVersion": "sporttery-day-formula-trace-v56",
@@ -92876,7 +92876,7 @@
       "worldCupPriorSignature": null,
       "scoreCalibrationSignature": "score-calibration-v2:0.048:{\"2\":-0.032,\"3\":-0.021,\"4+\":0.066,\"0-1\":0.029}:{\"clear-btts-open\":0.035,\"low-0-1\":0.032,\"open-4plus\":0.032,\"clear-clean-sheet\":-0.026}",
       "generatedAt": "2026-07-03T03:05:18.174Z",
-      "updatedAt": "2026-07-05T06:37:26.900Z",
+      "updatedAt": "2026-07-05T06:42:04.708Z",
       "cutoffTime": "2026-07-05 18:30:00",
       "dataPolicy": {
         "zh": "竞彩截止前，赛前分析先由 Elo 强度、长期历史样本、近一年状态、赛程密度、世界杯先验、比分分布与公开赛前信息层生成独立预测；官方 HAD/HHAD SP 和 SP 走势只用于校验市场分歧与价值风险。截止后保留历史预测，只结算赛果，不回写旧推荐。",
@@ -93085,24 +93085,24 @@
         "market": {
           "had": {
             "odds": {
-              "odds1": 1.66,
+              "odds1": 1.63,
               "oddsX": 3.3,
-              "odds2": 4.5
+              "odds2": 4.7
             },
             "source": "500.com:HAD",
             "sourceMethod": "500-fallback",
-            "updatedAt": "2026-07-05T04:57:57.236Z"
+            "updatedAt": "2026-07-05T06:41:57.828Z"
           },
           "hhad": {
             "handicapLine": "-1",
             "odds": {
-              "odds1": 3.38,
-              "oddsX": 3.2,
-              "odds2": 1.92
+              "odds1": 3.35,
+              "oddsX": 3.12,
+              "odds2": 1.96
             },
             "source": "500.com:HHAD",
             "sourceMethod": "500-fallback",
-            "updatedAt": "2026-07-05T04:57:57.236Z"
+            "updatedAt": "2026-07-05T06:41:57.828Z"
           },
           "oddsTrend": null
         },
@@ -93113,9 +93113,9 @@
             "away": 29.6
           },
           "market": {
-            "home": 53.4,
-            "draw": 26.9,
-            "away": 19.7
+            "home": 54.3,
+            "draw": 26.8,
+            "away": 18.8
           },
           "poisson": {
             "home": 48.1,
@@ -93257,22 +93257,22 @@
             "note": "high-variance-data-gap"
           }
         },
-        "hash": "1k1usse"
+        "hash": "qqztq8"
       },
-      "featureSnapshotHash": "1k1usse",
+      "featureSnapshotHash": "qqztq8",
       "updateReason": {
-        "zh": "官方 SP 或让球盘没有实质变化，原赛前方向继续保留；分析版本可更新，但不重算推荐方向。",
-        "en": "Official SP and handicap signals did not materially change, so the pre-match direction is preserved; analysis versions may update, but the recommendation direction is not recalculated."
+        "zh": "赛前赔率或让球信号发生实质变化，已生成新的临场预测；开赛后将锁定这版记录。",
+        "en": "Pre-match odds or handicap signals changed materially, so a new late forecast was generated and will be locked after kickoff."
       },
       "snapshot": {
         "phase": "mid",
-        "total": 4,
+        "total": 5,
         "phases": {
           "baseline": 1,
-          "mid": 3
+          "mid": 4
         },
-        "latestAt": "2026-07-05T06:33:08.558Z",
-        "latestSignature": "1X2:HAD:1:reference|BEST:HAD:1:recommend|GOALS::U2.5:reference|1.66/3.30/4.50|-1:3.38/3.20/1.92|46/25/30"
+        "latestAt": "2026-07-05T06:42:04.708Z",
+        "latestSignature": "1X2:HAD:1:reference|BEST:HAD:1:recommend|GOALS::U2.5:reference|1.63/3.30/4.70|-1:3.35/3.12/1.96|46/25/30"
       }
     }
   },
@@ -93288,7 +93288,7 @@
     "projectedScoreAway": 1,
     "probabilityModel": {
       "version": "unified-poisson-bayes-v56",
-      "generatedAt": "2026-07-05T06:37:37.333Z",
+      "generatedAt": "2026-07-05T06:42:36.244Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序；先用 Elo、长期历史样本、近一年状态、世界杯先验、赛程密度与 Poisson 比分分布生成独立足球预测。官方 SP/让球 SP 只用于市场校验、价值差比较和风险标签，不再驱动最终概率。",
         "en": "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model first builds an independent football forecast from Elo, long-run history, recent form, World Cup priors, and Poisson score distribution. Official SP/handicap SP are used only for market validation, value comparison, and risk tags; they do not drive the final probability."
@@ -94223,7 +94223,7 @@
       },
       "unifiedPosterior": {
         "version": "v56-score-review-draw-handicap-guard",
-        "generatedAt": "2026-07-05T06:37:37.333Z",
+        "generatedAt": "2026-07-05T06:42:36.245Z",
         "selectedMarket": "HHAD",
         "selectedCode": "1",
         "selectedLabelZh": "让胜",
@@ -94399,8 +94399,8 @@
             "en": "Watch reason: independent model edge is about 15 points, market disagreement about 45 points, same-side handicap support about 33%; no single 1X2 pick is promoted."
           },
           {
-            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 500 网 HAD 胜平负参考 SP 更新时间：2026-07-05T06:33:02.647Z。",
-            "en": "Draw support is not dominant, but late SP movement still matters. 500.com HAD reference SP updated at 2026-07-05T06:33:02.647Z."
+            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 500 网 HAD 胜平负参考 SP 更新时间：2026-07-05T06:41:57.828Z。",
+            "en": "Draw support is not dominant, but late SP movement still matters. 500.com HAD reference SP updated at 2026-07-05T06:41:57.828Z."
           }
         ],
         "riskTags": [
@@ -94521,7 +94521,7 @@
     ],
     "externalSignals": {
       "source": "500.com:jczq",
-      "updatedAt": "2026-07-05T06:33:02.647Z",
+      "updatedAt": "2026-07-05T06:41:57.828Z",
       "sourceMatchId": "2040406",
       "fixtureId": "1373073",
       "matchNo": "周日202",
@@ -94745,13 +94745,13 @@
     "oddsSource": "500.com:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "500-fallback",
-    "oddsUpdatedAt": "2026-07-05T06:33:02.647Z",
+    "oddsUpdatedAt": "2026-07-05T06:41:57.828Z",
     "oddsSourceUrl": "https://trade.500.com/jczq/",
     "handicapLine": "1",
     "handicapOddsSource": "500.com:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsUpdatedAt": "2026-07-05T06:33:02.647Z",
+    "handicapOddsUpdatedAt": "2026-07-05T06:41:57.828Z",
     "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
     "predictionMeta": {
       "policyVersion": "sporttery-day-formula-trace-v56",
@@ -94763,7 +94763,7 @@
       "worldCupPriorSignature": null,
       "scoreCalibrationSignature": "score-calibration-v2:0.048:{\"2\":-0.032,\"3\":-0.021,\"4+\":0.066,\"0-1\":0.029}:{\"clear-btts-open\":0.035,\"low-0-1\":0.032,\"open-4plus\":0.032,\"clear-clean-sheet\":-0.026}",
       "generatedAt": "2026-07-03T03:05:18.174Z",
-      "updatedAt": "2026-07-05T06:37:26.900Z",
+      "updatedAt": "2026-07-05T06:42:04.708Z",
       "cutoffTime": "2026-07-05 18:30:00",
       "dataPolicy": {
         "zh": "竞彩截止前，赛前分析先由 Elo 强度、长期历史样本、近一年状态、赛程密度、世界杯先验、比分分布与公开赛前信息层生成独立预测；官方 HAD/HHAD SP 和 SP 走势只用于校验市场分歧与价值风险。截止后保留历史预测，只结算赛果，不回写旧推荐。",
@@ -95158,7 +95158,7 @@
           "baseline": 2,
           "mid": 4
         },
-        "latestAt": "2026-07-05T06:33:08.558Z",
+        "latestAt": "2026-07-05T06:42:04.708Z",
         "latestSignature": "1X2:HAD:1:reference|BEST:HHAD:1:recommend|GOALS::U2.5:reference|6.90/4.20/1.34|1:2.72/3.15/2.25|45/25/30"
       }
     }
@@ -95175,7 +95175,7 @@
     "projectedScoreAway": 1,
     "probabilityModel": {
       "version": "unified-poisson-bayes-v56",
-      "generatedAt": "2026-07-05T06:37:37.334Z",
+      "generatedAt": "2026-07-05T06:42:36.246Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序；先用 Elo、长期历史样本、近一年状态、世界杯先验、赛程密度与 Poisson 比分分布生成独立足球预测。官方 SP/让球 SP 只用于市场校验、价值差比较和风险标签，不再驱动最终概率。",
         "en": "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model first builds an independent football forecast from Elo, long-run history, recent form, World Cup priors, and Poisson score distribution. Official SP/handicap SP are used only for market validation, value comparison, and risk tags; they do not drive the final probability."
@@ -96110,7 +96110,7 @@
       },
       "unifiedPosterior": {
         "version": "v56-score-review-draw-handicap-guard",
-        "generatedAt": "2026-07-05T06:37:37.334Z",
+        "generatedAt": "2026-07-05T06:42:36.246Z",
         "selectedMarket": "HAD",
         "selectedCode": "1",
         "selectedLabelZh": "主胜 金泉尚武",
@@ -96286,8 +96286,8 @@
             "en": "Watch reason: independent model edge is about 9 points, market disagreement about 4 points, same-side handicap support about 16%; no single 1X2 pick is promoted."
           },
           {
-            "zh": "平局支持率偏高，胜平负方向需要防平。 500 网 HAD 胜平负参考 SP 更新时间：2026-07-05T06:33:02.647Z。",
-            "en": "Draw support is high, so cover the draw risk. 500.com HAD reference SP updated at 2026-07-05T06:33:02.647Z."
+            "zh": "平局支持率偏高，胜平负方向需要防平。 500 网 HAD 胜平负参考 SP 更新时间：2026-07-05T06:41:57.828Z。",
+            "en": "Draw support is high, so cover the draw risk. 500.com HAD reference SP updated at 2026-07-05T06:41:57.828Z."
           }
         ],
         "riskTags": [
@@ -96408,7 +96408,7 @@
     ],
     "externalSignals": {
       "source": "500.com:jczq",
-      "updatedAt": "2026-07-05T06:33:02.647Z",
+      "updatedAt": "2026-07-05T06:41:57.828Z",
       "sourceMatchId": "2040407",
       "fixtureId": "1373100",
       "matchNo": "周日203",
@@ -96632,13 +96632,13 @@
     "oddsSource": "500.com:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "500-fallback",
-    "oddsUpdatedAt": "2026-07-05T06:33:02.647Z",
+    "oddsUpdatedAt": "2026-07-05T06:41:57.828Z",
     "oddsSourceUrl": "https://trade.500.com/jczq/",
     "handicapLine": "-1",
     "handicapOddsSource": "500.com:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsUpdatedAt": "2026-07-05T06:33:02.647Z",
+    "handicapOddsUpdatedAt": "2026-07-05T06:41:57.828Z",
     "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
     "predictionMeta": {
       "policyVersion": "sporttery-day-formula-trace-v56",
@@ -96650,7 +96650,7 @@
       "worldCupPriorSignature": null,
       "scoreCalibrationSignature": "score-calibration-v2:0.048:{\"2\":-0.032,\"3\":-0.021,\"4+\":0.066,\"0-1\":0.029}:{\"clear-btts-open\":0.035,\"low-0-1\":0.032,\"open-4plus\":0.032,\"clear-clean-sheet\":-0.026}",
       "generatedAt": "2026-07-03T03:05:18.174Z",
-      "updatedAt": "2026-07-05T06:37:26.900Z",
+      "updatedAt": "2026-07-05T06:42:04.708Z",
       "cutoffTime": "2026-07-05 18:30:00",
       "dataPolicy": {
         "zh": "竞彩截止前，赛前分析先由 Elo 强度、长期历史样本、近一年状态、赛程密度、世界杯先验、比分分布与公开赛前信息层生成独立预测；官方 HAD/HHAD SP 和 SP 走势只用于校验市场分歧与价值风险。截止后保留历史预测，只结算赛果，不回写旧推荐。",
@@ -97045,7 +97045,7 @@
           "baseline": 3,
           "mid": 1
         },
-        "latestAt": "2026-07-05T06:33:08.558Z",
+        "latestAt": "2026-07-05T06:42:04.708Z",
         "latestSignature": "1X2:HAD:1:reference|BEST:HAD:1:recommend|GOALS::U2.5:reference|2.38/2.95/2.70|-1:5.60/3.90/1.44|42/25/33"
       }
     }
@@ -97062,7 +97062,7 @@
     "projectedScoreAway": 1,
     "probabilityModel": {
       "version": "unified-poisson-bayes-v56",
-      "generatedAt": "2026-07-05T06:37:37.335Z",
+      "generatedAt": "2026-07-05T06:42:36.247Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序；先用 Elo、长期历史样本、近一年状态、世界杯先验、赛程密度与 Poisson 比分分布生成独立足球预测。官方 SP/让球 SP 只用于市场校验、价值差比较和风险标签，不再驱动最终概率。",
         "en": "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model first builds an independent football forecast from Elo, long-run history, recent form, World Cup priors, and Poisson score distribution. Official SP/handicap SP are used only for market validation, value comparison, and risk tags; they do not drive the final probability."
@@ -97997,7 +97997,7 @@
       },
       "unifiedPosterior": {
         "version": "v56-score-review-draw-handicap-guard",
-        "generatedAt": "2026-07-05T06:37:37.340Z",
+        "generatedAt": "2026-07-05T06:42:36.248Z",
         "selectedMarket": "HAD",
         "selectedCode": "1",
         "selectedLabelZh": "主胜 卡尔马",
@@ -98170,8 +98170,8 @@
             "en": "Watch reason: independent model edge is about 16 points, market disagreement about 45 points, same-side handicap support about 41%; no single 1X2 pick is promoted."
           },
           {
-            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 500 网 HAD 胜平负参考 SP 更新时间：2026-07-05T06:33:02.647Z。",
-            "en": "Draw support is not dominant, but late SP movement still matters. 500.com HAD reference SP updated at 2026-07-05T06:33:02.647Z."
+            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 500 网 HAD 胜平负参考 SP 更新时间：2026-07-05T06:41:57.828Z。",
+            "en": "Draw support is not dominant, but late SP movement still matters. 500.com HAD reference SP updated at 2026-07-05T06:41:57.828Z."
           }
         ],
         "riskTags": [
@@ -98292,7 +98292,7 @@
     ],
     "externalSignals": {
       "source": "500.com:jczq",
-      "updatedAt": "2026-07-05T06:33:02.647Z",
+      "updatedAt": "2026-07-05T06:41:57.828Z",
       "sourceMatchId": "2040408",
       "fixtureId": "1362692",
       "matchNo": "周日204",
@@ -98516,13 +98516,13 @@
     "oddsSource": "500.com:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "500-fallback",
-    "oddsUpdatedAt": "2026-07-05T06:33:02.647Z",
+    "oddsUpdatedAt": "2026-07-05T06:41:57.828Z",
     "oddsSourceUrl": "https://trade.500.com/jczq/",
     "handicapLine": "-1",
     "handicapOddsSource": "500.com:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsUpdatedAt": "2026-07-05T06:33:02.647Z",
+    "handicapOddsUpdatedAt": "2026-07-05T06:41:57.828Z",
     "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
     "predictionMeta": {
       "policyVersion": "sporttery-day-formula-trace-v56",
@@ -98534,7 +98534,7 @@
       "worldCupPriorSignature": null,
       "scoreCalibrationSignature": "score-calibration-v2:0.048:{\"2\":-0.032,\"3\":-0.021,\"4+\":0.066,\"0-1\":0.029}:{\"clear-btts-open\":0.035,\"low-0-1\":0.032,\"open-4plus\":0.032,\"clear-clean-sheet\":-0.026}",
       "generatedAt": "2026-07-04T03:08:03.902Z",
-      "updatedAt": "2026-07-05T06:37:26.900Z",
+      "updatedAt": "2026-07-05T06:42:04.708Z",
       "cutoffTime": "2026-07-05 20:00:00",
       "dataPolicy": {
         "zh": "竞彩截止前，赛前分析先由 Elo 强度、长期历史样本、近一年状态、赛程密度、世界杯先验、比分分布与公开赛前信息层生成独立预测；官方 HAD/HHAD SP 和 SP 走势只用于校验市场分歧与价值风险。截止后保留历史预测，只结算赛果，不回写旧推荐。",
@@ -98929,7 +98929,7 @@
           "baseline": 2,
           "mid": 1
         },
-        "latestAt": "2026-07-05T06:33:08.558Z",
+        "latestAt": "2026-07-05T06:42:04.708Z",
         "latestSignature": "1X2:HAD:1:reference|BEST:HAD:1:recommend|GOALS::U2.5:reference|1.36/4.40/6.00|-1:2.14/3.52/2.65|45/25/29"
       }
     }
@@ -98946,7 +98946,7 @@
     "projectedScoreAway": 1,
     "probabilityModel": {
       "version": "unified-poisson-bayes-v56",
-      "generatedAt": "2026-07-05T06:37:37.340Z",
+      "generatedAt": "2026-07-05T06:42:36.248Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序；先用 Elo、长期历史样本、近一年状态、世界杯先验、赛程密度与 Poisson 比分分布生成独立足球预测。官方 SP/让球 SP 只用于市场校验、价值差比较和风险标签，不再驱动最终概率。",
         "en": "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model first builds an independent football forecast from Elo, long-run history, recent form, World Cup priors, and Poisson score distribution. Official SP/handicap SP are used only for market validation, value comparison, and risk tags; they do not drive the final probability."
@@ -99881,7 +99881,7 @@
       },
       "unifiedPosterior": {
         "version": "v56-score-review-draw-handicap-guard",
-        "generatedAt": "2026-07-05T06:37:37.341Z",
+        "generatedAt": "2026-07-05T06:42:36.249Z",
         "selectedMarket": "HAD",
         "selectedCode": "1",
         "selectedLabelZh": "主胜 哥德堡",
@@ -100057,8 +100057,8 @@
             "en": "Watch reason: independent model edge is about 10 points, market disagreement about 10 points, same-side handicap support about 20%; no single 1X2 pick is promoted."
           },
           {
-            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 500 网 HAD 胜平负参考 SP 更新时间：2026-07-05T06:33:02.647Z。",
-            "en": "Draw support is not dominant, but late SP movement still matters. 500.com HAD reference SP updated at 2026-07-05T06:33:02.647Z."
+            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 500 网 HAD 胜平负参考 SP 更新时间：2026-07-05T06:41:57.828Z。",
+            "en": "Draw support is not dominant, but late SP movement still matters. 500.com HAD reference SP updated at 2026-07-05T06:41:57.828Z."
           }
         ],
         "riskTags": [
@@ -100179,7 +100179,7 @@
     ],
     "externalSignals": {
       "source": "500.com:jczq",
-      "updatedAt": "2026-07-05T06:33:02.647Z",
+      "updatedAt": "2026-07-05T06:41:57.828Z",
       "sourceMatchId": "2040409",
       "fixtureId": "1362689",
       "matchNo": "周日205",
@@ -100403,13 +100403,13 @@
     "oddsSource": "500.com:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "500-fallback",
-    "oddsUpdatedAt": "2026-07-05T06:33:02.647Z",
+    "oddsUpdatedAt": "2026-07-05T06:41:57.828Z",
     "oddsSourceUrl": "https://trade.500.com/jczq/",
     "handicapLine": "-1",
     "handicapOddsSource": "500.com:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsUpdatedAt": "2026-07-05T06:33:02.647Z",
+    "handicapOddsUpdatedAt": "2026-07-05T06:41:57.828Z",
     "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
     "predictionMeta": {
       "policyVersion": "sporttery-day-formula-trace-v56",
@@ -100421,7 +100421,7 @@
       "worldCupPriorSignature": null,
       "scoreCalibrationSignature": "score-calibration-v2:0.048:{\"2\":-0.032,\"3\":-0.021,\"4+\":0.066,\"0-1\":0.029}:{\"clear-btts-open\":0.035,\"low-0-1\":0.032,\"open-4plus\":0.032,\"clear-clean-sheet\":-0.026}",
       "generatedAt": "2026-07-04T03:08:03.902Z",
-      "updatedAt": "2026-07-05T06:37:26.900Z",
+      "updatedAt": "2026-07-05T06:42:04.708Z",
       "cutoffTime": "2026-07-05 20:00:00",
       "dataPolicy": {
         "zh": "竞彩截止前，赛前分析先由 Elo 强度、长期历史样本、近一年状态、赛程密度、世界杯先验、比分分布与公开赛前信息层生成独立预测；官方 HAD/HHAD SP 和 SP 走势只用于校验市场分歧与价值风险。截止后保留历史预测，只结算赛果，不回写旧推荐。",
@@ -100816,7 +100816,7 @@
           "baseline": 2,
           "mid": 1
         },
-        "latestAt": "2026-07-05T06:33:08.558Z",
+        "latestAt": "2026-07-05T06:42:04.708Z",
         "latestSignature": "1X2:HAD:1:reference|BEST:HAD:1:recommend|GOALS::U2.5:reference|2.14/3.28/2.80|-1:4.40/3.90/1.55|42/25/33"
       }
     }
@@ -100833,7 +100833,7 @@
     "projectedScoreAway": 1,
     "probabilityModel": {
       "version": "unified-poisson-bayes-v56",
-      "generatedAt": "2026-07-05T06:37:37.342Z",
+      "generatedAt": "2026-07-05T06:42:36.250Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序；先用 Elo、长期历史样本、近一年状态、世界杯先验、赛程密度与 Poisson 比分分布生成独立足球预测。官方 SP/让球 SP 只用于市场校验、价值差比较和风险标签，不再驱动最终概率。",
         "en": "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model first builds an independent football forecast from Elo, long-run history, recent form, World Cup priors, and Poisson score distribution. Official SP/handicap SP are used only for market validation, value comparison, and risk tags; they do not drive the final probability."
@@ -101768,7 +101768,7 @@
       },
       "unifiedPosterior": {
         "version": "v56-score-review-draw-handicap-guard",
-        "generatedAt": "2026-07-05T06:37:37.343Z",
+        "generatedAt": "2026-07-05T06:42:36.250Z",
         "selectedMarket": "HHAD",
         "selectedCode": "1",
         "selectedLabelZh": "让胜",
@@ -101945,8 +101945,8 @@
             "en": "Watch reason: independent model edge is about 9 points, market disagreement about 27 points, same-side handicap support about 47%; no single 1X2 pick is promoted."
           },
           {
-            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 500 网 HAD 胜平负参考 SP 更新时间：2026-07-05T06:33:02.647Z。",
-            "en": "Draw support is not dominant, but late SP movement still matters. 500.com HAD reference SP updated at 2026-07-05T06:33:02.647Z."
+            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 500 网 HAD 胜平负参考 SP 更新时间：2026-07-05T06:41:57.828Z。",
+            "en": "Draw support is not dominant, but late SP movement still matters. 500.com HAD reference SP updated at 2026-07-05T06:41:57.828Z."
           }
         ],
         "riskTags": [
@@ -102067,7 +102067,7 @@
     ],
     "externalSignals": {
       "source": "500.com:jczq",
-      "updatedAt": "2026-07-05T06:33:02.647Z",
+      "updatedAt": "2026-07-05T06:41:57.828Z",
       "sourceMatchId": "2040410",
       "fixtureId": "1362688",
       "matchNo": "周日206",
@@ -102291,13 +102291,13 @@
     "oddsSource": "500.com:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "500-fallback",
-    "oddsUpdatedAt": "2026-07-05T06:33:02.647Z",
+    "oddsUpdatedAt": "2026-07-05T06:41:57.828Z",
     "oddsSourceUrl": "https://trade.500.com/jczq/",
     "handicapLine": "1",
     "handicapOddsSource": "500.com:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsUpdatedAt": "2026-07-05T06:33:02.647Z",
+    "handicapOddsUpdatedAt": "2026-07-05T06:41:57.828Z",
     "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
     "predictionMeta": {
       "policyVersion": "sporttery-day-formula-trace-v56",
@@ -102309,7 +102309,7 @@
       "worldCupPriorSignature": null,
       "scoreCalibrationSignature": "score-calibration-v2:0.048:{\"2\":-0.032,\"3\":-0.021,\"4+\":0.066,\"0-1\":0.029}:{\"clear-btts-open\":0.035,\"low-0-1\":0.032,\"open-4plus\":0.032,\"clear-clean-sheet\":-0.026}",
       "generatedAt": "2026-07-04T03:08:03.902Z",
-      "updatedAt": "2026-07-05T06:37:26.900Z",
+      "updatedAt": "2026-07-05T06:42:04.708Z",
       "cutoffTime": "2026-07-05 22:30:00",
       "dataPolicy": {
         "zh": "竞彩截止前，赛前分析先由 Elo 强度、长期历史样本、近一年状态、赛程密度、世界杯先验、比分分布与公开赛前信息层生成独立预测；官方 HAD/HHAD SP 和 SP 走势只用于校验市场分歧与价值风险。截止后保留历史预测，只结算赛果，不回写旧推荐。",
@@ -102703,7 +102703,7 @@
         "phases": {
           "baseline": 2
         },
-        "latestAt": "2026-07-05T06:33:08.558Z",
+        "latestAt": "2026-07-05T06:42:04.708Z",
         "latestSignature": "1X2:HAD:1:reference|BEST:HHAD:1:recommend|GOALS::U2.5:reference|3.70/3.60/1.72|1:1.88/3.45/3.25|42/26/33"
       }
     }
@@ -102720,7 +102720,7 @@
     "projectedScoreAway": 0,
     "probabilityModel": {
       "version": "unified-poisson-bayes-v56",
-      "generatedAt": "2026-07-05T06:37:37.344Z",
+      "generatedAt": "2026-07-05T06:42:36.251Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序；先用 Elo、长期历史样本、近一年状态、世界杯先验、赛程密度与 Poisson 比分分布生成独立足球预测。官方 SP/让球 SP 只用于市场校验、价值差比较和风险标签，不再驱动最终概率。",
         "en": "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model first builds an independent football forecast from Elo, long-run history, recent form, World Cup priors, and Poisson score distribution. Official SP/handicap SP are used only for market validation, value comparison, and risk tags; they do not drive the final probability."
@@ -104119,7 +104119,7 @@
       },
       "unifiedPosterior": {
         "version": "v56-score-review-draw-handicap-guard",
-        "generatedAt": "2026-07-05T06:37:37.344Z",
+        "generatedAt": "2026-07-05T06:42:36.252Z",
         "selectedMarket": "HAD",
         "selectedCode": "1",
         "selectedLabelZh": "主胜 巴西",
@@ -104366,8 +104366,8 @@
             "en": "Watch reason: independent model edge is about 18 points, market disagreement about 34 points, same-side handicap support about 30%; no single 1X2 pick is promoted."
           },
           {
-            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 500 网 HAD 胜平负参考 SP 更新时间：2026-07-05T06:33:02.647Z。",
-            "en": "Draw support is not dominant, but late SP movement still matters. 500.com HAD reference SP updated at 2026-07-05T06:33:02.647Z."
+            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 500 网 HAD 胜平负参考 SP 更新时间：2026-07-05T06:41:57.828Z。",
+            "en": "Draw support is not dominant, but late SP movement still matters. 500.com HAD reference SP updated at 2026-07-05T06:41:57.828Z."
           }
         ],
         "riskTags": [
@@ -104567,7 +104567,7 @@
     },
     "externalSignals": {
       "source": "500.com:jczq",
-      "updatedAt": "2026-07-05T06:33:06.731Z",
+      "updatedAt": "2026-07-05T06:42:03.355Z",
       "sourceMatchId": "2040374",
       "fixtureId": "1359170",
       "matchNo": "周日091",
@@ -104615,7 +104615,7 @@
       "weather": {
         "source": "open-meteo",
         "provider": "open-meteo",
-        "updatedAt": "2026-07-05T06:33:06.731Z",
+        "updatedAt": "2026-07-05T06:42:03.355Z",
         "forecastTime": "2026-07-05T20:00Z",
         "verified": false,
         "confidence": "estimated-location",
@@ -104828,13 +104828,13 @@
     "oddsSource": "500.com:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "500-fallback",
-    "oddsUpdatedAt": "2026-07-05T06:33:02.647Z",
+    "oddsUpdatedAt": "2026-07-05T06:41:57.828Z",
     "oddsSourceUrl": "https://trade.500.com/jczq/",
     "handicapLine": "-1",
     "handicapOddsSource": "500.com:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsUpdatedAt": "2026-07-05T06:33:02.647Z",
+    "handicapOddsUpdatedAt": "2026-07-05T06:41:57.828Z",
     "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
     "predictionMeta": {
       "policyVersion": "sporttery-day-formula-trace-v56",
@@ -104846,7 +104846,7 @@
       "worldCupPriorSignature": "kimi-worldcup-dataset-v1|065363d19babce35|teams:48|fixtures:104",
       "scoreCalibrationSignature": "score-calibration-v2:0.048:{\"2\":-0.032,\"3\":-0.021,\"4+\":0.066,\"0-1\":0.029}:{\"clear-btts-open\":0.035,\"low-0-1\":0.032,\"open-4plus\":0.032,\"clear-clean-sheet\":-0.026}",
       "generatedAt": "2026-07-03T03:05:18.174Z",
-      "updatedAt": "2026-07-05T06:37:26.900Z",
+      "updatedAt": "2026-07-05T06:42:04.708Z",
       "cutoffTime": "2026-07-05 23:00:00",
       "dataPolicy": {
         "zh": "竞彩截止前，赛前分析先由 Elo 强度、长期历史样本、近一年状态、赛程密度、世界杯先验、比分分布与公开赛前信息层生成独立预测；官方 HAD/HHAD SP 和 SP 走势只用于校验市场分歧与价值风险。截止后保留历史预测，只结算赛果，不回写旧推荐。",
@@ -105237,7 +105237,7 @@
         "phases": {
           "baseline": 10
         },
-        "latestAt": "2026-07-05T06:33:08.558Z",
+        "latestAt": "2026-07-05T06:42:04.708Z",
         "latestSignature": "1X2:HAD:1:reference|BEST:HAD:1:recommend|GOALS::U2.5:reference|1.53/3.74/4.80|-1:3.00/3.02/2.15|45/28/27"
       }
     }
@@ -105254,7 +105254,7 @@
     "projectedScoreAway": 2,
     "probabilityModel": {
       "version": "unified-poisson-bayes-v56",
-      "generatedAt": "2026-07-05T06:37:37.345Z",
+      "generatedAt": "2026-07-05T06:42:36.255Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序；先用 Elo、长期历史样本、近一年状态、世界杯先验、赛程密度与 Poisson 比分分布生成独立足球预测。官方 SP/让球 SP 只用于市场校验、价值差比较和风险标签，不再驱动最终概率。",
         "en": "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model first builds an independent football forecast from Elo, long-run history, recent form, World Cup priors, and Poisson score distribution. Official SP/handicap SP are used only for market validation, value comparison, and risk tags; they do not drive the final probability."
@@ -106628,7 +106628,7 @@
       },
       "unifiedPosterior": {
         "version": "v56-score-review-draw-handicap-guard",
-        "generatedAt": "2026-07-05T06:37:37.346Z",
+        "generatedAt": "2026-07-05T06:42:36.255Z",
         "selectedMarket": "HAD",
         "selectedCode": "2",
         "selectedLabelZh": "客胜 英格兰",
@@ -106874,8 +106874,8 @@
             "en": "Watch reason: independent model edge is about 31 points, market disagreement about 14 points, same-side handicap support about 18%; no single 1X2 pick is promoted."
           },
           {
-            "zh": "平局支持率偏高，胜平负方向需要防平。 500 网 HAD 胜平负参考 SP 更新时间：2026-07-05T06:33:02.647Z。",
-            "en": "Draw support is high, so cover the draw risk. 500.com HAD reference SP updated at 2026-07-05T06:33:02.647Z."
+            "zh": "平局支持率偏高，胜平负方向需要防平。 500 网 HAD 胜平负参考 SP 更新时间：2026-07-05T06:41:57.828Z。",
+            "en": "Draw support is high, so cover the draw risk. 500.com HAD reference SP updated at 2026-07-05T06:41:57.828Z."
           }
         ],
         "riskTags": [
@@ -107075,7 +107075,7 @@
     },
     "externalSignals": {
       "source": "500.com:jczq",
-      "updatedAt": "2026-07-05T06:33:06.731Z",
+      "updatedAt": "2026-07-05T06:42:03.355Z",
       "sourceMatchId": "2040394",
       "fixtureId": "1359173",
       "matchNo": "周日092",
@@ -107123,7 +107123,7 @@
       "weather": {
         "source": "open-meteo",
         "provider": "open-meteo",
-        "updatedAt": "2026-07-05T06:33:06.731Z",
+        "updatedAt": "2026-07-05T06:42:03.355Z",
         "forecastTime": "2026-07-06T00:00Z",
         "verified": false,
         "confidence": "estimated-location",
@@ -107336,13 +107336,13 @@
     "oddsSource": "500.com:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "500-fallback",
-    "oddsUpdatedAt": "2026-07-05T06:33:02.647Z",
+    "oddsUpdatedAt": "2026-07-05T06:41:57.828Z",
     "oddsSourceUrl": "https://trade.500.com/jczq/",
     "handicapLine": "1",
     "handicapOddsSource": "500.com:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsUpdatedAt": "2026-07-05T06:33:02.647Z",
+    "handicapOddsUpdatedAt": "2026-07-05T06:41:57.828Z",
     "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
     "predictionMeta": {
       "policyVersion": "sporttery-day-formula-trace-v56",
@@ -107354,7 +107354,7 @@
       "worldCupPriorSignature": "kimi-worldcup-dataset-v1|065363d19babce35|teams:48|fixtures:104",
       "scoreCalibrationSignature": "score-calibration-v2:0.048:{\"2\":-0.032,\"3\":-0.021,\"4+\":0.066,\"0-1\":0.029}:{\"clear-btts-open\":0.035,\"low-0-1\":0.032,\"open-4plus\":0.032,\"clear-clean-sheet\":-0.026}",
       "generatedAt": "2026-07-03T03:05:18.174Z",
-      "updatedAt": "2026-07-05T06:37:26.900Z",
+      "updatedAt": "2026-07-05T06:42:04.708Z",
       "cutoffTime": "2026-07-05 23:00:00",
       "dataPolicy": {
         "zh": "竞彩截止前，赛前分析先由 Elo 强度、长期历史样本、近一年状态、赛程密度、世界杯先验、比分分布与公开赛前信息层生成独立预测；官方 HAD/HHAD SP 和 SP 走势只用于校验市场分歧与价值风险。截止后保留历史预测，只结算赛果，不回写旧推荐。",
@@ -107745,7 +107745,7 @@
         "phases": {
           "baseline": 11
         },
-        "latestAt": "2026-07-05T06:33:08.558Z",
+        "latestAt": "2026-07-05T06:42:04.708Z",
         "latestSignature": "1X2:HAD:2:reference|BEST:HAD:2:recommend|GOALS::U2.5:reference|3.22/3.04/2.04|1:1.61/3.33/4.80|23/23/54"
       }
     }
@@ -107762,7 +107762,7 @@
     "projectedScoreAway": 1,
     "probabilityModel": {
       "version": "unified-poisson-bayes-v56",
-      "generatedAt": "2026-07-05T06:37:37.347Z",
+      "generatedAt": "2026-07-05T06:42:36.256Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序；先用 Elo、长期历史样本、近一年状态、世界杯先验、赛程密度与 Poisson 比分分布生成独立足球预测。官方 SP/让球 SP 只用于市场校验、价值差比较和风险标签，不再驱动最终概率。",
         "en": "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model first builds an independent football forecast from Elo, long-run history, recent form, World Cup priors, and Poisson score distribution. Official SP/handicap SP are used only for market validation, value comparison, and risk tags; they do not drive the final probability."
@@ -108697,7 +108697,7 @@
       },
       "unifiedPosterior": {
         "version": "v56-score-review-draw-handicap-guard",
-        "generatedAt": "2026-07-05T06:37:37.347Z",
+        "generatedAt": "2026-07-05T06:42:36.256Z",
         "selectedMarket": "HHAD",
         "selectedCode": "2",
         "selectedLabelZh": "让负",
@@ -108878,8 +108878,8 @@
             "en": "Watch reason: independent model edge is about 6 points, market disagreement about 3 points, same-side handicap support about 19%; no single 1X2 pick is promoted."
           },
           {
-            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 500 网 HAD 胜平负参考 SP 更新时间：2026-07-05T06:33:02.647Z。",
-            "en": "Draw support is not dominant, but late SP movement still matters. 500.com HAD reference SP updated at 2026-07-05T06:33:02.647Z."
+            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 500 网 HAD 胜平负参考 SP 更新时间：2026-07-05T06:41:57.828Z。",
+            "en": "Draw support is not dominant, but late SP movement still matters. 500.com HAD reference SP updated at 2026-07-05T06:41:57.828Z."
           }
         ],
         "riskTags": [
@@ -109008,7 +109008,7 @@
     ],
     "externalSignals": {
       "source": "500.com:jczq",
-      "updatedAt": "2026-07-05T06:33:02.647Z",
+      "updatedAt": "2026-07-05T06:41:57.828Z",
       "sourceMatchId": "2040411",
       "fixtureId": "1362690",
       "matchNo": "周一201",
@@ -109232,13 +109232,13 @@
     "oddsSource": "500.com:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "500-fallback",
-    "oddsUpdatedAt": "2026-07-05T06:33:02.647Z",
+    "oddsUpdatedAt": "2026-07-05T06:41:57.828Z",
     "oddsSourceUrl": "https://trade.500.com/jczq/",
     "handicapLine": "-1",
     "handicapOddsSource": "500.com:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsUpdatedAt": "2026-07-05T06:33:02.647Z",
+    "handicapOddsUpdatedAt": "2026-07-05T06:41:57.828Z",
     "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
     "predictionMeta": {
       "policyVersion": "sporttery-day-formula-trace-v56",
@@ -109250,7 +109250,7 @@
       "worldCupPriorSignature": null,
       "scoreCalibrationSignature": "score-calibration-v2:0.048:{\"2\":-0.032,\"3\":-0.021,\"4+\":0.066,\"0-1\":0.029}:{\"clear-btts-open\":0.035,\"low-0-1\":0.032,\"open-4plus\":0.032,\"clear-clean-sheet\":-0.026}",
       "generatedAt": "2026-07-04T03:08:03.902Z",
-      "updatedAt": "2026-07-05T06:37:26.900Z",
+      "updatedAt": "2026-07-05T06:42:04.708Z",
       "cutoffTime": "2026-07-06 22:00:00",
       "dataPolicy": {
         "zh": "竞彩截止前，赛前分析先由 Elo 强度、长期历史样本、近一年状态、赛程密度、世界杯先验、比分分布与公开赛前信息层生成独立预测；官方 HAD/HHAD SP 和 SP 走势只用于校验市场分歧与价值风险。截止后保留历史预测，只结算赛果，不回写旧推荐。",
@@ -109640,7 +109640,7 @@
         "phases": {
           "baseline": 1
         },
-        "latestAt": "2026-07-05T06:33:08.558Z",
+        "latestAt": "2026-07-05T06:42:04.708Z",
         "latestSignature": "1X2:HAD:1:reference|BEST:HHAD:2:recommend|GOALS::U2.5:reference|2.28/3.50/2.47|-1:4.65/4.20/1.48|40/27/34"
       },
       "updateReason": {
@@ -109661,7 +109661,7 @@
     "projectedScoreAway": 1,
     "probabilityModel": {
       "version": "unified-poisson-bayes-v56",
-      "generatedAt": "2026-07-05T06:37:37.348Z",
+      "generatedAt": "2026-07-05T06:42:36.257Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序；先用 Elo、长期历史样本、近一年状态、世界杯先验、赛程密度与 Poisson 比分分布生成独立足球预测。官方 SP/让球 SP 只用于市场校验、价值差比较和风险标签，不再驱动最终概率。",
         "en": "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model first builds an independent football forecast from Elo, long-run history, recent form, World Cup priors, and Poisson score distribution. Official SP/handicap SP are used only for market validation, value comparison, and risk tags; they do not drive the final probability."
@@ -110596,7 +110596,7 @@
       },
       "unifiedPosterior": {
         "version": "v56-score-review-draw-handicap-guard",
-        "generatedAt": "2026-07-05T06:37:37.348Z",
+        "generatedAt": "2026-07-05T06:42:36.257Z",
         "selectedMarket": "HHAD",
         "selectedCode": "1",
         "selectedLabelZh": "让胜",
@@ -110773,8 +110773,8 @@
             "en": "Watch reason: independent model edge is about 17 points, market disagreement about 14 points, same-side handicap support about 55%; no single 1X2 pick is promoted."
           },
           {
-            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 500 网 HAD 胜平负参考 SP 更新时间：2026-07-05T06:33:02.647Z。",
-            "en": "Draw support is not dominant, but late SP movement still matters. 500.com HAD reference SP updated at 2026-07-05T06:33:02.647Z."
+            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 500 网 HAD 胜平负参考 SP 更新时间：2026-07-05T06:41:57.828Z。",
+            "en": "Draw support is not dominant, but late SP movement still matters. 500.com HAD reference SP updated at 2026-07-05T06:41:57.828Z."
           }
         ],
         "riskTags": [
@@ -110895,7 +110895,7 @@
     ],
     "externalSignals": {
       "source": "500.com:jczq",
-      "updatedAt": "2026-07-05T06:33:02.647Z",
+      "updatedAt": "2026-07-05T06:41:57.828Z",
       "sourceMatchId": "2040412",
       "fixtureId": "1362686",
       "matchNo": "周一202",
@@ -111119,13 +111119,13 @@
     "oddsSource": "500.com:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "500-fallback",
-    "oddsUpdatedAt": "2026-07-05T06:33:02.647Z",
+    "oddsUpdatedAt": "2026-07-05T06:41:57.828Z",
     "oddsSourceUrl": "https://trade.500.com/jczq/",
     "handicapLine": "1",
     "handicapOddsSource": "500.com:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsUpdatedAt": "2026-07-05T06:33:02.647Z",
+    "handicapOddsUpdatedAt": "2026-07-05T06:41:57.828Z",
     "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
     "predictionMeta": {
       "policyVersion": "sporttery-day-formula-trace-v56",
@@ -111137,7 +111137,7 @@
       "worldCupPriorSignature": null,
       "scoreCalibrationSignature": "score-calibration-v2:0.048:{\"2\":-0.032,\"3\":-0.021,\"4+\":0.066,\"0-1\":0.029}:{\"clear-btts-open\":0.035,\"low-0-1\":0.032,\"open-4plus\":0.032,\"clear-clean-sheet\":-0.026}",
       "generatedAt": "2026-07-04T03:08:03.902Z",
-      "updatedAt": "2026-07-05T06:37:26.900Z",
+      "updatedAt": "2026-07-05T06:42:04.708Z",
       "cutoffTime": "2026-07-06 22:00:00",
       "dataPolicy": {
         "zh": "竞彩截止前，赛前分析先由 Elo 强度、长期历史样本、近一年状态、赛程密度、世界杯先验、比分分布与公开赛前信息层生成独立预测；官方 HAD/HHAD SP 和 SP 走势只用于校验市场分歧与价值风险。截止后保留历史预测，只结算赛果，不回写旧推荐。",
@@ -111527,7 +111527,7 @@
         "phases": {
           "baseline": 1
         },
-        "latestAt": "2026-07-05T06:33:08.558Z",
+        "latestAt": "2026-07-05T06:42:04.708Z",
         "latestSignature": "1X2:HAD:1:reference|BEST:HHAD:1:recommend|GOALS::O2.5:reference|3.02/3.25/2.04|1:1.60/3.70/4.27|46/26/29"
       },
       "updateReason": {
@@ -111548,7 +111548,7 @@
     "projectedScoreAway": 1,
     "probabilityModel": {
       "version": "unified-poisson-bayes-v56",
-      "generatedAt": "2026-07-05T06:37:37.349Z",
+      "generatedAt": "2026-07-05T06:42:36.258Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序；先用 Elo、长期历史样本、近一年状态、世界杯先验、赛程密度与 Poisson 比分分布生成独立足球预测。官方 SP/让球 SP 只用于市场校验、价值差比较和风险标签，不再驱动最终概率。",
         "en": "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model first builds an independent football forecast from Elo, long-run history, recent form, World Cup priors, and Poisson score distribution. Official SP/handicap SP are used only for market validation, value comparison, and risk tags; they do not drive the final probability."
@@ -112922,7 +112922,7 @@
       },
       "unifiedPosterior": {
         "version": "v56-score-review-draw-handicap-guard",
-        "generatedAt": "2026-07-05T06:37:37.350Z",
+        "generatedAt": "2026-07-05T06:42:36.259Z",
         "selectedMarket": "HHAD",
         "selectedCode": "1",
         "selectedLabelZh": "让胜",
@@ -113174,8 +113174,8 @@
             "en": "Watch reason: independent model edge is about 9 points, market disagreement about 23 points, same-side handicap support about 26%; no single 1X2 pick is promoted."
           },
           {
-            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 500 网 HAD 胜平负参考 SP 更新时间：2026-07-05T06:33:02.647Z。",
-            "en": "Draw support is not dominant, but late SP movement still matters. 500.com HAD reference SP updated at 2026-07-05T06:33:02.647Z."
+            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 500 网 HAD 胜平负参考 SP 更新时间：2026-07-05T06:41:57.828Z。",
+            "en": "Draw support is not dominant, but late SP movement still matters. 500.com HAD reference SP updated at 2026-07-05T06:41:57.828Z."
           }
         ],
         "riskTags": [
@@ -113379,7 +113379,7 @@
     },
     "externalSignals": {
       "source": "500.com:jczq",
-      "updatedAt": "2026-07-05T06:33:06.731Z",
+      "updatedAt": "2026-07-05T06:42:03.355Z",
       "sourceMatchId": "2040416",
       "fixtureId": "1359176",
       "matchNo": "周一093",
@@ -113427,7 +113427,7 @@
       "weather": {
         "source": "open-meteo",
         "provider": "open-meteo",
-        "updatedAt": "2026-07-05T06:33:06.731Z",
+        "updatedAt": "2026-07-05T06:42:03.355Z",
         "forecastTime": "2026-07-06T19:00Z",
         "verified": false,
         "confidence": "estimated-location",
@@ -113640,13 +113640,13 @@
     "oddsSource": "500.com:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "500-fallback",
-    "oddsUpdatedAt": "2026-07-05T06:33:02.647Z",
+    "oddsUpdatedAt": "2026-07-05T06:41:57.828Z",
     "oddsSourceUrl": "https://trade.500.com/jczq/",
     "handicapLine": "1",
     "handicapOddsSource": "500.com:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsUpdatedAt": "2026-07-05T06:33:02.647Z",
+    "handicapOddsUpdatedAt": "2026-07-05T06:41:57.828Z",
     "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
     "predictionMeta": {
       "policyVersion": "sporttery-day-formula-trace-v56",
@@ -113658,7 +113658,7 @@
       "worldCupPriorSignature": "kimi-worldcup-dataset-v1|065363d19babce35|teams:48|fixtures:104",
       "scoreCalibrationSignature": "score-calibration-v2:0.048:{\"2\":-0.032,\"3\":-0.021,\"4+\":0.066,\"0-1\":0.029}:{\"clear-btts-open\":0.035,\"low-0-1\":0.032,\"open-4plus\":0.032,\"clear-clean-sheet\":-0.026}",
       "generatedAt": "2026-07-04T03:08:03.902Z",
-      "updatedAt": "2026-07-05T06:37:26.900Z",
+      "updatedAt": "2026-07-05T06:42:04.708Z",
       "cutoffTime": "2026-07-06 22:00:00",
       "dataPolicy": {
         "zh": "竞彩截止前，赛前分析先由 Elo 强度、长期历史样本、近一年状态、赛程密度、世界杯先验、比分分布与公开赛前信息层生成独立预测；官方 HAD/HHAD SP 和 SP 走势只用于校验市场分歧与价值风险。截止后保留历史预测，只结算赛果，不回写旧推荐。",
@@ -114049,7 +114049,7 @@
         "phases": {
           "baseline": 5
         },
-        "latestAt": "2026-07-05T06:33:08.558Z",
+        "latestAt": "2026-07-05T06:42:04.708Z",
         "latestSignature": "1X2:HAD:2:reference|BEST:HHAD:1:recommend|GOALS::U2.5:reference|3.83/3.30/1.77|1:1.82/3.48/3.42|33/26/42"
       }
     }
@@ -114066,7 +114066,7 @@
     "projectedScoreAway": 1,
     "probabilityModel": {
       "version": "unified-poisson-bayes-v56",
-      "generatedAt": "2026-07-05T06:37:37.350Z",
+      "generatedAt": "2026-07-05T06:42:36.259Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序；先用 Elo、长期历史样本、近一年状态、世界杯先验、赛程密度与 Poisson 比分分布生成独立足球预测。官方 SP/让球 SP 只用于市场校验、价值差比较和风险标签，不再驱动最终概率。",
         "en": "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model first builds an independent football forecast from Elo, long-run history, recent form, World Cup priors, and Poisson score distribution. Official SP/handicap SP are used only for market validation, value comparison, and risk tags; they do not drive the final probability."
@@ -115437,7 +115437,7 @@
       },
       "unifiedPosterior": {
         "version": "v56-score-review-draw-handicap-guard",
-        "generatedAt": "2026-07-05T06:37:37.351Z",
+        "generatedAt": "2026-07-05T06:42:36.260Z",
         "selectedMarket": "HHAD",
         "selectedCode": "1",
         "selectedLabelZh": "让胜",
@@ -115692,8 +115692,8 @@
             "en": "Watch reason: independent model edge is about 3 points, market disagreement about 0 points, same-side handicap support about 18%; no single 1X2 pick is promoted."
           },
           {
-            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 500 网 HAD 胜平负参考 SP 更新时间：2026-07-05T06:33:02.647Z。",
-            "en": "Draw support is not dominant, but late SP movement still matters. 500.com HAD reference SP updated at 2026-07-05T06:33:02.647Z."
+            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 500 网 HAD 胜平负参考 SP 更新时间：2026-07-05T06:41:57.828Z。",
+            "en": "Draw support is not dominant, but late SP movement still matters. 500.com HAD reference SP updated at 2026-07-05T06:41:57.828Z."
           }
         ],
         "riskTags": [
@@ -115897,7 +115897,7 @@
     },
     "externalSignals": {
       "source": "500.com:jczq",
-      "updatedAt": "2026-07-05T06:33:06.731Z",
+      "updatedAt": "2026-07-05T06:42:03.355Z",
       "sourceMatchId": "2040395",
       "fixtureId": "1359180",
       "matchNo": "周一094",
@@ -115945,7 +115945,7 @@
       "weather": {
         "source": "open-meteo",
         "provider": "open-meteo",
-        "updatedAt": "2026-07-05T06:33:06.731Z",
+        "updatedAt": "2026-07-05T06:42:03.355Z",
         "forecastTime": "2026-07-07T00:00Z",
         "verified": false,
         "confidence": "estimated-location",
@@ -116158,13 +116158,13 @@
     "oddsSource": "500.com:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "500-fallback",
-    "oddsUpdatedAt": "2026-07-05T06:33:02.647Z",
+    "oddsUpdatedAt": "2026-07-05T06:41:57.828Z",
     "oddsSourceUrl": "https://trade.500.com/jczq/",
     "handicapLine": "1",
     "handicapOddsSource": "500.com:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsUpdatedAt": "2026-07-05T06:33:02.647Z",
+    "handicapOddsUpdatedAt": "2026-07-05T06:41:57.828Z",
     "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
     "predictionMeta": {
       "policyVersion": "sporttery-day-formula-trace-v56",
@@ -116176,7 +116176,7 @@
       "worldCupPriorSignature": "kimi-worldcup-dataset-v1|065363d19babce35|teams:48|fixtures:104",
       "scoreCalibrationSignature": "score-calibration-v2:0.048:{\"2\":-0.032,\"3\":-0.021,\"4+\":0.066,\"0-1\":0.029}:{\"clear-btts-open\":0.035,\"low-0-1\":0.032,\"open-4plus\":0.032,\"clear-clean-sheet\":-0.026}",
       "generatedAt": "2026-07-04T03:08:03.902Z",
-      "updatedAt": "2026-07-05T06:37:26.900Z",
+      "updatedAt": "2026-07-05T06:42:04.708Z",
       "cutoffTime": "2026-07-06 22:00:00",
       "dataPolicy": {
         "zh": "竞彩截止前，赛前分析先由 Elo 强度、长期历史样本、近一年状态、赛程密度、世界杯先验、比分分布与公开赛前信息层生成独立预测；官方 HAD/HHAD SP 和 SP 走势只用于校验市场分歧与价值风险。截止后保留历史预测，只结算赛果，不回写旧推荐。",
@@ -116567,7 +116567,7 @@
         "phases": {
           "baseline": 4
         },
-        "latestAt": "2026-07-05T06:33:08.558Z",
+        "latestAt": "2026-07-05T06:42:04.708Z",
         "latestSignature": "1X2:HHAD:1:reference|BEST:HHAD:1:recommend|GOALS::U2.5:reference|2.44/3.26/2.42|1:1.42/4.40/5.05|35/26/39"
       }
     }
@@ -116584,7 +116584,7 @@
     "projectedScoreAway": 0,
     "probabilityModel": {
       "version": "unified-poisson-bayes-v56",
-      "generatedAt": "2026-07-05T06:37:37.352Z",
+      "generatedAt": "2026-07-05T06:42:36.261Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序；先用 Elo、长期历史样本、近一年状态、世界杯先验、赛程密度与 Poisson 比分分布生成独立足球预测。官方 SP/让球 SP 只用于市场校验、价值差比较和风险标签，不再驱动最终概率。",
         "en": "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model first builds an independent football forecast from Elo, long-run history, recent form, World Cup priors, and Poisson score distribution. Official SP/handicap SP are used only for market validation, value comparison, and risk tags; they do not drive the final probability."
@@ -117983,7 +117983,7 @@
       },
       "unifiedPosterior": {
         "version": "v56-score-review-draw-handicap-guard",
-        "generatedAt": "2026-07-05T06:37:37.352Z",
+        "generatedAt": "2026-07-05T06:42:36.262Z",
         "selectedMarket": "HAD",
         "selectedCode": "1",
         "selectedLabelZh": "主胜 阿根廷",
@@ -118233,8 +118233,8 @@
             "en": "Watch reason: independent model edge is about 37 points, market disagreement about 53 points, same-side handicap support about 47%; no single 1X2 pick is promoted."
           },
           {
-            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 500 网 HAD 胜平负参考 SP 更新时间：2026-07-05T06:33:02.647Z。",
-            "en": "Draw support is not dominant, but late SP movement still matters. 500.com HAD reference SP updated at 2026-07-05T06:33:02.647Z."
+            "zh": "平局支持率未明显压低主方向，但仍需留意赛前 SP 变化。 500 网 HAD 胜平负参考 SP 更新时间：2026-07-05T06:41:57.828Z。",
+            "en": "Draw support is not dominant, but late SP movement still matters. 500.com HAD reference SP updated at 2026-07-05T06:41:57.828Z."
           }
         ],
         "riskTags": [
@@ -118430,7 +118430,7 @@
     },
     "externalSignals": {
       "source": "500.com:jczq",
-      "updatedAt": "2026-07-05T06:33:06.731Z",
+      "updatedAt": "2026-07-05T06:42:03.355Z",
       "sourceMatchId": "2040427",
       "fixtureId": "1359183",
       "matchNo": "周二095",
@@ -118478,7 +118478,7 @@
       "weather": {
         "source": "open-meteo",
         "provider": "open-meteo",
-        "updatedAt": "2026-07-05T06:33:06.731Z",
+        "updatedAt": "2026-07-05T06:42:03.355Z",
         "forecastTime": "2026-07-07T16:00Z",
         "verified": false,
         "confidence": "estimated-location",
@@ -118691,13 +118691,13 @@
     "oddsSource": "500.com:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "500-fallback",
-    "oddsUpdatedAt": "2026-07-05T06:33:02.647Z",
+    "oddsUpdatedAt": "2026-07-05T06:41:57.828Z",
     "oddsSourceUrl": "https://trade.500.com/jczq/",
     "handicapLine": "-1",
     "handicapOddsSource": "500.com:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsUpdatedAt": "2026-07-05T06:33:02.647Z",
+    "handicapOddsUpdatedAt": "2026-07-05T06:41:57.828Z",
     "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
     "predictionMeta": {
       "policyVersion": "sporttery-day-formula-trace-v56",
@@ -118709,7 +118709,7 @@
       "worldCupPriorSignature": "kimi-worldcup-dataset-v1|065363d19babce35|teams:48|fixtures:104",
       "scoreCalibrationSignature": "score-calibration-v2:0.048:{\"2\":-0.032,\"3\":-0.021,\"4+\":0.066,\"0-1\":0.029}:{\"clear-btts-open\":0.035,\"low-0-1\":0.032,\"open-4plus\":0.032,\"clear-clean-sheet\":-0.026}",
       "generatedAt": "2026-07-05T03:06:05.084Z",
-      "updatedAt": "2026-07-05T06:37:26.900Z",
+      "updatedAt": "2026-07-05T06:42:04.708Z",
       "cutoffTime": "2026-07-07 22:00:00",
       "dataPolicy": {
         "zh": "竞彩截止前，赛前分析先由 Elo 强度、长期历史样本、近一年状态、赛程密度、世界杯先验、比分分布与公开赛前信息层生成独立预测；官方 HAD/HHAD SP 和 SP 走势只用于校验市场分歧与价值风险。截止后保留历史预测，只结算赛果，不回写旧推荐。",
@@ -119096,7 +119096,7 @@
         "phases": {
           "baseline": 1
         },
-        "latestAt": "2026-07-05T06:33:08.558Z",
+        "latestAt": "2026-07-05T06:42:04.708Z",
         "latestSignature": "1X2:HAD:1:reference|BEST:HAD:1:recommend|GOALS::U2.5:reference|1.23/4.65/10.00|-1:1.89/3.35/3.32|61/23/17"
       },
       "updateReason": {
@@ -119117,7 +119117,7 @@
     "projectedScoreAway": 1,
     "probabilityModel": {
       "version": "unified-poisson-bayes-v56",
-      "generatedAt": "2026-07-05T06:37:37.353Z",
+      "generatedAt": "2026-07-05T06:42:36.262Z",
       "basis": {
         "zh": "模型按竞彩日归档、按官方开赛时间排序；先用 Elo、长期历史样本、近一年状态、世界杯先验、赛程密度与 Poisson 比分分布生成独立足球预测。官方 SP/让球 SP 只用于市场校验、价值差比较和风险标签，不再驱动最终概率。",
         "en": "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model first builds an independent football forecast from Elo, long-run history, recent form, World Cup priors, and Poisson score distribution. Official SP/handicap SP are used only for market validation, value comparison, and risk tags; they do not drive the final probability."
@@ -120488,7 +120488,7 @@
       },
       "unifiedPosterior": {
         "version": "v56-score-review-draw-handicap-guard",
-        "generatedAt": "2026-07-05T06:37:37.354Z",
+        "generatedAt": "2026-07-05T06:42:36.263Z",
         "selectedMarket": "HHAD",
         "selectedCode": "1",
         "selectedLabelZh": "让胜",
@@ -120742,8 +120742,8 @@
             "en": "Watch reason: independent model edge is about 6 points, market disagreement about 7 points, same-side handicap support about 16%; no single 1X2 pick is promoted."
           },
           {
-            "zh": "平局支持率偏高，胜平负方向需要防平。 500 网 HAD 胜平负参考 SP 更新时间：2026-07-05T06:33:02.647Z。",
-            "en": "Draw support is high, so cover the draw risk. 500.com HAD reference SP updated at 2026-07-05T06:33:02.647Z."
+            "zh": "平局支持率偏高，胜平负方向需要防平。 500 网 HAD 胜平负参考 SP 更新时间：2026-07-05T06:41:57.828Z。",
+            "en": "Draw support is high, so cover the draw risk. 500.com HAD reference SP updated at 2026-07-05T06:41:57.828Z."
           }
         ],
         "riskTags": [
@@ -120947,7 +120947,7 @@
     },
     "externalSignals": {
       "source": "500.com:jczq",
-      "updatedAt": "2026-07-05T06:33:06.731Z",
+      "updatedAt": "2026-07-05T06:42:03.355Z",
       "sourceMatchId": "2040428",
       "fixtureId": "1359186",
       "matchNo": "周二096",
@@ -120995,7 +120995,7 @@
       "weather": {
         "source": "open-meteo",
         "provider": "open-meteo",
-        "updatedAt": "2026-07-05T06:33:06.731Z",
+        "updatedAt": "2026-07-05T06:42:03.355Z",
         "forecastTime": "2026-07-07T20:00Z",
         "verified": false,
         "confidence": "estimated-location",
@@ -121208,13 +121208,13 @@
     "oddsSource": "500.com:HAD",
     "oddsPoolCode": "HAD",
     "oddsSourceMethod": "500-fallback",
-    "oddsUpdatedAt": "2026-07-05T06:33:02.647Z",
+    "oddsUpdatedAt": "2026-07-05T06:41:57.828Z",
     "oddsSourceUrl": "https://trade.500.com/jczq/",
     "handicapLine": "1",
     "handicapOddsSource": "500.com:HHAD",
     "handicapOddsPoolCode": "HHAD",
     "handicapOddsSourceMethod": "500-fallback",
-    "handicapOddsUpdatedAt": "2026-07-05T06:33:02.647Z",
+    "handicapOddsUpdatedAt": "2026-07-05T06:41:57.828Z",
     "handicapOddsSourceUrl": "https://trade.500.com/jczq/",
     "predictionMeta": {
       "policyVersion": "sporttery-day-formula-trace-v56",
@@ -121226,7 +121226,7 @@
       "worldCupPriorSignature": "kimi-worldcup-dataset-v1|065363d19babce35|teams:48|fixtures:104",
       "scoreCalibrationSignature": "score-calibration-v2:0.048:{\"2\":-0.032,\"3\":-0.021,\"4+\":0.066,\"0-1\":0.029}:{\"clear-btts-open\":0.035,\"low-0-1\":0.032,\"open-4plus\":0.032,\"clear-clean-sheet\":-0.026}",
       "generatedAt": "2026-07-05T03:06:05.084Z",
-      "updatedAt": "2026-07-05T06:37:26.900Z",
+      "updatedAt": "2026-07-05T06:42:04.708Z",
       "cutoffTime": "2026-07-07 22:00:00",
       "dataPolicy": {
         "zh": "竞彩截止前，赛前分析先由 Elo 强度、长期历史样本、近一年状态、赛程密度、世界杯先验、比分分布与公开赛前信息层生成独立预测；官方 HAD/HHAD SP 和 SP 走势只用于校验市场分歧与价值风险。截止后保留历史预测，只结算赛果，不回写旧推荐。",
@@ -121613,7 +121613,7 @@
         "phases": {
           "baseline": 1
         },
-        "latestAt": "2026-07-05T06:33:08.558Z",
+        "latestAt": "2026-07-05T06:42:04.708Z",
         "latestSignature": "1X2:HAD:2:reference|BEST:HHAD:1:recommend|GOALS::U2.5:reference|2.91/2.82/2.32|1:1.46/3.75/5.65|34/27/40"
       },
       "updateReason": {
