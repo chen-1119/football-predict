@@ -52,7 +52,9 @@ CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS="${RELEASE_CANDIDATE_VERIFIER_RUNTIME_MAX
 CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS="${RELEASE_CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS:-420}"
 CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS="${RELEASE_CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS:-30}"
 CANDIDATE_REFRESH_STEP_RUNTIME_MAX_SECONDS="${RELEASE_CANDIDATE_REFRESH_STEP_RUNTIME_MAX_SECONDS:-90}"
-LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS="${RELEASE_LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS:-120}"
+LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS="${RELEASE_LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS:-240}"
+readonly LIVE_SQLITE_PREBUILD_CAPACITY_SETTLE_ATTEMPTS=10
+readonly LIVE_SQLITE_PREBUILD_CAPACITY_SETTLE_DELAY_SECONDS=5
 ALLOW_STOPPED_WINDOW_SQLITE_EXPORT="${RELEASE_ALLOW_STOPPED_WINDOW_SQLITE_EXPORT:-0}"
 WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS="${RELEASE_WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS:-600}"
 POST_SWAP_TRANSITION_ROLLBACK_MARGIN_SECONDS="${RELEASE_POST_SWAP_TRANSITION_ROLLBACK_MARGIN_SECONDS:-120}"
@@ -657,7 +659,7 @@ restore_release_fast_watcher_after_failed_pre_swap() {
 assert_live_sqlite_prebuild_capacity() {
   local app_control_group app_cgroup_dir app_memory_current app_memory_current_before
   local app_memory_current_after app_inactive_file capacity_output memory_sample sample_current
-  local sample_inactive_file policy_script runtime_env_identity
+  local sample_inactive_file policy_script runtime_env_identity capacity_attempt
   assert_release_fast_watcher_pause_guard || {
     printf 'live SQLite prebuild capacity gate requires the guarded watcher pause\n' >&2
     return 1
@@ -696,9 +698,16 @@ assert_live_sqlite_prebuild_capacity() {
     printf 'live SQLite prebuild capacity gate cannot read the app cgroup memory evidence\n' >&2
     return 1
   }
-  app_memory_current=""
-  app_inactive_file=""
-  for memory_sample in 1 2; do
+  policy_script="$NEXT_DIR/scripts/releasePrebuildPolicy.cjs"
+  [ -f "$policy_script" ] && [ ! -L "$policy_script" ] \
+    && [ "$(stat -c '%h' -- "$policy_script")" = "1" ] || {
+      printf 'live SQLite prebuild capacity policy is unavailable\n' >&2
+      return 1
+    }
+  for capacity_attempt in $(seq 1 "$LIVE_SQLITE_PREBUILD_CAPACITY_SETTLE_ATTEMPTS"); do
+    app_memory_current=""
+    app_inactive_file=""
+    for memory_sample in 1 2; do
     app_memory_current_before="$(cat -- "$app_cgroup_dir/memory.current")" || return 1
     sample_inactive_file="$(awk '$1 == "inactive_file" { value = $2; count += 1 } END { if (count == 1) print value }' \
       "$app_cgroup_dir/memory.stat")" || return 1
@@ -726,23 +735,27 @@ assert_live_sqlite_prebuild_capacity() {
     if [ -z "$app_inactive_file" ] || (( sample_inactive_file < app_inactive_file )); then
       app_inactive_file="$sample_inactive_file"
     fi
-    [ "$memory_sample" = "2" ] || sleep 1
+      [ "$memory_sample" = "2" ] || sleep 1
+    done
+    if capacity_output="$(run_as_service_user_with_runtime_env \
+      "$NODE_HOME/bin/node" "$policy_script" capacity \
+        --app-memory-current-bytes "$app_memory_current" \
+        --app-inactive-file-bytes "$app_inactive_file" 2>&1)"; then
+      [ -n "$capacity_output" ] || {
+        printf 'live SQLite prebuild capacity policy returned no evidence\n' >&2
+        return 1
+      }
+      log "live SQLite prebuild capacity accepted after settle attempt ${capacity_attempt}: ${capacity_output}"
+      return 0
+    fi
+    if [ "$capacity_attempt" -lt "$LIVE_SQLITE_PREBUILD_CAPACITY_SETTLE_ATTEMPTS" ]; then
+      log "live SQLite prebuild capacity pending after restart: attempt=${capacity_attempt}/${LIVE_SQLITE_PREBUILD_CAPACITY_SETTLE_ATTEMPTS} evidence=${capacity_output}"
+      sleep "$LIVE_SQLITE_PREBUILD_CAPACITY_SETTLE_DELAY_SECONDS"
+    fi
   done
-  policy_script="$NEXT_DIR/scripts/releasePrebuildPolicy.cjs"
-  [ -f "$policy_script" ] && [ ! -L "$policy_script" ] \
-    && [ "$(stat -c '%h' -- "$policy_script")" = "1" ] || {
-      printf 'live SQLite prebuild capacity policy is unavailable\n' >&2
-      return 1
-    }
-  capacity_output="$(run_as_service_user_with_runtime_env \
-    "$NODE_HOME/bin/node" "$policy_script" capacity \
-      --app-memory-current-bytes "$app_memory_current" \
-      --app-inactive-file-bytes "$app_inactive_file")" || return 1
-  [ -n "$capacity_output" ] || {
-    printf 'live SQLite prebuild capacity policy returned no evidence\n' >&2
-    return 1
-  }
-  log "live SQLite prebuild capacity accepted: ${capacity_output}"
+  printf 'live SQLite prebuild capacity gate remained unsafe after %s settle attempts: %s\n' \
+    "$LIVE_SQLITE_PREBUILD_CAPACITY_SETTLE_ATTEMPTS" "$capacity_output" >&2
+  return 1
 }
 
 assert_recovery_root_safe() {
@@ -6032,7 +6045,7 @@ fi
   || { printf 'invalid candidate refresh step RuntimeMaxSec: %s\n' "$CANDIDATE_REFRESH_STEP_RUNTIME_MAX_SECONDS" >&2; exit 1; }
 [[ "$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" =~ ^[0-9]+$ ]] \
   && [ "$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" -ge 60 ] \
-  && [ "$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" -le 120 ] \
+  && [ "$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" -le 300 ] \
   || { printf 'invalid live SQLite prebuild RuntimeMaxSec: %s\n' "$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" >&2; exit 1; }
 [[ "$ALLOW_STOPPED_WINDOW_SQLITE_EXPORT" =~ ^[01]$ ]] \
   || { printf 'invalid stopped-window SQLite export break-glass flag: %s\n' "$ALLOW_STOPPED_WINDOW_SQLITE_EXPORT" >&2; exit 1; }
