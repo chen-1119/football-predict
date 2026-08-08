@@ -7,6 +7,7 @@ const {
   canonicalRecommendationDecision,
   comparablePoolRows,
   compareRecommendationProjectionPair,
+  hasDirectionalEvidence,
   isResultPhase,
   publishedBestDecision,
   scheduledWithoutBestIds,
@@ -318,7 +319,7 @@ const runVerificationWithAccess = async (config) => {
 
   const scheduledWithoutBest = scheduledWithoutBestIds(rows, verifiedAtMs);
   checks.push({
-    name: "every scheduled row has an explicit BEST recommendation",
+    name: "every scheduled row that exposes a direction has an explicit BEST recommendation",
     ok: scheduledWithoutBest.length === 0,
     missingIds: scheduledWithoutBest,
   });
@@ -327,6 +328,7 @@ const runVerificationWithAccess = async (config) => {
   const resultPhaseWithoutArchive = rows
     .filter((row) => (
       isResultPhase(row, verifiedAtMs)
+      && hasDirectionalEvidence(row)
       && !archivedDecision(row)
       && !isAuthoritativeResultOnlyArchive(row, verifiedAtMs)
     ))
@@ -344,7 +346,7 @@ const runVerificationWithAccess = async (config) => {
     return counts;
   }, {});
   checks.push({
-    name: "every directional post-kickoff or result-phase row has an immutable pre-match archive",
+    name: "every post-kickoff or result-phase row that exposed a direction has an immutable pre-match archive",
     ok: resultPhaseWithoutArchive.length === 0,
     missingIds: resultPhaseWithoutArchive,
     resultOnlyArchives: resultOnlyArchives.length,

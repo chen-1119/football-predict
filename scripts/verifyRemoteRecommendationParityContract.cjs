@@ -23,6 +23,8 @@ const scheduled = {
   kickoffTime: "2099-08-01T01:00:00+08:00",
   buyEndTime: "2099-08-01T00:55:00+08:00",
   eventVersion: "2099-08-01T01:00:00+08:00",
+  odds: { odds1: 1.86, oddsX: 3.4, odds2: 4.2 },
+  oddsSource: "sporttery:had",
   predictions: [prediction],
 };
 const finished = {
@@ -73,6 +75,19 @@ const futureScheduledWithoutBest = {
   id: "sporttery_missing_best",
   sourceMatchId: "missing_best",
   predictions: [],
+};
+const futureScheduledWithoutOfficialSp = {
+  ...futureScheduledWithoutBest,
+  id: "sporttery_pending_sale",
+  sourceMatchId: "pending_sale",
+  odds: undefined,
+  oddsSource: undefined,
+};
+const futureScheduledWithOrphanDirection = {
+  ...futureScheduledWithoutBest,
+  id: "sporttery_orphan_direction",
+  sourceMatchId: "orphan_direction",
+  predictions: [{ ...prediction, marketType: "1X2" }],
 };
 const resultOnlyArchive = {
   id: "sporttery_result_only",
@@ -125,10 +140,20 @@ assert.equal(
 );
 assert.deepEqual(
   scheduledWithoutBestIds(
-    [postKickoffScheduledWithArchive, futureScheduledWithoutBest],
+    [
+      postKickoffScheduledWithArchive,
+      futureScheduledWithoutBest,
+      futureScheduledWithoutOfficialSp,
+      futureScheduledWithOrphanDirection,
+    ],
     Date.parse("2026-07-30T00:00:00.000Z"),
   ),
-  ["missing_best"],
+  ["orphan_direction"],
+);
+assert.equal(
+  compareRecommendationParity(futureScheduledWithoutBest, { ...futureScheduledWithoutBest }).ok,
+  true,
+  "a scheduled row with official SP but no publishable direction must remain parity-consistent",
 );
 assert.equal(compareRecommendationParity(finished, { ...finished }).ok, true);
 assert.equal(isAuthoritativeResultOnlyArchive(resultOnlyArchive), true);
