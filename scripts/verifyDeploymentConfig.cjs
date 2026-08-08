@@ -1383,7 +1383,7 @@ const run = () => {
   const writeBarrier = bundleReleaseScript.indexOf("start_release_sync_write_barrier", capacityGate);
   const prebuild = bundleReleaseScript.indexOf('prepare_live_sqlite_prebuild "$LIVE_STORE_DIR" "$LIVE_SQLITE_PATH"', writeBarrier);
   const ninetySecondGate = bundleReleaseScript.indexOf(
-    "candidate deadline capture heartbeat exceeded 90 seconds after live SQLite prebuild",
+    "candidate deadline capture heartbeat exceeded ${LIVE_SQLITE_PREBUILD_HEARTBEAT_MAX_AGE_SECONDS} seconds after live SQLite prebuild",
     prebuild,
   );
   const pressureGate = bundleReleaseScript.indexOf("current HTTP pressure gate failed after live SQLite prebuild", ninetySecondGate);

@@ -66,8 +66,8 @@ RELEASE_HEARTBEAT_KEEPER_START_TIMEOUT_SECONDS="${RELEASE_CANDIDATE_HEARTBEAT_KE
 RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS="${RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS:-30000}"
 RELEASE_SYNC_WRITE_BARRIER_START_TIMEOUT_SECONDS="${RELEASE_SYNC_WRITE_BARRIER_START_TIMEOUT_SECONDS:-45}"
 WORKER_FROZEN_CHILD_DRAIN_TIMEOUT_SECONDS="${RELEASE_WORKER_FROZEN_CHILD_DRAIN_TIMEOUT_SECONDS:-90}"
-readonly LIVE_SQLITE_PREBUILD_HEARTBEAT_MAX_AGE_SECONDS=90
-readonly POST_PREBUILD_HTTP_HEARTBEAT_MAX_AGE_SECONDS=110
+readonly LIVE_SQLITE_PREBUILD_HEARTBEAT_MAX_AGE_SECONDS=$((LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS + 30))
+readonly POST_PREBUILD_HTTP_HEARTBEAT_MAX_AGE_SECONDS=$((LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS + 60))
 CANDIDATE_UNIT=""
 RELEASE_HEARTBEAT_KEEPER_UNIT=""
 RELEASE_HEARTBEAT_KEEPER_RUNTIME_DIR=""
@@ -6431,7 +6431,7 @@ else
     || abort_before_swap "fast watcher pause guard failed after live SQLite prebuild"
   assert_candidate_capture_heartbeat_refresh_fresh \
     "$LIVE_SQLITE_PREBUILD_HEARTBEAT_MAX_AGE_SECONDS" post-live-sqlite-prebuild \
-    || abort_before_swap "candidate deadline capture heartbeat exceeded 90 seconds after live SQLite prebuild"
+    || abort_before_swap "candidate deadline capture heartbeat exceeded ${LIVE_SQLITE_PREBUILD_HEARTBEAT_MAX_AGE_SECONDS} seconds after live SQLite prebuild"
   wait_for_health "http://${HOST}:${PORT}" "post-live-sqlite-prebuild" 60 2 service \
     || abort_before_swap "current service degraded during live SQLite prebuild"
   run_as_service_user_with_runtime_env env \

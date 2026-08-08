@@ -870,7 +870,7 @@ check("sqlite recovery uses explicit tokens, validates snapshots, and quiesces m
     "live SQLite prebuild capacity gate rejected the release host",
     "candidate deadline capture heartbeat refresh failed before live SQLite prebuild",
     'prepare_live_sqlite_prebuild "$LIVE_STORE_DIR" "$LIVE_SQLITE_PATH"',
-    "candidate deadline capture heartbeat exceeded 90 seconds after live SQLite prebuild",
+    "candidate deadline capture heartbeat exceeded ${LIVE_SQLITE_PREBUILD_HEARTBEAT_MAX_AGE_SECONDS} seconds after live SQLite prebuild",
     "post-pressure live SQLite prebuild capacity gate rejected the release host",
     "candidate deadline capture heartbeat exceeded 110 seconds before second refresh",
     "candidate deadline capture heartbeat refresh failed after live SQLite prebuild",
@@ -1376,8 +1376,8 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
   assert.match(freshnessBody, /policy_script="\$NEXT_DIR\/scripts\/releasePrebuildPolicy\.cjs"/);
   assert.match(freshnessBody, /"\$policy_script" freshness/);
   assert.match(freshnessBody, /--refreshed-at-epoch-seconds/);
-  assert.match(bundleRelease, /readonly LIVE_SQLITE_PREBUILD_HEARTBEAT_MAX_AGE_SECONDS=90/);
-  assert.match(bundleRelease, /readonly POST_PREBUILD_HTTP_HEARTBEAT_MAX_AGE_SECONDS=110/);
+  assert.match(bundleRelease, /readonly LIVE_SQLITE_PREBUILD_HEARTBEAT_MAX_AGE_SECONDS=\$\(\(LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS \+ 30\)\)/);
+  assert.match(bundleRelease, /readonly POST_PREBUILD_HTTP_HEARTBEAT_MAX_AGE_SECONDS=\$\(\(LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS \+ 60\)\)/);
   assert.match(startBarrierBody, /runReleaseSyncWriteBarrier\.cjs/);
   assert.match(startBarrierBody, /--uid=football/);
   assert.match(startBarrierBody, /--lock-dir "\$lock_dir"/);
@@ -1498,7 +1498,7 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
     "candidate deadline capture heartbeat refresh failed before live SQLite prebuild",
     "canonical live sync write barrier could not be acquired before sqlite snapshot",
     'prepare_live_sqlite_prebuild "$LIVE_STORE_DIR" "$LIVE_SQLITE_PATH"',
-    "candidate deadline capture heartbeat exceeded 90 seconds after live SQLite prebuild",
+    "candidate deadline capture heartbeat exceeded ${LIVE_SQLITE_PREBUILD_HEARTBEAT_MAX_AGE_SECONDS} seconds after live SQLite prebuild",
     "current HTTP pressure gate failed after live SQLite prebuild",
     "candidate deadline capture heartbeat exceeded 110 seconds before second refresh",
     "candidate deadline capture heartbeat refresh failed after live SQLite prebuild",
