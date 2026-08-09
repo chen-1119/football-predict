@@ -2817,7 +2817,11 @@ check("the post-prebuild pressure gate is read-only against the sealed SQLite ge
 
 check("post-freeze SQLite CAS reports the exact failed invariant", () => {
   const verifyBody = extractFunction(bundleRelease, "verify_live_sqlite_prebuild_after_freeze");
+  const activateBody = extractFunction(bundleRelease, "activate_prebuilt_live_sqlite");
   assert.match(verifyBody, /stat -c '%u:%g:%a:%h'.*"\$seal_helper".*0:0:644:1/s);
+  assert.match(activateBody, /local seal_helper="\$\{APP_DIR\}\/scripts\/sqliteReleaseSeal\.cjs"/);
+  assert.doesNotMatch(activateBody, /local seal_helper="\$\{NEXT_DIR\}/);
+  assert.match(activateBody, /stat -c '%u:%g:%a:%h'.*"\$seal_helper".*0:0:644:1/s);
   for (const reason of [
     "prebuild-ready-state",
     "recovery-root-state",
@@ -2834,6 +2838,27 @@ check("post-freeze SQLite CAS reports the exact failed invariant", () => {
     "publication-pointer-cas",
   ]) {
     assert.match(verifyBody, new RegExp(`post-freeze SQLite validation failed: ${reason}`));
+  }
+  for (const reason of [
+    "release-state",
+    "stage-seal-metadata",
+    "stage-base-metadata",
+    "stage-directory-metadata",
+    "seal-helper-metadata",
+    "stage-metadata-cas",
+    "remove-live-sidecars",
+    "move-base",
+    "move-wal",
+    "remove-stage-shm",
+    "base-owner",
+    "base-mode",
+    "wal-owner",
+    "wal-mode",
+    "wal-fsync",
+    "base-fsync",
+    "parent-fsync",
+  ]) {
+    assert.match(activateBody, new RegExp(`prebuilt SQLite activation failed: ${reason}`));
   }
 });
 

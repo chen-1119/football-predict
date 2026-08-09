@@ -3765,7 +3765,10 @@ verify_live_sqlite_prebuild_after_freeze() {
 
 activate_prebuilt_live_sqlite() {
   local stage_path="$LIVE_SQLITE_PREBUILD_PATH"
-  local seal_helper="${NEXT_DIR}/scripts/sqliteReleaseSeal.cjs"
+  # The candidate directory has already been atomically renamed to APP_DIR
+  # before SQLite activation. Resolve the signed helper from that active tree;
+  # NEXT_DIR no longer exists once the app swap has completed.
+  local seal_helper="${APP_DIR}/scripts/sqliteReleaseSeal.cjs"
   [ "${LIVE_SQLITE_PREBUILD_READY:-0}" = "1" ] \
     && [ "${SWAP_STARTED:-0}" = "1" ] \
     && [ "${SERVICE_STOPPED_FOR_SWAP:-0}" = "1" ] \
@@ -3782,6 +3785,7 @@ activate_prebuilt_live_sqlite() {
     && [ "$(stat -c '%u:%g:%a' -- "$LIVE_SQLITE_PREBUILD_DIR")" = "0:0:700" ] \
     || { printf 'prebuilt SQLite activation failed: stage-directory-metadata\n' >&2; return 1; }
   [ -f "$seal_helper" ] && [ ! -L "$seal_helper" ] \
+    && [ "$(stat -c '%u:%g:%a:%h' -- "$seal_helper")" = "0:0:644:1" ] \
     || { printf 'prebuilt SQLite activation failed: seal-helper-metadata\n' >&2; return 1; }
   # The full stage digest and SQLite integrity check ran inside the bounded transient.
   # The root-private directory makes the nanosecond inode seal sufficient here,
