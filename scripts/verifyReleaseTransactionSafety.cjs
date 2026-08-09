@@ -3302,6 +3302,7 @@ check("release cleanup initializes live store paths before the strict EXIT trap"
 
 check("post-swap readiness freezes only a fresh completed worker idle window and keeps heartbeat live", () => {
   const main = mainProgram(bundleRelease);
+  const heartbeatKeeper = readText(releaseHeartbeatKeeperPath);
   const freezeBody = extractFunction(bundleRelease, "freeze_worker_for_readiness");
   const resumeBody = extractFunction(bundleRelease, "resume_worker_after_readiness");
   const captureRefreshBody = extractFunction(
@@ -3436,12 +3437,19 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
   assert.match(keeperStartBody, /release_candidate_heartbeat_keeper_has_latched_failure/);
   assert.doesNotMatch(keeperStartBody, /RuntimeMaxSec/);
   assert.match(keeperStartBody, /--property="KillMode=mixed"/);
-  assert.match(keeperStartBody, /--property="TimeoutStopSec=35s"/);
+  assert.match(keeperStartBody, /--property="TimeoutStopSec=100s"/);
   assert.match(keeperStartBody, /--property="MemoryHigh=900M"/);
   assert.match(keeperStartBody, /--property="MemoryMax=1200M"/);
   assert.match(keeperStartBody, /--property="MemorySwapMax=256M"/);
   assert.match(keeperStartBody, /--property="TasksMax=64"/);
   assert.match(keeperStartBody, /--property="LimitNOFILE=4096"/);
+  assert.match(bundleRelease, /RELEASE_CANDIDATE_HEARTBEAT_KEEPER_ATTEMPT_TIMEOUT_MS:-90000/);
+  assert.match(bundleRelease, /RELEASE_CANDIDATE_HEARTBEAT_KEEPER_START_TIMEOUT_SECONDS:-120/);
+  assert.match(bundleRelease, /RELEASE_HEARTBEAT_KEEPER_ATTEMPT_TIMEOUT_MS" -le 90000/);
+  assert.match(
+    heartbeatKeeper,
+    /raw\?\.attemptTimeoutMs \?\? 90_000,[\s\S]*?1_000,[\s\S]*?90_000,[\s\S]*?"attemptTimeoutMs"/,
+  );
   assert.match(workerDrainBody, /--property=ControlGroup --value/);
   assert.match(workerDrainBody, /\/sys\/fs\/cgroup\$\{control_group\}\/cgroup\.procs/);
   assert.match(workerDrainBody, /WORKER_FROZEN_CHILD_DRAIN_TIMEOUT_SECONDS/);

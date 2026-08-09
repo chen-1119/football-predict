@@ -2557,7 +2557,9 @@ const readPlanSqliteStatus = async () => {
     "pre-swap-legacy-top-level-due",
     "allowPreSwapLegacyTopLevelDueOmission",
     "KillMode=mixed",
-    "TimeoutStopSec=35s",
+    "TimeoutStopSec=100s",
+    "RELEASE_CANDIDATE_HEARTBEAT_KEEPER_ATTEMPT_TIMEOUT_MS:-90000",
+    "RELEASE_CANDIDATE_HEARTBEAT_KEEPER_START_TIMEOUT_SECONDS:-120",
     "--uid=football",
     "rollback fail-stop: release heartbeat keeper could not be reaped",
     "fail-stop: release heartbeat keeper could not be reaped from EXIT trap"
@@ -2575,7 +2577,9 @@ const readPlanSqliteStatus = async () => {
     "activeAttempt",
     "atomicDecisionRecordInvariantsMatch",
     "allowPreSwapLegacyTopLevelDueOmission",
-    "intervalSeconds: integerInRange(raw?.intervalSeconds ?? 20, 5, 30"
+    "intervalSeconds: integerInRange(raw?.intervalSeconds ?? 20, 5, 30",
+    "raw?.attemptTimeoutMs ?? 90_000",
+    "90_000,\n      \"attemptTimeoutMs\""
   ]) && hasAll(createReleaseBundle, [
     "scripts/runReleaseCandidateHeartbeatKeeper.cjs"
   ]) && hasAll(verifyReleaseBundleSafety, [
