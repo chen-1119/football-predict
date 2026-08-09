@@ -5,6 +5,7 @@ const path = require("node:path");
 const SEAL_VERSION = "release-sqlite-seal-v1";
 const DEFAULT_ROLLBACK_COPY_MAX_ATTEMPTS = 4;
 const DEFAULT_ROLLBACK_COPY_RETRY_DELAY_MS = 250;
+const MAX_STOPPED_WAL_RECONCILE_BYTES = 64 * 1024 * 1024;
 const TOKENS = Object.freeze([
   Object.freeze({ token: "base", suffix: "" }),
   Object.freeze({ token: "wal", suffix: "-wal" }),
@@ -223,6 +224,76 @@ const verifySnapshotMatchesSource = (snapshotSeal, sourceSeal) => {
   }
 };
 
+const reconcileStoppedWalSnapshot = ({ liveBase, snapshotBase, sourceSeal, snapshotSeal }) => {
+  assertSealShape(sourceSeal);
+  assertSealShape(snapshotSeal);
+  verifySnapshotMatchesSource(snapshotSeal, sourceSeal);
+  const liveMetadata = captureSeal(liveBase, { includeDigest: false });
+  const expectedBase = sourceSeal.entries[0];
+  const liveBaseEntry = liveMetadata.entries[0];
+  if (!sameMetadata(expectedBase, liveBaseEntry)) {
+    throw new Error("SQLite metadata seal CAS mismatch: base");
+  }
+  const expectedWal = sourceSeal.entries[1];
+  const liveWalMetadata = liveMetadata.entries[1];
+  if (expectedWal.present === liveWalMetadata.present
+      && (!expectedWal.present || sameMetadata(expectedWal, liveWalMetadata))) {
+    return { sourceSeal, snapshotSeal, reconciled: false };
+  }
+
+  const snapshotWalPath = `${snapshotBase}-wal`;
+  const liveWalPath = `${liveBase}-wal`;
+  if (!liveWalMetadata.present) {
+    removeRollbackAttemptFile(snapshotWalPath);
+    fsyncDirectory(path.dirname(snapshotBase));
+    const reconciledSource = {
+      ...sourceSeal,
+      entries: [sourceSeal.entries[0], { token: "wal", present: false }],
+    };
+    const reconciledSnapshot = {
+      ...snapshotSeal,
+      entries: [snapshotSeal.entries[0], { token: "wal", present: false }],
+    };
+    verifySnapshotMatchesSource(reconciledSnapshot, reconciledSource);
+    return { sourceSeal: reconciledSource, snapshotSeal: reconciledSnapshot, reconciled: true };
+  }
+
+  const liveWalBefore = captureEntry(liveWalPath, "wal", true);
+  if (BigInt(liveWalBefore.size) > BigInt(MAX_STOPPED_WAL_RECONCILE_BYTES)) {
+    throw new Error(`stopped SQLite WAL exceeds reconciliation limit: ${liveWalBefore.size}`);
+  }
+  const temporaryWalPath = `${snapshotWalPath}.stopped-${process.pid}-${crypto.randomBytes(8).toString("hex")}`;
+  try {
+    copyFileExclusive(liveWalPath, temporaryWalPath);
+    const liveWalAfter = captureEntry(liveWalPath, "wal", true);
+    if (JSON.stringify(liveWalBefore) !== JSON.stringify(liveWalAfter)) {
+      throw new SQLiteSourceChangedError("wal", "changed during stopped reconciliation");
+    }
+    const temporaryWal = captureEntry(temporaryWalPath, "wal", true);
+    if (!temporaryWal.present || temporaryWal.size !== liveWalBefore.size
+        || temporaryWal.sha256 !== liveWalBefore.sha256) {
+      throw new Error("stopped SQLite WAL reconciliation copy mismatch");
+    }
+    removeRollbackAttemptFile(snapshotWalPath);
+    fs.renameSync(temporaryWalPath, snapshotWalPath);
+    fsyncDirectory(path.dirname(snapshotBase));
+  } catch (error) {
+    removeRollbackAttemptFile(temporaryWalPath);
+    throw error;
+  }
+  const snapshotWal = captureEntry(snapshotWalPath, "wal", true);
+  const reconciledSource = {
+    ...sourceSeal,
+    entries: [sourceSeal.entries[0], liveWalBefore],
+  };
+  const reconciledSnapshot = {
+    ...snapshotSeal,
+    entries: [snapshotSeal.entries[0], snapshotWal],
+  };
+  verifySnapshotMatchesSource(reconciledSnapshot, reconciledSource);
+  return { sourceSeal: reconciledSource, snapshotSeal: reconciledSnapshot, reconciled: true };
+};
+
 const copyFileExclusive = (source, target) => {
   fs.copyFileSync(source, target, fs.constants.COPYFILE_EXCL | (fs.constants.COPYFILE_FICLONE || 0));
   fs.chmodSync(target, 0o600);
@@ -365,16 +436,17 @@ const finalizeRecoverySnapshot = ({
   livePathOutput,
   manifestOutput,
 }) => {
-  const sourceSeal = readSeal(sourceSealPath);
-  const snapshotSeal = readSeal(snapshotSealPath);
-  // Closing the final SQLite connection may recreate/touch an otherwise
-  // byte-identical WAL.  At this point the caller has stopped every writer and
-  // drained the write barrier, so permit only that representation-only drift.
-  // The base database remains strict metadata-CAS protected, while WAL device,
-  // link count, size, ownership, mode, and SHA-256 must still match exactly.
-  verifyMetadataSeal(liveBase, sourceSeal, { allowWalDigestEquivalent: true });
+  const originalSourceSeal = readSeal(sourceSealPath);
+  const originalSnapshotSeal = readSeal(snapshotSealPath);
+  const reconciled = reconcileStoppedWalSnapshot({
+    liveBase,
+    snapshotBase,
+    sourceSeal: originalSourceSeal,
+    snapshotSeal: originalSnapshotSeal,
+  });
+  const sourceSeal = reconciled.sourceSeal;
+  const snapshotSeal = reconciled.snapshotSeal;
   verifyMetadataSeal(snapshotBase, snapshotSeal);
-  verifySnapshotMatchesSource(snapshotSeal, sourceSeal);
   const shm = captureSmallShm(liveBase, snapshotBase);
   const rows = TOKENS.map(({ token }, index) => manifestRow(
     token,
@@ -491,6 +563,7 @@ module.exports = {
   captureSeal,
   copyRollbackSnapshot,
   finalizeRecoverySnapshot,
+  reconcileStoppedWalSnapshot,
   readSeal,
   verifyMetadataSeal,
   verifySnapshotMatchesSource,

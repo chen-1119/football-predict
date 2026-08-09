@@ -2561,6 +2561,8 @@ check("SQLite nanosecond seals reject same-size writes, inode swaps, links, and 
       snapshotSealOutput: snapshotSealPath,
       requireRootOwner: false,
     });
+    const stoppedWalBytes = Buffer.from("sqlite-wal-after--freeze\n");
+    fs.writeFileSync(`${copied.base}-wal`, stoppedWalBytes);
     fs.writeFileSync(`${copied.base}-shm`, Buffer.from("small-shm\n"));
     const livePathOutput = path.join(rollbackDirectory, "live-path");
     const manifestOutput = path.join(rollbackDirectory, "manifest.tsv");
@@ -2575,6 +2577,7 @@ check("SQLite nanosecond seals reject same-size writes, inode swaps, links, and 
     const manifest = fs.readFileSync(manifestOutput, "utf8").trim().split("\n");
     assert.equal(manifest.length, 3);
     assert.deepEqual(manifest.map((line) => line.split("\t")[0]), ["base", "wal", "shm"]);
+    assert.deepEqual(fs.readFileSync(`${snapshotBase}-wal`), stoppedWalBytes);
 
     const retried = makeFixture("retried");
     const retriedRollbackDirectory = path.join(retried.directory, "rollback");
