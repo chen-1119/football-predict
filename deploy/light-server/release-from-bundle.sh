@@ -3722,6 +3722,7 @@ verify_live_sqlite_prebuild_after_freeze() {
     || { printf 'post-freeze SQLite validation failed: finalize-recovery\n' >&2; return 1; }
   "$NODE_HOME/bin/node" "$seal_helper" verify-metadata \
     --base "$LIVE_SQLITE_PREBUILD_PATH" --seal "$LIVE_SQLITE_PREBUILD_STAGE_MANIFEST" \
+    --allow-wal-digest-equivalent 1 \
     || { printf 'post-freeze SQLite validation failed: stage-metadata-cas\n' >&2; return 1; }
   validate_prebuilt_live_sqlite_publication \
     "$NEXT_DIR" "$LIVE_STORE_DIR" "$NEXT_DIR/public/data" "$LIVE_SQLITE_PREBUILD_PATH" 0 \
@@ -3763,6 +3764,7 @@ activate_prebuilt_live_sqlite() {
   # keeping the stopped window free of a second whole-database read.
   "$NODE_HOME/bin/node" "$seal_helper" verify-metadata \
     --base "$stage_path" --seal "$LIVE_SQLITE_PREBUILD_STAGE_MANIFEST" \
+    --allow-wal-digest-equivalent 1 \
     || return 1
   rm -f -- "${LIVE_SQLITE_PATH}-wal" "${LIVE_SQLITE_PATH}-shm" || return 1
   mv -fT -- "$stage_path" "$LIVE_SQLITE_PATH" || return 1

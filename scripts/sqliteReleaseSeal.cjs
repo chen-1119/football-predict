@@ -503,6 +503,13 @@ const optionalIntegerArg = (args, name, fallback, minimum, maximum) => (
     : assertBoundedInteger(args[name], `--${name}`, minimum, maximum)
 );
 
+const optionalBooleanArg = (args, name, fallback = false) => {
+  if (args[name] == null) return fallback;
+  if (args[name] === "1") return true;
+  if (args[name] === "0") return false;
+  throw new Error(`--${name} must be 0 or 1`);
+};
+
 const main = () => {
   const [command, ...rest] = process.argv.slice(2);
   const args = parseArgs(rest);
@@ -537,7 +544,17 @@ const main = () => {
     writeJsonExclusive(output, captureSeal(requireArg(args, "base")));
     fsyncDirectory(path.dirname(output));
   } else if (command === "verify-metadata") {
-    verifyMetadataSeal(requireArg(args, "base"), readSeal(requireArg(args, "seal")));
+    verifyMetadataSeal(
+      requireArg(args, "base"),
+      readSeal(requireArg(args, "seal")),
+      {
+        allowWalDigestEquivalent: optionalBooleanArg(
+          args,
+          "allow-wal-digest-equivalent",
+          false,
+        ),
+      },
+    );
   } else if (command === "finalize-recovery") {
     finalizeRecoverySnapshot({
       liveBase: requireArg(args, "live-base"),

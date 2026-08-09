@@ -1328,6 +1328,11 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
   assert.match(bundleRelease, /event=finish at=%s elapsedSeconds=%s status=%s exitCode=%s/);
   assert.match(verifyBody, /finalize-recovery/);
   assert.match(verifyBody, /verify-metadata/);
+  assert.match(
+    verifyBody,
+    /verify-metadata[\s\S]*--allow-wal-digest-equivalent 1/u,
+    "post-freeze prebuilt verification must accept only digest-equivalent WAL close drift",
+  );
   assert.match(verifyBody, /mv -T -- "\$LIVE_SQLITE_PREBUILD_ROLLBACK_DIR" "\$\{RECOVERY_DIR\}\/sqlite"/);
   assert.match(verifyBody, /sync -f "\$RECOVERY_DIR"/);
   assert.match(verifyBody, /write_recovery_phase "sqlite-snapshotted"/);
@@ -1337,6 +1342,11 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
   assert.match(activateBody, /WORKER_STOPPED_FOR_SWAP/);
   assert.match(activateBody, /LIVE_SQLITE_PREBUILD_STAGE_MANIFEST/);
   assert.match(activateBody, /verify-metadata/);
+  assert.match(
+    activateBody,
+    /verify-metadata[\s\S]*--allow-wal-digest-equivalent 1/u,
+    "activation must preserve digest-equivalent WAL close handling",
+  );
   assertOrdered(activateBody, [
     'verify-metadata \\',
     'rm -f -- "${LIVE_SQLITE_PATH}-wal" "${LIVE_SQLITE_PATH}-shm"',
