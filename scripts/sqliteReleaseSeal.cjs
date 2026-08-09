@@ -229,15 +229,24 @@ const reconcileStoppedWalSnapshot = ({ liveBase, snapshotBase, sourceSeal, snaps
   assertSealShape(snapshotSeal);
   verifySnapshotMatchesSource(snapshotSeal, sourceSeal);
   const liveMetadata = captureSeal(liveBase, { includeDigest: false });
+  const snapshotMetadata = captureSeal(snapshotBase, { includeDigest: false });
   const expectedBase = sourceSeal.entries[0];
   const liveBaseEntry = liveMetadata.entries[0];
   if (!sameMetadata(expectedBase, liveBaseEntry)) {
     throw new Error("SQLite metadata seal CAS mismatch: base");
   }
+  if (!sameMetadata(snapshotSeal.entries[0], snapshotMetadata.entries[0])) {
+    throw new Error("SQLite rollback metadata seal CAS mismatch: base");
+  }
   const expectedWal = sourceSeal.entries[1];
   const liveWalMetadata = liveMetadata.entries[1];
-  if (expectedWal.present === liveWalMetadata.present
-      && (!expectedWal.present || sameMetadata(expectedWal, liveWalMetadata))) {
+  const expectedSnapshotWal = snapshotSeal.entries[1];
+  const snapshotWalMetadata = snapshotMetadata.entries[1];
+  const liveWalUnchanged = expectedWal.present === liveWalMetadata.present
+    && (!expectedWal.present || sameMetadata(expectedWal, liveWalMetadata));
+  const snapshotWalUnchanged = expectedSnapshotWal.present === snapshotWalMetadata.present
+    && (!expectedSnapshotWal.present || sameMetadata(expectedSnapshotWal, snapshotWalMetadata));
+  if (liveWalUnchanged && snapshotWalUnchanged) {
     return { sourceSeal, snapshotSeal, reconciled: false };
   }
 
@@ -446,7 +455,6 @@ const finalizeRecoverySnapshot = ({
   });
   const sourceSeal = reconciled.sourceSeal;
   const snapshotSeal = reconciled.snapshotSeal;
-  verifyMetadataSeal(snapshotBase, snapshotSeal, { allowWalDigestEquivalent: true });
   const shm = captureSmallShm(liveBase, snapshotBase);
   const rows = TOKENS.map(({ token }, index) => manifestRow(
     token,

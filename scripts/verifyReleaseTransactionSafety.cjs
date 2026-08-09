@@ -2561,6 +2561,7 @@ check("SQLite nanosecond seals reject same-size writes, inode swaps, links, and 
       snapshotSealOutput: snapshotSealPath,
       requireRootOwner: false,
     });
+    fs.writeFileSync(`${snapshotBase}-wal`, Buffer.from("rollback-wal-mutated----\n"));
     const stoppedWalBytes = Buffer.from("sqlite-wal-after--freeze\n");
     fs.writeFileSync(`${copied.base}-wal`, stoppedWalBytes);
     fs.writeFileSync(`${copied.base}-shm`, Buffer.from("small-shm\n"));
