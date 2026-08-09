@@ -912,6 +912,11 @@ check("release transaction bounds the old watcher memory pause and restores the 
   assert.match(removeBody, /systemctl daemon-reload/);
   assert.match(processStateBody, /\/proc\/\$\{main_pid\}\/environ/);
   assert.match(processStateBody, /grep -Fxc "RELAY_FAST_WATCHER_ENABLED=\$\{expected\}"/);
+  assert.match(processStateBody, /for attempt in \$\(seq 1 50\)/);
+  assert.match(processStateBody, /systemctl show "\$SERVICE_NAME" --property=MainPID --value/);
+  assert.match(processStateBody, /sleep 0\.1/);
+  assert.match(processStateBody, /\[ "\$count" = "1" \] && return 0/);
+  assert.match(processStateBody, /attempts=%s/);
   assert.match(pauseOverrideBody, /root:football:640:1/);
   assert.match(pauseOverrideBody, /root:root:644:1/);
   assert.match(pauseOverrideBody, /RELAY_FAST_WATCHER_ENABLED=0/);

@@ -547,19 +547,31 @@ EnvironmentFile=${RELEASE_FAST_WATCHER_PAUSE_ENV_FILE}" ] || return 1
 
 assert_release_fast_watcher_process_state() {
   local expected="$1"
-  local main_pid count
+  local main_pid="" count="" attempt
   [ "$expected" = "0" ] || [ "$expected" = "1" ] || return 1
-  systemctl is-active --quiet "$SERVICE_NAME" || return 1
-  main_pid="$(systemctl show "$SERVICE_NAME" --property=MainPID --value 2>/dev/null)" || return 1
-  [[ "$main_pid" =~ ^[1-9][0-9]*$ ]] || return 1
-  [ -r "/proc/${main_pid}/environ" ] || return 1
-  count="$(tr '\0' '\n' <"/proc/${main_pid}/environ" \
-    | grep -Fxc "RELAY_FAST_WATCHER_ENABLED=${expected}" || true)"
-  [ "$count" = "1" ] || {
-    printf 'release fast watcher process state mismatch: expected=%s count=%s pid=%s\n' \
-      "$expected" "$count" "$main_pid" >&2
-    return 1
-  }
+  # systemctl start may return after systemd records MainPID but just before the
+  # child completes execve(2). During that narrow handoff /proc/<pid>/environ
+  # still reflects the pre-exec process and can transiently omit the configured
+  # watcher variable. Re-read the current MainPID for a bounded five seconds;
+  # a missing or incorrect final environment remains fail-closed.
+  for attempt in $(seq 1 50); do
+    if systemctl is-active --quiet "$SERVICE_NAME"; then
+      main_pid="$(systemctl show "$SERVICE_NAME" --property=MainPID --value 2>/dev/null || true)"
+      if [[ "$main_pid" =~ ^[1-9][0-9]*$ ]] && [ -r "/proc/${main_pid}/environ" ]; then
+        count="$(tr '\0' '\n' <"/proc/${main_pid}/environ" \
+          | grep -Fxc "RELAY_FAST_WATCHER_ENABLED=${expected}" || true)"
+        [ "$count" = "1" ] && return 0
+      else
+        count="unreadable"
+      fi
+    else
+      count="inactive"
+    fi
+    sleep 0.1
+  done
+  printf 'release fast watcher process state mismatch: expected=%s count=%s pid=%s attempts=%s\n' \
+    "$expected" "$count" "${main_pid:-none}" 50 >&2
+  return 1
 }
 
 assert_release_fast_watcher_health_state() {
