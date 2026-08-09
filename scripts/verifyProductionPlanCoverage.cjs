@@ -2612,7 +2612,7 @@ const readPlanSqliteStatus = async () => {
     "LIVE_SQLITE_PREBUILD_HEARTBEAT_MAX_AGE_SECONDS=$((LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS + 30))",
     "POST_PREBUILD_HTTP_HEARTBEAT_MAX_AGE_SECONDS=$((LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS + 60))",
     "candidate deadline capture heartbeat exceeded ${LIVE_SQLITE_PREBUILD_HEARTBEAT_MAX_AGE_SECONDS} seconds after live SQLite prebuild",
-    "candidate deadline capture heartbeat exceeded 110 seconds before second refresh",
+    "candidate deadline capture heartbeat exceeded the sealed handoff budget",
     "scripts/sqliteReleaseSeal.cjs",
     "source-seal.json",
     "rollback-seal.json",

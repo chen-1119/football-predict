@@ -6509,9 +6509,11 @@ assert_live_sqlite_prebuild_capacity \
   || abort_before_swap "post-pressure live SQLite prebuild capacity gate rejected the release host"
 assert_candidate_capture_heartbeat_refresh_fresh \
   "$POST_PREBUILD_HTTP_HEARTBEAT_MAX_AGE_SECONDS" post-live-sqlite-http-pressure \
-  || abort_before_swap "candidate deadline capture heartbeat exceeded 110 seconds before second refresh"
-refresh_candidate_capture_heartbeat_for_readiness "$APP_DIR" "$NEXT_DIR" \
-  || abort_before_swap "candidate deadline capture heartbeat refresh failed after live SQLite prebuild"
+  || abort_before_swap "candidate deadline capture heartbeat exceeded the sealed handoff budget"
+# The prebuild captured the heartbeat and immutable generation together. Do not
+# refresh it again here: captureCandidateProspectiveDeadline can publish a new
+# generation pointer, which would correctly invalidate the already-sealed
+# SQLite projection. Post-swap readiness performs the next formal refresh.
 [ "${LIVE_SQLITE_PREBUILD_READY:-0}" != "1" ] \
   || start_release_pointer_commit_keeper \
   || abort_before_swap "canonical generation pointer-commit lock could not be acquired before SQLite seal CAS"

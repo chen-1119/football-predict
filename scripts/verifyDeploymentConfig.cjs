@@ -1391,14 +1391,15 @@ const run = () => {
     "post-pressure live SQLite prebuild capacity gate rejected the release host",
     pressureGate,
   );
-  const oneHundredTenSecondGate = bundleReleaseScript.indexOf(
-    "candidate deadline capture heartbeat exceeded 110 seconds before second refresh",
+  const sealedHandoffGate = bundleReleaseScript.indexOf(
+    "candidate deadline capture heartbeat exceeded the sealed handoff budget",
     postPressureCapacityGate,
   );
-  const secondRefresh = bundleReleaseScript.indexOf(
-    "candidate deadline capture heartbeat refresh failed after live SQLite prebuild",
-    oneHundredTenSecondGate,
+  const pointerKeeper = bundleReleaseScript.indexOf(
+    "start_release_pointer_commit_keeper",
+    sealedHandoffGate,
   );
+  const sealedWindow = bundleReleaseScript.slice(prebuild, pointerKeeper);
   pushCheck(checks, "signed release bounds live SQLite prebuild resources, capacity, and heartbeat age", (
     bundleReleaseScript.includes("RELEASE_LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS:-240")
     && bundleReleaseScript.includes('[ "$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" -ge 60 ]')
@@ -1427,8 +1428,9 @@ const run = () => {
     && ninetySecondGate > prebuild
     && pressureGate > ninetySecondGate
     && postPressureCapacityGate > pressureGate
-    && oneHundredTenSecondGate > postPressureCapacityGate
-    && secondRefresh > oneHundredTenSecondGate
+    && sealedHandoffGate > postPressureCapacityGate
+    && pointerKeeper > sealedHandoffGate
+    && !sealedWindow.includes('refresh_candidate_capture_heartbeat_for_readiness')
   ), {
     runtimeMinSeconds: 60,
     runtimeMaxSeconds: 240,
@@ -1439,8 +1441,9 @@ const run = () => {
     heartbeatFreshnessOrder: ninetySecondGate > prebuild
       && pressureGate > ninetySecondGate
       && postPressureCapacityGate > pressureGate
-      && oneHundredTenSecondGate > postPressureCapacityGate
-      && secondRefresh > oneHundredTenSecondGate,
+      && sealedHandoffGate > postPressureCapacityGate
+      && pointerKeeper > sealedHandoffGate
+      && !sealedWindow.includes('refresh_candidate_capture_heartbeat_for_readiness'),
   });
 
   const legacyReleaseKeepsSecretsOutsideBuilds = (

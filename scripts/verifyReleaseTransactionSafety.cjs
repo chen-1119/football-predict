@@ -872,8 +872,8 @@ check("sqlite recovery uses explicit tokens, validates snapshots, and quiesces m
     'prepare_live_sqlite_prebuild "$LIVE_STORE_DIR" "$LIVE_SQLITE_PATH"',
     "candidate deadline capture heartbeat exceeded ${LIVE_SQLITE_PREBUILD_HEARTBEAT_MAX_AGE_SECONDS} seconds after live SQLite prebuild",
     "post-pressure live SQLite prebuild capacity gate rejected the release host",
-    "candidate deadline capture heartbeat exceeded 110 seconds before second refresh",
-    "candidate deadline capture heartbeat refresh failed after live SQLite prebuild",
+    "candidate deadline capture heartbeat exceeded the sealed handoff budget",
+    "start_release_pointer_commit_keeper",
     "stop_service_for_release_window || abort_before_swap \"live service could not be paused before swap\"",
     "snapshot_external_model_artifacts_for_rollback",
     'candidateReleaseContinuity.cjs" snapshot',
@@ -1467,7 +1467,7 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
   assert.match(pointerKeeperCleanupBody, /root:root:600:1\|root:football:600:1\|root:football:440:1/);
   assert.match(pointerKeeperCleanupBody, /football:football:700:2/);
   assertOrdered(main, [
-    "candidate deadline capture heartbeat refresh failed after live SQLite prebuild",
+    "candidate deadline capture heartbeat exceeded the sealed handoff budget",
     "start_release_pointer_commit_keeper",
     'stop_service_for_release_window || abort_before_swap "live service could not be paused before swap"',
     "stop_release_sync_write_barrier clean",
@@ -1502,8 +1502,8 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
     'prepare_live_sqlite_prebuild "$LIVE_STORE_DIR" "$LIVE_SQLITE_PATH"',
     "candidate deadline capture heartbeat exceeded ${LIVE_SQLITE_PREBUILD_HEARTBEAT_MAX_AGE_SECONDS} seconds after live SQLite prebuild",
     "current HTTP pressure gate failed after live SQLite prebuild",
-    "candidate deadline capture heartbeat exceeded 110 seconds before second refresh",
-    "candidate deadline capture heartbeat refresh failed after live SQLite prebuild",
+    "candidate deadline capture heartbeat exceeded the sealed handoff budget",
+    "start_release_pointer_commit_keeper",
     'stop_service_for_release_window || abort_before_swap "live service could not be paused before swap"',
     "canonical live sync write barrier did not drain cleanly after service stop",
     "verify_live_sqlite_prebuild_after_freeze",
@@ -2724,9 +2724,14 @@ check("the sync worker stays live during long isolated work and pauses only for 
     "sync worker could not be paused before live SQLite prebuild",
     "candidate deadline capture heartbeat refresh failed before live SQLite prebuild",
     'prepare_live_sqlite_prebuild "$LIVE_STORE_DIR" "$LIVE_SQLITE_PATH"',
-    "candidate deadline capture heartbeat refresh failed after live SQLite prebuild",
     "candidateReleaseContinuity.cjs\" snapshot",
   ], "worker resumes for isolated candidate verification and pauses only for the bounded SQLite handoff");
+  const sealedWindow = main.slice(
+    main.indexOf('prepare_live_sqlite_prebuild "$LIVE_STORE_DIR" "$LIVE_SQLITE_PATH"'),
+    main.indexOf("verify_live_sqlite_prebuild_after_freeze"),
+  );
+  assert.doesNotMatch(sealedWindow, /refresh_candidate_capture_heartbeat_for_readiness/);
+  assert.match(sealedWindow, /post-live-sqlite-http-pressure/);
   assert.match(exitTrapBody, /restore_pre_swap_transaction/);
 });
 
@@ -3277,7 +3282,7 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
   assert.doesNotMatch(captureRefreshBody, /TRUSTED_SOURCE_DIR\/scripts\/(?:captureCandidateProspectiveDeadline|runReleaseCandidateHeartbeatKeeper)\.cjs/);
   assert.equal(
     (main.match(/refresh_candidate_capture_heartbeat_for_readiness "\$APP_DIR" "\$NEXT_DIR"/g) || []).length,
-    3,
+    2,
     "every pre-swap live heartbeat refresh must use active capture code and the validated candidate matcher",
   );
   assert.equal(
@@ -3287,7 +3292,7 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
   );
   assert.equal(
     (main.match(/refresh_candidate_capture_heartbeat_for_readiness/g) || []).length,
-    4,
+    3,
     "live heartbeat refreshes must not have implicit-root call sites",
   );
   assert.match(captureRefreshBody, /RELEASE_CANDIDATE_CAPTURE_REFRESH_ATTEMPTS/);
