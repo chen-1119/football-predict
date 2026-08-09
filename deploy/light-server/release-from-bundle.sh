@@ -3527,7 +3527,7 @@ prepare_live_sqlite_prebuild() {
   helper_path="${stage_dir}/prepare.sh"
   seal_helper="${NEXT_DIR}/scripts/sqliteReleaseSeal.cjs"
   [ -f "$seal_helper" ] && [ ! -L "$seal_helper" ] \
-    && [ "$(stat -c '%h' -- "$seal_helper")" = "1" ] || return 1
+    && [ "$(stat -c '%u:%g:%a:%h' -- "$seal_helper")" = "0:0:644:1" ] || return 1
   install -d -o root -g root -m 0700 -- "$rollback_dir" || return 1
   for file in "$stage_path" "${stage_path}-wal" "${stage_path}-shm" \
     "$rollback_path" "${rollback_path}-wal" "${rollback_path}-shm" \
@@ -3678,7 +3678,7 @@ verify_live_sqlite_prebuild_after_freeze() {
     return 1
   }
   [ -f "$seal_helper" ] && [ ! -L "$seal_helper" ] \
-    && [ "$(stat -c '%u:%g:%a:%h' -- "$seal_helper")" = "0:0:600:1" ] || {
+    && [ "$(stat -c '%u:%g:%a:%h' -- "$seal_helper")" = "0:0:644:1" ] || {
     printf 'post-freeze SQLite validation failed: seal-helper-metadata\n' >&2
     return 1
   }

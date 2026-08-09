@@ -1288,6 +1288,7 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
   assert.match(prepareBody, /"\$sqlite_path" = "\$\{store_dir%\/\}\/football\.db"/);
   assert.match(prepareBody, /--source-base "\$sqlite_path"/);
   assert.match(prepareBody, /"\$helper_path" "\$sqlite_path" "\$stage_path"/);
+  assert.match(prepareBody, /stat -c '%u:%g:%a:%h'.*"\$seal_helper".*0:0:644:1/s);
   assert.match(runBody, /RuntimeMaxSec=\$\{LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS\}s/);
   assert.match(prepareBody, /WORKER_STOPPED_FOR_SWAP/);
   assert.match(prepareBody, /live SQLite prebuild refuses to overlap an active sync worker/);
@@ -2762,6 +2763,7 @@ check("the post-prebuild pressure gate is read-only against the sealed SQLite ge
 
 check("post-freeze SQLite CAS reports the exact failed invariant", () => {
   const verifyBody = extractFunction(bundleRelease, "verify_live_sqlite_prebuild_after_freeze");
+  assert.match(verifyBody, /stat -c '%u:%g:%a:%h'.*"\$seal_helper".*0:0:644:1/s);
   for (const reason of [
     "prebuild-ready-state",
     "recovery-root-state",
