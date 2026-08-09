@@ -2499,6 +2499,17 @@ check("SQLite nanosecond seals reject same-size writes, inode swaps, links, and 
     const stable = makeFixture("stable");
     verifyMetadataSeal(stable.base, stable.seal);
 
+    const walCloseTouch = makeFixture("wal-close-touch");
+    const touchedAt = new Date(Date.now() + 2_000);
+    fs.utimesSync(`${walCloseTouch.base}-wal`, touchedAt, touchedAt);
+    assert.throws(() => verifyMetadataSeal(walCloseTouch.base, walCloseTouch.seal), /wal/u);
+    verifyMetadataSeal(walCloseTouch.base, walCloseTouch.seal, { allowWalDigestEquivalent: true });
+    fs.writeFileSync(`${walCloseTouch.base}-wal`, Buffer.from("sqlite-wal-after--freeze\n"));
+    assert.throws(
+      () => verifyMetadataSeal(walCloseTouch.base, walCloseTouch.seal, { allowWalDigestEquivalent: true }),
+      /wal/u,
+    );
+
     const sameSize = makeFixture("same-size");
     const originalSecond = Math.floor(Number(BigInt(sameSize.seal.entries[0].mtimeNs) / 1_000_000_000n));
     fs.writeFileSync(sameSize.base, Buffer.from("sqlite-base-after--freeze\n"));
