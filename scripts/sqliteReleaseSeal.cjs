@@ -305,12 +305,32 @@ const reconcileStoppedWalSnapshot = ({ liveBase, snapshotBase, sourceSeal, snaps
 
 const copyFileExclusive = (source, target) => {
   fs.copyFileSync(source, target, fs.constants.COPYFILE_EXCL | (fs.constants.COPYFILE_FICLONE || 0));
+  // Recovery snapshots live below a root-only 0700 transaction directory and
+  // must remain root-owned even when the source SQLite sidecars belong to the
+  // service account.  Do not rely on platform copy semantics for ownership.
+  if (typeof process.getuid === "function" && process.getuid() === 0) {
+    fs.chownSync(target, 0, 0);
+  }
   fs.chmodSync(target, 0o600);
   const descriptor = fs.openSync(target, "r+");
   try {
     fs.fsyncSync(descriptor);
   } finally {
     fs.closeSync(descriptor);
+  }
+};
+
+const assertPrivateSnapshotEntry = (filePath, token) => {
+  const stat = fs.lstatSync(filePath, { bigint: true });
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1n) {
+    throw new Error(`unsafe private SQLite snapshot entry: ${token}`);
+  }
+  if (process.platform !== "win32" && (stat.mode & 0o777n) !== 0o600n) {
+    throw new Error(`private SQLite snapshot mode mismatch: ${token}`);
+  }
+  if (typeof process.getuid === "function" && process.getuid() === 0
+      && (stat.uid !== 0n || stat.gid !== 0n)) {
+    throw new Error(`private SQLite snapshot ownership mismatch: ${token}`);
   }
 };
 
@@ -456,6 +476,12 @@ const finalizeRecoverySnapshot = ({
   const sourceSeal = reconciled.sourceSeal;
   const snapshotSeal = reconciled.snapshotSeal;
   const shm = captureSmallShm(liveBase, snapshotBase);
+  for (const { token, suffix } of TOKENS) {
+    if (snapshotSeal.entries.find((entry) => entry.token === token)?.present) {
+      assertPrivateSnapshotEntry(`${snapshotBase}${suffix}`, token);
+    }
+  }
+  if (shm.present) assertPrivateSnapshotEntry(`${snapshotBase}-shm`, "shm");
   const rows = TOKENS.map(({ token }, index) => manifestRow(
     token,
     snapshotSeal.entries[index],

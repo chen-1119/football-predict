@@ -1328,6 +1328,8 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
   assert.match(bundleRelease, /event=finish at=%s elapsedSeconds=%s status=%s exitCode=%s/);
   assert.match(verifyBody, /finalize-recovery/);
   assert.match(verifyBody, /verify-metadata/);
+  assert.match(verifyBody, /rollback-snapshot-private-metadata/u);
+  assert.match(verifyBody, /adopted-rollback-private-metadata/u);
   assert.match(
     verifyBody,
     /verify-metadata[\s\S]*--allow-wal-digest-equivalent 1/u,
@@ -1342,6 +1344,22 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
   assert.match(activateBody, /WORKER_STOPPED_FOR_SWAP/);
   assert.match(activateBody, /LIVE_SQLITE_PREBUILD_STAGE_MANIFEST/);
   assert.match(activateBody, /verify-metadata/);
+  for (const invariant of [
+    "stage-metadata-cas",
+    "remove-live-sidecars",
+    "move-base",
+    "move-wal",
+    "base-owner",
+    "wal-owner",
+    "base-fsync",
+    "parent-fsync",
+  ]) {
+    assert.match(
+      activateBody,
+      new RegExp(`prebuilt SQLite activation failed: ${invariant}`, "u"),
+      `activation must report ${invariant}`,
+    );
+  }
   assert.match(
     activateBody,
     /verify-metadata[\s\S]*--allow-wal-digest-equivalent 1/u,
@@ -2505,6 +2523,12 @@ check("SQLite nanosecond seals reject same-size writes, inode swaps, links, and 
     assert.match(sealSource, /sameMetadata\(metadataFromStat\(pathStat\), metadataFromStat\(stat\)\)/);
     assert.match(sealSource, /directoryStat\.uid !== 0n/);
     assert.match(sealSource, /directoryStat\.gid !== 0n/);
+    assert.match(
+      sealSource,
+      /fs\.chownSync\(target, 0, 0\)/u,
+      "SQLite rollback copies must explicitly remain root-owned",
+    );
+    assert.match(sealSource, /assertPrivateSnapshotEntry/u);
 
     const stable = makeFixture("stable");
     verifyMetadataSeal(stable.base, stable.seal);

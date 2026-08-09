@@ -3720,6 +3720,17 @@ verify_live_sqlite_prebuild_after_freeze() {
     --live-path-output "${LIVE_SQLITE_PREBUILD_ROLLBACK_DIR}/live-path" \
     --manifest-output "${LIVE_SQLITE_PREBUILD_ROLLBACK_DIR}/manifest.tsv" \
     || { printf 'post-freeze SQLite validation failed: finalize-recovery\n' >&2; return 1; }
+  local private_snapshot_entry
+  for private_snapshot_entry in \
+    "$LIVE_SQLITE_PREBUILD_ROLLBACK_PATH" \
+    "${LIVE_SQLITE_PREBUILD_ROLLBACK_PATH}-wal" \
+    "${LIVE_SQLITE_PREBUILD_ROLLBACK_PATH}-shm"; do
+    if [ -e "$private_snapshot_entry" ] || [ -L "$private_snapshot_entry" ]; then
+      [ -f "$private_snapshot_entry" ] && [ ! -L "$private_snapshot_entry" ] \
+        && [ "$(stat -c '%u:%g:%a:%h' -- "$private_snapshot_entry")" = "0:0:600:1" ] \
+        || { printf 'post-freeze SQLite validation failed: rollback-snapshot-private-metadata\n' >&2; return 1; }
+    fi
+  done
   "$NODE_HOME/bin/node" "$seal_helper" verify-metadata \
     --base "$LIVE_SQLITE_PREBUILD_PATH" --seal "$LIVE_SQLITE_PREBUILD_STAGE_MANIFEST" \
     --allow-wal-digest-equivalent 1 \
@@ -3734,6 +3745,16 @@ verify_live_sqlite_prebuild_after_freeze() {
   }
   sync -f "$LIVE_SQLITE_PREBUILD_ROLLBACK_DIR" || return 1
   mv -T -- "$LIVE_SQLITE_PREBUILD_ROLLBACK_DIR" "${RECOVERY_DIR}/sqlite" || return 1
+  for private_snapshot_entry in \
+    "${RECOVERY_DIR}/sqlite/football.db" \
+    "${RECOVERY_DIR}/sqlite/football.db-wal" \
+    "${RECOVERY_DIR}/sqlite/football.db-shm"; do
+    if [ -e "$private_snapshot_entry" ] || [ -L "$private_snapshot_entry" ]; then
+      [ -f "$private_snapshot_entry" ] && [ ! -L "$private_snapshot_entry" ] \
+        && [ "$(stat -c '%u:%g:%a:%h' -- "$private_snapshot_entry")" = "0:0:600:1" ] \
+        || { printf 'post-freeze SQLite validation failed: adopted-rollback-private-metadata\n' >&2; return 1; }
+    fi
+  done
   sync -f "$RECOVERY_DIR" || return 1
   sync -f "$LIVE_SQLITE_PREBUILD_DIR" || return 1
   LIVE_SQLITE_BACKUP_DIR="${RECOVERY_DIR}/sqlite"
@@ -3748,39 +3769,53 @@ activate_prebuilt_live_sqlite() {
   [ "${LIVE_SQLITE_PREBUILD_READY:-0}" = "1" ] \
     && [ "${SWAP_STARTED:-0}" = "1" ] \
     && [ "${SERVICE_STOPPED_FOR_SWAP:-0}" = "1" ] \
-    && [ "${WORKER_STOPPED_FOR_SWAP:-0}" = "1" ] || return 1
+    && [ "${WORKER_STOPPED_FOR_SWAP:-0}" = "1" ] \
+    || { printf 'prebuilt SQLite activation failed: release-state\n' >&2; return 1; }
   [ -f "$LIVE_SQLITE_PREBUILD_STAGE_MANIFEST" ] \
     && [ ! -L "$LIVE_SQLITE_PREBUILD_STAGE_MANIFEST" ] \
     && [ "$(stat -c '%u:%g:%a:%h' -- "$LIVE_SQLITE_PREBUILD_STAGE_MANIFEST")" = "0:0:600:1" ] \
-    || return 1
+    || { printf 'prebuilt SQLite activation failed: stage-seal-metadata\n' >&2; return 1; }
   [ -f "$stage_path" ] && [ ! -L "$stage_path" ] \
     && [ "$(stat -c '%u:%g:%a:%h' -- "$stage_path")" = "0:0:600:1" ] \
-    || return 1
+    || { printf 'prebuilt SQLite activation failed: stage-base-metadata\n' >&2; return 1; }
   [ -d "$LIVE_SQLITE_PREBUILD_DIR" ] && [ ! -L "$LIVE_SQLITE_PREBUILD_DIR" ] \
-    && [ "$(stat -c '%u:%g:%a' -- "$LIVE_SQLITE_PREBUILD_DIR")" = "0:0:700" ] || return 1
-  [ -f "$seal_helper" ] && [ ! -L "$seal_helper" ] || return 1
+    && [ "$(stat -c '%u:%g:%a' -- "$LIVE_SQLITE_PREBUILD_DIR")" = "0:0:700" ] \
+    || { printf 'prebuilt SQLite activation failed: stage-directory-metadata\n' >&2; return 1; }
+  [ -f "$seal_helper" ] && [ ! -L "$seal_helper" ] \
+    || { printf 'prebuilt SQLite activation failed: seal-helper-metadata\n' >&2; return 1; }
   # The full stage digest and SQLite integrity check ran inside the bounded transient.
   # The root-private directory makes the nanosecond inode seal sufficient here,
   # keeping the stopped window free of a second whole-database read.
   "$NODE_HOME/bin/node" "$seal_helper" verify-metadata \
     --base "$stage_path" --seal "$LIVE_SQLITE_PREBUILD_STAGE_MANIFEST" \
     --allow-wal-digest-equivalent 1 \
-    || return 1
-  rm -f -- "${LIVE_SQLITE_PATH}-wal" "${LIVE_SQLITE_PATH}-shm" || return 1
-  mv -fT -- "$stage_path" "$LIVE_SQLITE_PATH" || return 1
+    || { printf 'prebuilt SQLite activation failed: stage-metadata-cas\n' >&2; return 1; }
+  rm -f -- "${LIVE_SQLITE_PATH}-wal" "${LIVE_SQLITE_PATH}-shm" \
+    || { printf 'prebuilt SQLite activation failed: remove-live-sidecars\n' >&2; return 1; }
+  mv -fT -- "$stage_path" "$LIVE_SQLITE_PATH" \
+    || { printf 'prebuilt SQLite activation failed: move-base\n' >&2; return 1; }
   if [ -f "${stage_path}-wal" ] && [ ! -L "${stage_path}-wal" ]; then
-    mv -fT -- "${stage_path}-wal" "${LIVE_SQLITE_PATH}-wal" || return 1
+    mv -fT -- "${stage_path}-wal" "${LIVE_SQLITE_PATH}-wal" \
+      || { printf 'prebuilt SQLite activation failed: move-wal\n' >&2; return 1; }
   fi
-  rm -f -- "${stage_path}-shm" || return 1
-  chown football:football "$LIVE_SQLITE_PATH" || return 1
-  chmod 0600 "$LIVE_SQLITE_PATH" || return 1
+  rm -f -- "${stage_path}-shm" \
+    || { printf 'prebuilt SQLite activation failed: remove-stage-shm\n' >&2; return 1; }
+  chown football:football "$LIVE_SQLITE_PATH" \
+    || { printf 'prebuilt SQLite activation failed: base-owner\n' >&2; return 1; }
+  chmod 0600 "$LIVE_SQLITE_PATH" \
+    || { printf 'prebuilt SQLite activation failed: base-mode\n' >&2; return 1; }
   if [ -e "${LIVE_SQLITE_PATH}-wal" ]; then
-    chown football:football "${LIVE_SQLITE_PATH}-wal" || return 1
-    chmod 0600 "${LIVE_SQLITE_PATH}-wal" || return 1
-    sync -f "${LIVE_SQLITE_PATH}-wal" || return 1
+    chown football:football "${LIVE_SQLITE_PATH}-wal" \
+      || { printf 'prebuilt SQLite activation failed: wal-owner\n' >&2; return 1; }
+    chmod 0600 "${LIVE_SQLITE_PATH}-wal" \
+      || { printf 'prebuilt SQLite activation failed: wal-mode\n' >&2; return 1; }
+    sync -f "${LIVE_SQLITE_PATH}-wal" \
+      || { printf 'prebuilt SQLite activation failed: wal-fsync\n' >&2; return 1; }
   fi
-  sync -f "$LIVE_SQLITE_PATH" || return 1
-  sync -f "$(dirname "$LIVE_SQLITE_PATH")" || return 1
+  sync -f "$LIVE_SQLITE_PATH" \
+    || { printf 'prebuilt SQLite activation failed: base-fsync\n' >&2; return 1; }
+  sync -f "$(dirname "$LIVE_SQLITE_PATH")" \
+    || { printf 'prebuilt SQLite activation failed: parent-fsync\n' >&2; return 1; }
   LIVE_SQLITE_PREBUILD_READY=0
   LIVE_SQLITE_PREBUILD_ACTIVATED=1
   log "activated CAS-verified prebuilt live SQLite without a stopped-window export"
