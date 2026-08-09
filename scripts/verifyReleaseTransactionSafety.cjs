@@ -3811,6 +3811,8 @@ check("candidate ledger continuity is snapshotted before mutation and verified b
   const main = mainProgram(bundleRelease);
   assert.match(bundleRelease, /scripts\/candidateReleaseContinuity\.cjs" snapshot/);
   assert.match(bundleRelease, /scripts\/candidateReleaseContinuity\.cjs" verify/);
+  assert.match(bundleRelease, /"\$NODE_HOME\/bin\/node" "\$APP_DIR\/scripts\/candidateReleaseContinuity\.cjs" verify/);
+  assert.doesNotMatch(bundleRelease, /"\$NODE_HOME\/bin\/node" "\$NEXT_DIR\/scripts\/candidateReleaseContinuity\.cjs" verify/);
   assert.match(bundleRelease, /candidate-release-continuity-before\.json/);
   assert.match(bundleRelease, /candidate-release-continuity-after\.json/);
   assert.match(bundleRelease, /\.release-candidate-continuity\.json/);

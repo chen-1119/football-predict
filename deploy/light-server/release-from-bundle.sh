@@ -6791,7 +6791,7 @@ run_as_service_user_with_runtime_env env VERIFY_BASE_URL="http://${HOST}:${PORT}
   || rollback "post-swap production readiness failed"
 release_candidate_heartbeat_keeper_is_healthy \
   || rollback "release heartbeat keeper failed during production readiness"
-"$NODE_HOME/bin/node" "$NEXT_DIR/scripts/candidateReleaseContinuity.cjs" verify \
+"$NODE_HOME/bin/node" "$APP_DIR/scripts/candidateReleaseContinuity.cjs" verify \
   --registry "$LIVE_STORE_DIR/model-artifacts/candidate-prospective-registry.json" \
   --snapshot "$RECOVERY_DIR/candidate-release-continuity-before.json" \
   --output "$RECOVERY_DIR/candidate-release-continuity-after.json" \
