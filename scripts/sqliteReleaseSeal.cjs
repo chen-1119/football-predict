@@ -446,7 +446,7 @@ const finalizeRecoverySnapshot = ({
   });
   const sourceSeal = reconciled.sourceSeal;
   const snapshotSeal = reconciled.snapshotSeal;
-  verifyMetadataSeal(snapshotBase, snapshotSeal);
+  verifyMetadataSeal(snapshotBase, snapshotSeal, { allowWalDigestEquivalent: true });
   const shm = captureSmallShm(liveBase, snapshotBase);
   const rows = TOKENS.map(({ token }, index) => manifestRow(
     token,

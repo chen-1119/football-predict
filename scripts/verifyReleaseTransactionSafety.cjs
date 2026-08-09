@@ -2578,6 +2578,11 @@ check("SQLite nanosecond seals reject same-size writes, inode swaps, links, and 
     assert.equal(manifest.length, 3);
     assert.deepEqual(manifest.map((line) => line.split("\t")[0]), ["base", "wal", "shm"]);
     assert.deepEqual(fs.readFileSync(`${snapshotBase}-wal`), stoppedWalBytes);
+    const reconciledSnapshotSeal = captureSeal(snapshotBase);
+    const reconciledWalTouchedAt = new Date(Date.now() + 2_000);
+    fs.utimesSync(`${snapshotBase}-wal`, reconciledWalTouchedAt, reconciledWalTouchedAt);
+    assert.throws(() => verifyMetadataSeal(snapshotBase, reconciledSnapshotSeal), /wal/u);
+    verifyMetadataSeal(snapshotBase, reconciledSnapshotSeal, { allowWalDigestEquivalent: true });
 
     const retried = makeFixture("retried");
     const retriedRollbackDirectory = path.join(retried.directory, "rollback");
