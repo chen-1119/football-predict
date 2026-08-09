@@ -1418,7 +1418,7 @@ const run = () => {
     && bundleReleaseScript.includes('run_prebuild_stage quick_check')
     && bundleReleaseScript.includes('run_prebuild_stage seal')
     && releasePrebuildPolicy.includes('DEFAULT_MIN_MEM_AVAILABLE_MIB = 1152')
-    && releasePrebuildPolicy.includes('DEFAULT_MAX_APP_MEMORY_CURRENT_MIB = 640')
+    && releasePrebuildPolicy.includes('DEFAULT_MAX_APP_MEMORY_CURRENT_MIB = 768')
     && releasePrebuildPolicy.includes('DEFAULT_MAX_APP_WORKING_SET_MIB = 512')
     && envExample.includes('RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB=1152')
     && envExample.includes('RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_MEMORY_CURRENT_MIB=640')

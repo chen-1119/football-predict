@@ -1582,7 +1582,7 @@ ensure_node_runtime_env() {
   set_env_value "$env_file" "SQLITE_EXPORT_ATTEMPTS" "3"
   set_env_value "$env_file" "SQLITE_EXPORT_RETRY_DELAY_MS" "5000"
   set_env_value "$env_file" "RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB" "1152"
-  set_env_value "$env_file" "RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_MEMORY_CURRENT_MIB" "640"
+  set_env_value "$env_file" "RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_MEMORY_CURRENT_MIB" "768"
   set_env_value "$env_file" "RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_WORKING_SET_MIB" "512"
   set_env_value "$env_file" "ENABLE_MODEL_BACKTEST_ON_SYNC" "1"
   set_env_value "$env_file" "MODEL_BACKTEST_ON_SYNC_MIN_INTERVAL_MINUTES" "30"

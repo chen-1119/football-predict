@@ -2650,13 +2650,13 @@ const readPlanSqliteStatus = async () => {
     "RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_MEMORY_CURRENT_MIB",
     "DEFAULT_MIN_MEM_AVAILABLE_MIB = 1152",
     "RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_WORKING_SET_MIB",
-    "DEFAULT_MAX_APP_MEMORY_CURRENT_MIB = 640",
+    "DEFAULT_MAX_APP_MEMORY_CURRENT_MIB = 768",
     "DEFAULT_MAX_APP_WORKING_SET_MIB = 512",
     "evaluateCapacity",
     "evaluateFreshness"
   ]) && hasAll(bundleReleaseScript, [
     'set_env_value "$env_file" "RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB" "1152"',
-    'set_env_value "$env_file" "RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_MEMORY_CURRENT_MIB" "640"',
+    'set_env_value "$env_file" "RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_MEMORY_CURRENT_MIB" "768"',
     'set_env_value "$env_file" "RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_WORKING_SET_MIB" "512"'
   ]) && hasAll(createReleaseBundle, [
     "scripts/runReleaseSyncWriteBarrier.cjs",
