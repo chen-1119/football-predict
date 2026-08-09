@@ -1437,7 +1437,7 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
   assert.match(pointerKeeperStartBody, /install -d -o football -g football -m 0700 -- "\$control_dir"/);
   assert.match(pointerKeeperStartBody, /dataGenerationStore\.cjs" "\$module_file"/);
   assert.match(pointerKeeperStartBody, /root:football:440:1/);
-  assert.match(pointerKeeperStartBody, /sha256sum "\$TRUSTED_SOURCE_DIR\/server\/dataGenerationStore\.cjs"/);
+  assert.match(pointerKeeperStartBody, /sha256sum "\$NEXT_DIR\/server\/dataGenerationStore\.cjs"/);
   assert.match(pointerKeeperStartBody, /sha256sum "\$module_file"/);
   assert.match(pointerKeeperStartBody, /runuser -u football -- "\$NODE_HOME\/bin\/node"/);
   assert.match(pointerKeeperStartBody, /runtimeModule\.acquirePointerCommitLock/);
@@ -1481,6 +1481,8 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
     "stop_release_pointer_commit_keeper clean",
     "restart_service_if_needed",
   ], "canonical pointer lock overlaps sync barrier and spans final CAS, tree swap, and SQLite activation");
+  assert.match(main, /"\$NODE_HOME\/bin\/node" "\$NEXT_DIR\/scripts\/verifyApiPerformance\.cjs"/);
+  assert.doesNotMatch(main, /"\$NODE_HOME\/bin\/node" "\$TRUSTED_SOURCE_DIR\/scripts\/verifyApiPerformance\.cjs"/);
   const abortBody = extractFunction(bundleRelease, "abort_before_swap");
   const rollbackBody = extractFunction(bundleRelease, "rollback");
   const exitTrapBody = extractFunction(bundleRelease, "release_exit_trap");
@@ -3556,8 +3558,8 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
     'write_recovery_phase "candidate-validated"',
     "HOST_CONFIG_DIRTY=1",
     'write_recovery_phase "host-config-changing"',
-    'install_systemd_units "$TRUSTED_SOURCE_DIR"',
-    'install_nginx_config "$TRUSTED_SOURCE_DIR"',
+    'install_systemd_units "$NEXT_DIR"',
+    'install_nginx_config "$NEXT_DIR"',
     "systemctl daemon-reload",
     'write_recovery_phase "host-config-applied"',
     'wait_for_health "http://${HOST}:${PORT}" "post-preswap-nginx-reload"',

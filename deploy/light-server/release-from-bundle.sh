@@ -3614,7 +3614,7 @@ PREBUILD_HELPER
 }
 
 verify_live_sqlite_prebuild_after_freeze() {
-  local seal_helper="${TRUSTED_SOURCE_DIR}/scripts/sqliteReleaseSeal.cjs"
+  local seal_helper="${NEXT_DIR}/scripts/sqliteReleaseSeal.cjs"
   [ "${LIVE_SQLITE_PREBUILD_READY:-0}" = "1" ] || return 1
   release_pointer_commit_keeper_is_healthy || {
     printf 'post-freeze SQLite validation requires the canonical pointer keeper\n' >&2
@@ -3675,7 +3675,7 @@ verify_live_sqlite_prebuild_after_freeze() {
 
 activate_prebuilt_live_sqlite() {
   local stage_path="$LIVE_SQLITE_PREBUILD_PATH"
-  local seal_helper="${TRUSTED_SOURCE_DIR}/scripts/sqliteReleaseSeal.cjs"
+  local seal_helper="${NEXT_DIR}/scripts/sqliteReleaseSeal.cjs"
   [ "${LIVE_SQLITE_PREBUILD_READY:-0}" = "1" ] \
     && [ "${SWAP_STARTED:-0}" = "1" ] \
     && [ "${SERVICE_STOPPED_FOR_SWAP:-0}" = "1" ] \
@@ -5522,9 +5522,9 @@ start_release_pointer_commit_keeper() {
     printf 'release pointer-commit keeper must be acquired while the current HTTP service is healthy\n' >&2
     return 1
   }
-  [ -f "$TRUSTED_SOURCE_DIR/server/dataGenerationStore.cjs" ] \
-    && [ ! -L "$TRUSTED_SOURCE_DIR/server/dataGenerationStore.cjs" ] \
-    && [ "$(stat -c '%h' -- "$TRUSTED_SOURCE_DIR/server/dataGenerationStore.cjs")" = "1" ] || return 1
+  [ -f "$NEXT_DIR/server/dataGenerationStore.cjs" ] \
+    && [ ! -L "$NEXT_DIR/server/dataGenerationStore.cjs" ] \
+    && [ "$(stat -c '%h' -- "$NEXT_DIR/server/dataGenerationStore.cjs")" = "1" ] || return 1
   runtime_dir="$(mktemp -d /run/football-release-pointer-lock.XXXXXX)" || return 1
   chown root:football "$runtime_dir" || { rmdir -- "$runtime_dir"; return 1; }
   chmod 0750 "$runtime_dir" || { rmdir -- "$runtime_dir"; return 1; }
@@ -5548,12 +5548,12 @@ start_release_pointer_commit_keeper() {
   chown root:football "$helper_file" || return 1
   chmod 0550 "$helper_file" || return 1
   ( umask 077; set -o noclobber; cp --no-dereference --no-preserve=ownership,mode,timestamps \
-    -- "$TRUSTED_SOURCE_DIR/server/dataGenerationStore.cjs" "$module_file" ) || return 1
+    -- "$NEXT_DIR/server/dataGenerationStore.cjs" "$module_file" ) || return 1
   chown root:football "$module_file" || return 1
   chmod 0440 "$module_file" || return 1
   [ -f "$module_file" ] && [ ! -L "$module_file" ] \
     && [ "$(stat -c '%U:%G:%a:%h' -- "$module_file")" = "root:football:440:1" ] || return 1
-  [ "$(sha256sum "$TRUSTED_SOURCE_DIR/server/dataGenerationStore.cjs" | awk '{print $1}')" \
+  [ "$(sha256sum "$NEXT_DIR/server/dataGenerationStore.cjs" | awk '{print $1}')" \
     = "$(sha256sum "$module_file" | awk '{print $1}')" ] || return 1
   runuser -u football -- "$NODE_HOME/bin/node" -e '
     const runtimeModule = require(process.argv[1]);
@@ -6298,7 +6298,7 @@ CANDIDATE_ARCHIVE_REFRESH_CAPTURED_AT="$("$NODE_HOME/bin/node" -e 'process.stdou
   || abort_before_swap "candidate transition lease instant was empty"
 [ ! -e "$CANDIDATE_TRANSITION_LEASE" ] && [ ! -L "$CANDIDATE_TRANSITION_LEASE" ] \
   || abort_before_swap "candidate transition lease path already exists"
-"$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseTransitionLease.cjs" create \
+"$NODE_HOME/bin/node" "$NEXT_DIR/scripts/releaseTransitionLease.cjs" create \
   --current "$NEXT_DIR/public/data/matches-current.json" \
   --lease "$CANDIDATE_TRANSITION_LEASE" \
   --at "$CANDIDATE_ARCHIVE_REFRESH_CAPTURED_AT" \
@@ -6392,9 +6392,9 @@ HOST_CONFIG_DIRTY=1
 log "install trusted nginx SPA routing before the live service pause"
 write_recovery_phase "host-config-changing" \
   || abort_before_swap "recovery phase update failed before pre-swap host config"
-install_systemd_units "$TRUSTED_SOURCE_DIR" \
+install_systemd_units "$NEXT_DIR" \
   || abort_before_swap "trusted pre-swap systemd unit install failed"
-install_nginx_config "$TRUSTED_SOURCE_DIR" \
+install_nginx_config "$NEXT_DIR" \
   || abort_before_swap "trusted pre-swap nginx config reload failed"
 systemctl daemon-reload || abort_before_swap "pre-swap systemd daemon reload failed"
 write_recovery_phase "host-config-applied" \
@@ -6438,7 +6438,7 @@ else
     PERF_BASE_URL="http://${HOST}:${PORT}" PERF_START_SERVER=0 \
     PERF_REQUESTS=12 PERF_CONCURRENCY=3 PERF_WARMUP_REQUESTS=3 \
     PERF_WARMUP_CONCURRENCY=1 PERF_MAX_P95_MS=1500 PERF_MAX_ERROR_RATE=0 \
-    "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/verifyApiPerformance.cjs" \
+    "$NODE_HOME/bin/node" "$NEXT_DIR/scripts/verifyApiPerformance.cjs" \
     || abort_before_swap "current HTTP pressure gate failed after live SQLite prebuild"
   assert_release_fast_watcher_pause_guard \
     || abort_before_swap "fast watcher pause guard failed after current HTTP pressure gate"
@@ -6460,7 +6460,7 @@ stop_release_sync_write_barrier clean \
   || abort_before_swap "canonical live sync write barrier did not drain cleanly after service stop"
 snapshot_external_model_artifacts_for_rollback \
   || abort_before_swap "external model artifact rollback snapshot failed"
-"$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/candidateReleaseContinuity.cjs" snapshot \
+"$NODE_HOME/bin/node" "$NEXT_DIR/scripts/candidateReleaseContinuity.cjs" snapshot \
   --registry "$RECOVERY_DIR/external-model-artifacts/candidate-registry" \
   --output "$RECOVERY_DIR/candidate-release-continuity-before.json" \
   --bundle-sha256 "$BUNDLE_SHA256" \
@@ -6505,7 +6505,7 @@ write_recovery_phase "swap-starting" || abort_before_swap "recovery phase update
 # worker and live service are paused.
 CANDIDATE_TRANSITION_LEASE_VERIFIED_AT="$("$NODE_HOME/bin/node" -e 'process.stdout.write(new Date().toISOString())')" \
   || abort_before_swap "candidate transition lease verification instant could not be captured"
-"$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseTransitionLease.cjs" verify \
+"$NODE_HOME/bin/node" "$NEXT_DIR/scripts/releaseTransitionLease.cjs" verify \
   --current "$NEXT_DIR/public/data/matches-current.json" \
   --lease "$CANDIDATE_TRANSITION_LEASE" \
   --at "$CANDIDATE_TRANSITION_LEASE_VERIFIED_AT" \
@@ -6616,7 +6616,7 @@ run_as_service_user_with_runtime_env env VERIFY_BASE_URL="http://${HOST}:${PORT}
   || rollback "post-swap production readiness failed"
 release_candidate_heartbeat_keeper_is_healthy \
   || rollback "release heartbeat keeper failed during production readiness"
-"$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/candidateReleaseContinuity.cjs" verify \
+"$NODE_HOME/bin/node" "$NEXT_DIR/scripts/candidateReleaseContinuity.cjs" verify \
   --registry "$LIVE_STORE_DIR/model-artifacts/candidate-prospective-registry.json" \
   --snapshot "$RECOVERY_DIR/candidate-release-continuity-before.json" \
   --output "$RECOVERY_DIR/candidate-release-continuity-after.json" \
