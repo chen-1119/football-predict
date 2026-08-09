@@ -3665,35 +3665,53 @@ PREBUILD_HELPER
 
 verify_live_sqlite_prebuild_after_freeze() {
   local seal_helper="${NEXT_DIR}/scripts/sqliteReleaseSeal.cjs"
-  [ "${LIVE_SQLITE_PREBUILD_READY:-0}" = "1" ] || return 1
+  [ "${LIVE_SQLITE_PREBUILD_READY:-0}" = "1" ] || {
+    printf 'post-freeze SQLite validation failed: prebuild-ready-state\n' >&2
+    return 1
+  }
   release_pointer_commit_keeper_is_healthy || {
     printf 'post-freeze SQLite validation requires the canonical pointer keeper\n' >&2
     return 1
   }
-  [ "$RECOVERY_ACTIVE" = "1" ] && [ -d "$RECOVERY_DIR" ] && [ ! -L "$RECOVERY_DIR" ] || return 1
+  [ "$RECOVERY_ACTIVE" = "1" ] && [ -d "$RECOVERY_DIR" ] && [ ! -L "$RECOVERY_DIR" ] || {
+    printf 'post-freeze SQLite validation failed: recovery-root-state\n' >&2
+    return 1
+  }
   [ -f "$seal_helper" ] && [ ! -L "$seal_helper" ] \
-    && [ "$(stat -c '%u:%g:%a:%h' -- "$seal_helper")" = "0:0:600:1" ] || return 1
+    && [ "$(stat -c '%u:%g:%a:%h' -- "$seal_helper")" = "0:0:600:1" ] || {
+    printf 'post-freeze SQLite validation failed: seal-helper-metadata\n' >&2
+    return 1
+  }
   [ -d "$LIVE_SQLITE_PREBUILD_DIR" ] && [ ! -L "$LIVE_SQLITE_PREBUILD_DIR" ] \
-    && [ "$(stat -c '%u:%g:%a' -- "$LIVE_SQLITE_PREBUILD_DIR")" = "0:0:700" ] || return 1
+    && [ "$(stat -c '%u:%g:%a' -- "$LIVE_SQLITE_PREBUILD_DIR")" = "0:0:700" ] || {
+    printf 'post-freeze SQLite validation failed: prebuild-directory-metadata\n' >&2
+    return 1
+  }
   [ -d "$LIVE_SQLITE_PREBUILD_ROLLBACK_DIR" ] && [ ! -L "$LIVE_SQLITE_PREBUILD_ROLLBACK_DIR" ] \
-    && [ "$(stat -c '%u:%g:%a:%h' -- "$LIVE_SQLITE_PREBUILD_ROLLBACK_DIR")" = "0:0:700:2" ] || return 1
+    && [ "$(stat -c '%u:%g:%a:%h' -- "$LIVE_SQLITE_PREBUILD_ROLLBACK_DIR")" = "0:0:700:2" ] || {
+    printf 'post-freeze SQLite validation failed: rollback-directory-metadata\n' >&2
+    return 1
+  }
   [ -f "$LIVE_SQLITE_PREBUILD_SOURCE_MANIFEST" ] \
     && [ ! -L "$LIVE_SQLITE_PREBUILD_SOURCE_MANIFEST" ] \
     && [ "$(stat -c '%u:%g:%a:%h' -- "$LIVE_SQLITE_PREBUILD_SOURCE_MANIFEST")" = "0:0:600:1" ] \
-    || return 1
+    || { printf 'post-freeze SQLite validation failed: source-seal-metadata\n' >&2; return 1; }
   [ -f "$LIVE_SQLITE_PREBUILD_STAGE_MANIFEST" ] \
     && [ ! -L "$LIVE_SQLITE_PREBUILD_STAGE_MANIFEST" ] \
     && [ "$(stat -c '%u:%g:%a:%h' -- "$LIVE_SQLITE_PREBUILD_STAGE_MANIFEST")" = "0:0:600:1" ] \
-    || return 1
+    || { printf 'post-freeze SQLite validation failed: stage-seal-metadata\n' >&2; return 1; }
   [ -f "$LIVE_SQLITE_PREBUILD_PUBLICATION_SEAL" ] \
     && [ ! -L "$LIVE_SQLITE_PREBUILD_PUBLICATION_SEAL" ] \
     && [ "$(stat -c '%u:%g:%a:%h' -- "$LIVE_SQLITE_PREBUILD_PUBLICATION_SEAL")" = "0:0:600:1" ] \
-    || return 1
+    || { printf 'post-freeze SQLite validation failed: publication-seal-metadata\n' >&2; return 1; }
   [ -f "$LIVE_SQLITE_PREBUILD_ROLLBACK_SEAL" ] \
     && [ ! -L "$LIVE_SQLITE_PREBUILD_ROLLBACK_SEAL" ] \
     && [ "$(stat -c '%u:%g:%a:%h' -- "$LIVE_SQLITE_PREBUILD_ROLLBACK_SEAL")" = "0:0:600:1" ] \
-    || return 1
-  [ ! -e "${RECOVERY_DIR}/sqlite" ] && [ ! -L "${RECOVERY_DIR}/sqlite" ] || return 1
+    || { printf 'post-freeze SQLite validation failed: rollback-seal-metadata\n' >&2; return 1; }
+  [ ! -e "${RECOVERY_DIR}/sqlite" ] && [ ! -L "${RECOVERY_DIR}/sqlite" ] || {
+    printf 'post-freeze SQLite validation failed: recovery-sqlite-path-occupied\n' >&2
+    return 1
+  }
   "$NODE_HOME/bin/node" "$seal_helper" finalize-recovery \
     --live-base "$LIVE_SQLITE_PATH" \
     --snapshot-base "$LIVE_SQLITE_PREBUILD_ROLLBACK_PATH" \
@@ -3701,14 +3719,14 @@ verify_live_sqlite_prebuild_after_freeze() {
     --snapshot-seal "$LIVE_SQLITE_PREBUILD_ROLLBACK_SEAL" \
     --live-path-output "${LIVE_SQLITE_PREBUILD_ROLLBACK_DIR}/live-path" \
     --manifest-output "${LIVE_SQLITE_PREBUILD_ROLLBACK_DIR}/manifest.tsv" \
-    || return 1
+    || { printf 'post-freeze SQLite validation failed: finalize-recovery\n' >&2; return 1; }
   "$NODE_HOME/bin/node" "$seal_helper" verify-metadata \
     --base "$LIVE_SQLITE_PREBUILD_PATH" --seal "$LIVE_SQLITE_PREBUILD_STAGE_MANIFEST" \
-    || return 1
+    || { printf 'post-freeze SQLite validation failed: stage-metadata-cas\n' >&2; return 1; }
   validate_prebuilt_live_sqlite_publication \
     "$NEXT_DIR" "$LIVE_STORE_DIR" "$NEXT_DIR/public/data" "$LIVE_SQLITE_PREBUILD_PATH" 0 \
     pointer-only "$LIVE_SQLITE_PREBUILD_PUBLICATION_SEAL" "$LIVE_SQLITE_PREBUILD_STAGE_MANIFEST" \
-    || return 1
+    || { printf 'post-freeze SQLite validation failed: publication-pointer-cas\n' >&2; return 1; }
   release_pointer_commit_keeper_is_healthy || {
     printf 'canonical pointer keeper changed during post-freeze SQLite validation\n' >&2
     return 1

@@ -2760,6 +2760,27 @@ check("the post-prebuild pressure gate is read-only against the sealed SQLite ge
   assert.doesNotMatch(main, /PERF_ACCESS_TOKEN="\$\(/);
 });
 
+check("post-freeze SQLite CAS reports the exact failed invariant", () => {
+  const verifyBody = extractFunction(bundleRelease, "verify_live_sqlite_prebuild_after_freeze");
+  for (const reason of [
+    "prebuild-ready-state",
+    "recovery-root-state",
+    "seal-helper-metadata",
+    "prebuild-directory-metadata",
+    "rollback-directory-metadata",
+    "source-seal-metadata",
+    "stage-seal-metadata",
+    "publication-seal-metadata",
+    "rollback-seal-metadata",
+    "recovery-sqlite-path-occupied",
+    "finalize-recovery",
+    "stage-metadata-cas",
+    "publication-pointer-cas",
+  ]) {
+    assert.match(verifyBody, new RegExp(`post-freeze SQLite validation failed: ${reason}`));
+  }
+});
+
 check("candidate odds compaction executes a signed file without inline systemd argument expansion", () => {
   const main = mainProgram(bundleRelease);
   const compactBody = extractFunction(bundleRelease, "compact_public_odds_history");
