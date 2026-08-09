@@ -954,8 +954,12 @@ const readPlanSqliteStatus = async () => {
     "new signed result probe reaches SQLite publication inside ten seconds"
   ]) && hasAll(workerService, [
     "SYNC_WORKER_LOOP=1",
+    "runSyncWorker.cjs --loop",
     "DATASTORE_READ_SOURCE=sqlite",
     "ENABLE_SQLITE_EXPORT=1"
+    ]) && hasAll(syncWorker, [
+      'process.env.SYNC_WORKER_LOOP === "1"',
+      'process.argv.includes("--loop")'
     ]), { files: [
       "scripts/runSyncWorker.cjs",
       "scripts/publishOfficialResultsFast.cjs",

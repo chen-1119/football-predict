@@ -2795,6 +2795,25 @@ check("the sync worker stays live during long isolated work and pauses only for 
   assert.match(exitTrapBody, /restore_pre_swap_transaction/);
 });
 
+check("the live sync worker proves both loop contracts before release readiness", () => {
+  const startBody = extractFunction(bundleRelease, "start_worker_for_live_release");
+  const stateBody = extractFunction(bundleRelease, "assert_sync_worker_loop_process_state");
+  assertOrdered(startBody, [
+    'systemctl start "$WORKER_SERVICE_NAME"',
+    "assert_sync_worker_loop_process_state",
+    "WORKER_STOPPED_FOR_SWAP=0",
+  ], "worker start proves its stable loop process before it is considered resumed");
+  assert.match(stateBody, /for attempt in \$\(seq 1 50\)/);
+  assert.match(stateBody, /systemctl show "\$WORKER_SERVICE_NAME" --property=MainPID/);
+  assert.match(stateBody, /\/proc\/\$\{main_pid\}\/environ/);
+  assert.match(stateBody, /\/proc\/\$\{main_pid\}\/cmdline/);
+  assert.match(stateBody, /grep -Fxc "SYNC_WORKER_LOOP=1"/);
+  assert.match(stateBody, /grep -Fxc -- "--loop"/);
+  assert.match(stateBody, /grep -Fxc -- "\$expected_script"/);
+  assert.match(stateBody, /sleep 0\.1/);
+  assert.match(stateBody, /sync worker loop process state mismatch/);
+});
+
 check("the post-prebuild pressure gate is read-only against the sealed SQLite generation", () => {
   const main = mainProgram(bundleRelease);
   const abortBody = extractFunction(bundleRelease, "abort_before_swap");

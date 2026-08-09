@@ -1073,11 +1073,13 @@ const run = () => {
         && verifyReleaseBundleSafety.includes('"scripts/compactPublicOddsHistory.cjs"'),
     });
 
-  pushCheck(checks, "systemd split services", appService.includes("server/index.cjs") && appService.includes("TimeoutStopSec=8") && appService.includes("KillMode=mixed") && workerService.includes("runSyncWorker.cjs") && workerService.includes("DATASTORE_READ_SOURCE=sqlite") && workerService.includes("ENABLE_SQLITE_EXPORT=1"), {
+  pushCheck(checks, "systemd split services", appService.includes("server/index.cjs") && appService.includes("TimeoutStopSec=8") && appService.includes("KillMode=mixed") && workerService.includes("runSyncWorker.cjs --loop") && workerService.includes("SYNC_WORKER_LOOP=1") && syncWorker.includes('process.argv.includes("--loop")') && workerService.includes("DATASTORE_READ_SOURCE=sqlite") && workerService.includes("ENABLE_SQLITE_EXPORT=1"), {
     hasAppService: appService.includes("server/index.cjs"),
     appHasBoundedStop: appService.includes("TimeoutStopSec=8"),
     appKillModeMixed: appService.includes("KillMode=mixed"),
-    hasWorkerService: workerService.includes("runSyncWorker.cjs"),
+    hasWorkerService: workerService.includes("runSyncWorker.cjs --loop"),
+    workerHasLoopEnvironment: workerService.includes("SYNC_WORKER_LOOP=1"),
+    workerHasLoopArgumentFallback: syncWorker.includes('process.argv.includes("--loop")'),
     workerSqlite: workerService.includes("DATASTORE_READ_SOURCE=sqlite"),
     workerSqliteExport: workerService.includes("ENABLE_SQLITE_EXPORT=1")
   });

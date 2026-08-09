@@ -3994,8 +3994,48 @@ start_worker_for_live_release() {
     return 0
   fi
   systemctl start "$WORKER_SERVICE_NAME" >/dev/null 2>&1 || return 1
-  systemctl is-active --quiet "$WORKER_SERVICE_NAME" || return 1
+  assert_sync_worker_loop_process_state || return 1
   WORKER_STOPPED_FOR_SWAP=0
+}
+
+assert_sync_worker_loop_process_state() {
+  local main_pid="" env_count="" loop_arg_count="" script_arg_count="" attempt
+  local expected_script="${APP_DIR}/scripts/runSyncWorker.cjs"
+  # As with the API process, MainPID can be visible just before execve(2).
+  # Require the stable production worker to prove both independent loop
+  # contracts from its final environment and argv before release readiness.
+  for attempt in $(seq 1 50); do
+    if systemctl is-active --quiet "$WORKER_SERVICE_NAME"; then
+      main_pid="$(systemctl show "$WORKER_SERVICE_NAME" --property=MainPID --value 2>/dev/null || true)"
+      if [[ "$main_pid" =~ ^[1-9][0-9]*$ ]] \
+        && [ -r "/proc/${main_pid}/environ" ] \
+        && [ -r "/proc/${main_pid}/cmdline" ]; then
+        env_count="$(tr '\0' '\n' <"/proc/${main_pid}/environ" \
+          | grep -Fxc "SYNC_WORKER_LOOP=1" || true)"
+        loop_arg_count="$(tr '\0' '\n' <"/proc/${main_pid}/cmdline" \
+          | grep -Fxc -- "--loop" || true)"
+        script_arg_count="$(tr '\0' '\n' <"/proc/${main_pid}/cmdline" \
+          | grep -Fxc -- "$expected_script" || true)"
+        if [ "$env_count" = "1" ] \
+          && [ "$loop_arg_count" = "1" ] \
+          && [ "$script_arg_count" = "1" ]; then
+          return 0
+        fi
+      else
+        env_count="unreadable"
+        loop_arg_count="unreadable"
+        script_arg_count="unreadable"
+      fi
+    else
+      env_count="inactive"
+      loop_arg_count="inactive"
+      script_arg_count="inactive"
+    fi
+    sleep 0.1
+  done
+  printf 'sync worker loop process state mismatch: env=%s loopArg=%s scriptArg=%s pid=%s attempts=%s\n' \
+    "$env_count" "$loop_arg_count" "$script_arg_count" "${main_pid:-none}" 50 >&2
+  return 1
 }
 
 verify_post_swap_transition_window() {
