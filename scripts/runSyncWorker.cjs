@@ -544,7 +544,13 @@ const startCandidateProspectiveDeadlineHeartbeat = ({
       nextRunAt = null;
       return tick({ recoveryAttempt: false });
     }, plan.delayMs);
-    if (typeof normalHandle?.unref === "function") normalHandle.unref();
+    // An unresolved Promise does not keep Node alive.  Before the first exact
+    // heartbeat is published, the scheduled retry is therefore the worker's
+    // startup liveness handle and must remain referenced.  Later cadence
+    // timers stay unref'ed so normal shutdown is still prompt.
+    if (!resolveFirstPublication && typeof normalHandle?.unref === "function") {
+      normalHandle.unref();
+    }
     return plan;
   };
   const scheduleRetry = () => {
@@ -556,7 +562,9 @@ const startCandidateProspectiveDeadlineHeartbeat = ({
       nextRunAt = null;
       return tick({ recoveryAttempt: true });
     }, boundedRetryMs);
-    if (typeof retryHandle?.unref === "function") retryHandle.unref();
+    if (!resolveFirstPublication && typeof retryHandle?.unref === "function") {
+      retryHandle.unref();
+    }
   };
   const tick = ({ recoveryAttempt = false } = {}) => {
     if (inFlightTick) return inFlightTick;
