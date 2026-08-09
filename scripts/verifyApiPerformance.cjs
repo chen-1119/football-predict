@@ -1,6 +1,8 @@
 const { spawn } = require("node:child_process");
+const fs = require("node:fs");
 const http = require("node:http");
 const https = require("node:https");
+const path = require("node:path");
 const zlib = require("node:zlib");
 
 const defaultPort = Number(process.env.PORT || 8810);
@@ -21,6 +23,9 @@ const maxCurrentAvgBytes = Math.max(10_000, Number(process.env.PERF_MAX_CURRENT_
 const keepAlive = process.env.PERF_KEEP_ALIVE !== "0";
 const acceptGzip = process.env.PERF_ACCEPT_GZIP !== "0";
 const endpointCooldownMs = Math.max(0, Number(process.env.PERF_ENDPOINT_COOLDOWN_MS || 2500));
+const prepareAccessTokenOnly = process.env.PERF_PREPARE_ACCESS_TOKEN_ONLY === "1";
+const accessTokenFile = String(process.env.PERF_ACCESS_TOKEN_FILE || "").trim();
+const accessTokenOutputPath = String(process.env.PERF_ACCESS_TOKEN_OUTPUT_PATH || "").trim();
 const stableHealthNames = new Set(["public-health", "source-health"]);
 const httpAgent = new http.Agent({
   keepAlive,
@@ -172,8 +177,58 @@ const stopLocalServer = () => {
   setTimeout(() => child?.kill("SIGKILL"), 1500).unref();
 };
 
+const assertAbsoluteTokenPath = (value, label) => {
+  if (!value || !path.isAbsolute(value) || path.normalize(value) !== value) {
+    throw new Error(`${label} must be an absolute normalized path`);
+  }
+};
+
+const validateTokenFileStat = (filePath) => {
+  const stat = fs.lstatSync(filePath);
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1) {
+    throw new Error("performance access token file must be one regular non-linked file");
+  }
+  if (process.platform !== "win32" && (stat.mode & 0o777) !== 0o600) {
+    throw new Error("performance access token file must have mode 0600");
+  }
+  if (stat.size <= 0 || stat.size > 8192) {
+    throw new Error("performance access token file has an invalid size");
+  }
+};
+
+const readAccessTokenFile = (filePath) => {
+  assertAbsoluteTokenPath(filePath, "PERF_ACCESS_TOKEN_FILE");
+  validateTokenFileStat(filePath);
+  const token = fs.readFileSync(filePath, "utf8").trim();
+  if (!token || token.length > 8192 || /\s/.test(token)) {
+    throw new Error("performance access token file contains an invalid token");
+  }
+  return token;
+};
+
+const writeAccessTokenFile = (filePath, token) => {
+  assertAbsoluteTokenPath(filePath, "PERF_ACCESS_TOKEN_OUTPUT_PATH");
+  if (!token || token.length > 8192 || /\s/.test(token)) {
+    throw new Error("refusing to persist an invalid performance access token");
+  }
+  const parent = path.dirname(filePath);
+  const parentStat = fs.lstatSync(parent);
+  if (!parentStat.isDirectory() || parentStat.isSymbolicLink() || fs.realpathSync(parent) !== parent) {
+    throw new Error("performance access token parent must be a real directory");
+  }
+  const descriptor = fs.openSync(filePath, "wx", 0o600);
+  try {
+    fs.writeFileSync(descriptor, token, { encoding: "utf8" });
+    fs.fsyncSync(descriptor);
+  } finally {
+    fs.closeSync(descriptor);
+  }
+  validateTokenFileStat(filePath);
+};
+
 const getAccessToken = async () => {
   if (process.env.PERF_ACCESS_TOKEN) return process.env.PERF_ACCESS_TOKEN;
+  if (accessTokenFile) return readAccessTokenFile(accessTokenFile);
   if (process.env.PERF_ACCESS_CODE) {
     const verify = await request("POST", "/api/access/verify", { code: process.env.PERF_ACCESS_CODE });
     return verify.body?.session?.token || "";
@@ -379,6 +434,18 @@ const run = async () => {
     if (!token) {
       throw new Error("access token unavailable; set ACCESS_CODE_ADMIN_TOKEN, PERF_ACCESS_TOKEN, or PERF_ACCESS_CODE");
     }
+    if (prepareAccessTokenOnly) {
+      if (!accessTokenOutputPath) {
+        throw new Error("PERF_ACCESS_TOKEN_OUTPUT_PATH is required in token preparation mode");
+      }
+      writeAccessTokenFile(accessTokenOutputPath, token);
+      console.log(JSON.stringify({
+        ok: true,
+        checkedAt: new Date().toISOString(),
+        preparedAccessToken: true
+      }, null, 2));
+      return;
+    }
     const headers = { "x-access-token": token };
     const current = await request("GET", "/api/v1/matches/current?view=list", null, headers);
     const historySeed = matchRowsFrom(current.body).length > 0
@@ -500,7 +567,13 @@ const run = async () => {
   }
 };
 
-module.exports = { evaluatePerformanceRun, matchRowsFrom, selectDetailTarget };
+module.exports = {
+  evaluatePerformanceRun,
+  matchRowsFrom,
+  readAccessTokenFile,
+  selectDetailTarget,
+  writeAccessTokenFile
+};
 
 if (require.main === module) {
   run().catch((error) => {

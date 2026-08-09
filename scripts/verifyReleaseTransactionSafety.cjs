@@ -2730,6 +2730,31 @@ check("the sync worker stays live during long isolated work and pauses only for 
   assert.match(exitTrapBody, /restore_pre_swap_transaction/);
 });
 
+check("the post-prebuild pressure gate is read-only against the sealed SQLite generation", () => {
+  const main = mainProgram(bundleRelease);
+  const abortBody = extractFunction(bundleRelease, "abort_before_swap");
+  const rollbackBody = extractFunction(bundleRelease, "rollback");
+  const exitTrapBody = extractFunction(bundleRelease, "release_exit_trap");
+  const prepareBody = extractFunction(bundleRelease, "prepare_release_perf_access_token");
+  const cleanupBody = extractFunction(bundleRelease, "cleanup_release_perf_access_token");
+  assertOrdered(main, [
+    "prepare_release_perf_access_token",
+    "start_release_sync_write_barrier",
+    'prepare_live_sqlite_prebuild "$LIVE_STORE_DIR" "$LIVE_SQLITE_PATH"',
+    'PERF_ACCESS_TOKEN_FILE="$RELEASE_PERF_ACCESS_TOKEN_PATH"',
+    "cleanup_release_perf_access_token",
+  ], "performance credentials are created before and consumed read-only after the SQLite seal");
+  assert.match(prepareBody, /PERF_PREPARE_ACCESS_TOKEN_ONLY=1/);
+  assert.match(prepareBody, /PERF_ACCESS_TOKEN_OUTPUT_PATH="\$token_path"/);
+  assert.match(cleanupBody, /\/run\/football-release-perf/);
+  assert.match(cleanupBody, /RELEASE_PERF_ACCESS_TOKEN_DIR_DEVICE/);
+  assert.match(cleanupBody, /RELEASE_PERF_ACCESS_TOKEN_DIR_INODE/);
+  assert.match(abortBody, /cleanup_release_perf_access_token/);
+  assert.match(rollbackBody, /cleanup_release_perf_access_token/);
+  assert.match(exitTrapBody, /cleanup_release_perf_access_token/);
+  assert.doesNotMatch(main, /PERF_ACCESS_TOKEN="\$\(/);
+});
+
 check("candidate odds compaction executes a signed file without inline systemd argument expansion", () => {
   const main = mainProgram(bundleRelease);
   const compactBody = extractFunction(bundleRelease, "compact_public_odds_history");

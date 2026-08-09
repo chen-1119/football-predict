@@ -87,6 +87,10 @@ RELEASE_POINTER_COMMIT_KEEPER_HELPER_FILE=""
 RELEASE_POINTER_COMMIT_KEEPER_MODULE_FILE=""
 RELEASE_POINTER_COMMIT_KEEPER_PID=""
 RELEASE_POINTER_COMMIT_KEEPER_LOCK_DIR=""
+RELEASE_PERF_ACCESS_TOKEN_DIR=""
+RELEASE_PERF_ACCESS_TOKEN_DIR_DEVICE=""
+RELEASE_PERF_ACCESS_TOKEN_DIR_INODE=""
+RELEASE_PERF_ACCESS_TOKEN_PATH=""
 LIVE_SQLITE_PREBUILD_PATH=""
 LIVE_SQLITE_PREBUILD_DIR=""
 LIVE_SQLITE_PREBUILD_DIR_DEVICE=""
@@ -372,6 +376,52 @@ run_as_service_user() {
 
 run_as_service_user_with_runtime_env() {
   runuser -u football -- bash -c 'set -a; . "$1"; set +a; shift; exec "$@"' bash "$RUNTIME_ENV_FILE" "$@"
+}
+
+cleanup_release_perf_access_token() {
+  local runtime_dir="${RELEASE_PERF_ACCESS_TOKEN_DIR:-}"
+  local token_path="${RELEASE_PERF_ACCESS_TOKEN_PATH:-}"
+  [ -n "$runtime_dir" ] || return 0
+  [[ "$runtime_dir" =~ ^/run/football-release-perf\.[A-Za-z0-9]{6}$ ]] || return 1
+  [ -d "$runtime_dir" ] && [ ! -L "$runtime_dir" ] || return 1
+  [ "$(stat -c '%d' -- "$runtime_dir")" = "$RELEASE_PERF_ACCESS_TOKEN_DIR_DEVICE" ] \
+    && [ "$(stat -c '%i' -- "$runtime_dir")" = "$RELEASE_PERF_ACCESS_TOKEN_DIR_INODE" ] || return 1
+  [ "$token_path" = "$runtime_dir/access-token" ] || return 1
+  if [ -e "$token_path" ] || [ -L "$token_path" ]; then
+    [ -f "$token_path" ] && [ ! -L "$token_path" ] \
+      && [ "$(stat -c '%h' -- "$token_path")" = "1" ] || return 1
+    rm -f -- "$token_path" || return 1
+  fi
+  [ -z "$(find "$runtime_dir" -mindepth 1 -maxdepth 1 -print -quit)" ] || return 1
+  rmdir -- "$runtime_dir" || return 1
+  RELEASE_PERF_ACCESS_TOKEN_DIR=""
+  RELEASE_PERF_ACCESS_TOKEN_DIR_DEVICE=""
+  RELEASE_PERF_ACCESS_TOKEN_DIR_INODE=""
+  RELEASE_PERF_ACCESS_TOKEN_PATH=""
+}
+
+prepare_release_perf_access_token() {
+  local runtime_dir token_path football_uid football_gid
+  [ -z "${RELEASE_PERF_ACCESS_TOKEN_DIR:-}" ] || return 1
+  runtime_dir="$(mktemp -d /run/football-release-perf.XXXXXX)" || return 1
+  RELEASE_PERF_ACCESS_TOKEN_DIR="$runtime_dir"
+  RELEASE_PERF_ACCESS_TOKEN_DIR_DEVICE="$(stat -c '%d' -- "$runtime_dir")" || return 1
+  RELEASE_PERF_ACCESS_TOKEN_DIR_INODE="$(stat -c '%i' -- "$runtime_dir")" || return 1
+  token_path="$runtime_dir/access-token"
+  RELEASE_PERF_ACCESS_TOKEN_PATH="$token_path"
+  chown football:football "$runtime_dir" || return 1
+  chmod 0700 "$runtime_dir" || return 1
+  run_as_service_user_with_runtime_env env \
+    PERF_BASE_URL="http://${HOST}:${PORT}" PERF_START_SERVER=0 \
+    PERF_PREPARE_ACCESS_TOKEN_ONLY=1 PERF_ACCESS_TOKEN_OUTPUT_PATH="$token_path" \
+    "$NODE_HOME/bin/node" "$NEXT_DIR/scripts/verifyApiPerformance.cjs" || return 1
+  football_uid="$(id -u football)" || return 1
+  football_gid="$(id -g football)" || return 1
+  [ -f "$token_path" ] && [ ! -L "$token_path" ] \
+    && [ "$(stat -c '%u:%g:%a:%h' -- "$token_path")" = "${football_uid}:${football_gid}:600:1" ] \
+    && [ "$(stat -c '%s' -- "$token_path")" -gt 0 ] \
+    && [ "$(stat -c '%s' -- "$token_path")" -le 8192 ] || return 1
+  log "prepared a sealed read-only performance session before the SQLite snapshot"
 }
 
 release_fast_watcher_pause_paths() {
@@ -5807,6 +5857,8 @@ abort_before_swap() {
   stop_release_candidate_heartbeat_keeper \
     || { log "fail-stop: release heartbeat keeper could not be reaped before abort"; exit 1; }
   stop_candidate
+  cleanup_release_perf_access_token \
+    || { log "fail-stop: release performance credential could not be cleaned before abort"; exit 1; }
   cleanup_live_sqlite_prebuild \
     || { log "fail-stop: live SQLite prebuild could not be cleaned before abort"; exit 1; }
   cleanup_build_tree || true
@@ -5885,6 +5937,10 @@ rollback() {
     exit 1
   }
   stop_candidate
+  cleanup_release_perf_access_token || {
+    log "rollback fail-stop: release performance credential could not be cleaned"
+    exit 1
+  }
   local quiesce_failed=0
   stop_worker_for_release_window || true
   if systemctl cat "$WORKER_SERVICE_NAME" >/dev/null 2>&1 && systemctl is-active --quiet "$WORKER_SERVICE_NAME"; then
@@ -5969,6 +6025,7 @@ release_exit_trap() {
     exit 1
   }
   stop_candidate || true
+  cleanup_release_perf_access_token || log "warning: release performance credential cleanup failed in EXIT trap"
   cleanup_live_sqlite_prebuild || log "warning: live SQLite prebuild cleanup failed in EXIT trap"
   cleanup_build_tree || true
   if [ "$status" -ne 0 ] \
@@ -6401,6 +6458,8 @@ write_recovery_phase "host-config-applied" \
   || abort_before_swap "recovery phase update failed after pre-swap host config"
 wait_for_health "http://${HOST}:${PORT}" "post-preswap-nginx-reload" 90 2 service \
   || abort_before_swap "current service became unhealthy after pre-swap nginx reload"
+prepare_release_perf_access_token \
+  || abort_before_swap "read-only performance session could not be prepared before sqlite snapshot"
 
 # Stop timers and any already-running monitor/cleanup jobs before stopping the
 # HTTP service. football-monitor.service has Wants=football-predict.service;
@@ -6436,10 +6495,13 @@ else
     || abort_before_swap "current service degraded during live SQLite prebuild"
   run_as_service_user_with_runtime_env env \
     PERF_BASE_URL="http://${HOST}:${PORT}" PERF_START_SERVER=0 \
+    PERF_ACCESS_TOKEN_FILE="$RELEASE_PERF_ACCESS_TOKEN_PATH" \
     PERF_REQUESTS=12 PERF_CONCURRENCY=3 PERF_WARMUP_REQUESTS=3 \
     PERF_WARMUP_CONCURRENCY=1 PERF_MAX_P95_MS=1500 PERF_MAX_ERROR_RATE=0 \
     "$NODE_HOME/bin/node" "$NEXT_DIR/scripts/verifyApiPerformance.cjs" \
     || abort_before_swap "current HTTP pressure gate failed after live SQLite prebuild"
+  cleanup_release_perf_access_token \
+    || abort_before_swap "release performance credential could not be cleaned after pressure gate"
   assert_release_fast_watcher_pause_guard \
     || abort_before_swap "fast watcher pause guard failed after current HTTP pressure gate"
 fi
@@ -6689,6 +6751,7 @@ RELEASE_HEARTBEAT_KEEPER_UNIT=""
 RELEASE_HEARTBEAT_KEEPER_RUNTIME_DIR=""
 RELEASE_HEARTBEAT_KEEPER_CONTROL_FILE=""
 trap - EXIT
+cleanup_release_perf_access_token || log "warning: could not remove release performance credential after commit"
 cleanup_live_sqlite_backup || log "warning: could not remove live sqlite rollback snapshot after commit"
 cleanup_live_sqlite_prebuild || log "warning: could not remove live SQLite prebuild evidence after commit"
 

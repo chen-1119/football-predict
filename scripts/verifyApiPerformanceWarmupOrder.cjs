@@ -3,6 +3,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {
   evaluatePerformanceRun,
+  readAccessTokenFile,
+  writeAccessTokenFile,
   selectDetailTarget
 } = require('./verifyApiPerformance.cjs');
 const {
@@ -44,6 +46,23 @@ check('detail pressure testing falls back to immutable history when current is e
   }), { matchId: 'current-1', source: 'current' });
   assert.equal(selectDetailTarget({ currentBody: { rows: [] }, historyBody: { rows: [] } }), null);
   assert.ok(source.includes('selectedMatchSource: detailTarget.source'));
+});
+
+check('release pressure credentials are sealed to a private file and never printed', () => {
+  const tempRoot = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'perf-token-'));
+  const tokenPath = path.join(tempRoot, 'access-token');
+  try {
+    writeAccessTokenFile(tokenPath, 'test.performance.token');
+    assert.equal(readAccessTokenFile(tokenPath), 'test.performance.token');
+    assert.throws(() => writeAccessTokenFile(tokenPath, 'replacement'), /EEXIST/);
+    assert.ok(source.includes('PERF_PREPARE_ACCESS_TOKEN_ONLY'));
+    assert.ok(source.includes('PERF_ACCESS_TOKEN_OUTPUT_PATH'));
+    assert.ok(source.includes('PERF_ACCESS_TOKEN_FILE'));
+    assert.ok(source.includes('preparedAccessToken: true'));
+    assert.equal(source.includes('preparedAccessToken: token'), false);
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
 });
 
 check('warm-up and measurement share the same endpoint loop', () => {
