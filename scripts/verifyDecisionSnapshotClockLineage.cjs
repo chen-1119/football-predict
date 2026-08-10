@@ -200,6 +200,51 @@ assert.equal(relayRows[0].oddsObservedAt, "2026-07-16T10:25:00.000Z");
 assert.equal(relayRows[0].oddsReceivedAt, providerReceivedAt);
 assert.equal(relayRows[0].handicapOddsObservedAt, "2026-07-16T10:25:30.000Z");
 assert.equal(relayRows[0].handicapOddsReceivedAt, providerReceivedAt);
+const reusedIdStaleSaleRows = matchesFromSportteryRelaySnapshot({
+  payload: {
+    sourceCycleId: "relay-upload-cycle-reused-id",
+    sourceCycleKind: "upload-merge",
+  },
+  summary: {},
+  entries: [{
+    method: "current",
+    url: "https://webapi.sporttery.cn/test",
+    requestedAt: "2026-07-16T10:24:00.000Z",
+    receivedAt: providerReceivedAt,
+    sourceCycleId: "relay-endpoint-cycle-reused-id",
+    sourceRequest: { method: "GET" },
+    httpStatus: 200,
+    httpDate: "Thu, 16 Jul 2026 10:26:00 GMT",
+    httpEtag: '"relay-reused-id"',
+    contentType: "application/json",
+    rawSha256: "d".repeat(64),
+    rawBytes: 2500,
+    payload: {
+      value: {
+        matchInfoList: [{
+          subMatchList: [{
+            ...providerRow,
+            matchId: "clock-relay-reused-id",
+            matchDate: "2026-07-16",
+            matchTime: "20:00:00",
+            buyEndTime: "2026-07-09 19:50:00",
+            homeTeamAllName: "New Event Home",
+            awayTeamAllName: "New Event Away",
+            leagueAllName: "Clock League",
+            matchStatus: "Selling",
+          }],
+        }],
+      },
+    },
+  }],
+});
+assert.equal(reusedIdStaleSaleRows.length, 1);
+assert.equal(reusedIdStaleSaleRows[0].kickoffTime, "2026-07-16T20:00:00+08:00");
+assert.equal(reusedIdStaleSaleRows[0].buyEndTime, "");
+assert.equal(reusedIdStaleSaleRows[0].odds, null, "stale HAD sale atom must not cross a reused event id");
+assert.equal(reusedIdStaleSaleRows[0].handicapOdds, null, "stale HHAD sale atom must not cross a reused event id");
+assert.equal(reusedIdStaleSaleRows[0].oddsMarketProvenance, null);
+assert.equal(reusedIdStaleSaleRows[0].handicapOddsMarketProvenance, null);
 const valid = buildCandidateDecisionSnapshot(fixture(), capturedAt);
 assert.equal(valid.clockAudit.eligible, true);
 assert.equal(isDecisionClockAuditEligible(valid), true);
