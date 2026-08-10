@@ -89,7 +89,7 @@ verify("stored BEST direction is stable when a clear official market leader disa
   assert.equal(result?.prediction.recommendationAction, "reference");
   assert.equal(result?.prediction.recommendationTier, "model-low-evidence-data-pick");
   assert.equal(result?.displayOdds, 3.6);
-  assert.match(result?.prediction.explanation.en || "", /cannot overwrite the generated direction/);
+  assert.match(result?.prediction.explanation.en || "", /cannot overwrite the model probability leader/);
   assert.equal(isOfficialRecommendationEligible(baseMatch(), result?.prediction, NOW), false);
 });
 
@@ -301,7 +301,7 @@ verify("balanced official HAD supplies the stored BEST price without changing di
   assert.equal(result?.prediction.recommendationTier, "model-low-evidence-data-pick");
   assert.equal(result?.prediction.recommendationAction, "reference");
   assert.equal(result?.displayOdds, 3.05);
-  assert.match(result?.prediction.explanation.zh || "", /\u5e02\u573a\u6982\u7387\u9996\u4f4d\u4e0d\u4f1a\u6539\u5199\u5df2\u751f\u6210\u65b9\u5411/);
+  assert.match(result?.prediction.explanation.zh || "", /\u5e02\u573a\u6982\u7387\u9996\u4f4d\u4e0d\u4f1a\u6539\u5199\u6a21\u578b\u6982\u7387\u9996\u4f4d/);
   assert.equal(isOfficialRecommendationEligible(baseMatch(), result?.prediction, NOW), false);
 });
 
@@ -439,6 +439,52 @@ verify("complete stored model probabilities provide a deterministic final direct
   assert.equal(result?.prediction.recommendationAction, "reference");
   assert.equal(result?.prediction.trustScore, 45);
   assert.equal(isOfficialRecommendationEligible(baseMatch(), result?.prediction, NOW), false);
+});
+
+verify("weak draw safeguard cannot override the independent probability leader", () => {
+  const result = selectOnSaleAnalysisReference(baseMatch({
+    probabilityModel: {
+      inputSufficiency: { sufficient: true },
+      publicDecision: { directionPublished: true },
+      oneXTwo: { final: { home: 46, draw: 26, away: 28 } },
+      unifiedPosterior: {
+        generatedAt: new Date(NOW - 60_000).toISOString(),
+        selectedMarket: "HAD",
+        selectedCode: "X",
+        selectedProbability: 0.31,
+        selectionPolicy: "score-draw-risk-safeguard",
+      },
+    },
+  }), { now: NOW, allowModelOnly: true });
+  assert.equal(result?.source, "model-low-evidence");
+  assert.equal(result?.prediction.tipCode, "1");
+  assert.equal(result?.prediction.oddsPoolCode, "HAD");
+  assert.equal(result?.prediction.trustScore, 46);
+  assert.equal(result?.displayOdds, 1.56);
+  assert.match(result?.prediction.explanation.en || "", /independent pre-match model probability leader is Home win/);
+  assert.equal(isOfficialRecommendationEligible(baseMatch(), result?.prediction, NOW), false);
+});
+
+verify("unresolved model ties use stable match identity without a fixed draw bias", () => {
+  const picks = ["tie-a", "tie-b", "tie-c", "tie-d", "tie-e", "tie-f"].map((id) => (
+    selectOnSaleAnalysisReference(baseMatch({
+      id,
+      odds: undefined,
+      oddsSource: undefined,
+      oddsUpdatedAt: undefined,
+      probabilityModel: {
+        oneXTwo: { final: { home: 1, draw: 1, away: 1 } },
+        unifiedPosterior: {
+          generatedAt: new Date(NOW - 60_000).toISOString(),
+          selectedCode: "X",
+          selectionPolicy: "score-draw-risk-safeguard",
+        },
+      },
+    }), { now: NOW, allowModelOnly: true })?.prediction.tipCode
+  ));
+  assert.ok(picks.every((code) => ["1", "X", "2"].includes(code)));
+  assert.ok(new Set(picks).size > 1, `expected distributed deterministic ties, received ${picks.join(",")}`);
+  assert.ok(picks.some((code) => code !== "X"), `tie-break must not force every match to draw: ${picks.join(",")}`);
 });
 
 verify("existing audited model-only direction remains the no-odds fallback", () => {
@@ -741,6 +787,47 @@ verify("current 500 payload shape is selectable before a future cutoff", () => {
   });
   assert.equal(result?.source, "five-hundred-market");
   assert.ok(["1", "X", "2"].includes(result.prediction.tipCode));
+});
+
+verify("current scheduled model rows all receive one direction and draw safeguards follow the probability leader", () => {
+  const currentPath = path.resolve(__dirname, "..", "public", "data", "matches-current.json");
+  const payload = JSON.parse(fs.readFileSync(currentPath, "utf8"));
+  const rows = (Array.isArray(payload) ? payload : payload.matches || [])
+    .filter((row) => row.status === "SCHEDULED" && row.probabilityModel?.oneXTwo?.final);
+  assert.ok(rows.length > 0, "expected at least one scheduled current row with model probabilities");
+
+  const selections = rows.map((row, index) => {
+    const unifiedPosterior = row.probabilityModel?.unifiedPosterior || {};
+    const match = {
+      ...row,
+      kickoffTime: new Date(NOW + (4 + index) * 60 * 60 * 1000).toISOString(),
+      buyEndTime: new Date(NOW + (3.5 + index) * 60 * 60 * 1000).toISOString(),
+      oddsUpdatedAt: row.odds ? new Date(NOW - 60_000).toISOString() : row.oddsUpdatedAt,
+      probabilityModel: {
+        ...row.probabilityModel,
+        unifiedPosterior: {
+          ...unifiedPosterior,
+          generatedAt: new Date(NOW - 60_000).toISOString(),
+        },
+      },
+    };
+    return { row, result: selectOnSaleAnalysisReference(match, { now: NOW, allowModelOnly: true }) };
+  });
+
+  assert.ok(selections.every(({ result }) => ["1", "X", "2"].includes(result?.prediction.tipCode)));
+  const safeguardRows = selections.filter(({ row }) => (
+    row.probabilityModel?.unifiedPosterior?.selectionPolicy === "score-draw-risk-safeguard"
+  ));
+  assert.ok(safeguardRows.length > 0, "expected the current fixture to exercise draw safeguards");
+  for (const { row, result } of safeguardRows) {
+    const final = row.probabilityModel.oneXTwo.final;
+    const expected = final.home > final.draw && final.home > final.away
+      ? "1"
+      : final.away > final.home && final.away > final.draw
+        ? "2"
+        : "X";
+    assert.equal(result?.prediction.tipCode, expected, `${row.id} must follow oneXTwo.final instead of the safeguard code`);
+  }
 });
 
 console.log(JSON.stringify({

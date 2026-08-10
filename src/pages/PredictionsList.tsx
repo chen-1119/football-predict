@@ -49,7 +49,6 @@ import { TeamBadge } from '../components/TeamBadge';
 import { DateScopeBar } from '../components/predictions/DateScopeBar';
 import { MatchSummaryRow } from '../components/predictions/MatchSummaryRow';
 import { PredictionsPageHeader } from '../components/predictions/PredictionsPageHeader';
-import { AIArenaPreview } from '../components/predictions/AIArenaPreview';
 import '../styles/predictions.css';
 
 interface PredictionsListProps {
@@ -58,10 +57,8 @@ interface PredictionsListProps {
 }
 
 type SortBy = 'time' | 'odds';
-type SignalFilter = 'recommended' | 'all' | MatchSignalCategory;
 
 const SORT_OPTIONS: SortBy[] = ['time', 'odds'];
-const SIGNAL_FILTERS: SignalFilter[] = ['recommended', 'all', 'finished'];
 const LIST_VIEW_STATE_TTL_MS = 30 * 60 * 1000;
 const LIST_RETURN_SCROLL_TTL_MS = 10 * 60 * 1000;
 
@@ -69,7 +66,6 @@ type StoredListViewState = {
   savedAt: number;
   selectedDate: string;
   selectedLeagues: string[];
-  signalFilter: SignalFilter;
   sortBy: SortBy;
   sortOrder: 'asc' | 'desc';
 };
@@ -96,9 +92,6 @@ const readStoredListViewState = (viewMode: PredictionsListProps['viewMode']): St
       selectedLeagues: Array.isArray(parsed.selectedLeagues)
         ? parsed.selectedLeagues.filter((item): item is string => typeof item === 'string')
         : [],
-      signalFilter: SIGNAL_FILTERS.includes(parsed.signalFilter as SignalFilter)
-        ? parsed.signalFilter as SignalFilter
-        : 'all',
       sortBy: SORT_OPTIONS.includes(parsed.sortBy as SortBy) ? parsed.sortBy as SortBy : 'time',
       sortOrder: parsed.sortOrder === 'desc' ? 'desc' : 'asc'
     };
@@ -850,15 +843,11 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
 
   const restoredViewState = React.useMemo(() => readStoredListViewState(viewMode), [viewMode]);
   const restoreReturnView = React.useMemo(() => hasFreshListReturnScroll(viewMode), [viewMode]);
-  const defaultSignalFilter: SignalFilter = isAnalysisView ? 'recommended' : 'all';
   const [selectedDate, setSelectedDate] = useState<string>(() => (
     restoreReturnView ? restoredViewState?.selectedDate || getDateStringOffset(0) : getDateStringOffset(0)
   ));
   const [selectedLeagues, setSelectedLeagues] = useState<string[]>(() => (
     restoreReturnView ? restoredViewState?.selectedLeagues || [] : []
-  ));
-  const [signalFilter, setSignalFilter] = useState<SignalFilter>(() => (
-    restoreReturnView ? restoredViewState?.signalFilter || defaultSignalFilter : defaultSignalFilter
   ));
   const [sortBy, setSortBy] = useState<SortBy>(() => (
     restoreReturnView ? restoredViewState?.sortBy || 'time' : 'time'
@@ -885,14 +874,13 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         savedAt: Date.now(),
         selectedDate,
         selectedLeagues,
-        signalFilter,
         sortBy,
         sortOrder
       } satisfies StoredListViewState));
     } catch {
       // Filters remain fully usable when storage is disabled.
     }
-  }, [selectedDate, selectedLeagues, signalFilter, sortBy, sortOrder, viewMode]);
+  }, [selectedDate, selectedLeagues, sortBy, sortOrder, viewMode]);
 
   // A current/history refresh can remove one storage row and add another row
   // for the same fixture. Keep the first visible fixture at the same viewport
@@ -1004,15 +992,6 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
   };
 
   const t = (key: keyof typeof translations) => translations[key][language] || '';
-  const getSignalFilterLabel = (filter: SignalFilter) => {
-    if (filter === 'recommended') {
-      return isAnalysisView
-        ? (language === 'zh' ? '有方向' : 'Directions')
-        : t('recommended');
-    }
-    if (filter === 'all') return t('allSignals');
-    return translations[filter][language];
-  };
 
   const effectiveSelectedDate = selectedDate;
 
@@ -1038,24 +1017,6 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     });
   }, [effectiveSelectedDate, effectiveSelectedLeagues, matches]);
 
-  const signalCounts = useMemo(() => {
-    return baseFilteredMatches.reduce<Record<SignalFilter, number>>((counts, match) => {
-      const signal = getMatchSignal(match);
-      counts.all += 1;
-      const publishedRecommendation = getOnSaleDisplayRecommendation(match, language, nowMs)
-        || getLiveDisplayRecommendation(match, language);
-      const analysisReference = !publishedRecommendation
-        ? getOnSaleAnalysisReference(match, { allowModelOnly: false, now: nowMs })
-        : undefined;
-      const archivedPrediction = getArchivedPreMatchPrediction(match, nowMs);
-      if (match.resultDisposition !== 'VOID' && (publishedRecommendation || analysisReference || archivedPrediction)) {
-        counts.recommended += 1;
-      }
-      counts[signal.category] += 1;
-      return counts;
-    }, { recommended: 0, all: 0, steady: 0, lean: 0, value: 0, watch: 0, avoid: 0, unavailable: 0, finished: 0 });
-  }, [baseFilteredMatches, language, nowMs]);
-
   const recommendationCounts = useMemo(() => {
     return baseFilteredMatches.reduce((counts, match) => {
       const signal = getMatchSignal(match);
@@ -1064,7 +1025,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
       const liveRecommendation = getLiveDisplayRecommendation(match, language);
       const displayRecommendation = isVoid ? null : formalRecommendation || liveRecommendation;
       const analysisReference = displayRecommendation ? undefined : getOnSaleAnalysisReference(match, {
-        allowModelOnly: false,
+        allowModelOnly: true,
         now: nowMs
       });
       const archivedPrediction = getArchivedPreMatchPrediction(match, nowMs);
@@ -1095,45 +1056,12 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     return counts;
   }, { had: 0, hhad: 0 }), [baseFilteredMatches]);
 
-  const visibleSignalFilters = useMemo(() => {
-    return SIGNAL_FILTERS.filter((filter) => filter === 'recommended' || filter === 'all' || signalCounts[filter] > 0 || signalFilter === filter);
-  }, [signalCounts, signalFilter]);
-
-  const filteredMatches = useMemo(() => {
-    if (isFixturesView) return baseFilteredMatches;
-    if (signalFilter === 'recommended') return baseFilteredMatches.filter((match) => (
-      match.resultDisposition !== 'VOID'
-      && Boolean(
-        getOnSaleDisplayRecommendation(match, language, nowMs)
-        || getLiveDisplayRecommendation(match, language)
-        || getOnSaleAnalysisReference(match, { allowModelOnly: false, now: nowMs })
-        || getArchivedPreMatchPrediction(match, nowMs)
-      )
-    ));
-    if (signalFilter === 'all') return baseFilteredMatches;
-    return baseFilteredMatches.filter((match) => getMatchSignal(match).category === signalFilter);
-  }, [baseFilteredMatches, isFixturesView, language, nowMs, signalFilter]);
+  const filteredMatches = baseFilteredMatches;
 
   const sortedMatches = useMemo(() => {
     const sorted = [...filteredMatches];
 
     sorted.sort((a, b) => {
-      if (isAnalysisView || isFixturesView) {
-        const aHasDirection = Boolean(
-          getOnSaleDisplayRecommendation(a, language, nowMs)
-          || getLiveDisplayRecommendation(a, language)
-          || getOnSaleAnalysisReference(a, { allowModelOnly: false, now: nowMs })
-          || getArchivedPreMatchPrediction(a, nowMs)
-        );
-        const bHasDirection = Boolean(
-          getOnSaleDisplayRecommendation(b, language, nowMs)
-          || getLiveDisplayRecommendation(b, language)
-          || getOnSaleAnalysisReference(b, { allowModelOnly: false, now: nowMs })
-          || getArchivedPreMatchPrediction(b, nowMs)
-        );
-        if (aHasDirection !== bHasDirection) return aHasDirection ? -1 : 1;
-      }
-
       let comparison: number;
 
       if (sortBy === 'time') {
@@ -1146,7 +1074,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     });
 
     return sorted;
-  }, [filteredMatches, isAnalysisView, isFixturesView, language, nowMs, sortBy, sortOrder]);
+  }, [filteredMatches, sortBy, sortOrder]);
 
   const dailyReviewStats = useMemo(
     () => getDailyReviewStats(baseFilteredMatches, nowMs),
@@ -1209,7 +1137,6 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
 
   const handleResetFilters = () => {
     setSelectedLeagues([]);
-    setSignalFilter('all');
     setSortBy('time');
     setSortOrder('asc');
   };
@@ -1249,7 +1176,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
       : publishedRecommendation;
     const analysisReferenceSelection = !isFinished && !displayRecommendation
       ? selectOnSaleAnalysisReference(match, {
-        allowModelOnly: false,
+        allowModelOnly: true,
         candidate: rawDisplayRecommendation?.prediction,
         now: nowMs
       })
@@ -2472,9 +2399,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         ? (effectiveSelectedDate === todayStr
           ? (language === 'zh' ? '今日暂无开售赛事，数据会继续自动同步。' : 'No on-sale fixtures today. Sync will keep checking.')
           : (language === 'zh' ? '当前日期暂无开售赛事。' : 'No on-sale fixtures for this date.'))
-        : isAnalysisView && signalFilter === 'recommended'
-          ? t('noQualifiedPicks')
-          : isFixturesView
+        : isFixturesView
             ? (language === 'zh' ? '当前筛选暂无赛程或官方赔率。' : 'No fixtures or official odds match the current filters.')
             : t('noMatches');
 
@@ -2486,8 +2411,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     : (language === 'zh' ? '竞彩赛程 / 官方赔率' : 'Schedule / Official odds');
   const pageDescription = isAnalysisView
     ? (language === 'zh'
-      ? '优先显示已经形成方向的比赛；正式、实时与500数据补充使用独立统计口径。'
-      : 'Matches with a direction are shown first; formal, live and 500.com data picks use separate statistical tracks.')
+      ? '按竞彩业务日展示全部比赛；每场给出一个明确主方向，正式推荐与低置信数据推荐分开统计。'
+      : 'All matches are shown by Sporttery business day with one explicit main direction; formal and low-confidence data picks remain separate tracks.')
     : (language === 'zh'
       ? '按日期核对赛程和 HAD/HHAD；所有可用推荐直接标记方向，500数据补充单独注明来源。'
       : 'Review dated fixtures and HAD/HHAD prices. Every available pick shows its direction, with 500.com supplements clearly sourced.');
@@ -2572,8 +2497,6 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         />
       </section>
 
-      {isAnalysisView && <AIArenaPreview matches={matches} />}
-
       <section
         className="date-toolbar"
         data-date-scope="sporttery-business-date"
@@ -2602,35 +2525,9 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
 
       {baseFilteredMatches.length > 0 && (
         <section
-          className={`filter-workbench ${isAnalysisView ? 'has-scope' : ''}`}
+          className="filter-workbench"
           aria-label={language === 'zh' ? '赛事范围、筛选与排序' : 'Fixture scope, filters and sorting'}
         >
-        {isAnalysisView && (
-          <div
-            className="signal-quick-filter"
-            role="group"
-            aria-label={language === 'zh' ? '分析范围' : 'Analysis scope'}
-          >
-            <span className="signal-quick-label">
-              <ShieldCheck size={16} aria-hidden="true" />
-              {language === 'zh' ? '分析范围' : 'Scope'}
-            </span>
-            <div className="signal-quick-options">
-              {visibleSignalFilters.map((filter) => (
-                <button
-                  key={filter}
-                  type="button"
-                  onClick={() => setSignalFilter(filter)}
-                  className={`signal-quick-option is-${filter} ${signalFilter === filter ? 'active' : ''}`}
-                  aria-pressed={signalFilter === filter}
-                >
-                  <span>{getSignalFilterLabel(filter)}</span>
-                  <strong>{signalCounts[filter]}</strong>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
         <details className="panel filters-panel filters-details" aria-label={language === 'zh' ? '赛事筛选与排序' : 'Fixture filters and sorting'}>
           <summary className="filters-summary">
             <span>
@@ -2886,7 +2783,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
                     language,
                     publishedRecommendation,
                     nowMs,
-                    false
+                    true
                   );
                   // Keep the compact fixture table on the same dual-market
                   // projection as the detail page. The primary HAD direction
@@ -3186,7 +3083,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
                           </p>
                         </div>
                       )}
-                      decision={isAnalysisView || isArchived
+                      decision={isAnalysisView || isFixturesView || isArchived
                         ? renderDecisionCell(match, publishedRecommendation)
                         : undefined}
                     />

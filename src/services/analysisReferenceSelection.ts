@@ -59,20 +59,31 @@ const normalizedModelOutcomeProbabilities = (match: Match): NormalizedOutcomePro
   };
 };
 
+const stableOutcomePriority = (seed: string): Record<OutcomeCode, number> => {
+  let hash = 2166136261;
+  for (const character of String(seed || 'football-match')) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  const rotations: OutcomeCode[][] = [
+    ['1', 'X', '2'],
+    ['X', '2', '1'],
+    ['2', '1', 'X'],
+  ];
+  const order = rotations[Math.abs(hash) % rotations.length];
+  return Object.fromEntries(order.map((code, index) => [code, index])) as Record<OutcomeCode, number>;
+};
+
 const modelOutcomeLeader = (
   probabilities: NormalizedOutcomeProbabilities | null,
-  preferredCode?: OutcomeCode,
+  matchKey: string,
 ) => {
   if (!probabilities) return null;
-  const neutralPriority: Record<OutcomeCode, number> = { X: 0, '1': 1, '2': 2 };
+  const neutralPriority = stableOutcomePriority(matchKey);
   return (Object.entries(probabilities) as Array<[OutcomeCode, number]>)
     .sort(([leftCode, left], [rightCode, right]) => {
       const probabilityDelta = right - left;
       if (Math.abs(probabilityDelta) >= MARKET_LEADER_TIE_EPSILON) return probabilityDelta;
-      if (preferredCode) {
-        if (leftCode === preferredCode && rightCode !== preferredCode) return -1;
-        if (rightCode === preferredCode && leftCode !== preferredCode) return 1;
-      }
       return neutralPriority[leftCode] - neutralPriority[rightCode];
     })[0] || null;
 };
@@ -111,6 +122,7 @@ const normalizeHadOdds = (value: Partial<HadOddsTriplet> | null | undefined): Ha
 const rankDeViggedHad = (
   odds: HadOddsTriplet,
   preferredCode?: '1' | 'X' | '2',
+  matchKey = '',
 ) => {
   const entries = [
     { code: '1' as const, odds: odds.odds1 },
@@ -127,9 +139,9 @@ const rankDeViggedHad = (
         if (left.code === preferredCode && right.code !== preferredCode) return -1;
         if (right.code === preferredCode && left.code !== preferredCode) return 1;
       }
-      // Never let the source array order silently turn an unresolved market
-      // tie into a systematic home-win bias.
-      const neutralPriority = { X: 0, '1': 1, '2': 2 } as const;
+      // Rotate unresolved ties by immutable match identity so a batch cannot
+      // collapse into systematic home, draw, or away picks.
+      const neutralPriority = stableOutcomePriority(matchKey);
       return neutralPriority[left.code] - neutralPriority[right.code];
     });
 };
@@ -349,7 +361,7 @@ const buildLowEvidenceMarketLeaderReference = (
       : undefined);
   if (!candidate) return undefined;
 
-  const ranked = rankDeViggedHad(candidate.odds, preferredCode);
+  const ranked = rankDeViggedHad(candidate.odds, preferredCode, match.id);
   const leader = ranked[0];
   const runnerUp = ranked[1];
   if (!leader || !runnerUp) return undefined;
@@ -384,8 +396,8 @@ const buildLowEvidenceMarketLeaderReference = (
     evidenceRisksEn.push('the source is older than 12 hours');
   }
   if (tieBreakApplied) {
-    evidenceRisks.push(`\u9996\u4e24\u4f4d\u5dee\u503c\u4f4e\u4e8e ${(MARKET_LEADER_TIE_EPSILON * 100).toFixed(1)} \u4e2a\u767e\u5206\u70b9\uff0c\u4f7f\u7528\u663e\u5f0f\u4e2d\u6027\u5e73\u5c40/\u6a21\u578b\u65b9\u5411\u7834\u540c\u5206`);
-    evidenceRisksEn.push(`the top-two gap is below ${(MARKET_LEADER_TIE_EPSILON * 100).toFixed(1)} points, so an explicit neutral/model tie-break was used`);
+    evidenceRisks.push(`\u9996\u4e24\u4f4d\u5dee\u503c\u4f4e\u4e8e ${(MARKET_LEADER_TIE_EPSILON * 100).toFixed(1)} \u4e2a\u767e\u5206\u70b9\uff0c\u4f7f\u7528\u6bd4\u8d5b\u8eab\u4efd\u7a33\u5b9a\u7834\u540c\u5206\uff0c\u4e0d\u56fa\u5b9a\u504f\u5411\u67d0\u4e00\u7ed3\u679c`);
+    evidenceRisksEn.push(`the top-two gap is below ${(MARKET_LEADER_TIE_EPSILON * 100).toFixed(1)} points, so a stable match-identity tie-break was used without a fixed outcome bias`);
   }
   if (evidenceRisks.length === 0) {
     evidenceRisks.push('\u672a\u8fdb\u5165\u66f4\u9ad8\u8bc1\u636e\u7684\u6a21\u578b\u6216\u5e02\u573a\u63a8\u8350\u8def\u5f84');
@@ -597,18 +609,18 @@ const buildLowEvidenceModelReference = (
 ): AnalysisReferenceSelection | undefined => {
   const posteriorCode = match.probabilityModel?.unifiedPosterior?.selectedCode;
   const modelProbabilities = normalizedModelOutcomeProbabilities(match);
-  const probabilityLeader = modelOutcomeLeader(
-    modelProbabilities,
-    isDirection(posteriorCode) ? posteriorCode as OutcomeCode : undefined,
-  );
-  const tipCode = isDirection(candidate?.tipCode)
-    ? candidate?.tipCode as '1' | 'X' | '2'
-    : isDirection(posteriorCode)
-      ? posteriorCode as '1' | 'X' | '2'
-      : probabilityLeader?.[0];
+  const probabilityLeader = modelOutcomeLeader(modelProbabilities, match.id);
+  // Low-evidence BEST rows may contain a risk-safeguard outcome (historically
+  // often X) rather than the probability model's actual leader. The fallback
+  // shown on public match cards must therefore start from the independent
+  // oneXTwo.final distribution. Stored BEST/posterior codes are used only when
+  // that complete distribution is unavailable.
+  const tipCode = probabilityLeader?.[0]
+    || (isDirection(candidate?.tipCode) ? candidate?.tipCode as OutcomeCode : undefined)
+    || (isDirection(posteriorCode) ? posteriorCode as OutcomeCode : undefined);
   if (!tipCode) return undefined;
 
-  const poolCode = canonicalReferencePool(match, candidate);
+  const poolCode = modelProbabilities ? 'HAD' : canonicalReferencePool(match, candidate);
   const handicapLine = candidate?.handicapLine ?? match.handicapLine;
   // An HHAD direction without the home-team line has no stable meaning. Let
   // the caller fall through to a real HAD/market reference instead of silently
@@ -618,7 +630,7 @@ const buildLowEvidenceModelReference = (
     ? handicapDirectionLabel(tipCode)
     : referenceDirectionLabel(tipCode);
   const rawPosteriorProbability = Number(match.probabilityModel?.unifiedPosterior?.selectedProbability);
-  const posteriorProbability = Number.isFinite(rawPosteriorProbability)
+  const posteriorProbability = posteriorCode === tipCode && Number.isFinite(rawPosteriorProbability)
     ? (rawPosteriorProbability > 1 && rawPosteriorProbability <= 100
       ? rawPosteriorProbability / 100
       : rawPosteriorProbability)
@@ -627,15 +639,23 @@ const buildLowEvidenceModelReference = (
     && Number.isFinite(posteriorProbability)
     && posteriorProbability > 0
     && posteriorProbability <= 1;
-  const evidenceScore = Number(candidate?.multiFactorEvidence?.evidenceScore);
+  const sameCandidateDirection = candidate?.tipCode === tipCode
+    && canonicalReferencePool(match, candidate) === poolCode;
+  const evidenceScore = Number(sameCandidateDirection ? candidate?.multiFactorEvidence?.evidenceScore : NaN);
+  const orderedModelProbabilities = modelProbabilities
+    ? Object.values(modelProbabilities).sort((left, right) => right - left)
+    : [];
+  const modelGap = orderedModelProbabilities.length >= 2
+    ? Math.max(0, orderedModelProbabilities[0] - orderedModelProbabilities[1])
+    : null;
   const trustScore = hasPosteriorProbability
     ? Math.round(posteriorProbability * 100)
-    : Number.isFinite(Number(candidate?.trustScore))
+    : sameCandidateDirection && Number.isFinite(Number(candidate?.trustScore))
       ? Math.max(0, Math.min(100, Math.round(Number(candidate?.trustScore))))
       : 0;
   const sourceUpdatedAt = modelReferenceTimestamp(match);
   const prediction: PredictionDetail = {
-    ...(candidate || {}),
+    ...(sameCandidateDirection ? candidate : {}),
     marketType: 'BEST',
     oddsPoolCode: poolCode,
     handicapLine: poolCode === 'HHAD' ? String(handicapLine) : '0',
@@ -646,15 +666,15 @@ const buildLowEvidenceModelReference = (
     recommendationAction: 'reference',
     recommendationTier: MODEL_LOW_EVIDENCE_TIER,
     explanation: {
-      zh: `当前没有可核验的在售 ${poolCode} 赔率，按已生成的赛前模型方向给出${label.zh}。这是低置信数据推荐${Number.isFinite(evidenceScore) ? `，证据评分 ${Math.round(evidenceScore)}/100` : ''}；不计入正式命中率或串关。`,
-      en: `No verifiable on-sale ${poolCode} price is available, so the stored pre-match model direction is shown as ${label.en}. This is a low-confidence data pick${Number.isFinite(evidenceScore) ? ` with an evidence score of ${Math.round(evidenceScore)}/100` : ''}; it is excluded from formal hit-rate and bet-slip statistics.`,
+      zh: `按赛前独立模型概率首位给出${label.zh}${hasPosteriorProbability ? `（${Math.round(posteriorProbability * 100)}%）` : ''}${modelGap !== null ? `，领先次选 ${Math.round(modelGap * 1000) / 10} 个百分点` : ''}。这是低置信数据推荐${Number.isFinite(evidenceScore) ? `，证据评分 ${Math.round(evidenceScore)}/100` : ''}；不计入正式命中率或串关。`,
+      en: `The independent pre-match model probability leader is ${label.en}${hasPosteriorProbability ? ` at ${Math.round(posteriorProbability * 100)}%` : ''}${modelGap !== null ? `, ${Math.round(modelGap * 1000) / 10} points ahead of the runner-up` : ''}. This is a low-confidence data pick${Number.isFinite(evidenceScore) ? ` with an evidence score of ${Math.round(evidenceScore)}/100` : ''}; it is excluded from formal hit-rate and bet-slip statistics.`,
     },
     analysisItems: [
       {
         zh: '本方向只用于避免无内容空卡；赔率、阵容和数据质量补齐后会重新校验，不会自动升级为正式推荐。',
         en: 'This direction prevents an empty card only. It is rechecked when odds, lineups, and data quality improve and never auto-promotes to a formal pick.',
       },
-      ...(candidate?.analysisItems || []),
+      ...(sameCandidateDirection ? candidate?.analysisItems || [] : []),
     ],
     riskTags: [
       {
@@ -665,7 +685,7 @@ const buildLowEvidenceModelReference = (
         zh: '独立复盘，不计正式战绩',
         en: 'Separate review; excluded from formal record',
       },
-      ...(candidate?.riskTags || []),
+      ...(sameCandidateDirection ? candidate?.riskTags || [] : []),
     ],
     visibilityStatus: candidate?.visibilityStatus || 'FREE',
     resultStatus: 'PENDING',
@@ -709,19 +729,18 @@ const buildStableLowEvidenceModelReference = (
   const quote = getFreshOfficialReferenceQuote(match, base.prediction, now);
   const poolCode = base.prediction.oddsPoolCode || 'HAD';
   const label = base.prediction.tipLabel || referenceDirectionLabel(base.prediction.tipCode as OutcomeCode);
-  const evidenceScore = Number(base.prediction.multiFactorEvidence?.evidenceScore);
   const quoteZh = quote
-    ? `\u5f53\u524d\u5b98\u65b9 ${poolCode} ${label.zh} SP ${quote.odds.toFixed(2)} \u4ec5\u7528\u4e8e\u8865\u5145\u4ef7\u683c\uff0c\u5e02\u573a\u6982\u7387\u9996\u4f4d\u4e0d\u4f1a\u6539\u5199\u5df2\u751f\u6210\u65b9\u5411\u3002`
-    : `\u5f53\u524d\u6ca1\u6709\u53ef\u6838\u9a8c\u7684\u65b0\u9c9c\u5b98\u65b9 ${poolCode} SP\uff0c\u65b9\u5411\u4ecd\u6cbf\u7528\u5df2\u751f\u6210\u7684\u8d5b\u524d BEST/\u6a21\u578b\u7ed3\u679c\u3002`;
+    ? `\u5f53\u524d\u5b98\u65b9 ${poolCode} ${label.zh} SP ${quote.odds.toFixed(2)} \u4ec5\u7528\u4e8e\u8865\u5145\u4ef7\u683c\uff0c\u5e02\u573a\u6982\u7387\u9996\u4f4d\u4e0d\u4f1a\u6539\u5199\u6a21\u578b\u6982\u7387\u9996\u4f4d\u3002`
+    : `\u5f53\u524d\u6ca1\u6709\u53ef\u6838\u9a8c\u7684\u65b0\u9c9c\u5b98\u65b9 ${poolCode} SP\uff0c\u4ec5\u5c55\u793a\u5df2\u751f\u6210\u7684\u8d5b\u524d\u6a21\u578b\u6982\u7387\u9996\u4f4d\u3002`;
   const quoteEn = quote
-    ? `The current official ${poolCode} ${label.en} SP ${quote.odds.toFixed(2)} supplements price only; the market probability leader cannot overwrite the generated direction.`
-    : `No fresh verifiable official ${poolCode} SP is available, so the generated pre-match BEST/model direction is retained.`;
+    ? `The current official ${poolCode} ${label.en} SP ${quote.odds.toFixed(2)} supplements price only; the market probability leader cannot overwrite the model probability leader.`
+    : `No fresh verifiable official ${poolCode} SP is available, so only the generated pre-match model probability leader is shown.`;
   const prediction: PredictionDetail = {
     ...base.prediction,
     odds: quote?.odds || 0,
     explanation: {
-      zh: `\u4e3b\u65b9\u5411\u6cbf\u7528\u5df2\u751f\u6210\u7684\u8d5b\u524d BEST/\u6a21\u578b\u7ed3\u679c\uff1a${label.zh}\u3002${quoteZh}\u8fd9\u662f\u4f4e\u7f6e\u4fe1\u6570\u636e\u63a8\u8350${Number.isFinite(evidenceScore) ? `\uff0c\u8bc1\u636e\u8bc4\u5206 ${Math.round(evidenceScore)}/100` : ''}\uff1b\u4e0d\u8ba1\u5165\u6b63\u5f0f\u547d\u4e2d\u7387\u6216\u4e32\u5173\u3002`,
-      en: `The main direction retains the generated pre-match BEST/model result: ${label.en}. ${quoteEn} This is a low-confidence data pick${Number.isFinite(evidenceScore) ? ` with an evidence score of ${Math.round(evidenceScore)}/100` : ''}; it is excluded from formal hit-rate and bet-slip statistics.`,
+      zh: `${base.prediction.explanation.zh}${quoteZh}`,
+      en: `${base.prediction.explanation.en} ${quoteEn}`,
     },
     analysisItems: [
       {

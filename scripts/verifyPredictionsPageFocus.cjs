@@ -58,19 +58,22 @@ pushCheck("live-pick pool remains a gated secondary tool", hasAll(bestTips, [
 const primaryNavStart = navbar.indexOf('const navItems');
 const primaryNavEnd = navbar.indexOf('export const Navbar', primaryNavStart);
 const primaryNavSource = navbar.slice(primaryNavStart, primaryNavEnd);
-pushCheck("primary navigation has four analysis-flow destinations", hasAll(primaryNavSource, [
+pushCheck("primary navigation exposes the independent AI arena", hasAll(primaryNavSource, [
   "key: 'predictions'",
   "key: 'fixtures'",
+  "key: 'arena'",
   "key: 'review'",
   "key: 'leagues'",
   "labelKey: 'topLeagues'"
 ]) && !["key: 'best'", "key: 'generator'", "key: 'hitwin'"].some((needle) => primaryNavSource.includes(needle))
   && hasAll(app, [
     "fixtures: '/fixtures'",
+    "arena: '/ai-arena'",
     "review: '/review'",
     "leagues: '/leagues'",
     "tools: '/tools'",
     'path="/leagues"',
+    'path="/ai-arena"',
     '<Route path="/worldcup" element={<Navigate to="/leagues" replace />} />',
     '<Route path="/hitwin" element={<Navigate to="/review" replace />} />'
   ]));
@@ -86,7 +89,7 @@ pushCheck("analysis and fixtures routes render distinct content modes", hasAll(a
   "'赛程与官方赔率' : 'Fixtures and Official Odds'",
   'to="/predictions"',
   "const marketSelection = getListMarketSelection(",
-  "publishedRecommendation,\n                    nowMs,\n                    false\n                  );",
+  "publishedRecommendation,\n                    nowMs,\n                    true\n                  );",
   "const poolRows = isFixturesView",
   "? getSportteryPoolRows(match, language).filter((row) => row.odds)",
   "const publishedRecommendation = isVoid",
@@ -221,7 +224,7 @@ pushCheck("formal picks require current SP while published live picks retain pub
   "getOfficialPredictionOdds(match, storedBest)",
   "getOfficialPredictionHandicapLine(match, storedBest)",
   "prediction: eligiblePrediction"
-]) && strictHelperUses >= 3 && hasAll(predictions, [
+]) && strictHelperUses >= 2 && hasAll(predictions, [
   "getOnSaleDisplayRecommendation(match, language, nowMs) || getLiveDisplayRecommendation(match, language)",
   "displayRecommendation.publicationTrack === 'live'",
   "场推荐 / ${recommendationCounts.formal + recommendationCounts.live} 场正式或实时",
@@ -246,15 +249,14 @@ const referenceSelectionOrder = indexMap(analysisReferenceSelection, [
   "const lowEvidenceMarket = buildLowEvidenceMarketLeaderReference(",
 ]);
 const referenceSelectionOrderValues = Object.values(referenceSelectionOrder);
-pushCheck("analysis directions require official SP while sharing one stable selector", hasAll(predictions, [
+pushCheck("analysis gives every normal fixture a separately-accounted data direction", hasAll(predictions, [
   "getOnSaleAnalysisReference as selectAnalysisReferencePrediction",
   "selectOnSaleAnalysisReference",
   ") => selectAnalysisReferencePrediction(match, options);",
-  "allowModelOnly: false",
+  "allowModelOnly: true",
   "candidate: rawDisplayRecommendation?.prediction",
   "const analysisReference = analysisReferenceSelection?.prediction",
   "now: nowMs",
-  "'Directions'",
   "data picks",
   "formatReferenceTime(",
   "no official SP is on sale",
@@ -287,14 +289,15 @@ pushCheck("analysis directions require official SP while sharing one stable sele
   "'five-hundred-low-evidence-market'",
   "buildLowEvidenceMarketLeaderReference(",
   "buildStableLowEvidenceModelReference(match, storedBest, now)",
-  "market probability leader cannot overwrite the generated direction",
+  "market probability leader cannot overwrite the model probability leader",
   "OFFICIAL_MARKET_REFERENCE_MIN_LEADER_PROBABILITY = 0.55",
   "OFFICIAL_MARKET_REFERENCE_MIN_LEADER_GAP = 0.08",
   "leader.probability < OFFICIAL_MARKET_REFERENCE_MIN_LEADER_PROBABILITY",
   "leader.probability - runnerUp.probability < OFFICIAL_MARKET_REFERENCE_MIN_LEADER_GAP",
   "if (strongOppositeModel) return undefined",
   "displayOdds: null",
-  "const poolCode = canonicalReferencePool(match, candidate)",
+  "const poolCode = modelProbabilities ? 'HAD' : canonicalReferencePool(match, candidate)",
+  "const probabilityLeader = modelOutcomeLeader(modelProbabilities, match.id)",
   "handicapDirectionLabel(tipCode)",
   "odds: 0"
 ]) && referenceSelectionOrderValues.every((value) => value >= 0)
@@ -339,7 +342,7 @@ const detailRawPrimarySelection = matchDetail.slice(detailRawPrimaryStart, detai
 pushCheck("list card and detail overview share the same canonical BEST decision", hasAll(matchDetail, [
   "import { selectOnSaleAnalysisReference } from '../services/analysisReferenceSelection';",
   "const detailAnalysisReferenceSelection = !isResultPhase && !canonicalPublishedRecommendation",
-  "allowModelOnly: false",
+  "allowModelOnly: true",
   "const detailAnalysisCandidate = rawDisplayRecommendation?.prediction;",
   "candidate: detailAnalysisCandidate",
   "now: nowMs",
@@ -358,19 +361,12 @@ pushCheck("list card and detail overview share the same canonical BEST decision"
   detailCanonicalOrder
 });
 
-const signalCountsStart = predictions.indexOf("const signalCounts = useMemo");
-const recommendationCountsStart = predictions.indexOf("const recommendationCounts = useMemo", signalCountsStart);
+const recommendationCountsStart = predictions.indexOf("const recommendationCounts = useMemo");
 const fixtureCountsStart = predictions.indexOf("const fixtureMarketCounts = useMemo", recommendationCountsStart);
-const signalCountsSource = predictions.slice(signalCountsStart, recommendationCountsStart);
 const recommendationCountsSource = predictions.slice(recommendationCountsStart, fixtureCountsStart);
-pushCheck("reference picks count as recommendations and never inflate unavailable", hasAll(signalCountsSource, [
-  "const analysisReference = !publishedRecommendation",
-  "getOnSaleAnalysisReference(match, { allowModelOnly: false, now: nowMs })",
-  "const archivedPrediction = getArchivedPreMatchPrediction(match, nowMs)",
-  "(publishedRecommendation || analysisReference || archivedPrediction)",
-  "counts.recommended += 1"
-]) && hasAll(recommendationCountsSource, [
+pushCheck("reference picks count as recommendations and never inflate unavailable", hasAll(recommendationCountsSource, [
   "const analysisReference = displayRecommendation ? undefined : getOnSaleAnalysisReference(match, {",
+  "allowModelOnly: true",
   "const archivedPrediction = getArchivedPreMatchPrediction(match, nowMs)",
   "if (isVoid || signal.category === 'finished' || archivedPrediction)",
   "if (!isVoid && archivedPrediction)",
@@ -432,24 +428,24 @@ pushCheck("best tips renders every data pick and limits only the featured marker
   && !bestTips.includes("观察")
   && !bestTips.includes("if (tipCards.length > 0) return []"));
 
-pushCheck("analysis opens on current directed picks and rolls forward across midnight", hasAll(predictions, [
+pushCheck("analysis always opens on the complete day and rolls forward across midnight", hasAll(predictions, [
   "const hasFreshListReturnScroll =",
   "const restoreReturnView = React.useMemo(() => hasFreshListReturnScroll(viewMode), [viewMode])",
-  "const defaultSignalFilter: SignalFilter = isAnalysisView ? 'recommended' : 'all'",
-  "restoreReturnView ? restoredViewState?.signalFilter || defaultSignalFilter : defaultSignalFilter",
   "const previousTodayRef = React.useRef(todayStr)",
   "setSelectedDate((current) => current === previousToday ? todayStr : current)",
-  "if (aHasDirection !== bHasDirection) return aHasDirection ? -1 : 1"
-]));
+  "const filteredMatches = baseFilteredMatches"
+]) && !predictions.includes("有方向")
+  && !predictions.includes("signal-quick-filter")
+  && !predictions.includes("signalFilter"));
 
-pushCheck("fixtures keeps the full schedule but places recommended rows before empty rows", hasAll(predictions, [
-  "if (isFixturesView) return baseFilteredMatches",
-  "if (isAnalysisView || isFixturesView)",
-  "if (aHasDirection !== bHasDirection) return aHasDirection ? -1 : 1"
-]));
+pushCheck("fixtures keeps the full schedule in the selected sort order", hasAll(predictions, [
+  "const filteredMatches = baseFilteredMatches",
+  "const sorted = [...filteredMatches]",
+  "comparison = new Date(a.kickoffTime).getTime() - new Date(b.kickoffTime).getTime()"
+]) && !predictions.includes("if (aHasDirection !== bHasDirection)"));
 
-pushCheck("fixture history rows keep the original archived decision visible", hasAll(predictions, [
-  "decision={isAnalysisView || isArchived",
+pushCheck("fixtures render a decision for every row and keep archived decisions visible", hasAll(predictions, [
+  "decision={isAnalysisView || isFixturesView || isArchived",
   "? renderDecisionCell(match, publishedRecommendation)",
   ": undefined}"
 ]) && hasAll(matchSummaryRow, [
