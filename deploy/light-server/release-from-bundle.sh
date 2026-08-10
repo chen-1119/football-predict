@@ -123,6 +123,7 @@ PUBLIC_DATA_CACHE_FILES=(
   model-calibration.json
   model-evaluation.json
   model-strategy.json
+  ai-arena.json
   gpt-predictions.json
 )
 PUBLIC_ROOT_CACHE_FILES=(matches.json odds-history.json)

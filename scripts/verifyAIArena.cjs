@@ -279,6 +279,7 @@ const previewSource = fs.readFileSync(path.join(root, 'src', 'components', 'pred
 const serverSource = fs.readFileSync(path.join(root, 'server', 'index.cjs'), 'utf8');
 const generationSource = fs.readFileSync(path.join(root, 'server', 'dataGenerationBundle.cjs'), 'utf8');
 const syncSource = fs.readFileSync(path.join(root, 'scripts', 'syncData.cjs'), 'utf8');
+const bundleReleaseSource = fs.readFileSync(path.join(root, 'deploy', 'light-server', 'release-from-bundle.sh'), 'utf8');
 assert.match(appSource, /path="\/ai-arena"/);
 assert.match(appSource, /path="\/ai-arena\/:matchId"/);
 assert.doesNotMatch(listSource, /AIArenaPreview/);
@@ -294,6 +295,7 @@ assert.match(serverSource, /\/api\/v1\/ai-arena\/status/);
 assert.match(generationSource, /ai-arena\.json/);
 assert.match(syncSource, /updateAiArenaState/);
 assert.match(syncSource, /AI_ARENA_STATE_PATH/);
+assert.match(bundleReleaseSource, /PUBLIC_DATA_CACHE_FILES=\([\s\S]*ai-arena\.json[\s\S]*\)/);
 
 console.log(JSON.stringify({
   ok: true,
