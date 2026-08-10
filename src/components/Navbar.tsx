@@ -18,17 +18,18 @@ interface NavbarProps {
   openGlossary: () => void;
 }
 
-type NavTab = 'best' | 'predictions' | 'worldcup' | 'generator' | 'hitwin';
+type NavTab = 'best' | 'predictions' | 'worldcup' | 'generator' | 'arena' | 'hitwin';
 
 const navItems: Array<{
   key: NavTab;
-  labelKey: 'bestTips' | 'predictions' | 'worldCup' | 'generator' | 'hitAndWin';
+  labelKey: 'bestTips' | 'predictions' | 'worldCup' | 'generator' | 'arena' | 'hitAndWin';
   icon: React.ComponentType<{ size?: number }>;
 }> = [
   { key: 'best', labelKey: 'bestTips', icon: Trophy },
   { key: 'predictions', labelKey: 'predictions', icon: ListChecks },
   { key: 'worldcup', labelKey: 'worldCup', icon: Flag },
   { key: 'generator', labelKey: 'generator', icon: Ticket },
+  { key: 'arena', labelKey: 'arena', icon: Target },
   { key: 'hitwin', labelKey: 'hitAndWin', icon: Target }
 ];
 
@@ -42,6 +43,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
     bestTips: { zh: '今日参考', en: 'Daily References' },
     predictions: { zh: '赛事预测', en: 'Predictions' },
     generator: { zh: '投注单', en: 'Bet Slip' },
+    arena: { zh: 'AI生存战', en: 'AI Survival' },
     hitAndWin: { zh: '命中挑战', en: 'Hit & Win' },
     login: { zh: '校验', en: 'Verify' },
     help: { zh: '术语', en: 'Glossary' },

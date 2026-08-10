@@ -102,6 +102,7 @@ class RouteErrorBoundary extends Component<{ children: ReactNode }, { error: Err
 const tabPaths: Record<string, string> = {
   best: '/best',
   predictions: '/predictions',
+  arena: '/ai-arena',
   worldcup: '/worldcup',
   generator: '/betslip',
   hitwin: '/hitwin',
@@ -118,6 +119,7 @@ const decodeRouteParam = (value: string | undefined) => {
 };
 
 const getTabFromPath = (pathname: string) => {
+  if (pathname.startsWith('/ai-arena')) return 'arena';
   if (pathname.startsWith('/best')) return 'best';
   if (pathname.startsWith('/worldcup')) return 'worldcup';
   if (pathname.startsWith('/betslip') || pathname.startsWith('/generator')) return 'generator';
@@ -237,6 +239,14 @@ function RoutedContent() {
                 element={(
                   <RequireAccess>
                     <MatchDetailRoute />
+                  </RequireAccess>
+                )}
+              />
+              <Route
+                path="/ai-arena"
+                element={(
+                  <RequireAccess>
+                    <AIArena />
                   </RequireAccess>
                 )}
               />
