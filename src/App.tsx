@@ -23,6 +23,7 @@ const Auth = lazy(() => import('./pages/Auth').then((module) => ({ default: modu
 const AccessCodeAdmin = lazy(() => import('./pages/AccessCodeAdmin').then((module) => ({ default: module.AccessCodeAdmin })));
 const MatchDetail = lazy(() => import('./pages/MatchDetail').then((module) => ({ default: module.MatchDetail })));
 const WorldCup = lazy(() => import('./pages/WorldCup').then((module) => ({ default: module.WorldCup })));
+const AIArena = lazy(() => import('./pages/AIArena').then((module) => ({ default: module.AIArena })));
 
 const ASSET_RELOAD_STORAGE_KEY = 'football.assetReloadAt';
 
@@ -236,6 +237,14 @@ function RoutedContent() {
                 element={(
                   <RequireAccess>
                     <MatchDetailRoute />
+                  </RequireAccess>
+                )}
+              />
+              <Route
+                path="/ai-arena/:matchId"
+                element={(
+                  <RequireAccess>
+                    <AIArena />
                   </RequireAccess>
                 )}
               />

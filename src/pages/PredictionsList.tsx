@@ -27,6 +27,7 @@ import { buildPublicRecommendationCopy } from '../services/recommendationCopy';
 import { getAvailableResultPools, getDisplayRecommendation, getHandicapCompanionHeading, getListHandicapSupplement } from '../services/displayRecommendation';
 import { TeamBadge } from '../components/TeamBadge';
 import { WorldCupSpotlight } from '../components/WorldCupSpotlight';
+import { AIArenaPreview } from '../components/predictions/AIArenaPreview';
 
 interface PredictionsListProps {
   onSelectMatch: (matchId: string) => void;
@@ -1041,6 +1042,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
           </div>
         )}
       </details>
+
+      <AIArenaPreview matches={matches} />
 
       <section className="date-toolbar" aria-label="Date filters">
         <div className="date-quick-row">
