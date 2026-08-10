@@ -685,6 +685,7 @@ check("release sequence is burned before execution and remains burned on failure
 });
 
 const bundleRelease = readText(bundleReleasePath);
+assert.doesNotMatch(bundleRelease, /\r/u, "signed release shell entrypoint must use LF line endings");
 const releaseRecovery = readText(releaseRecoveryPath);
 const releaseWrapper = readText(releaseWrapperPath);
 
