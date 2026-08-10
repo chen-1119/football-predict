@@ -718,6 +718,41 @@ restore_release_fast_watcher_after_failed_pre_swap() {
   fi
 }
 
+request_live_sqlite_prebuild_cache_reclaim() {
+  local app_cgroup_dir="$1"
+  local reclaim_bytes="$2"
+  local expected_cgroup_dir="/sys/fs/cgroup/system.slice/${SERVICE_NAME}.service"
+  local reclaim_path reclaim_identity
+  assert_release_fast_watcher_pause_guard || return 1
+  [ "${WORKER_STOPPED_FOR_SWAP:-0}" = "1" ] || return 1
+  [ "$app_cgroup_dir" = "$expected_cgroup_dir" ] || {
+    printf 'live SQLite prebuild cache reclaim rejected unexpected app cgroup: %s\n' "$app_cgroup_dir" >&2
+    return 1
+  }
+  [[ "$reclaim_bytes" =~ ^(0|[1-9][0-9]*)$ ]] || {
+    printf 'live SQLite prebuild cache reclaim received invalid byte count: %s\n' "$reclaim_bytes" >&2
+    return 1
+  }
+  [ "$reclaim_bytes" != "0" ] || return 0
+  reclaim_path="${app_cgroup_dir}/memory.reclaim"
+  [ -f "$reclaim_path" ] && [ ! -L "$reclaim_path" ] && [ -w "$reclaim_path" ] || {
+    printf 'live SQLite prebuild cache reclaim interface is unavailable or unsafe: %s\n' "$reclaim_path" >&2
+    return 1
+  }
+  reclaim_identity="$(stat -c '%u:%g:%a:%h' -- "$reclaim_path")" || return 1
+  [ "$reclaim_identity" = "0:0:200:1" ] || {
+    printf 'live SQLite prebuild cache reclaim interface metadata is unsafe: %s\n' "$reclaim_identity" >&2
+    return 1
+  }
+  if printf '%s\n' "$reclaim_bytes" >"$reclaim_path"; then
+    log "requested app cgroup inactive-file reclaim before capacity retry: bytes=${reclaim_bytes}"
+  else
+    # memory.reclaim may return EAGAIN after making partial progress. The next
+    # strict capacity sample remains authoritative and still fails closed.
+    log "app cgroup inactive-file reclaim made partial or no progress; strict capacity retry remains required: bytes=${reclaim_bytes}"
+  fi
+}
+
 assert_live_sqlite_prebuild_capacity() {
   local app_control_group app_cgroup_dir app_memory_current app_memory_current_before
   local app_memory_current_after app_inactive_file capacity_output memory_sample sample_current
@@ -811,6 +846,7 @@ assert_live_sqlite_prebuild_capacity() {
       return 0
     fi
     if [ "$capacity_attempt" -lt "$LIVE_SQLITE_PREBUILD_CAPACITY_SETTLE_ATTEMPTS" ]; then
+      request_live_sqlite_prebuild_cache_reclaim "$app_cgroup_dir" "$app_inactive_file" || return 1
       log "live SQLite prebuild capacity pending after restart: attempt=${capacity_attempt}/${LIVE_SQLITE_PREBUILD_CAPACITY_SETTLE_ATTEMPTS} evidence=${capacity_output}"
       sleep "$LIVE_SQLITE_PREBUILD_CAPACITY_SETTLE_DELAY_SECONDS"
     fi

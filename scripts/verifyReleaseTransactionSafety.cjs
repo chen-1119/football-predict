@@ -892,6 +892,7 @@ check("release transaction bounds the old watcher memory pause and restores the 
   const cgroupDrainBody = extractFunction(bundleRelease, "wait_for_current_service_cgroup_reclaimed");
   const pauseOverrideBody = extractFunction(bundleRelease, "assert_release_fast_watcher_pause_override");
   const pauseGuardBody = extractFunction(bundleRelease, "assert_release_fast_watcher_pause_guard");
+  const cacheReclaimBody = extractFunction(bundleRelease, "request_live_sqlite_prebuild_cache_reclaim");
   const restoreBody = extractFunction(bundleRelease, "restore_release_fast_watcher_after_failed_pre_swap");
   const processStateBody = extractFunction(bundleRelease, "assert_release_fast_watcher_process_state");
   const capacityBody = extractFunction(bundleRelease, "assert_live_sqlite_prebuild_capacity");
@@ -950,6 +951,19 @@ check("release transaction bounds the old watcher memory pause and restores the 
   assert.doesNotMatch(pauseBody, /systemctl restart "\$SERVICE_NAME"/);
   assert.doesNotMatch(pauseBody, /remove_release_fast_watcher_pause_override/);
   assert.match(capacityBody, /assert_release_fast_watcher_pause_guard/);
+  assert.match(cacheReclaimBody, /assert_release_fast_watcher_pause_guard/);
+  assert.match(cacheReclaimBody, /WORKER_STOPPED_FOR_SWAP/);
+  assert.match(cacheReclaimBody, /expected_cgroup_dir="\/sys\/fs\/cgroup\/system\.slice\/\$\{SERVICE_NAME\}\.service"/);
+  assert.match(cacheReclaimBody, /memory\.reclaim/);
+  assert.match(cacheReclaimBody, /0:0:200:1/);
+  assert.match(cacheReclaimBody, /printf '%s\\n' "\$reclaim_bytes" >"\$reclaim_path"/);
+  assert.match(cacheReclaimBody, /strict capacity retry remains required/);
+  assert.doesNotMatch(cacheReclaimBody, /MemoryMax|MemoryHigh|RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_MEMORY_CURRENT_MIB/);
+  assertOrdered(capacityBody, [
+    '"$policy_script" capacity',
+    'request_live_sqlite_prebuild_cache_reclaim "$app_cgroup_dir" "$app_inactive_file"',
+    "LIVE_SQLITE_PREBUILD_CAPACITY_SETTLE_DELAY_SECONDS",
+  ], "inactive file cache is reclaimed only after a strict capacity rejection and before resampling");
   assertOrdered(stopBody, [
     'systemctl stop "$SERVICE_NAME"',
     'systemctl is-active --quiet "$SERVICE_NAME" && return 1',
