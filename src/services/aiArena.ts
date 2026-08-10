@@ -1,44 +1,127 @@
 import type { Match, OutcomeProbability } from './mockData';
 
 export type ArenaPickCode = '1' | 'X' | '2';
-export type ArenaRisk = 'low' | 'medium' | 'high';
+export type ArenaRiskStyle = 'steady' | 'balanced' | 'aggressive';
+export type ArenaLeagueCode = 'premier-league' | 'laliga' | 'serie-a' | 'bundesliga' | 'ligue-1';
 
-export interface ArenaAnalyst {
-  id: string;
+export interface ArenaLeagueSlot {
+  code: ArenaLeagueCode;
   nameZh: string;
   nameEn: string;
+  count: number;
+  target: 2;
+}
+
+export interface ArenaAgentDefinition {
+  id: string;
+  name: string;
+  nameZh: string;
+  style: ArenaRiskStyle;
   styleZh: string;
   styleEn: string;
+  color: string;
+  weeklyBudget: number;
+}
+
+export interface ArenaForecast {
+  matchId: string;
   pick: ArenaPickCode;
-  probability: number;
-  confidence: number;
-  risk: ArenaRisk;
-  stake: number;
-  startingBalance: number;
-  reasonsZh: string[];
-  reasonsEn: string[];
-}
-
-export interface DailyArenaSelection {
-  version: 'ai-single-match-arena-preview-v1';
-  dateKey: string;
-  match: Match;
-  aiScore: number;
   probabilities: Record<ArenaPickCode, number>;
-  marketProbabilities: Record<ArenaPickCode, number>;
-  odds: Record<ArenaPickCode, number>;
-  analysts: ArenaAnalyst[];
-  consensus: {
-    code: ArenaPickCode;
-    votes: number;
-    total: number;
-  };
-  projectedScore: string | null;
-  disclosure: 'strategy-simulation';
+  confidence: 1 | 2 | 3 | 4 | 5;
+  projectedScore: string;
+  reasonsZh: [string, string, string];
+  reasonsEn: [string, string, string];
+  expectedValue: number;
+  investment: boolean;
+  stake: number;
 }
 
-const STARTING_BALANCE = 10_000;
+export interface ArenaAgentEntry extends ArenaAgentDefinition {
+  startingBalance: 10_000;
+  balance: number;
+  status: 'ACTIVE' | 'YELLOW' | 'RED' | 'BANKRUPT';
+  forecasts: ArenaForecast[];
+  investedMatches: number;
+  totalStake: number;
+  brierScore: number | null;
+  maxDrawdown: number;
+  wealthRank: number | null;
+  predictionRank: number | null;
+  riskRank: number | null;
+  stageScore: number | null;
+}
+
+export interface ArenaMatchEntry {
+  match: Match;
+  league: ArenaLeagueSlot;
+  dateKey: string;
+  odds: Record<ArenaPickCode, number>;
+  baseProbabilities: Record<ArenaPickCode, number>;
+  marketProbabilities: Record<ArenaPickCode, number>;
+  forecasts: Array<ArenaForecast & { agentId: string; agentName: string; color: string }>;
+}
+
+export interface BigFiveSurvivalArena {
+  version: 'ai-big-five-survival-preview-v1';
+  weekStart: string;
+  weekEnd: string;
+  generatedAt: string;
+  targetMatches: 10;
+  availableMatches: number;
+  complete: boolean;
+  leagueSlots: ArenaLeagueSlot[];
+  matches: ArenaMatchEntry[];
+  agents: ArenaAgentEntry[];
+  dates: string[];
+  rules: {
+    startingBalance: 10_000;
+    predictionsPerAgent: number;
+    investmentsPerAgent: number;
+    weeklyStakeMin: 1500;
+    weeklyStakeMax: 2500;
+    singleStakeMin: 300;
+    singleStakeMax: 1200;
+    longOddsThreshold: 3.5;
+    longOddsStakeMax: 500;
+  };
+  disclosure: 'strategy-simulation-not-external-model-calls';
+}
+
 const CODES: ArenaPickCode[] = ['1', 'X', '2'];
+const STARTING_BALANCE = 10_000 as const;
+
+const LEAGUES: Array<Omit<ArenaLeagueSlot, 'count'>> = [
+  { code: 'premier-league', nameZh: '英超', nameEn: 'Premier League', target: 2 },
+  { code: 'laliga', nameZh: '西甲', nameEn: 'La Liga', target: 2 },
+  { code: 'serie-a', nameZh: '意甲', nameEn: 'Serie A', target: 2 },
+  { code: 'bundesliga', nameZh: '德甲', nameEn: 'Bundesliga', target: 2 },
+  { code: 'ligue-1', nameZh: '法甲', nameEn: 'Ligue 1', target: 2 },
+];
+
+const AGENTS: ArenaAgentDefinition[] = [
+  { id: 'gpt', name: 'GPT', nameZh: 'GPT 全局均衡', style: 'balanced', styleZh: '全局均衡', styleEn: 'Global balance', color: '#6ee7b7', weeklyBudget: 2000 },
+  { id: 'claude', name: 'Claude', nameZh: 'Claude 风险审慎', style: 'steady', styleZh: '风险审慎', styleEn: 'Risk first', color: '#f0b37e', weeklyBudget: 1600 },
+  { id: 'gemini', name: 'Gemini', nameZh: 'Gemini 多信号', style: 'balanced', styleZh: '多信号融合', styleEn: 'Multi-signal', color: '#8ab4f8', weeklyBudget: 1900 },
+  { id: 'deepseek', name: 'DeepSeek', nameZh: 'DeepSeek 价值搜索', style: 'aggressive', styleZh: '价值搜索', styleEn: 'Value search', color: '#8b9cff', weeklyBudget: 2200 },
+  { id: 'grok', name: 'Grok', nameZh: 'Grok 逆向进攻', style: 'aggressive', styleZh: '逆向进攻', styleEn: 'Contrarian attack', color: '#f4d06f', weeklyBudget: 2500 },
+  { id: 'qwen', name: 'Qwen', nameZh: 'Qwen 稳定执行', style: 'steady', styleZh: '稳定执行', styleEn: 'Stable execution', color: '#d5a6ff', weeklyBudget: 1800 },
+];
+
+const AGENT_PARAMETERS: Record<string, {
+  modelWeight: number;
+  marketWeight: number;
+  valueWeight: number;
+  drawBias: number;
+  favoriteBias: number;
+  underdogBias: number;
+}> = {
+  gpt: { modelWeight: 0.82, marketWeight: 0.18, valueWeight: 0.08, drawBias: 0, favoriteBias: 0, underdogBias: 0 },
+  claude: { modelWeight: 0.60, marketWeight: 0.40, valueWeight: 0.02, drawBias: 0.018, favoriteBias: 0.012, underdogBias: 0 },
+  gemini: { modelWeight: 0.70, marketWeight: 0.30, valueWeight: 0.12, drawBias: 0.004, favoriteBias: 0, underdogBias: 0 },
+  deepseek: { modelWeight: 0.76, marketWeight: 0.24, valueWeight: 0.20, drawBias: 0, favoriteBias: 0, underdogBias: 0.008 },
+  grok: { modelWeight: 0.86, marketWeight: 0.14, valueWeight: 0.25, drawBias: -0.008, favoriteBias: 0, underdogBias: 0.018 },
+  qwen: { modelWeight: 0.68, marketWeight: 0.32, valueWeight: 0.05, drawBias: 0.008, favoriteBias: 0.014, underdogBias: 0 },
+};
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -58,18 +141,22 @@ const normalizeProbability = (value: unknown): number | null => {
   return parsed > 1.000001 ? parsed / 100 : parsed;
 };
 
+const normalizeTriplet = (values: Record<ArenaPickCode, number>): Record<ArenaPickCode, number> => {
+  const safe = Object.fromEntries(CODES.map((code) => [code, Math.max(0.0001, values[code])])) as Record<ArenaPickCode, number>;
+  const total = safe['1'] + safe.X + safe['2'];
+  return {
+    '1': safe['1'] / total,
+    X: safe.X / total,
+    '2': safe['2'] / total,
+  };
+};
+
 const outcomeTriplet = (value: OutcomeProbability | null | undefined): Record<ArenaPickCode, number> | null => {
   const home = normalizeProbability(value?.home);
   const draw = normalizeProbability(value?.draw);
   const away = normalizeProbability(value?.away);
-  if (home === null || draw === null || away === null) return null;
-  const total = home + draw + away;
-  if (!(total > 0)) return null;
-  return {
-    '1': home / total,
-    X: draw / total,
-    '2': away / total,
-  };
+  if (home === null || draw === null || away === null || home + draw + away <= 0) return null;
+  return normalizeTriplet({ '1': home, X: draw, '2': away });
 };
 
 const officialHadOdds = (match: Match): Record<ArenaPickCode, number> | null => {
@@ -82,180 +169,302 @@ const officialHadOdds = (match: Match): Record<ArenaPickCode, number> | null => 
 };
 
 const devig = (odds: Record<ArenaPickCode, number>): Record<ArenaPickCode, number> => {
-  const inverse = {
-    '1': 1 / odds['1'],
-    X: 1 / odds.X,
-    '2': 1 / odds['2'],
-  };
-  const total = inverse['1'] + inverse.X + inverse['2'];
-  return {
-    '1': inverse['1'] / total,
-    X: inverse.X / total,
-    '2': inverse['2'] / total,
-  };
+  const inverse = { '1': 1 / odds['1'], X: 1 / odds.X, '2': 1 / odds['2'] };
+  return normalizeTriplet(inverse);
 };
 
-const leader = (scores: Record<ArenaPickCode, number>, allowed = CODES): ArenaPickCode => (
-  [...allowed].sort((left, right) => scores[right] - scores[left])[0] || 'X'
+const stableFraction = (value: string): number => {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) / 0xffffffff;
+};
+
+const leader = (scores: Record<ArenaPickCode, number>): ArenaPickCode => (
+  [...CODES].sort((left, right) => scores[right] - scores[left] || CODES.indexOf(left) - CODES.indexOf(right))[0]
 );
 
 const shanghaiDateKey = (value: Date | number | string): string => {
   const date = value instanceof Date ? value : new Date(value);
   return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Shanghai',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
+    timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
   }).format(date);
 };
 
-const matchBusinessDate = (match: Match): string => (
+const addDays = (dateKey: string, days: number): string => {
+  const value = new Date(`${dateKey}T12:00:00+08:00`);
+  value.setUTCDate(value.getUTCDate() + days);
+  return shanghaiDateKey(value);
+};
+
+export const arenaWeekRange = (nowMs = Date.now()): { weekStart: string; weekEnd: string } => {
+  const dateKey = shanghaiDateKey(nowMs);
+  const noon = new Date(`${dateKey}T12:00:00+08:00`);
+  const weekday = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Shanghai', weekday: 'short' })
+    .formatToParts(noon).find((part) => part.type === 'weekday')?.value
+    .replace('Mon', '1').replace('Tue', '2').replace('Wed', '3').replace('Thu', '4')
+    .replace('Fri', '5').replace('Sat', '6').replace('Sun', '7')) || 1;
+  const weekStart = addDays(dateKey, -(weekday - 1));
+  return { weekStart, weekEnd: addDays(weekStart, 6) };
+};
+
+const matchDateKey = (match: Match): string => (
   String(match.businessDate || match.matchDate || match.kickoffDate || '').slice(0, 10)
   || shanghaiDateKey(match.kickoffTime)
 );
 
-const confirmedHadSingle = (match: Match): boolean => (
-  match.externalSignals?.fiveHundred?.sale?.availability?.spfdg === true
-);
-
-const riskFor = (pickedProbability: number, gap: number, odds: number): ArenaRisk => {
-  if (pickedProbability >= 0.5 && gap >= 0.1 && odds <= 2.35) return 'low';
-  if (pickedProbability < 0.34 || gap < 0.04 || odds >= 3.8) return 'high';
-  return 'medium';
+const identifyLeague = (match: Match): ArenaLeagueCode | null => {
+  const text = [match.leagueId, match.leagueName, match.leagueNameEn, match.leagueShortName, match.leagueShortNameEn]
+    .filter(Boolean).join(' ').toLowerCase();
+  if (/(^|\s)epl($|\s)|英超|premier\s*league/.test(text)) return 'premier-league';
+  if (/西甲|la\s*liga|laliga/.test(text)) return 'laliga';
+  if (/意甲|serie\s*a|seriea/.test(text)) return 'serie-a';
+  if (/德甲|bundesliga/.test(text)) return 'bundesliga';
+  if (/法甲|ligue\s*1|ligue1/.test(text)) return 'ligue-1';
+  return null;
 };
 
-const analyst = (
-  input: Omit<ArenaAnalyst, 'probability' | 'confidence' | 'risk' | 'stake' | 'startingBalance'> & {
-    probabilities: Record<ArenaPickCode, number>;
-    odds: Record<ArenaPickCode, number>;
-    stakeRate: number;
-  },
-): ArenaAnalyst => {
-  const pickedProbability = input.probabilities[input.pick];
-  const ordered = CODES.map((code) => input.probabilities[code]).sort((a, b) => b - a);
-  const gap = Math.max(0, pickedProbability - (ordered.find((value) => value < pickedProbability) ?? ordered[1] ?? 0));
-  const risk = riskFor(pickedProbability, gap, input.odds[input.pick]);
-  const confidence = Math.round(clamp(48 + pickedProbability * 42 + gap * 45 - (risk === 'high' ? 8 : 0), 50, 92));
-  return {
-    id: input.id,
-    nameZh: input.nameZh,
-    nameEn: input.nameEn,
-    styleZh: input.styleZh,
-    styleEn: input.styleEn,
-    pick: input.pick,
-    probability: pickedProbability,
-    confidence,
-    risk,
-    startingBalance: STARTING_BALANCE,
-    stake: Math.round(STARTING_BALANCE * input.stakeRate),
-    reasonsZh: input.reasonsZh,
-    reasonsEn: input.reasonsEn,
-  };
+const agentDistribution = (
+  agentId: string,
+  matchId: string,
+  model: Record<ArenaPickCode, number>,
+  market: Record<ArenaPickCode, number>,
+  odds: Record<ArenaPickCode, number>,
+): Record<ArenaPickCode, number> => {
+  const parameters = AGENT_PARAMETERS[agentId] || AGENT_PARAMETERS.gpt;
+  const favorite = leader(market);
+  const underdog = [...CODES].sort((left, right) => odds[right] - odds[left])[0];
+  const raw = Object.fromEntries(CODES.map((code, index) => {
+    const valueSignal = clamp(model[code] * odds[code] - 1, -0.35, 0.45);
+    const jitter = (stableFraction(`${agentId}|${matchId}|${code}`) - 0.5) * 0.014;
+    const bias = (code === 'X' ? parameters.drawBias : 0)
+      + (code === favorite ? parameters.favoriteBias : 0)
+      + (code === underdog ? parameters.underdogBias : 0)
+      + (index === 0 ? 0.0001 : 0);
+    return [code,
+      model[code] * parameters.modelWeight
+      + market[code] * parameters.marketWeight
+      + valueSignal * parameters.valueWeight * 0.11
+      + bias
+      + jitter];
+  })) as Record<ArenaPickCode, number>;
+  return normalizeTriplet(raw);
 };
 
-const buildAnalysts = (
+const scorelineFor = (match: Match, pick: ArenaPickCode): string => {
+  const home = finiteNonNegative(match.projectedScoreHome);
+  const away = finiteNonNegative(match.projectedScoreAway);
+  if (home !== null && away !== null) return `${Math.round(home)}-${Math.round(away)}`;
+  if (pick === '1') return '2-1';
+  if (pick === '2') return '1-2';
+  return '1-1';
+};
+
+const confidenceFor = (probabilities: Record<ArenaPickCode, number>): 1 | 2 | 3 | 4 | 5 => {
+  const ordered = CODES.map((code) => probabilities[code]).sort((left, right) => right - left);
+  const score = ordered[0] + Math.max(0, ordered[0] - ordered[1]) * 0.8;
+  if (score >= 0.67) return 5;
+  if (score >= 0.55) return 4;
+  if (score >= 0.45) return 3;
+  if (score >= 0.38) return 2;
+  return 1;
+};
+
+const reasonsFor = (
+  pick: ArenaPickCode,
   probabilities: Record<ArenaPickCode, number>,
   market: Record<ArenaPickCode, number>,
   odds: Record<ArenaPickCode, number>,
-): ArenaAnalyst[] => {
-  const modelPick = leader(probabilities);
-  const marketPick = leader(market);
-  const valueScores = Object.fromEntries(CODES.map((code) => [code, probabilities[code] * odds[code]])) as Record<ArenaPickCode, number>;
-  const valuePick = leader(valueScores);
-  const safetyScores = Object.fromEntries(CODES.map((code) => [code, probabilities[code] - Math.max(0, odds[code] - 2.2) * 0.035])) as Record<ArenaPickCode, number>;
-  const safetyPick = leader(safetyScores);
-  const nonMarket = CODES.filter((code) => code !== marketPick);
-  const reviewPick = valueScores[leader(valueScores, nonMarket)] >= valueScores[modelPick] * 1.04
-    ? leader(valueScores, nonMarket)
-    : modelPick;
-  const balancedScores = Object.fromEntries(CODES.map((code) => [code, probabilities[code] * 0.72 + market[code] * 0.28])) as Record<ArenaPickCode, number>;
-  const balancedPick = leader(balancedScores);
-
-  return [
-    analyst({ id: 'core', nameZh: '核心概率', nameEn: 'Core Probability', styleZh: '模型派', styleEn: 'Model', pick: modelPick, probabilities, odds, stakeRate: 0.12, reasonsZh: ['采用当前统一概率最高方向', '不使用赛后数据'], reasonsEn: ['Uses the current highest unified probability', 'No post-match data'], }),
-    analyst({ id: 'steady', nameZh: '稳健风控', nameEn: 'Steady Control', styleZh: '稳健', styleEn: 'Steady', pick: safetyPick, probabilities, odds, stakeRate: 0.08, reasonsZh: ['降低高赔率尾部风险', '优先概率稳定性'], reasonsEn: ['Reduces long-price tail risk', 'Prioritizes probability stability'], }),
-    analyst({ id: 'balanced', nameZh: '均衡判断', nameEn: 'Balanced Read', styleZh: '均衡', styleEn: 'Balanced', pick: balancedPick, probabilities, odds, stakeRate: 0.1, reasonsZh: ['模型概率与去水市场交叉校验', '控制单一信号偏差'], reasonsEn: ['Blends model and devigged market', 'Limits single-signal bias'], }),
-    analyst({ id: 'value', nameZh: '价值发现', nameEn: 'Value Finder', styleZh: '进取', styleEn: 'Active', pick: valuePick, probabilities, odds, stakeRate: 0.18, reasonsZh: ['比较概率与官方 SP 的乘积', '仓位较高且波动更大'], reasonsEn: ['Compares probability against official SP', 'Higher simulated stake and variance'], }),
-    analyst({ id: 'market', nameZh: '市场校验', nameEn: 'Market Check', styleZh: '赔率派', styleEn: 'Market', pick: marketPick, probabilities, odds, stakeRate: 0.09, reasonsZh: ['跟随官方 SP 去水后的市场首选', '用于检验模型是否偏离共识'], reasonsEn: ['Follows the devigged official market leader', 'Checks model divergence from consensus'], }),
-    analyst({ id: 'review', nameZh: '反热门审查', nameEn: 'Contrarian Review', styleZh: '审查', styleEn: 'Review', pick: reviewPick, probabilities, odds, stakeRate: 0.06, reasonsZh: ['只有次选价值显著更高才反向', '默认不为制造分歧而分歧'], reasonsEn: ['Opposes only for materially stronger secondary value', 'Does not force disagreement'], }),
-  ];
+  agent: ArenaAgentDefinition,
+): { zh: [string, string, string]; en: [string, string, string] } => {
+  const edge = probabilities[pick] - market[pick];
+  const pickZh = arenaPickLabel(pick, 'zh');
+  const pickEn = arenaPickLabel(pick, 'en');
+  return {
+    zh: [
+      `${pickZh}在该策略分布中概率最高，为${Math.round(probabilities[pick] * 100)}%`,
+      edge >= 0.01 ? `相对同场去水市场高${Math.round(edge * 100)}个百分点` : `与同场去水市场接近，优先控制分歧风险`,
+      `${agent.styleZh}规则评估官方SP ${odds[pick].toFixed(2)}后的风险收益`,
+    ],
+    en: [
+      `${pickEn} leads this strategy distribution at ${Math.round(probabilities[pick] * 100)}%`,
+      edge >= 0.01 ? `${Math.round(edge * 100)} points above the devigged market` : 'Close to the devigged market, so disagreement risk is limited',
+      `${agent.styleEn} rules assess risk and reward at official SP ${odds[pick].toFixed(2)}`,
+    ],
+  };
 };
 
-const candidateScore = (
+const buildForecast = (
+  agent: ArenaAgentDefinition,
   match: Match,
-  probabilities: Record<ArenaPickCode, number>,
+  model: Record<ArenaPickCode, number>,
   market: Record<ArenaPickCode, number>,
-): number => {
-  const ordered = CODES.map((code) => probabilities[code]).sort((a, b) => b - a);
-  const probabilityGap = Math.max(0, ordered[0] - ordered[1]);
-  const modelPick = leader(probabilities);
-  const marketGap = Math.abs(probabilities[modelPick] - market[modelPick]);
-  const historyFamilies = [
-    Number(match.probabilityModel?.elo?.homeMatches || 0) + Number(match.probabilityModel?.elo?.awayMatches || 0) >= 12,
-    Number(match.probabilityModel?.form?.sampleSize || 0) >= 6,
-    Number(match.probabilityModel?.leaguePrior?.matches || 0) >= 30,
-  ].filter(Boolean).length;
-  const completeness = historyFamilies / 3;
-  return Math.round(clamp(
-    48 + ordered[0] * 22 + probabilityGap * 70 + marketGap * 35 + completeness * 12,
-    50,
-    95,
-  ));
+  odds: Record<ArenaPickCode, number>,
+): ArenaForecast => {
+  const probabilities = agentDistribution(agent.id, match.id, model, market, odds);
+  const pick = leader(probabilities);
+  const reasons = reasonsFor(pick, probabilities, market, odds, agent);
+  return {
+    matchId: match.id,
+    pick,
+    probabilities,
+    confidence: confidenceFor(probabilities),
+    projectedScore: scorelineFor(match, pick),
+    reasonsZh: reasons.zh,
+    reasonsEn: reasons.en,
+    expectedValue: probabilities[pick] * odds[pick] - 1,
+    investment: false,
+    stake: 0,
+  };
 };
 
-export const todayShanghaiDateKey = (): string => shanghaiDateKey(Date.now());
-
-export const buildDailyArenaSelection = (
-  matches: Match[],
-  dateKey = todayShanghaiDateKey(),
-  nowMs = Date.now(),
-): DailyArenaSelection | null => {
-  const candidates = matches.flatMap((match) => {
-    if (match.status !== 'SCHEDULED' || matchBusinessDate(match) !== dateKey) return [];
-    if (!confirmedHadSingle(match)) return [];
-    const kickoffMs = Date.parse(match.kickoffTime);
-    if (!Number.isFinite(kickoffMs) || kickoffMs <= nowMs) return [];
-    const odds = officialHadOdds(match);
-    const probabilities = outcomeTriplet(match.probabilityModel?.oneXTwo?.final);
-    if (!odds || !probabilities) return [];
-    const market = devig(odds);
-    return [{ match, odds, probabilities, market, score: candidateScore(match, probabilities, market) }];
-  }).sort((left, right) => (
-    right.score - left.score
-    || Date.parse(left.match.kickoffTime) - Date.parse(right.match.kickoffTime)
-    || left.match.id.localeCompare(right.match.id)
+const assignInvestments = (
+  forecasts: ArenaForecast[],
+  oddsByMatch: Map<string, Record<ArenaPickCode, number>>,
+  weeklyBudget: number,
+): ArenaForecast[] => {
+  const ordered = [...forecasts].sort((left, right) => (
+    (right.expectedValue + right.confidence * 0.025) - (left.expectedValue + left.confidence * 0.025)
+    || left.matchId.localeCompare(right.matchId)
   ));
+  const selected = ordered.slice(0, Math.min(3, ordered.length));
+  const ratios = [0.45, 0.33, 0.22];
+  const stakes = selected.map((forecast, index) => {
+    const odds = oddsByMatch.get(forecast.matchId)?.[forecast.pick] || 0;
+    const cap = odds > 3.5 ? 500 : 1200;
+    return Math.min(cap, Math.max(300, Math.round((weeklyBudget * ratios[index]) / 100) * 100));
+  });
+  if (selected.length === 3) {
+    let remaining = Math.max(0, Math.min(weeklyBudget, 2500) - stakes.reduce((sum, value) => sum + value, 0));
+    for (let index = 0; index < stakes.length && remaining >= 100; index += 1) {
+      const forecast = selected[index];
+      const odds = oddsByMatch.get(forecast.matchId)?.[forecast.pick] || 0;
+      const cap = odds > 3.5 ? 500 : 1200;
+      const room = Math.max(0, cap - stakes[index]);
+      const addition = Math.min(room, Math.floor(remaining / 100) * 100);
+      stakes[index] += addition;
+      remaining -= addition;
+    }
+  }
+  const stakeByMatch = new Map(selected.map((forecast, index) => [forecast.matchId, stakes[index]]));
+  return forecasts.map((forecast) => ({
+    ...forecast,
+    investment: stakeByMatch.has(forecast.matchId),
+    stake: stakeByMatch.get(forecast.matchId) || 0,
+  }));
+};
 
-  const selected = candidates[0];
-  if (!selected) return null;
-  const analysts = buildAnalysts(selected.probabilities, selected.market, selected.odds);
-  const voteCounts = Object.fromEntries(CODES.map((code) => [code, analysts.filter((row) => row.pick === code).length])) as Record<ArenaPickCode, number>;
-  const consensusCode = leader(voteCounts);
-  const homeScore = finiteNonNegative(selected.match.projectedScoreHome);
-  const awayScore = finiteNonNegative(selected.match.projectedScoreAway);
+const balanceStatus = (balance: number): ArenaAgentEntry['status'] => {
+  if (balance <= 0) return 'BANKRUPT';
+  if (balance < 1500) return 'RED';
+  if (balance < 3000) return 'YELLOW';
+  return 'ACTIVE';
+};
+
+export const buildBigFiveSurvivalArena = (
+  matches: Match[],
+  nowMs = Date.now(),
+): BigFiveSurvivalArena => {
+  const { weekStart, weekEnd } = arenaWeekRange(nowMs);
+  const candidates = matches.flatMap((match) => {
+    const leagueCode = identifyLeague(match);
+    const dateKey = matchDateKey(match);
+    if (!leagueCode || dateKey < weekStart || dateKey > weekEnd) return [];
+    if (match.status !== 'SCHEDULED' || Date.parse(match.kickoffTime) <= nowMs) return [];
+    const odds = officialHadOdds(match);
+    const baseProbabilities = outcomeTriplet(match.probabilityModel?.oneXTwo?.final);
+    if (!odds || !baseProbabilities) return [];
+    return [{ match, leagueCode, dateKey, odds, baseProbabilities, marketProbabilities: devig(odds) }];
+  });
+
+  const picked = LEAGUES.flatMap((league) => candidates
+    .filter((row) => row.leagueCode === league.code)
+    .sort((left, right) => Date.parse(left.match.kickoffTime) - Date.parse(right.match.kickoffTime) || left.match.id.localeCompare(right.match.id))
+    .slice(0, 2));
+  const leagueSlots: ArenaLeagueSlot[] = LEAGUES.map((league) => ({
+    ...league,
+    count: picked.filter((row) => row.leagueCode === league.code).length,
+  }));
+  const oddsByMatch = new Map(picked.map((row) => [row.match.id, row.odds]));
+
+  const agents: ArenaAgentEntry[] = AGENTS.map((agent) => {
+    const rawForecasts = picked.map((row) => buildForecast(
+      agent, row.match, row.baseProbabilities, row.marketProbabilities, row.odds,
+    ));
+    const forecasts = assignInvestments(rawForecasts, oddsByMatch, agent.weeklyBudget);
+    const totalStake = forecasts.reduce((sum, forecast) => sum + forecast.stake, 0);
+    return {
+      ...agent,
+      startingBalance: STARTING_BALANCE,
+      balance: STARTING_BALANCE,
+      status: balanceStatus(STARTING_BALANCE),
+      forecasts,
+      investedMatches: forecasts.filter((forecast) => forecast.investment).length,
+      totalStake,
+      brierScore: null,
+      maxDrawdown: 0,
+      wealthRank: null,
+      predictionRank: null,
+      riskRank: null,
+      stageScore: null,
+    };
+  });
+
+  const matchesWithForecasts: ArenaMatchEntry[] = picked
+    .map((row) => ({
+      match: row.match,
+      league: leagueSlots.find((league) => league.code === row.leagueCode)!,
+      dateKey: row.dateKey,
+      odds: row.odds,
+      baseProbabilities: row.baseProbabilities,
+      marketProbabilities: row.marketProbabilities,
+      forecasts: agents.map((agent) => {
+        const forecast = agent.forecasts.find((item) => item.matchId === row.match.id)!;
+        return { ...forecast, agentId: agent.id, agentName: agent.name, color: agent.color };
+      }),
+    }))
+    .sort((left, right) => Date.parse(left.match.kickoffTime) - Date.parse(right.match.kickoffTime));
 
   return {
-    version: 'ai-single-match-arena-preview-v1',
-    dateKey,
-    match: selected.match,
-    aiScore: selected.score,
-    probabilities: selected.probabilities,
-    marketProbabilities: selected.market,
-    odds: selected.odds,
-    analysts,
-    consensus: {
-      code: consensusCode,
-      votes: voteCounts[consensusCode],
-      total: analysts.length,
+    version: 'ai-big-five-survival-preview-v1',
+    weekStart,
+    weekEnd,
+    generatedAt: new Date(nowMs).toISOString(),
+    targetMatches: 10,
+    availableMatches: matchesWithForecasts.length,
+    complete: leagueSlots.every((league) => league.count === league.target),
+    leagueSlots,
+    matches: matchesWithForecasts,
+    agents,
+    dates: [...new Set(matchesWithForecasts.map((row) => row.dateKey))].sort(),
+    rules: {
+      startingBalance: STARTING_BALANCE,
+      predictionsPerAgent: matchesWithForecasts.length,
+      investmentsPerAgent: Math.min(3, matchesWithForecasts.length),
+      weeklyStakeMin: 1500,
+      weeklyStakeMax: 2500,
+      singleStakeMin: 300,
+      singleStakeMax: 1200,
+      longOddsThreshold: 3.5,
+      longOddsStakeMax: 500,
     },
-    projectedScore: homeScore !== null && awayScore !== null
-      ? `${Math.round(homeScore)}-${Math.round(awayScore)}`
-      : null,
-    disclosure: 'strategy-simulation',
+    disclosure: 'strategy-simulation-not-external-model-calls',
   };
 };
 
 export const arenaPickLabel = (code: ArenaPickCode, language: 'zh' | 'en'): string => {
   if (language === 'en') return code === '1' ? 'Home win' : code === '2' ? 'Away win' : 'Draw';
   return code === '1' ? '主胜' : code === '2' ? '客胜' : '平局';
+};
+
+export const arenaStatusLabel = (status: ArenaAgentEntry['status'], language: 'zh' | 'en'): string => {
+  const labels = {
+    ACTIVE: { zh: '生存', en: 'Active' },
+    YELLOW: { zh: '黄区', en: 'Yellow' },
+    RED: { zh: '红区', en: 'Red' },
+    BANKRUPT: { zh: '破产', en: 'Bankrupt' },
+  } as const;
+  return labels[status][language];
 };

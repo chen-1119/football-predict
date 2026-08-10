@@ -1,8 +1,12 @@
 import React from 'react';
-import { ArrowRight, Bot, ShieldCheck, Sparkles } from 'lucide-react';
+import { ArrowRight, Bot, CalendarDays, Coins, LockKeyhole, ShieldCheck, Trophy } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContextCore';
-import { arenaPickLabel, buildDailyArenaSelection } from '../../services/aiArena';
+import {
+  arenaPickLabel,
+  arenaStatusLabel,
+  buildBigFiveSurvivalArena,
+} from '../../services/aiArena';
 import type { Match } from '../../services/mockData';
 import '../../styles/ai-arena.css';
 
@@ -10,83 +14,127 @@ interface AIArenaPreviewProps {
   matches: Match[];
 }
 
-const pct = (value: number) => `${Math.round(value * 100)}%`;
+const dateLabel = (dateKey: string, language: 'zh' | 'en') => new Date(`${dateKey}T12:00:00+08:00`)
+  .toLocaleDateString(language === 'zh' ? 'zh-CN' : 'en-GB', {
+    month: '2-digit', day: '2-digit', weekday: 'short', timeZone: 'Asia/Shanghai',
+  });
 
 export const AIArenaPreview: React.FC<AIArenaPreviewProps> = ({ matches }) => {
   const { language } = useApp();
-  const selection = React.useMemo(() => buildDailyArenaSelection(matches), [matches]);
+  const arena = React.useMemo(() => buildBigFiveSurvivalArena(matches), [matches]);
+  const [activeDate, setActiveDate] = React.useState<string>('all');
+  const visibleMatches = activeDate === 'all'
+    ? arena.matches
+    : arena.matches.filter((row) => row.dateKey === activeDate);
+
+  React.useEffect(() => {
+    if (activeDate !== 'all' && !arena.dates.includes(activeDate)) setActiveDate('all');
+  }, [activeDate, arena.dates]);
 
   return (
-    <section className="ai-arena-preview" aria-labelledby="ai-arena-preview-title">
-      <div className="ai-arena-preview__heading">
-        <div>
-          <span className="ai-arena-kicker"><Sparkles size={15} aria-hidden="true" /> AI 单关竞技场</span>
-          <h2 id="ai-arena-preview-title">{language === 'zh' ? '今日 AI 精选单关' : 'Today AI single-match challenge'}</h2>
-          <p>{language === 'zh'
-            ? '只从已确认单关、已开售官方 HAD SP 且模型概率完整的比赛中选择一场。'
-            : 'One match selected only from confirmed singles with official HAD SP and complete model probabilities.'}</p>
-        </div>
-        <span className="ai-arena-preview__disclosure"><ShieldCheck size={14} aria-hidden="true" />
-          {language === 'zh' ? '6 个策略模拟角色 · 非外部大模型实调' : '6 simulated strategy roles · no external-model calls'}
-        </span>
-      </div>
+    <>
+      <section className="survival-league-progress" aria-label={language === 'zh' ? '五大联赛入选进度' : 'Big Five selection progress'}>
+        {arena.leagueSlots.map((league) => (
+          <div key={league.code} className={league.count === league.target ? 'is-complete' : ''}>
+            <span>{language === 'zh' ? league.nameZh : league.nameEn}</span>
+            <strong>{league.count}/{league.target}</strong>
+          </div>
+        ))}
+      </section>
 
-      {!selection ? (
-        <div className="ai-arena-empty">
-          <Bot size={26} aria-hidden="true" />
+      <section className="survival-scoreboard" aria-labelledby="survival-ranking-title">
+        <div className="survival-section-heading">
           <div>
-            <strong>{language === 'zh' ? '今日暂无满足条件的单关' : 'No eligible single match today'}</strong>
-            <p>{language === 'zh'
-              ? '不会用普通比赛、未开售赔率或历史 SP 凑数；官方单关到达后自动显示。'
-              : 'Regular fixtures, unopened prices, and historical SP are never used as filler.'}</p>
+            <span><Trophy size={15} aria-hidden="true" /> {language === 'zh' ? '本月生存榜' : 'Monthly survival table'}</span>
+            <h2 id="survival-ranking-title">{language === 'zh' ? '六 AI 同场竞技' : 'Six-AI competition'}</h2>
           </div>
+          <small><LockKeyhole size={14} /> {language === 'zh' ? '赛前提交后锁定' : 'Locked after cutoff'}</small>
         </div>
-      ) : (
-        <>
-          <div className="ai-arena-matchline">
-            <div className="ai-arena-matchline__teams">
-              <span>{selection.match.leagueShortName || selection.match.leagueName || '竞彩'}</span>
-              <strong>{selection.match.homeTeamName || '主队'} <em>VS</em> {selection.match.awayTeamName || '客队'}</strong>
-              <small>{new Date(selection.match.kickoffTime).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-GB', { hour12: false })}</small>
+        <div className="survival-ranking-table" role="table">
+          <div className="survival-ranking-row is-head" role="row">
+            <span>{language === 'zh' ? 'AI' : 'AI'}</span>
+            <span>{language === 'zh' ? '积分' : 'Points'}</span>
+            <span>{language === 'zh' ? '预测/Brier' : 'Forecast/Brier'}</span>
+            <span>{language === 'zh' ? '最大回撤' : 'Max drawdown'}</span>
+            <span>{language === 'zh' ? '本周投资' : 'Investments'}</span>
+            <span>{language === 'zh' ? '状态' : 'Status'}</span>
+          </div>
+          {arena.agents.map((agent, index) => (
+            <div className="survival-ranking-row" role="row" key={agent.id}>
+              <span className="survival-agent-name"><i style={{ background: agent.color }} /> <b>#{index + 1}</b> {agent.name}</span>
+              <strong>{agent.balance.toLocaleString()}</strong>
+              <span>{agent.brierScore === null ? (language === 'zh' ? '等待结算' : 'Pending') : agent.brierScore.toFixed(4)}</span>
+              <span>{agent.maxDrawdown.toFixed(0)}%</span>
+              <span>{agent.investedMatches}/{Math.min(3, arena.availableMatches)} · {agent.totalStake}</span>
+              <span className={`survival-status is-${agent.status.toLowerCase()}`}>{arenaStatusLabel(agent.status, language)}</span>
             </div>
-            <div className="ai-arena-score"><span>AI Score</span><strong>{selection.aiScore}</strong></div>
-            <div className="ai-arena-consensus">
-              <span>{language === 'zh' ? '今日共识' : 'Consensus'}</span>
-              <strong>{selection.consensus.votes}/{selection.consensus.total} {arenaPickLabel(selection.consensus.code, language)}</strong>
+          ))}
+        </div>
+      </section>
+
+      <section className="survival-daily" aria-labelledby="survival-daily-title">
+        <div className="survival-section-heading">
+          <div>
+            <span><CalendarDays size={15} aria-hidden="true" /> {arena.weekStart} — {arena.weekEnd}</span>
+            <h2 id="survival-daily-title">{language === 'zh' ? '每日对比' : 'Daily comparison'}</h2>
+          </div>
+          <small><ShieldCheck size={14} /> {language === 'zh' ? '同一赔率快照、同一截止时间' : 'Same odds snapshot and cutoff'}</small>
+        </div>
+
+        <div className="survival-date-tabs" role="tablist" aria-label={language === 'zh' ? '按日期查看' : 'Filter by date'}>
+          <button type="button" className={activeDate === 'all' ? 'is-active' : ''} onClick={() => setActiveDate('all')}>
+            {language === 'zh' ? '本周全部' : 'All week'}
+          </button>
+          {arena.dates.map((dateKey) => (
+            <button type="button" key={dateKey} className={activeDate === dateKey ? 'is-active' : ''} onClick={() => setActiveDate(dateKey)}>
+              {dateLabel(dateKey, language)}
+            </button>
+          ))}
+        </div>
+
+        {!visibleMatches.length ? (
+          <div className="survival-empty">
+            <Bot size={30} aria-hidden="true" />
+            <div>
+              <strong>{language === 'zh' ? '本周暂未凑齐可验证的五大联赛比赛' : 'No verified Big Five pool is available this week'}</strong>
+              <p>{language === 'zh'
+                ? '只接收本周未开赛、官方 HAD SP 完整且模型概率完整的比赛；不会用杯赛、旧赔率或虚构场次补足 10 场。'
+                : 'Only unplayed matches with complete official HAD SP and model probabilities are accepted. Cups, stale prices, and fabricated fixtures are never used as filler.'}</p>
             </div>
           </div>
-
-          <div className="ai-arena-probabilities" aria-label={language === 'zh' ? '模型胜平负概率' : 'Model 1X2 probabilities'}>
-            {(['1', 'X', '2'] as const).map((code) => (
-              <div key={code}>
-                <span>{arenaPickLabel(code, language)} <b>{pct(selection.probabilities[code])}</b></span>
-                <i><u style={{ width: pct(selection.probabilities[code]) }} /></i>
-                <small>SP {selection.odds[code].toFixed(2)}</small>
-              </div>
+        ) : (
+          <div className="survival-match-list">
+            {visibleMatches.map((row) => (
+              <article className="survival-match-card" key={row.match.id}>
+                <header>
+                  <div>
+                    <span>{language === 'zh' ? row.league.nameZh : row.league.nameEn} · {dateLabel(row.dateKey, language)}</span>
+                    <h3>{row.match.homeTeamName} <em>VS</em> {row.match.awayTeamName}</h3>
+                  </div>
+                  <div className="survival-odds">
+                    <span>主 {row.odds['1'].toFixed(2)}</span>
+                    <span>平 {row.odds.X.toFixed(2)}</span>
+                    <span>客 {row.odds['2'].toFixed(2)}</span>
+                  </div>
+                </header>
+                <div className="survival-agent-picks">
+                  {row.forecasts.map((forecast) => (
+                    <div key={forecast.agentId} className={forecast.investment ? 'is-invested' : ''}>
+                      <span><i style={{ background: forecast.color }} /> {forecast.agentName}</span>
+                      <strong>{arenaPickLabel(forecast.pick, language)}</strong>
+                      <small>{'★'.repeat(forecast.confidence)}{'☆'.repeat(5 - forecast.confidence)}</small>
+                      {forecast.investment && <b><Coins size={12} /> {forecast.stake}</b>}
+                    </div>
+                  ))}
+                </div>
+                <Link to={`/ai-arena/${encodeURIComponent(row.match.id)}`}>
+                  {language === 'zh' ? '查看六 AI 完整分析' : 'Open six-AI analysis'} <ArrowRight size={15} />
+                </Link>
+              </article>
             ))}
           </div>
-
-          <div className="ai-arena-daily-compare">
-            {selection.analysts.map((row) => (
-              <div key={row.id} className={`ai-arena-role is-${row.risk}`}>
-                <span>{language === 'zh' ? row.nameZh : row.nameEn}</span>
-                <strong>{arenaPickLabel(row.pick, language)}</strong>
-                <small>{language === 'zh' ? '信心' : 'Confidence'} {row.confidence} · {language === 'zh' ? '模拟仓位' : 'Sim stake'} {row.stake}</small>
-              </div>
-            ))}
-          </div>
-
-          <div className="ai-arena-preview__footer">
-            <p>{language === 'zh'
-              ? '积分、仓位和排名均为模拟展示；本阶段不会计入正式模型命中率。'
-              : 'Points, stakes, and rankings are simulated and excluded from formal model performance.'}</p>
-            <Link to={`/ai-arena/${encodeURIComponent(selection.match.id)}`}>
-              {language === 'zh' ? '查看 6 个策略详细对比' : 'Open six-role comparison'} <ArrowRight size={16} aria-hidden="true" />
-            </Link>
-          </div>
-        </>
-      )}
-    </section>
+        )}
+      </section>
+    </>
   );
 };
-
