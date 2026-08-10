@@ -4041,17 +4041,38 @@ assert_sync_worker_loop_process_state() {
 verify_post_swap_transition_window() {
   local required_margin_seconds="$1"
   local label="${2:-post-swap-worker-wait}"
-  local verified_at
+  local verified_at snapshot_lease snapshot_rc
   verified_at="$("$NODE_HOME/bin/node" -e 'process.stdout.write(new Date().toISOString())')" || return 1
-  "$NODE_HOME/bin/node" "$APP_DIR/scripts/releaseTransitionLease.cjs" verify \
+  snapshot_lease="${RECOVERY_DIR}/post-swap-transition-window.json"
+  [ ! -e "$snapshot_lease" ] && [ ! -L "$snapshot_lease" ] || {
+    printf 'post-swap transition snapshot path is unexpectedly occupied during %s\n' "$label" >&2
+    return 1
+  }
+  snapshot_rc=0
+  # The release-owned worker is expected to publish a new generation after
+  # swap. Re-verifying the immutable pre-swap digest would therefore reject the
+  # very hot sync this transaction requires. Instead, validate every observed
+  # live generation as a fresh, fail-closed transition snapshot: malformed or
+  # duplicate clocks still fail, and any newly discovered deadline must retain
+  # the complete rollback margin.
+  "$NODE_HOME/bin/node" "$APP_DIR/scripts/releaseTransitionLease.cjs" create \
     --current "$APP_DIR/public/data/matches-current.json" \
-    --lease "$CANDIDATE_TRANSITION_LEASE" \
+    --lease "$snapshot_lease" \
     --at "$verified_at" \
-    --required-margin-seconds "$required_margin_seconds" \
-    >/dev/null || {
-      printf 'release transition window became unsafe during %s at %s\n' "$label" "$verified_at" >&2
-      return 1
-    }
+    --verifier-runtime-max-seconds 1 \
+    --preverify-refresh-budget-seconds 0 \
+    --atomic-swap-margin-seconds "$required_margin_seconds" \
+    >/dev/null || snapshot_rc="$?"
+  if [ "$snapshot_rc" -eq 0 ]; then
+    [ -f "$snapshot_lease" ] && [ ! -L "$snapshot_lease" ] \
+      && [ "$(stat -c '%u:%g:%a:%h' -- "$snapshot_lease")" = "0:0:600:1" ] \
+      || snapshot_rc=1
+  fi
+  rm -f -- "$snapshot_lease" || snapshot_rc=1
+  if [ "$snapshot_rc" -ne 0 ]; then
+    printf 'release transition window became unsafe during %s at %s\n' "$label" "$verified_at" >&2
+    return 1
+  fi
 }
 
 wait_for_worker_official_publish_after() {

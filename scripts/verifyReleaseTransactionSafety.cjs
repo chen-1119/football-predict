@@ -3356,8 +3356,15 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
   assert.match(bundleRelease, /RELEASE_WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS:-600/);
   assert.match(bundleRelease, /officialPublishEvidenceAfter/);
   assert.match(bundleRelease, /RELEASE_POST_SWAP_TRANSITION_ROLLBACK_MARGIN_SECONDS:-120/);
-  assert.match(transitionGuardBody, /releaseTransitionLease\.cjs" verify/);
-  assert.match(transitionGuardBody, /--required-margin-seconds "\$required_margin_seconds"/);
+  assert.match(transitionGuardBody, /releaseTransitionLease\.cjs" create/);
+  assert.match(transitionGuardBody, /post-swap-transition-window\.json/);
+  assert.match(transitionGuardBody, /--current "\$APP_DIR\/public\/data\/matches-current\.json"/);
+  assert.match(transitionGuardBody, /--verifier-runtime-max-seconds 1/);
+  assert.match(transitionGuardBody, /--preverify-refresh-budget-seconds 0/);
+  assert.match(transitionGuardBody, /--atomic-swap-margin-seconds "\$required_margin_seconds"/);
+  assert.match(transitionGuardBody, /stat -c '%u:%g:%a:%h'/);
+  assert.match(transitionGuardBody, /rm -f -- "\$snapshot_lease"/);
+  assert.doesNotMatch(transitionGuardBody, /--lease "\$CANDIDATE_TRANSITION_LEASE"/);
   assert.match(officialWaitBody, /verify_post_swap_transition_window "\$POST_SWAP_TRANSITION_ROLLBACK_MARGIN_SECONDS"/);
   assert.match(readinessWaitBody, /verify_post_swap_transition_window "\$POST_SWAP_TRANSITION_ROLLBACK_MARGIN_SECONDS"/);
   assert.doesNotMatch(officialWaitBody, /official-result-fast-published/);
