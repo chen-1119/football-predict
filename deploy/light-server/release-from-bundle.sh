@@ -6237,6 +6237,13 @@ rollback() {
   cd "$APP_DIR" || exit 1
   fix_app_permissions "$APP_DIR" || { log "rollback fail-stop: app permissions failed"; exit 1; }
   fix_worker_write_permissions "$APP_DIR" || { log "rollback fail-stop: worker permissions failed"; exit 1; }
+  # A long release keeps the live worker running for most of the build. The
+  # serving generation can advance after the SQLite rollback image is sealed.
+  # Rebuild the restored SQLite from that current generation while all runtime
+  # writers remain quiesced, otherwise the old app would restart against a DB
+  # that matches neither current nor previous generation.
+  refresh_live_store_after_swap "$LIVE_STORE_DIR" "$LIVE_SQLITE_PATH" \
+    || { log "rollback incomplete: restored SQLite could not be aligned to the serving generation"; exit 1; }
   restore_managed_unit_states_after_rollback \
     || { log "rollback incomplete: original unit states or service health were not restored"; exit 1; }
   restore_timer_states_after_rollback || { log "rollback incomplete: timer state restoration failed"; exit 1; }
