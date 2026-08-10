@@ -6657,10 +6657,23 @@ pause_current_fast_watcher_for_live_prebuild \
   || abort_before_swap "current fast result watcher could not be paused for live SQLite prebuild"
 assert_live_sqlite_prebuild_capacity \
   || abort_before_swap "live SQLite prebuild capacity gate rejected the release host"
-refresh_candidate_capture_heartbeat_for_readiness "$APP_DIR" "$NEXT_DIR" \
-  || abort_before_swap "candidate deadline capture heartbeat refresh failed before live SQLite prebuild"
 start_release_sync_write_barrier \
   || abort_before_swap "canonical live sync write barrier could not be acquired before sqlite snapshot"
+run_as_service_user_with_runtime_env env \
+  PERF_BASE_URL="http://${HOST}:${PORT}" PERF_START_SERVER=0 \
+  PERF_ACCESS_TOKEN_FILE="$RELEASE_PERF_ACCESS_TOKEN_PATH" \
+  PERF_REQUESTS=12 PERF_CONCURRENCY=3 PERF_WARMUP_REQUESTS=3 \
+  PERF_WARMUP_CONCURRENCY=1 PERF_MAX_P95_MS=1500 PERF_MAX_ERROR_RATE=0 \
+  "$NODE_HOME/bin/node" "$NEXT_DIR/scripts/verifyApiPerformance.cjs" \
+  || abort_before_swap "current HTTP pressure gate failed before final live SQLite prebuild"
+cleanup_release_perf_access_token \
+  || abort_before_swap "release performance credential could not be cleaned before final sqlite snapshot"
+assert_release_fast_watcher_pause_guard \
+  || abort_before_swap "fast watcher pause guard failed after current HTTP pressure gate"
+assert_live_sqlite_prebuild_capacity \
+  || abort_before_swap "post-pressure live SQLite prebuild capacity gate rejected the release host"
+refresh_candidate_capture_heartbeat_for_readiness "$APP_DIR" "$NEXT_DIR" \
+  || abort_before_swap "candidate deadline capture heartbeat refresh failed before live SQLite prebuild"
 if ! prepare_live_sqlite_prebuild "$LIVE_STORE_DIR" "$LIVE_SQLITE_PATH"; then
   cleanup_live_sqlite_prebuild \
     || abort_before_swap "failed live SQLite prebuild could not be cleaned safely"
@@ -6676,22 +6689,11 @@ else
     || abort_before_swap "candidate deadline capture heartbeat exceeded ${LIVE_SQLITE_PREBUILD_HEARTBEAT_MAX_AGE_SECONDS} seconds after live SQLite prebuild"
   wait_for_health "http://${HOST}:${PORT}" "post-live-sqlite-prebuild" 60 2 service \
     || abort_before_swap "current service degraded during live SQLite prebuild"
-  run_as_service_user_with_runtime_env env \
-    PERF_BASE_URL="http://${HOST}:${PORT}" PERF_START_SERVER=0 \
-    PERF_ACCESS_TOKEN_FILE="$RELEASE_PERF_ACCESS_TOKEN_PATH" \
-    PERF_REQUESTS=12 PERF_CONCURRENCY=3 PERF_WARMUP_REQUESTS=3 \
-    PERF_WARMUP_CONCURRENCY=1 PERF_MAX_P95_MS=1500 PERF_MAX_ERROR_RATE=0 \
-    "$NODE_HOME/bin/node" "$NEXT_DIR/scripts/verifyApiPerformance.cjs" \
-    || abort_before_swap "current HTTP pressure gate failed after live SQLite prebuild"
-  cleanup_release_perf_access_token \
-    || abort_before_swap "release performance credential could not be cleaned after pressure gate"
-  assert_release_fast_watcher_pause_guard \
-    || abort_before_swap "fast watcher pause guard failed after current HTTP pressure gate"
 fi
 assert_live_sqlite_prebuild_capacity \
-  || abort_before_swap "post-pressure live SQLite prebuild capacity gate rejected the release host"
+  || abort_before_swap "post-prebuild live SQLite capacity gate rejected the release host"
 assert_candidate_capture_heartbeat_refresh_fresh \
-  "$POST_PREBUILD_HTTP_HEARTBEAT_MAX_AGE_SECONDS" post-live-sqlite-http-pressure \
+  "$POST_PREBUILD_HTTP_HEARTBEAT_MAX_AGE_SECONDS" post-live-sqlite-final-seal \
   || abort_before_swap "candidate deadline capture heartbeat exceeded the sealed handoff budget"
 # The prebuild captured the heartbeat and immutable generation together. Do not
 # refresh it again here: captureCandidateProspectiveDeadline can publish a new

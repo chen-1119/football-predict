@@ -1383,19 +1383,37 @@ const run = () => {
   const finalWorkerStop = bundleReleaseScript.indexOf("sync worker could not be paused before live SQLite prebuild");
   const capacityGate = bundleReleaseScript.indexOf("assert_live_sqlite_prebuild_capacity", finalWorkerStop);
   const writeBarrier = bundleReleaseScript.indexOf("start_release_sync_write_barrier", capacityGate);
-  const prebuild = bundleReleaseScript.indexOf('prepare_live_sqlite_prebuild "$LIVE_STORE_DIR" "$LIVE_SQLITE_PATH"', writeBarrier);
+  const pressureGate = bundleReleaseScript.indexOf(
+    "current HTTP pressure gate failed before final live SQLite prebuild",
+    writeBarrier,
+  );
+  const performanceCredentialCleanup = bundleReleaseScript.indexOf(
+    "release performance credential could not be cleaned before final sqlite snapshot",
+    pressureGate,
+  );
+  const postPressureCapacityGate = bundleReleaseScript.indexOf(
+    "post-pressure live SQLite prebuild capacity gate rejected the release host",
+    performanceCredentialCleanup,
+  );
+  const finalHeartbeatRefresh = bundleReleaseScript.indexOf(
+    "candidate deadline capture heartbeat refresh failed before live SQLite prebuild",
+    postPressureCapacityGate,
+  );
+  const prebuild = bundleReleaseScript.indexOf(
+    'prepare_live_sqlite_prebuild "$LIVE_STORE_DIR" "$LIVE_SQLITE_PATH"',
+    finalHeartbeatRefresh,
+  );
   const ninetySecondGate = bundleReleaseScript.indexOf(
     "candidate deadline capture heartbeat exceeded ${LIVE_SQLITE_PREBUILD_HEARTBEAT_MAX_AGE_SECONDS} seconds after live SQLite prebuild",
     prebuild,
   );
-  const pressureGate = bundleReleaseScript.indexOf("current HTTP pressure gate failed after live SQLite prebuild", ninetySecondGate);
-  const postPressureCapacityGate = bundleReleaseScript.indexOf(
-    "post-pressure live SQLite prebuild capacity gate rejected the release host",
-    pressureGate,
+  const postPrebuildCapacityGate = bundleReleaseScript.indexOf(
+    "post-prebuild live SQLite capacity gate rejected the release host",
+    ninetySecondGate,
   );
   const sealedHandoffGate = bundleReleaseScript.indexOf(
     "candidate deadline capture heartbeat exceeded the sealed handoff budget",
-    postPressureCapacityGate,
+    postPrebuildCapacityGate,
   );
   const pointerKeeper = bundleReleaseScript.indexOf(
     "start_release_pointer_commit_keeper",
@@ -1426,12 +1444,17 @@ const run = () => {
     && finalWorkerStop >= 0
     && capacityGate > finalWorkerStop
     && writeBarrier > capacityGate
-    && prebuild > writeBarrier
+    && pressureGate > writeBarrier
+    && performanceCredentialCleanup > pressureGate
+    && postPressureCapacityGate > performanceCredentialCleanup
+    && finalHeartbeatRefresh > postPressureCapacityGate
+    && prebuild > finalHeartbeatRefresh
     && ninetySecondGate > prebuild
-    && pressureGate > ninetySecondGate
-    && postPressureCapacityGate > pressureGate
-    && sealedHandoffGate > postPressureCapacityGate
+    && postPrebuildCapacityGate > ninetySecondGate
+    && sealedHandoffGate > postPrebuildCapacityGate
     && pointerKeeper > sealedHandoffGate
+    && !sealedWindow.includes('PERF_ACCESS_TOKEN_FILE=')
+    && !sealedWindow.includes('verifyApiPerformance.cjs')
     && !sealedWindow.includes('refresh_candidate_capture_heartbeat_for_readiness')
   ), {
     runtimeMinSeconds: 60,
@@ -1440,11 +1463,17 @@ const run = () => {
     memoryMaxMiB: 1024,
     memorySwapMaxMiB: 256,
     capacityGateBeforeBarrier: capacityGate > finalWorkerStop && writeBarrier > capacityGate,
-    heartbeatFreshnessOrder: ninetySecondGate > prebuild
-      && pressureGate > ninetySecondGate
-      && postPressureCapacityGate > pressureGate
-      && sealedHandoffGate > postPressureCapacityGate
+    heartbeatFreshnessOrder: pressureGate > writeBarrier
+      && performanceCredentialCleanup > pressureGate
+      && postPressureCapacityGate > performanceCredentialCleanup
+      && finalHeartbeatRefresh > postPressureCapacityGate
+      && prebuild > finalHeartbeatRefresh
+      && ninetySecondGate > prebuild
+      && postPrebuildCapacityGate > ninetySecondGate
+      && sealedHandoffGate > postPrebuildCapacityGate
       && pointerKeeper > sealedHandoffGate
+      && !sealedWindow.includes('PERF_ACCESS_TOKEN_FILE=')
+      && !sealedWindow.includes('verifyApiPerformance.cjs')
       && !sealedWindow.includes('refresh_candidate_capture_heartbeat_for_readiness'),
   });
 

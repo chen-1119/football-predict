@@ -868,10 +868,12 @@ check("sqlite recovery uses explicit tokens, validates snapshots, and quiesces m
     "sync worker could not be paused before live SQLite prebuild",
     "current fast result watcher could not be paused for live SQLite prebuild",
     "live SQLite prebuild capacity gate rejected the release host",
+    "current HTTP pressure gate failed before final live SQLite prebuild",
+    "post-pressure live SQLite prebuild capacity gate rejected the release host",
     "candidate deadline capture heartbeat refresh failed before live SQLite prebuild",
     'prepare_live_sqlite_prebuild "$LIVE_STORE_DIR" "$LIVE_SQLITE_PATH"',
     "candidate deadline capture heartbeat exceeded ${LIVE_SQLITE_PREBUILD_HEARTBEAT_MAX_AGE_SECONDS} seconds after live SQLite prebuild",
-    "post-pressure live SQLite prebuild capacity gate rejected the release host",
+    "post-prebuild live SQLite capacity gate rejected the release host",
     "candidate deadline capture heartbeat exceeded the sealed handoff budget",
     "start_release_pointer_commit_keeper",
     "stop_service_for_release_window || abort_before_swap \"live service could not be paused before swap\"",
@@ -992,9 +994,9 @@ check("release transaction bounds the old watcher memory pause and restores the 
     "pause_current_fast_watcher_for_live_prebuild",
     "assert_live_sqlite_prebuild_capacity",
     "start_release_sync_write_barrier",
-    "fast watcher pause guard failed after live SQLite prebuild",
     "fast watcher pause guard failed after current HTTP pressure gate",
     "post-pressure live SQLite prebuild capacity gate rejected the release host",
+    "fast watcher pause guard failed after live SQLite prebuild",
     "fast watcher pause guard failed before the live service stop",
     "stop_service_for_release_window",
   ], "maintenance and writer are quiesced before the old app cgroup recycle and capacity gate");
@@ -1008,7 +1010,7 @@ check("release transaction bounds the old watcher memory pause and restores the 
     "assert_release_fast_watcher_health_state 1",
   ], "the candidate watcher is confirmed through health after the new service is ready");
   assert.match(bundleRelease, /set_env_value "\$env_file" "RELAY_FAST_WATCHER_ENABLED" "1"/);
-  assert.equal((main.match(/assert_live_sqlite_prebuild_capacity/g) || []).length, 2);
+  assert.equal((main.match(/assert_live_sqlite_prebuild_capacity/g) || []).length, 3);
   assert.match(bundleRelease, /set_env_value "\$env_file" "RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_MEMORY_CURRENT_MIB" "768"/);
   assert.match(bundleRelease, /set_env_value "\$env_file" "RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_WORKING_SET_MIB" "512"/);
 });
@@ -1531,11 +1533,13 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
     "sync worker could not be paused before live SQLite prebuild",
     "current fast result watcher could not be paused for live SQLite prebuild",
     "live SQLite prebuild capacity gate rejected the release host",
-    "candidate deadline capture heartbeat refresh failed before live SQLite prebuild",
     "canonical live sync write barrier could not be acquired before sqlite snapshot",
+    "current HTTP pressure gate failed before final live SQLite prebuild",
+    "post-pressure live SQLite prebuild capacity gate rejected the release host",
+    "candidate deadline capture heartbeat refresh failed before live SQLite prebuild",
     'prepare_live_sqlite_prebuild "$LIVE_STORE_DIR" "$LIVE_SQLITE_PATH"',
     "candidate deadline capture heartbeat exceeded ${LIVE_SQLITE_PREBUILD_HEARTBEAT_MAX_AGE_SECONDS} seconds after live SQLite prebuild",
-    "current HTTP pressure gate failed after live SQLite prebuild",
+    "post-prebuild live SQLite capacity gate rejected the release host",
     "candidate deadline capture heartbeat exceeded the sealed handoff budget",
     "start_release_pointer_commit_keeper",
     'stop_service_for_release_window || abort_before_swap "live service could not be paused before swap"',
@@ -2791,7 +2795,8 @@ check("the sync worker stays live during long isolated work and pauses only for 
     main.indexOf("verify_live_sqlite_prebuild_after_freeze"),
   );
   assert.doesNotMatch(sealedWindow, /refresh_candidate_capture_heartbeat_for_readiness/);
-  assert.match(sealedWindow, /post-live-sqlite-http-pressure/);
+  assert.doesNotMatch(sealedWindow, /PERF_ACCESS_TOKEN_FILE|verifyApiPerformance/);
+  assert.match(sealedWindow, /post-live-sqlite-final-seal/);
   assert.match(exitTrapBody, /restore_pre_swap_transaction/);
 });
 
@@ -2814,7 +2819,7 @@ check("the live sync worker proves both loop contracts before release readiness"
   assert.match(stateBody, /sync worker loop process state mismatch/);
 });
 
-check("the post-prebuild pressure gate is read-only against the sealed SQLite generation", () => {
+check("the pressure gate completes before the final sealed SQLite generation", () => {
   const main = mainProgram(bundleRelease);
   const abortBody = extractFunction(bundleRelease, "abort_before_swap");
   const rollbackBody = extractFunction(bundleRelease, "rollback");
@@ -2824,10 +2829,16 @@ check("the post-prebuild pressure gate is read-only against the sealed SQLite ge
   assertOrdered(main, [
     "prepare_release_perf_access_token",
     "start_release_sync_write_barrier",
-    'prepare_live_sqlite_prebuild "$LIVE_STORE_DIR" "$LIVE_SQLITE_PATH"',
     'PERF_ACCESS_TOKEN_FILE="$RELEASE_PERF_ACCESS_TOKEN_PATH"',
     "cleanup_release_perf_access_token",
-  ], "performance credentials are created before and consumed read-only after the SQLite seal");
+    "refresh_candidate_capture_heartbeat_for_readiness",
+    'prepare_live_sqlite_prebuild "$LIVE_STORE_DIR" "$LIVE_SQLITE_PATH"',
+  ], "performance traffic completes before the final heartbeat and SQLite seal");
+  const sealedWindow = main.slice(
+    main.indexOf('prepare_live_sqlite_prebuild "$LIVE_STORE_DIR" "$LIVE_SQLITE_PATH"'),
+    main.indexOf("verify_live_sqlite_prebuild_after_freeze"),
+  );
+  assert.doesNotMatch(sealedWindow, /PERF_ACCESS_TOKEN_FILE|verifyApiPerformance/);
   assert.match(prepareBody, /PERF_PREPARE_ACCESS_TOKEN_ONLY=1/);
   assert.match(prepareBody, /PERF_ACCESS_TOKEN_OUTPUT_PATH="\$token_path"/);
   assert.match(cleanupBody, /\/run\/football-release-perf/);
