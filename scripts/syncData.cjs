@@ -8874,6 +8874,36 @@ function buildPreMatchSignalIndex(preMatchSignals) {
   return index;
 }
 
+function externalSignalMatchesEvent(match, signal) {
+  if (!match || !signal || typeof signal !== "object" || Array.isArray(signal)) return false;
+  const kickoffMs = parseBeijingDateTime(match?.kickoffTime || match?.eventVersion || "");
+  if (!Number.isFinite(kickoffMs)) return false;
+
+  const explicitEventClocks = [
+    signal?.kickoffTime,
+    signal?.eventVersion,
+    signal?.preMatch?.kickoffTime,
+    signal?.fiveHundred?.kickoffTime,
+    signal?.fiveHundred?.eventVersion,
+    signal?.fiveHundred?.result?.eventVersion,
+  ]
+    .map(parseBeijingDateTime)
+    .filter(Number.isFinite);
+  if (explicitEventClocks.length) {
+    return explicitEventClocks.every((value) => Math.abs(value - kickoffMs) <= 30 * 60 * 1000);
+  }
+
+  const saleCutoffMs = parseBeijingDateTime(
+    signal?.buyEndTime
+      || signal?.sale?.buyEndTime
+      || signal?.fiveHundred?.sale?.buyEndTime
+      || "",
+  );
+  if (!Number.isFinite(saleCutoffMs)) return false;
+  const leadMs = kickoffMs - saleCutoffMs;
+  return leadMs >= -30 * 60 * 1000 && leadMs <= 36 * 60 * 60 * 1000;
+}
+
 function attachExternalSignals(matches, externalSignals, preMatchSignals = null) {
   const signalMap = externalSignals?.matches || {};
   const preMatchIndex = buildPreMatchSignalIndex(preMatchSignals);
@@ -8881,8 +8911,10 @@ function attachExternalSignals(matches, externalSignals, preMatchSignals = null)
 
   return matches.map((match) => {
     const keys = externalSignalKeys(match);
-    const key = keys.find((candidate) => signalMap[candidate]);
-    const preMatch = keys.map((candidate) => preMatchIndex.get(candidate)).find(Boolean);
+    const key = keys.find((candidate) => externalSignalMatchesEvent(match, signalMap[candidate]));
+    const preMatch = keys
+      .map((candidate) => preMatchIndex.get(candidate))
+      .find((candidate) => externalSignalMatchesEvent(match, candidate));
     if (!key && !preMatch) return match;
     const value = key ? signalMap[key] : {};
     if (!value || typeof value !== "object" || Array.isArray(value)) return match;
@@ -9087,6 +9119,7 @@ function latestOddsSnapshotForMatch(match, historyRows) {
   const kickoffAt = Date.parse(match.kickoffTime);
   const rows = historyRows
     .filter((row) => normText(row?.sourceMatchId) === sourceMatchId)
+    .filter((row) => predictionPersistenceSameEvent(row, match))
     .filter((row) => sanitizeOdds({ odds1: row?.odds1, oddsX: row?.oddsX, odds2: row?.odds2 }))
     .sort((a, b) => Date.parse(a.capturedAt) - Date.parse(b.capturedAt));
 
@@ -9102,7 +9135,10 @@ function enrichRawMatchWithPredictionSnapshot(match, existingBySourceId, history
   if (sanitizeOdds(match.odds)) return match;
 
   const sourceMatchId = normText(match?.sourceMatchId || String(match?.id || "").replace(/^sporttery_/, ""));
-  const existing = existingBySourceId.get(sourceMatchId);
+  const existingCandidate = existingBySourceId.get(sourceMatchId);
+  const existing = predictionPersistenceSameEvent(existingCandidate, match)
+    ? existingCandidate
+    : null;
   const existingOdds = sanitizeOdds(existing?.odds);
   if (existingOdds) {
     return {
