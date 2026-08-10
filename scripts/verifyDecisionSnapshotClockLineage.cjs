@@ -11,8 +11,10 @@ const {
   enrichRawMatchWithPredictionSnapshot,
   finalizePublishedPredictionDecisions,
   marketSignalSignatureForMatch,
+  mergeFreshWithExistingStore,
   matchesFromSportteryRelaySnapshot,
   sportteryPoolOdds,
+  teamKey,
 } = require("./syncData.cjs");
 const {
   createCollectorAttestationTestContext,
@@ -376,6 +378,35 @@ assert.ok(reusedIdEndToEndDecision.predictions.length > 0);
 assert.equal(reusedIdEndToEndDecision.predictionMeta.cutoffTime, reusedIdRawEvent.buyEndTime);
 assert.equal(reusedIdEndToEndDecision.odds, undefined);
 assert.equal(reusedIdEndToEndDecision.handicapOdds, undefined);
+
+// A formerly contaminated store can already carry the new kickoff together
+// with the previous event's cutoff and locked market. The merge must use the
+// cutoff lineage as an event boundary even though id/kickoff/version now match.
+const contaminatedStoredEvent = clone(persistedFreshDecision);
+contaminatedStoredEvent.kickoffTime = reusedIdRawEvent.kickoffTime;
+contaminatedStoredEvent.eventVersion = reusedIdRawEvent.kickoffTime;
+const cleanFreshEvent = clone(reusedIdRawEvent);
+cleanFreshEvent.eventVersion = cleanFreshEvent.kickoffTime;
+const repairedStoredMerge = mergeFreshWithExistingStore(
+  [contaminatedStoredEvent],
+  [cleanFreshEvent],
+)[0];
+assert.equal(repairedStoredMerge.kickoffTime, cleanFreshEvent.kickoffTime);
+assert.equal(repairedStoredMerge.buyEndTime, cleanFreshEvent.buyEndTime);
+assert.equal(repairedStoredMerge.odds, undefined, "contaminated HAD must not survive an exact-id merge");
+assert.equal(repairedStoredMerge.handicapOdds, undefined, "contaminated HHAD must not survive an exact-id merge");
+assert.notEqual(
+  repairedStoredMerge.predictionMeta?.cutoffTime,
+  contaminatedStoredEvent.predictionMeta.cutoffTime,
+  "old decision cutoff must not be rebound to the reused event",
+);
+
+assert.equal(teamKey("\u5929\u72fc\u661f"), "sirius");
+assert.equal(teamKey("\u5e03\u9c81\u9a6c\u6ce2\u5361\u7eb3"), "brommapojkarna");
+assert.equal(teamKey("\u97e6\u65af\u7279\u7f57\u65af"), "vasteras sk");
+assert.equal(teamKey("\u4f50\u52a0\u987f\u65af"), "djurgarden");
+assert.equal(teamKey("\u5723\u514b\u62c9\u62c9"), "santa clara");
+assert.equal(teamKey("\u8461\u8404\u7259\u56fd\u6c11"), "nacional");
 
 const unchangedRefresh = clone(freshModel);
 unchangedRefresh.sourceCycleId = "sporttery-full-sync:2026-07-16T10:45:00.000Z";

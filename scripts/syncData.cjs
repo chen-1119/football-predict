@@ -2354,6 +2354,12 @@ const CURRENT_TEAM_KEY_ALIASES = Object.freeze({
   "\u6cf0\u56fd": "thailand",
   "\u5308\u7259\u5229": "hungary",
   "\u54c8\u8428\u514b": "kazakhstan",
+  "\u5929\u72fc\u661f": "sirius",
+  "\u5e03\u9c81\u9a6c\u6ce2\u5361\u7eb3": "brommapojkarna",
+  "\u97e6\u65af\u7279\u7f57\u65af": "vasteras sk",
+  "\u4f50\u52a0\u987f\u65af": "djurgarden",
+  "\u5723\u514b\u62c9\u62c9": "santa clara",
+  "\u8461\u8404\u7259\u56fd\u6c11": "nacional",
 });
 
 function normalizedTeamKey(teamName) {
@@ -8383,6 +8389,22 @@ function predictionPersistenceSameEvent(left, right) {
   const leftKickoff = canonicalClock(left?.kickoffTime ?? left?.kickoff);
   const rightKickoff = canonicalClock(right?.kickoffTime ?? right?.kickoff);
   if (!leftKickoff || !rightKickoff || leftKickoff !== rightKickoff) return false;
+  const explicitCutoff = (value) => normText(
+    value?.predictionMeta?.cutoffTime
+      || value?.buyEndTime
+      || value?.externalSignals?.buyEndTime
+      || value?.externalSignals?.fiveHundred?.sale?.buyEndTime,
+  );
+  // A previous bad cycle may already have rebound an old locked decision to
+  // the reused id's new kickoff. Event-version equality alone cannot repair
+  // that contaminated row. The sale/decision cutoff must also plausibly
+  // belong to the kickoff before odds, predictions, locks or revisions may be
+  // inherited.
+  for (const value of [left, right]) {
+    const cutoff = explicitCutoff(value);
+    const kickoff = value?.kickoffTime ?? value?.kickoff;
+    if (cutoff && !sportterySaleClockMatchesEvent(cutoff, kickoff)) return false;
+  }
   return true;
 }
 
@@ -9904,6 +9926,7 @@ function probabilityModelRichness(model) {
 
 function mergePublishedMatches(existing, fresh, modelCalibration = null) {
   if (!existing) return fresh;
+  if (!predictionPersistenceSameEvent(existing, fresh)) return fresh;
 
   const merged = { ...existing, ...fresh };
   if (probabilityModelRichness(existing.probabilityModel) > probabilityModelRichness(fresh.probabilityModel)) {
