@@ -7,6 +7,8 @@ const {
 } = require("../src/services/decisionSnapshot.cjs");
 const {
   applyPredictionPersistence,
+  attachExternalSignals,
+  enrichRawMatchWithPredictionSnapshot,
   finalizePublishedPredictionDecisions,
   marketSignalSignatureForMatch,
   matchesFromSportteryRelaySnapshot,
@@ -263,6 +265,72 @@ assert.equal(reusedIdDecision.predictionMeta.decisionRevision, 1);
 assert.notEqual(reusedIdDecision.predictionMeta.decisionId, persistedFreshDecision.predictionMeta.decisionId);
 assert.equal(reusedIdDecision.predictionMeta.lockedAt, undefined);
 assert.equal(reusedIdDecision.predictionMeta.lockedReason, undefined);
+
+// Reproduce the full r451 reused-id path: before persistence, an old official
+// odds row and a source-id keyed 500/pre-match signal could contaminate the
+// new raw fixture with the former event's cutoff and HHAD market.
+const reusedIdRawEvent = clone(reusedIdFreshEvent);
+for (const field of [
+  "odds",
+  "oddsSource",
+  "oddsPoolCode",
+  "oddsMarketProvenance",
+  "handicapOdds",
+  "handicapLine",
+  "handicapOddsSource",
+  "handicapOddsPoolCode",
+  "handicapOddsMarketProvenance",
+]) delete reusedIdRawEvent[field];
+const reusedIdEnriched = enrichRawMatchWithPredictionSnapshot(
+  reusedIdRawEvent,
+  new Map([[persistedFreshDecision.sourceMatchId, persistedFreshDecision]]),
+  [{
+    sourceMatchId: persistedFreshDecision.sourceMatchId,
+    kickoffTime: persistedFreshDecision.kickoffTime,
+    capturedAt: "2026-07-16T10:30:00.000Z",
+    cutoffTime: persistedFreshDecision.buyEndTime,
+    poolCode: "HAD",
+    odds1: 1.9,
+    oddsX: 3.3,
+    odds2: 4.1,
+  }],
+);
+assert.equal(reusedIdEnriched.odds, undefined);
+assert.equal(reusedIdEnriched.handicapOdds, undefined);
+const reusedIdWithSignals = attachExternalSignals(
+  [reusedIdEnriched],
+  {
+    source: "external-signal-clock-regression",
+    matches: {
+      [persistedFreshDecision.sourceMatchId]: {
+        updatedAt: "2026-07-16T10:35:00.000Z",
+        fiveHundred: {
+          sale: { buyEndTime: persistedFreshDecision.buyEndTime },
+          result: { eventVersion: persistedFreshDecision.kickoffTime },
+        },
+      },
+    },
+  },
+  {
+    matches: {
+      [persistedFreshDecision.sourceMatchId]: {
+        sourceMatchId: persistedFreshDecision.sourceMatchId,
+        kickoffTime: persistedFreshDecision.kickoffTime,
+      },
+    },
+  },
+)[0];
+assert.equal(reusedIdWithSignals.externalSignals, undefined);
+const reusedIdEndToEndDecision = finalizePublishedPredictionDecisions(
+  [reusedIdWithSignals],
+  new Map([[persistedFreshDecision.sourceMatchId, persistedFreshDecision]]),
+  "2026-08-10T00:02:00.000Z",
+  { finalizedAt: "2026-08-10T00:03:00.000Z" },
+)[0];
+assert.ok(reusedIdEndToEndDecision.predictions.length > 0);
+assert.equal(reusedIdEndToEndDecision.predictionMeta.cutoffTime, reusedIdRawEvent.buyEndTime);
+assert.equal(reusedIdEndToEndDecision.odds, undefined);
+assert.equal(reusedIdEndToEndDecision.handicapOdds, undefined);
 
 const unchangedRefresh = clone(freshModel);
 unchangedRefresh.sourceCycleId = "sporttery-full-sync:2026-07-16T10:45:00.000Z";
