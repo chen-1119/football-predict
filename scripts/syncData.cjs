@@ -8344,7 +8344,36 @@ function enabledPredictions(predictions) {
   return (predictions || []).filter((prediction) => prediction.marketType !== "GG_NG");
 }
 
+function predictionPersistenceSameEvent(left, right) {
+  if (!left || !right || typeof left !== "object" || typeof right !== "object") return false;
+  const sourceKey = (value) => normText(
+    value?.sourceMatchId || value?.matchId || String(value?.id || "").replace(/^[^_]+_/, ""),
+  );
+  const canonicalClock = (value) => {
+    const text = normText(value);
+    if (!text) return "";
+    const parsed = Date.parse(text);
+    return Number.isFinite(parsed) ? new Date(parsed).toISOString() : text;
+  };
+  const leftSource = sourceKey(left);
+  const rightSource = sourceKey(right);
+  if (!leftSource || !rightSource || leftSource !== rightSource) return false;
+  const leftVersion = canonicalClock(left?.eventVersion);
+  const rightVersion = canonicalClock(right?.eventVersion);
+  if (leftVersion && rightVersion && leftVersion !== rightVersion) return false;
+  const leftKickoff = canonicalClock(left?.kickoffTime ?? left?.kickoff);
+  const rightKickoff = canonicalClock(right?.kickoffTime ?? right?.kickoff);
+  if (!leftKickoff || !rightKickoff || leftKickoff !== rightKickoff) return false;
+  return true;
+}
+
 function applyPredictionPersistence(match, existing, capturedAt) {
+  // Sporttery provider ids are reused across distinct events. Persistence is
+  // allowed to inherit a cutoff, lock, revision or immutable decision only
+  // from the exact same event; otherwise an old cutoff can make a newly
+  // scheduled match look post-deadline and erase its freshly built reference
+  // recommendation.
+  existing = existing && predictionPersistenceSameEvent(existing, match) ? existing : null;
   const existingPredictions = enabledPredictions(Array.isArray(existing?.predictions) ? existing.predictions : []);
   const nextPredictions = enabledPredictions(Array.isArray(match?.predictions) ? match.predictions : []);
   const started = kickoffHasStarted(match, capturedAt) || match.status === "LIVE" || match.status === "FINISHED";
