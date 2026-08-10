@@ -4149,6 +4149,15 @@ function flatten(payload, sourceMethod, sourceUrl) {
   return rows;
 }
 
+function sportterySaleClockMatchesEvent(buyEndTime, kickoffTime) {
+  const cutoffMs = parseBeijingDateTime(buyEndTime);
+  const kickoffMs = parseBeijingDateTime(kickoffTime);
+  if (!Number.isFinite(cutoffMs) || !Number.isFinite(kickoffMs)) return false;
+  const earliestMs = kickoffMs - 72 * 60 * 60 * 1000;
+  const latestMs = kickoffMs + 30 * 60 * 1000;
+  return cutoffMs >= earliestMs && cutoffMs <= latestMs;
+}
+
 function mapSportteryRow(row, sourceMethod, sourceUrl) {
   const rowScore = scoreFromRow(row);
   const scoreHome = rowScore.home;
@@ -4165,7 +4174,17 @@ function mapSportteryRow(row, sourceMethod, sourceUrl) {
   const businessDate = normText(row.businessDate || row.matchNumDate)
     || inferSportteryBusinessDate(matchNo, matchDate)
     || matchDate;
-  const oddsInfo = sportteryOddsInfo(row, sourceUrl, sourceMethod);
+  const rawBuyEndTime = normText(
+    row.buyEndTime || row.matchEndTime || row.sellEndTime || row.stopSaleTime || row.endTime
+  );
+  const saleClockExplicit = Boolean(rawBuyEndTime);
+  const saleClockMatchesEvent = !saleClockExplicit
+    || sportterySaleClockMatchesEvent(rawBuyEndTime, kickoffTime);
+  // Sporttery provider ids are reused. Reject a market atom whose sale clock
+  // cannot belong to this kickoff instead of carrying old SP into a new event.
+  const oddsInfo = saleClockMatchesEvent
+    ? sportteryOddsInfo(row, sourceUrl, sourceMethod)
+    : { had: null, hhad: null };
   return {
     source: "sporttery",
     sourceMethod,
@@ -4174,7 +4193,7 @@ function mapSportteryRow(row, sourceMethod, sourceUrl) {
     matchNo,
     businessDate,
     matchDate,
-    buyEndTime: normText(row.buyEndTime || row.matchEndTime || row.sellEndTime || row.stopSaleTime || row.endTime),
+    buyEndTime: saleClockMatchesEvent ? rawBuyEndTime : "",
     homeTeam,
     awayTeam,
     homeRank: normText(row.homeRank),
