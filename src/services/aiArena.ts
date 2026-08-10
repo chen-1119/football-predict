@@ -1,4 +1,5 @@
 import type { Match, OutcomeProbability } from './mockData';
+import { buildApiUrl } from './runtimeUrls';
 
 export type ArenaPickCode = '1' | 'X' | '2';
 export type ArenaRiskStyle = 'steady' | 'balanced' | 'aggressive';
@@ -44,11 +45,23 @@ export interface ArenaAgentEntry extends ArenaAgentDefinition {
   investedMatches: number;
   totalStake: number;
   brierScore: number | null;
+  settledPredictions?: number;
+  won?: number;
+  lost?: number;
+  voided?: number;
   maxDrawdown: number;
   wealthRank: number | null;
   predictionRank: number | null;
   riskRank: number | null;
   stageScore: number | null;
+  riskReward?: number | null;
+  submissionHash?: string | null;
+  balanceHistory?: Array<{
+    at: string;
+    balance: number;
+    delta?: number;
+    matchId?: string;
+  }>;
 }
 
 export interface ArenaMatchEntry {
@@ -59,10 +72,19 @@ export interface ArenaMatchEntry {
   baseProbabilities: Record<ArenaPickCode, number>;
   marketProbabilities: Record<ArenaPickCode, number>;
   forecasts: Array<ArenaForecast & { agentId: string; agentName: string; color: string }>;
+  settlement?: {
+    status: 'SETTLED' | 'VOID';
+    outcome: ArenaPickCode | null;
+    scoreHome: number | null;
+    scoreAway: number | null;
+    settledAt: string;
+  } | null;
 }
 
 export interface BigFiveSurvivalArena {
-  version: 'ai-big-five-survival-preview-v1';
+  ok?: boolean;
+  version: 'ai-big-five-survival-preview-v1' | 'ai-big-five-survival-v2';
+  monthKey?: string;
   weekStart: string;
   weekEnd: string;
   generatedAt: string;
@@ -73,6 +95,41 @@ export interface BigFiveSurvivalArena {
   matches: ArenaMatchEntry[];
   agents: ArenaAgentEntry[];
   dates: string[];
+  state?: 'UNAVAILABLE' | 'FORMING' | 'READY' | 'LOCKED';
+  lockedAt?: string | null;
+  poolHash?: string | null;
+  submissionRootHash?: string | null;
+  standings?: ArenaAgentEntry[];
+  seasonStandings?: Array<{
+    agentId: string;
+    agentName: string;
+    color: string;
+    seasonPoints: number;
+    stages: number;
+    averageBrier: number | null;
+    bestStage: number;
+    rank: number;
+  }>;
+  awards?: {
+    monthChampion: { agentId: string; agentName: string; value: number } | null;
+    wealthKing: { agentId: string; agentName: string; value: number } | null;
+    accuracyKing: { agentId: string; agentName: string; value: number } | null;
+    riskKing: { agentId: string; agentName: string; value: number } | null;
+    upsetKing: { agentId: string; agentName: string; value: number } | null;
+    reckless: { agentId: string; agentName: string; value: number } | null;
+    bankrupt: Array<{ agentId: string; agentName: string }>;
+  } | null;
+  flopBoard?: Array<{
+    agentId: string;
+    agentName: string;
+    matchId: string;
+    match: string;
+    pick: ArenaPickCode;
+    confidence: number;
+    actual: ArenaPickCode;
+    loss: number;
+    settledAt: string;
+  }>;
   rules: {
     startingBalance: 10_000;
     predictionsPerAgent: number;
@@ -85,6 +142,13 @@ export interface BigFiveSurvivalArena {
     longOddsStakeMax: 500;
   };
   disclosure: 'strategy-simulation-not-external-model-calls';
+  formalStatisticsExcluded?: true;
+  integrity?: {
+    immutable: boolean;
+    inputSnapshotHash: string | null;
+    submissionRootHash: string | null;
+    stateHash: string;
+  };
 }
 
 const CODES: ArenaPickCode[] = ['1', 'X', '2'];
@@ -452,6 +516,41 @@ export const buildBigFiveSurvivalArena = (
     },
     disclosure: 'strategy-simulation-not-external-model-calls',
   };
+};
+
+const isSha256OrNull = (value: unknown) => value === null || /^[a-f0-9]{64}$/.test(String(value || ''));
+
+export const isPublishedBigFiveSurvivalArena = (value: unknown): value is BigFiveSurvivalArena => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const row = value as Partial<BigFiveSurvivalArena>;
+  if (row.version !== 'ai-big-five-survival-v2' || row.disclosure !== 'strategy-simulation-not-external-model-calls') return false;
+  if (row.formalStatisticsExcluded !== true || row.targetMatches !== 10) return false;
+  if (!Array.isArray(row.matches) || !Array.isArray(row.agents) || !Array.isArray(row.leagueSlots)) return false;
+  if (!Array.isArray(row.dates) || !Array.isArray(row.standings) || !Array.isArray(row.flopBoard)) return false;
+  if (!Array.isArray(row.seasonStandings)) return false;
+  if (!['FORMING', 'READY', 'LOCKED'].includes(String(row.state || ''))) return false;
+  if (row.agents.length !== 6 || row.leagueSlots.length !== 5) return false;
+  if (!Number.isInteger(row.availableMatches) || row.availableMatches! < 0 || row.availableMatches! > 10) return false;
+  if (!isSha256OrNull(row.poolHash) || !isSha256OrNull(row.submissionRootHash)) return false;
+  if (row.state === 'LOCKED') {
+    if (row.complete !== true || row.availableMatches !== 10) return false;
+    if (row.matches.length !== 10) return false;
+    if (!row.integrity?.immutable || !/^[a-f0-9]{64}$/.test(String(row.integrity.stateHash || ''))) return false;
+  }
+  return true;
+};
+
+export const fetchPublishedBigFiveSurvivalArena = async (
+  accessToken: string,
+  signal?: AbortSignal,
+): Promise<BigFiveSurvivalArena | null> => {
+  const response = await fetch(buildApiUrl('/api/v1/ai-arena'), {
+    headers: { authorization: `Bearer ${accessToken}` },
+    signal,
+  });
+  if (!response.ok) throw new Error(`AI arena HTTP ${response.status}`);
+  const payload: unknown = await response.json();
+  return isPublishedBigFiveSurvivalArena(payload) ? payload : null;
 };
 
 export const arenaPickLabel = (code: ArenaPickCode, language: 'zh' | 'en'): string => {

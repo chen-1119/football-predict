@@ -1,6 +1,8 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
+const { DatabaseSync } = require('node:sqlite');
 const ts = require('typescript');
 
 const root = path.join(__dirname, '..');
@@ -21,8 +23,17 @@ assert.equal(
   'aiArena.ts must transpile without syntax errors',
 );
 const moduleRecord = { exports: {} };
-new Function('exports', 'require', 'module', transpiled.outputText)(moduleRecord.exports, require, moduleRecord);
+const localRequire = (specifier) => specifier === './runtimeUrls'
+  ? { buildApiUrl: (endpoint) => endpoint }
+  : require(specifier);
+new Function('exports', 'require', 'module', transpiled.outputText)(moduleRecord.exports, localRequire, moduleRecord);
 const { buildBigFiveSurvivalArena, arenaWeekRange } = moduleRecord.exports;
+const {
+  PAYLOAD_VERSION,
+  STATE_VERSION,
+  updateAiArenaState,
+} = require('./aiArenaEngine.cjs');
+const { persistAiArenaSqlite } = require('./aiArenaSqlite.cjs');
 assert.equal(typeof buildBigFiveSurvivalArena, 'function');
 
 const leagues = [
@@ -119,10 +130,155 @@ assert.equal(
   'cups, non-official odds, finished matches, and missing probabilities must fail closed',
 );
 
+const lifecycleInput = fixtures.filter((row) => !row.id.endsWith('-overflow'));
+const firstCycle = updateAiArenaState({
+  matches: lifecycleInput,
+  state: null,
+  now: '2026-08-11T00:00:00.000Z',
+});
+assert.equal(firstCycle.state.version, STATE_VERSION);
+assert.equal(firstCycle.payload.version, PAYLOAD_VERSION);
+assert.equal(firstCycle.payload.state, 'LOCKED');
+assert.equal(firstCycle.payload.complete, true);
+assert.equal(firstCycle.payload.matches.length, 10);
+assert.equal(firstCycle.payload.agents.length, 6);
+assert.equal(firstCycle.payload.integrity.immutable, true);
+assert.match(firstCycle.payload.poolHash, /^[a-f0-9]{64}$/);
+assert.match(firstCycle.payload.submissionRootHash, /^[a-f0-9]{64}$/);
+for (const agent of firstCycle.payload.agents) {
+  assert.equal(agent.forecasts.length, 10);
+  assert.equal(agent.investedMatches, 3);
+  assert.ok(agent.totalStake >= 1500 && agent.totalStake <= 2500);
+  assert.match(agent.submissionHash, /^[a-f0-9]{64}$/);
+}
+
+const duplicateCycle = updateAiArenaState({
+  matches: lifecycleInput,
+  state: firstCycle.state,
+  now: '2026-08-11T00:00:00.000Z',
+});
+assert.equal(duplicateCycle.payload.poolHash, firstCycle.payload.poolHash);
+assert.equal(duplicateCycle.payload.submissionRootHash, firstCycle.payload.submissionRootHash);
+assert.equal(duplicateCycle.payload.integrity.stateHash, firstCycle.payload.integrity.stateHash);
+
+const delayed = lifecycleInput.map((match, index) => index === 0 ? {
+  ...match,
+  source: 'sporttery',
+  kickoffTime: new Date(Date.parse(match.kickoffTime) + 72 * 60 * 60 * 1000).toISOString(),
+  updatedAt: '2026-08-12T00:00:00.000Z',
+} : match);
+const postponedCycle = updateAiArenaState({
+  matches: delayed,
+  state: duplicateCycle.state,
+  now: '2026-08-12T00:00:00.000Z',
+});
+assert.equal(postponedCycle.payload.matches.filter((row) => row.settlement?.status === 'VOID').length, 1);
+
+const untrustedFinishedCycle = updateAiArenaState({
+  matches: lifecycleInput.map((match) => ({ ...match, status: 'FINISHED', scoreHome: 9, scoreAway: 0 })),
+  state: duplicateCycle.state,
+  now: '2026-08-14T15:00:00.000Z',
+});
+assert.equal(
+  untrustedFinishedCycle.payload.matches.filter((row) => row.settlement).length,
+  0,
+  'untrusted scores must not settle the arena',
+);
+
+const finishedRows = lifecycleInput.map((match, index) => ({
+  ...match,
+  source: 'sporttery',
+  status: 'FINISHED',
+  scoreHome: index % 3 === 0 ? 2 : 0,
+  scoreAway: index % 3 === 0 ? 1 : index % 3 === 1 ? 0 : 1,
+  eventVersion: `result-${index + 1}`,
+  resultProvenance: {
+    provider: 'sporttery',
+    source: 'sporttery:official-results',
+    sourceMatchId: match.id,
+    sourceStatus: 'FINISHED',
+    official: true,
+    trusted: true,
+    scoreHome: index % 3 === 0 ? 2 : 0,
+    scoreAway: index % 3 === 0 ? 1 : index % 3 === 1 ? 0 : 1,
+    kickoffTime: match.kickoffTime,
+    eventVersion: `result-${index + 1}`,
+  },
+}));
+const settledCycle = updateAiArenaState({
+  matches: finishedRows,
+  state: untrustedFinishedCycle.state,
+  now: '2026-08-14T16:00:00.000Z',
+});
+assert.equal(settledCycle.payload.matches.filter((row) => row.settlement).length, 10);
+assert.equal(settledCycle.payload.standings.length, 6);
+assert.equal(settledCycle.payload.seasonStandings.length, 6);
+assert.ok(settledCycle.payload.awards?.monthChampion);
+assert.ok(settledCycle.payload.flopBoard.length > 0);
+for (const row of settledCycle.payload.standings) {
+  assert.equal(row.settledPredictions, 10);
+  assert.ok(Number.isFinite(row.brierScore));
+  assert.ok(row.balance >= 0);
+  assert.ok(row.wealthRank >= 1 && row.wealthRank <= 6);
+  assert.ok(row.predictionRank >= 1 && row.predictionRank <= 6);
+  assert.ok(row.riskRank >= 1 && row.riskRank <= 6);
+  assert.ok(Number.isFinite(row.stageScore));
+  assert.ok(row.balanceHistory.length >= 1);
+}
+assert.equal(settledCycle.payload.formalStatisticsExcluded, true);
+assert.equal(settledCycle.payload.disclosure, 'strategy-simulation-not-external-model-calls');
+
+const septemberFixtures = lifecycleInput.map((match, index) => ({
+  ...match,
+  id: `sep-${match.id}`,
+  sourceMatchId: `sep-${match.id}`,
+  kickoffTime: `2026-09-${String(1 + (index % 3)).padStart(2, '0')}T20:00:00+08:00`,
+  businessDate: `2026-09-${String(1 + (index % 3)).padStart(2, '0')}`,
+}));
+const resetCycle = updateAiArenaState({
+  matches: septemberFixtures,
+  state: settledCycle.state,
+  now: '2026-09-01T00:00:00.000Z',
+});
+assert.equal(resetCycle.payload.monthKey, '2026-09');
+assert.equal(resetCycle.payload.state, 'LOCKED');
+assert.ok(resetCycle.payload.agents.every((row) => row.balance === 10_000));
+assert.ok(resetCycle.payload.agents.every((row) => row.brierScore === null));
+assert.ok(resetCycle.payload.seasonStandings.some((row) => row.seasonPoints > 0));
+
+const sqliteTempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'football-ai-arena-'));
+try {
+  const sqlitePath = path.join(sqliteTempDir, 'ai-arena.db');
+  const persisted = persistAiArenaSqlite({
+    dbPath: sqlitePath,
+    state: settledCycle.state,
+    payload: settledCycle.payload,
+  });
+  assert.equal(persisted.counts.players, 6);
+  assert.equal(persisted.counts.predictions, 60);
+  assert.ok(persisted.counts.balanceHistory >= 6);
+  const db = new DatabaseSync(sqlitePath, { readOnly: true });
+  try {
+    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all().map((row) => row.name);
+    assert.ok(tables.includes('ai_players'));
+    assert.ok(tables.includes('ai_predictions'));
+    assert.ok(tables.includes('ai_balance_history'));
+    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM ai_predictions WHERE settled_at IS NOT NULL').get().count, 60);
+  } finally {
+    db.close();
+  }
+} finally {
+  fs.rmSync(sqliteTempDir, { recursive: true, force: true });
+}
+
 const appSource = fs.readFileSync(path.join(root, 'src', 'App.tsx'), 'utf8');
 const listSource = fs.readFileSync(path.join(root, 'src', 'pages', 'PredictionsList.tsx'), 'utf8');
 const arenaSource = fs.readFileSync(path.join(root, 'src', 'pages', 'AIArena.tsx'), 'utf8');
 const navbarSource = fs.readFileSync(path.join(root, 'src', 'components', 'Navbar.tsx'), 'utf8');
+const previewSource = fs.readFileSync(path.join(root, 'src', 'components', 'predictions', 'AIArenaPreview.tsx'), 'utf8');
+const serverSource = fs.readFileSync(path.join(root, 'server', 'index.cjs'), 'utf8');
+const generationSource = fs.readFileSync(path.join(root, 'server', 'dataGenerationBundle.cjs'), 'utf8');
+const syncSource = fs.readFileSync(path.join(root, 'scripts', 'syncData.cjs'), 'utf8');
 assert.match(appSource, /path="\/ai-arena"/);
 assert.match(appSource, /path="\/ai-arena\/:matchId"/);
 assert.doesNotMatch(listSource, /AIArenaPreview/);
@@ -130,6 +286,13 @@ assert.match(arenaSource, /AI 五大联赛生存战/);
 assert.match(arenaSource, /strategy-simulation/);
 assert.match(navbarSource, /key: 'arena'/);
 assert.match(navbarSource, /AI生存战/);
+assert.match(arenaSource, /fetchPublishedBigFiveSurvivalArena/);
+assert.match(previewSource, /survival-flop-board/);
+assert.match(previewSource, /balanceHistory/);
+assert.match(serverSource, /\/api\/v1\/ai-arena/);
+assert.match(generationSource, /ai-arena\.json/);
+assert.match(syncSource, /updateAiArenaState/);
+assert.match(syncSource, /AI_ARENA_STATE_PATH/);
 
 console.log(JSON.stringify({
   ok: true,
@@ -144,5 +307,12 @@ console.log(JSON.stringify({
     stake: agent.totalStake,
   })),
   deterministic: true,
+  immutableLifecycle: {
+    version: settledCycle.payload.version,
+    poolHash: settledCycle.payload.poolHash,
+    submissionRootHash: settledCycle.payload.submissionRootHash,
+    settledMatches: settledCycle.payload.matches.filter((row) => row.settlement).length,
+    flopRows: settledCycle.payload.flopBoard.length,
+  },
   formalStatisticsExcluded: true,
 }, null, 2));

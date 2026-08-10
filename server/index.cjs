@@ -400,6 +400,7 @@ const immutablePublicationMetadataCache = new Map();
 const immutablePublicationMetadataFiles = new Set([
   "sync-meta.json",
   "model-evaluation.json",
+  "ai-arena.json",
 ]);
 const readStablePublicationMetadata = (basePublication, fileName, fallback = null) => {
   if (!basePublication?.context || !immutablePublicationMetadataFiles.has(fileName)) {
@@ -2749,6 +2750,7 @@ const protectedApiPaths = new Set([
   "/api/data/five-hundred-details",
   "/api/data/pre-match-signals",
   "/api/data/api-football",
+  "/api/v1/ai-arena",
   "/api/v1/research/search",
   "/api/v1/research/status"
 ]);
@@ -10442,6 +10444,38 @@ const handleApi = async (req, res, url) => {
     return sendJsonCached(req, res, await getModelEvaluation({ admin: detail }), { maxAgeSeconds: detail ? 0 : 60 });
   }
 
+  if (url.pathname === "/api/v1/ai-arena") {
+    const basePublication = resolveBasePublication();
+    const arena = readStablePublicationMetadata(basePublication, "ai-arena.json", null);
+    return sendJsonCached(req, res, arena && typeof arena === "object" && !Array.isArray(arena)
+      ? arena
+      : {
+          ok: true,
+          version: "ai-big-five-survival-v2",
+          generatedAt: null,
+          state: "UNAVAILABLE",
+          targetMatches: 10,
+          availableMatches: 0,
+          complete: false,
+          leagueSlots: [],
+          matches: [],
+          agents: [],
+          standings: [],
+          seasonStandings: [],
+          dates: [],
+          flopBoard: [],
+          awards: null,
+          integrity: {
+            immutable: false,
+            poolHash: null,
+            submissionRootHash: null,
+            stateHash: null,
+          },
+          disclosure: "strategy-simulation-not-external-model-calls",
+          formalStatisticsExcluded: true,
+        }, { maxAgeSeconds: 10 });
+  }
+
   if (url.pathname === "/api/v1/matches/current") {
     return sendJsonCached(req, res, await buildV1CurrentPayload(url), { maxAgeSeconds: 5 });
   }
@@ -10733,7 +10767,8 @@ const handleStatic = async (req, res, url) => {
     ["/data/prediction-snapshots.json", "/api/v1/model/evaluation"],
     ["/data/model-calibration.json", "/api/v1/model/evaluation"],
     ["/data/model-strategy.json", "/api/v1/model/evaluation"],
-    ["/data/gpt-predictions.json", "/api/v1/model/evaluation"]
+    ["/data/gpt-predictions.json", "/api/v1/model/evaluation"],
+    ["/data/ai-arena.json", "/api/v1/ai-arena"]
   ]);
   const replacementApi = disabledLargeStaticPayloads.get(pathname);
   if (replacementApi) {

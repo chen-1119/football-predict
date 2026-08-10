@@ -14,16 +14,38 @@ import {
 import { Link, useParams } from 'react-router-dom';
 import { AIArenaPreview } from '../components/predictions/AIArenaPreview';
 import { useApp } from '../context/AppContextCore';
-import { arenaPickLabel, buildBigFiveSurvivalArena } from '../services/aiArena';
+import {
+  arenaPickLabel,
+  buildBigFiveSurvivalArena,
+  fetchPublishedBigFiveSurvivalArena,
+} from '../services/aiArena';
+import type { BigFiveSurvivalArena } from '../services/aiArena';
 import '../styles/ai-arena.css';
 
 const pct = (value: number) => `${Math.round(value * 100)}%`;
 
 export const AIArena: React.FC = () => {
   const { matchId } = useParams();
-  const { language, matches } = useApp();
+  const { language, matches, accessSession } = useApp();
   const decodedMatchId = matchId ? decodeURIComponent(matchId) : '';
-  const arena = React.useMemo(() => buildBigFiveSurvivalArena(matches), [matches]);
+  const localArena = React.useMemo(() => buildBigFiveSurvivalArena(matches), [matches]);
+  const [publishedArena, setPublishedArena] = React.useState<BigFiveSurvivalArena | null>(null);
+  React.useEffect(() => {
+    if (!accessSession?.token) {
+      setPublishedArena(null);
+      return undefined;
+    }
+    const controller = new AbortController();
+    fetchPublishedBigFiveSurvivalArena(accessSession.token, controller.signal)
+      .then((payload) => {
+        if (!controller.signal.aborted) setPublishedArena(payload);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setPublishedArena(null);
+      });
+    return () => controller.abort();
+  }, [accessSession?.token, matches]);
+  const arena = publishedArena || localArena;
 
   if (!decodedMatchId) {
     return (
@@ -40,6 +62,7 @@ export const AIArena: React.FC = () => {
               <span><Target size={14} /> {arena.availableMatches}/10 {language === 'zh' ? '场' : 'matches'}</span>
               <span><Coins size={14} /> 10,000 {language === 'zh' ? '初始积分' : 'starting points'}</span>
               <span><LockKeyhole size={14} /> {language === 'zh' ? '一次提交后锁定' : 'One locked submission'}</span>
+              {arena.state && <span><ShieldCheck size={14} /> {arena.state}</span>}
             </div>
           </div>
           <div className="survival-stage-card">
@@ -61,7 +84,16 @@ export const AIArena: React.FC = () => {
           ? '当前为策略模拟基础版：六个名称代表固定决策人格，尚未声称已调用对应外部大模型。虚拟积分不可充值、提现或作为跟投注建议；数据不计入正式模型命中率。'
           : 'This is a strategy-simulation foundation. Names represent fixed decision profiles and do not claim live calls to external models. Virtual points cannot be purchased, cashed out, or treated as betting advice, and results are excluded from formal model metrics.'}</p></div>
 
-        <AIArenaPreview matches={matches} />
+        {arena.integrity?.immutable && (
+          <div className="survival-integrity" role="status">
+            <LockKeyhole size={16} />
+            <span>{language === 'zh' ? '本周提交已锁定' : 'Weekly submissions locked'}</span>
+            <code>{arena.submissionRootHash?.slice(0, 16)}</code>
+            <small>{arena.lockedAt ? new Date(arena.lockedAt).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-GB', { hour12: false, timeZone: 'Asia/Shanghai' }) : ''}</small>
+          </div>
+        )}
+
+        <AIArenaPreview matches={matches} arena={arena} />
 
         <section className="survival-rules-panel">
           <div className="survival-section-heading">
@@ -69,9 +101,10 @@ export const AIArena: React.FC = () => {
           </div>
           <div className="survival-rule-grid">
             <div><strong>10,000</strong><span>{language === 'zh' ? '每月重置的初始虚拟积分' : 'virtual points reset each month'}</span></div>
-            <div><strong>&lt; 3,000</strong><span>{language === 'zh' ? '进入黄区，提示仓位风险' : 'yellow zone risk warning'}</span></div>
-            <div><strong>&lt; 1,500</strong><span>{language === 'zh' ? '进入红区，接近淘汰' : 'red zone near elimination'}</span></div>
+            <div><strong>&lt; 3,000</strong><span>{language === 'zh' ? '进入黄区，单场最多投入 800' : 'yellow zone: 800 max per match'}</span></div>
+            <div><strong>&lt; 1,500</strong><span>{language === 'zh' ? '进入红区，每周最多 1,000，禁投高于 3.50' : 'red zone: 1,000 weekly cap; no odds above 3.50'}</span></div>
             <div><strong>0</strong><span>{language === 'zh' ? '破产后仍预测，但停止投资至下月' : 'bankrupt: keep forecasting, stop staking until reset'}</span></div>
+            <div><strong>12 + 8 + 5</strong><span>{language === 'zh' ? '财富榜、Brier 榜与风控奖励合并阶段积分' : 'wealth, Brier and risk rewards form the stage score'}</span></div>
           </div>
         </section>
       </article>
@@ -102,6 +135,11 @@ export const AIArena: React.FC = () => {
           <p>{new Date(selected.match.kickoffTime).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-GB', { hour12: false, timeZone: 'Asia/Shanghai' })}</p>
         </div>
         <span className="survival-lock"><LockKeyhole size={15} /> {language === 'zh' ? '同一赛前快照' : 'Same pre-match snapshot'}</span>
+        {selected.settlement?.status === 'SETTLED' && (
+          <strong className="survival-detail-result">
+            {selected.settlement.scoreHome}-{selected.settlement.scoreAway} · {arenaPickLabel(selected.settlement.outcome!, language)}
+          </strong>
+        )}
       </header>
 
       <section className="survival-baseline">
@@ -123,6 +161,11 @@ export const AIArena: React.FC = () => {
       <section className="survival-analysis-grid" aria-label={language === 'zh' ? '六AI分析' : 'Six AI analyses'}>
         {arena.agents.map((agent) => {
           const forecast = agent.forecasts.find((row) => row.matchId === selected.match.id)!;
+          const settledDelta = selected.settlement?.status === 'SETTLED' && forecast.investment
+            ? (forecast.pick === selected.settlement.outcome
+              ? forecast.stake * (selected.odds[forecast.pick] - 1)
+              : -forecast.stake)
+            : null;
           return (
             <article className={`survival-analysis-card is-${agent.style}`} key={agent.id}>
               <header>
@@ -139,6 +182,8 @@ export const AIArena: React.FC = () => {
                 <span>{language === 'zh' ? '信心' : 'Confidence'} <b>{'★'.repeat(forecast.confidence)}{'☆'.repeat(5 - forecast.confidence)}</b></span>
                 <span>{language === 'zh' ? '比分' : 'Score'} <b>{forecast.projectedScore}</b></span>
                 <span>EV <b>{forecast.expectedValue >= 0 ? '+' : ''}{(forecast.expectedValue * 100).toFixed(1)}%</b></span>
+                {selected.settlement?.status === 'SETTLED' && <span>{language === 'zh' ? '赛果' : 'Result'} <b>{forecast.pick === selected.settlement.outcome ? '✓' : '×'}</b></span>}
+                {settledDelta !== null && <span>{language === 'zh' ? '盈亏' : 'P/L'} <b>{settledDelta >= 0 ? '+' : ''}{settledDelta.toFixed(0)}</b></span>}
               </div>
               <div className="survival-mini-probabilities">
                 {(['1', 'X', '2'] as const).map((code) => <span key={code}>{arenaPickLabel(code, language)} <b>{pct(forecast.probabilities[code])}</b></span>)}
