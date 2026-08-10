@@ -6669,6 +6669,7 @@ run_trusted_candidate_verifier env PATH="$PATH" HOME="$BUILD_HOME" ADMIN_TOKEN="
   MODEL_INPUT_AUDIT_MIN_MARKET_ROWS=30 \
   VERIFY_BASE_URL="http://${HOST}:${CANDIDATE_PORT}" VERIFY_START_SERVER=0 VERIFY_REQUIRE_SQLITE=1 \
   SERVER_STORE_DIR="$CANDIDATE_STORE_DIR" DATASTORE_SQLITE_PATH="$CANDIDATE_SQLITE_PATH" \
+  VERIFY_REQUIRE_AI_ARENA=1 \
   "$NODE_HOME/bin/node" scripts/verifyProductionReadiness.cjs \
   || abort_before_swap "candidate production readiness failed"
 

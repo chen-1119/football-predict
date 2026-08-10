@@ -290,6 +290,7 @@ assert.match(arenaSource, /fetchPublishedBigFiveSurvivalArena/);
 assert.match(previewSource, /survival-flop-board/);
 assert.match(previewSource, /balanceHistory/);
 assert.match(serverSource, /\/api\/v1\/ai-arena/);
+assert.match(serverSource, /\/api\/v1\/ai-arena\/status/);
 assert.match(generationSource, /ai-arena\.json/);
 assert.match(syncSource, /updateAiArenaState/);
 assert.match(syncSource, /AI_ARENA_STATE_PATH/);

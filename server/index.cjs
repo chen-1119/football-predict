@@ -10444,6 +10444,45 @@ const handleApi = async (req, res, url) => {
     return sendJsonCached(req, res, await getModelEvaluation({ admin: detail }), { maxAgeSeconds: detail ? 0 : 60 });
   }
 
+  if (url.pathname === "/api/v1/ai-arena/status") {
+    const basePublication = resolveBasePublication();
+    const arena = readStablePublicationMetadata(basePublication, "ai-arena.json", null);
+    const validArena = arena && typeof arena === "object" && !Array.isArray(arena);
+    const agents = validArena && Array.isArray(arena.agents) ? arena.agents : [];
+    const leagueSlots = validArena && Array.isArray(arena.leagueSlots) ? arena.leagueSlots : [];
+    const hashPresent = (value) => /^[a-f0-9]{64}$/.test(String(value || ""));
+    return sendJsonCached(req, res, {
+      ok: validArena
+        && arena.version === "ai-big-five-survival-v2"
+        && agents.length === 6
+        && leagueSlots.length === 5
+        && arena.formalStatisticsExcluded === true,
+      version: "ai-big-five-survival-status-v1",
+      checkedAt: new Date().toISOString(),
+      publicationVersion: validArena ? arena.version || null : null,
+      state: validArena ? arena.state || "UNAVAILABLE" : "UNAVAILABLE",
+      targetMatches: validArena ? Number(arena.targetMatches || 0) : 0,
+      availableMatches: validArena ? Number(arena.availableMatches || 0) : 0,
+      complete: validArena ? arena.complete === true : false,
+      agents: agents.length,
+      leagueSlots: leagueSlots.map((row) => ({
+        code: String(row?.code || ""),
+        count: Number(row?.count || 0),
+        target: Number(row?.target || 0),
+      })),
+      formalStatisticsExcluded: validArena ? arena.formalStatisticsExcluded === true : true,
+      disclosure: validArena ? arena.disclosure || null : null,
+      integrity: {
+        immutable: validArena ? arena.integrity?.immutable === true : false,
+        poolHashPresent: validArena ? hashPresent(arena.poolHash || arena.integrity?.poolHash) : false,
+        submissionRootHashPresent: validArena
+          ? hashPresent(arena.submissionRootHash || arena.integrity?.submissionRootHash)
+          : false,
+        stateHashPresent: validArena ? hashPresent(arena.integrity?.stateHash) : false,
+      },
+    }, { maxAgeSeconds: 10 });
+  }
+
   if (url.pathname === "/api/v1/ai-arena") {
     const basePublication = resolveBasePublication();
     const arena = readStablePublicationMetadata(basePublication, "ai-arena.json", null);
