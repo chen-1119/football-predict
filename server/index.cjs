@@ -7330,6 +7330,20 @@ const recommendationCoverageHandicapLine = (value) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const recommendationCoverageOfficialMarketAvailable = (match, poolCode) => {
+  const code = String(poolCode || "").toUpperCase();
+  if (code === "HAD") {
+    return match?.oddsSource === "sporttery:HAD"
+      && recommendationCoverageOddsTripletValid(match?.odds);
+  }
+  if (code === "HHAD") {
+    return match?.handicapOddsSource === "sporttery:HHAD"
+      && recommendationCoverageOddsTripletValid(match?.handicapOdds)
+      && recommendationCoverageHandicapLine(match?.handicapLine) !== null;
+  }
+  return false;
+};
+
 const dualMarketDecisionBindingValid = (match) => (
   verifyDualMarketDecisionBinding(match).valid
 );
@@ -7387,9 +7401,12 @@ const buildCurrentRecommendationCoverage = async () => {
     if (match?.probabilityModel?.inputSufficiency?.sufficient === true) {
       trainingInputSufficientMatches += 1;
     }
-    const hhadMarketAvailable = recommendationCoverageOddsTripletValid(match?.handicapOdds)
-      && recommendationCoverageHandicapLine(match?.handicapLine) !== null;
-    const hadMarketAvailable = recommendationCoverageOddsTripletValid(match?.odds);
+    // Atomic HAD/HHAD coverage is an official-market integrity gate. A 500.com
+    // supplemental quote can support analysis, but it has no Sporttery
+    // collector attestation and therefore must neither masquerade as official
+    // SP nor make an otherwise valid reference recommendation fail release.
+    const hhadMarketAvailable = recommendationCoverageOfficialMarketAvailable(match, "HHAD");
+    const hadMarketAvailable = recommendationCoverageOfficialMarketAvailable(match, "HAD");
     if (hhadMarketAvailable) {
       hhadMarketMatches += 1;
       if (!hadMarketAvailable) {

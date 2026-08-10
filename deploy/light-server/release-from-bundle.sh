@@ -4604,6 +4604,78 @@ if (
 NODE
 }
 
+wait_for_release_candidate_heartbeat_public_budget() {
+  local unit="$RELEASE_HEARTBEAT_KEEPER_UNIT"
+  local control_file="$RELEASE_HEARTBEAT_KEEPER_CONTROL_FILE"
+  local heartbeat_file="$LIVE_STORE_DIR/candidate-prospective-capture-status.json"
+  local attempt max_attempts
+  [ -n "$unit" ] && [ -n "$control_file" ] || return 1
+  max_attempts=$((RELEASE_HEARTBEAT_KEEPER_START_TIMEOUT_SECONDS * 5))
+  for attempt in $(seq 1 "$max_attempts"); do
+    if systemctl is-active --quiet "$unit" && run_as_service_user "$NODE_HOME/bin/node" - \
+      "$control_file" "$heartbeat_file" "$unit" \
+      "$APP_DIR/scripts/runReleaseCandidateHeartbeatKeeper.cjs" \
+      "$APP_DIR/server/candidateHeartbeatSchedule.cjs" <<'NODE'
+const fs = require("node:fs");
+const [controlPath, heartbeatPath, expectedInstanceId, matcherModule, scheduleModule] = process.argv.slice(2);
+const readRegularJson = (filePath, maxBytes) => {
+  const flags = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0);
+  const fd = fs.openSync(filePath, flags);
+  try {
+    const info = fs.fstatSync(fd);
+    if (!info.isFile() || info.nlink !== 1 || info.size > maxBytes) {
+      throw new Error("unsafe keeper public-budget evidence file");
+    }
+    return JSON.parse(fs.readFileSync(fd, "utf8"));
+  } finally {
+    fs.closeSync(fd);
+  }
+};
+const { exactHeartbeatMatches } = require(matcherModule);
+const { candidateHeartbeatAttemptBudget } = require(scheduleModule);
+const control = readRegularJson(controlPath, 1024 * 1024);
+const heartbeat = readRegularJson(heartbeatPath, 16 * 1024 * 1024);
+const budget = candidateHeartbeatAttemptBudget({
+  evaluatedAt: heartbeat?.evaluatedAt,
+  nowMs: Date.now(),
+  recoveryAttempt: false,
+});
+if (
+  control?.version !== "release-candidate-heartbeat-keeper-v2"
+  || control?.instanceId !== expectedInstanceId
+  || control?.ok !== true
+  || control?.state !== "running"
+  || !Number.isSafeInteger(control?.captureSequence)
+  || control.captureSequence < 1
+  || control?.lastEvaluatedAt !== heartbeat?.evaluatedAt
+  || !exactHeartbeatMatches(heartbeat, control.lastEvaluatedAt, {
+    requireFresh: true,
+    maxAgeMs: 120_000,
+  })
+  || budget?.budgetFits !== true
+) process.exit(1);
+process.stdout.write(JSON.stringify({
+  captureSequence: control.captureSequence,
+  evaluatedAt: heartbeat.evaluatedAt,
+  heartbeatAgeMs: budget.heartbeatAgeMs,
+  nextAttemptTimeoutMs: budget.timeoutMs,
+  projectedCompletionAgeMs: budget.projectedCompletionAgeMs,
+}));
+NODE
+    then
+      log "release heartbeat keeper has a fresh public-readiness attempt budget"
+      return 0
+    fi
+    release_candidate_heartbeat_keeper_has_latched_failure && break
+    systemctl is-failed --quiet "$unit" && break
+    systemctl is-active --quiet "$unit" || break
+    sleep 0.2
+  done
+  journalctl -u "$unit" --no-pager -n 80 >&2 || true
+  printf 'release heartbeat keeper did not publish a public-readiness-budget heartbeat\n' >&2
+  return 1
+}
+
 release_candidate_heartbeat_keeper_has_latched_failure() {
   local unit="$RELEASE_HEARTBEAT_KEEPER_UNIT"
   local control_file="$RELEASE_HEARTBEAT_KEEPER_CONTROL_FILE"
@@ -6821,6 +6893,8 @@ sync -f "$APP_DIR" \
   || rollback "candidate release continuity marker directory sync failed"
 release_candidate_heartbeat_keeper_is_healthy \
   || rollback "release heartbeat keeper failed before public readiness"
+wait_for_release_candidate_heartbeat_public_budget \
+  || rollback "release heartbeat keeper lacked a fresh public readiness budget"
 
 if [ -n "$PUBLIC_BASE_URL" ]; then
   log "verify public origin ${PUBLIC_BASE_URL}"

@@ -3317,6 +3317,10 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
   const workerDrainBody = extractFunction(bundleRelease, "wait_for_frozen_worker_children_to_drain");
   const workerChildBody = extractFunction(bundleRelease, "frozen_worker_live_child_pids");
   const keeperHealthBody = extractFunction(bundleRelease, "release_candidate_heartbeat_keeper_is_healthy");
+  const keeperPublicBudgetBody = extractFunction(
+    bundleRelease,
+    "wait_for_release_candidate_heartbeat_public_budget",
+  );
   const keeperBaselineBody = extractFunction(
     bundleRelease,
     "release_candidate_heartbeat_keeper_clean_baseline",
@@ -3463,6 +3467,11 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
   assert.match(keeperHealthBody, /release-candidate-heartbeat-keeper-v2/);
   assert.match(keeperHealthBody, /control\?\.lastRegistryRootHash !== heartbeat\?\.audit\?\.rootHash/);
   assert.match(keeperHealthBody, /control\?\.captureSequence/);
+  assert.match(keeperPublicBudgetBody, /candidateHeartbeatAttemptBudget/);
+  assert.match(keeperPublicBudgetBody, /budget\?\.budgetFits !== true/);
+  assert.match(keeperPublicBudgetBody, /control\?\.lastEvaluatedAt !== heartbeat\?\.evaluatedAt/);
+  assert.match(keeperPublicBudgetBody, /release_candidate_heartbeat_keeper_has_latched_failure/);
+  assert.match(keeperPublicBudgetBody, /RELEASE_HEARTBEAT_KEEPER_START_TIMEOUT_SECONDS/);
   assert.match(keeperFailureBody, /release-candidate-heartbeat-keeper-v2/);
   assert.match(keeperFailureBody, /control\?\.state !== "failed-latched"/);
   assert.match(keeperFailureBody, /control\?\.awaitingExplicitStop !== true/);
@@ -3508,12 +3517,17 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
     "release_candidate_heartbeat_keeper_is_healthy",
     localReadinessIndex,
   );
+  const keeperPublicBudgetIndex = main.indexOf(
+    "wait_for_release_candidate_heartbeat_public_budget",
+    keeperHealthAfterLocalIndex,
+  );
   const keeperStopIndex = main.indexOf("stop_release_candidate_heartbeat_keeper clean", remoteReadinessIndex);
   assert.ok(firstCaptureRefreshIndex > workerIdleIndex && firstCaptureRefreshIndex < workerFreezeIndex);
   assert.ok(workerFreezeIndex < localReadinessIndex);
   assert.ok(workerDrainIndex > workerFreezeIndex && workerDrainIndex < keeperStartIndex);
   assert.ok(keeperStartIndex > workerFreezeIndex && keeperStartIndex < localReadinessIndex);
   assert.ok(keeperHealthAfterLocalIndex > localReadinessIndex && keeperHealthAfterLocalIndex < remoteReadinessIndex);
+  assert.ok(keeperPublicBudgetIndex > keeperHealthAfterLocalIndex && keeperPublicBudgetIndex < remoteReadinessIndex);
   assert.ok(keeperStopIndex > remoteReadinessIndex);
   assertOrdered(stopBody, [
     "stop_release_candidate_heartbeat_keeper",
@@ -3532,6 +3546,7 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
     "clear_release_worker_priority_request",
     "scripts/verifyProductionReadiness.cjs",
     "release_candidate_heartbeat_keeper_is_healthy",
+    "wait_for_release_candidate_heartbeat_public_budget",
     "scripts/verifyRemotePublicReadiness.cjs",
     "stop_release_candidate_heartbeat_keeper",
     "resume_worker_after_readiness",
