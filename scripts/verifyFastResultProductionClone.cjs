@@ -9,6 +9,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const { spawnSync } = require("node:child_process");
 const { DatabaseSync } = require("node:sqlite");
 const {
   readFastResultReceiptState,
@@ -42,11 +43,12 @@ const readArg = (name) => {
 const sqliteArg = readArg("--sqlite-path") || process.env.FAST_RESULT_PRODUCTION_CLONE_SQLITE_PATH;
 if (!sqliteArg || args.includes("--help") || args.includes("-h")) usage();
 if (args.some((value, index) => value.startsWith("--")
-  && !["--sqlite-path", "--require-receipt"].includes(value)
+  && !["--sqlite-path", "--require-receipt", "--transaction-child"].includes(value)
   && args[index - 1] !== "--sqlite-path")) usage();
 
 const sqlitePath = path.resolve(sqliteArg);
 const requireReceipt = args.includes("--require-receipt") || process.env.FAST_RESULT_PRODUCTION_CLONE_REQUIRE_RECEIPT === "1";
+const transactionChild = args.includes("--transaction-child");
 const check = (condition, message) => {
   if (!condition) throw new Error(message);
 };
@@ -92,13 +94,17 @@ const sqliteSidecarState = (filePath) => Object.fromEntries(
     return [suffix, stableFileIdentity(sidecarPath)];
   })
 );
-const sameSidecarContent = (left, right) => (
-  Object.keys(left).every((suffix) => {
-    const before = left[suffix];
-    const after = right[suffix];
-    if (!before || !after) return before === after;
-    return sameFileContent(before, after);
+const sidecarsContainNoTransactionalData = (state) => (
+  ["-journal", "-wal"].every((suffix) => {
+    const sidecar = state[suffix];
+    return !sidecar || Number(sidecar.size) === 0;
   })
+);
+const sidecarSummary = (state) => Object.fromEntries(
+  Object.entries(state).map(([suffix, value]) => [suffix, value ? {
+    size: value.size,
+    sha256: value.sha256,
+  } : null])
 );
 const parsePayload = (value) => {
   try { return JSON.parse(String(value || "")); } catch { return null; }
@@ -174,42 +180,74 @@ const runAttempt = (db) => {
   }
 };
 
-let db = null;
-try {
-  const beforeFile = stableFileIdentity(sqlitePath);
-  const beforeSidecars = sqliteSidecarState(sqlitePath);
-  db = new DatabaseSync(sqlitePath);
-  db.exec("PRAGMA busy_timeout = 60000");
-  const first = runAttempt(db);
-  const second = runAttempt(db);
-  check(
-    first.verified.receiptRootHash === second.verified.receiptRootHash
-      && first.verified.authorityRootHash === second.verified.authorityRootHash,
-    "repeated clone migration changed a receipt or authority root",
-  );
-  db.close();
-  db = null;
-  const afterFile = stableFileIdentity(sqlitePath);
-  const afterSidecars = sqliteSidecarState(sqlitePath);
-  check(sameFileContent(beforeFile, afterFile), "production clone bytes changed during rolled-back migration verification");
-  check(sameSidecarContent(beforeSidecars, afterSidecars), "production clone sidecars changed during rolled-back migration verification");
-  process.stdout.write(`${JSON.stringify({
-    ok: true,
-    verifier: "fast-result-production-clone-v2",
-    sqlitePath,
-    requireReceipt,
-    cloneUnchanged: true,
-    byteIdentity: {
-      size: afterFile.size,
-      sha256: afterFile.sha256,
-      mtimeChanged: beforeFile.mtimeNs !== afterFile.mtimeNs,
-      sidecarsUnchanged: true,
-    },
-    first,
-    second,
-  }, null, 2)}\n`);
-} catch (error) {
-  try { db?.close(); } catch { /* nothing to do */ }
-  process.stderr.write(`${error.stack || error.message || String(error)}\n`);
-  process.exitCode = 1;
-}
+const runTransactionChild = () => {
+  let db = null;
+  try {
+    db = new DatabaseSync(sqlitePath);
+    db.exec("PRAGMA busy_timeout = 60000");
+    const first = runAttempt(db);
+    const second = runAttempt(db);
+    check(
+      first.verified.receiptRootHash === second.verified.receiptRootHash
+        && first.verified.authorityRootHash === second.verified.authorityRootHash,
+      "repeated clone migration changed a receipt or authority root",
+    );
+    db.close();
+    db = null;
+    process.stdout.write(`${JSON.stringify({ first, second })}\n`);
+  } catch (error) {
+    try { db?.close(); } catch { /* nothing to do */ }
+    process.stderr.write(`${error.stack || error.message || String(error)}\n`);
+    process.exitCode = 1;
+  }
+};
+
+const runParent = () => {
+  try {
+    const beforeFile = stableFileIdentity(sqlitePath);
+    const beforeSidecars = sqliteSidecarState(sqlitePath);
+    check(
+      sidecarsContainNoTransactionalData(beforeSidecars),
+      "production clone has transactional SQLite sidecar data before verification",
+    );
+    const childArgs = [__filename, "--sqlite-path", sqlitePath, "--transaction-child"];
+    if (requireReceipt) childArgs.push("--require-receipt");
+    const child = spawnSync(process.execPath, childArgs, {
+      encoding: "utf8",
+      maxBuffer: 64 * 1024 * 1024,
+      env: process.env,
+    });
+    check(child.status === 0, String(child.stderr || child.stdout || "transaction child failed").trim());
+    const transaction = JSON.parse(String(child.stdout || "{}"));
+    const afterFile = stableFileIdentity(sqlitePath);
+    const afterSidecars = sqliteSidecarState(sqlitePath);
+    check(sameFileContent(beforeFile, afterFile), "production clone bytes changed during rolled-back migration verification");
+    check(
+      sidecarsContainNoTransactionalData(afterSidecars),
+      "production clone has transactional SQLite sidecar data after verification",
+    );
+    process.stdout.write(`${JSON.stringify({
+      ok: true,
+      verifier: "fast-result-production-clone-v2",
+      sqlitePath,
+      requireReceipt,
+      cloneUnchanged: true,
+      byteIdentity: {
+        size: afterFile.size,
+        sha256: afterFile.sha256,
+        mtimeChanged: beforeFile.mtimeNs !== afterFile.mtimeNs,
+        sidecarsClean: true,
+        beforeSidecars: sidecarSummary(beforeSidecars),
+        afterSidecars: sidecarSummary(afterSidecars),
+      },
+      first: transaction.first,
+      second: transaction.second,
+    }, null, 2)}\n`);
+  } catch (error) {
+    process.stderr.write(`${error.stack || error.message || String(error)}\n`);
+    process.exitCode = 1;
+  }
+};
+
+if (transactionChild) runTransactionChild();
+else runParent();
