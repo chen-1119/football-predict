@@ -8,6 +8,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const os = require("node:os");
 const crypto = require("node:crypto");
 const { spawnSync } = require("node:child_process");
 const { DatabaseSync } = require("node:sqlite");
@@ -94,17 +95,19 @@ const sqliteSidecarState = (filePath) => Object.fromEntries(
     return [suffix, stableFileIdentity(sidecarPath)];
   })
 );
-const sidecarsContainNoTransactionalData = (state) => (
-  ["-journal", "-wal"].every((suffix) => {
-    const sidecar = state[suffix];
-    return !sidecar || Number(sidecar.size) === 0;
-  })
-);
 const sidecarSummary = (state) => Object.fromEntries(
   Object.entries(state).map(([suffix, value]) => [suffix, value ? {
     size: value.size,
     sha256: value.sha256,
   } : null])
+);
+const sameSidecarContent = (left, right) => (
+  Object.keys(left).every((suffix) => {
+    const before = left[suffix];
+    const after = right[suffix];
+    if (!before || !after) return before === after;
+    return sameFileContent(before, after);
+  })
 );
 const parsePayload = (value) => {
   try { return JSON.parse(String(value || "")); } catch { return null; }
@@ -203,14 +206,24 @@ const runTransactionChild = () => {
 };
 
 const runParent = () => {
+  let workDir = null;
   try {
     const beforeFile = stableFileIdentity(sqlitePath);
     const beforeSidecars = sqliteSidecarState(sqlitePath);
     check(
-      sidecarsContainNoTransactionalData(beforeSidecars),
-      "production clone has transactional SQLite sidecar data before verification",
+      !beforeSidecars["-journal"] || Number(beforeSidecars["-journal"].size) === 0,
+      "sealed production clone has an active rollback journal",
     );
-    const childArgs = [__filename, "--sqlite-path", sqlitePath, "--transaction-child"];
+    // The release seal can legitimately contain a non-empty WAL. Opening that
+    // sealed snapshot directly lets SQLite checkpoint it into the main file,
+    // changing physical bytes even when both migration attempts roll back.
+    // Exercise the migration on a disposable main+WAL working clone and prove
+    // the sealed source (including every sidecar) stayed byte-identical.
+    workDir = fs.mkdtempSync(path.join(os.tmpdir(), "football-production-clone-verify-"));
+    const workingPath = path.join(workDir, "football.db");
+    fs.copyFileSync(sqlitePath, workingPath);
+    if (beforeSidecars["-wal"]) fs.copyFileSync(`${sqlitePath}-wal`, `${workingPath}-wal`);
+    const childArgs = [__filename, "--sqlite-path", workingPath, "--transaction-child"];
     if (requireReceipt) childArgs.push("--require-receipt");
     const child = spawnSync(process.execPath, childArgs, {
       encoding: "utf8",
@@ -221,14 +234,14 @@ const runParent = () => {
     const transaction = JSON.parse(String(child.stdout || "{}"));
     const afterFile = stableFileIdentity(sqlitePath);
     const afterSidecars = sqliteSidecarState(sqlitePath);
-    check(sameFileContent(beforeFile, afterFile), "production clone bytes changed during rolled-back migration verification");
+    check(sameFileContent(beforeFile, afterFile), "sealed production clone bytes changed during migration verification");
     check(
-      sidecarsContainNoTransactionalData(afterSidecars),
-      "production clone has transactional SQLite sidecar data after verification",
+      sameSidecarContent(beforeSidecars, afterSidecars),
+      "sealed production clone sidecars changed during migration verification",
     );
     process.stdout.write(`${JSON.stringify({
       ok: true,
-      verifier: "fast-result-production-clone-v2",
+      verifier: "fast-result-production-clone-v3",
       sqlitePath,
       requireReceipt,
       cloneUnchanged: true,
@@ -236,7 +249,7 @@ const runParent = () => {
         size: afterFile.size,
         sha256: afterFile.sha256,
         mtimeChanged: beforeFile.mtimeNs !== afterFile.mtimeNs,
-        sidecarsClean: true,
+        sealedSourceUnchanged: true,
         beforeSidecars: sidecarSummary(beforeSidecars),
         afterSidecars: sidecarSummary(afterSidecars),
       },
@@ -246,6 +259,8 @@ const runParent = () => {
   } catch (error) {
     process.stderr.write(`${error.stack || error.message || String(error)}\n`);
     process.exitCode = 1;
+  } finally {
+    if (workDir) fs.rmSync(workDir, { recursive: true, force: true });
   }
 };
 
