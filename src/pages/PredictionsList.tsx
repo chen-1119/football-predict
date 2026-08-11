@@ -2364,13 +2364,23 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     dataSync.sourceUpdatedAt || dataSync.updatedAt || dataSync.lastCheckedAt,
     language
   );
+  const publicationTransition = [
+    'generation-sqlite-mismatch',
+    'sqlite-previous-pair',
+    'previous-generation',
+    'generation-previous'
+  ].includes(dataSync.healthCurrentReadSource || '')
+    && dataSync.currentLoaded
+    && dataSync.currentCount > 0;
   const systemRecommendationTone = !recommendationReliable || sourceHealth?.ok === false
     ? 'cautious'
     : dataSync.error || isDataStale || hasSourceFallback || hasSourceTransportIssue
       ? 'cautious'
       : 'reliable';
   const systemRecommendationLabel = systemRecommendationTone === 'cautious'
-      ? (!recommendationReliable || sourceHealth?.ok === false
+      ? (publicationTransition
+        ? (language === 'zh' ? '数据发布更新中 · 已发推荐保留' : 'Data publication updating · Published picks kept')
+        : !recommendationReliable || sourceHealth?.ok === false
         ? (language === 'zh' ? '数据链路警示 · 已发推荐保留' : 'Data pipeline warning · Published picks kept')
         : (language === 'zh' ? '数据链路警示' : 'Data pipeline warning'))
       : (language === 'zh' ? '数据链路正常' : 'Data pipeline healthy');
