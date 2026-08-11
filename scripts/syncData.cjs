@@ -4635,6 +4635,7 @@ function buildArchivedPreMatchPrediction(
   if (!match || !snapshotIndex || isOfficialVoidMatch(match)) return null;
   const kickoffMs = parseBeijingDateTime(match?.kickoffTime || "");
   const observedMs = parseBeijingDateTime(capturedAt);
+  const cutoffMs = parseBeijingDateTime(matchCutoffValue(match));
   const resultPhase = ["FINISHED", "PENDING_RESULT", "LIVE"].includes(normText(match?.status).toUpperCase())
     || (
       normText(match?.status).toUpperCase() === "SCHEDULED"
@@ -4642,7 +4643,18 @@ function buildArchivedPreMatchPrediction(
       && Number.isFinite(observedMs)
       && kickoffMs <= observedMs
   );
-  if (!resultPhase || !Number.isFinite(kickoffMs)) return null;
+  // Freeze the immutable review direction as soon as the official purchase
+  // deadline has passed. Waiting until kickoff leaves a predictable gap: a
+  // long-running sync can publish the last pre-match generation before
+  // kickoff and the API then enters result phase without an archive until the
+  // next cycle finishes. The archive still selects only an independently
+  // validated snapshot captured on or before the deadline below, so this does
+  // not permit a post-cutoff or post-kickoff direction to be backfilled.
+  const cutoffPhase = normText(match?.status).toUpperCase() === "SCHEDULED"
+    && Number.isFinite(cutoffMs)
+    && Number.isFinite(observedMs)
+    && cutoffMs <= observedMs;
+  if (!(resultPhase || cutoffPhase) || !Number.isFinite(kickoffMs)) return null;
 
   // A release-signed recovery row is an explicit correction for a known
   // legacy archive. It must win even when that legacy object is structurally
