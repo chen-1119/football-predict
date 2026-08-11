@@ -373,6 +373,8 @@ for (const phase of rollbackPhases) {
       const restoredSqlite = fs.readFileSync(fixture.sqliteTarget, "utf8");
       assert.equal(restoredSqlite, rollbackSqliteFixture, phase);
       assert.match(restoredSqlite, /private_model_artifacts:hhad-companion-audit=old-hhad-companion-audit/, `${phase}: HHAD private artifact table must follow the SQLite rollback image`);
+      const recoveredSystemState = JSON.parse(fs.readFileSync(mapped(fixture.root, "/mock-systemd.json"), "utf8"));
+      assert.equal(recoveredSystemState.publicationAffinityRebuilds, 1, `${phase}: serving-generation SQLite must be rebuilt before restart`);
     }
     if (modelPhases.has(phase)) {
       assert.equal(fs.readFileSync(fixture.strategyTarget, "utf8"), "{\"state\":\"old\"}\n", phase);
@@ -381,7 +383,7 @@ for (const phase of rollbackPhases) {
     const second = runRecovery(fixture);
     assert.equal(second.status, 0, `${phase} idempotence: ${second.stderr}`);
     assert.equal(JSON.parse(second.stdout).action, "noop", `${phase} idempotence`);
-    assertions += 9;
+    assertions += sqlitePhases.has(phase) ? 10 : 9;
   } finally {
     fs.rmSync(fixture.root, { recursive: true, force: true });
   }
