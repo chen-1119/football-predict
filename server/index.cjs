@@ -10447,7 +10447,7 @@ const handleApi = async (req, res, url) => {
   if (url.pathname === "/api/v1/ai-arena/status") {
     const basePublication = resolveBasePublication();
     const arena = readStablePublicationMetadata(basePublication, "ai-arena.json", null);
-    const validArena = arena && typeof arena === "object" && !Array.isArray(arena);
+    const validArena = Boolean(arena && typeof arena === "object" && !Array.isArray(arena));
     const agents = validArena && Array.isArray(arena.agents) ? arena.agents : [];
     const leagueSlots = validArena && Array.isArray(arena.leagueSlots) ? arena.leagueSlots : [];
     const hashPresent = (value) => /^[a-f0-9]{64}$/.test(String(value || ""));

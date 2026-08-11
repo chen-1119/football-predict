@@ -292,6 +292,7 @@ assert.match(previewSource, /survival-flop-board/);
 assert.match(previewSource, /balanceHistory/);
 assert.match(serverSource, /\/api\/v1\/ai-arena/);
 assert.match(serverSource, /\/api\/v1\/ai-arena\/status/);
+assert.match(serverSource, /const validArena = Boolean\(arena && typeof arena === "object" && !Array\.isArray\(arena\)\)/);
 assert.match(generationSource, /ai-arena\.json/);
 assert.match(syncSource, /updateAiArenaState/);
 assert.match(syncSource, /AI_ARENA_STATE_PATH/);
