@@ -8,6 +8,7 @@ const {
   selectDetailTarget
 } = require('./verifyApiPerformance.cjs');
 const {
+  MAX_LATENCY_RECOVERY_ATTEMPTS,
   REQUIRED_LATENCY_RECOVERY_RUNS,
   evaluatePerformanceRecovery,
   isLatencyOnlyPerformanceFailure
@@ -284,13 +285,14 @@ check('one passing recovery batch is insufficient and two independent passes are
     recoveryRuns: [perfRun(), perfRun()]
   });
   assert.equal(REQUIRED_LATENCY_RECOVERY_RUNS, 2);
+  assert.equal(MAX_LATENCY_RECOVERY_ATTEMPTS, 3);
   assert.equal(onePass.ok, false);
   assert.equal(onePass.recoveryComplete, false);
   assert.equal(twoPasses.ok, true);
   assert.equal(twoPasses.recovered, true);
 });
 
-check('any failed recovery batch keeps the unchanged performance gate closed', () => {
+check('one latency spike may be followed by two consecutive passing recovery batches', () => {
   const initialRun = perfRun({
     status: 1,
     ok: false,
@@ -299,16 +301,54 @@ check('any failed recovery batch keeps the unchanged performance gate closed', (
   const recovery = evaluatePerformanceRecovery({
     initialRun,
     recoveryRuns: [
-      perfRun(),
       perfRun({
         status: 1,
         ok: false,
         failureReasons: ['measured:current-transition:p95:850>800']
-      })
+      }),
+      perfRun(),
+      perfRun()
     ]
   });
-  assert.equal(recovery.ok, false);
-  assert.equal(recovery.recoveryPassed, false);
+  assert.equal(recovery.ok, true);
+  assert.equal(recovery.recoveryPassed, true);
+  assert.equal(recovery.maximumConsecutivePassingRuns, 2);
+});
+
+check('non-consecutive passes or a non-latency recovery failure keep the gate closed', () => {
+  const initialRun = perfRun({
+    status: 1,
+    ok: false,
+    failureReasons: ['measured:current-transition:p95:993.69>800']
+  });
+  const interrupted = evaluatePerformanceRecovery({
+    initialRun,
+    recoveryRuns: [
+      perfRun(),
+      perfRun({
+        status: 1,
+        ok: false,
+        failureReasons: ['measured:current-list:p95:850>800']
+      }),
+      perfRun()
+    ]
+  });
+  const semanticFailure = evaluatePerformanceRecovery({
+    initialRun,
+    recoveryRuns: [
+      perfRun(),
+      perfRun({
+        status: 1,
+        ok: false,
+        failureReasons: ['measured:current-list:etag-identities:2!=1']
+      }),
+      perfRun()
+    ]
+  });
+  assert.equal(interrupted.ok, false);
+  assert.equal(interrupted.recoveryComplete, true);
+  assert.equal(semanticFailure.ok, false);
+  assert.equal(semanticFailure.nonLatencyRecoveryFailure, true);
 });
 
 check('current payload size still fails above the unchanged 180000-byte threshold', () => {
