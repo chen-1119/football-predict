@@ -1249,7 +1249,9 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
   assert.match(runBody, /ReadWritePaths=\$LIVE_SQLITE_PREBUILD_DIR \$LIVE_STORE_DIR\/data-generations/);
   assert.match(runBody, /CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_DAC_OVERRIDE/);
   assert.match(sqliteExporter, /SQLITE_EXPORT_SOURCE_POINTER_READ_ONLY/);
-  assert.match(productionCloneVerifier, /fast-result-production-clone-v1/);
+  assert.match(productionCloneVerifier, /fast-result-production-clone-v2/);
+  assert.match(productionCloneVerifier, /production clone bytes changed during rolled-back migration verification/);
+  assert.match(productionCloneVerifier, /production clone sidecars changed during rolled-back migration verification/);
   assert.match(productionCloneVerifier, /migrateLegacyFastResultIntegrity/);
   assert.match(productionCloneVerifier, /legacy midnight alias leaked into authority high-water/);
   assert.match(productionCloneVerifier, /repeated clone migration changed a receipt or authority root/);
