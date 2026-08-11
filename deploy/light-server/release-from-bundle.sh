@@ -56,7 +56,12 @@ LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS="${RELEASE_LIVE_SQLITE_PREBUILD_RUNTIME
 readonly LIVE_SQLITE_PREBUILD_CAPACITY_SETTLE_ATTEMPTS=10
 readonly LIVE_SQLITE_PREBUILD_CAPACITY_SETTLE_DELAY_SECONDS=5
 ALLOW_STOPPED_WINDOW_SQLITE_EXPORT="${RELEASE_ALLOW_STOPPED_WINDOW_SQLITE_EXPORT:-0}"
-WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS="${RELEASE_WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS:-600}"
+# A production official-result cycle includes the immutable generation commit
+# and SQLite export.  The 452 MB live store currently needs more than ten
+# minutes for that phase, so keep the wait bounded but large enough for one
+# real cycle.  The transition-lease check inside the polling loop still aborts
+# before the rollback margin if a betting cutoff becomes unsafe.
+WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS="${RELEASE_WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS:-1200}"
 POST_SWAP_TRANSITION_ROLLBACK_MARGIN_SECONDS="${RELEASE_POST_SWAP_TRANSITION_ROLLBACK_MARGIN_SECONDS:-120}"
 POST_SWAP_TRANSITION_START_BUDGET_SECONDS="${RELEASE_POST_SWAP_TRANSITION_START_BUDGET_SECONDS:-}"
 RELEASE_HEARTBEAT_KEEPER_INTERVAL_SECONDS="${RELEASE_CANDIDATE_HEARTBEAT_KEEPER_INTERVAL_SECONDS:-20}"
@@ -4119,7 +4124,7 @@ wait_for_worker_official_publish_after() {
   local poll_seconds="${RELEASE_WORKER_OFFICIAL_PUBLISH_POLL_SECONDS:-2}"
   local deadline evidence_rc
 
-  [[ "$timeout_seconds" =~ ^[0-9]+$ ]] || timeout_seconds=600
+  [[ "$timeout_seconds" =~ ^[0-9]+$ ]] || timeout_seconds=1200
   [[ "$poll_seconds" =~ ^[0-9]+$ ]] || poll_seconds=2
   [ "$timeout_seconds" -ge 30 ] || timeout_seconds=30
   [ "$poll_seconds" -ge 1 ] || poll_seconds=1
@@ -6385,7 +6390,7 @@ fi
   || { printf 'invalid frozen worker child drain timeout: %s\n' "$WORKER_FROZEN_CHILD_DRAIN_TIMEOUT_SECONDS" >&2; exit 1; }
 [[ "$WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] \
   && [ "$WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS" -ge 30 ] \
-  && [ "$WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS" -le 600 ] \
+  && [ "$WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS" -le 1500 ] \
   || { printf 'invalid worker official publication timeout: %s\n' "$WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS" >&2; exit 1; }
 [[ "$POST_SWAP_TRANSITION_ROLLBACK_MARGIN_SECONDS" =~ ^[0-9]+$ ]] \
   && [ "$POST_SWAP_TRANSITION_ROLLBACK_MARGIN_SECONDS" -ge 30 ] \
