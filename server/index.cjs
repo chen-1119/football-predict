@@ -167,7 +167,7 @@ const fastResultReceiptTransitionTtlMs = Math.max(
   30_000,
   Math.min(
     5 * 60_000,
-    Number(process.env.FAST_RESULT_RECEIPT_TRANSITION_TTL_MS || 120_000) || 120_000,
+    Number(process.env.FAST_RESULT_RECEIPT_TRANSITION_TTL_MS || 300_000) || 300_000,
   ),
 );
 const basePublicationRefreshState = {

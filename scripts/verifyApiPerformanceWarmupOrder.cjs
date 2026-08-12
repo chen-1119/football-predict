@@ -396,6 +396,7 @@ check('public health avoids full current payload and datastore diagnostics', () 
 
 check('public health keeps an exact validated receipt during a bounded SQLite pair refresh', () => {
   assert.ok(serverSource.includes('const fastResultReceiptTransitionCache = new Map();'));
+  assert.ok(serverSource.includes('FAST_RESULT_RECEIPT_TRANSITION_TTL_MS || 300_000'));
   assert.ok(serverSource.includes('publicationPairTransitionActive(publication)'));
   assert.ok(serverSource.includes('selectFastResultReceiptDuringPairTransition({'));
   assert.ok(publicHealthBase.includes('readPublicationFastResultReceiptState(basePublication)'));
