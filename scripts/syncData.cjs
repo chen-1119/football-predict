@@ -1773,10 +1773,21 @@ function normalizeOutcomeProbabilities(probabilities) {
 function formConfidence(formSnapshot) {
   const sampleSize = Number(formSnapshot?.sampleSize || 0);
   if (sampleSize <= 0) return 0;
+  const homeSample = Number(formSnapshot?.home?.sampleSize);
+  const awaySample = Number(formSnapshot?.away?.sampleSize);
+  if (Number.isFinite(homeSample) && Number.isFinite(awaySample)) {
+    // Recent form is a comparison, so one populated side cannot stand in for
+    // two-team evidence. Weight by the smaller side instead of the combined
+    // total to avoid treating an unknown opponent as a zero-goal team.
+    return clamp(Math.min(homeSample, awaySample) / 12, 0, 1);
+  }
   return clamp(sampleSize / 24, 0, 1);
 }
 
 function recentFormNumber(value, fallback) {
+  if (value === null || value === undefined || (typeof value === "string" && !value.trim())) {
+    return fallback;
+  }
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : fallback;
 }
@@ -2116,8 +2127,9 @@ function blendOutcomeProbabilities(match, market, poisson, eloSnapshot, formSnap
   const elo = normalizeOutcomeProbabilities(eloSnapshot?.probabilities);
   const eloSample = (eloSnapshot?.homeMatches || 0) + (eloSnapshot?.awayMatches || 0);
   const formSample = Number(formSnapshot?.sampleSize || 0);
+  const pairedFormConfidence = formConfidence(formSnapshot);
   const worldCupPrior = worldCupPriorOutcomeProbabilities(match);
-  const formReady = formSample >= 8;
+  const formReady = formSample >= 8 && pairedFormConfidence >= 0.25;
   let weights = elo && eloSample >= 6 && formReady
     ? { market: 0, teamStrength: 0.22, elo: 0.34, poisson: 0.44 }
     : elo && eloSample >= 6
@@ -3134,6 +3146,11 @@ const CURRENT_TEAM_KEY_ALIASES = Object.freeze({
   "\u5df4\u4f0a\u4e9a": "bahia",
   "\u7ef4\u591a\u5229\u4e9a": "vitoria",
   "\u5e15\u5c14\u6885\u62c9\u65af": "palmeiras",
+  "\u5df4\u9ece\u5723\u65e5\u5c14\u66fc": "paris sg",
+  "\u963f\u65af\u987f\u7ef4\u62c9": "aston villa",
+  "\u666e\u62c9\u6ed5\u65af": "platense",
+  "\u79d1\u91d1\u535a\u8054": "coquimbo unido",
+  "\u6ce2\u7279\u8bfa\u5c71\u4e18": "cerro porteno",
   "\u4e2d\u65e5\u5fb7\u5170": "midtjylland",
   "\u8d1d\u897f\u514b\u5854\u65af": "besiktas",
   "\u5b89\u5fb7\u83b1\u8d6b\u7279": "anderlecht",
@@ -10078,14 +10095,22 @@ function auditableDirectionalInputCoverage(match) {
 
   const form = match?.formSnapshot || null;
   const formSample = Math.max(0, Number(form?.sampleSize || 0));
+  const formHomeSample = Math.max(0, Number(form?.home?.sampleSize || 0));
+  const formAwaySample = Math.max(0, Number(form?.away?.sampleSize || 0));
+  const auditableMetricPresent = (value) => value !== null
+    && value !== undefined
+    && !(typeof value === "string" && !value.trim())
+    && Number.isFinite(Number(value));
   const formMetricsReady = [
     form?.home?.goalsForAvg,
     form?.home?.goalsAgainstAvg,
     form?.away?.goalsForAvg,
     form?.away?.goalsAgainstAvg,
-  ].every((value) => Number.isFinite(Number(value)));
+  ].every(auditableMetricPresent);
   const formReady = Boolean(
     formSample >= 6
+    && formHomeSample >= 3
+    && formAwaySample >= 3
     && formMetricsReady
     && modelInputProvenancePresent(form?.historicalSource || form)
   );
@@ -10100,7 +10125,7 @@ function auditableDirectionalInputCoverage(match) {
   );
   const historicalTrainingReady = Boolean(
     (modelInputProvenancePresent(elo?.historicalSource) && eloSample >= 12)
-    || (modelInputProvenancePresent(form?.historicalSource) && formSample >= 6)
+    || (modelInputProvenancePresent(form?.historicalSource) && formReady)
   );
   const historyReady = leagueHistoryReady || historicalTrainingReady;
   const evidenceFamilies = [eloReady, formReady, historyReady].filter(Boolean).length;
@@ -10127,6 +10152,8 @@ function auditableDirectionalInputCoverage(match) {
     form: {
       ready: formReady,
       sampleSize: formSample,
+      homeMatches: formHomeSample,
+      awayMatches: formAwaySample,
       metricsReady: formMetricsReady,
       provenance: modelInputProvenancePresent(form?.historicalSource || form),
     },

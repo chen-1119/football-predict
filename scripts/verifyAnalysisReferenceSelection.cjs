@@ -401,6 +401,30 @@ verify("500 market direction may fill direction only when no BEST or model direc
   assert.equal(result?.prediction.tipCode, "2");
 });
 
+verify("fresh 500 HAD replaces an unaudited cold-start fingerprint but keeps one recommendation", () => {
+  const updatedAt = new Date(NOW - 60_000).toISOString();
+  const match = baseMatch({
+    odds: { odds1: 3.15, oddsX: 3.65, odds2: 1.86 },
+    oddsSource: "500.com:HAD",
+    oddsUpdatedAt: updatedAt,
+    probabilityModel: {
+      inputSufficiency: { sufficient: false },
+      oneXTwo: { final: { home: 45, draw: 30.2, away: 24.8 } },
+      unifiedPosterior: {
+        generatedAt: updatedAt,
+        selectedMarket: "MODEL_ONLY_1X2",
+        selectedCode: "1",
+        selectedProbability: 45,
+      },
+    },
+  });
+  const result = selectOnSaleAnalysisReference(match, { now: NOW, allowModelOnly: true });
+  assert.equal(result?.source, "five-hundred-low-evidence-market");
+  assert.equal(result?.prediction.tipCode, "2");
+  assert.equal(result?.displayOdds, 1.86);
+  assert.ok(["1", "X", "2"].includes(result?.prediction.tipCode));
+});
+
 verify("no HAD odds retains the stored model direction as a low-confidence data pick without fabricating a price", () => {
   const result = selectOnSaleAnalysisReference(baseMatch({
     odds: undefined,

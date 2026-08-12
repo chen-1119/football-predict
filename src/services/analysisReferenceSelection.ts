@@ -829,6 +829,10 @@ export const selectOnSaleAnalysisReference = (
   ) return undefined;
 
   const storedBest = options.candidate || getVisiblePrediction(match, 'BEST');
+  const modelWithInputAudit = match.probabilityModel as (typeof match.probabilityModel & {
+    inputSufficiency?: { sufficient?: unknown };
+  });
+  const modelInputsInsufficient = modelWithInputAudit?.inputSufficiency?.sufficient === false;
   if (!isBeforeMatchSaleCutoff(match, now)) {
     if (options.allowModelOnly === false) return undefined;
     const atomicReference = buildAtomicDualMarketHadReference(match, storedBest);
@@ -910,6 +914,36 @@ export const selectOnSaleAnalysisReference = (
         : null,
       rankScore: referenceRankScore(prediction, 'model-only'),
     };
+  }
+
+  // A synthetic cold-start distribution is not team-specific evidence. When
+  // the audited input gate says the model is insufficient, prefer a fresh
+  // complete 500.com HAD market as the explicit fallback recommendation.
+  // This preserves one direction per match without publishing the neutral
+  // 0.5/0.5 strength prior plus a fixed home adjustment as if it were an
+  // independently analysed team view.
+  if (options.allowModelOnly !== false && modelInputsInsufficient) {
+    const insufficientInputMarket = buildFiveHundredMarketReferencePresentation(match, now);
+    if (insufficientInputMarket) {
+      return {
+        prediction: insufficientInputMarket.prediction,
+        source: 'five-hundred-market',
+        displayOdds: insufficientInputMarket.reference.selectedSourceOdds,
+        sourceUpdatedAt: insufficientInputMarket.reference.sourceUpdatedAt || null,
+        rankScore: referenceRankScore(insufficientInputMarket.prediction, 'five-hundred-market'),
+      };
+    }
+    const insufficientInputCandidate = getFiveHundredHadCandidate(match);
+    const insufficientInputLowEvidenceMarket = insufficientInputCandidate
+      ? buildLowEvidenceMarketLeaderReference(
+          match,
+          now,
+          true,
+          undefined,
+          insufficientInputCandidate,
+        )
+      : undefined;
+    if (insufficientInputLowEvidenceMarket) return insufficientInputLowEvidenceMarket;
   }
 
   if (options.allowModelOnly !== false) {

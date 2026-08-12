@@ -1,6 +1,17 @@
 const fs = require("fs");
+const crypto = require("crypto");
 const https = require("https");
 const path = require("path");
+const {
+  applyFixtureMappingEvidence,
+  fixtureIdentityHashFor,
+  loadEntityRegistry,
+  providerIdentityScore,
+  qualifyingFixtureMapping,
+  stableStringify,
+  writeEntityRegistryAtomic,
+} = require("./entityResolutionRegistry.cjs");
+const sha256 = (value) => crypto.createHash("sha256").update(String(value)).digest("hex");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const PUBLIC_DIR = path.join(PROJECT_ROOT, "public");
@@ -10,6 +21,11 @@ const FALLBACK_MATCHES_FILE = path.join(PUBLIC_DIR, "matches.json");
 const EXTERNAL_SIGNALS_FILE = path.join(DATA_DIR, "external-signals.json");
 const CACHE_FILE = path.join(DATA_DIR, "api-football-cache.json");
 const META_FILE = path.join(DATA_DIR, "api-football-meta.json");
+const SERVER_STORE_DIR = path.resolve(process.env.SERVER_STORE_DIR || path.join(PROJECT_ROOT, "server-data"));
+const ENTITY_REGISTRY_FILE = path.resolve(
+  process.env.ENTITY_RESOLUTION_REGISTRY_FILE
+    || path.join(SERVER_STORE_DIR, "entity-resolution", "team-registry.json")
+);
 
 const API_BASE = (process.env.API_FOOTBALL_BASE_URL || "https://v3.football.api-sports.io").replace(/\/+$/, "");
 const API_KEY = process.env.API_FOOTBALL_KEY || process.env.APISPORTS_KEY || "";
@@ -20,6 +36,7 @@ const LOOKAHEAD_DAYS = Math.max(1, Number(process.env.API_FOOTBALL_LOOKAHEAD_DAY
 const LOOKBACK_HOURS = Math.max(0, Number(process.env.API_FOOTBALL_LOOKBACK_HOURS || 8));
 const FIXTURE_SEARCH_REFRESH_MINUTES = Math.max(30, Number(process.env.API_FOOTBALL_FIXTURE_SEARCH_REFRESH_MINUTES || 720));
 const ACCESS_ERROR_REFRESH_MINUTES = Math.max(30, Number(process.env.API_FOOTBALL_ACCESS_ERROR_REFRESH_MINUTES || 120));
+const STATUS_REFRESH_MINUTES = Math.max(5, Number(process.env.API_FOOTBALL_STATUS_REFRESH_MINUTES || 30));
 const INJURY_LOOKAHEAD_HOURS = Math.max(1, Number(process.env.API_FOOTBALL_INJURY_LOOKAHEAD_HOURS || 48));
 const INJURY_REFRESH_MINUTES = Math.max(60, Number(process.env.API_FOOTBALL_INJURY_REFRESH_MINUTES || 360));
 const ODDS_LOOKAHEAD_HOURS = Math.max(1, Number(process.env.API_FOOTBALL_ODDS_LOOKAHEAD_HOURS || 48));
@@ -124,7 +141,41 @@ const TEAM_ALIASES = {
   "\u56fd\u9645\u7c73\u5170": ["inter", "inter milan"],
   "ac\u7c73\u5170": ["ac milan", "milan"],
   "\u5c24\u6587": ["juventus"],
-  "\u5c24\u6587\u56fe\u65af": ["juventus"]
+  "\u5c24\u6587\u56fe\u65af": ["juventus"],
+  "\u5df4\u9ece\u5723\u65e5\u5c14\u66fc": ["paris saint germain", "paris sg", "psg"],
+  "\u963f\u65af\u987f\u7ef4\u62c9": ["aston villa"],
+  "\u666e\u62c9\u6ed5\u65af": ["platense", "club atletico platense"],
+  "\u79d1\u91d1\u535a\u8054": ["coquimbo unido", "coquimbo"],
+  "\u5e15\u5c14\u6885\u62c9\u65af": ["palmeiras", "se palmeiras"],
+  "\u6ce2\u7279\u8bfa\u5c71\u4e18": ["cerro porteno", "cerro porteno asuncion"],
+  "\u6770\u5c14": ["eto fc gyor", "gyori eto", "gyor"],
+  "\u96f7\u514b\u96c5\u672a\u514b\u7ef4\u4eac\u4eba": ["vikingur reykjavik", "vikingur r"],
+  "\u65b0\u5723\u5f92": ["the new saints", "the new saints fc", "tns"],
+  "\u8428\u5df4\u8d6b": ["sabah", "sabah fc"],
+  "\u6bd4\u68ee\u963f\u6cf0\u5c14": ["atert bissen", "fc atert bissen"],
+  "\u514b\u62c9\u514b\u65af\u7ef4\u514b": ["ki klaksvik", "klaksvik"],
+  "\u82cf\u6377\u65af\u5361": ["sutjeska", "fk sutjeska", "sutjeska niksic"],
+  "\u963f\u62c9\u6728\u56fe\u51ef\u62c9\u7279": ["kairat almaty", "fc kairat almaty", "kairat"],
+  "\u74e6\u52d2\u4f26\u52a0": ["valerenga", "valerenga if"],
+  "\u5965\u52d2\u677e": ["aalesund", "aalesunds fk"],
+  "\u5fb7\u91cc\u57ce": ["derry city", "derry city fc"],
+  "\u7d22\u83f2\u4e9a\u4e2d\u592e\u9646\u519b": ["cska sofia", "pfc cska sofia"],
+  "\u8d39\u4f26\u8328\u74e6\u7f57\u65af": ["ferencvaros", "ferencvarosi tc"],
+  "\u4f0f\u4f0a\u4f0f\u4e01\u90a3": ["vojvodina", "fk vojvodina"],
+  "\u65e5\u5229\u7eb3": ["zilina", "msk zilina"],
+  "\u65af\u666e\u5229\u7279\u6d77\u675c\u514b": ["hajduk split", "hnk hajduk split"],
+  "\u535a\u5854\u5f17\u6208": ["botafogo", "botafogo rj"],
+  "\u6851\u6258\u65af": ["santos", "santos fc"],
+  "\u7ef4\u591a\u5229\u4e9a": ["vitoria", "ec vitoria"],
+  "\u74e6\u65af\u79d1\u8fbe\u4f3d\u9a6c": ["vasco da gama", "vasco da gama saf"],
+  "\u8499\u7279\u5229\u5c14CF": ["cf montreal", "montreal impact"],
+  "\u591a\u4f26\u591aFC": ["toronto fc"],
+  "\u829d\u52a0\u54e5\u706b\u7130": ["chicago fire", "chicago fire fc"],
+  "\u6e29\u54e5\u534e\u767d\u5e3d": ["vancouver whitecaps", "vancouver whitecaps fc"],
+  "\u5723\u8def\u6613\u65af\u57ce": ["st louis city", "st louis city sc"],
+  "\u582a\u8428\u65af\u57ce\u7ade\u6280": ["sporting kansas city"],
+  "\u897f\u96c5\u56fe\u6d77\u6e7e\u4eba": ["seattle sounders", "seattle sounders fc"],
+  "\u6ce2\u7279\u5170\u4f10\u6728\u5de5": ["portland timbers"]
 };
 
 const LEAGUE_ALIASES = {
@@ -133,11 +184,17 @@ const LEAGUE_ALIASES = {
   "\u4e16\u9884\u8d5b": ["world cup qualification", "world cup qualifiers"],
   "\u6b27\u51a0": ["uefa champions league", "champions league"],
   "\u6b27\u8054": ["uefa europa league", "europa league"],
+  "\u6b27\u7f57\u5df4": ["uefa europa league", "europa league"],
+  "\u632a\u8d85": ["norwegian eliteserien", "eliteserien"],
+  "\u5df4\u7532": ["serie a", "brasileirao serie a", "brazil serie a"],
+  "\u7f8e\u804c": ["major league soccer", "mls"],
   "\u82f1\u8d85": ["premier league"],
   "\u897f\u7532": ["la liga"],
   "\u5fb7\u7532": ["bundesliga"],
   "\u610f\u7532": ["serie a"],
-  "\u6cd5\u7532": ["ligue 1"]
+  "\u6cd5\u7532": ["ligue 1"],
+  "\u6b27\u6d32\u8d85\u7ea7\u676f": ["uefa super cup", "super cup"],
+  "\u89e3\u653e\u8005\u676f": ["copa libertadores", "conmebol libertadores"]
 };
 
 const nowIso = () => new Date().toISOString();
@@ -337,7 +394,7 @@ const summarizeFixture = (item) => ({
   } : null
 });
 
-const confidenceForFixture = (match, fixture) => {
+const confidenceForFixture = (match, fixture, entityRegistry = null) => {
   const homeTargets = targetTeamAliases(match, "home");
   const awayTargets = targetTeamAliases(match, "away");
   const leagueTargets = targetLeagueAliases(match);
@@ -347,7 +404,23 @@ const confidenceForFixture = (match, fixture) => {
   const reversedAwayScore = nameScore(awayTargets, fixture?.teams?.home?.name);
   const directTeamScore = (homeScore + awayScore) / 2;
   const reversedTeamScore = (reversedHomeScore + reversedAwayScore) / 2 * 0.78;
-  const teamScore = Math.max(directTeamScore, reversedTeamScore);
+  const nameBasedTeamScore = Math.max(directTeamScore, reversedTeamScore);
+  const entityIdentity = providerIdentityScore(entityRegistry, match, fixture);
+  const identityAwareDirectScore = entityIdentity.available && !entityIdentity.conflict
+    ? (["home", "away"].reduce((total, side) => {
+        if (entityIdentity.expected?.[side]) {
+          return total + (entityIdentity.expected[side] === entityIdentity.actual?.[side] ? 1 : 0);
+        }
+        return total + (side === "home" ? homeScore : awayScore);
+      }, 0) / 2)
+    : nameBasedTeamScore;
+  const teamScore = entityIdentity.exact
+    ? 1
+    : entityIdentity.conflict
+      ? Math.min(nameBasedTeamScore, 0.2)
+      : entityIdentity.partialExact
+        ? identityAwareDirectScore
+        : nameBasedTeamScore;
 
   const kickoffMs = Date.parse(match.kickoffTime || "");
   const fixtureMs = Date.parse(fixture?.date || "");
@@ -378,7 +451,8 @@ const confidenceForFixture = (match, fixture) => {
     timeScore: Number(timeScore.toFixed(4)),
     leagueScore: Number(leagueScore.toFixed(4)),
     diffMinutes: Math.round(diffMinutes),
-    reversed: reversedTeamScore > directTeamScore
+    reversed: reversedTeamScore > directTeamScore,
+    entityIdentity
   };
 };
 
@@ -460,22 +534,41 @@ const fixtureAccessSkipReason = (cache, date) => {
   return "";
 };
 
-const rememberInjuryAccessError = (cache, error) => {
+const isBulkIdsUnsupportedError = (error) => {
+  const message = error?.message || String(error || "");
+  return /\/injuries/i.test(message)
+    && /\bids\b|access|forbidden|plan|subscription|parameter/i.test(message)
+    && /do not have access|not have access|forbidden|plan|subscription|not allowed|invalid.*ids|ids.*invalid/i.test(message);
+};
+
+const rememberInjuryAccessError = (cache, error, mode = "fixture") => {
   const message = error?.message || String(error);
-  if (!/do not have access|not have access|forbidden|plan/i.test(message)) return;
+  if (!/do not have access|not have access|forbidden|plan|subscription|not allowed|invalid.*ids|ids.*invalid/i.test(message)) return;
+  const previous = cache.apiAccess?.injuries || {};
+  const updatedAt = nowIso();
   cache.apiAccess = {
     ...(cache.apiAccess || {}),
-    injuries: {
-      updatedAt: nowIso(),
-      reason: message
-    }
+    injuries: mode === "bulk"
+      ? {
+        ...previous,
+        updatedAt,
+        bulkIdsUnsupported: true,
+        bulkReason: message
+      }
+      : {
+        ...previous,
+        updatedAt,
+        fixtureUnsupported: true,
+        reason: message
+      }
   };
 };
 
 const injuryAccessSkipReason = (cache) => {
   const access = cache.apiAccess?.injuries;
   if (!access || !isFresh(access.updatedAt, ACCESS_ERROR_REFRESH_MINUTES)) return "";
-  return access.reason || "API-Football injuries skipped because current plan does not allow this request.";
+  if (!access.fixtureUnsupported) return "";
+  return access.reason || "API-Football injuries skipped because per-fixture access is unavailable.";
 };
 
 const appendError = (cache, error) => {
@@ -502,8 +595,161 @@ const formatApiErrors = (errors) => {
   return [String(errors)].filter(Boolean);
 };
 
+const booleanOrNull = (value) => {
+  if (value === true || value === "true" || value === 1 || value === "1") return true;
+  if (value === false || value === "false" || value === 0 || value === "0") return false;
+  return null;
+};
+
+const optionalNumber = (value) => {
+  if (value === undefined || value === null || String(value).trim() === "") return null;
+  return toNumber(value);
+};
+
+const normalizeAccountStatus = (payload, options = {}) => {
+  const checkedAt = options.checkedAt || nowIso();
+  const rawResponse = Array.isArray(payload?.response) ? payload.response[0] : payload?.response;
+  const response = rawResponse && typeof rawResponse === "object" ? rawResponse : null;
+  const subscription = response?.subscription && typeof response.subscription === "object" ? response.subscription : {};
+  const requests = response?.requests && typeof response.requests === "object" ? response.requests : {};
+  const rateLimit = options.rateLimit && typeof options.rateLimit === "object" ? options.rateLimit : {};
+  const active = booleanOrNull(subscription.active);
+  const current = optionalNumber(requests.current ?? requests.used);
+  const dailyLimit = optionalNumber(requests.limit_day ?? requests.limit);
+  const headerRemaining = optionalNumber(rateLimit.requestsRemaining ?? rateLimit.remaining);
+  const computedRemaining = current !== null && dailyLimit !== null ? Math.max(0, dailyLimit - current) : null;
+  const remaining = headerRemaining !== null ? headerRemaining : computedRemaining;
+  const statusMessages = [
+    ...formatApiErrors(payload?.errors),
+    compactText(payload?.message),
+    compactText(response?.message),
+    compactText(response?.account?.status),
+    compactText(subscription?.status)
+  ].filter(Boolean);
+  const message = statusMessages.join("; ");
+  const suspended = /suspend|disabled|terminated/i.test(message);
+  const inactive = active === false;
+  const quotaUnavailable = remaining !== null && remaining <= 0;
+  const valid = Boolean(response)
+    && Boolean(response.account || response.subscription || response.requests);
+  const blockers = [];
+  if (!valid) blockers.push("status-response-invalid");
+  if (suspended) blockers.push("account-suspended");
+  if (inactive) blockers.push("subscription-inactive");
+  if (quotaUnavailable) blockers.push("provider-quota-unavailable");
+  return {
+    checkedAt,
+    eligible: blockers.length === 0,
+    blocked: blockers.length > 0,
+    blockers,
+    reason: blockers.length
+      ? `${blockers.join(", ")}${message ? `: ${message}` : ""}`
+      : "API-Football account and quota preflight passed.",
+    suspended,
+    active,
+    plan: compactText(subscription.plan) || null,
+    quota: {
+      current,
+      dailyLimit,
+      remaining
+    },
+    rateLimit
+  };
+};
+
+const isGlobalAccountError = (error, statusCode = null) => {
+  const message = error?.message || String(error || "");
+  return Number(statusCode) === 429
+    || /account.*suspend|suspend.*account|subscription.*inactive|quota.*(?:exceed|unavailable|limit)|daily.*(?:request|quota).*limit|rate limit|too many requests/i.test(message);
+};
+
+const rememberGlobalAccountError = (cache, error, statusCode = null) => {
+  if (!isGlobalAccountError(error, statusCode)) return false;
+  const checkedAt = nowIso();
+  const message = error?.message || String(error);
+  const quotaUnavailable = Number(statusCode) === 429 || /quota|rate limit|too many requests|daily.*limit/i.test(message);
+  cache.apiAccess = {
+    ...(cache.apiAccess || {}),
+    status: {
+      checkedAt,
+      eligible: false,
+      blocked: true,
+      blockers: [quotaUnavailable ? "provider-quota-unavailable" : "account-suspended"],
+      reason: message,
+      suspended: !quotaUnavailable,
+      active: null,
+      plan: null,
+      quota: {
+        current: null,
+        dailyLimit: null,
+        remaining: quotaUnavailable ? 0 : null
+      },
+      rateLimit: {}
+    }
+  };
+  return true;
+};
+
+const accountAccessSkipReason = (cache) => {
+  const status = cache.apiAccess?.status;
+  if (!status || !isFresh(status.checkedAt, STATUS_REFRESH_MINUTES)) return "";
+  return status.eligible === true ? "" : (status.reason || "API-Football account preflight blocked this sync.");
+};
+
+const preflightAccountStatus = async (cache) => {
+  const cached = cache.apiAccess?.status;
+  if (cached && isFresh(cached.checkedAt, STATUS_REFRESH_MINUTES)) return cached;
+  try {
+    const checkedAt = nowIso();
+    const { payload, rateLimit } = await apiGet(cache, "/status");
+    const status = normalizeAccountStatus(payload, { checkedAt, rateLimit });
+    cache.apiAccess = {
+      ...(cache.apiAccess || {}),
+      status
+    };
+    return status;
+  } catch (error) {
+    const checkedAt = nowIso();
+    const rememberedGlobalBlock = cache.apiAccess?.status?.blocked === true
+      && isFresh(cache.apiAccess.status.checkedAt, STATUS_REFRESH_MINUTES)
+      ? cache.apiAccess.status
+      : null;
+    const status = rememberedGlobalBlock
+      ? {
+        ...rememberedGlobalBlock,
+        checkedAt,
+        reason: error?.message || rememberedGlobalBlock.reason || String(error)
+      }
+      : {
+        checkedAt,
+        eligible: false,
+        blocked: true,
+        blockers: ["status-preflight-failed"],
+        reason: error?.message || String(error),
+        suspended: /suspend/i.test(error?.message || String(error)),
+        active: null,
+        plan: null,
+        quota: { current: null, dailyLimit: null, remaining: null },
+        rateLimit: {}
+      };
+    cache.apiAccess = {
+      ...(cache.apiAccess || {}),
+      status
+    };
+    appendError(cache, error);
+    return status;
+  }
+};
+
 const apiGet = (cache, endpoint, params = {}) => new Promise((resolve, reject) => {
   ensureLedgerDate(cache);
+  if (endpoint !== "/status") {
+    const skipReason = accountAccessSkipReason(cache);
+    if (skipReason) {
+      reject(new Error(`API-Football global fail-closed: ${skipReason}`));
+      return;
+    }
+  }
   if (cache.requestLedger.count >= MAX_CALLS_PER_SYNC) {
     reject(new Error(`API_FOOTBALL_MAX_CALLS_PER_SYNC reached (${MAX_CALLS_PER_SYNC})`));
     return;
@@ -533,7 +779,9 @@ const apiGet = (cache, endpoint, params = {}) => new Promise((resolve, reject) =
       cache.requestLedger.byEndpoint[endpoint] = (cache.requestLedger.byEndpoint[endpoint] || 0) + 1;
       const payload = safeJsonParse(body, null);
       if (res.statusCode < 200 || res.statusCode >= 300) {
-        reject(new Error(`${endpoint} HTTP ${res.statusCode}: ${body.slice(0, 300)}`));
+        const error = new Error(`${endpoint} HTTP ${res.statusCode}: ${body.slice(0, 300)}`);
+        rememberGlobalAccountError(cache, error, res.statusCode);
+        reject(error);
         return;
       }
       if (!payload) {
@@ -542,17 +790,24 @@ const apiGet = (cache, endpoint, params = {}) => new Promise((resolve, reject) =
       }
       const apiErrors = formatApiErrors(payload.errors);
       if (apiErrors.length) {
-        reject(new Error(`${endpoint} API error: ${apiErrors.join("; ")}`));
+        const error = new Error(`${endpoint} API error: ${apiErrors.join("; ")}`);
+        rememberGlobalAccountError(cache, error, res.statusCode);
+        reject(error);
         return;
+      }
+      const rateLimit = {
+        limit: res.headers["x-ratelimit-limit"] || null,
+        remaining: res.headers["x-ratelimit-remaining"] || null,
+        requestsLimit: res.headers["x-ratelimit-requests-limit"] || null,
+        requestsRemaining: res.headers["x-ratelimit-requests-remaining"] || null
+      };
+      const requestsRemaining = optionalNumber(rateLimit.requestsRemaining ?? rateLimit.remaining);
+      if (endpoint !== "/status" && requestsRemaining !== null && requestsRemaining <= 0) {
+        rememberGlobalAccountError(cache, new Error("API-Football provider quota unavailable after this response."), 429);
       }
       resolve({
         payload,
-        rateLimit: {
-          limit: res.headers["x-ratelimit-limit"] || null,
-          remaining: res.headers["x-ratelimit-remaining"] || null,
-          requestsLimit: res.headers["x-ratelimit-requests-limit"] || null,
-          requestsRemaining: res.headers["x-ratelimit-requests-remaining"] || null
-        }
+        rateLimit
       });
     });
   });
@@ -564,35 +819,108 @@ const apiGet = (cache, endpoint, params = {}) => new Promise((resolve, reject) =
   req.end();
 });
 
-const fetchFixturesForDate = async (cache, date) => {
+const fetchFixturesForDate = async (cache, date, options = {}) => {
   const cached = cache.fixturesByDate[date];
-  if (cached && isFresh(cached.fetchedAt, FIXTURE_SEARCH_REFRESH_MINUTES)) {
-    return cached.fixtures || [];
+  if (options.forceLive !== true
+      && cached
+      && isFresh(cached.fetchedAt, FIXTURE_SEARCH_REFRESH_MINUTES)) {
+    return { fixtures: cached.fixtures || [], trustContext: null };
   }
 
   const { payload, rateLimit } = await apiGet(cache, "/fixtures", { date, timezone: TIME_ZONE });
   const fixtures = Array.isArray(payload.response) ? payload.response.map(summarizeFixture).filter((item) => item.fixtureId) : [];
+  const fetchedAt = nowIso();
+  const providerResponseSha256 = sha256(stableStringify(payload.response || []));
   cache.fixturesByDate[date] = {
-    fetchedAt: nowIso(),
+    fetchedAt,
     count: fixtures.length,
     rateLimit,
     fixtures
   };
-  return fixtures;
+  return {
+    fixtures,
+    trustContext: {
+      live: true,
+      providerResponseSha256,
+      responseFetchedAt: fetchedAt,
+    },
+  };
 };
 
-const resolveFixtureMaps = async (matches, cache, stats) => {
-  const eligible = matches.filter(isEligibleMatch);
-  const byDate = new Map();
+const fixtureProjectionForMapping = (mapping) => ({
+  teams: {
+    home: { id: mapping?.homeTeamId },
+    away: { id: mapping?.awayTeamId },
+  },
+});
 
-  for (const match of eligible) {
+const mappingVerificationState = (match, mapping, entityRegistry, options = {}) => {
+  const blockers = [];
+  const key = matchKey(match);
+  const identity = providerIdentityScore(
+    entityRegistry,
+    match,
+    fixtureProjectionForMapping(mapping),
+  );
+  if (!mapping?.fixtureId) blockers.push("provider-fixture-id-missing");
+  if (!Number.isFinite(Number(mapping?.confidence))
+      || Number(mapping.confidence) < MIN_MATCH_CONFIDENCE) {
+    blockers.push("fixture-confidence-below-sync-threshold");
+  }
+  if (mapping?.score?.reversed === true) blockers.push("reversed-fixture-not-eligible");
+  if (mapping?.sportteryMatchId && String(mapping.sportteryMatchId) !== String(key)) {
+    blockers.push("sporttery-match-key-mismatch");
+  }
+  const expectedSourceMatchId = sourceMatchIdFor(match);
+  if (mapping?.sourceMatchId
+      && expectedSourceMatchId
+      && String(mapping.sourceMatchId) !== String(expectedSourceMatchId)) {
+    blockers.push("source-match-id-mismatch");
+  }
+  const kickoffMs = Date.parse(String(match?.kickoffTime || ""));
+  const fixtureMs = Date.parse(String(mapping?.fixtureDate || ""));
+  if (!Number.isFinite(kickoffMs)
+      || !Number.isFinite(fixtureMs)
+      || Math.abs(kickoffMs - fixtureMs) > 4 * 60 * 60 * 1000) {
+    blockers.push("provider-fixture-time-mismatch");
+  }
+  if (!identity.exact) {
+    blockers.push(identity.conflict ? "provider-entity-conflict" : "provider-entity-registry-not-exact");
+  }
+
+  const trustContext = options.liveTrustContext || null;
+  const currentCycleQualification = trustContext?.live === true
+    ? qualifyingFixtureMapping(mapping, {}, { match, trustContext })
+    : null;
+  return {
+    verified: blockers.length === 0,
+    verificationSource: blockers.length
+      ? "audit-only"
+      : (currentCycleQualification?.eligible === true
+        ? "registry-exact+live-current-cycle"
+        : "registry-exact"),
+    blockers: uniq(blockers),
+    identity,
+    currentCycleQualification,
+  };
+};
+
+const buildFixtureResolutionPlan = (matches, cache, entityRegistry) => {
+  const byDate = new Map();
+  const reusableKeys = new Set();
+  const audits = [];
+  for (const match of matches || []) {
     const key = matchKey(match);
-    const cached = cache.fixtureMap[key];
-    if (cached?.fixtureId && cached.confidence >= MIN_MATCH_CONFIDENCE) {
-      stats.cachedFixtureMatches += 1;
-      continue;
-    }
-    if (cached?.lastSearchAt && isFresh(cached.lastSearchAt, FIXTURE_SEARCH_REFRESH_MINUTES)) {
+    const cached = cache?.fixtureMap?.[key];
+    const verification = mappingVerificationState(match, cached, entityRegistry);
+    const freshLastSearchIgnored = Boolean(
+      !verification.verified
+      && cached?.lastSearchAt
+      && isFresh(cached.lastSearchAt, FIXTURE_SEARCH_REFRESH_MINUTES)
+    );
+    audits.push({ key, verification, freshLastSearchIgnored });
+    if (verification.verified) {
+      reusableKeys.add(key);
       continue;
     }
     const date = dateFromMatch(match);
@@ -600,6 +928,45 @@ const resolveFixtureMaps = async (matches, cache, stats) => {
     if (!byDate.has(date)) byDate.set(date, []);
     byDate.get(date).push(match);
   }
+  return { byDate, reusableKeys, audits };
+};
+
+const buildVerifiedMappingSet = (
+  matches,
+  cache,
+  entityRegistry,
+  liveTrustContexts = new Map(),
+) => {
+  const verified = new Set();
+  for (const match of matches || []) {
+    const key = matchKey(match);
+    const mapping = cache?.fixtureMap?.[key];
+    const state = mappingVerificationState(match, mapping, entityRegistry, {
+      liveTrustContext: liveTrustContexts.get(key) || null,
+    });
+    if (state.verified) verified.add(key);
+  }
+  return verified;
+};
+
+const restrictToVerifiedMappings = (mappedMatches, verifiedMappingSet) => {
+  if (!(verifiedMappingSet instanceof Set)) return [];
+  return (mappedMatches || []).filter((entry) => verifiedMappingSet.has(matchKey(entry?.match || {})));
+};
+
+const selectVerifiedMappedMatches = (matches, cache, verifiedMappingSet) => restrictToVerifiedMappings(
+  (matches || []).map((match) => ({ match, map: cache?.fixtureMap?.[matchKey(match)] })),
+  verifiedMappingSet,
+).filter((entry) => entry.map?.fixtureId);
+
+const resolveFixtureMaps = async (matches, cache, stats, entityRegistry = null) => {
+  const eligible = matches.filter(isEligibleMatch);
+  const plan = buildFixtureResolutionPlan(eligible, cache, entityRegistry);
+  const byDate = plan.byDate;
+  const liveTrustContexts = new Map();
+  stats.cachedFixtureMatches += plan.reusableKeys.size;
+  stats.cachedEntityConflicts += plan.audits.filter((audit) => audit.verification.identity.conflict).length;
+  stats.unverifiedFreshCacheRevalidations += plan.audits.filter((audit) => audit.freshLastSearchIgnored).length;
 
   for (const [date, dateMatches] of byDate.entries()) {
     const skipReason = fixtureAccessSkipReason(cache, date);
@@ -609,8 +976,14 @@ const resolveFixtureMaps = async (matches, cache, stats) => {
     }
 
     let fixtures = [];
+    let trustContext = null;
     try {
-      fixtures = await fetchFixturesForDate(cache, date);
+      // Every row in this plan lacks an exact registry mapping. A fresh fixture
+      // list or lastSearchAt from a previous cycle is audit-only and cannot
+      // establish current-cycle provider trust, so force a live response.
+      const fixtureBatch = await fetchFixturesForDate(cache, date, { forceLive: true });
+      fixtures = fixtureBatch.fixtures;
+      trustContext = fixtureBatch.trustContext;
     } catch (error) {
       appendError(cache, error);
       rememberFixtureAccessError(cache, error);
@@ -622,13 +995,13 @@ const resolveFixtureMaps = async (matches, cache, stats) => {
       const ranked = fixtures
         .map((fixture) => ({
           fixture,
-          score: confidenceForFixture(match, fixture)
+          score: confidenceForFixture(match, fixture, entityRegistry)
         }))
         .sort((a, b) => b.score.confidence - a.score.confidence);
       const best = ranked[0];
       const previous = cache.fixtureMap[key] || {};
       if (best && best.score.confidence >= MIN_MATCH_CONFIDENCE && best.score.teamScore >= 0.54 && best.score.timeScore >= 0.36) {
-        cache.fixtureMap[key] = {
+        const learnedMapping = {
           fixtureId: best.fixture.fixtureId,
           sportteryMatchId: key,
           sourceMatchId: sourceMatchIdFor(match),
@@ -645,6 +1018,15 @@ const resolveFixtureMaps = async (matches, cache, stats) => {
           leagueName: best.fixture.league?.name || null,
           season: best.fixture.league?.season || null
         };
+        if (trustContext?.live === true) {
+          learnedMapping.providerEvidence = {
+            responseSha256: trustContext.providerResponseSha256,
+            responseFetchedAt: trustContext.responseFetchedAt,
+            fixtureIdentitySha256: fixtureIdentityHashFor(learnedMapping),
+          };
+          liveTrustContexts.set(key, trustContext);
+        }
+        cache.fixtureMap[key] = learnedMapping;
         stats.newFixtureMatches += previous.fixtureId === best.fixture.fixtureId ? 0 : 1;
       } else {
         cache.fixtureMap[key] = {
@@ -666,6 +1048,39 @@ const resolveFixtureMaps = async (matches, cache, stats) => {
       }
     }
   }
+  return liveTrustContexts;
+};
+
+const absorbEntityResolutionEvidence = (matches, cache, registry, trustContexts = new Map()) => {
+  const matchesByKey = new Map();
+  for (const match of matches || []) {
+    for (const key of [matchKey(match), sourceMatchIdFor(match)]) {
+      if (key) matchesByKey.set(String(key), match);
+    }
+  }
+  let nextRegistry = registry;
+  let changedRows = 0;
+  let conflictsAdded = 0;
+  const blockers = {};
+  for (const mapping of Object.values(cache.fixtureMap || {})) {
+    const match = matchesByKey.get(String(mapping?.sportteryMatchId || ""))
+      || matchesByKey.get(String(mapping?.sourceMatchId || ""));
+    if (!match) continue;
+    const result = applyFixtureMappingEvidence({
+      registry: nextRegistry,
+      match,
+      mapping,
+      observedAt: mapping?.matchedAt || nowIso(),
+      trustContext: trustContexts.get(String(mapping?.sportteryMatchId || "")) || null,
+    });
+    if (result.changed) {
+      nextRegistry = result.registry;
+      changedRows += 1;
+      conflictsAdded += result.conflictsAdded;
+    }
+    for (const blocker of result.blockers || []) blockers[blocker] = Number(blockers[blocker] || 0) + 1;
+  }
+  return { registry: nextRegistry, changedRows, conflictsAdded, blockers };
 };
 
 const chunk = (items, size) => {
@@ -685,10 +1100,64 @@ const formatPerson = (row) => {
 
 const multi = (text) => ({ zh: text, en: text });
 
-const buildInjuriesByFixture = (mappedMatches, response) => {
+const temporalEligibilityFor = (fetchedAt, cutoff) => {
+  const fetchedMs = Date.parse(fetchedAt || "");
+  const cutoffMs = Date.parse(cutoff || "");
+  const eligible = Number.isFinite(fetchedMs) && Number.isFinite(cutoffMs) && fetchedMs <= cutoffMs;
+  return {
+    eligible,
+    fetchedAt: fetchedAt || null,
+    cutoff: cutoff || null,
+    basis: "fetchedAt<=cutoff",
+    reason: eligible
+      ? "Observed no later than the pre-match cutoff."
+      : "Observed after cutoff or cutoff could not be proven."
+  };
+};
+
+const prematchCutoffFor = (entry) => [
+  entry?.match?.buyEndTime,
+  entry?.match?.predictionMeta?.cutoffTime,
+  entry?.match?.cutoffTime,
+  entry?.match?.kickoffTime,
+  entry?.map?.fixtureDate
+].map(compactText).find(Boolean) || null;
+
+const buildPieceMetadata = ({ entry, providerFixtureId, endpoint, observedAt, sourceUpdatedAt, query = {} }) => {
+  const fetchedAt = observedAt || nowIso();
+  const updatedAt = sourceUpdatedAt || fetchedAt;
+  const cutoff = prematchCutoffFor(entry);
+  return {
+    source: "api-football",
+    observedAt: fetchedAt,
+    sourceUpdatedAt: updatedAt,
+    providerFixtureId: providerFixtureId ?? entry?.map?.fixtureId ?? null,
+    provenance: {
+      provider: "api-football",
+      endpoint,
+      query,
+      fetchedAt,
+      sourceUpdatedAt: updatedAt
+    },
+    temporalEligibility: temporalEligibilityFor(fetchedAt, cutoff)
+  };
+};
+
+const normalizeInjuryPlayer = (row, side, fixtureId, observedAt) => ({
+  playerId: row?.player?.id ?? null,
+  name: compactText(row?.player?.name) || "Unknown player",
+  type: compactText(row?.player?.type || row?.type) || null,
+  reason: compactText(row?.player?.reason || row?.reason) || null,
+  teamId: row?.team?.id ?? null,
+  side,
+  fixtureId,
+  observedAt
+});
+
+const buildInjuriesByFixture = (mappedMatches, response, context = {}) => {
   const byFixture = new Map();
   for (const row of Array.isArray(response) ? response : []) {
-    const fixtureId = row?.fixture?.id;
+    const fixtureId = row?.fixture?.id ?? context.providerFixtureId;
     if (!fixtureId) continue;
     const mapped = matchForFixtureId(mappedMatches, fixtureId);
     if (!mapped) continue;
@@ -702,15 +1171,33 @@ const buildInjuriesByFixture = (mappedMatches, response) => {
         : null;
     if (!side) continue;
     if (!byFixture.has(fixtureId)) byFixture.set(fixtureId, { home: [], away: [] });
-    byFixture.get(fixtureId)[side].push(multi(formatPerson(row)));
+    byFixture.get(fixtureId)[side].push({
+      label: multi(formatPerson(row)),
+      player: normalizeInjuryPlayer(row, side, fixtureId, context.observedAt || nowIso())
+    });
   }
 
   const result = new Map();
   for (const [fixtureId, value] of byFixture.entries()) {
+    const entry = matchForFixtureId(mappedMatches, fixtureId);
+    const homeDetails = value.home.map((item) => item.player);
+    const awayDetails = value.away.map((item) => item.player);
+    const metadata = buildPieceMetadata({
+      entry,
+      providerFixtureId: fixtureId,
+      endpoint: context.endpoint || "/injuries",
+      observedAt: context.observedAt,
+      sourceUpdatedAt: context.sourceUpdatedAt,
+      query: context.query || {}
+    });
     result.set(String(fixtureId), {
-      home: value.home.slice(0, 8),
-      away: value.away.slice(0, 8),
-      summary: multi(`API-FOOTBALL injuries: home ${value.home.length}, away ${value.away.length}.`)
+      ...metadata,
+      home: value.home.slice(0, 8).map((item) => item.label),
+      away: value.away.slice(0, 8).map((item) => item.label),
+      homeDetails,
+      awayDetails,
+      players: homeDetails.concat(awayDetails),
+      summary: multi(`API-FOOTBALL injuries: home ${homeDetails.length}, away ${awayDetails.length}.`)
     });
   }
   return result;
@@ -727,21 +1214,78 @@ const mergeApiPiece = (apiPieces, fixtureId, piece) => {
 const cachedApiPieces = (signalState) => {
   if (!signalState || typeof signalState !== "object") return null;
   const pieces = {};
-  if (signalState.injuries) pieces.injuries = signalState.injuries;
-  if (signalState.lineups) pieces.lineups = signalState.lineups;
-  if (signalState.apiFootballOdds) pieces.apiFootballOdds = signalState.apiFootballOdds;
+  if (signalState.injuries?.temporalEligibility?.eligible === true) pieces.injuries = signalState.injuries;
+  if (signalState.lineups?.temporalEligibility?.eligible === true) pieces.lineups = signalState.lineups;
+  if (signalState.apiFootballOdds?.temporalEligibility?.eligible === true) pieces.apiFootballOdds = signalState.apiFootballOdds;
   return Object.keys(pieces).length ? pieces : null;
 };
 
-const hydrateCachedApiPieces = (mappedMatches, cache, apiPieces) => {
-  for (const entry of mappedMatches) {
+const hydrateCachedApiPieces = (mappedMatches, cache, apiPieces, verifiedMappingSet) => {
+  for (const entry of restrictToVerifiedMappings(mappedMatches, verifiedMappingSet)) {
     const fixtureId = String(entry.map.fixtureId);
     const pieces = cachedApiPieces(cache.fixtureSignals[fixtureId]);
     if (pieces) mergeApiPiece(apiPieces, fixtureId, pieces);
   }
 };
 
-const fetchInjuries = async (mappedMatches, cache, stats, apiPieces) => {
+const hasCachedBulkIdsRestriction = (cache) => {
+  const access = cache.apiAccess?.injuries;
+  return Boolean(access?.bulkIdsUnsupported)
+    && isFresh(access.updatedAt, ACCESS_ERROR_REFRESH_MINUTES);
+};
+
+const buildInjuryRequestPlan = (cache, fixtureIds) => {
+  const uniqueIds = uniq((fixtureIds || []).map(String));
+  if (hasCachedBulkIdsRestriction(cache)) {
+    return uniqueIds.map((fixtureId) => ({
+      mode: "fixture",
+      endpoint: "/injuries",
+      params: { fixture: fixtureId },
+      fixtureIds: [fixtureId]
+    }));
+  }
+  return chunk(uniqueIds, 20).map((ids) => ({
+    mode: "bulk",
+    endpoint: "/injuries",
+    params: { ids: ids.join("-") },
+    fixtureIds: ids
+  }));
+};
+
+const fixtureInjuryRequests = (fixtureIds) => uniq((fixtureIds || []).map(String)).map((fixtureId) => ({
+  mode: "fixture",
+  endpoint: "/injuries",
+  params: { fixture: fixtureId },
+  fixtureIds: [fixtureId]
+}));
+
+const recordInjuryResponse = ({ mappedMatches, cache, apiPieces, request, payload, rateLimit, observedAt }) => {
+  const byFixture = buildInjuriesByFixture(mappedMatches, payload.response, {
+    endpoint: request.endpoint,
+    query: request.params,
+    providerFixtureId: request.mode === "fixture" ? request.fixtureIds[0] : null,
+    observedAt,
+    sourceUpdatedAt: observedAt
+  });
+  for (const fixtureId of request.fixtureIds) {
+    const injuries = byFixture.get(String(fixtureId)) || null;
+    const state = {
+      ...(cache.fixtureSignals[fixtureId] || {}),
+      injuriesFetchedAt: observedAt,
+      injuriesRows: Array.isArray(injuries?.players) ? injuries.players.length : 0,
+      injuriesRateLimit: rateLimit,
+      injuriesFetchMode: request.mode
+    };
+    if (injuries) state.injuries = injuries;
+    cache.fixtureSignals[fixtureId] = state;
+    if (injuries?.temporalEligibility?.eligible === true) {
+      mergeApiPiece(apiPieces, fixtureId, { injuries });
+    }
+  }
+};
+
+const fetchInjuries = async (mappedMatches, cache, stats, apiPieces, verifiedMappingSet) => {
+  mappedMatches = restrictToVerifiedMappings(mappedMatches, verifiedMappingSet);
   const skipReason = injuryAccessSkipReason(cache);
   if (skipReason) {
     stats.injurySkippedByAccess = (stats.injurySkippedByAccess || 0) + 1;
@@ -753,68 +1297,121 @@ const fetchInjuries = async (mappedMatches, cache, stats, apiPieces) => {
     .map((entry) => entry.map.fixtureId);
   const uniqueIds = uniq(due.map(String));
 
-  for (const ids of chunk(uniqueIds, 20)) {
-    if (!ids.length) continue;
+  const queue = buildInjuryRequestPlan(cache, uniqueIds);
+  while (queue.length) {
+    if (cache.requestLedger.count >= MAX_CALLS_PER_SYNC) {
+      stats.injurySkippedByBudget = (stats.injurySkippedByBudget || 0) + queue.reduce((sum, item) => sum + item.fixtureIds.length, 0);
+      break;
+    }
+    const request = queue.shift();
     try {
-      const { payload, rateLimit } = await apiGet(cache, "/injuries", { ids: ids.join("-") });
-      const byFixture = buildInjuriesByFixture(mappedMatches, payload.response);
-      for (const fixtureId of ids) {
-        const injuries = byFixture.get(String(fixtureId)) || null;
-        cache.fixtureSignals[fixtureId] = {
-          ...(cache.fixtureSignals[fixtureId] || {}),
-          injuriesFetchedAt: nowIso(),
-          injuriesRows: injuries ? ((injuries.home || []).length + (injuries.away || []).length) : 0,
-          injuriesRateLimit: rateLimit
-        };
-        if (injuries) {
-          cache.fixtureSignals[fixtureId].injuries = injuries;
-          mergeApiPiece(apiPieces, fixtureId, { injuries });
-        }
-      }
+      const { payload, rateLimit } = await apiGet(cache, request.endpoint, request.params);
+      const observedAt = nowIso();
+      recordInjuryResponse({ mappedMatches, cache, apiPieces, request, payload, rateLimit, observedAt });
       stats.injuryCalls += 1;
+      if (request.mode === "fixture") stats.injuryFixtureFallbackCalls = (stats.injuryFixtureFallbackCalls || 0) + 1;
     } catch (error) {
       appendError(cache, error);
-      rememberInjuryAccessError(cache, error);
+      if (request.mode === "bulk" && isBulkIdsUnsupportedError(error)) {
+        rememberInjuryAccessError(cache, error, "bulk");
+        const remainingFixtureIds = request.fixtureIds.concat(queue.flatMap((item) => item.fixtureIds));
+        queue.splice(0, queue.length, ...fixtureInjuryRequests(remainingFixtureIds));
+        stats.injuryBulkFallbacks = (stats.injuryBulkFallbacks || 0) + 1;
+        continue;
+      }
+      rememberInjuryAccessError(cache, error, request.mode);
+      if (accountAccessSkipReason(cache) || /API_FOOTBALL_MAX_CALLS_PER_SYNC/.test(error?.message || "")) break;
+      if (request.mode === "fixture" && injuryAccessSkipReason(cache)) break;
     }
   }
 };
 
-const buildLineups = (entry, response) => {
+const normalizeLineupPlayer = (row) => {
+  const player = row?.player && typeof row.player === "object" ? row.player : row || {};
+  return {
+    playerId: player.id ?? null,
+    name: compactText(player.name) || null,
+    number: player.number ?? null,
+    position: compactText(player.pos || player.position) || null,
+    grid: compactText(player.grid) || null
+  };
+};
+
+const normalizeTeamLineup = (row) => {
+  if (!row || typeof row !== "object") return null;
+  const coach = row.coach && typeof row.coach === "object" ? row.coach : {};
+  return {
+    teamId: row.team?.id ?? null,
+    name: compactText(row.team?.name) || null,
+    coach: {
+      id: coach.id ?? null,
+      name: compactText(coach.name) || null
+    },
+    formation: compactText(row.formation) || null,
+    startXI: (Array.isArray(row.startXI) ? row.startXI : []).map(normalizeLineupPlayer),
+    substitutes: (Array.isArray(row.substitutes) ? row.substitutes : []).map(normalizeLineupPlayer)
+  };
+};
+
+const buildLineups = (entry, response, context = {}) => {
   const rows = Array.isArray(response) ? response : [];
-  const home = rows.find((row) => Number(row?.team?.id) === Number(entry.map.homeTeamId));
-  const away = rows.find((row) => Number(row?.team?.id) === Number(entry.map.awayTeamId));
-  if (!home && !away) return null;
+  const homeRow = rows.find((row) => Number(row?.team?.id) === Number(entry.map.homeTeamId));
+  const awayRow = rows.find((row) => Number(row?.team?.id) === Number(entry.map.awayTeamId));
+  if (!homeRow && !awayRow) return null;
+  const home = normalizeTeamLineup(homeRow);
+  const away = normalizeTeamLineup(awayRow);
   const homeFormation = home?.formation || "";
   const awayFormation = away?.formation || "";
-  const homeStart = Array.isArray(home?.startXI) ? home.startXI.length : 0;
-  const awayStart = Array.isArray(away?.startXI) ? away.startXI.length : 0;
+  const homeStart = home?.startXI?.length || 0;
+  const awayStart = away?.startXI?.length || 0;
+  const metadata = buildPieceMetadata({
+    entry,
+    providerFixtureId: entry.map.fixtureId,
+    endpoint: "/fixtures/lineups",
+    observedAt: context.observedAt,
+    sourceUpdatedAt: context.sourceUpdatedAt,
+    query: { fixture: String(entry.map.fixtureId) }
+  });
   return {
+    ...metadata,
+    home,
+    away,
     homeFormation: homeFormation || undefined,
     awayFormation: awayFormation || undefined,
     summary: multi(`API-FOOTBALL lineups: ${homeFormation || "--"} / ${awayFormation || "--"}, starters ${homeStart}/${awayStart}.`)
   };
 };
 
-const fetchLineups = async (mappedMatches, cache, stats, apiPieces) => {
+const fetchLineups = async (mappedMatches, cache, stats, apiPieces, verifiedMappingSet) => {
+  mappedMatches = restrictToVerifiedMappings(mappedMatches, verifiedMappingSet);
   const due = mappedMatches.filter((entry) => shouldFetchLineups(entry.match, cache.fixtureSignals[entry.map.fixtureId]));
   for (const entry of due) {
     const fixtureId = String(entry.map.fixtureId);
     try {
       const { payload, rateLimit } = await apiGet(cache, "/fixtures/lineups", { fixture: fixtureId });
-      const lineups = buildLineups(entry, payload.response);
+      const observedAt = nowIso();
+      const lineups = buildLineups(entry, payload.response, {
+        observedAt,
+        sourceUpdatedAt: observedAt
+      });
       cache.fixtureSignals[fixtureId] = {
         ...(cache.fixtureSignals[fixtureId] || {}),
-        lineupsFetchedAt: nowIso(),
+        lineupsFetchedAt: observedAt,
         lineupsRows: Array.isArray(payload.response) ? payload.response.length : 0,
         lineupsRateLimit: rateLimit
       };
       if (lineups) {
         cache.fixtureSignals[fixtureId].lineups = lineups;
-        mergeApiPiece(apiPieces, fixtureId, { lineups });
+        if (lineups.temporalEligibility.eligible) {
+          mergeApiPiece(apiPieces, fixtureId, { lineups });
+        } else {
+          stats.lineupsRejectedPostCutoff = (stats.lineupsRejectedPostCutoff || 0) + 1;
+        }
       }
       stats.lineupCalls += 1;
     } catch (error) {
       appendError(cache, error);
+      if (accountAccessSkipReason(cache) || /API_FOOTBALL_MAX_CALLS_PER_SYNC/.test(error?.message || "")) break;
     }
   }
 };
@@ -862,23 +1459,33 @@ const pickOneXTwoOdds = (entry, oddsPayload) => {
   return null;
 };
 
-const fetchOdds = async (mappedMatches, cache, stats, apiPieces) => {
+const fetchOdds = async (mappedMatches, cache, stats, apiPieces, verifiedMappingSet) => {
+  mappedMatches = restrictToVerifiedMappings(mappedMatches, verifiedMappingSet);
   const due = mappedMatches.filter((entry) => shouldFetchOdds(entry.match, cache.fixtureSignals[entry.map.fixtureId]));
   for (const entry of due) {
     const fixtureId = String(entry.map.fixtureId);
     try {
       const { payload, rateLimit } = await apiGet(cache, "/odds", { fixture: fixtureId });
+      const observedAt = nowIso();
       const oneXTwo = pickOneXTwoOdds(entry, payload.response);
       cache.fixtureSignals[fixtureId] = {
         ...(cache.fixtureSignals[fixtureId] || {}),
-        oddsFetchedAt: nowIso(),
+        oddsFetchedAt: observedAt,
         oddsRows: Array.isArray(payload.response) ? payload.response.length : 0,
         oddsRateLimit: rateLimit
       };
       if (oneXTwo) {
         const summary = `API-FOOTBALL ${oneXTwo.bookmaker} 1X2: ${oneXTwo.odds.odds1.toFixed(2)} / ${oneXTwo.odds.oddsX.toFixed(2)} / ${oneXTwo.odds.odds2.toFixed(2)}.`;
+        const metadata = buildPieceMetadata({
+          entry,
+          providerFixtureId: fixtureId,
+          endpoint: "/odds",
+          observedAt,
+          sourceUpdatedAt: oneXTwo.updatedAt || observedAt,
+          query: { fixture: fixtureId }
+        });
         const apiFootballOdds = {
-          source: "api-football",
+          ...metadata,
           bookmaker: oneXTwo.bookmaker,
           bet: oneXTwo.bet,
           updatedAt: oneXTwo.updatedAt,
@@ -886,11 +1493,16 @@ const fetchOdds = async (mappedMatches, cache, stats, apiPieces) => {
           summary: multi(summary)
         };
         cache.fixtureSignals[fixtureId].apiFootballOdds = apiFootballOdds;
-        mergeApiPiece(apiPieces, fixtureId, { apiFootballOdds });
+        if (apiFootballOdds.temporalEligibility.eligible) {
+          mergeApiPiece(apiPieces, fixtureId, { apiFootballOdds });
+        } else {
+          stats.oddsRejectedPostCutoff = (stats.oddsRejectedPostCutoff || 0) + 1;
+        }
       }
       stats.oddsCalls += 1;
     } catch (error) {
       appendError(cache, error);
+      if (accountAccessSkipReason(cache) || /API_FOOTBALL_MAX_CALLS_PER_SYNC/.test(error?.message || "")) break;
     }
   }
 };
@@ -902,6 +1514,54 @@ const mergeSourceName = (existingSource, nextSource) => {
     .map((item) => item.trim())
     .filter(Boolean);
   return uniq(parts).join("+") || nextSource || existingSource || "api-football";
+};
+
+const localizedSummaryText = (piece) => compactText(
+  typeof piece?.summary === "string"
+    ? piece.summary
+    : piece?.summary?.en || piece?.summary?.zh || ""
+);
+
+const isApiFootballPiece = (piece) => /api-football/i.test(`${piece?.source || ""} ${localizedSummaryText(piece)}`);
+
+const retainExistingPrematchPiece = (piece) => {
+  if (!piece) return false;
+  if (!isApiFootballPiece(piece)) return true;
+  return piece.temporalEligibility?.eligible === true;
+};
+
+const hasApiFootballPrematchFeatures = (signal) => Boolean(
+  isApiFootballPiece(signal?.injuries)
+  || isApiFootballPiece(signal?.lineups)
+  || isApiFootballPiece(signal?.externalOdds)
+  || signal?.bookmakerOdds?.apiFootball
+  || /api-football/i.test(signal?.bookmakerOdds?.had?.source || "")
+);
+
+const stripUnverifiedApiFootballFeatures = (signal, audit = {}) => {
+  if (!signal || typeof signal !== "object" || Array.isArray(signal)) return signal;
+  if (!hasApiFootballPrematchFeatures(signal) && !signal.apiFootball && !audit.fixtureId) return signal;
+  const next = { ...signal };
+  for (const key of ["injuries", "lineups", "externalOdds"]) {
+    if (isApiFootballPiece(next[key])) delete next[key];
+  }
+  if (next.bookmakerOdds && typeof next.bookmakerOdds === "object") {
+    const bookmakerOdds = { ...next.bookmakerOdds };
+    delete bookmakerOdds.apiFootball;
+    if (/api-football/i.test(bookmakerOdds.had?.source || "")) delete bookmakerOdds.had;
+    if (Object.keys(bookmakerOdds).length) next.bookmakerOdds = bookmakerOdds;
+    else delete next.bookmakerOdds;
+  }
+  next.apiFootball = {
+    ...(signal.apiFootball || {}),
+    ...(audit.fixtureId ? { fixtureId: audit.fixtureId } : {}),
+    mappingVerified: false,
+    enrichmentEligible: false,
+    verificationStatus: "audit-only",
+    verificationBlockers: uniq(audit.blockers || ["provider-entity-registry-not-exact"]),
+    lastCheckedAt: audit.checkedAt || nowIso(),
+  };
+  return next;
 };
 
 const mergeSignal = (existing, apiSignal) => {
@@ -916,13 +1576,27 @@ const mergeSignal = (existing, apiSignal) => {
     }
   };
 
-  if (existing?.injuries && !apiSignal.injuries) next.injuries = existing.injuries;
-  if (existing?.lineups && !apiSignal.lineups) next.lineups = existing.lineups;
-  if (existing?.externalOdds && !apiSignal.externalOdds) next.externalOdds = existing.externalOdds;
+  if (existing?.injuries && !apiSignal.injuries) {
+    if (retainExistingPrematchPiece(existing.injuries)) next.injuries = existing.injuries;
+    else delete next.injuries;
+  }
+  if (existing?.lineups && !apiSignal.lineups) {
+    if (retainExistingPrematchPiece(existing.lineups)) next.lineups = existing.lineups;
+    else delete next.lineups;
+  }
+  if (existing?.externalOdds && !apiSignal.externalOdds) {
+    if (retainExistingPrematchPiece(existing.externalOdds)) next.externalOdds = existing.externalOdds;
+    else delete next.externalOdds;
+  }
 
   next.bookmakerOdds = {
     ...(existing?.bookmakerOdds || {})
   };
+
+  if (!apiSignal.bookmakerOdds && next.bookmakerOdds.apiFootball && !retainExistingPrematchPiece(next.bookmakerOdds.apiFootball)) {
+    delete next.bookmakerOdds.apiFootball;
+    if (/api-football/i.test(next.bookmakerOdds.had?.source || "")) delete next.bookmakerOdds.had;
+  }
 
   if (apiSignal.bookmakerOdds) {
     next.bookmakerOdds = {
@@ -940,7 +1614,7 @@ const mergeSignal = (existing, apiSignal) => {
   return next;
 };
 
-const mergeExternalSignals = (matches, cache, apiPieces, stats) => {
+const mergeExternalSignals = (matches, cache, apiPieces, stats, verifiedMappingSet = new Set()) => {
   const existing = readJsonFile(EXTERNAL_SIGNALS_FILE, { version: 1, source: "external-signals", matches: {}, sources: {} });
   const outputMatches = existing?.matches && typeof existing.matches === "object" && !Array.isArray(existing.matches)
     ? { ...existing.matches }
@@ -950,6 +1624,23 @@ const mergeExternalSignals = (matches, cache, apiPieces, stats) => {
   for (const match of matches) {
     const key = matchKey(match);
     const map = cache.fixtureMap[key];
+    if (!(verifiedMappingSet instanceof Set) || !verifiedMappingSet.has(key)) {
+      const verification = mappingVerificationState(match, map, null);
+      let sanitizedRows = 0;
+      for (const signalKey of externalSignalKeys(match)) {
+        if (!outputMatches[signalKey]) continue;
+        const sanitized = stripUnverifiedApiFootballFeatures(outputMatches[signalKey], {
+          fixtureId: map?.fixtureId || outputMatches[signalKey]?.apiFootball?.fixtureId || null,
+          blockers: verification.blockers,
+          checkedAt: updatedAt,
+        });
+        if (sanitized !== outputMatches[signalKey]) sanitizedRows += 1;
+        outputMatches[signalKey] = sanitized;
+      }
+      if (map?.fixtureId) stats.unverifiedCacheAuditRows += 1;
+      stats.unverifiedApiSignalRowsSanitized += sanitizedRows;
+      continue;
+    }
     if (!map?.fixtureId || map.confidence < MIN_MATCH_CONFIDENCE) continue;
     const fixtureId = String(map.fixtureId);
     const pieces = apiPieces[fixtureId] || {};
@@ -968,6 +1659,9 @@ const mergeExternalSignals = (matches, cache, apiPieces, stats) => {
         fixtureDate: map.fixtureDate,
         confidence: map.confidence,
         matchedAt: map.matchedAt || null,
+        mappingVerified: true,
+        enrichmentEligible: true,
+        verificationStatus: "registry-exact",
         lastCheckedAt: updatedAt
       },
       ...(pieces.injuries ? { injuries: pieces.injuries } : {}),
@@ -975,6 +1669,11 @@ const mergeExternalSignals = (matches, cache, apiPieces, stats) => {
       ...(apiFootballOdds && !outputMatches[externalSignalKeys(match)[0]]?.externalOdds ? {
         externalOdds: {
           source: `api-football:${apiFootballOdds.bookmaker}`,
+          observedAt: apiFootballOdds.observedAt,
+          sourceUpdatedAt: apiFootballOdds.sourceUpdatedAt,
+          providerFixtureId: apiFootballOdds.providerFixtureId,
+          provenance: apiFootballOdds.provenance,
+          temporalEligibility: apiFootballOdds.temporalEligibility,
           odds1: apiFootballOdds.had.odds1,
           oddsX: apiFootballOdds.had.oddsX,
           odds2: apiFootballOdds.had.odds2,
@@ -1043,6 +1742,12 @@ const main = async () => {
     matchCount: 0,
     eligibleMatches: 0,
     cachedFixtureMatches: 0,
+    cachedEntityConflicts: 0,
+    unverifiedFreshCacheRevalidations: 0,
+    verifiedMappingCount: 0,
+    unverifiedMappingCount: 0,
+    unverifiedCacheAuditRows: 0,
+    unverifiedApiSignalRowsSanitized: 0,
     newFixtureMatches: 0,
     lowConfidenceMatches: 0,
     fixtureDatesSkippedByAccess: 0,
@@ -1050,17 +1755,47 @@ const main = async () => {
     signalsMapped: 0,
     injuryCalls: 0,
     injurySkippedByAccess: 0,
+    injuryBulkFallbacks: 0,
+    injuryFixtureFallbackCalls: 0,
+    injurySkippedByBudget: 0,
     lineupCalls: 0,
+    lineupsRejectedPostCutoff: 0,
     oddsCalls: 0,
+    oddsRejectedPostCutoff: 0,
+    entityRegistryFile: ENTITY_REGISTRY_FILE,
+    entityEvidenceRows: 0,
+    entityConflictsAdded: 0,
+    entityEvidenceBlockers: {},
     callsThisSync: 0,
     maxCallsPerSync: MAX_CALLS_PER_SYNC,
     errors: []
   };
 
+  const currentMatches = readJsonFile(CURRENT_MATCHES_FILE, readJsonFile(FALLBACK_MATCHES_FILE, []));
+  const matches = Array.isArray(currentMatches) ? currentMatches : [];
+  stats.matchCount = matches.length;
+  stats.eligibleMatches = matches.filter(isEligibleMatch).length;
+
   if (!ENABLED || !API_KEY) {
+    // Disabled provider access must not preserve old, unverified numeric
+    // fragments. Existing registry-exact rows remain eligible for cached use;
+    // every other API-Football fragment is reduced to audit metadata.
+    try {
+      const committedRegistry = loadEntityRegistry(ENTITY_REGISTRY_FILE, { createdAt: startedAt });
+      const eligibleMatches = matches.filter(isEligibleMatch);
+      const committedVerifiedSet = buildVerifiedMappingSet(eligibleMatches, cache, committedRegistry);
+      stats.verifiedMappingCount = committedVerifiedSet.size;
+      stats.unverifiedMappingCount = eligibleMatches.filter((match) => (
+        cache.fixtureMap[matchKey(match)]?.fixtureId
+        && !committedVerifiedSet.has(matchKey(match))
+      )).length;
+      mergeExternalSignals(matches, cache, {}, stats, committedVerifiedSet);
+    } catch (error) {
+      stats.ok = false;
+      stats.errors.push(error.message || String(error));
+    }
     const skipped = {
       ...stats,
-      ok: true,
       skipped: true,
       reason: !ENABLED ? "ENABLE_API_FOOTBALL_SYNC=0" : "API_FOOTBALL_KEY is not configured",
       finishedAt: nowIso()
@@ -1070,32 +1805,127 @@ const main = async () => {
     return;
   }
 
-  const currentMatches = readJsonFile(CURRENT_MATCHES_FILE, readJsonFile(FALLBACK_MATCHES_FILE, []));
-  const matches = Array.isArray(currentMatches) ? currentMatches : [];
-  stats.matchCount = matches.length;
-  stats.eligibleMatches = matches.filter(isEligibleMatch).length;
+  let verifiedMappingSet = new Set();
+  let externalSignalsMerged = false;
 
   try {
-    await resolveFixtureMaps(matches, cache, stats);
-    const mappedMatches = matches
-      .filter(isEligibleMatch)
-      .map((match) => ({ match, map: cache.fixtureMap[matchKey(match)] }))
-      .filter((entry) => entry.map?.fixtureId && entry.map.confidence >= MIN_MATCH_CONFIDENCE);
+    const entityRegistryFileExisted = fs.existsSync(ENTITY_REGISTRY_FILE);
+    let entityRegistry = loadEntityRegistry(ENTITY_REGISTRY_FILE, { createdAt: startedAt });
+    let persistedEntityRegistryHash = entityRegistryFileExisted ? entityRegistry.registryHash : null;
+    const absorbKnownFixtureMaps = (trustContexts = new Map()) => {
+      const learned = absorbEntityResolutionEvidence(matches, cache, entityRegistry, trustContexts);
+      entityRegistry = learned.registry;
+      stats.entityEvidenceRows += learned.changedRows;
+      stats.entityConflictsAdded += learned.conflictsAdded;
+      for (const [blocker, count] of Object.entries(learned.blockers)) {
+        stats.entityEvidenceBlockers[blocker] = Number(stats.entityEvidenceBlockers[blocker] || 0) + Number(count || 0);
+      }
+      if (learned.changedRows > 0 || !fs.existsSync(ENTITY_REGISTRY_FILE)) {
+        writeEntityRegistryAtomic(ENTITY_REGISTRY_FILE, entityRegistry, {
+          expectedRegistryHash: persistedEntityRegistryHash,
+        });
+        persistedEntityRegistryHash = entityRegistry.registryHash;
+      }
+    };
+    absorbKnownFixtureMaps();
+    const initiallyCommittedRegistry = loadEntityRegistry(ENTITY_REGISTRY_FILE);
+    if (initiallyCommittedRegistry.registryHash !== entityRegistry.registryHash) {
+      throw new Error("initial entity registry commit hash mismatch; provider enrichment remains blocked");
+    }
+    entityRegistry = initiallyCommittedRegistry;
+    verifiedMappingSet = buildVerifiedMappingSet(
+      matches.filter(isEligibleMatch),
+      cache,
+      entityRegistry,
+    );
+    stats.verifiedMappingCount = verifiedMappingSet.size;
+    stats.unverifiedMappingCount = matches.filter(isEligibleMatch).filter((match) => (
+      cache.fixtureMap[matchKey(match)]?.fixtureId
+      && !verifiedMappingSet.has(matchKey(match))
+    )).length;
+    const accountStatus = await preflightAccountStatus(cache);
+    stats.accountStatus = accountStatus;
+    if (!accountStatus.eligible) {
+      stats.ok = false;
+      stats.skipped = true;
+      stats.failClosed = true;
+      stats.reason = accountStatus.reason || "API-Football account preflight blocked this sync.";
+      return;
+    }
+
+    const liveTrustContexts = await resolveFixtureMaps(matches, cache, stats, entityRegistry);
+    if (liveTrustContexts.size > 0) absorbKnownFixtureMaps(liveTrustContexts);
+    // A current-cycle mapping is not consumable merely because the in-memory
+    // learning call succeeded. Re-read the committed registry and require the
+    // exact content hash before constructing the downstream allow-list.
+    const committedEntityRegistry = loadEntityRegistry(ENTITY_REGISTRY_FILE);
+    if (committedEntityRegistry.registryHash !== entityRegistry.registryHash) {
+      throw new Error("entity registry commit hash mismatch; provider enrichment remains blocked");
+    }
+    entityRegistry = committedEntityRegistry;
+    const fixtureBlockReason = accountAccessSkipReason(cache);
+    if (fixtureBlockReason) {
+      stats.ok = false;
+      stats.skipped = true;
+      stats.failClosed = true;
+      stats.reason = fixtureBlockReason;
+      return;
+    }
+    const eligibleMatches = matches.filter(isEligibleMatch);
+    verifiedMappingSet = buildVerifiedMappingSet(
+      eligibleMatches,
+      cache,
+      entityRegistry,
+      liveTrustContexts,
+    );
+    const mappedMatches = selectVerifiedMappedMatches(
+      eligibleMatches,
+      cache,
+      verifiedMappingSet,
+    );
+    stats.verifiedMappingCount = verifiedMappingSet.size;
+    stats.unverifiedMappingCount = eligibleMatches.filter((match) => (
+      cache.fixtureMap[matchKey(match)]?.fixtureId
+      && !verifiedMappingSet.has(matchKey(match))
+    )).length;
     stats.mappedMatches = mappedMatches.length;
 
     const apiPieces = {};
-    await fetchInjuries(mappedMatches, cache, stats, apiPieces);
-    await fetchLineups(mappedMatches, cache, stats, apiPieces);
-    await fetchOdds(mappedMatches, cache, stats, apiPieces);
-    hydrateCachedApiPieces(mappedMatches, cache, apiPieces);
+    await fetchInjuries(mappedMatches, cache, stats, apiPieces, verifiedMappingSet);
+    if (!accountAccessSkipReason(cache)) {
+      await fetchLineups(mappedMatches, cache, stats, apiPieces, verifiedMappingSet);
+    }
+    if (!accountAccessSkipReason(cache)) {
+      await fetchOdds(mappedMatches, cache, stats, apiPieces, verifiedMappingSet);
+    }
+    const enrichmentBlockReason = accountAccessSkipReason(cache);
+    if (enrichmentBlockReason) {
+      stats.ok = false;
+      stats.skipped = true;
+      stats.failClosed = true;
+      stats.reason = enrichmentBlockReason;
+      return;
+    }
+    hydrateCachedApiPieces(mappedMatches, cache, apiPieces, verifiedMappingSet);
     stats.callsThisSync = Math.max(0, cache.requestLedger.count - startingCalls);
 
-    mergeExternalSignals(matches, cache, apiPieces, stats);
+    mergeExternalSignals(matches, cache, apiPieces, stats, verifiedMappingSet);
+    externalSignalsMerged = true;
   } catch (error) {
     stats.ok = false;
     stats.errors.push(error.message || String(error));
     appendError(cache, error);
   } finally {
+    if (!externalSignalsMerged) {
+      try {
+        mergeExternalSignals(matches, cache, {}, stats, verifiedMappingSet);
+        externalSignalsMerged = true;
+      } catch (error) {
+        stats.ok = false;
+        stats.errors.push(`fail-closed external signal cleanup failed: ${error.message || String(error)}`);
+        appendError(cache, error);
+      }
+    }
     cache.updatedAt = nowIso();
     writeJsonFile(CACHE_FILE, cache);
     const meta = {
@@ -1112,7 +1942,36 @@ const main = async () => {
   }
 };
 
-main().catch((error) => {
-  console.error(error.message || error);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error.message || error);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  TEAM_ALIASES,
+  LEAGUE_ALIASES,
+  accountAccessSkipReason,
+  absorbEntityResolutionEvidence,
+  aliasesFor,
+  buildFixtureResolutionPlan,
+  buildInjuriesByFixture,
+  buildInjuryRequestPlan,
+  buildLineups,
+  buildPieceMetadata,
+  buildVerifiedMappingSet,
+  createCache,
+  confidenceForFixture,
+  isBulkIdsUnsupportedError,
+  mappingVerificationState,
+  mergeSignal,
+  normalizeAccountStatus,
+  normalizeCache,
+  normalizeName,
+  prematchCutoffFor,
+  restrictToVerifiedMappings,
+  selectVerifiedMappedMatches,
+  stripUnverifiedApiFootballFeatures,
+  temporalEligibilityFor
+};
