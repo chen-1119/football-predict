@@ -74,6 +74,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
   const toolsActive = currentTab === 'tools' || currentTab === 'best' || currentTab === 'generator';
   const publicationTransition = [
     'generation-sqlite-mismatch',
+    'generation-pair-refresh',
     'sqlite-previous-pair',
     'previous-generation',
     'generation-previous'

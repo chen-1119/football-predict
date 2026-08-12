@@ -874,6 +874,34 @@ const samePublicationIdentity = (left, right) => Boolean(
   && left?.committedAt === right?.committedAt
 );
 
+const selectFastResultReceiptDuringPairTransition = ({
+  sqliteState,
+  cachedState,
+  transitionActive = false,
+  validatedAtMs = 0,
+  nowMs = Date.now(),
+  ttlMs = 120_000,
+} = {}) => {
+  if (sqliteState?.valid === true && sqliteState?.receipt) return sqliteState;
+  const ageMs = Math.max(0, Number(nowMs || 0) - Number(validatedAtMs || 0));
+  if (
+    sqliteState?.reason !== "publication-identity-mismatch"
+    || transitionActive !== true
+    || cachedState?.valid !== true
+    || !cachedState?.receipt
+    || !Number.isFinite(ageMs)
+    || ageMs > Math.max(1, Number(ttlMs || 0))
+  ) return sqliteState;
+  return {
+    ...cachedState,
+    reason: "sqlite-pair-refresh-pending",
+    transition: true,
+    transitionSource: "cached-validated-receipt",
+    sqliteReason: sqliteState.reason,
+    validatedAt: new Date(Number(validatedAtMs)).toISOString(),
+  };
+};
+
 const assertActivePublicationUnchanged = ({ storeDir, publicDataDir, expected }) => {
   const actual = resolveActivePublication({ storeDir, publicDataDir });
   if (!samePublicationIdentity(expected?.identity, actual.identity)) {
@@ -1331,6 +1359,7 @@ module.exports = {
   resolveServingPublication,
   resolveServingPublicationForSqliteIdentity,
   safeGenerationCandidate,
+  selectFastResultReceiptDuringPairTransition,
   samePublicationIdentity,
   sqlitePublicationMatches,
   validateBundlePayloads,

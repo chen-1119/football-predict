@@ -2366,6 +2366,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
   );
   const publicationTransition = [
     'generation-sqlite-mismatch',
+    'generation-pair-refresh',
     'sqlite-previous-pair',
     'previous-generation',
     'generation-previous'

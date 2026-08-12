@@ -86,6 +86,7 @@ const {
   readPublicationJson,
   resolveServingPublication,
   resolveServingPublicationForSqliteIdentity,
+  selectFastResultReceiptDuringPairTransition,
 } = require("./dataGenerationBundle.cjs");
 const {
   RETRIEVAL_VERSION: llmRetrievalVersion,
@@ -161,6 +162,14 @@ const installedSignedTrainingAsset = installedHistoricalTrainingInspection.ok ==
 let basePublicationCache = null;
 let basePublicationRefresh = null;
 let sqlitePublicationIdentityCache = null;
+const fastResultReceiptTransitionCache = new Map();
+const fastResultReceiptTransitionTtlMs = Math.max(
+  30_000,
+  Math.min(
+    5 * 60_000,
+    Number(process.env.FAST_RESULT_RECEIPT_TRANSITION_TTL_MS || 120_000) || 120_000,
+  ),
+);
 const basePublicationRefreshState = {
   status: "idle",
   requestedToken: null,
@@ -228,6 +237,61 @@ const generationPointerToken = () => {
       : `sqlite:unavailable:${sqlite.fileToken || "unknown"}`);
   }
   return parts.join("|");
+};
+const publicationIdentityToken = (identity = null) => [
+  identity?.version || "",
+  identity?.mode || "",
+  identity?.generationId || "",
+  identity?.manifestHash || "",
+  identity?.sourceCycleId || "",
+  identity?.committedAt || "",
+].join(":");
+const publicationPairTransitionActive = (publication = null) => {
+  if (!publication?.identity || !basePublicationCache?.publication?.identity) return false;
+  if (
+    publicationIdentityToken(publication.identity)
+    !== publicationIdentityToken(basePublicationCache.publication.identity)
+  ) return false;
+  return Boolean(
+    basePublicationRefresh
+    || [
+      "validating",
+      "publication-write-in-progress-serving-previous",
+      "superseded-serving-previous",
+    ].includes(basePublicationRefreshState.status)
+  );
+};
+const pruneFastResultReceiptTransitionCache = (now = Date.now()) => {
+  for (const [key, entry] of fastResultReceiptTransitionCache.entries()) {
+    if (now - Number(entry?.validatedAtMs || 0) > fastResultReceiptTransitionTtlMs) {
+      fastResultReceiptTransitionCache.delete(key);
+    }
+  }
+};
+const readPublicationFastResultReceiptState = async (publication) => {
+  const identity = publication?.identity || null;
+  const key = publicationIdentityToken(identity);
+  const state = await readSqliteFastResultReceiptState(sqliteDbPath, {
+    publicationIdentity: identity,
+  });
+  const now = Date.now();
+  pruneFastResultReceiptTransitionCache(now);
+  if (state?.valid === true && state?.receipt) {
+    fastResultReceiptTransitionCache.set(key, {
+      state,
+      validatedAtMs: now,
+    });
+    return state;
+  }
+  const cached = fastResultReceiptTransitionCache.get(key);
+  return selectFastResultReceiptDuringPairTransition({
+    sqliteState: state,
+    cachedState: cached?.state || null,
+    transitionActive: publicationPairTransitionActive(publication),
+    validatedAtMs: cached?.validatedAtMs || 0,
+    nowMs: now,
+    ttlMs: fastResultReceiptTransitionTtlMs,
+  });
 };
 const releasePublicationLease = (lease) => {
   if (!lease) return;
@@ -3967,8 +4031,12 @@ const sqliteStatusMetaKey = (meta = null) => [
 ].join("|");
 
 const getCachedSqliteReadStatus = async (meta = null, publicationIdentity = null) => {
+  const sqliteFileToken = shouldPreferSqliteRead()
+    ? cachedSqlitePublicationIdentity().fileToken || "unknown"
+    : "not-preferred";
   const metaKey = [
     sqliteStatusMetaKey(meta),
+    sqliteFileToken,
     publicationIdentity?.mode || "legacy-bootstrap",
     publicationIdentity?.generationId || "",
     publicationIdentity?.manifestHash || "",
@@ -6617,6 +6685,10 @@ const compactFastResultIntegrityState = (state) => ({
   legacy: state?.legacy === true,
   reason: state?.reason || null,
   revision: state?.revision ?? null,
+  transition: state?.transition === true,
+  transitionSource: state?.transitionSource || null,
+  sqliteReason: state?.sqliteReason || null,
+  validatedAt: state?.validatedAt || null,
   ...(state?.error ? { error: state.error } : {}),
 });
 
@@ -6709,13 +6781,13 @@ const getPublicV1HealthBase = async () => {
     getCachedSqliteReadStatus(meta, basePublication.identity || null),
     readJsonFile(syncWorkerStatusPath, null),
     modelEvaluationPromise,
-    readSqliteFastResultReceiptState(sqliteDbPath, {
-      publicationIdentity: basePublication.identity || null,
-    }),
+    readPublicationFastResultReceiptState(basePublication),
   ]);
   const fastResultIntegrity = compactFastResultIntegrityState(fastResultIntegrityRaw);
   const syncWorkerStatus = syncWorkerRuntimeStatus(rawSyncWorkerStatus);
   const previousGeneration = basePublication.mode === "previous-generation";
+  const pairRefreshPending = sqlite?.baseReady === false
+    && publicationPairTransitionActive(basePublication);
   const sqliteUsable = sqliteFreshEnough(sqlite, "currentMatches", 0);
   const rawMetaCurrentCount = Number(meta?.files?.current);
   const metaCurrentCount = Number.isFinite(rawMetaCurrentCount)
@@ -6742,6 +6814,8 @@ const getPublicV1HealthBase = async () => {
     : {
         source: countDivergence.active
           ? "generation-sqlite-empty-divergence"
+          : pairRefreshPending
+          ? "generation-pair-refresh"
           : previousGeneration
           ? "previous-generation"
           : sqlite?.available
@@ -6750,11 +6824,12 @@ const getPublicV1HealthBase = async () => {
               : sqlite?.stale ? "file-sqlite-stale" : "file-sqlite-empty")
           : "file-sqlite-unavailable",
         stale: countDivergence.active
-          || previousGeneration
+          || (previousGeneration && !pairRefreshPending)
           || syncMetaLaneStale(meta, "current")
           || !Number.isFinite(rawMetaCurrentCount),
         count: metaCurrentCount,
-        blockedReason: countDivergence.blockedReason,
+        blockedReason: countDivergence.blockedReason
+          || (pairRefreshPending ? "sqlite-pair-refresh-pending" : null),
         sqliteCount: sqliteCurrentCount,
         generationCount: metaCurrentCount,
         dbUpdatedAt: sqliteStatusUpdatedAt(sqlite),
@@ -6914,9 +6989,7 @@ const buildPublicSyncMeta = async () => {
       warnings: [],
       errors: [error.message || String(error)]
     })),
-    readSqliteFastResultReceiptState(sqliteDbPath, {
-      publicationIdentity: basePublication.identity,
-    }).catch((error) => ({
+    readPublicationFastResultReceiptState(basePublication).catch((error) => ({
       available: true,
       valid: false,
       missing: false,

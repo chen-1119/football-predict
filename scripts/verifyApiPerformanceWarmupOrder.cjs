@@ -394,6 +394,17 @@ check('public health avoids full current payload and datastore diagnostics', () 
   assert.equal(publicHealthBase.includes('readGptPredictions('), false);
 });
 
+check('public health keeps an exact validated receipt during a bounded SQLite pair refresh', () => {
+  assert.ok(serverSource.includes('const fastResultReceiptTransitionCache = new Map();'));
+  assert.ok(serverSource.includes('publicationPairTransitionActive(publication)'));
+  assert.ok(serverSource.includes('selectFastResultReceiptDuringPairTransition({'));
+  assert.ok(publicHealthBase.includes('readPublicationFastResultReceiptState(basePublication)'));
+  assert.ok(publicHealthBase.includes('source: countDivergence.active'));
+  assert.ok(publicHealthBase.includes('? "generation-pair-refresh"'));
+  assert.ok(publicHealthBase.includes('? "sqlite-pair-refresh-pending" : null'));
+  assert.ok(serverSource.includes('cachedSqlitePublicationIdentity().fileToken || "unknown"'));
+});
+
 check('current and history payload builds use independent bounded lanes across cache invalidation', () => {
   assert.ok(serverSource.includes('const serializeV1ListPayloadBuild = (builder, laneName = "current") => {'));
   assert.ok(serverSource.includes('const v1ListPayloadLanes = {'));
