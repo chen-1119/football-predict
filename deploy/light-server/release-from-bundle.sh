@@ -6982,14 +6982,15 @@ wait_for_release_candidate_heartbeat_public_budget \
 
 if [ -n "$PUBLIC_BASE_URL" ]; then
   log "verify public origin ${PUBLIC_BASE_URL}"
-  # Deployment readiness requires a functioning service, protected API,
-  # SQLite, worker, and frontend assets. Upstream source freshness remains a
-  # separate business-health signal and already fails formal picks closed; it
-  # must not roll back a valid code release after a long enrichment cycle.
+  # The worker is deliberately SIGSTOP-frozen across strict SQLite and public
+  # projection verification.  Verify the service, protected API, SQLite and
+  # frontend assets here, then require the worker in a second pass immediately
+  # after it is resumed below.  Requiring workerRunning in this frozen window is
+  # self-contradictory and caused r481 to roll back an otherwise valid release.
   REMOTE_BASE_URL="$PUBLIC_BASE_URL" \
   REMOTE_REQUIRE_HEALTHY=0 \
   REMOTE_REQUIRE_SQLITE=1 \
-  REMOTE_REQUIRE_SYNC_WORKER=1 \
+  REMOTE_REQUIRE_SYNC_WORKER=0 \
   REMOTE_SQLITE_READY_ATTEMPTS="${REMOTE_SQLITE_READY_ATTEMPTS:-12}" \
   REMOTE_SQLITE_READY_RETRY_DELAY_MS="${REMOTE_SQLITE_READY_RETRY_DELAY_MS:-5000}" \
   REMOTE_SYNC_WORKER_ATTEMPTS="${REMOTE_SYNC_WORKER_ATTEMPTS:-12}" \
@@ -7002,6 +7003,19 @@ release_candidate_heartbeat_keeper_is_healthy \
 stop_release_candidate_heartbeat_keeper clean \
   || rollback "release heartbeat keeper could not be reaped after readiness"
 resume_worker_after_readiness || rollback "sync worker failed to resume after readiness"
+if [ -n "$PUBLIC_BASE_URL" ]; then
+  log "verify resumed sync worker at public origin ${PUBLIC_BASE_URL}"
+  REMOTE_BASE_URL="$PUBLIC_BASE_URL" \
+  REMOTE_REQUIRE_HEALTHY=0 \
+  REMOTE_REQUIRE_SQLITE=1 \
+  REMOTE_REQUIRE_SYNC_WORKER=1 \
+  REMOTE_SQLITE_READY_ATTEMPTS="${REMOTE_SQLITE_READY_ATTEMPTS:-12}" \
+  REMOTE_SQLITE_READY_RETRY_DELAY_MS="${REMOTE_SQLITE_READY_RETRY_DELAY_MS:-5000}" \
+  REMOTE_SYNC_WORKER_ATTEMPTS="${REMOTE_SYNC_WORKER_ATTEMPTS:-12}" \
+  REMOTE_SYNC_WORKER_RETRY_DELAY_MS="${REMOTE_SYNC_WORKER_RETRY_DELAY_MS:-5000}" \
+  run_as_service_user "$NODE_HOME/bin/node" "$APP_DIR/scripts/verifyRemotePublicReadiness.cjs" \
+    || rollback "resumed sync worker public readiness failed"
+fi
 write_recovery_phase "readiness-passed" || rollback "recovery phase update failed after readiness"
 enable_managed_timers_after_readiness || rollback "managed timers could not be enabled after readiness"
 

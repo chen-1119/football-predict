@@ -3379,6 +3379,18 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
   assert.match(bundleRelease, /RELEASE_WORKER_PRIORITY_REQUEST_TTL_SECONDS:-5400/);
   assert.match(priorityPrepareBody, /--ttl-seconds "\$WORKER_PRIORITY_REQUEST_TTL_SECONDS"/);
   assert.match(bundleRelease, /RELEASE_WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS:-1200/);
+  assert.match(bundleRelease, /REMOTE_REQUIRE_SYNC_WORKER=0/);
+  assert.match(bundleRelease, /resume_worker_after_readiness \|\| rollback "sync worker failed to resume after readiness"/);
+  assert.match(bundleRelease, /REMOTE_REQUIRE_SYNC_WORKER=1/);
+  assert.match(bundleRelease, /rollback "resumed sync worker public readiness failed"/);
+  assert.ok(
+    bundleRelease.indexOf("REMOTE_REQUIRE_SYNC_WORKER=0")
+      < bundleRelease.indexOf("resume_worker_after_readiness || rollback \"sync worker failed to resume after readiness\"")
+  );
+  assert.ok(
+    bundleRelease.indexOf("resume_worker_after_readiness || rollback \"sync worker failed to resume after readiness\"")
+      < bundleRelease.indexOf("REMOTE_REQUIRE_SYNC_WORKER=1")
+  );
   assert.match(bundleRelease, /WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS" -le 1500/);
   assert.match(bundleRelease, /officialPublishEvidenceAfter/);
   assert.match(bundleRelease, /RELEASE_POST_SWAP_TRANSITION_ROLLBACK_MARGIN_SECONDS:-120/);
