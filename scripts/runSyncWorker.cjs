@@ -1732,10 +1732,11 @@ const describeCycleStages = () => ([
       "sync:500:details",
       "sync:weather",
       "sync:football-data-fixtures",
-      "sync:api-football",
       "sync:open-research",
       "sync:web-consensus",
+      "sync:free-football",
       "sync:prematch",
+      "audit:recommendation-bias",
       "validate:sources",
       "validate:data:post-enrichment",
       "reconcile:fast-results-generation:post-enrichment",
@@ -2123,14 +2124,19 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
       "sync:football-data-fixtures",
       {}
     ));
-    enrichmentSteps.push(await runEnrichment(process.env.ENABLE_API_FOOTBALL_SYNC === "1", "sync:api-football"));
     enrichmentSteps.push(await runEnrichment(process.env.ENABLE_OPEN_RESEARCH_SYNC !== "0", "sync:open-research"));
     enrichmentSteps.push(await runEnrichment(
       process.env.ENABLE_WEB_CONSENSUS_SYNC !== "0" && webConsensusRefreshDue(),
       "sync:web-consensus",
       {}
     ));
+    enrichmentSteps.push(await runEnrichment(
+      process.env.ENABLE_FREE_FOOTBALL_SYNC !== "0",
+      "sync:free-football",
+      {}
+    ));
     enrichmentSteps.push(await runEnrichment(process.env.ENABLE_PREMATCH_SIGNALS_SYNC !== "0", "sync:prematch"));
+    enrichmentSteps.push(await runEnrichment(true, "audit:recommendation-bias"));
     const sourceValidationStep = await runOptional(true, "validate:sources", {
       REQUIRE_EXTERNAL_SIGNALS: process.env.REQUIRE_EXTERNAL_SIGNALS === "0" ? "0" : "1"
     }, {

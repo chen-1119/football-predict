@@ -33,15 +33,28 @@ function ageMinutes(iso) {
   return (Date.now() - time) / 60000;
 }
 
-function matchHasExternalSignal(match) {
-  const signals = match?.externalSignals;
+function externalSignalForMatch(match, externalMatches = {}) {
+  const sourceMatchId = String(match?.sourceMatchId || match?.id || "").replace(/^(sporttery|fivehundred)_/, "");
+  const teamDateKey = [
+    match?.homeTeamName || match?.homeTeamNameEn,
+    match?.awayTeamName || match?.awayTeamNameEn,
+    String(match?.kickoffTime || "").slice(0, 10),
+  ].filter(Boolean).map((value) => String(value).normalize("NFKC").trim().toLowerCase()).join("__");
+  for (const key of [sourceMatchId, match?.id, match?.matchNo, teamDateKey].filter(Boolean)) {
+    if (externalMatches[key]) return externalMatches[key];
+  }
+  return null;
+}
+
+function matchHasExternalSignal(match, externalMatches = {}) {
+  const signals = match?.externalSignals || externalSignalForMatch(match, externalMatches);
   if (!signals || typeof signals !== "object") return false;
   const had = signals.bookmakerOdds?.had;
   const hhad = signals.bookmakerOdds?.hhad;
   const apiFootball = signals.bookmakerOdds?.apiFootball || signals.apiFootball;
   const external = signals.externalOdds;
   const preMatch = signals.preMatch?.quality || signals.preMatch;
-  return Boolean(had || hhad || apiFootball || external || signals.injuries || signals.lineups || preMatch || signals.webConsensus);
+  return Boolean(had || hhad || apiFootball || external || signals.injuries || signals.lineups || preMatch || signals.webConsensus || signals.freeFootball);
 }
 
 const errors = [];
@@ -57,6 +70,7 @@ const externalMatches = external?.matches && typeof external.matches === "object
 const externalCount = Object.keys(externalMatches).length;
 const source500 = external?.sources?.["500.com:jczq"] || {};
 const sourceApiFootball = external?.sources?.["api-football"] || {};
+const sourceFreeFootball = external?.sources?.["free-public-football"] || {};
 const sourceWebConsensus = external?.sources?.webConsensus || {};
 const externalAge = ageMinutes(external?.updatedAt);
 const preMatchAge = ageMinutes(preMatch?.updatedAt);
@@ -66,7 +80,7 @@ const preMatchMatches = preMatch?.matches && typeof preMatch.matches === "object
 const preMatchCount = Object.keys(preMatchMatches).length;
 const preMatchSummary = preMatch?.summary || {};
 const currentCount = Array.isArray(current) ? current.length : 0;
-const currentWithExternal = Array.isArray(current) ? current.filter(matchHasExternalSignal).length : 0;
+const currentWithExternal = Array.isArray(current) ? current.filter((match) => matchHasExternalSignal(match, externalMatches)).length : 0;
 const currentCoverage = currentCount > 0 ? currentWithExternal / currentCount : 0;
 
 if (requireExternalSignals) {
@@ -142,6 +156,10 @@ const payload = {
     apiFootballUpdatedAt: sourceApiFootball.updatedAt || null,
     apiFootballMappedSignals: sourceApiFootball.mappedSignals || 0,
     apiFootballCallsThisSync: sourceApiFootball.callsThisSync || 0,
+    apiFootballStatus: "retired-not-required",
+    freeFootballRows: sourceFreeFootball.rows || 0,
+    freeFootballRecommendationReady: sourceFreeFootball.recommendationReady || 0,
+    freeFootballRecommendationCoverage: sourceFreeFootball.recommendationCoverage || 0,
     webConsensusRows: sourceWebConsensus.rows || 0,
     webConsensusUsable: sourceWebConsensus.usable || 0,
   },
@@ -153,6 +171,8 @@ const payload = {
     high: preMatchSummary.high || 0,
     medium: preMatchSummary.medium || 0,
     low: preMatchSummary.low || 0,
+    recommendationUsable: preMatchSummary.recommendationUsable || 0,
+    analysisComplete: preMatchSummary.analysisComplete || 0,
     warningCount: Array.isArray(preMatchSummary.warnings) ? preMatchSummary.warnings.length : 0,
   },
   currentMatches: {

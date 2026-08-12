@@ -565,7 +565,10 @@ const publicApiV1Base = process.env.PUBLIC_DATA_API_V1_BASE
 const enable500Sync = process.env.ENABLE_500_SYNC !== "0";
 const enable500DetailsSync = process.env.ENABLE_500_DETAILS_SYNC === "1";
 const enableWeatherSync = process.env.ENABLE_WEATHER_SYNC !== "0";
-const enableApiFootballSync = process.env.ENABLE_API_FOOTBALL_SYNC === "1";
+// The keyed API-Football lane is retired from the production path. Historical
+// cache files remain readable for audit compatibility, but runtime sync never
+// depends on a key or subscription.
+const enableApiFootballSync = false;
 const enablePreMatchSignalsSync = process.env.ENABLE_PREMATCH_SIGNALS_SYNC !== "0";
 const requireExternalSignals = process.env.REQUIRE_EXTERNAL_SIGNALS !== "0";
 const skipSportteryDirectFetch = process.env.SKIP_SPORTTERY_DIRECT_FETCH === "1"
@@ -2941,8 +2944,8 @@ const runSync = async (source = "server-cron") => {
     if (enableWeatherSync) {
       await runCommand(npmCommand, ["run", "sync:weather"]);
     }
-    if (enableApiFootballSync) {
-      await runCommand(npmCommand, ["run", "sync:api-football"]);
+    if (process.env.ENABLE_FREE_FOOTBALL_SYNC !== "0") {
+      await runCommand(npmCommand, ["run", "sync:free-football"]);
     }
     if (enablePreMatchSignalsSync) {
       await runCommand(npmCommand, ["run", "sync:prematch"]);
@@ -5652,8 +5655,21 @@ const minutesSince = (iso) => {
   return (Date.now() - time) / 60000;
 };
 
-const matchHasExternalSignal = (match) => {
-  const signals = match?.externalSignals;
+const externalSignalForHealthMatch = (match, externalMatches = {}) => {
+  const sourceMatchId = String(match?.sourceMatchId || match?.id || "").replace(/^(sporttery|fivehundred)_/, "");
+  const teamDateKey = [
+    match?.homeTeamName || match?.homeTeamNameEn,
+    match?.awayTeamName || match?.awayTeamNameEn,
+    String(match?.kickoffTime || "").slice(0, 10),
+  ].filter(Boolean).map((value) => String(value).normalize("NFKC").trim().toLowerCase()).join("__");
+  for (const key of [sourceMatchId, match?.id, match?.matchNo, teamDateKey].filter(Boolean)) {
+    if (externalMatches[key]) return externalMatches[key];
+  }
+  return null;
+};
+
+const matchHasExternalSignal = (match, externalMatches = {}) => {
+  const signals = match?.externalSignals || externalSignalForHealthMatch(match, externalMatches);
   if (!signals || typeof signals !== "object") return false;
   return Boolean(
     signals.externalOdds
@@ -5664,6 +5680,8 @@ const matchHasExternalSignal = (match) => {
     || signals.fiveHundred
     || signals.injuries
     || signals.lineups
+    || signals.freeFootball
+    || signals.preMatch
   );
 };
 
@@ -5932,24 +5950,36 @@ const buildSourceHealth = async (generation) => {
   const source500Details = external?.sources?.["500.com:details"] || {};
   const sourceWeather = external?.sources?.["open-meteo:forecast"] || {};
   const sourceApiFootball = external?.sources?.["api-football"] || {};
+  const sourceFreeFootball = external?.sources?.["free-public-football"] || {};
   const externalCount = Object.keys(externalMatches).length;
   const preMatchCount = Object.keys(preMatchMatches).length;
   const preMatchSummary = preMatch?.summary || {};
   const externalAge = minutesSince(external?.updatedAt);
   const preMatchAge = minutesSince(preMatch?.updatedAt);
   const currentCount = Array.isArray(current) ? current.length : 0;
-  const currentWithExternal = Array.isArray(current) ? current.filter(matchHasExternalSignal).length : 0;
+  const currentWithExternal = Array.isArray(current)
+    ? current.filter((match) => matchHasExternalSignal(match, externalMatches)).length
+    : 0;
   const currentWithFiveHundredDetails = Array.isArray(current)
-    ? current.filter((match) => Boolean(match?.externalSignals?.fiveHundred)).length
+    ? current.filter((match) => Boolean(
+        match?.externalSignals?.fiveHundred
+        || externalSignalForHealthMatch(match, externalMatches)?.fiveHundred
+      )).length
     : 0;
   const currentWithApiFootball = Array.isArray(current)
     ? current.filter((match) => Boolean(match?.externalSignals?.apiFootball)).length
     : 0;
   const currentWithWeather = Array.isArray(current)
-    ? current.filter((match) => Boolean(match?.externalSignals?.weather)).length
+    ? current.filter((match) => Boolean(
+        match?.externalSignals?.weather
+        || externalSignalForHealthMatch(match, externalMatches)?.weather
+      )).length
     : 0;
   const currentWithPreMatch = Array.isArray(current)
-    ? current.filter((match) => Boolean(match?.externalSignals?.preMatch)).length
+    ? current.filter((match) => Boolean(
+        match?.externalSignals?.preMatch
+        || externalSignalForHealthMatch(match, externalMatches)?.preMatch
+      )).length
     : 0;
   const sportteryCurrent = Array.isArray(current)
     ? current.filter((match) => String(match?.source || "").toLowerCase() === "sporttery" || String(match?.id || "").startsWith("sporttery_")).length
@@ -6058,6 +6088,7 @@ const buildSourceHealth = async (generation) => {
     sourceWeather.updatedAt || external?.updatedAt,
     Math.max(maxAgeMinutes, Number(sourceWeather.maxAgeMinutes || 0) || 0)
   );
+  const freeFootballFreshness = sourceFreshness(sourceFreeFootball.updatedAt, maxAgeMinutes);
   const preMatchFreshness = sourceFreshness(preMatch?.updatedAt, maxAgeMinutes);
   const sportteryScore = Math.round(
     (currentCount >= minCurrentMatches ? 35 : 0)
@@ -6078,7 +6109,16 @@ const buildSourceHealth = async (generation) => {
     + (weatherFreshness.stale ? 0 : 25)
     + (ratio(currentWithWeather, Math.max(currentCount, 1)) * 25)
   ) : 0;
-  const preMatchUsableRows = Number(preMatchSummary.high || 0) + Number(preMatchSummary.medium || 0);
+  const freeFootballRows = Number(sourceFreeFootball.rows || 0);
+  const freeFootballReady = Number(sourceFreeFootball.recommendationReady || 0);
+  const freeFootballScore = process.env.ENABLE_FREE_FOOTBALL_SYNC !== "0" ? Math.round(
+    (freeFootballRows >= currentCount && currentCount > 0 ? 25 : 0)
+    + (freeFootballFreshness.stale ? 0 : 25)
+    + (ratio(freeFootballReady, Math.max(currentCount, 1)) * 50)
+  ) : 0;
+  const preMatchUsableRows = Number.isFinite(Number(preMatchSummary.recommendationUsable))
+    ? Number(preMatchSummary.recommendationUsable)
+    : Number(preMatchSummary.high || 0) + Number(preMatchSummary.medium || 0);
   const preMatchScore = enablePreMatchSignalsSync ? Math.round(
     ((preMatchCount >= minPreMatchRows) ? 25 : 0)
     + (preMatchFreshness.stale ? 0 : 25)
@@ -6225,6 +6265,9 @@ const buildSourceHealth = async (generation) => {
       else warnings.push(message);
     }
   }
+  if (process.env.ENABLE_FREE_FOOTBALL_SYNC !== "0" && currentCount > 0 && freeFootballReady < currentCount) {
+    warnings.push(`free football recommendation inputs ${freeFootballReady}/${currentCount}`);
+  }
   if (!Array.isArray(current)) errors.push("current matches invalid");
   if (currentCount < minCurrentMatches) errors.push(`current matches ${currentCount} < ${minCurrentMatches}`);
 
@@ -6307,9 +6350,12 @@ const buildSourceHealth = async (generation) => {
       metrics: {
         rows: source500.rows || 0,
         mapped: source500.mapped || 0,
-        detailsRows: source500Details.rows || source500Details.updated || 0,
+        detailsRows: source500Details.detailsUpdatedThisRun ?? source500Details.updated ?? source500Details.rows ?? 0,
+        detailsUpdatedThisRun: source500Details.detailsUpdatedThisRun ?? source500Details.updated ?? 0,
+        detailsStoredTotal: source500Details.detailsStoredTotal || 0,
+        currentEligibleRows: source500Details.currentEligibleRows || 0,
         detailsCachedMerged: Math.max(source500Details.cachedMerged || 0, currentWithFiveHundredDetails),
-        currentMatchesWithDetails: currentWithFiveHundredDetails,
+        currentMatchesWithDetails: Math.max(source500Details.currentMatchesWithDetails || 0, currentWithFiveHundredDetails),
         currentCoverage: Number(ratio(currentWithFiveHundredDetails, Math.max(currentCount, 1)).toFixed(4)),
         errors: source500Details.errors || 0
       }
@@ -6336,6 +6382,31 @@ const buildSourceHealth = async (generation) => {
         currentMatchesWithWeather: currentWithWeather,
         currentCoverage: Number(ratio(currentWithWeather, Math.max(currentCount, 1)).toFixed(4)),
         errors: sourceWeather.errors || 0
+      }
+    },
+    {
+      id: "free-football",
+      label: "Free public football layer",
+      role: "zero-key-recommendation-input-fallback",
+      enabled: process.env.ENABLE_FREE_FOOTBALL_SYNC !== "0",
+      required: false,
+      status: sourceStatus({
+        enabled: process.env.ENABLE_FREE_FOOTBALL_SYNC !== "0",
+        exists: freeFootballRows > 0,
+        stale: freeFootballFreshness.stale,
+        score: freeFootballScore,
+        required: false,
+      }),
+      score: freeFootballScore,
+      ...freeFootballFreshness,
+      metrics: {
+        rows: freeFootballRows,
+        recommendationReady: freeFootballReady,
+        recommendationCoverage: Number(ratio(freeFootballReady, Math.max(currentCount, 1)).toFixed(4)),
+        analysisComplete: sourceFreeFootball.analysisComplete || 0,
+        grades: sourceFreeFootball.grades || {},
+        keyRequired: false,
+        apiFootballRequired: false,
       }
     },
     {
@@ -6383,6 +6454,7 @@ const buildSourceHealth = async (generation) => {
       enableWeatherSync,
       enablePreMatchSignalsSync,
       enableApiFootballSync,
+      enableFreeFootballSync: process.env.ENABLE_FREE_FOOTBALL_SYNC !== "0",
       requireExternalSignals,
       skipSportteryFetch: process.env.SKIP_SPORTTERY_FETCH === "1",
       skipSportteryDirectFetch,
@@ -6416,13 +6488,23 @@ const buildSourceHealth = async (generation) => {
       fiveHundredMapped: source500.mapped || 0,
       fiveHundredUrl: source500.url || null,
       fiveHundredDetailsUpdatedAt: source500Details.updatedAt || null,
-      fiveHundredDetailsRows: source500Details.rows || source500Details.updated || 0,
+      fiveHundredDetailsRows: source500Details.detailsUpdatedThisRun ?? source500Details.updated ?? source500Details.rows ?? 0,
+      fiveHundredDetailsUpdatedThisRun: source500Details.detailsUpdatedThisRun ?? source500Details.updated ?? 0,
+      fiveHundredDetailsStoredTotal: source500Details.detailsStoredTotal || 0,
+      fiveHundredCurrentEligibleRows: source500Details.currentEligibleRows || 0,
+      fiveHundredCurrentMatchesWithDetails: Math.max(source500Details.currentMatchesWithDetails || 0, currentWithFiveHundredDetails),
       fiveHundredDetailsCachedMerged: Math.max(source500Details.cachedMerged || 0, currentWithFiveHundredDetails),
       fiveHundredDetailsRequestedPages: source500Details.requestedPages || 0,
       fiveHundredDetailsRefreshMinutes: source500Details.refreshMinutes || 0,
       fiveHundredDetailsErrors: source500Details.errors || 0,
-      apiFootballConfigured: Boolean(process.env.API_FOOTBALL_KEY || process.env.APISPORTS_KEY),
-      apiFootballEnabled: enableApiFootballSync,
+      apiFootballConfigured: false,
+      apiFootballEnabled: false,
+      apiFootballStatus: "retired-not-required",
+      replacementSource: "free-public-football",
+      freeFootballUpdatedAt: sourceFreeFootball.updatedAt || null,
+      freeFootballRows: sourceFreeFootball.rows || 0,
+      freeFootballRecommendationReady: sourceFreeFootball.recommendationReady || 0,
+      freeFootballRecommendationCoverage: sourceFreeFootball.recommendationCoverage || 0,
       apiFootballUpdatedAt: sourceApiFootball.updatedAt || apiFootballMeta?.finishedAt || null,
       apiFootballMappedSignals: Math.max(sourceApiFootball.mappedSignals || 0, apiFootballMeta?.signalsMapped || 0, currentWithApiFootball),
       apiFootballCallsThisSync: apiFootballMeta?.callsThisSync || 0,
@@ -6438,6 +6520,8 @@ const buildSourceHealth = async (generation) => {
       high: preMatchSummary.high || 0,
       medium: preMatchSummary.medium || 0,
       low: preMatchSummary.low || 0,
+      recommendationUsable: preMatchSummary.recommendationUsable || 0,
+      analysisComplete: preMatchSummary.analysisComplete || 0,
       warningCount: Array.isArray(preMatchSummary.warnings) ? preMatchSummary.warnings.length : 0,
     },
     currentMatches: {
@@ -6732,6 +6816,7 @@ const publicSourceHealth = (health) => ({
     enableWeatherSync: Boolean(health?.mode?.enableWeatherSync),
     enablePreMatchSignalsSync: Boolean(health?.mode?.enablePreMatchSignalsSync),
     enableApiFootballSync: Boolean(health?.mode?.enableApiFootballSync),
+    enableFreeFootballSync: Boolean(health?.mode?.enableFreeFootballSync),
     requireExternalSignals: Boolean(health?.mode?.requireExternalSignals),
     skipSportteryFetch: Boolean(health?.mode?.skipSportteryFetch),
     skipSportteryDirectFetch: Boolean(health?.mode?.skipSportteryDirectFetch)
@@ -6763,8 +6848,18 @@ const publicSourceHealth = (health) => ({
     fiveHundredRows: health?.externalSignals?.fiveHundredRows || 0,
     fiveHundredMapped: health?.externalSignals?.fiveHundredMapped || 0,
     fiveHundredDetailsRows: health?.externalSignals?.fiveHundredDetailsRows || 0,
+    fiveHundredDetailsUpdatedThisRun: health?.externalSignals?.fiveHundredDetailsUpdatedThisRun || 0,
+    fiveHundredDetailsStoredTotal: health?.externalSignals?.fiveHundredDetailsStoredTotal || 0,
+    fiveHundredCurrentEligibleRows: health?.externalSignals?.fiveHundredCurrentEligibleRows || 0,
+    fiveHundredCurrentMatchesWithDetails: health?.externalSignals?.fiveHundredCurrentMatchesWithDetails || 0,
     fiveHundredDetailsCachedMerged: health?.externalSignals?.fiveHundredDetailsCachedMerged || 0,
     apiFootballEnabled: Boolean(health?.externalSignals?.apiFootballEnabled),
+    apiFootballStatus: health?.externalSignals?.apiFootballStatus || "retired-not-required",
+    replacementSource: health?.externalSignals?.replacementSource || "free-public-football",
+    freeFootballUpdatedAt: health?.externalSignals?.freeFootballUpdatedAt || null,
+    freeFootballRows: health?.externalSignals?.freeFootballRows || 0,
+    freeFootballRecommendationReady: health?.externalSignals?.freeFootballRecommendationReady || 0,
+    freeFootballRecommendationCoverage: health?.externalSignals?.freeFootballRecommendationCoverage || 0,
     apiFootballMappedSignals: health?.externalSignals?.apiFootballMappedSignals || 0,
     apiFootballUpdatedAt: health?.externalSignals?.apiFootballUpdatedAt || null
   },
@@ -6773,6 +6868,8 @@ const publicSourceHealth = (health) => ({
     updatedAt: health?.preMatchSignals?.updatedAt || null,
     ageMinutes: health?.preMatchSignals?.ageMinutes ?? null,
     matchKeys: health?.preMatchSignals?.matchKeys || 0,
+    recommendationUsable: health?.preMatchSignals?.recommendationUsable || 0,
+    analysisComplete: health?.preMatchSignals?.analysisComplete || 0,
     high: health?.preMatchSignals?.high || 0,
     medium: health?.preMatchSignals?.medium || 0,
     low: health?.preMatchSignals?.low || 0,

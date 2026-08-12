@@ -736,12 +736,17 @@ const run = () => {
 
   const openResearchGateway = readText(path.join(rootDir, "server", "openResearchGateway.cjs"));
   const openResearchSync = readText(path.join(rootDir, "scripts", "syncOpenResearchSignals.cjs"));
+  const freeFootballSync = readText(path.join(rootDir, "scripts", "syncFreeFootballSignals.cjs"));
   const syncWorker = readText(path.join(rootDir, "scripts", "runSyncWorker.cjs"));
   pushCheck(checks, "free/open research gateway is bounded, protected, and release-persistent",
     packageJson.scripts?.["sync:open-research"] === "node scripts/syncOpenResearchSignals.cjs"
       && packageJson.scripts?.["verify:open-research-gateway"] === "node scripts/verifyOpenResearchGateway.cjs"
+      && packageJson.scripts?.["sync:free-football"] === "node scripts/syncFreeFootballSignals.cjs"
+      && packageJson.scripts?.["verify:free-football-signals"] === "node scripts/verifyFreeFootballSignals.cjs"
       && keyValue(envExample, "ENABLE_OPEN_RESEARCH_SYNC") === "1"
       && keyValue(envExample, "ENABLE_WEB_CONSENSUS_SYNC") === "1"
+      && keyValue(envExample, "ENABLE_API_FOOTBALL_SYNC") === "0"
+      && keyValue(envExample, "ENABLE_FREE_FOOTBALL_SYNC") === "1"
       && Number(keyValue(envExample, "WEB_CONSENSUS_REFRESH_MINUTES")) >= 15
       && Number(keyValue(envExample, "OPEN_RESEARCH_MAX_MATCHES")) > 0
       && Number(keyValue(envExample, "OPEN_RESEARCH_MAX_MATCHES")) <= 4
@@ -751,12 +756,18 @@ const run = () => {
       && Number(keyValue(envExample, "SYNC_WORKER_MIN_IDLE_SECONDS")) >= 10
       && keyValue(envExample, "OPEN_RESEARCH_CONTACT_URL").startsWith("https://")
       && bundleReleaseScript.includes('set_env_value "$env_file" "ENABLE_OPEN_RESEARCH_SYNC" "1"')
+      && releaseScript.includes('set_env_value "$env_file" "ENABLE_API_FOOTBALL_SYNC" "0"')
+      && releaseScript.includes('set_env_value "$env_file" "ENABLE_FREE_FOOTBALL_SYNC" "1"')
+      && bundleReleaseScript.includes('set_env_value "$env_file" "ENABLE_API_FOOTBALL_SYNC" "0"')
+      && bundleReleaseScript.includes('set_env_value "$env_file" "ENABLE_FREE_FOOTBALL_SYNC" "1"')
       && bundleReleaseScript.includes('set_env_value "$env_file" "OPEN_RESEARCH_MAX_CONCURRENCY" "2"')
       && bundleReleaseScript.includes('set_env_value "$env_file" "SYNC_WORKER_MIN_IDLE_SECONDS" "10"')
       && bundleReleaseScript.includes('set_env_value "$env_file" "OPEN_RESEARCH_CONTACT_URL" "$PUBLIC_BASE_URL"')
       && syncWorker.indexOf('"sync:open-research"') >= 0
       && syncWorker.indexOf('"sync:web-consensus"') > syncWorker.indexOf('"sync:open-research"')
-      && syncWorker.indexOf('"sync:prematch"') > syncWorker.indexOf('"sync:web-consensus"')
+      && syncWorker.indexOf('"sync:free-football"') > syncWorker.indexOf('"sync:web-consensus"')
+      && syncWorker.indexOf('"sync:prematch"') > syncWorker.indexOf('"sync:free-football"')
+      && !syncWorker.includes('"sync:api-football"')
       && syncWorker.includes("const postCycleRelayBaseline = relaySnapshotFingerprint()")
       && syncWorker.includes("baseline: postCycleRelayBaseline")
       && serverIndex.includes('"/api/v1/research/search"')
@@ -765,7 +776,12 @@ const run = () => {
       && openResearchGateway.includes('redirect: "error"')
       && openResearchGateway.includes("URL_QUERY_REJECTED")
       && openResearchSync.includes('usableForModel: false')
-      && openResearchSync.includes('eligibleForNumericModel: false'), {
+      && openResearchSync.includes('eligibleForNumericModel: false')
+      && freeFootballSync.includes("zeroKeyRequired: true")
+      && freeFootballSync.includes('postCutoffMutationAllowed: false'), {
+      apiFootballEnabled: keyValue(envExample, "ENABLE_API_FOOTBALL_SYNC") || null,
+      freeFootballEnabled: keyValue(envExample, "ENABLE_FREE_FOOTBALL_SYNC") || null,
+      freeFootballZeroKey: freeFootballSync.includes("zeroKeyRequired: true"),
       enabled: keyValue(envExample, "ENABLE_OPEN_RESEARCH_SYNC") || null,
       maxMatches: keyValue(envExample, "OPEN_RESEARCH_MAX_MATCHES") || null,
       maxResults: keyValue(envExample, "OPEN_RESEARCH_MAX_RESULTS") || null,
