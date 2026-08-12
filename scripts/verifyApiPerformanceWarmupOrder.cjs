@@ -400,6 +400,7 @@ check('public health keeps an exact validated receipt during a bounded SQLite pa
   assert.ok(serverSource.includes('publicationPairTransitionActive(publication)'));
   assert.ok(serverSource.includes('selectFastResultReceiptDuringPairTransition({'));
   assert.ok(publicHealthBase.includes('readPublicationFastResultReceiptState(basePublication)'));
+  assert.ok(publicHealthBase.includes('fastResultIntegrityRaw?.transition === true'));
   assert.ok(publicHealthBase.includes('source: countDivergence.active'));
   assert.ok(publicHealthBase.includes('? "generation-pair-refresh"'));
   assert.ok(publicHealthBase.includes('? "sqlite-pair-refresh-pending" : null'));

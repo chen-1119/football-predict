@@ -6787,7 +6787,10 @@ const getPublicV1HealthBase = async () => {
   const syncWorkerStatus = syncWorkerRuntimeStatus(rawSyncWorkerStatus);
   const previousGeneration = basePublication.mode === "previous-generation";
   const pairRefreshPending = sqlite?.baseReady === false
-    && publicationPairTransitionActive(basePublication);
+    && (
+      fastResultIntegrityRaw?.transition === true
+      || publicationPairTransitionActive(basePublication)
+    );
   const sqliteUsable = sqliteFreshEnough(sqlite, "currentMatches", 0);
   const rawMetaCurrentCount = Number(meta?.files?.current);
   const metaCurrentCount = Number.isFinite(rawMetaCurrentCount)
