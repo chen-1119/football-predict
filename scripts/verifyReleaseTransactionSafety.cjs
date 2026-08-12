@@ -3375,6 +3375,9 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
   const priorityClearBody = extractFunction(bundleRelease, "clear_release_worker_priority_request");
   assert.match(bundleRelease, /readinessIdleEvidenceAfter/);
   assert.match(bundleRelease, /RELEASE_WORKER_READINESS_IDLE_TIMEOUT_SECONDS/);
+  assert.match(bundleRelease, /RELEASE_WORKER_READINESS_IDLE_TIMEOUT_SECONDS:-3600/);
+  assert.match(bundleRelease, /RELEASE_WORKER_PRIORITY_REQUEST_TTL_SECONDS:-5400/);
+  assert.match(priorityPrepareBody, /--ttl-seconds "\$WORKER_PRIORITY_REQUEST_TTL_SECONDS"/);
   assert.match(bundleRelease, /RELEASE_WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS:-1200/);
   assert.match(bundleRelease, /WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS" -le 1500/);
   assert.match(bundleRelease, /officialPublishEvidenceAfter/);

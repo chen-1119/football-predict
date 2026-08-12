@@ -62,6 +62,17 @@ ALLOW_STOPPED_WINDOW_SQLITE_EXPORT="${RELEASE_ALLOW_STOPPED_WINDOW_SQLITE_EXPORT
 # real cycle.  The transition-lease check inside the polling loop still aborts
 # before the rollback margin if a betting cutoff becomes unsafe.
 WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS="${RELEASE_WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS:-1200}"
+# The mandatory release cycle also runs enrichment, prospective capture, and a
+# full SQLite export.  Production r480 needed about 33 minutes after the
+# official-result phase, so the former 1800-second default could roll back a
+# healthy cycle while it was still completing durable publication.  Keep the
+# wait bounded, but allow one real slow cycle; the transition-window guard is
+# still checked on every poll and fails closed before a betting cutoff.
+WORKER_READINESS_IDLE_TIMEOUT_SECONDS="${RELEASE_WORKER_READINESS_IDLE_TIMEOUT_SECONDS:-3600}"
+# This request is bundle-bound and one-cycle-only.  Its lease must outlive the
+# official publication wait plus the readiness-idle wait so a slow valid cycle
+# cannot lose release priority midway through the transaction.
+WORKER_PRIORITY_REQUEST_TTL_SECONDS="${RELEASE_WORKER_PRIORITY_REQUEST_TTL_SECONDS:-5400}"
 POST_SWAP_TRANSITION_ROLLBACK_MARGIN_SECONDS="${RELEASE_POST_SWAP_TRANSITION_ROLLBACK_MARGIN_SECONDS:-120}"
 POST_SWAP_TRANSITION_START_BUDGET_SECONDS="${RELEASE_POST_SWAP_TRANSITION_START_BUDGET_SECONDS:-}"
 RELEASE_HEARTBEAT_KEEPER_INTERVAL_SECONDS="${RELEASE_CANDIDATE_HEARTBEAT_KEEPER_INTERVAL_SECONDS:-20}"
@@ -1854,7 +1865,7 @@ prepare_release_worker_priority_request() {
     --bundle-sha "$BUNDLE_SHA256" \
     --release-sequence "$RELEASE_SEQUENCE" \
     --output "$request_path" \
-    --ttl-seconds 1800 \
+    --ttl-seconds "$WORKER_PRIORITY_REQUEST_TTL_SECONDS" \
     >/dev/null || return 1
   [ -f "$request_path" ] && [ ! -L "$request_path" ] \
     && [ "$(stat -c '%h' -- "$request_path")" = "1" ] || return 1
@@ -4192,11 +4203,11 @@ NODE
 wait_for_worker_readiness_idle_after() {
   local worker_started_at="$1"
   local status_file="${2:-/var/lib/football-predict/sync-worker-status.json}"
-  local timeout_seconds="${RELEASE_WORKER_READINESS_IDLE_TIMEOUT_SECONDS:-1800}"
+  local timeout_seconds="$WORKER_READINESS_IDLE_TIMEOUT_SECONDS"
   local poll_seconds="${RELEASE_WORKER_READINESS_IDLE_POLL_SECONDS:-2}"
   local deadline evidence_rc
 
-  [[ "$timeout_seconds" =~ ^[0-9]+$ ]] || timeout_seconds=1800
+  [[ "$timeout_seconds" =~ ^[0-9]+$ ]] || timeout_seconds=3600
   [[ "$poll_seconds" =~ ^[0-9]+$ ]] || poll_seconds=2
   [ "$timeout_seconds" -ge 30 ] || timeout_seconds=30
   [ "$poll_seconds" -ge 1 ] || poll_seconds=1
