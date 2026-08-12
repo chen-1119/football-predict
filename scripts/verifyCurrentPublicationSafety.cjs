@@ -6,6 +6,7 @@ const path = require("node:path");
 const {
   selectCurrentPublicationRows,
   sqliteGenerationCountDivergence,
+  sqliteAtomicReplacementFallbackActive,
 } = require("../server/currentPublicationSafety.cjs");
 
 let checks = 0;
@@ -36,10 +37,36 @@ check(healthDivergence.active === true, "health must flag zero SQLite rows again
 check(healthDivergence.blockedReason === "sqlite-current-empty-generation-nonempty", "health must publish the same blocker");
 check(sqliteGenerationCountDivergence({ sqliteCount: 0, generationCount: 0 }).active === false, "health must accept a genuinely empty generation");
 
+check(sqliteAtomicReplacementFallbackActive({
+  sqliteAvailable: false,
+  generationAvailable: true,
+  workerRunning: true,
+  lastAvailableAtMs: 10_000,
+  nowMs: 25_000,
+  ttlMs: 30_000,
+}) === true, "a recent healthy SQLite read must protect the bounded atomic replacement window");
+check(sqliteAtomicReplacementFallbackActive({
+  sqliteAvailable: false,
+  generationAvailable: true,
+  workerRunning: true,
+  lastAvailableAtMs: 10_000,
+  nowMs: 45_001,
+  ttlMs: 30_000,
+}) === false, "the atomic replacement fallback must fail closed after its TTL");
+check(sqliteAtomicReplacementFallbackActive({
+  sqliteAvailable: false,
+  generationAvailable: true,
+  workerRunning: false,
+  lastAvailableAtMs: 10_000,
+  nowMs: 20_000,
+  ttlMs: 30_000,
+}) === false, "the atomic replacement fallback must require an active sync worker");
+
 const serverSource = fs.readFileSync(path.resolve(__dirname, "../server/index.cjs"), "utf8");
 const validatorSource = fs.readFileSync(path.resolve(__dirname, "validateData.cjs"), "utf8");
 check(serverSource.includes("selectCurrentPublicationRows({"), "the production current reader must use the safety selector");
 check(serverSource.includes("sqliteGenerationCountDivergence({"), "public health must use the same count-divergence rule");
+check(serverSource.includes("sqliteAtomicReplacementFallbackActive({"), "public health must guard the atomic SQLite replacement window");
 check(serverSource.includes("generation-sqlite-empty-divergence"), "the degraded read source must remain visible in production health");
 check(
   validatorSource.includes("publicationWarnings.push(`${match.id}: missing 1X2 prediction; publishing as awaiting analysis.`)"),

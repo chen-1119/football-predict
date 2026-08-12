@@ -398,10 +398,12 @@ check('public health keeps an exact validated receipt during a bounded SQLite pa
   assert.ok(serverSource.includes('const fastResultReceiptTransitionCache = new Map();'));
   assert.ok(serverSource.includes('FAST_RESULT_RECEIPT_TRANSITION_TTL_MS || 300_000'));
   assert.ok(serverSource.includes('publicationPairTransitionActive(publication)'));
+  assert.ok(serverSource.includes('"generation-sqlite-replacement"'));
   assert.ok(serverSource.includes('selectFastResultReceiptDuringPairTransition({'));
   assert.ok(publicHealthBase.includes('readPublicationFastResultReceiptState(basePublication)'));
   assert.ok(publicHealthBase.includes('fastResultIntegrityRaw?.transition === true'));
-  assert.ok(publicHealthBase.includes('source: countDivergence.active'));
+  assert.ok(publicHealthBase.includes('source: sqliteReplacementPending'));
+  assert.ok(publicHealthBase.includes(': countDivergence.active'));
   assert.ok(publicHealthBase.includes('? "generation-pair-refresh"'));
   assert.ok(publicHealthBase.includes('? "sqlite-pair-refresh-pending" : null'));
   assert.ok(serverSource.includes('cachedSqlitePublicationIdentity().fileToken || "unknown"'));

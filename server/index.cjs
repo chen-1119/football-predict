@@ -137,6 +137,7 @@ const {
 const {
   selectCurrentPublicationRows,
   sqliteGenerationCountDivergence,
+  sqliteAtomicReplacementFallbackActive,
 } = require("./currentPublicationSafety.cjs");
 
 const rootDir = path.resolve(__dirname, "..");
@@ -162,6 +163,7 @@ const installedSignedTrainingAsset = installedHistoricalTrainingInspection.ok ==
 let basePublicationCache = null;
 let basePublicationRefresh = null;
 let sqlitePublicationIdentityCache = null;
+let lastAvailableSqliteReadStatusAtMs = 0;
 const fastResultReceiptTransitionCache = new Map();
 const fastResultReceiptTransitionTtlMs = Math.max(
   30_000,
@@ -561,6 +563,11 @@ const sqliteReadStaleGraceMs = boundedRuntimeEnv(
 const sqliteReadStatusCacheMs = boundedRuntimeEnv(process.env, "SQLITE_READ_STATUS_CACHE_MS", {
   fallback: 15_000, min: 100, max: 5 * 60_000, integer: true,
 });
+const sqliteAtomicReplacementFallbackMs = boundedRuntimeEnv(
+  process.env,
+  "SQLITE_ATOMIC_REPLACEMENT_FALLBACK_MS",
+  { fallback: 30_000, min: 5_000, max: 60_000, integer: true },
+);
 const modelEvaluationCoverageMinRatio = boundedRuntimeEnv(
   process.env,
   ["MODEL_EVALUATION_SQLITE_COVERAGE_MIN", "CLOUD_SYNC_MODEL_SQLITE_COVERAGE_MIN"],
@@ -4055,6 +4062,7 @@ const getCachedSqliteReadStatus = async (meta = null, publicationIdentity = null
     return sqliteReadStatusInflight.promise;
   }
   const promise = getSqliteReadStatus(meta, publicationIdentity).then((status) => {
+    if (status?.available === true) lastAvailableSqliteReadStatusAtMs = Date.now();
     sqliteReadStatusCache = { metaKey, status, createdAt: Date.now() };
     return status;
   }).finally(() => {
@@ -6791,6 +6799,14 @@ const getPublicV1HealthBase = async () => {
       fastResultIntegrityRaw?.transition === true
       || publicationPairTransitionActive(basePublication)
     );
+  const sqliteReplacementPending = sqliteAtomicReplacementFallbackActive({
+    sqliteAvailable: sqlite?.available === true,
+    generationAvailable: Boolean(basePublication?.context),
+    workerRunning: syncWorkerStatus.running === true,
+    lastAvailableAtMs: lastAvailableSqliteReadStatusAtMs,
+    nowMs: Date.now(),
+    ttlMs: sqliteAtomicReplacementFallbackMs,
+  });
   const sqliteUsable = sqliteFreshEnough(sqlite, "currentMatches", 0);
   const rawMetaCurrentCount = Number(meta?.files?.current);
   const metaCurrentCount = Number.isFinite(rawMetaCurrentCount)
@@ -6815,7 +6831,9 @@ const getPublicV1HealthBase = async () => {
         checkedAt: nowIso()
       }
     : {
-        source: countDivergence.active
+        source: sqliteReplacementPending
+          ? "generation-sqlite-replacement"
+          : countDivergence.active
           ? "generation-sqlite-empty-divergence"
           : pairRefreshPending
           ? "generation-pair-refresh"
@@ -6826,12 +6844,16 @@ const getPublicV1HealthBase = async () => {
               ? "generation-sqlite-mismatch"
               : sqlite?.stale ? "file-sqlite-stale" : "file-sqlite-empty")
           : "file-sqlite-unavailable",
-        stale: countDivergence.active
+        stale: sqliteReplacementPending
+          ? syncMetaLaneStale(meta, "current") || !Number.isFinite(rawMetaCurrentCount)
+          : countDivergence.active
           || (previousGeneration && !pairRefreshPending)
           || syncMetaLaneStale(meta, "current")
           || !Number.isFinite(rawMetaCurrentCount),
         count: metaCurrentCount,
-        blockedReason: countDivergence.blockedReason
+        blockedReason: sqliteReplacementPending
+          ? "sqlite-atomic-replacement-pending"
+          : countDivergence.blockedReason
           || (pairRefreshPending ? "sqlite-pair-refresh-pending" : null),
         sqliteCount: sqliteCurrentCount,
         generationCount: metaCurrentCount,

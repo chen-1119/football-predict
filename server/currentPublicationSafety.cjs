@@ -43,7 +43,35 @@ const sqliteGenerationCountDivergence = ({ sqliteCount, generationCount }) => {
   });
 };
 
+/**
+ * SQLite exporters replace the database atomically. On some filesystems there
+ * is a very short interval where stat/open cannot see either pathname even
+ * though the immutable generation is already complete and readable. Only
+ * classify that interval as a publication transition when a healthy SQLite
+ * read was observed very recently and the sync worker is still active.
+ */
+const sqliteAtomicReplacementFallbackActive = ({
+  sqliteAvailable,
+  generationAvailable,
+  workerRunning,
+  lastAvailableAtMs,
+  nowMs = Date.now(),
+  ttlMs = 30_000,
+}) => {
+  const lastSeen = Number(lastAvailableAtMs);
+  const now = Number(nowMs);
+  const ttl = Math.max(1, Number(ttlMs) || 30_000);
+  return sqliteAvailable !== true
+    && generationAvailable === true
+    && workerRunning === true
+    && Number.isFinite(lastSeen)
+    && Number.isFinite(now)
+    && now >= lastSeen
+    && now - lastSeen <= ttl;
+};
+
 module.exports = {
   selectCurrentPublicationRows,
   sqliteGenerationCountDivergence,
+  sqliteAtomicReplacementFallbackActive,
 };
