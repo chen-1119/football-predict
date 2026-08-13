@@ -1,0 +1,31 @@
+server {
+  listen 80 default_server;
+  listen [::]:80 default_server;
+  server_name _;
+
+  location ^~ /.well-known/acme-challenge/ {
+    root /var/www/letsencrypt;
+    default_type text/plain;
+    try_files $uri =404;
+    access_log off;
+  }
+
+  location / {
+    return 308 https://__TLS_IP_ADDRESS__$request_uri;
+  }
+}
+
+server {
+  listen 443 ssl http2 default_server;
+  listen [::]:443 ssl http2 default_server;
+  server_name __TLS_IP_ADDRESS__;
+
+  ssl_certificate /etc/letsencrypt/live/__TLS_CERT_NAME__/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/__TLS_CERT_NAME__/privkey.pem;
+  ssl_protocols TLSv1.2 TLSv1.3;
+  ssl_session_cache shared:football_tls:10m;
+  ssl_session_timeout 1d;
+  ssl_session_tickets off;
+
+  include /etc/nginx/snippets/football-predict-server.conf;
+}

@@ -1,5 +1,10 @@
 const fs = require("fs");
 const path = require("path");
+const {
+  buildPublicationLedgerIndex,
+  loadPublicationLedger,
+  resolvePublishedRecommendation,
+} = require("../src/services/recommendationPublicationLedger.cjs");
 
 const dataDir = path.join(__dirname, "..", "public", "data");
 const files = ["matches-current.json", "matches-history.json"]
@@ -16,6 +21,10 @@ const calibrationFile = path.join(dataDir, "model-calibration.json");
 const strategyFile = path.join(dataDir, "model-strategy.json");
 const snapshotsFile = path.join(dataDir, "prediction-snapshots.json");
 const syncMetaFile = path.join(dataDir, "sync-meta.json");
+const publicationLedgerFile = path.resolve(
+  process.env.RECOMMENDATION_PUBLICATION_LEDGER_PATH
+  || path.join(__dirname, "..", "server-data", "recommendation-publication-ledger.json")
+);
 const modelCalibration = fs.existsSync(calibrationFile)
   ? JSON.parse(fs.readFileSync(calibrationFile, "utf8"))
   : null;
@@ -28,6 +37,8 @@ const predictionSnapshots = fs.existsSync(snapshotsFile)
 const syncMeta = fs.existsSync(syncMetaFile)
   ? JSON.parse(fs.readFileSync(syncMetaFile, "utf8"))
   : null;
+const publicationLedgerLoad = loadPublicationLedger(publicationLedgerFile);
+const publicationIndex = buildPublicationLedgerIndex(publicationLedgerLoad);
 
 function matchIdentity(match) {
   return String(
@@ -116,10 +127,11 @@ function isReferencePrediction(prediction) {
     || prediction?.recommendationTier === "reference";
 }
 
-function isMainPrediction(prediction) {
+function isMainPrediction(match, prediction) {
   return prediction?.marketType === "BEST"
     && prediction?.tipCode !== "WATCH"
-    && !isReferencePrediction(prediction);
+    && !isReferencePrediction(prediction)
+    && Boolean(resolvePublishedRecommendation(match, prediction, publicationIndex));
 }
 
 function rows() {
@@ -141,7 +153,8 @@ function rows() {
       result: prediction.resultStatus,
       action: prediction.recommendationAction || "recommend",
       tier: prediction.recommendationTier || "-",
-      role: isMainPrediction(prediction) ? "main" : "reference",
+      role: isMainPrediction(match, prediction) ? "main" : "reference",
+      publicationId: prediction.publicationId || null,
       policy: match.predictionMeta?.policyVersion || "none",
     })));
 }
@@ -172,8 +185,9 @@ function summarize(sourceRows, keyFn) {
 const allRows = rows();
 const mainRows = allRows.filter((row) => row.role === "main");
 const referenceRows = allRows.filter((row) => row.role !== "main");
-const settled = mainRows.filter((row) => row.result !== "PENDING" && row.tip !== "WATCH");
-const referenceSettled = referenceRows.filter((row) => row.result !== "PENDING" && row.tip !== "WATCH");
+const isHitRateResult = (row) => (row.result === "WON" || row.result === "LOST") && row.tip !== "WATCH";
+const settled = mainRows.filter(isHitRateResult);
+const referenceSettled = referenceRows.filter(isHitRateResult);
 const active = mainRows.filter((row) => row.status !== "FINISHED");
 
 function average(values) {
@@ -226,7 +240,14 @@ function scheduledContextSummary(sourceMatches) {
   };
 }
 
-console.log(`Prediction audit: ${matches.length} matches, ${mainRows.length} main rows, ${settled.length} settled main rows, ${referenceRows.length} reference rows.`);
+console.log(
+  `Prediction audit: ${matches.length} matches, ${mainRows.length} ledger-verified main rows, `
+  + `${settled.length} settled main rows, ${referenceRows.length} reference rows.`
+);
+console.log(
+  `Publication ledger: ${publicationIndex.valid ? "valid" : "invalid"}, `
+  + `${publicationIndex.rows} verified rows${publicationLedgerLoad.missing ? " (missing on disk)" : ""}.`
+);
 if (syncMeta?.historicalTraining || currentMatches.length) {
   const scheduled = currentMatches.filter((match) => match.status === "SCHEDULED");
   const auditScope = scheduled.length ? scheduled : currentMatches;

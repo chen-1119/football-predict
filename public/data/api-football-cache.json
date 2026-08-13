@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-06-10T09:49:22.637Z",
+  "updatedAt": "2026-07-16T01:30:10.163Z",
   "fixtureMap": {
     "sporttery_2040145": {
       "sportteryMatchId": "sporttery_2040145",
@@ -8669,7 +8669,7 @@
   },
   "apiAccess": {
     "fixtures": {
-      "updatedAt": "2026-06-10T09:49:22.566Z",
+      "updatedAt": "2026-07-15T05:05:41.283Z",
       "reason": "/fixtures API error: access: Your account is suspended, check on https://dashboard.api-football.com.",
       "suspended": true,
       "allowedFrom": "2026-06-08",
@@ -8678,13 +8678,31 @@
     "injuries": {
       "updatedAt": "2026-06-09T12:27:54.546Z",
       "reason": "/injuries API error: plan: Free plans do not have access to the Ids parameter."
+    },
+    "status": {
+      "checkedAt": "2026-07-16T01:30:09.850Z",
+      "eligible": false,
+      "blocked": true,
+      "blockers": [
+        "account-suspended"
+      ],
+      "reason": "/status API error: access: Your account is suspended, check on https://dashboard.api-football.com.",
+      "suspended": true,
+      "active": null,
+      "plan": null,
+      "quota": {
+        "current": null,
+        "dailyLimit": null,
+        "remaining": null
+      },
+      "rateLimit": {}
     }
   },
   "requestLedger": {
-    "date": "2026-06-10",
+    "date": "2026-07-16",
     "count": 1,
     "byEndpoint": {
-      "/fixtures": 1
+      "/status": 1
     }
   },
   "errors": [
@@ -8759,6 +8777,18 @@
     {
       "at": "2026-06-10T09:49:22.566Z",
       "message": "/fixtures API error: access: Your account is suspended, check on https://dashboard.api-football.com."
+    },
+    {
+      "at": "2026-07-15T05:05:41.283Z",
+      "message": "/fixtures API error: access: Your account is suspended, check on https://dashboard.api-football.com."
+    },
+    {
+      "at": "2026-07-15T18:28:16.003Z",
+      "message": "/status API error: access: Your account is suspended, check on https://dashboard.api-football.com."
+    },
+    {
+      "at": "2026-07-16T01:30:09.850Z",
+      "message": "/status API error: access: Your account is suspended, check on https://dashboard.api-football.com."
     }
   ]
 }

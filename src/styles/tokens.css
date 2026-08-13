@@ -1,0 +1,107 @@
+:root {
+  color-scheme: dark;
+
+  /* Neutral product surfaces. Gold is intentionally reserved for formal picks. */
+  --shell-bg: #0d1117;
+  --shell-bg-elevated: #121821;
+  --shell-surface: #151c25;
+  --shell-surface-hover: #1a222d;
+  --shell-surface-strong: #202a36;
+  --shell-border: #293441;
+  --shell-border-subtle: #202a34;
+  --shell-text: #f0f4f8;
+  --shell-text-secondary: #aab5c2;
+  --shell-text-muted: #778391;
+  --shell-green: #37b878;
+  --shell-green-hover: #2da56a;
+  --shell-green-soft: rgba(55, 184, 120, 0.12);
+  --shell-gold: #d7ac4c;
+  --shell-warning: #d7a548;
+  --shell-danger: #df6b6b;
+  --shell-danger-soft: rgba(223, 107, 107, 0.1);
+
+  --shell-radius-xs: 5px;
+  --shell-radius-sm: 8px;
+  --shell-radius-md: 10px;
+  --shell-radius-lg: 14px;
+  --shell-shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.18);
+  --shell-shadow-md: 0 16px 38px rgba(0, 0, 0, 0.3);
+  --shell-focus: 0 0 0 3px rgba(55, 184, 120, 0.22);
+
+  --shell-content-width: 1440px;
+  --shell-topbar-height: 62px;
+  --shell-mobile-topbar-height: 52px;
+  --shell-mobile-tabbar-height: 62px;
+  --shell-space-1: 4px;
+  --shell-space-2: 8px;
+  --shell-space-3: 12px;
+  --shell-space-4: 16px;
+  --shell-space-5: 20px;
+  --shell-space-6: 24px;
+  --shell-space-8: 32px;
+
+  --shell-font-sans: "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+  --shell-font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+
+  /* Canonical page aliases shared by list, detail, and utility views. */
+  --canvas: var(--shell-bg);
+  --surface-1: var(--shell-bg-elevated);
+  --surface-2: var(--shell-surface);
+  --surface-raised: var(--shell-surface-strong);
+  --border-subtle: var(--shell-border-subtle);
+  --border-strong: var(--shell-border);
+  --text-1: var(--shell-text);
+  --text-2: var(--shell-text-secondary);
+  --text-3: var(--shell-text-muted);
+  --brand: var(--shell-green);
+  --brand-foreground: #07150f;
+  --info: #69aef5;
+  /* Legacy page styles consume these two as HSL channels via hsl(var(...)). */
+  --warning: 42 63% 57%;
+  --danger: 0 65% 65%;
+  /* New shell components consume explicit CSS colors through status aliases. */
+  --status-warning: var(--shell-warning);
+  --status-danger: var(--shell-danger);
+  --value: #ad95e8;
+  --live: #f06478;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --radius-sm: var(--shell-radius-sm);
+  --radius-md: var(--shell-radius-md);
+  --radius-lg: var(--shell-radius-lg);
+  --font-ui: var(--shell-font-sans);
+  --font-numeric: var(--shell-font-mono);
+}
+
+.app-frame.app-shell-v2 {
+  /* Bridge the established page styles onto the restrained shell palette. */
+  --bg: 216 28% 7%;
+  --bg-page: 216 28% 7%;
+  --bg-card: 215 23% 11%;
+  --bg-card-hover: 215 22% 14%;
+  --bg-soft: 215 20% 12%;
+  --border: 214 18% 21%;
+  --primary: 151 54% 47%;
+  --primary-hover: 151 57% 41%;
+  --primary-soft: 151 46% 16%;
+  --accent: 151 54% 47%;
+  --accent-hover: 151 57% 41%;
+  --premium: 42 63% 57%;
+  --premium-soft: 42 48% 17%;
+  --text-primary: 210 29% 96%;
+  --text-secondary: 213 16% 71%;
+  --text-muted: 213 11% 52%;
+  --warning: 42 63% 57%;
+  --danger: 0 65% 65%;
+  --success: 151 54% 47%;
+  --shadow: var(--shell-shadow-md);
+  --radius: var(--shell-radius-md);
+  --font-sans: var(--shell-font-sans);
+  --font-title: var(--shell-font-sans);
+}

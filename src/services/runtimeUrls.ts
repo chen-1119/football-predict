@@ -10,7 +10,7 @@ export const normalizeRuntimeBase = (value: string | undefined): string | null =
 export const getDataApiBase = () => normalizeRuntimeBase(import.meta.env.VITE_DATA_API_BASE);
 
 const getLocalPreviewApiBase = () => {
-  if (typeof window === 'undefined') return null;
+  if (typeof window === 'undefined' || !import.meta.env.DEV) return null;
 
   const { hostname, port, protocol } = window.location;
   const isLocalHost = hostname === '127.0.0.1' || hostname === 'localhost' || hostname === '::1';
@@ -29,6 +29,10 @@ export const buildApiUrl = (endpoint: string) => {
 
   if (apiBase.endsWith('/api') && normalizedEndpoint.startsWith('/api/')) {
     return `${apiBase}${normalizedEndpoint.slice('/api'.length)}`;
+  }
+
+  if (apiBase.endsWith('/api/v1') && normalizedEndpoint.startsWith('/api/v1/')) {
+    return `${apiBase}${normalizedEndpoint.slice('/api/v1'.length)}`;
   }
 
   return `${apiBase}${normalizedEndpoint}`;

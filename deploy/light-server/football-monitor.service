@@ -1,0 +1,56 @@
+[Unit]
+Description=Football Predict runtime monitor
+After=network-online.target football-predict.service football-sync-worker.service football-cleanup.timer
+Wants=network-online.target football-predict.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/football-predict
+Environment=PATH=/opt/node-v22.22.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=NODE_HOME=/opt/node-v22.22.1
+Environment=NODE_ENV=production
+Environment=NODE_OPTIONS=--max-old-space-size=1536
+Environment=SERVER_STORE_DIR=/var/lib/football-predict
+Environment=DATASTORE_SQLITE_PATH=/var/lib/football-predict/football.db
+Environment=RUNTIME_MONITOR_BASE_URL=http://127.0.0.1:8788
+Environment=RUNTIME_MONITOR_STATUS_PATH=/var/lib/football-predict/health-monitor-status.json
+Environment=RUNTIME_MONITOR_REQUIRE_SQLITE=1
+Environment=RUNTIME_MONITOR_AUTO_REPAIR_SQLITE=1
+Environment=RUNTIME_MONITOR_TIMEOUT_MS=15000
+Environment=RUNTIME_MONITOR_HTTP_ATTEMPTS=2
+Environment=RUNTIME_MONITOR_HTTP_RETRY_DELAY_MS=750
+Environment=RUNTIME_MONITOR_SQLITE_REPAIR_TIMEOUT_MS=180000
+Environment=RUNTIME_MONITOR_CHECK_CLEANUP=1
+Environment=RUNTIME_MONITOR_ALLOW_LOCAL_PUSH_PAUSE=0
+Environment=RUNTIME_MONITOR_REQUIRE_CANDIDATE_TEMPORAL_AUDIT=1
+Environment=RUNTIME_MONITOR_AUTH_FILE=/etc/football-predict/env
+ExecStart=/opt/node-v22.22.1/bin/node /opt/football-predict/scripts/checkServerRuntime.cjs
+User=football
+Group=football
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+NoNewPrivileges=true
+UMask=0027
+CapabilityBoundingSet=
+AmbientCapabilities=
+PrivateDevices=true
+PrivateTmp=false
+ProtectHome=read-only
+ProtectSystem=strict
+ReadWritePaths=/var/lib/football-predict
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectProc=default
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM

@@ -1,547 +1,3430 @@
 {
-  "version": "self-optimization-v1",
-  "generatedAt": "2026-07-01T06:04:10.809Z",
+  "version": "self-optimization-v9-formal-ledger",
+  "generatedAt": "2026-07-31T19:37:09.822Z",
+  "source": "settled-pre-match-predictions",
   "activation": {
-    "mode": "cooling-only",
-    "onlineEffect": "guarded-active",
-    "minimumRowsForRule": 3,
-    "minimumRowsForProfile": 5,
+    "mode": "market-baseline-shadow",
+    "onlineEffect": "shadow",
+    "modelSignalEffect": "shadow",
+    "minimumRowsForRule": 12,
+    "minimumRowsForProfile": 20,
     "minimumRowsForLoosening": 100,
-    "note": "Only tightening rules are applied online until a bucket reaches the loosening sample floor."
+    "minimumMatchDaysForLoosening": 4,
+    "referenceShadowEffect": "shadow-observe",
+    "promotionGate": {
+      "version": "model-promotion-gate-v7",
+      "status": "shadow",
+      "onlineEffect": "shadow",
+      "eligibleScope": "none",
+      "checkedAt": "2026-07-31T19:37:09.822Z",
+      "sourceEvaluationVersion": "rolling-backtest-v19",
+      "thresholds": {
+        "configValid": true,
+        "configInvalidNames": [],
+        "minMarketBaselineRows": 500,
+        "minLogLossImprovement": 0,
+        "minBrierImprovement": 0,
+        "minRollingPassRate": 0.6,
+        "minIndependentRollingWindows": 6,
+        "minPromotionEvidenceRows": 500,
+        "minProductionRowsPerMarket": 100,
+        "requireCleanInputAudit": true,
+        "requireRecommendationSelectionGate": true,
+        "requireSelectionAdjustedCandidateRobustness": true,
+        "requireUntouchedProspectiveCandidateConfirmation": true,
+        "requireWalkForwardProtocol": true,
+        "requireVerifiedTrainingEvaluationWatermark": true,
+        "requireProductionPolicyReplay": true,
+        "requireModelMarginalGainVsCalibratedMarket": true,
+        "requireValidPromotionEvidenceManifest": true,
+        "requireCompleteDecisionClockRecords": true,
+        "requireVerifiedModelLearningChampion": true,
+        "requireModelSignalCandidateChampionIdentity": true,
+        "requiredModelLearningCandidateTypes": [
+          "market-residual-shadow"
+        ],
+        "requiredValidatedMarkets": [
+          "HAD",
+          "HHAD"
+        ]
+      },
+      "sample": {
+        "probabilityRows": 227,
+        "marketBaselineRows": 170,
+        "candidateRows": 170,
+        "modelCandidateRows": 170,
+        "rollingWindows": 4,
+        "shadowCandidateRows": 170,
+        "modelCandidateCount": 53,
+        "balancedModelCandidateCount": 9,
+        "productionPolicyVersion": "multi-factor-market-evidence-v2",
+        "productionPolicyReplay": false,
+        "validatedRecommendationMarkets": [],
+        "inputAuditOk": false,
+        "inputAuditViolationCount": 0,
+        "recommendationSelectionEligible": false,
+        "shadowCandidateRobustnessVersion": "shadow-candidate-robustness-v1",
+        "shadowCandidateInventoryHash": "153f08e4313e40c7a19f39a94da980cd7aad0813f2f4cb485e391cd1446825af",
+        "shadowCandidateInventoryCommitted": true,
+        "shadowCandidateRobustnessSelectionBound": true,
+        "shadowCandidateReadyForProspectiveTest": true,
+        "shadowCandidateFormalPromotionEligible": false,
+        "walkForwardProtocolVersion": "nested-expanding-window-candidate-selection-v2",
+        "walkForwardWatermarkVerified": false,
+        "promotionEvidenceEligibleRows": 0,
+        "promotionEvidenceManifestValid": true,
+        "promotionEvidenceDecisionClocksVerified": true,
+        "modelLearningChampionVerified": false,
+        "modelSignalCandidateChampionIdentityVerified": false
+      },
+      "metrics": {
+        "logLossImprovement": 0.0062,
+        "brierImprovement": 0.0024,
+        "accuracyDelta": 0,
+        "rollingPassRate": 1,
+        "rollingSource": "shadow-candidate",
+        "currentModelLogLossImprovement": -0.1115,
+        "currentModelBrierImprovement": -0.0738,
+        "bestModelLogLossImprovement": 0.0062,
+        "bestModelBrierImprovement": 0.0024,
+        "bestModelAccuracyDelta": 0,
+        "bestModelRollingPassRate": 1,
+        "modelMarginalReferenceId": null,
+        "modelMarginalLogLossImprovement": null,
+        "modelMarginalBrierImprovement": null,
+        "modelMarginalReady": false,
+        "riskTier": "watch",
+        "productionPolicyReady": false,
+        "walkForwardReady": false,
+        "promotionEvidenceReady": false,
+        "candidateRobustnessReadyForProspectiveTest": true,
+        "candidateRobustnessPromotionEligible": false,
+        "candidateRobustnessInventoryCommitted": true,
+        "modelLearningAuthorityReady": false,
+        "modelSignalIdentityReady": false
+      },
+      "shadowCandidate": {
+        "id": "market-current-model-residual-minus-20-temperature-1",
+        "role": "shadow-model-candidate",
+        "featureSet": [
+          "sporttery-market",
+          "current-probability-model",
+          "negative-model-residual",
+          "temperature-calibration"
+        ],
+        "weights": {
+          "market": 1.2,
+          "model": -0.2,
+          "temperature": 1
+        },
+        "metrics": {
+          "rows": 170,
+          "brier": 0.5381,
+          "logLoss": 0.9069,
+          "accuracy": 0.5824,
+          "calibrationByConfidence": {
+            "p_50_60": {
+              "rows": 39,
+              "avgConfidence": 0.5485,
+              "hitRate": 0.4359,
+              "calibrationError": 0.1126
+            },
+            "p_ge_60": {
+              "rows": 77,
+              "avgConfidence": 0.6908,
+              "hitRate": 0.7403,
+              "calibrationError": 0.0495
+            },
+            "p_lt_40": {
+              "rows": 19,
+              "avgConfidence": 0.3796,
+              "hitRate": 0.4211,
+              "calibrationError": 0.0414
+            },
+            "p_40_50": {
+              "rows": 35,
+              "avgConfidence": 0.4458,
+              "hitRate": 0.4857,
+              "calibrationError": 0.0399
+            }
+          }
+        },
+        "comparison": {
+          "rows": 170,
+          "brierImprovement": 0.0024,
+          "logLossImprovement": 0.0062,
+          "accuracyDelta": 0,
+          "interpretation": "positive improvement means the model beats the market baseline",
+          "pairedByMatch": true
+        },
+        "rolling": {
+          "windows": 4,
+          "passed": 4,
+          "passRate": 1,
+          "requiredWindows": 6,
+          "minRowsPerWindow": 40,
+          "sufficientIndependentWindows": false,
+          "split": "non-overlapping chronological windows",
+          "criteria": {
+            "minLogLossImprovement": 0,
+            "minBrierImprovement": 0
+          },
+          "recentWindows": [
+            {
+              "startKickoffTime": "2026-06-08T02:45:00+08:00",
+              "endKickoffTime": "2026-06-19T06:00:00+08:00",
+              "rows": 40,
+              "logLossImprovement": 0.007,
+              "brierImprovement": 0.002,
+              "accuracyDelta": 0
+            },
+            {
+              "startKickoffTime": "2026-06-19T09:00:00+08:00",
+              "endKickoffTime": "2026-06-28T02:00:00+08:00",
+              "rows": 40,
+              "logLossImprovement": 0.0063,
+              "brierImprovement": 0.0018,
+              "accuracyDelta": 0
+            },
+            {
+              "startKickoffTime": "2026-06-28T05:00:00+08:00",
+              "endKickoffTime": "2026-07-12T18:30:00+08:00",
+              "rows": 40,
+              "logLossImprovement": 0.0026,
+              "brierImprovement": 0.0009,
+              "accuracyDelta": 0
+            },
+            {
+              "startKickoffTime": "2026-07-12T20:00:00+08:00",
+              "endKickoffTime": "2026-07-22T18:30:00+08:00",
+              "rows": 40,
+              "logLossImprovement": 0.0113,
+              "brierImprovement": 0.0072,
+              "accuracyDelta": 0
+            }
+          ]
+        }
+      },
+      "shadowCandidateRobustness": {
+        "version": "shadow-candidate-robustness-v1",
+        "selectedCandidateId": "market-current-model-residual-minus-20-temperature-1",
+        "candidateInventoryHash": "153f08e4313e40c7a19f39a94da980cd7aad0813f2f4cb485e391cd1446825af",
+        "candidateInventoryCommitted": true,
+        "candidateReadyForProspectiveTest": true,
+        "formalPromotionEligible": false,
+        "blockers": [
+          "paired-rows:170<500",
+          "independent-windows:4<6",
+          "family-wise-adjusted-bootstrap-lower-bound-not-positive",
+          "candidate-selected-on-same-retrospective-sample"
+        ],
+        "policy": "Retrospective candidate search may nominate a frozen candidate, but guarded activation also requires an untouched prospective confirmation bound to the same candidate and committed candidate inventory."
+      },
+      "modelSignal": {
+        "status": "champion-identity-mismatch",
+        "onlineEffect": "shadow",
+        "readyForGuardedUse": false,
+        "bestCandidateUsesModelSignal": true,
+        "bestModelCandidateId": "market-current-model-residual-minus-20-temperature-1",
+        "calibratedMarketReferenceId": null,
+        "marginalGainVsCalibratedMarket": false,
+        "championIdentityMatched": false,
+        "candidateManifestHash": null,
+        "expectedCandidateManifestHash": null,
+        "rollingSource": "shadow-model-candidate",
+        "productionPolicyReady": false,
+        "validatedRecommendationMarkets": [],
+        "policy": "Model and historical-signal candidates remain shadow until they are non-worse than the same-temperature market calibration, every promotion-evidence decision clock verifies, and the current evaluation artifact is the hash-matched Champion in a valid model-learning registry."
+      },
+      "modelSignalCandidate": {
+        "id": "market-current-model-residual-minus-20-temperature-1",
+        "role": "shadow-model-candidate",
+        "featureSet": [
+          "sporttery-market",
+          "current-probability-model",
+          "negative-model-residual",
+          "temperature-calibration"
+        ],
+        "weights": {
+          "market": 1.2,
+          "model": -0.2,
+          "temperature": 1
+        },
+        "metrics": {
+          "rows": 170,
+          "brier": 0.5381,
+          "logLoss": 0.9069,
+          "accuracy": 0.5824,
+          "calibrationByConfidence": {
+            "p_50_60": {
+              "rows": 39,
+              "avgConfidence": 0.5485,
+              "hitRate": 0.4359,
+              "calibrationError": 0.1126
+            },
+            "p_ge_60": {
+              "rows": 77,
+              "avgConfidence": 0.6908,
+              "hitRate": 0.7403,
+              "calibrationError": 0.0495
+            },
+            "p_lt_40": {
+              "rows": 19,
+              "avgConfidence": 0.3796,
+              "hitRate": 0.4211,
+              "calibrationError": 0.0414
+            },
+            "p_40_50": {
+              "rows": 35,
+              "avgConfidence": 0.4458,
+              "hitRate": 0.4857,
+              "calibrationError": 0.0399
+            }
+          }
+        },
+        "comparison": {
+          "rows": 170,
+          "brierImprovement": 0.0024,
+          "logLossImprovement": 0.0062,
+          "accuracyDelta": 0,
+          "interpretation": "positive improvement means the model beats the market baseline",
+          "pairedByMatch": true
+        },
+        "rolling": {
+          "windows": 4,
+          "passed": 4,
+          "passRate": 1,
+          "requiredWindows": 6,
+          "minRowsPerWindow": 40,
+          "sufficientIndependentWindows": false,
+          "split": "non-overlapping chronological windows",
+          "criteria": {
+            "minLogLossImprovement": 0,
+            "minBrierImprovement": 0
+          },
+          "recentWindows": [
+            {
+              "startKickoffTime": "2026-06-08T02:45:00+08:00",
+              "endKickoffTime": "2026-06-19T06:00:00+08:00",
+              "rows": 40,
+              "logLossImprovement": 0.007,
+              "brierImprovement": 0.002,
+              "accuracyDelta": 0
+            },
+            {
+              "startKickoffTime": "2026-06-19T09:00:00+08:00",
+              "endKickoffTime": "2026-06-28T02:00:00+08:00",
+              "rows": 40,
+              "logLossImprovement": 0.0063,
+              "brierImprovement": 0.0018,
+              "accuracyDelta": 0
+            },
+            {
+              "startKickoffTime": "2026-06-28T05:00:00+08:00",
+              "endKickoffTime": "2026-07-12T18:30:00+08:00",
+              "rows": 40,
+              "logLossImprovement": 0.0026,
+              "brierImprovement": 0.0009,
+              "accuracyDelta": 0
+            },
+            {
+              "startKickoffTime": "2026-07-12T20:00:00+08:00",
+              "endKickoffTime": "2026-07-22T18:30:00+08:00",
+              "rows": 40,
+              "logLossImprovement": 0.0113,
+              "brierImprovement": 0.0072,
+              "accuracyDelta": 0
+            }
+          ]
+        },
+        "modelIdentity": null,
+        "candidateManifestHash": null,
+        "performanceManifestHash": null,
+        "foldManifestHashes": []
+      },
+      "reasons": [
+        "market-baseline-rows:170<500",
+        "shadow-candidate-rows:170<500",
+        "independent-rolling-windows:4<6",
+        "model-risk-tier:watch!=stable",
+        "input-audit-failed",
+        "recommendation-selection-gate-ineligible",
+        "shadow-candidate-prospective-confirmation-missing",
+        "walk-forward-watermark-missing",
+        "walk-forward-validation-unvalidated",
+        "promotion-evidence-ineligible",
+        "promotion-evidence-rows:0<500",
+        "model-learning-registry-missing",
+        "production-multi-factor-policy-unvalidated",
+        "recommendation-market-HAD-unvalidated",
+        "recommendation-market-HHAD-unvalidated",
+        "model-signal-no-marginal-gain-vs-calibrated-market",
+        "model-signal-candidate-champion-identity-mismatch"
+      ],
+      "promotionEvidence": {
+        "version": "promotion-evidence-gate-v1",
+        "eligible": false,
+        "requiredRows": 500,
+        "eligibleRows": 0,
+        "conflictingDuplicateKeys": 0,
+        "manifestHash": "f95be0176b1462ffbbdbd61db209339f945abe6b692b493a7276c2212d8ef643",
+        "manifestValid": true,
+        "decisionClockRecordsVerified": true,
+        "validationErrors": [],
+        "blockers": [
+          "promotion-evidence-ineligible",
+          "promotion-evidence-rows:0<500"
+        ]
+      },
+      "modelLearningAuthority": {
+        "version": "model-learning-activation-authority-v1",
+        "eligible": false,
+        "registryFile": "C:\\Users\\86188\\Documents\\football\\server-data\\model-artifacts\\model-learning-registry.json",
+        "registryValid": false,
+        "registryHash": null,
+        "championArtifactHash": null,
+        "candidateArtifactHash": null,
+        "candidateIdentity": null,
+        "candidateType": null,
+        "candidateApplies": false,
+        "championMatchesCandidate": false,
+        "championArtifactPresent": false,
+        "lastRelevantEventValid": false,
+        "evidenceHashMatches": false,
+        "lastRelevantEvent": null,
+        "blockers": [
+          "model-learning-registry-missing"
+        ]
+      },
+      "productionValidation": {
+        "version": "production-multi-factor-validation-v3",
+        "productionPolicyVersion": "multi-factor-market-evidence-v2",
+        "backtestPolicyVersion": "multi-factor-selection-shadow-v3",
+        "decisionSnapshotVersion": "candidate-decision-snapshot-v2",
+        "cohortPolicy": "candidate-decision-snapshot-v2-only",
+        "cohortRows": 0,
+        "excludedLegacyV1AuditRows": 108,
+        "samePolicyImplementation": false,
+        "eligible": false,
+        "validatedMarkets": [],
+        "requiredMarkets": [
+          "HAD",
+          "HHAD"
+        ],
+        "perMarket": {
+          "HAD": {
+            "sourceRows": 0,
+            "sameSnapshotModelMarketRows": 0,
+            "exactReplayRows": 0,
+            "minimumRows": 100,
+            "status": "unvalidated",
+            "productionPolicyReplay": false
+          },
+          "HHAD": {
+            "sourceRows": 0,
+            "sameSnapshotModelMarketRows": 0,
+            "exactReplayRows": 0,
+            "minimumRows": 100,
+            "status": "unvalidated",
+            "productionPolicyReplay": false
+          }
+        },
+        "blockers": [
+          "production-multi-factor-policy-not-replayed",
+          "HAD-production-policy-unvalidated",
+          "HHAD-production-policy-unvalidated"
+        ],
+        "policy": "Only immutable v2 candidates with exact canonical input/output/policy replay enter promotion validation; v1 remains audit-only and a probability/odds proxy cannot promote the production policy."
+      },
+      "walkForwardValidation": {
+        "version": "walk-forward-promotion-validation-v3",
+        "status": "blocked",
+        "eligible": false,
+        "protocolVersion": "nested-expanding-window-candidate-selection-v2",
+        "featureModelHash": "64701d1bc75adecb74276bbfbc0cad1f53a041d137bd17aa570ce7b770d2cac0",
+        "inputDataset": {
+          "rows": 164,
+          "rowKeyHashes": [
+            "348491b88912227d6ce2beaa0fc6af452a08ec6b5cb0a8340803d1c911053191",
+            "f792589ff468bbbc5513270385b6ce98a48b41211c403704568656c241e416a4",
+            "387c13f79f7f8dcc95703e1f5c513e53e14d9c83284bdb6b828be05dccba5d59",
+            "b956386df08884148db44fa3ba7f9babcfafa597f52175f50949d9a99d931f02",
+            "ab8932dc5e793050d4023d0fe592c0f48c476983db8e400a89e07489e24f2173",
+            "4ea3120fb126b881aa033b786ad23f2b4f144976d88d8dec6dc998b88a765bc2",
+            "3db468486e33a332e6f7c55394979209bb8aae14bb061c8a0347914b908dfd78",
+            "084dbb76c715c942e33b772c4221c5ae529272f3eaec16fd61b8bc9a9fdff394",
+            "2ad9c125c662bbd6201e9d95b432cd9b7eaab4f132155e50ab5669d828b201a0",
+            "d37429cc7b56db52a52dd6c85a3724f3ecfaaf68879856760017e07970a8f465",
+            "b8a7a10eaee4cff3e5462d485d5e96085a9d16666a8a6dc8b0f09c17e31c510c",
+            "531d34087be58b2e89416fdc72165ef1666f278c73f2c70f49ee50cf9d044b35",
+            "52c40ad89a6493f0ba5ea0b6581e1fa20a082efea2d5a8f20b214f0382437295",
+            "15c82f07182b88bcbd1bda3b6f29c25a163aebb2934d6af17bb5bbfae77999ca",
+            "b1af406a784ff38ed5f1b955b2e83763de6262837d2e4e3b3c61aa34e9fb4f30",
+            "1776190e8e5bf390e6f6c87bf6c587ca11ced987012e261e78f40ebd37c086fe",
+            "8bbdc2e648d5b90b32bcb53b032c5f93e29be6d20d2865efd3aded6382bafae2",
+            "e43b9b4f1a45e6d51cda974a9c1f5e64d676376d3a7c6a14b8dded87c897d174",
+            "c59eaba8a7f33238949f4f5202be66823227d6571c0b2d13aa9fe9f88f88c7b7",
+            "4ccedd318a23fc6d2d41faba4be18715c1e678a5032536445f9692dc7618512e",
+            "a8181e7a971fa0327eb651d6920f517eae63cda44ef42e2aa2474a23b72b1731",
+            "88104eb6163bbf4937754eb64994fb9144971a349b1f95426d700b4d550c2199",
+            "1226c384a89fb2db1b73c3946c4b22392a9703cd6a8c3b561d005aa9bb3ec062",
+            "7823651d857da8af788ac990e5f97a44f757af9f6df3d27bbb5da6de6699e4be",
+            "b407552660dd91342d64ca8c2a4479adb386857e48eeab4d94d9034e535b1b3e",
+            "be8efba311e0850a4bdfcc1beef0e283ece913651cf39ede852a15bab764606b",
+            "e80bb67ef3e4d694c593ee16363b4825c7bb9ff547170c5aba72b1d878dfb5dc",
+            "3ddda529e19afa40d2f3ed9c5be63f86d19fac47d2ef22f396bc65a59d50e7af",
+            "a39bf52d572e7306763bb67c08b5c52c2938dcac4d4cba6596fd872cd15226de",
+            "ec4f9e4b59bee236fcd35a2fb4eb72ba07da34d7bbde75038000c2333e4d474b",
+            "c2f657b6df5a9f6f0dc0b8f076caeb6edb9f4fb57566723dfc31d4e3c45bbeaa",
+            "3f9b86babec250a3db7e27a444b6cda366db3a0c7c47d3b97f0460283ecbe5cf",
+            "403fdfe9a8dd833c638d8013178a056c168f0e3c17a16baf90a5228879882598",
+            "c615efec7d94baf6a21d09589bf53f83561a464859589b42b4cde0b5480d4bc8",
+            "d1bd5f748f2322a4eb8f43c331e3e2ac63d3e73579bb52a8b7cde0fd3a1cab27",
+            "4daef054b0f008a035e5cb7c01948222992d4e4feeb232cf67cfc3a5c537a521",
+            "848ea8bca4060e64a07df8cdf09903e0e82e8070578d75ebad8bb3bab6347e7e",
+            "6680ab822109533332e4b667de43356816d95a243f0ad9a78ec73ccc9e0c4b65",
+            "7633d4b2932b59a48f501b2b50b7866f1d59eba7eb90d4f7095f4a955704e8c5",
+            "5d6e0ff5b640bb4baf0a65dcbc91cc2cde0b6ad161e394dae4e9e42b75af5c3a",
+            "1f989ea207c6f818f244ffce92058da39322af9f6e7b43d29f2bbde12eca1b6e",
+            "3864bbceec5a93f1d40b32bb80d5184099e5946147dd59add0ec77639821cdc3",
+            "31f2daeeaa6dece3da3befe3f64eed06d15ffca3664811e16074677f2926c32b",
+            "632ce0d1bb3edeeb0429101306cf141b33360b2bfc98e489c771a4445d554a1b",
+            "04e29db4fe1df0e08ebd62e9d4beead677fe3de97e1b6fe5e6e685fb23917a5e",
+            "41e33e3c37caf03e1ecafe30e2e77ff89b9d1e54a2bb1495518966725954c5d0",
+            "cf5b4ba6e85bfe1a141ed8f9ec1ff0d0a9ae49279d08bb192c105eb10c40d5ee",
+            "fa9aabc05bf01fd428600907e107c7666790b063f11418395adda9ca52c6514d",
+            "bbca58da737ea4f702f40a73d31de358aae68ff2f651872e94c8b025b3ce1434",
+            "b1ccd5933c6df32fe6027fe9062ec0f6abb6dbafd99ee7f0d9470563fb9a94ca",
+            "4ed51226e5f5759cdf7c2cb00630b647bdd5c2b87a42781d8614185f27fef889",
+            "3d86cd06b33e12fa7c50211000e2b70654fc73a074e071112d635a4d90940333",
+            "32d1c1ab1afc8dcea9922bea4fd88e24c6cd7a7fdc3490e3a6d8dfa381ad25b0",
+            "4febc985ee6f5a6b88f39120b26a718dd7bf09c85871ff0c6bdf61893594be5e",
+            "07e380ed80d33afed1331415248ec9f032144017ce7df03db0a1661d01a892e8",
+            "4ad2a7850ca3651205f1f7a2537b8b85c96ecb00e97030cd260b91655cccceb2",
+            "a09c0c5255302110bf50cf940a3734a7b351c963e3441d9d4617f0935891bb98",
+            "0e2635b1cb8f87dcbf131e23d627277fa5817b3024d39fedba5b137c7927a2ac",
+            "98166a76b1317cc9dafa5d12252244d8b0cc0e4a0313a2870f7a8c5515ee3d0e",
+            "203dc85650f9503f78053249da3e22cf8e5af522cc3dd8b640d50fdbff584262",
+            "d03ca96e75b080c20bf064c8cbe24e41083eb73e07ab1ce8281420b126719152",
+            "365aadee62125569b19aa9951cc3f83894b9fd982add37102deb5923cf9091cb",
+            "9bd7a1d72bbe35184b6702e026e7a62148c704ec69fc2108fe20787354a63a8e",
+            "aa73cdfaf4cfc115b6b1a763791654434a724aaeb0f37ca90cace1fe65dd767e",
+            "77c486de4c0c9a433db26e6930acc5663eca93769476d20a56c6cf1b6957d668",
+            "1f0d9c17e6dbc28cf20e36bf263856d67097e4d7e1915469b34daee5b0fb3701",
+            "f69e4a88e350d363f4157b61437d97087ba05f3d9e18ae0d3667ac0a2fc574c8",
+            "9f3f0db5ae1a2133bd85f58fc91c52af834ea4a5bef1c5ecaf3c47bba9c47c9a",
+            "afbb830b5d6ca681a04a1617fade18997b27a46503fa64b1282abe3cd75b2147",
+            "73c97634b6be0327c8c9a70de3dd4398d2df6b4142ee92ea6bda28cc16c172cb",
+            "4adf0032ebe97ed308437050fe53737497c93fa85989cf06d614b6ec76117ef4",
+            "566b346702f1d054c8ac859f6d4e1d23f94e4b44e7dc5a32e02bb92050284b4b",
+            "6e29dfbd53da7e3bcc3c267a090e13523b75dc941f9461a0b801d4a80216911d",
+            "26c2b7de868045e4652ab475cb9049d24c793a10e287a9903ddd913b58461159",
+            "1cb409fc561356d80ffbef19cecbffacb52b0f4b72d5e8bd1e7c7b53e5940e72",
+            "e48b50f8bc1ac1a5a1060868458c94a6cae07aff16ec96996e44514c3ddb4080",
+            "dea106639399e0ee906fef165ce69b7dd89736d52e19d53a36a8180c4958cfc4",
+            "6fdf88ac5db4d710254dd726f7207f270d553dd2e9b27856eb1f8485edafd641",
+            "3528c14882d1aba44e2c0d94b0cf90294fd2bbc09b40463daf2ff33d2358c2de",
+            "543601cbc5820b727ad76ae455c252de880a1d2351d7e12171c1a6f762f39df9",
+            "71184dc51dbd3eafd8954c995caa87ffa5217b45b5239c18f383b47e3e3e8234",
+            "1fcaa3471a1f110375042bce4b56bb4850589fe4d0797390176f78a5a647dc5d",
+            "77a4de32fab1859eaf74e186a4df77d2e6ee2c1517355c3d324fd2cf03843a1e",
+            "d4592dbb4cb75dd2d144a280a49f94973a99a99b96d1b901ab2e51f4e57b8bee",
+            "f97fc557c78b66eb403f0d1fd728ed88b582788f49501008e7c83cfafb643242",
+            "0e5bf0046110a7b4f4b7c80d597b44a74d261a184f2a9e56335d95fa504a0733",
+            "882d60e552845b586855d615dba66575a7caa583ab2f82f008c74d54845c6a68",
+            "c5c965f7a01bf8d8169e42866aeda5dca78fe67b63846b3e6b580d2a7215f377",
+            "1dce213bc88a47ed5215f5b52b223a607a69145266f0bd413dca7b01c58135ac",
+            "49184b81c4e7e7a4193acab98dc337a2327ab9b7eecbafa025340ccc193ab99c",
+            "390e54085fda3372c85b226817ee08b3d9c87340407e48b450c3564dad2cbf09",
+            "c74aa178ef32a08b1b4196187de03c3d95237836af621fb10530053658fec096",
+            "d705a6d40da9dfe1f58cb67982cf09ac6be20f7a178517fa1909e3fe98228742",
+            "e78c470c397dde890ad11d667098e679260cbb3fd68acacba8c945ef00e19471",
+            "a1fae3c11545abafad884a61831ad194fd81fbeb7c3966070264293588322e52",
+            "58d0709df84621153d0cf91d1225fff3c60c069fa0c20d48ef07fe7fe1407a93",
+            "fc8c371743f177d331b396c4c42c71e1aa41b7eaecfeaa17561c0b33ba25ac6e",
+            "30d2c0d5f2a50845991f68f13aee66499e51f1213355252fdbe758b38ec9f042",
+            "81f333cc03b25f9ccb1abb6fd03ae306d0c57c9b7ec705e067923988498ba33a",
+            "706660cb9d6a9d8d0954ba5131ba493d45bdb582e8d29fc661fe5b246ad62ce5",
+            "254427bc8dc8f1b38165c9ceaa5972c7931cda4f2df47b2e4b4103335f321c53",
+            "4c2bf66796a7412e7164740eb27fd87eb98530fac4a82164f52ac47b691478d0",
+            "60339d793b4e7c4096e3a9862bbe0aab031718aa8f2643ac2edc3019f364c448",
+            "b8e6572d7c837ba4f02a26f5b6b22f27d34af857cba966f9b83ee6f8bcdc647c",
+            "2958d0530dad28f7a7ebb062654c0eaa10e05992da9c56ebb5d83e947f729876",
+            "cee5ae419a50063771fbfafc2fdf349a75d63fa5110b710dd02b48f8a1899342",
+            "1cfdb9b8e7dd7b58fc53763d7aff769fa25cd3967fb5660431e42d7ad080111f",
+            "eef3e4079c2446ea0e4eda09f8f5190067605fea9834fb02b0d6538c9eeea0c9",
+            "87d4b1eae7c446d478e290eaff01de0d7247ec24999f10e8675cff37c59c74a8",
+            "42b7f39770835ed07c7c4501eaee439bc60cd8b58f2b261e2b76f8e0d3e776e1",
+            "2a68a177df20b2a7a93e1155cb3c578641ea2ccf36b69ee8f024abe96ed5629e",
+            "c0c214736526515d911e7f08b14e58750ffc99bdf67da680e9c0ff5dc24f2fef",
+            "aa1640fe7b4eb4dc58d2bcf574b523cfc400c699aa36ea62b542f2b60350d638",
+            "afbc7e31c4297e5279f38fb51df85d7bcc1bc7f6fbac9be4c5e6b53b9ea8d4e4",
+            "24c139a85389141e0e33eceb9f2b54a235f981928a5922c5baddac905690f5ef",
+            "fdf0903ba27759724df398d1ec8e982b5b99b237c796396c958d9d06be51a605",
+            "2486155923e4b5598aa54da0b4d25bac8e74a41a9688116c0e05c519877b32c4",
+            "58b78a71c5c5e603b7d0ff278400dd01b08bb0bce1cef7349e1e753c5fb1bbe5",
+            "c4233f707860ea95482e1b63f3c26a93ae0f5bf29a033f95c0c2bb9580ef327e",
+            "40c5b8602df7d031bf3fdd74e08c87497599e16d38df779536de8c30390cd6d9",
+            "f001e17e8ed12c7c1d9ad1fb2643bdd40f7ff66f86f337d192c33eecc5c2bf07",
+            "b768b9218b2239393efac7ed7995a72fa4f00016663bf4dbf2e10a6254c7680a",
+            "3bca77615dcaac56e305df267158537eed226ff2f82ff877fca899c068e3cfc1",
+            "fae1a0e2385fa3fa33c74f93f015bd148041afa68f40f4e30da36372045e9285",
+            "6a8b5e52749616b2680712f41a092426176f41053a395799b738390fad5a7196",
+            "dbf9e874404a3f524e961b292963d69dc6e2adc16c8a12a2428473728208cb29",
+            "4da7bf8857a1c40332230c0e9b4d6691264f07548a32f2fb7cd7b1183ceda275",
+            "d6b159b9b1c1d2829761dc65b6ed8115442219f3360182fa399755844f7cb20a",
+            "fd184e7d8268dbd500ca016bda8a417e125a527420adae9a871ca32f11fe2a73",
+            "aa28389d2d7517f98f15da375d6a2b401f8d1cebf6d427e7e6882ee0cf1cfa55",
+            "72d28f15b4dc63c93fd4f1df1df380511ba5f83136bd8b311ffeec9395054a81",
+            "ce44cacba5811bb1b3cba6e6415bc7671e5cabd57b99ea4cbbb838f9f55e0b9f",
+            "a29bd594d717907a5ae953bc49b0fd5d0a64acaa5f9a27798c7ff2514a1ec619",
+            "37c6f1b97093c557985337aba8ee97347eebbe0c12380c9428e1ea6473dc821a",
+            "c5c86e52aedd8e66649856bc07e6fa7962bcdee3072e46a8baf35da37612aedc",
+            "cc151572d4e867117b19f51042b9dbf57035e149fec552e18d66f9a7db8d0880",
+            "8c94208aadd158b62a78605306bfa1ef49ec77decf13c7af736e94aa3cfa6c28",
+            "ef267e91b6528550eba0fb5a48d6314c3d07165b6f9e888bf92ad2aa638c524a",
+            "2032e6bfc6d2812fa7a50b894f04de266bc1daa1137327e7e88f41b72ec90a35",
+            "2f59e48d0ae53605fdb07b927437dccf36d92fe53117a25d71b04a5fedce65d6",
+            "a0365ab68bfd458ea933fed74ed02385dcb381c1519145be75696e344c13db2e",
+            "9055c7fc4697918f3cfcdbd05f8c66dcc321187f443db15f5b6d29cd2417abf7",
+            "272c667cdf6b4bba5ed12f70141e281c29d3de4f86c98f193f537b5b0ed6835e",
+            "14897f7fa24a408857ff398648f71eba98976d147ae266d27ff2c3bfdc019fad",
+            "93072127b313ac334b880d1e41faf385a76b80e91d4196fe55edc682ca75557f",
+            "575eeb9dc4c2af29752ccf83b5e519de2a339c0eaf166c50bba51231797e4400",
+            "d631a45cb798562eb8ab4d32028da64e7c2152a77ca7767e6529f016b3d430c9",
+            "2b932c455854677f84cb5f60a7e2cb35b8f192cdb6977139beb19a0c01961126",
+            "6d13562a782369cdb6198337a064a8906fd839700189964d4391e25862b086e1",
+            "66f70eb7e522b4922aaff2a28c482ac689b13d853e1f1da7c05dccc767f435d9",
+            "d62a73cf6aafb72e0da0ae0fcf9b9438280ea496c294c47345852ffd4089f697",
+            "05fe5ead873f4d2962835bd2c84141228220f1c0c0e3eecb1380b356a971c38c",
+            "5a46f2848be139086aad41778ed47378b7c792f8126db809cccd8cbd1fe152db",
+            "d13bef921072a79893b08300ab24dd8ae977e49698bf3e2e97c44e138f0ae675",
+            "f6774c6b71ee364462fef5cf858caa382fdb533385a244faec350fa0e64f2bc0",
+            "7e23e0624aa8d301c915b982bc53a0835cb5eec40f950f2560bc58360f22c38d",
+            "b758c51fd33c2793e6a298021d677f8895ddb11adbec9a0cb648208cdc6bdb5e",
+            "99dd93b935edef98a2732dccfe8690901b3d6578ca5bf722614c87da0fb802db",
+            "488cce91290e8b9f70b358957d205697908177d7e1618d9e700518f7f526c3f0",
+            "9de4cc292146b8bf89f111629cb9cbd66896fe3a223f3a2339b7d1483db4f4ad",
+            "f3767b12623f80d7e8cb521994710586012772103e0d2795ad2fe16bcf8e13d2",
+            "3af5701d05b873cfb623a797d64c1471f7dffe63823e02dbfc11b108d0517a98",
+            "0908a3a9814f3e5efe43fbf76f55b145deec9f20c7919039ee548c25db2a5409",
+            "671335f990091c6b13f3ee8192851d7bea45d8ec31f1a22b14a7aed418fa1ab6"
+          ],
+          "rowCommitmentHashes": [
+            "edc7aba497450e908eb2366672e1fc1760c9684db624e178e171c04ef807fcec",
+            "fd29573201af2275c0552ed8721eac6a99a57edeaceb35459c4f01375c736bc5",
+            "6fbfdb79c8f20062834913f33aa5a4024d46a3f2e8763a04444c75986407eaf0",
+            "db2392cd35844797f4d9a37023ac06251ca22bbbdeb456672c731fdb5e0256f2",
+            "50132eb5ed35a2991a8249f3862e87eb5a00ccad51f87442d26ab9b7e95bd03f",
+            "ac897b3710ae349a8ea7648eaccf4fa4293666ab92a1b7e31dab1cd112770218",
+            "b8f89da53b682ba9810cdb40d8d3322a1dfa9e354b1bfb0d14e06bbc9dabca97",
+            "6e08e101cb01951247923007e31bf53076d87fea4334c5a14d8350f9af2182e9",
+            "4546f95e5d49fd113465780db010a2ed4a5ce261fdce24d6712030defc27d39d",
+            "da56faa2a51971bbcb5c1e047f08691bee1d7752f3892082d656cdb45cda30ce",
+            "b8fa1a8e812635f816e96e05b216469a1f7dde69cf0eee9c739c270675aec90b",
+            "e61173ae1332b2f614566f1474f4b4500f047fdc0aafb09dd27aec656b82a4ab",
+            "99a631c62ed478eb0cbe3ddd2707d9abfdaf19b703582140520c127c6bb76807",
+            "bddc234c8b09dafbe8a25699bda06b1230258f8031e5557d53ef460bcfa3175c",
+            "1829c33a1ca846540cc11c3a4c1650b5118b286a2e71629f423aa0edc70f2989",
+            "a887fb4a0f7261e71e3ecca41dccf723acbd8db236bb93d3773bed525906cb85",
+            "90e9524ef97f4da5f91ac9619e9d502517ee0de8f65b049f76828066b10af807",
+            "0d0b06c41caddc0f02e4f4d007c63eac7c62d5452a0608df87ac4657a34cc229",
+            "4a9602b1d9f08892c0c37661fe7ab53e83d95e05b6a5208a0ea2f91adb99f751",
+            "7ffab6975bd84727d30e70fdb22c5bffcd0b90d5fcef7fe56beea2ae448780b0",
+            "ad3a753eab271725d76fdc129b625ead805b2b62e23b2c6bb4d2692da70a7637",
+            "0b5869fe5474dcb933dfc8a51e53146ba114952a3a95592db07eee64541f606d",
+            "ec535e0df3db7a9ce2ec851dc920f92cd3ce0cfa79c095d58551523a9a2e05ad",
+            "a3ab3bdaa151eb265f6c1a1f64c9ede95d7f208855a5e2549ce1897808cbaccb",
+            "f2b64dff0d4362d3af2b8f2cc4429704d7ee694960315ac65705358b4e2ff104",
+            "d0da83c9d1863856f87f3d285b6b4a47e5ce37fe0111cc26f7784160cf22c205",
+            "1346367e2464ba0e32dc0fb315de45c38d1aced37da69afc4b6ac38101be6349",
+            "2b2c445c6ee12d099902dcf267f55b3257c40244be82e5711e5a1b9986816747",
+            "f210be82b97652a073bea8ed86063c6713bd6660dd0f622a1655def5a14aabb2",
+            "0c4c5d28c816523de29dbb1e93df4377d3c2fb654c1dea6edc25f9c0230054ec",
+            "5e7b00b5bd7dd56adfec84d49d93420cbf27f2d4c8d95b147f317c2ae6a4bace",
+            "f45b8b200c35f73c03d47286ec5d033229b0cd4d73cf11ed7dc290e19a28ee8e",
+            "c9fa2ee83179d5376e662859a2e01dd80792161595b3518bb06ed0c541cfa328",
+            "e4c8ef32a8082cdcc67a0f0d8b6c5e739126a9c5af5c46fd3a9162eed3da3e12",
+            "b6233d28d2a2bf9a87b6dae0bf37163590559ce3078ce1c6953e93764db6e006",
+            "069512e54318b8f750633b2ccd8bdbbb2224a3cf2dfe654b8186ecfcf66975cc",
+            "ab108d5d4a402fa50fab6a861ed83be3512995af013ee37595bf78569773d7f8",
+            "f78a58cfc2f0b20ce83788fbc66e2387e08a49592fcb2d57348673bea9efbf45",
+            "fd90ba63c753c31e397049875b8a683ee43ca44ce6e957990c1d97ee1f8fc475",
+            "1244c5549930d263c5a5d5d57e9970eb8529a2347bd330514303349e5fc4c406",
+            "bea8660fdb47ce0dee0e7e0a7f00fc1a44999278a5dbb0f4384fdbfc52513fee",
+            "9f8bf66fee1f359e2c37ef10363be9566e975f9c43dc07214b0a77b49cac2992",
+            "59ec61be76983c66ffe095346f76507408e6b59ddf6a87f866735e866e10d857",
+            "d5dcc875ddd3bb9447aed172dc6853fbeb53d4433f49220a62b941f2d40c4baf",
+            "437f101f737f33ee842a226badda221931c8c845693a83d323cace17a37f456c",
+            "5359011bbf0ef803f55714b67cee7b0179f056907f26cc36398fa57b07a95933",
+            "828abfd2b086e6b62bb3bf1e677d985baf1580a1e750e6fc479b07deadfe1cd3",
+            "3f8c3001bfb6e1f5643393de317d3585e1f343a869c4d7f1eb07e403c93c122a",
+            "086ed09ac1b23f917cbf23ce76b51ad920cc2f48b07035f6bd3172da429ded07",
+            "4d6b659b501573b44986f6919d2bbe241bcd103709941e80b5985ef5c89b991b",
+            "82edc99e373c714e8a3dd401d460c0aa3aa8c69c5d2a57b8be80d344ee1931c6",
+            "9002a2460d2b86eb316f3a08736f56520d31b7995ecd80a3329eb2a34cf157cf",
+            "21a01324b501f69c9bfbc457296b7e739137c6f0ed7bcee40f68ca5cee552110",
+            "1b0725771c242b8c29b8e9febb547603ab5e2244469351f29ec150ba9c04d514",
+            "2e69580fc8419ce8b149ca7c3ad3f53226959bb2da5ce32a33a7733ef8697284",
+            "b443070da28a6fc5c9744390d2a9a0d0e5f4ad2ffa2d17c79a253d99c77df8ae",
+            "3117cbccaab17ead9daf1f8920e451c19fad70f8b722bee9776c6c10296c9cc9",
+            "3a2eeb1765263b20b11a1970c9eec6673dacb9a4df4b328dc5488f72fcdf3e80",
+            "07f0ea6ec3404932faddec64144550a7c7f88ac17c1aa4209a90e2f48aefea01",
+            "61912728dcde3a87f9ad3e717b8c39ea3f7caa15395de79dea2bc480fc2a3db2",
+            "da894a487dbe5a2016d8be21ddbc5825fdd6c46bb167760bc2f115545519aa7a",
+            "49c6ace828d979774707b0e9b36f416cbb1237606268c4fa192de255120a3f1e",
+            "f04d14504cc2eeea8e85e3942e2d930de3627992a53745becbc0894eff295a6e",
+            "48eca5db9dcad4443de2d72feb56c82da2c8e585f8539fdbbedab5f81a46599c",
+            "ca7396c5892286b2cd2ae2974279e68726367555683434869a875d1e2748411a",
+            "4980c151307a575df5f99a5067589930a4b62f7a52d9d8b6077e3a22a176671d",
+            "39797fbd0a0bc724b52f54941ea74c43b8439c43fb34674bbbb50142868bc6be",
+            "5533689ada04ff0ea84b1977c6f47e63c7456ee2ec0c3f138b796bf6ac2d758b",
+            "887e5ea8a640be2bead84fcf8cf6a472b5342d6c7be86288648efb95d3938da3",
+            "c03e41f52a497f9ce0c2185fb4b775a11c074de99e24f078d4e5dc555589933c",
+            "ca21ae474276cc1c52150695caa1ad78af356ed588672794ce9e6fa3fe899d90",
+            "523192a6adf4440cf3e023a85d650f0638ee367299c4e70a7f987f47b9c6d8ad",
+            "89cf593ab5ae8f0ab1601a478386c7c9e0d980a7f203b3c25a72d4df4539a801",
+            "7b6d8897a7a3049ff47d9a7246a0b57f234633f795be602cfe6ff333df665a55",
+            "4524f49ac2e9ea86e2453c32d869019c63705483b6a839ca1894872f37e4832f",
+            "43c2c69956fd263204e17e83491b63f2910d7b20d3aed51a6048c43d68849c77",
+            "ba52cf5c0a7926a6babe30a08545bbebce7b5d9a87794d149e34ef35226f83e5",
+            "e2be3bed57ece12e9f8dc65ede70ef4704823fe4ed7900ef4c545cd38de6073c",
+            "9a2fa51116225d3d8468f009d987ea17f3bfac5fa63b1caa2a0bbf09f349fd56",
+            "a31e61f488a6f27e45689719564303d61aaa772d4bca1b797b04bab578b34fe1",
+            "4efd16ec248c3d4d4ec8685e2411131c384d293a136b6e44eafdd6e3c2d0c634",
+            "6d486c834421f9cf1e903ac9e9b68fc65d9a396605c2d9b751a9b123ef48f003",
+            "5e8a9eb71862c989552d18d07e42f6a0637d4a3f0062ee124da5ea26b53b4ac9",
+            "76849eef937084d2fbf377b630cca6c5a59ed8f62d20f2d54f7da65bcff595d0",
+            "167d065dfdd26b0c82024d02660befaf2ce6dca5d53da1cf4141c40b1f20bd04",
+            "31a93df5bb30b40e4866577c2bab6093fb5fc4d4b29351f2f81bef549495945d",
+            "62a4432a8ee60a96917d49a1a7b991356110b50d15bf7f8c699a5e2442e6ee68",
+            "606bb20d8bdaed03a916d4e95720f36211f8bfc22d9dbaa0f277407baa01c761",
+            "406ca2b1e827645ddeb87dcb8d09991485a284e2d3e827069e80e5354073542f",
+            "67a64dad1c7e0522f7d27cf0465adcbaed8cbea49ad8e6eee3072bbbdd06abf5",
+            "ddcb8c7ecec21de4eac5a0ec1d45ba749b723e76cf2fd5026390cacc522c1308",
+            "220f97cab32806759819d64d52891271999fb0a84b84ae353afbaa44cca302ee",
+            "4df1a5ec15f552bc7b68965b77d28b5dae396faef615e25889d5feb095e21e84",
+            "9179fb34e36ca7ec5b8628cfa03038cd4fd65fc59554517fd09a1c3885dfdf9d",
+            "073d203186a766bef83fea922eac0e28f70c6a054f1427b0b9ff74bbcc1323a6",
+            "992eb766d24dfaf5cc2405feee0ded5ded50e55c5e545be8f20644427e0c6747",
+            "97c6c26d99a41c3a93658a62267c440358f7d03d8141b7cfed6c8c7f143bc0fb",
+            "6b1863d7018cbe712f0f6ac07fc8cca3d2aebbf79d44f2026c757b6abdd57711",
+            "ee1eccd0ff53fe29da24e7b16b05b91da910535d6b74337b0a8e4a3b8f74a7a6",
+            "2c5aac504e7b6cff6bc105a9c55ff352c71d862443a9210e961ef42860977f1e",
+            "44387d001b94f3a060d19c43932d20e84628d9fe30d3dbaf94490e191d329734",
+            "26d61bbdd3ad411f073d92ab611ed6cb5f2ddc19b8bef8c867017039a7842ea4",
+            "5546f770f55579e18eb9cbc5352bceb23537848bbe2241df8ada545398278a12",
+            "396bca9db4fa3cce03888cfb55f9eb876474c68c7acd1f7543ca487818220d8c",
+            "19caf459d3d58fa9677a38288772e5d32a1e5d4a389a7388c4d319c7fea345e1",
+            "3afbd11d31d530337c197f52023e74dcef5a814f93a7465c0ecc1fd8827a3794",
+            "36238c3d9ed937c73136198fdf7b9733c03fe50c4b932b2ca4e0a73bb61cc315",
+            "63a16b9e2d324c3571576f5531d4c25dd815b2fd2a42134b9df2aa0cf1ed9413",
+            "acc5f9a4480e8efb33048d415877c4e6de727ab0cf4d55a1ef5f5b2c25a2b54a",
+            "1b16cb53da9b667d7638c68e2cb55c00003d12a3a48c0a7b19b4a1de6cd743dc",
+            "c5a24c3253bc43380d7706af308d71926bbc3270f614f41100990f4c437d1e4b",
+            "33a1b9ce056c75235d5ce3515d0149591c95f0c0be99c69783d5067f4e2ef9b5",
+            "f0808d3de1843d1afeb3e951f58290ccc368b71ae1cc5f8aad4b78eda504191e",
+            "3a6afbadc02f23885043f34709fb7c71378d17600a474dfd68e9be997f6d9097",
+            "df124c06ebcbecb9b7828e80674153ff754c154671d804a5edb8cf99948f8ab8",
+            "a66858e52b5fbed20717e8e6ca95ccb64e5c6ea9f25d47e774a86c00c292c05d",
+            "529ee270b899399536e5aa82b8b7ca7223d9682910146e98df1cd5eaa9aa5f8a",
+            "7da2f59a3e42c006806cdfc4e43b31ac0a399f6ba1a9bbef7dc3a6a91e0e6d56",
+            "99fa4f566e5088234e6a989b9a768148ddf45a0cd50ae9a64d5f7dc0723b0a2c",
+            "2f449756621310b66590403824daf1fdc86dbc51de8aba21ba32b3d91e39a515",
+            "66c16679030ee26309bcb0c6a6889fa6e73efc26045b1b4cd9328a2e04fdbacd",
+            "808d13d4217e59c78af1876e64a42d1b42b123bb8751521f1a68d7328e6eaebf",
+            "26b3d3b1a35b05ac05683c2a950c1256d7193207046e290e3995d45b4bbc8731",
+            "9630c172d7e7ea456d13f28ec91469d6025e485045b889b75cf79a54ac2433de",
+            "95f9926b3bb48272d89428f0612633def8dabefd22b7bd679cf6f7008264c0ac",
+            "ffb0b6834b076044f78accde91460a1a61735f198a708da4ca52dde124923501",
+            "fabf234f54d4917212103f966336677bbbe21a3b37354d0f9251b1aaee6243c9",
+            "b15fa3d2e0c38e7d68fc927001ec0b528d1bb89f9416bb4804800aa17a6eb6e3",
+            "81168e6807b8787dcb139896a6954b7c1a0248a0678b5a7a203ce774f331d17b",
+            "7ee757fba7b8fa96659fd14a857b78284c19b587ab701f152c17301507290e84",
+            "1a6be5cc2ef72db0a5ae2a664f807e9f26d9214a336ac8bbae62cd71f151288f",
+            "ba6969a7982667c56e2d902db021d625fe2271bb61247bc8d1563e133ed7b74b",
+            "6a46d72fede30ec74f6eea99c7c3dc76ecb37e1d29613950abafb41197fc77ad",
+            "2ea0d6cb1ae10d1abb27221d6f8e2a2f8519cd06bd8edc201642be409ff215a7",
+            "efff5b712b04451d1ef92dc3b4153a95a73c533464e9a1ac878c62931977df36",
+            "0308ac7f5b228d9a6bf0ed607a38c1c9e42e9f1b3b52e2a565738389e8ddd969",
+            "f626e05e47e1a38b7d4b6fc699b70e2e7881d267b4600a7ccbc102d317815bb4",
+            "9c15d678028ef7e19a7db3d7150d940b46144629b3504044d11e48c1516fdf89",
+            "f128602b484f9498296ad0acaffccc488233878d8d83623688a067e7c42a4edd",
+            "8a8c415efc68a1d0c3746b9bec70936e1f0c9bad350b2717ff6b9e3737b8e17a",
+            "0a749686de6981c5d4da23e25e720c193c49684af2c84db8ab77c266f00d84e2",
+            "d802e7d0c77659aae4dace76d7b8c01e04c3cee869363f34406d30632e732e61",
+            "6ebec0e27f1fa2948512fe112eca800d902fd1247ba6f19e902bb8f637ec2a1b",
+            "032ae5aed52a41516e1ed828e9a8ffb99e5e8edbf5967f8f1a773b7e860a9b4d",
+            "803f6ae63a1976f1b3bfa67acc01132540ab3b708e17859a7907bcf8366ebda3",
+            "f65d1f1fdcd057619b376370c04820db0d45a409aa579e0a1bdac614bb7b37be",
+            "6be662a229397ef2a7c2caf28f8126415cc5bf5c9d9190eb08fe62f709cbaad7",
+            "742bca7098e371909c91aff46c7ce483b2a3e98cecd6631e1901978696c42b02",
+            "1ddb2f4c120179f317905de122f27f93261f2a266c754c1b42466883979a14e0",
+            "3e24b2631e16f3ee7aae66806c6bc01aac04b7f964c6f532e85fa1ed6363795e",
+            "ad370acbaac79cc8e9ca208b356c585c37eede720260984e499b52e884dd3deb",
+            "e803a9150db9b5f4bc9abd889ee9a3a7a491159f4311e9dd1955bc9ce8a8999c",
+            "4d4f272557d99af9acac29891fcba51ece3aaff524d27b14435efdfde0f2915c",
+            "d01225a76e66aac751087655b9248d0442ecabb9066555b11de4a6f2d119a335",
+            "aa37ad166751e3171b08e7817b9d663da7cbe75dbe3f349d1728dfba61c913e1",
+            "223f7354a5dc534f05db25764d2b886e8de646640b9a69d5713214250552f3d2",
+            "a5f6e1d11cd72d738d29f98d154b3e9dafde12be9bca03897d0cbef82efcf693",
+            "835ec4501ce99e3e6f97d02ba70fc5496914c5770a31b040588d6c3022317cb3",
+            "d520b452604e16e7bd94f5c026db6e3da7cace94d416ee081eab614175ba8352",
+            "1a0e5c202ce50666fc91b0a14c896abe058a3981a53c4026fcffbc4896090add",
+            "e847b9e28dfaeaf5c44fc9823c8783fa1224f774cca39aa83fc76ad8bc1f24c4",
+            "d4201e91cb9d0a7f24bea1d36e2aa0aeb999d32090c869d532c247a73a50cf38",
+            "fc9e67ace68835af6f340c07398e7223685d67cf4667125dc3cfd2a410103a8e",
+            "a2469f3d8530897f817a3edcf6931c1c57c258006d0e97292eded321bbc87c55"
+          ],
+          "hash": "33eba234ac0c13a884cce7eff462dbcd70b397681a3228f9fa6cd66ce2590cbe"
+        },
+        "candidateManifest": [
+          {
+            "id": "blend-market-10",
+            "role": "shadow-candidate",
+            "weights": {
+              "market": 0.1,
+              "model": 0.9
+            },
+            "featureSet": [],
+            "specHash": "2fc959e7999158a4007453b3b9a4f2518ef7c12883ab1e5c33e256ba8cd0704d",
+            "predictionRows": 164,
+            "predictionDataHash": "4c89e75c7f180a4284ccab145e26f9d40732e7eaca72b1285746090d94c1f5bb",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "blend-market-20",
+            "role": "shadow-candidate",
+            "weights": {
+              "market": 0.2,
+              "model": 0.8
+            },
+            "featureSet": [],
+            "specHash": "ba90abc56e63d5cc74c5686d9a9a3e135578f5b560f271f32f456a8603432114",
+            "predictionRows": 164,
+            "predictionDataHash": "09a86901090f089e28cf6a6881dd9ddfde3479d05a00a5e2d8d611716caa7e00",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "blend-market-35",
+            "role": "shadow-candidate",
+            "weights": {
+              "market": 0.35,
+              "model": 0.65
+            },
+            "featureSet": [],
+            "specHash": "a575d208fab2f3c6477dd526f143578f8ab4d566477822caee8cd6ba7929be78",
+            "predictionRows": 164,
+            "predictionDataHash": "36f0066eacec795ba11507060046b2b35f6d1880862295e96c23b54e6900c438",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "blend-market-50",
+            "role": "shadow-candidate",
+            "weights": {
+              "market": 0.5,
+              "model": 0.5
+            },
+            "featureSet": [],
+            "specHash": "a08d7b4f4ea2fb36a92ff054099a818248ccf4b03e29f821147abda74df8689d",
+            "predictionRows": 164,
+            "predictionDataHash": "06aba0a7813dae0e78dc6e8a5e7287e6570329ca590e336208dd53fae68ccd58",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "blend-market-65",
+            "role": "shadow-candidate",
+            "weights": {
+              "market": 0.65,
+              "model": 0.35
+            },
+            "featureSet": [],
+            "specHash": "937e35ce39148575f39c75606fd0269f3f9d305cb6fbb28ebbf287d1d73f6b4e",
+            "predictionRows": 164,
+            "predictionDataHash": "1b43cb07505aee363a106f593a9590049a61eb031488a23095f639b4e88848a6",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "blend-market-80",
+            "role": "shadow-candidate",
+            "weights": {
+              "market": 0.8,
+              "model": 0.2
+            },
+            "featureSet": [],
+            "specHash": "8818d425ed8b54f571d755e9d9eba7d4d8386c86eca25fc768d363d5e4b2b2ee",
+            "predictionRows": 164,
+            "predictionDataHash": "e7447462ef24656d213956f1d804043d56d54f9bf96120f2c0159f57430fe1f0",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "blend-market-90",
+            "role": "shadow-candidate",
+            "weights": {
+              "market": 0.9,
+              "model": 0.1
+            },
+            "featureSet": [],
+            "specHash": "e8d222f90c5a44a7d555ae9c9c814ab35840614240704853581fa94122312868",
+            "predictionRows": 164,
+            "predictionDataHash": "177abbce56f47807b8ad385e3db7e1558d4d746c26767022b6ac96625f890d97",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "current-model",
+            "role": "current-online-shadow",
+            "weights": {
+              "market": 0,
+              "model": 1
+            },
+            "featureSet": [],
+            "specHash": "5bd2591fe2b323de2fd5a4fb81cf48e42e0a08cbc15d1df4c8e8c36bb8f59814",
+            "predictionRows": 164,
+            "predictionDataHash": "fa1f92033ae6871ad5c00598c9dca78a6a79f27158d82fea2ef51273b8ef1ef5",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "elo-rating-v1",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "elo": 1
+            },
+            "featureSet": [
+              "historical-results",
+              "elo-rating"
+            ],
+            "specHash": "4211515962acfca67c0dcd675683773eb7ee694e2219e5fde7c51b2422a9ab79",
+            "predictionRows": 29,
+            "predictionDataHash": "bd78e2235659291b593320e454b39f14b309139af021e106c7f857d1d8fc8e50",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "historical-elo-poisson-50",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "elo": 0.5,
+              "poisson": 0.5
+            },
+            "featureSet": [
+              "historical-results",
+              "elo-rating",
+              "goal-rate-poisson"
+            ],
+            "specHash": "f1d1dea081fcd3776645395f1e6ebb0772dbc25ebe11435e9d96aa3296de310c",
+            "predictionRows": 29,
+            "predictionDataHash": "bf1802afdf32228c044a47d84002a7216429a62e52e38fb3e7f3c26559c19b71",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-current-model-residual-minus-10-temperature-0_75",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 1.1,
+              "model": -0.1,
+              "temperature": 0.75
+            },
+            "featureSet": [
+              "sporttery-market",
+              "current-probability-model",
+              "negative-model-residual",
+              "temperature-calibration"
+            ],
+            "specHash": "305b394e56f01ec86107b256a63fd7f956599fb171a2fbb6b1f05d079001d04f",
+            "predictionRows": 164,
+            "predictionDataHash": "3de3a6a8a756601b7c92b5d5d3fa40213e1917a9334fa18517a279b0d1ed828e",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-current-model-residual-minus-10-temperature-0_9",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 1.1,
+              "model": -0.1,
+              "temperature": 0.9
+            },
+            "featureSet": [
+              "sporttery-market",
+              "current-probability-model",
+              "negative-model-residual",
+              "temperature-calibration"
+            ],
+            "specHash": "0bc7d7ea4160905d30547176d30116ba097db5e914eaa834799fb8b1161711b1",
+            "predictionRows": 164,
+            "predictionDataHash": "b0f3c50d1f50b7391d9fc664f437e7ee24a1ada2b3fa951ef1ff25247d0c8b1d",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-current-model-residual-minus-10-temperature-1",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 1.1,
+              "model": -0.1,
+              "temperature": 1
+            },
+            "featureSet": [
+              "sporttery-market",
+              "current-probability-model",
+              "negative-model-residual",
+              "temperature-calibration"
+            ],
+            "specHash": "105354d14d3fe269be739e94e33999f13102d30aeed7f9610e09dce1fa6cd7c4",
+            "predictionRows": 164,
+            "predictionDataHash": "2e9dae9a8c8024569eac8cd2e1941ef503d9b0ee200ab0926a66d47c365e696c",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-current-model-residual-minus-10-temperature-1_1",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 1.1,
+              "model": -0.1,
+              "temperature": 1.1
+            },
+            "featureSet": [
+              "sporttery-market",
+              "current-probability-model",
+              "negative-model-residual",
+              "temperature-calibration"
+            ],
+            "specHash": "1edc5c4471732df92092a81a98818b2d0e5eee3923ecc13cfc9108650f599092",
+            "predictionRows": 164,
+            "predictionDataHash": "0d5de9f22a42916ff925649cac1ac201daf3b60893e5267860fedcc149d4c59d",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-current-model-residual-minus-10-temperature-1_25",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 1.1,
+              "model": -0.1,
+              "temperature": 1.25
+            },
+            "featureSet": [
+              "sporttery-market",
+              "current-probability-model",
+              "negative-model-residual",
+              "temperature-calibration"
+            ],
+            "specHash": "a83600500f4458897dbbaec80aff16c9966bb8ef154bafe1223d379386acec0e",
+            "predictionRows": 164,
+            "predictionDataHash": "0cb915d75144fb4928cd8cd5fea4f1c6690f97424378fd0430fb69f9b7fbf631",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-current-model-residual-minus-20-temperature-0_75",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 1.2,
+              "model": -0.2,
+              "temperature": 0.75
+            },
+            "featureSet": [
+              "sporttery-market",
+              "current-probability-model",
+              "negative-model-residual",
+              "temperature-calibration"
+            ],
+            "specHash": "25c09ddd209c25013325a6257250e20d3f2ed1d63959b22ea5efcb43a36d702a",
+            "predictionRows": 164,
+            "predictionDataHash": "ac705a59058114355d35920c6412fd694756fc5f90f879b50b5b3f38933a9e87",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-current-model-residual-minus-20-temperature-0_9",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 1.2,
+              "model": -0.2,
+              "temperature": 0.9
+            },
+            "featureSet": [
+              "sporttery-market",
+              "current-probability-model",
+              "negative-model-residual",
+              "temperature-calibration"
+            ],
+            "specHash": "8676ef6b15bffe4bbb245090e9f3052342b681a57a1080c3001b18a482fea426",
+            "predictionRows": 164,
+            "predictionDataHash": "f35da247eba3161dae04abfd62e65bf05a0457823515b0c2522adb932fa65147",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-current-model-residual-minus-20-temperature-1",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 1.2,
+              "model": -0.2,
+              "temperature": 1
+            },
+            "featureSet": [
+              "sporttery-market",
+              "current-probability-model",
+              "negative-model-residual",
+              "temperature-calibration"
+            ],
+            "specHash": "4907ca19aeb2db3070b2f5f6d80adae7e73dfcc349fa2d5d87eabb78b8e656a1",
+            "predictionRows": 164,
+            "predictionDataHash": "c982e37314ce854428149d78e5669ceb006eb0d1a1203dbcfe9e3b555c3d8297",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-current-model-residual-minus-20-temperature-1_1",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 1.2,
+              "model": -0.2,
+              "temperature": 1.1
+            },
+            "featureSet": [
+              "sporttery-market",
+              "current-probability-model",
+              "negative-model-residual",
+              "temperature-calibration"
+            ],
+            "specHash": "f39195545f554d9358e859308dfd731860b78d1fb66d3b5b54ee720a8ab26643",
+            "predictionRows": 164,
+            "predictionDataHash": "ce4417c736ed54cf83c572d41e1f7496b6c9c23680b5505f62887d356785d00b",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-current-model-residual-minus-20-temperature-1_25",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 1.2,
+              "model": -0.2,
+              "temperature": 1.25
+            },
+            "featureSet": [
+              "sporttery-market",
+              "current-probability-model",
+              "negative-model-residual",
+              "temperature-calibration"
+            ],
+            "specHash": "34176c8b44afdfaaac235f3b4535599da2b8a3221ef33fd99e0d968f027ec072",
+            "predictionRows": 164,
+            "predictionDataHash": "a15a3ae71a63c687e6214e96ec15af0b8988bfe745f149035af94c5617d7cdf2",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-current-model-residual-minus-5-temperature-0_75",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 1.05,
+              "model": -0.05,
+              "temperature": 0.75
+            },
+            "featureSet": [
+              "sporttery-market",
+              "current-probability-model",
+              "negative-model-residual",
+              "temperature-calibration"
+            ],
+            "specHash": "fc888e431945dead8d2a9b62e1937c54ff7ed0933d64d9c794fcf887f48fc561",
+            "predictionRows": 164,
+            "predictionDataHash": "db6a0878a0e48a8b06495397ed2f2b52fa610109228dc44b1b7de4b4c559f52d",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-current-model-residual-minus-5-temperature-0_9",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 1.05,
+              "model": -0.05,
+              "temperature": 0.9
+            },
+            "featureSet": [
+              "sporttery-market",
+              "current-probability-model",
+              "negative-model-residual",
+              "temperature-calibration"
+            ],
+            "specHash": "e64a04ca38b73dedcc4164d4eb08e166bd448b72dbe9822da189ccaf9a71ce5f",
+            "predictionRows": 164,
+            "predictionDataHash": "922d60509ce0e46434f038f8f459a74dc31bc8e5b006693666006dd8f9a664a4",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-current-model-residual-minus-5-temperature-1",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 1.05,
+              "model": -0.05,
+              "temperature": 1
+            },
+            "featureSet": [
+              "sporttery-market",
+              "current-probability-model",
+              "negative-model-residual",
+              "temperature-calibration"
+            ],
+            "specHash": "a1f050365f6aae24e67c08dbecdaaea89470a9e5ea76d8efc2d076163b3639e3",
+            "predictionRows": 164,
+            "predictionDataHash": "2089bf475c8bf4b40089d64b35986631649151bcbe10454795143d8896969386",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-current-model-residual-minus-5-temperature-1_1",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 1.05,
+              "model": -0.05,
+              "temperature": 1.1
+            },
+            "featureSet": [
+              "sporttery-market",
+              "current-probability-model",
+              "negative-model-residual",
+              "temperature-calibration"
+            ],
+            "specHash": "f5cb73681de93a6f4264eb3cbffe34ca6f19c063eb1ff79c7ce9e0edbdb511e7",
+            "predictionRows": 164,
+            "predictionDataHash": "d6a72b35ae35b6e50052f670d4a8d95a663bad592f86408aed97cf54e294e958",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-current-model-residual-minus-5-temperature-1_25",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 1.05,
+              "model": -0.05,
+              "temperature": 1.25
+            },
+            "featureSet": [
+              "sporttery-market",
+              "current-probability-model",
+              "negative-model-residual",
+              "temperature-calibration"
+            ],
+            "specHash": "b3fe84153a509748e0f93cdcb7132fe358878dc1d0610bcd7725d7ab216c6ec4",
+            "predictionRows": 164,
+            "predictionDataHash": "2bee43131ef811ee4e2bd954ea8435515c607c4bdc6c8afacfc8f4238e87074f",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-current-model-temperature-65-0_9",
+            "role": "shadow-candidate",
+            "weights": {
+              "market": 0.65,
+              "model": 0.35,
+              "temperature": 0.9
+            },
+            "featureSet": [
+              "sporttery-market",
+              "current-probability-model",
+              "temperature-calibration"
+            ],
+            "specHash": "29ac4f5c9f4263d2d0cf8c4c238b037a6675fe9f83997ec597f4d31a4c43cb75",
+            "predictionRows": 164,
+            "predictionDataHash": "904ec0a14961878bdb9c1dd2b9b76d35c157fb100db7abce5bbdca8518d74fb7",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-current-model-temperature-65-1_1",
+            "role": "shadow-candidate",
+            "weights": {
+              "market": 0.65,
+              "model": 0.35,
+              "temperature": 1.1
+            },
+            "featureSet": [
+              "sporttery-market",
+              "current-probability-model",
+              "temperature-calibration"
+            ],
+            "specHash": "f0298670134b12b75a704ca20933106c1d5250726accb848b557dbaafb5edd85",
+            "predictionRows": 164,
+            "predictionDataHash": "80f0298914ba604f8a19285f897b6a1a073755bd477b40333f2a7f894a234a15",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-current-model-temperature-65-1_25",
+            "role": "shadow-candidate",
+            "weights": {
+              "market": 0.65,
+              "model": 0.35,
+              "temperature": 1.25
+            },
+            "featureSet": [
+              "sporttery-market",
+              "current-probability-model",
+              "temperature-calibration"
+            ],
+            "specHash": "02fb972fccdfe6efee7d4791369df7f9ebba4bdd1d92da1e30035af61263a4db",
+            "predictionRows": 164,
+            "predictionDataHash": "13b3038026f0b4c4b302315ebfba0dc4b6b6cc08b16411af287b9f800ca269e0",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-current-model-temperature-75-0_9",
+            "role": "shadow-candidate",
+            "weights": {
+              "market": 0.75,
+              "model": 0.25,
+              "temperature": 0.9
+            },
+            "featureSet": [
+              "sporttery-market",
+              "current-probability-model",
+              "temperature-calibration"
+            ],
+            "specHash": "06e0d01b2e2383b5c3222240e853c680fcd298d60771cdeeaadec98adf711a99",
+            "predictionRows": 164,
+            "predictionDataHash": "16c9a916dbb75df526c62536e5fa64078a46da9c7893959088a756cfd4bf72f5",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-current-model-temperature-75-1_1",
+            "role": "shadow-candidate",
+            "weights": {
+              "market": 0.75,
+              "model": 0.25,
+              "temperature": 1.1
+            },
+            "featureSet": [
+              "sporttery-market",
+              "current-probability-model",
+              "temperature-calibration"
+            ],
+            "specHash": "ab83a362583ba9950962cba4d93e7ea7b3ec9fe96037681c2e4e44edd143cc5b",
+            "predictionRows": 164,
+            "predictionDataHash": "7409fa4f70ee1e37385018ecb60773857b31b6d03552951cc7eda4549dc8360e",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-current-model-temperature-75-1_25",
+            "role": "shadow-candidate",
+            "weights": {
+              "market": 0.75,
+              "model": 0.25,
+              "temperature": 1.25
+            },
+            "featureSet": [
+              "sporttery-market",
+              "current-probability-model",
+              "temperature-calibration"
+            ],
+            "specHash": "140e2e0f569992e8de73b4062e8e8e2163a40775beeed3cc276e2034074fb64a",
+            "predictionRows": 164,
+            "predictionDataHash": "caf700d5a76930cd59d93be82f41456ee8ae27006cd52c04f1b734e75b98da66",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-current-model-temperature-85-0_9",
+            "role": "shadow-candidate",
+            "weights": {
+              "market": 0.85,
+              "model": 0.15,
+              "temperature": 0.9
+            },
+            "featureSet": [
+              "sporttery-market",
+              "current-probability-model",
+              "temperature-calibration"
+            ],
+            "specHash": "1e174f8dbe1eb55ebbc47fd8a0d3e458a4d954234faa1c71bdd7bbb8d4b3f413",
+            "predictionRows": 164,
+            "predictionDataHash": "b212f28d9d9dcf03eafb2cec913d3dbc8eb53b24edbb2747bcbb9818611fe7ea",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-current-model-temperature-85-1_1",
+            "role": "shadow-candidate",
+            "weights": {
+              "market": 0.85,
+              "model": 0.15,
+              "temperature": 1.1
+            },
+            "featureSet": [
+              "sporttery-market",
+              "current-probability-model",
+              "temperature-calibration"
+            ],
+            "specHash": "3fc56b618ff59e7b8b6e215ce5a4b1332b36739b09051fcb276ad1fb0fcc748a",
+            "predictionRows": 164,
+            "predictionDataHash": "56517606725a93f3b6bbaa6bc7dda66e6485c59c56ecd3bf14fde11c2019a2f1",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-current-model-temperature-85-1_25",
+            "role": "shadow-candidate",
+            "weights": {
+              "market": 0.85,
+              "model": 0.15,
+              "temperature": 1.25
+            },
+            "featureSet": [
+              "sporttery-market",
+              "current-probability-model",
+              "temperature-calibration"
+            ],
+            "specHash": "7f3480e14670e6fb4906098b9a166f07cc9e7bdc0f5aea6b199e87cf723fdcce",
+            "predictionRows": 164,
+            "predictionDataHash": "51f27ad734db937714f144fec5742e4139ae6ce9cb9953697080004c3c8354bb",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-current-model-temperature-92-0_9",
+            "role": "shadow-candidate",
+            "weights": {
+              "market": 0.92,
+              "model": 0.08,
+              "temperature": 0.9
+            },
+            "featureSet": [
+              "sporttery-market",
+              "current-probability-model",
+              "temperature-calibration"
+            ],
+            "specHash": "c763cf7e62df8936399b5a68c28bf075726d2a0433fbdc8ebf296e0450643247",
+            "predictionRows": 164,
+            "predictionDataHash": "ff87e98650f267fde2023476148282b5cb47fab23ea8a0aee4f63b242e0c9cfc",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-current-model-temperature-92-1_1",
+            "role": "shadow-candidate",
+            "weights": {
+              "market": 0.92,
+              "model": 0.08,
+              "temperature": 1.1
+            },
+            "featureSet": [
+              "sporttery-market",
+              "current-probability-model",
+              "temperature-calibration"
+            ],
+            "specHash": "8921b4460dc84b732a6700d83877bf619abb5c6a8f155800f9b470952072bc07",
+            "predictionRows": 164,
+            "predictionDataHash": "68444295c62d0ff20bd442782d1333151607a28575a2c5a7bb135ea0d4bb890e",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-current-model-temperature-92-1_25",
+            "role": "shadow-candidate",
+            "weights": {
+              "market": 0.92,
+              "model": 0.08,
+              "temperature": 1.25
+            },
+            "featureSet": [
+              "sporttery-market",
+              "current-probability-model",
+              "temperature-calibration"
+            ],
+            "specHash": "d59615086525ba66d8f1d07e11e9817a50598cdae32a128090d5af32cdcfd9f6",
+            "predictionRows": 164,
+            "predictionDataHash": "d654944c6f69843d112bac049d6e952e8455a3f081a24002a8b43e18f98f7981",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-history-blend-75",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 0.75,
+              "historical": 0.25
+            },
+            "featureSet": [
+              "sporttery-market",
+              "historical-results",
+              "elo-rating",
+              "goal-rate-poisson"
+            ],
+            "specHash": "42718efbfcc1a980c0abd32ba697ace25b0c758e599ff6cbca6f853e56a8ae8b",
+            "predictionRows": 29,
+            "predictionDataHash": "2fd036a22e2831b8c1bfa628921826f8ba5bffe3492580c761dc1917a9efe63b",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-history-blend-85",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 0.85,
+              "historical": 0.15
+            },
+            "featureSet": [
+              "sporttery-market",
+              "historical-results",
+              "elo-rating",
+              "goal-rate-poisson"
+            ],
+            "specHash": "e9fe8fc14d6d360d93189cb460df9e599d5973547e18dec5ee1da84eedcdcb70",
+            "predictionRows": 29,
+            "predictionDataHash": "db3a0b73e3848402708cd20496c03caf82f11f77d336171f3651aa1259c5c508",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-history-blend-92",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 0.92,
+              "historical": 0.08
+            },
+            "featureSet": [
+              "sporttery-market",
+              "historical-results",
+              "elo-rating",
+              "goal-rate-poisson"
+            ],
+            "specHash": "c13f23b06e090fd1c4de3f3859a75f4af7d1d719cb3de14fe022eeb8b72bdda6",
+            "predictionRows": 29,
+            "predictionDataHash": "23e8f79d9b8e0caa1e43e727e20614b56f94981c49de415c232c307296152657",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-history-temperature-65-0_9",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 0.65,
+              "historical": 0.35,
+              "temperature": 0.9
+            },
+            "featureSet": [
+              "sporttery-market",
+              "historical-results",
+              "elo-rating",
+              "goal-rate-poisson",
+              "temperature-calibration"
+            ],
+            "specHash": "2e53f882094ae84fe52873076cc842d4e79ebd3bfb5f036e7b10cc6388e5a245",
+            "predictionRows": 29,
+            "predictionDataHash": "fe22e22cfe7298adfa3dbbdc6b0196c1d9fad1d3a27810ab0146125ab4aea880",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-history-temperature-65-1_1",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 0.65,
+              "historical": 0.35,
+              "temperature": 1.1
+            },
+            "featureSet": [
+              "sporttery-market",
+              "historical-results",
+              "elo-rating",
+              "goal-rate-poisson",
+              "temperature-calibration"
+            ],
+            "specHash": "15c0d1ed4c3d970e3dbbf22ff382e5f8bca83a110ff5da66be9f19d42d3916d7",
+            "predictionRows": 29,
+            "predictionDataHash": "47c3e9a289b9d6b440f109ac80283357e669d8f8f0283e3cef45e234a18c2a09",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-history-temperature-65-1_25",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 0.65,
+              "historical": 0.35,
+              "temperature": 1.25
+            },
+            "featureSet": [
+              "sporttery-market",
+              "historical-results",
+              "elo-rating",
+              "goal-rate-poisson",
+              "temperature-calibration"
+            ],
+            "specHash": "ea057fc631b4cbc53f6a4b93ffe189a6ef8a5d5b2dfe086a94b745d24393b7df",
+            "predictionRows": 29,
+            "predictionDataHash": "178b4515832d8f1b8f4adcb4469e1db5c9d1fb6207902b0b10135258ac6b158a",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-history-temperature-75-0_9",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 0.75,
+              "historical": 0.25,
+              "temperature": 0.9
+            },
+            "featureSet": [
+              "sporttery-market",
+              "historical-results",
+              "elo-rating",
+              "goal-rate-poisson",
+              "temperature-calibration"
+            ],
+            "specHash": "efc192b671b0d3e2cdc40cfb8bddede091e5a5c9905414ac65eedb148b81a90b",
+            "predictionRows": 29,
+            "predictionDataHash": "eacd122250d6ed875da5fdefea07706b94f8a6f7feaa0ef426da5b55639bd231",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-history-temperature-75-1_1",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 0.75,
+              "historical": 0.25,
+              "temperature": 1.1
+            },
+            "featureSet": [
+              "sporttery-market",
+              "historical-results",
+              "elo-rating",
+              "goal-rate-poisson",
+              "temperature-calibration"
+            ],
+            "specHash": "4e1eff4b96a98e00acf8118e0f22badcea07efdfd237289213efc48c0749d71c",
+            "predictionRows": 29,
+            "predictionDataHash": "346b08399bfb8d2db0ac707c2307182904db92ea3aef1ed2ccdc7b5b6aa096c3",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-history-temperature-75-1_25",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 0.75,
+              "historical": 0.25,
+              "temperature": 1.25
+            },
+            "featureSet": [
+              "sporttery-market",
+              "historical-results",
+              "elo-rating",
+              "goal-rate-poisson",
+              "temperature-calibration"
+            ],
+            "specHash": "f81fbcd6081b16f2cc209e6a54dc7e8565a05b2de538132743073f3be21d7485",
+            "predictionRows": 29,
+            "predictionDataHash": "98e23b42a73ae0e42ab33ecafcaf2b830e5ab1ecb373b7dcb130e851187c2c2c",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-history-temperature-85-0_9",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 0.85,
+              "historical": 0.15,
+              "temperature": 0.9
+            },
+            "featureSet": [
+              "sporttery-market",
+              "historical-results",
+              "elo-rating",
+              "goal-rate-poisson",
+              "temperature-calibration"
+            ],
+            "specHash": "b35f69ff263bdf45b932b273071f2161f54121c5ecff4c16c3ccc473f1dcbcd2",
+            "predictionRows": 29,
+            "predictionDataHash": "0cdc752927c039bbbeef993ee138b5751ed87eb46b251d52e251ec35fc8d94ef",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-history-temperature-85-1_1",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 0.85,
+              "historical": 0.15,
+              "temperature": 1.1
+            },
+            "featureSet": [
+              "sporttery-market",
+              "historical-results",
+              "elo-rating",
+              "goal-rate-poisson",
+              "temperature-calibration"
+            ],
+            "specHash": "50ff7ffcfb451de15262a511e6531a764740bec9518b8f924023ba969a922783",
+            "predictionRows": 29,
+            "predictionDataHash": "e3a87f9d0694a94663f42eee7260bfba5c853b5e5cd82db62fc5776b2b01aa89",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-history-temperature-85-1_25",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 0.85,
+              "historical": 0.15,
+              "temperature": 1.25
+            },
+            "featureSet": [
+              "sporttery-market",
+              "historical-results",
+              "elo-rating",
+              "goal-rate-poisson",
+              "temperature-calibration"
+            ],
+            "specHash": "bdfb106950718ba6aefd2d1381842910927b7ab31db565a3df92cac254fcf2a8",
+            "predictionRows": 29,
+            "predictionDataHash": "6ed87877df7d1c3b2bcf0c5ffe681376766b2c4bed148cbe5e2bbbd8b6098b18",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-history-temperature-92-0_9",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 0.92,
+              "historical": 0.08,
+              "temperature": 0.9
+            },
+            "featureSet": [
+              "sporttery-market",
+              "historical-results",
+              "elo-rating",
+              "goal-rate-poisson",
+              "temperature-calibration"
+            ],
+            "specHash": "be7f2055e1453c977058852c2a6dfc4db16915d1c43022ee08a86405edb4ea41",
+            "predictionRows": 29,
+            "predictionDataHash": "997bc95638093fffae95a025d6a05efd18515c4741a0afd0401bc3dea42a9f92",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-history-temperature-92-1_1",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 0.92,
+              "historical": 0.08,
+              "temperature": 1.1
+            },
+            "featureSet": [
+              "sporttery-market",
+              "historical-results",
+              "elo-rating",
+              "goal-rate-poisson",
+              "temperature-calibration"
+            ],
+            "specHash": "afd14c5ab2a2de827eb49fa4e850ddc1de933ad6b3b1612a0c5fedaf533864e7",
+            "predictionRows": 29,
+            "predictionDataHash": "52f1dba41da771593b75ac6f757f87d8b86c7ba5824b4610035d308c0d6569ac",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "market-history-temperature-92-1_25",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "market": 0.92,
+              "historical": 0.08,
+              "temperature": 1.25
+            },
+            "featureSet": [
+              "sporttery-market",
+              "historical-results",
+              "elo-rating",
+              "goal-rate-poisson",
+              "temperature-calibration"
+            ],
+            "specHash": "f7d2c59fa8a7a7a0f46cdefd11a5af035e8253160231887443e29810f3b97fe5",
+            "predictionRows": 29,
+            "predictionDataHash": "9e7fd51880e809e3b74cfb36325e2c486d4b97521f3a175a2a2dd53226e867d6",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          },
+          {
+            "id": "poisson-goals-v1",
+            "role": "shadow-model-candidate",
+            "weights": {
+              "poisson": 1
+            },
+            "featureSet": [
+              "historical-results",
+              "goal-rate-poisson"
+            ],
+            "specHash": "7a3e1ff37793bbcbeeddc2bbefea106cde9937b9c8efbdec2bd2e92fb4e9d37b",
+            "predictionRows": 29,
+            "predictionDataHash": "f1ede6f8cd4e621ccc857744f6f4938a307cb86b8a20bb35cfebee5f64003906",
+            "duplicateRows": 0,
+            "rejectedRows": 0,
+            "outsideRows": 6,
+            "conflicts": 0
+          }
+        ],
+        "thresholds": {
+          "minimumTrainingRows": 80,
+          "evaluationWindowRows": 40,
+          "requiredFolds": 6,
+          "minimumPassRate": 0.6
+        },
+        "sample": {
+          "sourceRows": 164,
+          "inputRows": 227,
+          "duplicateRowsRemoved": 0,
+          "candidateCount": 53,
+          "folds": 0,
+          "evaluationRows": 0,
+          "passedFolds": 0,
+          "passRate": null
+        },
+        "integrity": {
+          "inputRows": 227,
+          "acceptedRows": 164,
+          "canonicalRows": 164,
+          "duplicateRowsRemoved": 0,
+          "rejectedRows": 63,
+          "baseRowConflicts": 0,
+          "candidateRowConflicts": 0
+        },
+        "continuity": {
+          "verified": true,
+          "coverageGapWindows": 0,
+          "policy": "After the first eligible boundary, every evaluation block is contiguous; missing candidate coverage blocks promotion instead of skipping a window."
+        },
+        "boundaryAudit": {
+          "considered": 45,
+          "outcomes": {
+            "insufficient-observed-training": 45
+          },
+          "truncated": true,
+          "samples": [
+            {
+              "offset": 80,
+              "evaluationStartedAt": "2026-06-27T14:51:10.373Z",
+              "nominalTrainingRows": 80,
+              "observedTrainingRows": 0,
+              "evaluationRows": 40,
+              "reason": "insufficient-observed-training"
+            },
+            {
+              "offset": 81,
+              "evaluationStartedAt": "2026-06-27T14:51:10.373Z",
+              "nominalTrainingRows": 81,
+              "observedTrainingRows": 0,
+              "evaluationRows": 40,
+              "reason": "insufficient-observed-training"
+            },
+            {
+              "offset": 82,
+              "evaluationStartedAt": "2026-06-27T14:51:10.373Z",
+              "nominalTrainingRows": 82,
+              "observedTrainingRows": 0,
+              "evaluationRows": 40,
+              "reason": "insufficient-observed-training"
+            },
+            {
+              "offset": 122,
+              "evaluationStartedAt": "2026-07-11T14:37:27.806Z",
+              "nominalTrainingRows": 122,
+              "observedTrainingRows": 0,
+              "evaluationRows": 40,
+              "reason": "insufficient-observed-training"
+            },
+            {
+              "offset": 123,
+              "evaluationStartedAt": "2026-07-11T14:37:27.806Z",
+              "nominalTrainingRows": 123,
+              "observedTrainingRows": 0,
+              "evaluationRows": 40,
+              "reason": "insufficient-observed-training"
+            },
+            {
+              "offset": 124,
+              "evaluationStartedAt": "2026-07-11T14:37:27.806Z",
+              "nominalTrainingRows": 124,
+              "observedTrainingRows": 0,
+              "evaluationRows": 40,
+              "reason": "insufficient-observed-training"
+            }
+          ]
+        },
+        "watermark": {
+          "trainingDataMaxObservedAt": null,
+          "evaluationWindowStartedAt": null,
+          "noOverlapVerified": false,
+          "perFoldVerified": false
+        },
+        "folds": [],
+        "blockers": [
+          "walk-forward-folds-missing",
+          "walk-forward-folds:0<6",
+          "walk-forward-pass-rate:missing<0.6",
+          "walk-forward-watermark-unverified",
+          "walk-forward-key-separation-unverified"
+        ],
+        "policy": "Each fold selects a frozen model-signal candidate only from unique outcomes observed before that fold, then scores every untouched contiguous chronological block against the canonical same-match devigged market. Candidate coverage gaps and conflicting duplicate rows fail closed.",
+        "foldManifestHash": "c9f284d8612f45836bd56d73a44dfd8f620203881eedcc4ec48994958a4832f3"
+      },
+      "policy": "Model strategy stays shadow until it has clean pre-match inputs, a hash-valid promotion manifest backed by complete decision-clock records, a versioned walk-forward protocol, stable out-of-sample gains, exact production-policy replay, and a matching promoted Champion in the validated model-learning registry."
+    },
+    "shadowTracks": {
+      "HHAD_COMPANION": {
+        "version": "hhad-companion-candidate-gate-v1",
+        "strategy": "HHAD_COMPANION_SHADOW",
+        "strategyVersion": "hhad-companion-shadow-v2",
+        "strategyHash": "d8e9cc2a921f9eef8ddcd48b2bd0123e8fd91e2fa49e1378b8cb8e4da20da73d",
+        "sourceEvaluationVersion": "hhad-companion-shadow-evaluation-v1",
+        "evaluatedAt": "2026-07-31T04:23:15.714Z",
+        "status": "shadow-collecting",
+        "thresholds": {
+          "minimumPairedNonVoidRows": 500,
+          "windows": 6,
+          "minimumRowsPerWindow": 40,
+          "minimumImprovingWindows": 5,
+          "recentNonNegativeWindows": 2,
+          "minimumMatchDays": 30,
+          "bootstrapConfidence": 0.95,
+          "exactReplayRate": 1,
+          "requiredGlobalRiskTier": "stable",
+          "onlineEffect": "shadow"
+        },
+        "checks": {
+          "minimumPairedNonVoidRows": false,
+          "sixNonOverlappingWindows": false,
+          "minimumImprovingWindows": false,
+          "recentTwoWindowsNonNegative": false,
+          "positiveOverallBrierImprovement": false,
+          "positiveOverallLogLossImprovement": false,
+          "minimumMatchDays": false,
+          "completeMatchDayCoverage": false,
+          "positiveBootstrapBrierLowerBound": false,
+          "positiveBootstrapLogLossLowerBound": false,
+          "exactReplayCoverage": true,
+          "noConflictingDuplicateRevisions": true,
+          "noAmbiguousFinalRevisions": true,
+          "globalRiskTierStable": false
+        },
+        "candidateReady": false,
+        "counts": {
+          "snapshotRows": 1302,
+          "trackRows": 252,
+          "currentStrategyRows": 252,
+          "rejectedStrategyRows": 0,
+          "missingMatchKeyRows": 0,
+          "missingEventVersionRows": 0,
+          "missingRevisionHashRows": 0,
+          "duplicateRevisionRows": 0,
+          "conflictingDuplicateRows": 0,
+          "deadlineEligibleRows": 252,
+          "postCutoffOrUnorderableRows": 0,
+          "ambiguousFinalGroups": 0,
+          "resultRows": 2459,
+          "officialRows": 2440,
+          "rejectedNonOfficialOrInvalidRows": 19,
+          "finalRevisions": 86,
+          "finalEvaluate": 33,
+          "finalSkip": 53,
+          "exactReplayFinals": 86,
+          "nonExactReplayFinals": 0,
+          "resultConflicts": 0,
+          "resultEventMismatches": 0,
+          "resultTimeRejected": 0,
+          "missingOfficialResults": 6,
+          "exactEvaluateWithoutSettlement": 6,
+          "settlementRows": 27,
+          "settledWon": 12,
+          "settledLost": 15,
+          "settledVoid": 0,
+          "settledUnsettled": 0,
+          "pairedNonVoidRows": 0,
+          "pairedMatchDays": 0,
+          "promotionTimeEligibleSettlements": 0,
+          "promotionTimeIneligibleSettlements": 27
+        },
+        "exactReplay": {
+          "finals": 86,
+          "exact": 86,
+          "rate": 1,
+          "requiredRate": 1
+        },
+        "onlineEffect": "shadow",
+        "promotionAllowed": false,
+        "interpretation": "candidate-ready permits manual evaluation only; onlineEffect remains shadow"
+      }
+    },
+    "riskGuard": {
+      "version": "risk-constrained-exposure-v1",
+      "riskTier": "watch",
+      "looseningAllowed": false,
+      "tighteningAllowed": true,
+      "maxCalibrationError": 0.2127,
+      "clvRows": 24,
+      "policy": "Online strategy may tighten recommendation gates from audited backtests while risk is watch or degraded, but loosening is blocked until the model risk tier is stable."
+    },
+    "note": "Strategy is shadow-only until the promotion manifest, decision clocks, and model-learning Champion authority all verify."
   },
   "sample": {
-    "matches": 3062,
-    "settledRows": 464,
-    "officialRows": 464,
-    "postMatchReviewRows": 277,
-    "recommendationRows": 305,
-    "bestRows": 116,
-    "goalsRows": 159,
+    "matches": 2459,
+    "settledRows": 0,
+    "officialRows": 0,
+    "recommendationRows": 0,
+    "bestRows": 0,
+    "hhadRows": 0,
+    "goalsRows": 0,
     "webConsensusRows": 0
   },
+  "summary": {
+    "total": {
+      "settled": 0,
+      "won": 0,
+      "lost": 0,
+      "hitRate": null,
+      "roi": null,
+      "avgOdds": null,
+      "oddsRows": 0,
+      "missingOddsRows": 0,
+      "avgTrust": null,
+      "avgProbability": null,
+      "independentMatchDays": 0
+    },
+    "official": {
+      "settled": 0,
+      "won": 0,
+      "lost": 0,
+      "hitRate": null,
+      "roi": null,
+      "avgOdds": null,
+      "oddsRows": 0,
+      "missingOddsRows": 0,
+      "avgTrust": null,
+      "avgProbability": null,
+      "independentMatchDays": 0
+    },
+    "recommendationPool": {
+      "settled": 0,
+      "won": 0,
+      "lost": 0,
+      "hitRate": null,
+      "roi": null,
+      "avgOdds": null,
+      "oddsRows": 0,
+      "missingOddsRows": 0,
+      "avgTrust": null,
+      "avgProbability": null,
+      "independentMatchDays": 0
+    },
+    "best": {
+      "settled": 0,
+      "won": 0,
+      "lost": 0,
+      "hitRate": null,
+      "roi": null,
+      "avgOdds": null,
+      "oddsRows": 0,
+      "missingOddsRows": 0,
+      "avgTrust": null,
+      "avgProbability": null,
+      "independentMatchDays": 0
+    },
+    "goals": {
+      "settled": 0,
+      "won": 0,
+      "lost": 0,
+      "hitRate": null,
+      "roi": null,
+      "avgOdds": null,
+      "oddsRows": 0,
+      "missingOddsRows": 0,
+      "avgTrust": null,
+      "avgProbability": null,
+      "independentMatchDays": 0
+    },
+    "byMarket": {},
+    "byRole": {},
+    "byProfile": {},
+    "byMarketProfile": {},
+    "byOddsBucket": {},
+    "byTip": {},
+    "byWebConsensus": {},
+    "byPolicy": {}
+  },
+  "referenceShadowRows": {
+    "version": "reference-shadow-evaluation-v1",
+    "role": "reference-shadow-only",
+    "promotionEligible": false,
+    "countedInFormalMetrics": false,
+    "activation": {
+      "onlineEffect": "shadow-observe",
+      "automaticPromotionAllowed": false,
+      "automaticLooseningAllowed": false,
+      "minimumRows": 50,
+      "minimumIndependentMatchDays": 4
+    },
+    "sample": {
+      "rows": 617,
+      "decisionRows": 211,
+      "independentMatchDays": 42
+    },
+    "summary": {
+      "total": {
+        "settled": 617,
+        "won": 330,
+        "lost": 287,
+        "hitRate": 0.535,
+        "roi": -0.055,
+        "avgOdds": 1.92,
+        "oddsRows": 585,
+        "missingOddsRows": 32,
+        "avgTrust": 48.4,
+        "avgProbability": null,
+        "independentMatchDays": 42
+      },
+      "decision": {
+        "settled": 211,
+        "won": 111,
+        "lost": 100,
+        "hitRate": 0.526,
+        "roi": -0.118,
+        "avgOdds": 1.83,
+        "oddsRows": 195,
+        "missingOddsRows": 16,
+        "avgTrust": 56.8,
+        "avgProbability": null,
+        "independentMatchDays": 42
+      },
+      "byRole": {
+        "1X2": {
+          "settled": 210,
+          "won": 116,
+          "lost": 94,
+          "hitRate": 0.552,
+          "roi": -0.018,
+          "avgOdds": 2.05,
+          "oddsRows": 194,
+          "missingOddsRows": 16,
+          "avgTrust": 37,
+          "avgProbability": null,
+          "independentMatchDays": 42
+        },
+        "BEST": {
+          "settled": 211,
+          "won": 111,
+          "lost": 100,
+          "hitRate": 0.526,
+          "roi": -0.118,
+          "avgOdds": 1.83,
+          "oddsRows": 195,
+          "missingOddsRows": 16,
+          "avgTrust": 56.8,
+          "avgProbability": null,
+          "independentMatchDays": 42
+        },
+        "GOALS": {
+          "settled": 196,
+          "won": 103,
+          "lost": 93,
+          "hitRate": 0.526,
+          "roi": -0.031,
+          "avgOdds": 1.87,
+          "oddsRows": 196,
+          "missingOddsRows": 0,
+          "avgTrust": 51.7,
+          "avgProbability": null,
+          "independentMatchDays": 39
+        }
+      },
+      "byMarket": {
+        "1X2": {
+          "settled": 112,
+          "won": 67,
+          "lost": 45,
+          "hitRate": 0.598,
+          "roi": -0.029,
+          "avgOdds": 1.72,
+          "oddsRows": 96,
+          "missingOddsRows": 16,
+          "avgTrust": 53.1,
+          "avgProbability": null,
+          "independentMatchDays": 35
+        },
+        "HHAD": {
+          "settled": 99,
+          "won": 44,
+          "lost": 55,
+          "hitRate": 0.444,
+          "roi": -0.204,
+          "avgOdds": 1.94,
+          "oddsRows": 99,
+          "missingOddsRows": 0,
+          "avgTrust": 60.9,
+          "avgProbability": null,
+          "independentMatchDays": 33
+        }
+      },
+      "byProfile": {
+        "international": {
+          "settled": 101,
+          "won": 58,
+          "lost": 43,
+          "hitRate": 0.574,
+          "roi": -0.097,
+          "avgOdds": 1.73,
+          "oddsRows": 100,
+          "missingOddsRows": 1,
+          "avgTrust": 58.7,
+          "avgProbability": null,
+          "independentMatchDays": 33
+        },
+        "japan": {
+          "settled": 4,
+          "won": 2,
+          "lost": 2,
+          "hitRate": 0.5,
+          "roi": -0.3,
+          "avgOdds": 1.57,
+          "oddsRows": 4,
+          "missingOddsRows": 0,
+          "avgTrust": 46.3,
+          "avgProbability": null,
+          "independentMatchDays": 4
+        },
+        "other": {
+          "settled": 106,
+          "won": 51,
+          "lost": 55,
+          "hitRate": 0.481,
+          "roi": -0.133,
+          "avgOdds": 1.96,
+          "oddsRows": 91,
+          "missingOddsRows": 15,
+          "avgTrust": 55.3,
+          "avgProbability": null,
+          "independentMatchDays": 27
+        }
+      },
+      "byMarketProfile": {
+        "1X2:international": {
+          "settled": 54,
+          "won": 36,
+          "lost": 18,
+          "hitRate": 0.667,
+          "roi": -0.038,
+          "avgOdds": 1.49,
+          "oddsRows": 53,
+          "missingOddsRows": 1,
+          "avgTrust": 57.7,
+          "avgProbability": null,
+          "independentMatchDays": 26
+        },
+        "1X2:japan": {
+          "settled": 4,
+          "won": 2,
+          "lost": 2,
+          "hitRate": 0.5,
+          "roi": -0.3,
+          "avgOdds": 1.57,
+          "oddsRows": 4,
+          "missingOddsRows": 0,
+          "avgTrust": 46.3,
+          "avgProbability": null,
+          "independentMatchDays": 4
+        },
+        "1X2:other": {
+          "settled": 54,
+          "won": 29,
+          "lost": 25,
+          "hitRate": 0.537,
+          "roi": 0.01,
+          "avgOdds": 2.04,
+          "oddsRows": 39,
+          "missingOddsRows": 15,
+          "avgTrust": 48.9,
+          "avgProbability": null,
+          "independentMatchDays": 21
+        },
+        "HHAD:international": {
+          "settled": 47,
+          "won": 22,
+          "lost": 25,
+          "hitRate": 0.468,
+          "roi": -0.163,
+          "avgOdds": 1.99,
+          "oddsRows": 47,
+          "missingOddsRows": 0,
+          "avgTrust": 59.8,
+          "avgProbability": null,
+          "independentMatchDays": 26
+        },
+        "HHAD:other": {
+          "settled": 52,
+          "won": 22,
+          "lost": 30,
+          "hitRate": 0.423,
+          "roi": -0.241,
+          "avgOdds": 1.91,
+          "oddsRows": 52,
+          "missingOddsRows": 0,
+          "avgTrust": 62,
+          "avgProbability": null,
+          "independentMatchDays": 19
+        }
+      },
+      "byOddsBucket": {
+        "1X2:sp_1_46_1_70": {
+          "settled": 19,
+          "won": 12,
+          "lost": 7,
+          "hitRate": 0.632,
+          "roi": -0.023,
+          "avgOdds": 1.55,
+          "oddsRows": 19,
+          "missingOddsRows": 0,
+          "avgTrust": 47.8,
+          "avgProbability": null,
+          "independentMatchDays": 17
+        },
+        "1X2:sp_1_71_2_05": {
+          "settled": 16,
+          "won": 10,
+          "lost": 6,
+          "hitRate": 0.625,
+          "roi": 0.156,
+          "avgOdds": 1.84,
+          "oddsRows": 16,
+          "missingOddsRows": 0,
+          "avgTrust": 49.3,
+          "avgProbability": null,
+          "independentMatchDays": 12
+        },
+        "1X2:sp_2_06_2_60": {
+          "settled": 11,
+          "won": 2,
+          "lost": 9,
+          "hitRate": 0.182,
+          "roi": -0.571,
+          "avgOdds": 2.3,
+          "oddsRows": 11,
+          "missingOddsRows": 0,
+          "avgTrust": 48.3,
+          "avgProbability": null,
+          "independentMatchDays": 10
+        },
+        "1X2:sp_gt_2_60": {
+          "settled": 7,
+          "won": 3,
+          "lost": 4,
+          "hitRate": 0.429,
+          "roi": 0.437,
+          "avgOdds": 3.55,
+          "oddsRows": 7,
+          "missingOddsRows": 0,
+          "avgTrust": 32.9,
+          "avgProbability": null,
+          "independentMatchDays": 4
+        },
+        "1X2:sp_le_1_45": {
+          "settled": 43,
+          "won": 32,
+          "lost": 11,
+          "hitRate": 0.744,
+          "roi": -0.038,
+          "avgOdds": 1.3,
+          "oddsRows": 43,
+          "missingOddsRows": 0,
+          "avgTrust": 60.3,
+          "avgProbability": null,
+          "independentMatchDays": 25
+        },
+        "1X2:unknown": {
+          "settled": 16,
+          "won": 8,
+          "lost": 8,
+          "hitRate": 0.5,
+          "roi": null,
+          "avgOdds": null,
+          "oddsRows": 0,
+          "missingOddsRows": 16,
+          "avgTrust": 55.9,
+          "avgProbability": null,
+          "independentMatchDays": 6
+        },
+        "HHAD:sp_1_46_1_70": {
+          "settled": 30,
+          "won": 17,
+          "lost": 13,
+          "hitRate": 0.567,
+          "roi": -0.113,
+          "avgOdds": 1.56,
+          "oddsRows": 30,
+          "missingOddsRows": 0,
+          "avgTrust": 64.4,
+          "avgProbability": null,
+          "independentMatchDays": 21
+        },
+        "HHAD:sp_1_71_2_05": {
+          "settled": 27,
+          "won": 14,
+          "lost": 13,
+          "hitRate": 0.519,
+          "roi": -0.015,
+          "avgOdds": 1.9,
+          "oddsRows": 27,
+          "missingOddsRows": 0,
+          "avgTrust": 60,
+          "avgProbability": null,
+          "independentMatchDays": 20
+        },
+        "HHAD:sp_2_06_2_60": {
+          "settled": 29,
+          "won": 5,
+          "lost": 24,
+          "hitRate": 0.172,
+          "roi": -0.604,
+          "avgOdds": 2.25,
+          "oddsRows": 29,
+          "missingOddsRows": 0,
+          "avgTrust": 58.2,
+          "avgProbability": null,
+          "independentMatchDays": 17
+        },
+        "HHAD:sp_gt_2_60": {
+          "settled": 6,
+          "won": 2,
+          "lost": 4,
+          "hitRate": 0.333,
+          "roi": -0.053,
+          "avgOdds": 3.19,
+          "oddsRows": 6,
+          "missingOddsRows": 0,
+          "avgTrust": 56.5,
+          "avgProbability": null,
+          "independentMatchDays": 6
+        },
+        "HHAD:sp_le_1_45": {
+          "settled": 7,
+          "won": 6,
+          "lost": 1,
+          "hitRate": 0.857,
+          "roi": 0.206,
+          "avgOdds": 1.41,
+          "oddsRows": 7,
+          "missingOddsRows": 0,
+          "avgTrust": 64.9,
+          "avgProbability": null,
+          "independentMatchDays": 7
+        }
+      },
+      "byTip": {
+        "1X2:1": {
+          "settled": 86,
+          "won": 50,
+          "lost": 36,
+          "hitRate": 0.581,
+          "roi": -0.111,
+          "avgOdds": 1.61,
+          "oddsRows": 70,
+          "missingOddsRows": 16,
+          "avgTrust": 55.4,
+          "avgProbability": null,
+          "independentMatchDays": 35
+        },
+        "1X2:2": {
+          "settled": 20,
+          "won": 14,
+          "lost": 6,
+          "hitRate": 0.7,
+          "roi": 0.044,
+          "avgOdds": 1.52,
+          "oddsRows": 20,
+          "missingOddsRows": 0,
+          "avgTrust": 48.6,
+          "avgProbability": null,
+          "independentMatchDays": 17
+        },
+        "1X2:X": {
+          "settled": 6,
+          "won": 3,
+          "lost": 3,
+          "hitRate": 0.5,
+          "roi": 0.677,
+          "avgOdds": 3.6,
+          "oddsRows": 6,
+          "missingOddsRows": 0,
+          "avgTrust": 34.7,
+          "avgProbability": null,
+          "independentMatchDays": 3
+        },
+        "HHAD:1": {
+          "settled": 50,
+          "won": 21,
+          "lost": 29,
+          "hitRate": 0.42,
+          "roi": -0.21,
+          "avgOdds": 1.97,
+          "oddsRows": 50,
+          "missingOddsRows": 0,
+          "avgTrust": 62.4,
+          "avgProbability": null,
+          "independentMatchDays": 24
+        },
+        "HHAD:2": {
+          "settled": 49,
+          "won": 23,
+          "lost": 26,
+          "hitRate": 0.469,
+          "roi": -0.198,
+          "avgOdds": 1.92,
+          "oddsRows": 49,
+          "missingOddsRows": 0,
+          "avgTrust": 59.4,
+          "avgProbability": null,
+          "independentMatchDays": 24
+        }
+      }
+    },
+    "tightening": {
+      "activeGates": {
+        "market": 0,
+        "profile": 0,
+        "marketProfile": 0,
+        "oddsBucket": 0,
+        "tip": 0
+      },
+      "activeGateCount": 0,
+      "gateByMarket": {
+        "1X2": {
+          "key": "reference:1X2",
+          "settled": 112,
+          "won": 67,
+          "lost": 45,
+          "hitRate": 0.598,
+          "roi": -0.029,
+          "avgOdds": 1.72,
+          "independentMatchDays": 35,
+          "onlineAction": "observe",
+          "sampleStatus": "shadow-quarantined",
+          "reasons": [
+            "neutral-sample",
+            "reference-cohort-not-tier-isolated"
+          ],
+          "adjustments": {
+            "minProbabilityBoost": 0,
+            "minModelGapBoost": 0,
+            "minHandicapSupportBoost": 0,
+            "trustPenalty": 0,
+            "maxRiskTagsDelta": 0,
+            "goalsMinBoost": 0
+          },
+          "diagnosticOnlineAction": "observe"
+        },
+        "HHAD": {
+          "key": "reference:HHAD",
+          "settled": 99,
+          "won": 44,
+          "lost": 55,
+          "hitRate": 0.444,
+          "roi": -0.204,
+          "avgOdds": 1.94,
+          "independentMatchDays": 33,
+          "onlineAction": "observe",
+          "sampleStatus": "shadow-quarantined",
+          "reasons": [
+            "neutral-sample",
+            "reference-cohort-not-tier-isolated"
+          ],
+          "adjustments": {
+            "minProbabilityBoost": 0,
+            "minModelGapBoost": 0,
+            "minHandicapSupportBoost": 0,
+            "trustPenalty": 0,
+            "maxRiskTagsDelta": 0,
+            "goalsMinBoost": 0
+          },
+          "diagnosticOnlineAction": "observe"
+        }
+      },
+      "gateByProfile": {
+        "international": {
+          "key": "reference:international",
+          "settled": 101,
+          "won": 58,
+          "lost": 43,
+          "hitRate": 0.574,
+          "roi": -0.097,
+          "avgOdds": 1.73,
+          "independentMatchDays": 33,
+          "onlineAction": "observe",
+          "sampleStatus": "shadow-quarantined",
+          "reasons": [
+            "neutral-sample",
+            "reference-cohort-not-tier-isolated"
+          ],
+          "adjustments": {
+            "minProbabilityBoost": 0,
+            "minModelGapBoost": 0,
+            "minHandicapSupportBoost": 0,
+            "trustPenalty": 0,
+            "maxRiskTagsDelta": 0,
+            "goalsMinBoost": 0
+          },
+          "diagnosticOnlineAction": "observe"
+        },
+        "japan": {
+          "key": "reference:japan",
+          "settled": 4,
+          "won": 2,
+          "lost": 2,
+          "hitRate": 0.5,
+          "roi": -0.3,
+          "avgOdds": 1.57,
+          "independentMatchDays": 4,
+          "onlineAction": "observe",
+          "sampleStatus": "shadow-quarantined",
+          "reasons": [
+            "sample<50",
+            "reference-cohort-not-tier-isolated"
+          ],
+          "adjustments": {
+            "minProbabilityBoost": 0,
+            "minModelGapBoost": 0,
+            "minHandicapSupportBoost": 0,
+            "trustPenalty": 0,
+            "maxRiskTagsDelta": 0,
+            "goalsMinBoost": 0
+          },
+          "diagnosticOnlineAction": "observe"
+        },
+        "other": {
+          "key": "reference:other",
+          "settled": 106,
+          "won": 51,
+          "lost": 55,
+          "hitRate": 0.481,
+          "roi": -0.133,
+          "avgOdds": 1.96,
+          "independentMatchDays": 27,
+          "onlineAction": "observe",
+          "sampleStatus": "shadow-quarantined",
+          "reasons": [
+            "neutral-sample",
+            "reference-cohort-not-tier-isolated"
+          ],
+          "adjustments": {
+            "minProbabilityBoost": 0,
+            "minModelGapBoost": 0,
+            "minHandicapSupportBoost": 0,
+            "trustPenalty": 0,
+            "maxRiskTagsDelta": 0,
+            "goalsMinBoost": 0
+          },
+          "diagnosticOnlineAction": "observe"
+        }
+      },
+      "gateByMarketProfile": {
+        "1X2:international": {
+          "key": "reference:1X2:international",
+          "settled": 54,
+          "won": 36,
+          "lost": 18,
+          "hitRate": 0.667,
+          "roi": -0.038,
+          "avgOdds": 1.49,
+          "independentMatchDays": 26,
+          "onlineAction": "observe",
+          "sampleStatus": "shadow-quarantined",
+          "reasons": [
+            "neutral-sample",
+            "reference-cohort-not-tier-isolated"
+          ],
+          "adjustments": {
+            "minProbabilityBoost": 0,
+            "minModelGapBoost": 0,
+            "minHandicapSupportBoost": 0,
+            "trustPenalty": 0,
+            "maxRiskTagsDelta": 0,
+            "goalsMinBoost": 0
+          },
+          "diagnosticOnlineAction": "observe"
+        },
+        "1X2:japan": {
+          "key": "reference:1X2:japan",
+          "settled": 4,
+          "won": 2,
+          "lost": 2,
+          "hitRate": 0.5,
+          "roi": -0.3,
+          "avgOdds": 1.57,
+          "independentMatchDays": 4,
+          "onlineAction": "observe",
+          "sampleStatus": "shadow-quarantined",
+          "reasons": [
+            "sample<50",
+            "reference-cohort-not-tier-isolated"
+          ],
+          "adjustments": {
+            "minProbabilityBoost": 0,
+            "minModelGapBoost": 0,
+            "minHandicapSupportBoost": 0,
+            "trustPenalty": 0,
+            "maxRiskTagsDelta": 0,
+            "goalsMinBoost": 0
+          },
+          "diagnosticOnlineAction": "observe"
+        },
+        "1X2:other": {
+          "key": "reference:1X2:other",
+          "settled": 54,
+          "won": 29,
+          "lost": 25,
+          "hitRate": 0.537,
+          "roi": 0.01,
+          "avgOdds": 2.04,
+          "independentMatchDays": 21,
+          "onlineAction": "observe",
+          "sampleStatus": "shadow-quarantined",
+          "reasons": [
+            "neutral-sample",
+            "reference-cohort-not-tier-isolated"
+          ],
+          "adjustments": {
+            "minProbabilityBoost": 0,
+            "minModelGapBoost": 0,
+            "minHandicapSupportBoost": 0,
+            "trustPenalty": 0,
+            "maxRiskTagsDelta": 0,
+            "goalsMinBoost": 0
+          },
+          "diagnosticOnlineAction": "observe"
+        },
+        "HHAD:international": {
+          "key": "reference:HHAD:international",
+          "settled": 47,
+          "won": 22,
+          "lost": 25,
+          "hitRate": 0.468,
+          "roi": -0.163,
+          "avgOdds": 1.99,
+          "independentMatchDays": 26,
+          "onlineAction": "observe",
+          "sampleStatus": "shadow-quarantined",
+          "reasons": [
+            "sample<50",
+            "reference-cohort-not-tier-isolated"
+          ],
+          "adjustments": {
+            "minProbabilityBoost": 0,
+            "minModelGapBoost": 0,
+            "minHandicapSupportBoost": 0,
+            "trustPenalty": 0,
+            "maxRiskTagsDelta": 0,
+            "goalsMinBoost": 0
+          },
+          "diagnosticOnlineAction": "observe"
+        },
+        "HHAD:other": {
+          "key": "reference:HHAD:other",
+          "settled": 52,
+          "won": 22,
+          "lost": 30,
+          "hitRate": 0.423,
+          "roi": -0.241,
+          "avgOdds": 1.91,
+          "independentMatchDays": 19,
+          "onlineAction": "observe",
+          "sampleStatus": "shadow-quarantined",
+          "reasons": [
+            "neutral-sample",
+            "reference-cohort-not-tier-isolated"
+          ],
+          "adjustments": {
+            "minProbabilityBoost": 0,
+            "minModelGapBoost": 0,
+            "minHandicapSupportBoost": 0,
+            "trustPenalty": 0,
+            "maxRiskTagsDelta": 0,
+            "goalsMinBoost": 0
+          },
+          "diagnosticOnlineAction": "observe"
+        }
+      },
+      "gateByOddsBucket": {
+        "1X2:sp_1_46_1_70": {
+          "key": "reference:1X2:sp_1_46_1_70",
+          "settled": 19,
+          "won": 12,
+          "lost": 7,
+          "hitRate": 0.632,
+          "roi": -0.023,
+          "avgOdds": 1.55,
+          "independentMatchDays": 17,
+          "onlineAction": "observe",
+          "sampleStatus": "shadow-quarantined",
+          "reasons": [
+            "sample<50",
+            "reference-cohort-not-tier-isolated"
+          ],
+          "adjustments": {
+            "minProbabilityBoost": 0,
+            "minModelGapBoost": 0,
+            "minHandicapSupportBoost": 0,
+            "trustPenalty": 0,
+            "maxRiskTagsDelta": 0,
+            "goalsMinBoost": 0
+          },
+          "diagnosticOnlineAction": "observe"
+        },
+        "1X2:sp_1_71_2_05": {
+          "key": "reference:1X2:sp_1_71_2_05",
+          "settled": 16,
+          "won": 10,
+          "lost": 6,
+          "hitRate": 0.625,
+          "roi": 0.156,
+          "avgOdds": 1.84,
+          "independentMatchDays": 12,
+          "onlineAction": "observe",
+          "sampleStatus": "shadow-quarantined",
+          "reasons": [
+            "sample<50",
+            "reference-cohort-not-tier-isolated"
+          ],
+          "adjustments": {
+            "minProbabilityBoost": 0,
+            "minModelGapBoost": 0,
+            "minHandicapSupportBoost": 0,
+            "trustPenalty": 0,
+            "maxRiskTagsDelta": 0,
+            "goalsMinBoost": 0
+          },
+          "diagnosticOnlineAction": "observe"
+        },
+        "1X2:sp_2_06_2_60": {
+          "key": "reference:1X2:sp_2_06_2_60",
+          "settled": 11,
+          "won": 2,
+          "lost": 9,
+          "hitRate": 0.182,
+          "roi": -0.571,
+          "avgOdds": 2.3,
+          "independentMatchDays": 10,
+          "onlineAction": "observe",
+          "sampleStatus": "shadow-quarantined",
+          "reasons": [
+            "sample<50",
+            "reference-cohort-not-tier-isolated"
+          ],
+          "adjustments": {
+            "minProbabilityBoost": 0,
+            "minModelGapBoost": 0,
+            "minHandicapSupportBoost": 0,
+            "trustPenalty": 0,
+            "maxRiskTagsDelta": 0,
+            "goalsMinBoost": 0
+          },
+          "diagnosticOnlineAction": "observe"
+        },
+        "1X2:sp_gt_2_60": {
+          "key": "reference:1X2:sp_gt_2_60",
+          "settled": 7,
+          "won": 3,
+          "lost": 4,
+          "hitRate": 0.429,
+          "roi": 0.437,
+          "avgOdds": 3.55,
+          "independentMatchDays": 4,
+          "onlineAction": "observe",
+          "sampleStatus": "shadow-quarantined",
+          "reasons": [
+            "sample<50",
+            "reference-cohort-not-tier-isolated"
+          ],
+          "adjustments": {
+            "minProbabilityBoost": 0,
+            "minModelGapBoost": 0,
+            "minHandicapSupportBoost": 0,
+            "trustPenalty": 0,
+            "maxRiskTagsDelta": 0,
+            "goalsMinBoost": 0
+          },
+          "diagnosticOnlineAction": "observe"
+        },
+        "1X2:sp_le_1_45": {
+          "key": "reference:1X2:sp_le_1_45",
+          "settled": 43,
+          "won": 32,
+          "lost": 11,
+          "hitRate": 0.744,
+          "roi": -0.038,
+          "avgOdds": 1.3,
+          "independentMatchDays": 25,
+          "onlineAction": "observe",
+          "sampleStatus": "shadow-quarantined",
+          "reasons": [
+            "sample<50",
+            "reference-cohort-not-tier-isolated"
+          ],
+          "adjustments": {
+            "minProbabilityBoost": 0,
+            "minModelGapBoost": 0,
+            "minHandicapSupportBoost": 0,
+            "trustPenalty": 0,
+            "maxRiskTagsDelta": 0,
+            "goalsMinBoost": 0
+          },
+          "diagnosticOnlineAction": "observe"
+        },
+        "1X2:unknown": {
+          "key": "reference:1X2:unknown",
+          "settled": 16,
+          "won": 8,
+          "lost": 8,
+          "hitRate": 0.5,
+          "roi": null,
+          "avgOdds": null,
+          "independentMatchDays": 6,
+          "onlineAction": "observe",
+          "sampleStatus": "shadow-quarantined",
+          "reasons": [
+            "sample<50",
+            "reference-cohort-not-tier-isolated"
+          ],
+          "adjustments": {
+            "minProbabilityBoost": 0,
+            "minModelGapBoost": 0,
+            "minHandicapSupportBoost": 0,
+            "trustPenalty": 0,
+            "maxRiskTagsDelta": 0,
+            "goalsMinBoost": 0
+          },
+          "diagnosticOnlineAction": "observe"
+        },
+        "HHAD:sp_1_46_1_70": {
+          "key": "reference:HHAD:sp_1_46_1_70",
+          "settled": 30,
+          "won": 17,
+          "lost": 13,
+          "hitRate": 0.567,
+          "roi": -0.113,
+          "avgOdds": 1.56,
+          "independentMatchDays": 21,
+          "onlineAction": "observe",
+          "sampleStatus": "shadow-quarantined",
+          "reasons": [
+            "sample<50",
+            "reference-cohort-not-tier-isolated"
+          ],
+          "adjustments": {
+            "minProbabilityBoost": 0,
+            "minModelGapBoost": 0,
+            "minHandicapSupportBoost": 0,
+            "trustPenalty": 0,
+            "maxRiskTagsDelta": 0,
+            "goalsMinBoost": 0
+          },
+          "diagnosticOnlineAction": "observe"
+        },
+        "HHAD:sp_1_71_2_05": {
+          "key": "reference:HHAD:sp_1_71_2_05",
+          "settled": 27,
+          "won": 14,
+          "lost": 13,
+          "hitRate": 0.519,
+          "roi": -0.015,
+          "avgOdds": 1.9,
+          "independentMatchDays": 20,
+          "onlineAction": "observe",
+          "sampleStatus": "shadow-quarantined",
+          "reasons": [
+            "sample<50",
+            "reference-cohort-not-tier-isolated"
+          ],
+          "adjustments": {
+            "minProbabilityBoost": 0,
+            "minModelGapBoost": 0,
+            "minHandicapSupportBoost": 0,
+            "trustPenalty": 0,
+            "maxRiskTagsDelta": 0,
+            "goalsMinBoost": 0
+          },
+          "diagnosticOnlineAction": "observe"
+        },
+        "HHAD:sp_2_06_2_60": {
+          "key": "reference:HHAD:sp_2_06_2_60",
+          "settled": 29,
+          "won": 5,
+          "lost": 24,
+          "hitRate": 0.172,
+          "roi": -0.604,
+          "avgOdds": 2.25,
+          "independentMatchDays": 17,
+          "onlineAction": "observe",
+          "sampleStatus": "shadow-quarantined",
+          "reasons": [
+            "sample<50",
+            "reference-cohort-not-tier-isolated"
+          ],
+          "adjustments": {
+            "minProbabilityBoost": 0,
+            "minModelGapBoost": 0,
+            "minHandicapSupportBoost": 0,
+            "trustPenalty": 0,
+            "maxRiskTagsDelta": 0,
+            "goalsMinBoost": 0
+          },
+          "diagnosticOnlineAction": "observe"
+        },
+        "HHAD:sp_gt_2_60": {
+          "key": "reference:HHAD:sp_gt_2_60",
+          "settled": 6,
+          "won": 2,
+          "lost": 4,
+          "hitRate": 0.333,
+          "roi": -0.053,
+          "avgOdds": 3.19,
+          "independentMatchDays": 6,
+          "onlineAction": "observe",
+          "sampleStatus": "shadow-quarantined",
+          "reasons": [
+            "sample<50",
+            "reference-cohort-not-tier-isolated"
+          ],
+          "adjustments": {
+            "minProbabilityBoost": 0,
+            "minModelGapBoost": 0,
+            "minHandicapSupportBoost": 0,
+            "trustPenalty": 0,
+            "maxRiskTagsDelta": 0,
+            "goalsMinBoost": 0
+          },
+          "diagnosticOnlineAction": "observe"
+        },
+        "HHAD:sp_le_1_45": {
+          "key": "reference:HHAD:sp_le_1_45",
+          "settled": 7,
+          "won": 6,
+          "lost": 1,
+          "hitRate": 0.857,
+          "roi": 0.206,
+          "avgOdds": 1.41,
+          "independentMatchDays": 7,
+          "onlineAction": "observe",
+          "sampleStatus": "shadow-quarantined",
+          "reasons": [
+            "sample<50",
+            "reference-cohort-not-tier-isolated"
+          ],
+          "adjustments": {
+            "minProbabilityBoost": 0,
+            "minModelGapBoost": 0,
+            "minHandicapSupportBoost": 0,
+            "trustPenalty": 0,
+            "maxRiskTagsDelta": 0,
+            "goalsMinBoost": 0
+          },
+          "diagnosticOnlineAction": "observe"
+        }
+      },
+      "gateByTip": {
+        "1X2:1": {
+          "key": "reference:1X2:1",
+          "settled": 86,
+          "won": 50,
+          "lost": 36,
+          "hitRate": 0.581,
+          "roi": -0.111,
+          "avgOdds": 1.61,
+          "independentMatchDays": 35,
+          "onlineAction": "observe",
+          "sampleStatus": "shadow-quarantined",
+          "reasons": [
+            "neutral-sample",
+            "reference-cohort-not-tier-isolated"
+          ],
+          "adjustments": {
+            "minProbabilityBoost": 0,
+            "minModelGapBoost": 0,
+            "minHandicapSupportBoost": 0,
+            "trustPenalty": 0,
+            "maxRiskTagsDelta": 0,
+            "goalsMinBoost": 0
+          },
+          "diagnosticOnlineAction": "observe"
+        },
+        "1X2:2": {
+          "key": "reference:1X2:2",
+          "settled": 20,
+          "won": 14,
+          "lost": 6,
+          "hitRate": 0.7,
+          "roi": 0.044,
+          "avgOdds": 1.52,
+          "independentMatchDays": 17,
+          "onlineAction": "observe",
+          "sampleStatus": "shadow-quarantined",
+          "reasons": [
+            "sample<50",
+            "reference-cohort-not-tier-isolated"
+          ],
+          "adjustments": {
+            "minProbabilityBoost": 0,
+            "minModelGapBoost": 0,
+            "minHandicapSupportBoost": 0,
+            "trustPenalty": 0,
+            "maxRiskTagsDelta": 0,
+            "goalsMinBoost": 0
+          },
+          "diagnosticOnlineAction": "observe"
+        },
+        "1X2:X": {
+          "key": "reference:1X2:X",
+          "settled": 6,
+          "won": 3,
+          "lost": 3,
+          "hitRate": 0.5,
+          "roi": 0.677,
+          "avgOdds": 3.6,
+          "independentMatchDays": 3,
+          "onlineAction": "observe",
+          "sampleStatus": "shadow-quarantined",
+          "reasons": [
+            "sample<50",
+            "reference-cohort-not-tier-isolated"
+          ],
+          "adjustments": {
+            "minProbabilityBoost": 0,
+            "minModelGapBoost": 0,
+            "minHandicapSupportBoost": 0,
+            "trustPenalty": 0,
+            "maxRiskTagsDelta": 0,
+            "goalsMinBoost": 0
+          },
+          "diagnosticOnlineAction": "observe"
+        },
+        "HHAD:1": {
+          "key": "reference:HHAD:1",
+          "settled": 50,
+          "won": 21,
+          "lost": 29,
+          "hitRate": 0.42,
+          "roi": -0.21,
+          "avgOdds": 1.97,
+          "independentMatchDays": 24,
+          "onlineAction": "observe",
+          "sampleStatus": "shadow-quarantined",
+          "reasons": [
+            "neutral-sample",
+            "reference-cohort-not-tier-isolated"
+          ],
+          "adjustments": {
+            "minProbabilityBoost": 0,
+            "minModelGapBoost": 0,
+            "minHandicapSupportBoost": 0,
+            "trustPenalty": 0,
+            "maxRiskTagsDelta": 0,
+            "goalsMinBoost": 0
+          },
+          "diagnosticOnlineAction": "observe"
+        },
+        "HHAD:2": {
+          "key": "reference:HHAD:2",
+          "settled": 49,
+          "won": 23,
+          "lost": 26,
+          "hitRate": 0.469,
+          "roi": -0.198,
+          "avgOdds": 1.92,
+          "independentMatchDays": 24,
+          "onlineAction": "observe",
+          "sampleStatus": "shadow-quarantined",
+          "reasons": [
+            "sample<50",
+            "reference-cohort-not-tier-isolated"
+          ],
+          "adjustments": {
+            "minProbabilityBoost": 0,
+            "minModelGapBoost": 0,
+            "minHandicapSupportBoost": 0,
+            "trustPenalty": 0,
+            "maxRiskTagsDelta": 0,
+            "goalsMinBoost": 0
+          },
+          "diagnosticOnlineAction": "observe"
+        }
+      }
+    },
+    "policy": "Reference recommendations remain diagnostic-only until source, tier, policy version, and immutable publication lineage are separated. They never enter formal hit rate, ROI, calibration, promotion evidence, or online gates."
+  },
+  "recommendationSelection": {
+    "version": "multi-factor-market-evidence-v2",
+    "status": "shadow-only",
+    "hardMaxSp": null,
+    "spRole": "continuous-market-value-and-risk-feature",
+    "directionSwitchByLowerSp": false,
+    "unknownSpAction": "watch",
+    "officialPoolsOnly": [
+      "HAD",
+      "HHAD"
+    ],
+    "mainMarketOnly": "BEST",
+    "riskConstrained": true,
+    "sourceEvaluationVersion": "rolling-backtest-v19",
+    "productionValidation": {
+      "version": "production-multi-factor-validation-v3",
+      "productionPolicyVersion": "multi-factor-market-evidence-v2",
+      "backtestPolicyVersion": "multi-factor-selection-shadow-v3",
+      "decisionSnapshotVersion": "candidate-decision-snapshot-v2",
+      "cohortPolicy": "candidate-decision-snapshot-v2-only",
+      "cohortRows": 0,
+      "excludedLegacyV1AuditRows": 108,
+      "samePolicyImplementation": false,
+      "eligible": false,
+      "validatedMarkets": [],
+      "requiredMarkets": [
+        "HAD",
+        "HHAD"
+      ],
+      "perMarket": {
+        "HAD": {
+          "sourceRows": 0,
+          "sameSnapshotModelMarketRows": 0,
+          "exactReplayRows": 0,
+          "minimumRows": 100,
+          "status": "unvalidated",
+          "productionPolicyReplay": false
+        },
+        "HHAD": {
+          "sourceRows": 0,
+          "sameSnapshotModelMarketRows": 0,
+          "exactReplayRows": 0,
+          "minimumRows": 100,
+          "status": "unvalidated",
+          "productionPolicyReplay": false
+        }
+      },
+      "blockers": [
+        "production-multi-factor-policy-not-replayed",
+        "HAD-production-policy-unvalidated",
+        "HHAD-production-policy-unvalidated"
+      ],
+      "policy": "Only immutable v2 candidates with exact canonical input/output/policy replay enter promotion validation; v1 remains audit-only and a probability/odds proxy cannot promote the production policy."
+    },
+    "evidence": {
+      "beforeSettled": 0,
+      "afterSettled": 0,
+      "coverage": 0,
+      "hitRateSpOnly": null,
+      "hitRateAfter": null,
+      "hitRateDeltaVsSpOnly": null,
+      "highSpCandidates": 0,
+      "lowSpRejected": 0,
+      "stableWindows": 0
+    },
+    "policy": "Official SP is a continuous market/value feature, never an accuracy ceiling. Promotion requires aligned independent model, score matrix, HAD/HHAD structure, as-of movement, value, data quality and risk evidence; failure becomes WATCH without changing direction for a lower SP."
+  },
   "activeGates": {
-    "profile": 2,
-    "market": 1,
-    "marketProfile": 4,
-    "oddsBucket": 2,
-    "tip": 3,
-    "webConsensus": 0,
-    "reviewSignal": 5
+    "profile": 0,
+    "market": 0,
+    "marketProfile": 0,
+    "oddsBucket": 0,
+    "tip": 0,
+    "webConsensus": 0
   },
-  "gateByMarket": {
-    "1X2": {
-      "key": "1X2",
-      "settled": 122,
-      "won": 63,
-      "lost": 59,
-      "hitRate": 0.516,
-      "roi": -0.203,
-      "avgOdds": 1.95,
-      "onlineAction": "observe",
-      "sampleStatus": "neutral",
-      "reasons": [
-        "neutral-sample"
-      ],
-      "adjustments": {
-        "minProbabilityBoost": 0,
-        "minModelGapBoost": 0,
-        "minHandicapSupportBoost": 0,
-        "trustPenalty": 0,
-        "maxRiskTagsDelta": 0,
-        "goalsMinBoost": 0
-      }
-    },
-    "BEST": {
-      "key": "BEST",
-      "settled": 116,
-      "won": 60,
-      "lost": 56,
-      "hitRate": 0.517,
-      "roi": -0.186,
-      "avgOdds": 1.77,
-      "onlineAction": "observe",
-      "sampleStatus": "neutral",
-      "reasons": [
-        "neutral-sample"
-      ],
-      "adjustments": {
-        "minProbabilityBoost": 0,
-        "minModelGapBoost": 0,
-        "minHandicapSupportBoost": 0,
-        "trustPenalty": 0,
-        "maxRiskTagsDelta": 0,
-        "goalsMinBoost": 0
-      }
-    },
-    "GOALS": {
-      "key": "GOALS",
-      "settled": 159,
-      "won": 76,
-      "lost": 83,
-      "hitRate": 0.478,
-      "roi": -0.076,
-      "avgOdds": 2.02,
-      "onlineAction": "observe",
-      "sampleStatus": "neutral",
-      "reasons": [
-        "neutral-sample"
-      ],
-      "adjustments": {
-        "minProbabilityBoost": 0,
-        "minModelGapBoost": 0,
-        "minHandicapSupportBoost": 0,
-        "trustPenalty": 0,
-        "maxRiskTagsDelta": 0,
-        "goalsMinBoost": 0
-      }
-    },
-    "HHAD": {
-      "key": "HHAD",
-      "settled": 67,
-      "won": 22,
-      "lost": 45,
-      "hitRate": 0.328,
-      "roi": -0.361,
-      "avgOdds": 2.17,
-      "onlineAction": "tighten",
-      "sampleStatus": "guarded",
-      "reasons": [
-        "cold-hit-rate",
-        "negative-flat-stake-roi"
-      ],
-      "adjustments": {
-        "minProbabilityBoost": 0.06,
-        "minModelGapBoost": 0.04,
-        "minHandicapSupportBoost": 0.05,
-        "trustPenalty": 9,
-        "maxRiskTagsDelta": -2,
-        "goalsMinBoost": 0
-      }
-    }
-  },
-  "gateByOddsBucket": {
-    "sp_1_46_1_70": {
-      "key": "sp_1_46_1_70",
-      "settled": 61,
-      "won": 38,
-      "lost": 23,
-      "hitRate": 0.623,
-      "roi": -0.02,
-      "avgOdds": 1.58,
-      "onlineAction": "observe",
-      "sampleStatus": "neutral",
-      "reasons": [
-        "neutral-sample"
-      ],
-      "adjustments": {
-        "minProbabilityBoost": 0,
-        "minModelGapBoost": 0,
-        "minHandicapSupportBoost": 0,
-        "trustPenalty": 0,
-        "maxRiskTagsDelta": 0,
-        "goalsMinBoost": 0
-      }
-    },
-    "sp_1_71_2_05": {
-      "key": "sp_1_71_2_05",
-      "settled": 74,
-      "won": 37,
-      "lost": 37,
-      "hitRate": 0.5,
-      "roi": -0.045,
-      "avgOdds": 1.88,
-      "onlineAction": "observe",
-      "sampleStatus": "neutral",
-      "reasons": [
-        "neutral-sample"
-      ],
-      "adjustments": {
-        "minProbabilityBoost": 0,
-        "minModelGapBoost": 0,
-        "minHandicapSupportBoost": 0,
-        "trustPenalty": 0,
-        "maxRiskTagsDelta": 0,
-        "goalsMinBoost": 0
-      }
-    },
-    "sp_2_06_2_60": {
-      "key": "sp_2_06_2_60",
-      "settled": 60,
-      "won": 13,
-      "lost": 47,
-      "hitRate": 0.217,
-      "roi": -0.5,
-      "avgOdds": 2.27,
-      "onlineAction": "tighten",
-      "sampleStatus": "guarded",
-      "reasons": [
-        "very-cold-hit-rate",
-        "negative-flat-stake-roi"
-      ],
-      "adjustments": {
-        "minProbabilityBoost": 0.06,
-        "minModelGapBoost": 0.055,
-        "minHandicapSupportBoost": 0.06,
-        "trustPenalty": 10,
-        "maxRiskTagsDelta": -2,
-        "goalsMinBoost": 0
-      }
-    },
-    "sp_gt_2_60": {
-      "key": "sp_gt_2_60",
-      "settled": 24,
-      "won": 0,
-      "lost": 24,
-      "hitRate": 0,
-      "roi": -1,
-      "avgOdds": 4.17,
-      "onlineAction": "tighten",
-      "sampleStatus": "guarded",
-      "reasons": [
-        "very-cold-hit-rate",
-        "negative-flat-stake-roi"
-      ],
-      "adjustments": {
-        "minProbabilityBoost": 0.06,
-        "minModelGapBoost": 0.055,
-        "minHandicapSupportBoost": 0.06,
-        "trustPenalty": 10,
-        "maxRiskTagsDelta": -2,
-        "goalsMinBoost": 0
-      }
-    },
-    "sp_le_1_45": {
-      "key": "sp_le_1_45",
-      "settled": 84,
-      "won": 57,
-      "lost": 27,
-      "hitRate": 0.679,
-      "roi": -0.119,
-      "avgOdds": 1.3,
-      "onlineAction": "observe",
-      "sampleStatus": "neutral",
-      "reasons": [
-        "neutral-sample"
-      ],
-      "adjustments": {
-        "minProbabilityBoost": 0,
-        "minModelGapBoost": 0,
-        "minHandicapSupportBoost": 0,
-        "trustPenalty": 0,
-        "maxRiskTagsDelta": 0,
-        "goalsMinBoost": 0
-      }
-    }
-  },
-  "gateByTip": {
-    "1X2:1": {
-      "key": "1X2:1",
-      "settled": 87,
-      "won": 42,
-      "lost": 45,
-      "hitRate": 0.483,
-      "roi": -0.231,
-      "avgOdds": 2.06,
-      "onlineAction": "observe",
-      "sampleStatus": "neutral",
-      "reasons": [
-        "neutral-sample"
-      ],
-      "adjustments": {
-        "minProbabilityBoost": 0,
-        "minModelGapBoost": 0,
-        "minHandicapSupportBoost": 0,
-        "trustPenalty": 0,
-        "maxRiskTagsDelta": 0,
-        "goalsMinBoost": 0
-      }
-    },
-    "1X2:2": {
-      "key": "1X2:2",
-      "settled": 34,
-      "won": 21,
-      "lost": 13,
-      "hitRate": 0.618,
-      "roi": -0.106,
-      "avgOdds": 1.62,
-      "onlineAction": "observe",
-      "sampleStatus": "neutral",
-      "reasons": [
-        "neutral-sample"
-      ],
-      "adjustments": {
-        "minProbabilityBoost": 0,
-        "minModelGapBoost": 0,
-        "minHandicapSupportBoost": 0,
-        "trustPenalty": 0,
-        "maxRiskTagsDelta": 0,
-        "goalsMinBoost": 0
-      }
-    },
-    "1X2:X": {
-      "key": "1X2:X",
-      "settled": 1,
-      "won": 0,
-      "lost": 1,
-      "hitRate": 0,
-      "roi": -1,
-      "avgOdds": 3.2,
-      "onlineAction": "observe",
-      "sampleStatus": "low-sample",
-      "reasons": [
-        "sample<3"
-      ],
-      "adjustments": {
-        "minProbabilityBoost": 0,
-        "minModelGapBoost": 0,
-        "minHandicapSupportBoost": 0,
-        "trustPenalty": 0,
-        "maxRiskTagsDelta": 0,
-        "goalsMinBoost": 0
-      }
-    },
-    "BEST:1": {
-      "key": "BEST:1",
-      "settled": 76,
-      "won": 38,
-      "lost": 38,
-      "hitRate": 0.5,
-      "roi": -0.211,
-      "avgOdds": 1.76,
-      "onlineAction": "observe",
-      "sampleStatus": "neutral",
-      "reasons": [
-        "neutral-sample"
-      ],
-      "adjustments": {
-        "minProbabilityBoost": 0,
-        "minModelGapBoost": 0,
-        "minHandicapSupportBoost": 0,
-        "trustPenalty": 0,
-        "maxRiskTagsDelta": 0,
-        "goalsMinBoost": 0
-      }
-    },
-    "BEST:2": {
-      "key": "BEST:2",
-      "settled": 39,
-      "won": 22,
-      "lost": 17,
-      "hitRate": 0.564,
-      "roi": -0.116,
-      "avgOdds": 1.74,
-      "onlineAction": "observe",
-      "sampleStatus": "neutral",
-      "reasons": [
-        "neutral-sample"
-      ],
-      "adjustments": {
-        "minProbabilityBoost": 0,
-        "minModelGapBoost": 0,
-        "minHandicapSupportBoost": 0,
-        "trustPenalty": 0,
-        "maxRiskTagsDelta": 0,
-        "goalsMinBoost": 0
-      }
-    },
-    "BEST:X": {
-      "key": "BEST:X",
-      "settled": 1,
-      "won": 0,
-      "lost": 1,
-      "hitRate": 0,
-      "roi": -1,
-      "avgOdds": 3.2,
-      "onlineAction": "observe",
-      "sampleStatus": "low-sample",
-      "reasons": [
-        "sample<3"
-      ],
-      "adjustments": {
-        "minProbabilityBoost": 0,
-        "minModelGapBoost": 0,
-        "minHandicapSupportBoost": 0,
-        "trustPenalty": 0,
-        "maxRiskTagsDelta": 0,
-        "goalsMinBoost": 0
-      }
-    },
-    "GOALS:3": {
-      "key": "GOALS:3",
-      "settled": 6,
-      "won": 2,
-      "lost": 4,
-      "hitRate": 0.333,
-      "roi": 0.527,
-      "avgOdds": 4.56,
-      "onlineAction": "tighten",
-      "sampleStatus": "guarded",
-      "reasons": [
-        "cold-hit-rate"
-      ],
-      "adjustments": {
-        "minProbabilityBoost": 0.04,
-        "minModelGapBoost": 0.025,
-        "minHandicapSupportBoost": 0.035,
-        "trustPenalty": 6,
-        "maxRiskTagsDelta": -1,
-        "goalsMinBoost": 0.03
-      }
-    },
-    "GOALS:4": {
-      "key": "GOALS:4",
-      "settled": 2,
-      "won": 0,
-      "lost": 2,
-      "hitRate": 0,
-      "roi": -1,
-      "avgOdds": 5.24,
-      "onlineAction": "observe",
-      "sampleStatus": "low-sample",
-      "reasons": [
-        "sample<3"
-      ],
-      "adjustments": {
-        "minProbabilityBoost": 0,
-        "minModelGapBoost": 0,
-        "minHandicapSupportBoost": 0,
-        "trustPenalty": 0,
-        "maxRiskTagsDelta": 0,
-        "goalsMinBoost": 0
-      }
-    },
-    "GOALS:O2.5": {
-      "key": "GOALS:O2.5",
-      "settled": 50,
-      "won": 28,
-      "lost": 22,
-      "hitRate": 0.56,
-      "roi": -0.002,
-      "avgOdds": 1.8,
-      "onlineAction": "observe",
-      "sampleStatus": "neutral",
-      "reasons": [
-        "neutral-sample"
-      ],
-      "adjustments": {
-        "minProbabilityBoost": 0,
-        "minModelGapBoost": 0,
-        "minHandicapSupportBoost": 0,
-        "trustPenalty": 0,
-        "maxRiskTagsDelta": 0,
-        "goalsMinBoost": 0
-      }
-    },
-    "GOALS:U2.5": {
-      "key": "GOALS:U2.5",
-      "settled": 101,
-      "won": 46,
-      "lost": 55,
-      "hitRate": 0.455,
-      "roi": -0.13,
-      "avgOdds": 1.91,
-      "onlineAction": "observe",
-      "sampleStatus": "neutral",
-      "reasons": [
-        "neutral-sample"
-      ],
-      "adjustments": {
-        "minProbabilityBoost": 0,
-        "minModelGapBoost": 0,
-        "minHandicapSupportBoost": 0,
-        "trustPenalty": 0,
-        "maxRiskTagsDelta": 0,
-        "goalsMinBoost": 0
-      }
-    },
-    "HHAD:1": {
-      "key": "HHAD:1",
-      "settled": 24,
-      "won": 8,
-      "lost": 16,
-      "hitRate": 0.333,
-      "roi": -0.353,
-      "avgOdds": 2.21,
-      "onlineAction": "tighten",
-      "sampleStatus": "guarded",
-      "reasons": [
-        "cold-hit-rate",
-        "negative-flat-stake-roi"
-      ],
-      "adjustments": {
-        "minProbabilityBoost": 0.06,
-        "minModelGapBoost": 0.04,
-        "minHandicapSupportBoost": 0.05,
-        "trustPenalty": 9,
-        "maxRiskTagsDelta": -2,
-        "goalsMinBoost": 0
-      }
-    },
-    "HHAD:2": {
-      "key": "HHAD:2",
-      "settled": 43,
-      "won": 14,
-      "lost": 29,
-      "hitRate": 0.326,
-      "roi": -0.366,
-      "avgOdds": 2.15,
-      "onlineAction": "tighten",
-      "sampleStatus": "guarded",
-      "reasons": [
-        "cold-hit-rate",
-        "negative-flat-stake-roi"
-      ],
-      "adjustments": {
-        "minProbabilityBoost": 0.06,
-        "minModelGapBoost": 0.04,
-        "minHandicapSupportBoost": 0.05,
-        "trustPenalty": 9,
-        "maxRiskTagsDelta": -2,
-        "goalsMinBoost": 0
-      }
-    }
+  "looseningGates": {
+    "profile": 0,
+    "market": 0,
+    "marketProfile": 0,
+    "oddsBucket": 0,
+    "tip": 0,
+    "webConsensus": 0
   },
   "gateByProfile": {
     "international": {
       "key": "international",
       "sample": {
         "overall": {
-          "settled": 363,
-          "won": 176,
-          "lost": 187,
-          "hitRate": 0.485,
-          "roi": -0.174,
-          "avgOdds": 1.91,
-          "avgTrust": 49.9,
-          "avgProbability": 0.458
+          "settled": 0,
+          "won": 0,
+          "lost": 0,
+          "hitRate": null,
+          "roi": null,
+          "avgOdds": null,
+          "oddsRows": 0,
+          "missingOddsRows": 0,
+          "avgTrust": null,
+          "avgProbability": null,
+          "independentMatchDays": 0
         },
         "oneXTwo": {
-          "settled": 89,
-          "won": 52,
-          "lost": 37,
-          "hitRate": 0.584,
-          "roi": -0.122,
-          "avgOdds": 1.75,
-          "avgTrust": 38.9,
-          "avgProbability": 0.471
+          "settled": 0,
+          "won": 0,
+          "lost": 0,
+          "hitRate": null,
+          "roi": null,
+          "avgOdds": null,
+          "oddsRows": 0,
+          "missingOddsRows": 0,
+          "avgTrust": null,
+          "avgProbability": null,
+          "independentMatchDays": 0
+        },
+        "hhad": {
+          "settled": 0,
+          "won": 0,
+          "lost": 0,
+          "hitRate": null,
+          "roi": null,
+          "avgOdds": null,
+          "oddsRows": 0,
+          "missingOddsRows": 0,
+          "avgTrust": null,
+          "avgProbability": null,
+          "independentMatchDays": 0
         },
         "goals": {
-          "settled": 124,
-          "won": 56,
-          "lost": 68,
-          "hitRate": 0.452,
-          "roi": -0.114,
-          "avgOdds": 2.06,
-          "avgTrust": 52.5,
-          "avgProbability": null
+          "settled": 0,
+          "won": 0,
+          "lost": 0,
+          "hitRate": null,
+          "roi": null,
+          "avgOdds": null,
+          "oddsRows": 0,
+          "missingOddsRows": 0,
+          "avgTrust": null,
+          "avgProbability": null,
+          "independentMatchDays": 0
         }
       },
       "onlineAction": "observe",
       "sampleStatus": "observe",
       "reasons": [
-        "international:neutral-sample",
-        "1X2:international:neutral-sample",
-        "GOALS:international:neutral-sample"
+        "international:sample<20",
+        "1X2:international:sample<20",
+        "HHAD:international:sample<20",
+        "GOALS:international:sample<20"
       ],
       "adjustments": {
         "minProbabilityBoost": 0,
@@ -556,50 +3439,72 @@
       "key": "japan",
       "sample": {
         "overall": {
-          "settled": 26,
-          "won": 12,
-          "lost": 14,
-          "hitRate": 0.462,
-          "roi": -0.179,
-          "avgOdds": 1.87,
-          "avgTrust": 51.8,
-          "avgProbability": 0.36
+          "settled": 0,
+          "won": 0,
+          "lost": 0,
+          "hitRate": null,
+          "roi": null,
+          "avgOdds": null,
+          "oddsRows": 0,
+          "missingOddsRows": 0,
+          "avgTrust": null,
+          "avgProbability": null,
+          "independentMatchDays": 0
         },
         "oneXTwo": {
-          "settled": 10,
-          "won": 3,
-          "lost": 7,
-          "hitRate": 0.3,
-          "roi": -0.476,
-          "avgOdds": 1.89,
-          "avgTrust": 47.9,
-          "avgProbability": 0.36
+          "settled": 0,
+          "won": 0,
+          "lost": 0,
+          "hitRate": null,
+          "roi": null,
+          "avgOdds": null,
+          "oddsRows": 0,
+          "missingOddsRows": 0,
+          "avgTrust": null,
+          "avgProbability": null,
+          "independentMatchDays": 0
+        },
+        "hhad": {
+          "settled": 0,
+          "won": 0,
+          "lost": 0,
+          "hitRate": null,
+          "roi": null,
+          "avgOdds": null,
+          "oddsRows": 0,
+          "missingOddsRows": 0,
+          "avgTrust": null,
+          "avgProbability": null,
+          "independentMatchDays": 0
         },
         "goals": {
-          "settled": 10,
-          "won": 7,
-          "lost": 3,
-          "hitRate": 0.7,
-          "roi": 0.29,
-          "avgOdds": 1.83,
-          "avgTrust": 59.7,
-          "avgProbability": null
+          "settled": 0,
+          "won": 0,
+          "lost": 0,
+          "hitRate": null,
+          "roi": null,
+          "avgOdds": null,
+          "oddsRows": 0,
+          "missingOddsRows": 0,
+          "avgTrust": null,
+          "avgProbability": null,
+          "independentMatchDays": 0
         }
       },
-      "onlineAction": "tighten",
-      "sampleStatus": "guarded",
+      "onlineAction": "observe",
+      "sampleStatus": "observe",
       "reasons": [
-        "japan:neutral-sample",
-        "1X2:japan:very-cold-hit-rate",
-        "1X2:japan:negative-flat-stake-roi",
-        "GOALS:japan:neutral-sample"
+        "japan:sample<20",
+        "1X2:japan:sample<20",
+        "HHAD:japan:sample<20",
+        "GOALS:japan:sample<20"
       ],
       "adjustments": {
-        "minProbabilityBoost": 0.09,
-        "minModelGapBoost": 0.055,
-        "minHandicapSupportBoost": 0.065,
-        "trustPenalty": 13,
-        "maxRiskTagsDelta": -3,
+        "minProbabilityBoost": 0,
+        "minModelGapBoost": 0,
+        "minHandicapSupportBoost": 0,
+        "trustPenalty": 0,
+        "maxRiskTagsDelta": 0,
         "goalsMinBoost": 0
       }
     },
@@ -607,53 +3512,119 @@
       "key": "other",
       "sample": {
         "overall": {
-          "settled": 75,
-          "won": 33,
-          "lost": 42,
-          "hitRate": 0.44,
-          "roi": -0.194,
-          "avgOdds": 2.23,
-          "avgTrust": 47,
-          "avgProbability": 0.453
+          "settled": 0,
+          "won": 0,
+          "lost": 0,
+          "hitRate": null,
+          "roi": null,
+          "avgOdds": null,
+          "oddsRows": 0,
+          "missingOddsRows": 0,
+          "avgTrust": null,
+          "avgProbability": null,
+          "independentMatchDays": 0
         },
         "oneXTwo": {
-          "settled": 23,
-          "won": 8,
-          "lost": 15,
-          "hitRate": 0.348,
-          "roi": -0.396,
-          "avgOdds": 2.74,
-          "avgTrust": 34,
-          "avgProbability": 0.467
+          "settled": 0,
+          "won": 0,
+          "lost": 0,
+          "hitRate": null,
+          "roi": null,
+          "avgOdds": null,
+          "oddsRows": 0,
+          "missingOddsRows": 0,
+          "avgTrust": null,
+          "avgProbability": null,
+          "independentMatchDays": 0
+        },
+        "hhad": {
+          "settled": 0,
+          "won": 0,
+          "lost": 0,
+          "hitRate": null,
+          "roi": null,
+          "avgOdds": null,
+          "oddsRows": 0,
+          "missingOddsRows": 0,
+          "avgTrust": null,
+          "avgProbability": null,
+          "independentMatchDays": 0
         },
         "goals": {
-          "settled": 25,
-          "won": 13,
-          "lost": 12,
-          "hitRate": 0.52,
-          "roi": -0.032,
-          "avgOdds": 1.89,
-          "avgTrust": 50.8,
-          "avgProbability": null
+          "settled": 0,
+          "won": 0,
+          "lost": 0,
+          "hitRate": null,
+          "roi": null,
+          "avgOdds": null,
+          "oddsRows": 0,
+          "missingOddsRows": 0,
+          "avgTrust": null,
+          "avgProbability": null,
+          "independentMatchDays": 0
         }
       },
-      "onlineAction": "tighten",
-      "sampleStatus": "guarded",
+      "onlineAction": "observe",
+      "sampleStatus": "observe",
       "reasons": [
-        "other:neutral-sample",
-        "1X2:other:cold-hit-rate",
-        "1X2:other:negative-flat-stake-roi",
-        "GOALS:other:neutral-sample"
+        "other:sample<20",
+        "1X2:other:sample<20",
+        "HHAD:other:sample<20",
+        "GOALS:other:sample<20"
       ],
       "adjustments": {
-        "minProbabilityBoost": 0.06,
-        "minModelGapBoost": 0.04,
-        "minHandicapSupportBoost": 0.05,
-        "trustPenalty": 9,
-        "maxRiskTagsDelta": -2,
+        "minProbabilityBoost": 0,
+        "minModelGapBoost": 0,
+        "minHandicapSupportBoost": 0,
+        "trustPenalty": 0,
+        "maxRiskTagsDelta": 0,
         "goalsMinBoost": 0
       }
     }
   },
-  "gateByWebConsensus": {}
+  "gateByMarket": {},
+  "gateByMarketProfile": {},
+  "gateByOddsBucket": {},
+  "gateByTip": {},
+  "gateByWebConsensus": {},
+  "advisoryPolicy": {
+    "webConsensus": {
+      "eligibleForNumericModel": false,
+      "eligibleForStrategyGate": false,
+      "onlineEffect": "advisory-only",
+      "legacyArtifacts": "ignored"
+    }
+  },
+  "recommendations": [
+    {
+      "id": "multi-factor-market-evidence-gate",
+      "status": "shadow-only",
+      "reason": "The multi-factor candidate remains shadow-only until enough as-of HAD/HHAD samples beat the same-match market and SP-only baselines."
+    },
+    {
+      "id": "sample-guard",
+      "status": "shadow-only",
+      "reason": "The model risk tier is watch, so online automation may tighten gates but cannot loosen thresholds yet."
+    },
+    {
+      "id": "reference-shadow-tightening",
+      "status": "shadow-observe",
+      "reason": "Reference recommendations are quarantined as diagnostics until their source/tier/version cohorts and immutable publication lineage are separated."
+    },
+    {
+      "id": "market-baseline-gate",
+      "status": "shadow",
+      "reason": "market-baseline-rows:170<500; shadow-candidate-rows:170<500; independent-rolling-windows:4<6; model-risk-tier:watch!=stable; input-audit-failed; recommendation-selection-gate-ineligible; shadow-candidate-prospective-confirmation-missing; walk-forward-watermark-missing; walk-forward-validation-unvalidated; promotion-evidence-ineligible; promotion-evidence-rows:0<500; model-learning-registry-missing; production-multi-factor-policy-unvalidated; recommendation-market-HAD-unvalidated; recommendation-market-HHAD-unvalidated; model-signal-no-marginal-gain-vs-calibrated-market; model-signal-candidate-champion-identity-mismatch"
+    },
+    {
+      "id": "model-signal-gate",
+      "status": "champion-identity-mismatch",
+      "reason": "No model or historical-signal candidate is ready to loosen online recommendations yet."
+    },
+    {
+      "id": "next-data-step",
+      "status": "pending",
+      "reason": "Import historical league data to seed Elo, form, and league priors before enabling weight optimization."
+    }
+  ]
 }

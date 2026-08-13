@@ -1,14 +1,20 @@
 {
   "version": 1,
   "source": "api-football",
-  "ok": true,
-  "startedAt": "2026-08-13T07:28:04.388Z",
-  "finishedAt": "2026-08-13T07:28:04.390Z",
-  "configured": false,
-  "enabled": false,
-  "matchCount": 0,
-  "eligibleMatches": 0,
+  "ok": false,
+  "startedAt": "2026-07-16T01:30:08.798Z",
+  "finishedAt": "2026-07-16T01:30:10.173Z",
+  "configured": true,
+  "enabled": true,
+  "matchCount": 16,
+  "eligibleMatches": 13,
   "cachedFixtureMatches": 0,
+  "cachedEntityConflicts": 0,
+  "unverifiedFreshCacheRevalidations": 0,
+  "verifiedMappingCount": 0,
+  "unverifiedMappingCount": 0,
+  "unverifiedCacheAuditRows": 0,
+  "unverifiedApiSignalRowsSanitized": 0,
   "newFixtureMatches": 0,
   "lowConfidenceMatches": 0,
   "fixtureDatesSkippedByAccess": 0,
@@ -16,11 +22,112 @@
   "signalsMapped": 0,
   "injuryCalls": 0,
   "injurySkippedByAccess": 0,
+  "injuryBulkFallbacks": 0,
+  "injuryFixtureFallbackCalls": 0,
+  "injurySkippedByBudget": 0,
   "lineupCalls": 0,
+  "lineupsRejectedPostCutoff": 0,
   "oddsCalls": 0,
-  "callsThisSync": 0,
+  "oddsRejectedPostCutoff": 0,
+  "entityRegistryFile": "C:\\Users\\86188\\Documents\\football\\server-data\\entity-resolution\\team-registry.json",
+  "entityEvidenceRows": 0,
+  "entityConflictsAdded": 0,
+  "entityEvidenceBlockers": {},
+  "callsThisSync": 1,
   "maxCallsPerSync": 35,
   "errors": [],
+  "accountStatus": {
+    "checkedAt": "2026-07-16T01:30:09.850Z",
+    "eligible": false,
+    "blocked": true,
+    "blockers": [
+      "account-suspended"
+    ],
+    "reason": "/status API error: access: Your account is suspended, check on https://dashboard.api-football.com.",
+    "suspended": true,
+    "active": null,
+    "plan": null,
+    "quota": {
+      "current": null,
+      "dailyLimit": null,
+      "remaining": null
+    },
+    "rateLimit": {}
+  },
   "skipped": true,
-  "reason": "ENABLE_API_FOOTBALL_SYNC=0"
+  "failClosed": true,
+  "reason": "/status API error: access: Your account is suspended, check on https://dashboard.api-football.com.",
+  "callsTodayEstimate": 1,
+  "requestLedger": {
+    "date": "2026-07-16",
+    "count": 1,
+    "byEndpoint": {
+      "/status": 1
+    }
+  },
+  "apiAccess": {
+    "fixtures": {
+      "updatedAt": "2026-07-15T05:05:41.283Z",
+      "reason": "/fixtures API error: access: Your account is suspended, check on https://dashboard.api-football.com.",
+      "suspended": true,
+      "allowedFrom": "2026-06-08",
+      "allowedTo": "2026-06-10"
+    },
+    "injuries": {
+      "updatedAt": "2026-06-09T12:27:54.546Z",
+      "reason": "/injuries API error: plan: Free plans do not have access to the Ids parameter."
+    },
+    "status": {
+      "checkedAt": "2026-07-16T01:30:09.850Z",
+      "eligible": false,
+      "blocked": true,
+      "blockers": [
+        "account-suspended"
+      ],
+      "reason": "/status API error: access: Your account is suspended, check on https://dashboard.api-football.com.",
+      "suspended": true,
+      "active": null,
+      "plan": null,
+      "quota": {
+        "current": null,
+        "dailyLimit": null,
+        "remaining": null
+      },
+      "rateLimit": {}
+    }
+  },
+  "recentErrors": [
+    {
+      "at": "2026-06-09T12:27:55.016Z",
+      "message": "/fixtures/lineups API error: access: Your account is suspended, check on https://dashboard.api-football.com."
+    },
+    {
+      "at": "2026-06-09T12:27:55.475Z",
+      "message": "/odds API error: access: Your account is suspended, check on https://dashboard.api-football.com."
+    },
+    {
+      "at": "2026-06-09T12:27:55.927Z",
+      "message": "/odds API error: access: Your account is suspended, check on https://dashboard.api-football.com."
+    },
+    {
+      "at": "2026-06-09T12:27:56.380Z",
+      "message": "/odds API error: access: Your account is suspended, check on https://dashboard.api-football.com."
+    },
+    {
+      "at": "2026-06-10T09:49:22.566Z",
+      "message": "/fixtures API error: access: Your account is suspended, check on https://dashboard.api-football.com."
+    },
+    {
+      "at": "2026-07-15T05:05:41.283Z",
+      "message": "/fixtures API error: access: Your account is suspended, check on https://dashboard.api-football.com."
+    },
+    {
+      "at": "2026-07-15T18:28:16.003Z",
+      "message": "/status API error: access: Your account is suspended, check on https://dashboard.api-football.com."
+    },
+    {
+      "at": "2026-07-16T01:30:09.850Z",
+      "message": "/status API error: access: Your account is suspended, check on https://dashboard.api-football.com."
+    }
+  ]
 }

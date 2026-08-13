@@ -2,6 +2,7 @@
 
 This project uses Cloudflare Workers Cron as the reliable scheduler and keeps the
 existing GitHub Actions workflow as the data scraper, committer, and deployer.
+The Worker is not the protected C-end recommendation API.
 
 Flow:
 
@@ -10,7 +11,13 @@ Flow:
 3. Worker calls GitHub `workflow_dispatch` for `.github/workflows/sync.yml`.
 4. GitHub Actions runs `scripts/syncData.cjs`, validates data, commits changed
    JSON files, and deploys GitHub Pages.
-5. The web page polls static JSON every 30 seconds.
+5. GitHub Pages publishes only the lightweight React shell and allowed runtime
+   metadata. Protected C-end match, odds, history, and model data must be served
+   by the Node `/api/v1/*` service.
+
+The Worker may expose `/api/sync-meta` for freshness checks and `/api/health`
+for operations. Requests for match lists, history, odds, prediction snapshots,
+or model detail return `410` with a replacement Node API path.
 
 ## Required Secrets
 
@@ -20,6 +27,11 @@ Set these with Wrangler or through the GitHub deployment workflow.
 
 - `GITHUB_TOKEN`: GitHub token used by the Worker to dispatch the sync workflow.
 - `MANUAL_TRIGGER_TOKEN`: optional token for calling `/trigger` manually.
+- `FOOTBALL_PRODUCTION_ADMIN_TOKEN`: production bearer token used only to upload
+  signed independent Sporttery collector evidence.
+- `SPORTTERY_COLLECTOR_PRIVATE_KEY_PKCS8`: Ed25519 PKCS#8 private key whose
+  public key and fingerprint are frozen in the production collector trust
+  registry and `wrangler.jsonc`.
 
 The GitHub token should have access to this repository and enough Actions
 permission to read workflow runs and create workflow dispatch events.
@@ -33,6 +45,11 @@ Add these in GitHub repository settings before running
 - `CLOUDFLARE_ACCOUNT_ID`
 - `SYNC_WORKER_GITHUB_TOKEN`
 - `SYNC_WORKER_MANUAL_TOKEN` optional
+- `SYNC_WORKER_FOOTBALL_PRODUCTION_ADMIN_TOKEN` and
+  `SYNC_WORKER_SPORTTERY_COLLECTOR_PRIVATE_KEY_PKCS8` must be configured as a
+  pair to enable the independent collector. A partial pair fails deployment;
+  an absent pair leaves scheduling active but truthfully reports the collector
+  as disabled.
 
 ## Deploy From GitHub
 
@@ -55,6 +72,8 @@ npx wrangler login
 npm run cf:sync:deploy
 npx wrangler secret put GITHUB_TOKEN --config cloudflare/sync-trigger/wrangler.jsonc
 npx wrangler secret put MANUAL_TRIGGER_TOKEN --config cloudflare/sync-trigger/wrangler.jsonc
+npx wrangler secret put FOOTBALL_PRODUCTION_ADMIN_TOKEN --config cloudflare/sync-trigger/wrangler.jsonc
+npx wrangler secret put SPORTTERY_COLLECTOR_PRIVATE_KEY_PKCS8 --config cloudflare/sync-trigger/wrangler.jsonc
 npm run cf:sync:deploy
 ```
 
@@ -64,7 +83,14 @@ policy:
 ```powershell
 npx.cmd wrangler login
 npx.cmd wrangler secret put GITHUB_TOKEN --config cloudflare/sync-trigger/wrangler.jsonc
+npx.cmd wrangler secret put FOOTBALL_PRODUCTION_ADMIN_TOKEN --config cloudflare/sync-trigger/wrangler.jsonc
+npx.cmd wrangler secret put SPORTTERY_COLLECTOR_PRIVATE_KEY_PKCS8 --config cloudflare/sync-trigger/wrangler.jsonc
 ```
+
+The production source-health API must still prove a fresh Ed25519 signature
+from this key and a distinct independence domain before the UI or model audit
+may report `trustedCollectorCount=2`. Merely deploying the Worker or storing
+the secrets is not redundancy proof.
 
 ## Manual Trigger Test
 
@@ -94,5 +120,8 @@ return `dispatched: false` and include the existing run URL.
 
 Cloudflare Cron starts the sync. GitHub Actions still performs the scrape and
 publish step. If GitHub Actions cannot reach China Sporttery during one run, the
-sync script now preserves the existing full data store instead of overwriting it
-with partial data.
+sync script preserves the existing full data store instead of overwriting it
+with partial data. GitHub Pages deployment requires the `DATA_API_BASE`
+repository variable to be an absolute HTTPS URL for the protected Node API;
+otherwise the Pages build fails instead of publishing a shell that cannot reach
+the production API.

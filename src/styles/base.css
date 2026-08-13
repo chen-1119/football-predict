@@ -1,0 +1,63 @@
+.app-frame.app-shell-v2 {
+  min-height: 100vh;
+  background: var(--shell-bg);
+  color: var(--shell-text);
+  font-family: var(--shell-font-sans);
+  isolation: isolate;
+}
+
+.app-shell-v2 *,
+.app-shell-v2 *::before,
+.app-shell-v2 *::after {
+  box-sizing: border-box;
+}
+
+.app-shell-v2 button,
+.app-shell-v2 input,
+.app-shell-v2 select,
+.app-shell-v2 textarea {
+  font-family: inherit;
+}
+
+.app-shell-v2 button,
+.app-shell-v2 summary,
+.app-shell-v2 [role="button"] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app-shell-v2 button:focus-visible,
+.app-shell-v2 a:focus-visible,
+.app-shell-v2 summary:focus-visible,
+.app-shell-v2 input:focus-visible,
+.app-shell-v2 select:focus-visible,
+.app-shell-v2 textarea:focus-visible {
+  outline: 2px solid var(--shell-green);
+  outline-offset: 2px;
+  box-shadow: var(--shell-focus);
+}
+
+.app-shell-v2 ::selection {
+  background: rgba(55, 184, 120, 0.28);
+  color: var(--shell-text);
+}
+
+.app-shell-v2 .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-shell-v2 *,
+  .app-shell-v2 *::before,
+  .app-shell-v2 *::after {
+    scroll-behavior: auto;
+    transition-duration: 0.01ms;
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+  }
+}

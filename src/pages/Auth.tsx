@@ -104,7 +104,7 @@ export const Auth: React.FC<AuthProps> = ({ onSuccess }) => {
             <ShieldCheck size={16} />
             {t('title')}
           </span>
-          <h2>{isAccessVerified ? t('verified') : t('title')}</h2>
+          <h1>{isAccessVerified ? t('verified') : t('title')}</h1>
           <p>{t('subtitle')}</p>
         </div>
 
