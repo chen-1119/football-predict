@@ -228,6 +228,9 @@ const requiredReleaseEntries = [
   // verifyDeploymentConfig executes this during guarded release preflight.
   "scripts/verifySportteryRelayFullRecovery.cjs",
   "deploy/light-server/football-release-recovery.cjs",
+  "deploy/light-server/football-access-code-qa.cjs",
+  "deploy/light-server/football-automation.sudoers",
+  "scripts/verifyQaAccessOperator.cjs",
   "scripts/verifyReleaseTransactionSafety.cjs",
   "scripts/verifyFastResultProductionClone.cjs",
   "scripts/verifyReleaseRecovery.cjs",

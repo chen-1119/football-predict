@@ -45,6 +45,7 @@ const releaseRecoveryHelperPath = path.join(rootDir, "deploy", "light-server", "
 const relayPromoterPath = path.join(rootDir, "deploy", "light-server", "football-relay-promote");
 const releaseBootstrapPath = path.join(rootDir, "deploy", "light-server", "bootstrap-release-entrypoints.sh");
 const releaseSudoersPath = path.join(rootDir, "deploy", "light-server", "football-automation.sudoers");
+const qaAccessOperatorPath = path.join(rootDir, "deploy", "light-server", "football-access-code-qa.cjs");
 const checkReleaseStatusPath = path.join(rootDir, "scripts", "checkReleaseStatus.cjs");
 const syncLockPath = path.join(rootDir, "server", "syncLock.cjs");
 const verifySyncLockPath = path.join(rootDir, "scripts", "verifySyncLock.cjs");
@@ -180,6 +181,7 @@ const run = () => {
   const relayPromoter = readText(relayPromoterPath);
   const releaseBootstrap = readText(releaseBootstrapPath);
   const releaseSudoers = readText(releaseSudoersPath);
+  const qaAccessOperator = readText(qaAccessOperatorPath);
   const checkReleaseStatus = readText(checkReleaseStatusPath);
   const syncLock = readText(syncLockPath);
   const verifySyncLock = readText(verifySyncLockPath);
@@ -1801,6 +1803,23 @@ const run = () => {
       sudoersAllowsOnlyFixedRecover: releaseSudoers.includes("/usr/local/sbin/football-release --recover"),
       deployBranchesBeforeBundleRead: deployReleaseBundle.indexOf("if (recoverMode)") < deployReleaseBundle.indexOf("const bundlePath = latestBundlePath()")
     });
+
+  pushCheck(checks, "short-lived QA access is a signed fixed operator with narrow sudo scope",
+    packageJson.scripts?.["verify:qa-access-operator"] === "node scripts/verifyQaAccessOperator.cjs"
+      && qaAccessOperator.includes('ttlSeconds: 900')
+      && qaAccessOperator.includes('qaLabelPattern')
+      && qaAccessOperator.includes('target.hostname !== "127.0.0.1"')
+      && qaAccessOperator.includes('process.getuid() !== 0')
+      && bundleReleaseScript.includes("install_fixed_qa_access_operator")
+      && bundleReleaseScript.includes("visudo -cf")
+      && releaseSudoers.includes("FOOTBALL_QA_ACCESS")
+      && releaseSudoers.includes("football-access-code-qa ^create[[:space:]]codex-qa-")
+      && releaseSudoers.includes("football-access-code-qa ^revoke[[:space:]][0-9a-f-]{36}$")
+      && !releaseSudoers.includes("NOPASSWD: ALL"), {
+        helper: "deploy/light-server/football-access-code-qa.cjs",
+        ttlSeconds: 900,
+        sudoersNarrow: releaseSudoers.includes("FOOTBALL_QA_ACCESS")
+      });
 
   pushCheck(checks, "relay promotion is serialized, content-counted, and rollback-safe", packageJson.scripts?.["verify:cleanup-relay-hardening"] === "node scripts/verifyCleanupRelayHardening.cjs"
     && relayPromoter.includes("flock -x 9")

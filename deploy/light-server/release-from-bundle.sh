@@ -23,6 +23,10 @@ RELEASE_SEQUENCE="${RELEASE_SEQUENCE:-}"
 readonly FIXED_RECOVERY_HELPER_ROTATION_CONTRACT="football-fixed-recovery-helper-rotation-v1"
 readonly FIXED_RECOVERY_HELPER_ROTATION_SOURCE="deploy/light-server/football-release-recovery.cjs"
 readonly FIXED_RECOVERY_HELPER_ROTATION_TARGET="/usr/local/libexec/football-release-recovery.cjs"
+readonly FIXED_QA_ACCESS_SOURCE="deploy/light-server/football-access-code-qa.cjs"
+readonly FIXED_QA_ACCESS_TARGET="/usr/local/sbin/football-access-code-qa"
+readonly FIXED_QA_SUDOERS_SOURCE="deploy/light-server/football-automation.sudoers"
+readonly FIXED_QA_SUDOERS_TARGET="/etc/sudoers.d/football-automation"
 TRANSACTION_VERSION=3
 RECOVERY_ROOT="/var/lib/football-release/recovery"
 RECOVERY_DIR="${RECOVERY_ROOT}/current"
@@ -2091,6 +2095,104 @@ rotate_fixed_recovery_helper() (
     || { printf 'fixed recovery helper post-commit syntax validation failed\n' >&2; return 1; }
 
   log "fixed recovery helper rotated to signed bundle digest ${source_sha}"
+  trap - EXIT HUP INT TERM
+  return 0
+)
+
+install_fixed_qa_access_operator() (
+  set -euo pipefail
+
+  local helper_source="${TRUSTED_SOURCE_DIR}/${FIXED_QA_ACCESS_SOURCE}"
+  local sudoers_source="${TRUSTED_SOURCE_DIR}/${FIXED_QA_SUDOERS_SOURCE}"
+  local helper_parent sudoers_parent helper_temp="" sudoers_temp=""
+  local helper_source_sha sudoers_source_sha
+
+  cleanup_fixed_qa_access_operator() {
+    local status=$?
+    [ -z "$helper_temp" ] || rm -f -- "$helper_temp" >/dev/null 2>&1 || true
+    [ -z "$sudoers_temp" ] || rm -f -- "$sudoers_temp" >/dev/null 2>&1 || true
+    exit "$status"
+  }
+  trap cleanup_fixed_qa_access_operator EXIT HUP INT TERM
+
+  if [ -e "$RECOVERY_DIR" ] || [ -L "$RECOVERY_DIR" ]; then
+    printf 'recovery transaction appeared before QA access operator install\n' >&2
+    return 1
+  fi
+  for source in "$helper_source" "$sudoers_source"; do
+    [ -f "$source" ] && [ ! -L "$source" ] && [ -s "$source" ] \
+      && [ "$(stat -c '%u:%g:%a:%h' -- "$source")" = "0:0:600:1" ] \
+      || { printf 'trusted QA access operator source is unsafe: %s\n' "$source" >&2; return 1; }
+  done
+  "$NODE_HOME/bin/node" --check "$helper_source" >/dev/null \
+    || { printf 'trusted QA access operator has invalid JavaScript syntax\n' >&2; return 1; }
+  visudo -cf "$sudoers_source" >/dev/null \
+    || { printf 'trusted QA access sudoers policy is invalid\n' >&2; return 1; }
+
+  helper_parent="$(dirname "$FIXED_QA_ACCESS_TARGET")"
+  sudoers_parent="$(dirname "$FIXED_QA_SUDOERS_TARGET")"
+  for parent in "$helper_parent" "$sudoers_parent"; do
+    [ -d "$parent" ] && [ ! -L "$parent" ] \
+      && [ "$(stat -c '%u:%g' -- "$parent")" = "0:0" ] \
+      && [ $((8#$(stat -c '%a' -- "$parent") & 0022)) -eq 0 ] \
+      || { printf 'QA access operator parent is unsafe: %s\n' "$parent" >&2; return 1; }
+  done
+
+  if [ -e "$FIXED_QA_ACCESS_TARGET" ] || [ -L "$FIXED_QA_ACCESS_TARGET" ]; then
+    [ -f "$FIXED_QA_ACCESS_TARGET" ] && [ ! -L "$FIXED_QA_ACCESS_TARGET" ] \
+      && [ "$(stat -c '%u:%g:%a:%h' -- "$FIXED_QA_ACCESS_TARGET")" = "0:0:755:1" ] \
+      || { printf 'existing QA access operator is unsafe\n' >&2; return 1; }
+  fi
+  if [ -e "$FIXED_QA_SUDOERS_TARGET" ] || [ -L "$FIXED_QA_SUDOERS_TARGET" ]; then
+    [ -f "$FIXED_QA_SUDOERS_TARGET" ] && [ ! -L "$FIXED_QA_SUDOERS_TARGET" ] \
+      && [ "$(stat -c '%u:%g:%a:%h' -- "$FIXED_QA_SUDOERS_TARGET")" = "0:0:440:1" ] \
+      || { printf 'existing QA access sudoers policy is unsafe\n' >&2; return 1; }
+  fi
+
+  helper_source_sha="$(sha256sum -- "$helper_source" | awk '{print $1}')"
+  sudoers_source_sha="$(sha256sum -- "$sudoers_source" | awk '{print $1}')"
+  if [ -f "$FIXED_QA_ACCESS_TARGET" ] && [ -f "$FIXED_QA_SUDOERS_TARGET" ] \
+    && [ "$(sha256sum -- "$FIXED_QA_ACCESS_TARGET" | awk '{print $1}')" = "$helper_source_sha" ] \
+    && [ "$(sha256sum -- "$FIXED_QA_SUDOERS_TARGET" | awk '{print $1}')" = "$sudoers_source_sha" ]; then
+    log "fixed QA access operator already matches signed bundle"
+    trap - EXIT HUP INT TERM
+    return 0
+  fi
+
+  helper_temp="$(mktemp "${helper_parent}/.football-access-code-qa.install.XXXXXX")"
+  sudoers_temp="$(mktemp "${sudoers_parent}/.football-automation.install.XXXXXX")"
+  install -o root -g root -m 0755 -- "$helper_source" "$helper_temp"
+  install -o root -g root -m 0440 -- "$sudoers_source" "$sudoers_temp"
+  [ "$(sha256sum -- "$helper_temp" | awk '{print $1}')" = "$helper_source_sha" ] \
+    && [ "$(stat -c '%u:%g:%a:%h' -- "$helper_temp")" = "0:0:755:1" ] \
+    || { printf 'QA access operator temporary validation failed\n' >&2; return 1; }
+  [ "$(sha256sum -- "$sudoers_temp" | awk '{print $1}')" = "$sudoers_source_sha" ] \
+    && [ "$(stat -c '%u:%g:%a:%h' -- "$sudoers_temp")" = "0:0:440:1" ] \
+    || { printf 'QA access sudoers temporary validation failed\n' >&2; return 1; }
+  "$NODE_HOME/bin/node" --check "$helper_temp" >/dev/null
+  visudo -cf "$sudoers_temp" >/dev/null
+  sync -f "$helper_temp"
+  sync -f "$sudoers_temp"
+
+  if [ -e "$RECOVERY_DIR" ] || [ -L "$RECOVERY_DIR" ]; then
+    printf 'recovery transaction appeared during QA access operator install\n' >&2
+    return 1
+  fi
+  mv -fT -- "$helper_temp" "$FIXED_QA_ACCESS_TARGET"
+  helper_temp=""
+  mv -fT -- "$sudoers_temp" "$FIXED_QA_SUDOERS_TARGET"
+  sudoers_temp=""
+  sync -f "$helper_parent"
+  sync -f "$sudoers_parent"
+  [ "$(sha256sum -- "$FIXED_QA_ACCESS_TARGET" | awk '{print $1}')" = "$helper_source_sha" ] \
+    && [ "$(stat -c '%u:%g:%a:%h' -- "$FIXED_QA_ACCESS_TARGET")" = "0:0:755:1" ] \
+    && [ "$(sha256sum -- "$FIXED_QA_SUDOERS_TARGET" | awk '{print $1}')" = "$sudoers_source_sha" ] \
+    && [ "$(stat -c '%u:%g:%a:%h' -- "$FIXED_QA_SUDOERS_TARGET")" = "0:0:440:1" ] \
+    || { printf 'fixed QA access operator post-install validation failed\n' >&2; return 1; }
+  "$NODE_HOME/bin/node" --check "$FIXED_QA_ACCESS_TARGET" >/dev/null
+  visudo -cf "$FIXED_QA_SUDOERS_TARGET" >/dev/null
+
+  log "installed fixed short-lived QA access operator from signed bundle"
   trap - EXIT HUP INT TERM
   return 0
 )
@@ -6481,6 +6583,8 @@ node "$TRUSTED_SOURCE_DIR/scripts/verifyDeploymentConfig.cjs" \
   || { printf 'trusted deployment configuration verification failed\n' >&2; exit 1; }
 rotate_fixed_recovery_helper \
   || { printf 'signed fixed recovery helper rotation failed\n' >&2; exit 1; }
+install_fixed_qa_access_operator \
+  || { printf 'signed fixed QA access operator install failed\n' >&2; exit 1; }
 
 TLS_ACTION_DIR="${TRUSTED_SOURCE_DIR}/.release-actions"
 if [ -e "$TLS_ACTION_DIR" ] || [ -L "$TLS_ACTION_DIR" ]; then
