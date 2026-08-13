@@ -1,3 +1,8 @@
+import {
+  collectSportteryEvidence,
+  sportteryCollectorConfigured,
+} from "./sportteryCollector.js";
+
 const DEFAULT_RECENT_RUN_SECONDS = 240;
 const DEFAULT_PUBLIC_DATA_CACHE_SECONDS = 20;
 const DEFAULT_CURRENT_DATA_CACHE_SECONDS = 5;
@@ -148,15 +153,20 @@ const triggerSync = async (env, source = "cloudflare-cron") => {
 };
 
 const publicDataFileMap = {
-  "sync-meta": "public/data/sync-meta.json",
-  "matches/current": "public/data/matches-current.json",
-  "matches/history": "public/data/matches-history.json",
-  "matches/root": "public/matches.json",
-  "odds/history": "public/data/odds-history.json",
-  "predictions/snapshots": "public/data/prediction-snapshots.json",
-  "model/calibration": "public/data/model-calibration.json",
-  "teams/index": "public/data/team-index.json"
+  "sync-meta": "public/data/sync-meta.json"
 };
+
+const disabledProtectedDataResources = new Map([
+  ["matches/current", "/api/v1/matches/current?view=list"],
+  ["matches/history", "/api/v1/matches/history?limit=50"],
+  ["matches/root", "/api/v1/matches/current?view=list"],
+  ["odds/history", "/api/v1/odds/history?matchId=<matchId>&limit=200"],
+  ["predictions/snapshots", "/api/v1/model/evaluation?detail=admin"],
+  ["model/calibration", "/api/v1/model/evaluation"],
+  ["teams/index", "/api/v1/matches/current?view=list"],
+  ["source-health", "/api/v1/source-health"],
+  ["model/evaluation", "/api/v1/model/evaluation"]
+]);
 
 const getResourceCacheSeconds = (config, key) => {
   if (key === "sync-meta" || key === "matches/current" || key === "matches/root") {
@@ -271,6 +281,16 @@ const resolveApiKey = (pathname) => {
 const fetchPublicApi = async (env, pathname, ctx) => {
   const key = resolveApiKey(pathname);
   const filePath = publicDataFileMap[key];
+  const replacement = disabledProtectedDataResources.get(key);
+  if (replacement) {
+    return json({
+      ok: false,
+      error: "protected data API disabled on sync worker",
+      key,
+      replacement,
+      note: "This Worker is a scheduler and freshness helper. C-end recommendation data must be served by the protected Node /api/v1 service."
+    }, 410);
+  }
   if (!filePath) return json({ ok: false, error: "unknown api resource", key }, 404);
 
   try {
@@ -301,20 +321,8 @@ const fetchPublicApi = async (env, pathname, ctx) => {
         }
       });
     }
-
-    const directPayloadKeys = new Set(["sync-meta", "matches/current", "matches/history", "matches/root"]);
-    if (directPayloadKeys.has(key)) {
-      return json(payload);
-    }
     return json(withApiMeta(payload, filePath));
   } catch (error) {
-    if (key === "matches/current") {
-      try {
-        return json(await fetchPublicJson(env, publicDataFileMap["matches/root"], "matches/root"));
-      } catch {
-        // Preserve the original error below.
-      }
-    }
     return json({ ok: false, error: error.message || String(error), key }, 502);
   }
 };
@@ -329,12 +337,23 @@ const isAuthorizedManualTrigger = (request, env) => {
 };
 
 export default {
-  async scheduled(_event, env, ctx) {
-    ctx.waitUntil(
-      triggerSync(env, "cloudflare-cron").catch((error) => {
-        console.error("Cloudflare cron dispatch failed:", error);
-      })
-    );
+  async scheduled(_event, env) {
+    const outcomes = await Promise.allSettled([
+      triggerSync(env, "cloudflare-cron"),
+      collectSportteryEvidence(env),
+    ]);
+    const labels = ["github-sync", "sporttery-collector"];
+    outcomes.forEach((outcome, index) => {
+      if (outcome.status === "rejected") {
+        console.error(JSON.stringify({
+          event: "scheduled-task-failed",
+          task: labels[index],
+          error: outcome.reason?.message || String(outcome.reason),
+        }));
+      } else {
+        console.log(JSON.stringify({ event: "scheduled-task-finished", task: labels[index], result: outcome.value }));
+      }
+    });
   },
 
   async fetch(request, env, ctx) {
@@ -348,8 +367,10 @@ export default {
       return json({
         ok: true,
         worker: "football-predict-sync-trigger",
-        cron: "*/5 * * * * guarded by MIN_SECONDS_BETWEEN_DISPATCHES",
-        api: ["/api/sync-meta", "/api/matches/current", "/api/matches/history"],
+        cron: "* * * * *; independent Sporttery evidence every minute, GitHub dispatch guarded by MIN_SECONDS_BETWEEN_DISPATCHES",
+        api: ["/api/sync-meta", "/api/health"],
+        protectedDataPolicy: "C-end matches, odds, and model details are disabled here; use the protected Node /api/v1 service.",
+        sportteryIndependentCollectorConfigured: sportteryCollectorConfigured(env),
         workflow: `${env.GITHUB_OWNER || "chen-1119"}/${env.GITHUB_REPO || "football-predict"}/${env.GITHUB_WORKFLOW_ID || "sync.yml"}`,
         checkedAt: new Date().toISOString()
       });
@@ -364,7 +385,8 @@ export default {
           minSecondsBetweenDispatches: config.recentRunSeconds,
           currentDataCacheSeconds: config.currentDataCacheSeconds,
           historyDataCacheSeconds: config.historyDataCacheSeconds,
-          staleDataSeconds: config.staleDataSeconds
+          staleDataSeconds: config.staleDataSeconds,
+          sportteryIndependentCollectorConfigured: sportteryCollectorConfigured(env)
         },
         checkedAt: new Date().toISOString()
       });

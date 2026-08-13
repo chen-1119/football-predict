@@ -1,5 +1,11 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const {
+  assessWebConsensusEvidence,
+  buildWebConsensusEvidenceHash,
+  WEB_CONSENSUS_EVIDENCE_VERSION,
+  verifyWebConsensusPromotionManifest,
+} = require("../src/services/webConsensusEvidence.cjs");
 
 const rootDir = path.join(__dirname, "..");
 const publicDir = path.join(rootDir, "public");
@@ -10,9 +16,18 @@ const CURRENT_MATCHES_FILE = path.join(dataDir, "matches-current.json");
 const EXTERNAL_SIGNALS_FILE = path.join(dataDir, "external-signals.json");
 const OUTPUT_FILE = path.join(dataDir, "web-consensus-signals.json");
 const DEFAULT_INPUT_FILE = path.join(serverDataDir, "web-consensus", "manual-insights.json");
+const MODEL_FEATURE_ENABLED = process.env.ENABLE_VERIFIED_WEB_CONSENSUS_MODEL === "1";
+const PROMOTION_MANIFEST_FILE = path.resolve(
+  process.env.WEB_CONSENSUS_PROMOTION_MANIFEST_FILE
+  || path.join(serverDataDir, "web-consensus", "promotion-manifest.json")
+);
+const EXPECTED_PROMOTION_MANIFEST_HASH = String(
+  process.env.WEB_CONSENSUS_PROMOTION_MANIFEST_HASH || ""
+).trim().toLowerCase();
 
 const INPUT_FILES = [
   process.env.WEB_CONSENSUS_INPUT,
+  path.join(serverDataDir, "web-consensus", "open-research-insights.json"),
   DEFAULT_INPUT_FILE,
   path.join(dataDir, "web-consensus-input.json"),
 ].filter(Boolean);
@@ -28,6 +43,11 @@ const readJson = (filePath, fallback) => {
     return fallback;
   }
 };
+
+const PROMOTION_MANIFEST = readJson(PROMOTION_MANIFEST_FILE, null);
+const PROMOTION_AUTHORITY = verifyWebConsensusPromotionManifest(PROMOTION_MANIFEST, {
+  expectedHash: EXPECTED_PROMOTION_MANIFEST_HASH,
+});
 
 const writeJson = (filePath, value) => {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -147,23 +167,42 @@ const scoreShape = (value) => {
     .slice(0, 5);
 };
 
-const sourceItems = (insight) => {
+const sourceItems = (insight, expectedMatchUuid = null) => {
   const raw = Array.isArray(insight.sourceItems)
     ? insight.sourceItems
     : Array.isArray(insight.sources)
       ? insight.sources.map((item) => (typeof item === "string" ? { name: item } : item))
       : [];
   return raw
-    .map((item) => ({
+    .map((item) => {
+      const sourceLicense = item.sourceLicense || item.source_license || item.license || null;
+      const normalized = {
       name: norm(item.name || item.source || item.title || item.url),
       url: norm(item.url),
-      publishedAt: norm(item.publishedAt),
-      capturedAt: norm(item.capturedAt || insight.capturedAt),
+      matchUuid: norm(item.matchUuid || item.match_uuid || expectedMatchUuid || insight.matchUuid || insight.match_uuid || insight.sourceMatchId || insight.matchId),
+      publisherOwner: norm(item.publisherOwner || item.publisher_owner),
+      publishedAt: norm(item.publishedAt || item.publication_time),
+      ingestedAt: norm(item.ingestedAt || item.ingested_at || item.capturedAt || insight.ingestedAt || insight.ingested_at || insight.capturedAt),
+      extractedAt: norm(item.extractedAt || item.extracted_at),
+      factCategory: norm(item.factCategory || item.fact_category),
+      extractedFact: norm(item.extractedFact || item.extracted_fact),
+      rawSnippet: norm(item.rawSnippet || item.raw_snippet),
+      riskDowngrade: norm(item.riskDowngrade || item.risk_downgrade),
+      sourceLicense,
+      rawSha256: norm(item.rawSha256 || item.raw_sha256),
+      httpDate: norm(item.httpDate || item.http_date),
+      llmGeneratedAt: norm(item.llmGeneratedAt || item.llm_generated_at),
       lean: directionSide(item.lean || item.oneXTwo),
       goals: goalsSide(item.goals),
       handicapView: handicapView(item.handicapView),
       scoreShape: scoreShape(item.scoreShape || item.scores),
-    }))
+      };
+      const providedHash = norm(item.evidenceHash || item.evidence_hash).toLowerCase();
+      return {
+        ...normalized,
+        evidenceHash: providedHash || buildWebConsensusEvidenceHash(normalized),
+      };
+    })
     .filter((item) => item.name || item.url);
 };
 
@@ -195,13 +234,14 @@ const modelAgreement = (match, consensus) => {
 
 const normalizeInsight = (insight, match, updatedAt) => {
   const consensusInput = insight.consensus || insight;
-  const sources = sourceItems(insight);
+  const expectedMatchUuid = sourceMatchId(match) || norm(match?.id || insight.matchUuid || insight.match_uuid);
+  const sources = sourceItems(insight, expectedMatchUuid);
   const confidence = clamp(Number(consensusInput.confidence ?? insight.confidence ?? 0.5), 0.05, 0.95);
   const capturedAt = norm(insight.capturedAt || consensusInput.capturedAt || updatedAt);
   const cutoffTime = norm(match?.buyEndTime || match?.predictionMeta?.cutoffTime || insight.cutoffTime);
   const capturedMs = parseDateTime(capturedAt);
   const cutoffMs = parseDateTime(cutoffTime);
-  const beforeCutoff = Number.isFinite(capturedMs) && Number.isFinite(cutoffMs) ? capturedMs <= cutoffMs : true;
+  const beforeCutoff = Number.isFinite(capturedMs) && Number.isFinite(cutoffMs) && capturedMs <= cutoffMs;
   const consensus = {
     oneXTwo: directionSide(consensusInput.oneXTwo || consensusInput.direction || consensusInput.pick),
     goals: goalsSide(consensusInput.goals || consensusInput.totalGoals),
@@ -211,8 +251,23 @@ const normalizeInsight = (insight, match, updatedAt) => {
     confidence: round(confidence, 3),
   };
   const agree = modelAgreement(match, consensus);
-  const usableForModel = insight.usableForModel === false ? false : beforeCutoff;
-  const sourceCount = Math.max(sources.length, Number(insight.sourceCount || 0), 1);
+  const modelUse = assessWebConsensusEvidence({
+    sources,
+    capturedAt,
+    cutoffTime,
+    matchUuid: expectedMatchUuid,
+    explicitModelOptIn: insight.usableForModel === true,
+    modelFeatureEnabled: MODEL_FEATURE_ENABLED,
+    promotionManifest: PROMOTION_MANIFEST,
+    expectedPromotionManifestHash: EXPECTED_PROMOTION_MANIFEST_HASH,
+  });
+  const eligibleForRiskDisplay = beforeCutoff && modelUse.eligibleForRiskDisplay === true;
+  const eligibleForRiskAdvisory = eligibleForRiskDisplay && modelUse.eligibleForRiskAdvisory === true;
+  // Compatibility flags are deliberately false. New callers may only use the
+  // explicitly named advisory/display fields below.
+  const usableForRisk = false;
+  const usableForModel = false;
+  const sourceCount = sources.length;
   const features = {
     modelAgree: agree,
     modelMarket: selectedModelMarket(match),
@@ -227,7 +282,7 @@ const normalizeInsight = (insight, match, updatedAt) => {
     goalsConsensus: consensus.goals,
   };
   const buckets = Array.from(new Set([
-    usableForModel ? "web:usable" : "web:audit-only",
+    eligibleForRiskDisplay ? "web:advisory-only" : "web:audit-only",
     agree === true ? "web:model-agree" : agree === false ? "web:model-conflict" : "web:model-unknown",
     consensus.handicapView ? `web:handicap:${consensus.handicapView}` : null,
     consensus.drawRisk ? `web:draw-risk:${consensus.drawRisk}` : null,
@@ -237,12 +292,21 @@ const normalizeInsight = (insight, match, updatedAt) => {
   ].filter(Boolean)));
 
   return {
-    version: "web-consensus-v1",
+    version: "web-consensus-v2",
     source: "web-consensus",
     updatedAt,
     capturedAt,
     cutoffTime,
     usableForModel,
+    usableForRisk,
+    eligibleForNumericModel: false,
+    eligibleForFormalQuality: false,
+    eligibleForStrategyGate: false,
+    eligibleForRiskDisplay,
+    eligibleForRiskAdvisory,
+    conflictFreeze: modelUse.conflictFreeze === true,
+    advisoryPolicy: "display-only",
+    modelUse,
     sourceMatchId: sourceMatchId(match),
     matchId: match?.id || insight.matchId,
     matchNo: match?.matchNo || insight.matchNo,
@@ -256,13 +320,69 @@ const normalizeInsight = (insight, match, updatedAt) => {
       sourceCount,
       confidence: round(confidence, 3),
       beforeCutoff,
+      evidenceVersion: WEB_CONSENSUS_EVIDENCE_VERSION,
+      independentDomains: modelUse.independentDomains,
+      evidenceBlockers: modelUse.blockers,
       inputFile: insight.inputFile || null,
     },
     buckets,
     summary: {
-      zh: `网络观点 ${sourceCount} 源，置信 ${Math.round(confidence * 100)}%，${usableForModel ? "可用于赛前观察" : "仅赛后审计"}。`,
-      en: `Web consensus from ${sourceCount} source(s), confidence ${Math.round(confidence * 100)}%, ${usableForModel ? "usable pre-match" : "audit only"}.`,
+      zh: `网络观点 ${sourceCount} 源，置信 ${Math.round(confidence * 100)}%，${eligibleForRiskDisplay ? "仅供风险展示" : "仅赛后审计"}。`,
+      en: `Web consensus from ${sourceCount} source(s), confidence ${Math.round(confidence * 100)}%, ${eligibleForRiskDisplay ? "risk display only" : "audit only"}.`,
     },
+  };
+};
+
+const sanitizeStoredConsensusRow = (value, key = null, updatedAt = nowIso()) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const legacyVersion = value.version === "web-consensus-v2" ? null : (value.version || "web-consensus-v1");
+  const expectedMatchUuid = norm(value.sourceMatchId || value.matchId || key);
+  const sources = sourceItems(value, expectedMatchUuid);
+  const modelUseBase = assessWebConsensusEvidence({
+    sources,
+    capturedAt: value.capturedAt,
+    cutoffTime: value.cutoffTime,
+    matchUuid: expectedMatchUuid,
+    explicitModelOptIn: false,
+    modelFeatureEnabled: false,
+    promotionManifest: PROMOTION_MANIFEST,
+    expectedPromotionManifestHash: EXPECTED_PROMOTION_MANIFEST_HASH,
+  });
+  const modelUse = legacyVersion
+    ? {
+      ...modelUseBase,
+      eligible: false,
+      eligibleForRiskDisplay: false,
+      eligibleForRiskAdvisory: false,
+      onlineEffect: "audit-only",
+      blockers: Array.from(new Set([...(modelUseBase.blockers || []), "legacy-web-consensus-row"])),
+    }
+    : modelUseBase;
+  const buckets = Array.from(new Set([
+    ...(Array.isArray(value.buckets)
+      ? value.buckets.filter((bucket) => !["web:usable", "web:risk-only", "web:strong-consensus"].includes(bucket))
+      : []),
+    legacyVersion || modelUse.eligibleForRiskDisplay !== true ? "web:audit-only" : "web:advisory-only",
+    legacyVersion ? "web:legacy-row" : null,
+  ].filter(Boolean)));
+
+  return {
+    ...value,
+    version: "web-consensus-v2",
+    ...(legacyVersion ? { legacyVersion, migratedAt: updatedAt } : {}),
+    updatedAt: value.updatedAt || updatedAt,
+    sources,
+    usableForModel: false,
+    usableForRisk: false,
+    eligibleForNumericModel: false,
+    eligibleForFormalQuality: false,
+    eligibleForStrategyGate: false,
+    eligibleForRiskDisplay: legacyVersion ? false : modelUse.eligibleForRiskDisplay === true,
+    eligibleForRiskAdvisory: legacyVersion ? false : modelUse.eligibleForRiskAdvisory === true,
+    conflictFreeze: modelUse.conflictFreeze === true,
+    advisoryPolicy: legacyVersion ? "legacy-audit-only" : "display-only",
+    modelUse,
+    buckets,
   };
 };
 
@@ -283,7 +403,8 @@ const main = () => {
   const warnings = [];
 
   for (const [key, value] of Object.entries(existingOutput.matches || {})) {
-    if (value && typeof value === "object" && !Array.isArray(value)) rows[key] = value;
+    const sanitized = sanitizeStoredConsensusRow(value, key, updatedAt);
+    if (sanitized) rows[key] = sanitized;
   }
 
   for (const insight of inputRows) {
@@ -320,16 +441,24 @@ const main = () => {
   }
 
   const output = {
-    version: 1,
+    version: 2,
     source: "web-consensus",
     updatedAt,
     count: Object.keys(rows).length,
     matches: rows,
     summary: {
       rows: Object.keys(rows).length,
-      usable: Object.values(rows).filter((row) => row.usableForModel).length,
-      auditOnly: Object.values(rows).filter((row) => !row.usableForModel).length,
+      usable: 0,
+      numericEligible: 0,
+      riskOnly: 0,
+      advisoryDisplay: Object.values(rows).filter((row) => row.eligibleForRiskDisplay === true).length,
+      auditOnly: Object.values(rows).filter((row) => row.eligibleForRiskDisplay !== true).length,
       warnings: warnings.slice(0, 20),
+      promotionAuthority: {
+        valid: PROMOTION_AUTHORITY.valid,
+        manifestHash: PROMOTION_AUTHORITY.manifestHash,
+        blockers: PROMOTION_AUTHORITY.blockers,
+      },
     },
   };
 
@@ -356,4 +485,12 @@ const main = () => {
   console.log(JSON.stringify({ ok: true, ...output.summary, output: path.relative(rootDir, OUTPUT_FILE) }, null, 2));
 };
 
-main();
+if (require.main === module) {
+  main();
+} else {
+  module.exports = {
+    normalizeInsight,
+    sanitizeStoredConsensusRow,
+    sourceItems,
+  };
+}

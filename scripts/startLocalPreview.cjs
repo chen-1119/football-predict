@@ -6,6 +6,13 @@ const { spawn } = require("child_process");
 
 const rootDir = path.resolve(__dirname, "..");
 const serverDataDir = path.join(rootDir, "server-data");
+const collectorRelaySnapshotPath = path.join(rootDir, ".codex-tmp", "sporttery-relay-snapshot.json");
+const previewRelaySnapshotPath = path.resolve(
+  process.env.SPORTTERY_RELAY_SNAPSHOT
+  || (fs.existsSync(collectorRelaySnapshotPath)
+    ? collectorRelaySnapshotPath
+    : path.join(serverDataDir, "sporttery-relay-snapshot.json"))
+);
 
 const port = Number(process.env.PORT || process.argv.find((arg) => arg.startsWith("--port="))?.slice(7) || 8788);
 const host = process.env.HOST || "127.0.0.1";
@@ -132,7 +139,12 @@ async function startServer() {
       DATASTORE_READ_SOURCE: process.env.DATASTORE_READ_SOURCE || "sqlite",
       ENABLE_SQLITE_EXPORT: process.env.ENABLE_SQLITE_EXPORT || "1",
       ENABLE_SYNC_CRON: process.env.ENABLE_SYNC_CRON || "0",
-      ENABLE_GPT_CRON: process.env.ENABLE_GPT_CRON || "0"
+      ENABLE_GPT_CRON: process.env.ENABLE_GPT_CRON || "0",
+      SPORTTERY_RELAY_MODE: process.env.SPORTTERY_RELAY_MODE || "prefer",
+      SPORTTERY_RELAY_SNAPSHOT: previewRelaySnapshotPath,
+      RELAY_FAST_WATCHER_ENABLED: process.env.RELAY_FAST_WATCHER_ENABLED || "1",
+      RELAY_FAST_WATCHER_POLL_MS: process.env.RELAY_FAST_WATCHER_POLL_MS || "1000",
+      RELAY_FAST_WATCHER_TIMEOUT_MS: process.env.RELAY_FAST_WATCHER_TIMEOUT_MS || "8000"
     }
   });
   child.unref();
@@ -190,7 +202,9 @@ async function main() {
       dataUpdatedAt: health.data?.updatedAt || null,
       dataSource: health.storage?.readSource || health.data?.source || null,
       sqliteStale: health.storage?.sqlite?.stale ?? null,
-      sqliteCurrentMatches: health.storage?.sqlite?.counts?.currentMatches ?? null
+      sqliteCurrentMatches: health.storage?.sqlite?.counts?.currentMatches ?? null,
+      relaySnapshotPath: previewRelaySnapshotPath,
+      fastResultWatcher: health.sync?.fastResultWatcher || null
     },
     access
   };

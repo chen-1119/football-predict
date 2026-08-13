@@ -42,14 +42,71 @@ export interface PredictionDetail {
   tipCode: string; // 比如 '1', 'X', '2', '1X', 'X2', 'O1.5', 'O2.5', 'U2.5', 'GG', 'NG'
   tipLabel: MultiLangString;
   odds: number;
-  trustScore: number; // 0-100
+  trustScore: number; // legacy field name: ordinal evidence score, 0-100 (not probability)
   recommendationAction?: 'recommend' | 'reference';
   recommendationTier?: string;
+  liveRecommendationAction?: 'recommend' | 'withhold';
+  liveRecommendationTier?: string;
+  liveRecommendation?: {
+    version?: string;
+    eligible?: boolean;
+    grade?: 'A' | 'B' | 'C' | 'WITHHOLD';
+    statisticsTrack?: 'live-model';
+    evidenceScore?: number | null;
+    minimumEvidenceScore?: number;
+    probabilityEdge?: number | null;
+    minimumProbabilityEdge?: number;
+    expectedValue?: number | null;
+    minimumExpectedValue?: number;
+    dataQuality?: number | null;
+    minimumDataQuality?: number;
+    severeMissingCount?: number | null;
+    maximumSevereMissingCount?: number;
+    coverageMode?: 'standard' | 'market-core-limited' | 'withhold';
+    dataCoverageWarning?: boolean;
+    supportingFactorCount?: number;
+    blockers?: string[];
+    warnings?: string[];
+  };
+  livePublicationEvidence?: {
+    version?: string;
+    policyVersion?: string;
+    statisticsTrack?: 'live-model';
+    matchId?: string;
+    sourceMatchId?: string;
+    market?: 'HAD' | 'HHAD';
+    code?: '1' | 'X' | '2';
+    handicapLine?: string | number;
+    officialSp?: number;
+    officialSource?: string;
+    officialSourceUrl?: string;
+    publishedAt?: string;
+    cutoffAt?: string;
+  };
+  multiFactorEvidence?: {
+    version?: string;
+    eligible?: boolean;
+    grade?: 'A' | 'B' | 'C' | 'WATCH';
+    evidenceScore?: number;
+    threshold?: number;
+    market?: 'HAD' | 'HHAD';
+    code?: '1' | 'X' | '2';
+    handicapLine?: string | number;
+    odds?: number;
+    modelProbability?: number;
+    marketProbability?: number;
+    probabilityEdge?: number | null;
+    expectedValue?: number | null;
+    dataQuality?: number | null;
+    diagnostics?: { severeMissingCount?: number | null };
+    blockers?: string[];
+    supportingFactors?: string[];
+  };
   explanation: MultiLangString;
   analysisItems?: MultiLangString[];
   riskTags?: MultiLangString[];
   visibilityStatus: 'FREE' | 'PREMIUM';
-  resultStatus: 'WON' | 'LOST' | 'PENDING';
+  resultStatus: 'WON' | 'LOST' | 'PENDING' | 'VOID';
 }
 
 export interface MatchContextSignals {
@@ -420,11 +477,15 @@ export interface PredictionMeta {
     modelVersion?: string | null;
     calibrationVersion?: string | null;
     cutoffTime?: string | null;
+    capturedAt?: string | null;
+    modelGeneratedAt?: string | null;
+    sourceCycleId?: string | null;
     source?: string | null;
     sourceMatchId?: string | null;
     kickoffTime?: string | null;
     market?: Record<string, unknown>;
     modelInputs?: Record<string, unknown>;
+    modelOutputs?: Record<string, unknown>;
   };
   snapshot?: {
     phase: 'baseline' | 'mid' | 'late' | 'final' | 'locked' | 'review';
@@ -432,6 +493,75 @@ export interface PredictionMeta {
     phases: Record<string, number>;
     latestAt?: string;
     latestSignature?: string;
+  };
+  dualMarketDecision?: {
+    version: 'dual-market-decision-binding-v1';
+    decisionSnapshotVersion?: string | null;
+    sourceCycleId?: string | null;
+    featureSnapshotHash?: string | null;
+    featureSnapshot?: Record<string, unknown> | null;
+    bindingHash?: string | null;
+    publicBindingVersion?: 'dual-market-public-binding-v1';
+    publicBindingHash?: string | null;
+    integrityVerified?: boolean;
+    integrityVersion?: 'dual-market-decision-integrity-v1';
+    sourceClocks?: {
+      capturedAt?: string | null;
+      decisionAt?: string | null;
+      cutoffTime?: string | null;
+      modelGeneratedAt?: string | null;
+      hadObservedAt?: string | null;
+      hadReceivedAt?: string | null;
+      hhadObservedAt?: string | null;
+      hhadReceivedAt?: string | null;
+    };
+    strategyVersions?: {
+      predictionPolicy?: string | null;
+      prompt?: string | null;
+      model?: string | null;
+      calibration?: string | null;
+      hhadCompanion?: string | null;
+    };
+    had?: {
+      poolCode: 'HAD';
+      code: '1' | 'X' | '2';
+      odds?: number | null;
+      modelProbability?: number | null;
+      marketProbability?: number | null;
+      recommendationAction?: 'recommend' | 'reference';
+    } | null;
+    hadAnalysis?: {
+      poolCode: 'HAD';
+      role?: 'one-x-two-analysis';
+      code: '1' | 'X' | '2';
+      odds?: number | null;
+      modelProbability?: number | null;
+      marketProbability?: number | null;
+      recommendationAction?: 'recommend' | 'reference';
+    } | null;
+    hhad?: {
+      poolCode: 'HHAD';
+      code: '1' | 'X' | '2';
+      handicapLine: number;
+      handicapLineText?: string;
+      odds: number;
+      modelProbability: number;
+      marketProbability: number;
+      recommendationAction?: 'recommend' | 'reference';
+      role?: 'handicap-companion';
+      promotionEligible?: false;
+      shadowAction?: 'EVALUATE' | 'SKIP';
+      shadowBlockers?: string[];
+    } | null;
+    hashes?: {
+      policyHash?: string | null;
+      hadMarketProvenanceHash?: string | null;
+      hhadMarketProvenanceHash?: string | null;
+      strategyHash?: string | null;
+      revisionHash?: string | null;
+      exposureHash?: string | null;
+      pairHash?: string | null;
+    };
   };
   dataPolicy?: MultiLangString;
   updateReason?: MultiLangString;
@@ -462,7 +592,7 @@ export interface GptPredictionRecord {
       notes?: string[];
     };
     tierAdjustment?: {
-      direction?: 'none' | 'down' | 'up' | 'watchOnly' | string;
+      direction?: 'none' | 'down' | 'watchOnly' | string;
       maxDelta?: number;
       reason?: string | null;
       canChangeRecommendationDirection?: boolean;
@@ -1016,8 +1146,21 @@ export interface PostMatchReview {
     settled: number;
     won: number;
     hitRate: number | null;
-    bestStatus?: 'WON' | 'LOST' | 'PENDING' | null;
-    oneXTwoStatus?: 'WON' | 'LOST' | 'PENDING' | null;
+    mainSettled?: number;
+    mainWon?: number;
+    referenceSettled?: number;
+    referenceWon?: number;
+    liveSettled?: number;
+    liveWon?: number;
+    liveHitRate?: number | null;
+    bestStatus?: 'WON' | 'LOST' | 'PENDING' | 'VOID' | null;
+    formalBestStatus?: 'WON' | 'LOST' | 'PENDING' | 'VOID' | null;
+    liveBestStatus?: 'WON' | 'LOST' | 'PENDING' | 'VOID' | null;
+    referenceBestStatus?: 'WON' | 'LOST' | 'PENDING' | 'VOID' | null;
+    archivedBestStatus?: 'WON' | 'LOST' | 'PENDING' | 'VOID' | null;
+    bestRole?: 'main' | 'reference' | null;
+    bestTrack?: 'formal' | 'live-model' | 'reference' | null;
+    oneXTwoStatus?: 'WON' | 'LOST' | 'PENDING' | 'VOID' | null;
     handicapHit?: boolean;
     missedHandicapLane?: boolean;
     rows: Array<{
@@ -1029,10 +1172,15 @@ export interface PostMatchReview {
       odds?: number;
       actualCode?: string | null;
       actualLabel?: MultiLangString;
-      resultStatus: 'WON' | 'LOST' | 'PENDING';
+      resultStatus: 'WON' | 'LOST' | 'PENDING' | 'VOID';
       trustScore?: number;
       recommendationAction?: 'recommend' | 'reference';
       recommendationTier?: string;
+      liveRecommendationAction?: 'recommend' | 'withhold';
+      liveRecommendationTier?: string;
+      liveRecommendation?: PredictionDetail['liveRecommendation'];
+      livePublicationEvidence?: PredictionDetail['livePublicationEvidence'];
+      performanceTrack?: 'formal' | 'live-model' | 'reference';
       reviewRole?: 'main' | 'reference' | string;
     }>;
   };
@@ -1072,8 +1220,56 @@ export interface Match {
   countryId: string;
   kickoffTime: string; // ISO string
   status: 'SCHEDULED' | 'LIVE' | 'PENDING_RESULT' | 'FINISHED';
+  sourceStatus?: 'UNKNOWN' | 'SCHEDULED' | 'LIVE' | 'PENDING_RESULT' | 'FINISHED';
+  effectiveStatus?: 'SCHEDULED' | 'LIVE' | 'PENDING_RESULT' | 'FINISHED';
+  statusReason?: string;
+  resultDisposition?: 'VOID';
+  voidReason?: string;
+  voidSource?: string;
+  voidObservedAt?: string | null;
+  voidSourceUrl?: string;
+  voidSourceMethod?: string;
+  eventVersion?: string;
   scoreHome?: number;
   scoreAway?: number;
+  provisionalResult?: {
+    version?: string;
+    status?: 'PROVISIONAL_RESULT_OBSERVED' | string;
+    provider?: string;
+    source?: string;
+    sourceMatchId?: string;
+    kickoffTime?: string;
+    eventVersion?: string;
+    scoreHome?: number;
+    scoreAway?: number;
+    scoreText?: string;
+    observedAt?: string;
+    firstObservedAt?: string;
+    latestObservedAt?: string;
+    observationSource?: string;
+    sourceUpdatedAt?: string | null;
+    observationFallback?: boolean;
+    official?: false;
+    trusted?: false;
+    promotionEligible?: false;
+    lifecycleEffect?: string;
+    statisticsTrack?: 'shadow-provisional' | string;
+    resultRevision?: number;
+  };
+  archivedPreMatchPrediction?: {
+    version: 'archived-pre-match-prediction-v1' | string;
+    source: 'immutable-pre-match-prediction-snapshot' | string;
+    sourceMatchId: string;
+    matchId?: string | null;
+    kickoffTime: string;
+    eventVersion: string;
+    capturedAt: string;
+    phase?: string | null;
+    signature?: string | null;
+    cutoffTime?: string | null;
+    marketEvidenceScope?: 'result-pool' | 'model-only-reference' | string;
+    prediction: PredictionDetail;
+  };
   projectedScoreHome?: number;
   projectedScoreAway?: number;
   oddsTrend?: {
@@ -1143,6 +1339,33 @@ export interface Match {
   sourceMethod?: string;
   sourceUrl?: string;
   sourceMatchId?: string;
+  resultSource?: string;
+  resultUpdatedAt?: string;
+  resultProvenance?: {
+    provider?: string;
+    source?: string;
+    sourceMethod?: string | null;
+    sourceKind?: string | null;
+    sourceUrl?: string | null;
+    sourceMatchId?: string | null;
+    providerMatchId?: string | null;
+    sourceStatus?: string;
+    official?: boolean;
+    trusted?: boolean;
+    scoreHome?: number;
+    scoreAway?: number;
+    kickoffTime?: string | null;
+    eventVersion?: string | null;
+    providerKickoffTime?: string | null;
+    observedAt?: string | null;
+    observationSource?: string | null;
+    resultObservationFallback?: boolean;
+    scoreKind?: string | null;
+    responseSha256?: string | null;
+    evidenceHash?: string | null;
+    resultRevision?: number;
+    promotionEligible?: boolean;
+  } | null;
   matchNo?: string;
   postMatchReview?: PostMatchReview;
 }

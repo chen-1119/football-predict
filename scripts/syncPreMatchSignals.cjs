@@ -22,9 +22,35 @@ const readJson = (filePath, fallback) => {
   }
 };
 
+const sleepMs = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+
+const withFileRetry = (operation, label) => {
+  let lastError;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    try {
+      return operation();
+    } catch (error) {
+      lastError = error;
+      if (attempt < 7) sleepMs(80 + attempt * 120);
+    }
+  }
+  throw new Error(`${label}: ${lastError?.message || lastError}`);
+};
+
 const writeJson = (filePath, value) => {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  const temporary = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  withFileRetry(() => fs.writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, "utf8"), `write ${temporary}`);
+  try {
+    withFileRetry(() => fs.renameSync(temporary, filePath), `replace ${filePath}`);
+  } catch (error) {
+    try {
+      withFileRetry(() => fs.copyFileSync(temporary, filePath), `copy ${filePath}`);
+    } finally {
+      try { fs.unlinkSync(temporary); } catch { /* best-effort cleanup */ }
+    }
+    void error;
+  }
 };
 
 const norm = (value) => String(value || "").trim();
@@ -43,6 +69,15 @@ const round = (value, digits = 0) => {
 };
 
 const multi = (zh, en = zh) => ({ zh, en });
+
+const observedPostMatchStats = (stats) => {
+  if (!stats || typeof stats !== "object") return false;
+  if (stats.observed === true || stats.provenance?.observed === true) return true;
+  const sourceType = norm(stats.sourceType || stats.provenance?.sourceType).toLowerCase();
+  if (["observed", "official-post-match", "provider-post-match"].includes(sourceType)) return true;
+  const source = norm(stats.source || stats.provenance?.source).toLowerCase();
+  return Boolean(stats.version && /api-football|official.*result|sporttery.*stat/.test(source));
+};
 
 const matchKeys = (match) => Array.from(new Set([
   norm(match.sourceMatchId),
@@ -114,6 +149,7 @@ const buildCardHistory = (historyMatches) => {
   for (const match of historyMatches || []) {
     if (match.status !== "FINISHED") continue;
     const stats = match.stats || {};
+    if (!observedPostMatchStats(stats)) continue;
     add(match.homeTeamName || match.homeTeamId, {
       yellowCards: stats.yellowCards?.home,
       redCards: stats.redCards?.home,
@@ -178,6 +214,9 @@ const buildQuality = ({ match, signal, teamHistory }) => {
   const weather = signal.weather || {};
   const webConsensus = signal.webConsensus || {};
   const fiveHundred = signal.fiveHundred || {};
+  const freeFootball = signal.freeFootball || {};
+  const freeStrength = freeFootball.strength || {};
+  const freeForm = freeFootball.form || {};
   const marketAvailable = Boolean(
     match.odds
     || match.handicapOdds
@@ -193,8 +232,17 @@ const buildQuality = ({ match, signal, teamHistory }) => {
     || fiveHundred.rank?.away?.fifaRank
     || signal.worldCupPrior
     || match.worldCupPrior
+    || freeStrength.available
   );
-  const stageAvailable = Boolean(fiveHundred.futureSchedule?.home || fiveHundred.futureSchedule?.away || signal.buyEndTime || match.buyEndTime);
+  const stageAvailable = Boolean(
+    fiveHundred.futureSchedule?.home
+    || fiveHundred.futureSchedule?.away
+    || signal.buyEndTime
+    || match.buyEndTime
+    || freeForm.available
+  );
+  const strengthAvailable = Boolean(freeStrength.available);
+  const formAvailable = Boolean(freeForm.available);
   const refereeVerified = Boolean(referee.name || num(referee.cardsPerMatch) !== null || num(referee.penaltiesPerMatch) !== null);
   const lineupAvailable = Boolean(
     lineups.summary?.zh
@@ -230,13 +278,12 @@ const buildQuality = ({ match, signal, teamHistory }) => {
   const webConsensusAvailable = Boolean(
     webConsensus
     && typeof webConsensus === "object"
-    && webConsensus.usableForModel !== false
     && (webConsensus.consensus || webConsensus.features || webConsensus.summary)
   );
   const webConsensusConfidence = Number(webConsensus?.quality?.confidence ?? webConsensus?.consensus?.confidence ?? 0);
-  const webConsensusVerified = webConsensusAvailable
+  const webConsensusDisplayEligible = webConsensusAvailable
+    && webConsensus.eligibleForRiskDisplay === true
     && Number.isFinite(webConsensusConfidence)
-    && webConsensusConfidence >= 0.62
     && Number(webConsensus?.quality?.sourceCount || 0) >= 1;
 
   const components = {
@@ -310,16 +357,6 @@ const buildQuality = ({ match, signal, teamHistory }) => {
       source: match.odds || match.handicapOdds ? "sporttery" : marketAvailable ? "external-odds" : "missing",
       note: marketAvailable ? multi("已有胜平负/让球盘口校验源", "Market validation source available") : multi("缺少盘口校验源", "No market validation source")
     }),
-    webConsensus: component({
-      key: "webConsensus",
-      label: multi("网络观点", "Web consensus"),
-      status: componentStatus(webConsensusAvailable, webConsensusVerified, webConsensusAvailable && !webConsensusVerified),
-      score: scoreComponent(webConsensusVerified ? "verified" : webConsensusAvailable ? "partial" : "missing", 56),
-      source: webConsensusAvailable ? "web-consensus" : "missing",
-      note: webConsensusAvailable
-        ? (webConsensus.summary || multi("已接入网络观点结构化信号", "Structured web consensus loaded"))
-        : multi("未接入网络观点", "No web consensus signal")
-    }),
     motivation: component({
       key: "motivation",
       label: multi("排名/战意", "Table/motivation"),
@@ -327,23 +364,45 @@ const buildQuality = ({ match, signal, teamHistory }) => {
       score: scoreComponent(rankingAvailable && stageAvailable ? "verified" : rankingAvailable || stageAvailable ? "partial" : "missing"),
       source: rankingAvailable || stageAvailable ? "rank-stage-context" : "missing",
       note: rankingAvailable || stageAvailable ? multi("已接入排名或赛程阶段信息", "Rank or stage context loaded") : multi("缺少排名/赛程阶段信息", "No table or stage context")
+    }),
+    strength: component({
+      key: "strength",
+      label: multi("Elo球队强度", "Elo team strength"),
+      status: componentStatus(strengthAvailable, Boolean(freeStrength.verifiedHistory), strengthAvailable && !freeStrength.verifiedHistory),
+      score: scoreComponent(freeStrength.verifiedHistory ? "verified" : strengthAvailable ? "estimated" : "missing", 52),
+      source: strengthAvailable ? (freeStrength.source || "local-elo-history") : "missing",
+      note: strengthAvailable
+        ? multi(`Elo ${freeStrength.homeRating ?? "--"}:${freeStrength.awayRating ?? "--"}，样本 ${freeStrength.homeMatches ?? 0}/${freeStrength.awayMatches ?? 0}`, `Elo ${freeStrength.homeRating ?? "--"}:${freeStrength.awayRating ?? "--"}, samples ${freeStrength.homeMatches ?? 0}/${freeStrength.awayMatches ?? 0}`)
+        : multi("未形成可审计Elo强度", "No auditable Elo strength")
+    }),
+    form: component({
+      key: "form",
+      label: multi("近期状态", "Recent form"),
+      status: componentStatus(formAvailable, Boolean(freeForm.balanced), formAvailable && !freeForm.balanced),
+      score: scoreComponent(freeForm.balanced ? "verified" : formAvailable ? "estimated" : "missing", 52),
+      source: formAvailable ? (freeForm.source || "local-rolling-form") : "missing",
+      note: formAvailable
+        ? multi(`状态样本 ${freeForm.homeSample ?? 0}/${freeForm.awaySample ?? 0}`, `Form samples ${freeForm.homeSample ?? 0}/${freeForm.awaySample ?? 0}`)
+        : multi("未形成近期状态样本", "No recent-form sample")
     })
   };
 
   const weights = {
-    referee: 10,
-    teamCards: 9,
-    lineup: 15,
-    injuries: 15,
-    xg: 12,
-    weather: 6,
+    referee: 4,
+    teamCards: 6,
+    lineup: 7,
+    injuries: 7,
+    xg: 8,
+    weather: 4,
     market: 16,
-    webConsensus: 8,
-    motivation: 9
+    motivation: 8,
+    strength: 16,
+    form: 14
   };
+  const totalWeight = Object.values(weights).reduce((sum, weight) => sum + weight, 0);
   const weightedScore = Object.entries(weights).reduce((sum, [key, weight]) => {
-    return sum + (components[key].score * weight) / 100;
-  }, 0);
+    return sum + components[key].score * weight;
+  }, 0) / totalWeight;
   const score = Math.round(clamp(weightedScore, 0, 100));
   const missing = Object.values(components)
     .filter((item) => item.status === "missing")
@@ -351,9 +410,9 @@ const buildQuality = ({ match, signal, teamHistory }) => {
       key: item.key,
       zh: `缺少${item.label.zh}`,
       en: `Missing ${item.label.en}`,
-      severity: item.key === "lineup" || item.key === "injuries" || item.key === "market"
+      severity: item.key === "market"
         ? "high"
-        : item.key === "webConsensus" || item.key === "weather"
+        : item.key === "weather" || item.key === "referee"
           ? "low"
           : "medium",
       weight: weights[item.key] || 5
@@ -374,17 +433,44 @@ const buildQuality = ({ match, signal, teamHistory }) => {
     0,
     18
   ));
+  const recommendationUsable = Boolean(
+    freeFootball.recommendationReady
+    || marketAvailable
+    || strengthAvailable
+    || formAvailable
+  );
+
+  const webConsensusAdvisory = {
+    version: "web-consensus-advisory-v1",
+    available: webConsensusAvailable,
+    eligibleForRiskDisplay: webConsensusDisplayEligible,
+    eligibleForNumericModel: false,
+    eligibleForFormalQuality: false,
+    weight: 0,
+    source: webConsensusAvailable ? "web-consensus" : "missing",
+    confidence: Number.isFinite(webConsensusConfidence) ? round(clamp(webConsensusConfidence, 0, 1), 3) : null,
+    conflictFreeze: webConsensus?.conflictFreeze === true || webConsensus?.modelUse?.conflictFreeze === true,
+    blockers: Array.isArray(webConsensus?.modelUse?.blockers) ? webConsensus.modelUse.blockers : [],
+    summary: webConsensusAvailable
+      ? (webConsensus.summary || multi("网络观点仅作风险提示", "Web consensus is advisory only"))
+      : multi("未接入网络观点；不影响正式质量分", "No web consensus; formal quality is unchanged")
+  };
 
   return {
-    version: "pre-match-quality-v50",
+    version: "pre-match-quality-v52-free-source-fallback",
     score,
     sourceQuality,
+    recommendationUsable,
+    analysisComplete: sourceQuality === "high" && severeMissingCount === 0,
     severeMissingCount,
     trustPenalty,
     components,
     missing,
     lowQuality,
     connected: Object.fromEntries(Object.entries(components).map(([key, value]) => [key, statusConnected(value.status)])),
+    advisory: {
+      webConsensus: webConsensusAdvisory
+    },
     summary: {
       zh: `赛前数据质量 ${score}/100，${sourceQuality === "high" ? "覆盖较好" : sourceQuality === "medium" ? "部分覆盖" : "缺口偏多"}。`,
       en: `Pre-match data quality ${score}/100, ${sourceQuality} coverage.`
@@ -437,7 +523,7 @@ const main = () => {
     const quality = buildQuality({ match, signal, teamHistory });
     const discipline = buildDisciplineFromQuality(teamHistory, quality);
     const payload = {
-      version: "sync-pre-match-signals-v50",
+      version: "sync-pre-match-signals-v52-free-source-fallback",
       source: "pre-match-signal-layer",
       updatedAt,
       sourceMatchId: norm(match.sourceMatchId) || norm(match.id).replace(/^sporttery_/, ""),
@@ -485,6 +571,8 @@ const main = () => {
       high: Object.values(preMatchRows).filter((row) => row.quality.sourceQuality === "high").length,
       medium: Object.values(preMatchRows).filter((row) => row.quality.sourceQuality === "medium").length,
       low: Object.values(preMatchRows).filter((row) => row.quality.sourceQuality === "low").length,
+      recommendationUsable: Object.values(preMatchRows).filter((row) => row.quality.recommendationUsable).length,
+      analysisComplete: Object.values(preMatchRows).filter((row) => row.quality.analysisComplete).length,
       warnings: warnings.slice(0, 20)
     }
   };
@@ -510,4 +598,11 @@ const main = () => {
   console.log(JSON.stringify({ ok: true, ...output.summary, output: path.relative(rootDir, OUTPUT_FILE) }, null, 2));
 };
 
-main();
+if (require.main === module) {
+  main();
+} else {
+  module.exports = {
+    buildCardHistory,
+    buildQuality,
+  };
+}

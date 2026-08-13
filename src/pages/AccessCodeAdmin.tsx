@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Ban, Check, Clipboard, KeyRound, Loader2, Plus, RefreshCw, ShieldCheck } from 'lucide-react';
 import { useApp } from '../context/AppContextCore';
 import { copyText } from '../services/clipboard';
@@ -50,10 +50,9 @@ const getStatusLabel = (status: AccessCodeRow['status'], language: 'zh' | 'en') 
 
 export const AccessCodeAdmin: React.FC = () => {
   const { language } = useApp();
-  const queryToken = useMemo(() => new URLSearchParams(window.location.search).get('token') || '', []);
   const generatedCodeInputRef = useRef<HTMLInputElement | null>(null);
   const copyResetTimerRef = useRef<number | null>(null);
-  const [adminToken, setAdminToken] = useState(() => queryToken || sessionStorage.getItem('football_admin_token') || '');
+  const [adminToken, setAdminToken] = useState(() => sessionStorage.getItem('football_admin_token') || '');
   const [label, setLabel] = useState('');
   const [generatedCode, setGeneratedCode] = useState<GeneratedAccessCode | null>(null);
   const [rows, setRows] = useState<AccessCodeRow[]>([]);
@@ -154,7 +153,7 @@ export const AccessCodeAdmin: React.FC = () => {
       }, 0);
       return () => window.clearTimeout(timer);
     }
-    // Load once when a remembered or query token exists.
+    // Load once when a token is remembered for this browser session.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -232,7 +231,7 @@ export const AccessCodeAdmin: React.FC = () => {
           <ShieldCheck size={16} />
           {t('title')}
         </span>
-        <h2>{t('title')}</h2>
+        <h1>{t('title')}</h1>
         <p>{t('subtitle')}</p>
       </section>
 

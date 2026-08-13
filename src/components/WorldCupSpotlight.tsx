@@ -5,7 +5,7 @@ import type { Match } from '../services/mockData';
 import { getPredictionTipDisplay, getSportteryPoolRows } from '../services/bettingDisplay';
 import { getDisplayRecommendation } from '../services/displayRecommendation';
 import { getTeamById } from '../services/entities';
-import { getBestPrediction, getDaysUntilWorldCup, getWorldCupWatchMatches } from '../services/worldCupData';
+import { getAnalysisReferencePrediction, getDaysUntilWorldCup, getWorldCupPhase, getWorldCupWatchMatches } from '../services/worldCupSpotlight';
 
 interface WorldCupSpotlightProps {
   matches: Match[];
@@ -34,12 +34,15 @@ export const WorldCupSpotlight: React.FC<WorldCupSpotlightProps> = ({
   const watchMatches = useMemo(() => getWorldCupWatchMatches(matches, 3), [matches]);
   const featuredMatch = watchMatches[0];
   const featuredDisplayRecommendation = featuredMatch ? getDisplayRecommendation(featuredMatch, language) : null;
-  const featuredPrediction = featuredMatch ? getBestPrediction(featuredMatch) : undefined;
+  const featuredReference = featuredMatch && !featuredDisplayRecommendation
+    ? getAnalysisReferencePrediction(featuredMatch)
+    : undefined;
   const poolRows = featuredMatch ? getSportteryPoolRows(featuredMatch, language) : [];
   const featuredOddsRow = poolRows.find((row) => row.odds);
   const homeTeam = featuredMatch ? getTeamById(featuredMatch.homeTeamId) : null;
   const awayTeam = featuredMatch ? getTeamById(featuredMatch.awayTeamId) : null;
   const daysLeft = getDaysUntilWorldCup();
+  const worldCupPhase = getWorldCupPhase();
 
   const copy = {
     kicker: { zh: '世界杯专题', en: 'World Cup Special' },
@@ -55,7 +58,9 @@ export const WorldCupSpotlight: React.FC<WorldCupSpotlightProps> = ({
     open: { zh: '进入世界杯专栏', en: 'Open World Cup' },
     today: { zh: '当前观察', en: 'Watch match' },
     empty: { zh: '等待官方赛程同步，先进入专栏查看世界杯活动页。', en: 'Waiting for official fixtures. Open the event page first.' },
-    model: { zh: '模型', en: 'Model' },
+    formal: { zh: '正式推荐', en: 'Formal pick' },
+    reference: { zh: '分析参考', en: 'Analysis reference' },
+    watch: { zh: '观察', en: 'Watch' },
     sp: { zh: 'SP', en: 'SP' }
   };
 
@@ -73,7 +78,11 @@ export const WorldCupSpotlight: React.FC<WorldCupSpotlightProps> = ({
         <div className="event-spotlight-meta">
           <b>
             <CalendarDays size={14} />
-            {t('countdown')} {daysLeft} {t('days')}
+            {worldCupPhase === 'upcoming'
+              ? `${t('countdown')} ${daysLeft} ${t('days')}`
+              : worldCupPhase === 'live'
+                ? (language === 'zh' ? '\u8d5b\u4e8b\u8fdb\u884c\u4e2d' : 'Tournament live')
+                : (language === 'zh' ? '\u8d5b\u4e8b\u5df2\u7ed3\u675f' : 'Tournament finished')}
           </b>
           <b>
             <Zap size={14} />
@@ -100,10 +109,10 @@ export const WorldCupSpotlight: React.FC<WorldCupSpotlightProps> = ({
             <small>
               {formatKickoff(featuredMatch.kickoffTime, language)}
               {featuredDisplayRecommendation
-                ? ` / ${t('model')} ${featuredDisplayRecommendation.label}`
-                : featuredPrediction
-                  ? ` / ${t('model')} ${getPredictionTipDisplay(featuredPrediction, language)}`
-                  : ''}
+                ? ` / ${t('formal')} ${featuredDisplayRecommendation.label}`
+                : featuredReference
+                  ? ` / ${t('reference')} ${getPredictionTipDisplay(featuredReference, language)}`
+                  : ` / ${t('watch')}`}
             </small>
             {featuredOddsRow?.odds && (
               <small>

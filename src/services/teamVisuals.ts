@@ -340,27 +340,13 @@ export function resolveCountryIso(...values: Array<string | undefined>) {
   return '';
 }
 
-function initialsFromTeam(team: Team) {
-  const english = team.shortName.en || team.name.en;
-  if (english && /^[a-z0-9\s.-]+$/i.test(english)) {
-    return english
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part.charAt(0))
-      .join('')
-      .toUpperCase() || '?';
-  }
-
-  const chinese = team.shortName.zh || team.name.zh || team.logo || '?';
-  return Array.from(chinese).slice(0, 2).join('');
-}
-
 export function resolveTeamVisual(team?: Team): TeamVisual {
   const safeTeam = team ?? FALLBACK_TEAM;
   const rawLogo = safeTeam.logo || '';
   const label = safeTeam.shortName.zh || safeTeam.shortName.en || safeTeam.name.zh || safeTeam.name.en || '球队';
-  const fallbackText = initialsFromTeam(safeTeam);
+  // Club badges must never manufacture a crest from a team name or initials.
+  // TeamBadge owns the visual fallback and renders a neutral, text-free shield.
+  const fallbackText = '';
   const isoFromName = resolveCountryIso(safeTeam.shortName.zh, safeTeam.name.zh, safeTeam.shortName.en, safeTeam.name.en);
   const clubCrest = findClubCrest(safeTeam.shortName.zh, safeTeam.name.zh, safeTeam.shortName.en, safeTeam.name.en, rawLogo);
 
@@ -427,7 +413,7 @@ export function resolveTeamVisual(team?: Team): TeamVisual {
   }
 
   return {
-    logo: fallbackText,
+    logo: '',
     label,
     fallbackText,
     logoType: safeTeam.logoType || 'crest-placeholder',

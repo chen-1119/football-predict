@@ -1,0 +1,587 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+trap '' HUP
+
+readonly PATH="/opt/node-v22.22.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export PATH
+
+readonly CONFIG_DIR="/etc/football-release"
+readonly PUBLIC_KEY="${CONFIG_DIR}/signing-public.pem"
+readonly UPLOAD_OWNER_FILE="${CONFIG_DIR}/upload-owner"
+readonly PUBLIC_BASE_URL_FILE="${CONFIG_DIR}/public-base-url"
+readonly RELEASE_EXPORT_MODE_FILE="${CONFIG_DIR}/release-export-live-sqlite"
+readonly EXPECTED_SITE_FILE="/etc/football-release/expected-site"
+readonly EXPECTED_CHANNEL_FILE="/etc/football-release/expected-channel"
+readonly INCOMING_DIR="/var/lib/football-release/incoming"
+readonly WORK_ROOT="/var/lib/football-release/work"
+readonly STATUS_DIR="/var/lib/football-release/status"
+readonly LOG_DIR="/var/lib/football-release/logs"
+readonly RECOVERY_ROOT="/var/lib/football-release/recovery"
+readonly RECOVERY_CURRENT="/var/lib/football-release/recovery/current"
+readonly HIGHEST_SEQUENCE_FILE="/var/lib/football-release/highest-accepted-sequence"
+readonly LOCK_FILE="/run/lock/football-release.lock"
+readonly APP_DIR="/opt/football-predict"
+readonly NODE_BIN="/opt/node-v22.22.1/bin/node"
+readonly RECOVERY_HELPER="/usr/local/libexec/football-release-recovery.cjs"
+readonly EXPECTED_POLICY_VERSION="release-secret-policy-v2"
+readonly EXPECTED_MANIFEST_VERSION="3"
+readonly EXPECTED_SIGNATURE_ALGORITHM="rsa-sha256-pkcs1-v1_5"
+readonly MAX_BUNDLE_BYTES=$((512 * 1024 * 1024))
+readonly MAX_ARCHIVE_ENTRIES=100000
+readonly MAX_ARCHIVE_ENTRY_BYTES=$((256 * 1024 * 1024))
+readonly MAX_ARCHIVE_EXTRACTED_BYTES=$((2 * 1024 * 1024 * 1024))
+
+die() {
+  printf 'football-release: %s\n' "$*" >&2
+  exit 1
+}
+
+require_root() {
+  [ "$(id -u)" -eq 0 ] || die "must run as root"
+}
+
+read_single_line() {
+  local file="$1"
+  local label="$2"
+  [ -f "$file" ] && [ ! -L "$file" ] || die "${label} file is missing or not regular: ${file}"
+  local value
+  IFS= read -r value <"$file" || true
+  [ -n "$value" ] || die "${label} is empty"
+  printf '%s' "$value"
+}
+
+assert_root_controlled_file() {
+  local file="$1"
+  local expected_mode="$2"
+  local label="$3"
+  [ -f "$file" ] && [ ! -L "$file" ] || die "${label} is missing or not regular: ${file}"
+  [ "$(stat -c '%u:%g:%a:%h' -- "$file")" = "0:0:${expected_mode}:1" ] \
+    || die "${label} owner, mode, or hard-link count is unsafe: ${file}"
+}
+
+trusted_key_id() {
+  openssl pkey -pubin -in "$PUBLIC_KEY" -outform DER 2>/dev/null \
+    | sha256sum \
+    | awk '{print $1}'
+}
+
+check_recovery_runtime() {
+  local command_name
+  for command_name in stat flock env systemctl nginx pkill pgrep mountpoint curl rm; do
+    command -v "$command_name" >/dev/null 2>&1 || die "missing command: ${command_name}"
+  done
+  [ -x "$NODE_BIN" ] && [ ! -L "$NODE_BIN" ] || die "fixed Node runtime is missing or unsafe: ${NODE_BIN}"
+  [ -d "$RECOVERY_ROOT" ] && [ ! -L "$RECOVERY_ROOT" ] || die "release recovery root is missing or unsafe"
+  [ "$(stat -c '%u:%g:%a' -- "$RECOVERY_ROOT")" = "0:0:700" ] \
+    || die "release recovery root must be root:root 0700"
+  assert_root_controlled_file "$RECOVERY_HELPER" 644 "cold recovery helper"
+  "$NODE_BIN" --check "$RECOVERY_HELPER" >/dev/null || die "cold recovery helper has invalid JavaScript syntax"
+  assert_root_controlled_file "$EXPECTED_SITE_FILE" 644 "expected site config"
+  assert_root_controlled_file "$EXPECTED_CHANNEL_FILE" 644 "expected channel config"
+}
+
+check_release_runtime() {
+  local allow_missing_app="${1:-0}"
+  check_recovery_runtime
+  local command_name
+  for command_name in openssl sha256sum tar node python3 realpath install mktemp awk sed head bash chmod chown mv rm date grep find sync dirname; do
+    command -v "$command_name" >/dev/null 2>&1 || die "missing command: ${command_name}"
+  done
+  for path in "$INCOMING_DIR" "$WORK_ROOT" "$STATUS_DIR" "$LOG_DIR"; do
+    [ -d "$path" ] && [ ! -L "$path" ] || die "required directory is missing or unsafe: ${path}"
+  done
+  if [ "$allow_missing_app" != "1" ]; then
+    [ -d "$APP_DIR" ] && [ ! -L "$APP_DIR" ] || die "application directory is missing or unsafe: ${APP_DIR}"
+  fi
+  [ -f "$PUBLIC_KEY" ] && [ ! -L "$PUBLIC_KEY" ] || die "trusted public key is missing or unsafe"
+  openssl rsa -pubin -in "$PUBLIC_KEY" -noout >/dev/null 2>&1 || die "trusted public key is not RSA"
+  local key_bits
+  key_bits="$(openssl rsa -pubin -in "$PUBLIC_KEY" -text -noout 2>/dev/null | sed -n 's/^[[:space:]]*\(RSA \)\?Public-Key: (\([0-9][0-9]*\) bit).*$/\2/p' | head -n 1)"
+  [[ "$key_bits" =~ ^[0-9]+$ ]] && (( key_bits >= 3072 )) || die "trusted RSA public key must be at least 3072 bits"
+  local upload_owner
+  upload_owner="$(read_single_line "$UPLOAD_OWNER_FILE" "upload owner")"
+  [[ "$upload_owner" =~ ^[a-z_][a-z0-9_-]*$ ]] || die "invalid configured upload owner"
+  id "$upload_owner" >/dev/null 2>&1 || die "configured upload owner does not exist"
+  assert_root_controlled_file "$HIGHEST_SEQUENCE_FILE" 600 "highest accepted sequence state"
+}
+
+acquire_release_lock() {
+  exec 9>"$LOCK_FILE"
+  flock -n 9 || die "another release or recovery is active"
+}
+
+assert_regular_upload() {
+  local file="$1"
+  local expected_owner="$2"
+  local max_bytes="$3"
+  [ -f "$file" ] && [ ! -L "$file" ] || die "upload is not a regular file: ${file}"
+  [ "$(realpath -e -- "$file")" = "$file" ] || die "upload path is not canonical: ${file}"
+  [ "$(stat -c '%U' -- "$file")" = "$expected_owner" ] || die "upload owner mismatch: ${file}"
+  [ "$(stat -c '%h' -- "$file")" = "1" ] || die "upload must have exactly one hard link: ${file}"
+  local mode
+  mode="$(stat -c '%a' -- "$file")"
+  (( (8#$mode & 8#022) == 0 )) || die "upload is group/world writable: ${file}"
+  local bytes
+  bytes="$(stat -c '%s' -- "$file")"
+  (( bytes > 0 && bytes <= max_bytes )) || die "upload size is outside the allowed range: ${file}"
+}
+
+write_status() {
+  local state="$1"
+  local ok="$2"
+  local exit_code="$3"
+  local sha="$4"
+  local started_at="$5"
+  local upload_group="$6"
+  local status_path="${STATUS_DIR}/${sha}.status"
+  local tmp
+  tmp="$(mktemp "${STATUS_DIR}/.${sha}.status.XXXXXX")"
+  if [ "$state" = "running" ]; then
+    printf 'status=running\nok=0\nstartedAt=%s\nbundleSha256=%s\n' \
+      "$started_at" "$sha" >"$tmp"
+  else
+    printf 'status=%s\nok=%s\nstartedAt=%s\nfinishedAt=%s\nexitCode=%s\nbundleSha256=%s\n' \
+      "$state" "$ok" "$started_at" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$exit_code" "$sha" >"$tmp"
+  fi
+  chown root:"$upload_group" "$tmp"
+  chmod 0640 "$tmp"
+  mv -fT "$tmp" "$status_path"
+}
+
+consume_release_sequence_before_execution() {
+  local sequence="$1"
+  assert_root_controlled_file "$HIGHEST_SEQUENCE_FILE" 600 "highest accepted sequence state"
+  local current
+  current="$(read_single_line "$HIGHEST_SEQUENCE_FILE" "highest accepted sequence")"
+  [ "$current" = "$HIGHEST_ACCEPTED_SEQUENCE" ] \
+    || die "highest accepted sequence changed while the release lock was held"
+  local state_dir state_tmp
+  state_dir="$(dirname "$HIGHEST_SEQUENCE_FILE")"
+  state_tmp="$(mktemp "${state_dir}/.highest-accepted-sequence.XXXXXX")"
+  if ! printf '%s\n' "$sequence" >"$state_tmp" \
+    || ! chown root:root "$state_tmp" \
+    || ! chmod 0600 "$state_tmp" \
+    || ! sync -f "$state_tmp" \
+    || ! mv -fT "$state_tmp" "$HIGHEST_SEQUENCE_FILE" \
+    || ! sync -f "$state_dir"; then
+    rm -f -- "$state_tmp" || true
+    die "could not atomically consume signed release sequence before execution"
+  fi
+  assert_root_controlled_file "$HIGHEST_SEQUENCE_FILE" 600 "consumed highest accepted sequence state"
+  [ "$(read_single_line "$HIGHEST_SEQUENCE_FILE" "consumed highest accepted sequence")" = "$sequence" ] \
+    || die "consumed highest accepted sequence does not match the signed manifest"
+}
+
+require_root
+
+if [ "${1:-}" = "--check" ] && [ "$#" -eq 1 ]; then
+  check_release_runtime 1
+  recovery_pending=0
+  app_present=0
+  if [ -e "$RECOVERY_CURRENT" ] || [ -L "$RECOVERY_CURRENT" ]; then recovery_pending=1; fi
+  if [ -d "$APP_DIR" ] && [ ! -L "$APP_DIR" ]; then app_present=1; fi
+  printf 'release-entrypoint-ok keyId=%s recoveryPending=%s appPresent=%s\n' \
+    "$(trusted_key_id)" "$recovery_pending" "$app_present"
+  exit 0
+fi
+
+if [ "${1:-}" = "--recover" ]; then
+  [ "$#" -eq 1 ] || die "usage: football-release --recover"
+  check_recovery_runtime
+  acquire_release_lock
+  exec env -i \
+    PATH="$PATH" \
+    HOME="/root" \
+    LANG="C.UTF-8" \
+    NODE_NO_WARNINGS="1" \
+    "$NODE_BIN" "$RECOVERY_HELPER"
+fi
+
+[ "$#" -eq 1 ] || die "usage: football-release --check|--recover|<64-character-sha256>"
+readonly BUNDLE_SHA="$1"
+[[ "$BUNDLE_SHA" =~ ^[0-9a-f]{64}$ ]] || die "invalid bundle sha256"
+
+check_recovery_runtime
+acquire_release_lock
+[ ! -e "$RECOVERY_CURRENT" ] && [ ! -L "$RECOVERY_CURRENT" ] \
+  || die "an unresolved release recovery transaction already exists: ${RECOVERY_CURRENT}; run --recover"
+check_release_runtime
+
+readonly UPLOAD_OWNER="$(read_single_line "$UPLOAD_OWNER_FILE" "upload owner")"
+readonly UPLOAD_GROUP="$(id -gn "$UPLOAD_OWNER")"
+readonly PUBLIC_BASE_URL="$(read_single_line "$PUBLIC_BASE_URL_FILE" "public base URL")"
+[[ "$PUBLIC_BASE_URL" =~ ^https?://[^[:space:]]+$ ]] || die "configured public base URL is invalid"
+assert_root_controlled_file "$EXPECTED_SITE_FILE" 644 "expected site config"
+assert_root_controlled_file "$EXPECTED_CHANNEL_FILE" 644 "expected channel config"
+assert_root_controlled_file "$HIGHEST_SEQUENCE_FILE" 600 "highest accepted sequence state"
+readonly EXPECTED_SITE="$(read_single_line "$EXPECTED_SITE_FILE" "expected site")"
+readonly EXPECTED_CHANNEL="$(read_single_line "$EXPECTED_CHANNEL_FILE" "expected channel")"
+[[ "$EXPECTED_SITE" =~ ^[a-z0-9][a-z0-9._-]{0,63}$ ]] || die "configured expected site is invalid"
+[[ "$EXPECTED_CHANNEL" =~ ^[a-z0-9][a-z0-9._-]{0,63}$ ]] || die "configured expected channel is invalid"
+readonly HIGHEST_ACCEPTED_SEQUENCE="$(read_single_line "$HIGHEST_SEQUENCE_FILE" "highest accepted sequence")"
+[[ "$HIGHEST_ACCEPTED_SEQUENCE" =~ ^(0|[1-9][0-9]*)$ ]] || die "highest accepted sequence state is malformed"
+
+release_export_mode="always"
+if [ -f "$RELEASE_EXPORT_MODE_FILE" ] && [ ! -L "$RELEASE_EXPORT_MODE_FILE" ]; then
+  IFS= read -r release_export_mode <"$RELEASE_EXPORT_MODE_FILE" || true
+fi
+[[ "$release_export_mode" =~ ^(always|preserve)$ ]] || die "invalid release export mode"
+readonly RELEASE_EXPORT_MODE="$release_export_mode"
+
+readonly BUNDLE_NAME="${BUNDLE_SHA}.tgz"
+readonly SHA_NAME="${BUNDLE_SHA}.sha256"
+readonly MANIFEST_NAME="${BUNDLE_SHA}.manifest.json"
+readonly SIGNATURE_NAME="${BUNDLE_SHA}.manifest.sig"
+readonly SOURCE_BUNDLE="${INCOMING_DIR}/${BUNDLE_NAME}"
+readonly SOURCE_SHA="${INCOMING_DIR}/${SHA_NAME}"
+readonly SOURCE_MANIFEST="${INCOMING_DIR}/${MANIFEST_NAME}"
+readonly SOURCE_SIGNATURE="${INCOMING_DIR}/${SIGNATURE_NAME}"
+readonly STATUS_PATH="${STATUS_DIR}/${BUNDLE_SHA}.status"
+readonly LOG_PATH="${LOG_DIR}/${BUNDLE_SHA}.log"
+readonly STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+: >"$LOG_PATH"
+chown root:"$UPLOAD_GROUP" "$LOG_PATH"
+chmod 0640 "$LOG_PATH"
+exec >>"$LOG_PATH" 2>&1
+
+status_started=0
+status_finalized=0
+work_dir=""
+cleanup_on_exit() {
+  local rc="$?"
+  trap - EXIT
+  if [ "$status_started" -eq 1 ] && [ "$status_finalized" -eq 0 ]; then
+    write_status "failed" "0" "$rc" "$BUNDLE_SHA" "$STARTED_AT" "$UPLOAD_GROUP" || true
+  fi
+  if [ -n "$work_dir" ] && [ -d "$work_dir" ]; then
+    rm -rf -- "$work_dir" || true
+  fi
+  exit "$rc"
+}
+trap cleanup_on_exit EXIT
+
+write_status "running" "0" "" "$BUNDLE_SHA" "$STARTED_AT" "$UPLOAD_GROUP"
+status_started=1
+printf 'football-release: validating signed bundle %s\n' "$BUNDLE_SHA"
+
+assert_regular_upload "$SOURCE_BUNDLE" "$UPLOAD_OWNER" "$MAX_BUNDLE_BYTES"
+assert_regular_upload "$SOURCE_SHA" "$UPLOAD_OWNER" 4096
+assert_regular_upload "$SOURCE_MANIFEST" "$UPLOAD_OWNER" $((1024 * 1024))
+assert_regular_upload "$SOURCE_SIGNATURE" "$UPLOAD_OWNER" $((16 * 1024))
+
+work_dir="$(mktemp -d "${WORK_ROOT}/${BUNDLE_SHA}.XXXXXX")"
+chmod 0700 "$work_dir"
+install -o root -g root -m 0600 -- "$SOURCE_BUNDLE" "${work_dir}/${BUNDLE_NAME}"
+install -o root -g root -m 0600 -- "$SOURCE_SHA" "${work_dir}/${SHA_NAME}"
+install -o root -g root -m 0600 -- "$SOURCE_MANIFEST" "${work_dir}/${MANIFEST_NAME}"
+install -o root -g root -m 0600 -- "$SOURCE_SIGNATURE" "${work_dir}/${SIGNATURE_NAME}"
+
+readonly BUNDLE_PATH="${work_dir}/${BUNDLE_NAME}"
+readonly SHA_PATH="${work_dir}/${SHA_NAME}"
+readonly MANIFEST_PATH="${work_dir}/${MANIFEST_NAME}"
+readonly SIGNATURE_PATH="${work_dir}/${SIGNATURE_NAME}"
+
+actual_sha="$(sha256sum "$BUNDLE_PATH" | awk '{print $1}')"
+[ "$actual_sha" = "$BUNDLE_SHA" ] || die "bundle sha256 does not match its immutable name"
+sidecar_sha="$(awk 'NR == 1 { print $1 }' "$SHA_PATH")"
+[[ "$sidecar_sha" =~ ^[0-9a-f]{64}$ ]] || die "sha256 sidecar is malformed"
+[ "$sidecar_sha" = "$BUNDLE_SHA" ] || die "sha256 sidecar does not match bundle"
+
+openssl dgst -sha256 -verify "$PUBLIC_KEY" -signature "$SIGNATURE_PATH" "$MANIFEST_PATH" >/dev/null \
+  || die "manifest signature verification failed"
+readonly TRUSTED_KEY_ID="$(trusted_key_id)"
+readonly BUNDLE_BYTES="$(stat -c '%s' "$BUNDLE_PATH")"
+
+manifest_sequence="$(node - "$MANIFEST_PATH" "$BUNDLE_SHA" "$BUNDLE_BYTES" "$TRUSTED_KEY_ID" \
+  "$EXPECTED_MANIFEST_VERSION" "$EXPECTED_POLICY_VERSION" "$EXPECTED_SIGNATURE_ALGORITHM" \
+  "$EXPECTED_SITE" "$EXPECTED_CHANNEL" "$HIGHEST_ACCEPTED_SEQUENCE" <<'NODE'
+const fs = require("node:fs");
+const [
+  manifestPath,
+  expectedSha,
+  expectedBytes,
+  expectedKeyId,
+  expectedVersion,
+  expectedPolicy,
+  expectedAlgorithm,
+  expectedSite,
+  expectedChannel,
+  highestAcceptedSequenceRaw
+] = process.argv.slice(2);
+const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+const failures = [];
+const now = Date.now();
+const maxFutureSkewMs = 5 * 60 * 1000;
+const maxLifetimeMs = 168 * 60 * 60 * 1000;
+const highestAcceptedSequence = Number(highestAcceptedSequenceRaw);
+const canonicalIsoMs = (value, label) => {
+  if (typeof value !== "string") {
+    failures.push(`${label} must be a canonical UTC ISO string`);
+    return NaN;
+  }
+  const parsed = new Date(value);
+  if (!Number.isFinite(parsed.getTime()) || parsed.toISOString() !== value) {
+    failures.push(`${label} must be a canonical UTC ISO string`);
+    return NaN;
+  }
+  return parsed.getTime();
+};
+if (manifest.ok !== true) failures.push("manifest is not marked ok");
+if (manifest.manifestVersion !== Number(expectedVersion)) failures.push("manifest version mismatch");
+if (manifest.policyVersion !== expectedPolicy) failures.push("policy version mismatch");
+if (manifest.sha256 !== expectedSha) failures.push("manifest sha256 mismatch");
+if (Number(manifest.bytes) !== Number(expectedBytes)) failures.push("manifest byte size mismatch");
+if (manifest.signature?.algorithm !== expectedAlgorithm) failures.push("signature algorithm mismatch");
+if (manifest.signature?.keyId !== expectedKeyId) failures.push("trusted key id mismatch");
+if (manifest.site !== expectedSite) failures.push("manifest site mismatch");
+if (manifest.channel !== expectedChannel) failures.push("manifest channel mismatch");
+if (!Number.isSafeInteger(highestAcceptedSequence) || highestAcceptedSequence < 0) failures.push("highest accepted sequence state is outside the safe integer range");
+if (!Number.isSafeInteger(manifest.releaseSequence) || manifest.releaseSequence <= 0) {
+  failures.push("manifest releaseSequence must be a positive safe JSON integer");
+} else if (Number.isSafeInteger(highestAcceptedSequence) && manifest.releaseSequence <= highestAcceptedSequence) {
+  failures.push("manifest releaseSequence is not strictly greater than highest accepted sequence");
+}
+const createdAtMs = canonicalIsoMs(manifest.createdAt, "manifest createdAt");
+const expiresAtMs = canonicalIsoMs(manifest.expiresAt, "manifest expiresAt");
+if (Number.isFinite(createdAtMs) && createdAtMs > now + maxFutureSkewMs) failures.push("manifest createdAt is too far in the future");
+if (Number.isFinite(expiresAtMs) && expiresAtMs <= now) failures.push("manifest has expired");
+if (Number.isFinite(createdAtMs) && Number.isFinite(expiresAtMs)) {
+  const lifetimeMs = expiresAtMs - createdAtMs;
+  if (lifetimeMs <= 0) failures.push("manifest expiresAt must be after createdAt");
+  if (lifetimeMs > maxLifetimeMs) failures.push("manifest validity lifetime exceeds 168 hours");
+}
+if (!Array.isArray(manifest.sensitiveEntries) || manifest.sensitiveEntries.length !== 0) failures.push("manifest sensitive entry set is not empty");
+if (!Array.isArray(manifest.blockedEntries) || manifest.blockedEntries.length !== 0) failures.push("manifest blocked entry set is not empty");
+if (!Array.isArray(manifest.missingEntries) || manifest.missingEntries.length !== 0) failures.push("manifest missing entry set is not empty");
+if (failures.length) {
+  throw new Error(`signed release manifest rejected: ${failures.join("; ")}`);
+}
+process.stdout.write(String(manifest.releaseSequence));
+NODE
+)"
+readonly MANIFEST_SEQUENCE="$manifest_sequence"
+
+inventory_path="${work_dir}/archive-inventory.json"
+python3 - "$BUNDLE_PATH" "$inventory_path" "$MAX_ARCHIVE_ENTRIES" \
+  "$MAX_ARCHIVE_ENTRY_BYTES" "$MAX_ARCHIVE_EXTRACTED_BYTES" <<'PY'
+import json
+import posixpath
+import sys
+import tarfile
+
+bundle_path, inventory_path, max_entries_raw, max_entry_raw, max_total_raw = sys.argv[1:]
+max_entries = int(max_entries_raw)
+max_entry_bytes = int(max_entry_raw)
+max_total_bytes = int(max_total_raw)
+seen = {}
+inventory = []
+total_bytes = 0
+release_scripts = 0
+odds_compactors = 0
+
+def reject(message):
+    raise SystemExit(f"archive rejected: {message}")
+
+def normalize(raw_name):
+    if not isinstance(raw_name, str) or not raw_name:
+        reject("empty member name")
+    if raw_name.startswith("/") or "\\" in raw_name:
+        reject(f"unsafe absolute or non-POSIX path: {raw_name!r}")
+    if any(ord(char) < 32 or ord(char) == 127 for char in raw_name):
+        reject(f"control character in path: {raw_name!r}")
+    name = raw_name
+    while name.startswith("./"):
+        name = name[2:]
+    name = name.rstrip("/")
+    # GNU tar emits a literal "." entry when the bundle is created from the
+    # repository root. It is the extraction root itself, not a traversable
+    # path segment. Keep every non-root dot or parent segment forbidden below.
+    if not name or name == ".":
+        return "."
+    if len(name.encode("utf-8")) > 4096:
+        reject("path exceeds 4096 encoded bytes")
+    if posixpath.normpath(name) != name:
+        reject(f"non-canonical path: {raw_name!r}")
+    parts = name.split("/")
+    if any(part in ("", ".", "..") or len(part.encode("utf-8")) > 255 for part in parts):
+        reject(f"unsafe path segment: {raw_name!r}")
+    return name
+
+def is_sensitive(path):
+    if path == ".":
+        return False
+    parts = path.lower().split("/")
+    base = parts[-1]
+    lower = "/".join(parts)
+    return (
+        lower == "deploy/light-server/env"
+        or lower.endswith("/deploy/light-server/env")
+        or base == ".env"
+        or base.startswith(".env.")
+        or base in {".npmrc", ".netrc", ".pypirc", "id_rsa", "id_ed25519", "credentials", "credentials.json", "secrets", "secrets.json"}
+        or base.endswith(".local")
+        or base.endswith((".pem", ".key", ".p12", ".pfx"))
+        or any(part in {".ssh", ".aws", ".azure", ".docker"} for part in parts)
+        or any(parts[index:index + 2] == [".config", "gcloud"] for index in range(len(parts) - 1))
+    )
+
+with tarfile.open(bundle_path, mode="r:gz", errorlevel=2) as archive:
+    for member in archive:
+        if len(inventory) >= max_entries:
+            reject(f"entry count exceeds {max_entries}")
+        normalized = normalize(member.name)
+        if normalized in seen:
+            reject(f"duplicate normalized path: {normalized!r}")
+        if not (member.isdir() or member.isfile()):
+            reject(f"archive contains a link, device, fifo, or other forbidden entry type: {normalized!r}")
+        kind = "directory" if member.isdir() else "file"
+        if normalized == "." and kind != "directory":
+            reject("archive root marker is not a directory")
+        if normalized != ".":
+            parts = normalized.split("/")
+            for index in range(1, len(parts)):
+                parent = "/".join(parts[:index])
+                if seen.get(parent) == "file":
+                    reject(f"file is used as a parent directory: {parent!r}")
+            if kind == "file" and any(path.startswith(f"{normalized}/") for path in seen):
+                reject(f"file collides with an existing directory prefix: {normalized!r}")
+        if is_sensitive(normalized):
+            reject(f"sensitive entry: {normalized!r}")
+        if normalized == ".release-trusted-sha256":
+            reject("archive contains reserved trusted-tree marker")
+        size = int(member.size or 0)
+        if size < 0 or size > max_entry_bytes:
+            reject(f"entry size is outside limit for {normalized!r}: {size}")
+        if kind == "directory" and size != 0:
+            reject(f"directory carries a payload: {normalized!r}")
+        total_bytes += size
+        if total_bytes > max_total_bytes:
+            reject(f"total extracted bytes exceed {max_total_bytes}")
+        seen[normalized] = kind
+        inventory.append({"path": normalized, "kind": kind, "size": size})
+        if normalized == "deploy/light-server/release-from-bundle.sh":
+            if kind != "file":
+                reject("release-from-bundle.sh must be a regular file")
+            release_scripts += 1
+        if normalized == "scripts/compactPublicOddsHistory.cjs":
+            if kind != "file":
+                reject("compactPublicOddsHistory.cjs must be a regular file")
+            odds_compactors += 1
+
+if not inventory:
+    reject("archive is empty")
+if release_scripts != 1:
+    reject("archive must contain exactly one release-from-bundle.sh")
+if odds_compactors != 1:
+    reject("archive must contain exactly one compactPublicOddsHistory.cjs")
+with open(inventory_path, "x", encoding="utf-8") as output:
+    json.dump({"entries": inventory, "totalBytes": total_bytes}, output, separators=(",", ":"))
+    output.write("\n")
+PY
+
+readonly TRUSTED_SOURCE_DIR="${work_dir}/trusted"
+[ ! -e "$TRUSTED_SOURCE_DIR" ] || die "trusted extraction path already exists"
+install -d -o root -g root -m 0700 -- "$TRUSTED_SOURCE_DIR"
+(
+  ulimit -f $((MAX_ARCHIVE_ENTRY_BYTES / 512))
+  tar --extract --gzip --file "$BUNDLE_PATH" --directory "$TRUSTED_SOURCE_DIR" \
+    --no-same-owner --no-same-permissions --delay-directory-restore --no-overwrite-dir
+) || die "trusted archive extraction failed"
+
+chown -hR root:root -- "$TRUSTED_SOURCE_DIR"
+find "$TRUSTED_SOURCE_DIR" -xdev -type d -exec chmod 0700 {} +
+find "$TRUSTED_SOURCE_DIR" -xdev -type f -exec chmod 0600 {} +
+if find "$TRUSTED_SOURCE_DIR" -xdev \! -type d \! -type f -print -quit | grep -q .; then
+  die "trusted extraction contains a link, device, fifo, socket, or foreign filesystem"
+fi
+
+python3 - "$TRUSTED_SOURCE_DIR" "$inventory_path" <<'PY'
+import json
+import os
+import stat
+import sys
+
+root, inventory_path = sys.argv[1:]
+with open(inventory_path, encoding="utf-8") as source:
+    inventory = json.load(source)
+expected = {
+    item["path"]: (item["kind"], int(item["size"]))
+    for item in inventory["entries"]
+    if item["path"] != "."
+}
+actual = {}
+for current, dirs, files in os.walk(root, topdown=True, followlinks=False):
+    for name in dirs + files:
+        full_path = os.path.join(current, name)
+        info = os.lstat(full_path)
+        relative = os.path.relpath(full_path, root).replace(os.sep, "/")
+        if stat.S_ISDIR(info.st_mode):
+            kind, size, required_mode = "directory", 0, 0o700
+        elif stat.S_ISREG(info.st_mode):
+            kind, size, required_mode = "file", info.st_size, 0o600
+            if info.st_nlink != 1:
+                raise SystemExit(f"trusted file has multiple hard links: {relative}")
+        else:
+            raise SystemExit(f"trusted tree contains unsupported type: {relative}")
+        if info.st_uid != 0 or info.st_gid != 0:
+            raise SystemExit(f"trusted tree ownership mismatch: {relative}")
+        if stat.S_IMODE(info.st_mode) != required_mode:
+            raise SystemExit(f"trusted tree mode mismatch: {relative}")
+        actual[relative] = (kind, size)
+if actual != expected:
+    missing = sorted(set(expected) - set(actual))[:10]
+    extra = sorted(set(actual) - set(expected))[:10]
+    changed = sorted(path for path in set(expected) & set(actual) if expected[path] != actual[path])[:10]
+    raise SystemExit(f"trusted extraction inventory mismatch; missing={missing} extra={extra} changed={changed}")
+PY
+
+readonly RELEASE_SCRIPT_PATH="${TRUSTED_SOURCE_DIR}/deploy/light-server/release-from-bundle.sh"
+readonly ODDS_COMPACTOR_PATH="${TRUSTED_SOURCE_DIR}/scripts/compactPublicOddsHistory.cjs"
+[ -f "$RELEASE_SCRIPT_PATH" ] && [ ! -L "$RELEASE_SCRIPT_PATH" ] && [ -s "$RELEASE_SCRIPT_PATH" ] \
+  || die "signed release entrypoint is missing from trusted extraction"
+[ -f "$ODDS_COMPACTOR_PATH" ] && [ ! -L "$ODDS_COMPACTOR_PATH" ] && [ -s "$ODDS_COMPACTOR_PATH" ] \
+  || die "signed odds compactor is missing from trusted extraction"
+chmod 0700 "$RELEASE_SCRIPT_PATH"
+printf '%s\n' "$BUNDLE_SHA" >"${TRUSTED_SOURCE_DIR}/.release-trusted-sha256"
+chown root:root "${TRUSTED_SOURCE_DIR}/.release-trusted-sha256"
+chmod 0600 "${TRUSTED_SOURCE_DIR}/.release-trusted-sha256"
+bash -n "$RELEASE_SCRIPT_PATH" || die "signed release entrypoint has invalid bash syntax"
+"$NODE_BIN" --check "$ODDS_COMPACTOR_PATH" >/dev/null || die "signed odds compactor has invalid JavaScript syntax"
+
+[ ! -e "$RECOVERY_CURRENT" ] && [ ! -L "$RECOVERY_CURRENT" ] \
+  || die "an unresolved release recovery transaction already exists: ${RECOVERY_CURRENT}"
+consume_release_sequence_before_execution "$MANIFEST_SEQUENCE"
+printf 'football-release: signature accepted keyId=%s; starting guarded release\n' "$TRUSTED_KEY_ID"
+set +e
+env -i \
+  PATH="$PATH" \
+  HOME="/root" \
+  LANG="C.UTF-8" \
+  PUBLIC_BASE_URL="$PUBLIC_BASE_URL" \
+  BUNDLE_SHA256="$BUNDLE_SHA" \
+  TRUSTED_SOURCE_DIR="$TRUSTED_SOURCE_DIR" \
+  RELEASE_SITE="$EXPECTED_SITE" \
+  RELEASE_CHANNEL="$EXPECTED_CHANNEL" \
+  RELEASE_SEQUENCE="$MANIFEST_SEQUENCE" \
+  RELEASE_EXPORT_LIVE_SQLITE="$RELEASE_EXPORT_MODE" \
+  bash "$RELEASE_SCRIPT_PATH" "$TRUSTED_SOURCE_DIR"
+release_status="$?"
+set -e
+
+if [ "$release_status" -ne 0 ]; then
+  write_status "failed" "0" "$release_status" "$BUNDLE_SHA" "$STARTED_AT" "$UPLOAD_GROUP"
+  status_finalized=1
+  printf 'football-release: guarded release failed with exit %s\n' "$release_status"
+  exit "$release_status"
+fi
+
+write_status "complete" "1" "0" "$BUNDLE_SHA" "$STARTED_AT" "$UPLOAD_GROUP"
+status_finalized=1
+rm -f -- "$SOURCE_BUNDLE" "$SOURCE_SHA" "$SOURCE_MANIFEST" "$SOURCE_SIGNATURE"
+printf 'football-release: guarded release complete %s\n' "$BUNDLE_SHA"
+
+trap - EXIT
+rm -rf -- "$work_dir"
+exit 0

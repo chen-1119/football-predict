@@ -110,7 +110,10 @@ const run = () => {
   });
 
   const leakageGuard = String(modelEvaluation?.policy?.leakageGuard || "");
-  pushCheck(checks, "backtest leakage guard excludes review snapshots", /review snapshots are excluded/i.test(leakageGuard), {
+  pushCheck(checks, "backtest leakage guard restricts promotion to immutable v2 decision snapshots",
+    leakageGuard.includes("promotion metrics use only rows with a trusted result observation")
+    && leakageGuard.includes("immutable v2 decision snapshot")
+    && leakageGuard.includes("v1 and wrapper fallbacks remain audit-only"), {
     leakageGuard: leakageGuard || null
   });
 
