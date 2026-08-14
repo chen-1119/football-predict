@@ -1302,7 +1302,7 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
   assert.match(runBody, /--property="MemoryMax=1024M"/);
   assert.match(runBody, /--property="MemorySwapMax=256M"/);
   assert.match(runBody, /--property="OOMPolicy=stop"/);
-  assert.match(bundleRelease, /RELEASE_LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS:-240/);
+  assert.match(bundleRelease, /RELEASE_LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS:-300/);
   const runtimeBounds = /\[ "\$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" -ge ([0-9]+) \][\s\S]*?\[ "\$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" -le ([0-9]+) \]/.exec(bundleRelease);
   assert.ok(runtimeBounds, "live SQLite prebuild RuntimeMaxSec must have explicit numeric bounds");
   const runtimeMin = Number(runtimeBounds[1]);
@@ -1310,6 +1310,7 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
   const runtimeAccepted = (value) => Number.isInteger(value) && value >= runtimeMin && value <= runtimeMax;
   assert.equal(runtimeAccepted(239), true);
   assert.equal(runtimeAccepted(240), true);
+  assert.equal(runtimeAccepted(300), true);
   assert.equal(runtimeAccepted(301), false);
   assert.equal(runtimeAccepted(59), false);
   assert.deepEqual({ runtimeMin, runtimeMax }, { runtimeMin: 60, runtimeMax: 300 });

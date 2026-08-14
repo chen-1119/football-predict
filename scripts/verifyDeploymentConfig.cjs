@@ -1439,7 +1439,7 @@ const run = () => {
   );
   const sealedWindow = bundleReleaseScript.slice(prebuild, pointerKeeper);
   pushCheck(checks, "signed release bounds live SQLite prebuild resources, capacity, and heartbeat age", (
-    bundleReleaseScript.includes("RELEASE_LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS:-240")
+    bundleReleaseScript.includes("RELEASE_LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS:-300")
     && bundleReleaseScript.includes('[ "$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" -ge 60 ]')
     && bundleReleaseScript.includes('[ "$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" -le 300 ]')
     && bundleReleaseScript.includes('IOSchedulingPriority=4')
@@ -1476,7 +1476,7 @@ const run = () => {
     && !sealedWindow.includes('refresh_candidate_capture_heartbeat_for_readiness')
   ), {
     runtimeMinSeconds: 60,
-    runtimeMaxSeconds: 240,
+    runtimeMaxSeconds: 300,
     memoryHighMiB: 768,
     memoryMaxMiB: 1024,
     memorySwapMaxMiB: 256,

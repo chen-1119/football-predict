@@ -2604,7 +2604,7 @@ const readPlanSqliteStatus = async () => {
     "live SQLite prebuild refuses to overlap an active sync worker",
     "start_release_sync_write_barrier",
     "canonical live sync write barrier did not drain cleanly after service stop",
-    "RELEASE_LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS:-240",
+    "RELEASE_LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS:-300",
     "LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS\" -ge 60",
     "LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS\" -le 300",
     "IOSchedulingPriority=4",
