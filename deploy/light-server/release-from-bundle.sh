@@ -6843,14 +6843,14 @@ prepare_release_perf_access_token \
 TIMER_STATE_DIRTY=1
 quiesce_managed_maintenance_for_sqlite_snapshot \
   || abort_before_swap "managed maintenance could not be quiesced before watcher pause"
-assert_live_sqlite_prebuild_capacity \
-  || abort_before_swap "live SQLite prebuild capacity gate rejected the release host"
 start_release_sync_write_barrier \
   || abort_before_swap "canonical live sync write barrier could not freeze generation commits before worker pause"
 stop_worker_for_release_window \
   || abort_before_swap "sync worker could not be paused before live SQLite prebuild"
 pause_current_fast_watcher_for_live_prebuild \
   || abort_before_swap "current fast result watcher could not be paused for live SQLite prebuild"
+assert_live_sqlite_prebuild_capacity \
+  || abort_before_swap "live SQLite prebuild capacity gate rejected the release host"
 run_as_service_user_with_runtime_env env \
   PERF_BASE_URL="http://${HOST}:${PORT}" PERF_START_SERVER=0 \
   PERF_ACCESS_TOKEN_FILE="$RELEASE_PERF_ACCESS_TOKEN_PATH" \

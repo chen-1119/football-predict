@@ -1398,11 +1398,14 @@ const run = () => {
       && bundleReleaseScript.includes("nginx -t || return 1")
   });
 
-  const capacityGate = bundleReleaseScript.indexOf("live SQLite prebuild capacity gate rejected the release host");
-  const writeBarrier = bundleReleaseScript.indexOf("start_release_sync_write_barrier", capacityGate);
+  const writeBarrier = bundleReleaseScript.indexOf("start_release_sync_write_barrier");
   const finalWorkerStop = bundleReleaseScript.indexOf(
     "sync worker could not be paused before live SQLite prebuild",
     writeBarrier,
+  );
+  const capacityGate = bundleReleaseScript.indexOf(
+    "live SQLite prebuild capacity gate rejected the release host",
+    finalWorkerStop,
   );
   const pressureGate = bundleReleaseScript.indexOf(
     "current HTTP pressure gate failed before final live SQLite prebuild",
@@ -1462,10 +1465,10 @@ const run = () => {
     && envExample.includes('RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB=1152')
     && envExample.includes('RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_MEMORY_CURRENT_MIB=640')
     && envExample.includes('RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_WORKING_SET_MIB=512')
-    && capacityGate >= 0
-    && writeBarrier > capacityGate
+    && writeBarrier >= 0
     && finalWorkerStop > writeBarrier
-    && pressureGate > finalWorkerStop
+    && capacityGate > finalWorkerStop
+    && pressureGate > capacityGate
     && performanceCredentialCleanup > pressureGate
     && postPressureCapacityGate > performanceCredentialCleanup
     && finalHeartbeatRefresh > postPressureCapacityGate
@@ -1483,10 +1486,10 @@ const run = () => {
     memoryHighMiB: 768,
     memoryMaxMiB: 1024,
     memorySwapMaxMiB: 256,
-    capacityGateBeforeBarrier: capacityGate >= 0
-      && writeBarrier > capacityGate
-      && finalWorkerStop > writeBarrier,
-    heartbeatFreshnessOrder: pressureGate > finalWorkerStop
+    barrierBeforeWorkerPause: writeBarrier >= 0
+      && finalWorkerStop > writeBarrier
+      && capacityGate > finalWorkerStop,
+    heartbeatFreshnessOrder: pressureGate > capacityGate
       && performanceCredentialCleanup > pressureGate
       && postPressureCapacityGate > performanceCredentialCleanup
       && finalHeartbeatRefresh > postPressureCapacityGate

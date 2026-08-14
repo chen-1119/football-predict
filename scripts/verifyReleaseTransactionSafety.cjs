@@ -866,10 +866,10 @@ check("sqlite recovery uses explicit tokens, validates snapshots, and quiesces m
   assert.match(quiesceBody, /systemctl stop/);
   assertOrdered(main, [
     "managed maintenance could not be quiesced before watcher pause",
-    "live SQLite prebuild capacity gate rejected the release host",
     "canonical live sync write barrier could not freeze generation commits before worker pause",
     "sync worker could not be paused before live SQLite prebuild",
     "current fast result watcher could not be paused for live SQLite prebuild",
+    "live SQLite prebuild capacity gate rejected the release host",
     "current HTTP pressure gate failed before final live SQLite prebuild",
     "post-pressure live SQLite prebuild capacity gate rejected the release host",
     "candidate deadline capture heartbeat refresh failed before live SQLite prebuild",
@@ -1006,10 +1006,10 @@ check("release transaction bounds the old watcher memory pause and restores the 
   ], "rollback delegates watcher restoration to managed unit recovery before timers and evidence cleanup");
   assertOrdered(main, [
     "quiesce_managed_maintenance_for_sqlite_snapshot",
-    "assert_live_sqlite_prebuild_capacity",
     "start_release_sync_write_barrier",
     "stop_worker_for_release_window",
     "pause_current_fast_watcher_for_live_prebuild",
+    "assert_live_sqlite_prebuild_capacity",
     "fast watcher pause guard failed after current HTTP pressure gate",
     "post-pressure live SQLite prebuild capacity gate rejected the release host",
     "fast watcher pause guard failed after live SQLite prebuild",
@@ -1554,10 +1554,10 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
     "sync worker could not resume during isolated candidate verification",
     "run_trusted_candidate_verifier",
     "managed maintenance could not be quiesced before watcher pause",
-    "live SQLite prebuild capacity gate rejected the release host",
     "canonical live sync write barrier could not freeze generation commits before worker pause",
     "sync worker could not be paused before live SQLite prebuild",
     "current fast result watcher could not be paused for live SQLite prebuild",
+    "live SQLite prebuild capacity gate rejected the release host",
     "current HTTP pressure gate failed before final live SQLite prebuild",
     "post-pressure live SQLite prebuild capacity gate rejected the release host",
     "candidate deadline capture heartbeat refresh failed before live SQLite prebuild",
