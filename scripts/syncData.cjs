@@ -8315,7 +8315,10 @@ function enforceUnifiedPosteriorRecommendation(match, context) {
       ? "1X2 is shown as a unified-posterior reference; the page main pick is the BEST row only."
       : "Standard 1X2 is not on sale, so no raw 1X2 main pick is created; the verdict uses HHAD."
   );
-  if (oneXTwoReference?.tipCode === "WATCH") {
+  const oneXTwoMustFollowUnifiedDecision = !selectedIsHhad
+    || !hasHad
+    || oneXTwoReference?.tipCode === "WATCH";
+  if (oneXTwoMustFollowUnifiedDecision) {
     oneXTwoReference = {
       ...oneXTwoReference,
       oddsPoolCode: selectedIsHhad ? "HHAD" : "HAD",

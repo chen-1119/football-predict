@@ -189,10 +189,19 @@ const lowSpFinal = lowSpEndToEnd.probabilityModel.oneXTwo.final;
 const lowSpModelLeader = Object.entries({ "1": lowSpFinal.home, X: lowSpFinal.draw, "2": lowSpFinal.away })
   .sort((a, b) => b[1] - a[1])[0][0];
 const lowSpOneXTwo = lowSpEndToEnd.predictions.find((row) => row.marketType === "1X2");
+const lowSpBest = lowSpEndToEnd.predictions.find((row) => row.marketType === "BEST");
+const lowSpUnifiedCode = lowSpEndToEnd.probabilityModel.unifiedPosterior.selectedCode;
 assert.equal(lowSpModelLeader, "1", "fixture must begin with a calibrated home model leader");
-assert.equal(lowSpOneXTwo.tipCode, "2", "end-to-end 1X2 output must preserve the evidence-backed value reroute");
+assert.equal(lowSpOneXTwo.tipCode, lowSpUnifiedCode,
+  "the published 1X2 row must use the final unified evidence direction");
+assert.notEqual(lowSpOneXTwo.tipCode, "1",
+  "the lower-SP market favourite must not overwrite the unified evidence direction");
 assert.equal(lowSpOneXTwo.recommendationAction, "reference", "the market disagreement must block promotion and remain WATCH/reference");
 assert.ok(lowSpOneXTwo.riskTags.some((tag) => tag.en === "Market disagreement"));
+assert.equal(lowSpBest.tipCode, lowSpOneXTwo.tipCode,
+  "the public BEST direction must stay bound to the published 1X2 recommendation");
+assert.equal(lowSpBest.odds, lowSpOneXTwo.odds,
+  "the public BEST odds must come from the same published 1X2 recommendation");
 
 const marketOnlyDisagreement = selectValueAwareOneXTwo(
   {},
@@ -251,6 +260,8 @@ const noAuditableInputsFixture = {
   status: "SCHEDULED",
 };
 const noAuditableInputs = predictionSetWithoutOfficialOdds(noAuditableInputsFixture);
+const noAuditableOneXTwo = noAuditableInputs.predictions.find((row) => row.marketType === "1X2");
+const noAuditableBest = noAuditableInputs.predictions.find((row) => row.marketType === "BEST");
 assert.equal(auditableDirectionalInputCoverage(noAuditableInputsFixture).sufficient, false);
 assert.ok(noAuditableInputs.predictions.length >= 2);
 /* Legacy suppression assertions intentionally removed: every public fixture now keeps a low-weight reference direction.
@@ -275,6 +286,8 @@ assert.ok(noAuditableInputs.projectedScore && Number.isFinite(noAuditableInputs.
 assert.ok(["1", "X", "2"].includes(noAuditableInputs.probabilityModel.publicDecision.tipCode));
 assert.equal(noAuditableInputs.probabilityModel.publicDecision.directionPublished, true);
 assert.equal(noAuditableInputs.probabilityModel.publicDecision.formalRecommendation, false);
+assert.equal(noAuditableBest.tipCode, noAuditableOneXTwo.tipCode,
+  "cold-start BEST must stay bound to the visible model-only 1X2 reference");
 assert.ok(noAuditableInputs.probabilityModel.oneXTwo.final);
 assert.ok(noAuditableInputs.probabilityModel.unifiedPosterior);
 assert.ok(["1", "X", "2"].includes(noAuditableInputs.probabilityModel.internalDirectionalAudit.unifiedPosterior.selectedCode),
@@ -372,7 +385,7 @@ assert.ok(!/[锛鏂璇绔妯姒鐞璁缁棰]/.test(JSON.stringify({
 console.log(JSON.stringify({
   ok: true,
   verifier: "prediction-direction-integrity",
-  assertions: 57,
+  assertions: 61,
   guarantees: {
     lowerSpCannotOverrideEvidence: true,
     hhadMarketContradictionDowngradesToWatch: true,
