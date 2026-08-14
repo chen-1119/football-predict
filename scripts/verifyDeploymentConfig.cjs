@@ -1398,9 +1398,12 @@ const run = () => {
       && bundleReleaseScript.includes("nginx -t || return 1")
   });
 
-  const finalWorkerStop = bundleReleaseScript.indexOf("sync worker could not be paused before live SQLite prebuild");
-  const capacityGate = bundleReleaseScript.indexOf("assert_live_sqlite_prebuild_capacity", finalWorkerStop);
+  const capacityGate = bundleReleaseScript.indexOf("live SQLite prebuild capacity gate rejected the release host");
   const writeBarrier = bundleReleaseScript.indexOf("start_release_sync_write_barrier", capacityGate);
+  const finalWorkerStop = bundleReleaseScript.indexOf(
+    "sync worker could not be paused before live SQLite prebuild",
+    writeBarrier,
+  );
   const pressureGate = bundleReleaseScript.indexOf(
     "current HTTP pressure gate failed before final live SQLite prebuild",
     writeBarrier,
@@ -1459,10 +1462,10 @@ const run = () => {
     && envExample.includes('RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB=1152')
     && envExample.includes('RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_MEMORY_CURRENT_MIB=640')
     && envExample.includes('RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_WORKING_SET_MIB=512')
-    && finalWorkerStop >= 0
-    && capacityGate > finalWorkerStop
+    && capacityGate >= 0
     && writeBarrier > capacityGate
-    && pressureGate > writeBarrier
+    && finalWorkerStop > writeBarrier
+    && pressureGate > finalWorkerStop
     && performanceCredentialCleanup > pressureGate
     && postPressureCapacityGate > performanceCredentialCleanup
     && finalHeartbeatRefresh > postPressureCapacityGate
@@ -1480,8 +1483,10 @@ const run = () => {
     memoryHighMiB: 768,
     memoryMaxMiB: 1024,
     memorySwapMaxMiB: 256,
-    capacityGateBeforeBarrier: capacityGate > finalWorkerStop && writeBarrier > capacityGate,
-    heartbeatFreshnessOrder: pressureGate > writeBarrier
+    capacityGateBeforeBarrier: capacityGate >= 0
+      && writeBarrier > capacityGate
+      && finalWorkerStop > writeBarrier,
+    heartbeatFreshnessOrder: pressureGate > finalWorkerStop
       && performanceCredentialCleanup > pressureGate
       && postPressureCapacityGate > performanceCredentialCleanup
       && finalHeartbeatRefresh > postPressureCapacityGate
