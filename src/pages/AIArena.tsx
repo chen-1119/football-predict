@@ -55,8 +55,8 @@ export const AIArena: React.FC = () => {
             <span className="survival-kicker"><Swords size={16} aria-hidden="true" /> AI Big Five Survival</span>
             <h1>{language === 'zh' ? 'AI 五大联赛生存战' : 'AI Big Five Survival'}</h1>
             <p>{language === 'zh'
-              ? '六个 AI 策略在同一周、同一批五大联赛和同一官方赔率快照上竞技：每场都预测，只选三场投入虚拟积分。'
-              : 'Six AI strategies compete on the same weekly Big Five pool and official odds snapshot: every match gets a forecast, while only three receive virtual stakes.'}</p>
+              ? '六个 AI 策略在同一周、同一批五大联赛和同一官方赔率快照上竞技：每场都给出确定性推荐，积分由各 AI 按证据与风险自主决定，可投多场，也可全部为 0。'
+              : 'Six AI strategies share one weekly Big Five pool and official odds snapshot. Every match gets a deterministic pick, while each AI autonomously chooses any number of point stakes, including zero.'}</p>
             <div className="survival-hero-badges">
               <span><BrainCircuit size={14} /> 6 AI</span>
               <span><Target size={14} /> {arena.availableMatches}/10 {language === 'zh' ? '场' : 'matches'}</span>
@@ -76,13 +76,13 @@ export const AIArena: React.FC = () => {
 
         <section className="survival-principles" aria-label={language === 'zh' ? '竞技规则摘要' : 'Competition rule summary'}>
           <article><Target size={20} /><div><strong>{language === 'zh' ? '全场预测' : 'Forecast all'}</strong><span>{language === 'zh' ? '每个 AI 对本周全部入选比赛给出 1X2 概率、方向、比分和三条理由。' : 'Each AI submits 1X2 probabilities, a pick, scoreline, and three reasons for every selected match.'}</span></div></article>
-          <article><Coins size={20} /><div><strong>{language === 'zh' ? '三场投资' : 'Three investments'}</strong><span>{language === 'zh' ? '每周总投入 1500–2500；单场 300–1200；SP 大于 3.5 时最多 500。' : 'Weekly stake 1500–2500; 300–1200 per match; odds above 3.5 are capped at 500.'}</span></div></article>
+          <article><Coins size={20} /><div><strong>{language === 'zh' ? '自主积分' : 'Autonomous staking'}</strong><span>{language === 'zh' ? '使用分数凯利、数据质量、反方风险与资金区间动态计算；不为凑固定场数强行投入。' : 'Fractional Kelly, data quality, adversarial risk, and balance zones set each stake; no fixed count is forced.'}</span></div></article>
           <article><Trophy size={20} /><div><strong>{language === 'zh' ? '三榜合一' : 'Three rankings'}</strong><span>{language === 'zh' ? '财富榜、Brier 预测榜和最大回撤风险榜共同决定阶段成绩。' : 'Wealth, Brier accuracy, and maximum drawdown combine into the stage result.'}</span></div></article>
         </section>
 
         <div className="survival-disclosure"><ShieldCheck size={17} /><p>{language === 'zh'
-          ? '当前为策略模拟基础版：六个名称代表固定决策人格，尚未声称已调用对应外部大模型。虚拟积分不可充值、提现或作为跟投注建议；数据不计入正式模型命中率。'
-          : 'This is a strategy-simulation foundation. Names represent fixed decision profiles and do not claim live calls to external models. Virtual points cannot be purchased, cashed out, or treated as betting advice, and results are excluded from formal model metrics.'}</p></div>
+          ? '当前为策略模拟版：Gemini 3.7 已参与本轮规则审查，但排行榜仍是可复现的固定决策人格，不冒充每场实时外部模型调用。虚拟积分不可充值、提现或作为跟投注建议；数据不计入正式模型命中率。'
+          : 'This is a reproducible strategy simulation. Gemini 3.7 reviewed this rule revision, but the leaderboard does not claim live external-model calls for each fixture. Virtual points are not money or betting advice, and results stay outside formal model metrics.'}</p></div>
 
         {arena.integrity?.immutable && (
           <div className="survival-integrity" role="status">
@@ -95,14 +95,34 @@ export const AIArena: React.FC = () => {
 
         <AIArenaPreview matches={matches} arena={arena} />
 
+        {Boolean(arena.evidenceStandings?.length) && (
+          <section className="survival-evidence-ranking">
+            <div className="survival-section-heading">
+              <div><span><BrainCircuit size={15} /> {language === 'zh' ? '赛后复盘' : 'Post-match review'}</span><h2>{language === 'zh' ? '专业 Agent Brier 排行' : 'Professional-agent Brier ranking'}</h2></div>
+              <small>{language === 'zh' ? '越低越好；命中率仅作辅助' : 'Lower is better; hit rate is secondary'}</small>
+            </div>
+            <div className="survival-evidence-ranking-grid">
+              {arena.evidenceStandings!.map((row, index) => (
+                <article key={row.id}>
+                  <b>#{index + 1}</b>
+                  <span>{language === 'zh' ? row.nameZh : row.nameEn}</span>
+                  <strong>Brier {row.brierScore?.toFixed(3) ?? '—'}</strong>
+                  <small>{row.hits}/{row.settled} · {row.hitRate === null ? '—' : `${Math.round(row.hitRate * 100)}%`}</small>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
+
         <section className="survival-rules-panel">
           <div className="survival-section-heading">
             <div><span><Gauge size={15} /> {language === 'zh' ? '完整赛制' : 'Full format'}</span><h2>{language === 'zh' ? '月度生存规则' : 'Monthly survival rules'}</h2></div>
           </div>
           <div className="survival-rule-grid">
             <div><strong>10,000</strong><span>{language === 'zh' ? '每月重置的初始虚拟积分' : 'virtual points reset each month'}</span></div>
-            <div><strong>&lt; 3,000</strong><span>{language === 'zh' ? '进入黄区，单场最多投入 800' : 'yellow zone: 800 max per match'}</span></div>
-            <div><strong>&lt; 1,500</strong><span>{language === 'zh' ? '进入红区，每周最多 1,000，禁投高于 3.50' : 'red zone: 1,000 weekly cap; no odds above 3.50'}</span></div>
+            <div><strong>0–22%</strong><span>{language === 'zh' ? '每周风险预算由 AI 风格和当前积分动态决定，允许 0 投入' : 'weekly risk budget varies by AI profile and balance; zero is allowed'}</span></div>
+            <div><strong>&lt; 3,000</strong><span>{language === 'zh' ? '黄区压缩周风险与单场风险，不再使用固定注额' : 'yellow zone reduces weekly and single-fixture risk without fixed stakes'}</span></div>
+            <div><strong>&lt; 1,500</strong><span>{language === 'zh' ? '红区停止新增积分投入，但继续输出每场推荐并记录质量' : 'red zone stops new point stakes while every forecast and quality record continues'}</span></div>
             <div><strong>0</strong><span>{language === 'zh' ? '破产后仍预测，但停止投资至下月' : 'bankrupt: keep forecasting, stop staking until reset'}</span></div>
             <div><strong>12 + 8 + 5</strong><span>{language === 'zh' ? '财富榜、Brier 榜与风控奖励合并阶段积分' : 'wealth, Brier and risk rewards form the stage score'}</span></div>
           </div>
@@ -124,6 +144,8 @@ export const AIArena: React.FC = () => {
       </section>
     );
   }
+
+  const decisionAudit = selected.forecasts.find((forecast) => forecast.decisionAudit)?.decisionAudit;
 
   return (
     <article className="ai-arena-page survival-detail">
@@ -158,6 +180,36 @@ export const AIArena: React.FC = () => {
         </div>
       </section>
 
+      {decisionAudit && (
+        <section className="survival-evidence-panel" aria-label={language === 'zh' ? '专业 Agent 证据链' : 'Professional agent evidence chain'}>
+          <div className="survival-section-heading">
+            <div>
+              <span><ShieldCheck size={15} /> {language === 'zh' ? '可审计决策链' : 'Auditable decision chain'}</span>
+              <h2>{language === 'zh' ? 'A1–A8 专业 Agent 与总裁判' : 'A1–A8 professional agents and chief judge'}</h2>
+            </div>
+            <small>{language === 'zh' ? `数据完整度 ${Math.round(decisionAudit.dataQuality * 100)}%` : `Data quality ${Math.round(decisionAudit.dataQuality * 100)}%`}</small>
+          </div>
+          <div className="survival-evidence-summary">
+            <span>{language === 'zh' ? '平局结构' : 'Draw structure'} <b>{decisionAudit.drawSignalScore}/100</b></span>
+            <span>{language === 'zh' ? '反方风险' : 'Adversarial risk'} <b>{decisionAudit.adversarialRiskScore}/100</b></span>
+            <span>{language === 'zh' ? '总裁判方向' : 'Chief-judge pick'} <b>{arenaPickLabel(decisionAudit.judge.finalPick, language)}</b></span>
+            <span>{language === 'zh' ? '反方是否改判' : 'Review changed pick'} <b>{decisionAudit.judge.changedByAdversarialReview ? (language === 'zh' ? '是' : 'Yes') : (language === 'zh' ? '否' : 'No')}</b></span>
+          </div>
+          <div className="survival-evidence-grid">
+            {decisionAudit.evidenceAgents.map((evidence) => (
+              <article key={evidence.id} className={!evidence.available ? 'is-unavailable' : ''}>
+                <header><strong>{language === 'zh' ? evidence.nameZh : evidence.nameEn}</strong><b>{evidence.available ? arenaPickLabel(evidence.pick, language) : (language === 'zh' ? '中立' : 'Neutral')}</b></header>
+                <p>{language === 'zh' ? evidence.reasonZh : evidence.nameEn}</p>
+                <small>{language === 'zh' ? '证据强度' : 'Evidence'} {evidence.confidence}/100</small>
+              </article>
+            ))}
+          </div>
+          <p className="survival-evidence-note">{language === 'zh'
+            ? '平局结构分是相对信号，不是平局概率；情报未通过来源与时效校验时保持中立，不允许编造伤停或新闻。'
+            : 'The draw-structure score is not a draw probability. Intelligence remains neutral unless source and freshness checks pass.'}</p>
+        </section>
+      )}
+
       <section className="survival-analysis-grid" aria-label={language === 'zh' ? '六AI分析' : 'Six AI analyses'}>
         {arena.agents.map((agent) => {
           const forecast = agent.forecasts.find((row) => row.matchId === selected.match.id)!;
@@ -180,6 +232,7 @@ export const AIArena: React.FC = () => {
               </div>
               <div className="survival-analysis-meta">
                 <span>{language === 'zh' ? '信心' : 'Confidence'} <b>{'★'.repeat(forecast.confidence)}{'☆'.repeat(5 - forecast.confidence)}</b></span>
+                <span>{language === 'zh' ? '推荐层级' : 'Tier'} <b>{forecast.recommendationTier === 'HIGH_EVIDENCE' ? (language === 'zh' ? '高证据' : 'High evidence') : forecast.recommendationTier === 'LOW_CONFIDENCE' ? (language === 'zh' ? '低置信' : 'Low confidence') : (language === 'zh' ? '参考' : 'Reference')}</b></span>
                 <span>{language === 'zh' ? '比分' : 'Score'} <b>{forecast.projectedScore}</b></span>
                 <span>EV <b>{forecast.expectedValue >= 0 ? '+' : ''}{(forecast.expectedValue * 100).toFixed(1)}%</b></span>
                 {selected.settlement?.status === 'SETTLED' && <span>{language === 'zh' ? '赛果' : 'Result'} <b>{forecast.pick === selected.settlement.outcome ? '✓' : '×'}</b></span>}
@@ -189,9 +242,10 @@ export const AIArena: React.FC = () => {
                 {(['1', 'X', '2'] as const).map((code) => <span key={code}>{arenaPickLabel(code, language)} <b>{pct(forecast.probabilities[code])}</b></span>)}
               </div>
               <ol>{(language === 'zh' ? forecast.reasonsZh : forecast.reasonsEn).map((reason) => <li key={reason}>{reason}</li>)}</ol>
-              <footer>{forecast.investment
-                ? (language === 'zh' ? '本周三场投资之一' : 'One of this week’s three investments')
-                : (language === 'zh' ? '给出预测，但本周不投入' : 'Forecast submitted; no weekly stake')}</footer>
+              <footer>{(language === 'zh' ? forecast.stakeReasonZh : forecast.stakeReasonEn)
+                || (forecast.investment
+                  ? (language === 'zh' ? `已分配 ${forecast.stake} 积分` : `${forecast.stake} points allocated`)
+                  : (language === 'zh' ? '给出推荐，本场积分为 0' : 'Recommendation submitted; stake is zero'))}</footer>
             </article>
           );
         })}

@@ -69,21 +69,23 @@ export const AIArenaPreview: React.FC<AIArenaPreviewProps> = ({ matches, arena: 
         <div className="survival-ranking-table" role="table">
           <div className="survival-ranking-row is-head" role="row">
             <span>{language === 'zh' ? 'AI' : 'AI'}</span>
-            <span>{language === 'zh' ? '积分' : 'Points'}</span>
-            <span>{language === 'zh' ? '预测/Brier' : 'Forecast/Brier'}</span>
+            <span>{language === 'zh' ? '积分/保留' : 'Points/Reserve'}</span>
+            <span>{language === 'zh' ? '自主投入' : 'Auto stake'}</span>
+            <span>{language === 'zh' ? '战绩/ROI' : 'Record/ROI'}</span>
+            <span>Brier</span>
             <span>{language === 'zh' ? '最大回撤' : 'Max drawdown'}</span>
-            <span>{language === 'zh' ? '本周投资' : 'Investments'}</span>
             <span>{language === 'zh' ? '状态' : 'Status'}</span>
           </div>
           {scoreboardAgents.map((agent, index) => (
             <div className="survival-ranking-row" role="row" key={agent.id}>
               <span className="survival-agent-name"><i style={{ background: agent.color }} /> <b>#{index + 1}</b> {agent.name}</span>
-              <strong>{agent.balance.toLocaleString()}</strong>
+              <strong>{agent.balance.toLocaleString()}<small> / {(agent.reservedBalance ?? Math.max(0, agent.balance - agent.totalStake)).toLocaleString()}</small></strong>
+              <span>{agent.investedMatches} {language === 'zh' ? '场' : 'matches'} · {agent.totalStake}</span>
+              <span>{agent.won || 0}-{agent.lost || 0} · {agent.roi === null || agent.roi === undefined ? '—' : `${(agent.roi * 100).toFixed(1)}%`}</span>
               <span>{agent.brierScore === null
                 ? (language === 'zh' ? '等待结算' : 'Pending')
                 : <>{agent.brierScore.toFixed(4)}{agent.stageScore !== null && <small> · {agent.stageScore}分</small>}</>}</span>
               <span>{(agent.maxDrawdown * 100).toFixed(1)}%</span>
-              <span>{agent.investedMatches}/{Math.min(3, arena.availableMatches)} · {agent.totalStake}</span>
               <span className={`survival-status is-${agent.status.toLowerCase()}`}>{arenaStatusLabel(agent.status, language)}</span>
             </div>
           ))}
@@ -175,7 +177,12 @@ export const AIArenaPreview: React.FC<AIArenaPreviewProps> = ({ matches, arena: 
                       <span><i style={{ background: forecast.color }} /> {forecast.agentName}</span>
                       <strong>{arenaPickLabel(forecast.pick, language)}</strong>
                       <small>{'★'.repeat(forecast.confidence)}{'☆'.repeat(5 - forecast.confidence)}</small>
-                      {forecast.investment && <b><Coins size={12} /> {forecast.stake}</b>}
+                      <u className={`survival-tier is-${(forecast.recommendationTier || 'REFERENCE').toLowerCase()}`}>
+                        {language === 'zh'
+                          ? (forecast.recommendationTier === 'HIGH_EVIDENCE' ? '高证据' : forecast.recommendationTier === 'LOW_CONFIDENCE' ? '低置信' : '参考')
+                          : (forecast.recommendationTier || 'REFERENCE').replace('_', ' ')}
+                      </u>
+                      <b className={forecast.investment ? '' : 'is-zero-stake'}><Coins size={12} /> {forecast.stake || 0}</b>
                       {row.settlement?.status === 'SETTLED' && (
                         <em className={forecast.pick === row.settlement.outcome ? 'is-hit' : 'is-miss'}>
                           {forecast.pick === row.settlement.outcome ? '✓' : '×'}

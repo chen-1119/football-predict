@@ -16873,7 +16873,7 @@ async function sync() {
       formalStatisticsExcluded: true,
       error: null,
     } : {
-      version: "ai-big-five-survival-v2",
+      version: "ai-big-five-survival-v4",
       state: "ERROR",
       availableMatches: 0,
       targetMatches: 10,

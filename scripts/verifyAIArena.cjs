@@ -27,12 +27,19 @@ const localRequire = (specifier) => specifier === './runtimeUrls'
   ? { buildApiUrl: (endpoint) => endpoint }
   : require(specifier);
 new Function('exports', 'require', 'module', transpiled.outputText)(moduleRecord.exports, localRequire, moduleRecord);
-const { buildBigFiveSurvivalArena, arenaWeekRange } = moduleRecord.exports;
 const {
+  buildBigFiveSurvivalArena,
+  arenaWeekRange,
+  isPublishedBigFiveSurvivalArena,
+} = moduleRecord.exports;
+const {
+  AGENTS,
   PAYLOAD_VERSION,
   STATE_VERSION,
+  assignInvestments,
   updateAiArenaState,
 } = require('./aiArenaEngine.cjs');
+const { VERSION: DECISION_ENGINE_VERSION } = require('./aiArenaDecisionEngine.cjs');
 const { persistAiArenaSqlite } = require('./aiArenaSqlite.cjs');
 assert.equal(typeof buildBigFiveSurvivalArena, 'function');
 
@@ -69,6 +76,12 @@ const baseMatch = (id, league, index, overrides = {}) => ({
       poisson: { home: 0.55, draw: 0.25, away: 0.2 },
       final: { home: 0.54 - index * 0.01, draw: 0.25 + index * 0.005, away: 0.21 + index * 0.005 },
     },
+    contextSignals: {
+      attackIntent: { home: 58, away: 53 },
+      rankingPressure: { home: 57, away: 55 },
+      dataGaps: { coverageScore: 72, trustPenalty: 4, severeMissingCount: 1, missing: [] },
+      webConsensus: { available: false },
+    },
     elo: { homeMatches: 12, awayMatches: 12 },
     form: { sampleSize: 12 },
     leaguePrior: { matches: 80 },
@@ -100,25 +113,65 @@ for (const agent of arena.agents) {
   assert.equal(agent.startingBalance, 10_000);
   assert.equal(agent.balance, 10_000);
   assert.equal(agent.forecasts.length, 10, `${agent.name} must forecast every pool match`);
-  assert.equal(agent.investedMatches, 3, `${agent.name} must invest in exactly three matches`);
-  assert.ok(agent.totalStake >= 1500 && agent.totalStake <= 2500, `${agent.name} weekly stake must stay in range`);
+  assert.ok(agent.investedMatches >= 0 && agent.investedMatches <= 10, `${agent.name} must choose its own investment count`);
+  assert.ok(agent.totalStake >= 0 && agent.totalStake <= agent.balance * agent.staking.weeklyRiskFraction, `${agent.name} weekly risk cap must hold`);
+  assert.equal(agent.reservedBalance, agent.balance - agent.totalStake);
   for (const forecast of agent.forecasts) {
     const probabilityTotal = forecast.probabilities['1'] + forecast.probabilities.X + forecast.probabilities['2'];
     assert.ok(Math.abs(probabilityTotal - 1) < 1e-9, 'AI probabilities must sum to one');
     assert.ok(forecast.confidence >= 1 && forecast.confidence <= 5);
     assert.equal(forecast.reasonsZh.length, 3);
+    assert.ok(['HIGH_EVIDENCE', 'REFERENCE', 'LOW_CONFIDENCE'].includes(forecast.recommendationTier));
+    assert.ok(forecast.recommendationReasonCodes.includes('DETERMINISTIC_TOP_PROBABILITY'));
+    assert.ok(forecast.stakeAudit);
+    assert.ok(forecast.stakeReasonZh.length > 0);
     if (!forecast.investment) {
       assert.equal(forecast.stake, 0);
+      assert.notEqual(forecast.stakeAudit.reasonCode, 'ALLOCATED');
       continue;
     }
-    assert.ok(forecast.stake >= 300 && forecast.stake <= 1200);
+    assert.ok(forecast.stake >= 50);
+    assert.equal(forecast.stakeAudit.reasonCode, 'ALLOCATED');
+    assert.ok(forecast.stake <= forecast.stakeAudit.singleCap);
     const match = arena.matches.find((row) => row.match.id === forecast.matchId);
     assert.ok(match);
-    if (match.odds[forecast.pick] > 3.5) assert.ok(forecast.stake <= 500, 'long odds stake cap must hold');
+    if (match.odds[forecast.pick] > 3.5) assert.ok(forecast.stake <= 200, 'long odds risk-fraction cap must hold');
   }
 }
 
 assert.deepEqual(buildBigFiveSurvivalArena(fixtures, nowMs), arena, 'same snapshot must produce deterministic decisions');
+assert.doesNotMatch(source, /Math\.random|stableFraction/, 'arena decisions must not contain pseudo-random direction jitter');
+
+const allocationMatch = (odds = 2.5) => new Map([['allocation-test', {
+  id: 'allocation-test', leagueCode: 'premier-league', dateKey: '2026-08-11',
+  odds: { '1': odds, X: 3.4, '2': 3.8 },
+  marketProbabilities: { '1': 0.40, X: 0.30, '2': 0.30 },
+}]]);
+const allocationForecast = (overrides = {}) => ({
+  matchId: 'allocation-test', pick: '1', probabilities: { '1': 0.70, X: 0.18, '2': 0.12 },
+  confidence: 5, projectedScore: '2-0', reasonsZh: ['a', 'b', 'c'], reasonsEn: ['a', 'b', 'c'],
+  expectedValue: 0.75, recommendationTier: 'HIGH_EVIDENCE', recommendationReasonCodes: ['DETERMINISTIC_TOP_PROBABILITY'],
+  dataQuality: 1, adversarialRisk: 0.10,
+  decisionAudit: { dataQuality: 1, adversarialRiskScore: 10 },
+  investment: false, stake: 0, stakeReasonZh: '', stakeReasonEn: '', stakeAudit: null,
+  ...overrides,
+});
+const positiveAllocation = assignInvestments([allocationForecast()], allocationMatch(), AGENTS[0], 10_000)[0];
+assert.equal(positiveAllocation.investment, true, 'strong positive evidence must be eligible for autonomous staking');
+assert.ok(positiveAllocation.stake >= 50 && positiveAllocation.stake <= positiveAllocation.stakeAudit.singleCap);
+assert.equal(positiveAllocation.stakeAudit.reasonCode, 'ALLOCATED');
+const negativeAllocation = assignInvestments([allocationForecast({ expectedValue: -0.01 })], allocationMatch(), AGENTS[0], 10_000)[0];
+assert.equal(negativeAllocation.stake, 0);
+assert.equal(negativeAllocation.stakeAudit.reasonCode, 'NEGATIVE_OR_LOW_EV');
+const lowQualityAllocation = assignInvestments([allocationForecast({ dataQuality: 0.1, decisionAudit: { dataQuality: 0.1, adversarialRiskScore: 10 } })], allocationMatch(), AGENTS[0], 10_000)[0];
+assert.equal(lowQualityAllocation.pick, '1', 'low quality must retain an explicit recommendation direction');
+assert.equal(lowQualityAllocation.stake, 0, 'low quality must never force a stake');
+assert.equal(lowQualityAllocation.stakeAudit.reasonCode, 'DATA_QUALITY_LOW');
+const longOddsAllocation = assignInvestments([allocationForecast({ probabilities: { '1': 0.25, X: 0.40, '2': 0.35 }, expectedValue: 1.5 })], allocationMatch(10), AGENTS[0], 10_000)[0];
+assert.ok(longOddsAllocation.stake <= 50, 'odds at or above 8 must stay within 0.5% of balance');
+const redZoneAllocation = assignInvestments([allocationForecast()], allocationMatch(), AGENTS[0], 1_000)[0];
+assert.equal(redZoneAllocation.stake, 0, 'red zone must stop new stakes while forecasts continue');
+assert.equal(redZoneAllocation.stakeAudit.reasonCode, 'RED_ZONE_RESTRICTED');
 assert.equal(
   buildBigFiveSurvivalArena([
     baseMatch('cup', ['cup', '欧冠', 'Champions League'], 0),
@@ -139,6 +192,7 @@ const firstCycle = updateAiArenaState({
 assert.equal(firstCycle.state.version, STATE_VERSION);
 assert.equal(firstCycle.payload.version, PAYLOAD_VERSION);
 assert.equal(firstCycle.payload.state, 'LOCKED');
+assert.equal(isPublishedBigFiveSurvivalArena(firstCycle.payload), true);
 assert.equal(firstCycle.payload.complete, true);
 assert.equal(firstCycle.payload.matches.length, 10);
 assert.equal(firstCycle.payload.agents.length, 6);
@@ -147,10 +201,38 @@ assert.match(firstCycle.payload.poolHash, /^[a-f0-9]{64}$/);
 assert.match(firstCycle.payload.submissionRootHash, /^[a-f0-9]{64}$/);
 for (const agent of firstCycle.payload.agents) {
   assert.equal(agent.forecasts.length, 10);
-  assert.equal(agent.investedMatches, 3);
-  assert.ok(agent.totalStake >= 1500 && agent.totalStake <= 2500);
+  assert.ok(agent.investedMatches >= 0 && agent.investedMatches <= 10);
+  assert.ok(agent.totalStake >= 0 && agent.totalStake <= agent.balance * agent.staking.weeklyRiskFraction);
+  assert.equal(agent.reservedBalance, agent.balance - agent.totalStake);
   assert.match(agent.submissionHash, /^[a-f0-9]{64}$/);
+  for (const forecast of agent.forecasts) {
+    assert.equal(forecast.decisionAudit.version, DECISION_ENGINE_VERSION);
+    assert.equal(forecast.decisionAudit.evidenceAgents.length, 7);
+    assert.ok(forecast.decisionAudit.drawSignalScore >= 0 && forecast.decisionAudit.drawSignalScore <= 100);
+    assert.ok(forecast.decisionAudit.adversarialRiskScore >= 0 && forecast.decisionAudit.adversarialRiskScore <= 100);
+    assert.ok(['HIGH_EVIDENCE', 'REFERENCE', 'LOW_CONFIDENCE'].includes(forecast.recommendationTier));
+    assert.ok(forecast.stakeAudit);
+    assert.equal(
+      forecast.reasonsZh.some((reason) => reason.includes('平局结构') && reason.includes('反方风险')),
+      true,
+    );
+  }
 }
+
+const legacyLockedState = JSON.parse(JSON.stringify(firstCycle.state));
+const legacyLockedWeek = legacyLockedState.months[firstCycle.payload.monthKey].weeks[firstCycle.payload.weekStart];
+for (const submission of Object.values(legacyLockedWeek.agentForecasts)) {
+  submission.model = 'strategy-profile-v1';
+  for (const forecast of submission.forecasts) delete forecast.stakeAudit;
+}
+const legacyCompatibilityCycle = updateAiArenaState({
+  matches: lifecycleInput,
+  state: legacyLockedState,
+  now: '2026-08-11T00:00:00.000Z',
+});
+assert.equal(legacyCompatibilityCycle.payload.version, 'ai-big-five-survival-v3', 'legacy locked submissions must stay on their original contract');
+assert.equal(legacyCompatibilityCycle.payload.stakingEngine, null);
+assert.equal(legacyCompatibilityCycle.payload.submissionRootHash, legacyLockedWeek.submissionRootHash, 'legacy locked roots must not be rewritten');
 
 const duplicateCycle = updateAiArenaState({
   matches: lifecycleInput,
@@ -215,6 +297,9 @@ assert.equal(settledCycle.payload.standings.length, 6);
 assert.equal(settledCycle.payload.seasonStandings.length, 6);
 assert.ok(settledCycle.payload.awards?.monthChampion);
 assert.ok(settledCycle.payload.flopBoard.length > 0);
+assert.equal(settledCycle.payload.evidenceStandings.length, 6);
+assert.ok(settledCycle.payload.evidenceStandings.every((row) => row.settled === 10));
+assert.ok(settledCycle.payload.evidenceStandings.every((row) => Number.isFinite(row.brierScore)));
 for (const row of settledCycle.payload.standings) {
   assert.equal(row.settledPredictions, 10);
   assert.ok(Number.isFinite(row.brierScore));
@@ -224,6 +309,9 @@ for (const row of settledCycle.payload.standings) {
   assert.ok(row.riskRank >= 1 && row.riskRank <= 6);
   assert.ok(Number.isFinite(row.stageScore));
   assert.ok(row.balanceHistory.length >= 1);
+  assert.ok(row.settledStake >= 0);
+  assert.ok(Number.isFinite(row.realizedProfit));
+  assert.equal(row.roi === null || Number.isFinite(row.roi), true);
 }
 assert.equal(settledCycle.payload.formalStatisticsExcluded, true);
 assert.equal(settledCycle.payload.disclosure, 'strategy-simulation-not-external-model-calls');
@@ -264,6 +352,8 @@ try {
     assert.ok(tables.includes('ai_predictions'));
     assert.ok(tables.includes('ai_balance_history'));
     assert.equal(db.prepare('SELECT COUNT(*) AS count FROM ai_predictions WHERE settled_at IS NOT NULL').get().count, 60);
+    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM ai_predictions WHERE decision_version = ?').get(DECISION_ENGINE_VERSION).count, 60);
+    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM ai_predictions WHERE decision_evidence_json IS NOT NULL').get().count, 60);
   } finally {
     db.close();
   }
@@ -284,15 +374,22 @@ assert.match(appSource, /path="\/ai-arena"/);
 assert.match(appSource, /path="\/ai-arena\/:matchId"/);
 assert.doesNotMatch(listSource, /AIArenaPreview/);
 assert.match(arenaSource, /AI 五大联赛生存战/);
-assert.match(arenaSource, /strategy-simulation/);
+assert.match(arenaSource, /strategy simulation/);
 assert.match(navbarSource, /key: 'arena'/);
 assert.match(navbarSource, /AI生存战/);
 assert.match(arenaSource, /fetchPublishedBigFiveSurvivalArena/);
+assert.match(arenaSource, /A1–A8 专业 Agent 与总裁判/);
+assert.match(arenaSource, /平局结构分是相对信号，不是平局概率/);
+assert.match(arenaSource, /专业 Agent Brier 排行/);
+assert.match(arenaSource, /自主积分/);
+assert.doesNotMatch(arenaSource, /本周三场投资之一/);
+assert.match(previewSource, /战绩\/ROI/);
 assert.match(previewSource, /survival-flop-board/);
 assert.match(previewSource, /balanceHistory/);
 assert.match(serverSource, /\/api\/v1\/ai-arena/);
 assert.match(serverSource, /\/api\/v1\/ai-arena\/status/);
 assert.match(serverSource, /const validArena = Boolean\(arena && typeof arena === "object" && !Array\.isArray\(arena\)\)/);
+assert.doesNotMatch(serverSource, /sourceBatches\s*\.slice\(0, 32\)/);
 assert.match(generationSource, /ai-arena\.json/);
 assert.match(syncSource, /updateAiArenaState/);
 assert.match(syncSource, /AI_ARENA_STATE_PATH/);
@@ -319,4 +416,5 @@ console.log(JSON.stringify({
     flopRows: settledCycle.payload.flopBoard.length,
   },
   formalStatisticsExcluded: true,
+  decisionEngine: DECISION_ENGINE_VERSION,
 }, null, 2));

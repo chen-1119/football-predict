@@ -180,9 +180,9 @@
 .survival-ranking-table { overflow-x: auto; }
 .survival-ranking-row {
   display: grid;
-  grid-template-columns: minmax(150px, 1.3fr) .8fr 1fr .8fr 1fr .65fr;
+  grid-template-columns: minmax(150px, 1.25fr) 1fr .85fr .85fr .85fr .75fr .65fr;
   align-items: center;
-  min-width: 780px;
+  min-width: 980px;
   padding: 12px 10px;
   border-top: 1px solid rgba(135, 154, 171, .13);
   font-size: 13px;
@@ -201,6 +201,7 @@
 .survival-analysis-card header > i,
 .survival-agent-picks i { width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 10px currentColor; }
 .survival-agent-name b { color: var(--text-secondary); font-size: 11px; }
+.survival-ranking-row strong small { color: var(--text-secondary); font-size: 10px; font-weight: 500; }
 
 .survival-status { width: max-content; padding: 4px 8px; border-radius: 999px; background: rgba(58, 187, 125, .12); color: #7cdfac; font-size: 11px; }
 .survival-status.is-yellow { color: #f2c75c; background: rgba(242, 199, 92, .1); }
@@ -255,6 +256,10 @@
 .survival-agent-picks strong { color: #f2c75c; }
 .survival-agent-picks small { color: #7fcfa8; font-size: 10px; white-space: nowrap; }
 .survival-agent-picks b { display: flex; align-items: center; gap: 4px; color: #f2c75c; font-size: 10px; }
+.survival-agent-picks b.is-zero-stake { color: var(--text-secondary); font-weight: 600; }
+.survival-tier { width: max-content; padding: 2px 5px; border-radius: 999px; background: rgba(127, 207, 168, .1); color: #7fcfa8; font-size: 9px; text-decoration: none; }
+.survival-tier.is-low_confidence { background: rgba(236, 129, 121, .1); color: #ec8179; }
+.survival-tier.is-high_evidence { background: rgba(242, 199, 92, .12); color: #f2c75c; }
 .survival-agent-picks em { position: absolute; right: 8px; bottom: 7px; font-size: 17px; font-style: normal; font-weight: 900; }
 .survival-agent-picks em.is-hit { color: #72d8a8; }
 .survival-agent-picks em.is-miss { color: #ec8179; }
@@ -354,4 +359,100 @@
   .survival-balance-history > div { grid-template-columns: 75px 1fr 65px; }
   .survival-awards,
   .survival-season-table { grid-template-columns: 1fr; }
+}
+
+.survival-evidence-panel {
+  margin: 18px 0;
+  padding: 18px;
+  border: 1px solid hsl(var(--accent) / .32);
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(18, 28, 36, .98), rgba(9, 17, 23, .98));
+}
+
+.survival-evidence-ranking {
+  padding: 18px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 16px;
+  background: hsl(var(--bg-card));
+}
+
+.survival-evidence-ranking-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.survival-evidence-ranking-grid article {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 6px 10px;
+  align-items: center;
+  padding: 11px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 11px;
+  background: hsl(var(--bg-card-hover) / .82);
+}
+
+.survival-evidence-ranking-grid article > b { color: hsl(var(--accent)); }
+.survival-evidence-ranking-grid article > span { font-weight: 700; }
+.survival-evidence-ranking-grid article > strong { font-family: var(--font-numeric); }
+.survival-evidence-ranking-grid article > small { grid-column: 2 / 4; color: hsl(var(--text-muted)); }
+
+.survival-evidence-panel .survival-section-heading > small,
+.survival-evidence-grid p,
+.survival-evidence-note {
+  color: hsl(var(--text-secondary));
+}
+
+.survival-evidence-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.survival-evidence-summary span,
+.survival-evidence-grid article {
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+  background: hsl(var(--bg-card-hover) / .82);
+}
+
+.survival-evidence-summary span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  color: hsl(var(--text-secondary));
+  font-size: 12px;
+}
+
+.survival-evidence-summary b { color: hsl(var(--text-primary)); font-size: 15px; }
+
+.survival-evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.survival-evidence-grid article { padding: 12px; }
+.survival-evidence-grid article.is-unavailable { opacity: .58; }
+.survival-evidence-grid header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.survival-evidence-grid header b { color: hsl(var(--accent)); }
+.survival-evidence-grid p,
+.survival-evidence-note { font-size: 12px; line-height: 1.55; }
+.survival-evidence-grid small { color: hsl(var(--text-muted)); }
+.survival-evidence-note { margin: 12px 0 0; }
+
+@media (max-width: 860px) {
+  .survival-evidence-summary,
+  .survival-evidence-grid,
+  .survival-evidence-ranking-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 560px) {
+  .survival-evidence-summary,
+  .survival-evidence-grid,
+  .survival-evidence-ranking-grid { grid-template-columns: 1fr; }
 }

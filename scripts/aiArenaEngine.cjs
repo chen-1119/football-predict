@@ -2,9 +2,13 @@
 
 const crypto = require("node:crypto");
 const { isTrustedOfficialFinal } = require("../src/services/matchLifecycle.cjs");
+const {
+  buildArenaEvidenceSnapshot,
+  buildProfessionalDecision,
+} = require("./aiArenaDecisionEngine.cjs");
 
 const STATE_VERSION = "ai-big-five-survival-state-v1";
-const PAYLOAD_VERSION = "ai-big-five-survival-v2";
+const PAYLOAD_VERSION = "ai-big-five-survival-v4";
 const STARTING_BALANCE = 10_000;
 const OUTCOMES = Object.freeze(["1", "X", "2"]);
 const LEAGUES = Object.freeze([
@@ -15,21 +19,13 @@ const LEAGUES = Object.freeze([
   Object.freeze({ code: "ligue-1", nameZh: "法甲", nameEn: "Ligue 1", target: 2 }),
 ]);
 const AGENTS = Object.freeze([
-  Object.freeze({ id: "gpt", name: "GPT", model: "strategy-profile-v1", style: "balanced", styleZh: "全局均衡", styleEn: "Global balance", color: "#6ee7b7", weeklyBudget: 2000 }),
-  Object.freeze({ id: "claude", name: "Claude", model: "strategy-profile-v1", style: "steady", styleZh: "风险审慎", styleEn: "Risk first", color: "#f0b37e", weeklyBudget: 1600 }),
-  Object.freeze({ id: "gemini", name: "Gemini", model: "strategy-profile-v1", style: "balanced", styleZh: "多信号融合", styleEn: "Multi-signal", color: "#8ab4f8", weeklyBudget: 1900 }),
-  Object.freeze({ id: "deepseek", name: "DeepSeek", model: "strategy-profile-v1", style: "aggressive", styleZh: "价值搜索", styleEn: "Value search", color: "#8b9cff", weeklyBudget: 2200 }),
-  Object.freeze({ id: "grok", name: "Grok", model: "strategy-profile-v1", style: "aggressive", styleZh: "逆向进攻", styleEn: "Contrarian attack", color: "#f4d06f", weeklyBudget: 2500 }),
-  Object.freeze({ id: "qwen", name: "Qwen", model: "strategy-profile-v1", style: "steady", styleZh: "稳定执行", styleEn: "Stable execution", color: "#d5a6ff", weeklyBudget: 1800 }),
+  Object.freeze({ id: "gpt", name: "GPT", model: "autonomous-risk-v2", style: "balanced", styleZh: "全局均衡", styleEn: "Global balance", color: "#6ee7b7", staking: Object.freeze({ kellyFraction: 0.18, minEv: 0.020, minEdge: 0.005, minDataQuality: 0.45, maxAdversarialRisk: 0.75, weeklyRiskFraction: 0.18, singleRiskFraction: 0.060, correlationCapFraction: 0.10 }) }),
+  Object.freeze({ id: "claude", name: "Claude", model: "autonomous-risk-v2", style: "steady", styleZh: "风险审慎", styleEn: "Risk first", color: "#f0b37e", staking: Object.freeze({ kellyFraction: 0.10, minEv: 0.035, minEdge: 0.010, minDataQuality: 0.60, maxAdversarialRisk: 0.55, weeklyRiskFraction: 0.12, singleRiskFraction: 0.040, correlationCapFraction: 0.07 }) }),
+  Object.freeze({ id: "gemini", name: "Gemini 3.7", model: "gemini-3.7-reviewed-profile-v2", style: "balanced", styleZh: "多信号融合", styleEn: "Multi-signal", color: "#8ab4f8", staking: Object.freeze({ kellyFraction: 0.16, minEv: 0.025, minEdge: 0.008, minDataQuality: 0.55, maxAdversarialRisk: 0.65, weeklyRiskFraction: 0.16, singleRiskFraction: 0.050, correlationCapFraction: 0.09 }) }),
+  Object.freeze({ id: "deepseek", name: "DeepSeek", model: "autonomous-risk-v2", style: "aggressive", styleZh: "价值搜索", styleEn: "Value search", color: "#8b9cff", staking: Object.freeze({ kellyFraction: 0.22, minEv: 0.015, minEdge: 0.005, minDataQuality: 0.45, maxAdversarialRisk: 0.72, weeklyRiskFraction: 0.20, singleRiskFraction: 0.065, correlationCapFraction: 0.11 }) }),
+  Object.freeze({ id: "grok", name: "Grok", model: "autonomous-risk-v2", style: "aggressive", styleZh: "逆向进攻", styleEn: "Contrarian attack", color: "#f4d06f", staking: Object.freeze({ kellyFraction: 0.20, minEv: 0.030, minEdge: 0.015, minDataQuality: 0.40, maxAdversarialRisk: 0.78, weeklyRiskFraction: 0.22, singleRiskFraction: 0.070, correlationCapFraction: 0.12 }) }),
+  Object.freeze({ id: "qwen", name: "Qwen", model: "autonomous-risk-v2", style: "steady", styleZh: "稳定执行", styleEn: "Stable execution", color: "#d5a6ff", staking: Object.freeze({ kellyFraction: 0.08, minEv: 0.050, minEdge: 0.015, minDataQuality: 0.65, maxAdversarialRisk: 0.50, weeklyRiskFraction: 0.10, singleRiskFraction: 0.030, correlationCapFraction: 0.06 }) }),
 ]);
-const PARAMETERS = Object.freeze({
-  gpt: { modelWeight: 0.82, marketWeight: 0.18, valueWeight: 0.08, drawBias: 0, favoriteBias: 0, underdogBias: 0 },
-  claude: { modelWeight: 0.60, marketWeight: 0.40, valueWeight: 0.02, drawBias: 0.018, favoriteBias: 0.012, underdogBias: 0 },
-  gemini: { modelWeight: 0.70, marketWeight: 0.30, valueWeight: 0.12, drawBias: 0.004, favoriteBias: 0, underdogBias: 0 },
-  deepseek: { modelWeight: 0.76, marketWeight: 0.24, valueWeight: 0.20, drawBias: 0, favoriteBias: 0, underdogBias: 0.008 },
-  grok: { modelWeight: 0.86, marketWeight: 0.14, valueWeight: 0.25, drawBias: -0.008, favoriteBias: 0, underdogBias: 0.018 },
-  qwen: { modelWeight: 0.68, marketWeight: 0.32, valueWeight: 0.05, drawBias: 0.008, favoriteBias: 0.014, underdogBias: 0 },
-});
 const WEALTH_POINTS = Object.freeze([12, 9, 7, 5, 3, 1]);
 const PREDICTION_POINTS = Object.freeze([8, 6, 5, 3, 2, 1]);
 
@@ -69,16 +65,6 @@ const officialOdds = (match) => {
 const modelProbabilities = (match) => normalizeTriplet(match?.probabilityModel?.oneXTwo?.final);
 const devig = (odds) => normalizeTriplet({ "1": 1 / odds["1"], X: 1 / odds.X, "2": 1 / odds["2"] });
 const sha256 = (value) => crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex");
-const stableFraction = (value) => {
-  let hash = 2166136261;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0) / 0xffffffff;
-};
-const leader = (scores) => [...OUTCOMES]
-  .sort((left, right) => scores[right] - scores[left] || OUTCOMES.indexOf(left) - OUTCOMES.indexOf(right))[0];
 
 const shanghaiDateKey = (value) => new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit",
@@ -196,6 +182,11 @@ const candidateRows = (matches, weekStart, weekEnd, nowMs) => matches.flatMap((m
   const probabilities = modelProbabilities(match);
   const id = matchIdentity(match);
   if (!id || !leagueCode || dateKey < weekStart || dateKey > weekEnd || !odds || !probabilities) return [];
+  const marketProbabilities = devig(odds);
+  const evidenceSnapshot = buildArenaEvidenceSnapshot(match, {
+    baseProbabilities: probabilities,
+    marketProbabilities,
+  });
   return [{
     id,
     matchId: String(match.id || id),
@@ -208,10 +199,11 @@ const candidateRows = (matches, weekStart, weekEnd, nowMs) => matches.flatMap((m
     awayTeamName: match.awayTeamName || match.awayTeamNameEn || "Away",
     odds,
     baseProbabilities: probabilities,
-    marketProbabilities: devig(odds),
+    marketProbabilities,
+    evidenceSnapshot,
     oddsSource: "sporttery:HAD",
     oddsUpdatedAt: match.oddsUpdatedAt || null,
-    dataSnapshotHash: sha256({ id, kickoffTime: match.kickoffTime, odds, probabilities }),
+    dataSnapshotHash: sha256({ id, kickoffTime: match.kickoffTime, odds, probabilities, evidenceSnapshot }),
   }];
 });
 const selectPool = (matches, weekStart, weekEnd, nowMs) => {
@@ -227,29 +219,6 @@ const selectPool = (matches, weekStart, weekEnd, nowMs) => {
   return { candidates: selected, slots, complete: slots.every((slot) => slot.count === slot.target) };
 };
 
-const agentDistribution = (agent, match) => {
-  const parameters = PARAMETERS[agent.id] || PARAMETERS.gpt;
-  const model = match.baseProbabilities;
-  const market = match.marketProbabilities;
-  const odds = match.odds;
-  const favorite = leader(market);
-  const underdog = [...OUTCOMES].sort((left, right) => odds[right] - odds[left])[0];
-  const raw = Object.fromEntries(OUTCOMES.map((code, index) => {
-    const valueSignal = clamp(model[code] * odds[code] - 1, -0.35, 0.45);
-    const jitter = (stableFraction(`${agent.id}|${match.id}|${code}`) - 0.5) * 0.014;
-    const bias = (code === "X" ? parameters.drawBias : 0)
-      + (code === favorite ? parameters.favoriteBias : 0)
-      + (code === underdog ? parameters.underdogBias : 0)
-      + (index === 0 ? 0.0001 : 0);
-    return [code,
-      model[code] * parameters.modelWeight
-      + market[code] * parameters.marketWeight
-      + valueSignal * parameters.valueWeight * 0.11
-      + bias
-      + jitter];
-  }));
-  return normalizeTriplet(raw);
-};
 const scorelineFor = (match, pick) => {
   if (pick === "1") return "2-1";
   if (pick === "2") return "1-2";
@@ -264,35 +233,41 @@ const confidenceFor = (probabilities) => {
   if (score >= 0.38) return 2;
   return 1;
 };
-const pickLabel = (pick) => pick === "1" ? "主胜" : pick === "2" ? "客胜" : "平局";
-const reasonsFor = (agent, match, pick, probabilities) => {
-  const edge = probabilities[pick] - match.marketProbabilities[pick];
-  return [
-    `${pickLabel(pick)}在该策略分布中概率最高，为 ${Math.round(probabilities[pick] * 100)}%`,
-    edge >= 0.01
-      ? `相对同场去水市场高 ${Math.round(edge * 100)} 个百分点`
-      : "与同场去水市场接近，优先控制分歧风险",
-    `${agent.styleZh}规则评估官方 SP ${match.odds[pick].toFixed(2)} 后的风险收益`,
-  ];
-};
 const buildForecast = (agent, match) => {
-  const probabilities = agentDistribution(agent, match);
-  const pick = leader(probabilities);
+  const decision = buildProfessionalDecision(agent, match);
+  const probabilities = decision.probabilities;
+  const pick = decision.pick;
+  const confidence = confidenceFor(probabilities);
+  const dataQuality = clamp(finite(decision.decisionAudit?.dataQuality) ?? 0, 0, 1);
+  const adversarialRisk = clamp((finite(decision.decisionAudit?.adversarialRiskScore) ?? 100) / 100, 0, 1);
+  const recommendationTier = dataQuality >= 0.75 && confidence >= 4 && adversarialRisk <= 0.45
+    ? "HIGH_EVIDENCE"
+    : dataQuality >= 0.50 && confidence >= 2 && adversarialRisk <= 0.70
+      ? "REFERENCE"
+      : "LOW_CONFIDENCE";
   return {
     matchId: match.id,
     pick,
     probabilities,
-    confidence: confidenceFor(probabilities),
+    confidence,
     projectedScore: scorelineFor(match, pick),
-    reasonsZh: reasonsFor(agent, match, pick, probabilities),
-    reasonsEn: [
-      `${pick === "1" ? "Home win" : pick === "2" ? "Away win" : "Draw"} leads this strategy distribution at ${Math.round(probabilities[pick] * 100)}%`,
-      "Compared against the same devigged official market snapshot",
-      `${agent.styleEn} rules assess risk and reward at official SP ${match.odds[pick].toFixed(2)}`,
+    reasonsZh: decision.reasonsZh,
+    reasonsEn: decision.reasonsEn,
+    expectedValue: decision.expectedValue,
+    decisionAudit: decision.decisionAudit,
+    dataQuality,
+    adversarialRisk,
+    recommendationTier,
+    recommendationReasonCodes: [
+      "DETERMINISTIC_TOP_PROBABILITY",
+      `TIER_${recommendationTier}`,
+      ...(decision.decisionAudit?.missingSignals?.length ? ["MISSING_SIGNALS_DISCLOSED"] : []),
     ],
-    expectedValue: probabilities[pick] * match.odds[pick] - 1,
     investment: false,
     stake: 0,
+    stakeReasonZh: "尚未执行积分风险分配。",
+    stakeReasonEn: "Point-risk allocation has not run yet.",
+    stakeAudit: null,
   };
 };
 const balanceStatus = (balance) => {
@@ -301,41 +276,103 @@ const balanceStatus = (balance) => {
   if (balance < 3000) return "YELLOW";
   return "ACTIVE";
 };
+const stakeReason = (reasonCode, stake = 0) => {
+  const reasons = {
+    ALLOCATED: [`证据与预期价值通过门槛，自主分配 ${stake} 积分。`, `Evidence and expected value passed; ${stake} points allocated autonomously.`],
+    BANKRUPT: ["积分为 0，继续预测但停止投入。", "Balance is zero; forecasts continue but staking stops."],
+    NEGATIVE_OR_LOW_EV: ["预期价值未达到该 AI 的投入门槛，积分为 0。", "Expected value is below this AI's threshold; stake is zero."],
+    EDGE_BELOW_THRESHOLD: ["相对市场优势不足，积分为 0。", "The edge over market is insufficient; stake is zero."],
+    DATA_QUALITY_LOW: ["数据完整度不足，仅保留低置信推荐，积分为 0。", "Data quality is insufficient; the low-confidence recommendation remains, but stake is zero."],
+    ADVERSARIAL_RISK_HIGH: ["反方审查风险过高，积分为 0。", "Adversarial-review risk is too high; stake is zero."],
+    CONFIDENCE_LOW: ["方向领先幅度不足，积分为 0。", "The leading outcome margin is too small; stake is zero."],
+    RED_ZONE_RESTRICTED: ["处于红区且未通过强化门槛，积分为 0。", "Red-zone enhanced thresholds were not met; stake is zero."],
+    STAKE_BELOW_MINIMUM: ["凯利折算后的风险额度低于最小执行单位，积分为 0。", "The Kelly-adjusted risk amount is below the execution minimum; stake is zero."],
+    WEEKLY_RISK_BUDGET_EXHAUSTED: ["本周风险预算已用尽，积分为 0。", "The weekly risk budget is exhausted; stake is zero."],
+    CORRELATION_CAP_REACHED: ["同联赛同比赛日暴露达到上限，积分为 0。", "The same-league/day correlation cap is reached; stake is zero."],
+  };
+  return reasons[reasonCode] || ["未触发积分投入。", "No point stake was triggered."];
+};
 const assignInvestments = (forecasts, matchesById, agent, balance) => {
   const status = balanceStatus(balance);
-  if (status === "BANKRUPT" || forecasts.length < 3) return forecasts;
-  const weeklyMax = status === "RED" ? Math.min(1000, balance) : Math.min(agent.weeklyBudget, 2500, balance);
-  const singleMax = status === "YELLOW" ? 800 : 1200;
-  const eligible = forecasts.filter((forecast) => {
-    const odds = matchesById.get(forecast.matchId)?.odds?.[forecast.pick] || 0;
-    return !(status === "RED" && odds > 3.5);
-  }).sort((left, right) => (
-    (right.expectedValue + right.confidence * 0.025) - (left.expectedValue + left.confidence * 0.025)
+  const policy = agent.staking;
+  const zoneMultiplier = status === "RED" ? 0 : status === "YELLOW" ? 0.65 : 1;
+  const weeklyRiskFraction = status === "RED" ? 0
+    : status === "YELLOW" ? Math.min(policy.weeklyRiskFraction, 0.10) : policy.weeklyRiskFraction;
+  const singleRiskFraction = status === "RED" ? 0
+    : status === "YELLOW" ? Math.min(policy.singleRiskFraction, 0.04) : policy.singleRiskFraction;
+  const weeklyCap = Math.max(0, Math.floor(Math.min(balance, balance * weeklyRiskFraction) / 10) * 10);
+  const singleCap = Math.max(0, Math.floor(Math.min(balance, balance * singleRiskFraction) / 10) * 10);
+  const correlationCap = Math.max(0, Math.floor(Math.min(balance, balance * policy.correlationCapFraction) / 10) * 10);
+  let totalStake = 0;
+  const groupStakes = new Map();
+  const allocations = new Map();
+  const ordered = [...forecasts].sort((left, right) => (
+    right.expectedValue - left.expectedValue
+    || right.probabilities[right.pick] - left.probabilities[left.pick]
+    || right.confidence - left.confidence
     || left.matchId.localeCompare(right.matchId)
   ));
-  if (eligible.length < 3 || weeklyMax < 900) return forecasts;
-  const selected = eligible.slice(0, 3);
-  const ratios = [0.45, 0.33, 0.22];
-  const stakes = selected.map((forecast, index) => {
-    const odds = matchesById.get(forecast.matchId).odds[forecast.pick];
-    const cap = Math.min(singleMax, odds > 3.5 ? 500 : singleMax);
-    return Math.min(cap, Math.max(300, Math.round((weeklyMax * ratios[index]) / 100) * 100));
-  });
-  let remaining = Math.max(0, weeklyMax - stakes.reduce((sum, value) => sum + value, 0));
-  for (let index = 0; index < stakes.length && remaining >= 100; index += 1) {
-    const forecast = selected[index];
-    const odds = matchesById.get(forecast.matchId).odds[forecast.pick];
-    const cap = Math.min(singleMax, odds > 3.5 ? 500 : singleMax);
-    const addition = Math.min(Math.max(0, cap - stakes[index]), Math.floor(remaining / 100) * 100);
-    stakes[index] += addition;
-    remaining -= addition;
+
+  for (const forecast of ordered) {
+    const match = matchesById.get(forecast.matchId);
+    const odds = positive(match?.odds?.[forecast.pick]) || 0;
+    const edge = forecast.probabilities[forecast.pick] - (match?.marketProbabilities?.[forecast.pick] || 0);
+    const dataQuality = clamp(finite(forecast.decisionAudit?.dataQuality) ?? 0, 0, 1);
+    const adversarialRisk = clamp((finite(forecast.decisionAudit?.adversarialRiskScore) ?? 100) / 100, 0, 1);
+    let reasonCode = null;
+    if (status === "BANKRUPT") reasonCode = "BANKRUPT";
+    else if (status === "RED") reasonCode = "RED_ZONE_RESTRICTED";
+    else if (!(forecast.expectedValue >= policy.minEv) || !(odds > 1)) reasonCode = "NEGATIVE_OR_LOW_EV";
+    else if (edge < policy.minEdge) reasonCode = "EDGE_BELOW_THRESHOLD";
+    else if (dataQuality < policy.minDataQuality) reasonCode = "DATA_QUALITY_LOW";
+    else if (adversarialRisk > policy.maxAdversarialRisk) reasonCode = "ADVERSARIAL_RISK_HIGH";
+    else if (forecast.confidence < 2) reasonCode = "CONFIDENCE_LOW";
+
+    const rawKelly = odds > 1 ? Math.max(0, forecast.expectedValue / (odds - 1)) : 0;
+    const confidenceDiscount = clamp((forecast.confidence - 1) / 4, 0.15, 1);
+    const longOddsDiscount = odds > 3.5 ? clamp(3.5 / odds, 0.15, 1) : 1;
+    const discount = confidenceDiscount * dataQuality * (1 - adversarialRisk) * longOddsDiscount * zoneMultiplier;
+    const longOddsCap = odds >= 8 ? Math.floor(balance * 0.005 / 10) * 10
+      : odds > 3.5 ? Math.floor(balance * 0.02 / 10) * 10 : singleCap;
+    const effectiveSingleCap = Math.min(singleCap, longOddsCap);
+    const groupKey = `${match?.leagueCode || "unknown"}|${match?.dateKey || "unknown"}`;
+    const groupRemaining = Math.max(0, correlationCap - (groupStakes.get(groupKey) || 0));
+    const weeklyRemaining = Math.max(0, weeklyCap - totalStake);
+    let stake = reasonCode ? 0 : Math.floor((balance * policy.kellyFraction * rawKelly * discount) / 10) * 10;
+    stake = Math.min(stake, effectiveSingleCap, groupRemaining, weeklyRemaining);
+    if (!reasonCode && weeklyRemaining < 50) reasonCode = "WEEKLY_RISK_BUDGET_EXHAUSTED";
+    else if (!reasonCode && groupRemaining < 50) reasonCode = "CORRELATION_CAP_REACHED";
+    else if (!reasonCode && stake < 50) reasonCode = "STAKE_BELOW_MINIMUM";
+    if (reasonCode) stake = 0;
+    else reasonCode = "ALLOCATED";
+    if (stake > 0) {
+      totalStake += stake;
+      groupStakes.set(groupKey, (groupStakes.get(groupKey) || 0) + stake);
+    }
+    const [stakeReasonZh, stakeReasonEn] = stakeReason(reasonCode, stake);
+    allocations.set(forecast.matchId, {
+      investment: stake > 0,
+      stake,
+      stakeReasonZh,
+      stakeReasonEn,
+      stakeAudit: {
+        policy: "fractional-kelly-evidence-risk-v2",
+        eligible: stake > 0,
+        reasonCode,
+        rawKelly: round(rawKelly, 6),
+        discount: round(discount, 6),
+        dataQuality: round(dataQuality, 4),
+        adversarialRisk: round(adversarialRisk, 4),
+        marketEdge: round(edge, 6),
+        weeklyCap,
+        singleCap: effectiveSingleCap,
+        correlationCap,
+        allocatedStake: stake,
+        reserveAfter: Math.max(0, balance - totalStake),
+      },
+    });
   }
-  const stakeByMatch = new Map(selected.map((forecast, index) => [forecast.matchId, stakes[index]]));
-  return forecasts.map((forecast) => ({
-    ...forecast,
-    investment: stakeByMatch.has(forecast.matchId),
-    stake: stakeByMatch.get(forecast.matchId) || 0,
-  }));
+  return forecasts.map((forecast) => ({ ...forecast, ...allocations.get(forecast.matchId) }));
 };
 
 const monthMetrics = (month) => {
@@ -351,6 +388,8 @@ const monthMetrics = (month) => {
     let won = 0;
     let lost = 0;
     let voided = 0;
+    let settledStake = 0;
+    let realizedProfit = 0;
     for (const week of weeks) {
       const forecastRows = week.agentForecasts?.[agent.id]?.forecasts || [];
       for (const match of week.pool || []) {
@@ -371,6 +410,8 @@ const monthMetrics = (month) => {
           const delta = forecast.pick === actual
             ? forecast.stake * (match.odds[forecast.pick] - 1)
             : -forecast.stake;
+          settledStake += forecast.stake;
+          realizedProfit += delta;
           balance = Math.max(0, round(balance + delta, 2));
           if (delta >= 0) won += 1;
           else lost += 1;
@@ -391,6 +432,9 @@ const monthMetrics = (month) => {
       won,
       lost,
       voided,
+      settledStake: round(settledStake, 2),
+      realizedProfit: round(realizedProfit, 2),
+      roi: settledStake > 0 ? round(realizedProfit / settledStake, 6) : null,
       maxDrawdown: round(maxDrawdown, 6),
       balanceHistory,
       bankrupt,
@@ -597,6 +641,48 @@ const seasonStandings = (state) => AGENTS.map((agent) => {
   || a.agentId.localeCompare(b.agentId)
 )).map((row, index) => ({ ...row, rank: index + 1 }));
 
+const evidenceAgentStandings = (month) => {
+  const aggregate = new Map();
+  for (const week of Object.values(month?.weeks || {})) {
+    if (week?.status !== "LOCKED") continue;
+    const primarySubmission = week.agentForecasts?.[AGENTS[0].id];
+    for (const forecast of primarySubmission?.forecasts || []) {
+      const settlement = week.settlements?.[forecast.matchId];
+      if (!settlement || settlement.status !== "SETTLED") continue;
+      for (const evidence of forecast.decisionAudit?.evidenceAgents || []) {
+        if (!evidence.available || !evidence.distribution || !OUTCOMES.includes(evidence.pick)) continue;
+        const brier = OUTCOMES.reduce((sum, code) => (
+          sum + (Number(evidence.distribution[code]) - (code === settlement.outcome ? 1 : 0)) ** 2
+        ), 0);
+        const row = aggregate.get(evidence.id) || {
+          id: evidence.id,
+          nameZh: evidence.nameZh,
+          nameEn: evidence.nameEn,
+          settled: 0,
+          hits: 0,
+          brierTotal: 0,
+        };
+        row.settled += 1;
+        row.hits += evidence.pick === settlement.outcome ? 1 : 0;
+        row.brierTotal += brier;
+        aggregate.set(evidence.id, row);
+      }
+    }
+  }
+  return [...aggregate.values()].map((row) => ({
+    id: row.id,
+    nameZh: row.nameZh,
+    nameEn: row.nameEn,
+    settled: row.settled,
+    hits: row.hits,
+    hitRate: row.settled ? round(row.hits / row.settled, 4) : null,
+    brierScore: row.settled ? round(row.brierTotal / row.settled, 6) : null,
+  })).sort((left, right) => (
+    (left.brierScore ?? Number.POSITIVE_INFINITY) - (right.brierScore ?? Number.POSITIVE_INFINITY)
+    || left.id.localeCompare(right.id)
+  ));
+};
+
 const publicWeek = (week, standings) => {
   const byAgent = new Map(standings.map((row) => [row.id, row]));
   const agents = AGENTS.map((agent) => {
@@ -611,8 +697,15 @@ const publicWeek = (week, standings) => {
       forecasts,
       investedMatches: forecasts.filter((forecast) => forecast.investment).length,
       totalStake: forecasts.reduce((sum, forecast) => sum + forecast.stake, 0),
+      reservedBalance: Math.max(0, (stage?.balance ?? STARTING_BALANCE) - forecasts.reduce((sum, forecast) => sum + forecast.stake, 0)),
       brierScore: stage?.brierScore ?? null,
       settledPredictions: stage?.settledPredictions || 0,
+      won: stage?.won || 0,
+      lost: stage?.lost || 0,
+      voided: stage?.voided || 0,
+      settledStake: stage?.settledStake || 0,
+      realizedProfit: stage?.realizedProfit || 0,
+      roi: stage?.roi ?? null,
       maxDrawdown: stage?.maxDrawdown || 0,
       wealthRank: stage?.wealthRank ?? null,
       predictionRank: stage?.predictionRank ?? null,
@@ -641,6 +734,7 @@ const publicWeek = (week, standings) => {
     marketProbabilities: match.marketProbabilities,
     oddsUpdatedAt: match.oddsUpdatedAt,
     dataSnapshotHash: match.dataSnapshotHash,
+    evidenceSnapshotHash: match.evidenceSnapshot?.hash || null,
     settlement: week.settlements?.[match.id] || null,
     forecasts: agents.flatMap((agent) => {
       const forecast = agent.forecasts.find((row) => row.matchId === match.id);
@@ -695,10 +789,16 @@ const updateAiArenaState = ({ matches, state: inputState, now = new Date().toISO
   const projected = publicWeek(week, standings);
   const availableMatches = week.pool?.length || 0;
   const complete = week.status === "LOCKED";
+  const autonomousStakingActive = !complete || AGENTS.every((agent) => {
+    const submission = week.agentForecasts?.[agent.id];
+    return /(?:autonomous-risk-v2|gemini-3\.7-reviewed-profile-v2)/.test(String(submission?.model || ""))
+      && Array.isArray(submission?.forecasts)
+      && submission.forecasts.every((forecast) => forecast?.stakeAudit?.policy === "fractional-kelly-evidence-risk-v2");
+  });
   const dates = complete ? [...new Set((week.pool || []).map((row) => row.dateKey))].sort() : [];
   const payload = {
     ok: true,
-    version: PAYLOAD_VERSION,
+    version: autonomousStakingActive ? PAYLOAD_VERSION : "ai-big-five-survival-v3",
     generatedAt: now,
     monthKey,
     weekStart,
@@ -715,10 +815,31 @@ const updateAiArenaState = ({ matches, state: inputState, now = new Date().toISO
     agents: projected.agents,
     standings,
     seasonStandings: seasonStandings(state),
+    evidenceStandings: evidenceAgentStandings(month),
     awards: monthlyAwards(month, standings),
     dates,
     flopBoard: flopRows(month),
-    rules: {
+    rules: autonomousStakingActive ? {
+      startingBalance: STARTING_BALANCE,
+      predictionsPerAgent: complete ? 10 : 0,
+      stakingMode: "autonomous-fractional-kelly-v2",
+      investmentsPerAgent: null,
+      zeroStakeAllowed: true,
+      minimumExecutableStake: 50,
+      weeklyRiskFractionRange: [0.10, 0.22],
+      singleRiskFractionRange: [0.03, 0.07],
+      longOddsThreshold: 3.5,
+      longOddsRiskFractionMax: 0.02,
+      extremeOddsThreshold: 8,
+      extremeOddsRiskFractionMax: 0.005,
+      yellowBalance: 3000,
+      yellowWeeklyRiskFractionMax: 0.10,
+      yellowSingleRiskFractionMax: 0.04,
+      redBalance: 1500,
+      redWeeklyRiskFractionMax: 0,
+      redSingleRiskFractionMax: 0,
+      bankruptBalance: 0,
+    } : {
       startingBalance: STARTING_BALANCE,
       predictionsPerAgent: complete ? 10 : 0,
       investmentsPerAgent: complete ? 3 : 0,
@@ -740,6 +861,8 @@ const updateAiArenaState = ({ matches, state: inputState, now = new Date().toISO
       submissionRootHash: week.submissionRootHash,
       stateHash: sha256(state),
     },
+    decisionEngine: "professional-agent-fusion-v1",
+    stakingEngine: autonomousStakingActive ? "fractional-kelly-evidence-risk-v2" : null,
     disclosure: "strategy-simulation-not-external-model-calls",
     formalStatisticsExcluded: true,
   };
@@ -754,7 +877,9 @@ module.exports = {
   STARTING_BALANCE,
   STATE_VERSION,
   arenaWeekRange,
+  assignInvestments,
   balanceStatus,
+  buildForecast,
   identifyLeague,
   updateAiArenaState,
 };

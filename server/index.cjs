@@ -10643,12 +10643,17 @@ const handleApi = async (req, res, url) => {
     const basePublication = resolveBasePublication();
     const arena = readStablePublicationMetadata(basePublication, "ai-arena.json", null);
     const validArena = Boolean(arena && typeof arena === "object" && !Array.isArray(arena));
+    const supportedArenaVersion = [
+      "ai-big-five-survival-v2",
+      "ai-big-five-survival-v3",
+      "ai-big-five-survival-v4",
+    ].includes(arena?.version);
     const agents = validArena && Array.isArray(arena.agents) ? arena.agents : [];
     const leagueSlots = validArena && Array.isArray(arena.leagueSlots) ? arena.leagueSlots : [];
     const hashPresent = (value) => /^[a-f0-9]{64}$/.test(String(value || ""));
     return sendJsonCached(req, res, {
       ok: validArena
-        && arena.version === "ai-big-five-survival-v2"
+        && supportedArenaVersion
         && agents.length === 6
         && leagueSlots.length === 5
         && arena.formalStatisticsExcluded === true,
@@ -10685,7 +10690,7 @@ const handleApi = async (req, res, url) => {
       ? arena
       : {
           ok: true,
-          version: "ai-big-five-survival-v2",
+          version: "ai-big-five-survival-v4",
           generatedAt: null,
           state: "UNAVAILABLE",
           targetMatches: 10,

@@ -2414,7 +2414,8 @@ const run = async () => {
     const aiArenaStatusPublished = aiArenaStatus.status === 200
       && aiArenaStatus.body?.ok === true
       && aiArenaStatus.body?.version === "ai-big-five-survival-status-v1"
-      && aiArenaStatus.body?.publicationVersion === "ai-big-five-survival-v2"
+      && ["ai-big-five-survival-v2", "ai-big-five-survival-v3", "ai-big-five-survival-v4"]
+        .includes(aiArenaStatus.body?.publicationVersion)
       && ["FORMING", "READY", "LOCKED"].includes(aiArenaStatusState)
       && Number(aiArenaStatus.body?.targetMatches) === 10
       && Number(aiArenaStatus.body?.availableMatches) >= 0
@@ -2460,7 +2461,8 @@ const run = async () => {
         && /^[a-f0-9]{64}$/.test(String(aiArena.body?.integrity?.stateHash || ""))
       );
       const aiArenaContractOk = aiArena.status === 200
-        && aiArena.body?.version === "ai-big-five-survival-v2"
+        && ["ai-big-five-survival-v2", "ai-big-five-survival-v3", "ai-big-five-survival-v4"]
+          .includes(aiArena.body?.version)
         && aiArenaStateValid
         && Number(aiArena.body?.targetMatches) === 10
         && Number(aiArena.body?.availableMatches) >= 0

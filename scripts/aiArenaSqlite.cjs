@@ -75,12 +75,21 @@ const ensureSchema = (db) => db.exec(`
   );
 `);
 
+const ensurePredictionAuditColumns = (db) => {
+  const columns = new Set(db.prepare("PRAGMA table_info(ai_predictions)").all().map((row) => row.name));
+  if (!columns.has("decision_version")) db.exec("ALTER TABLE ai_predictions ADD COLUMN decision_version TEXT");
+  if (!columns.has("decision_evidence_json")) db.exec("ALTER TABLE ai_predictions ADD COLUMN decision_evidence_json TEXT");
+  if (!columns.has("draw_signal_score")) db.exec("ALTER TABLE ai_predictions ADD COLUMN draw_signal_score REAL");
+  if (!columns.has("adversarial_risk_score")) db.exec("ALTER TABLE ai_predictions ADD COLUMN adversarial_risk_score REAL");
+};
+
 const persistAiArenaSqlite = ({ dbPath, state, payload }) => {
   if (!DatabaseSync) throw new Error("node:sqlite is unavailable for AI arena persistence");
   const resolvedPath = path.resolve(dbPath);
   const db = new DatabaseSync(resolvedPath);
   try {
     ensureSchema(db);
+    ensurePredictionAuditColumns(db);
     const insertPlayer = db.prepare(`
       INSERT INTO ai_players (
         id, name, model, style, month_key, balance, rank, status,
@@ -98,8 +107,9 @@ const persistAiArenaSqlite = ({ dbPath, state, payload }) => {
         id, match_id, ai_id, month_key, week_start, pick,
         probability_home, probability_draw, probability_away,
         confidence, projected_score, stake, odds, result, profit,
-        submission_hash, locked_at, settled_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        submission_hash, locked_at, settled_at,
+        decision_version, decision_evidence_json, draw_signal_score, adversarial_risk_score
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         result=excluded.result, profit=excluded.profit, settled_at=excluded.settled_at
     `);
@@ -183,6 +193,10 @@ const persistAiArenaSqlite = ({ dbPath, state, payload }) => {
                 submission.submissionHash,
                 week.lockedAt,
                 settlement?.settledAt || null,
+                forecast.decisionAudit?.version || null,
+                forecast.decisionAudit ? JSON.stringify(forecast.decisionAudit) : null,
+                forecast.decisionAudit?.drawSignalScore ?? null,
+                forecast.decisionAudit?.adversarialRiskScore ?? null,
               );
             }
           }
