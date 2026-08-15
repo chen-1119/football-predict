@@ -1,20 +1,20 @@
 {
   "version": "rolling-calibration-v1",
-  "generatedAt": "2026-08-15T10:28:22.707Z",
+  "generatedAt": "2026-08-15T10:51:22.203Z",
   "source": "settled-pre-match-predictions",
   "sample": {
-    "rows": 108,
+    "rows": 109,
     "oneXTwo": 0,
     "goals": 0,
-    "best": 108,
-    "recommendationPool": 108
+    "best": 109,
+    "recommendationPool": 109
   },
   "metrics": {
     "oneXTwoBrier": null,
     "oneXTwoLogLoss": null,
     "oneXTwoHitRate": null,
     "goalsHitRate": null,
-    "bestHitRate": 0.519
+    "bestHitRate": 0.523
   },
   "weightsByProfile": {
     "international": {
@@ -35,8 +35,8 @@
       "market": 0.58,
       "elo": 0.22,
       "poisson": 0.2,
-      "sample": 57,
-      "hitRate": 0.491
+      "sample": 58,
+      "hitRate": 0.5
     }
   },
   "gateByProfile": {
@@ -70,156 +70,148 @@
   },
   "scoreCalibration": {
     "version": "score-calibration-v2",
-    "generatedAt": "2026-08-15T10:28:22.706Z",
-    "source": "rolling-settled-projected-scores",
+    "generatedAt": "2026-08-15T10:51:22.202Z",
+    "source": "recent-settled-projected-scores",
     "sample": {
-      "rows": 21,
-      "recentRows": 11,
-      "totalProjectedRows": 108,
-      "sampleDays": 14,
+      "rows": 12,
+      "recentRows": 12,
+      "totalProjectedRows": 109,
+      "sampleDays": 2,
       "recentDays": 2,
       "rollingDays": 14,
       "minRows": 12,
-      "exactHitRate": 0.143,
-      "top3ExactHitRate": 0.286,
-      "outcomeHitRate": 0.381,
-      "top3OutcomeHitRate": 0.762,
-      "over25HitRate": 0.524,
-      "top3Over25HitRate": 0.952,
-      "totalBandHitRate": 0.286,
-      "top3TotalBandHitRate": 0.714,
-      "avgActualGoals": 2.76,
-      "avgProjectedGoals": 2.43,
-      "actualOver25Rate": 0.524,
-      "projectedOver25Rate": 0.429,
-      "actualBttsRate": 0.571,
-      "projectedBttsRate": 0.762,
-      "projectedLowScoreRate": 0.571,
+      "exactHitRate": 0.25,
+      "top3ExactHitRate": 0.333,
+      "outcomeHitRate": 0.417,
+      "top3OutcomeHitRate": 0.833,
+      "over25HitRate": 0.5,
+      "top3Over25HitRate": 0.917,
+      "totalBandHitRate": 0.333,
+      "top3TotalBandHitRate": 0.75,
+      "avgActualGoals": 3,
+      "avgProjectedGoals": 2.33,
+      "actualOver25Rate": 0.5,
+      "projectedOver25Rate": 0.333,
+      "actualBttsRate": 0.917,
+      "projectedBttsRate": 0.917,
+      "projectedLowScoreRate": 0.667,
       "actualScores": {
-        "1-1": 6,
-        "0-3": 3,
+        "1-1": 5,
         "3-2": 2,
         "0-0": 1,
-        "0-1": 1,
-        "1-0": 1,
         "1-2": 1,
         "1-3": 1,
-        "2-0": 1,
         "2-1": 1,
-        "3-0": 1,
-        "3-3": 1,
-        "4-0": 1
+        "3-3": 1
       },
       "projectedScores": {
         "1-1": 7,
-        "2-1": 7,
-        "2-0": 5,
-        "1-2": 2
+        "2-1": 3,
+        "1-2": 1,
+        "2-0": 1
       },
       "actualBands": {
-        "2": 7,
-        "3": 6,
-        "4+": 5,
-        "0-1": 3
+        "2": 5,
+        "3": 2,
+        "4+": 4,
+        "0-1": 1
       },
       "projectedBands": {
-        "2": 12,
-        "3": 9
+        "2": 8,
+        "3": 4
       },
       "actualShapes": {
-        "draw-btts": 7,
-        "clear-clean-sheet": 5,
-        "low-0-1": 3,
-        "open-4plus": 3,
+        "draw-btts": 6,
         "one-goal-btts": 2,
-        "clear-btts-open": 1
+        "open-4plus": 2,
+        "clear-btts-open": 1,
+        "low-0-1": 1
       },
       "projectedShapes": {
-        "one-goal-btts": 9,
         "draw-btts": 7,
-        "clear-clean-sheet": 5
+        "one-goal-btts": 4,
+        "clear-clean-sheet": 1
       }
     },
     "adjustments": {
-      "totalLambdaAdjustment": 0,
+      "totalLambdaAdjustment": 0.05,
       "over25ProbabilityShift": 0,
       "bttsProbabilityShift": 0,
-      "lowScoreRankPenalty": 0,
-      "openScoreRankBoost": 0,
+      "lowScoreRankPenalty": 0.03,
+      "openScoreRankBoost": 0.047,
       "bttsRankBoost": 0,
       "bandRankBoosts": {
-        "2": -0.024,
-        "4+": 0.043,
-        "0-1": 0.026
+        "2": -0.025,
+        "3": -0.017,
+        "4+": 0.06
       },
       "shapeRankBoosts": {
-        "one-goal-btts": -0.03,
-        "low-0-1": 0.029,
-        "open-4plus": 0.029
+        "open-4plus": 0.033,
+        "one-goal-btts": -0.016
       }
     },
     "reasons": [
-      "rolling-score-sample-for-hit-rate",
+      "recent-actual-goals-above-projection",
       "score-total-band-hit-rate-adjustment",
       "score-shape-hit-rate-adjustment"
     ]
   },
   "summary": {
     "total": {
-      "settled": 108,
-      "won": 56,
+      "settled": 109,
+      "won": 57,
       "lost": 52,
-      "hitRate": 0.519
+      "hitRate": 0.523
     },
     "byMarket": {
       "BEST": {
-        "settled": 108,
-        "won": 56,
+        "settled": 109,
+        "won": 57,
         "lost": 52,
-        "hitRate": 0.519
+        "hitRate": 0.523
       }
     },
     "byProfile": {
-      "other": {
-        "settled": 57,
-        "won": 28,
-        "lost": 29,
-        "hitRate": 0.491
-      },
       "international": {
         "settled": 51,
         "won": 28,
         "lost": 23,
         "hitRate": 0.549
+      },
+      "other": {
+        "settled": 58,
+        "won": 29,
+        "lost": 29,
+        "hitRate": 0.5
       }
     },
     "byMarketProfile": {
-      "BEST:other": {
-        "settled": 57,
-        "won": 28,
-        "lost": 29,
-        "hitRate": 0.491
-      },
       "BEST:international": {
         "settled": 51,
         "won": 28,
         "lost": 23,
         "hitRate": 0.549
+      },
+      "BEST:other": {
+        "settled": 58,
+        "won": 29,
+        "lost": 29,
+        "hitRate": 0.5
       }
     },
     "byOddsBucket": {},
     "byTip": {
-      "BEST:2": {
-        "settled": 38,
-        "won": 20,
-        "lost": 18,
-        "hitRate": 0.526
-      },
       "BEST:1": {
         "settled": 70,
         "won": 36,
         "lost": 34,
         "hitRate": 0.514
+      },
+      "BEST:2": {
+        "settled": 39,
+        "won": 21,
+        "lost": 18,
+        "hitRate": 0.538
       }
     }
   },
