@@ -515,6 +515,7 @@ const startCandidateProspectiveDeadlineHeartbeat = ({
   let normalHandle = null;
   let retryHandle = null;
   let stopped = false;
+  let paused = false;
   let nextRunAt = null;
   let lastSchedule = null;
   let inFlightTick = null;
@@ -534,7 +535,7 @@ const startCandidateProspectiveDeadlineHeartbeat = ({
     retryHandle = null;
   };
   const scheduleNormal = (evaluatedAt = readStatus()?.evaluatedAt || null) => {
-    if (stopped) return null;
+    if (stopped || paused) return null;
     clearNormal();
     const plan = scheduleFor(evaluatedAt, now());
     lastSchedule = plan;
@@ -554,7 +555,7 @@ const startCandidateProspectiveDeadlineHeartbeat = ({
     return plan;
   };
   const scheduleRetry = () => {
-    if (stopped || retryHandle !== null) return;
+    if (stopped || paused || retryHandle !== null) return;
     clearNormal();
     nextRunAt = new Date(now() + boundedRetryMs).toISOString();
     retryHandle = retryTimer(() => {
@@ -567,6 +568,13 @@ const startCandidateProspectiveDeadlineHeartbeat = ({
     }
   };
   const tick = ({ recoveryAttempt = false } = {}) => {
+    if (paused) {
+      return Promise.resolve({
+        ok: true,
+        skipped: true,
+        reason: "candidate-deadline-heartbeat-paused",
+      });
+    }
     if (inFlightTick) return inFlightTick;
     clearNormal();
     const publishedStatus = readStatus();
@@ -622,11 +630,23 @@ const startCandidateProspectiveDeadlineHeartbeat = ({
     get nextRunAt() { return nextRunAt; },
     get schedule() { return lastSchedule; },
     get inFlight() { return inFlightTick !== null; },
+    get paused() { return paused; },
     get lastResult() { return lastResult; },
     waitForIdle: () => inFlightTick || Promise.resolve(lastResult),
     waitForPublished: () => firstPublication,
+    pause: () => {
+      paused = true;
+      clearNormal();
+      clearRetry();
+    },
+    resume: () => {
+      if (stopped || !paused) return null;
+      paused = false;
+      return scheduleNormal();
+    },
     stop: () => {
       stopped = true;
+      paused = true;
       clearNormal();
       clearRetry();
     },
@@ -2657,6 +2677,7 @@ const main = async () => {
   }
   let cycleWake = null;
   do {
+    candidateDeadlineHeartbeat?.resume();
     const cadence = describeSyncCadence();
     const activeCycleStartedAt = new Date().toISOString();
     const activeCycleRelaySemanticBaseline = relaySnapshotSemanticFingerprint();
@@ -2753,6 +2774,15 @@ const main = async () => {
         }
       });
       const completedCycle = withCycleDuration(result);
+      if (releaseCycleNeedsReadinessHandoff(completedCycle)) {
+        // The release validator publishes its own exact cutoff heartbeat after
+        // observing sleeping state. Stop scheduling worker captures and drain
+        // the current child before advertising that handoff, otherwise both
+        // writers can contend on the prospective registry lock and force a
+        // healthy signed release to roll back.
+        candidateDeadlineHeartbeat?.pause();
+        await candidateDeadlineHeartbeat?.waitForIdle();
+      }
       if (activeEventCycle && completedCycle.degraded === true) {
         activeEventCycle = {
           ...activeEventCycle,

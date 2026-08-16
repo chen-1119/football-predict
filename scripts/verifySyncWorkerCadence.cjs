@@ -1420,6 +1420,20 @@ const verifyRelayWake = async () => {
   assert.ok(clockMs - heartbeatEpochMs < candidateDeadlineHeartbeatFreshnessLimitMs);
   assert.equal(normalDelayMs, 0, "a missed preventive slot is caught up immediately after recovery");
   assert.equal(heartbeat.schedule.due, true);
+  const timerCallsBeforePause = normalTimerCalls;
+  heartbeat.pause();
+  assert.equal(heartbeat.paused, true);
+  const pausedTick = await heartbeat.tick();
+  assert.equal(pausedTick.skipped, true);
+  assert.equal(pausedTick.reason, "candidate-deadline-heartbeat-paused");
+  assert.equal(heartbeatTicks, 2, "a release handoff cannot launch another registry writer");
+  heartbeat.resume();
+  assert.equal(heartbeat.paused, false);
+  assert.equal(
+    normalTimerCalls,
+    timerCallsBeforePause + 1,
+    "the ordinary heartbeat cadence resumes after the release handoff",
+  );
   heartbeat.stop();
 
   const baseline = { exists: true, token: "relay-a" };
