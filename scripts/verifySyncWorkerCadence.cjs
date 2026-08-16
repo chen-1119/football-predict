@@ -29,11 +29,13 @@ const {
   phaseLockWaitMs,
   releaseCycleDelayMs,
   releaseCycleInitialLockWaitMs,
+  releaseCycleNeedsReadinessHandoff,
   releaseCycleNeedsPriorityRetry,
   releaseCycleRetryMs,
   readinessIdleEvidenceAfter,
   readSourceCycleObservation,
   relaySnapshotChanged,
+  relayCatchupRequiredAfterCycle,
   relaySnapshotSemanticFileFingerprint,
   startCandidateProspectiveDeadlineHeartbeat,
   waitForNextCycle,
@@ -287,10 +289,35 @@ const completePriorityCycle = {
   },
 };
 assert.equal(releaseCycleNeedsPriorityRetry(completePriorityCycle), false);
+assert.equal(releaseCycleNeedsReadinessHandoff(completePriorityCycle), true);
 assert.equal(
   releaseCycleDelayMs(completePriorityCycle, configuredPostDeadlineHotIntervalMs),
   configuredPostDeadlineHotIntervalMs,
   "a complete publication returns to the ordinary cadence",
+);
+assert.equal(
+  relayCatchupRequiredAfterCycle({
+    loop: true,
+    enabled: true,
+    eligible: true,
+    baseline: { exists: true, token: "before" },
+    current: { exists: true, token: "after" },
+    cycle: completePriorityCycle,
+  }),
+  false,
+  "a complete release-priority cycle exposes readiness-safe idle even when the relay changed",
+);
+assert.equal(
+  relayCatchupRequiredAfterCycle({
+    loop: true,
+    enabled: true,
+    eligible: true,
+    baseline: { exists: true, token: "before" },
+    current: { exists: true, token: "after" },
+    cycle: { ...completePriorityCycle, releaseCycle: { priority: false } },
+  }),
+  true,
+  "ordinary cycles still perform immediate relay catch-up",
 );
 
 const stages = describeCycleStages();

@@ -1830,6 +1830,31 @@ const releaseCycleDelayMs = (cycle, normalDelayMs) => (
     : Math.max(0, Number(normalDelayMs || 0))
 );
 
+// A complete bundle-priority cycle must expose one real sleeping window so
+// the signed release can freeze the worker and verify the exact publication.
+// Relay snapshots are allowed to wake the following ordinary cycle, but they
+// must not turn this handoff into an unbounded chain of immediate catch-up
+// cycles while the release is waiting for readiness-safe idle.
+const releaseCycleNeedsReadinessHandoff = (cycle) => Boolean(
+  cycle?.releaseCycle?.priority === true
+  && isCompletePublicationCycle(cycle)
+);
+
+const relayCatchupRequiredAfterCycle = ({
+  loop,
+  enabled,
+  eligible,
+  baseline,
+  current,
+  cycle,
+}) => Boolean(
+  loop
+  && enabled
+  && eligible
+  && !releaseCycleNeedsReadinessHandoff(cycle)
+  && relaySnapshotChanged(baseline, current)
+);
+
 const completePublicationCycleEvidence = (cycle) => {
   if (!isCompletePublicationCycle(cycle)) return null;
   return Object.freeze({
@@ -2752,15 +2777,14 @@ const main = async () => {
       );
       loopDelayMs = releaseCycleDelayMs(completedCycle, normalLoopDelayMs);
       postCycleRelaySemantic = relaySnapshotSemanticFingerprint();
-      relayCatchupRequired = Boolean(
-        loop
-        && relayWakeEnabled
-        && relayWakeEligible
-        && relaySnapshotChanged(
-          activeCycleRelaySemanticBaseline,
-          postCycleRelaySemantic,
-        )
-      );
+      relayCatchupRequired = relayCatchupRequiredAfterCycle({
+        loop,
+        enabled: relayWakeEnabled,
+        eligible: relayWakeEligible,
+        baseline: activeCycleRelaySemanticBaseline,
+        current: postCycleRelaySemantic,
+        cycle: completedCycle,
+      });
       const nextWakeAt = loop
         ? new Date(Date.now() + (relayCatchupRequired ? 0 : loopDelayMs)).toISOString()
         : null;
@@ -2913,9 +2937,11 @@ module.exports = {
   releaseCycleDelayMs,
   releaseCycleInitialLockWaitMs,
   releaseCycleNeedsPriorityRetry,
+  releaseCycleNeedsReadinessHandoff,
   releaseCycleRetryMs,
   readinessIdleEvidenceAfter,
   relaySnapshotChanged,
+  relayCatchupRequiredAfterCycle,
   relaySnapshotFingerprint,
   relaySnapshotSemanticFingerprint,
   relaySnapshotSemanticFileFingerprint,
