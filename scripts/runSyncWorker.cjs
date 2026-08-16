@@ -372,6 +372,9 @@ const candidateDeadlineCaptureStatusAdvanced = (result, status) => {
 const runCandidateProspectiveDeadlineCapture = async ({
   timeoutMs = candidateDeadlineCaptureTimeoutMs,
   attemptKind = "scheduled",
+  run = runCommand,
+  readStatus = () => readJson(candidateProspectiveCaptureStatusFile, null),
+  writeAttempt = writeCandidateDeadlineCaptureAttempt,
 } = {}) => {
   if (!candidateDeadlineCaptureEnabled) {
     return { ok: true, skipped: true, reason: "disabled" };
@@ -400,7 +403,7 @@ const runCandidateProspectiveDeadlineCapture = async ({
       - attemptForceSettleMs,
   );
   try {
-    const result = await runCommand(
+    const result = await run(
       process.execPath,
       [candidateDeadlineCaptureScript],
       {
@@ -414,7 +417,7 @@ const runCandidateProspectiveDeadlineCapture = async ({
         stdio: "ignore",
       },
     );
-    const status = readJson(candidateProspectiveCaptureStatusFile, null);
+    const status = readStatus();
     if (!candidateDeadlineCaptureStatusAdvanced(result, status)) {
       const failed = {
         ...result,
@@ -424,7 +427,7 @@ const runCandidateProspectiveDeadlineCapture = async ({
         statusAdvanced: false,
         statusEvaluatedAt: status?.evaluatedAt || null,
       };
-      writeCandidateDeadlineCaptureAttempt({
+      writeAttempt({
         startedAt: result.startedAt || attemptStartedAt,
         finishedAt: result.finishedAt || new Date().toISOString(),
         ok: false,
@@ -445,7 +448,7 @@ const runCandidateProspectiveDeadlineCapture = async ({
       statusAdvanced: true,
       statusEvaluatedAt: status.evaluatedAt,
     };
-    writeCandidateDeadlineCaptureAttempt({
+    writeAttempt({
       startedAt: result.startedAt || attemptStartedAt,
       finishedAt: result.finishedAt || new Date().toISOString(),
       ok: true,
@@ -464,24 +467,43 @@ const runCandidateProspectiveDeadlineCapture = async ({
     });
     return completed;
   } catch (error) {
+    const observedStatus = readStatus();
+    const observedEvaluatedAtMs = Date.parse(observedStatus?.evaluatedAt || "");
+    const attemptStartedAtMs = Date.parse(attemptStartedAt);
+    const statusAdvanced = Boolean(
+      observedStatus?.version === "prospective-deadline-heartbeat-v2"
+      && Number.isFinite(observedEvaluatedAtMs)
+      && Number.isFinite(attemptStartedAtMs)
+      && observedEvaluatedAtMs >= attemptStartedAtMs
+    );
     const failed = {
       ok: false,
       skipped: false,
       reason: "candidate-deadline-capture-failed",
       error: error?.message || String(error),
       errorCode: error?.code || null,
+      exitCode: Number.isInteger(error?.exitCode) ? error.exitCode : null,
+      signal: error?.signal || null,
+      statusAdvanced,
+      statusEvaluatedAt: observedStatus?.evaluatedAt || null,
+      publishedStatusReason: observedStatus?.reason || null,
+      publishedStatusOk:
+        typeof observedStatus?.ok === "boolean" ? observedStatus.ok : null,
     };
-    writeCandidateDeadlineCaptureAttempt({
+    writeAttempt({
       startedAt: attemptStartedAt,
       finishedAt: new Date().toISOString(),
       ok: false,
       skipped: false,
       reason: failed.reason,
-      statusAdvanced: false,
-      publishedEvaluatedAt:
-        readJson(candidateProspectiveCaptureStatusFile, null)?.evaluatedAt || null,
+      statusAdvanced,
+      publishedEvaluatedAt: failed.statusEvaluatedAt,
+      publishedStatusReason: failed.publishedStatusReason,
+      publishedStatusOk: failed.publishedStatusOk,
       error: failed.error,
       errorCode: failed.errorCode,
+      exitCode: failed.exitCode,
+      signal: failed.signal,
       attemptKind,
       timeoutMs: boundedTimeoutMs,
       childExecutionTimeoutMs,

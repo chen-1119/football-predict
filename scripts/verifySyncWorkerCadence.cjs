@@ -37,6 +37,7 @@ const {
   relaySnapshotChanged,
   relayCatchupRequiredAfterCycle,
   relaySnapshotSemanticFileFingerprint,
+  runCandidateProspectiveDeadlineCapture,
   startCandidateProspectiveDeadlineHeartbeat,
   waitForNextCycle,
   writeJsonAtomic,
@@ -1206,6 +1207,34 @@ const verifyRelayWake = async () => {
     version: "prospective-deadline-heartbeat-v2",
     evaluatedAt: "2026-08-01T11:30:24.000Z",
   }), false, "a lock-busy child cannot reuse the prior heartbeat as a successful refresh");
+
+  let persistedFailureAttempt = null;
+  const captureFailure = new Error("fixture capture timed out");
+  captureFailure.code = "SYNC_WORKER_COMMAND_TIMEOUT";
+  captureFailure.exitCode = 1;
+  captureFailure.signal = "SIGKILL";
+  const failedCapture = await runCandidateProspectiveDeadlineCapture({
+    timeoutMs: 5_000,
+    attemptKind: "telemetry-self-test",
+    run: async () => { throw captureFailure; },
+    readStatus: () => ({
+      version: "prospective-deadline-heartbeat-v2",
+      evaluatedAt: "9999-01-01T00:00:00.000Z",
+      ok: false,
+      reason: "deadline-evidence-query-incomplete",
+    }),
+    writeAttempt: (attempt) => { persistedFailureAttempt = attempt; },
+  });
+  assert.equal(failedCapture.ok, false);
+  assert.equal(failedCapture.errorCode, "SYNC_WORKER_COMMAND_TIMEOUT");
+  assert.equal(failedCapture.statusAdvanced, true);
+  assert.equal(
+    failedCapture.publishedStatusReason,
+    "deadline-evidence-query-incomplete",
+  );
+  assert.equal(persistedFailureAttempt.exitCode, 1);
+  assert.equal(persistedFailureAttempt.signal, "SIGKILL");
+  assert.equal(persistedFailureAttempt.publishedStatusOk, false);
 
   const heartbeatEpochMs = Date.parse("2026-08-01T11:30:00.000Z");
   const preemptivePlan = candidateDeadlinePreemptiveSchedule(

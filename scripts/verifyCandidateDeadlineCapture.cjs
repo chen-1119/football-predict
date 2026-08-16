@@ -23,6 +23,7 @@ const {
   publicHistoryRowsForMatchUniverse,
   sqliteSnapshotsForMatches,
   sqliteProjectedMatchUniverse,
+  deferredResearchStatus,
   researchHeartbeatReuseDecision,
   researchSettlementInputFingerprint,
   settlementHistoryIdentityValues,
@@ -105,6 +106,19 @@ assert.equal(researchHeartbeatReuseDecision({
   priorStatus: reusablePriorStatus,
   settlementInputFingerprint: fingerprintFinal,
 }).reuseSettlement, false);
+
+const deferredResearch = deferredResearchStatus(
+  reusablePriorStatus.challengerSuite,
+  { dueMatches: 6 },
+);
+assert.equal(deferredResearch.ok, true);
+assert.equal(deferredResearch.skipped, true);
+assert.equal(deferredResearch.dueMatches, 6);
+assert.equal(deferredResearch.deferredForPrimaryDeadlineCapture, true);
+assert.equal(
+  deferredResearch.reason,
+  "deferred-for-primary-deadline-capture",
+);
 
 const rootDir = path.resolve(__dirname, "..");
 const captureScript = path.join(__dirname, "captureCandidateProspectiveDeadline.cjs");

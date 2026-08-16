@@ -1760,6 +1760,14 @@ const reusedResearchStatus = (status, { dueMatches = 0 } = {}) => ({
   blockers: [],
 });
 
+const deferredResearchStatus = (status, { dueMatches = 0 } = {}) => ({
+  ...reusedResearchStatus(status, { dueMatches }),
+  skipped: true,
+  deferredForPrimaryDeadlineCapture: true,
+  reason: "deferred-for-primary-deadline-capture",
+  reuseReason: "primary-formal-ledger-priority",
+});
+
 const settleCalibrationChallengers = ({ matches }) => {
   try {
     return withCandidateProspectiveRegistryLock(
@@ -2447,11 +2455,26 @@ const capture = () => {
           atMs,
         )),
     );
+    // Formal customer-facing decisions are the only time-critical writes in
+    // this process. Research suites consume the same immutable pre-deadline
+    // snapshots and can safely catch up on the next heartbeat. When all three
+    // suites already have a healthy persisted state, keep the due heartbeat
+    // bounded by capturing the formal ledger first instead of multiplying the
+    // SQLite deadline query and write work inside one 45-second child budget.
+    const deferResearchCapture = Boolean(
+      dueMatches.length > 0
+      && initialResearchReuse.suitesHealthy
+    );
+    const researchSnapshotQueryMatches = deferResearchCapture
+      ? []
+      : [
+          ...challengerDueMatchRows,
+          ...temperatureNeutralizationDueMatchRows,
+          ...commonCohortG2DueMatchRows,
+        ];
     const snapshotQueryMatches = uniqueMatches([
       ...dueMatches,
-      ...challengerDueMatchRows,
-      ...temperatureNeutralizationDueMatchRows,
-      ...commonCohortG2DueMatchRows,
+      ...researchSnapshotQueryMatches,
     ]);
     const upcomingMatches = matches.filter((match) => {
       const kickoffMs = kickoffMsFor(match);
@@ -2660,7 +2683,11 @@ const capture = () => {
       temperatureDueMatches: temperatureNeutralizationDueMatchRows.length,
       commonCohortG2DueMatches: commonCohortG2DueMatchRows.length,
     });
-    const challengerSuite = finalResearchReuse.reuseCapture
+    const challengerSuite = deferResearchCapture
+      ? deferredResearchStatus(priorCaptureStatus.challengerSuite, {
+          dueMatches: challengerDueMatchRows.length,
+        })
+      : finalResearchReuse.reuseCapture
       ? reusedResearchStatus(priorCaptureStatus.challengerSuite)
       : captureCalibrationChallengers({
           activeLedger: updatedLedger || ledger,
@@ -2672,7 +2699,12 @@ const capture = () => {
           trustedCollectorCount,
           trustedCollectorResolver,
         });
-    const temperatureNeutralizationSuite = finalResearchReuse.reuseCapture
+    const temperatureNeutralizationSuite = deferResearchCapture
+      ? deferredResearchStatus(
+          priorCaptureStatus.temperatureNeutralizationSuite,
+          { dueMatches: temperatureNeutralizationDueMatchRows.length },
+        )
+      : finalResearchReuse.reuseCapture
       ? reusedResearchStatus(priorCaptureStatus.temperatureNeutralizationSuite)
       : captureTemperatureNeutralization({
           activeLedger: updatedLedger || ledger,
@@ -2684,7 +2716,11 @@ const capture = () => {
           trustedCollectorResolver,
           settlementStatus: temperatureNeutralizationSettlement,
         });
-    const commonCohortG2 = finalResearchReuse.reuseCapture
+    const commonCohortG2 = deferResearchCapture
+      ? deferredResearchStatus(priorCaptureStatus.commonCohortG2, {
+          dueMatches: commonCohortG2DueMatchRows.length,
+        })
+      : finalResearchReuse.reuseCapture
       ? reusedResearchStatus(priorCaptureStatus.commonCohortG2)
       : captureCommonCohortG2({
           activeLedger: updatedLedger || ledger,
@@ -2877,6 +2913,7 @@ module.exports = {
   publicHistoryRowsForMatchUniverse,
   readTopLevelArrayProperty,
   researchHeartbeatReuseDecision,
+  deferredResearchStatus,
   researchSettlementInputFingerprint,
   settlementHistoryIdentityValues,
   sqliteSnapshotsForMatches,

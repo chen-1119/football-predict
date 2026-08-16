@@ -9109,6 +9109,27 @@ const buildPublicModelScorecard = ({
             typeof candidateCaptureAttempt?.statusAdvanced === "boolean"
               ? candidateCaptureAttempt.statusAdvanced
               : null,
+          lastAttemptErrorCode:
+            /^[A-Z0-9_]{1,80}$/.test(String(candidateCaptureAttempt?.errorCode || ""))
+              ? candidateCaptureAttempt.errorCode
+              : null,
+          lastAttemptExitCode: Number.isInteger(candidateCaptureAttempt?.exitCode)
+            ? candidateCaptureAttempt.exitCode
+            : null,
+          lastAttemptSignal:
+            /^SIG[A-Z0-9]{1,24}$/.test(String(candidateCaptureAttempt?.signal || ""))
+              ? candidateCaptureAttempt.signal
+              : null,
+          lastAttemptPublishedStatusReason:
+            /^[a-z0-9-]{1,120}$/.test(
+              String(candidateCaptureAttempt?.publishedStatusReason || ""),
+            )
+              ? candidateCaptureAttempt.publishedStatusReason
+              : null,
+          lastAttemptPublishedStatusOk:
+            typeof candidateCaptureAttempt?.publishedStatusOk === "boolean"
+              ? candidateCaptureAttempt.publishedStatusOk
+              : null,
           lastAttemptKind: candidateCaptureAttempt?.attemptKind || null,
           lastAttemptTimeoutMs: Number.isFinite(
             Number(candidateCaptureAttempt?.timeoutMs),
@@ -9680,6 +9701,31 @@ const getModelEvaluation = async ({ admin = false } = {}) => {
               statusAdvanced: candidateCaptureAttempt.statusAdvanced === true,
               publishedEvaluatedAt:
                 candidateCaptureAttempt.publishedEvaluatedAt || null,
+              errorCode:
+                /^[A-Z0-9_]{1,80}$/.test(
+                  String(candidateCaptureAttempt.errorCode || ""),
+                )
+                  ? candidateCaptureAttempt.errorCode
+                  : null,
+              exitCode: Number.isInteger(candidateCaptureAttempt.exitCode)
+                ? candidateCaptureAttempt.exitCode
+                : null,
+              signal:
+                /^SIG[A-Z0-9]{1,24}$/.test(
+                  String(candidateCaptureAttempt.signal || ""),
+                )
+                  ? candidateCaptureAttempt.signal
+                  : null,
+              publishedStatusReason:
+                /^[a-z0-9-]{1,120}$/.test(
+                  String(candidateCaptureAttempt.publishedStatusReason || ""),
+                )
+                  ? candidateCaptureAttempt.publishedStatusReason
+                  : null,
+              publishedStatusOk:
+                typeof candidateCaptureAttempt.publishedStatusOk === "boolean"
+                  ? candidateCaptureAttempt.publishedStatusOk
+                  : null,
               attemptKind: candidateCaptureAttempt.attemptKind || null,
               timeoutMs: Number.isFinite(Number(candidateCaptureAttempt.timeoutMs))
                 ? Math.max(0, Number(candidateCaptureAttempt.timeoutMs))

@@ -61,11 +61,11 @@ readonly LIVE_SQLITE_PREBUILD_CAPACITY_SETTLE_ATTEMPTS=10
 readonly LIVE_SQLITE_PREBUILD_CAPACITY_SETTLE_DELAY_SECONDS=5
 ALLOW_STOPPED_WINDOW_SQLITE_EXPORT="${RELEASE_ALLOW_STOPPED_WINDOW_SQLITE_EXPORT:-0}"
 # A production official-result cycle includes the immutable generation commit
-# and SQLite export.  The 452 MB live store currently needs more than ten
-# minutes for that phase, so keep the wait bounded but large enough for one
-# real cycle.  The transition-lease check inside the polling loop still aborts
-# before the rollback margin if a betting cutoff becomes unsafe.
-WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS="${RELEASE_WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS:-1200}"
+# and SQLite export. The 2026-08-16 release worker was still making bounded CPU
+# progress when the former 1200-second default expired. Use the already-audited
+# 1500-second hard ceiling so one real cycle can finish without weakening any
+# transition-lease, SQLite-affinity, or rollback check.
+WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS="${RELEASE_WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS:-1500}"
 # The mandatory release cycle also runs enrichment, prospective capture, and a
 # full SQLite export.  Production r480 needed about 33 minutes after the
 # official-result phase, so the former 1800-second default could roll back a
@@ -4243,7 +4243,7 @@ wait_for_worker_official_publish_after() {
   local poll_seconds="${RELEASE_WORKER_OFFICIAL_PUBLISH_POLL_SECONDS:-2}"
   local deadline evidence_rc
 
-  [[ "$timeout_seconds" =~ ^[0-9]+$ ]] || timeout_seconds=1200
+  [[ "$timeout_seconds" =~ ^[0-9]+$ ]] || timeout_seconds=1500
   [[ "$poll_seconds" =~ ^[0-9]+$ ]] || poll_seconds=2
   [ "$timeout_seconds" -ge 30 ] || timeout_seconds=30
   [ "$poll_seconds" -ge 1 ] || poll_seconds=1

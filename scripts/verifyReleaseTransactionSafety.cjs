@@ -3380,7 +3380,7 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
   assert.match(bundleRelease, /RELEASE_WORKER_READINESS_IDLE_TIMEOUT_SECONDS:-3600/);
   assert.match(bundleRelease, /RELEASE_WORKER_PRIORITY_REQUEST_TTL_SECONDS:-5400/);
   assert.match(priorityPrepareBody, /--ttl-seconds "\$WORKER_PRIORITY_REQUEST_TTL_SECONDS"/);
-  assert.match(bundleRelease, /RELEASE_WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS:-1200/);
+  assert.match(bundleRelease, /RELEASE_WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS:-1500/);
   assert.match(bundleRelease, /REMOTE_REQUIRE_SYNC_WORKER=0/);
   assert.match(bundleRelease, /resume_worker_after_readiness \|\| rollback "sync worker failed to resume after readiness"/);
   assert.match(bundleRelease, /REMOTE_REQUIRE_SYNC_WORKER=1/);
