@@ -1,19 +1,19 @@
 {
   "version": 1,
   "source": "sporttery",
-  "updatedAt": "2026-08-27T02:54:00.434Z",
-  "capturedAt": "2026-08-27T02:54:00.434Z",
-  "lastAttemptAt": "2026-08-27T02:54:00.434Z",
+  "updatedAt": "2026-08-27T02:58:58.714Z",
+  "capturedAt": "2026-08-27T02:58:58.714Z",
+  "lastAttemptAt": "2026-08-27T02:58:58.714Z",
   "api": {
     "source": "sporttery",
     "freshnessTime": "2026-07-01T06:02:58.003Z",
     "currentFreshnessTime": "2026-07-01T06:02:58.003Z",
     "historyFreshnessTime": "2026-07-01T06:02:58.003Z",
-    "sourceUpdatedAt": "2026-08-27T02:54:00.434Z",
-    "lastAttemptAt": "2026-08-27T02:54:00.434Z",
-    "ageSeconds": 4913462,
-    "currentAgeSeconds": 4913462,
-    "historyAgeSeconds": 4913462,
+    "sourceUpdatedAt": "2026-08-27T02:58:58.714Z",
+    "lastAttemptAt": "2026-08-27T02:58:58.714Z",
+    "ageSeconds": 4913760,
+    "currentAgeSeconds": 4913760,
+    "historyAgeSeconds": 4913760,
     "stale": true,
     "currentStale": true,
     "historyStale": true,
@@ -46,7 +46,7 @@
     "current": 421,
     "history": 3092,
     "teams": 747,
-    "predictionSnapshots": 4632,
+    "predictionSnapshots": 4634,
     "postMatchReviews": 3092,
     "externalSignals": 2861,
     "preMatchSignals": 42,
@@ -59,7 +59,7 @@
     "note": "GitHub Pages serves static JSON. The page checks for newer JSON regularly; GitHub Actions refreshes the source files on schedule."
   },
   "attempt": {
-    "capturedAt": "2026-08-27T02:54:00.434Z",
+    "capturedAt": "2026-08-27T02:58:58.714Z",
     "officialOddsMatches": 0,
     "officialHandicapOddsMatches": 0,
     "officialResultMatches": 0,
@@ -75,17 +75,17 @@
     "skipped": "fresh Sporttery odds unavailable; keeping existing 3507 matches"
   },
   "predictionSnapshots": {
-    "total": 4632,
+    "total": 4634,
     "byPhase": {
       "review": 85,
       "mid": 1030,
-      "baseline": 2791,
+      "baseline": 2793,
       "late": 379,
       "final": 281,
       "locked": 66
     },
-    "appended": 0,
-    "updated": 6
+    "appended": 2,
+    "updated": 4
   },
   "postMatchReviews": {
     "total": 3092,
@@ -106,7 +106,7 @@
   },
   "externalSignals": {
     "source": "external-signals",
-    "updatedAt": "2026-08-27T02:53:59.917Z",
+    "updatedAt": "2026-08-27T02:58:58.191Z",
     "matches": 2861,
     "webConsensusMatches": 0
   },
@@ -118,106 +118,108 @@
   "modelCalibration": {
     "version": "rolling-calibration-v1",
     "sample": {
-      "rows": 114,
+      "rows": 120,
       "oneXTwo": 0,
       "goals": 0,
-      "best": 114,
-      "recommendationPool": 114
+      "best": 120,
+      "recommendationPool": 120
     },
     "metrics": {
       "oneXTwoBrier": null,
       "oneXTwoLogLoss": null,
       "oneXTwoHitRate": null,
       "goalsHitRate": null,
-      "bestHitRate": 0.535
+      "bestHitRate": 0.533
     },
     "scoreCalibration": {
       "version": "score-calibration-v2",
       "sample": {
-        "rows": 14,
-        "recentRows": 2,
-        "totalProjectedRows": 114,
+        "rows": 20,
+        "recentRows": 8,
+        "totalProjectedRows": 120,
         "sampleDays": 14,
         "recentDays": 2,
         "rollingDays": 14,
         "minRows": 12,
-        "exactHitRate": 0.214,
-        "top3ExactHitRate": 0.429,
-        "outcomeHitRate": 0.429,
-        "top3OutcomeHitRate": 0.929,
-        "over25HitRate": 0.429,
-        "top3Over25HitRate": 0.929,
-        "totalBandHitRate": 0.214,
-        "top3TotalBandHitRate": 0.786,
-        "avgActualGoals": 2.93,
-        "avgProjectedGoals": 2.29,
-        "actualOver25Rate": 0.571,
-        "projectedOver25Rate": 0.286,
-        "actualBttsRate": 0.786,
-        "projectedBttsRate": 0.929,
-        "projectedLowScoreRate": 0.714,
+        "exactHitRate": 0.15,
+        "top3ExactHitRate": 0.35,
+        "outcomeHitRate": 0.5,
+        "top3OutcomeHitRate": 0.95,
+        "over25HitRate": 0.55,
+        "top3Over25HitRate": 0.9,
+        "totalBandHitRate": 0.2,
+        "top3TotalBandHitRate": 0.75,
+        "avgActualGoals": 3.25,
+        "avgProjectedGoals": 2.5,
+        "actualOver25Rate": 0.65,
+        "projectedOver25Rate": 0.5,
+        "actualBttsRate": 0.8,
+        "projectedBttsRate": 0.95,
+        "projectedLowScoreRate": 0.5,
         "actualScores": {
-          "1-1": 4,
+          "1-1": 5,
+          "3-2": 3,
+          "1-2": 2,
           "2-1": 2,
-          "3-2": 2,
           "0-0": 1,
           "0-3": 1,
           "1-0": 1,
-          "1-2": 1,
           "1-3": 1,
-          "3-3": 1
+          "3-1": 1,
+          "3-3": 1,
+          "4-0": 1,
+          "5-1": 1
         },
         "projectedScores": {
           "1-1": 9,
-          "2-1": 3,
+          "2-1": 9,
           "1-2": 1,
           "2-0": 1
         },
         "actualBands": {
-          "2": 4,
-          "3": 4,
-          "4+": 4,
+          "2": 5,
+          "3": 5,
+          "4+": 8,
           "0-1": 2
         },
         "projectedBands": {
           "2": 10,
-          "3": 4
+          "3": 10
         },
         "actualShapes": {
-          "draw-btts": 5,
-          "one-goal-btts": 3,
+          "draw-btts": 6,
+          "one-goal-btts": 4,
+          "open-4plus": 4,
+          "clear-btts-open": 3,
           "low-0-1": 2,
-          "open-4plus": 2,
-          "clear-btts-open": 1,
           "clear-clean-sheet": 1
         },
         "projectedShapes": {
+          "one-goal-btts": 10,
           "draw-btts": 9,
-          "one-goal-btts": 4,
           "clear-clean-sheet": 1
         }
       },
       "adjustments": {
-        "totalLambdaAdjustment": 0.048,
-        "over25ProbabilityShift": 0.034,
+        "totalLambdaAdjustment": 0.056,
+        "over25ProbabilityShift": 0,
         "bttsProbabilityShift": 0,
-        "lowScoreRankPenalty": 0.029,
-        "openScoreRankBoost": 0.052,
+        "lowScoreRankPenalty": 0.034,
+        "openScoreRankBoost": 0.05,
         "bttsRankBoost": 0,
         "bandRankBoosts": {
-          "2": -0.043,
-          "4+": 0.051,
-          "0-1": 0.026
+          "2": -0.025,
+          "3": -0.025,
+          "4+": 0.072
         },
         "shapeRankBoosts": {
-          "low-0-1": 0.029,
-          "open-4plus": 0.029,
-          "draw-btts": -0.026
+          "open-4plus": 0.04,
+          "clear-btts-open": 0.03,
+          "one-goal-btts": -0.027
         }
       },
       "reasons": [
         "recent-actual-goals-above-projection",
-        "recent-over25-above-projection",
         "rolling-score-sample-for-hit-rate",
         "top3-score-covers-more-than-primary",
         "score-total-band-hit-rate-adjustment",
