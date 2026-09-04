@@ -4305,7 +4305,7 @@ run_candidate_model_artifact_catchup /candidate-store /candidate-store/football.
     assert.match(buildStepBody, /node_heap_mib="1536"/);
     assert.match(
       buildStepBody,
-      /candidate-datastore-reconciled\)[\s\S]*?memory_high="2100M"[\s\S]*?memory_max="2600M"[\s\S]*?memory_swap_max="512M"[\s\S]*?node_heap_mib="1536"[\s\S]*?runtime_max_seconds="600"/,
+      /candidate-datastore\|candidate-datastore-reconciled\)[\s\S]*?memory_high="2100M"[\s\S]*?memory_max="2600M"[\s\S]*?memory_swap_max="512M"[\s\S]*?node_heap_mib="1536"[\s\S]*?runtime_max_seconds="600"/,
     );
     assert.match(buildStepBody, /MemoryHigh=\$memory_high/);
     assert.match(buildStepBody, /MemoryMax=\$memory_max/);

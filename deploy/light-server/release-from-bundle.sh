@@ -316,10 +316,10 @@ run_build_step() {
       ;;
   esac
   case "$label" in
-    candidate-datastore-reconciled)
-      # The post-archive SQLite projection retains about 1.8 GiB across the
-      # V8 heap, native SQLite state, and dirty page cache.  Keep its V8 heap
-      # unchanged, but give this one measured step enough soft-limit runway to
+    candidate-datastore|candidate-datastore-reconciled)
+      # The candidate SQLite projections retain about 1.8 GiB across the V8
+      # heap, native SQLite state, and dirty page cache.  Keep their V8 heap
+      # unchanged, but give these measured steps enough soft-limit runway to
       # avoid indefinite memcg direct reclaim.  The hard ceiling, swap budget,
       # and ten-minute runtime remain fail-closed.
       memory_high="2100M"
