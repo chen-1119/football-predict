@@ -85,6 +85,12 @@ const listMigrationFiles = () => fs.readdirSync(migrationsDir)
 
 const sha256 = (value) => crypto.createHash("sha256").update(value).digest("hex");
 
+// Git stores migrations with LF, but release bundles may be assembled from a
+// Windows worktree. Treat CRLF and LF as the same source while still rejecting
+// lone CR bytes and every other change to an applied migration.
+const canonicalizeMigrationSql = (value) => String(value).replace(/\r\n/g, "\n");
+const migrationSha256 = (value) => sha256(canonicalizeMigrationSql(value));
+
 const withPostgresTransaction = async (pool, callback, options = {}) => {
   const client = await pool.connect();
   const isolationLevel = String(options.isolationLevel || "SERIALIZABLE").toUpperCase();
@@ -124,7 +130,9 @@ const runPostgresMigrations = async (pool) => withPostgresTransaction(
     const applied = [];
     for (const fileName of listMigrationFiles()) {
       const version = fileName.replace(/\.sql$/i, "");
-      const sql = fs.readFileSync(path.join(migrationsDir, fileName), "utf8");
+      const sql = canonicalizeMigrationSql(
+        fs.readFileSync(path.join(migrationsDir, fileName), "utf8"),
+      );
       const digest = sha256(sql);
       const existing = await client.query(
         "SELECT sha256 FROM football.schema_migrations WHERE version = $1",
@@ -173,6 +181,7 @@ module.exports = {
   createPostgresPool,
   getPostgresHealth,
   listMigrationFiles,
+  migrationSha256,
   postgresConnectionString,
   postgresEnabled,
   postgresMode,

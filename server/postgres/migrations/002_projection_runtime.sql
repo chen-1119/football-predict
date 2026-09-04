@@ -34,3 +34,4 @@ CREATE TABLE IF NOT EXISTS football.private_model_artifacts (
 
 CREATE INDEX IF NOT EXISTS private_model_artifacts_updated_at
   ON football.private_model_artifacts (updated_at DESC, artifact_key);
+

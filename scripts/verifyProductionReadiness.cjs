@@ -551,6 +551,21 @@ const runAccessCodeRevocationChecks = async (checks) => {
 
 const run = async () => {
   const checks = [];
+  const postgresMigrationPlan = await runLocalJson(["scripts/verifyPostgresMigrationPlan.cjs"]);
+  pushCheck(
+    checks,
+    "PostgreSQL applied migrations remain immutable",
+    postgresMigrationPlan.status === 0
+      && postgresMigrationPlan.body?.ok === true
+      && postgresMigrationPlan.body?.verifier === "postgres-migration-plan",
+    {
+      status: postgresMigrationPlan.status,
+      verifier: postgresMigrationPlan.body?.verifier || null,
+      migrations: postgresMigrationPlan.body?.migrations || [],
+      stdoutTail: postgresMigrationPlan.status === 0 ? "" : postgresMigrationPlan.stdout.slice(-500),
+      stderrTail: postgresMigrationPlan.stderr.slice(-500),
+    },
+  );
   await refreshSqliteBeforeLocalServer(checks);
   const localServerOwnership = startServer ? await startLocalServer() : null;
 

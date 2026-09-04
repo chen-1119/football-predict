@@ -7215,6 +7215,9 @@ elif [ "$prebuilt_dist_status" -ne 0 ]; then
 fi
 run_build_step npm-ci env PATH="$PATH" HOME="$BUILD_HOME" npm_config_cache="${BUILD_HOME}/.npm" NODE_ENV=development \
   "$NODE_HOME/bin/npm" ci --include=dev --ignore-scripts
+run_build_step postgres-migration-plan env PATH="$PATH" HOME="$BUILD_HOME" NODE_ENV=production \
+  "$NODE_HOME/bin/node" scripts/verifyPostgresMigrationPlan.cjs \
+  || abort_before_swap "candidate PostgreSQL migration immutability verification failed"
 compact_public_odds_history "$BUILD_DIR"
 log "migrate immutable pre-match reference archives from preserved snapshots"
 run_build_step archive-migration env PATH="$PATH" HOME="$BUILD_HOME" NODE_ENV=production \

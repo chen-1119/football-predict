@@ -2881,6 +2881,7 @@ check("the sync worker stays live during long isolated work and pauses only for 
     "candidate cache snapshot sync barrier did not drain cleanly",
     "sync worker could not resume during isolated candidate build",
     "run_build_step npm-ci",
+    "run_build_step postgres-migration-plan",
     "run_build_step application-build",
     'wait_for_health "http://${HOST}:${CANDIDATE_PORT}" "candidate-server"',
     "canonical sync write barrier could not protect candidate readiness refresh",

@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const {
   listMigrationFiles,
+  migrationSha256,
   postgresSsl,
   sha256,
 } = require("../server/postgresStore.cjs");
@@ -61,6 +62,26 @@ assert.match(sql, /settled integer GENERATED ALWAYS AS \(won \+ lost\) STORED/);
 assert.equal(postgresSsl("postgresql://localhost/football"), false);
 assert.deepEqual(postgresSsl("postgresql://db.example.com/football"), { rejectUnauthorized: true });
 assert.equal(sha256("football").length, 64);
+const appliedMigrationHashes = Object.freeze({
+  "001_core.sql": "3580fecee8d500cb0851899c858cd1aaf90c321978cba1c8bbfc224c5f6e8b7c",
+  "002_projection_runtime.sql": "519987f10bd74c4a6c89ec6c639cd65af3040d7ae0159ede9b20abad9e47849b",
+  "003_order_preserving_payloads.sql": "bae14fe5304c7730629122070f737b61facda435ad5e31cfbc3961da30d319ec",
+  "004_free_source_warehouse.sql": "1497ac6ef7fec4f4b291ce3c211375bbb9f08d9d905e1a3abdaf994a3f83a37f",
+});
+for (const [fileName, expectedHash] of Object.entries(appliedMigrationHashes)) {
+  const migrationSql = fs.readFileSync(path.join(rootDir, "server", "postgres", "migrations", fileName), "utf8");
+  assert.equal(migrationSha256(migrationSql), expectedHash, `${fileName} must remain immutable`);
+  assert.equal(
+    migrationSha256(migrationSql.replace(/\r?\n/g, "\r\n")),
+    expectedHash,
+    `${fileName} hash must be stable across LF and CRLF release worktrees`,
+  );
+}
+assert.notEqual(
+  migrationSha256("SELECT 'line one\rline two';\n"),
+  migrationSha256("SELECT 'line one\nline two';\n"),
+  "a lone CR must remain a migration-integrity-significant byte",
+);
 for (const table of ["projection_meta", "projection_runs", "private_model_artifacts"]) {
   assert.match(projectionSql, new RegExp(`CREATE TABLE IF NOT EXISTS football\\.${table}\\s*\\(`));
 }

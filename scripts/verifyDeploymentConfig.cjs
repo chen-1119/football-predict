@@ -1843,6 +1843,22 @@ const run = () => {
         && bundleReleaseScript.includes("FAIL-STOP: BACKUP to APP move failed")
     });
 
+  const productionReadinessRunIndex = verifyProductionReadiness.indexOf("const run = async () =>");
+  const migrationPlanCheckIndex = verifyProductionReadiness.indexOf("scripts/verifyPostgresMigrationPlan.cjs");
+  const mutableReadinessCheckIndex = verifyProductionReadiness.indexOf("await refreshSqliteBeforeLocalServer(checks)");
+  pushCheck(checks, "PostgreSQL migration immutability fails before candidate mutation and atomic swap",
+    productionReadinessRunIndex >= 0
+      && migrationPlanCheckIndex > productionReadinessRunIndex
+      && mutableReadinessCheckIndex > migrationPlanCheckIndex
+      && verifyProductionReadiness.includes("PostgreSQL applied migrations remain immutable")
+      && bundleReleaseScript.includes("run_build_step postgres-migration-plan")
+      && bundleReleaseScript.includes("candidate PostgreSQL migration immutability verification failed"), {
+      productionReadinessRunIndex,
+      migrationPlanCheckIndex,
+      mutableReadinessCheckIndex,
+      releasePreflightWired: bundleReleaseScript.includes("run_build_step postgres-migration-plan"),
+    });
+
   pushCheck(checks, "bundle deploy recovers ssh-interrupted releases", deployReleaseBundle.includes("remote release recovery check")
     && deployReleaseBundle.includes(".release-bundle-sha256")
     && deployReleaseBundle.includes(".release-live-complete")
