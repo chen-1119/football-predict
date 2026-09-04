@@ -69,6 +69,8 @@ const currentUnsettledRetentionHours = resolveCurrentUnsettledRetentionHours(
     ?? syncMeta?.currentListPolicy?.unsettledRetentionHours
     ?? unresolvedArchivePayload?.retentionHours
 );
+const currentListPolicyVersion = String(syncMeta?.currentListPolicy?.version || "").trim();
+const enforcesCurrentRetention = currentListPolicyVersion === "kickoff-retention-v1";
 const matches = Array.from(new Map([...currentMatches, ...historyMatches].map((match) => [match.id, match])).values());
 const currentMatchIds = new Set(currentMatches.map((match) => match.id));
 const historyMatchIds = new Set(historyMatches.map((match) => match.id));
@@ -160,6 +162,9 @@ const errors = [];
 // malformed market/result data and integrity violations.
 const publicationWarnings = [];
 let oddsHistoryRows = [];
+let legacyStaleCurrentRows = 0;
+let legacyReviewHhadWithoutLineRows = 0;
+let legacyHadWithoutExplicitLineRows = 0;
 
 if (!Array.isArray(currentMatches) || currentMatches.length === 0) {
   errors.push("matches-current.json must contain a non-empty array.");
@@ -177,11 +182,28 @@ for (const match of currentMatches) {
   if (!isMatchEligibleForCurrent(match, currentListEvaluatedAt, {
     retentionHours: currentUnsettledRetentionHours,
   })) {
-    errors.push(`${match.id}: stale unsettled match must leave current after ${currentUnsettledRetentionHours}h without being marked FINISHED.`);
+    if (!currentListPolicyVersion) {
+      // Pre-retention snapshots legitimately kept unresolved rows in the public
+      // list. The first v1 sync migrates them to the private archive; do not
+      // make that migration a prerequisite for validating the legacy snapshot.
+      legacyStaleCurrentRows += 1;
+    } else {
+      errors.push(`${match.id}: stale unsettled match must leave current after ${currentUnsettledRetentionHours}h without being marked FINISHED.`);
+    }
   }
   if (match.status === "FINISHED" && !historyMatchIds.has(match.id)) {
     errors.push(`${match.id}: same-day FINISHED current row must also remain in history.`);
   }
+}
+
+if (legacyStaleCurrentRows > 0) {
+  publicationWarnings.push(
+    `${legacyStaleCurrentRows} stale unsettled current rows use a pre-retention snapshot and await kickoff-retention-v1 migration.`
+  );
+}
+
+if (currentListPolicyVersion && !enforcesCurrentRetention) {
+  errors.push(`sync-meta currentListPolicy uses unsupported version ${currentListPolicyVersion}.`);
 }
 
 for (const match of historyMatches) {
@@ -347,7 +369,22 @@ for (const match of matches) {
   if (reviewHhad) {
     const reviewLine = parseHandicapLine(reviewHhad.handicapLine);
     if (reviewLine === null) {
-      errors.push(`${match.id}: post-match HHAD result must include a real handicap line`);
+      const reviewVersion = String(match.postMatchReview?.version || "");
+      const predictionRows = Array.isArray(match.predictions) ? match.predictions : [];
+      const reviewRows = Array.isArray(match.postMatchReview?.predictionReview?.rows)
+        ? match.postMatchReview.predictionReview.rows
+        : [];
+      const hasBoundHhadEvidence = [...predictionRows, ...reviewRows].some((row) => (
+        String(row?.oddsPoolCode || row?.poolCode || "").toUpperCase() === "HHAD"
+      ));
+      if (reviewVersion === "post-match-review-v1" && !hasBoundHhadEvidence) {
+        // v1 emitted a display-only HHAD label even when no official line or
+        // prediction existed. It is not a settled HHAD sample; v2+ must omit it
+        // or carry a real line.
+        legacyReviewHhadWithoutLineRows += 1;
+      } else {
+        errors.push(`${match.id}: post-match HHAD result must include a real handicap line`);
+      }
     } else if (Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway)) {
       const adjustedHome = Number(match.scoreHome) + reviewLine;
       const expectedHhadCode = adjustedHome > Number(match.scoreAway)
@@ -360,6 +397,12 @@ for (const match of matches) {
       }
     }
   }
+}
+
+if (legacyReviewHhadWithoutLineRows > 0) {
+  publicationWarnings.push(
+    `${legacyReviewHhadWithoutLineRows} unbound post-match-review-v1 HHAD labels await schema migration and are excluded from HHAD evidence.`
+  );
 }
 
 const canonicalOddsHistoryPath = !validateLegacyStaticPayloads && fs.existsSync(dataOddsHistoryPath)
@@ -384,6 +427,9 @@ if (fs.existsSync(canonicalOddsHistoryPath)) {
       const sourceMatchId = String(row?.sourceMatchId || "");
       const captureBucket = String(row?.captureBucket || "");
       const poolCode = String(row?.poolCode || row?.oddsPoolCode || "HAD").toUpperCase();
+      const hasExplicitHandicapLine = row?.handicapLine !== undefined
+        && row?.handicapLine !== null
+        && String(row.handicapLine).trim() !== "";
       const handicapLine = Number(row?.handicapLine);
       const stateSignature = String(row?.stateSignature || "");
       const key = oddsHistoryV2 ? `${sourceMatchId}|${stateSignature}` : `${sourceMatchId}|${captureBucket}`;
@@ -398,8 +444,12 @@ if (fs.existsSync(canonicalOddsHistoryPath)) {
       if (!["HAD", "HHAD"].includes(poolCode)) {
         errors.push(`${sourceMatchId}: invalid odds-history pool ${poolCode}.`);
       }
-      if (poolCode === "HAD" && handicapLine !== 0) {
+      if (poolCode === "HAD" && (!hasExplicitHandicapLine ? oddsHistoryV2 : handicapLine !== 0)) {
         errors.push(`${sourceMatchId}: HAD history row must use handicapLine 0.`);
+      } else if (poolCode === "HAD" && !hasExplicitHandicapLine) {
+        // In v1 the HAD pool implied a zero line. v2+ requires the field so
+        // state signatures and market identities remain explicit.
+        legacyHadWithoutExplicitLineRows += 1;
       }
       if (poolCode === "HHAD" && !Number.isFinite(handicapLine)) {
         errors.push(`${sourceMatchId}: HHAD history row is missing a valid handicap line.`);
@@ -438,6 +488,12 @@ if (fs.existsSync(canonicalOddsHistoryPath)) {
       }
     }
   }
+}
+
+if (legacyHadWithoutExplicitLineRows > 0) {
+  publicationWarnings.push(
+    `${legacyHadWithoutExplicitLineRows} odds-history-v1 HAD rows use the protocol's implicit zero line and await schema migration.`
+  );
 }
 
 if (validateLegacyStaticPayloads && fs.existsSync(dataOddsHistoryPath)) {
