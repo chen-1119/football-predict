@@ -3488,6 +3488,122 @@ check("release cleanup initializes live store paths before the strict EXIT trap"
   assert.ok(liveSqliteIndex > liveStoreIndex && liveSqliteIndex < trapIndex);
 });
 
+check("pre-swap legacy deadline capture isolates only non-formal artifacts in an inode-pinned runtime", () => {
+  const main = mainProgram(bundleRelease);
+  const capabilityStart = bundleRelease.indexOf("active_candidate_capture_supports_deadline_only() {");
+  const capabilityEnd = bundleRelease.indexOf("\n}\n\nprepare_legacy_deadline_compat_runtime()", capabilityStart);
+  assert.ok(capabilityStart >= 0 && capabilityEnd > capabilityStart);
+  const capabilityBody = bundleRelease.slice(capabilityStart, capabilityEnd + 2);
+  const prepareBody = extractFunction(
+    bundleRelease,
+    "prepare_legacy_deadline_compat_runtime",
+  );
+  const cleanupBody = extractFunction(
+    bundleRelease,
+    "cleanup_legacy_deadline_compat_runtime",
+  );
+  const refreshBody = extractFunction(
+    bundleRelease,
+    "refresh_candidate_capture_heartbeat_for_readiness",
+  );
+  const abortBody = extractFunction(bundleRelease, "abort_before_swap");
+  const rollbackBody = extractFunction(bundleRelease, "rollback");
+  const exitBody = extractFunction(bundleRelease, "release_exit_trap");
+  const trapIndex = bundleRelease.indexOf("trap release_exit_trap EXIT");
+  for (const assignment of [
+    'LEGACY_DEADLINE_COMPAT_RUNTIME_DIR=""',
+    'LEGACY_DEADLINE_COMPAT_RUNTIME_DEVICE=""',
+    'LEGACY_DEADLINE_COMPAT_RUNTIME_INODE=""',
+    "LEGACY_DEADLINE_COMPAT_RUNTIME_INITIALIZED=0",
+  ]) {
+    const assignmentIndex = bundleRelease.indexOf(assignment);
+    assert.ok(assignmentIndex >= 0 && assignmentIndex < trapIndex, `${assignment} must precede EXIT trap`);
+  }
+  assert.match(capabilityBody, /require\(captureScript\)/);
+  assert.match(capabilityBody, /producer\?\.DEADLINE_ONLY_FLAG !== "--deadline-only"/);
+  assert.match(capabilityBody, /producer\.captureExecutionMode\(\["--deadline-only"\]\)/);
+  assert.match(capabilityBody, /mode\?\.mode !== "deadline-only"/);
+  assert.match(capabilityBody, /mode\?\.deadlineOnly !== true/);
+  assert.match(capabilityBody, /mode\?\.benchmarkOnly !== false/);
+  assert.doesNotMatch(capabilityBody, /main\s*\(/);
+  assert.match(capabilityBody, /systemd-run --quiet --wait --collect --pipe --service-type=exec/);
+  assert.match(capabilityBody, /--uid=football/);
+  assert.match(capabilityBody, /RuntimeMaxSec=15s/);
+  assert.match(capabilityBody, /PrivateNetwork=yes/);
+  assert.match(capabilityBody, /InaccessiblePaths=-\/etc\/football-predict[^\n]+-\/var\/lib\/football-predict/);
+  assert.match(capabilityBody, /process\.exit\(42\)/);
+  assert.match(capabilityBody, /catch \{\s+process\.exit\(43\)/);
+  assert.match(capabilityBody, /assert_transient_unit_cleared "\$unit" \|\| return 2/);
+  assert.match(capabilityBody, /"\$rc" -eq 42 \] && return 1/);
+  assert.match(prepareBody, /mktemp -d \/run\/football-release-deadline-compat\.XXXXXX/);
+  assert.match(prepareBody, /chown football:football "\$runtime_dir"/);
+  assert.match(prepareBody, /chmod 0700 "\$runtime_dir"/);
+  assert.match(prepareBody, /stat -c '%d:%i:%U:%G:%a:%h'/);
+  assert.match(prepareBody, /LEGACY_DEADLINE_COMPAT_RUNTIME_DEVICE="\$device"/);
+  assert.match(prepareBody, /LEGACY_DEADLINE_COMPAT_RUNTIME_INODE="\$inode"/);
+  assertOrdered(prepareBody, [
+    "mktemp -d /run/football-release-deadline-compat.XXXXXX",
+    "stat -c '%d:%i:%U:%G:%a:%h'",
+    'LEGACY_DEADLINE_COMPAT_RUNTIME_DIR="$runtime_dir"',
+    'LEGACY_DEADLINE_COMPAT_RUNTIME_DEVICE="$device"',
+    'LEGACY_DEADLINE_COMPAT_RUNTIME_INODE="$inode"',
+    "LEGACY_DEADLINE_COMPAT_RUNTIME_INITIALIZED=1",
+    'chown football:football "$runtime_dir"',
+    'chmod 0700 "$runtime_dir"',
+  ], "scratch identity is registered before ownership makes it writable by the service user");
+  assert.match(cleanupBody, /football-release-deadline-compat\\\.\[A-Za-z0-9\]\{6\}/);
+  assert.match(cleanupBody, /realpath -e -- "\$runtime_dir"/);
+  assert.match(cleanupBody, /mountpoint -q -- "\$runtime_dir"/);
+  assert.match(cleanupBody, /"\$device" = "\$expected_device"/);
+  assert.match(cleanupBody, /"\$inode" = "\$expected_inode"/);
+  assert.match(cleanupBody, /football:football[^\n]+root:root/);
+  assert.match(cleanupBody, /rm -rf --one-file-system -- "\$runtime_dir"/);
+  assertOrdered(refreshBody, [
+    'active_candidate_capture_supports_deadline_only "$capture_script"',
+    'if [ "$capability_rc" -eq 1 ]',
+    '[ "${SWAP_STARTED:-0}" = "0" ]',
+    "prepare_legacy_deadline_compat_runtime",
+    "capture_compat_env=(",
+    "run_as_service_user_with_runtime_env env",
+    '"${capture_compat_env[@]}"',
+    'SERVER_STORE_DIR="$LIVE_STORE_DIR"',
+    'DATASTORE_SQLITE_PATH="$LIVE_SQLITE_PATH"',
+    'SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH="$collector_trust_registry"',
+  ], "legacy capture isolation is selected before the unchanged active formal inputs");
+  for (const variable of [
+    "BENCHMARK_PROSPECTIVE_LEDGER_FILE",
+    "BENCHMARK_PROSPECTIVE_CAPTURE_STATUS_FILE",
+    "CANDIDATE_PROSPECTIVE_CHALLENGER_SUITE_FILE",
+    "CANDIDATE_PROSPECTIVE_TEMPERATURE_NEUTRALIZATION_SUITE_FILE",
+    "CANDIDATE_COMMON_COHORT_SHADOW_G2_FILE",
+    "CANDIDATE_COMMON_COHORT_SHADOW_G2_V2_FILE",
+  ]) {
+    assert.equal(
+      (refreshBody.match(new RegExp(`${variable}=`, "g")) || []).length,
+      1,
+      `${variable} must be redirected exactly once`,
+    );
+  }
+  assert.doesNotMatch(
+    refreshBody,
+    /CANDIDATE_PROSPECTIVE_(?:REGISTRY_FILE|CAPTURE_STATUS_FILE|MODEL_EVALUATION_FILE)=/,
+  );
+  assert.doesNotMatch(refreshBody, /DATA_STORE_DIR=/);
+  assert.match(refreshBody, /active candidate capture is legacy; isolate non-formal research and benchmark artifacts/);
+  assert.match(refreshBody, /active candidate deadline-only capability probe failed closed/);
+  assert.match(refreshBody, /cleanup_legacy_deadline_compat_runtime/g);
+  assert.match(abortBody, /cleanup_legacy_deadline_compat_runtime/);
+  assert.match(rollbackBody, /cleanup_legacy_deadline_compat_runtime/);
+  assert.match(exitBody, /cleanup_legacy_deadline_compat_runtime/);
+  assertOrdered(main, [
+    "cleanup_legacy_deadline_compat_runtime",
+    "commit_release_transaction",
+    "trap - EXIT",
+  ], "compatibility scratch is absent before commit disables rollback and EXIT cleanup");
+  assert.match(bundleRelease, /readonly CANDIDATE_CAPTURE_REFRESH_ATTEMPT_TIMEOUT_MS=90000/);
+  assert.match(bundleRelease, /readonly RELEASE_HEARTBEAT_KEEPER_FRESHNESS_MAX_SECONDS=120/);
+});
+
 check("post-swap readiness freezes only a fresh completed worker idle window and keeps heartbeat live", () => {
   const main = mainProgram(bundleRelease);
   const heartbeatKeeper = readText(releaseHeartbeatKeeperPath);

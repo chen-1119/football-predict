@@ -762,14 +762,25 @@ const verifyLedger = (ledger, { verifyReviewCheckpoints = true } = {}) => {
         .map((blocker) => `${prefix}-${blocker}`));
     }
   }
-  const cohortEvents = [];
+  // A production ledger can contain thousands of immutable decisions. Comparing
+  // each cohort event with every prior event makes every heartbeat O(n^2) and
+  // can exhaust the bounded pre-swap capture window. Index the exact identity
+  // relation used by sameCohortIdentity instead: normalized kickoff + market +
+  // every accepted id alias. This preserves duplicate detection while making
+  // verification linear in the number of events and aliases.
+  const cohortIdentityKeys = new Set();
   for (const event of ledger.events.filter((row) => (
     row?.type === "decision" || row?.type === "exclusion"
   ))) {
-    if (cohortEvents.some((prior) => sameCohortIdentity(prior, event))) {
+    const kickoffAt = cohortKickoffFor(event);
+    const market = String(event?.market || "HAD").trim().toUpperCase();
+    const keys = kickoffAt
+      ? [...identityValues(event)].map((identity) => JSON.stringify([kickoffAt, market, identity]))
+      : [];
+    if (keys.some((key) => cohortIdentityKeys.has(key))) {
       blockers.push(`event-${event.sequence}-duplicate-cohort-key`);
     }
-    cohortEvents.push(event);
+    for (const key of keys) cohortIdentityKeys.add(key);
   }
   const decisionHashes = new Map(
     ledger.events

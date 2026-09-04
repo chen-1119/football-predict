@@ -104,6 +104,10 @@ CANDIDATE_UNIT=""
 RELEASE_HEARTBEAT_KEEPER_UNIT=""
 RELEASE_HEARTBEAT_KEEPER_RUNTIME_DIR=""
 RELEASE_HEARTBEAT_KEEPER_CONTROL_FILE=""
+LEGACY_DEADLINE_COMPAT_RUNTIME_DIR=""
+LEGACY_DEADLINE_COMPAT_RUNTIME_DEVICE=""
+LEGACY_DEADLINE_COMPAT_RUNTIME_INODE=""
+LEGACY_DEADLINE_COMPAT_RUNTIME_INITIALIZED=0
 RELEASE_SYNC_WRITE_BARRIER_UNIT=""
 RELEASE_SYNC_WRITE_BARRIER_RUNTIME_DIR=""
 RELEASE_SYNC_WRITE_BARRIER_CONTROL_FILE=""
@@ -4745,8 +4749,123 @@ NODE
   return "$rc"
 }
 
+active_candidate_capture_supports_deadline_only() {
+  local capture_script="$1" unit rc
+  [ -f "$capture_script" ] && [ ! -L "$capture_script" ] \
+    && [ "$(stat -c '%h' -- "$capture_script")" = "1" ] || return 1
+  unit="football-release-deadline-capability-$$-${RANDOM}"
+  set +e
+  systemd-run --quiet --wait --collect --pipe --service-type=exec \
+    --unit="$unit" --uid=football --working-directory="$APP_DIR" \
+    --property="NoNewPrivileges=yes" \
+    --property="ProtectSystem=strict" \
+    --property="ProtectHome=true" \
+    --property="PrivateNetwork=yes" \
+    --property="PrivateTmp=yes" \
+    --property="PrivateDevices=yes" \
+    --property="MemoryMax=256M" \
+    --property="TasksMax=32" \
+    --property="RuntimeMaxSec=15s" \
+    --property="ReadOnlyPaths=$APP_DIR" \
+    --property="InaccessiblePaths=-/etc/football-predict -/etc/football-release -/var/lib/football-predict -/var/lib/football-release" \
+    -- "$NODE_HOME/bin/node" - "$capture_script" <<'NODE'
+const path = require("node:path");
+const captureScript = path.resolve(process.argv[2] || "");
+try {
+  const producer = require(captureScript);
+  const mode = typeof producer?.captureExecutionMode === "function"
+    ? producer.captureExecutionMode(["--deadline-only"])
+    : null;
+  if (
+    producer?.DEADLINE_ONLY_FLAG !== "--deadline-only"
+    || mode?.mode !== "deadline-only"
+    || mode?.deadlineOnly !== true
+    || mode?.benchmarkOnly !== false
+  ) process.exit(42);
+} catch {
+  process.exit(43);
+}
+NODE
+  rc="$?"
+  set -e
+  assert_transient_unit_cleared "$unit" || return 2
+  [ "$rc" -eq 0 ] && return 0
+  [ "$rc" -eq 42 ] && return 1
+  return 2
+}
+
+prepare_legacy_deadline_compat_runtime() {
+  local runtime_dir identity device inode owner group mode links extra
+  [ -z "${LEGACY_DEADLINE_COMPAT_RUNTIME_DIR:-}" ] \
+    && [ -z "${LEGACY_DEADLINE_COMPAT_RUNTIME_DEVICE:-}" ] \
+    && [ -z "${LEGACY_DEADLINE_COMPAT_RUNTIME_INODE:-}" ] \
+    && [ "${LEGACY_DEADLINE_COMPAT_RUNTIME_INITIALIZED:-0}" = "0" ] || return 1
+  runtime_dir="$(mktemp -d /run/football-release-deadline-compat.XXXXXX)" || return 1
+  [[ "$runtime_dir" =~ ^/run/football-release-deadline-compat\.[A-Za-z0-9]{6}$ ]] \
+    || { rmdir -- "$runtime_dir" || true; return 1; }
+  identity="$(stat -c '%d:%i:%U:%G:%a:%h' -- "$runtime_dir")" \
+    || { rmdir -- "$runtime_dir" || true; return 1; }
+  IFS=: read -r device inode owner group mode links extra <<<"$identity"
+  [ -z "$extra" ] && [[ "$device" =~ ^[0-9]+$ ]] && [[ "$inode" =~ ^[0-9]+$ ]] \
+    && [ "$owner" = "root" ] && [ "$group" = "root" ] \
+    && [ "$mode" = "700" ] && [ "$links" = "2" ] \
+    && [ -d "$runtime_dir" ] && [ ! -L "$runtime_dir" ] \
+    || { rmdir -- "$runtime_dir" || true; return 1; }
+  LEGACY_DEADLINE_COMPAT_RUNTIME_DIR="$runtime_dir"
+  LEGACY_DEADLINE_COMPAT_RUNTIME_DEVICE="$device"
+  LEGACY_DEADLINE_COMPAT_RUNTIME_INODE="$inode"
+  LEGACY_DEADLINE_COMPAT_RUNTIME_INITIALIZED=1
+  chown football:football "$runtime_dir" \
+    || { cleanup_legacy_deadline_compat_runtime || true; return 1; }
+  chmod 0700 "$runtime_dir" \
+    || { cleanup_legacy_deadline_compat_runtime || true; return 1; }
+  identity="$(stat -c '%d:%i:%U:%G:%a:%h' -- "$runtime_dir")" || return 1
+  IFS=: read -r device inode owner group mode links extra <<<"$identity"
+  [ -z "$extra" ] && [ "$device" = "$LEGACY_DEADLINE_COMPAT_RUNTIME_DEVICE" ] \
+    && [ "$inode" = "$LEGACY_DEADLINE_COMPAT_RUNTIME_INODE" ] \
+    && [ "$owner" = "football" ] && [ "$group" = "football" ] \
+    && [ "$mode" = "700" ] && [ "$links" = "2" ] \
+    && [ -d "$runtime_dir" ] && [ ! -L "$runtime_dir" ] \
+    || { cleanup_legacy_deadline_compat_runtime || true; return 1; }
+}
+
+cleanup_legacy_deadline_compat_runtime() {
+  local runtime_dir="${LEGACY_DEADLINE_COMPAT_RUNTIME_DIR:-}"
+  local expected_device="${LEGACY_DEADLINE_COMPAT_RUNTIME_DEVICE:-}"
+  local expected_inode="${LEGACY_DEADLINE_COMPAT_RUNTIME_INODE:-}"
+  local identity device inode owner group mode links extra
+  [ -n "$runtime_dir" ] || {
+    [ -z "$expected_device" ] && [ -z "$expected_inode" ] \
+      && [ "${LEGACY_DEADLINE_COMPAT_RUNTIME_INITIALIZED:-0}" = "0" ]
+    return
+  }
+  [ "${LEGACY_DEADLINE_COMPAT_RUNTIME_INITIALIZED:-0}" = "1" ] \
+    && [[ "$runtime_dir" =~ ^/run/football-release-deadline-compat\.[A-Za-z0-9]{6}$ ]] \
+    && [[ "$expected_device" =~ ^[0-9]+$ ]] && [[ "$expected_inode" =~ ^[0-9]+$ ]] \
+    || return 1
+  if [ -e "$runtime_dir" ] || [ -L "$runtime_dir" ]; then
+    [ -d "$runtime_dir" ] && [ ! -L "$runtime_dir" ] \
+      && [ "$(realpath -e -- "$runtime_dir")" = "$runtime_dir" ] \
+      && ! mountpoint -q -- "$runtime_dir" || return 1
+    identity="$(stat -c '%d:%i:%U:%G:%a:%h' -- "$runtime_dir")" || return 1
+    IFS=: read -r device inode owner group mode links extra <<<"$identity"
+    [ -z "$extra" ] && [ "$device" = "$expected_device" ] \
+      && [ "$inode" = "$expected_inode" ] \
+      && { [ "$owner:$group" = "football:football" ] || [ "$owner:$group" = "root:root" ]; } \
+      && [ "$mode" = "700" ] && [[ "$links" =~ ^[0-9]+$ ]] \
+      && [ "$links" -ge 2 ] || return 1
+    rm -rf --one-file-system -- "$runtime_dir" || return 1
+    [ ! -e "$runtime_dir" ] && [ ! -L "$runtime_dir" ] || return 1
+  fi
+  LEGACY_DEADLINE_COMPAT_RUNTIME_DIR=""
+  LEGACY_DEADLINE_COMPAT_RUNTIME_DEVICE=""
+  LEGACY_DEADLINE_COMPAT_RUNTIME_INODE=""
+  LEGACY_DEADLINE_COMPAT_RUNTIME_INITIALIZED=0
+}
+
 refresh_candidate_capture_heartbeat_for_readiness() {
-  local evaluated_at status_file runtime_root validator_root expected_validator_root validation_mode capture_script matcher_module collector_trust_registry attempt max_attempts retry_delay_seconds capture_lock_timeout_ms success_epoch_seconds capture_rc
+  local evaluated_at status_file runtime_root validator_root expected_validator_root validation_mode capture_script matcher_module collector_trust_registry attempt max_attempts retry_delay_seconds capture_lock_timeout_ms success_epoch_seconds capture_rc capability_rc
+  local -a capture_compat_env=()
   runtime_root="${1:-}"
   validator_root="${2:-}"
   [ "$#" -eq 2 ] || {
@@ -4793,6 +4912,36 @@ refresh_candidate_capture_heartbeat_for_readiness() {
   [[ "$capture_lock_timeout_ms" =~ ^[0-9]+$ ]] && [ "$capture_lock_timeout_ms" -ge 1000 ] && [ "$capture_lock_timeout_ms" -le 60000 ] \
     || { printf 'invalid candidate capture lock timeout milliseconds: %s\n' "$capture_lock_timeout_ms" >&2; return 1; }
 
+  # Pre-swap capture must keep using the active producer so its committed
+  # implementation hashes and formal ledger semantics cannot drift. Older
+  # producers ignored --deadline-only and continued into large onlineEffect=false
+  # research/benchmark lanes. Isolate only those non-formal outputs; the live
+  # registry, exact heartbeat, SQLite, current data and trust registry stay active.
+  capability_rc=0
+  active_candidate_capture_supports_deadline_only "$capture_script" || capability_rc="$?"
+  if [ "$capability_rc" -eq 1 ]; then
+    [ "${SWAP_STARTED:-0}" = "0" ] || {
+      printf 'active post-swap candidate capture does not advertise deadline-only support\n' >&2
+      return 1
+    }
+    prepare_legacy_deadline_compat_runtime || {
+      printf 'legacy candidate deadline compatibility runtime could not be prepared\n' >&2
+      return 1
+    }
+    capture_compat_env=(
+      "BENCHMARK_PROSPECTIVE_LEDGER_FILE=${LEGACY_DEADLINE_COMPAT_RUNTIME_DIR}/benchmark-prospective-ledger.json"
+      "BENCHMARK_PROSPECTIVE_CAPTURE_STATUS_FILE=${LEGACY_DEADLINE_COMPAT_RUNTIME_DIR}/benchmark-prospective-capture-status.json"
+      "CANDIDATE_PROSPECTIVE_CHALLENGER_SUITE_FILE=${LEGACY_DEADLINE_COMPAT_RUNTIME_DIR}/candidate-prospective-challenger-suite.json"
+      "CANDIDATE_PROSPECTIVE_TEMPERATURE_NEUTRALIZATION_SUITE_FILE=${LEGACY_DEADLINE_COMPAT_RUNTIME_DIR}/candidate-prospective-temperature-neutralization-suite.json"
+      "CANDIDATE_COMMON_COHORT_SHADOW_G2_FILE=${LEGACY_DEADLINE_COMPAT_RUNTIME_DIR}/candidate-common-cohort-shadow-g2.json"
+      "CANDIDATE_COMMON_COHORT_SHADOW_G2_V2_FILE=${LEGACY_DEADLINE_COMPAT_RUNTIME_DIR}/candidate-common-cohort-shadow-g2-v2.json"
+    )
+    log "active candidate capture is legacy; isolate non-formal research and benchmark artifacts for the pre-swap exact heartbeat"
+  elif [ "$capability_rc" -ne 0 ]; then
+    printf 'active candidate deadline-only capability probe failed closed (exit=%s)\n' "$capability_rc" >&2
+    return 1
+  fi
+
   # Before swap this runs only after the regular worker has been stopped, so the
   # capture cannot race its registry transaction. After swap it runs once after
   # the release worker has published readiness-safe idle and before SIGSTOP.
@@ -4801,9 +4950,10 @@ refresh_candidate_capture_heartbeat_for_readiness() {
   attempt=1
   while [ "$attempt" -le "$max_attempts" ]; do
     evaluated_at="$("$NODE_HOME/bin/node" -e 'process.stdout.write(new Date().toISOString())')" \
-      || return 1
+      || { cleanup_legacy_deadline_compat_runtime || true; return 1; }
     capture_rc=0
     run_as_service_user_with_runtime_env env \
+      "${capture_compat_env[@]}" \
       SERVER_STORE_DIR="$LIVE_STORE_DIR" \
       DATASTORE_SQLITE_PATH="$LIVE_SQLITE_PATH" \
       SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH="$collector_trust_registry" \
@@ -4820,28 +4970,34 @@ refresh_candidate_capture_heartbeat_for_readiness() {
         "$CANDIDATE_CAPTURE_REFRESH_ATTEMPT_TIMEOUT_MS" \
         "$CANDIDATE_CAPTURE_REFRESH_KILL_AFTER_MS" \
         "$CANDIDATE_CAPTURE_REFRESH_TIMEOUT_EXIT_CODE" >&2
+      cleanup_legacy_deadline_compat_runtime || return 1
       return "$CANDIDATE_CAPTURE_REFRESH_TIMEOUT_EXIT_CODE"
     fi
     if [ "$capture_rc" -eq 0 ]; then
       if validate_candidate_capture_heartbeat_status \
         "$status_file" "$evaluated_at" "$matcher_module" "$validator_root" "$validation_mode"
       then
-        success_epoch_seconds="$(date -u +'%s')" || return 1
-        [[ "$success_epoch_seconds" =~ ^[1-9][0-9]*$ ]] || return 1
+        success_epoch_seconds="$(date -u +'%s')" \
+          || { cleanup_legacy_deadline_compat_runtime || true; return 1; }
+        [[ "$success_epoch_seconds" =~ ^[1-9][0-9]*$ ]] \
+          || { cleanup_legacy_deadline_compat_runtime || true; return 1; }
         CANDIDATE_CAPTURE_HEARTBEAT_REFRESH_SUCCESS_EPOCH_SECONDS="$success_epoch_seconds"
         log "candidate deadline capture heartbeat refreshed after attempt ${attempt}/${max_attempts} at epoch ${success_epoch_seconds}"
+        cleanup_legacy_deadline_compat_runtime || return 1
         return 0
       fi
     fi
 
     if [ "$attempt" -ge "$max_attempts" ]; then
       printf 'candidate deadline capture heartbeat refresh exhausted after %s attempts\n' "$max_attempts" >&2
+      cleanup_legacy_deadline_compat_runtime || return 1
       return 1
     fi
     log "candidate deadline capture heartbeat refresh retry ${attempt}/${max_attempts}: registry/status not yet available"
     sleep "$retry_delay_seconds"
     attempt=$((attempt + 1))
   done
+  cleanup_legacy_deadline_compat_runtime || return 1
   return 1
 }
 
@@ -6399,6 +6555,8 @@ abort_before_swap() {
     || { log "fail-stop: release sync write barrier could not be reaped before abort"; exit 1; }
   stop_release_candidate_heartbeat_keeper \
     || { log "fail-stop: release heartbeat keeper could not be reaped before abort"; exit 1; }
+  cleanup_legacy_deadline_compat_runtime \
+    || { log "fail-stop: legacy deadline compatibility runtime could not be cleaned before abort"; exit 1; }
   stop_candidate
   cleanup_release_perf_access_token \
     || { log "fail-stop: release performance credential could not be cleaned before abort"; exit 1; }
@@ -6473,6 +6631,10 @@ rollback() {
   log "rollback: ${reason}"
   stop_release_candidate_heartbeat_keeper || {
     log "rollback fail-stop: release heartbeat keeper could not be reaped"
+    exit 1
+  }
+  cleanup_legacy_deadline_compat_runtime || {
+    log "rollback fail-stop: legacy deadline compatibility runtime could not be cleaned"
     exit 1
   }
   write_recovery_phase "rollback-starting" || {
@@ -6572,6 +6734,10 @@ release_exit_trap() {
   }
   stop_release_candidate_heartbeat_keeper || {
     log "fail-stop: release heartbeat keeper could not be reaped from EXIT trap"
+    exit 1
+  }
+  cleanup_legacy_deadline_compat_runtime || {
+    log "fail-stop: legacy deadline compatibility runtime could not be cleaned from EXIT trap"
     exit 1
   }
   stop_candidate || true
@@ -7387,6 +7553,8 @@ chown root:root "${APP_DIR}/.release-live-complete.next" || rollback "release co
 chmod 0644 "${APP_DIR}/.release-live-complete.next" || rollback "release completion marker permissions failed"
 mv "${APP_DIR}/.release-live-complete.next" "${APP_DIR}/.release-live-complete" || rollback "release completion marker could not be committed"
 chmod 0644 "${APP_DIR}/.release-live-complete" || rollback "release completion marker permissions failed"
+cleanup_legacy_deadline_compat_runtime \
+  || rollback "legacy deadline compatibility runtime remained before transaction commit"
 commit_release_transaction || rollback "recovery commit phase could not be recorded"
 if ! clear_release_recovery_snapshot; then
   log "warning: committed release retained recovery/current for roll-forward verification"
