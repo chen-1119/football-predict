@@ -2,7 +2,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const rootDir = path.resolve(__dirname, "..");
-const readText = (relativePath) => fs.readFileSync(path.join(rootDir, relativePath), "utf8");
+const readText = (relativePath) => fs.readFileSync(path.join(rootDir, relativePath), "utf8")
+  .replace(/\r\n?/g, "\n");
 
 const predictions = readText("src/pages/PredictionsList.tsx");
 const bestTips = readText("src/pages/BestTips.tsx");
