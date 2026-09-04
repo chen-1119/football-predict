@@ -1285,6 +1285,13 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
   assert.match(runBody, /ReadWritePaths=\$LIVE_SQLITE_PREBUILD_DIR \$LIVE_STORE_DIR\/data-generations/);
   assert.match(runBody, /CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_DAC_OVERRIDE/);
   assert.match(sqliteExporter, /SQLITE_EXPORT_SOURCE_POINTER_READ_ONLY/);
+  assert.match(sqliteExporter, /SQLITE_EXPORT_REQUIRE_ACTIVE_GENERATION_FAST_PATH/);
+  assert.match(sqliteExporter, /validatePayloadSemantics: !requireActiveGenerationFastPath/);
+  assert.match(sqliteExporter, /SQLITE_ACTIVE_GENERATION_FAST_PATH_REQUIRED/);
+  assert.match(sqliteExporter, /SQLITE_EXPORT_CONFIGURATION_INVALID/);
+  assert.match(sqliteExporter, /required active-generation fast path rejected release clone/);
+  assert.match(generationBundle, /validatePayloadSemantics = true/);
+  assert.match(generationBundle, /if \(validatePayloadSemantics\) validateGenerationBundle\(context\)/);
   assert.match(productionCloneVerifier, /fast-result-production-clone-v3/);
   assert.match(productionCloneVerifier, /sealed production clone bytes changed during migration verification/);
   assert.match(productionCloneVerifier, /sealed production clone sidecars changed during migration verification/);
@@ -1334,11 +1341,11 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
   assert.match(runBody, /--property="Nice=10"/);
   assert.match(runBody, /--property="IOSchedulingPriority=4"/);
   assert.match(runBody, /--property="IOWeight=50"/);
-  assert.match(runBody, /--property="MemoryHigh=768M"/);
+  assert.match(runBody, /--property="MemoryHigh=896M"/);
   assert.match(runBody, /--property="MemoryMax=1024M"/);
   assert.match(runBody, /--property="MemorySwapMax=256M"/);
   assert.match(runBody, /--property="OOMPolicy=stop"/);
-  assert.match(bundleRelease, /RELEASE_LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS:-540/);
+  assert.match(bundleRelease, /RELEASE_LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS:-900/);
   const runtimeBounds = /\[ "\$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" -ge ([0-9]+) \][\s\S]*?\[ "\$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" -le ([0-9]+) \]/.exec(bundleRelease);
   assert.ok(runtimeBounds, "live SQLite prebuild RuntimeMaxSec must have explicit numeric bounds");
   const runtimeMin = Number(runtimeBounds[1]);
@@ -1346,10 +1353,10 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
   const runtimeAccepted = (value) => Number.isInteger(value) && value >= runtimeMin && value <= runtimeMax;
   assert.equal(runtimeAccepted(479), true);
   assert.equal(runtimeAccepted(480), true);
-  assert.equal(runtimeAccepted(540), true);
-  assert.equal(runtimeAccepted(541), false);
+  assert.equal(runtimeAccepted(900), true);
+  assert.equal(runtimeAccepted(901), false);
   assert.equal(runtimeAccepted(59), false);
-  assert.deepEqual({ runtimeMin, runtimeMax }, { runtimeMin: 60, runtimeMax: 540 });
+  assert.deepEqual({ runtimeMin, runtimeMax }, { runtimeMin: 60, runtimeMax: 900 });
   assert.match(prepareBody, /case "\$store_dir" in/);
   assert.match(prepareBody, /"\$sqlite_path" = "\$\{store_dir%\/\}\/football\.db"/);
   assert.match(prepareBody, /--source-base "\$sqlite_path"/);
@@ -1384,9 +1391,15 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
   assert.doesNotMatch(prepareBody, /SQLITE_VACUUM_AFTER_EXPORT=1/);
   assert.match(bundleRelease, /SQLITE_MAINTENANCE_WINDOW=release-stopped/);
   assert.match(bundleRelease, /SQLITE_EXPORT_SOURCE_POINTER_READ_ONLY=1/);
+  assert.match(bundleRelease, /SQLITE_EXPORT_REQUIRE_ACTIVE_GENERATION_FAST_PATH=1/);
   assert.match(bundleRelease, /validate_prebuilt_live_sqlite_publication/);
   assert.match(validatePublicationNode, /SELECT key, value FROM schema_meta/);
   assert.doesNotMatch(validatePublicationNode, /SELECT key, value FROM meta\b/);
+  assert.match(
+    validatePublicationNode,
+    /resolveActivePublication\(\{[\s\S]{0,120}storeDir,[\s\S]{0,80}publicDataDir,[\s\S]{0,80}validatePayloadSemantics: false/,
+    "online full-capture must reuse manifest integrity without materializing the large payload twice",
+  );
   for (const stage of ["copy-rollback", "stage-copy", "export", "quick_check", "seal"]) {
     assert.match(bundleRelease, new RegExp(`run_prebuild_stage ${stage.replace("-", "\\-")}`));
   }
@@ -1473,7 +1486,7 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
   assert.match(freshnessBody, /--refreshed-at-epoch-seconds/);
   assert.match(bundleRelease, /readonly LIVE_SQLITE_PREBUILD_HEARTBEAT_MAX_AGE_SECONDS=\$\(\(LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS \+ 30\)\)/);
   assert.match(bundleRelease, /readonly POST_PREBUILD_HTTP_HEARTBEAT_MAX_AGE_SECONDS=\$\(\(LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS \+ 60\)\)/);
-  assert.match(bundleRelease, /readonly CANDIDATE_CAPTURE_HEARTBEAT_FRESHNESS_MAX_SECONDS=600/);
+  assert.match(bundleRelease, /readonly CANDIDATE_CAPTURE_HEARTBEAT_FRESHNESS_MAX_SECONDS=960/);
   assert.match(freshnessBody, /-le "\$CANDIDATE_CAPTURE_HEARTBEAT_FRESHNESS_MAX_SECONDS"/);
   assert.match(startBarrierBody, /runReleaseSyncWriteBarrier\.cjs/);
   assert.match(startBarrierBody, /--uid=football/);
@@ -2457,11 +2470,11 @@ rm -rf -- "$TEST_ROOT"
 });
 
 check("release prebuild capacity and heartbeat freshness gates enforce inclusive safe boundaries", () => {
-  assert.equal(POLICY_VERSION, "release-live-sqlite-prebuild-policy-v3");
+  assert.equal(POLICY_VERSION, "release-live-sqlite-prebuild-policy-v4");
   assert.equal(DEFAULT_MIN_MEM_AVAILABLE_MIB, 1152);
   assert.equal(DEFAULT_MAX_APP_MEMORY_CURRENT_MIB, 768);
   assert.equal(DEFAULT_MAX_APP_WORKING_SET_MIB, 512);
-  assert.equal(MAX_HEARTBEAT_AGE_SECONDS, 600);
+  assert.equal(MAX_HEARTBEAT_AGE_SECONDS, 960);
   assert.deepEqual(resolveCapacityLimits({}), {
     minMemAvailableMiB: 1152,
     maxAppMemoryCurrentMiB: 768,
@@ -2570,16 +2583,16 @@ check("release prebuild capacity and heartbeat freshness gates enforce inclusive
   }).ok, false, "clock regression must fail closed");
   assert.equal(evaluateFreshness({
     refreshedAtEpochSeconds: 1_000,
-    nowEpochSeconds: 1_600,
-    maxAgeSeconds: 600,
+    nowEpochSeconds: 1_960,
+    maxAgeSeconds: 960,
     phase: "maximum-bounded-limit",
   }).ok, true);
   assert.throws(() => evaluateFreshness({
     refreshedAtEpochSeconds: 1_000,
     nowEpochSeconds: 1_001,
-    maxAgeSeconds: 601,
+    maxAgeSeconds: 961,
     phase: "invalid-limit",
-  }), /between 1 and 600/);
+  }), /between 1 and 960/);
 });
 
 check("SQLite nanosecond seals reject same-size writes, inode swaps, links, and WAL transitions", () => {
@@ -4223,7 +4236,7 @@ run_candidate_model_artifact_catchup /candidate-store /candidate-store/football.
     assert.match(bundleRelease, /CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS=\$\(\(/);
     assert.match(
       bundleRelease,
-      /CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS=\$\(\([\s\S]{0,160}CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS[\s\S]{0,80}\(RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS \+ 999\) \/ 1000/,
+      /CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS=\$\(\([\s\S]{0,200}CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS[\s\S]{0,100}\(RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS \+ 999\) \/ 1000[\s\S]{0,80}LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS/,
     );
     assert.match(main, /--preverify-refresh-budget-seconds "\$CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS"/);
     assert.match(main, /--atomic-swap-margin-seconds "\$CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS"/);

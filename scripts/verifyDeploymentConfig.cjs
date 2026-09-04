@@ -1499,20 +1499,27 @@ const run = () => {
   );
   const sealedWindow = bundleReleaseScript.slice(prebuild, pointerKeeper);
   pushCheck(checks, "signed release bounds live SQLite prebuild resources, capacity, and heartbeat age", (
-    bundleReleaseScript.includes("RELEASE_LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS:-540")
+    bundleReleaseScript.includes("RELEASE_LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS:-900")
     && bundleReleaseScript.includes('[ "$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" -ge 60 ]')
-    && bundleReleaseScript.includes('[ "$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" -le 540 ]')
+    && bundleReleaseScript.includes('[ "$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" -le 900 ]')
     && bundleReleaseScript.includes('IOSchedulingPriority=4')
     && bundleReleaseScript.includes('IOWeight=50')
-    && bundleReleaseScript.includes('MemoryHigh=768M')
+    && bundleReleaseScript.includes('MemoryHigh=896M')
     && bundleReleaseScript.includes('MemoryMax=1024M')
     && bundleReleaseScript.includes('MemorySwapMax=256M')
     && bundleReleaseScript.includes('root:football:640:1')
     && bundleReleaseScript.includes('run_prebuild_stage copy-rollback')
     && bundleReleaseScript.includes('run_prebuild_stage stage-copy')
     && bundleReleaseScript.includes('run_prebuild_stage export')
+    && bundleReleaseScript.includes('SQLITE_EXPORT_REQUIRE_ACTIVE_GENERATION_FAST_PATH=1')
+    && bundleReleaseScript.includes('validatePayloadSemantics: false')
+    && releasePrebuildPolicy.includes('release-live-sqlite-prebuild-policy-v4')
+    && bundleReleaseScript.includes(
+      '(RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS + 999) / 1000 +\n  LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS'
+    )
     && bundleReleaseScript.includes('run_prebuild_stage quick_check')
     && bundleReleaseScript.includes('run_prebuild_stage seal')
+    && releasePrebuildPolicy.includes('MAX_HEARTBEAT_AGE_SECONDS = 960')
     && releasePrebuildPolicy.includes('DEFAULT_MIN_MEM_AVAILABLE_MIB = 1152')
     && releasePrebuildPolicy.includes('DEFAULT_MAX_APP_MEMORY_CURRENT_MIB = 768')
     && releasePrebuildPolicy.includes('DEFAULT_MAX_APP_WORKING_SET_MIB = 512')
@@ -1536,8 +1543,8 @@ const run = () => {
     && !sealedWindow.includes('refresh_candidate_capture_heartbeat_for_readiness')
   ), {
     runtimeMinSeconds: 60,
-    runtimeMaxSeconds: 540,
-    memoryHighMiB: 768,
+    runtimeMaxSeconds: 900,
+    memoryHighMiB: 896,
     memoryMaxMiB: 1024,
     memorySwapMaxMiB: 256,
     barrierBeforeWorkerPause: writeBarrier >= 0

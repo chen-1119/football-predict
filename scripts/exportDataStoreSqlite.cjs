@@ -80,6 +80,7 @@ const sqliteBusyTimeoutMs = Math.max(1000, Number(process.env.SQLITE_BUSY_TIMEOU
 const sqliteExportAttempts = Math.max(1, Number(process.env.SQLITE_EXPORT_ATTEMPTS || 3));
 const sqliteExportRetryDelayMs = Math.max(1000, Number(process.env.SQLITE_EXPORT_RETRY_DELAY_MS || 5000));
 const sourcePointerReadOnly = process.env.SQLITE_EXPORT_SOURCE_POINTER_READ_ONLY === "1";
+const requireActiveGenerationFastPath = process.env.SQLITE_EXPORT_REQUIRE_ACTIVE_GENERATION_FAST_PATH === "1";
 const SQLITE_SCHEMA_VERSION = "football-sqlite-v2-incremental";
 const ACTIVE_GENERATION_FAST_PATH_VERSION = "sqlite-active-generation-clone-fast-path-v1";
 const expectedWarehousePolicy = Object.freeze({
@@ -152,7 +153,20 @@ const readJson = (filePath, fallback) => {
 // every core input below is read from that immutable directory.  A missing
 // pointer is the only condition that permits legacy mutable-file bootstrap;
 // a corrupt pointer throws and prevents an unsafe fallback.
-const inputPublication = resolveActivePublication({ storeDir, publicDataDir });
+if (requireActiveGenerationFastPath && !sourcePointerReadOnly) {
+  const error = new Error("required active-generation fast path needs a read-only source pointer");
+  error.code = "SQLITE_EXPORT_CONFIGURATION_INVALID";
+  throw error;
+}
+const inputPublication = resolveActivePublication({
+  storeDir,
+  publicDataDir,
+  // The signed release path fails closed below unless the cloned SQLite
+  // metadata is an exact match. Keep the streaming manifest/file SHA256 pass,
+  // but avoid materializing the same 300+ MiB payload a second time merely to
+  // discover that no base rows need replaying.
+  validatePayloadSemantics: !requireActiveGenerationFastPath,
+});
 const generationInputActive = inputPublication.mode === "active-generation";
 const inputSyncMeta = readPublicationJson(inputPublication, "sync-meta.json", null);
 if (sourcePointerReadOnly && !generationInputActive) {
@@ -327,6 +341,13 @@ if (process.env.SQLITE_EXPORT_LOG_PREFLIGHT === "1") {
       publication: activeGenerationFastPath.publication,
     },
   }, null, 2));
+}
+if (requireActiveGenerationFastPath && !activeGenerationFastPath.eligible) {
+  const error = new Error(
+    `required active-generation fast path rejected release clone: ${activeGenerationFastPath.reason || "unknown"}`
+  );
+  error.code = "SQLITE_ACTIVE_GENERATION_FAST_PATH_REQUIRED";
+  throw error;
 }
 const loadBaseProjection = !activeGenerationFastPath.eligible;
 const readCoreJson = (relativePath, fallback) => readPublicationJson(
