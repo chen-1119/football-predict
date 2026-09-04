@@ -59,7 +59,11 @@ CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS="${RELEASE_CANDIDATE_VERIFIER_RUNTIME_MAX
 CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS="${RELEASE_CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS:-420}"
 CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS="${RELEASE_CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS:-30}"
 CANDIDATE_REFRESH_STEP_RUNTIME_MAX_SECONDS="${RELEASE_CANDIDATE_REFRESH_STEP_RUNTIME_MAX_SECONDS:-90}"
-LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS="${RELEASE_LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS:-540}"
+# Production r669 spent 125 seconds on bounded staging before the multi-gigabyte
+# export and was still making progress when the former 540-second unit expired.
+# Keep the operation finite while giving export, quick_check, and seal one
+# measured 900-second envelope on the 2 GiB host.
+LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS="${RELEASE_LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS:-900}"
 readonly LIVE_SQLITE_PREBUILD_CAPACITY_SETTLE_ATTEMPTS=10
 readonly LIVE_SQLITE_PREBUILD_CAPACITY_SETTLE_DELAY_SECONDS=5
 ALLOW_STOPPED_WINDOW_SQLITE_EXPORT="${RELEASE_ALLOW_STOPPED_WINDOW_SQLITE_EXPORT:-0}"
@@ -99,7 +103,7 @@ CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS=""
 WORKER_FROZEN_CHILD_DRAIN_TIMEOUT_SECONDS="${RELEASE_WORKER_FROZEN_CHILD_DRAIN_TIMEOUT_SECONDS:-90}"
 readonly LIVE_SQLITE_PREBUILD_HEARTBEAT_MAX_AGE_SECONDS=$((LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS + 30))
 readonly POST_PREBUILD_HTTP_HEARTBEAT_MAX_AGE_SECONDS=$((LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS + 60))
-readonly CANDIDATE_CAPTURE_HEARTBEAT_FRESHNESS_MAX_SECONDS=600
+readonly CANDIDATE_CAPTURE_HEARTBEAT_FRESHNESS_MAX_SECONDS=960
 CANDIDATE_UNIT=""
 RELEASE_HEARTBEAT_KEEPER_UNIT=""
 RELEASE_HEARTBEAT_KEEPER_RUNTIME_DIR=""
@@ -420,7 +424,7 @@ run_live_sqlite_prebuild_step() {
     --property="IOSchedulingClass=best-effort" \
     --property="IOSchedulingPriority=4" \
     --property="IOWeight=50" \
-    --property="MemoryHigh=768M" \
+    --property="MemoryHigh=896M" \
     --property="MemoryMax=1024M" \
     --property="MemorySwapMax=256M" \
     --property="OOMPolicy=stop" \
@@ -3759,7 +3763,15 @@ if (validationMode === "full-capture") {
   const { resolveActivePublication } = require(
     path.join(moduleRoot, "server", "dataGenerationBundle.cjs"),
   );
-  const publication = resolveActivePublication({ storeDir, publicDataDir });
+  // The exporter already proved this is an exact-generation SQLite clone and
+  // the resolver still re-hashes every manifest payload here. Avoid a second
+  // 300+ MiB semantic materialization outside the bounded transient unit; the
+  // sealed tree, SQLite metadata, and final pointer CAS remain fail-closed.
+  const publication = resolveActivePublication({
+    storeDir,
+    publicDataDir,
+    validatePayloadSemantics: false,
+  });
   if (publication?.mode !== "active-generation" || !publication?.identity?.generationId) {
     throw new Error("prebuilt SQLite requires an active immutable generation");
   }
@@ -3931,6 +3943,7 @@ export_stage() {
   env SERVER_STORE_DIR="$store_dir" DATASTORE_SQLITE_PATH="$stage_path" \
     SQLITE_EXPORT_PUBLIC_DATA_DIR="$next_dir/public/data" \
     SQLITE_EXPORT_SOURCE_POINTER_READ_ONLY=1 \
+    SQLITE_EXPORT_REQUIRE_ACTIVE_GENERATION_FAST_PATH=1 \
     SQLITE_EXPORT_LOG_PREFLIGHT=1 \
     SQLITE_VACUUM_AFTER_EXPORT=0 SQLITE_MAINTENANCE_WINDOW=release-stopped \
     SQLITE_WAL_CHECKPOINT_MODE=TRUNCATE \
@@ -6826,7 +6839,7 @@ fi
   || { printf 'invalid candidate refresh step RuntimeMaxSec: %s\n' "$CANDIDATE_REFRESH_STEP_RUNTIME_MAX_SECONDS" >&2; exit 1; }
 [[ "$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" =~ ^[0-9]+$ ]] \
   && [ "$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" -ge 60 ] \
-  && [ "$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" -le 540 ] \
+  && [ "$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" -le 900 ] \
   || { printf 'invalid live SQLite prebuild RuntimeMaxSec: %s\n' "$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" >&2; exit 1; }
 [[ "$ALLOW_STOPPED_WINDOW_SQLITE_EXPORT" =~ ^[01]$ ]] \
   || { printf 'invalid stopped-window SQLite export break-glass flag: %s\n' "$ALLOW_STOPPED_WINDOW_SQLITE_EXPORT" >&2; exit 1; }
@@ -6853,12 +6866,14 @@ fi
   || { printf 'invalid release sync write barrier start timeout: %s\n' "$RELEASE_SYNC_WRITE_BARRIER_START_TIMEOUT_SECONDS" >&2; exit 1; }
 # The barrier begins after candidate verification while the production worker
 # may still be finishing an official generation/SQLite publication. Account
-# for its complete bounded wait in the same transition horizon that protects
-# refresh and verification, so waiting for a healthy live writer can never
-# consume the final betting-cutoff margin silently.
+# for its complete bounded wait, plus the bounded live SQLite prebuild, in the
+# same transition horizon that protects refresh and verification. Neither a
+# healthy live writer nor the measured export can silently consume the final
+# betting-cutoff margin.
 CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS=$((
   CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS +
-  (RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS + 999) / 1000
+  (RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS + 999) / 1000 +
+  LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS
 ))
 [[ "$RELEASE_HEARTBEAT_KEEPER_START_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] \
   && [ "$RELEASE_HEARTBEAT_KEEPER_START_TIMEOUT_SECONDS" -ge 10 ] \

@@ -798,13 +798,25 @@ const legacyPublication = (publicDataDir) => Object.freeze({
   identity: publicationIdentity({ mode: "legacy-bootstrap" }),
 });
 
-const resolveActivePublication = ({ storeDir, publicDataDir }) => {
+const resolveActivePublication = ({
+  storeDir,
+  publicDataDir,
+  validatePayloadSemantics = true,
+}) => {
   const paths = storePaths(storeDir);
   if (!fs.existsSync(paths.currentPointer)) return legacyPublication(publicDataDir);
   let context;
   try {
+    if (typeof validatePayloadSemantics !== "boolean") {
+      fail("PUBLICATION_OPTION_INVALID", "validatePayloadSemantics must be boolean");
+    }
+    // resolveCurrentGeneration always validates the pointer, manifest, file
+    // metadata, and every payload SHA256. A release-only exact-clone probe can
+    // defer the additional whole-bundle JSON/schema materialization until it
+    // has proved the SQLite clone already carries this exact identity. Normal
+    // callers retain semantic validation by default.
     context = resolveCurrentGeneration({ storeDir });
-    validateGenerationBundle(context);
+    if (validatePayloadSemantics) validateGenerationBundle(context);
   } catch (error) {
     fail("ACTIVE_GENERATION_INVALID", "active data generation is invalid", {
       causeCode: error?.code || null,

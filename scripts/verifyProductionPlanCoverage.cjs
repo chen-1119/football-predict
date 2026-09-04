@@ -129,6 +129,7 @@ const packageJson = readJson("package.json", { scripts: {} });
 const scripts = packageJson.scripts || {};
 const serverIndex = readText("server/index.cjs");
 const dataStore = readText("server/dataStore.cjs");
+const dataGenerationBundle = readText("server/dataGenerationBundle.cjs");
 const sqliteStore = readText("server/sqliteStore.cjs");
 const sqliteExporter = readText("scripts/exportDataStoreSqlite.cjs");
 const syncData = readText("scripts/syncData.cjs");
@@ -2715,12 +2716,12 @@ const readPlanSqliteStatus = async () => {
     "live SQLite prebuild refuses to overlap an active sync worker",
     "start_release_sync_write_barrier",
     "canonical live sync write barrier did not drain cleanly after service stop",
-    "RELEASE_LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS:-540",
+    "RELEASE_LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS:-900",
     "LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS\" -ge 60",
-    "LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS\" -le 540",
+    "LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS\" -le 900",
     "IOSchedulingPriority=4",
     "IOWeight=50",
-    "MemoryHigh=768M",
+    "MemoryHigh=896M",
     "MemoryMax=1024M",
     "MemorySwapMax=256M",
     "OOMPolicy=stop",
@@ -2730,10 +2731,14 @@ const readPlanSqliteStatus = async () => {
     "run_prebuild_stage copy-rollback",
     "run_prebuild_stage stage-copy",
     "run_prebuild_stage export",
+    "SQLITE_EXPORT_REQUIRE_ACTIVE_GENERATION_FAST_PATH=1",
+    "validatePayloadSemantics: false",
     "run_prebuild_stage quick_check",
     "run_prebuild_stage seal",
     "LIVE_SQLITE_PREBUILD_HEARTBEAT_MAX_AGE_SECONDS=$((LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS + 30))",
     "POST_PREBUILD_HTTP_HEARTBEAT_MAX_AGE_SECONDS=$((LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS + 60))",
+    "CANDIDATE_CAPTURE_HEARTBEAT_FRESHNESS_MAX_SECONDS=960",
+    "(RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS + 999) / 1000 +\n  LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS",
     "candidate deadline capture heartbeat exceeded ${LIVE_SQLITE_PREBUILD_HEARTBEAT_MAX_AGE_SECONDS} seconds after live SQLite prebuild",
     "candidate deadline capture heartbeat exceeded the sealed handoff budget",
     "scripts/sqliteReleaseSeal.cjs",
@@ -2760,7 +2765,8 @@ const readPlanSqliteStatus = async () => {
     "live sync write barrier ownership changed before release",
     "await lock.release()"
   ]) && hasAll(releasePrebuildPolicy, [
-    "release-live-sqlite-prebuild-policy-v3",
+    "release-live-sqlite-prebuild-policy-v4",
+    "MAX_HEARTBEAT_AGE_SECONDS = 960",
     "RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB",
     "RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_MEMORY_CURRENT_MIB",
     "DEFAULT_MIN_MEM_AVAILABLE_MIB = 1152",
@@ -2769,6 +2775,13 @@ const readPlanSqliteStatus = async () => {
     "DEFAULT_MAX_APP_WORKING_SET_MIB = 512",
     "evaluateCapacity",
     "evaluateFreshness"
+  ]) && hasAll(dataGenerationBundle, [
+    "validatePayloadSemantics = true",
+    "if (validatePayloadSemantics) validateGenerationBundle(context)"
+  ]) && hasAll(sqliteExporter, [
+    "SQLITE_EXPORT_REQUIRE_ACTIVE_GENERATION_FAST_PATH",
+    "validatePayloadSemantics: !requireActiveGenerationFastPath",
+    "SQLITE_ACTIVE_GENERATION_FAST_PATH_REQUIRED"
   ]) && hasAll(bundleReleaseScript, [
     'set_env_value "$env_file" "RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB" "1152"',
     'set_env_value "$env_file" "RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_MEMORY_CURRENT_MIB" "768"',

@@ -1112,6 +1112,14 @@ try {
   assert.equal(activeSeed.fastPath.requested, false);
   assert.equal(activeSeed.fastPath.applied, false,
     "ordinary writable-pointer exports must never take the release clone fast path");
+  assert.throws(
+    () => runExporter({
+      ...activeEnv,
+      SQLITE_EXPORT_REQUIRE_ACTIVE_GENERATION_FAST_PATH: "1",
+    }),
+    /SQLITE_EXPORT_CONFIGURATION_INVALID|required active-generation fast path needs a read-only source pointer/,
+    "required release fast path must reject a writable source pointer",
+  );
 
   const canonicalLiveDbPath = path.join(activeStoreDir, "football.db");
   fs.copyFileSync(activeDbPath, canonicalLiveDbPath);
@@ -1145,6 +1153,28 @@ try {
   ).get().count, 1, "full fallback must repair the missing business table");
   incompleteClone.close();
 
+  const requiredFastPathClone = path.join(activeRoot, "release-clone-required-fast", "football.db");
+  fs.mkdirSync(path.dirname(requiredFastPathClone), { recursive: true });
+  fs.copyFileSync(activeDbPath, requiredFastPathClone);
+  let requiredFastPathDb = new DatabaseSync(requiredFastPathClone);
+  requiredFastPathDb.exec("DROP TABLE odds_snapshots");
+  requiredFastPathDb.close();
+  assert.throws(
+    () => runExporter({
+      ...activeEnv,
+      DATASTORE_SQLITE_PATH: requiredFastPathClone,
+      SQLITE_EXPORT_SOURCE_POINTER_READ_ONLY: "1",
+      SQLITE_EXPORT_REQUIRE_ACTIVE_GENERATION_FAST_PATH: "1",
+    }),
+    /SQLITE_ACTIVE_GENERATION_FAST_PATH_REQUIRED|required active-generation fast path rejected release clone: required-table-missing:odds_snapshots/,
+    "release prebuild must fail closed instead of materializing a full-export fallback",
+  );
+  requiredFastPathDb = new DatabaseSync(requiredFastPathClone, { readOnly: true });
+  assert.equal(requiredFastPathDb.prepare(
+    "SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table' AND name = 'odds_snapshots'"
+  ).get().count, 0, "required fast-path rejection must not repair or mutate the clone");
+  requiredFastPathDb.close();
+
   const overlayId = "history:release-fast-overlay-sentinel";
   const insertOverlay = (database) => database.prepare(`
     INSERT OR REPLACE INTO match_snapshots
@@ -1174,6 +1204,7 @@ try {
   const activeFast = runExporter({
     ...activeEnv,
     SQLITE_EXPORT_SOURCE_POINTER_READ_ONLY: "1",
+    SQLITE_EXPORT_REQUIRE_ACTIVE_GENERATION_FAST_PATH: "1",
   });
   assert.equal(activeFast.fastPath.eligible, true);
   assert.equal(activeFast.fastPath.applied, true);
@@ -1287,6 +1318,28 @@ try {
     storeDir: activeStoreDir,
     publicDataDir: activePublicDir,
   });
+  const generationSyncMetaPath = path.join(
+    committedGeneration.context.generationDir,
+    "sync-meta.json",
+  );
+  const generationSyncMetaBytes = fs.readFileSync(generationSyncMetaPath);
+  const tamperedGenerationSyncMetaBytes = Buffer.from(generationSyncMetaBytes);
+  tamperedGenerationSyncMetaBytes[tamperedGenerationSyncMetaBytes.length - 2] ^= 1;
+  fs.writeFileSync(generationSyncMetaPath, tamperedGenerationSyncMetaBytes);
+  try {
+    assert.throws(
+      () => resolveActivePublication({
+        storeDir: activeStoreDir,
+        publicDataDir: activePublicDir,
+        validatePayloadSemantics: false,
+      }),
+      (error) => error?.code === "ACTIVE_GENERATION_INVALID"
+        && error?.details?.causeCode === "FILE_HASH_MISMATCH",
+      "integrity-only release resolution must still hash and reject every changed generation file",
+    );
+  } finally {
+    fs.writeFileSync(generationSyncMetaPath, generationSyncMetaBytes);
+  }
   const activePointerPath = storePaths(activeStoreDir).currentPointer;
   const originalPointerBytes = fs.readFileSync(activePointerPath);
   const changedPointer = JSON.parse(originalPointerBytes.toString("utf8"));
