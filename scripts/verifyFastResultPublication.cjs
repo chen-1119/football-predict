@@ -3839,7 +3839,9 @@ const run = async () => {
       revision: crashMeta.fastResultRevision,
     });
 
-    const workerSource = fs.readFileSync(path.join(rootDir, "scripts", "runSyncWorker.cjs"), "utf8");
+    const workerSource = fs
+      .readFileSync(path.join(rootDir, "scripts", "runSyncWorker.cjs"), "utf8")
+      .replace(/\r\n?/g, "\n");
     const fastIndex = workerSource.indexOf('"publish:official-results-fast"');
     const fullIndex = workerSource.indexOf('runCommand("node", ["scripts/syncData.cjs"]');
     check("worker runs non-fatal fast publication before the full official sync", (

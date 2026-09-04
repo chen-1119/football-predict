@@ -16,7 +16,7 @@ const sqliteDbPath = process.env.DATASTORE_SQLITE_PATH || path.join(storeDir, "f
 
 const readText = (filePath) => {
   try {
-    return fs.readFileSync(path.join(rootDir, filePath), "utf8");
+    return fs.readFileSync(path.join(rootDir, filePath), "utf8").replace(/\r\n?/g, "\n");
   } catch {
     return "";
   }
