@@ -8,7 +8,7 @@ const outDir = path.join(root, "artifacts", "douyin-worldcup-2026-06-11");
 const htmlDir = path.join(outDir, "html");
 const frameDir = path.join(outDir, "frames");
 const ttsDir = path.join(outDir, "tts");
-const websiteUrl = process.env.WEBSITE_URL || "http://170.106.75.73/";
+const websiteUrl = process.env.WEBSITE_URL || "https://134.175.132.183/";
 const websiteContentUrl = process.env.WEBSITE_CONTENT_URL || new URL("/predictions", websiteUrl).href;
 const chromePath = process.env.CHROME_PATH || "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 const width = 1080;
@@ -667,7 +667,7 @@ function buildScenes(siteCapture, matches) {
       eyebrow: "今日赛前推荐",
       title: "今日两场预测",
       subtitle: "只看推荐方向 + 比分参考",
-      meta: "网址：http://170.106.75.73/",
+      meta: "网址：https://134.175.132.183/",
       kind: "cover"
     },
     {
@@ -713,7 +713,7 @@ function buildScenes(siteCapture, matches) {
       eyebrow: "网站入口",
       title: "完整内容看网址",
       subtitle: "赛程 / SP / 推荐 / 世界杯预测路线",
-      note: "网站入口：http://170.106.75.73/"
+      note: "网站入口：https://134.175.132.183/"
     }
   ];
 }
@@ -1101,7 +1101,7 @@ function sceneHtml(scene, index, total) {
       ${scene.note ? `<div class="note">${htmlEscape(scene.note)}</div>` : ""}
     </section>
     <div class="footer">
-      <span>网站来源：http://170.106.75.73/</span>
+      <span>网站来源：https://134.175.132.183/</span>
       <span>${String(index + 1).padStart(2, "0")} / ${String(total).padStart(2, "0")}</span>
     </div>
   </main>

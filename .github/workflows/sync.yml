@@ -93,6 +93,22 @@ jobs:
             echo "No changes in predictions data."
           fi
 
+      - name: Verify Pages API Base
+        env:
+          DATA_API_BASE: ${{ vars.DATA_API_BASE }}
+        run: |
+          if [ -z "${DATA_API_BASE:-}" ]; then
+            echo "DATA_API_BASE repository variable is required for protected C-end Pages builds."
+            exit 1
+          fi
+          case "$DATA_API_BASE" in
+            https://*) ;;
+            *)
+              echo "DATA_API_BASE must be an absolute HTTPS URL, got: $DATA_API_BASE"
+              exit 1
+              ;;
+          esac
+
       - name: Build Project
         env:
           VITE_BASE_PATH: /football-predict/

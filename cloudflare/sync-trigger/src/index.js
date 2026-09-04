@@ -1,3 +1,9 @@
+import {
+  collectSportteryEvidence,
+  createSportteryEvidence,
+  sportteryCollectorConfigured,
+} from "./sportteryCollector.js";
+
 const DEFAULT_RECENT_RUN_SECONDS = 240;
 const DEFAULT_PUBLIC_DATA_CACHE_SECONDS = 20;
 const DEFAULT_CURRENT_DATA_CACHE_SECONDS = 5;
@@ -24,13 +30,20 @@ const positiveNumber = (value, fallback) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
 
-const safeSecretEqual = (actual, expected) => {
-  const left = new TextEncoder().encode(String(actual || ""));
-  const right = new TextEncoder().encode(String(expected || ""));
-  const length = Math.max(left.length, right.length);
-  let diff = left.length ^ right.length;
-  for (let index = 0; index < length; index += 1) {
-    diff |= (left[index] || 0) ^ (right[index] || 0);
+const safeSecretEqual = async (actual, expected) => {
+  const encoder = new TextEncoder();
+  const [left, right] = await Promise.all([
+    crypto.subtle.digest("SHA-256", encoder.encode(String(actual || ""))),
+    crypto.subtle.digest("SHA-256", encoder.encode(String(expected || ""))),
+  ]);
+  if (typeof crypto.subtle.timingSafeEqual === "function") {
+    return crypto.subtle.timingSafeEqual(left, right);
+  }
+  const leftBytes = new Uint8Array(left);
+  const rightBytes = new Uint8Array(right);
+  let diff = 0;
+  for (let index = 0; index < leftBytes.length; index += 1) {
+    diff |= leftBytes[index] ^ rightBytes[index];
   }
   return diff === 0;
 };
@@ -148,15 +161,20 @@ const triggerSync = async (env, source = "cloudflare-cron") => {
 };
 
 const publicDataFileMap = {
-  "sync-meta": "public/data/sync-meta.json",
-  "matches/current": "public/data/matches-current.json",
-  "matches/history": "public/data/matches-history.json",
-  "matches/root": "public/matches.json",
-  "odds/history": "public/data/odds-history.json",
-  "predictions/snapshots": "public/data/prediction-snapshots.json",
-  "model/calibration": "public/data/model-calibration.json",
-  "teams/index": "public/data/team-index.json"
+  "sync-meta": "public/data/sync-meta.json"
 };
+
+const disabledProtectedDataResources = new Map([
+  ["matches/current", "/api/v1/matches/current?view=list"],
+  ["matches/history", "/api/v1/matches/history?limit=50"],
+  ["matches/root", "/api/v1/matches/current?view=list"],
+  ["odds/history", "/api/v1/odds/history?matchId=<matchId>&limit=200"],
+  ["predictions/snapshots", "/api/v1/model/evaluation?detail=admin"],
+  ["model/calibration", "/api/v1/model/evaluation"],
+  ["teams/index", "/api/v1/matches/current?view=list"],
+  ["source-health", "/api/v1/source-health"],
+  ["model/evaluation", "/api/v1/model/evaluation"]
+]);
 
 const getResourceCacheSeconds = (config, key) => {
   if (key === "sync-meta" || key === "matches/current" || key === "matches/root") {
@@ -271,6 +289,16 @@ const resolveApiKey = (pathname) => {
 const fetchPublicApi = async (env, pathname, ctx) => {
   const key = resolveApiKey(pathname);
   const filePath = publicDataFileMap[key];
+  const replacement = disabledProtectedDataResources.get(key);
+  if (replacement) {
+    return json({
+      ok: false,
+      error: "protected data API disabled on sync worker",
+      key,
+      replacement,
+      note: "This Worker is a scheduler and freshness helper. C-end recommendation data must be served by the protected Node /api/v1 service."
+    }, 410);
+  }
   if (!filePath) return json({ ok: false, error: "unknown api resource", key }, 404);
 
   try {
@@ -301,25 +329,13 @@ const fetchPublicApi = async (env, pathname, ctx) => {
         }
       });
     }
-
-    const directPayloadKeys = new Set(["sync-meta", "matches/current", "matches/history", "matches/root"]);
-    if (directPayloadKeys.has(key)) {
-      return json(payload);
-    }
     return json(withApiMeta(payload, filePath));
   } catch (error) {
-    if (key === "matches/current") {
-      try {
-        return json(await fetchPublicJson(env, publicDataFileMap["matches/root"], "matches/root"));
-      } catch {
-        // Preserve the original error below.
-      }
-    }
     return json({ ok: false, error: error.message || String(error), key }, 502);
   }
 };
 
-const isAuthorizedManualTrigger = (request, env) => {
+const isAuthorizedManualTrigger = async (request, env) => {
   if (!env.MANUAL_TRIGGER_TOKEN) return false;
 
   const auth = request.headers.get("authorization") || "";
@@ -329,12 +345,23 @@ const isAuthorizedManualTrigger = (request, env) => {
 };
 
 export default {
-  async scheduled(_event, env, ctx) {
-    ctx.waitUntil(
-      triggerSync(env, "cloudflare-cron").catch((error) => {
-        console.error("Cloudflare cron dispatch failed:", error);
-      })
-    );
+  async scheduled(_event, env) {
+    const outcomes = await Promise.allSettled([
+      triggerSync(env, "cloudflare-cron"),
+      collectSportteryEvidence(env),
+    ]);
+    const labels = ["github-sync", "sporttery-collector"];
+    outcomes.forEach((outcome, index) => {
+      if (outcome.status === "rejected") {
+        console.error(JSON.stringify({
+          event: "scheduled-task-failed",
+          task: labels[index],
+          error: outcome.reason?.message || String(outcome.reason),
+        }));
+      } else {
+        console.log(JSON.stringify({ event: "scheduled-task-finished", task: labels[index], result: outcome.value }));
+      }
+    });
   },
 
   async fetch(request, env, ctx) {
@@ -348,8 +375,10 @@ export default {
       return json({
         ok: true,
         worker: "football-predict-sync-trigger",
-        cron: "*/5 * * * * guarded by MIN_SECONDS_BETWEEN_DISPATCHES",
-        api: ["/api/sync-meta", "/api/matches/current", "/api/matches/history"],
+        cron: "* * * * *; GitHub dispatch guarded by MIN_SECONDS_BETWEEN_DISPATCHES; Sporttery evidence generated on authenticated pull",
+        api: ["/api/sync-meta", "/api/health", "/api/sporttery-evidence"],
+        protectedDataPolicy: "C-end matches, odds, and model details are disabled here; use the protected Node /api/v1 service.",
+        sportteryIndependentCollectorConfigured: sportteryCollectorConfigured(env),
         workflow: `${env.GITHUB_OWNER || "chen-1119"}/${env.GITHUB_REPO || "football-predict"}/${env.GITHUB_WORKFLOW_ID || "sync.yml"}`,
         checkedAt: new Date().toISOString()
       });
@@ -364,10 +393,43 @@ export default {
           minSecondsBetweenDispatches: config.recentRunSeconds,
           currentDataCacheSeconds: config.currentDataCacheSeconds,
           historyDataCacheSeconds: config.historyDataCacheSeconds,
-          staleDataSeconds: config.staleDataSeconds
+          staleDataSeconds: config.staleDataSeconds,
+          sportteryIndependentCollectorConfigured: sportteryCollectorConfigured(env)
         },
         checkedAt: new Date().toISOString()
       });
+    }
+
+    if (url.pathname === "/api/sporttery-evidence") {
+      if (request.method !== "POST") {
+        return json({ ok: false, error: "method not allowed" }, 405);
+      }
+      if (!await isAuthorizedManualTrigger(request, env)) {
+        return json({ ok: false, error: "unauthorized" }, 401);
+      }
+      try {
+        const evidence = await createSportteryEvidence(env);
+        return json({
+          ok: true,
+          evidence: {
+            version: evidence.version,
+            capturedAt: evidence.capturedAt,
+            sourceCycleId: evidence.sourceCycleId,
+            endpoints: evidence.endpoints,
+          },
+          summary: {
+            endpoints: evidence.endpoints.length,
+            rows: evidence.endpoints.reduce((sum, endpoint) => sum + Number(endpoint.rows || 0), 0),
+            errors: evidence.errors,
+          },
+        });
+      } catch (error) {
+        console.error(JSON.stringify({
+          event: "sporttery-evidence-pull-failed",
+          error: error?.message || String(error),
+        }));
+        return json({ ok: false, error: "sporttery evidence collection failed" }, 502);
+      }
     }
 
     if (url.pathname.startsWith("/api/")) {
@@ -379,7 +441,7 @@ export default {
     }
 
     if (url.pathname === "/trigger") {
-      if (!isAuthorizedManualTrigger(request, env)) {
+      if (!await isAuthorizedManualTrigger(request, env)) {
         return json({ ok: false, error: "unauthorized" }, 401);
       }
 

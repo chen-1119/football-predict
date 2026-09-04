@@ -7,6 +7,14 @@ import {
 } from './bettingDisplay';
 import { getTeamById } from './entities';
 import type { Match, PredictionDetail, Team } from './mockData';
+import { isOfficialRecommendationEligible } from './officialRecommendationEligibility';
+import {
+  isLiveRecommendationEligible,
+  isLiveRecommendationWindowOpen,
+  isPublishedLiveRecommendationEligible
+} from './liveRecommendationEligibility';
+import { isBeforeMatchSaleCutoff } from './matchLifecycle';
+import { formatCalibratedModelProbability, formatEvidenceScore } from './predictionPresentation';
 
 type Language = 'zh' | 'en';
 
@@ -31,10 +39,49 @@ export interface DisplayRecommendationCompanion {
   probability: number | null;
   support: number | null;
   reason: string;
+  lineAudit?: HandicapLineResolution;
+}
+
+export type HandicapLineSource =
+  | 'official-sporttery'
+  | 'prediction-reference'
+  | 'external-bookmaker-reference'
+  | 'external-signal-reference'
+  | 'match-reference'
+  | 'stored-prediction-reference'
+  | 'none';
+
+export type HandicapLineAuditReason =
+  | 'official-current-line'
+  | 'official-line-invalid'
+  | 'stale-prediction-line-conflict'
+  | 'reference-line-conflict'
+  | 'prediction-reference-line'
+  | 'external-bookmaker-reference-line'
+  | 'external-signal-reference-line'
+  | 'match-reference-line'
+  | 'stored-prediction-reference-line'
+  | 'handicap-line-missing';
+
+export interface HandicapLineResolution {
+  line: number | null;
+  source: HandicapLineSource;
+  official: boolean;
+  conflict: boolean;
+  reason: HandicapLineAuditReason;
+  conflictingLines: number[];
+}
+
+export interface DualMarketCompanionAudit {
+  status: 'bound' | 'blocked' | 'not-applicable';
+  blockers: string[];
+  prediction?: PredictionDetail;
+  lineAudit?: HandicapLineResolution;
 }
 
 export interface DisplayRecommendation {
   kind: DisplayRecommendationKind;
+  publicationTrack?: 'formal' | 'live';
   prediction?: PredictionDetail;
   tipCode?: string;
   label: string;
@@ -43,15 +90,138 @@ export interface DisplayRecommendation {
   support: number | null;
   reason: string;
   companion?: DisplayRecommendationCompanion;
+  companionAudit?: DualMarketCompanionAudit;
 }
 
 type RankedOutcome = { code: OutcomeCode; probability: number };
 
 const isOutcomeCode = (code: string | undefined): code is OutcomeCode => code === '1' || code === 'X' || code === '2';
 
-const isReferenceOnlyPrediction = (prediction?: PredictionDetail) => (
-  prediction?.recommendationAction === 'reference' || prediction?.recommendationTier === 'reference'
-);
+export const getOfficialRecommendationOdds = (
+  match: Match,
+  prediction: PredictionDetail | undefined
+) => {
+  if (!prediction || !isOutcomeCode(prediction.tipCode)) return 0;
+  if (prediction.oddsPoolCode === 'HHAD' && resolveHandicapLine(match, prediction) === null) return 0;
+  const official = getOfficialMatchOdds(match);
+  const odds = prediction.oddsPoolCode === 'HHAD' ? official.hhad?.odds : official.had?.odds;
+  const value = prediction.tipCode === '1'
+    ? odds?.odds1
+    : prediction.tipCode === 'X'
+      ? odds?.oddsX
+      : odds?.odds2;
+  return Number.isFinite(value) && Number(value) > 1 ? Number(value) : 0;
+};
+
+export const getOfficialRecommendationHandicapLine = (
+  match: Match,
+  prediction: PredictionDetail | undefined
+) => prediction?.oddsPoolCode === 'HHAD'
+  ? getOfficialMatchOdds(match).hhad?.handicap
+  : 0;
+
+export const isFormalRecommendationPrediction = (
+  match: Match,
+  prediction: PredictionDetail | undefined
+) => {
+  if (!prediction || !isPredictionOfficialResultPoolAvailable(match, prediction)) return false;
+  if (prediction.oddsPoolCode === 'HHAD' && resolveHandicapLine(match, prediction) === null) return false;
+  return isOfficialRecommendationEligible(
+    prediction,
+    getOfficialRecommendationOdds(match, prediction),
+    getOfficialRecommendationHandicapLine(match, prediction)
+  );
+};
+
+export const getFormalRecommendationPrediction = (match: Match): PredictionDetail | undefined => {
+  if (match.status !== 'SCHEDULED' || !isBeforeMatchSaleCutoff(match)) return undefined;
+  return (match.predictions || []).find((prediction) => (
+    prediction.marketType === 'BEST'
+    && isFormalRecommendationPrediction(match, prediction)
+  ));
+};
+
+export const isLiveRecommendationPrediction = (
+  match: Match,
+  prediction: PredictionDetail | undefined
+) => {
+  if (!prediction || !isPredictionOfficialResultPoolAvailable(match, prediction)) return false;
+  if (prediction.oddsPoolCode === 'HHAD' && resolveHandicapLine(match, prediction) === null) return false;
+  const officialOdds = getOfficialRecommendationOdds(match, prediction);
+  const officialHandicapLine = getOfficialRecommendationHandicapLine(match, prediction);
+  return isLiveRecommendationEligible(
+    prediction,
+    officialOdds,
+    officialHandicapLine,
+    match
+  ) || isPublishedLiveRecommendationEligible(
+    prediction,
+    officialOdds,
+    officialHandicapLine,
+    match
+  );
+};
+
+const getPublishedLiveRecommendationPrediction = (
+  match: Match,
+  prediction: PredictionDetail | undefined
+): PredictionDetail | undefined => {
+  const publication = prediction?.livePublicationEvidence;
+  const publishedOdds = Number(publication?.officialSp);
+  const publishedMarket = publication?.market;
+  const publishedCode = publication?.code;
+  const publishedLine = publishedMarket === 'HHAD'
+    ? parseHandicapLine(publication?.handicapLine)
+    : 0;
+  if (
+    !prediction
+    || !publication
+    || (publishedMarket !== 'HAD' && publishedMarket !== 'HHAD')
+    || (publishedCode !== '1' && publishedCode !== 'X' && publishedCode !== '2')
+    || !Number.isFinite(publishedOdds)
+    || publishedOdds <= 1
+    || (publishedMarket === 'HHAD' && publishedLine === null)
+    || !isPublishedLiveRecommendationEligible(
+      prediction,
+      publishedOdds,
+      publishedLine,
+      match
+    )
+  ) return undefined;
+
+  return {
+    ...prediction,
+    oddsPoolCode: publishedMarket,
+    tipCode: publishedCode,
+    tipLabel: publishedMarket === 'HHAD'
+      ? {
+          zh: getSimpleHandicapLabel(publishedCode, 'zh'),
+          en: getSimpleHandicapLabel(publishedCode, 'en')
+        }
+      : {
+          zh: getSimpleOutcomeLabel(match, publishedCode, 'zh'),
+          en: getSimpleOutcomeLabel(match, publishedCode, 'en')
+        },
+    odds: publishedOdds,
+    handicapLine: publishedMarket === 'HHAD' && publishedLine !== null
+      ? serializeHandicapLine(publishedLine)
+      : '0'
+  };
+};
+
+export const getLiveRecommendationPrediction = (match: Match): PredictionDetail | undefined => {
+  const predictions = match.predictions || [];
+  const publishedPrediction = predictions
+    .filter((prediction) => prediction.marketType === 'BEST')
+    .map((prediction) => getPublishedLiveRecommendationPrediction(match, prediction))
+    .find(Boolean);
+  if (publishedPrediction) return publishedPrediction;
+  if (!isLiveRecommendationWindowOpen(match)) return undefined;
+  return predictions.find((prediction) => (
+    prediction.marketType === 'BEST'
+    && isLiveRecommendationPrediction(match, prediction)
+  ));
+};
 
 const getMatchDisplayTeam = (match: Match, side: 'home' | 'away'): Team => {
   const base = getTeamById(side === 'home' ? match.homeTeamId : match.awayTeamId);
@@ -103,20 +273,24 @@ const getTopOutcomeFromProbabilities = (probabilities: OutcomeProbabilityTriplet
 );
 
 const getHandicapModelProbabilities = (match: Match) => (
-  match.probabilityModel?.handicap?.unifiedPosterior
+  resolveHandicapLine(match) === null
+    ? null
+    : match.probabilityModel?.handicap?.unifiedPosterior
     || match.probabilityModel?.handicap?.scoreImplied
     || match.probabilityModel?.handicap?.poisson
     || match.probabilityModel?.handicap?.market
 );
 
 const getHandicapRead = (match: Match) => {
+  const hasHandicapLine = resolveHandicapLine(match) !== null;
   const modelRows = getRankedOutcomeProbabilities(
     getHandicapModelProbabilities(match)
   );
   const resolvedOdds = getOfficialMatchOdds(match);
   const marketRows = getRankedOutcomeProbabilities(
-    match.probabilityModel?.handicap?.market
+    hasHandicapLine ? (match.probabilityModel?.handicap?.market
       || getImpliedProbabilities(resolvedOdds.hhad?.odds)
+    ) : null
   );
   const modelTop = modelRows[0] || null;
   const modelSecond = modelRows[1] || null;
@@ -208,10 +382,10 @@ export const getHandicapCompanionHeading = (
   language: Language
 ) => (
   companion.priority === 'preferred'
-    ? (language === 'zh' ? '让球优先' : 'HHAD priority')
+    ? (language === 'zh' ? '让球附加推荐' : 'HHAD add-on pick')
     : companion.priority === 'caution'
-      ? (language === 'zh' ? '让球防冷' : 'HHAD caution')
-      : (language === 'zh' ? '让球补充' : 'HHAD add-on')
+      ? (language === 'zh' ? '让球谨慎推荐' : 'HHAD cautious pick')
+      : (language === 'zh' ? '让球参考推荐' : 'HHAD reference pick')
 );
 
 const getHandicapCompanionTitle = (
@@ -220,10 +394,10 @@ const getHandicapCompanionTitle = (
   priority: HandicapCompanionPriority
 ) => (
   priority === 'preferred'
-    ? (language === 'zh' ? `让球优先 ${label}` : `HHAD priority ${label}`)
+    ? (language === 'zh' ? `让球附加推荐 ${label}` : `HHAD add-on pick ${label}`)
     : priority === 'caution'
-      ? (language === 'zh' ? `让球防冷 ${label}` : `HHAD caution ${label}`)
-      : (language === 'zh' ? `附加推荐 ${label}` : `Add-on ${label}`)
+      ? (language === 'zh' ? `让球谨慎推荐 ${label}` : `HHAD cautious pick ${label}`)
+      : (language === 'zh' ? `让球参考推荐 ${label}` : `HHAD reference pick ${label}`)
 );
 
 const getCloseHandicapReason = (language: Language) => (
@@ -287,12 +461,167 @@ const formatHandicapLine = (line: string | undefined, language: Language) => {
   return language === 'zh' ? `让球 ${line}` : `HHAD ${line}`;
 };
 
-const parseHandicapLine = (line: string | undefined) => {
-  const value = Number(String(line || '').replace(/[^\d.+-]/g, ''));
-  return Number.isFinite(value) ? value : null;
+export const parseHandicapLine = (line: unknown): number | null => {
+  if (typeof line === 'number') return Number.isFinite(line) ? line : null;
+  if (typeof line !== 'string') return null;
+  const normalized = line
+    .trim()
+    .replace(/\uFF0B/g, '+')
+    .replace(/[\uFF0D\u2212\u2013\u2014]/g, '-');
+  const matched = normalized.match(/^(?:(?:\u8BA9\u7403|HHAD|handicap)\s*[:\uFF1A]?\s*)?([+-]?(?:\d+(?:\.\d+)?|\.\d+))(?:\s*\u7403)?$/i);
+  if (!matched) return null;
+  const value = Number(matched[1]);
+  return Number.isFinite(value) ? (value === 0 ? 0 : value) : null;
+};
+
+const hasExplicitHhadMarker = (value: unknown): boolean => {
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  return [
+    record.poolCode,
+    record.oddsPoolCode,
+    record.market,
+    record.marketType,
+    record.externalOddsPoolCode,
+    record.handicapOddsPoolCode
+  ].some((marker) => String(marker || '').trim().toUpperCase() === 'HHAD');
+};
+
+const uniqueHandicapLines = (values: Array<number | null>) => Array.from(new Set(
+  values.filter((value): value is number => value !== null)
+));
+
+const lineConflict = (left: number, right: number) => Math.abs(left - right) > 0.000001;
+
+/**
+ * Resolves the home-team HHAD line with an explicit provenance contract.
+ * A current Sporttery HHAD market always wins. Stored prediction lines are
+ * never allowed to override it; a disagreement is an auditable fail-closed
+ * state so an old -1 row cannot silently turn a current +1 market around.
+ * Non-official lines remain usable only as clearly labelled reference input.
+ */
+export const getHandicapLineResolution = (
+  match: Match,
+  prediction?: PredictionDetail
+): HandicapLineResolution => {
+  const officialHhad = getOfficialMatchOdds(match).hhad;
+  const officialLine = parseHandicapLine(officialHhad?.handicap);
+  const storedHhadRows = (match.predictions || []).filter((item) => item.oddsPoolCode === 'HHAD');
+  const storedParsedLines = storedHhadRows.map((item) => parseHandicapLine(item.handicapLine));
+  const storedInvalidLine = storedHhadRows.some((item, index) => (
+    String(item.handicapLine ?? '').trim().length > 0 && storedParsedLines[index] === null
+  ));
+
+  if (officialHhad) {
+    if (officialLine === null) {
+      return {
+        line: null,
+        source: 'official-sporttery',
+        official: true,
+        conflict: true,
+        reason: 'official-line-invalid',
+        conflictingLines: uniqueHandicapLines(storedParsedLines)
+      };
+    }
+    const conflictingLines = uniqueHandicapLines(storedParsedLines)
+      .filter((line) => lineConflict(line, officialLine));
+    if (storedInvalidLine || conflictingLines.length > 0) {
+      return {
+        line: null,
+        source: 'official-sporttery',
+        official: true,
+        conflict: true,
+        reason: 'stale-prediction-line-conflict',
+        conflictingLines
+      };
+    }
+    return {
+      line: officialLine,
+      source: 'official-sporttery',
+      official: true,
+      conflict: false,
+      reason: 'official-current-line',
+      conflictingLines: []
+    };
+  }
+
+  const bookmakerHhad = match.externalSignals?.bookmakerOdds?.hhad;
+  const bookmakerLine = parseHandicapLine(bookmakerHhad?.handicapLine);
+  const externalLine = parseHandicapLine(match.externalSignals?.handicapLine);
+  const hasBookmakerHhadOdds = Boolean(
+    bookmakerHhad
+    && [bookmakerHhad.odds1, bookmakerHhad.oddsX, bookmakerHhad.odds2]
+      .every((odd) => Number.isFinite(Number(odd)) && Number(odd) > 1)
+  );
+  const allowExternalLine = externalLine !== null
+    && (hasBookmakerHhadOdds || hasExplicitHhadMarker(bookmakerHhad) || hasExplicitHhadMarker(match.externalSignals));
+  const predictionLine = prediction?.oddsPoolCode === 'HHAD'
+    ? parseHandicapLine(prediction.handicapLine)
+    : null;
+  const matchLine = parseHandicapLine(match.handicapLine);
+  const candidates: Array<{
+    line: number | null;
+    source: HandicapLineSource;
+    reason: HandicapLineAuditReason;
+  }> = [
+    { line: predictionLine, source: 'prediction-reference', reason: 'prediction-reference-line' },
+    { line: bookmakerLine, source: 'external-bookmaker-reference', reason: 'external-bookmaker-reference-line' },
+    { line: allowExternalLine ? externalLine : null, source: 'external-signal-reference', reason: 'external-signal-reference-line' },
+    { line: matchLine, source: 'match-reference', reason: 'match-reference-line' },
+    ...storedParsedLines.map((line) => ({
+      line,
+      source: 'stored-prediction-reference' as const,
+      reason: 'stored-prediction-reference-line' as const
+    }))
+  ];
+  const referenceLines = uniqueHandicapLines(candidates.map((candidate) => candidate.line));
+  if (referenceLines.length > 1 || storedInvalidLine) {
+    return {
+      line: null,
+      source: 'none',
+      official: false,
+      conflict: true,
+      reason: 'reference-line-conflict',
+      conflictingLines: referenceLines
+    };
+  }
+  const selected = candidates.find((candidate) => candidate.line !== null);
+  if (selected?.line !== null && selected?.line !== undefined) {
+    return {
+      line: selected.line,
+      source: selected.source,
+      official: false,
+      conflict: false,
+      reason: selected.reason,
+      conflictingLines: []
+    };
+  }
+  return {
+    line: null,
+    source: 'none',
+    official: false,
+    conflict: false,
+    reason: 'handicap-line-missing',
+    conflictingLines: []
+  };
+};
+
+export const resolveHandicapLine = (
+  match: Match,
+  prediction?: PredictionDetail
+): number | null => getHandicapLineResolution(match, prediction).line;
+
+const serializeHandicapLine = (line: number): string => {
+  if (line === 0) return '0';
+  const absolute = Math.abs(line);
+  const value = Number.isInteger(absolute)
+    ? String(absolute)
+    : absolute.toFixed(2).replace(/\.?0+$/, '');
+  return `${line > 0 ? '+' : '-'}${value}`;
 };
 
 const getHandicapOutcomeProbability = (match: Match, code: OutcomeCode) => {
+  if (resolveHandicapLine(match) === null) return null;
   const probabilities = getHandicapModelProbabilities(match);
   if (!probabilities) return null;
   const value = code === '1' ? probabilities.home : code === 'X' ? probabilities.draw : probabilities.away;
@@ -300,6 +629,7 @@ const getHandicapOutcomeProbability = (match: Match, code: OutcomeCode) => {
 };
 
 const getHandicapMarketSupport = (match: Match, code: OutcomeCode) => {
+  if (resolveHandicapLine(match) === null) return null;
   const resolvedOdds = getOfficialMatchOdds(match);
   const probabilities = match.probabilityModel?.handicap?.market
     || getImpliedProbabilities(resolvedOdds.hhad?.odds);
@@ -346,7 +676,7 @@ const getCompatibleHandicapCode = (
     return proposedCode;
   }
 
-  const lineValue = parseHandicapLine(match.handicapLine);
+  const lineValue = resolveHandicapLine(match);
   if (isHandicapCodeCompatible(primaryPrediction.tipCode, proposedCode, lineValue)) {
     return proposedCode;
   }
@@ -372,7 +702,11 @@ const getCompanionReason = (
   const awayTeam = getMatchDisplayTeam(match, 'away');
   const homeName = homeTeam.shortName[language] || homeTeam.name[language];
   const awayName = awayTeam.shortName[language] || awayTeam.name[language];
-  const line = formatHandicapLine(match.handicapLine, language);
+  const resolvedLine = resolveHandicapLine(match);
+  const line = formatHandicapLine(
+    resolvedLine === null ? undefined : serializeHandicapLine(resolvedLine),
+    language
+  );
   const handicapLabel = getSimpleHandicapLabel(handicapCode, language);
 
   if (language === 'zh') {
@@ -400,80 +734,6 @@ const getCompanionReason = (
   return `1X2 and ${line} align; add ${handicapLabel} as the handicap read.`;
 };
 
-const buildHandicapCompanion = (
-  match: Match,
-  primaryPrediction: PredictionDetail | undefined,
-  language: Language
-): DisplayRecommendationCompanion | null => {
-  if (!primaryPrediction || primaryPrediction.oddsPoolCode === 'HHAD' || !isOutcomeCode(primaryPrediction.tipCode)) {
-    return null;
-  }
-
-  const read = getHandicapRead(match);
-  if (!read.modelTop) return null;
-  if (read.marketTop && read.marketTop.code !== read.modelTop.code) return null;
-
-  const lineValue = parseHandicapLine(match.handicapLine);
-  const hasMeaningfulLine = lineValue === null || Math.abs(lineValue) >= 0.5;
-  if (!hasMeaningfulLine) return null;
-
-  const support = read.marketSupport;
-  const strongHandicapRead = read.modelTop.probability >= 48
-    && read.modelGap >= 10
-    && (support === null || support >= 35);
-  const splitDeepFavorite = primaryPrediction.tipCode !== read.modelTop.code
-    && read.modelTop.probability >= 45
-    && read.modelGap >= 8
-    && (support === null || support >= 35);
-
-  if (!strongHandicapRead && !splitDeepFavorite) return null;
-
-  const displayCode = getCompatibleHandicapCode(match, primaryPrediction, read.modelTop.code);
-  const probability = getHandicapOutcomeProbability(match, displayCode)
-    ?? (displayCode === read.modelTop.code ? read.modelTop.probability : null);
-  const supportForDisplay = displayCode === read.modelTop.code
-    ? support
-    : getHandicapMarketSupport(match, displayCode);
-  const label = getSimpleHandicapLabel(displayCode, language);
-  const priority = getHandicapCompanionPriority({
-    primaryPrediction,
-    probability,
-    support: supportForDisplay,
-    read,
-    displayCode,
-    lineValue: parseHandicapLine(match.handicapLine)
-  });
-  const prediction: PredictionDetail = {
-    marketType: '1X2',
-    oddsPoolCode: 'HHAD',
-    handicapLine: match.handicapLine,
-    tipCode: displayCode,
-    tipLabel: { zh: getSimpleHandicapLabel(displayCode, 'zh'), en: getSimpleHandicapLabel(displayCode, 'en') },
-    odds: getOutcomeOddsValue(match, 'HHAD', displayCode),
-    trustScore: Math.round(probability || 0),
-    recommendationAction: 'reference',
-    recommendationTier: 'handicap-companion',
-    explanation: { zh: '', en: '' },
-    visibilityStatus: 'FREE',
-    resultStatus: 'PENDING'
-  };
-
-  const lineLabel = formatHandicapLine(match.handicapLine, language);
-
-  return {
-    kind: 'handicap',
-    priority,
-    prediction,
-    tipCode: displayCode,
-    label,
-    title: getHandicapCompanionTitle(label, language, priority),
-    meta: `${lineLabel} · ${formatDisplayMeta(prediction, probability, language)}`,
-    probability,
-    support: supportForDisplay,
-    reason: getCompanionReason(match, primaryPrediction, displayCode, language)
-  };
-};
-
 const buildHandicapCompanionFromPrediction = (
   match: Match,
   handicapPrediction: PredictionDetail | undefined,
@@ -484,9 +744,18 @@ const buildHandicapCompanionFromPrediction = (
     return null;
   }
   if (!primaryPrediction || !isOutcomeCode(primaryPrediction.tipCode)) return null;
+  const lineAudit = getHandicapLineResolution(match, handicapPrediction);
+  const lineValue = lineAudit.line;
+  if (lineValue === null) return null;
 
-  const displayCode = getCompatibleHandicapCode(match, primaryPrediction, handicapPrediction.tipCode);
-  const adjustedPrediction: PredictionDetail = displayCode === handicapPrediction.tipCode
+  // A server-verified dual-market binding is already the immutable decision
+  // record. Compatibility heuristics may shape an unbound live supplement,
+  // but must never rewrite an atomically committed HHAD code after the fact.
+  const isAtomicallyBoundCompanion = handicapPrediction.recommendationTier === 'handicap-companion-bound';
+  const displayCode = isAtomicallyBoundCompanion
+    ? handicapPrediction.tipCode
+    : getCompatibleHandicapCode(match, primaryPrediction, handicapPrediction.tipCode);
+  const adjustedPredictionBase: PredictionDetail = displayCode === handicapPrediction.tipCode
     ? handicapPrediction
     : {
         ...handicapPrediction,
@@ -494,6 +763,10 @@ const buildHandicapCompanionFromPrediction = (
         tipLabel: { zh: getSimpleHandicapLabel(displayCode, 'zh'), en: getSimpleHandicapLabel(displayCode, 'en') },
         odds: getOutcomeOddsValue(match, 'HHAD', displayCode)
       };
+  const adjustedPrediction: PredictionDetail = {
+    ...adjustedPredictionBase,
+    handicapLine: serializeHandicapLine(lineValue)
+  };
   const probability = getOutcomeProbability(match, displayCode, adjustedPrediction);
   const read = getHandicapRead(match);
   const support = read.modelTop?.code === displayCode
@@ -507,7 +780,7 @@ const buildHandicapCompanionFromPrediction = (
     support,
     read,
     displayCode,
-    lineValue: parseHandicapLine(match.handicapLine)
+    lineValue
   });
 
   return {
@@ -517,11 +790,162 @@ const buildHandicapCompanionFromPrediction = (
     tipCode: displayCode,
     label,
     title: getHandicapCompanionTitle(label, language, priority),
-    meta: `${formatHandicapLine(match.handicapLine, language)} · ${formatDisplayMeta(adjustedPrediction, probability, language)}`,
+    meta: `${formatHandicapLine(serializeHandicapLine(lineValue), language)}${lineAudit.official ? '' : (language === 'zh' ? ' · 参考让球线' : ' · Reference HHAD line')} · ${formatDisplayMeta(match, adjustedPrediction, language)}`,
     probability: Number.isFinite(probability) ? Number(probability) : null,
     support,
-    reason: getCompanionReason(match, primaryPrediction, displayCode, language)
+    reason: getCompanionReason(match, primaryPrediction, displayCode, language),
+    lineAudit
   };
+};
+
+const SHA256_PATTERN = /^[a-f0-9]{64}$/i;
+
+const validProbability = (value: unknown) => (
+  Number.isFinite(Number(value)) && Number(value) >= 0 && Number(value) <= 1
+);
+
+const validTimestamp = (value: unknown) => {
+  const parsed = Date.parse(String(value || ''));
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+/**
+ * Replays only the compact dual-market record that the server attested before
+ * cutoff. Formal/live callers must never substitute a fresh HHAD model read.
+ */
+export const getDualMarketCompanionAudit = (
+  match: Match,
+  primaryPrediction: PredictionDetail | undefined
+): DualMarketCompanionAudit => {
+  if (!primaryPrediction || primaryPrediction.oddsPoolCode === 'HHAD') {
+    return { status: 'not-applicable', blockers: [] };
+  }
+
+  const binding = match.predictionMeta?.dualMarketDecision;
+  const had = binding?.had;
+  const hhad = binding?.hhad;
+  const clocks = binding?.sourceClocks;
+  const versions = binding?.strategyVersions;
+  const hashes = binding?.hashes;
+  const lineAudit = getHandicapLineResolution(match);
+  const officialLine = lineAudit.line;
+  const boundLine = Number(hhad?.handicapLine);
+  const odds = Number(hhad?.odds);
+  const probability = Number(hhad?.modelProbability);
+  const blockers: string[] = [];
+  const push = (condition: boolean, blocker: string) => {
+    if (condition) blockers.push(blocker);
+  };
+
+  push(!binding, 'dual-market-binding-missing');
+  push(binding?.version !== 'dual-market-decision-binding-v1', 'binding-version-invalid');
+  push(binding?.decisionSnapshotVersion !== 'candidate-decision-snapshot-v2', 'decision-snapshot-version-invalid');
+  push(binding?.integrityVerified !== true, 'binding-not-server-attested');
+  push(binding?.integrityVersion !== 'dual-market-decision-integrity-v1', 'binding-integrity-version-invalid');
+  push(binding?.publicBindingVersion !== 'dual-market-public-binding-v1', 'public-binding-version-invalid');
+  push(!SHA256_PATTERN.test(String(binding?.bindingHash || '')), 'binding-hash-missing-or-invalid');
+  push(!SHA256_PATTERN.test(String(binding?.publicBindingHash || '')), 'public-binding-hash-missing-or-invalid');
+  push(!String(binding?.sourceCycleId || '').trim(), 'source-cycle-id-missing');
+  push(!String(binding?.featureSnapshotHash || '').trim(), 'feature-snapshot-hash-missing');
+  push(had?.poolCode !== 'HAD', 'had-binding-missing-or-invalid');
+  push(!isOutcomeCode(had?.code), 'had-code-invalid');
+  push(primaryPrediction.oddsPoolCode !== 'HAD', 'primary-pool-not-had');
+  push(!isOutcomeCode(primaryPrediction.tipCode), 'primary-code-invalid');
+  push(isOutcomeCode(primaryPrediction.tipCode) && had?.code !== primaryPrediction.tipCode, 'primary-had-direction-mismatch');
+  push(!Number.isFinite(Number(had?.odds)) || Number(had?.odds) <= 1, 'had-odds-missing-or-invalid');
+  push(!validProbability(had?.modelProbability), 'had-model-probability-missing-or-invalid');
+  push(!validProbability(had?.marketProbability), 'had-market-probability-missing-or-invalid');
+  push(hhad?.poolCode !== 'HHAD', 'hhad-binding-missing-or-invalid');
+  push(!isOutcomeCode(hhad?.code), 'hhad-code-invalid');
+  push(!lineAudit.official, 'official-hhad-line-unavailable');
+  push(lineAudit.conflict, `handicap-line-${lineAudit.reason}`);
+  push(officialLine === null, 'official-hhad-line-missing-or-invalid');
+  push(!Number.isFinite(boundLine), 'bound-hhad-line-missing-or-invalid');
+  push(
+    officialLine !== null && Number.isFinite(boundLine) && lineConflict(officialLine, boundLine),
+    'bound-hhad-line-mismatch'
+  );
+  push(!Number.isFinite(odds) || odds <= 1, 'hhad-odds-missing-or-invalid');
+  push(!validProbability(probability), 'hhad-model-probability-missing-or-invalid');
+  push(!validProbability(hhad?.marketProbability), 'hhad-market-probability-missing-or-invalid');
+
+  const timestampKeys = [
+    'capturedAt',
+    'decisionAt',
+    'cutoffTime',
+    'modelGeneratedAt',
+    'hadObservedAt',
+    'hadReceivedAt',
+    'hhadObservedAt',
+    'hhadReceivedAt'
+  ] as const;
+  const parsedClocks = Object.fromEntries(
+    timestampKeys.map((key) => [key, validTimestamp(clocks?.[key])])
+  ) as Record<typeof timestampKeys[number], number | null>;
+  for (const key of timestampKeys) {
+    push(parsedClocks[key] === null, `${key}-missing-or-invalid`);
+  }
+  const pushClockOrder = (
+    left: typeof timestampKeys[number],
+    right: typeof timestampKeys[number],
+    blocker: string
+  ) => {
+    const leftAt = parsedClocks[left];
+    const rightAt = parsedClocks[right];
+    push(leftAt !== null && rightAt !== null && leftAt > rightAt, blocker);
+  };
+  pushClockOrder('capturedAt', 'cutoffTime', 'binding-captured-after-cutoff');
+  pushClockOrder('modelGeneratedAt', 'decisionAt', 'model-generated-after-decision');
+  pushClockOrder('decisionAt', 'cutoffTime', 'decision-after-cutoff');
+  pushClockOrder('hadObservedAt', 'hadReceivedAt', 'had-observed-after-received');
+  pushClockOrder('hadReceivedAt', 'decisionAt', 'had-received-after-decision');
+  pushClockOrder('hhadObservedAt', 'hhadReceivedAt', 'hhad-observed-after-received');
+  pushClockOrder('hhadReceivedAt', 'decisionAt', 'hhad-received-after-decision');
+  const kickoffAt = validTimestamp(match.kickoffTime);
+  push(kickoffAt === null, 'kickoff-time-missing-or-invalid');
+  push(
+    parsedClocks.cutoffTime !== null && kickoffAt !== null && parsedClocks.cutoffTime > kickoffAt,
+    'cutoff-after-kickoff'
+  );
+
+  for (const key of ['predictionPolicy', 'prompt', 'model', 'calibration', 'hhadCompanion'] as const) {
+    push(!String(versions?.[key] || '').trim(), `${key}-version-missing`);
+  }
+  for (const key of [
+    'policyHash',
+    'hadMarketProvenanceHash',
+    'hhadMarketProvenanceHash',
+    'strategyHash',
+    'revisionHash',
+    'exposureHash',
+    'pairHash'
+  ] as const) {
+    push(!SHA256_PATTERN.test(String(hashes?.[key] || '')), `${key}-missing-or-invalid`);
+  }
+
+  if (blockers.length > 0 || !hhad || !isOutcomeCode(hhad.code)) {
+    return { status: 'blocked', blockers: Array.from(new Set(blockers)), lineAudit };
+  }
+
+  const prediction: PredictionDetail = {
+    marketType: '1X2',
+    oddsPoolCode: 'HHAD',
+    handicapLine: serializeHandicapLine(boundLine),
+    tipCode: hhad.code,
+    tipLabel: {
+      zh: getSimpleHandicapLabel(hhad.code, 'zh'),
+      en: getSimpleHandicapLabel(hhad.code, 'en')
+    },
+    odds,
+    trustScore: Math.round(probability * 100),
+    recommendationAction: 'reference',
+    recommendationTier: 'handicap-companion-bound',
+    explanation: { zh: '', en: '' },
+    visibilityStatus: 'FREE',
+    resultStatus: 'PENDING'
+  };
+
+  return { status: 'bound', blockers: [], prediction, lineAudit };
 };
 
 export const getListHandicapSupplement = (
@@ -529,12 +953,34 @@ export const getListHandicapSupplement = (
   language: Language,
   primaryPrediction?: PredictionDetail
 ): DisplayRecommendationCompanion | null => {
+  const lineAudit = getHandicapLineResolution(match);
+  const lineValue = lineAudit.line;
+  if (lineValue === null) return null;
+  const requiresVerifiedBinding = primaryPrediction?.recommendationAction === 'recommend'
+    || Boolean(primaryPrediction?.livePublicationEvidence);
   const { hasHhad } = getAvailableResultPools(match);
-  if (!hasHhad || primaryPrediction?.oddsPoolCode === 'HHAD') return null;
+  const referenceLineAvailable = !requiresVerifiedBinding && !lineAudit.official;
+  if ((!hasHhad && !referenceLineAvailable) || primaryPrediction?.oddsPoolCode === 'HHAD') return null;
 
   const predictions = match.predictions || [];
   const pairedOutcomePrediction = getPairedOutcomePrediction(match, primaryPrediction);
-  const handicapPrediction = predictions.find((prediction) => (
+  const sharesPrimaryRoute = (prediction?: PredictionDetail) => (
+    !pairedOutcomePrediction
+    || pairedOutcomePrediction.oddsPoolCode !== 'HAD'
+    || !isOutcomeCode(pairedOutcomePrediction.tipCode)
+    || prediction?.tipCode === pairedOutcomePrediction.tipCode
+  );
+  const bindingAudit = getDualMarketCompanionAudit(match, pairedOutcomePrediction);
+  const boundHandicapPrediction = bindingAudit.status === 'bound' ? bindingAudit.prediction : undefined;
+  // A verified dual-market record is one atomic HAD/HHAD pair. If the primary
+  // direction no longer matches its HAD leg, fail the companion closed rather
+  // than mixing an old HHAD leg with a different current/list direction.
+  if (match.predictionMeta?.dualMarketDecision && !boundHandicapPrediction) return null;
+  // The immutable formal/live lane must never fall through to a current model
+  // recalculation when its dual-market binding is absent or invalid.
+  if (requiresVerifiedBinding && !boundHandicapPrediction) return null;
+  const handicapPrediction = boundHandicapPrediction
+    || predictions.find((prediction) => (
     prediction.marketType === 'BEST'
     && prediction.oddsPoolCode === 'HHAD'
     && isPredictionPoolAvailable(match, prediction)
@@ -546,7 +992,9 @@ export const getListHandicapSupplement = (
   ));
 
   if (handicapPrediction) {
-    return buildHandicapCompanionFromPrediction(match, handicapPrediction, pairedOutcomePrediction, language);
+    return sharesPrimaryRoute(handicapPrediction)
+      ? buildHandicapCompanionFromPrediction(match, handicapPrediction, pairedOutcomePrediction, language)
+      : null;
   }
 
   const read = getHandicapRead(match);
@@ -565,12 +1013,12 @@ export const getListHandicapSupplement = (
     support,
     read,
     displayCode,
-    lineValue: parseHandicapLine(match.handicapLine)
+    lineValue
   });
   const prediction: PredictionDetail = {
     marketType: '1X2',
     oddsPoolCode: 'HHAD',
-    handicapLine: match.handicapLine,
+    handicapLine: serializeHandicapLine(lineValue),
     tipCode: displayCode,
     tipLabel: { zh: getSimpleHandicapLabel(displayCode, 'zh'), en: getSimpleHandicapLabel(displayCode, 'en') },
     odds: getOutcomeOddsValue(match, 'HHAD', displayCode),
@@ -582,6 +1030,8 @@ export const getListHandicapSupplement = (
     resultStatus: 'PENDING'
   };
 
+  if (!sharesPrimaryRoute(prediction)) return null;
+
   return {
     kind: 'handicap',
     priority,
@@ -589,63 +1039,33 @@ export const getListHandicapSupplement = (
     tipCode: displayCode,
     label,
     title: getHandicapCompanionTitle(label, language, priority),
-    meta: `${formatHandicapLine(match.handicapLine, language)} · ${formatDisplayMeta(prediction, probability, language)}`,
+    meta: `${formatHandicapLine(serializeHandicapLine(lineValue), language)}${lineAudit.official ? '' : (language === 'zh' ? ' · 参考让球线' : ' · Reference HHAD line')} · ${formatDisplayMeta(match, prediction, language)}`,
     probability,
     support,
     reason: pairedOutcomePrediction && isOutcomeCode(pairedOutcomePrediction.tipCode)
       ? getCompanionReason(match, pairedOutcomePrediction, displayCode, language)
-      : getDisplayReasonForKind('handicap', language)
+      : getDisplayReasonForKind('handicap', language),
+    lineAudit
   };
 };
 
-const getHandicapOverride = (match: Match, promotedPrediction?: PredictionDetail) => {
-  if (promotedPrediction?.oddsPoolCode === 'HHAD' && !isHandicapMarketContradicted(match, promotedPrediction)) {
-    return null;
-  }
-
-  const read = getHandicapRead(match);
-  if (!read.modelTop) return null;
-  if (read.marketTop && read.marketTop.code !== read.modelTop.code) return null;
-  if (read.marketSupport === null) return null;
-
-  const promotedIsWeak = !promotedPrediction
-    || promotedPrediction.tipCode === 'WATCH'
-    || isReferenceOnlyPrediction(promotedPrediction)
-    || Number(promotedPrediction.trustScore || 0) <= 45;
-  if (!promotedIsWeak) return null;
-
-  const modelAlignedWithMarket = read.marketTop?.code === read.modelTop.code;
-  const spreadOk = read.modelMarketSpread === null
-    || read.modelMarketSpread <= (read.modelTop.probability >= 64 ? 18 : 22);
-  const strongModel = read.modelTop.probability >= 56
-    && read.modelGap >= 15
-    && modelAlignedWithMarket
-    && read.marketSupport >= 38
-    && spreadOk;
-  const marketRescue = read.modelTop.probability >= 45
-    && read.modelGap >= 14
-    && modelAlignedWithMarket
-    && read.marketSupport >= 48;
-
-  if (!strongModel && !marketRescue) return null;
-
-  const fauxPrediction: PredictionDetail = {
-    marketType: '1X2',
-    oddsPoolCode: 'HHAD',
-    handicapLine: match.handicapLine,
-    tipCode: read.modelTop.code,
-    tipLabel: { zh: getSimpleHandicapLabel(read.modelTop.code, 'zh'), en: getSimpleHandicapLabel(read.modelTop.code, 'en') },
-    odds: getOutcomeOddsValue(match, 'HHAD', read.modelTop.code),
-    trustScore: Math.round(Math.max(read.modelTop.probability, read.marketSupport)),
-    recommendationAction: 'reference',
-    recommendationTier: 'handicap-override-reference',
-    explanation: { zh: '', en: '' },
-    visibilityStatus: 'FREE',
-    resultStatus: 'PENDING'
-  };
-
-  return { prediction: fauxPrediction, top: read.modelTop, support: read.marketSupport };
-};
+/**
+ * A server-published analysis reference is already one complete public
+ * identity. The client may not attach a second direction to it, even when a
+ * dual-market audit record is present on the match; only an explicit
+ * publishedRecommendation.companion from the formal/live publication lane is
+ * eligible for display.
+ */
+export const getAnalysisReferenceHandicapSupplement = (
+  match: Match,
+  language: Language,
+  primaryPrediction: PredictionDetail | undefined,
+  referenceSource: string | undefined
+): DisplayRecommendationCompanion | null => (
+  referenceSource === 'published-reference'
+    ? null
+    : getListHandicapSupplement(match, language, primaryPrediction)
+);
 
 const getOneXTwoSupport = (match: Match, code: string | undefined, prediction?: PredictionDetail) => {
   if (!isOutcomeCode(code)) return null;
@@ -659,20 +1079,8 @@ const getOneXTwoSupport = (match: Match, code: string | undefined, prediction?: 
   return code === '1' ? probabilities.home : code === 'X' ? probabilities.draw : probabilities.away;
 };
 
-const isStoredOutcomePrediction = (prediction: PredictionDetail | undefined) => {
-  return Boolean(prediction && isOutcomeCode(prediction.tipCode));
-};
-
-const hasPredictionDisplayOdds = (prediction: PredictionDetail | undefined) => (
-  Number(prediction?.odds || 0) > 0
-);
-
 const isPredictionPoolAvailable = (match: Match, prediction: PredictionDetail | undefined) => {
-  return Boolean(
-    prediction
-    && hasPredictionDisplayOdds(prediction)
-    && (isPredictionOfficialResultPoolAvailable(match, prediction) || isStoredOutcomePrediction(prediction))
-  );
+  return isFormalRecommendationPrediction(match, prediction);
 };
 
 const buildOutcomeReferencePrediction = (match: Match, code: OutcomeCode): PredictionDetail => ({
@@ -725,18 +1133,20 @@ const getPairedOutcomePrediction = (
 };
 
 const formatDisplayMeta = (
+  match: Match,
   prediction: PredictionDetail | undefined,
-  probability: number | null,
   language: Language
 ) => {
   if (prediction && Number.isFinite(prediction.odds) && prediction.odds > 0) {
     return `${getPredictionValueLabel(prediction, language)} ${prediction.odds.toFixed(2)}`;
   }
-  if (probability !== null && Number.isFinite(probability)) {
-    return `${language === 'zh' ? '参考概率' : 'Reference'} ${Math.round(probability)}%`;
+  const modelProbability = formatCalibratedModelProbability(match, prediction);
+  if (modelProbability) {
+    return `${language === 'zh' ? '模型概率' : 'Model probability'} ${modelProbability}`;
   }
-  if (prediction && Number.isFinite(prediction.trustScore)) {
-    return `${language === 'zh' ? '推荐强度' : 'Pick strength'} ${Math.round(prediction.trustScore)}%`;
+  const evidenceScore = formatEvidenceScore(prediction);
+  if (evidenceScore !== '--') {
+    return `${language === 'zh' ? '证据评分' : 'Evidence score'} ${evidenceScore}`;
   }
   return '--';
 };
@@ -767,215 +1177,74 @@ const getDisplayReasonForKind = (
   return reasons[kind][language];
 };
 
-export const getAvailableResultPools = (match: Match) => (
-  getOfficialResultPoolAvailability(match)
+export const getAvailableResultPools = (match: Match) => {
+  const availability = getOfficialResultPoolAvailability(match);
+  return {
+    ...availability,
+    hasHhad: availability.hasHhad && resolveHandicapLine(match) !== null
+  };
+};
+
+const buildDisplayRecommendation = (
+  match: Match,
+  language: Language,
+  promotedPrediction: PredictionDetail | undefined,
+  publicationTrack: 'formal' | 'live'
+): DisplayRecommendation | null => {
+  if (!promotedPrediction || !isOutcomeCode(promotedPrediction.tipCode)) return null;
+  if (publicationTrack === 'formal' && isHandicapMarketContradicted(match, promotedPrediction)) return null;
+
+  const formalTipCode: OutcomeCode = promotedPrediction.tipCode;
+  const publishedLiveOdds = Number(promotedPrediction.livePublicationEvidence?.officialSp);
+  const officialOdds = publicationTrack === 'live' && Number.isFinite(publishedLiveOdds) && publishedLiveOdds > 1
+    ? publishedLiveOdds
+    : getOfficialRecommendationOdds(match, promotedPrediction);
+  const formalHandicapLine = promotedPrediction.oddsPoolCode === 'HHAD'
+    ? (publicationTrack === 'live'
+      ? parseHandicapLine(promotedPrediction.livePublicationEvidence?.handicapLine)
+      : resolveHandicapLine(match, promotedPrediction))
+    : null;
+  const formalPrediction = {
+    ...promotedPrediction,
+    odds: officialOdds,
+    ...(formalHandicapLine !== null
+      ? { handicapLine: serializeHandicapLine(formalHandicapLine) }
+      : {})
+  };
+  const probability = getOutcomeProbability(match, formalTipCode, formalPrediction);
+  const cleanProbability = Number.isFinite(probability) ? Number(probability) : null;
+  const label = formalPrediction.oddsPoolCode === 'HHAD'
+    ? getSimpleHandicapLabel(formalTipCode, language)
+    : getSimpleOutcomeLabel(match, formalTipCode, language);
+  const handicapRead = formalPrediction.oddsPoolCode === 'HHAD' ? getHandicapRead(match) : null;
+  const companionAudit = formalPrediction.oddsPoolCode === 'HAD'
+    ? getDualMarketCompanionAudit(match, formalPrediction)
+    : { status: 'not-applicable' as const, blockers: [] };
+  const companion = companionAudit.status === 'bound'
+    ? buildHandicapCompanionFromPrediction(match, companionAudit.prediction, formalPrediction, language) || undefined
+    : undefined;
+
+  return {
+    kind: 'prediction',
+    publicationTrack,
+    prediction: formalPrediction,
+    tipCode: formalTipCode,
+    label,
+    meta: formatDisplayMeta(match, formalPrediction, language),
+    probability: cleanProbability,
+    support: getOneXTwoSupport(match, formalTipCode, formalPrediction),
+    reason: formalPrediction.oddsPoolCode === 'HHAD' && isCloseHandicapDecision(handicapRead)
+      ? getCloseHandicapReason(language)
+      : getDisplayReasonForKind('prediction', language),
+    companion,
+    companionAudit
+  };
+};
+
+export const getDisplayRecommendation = (match: Match, language: Language): DisplayRecommendation | null => (
+  buildDisplayRecommendation(match, language, getFormalRecommendationPrediction(match), 'formal')
 );
 
-export const getDisplayRecommendation = (match: Match, language: Language): DisplayRecommendation | null => {
-  const predictions = match.predictions || [];
-  const { hasHad, hasHhad } = getAvailableResultPools(match);
-  const rawPromotedPrediction = [
-    predictions.find((prediction) => prediction.marketType === 'BEST' && isPredictionPoolAvailable(match, prediction)),
-    predictions.find((prediction) => prediction.marketType === '1X2' && isPredictionPoolAvailable(match, prediction))
-  ].find(Boolean);
-  const pendingPromotedPrediction = [
-    predictions.find((prediction) => prediction.marketType === 'BEST' && isStoredOutcomePrediction(prediction) && !hasPredictionDisplayOdds(prediction)),
-    predictions.find((prediction) => prediction.marketType === '1X2' && isStoredOutcomePrediction(prediction) && !hasPredictionDisplayOdds(prediction))
-  ].find(Boolean);
-  const pairedOutcomePrediction = getPairedOutcomePrediction(match, rawPromotedPrediction || pendingPromotedPrediction);
-  const shouldApplyLiveMarketFilter = match.status === 'SCHEDULED';
-  const promotedPrediction = rawPromotedPrediction && (!shouldApplyLiveMarketFilter || !isHandicapMarketContradicted(match, rawPromotedPrediction))
-    ? rawPromotedPrediction
-    : undefined;
-  const handicapRead = hasHhad ? getHandicapRead(match) : null;
-  const closeHandicapDecision = isCloseHandicapDecision(handicapRead);
-  const handicapOverride = hasHhad ? getHandicapOverride(match, promotedPrediction) : null;
-
-  if (handicapOverride) {
-    return {
-      kind: 'handicap',
-      prediction: handicapOverride.prediction,
-      tipCode: handicapOverride.top.code,
-      label: getSimpleHandicapLabel(handicapOverride.top.code, language),
-      meta: formatDisplayMeta(handicapOverride.prediction, handicapOverride.top.probability, language),
-      probability: handicapOverride.top.probability,
-      support: handicapOverride.support,
-      reason: closeHandicapDecision ? getCloseHandicapReason(language) : getDisplayReasonForKind('handicap', language)
-    };
-  }
-
-  if (promotedPrediction) {
-    const canPairPromotedHandicap = promotedPrediction.oddsPoolCode === 'HHAD'
-      && pairedOutcomePrediction
-      && isOutcomeCode(pairedOutcomePrediction.tipCode)
-      && isOutcomeCode(promotedPrediction.tipCode)
-      && isHandicapCodeCompatible(
-        pairedOutcomePrediction.tipCode,
-        promotedPrediction.tipCode,
-        parseHandicapLine(match.handicapLine)
-      );
-
-    if (canPairPromotedHandicap && pairedOutcomePrediction) {
-      const probability = getOutcomeProbability(match, pairedOutcomePrediction.tipCode as OutcomeCode, pairedOutcomePrediction);
-      const cleanProbability = Number.isFinite(probability) ? Number(probability) : null;
-      const companion = buildHandicapCompanionFromPrediction(match, promotedPrediction, pairedOutcomePrediction, language);
-
-      return {
-        kind: 'prediction',
-        prediction: pairedOutcomePrediction,
-        tipCode: pairedOutcomePrediction.tipCode,
-        label: getSimpleOutcomeLabel(match, pairedOutcomePrediction.tipCode as OutcomeCode, language),
-        meta: formatDisplayMeta(pairedOutcomePrediction, cleanProbability, language),
-        probability: cleanProbability,
-        support: getOneXTwoSupport(match, pairedOutcomePrediction.tipCode, pairedOutcomePrediction),
-        reason: companion
-          ? (language === 'zh'
-            ? '胜平负和让球盘拆开看：先判断胜负方向，再判断是否穿盘。'
-            : '1X2 and handicap are split: first the match result, then the cover.')
-          : getDisplayReasonForKind('prediction', language),
-        companion: companion || undefined
-      };
-    }
-
-    const probability = getOutcomeProbability(match, promotedPrediction.tipCode as OutcomeCode, promotedPrediction);
-    const cleanProbability = Number.isFinite(probability) ? Number(probability) : null;
-    const label = promotedPrediction.oddsPoolCode === 'HHAD'
-      ? getSimpleHandicapLabel(promotedPrediction.tipCode as OutcomeCode, language)
-      : getSimpleOutcomeLabel(match, promotedPrediction.tipCode as OutcomeCode, language);
-
-    return {
-      kind: 'prediction',
-      prediction: promotedPrediction,
-      tipCode: promotedPrediction.tipCode,
-      label,
-      meta: formatDisplayMeta(promotedPrediction, cleanProbability, language),
-      probability: cleanProbability,
-      support: getOneXTwoSupport(match, promotedPrediction.tipCode, promotedPrediction),
-      reason: promotedPrediction.oddsPoolCode === 'HHAD' && closeHandicapDecision
-        ? getCloseHandicapReason(language)
-        : getDisplayReasonForKind('prediction', language),
-      companion: buildHandicapCompanion(match, promotedPrediction, language) || undefined
-    };
-  }
-
-  const handicapTop = handicapRead?.modelTop || null;
-  const handicapMarketTop = handicapRead?.marketTop || null;
-  const handicapMarketFallback = !hasHad && hasHhad ? handicapMarketTop : null;
-  const handicapFallbackAllowed = Boolean(
-    handicapTop
-    && (!handicapMarketTop || handicapMarketTop.code === handicapTop.code)
-  );
-  const handicapDisplayTop = handicapTop && handicapFallbackAllowed
-    ? handicapTop
-    : handicapMarketFallback;
-  const handicapDisplaySupport = handicapDisplayTop?.code === handicapRead?.modelTop?.code
-    ? handicapRead?.marketSupport ?? null
-    : handicapDisplayTop?.probability ?? null;
-
-  if (hasHhad && handicapDisplayTop) {
-    const fauxPrediction: PredictionDetail = {
-      marketType: '1X2',
-      oddsPoolCode: 'HHAD',
-      handicapLine: match.handicapLine,
-      tipCode: handicapDisplayTop.code,
-      tipLabel: { zh: getSimpleHandicapLabel(handicapDisplayTop.code, 'zh'), en: getSimpleHandicapLabel(handicapDisplayTop.code, 'en') },
-      odds: getOutcomeOddsValue(match, 'HHAD', handicapDisplayTop.code),
-      trustScore: Math.round(handicapDisplayTop.probability),
-      recommendationAction: 'reference',
-      recommendationTier: 'reference',
-      explanation: { zh: '', en: '' },
-      visibilityStatus: 'FREE',
-      resultStatus: 'PENDING'
-    };
-
-    return {
-      kind: 'handicap',
-      prediction: fauxPrediction,
-      tipCode: handicapDisplayTop.code,
-      label: getSimpleHandicapLabel(handicapDisplayTop.code, language),
-      meta: formatDisplayMeta(fauxPrediction, handicapDisplayTop.probability, language),
-      probability: handicapDisplayTop.probability,
-      support: handicapDisplaySupport,
-      reason: !hasHad && hasHhad
-        ? (language === 'zh'
-          ? '普通胜平负未开售，本场直接按让球胜平负推荐。'
-          : 'Standard 1X2 is not on sale, so this fixture is recommended through HHAD.')
-        : getDisplayReasonForKind('handicap', language)
-    };
-  }
-
-  const outcomeTop = hasHad ? getTopOutcomeFromProbabilities(
-    match.probabilityModel?.oneXTwo?.final
-      || match.probabilityModel?.oneXTwo?.scoreImplied
-      || match.probabilityModel?.oneXTwo?.poisson
-      || match.probabilityModel?.oneXTwo?.market
-  ) : null;
-
-  if (outcomeTop) {
-    const fauxPrediction: PredictionDetail = {
-      marketType: '1X2',
-      oddsPoolCode: 'HAD',
-      tipCode: outcomeTop.code,
-      tipLabel: { zh: getSimpleOutcomeLabel(match, outcomeTop.code, 'zh'), en: getSimpleOutcomeLabel(match, outcomeTop.code, 'en') },
-      odds: getOutcomeOddsValue(match, 'HAD', outcomeTop.code),
-      trustScore: Math.round(outcomeTop.probability),
-      recommendationAction: 'reference',
-      recommendationTier: 'reference',
-      explanation: { zh: '', en: '' },
-      visibilityStatus: 'FREE',
-      resultStatus: 'PENDING'
-    };
-
-    return {
-      kind: 'outcome',
-      prediction: fauxPrediction,
-      tipCode: outcomeTop.code,
-      label: getSimpleOutcomeLabel(match, outcomeTop.code, language),
-      meta: formatDisplayMeta(fauxPrediction, outcomeTop.probability, language),
-      probability: outcomeTop.probability,
-      support: getOneXTwoSupport(match, outcomeTop.code),
-      reason: getDisplayReasonForKind('outcome', language),
-      companion: buildHandicapCompanion(match, fauxPrediction, language) || undefined
-    };
-  }
-
-  if (pendingPromotedPrediction) {
-    const pendingHandicapCompanion = getListHandicapSupplement(match, language, pendingPromotedPrediction);
-    if (pendingHandicapCompanion && hasPredictionDisplayOdds(pendingHandicapCompanion.prediction)) {
-      return {
-        kind: 'handicap',
-        prediction: pendingHandicapCompanion.prediction,
-        tipCode: pendingHandicapCompanion.tipCode,
-        label: pendingHandicapCompanion.label,
-        meta: pendingHandicapCompanion.meta,
-        probability: pendingHandicapCompanion.probability,
-        support: pendingHandicapCompanion.support,
-        reason: language === 'zh'
-          ? '胜平负主推 SP 未开售，先按已开售让球玩法展示可用推荐。'
-          : 'The 1X2 main SP is not open, so the on-sale handicap market is shown as the actionable pick.'
-      };
-    }
-
-    const probability = getOutcomeProbability(match, pendingPromotedPrediction.tipCode as OutcomeCode, pendingPromotedPrediction);
-    const cleanProbability = Number.isFinite(probability) ? Number(probability) : null;
-    const label = pendingPromotedPrediction.oddsPoolCode === 'HHAD'
-      ? getSimpleHandicapLabel(pendingPromotedPrediction.tipCode as OutcomeCode, language)
-      : getSimpleOutcomeLabel(match, pendingPromotedPrediction.tipCode as OutcomeCode, language);
-
-    return {
-      kind: pendingPromotedPrediction.oddsPoolCode === 'HHAD' ? 'handicap' : 'prediction',
-      prediction: pendingPromotedPrediction,
-      tipCode: pendingPromotedPrediction.tipCode,
-      label,
-      meta: formatDisplayMeta(pendingPromotedPrediction, cleanProbability, language),
-      probability: cleanProbability,
-      support: getOneXTwoSupport(match, pendingPromotedPrediction.tipCode, pendingPromotedPrediction),
-      reason: language === 'zh'
-        ? '当前方向先保留为赛前推荐；官方 SP 开售后会按胜平负/让球盘口重新确认。'
-        : 'The pre-match direction is kept for now; once official SP opens, 1X2/HHAD markets will recheck it.',
-      companion: buildHandicapCompanion(match, pendingPromotedPrediction, language) || undefined
-    };
-  }
-
-  return null;
-};
+export const getLiveDisplayRecommendation = (match: Match, language: Language): DisplayRecommendation | null => (
+  buildDisplayRecommendation(match, language, getLiveRecommendationPrediction(match), 'live')
+);

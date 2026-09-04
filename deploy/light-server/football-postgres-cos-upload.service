@@ -1,0 +1,45 @@
+[Unit]
+Description=Upload verified Football PostgreSQL backup to Tencent COS
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/football-predict/cos-backup.env
+
+[Service]
+Type=oneshot
+User=postgres
+Group=football
+EnvironmentFile=/etc/football-predict/cos-backup.env
+Environment=FOOTBALL_POSTGRES_BACKUP_DIR=/var/lib/football-predict/postgres-backups
+Environment=COSCLI_BIN=/usr/local/bin/coscli
+Environment=NODE_BIN=/opt/node-v22.22.1/bin/node
+RuntimeDirectory=football-postgres-cos-upload
+RuntimeDirectoryMode=0700
+ExecStart=/usr/local/sbin/football-postgres-cos-upload
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+NoNewPrivileges=true
+UMask=0077
+CapabilityBoundingSet=
+AmbientCapabilities=
+PrivateDevices=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/usr/bin /usr/lib /usr/local/bin/coscli /opt/node-v22.22.1
+ReadWritePaths=/var/lib/football-predict/postgres-backups
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectProc=invisible
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM

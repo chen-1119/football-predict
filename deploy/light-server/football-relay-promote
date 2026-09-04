@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+readonly PATH="/opt/node-v22.22.1/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export PATH
+
+readonly UPLOAD_OWNER_FILE="/etc/football-release/upload-owner"
+readonly INCOMING_DIR="/var/lib/football-relay/incoming"
+readonly WORK_ROOT="/var/lib/football-relay/work"
+readonly TARGET="/var/lib/football-predict/sporttery-relay-snapshot.json"
+readonly LOCK_FILE="/run/lock/football-relay-promote.lock"
+readonly MAX_SNAPSHOT_BYTES=$((64 * 1024 * 1024))
+
+die() {
+  printf 'football-relay-promote: %s\n' "$*" >&2
+  exit 1
+}
+
+[ "$(id -u)" -eq 0 ] || die "must run as root"
+for command_name in sha256sum stat realpath install mktemp node chown chmod mv rm awk dirname flock; do
+  command -v "$command_name" >/dev/null 2>&1 || die "missing command: ${command_name}"
+done
+for path in "$INCOMING_DIR" "$WORK_ROOT" "$(dirname "$TARGET")"; do
+  [ -d "$path" ] && [ ! -L "$path" ] || die "required directory is missing or unsafe: ${path}"
+done
+[ -f "$UPLOAD_OWNER_FILE" ] && [ ! -L "$UPLOAD_OWNER_FILE" ] || die "upload owner configuration is missing"
+IFS= read -r upload_owner <"$UPLOAD_OWNER_FILE" || true
+[[ "$upload_owner" =~ ^[a-z_][a-z0-9_-]*$ ]] || die "configured upload owner is invalid"
+id "$upload_owner" >/dev/null 2>&1 || die "configured upload owner does not exist"
+
+if [ "${1:-}" = "--check" ] && [ "$#" -eq 1 ]; then
+  printf 'relay-promoter-ok target=%s\n' "$TARGET"
+  exit 0
+fi
+
+[ "$#" -eq 2 ] || die "usage: football-relay-promote <64-character-sha256> <timestamp-id>"
+readonly SNAPSHOT_SHA="$1"
+readonly TIMESTAMP_ID="$2"
+[[ "$SNAPSHOT_SHA" =~ ^[0-9a-f]{64}$ ]] || die "invalid snapshot sha256"
+[[ "$TIMESTAMP_ID" =~ ^[0-9]{8}T[0-9]{9}Z$ ]] || die "invalid timestamp id"
+
+[ ! -L "$LOCK_FILE" ] || die "relay promotion lock path is unsafe"
+if [ ! -e "$LOCK_FILE" ]; then
+  ( set -o noclobber; : >"$LOCK_FILE" ) 2>/dev/null || true
+fi
+[ -f "$LOCK_FILE" ] && [ ! -L "$LOCK_FILE" ] || die "relay promotion lock is not a regular file"
+[ "$(stat -c '%U' -- "$LOCK_FILE")" = "root" ] || die "relay promotion lock owner mismatch"
+[ "$(stat -c '%h' -- "$LOCK_FILE")" = "1" ] || die "relay promotion lock must have exactly one hard link"
+chmod 0600 "$LOCK_FILE"
+exec 9<>"$LOCK_FILE"
+flock -x 9
+
+readonly SOURCE="${INCOMING_DIR}/${SNAPSHOT_SHA}.${TIMESTAMP_ID}.json"
+[ -f "$SOURCE" ] && [ ! -L "$SOURCE" ] || die "snapshot upload is not a regular file"
+[ "$(realpath -e -- "$SOURCE")" = "$SOURCE" ] || die "snapshot upload path is not canonical"
+[ "$(stat -c '%U' -- "$SOURCE")" = "$upload_owner" ] || die "snapshot upload owner mismatch"
+[ "$(stat -c '%h' -- "$SOURCE")" = "1" ] || die "snapshot upload must have exactly one hard link"
+mode="$(stat -c '%a' -- "$SOURCE")"
+(( (8#$mode & 8#022) == 0 )) || die "snapshot upload is group/world writable"
+bytes="$(stat -c '%s' -- "$SOURCE")"
+(( bytes > 0 && bytes <= MAX_SNAPSHOT_BYTES )) || die "snapshot upload size is outside the allowed range"
+
+work_dir="$(mktemp -d "${WORK_ROOT}/${SNAPSHOT_SHA}.XXXXXX")"
+cleanup() {
+  rm -rf -- "$work_dir" || true
+}
+trap cleanup EXIT
+readonly VERIFIED="${work_dir}/snapshot.json"
+install -o root -g root -m 0600 -- "$SOURCE" "$VERIFIED"
+
+actual_sha="$(sha256sum "$VERIFIED" | awk '{print $1}')"
+[ "$actual_sha" = "$SNAPSHOT_SHA" ] || die "snapshot sha256 mismatch"
+
+[ ! -L "$TARGET" ] || die "current relay target is a symbolic link"
+if [ -e "$TARGET" ]; then
+  [ -f "$TARGET" ] && [ ! -L "$TARGET" ] || die "current relay target is not a regular file"
+  [ "$(realpath -e -- "$TARGET")" = "$TARGET" ] || die "current relay target path is not canonical"
+  [ "$(stat -c '%h' -- "$TARGET")" = "1" ] || die "current relay target must have exactly one hard link"
+fi
+
+node - "$VERIFIED" "$TARGET" <<'NODE'
+const fs = require("node:fs");
+const [verifiedPath, currentPath] = process.argv.slice(-2);
+const payload = JSON.parse(fs.readFileSync(verifiedPath, "utf8"));
+const capturedMs = Date.parse(payload?.capturedAt || "");
+const ageMinutes = Number.isFinite(capturedMs) ? (Date.now() - capturedMs) / 60000 : Infinity;
+const endpoints = Array.isArray(payload?.endpoints) ? payload.endpoints : [];
+const rowsInPayload = (endpointPayload) => (endpointPayload?.value?.matchInfoList || [])
+  .reduce((sum, day) => sum + (Array.isArray(day?.subMatchList) ? day.subMatchList.length : 0), 0);
+const usable = endpoints.filter((entry) => entry?.payload && typeof entry.payload === "object" && entry.ok !== false);
+const actualRows = usable.reduce((sum, entry) => sum + rowsInPayload(entry.payload), 0);
+const reportedRows = Number(payload?.summary?.rows);
+const reportedUsableEndpoints = Number(payload?.summary?.usableEndpoints);
+const reportedEndpoints = Number(payload?.summary?.endpoints);
+const failures = [];
+if (payload?.version !== 1) failures.push("version must be 1");
+if (payload?.source !== "sporttery-relay-snapshot") failures.push("source must be sporttery-relay-snapshot");
+if (!Array.isArray(payload?.endpoints)) failures.push("endpoints must be an array");
+if (!Number.isFinite(capturedMs) || ageMinutes < -5 || ageMinutes > 120) failures.push("capturedAt is outside the allowed freshness window");
+if (!Number.isSafeInteger(reportedEndpoints) || reportedEndpoints !== endpoints.length) failures.push("summary.endpoints does not match endpoints");
+if (!Number.isSafeInteger(reportedUsableEndpoints) || reportedUsableEndpoints !== usable.length) failures.push("summary.usableEndpoints does not match usable endpoints");
+if (!Number.isSafeInteger(reportedRows) || reportedRows !== actualRows) failures.push("summary.rows does not match endpoint payload rows");
+if (actualRows < 100) failures.push("actual endpoint rows are below 100");
+if (usable.length < 2) failures.push("actual usable endpoints are below 2");
+for (const [index, entry] of usable.entries()) {
+  if (entry.rows === undefined || entry.rows === null) continue;
+  const entryRows = Number(entry.rows);
+  const actualEntryRows = rowsInPayload(entry.payload);
+  if (!Number.isSafeInteger(entryRows) || entryRows !== actualEntryRows) {
+    failures.push(`endpoints[${index}].rows does not match its payload`);
+  }
+}
+if (fs.existsSync(currentPath)) {
+  let current;
+  try {
+    current = JSON.parse(fs.readFileSync(currentPath, "utf8"));
+  } catch {
+    failures.push("current target is not valid JSON");
+  }
+  const currentCapturedMs = Date.parse(current?.capturedAt || "");
+  if (!Number.isFinite(currentCapturedMs)) {
+    failures.push("current target capturedAt is invalid");
+  } else if (Number.isFinite(capturedMs) && capturedMs <= currentCapturedMs) {
+    failures.push("capturedAt must be strictly newer than the current target");
+  }
+}
+if (failures.length) throw new Error(`relay snapshot rejected: ${failures.join("; ")}`);
+NODE
+
+readonly PROMOTED="${work_dir}/sporttery-relay-snapshot.json"
+install -o football -g football -m 0640 -- "$VERIFIED" "$PROMOTED"
+mv -fT "$PROMOTED" "$TARGET"
+rm -f -- "$SOURCE"
+printf 'relay-promoted sha256=%s timestampId=%s target=%s\n' "$SNAPSHOT_SHA" "$TIMESTAMP_ID" "$TARGET"

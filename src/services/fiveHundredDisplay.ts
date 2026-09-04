@@ -111,8 +111,9 @@ const dataReadyLabel = (ready: boolean, language: Language) => (
 
 export const buildFiveHundredDisplay = (match: Match, language: Language): FiveHundredDisplay => {
   const signal = match.externalSignals?.fiveHundred;
-  const lineups = match.externalSignals?.lineups;
-  const lineupSummary = multiText(lineups?.summary, language);
+  const projectedRoster = match.externalSignals?.projectedRoster
+    || match.externalSignals?.lineups;
+  const lineupSummary = multiText(projectedRoster?.summary, language);
 
   if (!signal) {
     return {
@@ -136,7 +137,7 @@ export const buildFiveHundredDisplay = (match: Match, language: Language): FiveH
   const hasMarket = hasEurope || hasAsian || Boolean(signal.sale?.availability);
   const hasRank = Boolean(signal.rank?.home?.fifaRank || signal.rank?.away?.fifaRank);
   const hasForm = Boolean(signal.recentForm?.home?.sampleSize || signal.recentForm?.away?.sampleSize);
-  const hasLineup = Boolean(lineupSummary || lineups?.homeFormation || lineups?.awayFormation);
+  const hasLineup = Boolean(lineupSummary || projectedRoster?.homeFormation || projectedRoster?.awayFormation);
   const hasSchedule = Boolean(
     isFiniteNumber(signal.futureSchedule?.home?.nextGapDays)
     || isFiniteNumber(signal.futureSchedule?.away?.nextGapDays)

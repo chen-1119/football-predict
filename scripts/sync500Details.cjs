@@ -3,6 +3,7 @@ const https = require("https");
 const path = require("path");
 const { execFileSync } = require("child_process");
 const iconv = require("iconv-lite");
+const { eventSafeExistingSignal } = require("./externalSignalEventIdentity.cjs");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const PUBLIC_DIR = path.join(PROJECT_ROOT, "public");
@@ -10,11 +11,27 @@ const DATA_DIR = path.join(PUBLIC_DIR, "data");
 const DETAILS_FILE = path.join(DATA_DIR, "five-hundred-details.json");
 const EXTERNAL_SIGNALS_FILE = path.join(DATA_DIR, "external-signals.json");
 const SOURCE_URL = process.env.FIVE_HUNDRED_JCZQ_URL || "https://trade.500.com/jczq/";
-const MAX_MATCHES = Math.max(1, Number(process.env.FIVE_HUNDRED_DETAILS_MAX_MATCHES || 8));
+// Current detail links are served by odds.500.com. Rewriting them to the
+// trade host turns valid detail pages into redirects that end in 404s.
+const DETAIL_BASE_URL = String(process.env.FIVE_HUNDRED_DETAIL_BASE_URL || "https://odds.500.com").replace(/\/+$/, "");
+const MAX_MATCHES = Math.max(1, Number(process.env.FIVE_HUNDRED_DETAILS_MAX_MATCHES || 24));
 const REFRESH_MINUTES = Math.max(30, Number(process.env.FIVE_HUNDRED_DETAILS_REFRESH_MINUTES || 180));
+const NEAR_REFRESH_MINUTES = Math.max(20, Math.min(
+  REFRESH_MINUTES,
+  Number(process.env.FIVE_HUNDRED_DETAILS_NEAR_REFRESH_MINUTES || 60),
+));
+const URGENT_REFRESH_MINUTES = Math.max(10, Math.min(
+  NEAR_REFRESH_MINUTES,
+  Number(process.env.FIVE_HUNDRED_DETAILS_URGENT_REFRESH_MINUTES || 20),
+));
 const RESULT_LOOKBACK_HOURS = Math.max(1, Number(process.env.FIVE_HUNDRED_RESULT_LOOKBACK_HOURS || 48));
 const DETAIL_TIMEOUT_SECONDS = Math.max(5, Number(process.env.FIVE_HUNDRED_DETAILS_TIMEOUT_SECONDS || 10));
 const MAX_ERRORS = Math.max(1, Number(process.env.FIVE_HUNDRED_DETAILS_MAX_ERRORS || 3));
+const RESULT_ONLY_MODE = process.env.FIVE_HUNDRED_RESULT_ONLY === "1";
+const RESULT_ONLY_ARCHIVE_MAX_DATES = Math.max(
+  1,
+  Math.min(4, Number(process.env.FIVE_HUNDRED_RESULT_ARCHIVE_MAX_DATES || 3)),
+);
 const USER_AGENT = process.env.FIVE_HUNDRED_USER_AGENT
   || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126 Safari/537.36";
 
@@ -27,6 +44,71 @@ const REQUEST_HEADERS = Object.freeze({
 });
 
 const nowIso = () => new Date().toISOString();
+
+const parseObservedTime = (value) => {
+  const text = String(value || "").trim();
+  if (!text) return NaN;
+  const normalized = /^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?$/.test(text)
+    ? `${text.replace(/\s+/, "T")}${text.length === 16 ? ":00" : ""}+08:00`
+    : text;
+  return Date.parse(normalized);
+};
+
+const observedIso = (value) => {
+  const time = parseObservedTime(value);
+  return Number.isFinite(time) ? new Date(time).toISOString() : null;
+};
+
+const preMatchValidUntil = (match) => (
+  observedIso(match?.buyEndTime)
+  || observedIso(match?.kickoffTime)
+  || null
+);
+
+const preMatchComponentTiming = (match, sourceObservedAt, receivedAt = sourceObservedAt) => {
+  const observed = observedIso(sourceObservedAt);
+  const received = observedIso(receivedAt) || observed;
+  const validUntil = preMatchValidUntil(match);
+  const observedMs = parseObservedTime(observed);
+  const validUntilMs = parseObservedTime(validUntil);
+  const usableForPreMatch = Number.isFinite(observedMs)
+    && Number.isFinite(validUntilMs)
+    && observedMs <= validUntilMs;
+  return {
+    sourceObservedAt: observed,
+    receivedAt: received,
+    validUntil,
+    usableForPreMatch,
+    observationPhase: usableForPreMatch ? "pre-match" : "post-cutoff",
+  };
+};
+
+const resultComponentTiming = (sourceObservedAt, receivedAt = sourceObservedAt) => ({
+  sourceObservedAt: observedIso(sourceObservedAt),
+  receivedAt: observedIso(receivedAt) || observedIso(sourceObservedAt),
+  validUntil: null,
+  usableForPreMatch: false,
+  observationPhase: "post-match-result",
+});
+
+const withComponentTiming = (component, timing) => {
+  if (!component || typeof component !== "object" || Array.isArray(component)) return component;
+  return {
+    ...component,
+    ...timing,
+    // Compatibility field: component.updatedAt now means when this component
+    // was observed, never the later time at which a result-only merge ran.
+    updatedAt: timing.sourceObservedAt || component.updatedAt || null,
+  };
+};
+
+const timingForAvailableComponent = (timing, available = true) => ({
+  ...timing,
+  usableForPreMatch: Boolean(available && timing?.usableForPreMatch),
+  observationPhase: available
+    ? timing?.observationPhase || "unknown"
+    : "unavailable",
+});
 
 const htmlDecode = (value) => String(value || "")
   .replace(/&nbsp;/g, " ")
@@ -172,9 +254,22 @@ const parseAttrs = (attrText) => {
 const absoluteUrl = (href) => {
   const value = norm(href);
   if (!value || value === "javascript:;") return "";
-  if (/^https?:\/\//i.test(value)) return value;
-  if (value.startsWith("//")) return `https:${value}`;
-  if (value.startsWith("/")) return `https://odds.500.com${value}`;
+  const rewriteDetailHost = (url) => {
+    try {
+      const parsed = new URL(url);
+      if (/^odds\.500\.com$/i.test(parsed.hostname)) {
+        const base = new URL(DETAIL_BASE_URL);
+        parsed.protocol = base.protocol;
+        parsed.host = base.host;
+      }
+      return parsed.toString();
+    } catch {
+      return url;
+    }
+  };
+  if (/^https?:\/\//i.test(value)) return rewriteDetailHost(value);
+  if (value.startsWith("//")) return rewriteDetailHost(`https:${value}`);
+  if (value.startsWith("/")) return `${DETAIL_BASE_URL}${value}`;
   return value;
 };
 
@@ -224,6 +319,7 @@ const signalKeys = (match) => {
 
 const parseTradeRows = (html) => {
   const rows = [];
+  const receivedAt = nowIso();
   const re = /<tr\b([^>]*class="[^"]*\bbet-tb-tr\b[^"]*"[^>]*)>([\s\S]*?)<\/tr>/gi;
   let match;
   while ((match = re.exec(html))) {
@@ -265,7 +361,14 @@ const parseTradeRows = (html) => {
       scoreHome: score?.home ?? null,
       scoreAway: score?.away ?? null,
       resultSource: score ? "500.com:jczq-result" : undefined,
-      resultUpdatedAt: score ? nowIso() : undefined,
+      resultUpdatedAt: score ? receivedAt : undefined,
+      resultSourceUpdatedAt: score ? null : undefined,
+      resultObservedAt: score ? receivedAt : undefined,
+      resultObservationSource: score ? "500.com-response-received-at" : undefined,
+      resultObservationFallback: score ? true : undefined,
+      eventVersion: score && attrs["data-matchdate"] && attrs["data-matchtime"]
+        ? `${norm(attrs["data-matchdate"])}T${norm(attrs["data-matchtime"])}:00+08:00`
+        : undefined,
       isEnded,
       handicapLine: norm(attrs["data-rangqiu"]),
       availability: availabilityFor(attrs["data-subactive"]),
@@ -304,26 +407,53 @@ const uniqueBySourceMatchId = (rows) => {
   return Array.from(byId.values());
 };
 
-const fetchRecentResultRows = async (existingDetails) => {
+const resultArchiveDatesForRows = (...collections) => {
   const dates = new Set();
-  for (const match of Object.values(existingDetails?.matches || {})) {
-    if (!isRecentResultCandidate(match)) continue;
-    const date = norm(match.processDate || match.matchDate || String(match.kickoffTime || "").slice(0, 10));
-    if (date) dates.add(date);
-  }
-
-  const rows = [];
-  const errors = [];
-  for (const date of dates) {
-    try {
-      const html = await httpGetHtml(buildDateUrl(date), SOURCE_URL);
-      rows.push(...parseTradeRows(html));
-    } catch (error) {
-      errors.push({ date, message: error.message || String(error) });
+  for (const collection of collections) {
+    for (const match of collection || []) {
+      if (!isRecentResultCandidate(match)) continue;
+      [
+        match.processDate,
+        match.businessDate,
+        match.matchDate,
+        String(match.kickoffTime || "").slice(0, 10),
+      ].map(norm).filter(Boolean).forEach((date) => dates.add(date));
     }
   }
+  return Array.from(dates).sort();
+};
 
-  return { rows, errors, dates: Array.from(dates) };
+const boundedResultArchiveDatesForRows = (maxDates, ...collections) => {
+  const dates = resultArchiveDatesForRows(...collections);
+  const limit = Math.max(1, Math.min(4, Number(maxDates || dates.length || 1)));
+  return dates.slice(-limit);
+};
+
+const fetchRecentResultRows = async (
+  existingDetails,
+  supportingMatches = [],
+  { maxDates = 4 } = {},
+) => {
+  const dates = boundedResultArchiveDatesForRows(
+    maxDates,
+    Object.values(existingDetails?.matches || {}),
+    supportingMatches,
+  );
+
+  const attempts = await Promise.all(dates.map(async (date) => {
+    try {
+      const html = await httpGetHtml(buildDateUrl(date), SOURCE_URL);
+      return { date, rows: parseTradeRows(html), error: null };
+    } catch (error) {
+      return { date, rows: [], error: { date, message: error.message || String(error) } };
+    }
+  }));
+
+  return {
+    rows: attempts.flatMap((attempt) => attempt.rows),
+    errors: attempts.map((attempt) => attempt.error).filter(Boolean),
+    dates,
+  };
 };
 
 const extractTables = (html) => {
@@ -719,7 +849,7 @@ const marketConsensus = (match, europeOdds, asianHandicap) => {
   };
 };
 
-const buildDetailSignal = (match, details, updatedAt) => {
+const buildLegacyDetailSignal = (match, details, updatedAt) => {
   const europeOdds = details.europeOdds || null;
   const asianHandicap = details.asianHandicap || null;
   const analysis = details.analysis || null;
@@ -769,6 +899,10 @@ const buildDetailSignal = (match, details, updatedAt) => {
         result: {
           source: match.resultSource || "500.com:jczq-result",
           updatedAt,
+          sourceUpdatedAt: null,
+          observationSource: match.resultObservationSource || "500.com-response-received-at",
+          resultObservationFallback: true,
+          eventVersion: match.eventVersion || match.kickoffTime || null,
           status: "FINISHED",
           scoreHome: match.scoreHome,
           scoreAway: match.scoreAway,
@@ -784,8 +918,10 @@ const buildDetailSignal = (match, details, updatedAt) => {
       macauTip: analysis?.macauTip || undefined,
     },
     ...(lineupSummary ? {
-      lineups: {
-        source: "500.com",
+      projectedRoster: {
+        source: "500.com:projected-roster",
+        evidenceType: "projected-roster",
+        verified: false,
         summary: lineupSummary,
       },
     } : {}),
@@ -804,6 +940,424 @@ const buildDetailSignal = (match, details, updatedAt) => {
   };
 };
 
+const hasComponentData = {
+  sale: (value) => Boolean(value && (value.buyEndTime || Object.keys(value.availability || {}).length)),
+  rank: (value) => Boolean(value && (
+    (value.home?.fifaRank !== null && value.home?.fifaRank !== undefined)
+    || (value.away?.fifaRank !== null && value.away?.fifaRank !== undefined)
+  )),
+  recentForm: (value) => Number(value?.home?.sampleSize || 0) > 0 || Number(value?.away?.sampleSize || 0) > 0,
+  futureSchedule: (value) => Boolean(
+    value?.home?.rows?.length
+    || value?.away?.rows?.length
+    || Number.isFinite(value?.home?.nextGapDays)
+    || Number.isFinite(value?.away?.nextGapDays)
+  ),
+  europeOdds: (value) => Boolean(value && (Number(value.companies || 0) > 0 || validTriplet(value.currentAverage))),
+  asianHandicap: (value) => Boolean(value && (
+    Number(value.companies || 0) > 0
+    || (value.currentAverageLine !== null && value.currentAverageLine !== undefined)
+  )),
+  marketConsensus: (value) => Boolean(value && (
+    value.officialHadProbability
+    || value.europeAverageProbability
+    || (value.homeProbabilityGap !== null && value.homeProbabilityGap !== undefined)
+    || (value.handicapLineGap !== null && value.handicapLineGap !== undefined)
+    || value.hhadAvailable
+    || value.notes?.length
+  )),
+  macauTip: (value) => Boolean(value && (value.pick || value.summary)),
+  projectedRoster: (value) => Boolean(value?.summary),
+  lineups: (value) => Boolean(value?.summary || value?.homeFormation || value?.awayFormation),
+  externalOdds: (value) => validTriplet(value),
+};
+
+const preMatchComponentEntries = (signal) => [
+  ["bookmakerOdds.had", signal?.bookmakerOdds?.had],
+  ["bookmakerOdds.hhad", signal?.bookmakerOdds?.hhad],
+  ["handicapLine", signal?.handicapLineMeta],
+  ["fiveHundred.sale", signal?.fiveHundred?.sale],
+  ["fiveHundred.rank", signal?.fiveHundred?.rank],
+  ["fiveHundred.recentForm", signal?.fiveHundred?.recentForm],
+  ["fiveHundred.futureSchedule", signal?.fiveHundred?.futureSchedule],
+  ["fiveHundred.europeOdds", signal?.fiveHundred?.europeOdds],
+  ["fiveHundred.asianHandicap", signal?.fiveHundred?.asianHandicap],
+  ["fiveHundred.marketConsensus", signal?.fiveHundred?.marketConsensus],
+  ["fiveHundred.macauTip", signal?.fiveHundred?.macauTip],
+  ["projectedRoster", signal?.projectedRoster],
+  ["confirmedLineup", signal?.confirmedLineup],
+  ["lineups", signal?.lineups],
+  ["externalOdds", signal?.externalOdds],
+].filter(([, value]) => value && typeof value === "object");
+
+const addTimingManifest = (signal) => {
+  const entries = preMatchComponentEntries(signal);
+  return {
+    ...signal,
+    preMatchUsableComponents: entries
+      .filter(([, component]) => component.usableForPreMatch === true)
+      .map(([name]) => name),
+    preMatchIneligibleComponents: entries
+      .filter(([, component]) => component.usableForPreMatch !== true)
+      .map(([name]) => name),
+    postMatchOnlyComponents: signal?.fiveHundred?.result
+      ? Array.from(new Set([...(signal.postMatchOnlyComponents || []), "fiveHundred.result"]))
+      : signal.postMatchOnlyComponents || [],
+  };
+};
+
+const ensurePreMatchComponentTiming = (component, match, fallbackObservedAt, available = true) => {
+  if (!component || typeof component !== "object" || Array.isArray(component)) return component;
+  const sourceObservedAt = component.sourceObservedAt || component.updatedAt || fallbackObservedAt;
+  const receivedAt = component.receivedAt || sourceObservedAt;
+  const derived = preMatchComponentTiming(match, sourceObservedAt, receivedAt);
+  const validUntil = observedIso(component.validUntil) || derived.validUntil;
+  const observedMs = parseObservedTime(derived.sourceObservedAt);
+  const validUntilMs = parseObservedTime(validUntil);
+  const timing = {
+    ...derived,
+    validUntil,
+    usableForPreMatch: Boolean(
+      available
+      && component.usableForPreMatch !== false
+      && Number.isFinite(observedMs)
+      && Number.isFinite(validUntilMs)
+      && observedMs <= validUntilMs
+    ),
+  };
+  timing.observationPhase = !available
+    ? "unavailable"
+    : timing.usableForPreMatch ? "pre-match" : "post-cutoff";
+  return withComponentTiming(component, timing);
+};
+
+const ensureSignalComponentTiming = (signal, match, fallbackObservedAt) => {
+  if (!signal || typeof signal !== "object") return signal;
+  const sourceObservedAt = signal.sourceObservedAt || signal.updatedAt || fallbackObservedAt;
+  const rootTiming = preMatchComponentTiming(
+    match,
+    sourceObservedAt,
+    signal.receivedAt || sourceObservedAt,
+  );
+  const fiveHundred = signal.fiveHundred && typeof signal.fiveHundred === "object"
+    ? { ...signal.fiveHundred }
+    : undefined;
+  const fiveObservedAt = fiveHundred?.sourceObservedAt || fiveHundred?.updatedAt || rootTiming.sourceObservedAt;
+
+  if (fiveHundred) {
+    const fiveTiming = preMatchComponentTiming(
+      match,
+      fiveObservedAt,
+      fiveHundred.receivedAt || fiveObservedAt,
+    );
+    fiveHundred.sourceObservedAt = fiveTiming.sourceObservedAt;
+    fiveHundred.receivedAt = fiveTiming.receivedAt;
+    fiveHundred.validUntil = observedIso(fiveHundred.validUntil) || fiveTiming.validUntil;
+    fiveHundred.updatedAt = fiveTiming.sourceObservedAt || fiveHundred.updatedAt || null;
+    fiveHundred.sale = ensurePreMatchComponentTiming(
+      fiveHundred.sale,
+      match,
+      fiveObservedAt,
+      hasComponentData.sale(fiveHundred.sale),
+    );
+    fiveHundred.rank = ensurePreMatchComponentTiming(
+      fiveHundred.rank,
+      match,
+      fiveObservedAt,
+      hasComponentData.rank(fiveHundred.rank),
+    );
+    fiveHundred.recentForm = ensurePreMatchComponentTiming(
+      fiveHundred.recentForm,
+      match,
+      fiveObservedAt,
+      hasComponentData.recentForm(fiveHundred.recentForm),
+    );
+    fiveHundred.futureSchedule = ensurePreMatchComponentTiming(
+      fiveHundred.futureSchedule,
+      match,
+      fiveObservedAt,
+      hasComponentData.futureSchedule(fiveHundred.futureSchedule),
+    );
+    fiveHundred.europeOdds = ensurePreMatchComponentTiming(
+      fiveHundred.europeOdds,
+      match,
+      fiveObservedAt,
+      hasComponentData.europeOdds(fiveHundred.europeOdds),
+    );
+    fiveHundred.asianHandicap = ensurePreMatchComponentTiming(
+      fiveHundred.asianHandicap,
+      match,
+      fiveObservedAt,
+      hasComponentData.asianHandicap(fiveHundred.asianHandicap),
+    );
+    fiveHundred.marketConsensus = ensurePreMatchComponentTiming(
+      fiveHundred.marketConsensus,
+      match,
+      fiveObservedAt,
+      hasComponentData.marketConsensus(fiveHundred.marketConsensus),
+    );
+    fiveHundred.macauTip = ensurePreMatchComponentTiming(
+      fiveHundred.macauTip,
+      match,
+      fiveObservedAt,
+      hasComponentData.macauTip(fiveHundred.macauTip),
+    );
+    if (fiveHundred.result) {
+      const resultObservedAt = fiveHundred.result.sourceObservedAt
+        || fiveHundred.result.updatedAt
+        || match?.resultUpdatedAt
+        || fallbackObservedAt;
+      fiveHundred.result = withComponentTiming(
+        {
+          ...fiveHundred.result,
+          sourceUpdatedAt: fiveHundred.result.sourceUpdatedAt || null,
+          observationSource: fiveHundred.result.observationSource || "500.com-response-received-at",
+          resultObservationFallback: true,
+          eventVersion: fiveHundred.result.eventVersion || match?.eventVersion || match?.kickoffTime || null,
+        },
+        resultComponentTiming(resultObservedAt, fiveHundred.result.receivedAt || resultObservedAt),
+      );
+    }
+  }
+
+  const output = {
+    ...signal,
+    timingPolicy: "component-as-of-v1",
+    timingUpdateKind: signal.timingUpdateKind || "component-observation",
+    sourceObservedAt: rootTiming.sourceObservedAt,
+    receivedAt: rootTiming.receivedAt,
+    validUntil: observedIso(signal.validUntil) || rootTiming.validUntil,
+    latestReceivedAt: observedIso(signal.latestReceivedAt) || rootTiming.receivedAt,
+    updatedAt: rootTiming.sourceObservedAt || signal.updatedAt || null,
+    ...(fiveHundred ? { fiveHundred } : {}),
+  };
+  if (output.bookmakerOdds) {
+    output.bookmakerOdds = {
+      ...output.bookmakerOdds,
+      had: ensurePreMatchComponentTiming(
+        output.bookmakerOdds.had,
+        match,
+        rootTiming.sourceObservedAt,
+        validTriplet(output.bookmakerOdds.had),
+      ),
+      hhad: ensurePreMatchComponentTiming(
+        output.bookmakerOdds.hhad,
+        match,
+        rootTiming.sourceObservedAt,
+        validTriplet(output.bookmakerOdds.hhad),
+      ),
+    };
+  }
+  output.handicapLineMeta = ensurePreMatchComponentTiming(
+    output.handicapLineMeta || (output.handicapLine !== undefined ? {
+      source: "500.com:jczq",
+      line: output.handicapLine,
+    } : undefined),
+    match,
+    rootTiming.sourceObservedAt,
+    output.handicapLine !== undefined && output.handicapLine !== null && output.handicapLine !== "",
+  );
+  output.projectedRoster = ensurePreMatchComponentTiming(
+    output.projectedRoster,
+    match,
+    rootTiming.sourceObservedAt,
+    hasComponentData.projectedRoster(output.projectedRoster),
+  );
+  output.confirmedLineup = ensurePreMatchComponentTiming(
+    output.confirmedLineup,
+    match,
+    rootTiming.sourceObservedAt,
+    hasComponentData.lineups(output.confirmedLineup),
+  );
+  output.lineups = ensurePreMatchComponentTiming(
+    output.lineups,
+    match,
+    rootTiming.sourceObservedAt,
+    hasComponentData.lineups(output.lineups),
+  );
+  output.externalOdds = ensurePreMatchComponentTiming(
+    output.externalOdds,
+    match,
+    rootTiming.sourceObservedAt,
+    hasComponentData.externalOdds(output.externalOdds),
+  );
+  return addTimingManifest(output);
+};
+
+const signalIdentityForMatch = (match) => ({
+  sourceMatchId: norm(match?.sourceMatchId) || undefined,
+  fixtureId: norm(match?.fixtureId) || undefined,
+  infoMatchId: norm(match?.infoMatchId) || undefined,
+  matchNo: norm(match?.matchNo) || undefined,
+  processDate: norm(match?.processDate) || undefined,
+  matchDate: norm(match?.matchDate || String(match?.kickoffTime || "").slice(0, 10)) || undefined,
+  leagueName: norm(match?.leagueName) || undefined,
+  homeTeamName: norm(match?.homeTeamName) || undefined,
+  awayTeamName: norm(match?.awayTeamName) || undefined,
+  kickoffTime: norm(match?.kickoffTime) || undefined,
+  buyEndTime: norm(match?.buyEndTime) || undefined,
+});
+
+const buildDetailSignal = (match, details, updatedAt) => {
+  const sourceObservedAt = observedIso(updatedAt);
+  const timing = preMatchComponentTiming(match, sourceObservedAt, updatedAt);
+  const timed = (component, available = true) => withComponentTiming(
+    component,
+    timingForAvailableComponent(timing, available),
+  );
+  const europeOdds = details.europeOdds || null;
+  const asianHandicap = details.asianHandicap || null;
+  const analysis = details.analysis || null;
+  const consensus = marketConsensus(match, europeOdds, asianHandicap);
+  const projectedHome = analysis?.projectedSquads?.home || [];
+  const projectedAway = analysis?.projectedSquads?.away || [];
+  const sale = {
+    buyEndTime: match.buyEndTime,
+    availability: match.availability,
+  };
+  const bookmakerOdds = {
+    ...(match.had ? {
+      had: timed({
+        ...match.had,
+        source: "500.com:jczq",
+      }, validTriplet(match.had)),
+    } : {}),
+    ...(match.hhad ? {
+      hhad: timed({
+        ...match.hhad,
+        source: "500.com:jczq",
+        handicapLine: match.handicapLine,
+      }, validTriplet(match.hhad)),
+    } : {}),
+  };
+  const lineupSummary = projectedHome.length || projectedAway.length
+    ? {
+      zh: `500 projected squads: ${match.homeTeamName} ${projectedHome.slice(0, 4).join(", ") || "--"}; ${match.awayTeamName} ${projectedAway.slice(0, 4).join(", ") || "--"}.`,
+      en: `500 projected squads: ${match.homeTeamName} ${projectedHome.slice(0, 4).join(", ") || "--"}; ${match.awayTeamName} ${projectedAway.slice(0, 4).join(", ") || "--"}.`,
+    }
+    : undefined;
+  const hasResult = Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway);
+  const result = hasResult
+    ? withComponentTiming({
+      source: match.resultSource || "500.com:jczq-result",
+      sourceUpdatedAt: match.resultSourceUpdatedAt || null,
+      observationSource: match.resultObservationSource || "500.com-response-received-at",
+      resultObservationFallback: true,
+      eventVersion: match.eventVersion || match.kickoffTime || null,
+      status: "FINISHED",
+      scoreHome: match.scoreHome,
+      scoreAway: match.scoreAway,
+      scoreText: `${match.scoreHome}:${match.scoreAway}`,
+    }, resultComponentTiming(match.resultUpdatedAt || updatedAt, updatedAt))
+    : undefined;
+  const signal = {
+    source: "500.com:jczq+500.com:details",
+    ...signalIdentityForMatch(match),
+    timingPolicy: "component-as-of-v1",
+    timingUpdateKind: "component-observation",
+    sourceObservedAt: timing.sourceObservedAt,
+    receivedAt: timing.receivedAt,
+    validUntil: timing.validUntil,
+    latestReceivedAt: timing.receivedAt,
+    updatedAt: timing.sourceObservedAt || updatedAt,
+    handicapLine: match.handicapLine || undefined,
+    ...(match.handicapLine !== undefined && match.handicapLine !== null && match.handicapLine !== "" ? {
+      handicapLineMeta: timed({
+        source: "500.com:jczq",
+        line: match.handicapLine,
+      }),
+    } : {}),
+    ...(Object.keys(bookmakerOdds).length ? { bookmakerOdds } : {}),
+    fiveHundred: {
+      source: "500.com",
+      sourceObservedAt: timing.sourceObservedAt,
+      receivedAt: timing.receivedAt,
+      validUntil: timing.validUntil,
+      updatedAt: timing.sourceObservedAt || updatedAt,
+      fixtureId: match.fixtureId,
+      infoMatchId: match.infoMatchId,
+      matchNo: match.matchNo,
+      urls: match.urls,
+      sale: timed(sale, hasComponentData.sale(sale)),
+      ...(result ? { result } : {}),
+      rank: analysis?.rank ? timed(analysis.rank, hasComponentData.rank(analysis.rank)) : undefined,
+      recentForm: analysis?.recentForm
+        ? timed(analysis.recentForm, hasComponentData.recentForm(analysis.recentForm))
+        : undefined,
+      futureSchedule: analysis?.futureSchedule
+        ? timed(analysis.futureSchedule, hasComponentData.futureSchedule(analysis.futureSchedule))
+        : undefined,
+      europeOdds: europeOdds ? timed(europeOdds, hasComponentData.europeOdds(europeOdds)) : undefined,
+      asianHandicap: asianHandicap
+        ? timed(asianHandicap, hasComponentData.asianHandicap(asianHandicap))
+        : undefined,
+      marketConsensus: timed(consensus, hasComponentData.marketConsensus(consensus)),
+      macauTip: analysis?.macauTip
+        ? timed(analysis.macauTip, hasComponentData.macauTip(analysis.macauTip))
+        : undefined,
+    },
+    ...(lineupSummary ? {
+      projectedRoster: timed({
+        source: "500.com:projected-roster",
+        evidenceType: "projected-roster",
+        verified: false,
+        summary: lineupSummary,
+      }),
+    } : {}),
+    ...(europeOdds?.currentAverage ? {
+      externalOdds: timed({
+        source: "500.com:average-europe",
+        odds1: europeOdds.currentAverage.odds1,
+        oddsX: europeOdds.currentAverage.oddsX,
+        odds2: europeOdds.currentAverage.odds2,
+        summary: {
+          zh: `${europeOdds.summary || "500 Europe odds average"}; risk ${consensus.riskLevel}.`,
+          en: `${europeOdds.summary || "500 Europe odds average"}; risk ${consensus.riskLevel}.`,
+        },
+      }, validTriplet(europeOdds.currentAverage)),
+    } : {}),
+  };
+  return addTimingManifest(signal);
+};
+
+const buildResultMergeSignal = (
+  match,
+  existingSignal,
+  receivedAt,
+  cachedDetails = {},
+  cachedObservedAt,
+) => {
+  const fallbackObservedAt = cachedObservedAt || receivedAt;
+  const base = existingSignal
+    ? ensureSignalComponentTiming(existingSignal, match, fallbackObservedAt)
+    : buildDetailSignal(match, cachedDetails, fallbackObservedAt);
+  const resultObservedAt = match.resultUpdatedAt || receivedAt;
+  const result = withComponentTiming({
+    ...(base?.fiveHundred?.result || {}),
+    source: match.resultSource || "500.com:jczq-result",
+    sourceUpdatedAt: match.resultSourceUpdatedAt || null,
+    observationSource: match.resultObservationSource || "500.com-response-received-at",
+    resultObservationFallback: true,
+    eventVersion: match.eventVersion || match.kickoffTime || null,
+    status: "FINISHED",
+    scoreHome: match.scoreHome,
+    scoreAway: match.scoreAway,
+    scoreText: `${match.scoreHome}:${match.scoreAway}`,
+  }, resultComponentTiming(resultObservedAt, receivedAt));
+  return addTimingManifest({
+    ...base,
+    ...signalIdentityForMatch(match),
+    timingPolicy: "component-as-of-v1",
+    timingUpdateKind: "result-only",
+    latestReceivedAt: observedIso(receivedAt) || base?.latestReceivedAt || null,
+    resultUpdatedAt: result.sourceObservedAt,
+    fiveHundred: {
+      ...(base?.fiveHundred || {}),
+      result,
+    },
+  });
+};
+
 const mergeSourceName = (existingSource, nextSource) => {
   const parts = String(existingSource || "")
     .split("+")
@@ -814,78 +1368,176 @@ const mergeSourceName = (existingSource, nextSource) => {
 };
 
 const mergeSignal = (existing, next) => {
+  existing = eventSafeExistingSignal(existing, next);
+  const resultOnly = next?.timingUpdateKind === "result-only";
+  const preserveExistingObservation = Boolean(resultOnly && existing);
   const output = {
     ...(existing && typeof existing === "object" ? existing : {}),
     ...next,
     source: mergeSourceName(existing?.source, next.source),
-    updatedAt: next.updatedAt || existing?.updatedAt || nowIso(),
+    sourceObservedAt: preserveExistingObservation
+      ? existing.sourceObservedAt || existing.updatedAt || next.sourceObservedAt
+      : next.sourceObservedAt || next.updatedAt || existing?.sourceObservedAt || existing?.updatedAt,
+    receivedAt: preserveExistingObservation
+      ? existing.receivedAt || existing.sourceObservedAt || existing.updatedAt
+      : next.receivedAt || next.sourceObservedAt || next.updatedAt || existing?.receivedAt,
+    validUntil: preserveExistingObservation
+      ? existing.validUntil || next.validUntil
+      : next.validUntil || existing?.validUntil,
+    latestReceivedAt: next.latestReceivedAt
+      || next.receivedAt
+      || existing?.latestReceivedAt
+      || existing?.receivedAt
+      || null,
+    updatedAt: preserveExistingObservation
+      ? existing.updatedAt || existing.sourceObservedAt || next.updatedAt
+      : next.updatedAt || existing?.updatedAt || nowIso(),
   };
-  output.bookmakerOdds = {
-    ...(existing?.bookmakerOdds || {}),
-    ...(next.bookmakerOdds || {}),
-  };
+  output.bookmakerOdds = resultOnly && existing?.bookmakerOdds
+    ? { ...(next.bookmakerOdds || {}), ...existing.bookmakerOdds }
+    : { ...(existing?.bookmakerOdds || {}), ...(next.bookmakerOdds || {}) };
   if (existing?.injuries && !next.injuries) output.injuries = existing.injuries;
-  if (existing?.lineups && next.lineups) output.lineups = { ...existing.lineups, ...next.lineups };
+  if (existing?.projectedRoster && next.projectedRoster) {
+    output.projectedRoster = resultOnly
+      ? { ...next.projectedRoster, ...existing.projectedRoster }
+      : { ...existing.projectedRoster, ...next.projectedRoster };
+  }
+  if (existing?.projectedRoster && !next.projectedRoster) output.projectedRoster = existing.projectedRoster;
+  if (existing?.confirmedLineup && !next.confirmedLineup) output.confirmedLineup = existing.confirmedLineup;
+  if (existing?.lineups && next.lineups) {
+    output.lineups = resultOnly
+      ? { ...next.lineups, ...existing.lineups }
+      : { ...existing.lineups, ...next.lineups };
+  }
   if (existing?.lineups && !next.lineups) output.lineups = existing.lineups;
   if (existing?.apiFootball && !next.apiFootball) output.apiFootball = existing.apiFootball;
-  if (existing?.fiveHundred && next.fiveHundred) output.fiveHundred = { ...existing.fiveHundred, ...next.fiveHundred };
-  return output;
+  if (existing?.fiveHundred && next.fiveHundred) {
+    output.fiveHundred = resultOnly
+      ? {
+        ...next.fiveHundred,
+        ...existing.fiveHundred,
+        result: next.fiveHundred.result || existing.fiveHundred.result,
+      }
+      : { ...existing.fiveHundred, ...next.fiveHundred };
+  }
+  if (resultOnly && existing?.handicapLineMeta) output.handicapLineMeta = existing.handicapLineMeta;
+  if (resultOnly && existing?.externalOdds) output.externalOdds = existing.externalOdds;
+  return addTimingManifest(output);
 };
 
 const selectTargets = (rows, cache) => {
   const now = Date.now();
+  const refreshMinutesFor = (row) => {
+    const kickoff = Date.parse(row?.kickoffTime || "");
+    if (!Number.isFinite(kickoff)) return REFRESH_MINUTES;
+    const minutesUntilKickoff = (kickoff - now) / 60000;
+    if (minutesUntilKickoff <= 90) return URGENT_REFRESH_MINUTES;
+    if (minutesUntilKickoff <= 6 * 60) return NEAR_REFRESH_MINUTES;
+    return REFRESH_MINUTES;
+  };
   return rows
     .filter((row) => row.urls.analysis || row.urls.europeOdds || row.urls.asianHandicap)
-    .sort((a, b) => Date.parse(a.kickoffTime || "") - Date.parse(b.kickoffTime || ""))
     .filter((row) => {
       const kickoff = Date.parse(row.kickoffTime || "");
       if (Number.isFinite(kickoff) && kickoff + 2 * 3600000 < now) return false;
       const cached = cache.matches?.[row.sourceMatchId];
-      return !cached || !isFresh(cached.updatedAt, REFRESH_MINUTES);
+      return !cached || !isFresh(cached.updatedAt, refreshMinutesFor(row));
+    })
+    .sort((a, b) => {
+      const aCached = cache.matches?.[a.sourceMatchId] ? 1 : 0;
+      const bCached = cache.matches?.[b.sourceMatchId] ? 1 : 0;
+      return aCached - bCached
+        || Date.parse(a.kickoffTime || "") - Date.parse(b.kickoffTime || "");
     })
     .slice(0, MAX_MATCHES);
 };
 
 const main = async () => {
   const updatedAt = nowIso();
-  const tradeHtml = await httpGetHtml(SOURCE_URL, "https://www.500.com/");
-  const currentTradeRows = parseTradeRows(tradeHtml);
   const existingDetails = readJson(DETAILS_FILE, { version: 1, source: "500.com:details", matches: {} });
-  const recentResults = await fetchRecentResultRows(existingDetails);
-  const tradeRows = uniqueBySourceMatchId([...currentTradeRows, ...recentResults.rows]);
-  const targets = selectTargets(tradeRows, existingDetails);
-  const detailsMatches = { ...(existingDetails.matches || {}) };
   const external = readJson(EXTERNAL_SIGNALS_FILE, { version: 1, source: "external-signals", matches: {}, sources: {} });
+  // Result-only mode skips the unrelated current fixture page and queries only
+  // the newest business/kickoff dates represented by unresolved cached rows.
+  // The date cap and concurrent requests keep the hot settlement path bounded
+  // while still working after 500.com has moved yesterday's games to archives.
+  const currentTradeRows = RESULT_ONLY_MODE
+    ? []
+    : parseTradeRows(await httpGetHtml(SOURCE_URL, "https://www.500.com/"));
+  const recentResults = await fetchRecentResultRows(
+    existingDetails,
+    Object.values(external.matches || {}),
+    { maxDates: RESULT_ONLY_MODE ? RESULT_ONLY_ARCHIVE_MAX_DATES : 4 },
+  );
+  const tradeRows = uniqueBySourceMatchId([...currentTradeRows, ...recentResults.rows]);
+  const currentResultRows = currentTradeRows.filter(
+    (row) => Number.isFinite(row.scoreHome) && Number.isFinite(row.scoreAway)
+  ).length;
+  const resultRows = tradeRows.filter(
+    (row) => Number.isFinite(row.scoreHome) && Number.isFinite(row.scoreAway)
+  ).length;
+  const targets = RESULT_ONLY_MODE ? [] : selectTargets(tradeRows, existingDetails);
+  const detailsMatches = { ...(existingDetails.matches || {}) };
   const externalMatches = { ...(external.matches || {}) };
   const errors = [];
-  let requestedPages = 1;
+  let requestedPages = recentResults.dates.length + (RESULT_ONLY_MODE ? 0 : 1);
   let updated = 0;
   let cachedMerged = 0;
+  let resultMerged = 0;
   const mergedCacheIds = new Set();
 
   const mergeCachedSignal = (match, cached) => {
-    if (!cached?.signal) return;
-    const kickoff = Date.parse(match.kickoffTime || cached.kickoffTime || "");
+    const kickoff = Date.parse(match.kickoffTime || cached?.kickoffTime || "");
     const hasMatchResult = Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway);
-    const hasCachedResult = Number.isFinite(cached.signal?.fiveHundred?.result?.scoreHome)
-      && Number.isFinite(cached.signal?.fiveHundred?.result?.scoreAway);
+    const hasCachedResult = Number.isFinite(cached?.signal?.fiveHundred?.result?.scoreHome)
+      && Number.isFinite(cached?.signal?.fiveHundred?.result?.scoreAway);
+    if (!hasMatchResult && !cached?.signal) return;
     if (!hasMatchResult && !hasCachedResult && Number.isFinite(kickoff) && kickoff + 2 * 3600000 < Date.now()) return;
     const signal = hasMatchResult
-      ? buildDetailSignal(match, cached.details || {}, updatedAt)
-      : cached.signal;
+      ? buildResultMergeSignal(
+        match,
+        cached?.signal,
+        updatedAt,
+        cached?.details || {},
+        cached?.sourceObservedAt || cached?.updatedAt,
+      )
+      : ensureSignalComponentTiming(
+        cached.signal,
+        match,
+        cached?.sourceObservedAt || cached?.updatedAt,
+      );
+    const keys = signalKeys(match);
+    const externalResultChanged = hasMatchResult && keys.some((key) => {
+      const externalResult = externalMatches[key]?.fiveHundred?.result;
+      return externalResult?.scoreHome !== match.scoreHome
+        || externalResult?.scoreAway !== match.scoreAway;
+    });
     if (hasMatchResult) {
+      if (
+        !cached?.signal ||
+        !hasCachedResult ||
+        cached?.signal?.fiveHundred?.result?.scoreHome !== match.scoreHome ||
+        cached?.signal?.fiveHundred?.result?.scoreAway !== match.scoreAway ||
+        externalResultChanged
+      ) {
+        resultMerged += 1;
+      }
       detailsMatches[match.sourceMatchId] = {
         ...cached,
         ...match,
-        updatedAt,
-        details: cached.details || {},
+        sourceObservedAt: cached?.sourceObservedAt || signal.sourceObservedAt || cached?.updatedAt || updatedAt,
+        receivedAt: cached?.receivedAt || signal.receivedAt || cached?.updatedAt || updatedAt,
+        validUntil: cached?.validUntil || signal.validUntil || preMatchValidUntil(match),
+        latestReceivedAt: updatedAt,
+        resultUpdatedAt: signal.resultUpdatedAt || match.resultUpdatedAt || updatedAt,
+        updatedAt: cached?.updatedAt || signal.updatedAt || updatedAt,
+        details: cached?.details || {},
         signal,
       };
     }
-    for (const key of signalKeys(match)) {
+    for (const key of keys) {
       externalMatches[key] = mergeSignal(externalMatches[key], signal);
     }
-    mergedCacheIds.add(match.sourceMatchId || cached.sourceMatchId);
+    mergedCacheIds.add(match.sourceMatchId || cached?.sourceMatchId);
     cachedMerged += 1;
   };
 
@@ -910,6 +1562,10 @@ const main = async () => {
       const signal = buildDetailSignal(match, details, updatedAt);
       const payload = {
         ...match,
+        sourceObservedAt: observedIso(updatedAt),
+        receivedAt: observedIso(updatedAt),
+        validUntil: preMatchValidUntil(match),
+        latestReceivedAt: observedIso(updatedAt),
         updatedAt,
         details,
         signal,
@@ -932,17 +1588,28 @@ const main = async () => {
   const detailsPayload = {
     version: 1,
     source: "500.com:details",
+    mode: RESULT_ONLY_MODE ? "result-only-recent-archive" : "full-details",
     updatedAt,
     url: SOURCE_URL,
     maxMatches: MAX_MATCHES,
     refreshMinutes: REFRESH_MINUTES,
+    nearRefreshMinutes: NEAR_REFRESH_MINUTES,
+    urgentRefreshMinutes: URGENT_REFRESH_MINUTES,
     timeoutSeconds: DETAIL_TIMEOUT_SECONDS,
     maxErrors: MAX_ERRORS,
     scannedRows: currentTradeRows.length,
     resultArchiveDates: recentResults.dates,
-    resultRows: recentResults.rows.filter((row) => Number.isFinite(row.scoreHome) && Number.isFinite(row.scoreAway)).length,
+    currentResultRows,
+    resultRows,
     updated,
+    detailsUpdatedThisRun: updated,
+    resultMerged,
     cachedMerged,
+    detailsStoredTotal: Object.keys(detailsMatches).length,
+    currentEligibleRows: currentTradeRows.filter((row) => (
+      row.urls?.analysis || row.urls?.europeOdds || row.urls?.asianHandicap
+    )).length,
+    currentMatchesWithDetails: currentTradeRows.filter((row) => Boolean(detailsMatches[row.sourceMatchId]?.signal)).length,
     requestedPages,
     errors: [...recentResults.errors, ...errors],
     matches: detailsMatches,
@@ -952,19 +1619,30 @@ const main = async () => {
   const externalPayload = {
     version: 1,
     source: "external-signals",
-    updatedAt: updated ? updatedAt : (external.updatedAt || updatedAt),
+    updatedAt: (updated || resultMerged) ? updatedAt : (external.updatedAt || updatedAt),
     sources: {
       ...(external.sources || {}),
       "500.com:details": {
         url: SOURCE_URL,
+        mode: RESULT_ONLY_MODE ? "result-only-recent-archive" : "full-details",
         updatedAt,
         scannedRows: currentTradeRows.length,
         resultArchiveDates: recentResults.dates,
-        resultRows: recentResults.rows.filter((row) => Number.isFinite(row.scoreHome) && Number.isFinite(row.scoreAway)).length,
+        currentResultRows,
+        resultRows,
         updated,
+        detailsUpdatedThisRun: updated,
+        resultMerged,
         cachedMerged,
+        detailsStoredTotal: Object.keys(detailsMatches).length,
+        currentEligibleRows: currentTradeRows.filter((row) => (
+          row.urls?.analysis || row.urls?.europeOdds || row.urls?.asianHandicap
+        )).length,
+        currentMatchesWithDetails: currentTradeRows.filter((row) => Boolean(detailsMatches[row.sourceMatchId]?.signal)).length,
         requestedPages,
         refreshMinutes: REFRESH_MINUTES,
+        nearRefreshMinutes: NEAR_REFRESH_MINUTES,
+        urgentRefreshMinutes: URGENT_REFRESH_MINUTES,
         timeoutSeconds: DETAIL_TIMEOUT_SECONDS,
         maxErrors: MAX_ERRORS,
         errors: recentResults.errors.length + errors.length,
@@ -981,12 +1659,21 @@ const main = async () => {
     ok: allErrors.length === 0 || hasUsableDetails,
     degraded: allErrors.length > 0 && hasUsableDetails,
     source: "500.com:details",
+    mode: RESULT_ONLY_MODE ? "result-only-recent-archive" : "full-details",
     scannedRows: currentTradeRows.length,
     resultArchiveDates: recentResults.dates,
-    resultRows: recentResults.rows.filter((row) => Number.isFinite(row.scoreHome) && Number.isFinite(row.scoreAway)).length,
+    currentResultRows,
+    resultRows,
     targets: targets.length,
     updated,
+    detailsUpdatedThisRun: updated,
+    resultMerged,
     cachedMerged,
+    detailsStoredTotal: Object.keys(detailsMatches).length,
+    currentEligibleRows: currentTradeRows.filter((row) => (
+      row.urls?.analysis || row.urls?.europeOdds || row.urls?.asianHandicap
+    )).length,
+    currentMatchesWithDetails: currentTradeRows.filter((row) => Boolean(detailsMatches[row.sourceMatchId]?.signal)).length,
     requestedPages,
     warnings: allErrors.length > 0 && hasUsableDetails ? allErrors : [],
     errors: hasUsableDetails ? [] : allErrors,
@@ -994,7 +1681,22 @@ const main = async () => {
   }, null, 2));
 };
 
-main().catch((error) => {
-  console.error(error.message || error);
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error.message || error);
+    process.exitCode = 1;
+  });
+} else {
+  module.exports = {
+    absoluteUrl,
+    buildDetailSignal,
+    buildResultMergeSignal,
+    ensureSignalComponentTiming,
+    mergeSignal,
+    preMatchComponentTiming,
+    resultComponentTiming,
+    resultArchiveDatesForRows,
+    boundedResultArchiveDatesForRows,
+    signalIdentityForMatch,
+  };
+}

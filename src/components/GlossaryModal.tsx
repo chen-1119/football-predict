@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect, useId, useRef } from 'react';
 import { useApp } from '../context/AppContextCore';
 import { bettingGlossary } from '../services/mockData';
 import { X } from 'lucide-react';
+import { focusFirstDialogControl, trapDialogFocus } from '../services/dialogFocus';
 
 interface GlossaryModalProps {
   isOpen: boolean;
@@ -10,6 +11,35 @@ interface GlossaryModalProps {
 
 export const GlossaryModal: React.FC<GlossaryModalProps> = ({ isOpen, onClose }) => {
   const { language } = useApp();
+  const titleId = useId();
+  const subtitleId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    previouslyFocusedRef.current = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    const focusFrame = window.requestAnimationFrame(() => focusFirstDialogControl(dialogRef.current));
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onCloseRef.current();
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      window.removeEventListener('keydown', onKeyDown);
+      previouslyFocusedRef.current?.focus();
+      previouslyFocusedRef.current = null;
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -25,19 +55,36 @@ export const GlossaryModal: React.FC<GlossaryModalProps> = ({ isOpen, onClose })
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+      <div
+        ref={dialogRef}
+        className="modal-content"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        aria-describedby={subtitleId}
+        tabIndex={-1}
+        onKeyDown={(event) => trapDialogFocus(event, dialogRef)}
+        onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: '600px' }}
+      >
         
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid hsl(var(--border))', paddingBottom: '0.75rem' }}>
           <div>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: '700', fontFamily: 'var(--font-title)' }}>
+            <h3 id={titleId} style={{ fontSize: '1.25rem', fontWeight: '700', fontFamily: 'var(--font-title)' }}>
               {t('title')}
             </h3>
-            <p style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', marginTop: '0.25rem' }}>
+            <p id={subtitleId} style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))', marginTop: '0.25rem' }}>
               {t('subtitle')}
             </p>
           </div>
-          <button onClick={onClose} className="btn btn-secondary" style={{ padding: '0.35rem', borderRadius: '50%' }}>
+          <button
+            type="button"
+            aria-label={t('close')}
+            onClick={onClose}
+            className="btn btn-secondary"
+            style={{ padding: '0.35rem', borderRadius: '50%' }}
+          >
             <X size={18} />
           </button>
         </div>
@@ -89,7 +136,7 @@ export const GlossaryModal: React.FC<GlossaryModalProps> = ({ isOpen, onClose })
 
         {/* Footer actions */}
         <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid hsl(var(--border))', paddingTop: '1rem' }}>
-          <button onClick={onClose} className="btn btn-primary">
+          <button type="button" onClick={onClose} className="btn btn-primary">
             {t('close')}
           </button>
         </div>

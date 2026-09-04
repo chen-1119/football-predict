@@ -1,0 +1,25 @@
+{
+  "name": "football-sporttery-collector",
+  "runtime": "Node.js20.15",
+  "handler": "index.handler",
+  "memoryMb": 256,
+  "timeoutSeconds": 60,
+  "publicNetworkAccess": true,
+  "timer": {
+    "name": "sporttery-every-5-minutes",
+    "rule": "@every 5m",
+    "enabled": true
+  },
+  "nonSecretEnvironment": {
+    "SPORTTERY_COLLECTOR_KEY_ID": "football-huawei-functiongraph-collector-20260903",
+    "SPORTTERY_COLLECTOR_TRANSPORT": "huawei-functiongraph-direct",
+    "SPORTTERY_COLLECTOR_CYCLE_PREFIX": "huawei-functiongraph-sporttery",
+    "SPORTTERY_COLLECTOR_REQUEST_TIMEOUT_MS": "20000",
+    "FOOTBALL_PRODUCTION_BASE_URL": "https://134.175.132.183"
+  },
+  "requiredSecretEnvironment": [
+    "SPORTTERY_COLLECTOR_PRIVATE_KEY_PKCS8_BASE64",
+    "SPORTTERY_COLLECTOR_KEY_FINGERPRINT",
+    "FOOTBALL_PRODUCTION_ADMIN_TOKEN"
+  ]
+}

@@ -25,6 +25,8 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           SYNC_WORKER_GITHUB_TOKEN: ${{ secrets.SYNC_WORKER_GITHUB_TOKEN }}
+          SYNC_WORKER_MANUAL_TOKEN: ${{ secrets.SYNC_WORKER_MANUAL_TOKEN }}
+          SYNC_WORKER_SPORTTERY_COLLECTOR_PRIVATE_KEY_PKCS8: ${{ secrets.SYNC_WORKER_SPORTTERY_COLLECTOR_PRIVATE_KEY_PKCS8 }}
         run: |
           missing=0
           test -n "$CLOUDFLARE_API_TOKEN" || (echo "Missing CLOUDFLARE_API_TOKEN"; missing=1)
@@ -35,6 +37,16 @@ jobs:
             echo "Cloudflare Worker deploy skipped. Add the secrets above to enable CI deploy."
           else
             echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -n "$SYNC_WORKER_MANUAL_TOKEN" ] && [ -n "$SYNC_WORKER_SPORTTERY_COLLECTOR_PRIVATE_KEY_PKCS8" ]; then
+            echo "collector_ready=true" >> "$GITHUB_OUTPUT"
+          elif [ -n "$SYNC_WORKER_MANUAL_TOKEN" ] || [ -n "$SYNC_WORKER_SPORTTERY_COLLECTOR_PRIVATE_KEY_PKCS8" ]; then
+            echo "collector_ready=false" >> "$GITHUB_OUTPUT"
+            echo "Independent Sporttery collector secret pair is incomplete."
+            exit 1
+          else
+            echo "collector_ready=false" >> "$GITHUB_OUTPUT"
+            echo "Independent Sporttery collector remains disabled until the pull token and signing key are configured."
           fi
 
       - name: Deploy Worker
@@ -51,8 +63,12 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           SYNC_WORKER_GITHUB_TOKEN: ${{ secrets.SYNC_WORKER_GITHUB_TOKEN }}
           SYNC_WORKER_MANUAL_TOKEN: ${{ secrets.SYNC_WORKER_MANUAL_TOKEN }}
+          SYNC_WORKER_SPORTTERY_COLLECTOR_PRIVATE_KEY_PKCS8: ${{ secrets.SYNC_WORKER_SPORTTERY_COLLECTOR_PRIVATE_KEY_PKCS8 }}
         run: |
           printf '%s' "$SYNC_WORKER_GITHUB_TOKEN" | npx wrangler secret put GITHUB_TOKEN --config cloudflare/sync-trigger/wrangler.jsonc
           if [ -n "$SYNC_WORKER_MANUAL_TOKEN" ]; then
             printf '%s' "$SYNC_WORKER_MANUAL_TOKEN" | npx wrangler secret put MANUAL_TRIGGER_TOKEN --config cloudflare/sync-trigger/wrangler.jsonc
+          fi
+          if [ "${{ steps.secrets.outputs.collector_ready }}" = "true" ]; then
+            printf '%s' "$SYNC_WORKER_SPORTTERY_COLLECTOR_PRIVATE_KEY_PKCS8" | npx wrangler secret put SPORTTERY_COLLECTOR_PRIVATE_KEY_PKCS8 --config cloudflare/sync-trigger/wrangler.jsonc
           fi

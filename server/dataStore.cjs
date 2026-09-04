@@ -3,6 +3,16 @@ const fsp = require("node:fs/promises");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const readline = require("node:readline");
+const {
+  reconcileMatchLifecycle,
+  resolveMatchLifecycle
+} = require("../src/services/matchLifecycle.cjs");
+const {
+  withOddsObservationTrail,
+} = require("../src/services/oddsObservationTrail.cjs");
+const {
+  attestImmutableAnalysisReferenceDecision,
+} = require("../src/services/immutableAnalysisReferenceDecision.cjs");
 
 const STATE_FILE = "state.json";
 const CURRENT_MATCHES_FILE = "current-matches.json";
@@ -28,6 +38,16 @@ const STORE_FULL_MATCH_SNAPSHOTS = process.env.DATASTORE_STORE_FULL_MATCH_SNAPSH
 const ODDS_HISTORY_EVENT_RETENTION_DAYS = Math.max(1, Number(process.env.DATASTORE_ODDS_HISTORY_RETENTION_DAYS || 30));
 const ODDS_HISTORY_EVENT_MAX_ROWS = Math.max(1000, Number(process.env.DATASTORE_ODDS_HISTORY_RECENT_ROWS || 12000));
 const STATE_SIGNATURE_MAX_KEYS = Math.max(1000, Number(process.env.DATASTORE_STATE_SIGNATURE_MAX_KEYS || 60000));
+const DATASTORE_EXACT_STATUS_CACHE_MS = Math.max(
+  1000,
+  Number(process.env.DATASTORE_EXACT_STATUS_CACHE_MS || 60_000) || 60_000
+);
+const DATASTORE_EXACT_STATUS_CACHE_MAX_FILES = Math.max(
+  8,
+  Number(process.env.DATASTORE_EXACT_STATUS_CACHE_MAX_FILES || 32) || 32
+);
+const exactRowCountCache = new Map();
+const statusStateCache = new Map();
 
 const nowIso = () => new Date().toISOString();
 
@@ -93,6 +113,28 @@ const readState = async (storeDir) => {
   return state && state.version ? { ...createState(), ...state } : createState();
 };
 
+const readStateForStatus = async (storeDir) => {
+  await ensureDataStore(storeDir);
+  const filePath = statePathFor(storeDir);
+  const stat = await fsp.stat(filePath).catch(() => null);
+  const signature = stat ? `${stat.size}:${stat.mtimeMs}` : "missing";
+  const cached = statusStateCache.get(filePath);
+  if (cached?.signature === signature) {
+    return { state: cached.state, cached: true };
+  }
+  const fullState = await readState(storeDir);
+  const state = {
+    version: fullState.version || 1,
+    updatedAt: fullState.updatedAt || null,
+    counts: fullState.counts || createState().counts
+  };
+  statusStateCache.set(filePath, { signature, state });
+  while (statusStateCache.size > 8) {
+    statusStateCache.delete(statusStateCache.keys().next().value);
+  }
+  return { state, cached: false };
+};
+
 const writeState = async (storeDir, state) => {
   await ensureDataStore(storeDir);
   const nextState = {
@@ -132,6 +174,41 @@ const countLines = async (filePath) => new Promise((resolve) => {
   stream.on("end", () => resolve(hasBytes && lastByte !== 10 ? rows + 1 : rows));
   stream.on("error", () => resolve(0));
 });
+
+const pruneExactRowCountCache = () => {
+  if (exactRowCountCache.size <= DATASTORE_EXACT_STATUS_CACHE_MAX_FILES) return;
+  const oldest = Array.from(exactRowCountCache.entries())
+    .sort((a, b) => a[1].cachedAtMs - b[1].cachedAtMs)
+    .slice(0, exactRowCountCache.size - DATASTORE_EXACT_STATUS_CACHE_MAX_FILES);
+  for (const [key] of oldest) exactRowCountCache.delete(key);
+};
+
+const readExactRowsCached = async (filePath, stat, loader) => {
+  const signature = `${stat.size}:${stat.mtimeMs}`;
+  const cached = exactRowCountCache.get(filePath);
+  if (
+    cached
+    && cached.signature === signature
+    && Date.now() - cached.cachedAtMs <= DATASTORE_EXACT_STATUS_CACHE_MS
+  ) {
+    return { rows: cached.rows, cached: true };
+  }
+  const rows = await loader();
+  exactRowCountCache.set(filePath, {
+    signature,
+    rows,
+    cachedAtMs: Date.now()
+  });
+  pruneExactRowCountCache();
+  return { rows, cached: false };
+};
+
+const materializedRowCount = async (filePath) => {
+  const parsed = await readJsonFile(filePath, null);
+  if (Array.isArray(parsed?.rows)) return parsed.rows.length;
+  if (parsed?.matches && typeof parsed.matches === "object") return Object.keys(parsed.matches).length;
+  return 0;
+};
 
 const readJsonFile = async (filePath, fallback = null) => {
   try {
@@ -173,9 +250,10 @@ const readDataStoreRows = async (storeDir, table, options = {}) => {
   }
 };
 
-const getDataStoreStatus = async (storeDir) => {
-  await ensureDataStore(storeDir);
-  const state = await readState(storeDir);
+const getDataStoreStatus = async (storeDir, options = {}) => {
+  const exact = options.exact === true;
+  const statusState = await readStateForStatus(storeDir);
+  const state = statusState.state;
   const stateCounts = state.counts || createState().counts;
   const dbDir = dbDirFor(storeDir);
   const files = {};
@@ -185,37 +263,63 @@ const getDataStoreStatus = async (storeDir) => {
     const storedRows = countKey ? stateCounts[countKey] : null;
     try {
       const stat = await fsp.stat(filePath);
-      const actualRows = await countLines(filePath);
+      const exactRows = exact
+        ? await readExactRowsCached(filePath, stat, () => countLines(filePath))
+        : null;
       files[table] = {
         exists: true,
         bytes: stat.size,
-        rows: actualRows,
+        rows: exactRows?.rows ?? (Number.isFinite(storedRows) ? storedRows : null),
         stateRows: Number.isFinite(storedRows) ? storedRows : null,
+        rowCountSource: exactRows
+          ? (exactRows.cached ? "exact-cache" : "exact-scan")
+          : (Number.isFinite(storedRows) ? "state" : "unavailable"),
         updatedAt: stat.mtime.toISOString()
       };
     } catch {
-      files[table] = { exists: false, bytes: 0, rows: 0, updatedAt: null };
+      files[table] = {
+        exists: false,
+        bytes: 0,
+        rows: 0,
+        stateRows: Number.isFinite(storedRows) ? storedRows : null,
+        rowCountSource: "missing",
+        updatedAt: null
+      };
     }
   }
   for (const fileName of [CURRENT_MATCHES_FILE, HISTORY_LIST_FILE, MATCH_INDEX_FILE]) {
     const filePath = materializedPathFor(storeDir, fileName);
     try {
       const stat = await fsp.stat(filePath);
-      const parsed = await readJsonFile(filePath, null);
+      const exactRows = exact
+        ? await readExactRowsCached(filePath, stat, () => materializedRowCount(filePath))
+        : null;
       files[fileName] = {
         exists: true,
         bytes: stat.size,
-        rows: Array.isArray(parsed?.rows) ? parsed.rows.length : parsed?.matches ? Object.keys(parsed.matches).length : 0,
+        rows: exactRows?.rows ?? null,
+        rowCountSource: exactRows
+          ? (exactRows.cached ? "exact-cache" : "exact-scan")
+          : "not-counted",
         updatedAt: stat.mtime.toISOString()
       };
     } catch {
-      files[fileName] = { exists: false, bytes: 0, rows: 0, updatedAt: null };
+      files[fileName] = {
+        exists: false,
+        bytes: 0,
+        rows: 0,
+        rowCountSource: "missing",
+        updatedAt: null
+      };
     }
   }
   return {
     ok: true,
     version: 1,
     checkedAt: nowIso(),
+    countMode: exact ? "exact" : "state",
+    exactCacheMs: exact ? DATASTORE_EXACT_STATUS_CACHE_MS : null,
+    stateCacheHit: statusState.cached,
     storeDir,
     dbDir,
     stateUpdatedAt: state.updatedAt || null,
@@ -452,7 +556,8 @@ const externalSummaryFor = (match) => {
     hasBookmakerHhad: Boolean(signals.bookmakerOdds?.hhad),
     hasApiFootballOdds: Boolean(signals.bookmakerOdds?.apiFootball),
     hasInjuries: Boolean(signals.injuries),
-    hasLineups: Boolean(signals.lineups),
+    hasLineups: Boolean(signals.confirmedLineup || signals.lineups),
+    hasProjectedRoster: Boolean(signals.projectedRoster),
     handicapLine: signals.handicapLine ?? signals.bookmakerOdds?.hhad?.handicapLine ?? null
   };
 };
@@ -583,8 +688,87 @@ const compactPredictionForList = (prediction) => {
     resultStatus: prediction.resultStatus,
     recommendationAction: prediction.recommendationAction,
     recommendationTier: prediction.recommendationTier,
+    liveRecommendationAction: prediction.liveRecommendationAction,
+    liveRecommendationTier: prediction.liveRecommendationTier,
+    liveRecommendation: prediction.liveRecommendation,
+    livePublicationEvidence: prediction.livePublicationEvidence,
     valueLabel: prediction.valueLabel,
     riskTags: Array.isArray(prediction.riskTags) ? prediction.riskTags.slice(0, 3) : []
+  };
+};
+
+const compactPredictionMetaForList = (meta, match) => {
+  if (!meta || typeof meta !== "object") return meta || null;
+  return {
+    policyVersion: meta.policyVersion,
+    promptVersion: meta.promptVersion,
+    strategyVersion: meta.strategyVersion,
+    trainingVersion: meta.trainingVersion,
+    generatedAt: meta.generatedAt,
+    updatedAt: meta.updatedAt,
+    lockedAt: meta.lockedAt,
+    lockedReason: meta.lockedReason,
+    cutoffTime: meta.cutoffTime,
+    dualMarketDecision: meta.dualMarketDecision,
+    immutableAnalysisReferenceDecision: attestImmutableAnalysisReferenceDecision(
+      meta.immutableAnalysisReferenceDecision,
+      match,
+    )
+  };
+};
+
+const compactArchivedPreMatchPredictionForList = (archive, match) => {
+  if (!archive || typeof archive !== "object" || !match) return null;
+  const prediction = archive.prediction;
+  const marketEvidenceScope = String(archive.marketEvidenceScope || "result-pool").trim();
+  const archivedPool = String(prediction?.oddsPoolCode || "").toUpperCase();
+  const modelOnlyReference = marketEvidenceScope === "model-only-reference"
+    && archivedPool === "HAD"
+    && prediction?.recommendationAction === "reference"
+    && Number(prediction?.odds) === 0;
+  const sourceMatchId = String(match.sourceMatchId || match.id || "").replace(/^sporttery_/, "");
+  const archivedSourceMatchId = String(archive.sourceMatchId || "").replace(/^sporttery_/, "");
+  const kickoffMs = Date.parse(match.kickoffTime || "");
+  const archiveDeadlineMs = Math.min(...[
+    Date.parse(archive.cutoffTime || ""),
+    Date.parse(match.predictionMeta?.cutoffTime || ""),
+    Date.parse(match.buyEndTime || ""),
+    kickoffMs,
+  ].filter(Number.isFinite));
+  const eventMs = Date.parse(match.eventVersion || match.kickoffTime || "");
+  const archivedEventMs = Date.parse(archive.eventVersion || archive.kickoffTime || "");
+  const capturedMs = Date.parse(archive.capturedAt || "");
+  if (
+    archive.version !== "archived-pre-match-prediction-v1"
+    || archive.source !== "immutable-pre-match-prediction-snapshot"
+    || !sourceMatchId
+    || sourceMatchId !== archivedSourceMatchId
+    || !Number.isFinite(kickoffMs)
+    || !Number.isFinite(eventMs)
+    || eventMs !== archivedEventMs
+    || !Number.isFinite(capturedMs)
+    || capturedMs >= kickoffMs
+    || !Number.isFinite(archiveDeadlineMs)
+    || capturedMs > archiveDeadlineMs
+    || prediction?.marketType !== "BEST"
+    || !["result-pool", "model-only-reference"].includes(marketEvidenceScope)
+    || !["HAD", "HHAD"].includes(archivedPool)
+    || !["1", "X", "2"].includes(String(prediction?.tipCode || "").toUpperCase())
+    || (marketEvidenceScope === "model-only-reference" && !modelOnlyReference)
+  ) return null;
+  return {
+    version: archive.version,
+    source: archive.source,
+    sourceMatchId,
+    matchId: archive.matchId || match.id || null,
+    kickoffTime: archive.kickoffTime || match.kickoffTime,
+    eventVersion: archive.eventVersion || match.eventVersion || match.kickoffTime,
+    capturedAt: archive.capturedAt,
+    phase: archive.phase || null,
+    signature: archive.signature || null,
+    cutoffTime: archive.cutoffTime || null,
+    marketEvidenceScope,
+    prediction: compactPredictionForList(prediction),
   };
 };
 
@@ -603,7 +787,25 @@ const compactPredictionReviewRowForList = (row) => {
     trustScore: row.trustScore,
     recommendationAction: row.recommendationAction,
     recommendationTier: row.recommendationTier,
+    liveRecommendationAction: row.liveRecommendationAction,
+    liveRecommendationTier: row.liveRecommendationTier,
+    liveRecommendation: row.liveRecommendation,
+    livePublicationEvidence: row.livePublicationEvidence,
+    performanceTrack: row.performanceTrack,
     reviewRole: row.reviewRole
+  };
+};
+
+const compactReviewSettlementForList = (settlement) => {
+  if (!settlement || typeof settlement !== "object") return null;
+  return {
+    resultRevision: Number.isSafeInteger(Number(settlement.resultRevision))
+      && Number(settlement.resultRevision) > 0
+      ? Number(settlement.resultRevision)
+      : null,
+    resultObservedAt: settlement.resultObservedAt || null,
+    settledAt: settlement.settledAt || null,
+    reviewGeneratedAt: settlement.reviewGeneratedAt || null,
   };
 };
 
@@ -618,6 +820,7 @@ const compactPostMatchReviewForList = (review) => {
     teams: review.teams,
     finalScore: review.finalScore,
     actual: review.actual,
+    settlement: compactReviewSettlementForList(review.settlement),
     predictionReview: {
       settled: review.predictionReview?.settled || 0,
       won: review.predictionReview?.won || 0,
@@ -628,7 +831,17 @@ const compactPostMatchReviewForList = (review) => {
       allWon: review.predictionReview?.allWon || 0,
       referenceSettled: review.predictionReview?.referenceSettled || 0,
       referenceWon: review.predictionReview?.referenceWon || 0,
+      liveSettled: review.predictionReview?.liveSettled || 0,
+      liveWon: review.predictionReview?.liveWon || 0,
+      liveHitRate: review.predictionReview?.liveHitRate ?? null,
       bestStatus: review.predictionReview?.bestStatus || null,
+      formalBestStatus: review.predictionReview?.formalBestStatus
+        || (review.predictionReview?.bestRole === "main" ? review.predictionReview?.bestStatus : null),
+      liveBestStatus: review.predictionReview?.liveBestStatus || null,
+      referenceBestStatus: review.predictionReview?.referenceBestStatus || null,
+      archivedBestStatus: review.predictionReview?.archivedBestStatus || null,
+      bestRole: review.predictionReview?.bestRole || null,
+      bestTrack: review.predictionReview?.bestTrack || null,
       oneXTwoStatus: review.predictionReview?.oneXTwoStatus || null,
       handicapHit: Boolean(review.predictionReview?.handicapHit),
       missedHandicapLane: Boolean(review.predictionReview?.missedHandicapLane),
@@ -644,6 +857,9 @@ const compactPostMatchReviewForList = (review) => {
 const compactMatchForHistoryList = (match) => ({
   id: match.id,
   sourceMatchId: match.sourceMatchId,
+  source: match.source,
+  sourceMethod: match.sourceMethod,
+  sourceUrl: match.sourceUrl,
   homeTeamId: match.homeTeamId,
   awayTeamId: match.awayTeamId,
   leagueId: match.leagueId,
@@ -652,7 +868,19 @@ const compactMatchForHistoryList = (match) => ({
   kickoffDate: match.kickoffDate,
   businessDate: match.businessDate,
   matchDate: match.matchDate,
+  buyEndTime: match.buyEndTime,
   status: match.status,
+  sourceStatus: match.sourceStatus,
+  effectiveStatus: match.effectiveStatus || match.status,
+  statusReason: match.statusReason,
+  resultDisposition: match.resultDisposition,
+  voidReason: match.voidReason,
+  voidSource: match.voidSource,
+  voidObservedAt: match.voidObservedAt,
+  eventVersion: match.eventVersion,
+  resultSource: match.resultSource,
+  resultUpdatedAt: match.resultUpdatedAt,
+  resultProvenance: match.resultProvenance || null,
   scoreHome: match.scoreHome,
   scoreAway: match.scoreAway,
   projectedScoreHome: match.projectedScoreHome,
@@ -678,8 +906,27 @@ const compactMatchForHistoryList = (match) => ({
   countryFlag: match.countryFlag,
   matchNo: match.matchNo,
   odds: match.odds,
+  oddsSource: match.oddsSource,
+  oddsPoolCode: match.oddsPoolCode,
+  oddsSourceMethod: match.oddsSourceMethod,
+  oddsUpdatedAt: match.oddsUpdatedAt,
+  oddsObservedAt: match.oddsObservedAt,
+  oddsReceivedAt: match.oddsReceivedAt,
+  oddsSourceUrl: match.oddsSourceUrl,
   handicapOdds: match.handicapOdds,
   handicapLine: match.handicapLine,
+  handicapOddsSource: match.handicapOddsSource,
+  handicapOddsPoolCode: match.handicapOddsPoolCode,
+  handicapOddsSourceMethod: match.handicapOddsSourceMethod,
+  handicapOddsUpdatedAt: match.handicapOddsUpdatedAt,
+  handicapOddsObservedAt: match.handicapOddsObservedAt,
+  handicapOddsReceivedAt: match.handicapOddsReceivedAt,
+  handicapOddsSourceUrl: match.handicapOddsSourceUrl,
+  predictionMeta: compactPredictionMetaForList(match.predictionMeta, match),
+  archivedPreMatchPrediction: compactArchivedPreMatchPredictionForList(
+    match.archivedPreMatchPrediction,
+    match
+  ),
   predictions: Array.isArray(match.predictions)
     ? match.predictions
       .filter((prediction) => prediction.marketType === "BEST" || prediction.marketType === "1X2")
@@ -703,6 +950,10 @@ const matchAliases = (match) => Array.from(new Set([
   match?.id,
   match?.sourceMatchId
 ].filter(Boolean).map(String)));
+
+const materializedMatchIdentity = (match) => String(
+  match?.sourceMatchId || match?.id || ""
+).replace(/^sporttery[_:-]/i, "");
 
 const writeMaterializedMatches = async (storeDir, current, history, source) => {
   const updatedAt = nowIso();
@@ -744,11 +995,27 @@ const writeMaterializedMatches = async (storeDir, current, history, source) => {
     }
   };
 
-  for (const match of Array.isArray(history) ? history : []) {
-    await writeOne(match, "history");
-  }
-  for (const match of Array.isArray(current) ? current : []) {
-    await writeOne(match, "current");
+  const materialized = new Map();
+  const stage = (match, dataset) => {
+    const key = materializedMatchIdentity(match);
+    if (!key) return;
+    const existing = materialized.get(key);
+    const resolved = existing
+      ? reconcileMatchLifecycle(existing.match, match)
+      : resolveMatchLifecycle(match);
+    materialized.set(key, {
+      match: resolved,
+      dataset: resolved.status === "FINISHED" ? "history" : (existing?.dataset || dataset)
+    });
+  };
+
+  // Start with the richer current row, then allow only a verified same-event
+  // terminal history row to add the result. This prevents the old current-last
+  // write order from regressing an already completed match to SCHEDULED.
+  for (const match of Array.isArray(current) ? current : []) stage(match, "current");
+  for (const match of Array.isArray(history) ? history : []) stage(match, "history");
+  for (const entry of materialized.values()) {
+    await writeOne(entry.match, entry.dataset);
   }
 
   await Promise.all([
@@ -772,6 +1039,18 @@ const writeMaterializedMatches = async (storeDir, current, history, source) => {
     historyRows: index.historyCount,
     indexedMatches: Object.keys(index.matches).length
   };
+};
+
+const sourceIncludesFiveHundred = (value) => String(value || "")
+  .split("+")
+  .map((item) => item.trim())
+  .some((item) => /^500\.com(?::|$)/i.test(item));
+
+const isFiveHundredOddsPiece = (piece, signal) => {
+  const pieceSource = String(piece?.source || "").trim();
+  return pieceSource
+    ? sourceIncludesFiveHundred(pieceSource)
+    : sourceIncludesFiveHundred(signal?.source);
 };
 
 const buildOddsSnapshots = (match, source, dataset = "current") => {
@@ -801,9 +1080,11 @@ const buildOddsSnapshots = (match, source, dataset = "current") => {
   const add = (pool, bookmaker, handicap, odds, updatedAt, origin) => {
     const compactOdds = pickOdds(odds);
     if (!compactOdds) return;
-    const payload = { pool, bookmaker, handicap, odds: compactOdds, updatedAt, origin };
+    const payload = { pool, bookmaker, handicap, odds: compactOdds };
+    const signature = hashPayload(payload);
+    const matchKey = match.sourceMatchId || match.id || "unknown-match";
     rows.push({
-      id: crypto.randomUUID(),
+      id: `odds-state-${hashPayload({ matchKey, ...payload })}`,
       ...common,
       pool,
       bookmaker,
@@ -813,7 +1094,7 @@ const buildOddsSnapshots = (match, source, dataset = "current") => {
       odds2: compactOdds.odds2,
       oddsUpdatedAt: updatedAt || null,
       origin: origin || null,
-      signature: hashPayload(payload)
+      signature
     });
   };
 
@@ -827,24 +1108,29 @@ const buildOddsSnapshots = (match, source, dataset = "current") => {
     match.handicapOddsSource || "sporttery:HHAD"
   );
 
-  const bookmakerOdds = match.externalSignals?.bookmakerOdds || {};
-  add("HAD", "500.com", 0, bookmakerOdds.had, match.externalSignals?.updatedAt, "500.com:jczq");
+  const externalSignals = match.externalSignals || {};
+  const bookmakerOdds = externalSignals.bookmakerOdds || {};
+  if (isFiveHundredOddsPiece(bookmakerOdds.had, externalSignals)) {
+    add("HAD", "500.com", 0, bookmakerOdds.had, externalSignals.updatedAt, bookmakerOdds.had?.source || "500.com:jczq");
+  }
   add(
     "HAD",
     bookmakerOdds.apiFootball?.bookmaker || "api-football",
     0,
     bookmakerOdds.apiFootball?.had,
-    bookmakerOdds.apiFootball?.updatedAt || match.externalSignals?.updatedAt,
+    bookmakerOdds.apiFootball?.updatedAt || externalSignals.updatedAt,
     "api-football:odds"
   );
-  add(
-    "HHAD",
-    "500.com",
-    bookmakerOdds.hhad?.handicapLine ?? match.externalSignals?.handicapLine ?? null,
-    bookmakerOdds.hhad,
-    match.externalSignals?.updatedAt,
-    "500.com:jczq"
-  );
+  if (isFiveHundredOddsPiece(bookmakerOdds.hhad, externalSignals)) {
+    add(
+      "HHAD",
+      "500.com",
+      bookmakerOdds.hhad?.handicapLine ?? externalSignals.handicapLine ?? null,
+      bookmakerOdds.hhad,
+      externalSignals.updatedAt,
+      bookmakerOdds.hhad?.source || "500.com:jczq"
+    );
+  }
   return rows;
 };
 
@@ -872,23 +1158,24 @@ const buildOddsHistorySnapshot = (row, source) => {
   const bookmaker = bookmakerForOddsHistory(row);
   const handicap = row.handicapLine ?? row.handicap ?? (pool === "HAD" ? 0 : null);
   const origin = row.oddsSource || row.origin || `${bookmaker}:${pool}`;
-  const payload = {
+  const signaturePayload = {
     pool,
     bookmaker,
     handicap,
-    odds: compactOdds,
-    capturedAt: row.capturedAt || null,
-    updatedAt: row.oddsUpdatedAt || row.updatedAt || null,
-    origin
+    odds: compactOdds
   };
-  return {
-    id: crypto.randomUUID(),
+  const signature = hashPayload(signaturePayload);
+  const sourceMatchId = row.sourceMatchId || null;
+  const matchId = matchIdForOddsHistory(row);
+  const matchKey = sourceMatchId || matchId || "unknown-match";
+  return withOddsObservationTrail({
+    id: `odds-state-${hashPayload({ matchKey, ...signaturePayload })}`,
     at: row.capturedAt || nowIso(),
     persistedAt: nowIso(),
     source,
     dataset: "odds-history",
-    matchId: matchIdForOddsHistory(row),
-    sourceMatchId: row.sourceMatchId || null,
+    matchId,
+    sourceMatchId,
     matchNo: row.matchNo || null,
     businessDate: row.businessDate || row.matchDate || null,
     kickoffTime: row.kickoffTime || null,
@@ -913,25 +1200,29 @@ const buildOddsHistorySnapshot = (row, source) => {
     origin,
     sourceMethod: row.oddsSourceMethod || null,
     sourceUrl: row.oddsSourceUrl || null,
-    signature: hashPayload(payload)
-  };
+    signature,
+    oddsObservedAt: row.oddsObservedAt || null,
+    oddsReceivedAt: row.oddsReceivedAt || null,
+    lastOddsReceivedAt: row.lastOddsReceivedAt || null,
+    sourceCycleId: row.sourceCycleId || null,
+    lastSourceCycleId: row.lastSourceCycleId || null,
+    marketProvenance: row.marketProvenance || row.oddsMarketProvenance || null,
+    observationTrail: row.observationTrail || []
+  });
 };
 
 const oddsKeyFor = (oddsRow) => {
-  const matchKey = oddsRow.matchId || oddsRow.sourceMatchId || "unknown-match";
+  const matchKey = oddsRow.sourceMatchId || oddsRow.matchId || "unknown-match";
   return `${matchKey}:${oddsRow.bookmaker || "unknown"}:${oddsRow.pool || "unknown"}:${oddsRow.handicap ?? 0}`;
 };
 
-const persistOddsSnapshotRow = async (storeDir, state, oddsRow, mode = "latest") => {
+const persistOddsSnapshotRow = async (storeDir, state, oddsRow, _mode = "latest") => {
   const oddsKey = oddsKeyFor(oddsRow);
-  const stateKey = mode === "event"
-    ? `${oddsKey}:${oddsRow.at || ""}:${oddsRow.signature}`
-    : oddsKey;
-  if (mode === "event" ? state.latestOddsSignatures[stateKey] : state.latestOddsSignatures[stateKey] === oddsRow.signature) {
-    return false;
-  }
+  const stateKey = `${oddsKey}:${oddsRow.signature}`;
+  if (state.latestOddsSignatures[stateKey]) return false;
   await appendRow(storeDir, TABLES.oddsSnapshots, oddsRow);
-  state.latestOddsSignatures[stateKey] = mode === "event" ? nowIso() : oddsRow.signature;
+  state.latestOddsSignatures[stateKey] = nowIso();
+  state.latestOddsSignatures[oddsKey] = oddsRow.signature;
   state.counts.oddsSnapshots += 1;
   return true;
 };
@@ -1226,6 +1517,7 @@ const getMatchTimeline = async (storeDir, id, limit = 120) => {
 
 module.exports = {
   TABLES,
+  buildOddsSnapshots,
   ensureDataStore,
   getDataStoreStatus,
   getHistoryMatchesForList,

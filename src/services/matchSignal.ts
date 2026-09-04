@@ -14,7 +14,7 @@ export interface MatchSignal {
 }
 
 const labels: Record<MatchSignalCategory, MultiLangString> = {
-  steady: { zh: '高可信候选', en: 'High confidence' },
+  steady: { zh: '证据较完整', en: 'Evidence aligned' },
   lean: { zh: '主推候选', en: 'Model lean' },
   value: { zh: '有冷门变量', en: 'Upset variables' },
   watch: { zh: '待开售', en: 'Pending sale' },
@@ -206,7 +206,7 @@ export function getMatchSignal(match: Match): MatchSignal {
       category: 'watch',
       label: labels.watch,
       note: {
-        zh: '当前推荐强度不足，等待下一轮赔率快照确认。',
+        zh: '当前证据评分不足，等待下一轮赔率快照确认。',
         en: 'Pick strength is thin; wait for the next odds snapshot.'
       },
       tone: 'warning',
@@ -295,7 +295,7 @@ export function getMatchSignal(match: Match): MatchSignal {
       label: labels.lean,
       note: {
         zh: probabilityTooLow
-          ? '已有主方向，但推荐强度未到稳胆标准，不包装成稳胆。'
+          ? '已有主方向，但证据评分与风险条件未达正式门槛。'
           : '已有主方向，但第一方向与第二方向差距偏小，需要保留防平或防冷。',
         en: probabilityTooLow
           ? 'A lean is published, but final probability is below the steady threshold.'
@@ -320,8 +320,8 @@ export function getMatchSignal(match: Match): MatchSignal {
       category: 'steady',
       label: labels.steady,
       note: {
-        zh: '官方赔率、综合判断、推荐强度和风险提示相对一致，可列入高信心候选。',
-        en: 'Official odds, main read, pick strength, and risk notes are aligned.'
+        zh: '官方赔率、综合判断、证据评分和风险提示相对一致，可列入正式候选。',
+        en: 'Official odds, main read, evidence score, and risk notes are aligned for a formal candidate.'
       },
       tone: 'success',
       trustScore,

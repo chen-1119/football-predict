@@ -118,7 +118,7 @@ export function buildPreMatchRisk(match: Match): PreMatchRiskSummary {
   const bestAny = match.predictions.find((prediction) => prediction.marketType === 'BEST');
   const trustSource = best || bestAny;
   const connectedSignalCount = [
-    externalSignals?.lineups,
+    externalSignals?.confirmedLineup || externalSignals?.projectedRoster || externalSignals?.lineups,
     externalSignals?.injuries,
     externalSignals?.referee,
     externalSignals?.expectedGoals
@@ -145,8 +145,8 @@ export function buildPreMatchRisk(match: Match): PreMatchRiskSummary {
 
   if (trustSource?.trustScore && trustSource.trustScore < 45) {
     addReason('low-trust', 14, {
-      zh: `推荐强度 ${trustSource.trustScore}% 偏低`,
-      en: `pick strength ${trustSource.trustScore}% is low`
+      zh: `证据评分 ${trustSource.trustScore}/100 偏低`,
+      en: `evidence score ${trustSource.trustScore}/100 is low`
     });
   }
 

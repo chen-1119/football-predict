@@ -141,7 +141,7 @@ export const featuredMatch: FeaturedMatchData = {
   ],
   odds: [
     { label: zhEn('官方赔率', 'Official odds'), value: '开售后更新' },
-    { label: zhEn('推荐强度', 'Pick strength'), value: '赛前锁定' },
+    { label: zhEn('证据评分', 'Evidence score'), value: '赛前锁定' },
     { label: zhEn('临场复核', 'Late check'), value: '开赛前' }
   ]
 };

@@ -1,0 +1,5 @@
+Cmnd_Alias FOOTBALL_RELEASE = /usr/local/sbin/football-release --check, /usr/local/sbin/football-release --recover, /usr/local/sbin/football-release ^[0-9a-f]{64}$
+Cmnd_Alias FOOTBALL_RELAY = /usr/local/sbin/football-relay-promote --check, /usr/local/sbin/football-relay-promote ^[0-9a-f]{64}[[:space:]][0-9]{8}T[0-9]{9}Z$
+Cmnd_Alias FOOTBALL_QA_ACCESS = /usr/local/sbin/football-access-code-qa list, /usr/local/sbin/football-access-code-qa ^create[[:space:]]codex-qa-[a-z0-9][a-z0-9-]{0,39}$, /usr/local/sbin/football-access-code-qa ^revoke[[:space:]][0-9a-f-]{36}$
+
+ubuntu ALL=(root) NOPASSWD: NOSETENV: FOOTBALL_RELEASE, FOOTBALL_RELAY, FOOTBALL_QA_ACCESS

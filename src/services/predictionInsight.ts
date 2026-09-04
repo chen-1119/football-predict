@@ -74,8 +74,9 @@ const dataCoverage = {
   en: 'The pre-match signal layer covers injuries, projected XI, weather, referee profile, xG/xGA, and external odds as verified risk modifiers.'
 };
 
-const multiText = (value: MultiLangString | undefined | null, language: 'zh' | 'en') => {
+const multiText = (value: MultiLangString | string | undefined | null, language: 'zh' | 'en') => {
   if (!value) return '';
+  if (typeof value === 'string') return value;
   return value[language] || value.zh || value.en || '';
 };
 
@@ -92,13 +93,20 @@ const externalNames = (
 const lineupsSignalText = (match: Match): MultiLangString => {
   const signals = match.externalSignals;
   const injuries = signals?.injuries;
-  const lineups = signals?.lineups;
+  const lineupQuality = signals?.preMatch?.quality?.components?.lineup;
+  const legacyConfirmed = lineupQuality?.confirmed === true
+    || ['confirmed-lineup', 'official-starting-xi'].includes(String(lineupQuality?.evidenceType || '').toLowerCase());
+  const confirmedLineup = signals?.confirmedLineup || (legacyConfirmed ? signals?.lineups : undefined);
+  const projectedRoster = signals?.projectedRoster || (!legacyConfirmed ? signals?.lineups : undefined);
+  const lineups = confirmedLineup || projectedRoster;
   const homeInjuriesZh = externalNames(injuries?.home, 'zh');
   const awayInjuriesZh = externalNames(injuries?.away, 'zh');
   const homeInjuriesEn = externalNames(injuries?.home, 'en');
   const awayInjuriesEn = externalNames(injuries?.away, 'en');
   const injurySummaryZh = multiText(injuries?.summary, 'zh');
   const injurySummaryEn = multiText(injuries?.summary, 'en');
+  const lineupPrefixZh = confirmedLineup ? '官方首发：' : projectedRoster ? '预计阵容（非确认首发）：' : '';
+  const lineupPrefixEn = confirmedLineup ? 'Official XI: ' : projectedRoster ? 'Projected roster (not confirmed): ' : '';
   const lineupSummaryZh = multiText(lineups?.summary, 'zh');
   const lineupSummaryEn = multiText(lineups?.summary, 'en');
   const formationZh = lineups?.homeFormation || lineups?.awayFormation
@@ -110,14 +118,14 @@ const lineupsSignalText = (match: Match): MultiLangString => {
 
   return {
     zh: [
-      lineupSummaryZh,
+      lineupSummaryZh ? `${lineupPrefixZh}${lineupSummaryZh}` : '',
       injurySummaryZh,
       homeInjuriesZh ? `${match.homeTeamName || '主队'}关注：${homeInjuriesZh}` : '',
       awayInjuriesZh ? `${match.awayTeamName || '客队'}关注：${awayInjuriesZh}` : '',
       formationZh
     ].filter(Boolean).join(' '),
     en: [
-      lineupSummaryEn,
+      lineupSummaryEn ? `${lineupPrefixEn}${lineupSummaryEn}` : '',
       injurySummaryEn,
       homeInjuriesEn ? `${match.homeTeamNameEn || match.homeTeamName || 'Home'} watch: ${homeInjuriesEn}` : '',
       awayInjuriesEn ? `${match.awayTeamNameEn || match.awayTeamName || 'Away'} watch: ${awayInjuriesEn}` : '',
@@ -491,12 +499,12 @@ const buildProfessionalFramework = ({
       en: `Official HAD: ${latestOdds}, normalized ${marketProbabilities.en}, main-line support ${percentText(hadSupport)}; official HHAD(${hhadLine}): ${latestHandicapOdds}, normalized ${handicapProbabilities.en}; same-side handicap support ${hhadSupport === null ? '--' : `${hhadSupport}%`}.`
     };
   const marketToneSupport = primaryUsesHhad ? hadSupport : hhadSupport;
-  const trendZh = match.oddsTrend && trendText
-    ? `${match.oddsTrend.summary.zh}`
-    : '官方赔率快照样本仍在积累，先以最新胜平负/让球为准。';
-  const trendEn = match.oddsTrend && trendText
-    ? `${match.oddsTrend.summary.en}`
-    : 'Official odds snapshots are still accumulating; use latest 1X2 / handicap first.';
+  const oddsTrendSummaryZh = multiText(match.oddsTrend?.summary, 'zh');
+  const oddsTrendSummaryEn = multiText(match.oddsTrend?.summary, 'en');
+  const trendZh = match.oddsTrend && trendText && oddsTrendSummaryZh
+    || '官方赔率快照样本仍在积累，先以最新胜平负/让球为准。';
+  const trendEn = match.oddsTrend && trendText && oddsTrendSummaryEn
+    || 'Official odds snapshots are still accumulating; use latest 1X2 / handicap first.';
   const lineupSignals = lineupsSignalText(match);
   const environmentSignals = environmentSignalText(match);
   const xgOddsSignals = xgAndExternalOddsText(match);
@@ -636,10 +644,10 @@ const buildProfessionalFramework = ({
       title: { zh: '十二、综合结论', en: '12. Verdict' },
       body: {
         zh: hasActionablePrimary
-          ? `稳妥方向：${action.zh}；主线 ${tipZh}，推荐强度 ${trustScore || '--'}%，当前判断 ${finalProbabilities.zh}。风险点：${riskTextZh}。`
+          ? `稳妥方向：${action.zh}；主线 ${tipZh}，证据评分 ${trustScore ? `${trustScore}/100` : '--'}，当前判断 ${finalProbabilities.zh}。风险点：${riskTextZh}。`
           : `稳妥方向：先观察，不输出单一胜平负；当前判断 ${finalProbabilities.zh}，等待赔率、让球盘和历史表现进一步同向。风险点：${riskTextZh}。`,
         en: hasActionablePrimary
-          ? `Conservative: ${action.en}; main line ${tipEn}, pick strength ${trustScore || '--'}%, current read ${finalProbabilities.en}. Risks: ${riskTextEn}.`
+          ? `Conservative: ${action.en}; main line ${tipEn}, evidence score ${trustScore ? `${trustScore}/100` : '--'}, current read ${finalProbabilities.en}. Risks: ${riskTextEn}.`
           : `Conservative: ${action.en}, no single 1X2 pick; current read ${finalProbabilities.en}, wait for odds/handicap/history buckets to align. Risks: ${riskTextEn}.`
       },
       tone: hasPrimary ? (isWatchOnly || isReferenceOnly ? 'warning' : 'success') : unavailableTone
@@ -695,6 +703,12 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
   const sampleText = `${context.homeSampleSize}/${context.awaySampleSize}/${context.h2hSampleSize}`;
   const sampleEnough = context.homeSampleSize >= 3 && context.awaySampleSize >= 3;
   const trendText = match.oddsTrend ? trendLabel(match.oddsTrend.direction) : null;
+  const oddsTrendSummaryZh = multiText(match.oddsTrend?.summary, 'zh');
+  const oddsTrendSummaryEn = multiText(match.oddsTrend?.summary, 'en');
+  const trendZh = oddsTrendSummaryZh
+    || '官方赔率快照样本仍在积累，先以最新胜平负/让球为准。';
+  const trendEn = oddsTrendSummaryEn
+    || 'Official odds snapshots are still accumulating; use latest 1X2 / handicap first.';
   const actionByCategory: Record<typeof signal.category, MultiLangString> = {
     steady: { zh: '推荐', en: 'Pick' },
     lean: { zh: '推荐', en: 'Pick' },
@@ -737,6 +751,42 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
     riskTextZh,
     riskTextEn
   });
+
+  if (match.status === 'PENDING_RESULT') {
+    return {
+      title: { zh: '等待官方赛果', en: 'Awaiting Official Result' },
+      summary: {
+        zh: '比赛已经开赛，赛前记录已锁定；当前只等待可信官方比分完成结算，不会使用赛后赔率生成新的推荐方向。',
+        en: 'The match has started and the pre-match record is locked. Settlement waits for a trusted official score and never creates a new direction from post-kickoff odds.'
+      },
+      action: { zh: '赛果待同步', en: 'Result pending' },
+      score: null,
+      tone: 'muted',
+      metrics: [
+        { label: { zh: '比赛状态', en: 'Match status' }, value: { zh: '等待官方赛果', en: 'Awaiting result' }, tone: 'muted' },
+        { label: { zh: '赛前记录', en: 'Pre-match record' }, value: { zh: '已锁定', en: 'Locked' }, tone: 'success' },
+        { label: { zh: '临时方向', en: 'Temporary pick' }, value: { zh: '不生成', en: 'Disabled' }, tone: 'success' },
+        { label: { zh: '历史样本', en: 'History sample' }, value: { zh: sampleText, en: sampleText }, tone: sampleEnough ? 'success' : 'warning' }
+      ],
+      drivers: [{
+        title: { zh: '为什么还没有结算', en: 'Why settlement is pending' },
+        body: {
+          zh: '系统只接受可验证的官方完场状态与整数比分。抓取延迟、比赛中断或官方尚未发布时会保持等待，不把缺失比分补成 0:0。',
+          en: 'Only a verifiable official final state with integer scores can settle the record. Capture delay, interruption, or an unpublished result stays pending; a missing score is never fabricated as 0-0.'
+        },
+        tone: 'warning'
+      }],
+      watchpoints: [{
+        title: { zh: '口径保护', en: 'Settlement guard' },
+        body: {
+          zh: '赛前推荐与分析参考分开结算；让球和普通胜平负也按各自玩法统计，等待同场官方赛果后再进入复盘。',
+          en: 'Formal picks and analysis references settle separately, while HAD and HHAD retain separate market statistics until the same-event official result arrives.'
+        },
+        tone: 'success'
+      }],
+      framework
+    };
+  }
 
   if (!primary && match.status === 'FINISHED') {
     return {
@@ -825,10 +875,10 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
         : { zh: '赛前分析模式', en: 'Pre-Match Analysis Mode' },
       summary: {
         zh: isReferenceOnly
-          ? `${action.zh}：推荐方向为 ${tipZh}，推荐强度 ${trustScore || '--'}%。重点跟踪官方赔率、让球盘和近期命中冷却。风险提示：${riskTextZh}。`
+          ? `${action.zh}：推荐方向为 ${tipZh}，证据评分 ${trustScore ? `${trustScore}/100` : '--'}。重点跟踪官方赔率、让球盘和近期命中冷却。风险提示：${riskTextZh}。`
           : `${action.zh}：当前等待官方赔率或临场信号补强；如果临场信号没有变，刷新页面也不会硬改原结论。风险提示：${riskTextZh}。`,
         en: isReferenceOnly
-          ? `${action.en}: pick direction is ${tipEn}, pick strength ${trustScore || '--'}%. Track official odds, handicap confirmation, and hit-rate cooldown. Risk notes: ${riskTextEn}.`
+          ? `${action.en}: pick direction is ${tipEn}, evidence score ${trustScore ? `${trustScore}/100` : '--'}. Track official odds, handicap confirmation, and hit-rate cooldown. Risk notes: ${riskTextEn}.`
           : `${action.en}: wait for official odds or late signals before forcing a single side. Risk notes: ${riskTextEn}.`
       },
       action,
@@ -863,10 +913,10 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
         },
         {
           title: { zh: '赔率走势', en: 'Odds movement' },
-          body: match.oddsTrend && trendText
+          body: match.oddsTrend && trendText && (oddsTrendSummaryZh || oddsTrendSummaryEn)
             ? {
-              zh: `${match.oddsTrend.summary.zh}`,
-              en: `${match.oddsTrend.summary.en}`
+              zh: oddsTrendSummaryZh || trendZh,
+              en: oddsTrendSummaryEn || trendEn
             }
             : {
               zh: '当前快照数量不足，先等待下一次官方赔率快照。',
@@ -907,8 +957,8 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
   return {
     title: { zh: '综合推荐判断', en: 'Pick Decision Brief' },
     summary: {
-      zh: `${action.zh}：当前主线为 ${tipZh}，${mainSupportLabel.zh} ${percentText(mainSupport)}，推荐强度 ${trustScore || '--'}%。风险提示：${riskTextZh}。`,
-      en: `${action.en}: main lean is ${tipEn}, ${mainSupportLabel.en} ${percentText(mainSupport)}, pick strength ${trustScore || '--'}%. Risk notes: ${riskTextEn}.`
+      zh: `${action.zh}：当前主线为 ${tipZh}，${mainSupportLabel.zh} ${percentText(mainSupport)}，证据评分 ${trustScore ? `${trustScore}/100` : '--'}。风险提示：${riskTextZh}。`,
+      en: `${action.en}: main lean is ${tipEn}, ${mainSupportLabel.en} ${percentText(mainSupport)}, evidence score ${trustScore ? `${trustScore}/100` : '--'}. Risk notes: ${riskTextEn}.`
     },
     action,
     score: insightScore,
@@ -935,10 +985,10 @@ export function buildMatchInsight(match: Match, context: MatchInsightContext): M
       },
       {
         title: { zh: '赔率走势', en: 'Odds movement' },
-        body: match.oddsTrend && trendText
+        body: match.oddsTrend && trendText && (oddsTrendSummaryZh || oddsTrendSummaryEn)
           ? {
-            zh: `已记录 ${match.oddsTrend.sampleSize} 次官方快照，当前表现为${trendText.zh}。${match.oddsTrend.summary.zh}`,
-            en: `${match.oddsTrend.sampleSize} official snapshots recorded; movement is ${trendText.en}. ${match.oddsTrend.summary.en}`
+            zh: `已记录 ${match.oddsTrend.sampleSize} 次官方快照，当前表现为${trendText.zh}。${oddsTrendSummaryZh || trendZh}`,
+            en: `${match.oddsTrend.sampleSize} official snapshots recorded; movement is ${trendText.en}. ${oddsTrendSummaryEn || trendEn}`
           }
           : {
             zh: '当前快照数量不足，先以最新官方赔率与后续定时快照对比。',
