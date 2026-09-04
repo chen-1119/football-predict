@@ -4673,8 +4673,12 @@ function validArchivedPreMatchPrediction(match, archive = match?.archivedPreMatc
   const marketEvidenceScope = normText(archive.marketEvidenceScope) || "result-pool";
   const archivedPool = normText(prediction?.oddsPoolCode).toUpperCase();
   const archivedOdds = Number(prediction?.odds);
+  const archivedHandicapLine = archivedPool === "HHAD"
+    ? parseHandicapLine(prediction?.handicapLine)
+    : 0;
   const modelOnlyReference = marketEvidenceScope === "model-only-reference"
-    && archivedPool === "HAD"
+    && ["HAD", "HHAD"].includes(archivedPool)
+    && (archivedPool !== "HHAD" || archivedHandicapLine !== null)
     && prediction?.recommendationAction === "reference"
     && archivedOdds === 0;
   const sourceMatchId = sourceMatchKeyForReview(match);
@@ -4736,7 +4740,7 @@ function archiveDirectionIdentity(prediction) {
       || (marketType === "1X2" ? "HAD" : "")
       || (
         prediction.recommendationAction === "reference"
-        && Number(prediction.odds || 0) === 0
+        && Number(prediction.odds) === 0
           ? "HAD"
           : ""
       )
@@ -4980,6 +4984,7 @@ function canonicalArchiveBestPrediction(match, publicationIndex = null) {
           decisionRevision: match?.predictionMeta?.decisionRevision || null,
           featureSnapshotHash: match?.predictionMeta?.featureSnapshotHash || null,
           decisionAt: match?.predictionMeta?.decisionGeneratedAt
+            || match?.predictionMeta?.generatedAt
             || match?.predictionMeta?.modelGeneratedAt
             || null,
         },
@@ -5143,14 +5148,17 @@ function buildArchivedPreMatchPrediction(
   ));
   const best = canonicalBest?.prediction || snapshotBest;
   if (!best) return recoveredArchive;
-  const archivedPool = normText(best.oddsPoolCode).toUpperCase();
   const marketEvidenceScope = best?.recommendationAction === "reference"
     && Number(best?.odds) === 0
     ? "model-only-reference"
     : "result-pool";
+  const explicitArchivedPool = normText(best.oddsPoolCode).toUpperCase();
+  const archivedPool = explicitArchivedPool
+    || (marketEvidenceScope === "model-only-reference" ? "HAD" : "");
 
   const bestKey = reviewSelectionKey(best);
   const bestDirection = archiveDirectionIdentity(best);
+  if (!bestDirection) return recoveredArchive;
   let evidenceSnapshot = candidates
     .slice()
     .reverse()
@@ -5225,12 +5233,11 @@ function buildArchivedPreMatchPrediction(
     ...(parityCorrection ? { recoveryEvidence: parityCorrection } : {}),
     prediction: {
       marketType: "BEST",
-      // A model-only reference still expresses the HAD 1/X/2 outcome space,
-      // but carries zero SP and an explicit model-only scope. This preserves
-      // the user's original pre-match direction after kickoff without
-      // pretending that an official market was published or admitting the
-      // row to formal performance statistics.
-      oddsPoolCode: marketEvidenceScope === "model-only-reference" ? "HAD" : archivedPool,
+      // A model-only reference keeps the exact HAD/HHAD outcome space users
+      // saw before kickoff, but carries zero SP and an explicit model-only
+      // scope. This preserves the direction without pretending that an official market was published
+      // or admitting it to formal performance statistics.
+      oddsPoolCode: archivedPool,
       handicapLine: archivedPool === "HHAD" ? best.handicapLine : undefined,
       tipCode: normText(best.tipCode).toUpperCase(),
       tipLabel: archivedTipLabel(match, best),

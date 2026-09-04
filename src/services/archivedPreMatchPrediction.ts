@@ -1,4 +1,5 @@
 import type { Match, PredictionDetail } from './mockData';
+import { parseHandicapLine } from './officialRecommendationEligibility';
 import { getVisiblePrediction } from './predictionVisibility';
 
 const isOutcomeCode = (value: unknown): value is '1' | 'X' | '2' => (
@@ -53,6 +54,8 @@ export const getArchivedPreMatchPrediction = (
   const archive = match.archivedPreMatchPrediction;
   const archivedPrediction = archive?.prediction;
   const marketEvidenceScope = archive?.marketEvidenceScope || 'result-pool';
+  const validArchivedHhadLine = archivedPrediction?.oddsPoolCode !== 'HHAD'
+    || parseHandicapLine(archivedPrediction?.handicapLine) !== null;
   const archivedAt = Date.parse(archive?.capturedAt || '');
   const archiveDeadlineAt = earliestFiniteTime(
     archive?.cutoffTime,
@@ -82,7 +85,7 @@ export const getArchivedPreMatchPrediction = (
       marketEvidenceScope === 'result-pool'
       || (
         marketEvidenceScope === 'model-only-reference'
-        && archivedPrediction.oddsPoolCode === 'HAD'
+        && validArchivedHhadLine
         && archivedPrediction.recommendationAction === 'reference'
         && Number(archivedPrediction.odds) === 0
       )

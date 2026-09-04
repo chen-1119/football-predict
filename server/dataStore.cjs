@@ -13,6 +13,9 @@ const {
 const {
   attestImmutableAnalysisReferenceDecision,
 } = require("../src/services/immutableAnalysisReferenceDecision.cjs");
+const {
+  parseHandicapLine,
+} = require("../src/services/officialRecommendationEligibility.cjs");
 
 const STATE_FILE = "state.json";
 const CURRENT_MATCHES_FILE = "current-matches.json";
@@ -722,8 +725,10 @@ const compactArchivedPreMatchPredictionForList = (archive, match) => {
   const prediction = archive.prediction;
   const marketEvidenceScope = String(archive.marketEvidenceScope || "result-pool").trim();
   const archivedPool = String(prediction?.oddsPoolCode || "").toUpperCase();
+  const validArchivedHhadLine = archivedPool !== "HHAD"
+    || parseHandicapLine(prediction?.handicapLine) !== null;
   const modelOnlyReference = marketEvidenceScope === "model-only-reference"
-    && archivedPool === "HAD"
+    && validArchivedHhadLine
     && prediction?.recommendationAction === "reference"
     && Number(prediction?.odds) === 0;
   const sourceMatchId = String(match.sourceMatchId || match.id || "").replace(/^sporttery_/, "");

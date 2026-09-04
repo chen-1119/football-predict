@@ -25,6 +25,7 @@ const {
   dualMarketDecisionBindingForMatchOrExisting,
   predictionSnapshotRow,
   shouldCaptureLockedShadowRevision,
+  validArchivedPreMatchPrediction,
 } = require("./syncData.cjs");
 const {
   boundDecisionOddsForPrediction,
@@ -556,6 +557,137 @@ assert.deepEqual(
   correctedArchive.recoveryEvidence,
   "a later result sync must preserve the original parity proof instead of manufacturing a new direction",
 );
+
+const modelOnlyParityMatch = clone(archiveParityMatch);
+delete modelOnlyParityMatch.predictionMeta.dualMarketDecision;
+delete modelOnlyParityMatch.predictionMeta.immutableAnalysisReferenceDecision;
+delete modelOnlyParityMatch.predictionMeta.decisionGeneratedAt;
+modelOnlyParityMatch.predictionMeta.generatedAt = "2026-07-12T10:00:00.000Z";
+modelOnlyParityMatch.predictionMeta.decisionId = "model-only-parity-decision";
+modelOnlyParityMatch.predictionMeta.decisionRevision = 1;
+modelOnlyParityMatch.predictions = [{
+  marketType: "BEST",
+  oddsPoolCode: "HHAD",
+  handicapLine: "+3",
+  tipCode: "1",
+  odds: 0,
+  recommendationAction: "reference",
+  recommendationTier: "model-only-reference",
+  tipLabel: {
+    zh: "参考推荐 让胜（数据待补）",
+    en: "Reference pick: HHAD home (data pending)",
+  },
+}];
+modelOnlyParityMatch.archivedPreMatchPrediction = {
+  ...clone(archiveParityMatch.archivedPreMatchPrediction),
+  marketEvidenceScope: "result-pool",
+  prediction: {
+    marketType: "BEST",
+    oddsPoolCode: "HHAD",
+    handicapLine: "+3",
+    tipCode: "2",
+    odds: 1.92,
+    recommendationAction: "reference",
+  },
+};
+const modelOnlyParityArchive = buildArchivedPreMatchPrediction(
+  modelOnlyParityMatch,
+  new Map(),
+  null,
+  "2026-07-12T12:30:00.000Z",
+);
+assert.equal(modelOnlyParityArchive?.marketEvidenceScope, "model-only-reference");
+assert.equal(modelOnlyParityArchive?.prediction?.oddsPoolCode, "HHAD");
+assert.equal(modelOnlyParityArchive?.prediction?.handicapLine, "+3");
+assert.equal(modelOnlyParityArchive?.prediction?.tipCode, "1");
+assert.equal(modelOnlyParityArchive?.prediction?.tipLabel?.zh, "参考推荐 让胜（数据待补）");
+assert.equal(modelOnlyParityArchive?.recoveryEvidence?.canonical?.market, "HHAD");
+assert.equal(modelOnlyParityArchive?.recoveryEvidence?.canonical?.directionIdentity, "HHAD:1:3");
+assert.equal(
+  modelOnlyParityArchive?.recoveryEvidence?.proof?.decisionAt,
+  modelOnlyParityMatch.predictionMeta.generatedAt,
+  "trusted archive proof must use the same generatedAt fallback accepted by the cutoff gate",
+);
+assert.ok(
+  canonicalArchiveParityRecovery({
+    ...modelOnlyParityMatch,
+    archivedPreMatchPrediction: modelOnlyParityArchive,
+  }),
+  "the normalized model-only parity repair must validate on replay",
+);
+const repeatedModelOnlyParityArchive = buildArchivedPreMatchPrediction(
+  {
+    ...modelOnlyParityMatch,
+    archivedPreMatchPrediction: clone(modelOnlyParityArchive),
+  },
+  new Map(),
+  null,
+  "2026-07-12T13:00:00.000Z",
+);
+assert.deepEqual(
+  repeatedModelOnlyParityArchive,
+  clone(modelOnlyParityArchive),
+  "a model-only HHAD archive must preserve its market and remain byte-stable across migration times",
+);
+assert.equal(
+  JSON.stringify(repeatedModelOnlyParityArchive),
+  JSON.stringify(modelOnlyParityArchive),
+  "the replayed archive must match the migration wrapper's serialized byte comparison",
+);
+assert.equal(
+  validArchivedPreMatchPrediction(modelOnlyParityMatch, {
+    ...clone(modelOnlyParityArchive),
+    prediction: {
+      ...clone(modelOnlyParityArchive.prediction),
+      handicapLine: undefined,
+    },
+  }),
+  null,
+  "a model-only HHAD archive without an explicit handicap line must fail closed",
+);
+const invalidModelOnlyHhadSnapshot = {
+  sourceMatchId: modelOnlyParityMatch.sourceMatchId,
+  kickoffTime: modelOnlyParityMatch.kickoffTime,
+  eventVersion: modelOnlyParityMatch.eventVersion,
+  capturedAt: modelOnlyParityMatch.predictionMeta.generatedAt,
+  cutoffTime: modelOnlyParityMatch.buyEndTime,
+  phase: "locked",
+  best: {
+    ...modelOnlyParityMatch.predictions[0],
+    handicapLine: undefined,
+  },
+};
+assert.equal(
+  buildArchivedPreMatchPrediction(
+    {
+      ...modelOnlyParityMatch,
+      predictions: [],
+      archivedPreMatchPrediction: undefined,
+    },
+    new Map([[
+      modelOnlyParityMatch.sourceMatchId,
+      [invalidModelOnlyHhadSnapshot],
+    ]]),
+    null,
+    "2026-07-12T12:30:00.000Z",
+  ),
+  null,
+  "the archive writer must reject a model-only HHAD source without a handicap line",
+);
+
+const pricedHhadParityMatch = clone(modelOnlyParityMatch);
+pricedHhadParityMatch.predictions[0].odds = 2.05;
+pricedHhadParityMatch.archivedPreMatchPrediction.prediction.tipCode = "X";
+const pricedHhadParityArchive = buildArchivedPreMatchPrediction(
+  pricedHhadParityMatch,
+  new Map(),
+  null,
+  "2026-07-12T12:30:00.000Z",
+);
+assert.equal(pricedHhadParityArchive?.marketEvidenceScope, "result-pool");
+assert.equal(pricedHhadParityArchive?.prediction?.oddsPoolCode, "HHAD");
+assert.equal(pricedHhadParityArchive?.prediction?.handicapLine, "+3");
+assert.equal(pricedHhadParityArchive?.recoveryEvidence?.canonical?.directionIdentity, "HHAD:1:3");
 
 const tamperedParityRecoveryMatch = clone(nextResultSyncMatch);
 tamperedParityRecoveryMatch.archivedPreMatchPrediction.recoveryEvidence.canonical.direction = "X";

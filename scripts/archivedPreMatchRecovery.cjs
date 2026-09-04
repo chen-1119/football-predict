@@ -1,6 +1,9 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
+const {
+  parseHandicapLine,
+} = require("../src/services/officialRecommendationEligibility.cjs");
 
 const RECOVERY_VERSION = "archived-pre-match-recovery-v1";
 const RECOVERY_SOURCE = "signed-release-pre-cutoff-snapshot-recovery";
@@ -76,6 +79,8 @@ const validateRecoveryRow = (row) => {
   const marketOdds = marketPool === "HHAD" ? evidence?.market?.hhad : evidence?.market?.had;
   const selectedOdds = oddsForTip(marketOdds, tipCode);
   const predictionOdds = finiteOdds(prediction.odds);
+  const validModelOnlyHhadLine = marketPool !== "HHAD"
+    || parseHandicapLine(prediction.handicapLine) !== null;
 
   if (row?.version !== RECOVERY_VERSION) errors.push("version-invalid");
   if (row?.source !== RECOVERY_SOURCE) errors.push("source-invalid");
@@ -104,9 +109,9 @@ const validateRecoveryRow = (row) => {
   }
   if (modelOnlyReference) {
     if (
-      marketPool !== "HAD"
-      || Number(prediction.odds) !== 0
+      Number(prediction.odds) !== 0
       || prediction.recommendationAction !== "reference"
+      || !validModelOnlyHhadLine
     ) errors.push("model-only-reference-invalid");
   } else if (!predictionOdds) {
     errors.push("prediction-odds-invalid");

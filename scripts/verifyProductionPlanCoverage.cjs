@@ -3209,7 +3209,8 @@ const readPlanSqliteStatus = async () => {
     ])
     && hasAll(syncData, [
       'marketEvidenceScope === "model-only-reference"',
-      'oddsPoolCode: marketEvidenceScope === "model-only-reference" ? "HAD" : archivedPool',
+      'const archivedPool = explicitArchivedPool',
+      "keeps the exact HAD/HHAD outcome space users",
       'prediction?.recommendationAction === "reference"',
       'Number(prediction?.odds) === 0',
       "pretending that an official market was published",

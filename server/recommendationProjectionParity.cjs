@@ -1,4 +1,7 @@
 const VERSION = "current-list-detail-recommendation-parity-v1";
+const {
+  parseHandicapLine,
+} = require("../src/services/officialRecommendationEligibility.cjs");
 
 const text = (value) => String(value ?? "").trim();
 const upper = (value) => text(value).toUpperCase();
@@ -32,15 +35,23 @@ const isResultPhase = (match, nowMs = Date.now()) => (
 const validDirection = (prediction) => {
   const pool = upper(prediction?.oddsPoolCode);
   return (!pool || ["HAD", "HHAD"].includes(pool))
+    && (pool !== "HHAD" || parseHandicapLine(prediction?.handicapLine) !== null)
     && ["1", "X", "2"].includes(upper(prediction?.tipCode));
 };
 const canonicalPool = (prediction) => (
   upper(prediction?.oddsPoolCode) || "MODEL_1X2"
 );
+const isModelOnlyReferencePrediction = (prediction) => (
+  text(prediction?.recommendationAction).toLowerCase() === "reference"
+  && Number(prediction?.odds) === 0
+);
+const canonicalModelOnlyPool = (prediction) => (
+  canonicalPool(prediction) === "HHAD" ? "MODEL_HHAD" : "MODEL_1X2"
+);
 const canonicalLine = (pool, value) => {
-  if (pool !== "HHAD") return "0";
-  const number = Number(value);
-  if (!Number.isFinite(number)) return null;
+  if (pool !== "HHAD" && pool !== "MODEL_HHAD") return "0";
+  const number = parseHandicapLine(value);
+  if (number === null) return null;
   return number > 0 ? `+${number}` : String(number);
 };
 const canonicalOdds = (value) => {
@@ -95,6 +106,9 @@ const validateArchivedDecision = (match) => {
   const archiveSourceId = canonicalArchiveSourceId(archive?.sourceMatchId);
   const matchSourceId = canonicalArchiveSourceId(match?.sourceMatchId || match?.id);
   const evidenceScope = text(archive?.marketEvidenceScope) || "result-pool";
+  const archivedPool = upper(prediction?.oddsPoolCode);
+  const validModelOnlyHhadLine = archivedPool !== "HHAD"
+    || canonicalLine("HHAD", prediction?.handicapLine) !== null;
 
   if (match?.resultDisposition === "VOID") blockers.push("void-match-has-no-archived-decision");
   if (archive?.version !== "archived-pre-match-prediction-v1") blockers.push("archive-version-invalid");
@@ -120,9 +134,8 @@ const validateArchivedDecision = (match) => {
     evidenceScope !== "result-pool"
     && !(
       evidenceScope === "model-only-reference"
-      && prediction?.oddsPoolCode === "HAD"
-      && prediction?.recommendationAction === "reference"
-      && Number(prediction?.odds) === 0
+      && validModelOnlyHhadLine
+      && isModelOnlyReferencePrediction(prediction)
     )
   ) blockers.push("archive-market-evidence-scope-invalid");
 
@@ -155,7 +168,9 @@ const publishedBestDecision = (match) => {
   return prediction ? {
     source: "published-best",
     prediction,
-    marketEvidenceScope: prediction?.oddsPoolCode ? "result-pool" : "model-only-reference",
+    marketEvidenceScope: isModelOnlyReferencePrediction(prediction)
+      ? "model-only-reference"
+      : "result-pool",
     capturedAt: null,
     signature: null,
   } : null;
@@ -303,7 +318,7 @@ const canonicalRecommendationDecision = (match, nowMs = Date.now()) => {
     : (hasOfficialHadSp(match) ? publishedBestDecision(match) : null);
   if (!selected) return null;
   const pool = selected.marketEvidenceScope === "model-only-reference"
-    ? "MODEL_1X2"
+    ? canonicalModelOnlyPool(selected.prediction)
     : canonicalPool(selected.prediction);
   return {
     id: canonicalId(match),

@@ -72,7 +72,10 @@ const {
   validateCollectorEvidenceUpload,
 } = require("./collectorQuorumEvidence.cjs");
 const { publicLiveRecommendationSummary } = require("./publicSyncMeta.cjs");
-const { isServerOfficialRecommendationEligible } = require("../src/services/officialRecommendationEligibility.cjs");
+const {
+  isServerOfficialRecommendationEligible,
+  parseHandicapLine,
+} = require("../src/services/officialRecommendationEligibility.cjs");
 const { apiFootballRuntimePolicyFor } = require("../src/services/apiFootballRuntimePolicy.cjs");
 const {
   evaluateLiveRecommendation,
@@ -5554,8 +5557,10 @@ const compactArchivedPreMatchPredictionForList = (archive, match) => {
   const prediction = archive.prediction;
   const marketEvidenceScope = String(archive.marketEvidenceScope || "result-pool").trim();
   const archivedPool = String(prediction?.oddsPoolCode || "").toUpperCase();
+  const validArchivedHhadLine = archivedPool !== "HHAD"
+    || parseHandicapLine(prediction?.handicapLine) !== null;
   const modelOnlyReference = marketEvidenceScope === "model-only-reference"
-    && archivedPool === "HAD"
+    && validArchivedHhadLine
     && prediction?.recommendationAction === "reference"
     && Number(prediction?.odds) === 0;
   const sourceMatchId = String(match.sourceMatchId || match.id || "").replace(/^sporttery_/, "");

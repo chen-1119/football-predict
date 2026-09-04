@@ -151,6 +151,29 @@ const historyMatch = {
   },
 };
 
+const modelOnlyHhadMatch = structuredClone(historyMatch);
+modelOnlyHhadMatch.id = "sporttery_model_only_hhad";
+modelOnlyHhadMatch.sourceMatchId = "model_only_hhad";
+modelOnlyHhadMatch.archivedPreMatchPrediction = {
+  ...structuredClone(archivedPrediction),
+  sourceMatchId: "model_only_hhad",
+  matchId: "sporttery_model_only_hhad",
+  marketEvidenceScope: "model-only-reference",
+  prediction: {
+    ...structuredClone(archivedPrediction.prediction),
+    oddsPoolCode: "HHAD",
+    handicapLine: "-2",
+    tipCode: "2",
+    tipLabel: { zh: "参考推荐 让负（数据待补）", en: "Reference pick: HHAD away" },
+    odds: 0,
+    recommendationAction: "reference",
+    recommendationTier: "cold-start-reference",
+  },
+};
+modelOnlyHhadMatch.predictions = [
+  structuredClone(modelOnlyHhadMatch.archivedPreMatchPrediction.prediction),
+];
+
 const main = async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "football-history-contract-"));
   const dataDir = path.join(tempRoot, "data");
@@ -160,7 +183,7 @@ const main = async () => {
     await fs.mkdir(dataDir, { recursive: true });
     const files = {
       "matches-current.json": [],
-      "matches-history.json": [historyMatch],
+      "matches-history.json": [historyMatch, modelOnlyHhadMatch],
       "sync-meta.json": {
         updatedAt: "2026-07-28T04:00:00.000Z",
         capturedAt: "2026-07-28T04:00:00.000Z",
@@ -175,7 +198,11 @@ const main = async () => {
     )));
 
     await persistDataSnapshot({ storeDir, dataDir, source: "history-contract-test" });
-    const [row] = await getHistoryMatchesForList(storeDir, 10);
+    const rows = await getHistoryMatchesForList(storeDir, 10);
+    const row = rows.find((candidate) => candidate.sourceMatchId === historyMatch.sourceMatchId);
+    const modelOnlyHhadRow = rows.find((candidate) => (
+      candidate.sourceMatchId === modelOnlyHhadMatch.sourceMatchId
+    ));
 
     assert.ok(row, "history row must remain queryable");
     assert.equal(row.oddsSource, "sporttery:HAD");
@@ -188,6 +215,12 @@ const main = async () => {
     assert.equal(row.postMatchReview.predictionReview.formalBestStatus, "WON");
     assert.equal(row.postMatchReview.predictionReview.bestTrack, "formal");
     assert.equal(row.postMatchReview.predictionReview.rows[0].performanceTrack, "formal");
+    assert.ok(modelOnlyHhadRow, "model-only HHAD history row must remain queryable");
+    assert.equal(modelOnlyHhadRow.archivedPreMatchPrediction.marketEvidenceScope, "model-only-reference");
+    assert.equal(modelOnlyHhadRow.archivedPreMatchPrediction.prediction.oddsPoolCode, "HHAD");
+    assert.equal(modelOnlyHhadRow.archivedPreMatchPrediction.prediction.handicapLine, "-2");
+    assert.equal(modelOnlyHhadRow.archivedPreMatchPrediction.prediction.tipCode, "2");
+    assert.equal(modelOnlyHhadRow.archivedPreMatchPrediction.prediction.tipLabel.zh, "参考推荐 让负（数据待补）");
 
     const [serverIndex, predictionsList, appContext] = await Promise.all([
       readText("server/index.cjs"),

@@ -7,6 +7,7 @@ const {
   isAuthoritativeResultOnlyArchive,
   runVerification,
   scheduledWithoutBestIds,
+  validateArchivedDecision,
 } = require("./verifyRemoteRecommendationParity.cjs");
 
 const prediction = {
@@ -218,6 +219,68 @@ assert.deepEqual(canonicalRecommendationDecision(modelOnlyFinished), {
   capturedAt: "2099-07-31T16:50:00.000Z",
   signature: "model-only-archive-signature",
 });
+const modelOnlyHhadScheduled = {
+  ...modelOnlyScheduled,
+  id: "model-only-hhad-1",
+  sourceMatchId: "model-only-hhad-1",
+  predictions: [{
+    ...modelOnlyScheduled.predictions[0],
+    oddsPoolCode: "HHAD",
+    handicapLine: "-2",
+    tipCode: "2",
+    tipLabel: { zh: "参考推荐 让负（数据待补）", en: "Reference pick: HHAD away" },
+  }],
+};
+assert.deepEqual(canonicalRecommendationDecision(modelOnlyHhadScheduled), {
+  id: "model-only-hhad-1",
+  eventVersion: "2099-07-31T17:00:00.000Z",
+  source: "published-best",
+  oddsPoolCode: "MODEL_HHAD",
+  tipCode: "2",
+  handicapLine: "-2",
+  odds: null,
+  capturedAt: null,
+  signature: null,
+});
+const modelOnlyHhadScheduledWithoutLine = JSON.parse(JSON.stringify(modelOnlyHhadScheduled));
+delete modelOnlyHhadScheduledWithoutLine.predictions[0].handicapLine;
+assert.equal(
+  canonicalRecommendationDecision(modelOnlyHhadScheduledWithoutLine),
+  null,
+  "a scheduled model-only HHAD direction without a handicap line must fail closed",
+);
+const modelOnlyHhadFinished = {
+  ...modelOnlyHhadScheduled,
+  status: "FINISHED",
+  archivedPreMatchPrediction: {
+    ...modelOnlyFinished.archivedPreMatchPrediction,
+    sourceMatchId: "model-only-hhad-1",
+    prediction: { ...modelOnlyHhadScheduled.predictions[0] },
+  },
+};
+assert.equal(
+  validateArchivedDecision(modelOnlyHhadFinished).valid,
+  true,
+  "a model-only HHAD archive must retain its explicit handicap direction",
+);
+assert.deepEqual(canonicalRecommendationDecision(modelOnlyHhadFinished), {
+  id: "model-only-hhad-1",
+  eventVersion: "2099-07-31T17:00:00.000Z",
+  source: "archive",
+  oddsPoolCode: "MODEL_HHAD",
+  tipCode: "2",
+  handicapLine: "-2",
+  odds: null,
+  capturedAt: "2099-07-31T16:50:00.000Z",
+  signature: "model-only-archive-signature",
+});
+const modelOnlyHhadWithoutLine = JSON.parse(JSON.stringify(modelOnlyHhadFinished));
+delete modelOnlyHhadWithoutLine.archivedPreMatchPrediction.prediction.handicapLine;
+assert.equal(
+  validateArchivedDecision(modelOnlyHhadWithoutLine).valid,
+  false,
+  "a model-only HHAD archive without a handicap line must fail closed",
+);
 assert.equal(compareRecommendationParity(
   modelOnlyScheduled,
   {

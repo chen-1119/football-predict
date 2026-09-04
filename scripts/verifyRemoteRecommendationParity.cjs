@@ -14,6 +14,7 @@ const {
   storedStatusOf,
   text,
   upper,
+  validateArchivedDecision,
 } = require("../server/recommendationProjectionParity.cjs");
 
 const VERSION = "remote-recommendation-parity-v1";
@@ -596,4 +597,5 @@ module.exports = {
   isAuthoritativeResultOnlyArchive,
   runVerificationWithAccess,
   scheduledWithoutBestIds,
+  validateArchivedDecision,
 };
