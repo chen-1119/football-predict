@@ -289,7 +289,9 @@ run_build_step() {
   local memory_max="1200M"
   local memory_swap_max="256M"
   local node_heap_mib="896"
+  local runtime_max_seconds=""
   local -a properties=()
+  local -a runtime_properties=()
   case "$label" in
     application-build|archive-migration|archive-migration-reconciled)
       # Vite's production transform now needs about 1 GiB for the retained
@@ -313,9 +315,26 @@ run_build_step() {
       node_heap_mib="1536"
       ;;
   esac
+  case "$label" in
+    candidate-datastore-reconciled)
+      # The post-archive SQLite projection retains about 1.8 GiB across the
+      # V8 heap, native SQLite state, and dirty page cache.  Keep its V8 heap
+      # unchanged, but give this one measured step enough soft-limit runway to
+      # avoid indefinite memcg direct reclaim.  The hard ceiling, swap budget,
+      # and ten-minute runtime remain fail-closed.
+      memory_high="2100M"
+      memory_max="2600M"
+      memory_swap_max="512M"
+      node_heap_mib="1536"
+      runtime_max_seconds="600"
+      ;;
+  esac
   next_transient_unit "$label"
   unit="$NEXT_TRANSIENT_UNIT"
   mapfile -t properties < <(transient_build_properties)
+  if [ -n "$runtime_max_seconds" ]; then
+    runtime_properties=(--property="RuntimeMaxSec=${runtime_max_seconds}s")
+  fi
   set +e
   systemd-run --quiet --wait --collect --pipe --service-type=exec \
     --unit="$unit" --uid="$BUILD_USER" --working-directory="$BUILD_DIR" \
@@ -329,6 +348,7 @@ run_build_step() {
     --property="MemoryMax=$memory_max" \
     --property="MemorySwapMax=$memory_swap_max" \
     --property="OOMPolicy=stop" \
+    "${runtime_properties[@]}" \
     --property="ReadWritePaths=$BUILD_DIR" \
     --property="InaccessiblePaths=-/etc/football-predict -/etc/football-release -/var/lib/football-predict -/var/lib/football-release" \
     -- /usr/bin/env NODE_OPTIONS=--max-old-space-size="$node_heap_mib" "$@"

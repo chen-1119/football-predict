@@ -4303,9 +4303,15 @@ run_candidate_model_artifact_catchup /candidate-store /candidate-store/football.
     assert.match(buildStepBody, /memory_max="2200M"/);
     assert.match(buildStepBody, /memory_swap_max="512M"/);
     assert.match(buildStepBody, /node_heap_mib="1536"/);
+    assert.match(
+      buildStepBody,
+      /candidate-datastore-reconciled\)[\s\S]*?memory_high="2100M"[\s\S]*?memory_max="2600M"[\s\S]*?memory_swap_max="512M"[\s\S]*?node_heap_mib="1536"[\s\S]*?runtime_max_seconds="600"/,
+    );
     assert.match(buildStepBody, /MemoryHigh=\$memory_high/);
     assert.match(buildStepBody, /MemoryMax=\$memory_max/);
     assert.match(buildStepBody, /MemorySwapMax=\$memory_swap_max/);
+    assert.match(buildStepBody, /RuntimeMaxSec=\$\{runtime_max_seconds\}s/);
+    assert.match(buildStepBody, /if \[ -n "\$runtime_max_seconds" \]; then[\s\S]*?runtime_properties=/);
     assert.match(buildStepBody, /NODE_OPTIONS=--max-old-space-size="\$node_heap_mib"/);
     const refreshStepBody = extractFunction(bundleRelease, "run_candidate_refresh_step");
     assert.match(refreshStepBody, /candidate-archive-refresh\|candidate-generation-refresh\|candidate-sqlite-affinity\|candidate-deadline-capture-refresh\)/);
