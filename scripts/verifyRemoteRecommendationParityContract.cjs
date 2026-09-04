@@ -5,6 +5,7 @@ const {
   canonicalRecommendationDecision,
   compareRecommendationParity,
   isAuthoritativeResultOnlyArchive,
+  projectPublicPredictionRows,
   runVerification,
   scheduledWithoutBestIds,
   validateArchivedDecision,
@@ -248,6 +249,15 @@ assert.equal(
   canonicalRecommendationDecision(modelOnlyHhadScheduledWithoutLine),
   null,
   "a scheduled model-only HHAD direction without a handicap line must fail closed",
+);
+assert.deepEqual(
+  projectPublicPredictionRows(modelOnlyHhadScheduledWithoutLine).map((row) => ({
+    marketType: row.marketType,
+    tipCode: row.tipCode,
+    recommendationAction: row.recommendationAction,
+  })),
+  [{ marketType: "BEST", tipCode: "WATCH", recommendationAction: "withhold" }],
+  "the public projection must neutralize a scheduled model-only HHAD direction without a line",
 );
 const modelOnlyHhadFinished = {
   ...modelOnlyHhadScheduled,

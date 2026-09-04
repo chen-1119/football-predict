@@ -283,6 +283,29 @@ const projectPublicPredictionRows = (match, {
     }
   }
 
+  // An incomplete directional BEST (for example HHAD without a handicap
+  // line) must never cross the public boundary as a usable recommendation.
+  // Keep one neutral WATCH row for product continuity and remove every
+  // supporting direction from this projection; the stored audit row remains
+  // untouched.
+  const invalidDirectionalBestRows = new Set(conflictSafeRows.filter((row) => (
+    upper(row?.marketType) === "BEST"
+    && ["1", "X", "2"].includes(upper(row?.tipCode))
+    && !validDirection(row)
+  )));
+  if (invalidDirectionalBestRows.size > 0) {
+    let watchProjected = false;
+    return conflictSafeRows.flatMap((row) => {
+      if (invalidDirectionalBestRows.has(row)) {
+        if (watchProjected) return [];
+        watchProjected = true;
+        return [neutralPublicWatchRow(row)];
+      }
+      if (validDirection(row)) return [];
+      return [row];
+    });
+  }
+
   // A WATCH/WITHHOLD BEST row keeps its internal direction for audit and
   // replay, but that direction is not a public recommendation. Publishing the
   // raw code made a low-evidence batch look like ten confident home wins. At
