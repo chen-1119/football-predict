@@ -231,10 +231,10 @@ const buildEvidenceAgents = (match) => {
 
 const PROFILE_WEIGHTS = Object.freeze({
   gpt: { math: 0.34, market: 0.23, history: 0.17, fundamentals: 0.12, intelligence: 0.04, draw: 0.10, adversarial: 0.13 },
-  claude: { math: 0.30, market: 0.28, history: 0.16, fundamentals: 0.10, intelligence: 0.03, draw: 0.13, adversarial: 0.18 },
+  kimi: { math: 0.30, market: 0.28, history: 0.16, fundamentals: 0.10, intelligence: 0.03, draw: 0.13, adversarial: 0.18 },
   gemini: { math: 0.30, market: 0.22, history: 0.18, fundamentals: 0.15, intelligence: 0.05, draw: 0.10, adversarial: 0.14 },
   deepseek: { math: 0.35, market: 0.18, history: 0.17, fundamentals: 0.10, intelligence: 0.03, draw: 0.10, adversarial: 0.12 },
-  grok: { math: 0.32, market: 0.18, history: 0.14, fundamentals: 0.10, intelligence: 0.04, draw: 0.08, adversarial: 0.24 },
+  doubao: { math: 0.32, market: 0.18, history: 0.14, fundamentals: 0.10, intelligence: 0.04, draw: 0.08, adversarial: 0.24 },
   qwen: { math: 0.33, market: 0.27, history: 0.17, fundamentals: 0.08, intelligence: 0.02, draw: 0.13, adversarial: 0.16 },
 });
 

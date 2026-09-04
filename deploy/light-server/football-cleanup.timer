@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Football Predict server cleanup daily
+
+[Timer]
+OnCalendar=*-*-* 04:35:00
+RandomizedDelaySec=20m
+Persistent=true
+Unit=football-cleanup.service
+
+[Install]
+WantedBy=timers.target

@@ -856,7 +856,15 @@ const readPublicationJson = (publication, relativePath, fallback = null) => {
       fail("GENERATION_CORE_FILE_MISSING", `missing ${relativePath}`);
     }
     if (!present) return fallback;
-    return readGenerationFile(publication.context, relativePath, { parseJson: true });
+    try {
+      return readGenerationFile(publication.context, relativePath, { parseJson: true });
+    } catch (error) {
+      // Optional projections must never turn the otherwise healthy public API
+      // into a 500 after a late disk fault. Required base files still fail
+      // closed, while optional files degrade to the caller's explicit fallback.
+      if (!definition?.required && error instanceof DataGenerationError) return fallback;
+      throw error;
+    }
   }
   try {
     return JSON.parse(fs.readFileSync(path.join(publication.publicDataDir, relativePath), "utf8"));

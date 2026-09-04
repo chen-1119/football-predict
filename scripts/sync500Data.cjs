@@ -2,6 +2,7 @@ const fs = require("fs");
 const https = require("https");
 const path = require("path");
 const iconv = require("iconv-lite");
+const { eventSafeExistingSignal } = require("./externalSignalEventIdentity.cjs");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const PUBLIC_DIR = path.join(PROJECT_ROOT, "public");
@@ -160,10 +161,12 @@ function buildSignal(attrs, rowHtml, updatedAt) {
 
 function parseRows(html, updatedAt) {
   const rows = [];
-  const re = /<tr\s+class="bet-tb-tr"([^>]*)>([\s\S]*?)<\/tr>/g;
+  const re = /<tr\b([^>]*)>([\s\S]*?)<\/tr>/gi;
   let match;
   while ((match = re.exec(html))) {
     const attrs = parseAttrs(match[1]);
+    const classNames = norm(attrs.class).split(/\s+/).filter(Boolean);
+    if (!classNames.includes("bet-tb-tr")) continue;
     const rowHtml = match[2];
     const keys = signalKeys(attrs);
     if (!keys.length) continue;
@@ -172,6 +175,57 @@ function parseRows(html, updatedAt) {
     rows.push({ keys, signal });
   }
   return rows;
+}
+
+function requireUsableRows(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    throw new Error("500.com jczq parser returned 0 usable odds rows; preserving the last known snapshot");
+  }
+  return rows;
+}
+
+function mergeMarketSignal(existing, next) {
+  const previousRaw = existing && typeof existing === "object" && !Array.isArray(existing)
+    ? existing
+    : {};
+  const incoming = next && typeof next === "object" && !Array.isArray(next)
+    ? next
+    : {};
+  const previous = eventSafeExistingSignal(previousRaw, incoming);
+  const definedIncoming = Object.fromEntries(
+    Object.entries(incoming).filter(([, value]) => value !== undefined && value !== null)
+  );
+  const sources = Array.from(new Set(
+    String(previous.source || "")
+      .split("+")
+      .concat(String(incoming.source || "").split("+"))
+      .map((item) => item.trim())
+      .filter(Boolean)
+  ));
+  const incomingBookmakerOdds = Object.fromEntries(
+    Object.entries(incoming.bookmakerOdds || {}).filter(([, value]) => value !== undefined && value !== null)
+  );
+  return {
+    ...previous,
+    ...definedIncoming,
+    source: sources.join("+") || incoming.source || previous.source || "500.com:jczq",
+    bookmakerOdds: {
+      ...(previous.bookmakerOdds || {}),
+      ...incomingBookmakerOdds,
+    },
+    // The market-only collector must never erase a result or a previously
+    // collected detail component. Result settlement is downstream of this
+    // shared file and may run several minutes after the score first appears.
+    ...(previous.fiveHundred ? {
+      fiveHundred: {
+        ...previous.fiveHundred,
+        ...(incoming.fiveHundred || {}),
+        ...(previous.fiveHundred.result && !incoming.fiveHundred?.result
+          ? { result: previous.fiveHundred.result }
+          : {}),
+      },
+    } : {}),
+  };
 }
 
 function readExisting() {
@@ -222,14 +276,14 @@ async function main() {
   const updatedAt = new Date().toISOString();
   const body = await httpGetBuffer(SOURCE_URL);
   const html = iconv.decode(body, "gbk");
-  const rows = parseRows(html, updatedAt);
+  const rows = requireUsableRows(parseRows(html, updatedAt));
   const existing = readExisting();
   const matches = { ...(existing.matches || {}) };
 
   let mapped = 0;
   for (const row of rows) {
     for (const key of row.keys) {
-      matches[key] = row.signal;
+      matches[key] = mergeMarketSignal(matches[key], row.signal);
       mapped += 1;
     }
   }
@@ -258,7 +312,18 @@ async function main() {
   }, null, 2));
 }
 
-main().catch((error) => {
-  console.error(error.message || error);
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error.message || error);
+    process.exitCode = 1;
+  });
+}
+
+module.exports = {
+  parseAttrs,
+  parseOdds,
+  parseRows,
+  requireUsableRows,
+  signalKeys,
+  mergeMarketSignal,
+};

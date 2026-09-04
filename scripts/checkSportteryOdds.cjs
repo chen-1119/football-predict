@@ -1,25 +1,21 @@
 const fs = require("fs");
 const path = require("path");
 const https = require("https");
+const {
+  SPORTTERY_CALCULATOR_URL,
+  SPORTTERY_CURRENT_URL,
+  sportteryRequestHeaders,
+} = require("./sportteryEndpointContract.cjs");
+const {
+  browserFallbackEnabled,
+  requestJsonViaEdgeDocument,
+} = require("./sportteryBrowserTransport.cjs");
 
-const SPORTTERY_BASE = "https://webapi.sporttery.cn";
 const VERIFY_MODE = String(process.env.ODDS_VERIFY_MODE || "strict").toLowerCase();
 const SOURCES = [
-  `${SPORTTERY_BASE}/gateway/jc/football/getMatchCalculatorV1.qry?poolCode=hhad,had&channel=c`,
-  `${SPORTTERY_BASE}/gateway/uniform/football/getMatchListV1.qry?clientCode=3001`,
+  SPORTTERY_CALCULATOR_URL,
+  SPORTTERY_CURRENT_URL,
 ];
-const SPORTTERY_REQUEST_HEADERS = Object.freeze({
-  "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1",
-  Accept: "application/json, text/plain, */*",
-  "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-  "Accept-Encoding": "identity",
-  Referer: "https://m.sporttery.cn/mjc/zqhh/?tab=all",
-  Origin: "https://m.sporttery.cn",
-  "Sec-Fetch-Site": "same-site",
-  "Sec-Fetch-Mode": "cors",
-  "Sec-Fetch-Dest": "empty",
-});
-
 function toNum(value) {
   if (value === null || value === undefined || value === "") return null;
   const n = Number(value);
@@ -48,9 +44,12 @@ function officialHadOdds(row) {
   });
 }
 
-function httpGetJson(url) {
+function httpGetJsonPrimary(url) {
   return new Promise((resolve, reject) => {
-    const req = https.request(url, { method: "GET", headers: SPORTTERY_REQUEST_HEADERS }, (res) => {
+    const req = https.request(url, {
+      method: "GET",
+      headers: sportteryRequestHeaders(url),
+    }, (res) => {
       let body = "";
       res.setEncoding("utf8");
       res.on("data", (chunk) => {
@@ -75,6 +74,20 @@ function httpGetJson(url) {
     req.on("error", reject);
     req.end();
   });
+}
+
+async function httpGetJson(url) {
+  try {
+    return await httpGetJsonPrimary(url);
+  } catch (error) {
+    if (!browserFallbackEnabled()) throw error;
+    try {
+      return (await requestJsonViaEdgeDocument(url)).payload;
+    } catch (browserError) {
+      browserError.cause = error;
+      throw browserError;
+    }
+  }
 }
 
 async function loadOfficialOdds() {

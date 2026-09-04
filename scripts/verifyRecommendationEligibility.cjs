@@ -188,14 +188,15 @@ check("model-only fixtures are exercised independently of the runtime slate",
   deterministicFixtures: deterministicModelOnlyFixtures.length,
   isolatedFromRuntimeSlate: modelOnlyMatches === deterministicModelOnlyFixtures
 });
-check("model-only BEST rows are non-actionable labeled references", regeneratedBestRows.length === modelOnlyMatches.length
+check("model-only BEST rows keep a visible cold-start reference while formal eligibility fails closed", regeneratedBestRows.length === modelOnlyMatches.length
   && regeneratedBestRows.every(({ prediction, inputSufficiency }) => (
     prediction.recommendationAction === "reference"
     && Number(prediction.odds || 0) === 0
     && prediction.resultStatus === "PENDING"
+    && ["1", "X", "2"].includes(prediction.tipCode)
     && (inputSufficiency?.sufficient === true
-      ? prediction.recommendationTier === "model-only-watch" && ["1", "X", "2"].includes(prediction.tipCode)
-      : prediction.recommendationTier === "cold-start-reference" && ["1", "X", "2"].includes(prediction.tipCode))
+      ? prediction.recommendationTier === "model-only-watch"
+      : prediction.recommendationTier === "cold-start-reference")
   )), { rows: regeneratedBestRows.map(({ matchId, prediction, inputSufficiency }) => ({
     matchId,
     inputSufficient: inputSufficiency?.sufficient ?? null,
@@ -211,7 +212,7 @@ check("no model-only row is actionable", regeneratedModelOnlyRows.every(({ predi
   && Number(prediction.odds || 0) === 0
 )));
 
-check("frontend keeps formal gates and hides directions without official SP",
+check("frontend keeps formal gates while reference directions remain separately visible without official SP",
   displayRecommendationSource.includes("getOfficialRecommendationHandicapLine(match, prediction)")
   && predictionsListSource.includes("if (!storedBest || !isPredictionOfficialResultPoolAvailable(match, storedBest)) return null")
   && predictionsListSource.includes("getOfficialPredictionHandicapLine(match, storedBest)")

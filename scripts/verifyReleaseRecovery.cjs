@@ -18,20 +18,20 @@ const rollbackPhases = [
   "runtime-env-updating",
   "runtime-env-updated",
   "candidate-validated",
+  "host-config-changing",
+  "host-config-applied",
   "external-model-artifacts-snapshotted",
   "sqlite-snapshotted",
   "swap-starting",
   "swap-complete",
-  "host-config-changing",
-  "host-config-applied",
   "readiness-passed",
   "rollback-starting",
   "recovering-rollback",
   "rolled-back"
 ];
-const preSwapPhases = new Set(rollbackPhases.slice(0, 6));
-const sqlitePhases = new Set(rollbackPhases.slice(5));
-const modelPhases = new Set(rollbackPhases.slice(4));
+const preSwapPhases = new Set(rollbackPhases.slice(0, 8));
+const sqlitePhases = new Set(rollbackPhases.slice(7));
+const modelPhases = new Set(rollbackPhases.slice(6));
 const forwardPhases = ["finalizing", "committed", "recovering-commit"];
 
 const managedConfigPaths = [
@@ -45,6 +45,7 @@ const managedConfigPaths = [
   "/etc/nginx/snippets/football-predict-server.conf",
   "/etc/nginx/snippets/football-predict-security-headers.conf",
   "/etc/nginx/sites-available/football-predict",
+  "/etc/nginx/sites-enabled/default",
   "/etc/nginx/sites-enabled/football-predict"
 ];
 
@@ -98,7 +99,7 @@ const defaultSystemState = () => ({
   }
 });
 
-const createFixture = (phase, { health = true, modelArtifactCount = 2 } = {}) => {
+const createFixture = (phase, { health = true, modelArtifactCount = 2, legacyManagedConfig = false } = {}) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "football-release-recovery-"));
   const current = mapped(root, "/var/lib/football-release/recovery/current");
   const recoveryRoot = path.dirname(current);
@@ -166,7 +167,10 @@ const createFixture = (phase, { health = true, modelArtifactCount = 2 } = {}) =>
   const configEntries = path.join(configDir, "entries");
   mkdir(configEntries, 0o700);
   managedConfigPaths.forEach((target) => mkdir(path.dirname(mapped(root, target)), 0o755));
-  write(path.join(configDir, "manifest.tsv"), managedConfigPaths
+  const fixtureManagedConfigPaths = legacyManagedConfig
+    ? managedConfigPaths.filter((target) => target !== "/etc/nginx/sites-enabled/default")
+    : managedConfigPaths;
+  write(path.join(configDir, "manifest.tsv"), fixtureManagedConfigPaths
     .map((target, index) => `${index + 1}\tabsent\t${target}\t-\t-`)
     .join("\n") + "\n");
   write(path.join(configDir, "timers.tsv"), [
@@ -384,6 +388,154 @@ for (const phase of rollbackPhases) {
     assert.equal(second.status, 0, `${phase} idempotence: ${second.stderr}`);
     assert.equal(JSON.parse(second.stdout).action, "noop", `${phase} idempotence`);
     assertions += sqlitePhases.has(phase) ? 10 : 9;
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+}
+
+{
+  const fixture = createFixture("candidate-validated");
+  try {
+    fs.rmSync(path.join(fixture.current, "trees", "new-app.json"));
+    fs.rmSync(fixture.next, { recursive: true, force: true });
+    const result = runRecovery(fixture);
+    assert.equal(result.status, 0, `disposed pre-swap candidate recovery: ${result.stderr}`);
+    assert.equal(JSON.parse(result.stdout).action, "rollback");
+    assert.equal(readTreeId(fixture.app), "old");
+    assertAbsent(fixture.current);
+    assertAbsent(fixture.failed);
+    assertions += 5;
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+}
+
+{
+  const fixture = createFixture("candidate-validated");
+  try {
+    fs.rmSync(path.join(fixture.current, "trees", "new-app.json"));
+    const mockPath = mapped(fixture.root, "/mock-systemd.json");
+    const before = fs.readFileSync(mockPath, "utf8");
+    const result = runRecovery(fixture);
+    assert.notEqual(result.status, 0, "missing candidate identity with live NEXT must be rejected");
+    assert.match(result.stderr, /required new-app app identity is missing/);
+    assert.equal(readTreeId(fixture.app), "old");
+    assert.equal(readTreeId(fixture.next), "new");
+    assert.equal(fs.readFileSync(mockPath, "utf8"), before,
+      "identity rejection must happen before quiesce or restore");
+    assertions += 5;
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+}
+
+{
+  const fixture = createFixture("candidate-validated", { legacyManagedConfig: true });
+  try {
+    const unmanagedLegacyDefault = mapped(fixture.root, "/etc/nginx/sites-enabled/default");
+    write(unmanagedLegacyDefault, "legacy-unmanaged-default\n", 0o644);
+    const result = runRecovery(fixture);
+    assert.equal(result.status, 0, `legacy managed config recovery: ${result.stderr}`);
+    assert.equal(JSON.parse(result.stdout).action, "rollback");
+    assert.equal(fs.readFileSync(unmanagedLegacyDefault, "utf8"), "legacy-unmanaged-default\n");
+    assertAbsent(fixture.current);
+    assertions += 4;
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+}
+
+{
+  const fixture = createFixture("candidate-validated", { legacyManagedConfig: true });
+  try {
+    const manifestPath = path.join(fixture.current, "managed-config", "manifest.tsv");
+    const beforeSystemState = fs.readFileSync(mapped(fixture.root, "/mock-systemd.json"), "utf8");
+    fs.writeFileSync(manifestPath, fs.readFileSync(manifestPath, "utf8").replace(
+      "/etc/nginx/sites-enabled/football-predict",
+      "/etc/nginx/sites-enabled/untrusted"
+    ));
+    const result = runRecovery(fixture);
+    assert.notEqual(result.status, 0, "unknown legacy config target must be rejected");
+    assert.match(result.stderr, /managed config manifest order mismatch/);
+    assert.equal(fs.readFileSync(mapped(fixture.root, "/mock-systemd.json"), "utf8"), beforeSystemState);
+    assertions += 3;
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+}
+
+{
+  const fixture = createFixture("recovering-rollback");
+  try {
+    fs.rmSync(path.join(fixture.current, "trees", "new-app.json"));
+    fs.rmSync(fixture.app, { recursive: true, force: true });
+    fs.renameSync(fixture.backup, fixture.app);
+    const result = runRecovery(fixture);
+    assert.equal(result.status, 0, `converged rollback resume: ${result.stderr}`);
+    assert.equal(JSON.parse(result.stdout).action, "rollback");
+    assert.equal(readTreeId(fixture.app), "old");
+    assertAbsent(fixture.current);
+    assertAbsent(fixture.failed);
+    assertions += 5;
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+}
+
+{
+  const fixture = createFixture("recovering-rollback");
+  try {
+    fs.rmSync(path.join(fixture.current, "trees", "new-app.json"));
+    fs.rmSync(fixture.app, { recursive: true, force: true });
+    fs.renameSync(fixture.backup, fixture.app);
+    fs.rmSync(path.join(fixture.current, "sqlite"), { recursive: true, force: true });
+    fs.rmSync(path.join(fixture.current, "external-model-artifacts"), { recursive: true, force: true });
+    const sqliteBefore = fs.readFileSync(fixture.sqliteTarget, "utf8");
+    const strategyBefore = fs.readFileSync(fixture.strategyTarget, "utf8");
+    const result = runRecovery(fixture);
+    assert.equal(result.status, 0, `converged pre-snapshot rollback resume: ${result.stderr}`);
+    assert.equal(JSON.parse(result.stdout).action, "rollback");
+    assert.equal(fs.readFileSync(fixture.sqliteTarget, "utf8"), sqliteBefore);
+    assert.equal(fs.readFileSync(fixture.strategyTarget, "utf8"), strategyBefore);
+    assertAbsent(fixture.current);
+    assertions += 5;
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+}
+
+{
+  const fixture = createFixture("recovering-rollback");
+  try {
+    fs.rmSync(path.join(fixture.current, "trees", "new-app.json"));
+    fs.rmSync(fixture.app, { recursive: true, force: true });
+    fs.renameSync(fixture.backup, fixture.app);
+    fs.rmSync(path.join(fixture.current, "external-model-artifacts"), { recursive: true, force: true });
+    const beforeSystemState = fs.readFileSync(mapped(fixture.root, "/mock-systemd.json"), "utf8");
+    const result = runRecovery(fixture);
+    assert.notEqual(result.status, 0, "sqlite-only rollback snapshot layout must be rejected");
+    assert.match(result.stderr, /sqlite rollback snapshot exists without its preceding model snapshot/);
+    assert.equal(fs.readFileSync(mapped(fixture.root, "/mock-systemd.json"), "utf8"), beforeSystemState);
+    assertions += 3;
+  } finally {
+    fs.rmSync(fixture.root, { recursive: true, force: true });
+  }
+}
+
+{
+  const fixture = createFixture("recovering-rollback");
+  try {
+    fs.rmSync(path.join(fixture.current, "trees", "new-app.json"));
+    const mockPath = mapped(fixture.root, "/mock-systemd.json");
+    const before = fs.readFileSync(mockPath, "utf8");
+    const result = runRecovery(fixture);
+    assert.notEqual(result.status, 0, "missing candidate identity with post-swap topology must be rejected");
+    assert.match(result.stderr, /required new-app app identity is missing/);
+    assert.equal(readTreeId(fixture.app), "new");
+    assert.equal(readTreeId(fixture.backup), "old");
+    assert.equal(fs.readFileSync(mockPath, "utf8"), before,
+      "post-swap identity rejection must happen before quiesce or restore");
+    assertions += 5;
   } finally {
     fs.rmSync(fixture.root, { recursive: true, force: true });
   }

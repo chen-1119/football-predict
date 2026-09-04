@@ -1,164 +1,121 @@
 import React, { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContextCore';
-import type { HitAndWinPick, HitAndWinSubmission } from '../context/AppContextCore';
 import type { Match } from '../services/mockData';
-import { isBeforeMatchSaleCutoff } from '../services/matchLifecycle';
 import { getTeamById } from '../services/entities';
-import { TeamBadge } from '../components/TeamBadge';
-import { Check, MessageSquare, NotebookPen, Save, ShieldAlert } from 'lucide-react';
+import { DateScopeBar } from '../components/predictions/DateScopeBar';
 
-type MatchWithOdds = Match & { odds: NonNullable<Match['odds']> };
-
-interface PersonalReviewEntry {
-  id: string;
-  nickname: string;
-  comment: string;
-  createdAt: string;
-  selections: HitAndWinSubmission;
-  fixtures?: Record<string, PersonalReviewFixture>;
-}
-
-interface PersonalReviewFixture {
-  sourceMatchId?: string | null;
-  homeTeamId?: string;
-  awayTeamId?: string;
-  homeTeamName?: string;
-  homeTeamNameEn?: string;
-  awayTeamName?: string;
-  awayTeamNameEn?: string;
-  kickoffTime?: string;
-}
-
-const STORAGE_KEY = 'football_worldcup_prediction_wall';
-
-const hasOdds = (match: Match): match is MatchWithOdds => Boolean(match.odds);
-
-const readPersonalReviewEntries = (): PersonalReviewEntry[] => {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-};
-
-const pickLabels: Record<HitAndWinPick, { zh: string; en: string }> = {
-  '1': { zh: '主胜', en: 'Home' },
-  X: { zh: '平局', en: 'Draw' },
-  '2': { zh: '客胜', en: 'Away' }
-};
-
-const matchResultPick = (match: Match): HitAndWinPick | null => {
-  if (match.status !== 'FINISHED' || !Number.isFinite(match.scoreHome) || !Number.isFinite(match.scoreAway)) return null;
-  if (Number(match.scoreHome) > Number(match.scoreAway)) return '1';
-  if (Number(match.scoreHome) < Number(match.scoreAway)) return '2';
-  return 'X';
-};
-
-const normalizeMatchIdentity = (value: unknown) => String(value || '')
-  .trim()
-  .toLowerCase()
-  .replace(/^sporttery[_:-]/, '');
-
-const findReviewMatch = (
-  matchId: string,
-  fixture: PersonalReviewFixture | undefined,
-  matches: Match[]
-) => {
-  const directMatch = matches.find((match) => match.id === matchId);
-  if (directMatch) return directMatch;
-
-  const identities = new Set([
-    normalizeMatchIdentity(matchId),
-    normalizeMatchIdentity(fixture?.sourceMatchId)
-  ].filter(Boolean));
-  if (identities.size === 0) return undefined;
-
-  return matches.find((match) => (
-    identities.has(normalizeMatchIdentity(match.id))
-    || identities.has(normalizeMatchIdentity(match.sourceMatchId))
-  ));
-};
-
-const scoreEntry = (entry: PersonalReviewEntry, matches: Match[]) => {
-  const rows = Object.entries(entry.selections).map(([matchId, pick]) => {
-    const fixture = entry.fixtures?.[matchId];
-    const match = findReviewMatch(matchId, fixture, matches);
-    const resultPick = match ? matchResultPick(match) : null;
-    const isSettled = Boolean(resultPick);
-    return {
-      match,
-      fixture,
-      pick,
-      resultPick,
-      isSettled,
-      isHit: isSettled && resultPick === pick,
-      state: isSettled ? 'settled' : match ? 'waiting' : 'unavailable'
-    };
-  });
-
-  return {
-    total: rows.length,
-    settled: rows.filter((row) => row.isSettled).length,
-    hits: rows.filter((row) => row.isHit).length,
-    waiting: rows.filter((row) => row.state === 'waiting').length,
-    unavailable: rows.filter((row) => row.state === 'unavailable').length,
-    rows
-  };
-};
-
-const createPersonalReviewEntry = (
-  comment: string,
-  selections: HitAndWinSubmission,
-  matches: Match[]
-): PersonalReviewEntry => ({
-  id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-  nickname: '',
-  comment: comment.trim().slice(0, 140),
-  createdAt: new Date().toISOString(),
-  selections,
-  // Keep an on-device pre-match fixture snapshot. A settled history row can
-  // legitimately receive a storage-row id different from the current lane;
-  // the snapshot lets the review remain understandable while it is resolved.
-  fixtures: Object.fromEntries(Object.keys(selections).map((matchId) => {
-    const match = matches.find((candidate) => candidate.id === matchId);
-    return [matchId, {
-      sourceMatchId: match?.sourceMatchId || null,
-      homeTeamId: match?.homeTeamId,
-      awayTeamId: match?.awayTeamId,
-      homeTeamName: match?.homeTeamName,
-      homeTeamNameEn: match?.homeTeamNameEn,
-      awayTeamName: match?.awayTeamName,
-      awayTeamNameEn: match?.awayTeamNameEn,
-      kickoffTime: match?.kickoffTime
-    }];
-  }))
+const shanghaiDateFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'Asia/Shanghai',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit'
 });
 
+const reviewDateKey = (match: Match) => {
+  const explicitDate = String(match.businessDate || match.matchDate || match.kickoffDate || '').slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(explicitDate)) return explicitDate;
+  const kickoffAt = new Date(match.kickoffTime || '');
+  if (!Number.isFinite(kickoffAt.getTime())) return '';
+  const parts = shanghaiDateFormatter.formatToParts(kickoffAt);
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const day = parts.find((part) => part.type === 'day')?.value;
+  return year && month && day ? `${year}-${month}-${day}` : '';
+};
+
+const formatReviewDate = (date: string, language: 'zh' | 'en') => {
+  const parsed = new Date(`${date}T12:00:00+08:00`);
+  if (!Number.isFinite(parsed.getTime())) return date;
+  return new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-US', {
+    timeZone: 'Asia/Shanghai',
+    month: '2-digit',
+    day: '2-digit',
+    weekday: 'short'
+  }).format(parsed);
+};
+
 export const HitAndWin: React.FC = () => {
-  const { language, matches } = useApp();
+  const { language, matches, dataSync } = useApp();
+  const navigate = useNavigate();
 
-  const hitMatches = useMemo(() => {
-    return matches
-      .filter((match: Match): match is MatchWithOdds => (
-        match.status === 'SCHEDULED' && isBeforeMatchSaleCutoff(match) && hasOdds(match)
-      ))
-      .slice(0, 10);
-  }, [matches]);
-
-  const systemReviewMatches = useMemo(() => matches
+  const allSystemReviewMatches = useMemo(() => matches
     .filter((match) => match.status === 'FINISHED' || Boolean(match.postMatchReview))
     .sort((left, right) => {
       const leftAt = Date.parse(left.postMatchReview?.generatedAt || left.resultUpdatedAt || left.kickoffTime || '') || 0;
       const rightAt = Date.parse(right.postMatchReview?.generatedAt || right.resultUpdatedAt || right.kickoffTime || '') || 0;
       return rightAt - leftAt;
-    })
-    .slice(0, 12), [matches]);
+    }), [matches]);
 
-  const [selections, setSelections] = useState<HitAndWinSubmission>({});
-  const [comment, setComment] = useState('');
-  const [entries, setEntries] = useState<PersonalReviewEntry[]>(readPersonalReviewEntries);
-  const [notice, setNotice] = useState<{ type: 'success' | 'danger'; text: string } | null>(null);
+  const systemReviewDates = useMemo(() => Array.from(new Set(
+    allSystemReviewMatches.map(reviewDateKey).filter(Boolean)
+  )).sort((left, right) => right.localeCompare(left)), [allSystemReviewMatches]);
+  const [selectedReviewDate, setSelectedReviewDate] = useState('');
+  const activeReviewDate = selectedReviewDate && systemReviewDates.includes(selectedReviewDate)
+    ? selectedReviewDate
+    : systemReviewDates[0] || '';
+  const quickReviewDates = systemReviewDates.slice(0, 3);
+  const olderReviewDates = systemReviewDates.slice(3, 31);
+  const selectedOlderReviewDate = olderReviewDates.includes(activeReviewDate) ? activeReviewDate : '';
+  const systemReviewMatches = useMemo(() => allSystemReviewMatches.filter((match) => (
+    !activeReviewDate || reviewDateKey(match) === activeReviewDate
+  )), [activeReviewDate, allSystemReviewMatches]);
+  const systemReviewSummary = useMemo(() => systemReviewMatches.reduce((summary, match) => {
+    const predictionReview = match.postMatchReview?.predictionReview;
+    const settledRows = predictionReview?.rows?.filter((row) => row.resultStatus === 'WON' || row.resultStatus === 'LOST') || [];
+    const referenceBestRow = settledRows.find((row) => (
+      row.marketType === 'BEST'
+      && row.performanceTrack !== 'formal'
+      && row.performanceTrack !== 'live-model'
+      && (row.recommendationAction === 'reference' || row.reviewRole === 'reference')
+    ));
+    if (predictionReview?.formalBestStatus === 'WON') summary.formalWon += 1;
+    if (predictionReview?.formalBestStatus === 'LOST') summary.formalLost += 1;
+    if (referenceBestRow?.resultStatus === 'WON') summary.referenceWon += 1;
+    if (referenceBestRow?.resultStatus === 'LOST') summary.referenceLost += 1;
+    if (match.postMatchReview) summary.reviewed += 1;
+    else summary.resultOnly += 1;
+    return summary;
+  }, {
+    formalWon: 0,
+    formalLost: 0,
+    referenceWon: 0,
+    referenceLost: 0,
+    reviewed: 0,
+    resultOnly: 0
+  }), [systemReviewMatches]);
+  const formalReviewPerformance = dataSync.modelEvaluation?.publicScorecard?.formalReviewPerformance;
+  const selectedFormalPerformance = formalReviewPerformance?.daily?.find((row) => row.date === activeReviewDate);
+  const selectedFormalSettled = Number(selectedFormalPerformance?.settled
+    ?? (systemReviewSummary.formalWon + systemReviewSummary.formalLost));
+  const selectedFormalWon = Number(selectedFormalPerformance?.won ?? systemReviewSummary.formalWon);
+  const selectedFormalHitRate = selectedFormalSettled > 0 ? selectedFormalWon / selectedFormalSettled : null;
+  const selectedReferenceSettled = systemReviewSummary.referenceWon + systemReviewSummary.referenceLost;
+  const selectedReferenceHitRate = selectedReferenceSettled > 0
+    ? systemReviewSummary.referenceWon / selectedReferenceSettled
+    : null;
+  const cumulativeReferencePerformance = useMemo(() => allSystemReviewMatches.reduce((summary, match) => {
+    const date = reviewDateKey(match);
+    if (!date || date < (formalReviewPerformance?.startDate || '2026-08-16')) return summary;
+    const settledRows = match.postMatchReview?.predictionReview?.rows?.filter((row) => row.resultStatus === 'WON' || row.resultStatus === 'LOST') || [];
+    const referenceBestRow = settledRows.find((row) => (
+      row.marketType === 'BEST'
+      && row.performanceTrack !== 'formal'
+      && row.performanceTrack !== 'live-model'
+      && (row.recommendationAction === 'reference' || row.reviewRole === 'reference')
+    ));
+    if (referenceBestRow?.resultStatus === 'WON') summary.won += 1;
+    if (referenceBestRow?.resultStatus === 'LOST') summary.lost += 1;
+    return summary;
+  }, { won: 0, lost: 0 }), [allSystemReviewMatches, formalReviewPerformance?.startDate]);
+  const cumulativeReferenceSettled = cumulativeReferencePerformance.won + cumulativeReferencePerformance.lost;
+  const cumulativeReferenceHitRate = cumulativeReferenceSettled > 0
+    ? cumulativeReferencePerformance.won / cumulativeReferenceSettled
+    : null;
+  const cumulativeFormalPerformance = formalReviewPerformance?.cumulative;
+  const formatHitRate = (rate: number | null | undefined) => (
+    typeof rate === 'number' && Number.isFinite(rate) ? `${(rate * 100).toFixed(1)}%` : '--'
+  );
 
   const translations = {
     title: { zh: '个人赛前复盘笔记', en: 'Personal Pre-match Review Notes' },
@@ -205,95 +162,83 @@ export const HitAndWin: React.FC = () => {
     referenceHit: { zh: '分析参考符合赛果', en: 'Analysis reference matched result' },
     referenceMiss: { zh: '分析参考未符合赛果', en: 'Analysis reference missed result' },
     reviewReason: { zh: '原因复盘', en: 'Reason review' },
-    nextAdjustment: { zh: '后续调整', en: 'Next adjustment' }
+    nextAdjustment: { zh: '后续调整', en: 'Next adjustment' },
+    mistakeReason: { zh: '未命中与失误定位', en: 'Miss and error diagnosis' },
+    frozenDirection: { zh: '赛前冻结方向', en: 'Frozen pre-match direction' },
+    scoreReview: { zh: '比分复盘', en: 'Score review' },
+    fullReview: { zh: '查看完整复盘', en: 'Open full review' },
+    reviewedCount: { zh: '完整复盘', en: 'Full reviews' },
+    resultOnlyCount: { zh: '仅赛果', en: 'Result only' }
   };
 
   const t = (key: keyof typeof translations) => translations[key][language] || '';
-
-  const handleSelect = (matchId: string, pick: HitAndWinPick) => {
-    setSelections((current) => ({
-      ...current,
-      [matchId]: pick
-    }));
-    setNotice(null);
-  };
-
-  const handleReset = () => {
-    setSelections({});
-    setNotice(null);
-  };
-
-  const handleSubmit = () => {
-    if (Object.keys(selections).length === 0) {
-      setNotice({ type: 'danger', text: t('unselectedWarning') });
-      return;
-    }
-
-    if (!comment.trim()) {
-      setNotice({ type: 'danger', text: t('commentWarning') });
-      return;
-    }
-
-    const entry = createPersonalReviewEntry(comment, selections, matches);
-    const nextEntries = [entry, ...entries].slice(0, 30);
-    setEntries(nextEntries);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(nextEntries));
-    setSelections({});
-    setComment('');
-    setNotice({ type: 'success', text: t('submittedText') });
-  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
       <div style={{ textAlign: 'center', maxWidth: '760px', margin: '0 auto' }}>
         <h1 style={{ fontSize: '2rem', fontWeight: '800', fontFamily: 'var(--font-title)' }} className="gradient-text">
-          {t('title')}
+          {language === 'zh' ? '赛后复盘中心' : 'Post-match Review Center'}
         </h1>
         <p style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.9rem', marginTop: '0.5rem', lineHeight: '1.6' }}>
-          {t('subtitle')}
+          {language === 'zh'
+            ? '只展示已进入赛果阶段的历史比赛；按比赛日期筛选，点击任一场可查看完整结算、未命中原因和后续调整。'
+            : 'Only historical fixtures with results are shown. Filter by match date and open any fixture for settlement, miss diagnosis, and next adjustments.'}
         </p>
       </div>
 
-      <div className="card premium-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '1.5rem', borderColor: 'hsl(var(--primary) / 0.28)' }}>
-        <h3 style={{ fontSize: '1.1rem', fontWeight: '800', color: 'hsl(var(--primary))', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <NotebookPen size={18} />
-          {t('rulesCard')}
-        </h3>
-        <ul style={{ listStyle: 'none', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.5rem', fontSize: '0.85rem', color: 'hsl(var(--text-secondary))' }}>
-          <li>{t('rule1')}</li>
-          <li>{t('rule2')}</li>
-          <li>{t('rule3')}</li>
-          <li style={{ color: 'hsl(var(--accent))', fontWeight: '700' }}>{t('rule4')}</li>
-        </ul>
-      </div>
-
-      {notice && (
-        <div
-          className="card"
-          role={notice.type === 'danger' ? 'alert' : 'status'}
-          aria-live={notice.type === 'danger' ? 'assertive' : 'polite'}
-          style={{
-          border: `1px solid hsl(var(--${notice.type === 'success' ? 'primary' : 'danger'}) / 0.3)`,
-          backgroundColor: `hsl(var(--${notice.type === 'success' ? 'primary' : 'danger'}) / 0.1)`,
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.5rem',
-          padding: '1rem',
-          borderRadius: '12px'
-          }}
-        >
-          {notice.type === 'success'
-            ? <Check size={18} style={{ color: 'hsl(var(--primary))' }} />
-            : <ShieldAlert size={18} style={{ color: 'hsl(var(--danger))' }} />}
-          <span style={{ fontSize: '0.85rem', color: 'hsl(var(--text-primary))' }}>{notice.text}</span>
-        </div>
-      )}
-
       <section className="card premium-card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1.25rem', borderColor: 'hsl(var(--primary) / 0.28)' }}>
-        <div>
-          <h2 style={{ fontSize: '1.2rem', fontWeight: '900', color: 'hsl(var(--text-primary))' }}>{t('systemReviewTitle')}</h2>
-          <p style={{ marginTop: '0.35rem', color: 'hsl(var(--text-secondary))', fontSize: '0.82rem', lineHeight: 1.5 }}>{t('systemReviewSubtitle')}</p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap' }}>
+          <div>
+            <h2 style={{ fontSize: '1.2rem', fontWeight: '900', color: 'hsl(var(--text-primary))' }}>{t('systemReviewTitle')}</h2>
+            <p style={{ marginTop: '0.35rem', color: 'hsl(var(--text-secondary))', fontSize: '0.82rem', lineHeight: 1.5 }}>{t('systemReviewSubtitle')}</p>
+          </div>
         </div>
+        {systemReviewDates.length > 0 && (
+          <DateScopeBar
+            selectedDate={activeReviewDate}
+            quickOptions={quickReviewDates.map((date, index) => ({
+              date,
+              label: index === 0
+                ? (language === 'zh' ? '最新' : 'Latest')
+                : index === 1
+                  ? (language === 'zh' ? '上一期' : 'Previous')
+                  : (language === 'zh' ? '上两期' : 'Two back'),
+              displayDate: formatReviewDate(date, language)
+            }))}
+            historyOptions={olderReviewDates.map((date) => ({
+              date,
+              label: language === 'zh' ? '更早' : 'Earlier',
+              displayDate: formatReviewDate(date, language)
+            }))}
+            selectedHistoryDate={selectedOlderReviewDate}
+            historyLabel={language === 'zh' ? '更多复盘日期' : 'More review dates'}
+            onSelectDate={setSelectedReviewDate}
+          />
+        )}
+        {systemReviewMatches.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.78rem', color: 'hsl(var(--text-secondary))' }}>
+            <span className="mini-watch">{t('reviewedCount')} {systemReviewSummary.reviewed}/{systemReviewMatches.length}</span>
+            {systemReviewSummary.resultOnly > 0 && <span className="mini-watch">{t('resultOnlyCount')} {systemReviewSummary.resultOnly}</span>}
+            <span className="mini-hit" data-review-date-reference-hit-rate={selectedReferenceHitRate ?? ''}>
+              {language === 'zh' ? '当日数据推荐命中率' : 'Daily data-pick hit rate'} {formatHitRate(selectedReferenceHitRate)} ({systemReviewSummary.referenceWon}/{selectedReferenceSettled})
+            </span>
+            {selectedFormalSettled > 0 && (
+              <span className="mini-hit" data-review-date-hit-rate={selectedFormalHitRate ?? ''}>
+                {language === 'zh' ? '当日正式命中率' : 'Daily formal hit rate'} {formatHitRate(selectedFormalHitRate)} ({selectedFormalWon}/{selectedFormalSettled})
+              </span>
+            )}
+            {cumulativeReferenceSettled > 0 && (
+              <span className="mini-hit" data-review-cumulative-reference-hit-rate={cumulativeReferenceHitRate ?? ''}>
+                {language === 'zh' ? `数据推荐累计（自 ${formalReviewPerformance?.startDate || '2026-08-16'}）` : `Data-pick cumulative since ${formalReviewPerformance?.startDate || '2026-08-16'}`} {formatHitRate(cumulativeReferenceHitRate)} ({cumulativeReferencePerformance.won}/{cumulativeReferenceSettled})
+              </span>
+            )}
+            {Number(cumulativeFormalPerformance?.settled || 0) > 0 && (
+              <span className="mini-hit" data-review-cumulative-hit-rate={cumulativeFormalPerformance?.hitRate ?? ''}>
+                {language === 'zh' ? `累计命中率（自 ${formalReviewPerformance?.startDate || '2026-08-16'}）` : `Cumulative since ${formalReviewPerformance?.startDate || '2026-08-16'}`} {formatHitRate(cumulativeFormalPerformance?.hitRate)} ({Number(cumulativeFormalPerformance?.won || 0)}/{Number(cumulativeFormalPerformance?.settled || 0)})
+              </span>
+            )}
+          </div>
+        )}
         {systemReviewMatches.length === 0 ? (
           <p style={{ padding: '1.25rem', textAlign: 'center', color: 'hsl(var(--text-muted))', border: '1px dashed hsl(var(--border))', borderRadius: '10px' }}>{t('noSystemReview')}</p>
         ) : (
@@ -309,21 +254,52 @@ export const HitAndWin: React.FC = () => {
                 : '--');
               const actualResult = review?.actual?.had?.label?.[language] || '--';
               const formalStatus = review?.predictionReview?.formalBestStatus || null;
-              const referenceStatus = review?.predictionReview?.referenceBestStatus || null;
+              const settledRows = review?.predictionReview?.rows?.filter((row) => row.resultStatus === 'WON' || row.resultStatus === 'LOST') || [];
+              const formalReviewRow = settledRows.find((row) => row.marketType === 'BEST' && row.performanceTrack === 'formal')
+                || settledRows.find((row) => row.performanceTrack === 'formal');
+              const liveReviewRow = settledRows.find((row) => row.marketType === 'BEST' && row.performanceTrack === 'live-model')
+                || settledRows.find((row) => row.performanceTrack === 'live-model');
+              const referenceReviewRow = settledRows.find((row) => (
+                row.marketType === 'BEST'
+                && (row.recommendationAction === 'reference' || row.reviewRole === 'reference')
+              )) || settledRows.find((row) => row.recommendationAction === 'reference' || row.reviewRole === 'reference');
+              // Preserve independent ledgers while still showing the real
+              // pre-match direction that the customer saw.
+              const primaryReviewRow = formalReviewRow || liveReviewRow || referenceReviewRow;
+              const primaryTrack = formalReviewRow
+                ? 'formal'
+                : liveReviewRow
+                  ? 'live-model'
+                  : referenceReviewRow
+                    ? 'reference'
+                    : 'result-only';
               const directionLabel = formalStatus === 'WON'
-                ? t('formalHit')
+                ? (language === 'zh' ? '正式推荐 · 命中' : 'Formal pick · Hit')
                 : formalStatus === 'LOST'
-                  ? t('formalMiss')
-                  : referenceStatus === 'WON'
-                    ? t('referenceHit')
-                    : referenceStatus === 'LOST'
-                      ? t('referenceMiss')
-                      : t('resultOnly');
-              const directionColor = formalStatus === 'WON' || referenceStatus === 'WON'
+                  ? (language === 'zh' ? '正式推荐 · 未命中' : 'Formal pick · Miss')
+                  : primaryTrack === 'live-model' && primaryReviewRow?.resultStatus === 'WON'
+                    ? (language === 'zh' ? '实时推荐 · 命中' : 'Live pick · Hit')
+                    : primaryTrack === 'live-model' && primaryReviewRow?.resultStatus === 'LOST'
+                      ? (language === 'zh' ? '实时推荐 · 未命中' : 'Live pick · Miss')
+                      : primaryTrack === 'reference' && primaryReviewRow?.resultStatus === 'WON'
+                        ? (language === 'zh' ? '数据推荐 · 命中（独立统计）' : 'Data pick · Hit (separate record)')
+                        : primaryTrack === 'reference' && primaryReviewRow?.resultStatus === 'LOST'
+                          ? (language === 'zh' ? '数据推荐 · 未命中（独立统计）' : 'Data pick · Miss (separate record)')
+                          : t('resultOnly');
+              const directionColor = primaryReviewRow?.resultStatus === 'WON'
                 ? 'hsl(var(--primary))'
-                : formalStatus === 'LOST' || referenceStatus === 'LOST'
+                : primaryReviewRow?.resultStatus === 'LOST'
                   ? 'hsl(var(--danger))'
                   : 'hsl(var(--text-muted))';
+              const frozenDirection = primaryReviewRow?.tipLabel?.[language] || primaryReviewRow?.tipCode || '--';
+              const marketLabel = primaryReviewRow?.oddsPoolCode === 'HHAD'
+                ? `HHAD${primaryReviewRow.handicapLine ? ` ${primaryReviewRow.handicapLine}` : ''}`
+                : primaryReviewRow?.oddsPoolCode === 'HAD' ? 'HAD' : primaryReviewRow?.marketType || '--';
+              const primaryMissSummary = primaryReviewRow?.resultStatus === 'LOST'
+                ? (language === 'zh'
+                  ? `赛前冻结方向为“${frozenDirection}”，实际结算为“${primaryReviewRow.actualLabel?.zh || actualResult}”；本场直接失误是主方向判断错误。其余原因只按已接入证据列出，不用缺失数据倒推事实。`
+                  : `The frozen direction was “${frozenDirection}”, while settlement was “${primaryReviewRow.actualLabel?.en || actualResult}”. The direct error was the primary direction call; other causes are listed only when supported by available evidence.`)
+                : '';
               return (
                 <article key={`system-review-${match.id}`} style={{ border: '1px solid hsl(var(--border))', borderRadius: '10px', padding: '0.9rem', backgroundColor: 'hsl(var(--bg))', display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', alignItems: 'flex-start' }}>
@@ -335,268 +311,29 @@ export const HitAndWin: React.FC = () => {
                     <span>·</span>
                     <span style={{ color: directionColor, fontWeight: '800' }}>{t('systemDirection')}：{directionLabel}</span>
                   </div>
+                  {primaryReviewRow && (
+                    <div style={{ fontSize: '0.76rem', color: 'hsl(var(--text-secondary))' }}>
+                      <span>{t('frozenDirection')}<strong style={{ display: 'block', color: 'hsl(var(--text-primary))' }}>{marketLabel} · {frozenDirection}{Number(primaryReviewRow.odds || 0) > 1 ? ` @${Number(primaryReviewRow.odds).toFixed(2)}` : ''}</strong></span>
+                    </div>
+                  )}
                   {(review?.modelDiagnosis?.length || review?.nextAdjustment?.length) ? (
                     <div style={{ borderTop: '1px solid hsl(var(--border))', paddingTop: '0.5rem', fontSize: '0.75rem', color: 'hsl(var(--text-muted))', lineHeight: 1.5 }}>
-                      {review?.modelDiagnosis?.slice(0, 1).map((item) => <p key={`reason-${item.code}`}><strong>{t('reviewReason')}：</strong>{item[language]}</p>)}
-                      {review?.nextAdjustment?.slice(0, 1).map((item) => <p key={`adjust-${item.code}`}><strong>{t('nextAdjustment')}：</strong>{item[language]}</p>)}
+                      {primaryMissSummary && <p><strong>{t('mistakeReason')}：</strong>{primaryMissSummary}</p>}
+                      {review?.modelDiagnosis?.slice(0, 1).map((item, index) => <p key={`reason-${item.code}`}><strong>{index === 0 ? `${t('reviewReason')}：` : ''}</strong>{item[language]}</p>)}
+                      {review?.nextAdjustment?.slice(0, 1).map((item, index) => <p key={`adjust-${item.code}`}><strong>{index === 0 ? `${t('nextAdjustment')}：` : ''}</strong>{item[language]}</p>)}
                     </div>
                   ) : null}
-                </article>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: '1.5rem', alignItems: 'start' }}>
-        <section style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {hitMatches.length === 0 ? (
-            <div className="card" style={{ padding: '3rem 2rem', textAlign: 'center', color: 'hsl(var(--text-secondary))' }}>
-              <NotebookPen size={36} style={{ color: 'hsl(var(--border))', marginBottom: '0.75rem' }} />
-              <p>{t('noMatches')}</p>
-            </div>
-          ) : hitMatches.map((match, index) => {
-            const homeTeam = getTeamById(match.homeTeamId);
-            const awayTeam = getTeamById(match.awayTeamId);
-            const userPick = selections[match.id];
-
-            return (
-              <div
-                key={match.id}
-                className="card"
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))',
-                  alignItems: 'center',
-                  gap: '1rem',
-                  padding: '1.15rem',
-                  backgroundColor: 'hsl(var(--bg-card))',
-                  borderColor: userPick ? 'hsl(var(--primary) / 0.42)' : 'hsl(var(--border))'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', minWidth: 0 }}>
-                  <span style={{
-                    width: '30px',
-                    height: '30px',
-                    borderRadius: '50%',
-                    backgroundColor: userPick ? 'hsl(var(--primary) / 0.16)' : 'hsl(var(--bg))',
-                    color: userPick ? 'hsl(var(--primary))' : 'hsl(var(--text-muted))',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontWeight: '800',
-                    fontSize: '0.85rem',
-                    flex: '0 0 auto'
-                  }}>
-                    {index + 1}
-                  </span>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontWeight: '800', fontSize: '0.95rem', flexWrap: 'wrap' }}>
-                      <TeamBadge team={homeTeam} size="sm" />
-                      <span>{homeTeam.shortName[language]}</span>
-                      <span style={{ color: 'hsl(var(--text-muted))' }}>vs</span>
-                      <TeamBadge team={awayTeam} size="sm" />
-                      <span>{awayTeam.shortName[language]}</span>
-                    </div>
-                    <span style={{ fontSize: '0.75rem', color: 'hsl(var(--text-muted))' }}>
-                      {new Date(match.kickoffTime).toLocaleDateString()} {new Date(match.kickoffTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}
-                    </span>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                  {([
-                    { key: '1', label: pickLabels['1'][language], odds: match.odds.odds1 },
-                    { key: 'X', label: pickLabels.X[language], odds: match.odds.oddsX },
-                    { key: '2', label: pickLabels['2'][language], odds: match.odds.odds2 },
-                  ] satisfies { key: HitAndWinPick; label: string; odds: number }[]).map((option) => {
-                    const isChosen = userPick === option.key;
-                    return (
-                      <button
-                        key={option.key}
-                        type="button"
-                        aria-pressed={isChosen}
-                        onClick={() => handleSelect(match.id, option.key)}
-                        className="btn"
-                        style={{
-                          padding: '0.5rem 0.85rem',
-                          fontSize: '0.8rem',
-                          borderRadius: '8px',
-                          backgroundColor: isChosen ? 'hsl(var(--primary))' : 'hsl(var(--bg))',
-                          color: isChosen ? '#03130c' : 'hsl(var(--text-primary))',
-                          border: '1px solid hsl(var(--border))',
-                          minWidth: '86px',
-                          textAlign: 'center'
-                        }}
-                      >
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                          <span style={{ fontWeight: '800' }}>{option.label}</span>
-                          <span style={{ fontSize: '0.65rem', opacity: 0.72 }}>@{option.odds.toFixed(2)}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </section>
-
-        <aside className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1.25rem', position: 'sticky', top: '96px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'hsl(var(--primary))', fontWeight: '800' }}>
-            <Save size={18} />
-            <span>{t('submitBtn')}</span>
-          </div>
-          <div className="form-group">
-            <label className="form-label" htmlFor="hit-win-comment">{t('comment')}</label>
-            <textarea
-              id="hit-win-comment"
-              className="form-input"
-              value={comment}
-              onChange={(event) => setComment(event.target.value)}
-              placeholder={t('commentPlaceholder')}
-              maxLength={140}
-              rows={4}
-              style={{ resize: 'vertical', minHeight: '96px' }}
-            />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr', gap: '0.75rem' }}>
-            <button type="button" onClick={handleReset} className="btn btn-secondary">
-              {t('resetBtn')}
-            </button>
-            <button type="button" onClick={handleSubmit} className="btn btn-primary">
-              <Save size={14} />
-              <span>{t('submitBtn')}</span>
-            </button>
-          </div>
-        </aside>
-      </div>
-
-      <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1.25rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-          <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.1rem', fontWeight: '900' }}>
-            <MessageSquare size={18} style={{ color: 'hsl(var(--primary))' }} />
-            {t('boardTitle')}
-          </h3>
-          <span style={{ color: 'hsl(var(--text-muted))', fontSize: '0.8rem' }}>
-            {entries.length} {language === 'zh' ? '条笔记' : 'notes'}
-          </span>
-        </div>
-
-        {entries.length === 0 ? (
-          <div style={{ padding: '2rem', textAlign: 'center', color: 'hsl(var(--text-secondary))', border: '1px dashed hsl(var(--border))', borderRadius: '10px' }}>
-            {t('noEntries')}
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
-            {entries.map((entry) => {
-              const score = scoreEntry(entry, matches);
-              return (
-                <article key={entry.id} className="card" style={{ backgroundColor: 'hsl(var(--bg))', display: 'flex', flexDirection: 'column', gap: '0.85rem', padding: '1rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem' }}>
-                    <div>
-                      <strong style={{ fontSize: '0.95rem' }}>{language === 'zh' ? '个人笔记' : 'Personal note'}</strong>
-                      <p style={{ marginTop: '0.25rem', color: 'hsl(var(--text-secondary))', fontSize: '0.82rem', lineHeight: 1.55 }}>{entry.comment}</p>
-                    </div>
-                    <span style={{ color: 'hsl(var(--text-muted))', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>
-                      {new Date(entry.createdAt).toLocaleDateString()}
-                    </span>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
-                    {[
-                      { label: t('pickCount'), value: score.total },
-                      { label: t('settled'), value: score.settled },
-                      { label: t('hits'), value: score.hits }
-                    ].map((item) => (
-                      <span key={item.label} style={{ border: '1px solid hsl(var(--border))', borderRadius: '8px', padding: '0.6rem', textAlign: 'center' }}>
-                        <small style={{ display: 'block', color: 'hsl(var(--text-muted))', fontSize: '0.68rem' }}>{item.label}</small>
-                        <strong style={{ color: 'hsl(var(--primary))', fontSize: '1rem' }}>{item.value}</strong>
-                      </span>
-                    ))}
-                  </div>
-
-                  <div aria-hidden="true" style={{ display: 'none' }}>
-                    <strong>{t('hitContent')}</strong>
-                    {/*
-                      <ul style={{ listStyle: 'none', marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                        {score.hitRows.map((row) => {
-                          const match = row.match;
-                          if (!match) return null;
-                          const home = getTeamById(match.homeTeamId);
-                          const away = getTeamById(match.awayTeamId);
-                          return (
-                            <li key={`${entry.id}-${match.id}`} style={{ fontSize: '0.78rem', color: 'hsl(var(--text-secondary))' }}>
-                              <span style={{ color: 'hsl(var(--primary))', fontWeight: '800' }}>{pickLabels[row.pick][language]}</span>
-                              {' · '}
-                              {home.shortName[language]} vs {away.shortName[language]}
-                              {' · '}
-                              {t('score')} {match.scoreHome}:{match.scoreAway}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    ) : (
-                      <p style={{ display: 'none' }}>
-                        {null}
-                      </p>
-                    */}
-                  </div>
-
-                  <div style={{ borderTop: '1px solid hsl(var(--border))', paddingTop: '0.75rem' }}>
-                    <strong style={{ fontSize: '0.8rem', color: 'hsl(var(--text-secondary))' }}>{t('hitContent')}</strong>
-                    <ul style={{ listStyle: 'none', marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
-                      {score.rows.map((row, index) => {
-                        const match = row.match;
-                        const fixture = row.fixture;
-                        const home = match ? getTeamById(match.homeTeamId) : null;
-                        const away = match ? getTeamById(match.awayTeamId) : null;
-                        const homeName = match?.homeTeamName
-                          || fixture?.[language === 'zh' ? 'homeTeamName' : 'homeTeamNameEn']
-                          || fixture?.homeTeamName
-                          || home?.shortName[language]
-                          || (language === 'zh' ? '主队' : 'Home');
-                        const awayName = match?.awayTeamName
-                          || fixture?.[language === 'zh' ? 'awayTeamName' : 'awayTeamNameEn']
-                          || fixture?.awayTeamName
-                          || away?.shortName[language]
-                          || (language === 'zh' ? '客队' : 'Away');
-                        const stateLabel = row.state === 'settled'
-                          ? (row.isHit ? t('hit') : t('miss'))
-                          : row.state === 'waiting' ? t('waiting') : t('unavailable');
-                        const stateColor = row.state === 'settled'
-                          ? (row.isHit ? 'hsl(var(--primary))' : 'hsl(var(--danger))')
-                          : 'hsl(var(--text-muted))';
-                        return (
-                          <li key={`${entry.id}-${match?.id || index}`} style={{ border: '1px solid hsl(var(--border))', borderRadius: '8px', padding: '0.55rem 0.6rem', fontSize: '0.76rem', color: 'hsl(var(--text-secondary))' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', alignItems: 'baseline' }}>
-                              <strong style={{ color: 'hsl(var(--text-primary))' }}>{homeName} vs {awayName}</strong>
-                              <span style={{ color: stateColor, fontWeight: '800', whiteSpace: 'nowrap' }}>{stateLabel}</span>
-                            </div>
-                            <div style={{ marginTop: '0.25rem', display: 'flex', flexWrap: 'wrap', gap: '0.4rem', color: 'hsl(var(--text-muted))' }}>
-                              <span>{pickLabels[row.pick][language]}</span>
-                              {row.isSettled && match && (
-                                <>
-                                  <span>·</span>
-                                  <span>{t('score')} {match.scoreHome}:{match.scoreAway}</span>
-                                  <span>·</span>
-                                  <span>{t('actualResult')} {row.resultPick ? pickLabels[row.resultPick][language] : '--'}</span>
-                                </>
-                              )}
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                    <p style={{ marginTop: '0.55rem', color: 'hsl(var(--text-muted))', fontSize: '0.76rem', lineHeight: 1.5 }}>
-                      <strong style={{ color: 'hsl(var(--text-secondary))' }}>{t('reviewFeedback')}：</strong>
-                      {score.settled > 0
-                        ? t('settledFeedback')
-                        : score.waiting > 0
-                          ? t('waitingFeedback')
-                          : t('unavailableFeedback')}
-                    </p>
-                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    aria-label={`${t('fullReview')}：${homeName} vs ${awayName}`}
+                    onClick={() => navigate(`/match/${encodeURIComponent(match.id)}`, {
+                      state: { openedFromList: true, fromPath: '/review' }
+                    })}
+                    style={{ alignSelf: 'flex-start', marginTop: '0.15rem' }}
+                  >
+                    {t('fullReview')}
+                  </button>
                 </article>
               );
             })}

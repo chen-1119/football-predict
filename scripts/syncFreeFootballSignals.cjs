@@ -2,6 +2,10 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const {
+  externalSignalMatchesEvent,
+  stampSignalEvent,
+} = require("./externalSignalEventIdentity.cjs");
 
 const ROOT_DIR = path.resolve(__dirname, "..");
 const DATA_DIR = path.join(ROOT_DIR, "public", "data");
@@ -75,10 +79,15 @@ const matchKeys = (match) => Array.from(new Set([
 ].filter(Boolean)));
 
 const findSignal = (externalMatches, match) => {
+  let reusableKey = null;
   for (const key of matchKeys(match)) {
-    if (externalMatches[key]) return { key, signal: externalMatches[key] };
+    if (!externalMatches[key]) continue;
+    reusableKey ||= key;
+    if (externalSignalMatchesEvent(externalMatches[key], match)) {
+      return { key, signal: externalMatches[key] };
+    }
   }
-  return { key: sourceMatchId(match) || norm(match?.id), signal: {} };
+  return { key: reusableKey || sourceMatchId(match) || norm(match?.id), signal: {} };
 };
 
 const validTriplet = (odds) => [odds?.odds1, odds?.oddsX, odds?.odds2]
@@ -122,7 +131,11 @@ const localStrengthEvidence = (match) => {
 };
 
 const localFormEvidence = (match) => {
-  const form = match?.predictionMeta?.form || {};
+  // The live model publishes the as-of form snapshot under probabilityModel.
+  // predictionMeta.form is retained only for older payload compatibility.
+  // Reading predictionMeta alone made a fully populated signed-history form
+  // look missing to the downstream quality layer.
+  const form = match?.predictionMeta?.form || match?.probabilityModel?.form || {};
   const home = form.home || {};
   const away = form.away || {};
   const homeSample = sampleSize(home.sampleSize);
@@ -169,6 +182,8 @@ const buildFreeFootballSignal = (match, externalSignal = {}, generatedAt = new D
     fiveHundred?.rank,
     fiveHundred?.europeOdds,
     fiveHundred?.asianHandicap,
+    externalSignal?.confirmedLineup,
+    externalSignal?.projectedRoster,
     externalSignal?.lineups,
     externalSignal?.injuries,
   ].some((component) => componentUsableBeforeCutoff(component, cutoff, sourceObservedAt));
@@ -255,15 +270,15 @@ const main = () => {
     rows[rowKey] = freeFootball;
     grades[freeFootball.grade] += 1;
     if (freeFootball.recommendationReady) recommendationReady += 1;
-    const nextSignal = {
+    const nextSignal = stampSignalEvent({
       ...(signal || {}),
       source: Array.from(new Set(String(signal?.source || "external-signals").split("+").concat("free-public-football")))
         .filter(Boolean).join("+"),
       freeFootball,
-    };
+    }, match);
     externalMatches[key] = nextSignal;
     for (const alias of matchKeys(match)) {
-      if (!externalMatches[alias]) externalMatches[alias] = nextSignal;
+      externalMatches[alias] = nextSignal;
     }
   }
 

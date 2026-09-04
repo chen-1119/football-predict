@@ -8,8 +8,10 @@ const {
 } = require("./aiArenaDecisionEngine.cjs");
 
 const STATE_VERSION = "ai-big-five-survival-state-v1";
-const PAYLOAD_VERSION = "ai-big-five-survival-v4";
+const PAYLOAD_VERSION = "ai-big-five-survival-v5";
 const STARTING_BALANCE = 10_000;
+const MIN_LOCKABLE_MATCHES = 2;
+const PARTIAL_LOCK_WEEKDAY_OFFSET = 4;
 const OUTCOMES = Object.freeze(["1", "X", "2"]);
 const LEAGUES = Object.freeze([
   Object.freeze({ code: "premier-league", nameZh: "英超", nameEn: "Premier League", target: 2 }),
@@ -19,12 +21,12 @@ const LEAGUES = Object.freeze([
   Object.freeze({ code: "ligue-1", nameZh: "法甲", nameEn: "Ligue 1", target: 2 }),
 ]);
 const AGENTS = Object.freeze([
-  Object.freeze({ id: "gpt", name: "GPT", model: "autonomous-risk-v2", style: "balanced", styleZh: "全局均衡", styleEn: "Global balance", color: "#6ee7b7", staking: Object.freeze({ kellyFraction: 0.18, minEv: 0.020, minEdge: 0.005, minDataQuality: 0.45, maxAdversarialRisk: 0.75, weeklyRiskFraction: 0.18, singleRiskFraction: 0.060, correlationCapFraction: 0.10 }) }),
-  Object.freeze({ id: "claude", name: "Claude", model: "autonomous-risk-v2", style: "steady", styleZh: "风险审慎", styleEn: "Risk first", color: "#f0b37e", staking: Object.freeze({ kellyFraction: 0.10, minEv: 0.035, minEdge: 0.010, minDataQuality: 0.60, maxAdversarialRisk: 0.55, weeklyRiskFraction: 0.12, singleRiskFraction: 0.040, correlationCapFraction: 0.07 }) }),
-  Object.freeze({ id: "gemini", name: "Gemini 3.7", model: "gemini-3.7-reviewed-profile-v2", style: "balanced", styleZh: "多信号融合", styleEn: "Multi-signal", color: "#8ab4f8", staking: Object.freeze({ kellyFraction: 0.16, minEv: 0.025, minEdge: 0.008, minDataQuality: 0.55, maxAdversarialRisk: 0.65, weeklyRiskFraction: 0.16, singleRiskFraction: 0.050, correlationCapFraction: 0.09 }) }),
-  Object.freeze({ id: "deepseek", name: "DeepSeek", model: "autonomous-risk-v2", style: "aggressive", styleZh: "价值搜索", styleEn: "Value search", color: "#8b9cff", staking: Object.freeze({ kellyFraction: 0.22, minEv: 0.015, minEdge: 0.005, minDataQuality: 0.45, maxAdversarialRisk: 0.72, weeklyRiskFraction: 0.20, singleRiskFraction: 0.065, correlationCapFraction: 0.11 }) }),
-  Object.freeze({ id: "grok", name: "Grok", model: "autonomous-risk-v2", style: "aggressive", styleZh: "逆向进攻", styleEn: "Contrarian attack", color: "#f4d06f", staking: Object.freeze({ kellyFraction: 0.20, minEv: 0.030, minEdge: 0.015, minDataQuality: 0.40, maxAdversarialRisk: 0.78, weeklyRiskFraction: 0.22, singleRiskFraction: 0.070, correlationCapFraction: 0.12 }) }),
-  Object.freeze({ id: "qwen", name: "Qwen", model: "autonomous-risk-v2", style: "steady", styleZh: "稳定执行", styleEn: "Stable execution", color: "#d5a6ff", staking: Object.freeze({ kellyFraction: 0.08, minEv: 0.050, minEdge: 0.015, minDataQuality: 0.65, maxAdversarialRisk: 0.50, weeklyRiskFraction: 0.10, singleRiskFraction: 0.030, correlationCapFraction: 0.06 }) }),
+  Object.freeze({ id: "gpt", name: "均衡策略", model: "autonomous-risk-v2", providerMode: "local-strategy-simulation", style: "balanced", styleZh: "全局均衡", styleEn: "Global balance", color: "#6ee7b7", staking: Object.freeze({ kellyFraction: 0.18, minEv: 0.020, minEdge: 0.005, minDataQuality: 0.45, maxAdversarialRisk: 0.75, weeklyRiskFraction: 0.18, singleRiskFraction: 0.060, correlationCapFraction: 0.10 }) }),
+  Object.freeze({ id: "kimi", name: "稳健策略", model: "auditable-risk-v2", providerMode: "local-strategy-simulation", style: "steady", styleZh: "风险审慎", styleEn: "Risk first", color: "#f0b37e", staking: Object.freeze({ kellyFraction: 0.10, minEv: 0.035, minEdge: 0.010, minDataQuality: 0.60, maxAdversarialRisk: 0.55, weeklyRiskFraction: 0.12, singleRiskFraction: 0.040, correlationCapFraction: 0.07 }) }),
+  Object.freeze({ id: "gemini", name: "融合策略", model: "multi-signal-risk-v2", providerMode: "local-strategy-simulation", style: "balanced", styleZh: "多信号融合", styleEn: "Multi-signal", color: "#8ab4f8", staking: Object.freeze({ kellyFraction: 0.16, minEv: 0.025, minEdge: 0.008, minDataQuality: 0.55, maxAdversarialRisk: 0.65, weeklyRiskFraction: 0.16, singleRiskFraction: 0.050, correlationCapFraction: 0.09 }) }),
+  Object.freeze({ id: "deepseek", name: "价值策略", model: "autonomous-risk-v2", providerMode: "local-strategy-simulation", style: "aggressive", styleZh: "价值搜索", styleEn: "Value search", color: "#8b9cff", staking: Object.freeze({ kellyFraction: 0.22, minEv: 0.015, minEdge: 0.005, minDataQuality: 0.45, maxAdversarialRisk: 0.72, weeklyRiskFraction: 0.20, singleRiskFraction: 0.065, correlationCapFraction: 0.11 }) }),
+  Object.freeze({ id: "doubao", name: "逆向策略", model: "auditable-risk-v2", providerMode: "local-strategy-simulation", style: "aggressive", styleZh: "逆向进攻", styleEn: "Contrarian attack", color: "#f4d06f", staking: Object.freeze({ kellyFraction: 0.20, minEv: 0.030, minEdge: 0.015, minDataQuality: 0.40, maxAdversarialRisk: 0.78, weeklyRiskFraction: 0.22, singleRiskFraction: 0.070, correlationCapFraction: 0.12 }) }),
+  Object.freeze({ id: "qwen", name: "纪律策略", model: "autonomous-risk-v2", providerMode: "local-strategy-simulation", style: "steady", styleZh: "稳定执行", styleEn: "Stable execution", color: "#d5a6ff", staking: Object.freeze({ kellyFraction: 0.08, minEv: 0.050, minEdge: 0.015, minDataQuality: 0.65, maxAdversarialRisk: 0.50, weeklyRiskFraction: 0.10, singleRiskFraction: 0.030, correlationCapFraction: 0.06 }) }),
 ]);
 const WEALTH_POINTS = Object.freeze([12, 9, 7, 5, 3, 1]);
 const PREDICTION_POINTS = Object.freeze([8, 6, 5, 3, 2, 1]);
@@ -87,15 +89,21 @@ const arenaWeekRange = (nowMs = Date.now()) => {
 const matchDateKey = (match) => String(
   match?.businessDate || match?.matchDate || match?.kickoffDate || match?.kickoffTime || "",
 ).slice(0, 10);
-const identifyLeague = (match) => {
-  const text = [match?.leagueId, match?.leagueName, match?.leagueNameEn, match?.leagueShortName, match?.leagueShortNameEn]
-    .filter(Boolean).join(" ").toLowerCase();
-  if (/(^|\s)epl($|\s)|英超|premier\s*league/.test(text)) return "premier-league";
-  if (/西甲|la\s*liga|laliga/.test(text)) return "laliga";
-  if (/意甲|serie\s*a|seriea/.test(text)) return "serie-a";
-  if (/德甲|bundesliga/.test(text)) return "bundesliga";
-  if (/法甲|ligue\s*1|ligue1/.test(text)) return "ligue-1";
+const identifyLeagueText = (text) => {
+  if (/巴甲|巴西|brazil|brasileir/.test(text)) return null;
+  if (/(^|\s)epl($|\s)|(?:^|[\s/·_-])英超(?:$|[\s/·_-])|premier\s*league/.test(text)) return "premier-league";
+  if (/英格兰(?:足球)?超级联赛/.test(text)) return "premier-league";
+  if (/(?:^|[\s/·_-])西甲(?:$|[\s/·_-])|西班牙(?:足球)?甲级联赛|la\s*liga|laliga/.test(text)) return "laliga";
+  if (/(?:^|[\s/·_-])意甲(?:$|[\s/·_-])|意大利(?:足球)?甲级联赛|serie\s*a|seriea/.test(text)) return "serie-a";
+  if (/(?:^|[\s/·_-])德甲(?:$|[\s/·_-])|德国(?:足球)?甲级联赛|bundesliga/.test(text)) return "bundesliga";
+  if (/(?:^|[\s/·_-])法甲(?:$|[\s/·_-])|法国(?:足球)?甲级联赛|ligue\s*1|ligue1/.test(text)) return "ligue-1";
   return null;
+};
+const identifyLeague = (match) => {
+  const labelText = [match?.leagueName, match?.leagueNameEn, match?.leagueShortName, match?.leagueShortNameEn]
+    .filter(Boolean).join(" ").toLowerCase();
+  if (labelText) return identifyLeagueText(labelText);
+  return identifyLeagueText(String(match?.leagueId || "").toLowerCase());
 };
 const matchIdentity = (match) => String(match?.sourceMatchId || match?.id || "").trim();
 const resultForMatch = (match) => {
@@ -216,7 +224,18 @@ const selectPool = (matches, weekStart, weekEnd, nowMs) => {
     ...league,
     count: selected.filter((row) => row.leagueCode === league.code).length,
   }));
-  return { candidates: selected, slots, complete: slots.every((slot) => slot.count === slot.target) };
+  const complete = slots.every((slot) => slot.count === slot.target);
+  const partialLockAt = `${addDays(weekStart, PARTIAL_LOCK_WEEKDAY_OFFSET)}T00:00:00+08:00`;
+  return {
+    candidates: selected,
+    slots,
+    complete,
+    lockable: complete || (
+      selected.length >= MIN_LOCKABLE_MATCHES
+      && nowMs >= Date.parse(partialLockAt)
+    ),
+    partialLockAt,
+  };
 };
 
 const scorelineFor = (match, pick) => {
@@ -765,6 +784,7 @@ const updateAiArenaState = ({ matches, state: inputState, now = new Date().toISO
       pool: [],
       leagueSlots: LEAGUES.map((league) => ({ ...league, count: 0 })),
       poolHash: null,
+      partialLockAt: null,
       submissionRootHash: null,
       agentForecasts: {},
       settlements: {},
@@ -775,10 +795,11 @@ const updateAiArenaState = ({ matches, state: inputState, now = new Date().toISO
     const selection = selectPool(matches, weekStart, weekEnd, nowMs);
     week.pool = selection.candidates;
     week.leagueSlots = selection.slots;
-    week.poolHash = selection.complete ? sha256(selection.candidates) : null;
-    week.status = selection.complete ? "READY" : "FORMING";
+    week.poolHash = selection.lockable ? sha256(selection.candidates) : null;
+    week.partialLockAt = selection.partialLockAt;
+    week.status = selection.lockable ? "READY" : "FORMING";
     week.updatedAt = now;
-    if (selection.complete) lockWeek(month, week, now);
+    if (selection.lockable) lockWeek(month, week, now);
   }
   updateSettlements(state, matches, now);
   state.updatedAt = now;
@@ -788,14 +809,17 @@ const updateAiArenaState = ({ matches, state: inputState, now = new Date().toISO
   const standings = monthMetrics(month);
   const projected = publicWeek(week, standings);
   const availableMatches = week.pool?.length || 0;
-  const complete = week.status === "LOCKED";
-  const autonomousStakingActive = !complete || AGENTS.every((agent) => {
+  const locked = week.status === "LOCKED";
+  const poolComplete = locked
+    && availableMatches === 10
+    && (week.leagueSlots || []).every((slot) => slot.count === slot.target);
+  const autonomousStakingActive = !locked || AGENTS.every((agent) => {
     const submission = week.agentForecasts?.[agent.id];
-    return /(?:autonomous-risk-v2|gemini-3\.7-reviewed-profile-v2)/.test(String(submission?.model || ""))
+    return /(?:autonomous-risk-v2|multi-signal-risk-v2|auditable-risk-v2|gemini-3\.7-reviewed-profile-v2|domestic-auditable-risk-v1)/.test(String(submission?.model || ""))
       && Array.isArray(submission?.forecasts)
       && submission.forecasts.every((forecast) => forecast?.stakeAudit?.policy === "fractional-kelly-evidence-risk-v2");
   });
-  const dates = complete ? [...new Set((week.pool || []).map((row) => row.dateKey))].sort() : [];
+  const dates = locked ? [...new Set((week.pool || []).map((row) => row.dateKey))].sort() : [];
   const payload = {
     ok: true,
     version: autonomousStakingActive ? PAYLOAD_VERSION : "ai-big-five-survival-v3",
@@ -805,13 +829,17 @@ const updateAiArenaState = ({ matches, state: inputState, now = new Date().toISO
     weekEnd,
     targetMatches: 10,
     availableMatches,
-    complete,
+    complete: poolComplete,
+    roundActive: locked,
+    poolPolicy: "complete-or-friday-partial-lock-v1",
+    shortfallPolicy: "lock-current-qualified-pool-no-backfill",
+    partialLockAt: week.partialLockAt || null,
     state: week.status,
     lockedAt: week.lockedAt,
     poolHash: week.poolHash,
     submissionRootHash: week.submissionRootHash,
     leagueSlots: week.leagueSlots,
-    matches: complete ? projected.matches : [],
+    matches: locked ? projected.matches : [],
     agents: projected.agents,
     standings,
     seasonStandings: seasonStandings(state),
@@ -821,7 +849,7 @@ const updateAiArenaState = ({ matches, state: inputState, now = new Date().toISO
     flopBoard: flopRows(month),
     rules: autonomousStakingActive ? {
       startingBalance: STARTING_BALANCE,
-      predictionsPerAgent: complete ? 10 : 0,
+      predictionsPerAgent: locked ? availableMatches : 0,
       stakingMode: "autonomous-fractional-kelly-v2",
       investmentsPerAgent: null,
       zeroStakeAllowed: true,
@@ -841,8 +869,8 @@ const updateAiArenaState = ({ matches, state: inputState, now = new Date().toISO
       bankruptBalance: 0,
     } : {
       startingBalance: STARTING_BALANCE,
-      predictionsPerAgent: complete ? 10 : 0,
-      investmentsPerAgent: complete ? 3 : 0,
+      predictionsPerAgent: locked ? availableMatches : 0,
+      investmentsPerAgent: locked ? 3 : 0,
       weeklyStakeMin: 1500,
       weeklyStakeMax: 2500,
       singleStakeMin: 300,
@@ -856,13 +884,26 @@ const updateAiArenaState = ({ matches, state: inputState, now = new Date().toISO
       bankruptBalance: 0,
     },
     integrity: {
-      immutable: complete,
+      immutable: locked,
       inputSnapshotHash: week.poolHash,
       submissionRootHash: week.submissionRootHash,
       stateHash: sha256(state),
     },
     decisionEngine: "professional-agent-fusion-v1",
     stakingEngine: autonomousStakingActive ? "fractional-kelly-evidence-risk-v2" : null,
+    dataAccess: {
+      mode: "shared-immutable-pre-match-snapshot",
+      identicalInputs: true,
+      sources: ["sporttery:official-had", "probability-model", "structured-evidence"],
+      externalProviderCallsActive: false,
+    },
+    resultWriter: {
+      mode: "trusted-official-auto-settlement",
+      officialOnly: true,
+      forecastsImmutable: true,
+      modelScoreWriteAllowed: false,
+    },
+    stakeFreedom: "any-qualified-match-or-zero-with-risk-caps",
     disclosure: "strategy-simulation-not-external-model-calls",
     formalStatisticsExcluded: true,
   };
@@ -872,6 +913,8 @@ const updateAiArenaState = ({ matches, state: inputState, now = new Date().toISO
 module.exports = {
   AGENTS,
   LEAGUES,
+  MIN_LOCKABLE_MATCHES,
+  PARTIAL_LOCK_WEEKDAY_OFFSET,
   OUTCOMES,
   PAYLOAD_VERSION,
   STARTING_BALANCE,

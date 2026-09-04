@@ -8,6 +8,11 @@ const {
   evaluateMultiFactorRecommendation,
 } = require("../src/services/multiFactorRecommendation.cjs");
 const {
+  CONFIDENCE_POLICY_VERSION,
+  buildDynamicRecommendationConfidence,
+  confidenceReferenceTier,
+} = require("../src/services/recommendationConfidence.cjs");
+const {
   isOfficialRecommendationEligible,
 } = require("../src/services/officialRecommendationEligibility.cjs");
 const {
@@ -40,6 +45,10 @@ const {
   hashDualMarketDecisionBinding,
 } = require("../src/services/dualMarketDecisionBinding.cjs");
 const {
+  attestImmutableAnalysisReferenceDecision,
+  buildImmutableAnalysisReferenceDecision,
+} = require("../src/services/immutableAnalysisReferenceDecision.cjs");
+const {
   buildSportteryMarketSourceProvenance,
   marketSourceLineageId,
   normalizeMarketSourceProvenance,
@@ -50,6 +59,7 @@ const {
 } = require("../src/services/collectorAttestation.cjs");
 const {
   canonicalSourceMatchId,
+  eventVersionOf,
   isOfficialSportteryFinal,
   isTrustedOfficialFinal,
   reconcileMatchLifecycle,
@@ -79,6 +89,9 @@ const {
   readSqliteTransitionMatches,
 } = require("../server/sqliteStore.cjs");
 const { acquireSyncMetaCommitLock } = require("./syncMetaCommitLock.cjs");
+const { FREE_FOOTBALL_TEAM_ALIASES } = require("./freeFootballTeamAliases.cjs");
+const { buildFormalReviewPerformance } = require("../server/reviewPerformanceSummary.cjs");
+const { auditRecommendationBias } = require("./auditRecommendationBatchBias.cjs");
 const {
   browserFallbackEnabled,
   requestJsonViaEdgeDocument,
@@ -111,6 +124,9 @@ const {
   applyOfficialClubResult,
   loadOfficialClubResults,
 } = require("./syncOfficialClubResults.cjs");
+const {
+  applyKLeagueOfficialResult,
+} = require("./syncKLeagueOfficialStandings.cjs");
 const {
   loadArchivedPreMatchRecoveries,
   recoveryArchiveForMatch,
@@ -158,7 +174,8 @@ const TRUSTED_MAX_FUTURE_SKEW_MS = boundedRuntimeEnv(
   { fallback: 300, min: 0, max: 3600 },
 ) * 1000;
 const ANALYST_PROMPT_VERSION = "professional-football-analyst-v25";
-const PREDICTION_POLICY_VERSION = "sporttery-day-formula-trace-v65-trusted-incremental-history";
+const PREDICTION_POLICY_VERSION = "sporttery-day-formula-trace-v74-auditable-confidence-facts";
+const PRE_CUTOFF_MODEL_REFRESH_FROM_POLICY = "sporttery-day-formula-trace-v67-evidence-led-poisson";
 const HISTORICAL_TRAINING_APPLICATION_VERSION = "historical-training-application-v3-signed-seed-trusted-event-incremental";
 const CALIBRATED_HAD_MARKET_MIN_LEADER_PROBABILITY = 0.60;
 const CONFIGURED_LLM_REVIEW_MODEL = String(process.env.GPT_MODEL || "").trim();
@@ -785,6 +802,31 @@ function loadSportteryRelaySnapshot() {
   };
   console.log(`Sporttery relay dual-file overlay ok: ${JSON.stringify(summary)}`);
   return { payload, entries, summary };
+}
+
+function loadSportteryRelayHistorySnapshot() {
+  if (SPORTTERY_RELAY_MODE === "off" || SPORTTERY_RELAY_MODE === "0") return null;
+  const full = firstSportteryRelayCandidate(sportteryRelaySnapshotPaths(), "full");
+  if (!full?.historyFresh) return null;
+  const entries = full.entries.filter((entry) => (
+    ["all", "result"].includes(relayEndpointMethod(entry))
+  ));
+  if (!entries.length) return null;
+  const rows = entries.reduce((sum, entry) => sum + relaySnapshotEntryRows(entry), 0);
+  const methods = Array.from(new Set(entries.map(relayEndpointMethod).filter(Boolean)));
+  return {
+    payload: full.payload,
+    entries,
+    summary: {
+      ...full.summary,
+      lane: "history-only",
+      endpoints: entries.length,
+      rows,
+      methods,
+      stale: true,
+      historyOnly: true,
+    },
+  };
 }
 
 // The fast result publisher is a trust boundary, so it must audit the exact
@@ -1931,7 +1973,11 @@ function independentBaseLambdas(match, probabilities) {
     3.28
   );
   const homeShare = clamp(
-    0.5 + strengthEdge * 0.58 + (profile.isInternational ? 0.008 : 0.035),
+    0.5 + strengthEdge * 0.58 + (
+      teamModelStrengthHasEvidence(match, "home") || teamModelStrengthHasEvidence(match, "away")
+        ? (profile.isInternational ? 0.008 : 0.035)
+        : 0
+    ),
     0.22,
     0.78
   );
@@ -2130,13 +2176,17 @@ function blendOutcomeProbabilities(match, market, poisson, eloSnapshot, formSnap
   const pairedFormConfidence = formConfidence(formSnapshot);
   const worldCupPrior = worldCupPriorOutcomeProbabilities(match);
   const formReady = formSample >= 8 && pairedFormConfidence >= 0.25;
+  // Market is one evidence family, not a direction override. Keep a stable
+  // market anchor in every data regime while letting Elo, team strength and
+  // the form/context-aware Poisson layer take the majority of the blend when
+  // auditable samples are available. No branch is selected by SP level.
   let weights = elo && eloSample >= 6 && formReady
-    ? { market: 0, teamStrength: 0.22, elo: 0.34, poisson: 0.44 }
+    ? { market: 0.1, teamStrength: 0.15, elo: 0.3, poisson: 0.45 }
     : elo && eloSample >= 6
-      ? { market: 0, teamStrength: 0.32, elo: 0.38, poisson: 0.3 }
+      ? { market: 0.12, teamStrength: 0.18, elo: 0.35, poisson: 0.35 }
       : formReady
-        ? { market: 0, teamStrength: 0.46, elo: 0, poisson: 0.54 }
-        : { market: 0, teamStrength: 0.58, elo: 0, poisson: 0.42 };
+        ? { market: 0.12, teamStrength: 0.24, elo: 0, poisson: 0.64 }
+        : { market: 0.15, teamStrength: 0.35, elo: 0, poisson: 0.5 };
   const worldCupPriorWeight = worldCupPrior
     ? 0.18
     : 0;
@@ -2613,9 +2663,9 @@ function buildProbabilityCalculationTrace(match, context) {
       },
     },
     marketUse: {
-      formula: "marketWeight=0",
-      zh: "SP 不进入最终概率加权，只用于比较模型方向与市场是否偏离，并生成风险/价值提示。",
-      en: "SP is not weighted into final probabilities; it only compares model direction against the market for risk/value notes.",
+      formula: "marketWeight=dynamic-low-weight",
+      zh: "SP 仅以低权重参与赛前校验，并用于比较模型方向与市场偏离、生成风险/价值提示；不得单独改写方向。",
+      en: "SP is a low-weight validation feature used for market divergence and value diagnostics; it cannot rewrite the direction by itself.",
     },
   };
 }
@@ -2761,9 +2811,9 @@ function buildCalculationTraceFromPublishedModel(match, model) {
       },
     },
     marketUse: {
-      formula: "marketWeight=0",
-      zh: "SP 不进入最终概率加权，只用于比较模型方向与市场是否偏离，并生成风险/价值提示。",
-      en: "SP is not weighted into final probabilities; it only compares model direction against the market for risk/value notes.",
+      formula: "marketWeight=dynamic-low-weight",
+      zh: "SP 仅以低权重参与赛前校验，并用于比较模型方向与市场偏离、生成风险/价值提示；不得单独改写方向。",
+      en: "SP is a low-weight validation feature used for market divergence and value diagnostics; it cannot rewrite the direction by itself.",
     },
   };
 }
@@ -2841,7 +2891,7 @@ function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLamb
     contextSignals,
   });
   return {
-    version: "independent-elo-form-poisson-v8",
+    version: "independent-elo-form-poisson-v9",
     generatedAt: new Date().toISOString(),
     basis: PREDICTION_MODEL_BASIS,
     ensembleWeights: {
@@ -3077,6 +3127,7 @@ const TEAM_KEY_ALIASES = Object.freeze({
 });
 
 const CURRENT_TEAM_KEY_ALIASES = Object.freeze({
+  ...FREE_FOOTBALL_TEAM_ALIASES,
   "\u963f\u6839\u5ef7": "argentina",
   "\u51b0\u5c9b": "iceland",
   "\u8461\u8404\u7259": "portugal",
@@ -3166,6 +3217,40 @@ const CURRENT_TEAM_KEY_ALIASES = Object.freeze({
   "\u5723\u52a0\u4ed1": "st gallen",
   "\u79d1\u6797\u8482\u5b89": "corinthians",
   "\u5df4\u62c9\u7eb3\u7ade\u6280": "athletico pr",
+  "\u79d1\u7f57\u62c9\u591a\u6025\u6d41": "colorado rapids",
+  "\u6d1b\u6749\u77f6": "los angeles",
+  "\u7c73\u4e9a\u5c14\u6bd4": "mjallby",
+  "\u8428\u5c14\u8328\u5821": "salzburg",
+  "\u7279\u62c9\u5e03\u5b97\u4f53\u80b2": "trabzonspor",
+  "\u56fe\u6069": "thun",
+  "\u8d1d\u5c14\u683c\u83b1\u5fb7\u7ea2\u661f": "red star",
+  "\u5df4\u5217\u5361\u8bfa": "vallecano",
+  "\u963f\u62c9\u7ef4\u65af": "alaves",
+  "\u7f57\u8428\u91cc\u5965\u4e2d\u592e": "rosario central",
+  "\u67cf\u592a\u9633\u795e": "kashiwa reysol",
+  "\u957f\u5d0e\u822a\u6d77": "v varen nagasaki",
+  "\u4e1c\u4eac": "tokyo",
+  "\u767b\u535a\u601d": "den bosch",
+  "\u6566\u523b\u5c14\u514b": "dunkerque",
+  "\u8499\u5f7c\u5229\u57c3": "montpellier",
+  "\u9a6c\u8d5b": "marseille",
+  "\u65af\u7279\u62c9\u65af\u5821": "strasbourg",
+  "\u963f\u68ee\u7eb3": "arsenal",
+  "\u8003\u6587\u5782": "coventry",
+  "\u7687\u5bb6\u8d1d\u8482\u65af": "betis",
+  "\u7687\u5bb6\u793e\u4f1a": "sociedad",
+  "\u6ce2\u5179\u5357": "lech poznan",
+  "\u7c73\u62c9\u7d22\u5c14": "mirassol",
+  "\u91cc\u83ab": "remo",
+  "\u5e15\u798f\u65af": "pafos",
+  "\u65af\u666e\u5229\u7279\u6d77\u675c\u514b": "hajduk split",
+  "\u8d39\u4f26\u8328\u74e6\u7f57\u65af": "ferencvaros",
+  "\u74e6\u52d2\u4f26\u52a0": "valerenga",
+  "\u6c49\u574e": "hamkam",
+  "\u535a\u5fb7\u95ea\u8000": "bodo glimt",
+  "\u5229\u52d2\u65af\u7279\u7f57\u59c6": "lillestrom",
+  "\u7ebd\u7ea6\u57ce": "new york city",
+  "\u591a\u4f26\u591a": "toronto",
 });
 
 function normalizedTeamKey(teamName) {
@@ -4643,6 +4728,335 @@ function mergeArchivedBestPrediction(match, predictions) {
   return replaced ? merged : [...merged, archivedBest];
 }
 
+function archiveDirectionIdentity(prediction) {
+  if (!prediction || typeof prediction !== "object") return null;
+  const marketType = normText(prediction.marketType).toUpperCase();
+  const poolCode = normText(
+    prediction.oddsPoolCode
+      || (marketType === "1X2" ? "HAD" : "")
+      || (
+        prediction.recommendationAction === "reference"
+        && Number(prediction.odds || 0) === 0
+          ? "HAD"
+          : ""
+      )
+  ).toUpperCase();
+  const tipCode = normText(prediction.tipCode).toUpperCase();
+  if (!["HAD", "HHAD"].includes(poolCode) || !["1", "X", "2"].includes(tipCode)) {
+    return null;
+  }
+  const handicapLine = poolCode === "HHAD"
+    ? parseHandicapLine(prediction.handicapLine)
+    : 0;
+  if (handicapLine === null) return null;
+  return `${poolCode}:${tipCode}:${handicapLine}`;
+}
+
+function canonicalArchiveParityRecovery(match) {
+  const archive = validArchivedPreMatchPrediction(match);
+  const correction = archive?.recoveryEvidence;
+  if (
+    correction?.version !== "published-direction-archive-parity-v1"
+    || correction?.reason !== "archived-direction-diverged-from-user-visible-published-direction"
+  ) return null;
+
+  const source = normText(correction.source);
+  if (![
+    "formal-publication-ledger",
+    "live-publication-ledger",
+    "immutable-analysis-reference-decision",
+    "dual-market-decision-binding",
+    "trusted-pre-cutoff-decision",
+  ].includes(source)) return null;
+
+  const archiveDirection = archiveDirectionIdentity(archive.prediction);
+  const canonicalMarket = normText(correction?.canonical?.market).toUpperCase();
+  const canonicalDirection = normText(correction?.canonical?.direction).toUpperCase();
+  const canonicalIdentity = normText(correction?.canonical?.directionIdentity);
+  const previousMarket = normText(correction?.previous?.market).toUpperCase();
+  const previousDirection = normText(correction?.previous?.direction).toUpperCase();
+  const previousIdentity = normText(correction?.previous?.directionIdentity);
+  if (
+    !archiveDirection
+    || !["HAD", "HHAD"].includes(canonicalMarket)
+    || !["1", "X", "2"].includes(canonicalDirection)
+    || canonicalIdentity !== archiveDirection
+    || canonicalMarket !== normText(archive?.prediction?.oddsPoolCode).toUpperCase()
+    || canonicalDirection !== normText(archive?.prediction?.tipCode).toUpperCase()
+    || !["HAD", "HHAD"].includes(previousMarket)
+    || !["1", "X", "2"].includes(previousDirection)
+    || !previousIdentity
+    || previousIdentity === canonicalIdentity
+    || !previousIdentity.startsWith(`${previousMarket}:${previousDirection}:`)
+  ) return null;
+
+  const proof = correction?.proof && typeof correction.proof === "object"
+    ? correction.proof
+    : {};
+  const proofIdentity = normText(
+    proof.recordHash
+      || proof.bindingHash
+      || proof.contentHash
+      || proof.publicationId
+      || proof.featureSnapshotHash
+      || proof.decisionId
+  );
+  if (!proofIdentity) return null;
+
+  const kickoffMs = parseBeijingDateTime(match?.kickoffTime || "");
+  const cutoffMs = parseBeijingDateTime(matchCutoffValue(match));
+  const deadlineMs = Math.min(...[cutoffMs, kickoffMs].filter(Number.isFinite));
+  const proofAt = [proof.publishedAt, proof.decisionAt]
+    .map(validAuditInstant)
+    .find((value) => {
+      const valueMs = parseBeijingDateTime(value || "");
+      return Number.isFinite(valueMs)
+        && Number.isFinite(deadlineMs)
+        && Number.isFinite(kickoffMs)
+        && valueMs <= deadlineMs
+        && valueMs < kickoffMs;
+    });
+  const correctedAtMs = parseBeijingDateTime(correction.correctedAt || "");
+  if (
+    !proofAt
+    || !Number.isFinite(correctedAtMs)
+    || correctedAtMs < parseBeijingDateTime(proofAt)
+  ) return null;
+
+  const attestationSignature = [
+    "published-direction-attestation-v1",
+    source,
+    archiveDirection,
+    proofIdentity,
+  ].join(":");
+  if (
+    normText(archive.signature).startsWith("published-direction-attestation-v1:")
+    && archive.signature !== attestationSignature
+  ) return null;
+
+  return {
+    prediction: archive.prediction,
+    source,
+    proof,
+    archive,
+  };
+}
+
+function canonicalArchiveBestPrediction(match, publicationIndex = null) {
+  const currentBest = (Array.isArray(match?.predictions) ? match.predictions : [])
+    .find((prediction) => (
+      prediction?.marketType === "BEST"
+      && archiveDirectionIdentity(prediction)
+    ));
+
+  if (currentBest) {
+    const formalPublication = resolvePublishedRecommendation(
+      match,
+      currentBest,
+      publicationIndex
+    );
+    if (formalPublication) {
+      return {
+        prediction: currentBest,
+        source: "formal-publication-ledger",
+        proof: {
+          publicationId: formalPublication.publicationId || currentBest.publicationId || null,
+          recordHash: formalPublication.recordHash || currentBest?.publicationEvidence?.recordHash || null,
+          publishedAt: formalPublication.publishedAt
+            || formalPublication.createdAt
+            || currentBest?.publicationEvidence?.publishedAt
+            || null,
+        },
+      };
+    }
+    if (isArchivedLiveRecommendation(match, currentBest)) {
+      return {
+        prediction: currentBest,
+        source: "live-publication-ledger",
+        proof: {
+          publicationId: currentBest?.livePublicationEvidence?.publicationId || null,
+          recordHash: currentBest?.livePublicationEvidence?.recordHash || null,
+          publishedAt: currentBest?.livePublicationEvidence?.publishedAt
+            || currentBest?.livePublicationEvidence?.createdAt
+            || null,
+        },
+      };
+    }
+  }
+
+  // A parity repair was created only after a strong pre-cutoff publication or
+  // decision proof showed that a legacy archive disagreed with the direction
+  // users had actually seen. Result-feed reconstruction can later lose the
+  // original binding and rediscover a different raw snapshot, so preserve the
+  // validated repair ahead of reconstructed snapshot/binding candidates.
+  const parityRecovery = canonicalArchiveParityRecovery(match);
+  if (parityRecovery) return parityRecovery;
+
+  const immutableReference = attestImmutableAnalysisReferenceDecision(
+    match?.predictionMeta?.immutableAnalysisReferenceDecision,
+    match
+  );
+  if (immutableReference) {
+    return {
+      prediction: {
+        marketType: "BEST",
+        oddsPoolCode: "HAD",
+        handicapLine: undefined,
+        tipCode: immutableReference.code,
+        tipLabel: currentBest?.tipCode === immutableReference.code
+          ? currentBest.tipLabel
+          : undefined,
+        odds: Number(immutableReference.selectedSourceOdds || 0),
+        trustScore: Math.round(Number(immutableReference.marketProbability || 0) * 100),
+        recommendationAction: "reference",
+        recommendationTier: "immutable-five-hundred-analysis-reference",
+        liveRecommendationAction: "withhold",
+        liveRecommendationTier: "live-withhold",
+      },
+      source: "immutable-analysis-reference-decision",
+      proof: {
+        contentHash: immutableReference.contentHash || null,
+        decisionAt: immutableReference.decisionAt || null,
+      },
+    };
+  }
+
+  const binding = validExistingDualMarketDecisionBinding(match);
+  if (binding?.had && ["1", "X", "2"].includes(normText(binding.had.code).toUpperCase())) {
+    const bindingCode = normText(binding.had.code).toUpperCase();
+    const matchingCurrent = currentBest
+      && normText(currentBest.oddsPoolCode || "HAD").toUpperCase() === "HAD"
+      && normText(currentBest.tipCode).toUpperCase() === bindingCode
+      ? currentBest
+      : null;
+    return {
+      prediction: {
+        ...(matchingCurrent || {}),
+        marketType: "BEST",
+        oddsPoolCode: "HAD",
+        handicapLine: undefined,
+        tipCode: bindingCode,
+        odds: Number(binding.had.odds),
+        trustScore: Number.isFinite(Number(matchingCurrent?.trustScore))
+          ? Number(matchingCurrent.trustScore)
+          : Math.round(Number(binding.had.modelProbability || 0) * 100),
+        recommendationAction: binding.had.recommendationAction
+          || matchingCurrent?.recommendationAction
+          || "reference",
+        recommendationTier: matchingCurrent?.recommendationTier
+          || "atomic-dual-market-bound-reference",
+        liveRecommendationAction: matchingCurrent?.liveRecommendationAction || "withhold",
+        liveRecommendationTier: matchingCurrent?.liveRecommendationTier || "live-withhold",
+      },
+      source: "dual-market-decision-binding",
+      proof: {
+        bindingHash: binding.bindingHash || null,
+        sourceCycleId: binding.sourceCycleId || null,
+        decisionAt: binding?.sourceClocks?.decisionAt || null,
+      },
+    };
+  }
+
+  const cutoffMs = parseBeijingDateTime(matchCutoffValue(match));
+  if (currentBest && trustedPreCutoffDecision(match, cutoffMs)) {
+    const normalizedPool = normText(currentBest.oddsPoolCode).toUpperCase()
+      || (
+        currentBest.recommendationAction === "reference"
+        && Number(currentBest.odds || 0) === 0
+          ? "HAD"
+          : ""
+      );
+    const normalizedPrediction = {
+      ...currentBest,
+      oddsPoolCode: normalizedPool,
+      handicapLine: normalizedPool === "HHAD" ? currentBest.handicapLine : undefined,
+    };
+    if (archiveDirectionIdentity(normalizedPrediction)) {
+      return {
+        prediction: normalizedPrediction,
+        source: "trusted-pre-cutoff-decision",
+        proof: {
+          decisionId: match?.predictionMeta?.decisionId || null,
+          decisionRevision: match?.predictionMeta?.decisionRevision || null,
+          featureSnapshotHash: match?.predictionMeta?.featureSnapshotHash || null,
+          decisionAt: match?.predictionMeta?.decisionGeneratedAt
+            || match?.predictionMeta?.modelGeneratedAt
+            || null,
+        },
+      };
+    }
+  }
+
+  return null;
+}
+
+function canonicalArchiveAttestation(match, canonicalBest, kickoffMs) {
+  const direction = archiveDirectionIdentity(canonicalBest?.prediction);
+  const source = normText(canonicalBest?.source);
+  const proof = canonicalBest?.proof && typeof canonicalBest.proof === "object"
+    ? canonicalBest.proof
+    : {};
+  const kickoffClock = normText(match?.kickoffTime).match(/T(\d{2}):(\d{2})/);
+  const resultPhase = ["FINISHED", "PENDING_RESULT", "LIVE"]
+    .includes(normText(match?.status).toUpperCase());
+  // Some official result rows use local 00:00 as an omitted-clock placeholder.
+  // Do not bind a published direction to that ambiguous event until the
+  // independent result-clock recovery has proved the exact fixture.
+  if (
+    resultPhase
+    && kickoffClock?.[1] === "00"
+    && kickoffClock?.[2] === "00"
+    && !match?.resultEventClockRecovery
+  ) {
+    return null;
+  }
+  if (!direction || ![
+    "formal-publication-ledger",
+    "live-publication-ledger",
+    "immutable-analysis-reference-decision",
+    "dual-market-decision-binding",
+    "trusted-pre-cutoff-decision",
+  ].includes(source)) {
+    return null;
+  }
+
+  const proofIdentity = normText(
+    proof.recordHash
+      || proof.bindingHash
+      || proof.contentHash
+      || proof.publicationId
+      || proof.featureSnapshotHash
+      || proof.decisionId
+  );
+  if (!proofIdentity) return null;
+
+  const cutoffMs = parseBeijingDateTime(matchCutoffValue(match));
+  const deadlineMs = Math.min(...[cutoffMs, kickoffMs].filter(Number.isFinite));
+  if (!Number.isFinite(deadlineMs)) return null;
+  const attestedAt = [
+    proof.publishedAt,
+    proof.decisionAt,
+    match?.predictionMeta?.decisionGeneratedAt,
+    match?.predictionMeta?.modelGeneratedAt,
+  ].map(validAuditInstant).find((value) => {
+    const valueMs = parseBeijingDateTime(value || "");
+    return Number.isFinite(valueMs) && valueMs <= deadlineMs && valueMs < kickoffMs;
+  });
+  if (!attestedAt) return null;
+
+  return {
+    capturedAt: attestedAt,
+    cutoffTime: validAuditInstant(matchCutoffValue(match)),
+    phase: "published",
+    signature: [
+      "published-direction-attestation-v1",
+      source,
+      direction,
+      proofIdentity,
+    ].join(":"),
+  };
+}
+
 function buildArchivedPreMatchPrediction(
   match,
   snapshotIndex,
@@ -4683,11 +5097,22 @@ function buildArchivedPreMatchPrediction(
   );
   if (recoveredArchive) return recoveredArchive;
 
+  const canonicalBest = canonicalArchiveBestPrediction(match, publicationIndex);
+  const canonicalDirection = archiveDirectionIdentity(canonicalBest?.prediction);
+  const canonicalAttestation = canonicalArchiveAttestation(
+    match,
+    canonicalBest,
+    kickoffMs
+  );
+
   // Outside the signed recovery set, the first validated result-phase archive
   // remains the public audit record. A later sync may have a shorter local
   // snapshot window and must never derive a different "original" direction.
   const existingArchive = validArchivedPreMatchPrediction(match);
-  if (existingArchive) return existingArchive;
+  const existingDirection = archiveDirectionIdentity(existingArchive?.prediction);
+  if (existingArchive && (!canonicalDirection || canonicalDirection === existingDirection)) {
+    return existingArchive;
+  }
 
   const sourceMatchId = sourceMatchKeyForReview(match);
   const snapshots = sourceMatchId ? snapshotIndex.get(sourceMatchId) || [] : [];
@@ -4700,10 +5125,11 @@ function buildArchivedPreMatchPrediction(
     .sort((left, right) => (
       parseBeijingDateTime(left.capturedAt) - parseBeijingDateTime(right.capturedAt)
     ));
-  if (!candidates.length) return recoveredArchive;
 
-  const predictions = fallbackPredictionsFromSnapshots(match, snapshotIndex, publicationIndex);
-  const best = predictions.find((prediction) => (
+  const predictions = candidates.length
+    ? fallbackPredictionsFromSnapshots(match, snapshotIndex, publicationIndex)
+    : [];
+  const snapshotBest = predictions.find((prediction) => (
     prediction?.marketType === "BEST"
     && ["1", "X", "2"].includes(normText(prediction?.tipCode).toUpperCase())
     && (
@@ -4715,6 +5141,7 @@ function buildArchivedPreMatchPrediction(
       )
     )
   ));
+  const best = canonicalBest?.prediction || snapshotBest;
   if (!best) return recoveredArchive;
   const archivedPool = normText(best.oddsPoolCode).toUpperCase();
   const marketEvidenceScope = best?.recommendationAction === "reference"
@@ -4723,13 +5150,31 @@ function buildArchivedPreMatchPrediction(
     : "result-pool";
 
   const bestKey = reviewSelectionKey(best);
-  const evidenceSnapshot = candidates
+  const bestDirection = archiveDirectionIdentity(best);
+  let evidenceSnapshot = candidates
     .slice()
     .reverse()
     .find((snapshot) => predictionsFromSnapshot(snapshot).some((prediction) => (
       prediction?.marketType === "BEST"
-      && reviewSelectionKey(prediction) === bestKey
-    ))) || candidates.at(-1);
+      && (
+        (bestKey && reviewSelectionKey(prediction) === bestKey)
+        || (bestDirection && archiveDirectionIdentity(prediction) === bestDirection)
+      )
+    ))) || candidates.at(-1) || null;
+  let evidenceBest = predictionsFromSnapshot(evidenceSnapshot).find((prediction) => (
+    prediction?.marketType === "BEST"
+    && archiveDirectionIdentity(prediction) === bestDirection
+  ));
+  // An immutable published/bound direction must have its own qualified
+  // pre-cutoff snapshot. Never fall back to a different raw model candidate:
+  // that was the production path that changed a visible home pick to draw
+  // when the page switched into result/archive mode.
+  if (canonicalDirection && !evidenceBest) {
+    if (!canonicalAttestation) return null;
+    evidenceSnapshot = canonicalAttestation;
+    evidenceBest = best;
+  }
+  if (!evidenceSnapshot) return recoveredArchive;
   const snapshotCapturedAt = validAuditInstant(evidenceSnapshot?.capturedAt);
   const snapshotCapturedMs = Date.parse(snapshotCapturedAt || "");
   const snapshotDeadlineMs = Math.min(...[
@@ -4745,6 +5190,26 @@ function buildArchivedPreMatchPrediction(
     || snapshotCapturedMs > snapshotDeadlineMs
   ) return recoveredArchive;
 
+  const parityCorrection = existingArchive && canonicalDirection !== existingDirection
+    ? {
+        version: "published-direction-archive-parity-v1",
+        reason: "archived-direction-diverged-from-user-visible-published-direction",
+        source: canonicalBest.source,
+        previous: {
+          market: normText(existingArchive?.prediction?.oddsPoolCode).toUpperCase() || null,
+          direction: normText(existingArchive?.prediction?.tipCode).toUpperCase() || null,
+          directionIdentity: existingDirection,
+        },
+        canonical: {
+          market: archivedPool,
+          direction: normText(best.tipCode).toUpperCase(),
+          directionIdentity: canonicalDirection,
+        },
+        proof: canonicalBest.proof || null,
+        correctedAt: validAuditInstant(capturedAt),
+      }
+    : null;
+
   return {
     version: "archived-pre-match-prediction-v1",
     source: "immutable-pre-match-prediction-snapshot",
@@ -4757,6 +5222,7 @@ function buildArchivedPreMatchPrediction(
     signature: evidenceSnapshot?.signature || null,
     cutoffTime: validAuditInstant(evidenceSnapshot?.cutoffTime || matchCutoffValue(match)),
     marketEvidenceScope,
+    ...(parityCorrection ? { recoveryEvidence: parityCorrection } : {}),
     prediction: {
       marketType: "BEST",
       // A model-only reference still expresses the HAD 1/X/2 outcome space,
@@ -5233,6 +5699,7 @@ function buildPostMatchReview(match, capturedAt, snapshotIndex = null, publicati
     generatedAt: capturedAt,
     matchId: match.id,
     sourceMatchId: match.sourceMatchId || null,
+    eventVersion: eventVersionOf(match),
     matchNo: match.matchNo || null,
     teams: {
       home: match.homeTeamName || match.homeTeam || "主队",
@@ -5367,6 +5834,7 @@ function compactPostMatchReviewForMatch(review) {
     generatedAt: review.generatedAt,
     matchId: review.matchId,
     sourceMatchId: review.sourceMatchId,
+    eventVersion: eventVersionOf(review),
     matchNo: review.matchNo,
     teams: review.teams,
     finalScore: review.finalScore,
@@ -7309,6 +7777,69 @@ function unifiedDataQuality(contextSignals) {
   return 0.58;
 }
 
+function observedUnifiedDataQuality(contextSignals) {
+  const qualityScore = Number(contextSignals?.dataGaps?.preMatchQuality?.score);
+  if (!Number.isFinite(qualityScore)) return null;
+  return clamp(qualityScore / 100, 0, 1);
+}
+
+function auditableConfidenceFreshnessEvidence(match, evaluatedAt, market = "HAD") {
+  const evaluatedMs = Date.parse(String(evaluatedAt || ""));
+  if (!Number.isFinite(evaluatedMs)) return null;
+  const canonicalAuditInstant = (value) => {
+    const text = String(value || "").trim();
+    if (!/(?:Z|[+-]\d{2}:\d{2})$/i.test(text)) return null;
+    const millis = Date.parse(text);
+    return Number.isFinite(millis) ? new Date(millis).toISOString() : null;
+  };
+  const selectedMarket = String(market || "HAD").toUpperCase();
+  const marketPrefix = selectedMarket === "HHAD" ? "handicapOdds" : "odds";
+  const marketProvenance = match?.[`${marketPrefix}MarketProvenance`] || null;
+  const candidates = [
+    {
+      observedAt: match?.[`${marketPrefix}ObservedAt`]
+        || marketProvenance?.timing?.providerObservedAt
+        || marketProvenance?.timing?.endpointProviderObservedAt
+        || null,
+      sourceUpdatedAt: match?.[`${marketPrefix}UpdatedAt`] || null,
+      source: match?.[`${marketPrefix}Source`] || null,
+    },
+    {
+      observedAt: match?.sourceObservedAt || null,
+      sourceUpdatedAt: match?.sourceUpdatedAt || null,
+      source: match?.source || null,
+    },
+    {
+      observedAt: match?.externalSignals?.preMatch?.sourceObservedAt || null,
+      sourceUpdatedAt: match?.externalSignals?.preMatch?.updatedAt || null,
+      source: match?.externalSignals?.preMatch?.source || null,
+    },
+  ].map((candidate) => {
+    const source = normText(candidate.source);
+    const observedAt = canonicalAuditInstant(candidate.observedAt);
+    const sourceUpdatedAt = canonicalAuditInstant(candidate.sourceUpdatedAt);
+    const asOf = observedAt || sourceUpdatedAt;
+    const asOfMs = Date.parse(String(asOf || ""));
+    if (!source || !Number.isFinite(asOfMs) || asOfMs > evaluatedMs + 5 * 60 * 1000) return null;
+    return { observedAt, sourceUpdatedAt, source, asOfMs };
+  }).filter(Boolean).sort((a, b) => b.asOfMs - a.asOfMs);
+  const selected = candidates[0] || null;
+  if (!selected) return null;
+  return {
+    observedAt: selected.observedAt,
+    sourceUpdatedAt: selected.sourceUpdatedAt,
+    evaluatedAt: new Date(evaluatedMs).toISOString(),
+    source: selected.source,
+  };
+}
+
+function observedInputCoverageRatio(inputCoverage) {
+  const raw = inputCoverage?.coverageRatio;
+  if (raw === null || raw === undefined || (typeof raw === "string" && !raw.trim())) return null;
+  const numeric = Number(raw);
+  return Number.isFinite(numeric) ? clamp(numeric, 0, 1) : null;
+}
+
 function weightedLogPosterior(components, biases = {}) {
   const validComponents = components
     .map((component) => ({
@@ -7331,19 +7862,86 @@ function weightedLogPosterior(components, biases = {}) {
   return normalizeOutcomeProbabilities(raw);
 }
 
-function buildUnifiedOneXTwoPosterior(probabilityModel, marketProbabilities, contextSignals, scoreShape) {
+function probabilityValue(value, fallback = null) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return clamp(numeric > 1 ? numeric / 100 : numeric, 0, 1);
+}
+
+function tripletComponentDiagnostics(components) {
+  const valid = components
+    .map((component) => normalizedTripletFromAny(component))
+    .filter(Boolean);
+  if (!valid.length) {
+    return { dispersion: 1, leaderAgreement: 0, componentCount: 0 };
+  }
+  const leaders = valid.map((component) => outcomeLeadStats(component).leader?.code || null);
+  const leaderCounts = leaders.reduce((summary, code) => {
+    if (code) summary[code] = (summary[code] || 0) + 1;
+    return summary;
+  }, {});
+  const leaderAgreement = Math.max(0, ...Object.values(leaderCounts)) / valid.length;
+  const sides = ["home", "draw", "away"];
+  const dispersion = sides.reduce((sum, side) => {
+    const mean = valid.reduce((total, component) => total + component[side], 0) / valid.length;
+    const variance = valid.reduce((total, component) => total + (component[side] - mean) ** 2, 0) / valid.length;
+    return sum + Math.sqrt(variance);
+  }, 0) / sides.length;
+  return {
+    dispersion: Number(dispersion.toFixed(6)),
+    leaderAgreement: Number(leaderAgreement.toFixed(6)),
+    componentCount: valid.length,
+  };
+}
+
+function buildUnifiedOneXTwoPosteriorDecision(probabilityModel, marketProbabilities, contextSignals, scoreShape, inputCoverage = null) {
   const final = normalizedTripletFromAny(probabilityModel?.oneXTwo?.final);
   const scoreImplied = normalizedTripletFromAny(probabilityModel?.oneXTwo?.scoreImplied);
   const poisson = normalizedTripletFromAny(probabilityModel?.oneXTwo?.poisson);
-  const scoreWeight = scoreShape?.drawHeavy ? 0.4 : scoreShape?.lowScoreHeavy ? 0.37 : 0.34;
+  const market = normalizedTripletFromAny(marketProbabilities);
+  const inputSparse = inputCoverage?.sufficient === false;
+  const coverageRatio = clamp(
+    Number(inputCoverage?.evidenceFamilies || 0)
+      / Math.max(1, Number(inputCoverage?.minimumEvidenceFamilies || 2)),
+    0,
+    1,
+  );
+  const independentComponents = [final, scoreImplied, poisson].filter(Boolean);
+  const componentDiagnostics = tripletComponentDiagnostics(independentComponents);
+  const independentPosterior = weightedLogPosterior([
+    { probabilities: final, weight: 0.5 },
+    { probabilities: scoreImplied, weight: 0.3 },
+    { probabilities: poisson, weight: 0.2 },
+  ]) || final || scoreImplied || poisson || market;
+  const independentSideGap = independentPosterior
+    ? Math.abs(Number(independentPosterior.home || 0) - Number(independentPosterior.away || 0))
+    : 1;
+  const dominantSideProbability = independentPosterior
+    ? Math.max(Number(independentPosterior.home || 0), Number(independentPosterior.away || 0))
+    : 1;
+  const competitiveBalance = clamp((0.17 - independentSideGap) / 0.17, 0, 1);
+  const poissonDraw = Number(poisson?.draw || 0);
+  const scoreDraw = Number(scoreImplied?.draw || 0);
+  const leagueDrawRate = probabilityValue(probabilityModel?.leaguePrior?.drawRate, null);
+  const drawEvidence = clamp(
+    competitiveBalance * 0.13
+      + (scoreShape?.drawHeavy ? 0.1 : 0)
+      + (scoreShape?.lowScoreHeavy ? 0.075 : 0)
+      + clamp((poissonDraw - 0.25) * 0.8, 0, 0.055)
+      + clamp((scoreDraw - 0.26) * 0.7, 0, 0.05)
+      + (leagueDrawRate === null ? 0 : clamp((leagueDrawRate - 0.24) * 0.65, -0.015, 0.045))
+      - clamp((dominantSideProbability - 0.47) * 0.75, 0, 0.12),
+    0,
+    0.3,
+  );
+  const scoreWeight = scoreShape?.drawHeavy ? 0.31 : scoreShape?.lowScoreHeavy ? 0.29 : 0.27;
   const biases = {};
   const groupContext = contextSignals?.worldCupGroupContext || contextSignals?.rankingPressure?.worldCupGroupContext;
   const groupEffects = groupContext?.effects || {};
 
-  if (scoreShape?.drawHeavy) biases.draw = (biases.draw || 0) + 0.09;
-  if (scoreShape?.lowScoreHeavy) biases.draw = (biases.draw || 0) + 0.06;
-  if (scoreShape?.top1Code === "1") biases.home = (biases.home || 0) + 0.035;
-  if (scoreShape?.top1Code === "2") biases.away = (biases.away || 0) + 0.035;
+  biases.draw = drawEvidence;
+  if (independentSideGap >= 0.16 && scoreShape?.top1Code === "1") biases.home = 0.025;
+  if (independentSideGap >= 0.16 && scoreShape?.top1Code === "2") biases.away = 0.025;
   if (groupContext?.sameGroup) {
     const drawBias = Number(groupEffects.drawBias || 0);
     const needEdge = Number(groupEffects.needEdge || 0);
@@ -7357,11 +7955,67 @@ function buildUnifiedOneXTwoPosterior(probabilityModel, marketProbabilities, con
     if (marginPushSide === "away") biases.away = (biases.away || 0) + 0.035;
   }
 
-  return weightedLogPosterior([
-    { probabilities: final, weight: 0.44 },
+  const weights = inputSparse
+    ? { final: 0.44, score: scoreWeight, poisson: 0.2, market: 0.07 }
+    : { final: 0.5, score: scoreWeight, poisson: 0.15, market: 0.08 };
+  const posterior = weightedLogPosterior([
+    { probabilities: final, weight: weights.final },
     { probabilities: scoreImplied, weight: scoreWeight },
-    { probabilities: poisson, weight: 0.14 },
+    { probabilities: poisson, weight: weights.poisson },
+    { probabilities: market, weight: weights.market },
   ], biases);
+  const uncertaintyScore = clamp(
+    (inputSparse ? 0.36 : 0.14)
+      + (1 - coverageRatio) * 0.24
+      + componentDiagnostics.dispersion * 1.45
+      + (1 - componentDiagnostics.leaderAgreement) * 0.18,
+    0.08,
+    0.92,
+  );
+
+  return {
+    probabilities: posterior,
+    diagnostics: {
+      version: "evidence-shrinkage-posterior-v1",
+      inputSparse,
+      marketRole: "low-weight-validation-not-direction-override",
+      weights: {
+        final: weights.final,
+        scoreImplied: scoreWeight,
+        poisson: weights.poisson,
+        market: weights.market,
+      },
+      evidenceFamilies: Number(inputCoverage?.evidenceFamilies || 0),
+      minimumEvidenceFamilies: Number(inputCoverage?.minimumEvidenceFamilies || 2),
+      coverageRatio: Number(coverageRatio.toFixed(3)),
+      independentComponentCount: componentDiagnostics.componentCount,
+      independentAgreement: componentDiagnostics.leaderAgreement,
+      componentDispersion: componentDiagnostics.dispersion,
+      independentSideGap: Number(independentSideGap.toFixed(4)),
+      drawAdjustment: Number(drawEvidence.toFixed(4)),
+      drawSignals: {
+        competitiveBalance: Number(competitiveBalance.toFixed(3)),
+        scoreDraw: Number(scoreDraw.toFixed(4)),
+        poissonDraw: Number(poissonDraw.toFixed(4)),
+        leagueDrawRate: leagueDrawRate === null ? null : Number(leagueDrawRate.toFixed(4)),
+        drawHeavy: Boolean(scoreShape?.drawHeavy),
+        lowScoreHeavy: Boolean(scoreShape?.lowScoreHeavy),
+      },
+      uncertaintyScore: Number(uncertaintyScore.toFixed(3)),
+      formalPromotionEligible: !inputSparse,
+      quotaBalancing: false,
+    },
+  };
+}
+
+function buildUnifiedOneXTwoPosterior(probabilityModel, marketProbabilities, contextSignals, scoreShape, inputCoverage = null) {
+  return buildUnifiedOneXTwoPosteriorDecision(
+    probabilityModel,
+    marketProbabilities,
+    contextSignals,
+    scoreShape,
+    inputCoverage,
+  ).probabilities;
 }
 
 function buildUnifiedHandicapPosterior(probabilityModel, hhadProbabilities, scoreShape) {
@@ -7574,11 +8228,11 @@ function multiFactorEvidenceForCandidate(match, candidate, context) {
     modelProbability: candidate.probability,
     marketProbability: candidateMarketSupport(candidate, context),
     modelGap: candidate.gap,
-    dataQuality: unifiedDataQuality(context.contextSignals),
+    dataQuality: observedUnifiedDataQuality(context.contextSignals),
     scoreAligned,
     crossMarketCompatible,
     handicapAligned,
-    marketLeaderAligned: marketLeader?.code === candidate.code,
+    marketLeaderAligned: marketLeader ? marketLeader.code === candidate.code : null,
     trendSupports: trend.supports,
     trendContradicts: trend.contradicts,
     externalMarketAligned: externalMarket.aligned,
@@ -7592,7 +8246,7 @@ function multiFactorEvidenceForCandidate(match, candidate, context) {
     severeMissingCount: dataGaps.severeMissingCount,
     riskTagsCount: Array.isArray(upstream?.riskTags) ? upstream.riskTags.length : 0,
   });
-  return {
+  const result = {
     ...evidence,
     handicapLine: evidenceHandicapLine,
     officialTrend: trend,
@@ -7604,6 +8258,21 @@ function multiFactorEvidenceForCandidate(match, candidate, context) {
       recommendationAction: upstream.recommendationAction,
       recommendationTier: upstream.recommendationTier,
     } : null,
+  };
+  if (context.inputSparseMarketFallback !== true) return result;
+  return {
+    ...result,
+    eligible: false,
+    grade: "WATCH",
+    blockers: [...new Set([
+      ...(result.blockers || []),
+      "insufficient-auditable-model-inputs",
+      "official-market-reference-only",
+    ])],
+    diagnostics: {
+      ...(result.diagnostics || {}),
+      inputSparseMarketFallback: true,
+    },
   };
 }
 
@@ -7648,14 +8317,6 @@ function recentReviewCandidateAdjustment(candidate, context) {
     if (context.hadAvailable) {
       penalty += 0.012;
       reasons.push("prefer-1x2-when-close");
-    }
-
-    if (Number.isFinite(odds) && odds >= 2.6) {
-      penalty += 0.075;
-      reasons.push("high-sp-handicap-cooling");
-    } else if (Number.isFinite(odds) && odds >= 2.06 && marketSupport !== null && marketSupport < 0.36) {
-      penalty += 0.035;
-      reasons.push("thin-market-support");
     }
 
     const opposesRawLeader = Number.isFinite(line) && (
@@ -7711,18 +8372,9 @@ function recentReviewCandidateAdjustment(candidate, context) {
       }
     }
 
-    if (topSupportsCandidate && scoreCount >= 2 && (marketSupport === null || marketSupport >= 0.43) && odds <= 2.6) {
+    if (topSupportsCandidate && scoreCount >= 2 && (marketSupport === null || marketSupport >= 0.43)) {
       bonus += 0.025;
       reasons.push("hhad-score-market-confirmed");
-    }
-  }
-
-  if (candidate.market === "HAD" && odds > 0 && odds <= 1.18 && candidate.code !== "X") {
-    const drawRow = (context.hadRows || []).find((row) => row.code === "X");
-    const drawPosterior = Number(drawRow?.probability || 0);
-    if (scoreShape.drawHeavy || scoreShape.lowScoreHeavy || drawPosterior >= 0.24) {
-      penalty += 0.055;
-      reasons.push("ultra-low-sp-draw-risk");
     }
   }
 
@@ -7770,6 +8422,7 @@ function unifiedCandidateScore(candidate, context) {
     if (!hhadAvailable) consistency -= 1;
   }
 
+  if (context.inputSparseMarketFallback === true) consistency *= 0.2;
   const qualityPenalty = dataQuality < 0.45 ? 0.035 : dataQuality < 0.62 ? 0.018 : 0;
   const riskPenalty = Math.min(0.055, Number(contextSignals?.trustPenalty || 0) / 220);
   const worldCupContextBoost = worldCupCandidateContextBoost(candidate, context);
@@ -7838,15 +8491,21 @@ function buildUnifiedPosteriorCandidates(match, context) {
     hhadOdds,
     anchorHandicapLine,
     contextSignals,
+    inputCoverage,
   } = context;
   const resolvedHhadLine = resolveHandicapLine(match, [best, oneXTwo]);
   const hhadLine = hhadOdds && resolvedHhadLine !== null
     ? formatHandicapLineForCopy(resolvedHhadLine)
     : (anchorHandicapLine || "");
   const scoreShape = scoreShapeFromProbabilityModel(probabilityModel, hhadLine);
-  const hadPosterior = hadOdds
-    ? buildUnifiedOneXTwoPosterior(probabilityModel, probabilities, contextSignals, scoreShape)
+  const inputSparseMarketFallback = Boolean(
+    hadOdds
+    && inputCoverage?.sufficient === false
+  );
+  const hadPosteriorDecision = hadOdds
+    ? buildUnifiedOneXTwoPosteriorDecision(probabilityModel, probabilities, contextSignals, scoreShape, inputCoverage)
     : null;
+  const hadPosterior = hadPosteriorDecision?.probabilities || null;
   const hhadPosterior = hhadOdds
     ? buildUnifiedHandicapPosterior(probabilityModel, hhadProbabilities, scoreShape)
     : null;
@@ -7873,6 +8532,9 @@ function buildUnifiedPosteriorCandidates(match, context) {
     best,
     oneXTwo,
     evaluationAt: probabilityModel?.generatedAt || new Date().toISOString(),
+    inputCoverage,
+    inputSparseMarketFallback,
+    hadPosteriorDiagnostics: hadPosteriorDecision?.diagnostics || null,
   };
   const candidates = [
     ...hadRows.map((row) => ({
@@ -7896,21 +8558,14 @@ function buildUnifiedPosteriorCandidates(match, context) {
     }));
 
   const rawSelected = [...candidates].sort((a, b) => b.posteriorScore - a.posteriorScore)[0] || null;
-  const hadBest = candidates.filter((item) => item.market === "HAD").sort((a, b) => b.posteriorScore - a.posteriorScore)[0] || null;
+  // HAD direction is the argmax of the auditable unified probability
+  // posterior. Value, score-shape and risk scores remain confidence/promotion
+  // evidence, but cannot rewrite the published outcome direction.
+  const hadBest = hadLeader
+    ? candidates.find((item) => item.market === "HAD" && item.code === hadLeader.code) || null
+    : null;
   const hhadBest = candidates.filter((item) => item.market === "HHAD").sort((a, b) => b.posteriorScore - a.posteriorScore)[0] || null;
   let selected = hadBest || hhadBest || rawSelected;
-
-  if ((scoreShape.drawHeavy || scoreShape.lowScoreHeavy) && hadBest) {
-    const hadDraw = candidates.find((item) => item.market === "HAD" && item.code === "X");
-    const drawWindow = scoreShape.drawHeavy ? 0.04 : 0.03;
-    if (
-      hadDraw
-      && hadDraw.probability >= 0.24
-      && hadDraw.posteriorScore >= Number(selected?.posteriorScore || 0) - drawWindow
-    ) {
-      selected = { ...hadDraw, selectionPolicy: "score-draw-risk-safeguard" };
-    }
-  }
 
   if (hadBest && hhadBest && selected?.market === "HHAD") {
     const hadIsClean = hadBest.probability >= 0.39
@@ -8017,6 +8672,19 @@ function buildUnifiedPosteriorCandidates(match, context) {
   }
 
   const hadMarketLeader = hadMarketRows[0] || null;
+  const selectedHadMarketSupport = selected?.market === "HAD"
+    ? hadMarketRows.find((row) => row.code === selected.code)?.probability ?? null
+    : null;
+  const hadMarketDirectionGap = selectedHadMarketSupport !== null && hadMarketLeader
+    ? Number(hadMarketLeader.probability) - Number(selectedHadMarketSupport)
+    : null;
+  const materialHadMarketConflict = Boolean(
+    selected?.market === "HAD"
+    && hadMarketLeader
+    && hadMarketLeader.code !== selected.code
+    && Number(hadMarketLeader.probability) >= 0.45
+    && Number(hadMarketDirectionGap) >= 0.12
+  );
   const calibratedMarketCandidate = hadMarketLeader
     ? candidates.find((item) => item.market === "HAD" && item.code === hadMarketLeader.code) || null
     : null;
@@ -8031,7 +8699,7 @@ function buildUnifiedPosteriorCandidates(match, context) {
   );
   const calibratedMarketBlockers = [
     ...(calibratedMarketThresholdMet && selected?.market !== "HAD" ? ["selected-market-not-had"] : []),
-    ...(calibratedMarketThresholdMet && selected?.market === "HAD" && selected.code !== hadMarketLeader?.code
+    ...(materialHadMarketConflict
       ? ["model-market-direction-conflict"]
       : []),
     ...(marketSafeguard ? ["market-safeguard-active"] : []),
@@ -8066,8 +8734,31 @@ function buildUnifiedPosteriorCandidates(match, context) {
     leaderProbability: Number.isFinite(hadMarketLeader?.probability)
       ? Number(hadMarketLeader.probability.toFixed(6))
       : null,
+    selectedCode: selected?.market === "HAD" ? selected.code : null,
+    selectedSupport: Number.isFinite(selectedHadMarketSupport)
+      ? Number(selectedHadMarketSupport.toFixed(6))
+      : null,
+    directionGap: Number.isFinite(hadMarketDirectionGap)
+      ? Number(hadMarketDirectionGap.toFixed(6))
+      : null,
+    materialDirectionConflict: materialHadMarketConflict,
     rawSelection: compactMarketLaneCandidate(rawSelected),
     activeSelection: compactMarketLaneCandidate(selected),
+  };
+  const inputFallback = {
+    version: "input-sparse-evidence-shrinkage-reference-v3",
+    applied: inputSparseMarketFallback,
+    formalPromotionEligible: false,
+    source: inputSparseMarketFallback ? "official-sporttery-had" : null,
+    marketWeight: hadPosteriorDecision?.diagnostics?.weights?.market ?? 0,
+    modelWeight: hadPosteriorDecision
+      ? Number((1 - Number(hadPosteriorDecision.diagnostics?.weights?.market || 0)).toFixed(2))
+      : 0,
+    inputSufficient: inputCoverage?.sufficient ?? null,
+    evidenceFamilies: inputCoverage?.evidenceFamilies ?? null,
+    blockers: inputSparseMarketFallback ? (inputCoverage?.blockers || []) : [],
+    uncertaintyScore: hadPosteriorDecision?.diagnostics?.uncertaintyScore ?? null,
+    drawAdjustment: hadPosteriorDecision?.diagnostics?.drawAdjustment ?? null,
   };
 
   if (selected) {
@@ -8112,6 +8803,8 @@ function buildUnifiedPosteriorCandidates(match, context) {
     outcomeConflict,
     marketLaneAudit,
     marketBaseline,
+    inputFallback,
+    hadPosteriorDiagnostics: hadPosteriorDecision?.diagnostics || null,
   };
 }
 
@@ -8169,6 +8862,9 @@ function enforceUnifiedPosteriorRecommendation(match, context) {
   const usesCalibratedHadMarketBaseline = unified.marketBaseline?.applied === true
     && selected.market === "HAD"
     && selected.code === unified.marketBaseline?.leaderCode;
+  const usesInputSparseMarketFallback = unified.inputFallback?.applied === true
+    && selected.market === "HAD";
+  const withholdForHadMarketConflict = unified.marketBaseline?.materialDirectionConflict === true;
   const isActionable = unified.actionable === true
     && Number.isFinite(selected.odds)
     && selected.odds > 1;
@@ -8211,18 +8907,45 @@ function enforceUnifiedPosteriorRecommendation(match, context) {
   const calibratedMarketNoteEn = usesCalibratedHadMarketBaseline
     ? `The official de-vigged HAD leader (${pct(unified.marketBaseline.leaderProbability || 0)}%) agrees with the current model direction and is marked only as market support. The market baseline does not rewrite the model direction or clear draw and cross-market safeguards.`
     : "";
-  const rawUnifiedTrust = clamp(
-    Math.round(selected.probability * 100 + selected.gap * 38 + Math.max(0, selected.consistency) * 95 - Number(contextSignals?.trustPenalty || 0) * 0.65 - Number(selected.recentReviewPenalty || 0) * 120),
-    48,
-    selected.market === "HHAD" ? 82 : 86
+  const inputFallbackNoteZh = usesInputSparseMarketFallback
+    ? `球队级 Elo、近期状态或历史映射未达到可审计门槛，当前方向采用平局感知的证据收缩：独立模型与比分结构占 ${Math.round((1 - Number(unified.inputFallback.marketWeight || 0)) * 100)}%，官方 HAD 仅以 ${Math.round(Number(unified.inputFallback.marketWeight || 0) * 100)}% 低权重做市场校验；该方向仍给出参考，但不进入正式晋级与正式命中率。`
+    : "";
+  const inputFallbackNoteEn = usesInputSparseMarketFallback
+    ? `Team-level Elo, form, or historical mapping did not meet the auditable threshold. The direction uses draw-aware evidence shrinkage with a ${Math.round((1 - Number(unified.inputFallback.marketWeight || 0)) * 100)}% independent model/score share and only a ${Math.round(Number(unified.inputFallback.marketWeight || 0) * 100)}% official market validation share. It remains visible as a reference and is excluded from formal promotion and formal hit-rate samples.`
+    : "";
+  const calibrationMetrics = match?.modelCalibration?.metrics || {};
+  const calibrationSample = match?.modelCalibration?.sample?.recommendationPool
+    ?? match?.modelCalibration?.sample?.oneXTwo
+    ?? null;
+  const confidenceFreshnessEvidence = auditableConfidenceFreshnessEvidence(
+    match,
+    probabilityModel?.generatedAt,
+    selected.market,
   );
-  const trustScore = usesCalibratedHadMarketBaseline && !isActionable
-    ? clamp(Math.round(Number(unified.marketBaseline?.leaderProbability || 0) * 100), 60, 72)
-    : clamp(
-        Math.round((rawUnifiedTrust + Number(multiFactorEvidence?.evidenceScore || 0)) / 2),
-        isActionable ? 55 : 30,
-        isActionable ? 88 : 59
-      );
+  const dynamicConfidence = buildDynamicRecommendationConfidence({
+    selectedProbability: selected.probability,
+    modelGap: selected.gap,
+    dataQuality: observedUnifiedDataQuality(contextSignals),
+    evidenceCompleteness: observedInputCoverageRatio(context.inputCoverage),
+    evidenceScore: multiFactorEvidence?.evidenceScore,
+    marketProbability: multiFactorEvidence?.marketProbability,
+    marketAligned: multiFactorEvidence?.diagnostics?.marketLeaderAligned,
+    supportingFactorCount: multiFactorEvidence?.supportingFactors?.length,
+    evidenceFamilyCount: context.inputCoverage?.evidenceFamilies,
+    minimumEvidenceFamilies: context.inputCoverage?.minimumEvidenceFamilies,
+    independentAgreement: unified.hadPosteriorDiagnostics?.independentAgreement,
+    freshnessEvidence: confidenceFreshnessEvidence,
+    uncertaintyScore: unified.hadPosteriorDiagnostics?.uncertaintyScore,
+    inputSparse: context.inputCoverage?.sufficient === false,
+    blockerCount: multiFactorEvidence?.blockers?.length,
+    calibrationHitRate: calibrationMetrics.bestHitRate ?? calibrationMetrics.oneXTwoHitRate,
+    calibrationSample,
+    trustPenalty: Number(contextSignals?.trustPenalty || 0)
+      + Number(selected.recentReviewPenalty || 0) * 100,
+    materialConflict: withholdForHadMarketConflict,
+    formalRecommendation: isActionable,
+  });
+  const trustScore = dynamicConfidence.score;
   const unifiedBestBase = {
     ...best,
     marketType: "BEST",
@@ -8235,14 +8958,17 @@ function enforceUnifiedPosteriorRecommendation(match, context) {
     },
     odds: Number.isFinite(selected.odds) ? selected.odds : 0,
     trustScore,
+    confidence: dynamicConfidence,
     multiFactorEvidence,
     recommendationAction: isActionable ? "recommend" : "reference",
     recommendationTier: !isActionable
-      ? (usesCalibratedHadMarketBaseline ? "calibrated-had-market-reference" : "multi-factor-watch")
+      ? (usesInputSparseMarketFallback
+          ? confidenceReferenceTier(dynamicConfidence, "input-sparse-dynamic-evidence")
+          : confidenceReferenceTier(dynamicConfidence))
       : `multi-factor-${String(multiFactorEvidence?.grade || "c").toLowerCase()}`,
     explanation: {
       zh: `统一后验结论：先用泊松比分矩阵生成比分分布，再融合独立模型概率、比分反推和赛前信号；SP只做校验。${onlyHhadNoteZh}${switchNoteZh}${marketSafeguardNoteZh}${evidenceNoteZh}${isActionable ? `本场主推 ${selected.label.zh}。` : `本场仅观察 ${selected.label.zh}。`}`,
-      en: `Unified posterior verdict: the Poisson score matrix is built first, then the final gate combines independent probability, score-implied probability, HAD/HHAD structure, official and external market movement, value, data quality and risk. ${calibratedMarketNoteEn}${marketSafeguardNoteEn}${evidenceNoteEn} Direction: ${selected.label.en}.`,
+      en: `Unified posterior verdict: the final gate combines independent probability, score-implied probability, HAD/HHAD structure, official and external market movement, value, data quality and risk. ${inputFallbackNoteEn}${calibratedMarketNoteEn}${marketSafeguardNoteEn}${evidenceNoteEn} Direction: ${selected.label.en}.`,
     },
     analysisItems: [
       {
@@ -8261,6 +8987,10 @@ function enforceUnifiedPosteriorRecommendation(match, context) {
         zh: calibratedMarketNoteZh,
         en: calibratedMarketNoteEn,
       }] : []),
+      ...(usesInputSparseMarketFallback ? [{
+        zh: inputFallbackNoteZh,
+        en: inputFallbackNoteEn,
+      }] : []),
       { zh: evidenceNoteZh, en: evidenceNoteEn },
       {
         zh: `自洽规则：如果比分热区偏平局，就压低硬追胜负；如果普通胜平负未开售，就不凭空生成主胜/平/客胜主推；如果选择让球，也只显示为让胜/让平/让负。`,
@@ -8273,18 +9003,139 @@ function enforceUnifiedPosteriorRecommendation(match, context) {
       ...(scoreShape.lowScoreHeavy ? [{ zh: "低比分热区", en: "Low-score zone" }] : []),
       ...(!isActionable ? [{ zh: "\u591a\u56e0\u7d20\u8bc1\u636e\u4e0d\u8db3", en: "Multi-factor evidence not ready" }] : []),
       ...(usesCalibratedHadMarketBaseline ? [{ zh: "\u6821\u51c6 HAD \u5e02\u573a\u53c2\u8003", en: "Calibrated HAD market reference" }] : []),
+      ...(usesInputSparseMarketFallback ? [{ zh: "\u7f3a\u53c2\u5b98\u65b9 HAD \u515c\u5e95", en: "Official HAD sparse-input backstop" }] : []),
       ...((best?.riskTags || []).filter((tag) => !["Conditions not aligned", "Best-lane hit-rate cooldown"].includes(tag.en)).slice(0, 3)),
     ],
     visibilityStatus: "FREE",
     resultStatus: isActionable ? resultStatus(match, selected.code, selectedIsHhad ? "BEST_HHAD" : "BEST") : "PENDING",
   };
-  const liveOfficialOdds = officialOddsForLivePrediction(match, unifiedBestBase);
+  const marketConflictLeaderLabel = withholdForHadMarketConflict
+    ? simpleOutcomeLabel(match, unified.marketBaseline.leaderCode)
+    : null;
+  let publicUnifiedBestBase = withholdForHadMarketConflict ? {
+    ...unifiedBestBase,
+    tipCode: "WATCH",
+    tipLabel: {
+      zh: "暂不推荐：模型与官方市场冲突",
+      en: "No pick: model and official market conflict",
+    },
+    odds: 0,
+    trustScore: clamp(Number(unifiedBestBase.trustScore || 35), 20, 38),
+    recommendationAction: "reference",
+    recommendationTier: "market-conflict-watch",
+    explanation: {
+      zh: `模型内部方向为${selected.label.zh}，但官方 HAD 去水领跑方向为${marketConflictLeaderLabel?.zh || unified.marketBaseline.leaderCode}（${pct(unified.marketBaseline.leaderProbability || 0)}%），方向支持差达到 ${pct(unified.marketBaseline.directionGap || 0)}%。当前保留内部审计，不向前台发布主胜、平局或客胜方向。`,
+      en: `The internal model side is ${selected.label.en}, while the official de-vigged HAD leader is ${marketConflictLeaderLabel?.en || unified.marketBaseline.leaderCode} (${pct(unified.marketBaseline.leaderProbability || 0)}%), with a ${pct(unified.marketBaseline.directionGap || 0)}% support gap. The internal audit is retained, but no public 1X2 direction is issued.`,
+    },
+    riskTags: [
+      { zh: "模型与官方市场冲突", en: "Model and official market conflict" },
+      { zh: "方向暂停发布", en: "Direction withheld" },
+    ],
+    resultStatus: "PENDING",
+  } : unifiedBestBase;
+  const dynamicHadReferenceCandidate = !isActionable
+    ? unified.candidates.find((item) => item.market === "HAD" && item.code === unified.hadRows?.[0]?.code) || null
+    : null;
+  const officialHadReferenceCode = (
+    !isActionable
+    && dynamicHadReferenceCandidate
+    && ["1", "X", "2"].includes(String(dynamicHadReferenceCandidate.code || ""))
+  )
+    ? String(dynamicHadReferenceCandidate.code)
+    : null;
+  const officialHadReferenceOdds = officialHadReferenceCode
+    ? oddsValueForCode(hadOdds, officialHadReferenceCode)
+    : 0;
+  const useOfficialHadReference = Boolean(
+    officialHadReferenceCode
+    && Number.isFinite(officialHadReferenceOdds)
+    && officialHadReferenceOdds > 1
+  );
+  const officialHadMarketRows = hadOdds
+    ? outcomeRowsFromTriplet(impliedProbabilities(hadOdds))
+    : [];
+  const officialHadReferenceMarketRow = officialHadMarketRows.find((row) => row.code === officialHadReferenceCode) || null;
+  const officialHadReferenceProbability = Number.isFinite(Number(dynamicHadReferenceCandidate?.probability))
+    ? Number(dynamicHadReferenceCandidate.probability)
+    : null;
+  const officialHadReferenceMarketProbability = officialHadReferenceMarketRow
+    && Number.isFinite(Number(officialHadReferenceMarketRow.probability))
+    ? Number(officialHadReferenceMarketRow.probability)
+    : null;
+  const officialHadReferenceMarketAligned = officialHadMarketRows[0]
+    ? officialHadMarketRows[0].code === officialHadReferenceCode
+    : null;
+  const officialHadReferenceEvidence = dynamicHadReferenceCandidate?.multiFactorEvidence || multiFactorEvidence;
+  const officialHadReferenceFreshnessEvidence = auditableConfidenceFreshnessEvidence(
+    match,
+    probabilityModel?.generatedAt,
+    "HAD",
+  );
+  const officialHadReferenceConfidence = buildDynamicRecommendationConfidence({
+    selectedProbability: officialHadReferenceProbability,
+    modelGap: dynamicHadReferenceCandidate?.gap,
+    dataQuality: observedUnifiedDataQuality(contextSignals),
+    evidenceCompleteness: observedInputCoverageRatio(context.inputCoverage),
+    evidenceScore: officialHadReferenceEvidence?.evidenceScore,
+    marketProbability: officialHadReferenceMarketProbability,
+    marketAligned: officialHadReferenceMarketAligned,
+    supportingFactorCount: officialHadReferenceEvidence?.supportingFactors?.length,
+    evidenceFamilyCount: context.inputCoverage?.evidenceFamilies,
+    minimumEvidenceFamilies: context.inputCoverage?.minimumEvidenceFamilies,
+    independentAgreement: unified.hadPosteriorDiagnostics?.independentAgreement,
+    freshnessEvidence: officialHadReferenceFreshnessEvidence,
+    uncertaintyScore: unified.hadPosteriorDiagnostics?.uncertaintyScore,
+    inputSparse: context.inputCoverage?.sufficient === false,
+    blockerCount: officialHadReferenceEvidence?.blockers?.length,
+    calibrationHitRate: calibrationMetrics.bestHitRate ?? calibrationMetrics.oneXTwoHitRate,
+    calibrationSample,
+    trustPenalty: Number(contextSignals?.trustPenalty || 0)
+      + Number(dynamicHadReferenceCandidate?.recentReviewPenalty || 0) * 100,
+    materialConflict: withholdForHadMarketConflict,
+    formalRecommendation: false,
+  });
+  const officialHadReferenceTrust = officialHadReferenceConfidence.score;
+  const officialHadReferenceTier = confidenceReferenceTier(
+    officialHadReferenceConfidence,
+    usesInputSparseMarketFallback ? "input-sparse-dynamic-evidence" : "dynamic-evidence",
+  );
+  if (useOfficialHadReference) {
+    const officialHadReferenceLabel = simpleOutcomeLabel(match, officialHadReferenceCode);
+    publicUnifiedBestBase = {
+      ...unifiedBestBase,
+      oddsPoolCode: "HAD",
+      handicapLine: "0",
+      tipCode: officialHadReferenceCode,
+      tipLabel: {
+        zh: `\u52a8\u6001\u8bc1\u636e\u53c2\u8003 ${officialHadReferenceLabel?.zh || officialHadReferenceCode}`,
+        en: `Dynamic-evidence reference: ${officialHadReferenceLabel?.en || officialHadReferenceCode}`,
+      },
+      odds: officialHadReferenceOdds,
+      trustScore: officialHadReferenceTrust,
+      confidence: officialHadReferenceConfidence,
+      recommendationAction: "reference",
+      recommendationTier: officialHadReferenceTier,
+      explanation: {
+        zh: `\u591a\u56e0\u7d20\u6b63\u5f0f\u95e8\u69db\u672a\u901a\u8fc7\uff0c\u4f46\u4ecd\u7ed9\u51fa\u52a8\u6001\u8bc1\u636e\u65b9\u5411 ${officialHadReferenceLabel?.zh || officialHadReferenceCode}\uff1a\u878d\u5408\u540e\u6982\u7387 ${pct(officialHadReferenceProbability)}%\uff0c\u5b98\u65b9\u53bb\u6c34\u652f\u6301 ${pct(officialHadReferenceMarketProbability)}%\u3002SP \u53ea\u7528\u4e8e\u76d8\u9762\u548c\u4ef7\u503c\u5c55\u793a\uff0c\u4e0d\u6539\u5199\u65b9\u5411\u3001\u4e0d\u5355\u72ec\u538b\u4f4e\u7f6e\u4fe1\u5ea6\u3002`,
+        en: `The formal multi-factor gate did not pass, but a dynamic-evidence direction remains visible: ${officialHadReferenceLabel?.en || officialHadReferenceCode}, with ${pct(officialHadReferenceProbability)}% fused probability and ${pct(officialHadReferenceMarketProbability)}% official de-vigged support. SP is retained for market/value display and neither rewrites direction nor caps confidence by itself.`,
+      },
+      riskTags: [
+        ...(withholdForHadMarketConflict
+          ? [{ zh: "\u6a21\u578b\u4e0e\u5b98\u65b9\u5e02\u573a\u51b2\u7a81", en: "Model and official market conflict" }]
+          : [{ zh: "\u6b63\u5f0f\u8bc1\u636e\u95e8\u69db\u672a\u901a\u8fc7", en: "Formal evidence gate not passed" }]),
+        { zh: "\u52a8\u6001\u591a\u56e0\u7d20\u878d\u5408", en: "Dynamic multi-factor fusion" },
+        { zh: "SP \u4e0d\u5355\u72ec\u5b9a\u7f6e\u4fe1", en: "SP-independent confidence" },
+      ],
+      resultStatus: "PENDING",
+    };
+  }
+  const liveOfficialOdds = officialOddsForLivePrediction(match, publicUnifiedBestBase);
   const liveRecommendationCandidate = evaluateLiveRecommendation(
-    unifiedBestBase,
+    publicUnifiedBestBase,
     liveOfficialOdds,
     selectedIsHhad ? hhadLine : 0
   );
-  const livePublicationEvidence = buildLivePublicationEvidence(match, unifiedBestBase, Date.now());
+  const livePublicationEvidence = buildLivePublicationEvidence(match, publicUnifiedBestBase, Date.now());
   const liveRecommendation = livePublicationEvidence
     ? liveRecommendationCandidate
     : {
@@ -8297,7 +9148,7 @@ function enforceUnifiedPosteriorRecommendation(match, context) {
         ])],
       };
   const unifiedBest = {
-    ...unifiedBestBase,
+    ...publicUnifiedBestBase,
     liveRecommendationAction: liveRecommendation.eligible ? "recommend" : "withhold",
     liveRecommendationTier: liveRecommendation.eligible
       ? `live-${String(liveRecommendation.grade || "c").toLowerCase()}`
@@ -8332,6 +9183,39 @@ function enforceUnifiedPosteriorRecommendation(match, context) {
       resultStatus: resultStatus(match, selected.code, selectedIsHhad ? "HHAD" : "1X2"),
     };
   }
+  if (withholdForHadMarketConflict) {
+    oneXTwoReference = {
+      ...oneXTwoReference,
+      tipCode: "WATCH",
+      tipLabel: {
+        zh: "暂不推荐：模型与官方市场冲突",
+        en: "No pick: model and official market conflict",
+      },
+      odds: 0,
+      trustScore: clamp(Number(oneXTwoReference?.trustScore || 35), 20, 38),
+      recommendationAction: "reference",
+      recommendationTier: "market-conflict-watch",
+      explanation: publicUnifiedBestBase.explanation,
+      riskTags: publicUnifiedBestBase.riskTags,
+      resultStatus: "PENDING",
+    };
+  }
+  if (useOfficialHadReference) {
+    oneXTwoReference = {
+      ...oneXTwoReference,
+      oddsPoolCode: "HAD",
+      handicapLine: "0",
+      tipCode: officialHadReferenceCode,
+      tipLabel: publicUnifiedBestBase.tipLabel,
+      odds: publicUnifiedBestBase.odds,
+      trustScore: publicUnifiedBestBase.trustScore,
+      recommendationAction: "reference",
+      recommendationTier: officialHadReferenceTier,
+      explanation: publicUnifiedBestBase.explanation,
+      riskTags: publicUnifiedBestBase.riskTags,
+      resultStatus: "PENDING",
+    };
+  }
   const goalsReference = markPredictionAsUnifiedReference(
     goals,
     "进球数只解释比分形态，不作为本场主推兜底。",
@@ -8339,7 +9223,7 @@ function enforceUnifiedPosteriorRecommendation(match, context) {
   );
   const unifiedProbabilityModel = {
     ...probabilityModel,
-    version: "unified-poisson-bayes-v64",
+    version: "unified-poisson-bayes-v73",
     oneXTwo: {
       ...(probabilityModel.oneXTwo || {}),
       unifiedPosterior: asPercentTriplet(unified.hadPosterior),
@@ -8349,7 +9233,7 @@ function enforceUnifiedPosteriorRecommendation(match, context) {
       unifiedPosterior: asPercentTriplet(unified.hhadPosterior),
     } : probabilityModel.handicap,
     unifiedPosterior: {
-      version: "v62-had-first-calibrated-market-baseline",
+      version: "v73-draw-aware-evidence-shrinkage-argmax",
       generatedAt: new Date().toISOString(),
       selectedMarket: selected.market,
       selectedCode: selected.code,
@@ -8367,6 +9251,8 @@ function enforceUnifiedPosteriorRecommendation(match, context) {
       outcomeConflict: unified.outcomeConflict || selected.outcomeConflict || null,
       marketLaneAudit: unified.marketLaneAudit,
       marketBaseline: unified.marketBaseline,
+      inputFallback: unified.inputFallback,
+      evidenceShrinkage: unified.hadPosteriorDiagnostics,
       dataQuality: Number(unifiedDataQuality(contextSignals).toFixed(3)),
       worldCupGroupContext: contextSignals?.worldCupGroupContext || null,
       scoreShape: {
@@ -8411,7 +9297,18 @@ function enforceUnifiedPosteriorRecommendation(match, context) {
           diagnostics: candidate.multiFactorEvidence.diagnostics,
         } : null,
       })),
-      policy: `${MULTI_FACTOR_POLICY_VERSION}; independent-and-value-evidence-may-reroute; market-disagreement-blocks-promotion; never-reroute-by-lower-sp; references-not-backups`,
+      confidence: officialHadReferenceConfidence,
+      policy: `${MULTI_FACTOR_POLICY_VERSION}; dynamic-market-elo-poisson-form-context-fusion; confidence-is-price-independent; formal-picks-require-independent-evidence; market-disagreement-blocks-promotion; references-remain-visible`,
+    },
+    publicDecision: {
+      tipCode: useOfficialHadReference ? officialHadReferenceCode : selected.code,
+      directionPublished: true,
+      formalRecommendation: !useOfficialHadReference && isActionable,
+      reason: withholdForHadMarketConflict
+        ? "material-official-market-direction-conflict-reference"
+        : useOfficialHadReference
+          ? "nonformal-dynamic-evidence-reference"
+        : "unified-posterior-decision",
     },
   };
 
@@ -9049,7 +9946,7 @@ function dataGapProfile(match, context) {
   const fiveHundred = signals.fiveHundred || {};
   const referee = signals.referee || {};
   const expectedGoals = signals.expectedGoals || {};
-  const lineups = signals.lineups || {};
+  const lineups = signals.confirmedLineup || signals.projectedRoster || signals.lineups || {};
   const injuries = signals.injuries || {};
   const weather = signals.weather || {};
   const webConsensus = signals.webConsensus || {};
@@ -9068,10 +9965,7 @@ function dataGapProfile(match, context) {
     || fiveHundred.futureSchedule?.away
     || signals.buyEndTime
   );
-  const refereeConnected = Boolean(
-    signalText(referee.name)
-    || hasNumericSignal(referee.cardsPerMatch, referee.penaltiesPerMatch)
-  );
+  const refereeConnected = Boolean(hasNumericSignal(referee.cardsPerMatch, referee.penaltiesPerMatch));
   const lineupConnected = Boolean(
     signalText(lineups.summary?.zh || lineups.summary?.en)
     || signalText(lineups.homeFormation)
@@ -9132,7 +10026,10 @@ function dataGapProfile(match, context) {
       weight: Number(item.weight || 0),
     }))
     : [];
-  const effectiveMissing = preMatchMissing.length ? preMatchMissing : missing;
+  // An empty temporal missing list is meaningful: evidence that has not
+  // reached its normal publication window must not fall back to the legacy
+  // static "missing injuries/projected XI" penalty.
+  const effectiveMissing = preMatchQuality ? preMatchMissing : missing;
   const missingWeight = effectiveMissing.reduce((sum, item) => sum + Number(item.weight || 0), 0);
   const fallbackCoverageScore = Math.round(clamp(100 - missingWeight, 25, 100));
   const coverageScore = Number.isFinite(Number(preMatchQuality?.score))
@@ -9171,7 +10068,7 @@ function dataGapProfile(match, context) {
   };
 
   return {
-    version: preMatchQuality ? "data-gap-profile-v50" : "data-gap-profile-v1",
+    version: preMatchQuality ? "data-gap-profile-v51-temporal-evidence" : "data-gap-profile-v1",
     coverageScore,
     sourceQuality,
     severeMissingCount,
@@ -9195,6 +10092,11 @@ function dataGapProfile(match, context) {
         score: preMatchQuality.score,
         sourceQuality: preMatchQuality.sourceQuality,
         lowQuality: (preMatchQuality.lowQuality || []).filter((key) => key !== "webConsensus" && key !== "web-consensus"),
+        missing: preMatchMissing,
+        notYetPublishable: Array.isArray(preMatchQuality.notYetPublishable)
+          ? preMatchQuality.notYetPublishable
+          : [],
+        components: preMatchQuality.components || {},
       },
     } : {}),
     note: sourceQuality === "low"
@@ -9215,7 +10117,7 @@ function preMatchContextSignals(match, probabilities, hhadProbabilities, homeLam
   const pressurePenalty = rankingPressure.maxPressure >= 70 ? 2 : 0;
   const rotationPenalty = rankingPressure.rotationRisk >= 0.3 ? 1 : 0;
   return {
-    version: dataGaps.version === "data-gap-profile-v50" ? "pre-match-context-v50" : "pre-match-context-v1",
+    version: dataGaps.version.startsWith("data-gap-profile-v5") ? "pre-match-context-v51-temporal-evidence" : "pre-match-context-v1",
     rankingPressure,
     worldCupGroupContext: rankingPressure.worldCupGroupContext || null,
     attackIntent,
@@ -9548,19 +10450,28 @@ function selectValueAwareOneXTwo(match, picks, modelProbabilities, marketProbabi
     const isDraw = profile.code === "X";
     const isSide = profile.code === "1" || profile.code === "2";
     const maxModelDiscount = modelLeaderProbability - modelProbability;
+    const drawRerouteSupported = !isDraw
+      || profile.modelRank === 1
+      || (modelProbability >= 0.31 && maxModelDiscount <= 0.04);
     const minEdge = isDraw ? 0.018 : odds <= 1.45 ? 0.05 : odds <= 1.7 ? 0.035 : 0.026;
     const minEv = isDraw ? 0.035 : odds <= 1.45 ? 0.05 : odds <= 1.7 ? 0.032 : 0.025;
     const minProbability = isDraw ? 0.245 : odds <= 1.7 ? 0.44 : 0.29;
     return edge >= minEdge
       && ev >= minEv
       && modelProbability >= minProbability
+      && drawRerouteSupported
       && maxModelDiscount <= (isDraw ? 0.12 : 0.14)
       && odds >= (isDraw ? 2.65 : 1.32)
       && odds <= (isDraw ? 6.8 : 5.8)
       && (!isSide || profile.handicapSupport === null || profile.handicapSupport >= 0.34);
   };
 
+  // The 1X2 probability layer owns the published direction. Price/EV may
+  // confirm that direction or downgrade it to watch, but it must never replace
+  // the most likely outcome with a lower-probability side (especially a long
+  // priced draw).
   const valueCandidate = profiles
+    .filter((profile) => profile.modelRank === 1)
     .filter(qualifiesValue)
     .sort((a, b) => b.score - a.score)[0];
 
@@ -10001,14 +10912,69 @@ function worldCupPriorOutcomeProbabilities(match) {
   });
 }
 
+function officialKLeagueStandingSignalForMatch(match) {
+  const signal = match?.externalSignals?.kLeagueOfficial;
+  if (!signal || signal.version !== "k-league-official-standings-v1") return null;
+  if (signal.source !== "K League official JSON") return null;
+  const observedMs = Date.parse(signal.observedAt || signal.receivedAt || "");
+  const cutoffMs = Date.parse(
+    match?.buyEndTime
+    || match?.predictionMeta?.cutoffTime
+    || match?.kickoffTime
+    || ""
+  );
+  if (!Number.isFinite(observedMs) || !Number.isFinite(cutoffMs) || observedMs > cutoffMs) return null;
+  if (cutoffMs - observedMs > 96 * 60 * 60 * 1000) return null;
+  const validSide = (row) => Boolean(
+    row
+    && Number(row.played || 0) >= 6
+    && Number(row.rank || 0) > 0
+    && Number.isFinite(Number(row.points))
+    && Number.isFinite(Number(row.goalsFor))
+    && Number.isFinite(Number(row.goalsAgainst))
+    && Array.isArray(row.recent)
+    && row.recent.length >= 4
+  );
+  return validSide(signal.home) && validSide(signal.away) ? signal : null;
+}
+
+function officialKLeagueTeamStrength(match, side) {
+  const signal = officialKLeagueStandingSignalForMatch(match);
+  const row = signal?.[side];
+  if (!row) return null;
+  const played = Math.max(1, Number(row.played || 0));
+  const pointsPerGame = clamp(Number(row.points || 0) / played, 0, 3);
+  const goalDifferencePerGame = clamp(
+    (Number(row.goalsFor || 0) - Number(row.goalsAgainst || 0)) / played,
+    -2,
+    2,
+  );
+  const recent = row.recent.slice(0, 6);
+  const recentPoints = recent.reduce((sum, result) => (
+    sum + (result === "W" ? 3 : result === "D" ? 1 : 0)
+  ), 0);
+  const recentPointsPerGame = recent.length ? recentPoints / recent.length : 1;
+  return clamp(
+    0.2
+      + (pointsPerGame / 3) * 0.55
+      + ((goalDifferencePerGame + 2) / 4) * 0.15
+      + (recentPointsPerGame / 3) * 0.1,
+    0.18,
+    0.92,
+  );
+}
+
 function teamModelStrength(match, side) {
   const priorStrength = worldCupPriorStrength(match, side);
   if (priorStrength !== null) return priorStrength;
 
-  const name = side === "home" ? match.homeTeam : match.awayTeam;
+  const name = matchSideTeamName(match, side);
   const directRank = side === "home" ? match.homeRank : match.awayRank;
   const rankStrength = rankToStrength(directRank) || rankToStrength(externalFifaRank(match, side));
   if (rankStrength !== null) return rankStrength;
+
+  const officialLeagueStrength = officialKLeagueTeamStrength(match, side);
+  if (officialLeagueStrength !== null) return officialLeagueStrength;
 
   const normalizedName = canonicalTeamNameForModel(name);
   for (const [teamName, strength] of MODEL_ONLY_TEAM_STRENGTH.entries()) {
@@ -10021,16 +10987,52 @@ function teamModelStrength(match, side) {
   return 0.5;
 }
 
+function teamModelStrengthHasEvidence(match, side) {
+  if (worldCupPriorStrength(match, side) !== null) return true;
+  const directRank = side === "home" ? match.homeRank : match.awayRank;
+  if (rankToStrength(directRank) !== null || rankToStrength(externalFifaRank(match, side)) !== null) return true;
+  if (officialKLeagueTeamStrength(match, side) !== null) return true;
+  const normalizedName = canonicalTeamNameForModel(matchSideTeamName(match, side));
+  for (const teamName of MODEL_ONLY_TEAM_STRENGTH.keys()) {
+    if (normalizedName.includes(canonicalTeamNameForModel(teamName))) return true;
+  }
+  return false;
+}
+
 function syntheticModelOnlyProbabilities(match) {
   const profile = matchVolatilityProfile(match);
   const homeStrength = teamModelStrength(match, "home");
   const awayStrength = teamModelStrength(match, "away");
-  const homeAdvantage = profile.isInternational ? 0.012 : 0.055;
+  const hasStrengthEvidence = teamModelStrengthHasEvidence(match, "home")
+    || teamModelStrengthHasEvidence(match, "away");
+  const homeAdvantage = hasStrengthEvidence ? (profile.isInternational ? 0.012 : 0.055) : 0;
   const strengthDiff = clamp((homeStrength - awayStrength) * 0.62 + homeAdvantage, -0.34, 0.34);
-  const draw = clamp(0.255 - Math.abs(strengthDiff) * 0.18, 0.18, 0.3);
+  const neutralDrawPrior = hasStrengthEvidence ? 0.255 : 0.3;
+  const draw = clamp(neutralDrawPrior - Math.abs(strengthDiff) * 0.18, 0.18, 0.32);
   const home = clamp((1 - draw) * clamp(0.5 + strengthDiff, 0.16, 0.84), 0.08, 0.82);
   const away = clamp(1 - draw - home, 0.08, 0.82);
   return normalizeOutcomeProbabilities({ home, draw, away });
+}
+
+function evidenceAwareIndependentProbabilities(match) {
+  const fallback = syntheticModelOnlyProbabilities(match);
+  const elo = normalizeOutcomeProbabilities(match?.eloSnapshot?.probabilities);
+  const homeMatches = Number(match?.eloSnapshot?.homeMatches || 0);
+  const awayMatches = Number(match?.eloSnapshot?.awayMatches || 0);
+  const pairedMatches = Math.min(homeMatches, awayMatches);
+  if (!elo || pairedMatches < 3) return fallback;
+
+  // When both teams have real Elo history, the Poisson seed must not remain a
+  // duplicate of the generic home prior. Otherwise teamStrength and Poisson
+  // contribute the same home bias while Elo is the only counterweight. Keep a
+  // small independent-strength contribution, but let audited Elo history lead
+  // the expected-goal split before recent form is applied.
+  const eloWeight = clamp(pairedMatches / 24, 0.55, 0.9);
+  return normalizeOutcomeProbabilities({
+    home: fallback.home * (1 - eloWeight) + elo.home * eloWeight,
+    draw: fallback.draw * (1 - eloWeight) + elo.draw * eloWeight,
+    away: fallback.away * (1 - eloWeight) + elo.away * eloWeight,
+  });
 }
 
 function oneXTwoCodeForScore(home, away) {
@@ -10110,11 +11112,22 @@ function auditableDirectionalInputCoverage(match) {
     form?.away?.goalsForAvg,
     form?.away?.goalsAgainstAvg,
   ].every(auditableMetricPresent);
+  const forecastMs = parseBeijingDateTime(match?.kickoffTime || match?.matchDate || "");
+  const maxFormAgeMs = 240 * 24 * 60 * 60 * 1000;
+  const formLastMatchTimes = [form?.home?.lastMatchAt, form?.away?.lastMatchAt]
+    .map((value) => parseBeijingDateTime(value || ""));
+  const formRecencyReady = Number.isFinite(forecastMs)
+    && formLastMatchTimes.every((value) => (
+      Number.isFinite(value)
+      && value <= forecastMs
+      && forecastMs - value <= maxFormAgeMs
+    ));
   const formReady = Boolean(
     formSample >= 6
     && formHomeSample >= 3
     && formAwaySample >= 3
     && formMetricsReady
+    && formRecencyReady
     && modelInputProvenancePresent(form?.historicalSource || form)
   );
 
@@ -10131,19 +11144,27 @@ function auditableDirectionalInputCoverage(match) {
     || (modelInputProvenancePresent(form?.historicalSource) && formReady)
   );
   const historyReady = leagueHistoryReady || historicalTrainingReady;
-  const evidenceFamilies = [eloReady, formReady, historyReady].filter(Boolean).length;
-  const sufficient = evidenceFamilies >= 2 && (eloReady || formReady);
+  const officialKLeague = officialKLeagueStandingSignalForMatch(match);
+  const officialKLeagueReady = Boolean(officialKLeague);
+  const historicalEvidenceFamilies = [eloReady, formReady, historyReady].filter(Boolean).length;
+  const evidenceFamilies = officialKLeagueReady
+    ? Math.max(2, historicalEvidenceFamilies)
+    : historicalEvidenceFamilies;
+  const sufficient = (historicalEvidenceFamilies >= 2 && (eloReady || formReady))
+    || officialKLeagueReady;
   const blockers = [];
-  if (!eloReady) blockers.push("auditable-elo-insufficient");
-  if (!formReady) blockers.push("auditable-form-insufficient");
+  if (!eloReady && !officialKLeagueReady) blockers.push("auditable-elo-insufficient");
+  if (!formReady && !officialKLeagueReady) blockers.push("auditable-form-insufficient");
   if (!historyReady) blockers.push("auditable-history-insufficient");
   if (!sufficient) blockers.push("directional-input-families-below-2");
 
   return {
-    version: "directional-input-coverage-v1",
+    version: "directional-input-coverage-v2-confidence-aware",
     sufficient,
     evidenceFamilies,
     minimumEvidenceFamilies: 2,
+    coverageRatio: Number(clamp(evidenceFamilies / 2, 0, 1).toFixed(3)),
+    freshnessQuality: formReady ? 0.9 : eloReady ? 0.7 : historyReady ? 0.55 : 0.42,
     policy: "without-official-odds-require-two-auditable-families-including-elo-or-form",
     elo: {
       ready: eloReady,
@@ -10158,6 +11179,10 @@ function auditableDirectionalInputCoverage(match) {
       homeMatches: formHomeSample,
       awayMatches: formAwaySample,
       metricsReady: formMetricsReady,
+      recencyReady: formRecencyReady,
+      maximumAgeDays: 240,
+      homeLastMatchAt: form?.home?.lastMatchAt || null,
+      awayLastMatchAt: form?.away?.lastMatchAt || null,
       provenance: modelInputProvenancePresent(form?.historicalSource || form),
     },
     history: {
@@ -10165,6 +11190,16 @@ function auditableDirectionalInputCoverage(match) {
       leaguePriorReady: leagueHistoryReady,
       leagueMatches: leagueHistoryMatches,
       historicalTrainingReady,
+    },
+    officialLeague: {
+      ready: officialKLeagueReady,
+      source: officialKLeague?.source || null,
+      version: officialKLeague?.version || null,
+      observedAt: officialKLeague?.observedAt || null,
+      homePlayed: Number(officialKLeague?.home?.played || 0),
+      awayPlayed: Number(officialKLeague?.away?.played || 0),
+      homeRank: Number(officialKLeague?.home?.rank || 0) || null,
+      awayRank: Number(officialKLeague?.away?.rank || 0) || null,
     },
     blockers,
   };
@@ -10279,7 +11314,7 @@ function suppressUnauditableDirectionalTips(result, inputCoverage) {
   return {
     ...result,
     predictions: directionalPredictions,
-    projectedScore: result?.projectedScore,
+    projectedScore: undefined,
     probabilityModel: publishedProbabilityModel,
   };
 }
@@ -10364,7 +11399,7 @@ function buildModelOnlyProbabilityModel(match, probabilities, homeLambda, awayLa
 
 function predictionSetWithoutOfficialOdds(match) {
   const inputCoverage = auditableDirectionalInputCoverage(match);
-  const probabilities = syntheticModelOnlyProbabilities(match);
+  const probabilities = evidenceAwareIndependentProbabilities(match);
   const leader = outcomeLeader(probabilities);
   const totalLambdaSeed = 2.18 + (1 - probabilities.draw) * 0.38 + Math.abs(probabilities.home - probabilities.away) * 0.52;
   const totalLambda = clamp(totalLambdaSeed, 1.65, 3.35);
@@ -10410,6 +11445,38 @@ function predictionSetWithoutOfficialOdds(match) {
   const bestProbability = Number(bestPick.probability);
   const trustScore = clamp(Math.round(bestProbability + probabilityGap * 0.75 + 5), 45, 78);
   const modelOnlyLowConfidence = bestProbability < 39 || probabilityGap < 4;
+  const calibrationMetrics = match?.modelCalibration?.metrics || {};
+  const calibrationSample = match?.modelCalibration?.sample?.recommendationPool
+    ?? match?.modelCalibration?.sample?.oneXTwo
+    ?? null;
+  const modelOnlyConfidence = buildDynamicRecommendationConfidence({
+    selectedProbability: bestProbability,
+    modelGap: probabilityGap,
+    dataQuality: observedUnifiedDataQuality(modelBundle.contextSignals),
+    evidenceCompleteness: observedInputCoverageRatio(inputCoverage),
+    // There is no multi-factor market gate before official SP opens. Keep the
+    // overall confidence unavailable instead of turning input coverage into a
+    // fabricated evidence score or neutral market agreement.
+    evidenceScore: null,
+    marketProbability: null,
+    marketAligned: null,
+    supportingFactorCount: 0,
+    evidenceFamilyCount: inputCoverage?.evidenceFamilies,
+    minimumEvidenceFamilies: inputCoverage?.minimumEvidenceFamilies,
+    independentAgreement: null,
+    freshnessEvidence: auditableConfidenceFreshnessEvidence(
+      match,
+      modelBundle.probabilityModel?.generatedAt,
+      "HAD",
+    ),
+    inputSparse: inputCoverage?.sufficient === false,
+    blockerCount: inputCoverage?.blockers?.length,
+    calibrationHitRate: calibrationMetrics.bestHitRate ?? calibrationMetrics.oneXTwoHitRate,
+    calibrationSample,
+    trustPenalty: Number(modelBundle.contextSignals?.trustPenalty || 0),
+    materialConflict: false,
+    formalRecommendation: false,
+  });
   const riskTags = [
     { zh: "未开售无官方SP", en: "No official SP" },
     { zh: "待官方赔率", en: "Waiting for official SP" },
@@ -10429,6 +11496,7 @@ function predictionSetWithoutOfficialOdds(match) {
     tipLabel,
     odds: 0,
     trustScore,
+    confidence: modelOnlyConfidence,
     recommendationAction: "reference",
     recommendationTier: "model-only-reference",
     explanation: {
@@ -10463,6 +11531,7 @@ function predictionSetWithoutOfficialOdds(match) {
     },
     odds: 0,
     trustScore: clamp(trustScore - (modelOnlyLowConfidence ? 8 : 3), 35, 76),
+    confidence: modelOnlyConfidence,
     recommendationAction: "reference",
     recommendationTier: "model-only-watch",
     explanation: oneXTwo.explanation,
@@ -10479,9 +11548,9 @@ function predictionSetWithoutOfficialOdds(match) {
     projectedScore: score,
     probabilityModel: {
       ...modelBundle.probabilityModel,
-      version: "model-only-unified-v64",
+      version: "model-only-unified-v66",
       unifiedPosterior: {
-        version: "v64-model-only-trusted-incremental-history",
+        version: "v66-model-only-evidence-led-poisson",
         generatedAt: new Date().toISOString(),
         selectedMarket: "MODEL_ONLY_1X2",
         selectedCode: bestPick.code,
@@ -10558,7 +11627,7 @@ function predictionSet(match) {
   const anchorLabelEn = anchorSourceInfo.labelEn;
   const probabilities = impliedProbabilities(anchorOdds);
   const hhadProbabilities = hhadOdds ? impliedProbabilities(hhadOdds) : null;
-  const independentProbabilities = syntheticModelOnlyProbabilities(match);
+  const independentProbabilities = evidenceAwareIndependentProbabilities(match);
   const independentLambda = independentBaseLambdas(match, independentProbabilities);
   const marketHomeLambda = independentLambda.homeLambda;
   const marketAwayLambda = independentLambda.awayLambda;
@@ -11338,6 +12407,7 @@ function predictionSet(match) {
     resultStatus: modelLean.resultStatus,
   };
 
+  const inputCoverage = auditableDirectionalInputCoverage(match);
   const unifiedRecommendation = enforceUnifiedPosteriorRecommendation(match, {
     oneXTwo,
     goals,
@@ -11350,9 +12420,9 @@ function predictionSet(match) {
     anchorHandicapLine,
     contextSignals,
     score,
+    inputCoverage,
   });
 
-  const inputCoverage = auditableDirectionalInputCoverage(match);
   const result = {
     predictions: unifiedRecommendation.predictions.map(normalizePredictionDisplayCopy),
     homeLambda,
@@ -11374,9 +12444,10 @@ function shouldBuildModelOnlyReference(match) {
   const now = Date.now();
   const forwardMs = (WINDOW_FORWARD_DAYS + 1) * 24 * 60 * 60 * 1000;
   const recentGraceMs = 3 * 60 * 60 * 1000;
+  const status = String(match?.status || "").trim().toUpperCase();
+  const preMatchStatus = ["SCHEDULED", "TIMED", "PENDING", "NOT_STARTED"].includes(status);
   return (
-    (!match?.source || match.source === "sporttery") &&
-    match?.status === "SCHEDULED" &&
+    preMatchStatus &&
     kickoffMs >= now - recentGraceMs &&
     kickoffMs <= now + forwardMs
   );
@@ -11436,6 +12507,13 @@ function toAppMatch(match) {
     countryId: meta.countryId,
     kickoffTime: match.kickoffTime,
     status: match.status,
+    ...(match.liveScore ? {
+      liveScore: {
+        ...match.liveScore,
+        official: false,
+        settlementEligible: false
+      }
+    } : {}),
     ...(match.resultDisposition === "VOID" ? {
       resultDisposition: "VOID",
       voidReason: match.voidReason,
@@ -12327,6 +13405,190 @@ function trustedPreCutoffDecision(existing, cutoffMs) {
   );
 }
 
+function completeSignedTrainingInputs(match) {
+  const elo = match?.probabilityModel?.elo || {};
+  const form = match?.probabilityModel?.form || {};
+  return Number.isFinite(Number(elo.homeRating))
+    && Number.isFinite(Number(elo.awayRating))
+    && Number(elo.homeMatches || 0) > 0
+    && Number(elo.awayMatches || 0) > 0
+    && Number(form?.home?.sampleSize || 0) > 0
+    && Number(form?.away?.sampleSize || 0) > 0;
+}
+
+function trainingArtifactsForMatch(match) {
+  return [
+    match?.probabilityModel?.elo?.historicalSource,
+    match?.probabilityModel?.form?.historicalSource,
+  ].map((source) => ({
+    source,
+    artifact: source?.releaseArtifact,
+  })).filter(({ artifact }) => artifact && typeof artifact === "object");
+}
+
+function validatedSignedTrainingArtifact(match) {
+  const rows = trainingArtifactsForMatch(match);
+  if (rows.length !== 2) return null;
+  const validRows = rows.filter(({ source, artifact }) => (
+    artifact.sourceKind === "signed-release-asset"
+    && artifact.entry === HISTORICAL_TRAINING_RELEASE_ENTRY
+    && artifact.validationOk === true
+    && /^[a-f0-9]{64}$/i.test(normText(artifact.sha256))
+    && Number(source?.rows || 0) > 0
+    && Number(artifact.teams || 0) > 0
+    && Number(artifact.finiteEloTeams || 0) > 0
+  ));
+  if (validRows.length !== 2) return null;
+  const hashes = new Set(validRows.map(({ artifact }) => normText(artifact.sha256).toLowerCase()));
+  if (hashes.size !== 1) return null;
+  return {
+    sha256: [...hashes][0],
+    rows: Math.min(...validRows.map(({ source }) => Number(source.rows))),
+    teams: Math.min(...validRows.map(({ artifact }) => Number(artifact.teams))),
+    finiteEloTeams: Math.min(...validRows.map(({ artifact }) => Number(artifact.finiteEloTeams))),
+  };
+}
+
+function strongestTrainingArtifact(match) {
+  const rows = trainingArtifactsForMatch(match)
+    .filter(({ source, artifact }) => (
+      /^[a-f0-9]{64}$/i.test(normText(artifact?.sha256))
+      && Number(source?.rows || 0) > 0
+    ));
+  if (!rows.length) return null;
+  return rows.sort((left, right) => (
+    Number(right.source?.rows || 0) - Number(left.source?.rows || 0)
+    || Number(right.artifact?.finiteEloTeams || 0) - Number(left.artifact?.finiteEloTeams || 0)
+  ))[0];
+}
+
+function hasFormalPublicationBinding(match) {
+  return enabledPredictions(Array.isArray(match?.predictions) ? match.predictions : []).some((prediction) => (
+    normText(prediction?.publicationId)
+    || (prediction?.publicationEvidence && typeof prediction.publicationEvidence === "object")
+    || (prediction?.liveRecommendationAction === "publish"
+      && prediction?.livePublicationEvidence
+      && typeof prediction.livePublicationEvidence === "object")
+  ));
+}
+
+const CURRENT_PUBLIC_CONFIDENCE_FIELDS = Object.freeze([
+  "modelProbability",
+  "evidenceCompleteness",
+  "evidenceCompletenessBasis",
+  "dataQuality",
+  "evidenceScore",
+  "marketConsistency",
+  "marketConsistencyBasis",
+  "calibrationSample",
+  "freshnessQuality",
+  "freshnessObservedAt",
+  "freshnessSourceUpdatedAt",
+  "freshnessAsOf",
+  "freshnessEvaluatedAt",
+  "freshnessAgeSeconds",
+  "freshnessSource",
+  "freshnessBasis",
+]);
+
+function hasCurrentPublicConfidenceContract(prediction) {
+  const confidence = prediction?.confidence;
+  const publicMetrics = confidence?.publicMetrics;
+  return confidence?.version === CONFIDENCE_POLICY_VERSION
+    && publicMetrics
+    && typeof publicMetrics === "object"
+    && CURRENT_PUBLIC_CONFIDENCE_FIELDS.every((field) => (
+      Object.prototype.hasOwnProperty.call(publicMetrics, field)
+    ));
+}
+
+function predictionConfidenceIdentity(prediction) {
+  if (!prediction || typeof prediction !== "object") return null;
+  const marketType = normText(prediction.marketType).toUpperCase();
+  const oddsPoolCode = normText(prediction.oddsPoolCode).toUpperCase();
+  const tipCode = normText(prediction.tipCode).toUpperCase();
+  const handicapLine = marketType === "BEST" && oddsPoolCode === "HHAD"
+    ? normText(prediction.handicapLine)
+    : "";
+  if (!marketType || !tipCode) return null;
+  return [marketType, oddsPoolCode, tipCode, handicapLine].join("|");
+}
+
+function enrichMutablePredictionConfidence(existingPredictions, nextPredictions) {
+  const nextByIdentity = new Map((nextPredictions || []).map((prediction) => (
+    [predictionConfidenceIdentity(prediction), prediction]
+  )).filter(([identity]) => Boolean(identity)));
+  return (existingPredictions || []).map((prediction) => {
+    if (hasCurrentPublicConfidenceContract(prediction)) {
+      return normalizePredictionDisplayCopy(prediction);
+    }
+    const candidate = nextByIdentity.get(predictionConfidenceIdentity(prediction));
+    if (!candidate || !hasCurrentPublicConfidenceContract(candidate)) {
+      return normalizePredictionDisplayCopy(prediction);
+    }
+    return normalizePredictionDisplayCopy({
+      ...prediction,
+      confidence: candidate.confidence,
+    });
+  });
+}
+
+function signedTrainingUpgradeRefresh(existing, candidate, publicationFinalizedAt) {
+  if (!existing || !candidate || !predictionPersistenceSameEvent(existing, candidate)) return null;
+  if (predictionContentLocked(existing, publicationFinalizedAt)
+    || predictionContentLocked(candidate, publicationFinalizedAt)) return null;
+  if (hasFormalPublicationBinding(existing)) return null;
+  if (!completeSignedTrainingInputs(candidate)) return null;
+  const next = validatedSignedTrainingArtifact(candidate);
+  if (!next) return null;
+  const previousRow = strongestTrainingArtifact(existing);
+  const previousSha256 = normText(previousRow?.artifact?.sha256).toLowerCase() || null;
+  if (previousSha256 === next.sha256) return null;
+  const previousRows = Number(previousRow?.source?.rows || 0);
+  const previousFiniteEloTeams = Number(previousRow?.artifact?.finiteEloTeams || 0);
+  const existingComplete = completeSignedTrainingInputs(existing);
+  const materiallyStronger = !existingComplete
+    || next.rows > previousRows
+    || next.finiteEloTeams > previousFiniteEloTeams;
+  if (!materiallyStronger) return null;
+  return {
+    version: "signed-training-pre-cutoff-refresh-v1",
+    applied: true,
+    scope: "same-event-pre-cutoff-unpublished-only",
+    previousSha256,
+    candidateSha256: next.sha256,
+    previousRows,
+    candidateRows: next.rows,
+    previousFiniteEloTeams,
+    candidateFiniteEloTeams: next.finiteEloTeams,
+    completedInputs: ["elo-home", "elo-away", "form-home", "form-away"],
+    refreshedAt: validAuditInstant(publicationFinalizedAt),
+  };
+}
+
+function preCutoffModelUpgradeRefresh(existing, candidate, publicationFinalizedAt) {
+  if (!existing || !candidate || !predictionPersistenceSameEvent(existing, candidate)) return null;
+  if (predictionContentLocked(existing, publicationFinalizedAt)
+    || predictionContentLocked(candidate, publicationFinalizedAt)) return null;
+  if (hasFormalPublicationBinding(existing)) return null;
+  const existingPredictions = enabledPredictions(existing?.predictions);
+  const candidatePredictions = enabledPredictions(candidate?.predictions);
+  if (!existingPredictions.length || !candidatePredictions.length) return null;
+  const previousPolicyVersion = normText(existing?.predictionMeta?.policyVersion);
+  if (previousPolicyVersion !== PRE_CUTOFF_MODEL_REFRESH_FROM_POLICY) return null;
+  return {
+    version: "pre-cutoff-model-upgrade-refresh-v1",
+    applied: true,
+    scope: "same-event-pre-cutoff-reference-only",
+    previousPolicyVersion,
+    candidatePolicyVersion: PREDICTION_POLICY_VERSION,
+    previousDirectionSignature: predictionSignature(existingPredictions),
+    candidateDirectionSignature: predictionSignature(candidatePredictions),
+    directionChanged: predictionSignature(existingPredictions) !== predictionSignature(candidatePredictions),
+    refreshedAt: validAuditInstant(publicationFinalizedAt),
+  };
+}
+
 function predictionPersistenceSameEvent(left, right) {
   if (!left || !right || typeof left !== "object" || typeof right !== "object") return false;
   const sourceKey = (value) => normText(
@@ -12509,12 +13771,27 @@ function applyPredictionPersistence(match, existing, capturedAt, options = {}) {
   }, match);
 
   const immutableDualMarketDecision = validExistingDualMarketDecisionBinding(existing);
+  const trainingUpgradeRefresh = !locked
+    ? signedTrainingUpgradeRefresh(existing, match, publicationFinalizedAt)
+    : null;
+  const modelUpgradeRefresh = !locked
+    ? preCutoffModelUpgradeRefresh(existing, match, publicationFinalizedAt)
+    : null;
+  const publicationGeneratedMeta = trainingUpgradeRefresh || modelUpgradeRefresh
+    ? {
+        ...generatedMeta,
+        ...(trainingUpgradeRefresh ? { trainingUpgradeRefresh } : {}),
+        ...(modelUpgradeRefresh ? { modelUpgradeRefresh } : {}),
+      }
+    : generatedMeta;
   if (
     immutableDualMarketDecision?.featureSnapshot
     && existingPredictions.length
     && sameEvent(existing, match)
     && !isOfficialResultMatch(match)
     && !isOfficialVoidMatch(match)
+    && !trainingUpgradeRefresh
+    && !modelUpgradeRefresh
   ) {
     return {
       ...match,
@@ -12545,7 +13822,7 @@ function applyPredictionPersistence(match, existing, capturedAt, options = {}) {
     return {
       ...rest,
       predictions: [],
-      predictionMeta: generatedMeta,
+      predictionMeta: publicationGeneratedMeta,
     };
   }
 
@@ -12636,7 +13913,7 @@ function applyPredictionPersistence(match, existing, capturedAt, options = {}) {
   }
 
   if (!existingPredictions.length || !nextPredictions.length) {
-    return { ...match, predictionMeta: generatedMeta };
+    return { ...match, predictionMeta: publicationGeneratedMeta };
   }
 
   const sameDirection = predictionSignature(existingPredictions) === predictionSignature(nextPredictions);
@@ -12663,9 +13940,19 @@ function applyPredictionPersistence(match, existing, capturedAt, options = {}) {
     || (existing?.predictionMeta?.trainingSignature || existing?.predictionMeta?.trainingVersion || "none") !== (dataSignature || "none");
 
   if (sameMarketSignals && !policyChanged) {
+    const immutableReferenceDecision = attestImmutableAnalysisReferenceDecision(
+      existing?.predictionMeta?.immutableAnalysisReferenceDecision,
+      existing,
+    );
+    const predictionEvidenceIsImmutable = hasFormalPublicationBinding(existing)
+      || Boolean(validArchivedPreMatchPrediction(existing))
+      || Boolean(immutableReferenceDecision);
+    const persistedPredictions = predictionEvidenceIsImmutable
+      ? existingPredictions.map(normalizePredictionDisplayCopy)
+      : enrichMutablePredictionConfidence(existingPredictions, nextPredictions);
     return {
       ...match,
-      predictions: existingPredictions.map(normalizePredictionDisplayCopy),
+      predictions: persistedPredictions,
       projectedScoreHome: existing?.projectedScoreHome ?? match.projectedScoreHome,
       projectedScoreAway: existing?.projectedScoreAway ?? match.projectedScoreAway,
       stats: existing?.stats || match.stats,
@@ -12685,7 +13972,7 @@ function applyPredictionPersistence(match, existing, capturedAt, options = {}) {
     return {
       ...match,
       predictionMeta: {
-        ...generatedMeta,
+        ...publicationGeneratedMeta,
         updateReason: {
           zh: "提示词与展示规则已升级，赛前方向未发生实质变化；保留原预测，只更新分析说明。",
           en: "Prompt and display rules were upgraded while the pre-match direction did not materially change; the old forecast is kept and only the analysis text is refreshed.",
@@ -12697,7 +13984,7 @@ function applyPredictionPersistence(match, existing, capturedAt, options = {}) {
   return {
     ...match,
     predictionMeta: {
-      ...generatedMeta,
+      ...publicationGeneratedMeta,
       updateReason: {
         zh: "赛前赔率或让球信号发生实质变化，已生成新的临场预测；开赛后将锁定这版记录。",
           en: "Pre-match odds, handicap signals, or a trusted provider observation changed materially, so a new late forecast was generated and will be locked after kickoff.",
@@ -12724,6 +14011,43 @@ function finalizePublishedPredictionDecisions(matches, existingBySourceId, captu
       : null;
     const finalizedAt = decisionFinalizationInstant(finalizationClock, match, index);
     return applyPredictionPersistence(match, existing, capturedAt, { finalizedAt });
+  });
+}
+
+function attachImmutableAnalysisReferenceDecisions(matches, existingBySourceId, capturedAt) {
+  return (matches || []).map((match) => {
+    const existing = existingBySourceId instanceof Map
+      ? existingBySourceId.get(matchStoreKey(match))
+      : null;
+    const existingDecision = existing && sameEvent(existing, match)
+      ? attestImmutableAnalysisReferenceDecision(
+          existing?.predictionMeta?.immutableAnalysisReferenceDecision,
+          match,
+        )
+      : null;
+    const currentDecision = attestImmutableAnalysisReferenceDecision(
+      match?.predictionMeta?.immutableAnalysisReferenceDecision,
+      match,
+    );
+    const decisionAt = match?.predictionMeta?.publicationFinalizedAt
+      || match?.predictionMeta?.updatedAt
+      || capturedAt;
+    // New records are created only while the sales window is still open. Once
+    // present, the same exact event keeps the first valid binding forever; a
+    // later heartbeat cannot refresh its direction, quote, clock or hash.
+    const signedTrainingRefreshApplied = match?.predictionMeta?.trainingUpgradeRefresh?.applied === true;
+    const modelUpgradeRefreshApplied = match?.predictionMeta?.modelUpgradeRefresh?.applied === true;
+    const decision = (!(signedTrainingRefreshApplied || modelUpgradeRefreshApplied) ? existingDecision : null)
+      || currentDecision
+      || buildImmutableAnalysisReferenceDecision(match, decisionAt);
+    if (!decision) return match;
+    return {
+      ...match,
+      predictionMeta: {
+        ...(match.predictionMeta || {}),
+        immutableAnalysisReferenceDecision: decision,
+      },
+    };
   });
 }
 
@@ -13279,6 +14603,28 @@ async function fetchSportteryMatches() {
     return relayMatches;
   }
 
+  // Current odds and official result publication have different freshness
+  // semantics. A stale current market lane must never authorize new odds or
+  // recommendations, but immutable terminal rows from a still-fresh history
+  // lane remain valid result evidence. Keeping this lane independent prevents
+  // a 20-minute odds freshness timeout from suppressing already captured
+  // official finals and voids.
+  const historySnapshot = relayMatches.length ? null : loadSportteryRelayHistorySnapshot();
+  const historyMatches = historySnapshot
+    ? dedupeMatches(matchesFromSportteryRelaySnapshot(historySnapshot))
+      .filter((match) => isOfficialResultMatch(match) || isOfficialVoidMatch(match))
+    : [];
+  if (historyMatches.length) {
+    console.log(
+      `Sporttery relay history-only snapshot ok: ${historyMatches.length} terminal matches ${JSON.stringify(historySnapshot.summary)}`,
+    );
+    sportteryFetchSummary = withSportteryFetchSummary({
+      transport: "relay-history-only",
+      relaySnapshot: publicRelaySnapshotSummary(historySnapshot.summary),
+    });
+    return historyMatches;
+  }
+
   if (SKIP_SPORTTERY_DIRECT_FETCH) {
     sportteryFetchSummary = withSportteryFetchSummary({
       transport: relayMatches.length ? "relay-fallback" : "direct-disabled",
@@ -13743,37 +15089,50 @@ function buildFiveHundredFallbackMatches(externalSignals) {
     if (!resultIsFresh && kickoffMs < now - staleStartedGraceMs) continue;
 
     const bookmakerOdds = signal.bookmakerOdds || {};
-    const parsedHhadLine = bookmakerOdds.hhad && typeof bookmakerOdds.hhad === "object"
+    const sourceIncludesFiveHundred = (value) => String(value || "")
+      .split("+")
+      .map((item) => item.trim())
+      .some((item) => /^500\.com(?::|$)/i.test(item));
+    const isFiveHundredOddsPiece = (piece) => {
+      const pieceSource = normText(piece?.source);
+      return pieceSource
+        ? sourceIncludesFiveHundred(pieceSource)
+        : sourceIncludesFiveHundred(signal.source);
+    };
+    const fiveHundredHad = isFiveHundredOddsPiece(bookmakerOdds.had) ? bookmakerOdds.had : null;
+    const fiveHundredHhad = isFiveHundredOddsPiece(bookmakerOdds.hhad) ? bookmakerOdds.hhad : null;
+    const fiveHundredExternal = isFiveHundredOddsPiece(signal.externalOdds) ? signal.externalOdds : null;
+    const parsedHhadLine = fiveHundredHhad && typeof fiveHundredHhad === "object"
       ? [bookmakerOdds.hhad.handicapLine, signal.handicapLine]
           .map(parseHandicapLine)
           .find((line) => line !== null) ?? null
       : null;
-    const bookmakerHhadOdds = parsedHhadLine === null ? null : sanitizeOdds(bookmakerOdds.hhad);
-    const hadOdds = sanitizeOdds(bookmakerOdds.had)
-      || (!bookmakerHhadOdds ? sanitizeOdds(signal.externalOdds) : null);
+    const bookmakerHhadOdds = parsedHhadLine === null ? null : sanitizeOdds(fiveHundredHhad);
+    const hadOdds = sanitizeOdds(fiveHundredHad)
+      || (!bookmakerHhadOdds ? sanitizeOdds(fiveHundredExternal) : null);
     const hhadOdds = bookmakerHhadOdds;
     if (!provisionalResult && !hadOdds && !hhadOdds) continue;
 
     const updatedAt = fallbackSourceUpdatedAt(signal, externalSignals);
     const hadObservedAt = hadOdds ? validAuditInstant(
-      bookmakerOdds?.had?.sourceObservedAt
-      || bookmakerOdds?.had?.observedAt
-      || bookmakerOdds?.had?.updatedAt
+      fiveHundredHad?.sourceObservedAt
+      || fiveHundredHad?.observedAt
+      || fiveHundredHad?.updatedAt
       || signal?.sourceObservedAt
       || updatedAt,
     ) : null;
     const hadReceivedAt = hadOdds ? validAuditInstant(
-      bookmakerOdds?.had?.receivedAt || signal?.receivedAt,
+      fiveHundredHad?.receivedAt || signal?.receivedAt,
     ) : null;
     const hhadObservedAt = hhadOdds ? validAuditInstant(
-      bookmakerOdds?.hhad?.sourceObservedAt
-      || bookmakerOdds?.hhad?.observedAt
-      || bookmakerOdds?.hhad?.updatedAt
+      fiveHundredHhad?.sourceObservedAt
+      || fiveHundredHhad?.observedAt
+      || fiveHundredHhad?.updatedAt
       || signal?.sourceObservedAt
       || updatedAt,
     ) : null;
     const hhadReceivedAt = hhadOdds ? validAuditInstant(
-      bookmakerOdds?.hhad?.receivedAt || signal?.receivedAt,
+      fiveHundredHhad?.receivedAt || signal?.receivedAt,
     ) : null;
     const matchDate = kickoffTime.slice(0, 10);
     const matchNo = normText(signal.matchNo);
@@ -13904,6 +15263,32 @@ function externalSignalMatchesEvent(match, signal) {
   return leadMs >= -30 * 60 * 1000 && leadMs <= 36 * 60 * 60 * 1000;
 }
 
+function trustedDisplayLiveScore(match, signal) {
+  const liveScore = signal?.liveScore;
+  if (!liveScore || typeof liveScore !== "object" || Array.isArray(liveScore)) return null;
+  const matchSourceMatchId = canonicalSourceMatchId(match?.sourceMatchId || match?.id);
+  const signalSourceMatchId = canonicalSourceMatchId(liveScore.sourceMatchId);
+  const matchKickoff = validAuditInstant(match?.kickoffTime || match?.eventVersion);
+  const liveKickoff = validAuditInstant(liveScore.kickoffTime);
+  const observedAt = validAuditInstant(liveScore.observedAt);
+  if (!matchSourceMatchId || !signalSourceMatchId || matchSourceMatchId !== signalSourceMatchId) return null;
+  if (!matchKickoff || !liveKickoff || Date.parse(matchKickoff) !== Date.parse(liveKickoff)) return null;
+  if (!observedAt || Date.parse(observedAt) < Date.parse(matchKickoff) - 15 * 60 * 1000) return null;
+  if (!Number.isInteger(liveScore.scoreHome) || liveScore.scoreHome < 0
+      || !Number.isInteger(liveScore.scoreAway) || liveScore.scoreAway < 0) return null;
+  if (liveScore.trusted !== true
+      || liveScore.settlementEligible !== false
+      || liveScore.mappingVerification !== "registry-exact"
+      || !String(liveScore.source || "").startsWith("api-football:")) return null;
+  return {
+    ...liveScore,
+    observedAt,
+    receivedAt: validAuditInstant(liveScore.receivedAt) || observedAt,
+    official: false,
+    settlementEligible: false
+  };
+}
+
 function attachExternalSignals(matches, externalSignals, preMatchSignals = null) {
   const signalMap = externalSignals?.matches || {};
   const preMatchIndex = buildPreMatchSignalIndex(preMatchSignals);
@@ -13919,8 +15304,10 @@ function attachExternalSignals(matches, externalSignals, preMatchSignals = null)
     const value = key ? signalMap[key] : {};
     if (!value || typeof value !== "object" || Array.isArray(value)) return match;
     const nextPreMatch = value.preMatch || preMatch || undefined;
+    const liveScore = trustedDisplayLiveScore(match, value);
     return {
       ...match,
+      ...(liveScore ? { liveScore } : {}),
       externalSignals: {
         ...value,
         ...(nextPreMatch ? { preMatch: nextPreMatch } : {}),
@@ -15217,11 +16604,11 @@ function attachPredictionSnapshotSummary(matches, snapshotPayload, capturedAt) {
     const sourceMatchId = normText(match?.sourceMatchId || String(match?.id || "").replace(/^sporttery_/, ""));
     const rows = rowsByMatch.get(sourceMatchId) || [];
     const lockedSnapshot = match?.predictionMeta?.snapshot;
-    if (predictionContentLocked(match, capturedAt) && lockedSnapshot?.latestSignature) {
-      const dualMarketDecision = dualMarketDecisionBindingFromImmutableRowsOrExisting(
-        match,
-        rows,
-      );
+    const contentLocked = predictionContentLocked(match, capturedAt);
+    const dualMarketDecision = contentLocked
+      ? dualMarketDecisionBindingFromImmutableRowsOrExisting(match, rows)
+      : dualMarketDecisionBindingForMatchOrExisting(match, capturedAt);
+    if (contentLocked && lockedSnapshot?.latestSignature) {
       return {
         ...match,
         predictionMeta: {
@@ -15231,7 +16618,6 @@ function attachPredictionSnapshotSummary(matches, snapshotPayload, capturedAt) {
         },
       };
     }
-    const dualMarketDecision = dualMarketDecisionBindingForMatchOrExisting(match, capturedAt);
     const phases = rows.reduce((acc, row) => {
       acc[row.phase] = (acc[row.phase] || 0) + 1;
       return acc;
@@ -16274,7 +17660,16 @@ async function sync() {
       sourceCycleId,
     };
   });
-  const rawMatches = allRawMatches.filter(inMatchWindow);
+  const unresolvedSourceIds = new Set(
+    existingUnresolvedArchive.map(matchStoreKey).filter(Boolean),
+  );
+  const rawMatches = allRawMatches.filter((match) => (
+    inMatchWindow(match)
+    || (
+      unresolvedSourceIds.has(matchStoreKey(match))
+      && (isOfficialResultMatch(match) || isOfficialVoidMatch(match))
+    )
+  ));
   const rawFiveHundredFallbackMatches = buildFiveHundredFallbackMatches(externalSignals)
     .filter(inMatchWindow)
     .map((match) => ({ ...match, sourceCycleId }));
@@ -16404,12 +17799,23 @@ async function sync() {
     new Map(),
     capturedAt,
   ).map(normalizePredictionAuditForPublish);
+  const recommendationBiasAudit = {
+    ...auditRecommendationBias(prospectiveAuditMatches, { nowMs: Date.parse(capturedAt) }),
+    checkedAt: capturedAt,
+    cohort: "prospective-pre-persistence",
+  };
+  if (recommendationBiasAudit.publicationBlocked) {
+    throw new Error(
+      `recommendation bias publication gate blocked: ${recommendationBiasAudit.blockingReasons.join(",")}`,
+    );
+  }
   // Persist exactly once, after every input-bearing enrichment and the final
   // published-model rebuild. This binds the immutable decision, probability
   // model, market snapshot and feature hash to one final model generation.
   // Existing locked decisions still flow through applyPredictionPersistence's
   // preservation branch and retain their original revision/source cycle.
   output = finalizePublishedPredictionDecisions(output, existingBySourceId, capturedAt);
+  output = attachImmutableAnalysisReferenceDecisions(output, existingBySourceId, capturedAt);
   output = output.map((match) => attachWorldCupPrior(match, worldCupKimiDataset));
   output = output.map(normalizePublishedPredictionText);
   output = output.map(sanitizePublishedReferenceCopy);
@@ -16457,6 +17863,7 @@ async function sync() {
   // so the supplemental result can never rewrite the original recommendation.
   output = output.map((match) => applyUefaOfficialResult(match, uefaOfficialResults));
   output = output.map((match) => applyOfficialClubResult(match, officialClubResults));
+  output = output.map(applyKLeagueOfficialResult);
   // The SQLite fast path may have observed this exact official final before
   // the full JSON rebuild started. Reapply only an exact event+score match so
   // the first immutable settlement timestamps and revisions cannot drift.
@@ -16499,6 +17906,14 @@ async function sync() {
   output = output.map((match) => resolveMatchLifecycle(match, { now: capturedAt }));
   const split = splitMatchesForOutput(output, capturedAt, {
     retentionHours: CURRENT_UNSETTLED_RETENTION_HOURS,
+  });
+  // Cache the customer-facing record once per published generation. This is
+  // intentionally derived only from immutable formal BEST settlements, so a
+  // page request never scans the full history database and a post-match model
+  // rebuild cannot rewrite the denominator.
+  postMatchReviewsPayload.formalPerformance = buildFormalReviewPerformance({
+    matches: split.history,
+    generatedAt: capturedAt,
   });
   let aiArenaPublication = null;
   let aiArenaDatabase = null;
@@ -16857,6 +18272,7 @@ async function sync() {
       commit: publicationLedgerCommit.summary,
       settlementPolicy: "valid-publication-id-and-immutable-binding-only; no-retroactive-formal-backfill",
     },
+    recommendationBiasAudit,
     liveRecommendations: liveRecommendationAudit,
     aiArena: aiArenaPublication ? {
       version: aiArenaPublication.payload.version,
@@ -16873,7 +18289,7 @@ async function sync() {
       formalStatisticsExcluded: true,
       error: null,
     } : {
-      version: "ai-big-five-survival-v4",
+      version: "ai-big-five-survival-v5",
       state: "ERROR",
       availableMatches: 0,
       targetMatches: 10,
@@ -16950,6 +18366,7 @@ async function sync() {
   writeJson(path.join(dataDir, "prediction-snapshots.json"), predictionSnapshotsPayload);
   writeJson(path.join(dataDir, "post-match-reviews.json"), postMatchReviewsPayload);
   writeJson(path.join(dataDir, "model-calibration.json"), modelCalibration);
+  writeJson(path.join(dataDir, "recommendation-bias-audit.json"), recommendationBiasAudit);
   if (aiArenaPublication) {
     // The private state is written before its public projection. A crash can
     // therefore delay the public view, but cannot publish decisions that were
@@ -17169,6 +18586,8 @@ if (require.main === module) {
     buildFormSnapshots,
     buildPredictionHealth,
     buildArchivedPreMatchPrediction,
+    archiveDirectionIdentity,
+    canonicalArchiveBestPrediction,
     buildPredictionReviewRows,
     buildPredictionFeatureSnapshot,
     candidateExternalMarketEvidence,
@@ -17183,6 +18602,7 @@ if (require.main === module) {
     isPredictionSettlementReady,
     isTrustedFinishedForSettlement,
     loadSportteryRelayFastSnapshotForAudit,
+    loadSportteryRelayHistorySnapshot,
     loadSportteryRelaySnapshot,
     loadHistoricalTrainingIndex,
     matchStoreKey,
@@ -17217,12 +18637,15 @@ if (require.main === module) {
     resolveHandicapLine,
     resultStatus,
     selectValueAwareOneXTwo,
+    shouldBuildModelOnlyReference,
     settlePredictionsForMatch,
     settleTrustedPublishedPredictions,
     teamKey,
     sanitizeNonOfficialResultForShadow,
     applyExternalResultSignal,
+    attachImmutableAnalysisReferenceDecisions,
     attachPredictionSnapshotSummary,
+    canonicalArchiveParityRecovery,
     dualMarketDecisionBindingFromSnapshotRow,
     dualMarketDecisionBindingForMatch,
     dualMarketDecisionBindingForMatchOrExisting,
@@ -17238,6 +18661,10 @@ if (require.main === module) {
     filesHaveSameBytes,
     applyContextGoalAdjustments,
     applyContextLambdaAdjustment,
+    buildUnifiedOneXTwoPosterior,
+    buildUnifiedOneXTwoPosteriorDecision,
+    evidenceAwareIndependentProbabilities,
+    independentBaseLambdas,
     dataGapProfile,
     preMatchContextSignals,
     webConsensusContext,

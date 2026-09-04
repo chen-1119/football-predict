@@ -1,5 +1,5 @@
 param(
-  [string]$HostName = "170.106.75.73",
+  [string]$HostName = "134.175.132.183",
   [string]$User = "root",
   [string]$KeyPath = ".codex-tmp/football_server_ed25519",
   [string]$RepoUrl = "https://github.com/chen-1119/football-predict.git",
@@ -10,6 +10,8 @@ param(
   [string]$GptRelayApiKey = "",
   [switch]$EnableGptCron
 )
+
+throw 'deploy/light-server/deploy.ps1 is disabled: unsigned deployment is not permitted. Use only the signed path: npm run release:bundle; npm run verify:release-bundle; npm run release:deploy-bundle.'
 
 $ErrorActionPreference = "Stop"
 
@@ -102,13 +104,11 @@ systemctl daemon-reload
 systemctl enable --now football-predict
 systemctl restart football-predict
 
-if [ -n "$Domain" ]; then
-  cp deploy/light-server/nginx.conf /etc/nginx/sites-available/football-predict
-  sed -i "s|server_name your-domain.com;|server_name $Domain;|" /etc/nginx/sites-available/football-predict
-else
-  cp deploy/light-server/nginx.conf /etc/nginx/sites-available/football-predict
-  sed -i "s|server_name your-domain.com;|server_name _;|" /etc/nginx/sites-available/football-predict
-fi
+install -d -m 0755 /etc/nginx/conf.d /etc/nginx/snippets /etc/nginx/sites-available /etc/nginx/sites-enabled
+install -m 0644 deploy/light-server/nginx-http-common.conf /etc/nginx/conf.d/football-predict-common.conf
+install -m 0644 deploy/light-server/nginx-server-common.conf /etc/nginx/snippets/football-predict-server.conf
+install -m 0644 deploy/light-server/nginx-security-headers.conf /etc/nginx/snippets/football-predict-security-headers.conf
+install -m 0644 deploy/light-server/nginx.conf /etc/nginx/sites-available/football-predict
 ln -sf /etc/nginx/sites-available/football-predict /etc/nginx/sites-enabled/football-predict
 rm -f /etc/nginx/sites-enabled/default
 nginx -t
@@ -133,8 +133,9 @@ try {
   }
   Write-Host ""
   Write-Host "Deployment finished."
-  Write-Host "URL: http://$HostName/"
-  Write-Host "ADMIN_TOKEN: $AdminToken"
+  Write-Host "HTTP bootstrap URL: http://$HostName/"
+  Write-Host "Run deploy/light-server/enable-nginx-tls.sh before sending credentials over the public origin."
+  Write-Host "ADMIN_TOKEN was not printed; keep it in secure operator storage."
 } finally {
   Remove-Item -LiteralPath $temp -Force -ErrorAction SilentlyContinue
 }

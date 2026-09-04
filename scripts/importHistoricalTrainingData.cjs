@@ -3,6 +3,7 @@ const path = require("path");
 const https = require("https");
 const { pipeline } = require("stream/promises");
 const readline = require("readline");
+const { FREE_FOOTBALL_TEAM_ALIASES } = require("./freeFootballTeamAliases.cjs");
 
 const VERSION = "historical-training-v1";
 const MATCHES_URL = process.env.HISTORICAL_MATCHES_CSV_URL
@@ -76,6 +77,7 @@ const BUILTIN_TEAM_ALIASES = Object.freeze({
 });
 
 const CURRENT_TEAM_ALIASES = Object.freeze({
+  ...FREE_FOOTBALL_TEAM_ALIASES,
   "\u963f\u6839\u5ef7": "argentina",
   "\u51b0\u5c9b": "iceland",
   "\u8461\u8404\u7259": "portugal",
@@ -130,6 +132,40 @@ const CURRENT_TEAM_ALIASES = Object.freeze({
   "\u6cf0\u56fd": "thailand",
   "\u5308\u7259\u5229": "hungary",
   "\u54c8\u8428\u514b": "kazakhstan",
+  "\u79d1\u7f57\u62c9\u591a\u6025\u6d41": "colorado rapids",
+  "\u6d1b\u6749\u77f6": "los angeles",
+  "\u7c73\u4e9a\u5c14\u6bd4": "mjallby",
+  "\u8428\u5c14\u8328\u5821": "salzburg",
+  "\u7279\u62c9\u5e03\u5b97\u4f53\u80b2": "trabzonspor",
+  "\u56fe\u6069": "thun",
+  "\u8d1d\u5c14\u683c\u83b1\u5fb7\u7ea2\u661f": "red star",
+  "\u5df4\u5217\u5361\u8bfa": "vallecano",
+  "\u963f\u62c9\u7ef4\u65af": "alaves",
+  "\u7f57\u8428\u91cc\u5965\u4e2d\u592e": "rosario central",
+  "\u67cf\u592a\u9633\u795e": "kashiwa reysol",
+  "\u957f\u5d0e\u822a\u6d77": "v varen nagasaki",
+  "\u4e1c\u4eac": "tokyo",
+  "\u767b\u535a\u601d": "den bosch",
+  "\u6566\u523b\u5c14\u514b": "dunkerque",
+  "\u8499\u5f7c\u5229\u57c3": "montpellier",
+  "\u9a6c\u8d5b": "marseille",
+  "\u65af\u7279\u62c9\u65af\u5821": "strasbourg",
+  "\u963f\u68ee\u7eb3": "arsenal",
+  "\u8003\u6587\u5782": "coventry",
+  "\u7687\u5bb6\u8d1d\u8482\u65af": "betis",
+  "\u7687\u5bb6\u793e\u4f1a": "sociedad",
+  "\u6ce2\u5179\u5357": "lech poznan",
+  "\u7c73\u62c9\u7d22\u5c14": "mirassol",
+  "\u91cc\u83ab": "remo",
+  "\u5e15\u798f\u65af": "pafos",
+  "\u65af\u666e\u5229\u7279\u6d77\u675c\u514b": "hajduk split",
+  "\u8d39\u4f26\u8328\u74e6\u7f57\u65af": "ferencvaros",
+  "\u74e6\u52d2\u4f26\u52a0": "valerenga",
+  "\u6c49\u574e": "hamkam",
+  "\u535a\u5fb7\u95ea\u8000": "bodo glimt",
+  "\u5229\u52d2\u65af\u7279\u7f57\u59c6": "lillestrom",
+  "\u7ebd\u7ea6\u57ce": "new york city",
+  "\u591a\u4f26\u591a": "toronto",
 });
 
 function ensureDir(dir) {

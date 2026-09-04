@@ -1,18 +1,21 @@
 import type { Match, PredictionDetail } from './mockData';
 import { normalizeOdds } from './bettingDisplay';
 import { getVisiblePredictions } from './predictionVisibility';
-import { isActionableRecommendation } from './matchSignal';
+import { getMatchSignal } from './matchSignal';
+import { isOfficialRecommendationEligible } from './officialRecommendationEligibility';
+import { isBeforeMatchSaleCutoff } from './matchLifecycle';
+import { getCalibratedModelProbability, getEvidenceScore } from './predictionPresentation';
 
 export type BetSlipMarketType = '1X2' | 'HHAD';
 
 export interface GeneratorParams {
   targetOdds: number; // 目标总SP
-  matchCount: 'auto' | 2 | 5 | 10 | 15; // 比赛数量
+  matchCount: 'auto' | 2 | 3 | 5 | 10 | 15; // 比赛数量
   marketTypes: string[]; // ['1X2', 'HHAD']
   minOdds: number;
   maxOdds: number;
   timeWindow: '1' | '2' | '3'; // 未来几天天数
-  minTrust: number; // 最低可信度
+  minTrust: number; // 最低证据评分
   onlyImportantLeagues: boolean;
   onlyOddsDropping: boolean;
 }
@@ -54,7 +57,7 @@ const isSportteryOutcomeTip = (tipCode: string | undefined) => (
 const isOfficialSportterySource = (source?: string) => String(source || '').startsWith('sporttery:');
 
 const selectionMarketKey = (prediction: PredictionDetail): BetSlipMarketType | null => {
-  if (prediction.marketType !== '1X2' || !isSportteryOutcomeTip(prediction.tipCode)) {
+  if ((prediction.marketType !== '1X2' && prediction.marketType !== 'BEST') || !isSportteryOutcomeTip(prediction.tipCode)) {
     return null;
   }
 
@@ -108,7 +111,9 @@ const outcomeEntries = (probabilities: { home: number; draw: number; away: numbe
     { code: '1', probability: Number(probabilities.home) },
     { code: 'X', probability: Number(probabilities.draw) },
     { code: '2', probability: Number(probabilities.away) }
-  ].filter((item) => Number.isFinite(item.probability));
+  ]
+    .filter((item) => Number.isFinite(item.probability))
+    .sort((a, b) => b.probability - a.probability);
 };
 
 const impliedProbabilities = (odds: { odds1: number; oddsX: number; odds2: number }) => {
@@ -195,8 +200,8 @@ const getOfficialPickCandidates = (
           odds: outcome.odds,
           trustScore,
           explanation: {
-            zh: `${explanationPrefix.zh}：${label.zh}，赔率 ${outcome.odds.toFixed(2)}，推荐强度约 ${Math.round(selectedProbability)}%。`,
-            en: `${explanationPrefix.en}: ${label.en}, odds ${outcome.odds.toFixed(2)}, pick strength around ${Math.round(selectedProbability)}%.`
+            zh: `${explanationPrefix.zh}：${label.zh}，赔率 ${outcome.odds.toFixed(2)}；该方向仅作赔率诊断，不把内部排序分当作概率。`,
+            en: `${explanationPrefix.en}: ${label.en}, odds ${outcome.odds.toFixed(2)}; this diagnostic does not present its internal rank as probability.`
           },
           analysisItems: [
             pool === 'HAD'
@@ -226,6 +231,10 @@ const getOfficialPickCandidates = (
   return outcomes;
 };
 
+// Retained for read-only odds-board diagnostics. Executable bet slips never
+// consume these generated reference candidates.
+void getOfficialPickCandidates;
+
 const dedupeSelections = (selections: SelectionResult[]) => {
   const byKey = new Map<string, SelectionResult>();
   for (const selection of selections) {
@@ -247,11 +256,9 @@ const dedupeSelections = (selections: SelectionResult[]) => {
 const selectionScore = (selection: SelectionResult) => {
   const sourceBoost = selection.generatedFrom === 'existing-prediction'
     ? 6
-    : selection.generatedFrom === 'reference-odds'
-      ? 3
-      : 0;
-  const marketBoost = selection.prediction.oddsPoolCode === 'HHAD' ? 2 : 0;
-  return selection.prediction.trustScore + sourceBoost + marketBoost;
+    : 0;
+  const evidenceScore = getEvidenceScore(selection.prediction) ?? 0;
+  return evidenceScore + sourceBoost;
 };
 
 const sortSelections = (a: SelectionResult, b: SelectionResult) => {
@@ -262,25 +269,63 @@ const sortSelections = (a: SelectionResult, b: SelectionResult) => {
   return a.prediction.odds - b.prediction.odds;
 };
 
-const selectionPassesQualityGate = (selection: SelectionResult, minTrust: number) => {
-  if (!isActionableRecommendation(selection.match)) return false;
+const isParlayMatchCandidate = (match: Match) => {
+  if (match.status !== 'SCHEDULED' || !isBeforeMatchSaleCutoff(match)) return false;
+  const signal = getMatchSignal(match);
+  return signal.category === 'steady' || signal.category === 'lean';
+};
+
+const hasOpenSelectionOdds = (selection: SelectionResult) => {
+  const odds = Number(selection.prediction.odds || 0);
+  return Number.isFinite(odds) && odds > 1;
+};
+
+const selectionPassesQualityGate = (selection: SelectionResult, minTrust: number, onlyOddsDropping: boolean) => {
+  if (!isParlayMatchCandidate(selection.match)) return false;
+  if (!hasOpenSelectionOdds(selection)) return false;
+  if (selection.generatedFrom !== 'existing-prediction') return false;
+  if (selection.prediction.marketType !== 'BEST') return false;
+  if (selection.prediction.recommendationAction !== 'recommend') return false;
 
   const pool = selection.prediction.oddsPoolCode === 'HHAD' ? 'HHAD' : 'HAD';
   const officialPool = getOfficialSportteryPool(selection.match, pool);
-  if (!officialPool?.isOfficial) return false;
-  if (selection.prediction.trustScore < Math.max(62, minTrust)) return false;
+  if (!officialPool?.odds || !officialPool.isOfficial) return false;
+  const officialOdds = selection.prediction.tipCode === '1'
+    ? officialPool.odds.odds1
+    : selection.prediction.tipCode === 'X'
+      ? officialPool.odds.oddsX
+      : officialPool.odds.odds2;
+  if (!isOfficialRecommendationEligible(
+    selection.prediction,
+    officialOdds,
+    pool === 'HHAD' ? officialPool.handicap : 0
+  )) return false;
+
+  const trustFloor = Math.max(62, minTrust);
+  if ((getEvidenceScore(selection.prediction) ?? 0) < trustFloor) return false;
+
+  if (onlyOddsDropping) {
+    if (pool !== 'HAD' || Number(selection.match.oddsTrend?.sampleSize || 0) < 3) return false;
+    const change = selection.prediction.tipCode === '1'
+      ? Number(selection.match.oddsTrend?.odds1Change)
+      : selection.prediction.tipCode === 'X'
+        ? Number(selection.match.oddsTrend?.oddsXChange)
+        : Number(selection.match.oddsTrend?.odds2Change);
+    if (!Number.isFinite(change) || change > -0.02) return false;
+  }
 
   const riskTags = selection.prediction.riskTags || [];
-  const hasNonOfficialRisk = riskTags.some((tag) => {
+  const hasHardRisk = riskTags.some((tag) => {
     const en = (tag.en || '').toLowerCase();
-    return en.includes('non-official') || en.includes('not the top probability');
+    return en.includes('not the top probability')
+      || en.includes('market disagreement')
+      || en.includes('handicap support weak')
+      || en.includes('heavy favorite');
   });
-  if (hasNonOfficialRisk) return false;
-  if (riskTags.length > 2) return false;
+  if (hasHardRisk) return false;
+  if (riskTags.length > 3) return false;
 
-  if (selection.generatedFrom === 'existing-prediction') return true;
-
-  return selection.prediction.odds >= 1.35 && selection.prediction.odds <= 3.2;
+  return true;
 };
 
 const rankCombination = (
@@ -291,17 +336,26 @@ const rankCombination = (
 ) => {
   const totalOdds = selections.reduce((product, selection) => product * selection.prediction.odds, 1);
   const averageTrust = selections.length
-    ? selections.reduce((sum, selection) => sum + selection.prediction.trustScore, 0) / selections.length
+    ? selections.reduce((sum, selection) => sum + (getEvidenceScore(selection.prediction) ?? 0), 0) / selections.length
     : 0;
   const countPenalty = selections.length < targetCountMin
     ? (targetCountMin - selections.length) * targetOdds
     : selections.length > targetCountMax
       ? (selections.length - targetCountMax) * targetOdds
       : 0;
+  const jointNegativeLogProbability = selections.reduce((sum, selection) => {
+    const calibratedModelProbability = getCalibratedModelProbability(selection.match, selection.prediction);
+    const marketImpliedProbability = 1 / Number(selection.prediction.odds || 0);
+    const calibratedProbability = calibratedModelProbability !== null
+      ? Math.max(0.05, Math.min(0.95, calibratedModelProbability / 100))
+      : Math.max(0.05, Math.min(0.95, marketImpliedProbability));
+    return sum - Math.log(calibratedProbability);
+  }, 0);
+  const targetDistance = Math.abs(Math.log(Math.max(1.001, totalOdds) / Math.max(1.001, targetOdds)));
   return {
     totalOdds,
     averageTrust,
-    value: Math.abs(totalOdds - targetOdds) + countPenalty - averageTrust / 1000
+    value: jointNegativeLogProbability * 2 + targetDistance * 0.25 + countPenalty - averageTrust / 5000
   };
 };
 
@@ -370,7 +424,8 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
     minOdds,
     maxOdds,
     timeWindow,
-    onlyImportantLeagues
+    onlyImportantLeagues,
+    onlyOddsDropping
   } = params;
   const { targetOdds, minTrust } = params;
   const enabledMarketTypes = marketTypes.filter(isBetSlipMarketType);
@@ -382,7 +437,7 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
   maxTime.setDate(now.getDate() + parseInt(timeWindow));
 
   const candidateMatches = matches.filter(m => {
-    if (m.status !== 'SCHEDULED') return false;
+    if (m.status !== 'SCHEDULED' || !isBeforeMatchSaleCutoff(m, now.getTime())) return false;
     const kickoff = new Date(m.kickoffTime);
     if (kickoff < now || kickoff > maxTime) return false;
     if (onlyImportantLeagues && m.leagueId === 'non-important') return false; // 我们目前所有mock联赛都设为 important
@@ -392,17 +447,19 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
   // 2. 筛选预测池
   const candidateSelections: SelectionResult[] = [];
   candidateMatches.forEach(m => {
+    if (!isParlayMatchCandidate(m)) return;
+
     getVisiblePredictions(m).forEach(p => {
       // 筛选市场类型
       const marketKey = selectionMarketKey(p);
       if (!marketKey) return;
       if (!includesMarket(marketKey)) return;
       if (p.tipCode === 'WATCH' || p.odds <= 0) return;
+      if (p.marketType !== 'BEST' || p.recommendationAction !== 'recommend') return;
       // 筛选 SP 范围
       if (p.odds < minOdds || p.odds > maxOdds) return;
-      // 筛选可信度
-      if (p.trustScore < minTrust) return;
-      if (!isActionableRecommendation(m)) return;
+      // 筛选证据评分；legacy trustScore 只作序数分，不作概率。
+      if ((getEvidenceScore(p) ?? 0) < minTrust) return;
       candidateSelections.push({
         match: m,
         prediction: p,
@@ -410,17 +467,10 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
       });
     });
 
-    if (includesMarket('1X2')) {
-      candidateSelections.push(...getOfficialPickCandidates(m, 'HAD', minOdds, maxOdds));
-    }
-
-    if (includesMarket('HHAD')) {
-      candidateSelections.push(...getOfficialPickCandidates(m, 'HHAD', minOdds, maxOdds));
-    }
   });
 
   const filteredSelections = dedupeSelections(candidateSelections)
-    .filter((selection) => selectionPassesQualityGate(selection, minTrust))
+    .filter((selection) => selectionPassesQualityGate(selection, minTrust, onlyOddsDropping))
     .sort(sortSelections);
 
   if (filteredSelections.length === 0) {
@@ -430,12 +480,12 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
     const zhReason = candidateMatches.length === 0
       ? '未来时间窗口内没有可用未开赛比赛。'
       : hasReferenceOdds
-        ? '当前窗口内有赛程，但胜平负/让球赔率未达到你设置的赔率或推荐强度要求。'
+        ? '当前窗口内有赛程，但胜平负/让球赔率未达到你设置的赔率或证据评分要求。'
         : '当前窗口内有赛程，但胜平负和让球胜平负还没有可用于串关的参考赔率。';
     const enReason = candidateMatches.length === 0
       ? 'There are no scheduled matches in the selected time window.'
       : hasReferenceOdds
-        ? 'Matches exist, but 1X2/handicap odds do not pass your odds or confidence filters.'
+        ? 'Matches exist, but 1X2/handicap odds do not pass your odds or evidence-score filters.'
         : 'Matches exist, but 1X2 and handicap reference odds are not available yet.';
     return {
       selections: [],
@@ -443,8 +493,8 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
       averageTrust: 0,
       isSuccess: false,
       message: {
-        zh: `${zhReason} 请放宽赔率、推荐强度，或把时间窗口扩到明后天再试。`,
-        en: `${enReason} Please loosen odds/pick-strength filters or extend the time window.`
+        zh: `${zhReason} 请放宽赔率、证据评分，或把时间窗口扩到明后天再试。`,
+        en: `${enReason} Please loosen odds/evidence-score filters or extend the time window.`
       }
     };
   }
@@ -473,14 +523,14 @@ export function generateBetSlip(params: GeneratorParams, matches: Match[]): BetS
       averageTrust: 0,
       isSuccess: false,
       message: {
-        zh: `当前只有 ${filteredSelections.length} 个候选方向通过筛选，匹配不到合适数量的串关组合。请降低比赛数量、放宽赔率/推荐强度，或增加比赛窗口。`,
-        en: `Only ${filteredSelections.length} candidate selections passed filters. Lower the count, loosen odds/pick-strength filters, or extend the time window.`
+        zh: `当前只有 ${filteredSelections.length} 个候选方向通过筛选，匹配不到合适数量的串关组合。请降低比赛数量、放宽赔率/证据评分，或增加比赛窗口。`,
+        en: `Only ${filteredSelections.length} candidate selections passed filters. Lower the count, loosen odds/evidence-score filters, or extend the time window.`
       }
     };
   }
 
   const averageTrust = Math.round(
-    bestCombination.reduce((sum, s) => sum + s.prediction.trustScore, 0) / bestCombination.length
+    bestCombination.reduce((sum, s) => sum + (getEvidenceScore(s.prediction) ?? 0), 0) / bestCombination.length
   );
 
   return {

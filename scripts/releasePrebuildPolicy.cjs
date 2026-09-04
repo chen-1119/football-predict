@@ -1,10 +1,11 @@
 const fs = require("node:fs");
 
 const POLICY_VERSION = "release-live-sqlite-prebuild-policy-v2";
+const MAX_HEARTBEAT_AGE_SECONDS = 600;
 const MIN_MEM_AVAILABLE_ENV = "RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB";
 const MAX_APP_MEMORY_ENV = "RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_MEMORY_CURRENT_MIB";
 const MAX_APP_WORKING_SET_ENV = "RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_WORKING_SET_MIB";
-const DEFAULT_MIN_MEM_AVAILABLE_MIB = 1152;
+const DEFAULT_MIN_MEM_AVAILABLE_MIB = 3072;
 const DEFAULT_MAX_APP_MEMORY_CURRENT_MIB = 768;
 const DEFAULT_MAX_APP_WORKING_SET_MIB = 512;
 
@@ -126,7 +127,7 @@ function evaluateFreshness({
   });
   const maxAge = parseBoundedInteger(maxAgeSeconds, "heartbeat maximum age seconds", {
     min: 1,
-    max: 300,
+    max: MAX_HEARTBEAT_AGE_SECONDS,
   });
   const normalizedPhase = String(phase ?? "");
   if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(normalizedPhase)) {
@@ -207,6 +208,7 @@ module.exports = {
   DEFAULT_MIN_MEM_AVAILABLE_MIB,
   MAX_APP_MEMORY_ENV,
   MAX_APP_WORKING_SET_ENV,
+  MAX_HEARTBEAT_AGE_SECONDS,
   MIN_MEM_AVAILABLE_ENV,
   POLICY_VERSION,
   evaluateCapacity,

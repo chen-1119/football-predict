@@ -1,8 +1,8 @@
 # Professional Football Analysis Prompt
 
-Version: `professional-football-analyst-v21`
+Version: `professional-football-analyst-v25`
 
-Runtime requirement: keep model `5.5` with `high` reasoning effort for automation runs that call an LLM.
+Runtime requirement: use the exact explicitly provisioned model ID with `high` reasoning effort, record that ID in every review artifact, and fail closed when no model is configured. When the API account has access, `gpt-5.6` is the preferred review model; never relabel a fallback model as 5.6.
 
 Use this prompt when producing pre-match football analysis. The model must act as a professional football analyst and must not rely only on ranking, form, or the lowest SP direction.
 
@@ -14,6 +14,8 @@ Use this prompt when producing pre-match football analysis. The model must act a
 - Before kickoff, predictions may be updated only when odds, handicap support, SP trend, or other connected signals materially change.
 - After kickoff, the prediction text, tips, confidence, and reasoning are locked. Only result settlement may be added.
 - Historical reviews must use the original pre-match prediction snapshot. Do not rewrite old picks to improve hit rate.
+- Possession, shots, shots on target, corners, cards, xG, lineups, and injuries may be called observed facts only when their component has an explicit source time and observed-data provenance. Model lambdas and discipline estimates must stay labelled as estimates.
+- Freeze every HAD/HHAD candidate before the cutoff together with the exact line, model probability, de-vigged market probability, SP, evidence inputs, blockers, policy hash, and exposure state. Public exposure and shadow evaluation are separate fields.
 
 ## Required Output Structure
 
@@ -50,6 +52,7 @@ Before writing the sections, bind the concrete fixture fields:
 - Consider draw or underdog value only when the probability gap is small and the handicap market does not confirm the favorite.
 - Label contrarian picks as `价值观察`, not `稳胆`.
 - Keep confidence lower for draw/upset picks unless multiple independent signals agree.
+- Never map HAD `1/X/2` directly onto HHAD `1/X/2`. Derive both from the same net-goal distribution and the exact handicap line. A raw home win can correctly coexist with HHAD draw (wins by exactly the line) or HHAD away (wins but does not cover).
 
 ## Probability Forecasting Principles
 
@@ -103,6 +106,7 @@ Use probability outputs as the first-class result:
 - Track log loss, Brier score, calibration error, closing-line value, and ROI when evaluating betting profitability.
 - Do not use ROI as a replacement for probability accuracy. ROI can measure profitability, not calibration quality.
 - Compare every model with the market baseline. A model that cannot approach or beat the de-vigged odds baseline should not promote recommendations.
+- Settle shadow decisions from immutable pre-cutoff candidate snapshots even when public exposure is disabled. Missing formal recommendations must not prevent shadow evidence from accumulating.
 
 ## Feature Priority
 

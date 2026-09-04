@@ -20,6 +20,7 @@ BUNDLE_SHA256="${BUNDLE_SHA256:-}"
 RELEASE_SITE="${RELEASE_SITE:-}"
 RELEASE_CHANNEL="${RELEASE_CHANNEL:-}"
 RELEASE_SEQUENCE="${RELEASE_SEQUENCE:-}"
+PRIMARY_READ_SOURCE="sqlite"
 readonly FIXED_RECOVERY_HELPER_ROTATION_CONTRACT="football-fixed-recovery-helper-rotation-v1"
 readonly FIXED_RECOVERY_HELPER_ROTATION_SOURCE="deploy/light-server/football-release-recovery.cjs"
 readonly FIXED_RECOVERY_HELPER_ROTATION_TARGET="/usr/local/libexec/football-release-recovery.cjs"
@@ -52,11 +53,13 @@ BUILD_HOME="${BUILD_DIR}/.build-home"
 CANDIDATE_STORE_DIR="${BUILD_DIR}/server-data"
 CANDIDATE_SQLITE_PATH="${CANDIDATE_STORE_DIR}/football.db"
 CANDIDATE_TRANSITION_LEASE="${RECOVERY_DIR}/candidate-transition-lease.json"
-CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS="${RELEASE_CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS:-600}"
+PREBUILT_DIST_MANIFEST_RELATIVE=".release-prebuilt/dist-manifest.json"
+PREBUILT_DIST_VALIDATED=0
+CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS="${RELEASE_CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS:-900}"
 CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS="${RELEASE_CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS:-420}"
 CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS="${RELEASE_CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS:-30}"
 CANDIDATE_REFRESH_STEP_RUNTIME_MAX_SECONDS="${RELEASE_CANDIDATE_REFRESH_STEP_RUNTIME_MAX_SECONDS:-90}"
-LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS="${RELEASE_LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS:-480}"
+LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS="${RELEASE_LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS:-540}"
 readonly LIVE_SQLITE_PREBUILD_CAPACITY_SETTLE_ATTEMPTS=10
 readonly LIVE_SQLITE_PREBUILD_CAPACITY_SETTLE_DELAY_SECONDS=5
 ALLOW_STOPPED_WINDOW_SQLITE_EXPORT="${RELEASE_ALLOW_STOPPED_WINDOW_SQLITE_EXPORT:-0}"
@@ -80,14 +83,23 @@ WORKER_PRIORITY_REQUEST_TTL_SECONDS="${RELEASE_WORKER_PRIORITY_REQUEST_TTL_SECON
 POST_SWAP_TRANSITION_ROLLBACK_MARGIN_SECONDS="${RELEASE_POST_SWAP_TRANSITION_ROLLBACK_MARGIN_SECONDS:-120}"
 POST_SWAP_TRANSITION_START_BUDGET_SECONDS="${RELEASE_POST_SWAP_TRANSITION_START_BUDGET_SECONDS:-}"
 RELEASE_HEARTBEAT_KEEPER_INTERVAL_SECONDS="${RELEASE_CANDIDATE_HEARTBEAT_KEEPER_INTERVAL_SECONDS:-20}"
-RELEASE_HEARTBEAT_KEEPER_ATTEMPT_TIMEOUT_MS="${RELEASE_CANDIDATE_HEARTBEAT_KEEPER_ATTEMPT_TIMEOUT_MS:-90000}"
+# The keeper runs the formal-only capture. Its attempt must finish with reserve
+# inside exactHeartbeatMatches' fixed 120-second freshness window; benchmark
+# collection now has an independent non-fatal worker lane.
+RELEASE_HEARTBEAT_KEEPER_ATTEMPT_TIMEOUT_MS="${RELEASE_CANDIDATE_HEARTBEAT_KEEPER_ATTEMPT_TIMEOUT_MS:-100000}"
 RELEASE_HEARTBEAT_KEEPER_LOCK_TIMEOUT_MS="${RELEASE_CANDIDATE_HEARTBEAT_KEEPER_LOCK_TIMEOUT_MS:-10000}"
 RELEASE_HEARTBEAT_KEEPER_START_TIMEOUT_SECONDS="${RELEASE_CANDIDATE_HEARTBEAT_KEEPER_START_TIMEOUT_SECONDS:-120}"
-RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS="${RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS:-30000}"
-RELEASE_SYNC_WRITE_BARRIER_START_TIMEOUT_SECONDS="${RELEASE_SYNC_WRITE_BARRIER_START_TIMEOUT_SECONDS:-45}"
+readonly RELEASE_HEARTBEAT_KEEPER_FRESHNESS_MAX_SECONDS=120
+readonly CANDIDATE_CAPTURE_REFRESH_ATTEMPT_TIMEOUT_MS=90000
+readonly CANDIDATE_CAPTURE_REFRESH_KILL_AFTER_MS=5000
+readonly CANDIDATE_CAPTURE_REFRESH_TIMEOUT_EXIT_CODE=124
+RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS="${RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS:-900000}"
+RELEASE_SYNC_WRITE_BARRIER_START_TIMEOUT_SECONDS="${RELEASE_SYNC_WRITE_BARRIER_START_TIMEOUT_SECONDS:-930}"
+CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS=""
 WORKER_FROZEN_CHILD_DRAIN_TIMEOUT_SECONDS="${RELEASE_WORKER_FROZEN_CHILD_DRAIN_TIMEOUT_SECONDS:-90}"
 readonly LIVE_SQLITE_PREBUILD_HEARTBEAT_MAX_AGE_SECONDS=$((LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS + 30))
 readonly POST_PREBUILD_HTTP_HEARTBEAT_MAX_AGE_SECONDS=$((LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS + 60))
+readonly CANDIDATE_CAPTURE_HEARTBEAT_FRESHNESS_MAX_SECONDS=600
 CANDIDATE_UNIT=""
 RELEASE_HEARTBEAT_KEEPER_UNIT=""
 RELEASE_HEARTBEAT_KEEPER_RUNTIME_DIR=""
@@ -158,6 +170,7 @@ MANAGED_CONFIG_PATHS=(
   /etc/nginx/snippets/football-predict-server.conf
   /etc/nginx/snippets/football-predict-security-headers.conf
   /etc/nginx/sites-available/football-predict
+  /etc/nginx/sites-enabled/default
   /etc/nginx/sites-enabled/football-predict
 )
 MANAGED_TIMERS=(football-cleanup.timer football-monitor.timer)
@@ -262,7 +275,34 @@ run_build_step() {
   local label="$1"
   shift
   local unit rc
+  local memory_high="900M"
+  local memory_max="1200M"
+  local memory_swap_max="256M"
+  local node_heap_mib="896"
   local -a properties=()
+  case "$label" in
+    application-build|archive-migration)
+      # Vite's production transform now needs about 1 GiB for the retained
+      # application graph.  A 1200 MiB hard ceiling leaves no useful GC
+      # headroom and can make the build swap-thrash indefinitely even though
+      # the 8 GiB host still has several GiB available.
+      memory_high="1600M"
+      memory_max="2200M"
+      memory_swap_max="512M"
+      node_heap_mib="1536"
+      ;;
+    optimize-strategy|candidate-generation|candidate-generation-reconciled|candidate-datastore|candidate-datastore-reconciled|candidate-deadline-capture)
+      # Strategy optimization, generation and the cold SQLite projection all
+      # traverse the full retained odds and prediction windows. The old 896
+      # MiB V8 heap entered cgroup reclaim and then aborted while JSON.parse
+      # still needed live objects, even though the 8 GiB host had several GiB
+      # available.
+      memory_high="1600M"
+      memory_max="2200M"
+      memory_swap_max="512M"
+      node_heap_mib="1536"
+      ;;
+  esac
   next_transient_unit "$label"
   unit="$NEXT_TRANSIENT_UNIT"
   mapfile -t properties < <(transient_build_properties)
@@ -270,9 +310,18 @@ run_build_step() {
   systemd-run --quiet --wait --collect --pipe --service-type=exec \
     --unit="$unit" --uid="$BUILD_USER" --working-directory="$BUILD_DIR" \
     "${properties[@]}" \
+    --property="Nice=10" \
+    --property="CPUWeight=25" \
+    --property="IOWeight=25" \
+    --property="IOSchedulingClass=best-effort" \
+    --property="IOSchedulingPriority=6" \
+    --property="MemoryHigh=$memory_high" \
+    --property="MemoryMax=$memory_max" \
+    --property="MemorySwapMax=$memory_swap_max" \
+    --property="OOMPolicy=stop" \
     --property="ReadWritePaths=$BUILD_DIR" \
     --property="InaccessiblePaths=-/etc/football-predict -/etc/football-release -/var/lib/football-predict -/var/lib/football-release" \
-    -- "$@"
+    -- /usr/bin/env NODE_OPTIONS=--max-old-space-size="$node_heap_mib" "$@"
   rc="$?"
   set -e
   assert_transient_unit_cleared "$unit" || return 1
@@ -283,7 +332,33 @@ run_candidate_refresh_step() {
   local label="$1"
   shift
   local unit rc
+  local memory_high="900M"
+  local memory_max="1200M"
+  local memory_swap_max="256M"
+  local node_heap_mib="896"
+  local runtime_max_seconds="$CANDIDATE_REFRESH_STEP_RUNTIME_MAX_SECONDS"
   local -a properties=()
+  case "$label" in
+    candidate-archive-refresh|candidate-generation-refresh|candidate-sqlite-affinity|candidate-deadline-capture-refresh)
+      # Archive migration parses and rewrites the retained prediction/history
+      # corpus as one integrity-checked transaction.  Keep the wider budget
+      # limited to that operation so it can complete on the 8 GiB host without
+      # weakening the normal candidate refresh limits.
+      memory_high="1600M"
+      memory_max="2200M"
+      memory_swap_max="512M"
+      node_heap_mib="1536"
+      ;;
+  esac
+  case "$label" in
+    candidate-generation-refresh|candidate-sqlite-affinity)
+      # Re-sealing the refreshed immutable generation traverses the complete
+      # retained corpus. The SQLite affinity gate is metadata-only, but keep
+      # the same bounded fallback budget so a cold multi-gigabyte SQLite file
+      # cannot be misreported as a generation mismatch after a systemd timeout.
+      runtime_max_seconds="240"
+      ;;
+  esac
   next_transient_unit "$label"
   unit="$NEXT_TRANSIENT_UNIT"
   mapfile -t properties < <(transient_build_properties)
@@ -291,11 +366,20 @@ run_candidate_refresh_step() {
   systemd-run --quiet --wait --collect --pipe --service-type=exec \
     --unit="$unit" --uid="$BUILD_USER" --working-directory="$NEXT_DIR" \
     "${properties[@]}" \
+    --property="Nice=10" \
+    --property="CPUWeight=25" \
+    --property="IOWeight=25" \
+    --property="IOSchedulingClass=best-effort" \
+    --property="IOSchedulingPriority=6" \
+    --property="MemoryHigh=$memory_high" \
+    --property="MemoryMax=$memory_max" \
+    --property="MemorySwapMax=$memory_swap_max" \
+    --property="OOMPolicy=stop" \
     --property="ReadWritePaths=$NEXT_DIR/public/data $CANDIDATE_STORE_DIR" \
     --property="ReadOnlyPaths=$BUILD_DIR/.release-archive-evidence" \
-    --property="RuntimeMaxSec=${CANDIDATE_REFRESH_STEP_RUNTIME_MAX_SECONDS}s" \
+    --property="RuntimeMaxSec=${runtime_max_seconds}s" \
     --property="InaccessiblePaths=-/etc/football-predict -/etc/football-release -/var/lib/football-predict -/var/lib/football-release" \
-    -- "$@"
+    -- /usr/bin/env NODE_OPTIONS=--max-old-space-size="$node_heap_mib" "$@"
   rc="$?"
   set -e
   assert_transient_unit_cleared "$unit" || return 1
@@ -332,9 +416,9 @@ run_live_sqlite_prebuild_step() {
     --property="IOSchedulingClass=best-effort" \
     --property="IOSchedulingPriority=4" \
     --property="IOWeight=50" \
-    --property="MemoryHigh=768M" \
-    --property="MemoryMax=1024M" \
-    --property="MemorySwapMax=256M" \
+    --property="MemoryHigh=1536M" \
+    --property="MemoryMax=2560M" \
+    --property="MemorySwapMax=512M" \
     --property="OOMPolicy=stop" \
     --property="RuntimeMaxSec=${LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS}s" \
     -- /bin/bash -c 'set -a; . "$1"; set +a; shift; exec "$@"' bash "$RUNTIME_ENV_FILE" "$@"
@@ -380,11 +464,20 @@ run_trusted_candidate_verifier() {
   systemd-run --quiet --wait --collect --pipe --service-type=exec \
     --unit="$unit" --uid="$BUILD_USER" --working-directory="$NEXT_DIR" \
     "${properties[@]}" \
+    --property="Nice=5" \
+    --property="CPUWeight=100" \
+    --property="IOWeight=25" \
+    --property="IOSchedulingClass=best-effort" \
+    --property="IOSchedulingPriority=6" \
+    --property="MemoryHigh=1600M" \
+    --property="MemoryMax=2200M" \
+    --property="MemorySwapMax=512M" \
+    --property="OOMPolicy=stop" \
     --property="ReadOnlyPaths=$NEXT_DIR" \
     --property="ReadWritePaths=$BUILD_DIR" \
     --property="RuntimeMaxSec=${CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS}s" \
     --property="InaccessiblePaths=-/etc/football-predict -/etc/football-release -/var/lib/football-predict -/var/lib/football-release" \
-    -- "$@"
+    -- /usr/bin/env NODE_OPTIONS=--max-old-space-size=1536 "$@"
   rc="$?"
   set -e
   assert_transient_unit_cleared "$unit" || return 1
@@ -678,18 +771,31 @@ wait_for_current_service_cgroup_reclaimed() {
   return 1
 }
 
+assert_sync_worker_inactive_for_live_prebuild() {
+  systemctl cat "$WORKER_SERVICE_NAME" >/dev/null 2>&1 || {
+    printf 'live SQLite prebuild could not prove the sync worker unit\n' >&2
+    return 1
+  }
+  systemctl is-active --quiet "$WORKER_SERVICE_NAME" && {
+    printf 'live SQLite prebuild requires the sync worker to be stopped first\n' >&2
+    return 1
+  }
+  return 0
+}
+
 pause_current_fast_watcher_for_live_prebuild() {
   local old_control_group
   systemctl is-active --quiet "$SERVICE_NAME" || return 1
-  [ "${WORKER_STOPPED_FOR_SWAP:-0}" = "1" ] || {
-    printf 'release fast watcher pause requires the sync worker to be stopped first\n' >&2
-    return 1
-  }
-  if systemctl cat "$WORKER_SERVICE_NAME" >/dev/null 2>&1 \
-    && systemctl is-active --quiet "$WORKER_SERVICE_NAME"; then
-    printf 'release fast watcher pause refuses an active sync worker\n' >&2
-    return 1
+  if [ "${WORKER_STOPPED_FOR_SWAP:-0}" != "1" ]; then
+    # An operator may have intentionally left a broken worker inactive while
+    # repairing its signed replacement.  The pause gate needs proof that no
+    # writer is running; it must not require that this transaction performed
+    # the stop or change rollback semantics by marking an originally inactive
+    # worker for restart.
+    assert_sync_worker_inactive_for_live_prebuild || return 1
+    log "sync worker was already inactive before the fast watcher pause"
   fi
+  assert_sync_worker_inactive_for_live_prebuild || return 1
   for unit in "${MANAGED_TIMERS[@]}" football-cleanup.service football-monitor.service; do
     systemctl is-active --quiet "$unit" && {
       printf 'release fast watcher pause requires quiescent maintenance: %s\n' "$unit" >&2
@@ -745,7 +851,7 @@ request_live_sqlite_prebuild_cache_reclaim() {
   local expected_cgroup_dir="/sys/fs/cgroup/system.slice/${SERVICE_NAME}.service"
   local reclaim_path reclaim_identity
   assert_release_fast_watcher_pause_guard || return 1
-  [ "${WORKER_STOPPED_FOR_SWAP:-0}" = "1" ] || return 1
+  assert_sync_worker_inactive_for_live_prebuild || return 1
   [ "$app_cgroup_dir" = "$expected_cgroup_dir" ] || {
     printf 'live SQLite prebuild cache reclaim rejected unexpected app cgroup: %s\n' "$app_cgroup_dir" >&2
     return 1
@@ -782,13 +888,8 @@ assert_live_sqlite_prebuild_capacity() {
     printf 'live SQLite prebuild capacity gate requires the guarded watcher pause\n' >&2
     return 1
   }
-  [ "${WORKER_STOPPED_FOR_SWAP:-0}" = "1" ] || {
-    printf 'live SQLite prebuild capacity gate requires the sync worker to be stopped\n' >&2
-    return 1
-  }
-  if systemctl cat "$WORKER_SERVICE_NAME" >/dev/null 2>&1 \
-    && systemctl is-active --quiet "$WORKER_SERVICE_NAME"; then
-    printf 'live SQLite prebuild capacity gate refuses an active sync worker\n' >&2
+  if ! assert_sync_worker_inactive_for_live_prebuild; then
+    printf 'live SQLite prebuild capacity gate could not prove an inactive sync worker\n' >&2
     return 1
   fi
   systemctl is-active --quiet "$SERVICE_NAME" || {
@@ -1601,8 +1702,14 @@ ensure_node_runtime_env() {
   set_env_value "$env_file" "LOCAL_DATA_PUSH_REQUIRED" "0"
   set_env_value "$env_file" "CLOUD_SYNC_REQUIRED" "0"
   set_env_value "$env_file" "SPORTTERY_RELAY_REQUIRED" "0"
-  set_env_value "$env_file" "CURRENT_MATCH_SOURCE" "sqlite"
-  set_env_value "$env_file" "DATASTORE_READ_SOURCE" "sqlite"
+  local persisted_postgres_mode
+  PRIMARY_READ_SOURCE="sqlite"
+  persisted_postgres_mode="$(sed -n 's/^FOOTBALL_POSTGRES_MODE=//p' "$env_file" | tail -n 1 | tr -d '\r' | tr '[:upper:]' '[:lower:]')"
+  if [ "$persisted_postgres_mode" = "primary" ]; then
+    PRIMARY_READ_SOURCE="postgres"
+  fi
+  set_env_value "$env_file" "CURRENT_MATCH_SOURCE" "$PRIMARY_READ_SOURCE"
+  set_env_value "$env_file" "DATASTORE_READ_SOURCE" "$PRIMARY_READ_SOURCE"
   set_env_value "$env_file" "DATASTORE_SQLITE_PATH" "/var/lib/football-predict/football.db"
   set_env_value "$env_file" "ENABLE_SQLITE_EXPORT" "1"
   set_env_value "$env_file" "ENABLE_SYNC_CRON" "0"
@@ -1614,6 +1721,7 @@ ensure_node_runtime_env() {
   set_env_value "$env_file" "CANDIDATE_DEADLINE_HOT_WINDOW_MINUTES" "120"
   set_env_value "$env_file" "POST_KICKOFF_HOT_WINDOW_MINUTES" "180"
   set_env_value "$env_file" "SYNC_WORKER_MIN_IDLE_SECONDS" "10"
+  set_env_value "$env_file" "SYNC_WORKER_SLOW_PHASE_MIN_INTERVAL_MINUTES" "60"
   set_env_value "$env_file" "SYNC_WORKER_EVENT_BRIDGE" "1"
   set_env_value "$env_file" "SYNC_WORKER_EVENT_POLL_MS" "1000"
   set_env_value "$env_file" "DATASTORE_COMPACT_ON_SYNC" "1"
@@ -1621,7 +1729,9 @@ ensure_node_runtime_env() {
   set_env_value "$env_file" "NODE_OPTIONS" "--max-old-space-size=1536"
   set_env_value "$env_file" "ODDS_HISTORY_RETENTION_DAYS" "14"
   set_env_value "$env_file" "ODDS_HISTORY_MAX_ROWS" "12000"
-  set_env_value "$env_file" "ENABLE_API_FOOTBALL_SYNC" "0"
+  if ! grep -q '^ENABLE_API_FOOTBALL_SYNC=' "$env_file"; then
+    set_env_value "$env_file" "ENABLE_API_FOOTBALL_SYNC" "0"
+  fi
   set_env_value "$env_file" "ENABLE_FREE_FOOTBALL_SYNC" "1"
   set_env_value "$env_file" "ENABLE_PREMATCH_SIGNALS_SYNC" "1"
   set_env_value "$env_file" "FIVE_HUNDRED_DETAILS_MAX_MATCHES" "24"
@@ -1638,20 +1748,32 @@ ensure_node_runtime_env() {
   set_env_value "$env_file" "OPEN_RESEARCH_MAX_CONCURRENCY" "2"
   set_env_value "$env_file" "OPEN_RESEARCH_RATE_BURST" "3"
   set_env_value "$env_file" "OPEN_RESEARCH_RATE_REFILL_MS" "5000"
-  if [ -n "${PUBLIC_BASE_URL:-}" ]; then
-    set_env_value "$env_file" "OPEN_RESEARCH_CONTACT_URL" "$PUBLIC_BASE_URL"
-  fi
+  case "${PUBLIC_BASE_URL:-}" in
+    https://*)
+      set_env_value "$env_file" "OPEN_RESEARCH_CONTACT_URL" "$PUBLIC_BASE_URL"
+      ;;
+    "")
+      ;;
+    *)
+      # PUBLIC_BASE_URL may intentionally be plain HTTP during an IP-only
+      # bootstrap. The research gateway accepts only a public HTTPS contact
+      # identity, so preserve the existing value instead of poisoning the
+      # runtime configuration with the bootstrap origin.
+      log "preserve OPEN_RESEARCH_CONTACT_URL because public origin is not HTTPS"
+      ;;
+  esac
   set_env_value "$env_file" "SQLITE_BUSY_TIMEOUT_MS" "60000"
   set_env_value "$env_file" "SQLITE_EXPORT_ATTEMPTS" "3"
   set_env_value "$env_file" "SQLITE_EXPORT_RETRY_DELAY_MS" "5000"
-  set_env_value "$env_file" "RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB" "1152"
+  set_env_value "$env_file" "RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB" "3072"
   set_env_value "$env_file" "RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_MEMORY_CURRENT_MIB" "768"
   set_env_value "$env_file" "RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_WORKING_SET_MIB" "512"
   set_env_value "$env_file" "ENABLE_MODEL_BACKTEST_ON_SYNC" "1"
-  set_env_value "$env_file" "MODEL_BACKTEST_ON_SYNC_MIN_INTERVAL_MINUTES" "30"
+  set_env_value "$env_file" "MODEL_BACKTEST_ON_SYNC_MIN_INTERVAL_MINUTES" "120"
   set_env_value "$env_file" "ENABLE_CANDIDATE_PROSPECTIVE_DEADLINE_CAPTURE" "1"
   set_env_value "$env_file" "CANDIDATE_PROSPECTIVE_CAPTURE_INTERVAL_SECONDS" "30"
-  set_env_value "$env_file" "CANDIDATE_PROSPECTIVE_CAPTURE_TIMEOUT_MS" "45000"
+  set_env_value "$env_file" "CANDIDATE_PROSPECTIVE_CAPTURE_TIMEOUT_MS" "100000"
+  set_env_value "$env_file" "CANDIDATE_PROSPECTIVE_CAPTURE_RECOVERY_BUDGET_MS" "55000"
   set_env_value "$env_file" "MODEL_BACKTEST_SQLITE_ODDS_LIMIT" "120000"
   set_env_value "$env_file" "MODEL_BACKTEST_SQLITE_PREDICTION_LIMIT" "50000"
   set_env_value "$env_file" "MODEL_BACKTEST_SNAPSHOTS_PER_MATCH" "6"
@@ -1803,6 +1925,12 @@ run_candidate_model_artifact_catchup() {
   # optimize:strategy can fail closed from guarded-active to shadow and remove
   # stale strategy injection from mutable current rows. Re-export after that
   # reconciliation so the candidate API and its public artifacts are identical.
+  # Publish the reconciled mutable files as one immutable candidate generation
+  # before exporting SQLite. Otherwise VERIFY_SQLITE_PREVALIDATED observes a
+  # legacy-bootstrap store and correctly rejects the missing publication identity.
+  run_build_step candidate-generation-reconciled env PATH="$PATH" HOME="${BUILD_HOME:-/nonexistent}" SERVER_STORE_DIR="$store_dir" \
+    DATA_GENERATION_PUBLIC_DATA_DIR="$BUILD_DIR/public/data" \
+    "$NODE_HOME/bin/npm" run datastore:generation || return 1
   run_build_step candidate-datastore-reconciled env PATH="$PATH" HOME="${BUILD_HOME:-/nonexistent}" SERVER_STORE_DIR="$store_dir" \
     DATASTORE_SQLITE_PATH="$sqlite_path" \
     "$NODE_HOME/bin/npm" run datastore:sqlite || return 1
@@ -2234,6 +2362,21 @@ preserve_live_public_data_cache() {
   fi
 }
 
+verify_and_normalize_prebuilt_dist() {
+  local helper="${BUILD_DIR}/scripts/releasePrebuiltDist.cjs"
+  local manifest="${BUILD_DIR}/${PREBUILT_DIST_MANIFEST_RELATIVE}"
+  [ -f "$helper" ] && [ ! -L "$helper" ] && [ "$(stat -c '%h' -- "$helper")" = "1" ] || return 2
+  [ -f "$manifest" ] && [ ! -L "$manifest" ] && [ "$(stat -c '%h' -- "$manifest")" = "1" ] || return 2
+  [ -d "${BUILD_DIR}/dist" ] && [ ! -L "${BUILD_DIR}/dist" ] || return 2
+  run_build_step prebuilt-dist-verify env PATH="$PATH" HOME="${BUILD_HOME:-/nonexistent}" \
+    "$NODE_HOME/bin/node" "$helper" verify --dist "${BUILD_DIR}/dist" --manifest "$manifest" \
+    || return 1
+  find "${BUILD_DIR}/dist" -type d -exec chmod 0755 {} + || return 1
+  find "${BUILD_DIR}/dist" -type f -exec chmod 0644 {} + || return 1
+  PREBUILT_DIST_VALIDATED=1
+  log "reuse signed prebuilt frontend dist; remote application build skipped"
+}
+
 validate_build_artifacts() {
   local artifact_root="${1:-$BUILD_DIR}"
   node - "$artifact_root" "${PUBLIC_DATA_CACHE_FILES[*]}" "${PUBLIC_ROOT_CACHE_FILES[*]}" <<'NODE'
@@ -2405,7 +2548,7 @@ assemble_final_tree() {
   install -d -o root -g root -m 0700 -- "$NEXT_DIR" || return 1
   cp -a --no-dereference -- "$TRUSTED_SOURCE_DIR/." "$NEXT_DIR/" || return 1
   rm -f -- "$NEXT_DIR/.release-trusted-sha256" || return 1
-  rm -rf -- "$NEXT_DIR/dist" "$NEXT_DIR/node_modules" "$NEXT_DIR/server-data" || return 1
+  rm -rf -- "$NEXT_DIR/dist" "$NEXT_DIR/node_modules" "$NEXT_DIR/server-data" "$NEXT_DIR/.release-prebuilt" || return 1
   install -d -o root -g root -m 0755 -- "$NEXT_DIR/dist" "$NEXT_DIR/node_modules" || return 1
   cp -a --no-dereference -- "$BUILD_DIR/dist/." "$NEXT_DIR/dist/" || return 1
   cp -a --no-dereference -- "$BUILD_DIR/node_modules/." "$NEXT_DIR/node_modules/" || return 1
@@ -2648,6 +2791,11 @@ install_nginx_config() {
   if [ -e /etc/nginx/sites-enabled/football-predict-tls ] || [ -L /etc/nginx/sites-enabled/football-predict-tls ]; then
     tls_site_enabled=1
   fi
+  # Stock Ubuntu enables its own default_server symlink. The managed football
+  # HTTP site is also the default server, so retaining both makes nginx -t
+  # fail. This path is part of MANAGED_CONFIG_PATHS and is therefore restored
+  # byte-for-byte on every pre-swap abort or post-swap rollback.
+  remove_managed_path /etc/nginx/sites-enabled/default || return 1
   if [ ! -f "${deploy_root}/nginx-http-common.conf" ] || [ -L "${deploy_root}/nginx-http-common.conf" ] \
     || [ ! -f "${deploy_root}/nginx-server-common.conf" ] || [ -L "${deploy_root}/nginx-server-common.conf" ] \
     || [ ! -f "${deploy_root}/nginx-security-headers.conf" ] || [ -L "${deploy_root}/nginx-security-headers.conf" ]; then
@@ -3772,6 +3920,7 @@ export_stage() {
   env SERVER_STORE_DIR="$store_dir" DATASTORE_SQLITE_PATH="$stage_path" \
     SQLITE_EXPORT_PUBLIC_DATA_DIR="$next_dir/public/data" \
     SQLITE_EXPORT_SOURCE_POINTER_READ_ONLY=1 \
+    SQLITE_EXPORT_LOG_PREFLIGHT=1 \
     SQLITE_VACUUM_AFTER_EXPORT=0 SQLITE_MAINTENANCE_WINDOW=release-stopped \
     SQLITE_WAL_CHECKPOINT_MODE=TRUNCATE \
     "$node_bin" "$next_dir/scripts/exportDataStoreSqlite.cjs"
@@ -4597,7 +4746,7 @@ NODE
 }
 
 refresh_candidate_capture_heartbeat_for_readiness() {
-  local evaluated_at status_file runtime_root validator_root expected_validator_root validation_mode capture_script matcher_module collector_trust_registry attempt max_attempts retry_delay_seconds capture_lock_timeout_ms success_epoch_seconds
+  local evaluated_at status_file runtime_root validator_root expected_validator_root validation_mode capture_script matcher_module collector_trust_registry attempt max_attempts retry_delay_seconds capture_lock_timeout_ms success_epoch_seconds capture_rc
   runtime_root="${1:-}"
   validator_root="${2:-}"
   [ "$#" -eq 2 ] || {
@@ -4653,13 +4802,27 @@ refresh_candidate_capture_heartbeat_for_readiness() {
   while [ "$attempt" -le "$max_attempts" ]; do
     evaluated_at="$("$NODE_HOME/bin/node" -e 'process.stdout.write(new Date().toISOString())')" \
       || return 1
-    if run_as_service_user_with_runtime_env env \
+    capture_rc=0
+    run_as_service_user_with_runtime_env env \
       SERVER_STORE_DIR="$LIVE_STORE_DIR" \
       DATASTORE_SQLITE_PATH="$LIVE_SQLITE_PATH" \
       SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH="$collector_trust_registry" \
       CANDIDATE_PROSPECTIVE_CAPTURE_LOCK_TIMEOUT_MS="$capture_lock_timeout_ms" \
       CANDIDATE_PROSPECTIVE_CAPTURE_EVALUATED_AT="$evaluated_at" \
-      "$NODE_HOME/bin/node" "$capture_script"; then
+      "$NODE_HOME/bin/node" "$matcher_module" --capture-once \
+        --capture-script "$capture_script" \
+        --working-directory "$runtime_root" \
+        --timeout-ms "$CANDIDATE_CAPTURE_REFRESH_ATTEMPT_TIMEOUT_MS" \
+        --kill-after-ms "$CANDIDATE_CAPTURE_REFRESH_KILL_AFTER_MS" \
+      || capture_rc="$?"
+    if [ "$capture_rc" -eq "$CANDIDATE_CAPTURE_REFRESH_TIMEOUT_EXIT_CODE" ]; then
+      printf 'candidate deadline capture heartbeat refresh timed out after %sms TERM plus %sms KILL grace (exit=%s)\n' \
+        "$CANDIDATE_CAPTURE_REFRESH_ATTEMPT_TIMEOUT_MS" \
+        "$CANDIDATE_CAPTURE_REFRESH_KILL_AFTER_MS" \
+        "$CANDIDATE_CAPTURE_REFRESH_TIMEOUT_EXIT_CODE" >&2
+      return "$CANDIDATE_CAPTURE_REFRESH_TIMEOUT_EXIT_CODE"
+    fi
+    if [ "$capture_rc" -eq 0 ]; then
       if validate_candidate_capture_heartbeat_status \
         "$status_file" "$evaluated_at" "$matcher_module" "$validator_root" "$validation_mode"
       then
@@ -4686,7 +4849,8 @@ assert_candidate_capture_heartbeat_refresh_fresh() {
   local max_age_seconds="$1"
   local phase="$2"
   local policy_script freshness_output
-  [[ "$max_age_seconds" =~ ^[1-9][0-9]*$ ]] && [ "$max_age_seconds" -le 300 ] || {
+  [[ "$max_age_seconds" =~ ^[1-9][0-9]*$ ]] \
+    && [ "$max_age_seconds" -le "$CANDIDATE_CAPTURE_HEARTBEAT_FRESHNESS_MAX_SECONDS" ] || {
     printf 'invalid candidate capture heartbeat freshness limit: %s\n' "$max_age_seconds" >&2
     return 1
   }
@@ -4724,11 +4888,7 @@ release_candidate_heartbeat_keeper_is_healthy() {
   systemctl is-active --quiet "$unit" || return 1
   main_pid="$(systemctl show "$unit" --property=MainPID --value 2>/dev/null || true)"
   [[ "$main_pid" =~ ^[1-9][0-9]*$ ]] || return 1
-  max_age_seconds=$((
-    RELEASE_HEARTBEAT_KEEPER_INTERVAL_SECONDS
-    + (RELEASE_HEARTBEAT_KEEPER_ATTEMPT_TIMEOUT_MS / 1000)
-    + 5
-  ))
+  max_age_seconds="$RELEASE_HEARTBEAT_KEEPER_FRESHNESS_MAX_SECONDS"
   run_as_service_user "$NODE_HOME/bin/node" - \
     "$control_file" "$heartbeat_file" "$unit" "$main_pid" "$max_age_seconds" \
     "$APP_DIR/scripts/runReleaseCandidateHeartbeatKeeper.cjs" <<'NODE'
@@ -4784,6 +4944,25 @@ if (
   || control?.lastCandidateRevisionId !== heartbeat?.audit?.candidateRevisionId
 ) process.exit(1);
 NODE
+}
+
+# The keeper commits the heartbeat and its matching control record with two
+# separate atomic renames.  A verifier can therefore land in the millisecond
+# handoff where the new heartbeat is visible while the control record still
+# names the preceding successful capture.  Re-read that bounded transient,
+# while still failing immediately if the unit exits or latches a real capture
+# failure.  This never accepts mismatched evidence: success still comes only
+# from release_candidate_heartbeat_keeper_is_healthy after both files agree.
+wait_for_release_candidate_heartbeat_keeper_healthy() {
+  local attempt max_attempts=50
+  for attempt in $(seq 1 "$max_attempts"); do
+    release_candidate_heartbeat_keeper_is_healthy && return 0
+    release_candidate_heartbeat_keeper_has_latched_failure && return 1
+    systemctl is-active --quiet "$RELEASE_HEARTBEAT_KEEPER_UNIT" || return 1
+    sleep 0.1
+  done
+  printf 'release heartbeat keeper evidence did not converge after bounded atomic handoff retries\n' >&2
+  return 1
 }
 
 wait_for_release_candidate_heartbeat_public_budget() {
@@ -5094,11 +5273,7 @@ stop_release_candidate_heartbeat_keeper() {
     fi
     if [ "$mode" = "clean" ]; then
       [ "$stop_failed" -eq 0 ] && [ "$forced_kill" -eq 0 ] || return 1
-      max_age_seconds=$((
-        RELEASE_HEARTBEAT_KEEPER_INTERVAL_SECONDS
-        + (RELEASE_HEARTBEAT_KEEPER_ATTEMPT_TIMEOUT_MS / 1000)
-        + 5
-      ))
+      max_age_seconds="$RELEASE_HEARTBEAT_KEEPER_FRESHNESS_MAX_SECONDS"
       release_candidate_heartbeat_keeper_clean_stop_evidence_is_valid \
         "$control_file" "$heartbeat_file" "$registry_file" \
         "$unit" "$main_pid" "$baseline_json" "$max_age_seconds" \
@@ -6153,22 +6328,25 @@ start_release_candidate_heartbeat_keeper() {
   RELEASE_HEARTBEAT_KEEPER_RUNTIME_DIR="$runtime_dir"
   RELEASE_HEARTBEAT_KEEPER_CONTROL_FILE="$control_file"
 
+  # The exact-deadline capture reads the live multi-gigabyte SQLite store
+  # while the regular worker is frozen. Do not starve this fail-closed gate
+  # behind background I/O or it can consume its whole bounded safety budget.
   if ! systemd-run --quiet --collect --service-type=exec \
     --unit="$unit" --uid=football --working-directory="$APP_DIR" \
     "${properties[@]}" \
     --property="KillMode=mixed" \
-    --property="TimeoutStopSec=100s" \
-    --property="MemoryHigh=900M" \
-    --property="MemoryMax=1200M" \
-    --property="MemorySwapMax=256M" \
+    --property="TimeoutStopSec=130s" \
+    --property="MemoryHigh=1600M" \
+    --property="MemoryMax=2200M" \
+    --property="MemorySwapMax=512M" \
     --property="OOMPolicy=stop" \
     --property="TasksMax=64" \
     --property="LimitNOFILE=4096" \
-    --property="CPUWeight=50" \
-    --property="IOWeight=25" \
-    --property="Nice=5" \
+    --property="CPUWeight=100" \
+    --property="IOWeight=100" \
+    --property="Nice=0" \
     --property="IOSchedulingClass=best-effort" \
-    --property="IOSchedulingPriority=7" \
+    --property="IOSchedulingPriority=4" \
     --property="ReadOnlyPaths=$APP_DIR $RUNTIME_ENV_FILE" \
     --property="ReadWritePaths=$LIVE_STORE_DIR $runtime_dir" \
     --property="InaccessiblePaths=-/etc/football-release -/var/lib/football-release" \
@@ -6458,7 +6636,7 @@ if [ -z "$BUNDLE_SHA256" ] || [[ ! "$BUNDLE_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
 fi
 [[ "$CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS" =~ ^[0-9]+$ ]] \
   && [ "$CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS" -ge 60 ] \
-  && [ "$CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS" -le 600 ] \
+  && [ "$CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS" -le 900 ] \
   || { printf 'invalid candidate verifier RuntimeMaxSec: %s\n' "$CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS" >&2; exit 1; }
 [[ "$CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS" =~ ^[0-9]+$ ]] \
   && [ "$CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS" -ge 30 ] \
@@ -6484,7 +6662,7 @@ fi
   || { printf 'invalid release heartbeat keeper interval: %s\n' "$RELEASE_HEARTBEAT_KEEPER_INTERVAL_SECONDS" >&2; exit 1; }
 [[ "$RELEASE_HEARTBEAT_KEEPER_ATTEMPT_TIMEOUT_MS" =~ ^[0-9]+$ ]] \
   && [ "$RELEASE_HEARTBEAT_KEEPER_ATTEMPT_TIMEOUT_MS" -ge 1000 ] \
-  && [ "$RELEASE_HEARTBEAT_KEEPER_ATTEMPT_TIMEOUT_MS" -le 90000 ] \
+  && [ "$RELEASE_HEARTBEAT_KEEPER_ATTEMPT_TIMEOUT_MS" -le 110000 ] \
   || { printf 'invalid release heartbeat keeper attempt timeout: %s\n' "$RELEASE_HEARTBEAT_KEEPER_ATTEMPT_TIMEOUT_MS" >&2; exit 1; }
 [[ "$RELEASE_HEARTBEAT_KEEPER_LOCK_TIMEOUT_MS" =~ ^[0-9]+$ ]] \
   && [ "$RELEASE_HEARTBEAT_KEEPER_LOCK_TIMEOUT_MS" -ge 1000 ] \
@@ -6492,16 +6670,26 @@ fi
   || { printf 'invalid release heartbeat keeper lock timeout: %s\n' "$RELEASE_HEARTBEAT_KEEPER_LOCK_TIMEOUT_MS" >&2; exit 1; }
 [[ "$RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS" =~ ^[0-9]+$ ]] \
   && [ "$RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS" -ge 1000 ] \
-  && [ "$RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS" -le 120000 ] \
+  && [ "$RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS" -le 1200000 ] \
   || { printf 'invalid release sync write barrier lock wait: %s\n' "$RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS" >&2; exit 1; }
 [[ "$RELEASE_SYNC_WRITE_BARRIER_START_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] \
   && [ "$RELEASE_SYNC_WRITE_BARRIER_START_TIMEOUT_SECONDS" -ge 5 ] \
-  && [ "$RELEASE_SYNC_WRITE_BARRIER_START_TIMEOUT_SECONDS" -le 180 ] \
+  && [ "$RELEASE_SYNC_WRITE_BARRIER_START_TIMEOUT_SECONDS" -le 1200 ] \
   && [ $((RELEASE_SYNC_WRITE_BARRIER_START_TIMEOUT_SECONDS * 1000)) -gt "$RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS" ] \
   || { printf 'invalid release sync write barrier start timeout: %s\n' "$RELEASE_SYNC_WRITE_BARRIER_START_TIMEOUT_SECONDS" >&2; exit 1; }
+# The barrier begins after candidate verification while the production worker
+# may still be finishing an official generation/SQLite publication. Account
+# for its complete bounded wait in the same transition horizon that protects
+# refresh and verification, so waiting for a healthy live writer can never
+# consume the final betting-cutoff margin silently.
+CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS=$((
+  CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS +
+  (RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS + 999) / 1000
+))
 [[ "$RELEASE_HEARTBEAT_KEEPER_START_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] \
   && [ "$RELEASE_HEARTBEAT_KEEPER_START_TIMEOUT_SECONDS" -ge 10 ] \
-  && [ "$RELEASE_HEARTBEAT_KEEPER_START_TIMEOUT_SECONDS" -le 120 ] \
+  && [ "$RELEASE_HEARTBEAT_KEEPER_START_TIMEOUT_SECONDS" -le 180 ] \
+  && [ $((RELEASE_HEARTBEAT_KEEPER_START_TIMEOUT_SECONDS * 1000)) -gt "$RELEASE_HEARTBEAT_KEEPER_ATTEMPT_TIMEOUT_MS" ] \
   || { printf 'invalid release heartbeat keeper start timeout: %s\n' "$RELEASE_HEARTBEAT_KEEPER_START_TIMEOUT_SECONDS" >&2; exit 1; }
 [[ "$WORKER_FROZEN_CHILD_DRAIN_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] \
   && [ "$WORKER_FROZEN_CHILD_DRAIN_TIMEOUT_SECONDS" -ge 30 ] \
@@ -6622,7 +6810,7 @@ if [ -e "$TLS_ACTION_DIR" ] || [ -L "$TLS_ACTION_DIR" ]; then
     || { printf 'validated TLS action request could not be removed\n' >&2; exit 1; }
   rmdir -- "$TLS_ACTION_DIR" \
     || { printf 'validated TLS action directory could not be removed\n' >&2; exit 1; }
-  PUBLIC_BASE_URL="https://170.106.75.73"
+  PUBLIC_BASE_URL="https://134.175.132.183"
   log "continue the signed application release over the verified HTTPS origin"
 fi
 
@@ -6645,6 +6833,15 @@ log "preflight current service"
 wait_for_health "http://${HOST}:${PORT}" "preflight-before-build" 90 2 service \
   || abort_before_swap "current service is not healthy before bundle release"
 
+# The 2 GiB host cannot safely parse the 50k-row prediction snapshot in a
+# candidate cgroup while football-monitor is independently rebuilding the live
+# SQLite projection. Preserve the original timer/unit states in recovery, then
+# keep only maintenance quiescent during the isolated candidate build. The
+# production HTTP service and sync worker remain active throughout this phase.
+TIMER_STATE_DIRTY=1
+quiesce_managed_maintenance_for_sqlite_snapshot \
+  || abort_before_swap "managed maintenance could not be quiesced before candidate build"
+
 log "create isolated build tree from trusted source"
 cleanup_build_tree || abort_before_swap "stale isolated build tree could not be removed"
 rm -rf --one-file-system -- "$NEXT_DIR" || abort_before_swap "stale final assembly tree could not be removed"
@@ -6664,12 +6861,32 @@ stop_worker_for_release_window \
   || abort_before_swap "sync worker could not be paused for candidate cache snapshot"
 preserve_live_public_data_cache "$APP_DIR" "$BUILD_DIR" \
   || abort_before_swap "live public cache failed no-follow validation"
+install -d -o root -g root -m 0700 -- "$CANDIDATE_STORE_DIR" \
+  || abort_before_swap "candidate AI arena store could not be created"
+candidate_ai_state_status=0
+copy_regular_file_nofollow \
+  "$LIVE_STORE_DIR/ai-arena-state.json" \
+  "$CANDIDATE_STORE_DIR/ai-arena-state.json" \
+  || candidate_ai_state_status="$?"
+if [ "$candidate_ai_state_status" -ne 0 ] && [ "$candidate_ai_state_status" -ne 2 ]; then
+  abort_before_swap "live AI arena state failed no-follow validation"
+fi
+if [ "$candidate_ai_state_status" -eq 0 ]; then
+  log "preserved immutable live AI arena state for isolated candidate publication"
+fi
 restart_worker_if_needed \
   || abort_before_swap "sync worker could not resume during isolated candidate build"
 chown -hR "$BUILD_USER:$BUILD_USER" "$BUILD_DIR"
 install -d -o "$BUILD_USER" -g "$BUILD_USER" -m 0700 "$BUILD_HOME"
 
 log "build candidate inside disposable transient cgroups"
+prebuilt_dist_status=0
+verify_and_normalize_prebuilt_dist || prebuilt_dist_status="$?"
+if [ "$prebuilt_dist_status" -eq 2 ]; then
+  log "signed prebuilt frontend dist is unavailable; retain guarded remote build fallback"
+elif [ "$prebuilt_dist_status" -ne 0 ]; then
+  abort_before_swap "signed prebuilt frontend dist failed integrity verification"
+fi
 run_build_step npm-ci env PATH="$PATH" HOME="$BUILD_HOME" npm_config_cache="${BUILD_HOME}/.npm" NODE_ENV=development \
   "$NODE_HOME/bin/npm" ci --include=dev --ignore-scripts
 compact_public_odds_history "$BUILD_DIR"
@@ -6681,8 +6898,19 @@ run_build_step archive-migration env PATH="$PATH" HOME="$BUILD_HOME" NODE_ENV=pr
   || abort_before_swap "candidate pre-match archive migration failed"
 prepare_candidate_llm_cache \
   || abort_before_swap "candidate LLM cache repair/audit failed in writable build tree"
-run_build_step application-build env PATH="$PATH" HOME="$BUILD_HOME" NODE_ENV=production \
-  "$NODE_HOME/bin/npm" run build
+if [ "$PREBUILT_DIST_VALIDATED" = "1" ]; then
+  log "application build satisfied by signed prebuilt dist"
+else
+  run_build_step application-build env PATH="$PATH" HOME="$BUILD_HOME" NODE_ENV=production \
+    "$NODE_HOME/bin/npm" run build
+fi
+run_build_step candidate-ai-arena-refresh env PATH="$PATH" HOME="$BUILD_HOME" NODE_ENV=production \
+  SERVER_STORE_DIR="$CANDIDATE_STORE_DIR" PUBLIC_DATA_DIR="$BUILD_DIR/public/data" \
+  "$NODE_HOME/bin/node" scripts/refreshAiArenaPublication.cjs \
+  || abort_before_swap "candidate AI arena publication refresh failed"
+run_build_step candidate-generation env PATH="$PATH" HOME="$BUILD_HOME" SERVER_STORE_DIR="$CANDIDATE_STORE_DIR" \
+  DATA_GENERATION_PUBLIC_DATA_DIR="$BUILD_DIR/public/data" \
+  "$NODE_HOME/bin/npm" run datastore:generation
 run_build_step candidate-datastore env PATH="$PATH" HOME="$BUILD_HOME" SERVER_STORE_DIR="$CANDIDATE_STORE_DIR" \
   DATASTORE_SQLITE_PATH="$CANDIDATE_SQLITE_PATH" \
   "$NODE_HOME/bin/npm" run datastore:sqlite
@@ -6734,7 +6962,7 @@ CANDIDATE_ARCHIVE_REFRESH_CAPTURED_AT="$("$NODE_HOME/bin/node" -e 'process.stdou
   --lease "$CANDIDATE_TRANSITION_LEASE" \
   --at "$CANDIDATE_ARCHIVE_REFRESH_CAPTURED_AT" \
   --verifier-runtime-max-seconds "$CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS" \
-  --preverify-refresh-budget-seconds "$CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS" \
+  --preverify-refresh-budget-seconds "$CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS" \
   --atomic-swap-margin-seconds "$CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS" \
   || abort_before_swap "candidate transition horizon is unsafe before worker pause"
 [ -f "$CANDIDATE_TRANSITION_LEASE" ] && [ ! -L "$CANDIDATE_TRANSITION_LEASE" ] \
@@ -6764,10 +6992,15 @@ run_candidate_refresh_step candidate-archive-refresh env PATH="$PATH" HOME="$BUI
   ARCHIVE_MIGRATION_CAPTURED_AT="$CANDIDATE_ARCHIVE_REFRESH_CAPTURED_AT" \
   "$NODE_HOME/bin/npm" run datastore:migrate-archives \
   || abort_before_swap "candidate pre-verification archive refresh failed"
-run_candidate_refresh_step candidate-sqlite-refresh env PATH="$PATH" HOME="$BUILD_HOME" NODE_ENV=production \
+run_candidate_refresh_step candidate-generation-refresh env PATH="$PATH" HOME="$BUILD_HOME" NODE_ENV=production \
+  SERVER_STORE_DIR="$CANDIDATE_STORE_DIR" \
+  DATA_GENERATION_PUBLIC_DATA_DIR="$NEXT_DIR/public/data" \
+  "$NODE_HOME/bin/npm" run datastore:generation \
+  || abort_before_swap "candidate generation refresh after archive migration failed"
+run_candidate_refresh_step candidate-sqlite-affinity env PATH="$PATH" HOME="$BUILD_HOME" NODE_ENV=production \
   SERVER_STORE_DIR="$CANDIDATE_STORE_DIR" DATASTORE_SQLITE_PATH="$CANDIDATE_SQLITE_PATH" \
-  "$NODE_HOME/bin/npm" run datastore:sqlite \
-  || abort_before_swap "candidate sqlite refresh after archive migration failed"
+  "$NODE_HOME/bin/node" scripts/verifySqlitePublicationIdentity.cjs \
+  || abort_before_swap "candidate generation changed after archive refresh; existing SQLite publication identity is no longer reusable"
 run_candidate_refresh_step candidate-deadline-capture-refresh env PATH="$PATH" HOME="$BUILD_HOME" NODE_ENV=production \
   SERVER_STORE_DIR="$CANDIDATE_STORE_DIR" DATASTORE_SQLITE_PATH="$CANDIDATE_SQLITE_PATH" \
   CANDIDATE_PROSPECTIVE_CAPTURE_EVALUATED_AT="$CANDIDATE_ARCHIVE_REFRESH_CAPTURED_AT" \
@@ -6802,6 +7035,7 @@ run_trusted_candidate_verifier env PATH="$PATH" HOME="$BUILD_HOME" ADMIN_TOKEN="
   ACCESS_CODE_ADMIN_TOKEN="$CANDIDATE_ADMIN_TOKEN" \
   MODEL_INPUT_AUDIT_MIN_MARKET_ROWS=30 \
   VERIFY_BASE_URL="http://${HOST}:${CANDIDATE_PORT}" VERIFY_START_SERVER=0 VERIFY_REQUIRE_SQLITE=1 \
+  VERIFY_SQLITE_PREVALIDATED=1 \
   SERVER_STORE_DIR="$CANDIDATE_STORE_DIR" DATASTORE_SQLITE_PATH="$CANDIDATE_SQLITE_PATH" \
   VERIFY_REQUIRE_AI_ARENA=1 \
   "$NODE_HOME/bin/node" scripts/verifyProductionReadiness.cjs \
@@ -6836,11 +7070,11 @@ wait_for_health "http://${HOST}:${PORT}" "post-preswap-nginx-reload" 90 2 servic
 prepare_release_perf_access_token \
   || abort_before_swap "read-only performance session could not be prepared before sqlite snapshot"
 
-# Stop timers and any already-running monitor/cleanup jobs before stopping the
-# HTTP service. football-monitor.service has Wants=football-predict.service;
-# if a timer fires during this window it can otherwise start the service again
-# between `systemctl stop` and the active-state guard.
-TIMER_STATE_DIRTY=1
+# Reassert that the timers and monitor/cleanup jobs which have remained
+# quiescent since candidate construction are still stopped before the HTTP
+# service pause. football-monitor.service has Wants=football-predict.service;
+# this guard prevents an unexpected activation from restarting the service
+# between `systemctl stop` and the active-state check.
 quiesce_managed_maintenance_for_sqlite_snapshot \
   || abort_before_swap "managed maintenance could not be quiesced before watcher pause"
 start_release_sync_write_barrier \
@@ -6991,6 +7225,15 @@ fi
 verify_store_write_permissions "$LIVE_STORE_DIR" "$LIVE_SQLITE_PATH" \
   || rollback "live store write-permission verification failed"
 verify_worker_write_permissions "$APP_DIR" || rollback "live worker write probe failed"
+if [ "$PRIMARY_READ_SOURCE" = "postgres" ]; then
+  log "apply PostgreSQL schema migrations and rebuild the order-preserving primary projection"
+  run_as_service_user_with_runtime_env env \
+    FOOTBALL_POSTGRES_QUERY_TIMEOUT_MS=300000 \
+    "$NODE_HOME/bin/npm" run postgres:migrate-schema \
+    || rollback "PostgreSQL schema migration failed"
+  run_as_service_user_with_runtime_env "$NODE_HOME/bin/npm" run postgres:backfill \
+    || rollback "PostgreSQL order-preserving backfill failed"
+fi
 restart_service_if_needed || rollback "service restart failed"
 
 wait_for_health "http://${HOST}:${PORT}" "post-swap-service" 120 2 service \
@@ -7038,6 +7281,16 @@ wait_for_worker_official_publish_after "$WORKER_RELEASE_STARTED_AT" "$LIVE_STORE
   || rollback "sync worker failed to publish official results for this release"
 wait_for_worker_readiness_idle_after "$WORKER_RELEASE_STARTED_AT" "$LIVE_STORE_DIR/sync-worker-status.json" \
   || rollback "sync worker failed to reach readiness-safe idle for this release"
+# The release worker has just committed a new SQLite/PostgreSQL publication.
+# Restart the HTTP process before strict readiness so its in-memory current
+# read-source cache is rebuilt from that exact publication instead of retaining
+# the generation fallback selected while the projection was still catching up.
+log "restart service after release worker projection publication"
+systemctl restart "$SERVICE_NAME" \
+  || rollback "service restart failed after release worker projection publication"
+wait_for_health "http://${HOST}:${PORT}" "post-worker-projection-restart" \
+  "${RELEASE_POST_WORKER_RESTART_HEALTH_TIMEOUT_SECONDS:-180}" 2 service \
+  || rollback "service health failed after release worker projection restart"
 refresh_candidate_capture_heartbeat_for_readiness "$APP_DIR" "$APP_DIR" \
   || rollback "candidate deadline capture heartbeat refresh failed before worker freeze"
 freeze_worker_for_readiness "$WORKER_RELEASE_STARTED_AT" "$LIVE_STORE_DIR/sync-worker-status.json" \
@@ -7051,11 +7304,11 @@ clear_release_worker_priority_request \
 clear_release_enrichment_reuse_request \
   || rollback "one-cycle enrichment reuse request could not be cleared"
 run_as_service_user_with_runtime_env env VERIFY_BASE_URL="http://${HOST}:${PORT}" \
-  VERIFY_START_SERVER=0 VERIFY_REQUIRE_SQLITE=1 VERIFY_SQLITE_PREVALIDATED=1 \
+  VERIFY_START_SERVER=0 VERIFY_REQUIRE_SQLITE=1 VERIFY_REQUIRED_READ_SOURCE="$PRIMARY_READ_SOURCE" VERIFY_SQLITE_PREVALIDATED=1 \
   SERVER_STORE_DIR="$LIVE_STORE_DIR" \
   DATASTORE_SQLITE_PATH="$LIVE_SQLITE_PATH" "$NODE_HOME/bin/node" "$APP_DIR/scripts/verifyProductionReadiness.cjs" \
   || rollback "post-swap production readiness failed"
-release_candidate_heartbeat_keeper_is_healthy \
+wait_for_release_candidate_heartbeat_keeper_healthy \
   || rollback "release heartbeat keeper failed during production readiness"
 "$NODE_HOME/bin/node" "$APP_DIR/scripts/candidateReleaseContinuity.cjs" verify \
   --registry "$LIVE_STORE_DIR/model-artifacts/candidate-prospective-registry.json" \
@@ -7085,7 +7338,7 @@ sync -f "${APP_DIR}/.release-candidate-continuity.json" \
   || rollback "candidate release continuity marker file sync failed"
 sync -f "$APP_DIR" \
   || rollback "candidate release continuity marker directory sync failed"
-release_candidate_heartbeat_keeper_is_healthy \
+wait_for_release_candidate_heartbeat_keeper_healthy \
   || rollback "release heartbeat keeper failed before public readiness"
 wait_for_release_candidate_heartbeat_public_budget \
   || rollback "release heartbeat keeper lacked a fresh public readiness budget"
@@ -7099,7 +7352,7 @@ if [ -n "$PUBLIC_BASE_URL" ]; then
   # self-contradictory and caused r481 to roll back an otherwise valid release.
   REMOTE_BASE_URL="$PUBLIC_BASE_URL" \
   REMOTE_REQUIRE_HEALTHY=0 \
-  REMOTE_REQUIRE_SQLITE=1 \
+  REMOTE_REQUIRE_SQLITE=1 REMOTE_REQUIRED_READ_SOURCE="$PRIMARY_READ_SOURCE" \
   REMOTE_REQUIRE_SYNC_WORKER=0 \
   REMOTE_SQLITE_READY_ATTEMPTS="${REMOTE_SQLITE_READY_ATTEMPTS:-12}" \
   REMOTE_SQLITE_READY_RETRY_DELAY_MS="${REMOTE_SQLITE_READY_RETRY_DELAY_MS:-5000}" \
@@ -7108,7 +7361,7 @@ if [ -n "$PUBLIC_BASE_URL" ]; then
   run_as_service_user "$NODE_HOME/bin/node" "$APP_DIR/scripts/verifyRemotePublicReadiness.cjs" \
     || rollback "public origin readiness failed"
 fi
-release_candidate_heartbeat_keeper_is_healthy \
+wait_for_release_candidate_heartbeat_keeper_healthy \
   || rollback "release heartbeat keeper failed during public readiness"
 stop_release_candidate_heartbeat_keeper clean \
   || rollback "release heartbeat keeper could not be reaped after readiness"
@@ -7117,7 +7370,7 @@ if [ -n "$PUBLIC_BASE_URL" ]; then
   log "verify resumed sync worker at public origin ${PUBLIC_BASE_URL}"
   REMOTE_BASE_URL="$PUBLIC_BASE_URL" \
   REMOTE_REQUIRE_HEALTHY=0 \
-  REMOTE_REQUIRE_SQLITE=1 \
+  REMOTE_REQUIRE_SQLITE=1 REMOTE_REQUIRED_READ_SOURCE="$PRIMARY_READ_SOURCE" \
   REMOTE_REQUIRE_SYNC_WORKER=1 \
   REMOTE_SQLITE_READY_ATTEMPTS="${REMOTE_SQLITE_READY_ATTEMPTS:-12}" \
   REMOTE_SQLITE_READY_RETRY_DELAY_MS="${REMOTE_SQLITE_READY_RETRY_DELAY_MS:-5000}" \

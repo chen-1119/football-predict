@@ -64,6 +64,8 @@ const verifySportteryRelayDualLaneServerPath = path.join(rootDir, "scripts", "ve
 const runSportteryRelayPushPath = path.join(rootDir, "scripts", "runSportteryRelayPush.ps1");
 const installSportteryRelayTaskPath = path.join(rootDir, "scripts", "installSportteryRelayTask.ps1");
 const syncDataPath = path.join(rootDir, "scripts", "syncData.cjs");
+const apiFootballSyncPath = path.join(rootDir, "scripts", "syncApiFootballData.cjs");
+const apiFootballRuntimePolicyPath = path.join(rootDir, "src", "services", "apiFootballRuntimePolicy.cjs");
 const oddsHistoryStorePath = path.join(rootDir, "scripts", "oddsHistoryStore.cjs");
 const privateModelArtifactStorePath = path.join(rootDir, "scripts", "privateModelArtifactStore.cjs");
 const runModelBacktestPath = path.join(rootDir, "scripts", "runModelBacktest.cjs");
@@ -160,6 +162,8 @@ const run = () => {
   const releasePrebuildPolicy = readText(releasePrebuildPolicyPath);
   const compactPublicOddsHistory = readText(compactPublicOddsHistoryPath);
   const serverIndex = readText(serverIndexPath);
+  const apiFootballSync = readText(apiFootballSyncPath);
+  const apiFootballRuntimePolicy = readText(apiFootballRuntimePolicyPath);
   const sourceRedundancy = readText(sourceRedundancyPath);
   const offlineReleaseKit = readText(offlineReleaseKitPath);
   const watchReleaseWindow = readText(watchReleaseWindowPath);
@@ -285,11 +289,11 @@ const run = () => {
     const postSwapReadiness = text.indexOf('rollback "post-swap production readiness failed"', workerFreeze);
     const remotePublicVerify = text.indexOf("scripts/verifyRemotePublicReadiness.cjs", postSwapReadiness);
     const keeperHealthAfterReadiness = text.indexOf(
-      "release_candidate_heartbeat_keeper_is_healthy",
+      "wait_for_release_candidate_heartbeat_keeper_healthy",
       postSwapReadiness,
     );
     const keeperHealthAfterRemote = text.indexOf(
-      "release_candidate_heartbeat_keeper_is_healthy",
+      "wait_for_release_candidate_heartbeat_keeper_healthy",
       remotePublicVerify,
     );
     const keeperStop = text.indexOf(
@@ -415,8 +419,8 @@ const run = () => {
     && httpsTlsOperations.includes("TLS_VERIFY_MODE=strict")
     && httpsTlsOperations.includes("certbot renew --dry-run")
     && httpsTlsOperations.includes("rotate")
-    && !sportteryRelayDoc.includes("SPORTTERY_RELAY_PUSH_BASE_URL=http://170.106.75.73")
-    && !sportteryRelayDoc.includes('curl -X POST "http://170.106.75.73')
+    && !sportteryRelayDoc.includes("SPORTTERY_RELAY_PUSH_BASE_URL=http://134.175.132.183")
+    && !sportteryRelayDoc.includes('curl -X POST "http://134.175.132.183')
     && !deployPowerShell.includes('Write-Host "ADMIN_TOKEN: $AdminToken"')
     && !deployPowerShell.includes("server_name your-domain.com"), {
       documentsStaging: httpsTlsOperations.includes("ACME_STAGING=1"),
@@ -699,11 +703,11 @@ const run = () => {
     && cloudPush.includes("refusing to send bearer credentials to a non-HTTPS public origin")
     && sportteryRelayPush.includes("refusing to send bearer credentials to a non-HTTPS public origin")
     && runSportteryRelayPush.includes('"https://$($env:FOOTBALL_CLOUD_HOST)"')
-    && runSportteryRelayPush.includes('"https://170.106.75.73"'), {
+    && runSportteryRelayPush.includes('"https://134.175.132.183"'), {
       envExampleHttps: envExample.includes("FOOTBALL_CLOUD_API_BASE=https://your-server"),
       cloudPushGuarded: cloudPush.includes("refusing to send bearer credentials"),
       relayPushGuarded: sportteryRelayPush.includes("refusing to send bearer credentials"),
-      relayTaskDefaultsHttps: runSportteryRelayPush.includes("https://170.106.75.73")
+      relayTaskDefaultsHttps: runSportteryRelayPush.includes("https://134.175.132.183")
     });
 
   pushCheck(checks, "sporttery proxy helper is safe and verifiable", Boolean(packageJson.scripts?.["configure:sporttery-proxy"])
@@ -723,15 +727,20 @@ const run = () => {
   pushCheck(checks, "env source sync cadence", Number(keyValue(envExample, "SYNC_INTERVAL_SECONDS")) <= 300
     && Number(keyValue(envExample, "HOT_SYNC_INTERVAL_SECONDS")) <= 120
     && Number(keyValue(envExample, "POST_DEADLINE_HOT_SYNC_INTERVAL_SECONDS")) >= 300
+    && Number(keyValue(envExample, "SYNC_WORKER_SLOW_PHASE_MIN_INTERVAL_MINUTES")) >= 60
     && Number(keyValue(envExample, "CANDIDATE_DEADLINE_HOT_WINDOW_MINUTES")) >= 120
     && releaseScript.includes('set_env_value "$env_file" "POST_DEADLINE_HOT_SYNC_INTERVAL_SECONDS" "300"')
     && bundleReleaseScript.includes('set_env_value "$env_file" "POST_DEADLINE_HOT_SYNC_INTERVAL_SECONDS" "300"')
+    && releaseScript.includes('set_env_value "$env_file" "SYNC_WORKER_SLOW_PHASE_MIN_INTERVAL_MINUTES" "60"')
+    && bundleReleaseScript.includes('set_env_value "$env_file" "SYNC_WORKER_SLOW_PHASE_MIN_INTERVAL_MINUTES" "60"')
     && releaseScript.includes('set_env_value "$env_file" "CANDIDATE_DEADLINE_HOT_WINDOW_MINUTES" "120"')
     && bundleReleaseScript.includes('set_env_value "$env_file" "CANDIDATE_DEADLINE_HOT_WINDOW_MINUTES" "120"'), {
     syncIntervalSeconds: keyValue(envExample, "SYNC_INTERVAL_SECONDS") || null,
     hotSyncIntervalSeconds: keyValue(envExample, "HOT_SYNC_INTERVAL_SECONDS") || null,
     postDeadlineHotSyncIntervalSeconds:
       keyValue(envExample, "POST_DEADLINE_HOT_SYNC_INTERVAL_SECONDS") || null,
+    slowPhaseMinIntervalMinutes:
+      keyValue(envExample, "SYNC_WORKER_SLOW_PHASE_MIN_INTERVAL_MINUTES") || null,
     candidateDeadlineHotWindowMinutes:
       keyValue(envExample, "CANDIDATE_DEADLINE_HOT_WINDOW_MINUTES") || null
   });
@@ -748,6 +757,14 @@ const run = () => {
       && keyValue(envExample, "ENABLE_OPEN_RESEARCH_SYNC") === "1"
       && keyValue(envExample, "ENABLE_WEB_CONSENSUS_SYNC") === "1"
       && keyValue(envExample, "ENABLE_API_FOOTBALL_SYNC") === "0"
+      && keyValue(envExample, "API_FOOTBALL_SYNC_MODE") === "shadow-enrichment"
+      && keyValue(envExample, "API_FOOTBALL_KEY") === ""
+      && keyValue(envExample, "API_FOOTBALL_INJURIES_ENABLED") === "1"
+      && keyValue(envExample, "API_FOOTBALL_LINEUPS_ENABLED") === "1"
+      && keyValue(envExample, "API_FOOTBALL_LIVE_SCORE_ENABLED") === "1"
+      && keyValue(envExample, "API_FOOTBALL_ODDS_ENABLED") === "0"
+      && Number(keyValue(envExample, "API_FOOTBALL_MAX_CALLS_PER_SYNC")) > 0
+      && Number(keyValue(envExample, "API_FOOTBALL_MAX_CALLS_PER_SYNC")) <= 35
       && keyValue(envExample, "ENABLE_FREE_FOOTBALL_SYNC") === "1"
       && Number(keyValue(envExample, "WEB_CONSENSUS_REFRESH_MINUTES")) >= 15
       && Number(keyValue(envExample, "OPEN_RESEARCH_MAX_MATCHES")) > 0
@@ -758,18 +775,36 @@ const run = () => {
       && Number(keyValue(envExample, "SYNC_WORKER_MIN_IDLE_SECONDS")) >= 10
       && keyValue(envExample, "OPEN_RESEARCH_CONTACT_URL").startsWith("https://")
       && bundleReleaseScript.includes('set_env_value "$env_file" "ENABLE_OPEN_RESEARCH_SYNC" "1"')
+      && releaseScript.includes("if ! grep -q '^ENABLE_API_FOOTBALL_SYNC=' \"$env_file\"; then")
       && releaseScript.includes('set_env_value "$env_file" "ENABLE_API_FOOTBALL_SYNC" "0"')
       && releaseScript.includes('set_env_value "$env_file" "ENABLE_FREE_FOOTBALL_SYNC" "1"')
+      && bundleReleaseScript.includes("if ! grep -q '^ENABLE_API_FOOTBALL_SYNC=' \"$env_file\"; then")
       && bundleReleaseScript.includes('set_env_value "$env_file" "ENABLE_API_FOOTBALL_SYNC" "0"')
       && bundleReleaseScript.includes('set_env_value "$env_file" "ENABLE_FREE_FOOTBALL_SYNC" "1"')
       && bundleReleaseScript.includes('set_env_value "$env_file" "OPEN_RESEARCH_MAX_CONCURRENCY" "2"')
       && bundleReleaseScript.includes('set_env_value "$env_file" "SYNC_WORKER_MIN_IDLE_SECONDS" "10"')
+      && bundleReleaseScript.includes('case "${PUBLIC_BASE_URL:-}" in')
+      && bundleReleaseScript.includes('https://*)')
       && bundleReleaseScript.includes('set_env_value "$env_file" "OPEN_RESEARCH_CONTACT_URL" "$PUBLIC_BASE_URL"')
+      && bundleReleaseScript.includes('preserve OPEN_RESEARCH_CONTACT_URL because public origin is not HTTPS')
       && syncWorker.indexOf('"sync:open-research"') >= 0
-      && syncWorker.indexOf('"sync:web-consensus"') > syncWorker.indexOf('"sync:open-research"')
-      && syncWorker.indexOf('"sync:free-football"') > syncWorker.indexOf('"sync:web-consensus"')
-      && syncWorker.indexOf('"sync:prematch"') > syncWorker.indexOf('"sync:free-football"')
-      && !syncWorker.includes('"sync:api-football"')
+      && syncWorker.lastIndexOf('"sync:web-consensus"') > syncWorker.lastIndexOf('"sync:open-research"')
+      && syncWorker.lastIndexOf('"sync:free-football"') > syncWorker.lastIndexOf('"sync:web-consensus"')
+      && syncWorker.lastIndexOf('"sync:prematch"') > syncWorker.lastIndexOf('"sync:free-football"')
+      && packageJson.scripts?.["sync:api-football"] === "node scripts/syncApiFootballData.cjs"
+      && syncWorker.includes('runEnrichment(apiFootballRuntimePolicy.enabled, "sync:api-football")')
+      && syncWorker.includes("apiFootballRuntimePolicyFor(process.env)")
+      && serverIndex.includes("apiFootballRuntimePolicyFor(process.env)")
+      && serverIndex.includes("const enableApiFootballSync = apiFootballRuntimePolicy.enabled")
+      && !serverIndex.includes("const enableApiFootballSync = false")
+      && apiFootballSync.includes("apiFootballRuntimePolicyFor")
+      && apiFootballRuntimePolicy.includes('rawSwitch === "1"')
+      && apiFootballRuntimePolicy.includes("mode === API_FOOTBALL_SHADOW_MODE")
+      && apiFootballRuntimePolicy.includes("requested && modeSupported && configured")
+      && apiFootballRuntimePolicy.includes('odds: env.API_FOOTBALL_ODDS_ENABLED === "1"')
+      && apiFootballRuntimePolicy.includes("formalRecommendation: false")
+      && apiFootballRuntimePolicy.includes("officialResult: false")
+      && apiFootballRuntimePolicy.includes("settlement: false")
       && syncWorker.includes("const postCycleRelayBaseline = relaySnapshotFingerprint()")
       && syncWorker.includes("baseline: postCycleRelayBaseline")
       && serverIndex.includes('"/api/v1/research/search"')
@@ -782,6 +817,16 @@ const run = () => {
       && freeFootballSync.includes("zeroKeyRequired: true")
       && freeFootballSync.includes('postCutoffMutationAllowed: false'), {
       apiFootballEnabled: keyValue(envExample, "ENABLE_API_FOOTBALL_SYNC") || null,
+      apiFootballSyncMode: keyValue(envExample, "API_FOOTBALL_SYNC_MODE") || null,
+      apiFootballInjuriesEnabled: keyValue(envExample, "API_FOOTBALL_INJURIES_ENABLED") || null,
+      apiFootballLineupsEnabled: keyValue(envExample, "API_FOOTBALL_LINEUPS_ENABLED") || null,
+      apiFootballLiveScoreEnabled: keyValue(envExample, "API_FOOTBALL_LIVE_SCORE_ENABLED") || null,
+      apiFootballOddsEnabled: keyValue(envExample, "API_FOOTBALL_ODDS_ENABLED") || null,
+      apiFootballMaxCallsPerSync: Number(keyValue(envExample, "API_FOOTBALL_MAX_CALLS_PER_SYNC")) || null,
+      apiFootballServerRuntimeOptIn: serverIndex.includes("const enableApiFootballSync = apiFootballRuntimePolicy.enabled"),
+      apiFootballShadowOnly: apiFootballRuntimePolicy.includes("formalRecommendation: false")
+        && apiFootballRuntimePolicy.includes("officialResult: false")
+        && apiFootballRuntimePolicy.includes("settlement: false"),
       freeFootballEnabled: keyValue(envExample, "ENABLE_FREE_FOOTBALL_SYNC") || null,
       freeFootballZeroKey: freeFootballSync.includes("zeroKeyRequired: true"),
       enabled: keyValue(envExample, "ENABLE_OPEN_RESEARCH_SYNC") || null,
@@ -792,6 +837,8 @@ const run = () => {
       contactUrl: keyValue(envExample, "OPEN_RESEARCH_CONTACT_URL") || null,
       webConsensusRefreshMinutes: keyValue(envExample, "WEB_CONSENSUS_REFRESH_MINUTES") || null,
       workerMinIdleSeconds: keyValue(envExample, "SYNC_WORKER_MIN_IDLE_SECONDS") || null,
+      openResearchContactRequiresHttps: bundleReleaseScript.includes('case "${PUBLIC_BASE_URL:-}" in')
+        && bundleReleaseScript.includes('https://*)'),
       apiProtected: serverIndex.includes('"/api/v1/research/search"'),
       paywallFetchDisabled: openResearchGateway.includes("URL_QUERY_REJECTED")
     });
@@ -921,7 +968,7 @@ const run = () => {
     });
 
   pushCheck(checks, "env model backtest catches up after sqlite sync", keyValue(envExample, "ENABLE_MODEL_BACKTEST_ON_SYNC") === "1"
-    && Number(keyValue(envExample, "MODEL_BACKTEST_ON_SYNC_MIN_INTERVAL_MINUTES")) >= 5
+    && Number(keyValue(envExample, "MODEL_BACKTEST_ON_SYNC_MIN_INTERVAL_MINUTES")) >= 120
     && Number(keyValue(envExample, "MODEL_BACKTEST_SQLITE_COVERAGE_TRIGGER_RATIO")) >= 0.98, {
       enableModelBacktestOnSync: keyValue(envExample, "ENABLE_MODEL_BACKTEST_ON_SYNC") || null,
       modelBacktestMinIntervalMinutes: keyValue(envExample, "MODEL_BACKTEST_ON_SYNC_MIN_INTERVAL_MINUTES") || null,
@@ -1091,14 +1138,14 @@ const run = () => {
         && verifyReleaseBundleSafety.includes('"scripts/compactPublicOddsHistory.cjs"'),
     });
 
-  pushCheck(checks, "systemd split services", appService.includes("server/index.cjs") && appService.includes("TimeoutStopSec=8") && appService.includes("KillMode=mixed") && workerService.includes("runSyncWorker.cjs --loop") && workerService.includes("SYNC_WORKER_LOOP=1") && syncWorker.includes('process.argv.includes("--loop")') && workerService.includes("DATASTORE_READ_SOURCE=sqlite") && workerService.includes("ENABLE_SQLITE_EXPORT=1"), {
+  pushCheck(checks, "systemd split services", appService.includes("server/index.cjs") && appService.includes("TimeoutStopSec=8") && appService.includes("KillMode=mixed") && workerService.includes("runSyncWorker.cjs --loop") && workerService.includes("SYNC_WORKER_LOOP=1") && syncWorker.includes('process.argv.includes("--loop")') && !workerService.includes("Environment=DATASTORE_READ_SOURCE=") && workerService.includes("ENABLE_SQLITE_EXPORT=1"), {
     hasAppService: appService.includes("server/index.cjs"),
     appHasBoundedStop: appService.includes("TimeoutStopSec=8"),
     appKillModeMixed: appService.includes("KillMode=mixed"),
     hasWorkerService: workerService.includes("runSyncWorker.cjs --loop"),
     workerHasLoopEnvironment: workerService.includes("SYNC_WORKER_LOOP=1"),
     workerHasLoopArgumentFallback: syncWorker.includes('process.argv.includes("--loop")'),
-    workerSqlite: workerService.includes("DATASTORE_READ_SOURCE=sqlite"),
+    workerReadSourceFromEnvFile: !workerService.includes("Environment=DATASTORE_READ_SOURCE="),
     workerSqliteExport: workerService.includes("ENABLE_SQLITE_EXPORT=1")
   });
 
@@ -1117,9 +1164,9 @@ const run = () => {
       && hasUnitDirective(workerService, "OOMScoreAdjust", "500")
       && hasUnitDirective(workerService, "Environment", "\"NODE_OPTIONS=--max-old-space-size=768 --expose-gc\"")
       && hasUnitDirective(workerService, "Environment", "MALLOC_ARENA_MAX=2")
-      && hasUnitDirective(workerService, "MemoryHigh", "1100M")
-      && hasUnitDirective(workerService, "MemoryMax", "1300M")
-      && hasUnitDirective(workerService, "MemorySwapMax", "256M"), {
+      && hasUnitDirective(workerService, "MemoryHigh", "3G")
+      && hasUnitDirective(workerService, "MemoryMax", "4G")
+      && hasUnitDirective(workerService, "MemorySwapMax", "1G"), {
       appOomScoreAdjust: unitDirectiveValues(appService, "OOMScoreAdjust"),
       appMemoryLow: unitDirectiveValues(appService, "MemoryLow"),
       workerOomScoreAdjust: unitDirectiveValues(workerService, "OOMScoreAdjust"),
@@ -1130,9 +1177,8 @@ const run = () => {
     });
 
   const externalRuntimeEnv = "/etc/football-predict/env";
-  const appWritablePaths = [
+  const commonWritablePaths = [
     "/var/lib/football-predict",
-    "/opt/football-predict/public/data",
     "/opt/football-predict/server-data"
   ];
   const commonNonRootSandboxDirectives = [
@@ -1167,15 +1213,19 @@ const run = () => {
     workerUsesPinnedNode: workerService.includes("ExecStart=/opt/node-v22.22.1/bin/node")
   });
 
-  const appAndWorkerSandboxed = [appService, workerService].every((service) => (
+  const serviceUsesCommonSandbox = (service) => (
     commonNonRootSandboxDirectives.every(([key, value]) => hasUnitDirective(service, key, value))
     && hasEmptyUnitDirective(service, "CapabilityBoundingSet")
     && hasEmptyUnitDirective(service, "AmbientCapabilities")
-    && appWritablePaths.every((writablePath) => unitDirectiveTokens(service, "ReadWritePaths").includes(writablePath))
-    && !unitDirectiveTokens(service, "ReadWritePaths").includes("/opt/football-predict/public")
+    && commonWritablePaths.every((writablePath) => unitDirectiveTokens(service, "ReadWritePaths").includes(writablePath))
     && !unitDirectiveTokens(service, "ReadWritePaths").includes("/opt/football-predict/dist")
     && !hasUnitDirective(service, "MemoryDenyWriteExecute", "true")
-  ));
+  );
+  const appAndWorkerSandboxed = serviceUsesCommonSandbox(appService)
+    && serviceUsesCommonSandbox(workerService)
+    && unitDirectiveTokens(appService, "ReadWritePaths").includes("/opt/football-predict/public/data")
+    && !unitDirectiveTokens(appService, "ReadWritePaths").includes("/opt/football-predict/public")
+    && unitDirectiveTokens(workerService, "ReadWritePaths").includes("/opt/football-predict/public");
   pushCheck(checks, "systemd app and worker use a V8-compatible filesystem sandbox", appAndWorkerSandboxed, {
     appWritablePaths: unitDirectiveTokens(appService, "ReadWritePaths"),
     workerWritablePaths: unitDirectiveTokens(workerService, "ReadWritePaths"),
@@ -1391,10 +1441,10 @@ const run = () => {
     releaseHasSqliteRollbackState: releaseScript.includes("backup_live_sqlite_for_rollback") && releaseScript.includes("restore_live_sqlite_after_rollback"),
     bundleHasSqliteRollbackState: bundleReleaseScript.includes("backup_live_sqlite_for_rollback") && bundleReleaseScript.includes("restore_live_sqlite_after_rollback"),
     releaseCriticalFunctionsPropagate: releaseSqliteFailurePropagates(releaseScript)
-      && releaseScript.includes("npm run model:backtest || return 1")
+      && releaseModelFailurePropagates(releaseScript)
       && releaseScript.includes("nginx -t || return 1"),
     bundleCriticalFunctionsPropagate: releaseSqliteFailurePropagates(bundleReleaseScript)
-      && bundleReleaseScript.includes("npm run model:backtest || return 1")
+      && releaseModelFailurePropagates(bundleReleaseScript)
       && bundleReleaseScript.includes("nginx -t || return 1")
   });
 
@@ -1445,24 +1495,24 @@ const run = () => {
   );
   const sealedWindow = bundleReleaseScript.slice(prebuild, pointerKeeper);
   pushCheck(checks, "signed release bounds live SQLite prebuild resources, capacity, and heartbeat age", (
-    bundleReleaseScript.includes("RELEASE_LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS:-480")
+    bundleReleaseScript.includes("RELEASE_LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS:-540")
     && bundleReleaseScript.includes('[ "$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" -ge 60 ]')
     && bundleReleaseScript.includes('[ "$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" -le 540 ]')
     && bundleReleaseScript.includes('IOSchedulingPriority=4')
     && bundleReleaseScript.includes('IOWeight=50')
-    && bundleReleaseScript.includes('MemoryHigh=768M')
-    && bundleReleaseScript.includes('MemoryMax=1024M')
-    && bundleReleaseScript.includes('MemorySwapMax=256M')
+    && bundleReleaseScript.includes('MemoryHigh=1536M')
+    && bundleReleaseScript.includes('MemoryMax=2560M')
+    && bundleReleaseScript.includes('MemorySwapMax=512M')
     && bundleReleaseScript.includes('root:football:640:1')
     && bundleReleaseScript.includes('run_prebuild_stage copy-rollback')
     && bundleReleaseScript.includes('run_prebuild_stage stage-copy')
     && bundleReleaseScript.includes('run_prebuild_stage export')
     && bundleReleaseScript.includes('run_prebuild_stage quick_check')
     && bundleReleaseScript.includes('run_prebuild_stage seal')
-    && releasePrebuildPolicy.includes('DEFAULT_MIN_MEM_AVAILABLE_MIB = 1152')
+    && releasePrebuildPolicy.includes('DEFAULT_MIN_MEM_AVAILABLE_MIB = 3072')
     && releasePrebuildPolicy.includes('DEFAULT_MAX_APP_MEMORY_CURRENT_MIB = 768')
     && releasePrebuildPolicy.includes('DEFAULT_MAX_APP_WORKING_SET_MIB = 512')
-    && envExample.includes('RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB=1152')
+    && envExample.includes('RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB=3072')
     && envExample.includes('RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_MEMORY_CURRENT_MIB=640')
     && envExample.includes('RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_WORKING_SET_MIB=512')
     && writeBarrier >= 0
@@ -1483,9 +1533,9 @@ const run = () => {
   ), {
     runtimeMinSeconds: 60,
     runtimeMaxSeconds: 540,
-    memoryHighMiB: 768,
-    memoryMaxMiB: 1024,
-    memorySwapMaxMiB: 256,
+    memoryHighMiB: 1536,
+    memoryMaxMiB: 2560,
+    memorySwapMaxMiB: 512,
     barrierBeforeWorkerPause: writeBarrier >= 0
       && finalWorkerStop > writeBarrier
       && capacityGate > finalWorkerStop,
@@ -1978,6 +2028,26 @@ const run = () => {
       checksNegativeAssetCaching: verifyRemotePublic.includes("missing static assets are not cached as immutable")
     });
 
+  pushCheck(checks, "remote public readiness reconciles relay and signed-store collector domains",
+    verifyRemotePublic.includes("sporttery-recent-collector-evidence-summary-v1")
+      && verifyRemotePublic.includes("storeIndependenceDomains")
+      && verifyRemotePublic.includes("combinedIndependenceDomains")
+      && verifyRemotePublic.includes("redundancyIndependenceDomains")
+      && verifyRemotePublic.includes("recentCollectorEvidenceStore?.trustRegistryAvailable === true")
+      && verifyRemotePublic.includes("redundancyCollectorCount === combinedIndependenceDomains.length"), {
+      checksSignedStoreSummary: verifyRemotePublic.includes(
+        "sporttery-recent-collector-evidence-summary-v1",
+      ),
+      combinesIndependenceDomains: verifyRemotePublic.includes("combinedIndependenceDomains"),
+      checksPublishedDomains: verifyRemotePublic.includes("redundancyIndependenceDomains"),
+      requiresTrustedRegistry: verifyRemotePublic.includes(
+        "recentCollectorEvidenceStore?.trustRegistryAvailable === true",
+      ),
+      reconcilesPublishedCount: verifyRemotePublic.includes(
+        "redundancyCollectorCount === combinedIndependenceDomains.length",
+      ),
+    });
+
   pushCheck(checks, "remote public readiness keeps prospective sample capture alive",
     verifyRemotePublic.includes("candidate prospective cutoff heartbeat is live and unblocked")
       && verifyRemotePublic.includes('publicCandidateProspective?.state === "ACTIVE"')
@@ -2098,9 +2168,13 @@ const run = () => {
     });
 
   pushCheck(checks, "release bundle excludes generated artifacts", createReleaseBundle.includes('"artifacts"')
-    && createReleaseBundle.includes('normalized.startsWith("artifacts/")'), {
+    && createReleaseBundle.includes('normalized.startsWith("artifacts/")')
+    && createReleaseBundle.includes('"outputs"')
+    && createReleaseBundle.includes('normalized.startsWith("outputs/")'), {
       excludesArtifacts: createReleaseBundle.includes('"artifacts"'),
-      blocksArtifactEntries: createReleaseBundle.includes('normalized.startsWith("artifacts/")')
+      blocksArtifactEntries: createReleaseBundle.includes('normalized.startsWith("artifacts/")'),
+      excludesOutputs: createReleaseBundle.includes('"outputs"'),
+      blocksOutputEntries: createReleaseBundle.includes('normalized.startsWith("outputs/")')
     });
 
   pushCheck(checks, "release bundle secret policy is enforced at every release boundary", Boolean(packageJson.scripts?.["verify:release-bundle"])
@@ -2409,15 +2483,19 @@ const run = () => {
   pushCheck(checks, "release scripts install and validate nginx config", releaseScript.includes("install_nginx_config")
     && releaseScript.includes("nginx -t")
     && releaseScript.includes("systemctl reload nginx")
+    && releaseScript.includes("rm -f /etc/nginx/sites-enabled/default")
     && bundleReleaseScript.includes("install_nginx_config")
     && bundleReleaseScript.includes("nginx -t")
-    && bundleReleaseScript.includes("systemctl reload nginx"), {
+    && bundleReleaseScript.includes("systemctl reload nginx")
+    && bundleReleaseScript.includes("remove_managed_path /etc/nginx/sites-enabled/default"), {
       releaseInstallsNginx: releaseScript.includes("install_nginx_config"),
       releaseTestsNginx: releaseScript.includes("nginx -t"),
       releaseReloadsNginx: releaseScript.includes("systemctl reload nginx"),
       bundleInstallsNginx: bundleReleaseScript.includes("install_nginx_config"),
       bundleTestsNginx: bundleReleaseScript.includes("nginx -t"),
-      bundleReloadsNginx: bundleReleaseScript.includes("systemctl reload nginx")
+      bundleReloadsNginx: bundleReleaseScript.includes("systemctl reload nginx"),
+      releaseRemovesStockDefault: releaseScript.includes("rm -f /etc/nginx/sites-enabled/default"),
+      bundleSnapshotsAndRemovesStockDefault: bundleReleaseScript.includes("remove_managed_path /etc/nginx/sites-enabled/default")
     });
 
   const releasePreservesHostTls = (text) => text.includes("/etc/nginx/conf.d/football-predict-common.conf")
@@ -2450,28 +2528,33 @@ const run = () => {
     : null;
   pushCheck(checks, "cloudflare collector uses public config and server-side independent trust domain", Boolean(
     cloudflareSportteryCollector.includes("crypto.subtle.sign")
-    && cloudflareSportteryCollector.includes("/api/admin/sporttery-collector-evidence")
+    && cloudflareWorker.includes("/api/sporttery-evidence")
+    && cloudflareWorker.includes("createSportteryEvidence(env)")
     && cloudflareSportteryCollectorVerifier.includes("server accepts every signed endpoint")
     && configuredCollectorKeyId
     && /^[a-f0-9]{64}$/.test(configuredCollectorFingerprint)
     && trustedCollectorKey?.enabled === true
     && trustedCollectorKey?.fingerprint === configuredCollectorFingerprint
     && trustedCollectorKey?.independenceDomain === "cloudflare-worker-collector-1"
+    && cloudflareWrangler?.vars?.SPORTTERY_COLLECTOR_DELIVERY_MODE === "pull"
     && !cloudflareWrangler?.vars?.SPORTTERY_COLLECTOR_PRIVATE_KEY_PKCS8
     && !cloudflareWrangler?.vars?.FOOTBALL_PRODUCTION_ADMIN_TOKEN
   ), {
     keyId: configuredCollectorKeyId || null,
     fingerprintMatchesRegistry: trustedCollectorKey?.fingerprint === configuredCollectorFingerprint,
     independenceDomain: trustedCollectorKey?.independenceDomain || null,
+    deliveryMode: cloudflareWrangler?.vars?.SPORTTERY_COLLECTOR_DELIVERY_MODE || null,
     privateSecretsAbsentFromConfig: !cloudflareWrangler?.vars?.SPORTTERY_COLLECTOR_PRIVATE_KEY_PKCS8
       && !cloudflareWrangler?.vars?.FOOTBALL_PRODUCTION_ADMIN_TOKEN
   });
 
   pushCheck(checks, "collector evidence upload has bounded dedicated Nginx route", collectorEvidenceUpload.includes("client_max_body_size 8m")
     && collectorEvidenceUpload.includes("limit_req zone=football_admin burst=5 nodelay")
-    && keyValue(envExample, "SPORTTERY_COLLECTOR_EVIDENCE_STORE_PATH") === "/var/lib/football-predict/sporttery-collector-evidence.json", {
+    && keyValue(envExample, "SPORTTERY_COLLECTOR_EVIDENCE_STORE_PATH") === "/var/lib/football-predict/sporttery-collector-evidence.json"
+    && keyValue(envExample, "SPORTTERY_SERVER_DIRECT_RELAY_UPLOAD_URL") === "http://127.0.0.1:8788/api/admin/sporttery-relay-fast-lane?runSync=0", {
       routePresent: Boolean(collectorEvidenceUpload),
-      evidenceStorePath: keyValue(envExample, "SPORTTERY_COLLECTOR_EVIDENCE_STORE_PATH") || null
+      evidenceStorePath: keyValue(envExample, "SPORTTERY_COLLECTOR_EVIDENCE_STORE_PATH") || null,
+      serverDirectFastLaneUrl: keyValue(envExample, "SPORTTERY_SERVER_DIRECT_RELAY_UPLOAD_URL") || null
     });
 
   pushCheck(checks, "cloudflare stale repair waits two cycles", Number(cloudflareWrangler?.vars?.STALE_DATA_SECONDS || 0) >= 600, {

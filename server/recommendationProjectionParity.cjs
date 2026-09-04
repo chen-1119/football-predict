@@ -161,6 +161,14 @@ const publishedBestDecision = (match) => {
   } : null;
 };
 
+const hasPublishedWatchDisposition = (match) => (
+  (Array.isArray(match?.predictions) ? match.predictions : []).some((prediction) => (
+    upper(prediction?.marketType) === "BEST"
+    && upper(prediction?.tipCode) === "WATCH"
+    && text(prediction?.recommendationAction).toLowerCase() === "withhold"
+  ))
+);
+
 /**
  * The generator intentionally retains its pre-selection 1X2 analysis row for
  * private audit/replay. Once the unified selector publishes a HAD BEST row,
@@ -183,14 +191,97 @@ const publicHadSupportingDirectionConflicts = (match, nowMs = Date.now()) => {
   ));
 };
 
+const isExplicitlyWithheldBest = (prediction) => {
+  const recommendationAction = text(prediction?.recommendationAction).toLowerCase();
+  return (
+    upper(prediction?.marketType) === "BEST"
+    && validDirection(prediction)
+    // REFERENCE is an intentional low-confidence public direction. It is
+    // excluded from formal statistics, but it must not be collapsed back into
+    // a directionless WATCH merely because its promotion evidence is WATCH.
+    // Only an explicit WITHHOLD (or a legacy non-reference/non-recommend
+    // disposition) authorizes the public boundary to remove the direction.
+    && recommendationAction !== "recommend"
+    && recommendationAction !== "reference"
+    && (
+    (
+      upper(prediction?.multiFactorEvidence?.grade) === "WATCH"
+      && prediction?.multiFactorEvidence?.eligible !== true
+    )
+    || (
+      upper(prediction?.liveRecommendationAction) === "WITHHOLD"
+      && prediction?.liveRecommendation?.eligible !== true
+    )
+    )
+  );
+};
+
+const neutralPublicWatchRow = (prediction) => ({
+  ...prediction,
+  tipCode: "WATCH",
+  tipLabel: {
+    zh: "观察：证据不足，暂无可靠方向",
+    en: "Watch: insufficient evidence, no reliable direction",
+  },
+  odds: 0,
+  trustScore: 0,
+  recommendationAction: "withhold",
+  recommendationTier: "public-watch",
+  liveRecommendationAction: "withhold",
+  liveRecommendationTier: "live-withhold",
+  multiFactorEvidence: prediction?.multiFactorEvidence
+    ? {
+        ...prediction.multiFactorEvidence,
+        eligible: false,
+        grade: "WATCH",
+        code: "WATCH",
+      }
+    : prediction?.multiFactorEvidence,
+});
+
 const projectPublicPredictionRows = (match, {
   nowMs = Date.now(),
 } = {}) => {
   const rows = Array.isArray(match?.predictions) ? match.predictions : [];
   const conflicts = publicHadSupportingDirectionConflicts(match, nowMs);
-  if (conflicts.length === 0) return rows.slice();
   const hidden = new Set(conflicts);
-  return rows.filter((row) => !hidden.has(row));
+  const conflictSafeRows = conflicts.length === 0
+    ? rows.slice()
+    : rows.filter((row) => !hidden.has(row));
+
+  // A recommendation can already be frozen before kickoff while the mutable
+  // current row no longer carries its BEST copy. The immutable archive is the
+  // canonical decision in that case; projecting a copy back into the public
+  // row restores continuity without rewriting the stored match or bypassing a
+  // deliberate WATCH/WITHHOLD disposition.
+  if (!isResultPhase(match, nowMs)) {
+    const hasAnyBestDisposition = conflictSafeRows.some((row) => upper(row?.marketType) === "BEST");
+    const frozen = hasAnyBestDisposition ? null : archivedDecision(match);
+    if (frozen?.prediction && validDirection(frozen.prediction)) {
+      conflictSafeRows.push({
+        ...frozen.prediction,
+        marketType: "BEST",
+        recommendationAction: text(frozen.prediction?.recommendationAction) || "reference",
+        recommendationTier: text(frozen.prediction?.recommendationTier) || "immutable-pre-match-reference",
+        immutableArchiveReference: true,
+      });
+    }
+  }
+
+  // A WATCH/WITHHOLD BEST row keeps its internal direction for audit and
+  // replay, but that direction is not a public recommendation. Publishing the
+  // raw code made a low-evidence batch look like ten confident home wins. At
+  // the public boundary expose one neutral WATCH disposition and suppress the
+  // supporting result-pool directions; the private stored rows stay intact.
+  if (isResultPhase(match, nowMs)) return conflictSafeRows;
+  const withheldBest = conflictSafeRows.find(isExplicitlyWithheldBest);
+  if (!withheldBest) return conflictSafeRows;
+
+  return conflictSafeRows.flatMap((row) => {
+    if (row === withheldBest) return [neutralPublicWatchRow(row)];
+    if (validDirection(row)) return [];
+    return [row];
+  });
 };
 
 const scheduledWithoutBestIds = (rows, nowMs = Date.now()) => (
@@ -201,6 +292,7 @@ const scheduledWithoutBestIds = (rows, nowMs = Date.now()) => (
       && hasOfficialHadSp(row)
       && hasDirectionalEvidence(row)
       && !publishedBestDecision(row)
+      && !hasPublishedWatchDisposition(row)
     ))
     .map((row) => canonicalId(row) || text(row?.id) || "unknown")
 );
@@ -353,6 +445,7 @@ module.exports = {
   hasOfficialHadSp,
   hasDirectionalEvidence,
   isResultPhase,
+  isExplicitlyWithheldBest,
   projectPublicPredictionRows,
   publicHadSupportingDirectionConflicts,
   publishedBestDecision,

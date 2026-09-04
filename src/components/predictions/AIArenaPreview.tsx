@@ -37,7 +37,7 @@ export const AIArenaPreview: React.FC<AIArenaPreviewProps> = ({ matches, arena: 
   const awardRows = arena.awards ? [
     { label: language === 'zh' ? '月冠军' : 'Month champion', award: arena.awards.monthChampion, digits: 0 },
     { label: language === 'zh' ? '财富王' : 'Wealth king', award: arena.awards.wealthKing, digits: 0 },
-    { label: language === 'zh' ? '最准 AI' : 'Accuracy king', award: arena.awards.accuracyKing, digits: 4 },
+    { label: language === 'zh' ? '最准策略' : 'Accuracy king', award: arena.awards.accuracyKing, digits: 4 },
     { label: language === 'zh' ? '风控王' : 'Risk king', award: arena.awards.riskKing, digits: 4 },
     { label: language === 'zh' ? '爆冷王' : 'Upset king', award: arena.awards.upsetKing, digits: 2 },
     { label: language === 'zh' ? '莽夫奖' : 'Boldest', award: arena.awards.reckless, digits: 0 },
@@ -62,13 +62,13 @@ export const AIArenaPreview: React.FC<AIArenaPreviewProps> = ({ matches, arena: 
         <div className="survival-section-heading">
           <div>
             <span><Trophy size={15} aria-hidden="true" /> {language === 'zh' ? '本月生存榜' : 'Monthly survival table'}</span>
-            <h2 id="survival-ranking-title">{language === 'zh' ? '六 AI 同场竞技' : 'Six-AI competition'}</h2>
+            <h2 id="survival-ranking-title">{language === 'zh' ? '六套本地策略同场模拟' : 'Six-profile simulation'}</h2>
           </div>
           <small><LockKeyhole size={14} /> {language === 'zh' ? '赛前提交后锁定' : 'Locked after cutoff'}</small>
         </div>
         <div className="survival-ranking-table" role="table">
           <div className="survival-ranking-row is-head" role="row">
-            <span>{language === 'zh' ? 'AI' : 'AI'}</span>
+            <span>{language === 'zh' ? '策略' : 'Profile'}</span>
             <span>{language === 'zh' ? '积分/保留' : 'Points/Reserve'}</span>
             <span>{language === 'zh' ? '自主投入' : 'Auto stake'}</span>
             <span>{language === 'zh' ? '战绩/ROI' : 'Record/ROI'}</span>
@@ -192,7 +192,7 @@ export const AIArenaPreview: React.FC<AIArenaPreviewProps> = ({ matches, arena: 
                   ))}
                 </div>
                 <Link to={`/ai-arena/${encodeURIComponent(row.match.id)}`}>
-                  {language === 'zh' ? '查看六 AI 完整分析' : 'Open six-AI analysis'} <ArrowRight size={15} />
+                  {language === 'zh' ? '查看六套策略完整分析' : 'Open six-profile analysis'} <ArrowRight size={15} />
                 </Link>
               </article>
             ))}
@@ -205,7 +205,7 @@ export const AIArenaPreview: React.FC<AIArenaPreviewProps> = ({ matches, arena: 
           <div className="survival-section-heading">
             <div>
               <span><Trophy size={15} /> {language === 'zh' ? '赛后结算' : 'Post-match settlement'}</span>
-              <h2>{language === 'zh' ? '积分曲线与 AI 翻车榜' : 'Balance curves and AI misses'}</h2>
+              <h2>{language === 'zh' ? '积分曲线与策略失误榜' : 'Balance curves and profile misses'}</h2>
             </div>
             <small><ShieldCheck size={14} /> {language === 'zh' ? '仅使用锁定赔率与正式赛果' : 'Locked odds and official results only'}</small>
           </div>
@@ -236,7 +236,7 @@ export const AIArenaPreview: React.FC<AIArenaPreviewProps> = ({ matches, arena: 
               })}
             </div>
             <div className="survival-flop-board">
-              <h3>{language === 'zh' ? '😂 AI 翻车榜' : 'AI miss board'}</h3>
+              <h3>{language === 'zh' ? '策略失误榜' : 'Profile miss board'}</h3>
               {(arena.flopBoard || []).length ? (arena.flopBoard || []).map((row) => (
                 <article key={`${row.agentId}-${row.matchId}`}>
                   <strong>{row.agentName}</strong>

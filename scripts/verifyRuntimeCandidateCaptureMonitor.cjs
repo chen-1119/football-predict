@@ -2,10 +2,77 @@
 
 const assert = require("node:assert/strict");
 const {
+  assessSqliteStorageStability,
+  candidateProspectiveCaptureRuntimeStatus,
   candidateProspectiveProgressStatus,
   candidateProspectiveRuntimeState,
   candidateProspectiveTemporalRuntimeState,
 } = require("./checkServerRuntime.cjs");
+
+const gib = 1024 * 1024 * 1024;
+const stableLargeSqlite = assessSqliteStorageStability({
+  bytes: 2.4 * gib,
+  warnBytes: gib,
+  failBytes: 2 * gib,
+  freeRatio: 0.02,
+  freeRatioWarn: 0.35,
+  schemaVersion: "football-sqlite-v2-incremental",
+  previousBytes: 2.39 * gib,
+  previousCheckedAt: "2026-08-17T16:30:00.000Z",
+  checkedAt: "2026-08-17T16:35:00.000Z",
+});
+assert.equal(stableLargeSqlite.status, "watch");
+assert.equal(stableLargeSqlite.runawayGrowth, false);
+assert.ok(stableLargeSqlite.reasons.includes("file-size-over-fail-budget"));
+
+const runawaySqlite = assessSqliteStorageStability({
+  bytes: 3 * gib,
+  warnBytes: gib,
+  failBytes: 2 * gib,
+  freeRatio: 0.02,
+  freeRatioWarn: 0.35,
+  schemaVersion: "football-sqlite-v2-incremental",
+  previousBytes: 2.4 * gib,
+  previousCheckedAt: "2026-08-17T16:30:00.000Z",
+  checkedAt: "2026-08-17T16:35:00.000Z",
+});
+assert.equal(runawaySqlite.status, "failed");
+assert.equal(runawaySqlite.runawayGrowth, true);
+assert.ok(runawaySqlite.reasons.includes("runaway-growth"));
+
+const distantHeartbeatOnlyDegradation = {
+  ok: false,
+  blockers: [
+    "candidate-capture-heartbeat-stale",
+    "candidate-heartbeat-preemptive-budget-missed",
+  ],
+  heartbeat: {
+    dueMatches: 0,
+    dueCaptureComplete: true,
+    dueAtomicComplete: true,
+    nearestFinalizationAt: "2026-08-18T18:52:00.000Z",
+  },
+  admission: { dueUnrecorded: 0, readyDueUnrecorded: 0 },
+};
+assert.equal(candidateProspectiveCaptureRuntimeStatus(
+  distantHeartbeatOnlyDegradation,
+  Date.parse("2026-08-17T16:45:00.000Z"),
+  600,
+), "watch");
+const nearDeadlineDegradation = structuredClone(distantHeartbeatOnlyDegradation);
+nearDeadlineDegradation.heartbeat.nearestFinalizationAt = "2026-08-17T16:50:00.000Z";
+assert.equal(candidateProspectiveCaptureRuntimeStatus(
+  nearDeadlineDegradation,
+  Date.parse("2026-08-17T16:45:00.000Z"),
+  600,
+), "failed");
+const captureGapDegradation = structuredClone(distantHeartbeatOnlyDegradation);
+captureGapDegradation.blockers.push("candidate-admission-capture-gap");
+assert.equal(candidateProspectiveCaptureRuntimeStatus(
+  captureGapDegradation,
+  Date.parse("2026-08-17T16:45:00.000Z"),
+  600,
+), "failed");
 
 const healthyFixture = {
   publicScorecard: {
@@ -271,6 +338,7 @@ const healthyTemporalFixture = {
       futureKickoffRows: 1,
       kickoffPassedRows: 4,
       awaitingOfficialFinalRows: 1,
+      officialVoidRows: 0,
       officialResultRecordMissingRows: 0,
       officialFinishedIneligibleRows: 3,
       officialFinishedIneligibleReasonCounts: {

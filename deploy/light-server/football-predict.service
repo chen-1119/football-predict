@@ -6,13 +6,39 @@ Wants=network-online.target
 [Service]
 Type=simple
 WorkingDirectory=/opt/football-predict
-EnvironmentFile=/opt/football-predict/deploy/light-server/env
-ExecStart=/usr/bin/node /opt/football-predict/server/index.cjs
+EnvironmentFile=/etc/football-predict/env
+Environment=SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH=/opt/football-predict/deploy/light-server/collector-trust-registry.json
+ExecStart=/opt/node-v22.22.1/bin/node /opt/football-predict/server/index.cjs
 Restart=always
-RestartSec=5
+RestartSec=2
+TimeoutStopSec=8
+KillMode=mixed
+OOMScoreAdjust=-500
+MemoryLow=512M
 User=football
 Group=football
 NoNewPrivileges=true
+UMask=0027
+CapabilityBoundingSet=
+AmbientCapabilities=
+PrivateDevices=true
+PrivateTmp=true
+ProtectHome=read-only
+ProtectSystem=strict
+ReadWritePaths=/var/lib/football-predict
+ReadWritePaths=/opt/football-predict/public/data
+ReadWritePaths=/opt/football-predict/server-data
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 
 [Install]
 WantedBy=multi-user.target

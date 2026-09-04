@@ -5,6 +5,11 @@ const os = require("node:os");
 const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
 const {
+  acquireSyncLockInterruptibly,
+  benchmarkDeadlineCaptureEnabled,
+  benchmarkDeadlineCaptureIntervalMs,
+  benchmarkDeadlineCaptureStatusAdvanced,
+  benchmarkDeadlineCaptureTimeoutMs,
   candidateDeadlineCaptureEnabled,
   candidateDeadlineCaptureForceSettleMs,
   candidateDeadlineCaptureIntervalMs,
@@ -14,17 +19,25 @@ const {
   candidateDeadlineCaptureStatusAdvanced,
   candidateDeadlineCaptureTerminateGraceMs,
   candidateDeadlineCaptureTimeoutMs,
+  candidateDeadlineCaptureCompleteThrough,
   candidateDeadlineAttemptBudget,
   candidateDeadlineHeartbeatFreshnessLimitMs,
   candidateDeadlinePreemptiveSchedule,
+  candidateDeadlineStartupSafetyWindowMs,
+  createBackgroundSlowPhaseTracker,
+  createWorkerShutdownController,
+  describeConsolidatedSlowPublicationNeed,
+  describeCandidateDeadlineStartupAdmission,
   describeCycleStages,
   describeFiveHundredResultFallbackNeed,
   describeModelStrategyReconciliationNeed,
   describePostEnrichmentPublicationNeed,
+  describeSlowPhaseNeed,
   describeSyncCadence,
   modelCandidateRegistryLockTimeoutMs,
   modelStrategyReconciliationFingerprint,
   nextCycleDelayMs,
+  officialCompensationRequired,
   officialPublishEvidenceAfter,
   phaseLockWaitMs,
   releaseCycleDelayMs,
@@ -32,14 +45,23 @@ const {
   releaseCycleNeedsReadinessHandoff,
   releaseCycleNeedsPriorityRetry,
   releaseCycleRetryMs,
+  releaseSlowPhaseDrainBudgetMs,
   readinessIdleEvidenceAfter,
   readSourceCycleObservation,
   relaySnapshotChanged,
   relayCatchupRequiredAfterCycle,
   relaySnapshotSemanticFileFingerprint,
   runCandidateProspectiveDeadlineCapture,
+  runBenchmarkProspectiveDeadlineCapture,
+  runWithSharedSlowArtifactLock,
   startCandidateProspectiveDeadlineHeartbeat,
+  startBenchmarkProspectiveDeadlineCapture,
+  slowPhaseMinIntervalMs,
+  slowPublicationLockWaitMs,
+  usesSharedSlowArtifact,
+  waitForBackgroundSlowPhaseDrain,
   waitForNextCycle,
+  writeWorkerStatusBestEffort,
   writeJsonAtomic,
 } = require("./runSyncWorker.cjs");
 const {
@@ -49,6 +71,10 @@ const {
 
 const workerSource = fs.readFileSync(path.join(__dirname, "runSyncWorker.cjs"), "utf8");
 const modelBacktestSource = fs.readFileSync(path.join(__dirname, "runModelBacktest.cjs"), "utf8");
+const remotePublicReadinessSource = fs.readFileSync(
+  path.join(__dirname, "verifyRemotePublicReadiness.cjs"),
+  "utf8",
+);
 
 const now = Date.parse("2026-07-13T12:00:00.000Z");
 const kickoff = (minutesFromNow) => new Date(now + minutesFromNow * 60_000).toISOString();
@@ -65,6 +91,88 @@ const configuredPostDeadlineHotIntervalMs = Math.max(
   configuredHotIntervalMs / 1_000,
   Number(process.env.POST_DEADLINE_HOT_SYNC_INTERVAL_SECONDS || 300),
 ) * 1_000;
+
+const exactDeadlineHeartbeatFixture = (evaluatedAt, overrides = {}) => ({
+  version: "prospective-deadline-heartbeat-v2",
+  captureMode: "deadline-only",
+  evaluatedAt,
+  ok: true,
+  skipped: false,
+  dueCaptureComplete: true,
+  dueAtomicComplete: true,
+  dueUnrecorded: 0,
+  readyDueUnrecorded: 0,
+  blockers: [],
+  audit: {
+    evaluatedAt,
+    state: "ACTIVE",
+    chainValid: true,
+    rootHash: "a".repeat(64),
+    candidateRevisionId: "candidate@test",
+    decisionRecord: {
+      version: "candidate-atomic-decision-record-v3",
+      admittedRows: 0,
+      atomicRows: 0,
+      completeRows: 0,
+      failedRows: 0,
+      coverage: 1,
+      complete: true,
+    },
+  },
+  readiness: {
+    version: "candidate-prospective-readiness-preview-v2",
+    evaluatedAt,
+    candidateRevisionId: "candidate@test",
+    evaluatedMatches: 0,
+    detailedMatches: 0,
+    rowsTruncated: 0,
+    upcomingMatches: 0,
+    readyNow: 0,
+    atomicReadyNow: 0,
+    awaitingMarket: 0,
+    blocked: 0,
+    excluded: 0,
+    readyInvariantOk: true,
+    nearestDeadlineAt: null,
+    nearestFinalizationAt: null,
+    nearestStatus: null,
+    nearestDeadlineBatch: null,
+    deadlineBatches: [],
+  },
+  ...overrides,
+});
+
+const missingSlowHistory = describeSlowPhaseNeed({ status: null, now });
+assert.equal(missingSlowHistory.due, true);
+assert.equal(missingSlowHistory.reason, "no-slow-phase-history");
+const freshSlowHistoryAt = new Date(now - Math.floor(slowPhaseMinIntervalMs / 2)).toISOString();
+const freshSlowHistory = describeSlowPhaseNeed({
+  status: { lastSlowPhaseAt: freshSlowHistoryAt },
+  now,
+});
+assert.equal(freshSlowHistory.due, false);
+assert.equal(freshSlowHistory.reason, "minimum-interval-not-elapsed");
+const expiredSlowHistory = describeSlowPhaseNeed({
+  status: { lastSlowPhaseAt: new Date(now - slowPhaseMinIntervalMs - 1).toISOString() },
+  now,
+});
+assert.equal(expiredSlowHistory.due, true);
+assert.equal(expiredSlowHistory.reason, "minimum-interval-elapsed");
+const releasePrioritySlowPhase = describeSlowPhaseNeed({
+  releasePriority: true,
+  status: { lastSlowPhaseAt: freshSlowHistoryAt },
+  now,
+});
+assert.equal(releasePrioritySlowPhase.due, true);
+assert.equal(releasePrioritySlowPhase.reason, "release-priority");
+const runningSlowPhase = describeSlowPhaseNeed({
+  releasePriority: true,
+  running: true,
+  status: { lastSlowPhaseAt: freshSlowHistoryAt },
+  now,
+});
+assert.equal(runningSlowPhase.due, false);
+assert.equal(runningSlowPhase.reason, "slow-phase-already-running");
 
 const pending = describeSyncCadence([{
   id: "pending",
@@ -204,6 +312,113 @@ const disabledFallback = describeFiveHundredResultFallbackNeed([{
   kickoffTime: kickoff(-120),
 }], now, false);
 assert.equal(disabledFallback.needed, false, "the explicit feature switch is respected");
+assert.ok(
+  !workerSource.includes('process.env.ENABLE_500_DETAILS_SYNC === "1"\n    && process.env.ENABLE_500_RESULT_FALLBACK'),
+  "bounded result recovery must not depend on enabling full 500 detail enrichment",
+);
+
+assert.equal(
+  candidateDeadlineStartupSafetyWindowMs,
+  candidateDeadlineHeartbeatFreshnessLimitMs,
+  "startup safety covers the complete failed-primary/retry/recovery chain",
+);
+const completeCaptureStatus = (evaluatedAt) => ({
+  version: "prospective-deadline-heartbeat-v2",
+  evaluatedAt,
+  ok: true,
+  skipped: false,
+  dueCaptureComplete: true,
+  dueAtomicComplete: true,
+  dueUnrecorded: 0,
+  readyDueUnrecorded: 0,
+});
+assert.equal(
+  candidateDeadlineCaptureCompleteThrough(completeCaptureStatus(kickoff(-1)), now - 60_000),
+  true,
+);
+assert.equal(
+  candidateDeadlineCaptureCompleteThrough(completeCaptureStatus(kickoff(-2)), now - 60_000),
+  false,
+  "a healthy but pre-finalization heartbeat cannot prove an overdue cohort",
+);
+
+const farDeadlineAdmission = describeCandidateDeadlineStartupAdmission({
+  matches: [{
+    id: "far-deadline",
+    status: "SCHEDULED",
+    kickoffTime: kickoff(180),
+    predictionMeta: { cutoffTime: kickoff(60) },
+  }],
+  nowMs: now,
+  captureStatus: null,
+  resultRecoveryPlan: { needed: false },
+});
+assert.equal(farDeadlineAdmission.waitForPublished, false);
+assert.equal(farDeadlineAdmission.fastOfficialLaneAdmitted, true);
+assert.equal(farDeadlineAdmission.reason, "deadline-safety-window-clear");
+
+const nearDeadlineAdmission = describeCandidateDeadlineStartupAdmission({
+  matches: [{
+    id: "near-deadline",
+    status: "SCHEDULED",
+    kickoffTime: kickoff(180),
+    predictionMeta: {
+      cutoffTime: new Date(now + candidateDeadlineStartupSafetyWindowMs - 1).toISOString(),
+    },
+  }],
+  nowMs: now,
+  captureStatus: null,
+  resultRecoveryPlan: { needed: false },
+});
+assert.equal(nearDeadlineAdmission.waitForPublished, true);
+assert.equal(nearDeadlineAdmission.fastOfficialLaneAdmitted, true);
+assert.equal(nearDeadlineAdmission.reason, "deadline-inside-startup-safety-window");
+
+const overdueMatch = {
+  id: "overdue-deadline",
+  status: "SCHEDULED",
+  kickoffTime: kickoff(120),
+  predictionMeta: { cutoffTime: kickoff(-5) },
+};
+const overdueUnprovenAdmission = describeCandidateDeadlineStartupAdmission({
+  matches: [overdueMatch],
+  nowMs: now,
+  captureStatus: completeCaptureStatus(kickoff(-4)),
+  resultRecoveryPlan: { needed: false },
+});
+assert.equal(overdueUnprovenAdmission.waitForPublished, true);
+assert.equal(overdueUnprovenAdmission.reason, "deadline-capture-overdue-unproven");
+const overdueProvenAdmission = describeCandidateDeadlineStartupAdmission({
+  matches: [overdueMatch],
+  nowMs: now,
+  captureStatus: completeCaptureStatus(kickoff(-1)),
+  resultRecoveryPlan: { needed: false },
+});
+assert.equal(overdueProvenAdmission.waitForPublished, false);
+assert.equal(overdueProvenAdmission.riskMatches.length, 0);
+
+const missingDeadlineAdmission = describeCandidateDeadlineStartupAdmission({
+  matches: [{ id: "missing-deadline", status: "SCHEDULED", kickoffTime: null }],
+  nowMs: now,
+  captureStatus: completeCaptureStatus(kickoff(1)),
+  resultRecoveryPlan: { needed: false },
+});
+assert.equal(missingDeadlineAdmission.waitForPublished, true);
+assert.equal(missingDeadlineAdmission.reason, "decision-deadline-missing");
+
+const recoveryFastLaneAdmission = describeCandidateDeadlineStartupAdmission({
+  matches: [{
+    id: "far-deadline-with-result-recovery",
+    status: "SCHEDULED",
+    kickoffTime: kickoff(180),
+    predictionMeta: { cutoffTime: kickoff(60) },
+  }],
+  nowMs: now,
+  captureStatus: null,
+  resultRecoveryPlan: { needed: true },
+});
+assert.equal(recoveryFastLaneAdmission.waitForPublished, false);
+assert.equal(recoveryFastLaneAdmission.reason, "overdue-result-recovery-fast-lane");
 
 assert.equal(
   nextCycleDelayMs("2026-07-13T11:59:40.000Z", 90_000, now),
@@ -230,6 +445,8 @@ assert.ok(workerSource.includes('"recent-kickoff",'));
 assert.ok(workerSource.includes('"live-match",'));
 assert.ok(workerSource.includes('"pending-result",'));
 assert.ok(workerSource.includes("nextCadence.mode === \"hot\" && !postDeadlineCooldown"));
+assert.ok(workerSource.includes('nextCadence.mode === "hot"'));
+assert.ok(workerSource.includes('completedCycle.slowPhase.skipped !== true'));
 assert.ok(phaseLockWaitMs >= 5_000, "publication-phase lock reacquisition has a bounded wait");
 assert.ok(
   releaseCycleInitialLockWaitMs >= phaseLockWaitMs
@@ -336,47 +553,87 @@ assert.equal(stages[3].fatal, false);
 assert.deepEqual(stages[0].operations, [
   "candidate:capture-deadline",
   "candidate:settle-prospective-ledger",
+  "benchmark:capture-deadline-independent",
 ]);
 assert.deepEqual(stages[1].operations, [
+  "sync:server-direct-sporttery-evidence",
+  "sync:cloudflare-sporttery-evidence",
+  "sync:k-league-standings",
   "publish:official-results-fast",
   "sync:uefa-results",
   "sync:official-club-results",
   "sync:500:result-fallback-if-pending",
   "publish-fast-event-if-changed",
 ]);
-assert.deepEqual(stages[2].operations, ["sync:data", "validate:data", "datastore:generation", "datastore:sqlite", "publish-event"]);
+assert.deepEqual(stages[2].operations, [
+  "sync:data",
+  "sync:free-football",
+  "sync:prematch",
+  "validate:data",
+  "datastore:generation",
+  "datastore:sqlite",
+  "publish-event",
+]);
 assert.deepEqual(stages[3].operations, [
   "sync:500",
   "sync:500:details",
+  "sync:api-football",
   "sync:weather",
   "sync:football-data-fixtures",
+  "sync:football-data-results",
   "sync:open-research",
   "sync:web-consensus",
   "sync:free-football",
-  "sync:prematch",
   "audit:recommendation-bias",
   "validate:sources",
   "validate:data:post-enrichment",
-  "reconcile:fast-results-generation:post-enrichment",
-  "datastore:generation:post-enrichment",
-  "datastore:sqlite:post-enrichment",
   "observe:source-cycle",
   "model:backtest",
   "model:learn:autonomous",
   "model:learn",
   "audit:capability",
   "optimize:strategy",
-  "reconcile:fast-results-generation:model-reconciled",
-  "datastore:generation:model-reconciled",
-  "datastore:sqlite:model-reconciled",
+  "sync:prematch",
+  "reconcile:fast-results-generation:consolidated-slow-publication",
+  "validate:data:consolidated-slow-publication",
+  "datastore:generation:consolidated-slow-publication",
+  "datastore:sqlite:consolidated-slow-publication",
   "observe:publication-readiness"
 ]);
+const slowWeatherIndex = workerSource.indexOf(
+  'runEnrichment(process.env.ENABLE_WEATHER_SYNC !== "0", "sync:weather")'
+);
+const slowPreMatchIndex = workerSource.indexOf(
+  "const consolidatedPreMatchStep =",
+  slowWeatherIndex,
+);
+assert.ok(
+  slowWeatherIndex >= 0 && slowPreMatchIndex > slowWeatherIndex,
+  "the slow pipeline must rebuild pre-match evidence after enrichment",
+);
+assert.ok(
+  workerSource.indexOf("const consolidatedPreMatchStep =", slowWeatherIndex)
+    > workerSource.indexOf('await acquireSlowPhaseLock("sync-worker-consolidated-slow-publication")'),
+  "the slow pre-match projection must run under the final publication lock",
+);
+assert.equal(usesSharedSlowArtifact("sync:weather"), true);
+assert.equal(usesSharedSlowArtifact("sync:api-football"), true);
+assert.equal(usesSharedSlowArtifact("sync:open-research"), true);
+assert.equal(usesSharedSlowArtifact("sync:web-consensus"), true);
+assert.equal(usesSharedSlowArtifact("sync:prematch"), true);
+assert.equal(usesSharedSlowArtifact("sync:500"), true);
+assert.equal(usesSharedSlowArtifact("sync:500:details"), true);
+assert.equal(usesSharedSlowArtifact("sync:k-league-standings"), true);
+assert.equal(usesSharedSlowArtifact("sync:football-data-fixtures"), false);
 assert.equal(candidateDeadlineCaptureEnabled, true);
 assert.ok(
   candidateDeadlineCaptureIntervalMs <= 60_000,
   "candidate deadline capture must check at least once per minute",
 );
 
+const serverDirectEvidenceIndex = workerSource.indexOf('"sync:server-direct-sporttery-evidence"');
+const cloudflareEvidenceIndex = workerSource.indexOf('"sync:cloudflare-sporttery-evidence"');
+const kLeagueStandingsIndex = workerSource.indexOf('"sync:k-league-standings"', cloudflareEvidenceIndex);
 const fastResultIndex = workerSource.indexOf('"publish:official-results-fast"');
 const uefaResultIndex = workerSource.indexOf('"sync:uefa-results"');
 const officialClubResultIndex = workerSource.indexOf('"sync:official-club-results"');
@@ -391,42 +648,81 @@ const slowEnrichmentIndex = workerSource.indexOf("const enrichmentSteps = []");
 const sourceValidationIndex = workerSource.indexOf("const sourceValidationStep = await runOptional");
 const postEnrichmentValidationIndex = workerSource.indexOf("const postEnrichmentDataValidationStep = {");
 const postEnrichmentPublicationPlanIndex = workerSource.indexOf("const postEnrichmentPublicationPlan =");
-const postEnrichmentLockAcquireIndex = workerSource.indexOf(
-  'await acquirePhaseLock("sync-worker-post-enrichment-publication")',
-  postEnrichmentPublicationPlanIndex,
-);
-const postEnrichmentFastReconciliationIndex = workerSource.indexOf(
-  "const postEnrichmentFastResultReconciliationStep =",
-  postEnrichmentLockAcquireIndex,
-);
-const postEnrichmentGenerationIndex = workerSource.indexOf("const postEnrichmentGenerationStep = {");
-const postEnrichmentSqliteIndex = workerSource.indexOf("const postEnrichmentSqliteStep = {");
-const postEnrichmentLockReleaseIndex = workerSource.indexOf(
-  "await releasePhaseLock();",
-  postEnrichmentSqliteIndex,
-);
 const sourceCycleObservationIndex = workerSource.indexOf("const sourceCycleObservation = readSourceCycleObservation");
 const modelBacktestIndex = workerSource.indexOf("const modelBacktestStep = sourceCycleObservation.ready");
 const autonomousModelLearningIndex = workerSource.indexOf("const autonomousModelLearningStep = await runOptional");
 const modelLearningIndex = workerSource.indexOf("const modelLearningStep = await runOptional");
 const capabilityAuditIndex = workerSource.indexOf("const capabilityAuditStep = await runOptional");
 const modelStrategyIndex = workerSource.indexOf("const modelStrategyEnabled =");
-const modelReconciledLockAcquireIndex = workerSource.indexOf(
-  'await acquirePhaseLock("sync-worker-model-reconciled-publication")',
+const modelStrategyLockAcquireIndex = workerSource.indexOf(
+  'await acquireSlowPhaseLock("sync-worker-model-strategy-and-publication")',
   modelStrategyIndex,
 );
-const modelReconciledFastReconciliationIndex = workerSource.indexOf(
-  "const modelReconciledFastResultReconciliationStep =",
-  modelReconciledLockAcquireIndex,
+const modelStrategyCommandIndex = workerSource.indexOf(
+  "const modelStrategyCommandStep = await runOptional",
+  modelStrategyLockAcquireIndex,
 );
-const modelReconciledGenerationIndex = workerSource.indexOf("const modelReconciledGenerationStep = {");
-const modelReconciledSqliteIndex = workerSource.indexOf("const modelReconciledSqliteStep = await runSqliteExportOrReuse");
-const modelReconciledLockReleaseIndex = workerSource.indexOf(
-  "await releasePhaseLock();",
-  modelReconciledSqliteIndex,
+const consolidatedPublicationPlanIndex = workerSource.indexOf(
+  "const consolidatedPublicationPlan = describeConsolidatedSlowPublicationNeed",
+  modelStrategyIndex,
 );
-const readinessObservationIndex = workerSource.indexOf("const readinessSourceCycleObservation = readSourceCycleObservation");
+const consolidatedLockAcquireIndex = workerSource.indexOf(
+  'await acquireSlowPhaseLock("sync-worker-consolidated-slow-publication")',
+  consolidatedPublicationPlanIndex,
+);
+const consolidatedArtifactLockAcquireIndex = workerSource.indexOf(
+  'await acquireSlowFinalArtifactLock("sync-worker-consolidated-slow-publication")',
+  consolidatedLockAcquireIndex,
+);
+const consolidatedFastReconciliationIndex = workerSource.indexOf(
+  "const consolidatedFastResultReconciliationStep =",
+  consolidatedLockAcquireIndex,
+);
+const consolidatedPreMatchStepIndex = workerSource.indexOf(
+  "const consolidatedPreMatchStep =",
+  consolidatedLockAcquireIndex,
+);
+const consolidatedFreeFootballStepIndex = workerSource.indexOf(
+  "const consolidatedFreeFootballStep =",
+  consolidatedLockAcquireIndex,
+);
+const consolidatedValidationIndex = workerSource.indexOf(
+  "const consolidatedDataValidationStep =",
+  consolidatedFastReconciliationIndex,
+);
+const consolidatedGenerationIndex = workerSource.indexOf("const consolidatedGenerationStep = {");
+const consolidatedSqliteIndex = workerSource.indexOf("const consolidatedSqliteStep = await runSqliteExportOrReuse");
+const consolidatedLockReleaseIndex = workerSource.indexOf(
+  "await releaseSlowPhaseLock();",
+  consolidatedSqliteIndex,
+);
+const consolidatedArtifactLockReleaseIndex = workerSource.indexOf(
+  "await releaseSlowFinalArtifactLock();",
+  consolidatedSqliteIndex,
+);
+const readinessObservationIndex = workerSource.indexOf(
+  "const readinessSourceCycleObservation = readSourceCycleObservation",
+  consolidatedSqliteIndex,
+);
 assert.ok(fastResultIndex >= 0);
+assert.ok(serverDirectEvidenceIndex >= 0 && serverDirectEvidenceIndex < cloudflareEvidenceIndex);
+assert.ok(cloudflareEvidenceIndex >= 0 && cloudflareEvidenceIndex < kLeagueStandingsIndex);
+assert.ok(kLeagueStandingsIndex >= 0 && kLeagueStandingsIndex < fastResultIndex);
+assert.ok(
+  workerSource.includes('process.env.ENABLE_K_LEAGUE_OFFICIAL_STANDINGS_SYNC !== "0"'),
+  "official K League standings refresh must be independently configurable",
+);
+assert.ok(
+  workerSource.includes("SPORTTERY_SERVER_DIRECT_COLLECTOR_PRIVATE_KEY_PATH")
+    && workerSource.includes("SPORTTERY_SERVER_DIRECT_COLLECTOR_KEY_ID")
+    && workerSource.includes("SPORTTERY_SERVER_DIRECT_COLLECTOR_KEY_FINGERPRINT"),
+  "new-server direct evidence requires its private key identity",
+);
+assert.ok(
+  workerSource.includes("SPORTTERY_CLOUDFLARE_EVIDENCE_URL")
+    && workerSource.includes("SPORTTERY_CLOUDFLARE_PULL_TOKEN"),
+  "independent evidence pull must require both URL and bearer token",
+);
 assert.ok(uefaResultIndex > fastResultIndex, "UEFA official result supplement follows the primary official fast publisher");
 assert.ok(
   officialClubResultIndex > uefaResultIndex,
@@ -439,6 +735,7 @@ assert.ok(
 assert.ok(fastPublishIndex > resultFallbackIndex, "fast-event publication follows the result fallback stage");
 assert.ok(fastPublishIndex > fastResultIndex);
 assert.ok(officialSyncIndex > fastPublishIndex);
+assert.ok(officialSyncIndex > kLeagueStandingsIndex, "official standings must refresh before recommendation rebuild");
 assert.ok(officialGenerationIndex > officialSyncIndex);
 assert.ok(officialSqliteIndex > officialGenerationIndex);
 assert.ok(officialPublishIndex > officialSqliteIndex);
@@ -454,52 +751,58 @@ assert.ok(
 assert.ok(sourceValidationIndex > slowEnrichmentIndex);
 assert.ok(postEnrichmentValidationIndex > sourceValidationIndex);
 assert.ok(postEnrichmentPublicationPlanIndex > postEnrichmentValidationIndex);
-assert.ok(
-  postEnrichmentLockAcquireIndex > postEnrichmentPublicationPlanIndex
-    && postEnrichmentLockAcquireIndex < postEnrichmentFastReconciliationIndex,
-  "post-enrichment generation reacquires the writer permit before publication",
-);
-assert.ok(
-  postEnrichmentFastReconciliationIndex > postEnrichmentLockAcquireIndex
-    && postEnrichmentFastReconciliationIndex < postEnrichmentGenerationIndex,
-  "a fast result committed during enrichment is rebased before generation",
-);
-assert.ok(postEnrichmentGenerationIndex > postEnrichmentPublicationPlanIndex);
-assert.ok(postEnrichmentSqliteIndex > postEnrichmentGenerationIndex);
-assert.ok(
-  postEnrichmentLockReleaseIndex > postEnrichmentSqliteIndex
-    && postEnrichmentLockReleaseIndex < modelBacktestIndex,
-  "model computation cannot keep the post-enrichment publication permit",
-);
-assert.ok(sourceCycleObservationIndex > postEnrichmentSqliteIndex);
+assert.ok(sourceCycleObservationIndex > postEnrichmentPublicationPlanIndex);
 assert.ok(modelBacktestIndex > sourceCycleObservationIndex);
 assert.ok(autonomousModelLearningIndex > modelBacktestIndex);
 assert.ok(modelLearningIndex > autonomousModelLearningIndex);
 assert.ok(capabilityAuditIndex > modelLearningIndex);
 assert.ok(modelStrategyIndex > capabilityAuditIndex);
 assert.ok(
-  modelReconciledLockAcquireIndex > modelStrategyIndex
-    && modelReconciledLockAcquireIndex < modelReconciledFastReconciliationIndex,
-  "changed strategy artifacts reacquire the writer permit before reconciliation",
+  consolidatedPublicationPlanIndex > modelStrategyIndex
+    && consolidatedLockAcquireIndex > consolidatedPublicationPlanIndex,
+  "the consolidated publication need is planned before its final permit",
 );
 assert.ok(
-  modelReconciledFastReconciliationIndex > modelReconciledLockAcquireIndex
-    && modelReconciledFastReconciliationIndex < modelReconciledGenerationIndex,
-  "a fast result committed during model computation is rebased before final generation",
-);
-assert.ok(modelReconciledGenerationIndex > modelStrategyIndex);
-assert.ok(
-  modelReconciledSqliteIndex > modelReconciledGenerationIndex,
-  "strategy output is committed to an immutable generation before SQLite reconciliation"
+  consolidatedArtifactLockAcquireIndex > consolidatedLockAcquireIndex
+    && consolidatedArtifactLockAcquireIndex < consolidatedFreeFootballStepIndex,
+  "the final publication serializes shared evidence before rebasing it",
 );
 assert.ok(
-  readinessObservationIndex > modelReconciledSqliteIndex,
-  "release readiness observes the final model-reconciled generation and SQLite identities"
+  modelStrategyLockAcquireIndex > modelStrategyIndex
+    && modelStrategyLockAcquireIndex < modelStrategyCommandIndex
+    && modelStrategyCommandIndex < consolidatedPublicationPlanIndex,
+  "strategy reconciliation mutates current/publication inputs only while holding the publication lock",
 );
 assert.ok(
-  modelReconciledLockReleaseIndex > modelReconciledSqliteIndex
-    && modelReconciledLockReleaseIndex < readinessObservationIndex,
-  "readiness observation occurs after the final writer permit is released",
+  consolidatedFreeFootballStepIndex > consolidatedLockAcquireIndex
+    && consolidatedFreeFootballStepIndex < consolidatedPreMatchStepIndex
+    && consolidatedPreMatchStepIndex < consolidatedFastReconciliationIndex,
+  "free and pre-match evidence are rebased under the final permit before result reconciliation and generation",
+);
+assert.ok(
+  consolidatedFastReconciliationIndex > consolidatedLockAcquireIndex
+    && consolidatedFastReconciliationIndex < consolidatedValidationIndex,
+  "a fast result committed during slow computation is rebased under the writer lock",
+);
+assert.ok(
+  consolidatedValidationIndex > consolidatedFastReconciliationIndex
+    && consolidatedValidationIndex < consolidatedGenerationIndex,
+  "the slow lane validates the latest official files under lock before consolidated generation",
+);
+assert.ok(
+  consolidatedSqliteIndex > consolidatedGenerationIndex,
+  "the combined enrichment and strategy output receives one immutable generation and SQLite export"
+);
+assert.ok(
+  readinessObservationIndex > consolidatedSqliteIndex,
+  "release readiness observes the consolidated generation and SQLite identities"
+);
+assert.ok(
+  consolidatedArtifactLockReleaseIndex > consolidatedSqliteIndex
+    && consolidatedArtifactLockReleaseIndex < consolidatedLockReleaseIndex
+    && consolidatedLockReleaseIndex > consolidatedSqliteIndex
+    && consolidatedLockReleaseIndex < readinessObservationIndex,
+  "artifact and publication permits are released in reverse order before readiness observation",
 );
 assert.equal(
   (workerSource.match(/\["scripts\/syncData\.cjs"\]/g) || []).length,
@@ -507,8 +810,22 @@ assert.equal(
   "the official pipeline must not rerun the full sync in the same cycle"
 );
 assert.ok(
-  workerSource.includes("maybeRunModelBacktest({ sqliteStep: effectivePostEnrichmentSqliteStep })"),
-  "the backtest must observe the SQLite export created after enrichment"
+  workerSource.includes("maybeRunModelBacktest({ sqliteStep })"),
+  "the backtest consumes the already committed immutable official SQLite history"
+);
+assert.match(
+  workerSource,
+  /const runEnrichment = async[\s\S]*?runWithSharedSlowArtifactLock\(\{[\s\S]*?waitMs: phaseLockWaitMs[\s\S]*?runOptional\(enabled, script/,
+  "background evidence writers use the dedicated shared-artifact lock instead of the official publication lock",
+);
+assert.match(
+  workerSource,
+  /officialFreeFootballStep = await runWithSharedSlowArtifactLock\(\{[\s\S]*?waitMs: 0[\s\S]*?officialPreMatchStep = await runWithSharedSlowArtifactLock\(\{[\s\S]*?waitMs: 0/,
+  "the official result lane never waits for a background evidence writer",
+);
+assert.ok(
+  slowPublicationLockWaitMs >= phaseLockWaitMs,
+  "the background final rebase can wait for an in-flight official publication without making the official lane wait",
 );
 assert.deepEqual(
   describePostEnrichmentPublicationNeed([
@@ -555,6 +872,34 @@ assert.deepEqual(
   },
   "a failed enrichment attempt may have partially mutated data and must force validation and republication",
 );
+assert.deepEqual(
+  describeConsolidatedSlowPublicationNeed({
+    postEnrichmentPublicationPlan: { required: true },
+    modelReconciliationRequired: true,
+    validationOk: true,
+  }),
+  {
+    required: true,
+    enrichmentRequired: true,
+    modelReconciliationRequired: true,
+    reason: "enrichment-or-model-artifact-changed",
+  },
+  "enrichment and model changes collapse into one slow publication",
+);
+assert.deepEqual(
+  describeConsolidatedSlowPublicationNeed({
+    postEnrichmentPublicationPlan: { required: true },
+    modelReconciliationRequired: true,
+    validationOk: false,
+  }),
+  {
+    required: false,
+    enrichmentRequired: true,
+    modelReconciliationRequired: true,
+    reason: "post-enrichment-validation-not-ready",
+  },
+  "the consolidated publication remains fail-closed when validation is not ready",
+);
 assert.ok(
   workerSource.includes("ok: sqliteExportEnabled === false"),
   "a requested SQLite export with invalid source-cycle evidence must degrade the cycle"
@@ -568,13 +913,13 @@ assert.ok(
   "registry learning must fail closed when post-enrichment source-cycle evidence is not ready"
 );
 assert.ok(
-  /modelReconciliationRequired[\s\S]*?"datastore:generation"[\s\S]*?modelReconciledGenerationStep[\s\S]*?runSqliteExportOrReuse/.test(workerSource),
-  "a successful strategy publication must be recommitted before the final SQLite export"
+  /consolidatedPublicationRequired[\s\S]*?"datastore:generation"[\s\S]*?consolidatedGenerationStep[\s\S]*?runSqliteExportOrReuse/.test(workerSource),
+  "slow enrichment and strategy output must share one consolidated generation and SQLite export"
 );
 assert.ok(
   workerSource.includes('reason: "strategy-artifacts-unchanged"')
     && workerSource.includes("modelStrategyFingerprintBefore !== modelStrategyFingerprintAfter"),
-  "an idempotent strategy run must skip the third generation and SQLite publication"
+  "an idempotent strategy run must not force a model-only publication"
 );
 assert.ok(
   workerSource.includes("modelStrategyRecovery.shouldRun"),
@@ -583,10 +928,21 @@ assert.ok(
 assert.ok(workerSource.includes("eventCycle: activeEventCycle"));
 assert.ok(workerSource.includes("inspectReleaseWorkerPriorityRequest"));
 assert.ok(workerSource.includes("waitMs: releaseCycle.initialLockWaitMs"));
+assert.ok(
+  workerSource.includes("deferSlowPhase: loop")
+    && workerSource.includes("slowPhaseRunning: slowPhaseRunningAtCycleStart")
+    && workerSource.includes("onSlowPhaseDeferred: trackBackgroundSlowPhase"),
+  "the official loop delegates one slow phase to a tracked single-instance background lane",
+);
 assert.match(
   workerSource,
-  /const result = await runCycle[\s\S]*?cycleWake = await waitForNextCycle/,
-  "release retry stays in the worker's single awaited loop and cannot overlap another cycle",
+  /preCycleReleaseRequest\.pending === true && backgroundSlowPhasePromise[\s\S]*?waitForBackgroundSlowPhaseDrain\(drainTask[\s\S]*?release-priority-drain-blocked[\s\S]*?const result = await runCycle/,
+  "a release-priority cycle uses a bounded fail-closed drain before readiness work",
+);
+assert.match(
+  workerSource,
+  /releaseCycle\.priority === true && hooks\.slowPhaseRunning === true[\s\S]*?reason: "release-priority-awaits-background-slow-phase"/,
+  "a release request that races the pre-cycle check retries instead of claiming readiness over a running slow lane",
 );
 assert.ok(workerSource.includes("fatal: false, timeoutMs: commandTimeouts.sqlite"));
 assert.ok(workerSource.includes("cycleWake = await waitForNextCycle"));
@@ -1136,24 +1492,69 @@ try {
 }
 
 const verifyRelayWake = async () => {
+  const sharedArtifactEvents = [];
+  const sharedArtifactResult = await runWithSharedSlowArtifactLock({
+    enabled: true,
+    script: "sync:weather",
+    waitMs: 1234,
+    acquireLock: async (options) => {
+      sharedArtifactEvents.push(["acquire", options.waitMs, options.source]);
+      return {
+        acquired: true,
+        release: async () => sharedArtifactEvents.push(["release"]),
+      };
+    },
+    task: async () => {
+      sharedArtifactEvents.push(["task"]);
+      return { ok: true, script: "sync:weather" };
+    },
+  });
+  assert.equal(sharedArtifactResult.ok, true);
+  assert.equal(sharedArtifactResult.sharedArtifactSerialized, true);
+  assert.equal(sharedArtifactEvents[0][0], "acquire");
+  assert.ok(sharedArtifactEvents[0][1] > 0 && sharedArtifactEvents[0][1] <= 1234);
+  assert.equal(sharedArtifactEvents[0][2], "shared-artifact:sync:weather");
+  assert.deepEqual(sharedArtifactEvents.slice(1), [["task"], ["release"]]);
+  let busyTaskRuns = 0;
+  const busyArtifactResult = await runWithSharedSlowArtifactLock({
+    enabled: true,
+    script: "sync:prematch",
+    waitMs: 0,
+    acquireLock: async () => ({
+      acquired: false,
+      reason: "sync lock held",
+      info: { owner: "background-slow" },
+      ageMs: 42,
+    }),
+    task: async () => {
+      busyTaskRuns += 1;
+      return { ok: true };
+    },
+  });
+  assert.equal(busyTaskRuns, 0);
+  assert.equal(busyArtifactResult.ok, true);
+  assert.equal(busyArtifactResult.skipped, true);
+  assert.equal(busyArtifactResult.deferred, true);
+  assert.equal(busyArtifactResult.reason, "shared-artifact-writer-busy");
+
   assert.doesNotMatch(
     workerSource,
     /capture-paused-for-model-backtest|withCandidateDeadlineCapturePaused/,
     "model backtests must not suspend the independent candidate deadline heartbeat",
   );
 
-  assert.equal(candidateDeadlineCaptureTimeoutMs, 45_000);
+  assert.equal(candidateDeadlineCaptureTimeoutMs, 100_000);
   assert.equal(candidateDeadlineCaptureRetryMs, 5_000);
-  assert.equal(candidateDeadlineCaptureRecoveryBudgetMs, 45_000);
+  assert.equal(candidateDeadlineCaptureRecoveryBudgetMs, 55_000);
   assert.equal(candidateDeadlineCaptureSafetyMarginMs, 10_000);
-  assert.equal(candidateDeadlineHeartbeatFreshnessLimitMs, 120_000);
+  assert.equal(candidateDeadlineHeartbeatFreshnessLimitMs, 180_000);
   assert.equal(candidateDeadlineCaptureTerminateGraceMs, 500);
   assert.equal(candidateDeadlineCaptureForceSettleMs, 500);
   assert.ok(
     candidateDeadlineCaptureTerminateGraceMs
       + candidateDeadlineCaptureForceSettleMs
       < candidateDeadlineCaptureTimeoutMs,
-    "capture shutdown overhead is reserved inside the advertised 45s attempt budget",
+    "capture shutdown overhead is reserved inside the advertised 100s attempt budget",
   );
   assert.match(
     workerSource,
@@ -1168,8 +1569,18 @@ const verifyRelayWake = async () => {
   );
   assert.match(
     workerSource,
-    /await candidateDeadlineHeartbeat\.waitForPublished\(\);[\s\S]*const result = await runCycle/,
-    "loop startup must publish one exact heartbeat before admitting the first heavy cycle",
+    /const startupResultRecoveryPlan = describeFiveHundredResultFallbackNeed\(\);[\s\S]*let startupDeadlineAdmissionPending = candidateDeadlineHeartbeat !== null;[\s\S]*const result = await runCycle/,
+    "loop startup enters the official fast lane without awaiting candidate publication",
+  );
+  assert.match(
+    workerSource,
+    /candidateDeadlineHeartbeat = loop[\s\S]*startCandidateProspectiveDeadlineHeartbeat\(\)[\s\S]*candidateDeadlineHeartbeat\.waitForPublished\(\)\.then[\s\S]*startBenchmarkProspectiveDeadlineCapture\(\{ immediate: false \}\)/,
+    "the benchmark lane is scheduled only after the first exact formal heartbeat",
+  );
+  assert.match(
+    workerSource,
+    /onBeforeHeavyStep: async \(\) => \{[\s\S]*describeCandidateDeadlineStartupAdmission\([\s\S]*startupDeadlineAdmission\.waitForPublished[\s\S]*candidateDeadlineHeartbeat\.waitForPublished\(\)[\s\S]*candidateDeadlineHeartbeat\?\.waitForHealthy\(\)/,
+    "every heavy step revalidates the exact heartbeat after startup admission",
   );
   assert.ok(
     (workerSource.match(/await onBeforeHeavyStep\(/g) || []).length >= 8,
@@ -1199,16 +1610,25 @@ const verifyRelayWake = async () => {
     ok: true,
     startedAt: "2026-08-01T11:30:30.000Z",
   };
-  assert.equal(candidateDeadlineCaptureStatusAdvanced(commandResult, {
-    version: "prospective-deadline-heartbeat-v2",
-    evaluatedAt: "2026-08-01T11:30:30.001Z",
-  }), true);
-  assert.equal(candidateDeadlineCaptureStatusAdvanced(commandResult, {
-    version: "prospective-deadline-heartbeat-v2",
-    evaluatedAt: "2026-08-01T11:30:24.000Z",
-  }), false, "a lock-busy child cannot reuse the prior heartbeat as a successful refresh");
+  assert.equal(candidateDeadlineCaptureStatusAdvanced(
+    commandResult,
+    exactDeadlineHeartbeatFixture("2026-08-01T11:30:30.001Z"),
+  ), true);
+  assert.equal(candidateDeadlineCaptureStatusAdvanced(
+    commandResult,
+    exactDeadlineHeartbeatFixture("2026-08-01T11:30:24.000Z"),
+  ), false, "a lock-busy child cannot reuse the prior heartbeat as a successful refresh");
+  assert.equal(candidateDeadlineCaptureStatusAdvanced(
+    commandResult,
+    exactDeadlineHeartbeatFixture("2026-08-01T11:30:30.001Z", {
+      ok: false,
+      skipped: true,
+      blockers: ["registry-lock-busy"],
+    }),
+  ), false, "a newly timestamped lock-busy status cannot resolve first publication");
 
   let persistedFailureAttempt = null;
+  let observedCaptureArgs = null;
   const captureFailure = new Error("fixture capture timed out");
   captureFailure.code = "SYNC_WORKER_COMMAND_TIMEOUT";
   captureFailure.exitCode = 1;
@@ -1216,7 +1636,10 @@ const verifyRelayWake = async () => {
   const failedCapture = await runCandidateProspectiveDeadlineCapture({
     timeoutMs: 5_000,
     attemptKind: "telemetry-self-test",
-    run: async () => { throw captureFailure; },
+    run: async (_command, args) => {
+      observedCaptureArgs = args;
+      throw captureFailure;
+    },
     readStatus: () => ({
       version: "prospective-deadline-heartbeat-v2",
       evaluatedAt: "9999-01-01T00:00:00.000Z",
@@ -1227,7 +1650,7 @@ const verifyRelayWake = async () => {
   });
   assert.equal(failedCapture.ok, false);
   assert.equal(failedCapture.errorCode, "SYNC_WORKER_COMMAND_TIMEOUT");
-  assert.equal(failedCapture.statusAdvanced, true);
+  assert.equal(failedCapture.statusAdvanced, false);
   assert.equal(
     failedCapture.publishedStatusReason,
     "deadline-evidence-query-incomplete",
@@ -1235,6 +1658,105 @@ const verifyRelayWake = async () => {
   assert.equal(persistedFailureAttempt.exitCode, 1);
   assert.equal(persistedFailureAttempt.signal, "SIGKILL");
   assert.equal(persistedFailureAttempt.publishedStatusOk, false);
+  assert.deepEqual(
+    observedCaptureArgs,
+    [path.join(__dirname, "captureCandidateProspectiveDeadline.cjs"), "--deadline-only"],
+    "the worker heartbeat must not wait for the benchmark lane",
+  );
+
+  let observedBenchmarkArgs = null;
+  let persistedBenchmarkAttempt = null;
+  const benchmarkStartedAt = "2026-08-01T11:31:00.000Z";
+  const benchmarkEvaluatedAt = "2026-08-01T11:31:00.001Z";
+  const benchmarkCapture = await runBenchmarkProspectiveDeadlineCapture({
+    run: async (_command, args) => {
+      observedBenchmarkArgs = args;
+      return { ok: true, startedAt: benchmarkStartedAt, finishedAt: benchmarkEvaluatedAt };
+    },
+    readStatus: () => ({
+      version: "goodwin-benchmark-deadline-capture-v1",
+      captureMode: "benchmark-only",
+      evaluatedAt: benchmarkEvaluatedAt,
+      ok: true,
+      skipped: false,
+      blockers: [],
+      dueMatches: 1,
+      eventsAdded: 1,
+    }),
+    writeAttempt: (attempt) => { persistedBenchmarkAttempt = attempt; },
+  });
+  assert.equal(benchmarkCapture.ok, true);
+  assert.equal(benchmarkCapture.dueMatches, 1);
+  assert.deepEqual(
+    observedBenchmarkArgs,
+    [path.join(__dirname, "captureCandidateProspectiveDeadline.cjs"), "--benchmark-only"],
+  );
+  assert.equal(persistedBenchmarkAttempt.ok, true);
+  assert.equal(benchmarkDeadlineCaptureStatusAdvanced(
+    { ok: true, startedAt: benchmarkStartedAt },
+    {
+      version: "goodwin-benchmark-deadline-capture-v1",
+      captureMode: "benchmark-only",
+      evaluatedAt: benchmarkEvaluatedAt,
+      ok: true,
+      skipped: false,
+      blockers: [],
+    },
+  ), true);
+  assert.equal(benchmarkDeadlineCaptureStatusAdvanced(
+    { ok: true, startedAt: benchmarkStartedAt },
+    {
+      version: "goodwin-benchmark-deadline-capture-v1",
+      captureMode: "benchmark-only",
+      evaluatedAt: benchmarkEvaluatedAt,
+      ok: false,
+      skipped: true,
+      blockers: ["ledger-lock-busy"],
+    },
+  ), false);
+  assert.equal(benchmarkDeadlineCaptureEnabled, true);
+  assert.ok(benchmarkDeadlineCaptureIntervalMs <= 5 * 60_000);
+  assert.ok(benchmarkDeadlineCaptureTimeoutMs < benchmarkDeadlineCaptureIntervalMs);
+
+  const benchmarkCutoffMs = Date.parse("2026-08-01T12:00:00.000Z");
+  const benchmarkKickoffMs = benchmarkCutoffMs + 10 * 60_000;
+  let benchmarkClockMs = benchmarkCutoffMs - 60_000;
+  let benchmarkScheduledDelayMs = null;
+  const benchmarkWindowScheduler = startBenchmarkProspectiveDeadlineCapture({
+    immediate: false,
+    now: () => benchmarkClockMs,
+    timer: (_callback, milliseconds) => {
+      benchmarkScheduledDelayMs = milliseconds;
+      return { unref: () => {} };
+    },
+    clearTimer: () => {},
+  });
+  assert.equal(benchmarkScheduledDelayMs, benchmarkDeadlineCaptureIntervalMs);
+  const firstPostCutoffCaptureMs = benchmarkClockMs + benchmarkScheduledDelayMs;
+  assert.ok(firstPostCutoffCaptureMs >= benchmarkCutoffMs);
+  assert.ok(
+    firstPostCutoffCaptureMs < benchmarkKickoffMs,
+    "a <=5-minute resident cadence must observe the kickoff-minus-10-minute benchmark window",
+  );
+  benchmarkWindowScheduler.stop();
+
+  let resolveBenchmarkAttempt = null;
+  let benchmarkSingleFlightCalls = 0;
+  const benchmarkSingleFlight = startBenchmarkProspectiveDeadlineCapture({
+    immediate: true,
+    run: () => {
+      benchmarkSingleFlightCalls += 1;
+      return new Promise((resolve) => { resolveBenchmarkAttempt = resolve; });
+    },
+    timer: () => ({ unref: () => {} }),
+    clearTimer: () => {},
+  });
+  await Promise.resolve();
+  const activeBenchmarkAttempt = benchmarkSingleFlight.tick();
+  assert.equal(benchmarkSingleFlightCalls, 1, "benchmark cadence must remain single-flight");
+  resolveBenchmarkAttempt({ ok: false, skipped: false, reason: "fixture-nonfatal" });
+  assert.equal((await activeBenchmarkAttempt).ok, false);
+  benchmarkSingleFlight.stop();
 
   const heartbeatEpochMs = Date.parse("2026-08-01T11:30:00.000Z");
   const preemptivePlan = candidateDeadlinePreemptiveSchedule(
@@ -1242,17 +1764,23 @@ const verifyRelayWake = async () => {
     heartbeatEpochMs,
   );
   assert.equal(preemptivePlan.version, "candidate-heartbeat-preemptive-schedule-v1");
-  assert.equal(preemptivePlan.refreshAgeMs, 15_000);
-  assert.equal(preemptivePlan.requiredReserveMs, 105_000);
-  assert.equal(preemptivePlan.projectedWorstCaseCompletionAgeMs, 110_000);
+  assert.equal(preemptivePlan.refreshAgeMs, 10_000);
+  assert.equal(preemptivePlan.requiredReserveMs, 170_000);
+  assert.equal(preemptivePlan.projectedWorstCaseCompletionAgeMs, 170_000);
   assert.equal(preemptivePlan.budgetFits, true);
+  assert.ok(
+    remotePublicReadinessSource.includes(
+      "Number(candidateCaptureHeartbeat?.intervalSeconds || 0) >= 1",
+    ),
+    "public readiness accepts the derived ten-second preemptive heartbeat interval",
+  );
   assert.equal(
-    preemptivePlan.refreshAgeMs + 45_000 + 5_000 + 43_000,
-    108_000,
-    "a full 45s failure, 5s retry and observed 43s recovery completes before 120s",
+    preemptivePlan.refreshAgeMs + 100_000 + 5_000 + 55_000,
+    170_000,
+    "a full 100s failure, 5s retry and bounded 55s recovery completes before 180s",
   );
   assert.ok(
-    preemptivePlan.refreshAgeMs + 45_000 + 5_000 + 43_000
+    preemptivePlan.refreshAgeMs + 100_000 + 5_000 + 55_000
       < candidateDeadlineHeartbeatFreshnessLimitMs,
   );
   const explicitlyImpossibleBudget = candidateHeartbeatPreemptiveSchedule({
@@ -1276,13 +1804,13 @@ const verifyRelayWake = async () => {
     recoveryAttempt: false,
   });
   assert.equal(latePrimaryBudget.heartbeatAgeMs, 43_000);
-  assert.equal(latePrimaryBudget.timeoutMs, 17_000);
-  assert.equal(latePrimaryBudget.projectedCompletionAgeMs, 110_000);
+  assert.equal(latePrimaryBudget.timeoutMs, 67_000);
+  assert.equal(latePrimaryBudget.projectedCompletionAgeMs, 170_000);
   assert.equal(latePrimaryBudget.budgetFits, true);
   assert.equal(
-    43_000 + latePrimaryBudget.timeoutMs + 5_000 + 43_000,
-    108_000,
-    "a prior 43s capture dynamically shortens the next primary attempt before retry",
+    43_000 + latePrimaryBudget.timeoutMs + 5_000 + 55_000,
+    170_000,
+    "a prior capture dynamically shortens the next primary attempt before retry",
   );
   const failedPrimaryAttempt = {
     finishedAt: new Date(heartbeatEpochMs + 61_000).toISOString(),
@@ -1352,13 +1880,13 @@ const verifyRelayWake = async () => {
   let resolveFirstAttempt = null;
   let firstRunOptions = null;
   let recoveryRunOptions = null;
+  let publishedHeartbeatStatus = exactDeadlineHeartbeatFixture(
+    new Date(heartbeatEpochMs).toISOString(),
+  );
   const heartbeat = startCandidateProspectiveDeadlineHeartbeat({
     immediate: false,
     now: () => clockMs,
-    readStatus: () => ({
-      version: "prospective-deadline-heartbeat-v2",
-      evaluatedAt: new Date(heartbeatEpochMs).toISOString(),
-    }),
+    readStatus: () => publishedHeartbeatStatus,
     run: async (options) => {
       heartbeatTicks += 1;
       if (heartbeatTicks === 1) {
@@ -1367,7 +1895,10 @@ const verifyRelayWake = async () => {
       }
       recoveryRunOptions = options;
       const recoveryStartedAt = clockMs;
-      clockMs += 43_000;
+      clockMs += 55_000;
+      publishedHeartbeatStatus = exactDeadlineHeartbeatFixture(
+        new Date(recoveryStartedAt).toISOString(),
+      );
       return {
         ok: true,
         skipped: false,
@@ -1392,7 +1923,7 @@ const verifyRelayWake = async () => {
     },
   });
   assert.ok(heartbeat);
-  assert.equal(normalDelayMs, 15_000);
+  assert.equal(normalDelayMs, 10_000);
   assert.equal(normalTimerCalls, 1);
   assert.equal(
     normalTimerUnrefCalls,
@@ -1409,16 +1940,24 @@ const verifyRelayWake = async () => {
   );
   assert.equal(heartbeatTicks, 1);
   assert.equal(firstRunOptions.attemptKind, "preemptive-primary");
-  assert.equal(firstRunOptions.timeoutMs, 45_000);
+  assert.equal(firstRunOptions.timeoutMs, 100_000);
   assert.equal(normalTimerCalls, 1, "no setInterval tick is armed while capture is in flight");
   assert.equal(retryTimerCalls, 0, "retry is scheduled only after the attempt fails");
-  clockMs += 45_000;
+  clockMs += 100_000;
   resolveFirstAttempt({
     ok: false,
     skipped: false,
     reason: "candidate-deadline-capture-status-not-advanced",
   });
   await firstPending;
+  let firstPublicationResolved = false;
+  heartbeat.waitForPublished().then(() => { firstPublicationResolved = true; });
+  await Promise.resolve();
+  assert.equal(
+    firstPublicationResolved,
+    false,
+    "a failed or lock-busy first attempt cannot resolve firstPublication",
+  );
   assert.equal(retryDelayMs, 5_000);
   assert.equal(typeof retryCallback, "function");
   assert.equal(
@@ -1433,22 +1972,27 @@ const verifyRelayWake = async () => {
   assert.equal(firstPublished.ok, true);
   assert.equal(
     firstPublished.statusEvaluatedAt,
-    new Date(heartbeatEpochMs + 65_000).toISOString(),
+    new Date(heartbeatEpochMs + 115_000).toISOString(),
     "startup admission observes the exact heartbeat published by recovery",
   );
   assert.equal(heartbeatTicks, 2);
   assert.equal(recoveryRunOptions.attemptKind, "preemptive-recovery");
-  assert.equal(recoveryRunOptions.timeoutMs, 45_000);
+  assert.equal(recoveryRunOptions.timeoutMs, 55_000);
   assert.equal(retryTimerCalls, 1, "a successful retry does not schedule another retry");
   assert.equal(normalTimerUnrefCalls, 1, "steady-state cadence timers are unref'ed after startup admission");
   assert.equal(
     clockMs - heartbeatEpochMs,
-    108_000,
+    170_000,
     "the deterministic full-failure recovery path publishes before freshness expires",
   );
   assert.ok(clockMs - heartbeatEpochMs < candidateDeadlineHeartbeatFreshnessLimitMs);
   assert.equal(normalDelayMs, 0, "a missed preventive slot is caught up immediately after recovery");
   assert.equal(heartbeat.schedule.due, true);
+  assert.equal(
+    (await heartbeat.waitForHealthy()).evaluatedAt,
+    firstPublished.statusEvaluatedAt,
+    "every heavy-step barrier revalidates the exact published status",
+  );
   const timerCallsBeforePause = normalTimerCalls;
   heartbeat.pause();
   assert.equal(heartbeat.paused, true);
@@ -1512,10 +2056,154 @@ const verifyRelayWake = async () => {
   assert.equal(baseCadenceWait.reason, "interval-elapsed");
   assert.equal(baseCadenceWait.waitedMs, 5_000);
 
+  let statusWriteLogs = 0;
+  const failedStatusWrite = writeWorkerStatusBestEffort(
+    { phase: "fault-injection" },
+    {
+      write: () => {
+        const error = new Error("simulated-status-disk-failure");
+        error.code = "ENOSPC";
+        throw error;
+      },
+      log: () => { statusWriteLogs += 1; },
+    },
+  );
+  assert.equal(failedStatusWrite.ok, false);
+  assert.equal(failedStatusWrite.error.code, "ENOSPC");
+  assert.equal(statusWriteLogs, 1);
+
+  let unhandledRejections = 0;
+  const observeUnhandled = () => { unhandledRejections += 1; };
+  process.on("unhandledRejection", observeUnhandled);
+  let trackerCurrentChanges = 0;
+  const statusFailingTracker = createBackgroundSlowPhaseTracker({
+    readStatus: () => ({ cycleState: "sleeping" }),
+    writeStatus: () => { throw new Error("simulated-background-status-write-failure"); },
+    log: () => {},
+    onCurrentChange: () => { trackerCurrentChanges += 1; },
+  });
+  const terminalTrackedTask = statusFailingTracker.track(
+    Promise.reject(new Error("simulated-background-task-rejection")),
+    { startedAt: "2026-07-13T12:00:00.000Z" },
+  );
+  assert.strictEqual(statusFailingTracker.current, terminalTrackedTask);
+  assert.equal(await terminalTrackedTask, null);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(unhandledRejections, 0);
+  assert.equal(statusFailingTracker.current, null);
+  assert.equal(trackerCurrentChanges, 2);
+
+  let rejectDrainTask = null;
+  const neverSettledUntilRejected = new Promise((resolve, reject) => {
+    rejectDrainTask = reject;
+  });
+  let drainTimerBudget = null;
+  const drainTimeout = await waitForBackgroundSlowPhaseDrain(
+    neverSettledUntilRejected,
+    {
+      budgetMs: 25,
+      timer: (callback, milliseconds) => {
+        drainTimerBudget = milliseconds;
+        queueMicrotask(callback);
+        return { id: "release-drain-timeout" };
+      },
+      clearTimer: () => {},
+    },
+  );
+  assert.equal(drainTimeout.ok, false);
+  assert.equal(drainTimeout.blocked, true);
+  assert.equal(drainTimeout.code, "SYNC_WORKER_RELEASE_DRAIN_TIMEOUT");
+  assert.equal(drainTimerBudget, 25);
+  rejectDrainTask(new Error("late-background-rejection-after-release-timeout"));
+  await new Promise((resolve) => setImmediate(resolve));
+  process.removeListener("unhandledRejection", observeUnhandled);
+  assert.equal(unhandledRejections, 0);
+
+  assert.equal(
+    officialCompensationRequired({
+      slowPhaseRunning: true,
+      cycle: {
+        skipped: true,
+        reason: "sync lock held",
+        lock: { source: "sync-worker-consolidated-slow-publication" },
+      },
+    }),
+    true,
+  );
+  assert.equal(
+    officialCompensationRequired({
+      slowPhaseRunning: true,
+      cycle: {
+        skipped: true,
+        reason: "sync lock held",
+        lock: { source: "manual-unrelated-writer" },
+      },
+    }),
+    false,
+  );
+  clock = 0;
+  const compensationWake = await waitForNextCycle(300_000, {
+    baseline,
+    enabled: false,
+    now: () => clock,
+    sleep: async (ms) => { clock += ms; },
+    wakePromise: Promise.resolve({
+      reason: "background-slow-phase-settled-official-compensation",
+    }),
+  });
+  assert.equal(
+    compensationWake.reason,
+    "background-slow-phase-settled-official-compensation",
+  );
+  assert.ok(compensationWake.waitedMs <= 2_000);
+
+  const shutdownSignals = [];
+  let forceShutdown = null;
+  const fakeShutdownChild = { pid: 4242, exitCode: null, signalCode: null };
+  const shutdownController = createWorkerShutdownController({
+    terminate: (child, signal) => {
+      shutdownSignals.push([child.pid, signal]);
+      return true;
+    },
+    timer: (callback) => {
+      forceShutdown = callback;
+      return { unref: () => {} };
+    },
+    clearTimer: () => {},
+    now: () => "2026-07-13T12:00:00.000Z",
+    terminateGraceMs: 25,
+  });
+  shutdownController.register(fakeShutdownChild);
+  const shutdownWake = shutdownController.wakePromise;
+  const shutdownRequest = shutdownController.requestShutdown("SIGINT");
+  assert.equal(shutdownRequest.signal, "SIGINT");
+  assert.deepEqual(shutdownSignals, [[4242, "SIGTERM"]]);
+  assert.equal((await shutdownWake).reason, "worker-shutdown-requested");
+  forceShutdown();
+  assert.deepEqual(shutdownSignals, [[4242, "SIGTERM"], [4242, "SIGKILL"]]);
+  shutdownController.unregister(fakeShutdownChild);
+  shutdownController.dispose();
+
+  let lockAttempts = 0;
+  await assert.rejects(
+    acquireSyncLockInterruptibly({
+      waitMs: 30_000,
+      isInterrupted: () => lockAttempts > 0,
+      acquireLock: async () => {
+        lockAttempts += 1;
+        return { acquired: false, reason: "sync lock held" };
+      },
+    }),
+    (error) => error?.code === "SYNC_WORKER_INTERRUPTED",
+  );
+  assert.equal(lockAttempts, 1);
+
   return {
     wake,
     interval,
     baseCadenceWait,
+    compensationWake,
+    drainTimeout,
     heartbeatTicks,
     preemptivePlan,
     deterministicRecoveryAgeMs: clockMs - heartbeatEpochMs,
@@ -1526,6 +2214,8 @@ verifyRelayWake().then(({
   wake,
   interval,
   baseCadenceWait,
+  compensationWake,
+  drainTimeout,
   heartbeatTicks,
   preemptivePlan,
   deterministicRecoveryAgeMs,
@@ -1554,6 +2244,9 @@ verifyRelayWake().then(({
     relayWakeLatencyMs: wake.waitedMs,
     unchangedRelayWaitMs: interval.waitedMs,
     baseCadenceWaitMs: baseCadenceWait.waitedMs,
+    officialCompensationWakeReason: compensationWake.reason,
+    releaseDrainTimeoutCode: drainTimeout.code,
+    releaseDrainBudgetSeconds: releaseSlowPhaseDrainBudgetMs / 1000,
     candidateDeadlineConfiguredIntervalSeconds:
       candidateDeadlineCaptureIntervalMs / 1000,
     candidateDeadlinePreemptiveRefreshSeconds:

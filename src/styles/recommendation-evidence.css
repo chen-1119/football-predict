@@ -1,0 +1,96 @@
+.recommendation-evidence-facts {
+  min-width: 0;
+  padding: 0.34rem;
+  border: 1px solid hsl(var(--border) / 0.72);
+  border-radius: 0.48rem;
+  background: hsl(var(--bg) / 0.24);
+}
+
+.recommendation-evidence-facts__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.28rem;
+  margin: 0;
+}
+
+.recommendation-evidence-facts__grid > div {
+  min-width: 0;
+  padding: 0.3rem 0.36rem;
+  border-radius: 0.38rem;
+  background: hsl(var(--bg-card) / 0.52);
+}
+
+.recommendation-evidence-facts__grid dt,
+.recommendation-evidence-facts__sample span {
+  color: hsl(var(--text-muted));
+  font-size: 0.58rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.recommendation-evidence-facts__grid dd {
+  margin: 0.16rem 0 0;
+  color: hsl(var(--text-primary));
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.recommendation-evidence-facts__grid dd small {
+  display: block;
+  margin-top: 0.16rem;
+  color: hsl(var(--text-muted));
+  font-size: 0.52rem;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.recommendation-evidence-facts__grid .is-market-aligned dd {
+  color: hsl(var(--success));
+}
+
+.recommendation-evidence-facts__grid .is-market-conflicted dd {
+  color: hsl(var(--danger));
+}
+
+.recommendation-evidence-facts__grid .is-unavailable dd,
+.recommendation-evidence-facts__grid .is-market-unavailable dd {
+  color: hsl(var(--text-muted));
+}
+
+.recommendation-evidence-facts__sample {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.3rem;
+  margin: 0.28rem 0 0;
+  color: hsl(var(--text-muted));
+  font-size: 0.6rem;
+  line-height: 1.2;
+}
+
+.recommendation-evidence-facts__sample strong {
+  color: hsl(var(--text-secondary));
+  font-size: 0.62rem;
+}
+
+@media (max-width: 720px) {
+  .recommendation-evidence-facts__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .recommendation-evidence-facts__sample {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .predictions-v4 .decision-card > .recommendation-evidence-facts {
+    grid-column: 1 / -1;
+  }
+}
+
+.recommendation-overview-card .recommendation-evidence-facts.is-detail {
+  margin-top: 0.55rem;
+}

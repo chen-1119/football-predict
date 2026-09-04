@@ -135,6 +135,8 @@ const syncData = readText("scripts/syncData.cjs");
 const archivedPreMatchPrediction = readText("src/services/archivedPreMatchPrediction.ts");
 const verifyArchivedPreMatchCutoff = readText("scripts/verifyArchivedPreMatchCutoff.cjs");
 const syncWorker = readText("scripts/runSyncWorker.cjs");
+const syncKLeagueOfficialStandings = readText("scripts/syncKLeagueOfficialStandings.cjs");
+const verifyKLeagueOfficialStandings = readText("scripts/verifyKLeagueOfficialStandings.cjs");
 const syncUefaOfficialResults = readText("scripts/syncUefaOfficialResults.cjs");
 const verifyUefaOfficialResults = readText("scripts/verifyUefaOfficialResults.cjs");
 const syncOfficialClubResults = readText("scripts/syncOfficialClubResults.cjs");
@@ -320,7 +322,12 @@ const requiredScripts = [
   "model:backtest",
   "optimize:strategy",
   "sync:free-football",
+  "sync:api-football",
+  "sync:weather",
+  "verify:api-football-hardening",
   "verify:free-football-signals",
+  "verify:weather-venue-discovery",
+  "verify:football-data-discipline",
   "audit:recommendation-bias",
   "verify:recommendation-bias",
   "verify:prediction-audit",
@@ -357,7 +364,9 @@ const requiredScripts = [
   "verify:sync-data-memory",
   "verify:release-enrichment-reuse",
   "verify:review-settlement",
+  "verify:review-performance",
   "verify:fast-result-publication",
+  "verify:fast-results-generation",
   "verify:uefa-official-results",
   "verify:official-club-results",
   "verify:relay-fast-watcher",
@@ -388,6 +397,7 @@ const requiredScripts = [
   "verify:predictions-page-focus",
   "verify:cloudflare-worker-policy",
   "verify:cloudflare-sporttery-collector",
+  "verify:huawei-functiongraph-collector",
   "verify:cloud-sync-freshness",
   "verify:server-primary",
   "verify:current-lane-freshness",
@@ -423,6 +433,7 @@ const requiredScripts = [
   "verify:match-lifecycle",
   "verify:match-detail-lifecycle",
   "verify:prediction-metric-semantics",
+  "verify:recommendation-confidence-payload",
   "verify:sporttery-egress",
   "verify:sporttery-relay-proxy",
   "verify:source-fallback",
@@ -931,6 +942,7 @@ const readPlanSqliteStatus = async () => {
     "HOT_SYNC_INTERVAL_SECONDS",
     "POST_DEADLINE_HOT_SYNC_INTERVAL_SECONDS",
     "HOT_SYNC_WINDOW_MINUTES",
+    "SYNC_WORKER_SLOW_PHASE_MIN_INTERVAL_MINUTES",
     "acquireSyncLock",
     "sqliteExportEnabled",
     "datastore:sqlite",
@@ -957,11 +969,11 @@ const readPlanSqliteStatus = async () => {
     "conflicting score cannot overwrite terminal history",
     "new signed result probe reaches SQLite publication inside ten seconds"
   ]) && hasAll(workerService, [
+    "EnvironmentFile=/etc/football-predict/env",
     "SYNC_WORKER_LOOP=1",
     "runSyncWorker.cjs --loop",
-    "DATASTORE_READ_SOURCE=sqlite",
     "ENABLE_SQLITE_EXPORT=1"
-    ]) && hasAll(syncWorker, [
+    ]) && !workerService.includes("Environment=DATASTORE_READ_SOURCE=") && hasAll(syncWorker, [
       'process.env.SYNC_WORKER_LOOP === "1"',
       'process.argv.includes("--loop")'
     ]), { files: [
@@ -1273,6 +1285,58 @@ const readPlanSqliteStatus = async () => {
     ]
   });
 
+  pushCheck(
+    "02-data-warehouse-sync",
+    "official K League standings and results refresh before rebuild with timezone and cutoff safeguards",
+    scripts["sync:k-league-standings"] === "node scripts/syncKLeagueOfficialStandings.cjs"
+      && hasAll(syncWorker, [
+        'process.env.ENABLE_K_LEAGUE_OFFICIAL_STANDINGS_SYNC !== "0"',
+        '"sync:k-league-standings"',
+        "const officialSyncStep = await runCommand",
+      ])
+      && syncWorker.indexOf('"sync:k-league-standings"') < syncWorker.indexOf("const officialSyncStep = await runCommand")
+      && hasAll(syncKLeagueOfficialStandings, [
+        "https://www.kleague.com/record/teamRank.do",
+        "https://www.kleague.com/getScheduleList.do",
+        "officialTimeZone: \"Asia/Seoul\"",
+        "MIN_FINAL_ELAPSED_MINUTES",
+        "validKLeagueFixtureEvidenceForMatch",
+        "applyKLeagueOfficialResult",
+        "stampSignalEvent",
+        "externalSignalMatchesEvent(next, match)",
+        "writeJsonAtomic",
+      ])
+      && hasAll(syncData, [
+        "officialKLeagueStandingSignalForMatch",
+        "officialKLeagueTeamStrength",
+        "output = output.map(applyKLeagueOfficialResult)",
+        "officialLeague",
+      ])
+      && hasAll(verifyKLeagueOfficialStandings, [
+        "post-cutoff standings must fail closed",
+        "19:30 Korea time must equal 18:30 Beijing time",
+        "an early FE placeholder must not settle a match",
+        "a score change without a matching evidence hash must fail closed",
+        "K League official standings and result verification passed",
+      ])
+      && hasAll(scripts["verify:production"] || "", [
+        "scripts/verifyKLeagueOfficialStandings.cjs",
+      ])
+      && hasAll(envExample, [
+        "ENABLE_K_LEAGUE_OFFICIAL_STANDINGS_SYNC=1",
+      ]),
+    {
+      files: [
+        "scripts/syncKLeagueOfficialStandings.cjs",
+        "scripts/verifyKLeagueOfficialStandings.cjs",
+        "scripts/syncData.cjs",
+        "scripts/runSyncWorker.cjs",
+        "deploy/light-server/env.example",
+        "package.json",
+      ],
+    },
+  );
+
   pushCheck("02-data-warehouse-sync", "runtime monitor detects strict official-result settlement misses", hasAll(runtimeMonitor, [
     "candidateProspectiveTemporalRuntimeState",
     "candidate settlement temporal audit",
@@ -1285,6 +1349,7 @@ const readPlanSqliteStatus = async () => {
     "RUNTIME_MONITOR_AUTH_FILE"
   ]) && hasAll(verifyRuntimeCandidateCapture, [
     "officialFinishedEligibleUnsettledRows: 0",
+    "officialVoidRows: 0",
     "candidate-official-result-settlement-missed",
     "candidate-settlement-read-model-row-missing",
     "officialFinishedIneligibleRows, 3",
@@ -1293,7 +1358,8 @@ const readPlanSqliteStatus = async () => {
   ]) && hasAll(candidateProspectiveTemporalAudit, [
     "resultEvidenceBlockersForDecision",
     "officialFinishedIneligibleReasonCounts",
-    "officialFinishedIneligiblePrimaryReasonCounts"
+    "officialFinishedIneligiblePrimaryReasonCounts",
+    "officialVoidRows"
   ]) && hasAll(verifyCandidateProspectiveTemporalAudit, [
     "not-official-sporttery-final",
     "officialFinishedIneligiblePrimaryReasonCounts"
@@ -1313,7 +1379,9 @@ const readPlanSqliteStatus = async () => {
 
   pushCheck("02-data-warehouse-sync", "candidate temporal admin diagnostics stay bounded across both production gates", hasAll(serverIndex, [
     "includeDiagnostics: true",
-    "diagnosticLimit: 100"
+    "diagnosticLimit: 100",
+    "matches-unresolved-archive.json",
+    "...unresolvedRows"
   ]) && hasAll(candidateProspectiveTemporalAudit, [
     "diagnosticRows",
     "diagnosticRowsTruncated",
@@ -1688,7 +1756,7 @@ const readPlanSqliteStatus = async () => {
   ]) && hasAll(runSportteryFastResultLanePs, [
     "sporttery-fast-result.log",
     "SPORTTERY_FAST_RESULT_INTERVAL_SECONDS",
-    "https://170.106.75.73",
+    "https://134.175.132.183",
     "--watch"
   ]) && hasAll(runSportteryFastResultLaneHidden, [
     "runSportteryFastResultLane.ps1",
@@ -2102,7 +2170,7 @@ const readPlanSqliteStatus = async () => {
     "unknownSpAction: \"watch\"",
     "directionSwitchByLowerSp: false"
   ]) && hasAll(verifyRecommendationEligibility, [
-    "model-only BEST rows are non-actionable labeled references",
+    "model-only BEST rows keep a visible cold-start reference while formal eligibility fails closed",
     "recommendation denominator has no unknown SP",
     "rolling windows are chronological and non-overlapping",
     "insufficient samples remain shadow"
@@ -2475,6 +2543,7 @@ const readPlanSqliteStatus = async () => {
     "signManifestBytes",
     "\".git\"",
     "\"node_modules\"",
+    "\"outputs\"",
     "\"dist\"",
     "\"server-data\"",
     "\"logs\"",
@@ -2486,7 +2555,15 @@ const readPlanSqliteStatus = async () => {
     "scripts/verifyWalkForwardValidation.cjs",
     "src/services/marketMovement.cjs",
     "scripts/verifyMarketMovement.cjs",
+    "src/services/recommendationConfidence.cjs",
+    "src/services/recommendationConfidence.d.cts",
+    "src/services/recommendationConfidence.ts",
+    "src/services/multiFactorRecommendation.cjs",
     "src/services/predictionPresentation.ts",
+    "src/components/predictions/RecommendationEvidenceFacts.tsx",
+    "src/styles/recommendation-evidence.css",
+    "scripts/verifyRecommendationConfidencePayload.cjs",
+    "scripts/verifyProbabilityDisplaySemantics.cjs",
     "scripts/verifyFrontendEvidenceSemantics.cjs",
     "scripts/candidateProspectiveTemperatureNeutralizationSuite.cjs",
     "scripts/verifyCandidateProspectiveTemperatureNeutralizationSuite.cjs",
@@ -2504,7 +2581,15 @@ const readPlanSqliteStatus = async () => {
     "scripts/verifyWalkForwardValidation.cjs",
     "src/services/marketMovement.cjs",
     "scripts/verifyMarketMovement.cjs",
+    "src/services/recommendationConfidence.cjs",
+    "src/services/recommendationConfidence.d.cts",
+    "src/services/recommendationConfidence.ts",
+    "src/services/multiFactorRecommendation.cjs",
     "src/services/predictionPresentation.ts",
+    "src/components/predictions/RecommendationEvidenceFacts.tsx",
+    "src/styles/recommendation-evidence.css",
+    "scripts/verifyRecommendationConfidencePayload.cjs",
+    "scripts/verifyProbabilityDisplaySemantics.cjs",
     "scripts/verifyFrontendEvidenceSemantics.cjs",
     "scripts/candidateProspectiveTemperatureNeutralizationSuite.cjs",
     "scripts/verifyCandidateProspectiveTemperatureNeutralizationSuite.cjs",
@@ -2554,6 +2639,7 @@ const readPlanSqliteStatus = async () => {
     "frozen sync worker child processes did not drain before keeper handoff",
     "release heartbeat keeper failed its first exact evaluatedAt gate",
     "release_candidate_heartbeat_keeper_is_healthy",
+    "wait_for_release_candidate_heartbeat_keeper_healthy",
     "release_candidate_heartbeat_keeper_has_latched_failure",
     "stop_release_candidate_heartbeat_keeper",
     "stop_release_candidate_heartbeat_keeper clean",
@@ -2561,9 +2647,16 @@ const readPlanSqliteStatus = async () => {
     "pre-swap-legacy-top-level-due",
     "allowPreSwapLegacyTopLevelDueOmission",
     "KillMode=mixed",
-    "TimeoutStopSec=100s",
-    "RELEASE_CANDIDATE_HEARTBEAT_KEEPER_ATTEMPT_TIMEOUT_MS:-90000",
+    "TimeoutStopSec=130s",
+    "MemoryHigh=1600M",
+    "MemoryMax=2200M",
+    "RELEASE_CANDIDATE_HEARTBEAT_KEEPER_ATTEMPT_TIMEOUT_MS:-100000",
     "RELEASE_CANDIDATE_HEARTBEAT_KEEPER_START_TIMEOUT_SECONDS:-120",
+    "RELEASE_HEARTBEAT_KEEPER_FRESHNESS_MAX_SECONDS=120",
+    "CANDIDATE_CAPTURE_REFRESH_ATTEMPT_TIMEOUT_MS=90000",
+    "CANDIDATE_CAPTURE_REFRESH_KILL_AFTER_MS=5000",
+    "CANDIDATE_CAPTURE_REFRESH_TIMEOUT_EXIT_CODE=124",
+    "--capture-once",
     "--uid=football",
     "rollback fail-stop: release heartbeat keeper could not be reaped",
     "fail-stop: release heartbeat keeper could not be reaped from EXIT trap"
@@ -2581,9 +2674,11 @@ const readPlanSqliteStatus = async () => {
     "activeAttempt",
     "atomicDecisionRecordInvariantsMatch",
     "allowPreSwapLegacyTopLevelDueOmission",
+    "CAPTURE_ONCE_TOTAL_BUDGET_MS = 100_000",
+    "capture-timeout",
     "intervalSeconds: integerInRange(raw?.intervalSeconds ?? 20, 5, 30",
-    "raw?.attemptTimeoutMs ?? 90_000",
-    "90_000,\n      \"attemptTimeoutMs\""
+    "raw?.attemptTimeoutMs ?? 100_000",
+    "110_000,\n      \"attemptTimeoutMs\""
   ]) && hasAll(createReleaseBundle, [
     "scripts/runReleaseCandidateHeartbeatKeeper.cjs"
   ]) && hasAll(verifyReleaseBundleSafety, [
@@ -2604,14 +2699,14 @@ const readPlanSqliteStatus = async () => {
     "live SQLite prebuild refuses to overlap an active sync worker",
     "start_release_sync_write_barrier",
     "canonical live sync write barrier did not drain cleanly after service stop",
-    "RELEASE_LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS:-480",
+    "RELEASE_LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS:-540",
     "LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS\" -ge 60",
     "LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS\" -le 540",
     "IOSchedulingPriority=4",
     "IOWeight=50",
-    "MemoryHigh=768M",
-    "MemoryMax=1024M",
-    "MemorySwapMax=256M",
+    "MemoryHigh=1536M",
+    "MemoryMax=2560M",
+    "MemorySwapMax=512M",
     "OOMPolicy=stop",
     "assert_live_sqlite_prebuild_capacity",
     "live SQLite prebuild capacity gate rejected the release host",
@@ -2652,14 +2747,14 @@ const readPlanSqliteStatus = async () => {
     "release-live-sqlite-prebuild-policy-v2",
     "RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB",
     "RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_MEMORY_CURRENT_MIB",
-    "DEFAULT_MIN_MEM_AVAILABLE_MIB = 1152",
+    "DEFAULT_MIN_MEM_AVAILABLE_MIB = 3072",
     "RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_WORKING_SET_MIB",
     "DEFAULT_MAX_APP_MEMORY_CURRENT_MIB = 768",
     "DEFAULT_MAX_APP_WORKING_SET_MIB = 512",
     "evaluateCapacity",
     "evaluateFreshness"
   ]) && hasAll(bundleReleaseScript, [
-    'set_env_value "$env_file" "RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB" "1152"',
+    'set_env_value "$env_file" "RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB" "3072"',
     'set_env_value "$env_file" "RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_MEMORY_CURRENT_MIB" "768"',
     'set_env_value "$env_file" "RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_WORKING_SET_MIB" "512"'
   ]) && hasAll(createReleaseBundle, [
@@ -2910,9 +3005,11 @@ const readPlanSqliteStatus = async () => {
   pushCheck("06-c-end-release-experience", "remote public readiness verifies live cutover state", hasAll(verifyRemotePublic, [
     "REMOTE_BASE_URL",
     "REMOTE_REQUIRE_SQLITE",
+    "REMOTE_REQUIRED_READ_SOURCE",
     "protected static payloads disabled",
     "protected v1 reads deny anonymous",
-    "sqlite read source when required",
+    "configured primary read source when required",
+    "postgresFromHealth",
     "candidate prospective cutoff heartbeat is live and unblocked",
     "prospective-deadline-heartbeat-v2",
     "candidate-prospective-readiness-preview-v2",
@@ -3161,7 +3258,9 @@ const readPlanSqliteStatus = async () => {
     "canAttemptDeploy",
     "liveComplete",
     "ssh is not reachable",
-    "public origin has not switched to sqlite",
+    "public origin has no ready configured primary store",
+    "primaryStoreReady",
+    "postgresReady",
     "remote release preflight failed",
     "remote cold-recovery helper does not match the candidate bundle",
     "checkRemoteRecoveryHelper",
@@ -3214,6 +3313,24 @@ const readPlanSqliteStatus = async () => {
 
   pushCheck(
     "06-c-end-release-experience",
+    "production verification gates the Huawei FunctionGraph independent collector artifact",
+    scripts["verify:huawei-functiongraph-collector"] === "node scripts/verifyHuaweiFunctionGraphCollector.cjs"
+      && hasAll(scripts["verify:production"] || "", [
+        "scripts/verifyHuaweiFunctionGraphCollector.cjs",
+        "scripts/verifyProductionReadiness.cjs",
+      ])
+      && (scripts["verify:production"] || "").indexOf(
+        "scripts/verifyHuaweiFunctionGraphCollector.cjs",
+      ) < (scripts["verify:production"] || "").indexOf("scripts/verifyProductionReadiness.cjs")
+      && hasAll(verifyProduction, [
+        '"scripts/verifyHuaweiFunctionGraphCollector.cjs"',
+        '"Huawei FunctionGraph independent Sporttery collector artifact"',
+      ]),
+    { file: "package.json" },
+  );
+
+  pushCheck(
+    "06-c-end-release-experience",
     "production verification runs recommendation selection epoch chronology before readiness",
     hasAll(scripts["verify:production"] || "", [
       "scripts/runModelBacktest.cjs --verify-recommendation-selection-time-order",
@@ -3222,6 +3339,131 @@ const readPlanSqliteStatus = async () => {
       "scripts/runModelBacktest.cjs --verify-recommendation-selection-time-order",
     ) < (scripts["verify:production"] || "").indexOf("scripts/verifyProductionReadiness.cjs"),
     { file: "package.json" },
+  );
+
+  pushCheck(
+    "06-c-end-release-experience",
+    "production verification enforces auditable recommendation confidence payload semantics",
+    scripts["verify:recommendation-confidence-payload"] === "node scripts/verifyRecommendationConfidencePayload.cjs"
+      && hasAll(scripts["verify:production"] || "", [
+        "scripts/verifyRecommendationConfidencePayload.cjs",
+        "scripts/verifyProductionReadiness.cjs",
+      ])
+      && (scripts["verify:production"] || "").indexOf(
+        "scripts/verifyRecommendationConfidencePayload.cjs",
+      ) < (scripts["verify:production"] || "").indexOf("scripts/verifyProductionReadiness.cjs")
+      && hasAll(verifyProduction, [
+        'runLocalJson([',
+        '"scripts/verifyRecommendationConfidencePayload.cjs"',
+        '"recommendation confidence public payload semantics"',
+        '"recommendation-confidence-production-payload"',
+        "missingCalibrationSampleIsNull",
+        "marketAlignmentIsTriState",
+        "freshnessRequiresAuditedClock",
+        "completenessUsesInputCoverageRatio",
+        "missingFactsRemainNull",
+      ]),
+    {
+      files: [
+        "scripts/verifyRecommendationConfidencePayload.cjs",
+        "scripts/verifyProductionReadiness.cjs",
+        "package.json",
+      ],
+      script: "verify:recommendation-confidence-payload",
+    },
+  );
+
+  pushCheck(
+    "06-c-end-release-experience",
+    "fast result generation isolates receipt reviews and ships its exact contract",
+    scripts["verify:fast-results-generation"] === "node scripts/verifyFastResultGenerationReconciliation.cjs"
+      && hasAll(scripts["verify:production"] || "", [
+        "scripts/verifyFastResultGenerationReconciliation.cjs",
+        "scripts/verifyProductionReadiness.cjs",
+      ])
+      && (scripts["verify:production"] || "").indexOf(
+        "scripts/verifyFastResultGenerationReconciliation.cjs",
+      ) < (scripts["verify:production"] || "").indexOf("scripts/verifyProductionReadiness.cjs")
+      && hasAll(verifyProduction, [
+        '"scripts/verifyFastResultGenerationReconciliation.cjs"',
+        '"fast result generation receipt review isolation"',
+        '"fast-result-generation-reconciliation"',
+        "Number(fastResultGeneration.body?.checks) === 21",
+        "Number(fastResultGeneration.body?.passed) === 21",
+        "receiptReviewCannotEnterFormalMetrics",
+        "invalidReviewInputCannotAdvanceGeneration",
+        "existingQuarantineLedgerIsStrictlyValidated",
+        "existingSameEventReviewPreservedByteForByte",
+        "standaloneReviewIdentityIncludesEventVersion",
+        "producedReviewsCarryCanonicalEventVersion",
+        "reproducibleLegacyReviewRequiresUniqueEventBinding",
+        "legacyReviewContentMustReproduce",
+        "nonReproducibleReferenceReviewIsQuarantined",
+        "quarantineWriteFailureCannotAdvanceGeneration",
+        "reviewSurfacesRemainOneToOne",
+        "legacyLiveOnlyReviewIsNonFormalQuarantine",
+        "embeddedReviewCannotSelfVerifyFormalPublication",
+        "unverifiedLegacyFormalReviewCannotAdvanceGeneration",
+        "wrongEventFactorsAreNotInherited",
+        "resultOnlyTopLevelModelContentIsStripped",
+        "sqliteAliasCannotRenamePublicIdentity",
+      ])
+      && hasAll(createReleaseBundle, [
+        '"scripts/reconcileFastResultGeneration.cjs"',
+        '"scripts/verifyFastResultGenerationReconciliation.cjs"',
+      ])
+      && hasAll(verifyReleaseBundleSafety, [
+        '"scripts/reconcileFastResultGeneration.cjs"',
+        '"scripts/verifyFastResultGenerationReconciliation.cjs"',
+      ]),
+    {
+      files: [
+        "scripts/reconcileFastResultGeneration.cjs",
+        "scripts/verifyFastResultGenerationReconciliation.cjs",
+        "scripts/createReleaseBundle.cjs",
+        "scripts/verifyReleaseBundleSafety.cjs",
+        "scripts/verifyProductionReadiness.cjs",
+        "package.json",
+      ],
+      script: "verify:fast-results-generation",
+    },
+  );
+
+  pushCheck(
+    "06-c-end-release-experience",
+    "postgres semantic result-only canonicalization is verified locally and inside signed candidates",
+    scripts["verify:postgres-semantic-reviews"] === "node scripts/verifyPostgresSemanticReviewCleanup.cjs"
+      && hasAll(scripts["verify:production"] || "", [
+        "scripts/verifyPostgresSemanticReviewCleanup.cjs",
+        "scripts/verifyProductionReadiness.cjs",
+      ])
+      && (scripts["verify:production"] || "").indexOf(
+        "scripts/verifyPostgresSemanticReviewCleanup.cjs",
+      ) < (scripts["verify:production"] || "").indexOf("scripts/verifyProductionReadiness.cjs")
+      && hasAll(verifyProduction, [
+        '"scripts/verifyPostgresSemanticReviewCleanup.cjs"',
+        '"postgres semantic result-only review canonicalization"',
+        '"postgres-semantic-review-cleanup"',
+        '"fivehundred_2040801"',
+        '"sporttery_2040801"',
+      ])
+      && hasAll(createReleaseBundle, [
+        '"scripts/verifyPostgresSemanticReviewCleanup.cjs"',
+      ])
+      && hasAll(verifyReleaseBundleSafety, [
+        '"scripts/verifyPostgresSemanticReviewCleanup.cjs"',
+      ]),
+    {
+      files: [
+        "scripts/postgresProjectionSync.cjs",
+        "scripts/verifyPostgresSemanticReviewCleanup.cjs",
+        "scripts/createReleaseBundle.cjs",
+        "scripts/verifyReleaseBundleSafety.cjs",
+        "scripts/verifyProductionReadiness.cjs",
+        "package.json",
+      ],
+      script: "verify:postgres-semantic-reviews",
+    },
   );
 
   pushCheck(

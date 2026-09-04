@@ -25,6 +25,9 @@ const {
   inspectHistoricalTrainingBuffer,
   inspectHistoricalTrainingFile,
 } = require("./historicalTrainingReleaseArtifact.cjs");
+const {
+  inspectPrebuiltDist,
+} = require("./releasePrebuiltDist.cjs");
 
 const rootDir = path.resolve(__dirname, "..");
 const outDir = path.join(rootDir, ".codex-tmp");
@@ -49,15 +52,15 @@ const tlsActionRequested = tlsActionEnvKeys.some((key) => String(process.env[key
 let tlsAction = null;
 if (tlsActionRequested) {
   const acmeEmail = String(process.env.RELEASE_TLS_ACME_EMAIL || "");
-  const ipAddress = String(process.env.RELEASE_TLS_IP_ADDRESS || "170.106.75.73");
+  const ipAddress = String(process.env.RELEASE_TLS_IP_ADDRESS || "134.175.132.183");
   if (process.env.RELEASE_TLS_AGREE_TOS !== "1") {
     throw new Error("RELEASE_TLS_AGREE_TOS=1 is required for a signed TLS release action");
   }
   if (process.env.RELEASE_TLS_STAGING_PREFLIGHT !== "1") {
     throw new Error("RELEASE_TLS_STAGING_PREFLIGHT=1 is required for a signed TLS release action");
   }
-  if (ipAddress !== "170.106.75.73") {
-    throw new Error("RELEASE_TLS_IP_ADDRESS must be the fixed production IP 170.106.75.73");
+  if (ipAddress !== "134.175.132.183") {
+    throw new Error("RELEASE_TLS_IP_ADDRESS must be the fixed production IP 134.175.132.183");
   }
   if (acmeEmail.length > 254
       || !/^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?\.[A-Za-z]{2,63}$/.test(acmeEmail)) {
@@ -108,6 +111,33 @@ if (!historicalTrainingSourceArtifact.ok) {
     `historical training release input is invalid: ${(historicalTrainingSourceArtifact.blockers || []).join(",")}`
   );
 }
+const frontendBuildCommand = process.platform === "win32"
+  ? (process.env.ComSpec || "C:\\Windows\\System32\\cmd.exe")
+  : "npm";
+const frontendBuildArgs = process.platform === "win32"
+  ? ["/d", "/s", "/c", "npm.cmd run build"]
+  : ["run", "build"];
+const frontendBuild = spawnSync(frontendBuildCommand, frontendBuildArgs, {
+  cwd: rootDir,
+  encoding: "utf8",
+  env: { ...process.env, NODE_ENV: "production" },
+  maxBuffer: 20 * 1024 * 1024,
+});
+if (frontendBuild.status !== 0) {
+  throw new Error(`release frontend build failed: ${String(
+    frontendBuild.error?.message || frontendBuild.stderr || frontendBuild.stdout || "unknown build failure"
+  ).slice(-4000)}`);
+}
+const prebuiltDistManifest = inspectPrebuiltDist(path.join(rootDir, "dist"));
+const prebuiltDistBundleEntry = ".release-prebuilt/dist-manifest.json";
+const prebuiltDistArtifact = Object.freeze({
+  ok: true,
+  entry: prebuiltDistBundleEntry,
+  version: prebuiltDistManifest.version,
+  treeHash: prebuiltDistManifest.treeHash,
+  fileCount: prebuiltDistManifest.fileCount,
+  totalBytes: prebuiltDistManifest.totalBytes,
+});
 const runtimeMutableSourceEntries = [
   "public/data/gpt-predictions.json"
 ];
@@ -127,9 +157,9 @@ const excludes = [
   ".agents",
   ".codex-tmp",
   "node_modules",
-  "dist",
   "server-data",
   "artifacts",
+  "outputs",
   "logs",
   "coverage",
   ".vite",
@@ -163,6 +193,14 @@ if (historicalTrainingSourceArtifact.ok) {
   fs.chmodSync(modelAssetPath, 0o600);
   tarArgs.push("-C", actionStageDir, HISTORICAL_TRAINING_RELEASE_ENTRY.split("/")[0]);
 }
+const prebuiltDistManifestPath = path.join(actionStageDir, prebuiltDistBundleEntry);
+fs.mkdirSync(path.dirname(prebuiltDistManifestPath), { recursive: true, mode: 0o700 });
+fs.writeFileSync(prebuiltDistManifestPath, `${JSON.stringify(prebuiltDistManifest, null, 2)}\n`, {
+  encoding: "utf8",
+  mode: 0o600,
+  flag: "wx"
+});
+tarArgs.push("-C", actionStageDir, prebuiltDistBundleEntry.split("/")[0]);
 if (tlsAction) {
   const actionDir = path.join(actionStageDir, ".release-actions");
   const actionPath = path.join(actionDir, "enable-ip-tls.json");
@@ -280,13 +318,16 @@ const blockedEntries = entries.filter((entry) => {
   return normalized.startsWith(".git/")
     || normalized.startsWith(".codex-tmp/")
     || normalized.startsWith("node_modules/")
-    || normalized.startsWith("dist/")
     || normalized.startsWith("artifacts/")
+    || normalized.startsWith("outputs/")
     || normalized.startsWith("server-data/")
     || runtimeMutableSourceEntries.includes(normalized);
 });
 const requiredEntries = [
   "package.json",
+  "scripts/data/football-data-discipline.json",
+  "scripts/footballDataDiscipline.cjs",
+  "scripts/verifyFootballDataDiscipline.cjs",
   "server/index.cjs",
   "server/candidateProspectiveTemporalAudit.cjs",
   "scripts/verifyCandidateProspectiveTemporalAudit.cjs",
@@ -301,6 +342,7 @@ const requiredEntries = [
   "scripts/verifyCandidateProspectiveAdmission.cjs",
   "server/dataGenerationBundle.cjs",
   "server/dataGenerationStore.cjs",
+  "src/services/apiFootballRuntimePolicy.cjs",
   "src/services/collectorAttestation.cjs",
   "src/services/dualMarketDecisionBinding.cjs",
   "src/services/marketSourceProvenance.cjs",
@@ -318,6 +360,8 @@ const requiredEntries = [
   "src/services/externalOddsAnalysisReference.ts",
   "src/services/externalOddsReferencePresentation.ts",
   "scripts/verifyExternalOddsAnalysisReference.cjs",
+  "src/services/immutableAnalysisReferenceDecision.cjs",
+  "scripts/verifyImmutableAnalysisReferenceDecision.cjs",
   "server/relayFastResultWatcher.cjs",
   "server/sourceRedundancy.cjs",
   "scripts/sync500Data.cjs",
@@ -359,6 +403,8 @@ const requiredEntries = [
   "scripts/runReleaseSyncWriteBarrier.cjs",
   "scripts/verifyReleaseSyncWriteBarrier.cjs",
   "scripts/releasePrebuildPolicy.cjs",
+  "scripts/releasePrebuiltDist.cjs",
+  "scripts/verifyReleasePrebuiltDist.cjs",
   "scripts/sqliteReleaseSeal.cjs",
   "scripts/verifyCandidateProspectiveLedger.cjs",
   "scripts/verifyCandidateProspectiveChallengerSuite.cjs",
@@ -389,6 +435,9 @@ const requiredEntries = [
   "scripts/publishOfficialResultsFast.cjs",
   "scripts/fastResultPublisherProtocol.cjs",
   "scripts/fastResultObservations.cjs",
+  "scripts/reconcileFastResultGeneration.cjs",
+  "scripts/verifyFastResultGenerationReconciliation.cjs",
+  "scripts/verifyPostgresSemanticReviewCleanup.cjs",
   "scripts/verifyFastResultPublication.cjs",
   "scripts/verifyFastResultProductionClone.cjs",
   "scripts/verifyRelayFastResultWatcher.cjs",
@@ -407,7 +456,15 @@ const requiredEntries = [
   "scripts/verifyBenchmarkSelectionPolicy.cjs",
   "src/services/marketMovement.cjs",
   "scripts/verifyMarketMovement.cjs",
+  "src/services/recommendationConfidence.cjs",
+  "src/services/recommendationConfidence.d.cts",
+  "src/services/recommendationConfidence.ts",
+  "src/services/multiFactorRecommendation.cjs",
   "src/services/predictionPresentation.ts",
+  "src/components/predictions/RecommendationEvidenceFacts.tsx",
+  "src/styles/recommendation-evidence.css",
+  "scripts/verifyRecommendationConfidencePayload.cjs",
+  "scripts/verifyProbabilityDisplaySemantics.cjs",
   "scripts/verifyFrontendEvidenceSemantics.cjs",
   "src/services/atomicMatchRefresh.ts",
   "src/services/recommendationPublicationLedger.cjs",
@@ -453,6 +510,8 @@ const requiredEntries = [
   "public/data/matches-current.json",
   "public/data/model-evaluation.json",
   "public/data/sync-meta.json",
+  "dist/index.html",
+  prebuiltDistBundleEntry,
   HISTORICAL_TRAINING_RELEASE_ENTRY,
 ];
 const missingEntries = requiredEntries.filter((entry) => !entries.some((candidate) => candidate.replace(/^\.\//, "") === entry));
@@ -463,6 +522,7 @@ const payload = {
     && sensitiveEntries.length === 0
     && missingEntries.length === 0
     && modelEvaluationArtifact.ok
+    && prebuiltDistArtifact.ok
     && historicalTrainingArtifact.ok
     && historicalTrainingArtifact.sourceMatchesBundle
     && releaseActionEntriesOk,
@@ -486,6 +546,7 @@ const payload = {
   sensitiveEntries: sensitiveEntries.slice(0, 20),
   missingEntries,
   modelEvaluationArtifact,
+  prebuiltDistArtifact,
   historicalTrainingArtifact,
   releaseActions: tlsAction ? ["enable-ip-tls"] : [],
   releaseActionEntries,

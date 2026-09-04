@@ -335,6 +335,23 @@ const allowedCurrentListLiveRecommendationFields = new Set([
   "dataCoverageWarning"
 ]);
 
+const allowedCurrentListConfidenceFields = new Set(["publicMetrics"]);
+const allowedCurrentListPublicConfidenceMetricFields = new Set([
+  "modelProbability",
+  "evidenceCompleteness",
+  "evidenceCompletenessBasis",
+  "marketConsistency",
+  "marketConsistencyBasis",
+  "calibrationSample",
+  "freshnessQuality",
+  "freshnessObservedAt",
+  "freshnessSourceUpdatedAt",
+  "freshnessAsOf",
+  "freshnessAgeSeconds",
+  "freshnessSource",
+  "freshnessBasis"
+]);
+
 const currentListPayloadCompactionIssues = (row) => {
   const issues = [];
   if (Object.prototype.hasOwnProperty.call(row?.probabilityModel || {}, "modelHealth")) {
@@ -342,10 +359,27 @@ const currentListPayloadCompactionIssues = (row) => {
   }
   for (const prediction of Array.isArray(row?.predictions) ? row.predictions : []) {
     const recommendation = prediction?.liveRecommendation;
-    if (!recommendation || typeof recommendation !== "object") continue;
-    for (const key of Object.keys(recommendation)) {
-      if (!allowedCurrentListLiveRecommendationFields.has(key)) {
-        issues.push(`predictions.${prediction?.marketType || "unknown"}.liveRecommendation.${key}`);
+    if (recommendation && typeof recommendation === "object") {
+      for (const key of Object.keys(recommendation)) {
+        if (!allowedCurrentListLiveRecommendationFields.has(key)) {
+          issues.push(`predictions.${prediction?.marketType || "unknown"}.liveRecommendation.${key}`);
+        }
+      }
+    }
+    const confidence = prediction?.confidence;
+    if (confidence && typeof confidence === "object") {
+      for (const key of Object.keys(confidence)) {
+        if (!allowedCurrentListConfidenceFields.has(key)) {
+          issues.push(`predictions.${prediction?.marketType || "unknown"}.confidence.${key}`);
+        }
+      }
+      const publicMetrics = confidence.publicMetrics;
+      if (publicMetrics && typeof publicMetrics === "object") {
+        for (const key of Object.keys(publicMetrics)) {
+          if (!allowedCurrentListPublicConfidenceMetricFields.has(key)) {
+            issues.push(`predictions.${prediction?.marketType || "unknown"}.confidence.publicMetrics.${key}`);
+          }
+        }
       }
     }
   }
@@ -376,6 +410,11 @@ const scheduledBestRecommendationsAreServerSafe = (match, globalRiskTier) => {
     ? match.predictions.filter((prediction) => prediction?.marketType === "BEST")
     : [];
   return bestRows.every((prediction) => {
+    if (String(prediction.tipCode || "").toUpperCase() === "WATCH") {
+      return prediction.recommendationAction === "withhold"
+        && prediction.multiFactorEvidence?.eligible !== true
+        && String(prediction.multiFactorEvidence?.grade || "").toUpperCase() === "WATCH";
+    }
     if (prediction.recommendationAction === "reference") return true;
     if (prediction.recommendationAction !== "recommend") return false;
     return globalRiskTier === "stable"
@@ -520,11 +559,14 @@ const run = async () => {
     const recommendationCoverage = health.body?.data?.recommendations || {};
     const recommendationProjectionParity = recommendationCoverage.projectionParity || {};
     pushCheck(checks, "health recommendation coverage schema", health.status === 200
-      && recommendationCoverage.version === "current-recommendation-coverage-v5"
+      && recommendationCoverage.version === "current-recommendation-coverage-v6"
       && Number.isInteger(recommendationCoverage.scheduledMatches)
       && Number.isInteger(recommendationCoverage.bestDirectionMatches)
       && Number.isInteger(recommendationCoverage.missingDirectionMatches)
       && Number.isInteger(recommendationCoverage.watchMatches)
+      && Number.isInteger(recommendationCoverage.publicationDispositionMatches)
+      && Number.isInteger(recommendationCoverage.missingDispositionMatches)
+      && Number.isFinite(Number(recommendationCoverage.dispositionCoverageRatio))
       && Number.isInteger(recommendationCoverage.trainingBackedMatches)
       && Number.isInteger(recommendationCoverage.trainingInputSufficientMatches)
       && Number.isInteger(recommendationCoverage.hhadMarketMatches)
@@ -1161,7 +1203,7 @@ const run = async () => {
       && candidateCaptureDurationMs >= 0
       && typeof candidateHeartbeatAgeMs === "number"
       && Number.isFinite(candidateHeartbeatAgeMs)
-      && candidateHeartbeatFreshnessLimitMs === 120_000
+      && candidateHeartbeatFreshnessLimitMs === 180_000
       && candidateHeartbeat?.scheduleVersion
         === "candidate-heartbeat-preemptive-schedule-v1"
       && candidateHeartbeat?.scheduleMode === "preemptive-evaluated-at"
@@ -1312,8 +1354,14 @@ const run = async () => {
         === candidateChallengerSuite.formalRows?.max
       && candidateChallengerSuite.eligibleWindows?.min
         === candidateChallengerSuite.eligibleWindows?.max
-      && candidateChallengerSuite.winningWindows?.min
-        === candidateChallengerSuite.winningWindows?.max
+      // Challenger trials share one prospective cohort, so row and eligible
+      // window counts must remain equal. Winning-window counts are a model
+      // performance outcome and may legitimately differ between challengers;
+      // the public contract exposes only their aggregate range.
+      && isNonNegativeInteger(candidateChallengerSuite.winningWindows?.min)
+      && isNonNegativeInteger(candidateChallengerSuite.winningWindows?.max)
+      && candidateChallengerSuite.winningWindows.min
+        <= candidateChallengerSuite.winningWindows.max
       && isNonNegativeInteger(
         candidateChallengerSuite.promotionReviewReadyTrialCount,
       )
@@ -1735,6 +1783,7 @@ const run = async () => {
         "officialFinishedIneligiblePrimaryReasonCounts",
         "officialFinishedIneligibleReasonCounts",
         "officialResultRecordMissingRows",
+        "officialVoidRows",
         "pendingKickoffRange",
         "pendingRows",
         "settledRows",
@@ -1795,6 +1844,7 @@ const run = async () => {
               "invalid-kickoff",
               "future-kickoff",
               "read-model-row-missing",
+              "official-void",
               "awaiting-official-final",
               "official-finished-eligible-unsettled",
               "official-finished-ineligible",
@@ -1980,6 +2030,26 @@ const run = async () => {
         liveRecommendationAction: prediction.liveRecommendationAction ?? null,
         hasLiveRecommendation: Boolean(prediction.liveRecommendation)
       }))
+    });
+    const protectedPublicConfidencePredictions = protectedBestPredictions.filter((prediction) => (
+      prediction?.confidence?.publicMetrics
+      && typeof prediction.confidence.publicMetrics === "object"
+    ));
+    pushCheck(checks, "protected current feed exposes only audited public confidence facts when present", (
+      current.status === 200
+      && protectedPublicConfidencePredictions.every((prediction) => (
+        Object.keys(prediction.confidence).every((key) => allowedCurrentListConfidenceFields.has(key))
+        && Object.keys(prediction.confidence.publicMetrics).every((key) => (
+          allowedCurrentListPublicConfidenceMetricFields.has(key)
+        ))
+      ))
+    ), {
+      status: current.status,
+      bestPredictions: protectedBestPredictions.length,
+      publicConfidencePredictions: protectedPublicConfidencePredictions.length,
+      publicMetricKeys: [...new Set(protectedPublicConfidencePredictions.flatMap((prediction) => (
+        Object.keys(prediction.confidence.publicMetrics)
+      )))].sort()
     });
     const unverifiedListBindings = currentRows.filter((row) => {
       const binding = row?.predictionMeta?.dualMarketDecision;

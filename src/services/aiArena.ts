@@ -34,6 +34,7 @@ export interface ArenaAgentDefinition {
   styleEn: string;
   color: string;
   model?: string;
+  providerMode?: 'local-strategy-simulation';
   staking: ArenaStakingProfile;
 }
 
@@ -150,7 +151,7 @@ export interface ArenaMatchEntry {
 
 export interface BigFiveSurvivalArena {
   ok?: boolean;
-  version: 'ai-big-five-survival-preview-v1' | 'ai-big-five-survival-v2' | 'ai-big-five-survival-v3' | 'ai-big-five-survival-v4';
+  version: 'ai-big-five-survival-preview-v1' | 'ai-big-five-survival-v2' | 'ai-big-five-survival-v3' | 'ai-big-five-survival-v4' | 'ai-big-five-survival-v5';
   monthKey?: string;
   weekStart: string;
   weekEnd: string;
@@ -158,6 +159,10 @@ export interface BigFiveSurvivalArena {
   targetMatches: 10;
   availableMatches: number;
   complete: boolean;
+  roundActive?: boolean;
+  poolPolicy?: 'complete-or-friday-partial-lock-v1';
+  shortfallPolicy?: 'lock-current-qualified-pool-no-backfill';
+  partialLockAt?: string | null;
   leagueSlots: ArenaLeagueSlot[];
   matches: ArenaMatchEntry[];
   agents: ArenaAgentEntry[];
@@ -228,6 +233,19 @@ export interface BigFiveSurvivalArena {
   disclosure: 'strategy-simulation-not-external-model-calls';
   decisionEngine?: 'professional-agent-fusion-v1';
   stakingEngine?: 'fractional-kelly-evidence-risk-v2';
+  dataAccess?: {
+    mode: 'shared-immutable-pre-match-snapshot';
+    identicalInputs: true;
+    sources: string[];
+    externalProviderCallsActive: false;
+  };
+  resultWriter?: {
+    mode: 'trusted-official-auto-settlement';
+    officialOnly: true;
+    forecastsImmutable: true;
+    modelScoreWriteAllowed: false;
+  };
+  stakeFreedom?: 'any-qualified-match-or-zero-with-risk-caps';
   formalStatisticsExcluded?: true;
   integrity?: {
     immutable: boolean;
@@ -249,12 +267,12 @@ const LEAGUES: Array<Omit<ArenaLeagueSlot, 'count'>> = [
 ];
 
 const AGENTS: ArenaAgentDefinition[] = [
-  { id: 'gpt', name: 'GPT', nameZh: 'GPT 全局均衡', model: 'autonomous-risk-v2', style: 'balanced', styleZh: '全局均衡', styleEn: 'Global balance', color: '#6ee7b7', staking: { kellyFraction: 0.18, minEv: 0.020, minEdge: 0.005, minDataQuality: 0.45, maxAdversarialRisk: 0.75, weeklyRiskFraction: 0.18, singleRiskFraction: 0.060, correlationCapFraction: 0.10 } },
-  { id: 'claude', name: 'Claude', nameZh: 'Claude 风险审慎', model: 'autonomous-risk-v2', style: 'steady', styleZh: '风险审慎', styleEn: 'Risk first', color: '#f0b37e', staking: { kellyFraction: 0.10, minEv: 0.035, minEdge: 0.010, minDataQuality: 0.60, maxAdversarialRisk: 0.55, weeklyRiskFraction: 0.12, singleRiskFraction: 0.040, correlationCapFraction: 0.07 } },
-  { id: 'gemini', name: 'Gemini 3.7', nameZh: 'Gemini 3.7 多信号', model: 'gemini-3.7-reviewed-profile-v2', style: 'balanced', styleZh: '多信号融合', styleEn: 'Multi-signal', color: '#8ab4f8', staking: { kellyFraction: 0.16, minEv: 0.025, minEdge: 0.008, minDataQuality: 0.55, maxAdversarialRisk: 0.65, weeklyRiskFraction: 0.16, singleRiskFraction: 0.050, correlationCapFraction: 0.09 } },
-  { id: 'deepseek', name: 'DeepSeek', nameZh: 'DeepSeek 价值搜索', model: 'autonomous-risk-v2', style: 'aggressive', styleZh: '价值搜索', styleEn: 'Value search', color: '#8b9cff', staking: { kellyFraction: 0.22, minEv: 0.015, minEdge: 0.005, minDataQuality: 0.45, maxAdversarialRisk: 0.72, weeklyRiskFraction: 0.20, singleRiskFraction: 0.065, correlationCapFraction: 0.11 } },
-  { id: 'grok', name: 'Grok', nameZh: 'Grok 逆向进攻', model: 'autonomous-risk-v2', style: 'aggressive', styleZh: '逆向进攻', styleEn: 'Contrarian attack', color: '#f4d06f', staking: { kellyFraction: 0.20, minEv: 0.030, minEdge: 0.015, minDataQuality: 0.40, maxAdversarialRisk: 0.78, weeklyRiskFraction: 0.22, singleRiskFraction: 0.070, correlationCapFraction: 0.12 } },
-  { id: 'qwen', name: 'Qwen', nameZh: 'Qwen 稳定执行', model: 'autonomous-risk-v2', style: 'steady', styleZh: '稳定执行', styleEn: 'Stable execution', color: '#d5a6ff', staking: { kellyFraction: 0.08, minEv: 0.050, minEdge: 0.015, minDataQuality: 0.65, maxAdversarialRisk: 0.50, weeklyRiskFraction: 0.10, singleRiskFraction: 0.030, correlationCapFraction: 0.06 } },
+  { id: 'gpt', name: '均衡策略', nameZh: '均衡策略', model: 'autonomous-risk-v2', providerMode: 'local-strategy-simulation', style: 'balanced', styleZh: '全局均衡', styleEn: 'Global balance', color: '#6ee7b7', staking: { kellyFraction: 0.18, minEv: 0.020, minEdge: 0.005, minDataQuality: 0.45, maxAdversarialRisk: 0.75, weeklyRiskFraction: 0.18, singleRiskFraction: 0.060, correlationCapFraction: 0.10 } },
+  { id: 'kimi', name: '稳健策略', nameZh: '稳健策略', model: 'auditable-risk-v2', providerMode: 'local-strategy-simulation', style: 'steady', styleZh: '风险审慎', styleEn: 'Risk first', color: '#f0b37e', staking: { kellyFraction: 0.10, minEv: 0.035, minEdge: 0.010, minDataQuality: 0.60, maxAdversarialRisk: 0.55, weeklyRiskFraction: 0.12, singleRiskFraction: 0.040, correlationCapFraction: 0.07 } },
+  { id: 'gemini', name: '融合策略', nameZh: '融合策略', model: 'multi-signal-risk-v2', providerMode: 'local-strategy-simulation', style: 'balanced', styleZh: '多信号融合', styleEn: 'Multi-signal', color: '#8ab4f8', staking: { kellyFraction: 0.16, minEv: 0.025, minEdge: 0.008, minDataQuality: 0.55, maxAdversarialRisk: 0.65, weeklyRiskFraction: 0.16, singleRiskFraction: 0.050, correlationCapFraction: 0.09 } },
+  { id: 'deepseek', name: '价值策略', nameZh: '价值策略', model: 'autonomous-risk-v2', providerMode: 'local-strategy-simulation', style: 'aggressive', styleZh: '价值搜索', styleEn: 'Value search', color: '#8b9cff', staking: { kellyFraction: 0.22, minEv: 0.015, minEdge: 0.005, minDataQuality: 0.45, maxAdversarialRisk: 0.72, weeklyRiskFraction: 0.20, singleRiskFraction: 0.065, correlationCapFraction: 0.11 } },
+  { id: 'doubao', name: '逆向策略', nameZh: '逆向策略', model: 'auditable-risk-v2', providerMode: 'local-strategy-simulation', style: 'aggressive', styleZh: '逆向进攻', styleEn: 'Contrarian attack', color: '#f4d06f', staking: { kellyFraction: 0.20, minEv: 0.030, minEdge: 0.015, minDataQuality: 0.40, maxAdversarialRisk: 0.78, weeklyRiskFraction: 0.22, singleRiskFraction: 0.070, correlationCapFraction: 0.12 } },
+  { id: 'qwen', name: '纪律策略', nameZh: '纪律策略', model: 'autonomous-risk-v2', providerMode: 'local-strategy-simulation', style: 'steady', styleZh: '稳定执行', styleEn: 'Stable execution', color: '#d5a6ff', staking: { kellyFraction: 0.08, minEv: 0.050, minEdge: 0.015, minDataQuality: 0.65, maxAdversarialRisk: 0.50, weeklyRiskFraction: 0.10, singleRiskFraction: 0.030, correlationCapFraction: 0.06 } },
 ];
 
 const AGENT_PARAMETERS: Record<string, {
@@ -266,10 +284,10 @@ const AGENT_PARAMETERS: Record<string, {
   underdogBias: number;
 }> = {
   gpt: { modelWeight: 0.82, marketWeight: 0.18, valueWeight: 0.08, drawBias: 0, favoriteBias: 0, underdogBias: 0 },
-  claude: { modelWeight: 0.60, marketWeight: 0.40, valueWeight: 0.02, drawBias: 0.018, favoriteBias: 0.012, underdogBias: 0 },
+  kimi: { modelWeight: 0.60, marketWeight: 0.40, valueWeight: 0.02, drawBias: 0.018, favoriteBias: 0.012, underdogBias: 0 },
   gemini: { modelWeight: 0.70, marketWeight: 0.30, valueWeight: 0.12, drawBias: 0.004, favoriteBias: 0, underdogBias: 0 },
   deepseek: { modelWeight: 0.76, marketWeight: 0.24, valueWeight: 0.20, drawBias: 0, favoriteBias: 0, underdogBias: 0.008 },
-  grok: { modelWeight: 0.86, marketWeight: 0.14, valueWeight: 0.25, drawBias: -0.008, favoriteBias: 0, underdogBias: 0.018 },
+  doubao: { modelWeight: 0.86, marketWeight: 0.14, valueWeight: 0.25, drawBias: -0.008, favoriteBias: 0, underdogBias: 0.018 },
   qwen: { modelWeight: 0.68, marketWeight: 0.32, valueWeight: 0.05, drawBias: 0.008, favoriteBias: 0.014, underdogBias: 0 },
 };
 
@@ -356,15 +374,25 @@ const matchDateKey = (match: Match): string => (
   || shanghaiDateKey(match.kickoffTime)
 );
 
-const identifyLeague = (match: Match): ArenaLeagueCode | null => {
-  const text = [match.leagueId, match.leagueName, match.leagueNameEn, match.leagueShortName, match.leagueShortNameEn]
-    .filter(Boolean).join(' ').toLowerCase();
-  if (/(^|\s)epl($|\s)|英超|premier\s*league/.test(text)) return 'premier-league';
-  if (/西甲|la\s*liga|laliga/.test(text)) return 'laliga';
-  if (/意甲|serie\s*a|seriea/.test(text)) return 'serie-a';
-  if (/德甲|bundesliga/.test(text)) return 'bundesliga';
-  if (/法甲|ligue\s*1|ligue1/.test(text)) return 'ligue-1';
+const identifyLeagueText = (text: string): ArenaLeagueCode | null => {
+  if (/巴甲|巴西|brazil|brasileir/.test(text)) return null;
+  if (/(^|\s)epl($|\s)|(?:^|[\s/·_-])英超(?:$|[\s/·_-])|premier\s*league/.test(text)) return 'premier-league';
+  if (/英格兰(?:足球)?超级联赛/.test(text)) return 'premier-league';
+  if (/(?:^|[\s/·_-])西甲(?:$|[\s/·_-])|西班牙(?:足球)?甲级联赛|la\s*liga|laliga/.test(text)) return 'laliga';
+  if (/(?:^|[\s/·_-])意甲(?:$|[\s/·_-])|意大利(?:足球)?甲级联赛|serie\s*a|seriea/.test(text)) return 'serie-a';
+  if (/(?:^|[\s/·_-])德甲(?:$|[\s/·_-])|德国(?:足球)?甲级联赛|bundesliga/.test(text)) return 'bundesliga';
+  if (/(?:^|[\s/·_-])法甲(?:$|[\s/·_-])|法国(?:足球)?甲级联赛|ligue\s*1|ligue1/.test(text)) return 'ligue-1';
   return null;
+};
+
+const identifyLeague = (match: Match): ArenaLeagueCode | null => {
+  // Human-readable provider labels are authoritative when present. Falling
+  // through to a stale/reused leagueId can otherwise put a Brazilian or
+  // Championship fixture into a Big Five slot after an identity merge.
+  const labelText = [match.leagueName, match.leagueNameEn, match.leagueShortName, match.leagueShortNameEn]
+    .filter(Boolean).join(' ').toLowerCase();
+  if (labelText) return identifyLeagueText(labelText);
+  return identifyLeagueText(String(match.leagueId || '').toLowerCase());
 };
 
 const agentDistribution = (
@@ -690,7 +718,7 @@ const isSha256OrNull = (value: unknown) => value === null || /^[a-f0-9]{64}$/.te
 export const isPublishedBigFiveSurvivalArena = (value: unknown): value is BigFiveSurvivalArena => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const row = value as Partial<BigFiveSurvivalArena>;
-  if (!['ai-big-five-survival-v2', 'ai-big-five-survival-v3', 'ai-big-five-survival-v4'].includes(String(row.version || ''))
+  if (!['ai-big-five-survival-v2', 'ai-big-five-survival-v3', 'ai-big-five-survival-v4', 'ai-big-five-survival-v5'].includes(String(row.version || ''))
     || row.disclosure !== 'strategy-simulation-not-external-model-calls') return false;
   if (row.formalStatisticsExcluded !== true || row.targetMatches !== 10) return false;
   if (!Array.isArray(row.matches) || !Array.isArray(row.agents) || !Array.isArray(row.leagueSlots)) return false;
@@ -701,8 +729,24 @@ export const isPublishedBigFiveSurvivalArena = (value: unknown): value is BigFiv
   if (!Number.isInteger(row.availableMatches) || row.availableMatches! < 0 || row.availableMatches! > 10) return false;
   if (!isSha256OrNull(row.poolHash) || !isSha256OrNull(row.submissionRootHash)) return false;
   if (row.state === 'LOCKED') {
-    if (row.complete !== true || row.availableMatches !== 10) return false;
-    if (row.matches.length !== 10) return false;
+    const partialPoolContract = row.version === 'ai-big-five-survival-v5';
+    if (partialPoolContract) {
+      if (row.roundActive !== true || row.availableMatches! < 2) return false;
+      if (row.matches.length !== row.availableMatches) return false;
+      if (row.complete !== (row.availableMatches === 10)) return false;
+      if (row.poolPolicy !== 'complete-or-friday-partial-lock-v1'
+        || row.shortfallPolicy !== 'lock-current-qualified-pool-no-backfill') return false;
+      if (row.dataAccess?.mode !== 'shared-immutable-pre-match-snapshot'
+        || row.dataAccess.identicalInputs !== true
+        || row.dataAccess.externalProviderCallsActive !== false) return false;
+      if (row.resultWriter?.mode !== 'trusted-official-auto-settlement'
+        || row.resultWriter.officialOnly !== true
+        || row.resultWriter.forecastsImmutable !== true
+        || row.resultWriter.modelScoreWriteAllowed !== false) return false;
+      if (row.stakeFreedom !== 'any-qualified-match-or-zero-with-risk-caps') return false;
+    } else if (row.complete !== true || row.availableMatches !== 10 || row.matches.length !== 10) {
+      return false;
+    }
     if (!row.integrity?.immutable || !/^[a-f0-9]{64}$/.test(String(row.integrity.stateHash || ''))) return false;
   }
   return true;

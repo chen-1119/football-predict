@@ -6,7 +6,7 @@ const autoDeploy = process.env.RELEASE_WATCH_AUTO_DEPLOY === "1";
 const attempts = Math.max(1, Number(process.env.RELEASE_WATCH_ATTEMPTS || (autoDeploy ? 60 : 1)));
 const intervalSeconds = Math.max(5, Number(process.env.RELEASE_WATCH_INTERVAL_SECONDS || 60));
 const commandTimeoutMs = Math.max(30_000, Number(process.env.RELEASE_WATCH_COMMAND_TIMEOUT_MS || 180_000));
-const publicBaseUrl = process.env.PUBLIC_BASE_URL || process.env.REMOTE_BASE_URL || "https://170.106.75.73";
+const publicBaseUrl = process.env.PUBLIC_BASE_URL || process.env.REMOTE_BASE_URL || "https://134.175.132.183";
 const sha256Pattern = /^[0-9a-f]{64}$/;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

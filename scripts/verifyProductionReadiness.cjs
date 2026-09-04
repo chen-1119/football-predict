@@ -30,6 +30,7 @@ const shouldAutoStartLocalServer = !explicitBaseUrl && process.env.VERIFY_START_
 const startServer = process.env.VERIFY_START_SERVER === "1" || shouldAutoStartLocalServer;
 const requireSqlite = process.env.VERIFY_REQUIRE_SQLITE === "1"
   || (startServer && process.env.VERIFY_REQUIRE_SQLITE !== "0");
+const requiredReadSource = String(process.env.VERIFY_REQUIRED_READ_SOURCE || (requireSqlite ? "sqlite" : "")).toLowerCase();
 const requireAiArenaPublication = process.env.VERIFY_REQUIRE_AI_ARENA === "1";
 const sqlitePrevalidated = requireSqlite
   && !startServer
@@ -43,6 +44,14 @@ const modelEvaluationArtifactPath = path.join(rootDir, "public", "data", "model-
 const expectedModelEvaluationVersion = "rolling-backtest-v19";
 const expectedWalkForwardValidationVersion = "walk-forward-promotion-validation-v3";
 const expectedWalkForwardProtocolVersion = "nested-expanding-window-candidate-selection-v2";
+const requestTimeoutMs = Math.min(
+  60_000,
+  Math.max(1_000, Number(process.env.VERIFY_REQUEST_TIMEOUT_MS || 30_000))
+);
+const childTimeoutMs = Math.min(
+  300_000,
+  Math.max(5_000, Number(process.env.VERIFY_CHILD_TIMEOUT_MS || 120_000))
+);
 
 let child = null;
 let childLogs = "";
@@ -90,6 +99,9 @@ const request = (method, pathname, body = null, headers = {}) => {
       });
     });
     req.on("error", reject);
+    req.setTimeout(requestTimeoutMs, () => {
+      req.destroy(new Error(`production-readiness request timed out after ${requestTimeoutMs}ms: ${method} ${target.pathname}`));
+    });
     if (payload) req.write(payload);
     req.end();
   });
@@ -224,6 +236,9 @@ const sampleFastSportteryRelaySnapshot = () => {
 };
 
 const runLocalJson = (args, env = {}) => new Promise((resolve) => {
+  const label = args.join(" ");
+  const startedAt = Date.now();
+  process.stderr.write(`[production-readiness] child-start ${label}\n`);
   const childProcess = spawn(process.execPath, args, {
     cwd: process.cwd(),
     env: { ...process.env, ...env },
@@ -231,6 +246,32 @@ const runLocalJson = (args, env = {}) => new Promise((resolve) => {
   });
   let stdout = "";
   let stderr = "";
+  let finished = false;
+  let timedOut = false;
+  let forceKillTimer = null;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    stderr += `production-readiness child timed out after ${childTimeoutMs}ms: ${label}\n`;
+    process.stderr.write(`[production-readiness] child-timeout ${label} elapsedMs=${Date.now() - startedAt}\n`);
+    childProcess.kill("SIGTERM");
+    forceKillTimer = setTimeout(() => childProcess.kill("SIGKILL"), 5_000);
+    forceKillTimer.unref?.();
+  }, childTimeoutMs);
+  timeout.unref?.();
+  const finish = ({ status, error = null }) => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(timeout);
+    if (forceKillTimer) clearTimeout(forceKillTimer);
+    let body = null;
+    try {
+      body = JSON.parse(stdout);
+    } catch {
+      body = null;
+    }
+    process.stderr.write(`[production-readiness] child-end ${label} status=${status} elapsedMs=${Date.now() - startedAt} timedOut=${timedOut ? 1 : 0}\n`);
+    resolve({ status, body, stdout, stderr: error || stderr, timedOut });
+  };
   childProcess.stdout.on("data", (chunk) => {
     stdout += chunk.toString();
   });
@@ -238,16 +279,13 @@ const runLocalJson = (args, env = {}) => new Promise((resolve) => {
     stderr += chunk.toString();
   });
   childProcess.on("error", (error) => {
-    resolve({ status: -1, body: null, stdout, stderr: error.message || String(error) });
+    finish({ status: -1, error: error.message || String(error) });
   });
-  childProcess.on("exit", (code) => {
-    let body = null;
-    try {
-      body = JSON.parse(stdout);
-    } catch {
-      body = null;
-    }
-    resolve({ status: code, body, stdout, stderr });
+  childProcess.on("exit", (code, signal) => {
+    finish({
+      status: timedOut ? 124 : (Number.isInteger(code) ? code : -1),
+      error: signal && !stderr ? `child exited from signal ${signal}` : null
+    });
   });
 });
 
@@ -310,7 +348,7 @@ const refreshSqliteAfterMutableChecks = async (checks) => {
 };
 
 const waitForSqlitePrimaryRead = async (checks, name = "sqlite primary read after refresh") => {
-  if (!requireSqlite) return;
+  if (!requiredReadSource) return;
   const timeoutMs = Math.max(1000, Number(process.env.VERIFY_SQLITE_READY_TIMEOUT_MS || 30000));
   const intervalMs = Math.max(250, Number(process.env.VERIFY_SQLITE_READY_INTERVAL_MS || 1000));
   const startedAt = Date.now();
@@ -320,20 +358,26 @@ const waitForSqlitePrimaryRead = async (checks, name = "sqlite primary read afte
       const health = await request("GET", "/api/v1/health");
       const currentRead = health.body?.data?.currentRead || {};
       const sqlite = health.body?.storage?.sqlite || {};
+      const postgres = health.body?.storage?.postgres || {};
       const source = currentRead.source || sqlite.readSource || null;
       attempts.push({
         status: health.status,
         currentReadSource: source,
         sqliteAvailable: sqlite.available ?? null,
         sqliteStale: sqlite.stale ?? null,
+        postgresAvailable: postgres.available ?? null,
         dbUpdatedAt: currentRead.dbUpdatedAt || sqlite.syncMetaUpdatedAt || null,
         fileUpdatedAt: currentRead.fileUpdatedAt || null
       });
-      if (health.status === 200 && sqlite.available === true && source === "sqlite") {
+      const ready = requiredReadSource === "postgres"
+        ? postgres.available === true && postgres.baseReady !== false && !postgres.baseBlockedReason && source === "postgres"
+        : sqlite.available === true && sqlite.baseReady !== false && !sqlite.baseBlockedReason && source === "sqlite";
+      if (health.status === 200 && ready) {
         pushCheck(checks, name, true, {
           attempts: attempts.length,
           timeoutMs,
           currentReadSource: source,
+          requiredReadSource,
           sqliteCounts: sqlite.counts || null,
           dbUpdatedAt: currentRead.dbUpdatedAt || sqlite.syncMetaUpdatedAt || null,
           fileUpdatedAt: currentRead.fileUpdatedAt || null
@@ -807,6 +851,93 @@ const run = async () => {
       stderrTail: frontendEvidenceSemantics.stderr.slice(-500)
     });
 
+    const recommendationConfidencePayload = await runLocalJson([
+      "scripts/verifyRecommendationConfidencePayload.cjs"
+    ]);
+    const recommendationConfidenceContract = recommendationConfidencePayload.body?.contract || {};
+    pushCheck(checks, "recommendation confidence public payload semantics",
+      recommendationConfidencePayload.status === 0
+      && recommendationConfidencePayload.body?.ok === true
+      && recommendationConfidencePayload.body?.verifier === "recommendation-confidence-production-payload"
+      && Number(recommendationConfidencePayload.body?.assertions || 0) > 0
+      && recommendationConfidenceContract.missingCalibrationSampleIsNull === true
+      && recommendationConfidenceContract.marketAlignmentIsTriState === true
+      && recommendationConfidenceContract.freshnessRequiresAuditedClock === true
+      && recommendationConfidenceContract.completenessUsesInputCoverageRatio === true
+      && recommendationConfidenceContract.missingFactsRemainNull === true, {
+      status: recommendationConfidencePayload.status,
+      verifier: recommendationConfidencePayload.body?.verifier || null,
+      assertions: recommendationConfidencePayload.body?.assertions ?? null,
+      contract: recommendationConfidenceContract,
+      stdoutTail: recommendationConfidencePayload.status === 0
+        ? ""
+        : recommendationConfidencePayload.stdout.slice(-500),
+      stderrTail: recommendationConfidencePayload.stderr.slice(-500)
+    });
+
+    const fastResultGeneration = await runLocalJson([
+      "scripts/verifyFastResultGenerationReconciliation.cjs"
+    ]);
+    const fastResultGenerationContract = fastResultGeneration.body?.contract || {};
+    pushCheck(checks, "fast result generation receipt review isolation",
+      fastResultGeneration.status === 0
+      && fastResultGeneration.body?.ok === true
+      && fastResultGeneration.body?.verifier === "fast-result-generation-reconciliation"
+      && Number(fastResultGeneration.body?.checks) === 21
+      && Number(fastResultGeneration.body?.passed) === 21
+      && Array.isArray(fastResultGeneration.body?.failed)
+      && fastResultGeneration.body.failed.length === 0
+      && fastResultGenerationContract.receiptReviewCannotEnterFormalMetrics === true
+      && fastResultGenerationContract.invalidReviewInputCannotAdvanceGeneration === true
+      && fastResultGenerationContract.existingQuarantineLedgerIsStrictlyValidated === true
+      && fastResultGenerationContract.existingSameEventReviewPreservedByteForByte === true
+      && fastResultGenerationContract.standaloneReviewIdentityIncludesEventVersion === true
+      && fastResultGenerationContract.producedReviewsCarryCanonicalEventVersion === true
+      && fastResultGenerationContract.reproducibleLegacyReviewRequiresUniqueEventBinding === true
+      && fastResultGenerationContract.legacyReviewContentMustReproduce === true
+      && fastResultGenerationContract.nonReproducibleReferenceReviewIsQuarantined === true
+      && fastResultGenerationContract.quarantineWriteFailureCannotAdvanceGeneration === true
+      && fastResultGenerationContract.reviewSurfacesRemainOneToOne === true
+      && fastResultGenerationContract.legacyLiveOnlyReviewIsNonFormalQuarantine === true
+      && fastResultGenerationContract.embeddedReviewCannotSelfVerifyFormalPublication === true
+      && fastResultGenerationContract.unverifiedLegacyFormalReviewCannotAdvanceGeneration === true
+      && fastResultGenerationContract.wrongEventFactorsAreNotInherited === true
+      && fastResultGenerationContract.resultOnlyTopLevelModelContentIsStripped === true
+      && fastResultGenerationContract.sqliteAliasCannotRenamePublicIdentity === true, {
+      status: fastResultGeneration.status,
+      verifier: fastResultGeneration.body?.verifier || null,
+      checks: fastResultGeneration.body?.checks ?? null,
+      passed: fastResultGeneration.body?.passed ?? null,
+      failed: fastResultGeneration.body?.failed || null,
+      contract: fastResultGenerationContract,
+      stdoutTail: fastResultGeneration.status === 0
+        ? ""
+        : fastResultGeneration.stdout.slice(-500),
+      stderrTail: fastResultGeneration.stderr.slice(-500)
+    });
+
+    const postgresSemanticReviews = await runLocalJson([
+      "scripts/verifyPostgresSemanticReviewCleanup.cjs"
+    ]);
+    pushCheck(checks, "postgres semantic result-only review canonicalization",
+      postgresSemanticReviews.status === 0
+      && postgresSemanticReviews.body?.ok === true
+      && postgresSemanticReviews.body?.verifier === "postgres-semantic-review-cleanup"
+      && Number(postgresSemanticReviews.body?.checks) >= 37
+      && postgresSemanticReviews.body?.fixture?.staleMatchId === "fivehundred_2040801"
+      && postgresSemanticReviews.body?.fixture?.keeperMatchId === "sporttery_2040801"
+      && postgresSemanticReviews.body?.fixture?.eventVersion === "2026-08-09T19:30:00.000Z"
+      && postgresSemanticReviews.body?.fixture?.resultIdentity === "2:2|sporttery:official-api", {
+      status: postgresSemanticReviews.status,
+      verifier: postgresSemanticReviews.body?.verifier || null,
+      checks: postgresSemanticReviews.body?.checks ?? null,
+      fixture: postgresSemanticReviews.body?.fixture || null,
+      stdoutTail: postgresSemanticReviews.status === 0
+        ? ""
+        : postgresSemanticReviews.stdout.slice(-500),
+      stderrTail: postgresSemanticReviews.stderr.slice(-500)
+    });
+
     const benchmarkSelection = await runLocalJson(["scripts/verifyBenchmarkSelectionPolicy.cjs"]);
     pushCheck(checks, "80 percent benchmark selection remains shadow-only", benchmarkSelection.status === 0
       && benchmarkSelection.body?.ok === true
@@ -1074,6 +1205,18 @@ const run = async () => {
       stderrTail: openResearchGateway.stderr.slice(-500)
     });
 
+    const apiFootballHardening = await runLocalJson(["scripts/verifyApiFootballHardening.cjs"]);
+    pushCheck(checks, "API-Football free supplement is quota-bounded and identity-safe",
+      apiFootballHardening.status === 0
+        && apiFootballHardening.body?.ok === true
+        && Number(apiFootballHardening.body?.assertions || 0) > 0, {
+        status: apiFootballHardening.status,
+        assertions: apiFootballHardening.body?.assertions ?? null,
+        networkCalls: apiFootballHardening.body?.networkCalls ?? null,
+        stdoutTail: apiFootballHardening.status === 0 ? "" : apiFootballHardening.stdout.slice(-500),
+        stderrTail: apiFootballHardening.stderr.slice(-500),
+      });
+
     const wikidataCandidates = await runLocalJson(["scripts/verifyWikidataEntityCandidates.cjs"]);
     pushCheck(checks, "Wikidata candidates remain quarantined", wikidataCandidates.status === 0
       && wikidataCandidates.body?.ok === true
@@ -1256,6 +1399,19 @@ const run = async () => {
       failedChecks: failedArtifactChecks(reviewSettlement),
       stdoutTail: reviewSettlement.status === 0 ? "" : reviewSettlement.stdout.slice(-500),
       stderrTail: reviewSettlement.stderr.slice(-500)
+    });
+
+    const reviewPerformance = await runLocalJson(["scripts/verifyReviewPerformanceSummary.cjs"]);
+    pushCheck(checks, "immutable daily formal review performance cache", reviewPerformance.status === 0
+      && reviewPerformance.body?.ok === true
+      && reviewPerformance.body?.version === "formal-review-performance-v1"
+      && reviewPerformance.body?.startDate === "2026-08-16", {
+      status: reviewPerformance.status,
+      version: reviewPerformance.body?.version || null,
+      startDate: reviewPerformance.body?.startDate || null,
+      checks: reviewPerformance.body?.checks ?? null,
+      stdoutTail: reviewPerformance.status === 0 ? "" : reviewPerformance.stdout.slice(-500),
+      stderrTail: reviewPerformance.stderr.slice(-500)
     });
 
     const archivedPreMatchCutoff = await runLocalJson([
@@ -1482,6 +1638,18 @@ const run = async () => {
         : null,
       stdoutTail: cloudflareSportteryCollector.status === 0 ? "" : cloudflareSportteryCollector.stdout.slice(-500),
       stderrTail: cloudflareSportteryCollector.stderr.slice(-500)
+    });
+
+    const huaweiFunctionGraphCollector = await runLocalJson(["scripts/verifyHuaweiFunctionGraphCollector.cjs"]);
+    pushCheck(checks, "Huawei FunctionGraph independent Sporttery collector artifact", huaweiFunctionGraphCollector.status === 0
+      && huaweiFunctionGraphCollector.body?.ok === true
+      && huaweiFunctionGraphCollector.body?.acceptedRows === 2, {
+      status: huaweiFunctionGraphCollector.status,
+      acceptedRows: huaweiFunctionGraphCollector.body?.acceptedRows ?? null,
+      assertions: huaweiFunctionGraphCollector.body?.assertions ?? null,
+      independenceDomain: huaweiFunctionGraphCollector.body?.independenceDomain ?? null,
+      stdoutTail: huaweiFunctionGraphCollector.status === 0 ? "" : huaweiFunctionGraphCollector.stdout.slice(-500),
+      stderrTail: huaweiFunctionGraphCollector.stderr.slice(-500)
     });
 
     const planCoverage = await runLocalJson(["scripts/verifyProductionPlanCoverage.cjs"]);
@@ -2112,6 +2280,7 @@ const run = async () => {
         "officialFinishedIneligiblePrimaryReasonCounts",
         "officialFinishedIneligibleReasonCounts",
         "officialResultRecordMissingRows",
+        "officialVoidRows",
         "pendingKickoffRange",
         "pendingRows",
         "settledRows",
@@ -2172,6 +2341,7 @@ const run = async () => {
               "invalid-kickoff",
               "future-kickoff",
               "read-model-row-missing",
+              "official-void",
               "awaiting-official-final",
               "official-finished-eligible-unsettled",
               "official-finished-ineligible",
@@ -2414,7 +2584,7 @@ const run = async () => {
     const aiArenaStatusPublished = aiArenaStatus.status === 200
       && aiArenaStatus.body?.ok === true
       && aiArenaStatus.body?.version === "ai-big-five-survival-status-v1"
-      && ["ai-big-five-survival-v2", "ai-big-five-survival-v3", "ai-big-five-survival-v4"]
+      && ["ai-big-five-survival-v2", "ai-big-five-survival-v3", "ai-big-five-survival-v4", "ai-big-five-survival-v5"]
         .includes(aiArenaStatus.body?.publicationVersion)
       && ["FORMING", "READY", "LOCKED"].includes(aiArenaStatusState)
       && Number(aiArenaStatus.body?.targetMatches) === 10
@@ -2452,16 +2622,30 @@ const run = async () => {
       const aiArenaLeagueSlots = Array.isArray(aiArena.body?.leagueSlots) ? aiArena.body.leagueSlots : [];
       const aiArenaState = String(aiArena.body?.state || "");
       const aiArenaStateValid = ["FORMING", "READY", "LOCKED"].includes(aiArenaState);
+      const aiArenaV5 = aiArena.body?.version === "ai-big-five-survival-v5";
+      const aiArenaAvailableMatches = Number(aiArena.body?.availableMatches);
       const aiArenaLockedValid = aiArenaState !== "LOCKED" || (
-        aiArena.body?.complete === true
-        && Number(aiArena.body?.availableMatches) === 10
+        (aiArenaV5
+          ? aiArena.body?.roundActive === true
+            && aiArenaAvailableMatches >= 2
+            && aiArena.body?.complete === (aiArenaAvailableMatches === 10)
+            && aiArena.body?.poolPolicy === "complete-or-friday-partial-lock-v1"
+            && aiArena.body?.shortfallPolicy === "lock-current-qualified-pool-no-backfill"
+            && aiArena.body?.dataAccess?.mode === "shared-immutable-pre-match-snapshot"
+            && aiArena.body?.dataAccess?.identicalInputs === true
+            && aiArena.body?.dataAccess?.externalProviderCallsActive === false
+            && aiArena.body?.resultWriter?.mode === "trusted-official-auto-settlement"
+            && aiArena.body?.resultWriter?.officialOnly === true
+            && aiArena.body?.resultWriter?.modelScoreWriteAllowed === false
+            && aiArena.body?.stakeFreedom === "any-qualified-match-or-zero-with-risk-caps"
+          : aiArena.body?.complete === true && aiArenaAvailableMatches === 10)
         && Array.isArray(aiArena.body?.matches)
-        && aiArena.body.matches.length === 10
+        && aiArena.body.matches.length === aiArenaAvailableMatches
         && aiArena.body?.integrity?.immutable === true
         && /^[a-f0-9]{64}$/.test(String(aiArena.body?.integrity?.stateHash || ""))
       );
       const aiArenaContractOk = aiArena.status === 200
-        && ["ai-big-five-survival-v2", "ai-big-five-survival-v3", "ai-big-five-survival-v4"]
+        && ["ai-big-five-survival-v2", "ai-big-five-survival-v3", "ai-big-five-survival-v4", "ai-big-five-survival-v5"]
           .includes(aiArena.body?.version)
         && aiArenaStateValid
         && Number(aiArena.body?.targetMatches) === 10
@@ -2595,21 +2779,22 @@ const run = async () => {
       exposesRawLlmRelay
     });
     const currentReadSource = current.body?.currentRead?.source || current.body?.dataSource || null;
-    const transitionCurrent = requireSqlite
+    const transitionCurrent = requiredReadSource === "sqlite"
       ? await request("GET", "/api/v1/matches/current?view=list&transition=1", null, accessHeaders)
       : null;
     const transitionCurrentReadSource = transitionCurrent?.body?.currentRead?.source
       || transitionCurrent?.body?.dataSource
       || null;
-    const currentReadSplitValid = !requireSqlite
-      || currentReadSource === "sqlite"
-      || (
+    const currentReadSplitValid = !requiredReadSource
+      || currentReadSource === requiredReadSource
+      || (requiredReadSource === "sqlite" &&
         currentReadSource === "generation"
         && transitionCurrent?.status === 200
         && transitionCurrentReadSource === "sqlite"
       );
     pushCheck(checks, "current read source", currentReadSplitValid, {
       requiredSqlite: requireSqlite,
+      requiredReadSource: requiredReadSource || null,
       dataSource: current.body?.dataSource || null,
       currentReadSource,
       transitionStatus: transitionCurrent?.status ?? null,
@@ -2637,7 +2822,7 @@ const run = async () => {
 
     const history = await request("GET", "/api/v1/matches/history?limit=5", null, accessHeaders);
     const historyRows = Array.isArray(history.body?.rows) ? history.body.rows : [];
-    pushCheck(checks, "history page", history.status === 200 && historyRows.length > 0 && (!requireSqlite || history.body?.source === "sqlite"), {
+    pushCheck(checks, "history page", history.status === 200 && historyRows.length > 0 && (!requiredReadSource || history.body?.source === requiredReadSource), {
       status: history.status,
       rows: historyRows.length,
       source: history.body?.source || null,

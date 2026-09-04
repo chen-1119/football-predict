@@ -23,17 +23,25 @@ import { getPredictionTipDisplay, getSportteryPoolRows, type SportteryOddsPoolDi
 import { getDisplayRecommendation } from '../services/displayRecommendation';
 import { getLeagueById, getTeamById } from '../services/entities';
 import type { Match, MultiLangString, Team } from '../services/mockData';
+import { WORLD_CUP_DATASET_SAFETY } from '../services/worldCupDatasetSafety';
 import {
-  getBestPrediction,
+  formatCalibratedModelProbability,
+  formatEvidenceScore,
+  isFormalPresentationAllowed
+} from '../services/predictionPresentation';
+import {
+  getAnalysisReferencePrediction,
   getDaysUntilWorldCup,
-  getMatchTrust,
+  getWorldCupCurrentOfficialStage,
   getWorldCupContenders,
   getWorldCupFixtureForecast,
   getWorldCupGroupForecasts,
   getWorldCupKnockoutForecast,
-  getWorldCupProjectedQualifiers,
+  getWorldCupLiveGroupStandings,
+  getWorldCupRound32Pairings,
   getWorldCupRecentResults,
-  getWorldCupSeededFixtures,
+  getWorldCupOfficialMatchNumber,
+  getWorldCupStandingQualifiers,
   getWorldCupUpsetRadar,
   getWorldCupWatchMatches,
   isWorldCupRelevantMatch,
@@ -44,6 +52,8 @@ import {
   WORLD_CUP_PIPELINE_CARDS,
   WORLD_CUP_STAGE_CARDS,
   type WorldCupGroupForecast,
+  type WorldCupRound32Pairing,
+  type WorldCupStandingTeam,
   type WorldCupTeamForecast
 } from '../services/worldCupData';
 
@@ -74,7 +84,7 @@ const copy = {
   stageDesc: { zh: '按官方 48 队赛制展示：12 组小组赛，前二直通，8 个最佳第三名补进 32 强。', en: '48 teams, 12 groups, top two plus eight best third-place teams to the Round of 32.' },
   model: { zh: '路径推演', en: 'Route Projection' },
   groups: { zh: '小组赛预测', en: 'Group Forecasts' },
-  groupsDesc: { zh: '使用球队强度、东道主加成、新军降权和小组全局竞争进行路径推演；世界杯赔率上线后会自动进入单场推荐。', en: 'Uses team strength, host boost, debutant adjustment and full-group competition.' },
+  groupsDesc: { zh: '使用球队强度、东道主加成、新军降权和小组全局竞争进行路径推演；世界杯赔率上线后进入单场分析，只有通过完整门槛才会成为正式推荐。', en: 'Uses team strength, host boost, debutant adjustment and full-group competition; released odds enter match analysis, and only the full gate creates a formal pick.' },
   bestThird: { zh: '最佳第三名竞争线', en: 'Best Third-Place Lane' },
   bestThirdNote: { zh: '第三名不是固定晋级，按积分、净胜球、进球数和强度排序抢 8 个名额。', en: 'Third-place teams compete for eight spots by points, goal difference, goals and strength.' },
   knockout: { zh: '淘汰赛路线', en: 'Knockout Route' },
@@ -90,9 +100,11 @@ const copy = {
   recent: { zh: '赛果复盘', en: 'Recent Reviews' },
   more: { zh: '查看详情', en: 'Details' },
   noRecent: { zh: '世界杯正赛尚未产生可复盘赛果。', en: 'No tournament results to review yet.' },
-  trust: { zh: '推荐强度', en: 'Pick Strength' },
+  evidenceScore: { zh: '证据评分', en: 'Evidence Score' },
+  watchIndex: { zh: '观察指数', en: 'Watch Index' },
   sp: { zh: '赔率', en: 'Odds' },
-  recommendation: { zh: '推荐方向', en: 'Pick' },
+  recommendation: { zh: '正式推荐', en: 'Formal Pick' },
+  analysisReference: { zh: '分析参考', en: 'Analysis Reference' },
   waiting: { zh: '待开售', en: 'Awaiting release' },
   disclaimer: { zh: '提示：本页为赛事数据分析与预测展示，仅供参考和娱乐研究使用，请理性看球。', en: 'Forecasts are for data analysis, reference and entertainment only.' }
 } as const;
@@ -118,6 +130,78 @@ const formatDateTime = (isoTime: string | undefined, language: Locale) => {
     hour12: false
   }).format(timestamp);
 };
+
+const currentStageCopy = {
+  kicker: { zh: '官方阶段看板', en: 'Official Stage Desk' },
+  desc: {
+    zh: '当前阶段由官方竞彩赛程编号动态判断；已完赛对阵、待开赛场次、赛前分析和下一轮预告集中展示。',
+    en: 'The active stage is derived from official Sporttery fixture numbers, with results, upcoming ties, analysis and the next round in one panel.'
+  },
+  synced: { zh: '已同步对阵', en: 'Synced ties' },
+  finished: { zh: '已完赛', en: 'Finished' },
+  upcoming: { zh: '待开赛', en: 'Upcoming' },
+  next: { zh: '下一场', en: 'Next' },
+  nextRound: { zh: '下一轮预告', en: 'Next-round preview' },
+  pending: { zh: '等待赛程补齐', en: 'Waiting for schedule' },
+  winner: { zh: '晋级', en: 'Advanced' },
+  pick: { zh: '赛前方向', en: 'Pre-match lean' },
+  odds: { zh: '赔率', en: 'Odds' },
+  score: { zh: '比分', en: 'Score' },
+  officialOnly: {
+    zh: '只读取官方竞彩世界杯赛程；损坏或未核验的 fallback 不参与阶段判断和展示。',
+    en: 'Only official Sporttery World Cup fixtures are used; damaged or unverified fallback data is excluded.'
+  }
+} as const;
+
+const datasetSafetyReasonLabels: Record<string, MultiLangString> = {
+  'invalid-team-groups': { zh: '球队分组异常', en: 'invalid team groups' },
+  'team-group-outlook-mismatch': { zh: '球队与分组展望不一致', en: 'team/group outlook mismatch' },
+  'team-group-cardinality-invalid': { zh: '小组球队数量异常', en: 'invalid group cardinality' },
+  'team-outlook-groups-not-diverse': { zh: '分组展望覆盖不足', en: 'incomplete outlook groups' },
+  'invalid-fixture-dates': { zh: '静态赛程日期异常', en: 'invalid static fixture dates' },
+  'invalid-fixture-groups': { zh: '静态赛程分组异常', en: 'invalid static fixture groups' },
+  'fixture-groups-not-diverse': { zh: '静态赛程分组覆盖不足', en: 'incomplete static fixture groups' },
+  'fixture-team-group-mismatch': { zh: '赛程球队与分组不一致', en: 'fixture/team group mismatch' },
+  'fixture-quality-untrusted': { zh: '静态赛程来源未核验', en: 'untrusted static fixture source' }
+};
+
+const isMatchResolved = (match: Match) => (
+  match.status === 'FINISHED'
+  || match.status === 'PENDING_RESULT'
+  || (Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway))
+);
+
+const getCleanStatusLabel = (match: Match, language: Locale) => {
+  const hasScore = Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway);
+  const score = hasScore ? ` ${match.scoreHome}:${match.scoreAway}` : '';
+  if (match.status === 'FINISHED') return language === 'zh' ? `完赛${score}` : `Finished${score}`;
+  if (match.status === 'LIVE') return language === 'zh' ? `进行中${score}` : `Live${score}`;
+  if (match.status === 'PENDING_RESULT') return language === 'zh' ? '待赛果' : 'Result pending';
+  return language === 'zh' ? '待开赛' : 'Scheduled';
+};
+
+const getCleanScoreLabel = (match: Match) => (
+  Number.isFinite(match.scoreHome) && Number.isFinite(match.scoreAway)
+    ? `${match.scoreHome}:${match.scoreAway}`
+    : 'VS'
+);
+
+const getWinnerSide = (match: Match): 'home' | 'away' | null => {
+  if (!Number.isFinite(match.scoreHome) || !Number.isFinite(match.scoreAway)) return null;
+  if ((match.scoreHome as number) > (match.scoreAway as number)) return 'home';
+  if ((match.scoreAway as number) > (match.scoreHome as number)) return 'away';
+  return null;
+};
+
+const getTeamShortName = (team: Team, language: Locale) => (
+  team.shortName[language]
+  || team.name[language]
+  || team.shortName.zh
+  || team.name.zh
+  || team.shortName.en
+  || team.name.en
+  || team.id
+);
 
 const getStatusLabel = (match: Match, language: Locale) => {
   if (match.status === 'FINISHED') {
@@ -156,31 +240,59 @@ const TeamFlag = ({ team }: { team: WorldCupTeamForecast }) => (
   />
 );
 
-const GroupTeamRow = ({ team, language }: { team: WorldCupTeamForecast; language: Locale }) => {
-  const status = team.projectedRank <= 2
-    ? (language === 'zh' ? '直通区' : 'Direct')
-    : team.projectedRank === 3
-      ? (language === 'zh' ? '第三名竞争' : 'Third-place race')
-      : (language === 'zh' ? '出局风险' : 'Elimination risk');
+const formatGoalDiff = (value: number) => {
+  if (!Number.isFinite(value)) return '0';
+  return value > 0 ? `+${value}` : `${value}`;
+};
+
+const getStandingSourceLabel = (source: WorldCupStandingTeam['standingSource'], language: Locale) => {
+  if (source === 'actual') return language === 'zh' ? '赛果锁定' : 'Locked';
+  if (source === 'mixed') return language === 'zh' ? '赛果+预测' : 'Live + model';
+  return language === 'zh' ? '预测补位' : 'Projected';
+};
+
+const getQualificationLabel = (team: WorldCupStandingTeam, language: Locale) => {
+  if (team.qualificationZone === 'direct') return language === 'zh' ? '直接出线区' : 'Direct lane';
+  if (team.qualificationZone === 'best-third') return language === 'zh' ? '最佳第三区' : 'Best third lane';
+  if (team.qualificationZone === 'eliminated') return language === 'zh' ? '出局' : 'Eliminated';
+  if (team.actualRank === 3) return language === 'zh' ? '第三名待比较' : 'Third-place pending';
+  return team.standingSource === 'projected'
+    ? (language === 'zh' ? '出局风险' : 'Elimination risk')
+    : (language === 'zh' ? '待追赶' : 'Chasing');
+};
+
+const getStandingLine = (team: WorldCupStandingTeam, language: Locale) => {
+  if (team.played > 0) {
+    return language === 'zh'
+      ? `${team.points}分 / ${team.played}场 / 净胜${formatGoalDiff(team.goalDifference)}`
+      : `${team.points} pts / ${team.played} played / GD ${formatGoalDiff(team.goalDifference)}`;
+  }
+
+  return language === 'zh'
+    ? `预测 ${team.projectedPoints.toFixed(1)}分 / FIFA ${team.fifaRank}`
+    : `Projected ${team.projectedPoints.toFixed(1)} pts / FIFA ${team.fifaRank}`;
+};
+
+const GroupTeamRow = ({ team, language }: { team: WorldCupStandingTeam; language: Locale }) => {
+  const hasResults = team.played > 0;
+  const status = getQualificationLabel(team, language);
 
   return (
-    <article className="worldcup-group-team-row">
+    <article className={`worldcup-group-team-row is-${team.qualificationZone}`}>
       <TeamFlag team={team} />
       <div className="worldcup-team-copy">
         <strong>{getTeamName(team, language)}</strong>
-        <small>
-          FIFA {team.fifaRank} / {language === 'zh' ? '均分' : 'Pts'} {team.projectedPoints.toFixed(1)}
-        </small>
+        <small>{getStandingLine(team, language)}</small>
         <em>{status}</em>
       </div>
       <div className="worldcup-team-prob">
-        <b>{formatPercent(team.advanceProbability)}</b>
-        <small>{language === 'zh' ? '晋级' : 'Advance'}</small>
+        <b>{hasResults ? team.points : formatPercent(team.advanceProbability)}</b>
+        <small>{hasResults ? (language === 'zh' ? '积分' : 'Points') : (language === 'zh' ? '晋级' : 'Advance')}</small>
       </div>
       <div className="worldcup-team-split">
-        <small>{language === 'zh' ? '头名' : 'Win'} {formatPercent(team.groupWinProbability)}</small>
-        <small>{language === 'zh' ? '直通' : 'Top 2'} {formatPercent(team.directAdvanceProbability)}</small>
-        <small>{language === 'zh' ? '第三线' : 'Best 3rd'} {formatPercent(team.bestThirdProbability)}</small>
+        <small>{language === 'zh' ? '排名' : 'Rank'} #{team.actualRank}</small>
+        <small>{hasResults ? `${team.wins}-${team.draws}-${team.losses}` : `${language === 'zh' ? '头名' : 'Win'} ${formatPercent(team.groupWinProbability)}`}</small>
+        <small>{getStandingSourceLabel(team.standingSource, language)}</small>
       </div>
       <span className="worldcup-team-meter" aria-hidden="true">
         <span style={{ '--advance': `${team.advanceProbability}%` } as React.CSSProperties} />
@@ -188,6 +300,45 @@ const GroupTeamRow = ({ team, language }: { team: WorldCupTeamForecast; language
     </article>
   );
 };
+
+const Round32Side = ({
+  team,
+  label,
+  language
+}: {
+  team: WorldCupStandingTeam | null;
+  label: MultiLangString;
+  language: Locale;
+}) => (
+  <div className="worldcup-r32-side">
+    <span>{pickText(label, language)}</span>
+    {team ? (
+      <div>
+        <TeamFlag team={team} />
+        <strong>{getTeamName(team, language)}</strong>
+        <small>{getStandingLine(team, language)}</small>
+      </div>
+    ) : (
+      <div>
+        <strong>{language === 'zh' ? '待定' : 'TBD'}</strong>
+        <small>{language === 'zh' ? '等待小组赛果' : 'Waiting for group results'}</small>
+      </div>
+    )}
+  </div>
+);
+
+const Round32PairingCard = ({ pairing, language }: { pairing: WorldCupRound32Pairing; language: Locale }) => (
+  <article className={`worldcup-r32-card is-${pairing.source}`}>
+    <header>
+      <strong>{pickText(pairing.title, language)}</strong>
+      <span>{getStandingSourceLabel(pairing.source, language)} / {language === 'zh' ? '路径指数' : 'Route index'} {Math.round(pairing.confidence)}/100</span>
+    </header>
+    <Round32Side team={pairing.left} label={pairing.leftLabel} language={language} />
+    <b className="worldcup-r32-vs">VS</b>
+    <Round32Side team={pairing.right} label={pairing.rightLabel} language={language} />
+    <p>{pickText(pairing.note, language)}</p>
+  </article>
+);
 
 type WorldCupCardRecommendation = {
   label: string;
@@ -282,11 +433,13 @@ const MatchCard = ({
   match,
   language,
   groupForecasts,
+  formalPresentationAllowed,
   onSelectMatch
 }: {
   match: Match;
   language: Locale;
   groupForecasts: WorldCupGroupForecast[];
+  formalPresentationAllowed: boolean;
   onSelectMatch: (id: string) => void;
 }) => {
   const home = getDisplayTeam(match, 'home');
@@ -296,24 +449,30 @@ const MatchCard = ({
     ? match.leagueName || match.leagueShortName
     : match.leagueNameEn || match.leagueShortNameEn)
     || league.shortName[language];
-  const prediction = getBestPrediction(match);
-  const displayRecommendation = getDisplayRecommendation(match, language);
-  const forecast = prediction ? null : getWorldCupFixtureForecast(match, groupForecasts);
-  const trust = displayRecommendation?.prediction?.trustScore || getMatchTrust(match) || forecast?.trust || 0;
+  const rawDisplayRecommendation = getDisplayRecommendation(match, language);
+  const displayRecommendation = formalPresentationAllowed ? rawDisplayRecommendation : null;
+  const analysisReference = !displayRecommendation
+    ? rawDisplayRecommendation?.prediction || getAnalysisReferencePrediction(match)
+    : undefined;
+  const forecast = displayRecommendation || !WORLD_CUP_DATASET_SAFETY.safe
+    ? null
+    : getWorldCupFixtureForecast(match, groupForecasts);
+  const presentedPrediction = displayRecommendation?.prediction || analysisReference;
+  const evidenceScore = formatEvidenceScore(presentedPrediction);
+  const modelProbability = formatCalibratedModelProbability(match, presentedPrediction);
   const pools = getSportteryPoolRows(match, language);
   const had = pools.find((pool) => pool.poolCode === 'HAD');
   const hhad = pools.find((pool) => pool.poolCode === 'HHAD');
-  const actionablePrediction = prediction && prediction.tipCode !== 'WATCH' ? prediction : null;
   const marketRecommendation = getMarketRecommendation(pools, language);
   const recommendation = displayRecommendation
     ? displayRecommendation.label
-    : actionablePrediction
-    ? getPredictionTipDisplay(actionablePrediction, language, true)
-    : marketRecommendation
-      ? marketRecommendation.label
-    : forecast
-      ? pickText(forecast.tip, language)
-      : copy.waiting[language];
+    : analysisReference
+      ? getPredictionTipDisplay(analysisReference, language, true)
+      : marketRecommendation
+        ? marketRecommendation.label
+        : forecast
+          ? pickText(forecast.tip, language)
+          : copy.waiting[language];
   const cardDetail = marketRecommendation?.detail || (forecast ? pickText(forecast.detail, language) : `${copy.waiting[language]} HAD ${copy.sp[language]}`);
 
   return (
@@ -335,8 +494,9 @@ const MatchCard = ({
       </button>
       <div className="worldcup-card-lines">
         <span>{leagueLabel}</span>
-        <span>{copy.recommendation[language]} {recommendation}</span>
-        <span>{copy.trust[language]} {trust ? `${trust}%` : '--'}</span>
+        <span>{displayRecommendation ? copy.recommendation[language] : copy.analysisReference[language]} {recommendation}</span>
+        <span>{copy.evidenceScore[language]} {evidenceScore}</span>
+        {modelProbability && <span>{language === 'zh' ? '模型概率' : 'Model probability'} {modelProbability}</span>}
         {forecast && (
           <span>
             {language === 'zh' ? '晋级参考' : 'Route reference'} {formatPercent(forecast.homeAdvanceProbability)} / {formatPercent(forecast.awayAdvanceProbability)}
@@ -373,20 +533,143 @@ const MatchCard = ({
   );
 };
 
+const OfficialStageMatchCard = ({
+  match,
+  language,
+  stageTitle,
+  groupForecasts,
+  formalPresentationAllowed,
+  onSelectMatch
+}: {
+  match: Match;
+  language: Locale;
+  stageTitle: string;
+  groupForecasts: WorldCupGroupForecast[];
+  formalPresentationAllowed: boolean;
+  onSelectMatch: (id: string) => void;
+}) => {
+  const home = getDisplayTeam(match, 'home');
+  const away = getDisplayTeam(match, 'away');
+  const homeName = getTeamShortName(home, language);
+  const awayName = getTeamShortName(away, language);
+  const pools = getSportteryPoolRows(match, language);
+  const had = pools.find((pool) => pool.poolCode === 'HAD');
+  const rawDisplayRecommendation = getDisplayRecommendation(match, language);
+  const displayRecommendation = formalPresentationAllowed ? rawDisplayRecommendation : null;
+  const analysisReference = !displayRecommendation
+    ? rawDisplayRecommendation?.prediction || getAnalysisReferencePrediction(match)
+    : undefined;
+  const forecast = displayRecommendation || !WORLD_CUP_DATASET_SAFETY.safe
+    ? null
+    : getWorldCupFixtureForecast(match, groupForecasts);
+  const marketRecommendation = getMarketRecommendation(pools, language);
+  const archivedDirectionMissing = isMatchResolved(match) && !displayRecommendation && !analysisReference;
+  const recommendation = displayRecommendation
+    ? displayRecommendation.label
+    : analysisReference
+      ? getPredictionTipDisplay(analysisReference, language, true)
+      : archivedDirectionMissing
+        ? (language === 'zh' ? '未归档' : 'Not archived')
+        : marketRecommendation?.label || (forecast ? pickText(forecast.tip, language) : currentStageCopy.pending[language]);
+  const presentedPrediction = displayRecommendation?.prediction || analysisReference;
+  const evidenceScore = formatEvidenceScore(presentedPrediction);
+  const modelProbability = formatCalibratedModelProbability(match, presentedPrediction);
+  const winnerSide = getWinnerSide(match);
+  const winner = winnerSide === 'home' ? homeName : winnerSide === 'away' ? awayName : '';
+  const oddsLabel = had?.odds
+    ? `${had.odds.odds1.toFixed(2)} / ${had.odds.oddsX.toFixed(2)} / ${had.odds.odds2.toFixed(2)}`
+    : isMatchResolved(match)
+      ? (language === 'zh' ? '赛前 SP 未归档' : 'Pre-match SP not archived')
+      : currentStageCopy.pending[language];
+  const officialMatchNumber = getWorldCupOfficialMatchNumber(match);
+  const stageCardLabel = officialMatchNumber !== null
+    ? `#${String(officialMatchNumber).padStart(3, '0')}`
+    : stageTitle;
+
+  return (
+    <button
+      className={`worldcup-r16-card ${isMatchResolved(match) ? 'is-finished' : 'is-upcoming'}`}
+      type="button"
+      onClick={() => onSelectMatch(match.id)}
+    >
+      <header>
+        <span>{stageCardLabel}</span>
+        <strong>{getCleanStatusLabel(match, language)}</strong>
+      </header>
+      <div className="worldcup-r16-teams">
+        <span className="worldcup-r16-side">
+          <TeamBadge team={home} size="sm" />
+          <strong>{homeName}</strong>
+        </span>
+        <b className="worldcup-r16-score">{getCleanScoreLabel(match)}</b>
+        <span className="worldcup-r16-side">
+          <strong>{awayName}</strong>
+          <TeamBadge team={away} size="sm" />
+        </span>
+      </div>
+      <div className="worldcup-r16-lines">
+        <span className="worldcup-r16-line">
+          <CalendarDays size={14} />
+          {formatDateTime(match.kickoffTime, language)}
+        </span>
+        <span className="worldcup-r16-line">
+          <Target size={14} />
+          {displayRecommendation ? copy.recommendation[language] : currentStageCopy.pick[language]} {recommendation}
+        </span>
+        <span className="worldcup-r16-line">
+          <Trophy size={14} />
+          {copy.evidenceScore[language]} {evidenceScore}
+        </span>
+        {modelProbability && (
+          <span className="worldcup-r16-line">
+            <BarChart3 size={14} />
+            {language === 'zh' ? '模型概率' : 'Model probability'} {modelProbability}
+          </span>
+        )}
+        <span className="worldcup-r16-line">
+          <BarChart3 size={14} />
+          HAD {currentStageCopy.odds[language]} {oddsLabel}
+        </span>
+      </div>
+      {winner && (
+        <span className="worldcup-r16-winner">
+          <Medal size={14} />
+          {currentStageCopy.winner[language]} {winner}
+        </span>
+      )}
+    </button>
+  );
+};
+
 export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
   const { language, matches, dataSync } = useApp();
   const shouldReduceMotion = useReducedMotion();
   const daysLeft = getDaysUntilWorldCup();
+  const formalPresentationAllowed = isFormalPresentationAllowed(
+    dataSync.modelEvaluation?.backtest?.riskTiers?.overall?.tier,
+    dataSync.sourceHealth?.fallbackCoverage?.servingMode || dataSync.sourceFallbackCoverage?.servingMode
+  );
 
   const groupForecasts = useMemo(() => getWorldCupGroupForecasts(), []);
-  const qualifiers = useMemo(() => getWorldCupProjectedQualifiers(groupForecasts), [groupForecasts]);
   const knockoutRoutes = useMemo(() => getWorldCupKnockoutForecast(groupForecasts), [groupForecasts]);
-  const seededWorldCupMatches = useMemo(() => getWorldCupSeededFixtures(), []);
   const syncedWorldCupMatches = useMemo(
     () => matches.filter(isWorldCupRelevantMatch).sort((a, b) => Date.parse(a.kickoffTime) - Date.parse(b.kickoffTime)),
     [matches]
   );
-  const allWorldCupMatches = syncedWorldCupMatches.length ? syncedWorldCupMatches : seededWorldCupMatches;
+  const allWorldCupMatches = syncedWorldCupMatches;
+  const officialGroupStageMatches = useMemo(
+    () => allWorldCupMatches.filter((match) => {
+      const matchNumber = getWorldCupOfficialMatchNumber(match);
+      return matchNumber !== null && matchNumber <= 72;
+    }),
+    [allWorldCupMatches]
+  );
+  const groupStandings = useMemo(
+    () => getWorldCupLiveGroupStandings(officialGroupStageMatches, groupForecasts),
+    [officialGroupStageMatches, groupForecasts]
+  );
+  const qualifiers = useMemo(() => getWorldCupStandingQualifiers(groupStandings), [groupStandings]);
+  const round32Pairings = useMemo(() => getWorldCupRound32Pairings(groupStandings), [groupStandings]);
   const watchMatches = useMemo(() => getWorldCupWatchMatches(allWorldCupMatches, 8), [allWorldCupMatches]);
   const fixtureMatches = useMemo(
     () => watchMatches.length
@@ -394,9 +677,25 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
       : allWorldCupMatches.filter((match) => match.status !== 'FINISHED' && match.status !== 'PENDING_RESULT').slice(0, 8),
     [allWorldCupMatches, watchMatches]
   );
+  const currentOfficialStage = useMemo(
+    () => getWorldCupCurrentOfficialStage(allWorldCupMatches),
+    [allWorldCupMatches]
+  );
+  const currentStageMatches = currentOfficialStage.matches;
+  const nextStageMatches = currentOfficialStage.nextMatches;
+  const isOfficialKnockoutStage = !['group', 'unknown'].includes(currentOfficialStage.id);
+  const showStaticForecastContent = WORLD_CUP_DATASET_SAFETY.safe && !isOfficialKnockoutStage;
+  const datasetGateReasons = WORLD_CUP_DATASET_SAFETY.reasons.map((reason) => (
+    datasetSafetyReasonLabels[reason]?.[language] || reason
+  ));
   const recentResults = useMemo(() => getWorldCupRecentResults(allWorldCupMatches, 5), [allWorldCupMatches]);
   const contenders = useMemo(() => getWorldCupContenders(allWorldCupMatches, 5), [allWorldCupMatches]);
   const upsetRadar = useMemo(() => getWorldCupUpsetRadar(allWorldCupMatches, 5), [allWorldCupMatches]);
+  const currentStageFinished = currentStageMatches.filter(isMatchResolved).length;
+  const upcomingCurrentStageMatches = currentStageMatches.filter((match) => !isMatchResolved(match));
+  const currentStageUpcoming = upcomingCurrentStageMatches.length;
+  const nextCurrentStageMatch = upcomingCurrentStageMatches[0] || null;
+  const spotlightMatches = (upcomingCurrentStageMatches.length ? upcomingCurrentStageMatches : fixtureMatches).slice(0, 3);
 
   const bestThird = qualifiers.bestThird;
   const updatedAt = dataSync.sourceUpdatedAt || dataSync.updatedAt || dataSync.lastCheckedAt;
@@ -413,7 +712,7 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
     { icon: CalendarDays, label: copy.kpis.matches[language], value: WORLD_CUP_OFFICIAL.matches, detail: `${WORLD_CUP_OFFICIAL.startDate} - ${WORLD_CUP_OFFICIAL.finalDate}` },
     { icon: Flag, label: copy.kpis.groups[language], value: WORLD_CUP_OFFICIAL.groups, detail: language === 'zh' ? '12 组 x 4 队' : '12 groups x 4 teams' },
     { icon: Trophy, label: copy.kpis.venues[language], value: WORLD_CUP_OFFICIAL.venues, detail: language === 'zh' ? '加拿大 / 墨西哥 / 美国' : 'Canada / Mexico / USA' },
-    { icon: Target, label: copy.kpis.sporttery[language], value: allWorldCupMatches.length || fixtureMatches.length, detail: fixtureMatches.length ? (language === 'zh' ? '已进入观察池' : 'In watch pool') : copy.waiting[language] },
+    { icon: Target, label: copy.kpis.sporttery[language], value: currentStageMatches.length || allWorldCupMatches.length || fixtureMatches.length, detail: currentOfficialStage.source === 'official-sporttery-schedule' ? currentOfficialStage.title[language] : copy.waiting[language] },
     { icon: Route, label: language === 'zh' ? '晋级名额' : 'Knockout Spots', value: 32, detail: language === 'zh' ? '前二 24 + 第三名 8' : 'Top two 24 + third-place 8' },
     { icon: BarChart3, label: language === 'zh' ? '路径推演' : 'Route Runs', value: WORLD_CUP_FORECAST_MODEL.simulations.toLocaleString(), detail: WORLD_CUP_FORECAST_MODEL.version },
     { icon: RefreshCw, label: copy.kpis.update[language], value: pageCheckedAt ? formatDateTime(pageCheckedAt, language) : '--', detail: updatedAt ? `${language === 'zh' ? '源' : 'Source'} ${formatDateTime(updatedAt, language)}` : '--' }
@@ -425,40 +724,43 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
         <div className="worldcup-spotlight-main">
           <span className="worldcup-kicker">
             <Trophy size={16} />
-            {copy.kicker[language]}
+            {pickText(WORLD_CUP_OFFICIAL.name, language)}
           </span>
-          <h2>{copy.heroTitle[language]}</h2>
-          <p>{copy.heroSubtitle[language]}</p>
+          <h1 style={{ fontSize: '1.55rem', fontFamily: 'var(--font-title)', lineHeight: 1.15 }}>
+            {currentOfficialStage.title[language]} · {language === 'zh' ? '官方赛程概览' : 'Official Fixture Overview'}
+          </h1>
+          <p>{currentStageCopy.desc[language]}</p>
           <div className="worldcup-spotlight-stats">
-            <span><strong>{WORLD_CUP_OFFICIAL.teams}</strong> {copy.kpis.teams[language]}</span>
-            <span><strong>{WORLD_CUP_OFFICIAL.matches}</strong> {copy.kpis.matches[language]}</span>
-            <span><strong>{WORLD_CUP_OFFICIAL.groups}</strong> {copy.kpis.groups[language]}</span>
-            <span><strong>{allWorldCupMatches.length || fixtureMatches.length}</strong> {copy.kpis.sporttery[language]}</span>
+            <span><strong>{currentStageMatches.length}</strong> {currentStageCopy.synced[language]}</span>
+            <span><strong>{currentStageFinished}</strong> {currentStageCopy.finished[language]}</span>
+            <span><strong>{currentStageUpcoming}</strong> {currentStageCopy.upcoming[language]}</span>
+            <span><strong>{nextStageMatches.length}</strong> {currentStageCopy.nextRound[language]}</span>
             <span className="worldcup-sync-pill">
               <RefreshCw size={14} />
               {pageCheckedAt ? formatDateTime(pageCheckedAt, language) : '--'}
             </span>
           </div>
           <div className="worldcup-spotlight-hosts">
-            <span>加拿大</span>
-            <span>墨西哥</span>
-            <span>美国</span>
+            <span>{language === 'zh' ? '仅官方竞彩赛程' : 'Official Sporttery only'}</span>
+            <span>{showStaticForecastContent ? (language === 'zh' ? '静态专题已通过门禁' : 'Static dataset approved') : (language === 'zh' ? '静态专题已隐藏' : 'Static dataset hidden')}</span>
           </div>
         </div>
         <div className="worldcup-spotlight-side">
-          {fixtureMatches.length ? (
-            fixtureMatches.slice(0, 3).map((match) => {
+          {spotlightMatches.length ? (
+            spotlightMatches.map((match) => {
               const home = getDisplayTeam(match, 'home');
               const away = getDisplayTeam(match, 'away');
-              const forecast = getWorldCupFixtureForecast(match, groupForecasts);
+              const forecast = WORLD_CUP_DATASET_SAFETY.safe
+                ? getWorldCupFixtureForecast(match, groupForecasts)
+                : null;
               const displayRecommendation = getDisplayRecommendation(match, language);
-              const prediction = getBestPrediction(match);
+              const analysisReference = !displayRecommendation ? getAnalysisReferencePrediction(match) : undefined;
               const marketRecommendation = getMarketRecommendation(getSportteryPoolRows(match, language), language);
               const miniRecommendation = displayRecommendation
-                ? displayRecommendation.label
-                : prediction && prediction.tipCode !== 'WATCH'
-                ? getPredictionTipDisplay(prediction, language, true)
-                : marketRecommendation?.label || (forecast ? pickText(forecast.tip, language) : copy.waiting[language]);
+                ? `${copy.recommendation[language]} ${displayRecommendation.label}`
+                : `${copy.analysisReference[language]} ${analysisReference
+                  ? getPredictionTipDisplay(analysisReference, language, true)
+                  : marketRecommendation?.label || (forecast ? pickText(forecast.tip, language) : copy.waiting[language])}`;
               return (
                 <button className="worldcup-mini-match" type="button" key={match.id} onClick={() => onSelectMatch(match.id)}>
                   <span className="worldcup-mini-label">{formatDateTime(match.kickoffTime, language)}</span>
@@ -477,28 +779,145 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
                 </button>
               );
             })
-          ) : (
-            knockoutRoutes.slice(0, 3).map((route) => (
-              <div className="worldcup-mini-match" key={`fallback-${route.team.id}`}>
-                <span className="worldcup-mini-label">{language === 'zh' ? '争冠路径观察' : 'Title route watch'}</span>
-                <span className="worldcup-mini-teams">
-                  <span>{route.team.flag} {getTeamName(route.team, language)}</span>
-                  <b>{formatPercent(route.champion)}</b>
-                  <span>{language === 'zh' ? '冠军概率' : 'champion'}</span>
-                </span>
-                <span className="worldcup-mini-meta">
-                  Group {route.team.groupId} / 32强 {formatPercent(route.round32)} / 8强 {formatPercent(route.quarterFinal)}
-                </span>
-                <span className="worldcup-mini-action">
-                  {copy.waiting[language]} SP
-                  <ChevronRight size={15} />
-                </span>
-              </div>
-            ))
-          )}
+          ) : <div className="worldcup-empty">{currentStageCopy.pending[language]}</div>}
         </div>
       </motion.section>
 
+      <motion.section className="worldcup-section worldcup-current-stage" {...reveal(0.012)}>
+        <div className="worldcup-current-stage-hero">
+          <span className="worldcup-kicker">
+            <Trophy size={16} />
+            {currentStageCopy.kicker[language]}
+          </span>
+          <div>
+            <h2>{currentOfficialStage.title[language]}</h2>
+            <p>{currentStageCopy.desc[language]}</p>
+          </div>
+          <div className="worldcup-current-stage-stats">
+            <article>
+              <span>{currentStageCopy.synced[language]}</span>
+              <strong>{currentStageMatches.length}/{currentOfficialStage.expectedMatches || '--'}</strong>
+            </article>
+            <article>
+              <span>{currentStageCopy.finished[language]}</span>
+              <strong>{currentStageFinished}</strong>
+            </article>
+            <article>
+              <span>{currentStageCopy.upcoming[language]}</span>
+              <strong>{currentStageUpcoming}</strong>
+            </article>
+            <article className="is-wide">
+              <span>{currentStageCopy.next[language]}</span>
+              <strong>
+                {nextCurrentStageMatch
+                  ? formatDateTime(nextCurrentStageMatch.kickoffTime, language)
+                  : '--'}
+              </strong>
+              <em>
+                {nextCurrentStageMatch
+                  ? `${getTeamShortName(getDisplayTeam(nextCurrentStageMatch, 'home'), language)} vs ${getTeamShortName(getDisplayTeam(nextCurrentStageMatch, 'away'), language)}`
+                  : currentStageCopy.pending[language]}
+              </em>
+            </article>
+          </div>
+        </div>
+
+        {currentStageMatches.length ? (
+          <div className="worldcup-r16-grid">
+            {currentStageMatches.map((match) => (
+              <OfficialStageMatchCard
+                key={match.id}
+                match={match}
+                language={language}
+                stageTitle={currentOfficialStage.title[language]}
+                groupForecasts={groupForecasts}
+                formalPresentationAllowed={formalPresentationAllowed}
+                onSelectMatch={onSelectMatch}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="worldcup-empty">{currentStageCopy.pending[language]}</div>
+        )}
+
+        {nextStageMatches.length > 0 && (
+          <div className="worldcup-next-round-strip">
+            <span className="worldcup-kicker">
+              <Medal size={16} />
+              {currentOfficialStage.nextTitle?.[language] || currentStageCopy.nextRound[language]}
+            </span>
+            <div>
+              {nextStageMatches.map((match) => (
+                <button
+                  className="worldcup-next-round-match"
+                  type="button"
+                  key={match.id}
+                  onClick={() => onSelectMatch(match.id)}
+                >
+                  <strong>{formatDateTime(match.kickoffTime, language)}</strong>
+                  <span>
+                    {getTeamShortName(getDisplayTeam(match, 'home'), language)}
+                    <b>VS</b>
+                    {getTeamShortName(getDisplayTeam(match, 'away'), language)}
+                  </span>
+                  <small>{getCleanStatusLabel(match, language)}</small>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <p className="worldcup-stage-footnote">
+          {currentStageCopy.officialOnly[language]}
+          {currentOfficialStage.startMatchNo !== null && currentOfficialStage.endMatchNo !== null
+            ? ` #${currentOfficialStage.startMatchNo}-${currentOfficialStage.endMatchNo}`
+            : ''}
+        </p>
+      </motion.section>
+
+      <motion.section className="worldcup-section" {...reveal(0.014)}>
+        <div className="worldcup-section-head">
+          <div>
+            <span className="worldcup-kicker">
+              <ShieldCheck size={16} />
+              {language === 'zh' ? '专题数据门禁' : 'Tournament Data Gate'}
+            </span>
+            <p>
+              {!WORLD_CUP_DATASET_SAFETY.safe
+                ? (language === 'zh'
+                  ? '静态专题数据集未通过安全校验：小组预测、静态 32 强/冠军概率、争冠强度和爆冷雷达已全部隐藏。当前页面只读取官方竞彩世界杯赛程。'
+                  : 'The static tournament dataset failed safety validation. Group forecasts, static Round-of-32/title probabilities, contender strength and upset radar are hidden; this page now reads only official Sporttery fixtures.')
+                : isOfficialKnockoutStage
+                  ? (language === 'zh'
+                    ? '赛事已进入淘汰赛，历史小组预测和静态路径推演已收起；当前官方阶段与下一阶段优先。'
+                    : 'The tournament is in the knockout phase, so old group forecasts and static route projections are collapsed in favor of the current and next official stages.')
+                  : (language === 'zh'
+                    ? '静态专题数据已通过安全门禁；官方赛程仍优先展示。'
+                    : 'The static tournament dataset passed its gate; official fixtures still take priority.')}
+            </p>
+          </div>
+          <span className="worldcup-sync-pill">
+            {WORLD_CUP_DATASET_SAFETY.safe
+              ? (language === 'zh' ? '数据集通过' : 'Dataset approved')
+              : (language === 'zh' ? '数据集拒绝' : 'Dataset rejected')}
+          </span>
+        </div>
+        <div className="worldcup-model-note">
+          <strong>{WORLD_CUP_DATASET_SAFETY.version}</strong>
+          <p>
+            {datasetGateReasons.length
+              ? `${language === 'zh' ? '阻断原因' : 'Blocked by'}：${datasetGateReasons.join(language === 'zh' ? '、' : ', ')}`
+              : (language === 'zh' ? '没有数据集阻断项。' : 'No dataset blockers.')}
+          </p>
+          <span>
+            {language === 'zh'
+              ? `当前阶段：${currentOfficialStage.title.zh} · 官方来源：${currentOfficialStage.source === 'official-sporttery-schedule' ? '已确认' : '等待同步'}`
+              : `Current stage: ${currentOfficialStage.title.en} · official source: ${currentOfficialStage.source === 'official-sporttery-schedule' ? 'confirmed' : 'pending'}`}
+          </span>
+        </div>
+      </motion.section>
+
+      {showStaticForecastContent && <>
       <motion.div {...reveal(0.015)}>
         <WorldCupLastDance language={language} />
       </motion.div>
@@ -597,11 +1016,11 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
           </span>
         </div>
         <div className="worldcup-group-grid">
-          {groupForecasts.map((group) => (
+          {groupStandings.map((group) => (
             <article className="worldcup-group-card" key={group.id}>
               <header>
                 <span>Group {group.id}</span>
-                <strong>{pickText(group.dates, language)}</strong>
+                <strong>{pickText(group.dates, language)} · {getStandingSourceLabel(group.source, language)}</strong>
               </header>
               <p>{pickText(group.headline, language)}</p>
               <div className="worldcup-group-team-list">
@@ -619,7 +1038,7 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
               <strong key={team.id}>
                 <TeamFlag team={team} />
                 {getTeamName(team, language)}
-                <small>{formatPercent(team.bestThirdProbability)} / {team.projectedPoints.toFixed(1)}分</small>
+                <small>{team.played > 0 ? `${team.points}分 / 净胜${formatGoalDiff(team.goalDifference)}` : `${formatPercent(team.bestThirdProbability)} / ${team.projectedPoints.toFixed(1)}分`}</small>
               </strong>
             ))}
           </div>
@@ -649,27 +1068,34 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
               </article>
             ))}
           </div>
-          <div className="worldcup-route-list">
-            {knockoutRoutes.slice(0, 10).map((route) => (
-              <article key={route.team.id}>
-                <TeamFlag team={route.team} />
-                <div className="worldcup-route-copy">
-                  <strong>{getTeamName(route.team, language)}</strong>
-                  <small>{pickText(route.tier, language)} / Group {route.team.groupId}</small>
-                </div>
-                <div className="worldcup-route-probs">
-                  <b>{formatPercent(route.champion)}</b>
-                  <small>{language === 'zh' ? '冠军' : 'Champion'}</small>
-                </div>
-                <div className="worldcup-route-bars">
-                  <span>32强 {formatPercent(route.round32)}</span>
-                  <span>16强 {formatPercent(route.round16)}</span>
-                  <span>8强 {formatPercent(route.quarterFinal)}</span>
-                  <span>4强 {formatPercent(route.semiFinal)}</span>
-                  <span>决赛 {formatPercent(route.final)}</span>
-                </div>
-              </article>
-            ))}
+          <div className="worldcup-knockout-detail">
+            <div className="worldcup-r32-board">
+              {round32Pairings.map((pairing) => (
+                <Round32PairingCard key={pairing.matchNo} pairing={pairing} language={language} />
+              ))}
+            </div>
+            <div className="worldcup-route-list">
+              {knockoutRoutes.slice(0, 6).map((route) => (
+                <article key={route.team.id}>
+                  <TeamFlag team={route.team} />
+                  <div className="worldcup-route-copy">
+                    <strong>{getTeamName(route.team, language)}</strong>
+                    <small>{pickText(route.tier, language)} / Group {route.team.groupId}</small>
+                  </div>
+                  <div className="worldcup-route-probs">
+                    <b>{formatPercent(route.champion)}</b>
+                    <small>{language === 'zh' ? '冠军' : 'Champion'}</small>
+                  </div>
+                  <div className="worldcup-route-bars">
+                    <span>32强 {formatPercent(route.round32)}</span>
+                    <span>16强 {formatPercent(route.round16)}</span>
+                    <span>8强 {formatPercent(route.quarterFinal)}</span>
+                    <span>4强 {formatPercent(route.semiFinal)}</span>
+                    <span>决赛 {formatPercent(route.final)}</span>
+                  </div>
+                </article>
+              ))}
+            </div>
           </div>
         </div>
       </motion.section>
@@ -688,7 +1114,14 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
         {fixtureMatches.length ? (
           <div className="worldcup-match-grid">
             {fixtureMatches.map((match) => (
-              <MatchCard key={match.id} match={match} language={language} groupForecasts={groupForecasts} onSelectMatch={onSelectMatch} />
+              <MatchCard
+                key={match.id}
+                match={match}
+                language={language}
+                groupForecasts={groupForecasts}
+                formalPresentationAllowed={formalPresentationAllowed}
+                onSelectMatch={onSelectMatch}
+              />
             ))}
           </div>
         ) : (
@@ -724,7 +1157,7 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
                   </span>
                   <span className="worldcup-contender-meta">
                     <b>{item.score}</b>
-                    <small>{copy.trust[language]}</small>
+                    <small>{copy.watchIndex[language]}</small>
                   </span>
                   <p>{pickText(item.reason, language)}</p>
                 </button>
@@ -807,6 +1240,7 @@ export const WorldCup: React.FC<WorldCupProps> = ({ onSelectMatch }) => {
           ))}
         </div>
       </motion.section>
+      </>}
     </div>
   );
 };

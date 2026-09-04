@@ -23,7 +23,7 @@ interface NavbarProps {
 }
 
 type NavTab = 'predictions' | 'fixtures' | 'arena' | 'review' | 'leagues';
-type DataStatus = 'ready' | 'syncing' | 'watch' | 'error';
+type DataStatus = 'locked' | 'ready' | 'syncing' | 'watch' | 'error';
 
 const navItems: Array<{
   key: NavTab;
@@ -48,9 +48,9 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
     topLeagues: { zh: '五大联赛', en: 'Top Leagues' },
     brand: { zh: '足球数据看板', en: 'Matchday Desk' },
     subtitle: { zh: '赛程 / 赔率 / 分析', en: 'Fixtures / Odds / Analysis' },
-    todayAnalysis: { zh: '今日分析', en: 'Today' },
+    todayAnalysis: { zh: '赛前分析', en: 'Analysis' },
     fixtures: { zh: '赛程', en: 'Fixtures' },
-    arena: { zh: 'AI生存战', en: 'AI Survival' },
+    arena: { zh: '策略模拟', en: 'Strategy Lab' },
     review: { zh: '复盘', en: 'Review' },
     more: { zh: '更多', en: 'More' },
     moreMenu: { zh: '更多功能', en: 'More options' },
@@ -63,10 +63,18 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
     primary: { zh: '主导航', en: 'Primary navigation' },
     mobilePrimary: { zh: '移动端主导航', en: 'Mobile primary navigation' },
     dataStatus: { zh: '数据状态', en: 'Data status' },
+    dataLocked: { zh: '待校验', en: 'Verify first' },
     dataReady: { zh: '数据在线', en: 'Data ready' },
     dataSyncing: { zh: '同步中', en: 'Syncing' },
     dataWatch: { zh: '数据提示', en: 'Data notice' },
-    dataError: { zh: '数据异常', en: 'Data issue' }
+    dataError: { zh: '数据异常', en: 'Data issue' },
+    dataPublishing: { zh: '发布切换', en: 'Publishing' },
+    dataRetrying: { zh: '同步重试', en: 'Retrying sync' },
+    dataIntegrity: { zh: '完整性待核', en: 'Integrity check' },
+    dataStale: { zh: '更新滞后', en: 'Update delayed' },
+    dataEvidence: { zh: '推荐证据待核', en: 'Evidence check' },
+    dataFallback: { zh: '降级读取', en: 'Fallback read' },
+    dataLoading: { zh: '读取赛程', en: 'Loading fixtures' }
   };
 
   const t = (key: keyof typeof translations) => translations[key][language] || '';
@@ -83,6 +91,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
   const visibleScheduleRetained = dataSync.currentLoaded && dataSync.currentCount > 0;
 
   const dataStatus: DataStatus = (() => {
+    if (!currentUser) return 'locked';
     // A generation/SQLite cutover may briefly fail the diagnostic health
     // probe while the already published schedule remains fully readable.
     // Keep this honest as "syncing" instead of telling customers the site is
@@ -106,15 +115,32 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
   })();
 
   const dataStatusLabel = {
+    locked: t('dataLocked'),
     ready: t('dataReady'),
     syncing: t('dataSyncing'),
     watch: t('dataWatch'),
     error: t('dataError')
   }[dataStatus];
 
+  const dataStatusDetail = (() => {
+    if (publicationTransition || dataSync.serviceTransitioning) return t('dataPublishing');
+    if (dataSync.error) return t('dataRetrying');
+    if (dataSync.sourceHealthOk === false) return t('dataIntegrity');
+    if (dataSync.serviceDataFresh === false || dataSync.sourceStale || dataSync.sourceDataFresh === false) return t('dataStale');
+    if (dataSync.recommendationReliable === false) return t('dataEvidence');
+    if (dataSync.healthServingMode === 'fallback-degraded') return t('dataFallback');
+    if (dataSync.currentLoading || !dataSync.currentLoaded) return t('dataLoading');
+    return '';
+  })();
+  const dataStatusReadable = dataStatus === 'syncing' || dataStatus === 'watch' || dataStatus === 'error';
+  const dataStatusDisplayLabel = dataStatusReadable && dataStatusDetail
+    ? `${dataStatusLabel} · ${dataStatusDetail}`
+    : dataStatusLabel;
+
   const dataStatusTitle = [
     t('dataStatus'),
     dataStatusLabel,
+    dataStatusDetail,
     dataSync.currentCount > 0 ? String(dataSync.currentCount) : ''
   ].filter(Boolean).join(' · ');
 
@@ -228,14 +254,14 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
 
           <div className="app-topbar-actions">
             <span
-              className={`app-data-status is-${dataStatus}`}
+              className={`app-data-status is-${dataStatus} ${dataStatusReadable ? 'is-readable' : ''}`}
               role="status"
               aria-live="polite"
               aria-label={dataStatusTitle}
               title={dataStatusTitle}
             >
               <span className="app-data-status-dot" aria-hidden="true" />
-              <span>{dataStatusLabel}</span>
+              <span>{dataStatusDisplayLabel}</span>
             </span>
 
             <div className="app-more" ref={moreRootRef}>

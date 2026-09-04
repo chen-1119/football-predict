@@ -25,14 +25,156 @@ const diskFailPercent = Math.max(diskWarnPercent + 1, Number(process.env.RUNTIME
 const sqliteWarnBytes = Math.max(64 * 1024 * 1024, Number(process.env.RUNTIME_MONITOR_SQLITE_WARN_BYTES || 1024 * 1024 * 1024));
 const sqliteFailBytes = Math.max(sqliteWarnBytes + 1, Number(process.env.RUNTIME_MONITOR_SQLITE_FAIL_BYTES || 2 * 1024 * 1024 * 1024));
 const sqliteFreeRatioWarn = Math.min(0.95, Math.max(0.1, Number(process.env.RUNTIME_MONITOR_SQLITE_FREE_RATIO_WARN || 0.35)));
+const sqliteRunawayGrowthBytes = Math.max(
+  64 * 1024 * 1024,
+  Number(process.env.RUNTIME_MONITOR_SQLITE_RUNAWAY_GROWTH_BYTES || 512 * 1024 * 1024),
+);
+const sqliteRunawayGrowthBytesPerHour = Math.max(
+  sqliteRunawayGrowthBytes,
+  Number(process.env.RUNTIME_MONITOR_SQLITE_RUNAWAY_GROWTH_BYTES_PER_HOUR || 1024 * 1024 * 1024),
+);
 const requireSqlite = process.env.RUNTIME_MONITOR_REQUIRE_SQLITE !== "0";
 const autoRepairSqlite = process.env.RUNTIME_MONITOR_AUTO_REPAIR_SQLITE === "1";
+const postgresMode = String(process.env.FOOTBALL_POSTGRES_MODE || "disabled").trim().toLowerCase();
 const checkSystemd = process.env.RUNTIME_MONITOR_CHECK_SYSTEMD !== "0" && !isWindows;
 const checkDisk = process.env.RUNTIME_MONITOR_CHECK_DISK !== "0" && !isWindows;
 const checkCleanup = process.env.RUNTIME_MONITOR_CHECK_CLEANUP !== "0";
 const checkModelEvaluation = process.env.RUNTIME_MONITOR_CHECK_MODEL_EVALUATION !== "0";
 const requireCandidateTemporalAudit =
   process.env.RUNTIME_MONITOR_REQUIRE_CANDIDATE_TEMPORAL_AUDIT === "1";
+
+const readPreviousRuntimeStatus = () => {
+  try {
+    if (!fs.existsSync(statusPath)) return null;
+    const parsed = JSON.parse(fs.readFileSync(statusPath, "utf8"));
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const publicationIdentityToken = (storage) => {
+  const identity = storage?.publication || storage?.publicationIdentity || {};
+  const values = [
+    identity.generationId,
+    identity.manifestHash,
+    identity.sourceCycleId,
+    identity.committedAt,
+  ].map((value) => String(value || "").trim());
+  return values.some(Boolean) ? values.join("|") : null;
+};
+
+const evaluateSqliteReadRequirement = ({
+  sqlite,
+  postgres,
+  currentRead,
+  requireSqlite: sqliteRequired,
+  autoRepairSqlite: sqliteAutoRepair,
+  postgresMode: configuredPostgresMode,
+}) => {
+  const sqliteAvailable = sqlite?.available === true;
+  const readSource = String(currentRead?.source || "").trim().toLowerCase();
+  const sqlitePublication = publicationIdentityToken(sqlite);
+  const postgresPublication = publicationIdentityToken(postgres);
+  const publicationParity = Boolean(
+    sqlitePublication
+    && postgresPublication
+    && sqlitePublication === postgresPublication
+  );
+  // During generation-pair-refresh the public read source is intentionally a
+  // transition label rather than `postgres`. If both storage projections are
+  // already bound to the same immutable publication, rebuilding SQLite cannot
+  // repair that resolver transition and only steals the worker's sync lock.
+  const primaryPostgres = configuredPostgresMode === "primary"
+    && (readSource === "postgres" || publicationParity);
+  const requirementMet = sqliteAvailable && (
+    !sqliteRequired
+    || (primaryPostgres ? publicationParity : readSource === "sqlite")
+  );
+  const repairEligible = Boolean(
+    sqliteAutoRepair
+    && sqliteRequired
+    && sqliteAvailable
+    && (primaryPostgres ? !publicationParity : readSource !== "sqlite")
+  );
+  return {
+    requirementMet,
+    repairEligible,
+    primaryPostgres,
+    publicationParity,
+    sqlitePublication,
+    postgresPublication,
+    reason: primaryPostgres
+      ? (publicationParity ? "postgres-primary-read-with-sqlite-parity" : "postgres-primary-sqlite-publication-mismatch")
+      : readSource === "sqlite"
+        ? "sqlite-primary-read"
+        : "sqlite-read-not-active",
+  };
+};
+
+const assessSqliteStorageStability = ({
+  bytes,
+  warnBytes,
+  failBytes,
+  freeRatio,
+  freeRatioWarn,
+  schemaVersion,
+  previousBytes = null,
+  previousCheckedAt = null,
+  checkedAt = new Date().toISOString(),
+  runawayGrowthBytes = 512 * 1024 * 1024,
+  runawayGrowthBytesPerHour = 1024 * 1024 * 1024,
+} = {}) => {
+  const currentBytes = Math.max(0, Number(bytes || 0));
+  const currentFreeRatio = Math.max(0, Number(freeRatio || 0));
+  const effectiveWarnBytes = Math.max(1, Number(warnBytes || 0));
+  const effectiveFailBytes = Math.max(effectiveWarnBytes + 1, Number(failBytes || 0));
+  const effectiveFreeRatioWarn = Math.max(0, Number(freeRatioWarn || 0));
+  const incrementalSchema = schemaVersion === "football-sqlite-v2-incremental";
+  const previous = Number(previousBytes);
+  const previousMs = Date.parse(previousCheckedAt || "");
+  const checkedMs = Date.parse(checkedAt || "");
+  const elapsedHours = Number.isFinite(previousMs)
+    && Number.isFinite(checkedMs)
+    && checkedMs > previousMs
+    ? (checkedMs - previousMs) / 3_600_000
+    : null;
+  const growthBytes = Number.isFinite(previous) && previous >= 0
+    ? currentBytes - previous
+    : null;
+  const growthBytesPerHour = growthBytes !== null && elapsedHours && elapsedHours > 0
+    ? growthBytes / elapsedHours
+    : null;
+  const runawayGrowth = growthBytes !== null
+    && growthBytes >= Math.max(1, Number(runawayGrowthBytes || 0))
+    && growthBytesPerHour !== null
+    && growthBytesPerHour >= Math.max(1, Number(runawayGrowthBytesPerHour || 0));
+  const reasons = [];
+  if (!incrementalSchema) reasons.push("non-incremental-schema");
+  if (currentBytes >= effectiveFailBytes) reasons.push("file-size-over-fail-budget");
+  else if (currentBytes >= effectiveWarnBytes) reasons.push("file-size-over-warn-budget");
+  if (currentFreeRatio >= effectiveFreeRatioWarn) reasons.push("free-page-ratio-high");
+  if (runawayGrowth) reasons.push("runaway-growth");
+  return {
+    status: runawayGrowth ? "failed" : reasons.length > 0 ? "watch" : "ok",
+    reasons,
+    bytes: currentBytes,
+    warnBytes: effectiveWarnBytes,
+    failBytes: effectiveFailBytes,
+    freeRatio: currentFreeRatio,
+    freeRatioWarn: effectiveFreeRatioWarn,
+    schemaVersion: schemaVersion || null,
+    incrementalSchema,
+    previousBytes: Number.isFinite(previous) && previous >= 0 ? previous : null,
+    previousCheckedAt: previousCheckedAt || null,
+    elapsedHours,
+    growthBytes,
+    growthBytesPerHour,
+    runawayGrowth,
+    runawayGrowthBytes: Math.max(1, Number(runawayGrowthBytes || 0)),
+    runawayGrowthBytesPerHour: Math.max(1, Number(runawayGrowthBytesPerHour || 0)),
+  };
+};
 const readAdminTokenFromFile = (filePath) => {
   const resolvedPath = String(filePath || "").trim();
   if (!resolvedPath) return "";
@@ -72,6 +214,14 @@ const fastResultWatcherMaxCheckAgeSeconds = Math.max(
   5,
   Number(process.env.RUNTIME_MONITOR_FAST_RESULT_WATCHER_MAX_CHECK_AGE_SECONDS || 30)
 );
+const fastResultWatcherRetryableGraceSeconds = Math.max(
+  fastResultWatcherMaxCheckAgeSeconds,
+  Number(process.env.RUNTIME_MONITOR_FAST_RESULT_WATCHER_RETRYABLE_GRACE_SECONDS || 300)
+);
+const candidateCaptureDeadlineRiskSeconds = Math.max(
+  120,
+  Number(process.env.RUNTIME_MONITOR_CANDIDATE_DEADLINE_RISK_SECONDS || 600)
+);
 const cloudSyncProcessPattern = process.env.RUNTIME_MONITOR_CLOUD_SYNC_PROCESS_PATTERN
   || "football-cloud-data|pushCloudSync|/tmp/football-cloud-data|SPORTTERY_RELAY_MODE=prefer";
 const npmCommand = isWindows ? "npm.cmd" : "npm";
@@ -84,6 +234,34 @@ const splitCsv = (value, fallback) => String(value || fallback)
 const finiteNumber = (value, fallback = null) => {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : fallback;
+};
+
+const candidateProspectiveCaptureRuntimeStatus = (
+  candidateCapture,
+  nowMs = Date.now(),
+  deadlineRiskSeconds = 600,
+) => {
+  if (candidateCapture?.ok === true) return "ok";
+  const blockers = Array.isArray(candidateCapture?.blockers)
+    ? candidateCapture.blockers
+    : [];
+  const heartbeatOnlyBlockers = new Set([
+    "candidate-capture-heartbeat-stale",
+    "candidate-heartbeat-preemptive-budget-missed",
+  ]);
+  const onlyHeartbeatDegraded = blockers.length > 0
+    && blockers.every((blocker) => heartbeatOnlyBlockers.has(blocker));
+  const dueCaptureComplete = candidateCapture?.heartbeat?.dueMatches === 0
+    && candidateCapture?.heartbeat?.dueCaptureComplete === true
+    && candidateCapture?.heartbeat?.dueAtomicComplete === true;
+  const noAdmissionGap = candidateCapture?.admission?.dueUnrecorded === 0
+    && candidateCapture?.admission?.readyDueUnrecorded === 0;
+  const finalizationMs = Date.parse(candidateCapture?.heartbeat?.nearestFinalizationAt || "");
+  const outsideDeadlineRisk = Number.isFinite(finalizationMs)
+    && finalizationMs - Number(nowMs) > Math.max(120, Number(deadlineRiskSeconds || 0)) * 1000;
+  return onlyHeartbeatDegraded && dueCaptureComplete && noAdmissionGap && outsideDeadlineRisk
+    ? "watch"
+    : "failed";
 };
 
 const systemdUnits = splitCsv(
@@ -259,6 +437,7 @@ const checkHealth = async () => {
   const storage = body.storage || {};
   const currentRead = body.data?.currentRead || {};
   const sqlite = storage.sqlite || {};
+  const postgres = storage.postgres || {};
   const servingMode = status.servingMode || "unknown";
   const hardFlags = {
     serviceOk: status.serviceOk === true,
@@ -340,6 +519,15 @@ const checkHealth = async () => {
   const fastWatcherCheckAgeSeconds = Number.isFinite(fastWatcherCheckedAtMs)
     ? Math.max(0, Math.round((Date.now() - fastWatcherCheckedAtMs) / 1000))
     : null;
+  const fastWatcherSuccessAtMs = Date.parse(fastResultWatcher?.lastSuccessAt || "");
+  const fastWatcherSuccessAgeSeconds = Number.isFinite(fastWatcherSuccessAtMs)
+    ? Math.max(0, Math.round((Date.now() - fastWatcherSuccessAtMs) / 1000))
+    : null;
+  const fastWatcherLastErrorCode = String(fastResultWatcher?.lastError?.code || "");
+  const fastWatcherRetryableSkip = fastWatcherLastErrorCode === "PUBLISHER_RETRYABLE_SKIP";
+  const fastWatcherRetryableWithinGrace = fastWatcherRetryableSkip
+    && fastWatcherSuccessAgeSeconds !== null
+    && fastWatcherSuccessAgeSeconds <= fastResultWatcherRetryableGraceSeconds;
   const fastWatcherCapabilityPresent = Boolean(
     fastResultWatcher
     && Object.prototype.hasOwnProperty.call(fastResultWatcher, "enabled")
@@ -360,6 +548,8 @@ const checkHealth = async () => {
     ? "ok"
     : fastWatcherHealthy
       ? "ok"
+      : fastWatcherConfigured && fastWatcherRecentlyChecked && fastWatcherRetryableWithinGrace
+        ? "watch"
       : fastWatcherConfigured && fastWatcherCheckAgeSeconds === null && !fastResultWatcher.lastError
         ? "watch"
         : "failed";
@@ -373,6 +563,9 @@ const checkHealth = async () => {
     checkAgeSeconds: fastWatcherCheckAgeSeconds,
     maxCheckAgeSeconds: fastResultWatcherMaxCheckAgeSeconds,
     lastSuccessAt: fastResultWatcher?.lastSuccessAt || null,
+    successAgeSeconds: fastWatcherSuccessAgeSeconds,
+    retryableGraceSeconds: fastResultWatcherRetryableGraceSeconds,
+    retryableSkipWithinGrace: fastWatcherRetryableWithinGrace,
     lastPublishedAt: fastResultWatcher?.lastPublishedAt || null,
     lastPublishedRows: fastResultWatcher?.lastPublishedRows ?? null,
     lastError: fastResultWatcher?.lastError || null,
@@ -386,16 +579,23 @@ const checkHealth = async () => {
             ? "watcher-starting"
             : !fastWatcherRecentlyChecked
               ? "watcher-heartbeat-stale"
+              : fastWatcherRetryableWithinGrace
+                ? "watcher-retryable-skip-within-grace"
               : fastResultWatcher.lastError
                 ? "watcher-reported-error"
                 : "watcher-healthy"
   });
 
-  const sqliteOk = sqlite.available === true && (!requireSqlite || currentRead.source === "sqlite");
-  const sqliteRepairEligible = autoRepairSqlite
-    && requireSqlite
-    && sqlite.available === true
-    && currentRead.source !== "sqlite";
+  const sqliteRequirement = evaluateSqliteReadRequirement({
+    sqlite,
+    postgres,
+    currentRead,
+    requireSqlite,
+    autoRepairSqlite,
+    postgresMode,
+  });
+  const sqliteOk = sqliteRequirement.requirementMet;
+  const sqliteRepairEligible = sqliteRequirement.repairEligible;
   addCheck("sqlite primary read", sqliteOk ? "ok" : (sqliteRepairEligible ? "watch" : "failed"), {
     requireSqlite,
     autoRepairSqlite,
@@ -404,26 +604,34 @@ const checkHealth = async () => {
     sqlitePath: sqlite.path || null,
     schemaVersion: sqlite.schemaVersion || null,
     currentReadSource: currentRead.source || null,
+    postgresMode,
+    publicationParity: sqliteRequirement.publicationParity,
+    sqlitePublication: sqliteRequirement.sqlitePublication,
+    postgresPublication: sqliteRequirement.postgresPublication,
+    reason: sqliteRequirement.reason,
     currentRows: body.data?.currentCount ?? null,
     historyRows: body.data?.historyCount ?? null
   });
 
-  const sqliteBytes = Number(sqlite.bytes || 0);
-  const sqliteFreeRatio = Number(sqlite.physical?.freeRatio || 0);
-  const incrementalSchema = sqlite.schemaVersion === "football-sqlite-v2-incremental";
-  const sqliteStorageStatus = sqliteBytes >= sqliteFailBytes
-    ? "failed"
-    : sqliteBytes >= sqliteWarnBytes || sqliteFreeRatio >= sqliteFreeRatioWarn || !incrementalSchema
-      ? "watch"
-      : "ok";
-  addCheck("sqlite storage stability", sqliteStorageStatus, {
-    bytes: sqliteBytes,
+  const previousRuntimeStatus = readPreviousRuntimeStatus();
+  const previousSqliteStorage = Array.isArray(previousRuntimeStatus?.checks)
+    ? previousRuntimeStatus.checks.find((check) => check?.name === "sqlite storage stability")
+    : null;
+  const sqliteStorage = assessSqliteStorageStability({
+    bytes: sqlite.bytes,
     warnBytes: sqliteWarnBytes,
     failBytes: sqliteFailBytes,
-    freeRatio: sqliteFreeRatio,
+    freeRatio: sqlite.physical?.freeRatio,
     freeRatioWarn: sqliteFreeRatioWarn,
-    schemaVersion: sqlite.schemaVersion || null,
-    incrementalSchema,
+    schemaVersion: sqlite.schemaVersion,
+    previousBytes: previousSqliteStorage?.bytes,
+    previousCheckedAt: previousRuntimeStatus?.checkedAt,
+    checkedAt: new Date().toISOString(),
+    runawayGrowthBytes: sqliteRunawayGrowthBytes,
+    runawayGrowthBytesPerHour: sqliteRunawayGrowthBytesPerHour,
+  });
+  addCheck("sqlite storage stability", sqliteStorage.status, {
+    ...sqliteStorage,
     warehousePolicy: sqlite.warehousePolicy || null,
   });
 
@@ -445,13 +653,27 @@ const markSqlitePrimaryReadRepaired = (details = {}) => {
 const maybeRepairSqliteRead = async (health) => {
   const currentRead = health?.data?.currentRead || {};
   const sqlite = health?.storage?.sqlite || {};
+  const postgres = health?.storage?.postgres || {};
+  const requirement = evaluateSqliteReadRequirement({
+    sqlite,
+    postgres,
+    currentRead,
+    requireSqlite,
+    autoRepairSqlite,
+    postgresMode,
+  });
   if (!autoRepairSqlite) return health;
   if (!requireSqlite) {
     addCheck("sqlite auto-repair", "ok", { skipped: true, reason: "sqlite-not-required" });
     return health;
   }
-  if (currentRead.source === "sqlite") {
-    addCheck("sqlite auto-repair", "ok", { skipped: true, reason: "already-sqlite" });
+  if (requirement.requirementMet) {
+    addCheck("sqlite auto-repair", "ok", {
+      skipped: true,
+      reason: requirement.reason,
+      currentReadSource: currentRead.source || null,
+      publicationParity: requirement.publicationParity,
+    });
     return health;
   }
   if (sqlite.available !== true) {
@@ -1184,6 +1406,7 @@ const candidateProspectiveTemporalRuntimeState = (modelEvaluation) => {
   const futureKickoffRows = count(temporal?.futureKickoffRows);
   const kickoffPassedRows = count(temporal?.kickoffPassedRows);
   const awaitingOfficialFinalRows = count(temporal?.awaitingOfficialFinalRows);
+  const officialVoidRows = count(temporal?.officialVoidRows);
   const officialResultRecordMissingRows = count(
     temporal?.officialResultRecordMissingRows,
   );
@@ -1215,6 +1438,7 @@ const candidateProspectiveTemporalRuntimeState = (modelEvaluation) => {
       futureKickoffRows,
       kickoffPassedRows,
       awaitingOfficialFinalRows,
+      officialVoidRows,
       officialResultRecordMissingRows,
       officialFinishedIneligibleRows,
       officialFinishedEligibleUnsettledRows,
@@ -1238,6 +1462,7 @@ const candidateProspectiveTemporalRuntimeState = (modelEvaluation) => {
     if (
       kickoffPassedRows
       !== awaitingOfficialFinalRows
+        + officialVoidRows
         + officialResultRecordMissingRows
         + officialFinishedIneligibleRows
         + officialFinishedEligibleUnsettledRows
@@ -1297,6 +1522,7 @@ const candidateProspectiveTemporalRuntimeState = (modelEvaluation) => {
     futureKickoffRows,
     kickoffPassedRows,
     awaitingOfficialFinalRows,
+    officialVoidRows,
     officialResultRecordMissingRows,
     officialFinishedIneligibleRows,
     officialFinishedIneligibleReasonCounts,
@@ -1331,14 +1557,23 @@ const checkModel = async () => {
   });
   const body = reachable ? model.body : null;
   const candidateCapture = candidateProspectiveRuntimeState(body);
+  const candidateCaptureStatus = candidateProspectiveCaptureRuntimeStatus(
+    candidateCapture,
+    Date.now(),
+    candidateCaptureDeadlineRiskSeconds,
+  );
   addCheck(
     "candidate prospective capture",
-    candidateCapture.ok ? "ok" : "failed",
+    candidateCaptureStatus,
     candidateCapture,
   );
   addCheck(
     "candidate prospective collection progress",
-    candidateProspectiveProgressStatus(candidateCapture),
+    candidateCaptureStatus === "failed"
+      ? "failed"
+      : candidateCapture.progress?.promotionReviewReady === true
+        ? "ok"
+        : "watch",
     candidateCapture.progress,
   );
   return body;
@@ -1655,6 +1890,9 @@ if (require.main === module) {
 }
 
 module.exports = {
+  assessSqliteStorageStability,
+  evaluateSqliteReadRequirement,
+  candidateProspectiveCaptureRuntimeStatus,
   candidateProspectiveProgressStatus,
   candidateProspectiveRuntimeState,
   candidateProspectiveTemporalRuntimeState,

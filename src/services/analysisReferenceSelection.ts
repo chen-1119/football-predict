@@ -11,8 +11,13 @@ import {
   isModelOnlyAnalysisReferenceEligible,
 } from './analysisReferenceEligibility';
 import { buildFiveHundredMarketReferencePresentation } from './externalOddsReferencePresentation';
+import {
+  buildDynamicRecommendationConfidence,
+  confidenceReferenceTier,
+} from './recommendationConfidence';
 
 export type AnalysisReferenceSource =
+  | 'published-reference'
   | 'official-calibrated-market'
   | 'official-market-consensus'
   | 'five-hundred-market'
@@ -21,6 +26,7 @@ export type AnalysisReferenceSource =
   | 'five-hundred-low-evidence-market'
   | 'model-only'
   | 'model-low-evidence'
+  | 'immutable-five-hundred-market'
   | 'atomic-dual-market-reference';
 
 export interface AnalysisReferenceSelection {
@@ -97,6 +103,7 @@ export const FIVE_HUNDRED_LOW_EVIDENCE_TIER = 'five-hundred-had-low-evidence-mar
 export const OFFICIAL_LOW_EVIDENCE_TIER = 'official-had-low-evidence-market-leader';
 export const MODEL_LOW_EVIDENCE_TIER = 'model-low-evidence-data-pick';
 export const ATOMIC_DUAL_MARKET_REFERENCE_TIER = 'atomic-dual-market-bound-reference';
+export const IMMUTABLE_FIVE_HUNDRED_REFERENCE_TIER = 'immutable-five-hundred-analysis-reference';
 
 type HadOddsTriplet = { odds1: number; oddsX: number; odds2: number };
 type LowEvidenceMarketProvider = 'official' | 'five-hundred';
@@ -490,6 +497,112 @@ const retainLockedPreCutoffReference = (
 
 const SHA256_PATTERN = /^[a-f0-9]{64}$/i;
 
+const buildImmutableAnalysisReference = (
+  match: Match,
+): AnalysisReferenceSelection | undefined => {
+  const decision = match.predictionMeta?.immutableAnalysisReferenceDecision;
+  const kickoffAt = Date.parse(String(decision?.kickoffTime || ''));
+  const matchKickoffAt = Date.parse(String(match.kickoffTime || ''));
+  const cutoffAt = Date.parse(String(decision?.cutoffTime || ''));
+  const decisionAt = Date.parse(String(decision?.decisionAt || ''));
+  const sourceUpdatedAt = Date.parse(String(decision?.sourceUpdatedAt || ''));
+  const sourceMatchId = String(match.sourceMatchId || match.id.replace(/^[^_]+_/, '')).trim();
+  const selectedSourceOdds = Number(decision?.selectedSourceOdds);
+  const marketProbability = Number(decision?.marketProbability);
+  const runnerUpProbability = Number(decision?.runnerUpProbability);
+  const leaderGap = Number(decision?.leaderGap);
+  const tipCode = decision?.code;
+  const expectedSourceOdds = tipCode === '1'
+    ? Number(decision?.sourceOdds?.odds1)
+    : tipCode === 'X'
+      ? Number(decision?.sourceOdds?.oddsX)
+      : Number(decision?.sourceOdds?.odds2);
+
+  if (
+    decision?.version !== 'immutable-analysis-reference-decision-v1'
+    || decision.integrityVerified !== true
+    || decision.integrityVersion !== 'immutable-analysis-reference-integrity-v1'
+    || !SHA256_PATTERN.test(String(decision.contentHash || ''))
+    || decision.selectionReason !== 'model-inputs-insufficient'
+    || decision.market !== 'HAD'
+    || !isDirection(tipCode)
+    || decision.source?.provider !== '500.com'
+    || decision.source?.official !== false
+    || decision.statisticsTrack !== 'analysis-only'
+    || decision.executable !== false
+    || decision.formalEligible !== false
+    || decision.liveEligible !== false
+    || decision.betSlipEligible !== false
+    || String(decision.sourceMatchId || '').trim() !== sourceMatchId
+    || !Number.isFinite(kickoffAt)
+    || !Number.isFinite(matchKickoffAt)
+    || kickoffAt !== matchKickoffAt
+    || !Number.isFinite(cutoffAt)
+    || !Number.isFinite(decisionAt)
+    || !Number.isFinite(sourceUpdatedAt)
+    || sourceUpdatedAt > decisionAt
+    || sourceUpdatedAt >= cutoffAt
+    || decisionAt >= cutoffAt
+    || cutoffAt > kickoffAt
+    || !Number.isFinite(selectedSourceOdds)
+    || selectedSourceOdds <= 1
+    || !Number.isFinite(expectedSourceOdds)
+    || Math.abs(expectedSourceOdds - selectedSourceOdds) > 0.000001
+    || !Number.isFinite(marketProbability)
+    || marketProbability < 0
+    || marketProbability > 1
+    || !Number.isFinite(runnerUpProbability)
+    || runnerUpProbability < 0
+    || runnerUpProbability > 1
+    || !Number.isFinite(leaderGap)
+    || leaderGap < 0
+    || leaderGap > 1
+  ) return undefined;
+
+  const label = referenceDirectionLabel(tipCode as OutcomeCode);
+  const prediction: PredictionDetail = {
+    marketType: 'BEST',
+    oddsPoolCode: 'HAD',
+    handicapLine: '0',
+    tipCode,
+    tipLabel: label,
+    // Keep the non-official price out of every executable recommendation gate.
+    // The labelled quote is returned separately as displayOdds.
+    odds: 0,
+    trustScore: Math.round(marketProbability * 100),
+    recommendationAction: 'reference',
+    recommendationTier: IMMUTABLE_FIVE_HUNDRED_REFERENCE_TIER,
+    explanation: {
+      zh: `模型训练输入不足，系统在销售截止前将 500 网 HAD 去水首位方向${label.zh}固化为独立数据参考；当时概率 ${(marketProbability * 100).toFixed(1)}%，领先第二方向 ${(leaderGap * 100).toFixed(1)} 个百分点。该方向仅供展示与复盘，不计正式命中率。`,
+      en: `Because audited model inputs were insufficient, the pre-cutoff 500.com HAD leader ${label.en} was locked as a separate data reference at ${(marketProbability * 100).toFixed(1)}%, ${(leaderGap * 100).toFixed(1)} points ahead of the runner-up. It is excluded from the formal hit rate.`,
+    },
+    analysisItems: [
+      {
+        zh: '方向、参考赔率、来源时间与截止时间已由同一条服务端哈希记录固化；截止后只重放，不重新选方向。',
+        en: 'Direction, reference price, source clock and cutoff were locked in one server-attested record; after cutoff it is replayed rather than recomputed.',
+      },
+      {
+        zh: `500 网参考赔率：主胜 ${Number(decision.sourceOdds?.odds1).toFixed(2)} / 平 ${Number(decision.sourceOdds?.oddsX).toFixed(2)} / 客胜 ${Number(decision.sourceOdds?.odds2).toFixed(2)}。`,
+        en: `500.com reference odds: home ${Number(decision.sourceOdds?.odds1).toFixed(2)} / draw ${Number(decision.sourceOdds?.oddsX).toFixed(2)} / away ${Number(decision.sourceOdds?.odds2).toFixed(2)}.`,
+      },
+    ],
+    riskTags: [
+      { zh: '非官方数据参考', en: 'Non-official data reference' },
+      { zh: '截止前原子固化', en: 'Atomically locked before cutoff' },
+      { zh: '不计正式命中率', en: 'Excluded from formal hit rate' },
+    ],
+    visibilityStatus: 'FREE',
+    resultStatus: 'PENDING',
+  };
+  return {
+    prediction,
+    source: 'immutable-five-hundred-market',
+    displayOdds: selectedSourceOdds,
+    sourceUpdatedAt: new Date(sourceUpdatedAt).toISOString(),
+    rankScore: referenceRankScore(prediction, 'immutable-five-hundred-market'),
+  };
+};
+
 /**
  * Replays the immutable HAD leg that the server already bound before cutoff.
  * This is the only post-cutoff fallback that does not depend on a fresh market
@@ -549,6 +662,21 @@ const buildAtomicDualMarketHadReference = (
   const tipCode = had.code as OutcomeCode;
   const tipLabel = referenceDirectionLabel(tipCode);
   const sameStoredDirection = candidate?.oddsPoolCode === 'HAD' && candidate.tipCode === tipCode;
+  const marketEvidenceScore = Math.round(marketProbability * 100);
+  const confidence = buildDynamicRecommendationConfidence({
+    selectedProbability: modelProbability,
+    marketProbability,
+    marketAligned: true,
+    dataQuality: candidate?.multiFactorEvidence?.dataQuality,
+    evidenceScore: candidate?.multiFactorEvidence?.evidenceScore,
+    supportingFactorCount: candidate?.multiFactorEvidence?.supportingFactors?.length,
+    blockerCount: candidate?.multiFactorEvidence?.blockers?.length,
+    formalRecommendation: false,
+  });
+  const calibratedTrustScore = confidence.score;
+  const recommendationTier = confidenceReferenceTier(confidence, 'atomic-dual-market');
+  const isLongPriceReference = false;
+  const isElevatedRiskReference = false;
   const prediction: PredictionDetail = {
     ...(sameStoredDirection ? candidate : {}),
     marketType: 'BEST',
@@ -557,25 +685,37 @@ const buildAtomicDualMarketHadReference = (
     tipCode,
     tipLabel,
     odds,
-    trustScore: Math.round(modelProbability * 100),
+    trustScore: calibratedTrustScore,
+    confidence,
     recommendationAction: 'reference',
-    recommendationTier: ATOMIC_DUAL_MARKET_REFERENCE_TIER,
+    recommendationTier,
     explanation: {
-      zh: `售前原子决策已锁定 HAD ${tipLabel.zh}，决策快照 SP ${odds.toFixed(2)}。该方向仅用于截止后展示与复盘，不计入正式推荐。`,
-      en: `The pre-cutoff atomic decision locked HAD ${tipLabel.en} at snapshot SP ${odds.toFixed(2)}. It is retained only for post-cutoff display and review, not as a formal pick.`,
+      zh: `赛前原子决策已锁定 HAD ${tipLabel.zh}，快照 SP ${odds.toFixed(2)}，官方去水支持约 ${marketEvidenceScore}%。该方向是可审计参考，不计入正式推荐。`,
+      en: `The pre-cutoff atomic decision locked HAD ${tipLabel.en} at snapshot SP ${odds.toFixed(2)}, with about ${marketEvidenceScore}% official de-vigged support. It remains an auditable reference and is not a formal pick.`,
     },
     analysisItems: [
       {
         zh: '方向、赔率、来源时钟与策略版本来自同一条验签通过的双市场绑定；截止后不得改向或用新赔率重算。',
         en: 'Direction, odds, source clocks, and strategy versions come from one verified dual-market binding and cannot be recomputed after cutoff.',
       },
+      {
+        zh: `置信分使用该方向的官方去水概率 ${marketEvidenceScore}%，不再用未达正式门槛的模型概率 ${Math.round(modelProbability * 100)}% 冒充置信度。`,
+        en: `Confidence combines model separation, evidence completeness, market agreement and historical reliability. Snapshot SP ${odds.toFixed(2)} does not determine it by itself.`,
+      },
       ...(sameStoredDirection ? candidate?.analysisItems || [] : []),
     ],
     riskTags: [
       {
-        zh: '原子绑定赛前方向 · 截止后仅展示',
-        en: 'Atomically bound pre-match direction · display only after cutoff',
+        zh: '原子绑定赛前方向 · 参考轨',
+        en: 'Atomically bound pre-match direction; reference track',
       },
+      ...(isLongPriceReference ? [{
+        zh: '长赔方向 · 低置信参考，不进精选与串关',
+        en: 'Long-price direction; low-confidence reference only, excluded from featured slips',
+      }] : isElevatedRiskReference ? [{
+        zh: '中高赔风险 · 降级参考',
+        en: 'Elevated price risk; downgraded reference',
+      }] : []),
       ...(sameStoredDirection ? candidate?.riskTags || [] : []),
     ],
     visibilityStatus: candidate?.visibilityStatus || 'FREE',
@@ -791,6 +931,7 @@ export const getOfficialReferenceOdds = (
 
 const referenceRankScore = (prediction: PredictionDetail, source: AnalysisReferenceSource) => {
   const sourcePriority: Record<AnalysisReferenceSource, number> = {
+    'published-reference': 450,
     'official-calibrated-market': 400,
     'official-market-consensus': 350,
     'five-hundred-market': 300,
@@ -799,21 +940,73 @@ const referenceRankScore = (prediction: PredictionDetail, source: AnalysisRefere
     'five-hundred-low-evidence-market': 150,
     'model-only': 100,
     'model-low-evidence': 75,
+    'immutable-five-hundred-market': 550,
     'atomic-dual-market-reference': 500,
   };
+  const confidenceBonus = prediction.confidence?.available === false
+    ? 0
+    : Number(prediction.trustScore || 0) / 10;
   return sourcePriority[source]
     + Number(prediction.multiFactorEvidence?.evidenceScore || 0)
-    + Number(prediction.trustScore || 0) / 10;
+    + confidenceBonus;
+};
+
+const isPublishedBestReference = (
+  match: Match,
+  prediction: PredictionDetail | undefined,
+): prediction is PredictionDetail => {
+  const policyVersion = String(match.predictionMeta?.policyVersion || '').trim();
+  const generatedAt = Date.parse(String(match.predictionMeta?.generatedAt || ''));
+  if (
+    !policyVersion
+    || !Number.isFinite(generatedAt)
+    || prediction?.marketType !== 'BEST'
+    || prediction.recommendationAction !== 'reference'
+    || !isDirection(prediction.tipCode)
+  ) return false;
+
+  if (prediction.oddsPoolCode === 'HHAD') {
+    return Boolean(String(prediction.handicapLine ?? '').trim());
+  }
+  if (prediction.oddsPoolCode === 'HAD') return true;
+
+  // MODEL_ONLY_1X2 rows deliberately have no official pool or line. Keep that
+  // published identity intact; assigning HAD here would turn a model-only
+  // direction into an official-market-looking selection and break the API/UI
+  // confidence binding.
+  return prediction.oddsPoolCode === undefined
+    && !String(prediction.handicapLine ?? '').trim();
+};
+
+const replayPublishedBestReference = (
+  match: Match,
+  prediction: PredictionDetail,
+): AnalysisReferenceSelection => {
+  const publicMetrics = prediction.confidence?.publicMetrics;
+  const sourceUpdatedAt = publicMetrics?.freshnessObservedAt
+    || publicMetrics?.freshnessSourceUpdatedAt
+    || publicMetrics?.freshnessAsOf
+    || modelReferenceTimestamp(match);
+  const odds = Number(prediction.odds);
+  return {
+    // Preserve object identity as well as market/pool/line/tip identity. Public
+    // confidence facts belong to this exact API-published selection only.
+    prediction,
+    source: 'published-reference',
+    displayOdds: Number.isFinite(odds) && odds > 1 ? odds : null,
+    sourceUpdatedAt,
+    rankScore: referenceRankScore(prediction, 'published-reference'),
+  };
 };
 
 /**
  * Selects one non-executable pre-match direction for analysis display.
  *
- * Once a BEST/model direction exists, official or 500.com odds may supplement
- * its price and risk evidence but may never replace that direction. Market
- * leaders may create a fallback direction only when no stored or derived model
- * direction exists. Low-evidence fallbacks remain excluded from formal
- * recommendation statistics.
+ * The server owns direction selection and atomically freezes the public BEST
+ * leg before cutoff. This client selector only replays that verified direction
+ * or uses an explicitly labelled fallback when no atomic decision exists. It
+ * never recomputes a frozen direction from later odds. Low-evidence fallbacks
+ * remain excluded from formal recommendation statistics.
  */
 export const selectOnSaleAnalysisReference = (
   match: Match,
@@ -828,13 +1021,27 @@ export const selectOnSaleAnalysisReference = (
     || now >= kickoffAt
   ) return undefined;
 
-  const storedBest = options.candidate || getVisiblePrediction(match, 'BEST');
+  const publishedBest = getVisiblePrediction(match, 'BEST');
+  const storedBest = options.candidate || publishedBest;
+  // The server uses WATCH as an explicit public disposition while retaining
+  // the private model direction for audit. Never synthesize a market-leader
+  // direction after that fail-closed decision, otherwise WATCH can reappear in
+  // the UI as a confident home/draw/away reference.
+  if (storedBest?.tipCode === 'WATCH' || storedBest?.recommendationTier === 'public-watch') {
+    return undefined;
+  }
   const modelWithInputAudit = match.probabilityModel as (typeof match.probabilityModel & {
     inputSufficiency?: { sufficient?: unknown };
   });
   const modelInputsInsufficient = modelWithInputAudit?.inputSufficiency?.sufficient === false;
   if (!isBeforeMatchSaleCutoff(match, now)) {
     if (options.allowModelOnly === false) return undefined;
+    if (modelInputsInsufficient) {
+      const lockedAnalysisReference = buildImmutableAnalysisReference(match);
+      if (lockedAnalysisReference) {
+        return retainLockedPreCutoffReference(lockedAnalysisReference);
+      }
+    }
     const atomicReference = buildAtomicDualMarketHadReference(match, storedBest);
     if (atomicReference) return retainLockedPreCutoffReference(atomicReference);
     const lockedModelReference = buildStableLowEvidenceModelReference(match, storedBest, now);
@@ -860,6 +1067,28 @@ export const selectOnSaleAnalysisReference = (
     }
     return undefined;
   }
+
+  // Before cutoff, the API-published BEST reference is the canonical public
+  // selection. Replaying it prevents client fallbacks from changing a
+  // MODEL_ONLY identity into HAD, or an HHAD +line selection into a different
+  // unhandicapped direction. Missing public metrics remain missing; this path
+  // never calculates or attaches confidence facts on the client.
+  if (
+    options.allowModelOnly !== false
+    && isPublishedBestReference(match, publishedBest)
+  ) {
+    return replayPublishedBestReference(match, publishedBest);
+  }
+
+  // The list card and the post-cutoff archive must replay the same server-bound
+  // direction.  Previously a low-evidence card could show the independent
+  // oneXTwo probability leader before cutoff, then switch to the atomically
+  // archived BEST/HAD leg after cutoff.  That made one public fixture appear to
+  // change from home to away even though the archive itself was immutable.
+  // Prefer the verified atomic HAD leg as soon as it exists; later odds and
+  // evidence may enrich the card, but cannot reselect its 1/X/2 direction.
+  const preCutoffAtomicReference = buildAtomicDualMarketHadReference(match, storedBest);
+  if (preCutoffAtomicReference) return preCutoffAtomicReference;
 
   // Public fixture cards call this selector with allowModelOnly=false. In that
   // lane a direction is publishable only when a complete, fresh official HAD
@@ -923,6 +1152,8 @@ export const selectOnSaleAnalysisReference = (
   // 0.5/0.5 strength prior plus a fixed home adjustment as if it were an
   // independently analysed team view.
   if (options.allowModelOnly !== false && modelInputsInsufficient) {
+    const lockedAnalysisReference = buildImmutableAnalysisReference(match);
+    if (lockedAnalysisReference) return lockedAnalysisReference;
     const insufficientInputMarket = buildFiveHundredMarketReferencePresentation(match, now);
     if (insufficientInputMarket) {
       return {

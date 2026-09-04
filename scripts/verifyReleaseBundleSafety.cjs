@@ -1,4 +1,5 @@
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { spawnSync } = require("node:child_process");
@@ -17,6 +18,7 @@ const {
   MAX_ARTIFACT_BYTES,
   inspectHistoricalTrainingBuffer,
 } = require("./historicalTrainingReleaseArtifact.cjs");
+const { inspectPrebuiltDist } = require("./releasePrebuiltDist.cjs");
 
 const rootDir = path.resolve(__dirname, "..");
 const tmpDir = path.join(rootDir, ".codex-tmp");
@@ -63,6 +65,7 @@ const modelEvaluationBundleEntry = "public/data/model-evaluation.json";
 const expectedModelEvaluationVersion = "rolling-backtest-v19";
 const expectedWalkForwardValidationVersion = "walk-forward-promotion-validation-v3";
 const expectedWalkForwardProtocolVersion = "nested-expanding-window-candidate-selection-v2";
+const prebuiltDistBundleEntry = ".release-prebuilt/dist-manifest.json";
 const bundledRuntimeMutableEntries = entries
   .map(normalizeReleaseEntry)
   .filter((entry) => runtimeMutableSourceEntries.includes(entry));
@@ -116,7 +119,7 @@ if (hasTlsAction && releaseActionMetadataMatches) {
     if (!action || typeof action !== "object" || Array.isArray(action)) throw new Error("action is not an object");
     if (JSON.stringify(Object.keys(action).sort()) !== JSON.stringify(allowedKeys)) throw new Error("action fields mismatch");
     if (action.actionVersion !== 1 || action.action !== "enable-ip-tls") throw new Error("action identity mismatch");
-    if (action.ipAddress !== "170.106.75.73") throw new Error("action IP mismatch");
+    if (action.ipAddress !== "134.175.132.183") throw new Error("action IP mismatch");
     if (action.agreeToSubscriberAgreement !== true || action.stagingPreflight !== true) {
       throw new Error("action consent or staging preflight is missing");
     }
@@ -159,6 +162,7 @@ const requiredReleaseEntries = [
   "server/dataGenerationBundle.cjs",
   "server/dataGenerationStore.cjs",
   "server/openResearchGateway.cjs",
+  "src/services/apiFootballRuntimePolicy.cjs",
   "src/services/collectorAttestation.cjs",
   "src/services/dualMarketDecisionBinding.cjs",
   "src/services/marketSourceProvenance.cjs",
@@ -197,6 +201,8 @@ const requiredReleaseEntries = [
   "scripts/runReleaseSyncWriteBarrier.cjs",
   "scripts/verifyReleaseSyncWriteBarrier.cjs",
   "scripts/releasePrebuildPolicy.cjs",
+  "scripts/releasePrebuiltDist.cjs",
+  "scripts/verifyReleasePrebuiltDist.cjs",
   "scripts/sqliteReleaseSeal.cjs",
   "scripts/verifyCandidateProspectiveTemperatureNeutralizationSuite.cjs",
   "scripts/verifyCandidateCommonCohortShadowG2.cjs",
@@ -220,7 +226,15 @@ const requiredReleaseEntries = [
   "scripts/verifyBenchmarkSelectionPolicy.cjs",
   "src/services/marketMovement.cjs",
   "scripts/verifyMarketMovement.cjs",
+  "src/services/recommendationConfidence.cjs",
+  "src/services/recommendationConfidence.d.cts",
+  "src/services/recommendationConfidence.ts",
+  "src/services/multiFactorRecommendation.cjs",
   "src/services/predictionPresentation.ts",
+  "src/components/predictions/RecommendationEvidenceFacts.tsx",
+  "src/styles/recommendation-evidence.css",
+  "scripts/verifyRecommendationConfidencePayload.cjs",
+  "scripts/verifyProbabilityDisplaySemantics.cjs",
   "scripts/verifyFrontendEvidenceSemantics.cjs",
   "scripts/verifyHhadCompanionShadowEvaluation.cjs",
   "scripts/hhadCompanionPublicContract.cjs",
@@ -233,6 +247,9 @@ const requiredReleaseEntries = [
   "scripts/verifyQaAccessOperator.cjs",
   "scripts/verifyReleaseTransactionSafety.cjs",
   "scripts/verifyFastResultProductionClone.cjs",
+  "scripts/reconcileFastResultGeneration.cjs",
+  "scripts/verifyFastResultGenerationReconciliation.cjs",
+  "scripts/verifyPostgresSemanticReviewCleanup.cjs",
   "scripts/verifyReleaseRecovery.cjs",
   "deploy/light-server/release-from-bundle.sh",
   "deploy/light-server/restore-ubuntu-operator-key.sh",
@@ -259,6 +276,8 @@ const requiredReleaseEntries = [
   "scripts/validateTlsReleaseAction.cjs",
   "scripts/validateCertbotRenewalConfig.cjs",
   "public/data/model-evaluation.json",
+  "dist/index.html",
+  prebuiltDistBundleEntry,
   HISTORICAL_TRAINING_RELEASE_ENTRY,
 ];
 const normalizedEntries = new Set(entries.map((entry) => entry.replace(/^\.\//, "")));
@@ -344,6 +363,57 @@ const historicalTrainingMetadataMatches = bundledHistoricalTraining.ok === true
   && signedHistoricalTraining?.minElo === bundledHistoricalTraining.minElo
   && signedHistoricalTraining?.maxElo === bundledHistoricalTraining.maxElo
   && signedHistoricalTraining?.lastMatchDate === bundledHistoricalTraining.lastMatchDate;
+const prebuiltExtractDir = fs.mkdtempSync(path.join(os.tmpdir(), "football-release-dist-"));
+let bundledPrebuiltDist = {
+  ok: false,
+  entry: prebuiltDistBundleEntry,
+  version: null,
+  treeHash: null,
+  fileCount: null,
+  totalBytes: null,
+  error: null,
+};
+try {
+  const extracted = spawnSync("tar", [
+    "-xzf", bundlePath,
+    "-C", prebuiltExtractDir,
+    "./dist",
+    `./${prebuiltDistBundleEntry}`,
+  ], {
+    cwd: rootDir,
+    encoding: "utf8",
+    maxBuffer: 5 * 1024 * 1024,
+  });
+  if (extracted.status !== 0) {
+    throw new Error(extracted.stderr || "prebuilt dist could not be extracted");
+  }
+  const declared = JSON.parse(fs.readFileSync(path.join(prebuiltExtractDir, prebuiltDistBundleEntry), "utf8"));
+  const actual = inspectPrebuiltDist(path.join(prebuiltExtractDir, "dist"));
+  if (JSON.stringify(declared) !== JSON.stringify(actual)) {
+    throw new Error("prebuilt dist manifest does not match bundled files");
+  }
+  bundledPrebuiltDist = {
+    ok: true,
+    entry: prebuiltDistBundleEntry,
+    version: actual.version,
+    treeHash: actual.treeHash,
+    fileCount: actual.fileCount,
+    totalBytes: actual.totalBytes,
+    error: null,
+  };
+} catch (error) {
+  bundledPrebuiltDist.error = error.message || String(error);
+} finally {
+  fs.rmSync(prebuiltExtractDir, { recursive: true, force: true });
+}
+const signedPrebuiltDist = signatureVerification?.manifest?.prebuiltDistArtifact || null;
+const prebuiltDistMetadataMatches = bundledPrebuiltDist.ok === true
+  && signedPrebuiltDist?.ok === true
+  && signedPrebuiltDist?.entry === bundledPrebuiltDist.entry
+  && signedPrebuiltDist?.version === bundledPrebuiltDist.version
+  && signedPrebuiltDist?.treeHash === bundledPrebuiltDist.treeHash
+  && Number(signedPrebuiltDist?.fileCount) === Number(bundledPrebuiltDist.fileCount)
+  && Number(signedPrebuiltDist?.totalBytes) === Number(bundledPrebuiltDist.totalBytes);
 const missedSensitivePolicyCases = expectedSensitiveEntries.filter((entry) => !isSensitiveReleaseEntry(entry));
 const falsePositivePolicyCases = expectedSafeEntries.filter((entry) => isSensitiveReleaseEntry(entry));
 const policySelfTestOk = missedSensitivePolicyCases.length === 0 && falsePositivePolicyCases.length === 0;
@@ -355,6 +425,7 @@ const payload = {
     && missingReleaseEntries.length === 0
     && modelEvaluationMetadataMatches
     && historicalTrainingMetadataMatches
+    && prebuiltDistMetadataMatches
     && Boolean(signatureVerification)
     && signedArtifactMatches
     && releaseActionMetadataMatches
@@ -370,6 +441,10 @@ const payload = {
   historicalTrainingArtifact: {
     ...bundledHistoricalTraining,
     manifestMatches: historicalTrainingMetadataMatches,
+  },
+  prebuiltDistArtifact: {
+    ...bundledPrebuiltDist,
+    manifestMatches: prebuiltDistMetadataMatches,
   },
   sensitiveEntries: sensitiveEntries.slice(0, 20),
   runtimeMutableSource: {

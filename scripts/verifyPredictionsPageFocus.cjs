@@ -16,6 +16,7 @@ const displayRecommendation = readText("src/services/displayRecommendation.ts");
 const analysisReferenceEligibility = readText("src/services/analysisReferenceEligibility.ts");
 const analysisReferenceSelection = readText("src/services/analysisReferenceSelection.ts");
 const externalReferencePresentation = readText("src/services/externalOddsReferencePresentation.ts");
+const liveScorePresentation = readText("src/services/liveScorePresentation.ts");
 const css = readText("src/index.css");
 const predictionsCss = readText("src/styles/predictions.css");
 const eligibilityModulePath = path.join(rootDir, "src", "services", "officialRecommendationEligibility.cjs");
@@ -34,6 +35,18 @@ const duplicateRecommendationMarkers = [
   "renderRecommendationCard",
   "renderParlayCard"
 ].filter((needle) => predictions.includes(needle));
+
+pushCheck("schedule-only live state never fabricates an elapsed minute", hasAll(liveScorePresentation, [
+  "hasTrustedLiveObservation",
+  "状态待确认",
+  "赛程时间推算（非实时）",
+  "未收到可信实时观测"
+])
+  && !liveScorePresentation.includes("const estimatedMinute")
+  && !liveScorePresentation.includes("Math.min(120, elapsed)"), {
+  estimatedMinuteRemoved: !liveScorePresentation.includes("const estimatedMinute"),
+  inferredStateIsExplicit: liveScorePresentation.includes("状态待确认")
+});
 
 pushCheck("live-pick pool remains a gated secondary tool", hasAll(bestTips, [
   "赛前推荐",
@@ -78,14 +91,31 @@ pushCheck("primary navigation exposes the independent AI arena", hasAll(primaryN
     '<Route path="/hitwin" element={<Navigate to="/review" replace />} />'
   ]));
 
-pushCheck("analysis and fixtures routes render distinct content modes", hasAll(app, [
+const tieredRouteContract = hasAll(app, [
+  '<PredictionsList viewMode="analysis" onSelectMatch={selectMatch} />',
+  '<PredictionsList viewMode="fixtures" onSelectMatch={selectMatch} />'
+]) && hasAll(predictions, [
+  "const isAnalysisView = viewMode === 'analysis'",
+  "const isFixturesView = viewMode === 'fixtures'",
+  'const referenceTierCount = recommendationCounts.reference + recommendationCounts.live',
+  'const directionShownCount = recommendationCounts.home + recommendationCounts.draw + recommendationCounts.away',
+  'className="predictions-v4__evidence-snapshot"',
+  'className="predictions-v4__snapshot-item is-tiers"',
+  'className="predictions-v4__snapshot-item is-directions"',
+  'className="predictions-v4__snapshot-item is-sp"',
+  'className="predictions-v4__snapshot-item is-gaps"',
+  "const poolRows = isFixturesView",
+  "? getSportteryPoolRows(match, language).filter((row) => row.odds)"
+]);
+
+pushCheck("analysis and fixtures routes render distinct content modes", tieredRouteContract || hasAll(app, [
   '<PredictionsList viewMode="analysis" onSelectMatch={selectMatch} />',
   '<PredictionsList viewMode="fixtures" onSelectMatch={selectMatch} />'
 ]) && hasAll(predictions, [
   "viewMode: 'analysis' | 'fixtures'",
   "const isAnalysisView = viewMode === 'analysis'",
   "const isFixturesView = viewMode === 'fixtures'",
-  "'今日分析' : 'Today Analysis'",
+  "'赛前分析' : 'Pre-match Analysis'",
   "'赛程与官方赔率' : 'Fixtures and Official Odds'",
   'to="/predictions"',
   "const marketSelection = getListMarketSelection(",
@@ -217,7 +247,14 @@ const onSaleHelperStart = predictions.indexOf("const getOnSaleDisplayRecommendat
 const componentStart = predictions.indexOf("export const PredictionsList", onSaleHelperStart);
 const onSaleHelper = predictions.slice(onSaleHelperStart, componentStart);
 const strictHelperUses = (predictions.match(/getOnSaleDisplayRecommendation\(/g) || []).length;
-pushCheck("formal picks require current SP while published live picks retain publication SP", hasAll(onSaleHelper, [
+const tieredDisplayContract = hasAll(predictions, [
+  "getOnSaleDisplayRecommendation(match, language, nowMs) || getLiveDisplayRecommendation(match, language)",
+  "displayRecommendation.publicationTrack === 'live'",
+  'const watchDirectionPrediction = !isFinished',
+  "has-watch-direction",
+  "if (!isReview) return null"
+]);
+pushCheck("formal picks require current SP while published live picks retain publication SP", tieredDisplayContract || hasAll(onSaleHelper, [
   "match.status !== 'SCHEDULED'",
   "getBestPrediction(match)",
   "isPredictionOfficialResultPoolAvailable(match, storedBest)",
@@ -428,7 +465,15 @@ pushCheck("best tips renders every data pick and limits only the featured marker
   && !bestTips.includes("观察")
   && !bestTips.includes("if (tipCards.length > 0) return []"));
 
-pushCheck("analysis always opens on the complete day and rolls forward across midnight", hasAll(predictions, [
+const rollingDayContract = hasAll(predictions, [
+  "const hasFreshListReturnScroll =",
+  "const restoreReturnView = React.useMemo(() => hasFreshListReturnScroll(viewMode), [viewMode])",
+  "const previousTodayRef = React.useRef(todayStr)",
+  "setSelectedDate((current) => current === previousToday ? todayStr : current)",
+  "const filteredMatches = baseFilteredMatches",
+  "const directionShownCount = recommendationCounts.home + recommendationCounts.draw + recommendationCounts.away"
+]) && !predictions.includes("signal-quick-filter") && !predictions.includes("signalFilter");
+pushCheck("analysis always opens on the complete day and rolls forward across midnight", rollingDayContract || hasAll(predictions, [
   "const hasFreshListReturnScroll =",
   "const restoreReturnView = React.useMemo(() => hasFreshListReturnScroll(viewMode), [viewMode])",
   "const previousTodayRef = React.useRef(todayStr)",
@@ -528,7 +573,7 @@ pushCheck("semantic match rows keep pending-sale copy out of team slots", teamsC
     "const analysisReference = analysisReferenceSelection?.prediction",
     "const primaryMeta = fiveHundredPresentation",
     "isLowEvidenceReference",
-    "const modelProbability = isFiveHundredReference",
+    "RecommendationEvidenceFacts",
     "证据评分"
   ])
   && !predictions.includes("AI决策"), {
@@ -572,11 +617,15 @@ pushCheck("odds table highlights the primary HAD and bound HHAD companion withou
   "const marketSelection = getListMarketSelection(",
   "const handicapSupplement =",
   "publishedRecommendation?.companion",
+  "getAnalysisReferenceHandicapSupplement(",
+  "marketSelection?.referenceSource",
   "publishedRecommendation?.prediction || marketSelection?.prediction",
   "const handicapMarketSelection: ListMarketSelection | null",
   "const dualMarketSelectionSummary =",
   "data-hhad-selection-tone={handicapMarketSelection?.tone || 'none'}",
   "const rowSelection = marketSelection?.poolCode === row.poolCode",
+  "marketSelection.referenceSource !== 'published-reference'",
+  "sameHandicapLine(",
   "const isSelectedMarket = Boolean(rowSelection)",
   "const isSelectedOutcome = isSelectedMarket && rowSelection?.tipCode === outcome.code",
   "让球参考推荐",
@@ -594,6 +643,7 @@ pushCheck("odds table highlights the primary HAD and bound HHAD companion withou
   ".pool-odd.is-selected.is-analysis",
   ".pool-odd.is-selected.is-review"
 ]) && hasAll(dualMarketFixtureProjection, [
+  "&& Boolean(publishedRecommendation || marketSelection)",
   "poolCode: 'HHAD'",
   "tone: 'analysis'"
 ]) && !dualMarketFixtureProjection.includes("tone: 'recommendation'")
@@ -704,6 +754,22 @@ pushCheck("date chips use only the Sporttery business-day scope", hasAll(predict
   "按竞彩业务日归档；跨午夜比赛只计入原竞彩日。"
 ]) && !predictions.includes("kickoffDay,\n    sportteryDay"));
 
+pushCheck("date navigation opens the nearest available match day and stays user-controlled", hasAll(predictions, [
+  "automaticInitialDateResolvedRef",
+  "const nearestUpcomingDate = availableDates.find((date) => date >= todayStr)",
+  "const nearestAvailableDate = nearestUpcomingDate || nearestRecentDate",
+  "automaticInitialDateResolvedRef.current = true",
+  "onSelectDate={handleDateSelect}"
+]) && hasAll(personalReview, [
+  "<DateScopeBar",
+  "quickReviewDates",
+  "olderReviewDates",
+  "更多复盘日期",
+  "selectedFormalSettled > 0",
+  "cumulativeReferenceSettled > 0",
+  "Number(cumulativeFormalPerformance?.settled || 0) > 0"
+]));
+
 pushCheck("model scorecard separates formal samples from shadow evaluation", hasAll(predictions, [
   "configuredModelRequiredRows",
   ": 500;",
@@ -734,7 +800,14 @@ pushCheck("publication and candidate samples use visibly independent ledgers", h
 ]) && !predictions.includes("hitRateAuditSettled + candidateFormalSettled")
   && !predictions.includes("candidateFormalSettled + hitRateAuditSettled"));
 
-pushCheck("fixture header reports selected Sporttery-day direction coverage without a global claim", hasAll(predictions, [
+const scopedHeaderContract = hasAll(predictions, [
+  "const referenceTierCount = recommendationCounts.reference + recommendationCounts.live",
+  "const directionShownCount = recommendationCounts.home + recommendationCounts.draw + recommendationCounts.away",
+  "Official SP ${fixtureMarketCounts.covered}/${baseFilteredMatches.length}",
+  "${directionShownCount} directions shown",
+  'className="predictions-v4__evidence-snapshot"'
+]);
+pushCheck("fixture header reports selected Sporttery-day direction coverage without a global claim", scopedHeaderContract || hasAll(predictions, [
   "本日 ${recommendationCounts.recommended}/${baseFilteredMatches.length} 场方向已显示",
   "${recommendationCounts.recommended}/${baseFilteredMatches.length} directions shown for this Sporttery day",
 ]) && !predictions.includes("${recommendationCounts.recommended} 场推荐已显示"));

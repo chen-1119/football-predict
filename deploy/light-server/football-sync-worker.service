@@ -9,7 +9,6 @@ WorkingDirectory=/opt/football-predict
 EnvironmentFile=/etc/football-predict/env
 Environment=SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH=/opt/football-predict/deploy/light-server/collector-trust-registry.json
 Environment=SYNC_WORKER_LOOP=1
-Environment=DATASTORE_READ_SOURCE=sqlite
 Environment=ENABLE_SQLITE_EXPORT=1
 Environment="NODE_OPTIONS=--max-old-space-size=768 --expose-gc"
 Environment=MALLOC_ARENA_MAX=2
@@ -20,9 +19,9 @@ Nice=10
 IOSchedulingClass=best-effort
 IOSchedulingPriority=7
 OOMScoreAdjust=500
-MemoryHigh=1100M
-MemoryMax=1300M
-MemorySwapMax=256M
+MemoryHigh=3G
+MemoryMax=4G
+MemorySwapMax=1G
 User=football
 Group=football
 NoNewPrivileges=true
@@ -34,7 +33,7 @@ PrivateTmp=true
 ProtectHome=read-only
 ProtectSystem=strict
 ReadWritePaths=/var/lib/football-predict
-ReadWritePaths=/opt/football-predict/public/data
+ReadWritePaths=/opt/football-predict/public
 ReadWritePaths=/opt/football-predict/server-data
 ProtectClock=true
 ProtectControlGroups=true

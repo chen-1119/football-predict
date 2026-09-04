@@ -5,17 +5,22 @@ const { spawn } = require("node:child_process");
 const { acquireSyncLock } = require("../server/syncLock.cjs");
 const { resolveActivePublication } = require("../server/dataGenerationBundle.cjs");
 const { readPointer, storePaths } = require("../server/dataGenerationStore.cjs");
+const { apiFootballRuntimePolicyFor } = require("../src/services/apiFootballRuntimePolicy.cjs");
 const {
   evaluateReleaseEnrichmentReuseRequest,
   inspectReleaseWorkerPriorityRequest,
 } = require("./releaseEnrichmentReuse.cjs");
 const {
+  captureFinalizationFor,
   decisionDeadlineFor,
 } = require("./candidateProspectiveLedger.cjs");
 const {
   candidateHeartbeatAttemptBudget,
   candidateHeartbeatPreemptiveSchedule,
 } = require("../server/candidateHeartbeatSchedule.cjs");
+const {
+  exactHeartbeatMatches,
+} = require("./runReleaseCandidateHeartbeatKeeper.cjs");
 
 let DatabaseSync = null;
 try {
@@ -33,6 +38,7 @@ const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
 // even if an EnvironmentFile is replaced or reordered during a unit reload.
 const loop = process.env.SYNC_WORKER_LOOP === "1" || process.argv.includes("--loop");
 const statusOnly = process.env.SYNC_WORKER_STATUS_ONLY === "1" || process.argv.includes("--status");
+const apiFootballRuntimePolicy = Object.freeze(apiFootballRuntimePolicyFor(process.env));
 const finiteEnvNumber = (name, fallback) => {
   const value = Number(process.env[name]);
   return Number.isFinite(value) ? value : fallback;
@@ -54,6 +60,28 @@ const phaseLockWaitMs = Math.max(
   5_000,
   finiteEnvNumber("SYNC_WORKER_PHASE_LOCK_WAIT_MS", 30_000),
 );
+const slowPublicationLockWaitMs = Math.max(
+  phaseLockWaitMs,
+  finiteEnvNumber("SYNC_WORKER_SLOW_PUBLICATION_LOCK_WAIT_MS", 900_000),
+);
+// These enrichers read the active match set and rewrite shared evidence files.
+// A background slow phase may overlap the next official cycle, so serialize
+// only those evidence writers on their own lock. The official result lane never
+// waits on that lock; its deterministic projections are retried by the final
+// rebased slow publication when a background writer is busy.
+const sharedSlowArtifactScripts = new Set([
+  "sync:500",
+  "sync:500:details",
+  "sync:api-football",
+  "sync:k-league-standings",
+  "sync:weather",
+  "sync:open-research",
+  "sync:web-consensus",
+  "sync:free-football",
+  "sync:prematch",
+]);
+const usesSharedSlowArtifact = (script) => sharedSlowArtifactScripts.has(String(script || ""));
+const sharedSlowArtifactLockDir = path.join(storeDir, "locks", "sync-enrichment-artifacts.lock");
 const relaySnapshotPath = path.resolve(
   process.env.SPORTTERY_RELAY_SNAPSHOT || path.join(storeDir, "sporttery-relay-snapshot.json")
 );
@@ -80,11 +108,23 @@ const candidateProspectiveCaptureAttemptStatusFile = path.join(
   storeDir,
   "candidate-prospective-capture-attempt-status.json",
 );
+const benchmarkProspectiveCaptureStatusFile = path.join(
+  storeDir,
+  "benchmark-prospective-capture-status.json",
+);
+const benchmarkProspectiveCaptureAttemptStatusFile = path.join(
+  storeDir,
+  "benchmark-prospective-capture-attempt-status.json",
+);
 const sqliteReadSourceEnabled = process.env.DATASTORE_READ_SOURCE === "sqlite" || process.env.CURRENT_MATCH_SOURCE === "sqlite";
 const sqliteExportEnabled = process.env.ENABLE_SQLITE_EXPORT === "1" || sqliteReadSourceEnabled;
 const modelBacktestOnSync = process.env.ENABLE_MODEL_BACKTEST_ON_SYNC === "1";
-const modelBacktestMinIntervalMs = Math.max(5, Number(process.env.MODEL_BACKTEST_ON_SYNC_MIN_INTERVAL_MINUTES || 30)) * 60 * 1000;
+const modelBacktestMinIntervalMs = Math.max(5, Number(process.env.MODEL_BACKTEST_ON_SYNC_MIN_INTERVAL_MINUTES || 120)) * 60 * 1000;
 const modelBacktestForce = process.env.MODEL_BACKTEST_ON_SYNC_FORCE === "1";
+const slowPhaseMinIntervalMs = Math.max(
+  5,
+  finiteEnvNumber("SYNC_WORKER_SLOW_PHASE_MIN_INTERVAL_MINUTES", 60),
+) * 60 * 1000;
 const candidateDeadlineCaptureEnabled =
   process.env.ENABLE_CANDIDATE_PROSPECTIVE_DEADLINE_CAPTURE !== "0";
 const candidateDeadlineCaptureIntervalMs = Math.max(
@@ -93,7 +133,7 @@ const candidateDeadlineCaptureIntervalMs = Math.max(
 ) * 1000;
 const candidateDeadlineCaptureTimeoutMs = Math.max(
   5_000,
-  finiteEnvNumber("CANDIDATE_PROSPECTIVE_CAPTURE_TIMEOUT_MS", 45_000),
+  finiteEnvNumber("CANDIDATE_PROSPECTIVE_CAPTURE_TIMEOUT_MS", 100_000),
 );
 const candidateDeadlineCaptureRetryMs = Math.max(
   1_000,
@@ -102,14 +142,14 @@ const candidateDeadlineCaptureRetryMs = Math.max(
     finiteEnvNumber("CANDIDATE_PROSPECTIVE_CAPTURE_RETRY_MS", 5_000),
   ),
 );
-const candidateDeadlineHeartbeatFreshnessLimitMs = 120_000;
+const candidateDeadlineHeartbeatFreshnessLimitMs = 180_000;
 const candidateDeadlineCaptureRecoveryBudgetMs = Math.max(
   1_000,
   Math.min(
     candidateDeadlineCaptureTimeoutMs,
     finiteEnvNumber(
       "CANDIDATE_PROSPECTIVE_CAPTURE_RECOVERY_BUDGET_MS",
-      candidateDeadlineCaptureTimeoutMs,
+      55_000,
     ),
   ),
 );
@@ -120,7 +160,7 @@ const candidateDeadlineCaptureSafetyMarginMs = Math.max(
 // `candidateDeadlineCaptureTimeoutMs` is an end-to-end attempt budget, not
 // merely the child execution timer.  Keeping the normal 10s/10s command
 // shutdown defaults here would make a nominal 45s attempt consume as much as
-// 65s before the recovery attempt can start, invalidating the 120s heartbeat
+// 65s before the recovery attempt can start, invalidating the heartbeat
 // proof.  Bound shutdown inside the advertised attempt budget instead.
 const candidateDeadlineCaptureTerminateGraceMs = Math.max(
   50,
@@ -161,10 +201,33 @@ const candidateDeadlineAttemptBudget = ({
   recoveryCaptureMs: candidateDeadlineCaptureRecoveryBudgetMs,
   safetyMarginMs: candidateDeadlineCaptureSafetyMarginMs,
 });
+const candidateDeadlineStartupSafetyWindowMs = Math.max(
+  candidateDeadlineHeartbeatFreshnessLimitMs,
+  candidateDeadlineCaptureTimeoutMs
+    + candidateDeadlineCaptureRetryMs
+    + candidateDeadlineCaptureRecoveryBudgetMs
+    + candidateDeadlineCaptureSafetyMarginMs,
+);
 const candidateDeadlineCaptureScript = path.join(
   rootDir,
   "scripts",
   "captureCandidateProspectiveDeadline.cjs",
+);
+const benchmarkDeadlineCaptureEnabled =
+  process.env.ENABLE_BENCHMARK_PROSPECTIVE_DEADLINE_CAPTURE !== "0";
+const benchmarkDeadlineCaptureIntervalMs = Math.min(
+  300,
+  Math.max(
+    60,
+    finiteEnvNumber("BENCHMARK_PROSPECTIVE_CAPTURE_INTERVAL_SECONDS", 240),
+  ),
+) * 1000;
+const benchmarkDeadlineCaptureTimeoutMs = Math.max(
+  10_000,
+  Math.min(
+    benchmarkDeadlineCaptureIntervalMs - 10_000,
+    finiteEnvNumber("BENCHMARK_PROSPECTIVE_CAPTURE_TIMEOUT_MS", 180_000),
+  ),
 );
 const footballDataFixturesStatusFile = path.join(
   storeDir,
@@ -177,6 +240,17 @@ const footballDataFixturesStatusFile = path.join(
 const footballDataFixturesMinIntervalMs = Math.max(
   30,
   finiteEnvNumber("FOOTBALL_DATA_FIXTURES_MIN_INTERVAL_MINUTES", 360)
+) * 60 * 1000;
+const footballDataResultsStatusFile = path.join(
+  storeDir,
+  "training",
+  "raw",
+  "football-data",
+  "sync-status.json"
+);
+const footballDataResultsMinIntervalMs = Math.max(
+  60,
+  finiteEnvNumber("FOOTBALL_DATA_RESULTS_MIN_INTERVAL_MINUTES", 720)
 ) * 60 * 1000;
 const webConsensusRefreshMs = Math.max(
   5,
@@ -244,6 +318,18 @@ const releaseCycleRetryMs = Math.max(
   1_000,
   Math.min(30_000, finiteEnvNumber("SYNC_WORKER_RELEASE_RETRY_MS", 5_000)),
 );
+const releaseSlowPhaseDrainBudgetMs = Math.max(
+  5_000,
+  finiteEnvNumber("SYNC_WORKER_RELEASE_SLOW_PHASE_DRAIN_BUDGET_MS", 120_000),
+);
+const shutdownDrainBudgetMs = Math.max(
+  5_000,
+  finiteEnvNumber("SYNC_WORKER_SHUTDOWN_DRAIN_BUDGET_MS", 30_000),
+);
+const interruptibleLockWaitSliceMs = Math.max(
+  250,
+  Math.min(5_000, finiteEnvNumber("SYNC_WORKER_INTERRUPTIBLE_LOCK_WAIT_SLICE_MS", 1_000)),
+);
 
 const terminateChildTree = (child, signal = "SIGTERM") => {
   if (!child?.pid || child.exitCode !== null || child.signalCode !== null) return false;
@@ -273,6 +359,82 @@ const terminateChildTree = (child, signal = "SIGTERM") => {
   }
 };
 
+const createWorkerInterruptedError = (request = null) => {
+  const signal = request?.signal || "shutdown";
+  const error = new Error(`sync worker interrupted by ${signal}`);
+  error.code = "SYNC_WORKER_INTERRUPTED";
+  error.signal = request?.signal || null;
+  error.requestedAt = request?.requestedAt || null;
+  return error;
+};
+
+const createWorkerShutdownController = ({
+  terminate = terminateChildTree,
+  timer = setTimeout,
+  clearTimer = clearTimeout,
+  now = () => new Date().toISOString(),
+  terminateGraceMs = commandTerminateGraceMs,
+} = {}) => {
+  const activeChildren = new Set();
+  let request = null;
+  let forceTimer = null;
+  let resolveWake = null;
+  const wakePromise = new Promise((resolve) => {
+    resolveWake = resolve;
+  });
+  const clearForceTimer = () => {
+    if (!forceTimer) return;
+    clearTimer(forceTimer);
+    forceTimer = null;
+  };
+  const scheduleForceKill = () => {
+    clearForceTimer();
+    if (activeChildren.size === 0) return;
+    forceTimer = timer(() => {
+      forceTimer = null;
+      for (const child of activeChildren) terminate(child, "SIGKILL");
+    }, Math.max(1, Number(terminateGraceMs) || 1));
+    forceTimer?.unref?.();
+  };
+  return {
+    get requested() { return request !== null; },
+    get request() { return request; },
+    get activeCount() { return activeChildren.size; },
+    wakePromise,
+    register(child) {
+      if (!child) return;
+      activeChildren.add(child);
+      if (request) {
+        terminate(child, "SIGTERM");
+        scheduleForceKill();
+      }
+    },
+    unregister(child) {
+      activeChildren.delete(child);
+      if (activeChildren.size === 0) clearForceTimer();
+    },
+    requestShutdown(signal = "SIGTERM") {
+      if (request) return request;
+      request = {
+        signal: String(signal || "SIGTERM"),
+        requestedAt: now(),
+      };
+      resolveWake?.({ reason: "worker-shutdown-requested", ...request });
+      for (const child of activeChildren) terminate(child, "SIGTERM");
+      scheduleForceKill();
+      return request;
+    },
+    interruptionError() {
+      return createWorkerInterruptedError(request);
+    },
+    dispose() {
+      clearForceTimer();
+    },
+  };
+};
+
+const runtimeShutdownController = createWorkerShutdownController();
+
 const commandTimeoutError = (command, args, timeoutMs) => {
   const error = new Error(`${command} ${args.join(" ")} timed out after ${timeoutMs}ms`);
   error.code = "SYNC_WORKER_COMMAND_TIMEOUT";
@@ -282,7 +444,11 @@ const commandTimeoutError = (command, args, timeoutMs) => {
   return error;
 };
 
-const runCommand = (command, args, extraEnv = {}, options = {}) => new Promise((resolve, reject) => {
+const runCommand = (command, args, extraEnv = {}, options = {}) => {
+  if (runtimeShutdownController.requested) {
+    return Promise.reject(runtimeShutdownController.interruptionError());
+  }
+  return new Promise((resolve, reject) => {
   const startedAt = new Date().toISOString();
   const timeoutMs = Math.max(1, Number(options.timeoutMs || commandTimeoutMs));
   const terminateGraceMs = Math.max(1, Number(options.terminateGraceMs || commandTerminateGraceMs));
@@ -296,6 +462,7 @@ const runCommand = (command, args, extraEnv = {}, options = {}) => new Promise((
     windowsHide: true,
     stdio: options.stdio || "inherit"
   });
+  runtimeShutdownController.register(child);
   let settled = false;
   let timedOut = false;
   let timeoutTimer = null;
@@ -308,6 +475,7 @@ const runCommand = (command, args, extraEnv = {}, options = {}) => new Promise((
     clearTimeout(timeoutTimer);
     clearTimeout(terminateTimer);
     clearTimeout(forceSettleTimer);
+    runtimeShutdownController.unregister(child);
     callback(value);
   };
   timeoutTimer = setTimeout(() => {
@@ -340,7 +508,8 @@ const runCommand = (command, args, extraEnv = {}, options = {}) => new Promise((
     error.signal = signal || null;
     finish(reject, error);
   });
-});
+  });
+};
 
 let candidateDeadlineCaptureInFlight = false;
 
@@ -362,10 +531,10 @@ const candidateDeadlineCaptureStatusAdvanced = (result, status) => {
   const evaluatedAtMs = Date.parse(status?.evaluatedAt || "");
   return Boolean(
     result?.ok === true
-    && status?.version === "prospective-deadline-heartbeat-v2"
     && Number.isFinite(startedAtMs)
     && Number.isFinite(evaluatedAtMs)
     && evaluatedAtMs >= startedAtMs
+    && exactHeartbeatMatches(status, status.evaluatedAt)
   );
 };
 
@@ -405,7 +574,7 @@ const runCandidateProspectiveDeadlineCapture = async ({
   try {
     const result = await run(
       process.execPath,
-      [candidateDeadlineCaptureScript],
+      [candidateDeadlineCaptureScript, "--deadline-only"],
       {
         SERVER_STORE_DIR: process.env.SERVER_STORE_DIR || storeDir,
         DATASTORE_SQLITE_PATH: process.env.DATASTORE_SQLITE_PATH || sqliteDbPath,
@@ -470,12 +639,10 @@ const runCandidateProspectiveDeadlineCapture = async ({
     const observedStatus = readStatus();
     const observedEvaluatedAtMs = Date.parse(observedStatus?.evaluatedAt || "");
     const attemptStartedAtMs = Date.parse(attemptStartedAt);
-    const statusAdvanced = Boolean(
-      observedStatus?.version === "prospective-deadline-heartbeat-v2"
-      && Number.isFinite(observedEvaluatedAtMs)
-      && Number.isFinite(attemptStartedAtMs)
-      && observedEvaluatedAtMs >= attemptStartedAtMs
-    );
+    const statusAdvanced = candidateDeadlineCaptureStatusAdvanced({
+      ok: true,
+      startedAt: attemptStartedAt,
+    }, observedStatus);
     const failed = {
       ok: false,
       skipped: false,
@@ -546,6 +713,21 @@ const startCandidateProspectiveDeadlineHeartbeat = ({
   const firstPublication = new Promise((resolve) => {
     resolveFirstPublication = resolve;
   });
+  const exactPublishedStatus = ({ requireFresh = true } = {}) => {
+    const status = readStatus();
+    const expectedEvaluatedAt = status?.evaluatedAt || null;
+    return {
+      status,
+      exact: Boolean(
+        expectedEvaluatedAt
+        && exactHeartbeatMatches(status, expectedEvaluatedAt, {
+          requireFresh,
+          nowMs: now(),
+          maxAgeMs: candidateDeadlineHeartbeatFreshnessLimitMs,
+        })
+      ),
+    };
+  };
   const clearNormal = () => {
     if (normalHandle === null) return;
     clearTimer(normalHandle);
@@ -612,7 +794,15 @@ const startCandidateProspectiveDeadlineHeartbeat = ({
       budget,
     }))
     .then((result) => {
-      if (result?.ok === true && result?.skipped !== true) {
+      const published = exactPublishedStatus();
+      const exactResult = Boolean(
+        result?.ok === true
+        && result?.skipped !== true
+        && typeof result?.statusEvaluatedAt === "string"
+        && result.statusEvaluatedAt === published.status?.evaluatedAt
+        && published.exact
+      );
+      if (exactResult) {
         lastResult = result;
         if (resolveFirstPublication) {
           resolveFirstPublication(result);
@@ -621,10 +811,17 @@ const startCandidateProspectiveDeadlineHeartbeat = ({
         clearRetry();
         scheduleNormal(result.statusEvaluatedAt || readStatus()?.evaluatedAt || null);
       } else {
-        lastResult = result;
+        lastResult = {
+          ...result,
+          ok: false,
+          skipped: false,
+          reason: result?.reason || "candidate-deadline-heartbeat-exact-status-invalid",
+          exactStatusValid: false,
+          observedEvaluatedAt: published.status?.evaluatedAt || null,
+        };
         scheduleRetry();
       }
-      return result;
+      return lastResult;
     })
     .catch((error) => {
       lastResult = {
@@ -656,6 +853,21 @@ const startCandidateProspectiveDeadlineHeartbeat = ({
     get lastResult() { return lastResult; },
     waitForIdle: () => inFlightTick || Promise.resolve(lastResult),
     waitForPublished: () => firstPublication,
+    waitForHealthy: async () => {
+      if (inFlightTick) await inFlightTick;
+      let published = exactPublishedStatus();
+      if (published.exact) return published.status;
+      const recovery = await tick({ recoveryAttempt: true });
+      published = exactPublishedStatus();
+      if (recovery?.ok === true && published.exact) return published.status;
+      const error = new Error(
+        `candidate deadline heartbeat is not exact: ${recovery?.reason || "status-invalid"}`,
+      );
+      error.code = "CANDIDATE_DEADLINE_HEARTBEAT_NOT_EXACT";
+      error.capture = recovery || null;
+      error.statusEvaluatedAt = published.status?.evaluatedAt || null;
+      throw error;
+    },
     pause: () => {
       paused = true;
       clearNormal();
@@ -671,6 +883,217 @@ const startCandidateProspectiveDeadlineHeartbeat = ({
       paused = true;
       clearNormal();
       clearRetry();
+    },
+  };
+};
+
+let benchmarkDeadlineCaptureInFlight = false;
+
+const benchmarkDeadlineCaptureStatusAdvanced = (result, status) => {
+  const startedAtMs = Date.parse(result?.startedAt || "");
+  const evaluatedAtMs = Date.parse(status?.evaluatedAt || "");
+  return Boolean(
+    result?.ok === true
+    && status?.version === "goodwin-benchmark-deadline-capture-v1"
+    && status?.captureMode === "benchmark-only"
+    && status?.ok === true
+    && status?.skipped === false
+    && Array.isArray(status?.blockers)
+    && status.blockers.length === 0
+    && Number.isFinite(startedAtMs)
+    && Number.isFinite(evaluatedAtMs)
+    && evaluatedAtMs >= startedAtMs
+  );
+};
+
+const writeBenchmarkDeadlineCaptureAttempt = (payload) => {
+  try {
+    return writeJsonAtomic(benchmarkProspectiveCaptureAttemptStatusFile, {
+      version: "benchmark-prospective-capture-attempt-v1",
+      ...payload,
+    });
+  } catch {
+    return null;
+  }
+};
+
+const runBenchmarkProspectiveDeadlineCapture = async ({
+  timeoutMs = benchmarkDeadlineCaptureTimeoutMs,
+  run = runCommand,
+  readStatus = () => readJson(benchmarkProspectiveCaptureStatusFile, null),
+  writeAttempt = writeBenchmarkDeadlineCaptureAttempt,
+} = {}) => {
+  if (!benchmarkDeadlineCaptureEnabled) {
+    return { ok: true, skipped: true, reason: "disabled" };
+  }
+  if (benchmarkDeadlineCaptureInFlight) {
+    return { ok: true, skipped: true, reason: "benchmark-capture-already-running" };
+  }
+  benchmarkDeadlineCaptureInFlight = true;
+  const attemptStartedAt = new Date().toISOString();
+  const boundedTimeoutMs = Math.max(
+    1_000,
+    Math.min(benchmarkDeadlineCaptureTimeoutMs, Number(timeoutMs || 0)),
+  );
+  try {
+    const result = await run(
+      process.execPath,
+      [candidateDeadlineCaptureScript, "--benchmark-only"],
+      {
+        SERVER_STORE_DIR: process.env.SERVER_STORE_DIR || storeDir,
+        DATASTORE_SQLITE_PATH: process.env.DATASTORE_SQLITE_PATH || sqliteDbPath,
+      },
+      {
+        timeoutMs: boundedTimeoutMs,
+        stdio: "ignore",
+      },
+    );
+    const status = readStatus();
+    if (!benchmarkDeadlineCaptureStatusAdvanced(result, status)) {
+      const failed = {
+        ...result,
+        ok: false,
+        skipped: false,
+        reason: "benchmark-deadline-capture-status-not-advanced",
+        statusEvaluatedAt: status?.evaluatedAt || null,
+      };
+      writeAttempt({
+        startedAt: result.startedAt || attemptStartedAt,
+        finishedAt: result.finishedAt || new Date().toISOString(),
+        ok: false,
+        skipped: false,
+        reason: failed.reason,
+        publishedEvaluatedAt: failed.statusEvaluatedAt,
+        timeoutMs: boundedTimeoutMs,
+      });
+      return failed;
+    }
+    const completed = {
+      ...result,
+      script: "candidate:benchmark-deadline-capture",
+      statusEvaluatedAt: status.evaluatedAt,
+      dueMatches: Number(status.dueMatches || 0),
+      eventsAdded: Number(status.eventsAdded || 0),
+    };
+    writeAttempt({
+      startedAt: result.startedAt || attemptStartedAt,
+      finishedAt: result.finishedAt || new Date().toISOString(),
+      ok: true,
+      skipped: false,
+      reason: status.reason || "benchmark-deadline-capture-advanced",
+      publishedEvaluatedAt: status.evaluatedAt,
+      timeoutMs: boundedTimeoutMs,
+      dueMatches: completed.dueMatches,
+      eventsAdded: completed.eventsAdded,
+    });
+    return completed;
+  } catch (error) {
+    const failed = {
+      ok: false,
+      skipped: false,
+      script: "candidate:benchmark-deadline-capture",
+      reason: "benchmark-deadline-capture-failed",
+      error: error?.message || String(error),
+      errorCode: error?.code || null,
+      timeoutMs: boundedTimeoutMs,
+    };
+    writeAttempt({
+      startedAt: attemptStartedAt,
+      finishedAt: new Date().toISOString(),
+      ...failed,
+    });
+    return failed;
+  } finally {
+    benchmarkDeadlineCaptureInFlight = false;
+  }
+};
+
+const startBenchmarkProspectiveDeadlineCapture = ({
+  intervalMs = benchmarkDeadlineCaptureIntervalMs,
+  run = runBenchmarkProspectiveDeadlineCapture,
+  now = Date.now,
+  timer = setTimeout,
+  clearTimer = clearTimeout,
+  immediate = true,
+} = {}) => {
+  if (!benchmarkDeadlineCaptureEnabled) return null;
+  const boundedIntervalMs = Math.min(300_000, Math.max(60_000, Number(intervalMs || 0)));
+  let handle = null;
+  let inFlightTick = null;
+  let stopped = false;
+  let paused = false;
+  let lastResult = null;
+  let nextRunAt = null;
+  const clear = () => {
+    if (handle === null) return;
+    clearTimer(handle);
+    handle = null;
+  };
+  const schedule = (attemptStartedAtMs = now()) => {
+    if (stopped || paused) return;
+    clear();
+    const delayMs = Math.max(0, attemptStartedAtMs + boundedIntervalMs - now());
+    nextRunAt = new Date(now() + delayMs).toISOString();
+    handle = timer(() => {
+      handle = null;
+      nextRunAt = null;
+      return tick();
+    }, delayMs);
+    handle?.unref?.();
+  };
+  const tick = () => {
+    if (stopped || paused) {
+      return Promise.resolve({ ok: true, skipped: true, reason: "benchmark-heartbeat-paused" });
+    }
+    if (inFlightTick) return inFlightTick;
+    clear();
+    const attemptStartedAtMs = now();
+    const pending = Promise.resolve()
+      .then(() => run({ timeoutMs: benchmarkDeadlineCaptureTimeoutMs }))
+      .then((result) => {
+        lastResult = result;
+        schedule(attemptStartedAtMs);
+        return result;
+      })
+      .catch((error) => {
+        lastResult = {
+          ok: false,
+          skipped: false,
+          reason: "benchmark-deadline-capture-run-rejected",
+          error: error?.message || String(error),
+        };
+        schedule(attemptStartedAtMs);
+        return lastResult;
+      })
+      .finally(() => {
+        if (inFlightTick === pending) inFlightTick = null;
+      });
+    inFlightTick = pending;
+    return pending;
+  };
+  if (immediate) void tick();
+  else schedule();
+  return {
+    tick,
+    intervalMs: boundedIntervalMs,
+    get handle() { return handle; },
+    get inFlight() { return inFlightTick !== null; },
+    get lastResult() { return lastResult; },
+    get nextRunAt() { return nextRunAt; },
+    waitForIdle: () => inFlightTick || Promise.resolve(lastResult),
+    pause: () => {
+      paused = true;
+      clear();
+    },
+    resume: () => {
+      if (stopped || !paused) return;
+      paused = false;
+      schedule();
+    },
+    stop: () => {
+      stopped = true;
+      paused = true;
+      clear();
     },
   };
 };
@@ -1382,6 +1805,109 @@ const readCurrentMatches = () => {
   return Array.isArray(matches) ? matches : [];
 };
 
+const candidateDeadlineCaptureCompleteThrough = (status, requiredThroughMs) => {
+  const evaluatedAtMs = Date.parse(status?.evaluatedAt || "");
+  return Boolean(
+    status?.version === "prospective-deadline-heartbeat-v2"
+    && status?.ok === true
+    && status?.skipped !== true
+    && status?.dueCaptureComplete === true
+    && status?.dueAtomicComplete === true
+    && Number(status?.dueUnrecorded) === 0
+    && Number(status?.readyDueUnrecorded) === 0
+    && Number.isFinite(evaluatedAtMs)
+    && Number.isFinite(Number(requiredThroughMs))
+    && evaluatedAtMs >= Number(requiredThroughMs)
+  );
+};
+
+const describeCandidateDeadlineStartupAdmission = ({
+  matches: matchesInput = null,
+  nowMs: nowInput = Date.now(),
+  captureStatus: captureStatusInput,
+  resultRecoveryPlan: resultRecoveryPlanInput,
+  safetyWindowMs: safetyWindowInput = candidateDeadlineStartupSafetyWindowMs,
+} = {}) => {
+  const matches = Array.isArray(matchesInput) ? matchesInput : readCurrentMatches();
+  const nowMs = Number.isFinite(Number(nowInput)) ? Number(nowInput) : Date.now();
+  const safetyWindowMs = Math.max(0, Number(safetyWindowInput || 0));
+  const captureStatus = captureStatusInput === undefined
+    ? readJson(candidateProspectiveCaptureStatusFile, null)
+    : captureStatusInput;
+  const resultRecoveryPlan = resultRecoveryPlanInput
+    || describeFiveHundredResultFallbackNeed(matches, nowMs);
+  const terminalStatuses = new Set([
+    "FINISHED",
+    "CANCELLED",
+    "POSTPONED",
+    "ABANDONED",
+  ]);
+  const riskMatches = [];
+  let nearestDeadlineMs = null;
+
+  for (const match of matches) {
+    const status = String(match?.status || "").trim().toUpperCase();
+    if (terminalStatuses.has(status)) continue;
+    const deadline = decisionDeadlineFor(match);
+    const deadlineMs = Number(deadline?.millis);
+    const finalization = captureFinalizationFor(match);
+    const finalizationMs = Number(finalization?.millis);
+    if (!Number.isFinite(deadlineMs)) {
+      riskMatches.push({
+        ...compactCadenceMatch(match, nowMs),
+        reason: "decision-deadline-missing",
+        captureProvenThroughFinalization: false,
+      });
+      continue;
+    }
+    if (nearestDeadlineMs === null || deadlineMs < nearestDeadlineMs) {
+      nearestDeadlineMs = deadlineMs;
+    }
+    const captureProvenThroughFinalization = Number.isFinite(finalizationMs)
+      && candidateDeadlineCaptureCompleteThrough(captureStatus, finalizationMs);
+    const millisecondsToDeadline = deadlineMs - nowMs;
+    const overdueUnproven = millisecondsToDeadline <= 0
+      && !captureProvenThroughFinalization;
+    const insideSafetyWindow = millisecondsToDeadline > 0
+      && millisecondsToDeadline <= safetyWindowMs;
+    if (!overdueUnproven && !insideSafetyWindow) continue;
+    riskMatches.push({
+      ...compactCadenceMatch(match, nowMs),
+      reason: overdueUnproven
+        ? "deadline-passed-without-complete-capture"
+        : "deadline-inside-startup-safety-window",
+      captureFinalizationAt: finalization?.value || null,
+      captureProvenThroughFinalization,
+    });
+  }
+
+  const waitForPublished = riskMatches.length > 0;
+  return {
+    version: "candidate-deadline-startup-admission-v1",
+    checkedAt: new Date(nowMs).toISOString(),
+    waitForPublished,
+    fastOfficialLaneAdmitted: true,
+    reason: waitForPublished
+      ? riskMatches.some((match) => match.reason === "decision-deadline-missing")
+        ? "decision-deadline-missing"
+        : riskMatches.some((match) => match.reason === "deadline-passed-without-complete-capture")
+          ? "deadline-capture-overdue-unproven"
+          : "deadline-inside-startup-safety-window"
+      : resultRecoveryPlan?.needed === true
+        ? "overdue-result-recovery-fast-lane"
+        : "deadline-safety-window-clear",
+    safetyWindowMs,
+    nearestDeadlineAt: Number.isFinite(nearestDeadlineMs)
+      ? new Date(nearestDeadlineMs).toISOString()
+      : null,
+    millisecondsToNearestDeadline: Number.isFinite(nearestDeadlineMs)
+      ? nearestDeadlineMs - nowMs
+      : null,
+    resultRecoveryNeeded: resultRecoveryPlan?.needed === true,
+    riskMatches,
+  };
+};
+
 const compactCadenceMatch = (match, now = Date.now()) => {
   const kickoffMs = Date.parse(match?.kickoffTime || "");
   const deadline = decisionDeadlineFor(match);
@@ -1521,8 +2047,7 @@ const describeSyncCadence = (matchesInput = null, nowInput = Date.now()) => {
 const describeFiveHundredResultFallbackNeed = (
   matchesInput = null,
   nowInput = Date.now(),
-  enabledInput = process.env.ENABLE_500_DETAILS_SYNC === "1"
-    && process.env.ENABLE_500_RESULT_FALLBACK !== "0"
+  enabledInput = process.env.ENABLE_500_RESULT_FALLBACK !== "0"
 ) => {
   const matches = Array.isArray(matchesInput) ? matchesInput : readCurrentMatches();
   const now = Number.isFinite(Number(nowInput)) ? Number(nowInput) : Date.now();
@@ -1584,6 +2109,74 @@ const runOptional = async (enabled, script, extraEnv = {}, options = {}) => {
   }
 };
 
+const acquireSyncLockInterruptibly = async ({
+  waitMs = 0,
+  acquireLock = acquireSyncLock,
+  isInterrupted = () => runtimeShutdownController.requested,
+  ...lockOptions
+} = {}) => {
+  const totalWaitMs = Math.max(0, Number(waitMs) || 0);
+  const startedAtMs = Date.now();
+  let lastResult = null;
+  do {
+    if (isInterrupted()) throw runtimeShutdownController.interruptionError();
+    const elapsedMs = Math.max(0, Date.now() - startedAtMs);
+    const remainingMs = Math.max(0, totalWaitMs - elapsedMs);
+    lastResult = await acquireLock({
+      ...lockOptions,
+      waitMs: Math.min(remainingMs, interruptibleLockWaitSliceMs),
+    });
+    if (lastResult?.acquired || lastResult?.reason !== "sync lock held") return lastResult;
+    if (Date.now() - startedAtMs >= totalWaitMs) return lastResult;
+  } while (true);
+};
+
+const runWithSharedSlowArtifactLock = async ({
+  enabled,
+  script,
+  task,
+  waitMs = 0,
+  acquireLock = acquireSyncLock,
+  isInterrupted = () => runtimeShutdownController.requested,
+} = {}) => {
+  if (typeof task !== "function") throw new TypeError("shared artifact task is required");
+  if (isInterrupted()) throw runtimeShutdownController.interruptionError();
+  if (!enabled || !usesSharedSlowArtifact(script)) return task();
+  const lock = await acquireSyncLockInterruptibly({
+    lockDir: sharedSlowArtifactLockDir,
+    owner: "football-sync-worker",
+    source: `shared-artifact:${script}`,
+    waitMs,
+    acquireLock,
+    isInterrupted,
+  });
+  if (!lock.acquired) {
+    return {
+      ok: true,
+      skipped: true,
+      deferred: true,
+      fatal: false,
+      script,
+      reason: "shared-artifact-writer-busy",
+      lock: {
+        owner: lock.info?.owner || null,
+        source: lock.info?.source || null,
+        pid: lock.info?.pid || null,
+        startedAt: lock.info?.startedAt || null,
+        ageMs: Math.round(lock.ageMs || 0),
+      },
+    };
+  }
+  try {
+    return {
+      ...(await task()),
+      sharedArtifactSerialized: true,
+    };
+  } finally {
+    await lock.release();
+  }
+};
+
 const describePostEnrichmentPublicationNeed = (stepsInput = []) => {
   const steps = Array.isArray(stepsInput) ? stepsInput : [];
   // A command that was actually invoked may have mutated part of the source
@@ -1609,6 +2202,26 @@ const describePostEnrichmentPublicationNeed = (stepsInput = []) => {
       .filter((step) => step?.skipped === true && step?.reused !== true)
       .map((step) => step.script || null)
       .filter(Boolean),
+  };
+};
+
+const describeConsolidatedSlowPublicationNeed = ({
+  postEnrichmentPublicationPlan = null,
+  modelReconciliationRequired = false,
+  validationOk = false,
+} = {}) => {
+  const enrichmentRequired = postEnrichmentPublicationPlan?.required === true;
+  const required = validationOk === true
+    && (enrichmentRequired || modelReconciliationRequired === true);
+  return {
+    required,
+    enrichmentRequired,
+    modelReconciliationRequired: modelReconciliationRequired === true,
+    reason: required
+      ? "enrichment-or-model-artifact-changed"
+      : (validationOk === true
+          ? "no-publishable-slow-phase-change"
+          : "post-enrichment-validation-not-ready"),
   };
 };
 
@@ -1748,12 +2361,16 @@ const describeCycleStages = () => ([
     operations: [
       "candidate:capture-deadline",
       "candidate:settle-prospective-ledger",
+      "benchmark:capture-deadline-independent",
     ],
   },
   {
     id: "official-result-fast",
     fatal: false,
     operations: [
+      "sync:server-direct-sporttery-evidence",
+      "sync:cloudflare-sporttery-evidence",
+      "sync:k-league-standings",
       "publish:official-results-fast",
       "sync:uefa-results",
       "sync:official-club-results",
@@ -1764,7 +2381,15 @@ const describeCycleStages = () => ([
   {
     id: "official-result",
     fatal: true,
-    operations: ["sync:data", "validate:data", "datastore:generation", "datastore:sqlite", "publish-event"]
+    operations: [
+      "sync:data",
+      "sync:free-football",
+      "sync:prematch",
+      "validate:data",
+      "datastore:generation",
+      "datastore:sqlite",
+      "publish-event",
+    ]
   },
   {
     id: "slow-enrichment",
@@ -1772,27 +2397,27 @@ const describeCycleStages = () => ([
     operations: [
       "sync:500",
       "sync:500:details",
+      "sync:api-football",
       "sync:weather",
       "sync:football-data-fixtures",
+      "sync:football-data-results",
       "sync:open-research",
       "sync:web-consensus",
       "sync:free-football",
-      "sync:prematch",
       "audit:recommendation-bias",
       "validate:sources",
       "validate:data:post-enrichment",
-      "reconcile:fast-results-generation:post-enrichment",
-      "datastore:generation:post-enrichment",
-      "datastore:sqlite:post-enrichment",
       "observe:source-cycle",
       "model:backtest",
       "model:learn:autonomous",
       "model:learn",
       "audit:capability",
       "optimize:strategy",
-      "reconcile:fast-results-generation:model-reconciled",
-      "datastore:generation:model-reconciled",
-      "datastore:sqlite:model-reconciled",
+      "sync:prematch",
+      "reconcile:fast-results-generation:consolidated-slow-publication",
+      "validate:data:consolidated-slow-publication",
+      "datastore:generation:consolidated-slow-publication",
+      "datastore:sqlite:consolidated-slow-publication",
       "observe:publication-readiness"
     ]
   }
@@ -1907,6 +2532,8 @@ const completePublicationCycleEvidence = (cycle) => {
     finishedAt: cycle.finishedAt || null,
     durationMs: cycleDurationMs(cycle),
     officialPhase: cycle.officialPhase,
+    slowPhase: cycle.slowPhase,
+    slowPhasePlan: cycle.slowPhasePlan,
     modelStrategyStep: cycle.modelStrategyStep,
     modelReconciledGenerationStep: cycle.modelReconciledGenerationStep,
     modelReconciledSqliteStep: cycle.modelReconciledSqliteStep,
@@ -1938,6 +2565,16 @@ const workerHistoryFields = (status = null) => {
     lastCompleteCycle,
     lastSuccessAt: status?.lastSuccessAt
       || (lastCycle?.ok === true && lastCycle?.skipped !== true ? lastCycle.finishedAt || null : null),
+    lastSlowPhaseAt: Number.isFinite(Date.parse(status?.lastSlowPhaseAt || ""))
+      ? status.lastSlowPhaseAt
+      : null,
+    lastSlowPhase: status?.lastSlowPhase && typeof status.lastSlowPhase === "object"
+      ? status.lastSlowPhase
+      : null,
+    backgroundSlowPhase: status?.backgroundSlowPhase
+      && typeof status.backgroundSlowPhase === "object"
+      ? status.backgroundSlowPhase
+      : null,
     lastCycleDurationMs: status?.lastCycleDurationMs !== null
       && status?.lastCycleDurationMs !== undefined
       && Number.isFinite(Number(status.lastCycleDurationMs))
@@ -1948,6 +2585,41 @@ const workerHistoryFields = (status = null) => {
 };
 
 let workerStatusState = readJson(statusFile, null);
+
+const describeSlowPhaseNeed = ({
+  releasePriority = false,
+  running = false,
+  status = workerStatusState,
+  now = Date.now(),
+} = {}) => {
+  const lastCompletedAt = status?.lastSlowPhaseAt || null;
+  const lastCompletedMs = Date.parse(lastCompletedAt || "");
+  const hasSuccessfulHistory = Number.isFinite(lastCompletedMs);
+  const ageMs = hasSuccessfulHistory ? Math.max(0, now - lastCompletedMs) : null;
+  if (running === true) {
+    return {
+      due: false,
+      reason: "slow-phase-already-running",
+      minIntervalMs: slowPhaseMinIntervalMs,
+      lastCompletedAt: hasSuccessfulHistory ? lastCompletedAt : null,
+      ageMs,
+    };
+  }
+  const due = releasePriority === true
+    || !hasSuccessfulHistory
+    || ageMs >= slowPhaseMinIntervalMs;
+  return {
+    due,
+    reason: releasePriority === true
+      ? "release-priority"
+      : (!hasSuccessfulHistory
+          ? "no-slow-phase-history"
+          : (due ? "minimum-interval-elapsed" : "minimum-interval-not-elapsed")),
+    minIntervalMs: slowPhaseMinIntervalMs,
+    lastCompletedAt: hasSuccessfulHistory ? lastCompletedAt : null,
+    ageMs,
+  };
+};
 
 const writeWorkerStatus = (payload) => {
   const body = {
@@ -1961,8 +2633,247 @@ const writeWorkerStatus = (payload) => {
   return body;
 };
 
+const writeWorkerStatusBestEffort = (
+  payload,
+  { write = writeWorkerStatus, log = console.error } = {},
+) => {
+  try {
+    return { ok: true, value: write(payload), error: null };
+  } catch (error) {
+    try {
+      log(JSON.stringify({
+        type: "sync-worker-status-write-failed",
+        at: new Date().toISOString(),
+        error: error?.message || String(error),
+        errorCode: error?.code || null,
+      }));
+    } catch {
+      // Diagnostics are best effort too. Never let telemetry failure become an
+      // unhandled rejection in the background lane.
+    }
+    return { ok: false, value: null, error };
+  }
+};
+
+const createBackgroundSlowPhaseTracker = ({
+  readStatus = () => workerStatusState,
+  writeStatus = writeWorkerStatus,
+  log = console.error,
+  isInterrupted = () => runtimeShutdownController.requested,
+  onCurrentChange = () => {},
+} = {}) => {
+  let currentPromise = null;
+  const safeWrite = (payload) => writeWorkerStatusBestEffort(payload, {
+    write: writeStatus,
+    log,
+  });
+  const safelyNotifyCurrentChange = (value) => {
+    try {
+      onCurrentChange(value);
+    } catch (error) {
+      try {
+        log(JSON.stringify({
+          type: "sync-worker-background-tracker-notify-failed",
+          at: new Date().toISOString(),
+          error: error?.message || String(error),
+        }));
+      } catch {
+        // The task promise already has a terminal rejection handler.
+      }
+    }
+  };
+  const track = (task, metadata = {}) => {
+    const startedAt = metadata.startedAt || new Date().toISOString();
+    const runningState = {
+      state: "running",
+      startedAt,
+      finishedAt: null,
+      plan: metadata.plan || null,
+      error: null,
+    };
+    let trackedPromise = null;
+    const observedTask = Promise.resolve(task).then(
+      (result) => ({ fulfilled: true, result }),
+      (error) => ({ fulfilled: false, error }),
+    );
+    const pipeline = observedTask
+      .then((outcome) => {
+        const finishedAt = new Date().toISOString();
+        const interrupted = isInterrupted();
+        if (outcome.fulfilled) {
+          const slowPhase = withCycleDuration(outcome.result?.slowPhase || outcome.result || null);
+          safeWrite({
+            ...(readStatus() || {}),
+            checkedAt: finishedAt,
+            lastSlowPhase: interrupted ? readStatus()?.lastSlowPhase || null : slowPhase,
+            lastSlowPhaseAt: !interrupted && slowPhase?.skipped !== true
+              ? slowPhase?.finishedAt || finishedAt
+              : readStatus()?.lastSlowPhaseAt || null,
+            backgroundSlowPhase: {
+              ...runningState,
+              state: interrupted
+                ? "interrupted"
+                : slowPhase?.ok === false ? "degraded" : "completed",
+              finishedAt,
+              degraded: slowPhase?.degraded === true,
+              warnings: slowPhase?.warnings || [],
+              signal: interrupted ? runtimeShutdownController.request?.signal || null : null,
+            },
+          });
+          return outcome.result;
+        }
+        const error = outcome.error;
+        const failure = withCycleDuration({
+          ok: false,
+          skipped: false,
+          phase: interrupted ? "slow-enrichment-interrupted" : "slow-enrichment-failed",
+          startedAt,
+          finishedAt,
+          error: error?.message || String(error),
+          errorCode: error?.code || null,
+        });
+        safeWrite({
+          ...(readStatus() || {}),
+          checkedAt: finishedAt,
+          lastSlowPhase: interrupted ? readStatus()?.lastSlowPhase || null : failure,
+          backgroundSlowPhase: {
+            ...runningState,
+            state: interrupted ? "interrupted" : "failed",
+            finishedAt,
+            error: error?.message || String(error),
+            errorCode: error?.code || null,
+            signal: interrupted ? runtimeShutdownController.request?.signal || null : null,
+          },
+        });
+        return null;
+      })
+      .finally(() => {
+        if (currentPromise === trackedPromise) {
+          currentPromise = null;
+          safelyNotifyCurrentChange(null);
+        }
+      });
+    // This catch is deliberately terminal and is attached before the first
+    // status write below. Status I/O, notification, or finally failures can
+    // never leave a rejected promise floating in the long-running worker.
+    trackedPromise = pipeline.catch((error) => {
+      try {
+        log(JSON.stringify({
+          type: "sync-worker-background-terminal-failure",
+          at: new Date().toISOString(),
+          error: error?.message || String(error),
+          errorCode: error?.code || null,
+        }));
+      } catch {
+        // Terminal means terminal: diagnostics cannot rethrow.
+      }
+      return null;
+    });
+    currentPromise = trackedPromise;
+    safelyNotifyCurrentChange(trackedPromise);
+    safeWrite({
+      ...(readStatus() || {}),
+      checkedAt: new Date().toISOString(),
+      backgroundSlowPhase: runningState,
+    });
+    return trackedPromise;
+  };
+  return {
+    track,
+    get current() { return currentPromise; },
+    get running() { return currentPromise !== null; },
+  };
+};
+
+const waitForBackgroundSlowPhaseDrain = async (
+  task,
+  {
+    budgetMs = releaseSlowPhaseDrainBudgetMs,
+    timer = setTimeout,
+    clearTimer = clearTimeout,
+    interruptPromise = null,
+  } = {},
+) => {
+  if (!task) return { ok: true, skipped: true, reason: "no-background-slow-phase" };
+  const startedAt = new Date().toISOString();
+  const boundedBudgetMs = Math.max(1, Number(budgetMs) || 1);
+  const observedTask = Promise.resolve(task).then(
+    (value) => ({ type: "settled", value }),
+    (error) => ({ type: "rejected", error }),
+  );
+  let timeoutHandle = null;
+  const timeout = new Promise((resolve) => {
+    timeoutHandle = timer(() => resolve({ type: "timeout" }), boundedBudgetMs);
+  });
+  const interruption = interruptPromise
+    ? Promise.resolve(interruptPromise).then(
+        (value) => ({ type: "interrupted", value }),
+        (error) => ({ type: "interrupted", error }),
+      )
+    : null;
+  const outcome = await Promise.race([
+    observedTask,
+    timeout,
+    ...(interruption ? [interruption] : []),
+  ]);
+  if (timeoutHandle) clearTimer(timeoutHandle);
+  const finishedAt = new Date().toISOString();
+  if (outcome.type === "settled") {
+    return { ok: true, skipped: false, startedAt, finishedAt, budgetMs: boundedBudgetMs };
+  }
+  if (outcome.type === "rejected") {
+    return {
+      ok: false,
+      blocked: true,
+      reason: "background-slow-phase-rejected-during-release-drain",
+      code: "SYNC_WORKER_RELEASE_DRAIN_REJECTED",
+      error: outcome.error?.message || String(outcome.error),
+      startedAt,
+      finishedAt,
+      budgetMs: boundedBudgetMs,
+    };
+  }
+  if (outcome.type === "interrupted") {
+    return {
+      ok: false,
+      blocked: true,
+      interrupted: true,
+      reason: "background-slow-phase-release-drain-interrupted",
+      code: "SYNC_WORKER_RELEASE_DRAIN_INTERRUPTED",
+      startedAt,
+      finishedAt,
+      budgetMs: boundedBudgetMs,
+    };
+  }
+  return {
+    ok: false,
+    blocked: true,
+    timedOut: true,
+    reason: "background-slow-phase-release-drain-budget-exhausted",
+    code: "SYNC_WORKER_RELEASE_DRAIN_TIMEOUT",
+    startedAt,
+    finishedAt,
+    budgetMs: boundedBudgetMs,
+  };
+};
+
+const slowPublicationLockSources = new Set([
+  "sync-worker-model-strategy-and-publication",
+  "sync-worker-consolidated-slow-publication",
+]);
+const officialCompensationRequired = ({ cycle = null, slowPhaseRunning = false } = {}) => Boolean(
+  cycle?.skipped === true
+  && cycle?.reason === "sync lock held"
+  && slowPhaseRunning === true
+  && slowPublicationLockSources.has(String(cycle?.lock?.source || ""))
+);
+
 const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
   const startedAt = new Date().toISOString();
+  const isInterrupted = typeof hooks.isInterrupted === "function"
+    ? hooks.isInterrupted
+    : () => runtimeShutdownController.requested;
+  if (isInterrupted()) throw runtimeShutdownController.interruptionError();
   const onFastPublished = typeof hooks.onFastPublished === "function"
     ? hooks.onFastPublished
     : async () => {};
@@ -1972,6 +2883,9 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
   const onBeforeHeavyStep = typeof hooks.onBeforeHeavyStep === "function"
     ? hooks.onBeforeHeavyStep
     : async () => {};
+  const onSlowPhaseDeferred = typeof hooks.onSlowPhaseDeferred === "function"
+    ? hooks.onSlowPhaseDeferred
+    : () => {};
   const releaseRequestEnvelope = inspectReleaseWorkerPriorityRequest({
     rootDir,
     storeDir,
@@ -1988,10 +2902,27 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
       : Math.max(0, Number(process.env.SYNC_WORKER_LOCK_WAIT_MS || 0)),
     retryMs: releaseCycleRetryMs,
   };
-  let syncLock = await acquireSyncLock({
+  const slowPhasePlan = describeSlowPhaseNeed({
+    releasePriority: releaseCycle.priority,
+    running: hooks.slowPhaseRunning === true,
+  });
+  if (releaseCycle.priority === true && hooks.slowPhaseRunning === true) {
+    return {
+      ok: true,
+      skipped: true,
+      reason: "release-priority-awaits-background-slow-phase",
+      startedAt,
+      finishedAt: new Date().toISOString(),
+      cadence,
+      releaseCycle,
+      slowPhasePlan,
+    };
+  }
+  let syncLock = await acquireSyncLockInterruptibly({
     owner: "football-sync-worker",
     source: "sync-worker-cycle",
     waitMs: releaseCycle.initialLockWaitMs,
+    isInterrupted,
   });
   if (!syncLock.acquired) {
     return {
@@ -2002,6 +2933,7 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
       finishedAt: new Date().toISOString(),
       cadence,
       releaseCycle,
+      slowPhasePlan,
       lock: {
         owner: syncLock.info?.owner || null,
         source: syncLock.info?.source || null,
@@ -2020,10 +2952,11 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
   };
   const acquirePhaseLock = async (source) => {
     if (syncLock?.acquired) return syncLock;
-    const nextLock = await acquireSyncLock({
+    const nextLock = await acquireSyncLockInterruptibly({
       owner: "football-sync-worker",
       source,
       waitMs: phaseLockWaitMs,
+      isInterrupted,
     });
     if (!nextLock.acquired) {
       const error = new Error(
@@ -2044,14 +2977,81 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
   };
 
   try {
+    const serverDirectSportteryEvidenceStep = await runOptional(
+      Boolean(
+        String(process.env.SPORTTERY_SERVER_DIRECT_COLLECTOR_PRIVATE_KEY_PATH || "").trim()
+        && String(process.env.SPORTTERY_SERVER_DIRECT_COLLECTOR_KEY_ID || "").trim()
+        && String(process.env.SPORTTERY_SERVER_DIRECT_COLLECTOR_KEY_FINGERPRINT || "").trim()
+      ),
+      "sync:server-direct-sporttery-evidence",
+      {},
+      {
+        fatal: false,
+        timeoutMs: commandTimeouts.resultFallback,
+      }
+    );
+    const cloudflareSportteryEvidenceStep = await runOptional(
+      Boolean(
+        String(process.env.SPORTTERY_CLOUDFLARE_EVIDENCE_URL || "").trim()
+        && String(process.env.SPORTTERY_CLOUDFLARE_PULL_TOKEN || "").trim()
+      ),
+      "sync:cloudflare-sporttery-evidence",
+      {},
+      {
+        fatal: false,
+        timeoutMs: commandTimeouts.resultFallback,
+      }
+    );
+    const kLeagueOfficialStandingsEnabled = process.env.ENABLE_K_LEAGUE_OFFICIAL_STANDINGS_SYNC !== "0";
+    const kLeagueOfficialStandingsStep = await runWithSharedSlowArtifactLock({
+      enabled: kLeagueOfficialStandingsEnabled,
+      script: "sync:k-league-standings",
+      waitMs: 0,
+      isInterrupted,
+      task: () => runOptional(
+        kLeagueOfficialStandingsEnabled,
+        "sync:k-league-standings",
+        {},
+        {
+          fatal: false,
+          timeoutMs: commandTimeouts.resultFallback,
+        }
+      ),
+    });
     const fastResultStep = await runBestEffort(
       "publish:official-results-fast",
       async () => {
         const { publishOfficialResultsFast } = require("./publishOfficialResultsFast.cjs");
-        return {
+        let result = {
           script: "publish:official-results-fast",
           ...publishOfficialResultsFast(),
         };
+        const postgresMode = String(process.env.FOOTBALL_POSTGRES_MODE || "disabled").trim().toLowerCase();
+        if (
+          ["shadow-write", "shadow-read", "primary"].includes(postgresMode)
+          && result.ok === true
+          && (Number(result.publishedRows || 0) > 0 || result.visibleStateChanged === true)
+        ) {
+          const { syncPostgresProjectionFromSqlite } = require("./postgresProjectionSync.cjs");
+          try {
+            result = {
+              ...result,
+              postgresProjection: await syncPostgresProjectionFromSqlite({ mode: "fast-result" }),
+            };
+          } catch (error) {
+            if (postgresMode === "primary") throw error;
+            result = {
+              ...result,
+              postgresProjection: {
+                ok: false,
+                warning: true,
+                code: error.code || null,
+                error: error.message || String(error),
+              },
+            };
+          }
+        }
+        return result;
       }
     );
     const uefaOfficialResultStep = await runOptional(
@@ -2112,6 +3112,38 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
     }, {
       timeoutMs: commandTimeouts.sync
     });
+    // These two stages are local deterministic projections of the just-built
+    // current match set. Run them in every official cycle so source quality is
+    // published atomically with the current fixtures instead of lagging behind
+    // until the hourly network-enrichment phase.
+    await onBeforeHeavyStep("sync:free-football");
+    const officialFreeFootballEnabled = process.env.ENABLE_FREE_FOOTBALL_SYNC !== "0";
+    const officialFreeFootballStep = await runWithSharedSlowArtifactLock({
+      enabled: officialFreeFootballEnabled,
+      script: "sync:free-football",
+      waitMs: 0,
+      isInterrupted,
+      task: () => runOptional(
+        officialFreeFootballEnabled,
+        "sync:free-football",
+        {},
+        { timeoutMs: commandTimeouts.enrichment }
+      ),
+    });
+    await onBeforeHeavyStep("sync:prematch");
+    const officialPreMatchEnabled = process.env.ENABLE_PREMATCH_SIGNALS_SYNC !== "0";
+    const officialPreMatchStep = await runWithSharedSlowArtifactLock({
+      enabled: officialPreMatchEnabled,
+      script: "sync:prematch",
+      waitMs: 0,
+      isInterrupted,
+      task: () => runOptional(
+        officialPreMatchEnabled,
+        "sync:prematch",
+        {},
+        { timeoutMs: commandTimeouts.enrichment }
+      ),
+    });
     const dataValidationStep = await runCommand(npmCommand, ["run", "validate:data"], {}, {
       timeoutMs: commandTimeouts.validation
     });
@@ -2140,11 +3172,16 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
       startedAt: officialPhaseStartedAt,
       finishedAt: officialPhaseFinishedAt,
       cadence,
+      serverDirectSportteryEvidenceStep,
+      cloudflareSportteryEvidenceStep,
+      kLeagueOfficialStandingsStep,
       fastResultStep,
       uefaOfficialResultStep,
       officialClubResultStep,
       fiveHundredResultFallbackStep,
       officialSyncStep,
+      officialFreeFootballStep,
+      officialPreMatchStep,
       dataValidationStep,
       officialGenerationStep,
       sqliteStep
@@ -2158,7 +3195,122 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
     // minutes for the whole cycle.
     await releasePhaseLock();
 
+    const fastWarnings = [
+      ...(fastResultStep?.ok === false
+        ? [`${fastResultStep.script}: ${fastResultStep.error}`]
+        : []),
+      ...(uefaOfficialResultStep?.ok === false
+        ? [`${uefaOfficialResultStep.script}: ${uefaOfficialResultStep.error}`]
+        : []),
+    ];
+    if (!slowPhasePlan.due) {
+      const readinessSourceCycleObservation = readSourceCycleObservation({
+        phase: "readiness",
+        validationStep: dataValidationStep,
+        generationStep: officialGenerationStep,
+        sqliteStep,
+      });
+      const slowPhaseFinishedAt = new Date().toISOString();
+      const slowPhase = withCycleDuration({
+        ok: true,
+        skipped: true,
+        phase: "slow-enrichment",
+        reason: slowPhasePlan.reason,
+        startedAt: slowPhaseFinishedAt,
+        finishedAt: slowPhaseFinishedAt,
+        plan: slowPhasePlan,
+        sourceCycleObservation: readinessSourceCycleObservation,
+        readinessSourceCycleObservation,
+        warnings: [],
+      });
+      return {
+        ok: true,
+        degraded: fastWarnings.length > 0,
+        startedAt,
+        finishedAt: new Date().toISOString(),
+        cadence,
+        releaseCycle,
+        slowPhasePlan,
+        fastPhase,
+        fastResultStep,
+        uefaOfficialResultStep,
+        officialPhase,
+        slowPhase,
+        sourceCycleObservation: readinessSourceCycleObservation,
+        sqliteStep,
+        readinessSourceCycleObservation,
+        warnings: fastWarnings,
+      };
+    }
+
+    const executeSlowPhase = async () => {
     const slowPhaseStartedAt = new Date().toISOString();
+    let slowPhaseLock = null;
+    let slowFinalArtifactLock = null;
+    const releaseSlowFinalArtifactLock = async () => {
+      if (!slowFinalArtifactLock?.acquired) return;
+      const heldLock = slowFinalArtifactLock;
+      slowFinalArtifactLock = null;
+      await heldLock.release();
+    };
+    const acquireSlowFinalArtifactLock = async (source) => {
+      if (slowFinalArtifactLock?.acquired) return slowFinalArtifactLock;
+      const nextLock = await acquireSyncLockInterruptibly({
+        lockDir: sharedSlowArtifactLockDir,
+        owner: "football-sync-worker",
+        source: `shared-artifact:${source}`,
+        waitMs: phaseLockWaitMs,
+        isInterrupted,
+      });
+      if (!nextLock.acquired) {
+        const error = new Error(
+          `sync worker could not acquire the final shared artifact lock during ${source}: ${nextLock.reason || "shared artifact lock unavailable"}`
+        );
+        error.code = "SYNC_WORKER_SHARED_ARTIFACT_LOCK_TIMEOUT";
+        error.lock = {
+          owner: nextLock.info?.owner || null,
+          source: nextLock.info?.source || null,
+          pid: nextLock.info?.pid || null,
+          startedAt: nextLock.info?.startedAt || null,
+          ageMs: Math.round(nextLock.ageMs || 0),
+        };
+        throw error;
+      }
+      slowFinalArtifactLock = nextLock;
+      return slowFinalArtifactLock;
+    };
+    const releaseSlowPhaseLock = async () => {
+      if (!slowPhaseLock?.acquired) return;
+      const heldLock = slowPhaseLock;
+      slowPhaseLock = null;
+      await heldLock.release();
+    };
+    const acquireSlowPhaseLock = async (source) => {
+      if (slowPhaseLock?.acquired) return slowPhaseLock;
+      const nextLock = await acquireSyncLockInterruptibly({
+        owner: "football-sync-worker",
+        source,
+        waitMs: slowPublicationLockWaitMs,
+        isInterrupted,
+      });
+      if (!nextLock.acquired) {
+        const error = new Error(
+          `sync worker could not reacquire the publication lock during ${source}: ${nextLock.reason || "sync lock unavailable"}`
+        );
+        error.code = "SYNC_WORKER_PHASE_LOCK_TIMEOUT";
+        error.lock = {
+          owner: nextLock.info?.owner || null,
+          source: nextLock.info?.source || null,
+          pid: nextLock.info?.pid || null,
+          startedAt: nextLock.info?.startedAt || null,
+          ageMs: Math.round(nextLock.ageMs || 0),
+        };
+        throw error;
+      }
+      slowPhaseLock = nextLock;
+      return slowPhaseLock;
+    };
+    try {
     const enrichmentSteps = [];
     const enrichmentOptions = { fatal: false, timeoutMs: commandTimeouts.enrichment };
     const releaseEnrichmentReuse = evaluateReleaseEnrichmentReuseRequest({
@@ -2178,10 +3330,17 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
         };
       }
       if (enabled) await onBeforeHeavyStep(script);
-      return runOptional(enabled, script, extraEnv, enrichmentOptions);
+      return runWithSharedSlowArtifactLock({
+        enabled,
+        script,
+        waitMs: phaseLockWaitMs,
+        isInterrupted,
+        task: () => runOptional(enabled, script, extraEnv, enrichmentOptions),
+      });
     };
     enrichmentSteps.push(await runEnrichment(process.env.ENABLE_500_SYNC !== "0", "sync:500"));
     enrichmentSteps.push(await runEnrichment(process.env.ENABLE_500_DETAILS_SYNC === "1", "sync:500:details"));
+    enrichmentSteps.push(await runEnrichment(apiFootballRuntimePolicy.enabled, "sync:api-football"));
     enrichmentSteps.push(await runEnrichment(process.env.ENABLE_WEATHER_SYNC !== "0", "sync:weather"));
     const footballDataFixturesStatus = readJson(footballDataFixturesStatusFile, null);
     const footballDataFixturesDue = process.env.ENABLE_FOOTBALL_DATA_FIXTURES_SYNC !== "0"
@@ -2191,18 +3350,32 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
       "sync:football-data-fixtures",
       {}
     ));
+    const footballDataResultsStatus = readJson(footballDataResultsStatusFile, null);
+    const footballDataResultsPostgresMode = String(
+      process.env.FOOTBALL_POSTGRES_MODE || "disabled"
+    ).trim().toLowerCase();
+    const footballDataResultsDue = process.env.ENABLE_FOOTBALL_DATA_RESULTS_SYNC !== "0"
+      && ["shadow-write", "shadow-read", "primary"].includes(footballDataResultsPostgresMode)
+      && ageMs(footballDataResultsStatus?.completedAt) >= footballDataResultsMinIntervalMs;
+    enrichmentSteps.push(await runEnrichment(
+      footballDataResultsDue,
+      "sync:football-data-results",
+      {}
+    ));
     enrichmentSteps.push(await runEnrichment(process.env.ENABLE_OPEN_RESEARCH_SYNC !== "0", "sync:open-research"));
     enrichmentSteps.push(await runEnrichment(
       process.env.ENABLE_WEB_CONSENSUS_SYNC !== "0" && webConsensusRefreshDue(),
       "sync:web-consensus",
       {}
     ));
-    enrichmentSteps.push(await runEnrichment(
-      process.env.ENABLE_FREE_FOOTBALL_SYNC !== "0",
-      "sync:free-football",
-      {}
-    ));
-    enrichmentSteps.push(await runEnrichment(process.env.ENABLE_PREMATCH_SIGNALS_SYNC !== "0", "sync:prematch"));
+    enrichmentSteps.push({
+      ...officialFreeFootballStep,
+      skipped: true,
+      reused: true,
+      script: "sync:free-football",
+      reason: "refreshed-before-official-publication",
+    });
+    const consolidatedPreMatchEnabled = process.env.ENABLE_PREMATCH_SIGNALS_SYNC !== "0";
     enrichmentSteps.push(await runEnrichment(true, "audit:recommendation-bias"));
     const sourceValidationStep = await runOptional(true, "validate:sources", {
       REQUIRE_EXTERNAL_SIGNALS: process.env.REQUIRE_EXTERNAL_SIGNALS === "0" ? "0" : "1"
@@ -2218,69 +3391,21 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
       phase: "post-enrichment",
     };
     const postEnrichmentPublicationPlan = describePostEnrichmentPublicationNeed(enrichmentSteps);
-    if (postEnrichmentPublicationPlan.required) {
-      await acquirePhaseLock("sync-worker-post-enrichment-publication");
-    }
-    const postEnrichmentFastResultReconciliationStep = {
-      ...(await runOptional(
-        postEnrichmentPublicationPlan.required,
-        "reconcile:fast-results-generation",
-        {},
-        { timeoutMs: commandTimeouts.validation }
-      )),
-      phase: "post-enrichment",
-    };
-    if (postEnrichmentDataValidationStep.ok === true
-      && postEnrichmentPublicationPlan.required) {
-      await onBeforeHeavyStep("datastore:generation:post-enrichment");
-    }
-    const postEnrichmentGenerationStep = {
-      ...(await runOptional(
-        postEnrichmentDataValidationStep.ok === true
-          && postEnrichmentPublicationPlan.required,
-        "datastore:generation",
-        {
-          SERVER_STORE_DIR: process.env.SERVER_STORE_DIR || storeDir,
-        },
-        { fatal: false, timeoutMs: commandTimeouts.sqlite }
-      )),
-      phase: "post-enrichment",
-    };
-    if (sqliteExportEnabled
-      && postEnrichmentDataValidationStep.ok === true
-      && postEnrichmentPublicationPlan.required) {
-      await onBeforeHeavyStep("datastore:sqlite:post-enrichment");
-    }
-    const postEnrichmentSqliteStep = {
-      ...(await runSqliteExportOrReuse({
-        enabled: sqliteExportEnabled
-          && postEnrichmentDataValidationStep.ok === true
-          && postEnrichmentPublicationPlan.required,
-        generationStep: postEnrichmentGenerationStep,
-        options: { fatal: false, timeoutMs: commandTimeouts.sqlite },
-      })),
-      phase: "post-enrichment",
-    };
-    if (postEnrichmentPublicationPlan.required) {
-      await releasePhaseLock();
-    }
-    const effectivePostEnrichmentGenerationStep = postEnrichmentPublicationPlan.required
-      ? postEnrichmentGenerationStep
-      : officialGenerationStep;
-    const effectivePostEnrichmentSqliteStep = postEnrichmentPublicationPlan.required
-      ? postEnrichmentSqliteStep
-      : sqliteStep;
+    // Backtests consume the already-committed immutable SQLite history. Keep
+    // enrichment and strategy computation off the publication lock, then
+    // publish their combined effect once. This removes the former
+    // post-enrichment export followed by a second model-reconciled export.
     const sourceCycleObservation = readSourceCycleObservation({
-      phase: "post-enrichment",
+      phase: "pre-consolidated-publication",
       validationStep: postEnrichmentDataValidationStep,
-      generationStep: effectivePostEnrichmentGenerationStep,
-      sqliteStep: effectivePostEnrichmentSqliteStep,
+      generationStep: officialGenerationStep,
+      sqliteStep,
     });
     if (sourceCycleObservation.ready) await onBeforeHeavyStep("model:backtest");
     const modelBacktestStep = sourceCycleObservation.ready
       ? await runBestEffort(
           "model:backtest",
-          () => maybeRunModelBacktest({ sqliteStep: effectivePostEnrichmentSqliteStep })
+          () => maybeRunModelBacktest({ sqliteStep })
         )
       : {
           ok: sqliteExportEnabled === false,
@@ -2336,8 +3461,15 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
     const modelStrategyEnabled = process.env.ENABLE_MODEL_STRATEGY_ON_SYNC === "1"
       || (modelBacktestStep?.ok === true && modelBacktestStep?.skipped !== true)
       || modelStrategyRecovery.shouldRun;
-    const modelStrategyFingerprintBefore = modelStrategyReconciliationFingerprint();
     if (modelStrategyEnabled) await onBeforeHeavyStep("optimize:strategy");
+    // Strategy reconciliation rewrites sync-meta/model-calibration and can
+    // reconcile matches-current. Hold the publication lock from that mutation
+    // through the one consolidated generation/export so a newer official cycle
+    // cannot be overwritten by an older background strategy process.
+    if (modelStrategyEnabled) {
+      await acquireSlowPhaseLock("sync-worker-model-strategy-and-publication");
+    }
+    const modelStrategyFingerprintBefore = modelStrategyReconciliationFingerprint();
     const modelStrategyCommandStep = await runOptional(modelStrategyEnabled, "optimize:strategy", {
       SERVER_STORE_DIR: process.env.SERVER_STORE_DIR || storeDir,
       DATA_STORE_DIR: process.env.DATA_STORE_DIR || process.env.SERVER_STORE_DIR || storeDir
@@ -2370,62 +3502,170 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
         };
     const modelReconciliationRequired = modelStrategyStep?.ok === true
       && modelStrategyStep?.skipped !== true;
-    if (modelReconciliationRequired) {
-      await acquirePhaseLock("sync-worker-model-reconciled-publication");
+    const consolidatedPublicationPlan = describeConsolidatedSlowPublicationNeed({
+      postEnrichmentPublicationPlan,
+      modelReconciliationRequired,
+      validationOk: postEnrichmentDataValidationStep.ok === true,
+    });
+    const consolidatedPublicationRequired = consolidatedPublicationPlan.required;
+    if (consolidatedPublicationRequired) {
+      await acquireSlowPhaseLock("sync-worker-consolidated-slow-publication");
+      // Hold the shared evidence permit through the complete final rebase,
+      // validation, generation, and SQLite export. A second worker or manual
+      // writer cannot interleave a shared artifact mutation inside the
+      // immutable publication. Official P->A attempts are zero-wait and slow
+      // A writers never wait P, so this does not create a circular wait.
+      await acquireSlowFinalArtifactLock("sync-worker-consolidated-slow-publication");
     }
-    const modelReconciledFastResultReconciliationStep = {
+    // Shared enrichers above may have been followed by a newer official cycle.
+    // Re-project free evidence and pre-match evidence while holding the final
+    // publication lock so generation always consumes the latest match set.
+    const consolidatedFreeFootballEnabled = process.env.ENABLE_FREE_FOOTBALL_SYNC !== "0";
+    if (consolidatedPublicationRequired && consolidatedFreeFootballEnabled) {
+      await onBeforeHeavyStep("sync:free-football:consolidated-slow-publication");
+    }
+    const consolidatedFreeFootballStep = {
       ...(await runOptional(
-        modelReconciliationRequired,
+        consolidatedPublicationRequired && consolidatedFreeFootballEnabled,
+        "sync:free-football",
+        {},
+        enrichmentOptions
+      )),
+      phase: "consolidated-slow-publication",
+      rebasedAfterOfficialLane: true,
+    };
+    enrichmentSteps.push(consolidatedFreeFootballStep);
+    if (consolidatedPublicationRequired && consolidatedPreMatchEnabled) {
+      await onBeforeHeavyStep("sync:prematch:consolidated-slow-publication");
+    }
+    const consolidatedPreMatchStep = {
+      ...(await runOptional(
+        consolidatedPublicationRequired && consolidatedPreMatchEnabled,
+        "sync:prematch",
+        {},
+        enrichmentOptions
+      )),
+      phase: "consolidated-slow-publication",
+      rebasedAfterOfficialLane: true,
+    };
+    enrichmentSteps.push(consolidatedPreMatchStep);
+    const consolidatedFastResultReconciliationStep = {
+      ...(await runOptional(
+        consolidatedPublicationRequired,
         "reconcile:fast-results-generation",
         {},
         { timeoutMs: commandTimeouts.validation }
       )),
-      phase: "model-reconciled",
+      phase: "consolidated-slow-publication",
     };
-    if (modelReconciliationRequired) {
-      await onBeforeHeavyStep("datastore:generation:model-reconciled");
-    }
-    const modelReconciledGenerationStep = {
+    const consolidatedDataValidationStep = {
       ...(await runOptional(
-        modelReconciliationRequired,
+        consolidatedPublicationRequired,
+        "validate:data",
+        {},
+        { fatal: false, timeoutMs: commandTimeouts.validation }
+      )),
+      phase: "consolidated-slow-publication",
+      rebasedAfterOfficialLane: true,
+    };
+    if (consolidatedPublicationRequired
+      && consolidatedDataValidationStep.ok === true) {
+      await onBeforeHeavyStep("datastore:generation:consolidated-slow-publication");
+    }
+    const consolidatedGenerationStep = {
+      ...(await runOptional(
+        consolidatedPublicationRequired
+          && consolidatedDataValidationStep.ok === true,
         "datastore:generation",
         {
           SERVER_STORE_DIR: process.env.SERVER_STORE_DIR || storeDir,
         },
         { fatal: false, timeoutMs: commandTimeouts.sqlite }
       )),
-      phase: "model-reconciled",
+      phase: "consolidated-slow-publication",
     };
     if (sqliteExportEnabled
-      && modelReconciliationRequired
-      && modelReconciledGenerationStep?.skipped !== true) {
-      await onBeforeHeavyStep("datastore:sqlite:model-reconciled");
+      && consolidatedPublicationRequired
+      && consolidatedDataValidationStep.ok === true
+      && consolidatedGenerationStep?.skipped !== true) {
+      await onBeforeHeavyStep("datastore:sqlite:consolidated-slow-publication");
     }
-    const modelReconciledSqliteStep = await runSqliteExportOrReuse({
+    const consolidatedSqliteStep = await runSqliteExportOrReuse({
       enabled: sqliteExportEnabled
-        && modelReconciliationRequired
-        && modelReconciledGenerationStep?.skipped !== true,
-      generationStep: modelReconciledGenerationStep,
+        && consolidatedPublicationRequired
+        && consolidatedDataValidationStep.ok === true
+        && consolidatedGenerationStep?.skipped !== true,
+      generationStep: consolidatedGenerationStep,
       options: { fatal: false, timeoutMs: commandTimeouts.sqlite },
     });
-    if (modelReconciliationRequired) {
-      await releasePhaseLock();
-    }
+    await releaseSlowFinalArtifactLock();
+    await releaseSlowPhaseLock();
+    const aliasConsolidatedStep = (step, phase, required) => required
+      ? { ...step, phase, consolidated: true }
+      : {
+          ok: true,
+          skipped: true,
+          consolidated: true,
+          script: step?.script || null,
+          phase,
+          reason: "consolidated-publication-not-required",
+        };
+    const postEnrichmentFastResultReconciliationStep = aliasConsolidatedStep(
+      consolidatedFastResultReconciliationStep,
+      "post-enrichment",
+      postEnrichmentPublicationPlan.required,
+    );
+    const postEnrichmentGenerationStep = aliasConsolidatedStep(
+      consolidatedGenerationStep,
+      "post-enrichment",
+      postEnrichmentPublicationPlan.required,
+    );
+    const postEnrichmentSqliteStep = aliasConsolidatedStep(
+      consolidatedSqliteStep,
+      "post-enrichment",
+      postEnrichmentPublicationPlan.required,
+    );
+    const modelReconciledFastResultReconciliationStep = aliasConsolidatedStep(
+      consolidatedFastResultReconciliationStep,
+      "model-reconciled",
+      modelReconciliationRequired,
+    );
+    const modelReconciledGenerationStep = aliasConsolidatedStep(
+      consolidatedGenerationStep,
+      "model-reconciled",
+      modelReconciliationRequired,
+    );
+    const modelReconciledSqliteStep = aliasConsolidatedStep(
+      consolidatedSqliteStep,
+      "model-reconciled",
+      modelReconciliationRequired,
+    );
+    const effectivePostEnrichmentGenerationStep = consolidatedPublicationRequired
+      ? consolidatedGenerationStep
+      : officialGenerationStep;
+    const effectivePostEnrichmentSqliteStep = consolidatedPublicationRequired
+      ? consolidatedSqliteStep
+      : sqliteStep;
     const readinessSourceCycleObservation = readSourceCycleObservation({
       phase: "readiness",
-      validationStep: postEnrichmentDataValidationStep,
-      generationStep: modelReconciliationRequired
-        ? modelReconciledGenerationStep
-        : effectivePostEnrichmentGenerationStep,
-      sqliteStep: modelReconciliationRequired
-        ? modelReconciledSqliteStep
-        : effectivePostEnrichmentSqliteStep,
+      validationStep: consolidatedPublicationRequired
+        ? consolidatedDataValidationStep
+        : postEnrichmentDataValidationStep,
+      generationStep: effectivePostEnrichmentGenerationStep,
+      sqliteStep: effectivePostEnrichmentSqliteStep,
     });
     const slowSteps = [
       ...enrichmentSteps,
       sourceValidationStep,
       postEnrichmentDataValidationStep,
       postEnrichmentPublicationPlan,
+      consolidatedPublicationPlan,
+      consolidatedFreeFootballStep,
+      consolidatedPreMatchStep,
+      consolidatedFastResultReconciliationStep,
+      consolidatedDataValidationStep,
+      consolidatedGenerationStep,
+      consolidatedSqliteStep,
       postEnrichmentFastResultReconciliationStep,
       postEnrichmentGenerationStep,
       postEnrichmentSqliteStep,
@@ -2439,16 +3679,9 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
       modelReconciledSqliteStep
     ];
     const degradedSteps = slowSteps.filter((step) => step && step.ok === false);
-    const fastWarnings = [
-      ...(fastResultStep?.ok === false
-        ? [`${fastResultStep.script}: ${fastResultStep.error}`]
-        : []),
-      ...(uefaOfficialResultStep?.ok === false
-        ? [`${uefaOfficialResultStep.script}: ${uefaOfficialResultStep.error}`]
-        : []),
-    ];
     const slowPhase = withCycleDuration({
       ok: degradedSteps.length === 0,
+      skipped: false,
       degraded: degradedSteps.length > 0,
       phase: "slow-enrichment",
       startedAt: slowPhaseStartedAt,
@@ -2465,6 +3698,7 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
       finishedAt: new Date().toISOString(),
       cadence,
       releaseCycle,
+      slowPhasePlan,
       fastPhase,
       fastResultStep,
       uefaOfficialResultStep,
@@ -2474,6 +3708,14 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
       enrichmentSteps,
       sourceValidationStep,
       postEnrichmentDataValidationStep,
+      postEnrichmentPublicationPlan,
+      consolidatedPublicationPlan,
+      consolidatedFreeFootballStep,
+      consolidatedPreMatchStep,
+      consolidatedFastResultReconciliationStep,
+      consolidatedDataValidationStep,
+      consolidatedGenerationStep,
+      consolidatedSqliteStep,
       postEnrichmentFastResultReconciliationStep,
       postEnrichmentGenerationStep,
       postEnrichmentSqliteStep,
@@ -2493,6 +3735,57 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
         ...degradedSteps.map((step) => `${step.script}: ${step.error}`)
       ]
     };
+    } finally {
+      await releaseSlowFinalArtifactLock();
+      await releaseSlowPhaseLock();
+    }
+    };
+
+    if (hooks.deferSlowPhase === true && releaseCycle.priority !== true) {
+      const deferredAt = new Date().toISOString();
+      const deferredSlowPhase = withCycleDuration({
+        ok: true,
+        skipped: true,
+        deferred: true,
+        phase: "slow-enrichment",
+        reason: "slow-phase-deferred-to-background-lane",
+        startedAt: deferredAt,
+        finishedAt: deferredAt,
+        plan: slowPhasePlan,
+        warnings: [],
+      });
+      const readinessSourceCycleObservation = readSourceCycleObservation({
+        phase: "readiness",
+        validationStep: dataValidationStep,
+        generationStep: officialGenerationStep,
+        sqliteStep,
+      });
+      const slowPhaseTask = Promise.resolve().then(executeSlowPhase);
+      onSlowPhaseDeferred(slowPhaseTask, {
+        startedAt: deferredAt,
+        plan: slowPhasePlan,
+      });
+      return {
+        ok: true,
+        degraded: fastWarnings.length > 0,
+        startedAt,
+        finishedAt: new Date().toISOString(),
+        cadence,
+        releaseCycle,
+        slowPhasePlan,
+        fastPhase,
+        fastResultStep,
+        uefaOfficialResultStep,
+        officialPhase,
+        slowPhase: deferredSlowPhase,
+        sourceCycleObservation: readinessSourceCycleObservation,
+        sqliteStep,
+        readinessSourceCycleObservation,
+        warnings: fastWarnings,
+      };
+    }
+
+    return await executeSlowPhase();
   } finally {
     await releasePhaseLock();
   }
@@ -2606,6 +3899,45 @@ const waitForNextCycle = async (delayMs, options = {}) => {
   const baseline = options.baseline || readFingerprint();
   const startedAtMs = now();
   const deadlineMs = startedAtMs + Math.max(0, Number(delayMs || 0));
+  const externalWake = options.wakePromise
+    ? Promise.resolve(options.wakePromise).then(
+        (value) => ({ external: true, value }),
+        (error) => ({
+          external: true,
+          value: {
+            reason: "external-wake-rejected",
+            error: error?.message || String(error),
+          },
+        }),
+      )
+    : null;
+
+  const waitStep = async (milliseconds) => {
+    if (!externalWake) {
+      await sleeper(milliseconds);
+      return null;
+    }
+    return Promise.race([
+      externalWake,
+      Promise.resolve(sleeper(Math.min(milliseconds, pollMs))).then(() => null),
+    ]);
+  };
+
+  if (externalWake) {
+    const immediateWake = await Promise.race([
+      externalWake,
+      Promise.resolve().then(() => null),
+    ]);
+    if (immediateWake?.external) {
+      return {
+        reason: immediateWake.value?.reason || "external-wake",
+        waitedMs: 0,
+        baseline,
+        current: enabled ? readFingerprint() : null,
+        external: immediateWake.value || null,
+      };
+    }
+  }
 
   if (enabled) {
     const current = readFingerprint();
@@ -2621,7 +3953,16 @@ const waitForNextCycle = async (delayMs, options = {}) => {
 
   while (now() < deadlineMs) {
     const remainingMs = Math.max(0, deadlineMs - now());
-    await sleeper(Math.min(enabled ? pollMs : remainingMs, remainingMs));
+    const wake = await waitStep(Math.min(enabled || externalWake ? pollMs : remainingMs, remainingMs));
+    if (wake?.external) {
+      return {
+        reason: wake.value?.reason || "external-wake",
+        waitedMs: Math.max(0, now() - startedAtMs),
+        baseline,
+        current: enabled ? readFingerprint() : null,
+        external: wake.value || null,
+      };
+    }
     if (!enabled) continue;
     const current = readFingerprint();
     if (relaySnapshotChanged(baseline, current)) {
@@ -2686,20 +4027,124 @@ const main = async () => {
     return;
   }
 
-  const candidateDeadlineHeartbeat = loop
+  let candidateDeadlineHeartbeat = null;
+  let benchmarkDeadlineHeartbeat = null;
+  let backgroundSlowPhasePromise = null;
+  let releaseDrainBlocker = null;
+  let officialCompensationPending = false;
+  const markShutdownInterrupted = (state = "requested") => {
+    const request = runtimeShutdownController.request || {};
+    const currentBackground = workerStatusState?.backgroundSlowPhase || null;
+    writeWorkerStatusBestEffort({
+      ...(workerStatusState || {}),
+      ok: true,
+      checkedAt: new Date().toISOString(),
+      cycleState: state === "completed" ? "stopped" : "stopping",
+      phase: "interrupted",
+      shutdown: {
+        state,
+        signal: request.signal || null,
+        requestedAt: request.requestedAt || null,
+        activeCommands: runtimeShutdownController.activeCount,
+      },
+      backgroundSlowPhase: (backgroundSlowPhasePromise || currentBackground?.state === "running")
+        ? {
+            ...(currentBackground || {}),
+            state: "interrupted",
+            finishedAt: state === "completed" ? new Date().toISOString() : null,
+            signal: request.signal || null,
+          }
+        : currentBackground,
+    });
+  };
+  const handleShutdownSignal = (signal) => {
+    runtimeShutdownController.requestShutdown(signal);
+    candidateDeadlineHeartbeat?.pause();
+    benchmarkDeadlineHeartbeat?.pause();
+    markShutdownInterrupted("requested");
+  };
+  const handleSigterm = () => handleShutdownSignal("SIGTERM");
+  const handleSigint = () => handleShutdownSignal("SIGINT");
+  process.once("SIGTERM", handleSigterm);
+  process.once("SIGINT", handleSigint);
+  candidateDeadlineHeartbeat = loop
     ? startCandidateProspectiveDeadlineHeartbeat()
     : null;
-  if (candidateDeadlineHeartbeat) {
-    // The immediate heartbeat is deliberately awaited before the first full
-    // sync.  Previously both child trees were launched together, which made
-    // the first generation/export contend with cutoff capture inside the same
-    // MemoryHigh cgroup.  Failed attempts keep their strict retry schedule and
-    // the heavy cycle does not start until one exact status publication wins.
-    await candidateDeadlineHeartbeat.waitForPublished();
+  if (loop && candidateDeadlineHeartbeat && benchmarkDeadlineCaptureEnabled) {
+    // Formal cutoff publication owns startup priority. Arm the independent
+    // benchmark lane only after the first exact heartbeat, and schedule its
+    // first attempt one normal interval later so it cannot compete with the
+    // formal child or block the heavy-step admission barrier.
+    void candidateDeadlineHeartbeat.waitForPublished().then(() => {
+      if (runtimeShutdownController.requested || benchmarkDeadlineHeartbeat) return;
+      benchmarkDeadlineHeartbeat = startBenchmarkProspectiveDeadlineCapture({ immediate: false });
+    });
   }
+  const startupResultRecoveryPlan = describeFiveHundredResultFallbackNeed();
+  let startupDeadlineAdmissionPending = candidateDeadlineHeartbeat !== null;
+  // The official fixture/result lane is append-only with respect to frozen
+  // recommendations, so it must not be held behind an unhealthy candidate
+  // heartbeat. The first heavy-step barrier below recomputes deadline risk and
+  // remains fail-closed when a cutoff is missing, near, or overdue without a
+  // complete capture. Otherwise it drains only the current bounded attempt;
+  // the independent heartbeat keeps retrying in the background.
   let cycleWake = null;
+  const backgroundSlowPhaseTracker = createBackgroundSlowPhaseTracker({
+    onCurrentChange: (current) => {
+      backgroundSlowPhasePromise = current;
+    },
+  });
+  const trackBackgroundSlowPhase = backgroundSlowPhaseTracker.track;
   do {
+    if (runtimeShutdownController.requested) break;
     candidateDeadlineHeartbeat?.resume();
+    benchmarkDeadlineHeartbeat?.resume();
+    const preCycleReleaseRequest = inspectReleaseWorkerPriorityRequest({
+      rootDir,
+      storeDir,
+    });
+    if (preCycleReleaseRequest.pending === true && backgroundSlowPhasePromise) {
+      if (releaseDrainBlocker?.task !== backgroundSlowPhasePromise) {
+        const drainTask = backgroundSlowPhasePromise;
+        const drain = await waitForBackgroundSlowPhaseDrain(drainTask, {
+          budgetMs: releaseSlowPhaseDrainBudgetMs,
+          interruptPromise: runtimeShutdownController.wakePromise,
+        });
+        releaseDrainBlocker = drain.ok === true
+          ? null
+          : { ...drain, task: drainTask };
+      }
+      if (runtimeShutdownController.requested) break;
+      if (releaseDrainBlocker?.task === backgroundSlowPhasePromise) {
+        const diagnostic = {
+          ...releaseDrainBlocker,
+          task: undefined,
+          pendingSince: releaseDrainBlocker.startedAt || null,
+        };
+        writeWorkerStatusBestEffort({
+          ...(workerStatusState || {}),
+          ok: false,
+          checkedAt: new Date().toISOString(),
+          cycleState: "release-blocked",
+          phase: "release-priority-drain-blocked",
+          releaseDrain: diagnostic,
+          error: diagnostic.reason,
+          errorCode: diagnostic.code,
+          nextWakeAt: new Date(Date.now() + releaseCycleRetryMs).toISOString(),
+        });
+        cycleWake = await waitForNextCycle(releaseCycleRetryMs, {
+          enabled: false,
+          wakePromise: Promise.race([
+            backgroundSlowPhasePromise.then(() => ({
+              reason: "background-slow-phase-settled-after-release-drain-block",
+            })),
+            runtimeShutdownController.wakePromise,
+          ]),
+        });
+        continue;
+      }
+      releaseDrainBlocker = null;
+    }
     const cadence = describeSyncCadence();
     const activeCycleStartedAt = new Date().toISOString();
     const activeCycleRelaySemanticBaseline = relaySnapshotSemanticFingerprint();
@@ -2710,6 +4155,7 @@ const main = async () => {
     let activeEventCycle = workerStatusState?.eventCycle || workerStatusState?.lastCycle || null;
     let fastPublishedThisCycle = false;
     let fullOfficialPublishedThisCycle = false;
+    const slowPhaseRunningAtCycleStart = backgroundSlowPhasePromise !== null;
     try {
       const previousHistory = workerHistoryFields(workerStatusState);
       writeWorkerStatus({
@@ -2733,12 +4179,34 @@ const main = async () => {
         ...previousHistory
       });
       const result = await runCycle(cadence, {
+        deferSlowPhase: loop,
+        slowPhaseRunning: slowPhaseRunningAtCycleStart,
+        onSlowPhaseDeferred: trackBackgroundSlowPhase,
+        isInterrupted: () => runtimeShutdownController.requested,
         onBeforeHeavyStep: async () => {
+          if (runtimeShutdownController.requested) {
+            throw runtimeShutdownController.interruptionError();
+          }
+          if (startupDeadlineAdmissionPending && candidateDeadlineHeartbeat) {
+            const startupDeadlineAdmission = describeCandidateDeadlineStartupAdmission({
+              resultRecoveryPlan: startupResultRecoveryPlan,
+            });
+            if (startupDeadlineAdmission.waitForPublished) {
+              await Promise.race([
+                candidateDeadlineHeartbeat.waitForPublished(),
+                runtimeShutdownController.wakePromise,
+              ]);
+            }
+            startupDeadlineAdmissionPending = false;
+          }
           // Drain an already-running cutoff capture before admitting the next
           // memory-heavy child.  The heartbeat remains enabled during the
           // child; this barrier only prevents simultaneous child-tree launch
           // and does not relax or manufacture the 120s freshness contract.
-          await candidateDeadlineHeartbeat?.waitForIdle();
+          await candidateDeadlineHeartbeat?.waitForHealthy();
+          if (runtimeShutdownController.requested) {
+            throw runtimeShutdownController.interruptionError();
+          }
         },
         onFastPublished: async (fastPhase) => {
           activeEventCycle = fastPhase;
@@ -2796,6 +4264,14 @@ const main = async () => {
         }
       });
       const completedCycle = withCycleDuration(result);
+      if (officialCompensationRequired({
+        cycle: completedCycle,
+        slowPhaseRunning: slowPhaseRunningAtCycleStart,
+      })) {
+        officialCompensationPending = true;
+      } else if (fullOfficialPublishedThisCycle) {
+        officialCompensationPending = false;
+      }
       if (releaseCycleNeedsReadinessHandoff(completedCycle)) {
         // The release validator publishes its own exact cutoff heartbeat after
         // observing sleeping state. Stop scheduling worker captures and drain
@@ -2803,7 +4279,9 @@ const main = async () => {
         // writers can contend on the prospective registry lock and force a
         // healthy signed release to roll back.
         candidateDeadlineHeartbeat?.pause();
+        benchmarkDeadlineHeartbeat?.pause();
         await candidateDeadlineHeartbeat?.waitForIdle();
+        await benchmarkDeadlineHeartbeat?.waitForIdle();
       }
       if (activeEventCycle && completedCycle.degraded === true) {
         activeEventCycle = {
@@ -2825,7 +4303,11 @@ const main = async () => {
         activeCycleStartedAt,
         nextCadence.intervalMs,
         Date.now(),
-        { fromCompletion: postDeadlineCooldown },
+        {
+          fromCompletion: postDeadlineCooldown
+            || nextCadence.mode === "hot"
+            || (completedCycle.slowPhase && completedCycle.slowPhase.skipped !== true),
+        },
       );
       loopDelayMs = releaseCycleDelayMs(completedCycle, normalLoopDelayMs);
       postCycleRelaySemantic = relaySnapshotSemanticFingerprint();
@@ -2859,6 +4341,12 @@ const main = async () => {
           cycleSemanticBaseline: activeCycleRelaySemanticBaseline,
           cycleSemanticCurrent: postCycleRelaySemantic,
         },
+        officialCompensation: {
+          pending: officialCompensationPending,
+          reason: officialCompensationPending
+            ? "background-slow-publication-lock-blocked-official-cycle"
+            : null,
+        },
         eventCycle: activeEventCycle,
         lastCycle: completedCycle,
         lastCompleteCycle: completePublicationCycleEvidence(completedCycle)
@@ -2866,12 +4354,30 @@ const main = async () => {
         lastSuccessAt: completedCycle.ok === true && completedCycle.skipped !== true
           ? completedCycle.finishedAt || new Date().toISOString()
           : runningHistory.lastSuccessAt,
+        lastSlowPhaseAt: completedCycle.slowPhase && completedCycle.slowPhase.skipped !== true
+          ? completedCycle.slowPhase.finishedAt || completedCycle.finishedAt || new Date().toISOString()
+          : runningHistory.lastSlowPhaseAt,
         lastCycleDurationMs: completedCycle.durationMs,
         lastError: null,
         nextWakeAt
       });
       console.log(JSON.stringify({ type: "sync-worker-cycle", ...completedCycle }, null, 2));
     } catch (error) {
+      if (runtimeShutdownController.requested) {
+        loopDelayMs = 0;
+        markShutdownInterrupted("draining");
+        try {
+          console.error(JSON.stringify({
+            type: "sync-worker-interrupted",
+            at: new Date().toISOString(),
+            signal: runtimeShutdownController.request?.signal || null,
+            error: error?.message || String(error),
+            errorCode: error?.code || null,
+          }));
+        } catch {
+          // Shutdown diagnostics remain best effort.
+        }
+      } else {
       const failedAt = new Date().toISOString();
       const runningHistory = workerHistoryFields(workerStatusState);
       const lastError = summarizeWorkerError(error, failedAt);
@@ -2896,7 +4402,7 @@ const main = async () => {
         activeCycleStartedAt,
         nextCadence.intervalMs,
         Date.now(),
-        { fromCompletion: postDeadlineCooldown },
+        { fromCompletion: postDeadlineCooldown || nextCadence.mode === "hot" },
       );
       const nextWakeAt = loop ? new Date(Date.now() + loopDelayMs).toISOString() : null;
       const failure = {
@@ -2921,6 +4427,7 @@ const main = async () => {
         lastCycle: failedCycle,
         lastCompleteCycle: runningHistory.lastCompleteCycle,
         lastSuccessAt: runningHistory.lastSuccessAt,
+        lastSlowPhaseAt: runningHistory.lastSlowPhaseAt,
         lastCycleDurationMs: failedCycle.durationMs,
         lastError,
         nextWakeAt,
@@ -2931,9 +4438,25 @@ const main = async () => {
       writeWorkerStatus(failure);
       console.error(JSON.stringify(failure, null, 2));
       if (!loop) process.exitCode = 1;
+      }
     }
-    if (loop) {
+    if (loop && !runtimeShutdownController.requested) {
       const postCycleRelayBaseline = relaySnapshotFingerprint();
+      const compensationWakePromise = officialCompensationPending
+        ? backgroundSlowPhasePromise
+          ? backgroundSlowPhasePromise.then(() => ({
+              reason: "background-slow-phase-settled-official-compensation",
+            }))
+          : Promise.resolve({
+              reason: "background-slow-phase-already-settled-official-compensation",
+            })
+        : null;
+      const externalWakePromise = compensationWakePromise
+        ? Promise.race([
+            compensationWakePromise,
+            runtimeShutdownController.wakePromise,
+          ])
+        : runtimeShutdownController.wakePromise;
       if (relayCatchupRequired) {
         cycleWake = {
           reason: "relay-semantic-change-during-cycle",
@@ -2944,11 +4467,26 @@ const main = async () => {
       } else {
         cycleWake = await waitForNextCycle(loopDelayMs, {
           baseline: postCycleRelayBaseline,
-          enabled: relayWakeEnabled && relayWakeEligible
+          enabled: relayWakeEnabled && relayWakeEligible,
+          wakePromise: externalWakePromise,
         });
       }
     }
-  } while (loop);
+  } while (loop && !runtimeShutdownController.requested);
+  candidateDeadlineHeartbeat?.pause();
+  candidateDeadlineHeartbeat?.stop?.();
+  benchmarkDeadlineHeartbeat?.pause();
+  benchmarkDeadlineHeartbeat?.stop?.();
+  await benchmarkDeadlineHeartbeat?.waitForIdle();
+  if (backgroundSlowPhasePromise) {
+    await waitForBackgroundSlowPhaseDrain(backgroundSlowPhasePromise, {
+      budgetMs: shutdownDrainBudgetMs,
+    });
+  }
+  if (runtimeShutdownController.requested) markShutdownInterrupted("completed");
+  runtimeShutdownController.dispose();
+  process.removeListener("SIGTERM", handleSigterm);
+  process.removeListener("SIGINT", handleSigint);
 };
 
 if (require.main === module) {
@@ -2959,6 +4497,11 @@ if (require.main === module) {
 }
 
 module.exports = {
+  acquireSyncLockInterruptibly,
+  benchmarkDeadlineCaptureEnabled,
+  benchmarkDeadlineCaptureIntervalMs,
+  benchmarkDeadlineCaptureStatusAdvanced,
+  benchmarkDeadlineCaptureTimeoutMs,
   commandTimeouts,
   candidateDeadlineCaptureEnabled,
   candidateDeadlineCaptureForceSettleMs,
@@ -2969,15 +4512,22 @@ module.exports = {
   candidateDeadlineCaptureStatusAdvanced,
   candidateDeadlineCaptureTerminateGraceMs,
   candidateDeadlineCaptureTimeoutMs,
+  candidateDeadlineCaptureCompleteThrough,
   candidateDeadlineAttemptBudget,
   candidateDeadlineHeartbeatFreshnessLimitMs,
   candidateDeadlinePreemptiveSchedule,
+  candidateDeadlineStartupSafetyWindowMs,
   cycleDurationMs,
+  createBackgroundSlowPhaseTracker,
+  createWorkerShutdownController,
   describeCycleStages,
+  describeConsolidatedSlowPublicationNeed,
   describeFiveHundredResultFallbackNeed,
+  describeCandidateDeadlineStartupAdmission,
   describeModelStrategyReconciliationNeed,
   describeModelBacktestNeed,
   describePostEnrichmentPublicationNeed,
+  describeSlowPhaseNeed,
   describeSyncCadence,
   fastEventVisibilityMs,
   main,
@@ -2985,12 +4535,14 @@ module.exports = {
   modelCandidateRegistryLockTimeoutMs,
   nextCycleDelayMs,
   officialPublishEvidenceAfter,
+  officialCompensationRequired,
   phaseLockWaitMs,
   releaseCycleDelayMs,
   releaseCycleInitialLockWaitMs,
   releaseCycleNeedsPriorityRetry,
   releaseCycleNeedsReadinessHandoff,
   releaseCycleRetryMs,
+  releaseSlowPhaseDrainBudgetMs,
   readinessIdleEvidenceAfter,
   relaySnapshotChanged,
   relayCatchupRequiredAfterCycle,
@@ -3002,11 +4554,19 @@ module.exports = {
   runSqliteExportOrReuse,
   runCommand,
   runCandidateProspectiveDeadlineCapture,
+  runBenchmarkProspectiveDeadlineCapture,
+  runWithSharedSlowArtifactLock,
   startCandidateProspectiveDeadlineHeartbeat,
+  startBenchmarkProspectiveDeadlineCapture,
   summarizeWorkerError,
+  slowPhaseMinIntervalMs,
+  slowPublicationLockWaitMs,
+  usesSharedSlowArtifact,
   webConsensusRefreshDue,
   waitForFastEventVisibility,
   waitForNextCycle,
+  waitForBackgroundSlowPhaseDrain,
+  writeWorkerStatusBestEffort,
   writeJsonAtomic,
   withCycleDuration,
   workerHistoryFields

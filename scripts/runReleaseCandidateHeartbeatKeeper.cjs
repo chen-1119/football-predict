@@ -8,6 +8,10 @@ const KEEPER_VERSION = "release-candidate-heartbeat-keeper-v2";
 const HEARTBEAT_VERSION = "prospective-deadline-heartbeat-v2";
 const READINESS_VERSION = "candidate-prospective-readiness-preview-v2";
 const MAX_CAPTURE_OUTPUT_BYTES = 4 * 1024 * 1024;
+const CAPTURE_ONCE_MODE = "--capture-once";
+const CAPTURE_ONCE_TIMEOUT_EXIT_CODE = 124;
+const CAPTURE_ONCE_SPAWN_EXIT_CODE = 125;
+const CAPTURE_ONCE_TOTAL_BUDGET_MS = 100_000;
 
 const readJson = (filePath, fallback = null) => {
   try {
@@ -153,6 +157,14 @@ const exactHeartbeatMatches = (
     status || {},
     "readyDueUnrecorded",
   );
+  const ownsCaptureMode = Object.prototype.hasOwnProperty.call(
+    status || {},
+    "captureMode",
+  );
+  const captureModeMatches = status?.captureMode === "deadline-only" || (
+    allowPreSwapLegacyTopLevelDueOmission === true
+    && !ownsCaptureMode
+  );
   const topLevelDueCountersMatch = (
     status?.dueUnrecorded === 0
     && status?.readyDueUnrecorded === 0
@@ -163,6 +175,7 @@ const exactHeartbeatMatches = (
   );
   return (
     status?.version === HEARTBEAT_VERSION
+    && captureModeMatches
     && status?.ok === true
     && status?.skipped === false
     && status?.dueCaptureComplete === true
@@ -210,9 +223,9 @@ const validateKeeperOptions = (raw) => {
     sqlitePath: path.resolve(String(raw?.sqlitePath || "")),
     intervalSeconds: integerInRange(raw?.intervalSeconds ?? 20, 5, 30, "intervalSeconds"),
     attemptTimeoutMs: integerInRange(
-      raw?.attemptTimeoutMs ?? 90_000,
+      raw?.attemptTimeoutMs ?? 100_000,
       1_000,
-      90_000,
+      110_000,
       "attemptTimeoutMs",
     ),
     lockTimeoutMs: integerInRange(
@@ -293,6 +306,164 @@ const assertRuntimePaths = (options) => {
     assertRegularFile(options.sqlitePath, "SQLite database");
   }
 };
+
+const validateCaptureOnceOptions = (raw) => {
+  const options = {
+    captureScript: path.resolve(String(raw?.captureScript || "")),
+    workingDirectory: path.resolve(String(raw?.workingDirectory || "")),
+    timeoutMs: integerInRange(raw?.timeoutMs ?? 90_000, 100, 95_000, "timeoutMs"),
+    killAfterMs: integerInRange(raw?.killAfterMs ?? 5_000, 100, 5_000, "killAfterMs"),
+  };
+  if (options.timeoutMs + options.killAfterMs > CAPTURE_ONCE_TOTAL_BUDGET_MS) {
+    throw new Error("capture-once TERM/KILL budget must not exceed 100000ms");
+  }
+  if (!path.isAbsolute(String(raw?.captureScript || ""))) {
+    throw new Error("captureScript must be absolute");
+  }
+  if (!path.isAbsolute(String(raw?.workingDirectory || ""))) {
+    throw new Error("workingDirectory must be absolute");
+  }
+  return options;
+};
+
+const parseCaptureOnceArgs = (argv) => {
+  const values = new Map();
+  const allowed = new Set([
+    "capture-script",
+    "working-directory",
+    "timeout-ms",
+    "kill-after-ms",
+  ]);
+  for (let index = 0; index < argv.length; index += 2) {
+    const token = argv[index];
+    const value = argv[index + 1];
+    const key = token?.startsWith("--") ? token.slice(2) : null;
+    if (!key || value === undefined || !allowed.has(key)) {
+      throw new Error(`invalid capture-once argument near ${token || "<end>"}`);
+    }
+    values.set(key, value);
+  }
+  return validateCaptureOnceOptions({
+    captureScript: values.get("capture-script"),
+    workingDirectory: values.get("working-directory"),
+    timeoutMs: values.get("timeout-ms"),
+    killAfterMs: values.get("kill-after-ms"),
+  });
+};
+
+const assertCaptureOncePaths = (options) => {
+  const captureInfo = fs.lstatSync(options.captureScript);
+  const workingInfo = fs.lstatSync(options.workingDirectory);
+  if (!captureInfo.isFile() || captureInfo.isSymbolicLink() || captureInfo.nlink !== 1) {
+    throw new Error("capture-once script must be a single-link regular file");
+  }
+  if (!workingInfo.isDirectory() || workingInfo.isSymbolicLink()) {
+    throw new Error("capture-once working directory is unsafe");
+  }
+};
+
+const runCaptureProcessBounded = (rawOptions) => new Promise((resolve) => {
+  const options = validateCaptureOnceOptions(rawOptions);
+  assertCaptureOncePaths(options);
+  const startedAtMs = Date.now();
+  const detached = process.platform !== "win32";
+  let child;
+  let timeout = null;
+  let forceKillTimer = null;
+  let timedOut = false;
+  let settled = false;
+
+  const signalTree = (signal) => {
+    if (!child || child.exitCode !== null || child.signalCode !== null) return false;
+    if (detached && Number.isSafeInteger(child.pid) && child.pid > 0) {
+      try {
+        process.kill(-child.pid, signal);
+        return true;
+      } catch {}
+    }
+    try {
+      return child.kill(signal);
+    } catch {
+      return false;
+    }
+  };
+  const finish = (result) => {
+    if (settled) return;
+    settled = true;
+    if (timeout) clearTimeout(timeout);
+    if (forceKillTimer) clearTimeout(forceKillTimer);
+    resolve({
+      durationMs: Date.now() - startedAtMs,
+      timeoutMs: options.timeoutMs,
+      killAfterMs: options.killAfterMs,
+      ...result,
+    });
+  };
+
+  try {
+    child = spawn(process.execPath, [options.captureScript, "--deadline-only"], {
+      cwd: options.workingDirectory,
+      env: process.env,
+      stdio: "inherit",
+      windowsHide: true,
+      detached,
+    });
+  } catch (error) {
+    finish({
+      ok: false,
+      reason: "capture-spawn-failed",
+      exitCode: CAPTURE_ONCE_SPAWN_EXIT_CODE,
+      error: error?.message || String(error),
+    });
+    return;
+  }
+
+  child.once("error", (error) => finish({
+    ok: false,
+    reason: "capture-spawn-failed",
+    exitCode: CAPTURE_ONCE_SPAWN_EXIT_CODE,
+    error: error?.message || String(error),
+  }));
+  child.once("close", (code, signal) => {
+    if (timedOut) {
+      finish({
+        ok: false,
+        reason: "capture-timeout",
+        exitCode: CAPTURE_ONCE_TIMEOUT_EXIT_CODE,
+        childExitCode: Number.isInteger(code) ? code : null,
+        childSignal: signal || null,
+      });
+      return;
+    }
+    finish({
+      ok: code === 0 && !signal,
+      reason: code === 0 && !signal ? "capture-complete" : "capture-process-failed",
+      exitCode: code === 0 && !signal
+        ? 0
+        : Number.isInteger(code) && code > 0 && code <= 255
+          ? code
+          : 1,
+      childExitCode: Number.isInteger(code) ? code : null,
+      childSignal: signal || null,
+    });
+  });
+
+  timeout = setTimeout(() => {
+    timedOut = true;
+    signalTree("SIGTERM");
+    forceKillTimer = setTimeout(() => {
+      signalTree("SIGKILL");
+      child?.unref?.();
+      finish({
+        ok: false,
+        reason: "capture-timeout",
+        exitCode: CAPTURE_ONCE_TIMEOUT_EXIT_CODE,
+        childExitCode: null,
+        childSignal: "SIGKILL",
+      });
+    }, options.killAfterMs);
+  }, options.timeoutMs);
+});
 
 const writeJsonAtomic = (filePath, payload) => {
   const tempFile = `${filePath}.${process.pid}.${Date.now()}.tmp`;
@@ -397,7 +568,7 @@ const runCaptureAttempt = (options, signalState, { onAttemptStarted = null } = {
     return;
   }
   try {
-    child = spawn(process.execPath, [options.captureScript], {
+    child = spawn(process.execPath, [options.captureScript, "--deadline-only"], {
       cwd: options.workingDirectory,
       env: {
         ...process.env,
@@ -706,13 +877,26 @@ const runKeeper = async (rawOptions) => {
 };
 
 const main = async () => {
-  const options = parseArgs(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  if (argv[0] === CAPTURE_ONCE_MODE) {
+    const result = await runCaptureProcessBounded(parseCaptureOnceArgs(argv.slice(1)));
+    if (!result.ok) {
+      process.stderr.write(
+        `[release-heartbeat-keeper] bounded capture failed: ${result.reason} `
+        + `(exit=${result.exitCode}, durationMs=${result.durationMs})\n`,
+      );
+    }
+    return result.exitCode;
+  }
+  const options = parseArgs(argv);
   const code = await runKeeper(options);
-  process.exitCode = code;
+  return code;
 };
 
 if (require.main === module) {
-  main().catch((error) => {
+  main().then((code) => {
+    process.exitCode = code;
+  }).catch((error) => {
     process.stderr.write(
       `[release-heartbeat-keeper] fatal: ${error?.stack || error?.message || String(error)}\n`,
     );
@@ -724,10 +908,16 @@ module.exports = {
   HEARTBEAT_VERSION,
   KEEPER_VERSION,
   READINESS_VERSION,
+  CAPTURE_ONCE_MODE,
+  CAPTURE_ONCE_TIMEOUT_EXIT_CODE,
+  CAPTURE_ONCE_TOTAL_BUDGET_MS,
   atomicDecisionRecordInvariantsMatch,
   captureScheduleDelayMs,
   exactHeartbeatMatches,
+  parseCaptureOnceArgs,
   readinessInvariantsMatch,
+  runCaptureProcessBounded,
   runKeeper,
+  validateCaptureOnceOptions,
   validateKeeperOptions,
 };

@@ -3,6 +3,10 @@ const crypto = require("crypto");
 const https = require("https");
 const path = require("path");
 const {
+  eventSafeExistingSignal,
+  stampSignalEvent,
+} = require("./externalSignalEventIdentity.cjs");
+const {
   applyFixtureMappingEvidence,
   fixtureIdentityHashFor,
   loadEntityRegistry,
@@ -11,16 +15,31 @@ const {
   stableStringify,
   writeEntityRegistryAtomic,
 } = require("./entityResolutionRegistry.cjs");
+const {
+  API_FOOTBALL_SHADOW_MODE,
+  apiFootballRuntimePolicyFor,
+  configuredKeyFor,
+} = require("../src/services/apiFootballRuntimePolicy.cjs");
 const sha256 = (value) => crypto.createHash("sha256").update(String(value)).digest("hex");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const PUBLIC_DIR = path.join(PROJECT_ROOT, "public");
-const DATA_DIR = path.join(PUBLIC_DIR, "data");
-const CURRENT_MATCHES_FILE = path.join(DATA_DIR, "matches-current.json");
-const FALLBACK_MATCHES_FILE = path.join(PUBLIC_DIR, "matches.json");
-const EXTERNAL_SIGNALS_FILE = path.join(DATA_DIR, "external-signals.json");
-const CACHE_FILE = path.join(DATA_DIR, "api-football-cache.json");
-const META_FILE = path.join(DATA_DIR, "api-football-meta.json");
+const DATA_DIR = path.resolve(process.env.API_FOOTBALL_DATA_DIR || path.join(PUBLIC_DIR, "data"));
+const CURRENT_MATCHES_FILE = path.resolve(
+  process.env.API_FOOTBALL_CURRENT_MATCHES_FILE || path.join(DATA_DIR, "matches-current.json"),
+);
+const FALLBACK_MATCHES_FILE = path.resolve(
+  process.env.API_FOOTBALL_FALLBACK_MATCHES_FILE || path.join(PUBLIC_DIR, "matches.json"),
+);
+const EXTERNAL_SIGNALS_FILE = path.resolve(
+  process.env.API_FOOTBALL_EXTERNAL_SIGNALS_FILE || path.join(DATA_DIR, "external-signals.json"),
+);
+const CACHE_FILE = path.resolve(
+  process.env.API_FOOTBALL_CACHE_FILE || path.join(DATA_DIR, "api-football-cache.json"),
+);
+const META_FILE = path.resolve(
+  process.env.API_FOOTBALL_META_FILE || path.join(DATA_DIR, "api-football-meta.json"),
+);
 const SERVER_STORE_DIR = path.resolve(process.env.SERVER_STORE_DIR || path.join(PROJECT_ROOT, "server-data"));
 const ENTITY_REGISTRY_FILE = path.resolve(
   process.env.ENTITY_RESOLUTION_REGISTRY_FILE
@@ -28,15 +47,24 @@ const ENTITY_REGISTRY_FILE = path.resolve(
 );
 
 const API_BASE = (process.env.API_FOOTBALL_BASE_URL || "https://v3.football.api-sports.io").replace(/\/+$/, "");
-const API_KEY = process.env.API_FOOTBALL_KEY || process.env.APISPORTS_KEY || "";
-const ENABLED = process.env.ENABLE_API_FOOTBALL_SYNC !== "0";
+const API_KEY = configuredKeyFor(process.env);
+const runtimePolicyFor = apiFootballRuntimePolicyFor;
+const RUNTIME_POLICY = Object.freeze(runtimePolicyFor(process.env));
+const ENABLED = RUNTIME_POLICY.enabled;
 const TIME_ZONE = process.env.API_FOOTBALL_TIMEZONE || "Asia/Shanghai";
-const MAX_CALLS_PER_SYNC = Math.max(0, Number(process.env.API_FOOTBALL_MAX_CALLS_PER_SYNC || 35));
+const maxCallsPerSyncFor = (env = {}) => {
+  const raw = env.API_FOOTBALL_MAX_CALLS_PER_SYNC;
+  if (raw === undefined || raw === null || String(raw).trim() === "") return 12;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 12;
+};
+const MAX_CALLS_PER_SYNC = maxCallsPerSyncFor(process.env);
 const LOOKAHEAD_DAYS = Math.max(1, Number(process.env.API_FOOTBALL_LOOKAHEAD_DAYS || 7));
 const LOOKBACK_HOURS = Math.max(0, Number(process.env.API_FOOTBALL_LOOKBACK_HOURS || 8));
 const FIXTURE_SEARCH_REFRESH_MINUTES = Math.max(30, Number(process.env.API_FOOTBALL_FIXTURE_SEARCH_REFRESH_MINUTES || 720));
 const ACCESS_ERROR_REFRESH_MINUTES = Math.max(30, Number(process.env.API_FOOTBALL_ACCESS_ERROR_REFRESH_MINUTES || 120));
 const STATUS_REFRESH_MINUTES = Math.max(5, Number(process.env.API_FOOTBALL_STATUS_REFRESH_MINUTES || 30));
+const SUSPENSION_PROBE_MINUTES = Math.max(60, Number(process.env.API_FOOTBALL_SUSPENSION_PROBE_MINUTES || 1440));
 const INJURY_LOOKAHEAD_HOURS = Math.max(1, Number(process.env.API_FOOTBALL_INJURY_LOOKAHEAD_HOURS || 48));
 const INJURY_REFRESH_MINUTES = Math.max(60, Number(process.env.API_FOOTBALL_INJURY_REFRESH_MINUTES || 360));
 const ODDS_LOOKAHEAD_HOURS = Math.max(1, Number(process.env.API_FOOTBALL_ODDS_LOOKAHEAD_HOURS || 48));
@@ -45,6 +73,14 @@ const LINEUP_LOOKAHEAD_MINUTES = Math.max(15, Number(process.env.API_FOOTBALL_LI
 const LINEUP_LOOKBACK_MINUTES = Math.max(15, Number(process.env.API_FOOTBALL_LINEUP_LOOKBACK_MINUTES || 120));
 const LINEUP_REFRESH_MINUTES = Math.max(10, Number(process.env.API_FOOTBALL_LINEUP_REFRESH_MINUTES || 20));
 const MIN_MATCH_CONFIDENCE = Math.max(0.1, Math.min(1, Number(process.env.API_FOOTBALL_MIN_MATCH_CONFIDENCE || 0.74)));
+const INJURIES_ENABLED = RUNTIME_POLICY.features.injuries;
+const LINEUPS_ENABLED = RUNTIME_POLICY.features.lineups;
+const ODDS_ENABLED = RUNTIME_POLICY.features.odds;
+const LIVE_SCORE_ENABLED = RUNTIME_POLICY.features.liveScore;
+const LIVE_SCORE_REFRESH_SECONDS = Math.max(10, Number(process.env.API_FOOTBALL_LIVE_SCORE_REFRESH_SECONDS || 30));
+const LIVE_SCORE_PRE_KICKOFF_MINUTES = Math.max(0, Number(process.env.API_FOOTBALL_LIVE_SCORE_PRE_KICKOFF_MINUTES || 10));
+const LIVE_SCORE_POST_KICKOFF_MINUTES = Math.max(120, Number(process.env.API_FOOTBALL_LIVE_SCORE_POST_KICKOFF_MINUTES || 210));
+const LIVE_SCORE_CACHE_MAX_SECONDS = Math.max(60, Number(process.env.API_FOOTBALL_LIVE_SCORE_CACHE_MAX_SECONDS || 300));
 
 const PREFERRED_BOOKMAKERS = (process.env.API_FOOTBALL_PREFERRED_BOOKMAKERS || "Bet365,10Bet,William Hill,1xBet,Marathonbet")
   .split(",")
@@ -187,6 +223,7 @@ const LEAGUE_ALIASES = {
   "\u6b27\u7f57\u5df4": ["uefa europa league", "europa league"],
   "\u632a\u8d85": ["norwegian eliteserien", "eliteserien"],
   "\u5df4\u7532": ["serie a", "brasileirao serie a", "brazil serie a"],
+  "\u5df4\u897f\u676f": ["copa do brasil", "brazil cup"],
   "\u7f8e\u804c": ["major league soccer", "mls"],
   "\u82f1\u8d85": ["premier league"],
   "\u897f\u7532": ["la liga"],
@@ -262,6 +299,14 @@ const createCache = () => ({
   errors: []
 });
 
+const createRequestBudget = (limit = MAX_CALLS_PER_SYNC) => ({
+  limit: Number.isFinite(Number(limit)) && Number(limit) >= 0
+    ? Math.floor(Number(limit))
+    : 12,
+  attempts: 0,
+  byEndpoint: {},
+});
+
 const normalizeCache = (cache) => ({
   ...createCache(),
   ...(cache && typeof cache === "object" ? cache : {}),
@@ -289,6 +334,36 @@ const ageMinutes = (iso) => {
 };
 
 const isFresh = (iso, ttlMinutes) => ageMinutes(iso) < ttlMinutes;
+
+const credentialFingerprintFor = (key) => (
+  key ? sha256(`api-football-credential-v1:${key}`).slice(0, 20) : null
+);
+
+const statusRefreshMinutesFor = (status) => (
+  status?.suspended === true || status?.blockers?.includes?.("account-suspended")
+    ? SUSPENSION_PROBE_MINUTES
+    : STATUS_REFRESH_MINUTES
+);
+
+const synchronizeCredentialState = (cache, credentialFingerprint = credentialFingerprintFor(API_KEY)) => {
+  if (!credentialFingerprint) return { changed: false, configured: false };
+  const previous = cache.apiAccess?.credentialFingerprint || null;
+  if (previous && previous !== credentialFingerprint) {
+    // A provider-level block belongs to one credential. A replacement key
+    // must receive an immediate /status preflight instead of inheriting the
+    // old key's suspension cooldown or plan restrictions.
+    cache.apiAccess = {
+      credentialFingerprint,
+      credentialChangedAt: nowIso(),
+    };
+    return { changed: true, configured: true };
+  }
+  cache.apiAccess = {
+    ...(cache.apiAccess || {}),
+    credentialFingerprint,
+  };
+  return { changed: false, configured: true };
+};
 
 const toNumber = (value) => {
   const number = Number(String(value ?? "").replace(/[^\d.+-]/g, ""));
@@ -373,6 +448,11 @@ const summarizeFixture = (item) => ({
   date: item?.fixture?.date || null,
   timestamp: item?.fixture?.timestamp || null,
   status: item?.fixture?.status || null,
+  goals: {
+    home: Number.isInteger(item?.goals?.home) ? item.goals.home : null,
+    away: Number.isInteger(item?.goals?.away) ? item.goals.away : null
+  },
+  score: item?.score && typeof item.score === "object" ? item.score : null,
   league: item?.league ? {
     id: item.league.id || null,
     name: item.league.name || null,
@@ -506,11 +586,12 @@ const rememberFixtureAccessError = (cache, error) => {
   const next = {
     ...previous,
     updatedAt: nowIso(),
-    reason: message
+    reason: message,
+    // A previous credential may have left a suspension bit behind.  A
+    // plan-date range error is not an account suspension and must clear that
+    // stale bit while retaining the discovered free-plan date window.
+    suspended: /account is suspended|suspended/i.test(message)
   };
-  if (/account is suspended|suspended/i.test(message)) {
-    next.suspended = true;
-  }
   const range = parseDateRangeHint(message);
   if (range) {
     next.allowedFrom = range.from;
@@ -692,16 +773,16 @@ const rememberGlobalAccountError = (cache, error, statusCode = null) => {
 
 const accountAccessSkipReason = (cache) => {
   const status = cache.apiAccess?.status;
-  if (!status || !isFresh(status.checkedAt, STATUS_REFRESH_MINUTES)) return "";
+  if (!status || !isFresh(status.checkedAt, statusRefreshMinutesFor(status))) return "";
   return status.eligible === true ? "" : (status.reason || "API-Football account preflight blocked this sync.");
 };
 
-const preflightAccountStatus = async (cache) => {
+const preflightAccountStatus = async (cache, requestBudget) => {
   const cached = cache.apiAccess?.status;
-  if (cached && isFresh(cached.checkedAt, STATUS_REFRESH_MINUTES)) return cached;
+  if (cached && isFresh(cached.checkedAt, statusRefreshMinutesFor(cached))) return cached;
   try {
     const checkedAt = nowIso();
-    const { payload, rateLimit } = await apiGet(cache, "/status");
+    const { payload, rateLimit } = await apiGet(cache, "/status", {}, requestBudget);
     const status = normalizeAccountStatus(payload, { checkedAt, rateLimit });
     cache.apiAccess = {
       ...(cache.apiAccess || {}),
@@ -711,7 +792,7 @@ const preflightAccountStatus = async (cache) => {
   } catch (error) {
     const checkedAt = nowIso();
     const rememberedGlobalBlock = cache.apiAccess?.status?.blocked === true
-      && isFresh(cache.apiAccess.status.checkedAt, STATUS_REFRESH_MINUTES)
+      && isFresh(cache.apiAccess.status.checkedAt, statusRefreshMinutesFor(cache.apiAccess.status))
       ? cache.apiAccess.status
       : null;
     const status = rememberedGlobalBlock
@@ -741,7 +822,22 @@ const preflightAccountStatus = async (cache) => {
   }
 };
 
-const apiGet = (cache, endpoint, params = {}) => new Promise((resolve, reject) => {
+const reserveRequestAttempt = (cache, requestBudget, endpoint) => {
+  ensureLedgerDate(cache);
+  const budget = requestBudget && typeof requestBudget === "object"
+    ? requestBudget
+    : createRequestBudget();
+  if (budget.attempts >= budget.limit) {
+    throw new Error(`API_FOOTBALL_MAX_CALLS_PER_SYNC reached (${budget.limit})`);
+  }
+  budget.attempts += 1;
+  budget.byEndpoint[endpoint] = Number(budget.byEndpoint[endpoint] || 0) + 1;
+  cache.requestLedger.count += 1;
+  cache.requestLedger.byEndpoint[endpoint] = Number(cache.requestLedger.byEndpoint[endpoint] || 0) + 1;
+  return budget;
+};
+
+const apiGet = (cache, endpoint, params = {}, requestBudget = createRequestBudget()) => new Promise((resolve, reject) => {
   ensureLedgerDate(cache);
   if (endpoint !== "/status") {
     const skipReason = accountAccessSkipReason(cache);
@@ -750,16 +846,18 @@ const apiGet = (cache, endpoint, params = {}) => new Promise((resolve, reject) =
       return;
     }
   }
-  if (cache.requestLedger.count >= MAX_CALLS_PER_SYNC) {
-    reject(new Error(`API_FOOTBALL_MAX_CALLS_PER_SYNC reached (${MAX_CALLS_PER_SYNC})`));
-    return;
-  }
-
   const url = new URL(`${API_BASE}${endpoint}`);
   for (const [key, value] of Object.entries(params)) {
     if (value !== undefined && value !== null && value !== "") {
       url.searchParams.set(key, String(value));
     }
+  }
+
+  try {
+    reserveRequestAttempt(cache, requestBudget, endpoint);
+  } catch (error) {
+    reject(error);
+    return;
   }
 
   const req = https.request(url, {
@@ -775,8 +873,6 @@ const apiGet = (cache, endpoint, params = {}) => new Promise((resolve, reject) =
       body += chunk;
     });
     res.on("end", () => {
-      cache.requestLedger.count += 1;
-      cache.requestLedger.byEndpoint[endpoint] = (cache.requestLedger.byEndpoint[endpoint] || 0) + 1;
       const payload = safeJsonParse(body, null);
       if (res.statusCode < 200 || res.statusCode >= 300) {
         const error = new Error(`${endpoint} HTTP ${res.statusCode}: ${body.slice(0, 300)}`);
@@ -819,7 +915,7 @@ const apiGet = (cache, endpoint, params = {}) => new Promise((resolve, reject) =
   req.end();
 });
 
-const fetchFixturesForDate = async (cache, date, options = {}) => {
+const fetchFixturesForDate = async (cache, date, options = {}, requestBudget) => {
   const cached = cache.fixturesByDate[date];
   if (options.forceLive !== true
       && cached
@@ -827,7 +923,12 @@ const fetchFixturesForDate = async (cache, date, options = {}) => {
     return { fixtures: cached.fixtures || [], trustContext: null };
   }
 
-  const { payload, rateLimit } = await apiGet(cache, "/fixtures", { date, timezone: TIME_ZONE });
+  const { payload, rateLimit } = await apiGet(
+    cache,
+    "/fixtures",
+    { date, timezone: TIME_ZONE },
+    requestBudget,
+  );
   const fixtures = Array.isArray(payload.response) ? payload.response.map(summarizeFixture).filter((item) => item.fixtureId) : [];
   const fetchedAt = nowIso();
   const providerResponseSha256 = sha256(stableStringify(payload.response || []));
@@ -853,6 +954,55 @@ const fixtureProjectionForMapping = (mapping) => ({
     away: { id: mapping?.awayTeamId },
   },
 });
+
+const LIVE_STATUS_CODES = new Set(["1H", "HT", "2H", "ET", "BT", "P", "SUSP", "INT", "LIVE"]);
+
+const liveScorePhaseFor = (statusCode) => ({
+  "1H": "first-half",
+  HT: "half-time",
+  "2H": "second-half",
+  ET: "extra-time",
+  BT: "extra-time-break",
+  P: "penalties",
+  SUSP: "suspended",
+  INT: "interrupted",
+  LIVE: "live"
+}[statusCode] || null);
+
+const buildLiveScoreObservation = (entry, fixture, context = {}) => {
+  const statusCode = compactText(fixture?.status?.short || fixture?.status?.code || fixture?.status).toUpperCase();
+  const scoreHome = Number.isInteger(fixture?.goals?.home) ? fixture.goals.home : null;
+  const scoreAway = Number.isInteger(fixture?.goals?.away) ? fixture.goals.away : null;
+  if (!LIVE_STATUS_CODES.has(statusCode) || scoreHome === null || scoreAway === null) return null;
+  const observedAt = context.observedAt || nowIso();
+  const minute = Number.isInteger(fixture?.status?.elapsed) ? Math.max(0, fixture.status.elapsed) : null;
+  return {
+    version: "live-score-observation-v1",
+    provider: "api-football",
+    source: "api-football:/fixtures",
+    sourceMatchId: sourceMatchIdFor(entry?.match || {}),
+    providerMatchId: fixture?.fixtureId ?? entry?.map?.fixtureId ?? null,
+    kickoffTime: entry?.match?.kickoffTime || null,
+    statusCode,
+    phase: liveScorePhaseFor(statusCode),
+    minute,
+    scoreHome,
+    scoreAway,
+    observedAt,
+    receivedAt: observedAt,
+    providerResponseSha256: context.providerResponseSha256 || null,
+    mappingConfidence: Number(entry?.map?.confidence || 0),
+    mappingVerification: "registry-exact",
+    usagePolicy: {
+      mode: RUNTIME_POLICY.mode,
+      shadowOnly: true,
+      ...RUNTIME_POLICY.authority
+    },
+    official: false,
+    trusted: true,
+    settlementEligible: false
+  };
+};
 
 const mappingVerificationState = (match, mapping, entityRegistry, options = {}) => {
   const blockers = [];
@@ -959,7 +1109,7 @@ const selectVerifiedMappedMatches = (matches, cache, verifiedMappingSet) => rest
   verifiedMappingSet,
 ).filter((entry) => entry.map?.fixtureId);
 
-const resolveFixtureMaps = async (matches, cache, stats, entityRegistry = null) => {
+const resolveFixtureMaps = async (matches, cache, stats, entityRegistry = null, requestBudget) => {
   const eligible = matches.filter(isEligibleMatch);
   const plan = buildFixtureResolutionPlan(eligible, cache, entityRegistry);
   const byDate = plan.byDate;
@@ -981,7 +1131,7 @@ const resolveFixtureMaps = async (matches, cache, stats, entityRegistry = null) 
       // Every row in this plan lacks an exact registry mapping. A fresh fixture
       // list or lastSearchAt from a previous cycle is audit-only and cannot
       // establish current-cycle provider trust, so force a live response.
-      const fixtureBatch = await fetchFixturesForDate(cache, date, { forceLive: true });
+      const fixtureBatch = await fetchFixturesForDate(cache, date, { forceLive: true }, requestBudget);
       fixtures = fixtureBatch.fixtures;
       trustContext = fixtureBatch.trustContext;
     } catch (error) {
@@ -1068,7 +1218,15 @@ const absorbEntityResolutionEvidence = (matches, cache, registry, trustContexts 
     if (!match) continue;
     const result = applyFixtureMappingEvidence({
       registry: nextRegistry,
-      match,
+      match: {
+        ...match,
+        // The fixture scorer already proved these aliases against the live
+        // provider response.  Pass the same canonical alias set into the
+        // append-only entity registry so a Chinese display name does not
+        // fail a second, raw-name-only comparison.
+        homeTeamAliases: targetTeamAliases(match, "home"),
+        awayTeamAliases: targetTeamAliases(match, "away"),
+      },
       mapping,
       observedAt: mapping?.matchedAt || nowIso(),
       trustContext: trustContexts.get(String(mapping?.sportteryMatchId || "")) || null,
@@ -1138,6 +1296,11 @@ const buildPieceMetadata = ({ entry, providerFixtureId, endpoint, observedAt, so
       query,
       fetchedAt,
       sourceUpdatedAt: updatedAt
+    },
+    usagePolicy: {
+      mode: RUNTIME_POLICY.mode,
+      shadowOnly: true,
+      ...RUNTIME_POLICY.authority
     },
     temporalEligibility: temporalEligibilityFor(fetchedAt, cutoff)
   };
@@ -1214,10 +1377,94 @@ const mergeApiPiece = (apiPieces, fixtureId, piece) => {
 const cachedApiPieces = (signalState) => {
   if (!signalState || typeof signalState !== "object") return null;
   const pieces = {};
-  if (signalState.injuries?.temporalEligibility?.eligible === true) pieces.injuries = signalState.injuries;
-  if (signalState.lineups?.temporalEligibility?.eligible === true) pieces.lineups = signalState.lineups;
-  if (signalState.apiFootballOdds?.temporalEligibility?.eligible === true) pieces.apiFootballOdds = signalState.apiFootballOdds;
+  if (LIVE_SCORE_ENABLED
+      && signalState.liveScore?.settlementEligible === false
+      && ageMinutes(signalState.liveScore.observedAt) * 60 <= LIVE_SCORE_CACHE_MAX_SECONDS) {
+    pieces.liveScore = signalState.liveScore;
+  }
+  if (INJURIES_ENABLED && signalState.injuries?.temporalEligibility?.eligible === true) pieces.injuries = signalState.injuries;
+  if (LINEUPS_ENABLED && signalState.lineups?.temporalEligibility?.eligible === true) pieces.lineups = signalState.lineups;
+  if (ODDS_ENABLED && signalState.apiFootballOdds?.temporalEligibility?.eligible === true) pieces.apiFootballOdds = signalState.apiFootballOdds;
   return Object.keys(pieces).length ? pieces : null;
+};
+
+const shouldFetchLiveScore = (entry, signalState, now = Date.now()) => {
+  if (!LIVE_SCORE_ENABLED) return false;
+  const kickoffMs = Date.parse(entry?.match?.kickoffTime || "");
+  if (!Number.isFinite(kickoffMs)) return false;
+  const minutesFromKickoff = (now - kickoffMs) / 60000;
+  if (minutesFromKickoff < -LIVE_SCORE_PRE_KICKOFF_MINUTES
+      || minutesFromKickoff > LIVE_SCORE_POST_KICKOFF_MINUTES) return false;
+  const lastFetchMs = Date.parse(signalState?.liveScoreFetchedAt || "");
+  return !Number.isFinite(lastFetchMs) || now - lastFetchMs >= LIVE_SCORE_REFRESH_SECONDS * 1000;
+};
+
+const buildLiveScoreRequestPlan = (mappedMatches, cache, verifiedMappingSet, now = Date.now()) => {
+  const due = restrictToVerifiedMappings(mappedMatches, verifiedMappingSet)
+    .filter((entry) => shouldFetchLiveScore(entry, cache.fixtureSignals[String(entry.map.fixtureId)], now));
+  return chunk(due, 20).map((entries) => ({
+    endpoint: "/fixtures",
+    params: { ids: entries.map((entry) => entry.map.fixtureId).join("-"), timezone: TIME_ZONE },
+    entries
+  }));
+};
+
+const recordLiveScoreResponse = ({ cache, apiPieces, request, payload, observedAt }) => {
+  const response = Array.isArray(payload?.response) ? payload.response : [];
+  const providerResponseSha256 = sha256(stableStringify(response));
+  const fixturesById = new Map(response
+    .map(summarizeFixture)
+    .filter((fixture) => fixture.fixtureId)
+    .map((fixture) => [String(fixture.fixtureId), fixture]));
+  let observations = 0;
+  for (const entry of request.entries) {
+    const fixtureId = String(entry.map.fixtureId);
+    const fixture = fixturesById.get(fixtureId);
+    const liveScore = fixture
+      ? buildLiveScoreObservation(entry, fixture, { observedAt, providerResponseSha256 })
+      : null;
+    const state = {
+      ...(cache.fixtureSignals[fixtureId] || {}),
+      liveScoreFetchedAt: observedAt
+    };
+    if (liveScore) {
+      state.liveScore = liveScore;
+      mergeApiPiece(apiPieces, fixtureId, { liveScore });
+      observations += 1;
+    } else {
+      delete state.liveScore;
+    }
+    cache.fixtureSignals[fixtureId] = state;
+  }
+  return observations;
+};
+
+const fetchLiveScores = async (
+  mappedMatches,
+  cache,
+  stats,
+  apiPieces,
+  verifiedMappingSet,
+  requestBudget,
+) => {
+  const queue = buildLiveScoreRequestPlan(mappedMatches, cache, verifiedMappingSet);
+  stats.liveScoreEligibleMatches = queue.reduce((sum, request) => sum + request.entries.length, 0);
+  for (const request of queue) {
+    if (requestBudget.attempts >= requestBudget.limit) {
+      stats.liveScoreSkippedByBudget += request.entries.length;
+      continue;
+    }
+    try {
+      const { payload } = await apiGet(cache, request.endpoint, request.params, requestBudget);
+      const observedAt = nowIso();
+      stats.liveScoreCalls += 1;
+      stats.liveScoreObservations += recordLiveScoreResponse({ cache, apiPieces, request, payload, observedAt });
+    } catch (error) {
+      appendError(cache, error);
+      stats.liveScoreErrors += 1;
+      if (accountAccessSkipReason(cache) || /API_FOOTBALL_MAX_CALLS_PER_SYNC/.test(error?.message || "")) break;
+    }
+  }
 };
 
 const hydrateCachedApiPieces = (mappedMatches, cache, apiPieces, verifiedMappingSet) => {
@@ -1284,7 +1531,14 @@ const recordInjuryResponse = ({ mappedMatches, cache, apiPieces, request, payloa
   }
 };
 
-const fetchInjuries = async (mappedMatches, cache, stats, apiPieces, verifiedMappingSet) => {
+const fetchInjuries = async (
+  mappedMatches,
+  cache,
+  stats,
+  apiPieces,
+  verifiedMappingSet,
+  requestBudget,
+) => {
   mappedMatches = restrictToVerifiedMappings(mappedMatches, verifiedMappingSet);
   const skipReason = injuryAccessSkipReason(cache);
   if (skipReason) {
@@ -1299,13 +1553,13 @@ const fetchInjuries = async (mappedMatches, cache, stats, apiPieces, verifiedMap
 
   const queue = buildInjuryRequestPlan(cache, uniqueIds);
   while (queue.length) {
-    if (cache.requestLedger.count >= MAX_CALLS_PER_SYNC) {
+    if (requestBudget.attempts >= requestBudget.limit) {
       stats.injurySkippedByBudget = (stats.injurySkippedByBudget || 0) + queue.reduce((sum, item) => sum + item.fixtureIds.length, 0);
       break;
     }
     const request = queue.shift();
     try {
-      const { payload, rateLimit } = await apiGet(cache, request.endpoint, request.params);
+      const { payload, rateLimit } = await apiGet(cache, request.endpoint, request.params, requestBudget);
       const observedAt = nowIso();
       recordInjuryResponse({ mappedMatches, cache, apiPieces, request, payload, rateLimit, observedAt });
       stats.injuryCalls += 1;
@@ -1382,13 +1636,25 @@ const buildLineups = (entry, response, context = {}) => {
   };
 };
 
-const fetchLineups = async (mappedMatches, cache, stats, apiPieces, verifiedMappingSet) => {
+const fetchLineups = async (
+  mappedMatches,
+  cache,
+  stats,
+  apiPieces,
+  verifiedMappingSet,
+  requestBudget,
+) => {
   mappedMatches = restrictToVerifiedMappings(mappedMatches, verifiedMappingSet);
   const due = mappedMatches.filter((entry) => shouldFetchLineups(entry.match, cache.fixtureSignals[entry.map.fixtureId]));
   for (const entry of due) {
     const fixtureId = String(entry.map.fixtureId);
     try {
-      const { payload, rateLimit } = await apiGet(cache, "/fixtures/lineups", { fixture: fixtureId });
+      const { payload, rateLimit } = await apiGet(
+        cache,
+        "/fixtures/lineups",
+        { fixture: fixtureId },
+        requestBudget,
+      );
       const observedAt = nowIso();
       const lineups = buildLineups(entry, payload.response, {
         observedAt,
@@ -1459,13 +1725,20 @@ const pickOneXTwoOdds = (entry, oddsPayload) => {
   return null;
 };
 
-const fetchOdds = async (mappedMatches, cache, stats, apiPieces, verifiedMappingSet) => {
+const fetchOdds = async (
+  mappedMatches,
+  cache,
+  stats,
+  apiPieces,
+  verifiedMappingSet,
+  requestBudget,
+) => {
   mappedMatches = restrictToVerifiedMappings(mappedMatches, verifiedMappingSet);
   const due = mappedMatches.filter((entry) => shouldFetchOdds(entry.match, cache.fixtureSignals[entry.map.fixtureId]));
   for (const entry of due) {
     const fixtureId = String(entry.map.fixtureId);
     try {
-      const { payload, rateLimit } = await apiGet(cache, "/odds", { fixture: fixtureId });
+      const { payload, rateLimit } = await apiGet(cache, "/odds", { fixture: fixtureId }, requestBudget);
       const observedAt = nowIso();
       const oneXTwo = pickOneXTwoOdds(entry, payload.response);
       cache.fixtureSignals[fixtureId] = {
@@ -1524,14 +1797,30 @@ const localizedSummaryText = (piece) => compactText(
 
 const isApiFootballPiece = (piece) => /api-football/i.test(`${piece?.source || ""} ${localizedSummaryText(piece)}`);
 
-const retainExistingPrematchPiece = (piece) => {
+const stripLegacyGenericApiFootballOdds = (signal) => {
+  if (!signal || typeof signal !== "object" || Array.isArray(signal)) return signal;
+  const genericExternalOdds = isApiFootballPiece(signal.externalOdds);
+  const genericBookmakerHad = /api-football/i.test(signal.bookmakerOdds?.had?.source || "");
+  if (!genericExternalOdds && !genericBookmakerHad) return signal;
+  const next = { ...signal };
+  if (genericExternalOdds) delete next.externalOdds;
+  if (genericBookmakerHad) {
+    next.bookmakerOdds = { ...(signal.bookmakerOdds || {}) };
+    delete next.bookmakerOdds.had;
+    if (Object.keys(next.bookmakerOdds).length === 0) delete next.bookmakerOdds;
+  }
+  return next;
+};
+
+const retainExistingPrematchPiece = (piece, featureEnabled = true) => {
   if (!piece) return false;
   if (!isApiFootballPiece(piece)) return true;
-  return piece.temporalEligibility?.eligible === true;
+  return featureEnabled && piece.temporalEligibility?.eligible === true;
 };
 
 const hasApiFootballPrematchFeatures = (signal) => Boolean(
-  isApiFootballPiece(signal?.injuries)
+  isApiFootballPiece(signal?.liveScore)
+  || isApiFootballPiece(signal?.injuries)
   || isApiFootballPiece(signal?.lineups)
   || isApiFootballPiece(signal?.externalOdds)
   || signal?.bookmakerOdds?.apiFootball
@@ -1542,7 +1831,7 @@ const stripUnverifiedApiFootballFeatures = (signal, audit = {}) => {
   if (!signal || typeof signal !== "object" || Array.isArray(signal)) return signal;
   if (!hasApiFootballPrematchFeatures(signal) && !signal.apiFootball && !audit.fixtureId) return signal;
   const next = { ...signal };
-  for (const key of ["injuries", "lineups", "externalOdds"]) {
+  for (const key of ["liveScore", "injuries", "lineups", "externalOdds"]) {
     if (isApiFootballPiece(next[key])) delete next[key];
   }
   if (next.bookmakerOdds && typeof next.bookmakerOdds === "object") {
@@ -1565,6 +1854,8 @@ const stripUnverifiedApiFootballFeatures = (signal, audit = {}) => {
 };
 
 const mergeSignal = (existing, apiSignal) => {
+  existing = stripLegacyGenericApiFootballOdds(eventSafeExistingSignal(existing, apiSignal));
+  apiSignal = stripLegacyGenericApiFootballOdds(apiSignal);
   const next = {
     ...(existing && typeof existing === "object" ? existing : {}),
     ...apiSignal,
@@ -1577,23 +1868,25 @@ const mergeSignal = (existing, apiSignal) => {
   };
 
   if (existing?.injuries && !apiSignal.injuries) {
-    if (retainExistingPrematchPiece(existing.injuries)) next.injuries = existing.injuries;
+    if (retainExistingPrematchPiece(existing.injuries, INJURIES_ENABLED)) next.injuries = existing.injuries;
     else delete next.injuries;
   }
   if (existing?.lineups && !apiSignal.lineups) {
-    if (retainExistingPrematchPiece(existing.lineups)) next.lineups = existing.lineups;
+    if (retainExistingPrematchPiece(existing.lineups, LINEUPS_ENABLED)) next.lineups = existing.lineups;
     else delete next.lineups;
   }
   if (existing?.externalOdds && !apiSignal.externalOdds) {
-    if (retainExistingPrematchPiece(existing.externalOdds)) next.externalOdds = existing.externalOdds;
+    if (retainExistingPrematchPiece(existing.externalOdds, ODDS_ENABLED)) next.externalOdds = existing.externalOdds;
     else delete next.externalOdds;
   }
+  if (existing?.liveScore && !apiSignal.liveScore) delete next.liveScore;
 
   next.bookmakerOdds = {
     ...(existing?.bookmakerOdds || {})
   };
 
-  if (!apiSignal.bookmakerOdds && next.bookmakerOdds.apiFootball && !retainExistingPrematchPiece(next.bookmakerOdds.apiFootball)) {
+  if (!apiSignal.bookmakerOdds && next.bookmakerOdds.apiFootball
+      && !retainExistingPrematchPiece(next.bookmakerOdds.apiFootball, ODDS_ENABLED)) {
     delete next.bookmakerOdds.apiFootball;
     if (/api-football/i.test(next.bookmakerOdds.had?.source || "")) delete next.bookmakerOdds.had;
   }
@@ -1603,12 +1896,6 @@ const mergeSignal = (existing, apiSignal) => {
       ...next.bookmakerOdds,
       ...apiSignal.bookmakerOdds
     };
-    if (!next.bookmakerOdds.had && apiSignal.bookmakerOdds.apiFootball?.had) {
-      next.bookmakerOdds.had = {
-        ...apiSignal.bookmakerOdds.apiFootball.had,
-        source: "api-football"
-      };
-    }
   }
 
   return next;
@@ -1619,6 +1906,9 @@ const mergeExternalSignals = (matches, cache, apiPieces, stats, verifiedMappingS
   const outputMatches = existing?.matches && typeof existing.matches === "object" && !Array.isArray(existing.matches)
     ? { ...existing.matches }
     : {};
+  for (const [signalKey, signal] of Object.entries(outputMatches)) {
+    outputMatches[signalKey] = stripLegacyGenericApiFootballOdds(signal);
+  }
   const updatedAt = nowIso();
 
   for (const match of matches) {
@@ -1645,7 +1935,7 @@ const mergeExternalSignals = (matches, cache, apiPieces, stats, verifiedMappingS
     const fixtureId = String(map.fixtureId);
     const pieces = apiPieces[fixtureId] || {};
     const apiFootballOdds = pieces.apiFootballOdds;
-    const apiSignal = {
+    const apiSignal = stampSignalEvent({
       updatedAt,
       apiFootball: {
         fixtureId: map.fixtureId,
@@ -1662,30 +1952,20 @@ const mergeExternalSignals = (matches, cache, apiPieces, stats, verifiedMappingS
         mappingVerified: true,
         enrichmentEligible: true,
         verificationStatus: "registry-exact",
-        lastCheckedAt: updatedAt
+        lastCheckedAt: updatedAt,
+        syncMode: RUNTIME_POLICY.mode,
+        shadowOnly: true,
+        authority: RUNTIME_POLICY.authority
       },
       ...(pieces.injuries ? { injuries: pieces.injuries } : {}),
       ...(pieces.lineups ? { lineups: pieces.lineups } : {}),
-      ...(apiFootballOdds && !outputMatches[externalSignalKeys(match)[0]]?.externalOdds ? {
-        externalOdds: {
-          source: `api-football:${apiFootballOdds.bookmaker}`,
-          observedAt: apiFootballOdds.observedAt,
-          sourceUpdatedAt: apiFootballOdds.sourceUpdatedAt,
-          providerFixtureId: apiFootballOdds.providerFixtureId,
-          provenance: apiFootballOdds.provenance,
-          temporalEligibility: apiFootballOdds.temporalEligibility,
-          odds1: apiFootballOdds.had.odds1,
-          oddsX: apiFootballOdds.had.oddsX,
-          odds2: apiFootballOdds.had.odds2,
-          summary: apiFootballOdds.summary
-        }
-      } : {}),
+      ...(pieces.liveScore ? { liveScore: pieces.liveScore } : {}),
       ...(apiFootballOdds ? {
         bookmakerOdds: {
           apiFootball: apiFootballOdds
         }
       } : {})
-    };
+    }, match);
 
     for (const signalKey of externalSignalKeys(match)) {
       outputMatches[signalKey] = mergeSignal(outputMatches[signalKey], apiSignal);
@@ -1698,6 +1978,10 @@ const mergeExternalSignals = (matches, cache, apiPieces, stats, verifiedMappingS
     "api-football": {
       url: API_BASE,
       updatedAt,
+      syncMode: RUNTIME_POLICY.mode,
+      shadowOnly: true,
+      features: RUNTIME_POLICY.features,
+      authority: RUNTIME_POLICY.authority,
       fixtureMatches: stats.cachedFixtureMatches + stats.newFixtureMatches,
       mappedSignals: stats.signalsMapped,
       callsThisSync: stats.callsThisSync,
@@ -1705,6 +1989,8 @@ const mergeExternalSignals = (matches, cache, apiPieces, stats, verifiedMappingS
       injurySkippedByAccess: stats.injurySkippedByAccess || 0,
       lineupCalls: stats.lineupCalls,
       oddsCalls: stats.oddsCalls,
+      liveScoreCalls: stats.liveScoreCalls,
+      liveScoreObservations: stats.liveScoreObservations,
       maxCallsPerSync: MAX_CALLS_PER_SYNC
     }
   };
@@ -1731,14 +2017,16 @@ const writeMeta = (payload) => {
 const main = async () => {
   const startedAt = nowIso();
   const cache = normalizeCache(readJsonFile(CACHE_FILE, null));
+  const credentialState = synchronizeCredentialState(cache);
   ensureLedgerDate(cache);
-  const startingCalls = cache.requestLedger.count;
+  const requestBudget = createRequestBudget();
   const stats = {
     ok: true,
     startedAt,
     finishedAt: null,
     configured: Boolean(API_KEY),
     enabled: ENABLED,
+    runtimePolicy: RUNTIME_POLICY,
     matchCount: 0,
     eligibleMatches: 0,
     cachedFixtureMatches: 0,
@@ -1762,12 +2050,19 @@ const main = async () => {
     lineupsRejectedPostCutoff: 0,
     oddsCalls: 0,
     oddsRejectedPostCutoff: 0,
+    liveScoreCalls: 0,
+    liveScoreEligibleMatches: 0,
+    liveScoreObservations: 0,
+    liveScoreSkippedByBudget: 0,
+    liveScoreErrors: 0,
     entityRegistryFile: ENTITY_REGISTRY_FILE,
     entityEvidenceRows: 0,
     entityConflictsAdded: 0,
     entityEvidenceBlockers: {},
     callsThisSync: 0,
     maxCallsPerSync: MAX_CALLS_PER_SYNC,
+    credentialState,
+    suspensionProbeMinutes: SUSPENSION_PROBE_MINUTES,
     errors: []
   };
 
@@ -1797,7 +2092,11 @@ const main = async () => {
     const skipped = {
       ...stats,
       skipped: true,
-      reason: !ENABLED ? "ENABLE_API_FOOTBALL_SYNC=0" : "API_FOOTBALL_KEY is not configured",
+      reason: !RUNTIME_POLICY.requested
+        ? "ENABLE_API_FOOTBALL_SYNC must be exactly 1"
+        : !RUNTIME_POLICY.modeSupported
+          ? `unsupported API_FOOTBALL_SYNC_MODE: ${RUNTIME_POLICY.mode}`
+          : "API_FOOTBALL_KEY is not configured",
       finishedAt: nowIso()
     };
     writeMeta(skipped);
@@ -1843,7 +2142,7 @@ const main = async () => {
       cache.fixtureMap[matchKey(match)]?.fixtureId
       && !verifiedMappingSet.has(matchKey(match))
     )).length;
-    const accountStatus = await preflightAccountStatus(cache);
+    const accountStatus = await preflightAccountStatus(cache, requestBudget);
     stats.accountStatus = accountStatus;
     if (!accountStatus.eligible) {
       stats.ok = false;
@@ -1853,7 +2152,13 @@ const main = async () => {
       return;
     }
 
-    const liveTrustContexts = await resolveFixtureMaps(matches, cache, stats, entityRegistry);
+    const liveTrustContexts = await resolveFixtureMaps(
+      matches,
+      cache,
+      stats,
+      entityRegistry,
+      requestBudget,
+    );
     if (liveTrustContexts.size > 0) absorbKnownFixtureMaps(liveTrustContexts);
     // A current-cycle mapping is not consumable merely because the in-memory
     // learning call succeeded. Re-read the committed registry and require the
@@ -1891,12 +2196,17 @@ const main = async () => {
     stats.mappedMatches = mappedMatches.length;
 
     const apiPieces = {};
-    await fetchInjuries(mappedMatches, cache, stats, apiPieces, verifiedMappingSet);
-    if (!accountAccessSkipReason(cache)) {
-      await fetchLineups(mappedMatches, cache, stats, apiPieces, verifiedMappingSet);
+    if (LIVE_SCORE_ENABLED) {
+      await fetchLiveScores(mappedMatches, cache, stats, apiPieces, verifiedMappingSet, requestBudget);
     }
-    if (!accountAccessSkipReason(cache)) {
-      await fetchOdds(mappedMatches, cache, stats, apiPieces, verifiedMappingSet);
+    if (INJURIES_ENABLED && !accountAccessSkipReason(cache)) {
+      await fetchInjuries(mappedMatches, cache, stats, apiPieces, verifiedMappingSet, requestBudget);
+    }
+    if (LINEUPS_ENABLED && !accountAccessSkipReason(cache)) {
+      await fetchLineups(mappedMatches, cache, stats, apiPieces, verifiedMappingSet, requestBudget);
+    }
+    if (ODDS_ENABLED && !accountAccessSkipReason(cache)) {
+      await fetchOdds(mappedMatches, cache, stats, apiPieces, verifiedMappingSet, requestBudget);
     }
     const enrichmentBlockReason = accountAccessSkipReason(cache);
     if (enrichmentBlockReason) {
@@ -1907,7 +2217,7 @@ const main = async () => {
       return;
     }
     hydrateCachedApiPieces(mappedMatches, cache, apiPieces, verifiedMappingSet);
-    stats.callsThisSync = Math.max(0, cache.requestLedger.count - startingCalls);
+    stats.callsThisSync = requestBudget.attempts;
 
     mergeExternalSignals(matches, cache, apiPieces, stats, verifiedMappingSet);
     externalSignalsMerged = true;
@@ -1930,7 +2240,7 @@ const main = async () => {
     writeJsonFile(CACHE_FILE, cache);
     const meta = {
       ...stats,
-      callsThisSync: Math.max(0, cache.requestLedger.count - startingCalls),
+      callsThisSync: requestBudget.attempts,
       callsTodayEstimate: cache.requestLedger.count,
       requestLedger: cache.requestLedger,
       apiAccess: cache.apiAccess || {},
@@ -1958,20 +2268,33 @@ module.exports = {
   buildFixtureResolutionPlan,
   buildInjuriesByFixture,
   buildInjuryRequestPlan,
+  buildLiveScoreObservation,
+  buildLiveScoreRequestPlan,
   buildLineups,
   buildPieceMetadata,
   buildVerifiedMappingSet,
   createCache,
+  createRequestBudget,
+  credentialFingerprintFor,
   confidenceForFixture,
   isBulkIdsUnsupportedError,
+  fixtureAccessSkipReason,
   mappingVerificationState,
+  rememberFixtureAccessError,
+  apiGet,
+  main,
+  maxCallsPerSyncFor,
   mergeSignal,
   normalizeAccountStatus,
   normalizeCache,
   normalizeName,
+  runtimePolicyFor,
+  statusRefreshMinutesFor,
+  synchronizeCredentialState,
   prematchCutoffFor,
   restrictToVerifiedMappings,
   selectVerifiedMappedMatches,
+  stripLegacyGenericApiFootballOdds,
   stripUnverifiedApiFootballFeatures,
   temporalEligibilityFor
 };

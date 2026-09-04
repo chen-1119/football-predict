@@ -30,8 +30,13 @@ const MANAGED_CONFIG_PATHS = [
   "/etc/nginx/snippets/football-predict-server.conf",
   "/etc/nginx/snippets/football-predict-security-headers.conf",
   "/etc/nginx/sites-available/football-predict",
+  "/etc/nginx/sites-enabled/default",
   "/etc/nginx/sites-enabled/football-predict"
 ];
+const LEGACY_MANAGED_CONFIG_PATHS = MANAGED_CONFIG_PATHS.filter(
+  (target) => target !== "/etc/nginx/sites-enabled/default"
+);
+const SUPPORTED_MANAGED_CONFIG_PATH_SETS = [MANAGED_CONFIG_PATHS, LEGACY_MANAGED_CONFIG_PATHS];
 
 const TIMER_UNITS = ["football-cleanup.timer", "football-monitor.timer"];
 const MAINTENANCE_UNITS = [
@@ -70,6 +75,8 @@ const PRE_SWAP_PHASES = new Set([
   "runtime-env-updating",
   "runtime-env-updated",
   "candidate-validated",
+  "host-config-changing",
+  "host-config-applied",
   "external-model-artifacts-snapshotted",
   "sqlite-snapshotted"
 ]);
@@ -77,8 +84,6 @@ const ROLLBACK_PHASES = new Set([
   ...PRE_SWAP_PHASES,
   "swap-starting",
   "swap-complete",
-  "host-config-changing",
-  "host-config-applied",
   "readiness-passed",
   "rollback-starting",
   "recovering-rollback",
@@ -89,8 +94,6 @@ const SQLITE_REQUIRED_PHASES = new Set([
   "sqlite-snapshotted",
   "swap-starting",
   "swap-complete",
-  "host-config-changing",
-  "host-config-applied",
   "readiness-passed",
   "rollback-starting",
   "recovering-rollback",
@@ -103,6 +106,8 @@ const MODEL_REQUIRED_PHASES = new Set([
 ]);
 const NEW_IDENTITY_REQUIRED_PHASES = new Set([
   "candidate-validated",
+  "host-config-changing",
+  "host-config-applied",
   "external-model-artifacts-snapshotted",
   ...SQLITE_REQUIRED_PHASES
 ]);
@@ -460,6 +465,16 @@ const loadIdentity = (currentDir, name, required) => {
   };
 };
 
+const treeMatchesRecordedIdentityMetadata = (absolutePath, identity) => {
+  const stat = lstatOrNull(hostPath(absolutePath), { bigint: true });
+  if (!stat?.isDirectory() || stat.isSymbolicLink()) return false;
+  return stat.dev === identity.dev
+    && stat.ino === identity.ino
+    && stat.uid === BigInt(identity.uid)
+    && stat.gid === BigInt(identity.gid)
+    && (stat.mode & 0o7777n) === BigInt(identity.mode);
+};
+
 const loadRuntimeEnvSnapshot = (currentDir) => {
   const dir = path.join(currentDir, "runtime-env");
   assertSecureDirectory(dir, "runtime env snapshot directory");
@@ -508,11 +523,16 @@ const loadConfigSnapshot = (currentDir) => {
   assertSecureDirectory(dir, "managed config snapshot directory");
   assertSecureDirectory(entriesDir, "managed config entries directory");
   const rows = parseTsv(path.join(dir, "manifest.tsv"), "managed config manifest", 5);
-  if (rows.length !== MANAGED_CONFIG_PATHS.length) fail("managed config manifest length mismatch");
+  const sameLengthPathSets = SUPPORTED_MANAGED_CONFIG_PATH_SETS.filter((paths) => paths.length === rows.length);
+  if (sameLengthPathSets.length === 0) fail("managed config manifest length mismatch");
+  const expectedConfigPaths = sameLengthPathSets.find((paths) => (
+    rows.every((row, index) => row[2] === paths[index])
+  ));
+  if (!expectedConfigPaths) fail("managed config manifest order mismatch");
   const entries = rows.map((row, offset) => {
     const [indexRaw, type, target, bytesRaw, digest] = row;
     const index = offset + 1;
-    if (indexRaw !== String(index) || target !== MANAGED_CONFIG_PATHS[offset]) fail("managed config manifest order mismatch");
+    if (indexRaw !== String(index) || target !== expectedConfigPaths[offset]) fail("managed config manifest order mismatch");
     const source = path.join(entriesDir, String(index));
     if (type === "absent") {
       if (bytesRaw !== "-" || digest !== "-" || pathExistsNoFollow(source)) fail(`invalid absent managed config snapshot: ${target}`);
@@ -701,11 +721,45 @@ const loadTransaction = () => {
   if (site !== expectedSite || channel !== expectedChannel) fail("transaction site or channel does not match fixed host identity");
   if (!ROLLBACK_PHASES.has(phase) && !FORWARD_PHASES.has(phase)) fail(`unknown recovery phase: ${phase}`);
   const oldIdentity = loadIdentity(currentDir, "old-app", true);
-  const newIdentity = loadIdentity(currentDir, "new-app", NEW_IDENTITY_REQUIRED_PHASES.has(phase) || FORWARD_PHASES.has(phase));
+  const newIdentityRequired = NEW_IDENTITY_REQUIRED_PHASES.has(phase) || FORWARD_PHASES.has(phase);
+  const newIdentity = loadIdentity(currentDir, "new-app", false);
+  let rollbackAlreadyOnOldTree = false;
+  if (!newIdentity && newIdentityRequired) {
+    // A rollback can already have converged the application tree before a
+    // later restore step fails. In that state the disposable candidate and
+    // its identity may both be gone while phase records recovery in progress.
+    // Resume only when the complete managed topology is the recorded old APP
+    // with no NEXT/BACKUP/FAILED tree. inspectTopology below still validates
+    // the recorded markers before any mutation. Forward recovery must always
+    // retain the candidate identity.
+    rollbackAlreadyOnOldTree = ROLLBACK_PHASES.has(phase)
+      && !FORWARD_PHASES.has(phase)
+      && treeMatchesRecordedIdentityMetadata(APP_PATH, oldIdentity)
+      && !pathExistsNoFollow(hostPath(NEXT_PATH))
+      && !pathExistsNoFollow(hostPath(BACKUP_PATH))
+      && !pathExistsNoFollow(hostPath(FAILED_PATH));
+    if (!rollbackAlreadyOnOldTree) fail("required new-app app identity is missing");
+  }
   const runtimeEnv = loadRuntimeEnvSnapshot(currentDir);
   const config = loadConfigSnapshot(currentDir);
-  const sqlite = SQLITE_REQUIRED_PHASES.has(phase) ? loadSqliteSnapshot(currentDir) : null;
-  const model = MODEL_REQUIRED_PHASES.has(phase) ? loadModelSnapshot(currentDir) : null;
+  const sqliteSnapshotPresent = pathExistsNoFollow(path.join(currentDir, "sqlite"));
+  const modelSnapshotPresent = pathExistsNoFollow(path.join(currentDir, "external-model-artifacts"));
+  const convergedPreSnapshotRollback = !newIdentity
+    && rollbackAlreadyOnOldTree
+    && ["recovering-rollback", "rolled-back"].includes(phase);
+  if (sqliteSnapshotPresent && !modelSnapshotPresent) {
+    fail("sqlite rollback snapshot exists without its preceding model snapshot");
+  }
+  const sqlite = SQLITE_REQUIRED_PHASES.has(phase)
+    ? (sqliteSnapshotPresent
+        ? loadSqliteSnapshot(currentDir)
+        : (convergedPreSnapshotRollback ? null : loadSqliteSnapshot(currentDir)))
+    : null;
+  const model = MODEL_REQUIRED_PHASES.has(phase)
+    ? (modelSnapshotPresent
+        ? loadModelSnapshot(currentDir)
+        : (convergedPreSnapshotRollback ? null : loadModelSnapshot(currentDir)))
+    : null;
   return {
     currentDir,
     recoveryRoot,

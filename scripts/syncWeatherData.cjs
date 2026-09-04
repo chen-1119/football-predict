@@ -1,6 +1,11 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const https = require("node:https");
+const {
+  eventSafeExistingSignal,
+  stampSignalEvent,
+} = require("./externalSignalEventIdentity.cjs");
+const { FREE_FOOTBALL_TEAM_ALIASES } = require("./freeFootballTeamAliases.cjs");
 
 const rootDir = path.resolve(__dirname, "..");
 const publicDir = path.join(rootDir, "public");
@@ -17,6 +22,12 @@ const timeoutMs = Math.max(3000, Number(process.env.WEATHER_TIMEOUT_SECONDS || 1
 const lookaheadDays = Math.max(1, Number(process.env.WEATHER_LOOKAHEAD_DAYS || 10));
 const maxAgeMinutes = Math.max(15, Number(process.env.WEATHER_MAX_AGE_MINUTES || 180));
 const enableWorldCupRotation = process.env.WEATHER_ENABLE_WORLDCUP_ROTATION !== "0";
+const enableTheSportsDbVenueDiscovery = process.env.WEATHER_ENABLE_THESPORTSDB_VENUE_DISCOVERY !== "0";
+const maxVenueDiscoveries = Math.max(0, Math.min(12, Number(process.env.WEATHER_VENUE_DISCOVERY_MAX_TEAMS || 4)));
+const venueDiscoveryRetryMinutes = Math.max(60, Number(process.env.WEATHER_VENUE_DISCOVERY_RETRY_MINUTES || 1440));
+const theSportsDbApiKey = String(process.env.THESPORTSDB_API_KEY || "123").trim() || "123";
+const theSportsDbBaseUrl = `https://www.thesportsdb.com/api/v1/json/${encodeURIComponent(theSportsDbApiKey)}`;
+const openMeteoGeocodingUrl = "https://geocoding-api.open-meteo.com/v1/search";
 
 const normText = (value, fallback = "") => {
   if (value === null || value === undefined) return fallback;
@@ -71,6 +82,201 @@ const requestJson = (url) => new Promise((resolve, reject) => {
   req.on("error", reject);
 });
 
+const normalizeTeamLookup = (value) => normText(value)
+  .normalize("NFKD")
+  .replace(/[\u0300-\u036f]/g, "")
+  .toLowerCase()
+  .replace(/\b(association football club|football club|soccer club|afc|fc|cf|sc)\b/g, " ")
+  .replace(/[^a-z0-9]+/g, "")
+  .trim();
+
+const teamLookupQuery = (match) => {
+  const displayName = normText(match?.homeTeamName || match?.homeTeam);
+  return normText(FREE_FOOTBALL_TEAM_ALIASES[displayName] || match?.homeTeamNameEn || "");
+};
+
+const venueRetryDue = (row, nowMs = Date.now()) => {
+  const attemptedAtMs = Date.parse(row?.attemptedAt || "");
+  if (!Number.isFinite(attemptedAtMs)) return true;
+  return nowMs - attemptedAtMs >= venueDiscoveryRetryMinutes * 60_000;
+};
+
+const teamCandidateMatches = (query, team) => {
+  const expected = normalizeTeamLookup(query);
+  if (expected.length < 3 || normText(team?.strSport).toLowerCase() !== "soccer") return false;
+  const candidates = [team?.strTeam, ...(normText(team?.strTeamAlternate).split(","))]
+    .map(normalizeTeamLookup)
+    .filter(Boolean);
+  return candidates.some((candidate) => (
+    candidate === expected
+    || (expected.length >= 4 && candidate.includes(expected))
+    || (candidate.length >= 4 && expected.includes(candidate))
+  ));
+};
+
+const dmsToDecimal = (degrees, minutes, seconds, direction) => {
+  const value = Number(degrees) + Number(minutes || 0) / 60 + Number(seconds || 0) / 3600;
+  return /[SW]/i.test(direction) ? -value : value;
+};
+
+const parseVenueCoordinates = (value) => {
+  const text = normText(value);
+  if (!text) return null;
+  const decimal = text.match(/(-?\d{1,3}(?:\.\d+)?)\s*[,;/]\s*(-?\d{1,3}(?:\.\d+)?)/);
+  if (decimal) {
+    const latitude = Number(decimal[1]);
+    const longitude = Number(decimal[2]);
+    if (Number.isFinite(latitude) && Number.isFinite(longitude) && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180) {
+      return { latitude, longitude };
+    }
+  }
+  const dms = text.match(/(\d{1,3}(?:\.\d+)?)\D+(\d{1,2}(?:\.\d+)?)\D+(\d{1,2}(?:\.\d+)?)\D*([NS])\D+(\d{1,3}(?:\.\d+)?)\D+(\d{1,2}(?:\.\d+)?)\D+(\d{1,2}(?:\.\d+)?)\D*([EW])/i);
+  if (!dms) return null;
+  const latitude = dmsToDecimal(dms[1], dms[2], dms[3], dms[4]);
+  const longitude = dmsToDecimal(dms[5], dms[6], dms[7], dms[8]);
+  if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return null;
+  return { latitude, longitude };
+};
+
+const geocodeProviderLocation = async (locationText, country) => {
+  const query = normText(locationText).split(",").slice(0, 2).join(", ");
+  if (query.length < 3) return null;
+  const params = new URLSearchParams({ name: query, count: "1", language: "en", format: "json" });
+  const payload = await requestJson(`${openMeteoGeocodingUrl}?${params.toString()}`);
+  const row = Array.isArray(payload?.results) ? payload.results[0] : null;
+  const latitude = Number(row?.latitude);
+  const longitude = Number(row?.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  return {
+    latitude,
+    longitude,
+    city: normText(row?.name || query),
+    country: normText(row?.country || country),
+    coordinateSource: "open-meteo-geocoding",
+  };
+};
+
+const discoverTeamLocation = async (match) => {
+  const localTeamId = normText(match?.homeTeamId);
+  const query = teamLookupQuery(match);
+  if (!localTeamId || !query) return { ok: false, reason: "missing-reviewed-alias", localTeamId, query };
+
+  const teamUrl = `${theSportsDbBaseUrl}/searchteams.php?t=${encodeURIComponent(query)}`;
+  const teamPayload = await requestJson(teamUrl);
+  const team = Array.isArray(teamPayload?.teams) ? teamPayload.teams.find((row) => teamCandidateMatches(query, row)) : null;
+  if (!team) return { ok: false, reason: "provider-team-mismatch", localTeamId, query };
+
+  let venue = null;
+  let coordinates = null;
+  const providerVenueId = normText(team?.idVenue);
+  if (providerVenueId) {
+    const venueUrl = `${theSportsDbBaseUrl}/lookupvenue.php?id=${encodeURIComponent(providerVenueId)}`;
+    const venuePayload = await requestJson(venueUrl);
+    venue = Array.isArray(venuePayload?.venues) ? venuePayload.venues[0] : null;
+    coordinates = parseVenueCoordinates(venue?.strMap);
+  }
+  if (!coordinates) {
+    const geocoded = await geocodeProviderLocation(venue?.strLocation || team?.strLocation, venue?.strCountry || team?.strCountry);
+    if (geocoded) coordinates = geocoded;
+  }
+  if (!coordinates) return { ok: false, reason: "provider-venue-coordinate-missing", localTeamId, query };
+
+  const discoveredAt = new Date().toISOString();
+  return {
+    ok: true,
+    localTeamId,
+    location: {
+      name: normText(venue?.strVenue || team?.strStadium || `${query} home venue`),
+      city: normText(coordinates.city || venue?.strLocation || team?.strLocation),
+      country: normText(coordinates.country || venue?.strCountry || team?.strCountry),
+      latitude: coordinates.latitude,
+      longitude: coordinates.longitude,
+      verified: false,
+      source: "thesportsdb-free-team-venue",
+      coordinateSource: normText(coordinates.coordinateSource || "thesportsdb-venue-map"),
+      providerTeamId: normText(team?.idTeam),
+      providerVenueId,
+      providerMatchedName: normText(team?.strTeam),
+      matchedQuery: query,
+      discoveredAt,
+      reviewState: "provider-exact-reference",
+    },
+  };
+};
+
+const discoverMissingTeamLocations = async (matches, locations) => {
+  const output = locations && typeof locations === "object" ? locations : { version: 2, matches: {}, teams: {} };
+  output.matches = output.matches && typeof output.matches === "object" ? output.matches : {};
+  output.teams = output.teams && typeof output.teams === "object" ? output.teams : {};
+  output.unresolvedTeams = output.unresolvedTeams && typeof output.unresolvedTeams === "object" ? output.unresolvedTeams : {};
+  if (!enableTheSportsDbVenueDiscovery || maxVenueDiscoveries === 0) return { locations: output, attempted: 0, added: 0, unresolved: 0 };
+
+  const unique = [];
+  const seen = new Set();
+  for (const match of matches) {
+    const localTeamId = normText(match?.homeTeamId);
+    if (
+      !localTeamId
+      || seen.has(localTeamId)
+      || finiteLocation(output.teams[localTeamId])
+      || !venueRetryDue(output.unresolvedTeams[localTeamId])
+    ) continue;
+    seen.add(localTeamId);
+    unique.push(match);
+  }
+
+  let attempted = 0;
+  let added = 0;
+  let unresolved = 0;
+  for (const match of unique.slice(0, maxVenueDiscoveries)) {
+    const localTeamId = normText(match?.homeTeamId);
+    attempted += 1;
+    try {
+      const result = await discoverTeamLocation(match);
+      if (result.ok) {
+        output.teams[localTeamId] = result.location;
+        delete output.unresolvedTeams[localTeamId];
+        added += 1;
+      } else {
+        output.unresolvedTeams[localTeamId] = {
+          teamName: normText(match?.homeTeamName || match?.homeTeam),
+          query: result.query || teamLookupQuery(match),
+          reason: result.reason,
+          attemptedAt: new Date().toISOString(),
+        };
+        unresolved += 1;
+      }
+    } catch (error) {
+      output.unresolvedTeams[localTeamId] = {
+        teamName: normText(match?.homeTeamName || match?.homeTeam),
+        query: teamLookupQuery(match),
+        reason: "provider-request-failed",
+        error: normText(error?.message || error).slice(0, 240),
+        attemptedAt: new Date().toISOString(),
+      };
+      unresolved += 1;
+    }
+  }
+  if (attempted > 0) {
+    output.version = Math.max(2, Number(output.version) || 0);
+    output.updatedAt = new Date().toISOString();
+    output.sources = {
+      ...(output.sources || {}),
+      "thesportsdb:team-venue": {
+        endpoint: "https://www.thesportsdb.com/api/v1/json/{key}/searchteams.php",
+        terms: "https://www.thesportsdb.com/docs_terms_of_use.php",
+        updatedAt: output.updatedAt,
+        attempted,
+        added,
+        unresolved,
+        retryMinutes: venueDiscoveryRetryMinutes,
+        reviewSemantics: "reference-only-until-human-verified",
+      },
+    };
+  }
+  return { locations: output, attempted, added, unresolved };
+};
+
 const sourceMatchId = (match) => normText(match?.sourceMatchId || String(match?.id || "").replace(/^(sporttery|fivehundred)_/, ""));
 
 const kickoffMs = (match) => {
@@ -124,6 +330,10 @@ const resolveLocation = (match, locations, worldCupIndex) => {
   const id = sourceMatchId(match);
   const byMatch = finiteLocation(locations?.matches?.[id]);
   if (byMatch) return byMatch;
+
+  const homeTeamId = normText(match?.homeTeamId);
+  const byHomeTeam = finiteLocation(locations?.teams?.[homeTeamId]);
+  if (byHomeTeam) return byHomeTeam;
 
   const venueSignal = resolveVenueSignal(match);
   if (venueSignal) return venueSignal;
@@ -285,11 +495,15 @@ async function main() {
     matches: {},
     sources: {},
   });
-  const locations = readJson(serverLocationsFile, readJson(publicLocationsFile, { matches: {} }));
+  let locations = readJson(serverLocationsFile, readJson(publicLocationsFile, { matches: {}, teams: {} }));
   const fetchedAt = new Date().toISOString();
   const candidates = (Array.isArray(currentMatches) ? currentMatches : [])
     .filter(isWithinLookahead)
     .slice(0, maxMatches);
+
+  const venueDiscovery = await discoverMissingTeamLocations(candidates, locations);
+  locations = venueDiscovery.locations;
+  if (venueDiscovery.attempted > 0) writeJson(serverLocationsFile, locations);
 
   const forecastCache = new Map();
   const updated = [];
@@ -321,10 +535,10 @@ async function main() {
         continue;
       }
 
-      const existing = externalSignals.matches?.[id] || {};
+      const existing = eventSafeExistingSignal(externalSignals.matches?.[id] || {}, match);
       const weather = buildWeatherSignal(match, location, row, fetchedAt);
       externalSignals.matches = externalSignals.matches || {};
-      externalSignals.matches[id] = {
+      externalSignals.matches[id] = stampSignalEvent({
         ...existing,
         source: existing.source || externalSignals.source || "external-signals",
         updatedAt: fetchedAt,
@@ -343,7 +557,7 @@ async function main() {
           },
         },
         weather,
-      };
+      }, match);
       updated.push({
         id,
         match: `${match.homeTeamName || match.homeTeam} vs ${match.awayTeamName || match.awayTeam}`,
@@ -373,6 +587,16 @@ async function main() {
       lookaheadDays,
       provider,
     },
+    "thesportsdb:team-venue": {
+      ...(externalSignals.sources?.["thesportsdb:team-venue"] || {}),
+      url: "https://www.thesportsdb.com/api/v1/json/{key}/searchteams.php",
+      updatedAt: fetchedAt,
+      attempted: venueDiscovery.attempted,
+      added: venueDiscovery.added,
+      unresolved: venueDiscovery.unresolved,
+      storedTeams: Object.keys(locations.teams || {}).length,
+      reviewSemantics: "reference-only-until-human-verified",
+    },
   };
 
   writeJson(externalSignalsFile, externalSignals);
@@ -383,6 +607,12 @@ async function main() {
     updated: updated.length,
     skipped: skipped.length,
     errors: errors.length,
+    venueDiscovery: {
+      attempted: venueDiscovery.attempted,
+      added: venueDiscovery.added,
+      unresolved: venueDiscovery.unresolved,
+      storedTeams: Object.keys(locations.teams || {}).length,
+    },
     sample: updated.slice(0, 6),
   }, null, 2));
 
@@ -392,7 +622,19 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  discoverMissingTeamLocations,
+  discoverTeamLocation,
+  parseVenueCoordinates,
+  resolveLocation,
+  teamCandidateMatches,
+  teamLookupQuery,
+  venueRetryDue,
+};

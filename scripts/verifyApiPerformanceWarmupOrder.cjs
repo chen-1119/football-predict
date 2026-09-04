@@ -409,6 +409,19 @@ check('public health keeps an exact validated receipt during a bounded SQLite pa
   assert.ok(serverSource.includes('cachedSqlitePublicationIdentity().fileToken || "unknown"'));
 });
 
+check('publication resolver waits for the configured primary projection identity', () => {
+  const resolverSource = fs.readFileSync(
+    path.resolve(__dirname, '..', 'server', 'publicationResolverWorker.cjs'),
+    'utf8',
+  );
+  assert.ok(serverSource.includes('requirePostgresPair: shouldPreferPostgresRead()'));
+  assert.ok(resolverSource.includes('if (workerData.requirePostgresPair)'));
+  assert.ok(resolverSource.includes('readPostgresPublicationIdentity(pool)'));
+  assert.ok(resolverSource.includes('POSTGRES_PUBLICATION_IDENTITY_UNAVAILABLE'));
+  assert.ok(resolverSource.includes('sqliteIdentity: postgres.publication'));
+  assert.ok(resolverSource.includes('await pool.end()'));
+});
+
 check('current and history payload builds use independent bounded lanes across cache invalidation', () => {
   assert.ok(serverSource.includes('const serializeV1ListPayloadBuild = (builder, laneName = "current") => {'));
   assert.ok(serverSource.includes('const v1ListPayloadLanes = {'));
@@ -494,10 +507,12 @@ check('the newest history page renders before optional archive, which merges bef
   assert.equal(historyLoader.includes('const [historyData, unresolvedArchiveData] = await Promise.all(['), false);
 });
 
-check('production current list prefers atomic SQLite and retains immutable publication fallback', () => {
-  assert.ok(serverSource.includes('&& !shouldPreferSqliteRead();'));
+check('production current list prefers atomic PostgreSQL or SQLite and retains immutable publication fallback', () => {
+  assert.ok(serverSource.includes('&& !shouldPreferSqliteRead()'));
+  assert.ok(serverSource.includes('&& !shouldPreferPostgresRead();'));
   assert.ok(serverSource.includes('serveInitialFromPublication'));
   assert.ok(serverSource.includes('preferPublication: serveInitialFromPublication'));
+  assert.ok(serverSource.includes('!serveInitialFromPublication && shouldPreferPostgresRead()'));
   assert.ok(serverSource.includes('!serveInitialFromPublication && shouldPreferSqliteRead()'));
 });
 
@@ -555,11 +570,11 @@ check('production readiness preserves performance failure reasons and warm-up ev
   assert.ok(readinessSource.includes('uniqueCheckedAt: row.uniqueCheckedAt'));
 });
 
-check('production readiness accepts the immutable initial lane only when transition reads still prove SQLite', () => {
+check('production readiness requires the configured database source and only permits the SQLite transition exception', () => {
   assert.ok(readinessSource.includes('/api/v1/matches/current?view=list&transition=1'));
+  assert.ok(readinessSource.includes('currentReadSource === requiredReadSource'));
   assert.ok(readinessSource.includes('currentReadSource === "generation"'));
   assert.ok(readinessSource.includes('transitionCurrentReadSource === "sqlite"'));
-  assert.ok(readinessSource.includes('currentReadSource === "sqlite"'));
 });
 
 check('parallel local readiness verifiers use process-scoped default ports', () => {

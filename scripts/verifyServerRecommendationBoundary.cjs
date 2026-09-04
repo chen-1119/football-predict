@@ -181,6 +181,11 @@ assert.match(
 );
 assert.match(serverSource, /const enforceCurrentRecommendationEvidence = \(match, prediction, globalRiskTier = "unknown"\)/);
 assert.match(serverSource, /if \(prediction\.marketType !== "BEST"\) return prediction;/);
+assert.match(
+  serverSource,
+  /if \(String\(prediction\.tipCode \|\| ""\)\.toUpperCase\(\) === "WATCH"\)[\s\S]*?multiFactorEvidence:[\s\S]*?eligible: false,[\s\S]*?grade: "WATCH"/,
+  "public WATCH rows must carry an explicit ineligible WATCH evidence envelope",
+);
 assert.match(serverSource, /if \(prediction\.recommendationAction === "reference"\) return liveEnrichedPrediction;/);
 assert.match(serverSource, /isServerLiveRecommendationEligible/);
 assert.match(serverSource, /isLiveRecommendationWindowOpen\(match, nowMs\)/);

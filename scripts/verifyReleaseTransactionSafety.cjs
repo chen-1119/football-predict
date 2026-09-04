@@ -14,14 +14,22 @@ const deployReleaseBundlePath = path.join(rootDir, "scripts", "deployReleaseBund
 const compactPublicOddsHistoryPath = path.join(rootDir, "scripts", "compactPublicOddsHistory.cjs");
 const sqliteReleaseSealPath = path.join(rootDir, "scripts", "sqliteReleaseSeal.cjs");
 const releasePrebuildPolicyPath = path.join(rootDir, "scripts", "releasePrebuildPolicy.cjs");
+const sqlitePublicationIdentityPath = path.join(
+  rootDir,
+  "scripts",
+  "verifySqlitePublicationIdentity.cjs",
+);
 const releaseHeartbeatKeeperPath = path.join(
   rootDir,
   "scripts",
   "runReleaseCandidateHeartbeatKeeper.cjs",
 );
 const {
+  CAPTURE_ONCE_TIMEOUT_EXIT_CODE,
+  CAPTURE_ONCE_TOTAL_BUDGET_MS,
   captureScheduleDelayMs,
   exactHeartbeatMatches,
+  validateCaptureOnceOptions,
   validateKeeperOptions,
 } = require(releaseHeartbeatKeeperPath);
 const {
@@ -34,6 +42,7 @@ const {
   DEFAULT_MAX_APP_MEMORY_CURRENT_MIB,
   DEFAULT_MAX_APP_WORKING_SET_MIB,
   DEFAULT_MIN_MEM_AVAILABLE_MIB,
+  MAX_HEARTBEAT_AGE_SECONDS,
   evaluateCapacity,
   evaluateFreshness,
   resolveCapacityLimits,
@@ -219,6 +228,7 @@ function prebuiltSqliteCasMatches(prebuildSourceManifest, rollbackManifest) {
 function exactHeartbeatFixture(evaluatedAt, overrides = {}) {
   return {
     version: "prospective-deadline-heartbeat-v2",
+    captureMode: "deadline-only",
     ok: true,
     skipped: false,
     dueCaptureComplete: true,
@@ -306,6 +316,7 @@ if (process.env.FAKE_KEEPER_MODE === "timeout-second" && count >= 2) {
     const evaluatedAt = process.env.CANDIDATE_PROSPECTIVE_CAPTURE_EVALUATED_AT;
     fs.writeFileSync(statusFile, JSON.stringify({
       version: "prospective-deadline-heartbeat-v2",
+      captureMode: "deadline-only",
       ok: true,
       skipped: false,
       dueCaptureComplete: true,
@@ -521,28 +532,32 @@ check("managed config manifest exactly restores files, symlinks, and absent path
   const managedPaths = [
     "/etc/systemd/system/football-monitor.service",
     "/etc/nginx/sites-available/football-predict",
+    "/etc/nginx/sites-enabled/default",
     "/etc/nginx/sites-enabled/football-predict",
     "/etc/nginx/snippets/football-predict-server.conf",
   ];
   const before = fixture({
     [managedPaths[0]]: { kind: "file", bytesHex: "6f6c642d756e6974", mode: "0644", owner: "root", group: "root" },
     [managedPaths[1]]: { kind: "file", bytesHex: "6f6c642d6e67696e78", mode: "0600", owner: "root", group: "root" },
-    [managedPaths[2]]: { kind: "symlink", target: "../sites-available/custom-before-release", owner: "root", group: "root" },
+    [managedPaths[2]]: { kind: "symlink", target: "/etc/nginx/sites-available/default", owner: "root", group: "root" },
+    [managedPaths[3]]: { kind: "symlink", target: "../sites-available/custom-before-release", owner: "root", group: "root" },
   });
   const manifest = snapshotPaths(before, managedPaths);
 
   before.set(managedPaths[0], { kind: "file", bytesHex: "6e6577", mode: "0777", owner: "build", group: "build" });
   before.set(managedPaths[1], { kind: "symlink", target: "/wrong/type" });
-  before.set(managedPaths[2], { kind: "file", bytesHex: "77726f6e672d74797065", mode: "0644" });
-  before.set(managedPaths[3], { kind: "file", bytesHex: "6e65772d66696c65", mode: "0644", owner: "root", group: "root" });
+  before.delete(managedPaths[2]);
+  before.set(managedPaths[3], { kind: "file", bytesHex: "77726f6e672d74797065", mode: "0644" });
+  before.set(managedPaths[4], { kind: "file", bytesHex: "6e65772d66696c65", mode: "0644", owner: "root", group: "root" });
   restorePaths(before, manifest);
 
   assert.deepEqual(before, fixture({
     [managedPaths[0]]: { kind: "file", bytesHex: "6f6c642d756e6974", mode: "0644", owner: "root", group: "root" },
     [managedPaths[1]]: { kind: "file", bytesHex: "6f6c642d6e67696e78", mode: "0600", owner: "root", group: "root" },
-    [managedPaths[2]]: { kind: "symlink", target: "../sites-available/custom-before-release", owner: "root", group: "root" },
+    [managedPaths[2]]: { kind: "symlink", target: "/etc/nginx/sites-available/default", owner: "root", group: "root" },
+    [managedPaths[3]]: { kind: "symlink", target: "../sites-available/custom-before-release", owner: "root", group: "root" },
   }));
-  assert.equal(before.has(managedPaths[3]), false, "an originally absent managed file must be removed");
+  assert.equal(before.has(managedPaths[4]), false, "an originally absent managed file must be removed");
 });
 
 check("external model artifact rollback exactly restores all external model artifacts", () => {
@@ -688,6 +703,15 @@ const bundleRelease = readText(bundleReleasePath);
 assert.doesNotMatch(bundleRelease, /\r/u, "signed release shell entrypoint must use LF line endings");
 const releaseRecovery = readText(releaseRecoveryPath);
 const releaseWrapper = readText(releaseWrapperPath);
+const sqlitePublicationIdentity = readText(sqlitePublicationIdentityPath);
+
+check("candidate SQLite publication affinity reads metadata only", () => {
+  assert.match(sqlitePublicationIdentity, /new DatabaseSync\(sqlitePath, \{ readOnly: true \}\)/);
+  assert.match(sqlitePublicationIdentity, /SELECT value FROM schema_meta WHERE key = \?/);
+  assert.match(sqlitePublicationIdentity, /readPointer\(storePaths\(storeDir\)\.currentPointer\)/);
+  assert.match(sqlitePublicationIdentity, /sqlite-publication-identity-v2-metadata-only/);
+  assert.doesNotMatch(sqlitePublicationIdentity, /readSourceCycleObservation|resolveActivePublication/);
+});
 
 check("signed bundle release uses the fixed root-owned recovery transaction directory", () => {
   assert.ok(
@@ -891,6 +915,7 @@ check("release transaction bounds the old watcher memory pause and restores the 
   const writeBody = extractFunction(bundleRelease, "write_release_fast_watcher_pause_override");
   const removeBody = extractFunction(bundleRelease, "remove_release_fast_watcher_pause_override");
   const pauseBody = extractFunction(bundleRelease, "pause_current_fast_watcher_for_live_prebuild");
+  const workerInactiveBody = extractFunction(bundleRelease, "assert_sync_worker_inactive_for_live_prebuild");
   const cgroupDrainBody = extractFunction(bundleRelease, "wait_for_current_service_cgroup_reclaimed");
   const pauseOverrideBody = extractFunction(bundleRelease, "assert_release_fast_watcher_pause_override");
   const pauseGuardBody = extractFunction(bundleRelease, "assert_release_fast_watcher_pause_guard");
@@ -940,7 +965,10 @@ check("release transaction bounds the old watcher memory pause and restores the 
   assert.match(cgroupDrainBody, /\[ ! -e "\$cgroup_dir" \] && \[ ! -L "\$cgroup_dir" \] && return 0/);
   assert.doesNotMatch(cgroupDrainBody, /memory\.reclaim|MemoryMax|MemoryHigh/);
   assert.match(pauseBody, /WORKER_STOPPED_FOR_SWAP/);
-  assert.match(pauseBody, /release fast watcher pause refuses an active sync worker/);
+  assert.match(pauseBody, /assert_sync_worker_inactive_for_live_prebuild/);
+  assert.match(workerInactiveBody, /systemctl cat "\$WORKER_SERVICE_NAME"/);
+  assert.match(workerInactiveBody, /systemctl is-active --quiet "\$WORKER_SERVICE_NAME"/);
+  assert.match(workerInactiveBody, /live SQLite prebuild requires the sync worker to be stopped first/);
   assertOrdered(pauseBody, [
     "write_release_fast_watcher_pause_override",
     "RELEASE_FAST_WATCHER_PAUSED_PROCESS=1",
@@ -953,8 +981,9 @@ check("release transaction bounds the old watcher memory pause and restores the 
   assert.doesNotMatch(pauseBody, /systemctl restart "\$SERVICE_NAME"/);
   assert.doesNotMatch(pauseBody, /remove_release_fast_watcher_pause_override/);
   assert.match(capacityBody, /assert_release_fast_watcher_pause_guard/);
+  assert.match(capacityBody, /assert_sync_worker_inactive_for_live_prebuild/);
   assert.match(cacheReclaimBody, /assert_release_fast_watcher_pause_guard/);
-  assert.match(cacheReclaimBody, /WORKER_STOPPED_FOR_SWAP/);
+  assert.match(cacheReclaimBody, /assert_sync_worker_inactive_for_live_prebuild/);
   assert.match(cacheReclaimBody, /expected_cgroup_dir="\/sys\/fs\/cgroup\/system\.slice\/\$\{SERVICE_NAME\}\.service"/);
   assert.match(cacheReclaimBody, /memory\.reclaim/);
   assert.match(cacheReclaimBody, /0:0:200:1/);
@@ -1033,12 +1062,14 @@ check("release transaction bounds the old watcher memory pause and restores the 
 
 check("watcher pause recycle rejects unsafe cgroups, drains fail-closed, and restores an inactive old app", () => {
   const cgroupDrainBody = extractFunction(bundleRelease, "wait_for_current_service_cgroup_reclaimed");
+  const workerInactiveBody = extractFunction(bundleRelease, "assert_sync_worker_inactive_for_live_prebuild");
   const pauseBody = extractFunction(bundleRelease, "pause_current_fast_watcher_for_live_prebuild");
   const restoreBody = extractFunction(bundleRelease, "restore_release_fast_watcher_after_failed_pre_swap");
   assert.match(cgroupDrainBody, /\[ "\$control_group" = "\$expected_control_group" \] \|\|/);
   assert.match(cgroupDrainBody, /\[ ! -e "\$cgroup_dir" \] && \[ ! -L "\$cgroup_dir" \] && return 0/g);
   assert.match(cgroupDrainBody, /timed out draining service cgroup/);
-  assert.match(pauseBody, /release fast watcher pause requires the sync worker to be stopped first/);
+  assert.match(pauseBody, /assert_sync_worker_inactive_for_live_prebuild/);
+  assert.match(pauseBody, /sync worker was already inactive before the fast watcher pause/);
   assertOrdered(restoreBody, [
     "remove_release_fast_watcher_pause_override",
     'if systemctl is-active --quiet "$SERVICE_NAME"',
@@ -1178,6 +1209,9 @@ assert_release_fast_watcher_pause_guard() { [ "$APP_ACTIVE:$CURRENT_WATCHER:$OVE
 assert_release_fast_watcher_process_state() { record "process-$1"; [ "$CURRENT_WATCHER" = "$1" ]; }
 assert_release_fast_watcher_health_state() { record "health-$1"; [ "$CURRENT_WATCHER" = "$1" ]; }
 log() { :; }
+assert_sync_worker_inactive_for_live_prebuild() {
+${workerInactiveBody}
+}
 pause_current_fast_watcher_for_live_prebuild() {
 ${pauseBody}
 }
@@ -1286,7 +1320,7 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
   assertOrdered(sqliteExporter, [
     "const activeGenerationFastPath = inspectActiveGenerationFastPath()",
     "const loadBaseProjection = !activeGenerationFastPath.eligible",
-    'const currentMatchesPayload = loadBaseProjection ? readCoreJson("matches-current.json", null) : null',
+    'let currentMatchesPayload = loadBaseProjection ? readCoreJson("matches-current.json", null) : null',
   ], "same-generation release eligibility is decided before large base JSON parsing");
   assert.match(sqliteExporter, /if \(activeGenerationFastPath\.eligible\) \{/);
   assert.match(sqliteExporter, /sqlite_export_fast_path/);
@@ -1299,11 +1333,11 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
   assert.match(runBody, /--property="Nice=10"/);
   assert.match(runBody, /--property="IOSchedulingPriority=4"/);
   assert.match(runBody, /--property="IOWeight=50"/);
-  assert.match(runBody, /--property="MemoryHigh=768M"/);
-  assert.match(runBody, /--property="MemoryMax=1024M"/);
-  assert.match(runBody, /--property="MemorySwapMax=256M"/);
+  assert.match(runBody, /--property="MemoryHigh=1536M"/);
+  assert.match(runBody, /--property="MemoryMax=2560M"/);
+  assert.match(runBody, /--property="MemorySwapMax=512M"/);
   assert.match(runBody, /--property="OOMPolicy=stop"/);
-  assert.match(bundleRelease, /RELEASE_LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS:-480/);
+  assert.match(bundleRelease, /RELEASE_LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS:-540/);
   const runtimeBounds = /\[ "\$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" -ge ([0-9]+) \][\s\S]*?\[ "\$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" -le ([0-9]+) \]/.exec(bundleRelease);
   assert.ok(runtimeBounds, "live SQLite prebuild RuntimeMaxSec must have explicit numeric bounds");
   const runtimeMin = Number(runtimeBounds[1]);
@@ -1412,7 +1446,7 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
   assert.match(cleanupBody, /find "\$stage_dir" -mindepth 1 -maxdepth 1 -print -quit/);
   assert.match(rootBody, /\/var\/lib\/football-release/);
   assert.match(rootBody, /8#022/);
-  assert.match(capacityBody, /WORKER_STOPPED_FOR_SWAP/);
+  assert.match(capacityBody, /assert_sync_worker_inactive_for_live_prebuild/);
   assert.match(capacityBody, /systemctl is-active --quiet "\$SERVICE_NAME"/);
   assert.match(capacityBody, /app-memory-current-bytes/);
   assert.match(capacityBody, /memory\.current/);
@@ -1429,7 +1463,7 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
   assert.match(prebuildPolicy, /RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB/);
   assert.match(prebuildPolicy, /RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_MEMORY_CURRENT_MIB/);
   assert.match(prebuildPolicy, /RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_WORKING_SET_MIB/);
-  assert.match(prebuildPolicy, /DEFAULT_MIN_MEM_AVAILABLE_MIB = 1152/);
+  assert.match(prebuildPolicy, /DEFAULT_MIN_MEM_AVAILABLE_MIB = 3072/);
   assert.match(prebuildPolicy, /DEFAULT_MAX_APP_MEMORY_CURRENT_MIB = 768/);
   assert.match(prebuildPolicy, /DEFAULT_MAX_APP_WORKING_SET_MIB = 512/);
   assert.match(captureRefreshBody, /CANDIDATE_CAPTURE_HEARTBEAT_REFRESH_SUCCESS_EPOCH_SECONDS="\$success_epoch_seconds"/);
@@ -1438,6 +1472,8 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
   assert.match(freshnessBody, /--refreshed-at-epoch-seconds/);
   assert.match(bundleRelease, /readonly LIVE_SQLITE_PREBUILD_HEARTBEAT_MAX_AGE_SECONDS=\$\(\(LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS \+ 30\)\)/);
   assert.match(bundleRelease, /readonly POST_PREBUILD_HTTP_HEARTBEAT_MAX_AGE_SECONDS=\$\(\(LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS \+ 60\)\)/);
+  assert.match(bundleRelease, /readonly CANDIDATE_CAPTURE_HEARTBEAT_FRESHNESS_MAX_SECONDS=600/);
+  assert.match(freshnessBody, /-le "\$CANDIDATE_CAPTURE_HEARTBEAT_FRESHNESS_MAX_SECONDS"/);
   assert.match(startBarrierBody, /runReleaseSyncWriteBarrier\.cjs/);
   assert.match(startBarrierBody, /--uid=football/);
   assert.match(startBarrierBody, /--lock-dir "\$lock_dir"/);
@@ -2420,17 +2456,18 @@ rm -rf -- "$TEST_ROOT"
 });
 
 check("release prebuild capacity and heartbeat freshness gates enforce inclusive safe boundaries", () => {
-  assert.equal(DEFAULT_MIN_MEM_AVAILABLE_MIB, 1152);
+  assert.equal(DEFAULT_MIN_MEM_AVAILABLE_MIB, 3072);
   assert.equal(DEFAULT_MAX_APP_MEMORY_CURRENT_MIB, 768);
   assert.equal(DEFAULT_MAX_APP_WORKING_SET_MIB, 512);
+  assert.equal(MAX_HEARTBEAT_AGE_SECONDS, 600);
   assert.deepEqual(resolveCapacityLimits({}), {
-    minMemAvailableMiB: 1152,
+    minMemAvailableMiB: 3072,
     maxAppMemoryCurrentMiB: 768,
     maxAppWorkingSetMiB: 512,
   });
   assert.throws(
-    () => resolveCapacityLimits({ RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB: "1151" }),
-    /between 1152 and 65536/,
+    () => resolveCapacityLimits({ RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB: "3071" }),
+    /between 3072 and 65536/,
   );
   assert.throws(
     () => resolveCapacityLimits({ RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_MEMORY_CURRENT_MIB: "769" }),
@@ -2440,14 +2477,14 @@ check("release prebuild capacity and heartbeat freshness gates enforce inclusive
     () => resolveCapacityLimits({ RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_WORKING_SET_MIB: "513" }),
     /between 64 and 512/,
   );
-  for (const invalid of ["", " 1152", "+1152", "1152.0", "1e3", "-1"]) {
+  for (const invalid of ["", " 3072", "+3072", "3072.0", "1e3", "-1"]) {
     assert.throws(
       () => resolveCapacityLimits({ RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB: invalid }),
       /unsigned base-10 integer/,
     );
   }
 
-  const thresholdMeminfo = `MemAvailable: ${1152 * 1024} kB\n`;
+  const thresholdMeminfo = `MemAvailable: ${3072 * 1024} kB\n`;
   const atCapacityBoundary = evaluateCapacity({
     meminfoText: thresholdMeminfo,
     appMemoryCurrentBytes: String(768 * 1024 * 1024),
@@ -2456,7 +2493,7 @@ check("release prebuild capacity and heartbeat freshness gates enforce inclusive
   });
   assert.equal(atCapacityBoundary.ok, true);
   assert.equal(evaluateCapacity({
-    meminfoText: `MemAvailable: ${1152 * 1024 - 1} kB\n`,
+    meminfoText: `MemAvailable: ${3072 * 1024 - 1} kB\n`,
     appMemoryCurrentBytes: String(768 * 1024 * 1024),
     appInactiveFileBytes: String(256 * 1024 * 1024),
     env: {},
@@ -2487,13 +2524,13 @@ check("release prebuild capacity and heartbeat freshness gates enforce inclusive
   }), /inactive_file must not exceed/);
   const r399ObservedCurrent = 544_145_408;
   assert.equal(evaluateCapacity({
-    meminfoText: `MemAvailable: ${1_266_688} kB\n`,
+    meminfoText: `MemAvailable: ${3_200_000} kB\n`,
     appMemoryCurrentBytes: String(r399ObservedCurrent),
     appInactiveFileBytes: String(128 * 1024 * 1024),
     env: {},
-  }).ok, true, "the r399 raw footprint passes only when its bounded working set and host runway pass");
+  }).ok, true, "the bounded app footprint passes only when its working set and new-host runway pass");
   assert.equal(evaluateCapacity({
-    meminfoText: `MemAvailable: ${1_266_688} kB\n`,
+    meminfoText: `MemAvailable: ${3_200_000} kB\n`,
     appMemoryCurrentBytes: String(r399ObservedCurrent),
     appInactiveFileBytes: String(r399ObservedCurrent - 512 * 1024 * 1024 - 1),
     env: {},
@@ -2529,12 +2566,18 @@ check("release prebuild capacity and heartbeat freshness gates enforce inclusive
     maxAgeSeconds: 90,
     phase: "clock-regression",
   }).ok, false, "clock regression must fail closed");
+  assert.equal(evaluateFreshness({
+    refreshedAtEpochSeconds: 1_000,
+    nowEpochSeconds: 1_600,
+    maxAgeSeconds: 600,
+    phase: "maximum-bounded-limit",
+  }).ok, true);
   assert.throws(() => evaluateFreshness({
     refreshedAtEpochSeconds: 1_000,
     nowEpochSeconds: 1_001,
-    maxAgeSeconds: 301,
+    maxAgeSeconds: 601,
     phase: "invalid-limit",
-  }), /between 1 and 300/);
+  }), /between 1 and 600/);
 });
 
 check("SQLite nanosecond seals reject same-size writes, inode swaps, links, and WAL transitions", () => {
@@ -2572,6 +2615,12 @@ check("SQLite nanosecond seals reject same-size writes, inode swaps, links, and 
     assert.throws(() => verifyMetadataSeal(walCloseTouch.base, walCloseTouch.seal), /wal/u);
     verifyMetadataSeal(walCloseTouch.base, walCloseTouch.seal, { allowWalDigestEquivalent: true });
     fs.writeFileSync(`${walCloseTouch.base}-wal`, Buffer.from("sqlite-wal-after--freeze\n"));
+    // Some Linux filesystems can round a rapid future-touch + same-size rewrite
+    // back onto the original timestamp quantum.  Keep this fixture focused on
+    // the digest-equivalence contract by forcing a distinct metadata value
+    // after the content mutation.
+    const changedWalAt = new Date(Date.now() + 4_000);
+    fs.utimesSync(`${walCloseTouch.base}-wal`, changedWalAt, changedWalAt);
     assert.throws(
       () => verifyMetadataSeal(walCloseTouch.base, walCloseTouch.seal, { allowWalDigestEquivalent: true }),
       /wal/u,
@@ -2795,6 +2844,7 @@ check("the sync worker stays live during long isolated work and pauses only for 
   assert.doesNotMatch(main, /pause the sync worker before current-service health preflight/);
   assertOrdered(main, [
     'wait_for_health "http://${HOST}:${PORT}" "preflight-before-build"',
+    "managed maintenance could not be quiesced before candidate build",
     "sync worker could not be paused for candidate cache snapshot",
     'preserve_live_public_data_cache "$APP_DIR" "$BUILD_DIR"',
     "sync worker could not resume during isolated candidate build",
@@ -2805,7 +2855,7 @@ check("the sync worker stays live during long isolated work and pauses only for 
     "candidate deadline capture heartbeat refresh failed after candidate worker freeze",
     "candidate could not stop for archive refresh",
     "candidate-archive-refresh",
-    "candidate-sqlite-refresh",
+    "candidate-sqlite-affinity",
     'wait_for_health "http://${HOST}:${CANDIDATE_PORT}" "candidate-server-refreshed"',
     "sync worker could not resume during isolated candidate verification",
     "run_trusted_candidate_verifier",
@@ -3066,11 +3116,25 @@ check("release heartbeat keeper requires an exact successful heartbeat and a bou
   const evaluatedAt = "2026-08-01T00:00:00.000Z";
   const exact = exactHeartbeatFixture(evaluatedAt);
   assert.equal(exactHeartbeatMatches(exact, evaluatedAt), true);
+  assert.equal(
+    exactHeartbeatMatches({ ...exact, captureMode: "full" }, evaluatedAt),
+    false,
+    "a full research capture cannot masquerade as the lightweight formal heartbeat",
+  );
   assert.equal(exactHeartbeatMatches({ ...exact, skipped: true }, evaluatedAt), false);
   assert.equal(exactHeartbeatMatches({ ...exact, evaluatedAt: "2026-08-01T00:00:01.000Z" }, evaluatedAt), false);
+  assert.equal(exactHeartbeatMatches(exact, evaluatedAt, {
+    requireFresh: true,
+    nowMs: Date.parse(evaluatedAt) + 120_000,
+  }), true);
+  assert.equal(exactHeartbeatMatches(exact, evaluatedAt, {
+    requireFresh: true,
+    nowMs: Date.parse(evaluatedAt) + 121_000,
+  }), false, "an active second attempt cannot extend acceptance of a 121-second-old heartbeat");
   const preSwapLegacy = structuredClone(exact);
   delete preSwapLegacy.dueUnrecorded;
   delete preSwapLegacy.readyDueUnrecorded;
+  delete preSwapLegacy.captureMode;
   assert.equal(
     exactHeartbeatMatches(preSwapLegacy, evaluatedAt),
     false,
@@ -3191,6 +3255,95 @@ check("release heartbeat keeper requires an exact successful heartbeat and a bou
   assert.equal(options.intervalSeconds, 30);
   assert.throws(() => validateKeeperOptions({ ...options, intervalSeconds: 31 }), /intervalSeconds/);
   assert.throws(() => validateKeeperOptions({ ...options, lockTimeoutMs: 25_000 }), /lockTimeoutMs/);
+  assert.throws(
+    () => validateKeeperOptions({ ...options, attemptTimeoutMs: 120_000 }),
+    /attemptTimeoutMs/,
+    "keeper attempts must leave reserve inside the fixed 120-second heartbeat window",
+  );
+  const keeperSource = fs.readFileSync(releaseHeartbeatKeeperPath, "utf8");
+  assert.match(
+    keeperSource,
+    /spawn\(process\.execPath, \[options\.captureScript, "--deadline-only"\]/,
+    "the release keeper must run only the exact formal cutoff heartbeat",
+  );
+});
+
+check("direct release heartbeat refresh bounds a genuinely hung capture and rejects stale success", () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "release-capture-once-"));
+  try {
+    const markerFile = path.join(tempDir, "capture-args.json");
+    const heartbeatFile = path.join(tempDir, "candidate-prospective-capture-status.json");
+    const hangingCapture = path.join(tempDir, "hanging-capture.cjs");
+    const staleHeartbeat = `${JSON.stringify(exactHeartbeatFixture(
+      "2026-08-01T00:00:00.000Z",
+    ), null, 2)}\n`;
+    fs.writeFileSync(heartbeatFile, staleHeartbeat, "utf8");
+    fs.writeFileSync(hangingCapture, `
+"use strict";
+const fs = require("node:fs");
+fs.writeFileSync(process.env.CAPTURE_ONCE_TEST_MARKER, JSON.stringify(process.argv.slice(2)));
+process.on("SIGTERM", () => {});
+setInterval(() => {}, 1000);
+`, "utf8");
+    const bounded = validateCaptureOnceOptions({
+      captureScript: hangingCapture,
+      workingDirectory: tempDir,
+      timeoutMs: 200,
+      killAfterMs: 200,
+    });
+    assert.ok(bounded.timeoutMs + bounded.killAfterMs <= CAPTURE_ONCE_TOTAL_BUDGET_MS);
+    assert.throws(() => validateCaptureOnceOptions({
+      ...bounded,
+      timeoutMs: 95_000,
+      killAfterMs: 5_001,
+    }), /killAfterMs|100000ms/);
+    const startedAt = Date.now();
+    const result = spawnSync(process.execPath, [
+      releaseHeartbeatKeeperPath,
+      "--capture-once",
+      "--capture-script", hangingCapture,
+      "--working-directory", tempDir,
+      "--timeout-ms", "200",
+      "--kill-after-ms", "200",
+    ], {
+      cwd: rootDir,
+      env: {
+        ...process.env,
+        CAPTURE_ONCE_TEST_MARKER: markerFile,
+        CANDIDATE_PROSPECTIVE_CAPTURE_EVALUATED_AT: "2026-08-01T00:10:00.000Z",
+      },
+      encoding: "utf8",
+      timeout: 5_000,
+    });
+    const durationMs = Date.now() - startedAt;
+    assert.equal(result.status, CAPTURE_ONCE_TIMEOUT_EXIT_CODE, result.stderr || result.stdout);
+    assert.equal(result.signal, null);
+    assert.ok(durationMs < 2_000, `hung capture exceeded bounded exit: ${durationMs}ms`);
+    assert.deepEqual(JSON.parse(fs.readFileSync(markerFile, "utf8")), ["--deadline-only"]);
+    assert.equal(
+      fs.readFileSync(heartbeatFile, "utf8"),
+      staleHeartbeat,
+      "a timed-out capture must not rewrite or bless an older heartbeat",
+    );
+    assert.match(result.stderr, /bounded capture failed: capture-timeout \(exit=124/);
+
+    const captureRefreshBody = extractFunction(
+      readText(bundleReleasePath),
+      "refresh_candidate_capture_heartbeat_for_readiness",
+    );
+    assert.match(captureRefreshBody, /"\$matcher_module" --capture-once/);
+    assert.match(captureRefreshBody, /--timeout-ms "\$CANDIDATE_CAPTURE_REFRESH_ATTEMPT_TIMEOUT_MS"/);
+    assert.match(captureRefreshBody, /--kill-after-ms "\$CANDIDATE_CAPTURE_REFRESH_KILL_AFTER_MS"/);
+    assert.match(captureRefreshBody, /CANDIDATE_CAPTURE_REFRESH_TIMEOUT_EXIT_CODE/);
+    assertOrdered(captureRefreshBody, [
+      'if [ "$capture_rc" -eq "$CANDIDATE_CAPTURE_REFRESH_TIMEOUT_EXIT_CODE" ]',
+      'return "$CANDIDATE_CAPTURE_REFRESH_TIMEOUT_EXIT_CODE"',
+      'if [ "$capture_rc" -eq 0 ]',
+      "validate_candidate_capture_heartbeat_status",
+    ], "timeout exits fail-closed before any old heartbeat can be validated");
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 });
 
 check("release heartbeat keeper latches a later capture failure and only exits on explicit stop", () => {
@@ -3352,6 +3505,10 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
   const workerDrainBody = extractFunction(bundleRelease, "wait_for_frozen_worker_children_to_drain");
   const workerChildBody = extractFunction(bundleRelease, "frozen_worker_live_child_pids");
   const keeperHealthBody = extractFunction(bundleRelease, "release_candidate_heartbeat_keeper_is_healthy");
+  const keeperHealthWaitBody = extractFunction(
+    bundleRelease,
+    "wait_for_release_candidate_heartbeat_keeper_healthy",
+  );
   const keeperPublicBudgetBody = extractFunction(
     bundleRelease,
     "wait_for_release_candidate_heartbeat_public_budget",
@@ -3428,6 +3585,10 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
   assert.match(resumeBody, /current_pid" = "\$WORKER_FROZEN_MAIN_PID/);
   assert.match(captureRefreshBody, /CANDIDATE_PROSPECTIVE_CAPTURE_EVALUATED_AT/);
   assert.match(captureRefreshBody, /captureCandidateProspectiveDeadline\.cjs/);
+  assert.match(captureRefreshBody, /"\$matcher_module" --capture-once/);
+  assert.match(captureRefreshBody, /--capture-script "\$capture_script"/);
+  assert.match(captureRefreshBody, /--timeout-ms "\$CANDIDATE_CAPTURE_REFRESH_ATTEMPT_TIMEOUT_MS"/);
+  assert.match(captureRefreshBody, /--kill-after-ms "\$CANDIDATE_CAPTURE_REFRESH_KILL_AFTER_MS"/);
   assert.match(captureRefreshBody, /validate_candidate_capture_heartbeat_status/);
   assert.match(captureValidatorBody, /exactHeartbeatMatches/);
   assert.match(captureValidatorBody, /requireFresh: true/);
@@ -3499,18 +3660,28 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
   assert.match(keeperStartBody, /release_candidate_heartbeat_keeper_has_latched_failure/);
   assert.doesNotMatch(keeperStartBody, /RuntimeMaxSec/);
   assert.match(keeperStartBody, /--property="KillMode=mixed"/);
-  assert.match(keeperStartBody, /--property="TimeoutStopSec=100s"/);
-  assert.match(keeperStartBody, /--property="MemoryHigh=900M"/);
-  assert.match(keeperStartBody, /--property="MemoryMax=1200M"/);
-  assert.match(keeperStartBody, /--property="MemorySwapMax=256M"/);
+  assert.match(keeperStartBody, /--property="TimeoutStopSec=130s"/);
+  assert.match(keeperStartBody, /--property="MemoryHigh=1600M"/);
+  assert.match(keeperStartBody, /--property="MemoryMax=2200M"/);
+  assert.match(keeperStartBody, /--property="MemorySwapMax=512M"/);
   assert.match(keeperStartBody, /--property="TasksMax=64"/);
   assert.match(keeperStartBody, /--property="LimitNOFILE=4096"/);
-  assert.match(bundleRelease, /RELEASE_CANDIDATE_HEARTBEAT_KEEPER_ATTEMPT_TIMEOUT_MS:-90000/);
+  assert.match(
+    keeperStartBody,
+    /--property="LimitNOFILE=4096" \\\r?\n\s*--property="CPUWeight=100" \\\r?\n\s*--property="IOWeight=100" \\\r?\n\s*--property="Nice=0" \\/,
+    "heartbeat keeper resource properties must remain in the same continued systemd-run command",
+  );
+  assert.match(keeperStartBody, /--property="CPUWeight=100"/);
+  assert.match(keeperStartBody, /--property="IOWeight=100"/);
+  assert.match(keeperStartBody, /--property="Nice=0"/);
+  assert.match(keeperStartBody, /--property="IOSchedulingPriority=4"/);
+  assert.match(bundleRelease, /RELEASE_CANDIDATE_HEARTBEAT_KEEPER_ATTEMPT_TIMEOUT_MS:-100000/);
   assert.match(bundleRelease, /RELEASE_CANDIDATE_HEARTBEAT_KEEPER_START_TIMEOUT_SECONDS:-120/);
-  assert.match(bundleRelease, /RELEASE_HEARTBEAT_KEEPER_ATTEMPT_TIMEOUT_MS" -le 90000/);
+  assert.match(bundleRelease, /RELEASE_HEARTBEAT_KEEPER_ATTEMPT_TIMEOUT_MS" -le 110000/);
+  assert.match(bundleRelease, /RELEASE_HEARTBEAT_KEEPER_FRESHNESS_MAX_SECONDS=120/);
   assert.match(
     heartbeatKeeper,
-    /raw\?\.attemptTimeoutMs \?\? 90_000,[\s\S]*?1_000,[\s\S]*?90_000,[\s\S]*?"attemptTimeoutMs"/,
+    /raw\?\.attemptTimeoutMs \?\? 100_000,[\s\S]*?1_000,[\s\S]*?110_000,[\s\S]*?"attemptTimeoutMs"/,
   );
   assert.match(workerDrainBody, /--property=ControlGroup --value/);
   assert.match(workerDrainBody, /\/sys\/fs\/cgroup\$\{control_group\}\/cgroup\.procs/);
@@ -3521,10 +3692,17 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
   assert.match(workerChildBody, /\[ "\$pid" != "\$main_pid" \]/);
   assert.match(workerChildBody, /""\|Z\|X\) continue/);
   assert.match(keeperHealthBody, /exactHeartbeatMatches/);
+  assert.match(keeperHealthBody, /max_age_seconds="\$RELEASE_HEARTBEAT_KEEPER_FRESHNESS_MAX_SECONDS"/);
   assert.doesNotMatch(keeperHealthBody, /allowPreSwapLegacyTopLevelDueOmission/);
   assert.match(keeperHealthBody, /release-candidate-heartbeat-keeper-v2/);
   assert.match(keeperHealthBody, /control\?\.lastRegistryRootHash !== heartbeat\?\.audit\?\.rootHash/);
   assert.match(keeperHealthBody, /control\?\.captureSequence/);
+  assert.match(keeperHealthWaitBody, /max_attempts=50/);
+  assert.match(keeperHealthWaitBody, /release_candidate_heartbeat_keeper_is_healthy && return 0/);
+  assert.match(keeperHealthWaitBody, /release_candidate_heartbeat_keeper_has_latched_failure && return 1/);
+  assert.match(keeperHealthWaitBody, /systemctl is-active --quiet "\$RELEASE_HEARTBEAT_KEEPER_UNIT" \|\| return 1/);
+  assert.match(keeperHealthWaitBody, /sleep 0\.1/);
+  assert.match(keeperHealthWaitBody, /evidence did not converge after bounded atomic handoff retries/);
   assert.match(keeperPublicBudgetBody, /candidateHeartbeatAttemptBudget/);
   assert.match(keeperPublicBudgetBody, /budget\?\.budgetFits !== true/);
   assert.match(keeperPublicBudgetBody, /control\?\.lastEvaluatedAt !== heartbeat\?\.evaluatedAt/);
@@ -3572,7 +3750,7 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
     workerFreezeIndex,
   );
   const keeperHealthAfterLocalIndex = main.indexOf(
-    "release_candidate_heartbeat_keeper_is_healthy",
+    "wait_for_release_candidate_heartbeat_keeper_healthy",
     localReadinessIndex,
   );
   const keeperPublicBudgetIndex = main.indexOf(
@@ -3597,13 +3775,15 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
     "start_worker_for_live_release",
     "wait_for_worker_official_publish_after",
     "wait_for_worker_readiness_idle_after",
+    'systemctl restart "$SERVICE_NAME"',
+    'wait_for_health "http://${HOST}:${PORT}" "post-worker-projection-restart"',
     "refresh_candidate_capture_heartbeat_for_readiness",
     'freeze_worker_for_readiness "$WORKER_RELEASE_STARTED_AT" "$LIVE_STORE_DIR/sync-worker-status.json"',
     'wait_for_frozen_worker_children_to_drain "$WORKER_FROZEN_MAIN_PID"',
     "start_release_candidate_heartbeat_keeper",
     "clear_release_worker_priority_request",
     "scripts/verifyProductionReadiness.cjs",
-    "release_candidate_heartbeat_keeper_is_healthy",
+    "wait_for_release_candidate_heartbeat_keeper_healthy",
     "wait_for_release_candidate_heartbeat_public_budget",
     "scripts/verifyRemotePublicReadiness.cjs",
     "stop_release_candidate_heartbeat_keeper",
@@ -3681,10 +3861,40 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
 
   check("candidate restores honest model-only archives before SQLite verification", () => {
     const main = mainProgram(bundleRelease);
+    const buildStepBody = extractFunction(bundleRelease, "run_build_step");
     const refreshWindowStart = main.indexOf("sync worker could not be paused for candidate readiness");
     const refreshWindowEnd = main.indexOf("run_trusted_candidate_verifier", refreshWindowStart);
     const refreshWindow = main.slice(refreshWindowStart, refreshWindowEnd);
+    assert.match(
+      buildStepBody,
+      /optimize-strategy\|candidate-generation\|candidate-generation-reconciled\|candidate-datastore\|candidate-datastore-reconciled\|candidate-deadline-capture/,
+    );
+    assert.match(buildStepBody, /memory_high="1600M"/);
+    assert.match(buildStepBody, /memory_max="2200M"/);
+    assert.match(buildStepBody, /memory_swap_max="512M"/);
+    assert.match(buildStepBody, /node_heap_mib="1536"/);
+    assert.match(buildStepBody, /MemoryHigh=\$memory_high/);
+    assert.match(buildStepBody, /MemoryMax=\$memory_max/);
+    assert.match(buildStepBody, /MemorySwapMax=\$memory_swap_max/);
+    assert.match(buildStepBody, /NODE_OPTIONS=--max-old-space-size="\$node_heap_mib"/);
+    const refreshStepBody = extractFunction(bundleRelease, "run_candidate_refresh_step");
+    assert.match(refreshStepBody, /candidate-archive-refresh\|candidate-generation-refresh\|candidate-sqlite-affinity\|candidate-deadline-capture-refresh\)/);
+    assert.match(refreshStepBody, /memory_high="1600M"/);
+    assert.match(refreshStepBody, /memory_max="2200M"/);
+    assert.match(refreshStepBody, /memory_swap_max="512M"/);
+    assert.match(refreshStepBody, /node_heap_mib="1536"/);
+    assert.match(refreshStepBody, /MemoryHigh=\$memory_high/);
+    assert.match(refreshStepBody, /MemoryMax=\$memory_max/);
+    assert.match(refreshStepBody, /MemorySwapMax=\$memory_swap_max/);
+    assert.match(refreshStepBody, /NODE_OPTIONS=--max-old-space-size="\$node_heap_mib"/);
+    assert.match(refreshStepBody, /candidate-generation-refresh\|candidate-sqlite-affinity\)[\s\S]*?runtime_max_seconds="240"/);
     assert.match(bundleRelease, /run_build_step archive-migration/);
+    assert.match(buildStepBody, /application-build\|archive-migration\)/);
+    assert.doesNotMatch(
+      main,
+      /NODE_OPTIONS=--max-old-space-size=1536/,
+      "archive migrations must inherit the label-scoped V8 heap instead of overriding it"
+    );
     assert.match(bundleRelease, /PUBLIC_DATA_DIR="\$BUILD_DIR\/public\/data"/);
     assert.match(bundleRelease, /ARCHIVE_MIGRATION_EVIDENCE_DATA_DIR="\$BUILD_DIR\/\.release-archive-evidence"/);
     assert.match(bundleRelease, /npm" run datastore:migrate-archives/);
@@ -3701,8 +3911,8 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
     assert.deepEqual(
       [...refreshWindow.matchAll(/"\$NODE_HOME\/bin\/npm" run ([^\s\\]+)/g)]
         .map((match) => match[1]),
-      ["datastore:migrate-archives", "datastore:sqlite"],
-      "the stopped-worker refresh window may attach existing archives, rebuild SQLite, and capture the same-asOf deadline only"
+      ["datastore:migrate-archives", "datastore:generation"],
+      "the stopped-worker refresh window may attach existing archives, publish their immutable generation, verify SQLite affinity, and capture the same-asOf deadline only"
     );
     assert.doesNotMatch(
       refreshWindow,
@@ -3713,10 +3923,16 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
       '"$BUILD_DIR/.release-archive-evidence/prediction-snapshots.json"',
       '"$BUILD_DIR/.release-archive-evidence/matches-current.json"',
       'preserve_live_public_data_cache "$APP_DIR" "$BUILD_DIR"',
+      '"$LIVE_STORE_DIR/ai-arena-state.json"',
       "run_build_step archive-migration",
+      "run_build_step candidate-ai-arena-refresh",
+      "run_build_step candidate-generation",
       "run_build_step candidate-datastore",
       'start root-owned assembled candidate',
     ], "preserved snapshots must repair archives before candidate SQLite and API verification");
+    assert.match(main, /copy_regular_file_nofollow[\s\S]*?\$LIVE_STORE_DIR\/ai-arena-state\.json[\s\S]*?\$CANDIDATE_STORE_DIR\/ai-arena-state\.json/);
+    assert.match(main, /candidate-ai-arena-refresh[\s\S]*?SERVER_STORE_DIR="\$CANDIDATE_STORE_DIR" PUBLIC_DATA_DIR="\$BUILD_DIR\/public\/data"[\s\S]*?scripts\/refreshAiArenaPublication\.cjs/);
+    assert.match(main, /candidate AI arena publication refresh failed/);
     assertOrdered(main, [
       'wait_for_health "http://${HOST}:${CANDIDATE_PORT}" "candidate-server"',
       "candidate transition lease instant could not be captured",
@@ -3729,8 +3945,11 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
       'PUBLIC_DATA_DIR="$NEXT_DIR/public/data"',
       'ARCHIVE_MIGRATION_EVIDENCE_DATA_DIR="$BUILD_DIR/.release-archive-evidence"',
       'ARCHIVE_MIGRATION_CAPTURED_AT="$CANDIDATE_ARCHIVE_REFRESH_CAPTURED_AT"',
-      "candidate-sqlite-refresh",
+      "candidate-generation-refresh",
+      'DATA_GENERATION_PUBLIC_DATA_DIR="$NEXT_DIR/public/data"',
+      "candidate-sqlite-affinity",
       'DATASTORE_SQLITE_PATH="$CANDIDATE_SQLITE_PATH"',
+      "scripts/verifySqlitePublicationIdentity.cjs",
       "candidate-deadline-capture-refresh",
       'CANDIDATE_PROSPECTIVE_CAPTURE_EVALUATED_AT="$CANDIDATE_ARCHIVE_REFRESH_CAPTURED_AT"',
       'node" scripts/captureCandidateProspectiveDeadline.cjs',
@@ -3739,24 +3958,48 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
       "run_trusted_candidate_verifier",
     ], "a stopped candidate reattaches only existing pre-cutoff evidence, refreshes SQLite, restarts healthy, then verifies");
     assert.match(main, /candidate pre-verification archive refresh failed/);
-    assert.match(main, /candidate sqlite refresh after archive migration failed/);
+    assert.match(main, /candidate generation refresh after archive migration failed/);
+    assert.match(main, /candidate generation changed after archive refresh; existing SQLite publication identity is no longer reusable/);
     assert.match(main, /candidate deadline capture failed at archive refresh instant/);
     assert.match(main, /refreshed candidate transient unit failed to start/);
     assert.match(main, /refreshed candidate health failed/);
+    assert.doesNotMatch(
+      refreshWindow,
+      /candidate-sqlite-refresh|npm" run datastore:sqlite/,
+      "a semantic-noop archive refresh must not rebuild the multi-gigabyte candidate SQLite projection"
+    );
   });
 
   check("candidate transition lease bounds refresh, verifier runtime, and the final atomic swap", () => {
     const main = mainProgram(bundleRelease);
     const verifierBody = extractFunction(bundleRelease, "run_trusted_candidate_verifier");
     assert.match(verifierBody, /RuntimeMaxSec=\$\{CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS\}s/);
+    assert.match(verifierBody, /MemoryHigh=1600M/);
+    assert.match(verifierBody, /MemoryMax=2200M/);
+    assert.match(verifierBody, /Nice=5/);
+    assert.match(verifierBody, /CPUWeight=100/);
+    assert.match(verifierBody, /MemorySwapMax=512M/);
+    assert.match(verifierBody, /NODE_OPTIONS=--max-old-space-size=1536/);
     const refreshBody = extractFunction(bundleRelease, "run_candidate_refresh_step");
-    assert.match(refreshBody, /RuntimeMaxSec=\$\{CANDIDATE_REFRESH_STEP_RUNTIME_MAX_SECONDS\}s/);
-    assert.match(bundleRelease, /RELEASE_CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS:-600/);
+    assert.match(refreshBody, /RuntimeMaxSec=\$\{runtime_max_seconds\}s/);
+    assert.match(refreshBody, /candidate-generation-refresh\|candidate-sqlite-affinity/);
+    assert.match(refreshBody, /candidate-archive-refresh\|candidate-generation-refresh\|candidate-sqlite-affinity/);
+    assert.match(bundleRelease, /RELEASE_CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS:-900/);
     assert.match(bundleRelease, /RELEASE_CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS:-420/);
     assert.match(bundleRelease, /RELEASE_CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS:-30/);
     assert.match(bundleRelease, /RELEASE_CANDIDATE_REFRESH_STEP_RUNTIME_MAX_SECONDS:-90/);
     assert.match(main, /--verifier-runtime-max-seconds "\$CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS"/);
-    assert.match(main, /--preverify-refresh-budget-seconds "\$CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS"/);
+    assert.match(
+      main,
+      /run_trusted_candidate_verifier[\s\S]*?VERIFY_SQLITE_PREVALIDATED=1[\s\S]*?scripts\/verifyProductionReadiness\.cjs/,
+      "the freshly rebuilt candidate SQLite must be identity-verified without a duplicate multi-gigabyte export"
+    );
+    assert.match(bundleRelease, /CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS=\$\(\(/);
+    assert.match(
+      bundleRelease,
+      /CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS=\$\(\([\s\S]{0,160}CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS[\s\S]{0,80}\(RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS \+ 999\) \/ 1000/,
+    );
+    assert.match(main, /--preverify-refresh-budget-seconds "\$CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS"/);
     assert.match(main, /--atomic-swap-margin-seconds "\$CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS"/);
     assert.equal(
       (main.match(/CANDIDATE_ARCHIVE_REFRESH_CAPTURED_AT="\$\("/g) || []).length,
@@ -3909,6 +4152,23 @@ check("candidate ledger continuity is snapshotted before mutation and verified b
   assert.match(bundleRelease, /mv -fT -- "\$\{APP_DIR\}\/\.release-candidate-continuity\.next"/);
   assert.match(bundleRelease, /stat -c '%u:%g:%a:%h'/);
   assert.match(bundleRelease, /sync -f "\$\{APP_DIR\}\/\.release-candidate-continuity\.json"/);
+});
+
+check("signed prebuilt frontend is hash-verified with a guarded remote-build fallback", () => {
+  const main = mainProgram(bundleRelease);
+  assert.match(bundleRelease, /verify_and_normalize_prebuilt_dist/);
+  assert.match(bundleRelease, /releasePrebuiltDist\.cjs/);
+  assert.match(bundleRelease, /"\$helper" verify --dist/);
+  assert.match(bundleRelease, /signed prebuilt frontend dist failed integrity verification/);
+  assert.match(bundleRelease, /signed prebuilt frontend dist is unavailable; retain guarded remote build fallback/);
+  assertOrdered(main, [
+    "verify_and_normalize_prebuilt_dist",
+    "run_build_step npm-ci",
+    'if [ "$PREBUILT_DIST_VALIDATED" = "1" ]',
+    "run_build_step application-build",
+    "validate_build_artifacts",
+  ], "prebuilt dist verification must precede reuse and final artifact validation");
+  assert.match(bundleRelease, /rm -rf -- .*"\$NEXT_DIR\/\.release-prebuilt"/);
 });
 
 check("signed release uploads retry transient SCP disconnects without bypassing host-key pinning", () => {

@@ -32,6 +32,27 @@ const {
   readSqliteTransitionMatches
 } = require("./sqliteStore.cjs");
 const {
+  createPostgresPool,
+  postgresEnabled,
+  postgresMode,
+  postgresPrimary,
+  postgresWriteEnabled,
+  runPostgresMigrations,
+} = require("./postgresStore.cjs");
+const {
+  getPostgresProjectionStatus,
+  readPostgresCurrentMatches,
+  readPostgresCurrentTransitionSnapshot,
+  readPostgresFastResultReceiptState,
+  readPostgresHistoryMatchesForList,
+  readPostgresHistoryMatchesPage,
+  readPostgresMatchById,
+  readPostgresOddsHistoryRows,
+  readPostgresPredictionSnapshotRows,
+  readPostgresPublicationIdentity,
+  readPostgresTransitionMatches,
+} = require("./postgresProjectionStore.cjs");
+const {
   acquireSyncLock,
   defaultLockDir: syncPublicationLockDir,
   syncLockActive,
@@ -47,10 +68,12 @@ const {
 } = require("./relayCollectorEvidence.cjs");
 const {
   appendCollectorEvidenceUpload,
+  summarizeRecentCollectorEvidenceStore,
   validateCollectorEvidenceUpload,
 } = require("./collectorQuorumEvidence.cjs");
 const { publicLiveRecommendationSummary } = require("./publicSyncMeta.cjs");
 const { isServerOfficialRecommendationEligible } = require("../src/services/officialRecommendationEligibility.cjs");
+const { apiFootballRuntimePolicyFor } = require("../src/services/apiFootballRuntimePolicy.cjs");
 const {
   evaluateLiveRecommendation,
   hasOfficialSportterySourceForLivePrediction,
@@ -74,7 +97,10 @@ const {
   createFastUploadSnapshot,
   resultFingerprint,
 } = require("../scripts/sportteryFastResultLane.cjs");
-const { createRelayFastResultWatcher } = require("./relayFastResultWatcher.cjs");
+const {
+  auditRelayFastResultEligibility,
+  createRelayFastResultWatcher,
+} = require("./relayFastResultWatcher.cjs");
 const {
   FAST_RESULT_OBSERVATION_LIMIT,
   findFastResultObservation,
@@ -87,6 +113,7 @@ const {
   resolveServingPublication,
   resolveServingPublicationForSqliteIdentity,
   selectFastResultReceiptDuringPairTransition,
+  sqlitePublicationMatches,
 } = require("./dataGenerationBundle.cjs");
 const {
   RETRIEVAL_VERSION: llmRetrievalVersion,
@@ -101,6 +128,7 @@ const {
   createOpenResearchGateway,
 } = require("./openResearchGateway.cjs");
 const { buildHitRateAudit } = require("./hitRateAudit.cjs");
+const { compactFormalReviewPerformance } = require("./reviewPerformanceSummary.cjs");
 const { compactPredictionSnapshotAudit } = require("./predictionSnapshotAudit.cjs");
 const {
   summarizeCandidateProspectiveAdmission,
@@ -130,6 +158,9 @@ const {
   compactDualMarketDecisionBindingForPublic,
   verifyDualMarketDecisionBinding,
 } = require("../src/services/dualMarketDecisionBinding.cjs");
+const {
+  attestImmutableAnalysisReferenceDecision,
+} = require("../src/services/immutableAnalysisReferenceDecision.cjs");
 const {
   buildRecommendationProjectionParityAudit,
   projectPublicPredictionRows,
@@ -162,6 +193,7 @@ const installedSignedTrainingAsset = installedHistoricalTrainingInspection.ok ==
   : null;
 let basePublicationCache = null;
 let basePublicationRefresh = null;
+let basePublicationRecheckTimer = null;
 let sqlitePublicationIdentityCache = null;
 let lastAvailableSqliteReadStatusAtMs = 0;
 const fastResultReceiptTransitionCache = new Map();
@@ -181,12 +213,13 @@ const basePublicationRefreshState = {
   switchedAt: null,
   failures: 0,
   lastError: null,
+  lastErrorCode: null,
   lastFailedToken: null,
   retryAfter: 0,
 };
 const generationPointerLockDir = path.join(storeDir, "data-generations", ".pointer-commit.lock");
-const cachedSqlitePublicationIdentity = () => {
-  if (!shouldPreferSqliteRead()) {
+const cachedSqlitePublicationIdentity = ({ requirePreferred = true } = {}) => {
+  if (requirePreferred && !shouldPreferSqliteRead()) {
     return { available: false, reason: "sqlite-not-preferred", publication: null, fileToken: "not-preferred" };
   }
   let fileToken = "missing";
@@ -224,8 +257,8 @@ const generationPointerToken = () => {
       else parts.push(`${name}:missing`);
     }
   }
-  if (shouldPreferSqliteRead()) {
-    const sqlite = cachedSqlitePublicationIdentity();
+  if (shouldPreferSqliteRead() || shouldPreferPostgresRead()) {
+    const sqlite = cachedSqlitePublicationIdentity({ requirePreferred: false });
     const identity = sqlite.publication || {};
     parts.push(sqlite.available
       ? [
@@ -273,9 +306,27 @@ const pruneFastResultReceiptTransitionCache = (now = Date.now()) => {
 const readPublicationFastResultReceiptState = async (publication) => {
   const identity = publication?.identity || null;
   const key = publicationIdentityToken(identity);
-  const state = await readSqliteFastResultReceiptState(sqliteDbPath, {
-    publicationIdentity: identity,
-  });
+  let state = null;
+  if (shouldPreferPostgresRead()) {
+    state = await readPostgresFastResultReceiptState(postgresPool, {
+      publicationIdentity: identity,
+    });
+  }
+  if (!state?.available || state?.valid !== true) {
+    const sqliteState = await readSqliteFastResultReceiptState(sqliteDbPath, {
+      publicationIdentity: identity,
+    });
+    if (sqliteState?.valid === true) {
+      state = {
+        ...sqliteState,
+        transition: shouldPreferPostgresRead(),
+        transitionSource: shouldPreferPostgresRead() ? "postgres-primary-sqlite-receipt-fallback" : null,
+        postgresReason: state?.reason || null,
+      };
+    } else if (!state) {
+      state = sqliteState;
+    }
+  }
   const now = Date.now();
   pruneFastResultReceiptTransitionCache(now);
   if (state?.valid === true && state?.receipt) {
@@ -325,18 +376,110 @@ const hydrateWorkerLease = (rawLease) => {
     },
   });
 };
+const publicationPairError = (code, message) => {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+};
+const activeProjectionIdentityComplete = (identity) => Boolean(
+  identity?.mode === "active-generation"
+  && identity.generationId
+  && identity.manifestHash
+  && identity.sourceCycleId
+  && identity.committedAt
+);
+const requirePostgresPrimarySqliteIdentity = () => {
+  const sqlite = cachedSqlitePublicationIdentity({ requirePreferred: false });
+  if (sqlite?.available !== true) {
+    throw publicationPairError(
+      "SQLITE_PUBLICATION_IDENTITY_UNAVAILABLE",
+      `SQLite publication identity is unavailable during PostgreSQL-primary pairing: ${sqlite?.reason || "unknown"}`,
+    );
+  }
+  if (!activeProjectionIdentityComplete(sqlite.publication)) {
+    throw publicationPairError(
+      "SQLITE_PUBLICATION_IDENTITY_INVALID",
+      "SQLite publication identity is incomplete during PostgreSQL-primary pairing",
+    );
+  }
+  return sqlite;
+};
+const requireMatchingPostgresPrimaryDatabasePair = (postgres) => {
+  if (postgres?.available !== true) {
+    throw publicationPairError(
+      "POSTGRES_PUBLICATION_IDENTITY_UNAVAILABLE",
+      `PostgreSQL publication identity is unavailable during startup pairing: ${postgres?.reason || "unknown"}`,
+    );
+  }
+  if (!activeProjectionIdentityComplete(postgres.publication)) {
+    throw publicationPairError(
+      "POSTGRES_PUBLICATION_IDENTITY_INVALID",
+      "PostgreSQL publication identity is incomplete during startup pairing",
+    );
+  }
+  const sqlite = requirePostgresPrimarySqliteIdentity();
+  if (!sqlitePublicationMatches(sqlite.publication, postgres.publication)) {
+    throw publicationPairError(
+      "PUBLICATION_DATABASE_PAIR_MISMATCH",
+      "PostgreSQL and SQLite publication identities do not match during startup pairing",
+    );
+  }
+  return postgres.publication;
+};
+const requireSqlitePairForResolvedPostgresPublication = (publication) => {
+  const sqlite = requirePostgresPrimarySqliteIdentity();
+  if (!sqlitePublicationMatches(sqlite.publication, publication?.identity)) {
+    throw publicationPairError(
+      "PUBLICATION_DATABASE_PAIR_MISMATCH",
+      "resolved PostgreSQL publication does not match the SQLite fallback identity",
+    );
+  }
+};
+const postgresPublicationRecheckRequired = () => Boolean(
+  shouldPreferPostgresRead()
+  && basePublicationCache?.publication
+  && (
+    basePublicationCache.publication.mode === "previous-generation"
+    || basePublicationCache.token !== generationPointerToken()
+  )
+);
+const armPostgresPublicationRecheck = (delayMs = 5_000) => {
+  if (
+    basePublicationRecheckTimer
+    || shuttingDown
+    || !postgresPublicationRecheckRequired()
+  ) return;
+  basePublicationRecheckTimer = setTimeout(() => {
+    basePublicationRecheckTimer = null;
+    if (!postgresPublicationRecheckRequired()) return;
+    scheduleBasePublicationRefresh(generationPointerToken());
+  }, Math.max(250, delayMs));
+  basePublicationRecheckTimer.unref?.();
+};
+const clearPostgresPublicationRecheck = () => {
+  if (!basePublicationRecheckTimer) return;
+  clearTimeout(basePublicationRecheckTimer);
+  basePublicationRecheckTimer = null;
+};
 const scheduleBasePublicationRefresh = (token) => {
-  if (!basePublicationCache?.publication || basePublicationRefresh) return;
+  if (shuttingDown || !basePublicationCache?.publication || basePublicationRefresh) return;
   if (
     basePublicationRefreshState.lastFailedToken === token
     && Date.now() < Number(basePublicationRefreshState.retryAfter || 0)
-  ) return;
+  ) {
+    armPostgresPublicationRecheck(
+      Math.max(250, Number(basePublicationRefreshState.retryAfter || 0) - Date.now()),
+    );
+    return;
+  }
+  clearPostgresPublicationRecheck();
   const worker = new Worker(path.join(__dirname, "publicationResolverWorker.cjs"), {
     workerData: {
       storeDir,
       publicDataDir: dataDir,
       sqliteDbPath,
       requireSqlitePair: shouldPreferSqliteRead(),
+      requirePostgresPair: shouldPreferPostgresRead(),
       ownerPid: process.pid,
     },
   });
@@ -349,6 +492,7 @@ const scheduleBasePublicationRefresh = (token) => {
     completedAt: null,
     durationMs: null,
     lastError: null,
+    lastErrorCode: null,
   });
 
   const finish = ({ message = null, error = null } = {}) => {
@@ -361,13 +505,24 @@ const scheduleBasePublicationRefresh = (token) => {
     basePublicationRefreshState.completedAt = new Date(completedAtMs).toISOString();
     basePublicationRefreshState.durationMs = completedAtMs - startedAtMs;
 
-    if (error || message?.ok !== true || !message?.publication) {
-      const failure = error || message?.error || {};
+    let pairError = error;
+    if (!pairError && message?.ok === true && message?.publication && shouldPreferPostgresRead()) {
+      try {
+        requireSqlitePairForResolvedPostgresPublication(message.publication);
+      } catch (validationError) {
+        pairError = validationError;
+      }
+    }
+    if (pairError || message?.ok !== true || !message?.publication) {
+      if (message?.lease) releasePublicationLease(hydrateWorkerLease(message.lease));
+      const failure = pairError || message?.error || {};
       basePublicationRefreshState.status = "failed-serving-previous";
       basePublicationRefreshState.failures += 1;
       basePublicationRefreshState.lastError = failure?.message || String(failure || "publication validation failed");
+      basePublicationRefreshState.lastErrorCode = failure?.code || null;
       basePublicationRefreshState.lastFailedToken = token;
       basePublicationRefreshState.retryAfter = completedAtMs + 5_000;
+      armPostgresPublicationRecheck(5_000);
       return;
     }
 
@@ -382,20 +537,40 @@ const scheduleBasePublicationRefresh = (token) => {
     }
 
     const previous = basePublicationCache;
-    basePublicationCache = {
-      token,
-      publication: message.publication,
-      readerLease: nextLease,
-    };
-    basePublicationRefreshState.status = "ready";
-    basePublicationRefreshState.switchedAt = new Date().toISOString();
+    const publicationUnchanged = publicationIdentityToken(previous?.publication?.identity)
+      === publicationIdentityToken(message.publication.identity);
+    if (publicationUnchanged) {
+      releasePublicationLease(nextLease);
+      basePublicationCache = { ...previous, token };
+    } else {
+      basePublicationCache = {
+        token,
+        publication: message.publication,
+        readerLease: nextLease,
+      };
+      basePublicationRefreshState.switchedAt = new Date().toISOString();
+      // Requests that started on the previous immutable generation may still be
+      // finishing asynchronous database work. Keep its lease for one request
+      // grace window before allowing cleanup.
+      deferReleasePublicationLease(previous?.readerLease);
+      clearApiReadCaches();
+    }
+    const servingPublication = publicationUnchanged
+      ? previous.publication
+      : message.publication;
+    const awaitingActivePair = shouldPreferPostgresRead()
+      && servingPublication?.mode === "previous-generation";
+    basePublicationRefreshState.status = awaitingActivePair
+      ? "previous-serving-recheck"
+      : "ready";
+    basePublicationRefreshState.lastError = null;
+    basePublicationRefreshState.lastErrorCode = null;
     basePublicationRefreshState.lastFailedToken = null;
-    basePublicationRefreshState.retryAfter = 0;
-    // Requests that started on the previous immutable generation may still be
-    // finishing asynchronous SQLite work. Keep its lease for one request
-    // grace window before allowing cleanup.
-    deferReleasePublicationLease(previous?.readerLease);
-    clearApiReadCaches();
+    basePublicationRefreshState.retryAfter = awaitingActivePair
+      ? completedAtMs + 5_000
+      : 0;
+    if (awaitingActivePair) armPostgresPublicationRecheck(5_000);
+    else clearPostgresPublicationRecheck();
   };
 
   worker.once("message", (message) => finish({ message }));
@@ -406,14 +581,22 @@ const scheduleBasePublicationRefresh = (token) => {
     }
   });
 };
-const resolveBasePublication = () => {
+const resolveBasePublication = ({ coldStartPairIdentity = null } = {}) => {
   const token = generationPointerToken();
-  if (basePublicationCache?.token === token) return basePublicationCache.publication;
+  if (basePublicationCache?.token === token) {
+    if (
+      shouldPreferPostgresRead()
+      && basePublicationCache.publication?.mode === "previous-generation"
+      && !basePublicationRefresh
+      && Date.now() >= Number(basePublicationRefreshState.retryAfter || 0)
+    ) scheduleBasePublicationRefresh(token);
+    return basePublicationCache.publication;
+  }
   // A committed generation is immutable and already protected by its reader
-  // lease. Keep serving it for the complete generation + SQLite publication
+  // lease. Keep serving it for the complete generation + database projection
   // transaction, instead of exposing the new generation during the interval
-  // where SQLite still carries the previous publication identity. The sync
-  // worker deliberately holds syncPublicationLockDir through both commands;
+  // where PostgreSQL or SQLite still carries the previous publication identity.
+  // The sync worker deliberately holds syncPublicationLockDir through both commands;
   // generationPointerLockDir also covers direct/non-worker pointer commits.
   const publicationWriteInProgress = pointerCommitLockActive({
     lockDir: generationPointerLockDir,
@@ -428,12 +611,16 @@ const resolveBasePublication = () => {
     scheduleBasePublicationRefresh(token);
     return basePublicationCache.publication;
   }
-  const sqlite = shouldPreferSqliteRead() ? cachedSqlitePublicationIdentity() : null;
-  const publication = sqlite?.available === true
+  const pairedProjection = coldStartPairIdentity
+    ? { available: true, publication: coldStartPairIdentity }
+    : shouldPreferSqliteRead()
+      ? cachedSqlitePublicationIdentity()
+      : null;
+  const publication = pairedProjection?.available === true
     ? resolveServingPublicationForSqliteIdentity({
         storeDir,
         publicDataDir: dataDir,
-        sqliteIdentity: sqlite.publication,
+        sqliteIdentity: pairedProjection.publication,
         allowPrevious: true,
       })
     : resolveServingPublication({
@@ -490,6 +677,11 @@ const readStablePublicationMetadata = (basePublication, fileName, fallback = nul
   return value;
 };
 const sqliteDbPath = path.resolve(process.env.DATASTORE_SQLITE_PATH || path.join(storeDir, "football.db"));
+const postgresRuntimeMode = postgresMode();
+const postgresConfigured = postgresEnabled();
+const postgresPool = postgresWriteEnabled(postgresRuntimeMode) && postgresConfigured
+  ? createPostgresPool({ applicationName: "football-predict-server" })
+  : null;
 const sportteryRelaySnapshotPath = path.resolve(
   process.env.SPORTTERY_RELAY_SNAPSHOT
   || path.join(storeDir, "sporttery-relay-snapshot.json")
@@ -636,10 +828,17 @@ const publicApiV1Base = process.env.PUBLIC_DATA_API_V1_BASE
 const enable500Sync = process.env.ENABLE_500_SYNC !== "0";
 const enable500DetailsSync = process.env.ENABLE_500_DETAILS_SYNC === "1";
 const enableWeatherSync = process.env.ENABLE_WEATHER_SYNC !== "0";
-// The keyed API-Football lane is retired from the production path. Historical
-// cache files remain readable for audit compatibility, but runtime sync never
-// depends on a key or subscription.
-const enableApiFootballSync = false;
+// This lane is explicit opt-in and shadow-only. API-Football can supplement
+// injuries, lineups and display-only live scores, but it never becomes the
+// authority for Sporttery identity, prices, results, settlement or formal picks.
+const apiFootballRuntimePolicy = Object.freeze(apiFootballRuntimePolicyFor(process.env));
+const apiFootballConfigured = apiFootballRuntimePolicy.configured;
+const apiFootballSyncMode = apiFootballRuntimePolicy.mode;
+const apiFootballSyncModeSupported = apiFootballRuntimePolicy.modeSupported;
+const enableApiFootballSync = apiFootballRuntimePolicy.enabled;
+const apiFootballFeatures = Object.freeze(apiFootballRuntimePolicy.features);
+const apiFootballAuthority = Object.freeze(apiFootballRuntimePolicy.authority);
+const apiFootballStatus = apiFootballRuntimePolicy.status;
 const enablePreMatchSignalsSync = process.env.ENABLE_PREMATCH_SIGNALS_SYNC !== "0";
 const requireExternalSignals = process.env.REQUIRE_EXTERNAL_SIGNALS !== "0";
 const skipSportteryDirectFetch = process.env.SKIP_SPORTTERY_DIRECT_FETCH === "1"
@@ -796,6 +995,8 @@ const currentTransitionRowLimit = Math.max(
 let lastCurrentRead = null;
 let sqliteReadStatusCache = null;
 let sqliteReadStatusInflight = null;
+let postgresReadStatusCache = null;
+let postgresReadStatusInflight = null;
 
 const nowIso = () => new Date().toISOString();
 const timestampMs = (value) => {
@@ -1841,8 +2042,9 @@ const ensureGeneratedFiles = async () => {
   const gptPath = path.join(dataDir, "gpt-predictions.json");
   if (!fs.existsSync(gptPath)) {
     await writeJsonFile(gptPath, {
-      version: 1,
-      source: "gpt-relay",
+      version: 2,
+      source: "llm-risk-review",
+      promptVersion: llmReviewPromptVersion,
       updatedAt: null,
       rows: []
     });
@@ -1904,6 +2106,7 @@ const clearApiReadCaches = () => {
   currentMatchesCache = null;
   historyListCache = null;
   sqliteReadStatusCache = null;
+  postgresReadStatusCache = null;
   sourceHealthCache = null;
   sourceHealthCacheGeneration += 1;
   publicV1HealthCache = null;
@@ -3248,6 +3451,38 @@ const handleSportteryRelaySnapshotUpload = async (req, url) => {
   return uploaded;
 };
 
+const compactRelayFastPublicationEligibility = (snapshot) => {
+  try {
+    const audit = auditRelayFastResultEligibility(snapshot);
+    return {
+      version: "relay-fast-result-publication-eligibility-v1",
+      validator: "auditRelayFastResultEligibility",
+      eligible: audit?.eligible === true,
+      blocker: audit?.blocker || null,
+      structureEligible: audit?.structure?.eligible === true,
+      endpointTrustEligible: audit?.endpointTrust?.eligible === true,
+      endpointTrustBlockers: Array.isArray(audit?.endpointTrust?.blockers)
+        ? audit.endpointTrust.blockers.slice(0, 16)
+        : [],
+      trustedMarketEndpoints: Number(audit?.marketAudit?.trustedEndpoints || 0),
+      trustedMarketCollectors: Number(audit?.marketAudit?.trustedCollectorCount || 0),
+    };
+  } catch (error) {
+    return {
+      version: "relay-fast-result-publication-eligibility-v1",
+      validator: "auditRelayFastResultEligibility",
+      eligible: false,
+      blocker: "relay-fast-publication-validator-error",
+      structureEligible: false,
+      endpointTrustEligible: false,
+      endpointTrustBlockers: [],
+      trustedMarketEndpoints: 0,
+      trustedMarketCollectors: 0,
+      errorCode: String(error?.code || "VALIDATOR_ERROR").slice(0, 80),
+    };
+  }
+};
+
 const handleSportteryRelayFastLaneUpload = async (req, url) => {
   const maxBytes = Math.max(
     1024 * 1024,
@@ -3283,10 +3518,13 @@ const handleSportteryRelayFastLaneUpload = async (req, url) => {
   }
 
   if (validateOnly) {
+    const publicationEligibility = compactRelayFastPublicationEligibility(snapshotWithCollector);
     return {
       ok: true,
       validateOnly: true,
       validation,
+      watcherEligible: publicationEligibility.eligible,
+      publicationEligibility,
       replacementPreview: {
         lane: "fast",
         fileName: path.basename(sportteryRelayFastLaneSnapshotPath),
@@ -3322,15 +3560,19 @@ const handleSportteryRelayFastLaneUpload = async (req, url) => {
           409
         );
       }
+      const publicationEligibility = compactRelayFastPublicationEligibility(commitSnapshot.snapshot);
       await writeJsonFileAtomic(sportteryRelayFastLaneSnapshotPath, commitSnapshot.snapshot);
       return {
         ok: true,
+        stored: true,
         validateOnly: false,
         path: sportteryRelayFastLaneSnapshotPath,
         fileName: path.basename(sportteryRelayFastLaneSnapshotPath),
         collectorState,
         validation,
-        storedValidation: relayFastLaneValidation(commitSnapshot.snapshot),
+        storedValidation: commitValidation,
+        watcherEligible: publicationEligibility.eligible,
+        publicationEligibility,
         replacedPrevious: Boolean(existingSnapshot),
         mergedWithPreviousResult: commitSnapshot.mergedWithPreviousResult,
         retainedResultObservedAt: commitSnapshot.retainedResultObservedAt,
@@ -3375,6 +3617,8 @@ const handleSportteryRelayFastLaneUpload = async (req, url) => {
     usableEndpoints: uploaded.storedValidation.usableEndpoints,
     capturedAt: uploaded.storedValidation.capturedAt,
     provenanceMode: uploaded.storedValidation.provenanceMode,
+    watcherEligible: uploaded.watcherEligible,
+    publicationEligibilityBlocker: uploaded.publicationEligibility?.blocker || null,
     replacedPrevious: uploaded.replacedPrevious,
     mergedWithPreviousResult: uploaded.mergedWithPreviousResult,
     retainedResultObservedAt: uploaded.retainedResultObservedAt,
@@ -4002,6 +4246,85 @@ const shouldPreferSqliteRead = () => {
   return datastoreReadSource === "sqlite" || process.env.CURRENT_MATCH_SOURCE === "sqlite";
 };
 
+const shouldPreferPostgresRead = () => postgresPrimary(postgresRuntimeMode) && Boolean(postgresPool);
+
+const getPostgresReadStatus = async (meta = null, publicationIdentity = null) => {
+  if (!postgresPool) {
+    return {
+      available: false,
+      reason: postgresConfigured ? "postgres-pool-unavailable" : "postgres-url-missing",
+      counts: {},
+      readSource: postgresRuntimeMode,
+    };
+  }
+  const status = await getPostgresProjectionStatus(postgresPool, { publicationIdentity });
+  const metaUpdatedTime = syncMetaDataVersionTime(meta);
+  const effectiveUpdatedAt = latestIsoTime(
+    status.syncMetaUpdatedAt,
+    status.exportedAt,
+    status.latestRun?.committedAt,
+  );
+  const postgresUpdatedTime = Date.parse(effectiveUpdatedAt || "");
+  const lagMs = Number.isFinite(metaUpdatedTime) && Number.isFinite(postgresUpdatedTime)
+    ? Math.max(0, metaUpdatedTime - postgresUpdatedTime)
+    : null;
+  const stale = Boolean(status.available)
+    && Number.isFinite(metaUpdatedTime)
+    && (!Number.isFinite(postgresUpdatedTime) || postgresUpdatedTime + currentMatchDbMaxStaleMs < metaUpdatedTime);
+  return {
+    ...status,
+    effectiveUpdatedAt,
+    readSource: postgresRuntimeMode,
+    stale,
+    lagSeconds: lagMs === null ? null : Math.round(lagMs / 1000),
+    withinReadGrace: Boolean(status.available)
+      && (!stale || (lagMs !== null && lagMs <= sqliteReadStaleGraceMs)),
+    maxStaleSeconds: Math.round(currentMatchDbMaxStaleMs / 1000),
+    readGraceSeconds: Math.round(sqliteReadStaleGraceMs / 1000),
+  };
+};
+
+const getCachedPostgresReadStatus = async (meta = null, publicationIdentity = null) => {
+  const metaKey = [
+    sqliteStatusMetaKey(meta),
+    publicationIdentity?.mode || "legacy-bootstrap",
+    publicationIdentity?.generationId || "",
+    publicationIdentity?.manifestHash || "",
+    publicationIdentity?.sourceCycleId || "",
+    publicationIdentity?.committedAt || "",
+  ].join("|");
+  const now = Date.now();
+  if (
+    postgresReadStatusCache
+    && postgresReadStatusCache.metaKey === metaKey
+    && now - postgresReadStatusCache.createdAt <= sqliteReadStatusCacheMs
+  ) return postgresReadStatusCache.status;
+  if (postgresReadStatusInflight?.metaKey === metaKey) return postgresReadStatusInflight.promise;
+  const promise = getPostgresReadStatus(meta, publicationIdentity).then((status) => {
+    postgresReadStatusCache = { metaKey, status, createdAt: Date.now() };
+    return status;
+  }).finally(() => {
+    if (postgresReadStatusInflight?.promise === promise) postgresReadStatusInflight = null;
+  });
+  postgresReadStatusInflight = { metaKey, promise };
+  return promise;
+};
+
+const postgresFreshEnough = (status, countKey = "currentMatches", requiredCount = 1) => Boolean(
+  status?.available
+  && status?.baseReady !== false
+  && (status.withinReadGrace === true || !status.stale)
+  && Number(status?.counts?.[countKey] || 0) >= requiredCount
+);
+
+const postgresStatusUpdatedAt = (status) => (
+  status?.effectiveUpdatedAt
+  || status?.syncMetaUpdatedAt
+  || status?.exportedAt
+  || status?.latestRun?.committedAt
+  || null
+);
+
 const getSqliteReadStatus = async (meta = null, publicationIdentity = null) => {
   const status = await getSqliteStatus(sqliteDbPath, { publicationIdentity });
   const metaUpdatedTime = syncMetaDataVersionTime(meta);
@@ -4088,9 +4411,23 @@ const sqliteStatusUpdatedAt = (status) => (
 );
 
 const sqliteReadCacheToken = async (meta = null, publicationIdentity = null) => {
-  if (!shouldPreferSqliteRead()) return "sqlite:not-preferred";
+  const postgresToken = shouldPreferPostgresRead()
+    ? await getCachedPostgresReadStatus(meta, publicationIdentity).then((status) => [
+        status.available ? "postgres:available" : "postgres:unavailable",
+        status.baseReady === false ? "base:mismatch" : "base:ready",
+        status.publication?.generationId || "",
+        status.publication?.manifestHash || "",
+        status.stale ? "stale" : "fresh",
+        status.effectiveUpdatedAt || "",
+        status.counts?.currentMatches || 0,
+        status.counts?.historyMatches || 0,
+        status.counts?.oddsSnapshots || 0,
+        status.counts?.predictionSnapshots || 0,
+      ].join("|"))
+    : "postgres:not-primary";
+  if (!shouldPreferSqliteRead()) return `${postgresToken}|sqlite:not-preferred`;
   const status = await getCachedSqliteReadStatus(meta, publicationIdentity);
-  return [
+  return [postgresToken,
     status.available ? "sqlite:available" : "sqlite:unavailable",
     status.baseReady === false ? "base:mismatch" : "base:ready",
     status.publication?.generationId || "",
@@ -4126,6 +4463,48 @@ const readCurrentMatchesDetailed = async (options = {}) => {
     : await readJsonFile(path.join(dataDir, "sync-meta.json"), null);
   const metaUpdatedTime = currentMetaTime(meta);
   let sqliteFallbackRead = null;
+  let postgresFallbackRead = null;
+
+  if (shouldPreferPostgresRead() && options.preferPublication !== true) {
+    const postgresStatus = await getCachedPostgresReadStatus(meta, basePublication?.identity || null);
+    if (postgresFreshEnough(postgresStatus, "currentMatches", 0)) {
+      const postgresMatches = Array.isArray(options.postgresRows)
+        ? options.postgresRows
+        : await readPostgresCurrentMatches(postgresPool, {
+            publicationIdentity: basePublication?.identity || null,
+          });
+      const rows = basePublication?.context
+        ? postgresMatches.map(resolveMatchLifecycle)
+        : await mergeGptIntoMatches(postgresMatches);
+      const generationRows = rows.length === 0 && basePublication?.context
+        ? (() => {
+            const generationMatches = readPublicationJson(basePublication, "matches-current.json", []);
+            return Array.isArray(generationMatches) ? generationMatches.map(resolveMatchLifecycle) : [];
+          })()
+        : [];
+      const guardedRead = selectCurrentPublicationRows({ sqliteRows: rows, generationRows });
+      lastCurrentRead = {
+        source: guardedRead.degraded ? `postgres-${guardedRead.source}` : "postgres",
+        stale: guardedRead.degraded,
+        count: guardedRead.rows.length,
+        blockedReason: guardedRead.blockedReason,
+        sqliteCount: guardedRead.sqliteCount,
+        generationCount: guardedRead.generationCount,
+        dbUpdatedAt: postgresStatusUpdatedAt(postgresStatus),
+        fileUpdatedAt: meta?.updatedAt || meta?.capturedAt || null,
+        sqliteLagSeconds: postgresStatus.lagSeconds ?? null,
+        sqliteReadGraceSeconds: postgresStatus.readGraceSeconds ?? null,
+        checkedAt: nowIso(),
+      };
+      return { rows: guardedRead.rows, ...lastCurrentRead };
+    }
+    postgresFallbackRead = {
+      source: postgresStatus.available
+        ? (postgresStatus.baseReady === false ? "postgres-generation-mismatch" : "postgres-stale-or-empty")
+        : "postgres-unavailable",
+      dbUpdatedAt: postgresStatusUpdatedAt(postgresStatus),
+    };
+  }
 
   if (shouldPreferSqliteRead() && options.preferPublication !== true) {
     const sqliteStatus = await getCachedSqliteReadStatus(meta, basePublication?.identity || null);
@@ -4153,7 +4532,9 @@ const readCurrentMatchesDetailed = async (options = {}) => {
         generationRows,
       });
       lastCurrentRead = {
-        source: guardedRead.degraded
+        source: postgresFallbackRead && !guardedRead.degraded
+          ? "postgres-primary-sqlite-fallback"
+          : guardedRead.degraded
           ? guardedRead.source
           : basePublication?.mode === "previous-generation"
             ? "sqlite-previous-pair"
@@ -4163,7 +4544,7 @@ const readCurrentMatchesDetailed = async (options = {}) => {
         blockedReason: guardedRead.blockedReason,
         sqliteCount: guardedRead.sqliteCount,
         generationCount: guardedRead.generationCount,
-        dbUpdatedAt: sqliteStatusUpdatedAt(sqliteStatus),
+        dbUpdatedAt: sqliteStatusUpdatedAt(sqliteStatus) || postgresFallbackRead?.dbUpdatedAt || null,
         fileUpdatedAt: meta?.updatedAt || meta?.capturedAt || null,
         sqliteLagSeconds: sqliteStatus.lagSeconds ?? null,
         sqliteReadGraceSeconds: sqliteStatus.readGraceSeconds ?? null,
@@ -4236,10 +4617,10 @@ const readCurrentMatchesDetailed = async (options = {}) => {
   const fileMatches = await readCurrentFileMatches();
   const rows = await mergeGptIntoMatches(fileMatches);
   lastCurrentRead = {
-    source: sqliteFallbackRead?.source || "file",
+    source: postgresFallbackRead?.source || sqliteFallbackRead?.source || "file",
     stale: false,
     count: rows.length,
-    dbUpdatedAt: sqliteFallbackRead?.dbUpdatedAt || null,
+    dbUpdatedAt: postgresFallbackRead?.dbUpdatedAt || sqliteFallbackRead?.dbUpdatedAt || null,
     fileUpdatedAt: meta?.updatedAt || meta?.capturedAt || null,
     checkedAt: nowIso()
   };
@@ -4343,6 +4724,13 @@ const compactVerifiedDualMarketDecision = (binding) => {
   return compactDualMarketDecisionBindingForPublic(binding);
 };
 
+const compactVerifiedImmutableAnalysisReference = (match) => (
+  attestImmutableAnalysisReferenceDecision(
+    match?.predictionMeta?.immutableAnalysisReferenceDecision,
+    match,
+  )
+);
+
 const normalizeMatchForDetailPayload = (match) => {
   if (!match || typeof match !== "object") return match;
   // Detail and list must expose the same independently verifiable compact
@@ -4366,6 +4754,7 @@ const normalizeMatchForDetailPayload = (match) => {
       ? {
           ...match.predictionMeta,
           dualMarketDecision,
+          immutableAnalysisReferenceDecision: compactVerifiedImmutableAnalysisReference(match),
         }
       : match.predictionMeta || null,
     probabilityModel: normalizeProbabilityModelForDetail(match.probabilityModel)
@@ -4383,7 +4772,8 @@ const compactPredictionMeta = (meta) => {
     dataPolicy: meta.dataPolicy,
     updateReason: meta.updateReason,
     snapshot: meta.snapshot,
-    dualMarketDecision: compactVerifiedDualMarketDecision(meta.dualMarketDecision)
+    dualMarketDecision: compactVerifiedDualMarketDecision(meta.dualMarketDecision),
+    immutableAnalysisReferenceDecision: meta.immutableAnalysisReferenceDecision,
   };
 };
 
@@ -4419,7 +4809,40 @@ const compactPreMatchQualityForList = (quality) => {
           en: item.en,
           severity: item.severity
         }))
-      : []
+      : [],
+    notYetPublishable: Array.isArray(quality.notYetPublishable)
+      ? quality.notYetPublishable.slice(0, 3).map((item) => ({
+          key: item.key,
+          zh: item.zh,
+          en: item.en,
+          expectedPublishedAt: item.expectedPublishedAt || null,
+          weight: 0
+        }))
+      : [],
+    postCutoffOnly: Array.isArray(quality.postCutoffOnly)
+      ? quality.postCutoffOnly.slice(0, 3).map((item) => ({
+          key: item.key,
+          zh: item.zh,
+          en: item.en,
+          sourceObservedAt: item.sourceObservedAt || null
+        }))
+      : [],
+    components: quality.components && typeof quality.components === "object"
+      ? Object.fromEntries(Object.entries(quality.components).map(([key, item]) => [key, {
+          key: item?.key || key,
+          label: item?.label,
+          status: item?.status,
+          score: item?.score,
+          source: item?.source,
+          note: item?.note,
+          evidenceType: item?.evidenceType,
+          availabilityState: item?.availabilityState,
+          eligibleAtCutoff: item?.eligibleAtCutoff,
+          expectedPublishedAt: item?.expectedPublishedAt || null,
+          sourceObservedAt: item?.sourceObservedAt || null,
+          confirmed: item?.confirmed === true
+        }]))
+      : {}
   };
 };
 
@@ -4581,7 +5004,8 @@ const compactPredictionMetaForList = (meta, match) => {
     cutoffTime: meta.cutoffTime,
     dualMarketDecision: compactVerifiedDualMarketDecision(
       attestDualMarketDecisionBinding(match)
-    )
+    ),
+    immutableAnalysisReferenceDecision: compactVerifiedImmutableAnalysisReference(match)
   };
 };
 
@@ -4671,6 +5095,32 @@ const readGlobalRecommendationRiskTier = async (
 const enforceCurrentRecommendationEvidence = (match, prediction, globalRiskTier = "unknown") => {
   if (!prediction || typeof prediction !== "object") return prediction;
   if (prediction.marketType !== "BEST") return prediction;
+  // A neutral public WATCH row is an explicit fail-closed disposition, not a
+  // low-confidence directional reference. Do not let live evidence enrichment
+  // revive or relabel it after the public projection removed the private code.
+  if (String(prediction.tipCode || "").toUpperCase() === "WATCH") {
+    return {
+      ...prediction,
+      recommendationAction: "withhold",
+      recommendationTier: "public-watch",
+      multiFactorEvidence: {
+        ...(prediction.multiFactorEvidence && typeof prediction.multiFactorEvidence === "object"
+          ? prediction.multiFactorEvidence
+          : {}),
+        eligible: false,
+        grade: "WATCH",
+      },
+      liveRecommendationAction: "withhold",
+      liveRecommendationTier: "live-withhold",
+      liveRecommendation: {
+        ...(prediction.liveRecommendation && typeof prediction.liveRecommendation === "object"
+          ? prediction.liveRecommendation
+          : {}),
+        eligible: false,
+        grade: "WITHHOLD",
+      },
+    };
+  }
   const nowMs = Date.now();
   const officialOdds = officialOddsForLivePrediction(match, prediction) || 0;
   const officialSource = hasOfficialSportterySourceForLivePrediction(match, prediction);
@@ -4777,6 +5227,54 @@ const compactLiveRecommendationForCurrentList = (recommendation) => {
   return compact;
 };
 
+const CURRENT_LIST_PUBLIC_CONFIDENCE_METRIC_KEYS = Object.freeze([
+  "modelProbability",
+  "evidenceCompleteness",
+  "evidenceCompletenessBasis",
+  "marketConsistency",
+  "marketConsistencyBasis",
+  "calibrationSample",
+  "freshnessQuality",
+  "freshnessObservedAt",
+  "freshnessSourceUpdatedAt",
+  "freshnessAsOf",
+  "freshnessAgeSeconds",
+  "freshnessSource",
+  "freshnessBasis",
+]);
+
+const compactPublicConfidenceForCurrentList = (confidence) => {
+  const source = confidence?.publicMetrics;
+  if (!source || typeof source !== "object" || Array.isArray(source)) return undefined;
+
+  const compact = {};
+  const copyNullable = (key, predicate) => {
+    if (!Object.prototype.hasOwnProperty.call(source, key)) return;
+    const value = source[key];
+    if (value === null || predicate(value)) compact[key] = value;
+  };
+
+  copyNullable("modelProbability", (value) => Number.isFinite(value) && value >= 0 && value <= 1);
+  copyNullable("evidenceCompleteness", (value) => Number.isFinite(value) && value >= 0 && value <= 1);
+  copyNullable("evidenceCompletenessBasis", (value) => ["input-coverage-ratio", "unavailable"].includes(value));
+  copyNullable("marketConsistency", (value) => ["aligned", "conflicted", "unavailable"].includes(value));
+  copyNullable("marketConsistencyBasis", (value) => ["auditable-market-leader", "unavailable"].includes(value));
+  copyNullable("calibrationSample", (value) => Number.isSafeInteger(value) && value >= 0);
+  copyNullable("freshnessQuality", (value) => Number.isFinite(value) && value >= 0 && value <= 1);
+  for (const key of ["freshnessObservedAt", "freshnessSourceUpdatedAt", "freshnessAsOf"]) {
+    copyNullable(key, (value) => typeof value === "string" && Number.isFinite(Date.parse(value)));
+  }
+  copyNullable("freshnessAgeSeconds", (value) => Number.isFinite(value) && value >= 0);
+  copyNullable("freshnessSource", (value) => typeof value === "string" && value.trim().length > 0 && value.length <= 160);
+  copyNullable("freshnessBasis", (value) => ["observed-at", "source-updated-at", "unavailable"].includes(value));
+
+  return CURRENT_LIST_PUBLIC_CONFIDENCE_METRIC_KEYS.some((key) => (
+    Object.prototype.hasOwnProperty.call(compact, key)
+  ))
+    ? { publicMetrics: compact }
+    : undefined;
+};
+
 const compactPredictionForCurrentList = (prediction) => {
   if (!prediction || typeof prediction !== "object") return null;
   return {
@@ -4794,6 +5292,7 @@ const compactPredictionForCurrentList = (prediction) => {
     liveRecommendation: compactLiveRecommendationForCurrentList(prediction.liveRecommendation),
     livePublicationEvidence: prediction.livePublicationEvidence,
     multiFactorEvidence: compactMultiFactorEvidenceForList(prediction.multiFactorEvidence),
+    confidence: compactPublicConfidenceForCurrentList(prediction.confidence),
     valueLabel: prediction.valueLabel,
     riskTags: Array.isArray(prediction.riskTags) ? prediction.riskTags.slice(0, 3) : [],
     visibilityStatus: prediction.visibilityStatus,
@@ -4928,6 +5427,30 @@ const compactExternalSignalsForList = (signals) => {
           available: true,
           homeFormation: signals.lineups.homeFormation,
           awayFormation: signals.lineups.awayFormation
+        }
+      : null,
+    projectedRoster: signals.projectedRoster
+      ? {
+          source: signals.projectedRoster.source,
+          evidenceType: signals.projectedRoster.evidenceType || "projected-roster",
+          verified: false,
+          summary: signals.projectedRoster.summary,
+          homeFormation: signals.projectedRoster.homeFormation,
+          awayFormation: signals.projectedRoster.awayFormation,
+          sourceObservedAt: signals.projectedRoster.sourceObservedAt,
+          usableForPreMatch: signals.projectedRoster.usableForPreMatch
+        }
+      : null,
+    confirmedLineup: signals.confirmedLineup
+      ? {
+          source: signals.confirmedLineup.source,
+          evidenceType: signals.confirmedLineup.evidenceType || "confirmed-lineup",
+          verified: signals.confirmedLineup.verified === true,
+          summary: signals.confirmedLineup.summary,
+          homeFormation: signals.confirmedLineup.homeFormation,
+          awayFormation: signals.confirmedLineup.awayFormation,
+          sourceObservedAt: signals.confirmedLineup.sourceObservedAt,
+          usableForPreMatch: signals.confirmedLineup.usableForPreMatch
         }
       : null,
     injuries: signals.injuries
@@ -5107,6 +5630,32 @@ const compactCurrentMatchForList = (match, globalRiskTier = "unknown") => {
     voidSource: match.voidSource,
     voidObservedAt: match.voidObservedAt,
     eventVersion: match.eventVersion,
+    sourceObservedAt: match.sourceObservedAt || null,
+    sourceReceivedAt: match.sourceReceivedAt || null,
+    firstInPlayObservedAt: match.firstInPlayObservedAt || null,
+    inPlayObservationSource: match.inPlayObservationSource || null,
+    liveScore: match.liveScore && typeof match.liveScore === "object"
+      ? {
+          version: match.liveScore.version || "live-score-observation-v1",
+          provider: match.liveScore.provider || match.liveScore.source || null,
+          source: match.liveScore.source || null,
+          sourceMatchId: match.liveScore.sourceMatchId || match.sourceMatchId || null,
+          providerMatchId: match.liveScore.providerMatchId || null,
+          statusCode: match.liveScore.statusCode || null,
+          phase: match.liveScore.phase || null,
+          minute: Number.isInteger(match.liveScore.minute) ? Math.max(0, match.liveScore.minute) : null,
+          scoreHome: Number.isInteger(match.liveScore.scoreHome) ? Math.max(0, match.liveScore.scoreHome) : null,
+          scoreAway: Number.isInteger(match.liveScore.scoreAway) ? Math.max(0, match.liveScore.scoreAway) : null,
+          observedAt: match.liveScore.observedAt || null,
+          receivedAt: match.liveScore.receivedAt || null,
+          official: match.liveScore.official === true,
+          trusted: match.liveScore.trusted === true,
+          settlementEligible: false,
+          mappingConfidence: Number.isFinite(Number(match.liveScore.mappingConfidence))
+            ? Number(match.liveScore.mappingConfidence)
+            : null,
+        }
+      : null,
     resultProvenance: match.resultProvenance || null,
     provisionalResult: compactProvisionalResultForList(match.provisionalResult),
     archivedPreMatchPrediction: compactArchivedPreMatchPredictionForList(
@@ -5272,7 +5821,11 @@ const compactPostMatchReviewForList = (review) => {
       handicapHit: Boolean(review.predictionReview?.handicapHit),
       missedHandicapLane: Boolean(review.predictionReview?.missedHandicapLane),
       rows: (review.predictionReview?.rows || []).map(compactPredictionReviewRowForList).filter(Boolean)
-    }
+    },
+    scoreReview: review.scoreReview,
+    modelDiagnosis: review.modelDiagnosis || [],
+    nextAdjustment: review.nextAdjustment || [],
+    dataGaps: review.dataGaps || []
   };
 };
 
@@ -5393,6 +5946,29 @@ const readUnresolvedArchiveForListDetailed = async (limit = 200) => {
 const readHistoryMatchesForListDetailed = async (limit = 600, options = {}) => {
   const safeLimit = Math.max(1, Math.min(1200, Number(limit || 600)));
   const basePublication = options.basePublication || null;
+  if (shouldPreferPostgresRead()) {
+    const meta = basePublication
+      ? readStablePublicationMetadata(basePublication, "sync-meta.json", null)
+      : await readJsonFile(path.join(dataDir, "sync-meta.json"), null);
+    const postgresStatus = await getCachedPostgresReadStatus(meta, basePublication?.identity || null);
+    if (postgresFreshEnough(postgresStatus, "historyMatches", 1)) {
+      const postgresRows = await readPostgresHistoryMatchesForList(
+        postgresPool,
+        safeLimit,
+        { publicationIdentity: basePublication?.identity || null },
+      );
+      if (postgresRows.length > 0) {
+        return {
+          source: "postgres",
+          dbUpdatedAt: postgresStatusUpdatedAt(postgresStatus),
+          rows: postgresRows
+            .filter((row) => row && typeof row === "object")
+            .map(compactHistoryMatchForList)
+            .filter(Boolean),
+        };
+      }
+    }
+  }
   if (shouldPreferSqliteRead()) {
     const meta = basePublication
       ? readStablePublicationMetadata(basePublication, "sync-meta.json", null)
@@ -5487,6 +6063,18 @@ const readMatchById = async (matchId, options = {}) => {
       : resolveMatchLifecycle(candidate);
   };
 
+  if (shouldPreferPostgresRead()) {
+    const meta = basePublication
+      ? readStablePublicationMetadata(basePublication, "sync-meta.json", null)
+      : await readJsonFile(path.join(dataDir, "sync-meta.json"), null);
+    const postgresStatus = await getCachedPostgresReadStatus(meta, basePublication?.identity || null);
+    if (postgresFreshEnough(postgresStatus, "historyMatches", 1)) {
+      mergeCandidate(await readPostgresMatchById(postgresPool, decodedId, {
+        publicationIdentity: basePublication?.identity || null,
+      }));
+    }
+  }
+
   if (shouldPreferSqliteRead()) {
     const meta = basePublication
       ? readStablePublicationMetadata(basePublication, "sync-meta.json", null)
@@ -5525,6 +6113,29 @@ const readMatchById = async (matchId, options = {}) => {
 
 const readOddsHistoryPage = async (url) => {
   const limit = Math.max(1, Math.min(500, Number(url.searchParams.get("limit") || 200)));
+  if (shouldPreferPostgresRead()) {
+    const basePublication = resolveBasePublication();
+    const meta = readStablePublicationMetadata(basePublication, "sync-meta.json", null);
+    const postgresStatus = await getCachedPostgresReadStatus(meta, basePublication.identity || null);
+    if (postgresFreshEnough(postgresStatus, "oddsSnapshots", 1)) {
+      const rows = await readPostgresOddsHistoryRows(postgresPool, {
+        limit,
+        matchId: url.searchParams.get("matchId") || "",
+        sourceMatchId: url.searchParams.get("sourceMatchId") || "",
+        pool: url.searchParams.get("pool") || "",
+        publicationIdentity: basePublication.identity || null,
+      });
+      if (rows.length > 0 || url.searchParams.get("matchId") || url.searchParams.get("sourceMatchId") || url.searchParams.get("pool")) {
+        return {
+          ok: true,
+          source: "postgres",
+          limit,
+          rows,
+          note: "odds history is paginated from PostgreSQL",
+        };
+      }
+    }
+  }
   if (shouldPreferSqliteRead()) {
     const meta = await readJsonFile(path.join(dataDir, "sync-meta.json"), null);
     const sqliteStatus = await getSqliteReadStatus(meta);
@@ -5564,7 +6175,17 @@ const readOddsHistoryPage = async (url) => {
 
 const readPredictionSnapshotAuditPage = async (url) => {
   const limit = Math.max(1, Math.min(200, Number(url.searchParams.get("limit") || 50)));
-  const rows = await readSqlitePredictionSnapshotRows(sqliteDbPath, {
+  const basePublication = resolveBasePublication();
+  const usePostgres = shouldPreferPostgresRead();
+  const rows = usePostgres
+    ? await readPostgresPredictionSnapshotRows(postgresPool, {
+        limit,
+        matchId: url.searchParams.get("matchId") || "",
+        sourceMatchId: url.searchParams.get("sourceMatchId") || "",
+        phase: url.searchParams.get("phase") || "",
+        publicationIdentity: basePublication.identity || null,
+      })
+    : await readSqlitePredictionSnapshotRows(sqliteDbPath, {
     limit,
     matchId: url.searchParams.get("matchId") || "",
     sourceMatchId: url.searchParams.get("sourceMatchId") || "",
@@ -5572,10 +6193,10 @@ const readPredictionSnapshotAuditPage = async (url) => {
   });
   return {
     ok: true,
-    source: "sqlite",
+    source: usePostgres ? "postgres" : "sqlite",
     limit,
     rows: rows.map(compactPredictionSnapshotAudit),
-    note: "admin-only compact audit of immutable prediction snapshots",
+    note: `admin-only compact audit of immutable prediction snapshots from ${usePostgres ? "PostgreSQL" : "SQLite"}`,
   };
 };
 
@@ -5590,7 +6211,8 @@ const summarizeExternalSignal = (matchId, signal) => ({
   hasHhad: Boolean(signal?.bookmakerOdds?.hhad),
   hasApiFootball: Boolean(signal?.apiFootball || signal?.bookmakerOdds?.apiFootball),
   hasFiveHundred: Boolean(signal?.fiveHundred),
-  hasLineups: Boolean(signal?.lineups),
+  hasLineups: Boolean(signal?.confirmedLineup || signal?.lineups),
+  hasProjectedRoster: Boolean(signal?.projectedRoster),
   hasInjuries: Boolean(signal?.injuries),
   buyEndTime: signal?.buyEndTime || null
 });
@@ -5756,6 +6378,8 @@ const matchHasExternalSignal = (match, externalMatches = {}) => {
     || signals.fiveHundred
     || signals.injuries
     || signals.lineups
+    || signals.confirmedLineup
+    || signals.projectedRoster
     || signals.freeFootball
     || signals.preMatch
   );
@@ -5901,6 +6525,7 @@ const buildSourceHealth = async (generation) => {
   const preMatch = await readJsonFile(path.join(dataDir, "pre-match-signals.json"), null);
   const apiFootballMeta = await readJsonFile(path.join(dataDir, "api-football-meta.json"), null);
   const sportteryEgressRawOnDisk = await readJsonFile(sportteryEgressStatusPath, null);
+  const collectorEvidenceStore = await readJsonFile(sportteryCollectorEvidenceStorePath, null);
   const sportteryEgressRaw = skipSportteryDirectFetch
     ? disabledSportteryEgressStatus(sportteryEgressRawOnDisk)
     : sportteryEgressRawOnDisk;
@@ -6120,22 +6745,37 @@ const buildSourceHealth = async (generation) => {
       }
     : syncMetaCurrentFreshness;
   const sportteryCurrentStale = relayCurrentFresh ? false : syncMetaCurrentStale;
-  const officialSourceRedundancy = assessOfficialSourceRedundancy({
+  const collectorEvidenceStoreSummary = summarizeRecentCollectorEvidenceStore({
+    evidenceStore: collectorEvidenceStore,
+    now: nowIso(),
+    maxAgeMinutes,
+  });
+  const collectorIndependenceDomains = [...new Set([
+    ...(Array.isArray(relaySnapshotSummary?.collectorAttestation?.independenceDomains)
+      ? relaySnapshotSummary.collectorAttestation.independenceDomains
+      : []),
+    ...collectorEvidenceStoreSummary.independenceDomains,
+  ])].sort();
+  const officialSourceRedundancy = {
+    ...assessOfficialSourceRedundancy({
     skipSportteryDirectFetch,
     syncTransport: meta?.api?.transport || null,
     currentLaneFresh: !syncMetaCurrentStale,
     sportteryEgress,
     relaySnapshot: relaySnapshotSummary,
     relayCollectorState,
-    trustedCollectorCount: Number(relaySnapshotSummary?.collectorAttestation?.trustedCollectorCount || 0) > 0
-      ? Number(relaySnapshotSummary.collectorAttestation.trustedCollectorCount)
+    trustedCollectorCount: collectorIndependenceDomains.length > 0
+      ? collectorIndependenceDomains.length
       : null,
     egressProofMaxAgeMinutes: boundedRuntimeEnv(
       process.env,
       "SPORTTERY_EGRESS_PROOF_MAX_AGE_MINUTES",
       { fallback: 20, min: maxAgeMinutes, max: 30 * 24 * 60 },
     )
-  });
+    }),
+    independenceDomains: collectorIndependenceDomains,
+    collectorEvidenceStore: collectorEvidenceStoreSummary,
+  };
   const relayHistoryKnown = Boolean(relayFullSnapshotSummary);
   const relayHistoryFresh = Boolean(
     Number(relayHistoryLane?.usableEndpoints || 0) > 0
@@ -6508,6 +7148,8 @@ const buildSourceHealth = async (generation) => {
         usableRows: preMatchUsableRows,
         currentMatchesWithPreMatch: currentWithPreMatch,
         currentCoverage: Number(ratio(currentWithPreMatch, Math.max(currentCount, 1)).toFixed(4)),
+        coverageByComponent: preMatchSummary.coverageByComponent || {},
+        gapPriorities: Array.isArray(preMatchSummary.gapPriorities) ? preMatchSummary.gapPriorities.slice(0, 10) : [],
         warningCount: Array.isArray(preMatchSummary.warnings) ? preMatchSummary.warnings.length : 0
       }
     }
@@ -6530,6 +7172,8 @@ const buildSourceHealth = async (generation) => {
       enableWeatherSync,
       enablePreMatchSignalsSync,
       enableApiFootballSync,
+      apiFootballSyncMode,
+      apiFootballShadowOnly: true,
       enableFreeFootballSync: process.env.ENABLE_FREE_FOOTBALL_SYNC !== "0",
       requireExternalSignals,
       skipSportteryFetch: process.env.SKIP_SPORTTERY_FETCH === "1",
@@ -6573,9 +7217,13 @@ const buildSourceHealth = async (generation) => {
       fiveHundredDetailsRequestedPages: source500Details.requestedPages || 0,
       fiveHundredDetailsRefreshMinutes: source500Details.refreshMinutes || 0,
       fiveHundredDetailsErrors: source500Details.errors || 0,
-      apiFootballConfigured: false,
-      apiFootballEnabled: false,
-      apiFootballStatus: "retired-not-required",
+      apiFootballConfigured,
+      apiFootballEnabled: enableApiFootballSync,
+      apiFootballStatus,
+      apiFootballSyncMode,
+      apiFootballShadowOnly: true,
+      apiFootballFeatures,
+      apiFootballAuthority,
       replacementSource: "free-public-football",
       freeFootballUpdatedAt: sourceFreeFootball.updatedAt || null,
       freeFootballRows: sourceFreeFootball.rows || 0,
@@ -6598,6 +7246,8 @@ const buildSourceHealth = async (generation) => {
       low: preMatchSummary.low || 0,
       recommendationUsable: preMatchSummary.recommendationUsable || 0,
       analysisComplete: preMatchSummary.analysisComplete || 0,
+      coverageByComponent: preMatchSummary.coverageByComponent || {},
+      gapPriorities: Array.isArray(preMatchSummary.gapPriorities) ? preMatchSummary.gapPriorities.slice(0, 10) : [],
       warningCount: Array.isArray(preMatchSummary.warnings) ? preMatchSummary.warnings.length : 0,
     },
     currentMatches: {
@@ -6706,8 +7356,9 @@ const getHealth = async (options = {}) => {
   const apiFootballMeta = await readJsonFile(path.join(dataDir, "api-football-meta.json"), null);
   const sources = await getSourceHealth();
   const sqlite = await getCachedSqliteReadStatus(meta);
+  const postgres = await getCachedPostgresReadStatus(meta);
   const fastResultIntegrity = compactFastResultIntegrityState(
-    await readSqliteFastResultReceiptState(sqliteDbPath)
+    await readPublicationFastResultReceiptState(resolveBasePublication())
   );
   const rawSyncWorkerStatus = await readJsonFile(syncWorkerStatusPath, null);
   const syncWorkerStatus = syncWorkerRuntimeStatus(rawSyncWorkerStatus);
@@ -6728,8 +7379,13 @@ const getHealth = async (options = {}) => {
     lastDataCompact,
     api: {
       publicApiBase,
-      apiFootballConfigured: Boolean(process.env.API_FOOTBALL_KEY || process.env.APISPORTS_KEY),
+      apiFootballConfigured,
       apiFootballEnabled: enableApiFootballSync,
+      apiFootballStatus,
+      apiFootballSyncMode,
+      apiFootballShadowOnly: true,
+      apiFootballFeatures,
+      apiFootballAuthority,
       apiFootballLastRun: apiFootballMeta?.finishedAt || null,
       apiFootballCallsTodayEstimate: apiFootballMeta?.callsTodayEstimate || 0,
       apiFootballFixtureDatesSkippedByAccess: apiFootballMeta?.fixtureDatesSkippedByAccess || 0,
@@ -6761,6 +7417,8 @@ const getHealth = async (options = {}) => {
     database: await getDataStoreStatus(storeDir, { exact: options.exactDataStore === true }),
     storage: {
       sqlite,
+      postgres,
+      primary: shouldPreferPostgresRead() ? "postgres" : "sqlite",
       fastResultIntegrity
     },
     files: {
@@ -6784,17 +7442,20 @@ const getPublicV1HealthBase = async () => {
   const modelEvaluationPromise = basePublication.context
     ? Promise.resolve(readStablePublicationMetadata(basePublication, "model-evaluation.json", null))
     : readJsonFile(path.join(dataDir, "model-evaluation.json"), null);
-  const [sources, sqlite, rawSyncWorkerStatus, modelEvaluationRaw, fastResultIntegrityRaw] = await Promise.all([
+  const [sources, sqlite, postgres, rawSyncWorkerStatus, modelEvaluationRaw, fastResultIntegrityRaw] = await Promise.all([
     getSourceHealth(),
     getCachedSqliteReadStatus(meta, basePublication.identity || null),
+    getCachedPostgresReadStatus(meta, basePublication.identity || null),
     readJsonFile(syncWorkerStatusPath, null),
     modelEvaluationPromise,
     readPublicationFastResultReceiptState(basePublication),
   ]);
   const fastResultIntegrity = compactFastResultIntegrityState(fastResultIntegrityRaw);
   const syncWorkerStatus = syncWorkerRuntimeStatus(rawSyncWorkerStatus);
+  const activeStorage = shouldPreferPostgresRead() ? postgres : sqlite;
+  const activeStorageName = shouldPreferPostgresRead() ? "postgres" : "sqlite";
   const previousGeneration = basePublication.mode === "previous-generation";
-  const pairRefreshPending = sqlite?.baseReady === false
+  const pairRefreshPending = activeStorage?.baseReady === false
     && (
       fastResultIntegrityRaw?.transition === true
       || publicationPairTransitionActive(basePublication)
@@ -6807,27 +7468,31 @@ const getPublicV1HealthBase = async () => {
     nowMs: Date.now(),
     ttlMs: sqliteAtomicReplacementFallbackMs,
   });
-  const sqliteUsable = sqliteFreshEnough(sqlite, "currentMatches", 0);
+  const sqliteUsable = shouldPreferPostgresRead()
+    ? postgresFreshEnough(postgres, "currentMatches", 0)
+    : sqliteFreshEnough(sqlite, "currentMatches", 0);
   const rawMetaCurrentCount = Number(meta?.files?.current);
   const metaCurrentCount = Number.isFinite(rawMetaCurrentCount)
     ? Math.max(0, rawMetaCurrentCount)
     : 0;
-  const sqliteCurrentCount = Math.max(0, Number(sqlite?.counts?.currentMatches || 0));
+  const sqliteCurrentCount = Math.max(0, Number(activeStorage?.counts?.currentMatches || 0));
   const countDivergence = sqliteGenerationCountDivergence({
     sqliteCount: sqliteCurrentCount,
     generationCount: metaCurrentCount,
   });
   const currentRead = compactCurrentReadStatus(sqliteUsable && !countDivergence.active
     ? {
-        source: previousGeneration ? "sqlite-previous-pair" : "sqlite",
+        source: previousGeneration ? `${activeStorageName}-previous-pair` : activeStorageName,
         stale: false,
         count: sqliteCurrentCount,
         sqliteCount: sqliteCurrentCount,
         generationCount: metaCurrentCount,
-        dbUpdatedAt: sqliteStatusUpdatedAt(sqlite),
+        dbUpdatedAt: shouldPreferPostgresRead()
+          ? postgresStatusUpdatedAt(postgres)
+          : sqliteStatusUpdatedAt(sqlite),
         fileUpdatedAt: syncMetaFreshness(meta, "current") || meta?.updatedAt || meta?.capturedAt || null,
-        sqliteLagSeconds: sqlite?.lagSeconds ?? null,
-        sqliteReadGraceSeconds: sqlite?.readGraceSeconds ?? null,
+        sqliteLagSeconds: activeStorage?.lagSeconds ?? null,
+        sqliteReadGraceSeconds: activeStorage?.readGraceSeconds ?? null,
         checkedAt: nowIso()
       }
     : {
@@ -6839,11 +7504,11 @@ const getPublicV1HealthBase = async () => {
           ? "generation-pair-refresh"
           : previousGeneration
           ? "previous-generation"
-          : sqlite?.available
-          ? (sqlite?.baseReady === false
-              ? "generation-sqlite-mismatch"
-              : sqlite?.stale ? "file-sqlite-stale" : "file-sqlite-empty")
-          : "file-sqlite-unavailable",
+          : activeStorage?.available
+          ? (activeStorage?.baseReady === false
+              ? `generation-${activeStorageName}-mismatch`
+              : activeStorage?.stale ? `${activeStorageName}-stale` : `${activeStorageName}-empty`)
+          : `${activeStorageName}-unavailable`,
         stale: sqliteReplacementPending
           ? syncMetaLaneStale(meta, "current") || !Number.isFinite(rawMetaCurrentCount)
           : countDivergence.active
@@ -6857,7 +7522,9 @@ const getPublicV1HealthBase = async () => {
           || (pairRefreshPending ? "sqlite-pair-refresh-pending" : null),
         sqliteCount: sqliteCurrentCount,
         generationCount: metaCurrentCount,
-        dbUpdatedAt: sqliteStatusUpdatedAt(sqlite),
+        dbUpdatedAt: shouldPreferPostgresRead()
+          ? postgresStatusUpdatedAt(postgres)
+          : sqliteStatusUpdatedAt(sqlite),
         fileUpdatedAt: syncMetaFreshness(meta, "current") || meta?.updatedAt || meta?.capturedAt || null,
         checkedAt: nowIso()
       });
@@ -6876,7 +7543,12 @@ const getPublicV1HealthBase = async () => {
       api: {
         syncCron: process.env.ENABLE_SYNC_CRON === "1" ? `${syncIntervalSeconds}s` : "off"
       },
-      storage: { sqlite, fastResultIntegrity },
+      storage: {
+        sqlite,
+        postgres,
+        primary: shouldPreferPostgresRead() ? "postgres" : "sqlite",
+        fastResultIntegrity,
+      },
       currentRead,
       meta,
       sources
@@ -6916,6 +7588,8 @@ const publicSourceHealth = (health) => ({
     enableWeatherSync: Boolean(health?.mode?.enableWeatherSync),
     enablePreMatchSignalsSync: Boolean(health?.mode?.enablePreMatchSignalsSync),
     enableApiFootballSync: Boolean(health?.mode?.enableApiFootballSync),
+    apiFootballSyncMode: health?.mode?.apiFootballSyncMode || "shadow-enrichment",
+    apiFootballShadowOnly: health?.mode?.apiFootballShadowOnly !== false,
     enableFreeFootballSync: Boolean(health?.mode?.enableFreeFootballSync),
     requireExternalSignals: Boolean(health?.mode?.requireExternalSignals),
     skipSportteryFetch: Boolean(health?.mode?.skipSportteryFetch),
@@ -6953,8 +7627,13 @@ const publicSourceHealth = (health) => ({
     fiveHundredCurrentEligibleRows: health?.externalSignals?.fiveHundredCurrentEligibleRows || 0,
     fiveHundredCurrentMatchesWithDetails: health?.externalSignals?.fiveHundredCurrentMatchesWithDetails || 0,
     fiveHundredDetailsCachedMerged: health?.externalSignals?.fiveHundredDetailsCachedMerged || 0,
+    apiFootballConfigured: Boolean(health?.externalSignals?.apiFootballConfigured),
     apiFootballEnabled: Boolean(health?.externalSignals?.apiFootballEnabled),
-    apiFootballStatus: health?.externalSignals?.apiFootballStatus || "retired-not-required",
+    apiFootballStatus: health?.externalSignals?.apiFootballStatus || "disabled",
+    apiFootballSyncMode: health?.externalSignals?.apiFootballSyncMode || "shadow-enrichment",
+    apiFootballShadowOnly: health?.externalSignals?.apiFootballShadowOnly !== false,
+    apiFootballFeatures: health?.externalSignals?.apiFootballFeatures || {},
+    apiFootballAuthority: health?.externalSignals?.apiFootballAuthority || {},
     replacementSource: health?.externalSignals?.replacementSource || "free-public-football",
     freeFootballUpdatedAt: health?.externalSignals?.freeFootballUpdatedAt || null,
     freeFootballRows: health?.externalSignals?.freeFootballRows || 0,
@@ -6973,6 +7652,8 @@ const publicSourceHealth = (health) => ({
     high: health?.preMatchSignals?.high || 0,
     medium: health?.preMatchSignals?.medium || 0,
     low: health?.preMatchSignals?.low || 0,
+    coverageByComponent: health?.preMatchSignals?.coverageByComponent || {},
+    gapPriorities: Array.isArray(health?.preMatchSignals?.gapPriorities) ? health.preMatchSignals.gapPriorities : [],
     warningCount: health?.preMatchSignals?.warningCount || 0
   },
   currentMatches: health?.currentMatches || { count: 0, withExternalSignals: 0, externalCoverage: 0 },
@@ -7203,6 +7884,8 @@ const matchDetailSourceHealth = (health) => ({
     enableWeatherSync: Boolean(health?.mode?.enableWeatherSync),
     enablePreMatchSignalsSync: Boolean(health?.mode?.enablePreMatchSignalsSync),
     enableApiFootballSync: Boolean(health?.mode?.enableApiFootballSync),
+    apiFootballSyncMode: health?.mode?.apiFootballSyncMode || "shadow-enrichment",
+    apiFootballShadowOnly: health?.mode?.apiFootballShadowOnly !== false,
     requireExternalSignals: Boolean(health?.mode?.requireExternalSignals),
     skipSportteryFetch: Boolean(health?.mode?.skipSportteryFetch)
   },
@@ -7480,7 +8163,12 @@ const getAdminSourceHealth = async (health) => {
         },
         apiFootball: {
           enabled: Boolean(health?.mode?.enableApiFootballSync),
-          configured: Boolean(process.env.API_FOOTBALL_KEY || process.env.APISPORTS_KEY),
+          configured: apiFootballConfigured,
+          status: apiFootballStatus,
+          syncMode: apiFootballSyncMode,
+          shadowOnly: true,
+          features: apiFootballFeatures,
+          authority: apiFootballAuthority,
           updatedAt: sourceApiFootball.updatedAt || apiFootballMeta?.finishedAt || null,
           callsThisSync: apiFootballMeta?.callsThisSync || 0,
           callsTodayEstimate: apiFootballMeta?.callsTodayEstimate || 0,
@@ -7626,7 +8314,8 @@ const buildCurrentRecommendationCoverage = async () => {
         }
       }
     }
-    const best = (Array.isArray(match?.predictions) ? match.predictions : [])
+    const publicMatch = enforceCurrentMatchRecommendationEvidence(match, globalRiskTier);
+    const best = (Array.isArray(publicMatch?.predictions) ? publicMatch.predictions : [])
       .find((prediction) => String(prediction?.marketType || "").toUpperCase() === "BEST");
     if (["1", "X", "2"].includes(String(best?.tipCode || "").toUpperCase())) {
       bestDirectionMatches += 1;
@@ -7646,19 +8335,23 @@ const buildCurrentRecommendationCoverage = async () => {
 
   const scheduledMatches = scheduled.length;
   const missingDirectionMatches = Math.max(0, scheduledMatches - bestDirectionMatches);
+  const publicationDispositionMatches = bestDirectionMatches + watchMatches;
+  const missingDispositionMatches = Math.max(0, scheduledMatches - publicationDispositionMatches);
   const hhadMissingDirectionMatches = Math.max(0, hhadMarketMatches - hhadBoundDirectionMatches);
   const dualMarketAtomicMissingMatches = Math.max(0, dualMarketEligibleMatches - dualMarketAtomicMatches);
   const trainingCoverageOk = trainingBackedMatches === scheduledMatches;
   const dualMarketAtomicCoverageOk = hhadMissingDirectionMatches === 0
     && dualMarketAtomicMissingMatches === 0;
   return {
-    version: "current-recommendation-coverage-v5",
+    version: "current-recommendation-coverage-v6",
     scheduledMatches,
     bestDirectionMatches,
     referenceDirectionMatches,
     formalDirectionMatches,
     missingDirectionMatches,
     watchMatches,
+    publicationDispositionMatches,
+    missingDispositionMatches,
     trainingBackedMatches,
     trainingInputSufficientMatches,
     hhadMarketMatches,
@@ -7675,6 +8368,9 @@ const buildCurrentRecommendationCoverage = async () => {
     coverageRatio: scheduledMatches > 0
       ? Number((bestDirectionMatches / scheduledMatches).toFixed(4))
       : 1,
+    dispositionCoverageRatio: scheduledMatches > 0
+      ? Number((publicationDispositionMatches / scheduledMatches).toFixed(4))
+      : 1,
     trainingCoverageRatio: scheduledMatches > 0
       ? Number((trainingBackedMatches / scheduledMatches).toFixed(4))
       : 1,
@@ -7690,8 +8386,7 @@ const buildCurrentRecommendationCoverage = async () => {
     projectionParity,
     trainingCoverageOk,
     dualMarketAtomicCoverageOk,
-    coverageOk: missingDirectionMatches === 0
-      && watchMatches === 0
+    coverageOk: missingDispositionMatches === 0
       && trainingCoverageOk
       && dualMarketAtomicCoverageOk
       && projectionParity.ok
@@ -7772,7 +8467,12 @@ const buildPublicV1Health = async () => {
     && promotionModelSignalReady
     && promotionBaselineRows >= minPromotionBaselineRows
     && (!Number.isFinite(promotionRollingPassRate) || promotionRollingPassRate >= minPromotionRollingPassRate);
-  const modelEvaluationHealth = buildModelEvaluationHealth(modelEvaluationRaw, health.storage?.sqlite || null);
+  const modelEvaluationHealth = buildModelEvaluationHealth(
+    modelEvaluationRaw,
+    health.storage?.primary === "postgres"
+      ? health.storage?.postgres || null
+      : health.storage?.sqlite || null,
+  );
   const modelRiskStable = modelEvaluationHealth.riskTier === "stable";
   // A candidate release can legitimately start against the previous mutable
   // store before the first post-swap sync. Report the immutable asset shipped
@@ -7851,6 +8551,8 @@ const buildPublicV1Health = async () => {
     },
     storage: {
       sqlite: health.storage?.sqlite || null,
+      postgres: health.storage?.postgres || null,
+      primary: health.storage?.primary || "sqlite",
       fastResultIntegrity,
     },
     model: {
@@ -7934,13 +8636,15 @@ const getPublicV1Health = async () => {
         historyCount: 0,
         currentRead: null,
         recommendations: {
-          version: "current-recommendation-coverage-v5",
+          version: "current-recommendation-coverage-v6",
           scheduledMatches: 0,
           bestDirectionMatches: 0,
           referenceDirectionMatches: 0,
           formalDirectionMatches: 0,
           missingDirectionMatches: 0,
           watchMatches: 0,
+          publicationDispositionMatches: 0,
+          missingDispositionMatches: 0,
           trainingBackedMatches: 0,
           trainingInputSufficientMatches: 0,
           hhadMarketMatches: 0,
@@ -7951,6 +8655,7 @@ const getPublicV1Health = async () => {
           dualMarketAtomicMatches: 0,
           dualMarketAtomicMissingMatches: 0,
           coverageRatio: 0,
+          dispositionCoverageRatio: 0,
           trainingCoverageRatio: 0,
           trainingInputSufficientRatio: 0,
           hhadDirectionCoverageRatio: 0,
@@ -8469,8 +9174,11 @@ const compactCandidateDeadlineBatches = (readiness, evaluatedAt = null) => {
   const sourceBatches = Array.isArray(readiness?.deadlineBatches)
     ? readiness.deadlineBatches
     : deriveCandidateDeadlineBatches(readiness, evaluatedAt);
+  // These are aggregate rows (no match identity is exposed), and the public
+  // contract uses their totals to reconcile the complete upcoming cohort.
+  // Truncating at 32 silently made a healthy schedule with many kickoff times
+  // look incomplete to the release gate.
   const batches = sourceBatches
-    .slice(0, 32)
     .map(compactCandidateDeadlineBatch)
     .filter(Boolean);
   const sourceNearest = readiness?.nearestDeadlineBatch
@@ -8548,6 +9256,7 @@ const buildPublicModelScorecard = ({
   evaluation,
   strategy,
   calibration,
+  formalReviewPerformance = null,
   candidateCaptureHeartbeat = null,
   candidateCaptureAttempt = null,
   candidateProspectiveRegistry = null,
@@ -8838,10 +9547,10 @@ const buildPublicModelScorecard = ({
     ? candidateCaptureHeartbeatObservedAtMs
       - Date.parse(rawCandidateCaptureHeartbeat.evaluatedAt)
     : null;
-  const candidateCaptureHeartbeatFreshnessLimitMs = 120_000;
+  const candidateCaptureHeartbeatFreshnessLimitMs = 180_000;
   const candidateCaptureTimeoutMs = Math.max(
     5_000,
-    Number(process.env.CANDIDATE_PROSPECTIVE_CAPTURE_TIMEOUT_MS || 45_000),
+    Number(process.env.CANDIDATE_PROSPECTIVE_CAPTURE_TIMEOUT_MS || 100_000),
   );
   const candidateCaptureConfiguredIntervalMs = Math.max(
     15,
@@ -8860,7 +9569,7 @@ const buildPublicModelScorecard = ({
       candidateCaptureTimeoutMs,
       Number(
         process.env.CANDIDATE_PROSPECTIVE_CAPTURE_RECOVERY_BUDGET_MS
-        || candidateCaptureTimeoutMs,
+        || 55_000,
       ),
     ),
   );
@@ -9388,6 +10097,7 @@ const buildPublicModelScorecard = ({
       } : null
     },
     formalPerformance,
+    formalReviewPerformance: compactFormalReviewPerformance(formalReviewPerformance),
     hitRateAudit,
     shadowTracks: {
       HHAD_COMPANION: hhadCompanion,
@@ -9618,6 +10328,7 @@ const getModelEvaluation = async ({ admin = false } = {}) => {
     candidateCaptureHeartbeat,
     candidateCaptureAttempt,
     candidateProspectiveRegistry,
+    postMatchReviews,
   ] = await Promise.all([
     readJsonFile(path.join(dataDir, "model-evaluation.json"), null),
     readJsonFile(path.join(dataDir, "model-calibration.json"), null),
@@ -9632,6 +10343,9 @@ const getModelEvaluation = async ({ admin = false } = {}) => {
       path.join(storeDir, "model-artifacts", "candidate-prospective-registry.json"),
       null,
     ),
+    basePublication?.context
+      ? Promise.resolve(readPublicationJson(basePublication, "post-match-reviews.json", null))
+      : readJsonFile(path.join(dataDir, "post-match-reviews.json"), null),
   ]);
   const globalRiskTier = await readGlobalRecommendationRiskTier(
     basePublication,
@@ -9655,19 +10369,29 @@ const getModelEvaluation = async ({ admin = false } = {}) => {
     );
   const candidateTemporalAudit = admin && candidateProspectiveRegistry
     ? await (async () => {
-        const [currentRead, historyMatches] = await Promise.all([
+        const [currentRead, historyMatches, unresolvedArchive] = await Promise.all([
           readCurrentMatchesDetailed({ basePublication }).catch(() => ({ rows: [] })),
           basePublication?.context
             ? Promise.resolve(
                 readPublicationJson(basePublication, "matches-history.json", []),
               )
             : readJsonFile(path.join(dataDir, "matches-history.json"), []),
+          readJsonFile(
+            path.join(storeDir, "matches-unresolved-archive.json"),
+            { rows: [] },
+          ),
         ]);
+        const unresolvedRows = Array.isArray(unresolvedArchive)
+          ? unresolvedArchive
+          : Array.isArray(unresolvedArchive?.rows)
+            ? unresolvedArchive.rows
+            : [];
         return buildCandidateProspectiveTemporalAudit({
           registry: candidateProspectiveRegistry,
           matches: [
             ...(Array.isArray(currentRead?.rows) ? currentRead.rows : []),
             ...(Array.isArray(historyMatches) ? historyMatches : []),
+            ...unresolvedRows,
           ],
           evaluatedAt: candidateCaptureHeartbeat?.evaluatedAt || nowIso(),
           includeDiagnostics: true,
@@ -9897,6 +10621,7 @@ const getModelEvaluation = async ({ admin = false } = {}) => {
       candidateCaptureHeartbeat,
       candidateCaptureAttempt,
       candidateProspectiveRegistry,
+      formalReviewPerformance: postMatchReviews?.formalPerformance || null,
     }),
     backtest: evaluation ? {
       version: evaluation.version || null,
@@ -10080,13 +10805,14 @@ const buildV1CurrentPayload = async (url) => {
   const basePublication = resolveBasePublication();
   const meta = readStablePublicationMetadata(basePublication, "sync-meta.json", null);
   const includeTransitionRows = url.searchParams.get("transition") === "1";
-  // SQLite is the production read model once its generation identity matches
-  // the immutable publication. Prefer it for the ordinary list as well as the
-  // transition list; readCurrentMatchesDetailed still falls back to the
-  // validated generation when the atomic projection is unavailable or behind.
+  // A database projection is the production read model once its generation
+  // identity matches the immutable publication. Prefer PostgreSQL or SQLite
+  // for the ordinary list as well as the transition list; only legacy/file
+  // mode should serve the immutable generation directly on the first read.
   const serveInitialFromPublication = !includeTransitionRows
     && Boolean(basePublication.context)
-    && !shouldPreferSqliteRead();
+    && !shouldPreferSqliteRead()
+    && !shouldPreferPostgresRead();
   const globalRiskTier = await readGlobalRecommendationRiskTier(basePublication);
   const sqliteCacheToken = serveInitialFromPublication
     ? `initial-publication:${basePublication.identity.manifestHash || basePublication.identity.generationId || "active"}`
@@ -10143,7 +10869,13 @@ const buildV1CurrentPayload = async (url) => {
   const cacheGeneration = v1ListPayloadCacheGeneration;
 
   const promise = serializeV1ListPayloadBuild(async () => {
-    const atomicSqliteSnapshot = !serveInitialFromPublication && shouldPreferSqliteRead()
+    const atomicSqliteSnapshot = !serveInitialFromPublication && shouldPreferPostgresRead()
+      ? await readPostgresCurrentTransitionSnapshot(postgresPool, {
+          sourceMatchIds: fastObservationSourceIds,
+          limit: transitionRowLimit,
+          publicationIdentity: basePublication.identity,
+        }).catch(() => ({ available: false, currentRows: [], transitionRows: [] }))
+      : !serveInitialFromPublication && shouldPreferSqliteRead()
       ? await readSqliteCurrentTransitionSnapshot(sqliteDbPath, {
           sourceMatchIds: fastObservationSourceIds,
           limit: transitionRowLimit,
@@ -10152,13 +10884,16 @@ const buildV1CurrentPayload = async (url) => {
       : { available: false, currentRows: [], transitionRows: [] };
     const [detail, transitionDetail, insertedTransitionRows] = await Promise.all([
       readCurrentMatchesDetailed({
+        postgresRows: shouldPreferPostgresRead() && atomicSqliteSnapshot.available
+          ? atomicSqliteSnapshot.currentRows
+          : undefined,
         sqliteRows: atomicSqliteSnapshot.available ? atomicSqliteSnapshot.currentRows : undefined,
         basePublication,
         preferPublication: serveInitialFromPublication,
       }),
       includeTransitionRows
         ? atomicSqliteSnapshot.available
-          ? Promise.resolve({ source: "sqlite-atomic", rows: [] })
+          ? Promise.resolve({ source: shouldPreferPostgresRead() ? "postgres-atomic" : "sqlite-atomic", rows: [] })
           : basePublication.context
           ? Promise.resolve({
               // A generation/SQLite cutover mismatch is transient. Do not
@@ -10177,6 +10912,12 @@ const buildV1CurrentPayload = async (url) => {
         ? Promise.resolve([])
         : atomicSqliteSnapshot.available
         ? Promise.resolve(atomicSqliteSnapshot.transitionRows)
+        : shouldPreferPostgresRead()
+        ? readPostgresTransitionMatches(postgresPool, {
+            sourceMatchIds: fastObservationSourceIds,
+            limit: transitionRowLimit,
+            publicationIdentity: basePublication.identity,
+          }).catch(() => [])
         : shouldPreferSqliteRead()
         ? readSqliteTransitionMatches(sqliteDbPath, {
             sourceMatchIds: fastObservationSourceIds,
@@ -10360,7 +11101,39 @@ const buildV1HistoryPayload = async (url) => {
   const promise = serializeV1ListPayloadBuild(async () => {
     let detail = null;
     let page = null;
-    if (!url.searchParams.get("cursorId") && shouldPreferSqliteRead()) {
+    if (!url.searchParams.get("cursorId") && shouldPreferPostgresRead()) {
+      const limit = parseLimit(url.searchParams.get("limit"), 50, 200);
+      const offset = decodeCursor(url.searchParams.get("cursor"));
+      const postgresStatus = await getCachedPostgresReadStatus(meta, basePublication.identity);
+      if (postgresFreshEnough(postgresStatus, "historyMatches", 1)) {
+        const postgresPage = await readPostgresHistoryMatchesPage(postgresPool, {
+          limit,
+          offset,
+          publicationIdentity: basePublication.identity,
+        });
+        const rows = postgresPage.rows
+          .filter((row) => row && typeof row === "object")
+          .map(compactHistoryMatchForList)
+          .filter(Boolean);
+        const nextOffset = offset + Math.max(0, Number(postgresPage.consumedRows || 0));
+        detail = {
+          source: "postgres",
+          dbUpdatedAt: postgresStatusUpdatedAt(postgresStatus),
+          rows,
+        };
+        page = {
+          rows,
+          pageInfo: {
+            limit,
+            count: rows.length,
+            nextCursor: nextOffset < postgresPage.totalAvailable ? encodeCursor(nextOffset) : null,
+            hasMore: nextOffset < postgresPage.totalAvailable,
+            totalAvailable: postgresPage.totalAvailable,
+          },
+        };
+      }
+    }
+    if (!page && !url.searchParams.get("cursorId") && shouldPreferSqliteRead()) {
       const limit = parseLimit(url.searchParams.get("limit"), 50, 200);
       const offset = decodeCursor(url.searchParams.get("cursor"));
       const sqliteStatus = await getCachedSqliteReadStatus(meta, basePublication.identity);
@@ -10665,7 +11438,7 @@ const handleApi = async (req, res, url) => {
     if (detail && !isAuthorized(req, url)) return sendJson(res, { ok: false, error: "unauthorized" }, 401);
     const health = await getSourceHealth();
     const fastResultIntegrity = compactFastResultIntegrityState(
-      await readSqliteFastResultReceiptState(sqliteDbPath)
+      await readPublicationFastResultReceiptState(resolveBasePublication())
     );
     const payload = detail ? await getAdminSourceHealth(health) : publicSourceHealth(health);
     return sendJsonCached(req, res, {
@@ -10693,6 +11466,7 @@ const handleApi = async (req, res, url) => {
       "ai-big-five-survival-v2",
       "ai-big-five-survival-v3",
       "ai-big-five-survival-v4",
+      "ai-big-five-survival-v5",
     ].includes(arena?.version);
     const agents = validArena && Array.isArray(arena.agents) ? arena.agents : [];
     const leagueSlots = validArena && Array.isArray(arena.leagueSlots) ? arena.leagueSlots : [];
@@ -10710,6 +11484,7 @@ const handleApi = async (req, res, url) => {
       targetMatches: validArena ? Number(arena.targetMatches || 0) : 0,
       availableMatches: validArena ? Number(arena.availableMatches || 0) : 0,
       complete: validArena ? arena.complete === true : false,
+      roundActive: validArena ? arena.roundActive === true : false,
       agents: agents.length,
       leagueSlots: leagueSlots.map((row) => ({
         code: String(row?.code || ""),
@@ -10736,12 +11511,16 @@ const handleApi = async (req, res, url) => {
       ? arena
       : {
           ok: true,
-          version: "ai-big-five-survival-v4",
+          version: "ai-big-five-survival-v5",
           generatedAt: null,
           state: "UNAVAILABLE",
           targetMatches: 10,
           availableMatches: 0,
           complete: false,
+          roundActive: false,
+          poolPolicy: "complete-or-friday-partial-lock-v1",
+          shortfallPolicy: "lock-current-qualified-pool-no-backfill",
+          partialLockAt: null,
           leagueSlots: [],
           matches: [],
           agents: [],
@@ -10756,6 +11535,19 @@ const handleApi = async (req, res, url) => {
             submissionRootHash: null,
             stateHash: null,
           },
+          dataAccess: {
+            mode: "shared-immutable-pre-match-snapshot",
+            identicalInputs: true,
+            sources: ["sporttery:official-had", "probability-model", "structured-evidence"],
+            externalProviderCallsActive: false,
+          },
+          resultWriter: {
+            mode: "trusted-official-auto-settlement",
+            officialOnly: true,
+            forecastsImmutable: true,
+            modelScoreWriteAllowed: false,
+          },
+          stakeFreedom: "any-qualified-match-or-zero-with-risk-caps",
           disclosure: "strategy-simulation-not-external-model-calls",
           formalStatisticsExcluded: true,
         }, { maxAgeSeconds: 10 });
@@ -11161,10 +11953,48 @@ const releaseActivePublicationLease = () => {
   releasePublicationLease(lease);
 };
 
+const ensurePostgresRuntime = async () => {
+  if (!postgresWriteEnabled(postgresRuntimeMode)) return { ok: true, skipped: true, mode: postgresRuntimeMode };
+  if (!postgresPool) {
+    const error = new Error("PostgreSQL mode is enabled but FOOTBALL_POSTGRES_URL is missing");
+    error.code = "POSTGRES_RUNTIME_URL_MISSING";
+    if (postgresPrimary(postgresRuntimeMode)) throw error;
+    console.error(`[football-server] ${error.message}`);
+    return { ok: false, warning: true, error: error.message };
+  }
+  try {
+    const migrations = await runPostgresMigrations(postgresPool);
+    console.log(`[football-server] PostgreSQL ${postgresRuntimeMode} ready (${migrations.applied.length} migration(s) applied)`);
+    return { ok: true, mode: postgresRuntimeMode, migrations };
+  } catch (error) {
+    if (postgresPrimary(postgresRuntimeMode)) throw error;
+    console.error("[football-server] PostgreSQL shadow runtime unavailable", {
+      code: error?.code || null,
+      message: error?.message || String(error),
+    });
+    return { ok: false, warning: true, error: error.message || String(error) };
+  }
+};
+
+const warmBasePublicationForStartup = async () => {
+  if (!shouldPreferPostgresRead()) return resolveBasePublication();
+  const postgres = await readPostgresPublicationIdentity(postgresPool);
+  const pairIdentity = requireMatchingPostgresPrimaryDatabasePair(postgres);
+  const publication = resolveBasePublication({ coldStartPairIdentity: pairIdentity });
+  const awaitingActivePair = publication?.mode === "previous-generation";
+  basePublicationRefreshState.status = awaitingActivePair
+    ? "previous-serving-recheck"
+    : "ready";
+  basePublicationRefreshState.retryAfter = awaitingActivePair ? Date.now() + 5_000 : 0;
+  if (awaitingActivePair) armPostgresPublicationRecheck(5_000);
+  return publication;
+};
+
 const shutdown = (signal) => {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log(`[football-server] received ${signal}; closing server`);
+  clearPostgresPublicationRecheck();
   for (const timer of runtimeTimers) {
     clearTimeout(timer);
     clearInterval(timer);
@@ -11188,6 +12018,9 @@ const shutdown = (signal) => {
         });
       }
       releaseActivePublicationLease();
+      if (postgresPool) {
+        try { await postgresPool.end(); } catch { /* shutdown continues */ }
+      }
       if (forced) console.warn(`[football-server] forced socket shutdown after ${shutdownGraceMs}ms`);
       else console.log("[football-server] closed");
       process.exit(0);
@@ -11219,9 +12052,9 @@ const shutdown = (signal) => {
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
 
-Promise.all([ensureStore(), ensureGeneratedFiles()]).then(() => {
+Promise.all([ensureStore(), ensureGeneratedFiles(), ensurePostgresRuntime()]).then(async () => {
   const publicationWarmupStartedAt = Date.now();
-  resolveBasePublication();
+  await warmBasePublicationForStartup();
   console.log(`[football-server] publication cache warmed in ${Date.now() - publicationWarmupStartedAt}ms`);
   server.listen(port, host, () => {
     console.log(`[football-server] listening on http://${host}:${port}`);
@@ -11233,4 +12066,13 @@ Promise.all([ensureStore(), ensureGeneratedFiles()]).then(() => {
     console.log(`[football-server] access-code admin protected: ${accessCodeAdminToken ? "yes" : "no"}`);
   });
   startTimers();
+}).catch(async (error) => {
+  console.error("[football-server] startup failed", {
+    code: error?.code || null,
+    message: error?.message || String(error),
+  });
+  if (postgresPool) {
+    try { await postgresPool.end(); } catch { /* startup failure remains primary */ }
+  }
+  process.exitCode = 1;
 });

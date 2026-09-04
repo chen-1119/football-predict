@@ -143,7 +143,11 @@ type RuntimeConfig = {
 
 const CURRENT_REFRESH_MS = 15 * 1000;
 const TRANSIENT_CURRENT_REFRESH_MS = 3 * 1000;
-const HISTORY_REFRESH_MS = 60 * 1000;
+const SYNC_META_REFRESH_MS = 30 * 1000;
+const SOURCE_HEALTH_REFRESH_MS = 60 * 1000;
+const PUBLIC_HEALTH_REFRESH_MS = 60 * 1000;
+const MODEL_EVALUATION_REFRESH_MS = 5 * 60 * 1000;
+const HISTORY_REFRESH_MS = 5 * 60 * 1000;
 const DATA_FETCH_TIMEOUT_MS = 6 * 1000;
 const HISTORY_DATA_FETCH_TIMEOUT_MS = 12 * 1000;
 const AUTH_CURRENT_PREFETCH_TIMEOUT_MS = 1200;
@@ -627,6 +631,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [matches, setMatches] = useState<Match[]>([]);
   const isAccessVerified = isAccessSessionValid(accessSession);
   const lastMetaRef = useRef<{ resultFreshnessTime?: string | null; finishedCount?: number }>({});
+  const diagnosticRefreshAtRef = useRef({
+    syncMeta: 0,
+    sourceHealth: 0,
+    publicHealth: 0,
+    modelEvaluation: 0
+  });
   const refreshMsRef = useRef(CURRENT_REFRESH_MS);
   const apiBaseRef = useRef<string | null>(ENV_DATA_API_BASE);
   const apiDisabledRef = useRef(ENV_DISABLE_DATA_API);
@@ -943,10 +953,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // The current schedule owns first paint. Diagnostics start only after
         // it has rendered so cold source-health/model/SQLite work cannot make
         // a newly authenticated customer stare at an empty recovery screen.
-        const metaPromise = recoveryProbeOnly ? null : fetchSyncMeta();
-        const sourceHealthPromise = recoveryProbeOnly ? null : fetchSourceHealth();
-        const modelEvaluationPromise = recoveryProbeOnly ? null : fetchModelEvaluation();
-        const publicHealthPromise = recoveryProbeOnly ? null : fetchPublicHealth();
+        const diagnosticNow = Date.now();
+        const diagnosticDue = (
+          key: keyof typeof diagnosticRefreshAtRef.current,
+          intervalMs: number
+        ) => {
+          if (recoveryProbeOnly) return false;
+          const due = isInitial || diagnosticNow - diagnosticRefreshAtRef.current[key] >= intervalMs;
+          if (due) diagnosticRefreshAtRef.current[key] = diagnosticNow;
+          return due;
+        };
+        const metaPromise = diagnosticDue('syncMeta', SYNC_META_REFRESH_MS) ? fetchSyncMeta() : null;
+        const sourceHealthPromise = diagnosticDue('sourceHealth', SOURCE_HEALTH_REFRESH_MS)
+          ? fetchSourceHealth()
+          : null;
+        const modelEvaluationPromise = diagnosticDue('modelEvaluation', MODEL_EVALUATION_REFRESH_MS)
+          ? fetchModelEvaluation()
+          : null;
+        const publicHealthPromise = diagnosticDue('publicHealth', PUBLIC_HEALTH_REFRESH_MS)
+          ? fetchPublicHealth()
+          : null;
 
         if (metaPromise) void metaPromise.then((meta) => {
           if (cancelled || requestGeneration !== currentRequestGeneration) return;

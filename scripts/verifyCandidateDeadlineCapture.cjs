@@ -29,6 +29,9 @@ const {
   settlementHistoryIdentityValues,
   summarizeDeadlineBatches,
 } = require("./captureCandidateProspectiveDeadline.cjs");
+const {
+  exactHeartbeatMatches,
+} = require("./runReleaseCandidateHeartbeatKeeper.cjs");
 
 const reusableResearchStatus = (version) => ({
   version,
@@ -126,6 +129,10 @@ const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "candidate-deadline-captur
 const registryFile = path.join(tempDir, "candidate-registry.json");
 const statusFile = path.join(tempDir, "capture-status.json");
 const benchmarkLedgerFile = path.join(tempDir, "benchmark-ledger.json");
+const benchmarkStatusFile = path.join(tempDir, "benchmark-status.json");
+const challengerSuiteFile = path.join(tempDir, "challenger-suite.json");
+const temperatureSuiteFile = path.join(tempDir, "temperature-suite.json");
+const commonCohortSuiteFile = path.join(tempDir, "common-cohort-suite.json");
 const currentFile = path.join(tempDir, "matches-current.json");
 const historyFile = path.join(tempDir, "matches-history.json");
 const snapshotsFile = path.join(tempDir, "prediction-snapshots.json");
@@ -474,9 +481,9 @@ db.prepare(`
 );
 db.close();
 
-const runCapture = (at, extraEnv = {}) => spawnSync(
+const runCapture = (at, extraEnv = {}, extraArgs = []) => spawnSync(
   process.execPath,
-  [captureScript],
+  [captureScript, ...extraArgs],
   {
     cwd: rootDir,
     encoding: "utf8",
@@ -487,6 +494,10 @@ const runCapture = (at, extraEnv = {}) => spawnSync(
       DATASTORE_SQLITE_PATH: sqliteFile,
       CANDIDATE_PROSPECTIVE_REGISTRY_FILE: registryFile,
       BENCHMARK_PROSPECTIVE_LEDGER_FILE: benchmarkLedgerFile,
+      BENCHMARK_PROSPECTIVE_CAPTURE_STATUS_FILE: benchmarkStatusFile,
+      CANDIDATE_PROSPECTIVE_CHALLENGER_SUITE_FILE: challengerSuiteFile,
+      CANDIDATE_PROSPECTIVE_TEMPERATURE_NEUTRALIZATION_SUITE_FILE: temperatureSuiteFile,
+      CANDIDATE_COMMON_COHORT_SHADOW_G2_V2_FILE: commonCohortSuiteFile,
       CANDIDATE_PROSPECTIVE_CAPTURE_STATUS_FILE: statusFile,
       CANDIDATE_PROSPECTIVE_CURRENT_MATCHES_FILE: currentFile,
       CANDIDATE_PROSPECTIVE_HISTORY_MATCHES_FILE: historyFile,
@@ -513,14 +524,83 @@ const check = (name, fn) => {
 check("formal candidate heartbeat runs before the heavier benchmark lane", () => {
   const source = fs.readFileSync(captureScript, "utf8");
   const mainStart = source.indexOf("const main = () =>");
-  const candidateCapture = source.indexOf("const result = capture();", mainStart);
+  const candidateCapture = source.indexOf("const result = capture({ deadlineOnly });", mainStart);
   const benchmarkCapture = source.indexOf(
-    "benchmarkCaptureStatus = captureBenchmark();",
-    mainStart,
+    "benchmarkCaptureStatus = publishBenchmarkCaptureStatus(captureBenchmark());",
+    candidateCapture,
   );
   assert.ok(mainStart >= 0);
   assert.ok(candidateCapture > mainStart);
   assert.ok(benchmarkCapture > candidateCapture);
+});
+
+check("deadline-only mode commits the formal heartbeat without touching benchmark", () => {
+  const result = runCapture(
+    "2026-07-27T00:43:30.000Z",
+    {},
+    ["--deadline-only"],
+  );
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const status = JSON.parse(fs.readFileSync(statusFile, "utf8"));
+  assert.equal(status.evaluatedAt, "2026-07-27T00:43:30.000Z");
+  assert.equal(status.captureMode, "deadline-only");
+  assert.equal(status.ok, true);
+  assert.equal(status.skipped, false);
+  assert.equal(status.dueCaptureComplete, true);
+  assert.equal(status.dueAtomicComplete, true);
+  const activeRegistryFile = path.join(tempDir, "exact-active-registry.json");
+  const activeStatusFile = path.join(tempDir, "exact-active-status.json");
+  const priorRegistry = JSON.parse(fs.readFileSync(registryFile, "utf8"));
+  const priorLedger = priorRegistry.ledgers.find(
+    (ledger) => ledger.ledgerId === priorRegistry.activeLedgerId,
+  );
+  const activated = updateCandidateProspectiveLedger({
+    priorRegistry,
+    candidates: [baseline, candidate],
+    selectedCandidate: candidate,
+    robustness: {
+      version: "shadow-candidate-robustness-v1",
+      family: { inventoryHash: priorLedger.header.inventoryHashAtFreeze },
+      selectedCandidate: { id: candidate.id },
+      candidateReadyForProspectiveTest: true,
+    },
+    matches: [],
+    snapshots: [],
+    evaluatedAt: "2026-07-27T00:43:31.000Z",
+    implementationCommitment,
+    trustedCollectorCount: 2,
+  });
+  assert.equal(activated.chainValid, true);
+  writeJson(activeRegistryFile, activated.registry);
+  const activeResult = runCapture(
+    "2026-07-27T00:43:32.000Z",
+    {
+      CANDIDATE_PROSPECTIVE_REGISTRY_FILE: activeRegistryFile,
+      CANDIDATE_PROSPECTIVE_CAPTURE_STATUS_FILE: activeStatusFile,
+    },
+    ["--deadline-only"],
+  );
+  assert.equal(activeResult.status, 0, activeResult.stderr || activeResult.stdout);
+  const activeStatus = JSON.parse(fs.readFileSync(activeStatusFile, "utf8"));
+  assert.equal(
+    exactHeartbeatMatches(activeStatus, activeStatus.evaluatedAt),
+    true,
+    "the real active deadline-only producer payload must satisfy the release/worker consumer gate",
+  );
+  assert.equal(fs.existsSync(benchmarkLedgerFile), false);
+  assert.equal(fs.existsSync(benchmarkStatusFile), false);
+  for (const researchFile of [
+    challengerSuiteFile,
+    temperatureSuiteFile,
+    commonCohortSuiteFile,
+  ]) {
+    assert.equal(fs.existsSync(researchFile), false);
+    assert.equal(
+      fs.existsSync(`${researchFile}.lock`),
+      false,
+      "deadline-only must not enter a research suite lock",
+    );
+  }
 });
 
 check("match-universe preparation stays outside candidate and benchmark ledger locks", () => {
@@ -528,14 +608,14 @@ check("match-universe preparation stays outside candidate and benchmark ledger l
   for (const [name, startMarker, nextMarker, lockMarker] of [
     [
       "candidate",
-      "const capture = () => {",
+      "const capture = ({ deadlineOnly = false } = {}) => {",
       "const main = () =>",
       "return withCandidateProspectiveRegistryLock(\n    registryFile,",
     ],
     [
       "benchmark",
       "const captureBenchmark = () => {",
-      "const capture = () => {",
+      "const capture = ({ deadlineOnly = false } = {}) => {",
       "return withCandidateProspectiveRegistryLock(\n    benchmarkLedgerFile,",
     ],
   ]) {
@@ -1223,6 +1303,7 @@ check("pre-deadline heartbeat leaves the frozen denominator unchanged", () => {
   const benchmark = JSON.parse(fs.readFileSync(benchmarkLedgerFile, "utf8"));
   const active = registry.ledgers.find((ledger) => ledger.ledgerId === registry.activeLedgerId);
   assert.equal(status.dueMatches, 0);
+  assert.equal(status.captureMode, "full");
   assert.equal(status.readiness.version, "candidate-prospective-readiness-preview-v2");
   assert.equal(status.readiness.upcomingMatches, 1);
   assert.equal(status.readiness.readyNow, 1);
@@ -1239,6 +1320,24 @@ check("pre-deadline heartbeat leaves the frozen denominator unchanged", () => {
   assert.equal(status.benchmark.eventsAdded, 1);
   assert.deepEqual(benchmark.events.map((event) => event.type), ["universe"]);
   assert.equal(benchmark.events[0].createdBeforeCutoff, true);
+});
+
+check("benchmark-only refresh leaves the formal heartbeat identity untouched", () => {
+  const formalBefore = JSON.parse(fs.readFileSync(statusFile, "utf8"));
+  const result = runCapture(
+    "2026-07-27T00:44:30.000Z",
+    {},
+    ["--benchmark-only"],
+  );
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const formalAfter = JSON.parse(fs.readFileSync(statusFile, "utf8"));
+  const benchmarkStatus = JSON.parse(fs.readFileSync(benchmarkStatusFile, "utf8"));
+  assert.equal(formalAfter.evaluatedAt, formalBefore.evaluatedAt);
+  assert.equal(formalAfter.captureMode, "full");
+  assert.equal(benchmarkStatus.captureMode, "benchmark-only");
+  assert.equal(benchmarkStatus.evaluatedAt, "2026-07-27T00:44:30.000Z");
+  assert.equal(benchmarkStatus.ok, true);
+  assert.equal(benchmarkStatus.skipped, false);
 });
 
 check("deadline heartbeat waits for the fixed evidence finalization grace", () => {

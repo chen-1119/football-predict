@@ -132,4 +132,3 @@ const main = async () => {
 };
 
 main().catch((error) => fail(error?.message || String(error)));
-

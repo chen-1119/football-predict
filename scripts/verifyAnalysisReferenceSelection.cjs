@@ -22,11 +22,25 @@ const {
   selectOnSaleAnalysisReference,
 } = require("../src/services/analysisReferenceSelection.ts");
 const {
+  formatEvidenceScore,
+  getEvidenceScore,
+  getPublishedRecommendationEvidenceBreakdown,
+} = require("../src/services/predictionPresentation.ts");
+const {
   buildExternalOddsAnalysisReference,
 } = require("../src/services/externalOddsAnalysisReference.cjs");
 const {
+  buildImmutableAnalysisReferenceDecision,
+} = require("../src/services/immutableAnalysisReferenceDecision.cjs");
+const {
   isOfficialRecommendationEligible,
 } = require("../src/services/officialRecommendationEligibility.cjs");
+const {
+  buildPublicRecommendationCopy,
+} = require("../src/services/recommendationCopy.ts");
+const {
+  getAnalysisReferenceHandicapSupplement,
+} = require("../src/services/displayRecommendation.ts");
 
 const NOW = Date.parse("2026-07-22T12:00:00.000Z");
 const weakBest = {
@@ -91,6 +105,290 @@ verify("stored BEST direction is stable when a clear official market leader disa
   assert.equal(result?.displayOdds, 3.6);
   assert.match(result?.prediction.explanation.en || "", /cannot overwrite the model probability leader/);
   assert.equal(isOfficialRecommendationEligible(baseMatch(), result?.prediction, NOW), false);
+});
+
+verify("an explicit public WATCH cannot be revived as a market direction", () => {
+  const result = selectOnSaleAnalysisReference(baseMatch({
+    predictions: [{
+      ...weakBest,
+      tipCode: "WATCH",
+      tipLabel: { zh: "观察：证据不足，暂无可靠方向", en: "Watch: no reliable direction" },
+      recommendationAction: "withhold",
+      recommendationTier: "public-watch",
+    }],
+  }), { now: NOW, allowModelOnly: true });
+  assert.equal(result, undefined);
+});
+
+verify("r655 pre-cutoff model-only BEST replays the exact API-published identity", () => {
+  const publicMetrics = {
+    modelProbability: 0.499,
+    evidenceCompleteness: 1,
+    marketConsistency: "unavailable",
+    calibrationSample: 0,
+    freshnessQuality: 1,
+    freshnessObservedAt: new Date(NOW - 60_000).toISOString(),
+    freshnessAsOf: new Date(NOW - 60_000).toISOString(),
+    freshnessAgeSeconds: 36,
+    freshnessSource: "sporttery",
+    freshnessBasis: "observed-at",
+  };
+  const publishedBest = {
+    ...weakBest,
+    oddsPoolCode: undefined,
+    handicapLine: undefined,
+    tipCode: "1",
+    odds: 0,
+    recommendationTier: "model-only-watch",
+    confidence: { publicMetrics },
+  };
+  const match = baseMatch({
+    id: "r655-model-only-published-best",
+    odds: { odds1: 1.22, oddsX: 5.4, odds2: 9.8 },
+    oddsSource: "sporttery:HAD",
+    oddsUpdatedAt: new Date(NOW - 30_000).toISOString(),
+    handicapLine: "-1",
+    handicapOdds: { odds1: 2.5, oddsX: 3.25, odds2: 2.22 },
+    handicapOddsSource: "sporttery:HHAD",
+    handicapOddsUpdatedAt: new Date(NOW - 30_000).toISOString(),
+    predictions: [publishedBest],
+    predictionMeta: {
+      policyVersion: "sporttery-day-formula-trace-v74-auditable-confidence-facts",
+      generatedAt: new Date(NOW - 60_000).toISOString(),
+      dualMarketDecision: { version: "present-but-client-companion-forbidden" },
+    },
+    probabilityModel: {
+      inputSufficiency: { sufficient: true },
+      oneXTwo: { final: { home: 0.2, draw: 0.3, away: 0.5 } },
+      unifiedPosterior: {
+        generatedAt: new Date(NOW - 60_000).toISOString(),
+        selectedMarket: "MODEL_ONLY_1X2",
+        selectedCode: "1",
+        selectedProbability: 0.499,
+        policy: "observation-only-audited",
+      },
+    },
+  });
+  const result = selectOnSaleAnalysisReference(match, { now: NOW, allowModelOnly: true });
+  assert.equal(result?.source, "published-reference");
+  assert.strictEqual(result?.prediction, publishedBest,
+    "the UI must replay the API object instead of synthesizing a HAD clone");
+  assert.equal(result?.prediction.oddsPoolCode, undefined);
+  assert.equal(result?.prediction.handicapLine, undefined);
+  assert.equal(result?.prediction.tipCode, "1",
+    "a later client probability leader cannot rewrite the published direction");
+  const breakdown = getPublishedRecommendationEvidenceBreakdown(match, result?.prediction);
+  assert.equal(breakdown.modelProbability, 49.9);
+  assert.equal(breakdown.evidenceCompleteness, 100);
+  assert.equal(breakdown.marketConsistency, "unavailable");
+  assert.equal(breakdown.freshnessQuality, 100);
+  const publicCopy = buildPublicRecommendationCopy(match, result?.prediction, "zh", {
+    forceReference: true,
+  });
+  assert.equal(publicCopy.marketLabel, "模型 1X2");
+  assert.equal(publicCopy.oddsLabel, "SP --",
+    "MODEL_ONLY must not borrow the available HAD SP");
+  assert.equal(
+    getAnalysisReferenceHandicapSupplement(
+      match,
+      "zh",
+      result?.prediction,
+      result?.source,
+    ),
+    null,
+    "a published reference must never synthesize a client companion, even when dualMarketDecision exists",
+  );
+});
+
+verify("r655 pre-cutoff HHAD BEST keeps pool line direction and published facts", () => {
+  const publishedBest = {
+    ...weakBest,
+    oddsPoolCode: "HHAD",
+    handicapLine: "+3",
+    tipCode: "1",
+    odds: 2.02,
+    recommendationTier: "dynamic-evidence-medium-reference",
+    confidence: {
+      publicMetrics: {
+        modelProbability: 0.7100882247731372,
+        evidenceCompleteness: 1,
+        marketConsistency: "aligned",
+        calibrationSample: 0,
+        freshnessQuality: 1,
+        freshnessObservedAt: new Date(NOW - 60_000).toISOString(),
+        freshnessAsOf: new Date(NOW - 60_000).toISOString(),
+        freshnessAgeSeconds: 38,
+        freshnessSource: "sporttery",
+        freshnessBasis: "observed-at",
+      },
+    },
+  };
+  const match = baseMatch({
+    id: "r655-hhad-published-best",
+    handicapLine: "+1",
+    handicapOdds: { odds1: 1.44, oddsX: 4.3, odds2: 5.8 },
+    handicapOddsSource: "sporttery:HHAD",
+    handicapOddsUpdatedAt: new Date(NOW - 30_000).toISOString(),
+    predictions: [publishedBest],
+    predictionMeta: {
+      policyVersion: "sporttery-day-formula-trace-v74-auditable-confidence-facts",
+      generatedAt: new Date(NOW - 60_000).toISOString(),
+    },
+    probabilityModel: {
+      inputSufficiency: { sufficient: true },
+      oneXTwo: { final: { home: 0.1, draw: 0.2, away: 0.7 } },
+      unifiedPosterior: {
+        generatedAt: new Date(NOW - 60_000).toISOString(),
+        selectedMarket: "HHAD",
+        selectedCode: "1",
+        selectedProbability: 0.7100882247731372,
+      },
+    },
+  });
+  const result = selectOnSaleAnalysisReference(match, { now: NOW, allowModelOnly: true });
+  assert.equal(result?.source, "published-reference");
+  assert.strictEqual(result?.prediction, publishedBest);
+  assert.equal(result?.prediction.oddsPoolCode, "HHAD");
+  assert.equal(result?.prediction.handicapLine, "+3");
+  assert.equal(result?.prediction.tipCode, "1");
+  const breakdown = getPublishedRecommendationEvidenceBreakdown(match, result?.prediction);
+  assert.equal(Math.round(breakdown.modelProbability), 71);
+  assert.equal(breakdown.marketConsistency, "aligned");
+  const publicCopy = buildPublicRecommendationCopy(match, result?.prediction, "zh", {
+    forceReference: true,
+  });
+  assert.equal(publicCopy.marketLabel, "让球玩法");
+  assert.equal(publicCopy.oddsLabel, "SP --",
+    "published HHAD +3 must not borrow current official HHAD +1 SP or its stored old-line price");
+});
+
+verify("r655 pre-cutoff BEST without public metrics keeps identity and remains unavailable", () => {
+  const publishedBest = {
+    ...weakBest,
+    oddsPoolCode: undefined,
+    handicapLine: undefined,
+    tipCode: "2",
+    odds: 0,
+    recommendationTier: "model-only-watch",
+    confidence: undefined,
+  };
+  const match = baseMatch({
+    id: "r655-missing-public-facts",
+    odds: undefined,
+    oddsSource: undefined,
+    oddsUpdatedAt: undefined,
+    predictions: [publishedBest],
+    predictionMeta: {
+      policyVersion: "sporttery-day-formula-trace-v74-auditable-confidence-facts",
+      generatedAt: new Date(NOW - 60_000).toISOString(),
+    },
+  });
+  const result = selectOnSaleAnalysisReference(match, { now: NOW, allowModelOnly: true });
+  assert.equal(result?.source, "published-reference");
+  assert.strictEqual(result?.prediction, publishedBest);
+  const breakdown = getPublishedRecommendationEvidenceBreakdown(match, result?.prediction);
+  assert.equal(breakdown.modelProbability, null);
+  assert.equal(breakdown.evidenceCompleteness, null);
+  assert.equal(breakdown.marketConsistency, "unavailable");
+  assert.equal(breakdown.freshnessQuality, null);
+});
+
+verify("r655 30-row live shape preserves every API BEST identity and fact count", () => {
+  const namedRows = [
+    "周三009",
+    "周四002",
+    ...Array.from({ length: 11 }, (_, index) => `MODEL-${index + 3}`),
+    "周三010",
+    ...Array.from({ length: 16 }, (_, index) => `HAD-${index + 1}`),
+  ];
+  const selections = namedRows.map((matchNo, index) => {
+    const poolCode = index < 13 ? undefined : index === 13 ? "HHAD" : "HAD";
+    const tipCode = matchNo === "周三009" || matchNo === "周四002" || matchNo === "周三010"
+      ? "1"
+      : index % 3 === 0 ? "X" : index % 3 === 1 ? "1" : "2";
+    const publicMetrics = index < 14 ? {
+      modelProbability: index === 13 ? 0.7100882247731372 : 0.499,
+      evidenceCompleteness: 1,
+      marketConsistency: index === 13 ? "aligned" : "unavailable",
+      calibrationSample: 0,
+      freshnessQuality: 1,
+      freshnessObservedAt: new Date(NOW - 60_000).toISOString(),
+      freshnessAsOf: new Date(NOW - 60_000).toISOString(),
+      freshnessAgeSeconds: 36,
+      freshnessSource: "sporttery",
+      freshnessBasis: "observed-at",
+    } : undefined;
+    const publishedBest = {
+      ...weakBest,
+      oddsPoolCode: poolCode,
+      handicapLine: poolCode === "HHAD" ? "+3" : poolCode === "HAD" ? "0" : undefined,
+      tipCode,
+      odds: poolCode ? (poolCode === "HHAD" ? 2.02 : 1.91) : 0,
+      confidence: publicMetrics ? { publicMetrics } : undefined,
+    };
+    const match = baseMatch({
+      id: `r655-live-shape-${index + 1}`,
+      matchNo,
+      predictions: [publishedBest],
+      handicapLine: "+1",
+      handicapOdds: { odds1: 1.44, oddsX: 4.3, odds2: 5.8 },
+      handicapOddsSource: "sporttery:HHAD",
+      handicapOddsUpdatedAt: new Date(NOW - 30_000).toISOString(),
+      predictionMeta: {
+        policyVersion: "sporttery-day-formula-trace-v74-auditable-confidence-facts",
+        generatedAt: new Date(NOW - 60_000).toISOString(),
+      },
+      probabilityModel: {
+        inputSufficiency: { sufficient: true },
+        publicDecision: { directionPublished: true },
+        unifiedPosterior: {
+          generatedAt: new Date(NOW - 60_000).toISOString(),
+          selectedMarket: poolCode || "MODEL_ONLY_1X2",
+          selectedCode: tipCode,
+          selectedProbability: publicMetrics?.modelProbability || 0.49,
+        },
+      },
+    });
+    const selected = selectOnSaleAnalysisReference(match, { now: NOW, allowModelOnly: true });
+    assert.equal(selected?.source, "published-reference", `${matchNo} source`);
+    assert.strictEqual(selected?.prediction, publishedBest, `${matchNo} object identity`);
+    assert.equal(selected?.prediction.oddsPoolCode, poolCode, `${matchNo} pool identity`);
+    assert.equal(selected?.prediction.handicapLine, publishedBest.handicapLine, `${matchNo} line identity`);
+    assert.equal(selected?.prediction.tipCode, tipCode, `${matchNo} direction identity`);
+    return {
+      selected,
+      facts: getPublishedRecommendationEvidenceBreakdown(match, selected?.prediction),
+      copy: buildPublicRecommendationCopy(match, selected?.prediction, "zh", { forceReference: true }),
+    };
+  });
+
+  assert.equal(selections.filter(({ selected }) => selected?.prediction.oddsPoolCode === undefined).length, 13);
+  assert.equal(selections.filter(({ selected }) => selected?.prediction.oddsPoolCode === "HHAD").length, 1);
+  assert.equal(selections.filter(({ selected }) => selected?.prediction.oddsPoolCode === "HAD").length, 16);
+  assert.equal(selections.filter(({ facts }) => facts.modelProbability !== null).length, 14);
+  assert.equal(selections.filter(({ facts }) => facts.modelProbability === null).length, 16);
+  assert.equal(selections.filter(({ copy }) => copy.oddsLabel === "SP --").length, 14,
+    "13 MODEL_ONLY rows plus the mismatched published HHAD line must stay SP unavailable");
+});
+
+verify("r655 published replay does not bypass a closed sale cutoff", () => {
+  const publishedBest = {
+    ...weakBest,
+    confidence: { publicMetrics: { modelProbability: 0.31 } },
+  };
+  const match = baseMatch({
+    predictions: [publishedBest],
+    buyEndTime: new Date(NOW - 1).toISOString(),
+    predictionMeta: {
+      policyVersion: "sporttery-day-formula-trace-v74-auditable-confidence-facts",
+      generatedAt: new Date(NOW - 60_000).toISOString(),
+    },
+  });
+  const result = selectOnSaleAnalysisReference(match, { now: NOW, allowModelOnly: true });
+  assert.notEqual(result?.source, "published-reference");
+  assert.notStrictEqual(result?.prediction, publishedBest);
+  assert.match(result?.prediction.riskTags?.[0]?.en || "", /Sales closed; review only/);
+  assert.match(result?.prediction.explanation?.en || "", /Locked pre-cutoff data pick retained/);
 });
 
 verify("fresh inherited 500 source cannot replace a stored BEST direction", () => {
@@ -419,10 +717,51 @@ verify("fresh 500 HAD replaces an unaudited cold-start fingerprint but keeps one
     },
   });
   const result = selectOnSaleAnalysisReference(match, { now: NOW, allowModelOnly: true });
-  assert.equal(result?.source, "five-hundred-low-evidence-market");
+  assert.equal(result?.source, "five-hundred-market");
   assert.equal(result?.prediction.tipCode, "2");
   assert.equal(result?.displayOdds, 1.86);
   assert.ok(["1", "X", "2"].includes(result?.prediction.tipCode));
+});
+
+verify("an immutable weak-model data reference keeps the same direction before and after cutoff", () => {
+  const updatedAt = new Date(NOW - 60_000).toISOString();
+  const match = baseMatch({
+    id: "sporttery_immutable_away",
+    sourceMatchId: "immutable_away",
+    odds: { odds1: 1 / 0.30, oddsX: 1 / 0.29, odds2: 1 / 0.41, updatedAt },
+    oddsSource: "500.com:HAD",
+    oddsUpdatedAt: updatedAt,
+    probabilityModel: {
+      inputSufficiency: { sufficient: false },
+      oneXTwo: { final: { home: 45, draw: 30, away: 25 } },
+      unifiedPosterior: {
+        generatedAt: updatedAt,
+        selectedMarket: "MODEL_ONLY_1X2",
+        selectedCode: "1",
+        selectedProbability: 45,
+      },
+    },
+  });
+  const decision = buildImmutableAnalysisReferenceDecision(match, new Date(NOW).toISOString());
+  assert.ok(decision);
+  const boundMatch = {
+    ...match,
+    predictionMeta: {
+      ...(match.predictionMeta || {}),
+      immutableAnalysisReferenceDecision: decision,
+    },
+  };
+  const beforeCutoff = selectOnSaleAnalysisReference(boundMatch, { now: NOW, allowModelOnly: true });
+  const afterCutoff = selectOnSaleAnalysisReference(boundMatch, {
+    now: Date.parse(match.buyEndTime) + 60_000,
+    allowModelOnly: true,
+  });
+  assert.equal(beforeCutoff?.source, "immutable-five-hundred-market");
+  assert.equal(afterCutoff?.source, "immutable-five-hundred-market");
+  assert.equal(beforeCutoff?.prediction.tipCode, "2");
+  assert.equal(afterCutoff?.prediction.tipCode, "2");
+  assert.equal(afterCutoff?.prediction.recommendationAction, "reference");
+  assert.equal(isOfficialRecommendationEligible(boundMatch, afterCutoff?.prediction, NOW), false);
 });
 
 verify("no HAD odds retains the stored model direction as a low-confidence data pick without fabricating a price", () => {
@@ -618,13 +957,142 @@ verify("closed sale window replays the verified atomic HAD leg even when ordinar
   assert.equal(result?.source, "atomic-dual-market-reference");
   assert.equal(result?.prediction.tipCode, "1");
   assert.equal(result?.prediction.odds, 1.47);
-  assert.equal(result?.prediction.recommendationTier, "atomic-dual-market-bound-reference");
+  assert.equal(result?.prediction.trustScore, result?.prediction.confidence?.score,
+    "atomic reference confidence must come from the shared dynamic evidence scorer");
+  assert.equal(result?.prediction.confidence?.available, false,
+    "a bound reference without observed freshness must expose unavailable confidence");
+  assert.ok(result?.prediction.confidence?.unavailableReasons?.includes("freshness-quality-missing"));
+  assert.equal(getEvidenceScore(result?.prediction), null);
+  assert.equal(formatEvidenceScore(result?.prediction), "--");
+  assert.ok(Number(result?.rankScore) >= 500,
+    "confidence unavailability must not erase the locked reference source priority");
+  assert.equal(result?.prediction.confidence?.priceIndependent, true);
+  assert.match(result?.prediction.recommendationTier || "", /^atomic-dual-market-/);
   assert.match(result?.prediction.explanation?.en || "", /atomic decision locked HAD Home/);
   assert.ok(
     (result?.prediction.analysisItems || []).some((item) => /verified dual-market binding/.test(item?.en || "")),
     "expected the replayed direction to retain verified dual-market binding provenance"
   );
   assert.equal(isOfficialRecommendationEligible(match, result?.prediction, NOW), false);
+});
+
+verify("atomic HAD direction stays visible and SP does not impose a confidence cap", () => {
+  const decisionAt = new Date(NOW - 20 * 60 * 1000).toISOString();
+  const cutoffTime = new Date(NOW + 15 * 60 * 1000).toISOString();
+  const match = baseMatch({
+    buyEndTime: cutoffTime,
+    predictions: [{ ...weakBest, tipCode: "X", odds: 3.2 }],
+    predictionMeta: {
+      generatedAt: decisionAt,
+      dualMarketDecision: {
+        version: "dual-market-decision-binding-v1",
+        decisionSnapshotVersion: "candidate-decision-snapshot-v2",
+        sourceCycleId: "verified-long-price-cycle",
+        bindingHash: "e".repeat(64),
+        publicBindingVersion: "dual-market-public-binding-v1",
+        publicBindingHash: "f".repeat(64),
+        integrityVerified: true,
+        integrityVersion: "dual-market-decision-integrity-v1",
+        sourceClocks: {
+          decisionAt,
+          cutoffTime,
+          hadObservedAt: new Date(NOW - 25 * 60 * 1000).toISOString(),
+          hadReceivedAt: new Date(NOW - 22 * 60 * 1000).toISOString(),
+        },
+        strategyVersions: {
+          predictionPolicy: "policy-v1",
+          model: "model-v1",
+          calibration: "calibration-v1",
+        },
+        had: {
+          poolCode: "HAD",
+          code: "X",
+          odds: 3.2,
+          modelProbability: 0.61,
+          marketProbability: 0.31,
+          recommendationAction: "reference",
+        },
+      },
+    },
+  });
+  const result = selectOnSaleAnalysisReference(match, { now: NOW, allowModelOnly: true });
+  assert.equal(result?.source, "atomic-dual-market-reference");
+  assert.equal(result?.prediction.tipCode, "X", "the visible direction must not disappear");
+  assert.equal(result?.prediction.trustScore, result?.prediction.confidence?.score);
+  assert.equal(result?.prediction.confidence?.priceIndependent, true);
+  assert.match(result?.prediction.recommendationTier || "", /^atomic-dual-market-/);
+  assert.ok(!(result?.prediction.riskTags || []).some((item) => /Long-price direction/.test(item?.en || "")));
+  assert.equal(isOfficialRecommendationEligible(match, result?.prediction, NOW), false);
+});
+
+verify("verified atomic HAD direction is identical before and after cutoff when the probability leader disagrees", () => {
+  const cutoffAt = NOW + 30 * 60 * 1000;
+  const decisionAt = new Date(NOW - 2 * 60 * 1000).toISOString();
+  const cutoffTime = new Date(cutoffAt).toISOString();
+  const match = baseMatch({
+    buyEndTime: cutoffTime,
+    predictions: [{ ...weakBest, tipCode: "2" }],
+    predictionMeta: {
+      generatedAt: decisionAt,
+      dualMarketDecision: {
+        version: "dual-market-decision-binding-v1",
+        decisionSnapshotVersion: "candidate-decision-snapshot-v2",
+        sourceCycleId: "verified-visible-direction-cycle",
+        bindingHash: "c".repeat(64),
+        publicBindingVersion: "dual-market-public-binding-v1",
+        publicBindingHash: "d".repeat(64),
+        integrityVerified: true,
+        integrityVersion: "dual-market-decision-integrity-v1",
+        sourceClocks: {
+          decisionAt,
+          cutoffTime,
+          hadObservedAt: new Date(NOW - 5 * 60 * 1000).toISOString(),
+          hadReceivedAt: new Date(NOW - 3 * 60 * 1000).toISOString(),
+        },
+        strategyVersions: {
+          predictionPolicy: "policy-v1",
+          model: "model-v1",
+          calibration: "calibration-v1",
+        },
+        had: {
+          poolCode: "HAD",
+          code: "2",
+          odds: 1.83,
+          modelProbability: 0.299,
+          marketProbability: 0.41,
+          recommendationAction: "reference",
+        },
+      },
+    },
+    probabilityModel: {
+      inputSufficiency: { sufficient: true },
+      publicDecision: { directionPublished: true },
+      oneXTwo: { final: { home: 45.1, draw: 25, away: 29.9 } },
+      unifiedPosterior: {
+        generatedAt: decisionAt,
+        selectedMarket: "HAD",
+        selectedCode: "2",
+        selectedProbability: 0.299,
+        selectionPolicy: "unified-posterior",
+      },
+    },
+  });
+
+  const beforeCutoff = selectOnSaleAnalysisReference(match, {
+    now: NOW,
+    allowModelOnly: true,
+  });
+  const afterCutoff = selectOnSaleAnalysisReference(match, {
+    now: cutoffAt + 1,
+    allowModelOnly: true,
+  });
+
+  assert.equal(beforeCutoff?.source, "atomic-dual-market-reference");
+  assert.equal(afterCutoff?.source, "atomic-dual-market-reference");
+  assert.equal(beforeCutoff?.prediction.tipCode, "2");
+  assert.equal(afterCutoff?.prediction.tipCode, "2");
+  assert.equal(beforeCutoff?.prediction.odds, 1.83);
+  assert.equal(afterCutoff?.prediction.odds, 1.83);
 });
 
 verify("invalid atomic hashes cannot revive a stale post-cutoff direction", () => {
@@ -764,11 +1232,11 @@ verify("public cards retain a clear fresh official market direction", () => {
   assert.equal(result?.displayOdds, 1.56);
 });
 
-verify("current 500 payload shape is selectable before a future cutoff", () => {
+verify("500 payload shape is selectable before a future cutoff", () => {
   const currentPath = path.resolve(__dirname, "..", "public", "data", "matches-current.json");
   const payload = JSON.parse(fs.readFileSync(currentPath, "utf8"));
   const rows = Array.isArray(payload) ? payload : payload.matches || [];
-  const sourceRow = rows.find((row) => {
+  const currentSourceRow = rows.find((row) => {
     const topLevel500 = String(row.oddsSource || "").toLowerCase().startsWith("500.com:had");
     const nested500 = (
       row.externalSignals?.source === "500.com:jczq"
@@ -789,7 +1257,16 @@ verify("current 500 payload shape is selectable before a future cutoff", () => {
       buyEndTime: new Date(sourceUpdatedAt + 3.5 * 60 * 60 * 1000).toISOString(),
     }, sourceUpdatedAt + 60_000));
   });
-  assert.ok(sourceRow, "expected at least one qualifying synced 500.com current row");
+  // A healthy current slate can legitimately contain no 500.com enrichment.
+  // Keep this contract deterministic instead of making the verifier depend on
+  // whichever leagues happen to be on sale when it runs.
+  const sourceRow = currentSourceRow || baseMatch({
+    id: "five-hundred-payload-fixture",
+    oddsSource: "500.com:HAD",
+    oddsUpdatedAt: new Date(NOW - 60_000).toISOString(),
+    predictions: [],
+    probabilityModel: { unifiedPosterior: {} },
+  });
   const sourceUpdatedAt = Date.parse(
     sourceRow.oddsUpdatedAt
     || sourceRow.externalSignals?.bookmakerOdds?.had?.updatedAt
@@ -813,7 +1290,7 @@ verify("current 500 payload shape is selectable before a future cutoff", () => {
   assert.ok(["1", "X", "2"].includes(result.prediction.tipCode));
 });
 
-verify("current scheduled model rows all receive one direction and draw safeguards follow the probability leader", () => {
+verify("current scheduled rows replay a provenance-bound BEST before client probability fallbacks", () => {
   const currentPath = path.resolve(__dirname, "..", "public", "data", "matches-current.json");
   const payload = JSON.parse(fs.readFileSync(currentPath, "utf8"));
   const rows = (Array.isArray(payload) ? payload : payload.matches || [])
@@ -844,13 +1321,33 @@ verify("current scheduled model rows all receive one direction and draw safeguar
   ));
   assert.ok(safeguardRows.length > 0, "expected the current fixture to exercise draw safeguards");
   for (const { row, result } of safeguardRows) {
+    const publishedBest = (row.predictions || []).find((prediction) => (
+      prediction.marketType === "BEST"
+      && prediction.recommendationAction === "reference"
+      && ["1", "X", "2"].includes(prediction.tipCode)
+    ));
+    const provenanceBound = Boolean(
+      publishedBest
+      && String(row.predictionMeta?.policyVersion || "").trim()
+      && Number.isFinite(Date.parse(String(row.predictionMeta?.generatedAt || "")))
+    );
+    if (provenanceBound) {
+      assert.equal(result?.source, "published-reference");
+      assert.strictEqual(result?.prediction, publishedBest);
+      assert.equal(result?.prediction.tipCode, publishedBest.tipCode,
+        `${row.id} must replay the server-published BEST instead of client-side re-selection`);
+      assert.equal(result?.prediction.oddsPoolCode, publishedBest.oddsPoolCode);
+      assert.equal(result?.prediction.handicapLine, publishedBest.handicapLine);
+      continue;
+    }
     const final = row.probabilityModel.oneXTwo.final;
     const expected = final.home > final.draw && final.home > final.away
       ? "1"
       : final.away > final.home && final.away > final.draw
         ? "2"
         : "X";
-    assert.equal(result?.prediction.tipCode, expected, `${row.id} must follow oneXTwo.final instead of the safeguard code`);
+    assert.equal(result?.prediction.tipCode, expected,
+      `${row.id} without publication provenance must follow oneXTwo.final instead of the safeguard code`);
   }
 });
 
@@ -860,6 +1357,8 @@ console.log(JSON.stringify({
   scenarios: scenarios.length,
   passed: scenarios.length,
   selectionOrder: [
+    "published-reference",
+    "immutable-five-hundred-market",
     "atomic-dual-market-reference",
     "official-calibrated-market",
     "strong-model",

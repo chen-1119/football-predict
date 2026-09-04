@@ -3,6 +3,7 @@ const https = require("https");
 const path = require("path");
 const { execFileSync } = require("child_process");
 const iconv = require("iconv-lite");
+const { eventSafeExistingSignal } = require("./externalSignalEventIdentity.cjs");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const PUBLIC_DIR = path.join(PROJECT_ROOT, "public");
@@ -10,7 +11,9 @@ const DATA_DIR = path.join(PUBLIC_DIR, "data");
 const DETAILS_FILE = path.join(DATA_DIR, "five-hundred-details.json");
 const EXTERNAL_SIGNALS_FILE = path.join(DATA_DIR, "external-signals.json");
 const SOURCE_URL = process.env.FIVE_HUNDRED_JCZQ_URL || "https://trade.500.com/jczq/";
-const DETAIL_BASE_URL = String(process.env.FIVE_HUNDRED_DETAIL_BASE_URL || "https://trade.500.com").replace(/\/+$/, "");
+// Current detail links are served by odds.500.com. Rewriting them to the
+// trade host turns valid detail pages into redirects that end in 404s.
+const DETAIL_BASE_URL = String(process.env.FIVE_HUNDRED_DETAIL_BASE_URL || "https://odds.500.com").replace(/\/+$/, "");
 const MAX_MATCHES = Math.max(1, Number(process.env.FIVE_HUNDRED_DETAILS_MAX_MATCHES || 24));
 const REFRESH_MINUTES = Math.max(30, Number(process.env.FIVE_HUNDRED_DETAILS_REFRESH_MINUTES || 180));
 const NEAR_REFRESH_MINUTES = Math.max(20, Math.min(
@@ -915,8 +918,10 @@ const buildLegacyDetailSignal = (match, details, updatedAt) => {
       macauTip: analysis?.macauTip || undefined,
     },
     ...(lineupSummary ? {
-      lineups: {
-        source: "500.com",
+      projectedRoster: {
+        source: "500.com:projected-roster",
+        evidenceType: "projected-roster",
+        verified: false,
         summary: lineupSummary,
       },
     } : {}),
@@ -962,7 +967,8 @@ const hasComponentData = {
     || value.notes?.length
   )),
   macauTip: (value) => Boolean(value && (value.pick || value.summary)),
-  lineups: (value) => Boolean(value?.summary),
+  projectedRoster: (value) => Boolean(value?.summary),
+  lineups: (value) => Boolean(value?.summary || value?.homeFormation || value?.awayFormation),
   externalOdds: (value) => validTriplet(value),
 };
 
@@ -978,6 +984,8 @@ const preMatchComponentEntries = (signal) => [
   ["fiveHundred.asianHandicap", signal?.fiveHundred?.asianHandicap],
   ["fiveHundred.marketConsensus", signal?.fiveHundred?.marketConsensus],
   ["fiveHundred.macauTip", signal?.fiveHundred?.macauTip],
+  ["projectedRoster", signal?.projectedRoster],
+  ["confirmedLineup", signal?.confirmedLineup],
   ["lineups", signal?.lineups],
   ["externalOdds", signal?.externalOdds],
 ].filter(([, value]) => value && typeof value === "object");
@@ -1149,6 +1157,18 @@ const ensureSignalComponentTiming = (signal, match, fallbackObservedAt) => {
     rootTiming.sourceObservedAt,
     output.handicapLine !== undefined && output.handicapLine !== null && output.handicapLine !== "",
   );
+  output.projectedRoster = ensurePreMatchComponentTiming(
+    output.projectedRoster,
+    match,
+    rootTiming.sourceObservedAt,
+    hasComponentData.projectedRoster(output.projectedRoster),
+  );
+  output.confirmedLineup = ensurePreMatchComponentTiming(
+    output.confirmedLineup,
+    match,
+    rootTiming.sourceObservedAt,
+    hasComponentData.lineups(output.confirmedLineup),
+  );
   output.lineups = ensurePreMatchComponentTiming(
     output.lineups,
     match,
@@ -1277,8 +1297,10 @@ const buildDetailSignal = (match, details, updatedAt) => {
         : undefined,
     },
     ...(lineupSummary ? {
-      lineups: timed({
-        source: "500.com",
+      projectedRoster: timed({
+        source: "500.com:projected-roster",
+        evidenceType: "projected-roster",
+        verified: false,
         summary: lineupSummary,
       }),
     } : {}),
@@ -1346,6 +1368,7 @@ const mergeSourceName = (existingSource, nextSource) => {
 };
 
 const mergeSignal = (existing, next) => {
+  existing = eventSafeExistingSignal(existing, next);
   const resultOnly = next?.timingUpdateKind === "result-only";
   const preserveExistingObservation = Boolean(resultOnly && existing);
   const output = {
@@ -1374,6 +1397,13 @@ const mergeSignal = (existing, next) => {
     ? { ...(next.bookmakerOdds || {}), ...existing.bookmakerOdds }
     : { ...(existing?.bookmakerOdds || {}), ...(next.bookmakerOdds || {}) };
   if (existing?.injuries && !next.injuries) output.injuries = existing.injuries;
+  if (existing?.projectedRoster && next.projectedRoster) {
+    output.projectedRoster = resultOnly
+      ? { ...next.projectedRoster, ...existing.projectedRoster }
+      : { ...existing.projectedRoster, ...next.projectedRoster };
+  }
+  if (existing?.projectedRoster && !next.projectedRoster) output.projectedRoster = existing.projectedRoster;
+  if (existing?.confirmedLineup && !next.confirmedLineup) output.confirmedLineup = existing.confirmedLineup;
   if (existing?.lineups && next.lineups) {
     output.lineups = resultOnly
       ? { ...next.lineups, ...existing.lineups }
@@ -1658,6 +1688,7 @@ if (require.main === module) {
   });
 } else {
   module.exports = {
+    absoluteUrl,
     buildDetailSignal,
     buildResultMergeSignal,
     ensureSignalComponentTiming,

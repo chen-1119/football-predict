@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Football Predict runtime monitor
+
+[Timer]
+OnBootSec=2m
+OnUnitActiveSec=5m
+RandomizedDelaySec=30s
+Persistent=true
+Unit=football-monitor.service
+
+[Install]
+WantedBy=timers.target

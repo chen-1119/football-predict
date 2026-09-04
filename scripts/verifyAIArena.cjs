@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 const { DatabaseSync } = require('node:sqlite');
 const ts = require('typescript');
 
@@ -37,6 +38,7 @@ const {
   PAYLOAD_VERSION,
   STATE_VERSION,
   assignInvestments,
+  identifyLeague,
   updateAiArenaState,
 } = require('./aiArenaEngine.cjs');
 const { VERSION: DECISION_ENGINE_VERSION } = require('./aiArenaDecisionEngine.cjs');
@@ -106,6 +108,13 @@ assert.equal(arena.targetMatches, 10);
 assert.equal(arena.complete, true);
 assert.deepEqual(arena.leagueSlots.map((row) => row.count), [2, 2, 2, 2, 2]);
 assert.equal(arena.agents.length, 6);
+assert.deepEqual(arena.agents.map((row) => row.id), ['gpt', 'kimi', 'gemini', 'deepseek', 'doubao', 'qwen']);
+assert.deepEqual(
+  arena.agents.map((row) => row.name),
+  ['均衡策略', '稳健策略', '融合策略', '价值策略', '逆向策略', '纪律策略'],
+);
+assert.equal(arena.agents.every((row) => row.providerMode === 'local-strategy-simulation'), true);
+assert.equal(arena.agents.some((row) => row.id === 'claude' || row.id === 'grok'), false);
 assert.equal(arena.matches.length, 10);
 assert.ok(arena.matches.some((row) => row.forecasts.some((forecast) => forecast.projectedScore === '2-0')));
 
@@ -183,7 +192,156 @@ assert.equal(
   'cups, non-official odds, finished matches, and missing probabilities must fail closed',
 );
 
+const conflictingBrazilLeague = baseMatch('conflicting-brazil', leagues[1], 1, {
+  leagueId: 'laliga',
+  leagueName: '巴西甲级联赛',
+  leagueNameEn: 'Brazil Serie A',
+  leagueShortName: '巴甲',
+});
+assert.equal(identifyLeague(conflictingBrazilLeague), null, 'readable Brazilian league labels must override a stale La Liga id');
+assert.equal(
+  buildBigFiveSurvivalArena([conflictingBrazilLeague], nowMs).availableMatches,
+  0,
+  'the browser preview must not place a Brazilian fixture in a Big Five slot',
+);
+const conflictingChampionshipLeague = baseMatch('conflicting-championship', leagues[0], 1, {
+  leagueId: 'epl',
+  leagueName: '英格兰冠军联赛',
+  leagueNameEn: 'EFL Championship',
+  leagueShortName: '英冠',
+});
+assert.equal(identifyLeague(conflictingChampionshipLeague), null, 'readable Championship labels must override a stale EPL id');
+assert.equal(
+  buildBigFiveSurvivalArena([conflictingChampionshipLeague], nowMs).availableMatches,
+  0,
+  'the browser preview must not place a Championship fixture in a Premier League slot',
+);
+
 const lifecycleInput = fixtures.filter((row) => !row.id.endsWith('-overflow'));
+const partialInput = [
+  baseMatch('partial-laliga', leagues[1], 2, {
+    kickoffTime: '2026-08-15T20:00:00+08:00',
+    businessDate: '2026-08-15',
+  }),
+  baseMatch('partial-ligue1', leagues[4], 8, {
+    kickoffTime: '2026-08-16T20:00:00+08:00',
+    businessDate: '2026-08-16',
+  }),
+];
+const oneMatchCycle = updateAiArenaState({
+  matches: [partialInput[0]],
+  state: null,
+  now: '2026-08-14T00:00:00.000Z',
+});
+assert.equal(oneMatchCycle.payload.state, 'FORMING', 'one qualified fixture is not enough to lock a round');
+assert.equal(oneMatchCycle.payload.roundActive, false);
+assert.equal(oneMatchCycle.payload.availableMatches, 1);
+
+const earlyPartialCycle = updateAiArenaState({
+  matches: partialInput,
+  state: null,
+  now: '2026-08-13T00:00:00.000Z',
+});
+assert.equal(earlyPartialCycle.payload.state, 'FORMING', 'partial pools must keep filling before Friday');
+assert.equal(earlyPartialCycle.payload.availableMatches, 2);
+
+const partialCycle = updateAiArenaState({
+  matches: partialInput,
+  state: null,
+  now: '2026-08-14T00:00:00.000Z',
+});
+assert.equal(partialCycle.payload.version, PAYLOAD_VERSION);
+assert.equal(partialCycle.payload.state, 'LOCKED', 'two qualified fixtures must start the current round');
+assert.equal(partialCycle.payload.roundActive, true);
+assert.equal(partialCycle.payload.complete, false, 'a partial round must not claim the ten-match target is complete');
+assert.equal(partialCycle.payload.availableMatches, 2);
+assert.equal(partialCycle.payload.matches.length, 2);
+assert.equal(partialCycle.payload.rules.predictionsPerAgent, 2);
+assert.equal(partialCycle.payload.poolPolicy, 'complete-or-friday-partial-lock-v1');
+assert.equal(partialCycle.payload.partialLockAt, '2026-08-14T00:00:00+08:00');
+assert.equal(partialCycle.payload.shortfallPolicy, 'lock-current-qualified-pool-no-backfill');
+assert.equal(partialCycle.payload.dataAccess.mode, 'shared-immutable-pre-match-snapshot');
+assert.equal(partialCycle.payload.dataAccess.identicalInputs, true);
+assert.equal(partialCycle.payload.dataAccess.externalProviderCallsActive, false);
+assert.equal(partialCycle.payload.resultWriter.mode, 'trusted-official-auto-settlement');
+assert.equal(partialCycle.payload.resultWriter.officialOnly, true);
+assert.equal(partialCycle.payload.resultWriter.modelScoreWriteAllowed, false);
+assert.equal(partialCycle.payload.stakeFreedom, 'any-qualified-match-or-zero-with-risk-caps');
+assert.equal(isPublishedBigFiveSurvivalArena(partialCycle.payload), true);
+assert.deepEqual(partialCycle.payload.agents.map((row) => row.id), ['gpt', 'kimi', 'gemini', 'deepseek', 'doubao', 'qwen']);
+assert.ok(partialCycle.payload.agents.every((row) => row.forecasts.length === 2));
+
+const partialNoBackfillCycle = updateAiArenaState({
+  matches: lifecycleInput,
+  state: partialCycle.state,
+  now: '2026-08-14T00:05:00.000Z',
+});
+assert.equal(partialNoBackfillCycle.payload.availableMatches, 2, 'a locked partial round must not backfill later fixtures');
+assert.equal(partialNoBackfillCycle.payload.poolHash, partialCycle.payload.poolHash);
+assert.equal(partialNoBackfillCycle.payload.submissionRootHash, partialCycle.payload.submissionRootHash);
+
+const refreshTempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'football-ai-arena-refresh-'));
+try {
+  const refreshStoreDir = path.join(refreshTempDir, 'store');
+  const refreshPublicDir = path.join(refreshTempDir, 'public', 'data');
+  fs.mkdirSync(refreshStoreDir, { recursive: true });
+  fs.mkdirSync(refreshPublicDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(refreshStoreDir, 'ai-arena-state.json'),
+    JSON.stringify(partialNoBackfillCycle.state),
+  );
+  fs.writeFileSync(path.join(refreshPublicDir, 'matches-current.json'), JSON.stringify(partialInput));
+  fs.writeFileSync(
+    path.join(refreshPublicDir, 'ai-arena.json'),
+    JSON.stringify({ ...partialNoBackfillCycle.payload, version: 'ai-big-five-survival-v3' }),
+  );
+  const refreshed = spawnSync(process.execPath, [path.join(root, 'scripts', 'refreshAiArenaPublication.cjs')], {
+    cwd: root,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      SERVER_STORE_DIR: refreshStoreDir,
+      PUBLIC_DATA_DIR: refreshPublicDir,
+      AI_ARENA_REFRESHED_AT: '2026-08-14T00:05:00.000Z',
+    },
+  });
+  assert.equal(refreshed.status, 0, refreshed.stderr || refreshed.stdout);
+  const refreshedPayload = JSON.parse(fs.readFileSync(path.join(refreshPublicDir, 'ai-arena.json'), 'utf8'));
+  assert.equal(refreshedPayload.version, PAYLOAD_VERSION);
+  assert.equal(refreshedPayload.complete, false);
+  assert.equal(refreshedPayload.roundActive, true);
+  assert.equal(refreshedPayload.poolHash, partialCycle.payload.poolHash);
+  assert.equal(refreshedPayload.submissionRootHash, partialCycle.payload.submissionRootHash);
+  assert.deepEqual(refreshedPayload.agents.map((row) => row.id), ['gpt', 'kimi', 'gemini', 'deepseek', 'doubao', 'qwen']);
+} finally {
+  fs.rmSync(refreshTempDir, { recursive: true, force: true });
+}
+
+const partialSettledCycle = updateAiArenaState({
+  matches: partialInput.map((match, index) => ({
+    ...match,
+    source: 'sporttery',
+    status: 'FINISHED',
+    scoreHome: index === 0 ? 1 : 0,
+    scoreAway: index === 0 ? 0 : 1,
+    resultProvenance: {
+      provider: 'sporttery',
+      source: 'sporttery:official-results',
+      sourceMatchId: match.id,
+      sourceStatus: 'FINISHED',
+      official: true,
+      trusted: true,
+      scoreHome: index === 0 ? 1 : 0,
+      scoreAway: index === 0 ? 0 : 1,
+      kickoffTime: match.kickoffTime,
+      eventVersion: `partial-result-${index + 1}`,
+    },
+  })),
+  state: partialNoBackfillCycle.state,
+  now: '2026-08-14T16:00:00.000Z',
+});
+assert.equal(partialSettledCycle.payload.matches.filter((row) => row.settlement?.status === 'SETTLED').length, 2);
+
 const firstCycle = updateAiArenaState({
   matches: lifecycleInput,
   state: null,
@@ -373,14 +531,17 @@ const bundleReleaseSource = fs.readFileSync(path.join(root, 'deploy', 'light-ser
 assert.match(appSource, /path="\/ai-arena"/);
 assert.match(appSource, /path="\/ai-arena\/:matchId"/);
 assert.doesNotMatch(listSource, /AIArenaPreview/);
-assert.match(arenaSource, /AI 五大联赛生存战/);
-assert.match(arenaSource, /strategy simulation/);
+assert.match(arenaSource, /五大联赛策略模拟场/);
+assert.match(arenaSource, /这是本地策略规则模拟/);
+assert.match(arenaSource, /不是 GPT、Gemini、DeepSeek、Kimi、豆包或 Qwen 的实时 API 对战/);
+assert.match(arenaSource, /系统只按可信官方赛果自动结算/);
+assert.match(arenaSource, /周五仍不足时，至少 2 场即可锁定开赛/);
 assert.match(navbarSource, /key: 'arena'/);
-assert.match(navbarSource, /AI生存战/);
+assert.match(navbarSource, /策略模拟/);
 assert.match(arenaSource, /fetchPublishedBigFiveSurvivalArena/);
-assert.match(arenaSource, /A1–A8 专业 Agent 与总裁判/);
+assert.match(arenaSource, /A1–A7 证据模块与最终裁决/);
 assert.match(arenaSource, /平局结构分是相对信号，不是平局概率/);
-assert.match(arenaSource, /专业 Agent Brier 排行/);
+assert.match(arenaSource, /证据模块 Brier 排行/);
 assert.match(arenaSource, /自主积分/);
 assert.doesNotMatch(arenaSource, /本周三场投资之一/);
 assert.match(previewSource, /战绩\/ROI/);

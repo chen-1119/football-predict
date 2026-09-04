@@ -2,9 +2,11 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "football-predict-sync-trigger",
   "main": "src/index.js",
-  "compatibility_date": "2026-06-06",
+  "compatibility_date": "2026-08-21",
+  "compatibility_flags": ["nodejs_compat"],
   "observability": {
-    "enabled": true
+    "enabled": true,
+    "head_sampling_rate": 1
   },
   "triggers": {
     "crons": [
@@ -20,6 +22,9 @@
     "PUBLIC_DATA_CACHE_SECONDS": "20",
     "CURRENT_DATA_CACHE_SECONDS": "5",
     "HISTORY_DATA_CACHE_SECONDS": "180",
-    "STALE_DATA_SECONDS": "240"
+    "STALE_DATA_SECONDS": "600",
+    "SPORTTERY_COLLECTOR_DELIVERY_MODE": "pull",
+    "SPORTTERY_COLLECTOR_KEY_ID": "football-cloudflare-collector-20260821",
+    "SPORTTERY_COLLECTOR_KEY_FINGERPRINT": "af7e5755154c95af60e4bfec111a7de62169323f3646dd1c66f18fe0f975a1e2"
   }
 }

@@ -88,6 +88,10 @@ const benchmarkLedgerFile = path.resolve(
   process.env.BENCHMARK_PROSPECTIVE_LEDGER_FILE
   || path.join(storeDir, "model-artifacts", "benchmark-prospective-ledger.json"),
 );
+const benchmarkStatusFile = path.resolve(
+  process.env.BENCHMARK_PROSPECTIVE_CAPTURE_STATUS_FILE
+  || path.join(storeDir, "benchmark-prospective-capture-status.json"),
+);
 const challengerSuiteFile = path.resolve(
   process.env.CANDIDATE_PROSPECTIVE_CHALLENGER_SUITE_FILE
   || path.join(storeDir, "model-artifacts", "candidate-prospective-challenger-suite.json"),
@@ -203,6 +207,22 @@ const publicSnapshotPrefixMaxBytes = Math.max(
   ),
 );
 const captureStartedAt = process.hrtime.bigint();
+const DEADLINE_ONLY_FLAG = "--deadline-only";
+const BENCHMARK_ONLY_FLAG = "--benchmark-only";
+
+const captureExecutionMode = (argv = process.argv.slice(2)) => {
+  const deadlineOnly = Array.isArray(argv) && argv.includes(DEADLINE_ONLY_FLAG);
+  const benchmarkOnly = Array.isArray(argv) && argv.includes(BENCHMARK_ONLY_FLAG);
+  if (deadlineOnly && benchmarkOnly) {
+    throw new Error("deadline-only and benchmark-only are mutually exclusive");
+  }
+  return {
+    deadlineOnly,
+    benchmarkOnly,
+    mode: deadlineOnly ? "deadline-only" : benchmarkOnly ? "benchmark-only" : "full",
+  };
+};
+const captureMode = captureExecutionMode().mode;
 
 const readJson = (filePath, fallback) => {
   try {
@@ -660,7 +680,20 @@ const matchUniverse = () => {
   // Keep all current rows, but bound history to the exact persisted decision
   // identities. If SQLite is unavailable the existing full public-history
   // fallback remains fail-closed.
-  const historyIdentityValues = settlementHistoryIdentityValues();
+  const historyIdentityValues = settlementHistoryIdentityValues({
+    artifactFiles: captureMode === "deadline-only"
+      ? [registryFile]
+      : captureMode === "benchmark-only"
+        ? [benchmarkLedgerFile]
+        : [
+            registryFile,
+            benchmarkLedgerFile,
+            challengerSuiteFile,
+            temperatureNeutralizationSuiteFile,
+            legacyCommonCohortG2V1SuiteFile,
+            commonCohortG2SuiteFile,
+          ],
+  });
   const sqlite = sqliteProjectedMatchUniverse(sqliteDbPath, {
     historyIdentityValues,
   });
@@ -1768,6 +1801,22 @@ const deferredResearchStatus = (status, { dueMatches = 0 } = {}) => ({
   reuseReason: "primary-formal-ledger-priority",
 });
 
+const deadlineOnlyResearchStatus = (status, version) => ({
+  ...(status && typeof status === "object" ? status : {
+    version,
+    available: false,
+    onlineEffect: false,
+    chainValid: true,
+  }),
+  ok: true,
+  skipped: true,
+  changed: false,
+  deferredForPrimaryDeadlineCapture: true,
+  reason: "deadline-only-research-deferred",
+  reuseReason: "production-critical-formal-heartbeat-only",
+  blockers: [],
+});
+
 const settleCalibrationChallengers = ({ matches }) => {
   try {
     return withCandidateProspectiveRegistryLock(
@@ -2204,9 +2253,12 @@ const captureCommonCohortG2 = ({
 };
 
 const priorCaptureStatus = readJson(statusFile, null);
+const priorBenchmarkCaptureStatus = readJson(benchmarkStatusFile, null);
 let currentResearchSettlementInputFingerprint = null;
 let benchmarkCaptureStatus = (
-  priorCaptureStatus?.benchmark?.version === "goodwin-benchmark-deadline-capture-v1"
+  priorBenchmarkCaptureStatus?.version === "goodwin-benchmark-deadline-capture-v1"
+    ? priorBenchmarkCaptureStatus
+    : priorCaptureStatus?.benchmark?.version === "goodwin-benchmark-deadline-capture-v1"
     ? priorCaptureStatus.benchmark
     : {
         version: "goodwin-benchmark-deadline-capture-v1",
@@ -2221,11 +2273,13 @@ const writeStatus = (payload) => {
   const body = {
     version: "prospective-deadline-heartbeat-v2",
     evaluatedAt,
+    captureMode,
     captureDurationMs: Number(
       (Number(process.hrtime.bigint() - captureStartedAt) / 1_000_000).toFixed(3),
     ),
     registryFile,
     benchmarkLedgerFile,
+    benchmarkStatusFile,
     temperatureNeutralizationSuiteFile,
     commonCohortG2SuiteFile,
     sqliteDbPath,
@@ -2237,6 +2291,28 @@ const writeStatus = (payload) => {
   writeJsonAtomic(statusFile, body);
   process.stdout.write(`${JSON.stringify(body, null, 2)}\n`);
   return body;
+};
+
+const publishBenchmarkCaptureStatus = (status) => {
+  writeJsonAtomic(benchmarkStatusFile, status);
+  try {
+    withCandidateProspectiveRegistryLock(
+      registryFile,
+      () => {
+        const currentStatus = readJson(statusFile, null);
+        if (currentStatus?.version !== "prospective-deadline-heartbeat-v2") return;
+        writeJsonAtomic(statusFile, {
+          ...currentStatus,
+          benchmark: status,
+        });
+      },
+      { timeoutMs: lockTimeoutMs },
+    );
+  } catch {
+    // The sidecar is authoritative for the independent benchmark scheduler.
+    // The next formal heartbeat merges it without weakening cutoff freshness.
+  }
+  return status;
 };
 
 const captureBenchmark = () => {
@@ -2299,6 +2375,7 @@ const captureBenchmark = () => {
     return {
       version: "goodwin-benchmark-deadline-capture-v1",
       evaluatedAt,
+      captureMode: "benchmark-only",
       ok: ledgerUpdate.chainValid === true,
       skipped: false,
       changed: ledgerUpdate.changed === true,
@@ -2334,7 +2411,7 @@ const captureBenchmark = () => {
   );
 };
 
-const capture = () => {
+const capture = ({ deadlineOnly = false } = {}) => {
   // The universe is immutable for this evaluatedAt. Build it outside the
   // registry lock so the 1.22GB SQLite export lane cannot turn preparation
   // I/O into candidate-ledger lock contention.
@@ -2362,7 +2439,9 @@ const capture = () => {
       });
     }
     const { currentMatches, historyMatches, matches } = universe;
-    currentResearchSettlementInputFingerprint = researchSettlementInputFingerprint(matches);
+    currentResearchSettlementInputFingerprint = deadlineOnly
+      ? priorCaptureStatus?.researchSettlementInputFingerprint || null
+      : researchSettlementInputFingerprint(matches);
     const settlementUpdate = settleCandidateProspectiveRegistry({
       priorRegistry: registry,
       matches,
@@ -2383,20 +2462,35 @@ const capture = () => {
       registry = settlementUpdate.registry;
       ledger = activeLedgerFor(registry) || ledger;
     }
-    const initialResearchReuse = researchHeartbeatReuseDecision({
+    const initialResearchReuse = deadlineOnly ? null : researchHeartbeatReuseDecision({
       priorStatus: priorCaptureStatus,
       settlementInputFingerprint: currentResearchSettlementInputFingerprint,
       settlementChanged: settlementUpdate.changed === true,
     });
-    const challengerSettlement = initialResearchReuse.reuseSettlement
-      ? reusedResearchStatus(priorCaptureStatus.challengerSuite)
-      : settleCalibrationChallengers({ matches });
-    const temperatureNeutralizationSettlement = initialResearchReuse.reuseSettlement
-      ? reusedResearchStatus(priorCaptureStatus.temperatureNeutralizationSuite)
-      : settleTemperatureNeutralization({ matches });
-    const commonCohortG2Settlement = initialResearchReuse.reuseSettlement
-      ? reusedResearchStatus(priorCaptureStatus.commonCohortG2)
-      : settleCommonCohortG2({ matches });
+    const challengerSettlement = deadlineOnly
+      ? deadlineOnlyResearchStatus(
+          priorCaptureStatus?.challengerSuite,
+          CHALLENGER_SUITE_AUDIT_VERSION,
+        )
+      : initialResearchReuse.reuseSettlement
+        ? reusedResearchStatus(priorCaptureStatus.challengerSuite)
+        : settleCalibrationChallengers({ matches });
+    const temperatureNeutralizationSettlement = deadlineOnly
+      ? deadlineOnlyResearchStatus(
+          priorCaptureStatus?.temperatureNeutralizationSuite,
+          TEMPERATURE_NEUTRALIZATION_AUDIT_VERSION,
+        )
+      : initialResearchReuse.reuseSettlement
+        ? reusedResearchStatus(priorCaptureStatus.temperatureNeutralizationSuite)
+        : settleTemperatureNeutralization({ matches });
+    const commonCohortG2Settlement = deadlineOnly
+      ? deadlineOnlyResearchStatus(
+          priorCaptureStatus?.commonCohortG2,
+          COMMON_COHORT_G2_AUDIT_VERSION,
+        )
+      : initialResearchReuse.reuseSettlement
+        ? reusedResearchStatus(priorCaptureStatus.commonCohortG2)
+        : settleCommonCohortG2({ matches });
     const settlementEventsAdded = Number(settlementUpdate.settlementsAdded || 0);
     const driftBlockers = implementationDrift(ledger);
     if (driftBlockers.length) {
@@ -2416,7 +2510,9 @@ const capture = () => {
     }
     const atMs = Date.parse(evaluatedAt);
     const dueMatches = pendingCaptureMatches(ledger, matches, atMs);
-    const priorChallengerSuite = readJson(challengerSuiteFile, null);
+    const priorChallengerSuite = deadlineOnly
+      ? null
+      : readJson(challengerSuiteFile, null);
     const challengerDueMatchRows = uniqueMatches(
       challengerLedgersFor(priorChallengerSuite)
         .flatMap((challengerLedger) => pendingCaptureMatches(
@@ -2425,10 +2521,9 @@ const capture = () => {
           atMs,
         )),
     );
-    const priorTemperatureNeutralizationSuite = readJson(
-      temperatureNeutralizationSuiteFile,
-      null,
-    );
+    const priorTemperatureNeutralizationSuite = deadlineOnly
+      ? null
+      : readJson(temperatureNeutralizationSuiteFile, null);
     const temperatureNeutralizationDueMatchRows = uniqueMatches(
       futureOnlyMatchesForSuite(
         priorTemperatureNeutralizationSuite,
@@ -2440,7 +2535,9 @@ const capture = () => {
           )),
       ),
     );
-    const priorCommonCohortG2Suite = readJson(commonCohortG2SuiteFile, null);
+    const priorCommonCohortG2Suite = deadlineOnly
+      ? null
+      : readJson(commonCohortG2SuiteFile, null);
     const commonCohortG2EligibleMatches = priorCommonCohortG2Suite
       ? commonCohortG2InputEligibility({
           plan: priorCommonCohortG2Suite.header?.frozenPlan,
@@ -2461,7 +2558,7 @@ const capture = () => {
     // suites already have a healthy persisted state, keep the due heartbeat
     // bounded by capturing the formal ledger first instead of multiplying the
     // SQLite deadline query and write work inside one 45-second child budget.
-    const deferResearchCapture = Boolean(
+    const deferResearchCapture = deadlineOnly || Boolean(
       dueMatches.length > 0
       && initialResearchReuse.suitesHealthy
     );
@@ -2675,7 +2772,7 @@ const capture = () => {
       trustedCollectorCount,
       trustedCollectorResolver,
     });
-    const finalResearchReuse = researchHeartbeatReuseDecision({
+    const finalResearchReuse = deadlineOnly ? null : researchHeartbeatReuseDecision({
       priorStatus: priorCaptureStatus,
       settlementInputFingerprint: currentResearchSettlementInputFingerprint,
       settlementChanged: settlementUpdate.changed === true,
@@ -2683,8 +2780,10 @@ const capture = () => {
       temperatureDueMatches: temperatureNeutralizationDueMatchRows.length,
       commonCohortG2DueMatches: commonCohortG2DueMatchRows.length,
     });
-    const challengerSuite = deferResearchCapture
-      ? deferredResearchStatus(priorCaptureStatus.challengerSuite, {
+    const challengerSuite = deadlineOnly
+      ? challengerSettlement
+      : deferResearchCapture
+      ? deferredResearchStatus(priorCaptureStatus?.challengerSuite, {
           dueMatches: challengerDueMatchRows.length,
         })
       : finalResearchReuse.reuseCapture
@@ -2699,9 +2798,11 @@ const capture = () => {
           trustedCollectorCount,
           trustedCollectorResolver,
         });
-    const temperatureNeutralizationSuite = deferResearchCapture
+    const temperatureNeutralizationSuite = deadlineOnly
+      ? temperatureNeutralizationSettlement
+      : deferResearchCapture
       ? deferredResearchStatus(
-          priorCaptureStatus.temperatureNeutralizationSuite,
+          priorCaptureStatus?.temperatureNeutralizationSuite,
           { dueMatches: temperatureNeutralizationDueMatchRows.length },
         )
       : finalResearchReuse.reuseCapture
@@ -2716,8 +2817,10 @@ const capture = () => {
           trustedCollectorResolver,
           settlementStatus: temperatureNeutralizationSettlement,
         });
-    const commonCohortG2 = deferResearchCapture
-      ? deferredResearchStatus(priorCaptureStatus.commonCohortG2, {
+    const commonCohortG2 = deadlineOnly
+      ? commonCohortG2Settlement
+      : deferResearchCapture
+      ? deferredResearchStatus(priorCaptureStatus?.commonCohortG2, {
           dueMatches: commonCohortG2DueMatchRows.length,
         })
       : finalResearchReuse.reuseCapture
@@ -2835,11 +2938,44 @@ const capture = () => {
 };
 
 const main = () => {
+  const { deadlineOnly, benchmarkOnly } = captureExecutionMode();
+  if (benchmarkOnly) {
+    try {
+      benchmarkCaptureStatus = publishBenchmarkCaptureStatus(captureBenchmark());
+      process.stdout.write(`${JSON.stringify(benchmarkCaptureStatus, null, 2)}\n`);
+      if (
+        benchmarkCaptureStatus?.ok !== true
+        || benchmarkCaptureStatus?.skipped === true
+      ) process.exitCode = 1;
+    } catch (error) {
+      benchmarkCaptureStatus = {
+        version: "goodwin-benchmark-deadline-capture-v1",
+        evaluatedAt,
+        captureMode: "benchmark-only",
+        ok: false,
+        skipped: true,
+        reason: error?.code === "CANDIDATE_PROSPECTIVE_REGISTRY_LOCK_TIMEOUT"
+          ? "ledger-lock-busy"
+          : "benchmark-capture-failed",
+        error: error?.message || String(error),
+        errorCode: error?.code || null,
+        blockers: [
+          error?.code === "CANDIDATE_PROSPECTIVE_REGISTRY_LOCK_TIMEOUT"
+            ? "ledger-lock-busy"
+            : "benchmark-deadline-capture-failed",
+        ],
+      };
+      publishBenchmarkCaptureStatus(benchmarkCaptureStatus);
+      process.stderr.write(`${JSON.stringify(benchmarkCaptureStatus)}\n`);
+      process.exitCode = 1;
+    }
+    return;
+  }
   // The candidate ledger is the production-critical cutoff lane. Publish it
   // before the heavier research benchmark work so a worker timeout cannot
   // leave the formal heartbeat stale.
   try {
-    const result = capture();
+    const result = capture({ deadlineOnly });
     if (result?.ok !== true) process.exitCode = 1;
   } catch (error) {
     const lockBusy = error?.code === "CANDIDATE_PROSPECTIVE_REGISTRY_LOCK_TIMEOUT";
@@ -2875,13 +3011,21 @@ const main = () => {
     if (!lockBusy) process.exitCode = 1;
   }
 
+  // The worker and release keeper need only the exact, fail-closed cutoff
+  // heartbeat above. Benchmark collection runs through the independent
+  // benchmark-only resident lane (and remains part of the default full mode),
+  // so a large odds-history scan cannot turn a safely committed formal
+  // heartbeat into a child-process timeout.
+  if (deadlineOnly) return;
+
   try {
-    benchmarkCaptureStatus = captureBenchmark();
+    benchmarkCaptureStatus = publishBenchmarkCaptureStatus(captureBenchmark());
   } catch (error) {
     const lockBusy = error?.code === "CANDIDATE_PROSPECTIVE_REGISTRY_LOCK_TIMEOUT";
     benchmarkCaptureStatus = {
       version: "goodwin-benchmark-deadline-capture-v1",
       evaluatedAt,
+      captureMode: "benchmark-only",
       ok: lockBusy,
       skipped: true,
       reason: lockBusy ? "ledger-lock-busy" : "benchmark-capture-failed",
@@ -2889,24 +3033,17 @@ const main = () => {
       errorCode: error?.code || null,
       blockers: [lockBusy ? "ledger-lock-busy" : "benchmark-deadline-capture-failed"],
     };
-  }
-
-  const currentStatus = readJson(statusFile, null);
-  if (
-    currentStatus?.version === "prospective-deadline-heartbeat-v2"
-    && currentStatus.evaluatedAt === evaluatedAt
-  ) {
-    writeJsonAtomic(statusFile, {
-      ...currentStatus,
-      benchmark: benchmarkCaptureStatus,
-    });
+    publishBenchmarkCaptureStatus(benchmarkCaptureStatus);
   }
 };
 
 if (require.main === module) main();
 
 module.exports = {
+  BENCHMARK_ONLY_FLAG,
+  DEADLINE_ONLY_FLAG,
   candidateReadinessPreview,
+  captureExecutionMode,
   implementationDrift,
   main,
   mergeMatchUniverseSources,
