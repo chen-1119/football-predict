@@ -56,7 +56,7 @@ CANDIDATE_TRANSITION_LEASE="${RECOVERY_DIR}/candidate-transition-lease.json"
 PREBUILT_DIST_MANIFEST_RELATIVE=".release-prebuilt/dist-manifest.json"
 PREBUILT_DIST_VALIDATED=0
 CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS="${RELEASE_CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS:-900}"
-CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS="${RELEASE_CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS:-420}"
+CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS="${RELEASE_CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS:-900}"
 CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS="${RELEASE_CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS:-30}"
 CANDIDATE_REFRESH_STEP_RUNTIME_MAX_SECONDS="${RELEASE_CANDIDATE_REFRESH_STEP_RUNTIME_MAX_SECONDS:-90}"
 # Production r669 spent 125 seconds on bounded staging before the multi-gigabyte
@@ -116,6 +116,7 @@ RELEASE_SYNC_WRITE_BARRIER_UNIT=""
 RELEASE_SYNC_WRITE_BARRIER_RUNTIME_DIR=""
 RELEASE_SYNC_WRITE_BARRIER_CONTROL_FILE=""
 RELEASE_SYNC_WRITE_BARRIER_PID=""
+RELEASE_SYNC_WRITE_BARRIER_SCRIPT_ROOT=""
 RELEASE_POINTER_COMMIT_KEEPER_UNIT=""
 RELEASE_POINTER_COMMIT_KEEPER_RUNTIME_DIR=""
 RELEASE_POINTER_COMMIT_KEEPER_RUNTIME_DEVICE=""
@@ -145,6 +146,7 @@ LIVE_SQLITE_PREBUILD_READY=0
 LIVE_SQLITE_PREBUILD_ACTIVATED=0
 LIVE_SQLITE_PREBUILD_ADOPTED=0
 CANDIDATE_CAPTURE_HEARTBEAT_REFRESH_SUCCESS_EPOCH_SECONDS=""
+LIVE_SQLITE_PUBLICATION_WORKER_STARTED_AT=""
 TRANSIENT_COUNTER=0
 NEXT_TRANSIENT_UNIT=""
 
@@ -5480,18 +5482,22 @@ cleanup_release_sync_write_barrier_runtime() {
   fi
   RELEASE_SYNC_WRITE_BARRIER_RUNTIME_DIR=""
   RELEASE_SYNC_WRITE_BARRIER_CONTROL_FILE=""
+  RELEASE_SYNC_WRITE_BARRIER_SCRIPT_ROOT=""
 }
 
 cleanup_release_sync_write_barrier_owned_lock() {
   local helper_pid="$1"
+  local script_root="$RELEASE_SYNC_WRITE_BARRIER_SCRIPT_ROOT"
+  local helper_file="${script_root}/scripts/runReleaseSyncWriteBarrier.cjs"
   local lock_dir="$LIVE_STORE_DIR/locks/sync.lock"
   local output rc
   [[ "$helper_pid" =~ ^[1-9][0-9]*$ ]] || return 1
-  [ -f "$NEXT_DIR/scripts/runReleaseSyncWriteBarrier.cjs" ] \
-    && [ ! -L "$NEXT_DIR/scripts/runReleaseSyncWriteBarrier.cjs" ] || return 1
+  [ "$script_root" = "$APP_DIR" ] || [ "$script_root" = "$NEXT_DIR" ] || return 1
+  [ -f "$helper_file" ] && [ ! -L "$helper_file" ] \
+    && [ "$(stat -c '%h' -- "$helper_file")" = "1" ] || return 1
   set +e
   output="$(runuser -u football -- \
-    "$NODE_HOME/bin/node" "$NEXT_DIR/scripts/runReleaseSyncWriteBarrier.cjs" cleanup-dead-owned \
+    "$NODE_HOME/bin/node" "$helper_file" cleanup-dead-owned \
       --store-dir "$LIVE_STORE_DIR" \
       --lock-dir "$lock_dir" \
       --owner release-live-sqlite-prebuild \
@@ -6397,16 +6403,19 @@ NODE
 }
 
 start_release_sync_write_barrier() {
+  local script_root="${1:-$NEXT_DIR}"
+  local helper_file="${script_root}/scripts/runReleaseSyncWriteBarrier.cjs"
   local unit runtime_dir control_file lock_dir locks_parent main_pid attempt max_attempts
   local -a properties=()
-  [ -z "${RELEASE_SYNC_WRITE_BARRIER_UNIT:-}" ] || return 1
+  [ -z "${RELEASE_SYNC_WRITE_BARRIER_UNIT:-}" ] \
+    && [ -z "${RELEASE_SYNC_WRITE_BARRIER_SCRIPT_ROOT:-}" ] || return 1
+  [ "$script_root" = "$APP_DIR" ] || [ "$script_root" = "$NEXT_DIR" ] || return 1
   systemctl is-active --quiet "$SERVICE_NAME" || {
     printf 'release sync write barrier requires the current HTTP service to be active\n' >&2
     return 1
   }
-  [ -f "$NEXT_DIR/scripts/runReleaseSyncWriteBarrier.cjs" ] \
-    && [ ! -L "$NEXT_DIR/scripts/runReleaseSyncWriteBarrier.cjs" ] \
-    && [ "$(stat -c '%h' -- "$NEXT_DIR/scripts/runReleaseSyncWriteBarrier.cjs")" = "1" ] || return 1
+  [ -f "$helper_file" ] && [ ! -L "$helper_file" ] \
+    && [ "$(stat -c '%h' -- "$helper_file")" = "1" ] || return 1
   runtime_dir="$(mktemp -d /run/football-release-sync-barrier.XXXXXX)" || return 1
   chown football:football "$runtime_dir" || { rmdir "$runtime_dir"; return 1; }
   chmod 0700 "$runtime_dir" || { rmdir "$runtime_dir"; return 1; }
@@ -6416,6 +6425,7 @@ start_release_sync_write_barrier() {
   # this exact directory even when no transient unit was started.
   RELEASE_SYNC_WRITE_BARRIER_RUNTIME_DIR="$runtime_dir"
   RELEASE_SYNC_WRITE_BARRIER_CONTROL_FILE="$control_file"
+  RELEASE_SYNC_WRITE_BARRIER_SCRIPT_ROOT="$script_root"
   locks_parent="$LIVE_STORE_DIR/locks"
   if [ ! -e "$locks_parent" ] && [ ! -L "$locks_parent" ]; then
     install -d -o football -g football -m 0700 -- "$locks_parent" || return 1
@@ -6434,7 +6444,7 @@ start_release_sync_write_barrier() {
   RELEASE_SYNC_WRITE_BARRIER_UNIT="$unit"
 
   if ! systemd-run --quiet --collect --service-type=exec \
-    --unit="$unit" --uid=football --working-directory="$NEXT_DIR" \
+    --unit="$unit" --uid=football --working-directory="$script_root" \
     "${properties[@]}" \
     --property="KillMode=mixed" \
     --property="TimeoutStopSec=20s" \
@@ -6446,11 +6456,11 @@ start_release_sync_write_barrier() {
     --property="LimitNOFILE=1024" \
     --property="PrivateNetwork=yes" \
     --property="RestrictAddressFamilies=AF_UNIX" \
-    --property="ReadOnlyPaths=$NEXT_DIR" \
+    --property="ReadOnlyPaths=$script_root" \
     --property="ReadWritePaths=$locks_parent $runtime_dir" \
     --property="InaccessiblePaths=-/etc/football-predict -/etc/football-release -/var/lib/football-release" \
     -- env SERVER_STORE_DIR="$LIVE_STORE_DIR" \
-      "$NODE_HOME/bin/node" "$NEXT_DIR/scripts/runReleaseSyncWriteBarrier.cjs" \
+      "$NODE_HOME/bin/node" "$helper_file" \
       --store-dir "$LIVE_STORE_DIR" \
       --lock-dir "$lock_dir" \
       --control-file "$control_file" \
@@ -6479,6 +6489,26 @@ start_release_sync_write_barrier() {
   stop_release_sync_write_barrier || true
   printf 'release sync write barrier failed to acquire the canonical live sync.lock\n' >&2
   return 1
+}
+
+verify_live_sqlite_publication_identity() {
+  local script_root="${1:-$NEXT_DIR}"
+  local verifier="${script_root}/scripts/verifySqlitePublicationIdentity.cjs"
+  [ -f "$verifier" ] && [ ! -L "$verifier" ] \
+    && [ "$(stat -c '%h' -- "$verifier")" = "1" ] || return 1
+  if [ "$script_root" = "$TRUSTED_SOURCE_DIR" ]; then
+    # The wrapper deliberately keeps the signed extraction root-private. Run
+    # this metadata-only verifier as root without loading runtime secrets; the
+    # canonical barrier itself still runs as the unprivileged football user.
+    [ "$(stat -c '%U:%G:%a' -- "$verifier")" = "root:root:600" ] || return 1
+    env SERVER_STORE_DIR="$LIVE_STORE_DIR" DATASTORE_SQLITE_PATH="$LIVE_SQLITE_PATH" \
+      "$NODE_HOME/bin/node" "$verifier"
+    return
+  fi
+  [ "$script_root" = "$APP_DIR" ] || [ "$script_root" = "$NEXT_DIR" ] || return 1
+  run_as_service_user_with_runtime_env env \
+    SERVER_STORE_DIR="$LIVE_STORE_DIR" DATASTORE_SQLITE_PATH="$LIVE_SQLITE_PATH" \
+    "$NODE_HOME/bin/node" "$verifier"
 }
 
 start_release_candidate_heartbeat_keeper() {
@@ -6825,10 +6855,6 @@ fi
   && [ "$CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS" -ge 60 ] \
   && [ "$CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS" -le 900 ] \
   || { printf 'invalid candidate verifier RuntimeMaxSec: %s\n' "$CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS" >&2; exit 1; }
-[[ "$CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS" =~ ^[0-9]+$ ]] \
-  && [ "$CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS" -ge 30 ] \
-  && [ "$CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS" -le 600 ] \
-  || { printf 'invalid candidate pre-verification refresh budget: %s\n' "$CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS" >&2; exit 1; }
 [[ "$CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS" =~ ^[0-9]+$ ]] \
   && [ "$CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS" -ge 5 ] \
   && [ "$CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS" -le 120 ] \
@@ -6837,6 +6863,18 @@ fi
   && [ "$CANDIDATE_REFRESH_STEP_RUNTIME_MAX_SECONDS" -ge 30 ] \
   && [ "$CANDIDATE_REFRESH_STEP_RUNTIME_MAX_SECONDS" -le 300 ] \
   || { printf 'invalid candidate refresh step RuntimeMaxSec: %s\n' "$CANDIDATE_REFRESH_STEP_RUNTIME_MAX_SECONDS" >&2; exit 1; }
+# The protected refresh contains two configurable archive/capture units, two
+# fixed 240-second generation/affinity units, one 90-second exact-heartbeat
+# attempt, and one 90-second candidate health wait. Reject an operator override
+# that cannot cover those declared hard ceilings before lease arithmetic.
+CANDIDATE_PREVERIFY_MIN_REFRESH_BUDGET_SECONDS=$((
+  2 * CANDIDATE_REFRESH_STEP_RUNTIME_MAX_SECONDS + 2 * 240 + 90 + 90
+))
+[[ "$CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS" =~ ^[0-9]+$ ]] \
+  && [ "$CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS" -ge "$CANDIDATE_PREVERIFY_MIN_REFRESH_BUDGET_SECONDS" ] \
+  && [ "$CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS" -le 1500 ] \
+  || { printf 'invalid candidate pre-verification refresh budget: %s (minimum=%s)\n' \
+    "$CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS" "$CANDIDATE_PREVERIFY_MIN_REFRESH_BUDGET_SECONDS" >&2; exit 1; }
 [[ "$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" =~ ^[0-9]+$ ]] \
   && [ "$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" -ge 60 ] \
   && [ "$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" -le 900 ] \
@@ -6864,26 +6902,6 @@ fi
   && [ "$RELEASE_SYNC_WRITE_BARRIER_START_TIMEOUT_SECONDS" -le 1200 ] \
   && [ $((RELEASE_SYNC_WRITE_BARRIER_START_TIMEOUT_SECONDS * 1000)) -gt "$RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS" ] \
   || { printf 'invalid release sync write barrier start timeout: %s\n' "$RELEASE_SYNC_WRITE_BARRIER_START_TIMEOUT_SECONDS" >&2; exit 1; }
-# The barrier begins after candidate verification while the production worker
-# may still be finishing an official generation/SQLite publication. Account
-# for its complete bounded wait, plus the bounded live SQLite prebuild, in the
-# same transition horizon that protects refresh and verification. Neither a
-# healthy live writer nor the measured export can silently consume the final
-# betting-cutoff margin.
-CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS=$((
-  CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS +
-  (RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS + 999) / 1000 +
-  LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS
-))
-[[ "$RELEASE_HEARTBEAT_KEEPER_START_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] \
-  && [ "$RELEASE_HEARTBEAT_KEEPER_START_TIMEOUT_SECONDS" -ge 10 ] \
-  && [ "$RELEASE_HEARTBEAT_KEEPER_START_TIMEOUT_SECONDS" -le 180 ] \
-  && [ $((RELEASE_HEARTBEAT_KEEPER_START_TIMEOUT_SECONDS * 1000)) -gt "$RELEASE_HEARTBEAT_KEEPER_ATTEMPT_TIMEOUT_MS" ] \
-  || { printf 'invalid release heartbeat keeper start timeout: %s\n' "$RELEASE_HEARTBEAT_KEEPER_START_TIMEOUT_SECONDS" >&2; exit 1; }
-[[ "$WORKER_FROZEN_CHILD_DRAIN_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] \
-  && [ "$WORKER_FROZEN_CHILD_DRAIN_TIMEOUT_SECONDS" -ge 30 ] \
-  && [ "$WORKER_FROZEN_CHILD_DRAIN_TIMEOUT_SECONDS" -le 180 ] \
-  || { printf 'invalid frozen worker child drain timeout: %s\n' "$WORKER_FROZEN_CHILD_DRAIN_TIMEOUT_SECONDS" >&2; exit 1; }
 [[ "$WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] \
   && [ "$WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS" -ge 30 ] \
   && [ "$WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS" -le 1500 ] \
@@ -6903,6 +6921,30 @@ fi
   ))" ] \
   && [ "$POST_SWAP_TRANSITION_START_BUDGET_SECONDS" -le 1800 ] \
   || { printf 'invalid post-swap transition start budget: %s\n' "$POST_SWAP_TRANSITION_START_BUDGET_SECONDS" >&2; exit 1; }
+# The barrier begins after candidate verification while the production worker
+# must first finish a fresh official generation/SQLite publication. Account for
+# that complete bounded wait, the barrier acquisition, and the bounded live
+# SQLite prebuild in the same transition horizon that protects refresh and
+# verification. Preserve the larger post-swap worker/rollback reserve in place
+# of the smaller atomic margin already added by releaseTransitionLease itself.
+# Neither a healthy live writer nor the measured export can silently consume
+# the final betting-cutoff margin.
+CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS=$((
+  CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS +
+  WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS +
+  2 * ((RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS + 999) / 1000) +
+  LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS +
+  POST_SWAP_TRANSITION_START_BUDGET_SECONDS - CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS
+))
+[[ "$RELEASE_HEARTBEAT_KEEPER_START_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] \
+  && [ "$RELEASE_HEARTBEAT_KEEPER_START_TIMEOUT_SECONDS" -ge 10 ] \
+  && [ "$RELEASE_HEARTBEAT_KEEPER_START_TIMEOUT_SECONDS" -le 180 ] \
+  && [ $((RELEASE_HEARTBEAT_KEEPER_START_TIMEOUT_SECONDS * 1000)) -gt "$RELEASE_HEARTBEAT_KEEPER_ATTEMPT_TIMEOUT_MS" ] \
+  || { printf 'invalid release heartbeat keeper start timeout: %s\n' "$RELEASE_HEARTBEAT_KEEPER_START_TIMEOUT_SECONDS" >&2; exit 1; }
+[[ "$WORKER_FROZEN_CHILD_DRAIN_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] \
+  && [ "$WORKER_FROZEN_CHILD_DRAIN_TIMEOUT_SECONDS" -ge 30 ] \
+  && [ "$WORKER_FROZEN_CHILD_DRAIN_TIMEOUT_SECONDS" -le 180 ] \
+  || { printf 'invalid frozen worker child drain timeout: %s\n' "$WORKER_FROZEN_CHILD_DRAIN_TIMEOUT_SECONDS" >&2; exit 1; }
 if [ "$APP_DIR" != "/opt/football-predict" ] || [ "$NEXT_DIR" != "/opt/football-predict.next" ] \
   || [ "$BACKUP_DIR" != "/opt/football-predict.previous" ] || [ "$FAILED_DIR" != "/opt/football-predict.failed" ] \
   || [ "$RUNTIME_ENV_FILE" != "/etc/football-predict/env" ]; then
@@ -7046,8 +7088,12 @@ copy_regular_file_nofollow \
   "$BUILD_DIR/public/data/matches-current.json" \
   "$BUILD_DIR/.release-archive-evidence/matches-current.json" \
   || abort_before_swap "signed current archive evidence could not be preserved"
+start_release_sync_write_barrier "$APP_DIR" \
+  || abort_before_swap "canonical sync write barrier could not protect candidate cache snapshot"
 stop_worker_for_release_window \
   || abort_before_swap "sync worker could not be paused for candidate cache snapshot"
+verify_live_sqlite_publication_identity "$TRUSTED_SOURCE_DIR" \
+  || abort_before_swap "live SQLite publication identity mismatched after candidate cache worker pause"
 preserve_live_public_data_cache "$APP_DIR" "$BUILD_DIR" \
   || abort_before_swap "live public cache failed no-follow validation"
 install -d -o root -g root -m 0700 -- "$CANDIDATE_STORE_DIR" \
@@ -7063,6 +7109,8 @@ fi
 if [ "$candidate_ai_state_status" -eq 0 ]; then
   log "preserved immutable live AI arena state for isolated candidate publication"
 fi
+stop_release_sync_write_barrier clean \
+  || abort_before_swap "candidate cache snapshot sync barrier did not drain cleanly"
 restart_worker_if_needed \
   || abort_before_swap "sync worker could not resume during isolated candidate build"
 chown -hR "$BUILD_USER:$BUILD_USER" "$BUILD_DIR"
@@ -7161,8 +7209,12 @@ CANDIDATE_ARCHIVE_REFRESH_CAPTURED_AT="$("$NODE_HOME/bin/node" -e 'process.stdou
 # are refreshed at one fixed instant. The live worker is resumed before the
 # longer isolated candidate verifier, then paused again for the bounded live
 # SQLite prebuild and atomic handoff below.
+start_release_sync_write_barrier \
+  || abort_before_swap "canonical sync write barrier could not protect candidate readiness refresh"
 stop_worker_for_release_window \
   || abort_before_swap "sync worker could not be paused for candidate readiness"
+verify_live_sqlite_publication_identity \
+  || abort_before_swap "live SQLite publication identity mismatched after candidate readiness worker pause"
 refresh_candidate_capture_heartbeat_for_readiness "$APP_DIR" "$NEXT_DIR" \
   || abort_before_swap "candidate deadline capture heartbeat refresh failed after candidate worker freeze"
 # The worker intentionally remains live during the long build. A match can
@@ -7218,6 +7270,12 @@ wait_for_health "http://${HOST}:${CANDIDATE_PORT}" "candidate-server-refreshed" 
 # worker before the long verifier so production result publication and the
 # prospective cutoff heartbeat remain fresh. The worker is paused again only
 # for the bounded live SQLite prebuild and atomic handoff below.
+stop_release_sync_write_barrier clean \
+  || abort_before_swap "candidate readiness sync barrier did not drain cleanly"
+LIVE_SQLITE_PUBLICATION_WORKER_STARTED_AT="$("$NODE_HOME/bin/node" -e 'process.stdout.write(new Date().toISOString())')" \
+  || abort_before_swap "live SQLite publication worker marker could not be created"
+[ -n "$LIVE_SQLITE_PUBLICATION_WORKER_STARTED_AT" ] \
+  || abort_before_swap "live SQLite publication worker marker was empty"
 restart_worker_if_needed \
   || abort_before_swap "sync worker could not resume during isolated candidate verification"
 run_trusted_candidate_verifier env PATH="$PATH" HOME="$BUILD_HOME" ADMIN_TOKEN="$CANDIDATE_ADMIN_TOKEN" \
@@ -7259,6 +7317,15 @@ wait_for_health "http://${HOST}:${PORT}" "post-preswap-nginx-reload" 90 2 servic
 prepare_release_perf_access_token \
   || abort_before_swap "read-only performance session could not be prepared before sqlite snapshot"
 
+# Require a fresh official generation plus SQLite publication from the worker
+# restart above. The following canonical barrier waits out any consolidated
+# slow publication that won the lock next, closing the phase-boundary race
+# without requiring the whole slow cycle to fit a short pre-swap timeout.
+wait_for_worker_official_publish_after \
+  "$LIVE_SQLITE_PUBLICATION_WORKER_STARTED_AT" \
+  "$LIVE_STORE_DIR/sync-worker-status.json" \
+  || abort_before_swap "sync worker did not publish a fresh official SQLite generation before live prebuild"
+
 # Reassert that the timers and monitor/cleanup jobs which have remained
 # quiescent since candidate construction are still stopped before the HTTP
 # service pause. football-monitor.service has Wants=football-predict.service;
@@ -7270,6 +7337,8 @@ start_release_sync_write_barrier \
   || abort_before_swap "canonical live sync write barrier could not freeze generation commits before worker pause"
 stop_worker_for_release_window \
   || abort_before_swap "sync worker could not be paused before live SQLite prebuild"
+verify_live_sqlite_publication_identity \
+  || abort_before_swap "live SQLite publication identity changed after the final worker pause"
 pause_current_fast_watcher_for_live_prebuild \
   || abort_before_swap "current fast result watcher could not be paused for live SQLite prebuild"
 assert_live_sqlite_prebuild_capacity \

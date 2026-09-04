@@ -1036,8 +1036,10 @@ check("release transaction bounds the old watcher memory pause and restores the 
   ], "rollback delegates watcher restoration to managed unit recovery before timers and evidence cleanup");
   assertOrdered(main, [
     "quiesce_managed_maintenance_for_sqlite_snapshot",
-    "start_release_sync_write_barrier",
-    "stop_worker_for_release_window",
+    "sync worker did not publish a fresh official SQLite generation before live prebuild",
+    "canonical live sync write barrier could not freeze generation commits before worker pause",
+    "sync worker could not be paused before live SQLite prebuild",
+    "live SQLite publication identity changed after the final worker pause",
     "pause_current_fast_watcher_for_live_prebuild",
     "assert_live_sqlite_prebuild_capacity",
     "fast watcher pause guard failed after current HTTP pressure gate",
@@ -1489,6 +1491,11 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
   assert.match(bundleRelease, /readonly CANDIDATE_CAPTURE_HEARTBEAT_FRESHNESS_MAX_SECONDS=960/);
   assert.match(freshnessBody, /-le "\$CANDIDATE_CAPTURE_HEARTBEAT_FRESHNESS_MAX_SECONDS"/);
   assert.match(startBarrierBody, /runReleaseSyncWriteBarrier\.cjs/);
+  assert.match(startBarrierBody, /local script_root="\$\{1:-\$NEXT_DIR\}"/);
+  assert.match(startBarrierBody, /local helper_file="\$\{script_root\}\/scripts\/runReleaseSyncWriteBarrier\.cjs"/);
+  assert.match(startBarrierBody, /\[ "\$script_root" = "\$APP_DIR" \] \|\| \[ "\$script_root" = "\$NEXT_DIR" \]/);
+  assert.match(startBarrierBody, /--working-directory="\$script_root"/);
+  assert.match(startBarrierBody, /--property="ReadOnlyPaths=\$script_root"/);
   assert.match(startBarrierBody, /--uid=football/);
   assert.match(startBarrierBody, /--lock-dir "\$lock_dir"/);
   assert.match(startBarrierBody, /--property="PrivateNetwork=yes"/);
@@ -1506,6 +1513,13 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
   assert.match(stopBarrierBody, /stop_service_for_release_window/);
   assert.match(stopBarrierBody, /cleanup_release_sync_write_barrier_owned_lock/);
   assert.match(stopBarrierBody, /\[ ! -e "\$lock_dir" \]/);
+  assert.match(bundleRelease, /RELEASE_SYNC_WRITE_BARRIER_SCRIPT_ROOT=/);
+  assert.match(bundleRelease, /local script_root="\$RELEASE_SYNC_WRITE_BARRIER_SCRIPT_ROOT"/);
+  assert.match(bundleRelease, /"\$helper_file" cleanup-dead-owned/);
+  assertOrdered(bundleRelease, [
+    "invalid worker official publication timeout",
+    "CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS=$((",
+  ], "the official publication timeout is validated before release-horizon arithmetic");
   assert.match(barrierHelper, /require\("\.\.\/server\/syncLock\.cjs"\)/);
   assert.match(barrierHelper, /await acquireSyncLock/);
   assert.match(barrierHelper, /current\.pid === expected\.pid/);
@@ -2860,25 +2874,59 @@ check("the sync worker stays live during long isolated work and pauses only for 
   assertOrdered(main, [
     'wait_for_health "http://${HOST}:${PORT}" "preflight-before-build"',
     "managed maintenance could not be quiesced before candidate build",
+    "canonical sync write barrier could not protect candidate cache snapshot",
     "sync worker could not be paused for candidate cache snapshot",
+    "live SQLite publication identity mismatched after candidate cache worker pause",
     'preserve_live_public_data_cache "$APP_DIR" "$BUILD_DIR"',
+    "candidate cache snapshot sync barrier did not drain cleanly",
     "sync worker could not resume during isolated candidate build",
     "run_build_step npm-ci",
     "run_build_step application-build",
     'wait_for_health "http://${HOST}:${CANDIDATE_PORT}" "candidate-server"',
+    "canonical sync write barrier could not protect candidate readiness refresh",
     "sync worker could not be paused for candidate readiness",
+    "live SQLite publication identity mismatched after candidate readiness worker pause",
     "candidate deadline capture heartbeat refresh failed after candidate worker freeze",
     "candidate could not stop for archive refresh",
     "candidate-archive-refresh",
     "candidate-sqlite-affinity",
     'wait_for_health "http://${HOST}:${CANDIDATE_PORT}" "candidate-server-refreshed"',
+    "candidate readiness sync barrier did not drain cleanly",
+    "LIVE_SQLITE_PUBLICATION_WORKER_STARTED_AT=",
     "sync worker could not resume during isolated candidate verification",
     "run_trusted_candidate_verifier",
+    "sync worker did not publish a fresh official SQLite generation before live prebuild",
+    "canonical live sync write barrier could not freeze generation commits before worker pause",
     "sync worker could not be paused before live SQLite prebuild",
+    "live SQLite publication identity changed after the final worker pause",
     "candidate deadline capture heartbeat refresh failed before live SQLite prebuild",
     'prepare_live_sqlite_prebuild "$LIVE_STORE_DIR" "$LIVE_SQLITE_PATH"',
     "candidateReleaseContinuity.cjs\" snapshot",
   ], "worker resumes for isolated candidate verification and pauses only for the bounded SQLite handoff");
+  assert.equal(
+    (main.match(/start_release_sync_write_barrier/g) || []).length,
+    3,
+    "every pre-swap worker pause is protected by the canonical sync barrier",
+  );
+  assert.match(main, /start_release_sync_write_barrier "\$APP_DIR"/);
+  assert.match(main, /verify_live_sqlite_publication_identity "\$TRUSTED_SOURCE_DIR"/);
+  const publicationIdentityBody = extractFunction(
+    bundleRelease,
+    "verify_live_sqlite_publication_identity",
+  );
+  assert.match(publicationIdentityBody, /if \[ "\$script_root" = "\$TRUSTED_SOURCE_DIR" \]/);
+  assert.match(publicationIdentityBody, /root:root:600/);
+  assertOrdered(publicationIdentityBody, [
+    'env SERVER_STORE_DIR="$LIVE_STORE_DIR" DATASTORE_SQLITE_PATH="$LIVE_SQLITE_PATH"',
+    "return",
+    '[ "$script_root" = "$APP_DIR" ] || [ "$script_root" = "$NEXT_DIR" ]',
+    "run_as_service_user_with_runtime_env",
+  ], "root-private signed code runs only the metadata verifier without loading runtime secrets");
+  assert.equal(
+    (main.match(/verify_live_sqlite_publication_identity/g) || []).length,
+    3,
+    "every protected worker pause proves the live pointer and SQLite identity",
+  );
   const sealedWindow = main.slice(
     main.indexOf('prepare_live_sqlite_prebuild "$LIVE_STORE_DIR" "$LIVE_SQLITE_PATH"'),
     main.indexOf("verify_live_sqlite_prebuild_after_freeze"),
@@ -4224,9 +4272,13 @@ run_candidate_model_artifact_catchup /candidate-store /candidate-store/football.
     assert.match(refreshBody, /candidate-generation-refresh\|candidate-sqlite-affinity/);
     assert.match(refreshBody, /candidate-archive-refresh\|candidate-generation-refresh\|candidate-sqlite-affinity/);
     assert.match(bundleRelease, /RELEASE_CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS:-900/);
-    assert.match(bundleRelease, /RELEASE_CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS:-420/);
+    assert.match(bundleRelease, /RELEASE_CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS:-900/);
+    assert.match(bundleRelease, /CANDIDATE_PREVERIFY_MIN_REFRESH_BUDGET_SECONDS=\$\(\(/);
+    assert.match(bundleRelease, /2 \* CANDIDATE_REFRESH_STEP_RUNTIME_MAX_SECONDS \+ 2 \* 240 \+ 90 \+ 90/);
+    assert.match(bundleRelease, /CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS" -ge "\$CANDIDATE_PREVERIFY_MIN_REFRESH_BUDGET_SECONDS/);
     assert.match(bundleRelease, /RELEASE_CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS:-30/);
     assert.match(bundleRelease, /RELEASE_CANDIDATE_REFRESH_STEP_RUNTIME_MAX_SECONDS:-90/);
+    assert.match(bundleRelease, /RELEASE_WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS:-1500/);
     assert.match(main, /--verifier-runtime-max-seconds "\$CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS"/);
     assert.match(
       main,
@@ -4236,7 +4288,7 @@ run_candidate_model_artifact_catchup /candidate-store /candidate-store/football.
     assert.match(bundleRelease, /CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS=\$\(\(/);
     assert.match(
       bundleRelease,
-      /CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS=\$\(\([\s\S]{0,200}CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS[\s\S]{0,100}\(RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS \+ 999\) \/ 1000[\s\S]{0,80}LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS/,
+      /CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS=\$\(\([\s\S]{0,200}CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS[\s\S]{0,100}WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS[\s\S]{0,100}2 \* \(\(RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS \+ 999\) \/ 1000\)[\s\S]{0,100}LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS[\s\S]{0,100}POST_SWAP_TRANSITION_START_BUDGET_SECONDS - CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS/,
     );
     assert.match(main, /--preverify-refresh-budget-seconds "\$CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS"/);
     assert.match(main, /--atomic-swap-margin-seconds "\$CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS"/);
@@ -4250,12 +4302,15 @@ run_candidate_model_artifact_catchup /candidate-store /candidate-store/football.
       "CANDIDATE_ARCHIVE_REFRESH_CAPTURED_AT=",
       'releaseTransitionLease.cjs" create',
       "candidate transition horizon is unsafe before worker pause",
+      "canonical sync write barrier could not protect candidate readiness refresh",
       "sync worker could not be paused for candidate readiness",
       "candidate deadline capture heartbeat refresh failed after candidate worker freeze",
       'ARCHIVE_MIGRATION_CAPTURED_AT="$CANDIDATE_ARCHIVE_REFRESH_CAPTURED_AT"',
       'CANDIDATE_PROSPECTIVE_CAPTURE_EVALUATED_AT="$CANDIDATE_ARCHIVE_REFRESH_CAPTURED_AT"',
       "run_trusted_candidate_verifier",
       "cleanup_build_tree",
+      "sync worker did not publish a fresh official SQLite generation before live prebuild",
+      "live SQLite publication identity changed after the final worker pause",
       'write_recovery_phase "swap-starting"',
       'releaseTransitionLease.cjs" verify',
       "candidate transition crossed or atomic swap margin expired",

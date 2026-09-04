@@ -1452,10 +1452,52 @@ const run = () => {
       && bundleReleaseScript.includes("nginx -t || return 1")
   });
 
-  const writeBarrier = bundleReleaseScript.indexOf("start_release_sync_write_barrier");
+  const cacheSnapshotBarrier = bundleReleaseScript.indexOf(
+    "canonical sync write barrier could not protect candidate cache snapshot",
+  );
+  const cacheSnapshotWorkerStop = bundleReleaseScript.indexOf(
+    "sync worker could not be paused for candidate cache snapshot",
+    cacheSnapshotBarrier,
+  );
+  const cacheSnapshotIdentityGate = bundleReleaseScript.indexOf(
+    "live SQLite publication identity mismatched after candidate cache worker pause",
+    cacheSnapshotWorkerStop,
+  );
+  const cacheSnapshotBarrierDrain = bundleReleaseScript.indexOf(
+    "candidate cache snapshot sync barrier did not drain cleanly",
+    cacheSnapshotIdentityGate,
+  );
+  const candidateRefreshBarrier = bundleReleaseScript.indexOf(
+    "canonical sync write barrier could not protect candidate readiness refresh",
+    cacheSnapshotBarrierDrain,
+  );
+  const candidateRefreshWorkerStop = bundleReleaseScript.indexOf(
+    "sync worker could not be paused for candidate readiness",
+    candidateRefreshBarrier,
+  );
+  const candidateRefreshIdentityGate = bundleReleaseScript.indexOf(
+    "live SQLite publication identity mismatched after candidate readiness worker pause",
+    candidateRefreshWorkerStop,
+  );
+  const candidateRefreshBarrierDrain = bundleReleaseScript.indexOf(
+    "candidate readiness sync barrier did not drain cleanly",
+    candidateRefreshIdentityGate,
+  );
+  const publicationOfficialGate = bundleReleaseScript.indexOf(
+    "sync worker did not publish a fresh official SQLite generation before live prebuild",
+    candidateRefreshBarrierDrain,
+  );
+  const writeBarrier = bundleReleaseScript.indexOf(
+    "canonical live sync write barrier could not freeze generation commits before worker pause",
+    publicationOfficialGate,
+  );
   const finalWorkerStop = bundleReleaseScript.indexOf(
     "sync worker could not be paused before live SQLite prebuild",
     writeBarrier,
+  );
+  const publicationAffinityGate = bundleReleaseScript.indexOf(
+    "live SQLite publication identity changed after the final worker pause",
+    finalWorkerStop,
   );
   const capacityGate = bundleReleaseScript.indexOf(
     "live SQLite prebuild capacity gate rejected the release host",
@@ -1513,9 +1555,17 @@ const run = () => {
     && bundleReleaseScript.includes('run_prebuild_stage export')
     && bundleReleaseScript.includes('SQLITE_EXPORT_REQUIRE_ACTIVE_GENERATION_FAST_PATH=1')
     && bundleReleaseScript.includes('validatePayloadSemantics: false')
+    && bundleReleaseScript.includes('RELEASE_WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS:-1500')
+    && bundleReleaseScript.includes('RELEASE_CANDIDATE_PREVERIFY_REFRESH_BUDGET_SECONDS:-900')
+    && bundleReleaseScript.includes('CANDIDATE_PREVERIFY_MIN_REFRESH_BUDGET_SECONDS=$((')
+    && bundleReleaseScript.includes('POST_SWAP_TRANSITION_START_BUDGET_SECONDS - CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS')
+    && bundleReleaseScript.includes('LIVE_SQLITE_PUBLICATION_WORKER_STARTED_AT=')
+    && bundleReleaseScript.includes('verify_live_sqlite_publication_identity()')
+    && bundleReleaseScript.includes('RELEASE_SYNC_WRITE_BARRIER_SCRIPT_ROOT=')
+    && bundleReleaseScript.includes('local script_root="${1:-$NEXT_DIR}"')
     && releasePrebuildPolicy.includes('release-live-sqlite-prebuild-policy-v4')
     && bundleReleaseScript.includes(
-      '(RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS + 999) / 1000 +\n  LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS'
+      'WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS +\n  2 * ((RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS + 999) / 1000) +\n  LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS +\n  POST_SWAP_TRANSITION_START_BUDGET_SECONDS - CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS'
     )
     && bundleReleaseScript.includes('run_prebuild_stage quick_check')
     && bundleReleaseScript.includes('run_prebuild_stage seal')
@@ -1526,9 +1576,19 @@ const run = () => {
     && envExample.includes('RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB=1152')
     && envExample.includes('RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_MEMORY_CURRENT_MIB=640')
     && envExample.includes('RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_WORKING_SET_MIB=512')
-    && writeBarrier >= 0
+    && cacheSnapshotBarrier >= 0
+    && cacheSnapshotWorkerStop > cacheSnapshotBarrier
+    && cacheSnapshotIdentityGate > cacheSnapshotWorkerStop
+    && cacheSnapshotBarrierDrain > cacheSnapshotIdentityGate
+    && candidateRefreshBarrier > cacheSnapshotBarrierDrain
+    && candidateRefreshWorkerStop > candidateRefreshBarrier
+    && candidateRefreshIdentityGate > candidateRefreshWorkerStop
+    && candidateRefreshBarrierDrain > candidateRefreshIdentityGate
+    && publicationOfficialGate > candidateRefreshBarrierDrain
+    && writeBarrier > publicationOfficialGate
     && finalWorkerStop > writeBarrier
-    && capacityGate > finalWorkerStop
+    && publicationAffinityGate > finalWorkerStop
+    && capacityGate > publicationAffinityGate
     && pressureGate > capacityGate
     && performanceCredentialCleanup > pressureGate
     && postPressureCapacityGate > performanceCredentialCleanup
