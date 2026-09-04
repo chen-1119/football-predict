@@ -3399,11 +3399,119 @@ setInterval(() => {}, 1000);
     assert.match(captureRefreshBody, /--kill-after-ms "\$CANDIDATE_CAPTURE_REFRESH_KILL_AFTER_MS"/);
     assert.match(captureRefreshBody, /CANDIDATE_CAPTURE_REFRESH_TIMEOUT_EXIT_CODE/);
     assertOrdered(captureRefreshBody, [
+      'if [ "$capture_rc" -ne 0 ]',
       'if [ "$capture_rc" -eq "$CANDIDATE_CAPTURE_REFRESH_TIMEOUT_EXIT_CODE" ]',
-      'return "$CANDIDATE_CAPTURE_REFRESH_TIMEOUT_EXIT_CODE"',
-      'if [ "$capture_rc" -eq 0 ]',
+      'return "$capture_rc"',
       "validate_candidate_capture_heartbeat_status",
     ], "timeout exits fail-closed before any old heartbeat can be validated");
+    assert.match(captureRefreshBody, /candidate deadline capture heartbeat refresh process failed \(exit=%s\)/);
+    assertOrdered(captureRefreshBody, [
+      'if [ "$capture_rc" -ne 0 ]',
+      'return "$capture_rc"',
+      "validate_candidate_capture_heartbeat_status",
+      'if [ "$attempt" -ge "$max_attempts" ]',
+      "candidate deadline capture heartbeat refresh retry",
+      "sleep \"$retry_delay_seconds\"",
+    ], "only an exit-zero capture with unavailable exact status can enter the retry path");
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+check("direct release heartbeat refresh fails process errors once and retries only exact-status misses", () => {
+  const refreshBody = extractFunction(
+    readText(bundleReleasePath),
+    "refresh_candidate_capture_heartbeat_for_readiness",
+  );
+  if (process.platform !== "linux" || !fs.existsSync("/bin/bash")) return;
+
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "release-refresh-policy-"));
+  try {
+    const activeDir = path.join(tempDir, "active");
+    const candidateDir = path.join(tempDir, "candidate");
+    const liveDir = path.join(tempDir, "live");
+    const compatDir = path.join(tempDir, "compat");
+    const runtimeEnv = path.join(tempDir, "runtime.env");
+    fs.mkdirSync(path.join(activeDir, "scripts"), { recursive: true });
+    fs.mkdirSync(path.join(activeDir, "deploy", "light-server"), { recursive: true });
+    fs.mkdirSync(path.join(candidateDir, "scripts"), { recursive: true });
+    fs.mkdirSync(liveDir, { recursive: true });
+    fs.mkdirSync(compatDir, { recursive: true });
+    fs.writeFileSync(path.join(activeDir, "scripts", "captureCandidateProspectiveDeadline.cjs"), "module.exports = {};\n");
+    fs.writeFileSync(path.join(activeDir, "deploy", "light-server", "collector-trust-registry.json"), "{}\n");
+    fs.writeFileSync(path.join(candidateDir, "scripts", "runReleaseCandidateHeartbeatKeeper.cjs"), "module.exports = {};\n");
+    fs.writeFileSync(runtimeEnv, "NODE_ENV=production\n");
+
+    const harness = `
+set -euo pipefail
+SCENARIO="$1"
+APP_DIR="$2"
+NEXT_DIR="$3"
+LIVE_STORE_DIR="$4"
+LEGACY_TEST_COMPAT_DIR="$5"
+RUNTIME_ENV_FILE="$6"
+NODE_HOME="$7"
+LIVE_SQLITE_PATH="$LIVE_STORE_DIR/football.db"
+SWAP_STARTED=0
+RELEASE_CANDIDATE_CAPTURE_REFRESH_ATTEMPTS=3
+RELEASE_CANDIDATE_CAPTURE_REFRESH_RETRY_SECONDS=1
+RELEASE_CANDIDATE_CAPTURE_LOCK_TIMEOUT_MS=10000
+CANDIDATE_CAPTURE_REFRESH_ATTEMPT_TIMEOUT_MS=90000
+CANDIDATE_CAPTURE_REFRESH_KILL_AFTER_MS=5000
+CANDIDATE_CAPTURE_REFRESH_TIMEOUT_EXIT_CODE=124
+CANDIDATE_CAPTURE_HEARTBEAT_REFRESH_SUCCESS_EPOCH_SECONDS=""
+LEGACY_DEADLINE_COMPAT_RUNTIME_DIR=""
+LEGACY_DEADLINE_COMPAT_RUNTIME_INITIALIZED=0
+RUNS=0
+MODERN_RUNS=0
+VALIDATIONS=0
+SLEEPS=0
+CLEANUPS=0
+active_candidate_capture_supports_deadline_only() { return 1; }
+prepare_legacy_deadline_compat_runtime() {
+  LEGACY_DEADLINE_COMPAT_RUNTIME_DIR="$LEGACY_TEST_COMPAT_DIR"
+  LEGACY_DEADLINE_COMPAT_RUNTIME_INITIALIZED=1
+}
+cleanup_legacy_deadline_compat_runtime() { CLEANUPS=$((CLEANUPS + 1)); return 0; }
+run_legacy_candidate_capture_refresh() {
+  RUNS=$((RUNS + 1))
+  [ "$SCENARIO" != "process-error" ] || return 7
+  return 0
+}
+run_as_service_user_with_runtime_env() { MODERN_RUNS=$((MODERN_RUNS + 1)); return 88; }
+validate_candidate_capture_heartbeat_status() {
+  VALIDATIONS=$((VALIDATIONS + 1))
+  [ "$SCENARIO" != "exact-retry" ] || [ "$VALIDATIONS" -ge 2 ]
+}
+log() { :; }
+sleep() { SLEEPS=$((SLEEPS + 1)); }
+refresh_candidate_capture_heartbeat_for_readiness() {
+${refreshBody}
+}
+set +e
+refresh_candidate_capture_heartbeat_for_readiness "$APP_DIR" "$NEXT_DIR"
+rc=$?
+set -e
+printf '%s %s %s %s %s %s\n' "$rc" "$RUNS" "$VALIDATIONS" "$SLEEPS" "$CLEANUPS" "$MODERN_RUNS"
+`;
+    const nodeHome = path.dirname(path.dirname(process.execPath));
+    const runScenario = (scenario) => spawnSync("/bin/bash", [
+      "-s", "--", scenario, activeDir, candidateDir, liveDir, compatDir, runtimeEnv, nodeHome,
+    ], {
+      input: harness,
+      encoding: "utf8",
+      timeout: 20_000,
+    });
+
+    const processError = runScenario("process-error");
+    assert.equal(processError.status, 0, processError.stderr || processError.stdout);
+    assert.equal(processError.stdout.trim(), "7 1 0 0 1 0");
+    assert.match(processError.stderr, /refresh process failed \(exit=7\)/);
+
+    const exactRetry = runScenario("exact-retry");
+    assert.equal(exactRetry.status, 0, exactRetry.stderr || exactRetry.stdout);
+    assert.equal(exactRetry.stdout.trim(), "0 2 2 1 1 0");
+    assert.doesNotMatch(exactRetry.stderr, /refresh process failed/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
@@ -3565,6 +3673,10 @@ check("pre-swap legacy deadline capture isolates only non-formal artifacts in an
     bundleRelease,
     "cleanup_legacy_deadline_compat_runtime",
   );
+  const legacyRunnerBody = extractFunction(
+    bundleRelease,
+    "run_legacy_candidate_capture_refresh",
+  );
   const refreshBody = extractFunction(
     bundleRelease,
     "refresh_candidate_capture_heartbeat_for_readiness",
@@ -3631,18 +3743,48 @@ check("pre-swap legacy deadline capture isolates only non-formal artifacts in an
     /^\s*return\s*$/mu,
     "compatibility cleanup must not use a bare return that inherits an EXIT trap status",
   );
+  assert.match(legacyRunnerBody, /systemd-run --quiet --wait --collect --pipe --service-type=exec/);
+  assert.match(legacyRunnerBody, /next_transient_unit legacy-deadline-capture-refresh/);
+  assert.match(legacyRunnerBody, /--uid=football/);
+  assert.match(legacyRunnerBody, /--property="PrivateNetwork=yes"/);
+  assert.match(legacyRunnerBody, /--property="MemoryHigh=4600M"/);
+  assert.match(legacyRunnerBody, /--property="MemoryMax=5200M"/);
+  assert.match(legacyRunnerBody, /--property="MemorySwapMax=1G"/);
+  assert.match(legacyRunnerBody, /--property="OOMPolicy=stop"/);
+  assert.match(legacyRunnerBody, /--property="OOMScoreAdjust=500"/);
+  assert.match(legacyRunnerBody, /--property="RuntimeMaxSec=110s"/);
+  assert.match(legacyRunnerBody, /--property="ReadOnlyPaths=\$runtime_root \$validator_root \$RUNTIME_ENV_FILE"/);
+  assert.match(legacyRunnerBody, /--property="ReadWritePaths=\$LIVE_STORE_DIR \$LEGACY_DEADLINE_COMPAT_RUNTIME_DIR"/);
+  assert.match(legacyRunnerBody, /NODE_OPTIONS=--max-old-space-size=4096 MALLOC_ARENA_MAX=2/);
+  assert.match(legacyRunnerBody, /--timeout-ms "\$CANDIDATE_CAPTURE_REFRESH_ATTEMPT_TIMEOUT_MS"/);
+  assert.match(legacyRunnerBody, /--kill-after-ms "\$CANDIDATE_CAPTURE_REFRESH_KILL_AFTER_MS"/);
+  assert.match(legacyRunnerBody, /assert_transient_unit_cleared "\$unit" \|\| return 1/);
+  assert.doesNotMatch(legacyRunnerBody, /MemoryHigh=1600M|MemoryMax=2200M/);
   assertOrdered(refreshBody, [
     'active_candidate_capture_supports_deadline_only "$capture_script"',
     'if [ "$capability_rc" -eq 1 ]',
     '[ "${SWAP_STARTED:-0}" = "0" ]',
     "prepare_legacy_deadline_compat_runtime",
     "capture_compat_env=(",
-    "run_as_service_user_with_runtime_env env",
+    "legacy_capture=1",
+    'if [ "$legacy_capture" = "1" ]',
+    "run_legacy_candidate_capture_refresh",
     '"${capture_compat_env[@]}"',
+  ], "legacy compatibility capture is selected before entering its dedicated cgroup");
+  assertOrdered(legacyRunnerBody, [
+    'ReadOnlyPaths=$runtime_root $validator_root $RUNTIME_ENV_FILE',
+    'ReadWritePaths=$LIVE_STORE_DIR $LEGACY_DEADLINE_COMPAT_RUNTIME_DIR',
+    "NODE_OPTIONS=--max-old-space-size=4096 MALLOC_ARENA_MAX=2",
     'SERVER_STORE_DIR="$LIVE_STORE_DIR"',
     'DATASTORE_SQLITE_PATH="$LIVE_SQLITE_PATH"',
     'SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH="$collector_trust_registry"',
-  ], "legacy capture isolation is selected before the unchanged active formal inputs");
+  ], "legacy cgroup keeps the active formal inputs while redirecting only compatibility outputs");
+  assertOrdered(refreshBody, [
+    'else\n      run_as_service_user_with_runtime_env env',
+    'SERVER_STORE_DIR="$LIVE_STORE_DIR"',
+    'DATASTORE_SQLITE_PATH="$LIVE_SQLITE_PATH"',
+    'SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH="$collector_trust_registry"',
+  ], "modern deadline-only capture remains on its original runtime path");
   for (const variable of [
     "BENCHMARK_PROSPECTIVE_LEDGER_FILE",
     "BENCHMARK_PROSPECTIVE_CAPTURE_STATUS_FILE",

@@ -4886,8 +4886,65 @@ cleanup_legacy_deadline_compat_runtime() {
   LEGACY_DEADLINE_COMPAT_RUNTIME_INITIALIZED=0
 }
 
+run_legacy_candidate_capture_refresh() {
+  local runtime_root="$1"
+  local validator_root="$2"
+  local matcher_module="$3"
+  local capture_script="$4"
+  local collector_trust_registry="$5"
+  local capture_lock_timeout_ms="$6"
+  local evaluated_at="$7"
+  local unit rc
+  shift 7
+  local -a capture_compat_env=("$@")
+  local -a properties=()
+
+  # A legacy producer ignores --deadline-only and traverses the retained
+  # research corpus. Keep that one compatibility execution in a separate,
+  # finite cgroup with enough V8 headroom for the observed corpus; the modern
+  # formal-only producer remains on the normal 1536 MiB path.
+  [ "${SWAP_STARTED:-0}" = "0" ] \
+    && [ -n "${LEGACY_DEADLINE_COMPAT_RUNTIME_DIR:-}" ] \
+    && [ "${LEGACY_DEADLINE_COMPAT_RUNTIME_INITIALIZED:-0}" = "1" ] \
+    || return 1
+  next_transient_unit legacy-deadline-capture-refresh
+  unit="$NEXT_TRANSIENT_UNIT"
+  mapfile -t properties < <(transient_build_properties)
+  set +e
+  systemd-run --quiet --wait --collect --pipe --service-type=exec \
+    --unit="$unit" --uid=football --working-directory="$runtime_root" \
+    "${properties[@]}" \
+    --property="PrivateNetwork=yes" \
+    --property="MemoryHigh=4600M" \
+    --property="MemoryMax=5200M" \
+    --property="MemorySwapMax=1G" \
+    --property="OOMPolicy=stop" \
+    --property="OOMScoreAdjust=500" \
+    --property="RuntimeMaxSec=110s" \
+    --property="ReadOnlyPaths=$runtime_root $validator_root $RUNTIME_ENV_FILE" \
+    --property="ReadWritePaths=$LIVE_STORE_DIR $LEGACY_DEADLINE_COMPAT_RUNTIME_DIR" \
+    --property="InaccessiblePaths=-/etc/football-release -/var/lib/football-release" \
+    -- /bin/bash -c 'set -a; . "$1"; set +a; shift; exec "$@"' bash "$RUNTIME_ENV_FILE" \
+      env NODE_OPTIONS=--max-old-space-size=4096 MALLOC_ARENA_MAX=2 \
+      "${capture_compat_env[@]}" \
+      SERVER_STORE_DIR="$LIVE_STORE_DIR" \
+      DATASTORE_SQLITE_PATH="$LIVE_SQLITE_PATH" \
+      SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH="$collector_trust_registry" \
+      CANDIDATE_PROSPECTIVE_CAPTURE_LOCK_TIMEOUT_MS="$capture_lock_timeout_ms" \
+      CANDIDATE_PROSPECTIVE_CAPTURE_EVALUATED_AT="$evaluated_at" \
+      "$NODE_HOME/bin/node" "$matcher_module" --capture-once \
+        --capture-script "$capture_script" \
+        --working-directory "$runtime_root" \
+        --timeout-ms "$CANDIDATE_CAPTURE_REFRESH_ATTEMPT_TIMEOUT_MS" \
+        --kill-after-ms "$CANDIDATE_CAPTURE_REFRESH_KILL_AFTER_MS"
+  rc="$?"
+  set -e
+  assert_transient_unit_cleared "$unit" || return 1
+  return "$rc"
+}
+
 refresh_candidate_capture_heartbeat_for_readiness() {
-  local evaluated_at status_file runtime_root validator_root expected_validator_root validation_mode capture_script matcher_module collector_trust_registry attempt max_attempts retry_delay_seconds capture_lock_timeout_ms success_epoch_seconds capture_rc capability_rc
+  local evaluated_at status_file runtime_root validator_root expected_validator_root validation_mode capture_script matcher_module collector_trust_registry attempt max_attempts retry_delay_seconds capture_lock_timeout_ms success_epoch_seconds capture_rc capability_rc legacy_capture
   local -a capture_compat_env=()
   runtime_root="${1:-}"
   validator_root="${2:-}"
@@ -4941,6 +4998,7 @@ refresh_candidate_capture_heartbeat_for_readiness() {
   # research/benchmark lanes. Isolate only those non-formal outputs; the live
   # registry, exact heartbeat, SQLite, current data and trust registry stay active.
   capability_rc=0
+  legacy_capture=0
   active_candidate_capture_supports_deadline_only "$capture_script" || capability_rc="$?"
   if [ "$capability_rc" -eq 1 ]; then
     [ "${SWAP_STARTED:-0}" = "0" ] || {
@@ -4959,6 +5017,7 @@ refresh_candidate_capture_heartbeat_for_readiness() {
       "CANDIDATE_COMMON_COHORT_SHADOW_G2_FILE=${LEGACY_DEADLINE_COMPAT_RUNTIME_DIR}/candidate-common-cohort-shadow-g2.json"
       "CANDIDATE_COMMON_COHORT_SHADOW_G2_V2_FILE=${LEGACY_DEADLINE_COMPAT_RUNTIME_DIR}/candidate-common-cohort-shadow-g2-v2.json"
     )
+    legacy_capture=1
     log "active candidate capture is legacy; isolate non-formal research and benchmark artifacts for the pre-swap exact heartbeat"
   elif [ "$capability_rc" -ne 0 ]; then
     printf 'active candidate deadline-only capability probe failed closed (exit=%s)\n' "$capability_rc" >&2
@@ -4975,40 +5034,50 @@ refresh_candidate_capture_heartbeat_for_readiness() {
     evaluated_at="$("$NODE_HOME/bin/node" -e 'process.stdout.write(new Date().toISOString())')" \
       || { cleanup_legacy_deadline_compat_runtime || true; return 1; }
     capture_rc=0
-    run_as_service_user_with_runtime_env env \
-      "${capture_compat_env[@]}" \
-      SERVER_STORE_DIR="$LIVE_STORE_DIR" \
-      DATASTORE_SQLITE_PATH="$LIVE_SQLITE_PATH" \
-      SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH="$collector_trust_registry" \
-      CANDIDATE_PROSPECTIVE_CAPTURE_LOCK_TIMEOUT_MS="$capture_lock_timeout_ms" \
-      CANDIDATE_PROSPECTIVE_CAPTURE_EVALUATED_AT="$evaluated_at" \
-      "$NODE_HOME/bin/node" "$matcher_module" --capture-once \
-        --capture-script "$capture_script" \
-        --working-directory "$runtime_root" \
-        --timeout-ms "$CANDIDATE_CAPTURE_REFRESH_ATTEMPT_TIMEOUT_MS" \
-        --kill-after-ms "$CANDIDATE_CAPTURE_REFRESH_KILL_AFTER_MS" \
-      || capture_rc="$?"
-    if [ "$capture_rc" -eq "$CANDIDATE_CAPTURE_REFRESH_TIMEOUT_EXIT_CODE" ]; then
-      printf 'candidate deadline capture heartbeat refresh timed out after %sms TERM plus %sms KILL grace (exit=%s)\n' \
-        "$CANDIDATE_CAPTURE_REFRESH_ATTEMPT_TIMEOUT_MS" \
-        "$CANDIDATE_CAPTURE_REFRESH_KILL_AFTER_MS" \
-        "$CANDIDATE_CAPTURE_REFRESH_TIMEOUT_EXIT_CODE" >&2
-      cleanup_legacy_deadline_compat_runtime || return 1
-      return "$CANDIDATE_CAPTURE_REFRESH_TIMEOUT_EXIT_CODE"
+    if [ "$legacy_capture" = "1" ]; then
+      run_legacy_candidate_capture_refresh \
+        "$runtime_root" "$validator_root" "$matcher_module" "$capture_script" \
+        "$collector_trust_registry" "$capture_lock_timeout_ms" "$evaluated_at" \
+        "${capture_compat_env[@]}" \
+        || capture_rc="$?"
+    else
+      run_as_service_user_with_runtime_env env \
+        SERVER_STORE_DIR="$LIVE_STORE_DIR" \
+        DATASTORE_SQLITE_PATH="$LIVE_SQLITE_PATH" \
+        SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH="$collector_trust_registry" \
+        CANDIDATE_PROSPECTIVE_CAPTURE_LOCK_TIMEOUT_MS="$capture_lock_timeout_ms" \
+        CANDIDATE_PROSPECTIVE_CAPTURE_EVALUATED_AT="$evaluated_at" \
+        "$NODE_HOME/bin/node" "$matcher_module" --capture-once \
+          --capture-script "$capture_script" \
+          --working-directory "$runtime_root" \
+          --timeout-ms "$CANDIDATE_CAPTURE_REFRESH_ATTEMPT_TIMEOUT_MS" \
+          --kill-after-ms "$CANDIDATE_CAPTURE_REFRESH_KILL_AFTER_MS" \
+        || capture_rc="$?"
     fi
-    if [ "$capture_rc" -eq 0 ]; then
-      if validate_candidate_capture_heartbeat_status \
-        "$status_file" "$evaluated_at" "$matcher_module" "$validator_root" "$validation_mode"
-      then
-        success_epoch_seconds="$(date -u +'%s')" \
-          || { cleanup_legacy_deadline_compat_runtime || true; return 1; }
-        [[ "$success_epoch_seconds" =~ ^[1-9][0-9]*$ ]] \
-          || { cleanup_legacy_deadline_compat_runtime || true; return 1; }
-        CANDIDATE_CAPTURE_HEARTBEAT_REFRESH_SUCCESS_EPOCH_SECONDS="$success_epoch_seconds"
-        log "candidate deadline capture heartbeat refreshed after attempt ${attempt}/${max_attempts} at epoch ${success_epoch_seconds}"
-        cleanup_legacy_deadline_compat_runtime || return 1
-        return 0
+    if [ "$capture_rc" -ne 0 ]; then
+      if [ "$capture_rc" -eq "$CANDIDATE_CAPTURE_REFRESH_TIMEOUT_EXIT_CODE" ]; then
+        printf 'candidate deadline capture heartbeat refresh timed out after %sms TERM plus %sms KILL grace (exit=%s)\n' \
+          "$CANDIDATE_CAPTURE_REFRESH_ATTEMPT_TIMEOUT_MS" \
+          "$CANDIDATE_CAPTURE_REFRESH_KILL_AFTER_MS" \
+          "$CANDIDATE_CAPTURE_REFRESH_TIMEOUT_EXIT_CODE" >&2
+      else
+        printf 'candidate deadline capture heartbeat refresh process failed (exit=%s)\n' \
+          "$capture_rc" >&2
       fi
+      cleanup_legacy_deadline_compat_runtime || return 1
+      return "$capture_rc"
+    fi
+    if validate_candidate_capture_heartbeat_status \
+      "$status_file" "$evaluated_at" "$matcher_module" "$validator_root" "$validation_mode"
+    then
+      success_epoch_seconds="$(date -u +'%s')" \
+        || { cleanup_legacy_deadline_compat_runtime || true; return 1; }
+      [[ "$success_epoch_seconds" =~ ^[1-9][0-9]*$ ]] \
+        || { cleanup_legacy_deadline_compat_runtime || true; return 1; }
+      CANDIDATE_CAPTURE_HEARTBEAT_REFRESH_SUCCESS_EPOCH_SECONDS="$success_epoch_seconds"
+      log "candidate deadline capture heartbeat refreshed after attempt ${attempt}/${max_attempts} at epoch ${success_epoch_seconds}"
+      cleanup_legacy_deadline_compat_runtime || return 1
+      return 0
     fi
 
     if [ "$attempt" -ge "$max_attempts" ]; then
