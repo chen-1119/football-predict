@@ -82,7 +82,11 @@ const cloudPushPath = path.join(rootDir, "scripts", "pushCloudSync.cjs");
 
 const readText = (filePath) => {
   try {
-    return fs.readFileSync(filePath, "utf8");
+    // Git may materialize text files with CRLF on the release workstation,
+    // while the signed bundle is verified on Linux. Keep every source-token
+    // assertion byte-order independent so the same commit cannot pass locally
+    // and fail remotely solely because of checkout line endings.
+    return fs.readFileSync(filePath, "utf8").replace(/\r\n?/g, "\n");
   } catch {
     return "";
   }
