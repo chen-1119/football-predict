@@ -288,8 +288,8 @@ run_build_step() {
     application-build|archive-migration|archive-migration-reconciled)
       # Vite's production transform now needs about 1 GiB for the retained
       # application graph.  A 1200 MiB hard ceiling leaves no useful GC
-      # headroom and can make the build swap-thrash indefinitely even though
-      # the 8 GiB host still has several GiB available.
+      # headroom and can make the build swap-thrash indefinitely even when
+      # bounded host and swap runway remains available.
       memory_high="1600M"
       memory_max="2200M"
       memory_swap_max="512M"
@@ -299,8 +299,8 @@ run_build_step() {
       # Strategy optimization, generation and the cold SQLite projection all
       # traverse the full retained odds and prediction windows. The old 896
       # MiB V8 heap entered cgroup reclaim and then aborted while JSON.parse
-      # still needed live objects, even though the 8 GiB host had several GiB
-      # available.
+      # still needed live objects, even when bounded host and swap runway
+      # remained available.
       memory_high="1600M"
       memory_max="2200M"
       memory_swap_max="512M"
@@ -346,7 +346,7 @@ run_candidate_refresh_step() {
     candidate-archive-refresh|candidate-generation-refresh|candidate-sqlite-affinity|candidate-deadline-capture-refresh)
       # Archive migration parses and rewrites the retained prediction/history
       # corpus as one integrity-checked transaction.  Keep the wider budget
-      # limited to that operation so it can complete on the 8 GiB host without
+      # limited to that operation so it can use bounded swap runway without
       # weakening the normal candidate refresh limits.
       memory_high="1600M"
       memory_max="2200M"
@@ -420,9 +420,9 @@ run_live_sqlite_prebuild_step() {
     --property="IOSchedulingClass=best-effort" \
     --property="IOSchedulingPriority=4" \
     --property="IOWeight=50" \
-    --property="MemoryHigh=1536M" \
-    --property="MemoryMax=2560M" \
-    --property="MemorySwapMax=512M" \
+    --property="MemoryHigh=768M" \
+    --property="MemoryMax=1024M" \
+    --property="MemorySwapMax=256M" \
     --property="OOMPolicy=stop" \
     --property="RuntimeMaxSec=${LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS}s" \
     -- /bin/bash -c 'set -a; . "$1"; set +a; shift; exec "$@"' bash "$RUNTIME_ENV_FILE" "$@"
@@ -1769,7 +1769,7 @@ ensure_node_runtime_env() {
   set_env_value "$env_file" "SQLITE_BUSY_TIMEOUT_MS" "60000"
   set_env_value "$env_file" "SQLITE_EXPORT_ATTEMPTS" "3"
   set_env_value "$env_file" "SQLITE_EXPORT_RETRY_DELAY_MS" "5000"
-  set_env_value "$env_file" "RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB" "3072"
+  set_env_value "$env_file" "RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB" "1152"
   set_env_value "$env_file" "RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_MEMORY_CURRENT_MIB" "768"
   set_env_value "$env_file" "RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_WORKING_SET_MIB" "512"
   set_env_value "$env_file" "ENABLE_MODEL_BACKTEST_ON_SYNC" "1"

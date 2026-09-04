@@ -2720,9 +2720,9 @@ const readPlanSqliteStatus = async () => {
     "LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS\" -le 540",
     "IOSchedulingPriority=4",
     "IOWeight=50",
-    "MemoryHigh=1536M",
-    "MemoryMax=2560M",
-    "MemorySwapMax=512M",
+    "MemoryHigh=768M",
+    "MemoryMax=1024M",
+    "MemorySwapMax=256M",
     "OOMPolicy=stop",
     "assert_live_sqlite_prebuild_capacity",
     "live SQLite prebuild capacity gate rejected the release host",
@@ -2760,17 +2760,17 @@ const readPlanSqliteStatus = async () => {
     "live sync write barrier ownership changed before release",
     "await lock.release()"
   ]) && hasAll(releasePrebuildPolicy, [
-    "release-live-sqlite-prebuild-policy-v2",
+    "release-live-sqlite-prebuild-policy-v3",
     "RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB",
     "RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_MEMORY_CURRENT_MIB",
-    "DEFAULT_MIN_MEM_AVAILABLE_MIB = 3072",
+    "DEFAULT_MIN_MEM_AVAILABLE_MIB = 1152",
     "RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_WORKING_SET_MIB",
     "DEFAULT_MAX_APP_MEMORY_CURRENT_MIB = 768",
     "DEFAULT_MAX_APP_WORKING_SET_MIB = 512",
     "evaluateCapacity",
     "evaluateFreshness"
   ]) && hasAll(bundleReleaseScript, [
-    'set_env_value "$env_file" "RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB" "3072"',
+    'set_env_value "$env_file" "RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB" "1152"',
     'set_env_value "$env_file" "RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_MEMORY_CURRENT_MIB" "768"',
     'set_env_value "$env_file" "RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_WORKING_SET_MIB" "512"'
   ]) && hasAll(createReleaseBundle, [
