@@ -522,7 +522,7 @@ const check = (name, fn) => {
 };
 
 check("formal candidate heartbeat runs before the heavier benchmark lane", () => {
-  const source = fs.readFileSync(captureScript, "utf8");
+  const source = fs.readFileSync(captureScript, "utf8").replace(/\r\n?/g, "\n");
   const mainStart = source.indexOf("const main = () =>");
   const candidateCapture = source.indexOf("const result = capture({ deadlineOnly });", mainStart);
   const benchmarkCapture = source.indexOf(
@@ -604,7 +604,7 @@ check("deadline-only mode commits the formal heartbeat without touching benchmar
 });
 
 check("match-universe preparation stays outside candidate and benchmark ledger locks", () => {
-  const source = fs.readFileSync(captureScript, "utf8");
+  const source = fs.readFileSync(captureScript, "utf8").replace(/\r\n?/g, "\n");
   for (const [name, startMarker, nextMarker, lockMarker] of [
     [
       "candidate",
