@@ -1,11 +1,15 @@
 const fs = require("node:fs");
 
-const POLICY_VERSION = "release-live-sqlite-prebuild-policy-v2";
+const POLICY_VERSION = "release-live-sqlite-prebuild-policy-v3";
 const MAX_HEARTBEAT_AGE_SECONDS = 600;
 const MIN_MEM_AVAILABLE_ENV = "RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB";
 const MAX_APP_MEMORY_ENV = "RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_MEMORY_CURRENT_MIB";
 const MAX_APP_WORKING_SET_ENV = "RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_WORKING_SET_MIB";
-const DEFAULT_MIN_MEM_AVAILABLE_MIB = 3072;
+// The production light server has a 2 GiB physical-memory envelope. Keep at
+// least 1152 MiB physically available before starting the separately bounded
+// 1 GiB SQLite prebuild cgroup; its 256 MiB swap allowance is fallback only.
+// App raw/working-set ceilings below remain independent fail-closed gates.
+const DEFAULT_MIN_MEM_AVAILABLE_MIB = 1152;
 const DEFAULT_MAX_APP_MEMORY_CURRENT_MIB = 768;
 const DEFAULT_MAX_APP_WORKING_SET_MIB = 512;
 

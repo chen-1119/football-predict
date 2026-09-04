@@ -1504,19 +1504,19 @@ const run = () => {
     && bundleReleaseScript.includes('[ "$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" -le 540 ]')
     && bundleReleaseScript.includes('IOSchedulingPriority=4')
     && bundleReleaseScript.includes('IOWeight=50')
-    && bundleReleaseScript.includes('MemoryHigh=1536M')
-    && bundleReleaseScript.includes('MemoryMax=2560M')
-    && bundleReleaseScript.includes('MemorySwapMax=512M')
+    && bundleReleaseScript.includes('MemoryHigh=768M')
+    && bundleReleaseScript.includes('MemoryMax=1024M')
+    && bundleReleaseScript.includes('MemorySwapMax=256M')
     && bundleReleaseScript.includes('root:football:640:1')
     && bundleReleaseScript.includes('run_prebuild_stage copy-rollback')
     && bundleReleaseScript.includes('run_prebuild_stage stage-copy')
     && bundleReleaseScript.includes('run_prebuild_stage export')
     && bundleReleaseScript.includes('run_prebuild_stage quick_check')
     && bundleReleaseScript.includes('run_prebuild_stage seal')
-    && releasePrebuildPolicy.includes('DEFAULT_MIN_MEM_AVAILABLE_MIB = 3072')
+    && releasePrebuildPolicy.includes('DEFAULT_MIN_MEM_AVAILABLE_MIB = 1152')
     && releasePrebuildPolicy.includes('DEFAULT_MAX_APP_MEMORY_CURRENT_MIB = 768')
     && releasePrebuildPolicy.includes('DEFAULT_MAX_APP_WORKING_SET_MIB = 512')
-    && envExample.includes('RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB=3072')
+    && envExample.includes('RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB=1152')
     && envExample.includes('RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_MEMORY_CURRENT_MIB=640')
     && envExample.includes('RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_WORKING_SET_MIB=512')
     && writeBarrier >= 0
@@ -1537,9 +1537,9 @@ const run = () => {
   ), {
     runtimeMinSeconds: 60,
     runtimeMaxSeconds: 540,
-    memoryHighMiB: 1536,
-    memoryMaxMiB: 2560,
-    memorySwapMaxMiB: 512,
+    memoryHighMiB: 768,
+    memoryMaxMiB: 1024,
+    memorySwapMaxMiB: 256,
     barrierBeforeWorkerPause: writeBarrier >= 0
       && finalWorkerStop > writeBarrier
       && capacityGate > finalWorkerStop,

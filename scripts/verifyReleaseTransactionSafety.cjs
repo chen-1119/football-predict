@@ -43,6 +43,7 @@ const {
   DEFAULT_MAX_APP_WORKING_SET_MIB,
   DEFAULT_MIN_MEM_AVAILABLE_MIB,
   MAX_HEARTBEAT_AGE_SECONDS,
+  POLICY_VERSION,
   evaluateCapacity,
   evaluateFreshness,
   resolveCapacityLimits,
@@ -1333,9 +1334,9 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
   assert.match(runBody, /--property="Nice=10"/);
   assert.match(runBody, /--property="IOSchedulingPriority=4"/);
   assert.match(runBody, /--property="IOWeight=50"/);
-  assert.match(runBody, /--property="MemoryHigh=1536M"/);
-  assert.match(runBody, /--property="MemoryMax=2560M"/);
-  assert.match(runBody, /--property="MemorySwapMax=512M"/);
+  assert.match(runBody, /--property="MemoryHigh=768M"/);
+  assert.match(runBody, /--property="MemoryMax=1024M"/);
+  assert.match(runBody, /--property="MemorySwapMax=256M"/);
   assert.match(runBody, /--property="OOMPolicy=stop"/);
   assert.match(bundleRelease, /RELEASE_LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS:-540/);
   const runtimeBounds = /\[ "\$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" -ge ([0-9]+) \][\s\S]*?\[ "\$LIVE_SQLITE_PREBUILD_RUNTIME_MAX_SECONDS" -le ([0-9]+) \]/.exec(bundleRelease);
@@ -1463,7 +1464,7 @@ check("live SQLite prebuild creates a transient rollback snapshot and keeps the 
   assert.match(prebuildPolicy, /RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB/);
   assert.match(prebuildPolicy, /RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_MEMORY_CURRENT_MIB/);
   assert.match(prebuildPolicy, /RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_WORKING_SET_MIB/);
-  assert.match(prebuildPolicy, /DEFAULT_MIN_MEM_AVAILABLE_MIB = 3072/);
+  assert.match(prebuildPolicy, /DEFAULT_MIN_MEM_AVAILABLE_MIB = 1152/);
   assert.match(prebuildPolicy, /DEFAULT_MAX_APP_MEMORY_CURRENT_MIB = 768/);
   assert.match(prebuildPolicy, /DEFAULT_MAX_APP_WORKING_SET_MIB = 512/);
   assert.match(captureRefreshBody, /CANDIDATE_CAPTURE_HEARTBEAT_REFRESH_SUCCESS_EPOCH_SECONDS="\$success_epoch_seconds"/);
@@ -2456,18 +2457,19 @@ rm -rf -- "$TEST_ROOT"
 });
 
 check("release prebuild capacity and heartbeat freshness gates enforce inclusive safe boundaries", () => {
-  assert.equal(DEFAULT_MIN_MEM_AVAILABLE_MIB, 3072);
+  assert.equal(POLICY_VERSION, "release-live-sqlite-prebuild-policy-v3");
+  assert.equal(DEFAULT_MIN_MEM_AVAILABLE_MIB, 1152);
   assert.equal(DEFAULT_MAX_APP_MEMORY_CURRENT_MIB, 768);
   assert.equal(DEFAULT_MAX_APP_WORKING_SET_MIB, 512);
   assert.equal(MAX_HEARTBEAT_AGE_SECONDS, 600);
   assert.deepEqual(resolveCapacityLimits({}), {
-    minMemAvailableMiB: 3072,
+    minMemAvailableMiB: 1152,
     maxAppMemoryCurrentMiB: 768,
     maxAppWorkingSetMiB: 512,
   });
   assert.throws(
-    () => resolveCapacityLimits({ RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB: "3071" }),
-    /between 3072 and 65536/,
+    () => resolveCapacityLimits({ RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB: "1151" }),
+    /between 1152 and 65536/,
   );
   assert.throws(
     () => resolveCapacityLimits({ RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_MEMORY_CURRENT_MIB: "769" }),
@@ -2477,14 +2479,14 @@ check("release prebuild capacity and heartbeat freshness gates enforce inclusive
     () => resolveCapacityLimits({ RELEASE_LIVE_SQLITE_PREBUILD_MAX_APP_WORKING_SET_MIB: "513" }),
     /between 64 and 512/,
   );
-  for (const invalid of ["", " 3072", "+3072", "3072.0", "1e3", "-1"]) {
+  for (const invalid of ["", " 1152", "+1152", "1152.0", "1e3", "-1"]) {
     assert.throws(
       () => resolveCapacityLimits({ RELEASE_LIVE_SQLITE_PREBUILD_MIN_MEM_AVAILABLE_MIB: invalid }),
       /unsigned base-10 integer/,
     );
   }
 
-  const thresholdMeminfo = `MemAvailable: ${3072 * 1024} kB\n`;
+  const thresholdMeminfo = `MemAvailable: ${1152 * 1024} kB\n`;
   const atCapacityBoundary = evaluateCapacity({
     meminfoText: thresholdMeminfo,
     appMemoryCurrentBytes: String(768 * 1024 * 1024),
@@ -2493,7 +2495,7 @@ check("release prebuild capacity and heartbeat freshness gates enforce inclusive
   });
   assert.equal(atCapacityBoundary.ok, true);
   assert.equal(evaluateCapacity({
-    meminfoText: `MemAvailable: ${3072 * 1024 - 1} kB\n`,
+    meminfoText: `MemAvailable: ${1152 * 1024 - 1} kB\n`,
     appMemoryCurrentBytes: String(768 * 1024 * 1024),
     appInactiveFileBytes: String(256 * 1024 * 1024),
     env: {},
@@ -2524,13 +2526,13 @@ check("release prebuild capacity and heartbeat freshness gates enforce inclusive
   }), /inactive_file must not exceed/);
   const r399ObservedCurrent = 544_145_408;
   assert.equal(evaluateCapacity({
-    meminfoText: `MemAvailable: ${3_200_000} kB\n`,
+    meminfoText: `MemAvailable: ${1_266_688} kB\n`,
     appMemoryCurrentBytes: String(r399ObservedCurrent),
     appInactiveFileBytes: String(128 * 1024 * 1024),
     env: {},
-  }).ok, true, "the bounded app footprint passes only when its working set and new-host runway pass");
+  }).ok, true, "the bounded app footprint passes only when its working set and 2 GiB host runway pass");
   assert.equal(evaluateCapacity({
-    meminfoText: `MemAvailable: ${3_200_000} kB\n`,
+    meminfoText: `MemAvailable: ${1_266_688} kB\n`,
     appMemoryCurrentBytes: String(r399ObservedCurrent),
     appInactiveFileBytes: String(r399ObservedCurrent - 512 * 1024 * 1024 - 1),
     env: {},
