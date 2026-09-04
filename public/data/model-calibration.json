@@ -1,42 +1,49 @@
 {
   "version": "rolling-calibration-v1",
-  "generatedAt": "2026-09-04T03:00:52.407Z",
+  "generatedAt": "2026-09-04T03:39:39.875Z",
   "source": "settled-pre-match-predictions",
   "sample": {
-    "rows": 127,
+    "rows": 0,
+    "independentMatchDays": 0,
     "oneXTwo": 0,
+    "hhad": 0,
     "goals": 0,
-    "best": 127,
-    "recommendationPool": 127
+    "best": 0,
+    "recommendationPool": 0,
+    "automaticRelaxationMinimumRows": 50,
+    "automaticRelaxationMinimumMatchDays": 4
   },
   "metrics": {
     "oneXTwoBrier": null,
     "oneXTwoLogLoss": null,
     "oneXTwoHitRate": null,
     "goalsHitRate": null,
-    "bestHitRate": 0.52
+    "bestHitRate": null
   },
   "weightsByProfile": {
     "international": {
       "market": 0.62,
       "elo": 0.2,
       "poisson": 0.18,
-      "sample": 51,
-      "hitRate": 0.549
+      "sample": 0,
+      "independentMatchDays": 0,
+      "hitRate": null
     },
     "japan": {
       "market": 0.6,
       "elo": 0.18,
       "poisson": 0.22,
       "sample": 0,
+      "independentMatchDays": 0,
       "hitRate": null
     },
     "other": {
       "market": 0.58,
       "elo": 0.22,
       "poisson": 0.2,
-      "sample": 76,
-      "hitRate": 0.5
+      "sample": 0,
+      "independentMatchDays": 0,
+      "hitRate": null
     }
   },
   "gateByProfile": {
@@ -70,74 +77,39 @@
   },
   "scoreCalibration": {
     "version": "score-calibration-v2",
-    "generatedAt": "2026-09-04T03:00:52.406Z",
-    "source": "rolling-settled-projected-scores",
+    "generatedAt": "2026-09-04T03:39:39.874Z",
+    "source": "recent-settled-projected-scores",
     "sample": {
-      "rows": 15,
-      "recentRows": 7,
-      "totalProjectedRows": 127,
-      "sampleDays": 14,
+      "rows": 0,
+      "independentMatchDays": 0,
+      "automaticTuningSampleReady": false,
+      "recentRows": 0,
+      "totalProjectedRows": 0,
+      "sampleDays": 2,
       "recentDays": 2,
       "rollingDays": 14,
-      "minRows": 12,
-      "exactHitRate": 0.067,
-      "top3ExactHitRate": 0.2,
-      "outcomeHitRate": 0.4,
-      "top3OutcomeHitRate": 0.8,
-      "over25HitRate": 0.667,
-      "top3Over25HitRate": 0.933,
-      "totalBandHitRate": 0.267,
-      "top3TotalBandHitRate": 0.6,
-      "avgActualGoals": 3.07,
-      "avgProjectedGoals": 2.73,
-      "actualOver25Rate": 0.667,
-      "projectedOver25Rate": 0.733,
-      "actualBttsRate": 0.6,
-      "projectedBttsRate": 0.867,
-      "projectedLowScoreRate": 0.267,
-      "actualScores": {
-        "0-2": 2,
-        "2-1": 2,
-        "3-1": 2,
-        "0-0": 1,
-        "0-1": 1,
-        "1-1": 1,
-        "1-2": 1,
-        "2-2": 1,
-        "3-0": 1,
-        "3-2": 1,
-        "4-0": 1,
-        "5-1": 1
-      },
-      "projectedScores": {
-        "2-1": 11,
-        "1-1": 2,
-        "0-2": 1,
-        "2-0": 1
-      },
-      "actualBands": {
-        "2": 3,
-        "3": 4,
-        "4+": 6,
-        "0-1": 2
-      },
-      "projectedBands": {
-        "2": 4,
-        "3": 11
-      },
-      "actualShapes": {
-        "clear-btts-open": 3,
-        "clear-clean-sheet": 3,
-        "one-goal-btts": 3,
-        "draw-btts": 2,
-        "low-0-1": 2,
-        "open-4plus": 2
-      },
-      "projectedShapes": {
-        "one-goal-btts": 11,
-        "clear-clean-sheet": 2,
-        "draw-btts": 2
-      }
+      "minRows": 50,
+      "exactHitRate": null,
+      "top3ExactHitRate": null,
+      "outcomeHitRate": null,
+      "top3OutcomeHitRate": null,
+      "over25HitRate": null,
+      "top3Over25HitRate": null,
+      "totalBandHitRate": null,
+      "top3TotalBandHitRate": null,
+      "avgActualGoals": null,
+      "avgProjectedGoals": null,
+      "actualOver25Rate": null,
+      "projectedOver25Rate": null,
+      "actualBttsRate": null,
+      "projectedBttsRate": null,
+      "projectedLowScoreRate": null,
+      "actualScores": {},
+      "projectedScores": {},
+      "actualBands": {},
+      "projectedBands": {},
+      "actualShapes": {},
+      "projectedShapes": {}
     },
     "adjustments": {
       "totalLambdaAdjustment": 0,
@@ -146,82 +118,27 @@
       "lowScoreRankPenalty": 0,
       "openScoreRankBoost": 0,
       "bttsRankBoost": 0,
-      "bandRankBoosts": {
-        "3": -0.047,
-        "4+": 0.072,
-        "0-1": 0.024
-      },
-      "shapeRankBoosts": {
-        "one-goal-btts": -0.048,
-        "clear-btts-open": 0.04,
-        "low-0-1": 0.027,
-        "open-4plus": 0.027
-      }
+      "bandRankBoosts": {},
+      "shapeRankBoosts": {}
     },
     "reasons": [
-      "rolling-score-sample-for-hit-rate",
-      "score-total-band-hit-rate-adjustment",
-      "score-shape-hit-rate-adjustment"
+      "no-settled-projected-score-sample"
     ]
   },
   "summary": {
     "total": {
-      "settled": 127,
-      "won": 66,
-      "lost": 61,
-      "hitRate": 0.52
+      "settled": 0,
+      "won": 0,
+      "lost": 0,
+      "independentMatchDays": 0,
+      "hitRate": null
     },
-    "byMarket": {
-      "BEST": {
-        "settled": 127,
-        "won": 66,
-        "lost": 61,
-        "hitRate": 0.52
-      }
-    },
-    "byProfile": {
-      "other": {
-        "settled": 76,
-        "won": 38,
-        "lost": 38,
-        "hitRate": 0.5
-      },
-      "international": {
-        "settled": 51,
-        "won": 28,
-        "lost": 23,
-        "hitRate": 0.549
-      }
-    },
-    "byMarketProfile": {
-      "BEST:other": {
-        "settled": 76,
-        "won": 38,
-        "lost": 38,
-        "hitRate": 0.5
-      },
-      "BEST:international": {
-        "settled": 51,
-        "won": 28,
-        "lost": 23,
-        "hitRate": 0.549
-      }
-    },
+    "byMarket": {},
+    "byRole": {},
+    "byProfile": {},
+    "byMarketProfile": {},
     "byOddsBucket": {},
-    "byTip": {
-      "BEST:1": {
-        "settled": 85,
-        "won": 44,
-        "lost": 41,
-        "hitRate": 0.518
-      },
-      "BEST:2": {
-        "settled": 42,
-        "won": 22,
-        "lost": 20,
-        "hitRate": 0.524
-      }
-    }
+    "byTip": {}
   },
   "note": {
     "zh": "该文件由已结算赛前预测自动生成，只用于动态调权和推荐闸门，不会回写赛后方向。",
@@ -884,6 +801,7 @@
         }
       }
     },
-    "gateByWebConsensus": {}
+    "gateByWebConsensus": {},
+    "gateByMarketProfile": {}
   }
 }
