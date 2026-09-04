@@ -3558,6 +3558,16 @@ check("pre-swap legacy deadline capture isolates only non-formal artifacts in an
   assert.match(cleanupBody, /"\$inode" = "\$expected_inode"/);
   assert.match(cleanupBody, /football:football[^\n]+root:root/);
   assert.match(cleanupBody, /rm -rf --one-file-system -- "\$runtime_dir"/);
+  assert.match(
+    cleanupBody,
+    /\[ -z "\$expected_device" \][\s\S]*?LEGACY_DEADLINE_COMPAT_RUNTIME_INITIALIZED[\s\S]*?\|\| return 1\s+return 0/,
+    "an already-empty compatibility runtime must explicitly succeed instead of inheriting an EXIT trap status",
+  );
+  assert.doesNotMatch(
+    cleanupBody,
+    /^\s*return\s*$/mu,
+    "compatibility cleanup must not use a bare return that inherits an EXIT trap status",
+  );
   assertOrdered(refreshBody, [
     'active_candidate_capture_supports_deadline_only "$capture_script"',
     'if [ "$capability_rc" -eq 1 ]',
@@ -3602,6 +3612,35 @@ check("pre-swap legacy deadline capture isolates only non-formal artifacts in an
   ], "compatibility scratch is absent before commit disables rollback and EXIT cleanup");
   assert.match(bundleRelease, /readonly CANDIDATE_CAPTURE_REFRESH_ATTEMPT_TIMEOUT_MS=90000/);
   assert.match(bundleRelease, /readonly RELEASE_HEARTBEAT_KEEPER_FRESHNESS_MAX_SECONDS=120/);
+
+  if (process.platform === "linux" && fs.existsSync("/bin/bash")) {
+    const harness = `
+set -euo pipefail
+LEGACY_DEADLINE_COMPAT_RUNTIME_DIR=""
+LEGACY_DEADLINE_COMPAT_RUNTIME_DEVICE=""
+LEGACY_DEADLINE_COMPAT_RUNTIME_INODE=""
+LEGACY_DEADLINE_COMPAT_RUNTIME_INITIALIZED=0
+cleanup_legacy_deadline_compat_runtime() {
+${cleanupBody}
+}
+LEGACY_DEADLINE_COMPAT_RUNTIME_DEVICE="1"
+if cleanup_legacy_deadline_compat_runtime; then exit 92; fi
+LEGACY_DEADLINE_COMPAT_RUNTIME_DEVICE=""
+cleanup_legacy_deadline_compat_runtime
+trap 'original_status=$?; trap - EXIT; cleanup_legacy_deadline_compat_runtime || exit 91; exit "$original_status"' EXIT
+exit 7
+`;
+    const result = spawnSync("/bin/bash", ["-s"], {
+      input: harness,
+      encoding: "utf8",
+      timeout: 20_000,
+    });
+    assert.equal(
+      result.status,
+      7,
+      result.stderr || result.stdout || "EXIT trap compatibility cleanup changed the original exit status",
+    );
+  }
 });
 
 check("post-swap readiness freezes only a fresh completed worker idle window and keeps heartbeat live", () => {
@@ -3960,12 +3999,80 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
     assertOrdered(catchupBody, [
       "run_build_step model-backtest",
       "run_build_step optimize-strategy",
+      "sync_model_artifact_mirrors",
+      "run_build_step archive-migration-reconciled",
+      'PUBLIC_DATA_DIR="$BUILD_DIR/public/data"',
+      'ARCHIVE_MIGRATION_EVIDENCE_DATA_DIR="$BUILD_DIR/.release-archive-evidence"',
+      'npm" run datastore:migrate-archives',
+      "run_build_step candidate-generation-reconciled",
       "run_build_step candidate-datastore-reconciled",
       "run_build_step candidate-deadline-capture",
       "npm\" run candidate:capture-deadline",
-    ], "candidate strategy and deadline audit");
+    ], "candidate strategy, archive reconciliation, publication pair, and deadline audit");
     assert.match(catchupBody, /SERVER_STORE_DIR="\$store_dir"/);
     assert.match(catchupBody, /DATASTORE_SQLITE_PATH="\$sqlite_path"/);
+    if (process.platform === "linux" && fs.existsSync("/bin/bash")) {
+      const harness = `
+set -euo pipefail
+PATH=/usr/bin:/bin
+BUILD_HOME=/build-home
+BUILD_DIR=/candidate-build
+NODE_HOME=/node
+current_state=preserved
+mirrored_state=""
+generation_state=""
+sqlite_generation_state=""
+run_build_step() {
+  case "$1" in
+    model-backtest) [ "$current_state" = "preserved" ] ;;
+    optimize-strategy) current_state=optimized ;;
+    archive-migration-reconciled)
+      [ "$mirrored_state" = "optimized" ] || return 1
+      current_state=archived
+      ;;
+    candidate-generation-reconciled)
+      [ "$current_state" = "archived" ] || return 1
+      generation_state="$current_state"
+      ;;
+    candidate-datastore-reconciled)
+      [ "$generation_state" = "archived" ] || return 1
+      sqlite_generation_state="$generation_state"
+      ;;
+    candidate-deadline-capture)
+      [ "$generation_state" = "$sqlite_generation_state" ] || return 1
+      ;;
+  esac
+  printf 'step=%s\\n' "$1"
+}
+sync_model_artifact_mirrors() {
+  [ "$current_state" = "optimized" ] || return 1
+  mirrored_state="$current_state"
+  printf 'step=model-mirrors\\n'
+}
+run_candidate_model_artifact_catchup() {
+${catchupBody}
+}
+run_candidate_model_artifact_catchup /candidate-store /candidate-store/football.db
+[ "$current_state" = "archived" ]
+[ "$generation_state" = "archived" ]
+[ "$sqlite_generation_state" = "$generation_state" ]
+`;
+      const result = spawnSync("/bin/bash", ["-s"], {
+        input: harness,
+        encoding: "utf8",
+        timeout: 20_000,
+      });
+      assert.equal(result.status, 0, result.stderr || result.stdout);
+      assert.deepEqual(result.stdout.trim().split(/\r?\n/u), [
+        "step=model-backtest",
+        "step=optimize-strategy",
+        "step=model-mirrors",
+        "step=archive-migration-reconciled",
+        "step=candidate-generation-reconciled",
+        "step=candidate-datastore-reconciled",
+        "step=candidate-deadline-capture",
+      ]);
+    }
     assert.match(candidateRefreshBody, /--working-directory="\$NEXT_DIR"/);
     assert.match(candidateRefreshBody, /InaccessiblePaths=-\/etc\/football-predict -\/etc\/football-release -\/var\/lib\/football-predict -\/var\/lib\/football-release/);
     assert.match(main, /candidate-deadline-capture-refresh[\s\S]*?SERVER_STORE_DIR="\$CANDIDATE_STORE_DIR" DATASTORE_SQLITE_PATH="\$CANDIDATE_SQLITE_PATH"[\s\S]*?scripts\/captureCandidateProspectiveDeadline\.cjs/);
@@ -3980,11 +4087,13 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
     const buildStepBody = extractFunction(bundleRelease, "run_build_step");
     const refreshWindowStart = main.indexOf("sync worker could not be paused for candidate readiness");
     const refreshWindowEnd = main.indexOf("run_trusted_candidate_verifier", refreshWindowStart);
+    assert.ok(refreshWindowStart >= 0 && refreshWindowEnd > refreshWindowStart);
     const refreshWindow = main.slice(refreshWindowStart, refreshWindowEnd);
     assert.match(
       buildStepBody,
       /optimize-strategy\|candidate-generation\|candidate-generation-reconciled\|candidate-datastore\|candidate-datastore-reconciled\|candidate-deadline-capture/,
     );
+    assert.match(buildStepBody, /application-build\|archive-migration\|archive-migration-reconciled\)/);
     assert.match(buildStepBody, /memory_high="1600M"/);
     assert.match(buildStepBody, /memory_max="2200M"/);
     assert.match(buildStepBody, /memory_swap_max="512M"/);
@@ -4005,7 +4114,6 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
     assert.match(refreshStepBody, /NODE_OPTIONS=--max-old-space-size="\$node_heap_mib"/);
     assert.match(refreshStepBody, /candidate-generation-refresh\|candidate-sqlite-affinity\)[\s\S]*?runtime_max_seconds="240"/);
     assert.match(bundleRelease, /run_build_step archive-migration/);
-    assert.match(buildStepBody, /application-build\|archive-migration\)/);
     assert.doesNotMatch(
       main,
       /NODE_OPTIONS=--max-old-space-size=1536/,

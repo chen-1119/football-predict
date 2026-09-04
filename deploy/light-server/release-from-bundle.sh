@@ -285,7 +285,7 @@ run_build_step() {
   local node_heap_mib="896"
   local -a properties=()
   case "$label" in
-    application-build|archive-migration)
+    application-build|archive-migration|archive-migration-reconciled)
       # Vite's production transform now needs about 1 GiB for the retained
       # application graph.  A 1200 MiB hard ceiling leaves no useful GC
       # headroom and can make the build swap-thrash indefinitely even though
@@ -1926,6 +1926,13 @@ run_candidate_model_artifact_catchup() {
     DATASTORE_SQLITE_PATH="$sqlite_path" \
     "$NODE_HOME/bin/npm" run optimize:strategy || return 1
   sync_model_artifact_mirrors "$store_dir" "$BUILD_DIR" || return 1
+  # optimize:strategy can rewrite mutable current rows after their signed
+  # pre-match archives were repaired. Re-attach only the already-preserved
+  # archive evidence before sealing the reconciled generation and SQLite pair.
+  run_build_step archive-migration-reconciled env PATH="$PATH" HOME="${BUILD_HOME:-/nonexistent}" NODE_ENV=production \
+    PUBLIC_DATA_DIR="$BUILD_DIR/public/data" \
+    ARCHIVE_MIGRATION_EVIDENCE_DATA_DIR="$BUILD_DIR/.release-archive-evidence" \
+    "$NODE_HOME/bin/npm" run datastore:migrate-archives || return 1
   # optimize:strategy can fail closed from guarded-active to shadow and remove
   # stale strategy injection from mutable current rows. Re-export after that
   # reconciliation so the candidate API and its public artifacts are identical.
@@ -4836,8 +4843,9 @@ cleanup_legacy_deadline_compat_runtime() {
   local identity device inode owner group mode links extra
   [ -n "$runtime_dir" ] || {
     [ -z "$expected_device" ] && [ -z "$expected_inode" ] \
-      && [ "${LEGACY_DEADLINE_COMPAT_RUNTIME_INITIALIZED:-0}" = "0" ]
-    return
+      && [ "${LEGACY_DEADLINE_COMPAT_RUNTIME_INITIALIZED:-0}" = "0" ] \
+      || return 1
+    return 0
   }
   [ "${LEGACY_DEADLINE_COMPAT_RUNTIME_INITIALIZED:-0}" = "1" ] \
     && [[ "$runtime_dir" =~ ^/run/football-release-deadline-compat\.[A-Za-z0-9]{6}$ ]] \
