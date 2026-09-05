@@ -3,10 +3,16 @@
 require("./verifyExternalSignalEventIdentity.cjs");
 
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const { spawnSync } = require("node:child_process");
 const historicalTraining = require("../server-data/training/historical-training-index.json");
 const {
   buildFreeFootballSignal,
   componentUsableBeforeCutoff,
+  freeFootballCoverageRequirement,
+  summarizeFreeFootballCoverage,
 } = require("./syncFreeFootballSignals.cjs");
 const {
   buildQuality,
@@ -196,6 +202,73 @@ const noEvidence = buildFreeFootballSignal({
 assert.equal(noEvidence.grade, "D");
 assert.equal(noEvidence.recommendationReady, false);
 
+const asOf = "2026-08-13T10:00:00.000Z";
+const uncoveredUpcoming = buildFreeFootballSignal({
+  id: "upcoming", status: "SCHEDULED", kickoffTime, buyEndTime,
+}, {}, asOf);
+const coveredUpcoming = buildFreeFootballSignal(baseMatch, {}, asOf);
+const uncoveredFinished = buildFreeFootballSignal({
+  id: "finished", status: "FINISHED", kickoffTime, buyEndTime, scoreHome: 2, scoreAway: 1,
+}, {}, asOf);
+assert.equal(uncoveredFinished.grade, "D");
+assert.equal(uncoveredFinished.recommendationReady, false, "finished gaps must not become recommendations");
+assert.equal(uncoveredFinished.policy.postCutoffMutationAllowed, false);
+assert.equal(summarizeFreeFootballCoverage([coveredUpcoming, uncoveredFinished]).ok, true);
+assert.equal(summarizeFreeFootballCoverage([coveredUpcoming, uncoveredUpcoming]).ok, false);
+const mixedCoverage = summarizeFreeFootballCoverage([coveredUpcoming, uncoveredFinished, uncoveredUpcoming]);
+assert.equal(mixedCoverage.ok, false, "finished rows must not mask a real upcoming gap");
+assert.equal(mixedCoverage.recommendationCoverage, 0.3333, "all-row coverage stays honest");
+assert.equal(mixedCoverage.preMatchRequired, 2);
+assert.equal(mixedCoverage.preMatchReady, 1);
+assert.equal(mixedCoverage.preMatchBlocked, 1);
+assert.equal(mixedCoverage.excludedFromPreMatchRequirement, 1);
+assert.equal(mixedCoverage.exclusionReasons["lifecycle-finished"], 1);
+for (const status of ["LIVE", "PENDING_RESULT", "CANCELLED", "CANCELED", "POSTPONED", "ABANDONED", "SUSPENDED"]) {
+  assert.equal(freeFootballCoverageRequirement({ status, kickoffTime }, asOf).required, false);
+}
+assert.equal(freeFootballCoverageRequirement({ status: "SCHEDULED", kickoffTime, buyEndTime }, "2026-08-13T11:30:00.000Z").required, false);
+assert.equal(freeFootballCoverageRequirement({ status: "SCHEDULED", kickoffTime, buyEndTime: "invalid" }, "2026-08-13T12:00:00.000Z").required, false);
+assert.equal(freeFootballCoverageRequirement({ status: "SCHEDULED" }, asOf).required, true);
+assert.equal(freeFootballCoverageRequirement({ kickoffTime }, "invalid").required, true);
+assert.equal(summarizeFreeFootballCoverage([{ grade: "D", recommendationReady: false }]).ok, false, "legacy rows without scope fail closed");
+assert.equal(summarizeFreeFootballCoverage([]).ok, true, "a valid empty business day has no missing pre-match input");
+
+const cliRoot = fs.mkdtempSync(path.join(os.tmpdir(), "football-free-lifecycle-"));
+try {
+  const scriptDir = path.join(cliRoot, "scripts");
+  const dataDir = path.join(cliRoot, "public", "data");
+  fs.mkdirSync(scriptDir, { recursive: true });
+  fs.mkdirSync(dataDir, { recursive: true });
+  for (const name of ["syncFreeFootballSignals.cjs", "externalSignalEventIdentity.cjs"]) {
+    fs.copyFileSync(path.join(__dirname, name), path.join(scriptDir, name));
+  }
+  const runCli = (fixtures) => {
+    fs.writeFileSync(path.join(dataDir, "matches-current.json"), JSON.stringify(fixtures));
+    fs.writeFileSync(path.join(dataDir, "external-signals.json"), JSON.stringify({ matches: {} }));
+    return spawnSync(process.execPath, [path.join(scriptDir, "syncFreeFootballSignals.cjs")], {
+      cwd: cliRoot, encoding: "utf8", timeout: 15000,
+    });
+  };
+  const closedFixture = {
+    id: "finished", status: "FINISHED", kickoffTime: "2026-01-01T12:00:00Z", scoreHome: 2, scoreAway: 1,
+  };
+  const closedResult = runCli([closedFixture]);
+  assert.equal(closedResult.status, 0, closedResult.stderr);
+  assert.equal(JSON.parse(closedResult.stdout).ok, true);
+  const closedOutput = JSON.parse(fs.readFileSync(path.join(dataDir, "free-football-signals.json"), "utf8"));
+  assert.equal(closedOutput.matches.finished.recommendationReady, false);
+  assert.equal(closedOutput.summary.recommendationCoverage, 0);
+  const upcomingResult = runCli([closedFixture, {
+    id: "future", status: "SCHEDULED", kickoffTime: "2099-01-01T12:00:00Z",
+  }]);
+  assert.equal(upcomingResult.status, 1, upcomingResult.stderr);
+  assert.equal(JSON.parse(upcomingResult.stdout).preMatchBlocked, 1);
+  const malformedResult = runCli({ invalid: true });
+  assert.equal(malformedResult.status, 1, "malformed current data must not become a healthy empty day");
+} finally {
+  fs.rmSync(cliRoot, { recursive: true, force: true });
+}
+
 console.log(JSON.stringify({
   ok: true,
   verified: [
@@ -208,6 +281,10 @@ console.log(JSON.stringify({
     "post-cutoff-supplement-rejection",
     "league-prior-cold-start",
     "fail-closed-with-no-evidence",
+    "finished-input-gaps-do-not-block-official-sync",
+    "upcoming-input-gaps-still-fail-closed",
+    "lifecycle-and-cutoff-scoped-coverage",
+    "cli-exit-code-preserves-pre-match-gates-and-rejects-malformed-input",
     "utf8-safe-active-sporttery-team-aliases",
   ],
 }, null, 2));

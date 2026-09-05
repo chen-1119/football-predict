@@ -167,6 +167,54 @@ const poissonEvidence = (match) => {
   };
 };
 
+const freeFootballCoverageRequirement = (match, generatedAt) => {
+  const status = norm(match?.status).toUpperCase();
+  if (["FINISHED", "LIVE", "PENDING_RESULT", "CANCELLED", "CANCELED", "POSTPONED", "ABANDONED", "SUSPENDED"].includes(status)) {
+    return { required: false, reason: `lifecycle-${status.toLowerCase()}` };
+  }
+  const nowMs = parseInstant(generatedAt);
+  const deadlines = [cutoffFor(match), match?.kickoffTime].map(parseInstant).filter(Number.isFinite);
+  if (Number.isFinite(nowMs) && deadlines.some((deadline) => deadline <= nowMs)) {
+    return { required: false, reason: "pre-match-window-closed" };
+  }
+  // Unknown timing remains required: missing clocks must not hide a real gap.
+  return { required: true, reason: "pre-match-input-required" };
+};
+
+const summarizeFreeFootballCoverage = (rows) => {
+  const summary = {
+    rows: rows.length,
+    recommendationReady: 0,
+    recommendationCoverage: 0,
+    analysisComplete: 0,
+    grades: { A: 0, B: 0, C: 0, D: 0 },
+    preMatchRequired: 0,
+    preMatchReady: 0,
+    preMatchBlocked: 0,
+    excludedFromPreMatchRequirement: 0,
+    exclusionReasons: {},
+    apiFootballRequired: false,
+    keyRequired: false,
+  };
+  for (const row of rows) {
+    if (row.recommendationReady === true) summary.recommendationReady += 1;
+    if (row.analysisComplete === true) summary.analysisComplete += 1;
+    summary.grades[row.grade] = (summary.grades[row.grade] || 0) + 1;
+    if (row.coverageRequirement?.required === false) {
+      summary.excludedFromPreMatchRequirement += 1;
+      const reason = row.coverageRequirement.reason || "unspecified";
+      summary.exclusionReasons[reason] = (summary.exclusionReasons[reason] || 0) + 1;
+    } else {
+      summary.preMatchRequired += 1;
+      if (row.recommendationReady === true) summary.preMatchReady += 1;
+      else summary.preMatchBlocked += 1;
+    }
+  }
+  summary.recommendationCoverage = rows.length
+    ? Number((summary.recommendationReady / rows.length).toFixed(4)) : 0;
+  return { ok: summary.preMatchBlocked === 0, ...summary };
+};
+
 const buildFreeFootballSignal = (match, externalSignal = {}, generatedAt = new Date().toISOString()) => {
   const cutoff = cutoffFor(match);
   const sourceObservedAt = externalSignal?.sourceObservedAt || externalSignal?.updatedAt || null;
@@ -227,6 +275,7 @@ const buildFreeFootballSignal = (match, externalSignal = {}, generatedAt = new D
     cutoffTime: isoOrNull(cutoff),
     grade,
     recommendationReady,
+    coverageRequirement: freeFootballCoverageRequirement(match, generatedAt),
     analysisComplete: grade === "A",
     market: {
       available: marketAvailable,
@@ -256,20 +305,17 @@ const buildFreeFootballSignal = (match, externalSignal = {}, generatedAt = new D
 
 const main = () => {
   const generatedAt = new Date().toISOString();
-  const matches = readJson(CURRENT_FILE, []);
+  const matches = readJson(CURRENT_FILE, null);
+  if (!Array.isArray(matches)) throw new Error("Current fixtures must be a readable JSON array");
   const external = readJson(EXTERNAL_FILE, { version: 1, source: "external-signals", matches: {}, sources: {} });
   const externalMatches = { ...(external.matches || {}) };
   const rows = {};
-  const grades = { A: 0, B: 0, C: 0, D: 0 };
-  let recommendationReady = 0;
 
-  for (const match of Array.isArray(matches) ? matches : []) {
+  for (const match of matches) {
     const { key, signal } = findSignal(externalMatches, match);
     const freeFootball = buildFreeFootballSignal(match, signal, generatedAt);
     const rowKey = freeFootball.sourceMatchId || match.id;
     rows[rowKey] = freeFootball;
-    grades[freeFootball.grade] += 1;
-    if (freeFootball.recommendationReady) recommendationReady += 1;
     const nextSignal = stampSignalEvent({
       ...(signal || {}),
       source: Array.from(new Set(String(signal?.source || "external-signals").split("+").concat("free-public-football")))
@@ -282,16 +328,7 @@ const main = () => {
     }
   }
 
-  const count = Object.keys(rows).length;
-  const summary = {
-    rows: count,
-    recommendationReady,
-    recommendationCoverage: count > 0 ? Number((recommendationReady / count).toFixed(4)) : 0,
-    analysisComplete: grades.A,
-    grades,
-    apiFootballRequired: false,
-    keyRequired: false,
-  };
+  const { ok, ...summary } = summarizeFreeFootballCoverage(Object.values(rows));
   const output = {
     version: VERSION,
     source: "free-public-football-layer",
@@ -316,8 +353,8 @@ const main = () => {
 
   writeJsonAtomic(OUTPUT_FILE, output);
   writeJsonAtomic(EXTERNAL_FILE, nextExternal);
-  console.log(JSON.stringify({ ok: count > 0 && recommendationReady === count, ...summary, output: path.relative(ROOT_DIR, OUTPUT_FILE) }, null, 2));
-  if (count > 0 && recommendationReady !== count) process.exitCode = 1;
+  console.log(JSON.stringify({ ok, ...summary, output: path.relative(ROOT_DIR, OUTPUT_FILE) }, null, 2));
+  if (!ok) process.exitCode = 1;
 };
 
 if (require.main === module) main();
@@ -325,6 +362,8 @@ if (require.main === module) main();
 module.exports = {
   VERSION,
   buildFreeFootballSignal,
+  freeFootballCoverageRequirement,
+  summarizeFreeFootballCoverage,
   componentUsableBeforeCutoff,
   matchKeys,
 };
