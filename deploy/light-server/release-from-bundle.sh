@@ -4922,7 +4922,7 @@ run_legacy_candidate_capture_refresh() {
   # A legacy producer ignores --deadline-only and traverses the retained
   # research corpus. Keep that one compatibility execution in a separate,
   # finite cgroup with enough V8 headroom for the observed corpus; the modern
-  # formal-only producer remains on the normal 1536 MiB path.
+  # formal-only producer uses its smaller, separately bounded capture profile.
   [ "${SWAP_STARTED:-0}" = "0" ] \
     && [ -n "${LEGACY_DEADLINE_COMPAT_RUNTIME_DIR:-}" ] \
     && [ "${LEGACY_DEADLINE_COMPAT_RUNTIME_INITIALIZED:-0}" = "1" ] \
@@ -4957,6 +4957,38 @@ run_legacy_candidate_capture_refresh() {
         --working-directory "$runtime_root" \
         --timeout-ms "$CANDIDATE_CAPTURE_REFRESH_ATTEMPT_TIMEOUT_MS" \
         --kill-after-ms "$CANDIDATE_CAPTURE_REFRESH_KILL_AFTER_MS"
+  rc="$?"
+  set -e
+  assert_transient_unit_cleared "$unit" || return 1
+  return "$rc"
+}
+
+run_native_candidate_capture_step() {
+  local runtime_root="$1" validator_root="$2" unit rc
+  shift 2
+  local -a properties=()
+  next_transient_unit native-deadline-capture-refresh
+  unit="$NEXT_TRANSIENT_UNIT"
+  mapfile -t properties < <(transient_build_properties)
+  # The retained formal evidence now exceeds the old 1536 MiB V8 budget.
+  # Match the verified worker capture heap without raising the app's budget;
+  # bound RSS, swap, lifetime, privileges and writes independently of V8.
+  set +e
+  systemd-run --quiet --wait --collect --pipe --service-type=exec \
+    --unit="$unit" --uid=football --working-directory="$runtime_root" \
+    "${properties[@]}" \
+    --property="PrivateNetwork=yes" \
+    --property="MemoryHigh=3G" \
+    --property="MemoryMax=3500M" \
+    --property="MemorySwapMax=512M" \
+    --property="OOMPolicy=stop" \
+    --property="OOMScoreAdjust=500" \
+    --property="RuntimeMaxSec=110s" \
+    --property="ReadOnlyPaths=$runtime_root $validator_root $RUNTIME_ENV_FILE" \
+    --property="ReadWritePaths=$LIVE_STORE_DIR" \
+    --property="InaccessiblePaths=-/etc/football-release -/var/lib/football-release" \
+    -- /bin/bash -c 'set -a; . "$1"; set +a; shift; exec "$@"' bash "$RUNTIME_ENV_FILE" \
+      env NODE_OPTIONS=--max-old-space-size=2304 MALLOC_ARENA_MAX=2 "$@"
   rc="$?"
   set -e
   assert_transient_unit_cleared "$unit" || return 1
@@ -5061,7 +5093,7 @@ refresh_candidate_capture_heartbeat_for_readiness() {
         "${capture_compat_env[@]}" \
         || capture_rc="$?"
     else
-      run_as_service_user_with_runtime_env env \
+      run_native_candidate_capture_step "$runtime_root" "$validator_root" env \
         SERVER_STORE_DIR="$LIVE_STORE_DIR" \
         DATASTORE_SQLITE_PATH="$LIVE_SQLITE_PATH" \
         SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH="$collector_trust_registry" \
@@ -6632,8 +6664,8 @@ start_release_candidate_heartbeat_keeper() {
     "${properties[@]}" \
     --property="KillMode=mixed" \
     --property="TimeoutStopSec=130s" \
-    --property="MemoryHigh=1600M" \
-    --property="MemoryMax=2200M" \
+    --property="MemoryHigh=3G" \
+    --property="MemoryMax=3500M" \
     --property="MemorySwapMax=512M" \
     --property="OOMPolicy=stop" \
     --property="TasksMax=64" \
@@ -6647,7 +6679,8 @@ start_release_candidate_heartbeat_keeper() {
     --property="ReadWritePaths=$LIVE_STORE_DIR $runtime_dir" \
     --property="InaccessiblePaths=-/etc/football-release -/var/lib/football-release" \
     -- /bin/bash -c 'set -a; . "$1"; set +a; shift; exec "$@"' bash "$RUNTIME_ENV_FILE" \
-      env SERVER_STORE_DIR="$LIVE_STORE_DIR" DATASTORE_SQLITE_PATH="$LIVE_SQLITE_PATH" \
+      env NODE_OPTIONS=--max-old-space-size=2304 MALLOC_ARENA_MAX=2 \
+      SERVER_STORE_DIR="$LIVE_STORE_DIR" DATASTORE_SQLITE_PATH="$LIVE_SQLITE_PATH" \
       "$NODE_HOME/bin/node" "$APP_DIR/scripts/runReleaseCandidateHeartbeatKeeper.cjs" \
       --instance-id "$unit" \
       --capture-script "$APP_DIR/scripts/captureCandidateProspectiveDeadline.cjs" \

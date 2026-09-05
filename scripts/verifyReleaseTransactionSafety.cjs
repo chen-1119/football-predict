@@ -3419,6 +3419,62 @@ setInterval(() => {}, 1000);
   }
 });
 
+check("native release capture and keeper override only their bounded memory profile", () => {
+  const runner = extractFunction(bundleRelease, "run_native_candidate_capture_step");
+  const keeper = extractFunction(bundleRelease, "start_release_candidate_heartbeat_keeper");
+  const refresh = extractFunction(bundleRelease, "refresh_candidate_capture_heartbeat_for_readiness");
+  for (const body of [runner, keeper]) {
+    for (const property of ["MemoryHigh=3G", "MemoryMax=3500M", "MemorySwapMax=512M", "OOMPolicy=stop"]) {
+      assert.ok(body.includes(`--property="${property}"`), property);
+    }
+    assertOrdered(body, [
+      'bash "$RUNTIME_ENV_FILE"',
+      "env NODE_OPTIONS=--max-old-space-size=2304 MALLOC_ARENA_MAX=2",
+    ], "capture heap override must follow runtime env loading");
+    assert.match(body, /--uid=football/);
+    assert.match(body, /InaccessiblePaths=-\/etc\/football-release -\/var\/lib\/football-release/);
+  }
+  assert.match(runner, /--wait --collect --pipe/);
+  assert.match(runner, /RuntimeMaxSec=110s/);
+  assert.match(runner, /PrivateNetwork=yes/);
+  assert.match(runner, /ReadWritePaths=\$LIVE_STORE_DIR"/);
+  assertOrdered(runner, ['rc="$?"', 'assert_transient_unit_cleared "$unit" || return 1', 'return "$rc"'], "capture failure and cgroup cleanup must be preserved");
+  assert.match(refresh, /run_native_candidate_capture_step "\$runtime_root" "\$validator_root" env/);
+  assert.doesNotMatch(refresh, /run_as_service_user_with_runtime_env/);
+  if (process.platform !== "linux" || !fs.existsSync("/bin/bash")) return;
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "release-capture-memory-"));
+  try {
+    const envFile = path.join(tempDir, "runtime.env");
+    fs.writeFileSync(envFile, "NODE_OPTIONS=--max-old-space-size=1536\n");
+    const harness = `
+set -euo pipefail
+RUNTIME_ENV_FILE="$1"
+LIVE_STORE_DIR="$2"
+CHILD_EXIT="$3"
+DRAIN_EXIT="$4"
+next_transient_unit() { NEXT_TRANSIENT_UNIT="test-capture"; }
+transient_build_properties() { :; }
+systemd-run() { while [ "$1" != "--" ]; do shift; done; shift; "$@"; }
+assert_transient_unit_cleared() { printf 'drained\\n'; return "$DRAIN_EXIT"; }
+run_native_candidate_capture_step() {
+${runner}
+}
+rc=0
+run_native_candidate_capture_step "$LIVE_STORE_DIR" "$LIVE_STORE_DIR" /bin/bash -c 'printf "%s %s\\n" "$NODE_OPTIONS" "$MALLOC_ARENA_MAX"; exit "$1"' bash "$CHILD_EXIT" || rc="$?"
+printf 'exit=%s\\n' "$rc"
+`;
+    for (const [child, drain, expected] of [[0, 0, 0], [7, 0, 7], [0, 1, 1]]) {
+      const result = spawnSync("/bin/bash", ["-s", "--", envFile, tempDir, String(child), String(drain)], {
+        input: harness, encoding: "utf8", timeout: 5_000,
+      });
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(result.stdout.trim(), `--max-old-space-size=2304 2\ndrained\nexit=${expected}`);
+    }
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 check("direct release heartbeat refresh fails process errors once and retries only exact-status misses", () => {
   const refreshBody = extractFunction(
     readText(bundleReleasePath),
@@ -3479,7 +3535,7 @@ run_legacy_candidate_capture_refresh() {
   [ "$SCENARIO" != "process-error" ] || return 7
   return 0
 }
-run_as_service_user_with_runtime_env() { MODERN_RUNS=$((MODERN_RUNS + 1)); return 88; }
+run_native_candidate_capture_step() { MODERN_RUNS=$((MODERN_RUNS + 1)); return 88; }
 validate_candidate_capture_heartbeat_status() {
   VALIDATIONS=$((VALIDATIONS + 1))
   [ "$SCENARIO" != "exact-retry" ] || [ "$VALIDATIONS" -ge 2 ]
@@ -3781,11 +3837,11 @@ check("pre-swap legacy deadline capture isolates only non-formal artifacts in an
     'SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH="$collector_trust_registry"',
   ], "legacy cgroup keeps the active formal inputs while redirecting only compatibility outputs");
   assertOrdered(refreshBody, [
-    'else\n      run_as_service_user_with_runtime_env env',
+    'else\n      run_native_candidate_capture_step "$runtime_root" "$validator_root" env',
     'SERVER_STORE_DIR="$LIVE_STORE_DIR"',
     'DATASTORE_SQLITE_PATH="$LIVE_SQLITE_PATH"',
     'SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH="$collector_trust_registry"',
-  ], "modern deadline-only capture remains on its original runtime path");
+  ], "modern deadline-only capture keeps its active formal inputs inside the bounded runtime");
   for (const variable of [
     "BENCHMARK_PROSPECTIVE_LEDGER_FILE",
     "BENCHMARK_PROSPECTIVE_CAPTURE_STATUS_FILE",
@@ -4022,8 +4078,8 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
   assert.doesNotMatch(keeperStartBody, /RuntimeMaxSec/);
   assert.match(keeperStartBody, /--property="KillMode=mixed"/);
   assert.match(keeperStartBody, /--property="TimeoutStopSec=130s"/);
-  assert.match(keeperStartBody, /--property="MemoryHigh=1600M"/);
-  assert.match(keeperStartBody, /--property="MemoryMax=2200M"/);
+  assert.match(keeperStartBody, /--property="MemoryHigh=3G"/);
+  assert.match(keeperStartBody, /--property="MemoryMax=3500M"/);
   assert.match(keeperStartBody, /--property="MemorySwapMax=512M"/);
   assert.match(keeperStartBody, /--property="TasksMax=64"/);
   assert.match(keeperStartBody, /--property="LimitNOFILE=4096"/);
