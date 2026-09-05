@@ -446,6 +446,12 @@ const archiveParityMatch = {
       : prediction
   )),
 };
+// A private dual-market candidate is no longer proof of what was public.
+// Establish the actual pre-cutoff public reference before testing a correction.
+archiveParityMatch.predictionMeta.publicReferenceDecision = require("../src/services/publicReferenceDecision.cjs")
+  .bindPublicReferenceDecision({ ...archiveParityMatch, status: "SCHEDULED" }, null,
+    "2026-07-12T10:10:00.000Z").predictionMeta.publicReferenceDecision;
+assert.ok(archiveParityMatch.predictionMeta.publicReferenceDecision);
 const canonicalArchiveSnapshot = {
   sourceMatchId: archiveParityMatch.sourceMatchId,
   kickoffTime: archiveParityMatch.kickoffTime,
@@ -524,12 +530,12 @@ assert.equal(
 );
 assert.equal(
   attestedOnlyCorrectedArchive?.capturedAt,
-  selfTestDualMarketBinding.sourceClocks.decisionAt,
+  archiveParityMatch.predictionMeta.publicReferenceDecision.recordedAt,
   "attestation-only archive recovery must retain the binding's pre-cutoff decision time",
 );
 assert.match(
   attestedOnlyCorrectedArchive?.signature || "",
-  /^published-direction-attestation-v1:dual-market-decision-binding:/,
+  /^published-direction-attestation-v1:public-reference-decision:/,
   "attestation-only archive recovery must retain an explicit signed-direction evidence marker",
 );
 
@@ -559,6 +565,7 @@ assert.deepEqual(
 );
 
 const modelOnlyParityMatch = clone(archiveParityMatch);
+delete modelOnlyParityMatch.predictionMeta.publicReferenceDecision;
 delete modelOnlyParityMatch.predictionMeta.dualMarketDecision;
 delete modelOnlyParityMatch.predictionMeta.immutableAnalysisReferenceDecision;
 delete modelOnlyParityMatch.predictionMeta.decisionGeneratedAt;

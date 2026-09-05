@@ -806,6 +806,7 @@ const preflightAccountStatus = async (cache, requestBudget) => {
         eligible: false,
         blocked: true,
         blockers: ["status-preflight-failed"],
+        diagnostics: require("./providerFailure.cjs").providerFailure(error),
         reason: error?.message || String(error),
         suspended: /suspend/i.test(error?.message || String(error)),
         active: null,
@@ -862,15 +863,24 @@ const apiGet = (cache, endpoint, params = {}, requestBudget = createRequestBudge
 
   const req = https.request(url, {
     method: "GET",
+    // The production host has working IPv4 but no IPv6 route. Keep the
+    // transport deterministic; an explicit 0 opts into platform auto-selection.
+    family: [0, 4, 6].includes(Number(process.env.API_FOOTBALL_ADDRESS_FAMILY ?? 4))
+      ? Number(process.env.API_FOOTBALL_ADDRESS_FAMILY ?? 4) : 4,
     headers: {
       "accept": "application/json",
       "x-apisports-key": API_KEY
     }
   }, (res) => {
     let body = "";
+    res.on("error", reject);
+    res.on("aborted", () => reject(Object.assign(new Error(`${endpoint} response aborted`), { code: "ECONNRESET" })));
     res.setEncoding("utf8");
     res.on("data", (chunk) => {
       body += chunk;
+      if (body.length > 2 * 1024 * 1024) {
+        req.destroy(Object.assign(new Error(`${endpoint} response too large`), { code: "ERR_BODY_TOO_LARGE" }));
+      }
     });
     res.on("end", () => {
       const payload = safeJsonParse(body, null);
@@ -908,9 +918,12 @@ const apiGet = (cache, endpoint, params = {}, requestBudget = createRequestBudge
     });
   });
 
-  req.setTimeout(20000, () => {
-    req.destroy(new Error(`${endpoint} timeout`));
-  });
+  // Covers DNS, connect, TLS and response, not just socket inactivity.
+  const deadline = setTimeout(() => {
+    req.destroy(Object.assign(new Error(`${endpoint} timeout`), { code: "ETIMEDOUT" }));
+  }, 20000);
+  deadline.unref?.();
+  req.once("close", () => clearTimeout(deadline));
   req.on("error", reject);
   req.end();
 });

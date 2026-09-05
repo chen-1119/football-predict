@@ -1036,6 +1036,18 @@ export const selectOnSaleAnalysisReference = (
   const modelInputsInsufficient = modelWithInputAudit?.inputSufficiency?.sufficient === false;
   if (!isBeforeMatchSaleCutoff(match, now)) {
     if (options.allowModelOnly === false) return undefined;
+    const publicRecord = match.predictionMeta?.publicReferenceDecision;
+    if (publicRecord?.version === 'public-reference-decision-v1'
+      && publicRecord.integrityVerified === true
+      && SHA256_PATTERN.test(publicRecord.contentHash)
+      && publicRecord.sourceMatchId === String(match.sourceMatchId || match.id.replace(/^[^_]+_/, ''))
+      && Date.parse(publicRecord.kickoffTime) === kickoffAt
+      && Date.parse(publicRecord.recordedAt) < Date.parse(publicRecord.cutoffTime)
+      && Date.parse(publicRecord.decisionAt) <= Date.parse(publicRecord.recordedAt)
+      && isDirection(publicRecord.prediction.tipCode)
+      && publicRecord.prediction.recommendationAction === 'reference') {
+      return retainLockedPreCutoffReference(replayPublishedBestReference(match, publicRecord.prediction));
+    }
     if (modelInputsInsufficient) {
       const lockedAnalysisReference = buildImmutableAnalysisReference(match);
       if (lockedAnalysisReference) {

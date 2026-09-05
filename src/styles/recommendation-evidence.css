@@ -1,21 +1,21 @@
 .recommendation-evidence-facts {
   min-width: 0;
-  padding: 0.34rem;
-  border: 1px solid hsl(var(--border) / 0.72);
-  border-radius: 0.48rem;
-  background: hsl(var(--bg) / 0.24);
+  padding: 0;
+  border: 0;
+  border-radius: 0.6rem;
+  background: transparent;
 }
 
 .recommendation-evidence-facts__grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.28rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
   margin: 0;
 }
 
 .recommendation-evidence-facts__grid > div {
   min-width: 0;
-  padding: 0.3rem 0.36rem;
+  padding: 0.55rem 0.65rem;
   border-radius: 0.38rem;
   background: hsl(var(--bg-card) / 0.52);
 }
@@ -23,27 +23,27 @@
 .recommendation-evidence-facts__grid dt,
 .recommendation-evidence-facts__sample span {
   color: hsl(var(--text-muted));
-  font-size: 0.58rem;
-  font-weight: 700;
-  line-height: 1.2;
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.5;
 }
 
 .recommendation-evidence-facts__grid dd {
   margin: 0.16rem 0 0;
   color: hsl(var(--text-primary));
-  font-size: 0.76rem;
+  font-size: 0.95rem;
   font-weight: 800;
-  line-height: 1.15;
-  overflow-wrap: anywhere;
+  line-height: 1.4;
+  overflow-wrap: break-word;
 }
 
 .recommendation-evidence-facts__grid dd small {
   display: block;
   margin-top: 0.16rem;
   color: hsl(var(--text-muted));
-  font-size: 0.52rem;
-  font-weight: 650;
-  line-height: 1.2;
+  font-size: 0.68rem;
+  font-weight: 400;
+  line-height: 1.45;
 }
 
 .recommendation-evidence-facts__grid .is-market-aligned dd {
@@ -94,3 +94,16 @@
 .recommendation-overview-card .recommendation-evidence-facts.is-detail {
   margin-top: 0.55rem;
 }
+
+.data-adoption-details { margin-top: 0.65rem; border-top: 1px solid var(--border-subtle); padding-top: 0.6rem; font-size: 0.72rem; line-height: 1.55; }
+.data-adoption-details summary { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.3rem; color: var(--text-2); cursor: pointer; min-height: 28px; }
+.data-adoption-details summary::after { content: '+'; margin-left: auto; }
+.data-adoption-details[open] summary::after { content: '−'; }
+.data-adoption-details summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
+.data-adoption-details p { margin: 0.55rem 0; color: var(--text-3); }
+.data-adoption-details dl { display: grid; gap: 0.35rem; margin: 0.5rem 0; }
+.data-adoption-details dl > div { display: grid; grid-template-columns: 5rem minmax(0, 1fr); gap: 0.5rem; }
+.data-adoption-details dt { color: var(--text-2); }
+.data-adoption-details dd { margin: 0; color: var(--status-warning); overflow-wrap: break-word; }
+.data-adoption-details [data-state='adopted'] dd { color: var(--brand); }
+.data-adoption-details [data-state='unknown'] dd { color: var(--text-3); }

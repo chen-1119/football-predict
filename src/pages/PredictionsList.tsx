@@ -52,6 +52,7 @@ import { MatchSummaryRow } from '../components/predictions/MatchSummaryRow';
 import { PredictionsPageHeader } from '../components/predictions/PredictionsPageHeader';
 import { RecommendationEvidenceFacts } from '../components/predictions/RecommendationEvidenceFacts';
 import '../styles/predictions.css';
+import '../styles/predictions-refresh.css';
 
 interface PredictionsListProps {
   onSelectMatch: (matchId: string) => void;
@@ -1780,6 +1781,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
           className={isReferencePick ? 'is-reference' : undefined}
         />
 
+        <details className="decision-more-facts">
+          <summary>{language === 'zh' ? `截止 ${decisionCutoffTime || '--'} · 查看赔率与口径` : `Cutoff ${decisionCutoffTime || '--'} · Price & scope`}</summary>
         <div className="decision-facts">
           <span>
             {referenceOdds
@@ -1824,6 +1827,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
             <strong>{decisionCutoffTime || '--'}</strong>
           </span>
         </div>
+        </details>
         {decisionReason && (
           <p className="decision-reason">
             <span>{decisionReason}</span>
@@ -3508,12 +3512,12 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
                                     : 'No reliable pick yet; HAD/HHAD prices and lines are shown for reference'))
                               : (language === 'zh'
                                 ? (fiveHundredMarketPresentation
-                                  ? '当前方向按500 HAD去水后市场首位生成；属于500数据补充推荐，与正式模型推荐分轨统计'
+                                  ? '500 市场首位仅作对照；本场方向以已发布参考记录为准，二者可能不一致，不计正式战绩'
                                   : poolRows.some((row) => getReferenceOddsSourceLabel(row.source, language))
                                   ? '500/外部 SP 仅作赔率对照；模型方向不按最低 SP 自动选择'
                                   : 'SP 仅为赔率；不按最低 SP 选择方向')
                                 : (fiveHundredMarketPresentation
-                                  ? 'This direction is the de-vigged 500.com HAD market leader; it is a non-official market reference, not a model or formal pick'
+                                  ? 'The 500.com market leader is a comparison only; the published reference may differ and is excluded from formal results'
                                   : poolRows.some((row) => getReferenceOddsSourceLabel(row.source, language))
                                   ? '500/external SP is for price comparison only; model directions never auto-pick the lowest price'
                                   : 'SP is price only; the lowest SP is not auto-selected'))}

@@ -1,0 +1,94 @@
+/* r688: readable density, intrinsic sizing and a deliberate mobile composition. */
+.predictions-v4.dashboard-stack { gap: 1rem; }
+.predictions-v4__match-row { scroll-margin-top: 80px; }
+.predictions-v4 .dashboard-hero.is-compact { padding: 1.25rem 1.4rem; border-radius: 16px; background: linear-gradient(110deg, rgba(55,184,120,.075), transparent 65%), var(--surface-1); }
+.predictions-v4__heading { gap: .4rem; }
+.predictions-v4__title-line h1 { font-size: clamp(1.5rem, 2.3vw, 2rem); font-weight: 750; letter-spacing: -.035em; line-height: 1.25; }
+.predictions-v4__heading p { font-size: .82rem; font-weight: 400; white-space: normal; }
+.predictions-v4__eyebrow { font-size: .7rem; font-weight: 600; letter-spacing: .12em; }
+.predictions-v4__system-status { font-weight: 600; padding: .35rem .6rem; }
+.predictions-v4 .league-header { padding: .85rem 1rem; background: var(--surface-1); }
+.predictions-v4 .league-title { font-size: .92rem; font-weight: 650; }
+.predictions-v4 .league-group { border-radius: 14px; overflow: clip; }
+.predictions-v4__match-row,
+.predictions-v4__match-list.is-fixtures-view .predictions-v4__match-row.has-decision {
+  grid-template-columns: 76px minmax(135px, .8fr) minmax(310px, 1.8fr) minmax(285px, 1.3fr) 52px;
+  gap: .9rem; padding: 1.15rem 1rem; align-items: start;
+}
+.predictions-v4__match-slot { min-width: 0; }
+.predictions-v4 .team-stack { gap: 1rem; }
+.predictions-v4 .team-name { font-size: .9rem; font-weight: 650; white-space: normal; overflow-wrap: break-word; }
+.predictions-v4 .kickoff-time { font-size: 1rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.predictions-v4 .sporttery-pool-stack { border-radius: 10px; background: transparent; }
+.predictions-v4 .sporttery-pool-head, .predictions-v4 .sporttery-pool-row {
+  grid-template-columns: minmax(74px, 1fr) repeat(3, minmax(40px, .65fr)) minmax(68px, 1fr);
+}
+.predictions-v4 .sporttery-pool-head { min-height: 32px; font-size: .64rem; font-weight: 500; }
+.predictions-v4 .sporttery-pool-stack .sporttery-pool-row { min-height: 66px; }
+.predictions-v4 .decision-card { gap: .7rem; padding: .85rem; border-radius: 12px; background: var(--surface-1); }
+.predictions-v4 .decision-label { font-size: 1.06rem; font-weight: 700; line-height: 1.4; white-space: normal; overflow-wrap: break-word; }
+.predictions-v4 .decision-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
+.predictions-v4 .decision-facts span { border: 0; background: transparent; padding: .25rem 0; font-size: .7rem; line-height: 1.5; }
+.predictions-v4 .decision-facts strong { font-size: .78rem; white-space: normal; overflow: visible; text-overflow: clip; font-weight: 600; }
+.predictions-v4 .decision-reason { font-size: .74rem; font-weight: 400; line-height: 1.65; }
+.predictions-v4 .daily-review-panel.is-compact { padding: 1rem 1.2rem; border-radius: 14px; gap: .9rem; }
+.predictions-v4 .daily-review-stats { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: .65rem; }
+.predictions-v4 .daily-review-stats span { padding: .7rem; border: 0; border-radius: 9px; }
+.predictions-v4 .notice-banner.is-compact { padding: .8rem 1rem; border-radius: 10px; font-size: .8rem; }
+.predictions-v4 .source-health-head, .predictions-v4 .system-model-summary { padding: .9rem 1rem; }
+.predictions-v4 .recommendation-evidence-facts__sample { font-size: .7rem; justify-content: flex-start; }
+.predictions-v4 .recommendation-evidence-facts__sample strong { font-size: .72rem; }
+.predictions-v4 { --text-muted: 213 16% 64%; --text-3: #91a0b0; }
+.predictions-v4 .details-button { white-space: nowrap; }
+.decision-more-facts { width: 100%; border-top: 1px solid var(--border-subtle); padding-top: .6rem; }
+.decision-more-facts summary { font-size: .72rem; color: var(--text-2); cursor: pointer; min-height: 28px; line-height: 1.5; }
+.decision-more-facts summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
+.decision-more-facts[open] .decision-facts { margin-top: .6rem; }
+
+@media (min-width: 1200px) {
+  .predictions-v4__match-row.has-decision {
+    grid-template-columns: 74px minmax(150px, 1.2fr) minmax(290px, 1fr) 76px;
+    grid-template-rows: auto 1fr;
+  }
+  .predictions-v4__match-list.is-fixtures-view .predictions-v4__match-row.has-decision {
+    grid-template-columns: 74px minmax(150px, 1.2fr) minmax(290px, 1fr) 76px;
+  }
+  .predictions-v4__match-row.has-decision .is-time { grid-column: 1; grid-row: 1; }
+  .predictions-v4__match-row.has-decision .is-teams { grid-column: 2; grid-row: 1; }
+  .predictions-v4__match-row.has-decision .is-odds { grid-column: 1 / 3; grid-row: 2; align-self: start; }
+  .predictions-v4__match-row.has-decision .is-decision { grid-column: 3; grid-row: 1 / 3; }
+  .predictions-v4__match-row.has-decision .predictions-v4__match-action { grid-column: 4; grid-row: 1 / 3; align-items: flex-start; }
+}
+
+@media (max-width: 1199px) {
+  .predictions-v4__match-row,
+  .predictions-v4__match-list.is-fixtures-view .predictions-v4__match-row,
+  .predictions-v4__match-list.is-fixtures-view .predictions-v4__match-row.has-decision {
+    grid-template-columns: 80px minmax(0, 1fr) 52px;
+  }
+  .predictions-v4__match-slot.is-odds, .predictions-v4__match-slot.is-decision { grid-column: 1 / -1; }
+  .predictions-v4 .team-stack { display: flex; flex-wrap: wrap; gap: .8rem 2rem; }
+  .predictions-v4 .decision-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .predictions-v4 .decision-card > .recommendation-evidence-facts { grid-column: 2; grid-row: 1 / span 4; }
+  .predictions-v4 .decision-card > .decision-reason { grid-column: 1 / -1; }
+}
+@media (max-width: 600px) {
+  .predictions-v4 .dashboard-hero.is-compact { padding: 1rem; }
+  .predictions-v4__title-line { flex-wrap: wrap; }
+  .predictions-v4__match-row,
+  .predictions-v4__match-list.is-fixtures-view .predictions-v4__match-row,
+  .predictions-v4__match-list.is-fixtures-view .predictions-v4__match-row.has-decision {
+    grid-template-columns: 68px minmax(0, 1fr); padding: 1rem .75rem; gap: .85rem;
+  }
+  .predictions-v4 .team-stack { display: grid; gap: .6rem; }
+  .predictions-v4__match-action { grid-column: 1 / -1; }
+  .predictions-v4 .decision-card { display: flex; flex-direction: column; padding: .85rem; }
+  .predictions-v4 .decision-card > .recommendation-evidence-facts { width: 100%; }
+  .predictions-v4 .decision-facts { width: 100%; }
+  .predictions-v4 .sporttery-pool-head, .predictions-v4 .sporttery-pool-row {
+    grid-template-columns: minmax(56px, .8fr) repeat(3, minmax(34px, .6fr)) minmax(62px, 1fr);
+  }
+  .predictions-v4 .sporttery-pool-head { font-size: .6rem; }
+  .predictions-v4 .pool-name { display: block; font-size: .64rem; }
+  .predictions-v4 .daily-review-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

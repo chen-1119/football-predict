@@ -869,14 +869,24 @@ const verifyPostgresPrimaryColdStartPairing = async ({ previousIdentity, activeI
     available: false,
     reason: "injected pointer-rotation resolver failure",
   });
+  const initialWriterLock = path.join(activeCache.fixtureStoreDir, "locks", "sync.lock");
+  fs.mkdirSync(initialWriterLock, { recursive: true });
+  fs.writeFileSync(path.join(initialWriterLock, "lock.json"), JSON.stringify({
+    version: 1, pid: process.pid, hostname: os.hostname(), startedAt: new Date().toISOString(),
+    owner: "r688-initial-lock-test", lockDir: initialWriterLock,
+  }));
   fs.writeFileSync(activeCachePaths.currentPointer, nextPointerBytes);
   await requestJson({ port: activeCacheServer.port, pathname: "/api/v1/sync-meta" });
+  await new Promise((resolve) => setTimeout(resolve, 5_500));
+  check(!postgresAuditRows(activeCache.auditFile).some((row) => row.isMainThread === false),
+    "initial locked request arms a timer without starting any resolver worker");
+  fs.rmSync(initialWriterLock, { recursive: true, force: true });
   await waitForCondition(
     () => postgresAuditRows(activeCache.auditFile).find((row) => (
       row.isMainThread === false && row.available === false
     )),
-    "pointer rotation did not invoke the PostgreSQL resolver",
-    5_000,
+    "writer release did not automatically invoke resolver without a new HTTP request",
+    8_000,
   );
   const activeCacheAfterFailure = await requestJson({
     port: activeCacheServer.port,
@@ -891,6 +901,12 @@ const verifyPostgresPrimaryColdStartPairing = async ({ previousIdentity, activeI
   // while PASSIVE checkpoint cannot rewrite the main database. The running
   // server already cached G1 above, reproducing production without a restart.
   const pinnedWalReader = new DatabaseSync(activeCache.fixtureDbPath, { readOnly: true });
+  const writerLock = path.join(activeCache.fixtureStoreDir, "locks", "sync.lock");
+  fs.mkdirSync(writerLock, { recursive: true });
+  fs.writeFileSync(path.join(writerLock, "lock.json"), JSON.stringify({
+    version: 1, pid: process.pid, hostname: os.hostname(), startedAt: new Date().toISOString(),
+    owner: "r688-writer-barrier-test", lockDir: writerLock,
+  }));
   try {
     pinnedWalReader.exec("BEGIN");
     pinnedWalReader.prepare("SELECT value FROM schema_meta WHERE key='data_generation_id'").get();
@@ -908,6 +924,13 @@ const verifyPostgresPrimaryColdStartPairing = async ({ previousIdentity, activeI
       ["dev", "ino", "size", "mtimeNs", "ctimeNs"].map((key) => String(mainFileBeforeWalExport[key])),
       "WAL-only export leaves every formerly cached main-file stat field unchanged",
     );
+    // Let an already armed timer fire while the writer is active. It must
+    // re-arm, not bypass the barrier or depend on another HTTP request.
+    await new Promise((resolve) => setTimeout(resolve, 5_500));
+    check(!postgresAuditRows(activeCache.auditFile).some((row) => row.isMainThread === false
+      && row.available === true && row.generationId === activeIdentity.generationId),
+    "timer recheck respects active writer lock even after complete WAL commit");
+    fs.rmSync(writerLock, { recursive: true, force: true });
     await waitForCondition(
       () => postgresAuditRows(activeCache.auditFile).find((row) => (
         row.isMainThread === false
@@ -926,6 +949,7 @@ const verifyPostgresPrimaryColdStartPairing = async ({ previousIdentity, activeI
     }, "cached active G1 did not switch after the G2 database pair caught up");
     equal(activeCacheAfter.status, 200, "active-cache recovery switches atomically to G2 before WAL checkpoint");
   } finally {
+    fs.rmSync(writerLock, { recursive: true, force: true });
     pinnedWalReader.exec("ROLLBACK");
     pinnedWalReader.close();
   }

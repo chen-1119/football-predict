@@ -1,4 +1,5 @@
 import type { Match, PredictionDetail } from '../../services/mockData';
+import { DataAdoptionDetails } from './DataAdoptionDetails';
 import {
   formatCalibrationSample,
   formatEvidenceCompleteness,
@@ -91,7 +92,7 @@ export function RecommendationEvidenceFacts({
           <dd>{modelProbability}</dd>
         </div>
         <div className={breakdown.evidenceCompleteness === null ? 'is-unavailable' : ''}>
-          <dt>{language === 'zh' ? '证据完整度' : 'Evidence completeness'}</dt>
+          <dt title={language === 'zh' ? '方向输入覆盖率，不代表所有数据齐全或预测命中率' : 'Directional input coverage, not full data coverage or accuracy'}>{language === 'zh' ? '方向输入覆盖' : 'Directional input coverage'}</dt>
           <dd>{evidenceCompleteness}</dd>
         </div>
         <div className={`is-market-${breakdown.marketConsistency}`}>
@@ -99,7 +100,7 @@ export function RecommendationEvidenceFacts({
           <dd>{marketConsistency}</dd>
         </div>
         <div className={breakdown.freshnessQuality === null ? 'is-unavailable' : ''}>
-          <dt>{language === 'zh' ? '数据时效' : 'Data freshness'}</dt>
+          <dt>{language === 'zh' ? '决策时数据时效' : 'Freshness at decision'}</dt>
           <dd>
             <span>{freshnessQuality}</span>
             <small data-freshness-clock={freshnessClock.kind}>{freshnessObservedLabel}</small>
@@ -108,8 +109,9 @@ export function RecommendationEvidenceFacts({
       </dl>
       <p className="recommendation-evidence-facts__sample">
         <span>{language === 'zh' ? '校准样本' : 'Calibration sample'}</span>
-        <strong>{calibrationSample}</strong>
+        <strong>{calibrationSample}{breakdown.calibrationSample === 0 ? (language === 'zh' ? ' · 尚无校准样本' : ' · No calibration samples') : ''}</strong>
       </p>
+      <DataAdoptionDetails match={match} language={language} />
     </section>
   );
 }

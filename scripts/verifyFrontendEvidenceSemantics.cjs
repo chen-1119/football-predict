@@ -69,9 +69,9 @@ check('list and detail recommendation cards render the four audited confidence f
   && detail.includes('<RecommendationEvidenceFacts')
   && recommendationEvidenceFacts.includes('getPublishedRecommendationEvidenceBreakdown(match, prediction)')
   && recommendationEvidenceFacts.includes("'模型概率'")
-  && recommendationEvidenceFacts.includes("'证据完整度'")
+  && recommendationEvidenceFacts.includes("'方向输入覆盖'")
   && recommendationEvidenceFacts.includes("'市场一致性'")
-  && recommendationEvidenceFacts.includes("'数据时效'")
+  && recommendationEvidenceFacts.includes("'决策时数据时效'")
   && recommendationEvidenceFacts.includes("'校准样本'")
   && recommendationEvidenceFacts.includes('recommendation-evidence-facts__sample')
   && recommendationEvidenceFacts.includes('breakdown.freshnessObservedAt')
@@ -119,7 +119,7 @@ check('current list API carries only the public facts consumed by the four-dimen
   && !/\b(?:components|penalties|unavailableReasons|priceIndependent)\b/.test(publicConfidenceProjection)
   && !/\.\.\.(?:confidence|source|compact)/.test(publicConfidenceProjection));
 check('confidence facts remain readable on narrow screens',
-  recommendationEvidenceCss.includes('grid-template-columns: repeat(4, minmax(0, 1fr))')
+  recommendationEvidenceCss.includes('grid-template-columns: repeat(2, minmax(0, 1fr))')
   && recommendationEvidenceCss.includes('@media (max-width: 720px)')
   && recommendationEvidenceCss.includes('grid-template-columns: repeat(2, minmax(0, 1fr))')
   && recommendationEvidenceCss.includes('@media (max-width: 480px)')

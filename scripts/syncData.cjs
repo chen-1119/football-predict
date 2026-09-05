@@ -4586,6 +4586,7 @@ function sameSnapshotEvent(match, snapshot) {
 
 function isEligiblePreMatchSnapshot(match, snapshot) {
   if (!snapshot || typeof snapshot !== "object") return false;
+  if (snapshot.auditRole === "shadow-candidate") return false;
   const phase = normText(snapshot.phase).toLowerCase();
   if (phase && !PRE_MATCH_SNAPSHOT_PHASES.has(phase)) return false;
 
@@ -4768,6 +4769,7 @@ function canonicalArchiveParityRecovery(match) {
   if (![
     "formal-publication-ledger",
     "live-publication-ledger",
+    "public-reference-decision",
     "immutable-analysis-reference-decision",
     "dual-market-decision-binding",
     "trusted-pre-cutoff-decision",
@@ -4896,6 +4898,14 @@ function canonicalArchiveBestPrediction(match, publicationIndex = null) {
   const parityRecovery = canonicalArchiveParityRecovery(match);
   if (parityRecovery) return parityRecovery;
 
+  const publicReference = require("../src/services/publicReferenceDecision.cjs")
+    .attestPublicReferenceDecision(match?.predictionMeta?.publicReferenceDecision, match);
+  if (publicReference) return {
+    prediction: publicReference.prediction,
+    source: "public-reference-decision",
+    proof: { contentHash: publicReference.contentHash, decisionAt: publicReference.recordedAt },
+  };
+
   const immutableReference = attestImmutableAnalysisReferenceDecision(
     match?.predictionMeta?.immutableAnalysisReferenceDecision,
     match
@@ -5018,6 +5028,7 @@ function canonicalArchiveAttestation(match, canonicalBest, kickoffMs) {
   if (!direction || ![
     "formal-publication-ledger",
     "live-publication-ledger",
+    "public-reference-decision",
     "immutable-analysis-reference-decision",
     "dual-market-decision-binding",
     "trusted-pre-cutoff-decision",
@@ -5115,7 +5126,9 @@ function buildArchivedPreMatchPrediction(
   // snapshot window and must never derive a different "original" direction.
   const existingArchive = validArchivedPreMatchPrediction(match);
   const existingDirection = archiveDirectionIdentity(existingArchive?.prediction);
-  if (existingArchive && (!canonicalDirection || canonicalDirection === existingDirection)) {
+  if (existingArchive && (!canonicalDirection || canonicalDirection === existingDirection
+    || !["formal-publication-ledger", "live-publication-ledger", "immutable-analysis-reference-decision",
+      "public-reference-decision", "trusted-pre-cutoff-decision"].includes(canonicalBest?.source))) {
     return existingArchive;
   }
 
@@ -11153,7 +11166,8 @@ function auditableDirectionalInputCoverage(match) {
   const historyReady = leagueHistoryReady || historicalTrainingReady;
   const officialKLeague = officialKLeagueStandingSignalForMatch(match);
   const officialKLeagueReady = Boolean(officialKLeague);
-  const historicalEvidenceFamilies = [eloReady, formReady, historyReady].filter(Boolean).length;
+  // Elo/form training provenance cannot be counted again as an independent input.
+  const historicalEvidenceFamilies = [eloReady, formReady, leagueHistoryReady].filter(Boolean).length;
   const evidenceFamilies = officialKLeagueReady
     ? Math.max(2, historicalEvidenceFamilies)
     : historicalEvidenceFamilies;
@@ -11188,6 +11202,12 @@ function auditableDirectionalInputCoverage(match) {
       metricsReady: formMetricsReady,
       recencyReady: formRecencyReady,
       maximumAgeDays: 240,
+      ageDays: formLastMatchTimes.map((value) => Number.isFinite(value) && Number.isFinite(forecastMs)
+        && value <= forecastMs ? Math.floor((forecastMs - value) / 86400000) : null),
+      freshnessStatus: !formRecencyReady ? "unavailable" : formLastMatchTimes.some((value) => forecastMs - value > 60 * 86400000)
+        ? "aged-history" : "recent",
+      recentWindowDays: 60,
+      freshnessNote: "240-day history eligibility is not current-season form; aged inputs require shadow validation",
       homeLastMatchAt: form?.home?.lastMatchAt || null,
       awayLastMatchAt: form?.away?.lastMatchAt || null,
       provenance: modelInputProvenancePresent(form?.historicalSource || form),
@@ -15967,6 +15987,7 @@ function loadPredictionSnapshots(publicDir) {
         retentionDays: Number(parsed?.retentionDays || PREDICTION_SNAPSHOT_RETENTION_DAYS),
         maxRows: Number(parsed?.maxRows || PREDICTION_SNAPSHOT_MAX_ROWS),
         rows: Array.isArray(parsed?.rows) ? parsed.rows : [],
+        publicReferenceDecisions: Array.isArray(parsed?.publicReferenceDecisions) ? parsed.publicReferenceDecisions : [],
       };
     } catch {
       return {
@@ -16170,6 +16191,8 @@ function predictionSnapshotRow(match, capturedAt) {
 }
 
 function finiteProbability(value) {
+  if (typeof value !== "number" && typeof value !== "string") return null;
+  if (typeof value === "string" && !value.trim()) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : null;
 }
@@ -16369,6 +16392,7 @@ function dualMarketDecisionBindingFromImmutableRowsOrExisting(match, rows) {
   const cutoffMs = Date.parse(match?.predictionMeta?.cutoffTime || matchCutoffValue(match) || "");
   const immutableRows = (Array.isArray(rows) ? rows : [])
     .filter((row) => {
+      if (row?.auditRole === "shadow-candidate") return false;
       const decisionMs = Date.parse(
         row?.decisionSnapshot?.decisionAt
         || row?.decisionAt
@@ -16479,7 +16503,8 @@ function appendPredictionSnapshots(publicDir, matches, capturedAt, {
   const observations = (observationMatches || [])
     .filter((match) => shouldCaptureLockedShadowRevision(match, capturedAt))
     .map((match) => predictionSnapshotRow(match, capturedAt))
-    .filter(Boolean);
+    .filter(Boolean)
+    .map((row) => ({ ...row, auditRole: "shadow-candidate" }));
 
   for (const row of history.rows) {
     const rowTime = Date.parse(row?.lastSeenAt || row?.capturedAt);
@@ -16581,6 +16606,12 @@ function appendPredictionSnapshots(publicDir, matches, capturedAt, {
   const payload = {
     version: 3,
     source: "sporttery:prediction-snapshots",
+    // Separate immutable public lineage; never enter the candidate deadline selector.
+    publicReferenceDecisions: [...new Map([
+      ...(history.publicReferenceDecisions || []),
+      ...(matches || []).map((match) => match?.predictionMeta?.publicReferenceDecision).filter(Boolean),
+    ].filter((record) => Date.parse(record.recordedAt) >= cutoff)
+      .map((record) => [record.contentHash, record])).values()],
     updatedAt: appended || updated ? capturedAt : (history.updatedAt || capturedAt),
     retentionDays: PREDICTION_SNAPSHOT_RETENTION_DAYS,
     maxRows: PREDICTION_SNAPSHOT_MAX_ROWS,
@@ -17844,6 +17875,11 @@ async function sync() {
     { ledgerPath: RECOMMENDATION_PUBLICATION_LEDGER_PATH }
   );
   output = publicationLedgerCommit.matches;
+  // Capture the public reference after persistence and publication gates. The
+  // prospective shadow stream must never become its archive authority.
+  output = output.map((match) => require("../src/services/publicReferenceDecision.cjs")
+    .bindPublicReferenceDecision(match, existingBySourceId.get(matchStoreKey(match)),
+      new Date().toISOString()));
   publicationLedgerLoad = publicationLedgerCommit.ledgerLoad;
   publicationIndex = publicationLedgerCommit.publicationIndex;
   const predictionSnapshotsPayload = appendPredictionSnapshots(

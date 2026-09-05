@@ -602,6 +602,23 @@ export interface PredictionMeta {
     latestAt?: string;
     latestSignature?: string;
   };
+  publicReferenceDecision?: {
+    version: 'public-reference-decision-v1';
+    sourceMatchId: string;
+    kickoffTime: string;
+    eventVersion?: string | null;
+    cutoffTime: string;
+    recordedAt: string;
+    decisionAt: string;
+    decisionId?: string | null;
+    revision: number;
+    previousHash?: string | null;
+    prediction: PredictionDetail;
+    dataGaps?: MatchContextSignals['dataGaps'] | null;
+    contentHash: string;
+    integrityVerified: boolean;
+  } | null;
+  decisionDataGaps?: MatchContextSignals['dataGaps'] | null;
   dualMarketDecision?: {
     version: 'dual-market-decision-binding-v1';
     decisionSnapshotVersion?: string | null;

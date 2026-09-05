@@ -10,12 +10,16 @@ type ProbabilityTriplet = {
 const DERIVED_REFERENCE_TIER = /(?:^|[-_ ])(?:reference|model[-_ ]?only|handicap[-_ ]?companion|watch)(?:$|[-_ ])/i;
 
 const boundedScore = (value: unknown): number | null => {
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  if (typeof value === 'string' && !value.trim()) return null;
   if (value === null || value === undefined || value === '') return null;
   const numeric = Number(value);
   return Number.isFinite(numeric) && numeric >= 0 && numeric <= 100 ? numeric : null;
 };
 
 const isMissingNumericValue = (value: unknown) => (
+  (typeof value !== 'number' && typeof value !== 'string')
+  ||
   value === null
   || value === undefined
   || (typeof value === 'string' && value.trim() === '')

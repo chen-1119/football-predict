@@ -4,6 +4,8 @@ const MIN_MODEL_GAP = 0.06;
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 const finiteNumber = (value) => {
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  if (typeof value === 'string' && !value.trim()) return null;
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
 };

@@ -450,6 +450,15 @@ const clearPostgresPublicationRecheck = () => {
 };
 const scheduleBasePublicationRefresh = (token) => {
   if (shuttingDown || !basePublicationCache?.publication || basePublicationRefresh) return;
+  // Timer retries and superseded workers must respect the same writer barrier
+  // as HTTP-triggered refreshes. A retry is never permission to read mid-commit.
+  if (pointerCommitLockActive({ lockDir: generationPointerLockDir, staleMs: 60_000 })
+    || syncLockActive({ lockDir: syncPublicationLockDir })) {
+    basePublicationRefreshState.status = "publication-write-in-progress-serving-previous";
+    basePublicationRefreshState.requestedToken = token;
+    armPostgresPublicationRecheck();
+    return;
+  }
   if (
     basePublicationRefreshState.lastFailedToken === token
     && Date.now() < Number(basePublicationRefreshState.retryAfter || 0)
@@ -592,6 +601,7 @@ const resolveBasePublication = ({ coldStartPairIdentity = null } = {}) => {
   if (basePublicationCache?.publication && publicationWriteInProgress) {
     basePublicationRefreshState.status = "publication-write-in-progress-serving-previous";
     basePublicationRefreshState.requestedToken = token;
+    armPostgresPublicationRecheck();
     return basePublicationCache.publication;
   }
   if (basePublicationCache?.publication) {
@@ -4742,6 +4752,8 @@ const normalizeMatchForDetailPayload = (match) => {
           ...match.predictionMeta,
           dualMarketDecision,
           immutableAnalysisReferenceDecision: compactVerifiedImmutableAnalysisReference(match),
+          publicReferenceDecision: require("../src/services/publicReferenceDecision.cjs")
+            .attestPublicReferenceDecision(match.predictionMeta.publicReferenceDecision, match),
         }
       : match.predictionMeta || null,
     probabilityModel: normalizeProbabilityModelForDetail(match.probabilityModel)
@@ -4761,6 +4773,8 @@ const compactPredictionMeta = (meta) => {
     snapshot: meta.snapshot,
     dualMarketDecision: compactVerifiedDualMarketDecision(meta.dualMarketDecision),
     immutableAnalysisReferenceDecision: meta.immutableAnalysisReferenceDecision,
+    publicReferenceDecision: meta.publicReferenceDecision,
+    decisionDataGaps: meta.decisionDataGaps || meta.featureSnapshot?.modelInputs?.dataGaps || null,
   };
 };
 
@@ -4992,7 +5006,10 @@ const compactPredictionMetaForList = (meta, match) => {
     dualMarketDecision: compactVerifiedDualMarketDecision(
       attestDualMarketDecisionBinding(match)
     ),
-    immutableAnalysisReferenceDecision: compactVerifiedImmutableAnalysisReference(match)
+    immutableAnalysisReferenceDecision: compactVerifiedImmutableAnalysisReference(match),
+    publicReferenceDecision: require("../src/services/publicReferenceDecision.cjs")
+      .attestPublicReferenceDecision(meta.publicReferenceDecision, match),
+    decisionDataGaps: meta.decisionDataGaps || meta.featureSnapshot?.modelInputs?.dataGaps || null,
   };
 };
 

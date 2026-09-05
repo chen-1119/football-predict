@@ -713,6 +713,9 @@ const compactPredictionMetaForList = (meta, match) => {
     lockedReason: meta.lockedReason,
     cutoffTime: meta.cutoffTime,
     dualMarketDecision: meta.dualMarketDecision,
+    decisionDataGaps: meta.featureSnapshot?.modelInputs?.dataGaps || null,
+    publicReferenceDecision: require("../src/services/publicReferenceDecision.cjs")
+      .attestPublicReferenceDecision(meta.publicReferenceDecision, match),
     immutableAnalysisReferenceDecision: attestImmutableAnalysisReferenceDecision(
       meta.immutableAnalysisReferenceDecision,
       match,

@@ -587,6 +587,12 @@ const run = async () => {
       stderrTail: publicationIdentityCache.stderr.slice(-500),
     });
   await refreshSqliteBeforeLocalServer(checks);
+  const publicReferenceIntegrity = await runLocalJson(["scripts/verifyPublicReferenceIntegrity.cjs"]);
+  pushCheck(checks, "public reference survives cutoff and provider changes; missing values stay missing",
+    publicReferenceIntegrity.status === 0 && publicReferenceIntegrity.body?.ok === true, {
+      status: publicReferenceIntegrity.status, checks: publicReferenceIntegrity.body?.checks || 0,
+      stderrTail: publicReferenceIntegrity.stderr.slice(-500),
+    });
   const localServerOwnership = startServer ? await startLocalServer() : null;
 
   try {
