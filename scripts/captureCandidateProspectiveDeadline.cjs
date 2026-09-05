@@ -1806,15 +1806,19 @@ const deadlineOnlyResearchStatus = (status, version) => ({
     version,
     available: false,
     onlineEffect: false,
-    chainValid: true,
+    chainValid: false,
   }),
-  ok: true,
+  // Deferring research does not repair its prior failure or make an absent
+  // suite available. Keep those reasons separate from the formal heartbeat.
+  ok: status?.ok !== false,
   skipped: true,
   changed: false,
   deferredForPrimaryDeadlineCapture: true,
   reason: "deadline-only-research-deferred",
   reuseReason: "production-critical-formal-heartbeat-only",
-  blockers: [],
+  blockers: Array.isArray(status?.blockers) && status.blockers.length
+    ? [...status.blockers]
+    : status?.available === true ? [] : ["deadline-only-research-unavailable"],
 });
 
 const settleCalibrationChallengers = ({ matches }) => {
@@ -3051,6 +3055,7 @@ module.exports = {
   readTopLevelArrayProperty,
   researchHeartbeatReuseDecision,
   deferredResearchStatus,
+  deadlineOnlyResearchStatus,
   researchSettlementInputFingerprint,
   settlementHistoryIdentityValues,
   sqliteSnapshotsForMatches,

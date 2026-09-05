@@ -24,6 +24,7 @@ const {
   sqliteSnapshotsForMatches,
   sqliteProjectedMatchUniverse,
   deferredResearchStatus,
+  deadlineOnlyResearchStatus,
   researchHeartbeatReuseDecision,
   researchSettlementInputFingerprint,
   settlementHistoryIdentityValues,
@@ -32,6 +33,10 @@ const {
 const {
   exactHeartbeatMatches,
 } = require("./runReleaseCandidateHeartbeatKeeper.cjs");
+const {
+  AUDIT_VERSION: CHALLENGER_AUDIT_VERSION,
+  compactCalibrationChallengerSuitePublic,
+} = require("./candidateProspectiveChallengerSuite.cjs");
 
 const reusableResearchStatus = (version) => ({
   version,
@@ -534,6 +539,32 @@ check("formal candidate heartbeat runs before the heavier benchmark lane", () =>
   assert.ok(benchmarkCapture > candidateCapture);
 });
 
+check("deadline-only research preserves unavailable reasons and prior failures", () => {
+  const missing = deadlineOnlyResearchStatus(null, CHALLENGER_AUDIT_VERSION);
+  assert.equal(missing.available, false);
+  assert.equal(missing.chainValid, false);
+  assert.deepEqual(missing.blockers, ["deadline-only-research-unavailable"]);
+  const repeated = deadlineOnlyResearchStatus(missing, CHALLENGER_AUDIT_VERSION);
+  assert.deepEqual(repeated.blockers, missing.blockers);
+  assert.notEqual(repeated.blockers, missing.blockers);
+  const publicMissing = compactCalibrationChallengerSuitePublic(repeated);
+  assert.equal(publicMissing.available, false);
+  assert.equal(publicMissing.trialCount, 0);
+  assert.equal(publicMissing.rootHash, null);
+  assert.equal(publicMissing.blockerCount, 1);
+  const failed = { ...missing, ok: false, blockers: ["research-chain-invalid"] };
+  const deferredFailure = deadlineOnlyResearchStatus(failed, CHALLENGER_AUDIT_VERSION);
+  assert.equal(deferredFailure.ok, false);
+  assert.deepEqual(deferredFailure.blockers, ["research-chain-invalid"]);
+  assert.deepEqual(failed.blockers, ["research-chain-invalid"]);
+  const healthy = reusableResearchStatus(CHALLENGER_AUDIT_VERSION);
+  const deferredHealthy = deadlineOnlyResearchStatus(healthy, CHALLENGER_AUDIT_VERSION);
+  assert.equal(deferredHealthy.available, true);
+  assert.equal(deferredHealthy.chainValid, true);
+  assert.deepEqual(deferredHealthy.blockers, []);
+  assert.equal(deferredHealthy.onlineEffect, false);
+});
+
 check("deadline-only mode commits the formal heartbeat without touching benchmark", () => {
   const result = runCapture(
     "2026-07-27T00:43:30.000Z",
@@ -582,6 +613,11 @@ check("deadline-only mode commits the formal heartbeat without touching benchmar
   );
   assert.equal(activeResult.status, 0, activeResult.stderr || activeResult.stdout);
   const activeStatus = JSON.parse(fs.readFileSync(activeStatusFile, "utf8"));
+  const publicResearch = compactCalibrationChallengerSuitePublic(activeStatus.challengerSuite);
+  assert.equal(publicResearch.available, false);
+  assert.equal(publicResearch.trialCount, 0);
+  assert.ok(publicResearch.blockerCount >= 1, "an unavailable research suite must explain why");
+  assert.deepEqual(activeStatus.blockers, [], "research deferral must not contaminate formal capture blockers");
   assert.equal(
     exactHeartbeatMatches(activeStatus, activeStatus.evaluatedAt),
     true,

@@ -80,10 +80,15 @@ const startServer = async ({ failWriteAfter = null } = {}) => {
     cwd: rootDir,
     env: {
       ...process.env,
+      // This server owns only its temporary fixture, never the host's DB.
+      FOOTBALL_POSTGRES_MODE: "disabled",
+      FOOTBALL_POSTGRES_URL: "",
+      DATABASE_URL: "",
       NODE_ENV: "test",
       HOST: "127.0.0.1",
       PORT: String(port),
       SERVER_STORE_DIR: storeDir,
+      DATA_STORE_DIR: storeDir,
       DATASTORE_SQLITE_PATH: path.join(storeDir, "football.db"),
       DATASTORE_READ_SOURCE: "file",
       ENABLE_SQLITE_EXPORT: "0",

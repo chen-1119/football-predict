@@ -566,6 +566,16 @@ const run = async () => {
       stderrTail: postgresMigrationPlan.stderr.slice(-500),
     },
   );
+  const fixtureIsolation = await runLocalJson(["scripts/verifyProductionFixtureIsolation.cjs"]);
+  pushCheck(checks, "temporary verifier servers reject inherited production database settings",
+    fixtureIsolation.status === 0 && fixtureIsolation.body?.ok === true
+      && fixtureIsolation.body?.checks?.length === 3
+      && fixtureIsolation.body.checks.every((check) => check.ok === true), {
+      status: fixtureIsolation.status,
+      checks: fixtureIsolation.body?.checks || [],
+      stdoutTail: fixtureIsolation.status === 0 ? "" : fixtureIsolation.stdout.slice(-500),
+      stderrTail: fixtureIsolation.stderr.slice(-500),
+    });
   await refreshSqliteBeforeLocalServer(checks);
   const localServerOwnership = startServer ? await startLocalServer() : null;
 

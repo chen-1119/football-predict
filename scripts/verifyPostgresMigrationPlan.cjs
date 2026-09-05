@@ -59,8 +59,29 @@ assert.match(sql, /UNIQUE \(competition_id, competitor_id, match_id\)/);
 assert.match(sql, /idempotency_key text NOT NULL UNIQUE/);
 assert.match(sql, /risk_tier = 'skip' AND stake = 0/);
 assert.match(sql, /settled integer GENERATED ALWAYS AS \(won \+ lost\) STORED/);
-assert.equal(postgresSsl("postgresql://localhost/football"), false);
-assert.deepEqual(postgresSsl("postgresql://db.example.com/football"), { rejectUnauthorized: true });
+// Test each policy explicitly instead of inheriting the deployment host's
+// local-PostgreSQL TLS setting. Restore it before any later verifier work.
+const priorSslMode = process.env.FOOTBALL_POSTGRES_SSL_MODE;
+try {
+  delete process.env.FOOTBALL_POSTGRES_SSL_MODE;
+  for (const host of ["localhost", "127.0.0.1", "[::1]"]) {
+    assert.equal(postgresSsl(`postgresql://${host}/football`), false);
+  }
+  assert.deepEqual(postgresSsl("postgresql://db.example.com/football"), { rejectUnauthorized: true });
+  for (const [mode, expected] of [
+    ["disable", false],
+    ["require", { rejectUnauthorized: false }],
+    ["verify-full", { rejectUnauthorized: true }],
+  ]) {
+    process.env.FOOTBALL_POSTGRES_SSL_MODE = mode;
+    for (const host of ["localhost", "db.example.com"]) {
+      assert.deepEqual(postgresSsl(`postgresql://${host}/football`), expected);
+    }
+  }
+} finally {
+  if (priorSslMode === undefined) delete process.env.FOOTBALL_POSTGRES_SSL_MODE;
+  else process.env.FOOTBALL_POSTGRES_SSL_MODE = priorSslMode;
+}
 assert.equal(sha256("football").length, 64);
 const appliedMigrationHashes = Object.freeze({
   "001_core.sql": "3580fecee8d500cb0851899c858cd1aaf90c321978cba1c8bbfc224c5f6e8b7c",

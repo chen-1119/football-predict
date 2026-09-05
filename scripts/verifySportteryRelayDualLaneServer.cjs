@@ -425,10 +425,16 @@ const main = async () => {
       cwd: rootDir,
       env: {
         ...process.env,
+        // Post-swap verifiers inherit primary mode; the relay fixture must not.
+        FOOTBALL_POSTGRES_MODE: "disabled",
+        FOOTBALL_POSTGRES_URL: "",
+        DATABASE_URL: "",
         NODE_ENV: "test",
         HOST: "127.0.0.1",
         PORT: String(port),
         SERVER_STORE_DIR: storeDir,
+        DATA_STORE_DIR: storeDir,
+        DATASTORE_READ_SOURCE: "file",
         DATASTORE_SQLITE_PATH: path.join(storeDir, "football.db"),
         SPORTTERY_RELAY_SNAPSHOT: fullPath,
         SPORTTERY_RELAY_FAST_LANE_SNAPSHOT: fastPath,
