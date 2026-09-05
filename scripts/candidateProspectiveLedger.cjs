@@ -637,15 +637,20 @@ const candidateProbabilities = (
 // edited. Bind the revision to the exact pure evaluator functions used by the
 // decision record. Function source is deterministic in the deployed CommonJS
 // artifact and keeps the implementation commitment independently verifiable.
+// Git may check the same blob out as CRLF on Windows and LF on Linux. Function
+// source preserves those line endings, so canonicalize them before hashing;
+// otherwise a byte-formatting difference can falsely retire an ACTIVE trial.
+const canonicalFunctionSource = (fn) => fn.toString().replace(/\r\n?/gu, "\n");
+
 const CANDIDATE_EVALUATOR_IMPLEMENTATION_HASH = sha256({
   version: CANDIDATE_EVALUATOR_VERSION,
-  finite: finite.toString(),
-  round: round.toString(),
-  normalizeTriplet: normalizeTriplet.toString(),
-  marketProbabilitiesFromOdds: marketProbabilitiesFromOdds.toString(),
-  temperatureTriplet: temperatureTriplet.toString(),
-  logPoolTriplet: logPoolTriplet.toString(),
-  candidateProbabilities: candidateProbabilities.toString(),
+  finite: canonicalFunctionSource(finite),
+  round: canonicalFunctionSource(round),
+  normalizeTriplet: canonicalFunctionSource(normalizeTriplet),
+  marketProbabilitiesFromOdds: canonicalFunctionSource(marketProbabilitiesFromOdds),
+  temperatureTriplet: canonicalFunctionSource(temperatureTriplet),
+  logPoolTriplet: canonicalFunctionSource(logPoolTriplet),
+  candidateProbabilities: canonicalFunctionSource(candidateProbabilities),
 });
 
 const candidateEvaluatorSemanticHashes = () => ({
@@ -3454,6 +3459,7 @@ module.exports = {
   normalizeTriplet,
   normalizedLeagueForMatch,
   classifyCandidateDecisionEvidence,
+  canonicalFunctionSource,
   candidateEvaluatorSemanticHashes,
   marketProbabilitiesFromOdds,
   temperatureTriplet,

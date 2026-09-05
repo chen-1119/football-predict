@@ -49,6 +49,7 @@ const {
   nominationPolicyHashFor,
   postActivationEvidenceEvents,
   candidateGateSpecCompatibility,
+  canonicalFunctionSource,
   candidateEvaluatorSemanticHashes,
   classifyCandidateDecisionEvidence,
   buildDecisionEvent,
@@ -725,6 +726,18 @@ check("production semantic commitment is stable and binds the pure evaluator", (
   assert.match(
     semanticHashes["candidate-probability-evaluator"],
     /^[a-f0-9]{64}$/,
+  );
+  assert.equal(
+    canonicalFunctionSource({
+      toString: () => "const evaluator = () => {\r\n  return 1;\r\n};\r",
+    }),
+    "const evaluator = () => {\n  return 1;\n};\n",
+  );
+  // This is the already-frozen production evaluator identity. Both Windows
+  // CRLF and Linux LF checkouts must resolve to this same semantic hash.
+  assert.equal(
+    semanticHashes["candidate-probability-evaluator"],
+    "cab792f5b33c93060cfe589c1f3e170823a73f197dd9be6d862ac01885c444db",
   );
   const stableCommitment = buildCandidateCommitment(candidate, {
     commitmentVersion: CANDIDATE_IMPLEMENTATION_COMMITMENT_VERSION,
