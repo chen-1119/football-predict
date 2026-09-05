@@ -887,29 +887,48 @@ const verifyPostgresPrimaryColdStartPairing = async ({ previousIdentity, activeI
     "resolver failure preserves the cached active G1 publication instead of exposing unpaired G2",
   );
 
-  writePostgresIdentityState(activeCache.identityFile, { publication: activeProjectionIdentity });
-  runExporter({
-    targetStoreDir: activeCache.fixtureStoreDir,
-    targetDbPath: activeCache.fixtureDbPath,
-    targetPublicDataDir: activeCache.fixturePublicDataDir,
-  });
-  await waitForCondition(
-    () => postgresAuditRows(activeCache.auditFile).find((row) => (
-      row.isMainThread === false
-      && row.available === true
-      && row.generationId === activeIdentity.generationId
-    )),
-    "cached active G1 did not receive the automatic bounded PostgreSQL recheck",
-    8_000,
-  );
-  const activeCacheAfter = await waitForCondition(async () => {
-    const response = await requestJson({
-      port: activeCacheServer.port,
-      pathname: "/api/v1/sync-meta",
+  // Keep an old read snapshot open: the real exporter must commit G2 in WAL
+  // while PASSIVE checkpoint cannot rewrite the main database. The running
+  // server already cached G1 above, reproducing production without a restart.
+  const pinnedWalReader = new DatabaseSync(activeCache.fixtureDbPath, { readOnly: true });
+  try {
+    pinnedWalReader.exec("BEGIN");
+    pinnedWalReader.prepare("SELECT value FROM schema_meta WHERE key='data_generation_id'").get();
+    const mainFileBeforeWalExport = fs.statSync(activeCache.fixtureDbPath, { bigint: true });
+    writePostgresIdentityState(activeCache.identityFile, { publication: activeProjectionIdentity });
+    const walExport = runExporter({
+      targetStoreDir: activeCache.fixtureStoreDir,
+      targetDbPath: activeCache.fixtureDbPath,
+      targetPublicDataDir: activeCache.fixturePublicDataDir,
     });
-    return samePublicationIdentity(response.body?.publication, activeIdentity) ? response : null;
-  }, "cached active G1 did not switch after the G2 database pair caught up");
-  equal(activeCacheAfter.status, 200, "active-cache recovery switches atomically to G2");
+    check(samePublicationIdentity(walExport.publication, activeIdentity), "WAL exporter commits complete G2 projection");
+    const mainFileAfterWalExport = fs.statSync(activeCache.fixtureDbPath, { bigint: true });
+    equal(
+      ["dev", "ino", "size", "mtimeNs", "ctimeNs"].map((key) => String(mainFileAfterWalExport[key])),
+      ["dev", "ino", "size", "mtimeNs", "ctimeNs"].map((key) => String(mainFileBeforeWalExport[key])),
+      "WAL-only export leaves every formerly cached main-file stat field unchanged",
+    );
+    await waitForCondition(
+      () => postgresAuditRows(activeCache.auditFile).find((row) => (
+        row.isMainThread === false
+        && row.available === true
+        && row.generationId === activeIdentity.generationId
+      )),
+      "cached active G1 did not receive the automatic bounded PostgreSQL recheck",
+      8_000,
+    );
+    const activeCacheAfter = await waitForCondition(async () => {
+      const response = await requestJson({
+        port: activeCacheServer.port,
+        pathname: "/api/v1/sync-meta",
+      });
+      return samePublicationIdentity(response.body?.publication, activeIdentity) ? response : null;
+    }, "cached active G1 did not switch after the G2 database pair caught up");
+    equal(activeCacheAfter.status, 200, "active-cache recovery switches atomically to G2 before WAL checkpoint");
+  } finally {
+    pinnedWalReader.exec("ROLLBACK");
+    pinnedWalReader.close();
+  }
   await stopServer();
 };
 

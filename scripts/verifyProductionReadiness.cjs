@@ -576,6 +576,16 @@ const run = async () => {
       stdoutTail: fixtureIsolation.status === 0 ? "" : fixtureIsolation.stdout.slice(-500),
       stderrTail: fixtureIsolation.stderr.slice(-500),
     });
+  const publicationIdentityCache = await runLocalJson(["scripts/verifySqlitePublicationIdentityCache.cjs"]);
+  pushCheck(checks, "SQLite publication identity cache follows WAL commits without checkpoint",
+    publicationIdentityCache.status === 0 && publicationIdentityCache.body?.ok === true
+      && publicationIdentityCache.body?.checks?.length === 11
+      && publicationIdentityCache.body.checks.every((check) => check.ok === true), {
+      status: publicationIdentityCache.status,
+      checks: publicationIdentityCache.body?.checks || [],
+      stdoutTail: publicationIdentityCache.status === 0 ? "" : publicationIdentityCache.stdout.slice(-500),
+      stderrTail: publicationIdentityCache.stderr.slice(-500),
+    });
   await refreshSqliteBeforeLocalServer(checks);
   const localServerOwnership = startServer ? await startLocalServer() : null;
 

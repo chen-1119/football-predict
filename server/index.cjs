@@ -31,6 +31,7 @@ const {
   readSqliteFastResultReceiptState,
   readSqliteTransitionMatches
 } = require("./sqliteStore.cjs");
+const { createSqlitePublicationIdentityCache } = require("./sqlitePublicationIdentityCache.cjs");
 const {
   createPostgresPool,
   postgresEnabled,
@@ -197,7 +198,7 @@ const installedSignedTrainingAsset = installedHistoricalTrainingInspection.ok ==
 let basePublicationCache = null;
 let basePublicationRefresh = null;
 let basePublicationRecheckTimer = null;
-let sqlitePublicationIdentityCache = null;
+let readCachedSqlitePublicationIdentity = null;
 let lastAvailableSqliteReadStatusAtMs = 0;
 const fastResultReceiptTransitionCache = new Map();
 const fastResultReceiptTransitionTtlMs = Math.max(
@@ -225,28 +226,11 @@ const cachedSqlitePublicationIdentity = ({ requirePreferred = true } = {}) => {
   if (requirePreferred && !shouldPreferSqliteRead()) {
     return { available: false, reason: "sqlite-not-preferred", publication: null, fileToken: "not-preferred" };
   }
-  let fileToken = "missing";
-  try {
-    const stat = fs.statSync(sqliteDbPath, { bigint: true });
-    fileToken = [stat.dev, stat.ino, stat.size, stat.mtimeNs, stat.ctimeNs].map(String).join(":");
-  } catch (error) {
-    if (error?.code !== "ENOENT") fileToken = `error:${error?.code || "stat"}`;
-  }
-  const now = Date.now();
-  if (
-    sqlitePublicationIdentityCache?.fileToken === fileToken
-    && (
-      sqlitePublicationIdentityCache.state?.available === true
-      || now - sqlitePublicationIdentityCache.checkedAtMs < 1_000
-    )
-  ) return sqlitePublicationIdentityCache.state;
-
-  const state = {
-    ...readSqlitePublicationIdentity(sqliteDbPath),
-    fileToken,
-  };
-  sqlitePublicationIdentityCache = { fileToken, checkedAtMs: now, state };
-  return state;
+  readCachedSqlitePublicationIdentity ||= createSqlitePublicationIdentityCache({
+    dbPath: sqliteDbPath,
+    readIdentity: readSqlitePublicationIdentity,
+  });
+  return readCachedSqlitePublicationIdentity();
 };
 const generationPointerToken = () => {
   const root = path.join(storeDir, "data-generations");
