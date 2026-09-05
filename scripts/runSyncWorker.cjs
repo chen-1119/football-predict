@@ -710,8 +710,12 @@ const startCandidateProspectiveDeadlineHeartbeat = ({
   let inFlightTick = null;
   let lastResult = null;
   let resolveFirstPublication = null;
+  let resolveFirstStartupAdmission = null;
   const firstPublication = new Promise((resolve) => {
     resolveFirstPublication = resolve;
+  });
+  const firstStartupAdmission = new Promise((resolve) => {
+    resolveFirstStartupAdmission = resolve;
   });
   const exactPublishedStatus = ({ requireFresh = true } = {}) => {
     const status = readStatus();
@@ -808,9 +812,30 @@ const startCandidateProspectiveDeadlineHeartbeat = ({
           resolveFirstPublication(result);
           resolveFirstPublication = null;
         }
+        if (resolveFirstStartupAdmission) {
+          resolveFirstStartupAdmission({
+            kind: "exact-heartbeat",
+            recoveryRequired: false,
+            result,
+            status: published.status,
+          });
+          resolveFirstStartupAdmission = null;
+        }
         clearRetry();
         scheduleNormal(result.statusEvaluatedAt || readStatus()?.evaluatedAt || null);
       } else {
+        if (
+          resolveFirstStartupAdmission
+          && candidateImplementationDriftAwaitingRefreeze(published.status)
+        ) {
+          resolveFirstStartupAdmission({
+            kind: "implementation-drift-refreeze",
+            recoveryRequired: true,
+            result,
+            status: published.status,
+          });
+          resolveFirstStartupAdmission = null;
+        }
         lastResult = {
           ...result,
           ok: false,
@@ -853,13 +878,34 @@ const startCandidateProspectiveDeadlineHeartbeat = ({
     get lastResult() { return lastResult; },
     waitForIdle: () => inFlightTick || Promise.resolve(lastResult),
     waitForPublished: () => firstPublication,
-    waitForHealthy: async () => {
+    waitForStartupAdmission: () => firstStartupAdmission,
+    waitForHealthy: async ({ allowImplementationDrift = false } = {}) => {
       if (inFlightTick) await inFlightTick;
       let published = exactPublishedStatus();
       if (published.exact) return published.status;
+      if (
+        allowImplementationDrift
+        && candidateImplementationDriftAwaitingRefreeze(published.status)
+      ) {
+        return {
+          ...published.status,
+          exact: false,
+          recoveryRequired: true,
+        };
+      }
       const recovery = await tick({ recoveryAttempt: true });
       published = exactPublishedStatus();
       if (recovery?.ok === true && published.exact) return published.status;
+      if (
+        allowImplementationDrift
+        && candidateImplementationDriftAwaitingRefreeze(published.status)
+      ) {
+        return {
+          ...published.status,
+          exact: false,
+          recoveryRequired: true,
+        };
+      }
       const error = new Error(
         `candidate deadline heartbeat is not exact: ${recovery?.reason || "status-invalid"}`,
       );
@@ -1821,6 +1867,43 @@ const candidateDeadlineCaptureCompleteThrough = (status, requiredThroughMs) => {
   );
 };
 
+const candidateImplementationDriftAwaitingRefreeze = (status) => {
+  const blockers = Array.isArray(status?.blockers) ? status.blockers : [];
+  const decisionRecord = status?.audit?.decisionRecord || {};
+  const implementationDriftBlocker = (blocker) => (
+    blocker === "semantic-commitment-version-mismatch"
+    || blocker === "dependency-lock-hash-mismatch"
+    || /^semantic-hash-mismatch:[A-Za-z0-9_.@/-]+$/u.test(String(blocker || ""))
+    || /^source-hash-mismatch:[A-Za-z0-9_.@/-]+$/u.test(String(blocker || ""))
+  );
+  return Boolean(
+    status?.version === "prospective-deadline-heartbeat-v2"
+    && status?.captureMode === "deadline-only"
+    && status?.ok === true
+    && status?.skipped === true
+    && status?.reason === "candidate-implementation-drift-awaiting-refreeze"
+    && typeof status?.evaluatedAt === "string"
+    && Number.isFinite(Date.parse(status.evaluatedAt))
+    && typeof status?.candidateRevisionId === "string"
+    && status.candidateRevisionId.length > 0
+    && status?.audit?.state === "ACTIVE"
+    && status?.audit?.chainValid === true
+    && status?.audit?.evaluatedAt === status.evaluatedAt
+    && status?.audit?.candidateRevisionId === status.candidateRevisionId
+    && /^[a-f0-9]{64}$/u.test(String(status?.audit?.rootHash || ""))
+    && decisionRecord.version === "candidate-atomic-decision-record-v3"
+    && Number.isSafeInteger(decisionRecord.admittedRows)
+    && decisionRecord.admittedRows >= 0
+    && decisionRecord.admittedRows === decisionRecord.atomicRows
+    && decisionRecord.atomicRows === decisionRecord.completeRows
+    && decisionRecord.failedRows === 0
+    && decisionRecord.coverage === 1
+    && decisionRecord.complete === true
+    && blockers.length > 0
+    && blockers.every(implementationDriftBlocker)
+  );
+};
+
 const describeCandidateDeadlineStartupAdmission = ({
   matches: matchesInput = null,
   nowMs: nowInput = Date.now(),
@@ -1836,6 +1919,7 @@ const describeCandidateDeadlineStartupAdmission = ({
     : captureStatusInput;
   const resultRecoveryPlan = resultRecoveryPlanInput
     || describeFiveHundredResultFallbackNeed(matches, nowMs);
+  const refreezeRecoveryRequired = candidateImplementationDriftAwaitingRefreeze(captureStatus);
   const terminalStatuses = new Set([
     "FINISHED",
     "CANCELLED",
@@ -1881,13 +1965,21 @@ const describeCandidateDeadlineStartupAdmission = ({
     });
   }
 
-  const waitForPublished = riskMatches.length > 0;
+  // An implementation-drift heartbeat is deliberately not exact: it blocks
+  // every new formal decision until model:backtest retires the old revision.
+  // Waiting for exact here would deadlock that refreeze behind this very gate.
+  // Admit only the data/model recovery lane; main() requires a fresh exact
+  // heartbeat immediately after the refreeze before later heavy steps run.
+  const waitForPublished = riskMatches.length > 0 && !refreezeRecoveryRequired;
   return {
     version: "candidate-deadline-startup-admission-v1",
     checkedAt: new Date(nowMs).toISOString(),
     waitForPublished,
+    refreezeRecoveryRequired,
     fastOfficialLaneAdmitted: true,
-    reason: waitForPublished
+    reason: refreezeRecoveryRequired
+      ? "candidate-implementation-drift-refreeze-recovery"
+      : waitForPublished
       ? riskMatches.some((match) => match.reason === "decision-deadline-missing")
         ? "decision-deadline-missing"
         : riskMatches.some((match) => match.reason === "deadline-passed-without-complete-capture")
@@ -2225,12 +2317,15 @@ const describeConsolidatedSlowPublicationNeed = ({
   };
 };
 
-const describeModelBacktestNeed = ({ sqliteStep = null } = {}) => {
+const describeModelBacktestNeed = ({
+  sqliteStep = null,
+  forceCandidateImplementationRefreeze = false,
+} = {}) => {
   const evaluation = readJson(path.join(rootDir, "public", "data", "model-evaluation.json"), null);
   const syncMeta = readJson(path.join(rootDir, "public", "data", "sync-meta.json"), null);
   const lastStatus = readJson(modelBacktestStatusFile, null);
   const candidateCaptureStatus = readJson(candidateProspectiveCaptureStatusFile, null);
-  const candidateImplementationDrift = (
+  const candidateImplementationDrift = forceCandidateImplementationRefreeze === true || (
     candidateCaptureStatus?.reason === "candidate-implementation-drift-awaiting-refreeze"
   );
   const sqliteCoverage = readSqliteCounts();
@@ -2325,8 +2420,14 @@ const describeModelBacktestNeed = ({ sqliteStep = null } = {}) => {
   };
 };
 
-const maybeRunModelBacktest = async ({ sqliteStep = null } = {}) => {
-  const decision = describeModelBacktestNeed({ sqliteStep });
+const maybeRunModelBacktest = async ({
+  sqliteStep = null,
+  forceCandidateImplementationRefreeze = false,
+} = {}) => {
+  const decision = describeModelBacktestNeed({
+    sqliteStep,
+    forceCandidateImplementationRefreeze,
+  });
   if (!decision.shouldRun) {
     return { ok: true, skipped: true, script: "model:backtest", decision };
   }
@@ -2351,6 +2452,22 @@ const maybeRunModelBacktest = async ({ sqliteStep = null } = {}) => {
   };
   writeJsonAtomic(modelBacktestStatusFile, status);
   return { ...result, script: "model:backtest", decision };
+};
+
+const assertCandidateImplementationRefreezeBacktest = (step) => {
+  if (
+    step?.ok === true
+    && step?.skipped !== true
+    && step?.decision?.candidateImplementationDrift === true
+  ) {
+    return step;
+  }
+  const error = new Error(
+    "candidate implementation refreeze did not complete before the exact-heartbeat gate",
+  );
+  error.code = "CANDIDATE_IMPLEMENTATION_REFREEZE_INCOMPLETE";
+  error.step = step || null;
+  throw error;
 };
 
 const describeCycleStages = () => ([
@@ -2883,6 +3000,14 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
   const onBeforeHeavyStep = typeof hooks.onBeforeHeavyStep === "function"
     ? hooks.onBeforeHeavyStep
     : async () => {};
+  const onAfterModelBacktest = typeof hooks.onAfterModelBacktest === "function"
+    ? hooks.onAfterModelBacktest
+    : async () => {};
+  const requiresCandidateImplementationRefreeze = (
+    typeof hooks.requiresCandidateImplementationRefreeze === "function"
+      ? hooks.requiresCandidateImplementationRefreeze
+      : () => false
+  );
   const onSlowPhaseDeferred = typeof hooks.onSlowPhaseDeferred === "function"
     ? hooks.onSlowPhaseDeferred
     : () => {};
@@ -3405,7 +3530,11 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
     const modelBacktestStep = sourceCycleObservation.ready
       ? await runBestEffort(
           "model:backtest",
-          () => maybeRunModelBacktest({ sqliteStep })
+          () => maybeRunModelBacktest({
+            sqliteStep,
+            forceCandidateImplementationRefreeze:
+              requiresCandidateImplementationRefreeze() === true,
+          })
         )
       : {
           ok: sqliteExportEnabled === false,
@@ -3419,6 +3548,7 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
             : null,
           sourceCycleObservation,
         };
+    await onAfterModelBacktest(modelBacktestStep);
     await onBeforeHeavyStep("model:learn:autonomous");
     const autonomousModelLearningStep = await runOptional(
       sourceCycleObservation.ready
@@ -4082,6 +4212,7 @@ const main = async () => {
   }
   const startupResultRecoveryPlan = describeFiveHundredResultFallbackNeed();
   let startupDeadlineAdmissionPending = candidateDeadlineHeartbeat !== null;
+  let candidateImplementationRefreezePending = false;
   // The official fixture/result lane is append-only with respect to frozen
   // recommendations, so it must not be held behind an unhealthy candidate
   // heartbeat. The first heavy-step barrier below recomputes deadline risk and
@@ -4183,30 +4314,64 @@ const main = async () => {
         slowPhaseRunning: slowPhaseRunningAtCycleStart,
         onSlowPhaseDeferred: trackBackgroundSlowPhase,
         isInterrupted: () => runtimeShutdownController.requested,
+        requiresCandidateImplementationRefreeze: () => (
+          candidateImplementationRefreezePending
+        ),
         onBeforeHeavyStep: async () => {
           if (runtimeShutdownController.requested) {
             throw runtimeShutdownController.interruptionError();
           }
           if (startupDeadlineAdmissionPending && candidateDeadlineHeartbeat) {
+            // The immediate startup capture may replace a structurally valid
+            // pre-swap heartbeat with an implementation-drift hold. Observe
+            // that first attempt before deciding which admission wait applies.
+            await candidateDeadlineHeartbeat.waitForIdle();
+            let captureStatus = readJson(candidateProspectiveCaptureStatusFile, null);
+            if (candidateImplementationDriftAwaitingRefreeze(captureStatus)) {
+              candidateImplementationRefreezePending = true;
+            }
             const startupDeadlineAdmission = describeCandidateDeadlineStartupAdmission({
+              captureStatus,
               resultRecoveryPlan: startupResultRecoveryPlan,
             });
             if (startupDeadlineAdmission.waitForPublished) {
-              await Promise.race([
-                candidateDeadlineHeartbeat.waitForPublished(),
+              const admission = await Promise.race([
+                candidateDeadlineHeartbeat.waitForStartupAdmission(),
                 runtimeShutdownController.wakePromise,
               ]);
+              if (admission?.recoveryRequired === true) {
+                candidateImplementationRefreezePending = true;
+              }
             }
             startupDeadlineAdmissionPending = false;
+          }
+          const captureStatus = readJson(candidateProspectiveCaptureStatusFile, null);
+          if (candidateImplementationDriftAwaitingRefreeze(captureStatus)) {
+            // Latch this state for the complete cycle. A later lock-busy or
+            // retry status cannot erase the obligation to refreeze and prove
+            // a new exact heartbeat.
+            candidateImplementationRefreezePending = true;
           }
           // Drain an already-running cutoff capture before admitting the next
           // memory-heavy child.  The heartbeat remains enabled during the
           // child; this barrier only prevents simultaneous child-tree launch
           // and does not relax or manufacture the 120s freshness contract.
-          await candidateDeadlineHeartbeat?.waitForHealthy();
+          await candidateDeadlineHeartbeat?.waitForHealthy({
+            allowImplementationDrift: candidateImplementationRefreezePending,
+          });
           if (runtimeShutdownController.requested) {
             throw runtimeShutdownController.interruptionError();
           }
+        },
+        onAfterModelBacktest: async (modelBacktestStep) => {
+          if (!candidateImplementationRefreezePending) return;
+          assertCandidateImplementationRefreezeBacktest(modelBacktestStep);
+          // The model backtest retires the old implementation revision and
+          // freezes the replacement. No learning, strategy, publication, or
+          // readiness step may proceed until that live registry produces a
+          // genuinely exact formal heartbeat.
+          await candidateDeadlineHeartbeat?.waitForHealthy();
+          candidateImplementationRefreezePending = false;
         },
         onFastPublished: async (fastPhase) => {
           activeEventCycle = fastPhase;
@@ -4498,6 +4663,7 @@ if (require.main === module) {
 
 module.exports = {
   acquireSyncLockInterruptibly,
+  assertCandidateImplementationRefreezeBacktest,
   benchmarkDeadlineCaptureEnabled,
   benchmarkDeadlineCaptureIntervalMs,
   benchmarkDeadlineCaptureStatusAdvanced,
@@ -4513,6 +4679,7 @@ module.exports = {
   candidateDeadlineCaptureTerminateGraceMs,
   candidateDeadlineCaptureTimeoutMs,
   candidateDeadlineCaptureCompleteThrough,
+  candidateImplementationDriftAwaitingRefreeze,
   candidateDeadlineAttemptBudget,
   candidateDeadlineHeartbeatFreshnessLimitMs,
   candidateDeadlinePreemptiveSchedule,

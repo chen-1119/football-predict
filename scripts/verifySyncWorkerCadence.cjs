@@ -20,6 +20,7 @@ const {
   candidateDeadlineCaptureTerminateGraceMs,
   candidateDeadlineCaptureTimeoutMs,
   candidateDeadlineCaptureCompleteThrough,
+  candidateImplementationDriftAwaitingRefreeze,
   candidateDeadlineAttemptBudget,
   candidateDeadlineHeartbeatFreshnessLimitMs,
   candidateDeadlinePreemptiveSchedule,
@@ -138,6 +139,35 @@ const exactDeadlineHeartbeatFixture = (evaluatedAt, overrides = {}) => ({
     nearestStatus: null,
     nearestDeadlineBatch: null,
     deadlineBatches: [],
+  },
+  ...overrides,
+});
+
+const implementationDriftHeartbeatFixture = (evaluatedAt, overrides = {}) => ({
+  version: "prospective-deadline-heartbeat-v2",
+  captureMode: "deadline-only",
+  evaluatedAt,
+  ok: true,
+  skipped: true,
+  changed: false,
+  reason: "candidate-implementation-drift-awaiting-refreeze",
+  candidateRevisionId: "candidate@test",
+  blockers: ["semantic-hash-mismatch:candidate-probability-evaluator"],
+  audit: {
+    evaluatedAt,
+    state: "ACTIVE",
+    chainValid: true,
+    rootHash: "b".repeat(64),
+    candidateRevisionId: "candidate@test",
+    decisionRecord: {
+      version: "candidate-atomic-decision-record-v3",
+      admittedRows: 12,
+      atomicRows: 12,
+      completeRows: 12,
+      failedRows: 0,
+      coverage: 1,
+      complete: true,
+    },
   },
   ...overrides,
 });
@@ -388,6 +418,28 @@ const overdueUnprovenAdmission = describeCandidateDeadlineStartupAdmission({
 });
 assert.equal(overdueUnprovenAdmission.waitForPublished, true);
 assert.equal(overdueUnprovenAdmission.reason, "deadline-capture-overdue-unproven");
+const driftRecoveryStatus = implementationDriftHeartbeatFixture(kickoff(-1));
+assert.equal(candidateImplementationDriftAwaitingRefreeze(driftRecoveryStatus), true);
+const driftRecoveryAdmission = describeCandidateDeadlineStartupAdmission({
+  matches: [overdueMatch],
+  nowMs: now,
+  captureStatus: driftRecoveryStatus,
+  resultRecoveryPlan: { needed: false },
+});
+assert.equal(driftRecoveryAdmission.waitForPublished, false);
+assert.equal(driftRecoveryAdmission.refreezeRecoveryRequired, true);
+assert.equal(
+  driftRecoveryAdmission.reason,
+  "candidate-implementation-drift-refreeze-recovery",
+);
+assert.equal(
+  candidateImplementationDriftAwaitingRefreeze({
+    ...driftRecoveryStatus,
+    blockers: [...driftRecoveryStatus.blockers, "unknown-runtime-blocker"],
+  }),
+  false,
+  "an unknown blocker can never enter the refreeze recovery lane",
+);
 const overdueProvenAdmission = describeCandidateDeadlineStartupAdmission({
   matches: [overdueMatch],
   nowMs: now,
@@ -809,9 +861,10 @@ assert.equal(
   1,
   "the official pipeline must not rerun the full sync in the same cycle"
 );
-assert.ok(
-  workerSource.includes("maybeRunModelBacktest({ sqliteStep })"),
-  "the backtest consumes the already committed immutable official SQLite history"
+assert.match(
+  workerSource,
+  /maybeRunModelBacktest\(\{[\s\S]*?sqliteStep,[\s\S]*?forceCandidateImplementationRefreeze:/,
+  "the backtest consumes immutable official SQLite history and honors a latched refreeze",
 );
 assert.match(
   workerSource,
@@ -1579,8 +1632,8 @@ const verifyRelayWake = async () => {
   );
   assert.match(
     workerSource,
-    /onBeforeHeavyStep: async \(\) => \{[\s\S]*describeCandidateDeadlineStartupAdmission\([\s\S]*startupDeadlineAdmission\.waitForPublished[\s\S]*candidateDeadlineHeartbeat\.waitForPublished\(\)[\s\S]*candidateDeadlineHeartbeat\?\.waitForHealthy\(\)/,
-    "every heavy step revalidates the exact heartbeat after startup admission",
+    /onBeforeHeavyStep: async \(\) => \{[\s\S]*candidateDeadlineHeartbeat\.waitForIdle\(\)[\s\S]*describeCandidateDeadlineStartupAdmission\([\s\S]*startupDeadlineAdmission\.waitForPublished[\s\S]*candidateDeadlineHeartbeat\.waitForStartupAdmission\(\)[\s\S]*candidateDeadlineHeartbeat\?\.waitForHealthy\(\{[\s\S]*allowImplementationDrift: candidateImplementationRefreezePending/,
+    "startup observes the first capture and every heavy step enforces exact or latched refreeze admission",
   );
   assert.ok(
     (workerSource.match(/await onBeforeHeavyStep\(/g) || []).length >= 8,
@@ -2008,6 +2061,72 @@ const verifyRelayWake = async () => {
     "the ordinary heartbeat cadence resumes after the release handoff",
   );
   heartbeat.stop();
+
+  let driftRaceClockMs = heartbeatEpochMs + 20_000;
+  let driftRaceRuns = 0;
+  let driftRaceStatus = exactDeadlineHeartbeatFixture(
+    new Date(heartbeatEpochMs).toISOString(),
+  );
+  const driftRaceHeartbeat = startCandidateProspectiveDeadlineHeartbeat({
+    immediate: true,
+    now: () => driftRaceClockMs,
+    readStatus: () => driftRaceStatus,
+    run: async () => {
+      driftRaceRuns += 1;
+      if (driftRaceRuns === 1) {
+        const evaluatedAt = new Date(driftRaceClockMs).toISOString();
+        driftRaceStatus = implementationDriftHeartbeatFixture(evaluatedAt);
+        return {
+          ok: false,
+          skipped: false,
+          reason: "candidate-deadline-capture-status-not-advanced",
+          statusEvaluatedAt: evaluatedAt,
+        };
+      }
+      driftRaceClockMs += 1_000;
+      const evaluatedAt = new Date(driftRaceClockMs).toISOString();
+      driftRaceStatus = exactDeadlineHeartbeatFixture(evaluatedAt);
+      return {
+        ok: true,
+        skipped: false,
+        statusEvaluatedAt: evaluatedAt,
+      };
+    },
+    timer: () => ({ unref() {} }),
+    clearTimer: () => {},
+    retryTimer: () => ({ unref() {} }),
+    clearRetryTimer: () => {},
+  });
+  await driftRaceHeartbeat.waitForIdle();
+  const driftStartupAdmission = await driftRaceHeartbeat.waitForStartupAdmission();
+  assert.equal(driftStartupAdmission.kind, "implementation-drift-refreeze");
+  assert.equal(driftStartupAdmission.recoveryRequired, true);
+  assert.equal(
+    (await driftRaceHeartbeat.waitForHealthy({ allowImplementationDrift: true }))
+      .recoveryRequired,
+    true,
+    "only the pre-refreeze heavy lane may observe the explicit recovery hold",
+  );
+  let driftRacePublicationResolved = false;
+  driftRaceHeartbeat.waitForPublished().then(() => {
+    driftRacePublicationResolved = true;
+  });
+  await Promise.resolve();
+  assert.equal(
+    driftRacePublicationResolved,
+    false,
+    "implementation drift never manufactures an exact publication or starts benchmark work",
+  );
+  await driftRaceHeartbeat.tick({ recoveryAttempt: true });
+  const refrozenPublication = await driftRaceHeartbeat.waitForPublished();
+  assert.equal(refrozenPublication.statusEvaluatedAt, driftRaceStatus.evaluatedAt);
+  assert.equal(driftRacePublicationResolved, true);
+  assert.equal(
+    (await driftRaceHeartbeat.waitForHealthy()).evaluatedAt,
+    driftRaceStatus.evaluatedAt,
+    "strict health becomes available only after the refrozen exact heartbeat",
+  );
+  driftRaceHeartbeat.stop();
 
   const baseline = { exists: true, token: "relay-a" };
   assert.equal(relaySnapshotChanged(baseline, { exists: true, token: "relay-b" }), true);
