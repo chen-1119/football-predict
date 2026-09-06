@@ -1275,7 +1275,9 @@ const readPlanSqliteStatus = async () => {
     "RUNTIME_MONITOR_AUTO_REPAIR_SQLITE",
     "sqlite auto-repair",
     "sqlite primary read after repair",
-    "datastore:sqlite"
+    "runSqliteRepairCommands",
+    "exportDataStoreSqlite.cjs",
+    "syncPostgresProjection.cjs"
   ]) && hasAll(monitorService, [
     "RUNTIME_MONITOR_REQUIRE_SQLITE=1",
     "RUNTIME_MONITOR_AUTO_REPAIR_SQLITE=1"

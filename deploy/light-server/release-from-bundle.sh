@@ -7122,6 +7122,21 @@ fi
 log "trusted signed source accepted for ${BUNDLE_SHA256}"
 node "$TRUSTED_SOURCE_DIR/scripts/verifyDeploymentConfig.cjs" \
   || { printf 'trusted deployment configuration verification failed\n' >&2; exit 1; }
+# Reject a closed transition window before changing host configuration or
+# starting expensive candidate reconstruction. Use the same validated budgets
+# as the later candidate lease, but never persist/reuse this advisory probe.
+# The live public directory may point at an immutable generation; the helper
+# still requires its final JSON entry to be a single-link regular file.
+log "probe live transition window before host changes and candidate construction"
+RELEASE_EARLY_PROBE_AT="$("$NODE_HOME/bin/node" -e 'process.stdout.write(new Date().toISOString())')" \
+  || { printf 'early release transition probe instant could not be captured\n' >&2; exit 1; }
+"$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseTransitionLease.cjs" probe \
+  --current "$APP_DIR/public/data/matches-current.json" \
+  --at "$RELEASE_EARLY_PROBE_AT" \
+  --verifier-runtime-max-seconds "$CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS" \
+  --preverify-refresh-budget-seconds "$CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS" \
+  --atomic-swap-margin-seconds "$CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS" \
+  || { printf 'early release transition horizon is unsafe; no host changes or candidate rebuild performed\n' >&2; exit 1; }
 rotate_fixed_recovery_helper \
   || { printf 'signed fixed recovery helper rotation failed\n' >&2; exit 1; }
 install_fixed_qa_access_operator \

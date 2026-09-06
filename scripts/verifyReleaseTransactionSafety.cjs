@@ -4462,6 +4462,42 @@ run_candidate_model_artifact_catchup /candidate-store /candidate-store/football.
     );
   });
 
+  check("read-only transition probe rejects closed windows before host mutations or candidate construction", () => {
+    const main = mainProgram(bundleRelease);
+    const probeStart = main.indexOf('"$TRUSTED_SOURCE_DIR/scripts/releaseTransitionLease.cjs" probe');
+    const probeEnd = main.indexOf("rotate_fixed_recovery_helper", probeStart);
+    assert.ok(probeStart >= 0 && probeEnd > probeStart);
+    const probe = main.slice(probeStart, probeEnd);
+    assert.match(probe, /--current "\$APP_DIR\/public\/data\/matches-current\.json"/);
+    assert.match(probe, /--at "\$RELEASE_EARLY_PROBE_AT"/);
+    assert.doesNotMatch(probe, /--lease\b/);
+    assert.match(probe, /\|\| \{ printf 'early release transition horizon is unsafe;[^\n]+exit 1; \}/);
+    const finalLeaseStart = main.indexOf('"$NEXT_DIR/scripts/releaseTransitionLease.cjs" create');
+    const finalLeaseEnd = main.indexOf('"candidate transition horizon is unsafe before worker pause"', finalLeaseStart);
+    assert.ok(finalLeaseStart > probeEnd && finalLeaseEnd > finalLeaseStart);
+    const finalLease = main.slice(finalLeaseStart, finalLeaseEnd);
+    const budgetFlags = /--(?:verifier-runtime-max-seconds|preverify-refresh-budget-seconds|atomic-swap-margin-seconds) "\$[A-Z_]+"/g;
+    const probeBudget = probe.match(budgetFlags);
+    assert.equal(probeBudget?.length, 3);
+    assert.deepEqual(probeBudget, finalLease.match(budgetFlags), "early probe must use the final lease's exact validated budgets");
+    assertOrdered(main, [
+      "CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS=",
+      'node "$TRUSTED_SOURCE_DIR/scripts/verifyDeploymentConfig.cjs"',
+      "RELEASE_EARLY_PROBE_AT=",
+      '"$TRUSTED_SOURCE_DIR/scripts/releaseTransitionLease.cjs" probe',
+      "early release transition horizon is unsafe; no host changes or candidate rebuild performed",
+      "rotate_fixed_recovery_helper",
+      "install_fixed_qa_access_operator",
+      "initialize_release_recovery_snapshot",
+      "prepare_runtime_env",
+      "quiesce_managed_maintenance_for_sqlite_snapshot",
+      "run_build_step npm-ci",
+      '"$NEXT_DIR/scripts/releaseTransitionLease.cjs" create',
+      '"$NEXT_DIR/scripts/releaseTransitionLease.cjs" verify',
+    ], "an advisory probe must precede mutations while final lease and CAS remain mandatory");
+    assert.doesNotMatch(finalLease, /RELEASE_EARLY_PROBE_AT/, "the final lease must take a new timestamp after candidate construction");
+  });
+
   check("candidate transition lease bounds refresh, verifier runtime, and the final atomic swap", () => {
     const main = mainProgram(bundleRelease);
     const verifierBody = extractFunction(bundleRelease, "run_trusted_candidate_verifier");

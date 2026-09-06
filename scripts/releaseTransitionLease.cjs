@@ -424,8 +424,8 @@ const writeLeaseAtomic = (filePath, lease) => {
 
 const parseCli = (argv) => {
   const [mode, ...tokens] = argv;
-  if (!new Set(["create", "verify"]).has(mode)) {
-    throw new ReleaseTransitionLeaseError("mode must be create or verify");
+  if (!new Set(["probe", "create", "verify"]).has(mode)) {
+    throw new ReleaseTransitionLeaseError("mode must be probe, create or verify");
   }
   const options = {};
   for (let index = 0; index < tokens.length; index += 2) {
@@ -442,23 +442,30 @@ const parseCli = (argv) => {
 const main = (argv = process.argv.slice(2)) => {
   const { mode, options } = parseCli(argv);
   const currentPath = path.resolve(options.current || "");
-  const leasePath = path.resolve(options.lease || "");
-  if (!options.current || !options.lease || !options.at) {
+  if (mode === "probe" && options.lease !== undefined) {
+    throw new ReleaseTransitionLeaseError("read-only probe does not accept --lease");
+  }
+  if (!options.current || !options.at || (mode !== "probe" && !options.lease)) {
+    if (mode === "probe") {
+      throw new ReleaseTransitionLeaseError("--current and --at are required");
+    }
     throw new ReleaseTransitionLeaseError("--current, --lease and --at are required");
   }
   const payload = readRegularJson(currentPath, "candidate current JSON");
-  if (mode === "create") {
+  if (mode === "probe" || mode === "create") {
     const lease = createTransitionLease(payload, {
       refreshAt: options.at,
       verifierRuntimeMaxSeconds: options["verifier-runtime-max-seconds"],
       preverifyRefreshBudgetSeconds: options["preverify-refresh-budget-seconds"],
       atomicSwapMarginSeconds: options["atomic-swap-margin-seconds"],
     });
-    writeLeaseAtomic(leasePath, lease);
+    // A successful probe is advisory only: it neither creates a lease nor
+    // reserves a window. The candidate and final CAS must still be checked.
+    if (mode === "create") writeLeaseAtomic(path.resolve(options.lease), lease);
     process.stdout.write(`${JSON.stringify({ ok: true, mode, ...lease })}\n`);
     return lease;
   }
-  const lease = readRegularJson(leasePath, "transition lease");
+  const lease = readRegularJson(path.resolve(options.lease), "transition lease");
   const result = verifyTransitionLease(payload, lease, {
     verifiedAt: options.at,
     requiredMarginSeconds: options["required-margin-seconds"] ?? null,

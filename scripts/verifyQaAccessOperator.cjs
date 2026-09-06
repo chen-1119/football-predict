@@ -68,6 +68,12 @@ const run = (args) => new Promise((resolve, reject) => {
 
 server.listen(0, "127.0.0.1", async () => {
   try {
+    const helperBytes = fs.readFileSync(helperPath);
+    const firstLineEnd = helperBytes.indexOf(0x0a);
+    assert.ok(firstLineEnd > 0, "QA helper must start with a newline-terminated shebang");
+    assert.equal(helperBytes.subarray(0, firstLineEnd).includes(0x0d), false,
+      "QA helper shebang must use LF, not CRLF, so Linux can execute it directly");
+
     const create = await run(["create", "codex-qa-browser"]);
     assert.equal(create.status, 0, create.stderr);
     assert.equal(JSON.parse(create.stdout).ttlSeconds, 900);
@@ -97,7 +103,7 @@ server.listen(0, "127.0.0.1", async () => {
     assert.match(release, /visudo -cf/);
     assert.match(release, /football-access-code-qa\.cjs/);
 
-    process.stdout.write(`${JSON.stringify({ ok: true, verifier: "qa-access-operator", checks: 13 }, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify({ ok: true, verifier: "qa-access-operator", checks: 14 }, null, 2)}\n`);
   } catch (error) {
     process.stderr.write(`${error?.stack || error}\n`);
     process.exitCode = 1;

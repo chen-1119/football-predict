@@ -1,6 +1,9 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
+const { createSourceCycleId, fetchEndpoint } = require("./collectSportterySnapshot.cjs");
+const { SPORTTERY_RESULT_URL } = require("./sportteryEndpointContract.cjs");
+const { createFastUploadSnapshot, resultFingerprint } = require("./sportteryFastResultLane.cjs");
 const {
   fetchJsonBounded,
   validateLocalUrl,
@@ -137,6 +140,134 @@ const readPrivateKey = (inputPath) => {
   return value;
 };
 
+const collectServerDirectEvidence = async ({
+  collectorEnv,
+  keyId,
+  privateKeyPem,
+  maxAgeMinutes,
+  createMarketEvidence,
+  resultRequest,
+}) => {
+  const resultSourceCycleId = createSourceCycleId();
+  const [marketOutcome, resultOutcome] = await Promise.allSettled([
+    Promise.resolve().then(() => createMarketEvidence(collectorEnv)),
+    fetchEndpoint({
+      id: "result", method: "result", page: 1, role: "result",
+      url: SPORTTERY_RESULT_URL,
+      sourceCycleId: resultSourceCycleId,
+      attestationSigner: { keyId, privateKeyPem },
+      ...(resultRequest ? { request: resultRequest } : {}),
+    }),
+  ]);
+  if (marketOutcome.status !== "fulfilled") throw marketOutcome.reason;
+  // This builder still requires both complete market endpoints. A result
+  // response must never enter the market-evidence quorum or replace a market.
+  const marketEvidence = marketOutcome.value;
+  const companionSnapshot = buildFastLaneSnapshot(marketEvidence, { keyId, maxAgeMinutes });
+  const resultEndpoint = resultOutcome.status === "fulfilled" ? resultOutcome.value : null;
+  const resultCollected = Boolean(resultEndpoint?.ok === true && Number(resultEndpoint.rows) > 0);
+  if (!resultCollected) {
+    return {
+      marketEvidence,
+      // Uploading only fresh companions uses the server's existing monotonic
+      // merge, preserving the old signed result and its original clock.
+      fastLaneSnapshot: companionSnapshot,
+      resultProbe: {
+        collected: false,
+        receivedAt: null,
+        rows: 0,
+        reason: resultOutcome.status === "rejected" ? "official-result-request-failed" : "official-result-empty",
+        errorCode: resultOutcome.reason?.code || null,
+      },
+    };
+  }
+  const probeSnapshot = {
+    sourceCycleId: resultSourceCycleId,
+    capturedAt: resultEndpoint.receivedAt,
+    endpoints: [resultEndpoint],
+    producer: companionSnapshot.producer,
+    maxAgeMinutes: companionSnapshot.maxAgeMinutes,
+  };
+  return {
+    marketEvidence,
+    fastLaneSnapshot: createFastUploadSnapshot({
+      probeSnapshot,
+      companionSnapshot,
+      fingerprint: resultFingerprint(resultEndpoint),
+    }),
+    resultProbe: {
+      collected: true,
+      receivedAt: resultEndpoint.receivedAt,
+      rows: resultEndpoint.rows,
+      reason: "signed-official-result-collected",
+      errorCode: null,
+    },
+  };
+};
+
+const publishServerDirectCollection = async ({
+  collection,
+  adminToken,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+  fastLaneUploadUrl,
+  collectorUploadUrl,
+  upload = fetchJsonBounded,
+  logger = console.log,
+}) => {
+  const evidence = collection.marketEvidence;
+  const fastLane = await upload(
+    validateFastLaneUploadUrl(fastLaneUploadUrl),
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${adminToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ snapshot: collection.fastLaneSnapshot }),
+    },
+    { timeoutMs, maxBytes: MAX_LOCAL_RESPONSE_BYTES, label: "server-direct fast lane upload" },
+  );
+  if (fastLane?.ok !== true || fastLane?.storedValidation?.ok !== true) {
+    throw new Error("server-direct fast lane upload was not accepted");
+  }
+  if (collection.resultProbe.collected && (
+    fastLane?.stored !== true || fastLane?.watcherEligible !== true || fastLane?.publicationEligibility?.eligible !== true
+  )) throw new Error("server-direct result was stored without trusted watcher eligibility");
+  const accepted = await upload(
+    validateLocalUrl(collectorUploadUrl),
+    {
+      method: "POST",
+      headers: { authorization: `Bearer ${adminToken}`, "content-type": "application/json" },
+      body: JSON.stringify(evidence),
+    },
+    { timeoutMs, maxBytes: MAX_LOCAL_RESPONSE_BYTES, label: "server-direct evidence upload" },
+  );
+  if (accepted?.ok !== true) throw new Error("server-direct evidence upload was not accepted");
+  const summary = {
+    ok: true,
+    degraded: !collection.resultProbe.collected,
+    transport: "new-server-direct",
+    capturedAt: evidence.capturedAt || null,
+    sourceCycleId: evidence.sourceCycleId || null,
+    endpoints: evidence.endpoints.length,
+    rows: evidence.endpoints.reduce((sum, endpoint) => sum + Number(endpoint.rows || 0), 0),
+    errors: evidence.errors,
+    resultProbe: {
+      ...collection.resultProbe,
+      refreshed: collection.resultProbe.collected,
+      status: collection.resultProbe.collected ? "fresh" : "degraded-result-unavailable",
+      previousResultPreserved: !collection.resultProbe.collected && fastLane?.mergedWithPreviousResult === true,
+      // Collection/storage is not proof that the watcher published a score.
+      scorePublicationConfirmed: false,
+    },
+    fastLaneRows: Number(fastLane?.storedValidation?.rows || 0),
+    fastLaneCapturedAt: fastLane?.storedValidation?.capturedAt || null,
+    fastLaneMergedWithPreviousResult: fastLane?.mergedWithPreviousResult === true,
+    acceptedRows: Number(accepted.acceptedRows || 0),
+    storeRows: Number(accepted.storeRows || 0),
+    storeRootHash: accepted.storeRootHash || null,
+  };
+  logger?.(JSON.stringify(summary, null, 2));
+  return summary;
+};
+
 const run = async ({ logger = console.log } = {}) => {
   const privateKey = readPrivateKey(process.env.SPORTTERY_SERVER_DIRECT_COLLECTOR_PRIVATE_KEY_PATH);
   const keyId = requiredText(process.env.SPORTTERY_SERVER_DIRECT_COLLECTOR_KEY_ID, "SPORTTERY_SERVER_DIRECT_COLLECTOR_KEY_ID");
@@ -154,62 +285,24 @@ const run = async ({ logger = console.log } = {}) => {
   const timeoutMs = positiveInteger(process.env.SPORTTERY_SERVER_DIRECT_COLLECTOR_TIMEOUT_MS, DEFAULT_TIMEOUT_MS);
   const collectorUrl = pathToFileURL(path.join(rootDir, "cloudflare", "sync-trigger", "src", "sportteryCollector.js")).href;
   const { createSportteryEvidence } = await import(collectorUrl);
-  const evidence = await createSportteryEvidence({
-    SPORTTERY_COLLECTOR_PRIVATE_KEY_PKCS8: privateKey,
-    SPORTTERY_COLLECTOR_KEY_ID: keyId,
-    SPORTTERY_COLLECTOR_KEY_FINGERPRINT: keyFingerprint,
-    SPORTTERY_COLLECTOR_TRANSPORT: "new-server-direct",
-    SPORTTERY_COLLECTOR_CYCLE_PREFIX: "new-server-sporttery",
-  });
-  const fastLaneSnapshot = buildFastLaneSnapshot(evidence, {
+  const collection = await collectServerDirectEvidence({
     keyId,
+    privateKeyPem: privateKey,
     maxAgeMinutes: process.env.SPORTTERY_RELAY_MAX_AGE_MINUTES,
+    createMarketEvidence: createSportteryEvidence,
+    collectorEnv: {
+      SPORTTERY_COLLECTOR_PRIVATE_KEY_PKCS8: privateKey,
+      SPORTTERY_COLLECTOR_KEY_ID: keyId,
+      SPORTTERY_COLLECTOR_KEY_FINGERPRINT: keyFingerprint,
+      SPORTTERY_COLLECTOR_TRANSPORT: "new-server-direct",
+      SPORTTERY_COLLECTOR_CYCLE_PREFIX: "new-server-sporttery",
+    },
   });
-  const fastLane = await fetchJsonBounded(
-    validateFastLaneUploadUrl(process.env.SPORTTERY_SERVER_DIRECT_RELAY_UPLOAD_URL),
-    {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${adminToken}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ snapshot: fastLaneSnapshot }),
-    },
-    { timeoutMs, maxBytes: MAX_LOCAL_RESPONSE_BYTES, label: "server-direct fast lane upload" },
-  );
-  if (fastLane?.ok !== true || fastLane?.storedValidation?.ok !== true) {
-    throw new Error("server-direct fast lane upload was not accepted");
-  }
-  const accepted = await fetchJsonBounded(
-    validateLocalUrl(process.env.SPORTTERY_SERVER_DIRECT_COLLECTOR_UPLOAD_URL),
-    {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${adminToken}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify(evidence),
-    },
-    { timeoutMs, maxBytes: MAX_LOCAL_RESPONSE_BYTES, label: "server-direct evidence upload" },
-  );
-  if (accepted?.ok !== true) throw new Error("server-direct evidence upload was not accepted");
-  const summary = {
-    ok: true,
-    transport: "new-server-direct",
-    capturedAt: evidence.capturedAt || null,
-    sourceCycleId: evidence.sourceCycleId || null,
-    endpoints: evidence.endpoints.length,
-    rows: evidence.endpoints.reduce((sum, endpoint) => sum + Number(endpoint.rows || 0), 0),
-    errors: evidence.errors,
-    fastLaneRows: Number(fastLane?.storedValidation?.rows || 0),
-    fastLaneCapturedAt: fastLane?.storedValidation?.capturedAt || null,
-    fastLaneMergedWithPreviousResult: fastLane?.mergedWithPreviousResult === true,
-    acceptedRows: Number(accepted.acceptedRows || 0),
-    storeRows: Number(accepted.storeRows || 0),
-    storeRootHash: accepted.storeRootHash || null,
-  };
-  logger?.(JSON.stringify(summary, null, 2));
-  return summary;
+  return publishServerDirectCollection({
+    collection, adminToken, timeoutMs, logger,
+    fastLaneUploadUrl: process.env.SPORTTERY_SERVER_DIRECT_RELAY_UPLOAD_URL,
+    collectorUploadUrl: process.env.SPORTTERY_SERVER_DIRECT_COLLECTOR_UPLOAD_URL,
+  });
 };
 
 if (require.main === module) {
@@ -225,6 +318,8 @@ if (require.main === module) {
 
 module.exports = {
   buildFastLaneSnapshot,
+  collectServerDirectEvidence,
+  publishServerDirectCollection,
   readPrivateKey,
   run,
   validateFastLaneUploadUrl,

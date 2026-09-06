@@ -35,7 +35,28 @@ const sqliteRunawayGrowthBytesPerHour = Math.max(
 );
 const requireSqlite = process.env.RUNTIME_MONITOR_REQUIRE_SQLITE !== "0";
 const autoRepairSqlite = process.env.RUNTIME_MONITOR_AUTO_REPAIR_SQLITE === "1";
-const postgresMode = String(process.env.FOOTBALL_POSTGRES_MODE || "disabled").trim().toLowerCase();
+const readAllowedRuntimeValues = (filePath, allowedKeys) => {
+  const selected = {};
+  if (!String(filePath || "").trim()) return selected;
+  try {
+    const allowed = new Set(allowedKeys);
+    for (const line of fs.readFileSync(filePath, "utf8").split(/\r?\n/)) {
+      const match = line.match(/^\s*([A-Z][A-Z0-9_]*)\s*=(.*)$/);
+      if (!match || !allowed.has(match[1])) continue;
+      let value = match[2].trim();
+      if (value.length >= 2 && ((value.startsWith('"') && value.endsWith('"'))
+        || (value.startsWith("'") && value.endsWith("'")))) value = value.slice(1, -1);
+      selected[match[1]] = value;
+    }
+  } catch { /* Missing runtime configuration remains fail-closed. */ }
+  return selected;
+};
+const resolveMonitorPostgresMode = (env = process.env, readValues = readAllowedRuntimeValues) => {
+  const value = env.FOOTBALL_POSTGRES_MODE
+    ?? readValues(env.RUNTIME_MONITOR_AUTH_FILE, ["FOOTBALL_POSTGRES_MODE"]).FOOTBALL_POSTGRES_MODE;
+  return String(value || "disabled").trim().toLowerCase();
+};
+const postgresMode = resolveMonitorPostgresMode();
 const checkSystemd = process.env.RUNTIME_MONITOR_CHECK_SYSTEMD !== "0" && !isWindows;
 const checkDisk = process.env.RUNTIME_MONITOR_CHECK_DISK !== "0" && !isWindows;
 const checkCleanup = process.env.RUNTIME_MONITOR_CHECK_CLEANUP !== "0";
@@ -61,7 +82,7 @@ const publicationIdentityToken = (storage) => {
     identity.sourceCycleId,
     identity.committedAt,
   ].map((value) => String(value || "").trim());
-  return values.some(Boolean) ? values.join("|") : null;
+  return values.every(Boolean) ? values.join("|") : null;
 };
 
 const evaluateSqliteReadRequirement = ({
@@ -390,6 +411,7 @@ const runCommand = (command, args, options = {}) => {
     env: options.env || process.env,
     encoding: "utf8",
     timeout: options.timeout || commandTimeoutMs,
+    ...(options.killSignal ? { killSignal: options.killSignal } : {}),
     windowsHide: true
   });
   return {
@@ -398,6 +420,100 @@ const runCommand = (command, args, options = {}) => {
     stdout: String(result.stdout || "").trim(),
     stderr: String(result.stderr || "").trim(),
     error: result.error ? (result.error.message || String(result.error)) : null
+  };
+};
+
+const MONITOR_POSTGRES_ENV_KEYS = Object.freeze([
+  "FOOTBALL_POSTGRES_MODE", "FOOTBALL_POSTGRES_URL", "DATABASE_URL", "FOOTBALL_POSTGRES_SSL_MODE",
+  "FOOTBALL_POSTGRES_CONNECT_TIMEOUT_MS", "FOOTBALL_POSTGRES_IDLE_TIMEOUT_MS",
+  "FOOTBALL_POSTGRES_QUERY_TIMEOUT_MS", "FOOTBALL_POSTGRES_POOL_MAX", "FOOTBALL_POSTGRES_POOL_MIN",
+]);
+const monitorRepairEnvironment = (stage, env = process.env, readValues = readAllowedRuntimeValues) => {
+  // Keep the monitor's admin/provider credentials out of repair children. Only
+  // the PostgreSQL projection receives its narrowly selected connection values.
+  const selected = {};
+  const runtimeKeys = ["PATH", "SystemRoot", "SYSTEMROOT", "WINDIR", "ComSpec", "TEMP", "TMP", "TMPDIR",
+    "HOME", "USERPROFILE", "NODE_ENV", "NODE_OPTIONS", "SERVER_STORE_DIR", "DATASTORE_SQLITE_PATH"];
+  for (const key of [...runtimeKeys, ...Object.keys(env).filter((key) => /^SQLITE_[A-Z0-9_]+$/.test(key))]) {
+    if (env[key] !== undefined) selected[key] = env[key];
+  }
+  selected.SERVER_STORE_DIR = env.SERVER_STORE_DIR || storeDir;
+  selected.DATASTORE_SQLITE_PATH = env.DATASTORE_SQLITE_PATH || path.join(selected.SERVER_STORE_DIR, "football.db");
+  selected.SQLITE_VACUUM_AFTER_EXPORT = "0";
+  selected.SQLITE_MAINTENANCE_WINDOW = "";
+  if (stage === "projection") {
+    const configured = readValues(env.RUNTIME_MONITOR_AUTH_FILE, MONITOR_POSTGRES_ENV_KEYS);
+    for (const key of MONITOR_POSTGRES_ENV_KEYS) {
+      const value = env[key] ?? configured[key];
+      if (value !== undefined) selected[key] = value;
+    }
+  }
+  return selected;
+};
+const runSqliteRepairCommands = ({ env = process.env, commandRunner = runCommand, now = Date.now } = {}) => {
+  const deadline = now() + sqliteRepairTimeoutMs;
+  const runStep = (stage, script, args = []) => {
+    const remainingMs = deadline - now();
+    if (remainingMs <= 0) return {
+      stage, ok: false, status: null, signal: null, payload: null, error: `${stage}-budget-exhausted`,
+    };
+    // These entrypoints run their database work in this process, with no npm
+    // shell or grandchildren. spawnSync waits for that direct Node process to
+    // finish (including timeout SIGKILL) before the canonical lock can release.
+    const result = commandRunner(process.execPath, [path.join(rootDir, "scripts", script), ...args], {
+      timeout: remainingMs,
+      killSignal: "SIGKILL",
+      env: monitorRepairEnvironment(stage, env),
+    });
+    let payload = null;
+    try { payload = JSON.parse(result.stdout || "{}"); } catch { /* Reject malformed or multiple documents. */ }
+    const ok = result.status === 0 && !result.error && payload?.ok === true;
+    return {
+      stage, ok, status: result.status, signal: result.signal || null,
+      payload: ok ? payload : null,
+      // Never copy raw child stderr/stdout: connection errors may contain secrets.
+      error: ok ? null : result.error ? `${stage}-process-failed`
+        : result.status !== 0 ? `${stage}-command-failed` : `${stage}-result-invalid`,
+    };
+  };
+  const sqlite = runStep("sqlite", "exportDataStoreSqlite.cjs");
+  const projection = sqlite.ok ? runStep("projection", "syncPostgresProjection.cjs", ["--if-enabled"]) : null;
+  return { ok: sqlite.ok && projection?.ok === true, sqlite, projection };
+};
+
+const assessFastResultProbeFreshness = (watcher, { required = true, nowMs = Date.now() } = {}) => {
+  const evidence = watcher?.inputEvidence;
+  const receivedAt = typeof evidence?.resultProbeReceivedAt === "string"
+    ? evidence.resultProbeReceivedAt : null;
+  const receivedMs = Date.parse(receivedAt || "");
+  const ageSeconds = Number.isFinite(receivedMs) && Number.isFinite(nowMs)
+    ? (nowMs - receivedMs) / 1000 : null;
+  const maxAgeSeconds = typeof evidence?.freshnessMaxAgeSeconds === "number"
+    && Number.isFinite(evidence.freshnessMaxAgeSeconds) && evidence.freshnessMaxAgeSeconds > 0
+    ? evidence.freshnessMaxAgeSeconds : null;
+  const reported = String(evidence?.resultProbeFreshness || "unavailable").toLowerCase();
+  const freshness = !evidence || ageSeconds === null ? "unavailable"
+    : reported === "future" ? "future"
+      : ["unknown", "unavailable"].includes(reported) ? reported
+        : maxAgeSeconds === null ? "unknown"
+          : reported === "stale" || ageSeconds > maxAgeSeconds ? "stale"
+            : reported === "fresh" ? "fresh" : "unknown";
+  // Source freshness is independent of a publisher's successful no-op. Never
+  // substitute lastCheckedAt/lastSuccessAt or a fresh market companion clock.
+  const status = !required || freshness === "fresh" ? "ok" : "watch";
+  return {
+    status,
+    required,
+    capabilityPresent: Boolean(evidence),
+    freshness,
+    reportedFreshness: evidence ? reported : null,
+    resultProbeReceivedAt: receivedAt,
+    resultProbeAgeSeconds: ageSeconds === null ? null : Math.round(ageSeconds),
+    freshnessMaxAgeSeconds: maxAgeSeconds,
+    reason: !required ? "not-required-on-this-runtime"
+      : !evidence ? "result-probe-freshness-capability-missing"
+        : `result-probe-${freshness}`,
+    scope: "collection-freshness-not-terminal-result-authority",
   };
 };
 
@@ -585,6 +701,10 @@ const checkHealth = async () => {
                 ? "watcher-reported-error"
                 : "watcher-healthy"
   });
+  const resultProbeFreshness = assessFastResultProbeFreshness(fastResultWatcher, {
+    required: requireFastResultWatcher,
+  });
+  addCheck("fast result probe freshness", resultProbeFreshness.status, resultProbeFreshness);
 
   const sqliteRequirement = evaluateSqliteReadRequirement({
     sqlite,
@@ -709,44 +829,44 @@ const maybeRepairSqliteRead = async (health) => {
 
   const startedAt = new Date().toISOString();
   try {
-    const result = runCommand(npmCommand, ["run", "datastore:sqlite", "--silent"], {
-      timeout: sqliteRepairTimeoutMs,
-      env: {
-        ...process.env,
-        SERVER_STORE_DIR: process.env.SERVER_STORE_DIR || storeDir,
-        DATASTORE_SQLITE_PATH: process.env.DATASTORE_SQLITE_PATH || path.join(storeDir, "football.db")
-      }
-    });
-    let exportPayload = null;
-    try {
-      exportPayload = JSON.parse(result.stdout || "{}");
-    } catch {
-      exportPayload = null;
-    }
-    const exportOk = result.status === 0 && exportPayload?.ok === true;
+    const result = runSqliteRepairCommands();
+    const exportPayload = result.sqlite.payload;
+    const exportOk = result.ok;
     addCheck("sqlite auto-repair", exportOk ? "ok" : "failed", {
       startedAt,
       finishedAt: new Date().toISOString(),
       timeoutMs: sqliteRepairTimeoutMs,
-      exitStatus: result.status,
-      signal: result.signal || null,
+      exitStatus: result.projection?.status ?? result.sqlite.status,
+      signal: result.projection?.signal || result.sqlite.signal || null,
       beforeReadSource: currentRead.source || null,
       lockOwner: syncLock.info?.owner || null,
       exportOk,
+      sqliteExportOk: result.sqlite.ok,
+      postgresProjectionOk: result.projection?.ok ?? null,
       counts: exportPayload?.counts || null,
       dbPath: exportPayload?.dbPath || process.env.DATASTORE_SQLITE_PATH || path.join(storeDir, "football.db"),
-      error: exportOk ? null : (result.error || result.stderr || result.stdout.slice(0, 500) || "sqlite export failed")
+      error: result.sqlite.error || result.projection?.error || null
     });
     if (!exportOk) return health;
 
     const after = await requestJson("/api/v1/health");
     const afterRead = after.body?.data?.currentRead || {};
     const afterSqlite = after.body?.storage?.sqlite || {};
-    const repaired = after.ok && afterRead.source === "sqlite";
+    const afterRequirement = evaluateSqliteReadRequirement({
+      sqlite: afterSqlite,
+      postgres: after.body?.storage?.postgres || {},
+      currentRead: afterRead,
+      requireSqlite,
+      autoRepairSqlite,
+      postgresMode,
+    });
+    const repaired = after.ok && afterRequirement.requirementMet;
     addCheck("sqlite primary read after repair", repaired ? "ok" : "failed", {
       httpStatus: after.status,
       currentReadSource: afterRead.source || null,
       sqliteAvailable: afterSqlite.available ?? null,
+      publicationParity: afterRequirement.publicationParity,
+      reason: afterRequirement.reason,
       currentRows: after.body?.data?.currentCount ?? null,
       historyRows: after.body?.data?.historyCount ?? null,
       error: after.error || after.parseError || null
@@ -1784,6 +1904,10 @@ const buildPayload = (
       fastResultWatcherLastCheckedAt: health?.sync?.fastResultWatcher?.lastCheckedAt || null,
       fastResultWatcherLastPublishedAt: health?.sync?.fastResultWatcher?.lastPublishedAt || null,
       fastResultWatcherLastError: health?.sync?.fastResultWatcher?.lastError || null,
+      fastResultProbeFreshness: assessFastResultProbeFreshness(health?.sync?.fastResultWatcher, {
+        required: requireFastResultWatcher,
+      }).freshness,
+      fastResultProbeReceivedAt: health?.sync?.fastResultWatcher?.inputEvidence?.resultProbeReceivedAt || null,
       sqliteBytes: health?.storage?.sqlite?.bytes ?? null,
       sqliteSchemaVersion: health?.storage?.sqlite?.schemaVersion || null,
       sqliteFreeRatio: health?.storage?.sqlite?.physical?.freeRatio ?? null,
@@ -1890,6 +2014,11 @@ if (require.main === module) {
 }
 
 module.exports = {
+  readAllowedRuntimeValues,
+  resolveMonitorPostgresMode,
+  monitorRepairEnvironment,
+  runSqliteRepairCommands,
+  assessFastResultProbeFreshness,
   assessSqliteStorageStability,
   evaluateSqliteReadRequirement,
   candidateProspectiveCaptureRuntimeStatus,

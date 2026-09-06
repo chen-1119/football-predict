@@ -12,6 +12,7 @@ const {
   RESULT_SEMANTIC_FINGERPRINT_VERSION,
   createRelayFastResultWatcher,
   createRelayResultSemanticFingerprintReader,
+  auditRelayFastResultEligibility,
   relayResultSemanticFingerprint,
   relaySnapshotFingerprint,
   retryablePublisherSkip,
@@ -399,6 +400,60 @@ const run = async () => {
     ), { retryCalls, health: retryWatcher.health() });
     retryWatcher.stop();
 
+    let recoveryFingerprint = "completed-result-a";
+    let recoveryPermitHeld = false;
+    let recoveryPublisherRuns = 0;
+    let recoveryPublishedEvents = 0;
+    const recoveryWatcher = createRelayFastResultWatcher({
+      enabled: true,
+      relaySnapshotPath: "unused-in-recovery-test.json",
+      publisherPath: "unused-in-recovery-test.cjs",
+      cwd: tempDir,
+      pollMs: 250,
+      readFingerprint: () => recoveryFingerprint,
+      acquireRunPermit: async () => ({ acquired: !recoveryPermitHeld, reason: "fixture-writer-active" }),
+      runPublisher: async () => {
+        recoveryPublisherRuns += 1;
+        return recoveryFingerprint === "invalid-envelope-b"
+          ? { ok: true, skipped: true, reason: "trusted-fast-result-endpoints-unavailable" }
+          : { ok: true, skipped: true, reason: "no-result-state-change", publishedRows: 0 };
+      },
+      onPublished: () => { recoveryPublishedEvents += 1; },
+      logger: { warn: () => {} },
+    });
+    await recoveryWatcher.check();
+    recoveryFingerprint = "invalid-envelope-b";
+    await recoveryWatcher.check();
+    const recoveryError = recoveryWatcher.health().lastError;
+    recoveryFingerprint = "completed-result-a";
+    recoveryPermitHeld = true;
+    await recoveryWatcher.check();
+    check("returning to a completed result after failure retains the error and publisher backoff", (
+      recoveryPublisherRuns === 2
+      && recoveryWatcher.health().pending === true
+      && recoveryWatcher.health().lastError === recoveryError
+    ), { health: recoveryWatcher.health(), recoveryPublisherRuns });
+    await wait(550);
+    await recoveryWatcher.check();
+    check("completed-result recovery must still acquire the existing publication lock", (
+      recoveryPublisherRuns === 2
+      && recoveryWatcher.health().pending === true
+      && recoveryWatcher.health().deferred === 1
+      && recoveryWatcher.health().lastError === recoveryError
+    ), { health: recoveryWatcher.health(), recoveryPublisherRuns });
+    recoveryPermitHeld = false;
+    await wait(550);
+    await recoveryWatcher.check();
+    await recoveryWatcher.check();
+    check("a real successful no-op publisher retry clears the recovered error without publication churn", (
+      recoveryPublisherRuns === 3
+      && recoveryWatcher.health().lastError === null
+      && recoveryWatcher.health().pending === false
+      && recoveryWatcher.health().lastPublishedAt === null
+      && recoveryPublishedEvents === 0
+    ), { health: recoveryWatcher.health(), recoveryPublisherRuns, recoveryPublishedEvents });
+    await recoveryWatcher.stop();
+
     let permitHeld = true;
     let permitRuns = 0;
     let permitReleases = 0;
@@ -736,6 +791,121 @@ const run = async () => {
     const semanticReader = createRelayResultSemanticFingerprintReader(semanticRelayPath, {
       trustRegistry: semanticKeyPair.registry,
     });
+    const expiryRelayPath = path.join(tempDir, "relay-semantic-clock-expiry.json");
+    const expirySnapshot = signedFastLaneSnapshot({ keyPair: semanticKeyPair, currentMarker: "expiry" });
+    fs.writeFileSync(expiryRelayPath, JSON.stringify(expirySnapshot), "utf8");
+    const expiryCapturedMs = Date.parse(expirySnapshot.capturedAt);
+    let expiryNowMs = expiryCapturedMs;
+    const expiryOptions = {
+      trustRegistry: semanticKeyPair.registry,
+      nowMs: () => expiryNowMs,
+      maxAgeMs: 60_000,
+    };
+    const expiryReader = createRelayResultSemanticFingerprintReader(expiryRelayPath, expiryOptions);
+    const originalReadFileSync = fs.readFileSync;
+    let expiryFileReads = 0;
+    let expiryInitialFingerprint;
+    let expiryBoundaryFingerprint;
+    let expiryStaleFingerprint;
+    try {
+      fs.readFileSync = function (filePath, ...args) {
+        if (String(filePath) === expiryRelayPath) expiryFileReads += 1;
+        return originalReadFileSync.call(this, filePath, ...args);
+      };
+      expiryInitialFingerprint = expiryReader();
+      for (let seconds = 1; seconds <= 60; seconds += 1) {
+        expiryNowMs = expiryCapturedMs + seconds * 1000;
+        expiryBoundaryFingerprint = expiryReader();
+      }
+      expiryNowMs = expiryCapturedMs + 60_001;
+      expiryStaleFingerprint = expiryReader();
+      for (let seconds = 1; seconds <= 60; seconds += 1) {
+        expiryNowMs = expiryCapturedMs + 60_001 + seconds * 1000;
+        expiryReader();
+      }
+    } finally {
+      fs.readFileSync = originalReadFileSync;
+    }
+    check("unchanged semantic cache expires exactly after signed envelope freshness without repeated JSON reads", (
+      expiryInitialFingerprint?.startsWith(`${RESULT_SEMANTIC_FINGERPRINT_VERSION}:`)
+      && expiryBoundaryFingerprint === expiryInitialFingerprint
+      && expiryStaleFingerprint === relaySnapshotFingerprint(expiryRelayPath)
+      && expiryFileReads === 2
+    ), { expiryInitialFingerprint, expiryBoundaryFingerprint, expiryStaleFingerprint, expiryFileReads });
+    const mutableTrustRegistry = JSON.parse(JSON.stringify(semanticKeyPair.registry));
+    const trustChangeReader = createRelayResultSemanticFingerprintReader(expiryRelayPath, {
+      trustRegistry: mutableTrustRegistry,
+      nowMs: expiryCapturedMs,
+      maxAgeMs: 60_000,
+    });
+    const trustedBeforeRevocation = trustChangeReader();
+    mutableTrustRegistry.keys = [];
+    const rejectedAfterRevocation = trustChangeReader();
+    check("trust registry changes invalidate a completed semantic cache without a relay file rewrite", (
+      trustedBeforeRevocation?.startsWith(`${RESULT_SEMANTIC_FINGERPRINT_VERSION}:`)
+      && rejectedAfterRevocation === relaySnapshotFingerprint(expiryRelayPath)
+      && trustChangeReader.inputEvidence().publicationEligibleAtLastAudit === false
+    ), { trustedBeforeRevocation, rejectedAfterRevocation });
+    let expiryPublisherRuns = 0;
+    let expiryPublishedEvents = 0;
+    const expiryWatcher = createRelayFastResultWatcher({
+      enabled: true,
+      relaySnapshotPath: expiryRelayPath,
+      publisherPath: "unused-in-expiry-test.cjs",
+      pollMs: 250,
+      readFingerprint: expiryReader,
+      runPublisher: async () => {
+        expiryPublisherRuns += 1;
+        const audit = auditRelayFastResultEligibility(expirySnapshot, expiryOptions);
+        return audit.eligible
+          ? { ok: true, skipped: true, reason: "no-explicit-official-terminal-results" }
+          : { ok: true, skipped: true, reason: "trusted-fast-result-endpoints-unavailable" };
+      },
+      onPublished: () => { expiryPublishedEvents += 1; },
+      logger: { warn: () => {} },
+    });
+    expiryNowMs = expiryCapturedMs;
+    await expiryWatcher.check();
+    expiryNowMs = expiryCapturedMs + 60_001;
+    await expiryWatcher.check();
+    await expiryWatcher.check();
+    check("a time-expired unchanged upstream becomes retryable failure instead of a healthy no-op", (
+      expiryPublisherRuns === 2
+      && expiryWatcher.health().pending === true
+      && expiryWatcher.health().lastError?.code === "PUBLISHER_RETRYABLE_SKIP"
+      && expiryWatcher.health().lastPublishedAt === null
+      && expiryPublishedEvents === 0
+    ), { expiryPublisherRuns, expiryPublishedEvents, health: expiryWatcher.health() });
+    await expiryWatcher.stop();
+    const historicalProbePath = path.join(tempDir, "relay-fresh-market-historical-result.json");
+    const historicalProbeAt = new Date(Date.now() - 2 * 24 * 60 * 60_000).toISOString();
+    fs.writeFileSync(historicalProbePath, JSON.stringify(signedFastLaneSnapshot({
+      keyPair: semanticKeyPair,
+      currentMarker: "fresh-market-old-probe",
+      resultObservedAt: historicalProbeAt,
+      resultSourceCycleId: "historical-signed-terminal-authority",
+    })), "utf8");
+    const historicalProbeWatcher = createRelayFastResultWatcher({
+      enabled: true,
+      relaySnapshotPath: historicalProbePath,
+      publisherPath: "unused-in-input-evidence-test.cjs",
+      fingerprintTrustRegistry: semanticKeyPair.registry,
+      runPublisher: async () => ({ ok: true, skipped: true, reason: "no-result-state-change" }),
+      logger: { warn: () => {} },
+    });
+    await historicalProbeWatcher.check();
+    const historicalProbeHealth = historicalProbeWatcher.health();
+    check("healthy historical-authority no-op explicitly reports a stale result probe despite fresh market companions", (
+      historicalProbeHealth.lastError === null
+      && historicalProbeHealth.lastSuccessAt !== null
+      && historicalProbeHealth.lastPublishedAt === null
+      && historicalProbeHealth.inputEvidence?.publicationEligibleAtLastAudit === true
+      && historicalProbeHealth.inputEvidence?.resultProbeReceivedAt === historicalProbeAt
+      && historicalProbeHealth.inputEvidence?.resultProbeFreshness === "stale"
+      && historicalProbeHealth.inputEvidence?.resultProbeAgeSeconds >= 2 * 24 * 60 * 60
+      && JSON.stringify(historicalProbeHealth.inputEvidence).length < 800
+    ), { health: historicalProbeHealth });
+    await historicalProbeWatcher.stop();
     const futureRecoveryPath = path.join(tempDir, "relay-semantic-future-recovery.json");
     let simulatedNowMs = Date.now() + 5_000;
     const futureResultAt = new Date(simulatedNowMs + 60_000).toISOString();

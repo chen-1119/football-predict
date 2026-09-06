@@ -23,6 +23,8 @@ Environment=RUNTIME_MONITOR_SQLITE_REPAIR_TIMEOUT_MS=180000
 Environment=RUNTIME_MONITOR_CHECK_CLEANUP=1
 Environment=RUNTIME_MONITOR_ALLOW_LOCAL_PUSH_PAUSE=0
 Environment=RUNTIME_MONITOR_REQUIRE_CANDIDATE_TEMPORAL_AUDIT=1
+# Read only ADMIN_TOKEN and the allowlisted PostgreSQL settings from this file;
+# do not import provider credentials via a full EnvironmentFile.
 Environment=RUNTIME_MONITOR_AUTH_FILE=/etc/football-predict/env
 ExecStart=/opt/node-v22.22.1/bin/node /opt/football-predict/scripts/checkServerRuntime.cjs
 User=football

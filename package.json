@@ -61,6 +61,8 @@
     "server:prod": "npm run build && node server/index.cjs",
     "preview:server": "node scripts/startLocalPreview.cjs",
     "release:bundle": "node scripts/createReleaseBundle.cjs",
+    "release:queue-server": "node scripts/queueServerRelease.cjs",
+    "verify:release-server-queue": "node scripts/verifyServerReleaseQueue.cjs",
     "release:signing-key": "node scripts/generateReleaseSigningKey.cjs",
     "verify:release-bundle": "node scripts/verifyReleaseBundleSafety.cjs",
     "release:offline-kit": "node scripts/createOfflineReleaseKit.cjs",

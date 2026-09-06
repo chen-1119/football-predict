@@ -5,7 +5,14 @@ const path = require("node:path");
 
 const { getDataStoreStatus } = require("../server/dataStore.cjs");
 const { assessOfficialSourceRedundancy } = require("../server/sourceRedundancy.cjs");
-const { evaluateSqliteReadRequirement } = require("./checkServerRuntime.cjs");
+const {
+  evaluateSqliteReadRequirement,
+  readAllowedRuntimeValues,
+  resolveMonitorPostgresMode,
+  monitorRepairEnvironment,
+  runSqliteRepairCommands,
+  assessFastResultProbeFreshness,
+} = require("./checkServerRuntime.cjs");
 const {
   runCommand,
   summarizeWorkerError,
@@ -289,6 +296,19 @@ const verifyPostgresPrimarySqliteParity = () => {
   assert.equal(mismatched.repairEligible, true);
   assert.equal(mismatched.publicationParity, false);
 
+  for (const key of Object.keys(publication)) {
+    const incomplete = { ...publication, [key]: "" };
+    const requirement = evaluateSqliteReadRequirement({
+      sqlite: { available: true, publication: incomplete },
+      postgres: { available: true, publication: incomplete },
+      currentRead: { source: "postgres" },
+      requireSqlite: true, autoRepairSqlite: true, postgresMode: "primary",
+    });
+    assert.equal(requirement.publicationParity, false, `missing ${key} must not grant parity`);
+    assert.equal(requirement.requirementMet, false);
+  }
+  record("SQLite and PostgreSQL parity requires all four publication identity fields", { fields: 4 });
+
   const sqlitePrimary = evaluateSqliteReadRequirement({
     sqlite: { available: true, publication },
     postgres: { available: false },
@@ -307,6 +327,151 @@ const verifyPostgresPrimarySqliteParity = () => {
   });
 };
 
+const verifyMonitorRepairIsolation = (storeDir) => {
+  const envPath = path.join(storeDir, "monitor-runtime.env");
+  fs.writeFileSync(envPath, [
+    'FOOTBALL_POSTGRES_MODE="primary"',
+    "FOOTBALL_POSTGRES_URL='postgresql://fixture:fixture-password@localhost/test'",
+    "FOOTBALL_POSTGRES_SSL_MODE=disable",
+    "ADMIN_TOKEN=fixture-admin-secret",
+    "API_FOOTBALL_KEY=fixture-provider-secret",
+    "UNRELATED=value",
+  ].join("\n"));
+  const env = {
+    ...process.env,
+    RUNTIME_MONITOR_AUTH_FILE: envPath,
+    SERVER_STORE_DIR: storeDir,
+    ADMIN_TOKEN: "fixture-admin-secret", API_FOOTBALL_KEY: "fixture-provider-secret",
+    FOOTBALL_POSTGRES_MODE: undefined, FOOTBALL_POSTGRES_URL: undefined, DATABASE_URL: undefined,
+    SQLITE_VACUUM_AFTER_EXPORT: "1", SQLITE_MAINTENANCE_WINDOW: "release-stopped",
+  };
+  assert.deepEqual(readAllowedRuntimeValues(envPath, ["FOOTBALL_POSTGRES_MODE"]), { FOOTBALL_POSTGRES_MODE: "primary" });
+  assert.equal(resolveMonitorPostgresMode(env), "primary");
+  assert.equal(resolveMonitorPostgresMode({ ...env, FOOTBALL_POSTGRES_MODE: "disabled" }), "disabled");
+  const sqliteEnv = monitorRepairEnvironment("sqlite", env);
+  const projectionEnv = monitorRepairEnvironment("projection", env);
+  assert.equal(sqliteEnv.ADMIN_TOKEN, undefined);
+  assert.equal(sqliteEnv.API_FOOTBALL_KEY, undefined);
+  assert.equal(sqliteEnv.FOOTBALL_POSTGRES_URL, undefined);
+  assert.equal(sqliteEnv.DATABASE_URL, undefined);
+  assert.equal(sqliteEnv.SQLITE_VACUUM_AFTER_EXPORT, "0");
+  assert.equal(sqliteEnv.SQLITE_MAINTENANCE_WINDOW, "");
+  assert.equal(projectionEnv.FOOTBALL_POSTGRES_MODE, "primary");
+  assert.equal(projectionEnv.FOOTBALL_POSTGRES_URL, "postgresql://fixture:fixture-password@localhost/test");
+  assert.equal(projectionEnv.ADMIN_TOKEN, undefined);
+  assert.equal(projectionEnv.API_FOOTBALL_KEY, undefined);
+  assert.equal(projectionEnv.UNRELATED, undefined);
+  const service = fs.readFileSync(path.join(rootDir, "deploy/light-server/football-monitor.service"), "utf8");
+  assert.ok(!/^EnvironmentFile=/m.test(service));
+  record("monitor reads allowlisted PG configuration without importing provider or admin secrets into repair children", {
+    mode: projectionEnv.FOOTBALL_POSTGRES_MODE, fullEnvironmentFile: false, runtimeVacuumAllowed: false,
+  });
+
+  const calls = [];
+  const repaired = runSqliteRepairCommands({ env, commandRunner(command, args, options) {
+    calls.push({ command, script: path.basename(args[0]), killSignal: options.killSignal });
+    assert.equal(command, process.execPath);
+    assert.equal(options.killSignal, "SIGKILL");
+    assert.ok(options.timeout > 0);
+    return { status: 0, stdout: JSON.stringify({ ok: true, counts: { rows: 1 } }), stderr: "" };
+  } });
+  assert.equal(repaired.ok, true);
+  assert.deepEqual(calls.map((call) => call.script), ["exportDataStoreSqlite.cjs", "syncPostgresProjection.cjs"]);
+  record("monitor parses SQLite and projection results separately using direct Node children", { steps: calls });
+
+  let badCalls = 0;
+  const malformed = runSqliteRepairCommands({ env, commandRunner() {
+    badCalls += 1;
+    return { status: 0, stdout: '{"ok":true}\n{"ok":true}', stderr: "fixture-admin-secret" };
+  } });
+  assert.equal(malformed.ok, false);
+  assert.equal(badCalls, 1);
+  assert.equal(malformed.projection, null);
+  assert.ok(!JSON.stringify(malformed).includes("fixture-admin-secret"));
+  let failureCalls = 0;
+  const projectionFailed = runSqliteRepairCommands({ env, commandRunner() {
+    failureCalls += 1;
+    return failureCalls === 1 ? { status: 0, stdout: '{"ok":true}' }
+      : { status: 1, stdout: "", stderr: "postgresql://fixture:fixture-password@localhost/test" };
+  } });
+  assert.equal(projectionFailed.ok, false);
+  assert.equal(projectionFailed.projection.error, "projection-command-failed");
+  assert.ok(!JSON.stringify(projectionFailed).includes("fixture-password"));
+  let nowMs = 0;
+  let budgetCalls = 0;
+  const exhausted = runSqliteRepairCommands({ env, now: () => nowMs, commandRunner() {
+    budgetCalls += 1;
+    nowMs = 1_000_000_000;
+    return { status: 0, stdout: '{"ok":true}' };
+  } });
+  assert.equal(exhausted.ok, false);
+  assert.equal(budgetCalls, 1);
+  assert.equal(exhausted.projection.error, "projection-budget-exhausted");
+  record("monitor rejects malformed results, stops on failures, redacts child output and retains one repair budget", {
+    malformedCalls: badCalls, projectionFailureDetected: true, budgetCalls,
+  });
+
+  const { spawnSync } = require("node:child_process");
+  let childPid = null;
+  const timedOut = runSqliteRepairCommands({ env, commandRunner(command, args, options) {
+    const result = spawnSync(command, ["-e", "setInterval(() => {}, 1000)"], {
+      env: options.env, timeout: 100, killSignal: options.killSignal, windowsHide: true,
+    });
+    childPid = result.pid;
+    return result;
+  } });
+  assert.equal(timedOut.ok, false);
+  assert.equal(timedOut.projection, null);
+  assert.ok(childPid > 0);
+  assert.throws(() => process.kill(childPid, 0), "direct repair child must be gone before the caller releases its lock");
+  const source = fs.readFileSync(path.join(rootDir, "scripts/checkServerRuntime.cjs"), "utf8");
+  assert.ok(source.includes("const result = runSqliteRepairCommands();"));
+  assert.ok(source.includes("const repaired = after.ok && afterRequirement.requirementMet;"));
+  assert.ok(source.includes("if (syncLock.release) await syncLock.release();"));
+  record("monitor timeout returns only after its direct repair process has ended and post-repair checks reuse read requirements", {
+    childEnded: true, postgresPrimarySupportedAfterRepair: true,
+  });
+};
+
+const verifyResultProbeFreshness = () => {
+  const nowMs = Date.parse("2026-09-06T08:00:00.000Z");
+  const fresh = {
+    enabled: true, lastCheckedAt: new Date(nowMs).toISOString(),
+    lastSuccessAt: new Date(nowMs).toISOString(), lastError: null,
+    inputEvidence: {
+      resultProbeReceivedAt: new Date(nowMs - 30_000).toISOString(),
+      resultProbeFreshness: "fresh", freshnessMaxAgeSeconds: 1200,
+    },
+  };
+  const check = (value) => assessFastResultProbeFreshness(value, { nowMs });
+  assert.equal(check(fresh).status, "ok");
+  const stale = { ...fresh, inputEvidence: {
+    ...fresh.inputEvidence, resultProbeReceivedAt: "2026-08-24T01:24:26.000Z", resultProbeFreshness: "stale",
+  } };
+  assert.equal(check(stale).status, "watch");
+  assert.equal(check(stale).freshness, "stale");
+  assert.equal(check({ ...stale, inputEvidence: { ...stale.inputEvidence, resultProbeFreshness: "fresh" } }).freshness, "stale",
+    "cached fresh label cannot outlive the actual signed result probe clock");
+  for (const freshness of ["future", "unknown", "unavailable"]) {
+    const value = check({ ...fresh, inputEvidence: { ...fresh.inputEvidence, resultProbeFreshness: freshness } });
+    assert.equal(value.status, "watch");
+    assert.equal(value.freshness, freshness);
+  }
+  const legacy = check({ ...fresh, inputEvidence: undefined });
+  assert.equal(legacy.status, "watch");
+  assert.equal(legacy.capabilityPresent, false);
+  assert.equal(legacy.reason, "result-probe-freshness-capability-missing");
+  assert.equal(check({ ...fresh, inputEvidence: { ...fresh.inputEvidence, resultProbeReceivedAt: null } }).status, "watch");
+  assert.equal(check({ ...fresh, inputEvidence: { ...fresh.inputEvidence, freshnessMaxAgeSeconds: null } }).status, "watch");
+  assert.equal(assessFastResultProbeFreshness(null, { required: false, nowMs }).status, "ok");
+  const source = fs.readFileSync(path.join(rootDir, "scripts/checkServerRuntime.cjs"), "utf8");
+  assert.ok(source.includes('addCheck("fast result probe freshness", resultProbeFreshness.status, resultProbeFreshness)'));
+  record("result probe collection freshness is independent of healthy publisher heartbeats and successful no-ops", {
+    fresh: "ok", stale: "watch", future: "watch", unknown: "watch", unavailable: "watch",
+    legacyCapabilityMissing: "watch", terminalResultAuthorityUnchanged: true,
+  });
+};
+
 (async () => {
   const storeDir = buildStoreFixture();
   try {
@@ -317,6 +482,8 @@ const verifyPostgresPrimarySqliteParity = () => {
     verifyFastResultWatcherRuntimeGuard();
     verifyOfficialSourceRedundancy();
     verifyPostgresPrimarySqliteParity();
+    verifyMonitorRepairIsolation(storeDir);
+    verifyResultProbeFreshness();
   } finally {
     fs.rmSync(storeDir, { recursive: true, force: true });
   }

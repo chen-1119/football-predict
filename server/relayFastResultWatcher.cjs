@@ -165,6 +165,22 @@ const validateRelayFastResultStructure = (snapshot) => {
   }
 };
 
+const relayFastClockPolicy = (options = {}) => ({
+  nowMs: optionNowMs(options),
+  maxFutureSkewMs: boundedRuntimeNumber(options.maxFutureSkewMs, {
+    fallback: boundedRuntimeEnv(process.env, "TRUSTED_MAX_FUTURE_SKEW_SECONDS", {
+      fallback: 300, min: 0, max: 3600,
+    }) * 1000,
+    min: 0, max: 3_600_000,
+  }),
+  maxAgeMs: boundedRuntimeNumber(options.maxAgeMs, {
+    fallback: boundedRuntimeEnv(process.env, ["SPORTTERY_RELAY_MAX_AGE_MINUTES", "SOURCE_MAX_AGE_MINUTES"], {
+      fallback: 20, min: 1, max: 30 * 24 * 60,
+    }) * 60_000,
+    min: 60_000, max: 30 * 24 * 60 * 60_000,
+  }),
+});
+
 const auditRelayFastResultEligibility = (snapshot, options = {}) => {
   const structure = validateRelayFastResultStructure(snapshot);
   if (!structure.eligible) {
@@ -191,23 +207,7 @@ const auditRelayFastResultEligibility = (snapshot, options = {}) => {
     };
   }
 
-  const nowMs = optionNowMs(options);
-  const defaultFutureSkewMs = boundedRuntimeEnv(
-    process.env,
-    "TRUSTED_MAX_FUTURE_SKEW_SECONDS",
-    { fallback: 300, min: 0, max: 3600 },
-  ) * 1000;
-  const defaultMaxAgeMs = boundedRuntimeEnv(
-    process.env,
-    ["SPORTTERY_RELAY_MAX_AGE_MINUTES", "SOURCE_MAX_AGE_MINUTES"],
-    { fallback: 20, min: 1, max: 30 * 24 * 60 },
-  ) * 60_000;
-  const maxFutureSkewMs = boundedRuntimeNumber(options.maxFutureSkewMs, {
-    fallback: defaultFutureSkewMs, min: 0, max: 3_600_000,
-  });
-  const maxAgeMs = boundedRuntimeNumber(options.maxAgeMs, {
-    fallback: defaultMaxAgeMs, min: 60_000, max: 30 * 24 * 60 * 60_000,
-  });
+  const { nowMs, maxFutureSkewMs, maxAgeMs } = relayFastClockPolicy(options);
   const capturedMs = Date.parse(snapshot?.capturedAt || "");
   if (
     !Number.isFinite(capturedMs)
@@ -274,9 +274,8 @@ const auditRelayFastResultEligibility = (snapshot, options = {}) => {
   };
 };
 
-const relayResultSemanticFingerprint = (snapshot, options = {}) => {
+const semanticFingerprintFromEligibility = (eligibility) => {
   try {
-    const eligibility = auditRelayFastResultEligibility(snapshot, options);
     if (!eligibility.eligible) return null;
     const { endpointTrust } = eligibility;
 
@@ -298,26 +297,54 @@ const relayResultSemanticFingerprint = (snapshot, options = {}) => {
   }
 };
 
+const relayResultSemanticFingerprint = (snapshot, options = {}) => {
+  try {
+    return semanticFingerprintFromEligibility(auditRelayFastResultEligibility(snapshot, options));
+  } catch {
+    return null;
+  }
+};
+
 const createRelayResultSemanticFingerprintReader = (filePath, options = {}) => {
   let cachedFileFingerprint = null;
   let cachedResultFingerprint = null;
-  return () => {
+  let cachedTrustFingerprint = null;
+  let cachedPolicyFingerprint = null;
+  let cachedEvidence = null;
+  let cachedCheckedAtMs = null;
+  let cachedRecheckAtMs = 0;
+  const readFingerprint = () => {
+    const { nowMs, maxAgeMs, maxFutureSkewMs } = relayFastClockPolicy(options);
+    const registrySource = options.trustRegistry || process.env.SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH;
+    const trustFingerprint = registrySource && typeof registrySource === "object"
+      ? crypto.createHash("sha256").update(stableStringify(registrySource)).digest("hex")
+      : registrySource ? relaySnapshotFingerprint(String(registrySource)) : null;
+    const policyFingerprint = `${maxAgeMs}:${maxFutureSkewMs}`;
     const before = relaySnapshotFingerprint(filePath);
     if (!before) {
       cachedFileFingerprint = null;
       cachedResultFingerprint = null;
+      cachedEvidence = null;
       return null;
     }
     if (
       before === cachedFileFingerprint
-      && String(cachedResultFingerprint || "")
-        .startsWith(`${RESULT_SEMANTIC_FINGERPRINT_VERSION}:`)
+      && trustFingerprint === cachedTrustFingerprint
+      && policyFingerprint === cachedPolicyFingerprint
+      && nowMs >= cachedCheckedAtMs
+      && nowMs < cachedRecheckAtMs
     ) return cachedResultFingerprint;
 
     let semanticFingerprint = null;
+    let eligibility = null;
+    let snapshot = null;
     try {
-      const snapshot = JSON.parse(fs.readFileSync(filePath, "utf8"));
-      semanticFingerprint = relayResultSemanticFingerprint(snapshot, options);
+      // Keep only compact verified clocks/digests between calls, never the
+      // large parsed envelope. Re-read at a clock boundary or when the file,
+      // trust registry or clock policy changes, not on every one-second poll.
+      snapshot = JSON.parse(fs.readFileSync(filePath, "utf8"));
+      eligibility = auditRelayFastResultEligibility(snapshot, { ...options, nowMs });
+      semanticFingerprint = semanticFingerprintFromEligibility(eligibility);
     } catch {
       semanticFingerprint = null;
     }
@@ -325,6 +352,7 @@ const createRelayResultSemanticFingerprintReader = (filePath, options = {}) => {
     if (!after) {
       cachedFileFingerprint = null;
       cachedResultFingerprint = null;
+      cachedEvidence = null;
       return null;
     }
     if (after !== before) {
@@ -332,12 +360,77 @@ const createRelayResultSemanticFingerprintReader = (filePath, options = {}) => {
       // full identity so the watcher runs fail-closed and parses it next poll.
       cachedFileFingerprint = null;
       cachedResultFingerprint = null;
+      cachedEvidence = null;
       return after;
     }
     cachedFileFingerprint = after;
     cachedResultFingerprint = semanticFingerprint || after;
+    cachedTrustFingerprint = trustFingerprint;
+    cachedPolicyFingerprint = policyFingerprint;
+    cachedEvidence = {
+      eligible: eligibility?.eligible === true,
+      blocker: eligibility?.blocker || "relay-fast-snapshot-read-invalid",
+      resultProbeReceivedAt: eligibility?.endpointTrust?.resultProbeRevision?.receivedAt || null,
+      maxAgeMs,
+      maxFutureSkewMs,
+    };
+    if (cachedEvidence.eligible) cachedEvidence.blocker = null;
+    cachedCheckedAtMs = nowMs;
+    // A completed semantic token must never outlive the envelope/market
+    // freshness gates. Trust-file and policy identities are checked per poll.
+    cachedRecheckAtMs = Infinity;
+    if (!snapshot) cachedRecheckAtMs = nowMs + 30_000;
+    if (eligibility?.eligible) {
+      const clockExpiries = [
+        Date.parse(snapshot.capturedAt) + eligibility.maxAgeMs + 1,
+        ...eligibility.endpointTrust.details.flatMap((detail, index) => (
+          ["current", "calculator"].includes(detail.method)
+            ? [Date.parse(eligibility.endpointTrust.audits[index].attestation.commitment.receivedAt)
+              + eligibility.maxAgeMs + 1]
+            : []
+        )),
+      ];
+      cachedRecheckAtMs = Math.min(cachedRecheckAtMs, ...clockExpiries);
+    } else if (["relay-fast-envelope-clock-invalid", "relay-fast-endpoint-clock-invalid"].includes(eligibility?.blocker)) {
+      const latestClockMs = Math.max(...[
+        Date.parse(snapshot?.capturedAt || ""),
+        ...(eligibility?.endpointTrust?.audits || []).map((audit) => (
+          Date.parse(audit?.attestation?.commitment?.receivedAt || "")
+        )),
+      ].filter(Number.isFinite));
+      // A future signed clock can recover without a rewrite; a stale clock
+      // cannot. Re-audit at the exact future-skew boundary, not every second.
+      if (latestClockMs - maxFutureSkewMs > nowMs) cachedRecheckAtMs = latestClockMs - maxFutureSkewMs;
+    }
     return cachedResultFingerprint;
   };
+  readFingerprint.inputEvidence = () => {
+    const nowMs = optionNowMs(options);
+    const probeReceivedAt = cachedEvidence?.resultProbeReceivedAt || null;
+    const probeReceivedMs = Date.parse(probeReceivedAt || "");
+    const maxAgeMs = cachedEvidence?.maxAgeMs;
+    const ageMs = Number.isFinite(probeReceivedMs) ? nowMs - probeReceivedMs : null;
+    // Old signed terminal results retain their historical authority, but a
+    // fresh market companion cannot prove that the result probe is live.
+    // These diagnostics deliberately do not relax or change publisher gates.
+    const resultProbeFreshness = ageMs === null
+      ? "unavailable"
+      : ageMs < -Number(cachedEvidence?.maxFutureSkewMs || 0)
+        ? "future"
+        : !Number.isFinite(maxAgeMs)
+          ? "unknown"
+          : ageMs > maxAgeMs ? "stale" : "fresh";
+    return {
+      lastAuditedAt: cachedCheckedAtMs === null ? null : new Date(cachedCheckedAtMs).toISOString(),
+      publicationEligibleAtLastAudit: cachedEvidence?.eligible === true,
+      blocker: cachedEvidence?.blocker || (cachedFileFingerprint ? null : "relay-fast-snapshot-unavailable"),
+      resultProbeReceivedAt: probeReceivedAt,
+      resultProbeAgeSeconds: ageMs === null ? null : Math.max(0, Math.round(ageMs / 1000)),
+      resultProbeFreshness,
+      freshnessMaxAgeSeconds: Number.isFinite(maxAgeMs) ? maxAgeMs / 1000 : null,
+    };
+  };
+  return readFingerprint;
 };
 
 const compactError = (error) => ({
@@ -587,6 +680,9 @@ const createRelayFastResultWatcher = ({
     lastPublishedAt: state.lastPublishedAt,
     lastLatencyMs: state.lastLatencyMs,
     lastPublishedRows: state.lastPublishedRows,
+    inputEvidence: typeof readCurrentFingerprint.inputEvidence === "function"
+      ? readCurrentFingerprint.inputEvidence()
+      : null,
     lastError: state.lastError,
     checks: state.checks,
     runs: state.runs,
@@ -705,7 +801,10 @@ const createRelayFastResultWatcher = ({
       if (state.running && state.pending && state.queuedFingerprint !== fingerprint) state.coalesced += 1;
       state.observedFingerprint = fingerprint;
       state.queuedFingerprint = fingerprint;
-      state.pending = fingerprint !== state.completedFingerprint || force;
+      // Recovering from a bad envelope to an already completed result token
+      // still requires a real publisher validation. Do not merely clear an
+      // old error, nor let semantic de-duplication cancel its pending retry.
+      state.pending = fingerprint !== state.completedFingerprint || force || Boolean(state.lastError);
     }
     if (!state.pending || state.running || Date.now() < state.retryNotBefore) return activePromise;
     activePromise = drain();

@@ -1,6 +1,7 @@
 #!/opt/node-v22.22.1/bin/node
 "use strict";
 
+// Keep the shebang LF-only: Linux treats a trailing CR as part of the interpreter path.
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
