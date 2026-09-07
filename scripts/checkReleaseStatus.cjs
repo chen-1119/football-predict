@@ -205,6 +205,9 @@ const collectFilesNewerThan = (dir, cutoffMs, root = dir, rows = []) => {
     const relativePath = path.relative(root, filePath).replace(/\\/g, "/");
     const firstSegment = relativePath.split("/")[0];
     if (entry.isDirectory()) {
+      // The packager excludes root QA artifacts. Do not hide actual source
+      // directories such as src/outputs by adding this to the basename set.
+      if (relativePath === "outputs") continue;
       if (ignoredFreshnessDirs.has(entry.name) || ignoredFreshnessDirs.has(firstSegment)) continue;
       collectFilesNewerThan(filePath, cutoffMs, root, rows);
       continue;
