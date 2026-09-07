@@ -1069,6 +1069,16 @@ try {
   const activeStoreDir = path.join(activeRoot, "store");
   const activeDbPath = path.join(activeRoot, "release-clone", "football.db");
   const activeSourceCycleId = "active-fast-path-cycle-1";
+  const { bindPublicReferenceDecision, pendingPublicReferenceEvidence } = require("../src/services/publicReferenceDecision.cjs");
+  const referenceMatch = bindPublicReferenceDecision({
+    id: "sporttery_policy_upgrade", sourceMatchId: "policy_upgrade", status: "SCHEDULED", businessDate: "2026-07-13",
+    kickoffTime: "2026-07-13T12:00:00.000Z", eventVersion: "2026-07-13T12:00:00.000Z", buyEndTime: "2026-07-13T11:55:00.000Z",
+    odds: { odds1: 2, oddsX: 3.4, odds2: 4 },
+    predictions: [{ marketType: "BEST", recommendationAction: "reference", oddsPoolCode: "HAD", tipCode: "X", odds: 3.4 }],
+    predictionMeta: { generatedAt: "2026-07-12T13:00:00.000Z", decisionId: "policy-upgrade-reference", modelVersion: "fixture", policyVersion: "fixture",
+      featureSnapshot: { version: "fixture", capturedAt: "2026-07-12T13:00:00.000Z", sourceMatchId: "policy_upgrade", kickoffTime: "2026-07-13T12:00:00.000Z", modelInputs: {} } },
+    probabilityModel: { version: "fixture", generatedAt: "2026-07-12T13:00:00.000Z", oneXTwo: { final: { home: 35, draw: 40, away: 25 } } },
+  }, null, "2026-07-12T13:00:01.000Z");
   writeJson(path.join(activePublicDir, "matches-current.json"), [currentMatch]);
   writeJson(path.join(activePublicDir, "matches-history.json"), [historyMatch]);
   writeJson(path.join(activePublicDir, "sync-meta.json"), {
@@ -1088,6 +1098,8 @@ try {
   writeJson(path.join(activePublicDir, "prediction-snapshots.json"), {
     version: 1,
     rows: [fixturePrediction()],
+    publicReferenceDecisions: [referenceMatch.predictionMeta.publicReferenceDecision],
+    publicReferenceEvidence: [pendingPublicReferenceEvidence(referenceMatch)],
   });
   writeJson(path.join(activePublicDir, "model-calibration.json"), {
     version: "active-fast-path-calibration-v1",
@@ -1271,6 +1283,52 @@ try {
     "SELECT value FROM schema_meta WHERE key = 'warehouse_policy'"
   ).get().value);
   activeDb.close();
+  // Real v3 -> v5 clone migration: preserve all base/overlay rows and clocks,
+  // build the actual reference membership proofs, then become exact-no-op.
+  const upgradePath = path.join(activeRoot, "reference-upgrade-clone", "football.db");
+  fs.mkdirSync(path.dirname(upgradePath), { recursive: true });
+  fs.copyFileSync(activeDbPath, upgradePath);
+  const { publicReferenceArchive: _oldArchive, publicReferenceIndex: _oldIndex, ...legacyReferencePolicy } = exactWarehousePolicy;
+  legacyReferencePolicy.version = 3;
+  let upgradeDb = new DatabaseSync(upgradePath);
+  setMeta(upgradeDb, "warehouse_policy", JSON.stringify(legacyReferencePolicy));
+  upgradeDb.exec("DELETE FROM source_snapshots WHERE id = 'public-reference-decisions:current' OR id LIKE 'public-reference-index:%';");
+  const preservedTables = ["match_snapshots", "odds_snapshots", "prediction_snapshots", "private_model_artifacts"];
+  const preservedRows = Object.fromEntries(preservedTables.map(table => [table, upgradeDb.prepare(`SELECT * FROM ${table} ORDER BY 1`).all()]));
+  const beforeExportClock = upgradeDb.prepare("SELECT value FROM schema_meta WHERE key='exported_at'").get().value;
+  upgradeDb.close();
+  const upgradeEnv = { ...activeEnv, DATASTORE_SQLITE_PATH: upgradePath, SQLITE_EXPORT_SOURCE_POINTER_READ_ONLY: "1", SQLITE_EXPORT_REQUIRE_ACTIVE_GENERATION_FAST_PATH: "1" };
+  assert.throws(() => runExporter(upgradeEnv), /warehouse-policy-mismatch/, "a release cannot silently opt in to policy migration");
+  const upgraded = runExporter({ ...upgradeEnv, SQLITE_EXPORT_ALLOW_REFERENCE_POLICY_UPGRADE: "1" });
+  assert.equal(upgraded.fastPath.referencePolicyUpgrade, true);
+  assert.equal(upgraded.fastPath.reason, "exact-active-generation-reference-policy-upgrade");
+  assert.equal(upgraded.incremental.matchChanges, 0);
+  assert.equal(upgraded.incremental.oddsChanges, 0);
+  assert.equal(upgraded.incremental.predictionChanges, 0);
+  assert.ok(upgraded.incremental.sourceChanges >= 3);
+  upgradeDb = new DatabaseSync(upgradePath, { readOnly: true });
+  for (const table of preservedTables) assert.deepEqual(upgradeDb.prepare(`SELECT * FROM ${table} ORDER BY 1`).all(), preservedRows[table], `${table} must remain byte-equivalent`);
+  assert.equal(upgradeDb.prepare("SELECT value FROM schema_meta WHERE key='exported_at'").get().value, beforeExportClock);
+  assert.deepEqual(JSON.parse(upgradeDb.prepare("SELECT value FROM schema_meta WHERE key='warehouse_policy'").get().value), exactWarehousePolicy);
+  const proofHash = referenceMatch.predictionMeta.publicReferenceDecision.contentHash;
+  const readPayload = id => JSON.parse(upgradeDb.prepare("SELECT payload FROM source_snapshots WHERE id=?").get(id).payload);
+  const { resolveIndexedPublicReferenceEvidence } = require("../server/publicReferenceArchive.cjs");
+  const proof = resolveIndexedPublicReferenceEvidence(readPayload("public-reference-index:current"), readPayload(`public-reference-index:row:${proofHash}`), proofHash);
+  assert.equal(proof.ok, true);
+  assert.equal(proof.record.prediction.tipCode, "X", "upgrading an index must not recalculate the published direction");
+  upgradeDb.close();
+  const upgradedNoOp = runExporter({ ...upgradeEnv, SQLITE_EXPORT_ALLOW_REFERENCE_POLICY_UPGRADE: "1" });
+  assert.equal(upgradedNoOp.fastPath.referencePolicyUpgrade, false);
+  assert.equal(upgradedNoOp.incremental.sourceChanges, 0);
+  for (const invalidPolicy of [{ ...legacyReferencePolicy, version: 2 }, { ...legacyReferencePolicy, unexpected: true }, { ...legacyReferencePolicy, oddsStateLimit: "50000" }]) {
+    upgradeDb = new DatabaseSync(upgradePath); setMeta(upgradeDb, "warehouse_policy", JSON.stringify(invalidPolicy)); upgradeDb.close();
+    assert.throws(() => runExporter({ ...upgradeEnv, SQLITE_EXPORT_ALLOW_REFERENCE_POLICY_UPGRADE: "1" }), /warehouse-policy-mismatch/);
+    upgradeDb = new DatabaseSync(upgradePath, { readOnly: true });
+    assert.deepEqual(JSON.parse(upgradeDb.prepare("SELECT value FROM schema_meta WHERE key='warehouse_policy'").get().value), invalidPolicy, "rejected policy cannot be rewritten");
+    upgradeDb.close();
+  }
+  assert.throws(() => runExporter({ ...activeEnv, SQLITE_EXPORT_ALLOW_REFERENCE_POLICY_UPGRADE: "1" }), /SQLITE_EXPORT_CONFIGURATION_INVALID/);
+
   const mismatchCases = [
     ["data_publication_mode", "legacy-bootstrap", "identity-mismatch:data_publication_mode"],
     ["data_generation_id", "g-" + "0".repeat(64), "identity-mismatch:data_generation_id"],
@@ -1370,5 +1428,6 @@ try {
     vacuum: vacuumed.vacuum,
   }, null, 2));
 } finally {
-  fs.rmSync(tempDir, { recursive: true, force: true });
+  try { fs.rmSync(tempDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); }
+  catch (error) { console.error(`test cleanup failed: ${tempDir}: ${error.message}`); process.exitCode = 1; }
 }

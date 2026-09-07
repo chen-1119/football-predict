@@ -83,6 +83,7 @@ const sqliteExportAttempts = Math.max(1, Number(process.env.SQLITE_EXPORT_ATTEMP
 const sqliteExportRetryDelayMs = Math.max(1000, Number(process.env.SQLITE_EXPORT_RETRY_DELAY_MS || 5000));
 const sourcePointerReadOnly = process.env.SQLITE_EXPORT_SOURCE_POINTER_READ_ONLY === "1";
 const requireActiveGenerationFastPath = process.env.SQLITE_EXPORT_REQUIRE_ACTIVE_GENERATION_FAST_PATH === "1";
+const allowReferencePolicyUpgrade = process.env.SQLITE_EXPORT_ALLOW_REFERENCE_POLICY_UPGRADE === "1";
 const SQLITE_SCHEMA_VERSION = "football-sqlite-v2-incremental";
 const ACTIVE_GENERATION_FAST_PATH_VERSION = "sqlite-active-generation-clone-fast-path-v1";
 const expectedWarehousePolicy = Object.freeze({
@@ -157,7 +158,8 @@ const readJson = (filePath, fallback) => {
 // every core input below is read from that immutable directory.  A missing
 // pointer is the only condition that permits legacy mutable-file bootstrap;
 // a corrupt pointer throws and prevents an unsafe fallback.
-if (requireActiveGenerationFastPath && !sourcePointerReadOnly) {
+if ((requireActiveGenerationFastPath && !sourcePointerReadOnly)
+    || (allowReferencePolicyUpgrade && (!requireActiveGenerationFastPath || !sourcePointerReadOnly))) {
   const error = new Error("required active-generation fast path needs a read-only source pointer");
   error.code = "SQLITE_EXPORT_CONFIGURATION_INVALID";
   throw error;
@@ -244,6 +246,20 @@ const activeGenerationFastPathMetaMismatch = (meta) => {
   return policyMatches ? null : "warehouse-policy-mismatch";
 };
 
+// v3 -> v5 adds only the independently stored reference archive and its index.
+// Do not interpret arbitrary policy/limit/identity differences as this migration.
+const isExactReferencePolicyUpgrade = (serialized) => {
+  if (expectedWarehousePolicy.version !== 5) return false;
+  let actual;
+  try { actual = JSON.parse(serialized); } catch { return false; }
+  const { publicReferenceArchive: _archive, publicReferenceIndex: _index, ...legacy } = expectedWarehousePolicy;
+  legacy.version = 3;
+  const keys = Object.keys(legacy).sort();
+  return Boolean(actual && typeof actual === "object" && !Array.isArray(actual)
+    && Object.keys(actual).sort().join("|") === keys.join("|")
+    && keys.every(key => typeof actual[key] === typeof legacy[key] && actual[key] === legacy[key]));
+};
+
 const inspectActiveGenerationFastPath = () => {
   const base = {
     version: ACTIVE_GENERATION_FAST_PATH_VERSION,
@@ -290,12 +306,17 @@ const inspectActiveGenerationFastPath = () => {
     ).all(...ACTIVE_GENERATION_FAST_PATH_REQUIRED_TABLES).map((row) => String(row.name)));
     const missingTable = ACTIVE_GENERATION_FAST_PATH_REQUIRED_TABLES.find((name) => !presentTables.has(name));
     if (missingTable) return reject(`required-table-missing:${missingTable}`);
-    const mismatch = activeGenerationFastPathMetaMismatch(readActiveGenerationFastPathMeta(probe));
-    if (mismatch) return reject(mismatch);
+    const meta = readActiveGenerationFastPathMeta(probe);
+    const mismatch = activeGenerationFastPathMetaMismatch(meta);
+    const referencePolicyUpgrade = allowReferencePolicyUpgrade && mismatch === "warehouse-policy-mismatch"
+      && isExactReferencePolicyUpgrade(meta.warehouse_policy);
+    if (mismatch && !referencePolicyUpgrade) return reject(mismatch);
     return Object.freeze({
       ...base,
       eligible: true,
-      reason: "exact-active-generation-clone",
+      reason: referencePolicyUpgrade ? "exact-active-generation-reference-policy-upgrade" : "exact-active-generation-clone",
+      referencePolicyUpgrade,
+      priorWarehousePolicy: referencePolicyUpgrade ? meta.warehouse_policy : null,
       cloneFileIdentity: Object.freeze({
         dev: Number(stat.dev),
         ino: Number(stat.ino),
@@ -1288,23 +1309,62 @@ const readFinalCounts = (db) => {
   };
 };
 
+const projectPublicReferenceArchive = (db, snapshot) => {
+  const referenceArchive = buildPublicReferenceArchive(snapshot);
+  const referenceIndex = buildPublicReferenceIndex(referenceArchive);
+  const insert = sourceUpserter(db);
+  let changes = 0;
+  db.exec("CREATE TEMP TABLE IF NOT EXISTS export_active_reference_index_ids (id TEXT PRIMARY KEY); DELETE FROM export_active_reference_index_ids;");
+  const keepId = db.prepare("INSERT INTO export_active_reference_index_ids (id) VALUES (?)");
+  if (referenceIndex) {
+    keepId.run(INDEX_ID);
+    changes += Number(insert.run(INDEX_ID, "sporttery:public-reference-index", referenceArchive.lastRecordedAt, JSON.stringify(referenceIndex.manifest)).changes || 0);
+    for (const shard of referenceIndex.shards) {
+      keepId.run(shard.id);
+      changes += Number(insert.run(shard.id, "sporttery:public-reference-index", referenceArchive.lastRecordedAt, JSON.stringify(shard.payload)).changes || 0);
+    }
+  }
+  changes += Number(db.prepare(`DELETE FROM source_snapshots
+    WHERE (id = ? OR substr(id, 1, ?) = ?)
+    AND NOT EXISTS (SELECT 1 FROM export_active_reference_index_ids active WHERE active.id = source_snapshots.id)`)
+    .run(INDEX_ID, INDEX_PREFIX.length, INDEX_PREFIX).changes || 0);
+  if (referenceArchive) {
+    changes += Number(insert.run(PUBLIC_REFERENCE_ARCHIVE_SOURCE_ID, referenceArchive.source,
+      referenceArchive.lastRecordedAt, JSON.stringify(referenceArchive)).changes || 0);
+  } else {
+    changes += Number(db.prepare("DELETE FROM source_snapshots WHERE id = ?").run(PUBLIC_REFERENCE_ARCHIVE_SOURCE_ID).changes || 0);
+  }
+  return changes;
+};
+
 const exportIncrementalRows = async (db) => {
   const now = new Date().toISOString();
   const fastResultGuard = readFastResultGuard(db);
   if (activeGenerationFastPath.eligible) {
+    const metadata = readActiveGenerationFastPathMeta(db);
+    const upgrade = activeGenerationFastPath.referencePolicyUpgrade;
     const mismatch = activeGenerationFastPathFileMismatch()
-      || activeGenerationFastPathMetaMismatch(readActiveGenerationFastPathMeta(db));
+      || (upgrade && metadata.warehouse_policy !== activeGenerationFastPath.priorWarehousePolicy ? "reference-upgrade-policy-changed" : null)
+      || activeGenerationFastPathMetaMismatch(upgrade ? { ...metadata, warehouse_policy: JSON.stringify(expectedWarehousePolicy) } : metadata);
     if (mismatch) {
       const error = new Error(`release clone fast-path metadata changed before transaction: ${mismatch}`);
       error.code = "SQLITE_FAST_PATH_METADATA_CHANGED";
       throw error;
+    }
+    const imported = emptyImportSummary();
+    if (upgrade) {
+      // Read and validate the immutable generation's actual archive. The old
+      // live DB/source pointer and unrelated base/fast-result rows stay untouched.
+      const snapshot = readCoreJson("prediction-snapshots.json", null);
+      imported.sourceChanges = projectPublicReferenceArchive(db, snapshot);
+      upsertMeta(db, "warehouse_policy", JSON.stringify(expectedWarehousePolicy), now);
     }
     const fastPath = fastPathEvidenceFor(true, now);
     upsertMeta(db, "sqlite_export_fast_path", JSON.stringify(fastPath), now);
     return {
       now,
       migration: emptyMigration(),
-      imported: emptyImportSummary(),
+      imported,
       pruned: {
         syncRuns: 0,
         matchSnapshots: 0,
@@ -1398,37 +1458,7 @@ const exportIncrementalRows = async (db) => {
 
   let predictionSnapshots = loadBaseProjection ? readCoreJson("prediction-snapshots.json", null) : null;
   if (loadBaseProjection) {
-    const referenceArchive = buildPublicReferenceArchive(predictionSnapshots);
-    const referenceIndex = buildPublicReferenceIndex(referenceArchive);
-    // Reconcile membership atomically, but preserve unchanged payloads so a
-    // repeated base projection does not rewrite every evidence shard.
-    db.exec("CREATE TEMP TABLE IF NOT EXISTS export_active_reference_index_ids (id TEXT PRIMARY KEY); DELETE FROM export_active_reference_index_ids;");
-    const keepReferenceIndexId = db.prepare("INSERT INTO export_active_reference_index_ids (id) VALUES (?)");
-    if (referenceIndex) {
-      keepReferenceIndexId.run(INDEX_ID);
-      imported.sourceChanges += Number(sourceInsert.run(INDEX_ID, "sporttery:public-reference-index", referenceArchive.lastRecordedAt, JSON.stringify(referenceIndex.manifest)).changes || 0);
-      for (const shard of referenceIndex.shards) {
-        keepReferenceIndexId.run(shard.id);
-        imported.sourceChanges += Number(sourceInsert.run(shard.id, "sporttery:public-reference-index", referenceArchive.lastRecordedAt, JSON.stringify(shard.payload)).changes || 0);
-      }
-    }
-    imported.sourceChanges += Number(db.prepare(`DELETE FROM source_snapshots
-      WHERE (id = ? OR substr(id, 1, ?) = ?)
-      AND NOT EXISTS (SELECT 1 FROM export_active_reference_index_ids active WHERE active.id = source_snapshots.id)`)
-      .run(INDEX_ID, INDEX_PREFIX.length, INDEX_PREFIX).changes || 0);
-    if (referenceArchive) {
-      imported.sourceChanges += Number(sourceInsert.run(
-        PUBLIC_REFERENCE_ARCHIVE_SOURCE_ID,
-        referenceArchive.source,
-        referenceArchive.lastRecordedAt,
-        JSON.stringify(referenceArchive),
-      ).changes || 0);
-    } else {
-      // An unavailable ledger is not a current verified archive. Never leave
-      // a previous generation's document looking like this generation's proof.
-      imported.sourceChanges += Number(db.prepare("DELETE FROM source_snapshots WHERE id = ?")
-        .run(PUBLIC_REFERENCE_ARCHIVE_SOURCE_ID).changes || 0);
-    }
+    imported.sourceChanges += projectPublicReferenceArchive(db, predictionSnapshots);
   }
   let currentMatchesPayload = loadBaseProjection ? readCoreJson("matches-current.json", null) : null;
   let historyMatchesPayload = loadBaseProjection ? readCoreJson("matches-history.json", null) : null;

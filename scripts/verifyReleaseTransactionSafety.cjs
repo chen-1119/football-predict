@@ -4789,6 +4789,20 @@ check("signed release uploads retry transient SCP disconnects without bypassing 
   assert.doesNotMatch(deployReleaseBundle, /StrictHostKeyChecking=(?:no|accept-new)/);
 });
 
+check("release clone reference migration is explicit and does not allow a general full export", () => {
+  const source = readText(path.join(rootDir, "scripts", "exportDataStoreSqlite.cjs"));
+  assert.match(bundleRelease, /SQLITE_EXPORT_REQUIRE_ACTIVE_GENERATION_FAST_PATH=1/);
+  assert.match(bundleRelease, /SQLITE_EXPORT_ALLOW_REFERENCE_POLICY_UPGRADE=1/);
+  assert.match(source, /allowReferencePolicyUpgrade && \(!requireActiveGenerationFastPath \|\| !sourcePointerReadOnly\)/);
+  assert.match(source, /expectedWarehousePolicy.version !== 5/);
+  assert.match(source, /legacy.version = 3/);
+  assert.match(source, /mismatch === "warehouse-policy-mismatch"/);
+  assert.match(source, /isExactReferencePolicyUpgrade\(meta.warehouse_policy\)/);
+  assert.match(source, /metadata.warehouse_policy !== activeGenerationFastPath.priorWarehousePolicy/);
+  assert.match(source, /imported.sourceChanges = projectPublicReferenceArchive\(db, snapshot\)/);
+  assert.match(source, /if \(requireActiveGenerationFastPath && !activeGenerationFastPath.eligible\)/);
+});
+
 for (const result of checks) {
   if (result.ok) {
     console.log(`PASS ${result.name}`);
