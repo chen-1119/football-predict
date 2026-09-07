@@ -37,3 +37,31 @@
 - 本改动改变 syncData 文件身份；上一轮 798fd28a 的 34 条捕获证据不能冒充当前补丁的全量重放或生产集成证明。既有截止与候选版本转换规则不豁免。
 
 02:11:00 复核原 r702 队列 PID3577920 仍 alive、waiting-not-before、attempted=false，03:31/03:36 与安全门禁不变；app/live-complete 仍 r699。没有热改生产、重启、重签、重包或重排 r702；本补丁不在冻结的 6f86 签名包内，需后续独立受控发布。仍须验证完整快速发布/PG投影耗时、新 worker 周期及源时效；不能宣称线上超时已经修复或命中率提高。完整 Q1–Q5 继续进行。
+
+## 2026-09-08 02:23–02:29：真实副本的完整 SQLite CLI 对照
+
+本轮进一步执行实际 `publishOfficialResultsFast.cjs` CLI，而不是仅调用归档函数。服务器预检可用内存约 4621 MiB、磁盘空闲约 116 GiB、主服务与 worker active。在已有隔离代码目录下建立新的 `publisher-clone-L9bwnS`，从只读连接使用 Node SQLite online backup 获得含已提交 WAL 的一致 SQLite 副本；没有直接拼接复制运行中的 db/wal/shm，也没有停止服务或占用生产同步锁。
+
+最初准备脚本在最终汇总完成前退出，未生成完成报告，没有把它直接当成功。保留并检查现有副本，随后在运行器中重新执行 `PRAGMA quick_check` 得到唯一 `ok`，用时 21.595 秒；数据库 919342 × 4096 页、3,765,624,832 字节，回执 valid=true、并非缺失，source_cycle_id 为 `sporttery-full-sync:2026-09-07T18:10:23.377Z`。先后计算整文件摘要一致：`976ee983d71a8051cbac7764809b37ac86057ccecd0a66a80227302d314fa230`。
+
+配套 sync-meta 与快通道分别复制，**不是跨文件原子代际捕获**。sync-meta 为 420714 字节，SHA `167bf486bdea19e146f5572cc6ae1b2ffde1e86c72eef622c1bc46f428c540d6`；快通道为 294868 字节，SHA `8b24994083581017072e4be0697f3b190afaa0671667b79326772ade0e5d2e86`，三个端点当时均可信、result:1 观察时间 02:09:32。正式 publication ledger 在副本缺失，测试保留 missing=true，没有合成账本或借用正式统计。
+
+两个真实子进程均使用同一副本、512 MiB 堆、非 root、低优先级、清空后的专用环境；文件写入限定在副本目录，SQLite 打开目标也限定在该目录，网络调用禁止。PostgreSQL 明确 disabled，因此 **没有验证 PG 投影**。诊断允许运行最多 55 秒以测得旧入口耗时，没有改线上八秒 watchdog。
+
+| 项目 | 旧立即读取 CLI | 新按需读取 CLI |
+| --- | ---: | ---: |
+| 含子进程启动的耗时 | 12,626 ms | 1,822 ms |
+| 预测快照 SQL 调用 | 20 次 | 2 次 |
+| 预测快照 SQL 合计时间 | 7,897.33 ms | 740.46 ms |
+| 退出码 / 发布条数 | 0 / 0 | 0 / 0 |
+| 旧修订拒绝数 | 10 | 10 |
+
+新入口先在 02:23 运行，旧入口随后在 02:24 运行；这是同机一次实际观测，不是随机化多轮性能基准。两个入口均返回 `no-result-state-change`，scannedRows=trustedFinishedRows=10、correctionRejected=10、writeTransactionStarted=true，实际执行 `BEGIN IMMEDIATE` 后 `ROLLBACK`。去掉明确的 startedAt/finishedAt 两个计时字段后，其余完整业务返回对象逐项相等；原始输出全部保留。这不是先前要求零字段排除的严格模型重放证据，不可混用。
+
+该样本证明旧官方结果重放路径的实际开销能超过线上八秒，而候选优化在同一场景下低于八秒；它**没有产生新的赛果写入或触发 PG 复制**，不能说“整个线上发布问题已解决”。两次执行后副本 DB 整文件摘要、sync-meta 和快通道摘要均不变，WAL 已正常关闭移除；生产写入 0、网络请求 0。临时 3.7 GB 副本保留作证据，未清理。
+
+02:29:33 又核对旧、新两份隔离包全部各 502 个文件哈希未变；旧包基线798fd28a与19f16c9的 scripts/src-services/server源码没有差异，新包三份实际实现哈希与已提交 d8383fe9 中的优化一致。未向生产目录补装新模块。
+
+私有汇总 `outputs/full-publisher-comparison-20260908.json`，SHA `de7e7dc87a980358f21bacd1a942948b6493d78b44caff0f7c4d5b965cc70809`；原始 `full-publisher-{run,baseline-run,profile,baseline-profile}-20260908.json` 的哈希在汇总中列明。工件不上传 Git，仅提交本说明。
+
+02:29:00 原 r702 队列同 PID3577920 仍存活、waiting-not-before、attempted=false，app/live-complete 仍 r699，计划与门禁不变。下一步仍须取得新赛果写入与 PG 投影证据，再进行新版受控发布、双库同代及新 worker 周期验收；没有改动签名包、部署、提升模型权限或证明命中率改善。
