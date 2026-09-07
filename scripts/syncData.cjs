@@ -18735,6 +18735,7 @@ if (require.main === module) {
     postMatchReviewActuals,
     predictionFromSnapshotTip,
     predictionSet,
+    blendLambdasWithForm,
     predictionSetWithoutOfficialOdds,
     compactPostMatchReviewForMatch,
     postMatchReviewComparable,
