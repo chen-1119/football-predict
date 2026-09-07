@@ -17327,16 +17327,17 @@ function predictionInputFromPublishedMatch(match, modelCalibration = null) {
   };
 }
 
-function rebuildPublishedPredictionModel(match, modelCalibration = null) {
+function rebuildPublishedPredictionModel(match, modelCalibration = null, executionCapture = null) {
   if (predictionContentLocked(match)) return match;
   const odds = sanitizeOdds(match?.odds);
   const handicapOdds = sanitizeHandicapOdds(match);
   const input = predictionInputFromPublishedMatch({ ...match, odds, handicapOdds }, modelCalibration);
-  const rebuilt = odds || handicapOdds
-    ? predictionSet(input)
+  const calculate = odds || handicapOdds
+    ? predictionSet
     : shouldBuildModelOnlyReference(match)
-      ? predictionSetWithoutOfficialOdds(input)
+      ? predictionSetWithoutOfficialOdds
       : null;
+  const rebuilt = calculate ? (executionCapture ? executionCapture.run(input, calculate) : calculate(input)) : null;
   if (!rebuilt) return match;
   return {
     ...match,
@@ -17873,11 +17874,12 @@ async function sync() {
   output = output.map(applyExternalResultSignal);
   output = output.map((match) => rebuildPublishedPredictionModel(match, modelCalibration));
   prospectiveAuditMatches = attachOddsTrends(prospectiveAuditMatches, publicDir, oddsHistoryPayload);
+  const predictionExecutionCapture = require("./predictionExecutionCapture.cjs").createPredictionExecutionCapture(capturedAt);
   prospectiveAuditMatches = attachExternalSignals(prospectiveAuditMatches, externalSignals, preMatchSignals);
   prospectiveAuditMatches = prospectiveAuditMatches
     .map((match) => attachWorldCupPrior(match, worldCupKimiDataset))
     .map(applyExternalResultSignal)
-    .map((match) => rebuildPublishedPredictionModel(match, modelCalibration));
+    .map((match) => rebuildPublishedPredictionModel(match, modelCalibration, predictionExecutionCapture));
   prospectiveAuditMatches = finalizePublishedPredictionDecisions(
     prospectiveAuditMatches,
     new Map(),
@@ -17934,6 +17936,9 @@ async function sync() {
     capturedAt,
     { observationMatches: prospectiveAuditMatches },
   );
+  // Private pre-persistence computation evidence is not a public decision ledger.
+  // Capture failures expose a diagnostic gap without changing publication or old records.
+  const predictionExecutionCaptureStatus = predictionExecutionCapture.persist(DEFAULT_STORE_DIR);
   output = attachPredictionSnapshotSummary(output, predictionSnapshotsPayload, capturedAt);
   // Result-phase cards must replay the immutable pre-match BEST snapshot.
   // Mutable match.predictions can be rebuilt after kickoff and therefore must
@@ -18368,6 +18373,7 @@ async function sync() {
       settlementPolicy: "valid-publication-id-and-immutable-binding-only; no-retroactive-formal-backfill",
     },
     recommendationBiasAudit,
+    predictionExecutionCapture: predictionExecutionCaptureStatus,
     liveRecommendations: liveRecommendationAudit,
     aiArena: aiArenaPublication ? {
       version: aiArenaPublication.payload.version,
@@ -18650,6 +18656,7 @@ if (require.main === module) {
   });
 } else {
   module.exports = {
+    rebuildPublishedPredictionModel,
     attachWorldCupPrior,
     attachArchivedPreMatchPredictions,
     applyPredictionPersistence,

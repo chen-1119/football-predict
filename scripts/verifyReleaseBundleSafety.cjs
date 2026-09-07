@@ -249,6 +249,8 @@ const requiredReleaseEntries = [
   "scripts/verifyOfficialClubReceiptClocks.cjs",
   "scripts/competitionModelContext.cjs",
   "scripts/verifyCompetitionModelContext.cjs",
+  "scripts/predictionExecutionCapture.cjs",
+  "scripts/verifyPredictionExecutionCapture.cjs",
   "scripts/syncOfficialClubResults.cjs",
   "src/services/legacyReferenceConflict.ts",
   "scripts/verifyModelInputUsage.cjs",

@@ -58,7 +58,8 @@ const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/servic
   'scripts/verifyApiFootballDiagnostics.cjs', 'scripts/verifyCandidateArtifactSeed.cjs', 'scripts/verifyCandidateRevisionLineage.cjs',
   'scripts/verifyLegacyReferenceConflict.cjs', 'src/services/legacyReferenceConflict.ts', 'scripts/verifyFrozenArchiveAuthority.cjs',
   'scripts/verifyOfficialClubResults.cjs', 'scripts/syncOfficialClubResults.cjs', 'scripts/verifyOfficialClubReceiptClocks.cjs',
-  'scripts/competitionModelContext.cjs', 'scripts/verifyCompetitionModelContext.cjs'];
+  'scripts/competitionModelContext.cjs', 'scripts/verifyCompetitionModelContext.cjs',
+  'scripts/predictionExecutionCapture.cjs', 'scripts/verifyPredictionExecutionCapture.cjs'];
 const requiredEntries = source => {
   const match = /const required(?:Release)?Entries = (\[[\s\S]*?\n\]);/.exec(source);
   assert.ok(match, 'required release-entry array must be explicit');
@@ -98,7 +99,7 @@ for (const [name, bad] of Object.entries({ failed: { ok: false }, insufficient: 
   check(`production receipt gate rejects ${name} proof`, () => assert.equal(receiptGate({ ...receiptProof, ...bad }), false));
 }
 const competitionStart = readiness.indexOf('  pushCheck(checks, "model competition weights ignore team labels and preserve executed context",');
-const competitionEnd = readiness.indexOf('\n  const localServerOwnership', competitionStart);
+const competitionEnd = readiness.indexOf('\n  const executionCapture', competitionStart);
 assert.ok(competitionStart >= 0 && competitionEnd > competitionStart);
 const competitionGate = (body, status = 0) => {
   let result = null;
@@ -112,4 +113,19 @@ for (const bad of [{ ok: false }, { checks: 15 }, { productionWrites: 1 }]) {
   check('competition gate rejects incomplete or writing proof ' + JSON.stringify(bad), () => assert.equal(competitionGate({ ...competitionProof, ...bad }), false));
 }
 check('competition gate rejects failed command even with success JSON', () => assert.equal(competitionGate(competitionProof, 1), false));
+const executionStart = readiness.indexOf('  pushCheck(checks, "private prediction execution capture preserves exact inputs and never rewrites locked outputs",');
+const executionEnd = readiness.indexOf('\n  const localServerOwnership', executionStart);
+assert.ok(executionStart >= 0 && executionEnd > executionStart);
+const executionGate = (body, status = 0) => {
+  let result = null;
+  vm.runInNewContext(readiness.slice(executionStart, executionEnd), { checks: [],
+    executionCapture: { status, body, stderr: '' }, pushCheck: (_checks, _name, ok) => { result = ok; } }, { timeout: 1000 });
+  return result;
+};
+const executionProof = { ok: true, checks: 22, productionDataTouched: false, providerRequests: 0 };
+check('execution capture gate accepts actual boundary and storage cases', () => assert.equal(executionGate(executionProof), true));
+for (const bad of [{ ok: false }, { checks: 21 }, { productionDataTouched: true }, { providerRequests: 1 }]) {
+  check('execution gate rejects invalid evidence ' + JSON.stringify(bad), () => assert.equal(executionGate({ ...executionProof, ...bad }), false));
+}
+check('execution gate rejects command failure', () => assert.equal(executionGate(executionProof, 1), false));
 console.log(JSON.stringify({ok:true,verifier:'release-verifier-contracts-v1',checks,productionDataTouched:false},null,2));
