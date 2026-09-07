@@ -9,14 +9,40 @@ const file = path.join(__dirname, 'validateData.cjs');
 const source = fs.readFileSync(file, 'utf8');
 const baseRequire = createRequire(file);
 const archivePath = path.resolve(__dirname, '../outputs/synthetic-validation-archive.json');
+const startedAtMs = Date.now();
+const publicDir = path.resolve(__dirname, '../public');
+const fixtureMatch = {
+  id:'sporttery_991980', sourceMatchId:'991980', source:'sporttery',
+  sourceUrl:'https://webapi.sporttery.cn/gateway/jc/football/getMatchListV1.qry',
+  status:'SCHEDULED', kickoffTime:'2026-09-08T12:00:00.000Z',
+  homeTeamColor:'#112233', awayTeamColor:'#445566', predictions:[],
+};
+// Scope-contract mutations need two deterministic rows, not 22 parses of the
+// entire production history. Full public-file validation is retained below in
+// both scopes. These fixtures never escape the in-memory filesystem overlay.
+const fixtureFiles = new Map([
+  [path.join(publicDir,'data','matches-current.json'), JSON.stringify([fixtureMatch])],
+  [path.join(publicDir,'data','matches-history.json'), JSON.stringify([{...fixtureMatch,
+    id:'sporttery_991981',sourceMatchId:'991981',status:'FINISHED',kickoffTime:'2026-09-06T12:00:00.000Z',scoreHome:1,scoreAway:1}])],
+  [path.join(publicDir,'data','sync-meta.json'),JSON.stringify({files:{archivedUnsettled:14},currentListPolicy:{
+    version:'kickoff-retention-v1',evaluatedAt:'2026-09-07T12:00:00.000Z',archivedUnsettled:14,unsettledRetentionHours:48}})],
+]);
 let checks = 0;
-function run({ publicOnly = false, archive = null, count = 14, policyCount = count, omitCounts = false, badScore = false } = {}) {
+let fullPublicFileRuns = 0, fixtureDataReads = 0;
+function run({ publicOnly = false, archive = null, count = 14, policyCount = count, omitCounts = false, badScore = false, fullPublicFiles = false } = {}) {
   const io = Object.create(fs), messages = [];
   let payload = null, exitCode = 0, archiveReads = 0;
-  io.existsSync = p => path.resolve(p) === archivePath ? archive !== null : fs.existsSync(p);
+  if(fullPublicFiles) fullPublicFileRuns++;
+  io.existsSync = p => path.resolve(p) === archivePath ? archive !== null : fullPublicFiles ? fs.existsSync(p) : fixtureFiles.has(path.resolve(p));
+  io.statSync = p => {
+    if(fullPublicFiles) return fs.statSync(p);
+    assert.ok(fixtureFiles.has(path.resolve(p)),'unexpected fixture stat');
+    return {size:Buffer.byteLength(fixtureFiles.get(path.resolve(p)))};
+  };
   io.readFileSync = (p, ...args) => {
     if (path.resolve(p) === archivePath) { archiveReads++; return JSON.stringify(archive); }
-    const raw = fs.readFileSync(p, ...args);
+    if(!fullPublicFiles) {assert.ok(fixtureFiles.has(path.resolve(p)),'unexpected fixture read');fixtureDataReads++;}
+    const raw = fullPublicFiles ? fs.readFileSync(p, ...args) : fixtureFiles.get(path.resolve(p));
     if (String(p).replaceAll('\\', '/').endsWith('/public/data/sync-meta.json')) {
       const meta = JSON.parse(raw); meta.files.archivedUnsettled = count;
       meta.currentListPolicy.archivedUnsettled = policyCount;
@@ -78,4 +104,16 @@ verify('Pages uses explicit public scope while default npm task stays strict', (
   assert.equal(pkg.scripts['validate:data:public'], 'node scripts/validateData.cjs --public-distribution');
   assert.match(fs.readFileSync(path.join(__dirname, '../.github/workflows/deploy.yml'), 'utf8'), /npm run validate:data:public/);
 });
-console.log(JSON.stringify({ ok: true, checks, productionDataTouched: false, scope: 'actual validator with isolated in-memory overlays' }, null, 2));
+verify('complete actual public data still passes public-scope validation', () => {
+  const r=run({publicOnly:true,fullPublicFiles:true});assert.equal(r.exitCode,0,r.messages);
+  assert.equal(r.payload.privateArchiveVerified,false);assert.equal(r.archiveReads,0);assert.ok(r.payload.count>0);
+});
+verify('complete actual public data still passes server-scope validation with isolated archive', () => {
+  const r=run({fullPublicFiles:true,count:0,archive:[]});assert.equal(r.exitCode,0,r.messages);
+  assert.equal(r.payload.privateArchiveVerified,true);assert.equal(r.archiveReads,1);assert.ok(r.payload.count>0);
+});
+assert.equal(fullPublicFileRuns,2);assert.equal(fixtureDataReads,63);
+console.log(JSON.stringify({ ok: true, checks, productionDataTouched: false,
+  fullPublicFileRuns, fixtureDataReads, elapsedMs:Date.now()-startedAtMs,
+  scope:'actual validator; bounded scope fixtures plus two complete public-file passes; private archive is isolated',
+}, null, 2));

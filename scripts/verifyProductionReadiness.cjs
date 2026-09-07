@@ -589,7 +589,8 @@ const run = async () => {
     });
   pushCheck(checks, "Pages scope cannot weaken server private-archive validation",
     dataValidationScopes.status === 0 && dataValidationScopes.body?.ok === true
-      && dataValidationScopes.body?.checks >= 22 && dataValidationScopes.body?.productionDataTouched === false, {
+      && dataValidationScopes.body?.checks === 24 && dataValidationScopes.body?.productionDataTouched === false
+      && dataValidationScopes.body?.fullPublicFileRuns === 2 && dataValidationScopes.body?.fixtureDataReads === 63, {
       status: dataValidationScopes.status, checks: dataValidationScopes.body?.checks || 0,
       stdoutTail: dataValidationScopes.status === 0 ? "" : dataValidationScopes.stdout.slice(-500),
       stderrTail: dataValidationScopes.stderr.slice(-500),
