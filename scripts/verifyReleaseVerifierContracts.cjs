@@ -62,6 +62,8 @@ const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/servic
   'scripts/predictionExecutionCapture.cjs', 'scripts/verifyPredictionExecutionCapture.cjs', 'scripts/verifyDataGenerationPointerLockRace.cjs',
   'scripts/verifyDataGenerationEndToEnd.cjs',
   'scripts/openFootballObservationStore.cjs', 'scripts/auditOpenFootballCurrentSeason.cjs', 'scripts/verifyOpenFootballObservations.cjs',
+  'scripts/openFootballObservationSchedule.cjs', 'scripts/runOpenFootballObservationSync.cjs',
+  'scripts/verifyOpenFootballObservationSchedule.cjs', 'scripts/footballDataFixtureRetry.cjs',
   'src/services/predictionExecutionClock.cjs', 'scripts/verifyPredictionExecutionClock.cjs',
   'src/services/predictionRuntimeIdentity.cjs', 'scripts/replayPredictionCapture.cjs', 'scripts/verifyPredictionReplay.cjs'];
 const requiredEntries = source => {
@@ -216,4 +218,23 @@ for (const bad of [{ ok: false }, { checks: 50 }, { providerRequests: 1 }, { pro
   check('community gate rejects invalid receipt evidence ' + JSON.stringify(bad), () => assert.equal(communityGate({ ...communityProof, ...bad }), false));
 }
 check('community gate rejects command failure', () => assert.equal(communityGate(communityProof, 1), false));
+const scheduleStart = readiness.indexOf('    pushCheck(checks, "community receipt schedule is isolated, bounded and outside base publication",');
+const scheduleEnd = readiness.indexOf('\n    const communityObservations', scheduleStart);
+assert.ok(scheduleStart >= 0 && scheduleEnd > scheduleStart);
+const scheduleGate = (body, status = 0) => {
+  let result;
+  vm.runInNewContext(readiness.slice(scheduleStart, scheduleEnd), { checks: [],
+    communitySchedule: { status, body, stdout: '', stderr: '' },
+    pushCheck: (_checks, _name, ok) => { result = ok; } }, { timeout: 1000 });
+  return result;
+};
+const scheduleProof = { ok: true, verifier: 'openfootball-observation-schedule-v1', providerRequests: 0, productionDataTouched: false,
+  checks: Array.from({ length: 17 }, (_, i) => ({ name: i === 0 ? 'actual worker wiring keeps research step outside base-publication inputs' : `check-${i}`, ok: true })) };
+check('community scheduling gate accepts isolated complete wiring evidence', () => assert.equal(scheduleGate(scheduleProof), true));
+for (const bad of [{ ok: false }, { verifier: 'unrelated' }, { providerRequests: 1 }, { productionDataTouched: true },
+  { checks: scheduleProof.checks.slice(0, 16) }, { checks: scheduleProof.checks.map(c => ({ ...c, name: 'unrelated' })) },
+  { checks: scheduleProof.checks.map(c => ({ ...c, ok: false })) }]) {
+  check('community scheduling gate rejects incomplete evidence', () => assert.equal(scheduleGate({ ...scheduleProof, ...bad }), false));
+}
+check('community scheduling gate rejects failed child', () => assert.equal(scheduleGate(scheduleProof, 1), false));
 console.log(JSON.stringify({ok:true,verifier:'release-verifier-contracts-v1',checks,productionDataTouched:false},null,2));

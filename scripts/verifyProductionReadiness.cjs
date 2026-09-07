@@ -1604,6 +1604,18 @@ const run = async () => {
       stderrTail: currentMatchRetention.stderr.slice(-500)
     });
 
+    const communitySchedule = await runLocalJson(["scripts/verifyOpenFootballObservationSchedule.cjs"]);
+    pushCheck(checks, "community receipt schedule is isolated, bounded and outside base publication", communitySchedule.status === 0
+      && communitySchedule.body?.ok === true && communitySchedule.body?.verifier === "openfootball-observation-schedule-v1"
+      && communitySchedule.body?.providerRequests === 0 && communitySchedule.body?.productionDataTouched === false
+      && Array.isArray(communitySchedule.body?.checks) && communitySchedule.body.checks.length >= 17
+      && communitySchedule.body.checks.every(check => check.ok === true)
+      && communitySchedule.body.checks.some(check => check.name === "actual worker wiring keeps research step outside base-publication inputs"), {
+      status: communitySchedule.status, checks: communitySchedule.body?.checks?.length ?? null,
+      stdoutTail: communitySchedule.status === 0 ? "" : communitySchedule.stdout.slice(-500),
+      stderrTail: communitySchedule.stderr.slice(-500),
+    });
+
     const communityObservations = await runLocalJson(["scripts/verifyOpenFootballObservations.cjs"]);
     pushCheck(checks, "community raw receipts preserve first clocks and cannot publish predictions", communityObservations.status === 0
       && communityObservations.body?.ok === true && communityObservations.body?.checks >= 51

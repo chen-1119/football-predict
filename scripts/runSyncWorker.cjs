@@ -7,6 +7,7 @@ const { resolveActivePublication } = require("../server/dataGenerationBundle.cjs
 const { readPointer, storePaths } = require("../server/dataGenerationStore.cjs");
 const { apiFootballRuntimePolicyFor } = require("../src/services/apiFootballRuntimePolicy.cjs");
 const { runFootballDataFixtureRetry } = require("./footballDataFixtureRetry.cjs");
+const { runOpenFootballObservationSchedule } = require("./openFootballObservationSchedule.cjs");
 const {
   evaluateReleaseEnrichmentReuseRequest,
   inspectReleaseWorkerPriorityRequest,
@@ -2522,6 +2523,7 @@ const describeCycleStages = () => ([
       "sync:500:details",
       "sync:api-football",
       "sync:weather",
+      "sync:openfootball-observations",
       "sync:football-data-fixtures",
       "sync:football-data-results",
       "sync:open-research",
@@ -3481,6 +3483,13 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
     enrichmentSteps.push(await runEnrichment(process.env.ENABLE_500_DETAILS_SYNC === "1", "sync:500:details"));
     enrichmentSteps.push(await runEnrichment(apiFootballRuntimePolicy.enabled, "sync:api-football"));
     enrichmentSteps.push(await runEnrichment(process.env.ENABLE_WEATHER_SYNC !== "0", "sync:weather"));
+    // Private community receipts do not feed the publication planner. They
+    // retain a visible slow-step result but cannot trigger base reconstruction.
+    const communityReceiptStep = await runOpenFootballObservationSchedule({
+      enabled: process.env.ENABLE_OPENFOOTBALL_OBSERVATIONS !== "0", storeDir,
+      read: readJson, write: writeJsonAtomic,
+      run: (extraEnv) => runEnrichment(true, "sync:openfootball-observations", extraEnv),
+    });
     const footballDataFixturesStatus = readJson(footballDataFixturesStatusFile, null);
     enrichmentSteps.push(await runFootballDataFixtureRetry({
       enabled: process.env.ENABLE_FOOTBALL_DATA_FIXTURES_SYNC !== "0",
@@ -3801,6 +3810,7 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
       sqliteStep: effectivePostEnrichmentSqliteStep,
     });
     const slowSteps = [
+      communityReceiptStep,
       ...enrichmentSteps,
       sourceValidationStep,
       postEnrichmentDataValidationStep,
@@ -3852,6 +3862,7 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
       slowPhase,
       releaseEnrichmentReuse,
       enrichmentSteps,
+      communityReceiptStep,
       sourceValidationStep,
       postEnrichmentDataValidationStep,
       postEnrichmentPublicationPlan,

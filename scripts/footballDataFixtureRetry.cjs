@@ -11,6 +11,12 @@ const canonicalMs = value => {
   const n = Date.parse(value);
   return Number.isFinite(n) && new Date(n).toISOString() === value ? n : null;
 };
+function createSupplementarySourceRetry(options = {}) {
+const VERSION = options.version || 'football-data-fixture-retry-v1';
+const SCRIPT = options.script || 'sync:football-data-fixtures';
+const label = options.label || 'Supplementary fixtures';
+if (!/^[a-z0-9-]{1,100}$/.test(VERSION) || !/^[a-z0-9:-]{1,100}$/.test(SCRIPT)
+  || typeof label !== 'string' || label.length > 80) throw new TypeError('invalid source retry identity');
 function validAttempt(value, nowMs) {
   if (!value || value.version !== VERSION || value.script !== SCRIPT
       || !['running','failed','succeeded'].includes(value.state)
@@ -26,7 +32,7 @@ function validAttempt(value, nowMs) {
 }
 const failureResult = (reason, nextAttemptAt, errorCode = null) => ({
   ok:false, skipped:true, fatal:false, script:SCRIPT, reason,
-  error:`Supplementary fixtures unavailable (${reason}); last valid snapshot preserved${nextAttemptAt ? `; next attempt ${nextAttemptAt}` : ''}`,
+  error:`${label} unavailable (${reason}); last valid snapshot preserved${nextAttemptAt ? `; next attempt ${nextAttemptAt}` : ''}`,
   retry:{ version:VERSION, nextAttemptAt:nextAttemptAt || null, errorCode, sourceRecovered:false },
 });
 
@@ -58,7 +64,7 @@ async function runFootballDataFixtureRetry({ enabled, checkedAt, minIntervalMs, 
   // the running lease for restart protection; never convert cancellation to ok.
   let result = await run();
   if (!result || typeof result.ok !== 'boolean') result = {ok:false, fatal:false,
-    error:'Supplementary fixtures command returned no valid result', errorCode:'SOURCE_RESULT_INVALID'};
+    error:`${label} command returned no valid result`, errorCode:'SOURCE_RESULT_INVALID'};
   if (result?.skipped || result?.reused) {
     // Signed release reuse did not perform a new source request. Restore the
     // original operational state and never advance success/failure clocks.
@@ -78,4 +84,8 @@ async function runFootballDataFixtureRetry({ enabled, checkedAt, minIntervalMs, 
   catch { return {...failureResult('retry-state-write-failed',null,'RETRY_STATE_WRITE_FAILED'),skipped:false}; }
   return {...result,script:SCRIPT,retry:{version:VERSION,nextAttemptAt,errorCode,sourceRecovered:succeeded,failures,priorStateInvalid:prior !== null && !valid}};
 }
-module.exports = {VERSION,SCRIPT,BASE_RETRY_MS,MAX_RETRY_MS,validAttempt,runFootballDataFixtureRetry};
+return { validAttempt, run: runFootballDataFixtureRetry };
+}
+const fixturesPolicy = createSupplementarySourceRetry();
+module.exports = {VERSION,SCRIPT,BASE_RETRY_MS,MAX_RETRY_MS,
+  validAttempt:fixturesPolicy.validAttempt,runFootballDataFixtureRetry:fixturesPolicy.run,createSupplementarySourceRetry};

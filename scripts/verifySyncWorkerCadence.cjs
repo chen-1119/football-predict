@@ -631,6 +631,7 @@ assert.deepEqual(stages[3].operations, [
   "sync:500:details",
   "sync:api-football",
   "sync:weather",
+  "sync:openfootball-observations",
   "sync:football-data-fixtures",
   "sync:football-data-results",
   "sync:open-research",

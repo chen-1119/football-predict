@@ -37,7 +37,7 @@ npm.cmd run verify:openfootball-observations
 
 首批报告 SHA-256 `441254668fa5537cdbbc65ea290d79ce70614e2bbd9f0ce1568db9b911dd279b`。05:53:40 独立进程只读重查全部链、原始字节和首批报告，一致通过；最后 receiptHash `ae1c9708e6dcfc97a1e53c7943bf64136771623f21b09cb58a90a6772df9fb04`。私有回取报告为工作树 `outputs/community-receipts-reread-1788818020010.json`；不上传原始数据或 SQLite 到公开 Git。
 
-采集在服务器完成，电脑关闭不会删除已保存内容。但本轮只执行一次，**尚未接入周期 worker、没有新增定时任务，也尚未纳入跨机备份**。不能宣称常驻第二通道已经完成。未来接入须加入配额/失败冷却、状态展示及新发布验收。
+采集在服务器完成，电脑关闭不会删除已保存内容。但该次真实采集只执行一次，**当时尚未接入周期 worker、没有新增定时任务，也尚未纳入跨机备份**。后续已完成 [worker 周期调度源码与隔离验证](openfootball-worker-schedule.md)，仍未部署，不可据此宣称常驻第二通道已经完成。
 
 ## 当时线上真实缺口
 
