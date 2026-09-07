@@ -170,7 +170,7 @@ function auditDatabase(db) {
       sourceVerified: false, productionAdmittedRows: 0, writes: 0 };
 }
 
-function auditObservationStore(storeDir) {
+function readAuditedObservationStore(storeDir, read) {
   if (typeof storeDir !== "string" || !path.isAbsolute(storeDir)) throw new Error("Explicit absolute observation directory required");
   const file = path.join(fs.realpathSync(storeDir), "observations.sqlite");
   const stat = fs.lstatSync(file);
@@ -178,11 +178,14 @@ function auditObservationStore(storeDir) {
   const db = new DatabaseSync(file, { readOnly: true });
   try {
     db.exec("PRAGMA query_only=ON; PRAGMA busy_timeout=5000; BEGIN;");
-    const report = auditDatabase(db);
+    const audit = auditDatabase(db);
+    const report = read ? read(db, audit) : audit;
     db.exec("COMMIT;");
     return report;
   } finally { db.close(); }
 }
+
+const auditObservationStore = storeDir => readAuditedObservationStore(storeDir);
 
 async function collectSeasonObservations({ storeDir, season, fetchImpl = fetch, clock }) {
   // Validate configuration before making any request. Explicit storage means a
@@ -214,4 +217,4 @@ if (require.main === module) {
   }).catch(error => { console.error(error.message); process.exitCode = 1; });
 }
 
-module.exports = { VERSION, MAX_RAW_BYTES, MAX_OBSERVATIONS, recordSourceObservation, collectSeasonObservations, auditObservationStore };
+module.exports = { VERSION, MAX_RAW_BYTES, MAX_OBSERVATIONS, recordSourceObservation, collectSeasonObservations, auditObservationStore, readAuditedObservationStore };

@@ -391,6 +391,8 @@ const requiredEntries = [
   "scripts/verifyDataGenerationPointerLockRace.cjs",
   "scripts/verifyDataGenerationEndToEnd.cjs",
   "scripts/openFootballObservationStore.cjs",
+  "scripts/openFootballResultReceiptIndex.cjs",
+  "scripts/verifyOpenFootballResultReceiptIndex.cjs",
   "scripts/openFootballObservationSchedule.cjs",
   "scripts/runOpenFootballObservationSync.cjs",
   "scripts/verifyOpenFootballObservationSchedule.cjs",

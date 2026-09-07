@@ -1604,6 +1604,19 @@ const run = async () => {
       stderrTail: currentMatchRetention.stderr.slice(-500)
     });
 
+    const communityResultReceipts = await runLocalJson(["scripts/verifyOpenFootballResultReceiptIndex.cjs"]);
+    pushCheck(checks, "community result clocks require actual qualifying receipts and immutable as-of replay", communityResultReceipts.status === 0
+      && communityResultReceipts.body?.ok === true && communityResultReceipts.body?.verifier === "openfootball-result-receipt-index-v1"
+      && communityResultReceipts.body?.providerRequests === 0 && communityResultReceipts.body?.productionDataTouched === false
+      && Array.isArray(communityResultReceipts.body?.checks) && communityResultReceipts.body.checks.length >= 17
+      && communityResultReceipts.body.checks.every(check => check.ok === true)
+      && communityResultReceipts.body.checks.some(check => check.name === "appended future evidence does not alter historical index hash or rows")
+      && communityResultReceipts.body.checks.some(check => check.name === "same-day source score remains quarantined even when queried a week later"), {
+      status: communityResultReceipts.status, checks: communityResultReceipts.body?.checks?.length ?? null,
+      stdoutTail: communityResultReceipts.status === 0 ? "" : communityResultReceipts.stdout.slice(-500),
+      stderrTail: communityResultReceipts.stderr.slice(-500),
+    });
+
     const communitySchedule = await runLocalJson(["scripts/verifyOpenFootballObservationSchedule.cjs"]);
     pushCheck(checks, "community receipt schedule is isolated, bounded and outside base publication", communitySchedule.status === 0
       && communitySchedule.body?.ok === true && communitySchedule.body?.verifier === "openfootball-observation-schedule-v1"

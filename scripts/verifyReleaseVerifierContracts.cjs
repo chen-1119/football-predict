@@ -62,6 +62,7 @@ const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/servic
   'scripts/predictionExecutionCapture.cjs', 'scripts/verifyPredictionExecutionCapture.cjs', 'scripts/verifyDataGenerationPointerLockRace.cjs',
   'scripts/verifyDataGenerationEndToEnd.cjs',
   'scripts/openFootballObservationStore.cjs', 'scripts/auditOpenFootballCurrentSeason.cjs', 'scripts/verifyOpenFootballObservations.cjs',
+  'scripts/openFootballResultReceiptIndex.cjs', 'scripts/verifyOpenFootballResultReceiptIndex.cjs',
   'scripts/openFootballObservationSchedule.cjs', 'scripts/runOpenFootballObservationSync.cjs',
   'scripts/verifyOpenFootballObservationSchedule.cjs', 'scripts/footballDataFixtureRetry.cjs',
   'src/services/predictionExecutionClock.cjs', 'scripts/verifyPredictionExecutionClock.cjs',
@@ -237,4 +238,25 @@ for (const bad of [{ ok: false }, { verifier: 'unrelated' }, { providerRequests:
   check('community scheduling gate rejects incomplete evidence', () => assert.equal(scheduleGate({ ...scheduleProof, ...bad }), false));
 }
 check('community scheduling gate rejects failed child', () => assert.equal(scheduleGate(scheduleProof, 1), false));
+const resultStart = readiness.indexOf('    pushCheck(checks, "community result clocks require actual qualifying receipts and immutable as-of replay",');
+const resultEnd = readiness.indexOf('\n    const communitySchedule', resultStart);
+assert.ok(resultStart >= 0 && resultEnd > resultStart);
+const resultGate = (body, status = 0) => {
+  let result;
+  vm.runInNewContext(readiness.slice(resultStart, resultEnd), { checks: [],
+    communityResultReceipts: { status, body, stdout: '', stderr: '' },
+    pushCheck: (_checks, _name, ok) => { result = ok; } }, { timeout: 1000 });
+  return result;
+};
+const resultNames = ['appended future evidence does not alter historical index hash or rows',
+  'same-day source score remains quarantined even when queried a week later'];
+const resultProof = { ok: true, verifier: 'openfootball-result-receipt-index-v1', providerRequests: 0, productionDataTouched: false,
+  checks: Array.from({ length: 17 }, (_, i) => ({ name: resultNames[i] || `check-${i}`, ok: true })) };
+check('result receipt gate accepts bounded as-of and quarantine evidence', () => assert.equal(resultGate(resultProof), true));
+for (const bad of [{ ok: false }, { verifier: 'unrelated' }, { providerRequests: 1 }, { productionDataTouched: true },
+  { checks: resultProof.checks.slice(0, 16) }, { checks: resultProof.checks.map(c => ({ ...c, name: 'unrelated' })) },
+  { checks: resultProof.checks.map(c => ({ ...c, ok: false })) }]) {
+  check('result receipt gate rejects incomplete evidence', () => assert.equal(resultGate({ ...resultProof, ...bad }), false));
+}
+check('result receipt gate rejects failed child', () => assert.equal(resultGate(resultProof, 1), false));
 console.log(JSON.stringify({ok:true,verifier:'release-verifier-contracts-v1',checks,productionDataTouched:false},null,2));
