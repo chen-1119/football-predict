@@ -101,7 +101,10 @@
 .data-adoption-details[open] summary::after { content: '−'; }
 .data-adoption-details summary:focus-visible { outline: 2px solid hsl(var(--text-primary)); outline-offset: 3px; border-radius: 4px; }
 .data-adoption-details p { margin: 0.55rem 0; color: hsl(var(--text-secondary)); }
-.data-adoption-details__counts { font-size: 0.75rem; color: hsl(var(--text-secondary)); font-weight: 500; }
+.data-adoption-details__counts { display: flex; flex-wrap: wrap; gap: 0.3rem 0.65rem; flex-basis: 100%; order: 1; font-size: 0.75rem; color: hsl(var(--text-secondary)); font-weight: 500; }
+.data-adoption-details__counts > span { white-space: nowrap; }
+.data-adoption-details__counts [data-summary-state='conflicting'],
+.data-adoption-details__counts [data-summary-state='after-decision'] { color: hsl(var(--danger)); }
 .data-adoption-details__identity { display: grid; gap: 0.45rem; padding: 0.7rem; background: hsl(var(--bg-card) / 0.55); border-radius: 8px; color: hsl(var(--text-muted)); }
 .data-adoption-details__identity strong { display: block; color: hsl(var(--text-secondary)); font-weight: 500; overflow-wrap: anywhere; }
 .data-adoption-details p.data-adoption-details__warning { border-left: 2px solid hsl(var(--text-muted)); padding-left: 0.65rem; }

@@ -180,4 +180,21 @@ for (const value of ["2024-02-29T00:00:00Z", "2026-09-01T08:00:00+08:00", "2026-
   assert.notEqual(row(match, "weather").observedAt, null);
   assert.equal(row(match, "weather").state, "available-not-adopted");
 });
+check("closed summary accounts for every input and exposes conflicts, late and aged states", () => {
+  const match = clone(published);
+  const components = match.predictionMeta.publicReferenceDecision.dataGaps.preMatchQuality.components;
+  components.homeForm = { status: "conflicting" };
+  components.elo = { status: "stale" };
+  const report = service.getDataAdoptionReport(match);
+  for (const language of ["zh", "en"]) {
+    const html = renderToStaticMarkup(React.createElement(DataAdoptionDetails, { match, language }));
+    const summary = html.match(/<summary>([\s\S]*?)<\/summary>/)[1];
+    const actual = Object.fromEntries([...summary.matchAll(/data-summary-state="([^"]+)">([^<]+)</g)].map(m => [m[1], Number(m[2].match(/\d+/)[0])]));
+    assert.equal(Object.values(actual).reduce((a, b) => a + b, 0), report.rows.length);
+    assert.equal(actual.conflicting, 1); assert.equal(actual["after-decision"], 1); assert.equal(actual.stale, 1);
+    assert.equal(actual.unverified, report.rows.filter(r => ["unknown", "unverified", "available-not-adopted"].includes(r.state)).length);
+    assert.equal(actual["not-yet-published"], 1);
+    assert.equal(summary.includes("%"), false);
+  }
+});
 console.log(JSON.stringify({ ok: true, checks, scope: "actual publisher, pure TS rules and actual TSX rendering; synthetic only", modelWeightsChanged: false }, null, 2));
