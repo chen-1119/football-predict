@@ -252,6 +252,11 @@ const footballDataResultsMinIntervalMs = Math.max(
   60,
   finiteEnvNumber("FOOTBALL_DATA_RESULTS_MIN_INTERVAL_MINUTES", 720)
 ) * 60 * 1000;
+// Daily enrichment follows the live season. The standalone historical-download
+// CLI deliberately keeps its previous-season default and explicit overrides.
+const footballDataResultsWorkerEnv = (env = process.env) => ({
+  FOOTBALL_DATA_RESULTS_SEASON: env.FOOTBALL_DATA_RESULTS_SEASON || "current",
+});
 const webConsensusRefreshMs = Math.max(
   5,
   finiteEnvNumber("WEB_CONSENSUS_REFRESH_MINUTES", 30)
@@ -3485,7 +3490,7 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
     enrichmentSteps.push(await runEnrichment(
       footballDataResultsDue,
       "sync:football-data-results",
-      {}
+      footballDataResultsWorkerEnv()
     ));
     enrichmentSteps.push(await runEnrichment(process.env.ENABLE_OPEN_RESEARCH_SYNC !== "0", "sync:open-research"));
     enrichmentSteps.push(await runEnrichment(
@@ -4697,6 +4702,7 @@ module.exports = {
   describeSlowPhaseNeed,
   describeSyncCadence,
   fastEventVisibilityMs,
+  footballDataResultsWorkerEnv,
   main,
   modelStrategyReconciliationFingerprint,
   modelCandidateRegistryLockTimeoutMs,

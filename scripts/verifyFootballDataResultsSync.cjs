@@ -6,6 +6,7 @@ const path = require("node:path");
 const http = require("node:http");
 const { once } = require("node:events");
 const { currentSeasonCode, previousSeasonCode, resolveSeason, sourceList, downloadCsv, main } = require("./syncFootballDataResults.cjs");
+const { footballDataResultsWorkerEnv, runCommand } = require("./runSyncWorker.cjs");
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), "football-results-sync-test-"));
 let checks = 0;
 const check = async (name, fn) => { await fn(); checks++; };
@@ -29,6 +30,30 @@ const server = http.createServer((req, res) => {
   const source = { code: "E0", group: "main-league-season", url: `${base}/data` };
   const destination = path.join(temp, "single.csv");
   const firstAt = "2026-09-07T01:00:00.000Z"; const laterAt = "2026-09-07T02:00:00.000Z";
+  const workerSource=fs.readFileSync(path.join(__dirname,"runSyncWorker.cjs"),"utf8");
+  // CRLF worktrees use the same source fragment after newline normalization.
+  const normalized=workerSource.replace(/\r\n/g,"\n");
+  const normalizedStart=normalized.indexOf('enrichmentSteps.push(await runEnrichment(\n      footballDataResultsDue,');
+  assert.ok(normalizedStart>=0);
+  const step=normalized.slice(normalizedStart,normalized.indexOf('));',normalizedStart)+3);
+  const executeStep=new (Object.getPrototypeOf(async function(){}).constructor)("enrichmentSteps","runEnrichment","footballDataResultsDue","footballDataResultsWorkerEnv",step);
+  for (const [name, env, expected] of [["unset",{},"2627"],["empty",{FOOTBALL_DATA_RESULTS_SEASON:""},"2627"],
+    ["explicit current",{FOOTBALL_DATA_RESULTS_SEASON:"current"},"2627"],["explicit history",{FOOTBALL_DATA_RESULTS_SEASON:"previous"},"2526"],
+    ["explicit season",{FOOTBALL_DATA_RESULTS_SEASON:"2425"},"2425"]]) await check("actual worker enrichment step and child resolve "+name+" season correctly",async()=>{
+    const entries=[]; let captured;
+    await executeStep(entries,async(enabled,script,extraEnv)=>{captured={enabled,script,extraEnv};return {ok:true};},true,()=>footballDataResultsWorkerEnv(env));
+    assert.equal(captured.enabled,true); assert.equal(captured.script,"sync:football-data-results"); assert.equal(entries.length,1);
+    const child=await runCommand(process.execPath,["-e",`const assert=require('node:assert/strict');const {resolveSeason}=require('./scripts/syncFootballDataResults.cjs');assert.equal(resolveSeason(process.env.FOOTBALL_DATA_RESULTS_SEASON,new Date('2026-09-07T00:00:00.000Z')),${JSON.stringify(expected)});`],captured.extraEnv,{stdio:"ignore",timeoutMs:10000});
+    assert.equal(child.ok,true);
+  });
+  await check("disabled or not-due enrichment stays disabled and invalid explicit settings are not silently replaced",async()=>{
+    let enabled;
+    await executeStep([],async(value)=>{enabled=value;return {ok:true};},false,()=>footballDataResultsWorkerEnv({}));
+    assert.equal(enabled,false);
+    assert.throws(()=>resolveSeason(footballDataResultsWorkerEnv({FOOTBALL_DATA_RESULTS_SEASON:"2628"}).FOOTBALL_DATA_RESULTS_SEASON));
+    assert.ok(normalized.includes('ageMs(footballDataResultsStatus?.completedAt) >= footballDataResultsMinIntervalMs'));
+    assert.ok(normalized.includes('finiteEnvNumber("FOOTBALL_DATA_RESULTS_MIN_INTERVAL_MINUTES", 720)'));
+  });
   await check("current and previous season remain distinct across the July boundary", () => {
     assert.equal(currentSeasonCode(new Date("2026-06-30T23:59:59Z")), "2526");
     assert.equal(currentSeasonCode(new Date("2026-07-01T00:00:00Z")), "2627");
@@ -95,7 +120,7 @@ const server = http.createServer((req, res) => {
     process.exitCode = 0;
     assert.equal(JSON.parse(fs.readFileSync(path.join(batchDir, "sync-status.json"))).summary.failed, 2);
   });
-  console.log(JSON.stringify({ ok: true, checks, scope: "actual localhost HTTP streaming and batch persistence; no upstream requests or production DB", productionDataTouched: false }, null, 2));
+  console.log(JSON.stringify({ ok: true, checks, scope: "actual worker enrichment fragment and child environment, localhost HTTP streaming and batch persistence; no upstream requests or production DB", productionDataTouched: false }, null, 2));
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => {
   server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
   const target = path.resolve(temp);
