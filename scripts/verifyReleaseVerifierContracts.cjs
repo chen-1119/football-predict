@@ -59,7 +59,8 @@ const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/servic
   'scripts/verifyLegacyReferenceConflict.cjs', 'src/services/legacyReferenceConflict.ts', 'scripts/verifyFrozenArchiveAuthority.cjs',
   'scripts/verifyOfficialClubResults.cjs', 'scripts/syncOfficialClubResults.cjs', 'scripts/verifyOfficialClubReceiptClocks.cjs',
   'scripts/competitionModelContext.cjs', 'scripts/verifyCompetitionModelContext.cjs',
-  'scripts/predictionExecutionCapture.cjs', 'scripts/verifyPredictionExecutionCapture.cjs'];
+  'scripts/predictionExecutionCapture.cjs', 'scripts/verifyPredictionExecutionCapture.cjs',
+  'src/services/predictionExecutionClock.cjs', 'scripts/verifyPredictionExecutionClock.cjs'];
 const requiredEntries = source => {
   const match = /const required(?:Release)?Entries = (\[[\s\S]*?\n\]);/.exec(source);
   assert.ok(match, 'required release-entry array must be explicit');
@@ -114,7 +115,7 @@ for (const bad of [{ ok: false }, { checks: 15 }, { productionWrites: 1 }]) {
 }
 check('competition gate rejects failed command even with success JSON', () => assert.equal(competitionGate(competitionProof, 1), false));
 const executionStart = readiness.indexOf('  pushCheck(checks, "private prediction execution capture preserves exact inputs and never rewrites locked outputs",');
-const executionEnd = readiness.indexOf('\n  const localServerOwnership', executionStart);
+const executionEnd = readiness.indexOf('\n  const executionClock', executionStart);
 assert.ok(executionStart >= 0 && executionEnd > executionStart);
 const executionGate = (body, status = 0) => {
   let result = null;
@@ -128,4 +129,19 @@ for (const bad of [{ ok: false }, { checks: 21 }, { productionDataTouched: true 
   check('execution gate rejects invalid evidence ' + JSON.stringify(bad), () => assert.equal(executionGate({ ...executionProof, ...bad }), false));
 }
 check('execution gate rejects command failure', () => assert.equal(executionGate(executionProof, 1), false));
+const clockStart = readiness.indexOf('  pushCheck(checks, "prediction clock replays entire outputs without ignoring fields or forging observation times",');
+const clockEnd = readiness.indexOf('\n  const localServerOwnership', clockStart);
+assert.ok(clockStart >= 0 && clockEnd > clockStart);
+const clockGate = (body, status = 0) => {
+  let result = null;
+  vm.runInNewContext(readiness.slice(clockStart, clockEnd), { checks: [], executionClock: { status, body, stderr: '' },
+    pushCheck: (_checks, _name, ok) => { result = ok; } }, { timeout: 1000 });
+  return result;
+};
+const clockProof = { ok: true, checks: 14, productionDataTouched: false, providerRequests: 0, fullOutputFieldsIgnored: 0 };
+check('clock gate accepts full-output replay without field exclusions', () => assert.equal(clockGate(clockProof), true));
+for (const bad of [{ ok: false }, { checks: 13 }, { productionDataTouched: true }, { providerRequests: 1 }, { fullOutputFieldsIgnored: 1 }]) {
+  check('clock gate rejects invalid proof ' + JSON.stringify(bad), () => assert.equal(clockGate({ ...clockProof, ...bad }), false));
+}
+check('clock gate rejects command failure', () => assert.equal(clockGate(clockProof, 1), false));
 console.log(JSON.stringify({ok:true,verifier:'release-verifier-contracts-v1',checks,productionDataTouched:false},null,2));

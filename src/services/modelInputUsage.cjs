@@ -11,7 +11,7 @@ const same = (a, b) => finite(a) && finite(b) && Math.abs(a - b) < 1e-12;
 // These receipts are created only by the executing arithmetic functions.
 // They attest arithmetic use, NOT source truth, freshness, or promotion eligibility.
 function recordModelInputUsage(match, stage, computation) {
-  const payload = clone({ version: VERSION, stage, recordedAt: new Date().toISOString(),
+  const payload = clone({ version: VERSION, stage, recordedAt: require("./predictionExecutionClock.cjs").predictionNowIso(),
     sourceMatchId: String(match.sourceMatchId || ""), kickoffTime: match.kickoffTime || null,
     ...computation });
   return { ...payload, contentHash: digest(payload) };

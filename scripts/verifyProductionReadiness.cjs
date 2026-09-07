@@ -637,6 +637,14 @@ const run = async () => {
       status: executionCapture.status, checks: executionCapture.body?.checks || 0,
       stderrTail: executionCapture.stderr.slice(-500),
     });
+  const executionClock = await runLocalJson(["scripts/verifyPredictionExecutionClock.cjs"]);
+  pushCheck(checks, "prediction clock replays entire outputs without ignoring fields or forging observation times",
+    executionClock.status === 0 && executionClock.body?.ok === true
+      && executionClock.body?.checks >= 14 && executionClock.body?.productionDataTouched === false
+      && executionClock.body?.providerRequests === 0 && executionClock.body?.fullOutputFieldsIgnored === 0, {
+      status: executionClock.status, checks: executionClock.body?.checks || 0,
+      stderrTail: executionClock.stderr.slice(-500),
+    });
   const localServerOwnership = startServer ? await startLocalServer() : null;
 
   try {

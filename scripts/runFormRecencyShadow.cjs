@@ -49,7 +49,7 @@ function run(inputFile, outputFile) {
   assert.equal(fs.existsSync(output), false, "existing research output must not be overwritten");
   const stat = fs.lstatSync(input); assert.ok(stat.isFile() && !stat.isSymbolicLink() && stat.size <= 32 * 1024 * 1024, "bounded fixture input required");
   const bytes = fs.readFileSync(input), rows = JSON.parse(bytes); assert.ok(Array.isArray(rows) && rows.length <= 500);
-  const implementationFiles = [__filename, path.join(__dirname, "formRecencyShadow.cjs"), path.join(__dirname, "syncData.cjs"), path.join(__dirname, "competitionModelContext.cjs"), path.join(root, "src/services/modelInputUsage.cjs"), path.join(root, "src/services/strictInstant.cjs")];
+  const implementationFiles = [__filename, path.join(__dirname, "formRecencyShadow.cjs"), path.join(__dirname, "syncData.cjs"), path.join(__dirname, "competitionModelContext.cjs"), path.join(root, "src/services/modelInputUsage.cjs"), path.join(root, "src/services/predictionExecutionClock.cjs"), path.join(root, "src/services/strictInstant.cjs")];
   const implementation = implementationFiles.map(file => ({ file: path.relative(root, file).replaceAll("\\", "/"), sha256: hash(fs.readFileSync(file)) }));
   const seen = new Set(), excluded = [], reports = [];
   for (const row of rows) {

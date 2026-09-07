@@ -99,6 +99,7 @@ check("actual detail model normalizer hides raw receipts while preserving public
   const normalize = new Function("normalizeProbabilityLaneForDetail", "finiteNumberOrNull", source.slice(start, end) + "\nreturn normalizeProbabilityModelForDetail;")(v => v, v => typeof v === "number" && Number.isFinite(v) ? v : null);
   const result = normalize(model);
   assert.equal(Object.hasOwn(result, "inputUsage"), false);
+  assert.equal(Object.hasOwn(result, "executionClock"), false);
   assert.deepEqual(result.oneXTwo, model.oneXTwo);
   assert.equal(model.inputUsage.length, 2);
 });

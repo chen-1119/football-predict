@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const https = require("https");
 const crypto = require("crypto");
+const { predictionNowMs, predictionNowIso, executeWithPredictionClock } = require("../src/services/predictionExecutionClock.cjs");
 const { spawn } = require("child_process");
 const {
   MULTI_FACTOR_POLICY_VERSION,
@@ -2907,9 +2908,9 @@ function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLamb
     contextSignals,
   });
   return {
-    version: "independent-elo-form-poisson-v10",
+    version: "independent-elo-form-poisson-v11",
     competitionContext: require("./competitionModelContext.cjs").competitionModelContext(match),
-    generatedAt: new Date().toISOString(),
+    generatedAt: predictionNowIso(),
     basis: PREDICTION_MODEL_BASIS,
     ensembleWeights: {
       ...blended.weights,
@@ -8176,8 +8177,8 @@ function candidateExternalMarketEvidence(match, candidate, evaluationAt = null) 
   const declaredCutoffMs = parseBeijingDateTime(match?.predictionMeta?.cutoffTime || matchCutoffValue(match));
   const lockedMs = parseBeijingDateTime(match?.predictionMeta?.lockedAt || "");
   const evaluationMs = parseBeijingDateTime(evaluationAt || "");
-  const cutoffCandidates = [Date.now(), kickoffMs, declaredCutoffMs, lockedMs, evaluationMs].filter(Number.isFinite);
-  const cutoffMs = cutoffCandidates.length ? Math.min(...cutoffCandidates) : Date.now();
+  const cutoffCandidates = [predictionNowMs(), kickoffMs, declaredCutoffMs, lockedMs, evaluationMs].filter(Number.isFinite);
+  const cutoffMs = Math.min(...cutoffCandidates);
   const ageMs = Number.isFinite(updatedMs) ? cutoffMs - updatedMs : NaN;
   const freshAsOf = Number.isFinite(ageMs) && ageMs >= 0 && ageMs <= 72 * 60 * 60 * 1000;
   if (!freshAsOf) {
@@ -8595,7 +8596,7 @@ function buildUnifiedPosteriorCandidates(match, context) {
     contextSignals,
     best,
     oneXTwo,
-    evaluationAt: probabilityModel?.generatedAt || new Date().toISOString(),
+    evaluationAt: probabilityModel?.generatedAt || predictionNowIso(),
     inputCoverage,
     inputSparseMarketFallback,
     hadPosteriorDiagnostics: hadPosteriorDecision?.diagnostics || null,
@@ -9199,7 +9200,7 @@ function enforceUnifiedPosteriorRecommendation(match, context) {
     liveOfficialOdds,
     selectedIsHhad ? hhadLine : 0
   );
-  const livePublicationEvidence = buildLivePublicationEvidence(match, publicUnifiedBestBase, Date.now());
+  const livePublicationEvidence = buildLivePublicationEvidence(match, publicUnifiedBestBase, predictionNowMs());
   const liveRecommendation = livePublicationEvidence
     ? liveRecommendationCandidate
     : {
@@ -9287,7 +9288,7 @@ function enforceUnifiedPosteriorRecommendation(match, context) {
   );
   const unifiedProbabilityModel = {
     ...probabilityModel,
-    version: "unified-poisson-bayes-v74",
+    version: "unified-poisson-bayes-v75",
     oneXTwo: {
       ...(probabilityModel.oneXTwo || {}),
       unifiedPosterior: asPercentTriplet(unified.hadPosterior),
@@ -9297,8 +9298,8 @@ function enforceUnifiedPosteriorRecommendation(match, context) {
       unifiedPosterior: asPercentTriplet(unified.hhadPosterior),
     } : probabilityModel.handicap,
     unifiedPosterior: {
-      version: "v74-competition-metadata-draw-aware-evidence-shrinkage-argmax",
-      generatedAt: new Date().toISOString(),
+      version: "v75-execution-clock-competition-metadata-draw-aware-evidence-shrinkage-argmax",
+      generatedAt: predictionNowIso(),
       selectedMarket: selected.market,
       selectedCode: selected.code,
       selectedLabelZh: selected.label.zh,
@@ -11436,7 +11437,7 @@ function buildModelOnlyProbabilityModel(match, probabilities, homeLambda, awayLa
   return {
     probabilityModel: {
       ...probabilityModel,
-      version: "model-only-no-official-sp-v3",
+      version: "model-only-no-official-sp-v4",
       basis: {
         zh: "未开售模型参考：官方 SP/让球 SP 暂无时，按球队强弱、历史样本、赛程与 Poisson 比分分布生成参考推荐；不作为串关 SP。",
         en: "Model-only reference while official SP/handicap SP is unavailable. It uses team strength, historical samples, schedule context, and Poisson score distribution, and is not a parlay SP."
@@ -11456,6 +11457,10 @@ function buildModelOnlyProbabilityModel(match, probabilities, homeLambda, awayLa
 }
 
 function predictionSetWithoutOfficialOdds(match) {
+  return executeWithPredictionClock(() => predictionSetWithoutOfficialOddsInternal(match));
+}
+
+function predictionSetWithoutOfficialOddsInternal(match) {
   const inputCoverage = auditableDirectionalInputCoverage(match);
   const probabilities = evidenceAwareIndependentProbabilities(match);
   const leader = outcomeLeader(probabilities);
@@ -11606,10 +11611,10 @@ function predictionSetWithoutOfficialOdds(match) {
     projectedScore: score,
     probabilityModel: {
       ...modelBundle.probabilityModel,
-      version: "model-only-unified-v66",
+      version: "model-only-unified-v67",
       unifiedPosterior: {
-        version: "v66-model-only-evidence-led-poisson",
-        generatedAt: new Date().toISOString(),
+        version: "v67-model-only-execution-clock-evidence-led-poisson",
+        generatedAt: predictionNowIso(),
         selectedMarket: "MODEL_ONLY_1X2",
         selectedCode: bestPick.code,
         selectedLabelZh: bestPick.labelZh,
@@ -11668,6 +11673,10 @@ function oddsAnchorSourceInfo(match, isHhad, handicapLine) {
 }
 
 function predictionSet(match) {
+  return executeWithPredictionClock(() => predictionSetInternal(match));
+}
+
+function predictionSetInternal(match) {
   const hadOdds = sanitizeOdds(match.odds);
   const parsedHandicapLine = parseHandicapLine(match.handicapLine);
   const hhadLineText = parsedHandicapLine === null
@@ -18656,6 +18665,8 @@ if (require.main === module) {
   });
 } else {
   module.exports = {
+    replayPredictionWithClock: (input, clock) => executeWithPredictionClock(
+      () => input.odds || input.handicapOdds ? predictionSet(input) : predictionSetWithoutOfficialOdds(input), clock ?? null),
     rebuildPublishedPredictionModel,
     attachWorldCupPrior,
     attachArchivedPreMatchPredictions,

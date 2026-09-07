@@ -4705,7 +4705,8 @@ const normalizeProbabilityLaneForDetail = (lane) => {
 
 const normalizeProbabilityModelForDetail = (model) => {
   if (!model || typeof model !== "object") return model || null;
-  const { inputUsage, ...publicModel } = model;
+  const { inputUsage, executionClock, ...publicModel } = model;
+  void executionClock; // Local execution clock transcripts remain private evidence.
   void inputUsage; // Raw execution receipts are available only via the admin evidence ledger.
   return {
     ...publicModel,
