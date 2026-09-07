@@ -5,8 +5,9 @@ const { rebuildPublishedPredictionModel } = require("./syncData.cjs");
 const { replayBatch } = require("./replayPredictionCapture.cjs");
 const { predictionRuntimeIdentity, completeRuntimeIdentity, comparePredictionRuntimes } = require("../src/services/predictionRuntimeIdentity.cjs");
 const root = path.resolve(__dirname, ".."), hash = value => crypto.createHash("sha256").update(value).digest("hex");
-fs.mkdirSync(path.join(root, "outputs"), { recursive: true });
-const dir = fs.mkdtempSync(path.join(root, "outputs", "prediction-replay-test-"));
+// Signed candidates are read-only; synthetic fixtures belong in private system temp.
+const dir = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "football-prediction-replay-test-"));
+assert.equal(path.dirname(fs.realpathSync(dir)), fs.realpathSync(require("node:os").tmpdir()));
 const collector = createPredictionExecutionCapture(new Date().toISOString());
 rebuildPublishedPredictionModel({ sourceMatchId: "independent-replay-fixture", kickoffTime: "2099-09-09T03:00:00+08:00", status: "SCHEDULED",
   homeTeamName: "Synthetic Home", awayTeamName: "国际米兰", leagueName: "欧洲冠军联赛",

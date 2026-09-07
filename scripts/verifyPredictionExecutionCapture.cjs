@@ -3,8 +3,9 @@ const assert = require("node:assert/strict"), fs = require("node:fs"), path = re
 const { createPredictionExecutionCapture: capture, LIMITS, captureStorageCapacity, predictionCaptureStorageHealth, encode, decode } = require("./predictionExecutionCapture.cjs");
 const { rebuildPublishedPredictionModel } = require("./syncData.cjs");
 const root = path.resolve(__dirname, "..");
-fs.mkdirSync(path.join(root, "outputs"), { recursive: true });
-const dir = fs.mkdtempSync(path.join(root, "outputs", "execution-capture-test-"));
+// Signed candidates are read-only; synthetic fixtures belong in private system temp.
+const dir = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "football-execution-capture-test-"));
+assert.equal(path.dirname(fs.realpathSync(dir)), fs.realpathSync(require("node:os").tmpdir()));
 let checks = 0;
 const check = (name, test) => { test(); checks++; };
 const now = () => new Date().toISOString();

@@ -1392,6 +1392,14 @@ const run = () => {
       globallyExportsReducedFloor: bundleReleaseScript.includes('export MODEL_INPUT_AUDIT_MIN_MARKET_ROWS')
     });
 
+  for (const verifierName of ["verifyPredictionExecutionCapture.cjs", "verifyPredictionReplay.cjs"]) {
+    const verifierSource = readText(path.join(rootDir, "scripts", verifierName));
+    pushCheck(checks, `${verifierName} stores synthetic fixtures outside the read-only release tree`,
+      verifierSource.includes('fs.mkdtempSync(path.join(require("node:os").tmpdir(), "football-')
+        && verifierSource.includes('path.dirname(fs.realpathSync(dir))')
+        && !verifierSource.includes('path.join(root, "outputs"'), { verifierName });
+  }
+
   const lifecycleFinallyIndex = verifyMatchDetailLifecycle.indexOf("} finally {");
   const lifecycleViteCloseIndex = verifyMatchDetailLifecycle.indexOf("await vite?.close()", lifecycleFinallyIndex);
   const lifecycleCacheCleanupIndex = verifyMatchDetailLifecycle.indexOf("fs.rmSync(viteCacheDir, { recursive: true, force: true })", lifecycleFinallyIndex);

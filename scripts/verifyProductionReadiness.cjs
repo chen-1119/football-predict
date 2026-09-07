@@ -639,6 +639,7 @@ const run = async () => {
       && executionCapture.body?.productionDataTouched === false
       && executionCapture.body?.providerRequests === 0, {
       status: executionCapture.status, checks: executionCapture.body?.checks || 0,
+      stderrHead: executionCapture.status === 0 ? "" : executionCapture.stderr.slice(0, 500),
       stderrTail: executionCapture.stderr.slice(-500),
     });
   const executionClock = await runLocalJson(["scripts/verifyPredictionExecutionClock.cjs"]);
@@ -655,6 +656,7 @@ const run = async () => {
       && predictionReplay.body?.independentChildRuns >= 1 && predictionReplay.body?.productionDataTouched === false
       && predictionReplay.body?.providerRequests === 0 && predictionReplay.body?.fullOutputFieldsIgnored === 0, {
       status: predictionReplay.status, checks: predictionReplay.body?.checks || 0,
+      stderrHead: predictionReplay.status === 0 ? "" : predictionReplay.stderr.slice(0, 500),
       stderrTail: predictionReplay.stderr.slice(-500),
     });
   const localServerOwnership = startServer ? await startLocalServer() : null;
