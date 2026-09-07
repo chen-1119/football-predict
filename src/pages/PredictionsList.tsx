@@ -2344,15 +2344,16 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
   const scorecardLeagueCount = scorecardBuckets?.leagues?.length || 0;
   const scorecardOddsCount = scorecardBuckets?.odds?.length || 0;
   const scorecardPublicAvailable = modelScorecard?.publicView === true;
-  const rawScorecardFormalRows = Number(
-    scorecardSample?.formalRecommendationRows ?? scorecardSample?.predictionRows
-  );
-  const scorecardFormalRows = Number.isInteger(rawScorecardFormalRows) && rawScorecardFormalRows >= 0
+  const rawScorecardFormalRows = scorecardSample?.formalRecommendationRows;
+  const scorecardFormalRows = typeof rawScorecardFormalRows === 'number' && Number.isInteger(rawScorecardFormalRows) && rawScorecardFormalRows >= 0
     ? rawScorecardFormalRows
     : null;
   const hitRateAudit = modelScorecard?.hitRateAudit;
   const hitRateAuditObserved = hitRateAudit?.observed;
-  const hitRateAuditSettled = Number(hitRateAuditObserved?.settled ?? scorecardFormalRows ?? 0);
+  const rawHitRateAuditSettled = hitRateAuditObserved?.settled;
+  const hitRateAuditSettled = typeof rawHitRateAuditSettled === 'number' && Number.isSafeInteger(rawHitRateAuditSettled) && rawHitRateAuditSettled >= 0
+    ? rawHitRateAuditSettled : null;
+  const hitRateAuditSettledLabel = hitRateAuditSettled === null ? '--' : String(hitRateAuditSettled);
   const hitRateAuditRequiredRows = Number(hitRateAudit?.minimumSettledRows ?? 500);
   const hitRateAuditTarget = Number(hitRateAudit?.targetRate ?? 0.8);
   const hitRateAuditSampleReady = hitRateAudit?.sampleReady === true;
@@ -3536,13 +3537,20 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         </section>
       )}
       {isAnalysisView && (
+        <details className="research-audit-disclosure" data-testid="research-audit-disclosure">
+          <summary>
+            <strong>{language === 'zh' ? '模型验证与研究记录' : 'Model validation and research'}</strong>
+            <span>{hitRateAuditSettled === null
+              ? (language === 'zh' ? '正式统计未提供 · 研究记录不计入正式成绩' : 'Formal statistics unavailable · research is not formal performance')
+              : (language === 'zh' ? `正式已结算 ${hitRateAuditSettled} 场 · 展开查看独立账本与准入条件` : `${hitRateAuditSettled} formal settlements · view independent ledgers and admission rules`)}</span>
+          </summary>
         <section
           className={`benchmark-audit-panel ${hitRateAuditSampleReady ? 'is-ready' : 'is-collecting'}`}
           data-testid="benchmark-hit-rate-audit"
           data-sample-track="publication-ledger"
           data-audit-version={hitRateAudit?.version || ''}
           data-audit-status={hitRateAudit?.status || 'collecting'}
-          data-audit-settled={hitRateAuditSettled}
+          data-audit-settled={hitRateAuditSettled ?? ''}
           data-audit-required={hitRateAuditRequiredRows}
           data-audit-target={hitRateAuditTarget}
           data-audit-external-claim={hitRateAudit?.externalBenchmark?.verificationStatus || 'unverified-external-claim'}
@@ -3565,7 +3573,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
           <div className="benchmark-audit-panel__metrics">
             <span>
               {language === 'zh' ? '客户正式发布结算' : 'Customer-published settlements'}
-              <strong>{hitRateAuditSettled}/{hitRateAuditRequiredRows}</strong>
+              <strong>{hitRateAuditSettledLabel}/{hitRateAuditRequiredRows}</strong>
             </span>
             <span>
               {language === 'zh' ? '已验证命中率' : 'Verified hit rate'}
@@ -3589,8 +3597,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
             data-testid="benchmark-ledger-separation-note"
           >
             {language === 'zh'
-              ? `独立账本说明：客户正式发布结算（${hitRateAuditSettled}）只统计已发布给客户的正式推荐；候选前瞻对标结算（${candidateFormalSettled}）仅用于候选 Brier / Log Loss 复核，不计入正式命中率。`
-              : `Independent ledgers: customer-published settlements (${hitRateAuditSettled}) count only formal picks published to customers; candidate prospective benchmark settlements (${candidateFormalSettled}) are used only for candidate Brier / Log Loss review and never enter the formal hit rate.`}
+              ? `独立账本说明：客户正式发布结算（${hitRateAuditSettledLabel}）只统计已发布给客户的正式推荐；候选前瞻对标结算（${candidateFormalSettled}）仅用于候选 Brier / Log Loss 复核，不计入正式命中率。`
+              : `Independent ledgers: customer-published settlements (${hitRateAuditSettledLabel}) count only formal picks published to customers; candidate prospective benchmark settlements (${candidateFormalSettled}) are used only for candidate Brier / Log Loss review and never enter the formal hit rate.`}
           </p>
           <div
             className="benchmark-audit-panel__shadow"
@@ -3737,6 +3745,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
             <span>{language === 'zh' ? '外部 80% 声称：未核验，不进入训练标签' : 'External 80% claim: unverified, never a training label'}</span>
           </div>
         </section>
+        </details>
       )}
 
       <section

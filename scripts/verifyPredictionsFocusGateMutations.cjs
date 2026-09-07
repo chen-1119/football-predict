@@ -26,6 +26,12 @@ const evaluate = mutate => {
   return { payload, exitCode: testProcess.exitCode };
 };
 const mutations = [
+  { name: "bound reference skipped before cutoff", file: "src/services/analysisReferenceSelection.ts", apply: text => text.replace('if (publicRecord) {', 'if (!beforeCutoff && publicRecord) {'), gate: "analysis gives every" },
+  { name: "bound reference borrows mutable clock", file: "src/services/analysisReferenceSelection.ts", apply: text => text.replace('sourceUpdatedAt: publicRecord.decisionAt', 'sourceUpdatedAt: modelReferenceTimestamp(match)'), gate: "analysis gives every" },
+  { name: "diagnostic samples borrowed as formal samples", file: "src/pages/PredictionsList.tsx", apply: text => text.replace('const rawScorecardFormalRows = scorecardSample?.formalRecommendationRows;', 'const rawScorecardFormalRows = scorecardSample?.formalRecommendationRows ?? scorecardSample?.predictionRows;'), gate: "model scorecard separates" },
+  { name: "audit borrows another cohort when absent", file: "src/pages/PredictionsList.tsx", apply: text => text.replace('const rawHitRateAuditSettled = hitRateAuditObserved?.settled;', 'const rawHitRateAuditSettled = hitRateAuditObserved?.settled ?? scorecardFormalRows;'), gate: "publication and candidate samples" },
+  { name: "missing audit count becomes zero", file: "src/pages/PredictionsList.tsx", apply: text => text.replace("const hitRateAuditSettledLabel = hitRateAuditSettled === null ? '--' : String(hitRateAuditSettled);", 'const hitRateAuditSettledLabel = String(hitRateAuditSettled ?? 0);'), gate: "publication and candidate samples" },
+  { name: "research clutter opened by default", file: "src/pages/PredictionsList.tsx", apply: text => text.replace('<details className="research-audit-disclosure"', '<details open className="research-audit-disclosure"'), gate: "research ledgers are accessible" },
   { name: "missing primary selection", file: "src/pages/PredictionsList.tsx", apply: text => text.replaceAll("const marketSelection = getListMarketSelection(", "const marketSelection = disabledSelection("), gate: "odds table highlights" },
   { name: "companion promoted to recommendation", file: "src/pages/PredictionsList.tsx", apply: text => {
     const start = text.indexOf("const handicapMarketSelection: ListMarketSelection | null");

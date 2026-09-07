@@ -313,7 +313,12 @@ pushCheck("analysis gives every normal fixture a separately-accounted data direc
 ]) && hasAll(analysisReferenceSelection, [
   "match.resultDisposition === 'VOID'",
   "match.status !== 'SCHEDULED'",
-  "if (!isBeforeMatchSaleCutoff(match, now))",
+  "const beforeCutoff = isBeforeMatchSaleCutoff(match, now);",
+  "if (!beforeCutoff)",
+  "if (publicRecord)",
+  "sourceUpdatedAt: publicRecord.decisionAt",
+  "canonicalSourceMatchId(publicRecord.sourceMatchId) === canonicalSourceMatchId(match.sourceMatchId || match.id)",
+  "recordedAt <= now && decisionAt <= recordedAt && recordedAt < recordCutoffAt",
   "marketClockState(match, lockedFiveHundredCandidate.sourceUpdatedAt, now) === 'fresh'",
   "retainLockedPreCutoffReference",
   "isPredictionOfficialResultPoolAvailable(match, storedBest)",
@@ -777,20 +782,25 @@ pushCheck("date navigation opens the nearest available match day and stays user-
 pushCheck("model scorecard separates formal samples from shadow evaluation", hasAll(predictions, [
   "configuredModelRequiredRows",
   ": 500;",
-  "scorecardSample?.formalRecommendationRows ?? scorecardSample?.predictionRows",
+  "const rawScorecardFormalRows = scorecardSample?.formalRecommendationRows;",
+  "typeof rawScorecardFormalRows === 'number'",
   "scorecardHasFormalSample",
   "暂无正式样本",
   "暂无正式推荐样本；影子 LL/Brier 不计入赔率区间表现",
   "data-model-scorecard-has-formal-sample",
   "data-model-formal-recommendation-rows"
-]) && !predictions.includes("modelGate?.thresholds?.minMarketBaselineRows ?? 100")
+]) && !predictions.includes("scorecardSample?.formalRecommendationRows ?? scorecardSample?.predictionRows")
+  && !predictions.includes("modelGate?.thresholds?.minMarketBaselineRows ?? 100")
   && !predictions.includes("scorecardOddsCount} bands / ${scorecardComparisonNote}"));
 
 pushCheck("publication and candidate samples use visibly independent ledgers", hasAll(predictions, [
   'data-testid="benchmark-hit-rate-audit"',
   'data-sample-track="publication-ledger"',
   "客户正式发布结算",
-  '<strong>{hitRateAuditSettled}/{hitRateAuditRequiredRows}</strong>',
+  '<strong>{hitRateAuditSettledLabel}/{hitRateAuditRequiredRows}</strong>',
+  'const rawHitRateAuditSettled = hitRateAuditObserved?.settled;',
+  "typeof rawHitRateAuditSettled === 'number'",
+  "const hitRateAuditSettledLabel = hitRateAuditSettled === null ? '--' : String(hitRateAuditSettled);",
   'data-testid="benchmark-ledger-separation-note"',
   "独立账本说明：客户正式发布结算",
   "候选前瞻对标结算",
@@ -839,7 +849,7 @@ pushCheck("80 percent benchmark is visibly audited instead of advertised as a re
   "截止后不可改方向、赔率或证据",
   "外部 80% 声称：未核验，不进入训练标签",
   "hitRateAuditObserved?.interval95",
-  "hitRateAuditSettled}/{hitRateAuditRequiredRows",
+  "hitRateAuditSettledLabel}/{hitRateAuditRequiredRows",
   "data-clv-version={hitRateClvAudit?.version",
   "data-clv-timing-version={hitRateClvAudit?.timingAudit?.version",
   "data-clv-eligible-rows={hitRateClvRows}",
@@ -851,6 +861,11 @@ pushCheck("80 percent benchmark is visibly audited instead of advertised as a re
   ".benchmark-audit-panel__metrics",
   ".benchmark-audit-panel__rules"
 ]));
+
+pushCheck("research ledgers are accessible but collapsed outside the primary match flow", hasAll(predictions, [
+  '<details className="research-audit-disclosure" data-testid="research-audit-disclosure">',
+  '模型验证与研究记录', '正式统计未提供 · 研究记录不计入正式成绩',
+]) && hasAll(predictionsCss, ['.research-audit-disclosure > summary:focus-visible', '.research-audit-disclosure[open] > summary::after']));
 
 pushCheck("high-selectivity benchmark cohort is visible but cannot affect formal recommendations", hasAll(predictions, [
   'data-testid="benchmark-shadow-track"',

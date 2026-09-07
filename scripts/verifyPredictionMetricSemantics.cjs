@@ -345,7 +345,10 @@ function run() {
 
   assert.ok(serverSource.includes('formalRecommendationRows: sample.predictionRows ?? null'));
   assert.ok(serverSource.includes('scope: "formal-recommendations-only"'));
-  assert.ok(predictionsSource.includes("scorecardSample?.formalRecommendationRows ?? scorecardSample?.predictionRows"));
+  assert.ok(predictionsSource.includes("const rawScorecardFormalRows = scorecardSample?.formalRecommendationRows;"));
+  assert.ok(predictionsSource.includes("typeof rawScorecardFormalRows === 'number'"));
+  assert.ok(!predictionsSource.includes("scorecardSample?.formalRecommendationRows ?? scorecardSample?.predictionRows"));
+  assert.ok(predictionsSource.includes("const rawHitRateAuditSettled = hitRateAuditObserved?.settled;"));
   assert.ok(predictionsSource.includes("暂无正式推荐样本；影子 LL/Brier 不计入赔率区间表现"));
   assert.ok(!predictionsSource.includes("modelGate?.thresholds?.minMarketBaselineRows ?? 100"));
   assert.ok(predictionsSource.includes(": 500;"));
