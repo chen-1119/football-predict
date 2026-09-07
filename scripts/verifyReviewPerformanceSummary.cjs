@@ -266,6 +266,7 @@ const renderPage = (scorecard, matches = []) => {
     if (id === "../context/AppContextCore") return { useApp: () => ({ language: "zh", matches, dataSync: { modelEvaluation: { publicScorecard: scorecard } } }) };
     if (id === "../services/entities") return { getTeamById: () => ({ shortName: { zh: "测试", en: "Fixture" } }) };
     if (id === "../components/predictions/DateScopeBar") return { DateScopeBar: () => null };
+    if (id === "../components/review/ReviewEvidenceOverview") return require('./lib/loadReviewTsForVerification.cjs')(ts, path.join(rootDir, 'src/components/review/ReviewEvidenceOverview.tsx'));
     return require(id);
   };
   new Function("require", "module", "exports", compiledPage)(fakeRequire, module, module.exports);
