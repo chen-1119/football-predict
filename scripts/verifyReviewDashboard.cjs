@@ -6,7 +6,7 @@ const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
 const load = require('./lib/loadReviewTsForVerification.cjs');
 const root = path.resolve(__dirname, '..');
-const { selectReviewWindow, reviewShanghaiDate } = load(ts, path.join(root, 'src/services/reviewDashboard.ts'));
+const { selectReviewWindow, selectReviewMarketWindow, reviewShanghaiDate } = load(ts, path.join(root, 'src/services/reviewDashboard.ts'));
 const checks = [];
 const check = (name, fn) => { fn(); checks.push(name); };
 const fixture = () => ({
@@ -21,6 +21,10 @@ const fixture = () => ({
   ], policy: { sourceScope: 'server-complete-history', unit: 'match-best' },
 });
 const select = (s, w = 'all', t = 'reference') => selectReviewWindow(s, t, w);
+const withMarkets = (value) => ({ ...value, marketBreakdown: { version: 'review-best-market-v1',
+  HAD: { cumulative: value.cumulative, daily: value.daily }, HHAD: { cumulative: { won: 0, lost: 0, settled: 0 }, daily: [] },
+  UNKNOWN: { cumulative: { won: 0, lost: 0, settled: 0 }, daily: [] },
+} });
 check('Shanghai cutoff is independent of local timezone; timezone-less clock rejected', () => {
   assert.equal(reviewShanghaiDate('2026-09-06T15:59:59Z'), '2026-09-06');
   assert.equal(reviewShanghaiDate('2026-09-06T16:00:00Z'), '2026-09-07');
@@ -74,15 +78,15 @@ check('malformed counts, duplicate days, out-of-window rows and unreconciled tot
 const render = (track, window, props = {}) => {
   let hook = 0;
   const { ReviewEvidenceOverview } = load(ts, path.join(root, 'src/components/review/ReviewEvidenceOverview.tsx'), {
-    react: { ...React, useState: () => [hook++ === 0 ? track : window, () => {}] },
+    react: { ...React, useState: () => [[track, window, 'HAD'][hook++], () => {}] },
   });
-  const reference = fixture(); const formal = { ...fixture(), version: 'formal-review-performance-v1' };
+  const reference = withMarkets(fixture()); const formal = { ...withMarkets(fixture()), version: 'formal-review-performance-v1' };
   return renderToStaticMarkup(React.createElement(ReviewEvidenceOverview, { language: 'zh', formal, reference, ...props }));
 };
 check('actual overview renders category/window controls and honest mixed-market/evidence disclosures', () => {
   const html = render('reference', '7d');
   for (const value of ['55.6%', '命中 5 / 已结算 9', '正式推荐', '数据参考', '研究影子', '本版本', '近 7 天', '近 30 天',
-    '非 HAD 单玩法成绩', '待补证', '分母待核验', '2026-09-01', '2026-09-07', 'aria-pressed="true"', '<details', '<summary']) assert.ok(html.includes(value), value);
+    'HAD 冻结 BEST · 独立玩法口径', 'HHAD 让球', 'BEST 总账', '待补证', '分母待核验', '2026-09-01', '2026-09-07', 'aria-pressed="true"', '<details', '<summary']) assert.ok(html.includes(value), value);
 });
 check('actual current-version and missing-data UI do not invent a performance number', () => {
   const version = render('reference', 'version');
@@ -94,5 +98,29 @@ check('shadow wins are never inferred from settled counts; long revision remains
   const revision = `candidate-${'abcdef'.repeat(20)}`;
   const html = render('shadow', '7d', { shadow: { candidateRevisionId: revision, cohort: { shadow: { settled: 123 } } } });
   assert.ok(html.includes(revision)); assert.ok(html.includes('影子已结算 123 · 命中数未提供')); assert.ok(!html.includes('52.0%'));
+});
+check('market windows require a complete partition and never fall back to mixed BEST', () => {
+  assert.equal(selectReviewMarketWindow(fixture(), 'reference', 'all', 'HAD').state, 'market-unavailable');
+  assert.equal(selectReviewMarketWindow(fixture(), 'reference', 'all', 'BEST').counts.settled, 25);
+  assert.equal(selectReviewMarketWindow(withMarkets(fixture()), 'reference', '7d', 'HAD').counts.settled, 9);
+  assert.equal(selectReviewMarketWindow(withMarkets(fixture()), 'reference', 'all', 'HHAD').counts.hitRate, null);
+});
+check('market partition rejects missing groups, wrong versions and count/date drift', () => {
+  for (const mutate of [s => delete s.marketBreakdown.UNKNOWN, s => s.marketBreakdown.version = 'bad',
+    s => s.marketBreakdown.extra = {}, s => s.marketBreakdown.HHAD = s.marketBreakdown.HAD,
+    s => s.marketBreakdown.HAD.daily = s.marketBreakdown.HAD.daily.map(r => ({ ...r, date: r.date === '2026-08-01' ? '2026-08-02' : r.date }))]) {
+    const s = withMarkets(fixture()); mutate(s);
+    assert.equal(selectReviewMarketWindow(s, 'reference', 'all', 'HAD').state, 'market-unavailable');
+  }
+});
+check('unknown market rows are visible and excluded from HAD instead of silently reassigned', () => {
+  const s = withMarkets(fixture());
+  s.marketBreakdown.UNKNOWN = { cumulative: { won: 3, lost: 2, settled: 5 }, daily: [s.daily[0]] };
+  s.marketBreakdown.HAD = { cumulative: { won: 10, lost: 10, settled: 20 }, daily: s.daily.slice(1) };
+  const html = render('reference', 'all', { reference: s });
+  assert.ok(html.includes('全部历史中有 5 场玩法未知，仅保留在 BEST 总账。'));
+  assert.ok(html.includes('命中 10 / 已结算 20'));
+  assert.equal(selectReviewMarketWindow(s, 'reference', 'all', 'HAD').counts.hitRate, .5);
+  assert.equal(selectReviewMarketWindow(s, 'reference', 'all', 'BEST').counts.hitRate, 13 / 25);
 });
 console.log(JSON.stringify({ ok: true, checks: checks.length, cases: checks }, null, 2));

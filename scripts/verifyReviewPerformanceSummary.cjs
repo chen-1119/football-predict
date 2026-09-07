@@ -245,6 +245,56 @@ check("public compaction reconciles every count and rejects malformed/duplicate 
 });
 
 const rootDir = path.resolve(__dirname, "..");
+check("frozen BEST market partitions preserve total history without using current or supporting odds", () => {
+  for (const [factory, aggregate, compact] of [[referenceMatch, buildReferenceReviewPerformance, compactReferenceReviewPerformance], [formalMatch, buildFormalReviewPerformance, compactFormalReviewPerformance]]) {
+    const input = [["HAD", "WON"], ["HHAD", "LOST"], [undefined, "WON"], ["had", "LOST"]].map(([pool, status], i) => {
+      const match = factory({ id: `market-${i}`, date: "2026-08-17", status });
+      match.postMatchReview.predictionReview.rows[0].oddsPoolCode = pool;
+      match.odds = { home: 1.2, draw: 4, away: 9 };
+      match.postMatchReview.predictionReview.rows.push({ ...match.postMatchReview.predictionReview.rows[0], marketType: "HAD", oddsPoolCode: "HAD", resultStatus: "WON" });
+      return match;
+    });
+    const result = aggregate(generate([...input, clone(input[0])]));
+    assert.equal(result.cumulative.settled, 4);
+    assert.equal(result.cumulative.won, 2);
+    assert.equal(result.marketBreakdown.HAD.cumulative.settled, 1);
+    assert.equal(result.marketBreakdown.HAD.cumulative.won, 1);
+    assert.equal(result.marketBreakdown.HHAD.cumulative.settled, 1);
+    assert.equal(result.marketBreakdown.HHAD.cumulative.won, 0);
+    assert.equal(result.marketBreakdown.UNKNOWN.cumulative.settled, 2);
+    assert.deepEqual(aggregate(generate([...input, clone(input[0])].reverse())), result);
+    assert.equal(compact(result).marketBreakdown.UNKNOWN.cumulative.won, 1);
+  }
+});
+check("conflicting duplicate BEST markets are excluded from every partition", () => {
+  const first = referenceMatch({ id: "conflicting-market", date: "2026-08-17", status: "WON" });
+  first.postMatchReview.predictionReview.rows[0].oddsPoolCode = "HAD";
+  const second = clone(first); second.postMatchReview.predictionReview.rows[0].oddsPoolCode = "HHAD";
+  for (const input of [[first, second], [second, first]]) {
+    const result = buildReferenceReviewPerformance(generate(input));
+    assert.equal(result.cumulative.settled, 0);
+    for (const market of ["HAD", "HHAD", "UNKNOWN"]) assert.equal(result.marketBreakdown[market].cumulative.settled, 0);
+  }
+});
+check("market compaction rejects missing/extra groups and cross-market daily drift even when totals match", () => {
+  const make = () => {
+    const a = referenceMatch({ id: "market-a", date: "2026-08-16", status: "WON" });
+    const b = referenceMatch({ id: "market-b", date: "2026-08-17", status: "LOST" });
+    a.postMatchReview.predictionReview.rows[0].oddsPoolCode = "HAD";
+    b.postMatchReview.predictionReview.rows[0].oddsPoolCode = "HHAD";
+    return buildReferenceReviewPerformance(generate([a, b]));
+  };
+  for (const mutate of [s => delete s.marketBreakdown.UNKNOWN, s => s.marketBreakdown.extra = {},
+    s => s.marketBreakdown.version = "bad", s => s.marketBreakdown.HAD.cumulative.won = 0,
+    s => { s.marketBreakdown.HAD.daily[0].date = "2026-08-17"; s.marketBreakdown.HHAD.daily[0].date = "2026-08-16"; },
+    s => s.marketBreakdown.HAD.daily[0].date = "2026-08-18",
+    s => s.marketBreakdown.HAD = s.marketBreakdown.HHAD]) {
+    const value = make(); mutate(value); assert.equal(compactReferenceReviewPerformance(value), null);
+  }
+  const legacy = make(); delete legacy.marketBreakdown;
+  assert.equal(compactReferenceReviewPerformance(legacy).cumulative.settled, 2);
+  assert.equal(compactReferenceReviewPerformance(legacy).marketBreakdown, undefined);
+});
 const pageSource = fs.readFileSync(path.join(rootDir, "src/pages/HitAndWin.tsx"), "utf8");
 // Execute the actual TSX component with read-only React hooks; no browser,
 // access code, network, or on-disk generated bundle is needed for this check.

@@ -4,6 +4,8 @@ const FORMAL_REVIEW_PERFORMANCE_VERSION = "formal-review-performance-v1";
 const REFERENCE_REVIEW_PERFORMANCE_VERSION = "reference-review-performance-v1";
 const FORMAL_REVIEW_PERFORMANCE_START_DATE = "2026-08-16";
 const REVIEW_IDENTITY_VERSION = "review-event-identity-v2";
+const REVIEW_MARKET_BREAKDOWN_VERSION = "review-best-market-v1";
+const REVIEW_MARKETS = ["HAD", "HHAD", "UNKNOWN"];
 
 const asText = (value) => typeof value === "string" ? value.trim() : "";
 const validDate = (value) => {
@@ -88,7 +90,9 @@ const settlementForTrack = (match, track) => {
   if (fingerprints.size !== 1) return { conflict: true };
   const status = rows[0].resultStatus;
   if (track === "formal" && review.formalBestStatus !== status) return { conflict: true };
-  return { status, fingerprint: [...fingerprints][0] };
+  // Partition by the settled frozen BEST row itself, never current match odds
+  // or a supporting market. Missing legacy pool labels remain UNKNOWN.
+  return { status, fingerprint: [...fingerprints][0], market: ["HAD", "HHAD"].includes(rows[0].oddsPoolCode) ? rows[0].oddsPoolCode : "UNKNOWN" };
 };
 
 const formalBestSettlement = (match) => settlementForTrack(match, "formal")?.status || null;
@@ -139,6 +143,7 @@ const buildReviewPerformance = ({
     } else events.set(identity, incoming);
   }
   const byDate = new Map();
+  const byMarket = new Map(REVIEW_MARKETS.map((market) => [market, new Map()]));
   for (const event of events.values()) {
     if (event.conflict) { excluded.conflictingEvent += 1; continue; }
     const bucket = byDate.get(event.date) || emptyBucket(event.date);
@@ -146,6 +151,12 @@ const buildReviewPerformance = ({
     if (event.status === "WON") bucket.won += 1;
     else bucket.lost += 1;
     byDate.set(event.date, bucket);
+    const marketDates = byMarket.get(event.market);
+    const marketBucket = marketDates.get(event.date) || emptyBucket(event.date);
+    marketBucket.settled += 1;
+    if (event.status === "WON") marketBucket.won += 1;
+    else marketBucket.lost += 1;
+    marketDates.set(event.date, marketBucket);
   }
   const daily = [...byDate.values()].map(finalizeBucket).sort((a, b) => a.date.localeCompare(b.date));
   const cumulative = finalizeBucket(daily.reduce((total, row) => ({
@@ -156,6 +167,16 @@ const buildReviewPerformance = ({
     version: track === "formal" ? FORMAL_REVIEW_PERFORMANCE_VERSION : REFERENCE_REVIEW_PERFORMANCE_VERSION,
     generatedAt, startDate: normalizedStartDate, timezone: "Asia/Shanghai",
     cumulative, daily, exclusions: excluded, policy: policyFor(track),
+    marketBreakdown: {
+      version: REVIEW_MARKET_BREAKDOWN_VERSION,
+      ...Object.fromEntries(REVIEW_MARKETS.map((market) => {
+        const marketDaily = [...byMarket.get(market).values()].map(finalizeBucket).sort((a, b) => a.date.localeCompare(b.date));
+        const marketCumulative = finalizeBucket(marketDaily.reduce((total, row) => ({
+          date: null, won: total.won + row.won, lost: total.lost + row.lost, settled: total.settled + row.settled, hitRate: null,
+        }), emptyBucket(null)));
+        return [market, { cumulative: marketCumulative, daily: marketDaily }];
+      })),
+    },
   };
 };
 
@@ -182,11 +203,32 @@ const compactReviewPerformance = (value, track) => {
   if (!cumulative || daily.some((row) => !row)) return null;
   if (new Set(daily.map((row) => row.date)).size !== daily.length) return null;
   if (["won", "lost", "settled"].some((key) => daily.reduce((sum, row) => sum + row[key], 0) !== cumulative[key])) return null;
+  let marketBreakdown;
+  if (value.marketBreakdown !== undefined) {
+    const partition = value.marketBreakdown;
+    if (!partition || partition.version !== REVIEW_MARKET_BREAKDOWN_VERSION
+      || Object.keys(partition).sort().join(",") !== [...REVIEW_MARKETS, "version"].sort().join(",")) return null;
+    marketBreakdown = { version: REVIEW_MARKET_BREAKDOWN_VERSION };
+    for (const market of REVIEW_MARKETS) {
+      // Reuse count/date reconciliation without recursively trusting input
+      // partitions. Only these two fields enter the nested summary.
+      const group = compactReviewPerformance({ version, generatedAt: value.generatedAt, startDate,
+        cumulative: partition[market]?.cumulative, daily: partition[market]?.daily, policy: value.policy }, track);
+      if (!group) return null;
+      marketBreakdown[market] = { cumulative: group.cumulative, daily: group.daily };
+    }
+    if (["won", "lost", "settled"].some((key) => REVIEW_MARKETS.reduce((sum, market) => sum + marketBreakdown[market].cumulative[key], 0) !== cumulative[key])) return null;
+    const rootDates = new Set(daily.map((row) => row.date));
+    const marketDates = REVIEW_MARKETS.map((market) => new Map(marketBreakdown[market].daily.map((row) => [row.date, row])));
+    if (marketDates.some((dates) => [...dates.keys()].some((date) => !rootDates.has(date)))) return null;
+    if (daily.some((row) => ["won", "lost", "settled"].some((key) => marketDates.reduce((sum, dates) => sum + (dates.get(row.date)?.[key] || 0), 0) !== row[key]))) return null;
+  }
   return {
     version, generatedAt: value.generatedAt || null, startDate, timezone: "Asia/Shanghai",
     cumulative, daily: daily.sort((a, b) => a.date.localeCompare(b.date)),
     exclusions: Object.fromEntries(Object.entries(value.exclusions || {}).filter(([, n]) => Number.isSafeInteger(n) && n >= 0)),
     policy: { ...policyFor(track), identityVersion: value.policy?.identityVersion || "legacy-review-event-identity-v1" },
+    ...(marketBreakdown ? { marketBreakdown } : {}),
   };
 };
 
@@ -196,6 +238,7 @@ const compactReferenceReviewPerformance = (value) => compactReviewPerformance(va
 module.exports = {
   FORMAL_REVIEW_PERFORMANCE_START_DATE, FORMAL_REVIEW_PERFORMANCE_VERSION,
   REFERENCE_REVIEW_PERFORMANCE_VERSION, REVIEW_IDENTITY_VERSION,
+  REVIEW_MARKET_BREAKDOWN_VERSION,
   buildFormalReviewPerformance, buildReferenceReviewPerformance, businessDateForMatch,
   compactFormalReviewPerformance, compactReferenceReviewPerformance,
   formalBestSettlement, referenceBestSettlement, matchIdentity,

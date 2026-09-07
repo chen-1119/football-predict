@@ -2,13 +2,39 @@ import type { ReviewPerformanceBucket, ReviewPerformanceSummary } from './review
 
 export type ReviewTrack = 'formal' | 'reference';
 export type ReviewWindow = 'version' | '7d' | '30d' | 'all';
+export type ReviewMarket = 'HAD' | 'HHAD' | 'BEST';
 export type ReviewCounts = { won: number; lost: number; settled: number; hitRate: number | null };
 export type ReviewWindowResult = {
-  state: 'ready' | 'pending' | 'version-unavailable';
+  state: 'ready' | 'pending' | 'version-unavailable' | 'market-unavailable';
   counts: ReviewCounts | null;
   from: string | null;
   through: string | null;
   partial: boolean;
+};
+
+/** A market partition must reconcile both totals AND each day across all pools.
+ * The UNKNOWN bucket stays in BEST but is never reassigned to HAD/HHAD.
+ */
+export const selectReviewMarketWindow = (
+  summary: ReviewPerformanceSummary | null | undefined, track: ReviewTrack, window: ReviewWindow, market: ReviewMarket,
+): ReviewWindowResult => {
+  const root = selectReviewWindow(summary, track, 'all');
+  if (root.state !== 'ready' || !summary) return root;
+  if (market === 'BEST') return selectReviewWindow(summary, track, window);
+  const missing: ReviewWindowResult = { state: 'market-unavailable', counts: null, from: null, through: root.through, partial: false };
+  const partition = summary.marketBreakdown;
+  const markets = ['HAD', 'HHAD', 'UNKNOWN'] as const;
+  if (!partition || partition.version !== 'review-best-market-v1'
+    || Object.keys(partition).sort().join(',') !== ['HAD', 'HHAD', 'UNKNOWN', 'version'].sort().join(',')) return missing;
+  const groups = markets.map((key) => ({ ...summary, cumulative: partition[key]?.cumulative, daily: partition[key]?.daily }));
+  const totals = groups.map((group) => selectReviewWindow(group, track, 'all'));
+  if (totals.some((group) => group.state !== 'ready')) return missing;
+  if ((['won', 'lost', 'settled'] as const).some((key) => totals.reduce((sum, group) => sum + group.counts![key], 0) !== root.counts![key])) return missing;
+  const days = groups.map((group) => new Map(group.daily!.map((row) => [row.date!, row])));
+  const rootDates = new Set(summary.daily!.map((row) => row.date!));
+  if (days.some((group) => [...group.keys()].some((date) => !rootDates.has(date)))) return missing;
+  if (summary.daily!.some((row) => (['won', 'lost', 'settled'] as const).some((key) => days.reduce((sum, group) => sum + (group.get(row.date!)?.[key] || 0), 0) !== row[key]))) return missing;
+  return selectReviewWindow(groups[market === 'HAD' ? 0 : 1], track, window);
 };
 
 const dateKey = (value: unknown): value is string => typeof value === 'string'

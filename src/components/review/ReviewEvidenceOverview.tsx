@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { ReviewPerformanceSummary } from '../../services/reviewPerformanceTypes';
-import { selectReviewWindow, reviewShanghaiDate } from '../../services/reviewDashboard';
-import type { ReviewWindow } from '../../services/reviewDashboard';
+import { selectReviewMarketWindow, reviewShanghaiDate } from '../../services/reviewDashboard';
+import type { ReviewWindow, ReviewMarket } from '../../services/reviewDashboard';
 import './review.css';
 
 type ShadowSummary = {
@@ -24,8 +24,10 @@ export const ReviewEvidenceOverview: React.FC<Props> = ({ language, formal, refe
   const zh = language === 'zh';
   const [track, setTrack] = useState<'formal' | 'reference' | 'shadow'>('formal');
   const [window, setWindow] = useState<ReviewWindow>('all');
+  const [market, setMarket] = useState<ReviewMarket>('HAD');
   const summary = track === 'formal' ? formal : reference;
-  const result = selectReviewWindow(summary, track === 'formal' ? 'formal' : 'reference', window);
+  const result = selectReviewMarketWindow(summary, track === 'formal' ? 'formal' : 'reference', window, market);
+  const verifiedPartition = selectReviewMarketWindow(summary, track === 'formal' ? 'formal' : 'reference', 'all', 'HAD').state === 'ready';
   const isShadow = track === 'shadow';
   const labels = { formal: zh ? '正式推荐' : 'Formal picks', reference: zh ? '数据参考' : 'Data references', shadow: zh ? '研究影子' : 'Research shadow' };
   const windowLabels: Record<ReviewWindow, string> = { version: zh ? '本版本' : 'This version', '7d': zh ? '近 7 天' : '7 days', '30d': zh ? '近 30 天' : '30 days', all: zh ? '累计' : 'All time' };
@@ -37,6 +39,7 @@ export const ReviewEvidenceOverview: React.FC<Props> = ({ language, formal, refe
   const value = isShadow ? '—' : result.counts?.hitRate != null ? `${(result.counts.hitRate * 100).toFixed(1)}%` : '—';
   const status = isShadow ? (zh ? '独立观察，不替代正式推荐' : 'Independent observation, not formal picks')
     : result.state === 'version-unavailable' ? (zh ? '缺少可核验的版本分组' : 'Verified version partition unavailable')
+      : result.state === 'market-unavailable' ? (zh ? '完整玩法分组待更新' : 'Complete market partition pending')
       : result.state !== 'ready' ? (zh ? '完整统计待更新' : 'Complete statistics pending')
         : result.counts?.settled === 0 ? (zh ? '本窗口无已结算样本' : 'No settled samples in this window')
           : (zh ? '真实结算，不代表未来表现' : 'Actual settlements, not future performance');
@@ -52,9 +55,11 @@ export const ReviewEvidenceOverview: React.FC<Props> = ({ language, formal, refe
         </button>)}
       </div>
       <div className="review-overview-controls">
-        <span className="review-track-caption">{labels[track]}<small>{isShadow ? (zh ? '候选前瞻账本' : 'Prospective candidate ledger') : (zh ? 'BEST 综合口径 · 非 HAD 单玩法成绩' : 'Combined BEST ledger · Not HAD-only')}</small></span>
+        <span className="review-track-caption">{labels[track]}<small>{isShadow ? (zh ? '候选前瞻账本' : 'Prospective candidate ledger') : market === 'BEST' ? (zh ? 'BEST 综合口径 · 非 HAD 单玩法成绩' : 'Combined BEST ledger · Not HAD-only') : (zh ? `${market} 冻结 BEST · 独立玩法口径` : `${market} frozen BEST · Separate market cohort`)}</small></span>
         {!isShadow && <div className="review-window-switch" role="group" aria-label={zh ? '统计时间范围' : 'Statistics time window'}>{(['version', '7d', '30d', 'all'] as const).map((key) => <button key={key} type="button" aria-pressed={window === key} onClick={() => setWindow(key)}>{windowLabels[key]}</button>)}</div>}
       </div>
+      {!isShadow && <div className="review-market-switch" role="group" aria-label={zh ? '统计玩法' : 'Statistics market'}>{(['HAD', 'HHAD', 'BEST'] as const).map((key) => <button type="button" key={key} aria-pressed={market === key} onClick={() => setMarket(key)}>{key === 'HAD' ? (zh ? 'HAD 胜平负' : 'HAD 1X2') : key === 'HHAD' ? (zh ? 'HHAD 让球' : 'HHAD handicap') : (zh ? 'BEST 总账' : 'BEST combined')}</button>)}</div>}
+      {!isShadow && verifiedPartition && Number(summary?.marketBreakdown?.UNKNOWN?.cumulative?.settled) > 0 && <p className="review-unknown-market" data-review-unknown-market>{zh ? `全部历史中有 ${count(summary?.marketBreakdown?.UNKNOWN?.cumulative?.settled)} 场玩法未知，仅保留在 BEST 总账。` : `${count(summary?.marketBreakdown?.UNKNOWN?.cumulative?.settled)} all-time rows have unknown markets and remain only in combined BEST.`}</p>}
       <div className="review-metric-grid" aria-live="polite" aria-atomic="true">
         <article className="review-primary-metric"><h3>{zh ? '已结算命中率' : 'Settled hit rate'}</h3><strong data-review-overview-rate>{value}</strong><p>{status}</p>
           <span>{!isShadow && result.counts ? (zh ? `命中 ${count(result.counts.won)} / 已结算 ${count(result.counts.settled)}` : `Won ${count(result.counts.won)} / settled ${count(result.counts.settled)}`) : isShadow ? (zh ? `影子已结算 ${count(shadow?.cohort?.shadow?.settled)} · 命中数未提供` : `Shadow settled ${count(shadow?.cohort?.shadow?.settled)} · Wins unavailable`) : (zh ? '没有数据时不显示 0% 或 50%' : 'Missing data is not 0% or 50%')}</span>
@@ -68,7 +73,7 @@ export const ReviewEvidenceOverview: React.FC<Props> = ({ language, formal, refe
         <div><dt>{zh ? '数据更新 · 北京时间' : 'Data updated · Asia/Shanghai'}</dt><dd>{updated}</dd></div>
       </dl>
       <details className="review-evidence-gaps"><summary>{zh ? '为什么暂时不能说模型更准？' : 'Why is model superiority not established?'}<span>{zh ? '查看缺失证据' : 'View evidence gaps'}</span></summary>
-        <ul><li>{zh ? '版本分组和 HAD / HHAD 独立分母尚未由这份公开统计提供；累计不能当作本版本或单玩法成绩。' : 'This public summary lacks version partitions and separate HAD / HHAD denominators; cumulative results are not version-specific or market-specific.'}</li>
+        <ul><li>{zh ? '版本分组尚未提供，累计不能当作本版本成绩。HAD / HHAD 按原冻结 BEST 玩法独立统计；未知玩法只留在 BEST 总账，不分配到任一玩法。' : 'Version partitions are unavailable; cumulative is not version-specific. HAD / HHAD use the original frozen BEST market. Unknown markets remain only in combined BEST.'}</li>
           <li>{zh ? '同组基准与覆盖率缺失时不计算“提升幅度”；缺失不等于表现为零。' : 'No improvement is calculated without paired baseline and coverage evidence; missing evidence is not zero performance.'}</li>
           <li>{zh ? '历史复盘与研究影子不能替代独立前瞻验证。新模型通过既定准入门槛前，保持独立观察。' : 'Historical reviews and research shadows cannot replace independent prospective validation. New models remain separate until established admission gates pass.'}</li></ul>
       </details>

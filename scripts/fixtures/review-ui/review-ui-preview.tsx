@@ -8,13 +8,17 @@ import '../../../src/index.css';
 // Synthetic QA only. No production credentials, requests or match mutations.
 const mode = new URLSearchParams(location.search).get('mode') || 'complete';
 const zh = new URLSearchParams(location.search).get('lang') !== 'en';
-const summary = (reference: boolean) => ({
+const summary = (reference: boolean) => {
+  const value = {
   version: reference ? 'reference-review-performance-v1' : 'formal-review-performance-v1',
   generatedAt: '2026-09-06T16:00:00Z', startDate: '2026-08-16', timezone: 'Asia/Shanghai',
   cumulative: reference ? { won: 610, lost: 640, settled: 1250 } : { won: 0, lost: 0, settled: 0 },
   daily: reference ? [{ date: '2026-08-16', won: 604, lost: 633, settled: 1237 }, { date: '2026-09-06', won: 6, lost: 7, settled: 13 }] : [],
   policy: { sourceScope: 'server-complete-history', unit: 'match-best' },
-});
+  };
+  const empty = { cumulative: { won: 0, lost: 0, settled: 0 }, daily: [] };
+  return { ...value, marketBreakdown: { version: 'review-best-market-v1', HAD: { cumulative: value.cumulative, daily: value.daily }, HHAD: empty, UNKNOWN: empty } };
+};
 const scorecard = mode === 'missing' ? {} : {
   formalReviewPerformance: summary(false), referenceReviewPerformance: summary(true),
   shadowTracks: { CANDIDATE_PROSPECTIVE: { candidateRevisionId: `candidate-${'abcdef'.repeat(20)}`, frozenAt: '2026-09-01T10:00:00Z', evaluatedAt: '2026-09-07T04:00:00Z', cohort: { shadow: { settled: 123 } } } },
