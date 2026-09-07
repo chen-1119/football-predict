@@ -15,7 +15,13 @@ const base = { id: 'sporttery_991010', sourceMatchId: '991010', status: 'SCHEDUL
     probabilities: { home: .4, draw: .35, away: .25 }, oneXTwo: { home: .4, draw: .35, away: .25 } },
   predictionMeta: { generatedAt: decision, decisionId: 'synthetic-full-app', modelVersion: 'synthetic-model', policyVersion: 'synthetic-policy',
     featureSnapshot: { sourceMatchId: '991010', kickoffTime: kickoff, capturedAt: decision, modelInputs: {
-      form: { home: { sampleSize: 4, lastMatchAt: '2026-09-01T12:00:00Z' }, away: { sampleSize: 0 } },
+      form: { home: { sampleSize: 4, lastMatchAt: '2026-09-01T12:00:00Z', resultEvidence: {
+        version: 'recent-form-result-evidence-v1', sourceVerified: false, sampleRows: 4, homeRows: 3, awayRows: 1,
+        observedRows: 0, missingObservedAtRows: 4, missingSourceRows: 4, beforeKickoffRows: 0, afterDecisionRows: 0,
+        latestObservedAt: null, decisionAt: decision, temporalStatus: 'unverified', selectionHash: 'd'.repeat(64),
+        contentObservation: { version: 'recent-form-content-receipt-summary-v1', scope: 'local-content-receipt-only', sourceVerified: false,
+          sampleRows: 4, receivedRows: 3, missingReceiptRows: 1, afterDecisionRows: 0, latestFirstObservedAt: '2026-09-06T18:00:00.000Z', decisionAt: decision },
+      } }, away: { sampleSize: 0 } },
       elo: { homeMatches: 20, awayMatches: 20 }, dataGaps: { preMatchQuality: { components: {
         homeForm: { status: 'conflicting' }, elo: { status: 'stale' }, referee: { status: 'published_after_cutoff' },
         lineup: { status: 'not_yet_publishable' }, injuries: { status: 'missing' },

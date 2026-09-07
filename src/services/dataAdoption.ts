@@ -43,7 +43,17 @@ const formResultEvidence = (value: unknown, samples: number | null) => {
   if (counts.sampleRows !== samples || counts.homeRows + counts.awayRows !== samples
     || counts.observedRows + counts.missingObservedAtRows !== samples || keys.some(key => counts[key] > samples)
     || (counts.observedRows > 0 && !latestObservedAt) || (counts.observedRows === 0 && latestObservedAt)) return null;
-  return { ...counts, latestObservedAt, decisionAt };
+  const content = object(evidence.contentObservation);
+  const received = count(content?.receivedRows); const missing = count(content?.missingReceiptRows);
+  const late = count(content?.afterDecisionRows); const latestReceiptAt = clock(content?.latestFirstObservedAt);
+  const receiptDecisionAt = clock(content?.decisionAt);
+  const contentObservation = content?.version === 'recent-form-content-receipt-summary-v1' && content.scope === 'local-content-receipt-only'
+    && content.sourceVerified === false && content.sampleRows === samples && received !== null && received > 0 && missing !== null
+    && received + missing === samples && late !== null && late <= received && latestReceiptAt && receiptDecisionAt
+    && Date.parse(receiptDecisionAt) === (decisionAt ? Date.parse(decisionAt) : NaN)
+    && (Date.parse(latestReceiptAt) > Date.parse(receiptDecisionAt)) === (late > 0)
+    ? { receivedRows: received, missingReceiptRows: missing, afterDecisionRows: late, latestFirstObservedAt: latestReceiptAt, decisionAt: receiptDecisionAt } : null;
+  return { ...counts, latestObservedAt, decisionAt, contentObservation };
 };
 
 /** Presence is not a model-usage receipt. Never infer adoption from connected=true. */
@@ -102,6 +112,10 @@ export function getDataAdoptionReport(match: Match) {
           || (asOf && resultObservation?.decisionAt && Date.parse(resultObservation.decisionAt) > Date.parse(asOf))) { state = 'after-decision'; reason = 'after-decision'; }
         else if (resultObservation?.beforeKickoffRows) { state = 'conflicting'; reason = 'result-clock-conflict'; }
         else if (state === 'unverified' && resultObservation?.missingObservedAtRows) reason = 'result-clock-missing';
+        if (resultObservation?.contentObservation && (resultObservation.contentObservation.afterDecisionRows > 0
+          || (asOf && Date.parse(resultObservation.contentObservation.latestFirstObservedAt) > Date.parse(asOf))) && state !== 'conflicting') {
+          state = 'after-decision'; reason = 'after-decision';
+        }
       }
     }
     if (key === 'elo') {

@@ -125,6 +125,34 @@ const withObservation = value => {
   match.predictionMeta.publicReferenceDecision.dataGaps.inputSummaries.form.home.resultEvidence = value;
   return match;
 };
+const contentFixture = () => ({ version: "recent-form-content-receipt-summary-v1", scope: "local-content-receipt-only", sourceVerified: false,
+  sampleRows: 4, receivedRows: 3, missingReceiptRows: 1, afterDecisionRows: 0, latestFirstObservedAt: "2026-09-06T18:00:00.000Z", decisionAt: at });
+const withContent = contentObservation => withObservation({ ...observationFixture(), contentObservation });
+check("file receipt is separately labelled without upgrading result evidence or adoption", () => {
+  const match = withContent(contentFixture());
+  assert.equal(row(match, "homeForm").state, "unverified"); assert.equal(row(match, "homeForm").resultObservation.observedRows, 2);
+  assert.equal(row(match, "homeForm").resultObservation.contentObservation.receivedRows, 3);
+  for (const language of ["zh", "en"]) {
+    const html=renderToStaticMarkup(React.createElement(DataAdoptionDetails,{match,language}));
+    assert.ok(html.includes(language === "zh" ? "另有本地文件接收凭据 3 / 4" : "Separate local file receipts 3/4"));
+    assert.ok(html.includes(language === "zh" ? "文件接收不等于赛果当时可用" : "File receipt is not historical result availability"));
+  }
+});
+check("late local content reception is adverse even with older matches", () => {
+  const match=withContent({...contentFixture(),latestFirstObservedAt:"2026-09-07T10:00:00.000Z",afterDecisionRows:1});
+  assert.equal(row(match,"homeForm").state,"after-decision");
+  match.predictionMeta.publicReferenceDecision.dataGaps.preMatchQuality.components.homeForm={status:"conflicting"};
+  assert.equal(row(match,"homeForm").state,"conflicting");
+});
+for (const [name, change] of [
+  ["wrong denominator",{sampleRows:5}], ["missing count",{receivedRows:null}], ["inconsistent counts",{missingReceiptRows:2}],
+  ["wrong clock",{decisionAt:"2026-09-07T00:00:00.000Z"}], ["invalid date",{latestFirstObservedAt:"2026-02-30T00:00:00Z"}],
+  ["time count conflict",{latestFirstObservedAt:"2026-09-07T10:00:00.000Z"}], ["source claim",{sourceVerified:true}], ["wrong scope",{scope:"official-result"}],
+]) check("invalid content summary stays unverified: "+name, () => {
+  const match=withContent({...contentFixture(),...change});
+  assert.equal(row(match,"homeForm").resultObservation.contentObservation,null);
+  assert.equal(row(match,"homeForm").state,"unverified");
+});
 check("observed result clocks and sample venues render separately from last match clocks", () => {
   const match = withObservation(observationFixture());
   assert.equal(row(match, "homeForm").reason, "result-clock-missing");

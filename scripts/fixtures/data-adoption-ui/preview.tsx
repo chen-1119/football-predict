@@ -14,7 +14,13 @@ const match = params.get('mode') === 'missing' ? {} : { predictionMeta: { public
     homeForm: { status: 'conflicting' }, elo: { status: 'stale' },
     referee: { status: 'published_after_cutoff' }, lineup: { status: 'not_yet_publishable' },
     weather: { status: 'verified', sourceObservedAt: '2026-09-07T00:00:00Z' }, injuries: { status: 'missing' },
-  } }, inputSummaries: { form: { home: { sampleSize: 4, lastMatchAt: '2026-09-01T12:00:00Z' }, away: { sampleSize: 0 } },
+  } }, inputSummaries: { form: { home: { sampleSize: 4, lastMatchAt: '2026-09-01T12:00:00Z', resultEvidence: {
+    version: 'recent-form-result-evidence-v1', sourceVerified: false, sampleRows: 4, homeRows: 3, awayRows: 1,
+    observedRows: 0, missingObservedAtRows: 4, missingSourceRows: 4, beforeKickoffRows: 0, afterDecisionRows: 0,
+    latestObservedAt: null, decisionAt: '2026-09-07T01:00:00Z', temporalStatus: 'unverified', selectionHash: 'd'.repeat(64),
+    contentObservation: { version: 'recent-form-content-receipt-summary-v1', scope: 'local-content-receipt-only', sourceVerified: false,
+      sampleRows: 4, receivedRows: 3, missingReceiptRows: 1, afterDecisionRows: 0, latestFirstObservedAt: '2026-09-06T18:00:00.000Z', decisionAt: '2026-09-07T01:00:00Z' },
+  } }, away: { sampleSize: 0 } },
     elo: { homeMatches: 20, awayMatches: 20 } } }
 } } };
 createRoot(document.getElementById('root')!).render(<main style={{ maxWidth: 900, margin: '0 auto', padding: 16 }}>

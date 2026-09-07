@@ -91,6 +91,8 @@ const outputDir = path.resolve(__dirname, '../outputs');
         const summary = page.locator('.data-adoption-details summary').first();
         if (routePath.startsWith('/match/')) {
           await summary.waitFor(); await summary.focus(); await page.keyboard.press('Enter');
+          assert.ok((await page.locator('.data-adoption-details').first().textContent()).includes('另有本地文件接收凭据 3 / 4'));
+          assert.ok((await page.locator('.data-adoption-details').first().textContent()).includes('有观测时钟 0 / 4'));
           await page.evaluate(() => window.scrollTo(0, 0));
           await audit('detail-gaps-open');
         }

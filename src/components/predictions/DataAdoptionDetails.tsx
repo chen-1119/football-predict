@@ -56,6 +56,11 @@ export function DataAdoptionDetails({ match, language }: { match: Match; languag
               <small>{language === 'zh' ? `样本主场 ${row.resultObservation.homeRows} / 客场 ${row.resultObservation.awayRows}` : `Sample venues: home ${row.resultObservation.homeRows} / away ${row.resultObservation.awayRows}`}</small>
               <small>{language === 'zh' ? `有观测时钟 ${row.resultObservation.observedRows} / ${row.resultObservation.sampleRows} · 缺时钟 ${row.resultObservation.missingObservedAtRows} · 缺来源 ${row.resultObservation.missingSourceRows}` : `Observation clocks ${row.resultObservation.observedRows}/${row.resultObservation.sampleRows} · missing clocks ${row.resultObservation.missingObservedAtRows} · missing sources ${row.resultObservation.missingSourceRows}`}</small>
               <small>{language === 'zh' ? '最近赛果观测' : 'Latest result observation'} · {displayTime(row.resultObservation.latestObservedAt, language)}</small>
+              {row.resultObservation.contentObservation && <>
+                <small>{language === 'zh' ? `另有本地文件接收凭据 ${row.resultObservation.contentObservation.receivedRows} / ${row.resultObservation.sampleRows} · 缺凭据 ${row.resultObservation.contentObservation.missingReceiptRows}` : `Separate local file receipts ${row.resultObservation.contentObservation.receivedRows}/${row.resultObservation.sampleRows} · missing ${row.resultObservation.contentObservation.missingReceiptRows}`}</small>
+                <small>{language === 'zh' ? '最近文件首次接收' : 'Latest file first receipt'} · {displayTime(row.resultObservation.contentObservation.latestFirstObservedAt, language)}</small>
+                <small>{language === 'zh' ? '文件接收不等于赛果当时可用，也不是独立来源证明。' : 'File receipt is not historical result availability or independent source proof.'}</small>
+              </>}
               <small>{language === 'zh' ? '仅记录元数据，不等于来源已核验或首次收到时间已证明。' : 'Metadata only; neither source verification nor first-receipt proof.'}</small>
             </>}
             {row.source && <small>{language === 'zh' ? '来源' : 'Source'} · {row.source}</small>}

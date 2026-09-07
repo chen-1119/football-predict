@@ -5,6 +5,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { iterateHistoricalEvents } = require("./historicalEventStore.cjs");
 const { inspectHistoricalTrainingObject } = require("./historicalTrainingReleaseArtifact.cjs");
+const { sourceList } = require("./syncFootballDataResults.cjs");
+const { bindHistoricalContentObservation } = require("./historicalContentObservation.cjs");
 
 const rootDir = path.resolve(__dirname, "..");
 const inputFile = path.resolve(
@@ -97,7 +99,7 @@ function existingRecentKeys(index) {
   return keys;
 }
 
-function updateTeam(team, event, side, newRating) {
+function updateTeam(team, event, side, newRating, sourceObservation = null) {
   const homeKey = normalizeKey(event.homeTeamNormalized || event.homeTeamRaw);
   const awayKey = normalizeKey(event.awayTeamNormalized || event.awayTeamRaw);
   team.matches = Number(team.matches || 0) + 1;
@@ -106,7 +108,7 @@ function updateTeam(team, event, side, newRating) {
   if (!team.firstMatchDate || event.date < team.firstMatchDate) team.firstMatchDate = event.date;
   if (!team.lastMatchDate || event.date > team.lastMatchDate) team.lastMatchDate = event.date;
   team.recent = Array.isArray(team.recent) ? team.recent : [];
-  team.recent.push({
+  const recentRow = {
     source: event.recentSource || "football-data.co.uk",
     division: event.competition,
     kickoffTime: event.kickoff || `${event.date}T12:00:00+00:00`,
@@ -115,11 +117,14 @@ function updateTeam(team, event, side, newRating) {
     scoreHome: Number(event.score.home),
     scoreAway: Number(event.score.away),
     side,
-  });
+  };
+  const observation = bindHistoricalContentObservation(recentRow, event, sourceObservation);
+  if (observation) recentRow.sourceObservation = observation;
+  team.recent.push(recentRow);
   if (team.recent.length > RECENT_LIMIT) team.recent.splice(0, team.recent.length - RECENT_LIMIT);
 }
 
-function applyEvent(index, event) {
+function applyEvent(index, event, sourceObservation = null) {
   const homeKey = normalizeKey(event.homeTeamNormalized || event.homeTeamRaw);
   const awayKey = normalizeKey(event.awayTeamNormalized || event.awayTeamRaw);
   if (!index.teams[homeKey]) index.teams[homeKey] = teamRecord(event.homeTeamRaw || homeKey);
@@ -134,8 +139,26 @@ function applyEvent(index, event) {
   const goalDiff = Math.abs(Number(event.score.home) - Number(event.score.away));
   const margin = goalDiff <= 1 ? 1 : Math.min(1.75, Math.log(goalDiff + 1));
   const delta = 22 * margin * (actualHome - expectedHome);
-  updateTeam(home, event, "home", homeBefore + delta);
-  updateTeam(away, event, "away", awayBefore - delta);
+  updateTeam(home, event, "home", homeBefore + delta, sourceObservation);
+  updateTeam(away, event, "away", awayBefore - delta, sourceObservation);
+}
+
+function sourceObservationForFile(file, directory, status, manifest, now = Date.now()) {
+  const relative = path.relative(directory, file).replace(/\\/g, "/");
+  const match = /^(main-league-season|worldwide-history)\/([A-Z0-9]+)-(\d{4})\.csv$/.exec(relative);
+  if (!match) return null;
+  const expected = sourceList({ season: match[3] }).find(source => source.group === match[1] && source.code === match[2]);
+  if (!expected) return null;
+  const source = status?.sources?.[expected.url];
+  const receipt = source?.observation;
+  if (!receipt || receipt.version !== "football-data-content-observation-v1" || receipt.scope !== "local-fetch-only"
+    || receipt.sourceVerified !== false || receipt.sourceUrl !== expected.url
+    || typeof source.destination !== "string" || path.resolve(source.destination) !== path.resolve(file)
+    || receipt.sha256 !== manifest?.sourceFileSha256 || receipt.sha256 !== fileSha256(file)
+    || typeof receipt.firstObservedAt !== "string" || !Number.isFinite(Date.parse(receipt.firstObservedAt))
+    || new Date(receipt.firstObservedAt).toISOString() !== receipt.firstObservedAt
+    || Date.parse(receipt.firstObservedAt) > now) return null;
+  return { ...receipt };
 }
 
 async function readEvents(file) {
@@ -192,6 +215,8 @@ async function main() {
   if (!before.ok) throw new Error(`historical training index is invalid: ${before.blockers.join(",")}`);
   const files = listCsvFiles(sourceDir);
   if (!files.length) throw new Error(`no Football-Data CSV files found under ${sourceDir}`);
+  let downloadStatus = null;
+  try { downloadStatus = JSON.parse(fs.readFileSync(path.join(sourceDir, "sync-status.json"), "utf8")); } catch { /* Legacy rows stay unobserved. */ }
 
   const watermarks = index.source?.freeFootballData?.files || {};
   const recentKeys = existingRecentKeys(index);
@@ -206,13 +231,17 @@ async function main() {
       continue;
     }
     const { events, manifest } = await readEvents(file);
+    // Recheck the parsed bytes before attaching an existing fetch receipt.
+    // Neither file mtime nor this import's current time can substitute for it.
+    if (manifest.sourceFileSha256 !== digest || fileSha256(file) !== digest) throw new Error("Football-Data source changed during import");
+    const sourceObservation = sourceObservationForFile(file, sourceDir, downloadStatus, manifest);
     const cutoff = prior?.lastDate || derivedInitialCutoff(index, events);
     const candidates = events.filter((event) => (
       (prior ? event.date >= cutoff : event.date > cutoff)
         && !recentKeys.has(eventKey(event))
     ));
     for (const event of candidates) recentKeys.add(eventKey(event));
-    accepted.push(...candidates.map((event) => ({ event, file: relative })));
+    accepted.push(...candidates.map((event) => ({ event, file: relative, sourceObservation })));
     fileReports.push({
       file: relative,
       sha256: digest,
@@ -223,6 +252,7 @@ async function main() {
       firstDate: candidates[0]?.date || null,
       lastDate: candidates.at(-1)?.date || prior?.lastDate || manifest.dateRange.to || null,
       manifestRootHash: manifest.rootHash,
+      contentObservationRows: sourceObservation ? candidates.length : 0,
     });
   }
 
@@ -230,7 +260,7 @@ async function main() {
     left.event.date.localeCompare(right.event.date)
       || left.event.sourceEventId.localeCompare(right.event.sourceEventId)
   ));
-  for (const row of accepted) applyEvent(index, row.event);
+  for (const row of accepted) applyEvent(index, row.event, row.sourceObservation);
 
   const priorAcceptedRows = Math.max(
     Number(index.source?.freeFootballData?.acceptedRows || 0),
@@ -315,4 +345,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { applyEvent, derivedInitialCutoff, eventKey, listCsvFiles, normalizeKey };
+module.exports = { applyEvent, derivedInitialCutoff, eventKey, listCsvFiles, normalizeKey, sourceObservationForFile };

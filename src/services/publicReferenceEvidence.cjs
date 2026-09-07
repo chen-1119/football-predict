@@ -88,7 +88,11 @@ function compactPublicDataGaps(feature) {
     const resultEvidence = value => value?.version === "recent-form-result-evidence-v1" && value.sourceVerified === false
       ? { version: value.version, sourceVerified: false,
         ...Object.fromEntries(["sampleRows", "homeRows", "awayRows", "observedRows", "missingObservedAtRows", "missingSourceRows", "beforeKickoffRows", "afterDecisionRows"].map(key => [key, number(value[key])])),
-        latestObservedAt: string(value.latestObservedAt), decisionAt: string(value.decisionAt), temporalStatus: string(value.temporalStatus), selectionHash: string(value.selectionHash) } : null;
+        latestObservedAt: string(value.latestObservedAt), decisionAt: string(value.decisionAt), temporalStatus: string(value.temporalStatus), selectionHash: string(value.selectionHash),
+        ...(value.contentObservation?.version === "recent-form-content-receipt-summary-v1" && value.contentObservation.scope === "local-content-receipt-only" && value.contentObservation.sourceVerified === false
+          ? { contentObservation: { version: value.contentObservation.version, scope: value.contentObservation.scope, sourceVerified: false,
+            ...Object.fromEntries(["sampleRows", "receivedRows", "missingReceiptRows", "afterDecisionRows"].map(key => [key, number(value.contentObservation[key])])),
+            latestFirstObservedAt: string(value.contentObservation.latestFirstObservedAt), decisionAt: string(value.contentObservation.decisionAt) } } : {}) } : null;
     const formSide = value => value && typeof value === "object"
       ? { sampleSize: number(value.sampleSize), lastMatchAt: string(value.lastMatchAt), resultEvidence: resultEvidence(value.resultEvidence) } : null;
   return {

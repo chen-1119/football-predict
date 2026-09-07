@@ -26,6 +26,8 @@ const { SOURCE_ID, VERSION: ARCHIVE_VERSION, INDEX_ID, INDEX_PREFIX, buildPublic
 const { exactDecisionEventMatch } = require("../src/services/decisionEventIdentity.cjs");
 const { observePredictionEvidence } = require("./predictionEvidenceAudit.cjs");
 const { isDecisionClockAuditEligible } = require("../src/services/decisionSnapshot.cjs");
+const { bindHistoricalContentObservation } = require("./historicalContentObservation.cjs");
+const { summarizeRecentFormEvidence } = require("./recentFormEvidence.cjs");
 
 const rootDir = path.resolve(__dirname, "..");
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "football-evidence-roundtrip-"));
@@ -81,6 +83,14 @@ const proof = (poolCode, odds) => trust.buildSignedMarketProvenance({
 });
 
 const makeMatch = () => {
+  const recentRows = Array.from({ length: 4 }, (_, i) => {
+    const row = { source: "football-data.co.uk", division: "E0", kickoffTime: `2026-08-${28+i}T12:00:00.000Z`,
+      homeKey: "synthetic home", awayKey: "synthetic away", scoreHome: 0, scoreAway: 1, side: "home" };
+    row.sourceObservation = bindHistoricalContentObservation(row, { sourceEventId: String(i+1).padStart(64,"0"), eventSha256: "b".repeat(64), rawRowSha256: "c".repeat(64) },
+      { version: "football-data-content-observation-v1", scope: "local-fetch-only", sourceVerified: false,
+        sourceUrl: "https://www.football-data.co.uk/mmz4281/2627/E0.csv", sha256: "a".repeat(64), firstObservedAt: "2026-09-06T12:00:00.000Z" });
+    return row;
+  });
   const match = {
     id: `sporttery_${sourceMatchId}`, sourceMatchId, status: "SCHEDULED",
     eventVersion: "2026-09-07T12:00:00.000Z", kickoffTime: "2026-09-07T12:00:00.000Z",
@@ -103,7 +113,7 @@ const makeMatch = () => {
       oneXTwo: { final: { home: 32, draw: 37, away: 31 } },
       handicap: { line: -1, unifiedPosterior: { home: 22, draw: 27, away: 51 } },
       goalLines: { over25: 45, under25: 55 }, bothTeamsToScore: { yes: 48, no: 52 },
-      form: { home: { sampleSize: 4, lastMatchAt: "2026-08-31T12:00:00.000Z" },
+      form: { home: { sampleSize: 4, lastMatchAt: "2026-08-31T12:00:00.000Z", resultEvidence: summarizeRecentFormEvidence(recentRows, "synthetic home", capturedAt) },
         away: { sampleSize: 0, lastMatchAt: null } },
       modelHealth: { dataGaps: { connected: { homeForm: "available", awayForm: "missing", injury: null } } },
       unifiedPosterior: {
@@ -234,6 +244,8 @@ const verifyEvidenceHttp = async (reference, identity, postgresUrl = "") => {
     equal(result.cache, "no-store", "private evidence cannot be cached by intermediaries");
     equal(result.body.record.contentHash, reference.contentHash, "HTTP resolves exact original reference hash");
     equal(result.body.evidence.publicPrediction.tipCode, "X", "HTTP does not substitute private home prediction");
+    equal(result.body.evidence.featureSnapshot.modelInputs.form.home.resultEvidence.contentObservation,
+      reference.dataGaps.inputSummaries.form.home.resultEvidence.contentObservation, "actual primary-mode HTTP retains the separate local file receipt summary");
     equal(result.body.publication.generationId, identity.generationId, "HTTP evidence read is publication paired");
     equal((await request("/api/db/public-reference-evidence?referenceHash=bad", admin)).status, 400, "HTTP rejects malformed hash");
     equal((await request("/api/db/public-reference-evidence?referenceHash=" + "f".repeat(64), admin)).status, 404, "HTTP reports absent reference without fabricated evidence");
@@ -394,6 +406,8 @@ const main = async () => {
     equal(await readPostgresCurrentMatches(realPool, { publicationIdentity: identity }), await readSqliteCurrentMatches(dbPath, { publicationIdentity: identity }), "real PostgreSQL driver matches SQLite current payload including immutable public record");
     equal(await readPostgresPredictionSnapshotRows(realPool, { sourceMatchId, publicationIdentity: identity }), await readSqlitePredictionSnapshotRows(dbPath, { sourceMatchId }), "real PostgreSQL candidate evidence survives actual writer and reader");
     const realEvidence = await readPostgresPublicReferenceEvidence(realPool, { referenceHash: reference.contentHash, publicationIdentity: identity });
+    equal(realEvidence.evidence.featureSnapshot.modelInputs.form.home.resultEvidence.contentObservation,
+      reference.dataGaps.inputSummaries.form.home.resultEvidence.contentObservation, "real PostgreSQL retains source-to-feature local receipt counters and clock without promoting them");
     equal(realEvidence, readSqlitePublicReferenceEvidence(dbPath, { referenceHash: reference.contentHash, publicationIdentity: identity }), "real PostgreSQL hash-bound evidence matches actual SQLite reader");
     equal((await readPostgresPublicReferenceEvidence(realPool, { referenceHash: reference.contentHash, publicationIdentity: { ...identity, generationId: "wrong" } })).reason, "generation-mismatch", "real PostgreSQL refuses mismatched generation");
     await verifyEvidenceHttp(reference, identity, realPostgresUrl);
@@ -473,6 +487,8 @@ const main = async () => {
   const sqliteEvidence = readSqlitePublicReferenceEvidence(dbPath, evidenceOptions);
   check(sqliteEvidence.ok, "SQLite admin reader resolves the exact hash-bound evidence");
   equal(sqliteEvidence.evidence.publicPrediction.tipCode, "X", "admin evidence retains public draw");
+  equal(sqliteEvidence.evidence.featureSnapshot.modelInputs.form.home.resultEvidence.contentObservation,
+    reference.dataGaps.inputSummaries.form.home.resultEvidence.contentObservation, "actual SQLite retains separate file receipt metadata");
   for (const payloadAsText of [true, false]) {
     transport.state.payloadAsText = payloadAsText;
     equal(await readPostgresPublicReferenceEvidence(transport.pool, evidenceOptions), sqliteEvidence, "PostgreSQL admin reader preserves exact evidence for text and driver-object payloads");

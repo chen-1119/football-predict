@@ -138,6 +138,9 @@ export interface PredictionDetail {
 }
 
 export interface FormResultEvidenceSummary {
+  contentObservation?: { version: string; scope: string; sourceVerified: false; sampleRows: number | null;
+    receivedRows: number | null; missingReceiptRows: number | null; afterDecisionRows: number | null;
+    latestFirstObservedAt: string | null; decisionAt: string | null };
   version: string;
   sourceVerified: false;
   sampleRows: number | null;

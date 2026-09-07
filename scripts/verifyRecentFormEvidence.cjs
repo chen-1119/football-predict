@@ -5,6 +5,13 @@ const { buildFormSnapshots, predictionSet, buildPredictionFeatureSnapshot } = re
 const { bindPublicReferenceDecision: bind, pendingPublicReferenceEvidence: pending } = require("../src/services/publicReferenceDecision.cjs");
 const clone = value => JSON.parse(JSON.stringify(value));
 const decisionAt = "2026-09-07T01:00:00.000Z";
+// The fixture decision is historical; run the actual model at that fixed clock.
+// Otherwise wall-clock generatedAt makes evidence correctly reject the fixture.
+const modelAtDecision = match => {
+  const NativeDate = Date;
+  global.Date = class extends NativeDate { constructor(...args) { super(...(args.length ? args : [decisionAt])); } static now() { return NativeDate.parse(decisionAt); } };
+  try { return predictionSet(match); } finally { global.Date = NativeDate; }
+};
 let checks = 0;
 const check = (name, fn) => { fn(); checks++; };
 const row = { sourceMatchId: "form-evidence", homeKey: "alpha", awayKey: "beta", kickoffTime: "2026-09-01T12:00:00Z",
@@ -73,7 +80,7 @@ check("historical seed without clocks remains visibly unverified", () => {
 });
 check("actual model, feature capture and frozen public record retain compact metadata", () => {
   const match = { ...forecast, formSnapshot: form };
-  match.probabilityModel = predictionSet(match).probabilityModel;
+  match.probabilityModel = modelAtDecision(match).probabilityModel;
   match.predictionMeta = { ...match.predictionMeta, decisionId: "form-result-evidence-test", modelVersion: match.probabilityModel.version, policyVersion: "test" };
   match.predictionMeta.featureSnapshot = buildPredictionFeatureSnapshot(match, decisionAt);
   match.predictions = [{ marketType: "BEST", oddsPoolCode: "HAD", tipCode: "X", odds: 3.3, recommendationAction: "reference" }];

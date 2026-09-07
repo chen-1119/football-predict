@@ -39,6 +39,10 @@ const outputDir = path.resolve(__dirname, '../outputs');
       await summary.focus(); await page.keyboard.press('Enter');
       assert.equal(await page.locator('.data-adoption-details').getAttribute('open'), '');
       await audit('keyboard-open');
+      if (mode === 'complete') {
+        assert.ok((await page.locator('.data-adoption-details').textContent()).includes(lang === 'zh' ? '另有本地文件接收凭据 3 / 4' : 'Separate local file receipts 3/4'));
+        assert.ok((await page.locator('.data-adoption-details').textContent()).includes(lang === 'zh' ? '有观测时钟 0 / 4' : 'Observation clocks 0/4'));
+      }
       if (lang === 'zh' && mode === 'complete') await page.screenshot({ path: path.join(outputDir, `data-adoption-${width}-open.png`), fullPage: true });
       await page.keyboard.press('Space');
       assert.equal(await page.locator('.data-adoption-details').getAttribute('open'), null);
