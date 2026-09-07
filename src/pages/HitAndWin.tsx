@@ -5,6 +5,7 @@ import type { Match } from '../services/mockData';
 import type { ReviewPerformanceBucket, ReviewPerformanceSummary } from '../services/reviewPerformanceTypes';
 import { getTeamById } from '../services/entities';
 import { DateScopeBar } from '../components/predictions/DateScopeBar';
+import { ReviewEvidenceOverview } from '../components/review/ReviewEvidenceOverview';
 
 const shanghaiDateFormatter = new Intl.DateTimeFormat('en-US', {
   timeZone: 'Asia/Shanghai',
@@ -175,19 +176,20 @@ export const HitAndWin: React.FC = () => {
   const t = (key: keyof typeof translations) => translations[key][language] || '';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-      <div style={{ textAlign: 'center', maxWidth: '760px', margin: '0 auto' }}>
-        <h1 style={{ fontSize: '2rem', fontWeight: '800', fontFamily: 'var(--font-title)' }} className="gradient-text">
+    <div className="review-page">
+      <header className="review-page-header"><div>
+        <h1>
           {language === 'zh' ? '赛后复盘中心' : 'Post-match Review Center'}
         </h1>
-        <p style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.9rem', marginTop: '0.5rem', lineHeight: '1.6' }}>
+        <p>
           {language === 'zh'
             ? '只展示已进入赛果阶段的历史比赛；按比赛日期筛选，点击任一场可查看完整结算、未命中原因和后续调整。'
             : 'Only historical fixtures with results are shown. Filter by match date and open any fixture for settlement, miss diagnosis, and next adjustments.'}
         </p>
-      </div>
+      </div></header>
+      <ReviewEvidenceOverview language={language} formal={formalReviewPerformance} reference={referenceReviewPerformance} shadow={scorecard?.shadowTracks?.CANDIDATE_PROSPECTIVE} />
 
-      <section className="card premium-card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1.25rem', borderColor: 'hsl(var(--primary) / 0.28)' }}>
+      <section className="review-history">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap' }}>
           <div>
             <h2 style={{ fontSize: '1.2rem', fontWeight: '900', color: 'hsl(var(--text-primary))' }}>{t('systemReviewTitle')}</h2>
@@ -216,6 +218,8 @@ export const HitAndWin: React.FC = () => {
             onSelectDate={setSelectedReviewDate}
           />
         )}
+        <details className="review-legacy-summary">
+          <summary>{language === 'zh' ? '所选日期与历史累计 · BEST 原始统计' : 'Selected date and all-time · Original BEST statistics'}</summary>
         <div data-review-statistics-scope="server-complete-history" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px' }}>
           {performanceCards.map(({ key, title, scope, bucket }) => (
             <article key={key} {...{ [key]: bucket?.hitRate ?? '' }} style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: '8px', padding: '14px', border: '1px solid hsl(var(--border))', borderRadius: '12px', background: 'hsl(var(--bg))' }}>
@@ -230,6 +234,7 @@ export const HitAndWin: React.FC = () => {
             </article>
           ))}
         </div>
+        </details>
         <p data-review-denominator="one-frozen-best-per-match" style={{ color: 'hsl(var(--text-muted))', fontSize: '0.76rem', lineHeight: 1.6 }}>
           {language === 'zh'
             ? '统计来自服务端完整历史；每场只计一个赛前冻结 BEST，命中数 / 已结算数。正式与参考独立，实时、外部赛果影子、逐玩法分析和作废场次不混入。下方列表按页加载，不影响累计。'
@@ -245,7 +250,7 @@ export const HitAndWin: React.FC = () => {
         {systemReviewMatches.length === 0 ? (
           <p style={{ padding: '1.25rem', textAlign: 'center', color: 'hsl(var(--text-muted))', border: '1px dashed hsl(var(--border))', borderRadius: '10px' }}>{t('noSystemReview')}</p>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '0.85rem' }}>
+          <div className="review-fixture-grid">
             {systemReviewMatches.map((match) => {
               const review = match.postMatchReview;
               const home = getTeamById(match.homeTeamId);

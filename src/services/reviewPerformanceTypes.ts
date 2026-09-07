@@ -12,6 +12,12 @@ export interface ReviewPerformanceSummary {
   timezone?: string;
   cumulative?: ReviewPerformanceBucket | null;
   daily?: Array<ReviewPerformanceBucket & { date?: string }>;
+  marketBreakdown?: {
+    version?: string;
+    HAD?: ReviewMarketGroup;
+    HHAD?: ReviewMarketGroup;
+    UNKNOWN?: ReviewMarketGroup;
+  } | null;
   exclusions?: Record<string, number>;
   policy?: {
     denominator?: string;
@@ -23,4 +29,9 @@ export interface ReviewPerformanceSummary {
     identityVersion?: string;
     conflictingEvents?: string;
   } | null;
+}
+
+export interface ReviewMarketGroup {
+  cumulative?: ReviewPerformanceBucket | null;
+  daily?: Array<ReviewPerformanceBucket & { date?: string }>;
 }
