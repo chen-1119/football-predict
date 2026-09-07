@@ -251,6 +251,7 @@ const requiredReleaseEntries = [
   "scripts/verifyCompetitionModelContext.cjs",
   "scripts/predictionExecutionCapture.cjs",
   "scripts/verifyPredictionExecutionCapture.cjs",
+  "scripts/verifyDataGenerationPointerLockRace.cjs",
   "src/services/predictionExecutionClock.cjs",
   "scripts/verifyPredictionExecutionClock.cjs",
   "src/services/predictionRuntimeIdentity.cjs",

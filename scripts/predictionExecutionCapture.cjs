@@ -43,6 +43,7 @@ function predictionCaptureStorageHealth(capture, nowMs = Date.now()) {
     return { ...health, status: capture.reason === "no-captured-records" ? "watch" : "failed",
       reason: reasons.includes(capture.reason) ? capture.reason : "capture-persistence-failed" };
   }
+  if (capture.lockReleaseFailed === true) return { ...health, status: "failed", reason: "capture-writer-lock-release-not-proven" };
   const observedAt = capture.storage?.observedAt;
   if (capture.storage?.version !== "prediction-capture-capacity-v2" || !strictInstant(observedAt)
     || !Number.isFinite(nowMs) || Date.parse(observedAt) > nowMs) return { ...health, reason: "capture-capacity-not-verifiable" };
@@ -134,12 +135,18 @@ function createPredictionExecutionCapture(cycleAt) {
   function persist(storeDir) {
     const status = summary();
     if (!records.length) return { ...status, persisted: false, reason: "no-captured-records" };
-    let lock, lockPath, storage;
+    let lock, storage, outcome;
+    const reply = value => { outcome = value; return value; };
     try {
       const parent = fs.realpathSync(storeDir), dir = path.join(parent, "prediction-execution-captures");
       fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
       if (fs.lstatSync(dir).isSymbolicLink() || fs.realpathSync(dir) !== dir) throw new Error("unsafe-private-directory");
-      lockPath = path.join(dir, ".writer.lock"); lock = fs.openSync(lockPath, "wx", 0o600);
+      // Reuse the inode/token-bound directory lock, not an age-based unlink.
+      // A complete same-host dead owner can be reclaimed; a live successor,
+      // partial owner or legacy empty file remains protected. Never wait here.
+      lock = require("../server/dataGenerationStore.cjs").acquirePointerCommitLock({
+        lockDir: path.join(dir, ".writer.lock"), timeoutMs: 0,
+      });
       const names = fs.readdirSync(dir).filter(name => name !== ".writer.lock");
       let used = 0;
       for (const name of names) {
@@ -157,7 +164,7 @@ function createPredictionExecutionCapture(cycleAt) {
           storage = { ...captureStorageCapacity({ files: names.length, bytes: used,
             nextBatchBytes: fs.statSync(file).size, availableBytes: availableStorageBytes(parent) }), observedAt: new Date().toISOString() };
         } catch { storage = { version: "prediction-capture-capacity-v2", status: "unknown", reason: "private-store-free-space-unavailable" }; }
-        return { ...status, persisted: true, sha256, duplicate: true, storage };
+        return reply({ ...status, persisted: true, sha256, duplicate: true, storage });
       }
       const zipped = zlib.gzipSync(raw);
       storage = { ...captureStorageCapacity({ files: names.length, bytes: used,
@@ -170,15 +177,25 @@ function createPredictionExecutionCapture(cycleAt) {
       // other processes can consume space too. ENOSPC still fails closed.
       storage = { ...captureStorageCapacity({ files: names.length + 1, bytes: used + zipped.length,
         nextBatchBytes: zipped.length, availableBytes: Math.max(0, storage.availableBytes - zipped.length) }), observedAt: storage.observedAt };
-      return { ...status, persisted: true, sha256, duplicate: false, storage };
+      return reply({ ...status, persisted: true, sha256, duplicate: false, storage });
     } catch (error) {
       const known = ["unsafe-private-directory", "unexpected-store-entry", "unsafe-store-entry", "existing-capture-mismatch", "private-store-capacity-limit", "private-store-disk-reserve", "private-store-free-space-unavailable", "capture-readback-mismatch"];
-      return { ...status, persisted: false, ...(storage ? { storage } : {}), reason: known.includes(error.message) ? error.message : error.code === "EEXIST" ? "private-store-busy" : "private-store-io-failed" };
+      return reply({ ...status, persisted: false, ...(storage ? { storage } : {}), reason: known.includes(error.message) ? error.message
+        : ["EEXIST", "POINTER_LOCK_TIMEOUT"].includes(error.code) ? "private-store-busy" : "private-store-io-failed" });
     } finally {
       if (lock !== undefined) {
         // Diagnostics must never abort a successful public sync in cleanup.
-        try { fs.closeSync(lock); } catch { /* later runs will expose a busy store */ }
-        try { fs.unlinkSync(lockPath); } catch { /* never remove another lock or retry publication */ }
+        // Windows can transiently deny directory rename. Every release retry
+        // revalidates the inode/token through the shared lock implementation;
+        // never fall back to deleting the canonical path or reclaiming by age.
+        for (let attempt = 0; attempt < 4; attempt++) {
+          try { lock.release(); break; } catch (error) {
+            const retryable = error.code === "POINTER_LOCK_RELEASE_FAILED"
+              && ["claim-raced", "quarantine-failed"].includes(error.details?.status);
+            if (!retryable || attempt === 3) { if (outcome) outcome.lockReleaseFailed = true; break; }
+            Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+          }
+        }
       }
     }
   }

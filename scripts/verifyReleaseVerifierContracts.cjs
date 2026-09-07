@@ -59,7 +59,7 @@ const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/servic
   'scripts/verifyLegacyReferenceConflict.cjs', 'src/services/legacyReferenceConflict.ts', 'scripts/verifyFrozenArchiveAuthority.cjs',
   'scripts/verifyOfficialClubResults.cjs', 'scripts/syncOfficialClubResults.cjs', 'scripts/verifyOfficialClubReceiptClocks.cjs',
   'scripts/competitionModelContext.cjs', 'scripts/verifyCompetitionModelContext.cjs',
-  'scripts/predictionExecutionCapture.cjs', 'scripts/verifyPredictionExecutionCapture.cjs',
+  'scripts/predictionExecutionCapture.cjs', 'scripts/verifyPredictionExecutionCapture.cjs', 'scripts/verifyDataGenerationPointerLockRace.cjs',
   'src/services/predictionExecutionClock.cjs', 'scripts/verifyPredictionExecutionClock.cjs',
   'src/services/predictionRuntimeIdentity.cjs', 'scripts/replayPredictionCapture.cjs', 'scripts/verifyPredictionReplay.cjs'];
 const requiredEntries = source => {
@@ -124,10 +124,10 @@ const executionGate = (body, status = 0) => {
     executionCapture: { status, body, stderr: '' }, pushCheck: (_checks, _name, ok) => { result = ok; } }, { timeout: 1000 });
   return result;
 };
-const executionProof = { ok: true, checks: 40, retentionChecks: 18, realRetainedBatches: 513,
+const executionProof = { ok: true, checks: 49, writerLockChecks: 9, retentionChecks: 18, realRetainedBatches: 513,
   retentionPolicyVersion: "prediction-capture-capacity-v2", productionDataTouched: false, providerRequests: 0 };
 check('execution capture gate accepts actual boundary and storage cases', () => assert.equal(executionGate(executionProof), true));
-for (const bad of [{ ok: false }, { checks: 39 }, { retentionChecks: 17 }, { realRetainedBatches: 512 },
+for (const bad of [{ ok: false }, { checks: 48 }, { writerLockChecks: 8 }, { writerLockChecks: undefined }, { retentionChecks: 17 }, { realRetainedBatches: 512 },
   { retentionPolicyVersion: "prediction-capture-capacity-v1" }, { productionDataTouched: true }, { providerRequests: 1 }]) {
   check('execution gate rejects invalid evidence ' + JSON.stringify(bad), () => assert.equal(executionGate({ ...executionProof, ...bad }), false));
 }

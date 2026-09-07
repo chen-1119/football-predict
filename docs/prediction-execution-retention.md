@@ -38,6 +38,22 @@
 
 ## 仍未完成的范围
 
-这不是跨主机备份、完整实际加载依赖闭包、异常中断后的旧写锁恢复或六窗独立前瞻完成证明。存储模块实现身份已改变，旧捕获只能按原代码身份验证，不能拿旧批次替新实现证明严格重放。预测公式、历史公开方向、冻结版本和晋级门槛未改变，不能声称命中率提高。
+这不是跨主机备份、完整实际加载依赖闭包或六窗独立前瞻完成证明。旧式空文件锁仍不能自动恢复；新目录锁恢复范围见下节。存储模块实现身份已改变，旧捕获只能按原代码身份验证，不能拿旧批次替新实现证明严格重放。预测公式、历史公开方向、冻结版本和晋级门槛未改变，不能声称命中率提高。
 
 本轮不修改冻结 6f86 的 r702 签名包或单次队列。新能力尚需后续受控发布与真实 worker 周期确认；本地/隔离通过不等于已上线。Q1–Q5 的其余范围和新官方赛果真正写入验收继续保留。
+
+## 2026-09-08：写锁异常退出保护与有界释放
+
+空文件 `wx` 锁无法证明异常退出后的归属。本次改用既有 `dataGenerationStore.acquirePointerCommitLock`：新锁是目录，元数据含同主机 PID、随机 token、取得时间；释放/恢复核对精确 inode、owner 内容和 token，先隔离再清理。只自动恢复能够确认已经退出的同主机完整 owner；活跃 owner、异地主机、残缺元数据、额外条目、旧式空文件均保留并返回 busy，不按锁年龄删除。
+
+初次接入的真实 513 批测试失败，保留失败现场。进一步诊断观察到 Windows `renameSync(lockDir, quarantinePath)` 偶发 `EPERM`，返回 `POINTER_LOCK_RELEASE_FAILED/quarantine-failed`。现在只对 `claim-raced`、`quarantine-failed` 两种可重新检查的状态最多调用四次 release，每次仍由原实现完整核对归属，重试间隔 20ms（最多三个间隔，不含文件操作耗时）。不做 canonical unlink、递归删除兜底或无限重试。
+
+释放最终失败不改变已成功留存的事实，返回 `lockReleaseFailed=true`，健康状态为 `failed/capture-writer-lock-release-not-proven`；诊断失败不能让已完成的公共同步抛错。部分写入和不可证明的锁保持 fail-closed，仍需人工核查。公式、记录正文编码、历史方向和正式权限不变。
+
+验证新增 9 项，总 49 项，Windows 和 Linux Node22.22.1 各通过：真实已退出子进程的锁恢复且旧 gzip 字节不变、旧时间的活跃 owner、外主机、残缺/额外元数据、旧空文件、有界临时/永久重命名拒绝，以及实际多进程 ABA/释放时替换 owner 的 10 断言子验证。仍实际新增并回读 513 批，不只模拟计数。Windows 七套回归通过：49 捕获、278 SQLite/实际 HTTP（PG transport 替身）、13 独立重放、14 时钟、59+11 监控、92 发布合同、10 冻结归档；七个改动脚本 lint 通过。
+
+readiness 必须报告至少 49 项、9 项锁验证以及原 18 留存项/513 批；打包和验包的 required entries 都新增实际多进程锁验证器，缺失即拒绝。它随捕获验证器真实执行，不仅检查文件存在。
+
+Linux 使用独立 `/var/tmp/football-replay-tJVmbXwG`，普通 ubuntu 身份、低优先级、512MiB Node 堆上限、90 秒子进程期限；无依赖安装或生产目录写入。03:48:51–03:49:01 的复验前后 499 个候选文件哈希不变。捕获源 SHA `974d6309294520d4add403eb2b35c541c81b93425be972057e75a04651be464c`，测试 SHA `4524ceac785b686be8b6ab50a2e782961753630ec226c3ebeca76ea13a39827f`，报告 SHA `d619a8cfb1b75af50fad2a720c9c710abe2404249c8ddebbc3debb7deaf21262`。文件清单校验不是完整实际加载依赖闭包证明。
+
+本地私有报告 `outputs/capture-lock-regressions-20260908.json`；Linux `capture-lock-verification.json` 在上述隔离根目录。测试现场保留，ABA 子测试仅清理自己生成并核对 realpath 的临时目录；不涉及生产数据。新代码不在已冻结并正在运行的 r702 中，仍待后续发布验收。

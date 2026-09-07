@@ -632,7 +632,8 @@ const run = async () => {
   const executionCapture = await runLocalJson(["scripts/verifyPredictionExecutionCapture.cjs"]);
   pushCheck(checks, "private prediction execution capture preserves exact inputs and never rewrites locked outputs",
     executionCapture.status === 0 && executionCapture.body?.ok === true
-      && executionCapture.body?.checks >= 40 && executionCapture.body?.retentionChecks >= 18
+      && executionCapture.body?.checks >= 49 && executionCapture.body?.retentionChecks >= 18
+      && executionCapture.body?.writerLockChecks >= 9
       && executionCapture.body?.realRetainedBatches >= 513
       && executionCapture.body?.retentionPolicyVersion === "prediction-capture-capacity-v2"
       && executionCapture.body?.productionDataTouched === false

@@ -199,7 +199,8 @@ retentionCheck("real 513-batch append crosses the old file ceiling and preserves
   const other = fs.mkdtempSync(path.join(dir, "retention-")), files = [];
   for (let i = 0; i < 513; i++) {
     const c = capture(now()); c.run({ ...fixture(), sourceMatchId: `retention-${i}` }, scorer);
-    const status = c.persist(other); assert.equal(status.persisted, true); assert.equal(status.duplicate, false);
+    const status = c.persist(other); assert.equal(status.persisted, true, `batch ${i}: ${JSON.stringify(status)}`); assert.equal(status.duplicate, false);
+    assert.notEqual(status.lockReleaseFailed, true, `batch ${i}: lock release must be proven`);
     assert.equal(status.storage.files, i + 1);
     const file = path.join(other, "prediction-execution-captures", status.sha256 + ".json.gz");
     const raw = fs.readFileSync(file); assert.equal(hash(zlib.gunzipSync(raw)), status.sha256);
@@ -223,6 +224,72 @@ check("sensitive output does not prevent returning original result", () => {
   assert.equal(output.apiKey, "synthetic-output-secret"); assert.equal(c.summary().skipped["sensitive-input-rejected"], 1);
   assert.equal(c.summary().captured, 0);
 });
-console.log(JSON.stringify({ ok: true, verifier: "prediction-execution-capture-v1", checks, fixtureDirectory: dir,
+let writerLockChecks = 0;
+const lockCheck = (name, test) => { check(name, test); writerLockChecks++; };
+const lockFixture = () => {
+  const base = fs.mkdtempSync(path.join(dir, "writer-"));
+  const c = capture(now()); c.run(fixture(), scorer);
+  const initial = c.persist(base); assert.equal(initial.persisted, true); assert.notEqual(initial.lockReleaseFailed, true);
+  const folder = path.join(base, "prediction-execution-captures"), lockDir = path.join(folder, ".writer.lock");
+  const file = path.join(folder, initial.sha256 + ".json.gz"), bytes = fs.readFileSync(file);
+  return { base, c, folder, lockDir, file, bytes };
+};
+lockCheck("real exited child owner is recovered without rewriting previous capture", () => {
+  const f = lockFixture();
+  const child = require("node:child_process").spawnSync(process.execPath, ["-e",
+    'require(process.argv[1]).acquirePointerCommitLock({lockDir:process.argv[2],timeoutMs:0});',
+    path.join(root, "server/dataGenerationStore.cjs"), f.lockDir], { encoding: "utf8", windowsHide: true, timeout: 10000 });
+  assert.equal(child.status, 0, child.stderr);
+  const owner = JSON.parse(fs.readFileSync(path.join(f.lockDir, "owner.json")));
+  assert.throws(() => process.kill(owner.pid, 0), error => error.code === "ESRCH");
+  const result = f.c.persist(f.base); assert.equal(result.persisted, true); assert.equal(result.duplicate, true);
+  assert.notEqual(result.lockReleaseFailed, true); assert.ok(fs.readFileSync(f.file).equals(f.bytes));
+  assert.equal(fs.existsSync(f.lockDir), false);
+});
+for (const kind of ["live-old-owner", "foreign-owner", "partial-owner", "extra-metadata"]) {
+  lockCheck(kind + " cannot be reclaimed by age", () => {
+    const f = lockFixture(); fs.mkdirSync(f.lockDir);
+    const owner = { schemaVersion: 1, token: crypto.randomUUID(), pid: process.pid,
+      hostname: require("node:os").hostname(), acquiredAt: "2000-01-01T00:00:00.000Z" };
+    if (kind === "foreign-owner") owner.hostname = "synthetic-foreign-host";
+    const file = path.join(f.lockDir, "owner.json"), raw = kind === "partial-owner" ? "{" : JSON.stringify(owner);
+    fs.writeFileSync(file, raw);
+    if (kind === "extra-metadata") fs.writeFileSync(path.join(f.lockDir, "unexpected"), "preserve");
+    const entries = fs.readdirSync(f.lockDir);
+    const result = f.c.persist(f.base); assert.equal(result.persisted, false); assert.equal(result.reason, "private-store-busy");
+    assert.equal(fs.readFileSync(file, "utf8"), raw); assert.deepEqual(fs.readdirSync(f.lockDir), entries);
+    assert.ok(fs.readFileSync(f.file).equals(f.bytes));
+  });
+}
+for (const permanent of [false, true]) lockCheck((permanent ? "persistent" : "transient") + " release denial is bounded and never deletes canonical lock", () => {
+  const f = lockFixture(), rename = fs.renameSync; let denied = 0;
+  try {
+    fs.renameSync = (from, to, ...args) => {
+      if (from === f.lockDir && (permanent || denied === 0)) {
+        denied++; const error = new Error("synthetic rename denied"); error.code = "EPERM"; throw error;
+      }
+      return rename(from, to, ...args);
+    };
+    const result = f.c.persist(f.base); assert.equal(result.persisted, true); assert.equal(result.duplicate, true);
+    assert.equal(denied, permanent ? 4 : 1); assert.equal(result.lockReleaseFailed === true, permanent);
+    assert.equal(fs.existsSync(f.lockDir), permanent); assert.ok(fs.readFileSync(f.file).equals(f.bytes));
+    if (permanent) {
+      const health = predictionCaptureStorageHealth(result);
+      assert.equal(health.status, "failed"); assert.equal(health.reason, "capture-writer-lock-release-not-proven");
+    }
+  } finally { fs.renameSync = rename; }
+});
+lockCheck("legacy empty file stays protected", () => {
+  const f = lockFixture(); fs.writeFileSync(f.lockDir, "");
+  assert.equal(f.c.persist(f.base).reason, "private-store-busy");
+  assert.equal(fs.statSync(f.lockDir).size, 0); assert.ok(fs.readFileSync(f.file).equals(f.bytes));
+});
+lockCheck("actual multiprocess ABA and release successor races preserve successor ownership", () => {
+  const child = require("node:child_process").spawnSync(process.execPath, [path.join(root, "scripts/verifyDataGenerationPointerLockRace.cjs")],
+    { cwd: root, encoding: "utf8", windowsHide: true, timeout: 30000 });
+  assert.equal(child.status, 0, child.stderr); const result = JSON.parse(child.stdout);
+  assert.equal(result.ok, true); assert.ok(result.assertions >= 10);
+});
+console.log(JSON.stringify({ ok: true, verifier: "prediction-execution-capture-v1", checks, fixtureDirectory: dir, writerLockChecks,
   retentionChecks, realRetainedBatches: 513, retentionPolicyVersion: "prediction-capture-capacity-v2",
   productionDataTouched: false, providerRequests: 0, scope: "actual rebuild boundary plus bounded private JSON evidence; not deterministic full replay or source attestation" }, null, 2));

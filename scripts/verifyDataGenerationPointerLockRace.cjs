@@ -188,5 +188,8 @@ try {
   for (const child of children) {
     try { child.kill(); } catch { /* already exited */ }
   }
-  fs.rmSync(root, { recursive: true, force: true });
+  const cleanupRoot = fs.realpathSync(root);
+  assert.equal(path.dirname(cleanupRoot), fs.realpathSync(os.tmpdir()), "cleanup stays inside the temporary directory");
+  assert.ok(path.basename(cleanupRoot).startsWith("football-pointer-lock-aba-"), "cleanup targets only this test's generated directory");
+  fs.rmSync(cleanupRoot, { recursive: true, force: true });
 }
