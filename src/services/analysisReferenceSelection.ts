@@ -3,7 +3,7 @@ import {
   isPredictionOfficialResultPoolAvailable,
 } from './bettingDisplay';
 import type { Match, PredictionDetail } from './mockData';
-import { isBeforeMatchSaleCutoff } from './matchLifecycle';
+import { canonicalSourceMatchId, isBeforeMatchSaleCutoff } from './matchLifecycle';
 import { getVisiblePrediction } from './predictionVisibility';
 import {
   isCalibratedMarketAnalysisReferenceEligible,
@@ -1034,20 +1034,42 @@ export const selectOnSaleAnalysisReference = (
     inputSufficiency?: { sufficient?: unknown };
   });
   const modelInputsInsufficient = modelWithInputAudit?.inputSufficiency?.sufficient === false;
-  if (!isBeforeMatchSaleCutoff(match, now)) {
-    if (options.allowModelOnly === false) return undefined;
-    const publicRecord = match.predictionMeta?.publicReferenceDecision;
-    if ((publicRecord?.version === 'public-reference-decision-v1' || publicRecord?.version === 'public-reference-decision-v2')
+  const beforeCutoff = isBeforeMatchSaleCutoff(match, now);
+  const publicRecord = match.predictionMeta?.publicReferenceDecision;
+  // A bound public record, when present, owns the reference on both sides of
+  // cutoff. Mutable BEST candidates cannot silently revise that record.
+  // Actual public revisions arrive as a new server-attested record/hash.
+  if (publicRecord) {
+    const recordedAt = Date.parse(publicRecord.recordedAt);
+    const decisionAt = Date.parse(publicRecord.decisionAt);
+    const recordCutoffAt = Date.parse(publicRecord.cutoffTime);
+    const currentCutoffs = [match.predictionMeta?.cutoffTime, match.buyEndTime, match.kickoffTime]
+      .map(value => Date.parse(value || '')).filter(Number.isFinite);
+    if ((publicRecord.version === 'public-reference-decision-v1' || publicRecord.version === 'public-reference-decision-v2')
       && publicRecord.integrityVerified === true
       && SHA256_PATTERN.test(publicRecord.contentHash)
-      && publicRecord.sourceMatchId === String(match.sourceMatchId || match.id.replace(/^[^_]+_/, ''))
+      && canonicalSourceMatchId(publicRecord.sourceMatchId) === canonicalSourceMatchId(match.sourceMatchId || match.id)
       && Date.parse(publicRecord.kickoffTime) === kickoffAt
-      && Date.parse(publicRecord.recordedAt) < Date.parse(publicRecord.cutoffTime)
-      && Date.parse(publicRecord.decisionAt) <= Date.parse(publicRecord.recordedAt)
-      && isDirection(publicRecord.prediction.tipCode)
+      && (!publicRecord.eventVersion || !match.eventVersion || Date.parse(publicRecord.eventVersion) === Date.parse(match.eventVersion))
+      && Number.isFinite(recordedAt) && Number.isFinite(decisionAt) && Number.isFinite(recordCutoffAt)
+      && recordedAt <= now && decisionAt <= recordedAt && recordedAt < recordCutoffAt && recordCutoffAt <= kickoffAt
+      && recordedAt < Math.min(...currentCutoffs)
+      && publicRecord.prediction?.marketType === 'BEST'
+      && isDirection(publicRecord.prediction?.tipCode)
       && publicRecord.prediction.recommendationAction === 'reference') {
-      return retainLockedPreCutoffReference(replayPublishedBestReference(match, publicRecord.prediction));
+      // Strict official-card callers may suppress an ineligible record, but
+      // must never replace it with a mutable model or market leader.
+      if (options.allowModelOnly === false && (
+        !beforeCutoff || publicRecord.prediction.oddsPoolCode !== 'HAD'
+        || !hasFreshCompleteOfficialHad(match, now)
+      )) return undefined;
+      const replay = { ...replayPublishedBestReference(match, publicRecord.prediction), sourceUpdatedAt: publicRecord.decisionAt };
+      return beforeCutoff ? replay : retainLockedPreCutoffReference(replay);
     }
+    return undefined;
+  }
+  if (!beforeCutoff) {
+    if (options.allowModelOnly === false) return undefined;
     if (modelInputsInsufficient) {
       const lockedAnalysisReference = buildImmutableAnalysisReference(match);
       if (lockedAnalysisReference) {

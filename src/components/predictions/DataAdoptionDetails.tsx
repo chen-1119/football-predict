@@ -8,12 +8,22 @@ const displayTime = (value: string | null, language: 'zh' | 'en') => value
 export function DataAdoptionDetails({ match, language }: { match: Match; language: 'zh' | 'en' }) {
   const { rows, calculationRows, asOf, bound, modelVersion, referenceHash } = getDataAdoptionReport(match);
   const missing = rows.filter((row) => row.state === 'missing').length;
-  const unverified = rows.filter((row) => ['unknown', 'unverified'].includes(row.state)).length;
+  const unverified = rows.filter((row) => ['unknown', 'unverified', 'available-not-adopted'].includes(row.state)).length;
+  const summaryCounts = [
+    { key: 'conflicting', count: rows.filter(row => row.state === 'conflicting').length, zh: '来源冲突', en: 'source conflicts' },
+    { key: 'after-decision', count: rows.filter(row => row.state === 'after-decision').length, zh: '晚于决策', en: 'after decision' },
+    { key: 'stale', count: rows.filter(row => row.state === 'stale').length, zh: '陈旧数据', en: 'aged inputs' },
+    { key: 'missing', count: missing, zh: '已知缺失', en: 'known missing' },
+    { key: 'unverified', count: unverified, zh: '待核验', en: 'unverified usage' },
+    { key: 'not-yet-published', count: rows.filter(row => row.state === 'not-yet-published').length, zh: '当时未公布', en: 'not published then' },
+  ].filter(group => group.count > 0);
   return (
     <details className="data-adoption-details">
       <summary>
         <span>{language === 'zh' ? '数据采用与缺口' : 'Data adoption & gaps'}</span>
-        <span className="data-adoption-details__counts">{language === 'zh' ? `已知缺失 ${missing} · 待核验 ${unverified}` : `${missing} known missing · ${unverified} unverified`}</span>
+        <span className="data-adoption-details__counts">{summaryCounts.map(group => <span key={group.key} data-summary-state={group.key}>
+          {language === 'zh' ? `${group.zh} ${group.count}` : `${group.count} ${group.en}`}
+        </span>)}</span>
       </summary>
       <p>{language === 'zh'
         ? '数据接通不等于参与计算。以下不计算“采用率”，也不代表预测命中率。'

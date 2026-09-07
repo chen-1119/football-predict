@@ -1290,12 +1290,27 @@ verify("500 payload shape is selectable before a future cutoff", () => {
   assert.ok(["1", "X", "2"].includes(result.prediction.tipCode));
 });
 
-verify("current scheduled rows replay a provenance-bound BEST before client probability fallbacks", () => {
+verify("retimed current shapes cannot retain old event bindings; explicitly unbound legacy shapes replay BEST", () => {
   const currentPath = path.resolve(__dirname, "..", "public", "data", "matches-current.json");
   const payload = JSON.parse(fs.readFileSync(currentPath, "utf8"));
   const rows = (Array.isArray(payload) ? payload : payload.matches || [])
     .filter((row) => row.status === "SCHEDULED" && row.probabilityModel?.oneXTwo?.final);
-  assert.ok(rows.length > 0, "expected at least one scheduled current row with model probabilities");
+  // Live slates do not guarantee any particular policy. Always exercise both
+  // safeguard provenance branches using explicit synthetic rows, even off-season.
+  for (const provenance of [false, true]) rows.push(baseMatch({
+    id: `synthetic-safeguard-${provenance ? 'published' : 'unbound'}`,
+    predictionMeta: provenance ? {
+      policyVersion: 'synthetic-safeguard-v1', generatedAt: new Date(NOW - 60000).toISOString(),
+    } : undefined,
+    probabilityModel: {
+      ...baseMatch().probabilityModel,
+      oneXTwo: { final: { home: 0.7, draw: 0.2, away: 0.1 } },
+      unifiedPosterior: {
+        ...baseMatch().probabilityModel.unifiedPosterior,
+        selectionPolicy: 'score-draw-risk-safeguard',
+      },
+    },
+  }));
 
   const selections = rows.map((row, index) => {
     const unifiedPosterior = row.probabilityModel?.unifiedPosterior || {};
@@ -1312,14 +1327,21 @@ verify("current scheduled rows replay a provenance-bound BEST before client prob
         },
       },
     };
-    return { row, result: selectOnSaleAnalysisReference(match, { now: NOW, allowModelOnly: true }) };
+    if (match.predictionMeta?.publicReferenceDecision) {
+      assert.equal(selectOnSaleAnalysisReference(match, { now: NOW, allowModelOnly: true }), undefined,
+        'retiming an event invalidates its original public binding');
+    }
+    // This separate legacy-shape test explicitly has no public record. Never
+    // change event clocks and then pretend the original binding still applies.
+    const legacy = { ...match, predictionMeta: { ...match.predictionMeta, publicReferenceDecision: undefined } };
+    return { row, result: selectOnSaleAnalysisReference(legacy, { now: NOW, allowModelOnly: true }) };
   });
 
   assert.ok(selections.every(({ result }) => ["1", "X", "2"].includes(result?.prediction.tipCode)));
   const safeguardRows = selections.filter(({ row }) => (
     row.probabilityModel?.unifiedPosterior?.selectionPolicy === "score-draw-risk-safeguard"
   ));
-  assert.ok(safeguardRows.length > 0, "expected the current fixture to exercise draw safeguards");
+  assert.ok(safeguardRows.length >= 2, "both deterministic safeguard provenance branches must run");
   for (const { row, result } of safeguardRows) {
     const publishedBest = (row.predictions || []).find((prediction) => (
       prediction.marketType === "BEST"
@@ -1349,6 +1371,59 @@ verify("current scheduled rows replay a provenance-bound BEST before client prob
     assert.equal(result?.prediction.tipCode, expected,
       `${row.id} without publication provenance must follow oneXTwo.final instead of the safeguard code`);
   }
+});
+
+const { bindPublicReferenceDecision } = require('../src/services/publicReferenceDecision.cjs');
+const frozenFixture = () => bindPublicReferenceDecision(baseMatch({ id: 'sporttery_991030', sourceMatchId: '991030',
+  predictionMeta: { generatedAt: new Date(NOW - 60000).toISOString(), decisionId: 'qa-record-1', policyVersion: 'qa-policy' },
+}), null, new Date(NOW - 50000).toISOString());
+verify('bound reference beats a different mutable BEST before and after sale cutoff', () => {
+  const published = frozenFixture(), record = published.predictionMeta.publicReferenceDecision;
+  const changed = { ...published, predictions: [{ ...weakBest, tipCode: '1', odds: 1.56 }] };
+  for (const now of [NOW, Date.parse(published.buyEndTime) + 1]) {
+    const selected = selectOnSaleAnalysisReference(changed, { now, allowModelOnly: true });
+    assert.equal(selected?.prediction.tipCode, 'X'); assert.equal(selected?.prediction.odds, 3.6);
+    assert.equal(selected?.sourceUpdatedAt, record.decisionAt);
+  }
+});
+verify('actual public revision can update the reference while preserving revision lineage', () => {
+  const previous = frozenFixture();
+  const revised = bindPublicReferenceDecision({ ...previous, predictions: [{ ...weakBest, tipCode: '1', odds: 1.56 }],
+    predictionMeta: { ...previous.predictionMeta, decisionId: 'qa-record-2', generatedAt: new Date(NOW - 40000).toISOString() } }, previous, new Date(NOW - 30000).toISOString());
+  assert.equal(revised.predictionMeta.publicReferenceDecision.revision, 2);
+  assert.equal(revised.predictionMeta.publicReferenceDecision.previousHash, previous.predictionMeta.publicReferenceDecision.contentHash);
+  assert.equal(selectOnSaleAnalysisReference(revised, { now: NOW, allowModelOnly: true })?.prediction.tipCode, '1');
+});
+verify('strict official-card lane replays the bound HAD or withholds, never reselects', () => {
+  const match = frozenFixture();
+  match.predictions = [{ ...weakBest, tipCode: '1', odds: 1.56 }];
+  assert.equal(selectOnSaleAnalysisReference(match, { now: NOW, allowModelOnly: false })?.prediction.tipCode, 'X');
+  for (const overrides of [
+    { odds: undefined }, { oddsSource: '500.com:HAD' },
+    { oddsUpdatedAt: new Date(NOW - 48 * 3600000).toISOString() },
+  ]) assert.equal(selectOnSaleAnalysisReference({ ...match, ...overrides }, { now: NOW, allowModelOnly: false }), undefined);
+  assert.equal(selectOnSaleAnalysisReference(match, { now: Date.parse(match.buyEndTime) + 1, allowModelOnly: false }), undefined);
+});
+for (const [name, mutation] of [
+  ['invalid integrity', r => { r.integrityVerified = false; }],
+  ['invalid hash', r => { r.contentHash = 'bad'; }],
+  ['wrong event', r => { r.sourceMatchId = 'wrong'; }],
+  ['wrong kickoff', r => { r.kickoffTime = new Date(NOW + 1).toISOString(); }],
+  ['future record', r => { r.recordedAt = new Date(NOW + 1).toISOString(); }],
+  ['decision after recording', r => { r.decisionAt = new Date(NOW).toISOString(); }],
+  ['record after cutoff', r => { r.cutoffTime = new Date(NOW - 70000).toISOString(); }],
+  ['invalid direction', r => { r.prediction.tipCode = 'BAD'; }],
+]) verify(`invalid present public record cannot fall back to mutable BEST: ${name}`, () => {
+  const match = frozenFixture(); mutation(match.predictionMeta.publicReferenceDecision);
+  for (const allowModelOnly of [true, false]) {
+    assert.equal(selectOnSaleAnalysisReference(match, { now: NOW, allowModelOnly }), undefined);
+  }
+});
+verify('provider alias preserves the public identity and WATCH remains a public withdrawal', () => {
+  const match = frozenFixture(); match.id = 'fivehundred_991030'; delete match.sourceMatchId;
+  assert.equal(selectOnSaleAnalysisReference(match, { now: NOW, allowModelOnly: true })?.prediction.tipCode, 'X');
+  match.predictions = [{ ...weakBest, tipCode: 'WATCH', recommendationTier: 'public-watch' }];
+  assert.equal(selectOnSaleAnalysisReference(match, { now: NOW, allowModelOnly: true }), undefined);
 });
 
 console.log(JSON.stringify({

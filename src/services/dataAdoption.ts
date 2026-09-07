@@ -17,6 +17,16 @@ const clock = (value: unknown) => {
   if (typeof value !== 'string' || !value.trim()) return null;
   const normalized = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2})?$/.test(value)
     ? `${value.replace(' ', 'T')}+08:00` : value;
+  // Date.parse normalizes impossible dates (e.g. February 30). Only accept
+  // real calendar dates and explicit zones, apart from the Beijing legacy form.
+  const parts = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,9}))?)?(Z|[+-]\d{2}:\d{2})$/.exec(normalized);
+  if (!parts) return null;
+  const [year, month, day, hour, minute, second] = [parts[1], parts[2], parts[3], parts[4], parts[5], parts[6] || '0'].map(Number);
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  if (year < 1 || month < 1 || month > 12 || day < 1 || day > days[month - 1]
+    || hour > 23 || minute > 59 || second > 59) return null;
+  if (parts[8] !== 'Z' && (Number(parts[8].slice(1, 3)) > 23 || Number(parts[8].slice(4, 6)) > 59)) return null;
   return Number.isFinite(Date.parse(normalized)) ? normalized : null;
 };
 const count = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
@@ -76,6 +86,8 @@ export function getDataAdoptionReport(match: Match) {
       reason = observedAt && asOf ? 'usage-not-recorded' : 'clock-missing';
     } else if (connected?.[key] === true) { state = 'unverified'; reason = 'connected-only'; }
     else if (connected?.[key] === false) { state = 'missing'; reason = 'missing-at-decision'; }
+    const sourceState = state;
+    const sourceReason = reason;
     if (key === 'homeForm' || key === 'awayForm') {
       const form = object(summaries?.form);
       const side = object(form?.[key === 'homeForm' ? 'home' : 'away']);
@@ -98,6 +110,10 @@ export function getDataAdoptionReport(match: Match) {
       if (home === 0 || away === 0) { state = 'missing'; reason = 'zero-samples'; }
       else if (home !== null && away !== null) { state = 'unverified'; reason = 'usage-not-recorded'; }
     }
+    // Sample presence cannot erase a source conflict, late observation or stale
+    // source. More specific adverse history evidence can still strengthen it.
+    const adversePriority = (value: AdoptionState) => value === 'conflicting' ? 3 : value === 'after-decision' ? 2 : value === 'stale' ? 1 : 0;
+    if (adversePriority(sourceState) > adversePriority(state)) { state = sourceState; reason = sourceReason; }
     if (calculationRows.some(row => row.key === key) && ['usage-not-recorded', 'connected-only'].includes(reason)) reason = 'base-usage-recorded';
     return { key, zh, en, state, reason, observedAt, sampleSize, source, resultObservation };
   });
