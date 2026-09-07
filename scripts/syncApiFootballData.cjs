@@ -4,6 +4,8 @@ const https = require("https");
 const path = require("path");
 const { fixtureTeamCategoryAudit } = require("./teamCategoryIdentity.cjs");
 const { scopedTeamAliases } = require("./apiFootballScopedAliases.cjs");
+const { strictInstant } = require("../src/services/strictInstant.cjs");
+const { temporalEligibilityFor, prematchCutoffFor, buildClockEvidence, pieceClockEligible } = require("./apiFootballClockEvidence.cjs");
 const {
   eventSafeExistingSignal,
   stampSignalEvent,
@@ -523,8 +525,8 @@ const confidenceForFixture = (match, fixture, entityRegistry = null) => {
         ? identityAwareDirectScore
         : nameBasedTeamScore;
 
-  const kickoffMs = Date.parse(match.kickoffTime || "");
-  const fixtureMs = Date.parse(fixture?.date || "");
+  const kickoffMs = Date.parse(strictInstant(match.kickoffTime) || "");
+  const fixtureMs = Date.parse(strictInstant(fixture?.date) || "");
   const diffMinutes = Number.isFinite(kickoffMs) && Number.isFinite(fixtureMs)
     ? Math.abs(kickoffMs - fixtureMs) / 60000
     : 9999;
@@ -1064,8 +1066,8 @@ const mappingVerificationState = (match, mapping, entityRegistry, options = {}) 
       && String(mapping.sourceMatchId) !== String(expectedSourceMatchId)) {
     blockers.push("source-match-id-mismatch");
   }
-  const kickoffMs = Date.parse(String(match?.kickoffTime || ""));
-  const fixtureMs = Date.parse(String(mapping?.fixtureDate || ""));
+  const kickoffMs = Date.parse(strictInstant(match?.kickoffTime) || "");
+  const fixtureMs = Date.parse(strictInstant(mapping?.fixtureDate) || "");
   if (!Number.isFinite(kickoffMs)
       || !Number.isFinite(fixtureMs)
       || Math.abs(kickoffMs - fixtureMs) > 4 * 60 * 60 * 1000) {
@@ -1288,33 +1290,11 @@ const formatPerson = (row) => {
 
 const multi = (text) => ({ zh: text, en: text });
 
-const temporalEligibilityFor = (fetchedAt, cutoff) => {
-  const fetchedMs = Date.parse(fetchedAt || "");
-  const cutoffMs = Date.parse(cutoff || "");
-  const eligible = Number.isFinite(fetchedMs) && Number.isFinite(cutoffMs) && fetchedMs <= cutoffMs;
-  return {
-    eligible,
-    fetchedAt: fetchedAt || null,
-    cutoff: cutoff || null,
-    basis: "fetchedAt<=cutoff",
-    reason: eligible
-      ? "Observed no later than the pre-match cutoff."
-      : "Observed after cutoff or cutoff could not be proven."
-  };
-};
-
-const prematchCutoffFor = (entry) => [
-  entry?.match?.buyEndTime,
-  entry?.match?.predictionMeta?.cutoffTime,
-  entry?.match?.cutoffTime,
-  entry?.match?.kickoffTime,
-  entry?.map?.fixtureDate
-].map(compactText).find(Boolean) || null;
-
 const buildPieceMetadata = ({ entry, providerFixtureId, endpoint, observedAt, sourceUpdatedAt, query = {} }) => {
-  const fetchedAt = observedAt || nowIso();
-  const updatedAt = sourceUpdatedAt || fetchedAt;
   const cutoff = prematchCutoffFor(entry);
+  const clocks = buildClockEvidence({ observedAt, sourceUpdatedAt, cutoff });
+  const fetchedAt = clocks.observedAt;
+  const updatedAt = clocks.sourceUpdatedAt;
   return {
     source: "api-football",
     observedAt: fetchedAt,
@@ -1332,7 +1312,8 @@ const buildPieceMetadata = ({ entry, providerFixtureId, endpoint, observedAt, so
       shadowOnly: true,
       ...RUNTIME_POLICY.authority
     },
-    temporalEligibility: temporalEligibilityFor(fetchedAt, cutoff)
+    clockEvidence: clocks.clockEvidence,
+    temporalEligibility: clocks.temporalEligibility
   };
 };
 
@@ -1366,7 +1347,7 @@ const buildInjuriesByFixture = (mappedMatches, response, context = {}) => {
     if (!byFixture.has(fixtureId)) byFixture.set(fixtureId, { home: [], away: [] });
     byFixture.get(fixtureId)[side].push({
       label: multi(formatPerson(row)),
-      player: normalizeInjuryPlayer(row, side, fixtureId, context.observedAt || nowIso())
+      player: normalizeInjuryPlayer(row, side, fixtureId, strictInstant(context.observedAt))
     });
   }
 
@@ -1404,7 +1385,7 @@ const mergeApiPiece = (apiPieces, fixtureId, piece) => {
   };
 };
 
-const cachedApiPieces = (signalState) => {
+const cachedApiPieces = (signalState, entry) => {
   if (!signalState || typeof signalState !== "object") return null;
   const pieces = {};
   if (LIVE_SCORE_ENABLED
@@ -1412,9 +1393,9 @@ const cachedApiPieces = (signalState) => {
       && ageMinutes(signalState.liveScore.observedAt) * 60 <= LIVE_SCORE_CACHE_MAX_SECONDS) {
     pieces.liveScore = signalState.liveScore;
   }
-  if (INJURIES_ENABLED && signalState.injuries?.temporalEligibility?.eligible === true) pieces.injuries = signalState.injuries;
-  if (LINEUPS_ENABLED && signalState.lineups?.temporalEligibility?.eligible === true) pieces.lineups = signalState.lineups;
-  if (ODDS_ENABLED && signalState.apiFootballOdds?.temporalEligibility?.eligible === true) pieces.apiFootballOdds = signalState.apiFootballOdds;
+  if (INJURIES_ENABLED && pieceClockEligible(signalState.injuries, entry)) pieces.injuries = signalState.injuries;
+  if (LINEUPS_ENABLED && pieceClockEligible(signalState.lineups, entry)) pieces.lineups = signalState.lineups;
+  if (ODDS_ENABLED && pieceClockEligible(signalState.apiFootballOdds, entry)) pieces.apiFootballOdds = signalState.apiFootballOdds;
   return Object.keys(pieces).length ? pieces : null;
 };
 
@@ -1500,7 +1481,7 @@ const fetchLiveScores = async (
 const hydrateCachedApiPieces = (mappedMatches, cache, apiPieces, verifiedMappingSet) => {
   for (const entry of restrictToVerifiedMappings(mappedMatches, verifiedMappingSet)) {
     const fixtureId = String(entry.map.fixtureId);
-    const pieces = cachedApiPieces(cache.fixtureSignals[fixtureId]);
+    const pieces = cachedApiPieces(cache.fixtureSignals[fixtureId], entry);
     if (pieces) mergeApiPiece(apiPieces, fixtureId, pieces);
   }
 };
@@ -1542,7 +1523,7 @@ const recordInjuryResponse = ({ mappedMatches, cache, apiPieces, request, payloa
     query: request.params,
     providerFixtureId: request.mode === "fixture" ? request.fixtureIds[0] : null,
     observedAt,
-    sourceUpdatedAt: observedAt
+    sourceUpdatedAt: null
   });
   for (const fixtureId of request.fixtureIds) {
     const injuries = byFixture.get(String(fixtureId)) || null;
@@ -1688,7 +1669,7 @@ const fetchLineups = async (
       const observedAt = nowIso();
       const lineups = buildLineups(entry, payload.response, {
         observedAt,
-        sourceUpdatedAt: observedAt
+        sourceUpdatedAt: null
       });
       cache.fixtureSignals[fixtureId] = {
         ...(cache.fixtureSignals[fixtureId] || {}),
@@ -1784,7 +1765,7 @@ const fetchOdds = async (
           providerFixtureId: fixtureId,
           endpoint: "/odds",
           observedAt,
-          sourceUpdatedAt: oneXTwo.updatedAt || observedAt,
+          sourceUpdatedAt: oneXTwo.updatedAt ?? null,
           query: { fixture: fixtureId }
         });
         const apiFootballOdds = {
@@ -1845,7 +1826,7 @@ const stripLegacyGenericApiFootballOdds = (signal) => {
 const retainExistingPrematchPiece = (piece, featureEnabled = true) => {
   if (!piece) return false;
   if (!isApiFootballPiece(piece)) return true;
-  return featureEnabled && piece.temporalEligibility?.eligible === true;
+  return featureEnabled && pieceClockEligible(piece);
 };
 
 const hasApiFootballPrematchFeatures = (signal) => Boolean(
@@ -1883,7 +1864,7 @@ const stripUnverifiedApiFootballFeatures = (signal, audit = {}) => {
   return next;
 };
 
-const mergeSignal = (existing, apiSignal) => {
+const mergeSignal = (existing, apiSignal, entry = null) => {
   existing = stripLegacyGenericApiFootballOdds(eventSafeExistingSignal(existing, apiSignal));
   apiSignal = stripLegacyGenericApiFootballOdds(apiSignal);
   const next = {
@@ -1927,6 +1908,23 @@ const mergeSignal = (existing, apiSignal) => {
       ...apiSignal.bookmakerOdds
     };
   }
+
+  // Recheck incoming as well as retained fragments. A cache boolean or an old
+  // publication clock synthesized from receipt time is not v2 clock evidence.
+  const temporalRejections = [];
+  for (const key of ["injuries", "lineups", "externalOdds"]) {
+    const candidate = next[key] || existing?.[key];
+    if (isApiFootballPiece(candidate) && !pieceClockEligible(candidate, entry)) {
+      delete next[key];
+      temporalRejections.push(`${key}:clock-evidence-not-verifiable`);
+    }
+  }
+  const oddsCandidate = next.bookmakerOdds?.apiFootball || existing?.bookmakerOdds?.apiFootball;
+  if (oddsCandidate && !pieceClockEligible(oddsCandidate, entry)) {
+    delete next.bookmakerOdds.apiFootball;
+    temporalRejections.push("apiFootballOdds:clock-evidence-not-verifiable");
+  }
+  next.apiFootball.temporalRejections = temporalRejections;
 
   return next;
 };
@@ -1998,7 +1996,7 @@ const mergeExternalSignals = (matches, cache, apiPieces, stats, verifiedMappingS
     }, match);
 
     for (const signalKey of externalSignalKeys(match)) {
-      outputMatches[signalKey] = mergeSignal(outputMatches[signalKey], apiSignal);
+      outputMatches[signalKey] = mergeSignal(outputMatches[signalKey], apiSignal, { match, map });
     }
     stats.signalsMapped += 1;
   }

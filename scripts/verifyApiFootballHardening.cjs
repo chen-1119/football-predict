@@ -108,9 +108,10 @@ check(
 const observedAt = "2026-07-16T10:00:00.000Z";
 const futureKickoff = new Date(Date.now() + 60 * 60 * 1000).toISOString();
 const apiOddsPiece = {
+  ...api.buildPieceMetadata({ entry: { match: { kickoffTime: futureKickoff } },
+    endpoint: "/odds", observedAt, sourceUpdatedAt: observedAt }),
   source: "api-football",
   updatedAt: observedAt,
-  temporalEligibility: { eligible: true },
   had: { odds1: 2.1, oddsX: 3.2, odds2: 3.4 },
 };
 const sanitizedApiOddsSignal = api.mergeSignal({
@@ -938,6 +939,8 @@ if (fs.existsSync(META_FILE)) {
 const liveCompetitionShapes = require("./verifyApiFootballLiveCompetitionShapes.cjs").verifyLiveCompetitionShapes();
 check(liveCompetitionShapes.ok && liveCompetitionShapes.cases === 4,
   "actual full-label competition shapes must pass the release hardening gate");
+const clockEvidence = require("./verifyApiFootballClockEvidence.cjs").verifyClockEvidence();
+check(clockEvidence.ok, "receipt and upstream clocks must remain distinct through cache and merge");
 
 console.log(JSON.stringify({
   ok: true,
@@ -947,6 +950,7 @@ console.log(JSON.stringify({
   legacyCacheCompatible,
   legacyMetaReadable,
   liveCompetitionShapes,
+  clockEvidence,
   covered: [
     "status-preflight-fail-closed",
     "quota-block",
