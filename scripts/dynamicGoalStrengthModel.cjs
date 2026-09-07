@@ -231,8 +231,8 @@ function createState(config) {
 
 function decayedTeamView(teamInput, asOf, config) {
   const team = teamInput || emptyTeam(config);
-  const latentDecay = decayFactor(team.updatedAt, asOf, config.latentHalfLifeDays);
-  const eloDecay = decayFactor(team.updatedAt, asOf, config.eloHalfLifeDays);
+  const latentDecay = config.researchAblation === "without-recency" ? 1 : decayFactor(team.updatedAt, asOf, config.latentHalfLifeDays);
+  const eloDecay = config.researchAblation === "without-recency" ? 1 : decayFactor(team.updatedAt, asOf, config.eloHalfLifeDays);
   const reliability = team.matches / (team.matches + config.coldStartPriorMatches);
   const elo = config.baseElo + (team.elo - config.baseElo) * eloDecay;
   return {
@@ -265,7 +265,7 @@ function materializeTeam(state, entityId, asOf) {
 
 function decayedCompetitionView(input, asOf, config) {
   const competition = input || emptyCompetition();
-  const decay = decayFactor(competition.updatedAt, asOf, config.leagueHalfLifeDays);
+  const decay = config.researchAblation === "without-recency" ? 1 : decayFactor(competition.updatedAt, asOf, config.leagueHalfLifeDays);
   return {
     ...competition,
     awayGoals: competition.awayGoals * decay,
@@ -329,16 +329,18 @@ function modelProjection(state, match, forecastBoundary) {
   const home = decayedTeamView(state.teams.get(match.homeTeam.entityId), forecastBoundary, config);
   const away = decayedTeamView(state.teams.get(match.awayTeam.entityId), forecastBoundary, config);
   const league = smoothedCompetitionRates(state, match.competition, forecastBoundary);
+  const neutral = match.neutral || config.researchAblation === "without-venue";
+  const withoutOpponent = config.researchAblation === "without-opponent-strength";
   const neutralBase = (league.homeGoals + league.awayGoals) / 2;
-  const homeBase = match.neutral ? neutralBase : league.homeGoals;
-  const awayBase = match.neutral ? neutralBase : league.awayGoals;
+  const homeBase = neutral ? neutralBase : league.homeGoals;
+  const awayBase = neutral ? neutralBase : league.awayGoals;
   const homeLambda = clamp(
-    homeBase * Math.exp(home.effectiveAttack - away.effectiveDefense),
+    homeBase * Math.exp(home.effectiveAttack - (withoutOpponent ? 0 : away.effectiveDefense)),
     config.minLambda,
     config.maxLambda,
   );
   const awayLambda = clamp(
-    awayBase * Math.exp(away.effectiveAttack - home.effectiveDefense),
+    awayBase * Math.exp(away.effectiveAttack - (withoutOpponent ? 0 : home.effectiveDefense)),
     config.minLambda,
     config.maxLambda,
   );
@@ -348,10 +350,10 @@ function modelProjection(state, match, forecastBoundary) {
   });
   const poisson = outcomeProbabilitiesFromMatrix(matrix);
   const elo = eloTriplet(
-    home.effectiveElo,
-    away.effectiveElo,
+    withoutOpponent ? config.baseElo : home.effectiveElo,
+    withoutOpponent ? config.baseElo : away.effectiveElo,
     league.drawRate,
-    match.neutral ? 0 : config.eloHomeAdvantage,
+    neutral ? 0 : config.eloHomeAdvantage,
   );
   const final = normalizeTriplet(Object.fromEntries(OUTCOMES.map((outcome) => [
     outcome,
@@ -396,7 +398,7 @@ function modelProjection(state, match, forecastBoundary) {
       },
       elo: {
         expectedHome: round(elo.expectedHome),
-        homeAdvantage: match.neutral ? 0 : config.eloHomeAdvantage,
+        homeAdvantage: neutral ? 0 : config.eloHomeAdvantage,
       },
       poisson: {
         awayLambda: round(awayLambda),
@@ -575,6 +577,17 @@ function withoutHash(value, key) {
 
 function buildDynamicGoalStrengthArtifact(events, options = {}) {
   const config = normalizeConfig(options.config || options.modelConfig || {});
+  return buildArtifactFromConfig(events, config);
+}
+
+// Separate research entrypoint: normal callers cannot activate a knockout via config.
+// The explicit ablation identity participates in the config and model commitments.
+function buildDynamicGoalStrengthAblationArtifact(events, ablation) {
+  if (!["without-recency", "without-venue", "without-opponent-strength"].includes(ablation)) throw new Error("unknown fixed research ablation");
+  return buildArtifactFromConfig(events, Object.freeze({ ...normalizeConfig(), researchAblation: ablation }));
+}
+
+function buildArtifactFromConfig(events, config) {
   const featureArtifact = buildHistoricalAsOfFeatureArtifact(events, createModelAdapter(config));
   const modelBody = {
     version: DYNAMIC_GOAL_STRENGTH_MODEL_VERSION,
@@ -803,6 +816,7 @@ module.exports = {
   DYNAMIC_GOAL_STRENGTH_WALK_FORWARD_VERSION,
   DynamicGoalStrengthError,
   buildDynamicGoalStrengthArtifact,
+  buildDynamicGoalStrengthAblationArtifact,
   dixonColesScoreMatrix,
   evaluateDynamicGoalStrengthWalkForward,
   normalizeConfig,

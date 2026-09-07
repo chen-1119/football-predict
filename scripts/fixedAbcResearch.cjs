@@ -1,10 +1,12 @@
 "use strict";
 
 const { stableHash } = require("./historicalAsOfFeatureBuilder.cjs");
+const { POLICY: UNCERTAINTY_POLICY, pairedCalendarBlockResearch } = require("./pairedCalendarBlockResearch.cjs");
 const OUTCOMES = Object.freeze(["1", "X", "2"]);
-const VERSION = "fixed-abc-historical-research-v1";
+const VERSION = "fixed-abc-historical-research-v2";
 const PROTOCOL = Object.freeze({
-  version: "fixed-abc-protocol-v1", market: "HAD", sourceDataset: "xgabora/Club-Football-Match-Data-2000-2025:Matches.csv",
+  version: "fixed-abc-protocol-v2", market: "HAD", sourceDataset: "xgabora/Club-Football-Match-Data-2000-2025:Matches.csv",
+  uncertainty: UNCERTAINTY_POLICY,
   scope: "all-competitions-in-the-frozen-source-inventory", maximumEvents: 20000,
   dates: { start: "2023-01-01", tune: "2024-01-01", calibrate: "2024-07-01", test: "2025-01-01", end: "2025-06-02" },
   routes: { A: "de-vigged-market", B: "dynamic-goal-strength-shadow-v1", C: "quality-bounded-positive-linear-residual" },
@@ -135,6 +137,11 @@ const fittingScore = (rows, route, weight, t) => {
   const s = score(rows, row => routeProbabilities(row, route, weight, t));
   return { weight, temperature: t, rows: s.rows, brier: s.brier, logLoss: s.logLoss };
 };
+function pairedUncertainty(rows, predict) {
+  const loss = (p, actual) => ({ brier: OUTCOMES.reduce((s, k) => s + (p[k] - Number(k === actual)) ** 2, 0), logLoss: -Math.log(Math.max(1e-12, p[actual])) });
+  return pairedCalendarBlockResearch(rows.map(row => ({ eventId: row.eventId, forecastAt: row.forecastAt,
+    baseline: loss(row.market, row.actual), candidate: loss(predict(row), row.actual) })));
+}
 function runFixedAbcResearch(rows, protocol = freezeProtocol()) {
   const split = partitionRows(rows, protocol);
   for (const name of ["training", "tuning", "calibration", "test"]) {
@@ -156,9 +163,9 @@ function runFixedAbcResearch(rows, protocol = freezeProtocol()) {
   const reports = Object.fromEntries(["A", "B", "C"].map(route => {
     const predict = row => routeProbabilities(row, route, weight, temperatures[route]);
     const selected = test.filter(row => row.quality >= protocol.filter.minimumQuality && Math.max(...OUTCOMES.map(k => predict(row)[k])) >= protocol.filter.minimumMaximumProbability);
-    return [route, { allPaired: score(test, predict), commonDecisions: score(commonDecisions, predict), rawUncalibrated: score(test, row => routeProbabilities(row, route, weight, 1)),
+    return [route, { allPaired: score(test, predict), pairedUncertainty: route === "A" ? null : pairedUncertainty(test, predict), commonDecisions: score(commonDecisions, predict), rawUncalibrated: score(test, row => routeProbabilities(row, route, weight, 1)),
       fixedFilter: { rows: selected.length, coverage: round(selected.length / test.length), eventIdsHash: stableHash(selected.map(row => row.eventId)),
-        candidate: score(selected, predict), sameRowsMarket: score(selected, row => row.market) } }];
+        candidate: score(selected, predict), sameRowsMarket: score(selected, row => row.market), pairedUncertainty: route === "A" ? null : pairedUncertainty(selected, predict) } }];
   }));
   const partition = Object.fromEntries(Object.entries(split.segments).map(([name, values]) => [name, { rows: values.length,
     firstForecastAt: values[0]?.forecastAt || null, lastForecastAt: values.at(-1)?.forecastAt || null,
@@ -172,7 +179,7 @@ function runFixedAbcResearch(rows, protocol = freezeProtocol()) {
       testLabelsUsedForFitting: false, fittingCommitment: stableHash({ tuning: split.segments.tuning, calibration: split.segments.calibration, weight, temperatures }) },
     reports, conclusion: { candidateHasPositivePointEstimates: reports.C.allPaired.brier < reports.A.allPaired.brier && reports.C.allPaired.logLoss < reports.A.allPaired.logLoss,
       candidateUsesModelResidual: weight > 0, nominationAllowed: false,
-      blockers: ["previously-inspected-historical-data", "historical-source-clock-proof-missing", "independent-prospective-evidence-required", "paired-cluster-uncertainty-not-yet-computed", "feature-ablation-not-yet-completed"] } };
+      blockers: ["previously-inspected-historical-data", "historical-source-clock-proof-missing", "independent-prospective-evidence-required", "team-dependence-not-fully-modelled-by-calendar-blocks", "feature-ablation-not-yet-completed"] } };
   return { ...body, manifestHash: stableHash(body) };
 }
 module.exports = { VERSION, PROTOCOL, freezeProtocol, partitionRows, runFixedAbcResearch, validProbabilities, direction, score };

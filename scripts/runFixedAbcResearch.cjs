@@ -6,6 +6,10 @@ const { stableHash } = require("./historicalAsOfFeatureBuilder.cjs");
 const { buildDynamicGoalStrengthArtifact, verifyDynamicGoalStrengthArtifact } = require("./dynamicGoalStrengthModel.cjs");
 const { canonicalMarketOdds, devigOdds } = require("./historicalMarketResearch.cjs");
 const { freezeProtocol, runFixedAbcResearch } = require("./fixedAbcResearch.cjs");
+const { runFixedAbcAblations } = require("./fixedAbcAblationResearch.cjs");
+const implementationFiles = ["fixedAbcResearch.cjs", "pairedCalendarBlockResearch.cjs", "fixedAbcAblationResearch.cjs", "runFixedAbcResearch.cjs", "dynamicGoalStrengthModel.cjs", "historicalAsOfFeatureBuilder.cjs", "historicalTrainingWarehouse.cjs", "historicalMarketResearch.cjs", "historicalEventStore.cjs"];
+const readImplementationHashes = () => Object.fromEntries(implementationFiles.map(name => [name, stableHash(fs.readFileSync(path.join(__dirname, name), "utf8").replace(/\r\n/g, "\n"))]));
+const implementationHashes = readImplementationHashes();
 const root = path.resolve(__dirname, "..");
 const warehouse = process.env.HISTORICAL_TRAINING_SQLITE_PATH || path.join(root, "server-data/training/private/historical-training.sqlite");
 const output = path.resolve(process.env.FIXED_ABC_OUTPUT_PATH || path.join(root, "outputs/fixed-abc-historical-v1.json"));
@@ -38,12 +42,14 @@ const rows = dynamic.featureArtifact.snapshots.map(s => {
     actual: label.outcome, featureHash: s.featureHash, labelHash: label.labelHash };
 });
 const research = runFixedAbcResearch(rows, protocol);
-const implementationFiles = ["fixedAbcResearch.cjs", "runFixedAbcResearch.cjs", "dynamicGoalStrengthModel.cjs", "historicalAsOfFeatureBuilder.cjs", "historicalTrainingWarehouse.cjs", "historicalMarketResearch.cjs", "historicalEventStore.cjs"];
-const implementationHashes = Object.fromEntries(implementationFiles.map(name => [name, stableHash(fs.readFileSync(path.join(__dirname, name), "utf8").replace(/\r\n/g, "\n"))]));
-const body = { version: "fixed-abc-research-run-v1", source: { dataset: protocol.sourceDataset, warehouseRows: query.rows,
+const ablations = runFixedAbcAblations(events, rows, protocol);
+if (stableHash(implementationHashes) !== stableHash(readImplementationHashes())) throw new Error("research implementation changed during execution");
+const body = { version: "fixed-abc-research-run-v2", source: { dataset: protocol.sourceDataset, warehouseRows: query.rows,
   calendarInventoryRows: inventory.length, selectedEventRows: events.length, omittedOlderCalendarRows: inventory.length - events.length,
   competitions: [...new Set(events.map(e => e.competition || "unknown"))].sort(), inputArtifactHash: dynamic.featureArtifact.input.rootHash,
-  dynamicArtifactHash: dynamic.artifactHash, dynamicModelHash: dynamic.model.modelHash }, implementationHashes, research };
+  dynamicArtifactHash: dynamic.artifactHash, dynamicModelHash: dynamic.model.modelHash }, implementationHashes, research, ablations,
+  combinedConclusion: { productionEligible: false, nominationAllowed: false, fixedComponentAblationsCompleted: true,
+    remainingBlockers: research.conclusion.blockers.filter(reason => reason !== "feature-ablation-not-yet-completed") } };
 const result = { ...body, manifestHash: stableHash(body) };
 fs.mkdirSync(path.dirname(output), { recursive: true });
 fs.writeFileSync(output, `${JSON.stringify(result, null, 2)}\n`, { flag: "wx" });
