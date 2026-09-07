@@ -1470,6 +1470,13 @@ const run = async () => {
       stdoutTail: frozenReviewVersion.status === 0 ? "" : frozenReviewVersion.stdout.slice(-500), stderrTail: frozenReviewVersion.stderr.slice(-500),
     });
 
+    const publicReferencePairs = await runLocalJson(["scripts/verifyPublicReferencePairs.cjs"]);
+    pushCheck(checks, "frozen same-decision reference market quote and paired diagnostic", publicReferencePairs.status === 0
+      && publicReferencePairs.body?.ok === true && publicReferencePairs.body?.checks >= 24, {
+      status: publicReferencePairs.status, checks: publicReferencePairs.body?.checks ?? null,
+      stdoutTail: publicReferencePairs.status === 0 ? "" : publicReferencePairs.stdout.slice(-500), stderrTail: publicReferencePairs.stderr.slice(-500),
+    });
+
     const archivedPreMatchCutoff = await runLocalJson([
       "scripts/verifyArchivedPreMatchCutoff.cjs"
     ]);

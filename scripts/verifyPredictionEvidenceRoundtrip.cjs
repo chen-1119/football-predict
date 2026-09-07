@@ -31,6 +31,7 @@ const { summarizeRecentFormEvidence } = require("./recentFormEvidence.cjs");
 const { readSqliteHistoryMatchesForList } = require("../server/sqliteStore.cjs");
 const { readPostgresHistoryMatchesForList } = require("../server/postgresProjectionStore.cjs");
 const { resolveFrozenReviewVersion } = require("../src/services/frozenReviewVersion.cjs");
+const { auditFrozenReferenceMarket } = require("../src/services/frozenReferenceMarketPair.cjs");
 const { buildReferenceReviewPerformance, compactReferenceReviewPerformance } = require("../server/reviewPerformanceSummary.cjs");
 
 const rootDir = path.resolve(__dirname, "..");
@@ -43,6 +44,15 @@ const realPostgresUrl = process.env.EVIDENCE_TEST_POSTGRES_URL || "";
 let checks = 0;
 const equal = (actual, expected, message) => { assert.deepEqual(actual, expected, message); checks += 1; };
 const check = (value, message) => { assert.ok(value, message); checks += 1; };
+const verifyStoredMarketPair = (match, resolved, label) => {
+  check(resolved.ok, `${label}: private evidence resolves`);
+  const pair = auditFrozenReferenceMarket({ match, record: resolved.record,
+    entry: { version: "public-reference-evidence-v1", referenceHash: resolved.record.contentHash,
+      evidenceHash: resolved.record.evidenceBinding.evidenceHash, evidence: resolved.evidence },
+    trustRegistry: trust.registry, auditAt: "2026-09-07T15:00:00.000Z" });
+  equal(pair.eligible, true, `${label}: same-decision signed market pair survives transport: ${JSON.stringify(pair)}`);
+  equal([pair.market, pair.publicCode, pair.baselineCode, pair.publishedWon, pair.baselineWon], ["HAD", "X", "1", true, false], `${label}: exact paired result uses old public draw and original market favorite`);
+};
 const json = (value) => JSON.parse(JSON.stringify(value));
 const writeJson = (name, payload) => {
   fs.mkdirSync(publicDataDir, { recursive: true });
@@ -266,6 +276,7 @@ const verifyEvidenceHttp = async (reference, identity, postgresUrl = "") => {
     check(frozenRow?.frozenVersion, "actual history list compactor retains frozen version receipt");
     equal(frozenRow.frozenVersion.referenceHash, reference.contentHash, "history HTTP version receipt addresses original public record");
     equal(frozenRow.frozenVersion.modelVersion, reference.evidenceBinding.modelVersion, "history HTTP never substitutes current model version");
+    verifyStoredMarketPair(history.body[0], result.body, postgresUrl ? "real PostgreSQL history/admin HTTP" : "SQLite history/admin HTTP");
     const scorecard = await request("/api/v1/model/evaluation", { authorization: `Bearer ${verified.body.session.token}` });
     equal(scorecard.status, 200, "public scorecard HTTP succeeds with a real local recommendation session");
     const partition = scorecard.body.publicScorecard?.referenceReviewPerformance?.versionBreakdown;
@@ -442,6 +453,7 @@ const main = async () => {
     equal(realEvidence.evidence.featureSnapshot.modelInputs.form.home.resultEvidence.contentObservation,
       reference.dataGaps.inputSummaries.form.home.resultEvidence.contentObservation, "real PostgreSQL retains source-to-feature local receipt counters and clock without promoting them");
     equal(realEvidence, readSqlitePublicReferenceEvidence(dbPath, { referenceHash: reference.contentHash, publicationIdentity: identity }), "real PostgreSQL hash-bound evidence matches actual SQLite reader");
+    verifyStoredMarketPair((await readPostgresHistoryMatchesForList(realPool, 10, { publicationIdentity: identity }))[0], realEvidence, "native PostgreSQL history and evidence readers");
     equal((await readPostgresPublicReferenceEvidence(realPool, { referenceHash: reference.contentHash, publicationIdentity: { ...identity, generationId: "wrong" } })).reason, "generation-mismatch", "real PostgreSQL refuses mismatched generation");
     await verifyEvidenceHttp(reference, identity, realPostgresUrl);
     // Force an old-clock incremental scenario in this newly created test schema only.
@@ -530,12 +542,14 @@ const main = async () => {
   const evidenceOptions = { referenceHash: reference.contentHash, publicationIdentity: identity };
   const sqliteEvidence = readSqlitePublicReferenceEvidence(dbPath, evidenceOptions);
   check(sqliteEvidence.ok, "SQLite admin reader resolves the exact hash-bound evidence");
+  verifyStoredMarketPair(sqliteHistory[0], sqliteEvidence, "SQLite history and evidence readers");
   equal(sqliteEvidence.evidence.publicPrediction.tipCode, "X", "admin evidence retains public draw");
   equal(sqliteEvidence.evidence.featureSnapshot.modelInputs.form.home.resultEvidence.contentObservation,
     reference.dataGaps.inputSummaries.form.home.resultEvidence.contentObservation, "actual SQLite retains separate file receipt metadata");
   for (const payloadAsText of [true, false]) {
     transport.state.payloadAsText = payloadAsText;
     equal(await readPostgresPublicReferenceEvidence(transport.pool, evidenceOptions), sqliteEvidence, "PostgreSQL admin reader preserves exact evidence for text and driver-object payloads");
+    verifyStoredMarketPair(pgHistory[0], await readPostgresPublicReferenceEvidence(transport.pool, evidenceOptions), `query-capture PostgreSQL ${payloadAsText ? "text" : "object"} decoder`);
   }
   for (const [options, reason] of [
     [{ ...evidenceOptions, referenceHash: "invalid" }, "invalid-reference-hash"],
