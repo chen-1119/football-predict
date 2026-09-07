@@ -6,7 +6,7 @@ const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
 const load = require('./lib/loadReviewTsForVerification.cjs');
 const root = path.resolve(__dirname, '..');
-const { selectReviewWindow, selectReviewMarketWindow, selectReviewExclusions, reviewShanghaiDate } = load(ts, path.join(root, 'src/services/reviewDashboard.ts'));
+const { selectReviewWindow, selectReviewMarketWindow, selectReviewExclusions, reviewShanghaiDate, reviewWilsonInterval } = load(ts, path.join(root, 'src/services/reviewDashboard.ts'));
 const checks = [];
 const check = (name, fn) => { fn(); checks.push(name); };
 const fixture = () => ({
@@ -163,5 +163,29 @@ check('actual exclusion UI explains whole-input scope in a filtered window and s
   }
   assert.ok(!render('shadow', 'all', { reference: s }).includes('data-review-exclusions'));
   assert.ok(render('reference', 'all', { reference: withMarkets(fixture()) }).includes('不能视为已完成审计'));
+});
+check('Wilson reference values, symmetry and boundary samples', () => {
+  const interval = (won, lost) => reviewWilsonInterval({ won, lost, settled: won + lost });
+  const half = interval(50, 50);
+  assert.ok(Math.abs(half.lower - .4038315304) < 1e-9);
+  assert.ok(Math.abs(half.upper - .5961684696) < 1e-9);
+  assert.equal(interval(0, 1).lower, 0); assert.equal(interval(1, 0).upper, 1);
+  assert.ok(Math.abs(interval(0, 1).upper - .7934506856) < 1e-9);
+  assert.ok(Math.abs(interval(7, 13).lower + interval(13, 7).upper - 1) < 1e-12);
+  assert.ok(interval(5, 5).upper - interval(5, 5).lower > half.upper - half.lower);
+  assert.ok(interval(500, 500).upper - interval(500, 500).lower < half.upper - half.lower);
+});
+check('Wilson rejects absent, zero and malformed counts; ignores supplied hit rate', () => {
+  for (const row of [null, {}, { won: 0, lost: 0, settled: 0 }, { won: 1, lost: 0, settled: 2 },
+    { won: '1', lost: 0, settled: 1 }, { won: -1, lost: 2, settled: 1 }, { won: 0.5, lost: 0.5, settled: 1 }]) assert.equal(reviewWilsonInterval(row), null);
+  assert.deepEqual(reviewWilsonInterval({ won: 50, lost: 50, settled: 100, hitRate: .99 }), reviewWilsonInterval({ won: 50, lost: 50, settled: 100 }));
+});
+check('interval uses selected reconciled market/window and cannot leak to unknown or shadow results', () => {
+  const html = render('reference', '7d');
+  const expected = reviewWilsonInterval({ won: 5, lost: 4, settled: 9 });
+  assert.ok(html.includes(`${(expected.lower * 100).toFixed(1)}% – ${(expected.upper * 100).toFixed(1)}%`));
+  for (const words of ['95% Wilson', '假设各场独立', '未校正同日或联赛相关性', '不用于模型晋级']) assert.ok(html.includes(words));
+  for (const absent of [render('reference', 'version'), render('shadow', 'all'), render('formal', 'all', { formal: undefined }),
+    render('reference', 'all', { reference: fixture() })]) assert.ok(!absent.includes('data-review-uncertainty'));
 });
 console.log(JSON.stringify({ ok: true, checks: checks.length, cases: checks }, null, 2));

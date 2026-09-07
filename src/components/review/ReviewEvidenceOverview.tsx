@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { ReviewPerformanceSummary } from '../../services/reviewPerformanceTypes';
-import { selectReviewMarketWindow, selectReviewExclusions, reviewShanghaiDate } from '../../services/reviewDashboard';
+import { selectReviewMarketWindow, selectReviewExclusions, reviewShanghaiDate, reviewWilsonInterval } from '../../services/reviewDashboard';
 import type { ReviewWindow, ReviewMarket } from '../../services/reviewDashboard';
 import './review.css';
 
@@ -29,6 +29,7 @@ export const ReviewEvidenceOverview: React.FC<Props> = ({ language, formal, refe
   const result = selectReviewMarketWindow(summary, track === 'formal' ? 'formal' : 'reference', window, market);
   const verifiedPartition = selectReviewMarketWindow(summary, track === 'formal' ? 'formal' : 'reference', 'all', 'HAD').state === 'ready';
   const isShadow = track === 'shadow';
+  const interval = !isShadow && result.state === 'ready' ? reviewWilsonInterval(result.counts) : null;
   const exclusions = selectReviewExclusions(summary, track === 'formal' ? 'formal' : 'reference');
   const labels = { formal: zh ? '正式推荐' : 'Formal picks', reference: zh ? '数据参考' : 'Data references', shadow: zh ? '研究影子' : 'Research shadow' };
   const windowLabels: Record<ReviewWindow, string> = { version: zh ? '本版本' : 'This version', '7d': zh ? '近 7 天' : '7 days', '30d': zh ? '近 30 天' : '30 days', all: zh ? '累计' : 'All time' };
@@ -64,6 +65,10 @@ export const ReviewEvidenceOverview: React.FC<Props> = ({ language, formal, refe
       <div className="review-metric-grid" aria-live="polite" aria-atomic="true">
         <article className="review-primary-metric"><h3>{zh ? '已结算命中率' : 'Settled hit rate'}</h3><strong data-review-overview-rate>{value}</strong><p>{status}</p>
           <span>{!isShadow && result.counts ? (zh ? `命中 ${count(result.counts.won)} / 已结算 ${count(result.counts.settled)}` : `Won ${count(result.counts.won)} / settled ${count(result.counts.settled)}`) : isShadow ? (zh ? `影子已结算 ${count(shadow?.cohort?.shadow?.settled)} · 命中数未提供` : `Shadow settled ${count(shadow?.cohort?.shadow?.settled)} · Wins unavailable`) : (zh ? '没有数据时不显示 0% 或 50%' : 'Missing data is not 0% or 50%')}</span>
+          {interval && <details className="review-uncertainty" data-review-uncertainty>
+            <summary>{zh ? '样本区间 · 95% Wilson' : 'Sample interval · 95% Wilson'}<span data-review-interval>{`${(interval.lower * 100).toFixed(1)}% – ${(interval.upper * 100).toFixed(1)}%`}</span><small>{zh ? '独立同概率假设 · 非未来预测' : 'Independent, common probability · Not a forecast'}</small></summary>
+            <p>{zh ? '仅作样本不确定性描述，假设各场独立且命中概率相同；未校正同日或联赛相关性，不是未来命中率承诺，也不能证明优于赔率基准。不用于模型晋级。' : 'Describes sampling uncertainty assuming independent matches with a common hit probability. Not adjusted for day or league dependence, not a future hit-rate promise or evidence of beating market odds. Not used for model admission.'}</p>
+          </details>}
         </article>
         <article><h3>{zh ? '同组赔率基准' : 'Paired market baseline'}</h3><strong className="review-missing-value">{zh ? '待补证' : 'Evidence pending'}</strong><p>{zh ? '需要相同场次、相同玩法和同一决策时点的完整赔率。' : 'Requires the same matches, market and full odds at the decision time.'}</p><span>{zh ? '不使用赛后赔率或其他样本代替' : 'No post-match odds or unrelated cohorts'}</span></article>
         <article><h3>{zh ? '推荐覆盖率' : 'Recommendation coverage'}</h3><strong className="review-missing-value">{zh ? '分母待核验' : 'Universe unverified'}</strong><p>{zh ? '需冻结完整候选场次范围，再计算实际发布比例。' : 'Requires a frozen eligible universe before computing the published share.'}</p><span>{zh ? '已结算场数不等于全部候选场数' : 'Settled rows are not the eligible universe'}</span></article>

@@ -75,6 +75,23 @@ export const reviewCounts = (value: ReviewPerformanceBucket | null | undefined):
   return { won: won!, lost: lost!, settled: settled!, hitRate: settled! > 0 ? won! / settled! : null };
 };
 
+/** Descriptive Wilson score interval under an independent, common-probability
+ * Bernoulli assumption. Not a paired improvement test, date-cluster adjustment,
+ * forecast, or model admission gate. Use only reconciled selected-window counts.
+ * Formula: https://www.itl.nist.gov/div898/handbook/prc/section2/prc241.htm
+ */
+export const reviewWilsonInterval = (value: ReviewPerformanceBucket | null | undefined) => {
+  const counts = reviewCounts(value);
+  if (!counts || counts.settled === 0) return null;
+  const n = counts.settled, p = counts.won / n, z = 1.959963984540054;
+  const z2 = z * z, denominator = 1 + z2 / n;
+  const centre = (p + z2 / (2 * n)) / denominator;
+  const margin = z * Math.sqrt(p * (1 - p) / n + z2 / (4 * n * n)) / denominator;
+  return { method: 'wilson-score-95-descriptive' as const, sampleSize: n,
+    lower: counts.won === 0 ? 0 : Math.max(0, centre - margin),
+    upper: counts.lost === 0 ? 1 : Math.min(1, centre + margin) };
+};
+
 export const reviewShanghaiDate = (value: string | null | undefined): string | null => {
   // Reject timezone-less clocks: statistics must not depend on the browser's zone.
   if (!value || !/(Z|[+-]\d{2}:\d{2})$/i.test(value) || !Number.isFinite(Date.parse(value))) return null;

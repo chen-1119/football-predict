@@ -51,6 +51,10 @@ const outputDir = path.resolve(__dirname, '../outputs');
       await page.waitForFunction(() => document.querySelector('[data-review-overview-rate]')?.textContent === '50.0%');
       await page.waitForFunction(() => document.querySelector('.review-fixture-grid')?.children.length === 2);
       await audit('review-full-shell');
+      assert.equal(await page.locator('[data-review-interval]').textContent(), '9.5% – 90.5%');
+      await page.locator('[data-review-uncertainty] summary').focus(); await page.keyboard.press('Enter');
+      assert.equal(await page.locator('[data-review-uncertainty]').getAttribute('open'), '');
+      await audit('uncertainty-full-shell-keyboard-open');
       await page.screenshot({ path: path.join(outputDir, `full-app-review-${width}.png`), fullPage: true });
       const exclusionPanel = page.locator('[data-review-exclusions]');
       assert.equal(await exclusionPanel.getAttribute('open'), null);
@@ -131,6 +135,7 @@ const outputDir = path.resolve(__dirname, '../outputs');
       await page.goto(`${baseUrl}/review`);
       await page.locator('[data-review-overview]').waitFor();
       await audit('review-empty');
+      assert.equal(await page.locator('[data-review-uncertainty]').count(), 0);
       await context.close();
     }
     assert.deepEqual(errors, []); assert.deepEqual(unexpectedRequests, []);
