@@ -25,6 +25,9 @@ const match = params.get('mode') === 'missing' ? {} : { predictionMeta: { public
 } } };
 const collector = params.get('mode') === 'collector' ? { apiFootball: { fixtureId: 991222, lastCheckedAt: '2026-09-07T14:00:00Z',
   mappingVerified: false, verificationBlockers: ['provider-entity-registry-not-exact'],
+  fixtureAccess: { version: 'api-football-fixture-access-diagnostic-v1', state: 'outside-recorded-window',
+    requestedDate: '2026-09-09', allowedFrom: '2026-09-06', allowedTo: '2026-09-08',
+    checkedAt: '2026-09-07T14:00:00Z', restrictionRecordedAt: '2026-09-07T13:45:00Z', refreshMinutes: 120, suspended: false },
   temporalRejections: ['lineups:clock-evidence-not-verifiable'] } } : undefined;
 createRoot(document.getElementById('root')!).render(<main style={{ maxWidth: 900, margin: '0 auto', padding: 16 }}>
   <p>本地合成数据验收 · 不代表线上比赛或来源核验</p>

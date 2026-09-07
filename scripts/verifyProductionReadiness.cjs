@@ -1339,7 +1339,9 @@ const run = async () => {
     const collectorDiagnostics = await runLocalJson(["scripts/verifyApiFootballDiagnostics.cjs"]);
     pushCheck(checks, "collector diagnostics preserve privacy and frozen-decision separation",
       collectorDiagnostics.status === 0 && collectorDiagnostics.body?.ok === true
-        && Number(collectorDiagnostics.body?.checks || 0) >= 24, {
+        && Number(collectorDiagnostics.body?.checks || 0) >= 43
+        && Number(collectorDiagnostics.body?.fixtureAccessChecks || 0) >= 19
+        && collectorDiagnostics.body?.productionDataWritten === false, {
         status: collectorDiagnostics.status, checks: collectorDiagnostics.body?.checks ?? null,
         stdoutTail: collectorDiagnostics.status === 0 ? "" : collectorDiagnostics.stdout.slice(-500),
         stderrTail: collectorDiagnostics.stderr.slice(-500),

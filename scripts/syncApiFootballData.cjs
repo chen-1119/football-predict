@@ -5,6 +5,7 @@ const path = require("path");
 const { fixtureTeamCategoryAudit } = require("./teamCategoryIdentity.cjs");
 const { scopedTeamAliases } = require("./apiFootballScopedAliases.cjs");
 const { strictInstant } = require("../src/services/strictInstant.cjs");
+const { buildFixtureAccessDiagnostic } = require("../src/services/apiFootballDiagnostics.cjs");
 const { temporalEligibilityFor, prematchCutoffFor, buildClockEvidence, pieceClockEligible } = require("./apiFootballClockEvidence.cjs");
 const {
   eventSafeExistingSignal,
@@ -1840,7 +1841,7 @@ const hasApiFootballPrematchFeatures = (signal) => Boolean(
 
 const stripUnverifiedApiFootballFeatures = (signal, audit = {}) => {
   if (!signal || typeof signal !== "object" || Array.isArray(signal)) return signal;
-  if (!hasApiFootballPrematchFeatures(signal) && !signal.apiFootball && !audit.fixtureId) return signal;
+  if (!hasApiFootballPrematchFeatures(signal) && !signal.apiFootball && !audit.fixtureId && !audit.fixtureAccess) return signal;
   const next = { ...signal };
   for (const key of ["liveScore", "injuries", "lineups", "externalOdds"]) {
     if (isApiFootballPiece(next[key])) delete next[key];
@@ -1860,6 +1861,7 @@ const stripUnverifiedApiFootballFeatures = (signal, audit = {}) => {
     verificationStatus: "audit-only",
     verificationBlockers: uniq(audit.blockers || ["provider-entity-registry-not-exact"]),
     lastCheckedAt: audit.checkedAt || nowIso(),
+    ...(Object.hasOwn(audit, "fixtureAccess") ? { fixtureAccess: audit.fixtureAccess } : {}),
   };
   return next;
 };
@@ -1942,15 +1944,17 @@ const mergeExternalSignals = (matches, cache, apiPieces, stats, verifiedMappingS
   for (const match of matches) {
     const key = matchKey(match);
     const map = cache.fixtureMap[key];
+    const fixtureAccess = buildFixtureAccessDiagnostic(cache.apiAccess?.fixtures, dateFromMatch(match), updatedAt, ACCESS_ERROR_REFRESH_MINUTES);
     if (!(verifiedMappingSet instanceof Set) || !verifiedMappingSet.has(key)) {
       const verification = mappingVerificationState(match, map, null);
       let sanitizedRows = 0;
       for (const signalKey of externalSignalKeys(match)) {
-        if (!outputMatches[signalKey]) continue;
-        const sanitized = stripUnverifiedApiFootballFeatures(outputMatches[signalKey], {
+        if (!outputMatches[signalKey] && !fixtureAccess) continue;
+        const sanitized = stripUnverifiedApiFootballFeatures(outputMatches[signalKey] || stampSignalEvent({ updatedAt }, match), {
           fixtureId: map?.fixtureId || outputMatches[signalKey]?.apiFootball?.fixtureId || null,
           blockers: verification.blockers,
           checkedAt: updatedAt,
+          fixtureAccess,
         });
         if (sanitized !== outputMatches[signalKey]) sanitizedRows += 1;
         outputMatches[signalKey] = sanitized;
@@ -1981,6 +1985,7 @@ const mergeExternalSignals = (matches, cache, apiPieces, stats, verifiedMappingS
         enrichmentEligible: true,
         verificationStatus: "registry-exact",
         lastCheckedAt: updatedAt,
+        fixtureAccess,
         syncMode: RUNTIME_POLICY.mode,
         shadowOnly: true,
         authority: RUNTIME_POLICY.authority

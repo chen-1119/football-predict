@@ -259,4 +259,20 @@ for (const bad of [{ ok: false }, { verifier: 'unrelated' }, { providerRequests:
   check('result receipt gate rejects incomplete evidence', () => assert.equal(resultGate({ ...resultProof, ...bad }), false));
 }
 check('result receipt gate rejects failed child', () => assert.equal(resultGate(resultProof, 1), false));
+const diagnosticStart = readiness.indexOf('    pushCheck(checks, "collector diagnostics preserve privacy and frozen-decision separation",');
+const diagnosticEnd = readiness.indexOf('\n    const wikidataCandidates', diagnosticStart);
+assert.ok(diagnosticStart >= 0 && diagnosticEnd > diagnosticStart);
+const diagnosticGate = (body, status = 0) => {
+  let result;
+  vm.runInNewContext(readiness.slice(diagnosticStart, diagnosticEnd), { checks: [],
+    collectorDiagnostics: { status, body, stdout: '', stderr: '' },
+    pushCheck: (_checks, _name, ok) => { result = ok; } }, { timeout: 1000 });
+  return result;
+};
+const diagnosticProof = { ok: true, checks: 43, fixtureAccessChecks: 19, productionDataWritten: false };
+check('collector diagnostic gate requires date-access integration and privacy proof', () => assert.equal(diagnosticGate(diagnosticProof), true));
+for (const bad of [{ ok: false }, { checks: 42 }, { fixtureAccessChecks: 18 }, { fixtureAccessChecks: undefined }, { productionDataWritten: true }]) {
+  check('collector diagnostic gate rejects incomplete date-access proof', () => assert.equal(diagnosticGate({ ...diagnosticProof, ...bad }), false));
+}
+check('collector diagnostic gate rejects failed child', () => assert.equal(diagnosticGate(diagnosticProof, 1), false));
 console.log(JSON.stringify({ok:true,verifier:'release-verifier-contracts-v1',checks,productionDataTouched:false},null,2));

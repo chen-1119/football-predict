@@ -47,6 +47,9 @@ const outputDir = path.resolve(__dirname, '../outputs');
       if (mode === 'collector') {
         assert.equal(await page.locator('[data-collector-state]').count(), 3);
         assert.equal(await page.locator('[data-collector-state="clock-rejected"]').count(), 1);
+        assert.equal(await page.locator('[data-fixture-access="outside-recorded-window"]').count(), 1);
+        assert.ok((await page.locator('.collector-diagnostics__access').textContent()).includes('2026-09-09'));
+        assert.ok((await page.locator('.collector-diagnostics__access').textContent()).includes(lang === 'zh' ? '两项独立检查' : 'separate checks'));
         assert.ok((await page.locator('.collector-diagnostics').textContent()).includes(lang === 'zh' ? '不回填原推荐' : 'does not backfill'));
         if (lang === 'zh') await page.locator('.collector-diagnostics').screenshot({ path: path.join(outputDir, `collector-diagnostics-${width}.png`) });
       }

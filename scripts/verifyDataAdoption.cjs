@@ -239,4 +239,17 @@ check("collector diagnostics never change frozen evidence or its counts", () => 
     assert.ok(!html.includes("NEVER_PUBLIC"));
   }
 });
+check("date access window is independent of mapping and frozen input usage", () => {
+  const match = clone(published), before = service.getDataAdoptionReport(match);
+  const { buildFixtureAccessDiagnostic } = require("../src/services/apiFootballDiagnostics.cjs");
+  match.externalSignals = { apiFootball: { mappingVerified: false, lastCheckedAt: "2026-09-07T14:00:00Z",
+    fixtureAccess: buildFixtureAccessDiagnostic({ updatedAt: "2026-09-07T13:30:00Z", allowedFrom: "2026-09-06", allowedTo: "2026-09-08" }, "2026-09-09", "2026-09-07T14:00:00Z") } };
+  assert.deepEqual(service.getDataAdoptionReport(match), before);
+  for (const language of ["zh", "en"]) {
+    const html = renderToStaticMarkup(React.createElement(DataAdoptionDetails, { match, language }));
+    assert.ok(html.includes('data-fixture-access="outside-recorded-window"'));
+    assert.ok(html.includes("2026-09-09")); assert.ok(html.includes("2026-09-06")); assert.ok(html.includes("2026-09-08"));
+    assert.ok(html.includes(language === "zh" ? "两项独立检查" : "separate checks"));
+  }
+});
 console.log(JSON.stringify({ ok: true, checks, scope: "actual publisher, pure TS rules and actual TSX rendering; synthetic only", modelWeightsChanged: false }, null, 2));

@@ -8,6 +8,33 @@ const id = value => (typeof value === "number" && Number.isSafeInteger(value) &&
 const allowed = (value, values, fallback) => values.includes(value) ? value : fallback;
 const states = ["not-received", "clock-rejected", "receipt-recorded", "legacy-unverified"];
 const sourceStates = ["missing", "recorded", "invalid", "after-receipt", "unverified"];
+const day = value => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
+  && strictInstant(`${value}T00:00:00Z`) ? value : null;
+
+function buildFixtureAccessDiagnostic(access, requestedDate, checkedAt, refreshMinutes = 120) {
+  if (!object(access)) return null;
+  const date = day(requestedDate), checked = strictInstant(checkedAt), recorded = strictInstant(access.updatedAt);
+  const from = day(access.allowedFrom), to = day(access.allowedTo);
+  const ttlValid = Number.isFinite(refreshMinutes) && refreshMinutes >= 30 && refreshMinutes <= 1440;
+  const clocksValid = checked && recorded && Date.parse(recorded) <= Date.parse(checked) && ttlValid;
+  const rangeValid = from && to && from <= to;
+  const state = !date || !clocksValid ? "invalid-record"
+    : Date.parse(checked) - Date.parse(recorded) > refreshMinutes * 60000 ? "stale-record"
+      : access.suspended === true ? "account-restricted"
+        : !rangeValid ? "invalid-record"
+          : date < from || date > to ? "outside-recorded-window" : "within-recorded-window";
+  return { version: "api-football-fixture-access-diagnostic-v1", state,
+    requestedDate: date, allowedFrom: from, allowedTo: to, checkedAt: checked,
+    restrictionRecordedAt: recorded, refreshMinutes: ttlValid ? refreshMinutes : null,
+    suspended: access.suspended === true };
+}
+function compactFixtureAccess(value) {
+  if (!object(value) || value.version !== "api-football-fixture-access-diagnostic-v1") return null;
+  // Recompute state from bounded fields; never trust a supplied 'allowed' or
+  // 'restricted' label, raw provider error, or missing observation clock.
+  return buildFixtureAccessDiagnostic({ updatedAt: value.restrictionRecordedAt, allowedFrom: value.allowedFrom,
+    allowedTo: value.allowedTo, suspended: value.suspended }, value.requestedDate, value.checkedAt, value.refreshMinutes);
+}
 
 // Public, bounded diagnostics only. No private errors, queries, keys, raw
 // provider payloads or outcome direction enter this projection.
@@ -19,6 +46,7 @@ function compactApiFootballDiagnostics(signals) {
     return {
       version: VERSION, scope: "collector-only-not-frozen-decision", provider: "api-football",
       fixtureId: id(prior.fixtureId), checkedAt: strictInstant(prior.checkedAt),
+      fixtureAccess: compactFixtureAccess(prior.fixtureAccess),
       mappingStatus: prior.mappingStatus === "recorded" && (!id(prior.fixtureId) || !strictInstant(prior.checkedAt))
         ? "unverified" : allowed(prior.mappingStatus, ["recorded", "unverified", "conflicting"], "unverified"),
       features: KEYS.map(key => {
@@ -37,6 +65,7 @@ function compactApiFootballDiagnostics(signals) {
   const rejections = Array.isArray(api.temporalRejections) ? api.temporalRejections.slice(0, 12) : [];
   return {
     version: VERSION, scope: "collector-only-not-frozen-decision", provider: "api-football", fixtureId, checkedAt,
+    fixtureAccess: compactFixtureAccess(api.fixtureAccess),
     mappingStatus: blockers.some(value => typeof value === "string" && /conflict|reversed/.test(value))
       ? "conflicting" : api.mappingVerified === true && fixtureId && checkedAt ? "recorded" : "unverified",
     features: KEYS.map(key => {
@@ -60,4 +89,4 @@ function compactApiFootballDiagnostics(signals) {
     }),
   };
 }
-module.exports = { compactApiFootballDiagnostics };
+module.exports = { compactApiFootballDiagnostics, buildFixtureAccessDiagnostic };

@@ -8,6 +8,13 @@ const displayTime = (value: string | null, language: 'zh' | 'en') => value
 export function DataAdoptionDetails({ match, language }: { match: Match; language: 'zh' | 'en' }) {
   const { rows, calculationRows, asOf, bound, modelVersion, referenceHash } = getDataAdoptionReport(match);
   const collector = getCollectorDiagnostics(match);
+  const accessLabels = {
+    'outside-recorded-window': { zh: '日期超出已记录的可查范围', en: 'Date outside recorded access window' },
+    'within-recorded-window': { zh: '日期在已记录范围内 · 不代表取得数据', en: 'Within recorded window · data not guaranteed' },
+    'account-restricted': { zh: '已记录账户访问限制', en: 'Account access restriction recorded' },
+    'stale-record': { zh: '权限记录已过期 · 待重新检查', en: 'Access record stale · recheck needed' },
+    'invalid-record': { zh: '权限记录不完整 · 不能判断可查范围', en: 'Incomplete access record · window unknown' },
+  };
   const collectorLabels = {
     'not-received': { zh: '未取得该项记录', en: 'No fragment received' },
     'clock-rejected': { zh: '时间证据未通过', en: 'Time evidence rejected' },
@@ -53,6 +60,13 @@ export function DataAdoptionDetails({ match, language }: { match: Match; languag
           <span>{language === 'zh' ? '检查记录（北京）' : 'Check recorded (Beijing)'}<strong>{displayTime(collector.checkedAt, language)}</strong></span>
           <span>{language === 'zh' ? '提供方赛事 ID' : 'Provider fixture ID'}<strong>{collector.fixtureId || '—'}</strong></span>
         </div>
+        {collector.fixtureAccess && <div className="collector-diagnostics__access" data-fixture-access={collector.fixtureAccess.state}>
+          <strong>{accessLabels[collector.fixtureAccess.state][language]}</strong>
+          <p>{language === 'zh' ? '本场查询日期' : 'Fixture query date'}：<time dateTime={collector.fixtureAccess.requestedDate || undefined}>{collector.fixtureAccess.requestedDate || '—'}</time></p>
+          <p>{language === 'zh' ? '已记录范围' : 'Recorded window'}：<time dateTime={collector.fixtureAccess.allowedFrom || undefined}>{collector.fixtureAccess.allowedFrom || '—'}</time> → <time dateTime={collector.fixtureAccess.allowedTo || undefined}>{collector.fixtureAccess.allowedTo || '—'}</time></p>
+          <small>{language === 'zh' ? '权限记录时间（北京）' : 'Access recorded (Beijing)'}：{displayTime(collector.fixtureAccess.restrictionRecordedAt, language)}</small>
+          <p>{language === 'zh' ? '日期权限与球队映射是两项独立检查。旧权限范围不是永久套餐承诺；未取得伤停或首发，不能解释为没有伤停或已确认首发。' : 'Date access and team identity are separate checks. A prior window is not a permanent plan guarantee; missing injuries or lineups do not mean none exist or are confirmed.'}</p>
+        </div>}
         <ul>{collector.features.map(feature => <li key={feature.key} data-collector-state={feature.state}>
           <div><strong>{featureLabels[feature.key][language]}</strong><span>{collectorLabels[feature.state][language]}</span></div>
           <small>{language === 'zh' ? '接收时间' : 'Receipt time'} · {displayTime(feature.receivedAt, language)}</small>
