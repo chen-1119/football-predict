@@ -1037,6 +1037,30 @@ const ledgerEvent = (ledger, type) => ledger.events.find((event) => event.type =
 const ledgerEvents = (ledger, type) => ledger.events.filter((event) => event.type === type);
 const ledgerRetired = (ledger) => Boolean(ledgerEvent(ledger, "retirement"));
 const ledgerActivation = (ledger) => ledgerEvent(ledger, "activation");
+
+// An implementation-only revision of a previously activated fixed trial is
+// still that trial's hypothesis, even while its NEW evidence window is SHADOW.
+// Follow existing immutable retirement links; never inherit activation, rows,
+// eligibility, or a lock across a changed definition/gate/nomination policy.
+const hasActivatedTrialLineage = (registry, ledger) => {
+  const visited = new Set();
+  let current = ledger;
+  while (current && !visited.has(current.ledgerId)) {
+    visited.add(current.ledgerId);
+    if (ledgerActivation(current)) return true;
+    const predecessors = registry.ledgers.filter((prior) => prior.ledgerId !== current.ledgerId
+      && prior.header.gateSpecHash === current.header.gateSpecHash
+      && prior.header.nominationPolicyHash === current.header.nominationPolicyHash
+      && sha256(prior.header.candidateDefinition) === sha256(current.header.candidateDefinition)
+      && prior.events.some((event) => event.type === "retirement"
+        && event.reason === "active-candidate-implementation-revision-changed-or-removed"
+        && event.replacementCandidateRevisionId === current.header.candidateRevisionId
+        && event.recordedAt === current.header.frozenAt && event.onlineEffect === false));
+    if (predecessors.length !== 1) return false;
+    current = predecessors[0];
+  }
+  return false;
+};
 const PROSPECTIVE_EVIDENCE_EVENT_TYPES = new Set([
   "decision",
   "exclusion",
@@ -3256,7 +3280,7 @@ const updateCandidateProspectiveLedger = ({
   const inventory = candidateInventory(candidates, implementationCommitment);
   const inventorySupplied = Array.isArray(candidates) && candidates.length > 0;
   updateCandidateRegistry(registry, inventory, evaluatedAt);
-  const commitment = selectedCandidate
+  let commitment = selectedCandidate
     ? buildCandidateCommitment(selectedCandidate, implementationCommitment)
     : null;
   let active = registry.ledgers.find((ledger) => ledger.ledgerId === registry.activeLedgerId) || null;
@@ -3286,7 +3310,15 @@ const updateCandidateProspectiveLedger = ({
     && commitment
     && active.header.candidateRevisionId !== commitment.candidateRevisionId
   );
-  const activeProspectiveTrialLocked = Boolean(active && ledgerActivation(active));
+  const activeProspectiveTrialLocked = Boolean(active && hasActivatedTrialLineage(registry, active));
+  const sameDefinitionRevisions = active ? inventory.entries.filter((entry) => (
+    sha256(entry.definition) === sha256(active.header.candidateDefinition)
+  )) : [];
+  if (activeImplementationChanged && activeProspectiveTrialLocked && sameDefinitionRevisions.length === 1) {
+    // Daily retrospective ranking is not authorization to swap the fixed
+    // hypothesis during an implementation revision. Its own new proof is needed.
+    commitment = sameDefinitionRevisions[0];
+  }
   const incomingGateSpecHash = sha256(fixedGateSpec());
   const activeGateSpecChanged = Boolean(
     active

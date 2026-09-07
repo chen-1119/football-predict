@@ -49,4 +49,33 @@ check('exact revision transition and its signed dependencies pass before sequenc
     assert.ok(safety.includes(`"${entry}"`));
   }
 });
+check('fixed hypothesis lineage survives competing retrospective winners before signing', () => {
+  const result = require('./verifyCandidateRevisionLineage.cjs').verifyCandidateRevisionLineage();
+  assert.equal(result.ok, true); assert.ok(result.checks >= 11);
+});
+const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/services/apiFootballDiagnostics.d.cts',
+  'scripts/apiFootballClockEvidence.cjs', 'scripts/verifyApiFootballClockEvidence.cjs',
+  'scripts/verifyApiFootballDiagnostics.cjs', 'scripts/verifyCandidateArtifactSeed.cjs', 'scripts/verifyCandidateRevisionLineage.cjs'];
+const requiredEntries = source => {
+  const match = /const required(?:Release)?Entries = (\[[\s\S]*?\n\]);/.exec(source);
+  assert.ok(match, 'required release-entry array must be explicit');
+  const prebuilt = /const prebuiltDistBundleEntry = ("[^"\n]+");/.exec(source);
+  assert.ok(prebuilt, 'prebuilt entry must be an explicit path');
+  // Resolve the array's two existing constants from their real definitions.
+  return vm.runInNewContext(match[1], { prebuiltDistBundleEntry: JSON.parse(prebuilt[1]), HISTORICAL_TRAINING_RELEASE_ENTRY:
+    require('./historicalTrainingReleaseArtifact.cjs').HISTORICAL_TRAINING_RELEASE_ENTRY }, { timeout: 1000 });
+};
+const collectorDependenciesPresent = (creator, validator) => collectorEntries.every(entry =>
+  requiredEntries(creator).includes(entry) && requiredEntries(validator).includes(entry));
+check('collector and rehearsal dependencies are required by both actual archive gates', () => {
+  assert.equal(collectorDependenciesPresent(bundle, safety), true);
+  for (const entry of collectorEntries) assert.ok(fs.statSync(path.join(root, entry)).isFile(), entry);
+});
+for (const entry of collectorEntries) for (const side of ['creator', 'validator']) {
+  check(`${side} gate rejects missing ${entry}`, () => {
+    const missing = source => source.replace(`  "${entry}",\n`, '');
+    assert.equal(collectorDependenciesPresent(side === 'creator' ? missing(bundle) : bundle,
+      side === 'validator' ? missing(safety) : safety), false);
+  });
+}
 console.log(JSON.stringify({ok:true,verifier:'release-verifier-contracts-v1',checks,productionDataTouched:false},null,2));

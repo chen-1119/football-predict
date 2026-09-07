@@ -2367,6 +2367,12 @@ check("overlapping window boundaries are rejected and reveal row reuse", () => {
   assert.equal(evaluation.passes, false);
 });
 
+check("fixed trial lineage survives implementation changes and repeated backtests", () => {
+  const result = require("./verifyCandidateRevisionLineage.cjs").verifyCandidateRevisionLineage();
+  assert.equal(result.ok, true);
+  assert.ok(result.checks >= 7);
+});
+
 const ok = checks.every((entry) => entry.ok);
 process.stdout.write(`${JSON.stringify({
   ok,
