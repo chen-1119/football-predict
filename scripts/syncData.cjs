@@ -5150,9 +5150,14 @@ function buildArchivedPreMatchPrediction(
   // snapshot window and must never derive a different "original" direction.
   const existingArchive = validArchivedPreMatchPrediction(match);
   const existingDirection = archiveDirectionIdentity(existingArchive?.prediction);
+  // A hash of a fallback market reference, or a model's pre-cutoff timestamp,
+  // proves neither what was public nor authority to rewrite a frozen archive.
+  // Independent publication records may establish a parity correction; the
+  // explicit release-signed recovery path above remains separate. Losing the
+  // current public record must never downgrade the first archive's protection.
   if (existingArchive && (!canonicalDirection || canonicalDirection === existingDirection
-    || !["formal-publication-ledger", "live-publication-ledger", "immutable-analysis-reference-decision",
-      "public-reference-decision", "trusted-pre-cutoff-decision"].includes(canonicalBest?.source))) {
+    || !["formal-publication-ledger", "live-publication-ledger",
+      "public-reference-decision"].includes(canonicalBest?.source))) {
     return existingArchive;
   }
 

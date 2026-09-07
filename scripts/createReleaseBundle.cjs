@@ -381,6 +381,7 @@ const requiredEntries = [
   "scripts/verifyCandidateArtifactSeed.cjs",
   "scripts/verifyCandidateRevisionLineage.cjs",
   "scripts/verifyLegacyReferenceConflict.cjs",
+  "scripts/verifyFrozenArchiveAuthority.cjs",
   "src/services/legacyReferenceConflict.ts",
   "scripts/verifyModelInputUsage.cjs",
   "src/services/modelInputUsage.cjs",

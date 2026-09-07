@@ -597,6 +597,19 @@ modelOnlyParityMatch.archivedPreMatchPrediction = {
     recommendationAction: "reference",
   },
 };
+assert.deepEqual(buildArchivedPreMatchPrediction(modelOnlyParityMatch, new Map(), null,
+  "2026-07-12T12:30:00.000Z"), modelOnlyParityMatch.archivedPreMatchPrediction,
+"a timestamped model declaration alone cannot correct a frozen HHAD archive");
+const bindArchiveTestPublication = (match) => {
+  const source = clone(match);
+  source.status = "SCHEDULED";
+  delete source.predictionMeta.publicReferenceDecision;
+  const published = require("../src/services/publicReferenceDecision.cjs").bindPublicReferenceDecision(
+    source, null, "2026-07-12T10:00:01.000Z");
+  assert.ok(published.predictionMeta.publicReferenceDecision, "correction test requires actual independent pre-cutoff publication");
+  match.predictionMeta.publicReferenceDecision = published.predictionMeta.publicReferenceDecision;
+};
+bindArchiveTestPublication(modelOnlyParityMatch);
 const modelOnlyParityArchive = buildArchivedPreMatchPrediction(
   modelOnlyParityMatch,
   new Map(),
@@ -612,8 +625,8 @@ assert.equal(modelOnlyParityArchive?.recoveryEvidence?.canonical?.market, "HHAD"
 assert.equal(modelOnlyParityArchive?.recoveryEvidence?.canonical?.directionIdentity, "HHAD:1:3");
 assert.equal(
   modelOnlyParityArchive?.recoveryEvidence?.proof?.decisionAt,
-  modelOnlyParityMatch.predictionMeta.generatedAt,
-  "trusted archive proof must use the same generatedAt fallback accepted by the cutoff gate",
+  modelOnlyParityMatch.predictionMeta.publicReferenceDecision.recordedAt,
+  "archive correction proof must use the independent public record's capture time",
 );
 assert.ok(
   canonicalArchiveParityRecovery({
@@ -670,6 +683,7 @@ assert.equal(
       ...modelOnlyParityMatch,
       predictions: [],
       archivedPreMatchPrediction: undefined,
+      predictionMeta: { ...modelOnlyParityMatch.predictionMeta, publicReferenceDecision: undefined },
     },
     new Map([[
       modelOnlyParityMatch.sourceMatchId,
@@ -685,6 +699,7 @@ assert.equal(
 const pricedHhadParityMatch = clone(modelOnlyParityMatch);
 pricedHhadParityMatch.predictions[0].odds = 2.05;
 pricedHhadParityMatch.archivedPreMatchPrediction.prediction.tipCode = "X";
+bindArchiveTestPublication(pricedHhadParityMatch);
 const pricedHhadParityArchive = buildArchivedPreMatchPrediction(
   pricedHhadParityMatch,
   new Map(),

@@ -77,4 +77,7 @@ check(!shadow(missingTrial).eligible, "null probability cannot become a zero sha
 const noForm = structuredClone(shadowRow); delete noForm.featureSnapshot;
 check(shadow(noForm).modelWeight === 0 && shadow(noForm).diagnostics.missingFormClock,
   "missing recent-data clocks yield explicit market baseline, not invented form");
+const frozenArchiveAuthority = require("./verifyFrozenArchiveAuthority.cjs").verifyFrozenArchiveAuthority();
+check(frozenArchiveAuthority.ok && frozenArchiveAuthority.checks >= 9,
+  "unbound model and legacy reference declarations cannot overwrite frozen archives");
 console.log(JSON.stringify({ ok: true, checks, fixture: "synthetic reproduction of public draw/private home identity conflict", productionDataTouched: false }, null, 2));
