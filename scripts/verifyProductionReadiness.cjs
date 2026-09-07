@@ -577,6 +577,16 @@ const run = async () => {
       stderrTail: fixtureIsolation.stderr.slice(-500),
     });
   const dataValidationScopes = await runLocalJson(["scripts/verifyDataValidationScopes.cjs"]);
+  const fixtureRetry = await runLocalJson(["scripts/verifyFootballDataFixtureRetry.cjs"]);
+  pushCheck(checks, "failed supplementary fixtures back off without changing successful snapshot freshness",
+    fixtureRetry.status === 0 && fixtureRetry.body?.ok === true
+      && fixtureRetry.body?.verifier === "football-data-fixture-retry-v1"
+      && fixtureRetry.body?.productionDataTouched === false
+      && fixtureRetry.body?.checks?.length === 18
+      && fixtureRetry.body.checks.every(check => check.ok === true), {
+      status: fixtureRetry.status, checks: fixtureRetry.body?.checks || [],
+      stderrTail: fixtureRetry.stderr.slice(-500),
+    });
   pushCheck(checks, "Pages scope cannot weaken server private-archive validation",
     dataValidationScopes.status === 0 && dataValidationScopes.body?.ok === true
       && dataValidationScopes.body?.checks >= 22 && dataValidationScopes.body?.productionDataTouched === false, {

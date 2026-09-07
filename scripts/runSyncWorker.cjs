@@ -6,6 +6,7 @@ const { acquireSyncLock } = require("../server/syncLock.cjs");
 const { resolveActivePublication } = require("../server/dataGenerationBundle.cjs");
 const { readPointer, storePaths } = require("../server/dataGenerationStore.cjs");
 const { apiFootballRuntimePolicyFor } = require("../src/services/apiFootballRuntimePolicy.cjs");
+const { runFootballDataFixtureRetry } = require("./footballDataFixtureRetry.cjs");
 const {
   evaluateReleaseEnrichmentReuseRequest,
   inspectReleaseWorkerPriorityRequest,
@@ -3481,13 +3482,15 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
     enrichmentSteps.push(await runEnrichment(apiFootballRuntimePolicy.enabled, "sync:api-football"));
     enrichmentSteps.push(await runEnrichment(process.env.ENABLE_WEATHER_SYNC !== "0", "sync:weather"));
     const footballDataFixturesStatus = readJson(footballDataFixturesStatusFile, null);
-    const footballDataFixturesDue = process.env.ENABLE_FOOTBALL_DATA_FIXTURES_SYNC !== "0"
-      && ageMs(footballDataFixturesStatus?.checkedAt) >= footballDataFixturesMinIntervalMs;
-    enrichmentSteps.push(await runEnrichment(
-      footballDataFixturesDue,
-      "sync:football-data-fixtures",
-      {}
-    ));
+    enrichmentSteps.push(await runFootballDataFixtureRetry({
+      enabled: process.env.ENABLE_FOOTBALL_DATA_FIXTURES_SYNC !== "0",
+      checkedAt: footballDataFixturesStatus?.checkedAt,
+      minIntervalMs: footballDataFixturesMinIntervalMs,
+      attemptFile: path.join(path.dirname(footballDataFixturesStatusFile), "attempt.json"),
+      read: readJson,
+      write: writeJsonAtomic,
+      run: () => runEnrichment(true, "sync:football-data-fixtures", {}),
+    }));
     const footballDataResultsStatus = readJson(footballDataResultsStatusFile, null);
     const footballDataResultsPostgresMode = String(
       process.env.FOOTBALL_POSTGRES_MODE || "disabled"
