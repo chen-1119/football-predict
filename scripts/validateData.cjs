@@ -12,6 +12,7 @@ const {
 const {
   boundDecisionOddsForPrediction,
 } = require("../src/services/dualMarketDecisionBinding.cjs");
+const { isValidFinalScore } = require("../src/services/matchLifecycle.cjs");
 
 const publicDir = path.join(__dirname, "..", "public");
 // Static distribution builds cannot inspect a server-private archive. The
@@ -277,6 +278,9 @@ if (Array.isArray(rootMatches) && rootMatches.length > currentMatches.length + 2
 }
 
 for (const match of matches) {
+  if (match.status === "FINISHED" && !isValidFinalScore(match)) {
+    errors.push(`${match.id}: FINISHED match requires numeric non-negative integer final scores for both teams.`);
+  }
   const oddsValues = [match.odds?.odds1, match.odds?.oddsX, match.odds?.odds2];
   const hasOfficialOdds = match.oddsSource === "sporttery:HAD";
   const handicapOddsValues = [match.handicapOdds?.odds1, match.handicapOdds?.oddsX, match.handicapOdds?.odds2];

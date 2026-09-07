@@ -47,3 +47,9 @@ the committed old source and new source in separate Node processes:
 Both passed. Local timing is not a promise or a measurement of production release
 savings. Report: `outputs/validation-scope-timing-1788778384194.json`. No model,
 historical result, source data, or release gate was changed by this benchmark.
+
+Follow-through: the final-score guard subsequently adds 46 bounded cases (70
+total, 201 fixture data reads), retaining the two complete actual-public-file
+passes. The timings above belong to the earlier 24-case revision, not a new
+benchmark of the expanded suite. See `finished-score-validation.md` for the
+reproduced defect, stricter production validator and separate live scalar audit.

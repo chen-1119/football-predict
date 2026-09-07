@@ -15,7 +15,7 @@ const fixtureMatch = {
   id:'sporttery_991980', sourceMatchId:'991980', source:'sporttery',
   sourceUrl:'https://webapi.sporttery.cn/gateway/jc/football/getMatchListV1.qry',
   status:'SCHEDULED', kickoffTime:'2026-09-08T12:00:00.000Z',
-  homeTeamColor:'#112233', awayTeamColor:'#445566', predictions:[],
+  homeTeamColor:'#112233', awayTeamColor:'#445566', predictions:[],scoreHome:null,scoreAway:null,
 };
 // Scope-contract mutations need two deterministic rows, not 22 parses of the
 // entire production history. Full public-file validation is retained below in
@@ -29,7 +29,7 @@ const fixtureFiles = new Map([
 ]);
 let checks = 0;
 let fullPublicFileRuns = 0, fixtureDataReads = 0;
-function run({ publicOnly = false, archive = null, count = 14, policyCount = count, omitCounts = false, badScore = false, fullPublicFiles = false } = {}) {
+function run({ publicOnly = false, archive = null, count = 14, policyCount = count, omitCounts = false, badScore = false, officialHistory = false, scorePatch = null, fullPublicFiles = false } = {}) {
   const io = Object.create(fs), messages = [];
   let payload = null, exitCode = 0, archiveReads = 0;
   if(fullPublicFiles) fullPublicFileRuns++;
@@ -49,8 +49,12 @@ function run({ publicOnly = false, archive = null, count = 14, policyCount = cou
       if (omitCounts) { delete meta.files.archivedUnsettled; delete meta.currentListPolicy.archivedUnsettled; }
       return JSON.stringify(meta);
     }
-    if (badScore && String(p).replaceAll('\\', '/').endsWith('/public/data/matches-history.json')) {
-      const rows = JSON.parse(raw); assert.ok(rows.length); rows[0].scoreHome = null; return JSON.stringify(rows);
+    if ((badScore || scorePatch) && String(p).replaceAll('\\', '/').endsWith('/public/data/matches-history.json')) {
+      const rows = JSON.parse(raw); assert.ok(rows.length);
+      if(badScore) rows[0].scoreHome = null;
+      if(scorePatch) Object.assign(rows[0],scorePatch);
+      if(officialHistory) Object.assign(rows[0], {oddsSource:'sporttery:HAD',oddsSourceUrl:fixtureMatch.sourceUrl,odds:{odds1:2.1,oddsX:3.2,odds2:3.4}});
+      return JSON.stringify(rows);
     }
     return raw;
   };
@@ -90,6 +94,22 @@ verify('public archive counters must agree', () => {
 verify('public scope still rejects a missing finished score', () => {
   const r = run({ publicOnly: true, badScore: true }); assert.equal(r.exitCode, 1); assert.match(r.messages, /score/i);
 });
+for(const publicOnly of [true,false]) {
+  for(const officialHistory of [true,false]) {
+    for(const side of ['scoreHome','scoreAway']) {
+      for(const value of [null,'','1',-1,0.5]) verify(`all FINISHED scores are strict / ${publicOnly}/${officialHistory}/${side}/${JSON.stringify(value)}`,()=>{
+        const r=run({publicOnly,count:0,archive:[],officialHistory,scorePatch:{[side]:value}});
+        assert.equal(r.exitCode,1);assert.match(r.messages,/FINISHED match requires numeric non-negative integer final scores/);
+      });
+    }
+    verify(`real 0-0 final is valid / ${publicOnly}/${officialHistory}`,()=>{
+      const r=run({publicOnly,count:0,archive:[],officialHistory,scorePatch:{scoreHome:0,scoreAway:0}});assert.equal(r.exitCode,0,r.messages);
+    });
+  }
+  verify(`scheduled fixture retains null scores / ${publicOnly}`,()=>{
+    const r=run({publicOnly,count:0,archive:[]});assert.equal(r.exitCode,0,r.messages);assert.equal(r.payload.statuses.SCHEDULED,1);
+  });
+}
 verify('server still inspects malformed private rows', () => {
   const r = run({ count: 1, archive: [{ id: 'synthetic-unresolved-invalid', status: 'FINISHED' }] });
   assert.equal(r.exitCode, 1); assert.equal(r.archiveReads, 1); assert.match(r.messages, /archive must not retain FINISHED/);
@@ -112,8 +132,8 @@ verify('complete actual public data still passes server-scope validation with is
   const r=run({fullPublicFiles:true,count:0,archive:[]});assert.equal(r.exitCode,0,r.messages);
   assert.equal(r.payload.privateArchiveVerified,true);assert.equal(r.archiveReads,1);assert.ok(r.payload.count>0);
 });
-assert.equal(fullPublicFileRuns,2);assert.equal(fixtureDataReads,63);
+assert.equal(fullPublicFileRuns,2);assert.equal(fixtureDataReads,201);
 console.log(JSON.stringify({ ok: true, checks, productionDataTouched: false,
-  fullPublicFileRuns, fixtureDataReads, elapsedMs:Date.now()-startedAtMs,
+  fullPublicFileRuns, fixtureDataReads, strictFinishedScoreCases:46, elapsedMs:Date.now()-startedAtMs,
   scope:'actual validator; bounded scope fixtures plus two complete public-file passes; private archive is isolated',
 }, null, 2));
