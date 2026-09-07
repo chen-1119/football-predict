@@ -81,6 +81,9 @@ try {
   };
   assert.equal(candidateImplementationDriftAwaitingRefreeze(driftStatus), true);
   assert.equal(candidateImplementationDriftAwaitingRefreeze({
+    ...driftStatus, blockers: ["semantic-hash-mismatch:result-input-timeline"],
+  }), true, "a changed result-admission policy must trigger the existing refreeze path");
+  assert.equal(candidateImplementationDriftAwaitingRefreeze({
     ...driftStatus,
     blockers: ["candidate-data-incomplete"],
   }), false);
@@ -117,7 +120,7 @@ try {
   process.stdout.write(`${JSON.stringify({
     ok: true,
     verifier: "sync-worker-model-refreeze",
-    assertions: 16,
+    assertions: 17,
     decision: {
       enabled: decision.enabled,
       shouldRun: decision.shouldRun,

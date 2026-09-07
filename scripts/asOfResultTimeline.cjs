@@ -1,7 +1,9 @@
 const { buildResultProvenance } = require("../src/services/matchLifecycle.cjs");
+const { strictInstant } = require("../src/services/strictInstant.cjs");
+const { createHash } = require("node:crypto");
 
 const timeMs = (value) => {
-  const parsed = Date.parse(value || "");
+  const parsed = Date.parse(strictInstant(value) || "");
   return Number.isFinite(parsed) ? parsed : null;
 };
 
@@ -21,6 +23,9 @@ const forecastTimeForMatch = (match) => {
     match?.buyEndTime,
   ]) {
     const candidate = timeMs(value);
+    // A declared malformed decision clock cannot fall through to a later
+    // deadline/kickoff and thereby learn results not known at the decision.
+    if (value !== undefined && value !== null && value !== "" && candidate === null) return null;
     if (candidate !== null && candidate <= kickoffMs) return candidate;
   }
   return kickoffMs;
@@ -138,7 +143,16 @@ const forEachForecastAsOf = (matches, {
   };
 };
 
+// Bind this input-admission policy independently of probability arithmetic.
+// A changed timeline must start a new candidate revision, not mix cohorts.
+const resultTimelineSemanticHash = () => createHash("sha256").update(JSON.stringify({
+  version: "result-input-timeline-commitment-v1",
+  functions: [strictInstant, timeMs, forecastTimeForMatch, resultObservationForMatch, forEachForecastAsOf, buildResultProvenance]
+    .map(fn => fn.toString().replace(/\r\n?/gu, "\n")),
+})).digest("hex");
+
 module.exports = {
+  resultTimelineSemanticHash,
   forEachForecastAsOf,
   forecastTimeForMatch,
   hasSettledScore,

@@ -6,7 +6,7 @@ const path = require("node:path");
 const {
   CAPTURE_FINALIZATION_GRACE_SECONDS,
   CAPTURE_FINALIZATION_POLICY_VERSION,
-  CANDIDATE_EVALUATOR_IMPLEMENTATION_HASH,
+  candidateEvaluatorSemanticHashes,
   CANDIDATE_IMPLEMENTATION_COMMITMENT_VERSION,
   atomicDecisionRecordValid,
   buildDecisionEvent,
@@ -273,15 +273,11 @@ const implementationDrift = (ledger) => {
     ) {
       blockers.push("semantic-commitment-version-mismatch");
     }
-    const expectedEvaluatorHash =
-      semanticHashes["candidate-probability-evaluator"];
-    if (
-      !expectedEvaluatorHash
-      || expectedEvaluatorHash !== CANDIDATE_EVALUATOR_IMPLEMENTATION_HASH
-    ) {
-      blockers.push(
-        "semantic-hash-mismatch:candidate-probability-evaluator",
-      );
+    const actualSemanticHashes = candidateEvaluatorSemanticHashes();
+    for (const key of new Set([...Object.keys(actualSemanticHashes), ...Object.keys(semanticHashes)])) {
+      if (!actualSemanticHashes[key] || semanticHashes[key] !== actualSemanticHashes[key]) {
+        blockers.push(`semantic-hash-mismatch:${key}`);
+      }
     }
   }
   for (const [relativeFile, expectedHash] of Object.entries(expected.sourceHashes || {})) {

@@ -3,6 +3,7 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
+const { resultTimelineSemanticHash } = require("./asOfResultTimeline.cjs");
 const {
   pairedCircularBlockBootstrap,
 } = require("./shadowCandidateRobustness.cjs");
@@ -655,6 +656,7 @@ const CANDIDATE_EVALUATOR_IMPLEMENTATION_HASH = sha256({
 
 const candidateEvaluatorSemanticHashes = () => ({
   "candidate-probability-evaluator": CANDIDATE_EVALUATOR_IMPLEMENTATION_HASH,
+  "result-input-timeline": resultTimelineSemanticHash(),
 });
 
 const candidateDefinition = (candidate) => ({

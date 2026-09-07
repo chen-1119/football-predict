@@ -722,6 +722,7 @@ check("production semantic commitment is stable and binds the pure evaluator", (
   const semanticHashes = candidateEvaluatorSemanticHashes();
   assert.deepEqual(semanticHashes, {
     "candidate-probability-evaluator": CANDIDATE_EVALUATOR_IMPLEMENTATION_HASH,
+    "result-input-timeline": require("./asOfResultTimeline.cjs").resultTimelineSemanticHash(),
   });
   assert.match(
     semanticHashes["candidate-probability-evaluator"],
@@ -767,6 +768,12 @@ check("production semantic commitment is stable and binds the pure evaluator", (
     stableCommitment.candidateRevisionId,
     changedEvaluator.candidateRevisionId,
   );
+  const changedTimeline = buildCandidateCommitment(candidate, {
+    commitmentVersion: CANDIDATE_IMPLEMENTATION_COMMITMENT_VERSION,
+    semanticHashes: { ...semanticHashes, "result-input-timeline": "7".repeat(64) },
+    sourceHashes: {}, dependencyLockHash: "",
+  });
+  assert.notEqual(stableCommitment.candidateRevisionId, changedTimeline.candidateRevisionId);
 });
 
 check("deadline capture independently rejects a changed semantic evaluator", () => {
@@ -789,6 +796,12 @@ check("deadline capture independently rejects a changed semantic evaluator", () 
   assert.deepEqual(implementationDrift(driftedLedger), [
     "semantic-hash-mismatch:candidate-probability-evaluator",
   ]);
+  for (const replacement of [undefined, "8".repeat(64)]) {
+    const timelineDrift = JSON.parse(JSON.stringify(validLedger));
+    if (replacement === undefined) delete timelineDrift.header.candidateImplementation.semanticHashes["result-input-timeline"];
+    else timelineDrift.header.candidateImplementation.semanticHashes["result-input-timeline"] = replacement;
+    assert.deepEqual(implementationDrift(timelineDrift), ["semantic-hash-mismatch:result-input-timeline"]);
+  }
 });
 
 check("inventory hash matches the frozen candidate family definition", () => {

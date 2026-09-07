@@ -1,6 +1,7 @@
 "use strict";
 
 const crypto = require("node:crypto");
+const { strictInstant } = require("./strictInstant.cjs");
 
 const MATCH_STATUS_PRIORITY = Object.freeze({
   UNKNOWN: 0,
@@ -81,7 +82,7 @@ const canonicalMatchStatus = (value) => {
 };
 
 const canonicalInstant = (value) => {
-  const text = asText(value);
+  const text = strictInstant(value);
   if (!text) return null;
   const time = Date.parse(text);
   return Number.isFinite(time) ? new Date(time).toISOString() : null;

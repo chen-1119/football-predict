@@ -239,6 +239,7 @@ const requiredReleaseEntries = [
   "scripts/teamCategoryIdentity.cjs",
   "scripts/recentFormEvidence.cjs",
   "scripts/apiFootballScopedAliases.cjs",
+  "src/services/strictInstant.cjs",
   "scripts/verifyRecentFormEvidence.cjs",
   "scripts/verifyFootballDataResultsSync.cjs",
   "scripts/verifyTeamCategoryIdentity.cjs",
