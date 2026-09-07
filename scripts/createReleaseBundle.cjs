@@ -389,6 +389,7 @@ const requiredEntries = [
   "scripts/predictionExecutionCapture.cjs",
   "scripts/verifyPredictionExecutionCapture.cjs",
   "scripts/verifyDataGenerationPointerLockRace.cjs",
+  "scripts/verifyDataGenerationEndToEnd.cjs",
   "src/services/predictionExecutionClock.cjs",
   "scripts/verifyPredictionExecutionClock.cjs",
   "src/services/predictionRuntimeIdentity.cjs",

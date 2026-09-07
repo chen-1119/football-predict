@@ -60,6 +60,7 @@ const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/servic
   'scripts/verifyOfficialClubResults.cjs', 'scripts/syncOfficialClubResults.cjs', 'scripts/verifyOfficialClubReceiptClocks.cjs',
   'scripts/competitionModelContext.cjs', 'scripts/verifyCompetitionModelContext.cjs',
   'scripts/predictionExecutionCapture.cjs', 'scripts/verifyPredictionExecutionCapture.cjs', 'scripts/verifyDataGenerationPointerLockRace.cjs',
+  'scripts/verifyDataGenerationEndToEnd.cjs',
   'src/services/predictionExecutionClock.cjs', 'scripts/verifyPredictionExecutionClock.cjs',
   'src/services/predictionRuntimeIdentity.cjs', 'scripts/replayPredictionCapture.cjs', 'scripts/verifyPredictionReplay.cjs'];
 const requiredEntries = source => {
@@ -181,4 +182,21 @@ for (const bad of [{ok:false}, {checks:[]}, {checks:lifecycleProof.checks.slice(
   check('lifecycle gate rejects absent or failing alias proof', () => assert.equal(lifecycleGate({...lifecycleProof,...bad}), false));
 }
 check('lifecycle gate rejects child failure', () => assert.equal(lifecycleGate(lifecycleProof,1),false));
+const generationStart = readiness.indexOf('    pushCheck(checks, "buffered generation preserves canonical identity and isolated publication behavior",');
+const generationEnd = readiness.indexOf('\n    const selectedJson', generationStart);
+assert.ok(generationStart >= 0 && generationEnd > generationStart);
+const generationGate = (body, status = 0) => {
+  let result;
+  vm.runInNewContext(readiness.slice(generationStart, generationEnd), { checks: [],
+    generationCompatibility: { status, body, stdout: '', stderr: '' },
+    pushCheck: (_checks, _name, ok) => { result = ok; } }, { timeout: 1000 });
+  return result;
+};
+const generationProof = { ok: true, version: 'buffered-generation-compatibility-v1', checks: 125, bufferedCompatibilityChecks: 125, defaultServerDataTouched: false };
+check('generation gate accepts complete isolated compatibility coverage', () => assert.equal(generationGate(generationProof), true));
+for (const bad of [{ ok: false }, { version: 'unrelated-test' }, { checks: 124 }, { bufferedCompatibilityChecks: 124 },
+  { bufferedCompatibilityChecks: undefined }, { defaultServerDataTouched: true }, { defaultServerDataTouched: undefined }]) {
+  check('generation gate rejects incomplete or writing proof ' + JSON.stringify(bad), () => assert.equal(generationGate({ ...generationProof, ...bad }), false));
+}
+check('generation gate rejects child failure', () => assert.equal(generationGate(generationProof, 1), false));
 console.log(JSON.stringify({ok:true,verifier:'release-verifier-contracts-v1',checks,productionDataTouched:false},null,2));

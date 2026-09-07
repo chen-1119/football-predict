@@ -1604,6 +1604,20 @@ const run = async () => {
       stderrTail: currentMatchRetention.stderr.slice(-500)
     });
 
+    const generationCompatibility = await runLocalJson(["scripts/verifyDataGenerationEndToEnd.cjs", "--buffered-compatibility-only"]);
+    pushCheck(checks, "buffered generation preserves canonical identity and isolated publication behavior", generationCompatibility.status === 0
+      && generationCompatibility.body?.ok === true
+      && generationCompatibility.body?.version === "buffered-generation-compatibility-v1"
+      && generationCompatibility.body?.checks >= 125
+      && generationCompatibility.body?.bufferedCompatibilityChecks >= 125
+      && generationCompatibility.body?.defaultServerDataTouched === false, {
+      status: generationCompatibility.status,
+      checks: generationCompatibility.body?.checks ?? null,
+      bufferedCompatibilityChecks: generationCompatibility.body?.bufferedCompatibilityChecks ?? null,
+      stdoutTail: generationCompatibility.status === 0 ? "" : generationCompatibility.stdout.slice(-500),
+      stderrTail: generationCompatibility.stderr.slice(-500),
+    });
+
     const selectedJson = await runLocalJson(["scripts/verifySelectedJsonObjectFile.cjs"]);
     pushCheck(checks, "bounded immutable JSON selection and full-file integrity", selectedJson.status === 0
       && selectedJson.body?.ok === true

@@ -15,6 +15,7 @@ const {
   cleanupDataGenerations,
   commitWithActivePublicationPointerLock,
   commitCurrentDataGeneration,
+  readMutableBundle,
   readPublicationJson,
   resolveActivePublication,
   resolveServingPublication,
@@ -164,6 +165,61 @@ const semanticHashCompatibilityFixture = () => {
     ["prediction-snapshots.json", { updatedAt: "volatile", rows: [{ id: "1", probability: 0.625 }] }],
     ["model-calibration.json", { version: "兼容-v1", generatedAt: "2026-07-16T01:02:03.000Z" }],
   ]);
+};
+
+const verifyBufferedGenerationCompatibility = () => {
+  const before = checks;
+  const sourceDir = path.join(tempRoot, "buffered-history-source");
+  fs.mkdirSync(sourceDir);
+  for (const name of CORE_FILES) fs.writeFileSync(path.join(sourceDir, name), "{}");
+  const file = path.join(sourceDir, "matches-history.json");
+  const scan = (text, withSemantic) => {
+    fs.writeFileSync(file, text);
+    const hash = withSemantic ? require("node:crypto").createHash("sha256") : null;
+    const result = readMutableBundle({ publicDataDir: sourceDir }).inspectMatchArray("matches-history.json", { semanticHasher: hash });
+    return { ...result, semanticHash: hash?.digest("hex") };
+  };
+  const valid = (text, rows) => {
+    for (const withSemantic of [false, true]) {
+      const result = scan(text, withSemantic);
+      equal(result.rows, rows.length, "buffered history keeps every row across decoded chunks");
+      equal([result.bytes, result.sha256], [Buffer.byteLength(text), sha256(text)], "buffered history retains the exact original byte hash");
+      if (withSemantic) equal(result.semanticHash,
+        sha256(stableStringify(legacySemanticProjectionFor("matches-history.json", rows))),
+        "buffered history matches independent full-JSON canonical digest");
+    }
+  };
+  valid("[]", []);
+  valid('\uFEFF \n[ {"id":"one"}, {"id":"two","nested":{"sourceCycleId":"omit","keep":true}} ]\n',
+    [{ id: "one" }, { id: "two", nested: { sourceCycleId: "omit", keep: true } }]);
+  const prefix = '[{"id":"boundary","text":"';
+  const special = JSON.stringify('汉😀\\"}][\n').slice(1, -1);
+  for (let delta = -8; delta <= 8; delta += 1) {
+    const text = prefix + "a".repeat(65536 - Buffer.byteLength(prefix) - 2 + delta)
+      + special + '","nested":[{"id":"inner","value":"keep"}]}]';
+    valid(text, JSON.parse(text));
+  }
+  const longRows = Array.from({ length: 520 }, (_, i) => ({ id: `row-${i}`, text: "跨块😀".repeat(100), nested: [false, null, { sourceCycleId: "volatile", keep: i }] }));
+  valid(JSON.stringify(longRows), longRows);
+  for (const text of ['{}', '[1]', '[{}]', '[{"id":"a"},{"id":"a"}]',
+    '[{"id":"a"},]', '[{"id":"a"}{"id":"b"}]', '[{"id":"a"]',
+    '[{"id":"a"}]false', '[{"id":"a","x":"unterminated', '[{"id":"a","x":"\\q"}]',
+    prefix + "a".repeat(131072) + '\n"}]']) {
+    for (const withSemantic of [false, true]) {
+      assert.throws(() => scan(text, withSemantic), error => ["GENERATION_JSON_INVALID", "GENERATION_SEMANTIC_INVALID"].includes(error.code));
+      checks += 1;
+    }
+  }
+  const large = semanticHashCompatibilityFixture();
+  large.set("prediction-snapshots.json", { updatedAt: "omit", rows: Array.from({ length: 5000 }, (_, i) => ({ id: String(i), probabilities: [0.3, 0.4, 0.3], text: '汉😀\\"\ud800' })) });
+  large.set("external-signals.json", { updatedAt: "omit", text: "宽字符😀".repeat(30000), nested: { updatedAt: "preserve" } });
+  equal(bundleSemanticHash(large), legacyBundleSemanticHash(large), "bounded hash fragments and oversized Unicode scalars preserve legacy bytes");
+  large.get("prediction-snapshots.json").rows[0].invalid = undefined;
+  assert.throws(() => bundleSemanticHash(large), error => error.code === "INVALID_CANONICAL_VALUE"); checks += 1;
+  delete large.get("prediction-snapshots.json").rows[0].invalid;
+  large.get("prediction-snapshots.json").rows[0].invalid = Infinity;
+  assert.throws(() => bundleSemanticHash(large), error => error.code === "INVALID_CANONICAL_VALUE"); checks += 1;
+  return checks - before;
 };
 
 const writeJson = (fileName, payload) => {
@@ -999,7 +1055,19 @@ const stopServer = async () => {
 
 (async () => {
   try {
+    if (process.argv.includes("--buffered-compatibility-only")) {
+      const bufferedCompatibilityChecks = verifyBufferedGenerationCompatibility();
+      console.log(JSON.stringify({
+        ok: true,
+        version: "buffered-generation-compatibility-v1",
+        checks,
+        bufferedCompatibilityChecks,
+        defaultServerDataTouched: false,
+      }, null, 2));
+      return;
+    }
     verifyBoundedReceiptTransitionSelection();
+    const bufferedCompatibilityChecks = verifyBufferedGenerationCompatibility();
     const semanticFixture = semanticHashCompatibilityFixture();
     equal(
       bundleSemanticHash(semanticFixture),
@@ -1297,12 +1365,16 @@ const stopServer = async () => {
       ok: true,
       version: "immutable-base-generation-e2e-v1",
       checks,
+      bufferedCompatibilityChecks,
       isolatedTempRoot: tempRoot,
       defaultServerDataTouched: false,
     }, null, 2));
   } finally {
     await stopServer();
-    fs.rmSync(tempRoot, { recursive: true, force: true });
+    const resolvedTemp = fs.realpathSync(tempRoot);
+    assert.equal(path.dirname(resolvedTemp).toLowerCase(), fs.realpathSync(os.tmpdir()).toLowerCase());
+    assert.ok(path.basename(resolvedTemp).startsWith("football-generation-e2e-"));
+    fs.rmSync(resolvedTemp, { recursive: true, force: true });
   }
 })().catch((error) => {
   console.error(error.stack || error.message || String(error));

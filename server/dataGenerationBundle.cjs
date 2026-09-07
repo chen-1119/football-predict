@@ -122,6 +122,30 @@ const assertMatchRows = (relativePath, rows) => {
   return ids;
 };
 
+// Tokens are complete JSON punctuation or JSON.stringify results, so batching
+// never joins separate surrogate halves. Bound both text and fragment count;
+// oversized scalar tokens go directly to the native hash without another copy.
+const createSemanticHasher = () => {
+  const hash = crypto.createHash("sha256");
+  let fragments = [], characters = 0;
+  const flush = () => {
+    if (!fragments.length) return;
+    hash.update(fragments.join(""));
+    fragments = [];
+    characters = 0;
+  };
+  return {
+    update(token) {
+      if (typeof token !== "string") fail("INVALID_ARGUMENT", "semantic hash requires complete JSON text tokens");
+      if (characters + token.length > 64 * 1024 || fragments.length >= 2048) flush();
+      if (token.length >= 64 * 1024) hash.update(token);
+      else { fragments.push(token); characters += token.length; }
+      return this;
+    },
+    digest(encoding) { flush(); return hash.digest(encoding); },
+  };
+};
+
 const validateBundleReader = ({
   hasPayload,
   readPayload,
@@ -159,7 +183,7 @@ const validateBundleReader = ({
         ...FILE_DEFINITIONS.filter((definition) => !CORE_FILES.includes(definition.path)),
       ]
     : FILE_DEFINITIONS;
-  const semanticHasher = includeSemanticHash ? crypto.createHash("sha256") : null;
+  const semanticHasher = includeSemanticHash ? createSemanticHasher() : null;
   let semanticEntries = 0;
   if (semanticHasher) semanticHasher.update("{");
 
@@ -426,7 +450,7 @@ const inspectMatchArrayFile = (filePath, relativePath, { semanticHasher = null }
   let depth = 0;
   let inString = false;
   let escaped = false;
-  let rowSource = "";
+  let rowFragments = [];
 
   const invalid = (message, details = {}) => fail(
     "GENERATION_JSON_INVALID",
@@ -436,7 +460,7 @@ const inspectMatchArrayFile = (filePath, relativePath, { semanticHasher = null }
   const finishRow = () => {
     let row;
     try {
-      row = JSON.parse(rowSource);
+      row = JSON.parse(rowFragments.join(""));
     } catch (error) {
       invalid(error.message || String(error), { row: rows });
     }
@@ -459,7 +483,7 @@ const inspectMatchArrayFile = (filePath, relativePath, { semanticHasher = null }
     }
     rows += 1;
     row = null;
-    rowSource = "";
+    rowFragments = [];
     collecting = false;
     arrayState = "comma-or-end";
     // Parsed rows are not retained. A bounded periodic collection prevents
@@ -468,7 +492,12 @@ const inspectMatchArrayFile = (filePath, relativePath, { semanticHasher = null }
     if (rows % 256 === 0) collectReleasedPayloads();
   };
   const consume = (source) => {
-    for (const char of source) {
+    // Scan the same delimiters/escape state but retain slices, not one rope
+    // allocation per character. Decoded UTF-8 chunks and complete rows keep the
+    // original bytes and JSON.parse validation across every chunk boundary.
+    let fragmentStart = collecting ? 0 : -1;
+    for (let index = 0; index < source.length; index += 1) {
+      const char = source[index];
       if (outerFinished) {
         if (!/\s/.test(char)) invalid("trailing content after top-level array");
         continue;
@@ -500,11 +529,10 @@ const inspectMatchArrayFile = (filePath, relativePath, { semanticHasher = null }
         depth = 1;
         inString = false;
         escaped = false;
-        rowSource = char;
+        fragmentStart = index;
         continue;
       }
 
-      rowSource += char;
       if (inString) {
         if (escaped) escaped = false;
         else if (char === "\\") escaped = true;
@@ -519,9 +547,14 @@ const inspectMatchArrayFile = (filePath, relativePath, { semanticHasher = null }
       else if (char === "}" || char === "]") {
         depth -= 1;
         if (depth < 0) invalid(`row ${rows} has unbalanced JSON`);
-        if (depth === 0) finishRow();
+        if (depth === 0) {
+          rowFragments.push(source.slice(fragmentStart, index + 1));
+          fragmentStart = -1;
+          finishRow();
+        }
       }
     }
+    if (fragmentStart >= 0) rowFragments.push(source.slice(fragmentStart));
   };
 
   try {
@@ -550,7 +583,7 @@ const inspectMatchArrayFile = (filePath, relativePath, { semanticHasher = null }
 };
 
 const bundleSemanticHashFromReader = ({ hasPayload, readPayload }) => {
-  const hash = crypto.createHash("sha256");
+  const hash = createSemanticHasher();
   hash.update("{");
   const sortedCoreFiles = [...CORE_FILES].sort();
   for (let index = 0; index < sortedCoreFiles.length; index += 1) {
