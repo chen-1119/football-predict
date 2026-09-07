@@ -2,6 +2,7 @@ const fs = require("fs");
 const crypto = require("crypto");
 const https = require("https");
 const path = require("path");
+const { fixtureTeamCategoryAudit } = require("./teamCategoryIdentity.cjs");
 const {
   eventSafeExistingSignal,
   stampSignalEvent,
@@ -475,6 +476,7 @@ const summarizeFixture = (item) => ({
 });
 
 const confidenceForFixture = (match, fixture, entityRegistry = null) => {
+  const teamCategory = fixtureTeamCategoryAudit(match, { home: fixture?.teams?.home?.name, away: fixture?.teams?.away?.name });
   const homeTargets = targetTeamAliases(match, "home");
   const awayTargets = targetTeamAliases(match, "away");
   const leagueTargets = targetLeagueAliases(match);
@@ -494,7 +496,7 @@ const confidenceForFixture = (match, fixture, entityRegistry = null) => {
         return total + (side === "home" ? homeScore : awayScore);
       }, 0) / 2)
     : nameBasedTeamScore;
-  const teamScore = entityIdentity.exact
+  const teamScore = !teamCategory.compatible ? 0 : entityIdentity.exact
     ? 1
     : entityIdentity.conflict
       ? Math.min(nameBasedTeamScore, 0.2)
@@ -532,7 +534,8 @@ const confidenceForFixture = (match, fixture, entityRegistry = null) => {
     leagueScore: Number(leagueScore.toFixed(4)),
     diffMinutes: Math.round(diffMinutes),
     reversed: reversedTeamScore > directTeamScore,
-    entityIdentity
+    entityIdentity,
+    teamCategory
   };
 };
 
@@ -1019,6 +1022,8 @@ const buildLiveScoreObservation = (entry, fixture, context = {}) => {
 
 const mappingVerificationState = (match, mapping, entityRegistry, options = {}) => {
   const blockers = [];
+  const teamCategory = fixtureTeamCategoryAudit(match, { home: mapping?.homeTeamName, away: mapping?.awayTeamName });
+  blockers.push(...teamCategory.blockers);
   const key = matchKey(match);
   const identity = providerIdentityScore(
     entityRegistry,
@@ -1064,6 +1069,7 @@ const mappingVerificationState = (match, mapping, entityRegistry, options = {}) 
         : "registry-exact"),
     blockers: uniq(blockers),
     identity,
+    teamCategory,
     currentCycleQualification,
   };
 };

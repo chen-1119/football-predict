@@ -2,6 +2,10 @@
 
 const { createHash } = require("node:crypto");
 const VERSION = "public-reference-decision-v1";
+const BOUND_VERSION = "public-reference-decision-v2";
+const { VERSION: EVIDENCE_VERSION, capturePublicReferenceEvidence, compactPublicDataGaps } = require("./publicReferenceEvidence.cjs");
+const pendingEvidence = new WeakMap();
+const pendingPublicReferenceEvidence = (match) => pendingEvidence.get(match) || null;
 const instant = (value) => {
   const time = Date.parse(String(value || ""));
   return Number.isFinite(time) ? time : null;
@@ -39,15 +43,21 @@ const payload = (record) => ({
   revision: record.revision, previousHash: record.previousHash,
   prediction: record.prediction,
   dataGaps: record.dataGaps || null,
+  ...(record.version === BOUND_VERSION ? { evidenceBinding: record.evidenceBinding || null } : {}),
 });
 const hash = (record) => createHash("sha256").update(JSON.stringify(payload(record))).digest("hex");
 
 function attestPublicReferenceDecision(record, match) {
-  if (!record || record.version !== VERSION || !direction(record.prediction)
+  if (!record || ![VERSION, BOUND_VERSION].includes(record.version) || !direction(record.prediction)
     || !Number.isSafeInteger(record.revision) || record.revision < 1
     || (record.previousHash !== null && !/^[a-f0-9]{64}$/.test(record.previousHash || ""))
     || record.contentHash !== hash(record) || !eventId(match)
     || record.sourceMatchId !== eventId(match)) return null;
+  if (record.version === BOUND_VERSION && record.evidenceBinding) {
+    const b = record.evidenceBinding;
+    if (b.version !== EVIDENCE_VERSION || ![b.evidenceHash, b.featureHash, b.modelHash].every((v) => /^[a-f0-9]{64}$/.test(v || ""))
+      || !b.modelVersion || !b.policyVersion) return null;
+  }
   const [kickoff, matchKickoff, cutoff, recorded, decided] = [record.kickoffTime, match.kickoffTime,
     record.cutoffTime, record.recordedAt, record.decisionAt].map(instant);
   if ([kickoff, matchKickoff, cutoff, recorded, decided].some((value) => value === null)
@@ -78,25 +88,32 @@ function bindPublicReferenceDecision(match, existing, recordedAtValue) {
   // A failed current public decision (including WATCH) cannot be replaced by
   // an older reference while sales are open. After cutoff only replay is legal.
   let record = !open ? previous : null;
+  let capturedEvidence = null;
   if (open && best && decided !== null && decided <= recorded && eventId(match)) {
     const unchanged = previous && previous.decisionId === (match.predictionMeta?.decisionId || null)
       && direction(previous.prediction) === direction(best) && previous.prediction.odds === best.odds;
     if (unchanged) record = previous;
     else {
       const next = {
-        version: VERSION, sourceMatchId: eventId(match), kickoffTime: new Date(kickoff).toISOString(),
+        version: BOUND_VERSION, sourceMatchId: eventId(match), kickoffTime: new Date(kickoff).toISOString(),
         eventVersion: match.eventVersion || null, cutoffTime: new Date(cutoff).toISOString(),
         recordedAt: new Date(recorded).toISOString(), decisionAt: new Date(decided).toISOString(),
         decisionId: match.predictionMeta?.decisionId || null,
         revision: (previous?.revision || 0) + 1, previousHash: previous?.contentHash || null,
         prediction: publicTip(best),
-        dataGaps: match.predictionMeta?.featureSnapshot?.modelInputs?.dataGaps?.connected
-          ? { connected: { ...match.predictionMeta.featureSnapshot.modelInputs.dataGaps.connected } } : null,
+        dataGaps: compactPublicDataGaps(match.predictionMeta?.featureSnapshot),
       };
+      capturedEvidence = capturePublicReferenceEvidence(match, next);
+      next.evidenceBinding = capturedEvidence?.binding || null;
       record = attestPublicReferenceDecision({ ...next, contentHash: hash(next) }, match);
     }
   }
-  return { ...match, predictionMeta: { ...(match.predictionMeta || {}), publicReferenceDecision: record || undefined } };
+  const result = { ...match, predictionMeta: { ...(match.predictionMeta || {}), publicReferenceDecision: record || undefined } };
+  if (record && capturedEvidence) pendingEvidence.set(result, {
+    version: EVIDENCE_VERSION, referenceHash: record.contentHash,
+    evidenceHash: capturedEvidence.binding.evidenceHash, evidence: capturedEvidence.evidence,
+  });
+  return result;
 }
 
-module.exports = { attestPublicReferenceDecision, bindPublicReferenceDecision };
+module.exports = { attestPublicReferenceDecision, bindPublicReferenceDecision, pendingPublicReferenceEvidence };

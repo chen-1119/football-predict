@@ -2,6 +2,8 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const { observePredictionEvidence, summarizePredictionEvidence } = require("./predictionEvidenceAudit.cjs");
+const { exactDecisionEventMatch } = require("../src/services/decisionEventIdentity.cjs");
 const {
   MULTI_FACTOR_POLICY_VERSION,
   evaluateMultiFactorRecommendation,
@@ -2393,6 +2395,7 @@ const summarizePreMatchInputAudit = (rows) => {
     ok: violationCount === 0,
     promotionEligible,
     promotionBlockers,
+    evidenceDiagnostics: summarizePredictionEvidence(rows),
     policy: {
       splitPolicy: "time-ordered rolling windows; no random split",
       probabilityPolicy: "use locked match probabilities or prediction snapshots captured/first-seen before kickoff; review snapshots are excluded",
@@ -2620,20 +2623,6 @@ const decisionSnapshotPromotionCohortEligible = (decisionSnapshot) => (
   decisionSnapshot?.version === DECISION_SNAPSHOT_VERSION
   && isDecisionClockAuditEligible(decisionSnapshot)
 );
-
-const exactDecisionEventMatch = (decision, match) => {
-  const decisionKickoff = Date.parse(decision?.kickoffTime || "");
-  const matchKickoff = Date.parse(match?.kickoffTime || match?.matchDate || "");
-  if (!Number.isFinite(decisionKickoff) || decisionKickoff !== matchKickoff) return false;
-  const comparisons = [];
-  const decisionMatchId = String(decision?.matchId || "").trim();
-  const matchId = String(match?.matchId || match?.id || "").trim();
-  const decisionSourceId = String(decision?.sourceMatchId || "").trim();
-  const matchSourceId = String(match?.sourceMatchId || "").trim();
-  if (decisionMatchId && matchId) comparisons.push(decisionMatchId === matchId);
-  if (decisionSourceId && matchSourceId) comparisons.push(decisionSourceId === matchSourceId);
-  return comparisons.length > 0 && comparisons.every(Boolean);
-};
 
 const sameProbabilityTriplet = (left, right) => (
   ["1", "X", "2"].every((code) => (
@@ -3120,6 +3109,14 @@ const runStrictPromotionCohortSelfTest = () => {
     strictDecisionMarketPair({ ...wrapper, snapshot: { ...wrapper.snapshot, decisionSnapshot: missingProvenance } }, match) === null);
   push("rescheduled event identity cannot reuse an older decision",
     strictDecisionMarketPair(wrapper, { ...match, kickoffTime: "2026-07-01T13:00:00.000Z" }) === null);
+  push("verified official source alias preserves the same immutable decision pair",
+    Boolean(strictDecisionMarketPair(wrapper, { ...match, id: "fivehundred_2040999" })));
+  push("alias repair never bypasses clock or provenance gates",
+    strictDecisionMarketPair({ ...wrapper, snapshot: { ...wrapper.snapshot, decisionSnapshot: clockless } }, { ...match, id: "fivehundred_2040999" }) === null
+      && strictDecisionMarketPair({ ...wrapper, snapshot: { ...wrapper.snapshot, decisionSnapshot: missingProvenance } }, { ...match, id: "fivehundred_2040999" }) === null);
+  push("unknown prefixes and conflicting official source ids cannot alias",
+    strictDecisionMarketPair(wrapper, { ...match, id: "unknown_2040999" }) === null
+      && strictDecisionMarketPair(wrapper, { ...match, id: "fivehundred_2040999", sourceMatchId: "2040998" }) === null);
 
   const pairMarketRow = pair?.marketEntry?.row || {};
   const validRow = {
@@ -3856,6 +3853,7 @@ for (const match of matches) {
         probabilities: marketProbabilities
       } : null,
       strictDecisionSnapshotVersion: strictDecisionPair?.decision?.version || null,
+      evidenceTrace: observePredictionEvidence({ match, selectedSnapshot: recommendationDecisionSnapshot, strictPair: strictDecisionPair }),
       strictDecisionClockEligible: Boolean(strictDecisionPair),
       strictDecisionAt: strictDecisionPair?.decision?.decisionAt || null,
       strictModelProbabilities: strictDecisionPair?.modelProbabilities || null,

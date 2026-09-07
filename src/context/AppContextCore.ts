@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react';
 import type { Match } from '../services/mockData';
 import type { AccessSession } from '../services/accessControl';
+import type { ReviewPerformanceSummary } from '../services/reviewPerformanceTypes';
 
 export type Language = 'zh' | 'en';
 export type HitAndWinPick = '1' | 'X' | '2';
@@ -336,30 +337,8 @@ export interface DataSyncState {
         brier?: number | null;
         logLoss?: number | null;
       } | null;
-      formalReviewPerformance?: {
-        version?: 'formal-review-performance-v1' | string;
-        generatedAt?: string | null;
-        startDate?: string;
-        timezone?: 'Asia/Shanghai' | string;
-        cumulative?: {
-          won?: number;
-          lost?: number;
-          settled?: number;
-          hitRate?: number | null;
-        } | null;
-        daily?: Array<{
-          date?: string;
-          won?: number;
-          lost?: number;
-          settled?: number;
-          hitRate?: number | null;
-        }>;
-        policy?: {
-          denominator?: string;
-          includedStatuses?: string[];
-          immutableRecommendationRequired?: boolean;
-        } | null;
-      } | null;
+      formalReviewPerformance?: ReviewPerformanceSummary | null;
+      referenceReviewPerformance?: ReviewPerformanceSummary | null;
       hitRateAudit?: {
         version?: string;
         status?: 'collecting' | 'credible-near-target' | 'verified-below-target' | string;

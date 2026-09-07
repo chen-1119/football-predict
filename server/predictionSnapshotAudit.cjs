@@ -27,6 +27,10 @@ const compactPredictionSnapshotAudit = (row) => {
   return {
     matchId: row?.matchId || decision?.matchId || null,
     sourceMatchId: row?.sourceMatchId || decision?.sourceMatchId || null,
+    eventVersion: row?.eventVersion || null,
+    decisionId: row?.decisionId || null,
+    publicReferenceHash: row?.publicReferenceHash || null,
+    publicReferenceEvidenceHash: row?.publicReferenceEvidenceHash || null,
     phase: row?.phase || decision?.phase || null,
     capturedAt: row?.capturedAt || decision?.capturedAt || null,
     firstSeenAt: row?.firstSeenAt || null,

@@ -90,7 +90,7 @@ const {
 } = require("../server/sqliteStore.cjs");
 const { acquireSyncMetaCommitLock } = require("./syncMetaCommitLock.cjs");
 const { FREE_FOOTBALL_TEAM_ALIASES } = require("./freeFootballTeamAliases.cjs");
-const { buildFormalReviewPerformance } = require("../server/reviewPerformanceSummary.cjs");
+const { buildFormalReviewPerformance, buildReferenceReviewPerformance } = require("../server/reviewPerformanceSummary.cjs");
 const { auditRecommendationBias } = require("./auditRecommendationBatchBias.cjs");
 const {
   browserFallbackEnabled,
@@ -238,12 +238,12 @@ const CURRENT_UNSETTLED_RETENTION_HOURS = resolveCurrentUnsettledRetentionHours(
 
 const STATUS_PRIORITY = { FINISHED: 6, LIVE: 5, PENDING_RESULT: 4, SCHEDULED: 2 };
 const PREDICTION_DATA_POLICY = {
-  zh: "竞彩截止前，赛前分析先由 Elo 强度、长期历史样本、近一年状态、赛程密度、比分分布与公开赛前信息层生成独立预测；世界杯先验仅在数据安全校验通过时启用。官方 HAD/HHAD SP 和 SP 走势只用于校验市场分歧与价值风险。截止后保留历史预测，只结算赛果，不回写旧推荐。",
-  en: "Before the Sporttery cutoff, pre-match reads first build an independent forecast from Elo strength, long-run history, recent form, schedule density, score distribution, and public pre-match signals; World Cup priors are enabled only after dataset safety validation. Official HAD/HHAD SP and SP movement are used only to validate market disagreement and value risk. After cutoff, the historical prediction is kept and only settlement is added.",
+  zh: "竞彩截止前，模型结合球队强度、历史样本、近期状态、比分分布与市场赔率生成参考。各项是否参与、使用权重和数据缺口以本次计算记录为准；有输入不等于来源已验证。截止后保留历史预测，只结算赛果，不回写旧推荐。",
+  en: "Before cutoff, the model combines team strength, history, form, score distributions and market odds. Actual use, weights and gaps follow this calculation's records; presence is not source verification. After cutoff, historical predictions are preserved and only results are settled.",
 };
 const PREDICTION_MODEL_BASIS = {
-  zh: "模型按竞彩日归档、按官方开赛时间排序；先用 Elo、长期历史样本、近一年状态、赛程密度与 Poisson 比分分布生成独立足球预测，世界杯先验仅在安全校验通过时参与。官方 SP/让球 SP 只用于市场校验、价值差比较和风险标签，不再驱动最终概率。",
-  en: "Schedules are grouped by Sporttery day and sorted by official kickoff time. The model first builds an independent football forecast from Elo, long-run history, recent form, schedule density, and Poisson score distribution; World Cup priors participate only after safety validation. Official SP/handicap SP are used only for market validation, value comparison, and risk tags; they do not drive the final probability.",
+  zh: "模型按竞彩日归档、按官方开赛时间排序。基础概率结合 Elo、球队强度、Poisson 比分分布和市场赔率，随后进行反馈、校准与统一后验选择。赔率并非固定零权重；各阶段实际系数与缺失回退需分别核对，基础模型输出不等于最终冻结的公开方向。",
+  en: "Schedules use Sporttery business days and official kickoff order. Base probabilities mix Elo, team strength, Poisson scores and market odds before feedback, calibration and unified selection. Market weight is not fixed at zero. Stage coefficients and missing-input fallbacks must be audited separately; base output is not the final frozen public direction.",
 };
 const ANALYST_OUTPUT_SECTIONS = Object.freeze([
   { id: "baseline", zh: "一、比赛基本面分析", en: "1. Fixture baseline" },
@@ -1847,6 +1847,8 @@ function recentFormCandidate(form, marketHomeLambda, marketAwayLambda, confidenc
     awayLambda: clamp(awayAttack * 0.58 + homeDefense * 0.42, 0.25, 3.6),
     confidence,
     source,
+    fallbackMetrics: ["home.goalsForAvg", "home.goalsAgainstAvg", "away.goalsForAvg", "away.goalsAgainstAvg"]
+      .filter(key => { const [side, metric] = key.split("."); return recentFormNumber(form[side][metric], null) === null; }),
   };
 }
 
@@ -1892,6 +1894,10 @@ function blendLambdasWithForm(match, marketHomeLambda, marketAwayLambda) {
       formWeight: 0,
       formHomeLambda: null,
       formAwayLambda: null,
+      formUsage: require("../src/services/modelInputUsage.cjs").recordModelInputUsage(match, "form-lambda-blend", {
+        before: { home: marketHomeLambda, away: marketAwayLambda }, candidates: [], weight: 0,
+        output: { home: marketHomeLambda, away: marketAwayLambda },
+      }),
     };
   }
 
@@ -1910,10 +1916,17 @@ function blendLambdasWithForm(match, marketHomeLambda, marketAwayLambda) {
   const maxWeight = profile.isInternational ? 0.34 : 0.42;
   const strongestConfidence = Math.max(...candidates.map((item) => item.confidence));
   const formWeight = clamp(strongestConfidence * maxWeight, 0, maxWeight);
+  const formOutput = {
+    home: clamp(marketHomeLambda * (1 - formWeight) + formHomeLambda * formWeight, 0.25, 3.4),
+    away: clamp(marketAwayLambda * (1 - formWeight) + formAwayLambda * formWeight, 0.25, 3.4),
+  };
 
   return {
-    homeLambda: clamp(marketHomeLambda * (1 - formWeight) + formHomeLambda * formWeight, 0.25, 3.4),
-    awayLambda: clamp(marketAwayLambda * (1 - formWeight) + formAwayLambda * formWeight, 0.25, 3.4),
+    homeLambda: formOutput.home,
+    awayLambda: formOutput.away,
+    formUsage: require("../src/services/modelInputUsage.cjs").recordModelInputUsage(match, "form-lambda-blend", {
+      before: { home: marketHomeLambda, away: marketAwayLambda }, candidates, weight: formWeight, output: formOutput,
+    }),
     formWeight: Number(formWeight.toFixed(3)),
     formHomeLambda: Number(formHomeLambda.toFixed(2)),
     formAwayLambda: Number(formAwayLambda.toFixed(2)),
@@ -2205,12 +2218,15 @@ function blendOutcomeProbabilities(match, market, poisson, eloSnapshot, formSnap
     away: market.away * weights.market + teamStrength.away * weights.teamStrength + (elo?.away || 0) * weights.elo + poisson.away * weights.poisson + (worldCupPrior?.away || 0) * (weights.worldCupPrior || 0),
   };
   const total = blended.home + blended.draw + blended.away || 1;
+  const blendOutput = { home: blended.home / total, draw: blended.draw / total, away: blended.away / total };
   return {
-    probabilities: {
-      home: blended.home / total,
-      draw: blended.draw / total,
-      away: blended.away / total,
-    },
+    probabilities: blendOutput,
+    usage: require("../src/services/modelInputUsage.cjs").recordModelInputUsage(match, "base-outcome-blend", {
+      inputs: { market, teamStrength, elo, poisson, worldCupPrior },
+      weights: { ...weights, worldCupPrior: weights.worldCupPrior || 0 }, output: blendOutput,
+      marketPool: sanitizeOdds(match.odds) ? "HAD" : sanitizeHandicapOdds(match) ? "HHAD" : null,
+      marketSource: sanitizeOdds(match.odds) ? match.oddsSource || null : sanitizeHandicapOdds(match) ? match.handicapOddsSource || null : null,
+    }),
     weights,
     teamStrength,
   };
@@ -2549,7 +2565,7 @@ function buildProbabilityCalculationTrace(match, context) {
       label: { zh: "官方 SP 去水", en: "Official SP de-vig" },
       weight: formulaNumber(weights.market || 0, 3),
       probabilities: market,
-      role: officialOddsAvailable ? "validation-only" : "unavailable",
+      role: Number(weights.market || 0) > 0 ? "base-model-and-validation" : officialOddsAvailable ? "validation-only" : "unavailable",
     },
   ].filter((component) => component.probabilities || component.key === "market");
   const scoreFeedback = context.scoreOutcomeFeedback || {};
@@ -2577,13 +2593,13 @@ function buildProbabilityCalculationTrace(match, context) {
   return {
     version: "formula-trace-v2",
     policy: {
-      zh: "公式先算独立足球概率，官方 SP 只做市场校验和风险提示，权重固定为 0。",
-      en: "The formula first computes independent football probabilities. Official SP is validation and risk context only, with weight fixed at 0.",
+      zh: "此处展示基础概率计算，市场赔率按下列实际权重参与混合；之后仍有比分反馈、校准和统一后验选择，不等于最终公开方向。",
+      en: "This is the base probability calculation, including the actual market weight below. Score feedback, calibration and unified selection follow; this is not the final public direction.",
     },
     outcome: {
       formula: {
-        zh: "P_raw(o)=w_strength*S(o)+w_elo*E(o)+w_poisson*Q(o)+w_wc*W(o)；P_final(o)=calibrate(normalize(P_raw(o)))。",
-        en: "P_raw(o)=w_strength*S(o)+w_elo*E(o)+w_poisson*Q(o)+w_wc*W(o); P_score(o) is aggregated from the score matrix; P_final(o)=calibrate((1-wS)*P_raw(o)+wS*P_score(o)).",
+        zh: "P_raw(o)=normalize(w_market*M(o)+w_strength*S(o)+w_elo*E(o)+w_poisson*Q(o)+w_wc*W(o))；P_base(o)=calibrate((1-wS)*P_raw(o)+wS*P_score(o))。",
+        en: "P_raw(o)=normalize(w_market*M(o)+w_strength*S(o)+w_elo*E(o)+w_poisson*Q(o)+w_wc*W(o)); P_base(o)=calibrate((1-wS)*P_raw(o)+wS*P_score(o)).",
       },
       weights: {
         market: formulaNumber(weights.market || 0, 3),
@@ -2663,9 +2679,9 @@ function buildProbabilityCalculationTrace(match, context) {
       },
     },
     marketUse: {
-      formula: "marketWeight=dynamic-low-weight",
-      zh: "SP 仅以低权重参与赛前校验，并用于比较模型方向与市场偏离、生成风险/价值提示；不得单独改写方向。",
-      en: "SP is a low-weight validation feature used for market divergence and value diagnostics; it cannot rewrite the direction by itself.",
+      formula: "baseMarketWeight=ensembleWeights.market; finalContribution=not-attributed",
+      zh: "赔率按基础模型实际阶段系数参与概率混合，也用于市场偏离和风险诊断；该系数不代表最终公开方向的贡献度，已冻结方向不得被刷新覆盖。",
+      en: "Odds enter the base probability blend at its recorded stage weight and also support market-risk diagnostics. This weight is not final-direction attribution; refreshes must not overwrite a frozen direction.",
     },
   };
 }
@@ -2709,7 +2725,7 @@ function buildCalculationTraceFromPublishedModel(match, model) {
       label: { zh: "官方 SP 去水", en: "Official SP de-vig" },
       weight: formulaNumber(weights.market || 0, 3),
       probabilities: oneXTwo.market || null,
-      role: oneXTwo.market ? "validation-only" : "unavailable",
+      role: oneXTwo.market ? (Number(weights.market || 0) > 0 ? "base-model-and-validation" : "validation-only") : "unavailable",
     },
   ].filter((component) => component.probabilities || component.key === "market");
 
@@ -2732,13 +2748,13 @@ function buildCalculationTraceFromPublishedModel(match, model) {
   return {
     version: "formula-trace-v2",
     policy: {
-      zh: "公式先算独立足球概率，官方 SP 只做市场校验和风险提示，权重固定为 0。",
-      en: "The formula first computes independent football probabilities. Official SP is validation and risk context only, with weight fixed at 0.",
+      zh: "以下为已保存基础模型的解释视图，不补造计算时使用回执。市场赔率权重以保存的数值为准；基础输出不等于最终公开方向。",
+      en: "Explanation of the stored base model; no execution receipt is reconstructed. Market use follows the stored weight, and base output is not the final public direction.",
     },
     outcome: {
       formula: {
-        zh: "P_raw(o)=w_strength*S(o)+w_elo*E(o)+w_poisson*Q(o)+w_wc*W(o)；P_final(o)=calibrate(normalize(P_raw(o)))。",
-        en: "P_raw(o)=w_strength*S(o)+w_elo*E(o)+w_poisson*Q(o)+w_wc*W(o); P_final(o)=calibrate(normalize(P_raw(o))).",
+        zh: "P_raw(o)=normalize(w_market*M(o)+w_strength*S(o)+w_elo*E(o)+w_poisson*Q(o)+w_wc*W(o))；后续比分反馈与校准见保存记录。",
+        en: "P_raw(o)=normalize(w_market*M(o)+w_strength*S(o)+w_elo*E(o)+w_poisson*Q(o)+w_wc*W(o)); subsequent feedback and calibration follow the stored record.",
       },
       weights: {
         market: formulaNumber(weights.market || 0, 3),
@@ -2811,9 +2827,9 @@ function buildCalculationTraceFromPublishedModel(match, model) {
       },
     },
     marketUse: {
-      formula: "marketWeight=dynamic-low-weight",
-      zh: "SP 仅以低权重参与赛前校验，并用于比较模型方向与市场偏离、生成风险/价值提示；不得单独改写方向。",
-      en: "SP is a low-weight validation feature used for market divergence and value diagnostics; it cannot rewrite the direction by itself.",
+      formula: "baseMarketWeight=ensembleWeights.market; finalContribution=not-attributed",
+      zh: "赔率按基础模型实际阶段系数参与概率混合，也用于市场偏离和风险诊断；该系数不代表最终公开方向的贡献度，已冻结方向不得被刷新覆盖。",
+      en: "Odds enter the base probability blend at its recorded stage weight and also support market-risk diagnostics. This weight is not final-direction attribution; refreshes must not overwrite a frozen direction.",
     },
   };
 }
@@ -2899,6 +2915,7 @@ function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLamb
       scoreFeedback: scoreOutcomeFeedback.weight,
     },
     calculationTrace,
+    inputUsage: [lambdaBlend?.formUsage, blended.usage].filter(Boolean),
     dynamicCalibration: {
       version: match.modelCalibration?.version || "none",
       profileKey: calibration.profileKey,
@@ -3773,8 +3790,10 @@ function countSince(rows, kickoffTime, days) {
 function summarizeTeamForm(rows, key, kickoffTime) {
   const recent = rows.slice(-FORM_LOOKBACK_MATCHES);
   const last = rows[rows.length - 1];
+  const resultEvidence = require("./recentFormEvidence.cjs").summarizeRecentFormEvidence(recent, key, kickoffTime);
   const empty = {
     sampleSize: 0,
+    resultEvidence,
     wins: 0,
     draws: 0,
     losses: 0,
@@ -3826,6 +3845,7 @@ function summarizeTeamForm(rows, key, kickoffTime) {
   const sampleSize = recent.length;
   return {
     sampleSize,
+    resultEvidence,
     wins: totals.wins,
     draws: totals.draws,
     losses: totals.losses,
@@ -12869,6 +12889,7 @@ function buildPredictionFeatureSnapshot(match, explicitCapturedAt = null) {
       } : null,
     },
     modelInputs: {
+      usageSummary: require("../src/services/modelInputUsage.cjs").summarizeModelInputUsage(model, match),
       oneXTwoFinal: compactFeatureTriplet(model.oneXTwo?.final),
       market: compactFeatureTriplet(model.oneXTwo?.market),
       poisson: compactFeatureTriplet(model.oneXTwo?.poisson),
@@ -15988,6 +16009,7 @@ function loadPredictionSnapshots(publicDir) {
         maxRows: Number(parsed?.maxRows || PREDICTION_SNAPSHOT_MAX_ROWS),
         rows: Array.isArray(parsed?.rows) ? parsed.rows : [],
         publicReferenceDecisions: Array.isArray(parsed?.publicReferenceDecisions) ? parsed.publicReferenceDecisions : [],
+        publicReferenceEvidence: Array.isArray(parsed?.publicReferenceEvidence) ? parsed.publicReferenceEvidence : [],
       };
     } catch {
       return {
@@ -16139,6 +16161,8 @@ function predictionSnapshotRow(match, capturedAt) {
   const decisionSnapshot = buildCandidateDecisionSnapshot(match, capturedAt, {
     collectorTrustRegistry: COLLECTOR_TRUST_REGISTRY,
   });
+  const publicReference = require("../src/services/publicReferenceDecision.cjs")
+    .attestPublicReferenceDecision(match?.predictionMeta?.publicReferenceDecision, match);
   return normalizePredictionSnapshotAudit({
     capturedAt,
     decisionAt: decisionSnapshot?.decisionAt || null,
@@ -16157,6 +16181,11 @@ function predictionSnapshotRow(match, capturedAt) {
     promptVersion: match.predictionMeta?.promptVersion || ANALYST_PROMPT_VERSION,
     decisionId: match.predictionMeta?.decisionId || null,
     decisionRevision: Number(match.predictionMeta?.decisionRevision || 1),
+    eventVersion: match.eventVersion || null,
+    // A pointer to the separate public ledger, never proof that this candidate
+    // was published or that its probabilities equal the public evidence.
+    publicReferenceHash: publicReference?.contentHash || null,
+    publicReferenceEvidenceHash: publicReference?.evidenceBinding?.evidenceHash || null,
     sourceMatchId,
     matchId: match.id,
     matchNo: match.matchNo,
@@ -16626,6 +16655,12 @@ function appendPredictionSnapshots(publicDir, matches, capturedAt, {
       updated,
     },
   };
+  payload.publicReferenceEvidence = require("../src/services/publicReferenceEvidence.cjs")
+    .collectPublicReferenceEvidence(payload.publicReferenceDecisions, [
+      ...(history.publicReferenceEvidence || []),
+      ...(matches || []).map((match) => require("../src/services/publicReferenceDecision.cjs")
+        .pendingPublicReferenceEvidence(match)).filter(Boolean),
+    ]);
   return payload;
 }
 
@@ -17958,6 +17993,10 @@ async function sync() {
     matches: split.history,
     generatedAt: capturedAt,
   });
+  postMatchReviewsPayload.referencePerformance = buildReferenceReviewPerformance({
+    matches: split.history,
+    generatedAt: capturedAt,
+  });
   let aiArenaPublication = null;
   let aiArenaDatabase = null;
   let aiArenaError = null;
@@ -18677,6 +18716,7 @@ if (require.main === module) {
     provisionalResultEvidenceForMatch,
     isFormalMainPredictionForMetrics,
     predictionSnapshotRow,
+    appendPredictionSnapshots,
     resolveHandicapLine,
     resultStatus,
     selectValueAwareOneXTwo,

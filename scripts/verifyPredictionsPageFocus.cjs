@@ -630,7 +630,7 @@ pushCheck("odds table highlights the primary HAD and bound HHAD companion withou
   "const isSelectedMarket = Boolean(rowSelection)",
   "const isSelectedOutcome = isSelectedMarket && rowSelection?.tipCode === outcome.code",
   "让球参考推荐",
-  "This direction is the de-vigged 500.com HAD market leader",
+  "The 500.com market leader is a comparison only; the published reference may differ and is excluded from formal results",
   "Cross-market directions conflict; no pick is issued",
   "Odds comparison, not the selected market",
   "Official odds comparison",
@@ -766,9 +766,12 @@ pushCheck("date navigation opens the nearest available match day and stays user-
   "quickReviewDates",
   "olderReviewDates",
   "更多复盘日期",
-  "selectedFormalSettled > 0",
-  "cumulativeReferenceSettled > 0",
-  "Number(cumulativeFormalPerformance?.settled || 0) > 0"
+  "dailyReviewBucket(formalReviewPerformance, activeReviewDate)",
+  "dailyReviewBucket(referenceReviewPerformance, activeReviewDate)",
+  "validReviewBucket(formalReviewPerformance?.cumulative)",
+  "validReviewBucket(referenceReviewPerformance?.cumulative)",
+  "formatHitRate(bucket)",
+  'data-review-denominator="one-frozen-best-per-match"'
 ]));
 
 pushCheck("model scorecard separates formal samples from shadow evaluation", hasAll(predictions, [

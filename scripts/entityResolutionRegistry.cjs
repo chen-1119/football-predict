@@ -3,6 +3,7 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
+const { fixtureTeamCategoryAudit } = require("./teamCategoryIdentity.cjs");
 
 const VERSION = "entity-resolution-registry-v1";
 const DEFAULT_PROVIDER = "api-football";
@@ -208,6 +209,7 @@ const qualifyingFixtureMapping = (mapping, thresholds = {}, context = {}) => {
   if (!match) {
     blockers.push("local-match-context-missing");
   } else {
+    blockers.push(...fixtureTeamCategoryAudit(match, { home: mapping?.homeTeamName, away: mapping?.awayTeamName }).blockers);
     const kickoffMs = Date.parse(String(match?.kickoffTime || ""));
     const fixtureMs = Date.parse(String(mapping?.fixtureDate || ""));
     if (!Number.isFinite(kickoffMs) || !Number.isFinite(fixtureMs)

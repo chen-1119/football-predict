@@ -683,7 +683,33 @@ const readSqlitePredictionSnapshotRows = async (dbPath, options = {}) => {
   }
 };
 
+const readSqlitePublicReferenceEvidence = (dbPath, options = {}) => {
+  const { INDEX_ID, MAX_INDEX_BYTES, MAX_AUDIT_BYTES, indexRowId, validReferenceHash, resolveIndexedPublicReferenceEvidence } = require("./publicReferenceArchive.cjs");
+  if (!validReferenceHash(options.referenceHash)) return { ok: false, reason: "invalid-reference-hash" };
+  if (!options.publicationIdentity?.generationId) return { ok: false, reason: "generation-unavailable" };
+  const { db } = openReadonly(path.resolve(dbPath));
+  if (!db) return { ok: false, reason: "evidence-store-unavailable" };
+  try {
+    db.exec("BEGIN");
+    const publication = sqlitePublicationIdentityFromMeta(readMetaRows(db, SQLITE_PUBLICATION_META_KEYS), { strictGenerationSource: true });
+    if (!sqlitePublicationMatches(publication, options.publicationIdentity)) {
+      db.exec("ROLLBACK");
+      return { ok: false, reason: "generation-mismatch" };
+    }
+    const query = db.prepare("SELECT payload FROM source_snapshots WHERE id = ? AND length(CAST(payload AS BLOB)) <= ? LIMIT 1");
+    const manifest = query.get(INDEX_ID, MAX_INDEX_BYTES);
+    const row = query.get(indexRowId(options.referenceHash), MAX_AUDIT_BYTES);
+    const result = resolveIndexedPublicReferenceEvidence(safeJsonParse(manifest?.payload), safeJsonParse(row?.payload), options.referenceHash);
+    db.exec("COMMIT");
+    return { ...result, publication };
+  } catch {
+    try { db.exec("ROLLBACK"); } catch { /* preserve the safe read error */ }
+    return { ok: false, reason: "evidence-read-failed" };
+  } finally { closeDatabase(db); }
+};
+
 module.exports = {
+  readSqlitePublicReferenceEvidence,
   getSqliteStatus,
   readSqlitePublicationIdentity,
   readSqliteCurrentMatches,

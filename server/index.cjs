@@ -28,6 +28,7 @@ const {
   readSqliteMatchById,
   readSqliteOddsHistoryRows,
   readSqlitePredictionSnapshotRows,
+  readSqlitePublicReferenceEvidence,
   readSqliteFastResultReceiptState,
   readSqliteTransitionMatches
 } = require("./sqliteStore.cjs");
@@ -50,6 +51,7 @@ const {
   readPostgresMatchById,
   readPostgresOddsHistoryRows,
   readPostgresPredictionSnapshotRows,
+  readPostgresPublicReferenceEvidence,
   readPostgresPublicationIdentity,
   readPostgresTransitionMatches,
 } = require("./postgresProjectionStore.cjs");
@@ -132,7 +134,8 @@ const {
   createOpenResearchGateway,
 } = require("./openResearchGateway.cjs");
 const { buildHitRateAudit } = require("./hitRateAudit.cjs");
-const { compactFormalReviewPerformance } = require("./reviewPerformanceSummary.cjs");
+const { compactFormalReviewPerformance, compactReferenceReviewPerformance } = require("./reviewPerformanceSummary.cjs");
+const { compactPredictionEvidence } = require("../scripts/predictionEvidenceAudit.cjs");
 const { compactPredictionSnapshotAudit } = require("./predictionSnapshotAudit.cjs");
 const {
   summarizeCandidateProspectiveAdmission,
@@ -4695,8 +4698,10 @@ const normalizeProbabilityLaneForDetail = (lane) => {
 
 const normalizeProbabilityModelForDetail = (model) => {
   if (!model || typeof model !== "object") return model || null;
+  const { inputUsage, ...publicModel } = model;
+  void inputUsage; // Raw execution receipts are available only via the admin evidence ledger.
   return {
-    ...model,
+    ...publicModel,
     basis: model.basis && typeof model.basis === "object" ? model.basis : { zh: "--", en: "--" },
     oneXTwo: normalizeProbabilityLaneForDetail(model.oneXTwo),
     scoreDistribution: Array.isArray(model.scoreDistribution) ? model.scoreDistribution : [],
@@ -9263,6 +9268,7 @@ const buildPublicModelScorecard = ({
   strategy,
   calibration,
   formalReviewPerformance = null,
+  referenceReviewPerformance = null,
   candidateCaptureHeartbeat = null,
   candidateCaptureAttempt = null,
   candidateProspectiveRegistry = null,
@@ -10104,6 +10110,7 @@ const buildPublicModelScorecard = ({
     },
     formalPerformance,
     formalReviewPerformance: compactFormalReviewPerformance(formalReviewPerformance),
+    referenceReviewPerformance: compactReferenceReviewPerformance(referenceReviewPerformance),
     hitRateAudit,
     shadowTracks: {
       HHAD_COMPANION: hhadCompanion,
@@ -10159,6 +10166,9 @@ const compactInputAudit = (inputAudit) => {
     coverage: inputAudit.coverage || null,
     timeWindow: inputAudit.timeWindow || null,
     violationCount: inputAudit.violationCount ?? null,
+    promotionEligible: inputAudit.promotionEligible ?? null,
+    promotionBlockers: inputAudit.promotionBlockers || [],
+    evidenceDiagnostics: compactPredictionEvidence(inputAudit.evidenceDiagnostics),
     violations,
     policy: inputAudit.policy || null,
     publicView: true,
@@ -10628,6 +10638,7 @@ const getModelEvaluation = async ({ admin = false } = {}) => {
       candidateCaptureAttempt,
       candidateProspectiveRegistry,
       formalReviewPerformance: postMatchReviews?.formalPerformance || null,
+      referenceReviewPerformance: postMatchReviews?.referencePerformance || null,
     }),
     backtest: evaluation ? {
       version: evaluation.version || null,
@@ -11700,6 +11711,19 @@ const handleApi = async (req, res, url) => {
 
   if (url.pathname === "/api/db/prediction-snapshots") {
     return sendJson(res, await readPredictionSnapshotAuditPage(url));
+  }
+
+  if (url.pathname === "/api/db/public-reference-evidence") {
+    res.setHeader("Cache-Control", "no-store");
+    if (req.method !== "GET") return sendJson(res, { ok: false, reason: "method-not-allowed" }, 405);
+    const options = { referenceHash: url.searchParams.get("referenceHash"), publicationIdentity: resolveBasePublication().identity || null };
+    const usePostgres = shouldPreferPostgresRead();
+    const result = usePostgres
+      ? await readPostgresPublicReferenceEvidence(postgresPool, options)
+      : readSqlitePublicReferenceEvidence(sqliteDbPath, options);
+    const status = result.ok ? 200 : result.reason === "invalid-reference-hash" ? 400
+      : ["reference-not-found", "evidence-not-recorded"].includes(result.reason) ? 404 : 503;
+    return sendJson(res, { ...result, source: usePostgres ? "postgres" : "sqlite" }, status);
   }
 
   if (url.pathname === "/api/db/prediction-runs") {

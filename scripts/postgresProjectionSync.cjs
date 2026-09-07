@@ -1388,9 +1388,12 @@ const syncPostgresProjectionFromSqlite = async (options = {}) => {
           ? new Date(previousCommittedAt.getTime() - 6 * 60 * 60 * 1000).toISOString()
           : "1970-01-01T00:00:00.000Z";
         const full = mode === "backfill";
+        // The current public-reference archive can change through retention
+        // or a binding correction while all recordedAt clocks remain old.
+        // Project the document and its PK lookup shards outside that window.
         const sourceSql = full
           ? "SELECT id, source, captured_at, payload FROM source_snapshots ORDER BY id"
-          : "SELECT id, source, captured_at, payload FROM source_snapshots WHERE captured_at >= ? ORDER BY id";
+          : "SELECT id, source, captured_at, payload FROM source_snapshots WHERE captured_at >= ? OR id = 'public-reference-decisions:current' OR source = 'sporttery:public-reference-index' ORDER BY id";
         const sourceStatement = db.prepare(sourceSql);
         const sourceRows = await streamIteratorInsert({
           client,

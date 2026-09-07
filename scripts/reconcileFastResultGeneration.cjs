@@ -18,7 +18,7 @@ const {
   validArchivedPreMatchPrediction,
 } = require("./syncData.cjs");
 const { acquireSyncMetaCommitLock } = require("./syncMetaCommitLock.cjs");
-const { buildFormalReviewPerformance } = require("../server/reviewPerformanceSummary.cjs");
+const { buildFormalReviewPerformance, buildReferenceReviewPerformance } = require("../server/reviewPerformanceSummary.cjs");
 const {
   eventVersionOf,
   reconcileMatchLifecycle,
@@ -1184,6 +1184,10 @@ const reconcileFastResultGeneration = ({
       rows: nextReviewRows,
       summary: reviewSummary(nextReviewRows),
       formalPerformance: buildFormalReviewPerformance({
+        matches: nextHistory,
+        generatedAt: startedAt,
+      }),
+      referencePerformance: buildReferenceReviewPerformance({
         matches: nextHistory,
         generatedAt: startedAt,
       }),

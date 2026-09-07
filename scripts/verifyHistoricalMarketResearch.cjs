@@ -1,6 +1,10 @@
 "use strict";
 
-const assert = require("node:assert/strict");
+const strictAssert = require("node:assert/strict");
+let assertionCount = 0;
+const assert = new Proxy(strictAssert, { get(target, key) {
+  return typeof target[key] === "function" ? (...args) => { assertionCount++; return target[key](...args); } : target[key];
+} });
 const {
   HASH_PATTERN,
   stableHash,
@@ -79,7 +83,7 @@ const options = {
 };
 
 const artifact = buildHistoricalMarketResearch(events, options);
-assert.equal(artifact.version, "historical-market-research-shadow-v2");
+assert.equal(artifact.version, "historical-market-research-shadow-v3");
 assert.equal(artifact.status, "evaluated-research-shadow");
 assert.equal(artifact.researchOnly, true);
 assert.equal(artifact.shadowOnly, true);
@@ -141,6 +145,20 @@ assert.notEqual(futureArtifact.manifestHash, artifact.manifestHash);
 const tampered = structuredClone(artifact);
 tampered.walkForward.aggregate.market.brier += 0.01;
 assert.equal(verifyHistoricalMarketResearch(tampered), false);
+for (const mutate of [
+  fold => { fold.selection.fit.endDate = fold.selection.validation.startDate; },
+  fold => { fold.selection.fit.latestAvailableAt = `${fold.selection.validation.startDate}T00:00:00.000Z`; },
+  fold => { fold.training.latestAvailableAt = `${fold.window.startDate}T00:00:00.000Z`; },
+  fold => { fold.selection.validation.latestAvailableAt = `${fold.window.startDate}T00:00:00.000Z`; },
+]) {
+  const invalid = structuredClone(artifact), fold = invalid.walkForward.folds[0];
+  mutate(fold);
+  const { foldManifestHash, ...foldBody } = fold;
+  fold.foldManifestHash = stableHash(foldBody);
+  const { manifestHash, ...body } = invalid;
+  invalid.manifestHash = stableHash(body);
+  assert.equal(verifyHistoricalMarketResearch(invalid), false, "recomputed content hashes cannot bless temporal leakage");
+}
 
 const noOdds = { ...events[0], preMatchOdds: { home: 2 } };
 assert.equal(canonicalMarketOdds(noOdds), null);
@@ -155,8 +173,8 @@ assert.ok(candidateGrid().some((candidate) => candidate.modelWeight < 0));
 
 console.log(JSON.stringify({
   ok: true,
-  verifier: "historical-market-research-v2",
-  assertions: 41,
+  verifier: "historical-market-research-v3",
+  assertions: assertionCount,
   inputRows: events.length,
   evaluatedRows: artifact.source.evaluatedRows,
   folds: artifact.walkForward.folds.length,

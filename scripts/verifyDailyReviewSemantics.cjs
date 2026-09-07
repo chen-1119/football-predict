@@ -3,7 +3,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const rootDir = path.resolve(__dirname, '..');
-const source = fs.readFileSync(path.join(rootDir, 'src', 'pages', 'PredictionsList.tsx'), 'utf8');
+const readSource = (relativePath) => fs.readFileSync(path.join(rootDir, relativePath), 'utf8').replace(/\r\n?/g, '\n');
+const source = readSource('src/pages/PredictionsList.tsx');
 const checks = [];
 
 const check = (name, predicate) => {
@@ -58,8 +59,8 @@ check('mixed yesterday business day keeps 3 total, 2 settled, 1 not final and ar
   && productionDay.archivedDirections === 2
 ));
 
-const archiveReader = fs.readFileSync(path.join(rootDir, 'src', 'services', 'archivedPreMatchPrediction.ts'), 'utf8');
-const matchDetail = fs.readFileSync(path.join(rootDir, 'src', 'pages', 'MatchDetail.tsx'), 'utf8');
+const archiveReader = readSource('src/services/archivedPreMatchPrediction.ts');
+const matchDetail = readSource('src/pages/MatchDetail.tsx');
 check('LIVE cards and detail can display the immutable original pre-match direction', [
   "match.status === 'LIVE'",
   'const isInPlayArchiveFallback',

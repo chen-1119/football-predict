@@ -442,7 +442,23 @@ const readPostgresFastResultReceiptState = async (pool, options = {}) => {
   };
 };
 
+const readPostgresPublicReferenceEvidence = async (pool, options = {}) => {
+  const { INDEX_ID, MAX_INDEX_BYTES, MAX_AUDIT_BYTES, indexRowId, validReferenceHash, resolveIndexedPublicReferenceEvidence } = require("./publicReferenceArchive.cjs");
+  if (!validReferenceHash(options.referenceHash)) return { ok: false, reason: "invalid-reference-hash" };
+  if (!options.publicationIdentity?.generationId) return { ok: false, reason: "generation-unavailable" };
+  try {
+    const result = await withReadSnapshot(pool, options.publicationIdentity, async (client) => {
+      const manifest = await client.query("SELECT payload FROM football.source_snapshots WHERE id = $1 AND octet_length(payload::text) <= $2 LIMIT 1", [INDEX_ID, MAX_INDEX_BYTES]);
+      const rows = await client.query("SELECT payload FROM football.source_snapshots WHERE id = $1 AND octet_length(payload::text) <= $2 LIMIT 1", [indexRowId(options.referenceHash), MAX_AUDIT_BYTES]);
+      return resolveIndexedPublicReferenceEvidence(normalizePayload(manifest.rows[0]?.payload), normalizePayload(rows.rows[0]?.payload), options.referenceHash);
+    });
+    if (!result.available) return { ok: false, reason: result.reason === "postgres-generation-mismatch" ? "generation-mismatch" : "evidence-read-failed" };
+    return { ...result.value, publication: result.publication };
+  } catch { return { ok: false, reason: "evidence-store-unavailable" }; }
+};
+
 module.exports = {
+  readPostgresPublicReferenceEvidence,
   getPostgresProjectionStatus,
   publicationIdentityFromMeta,
   readPostgresCurrentMatches,

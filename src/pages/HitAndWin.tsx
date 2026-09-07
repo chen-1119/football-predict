@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContextCore';
 import type { Match } from '../services/mockData';
+import type { ReviewPerformanceBucket, ReviewPerformanceSummary } from '../services/reviewPerformanceTypes';
 import { getTeamById } from '../services/entities';
 import { DateScopeBar } from '../components/predictions/DateScopeBar';
 
@@ -35,6 +36,20 @@ const formatReviewDate = (date: string, language: 'zh' | 'en') => {
   }).format(parsed);
 };
 
+const validReviewBucket = (value: ReviewPerformanceBucket | null | undefined) => {
+  const { won, lost, settled } = value || {};
+  if (![won, lost, settled].every((n) => typeof n === 'number' && Number.isSafeInteger(n) && n >= 0)) return undefined;
+  if (won! + lost! !== settled) return undefined;
+  return { won: won!, lost: lost!, settled: settled!, hitRate: settled! > 0 ? won! / settled! : null };
+};
+
+const dailyReviewBucket = (summary: ReviewPerformanceSummary | null | undefined, date: string) => {
+  if (!summary || !validReviewBucket(summary.cumulative) || !Array.isArray(summary.daily)
+    || !date || !summary.startDate || date < summary.startDate) return undefined;
+  const found = summary.daily.find((row) => row.date === date);
+  return found ? validReviewBucket(found) : { won: 0, lost: 0, settled: 0, hitRate: null };
+};
+
 export const HitAndWin: React.FC = () => {
   const { language, matches, dataSync } = useApp();
   const navigate = useNavigate();
@@ -47,9 +62,19 @@ export const HitAndWin: React.FC = () => {
       return rightAt - leftAt;
     }), [matches]);
 
-  const systemReviewDates = useMemo(() => Array.from(new Set(
-    allSystemReviewMatches.map(reviewDateKey).filter(Boolean)
-  )).sort((left, right) => right.localeCompare(left)), [allSystemReviewMatches]);
+  const scorecard = dataSync.modelEvaluation?.publicScorecard;
+  const formalReviewPerformance = scorecard?.formalReviewPerformance;
+  const rawReferencePerformance = scorecard?.referenceReviewPerformance;
+  const referenceReviewPerformance = rawReferencePerformance?.version === 'reference-review-performance-v1'
+    && rawReferencePerformance.policy?.sourceScope === 'server-complete-history'
+    && rawReferencePerformance.policy?.unit === 'match-best'
+    ? rawReferencePerformance : undefined;
+  const systemReviewDates = useMemo(() => Array.from(new Set([
+    ...allSystemReviewMatches.map(reviewDateKey),
+    ...(formalReviewPerformance?.daily || []).map((row) => row.date || ''),
+    ...(referenceReviewPerformance?.daily || []).map((row) => row.date || ''),
+  ].filter(Boolean))).sort((left, right) => right.localeCompare(left)),
+  [allSystemReviewMatches, formalReviewPerformance, referenceReviewPerformance]);
   const [selectedReviewDate, setSelectedReviewDate] = useState('');
   const activeReviewDate = selectedReviewDate && systemReviewDates.includes(selectedReviewDate)
     ? selectedReviewDate
@@ -61,61 +86,37 @@ export const HitAndWin: React.FC = () => {
     !activeReviewDate || reviewDateKey(match) === activeReviewDate
   )), [activeReviewDate, allSystemReviewMatches]);
   const systemReviewSummary = useMemo(() => systemReviewMatches.reduce((summary, match) => {
-    const predictionReview = match.postMatchReview?.predictionReview;
-    const settledRows = predictionReview?.rows?.filter((row) => row.resultStatus === 'WON' || row.resultStatus === 'LOST') || [];
-    const referenceBestRow = settledRows.find((row) => (
-      row.marketType === 'BEST'
-      && row.performanceTrack !== 'formal'
-      && row.performanceTrack !== 'live-model'
-      && (row.recommendationAction === 'reference' || row.reviewRole === 'reference')
-    ));
-    if (predictionReview?.formalBestStatus === 'WON') summary.formalWon += 1;
-    if (predictionReview?.formalBestStatus === 'LOST') summary.formalLost += 1;
-    if (referenceBestRow?.resultStatus === 'WON') summary.referenceWon += 1;
-    if (referenceBestRow?.resultStatus === 'LOST') summary.referenceLost += 1;
     if (match.postMatchReview) summary.reviewed += 1;
     else summary.resultOnly += 1;
     return summary;
   }, {
-    formalWon: 0,
-    formalLost: 0,
-    referenceWon: 0,
-    referenceLost: 0,
     reviewed: 0,
     resultOnly: 0
   }), [systemReviewMatches]);
-  const formalReviewPerformance = dataSync.modelEvaluation?.publicScorecard?.formalReviewPerformance;
-  const selectedFormalPerformance = formalReviewPerformance?.daily?.find((row) => row.date === activeReviewDate);
-  const selectedFormalSettled = Number(selectedFormalPerformance?.settled
-    ?? (systemReviewSummary.formalWon + systemReviewSummary.formalLost));
-  const selectedFormalWon = Number(selectedFormalPerformance?.won ?? systemReviewSummary.formalWon);
-  const selectedFormalHitRate = selectedFormalSettled > 0 ? selectedFormalWon / selectedFormalSettled : null;
-  const selectedReferenceSettled = systemReviewSummary.referenceWon + systemReviewSummary.referenceLost;
-  const selectedReferenceHitRate = selectedReferenceSettled > 0
-    ? systemReviewSummary.referenceWon / selectedReferenceSettled
-    : null;
-  const cumulativeReferencePerformance = useMemo(() => allSystemReviewMatches.reduce((summary, match) => {
-    const date = reviewDateKey(match);
-    if (!date || date < (formalReviewPerformance?.startDate || '2026-08-16')) return summary;
-    const settledRows = match.postMatchReview?.predictionReview?.rows?.filter((row) => row.resultStatus === 'WON' || row.resultStatus === 'LOST') || [];
-    const referenceBestRow = settledRows.find((row) => (
-      row.marketType === 'BEST'
-      && row.performanceTrack !== 'formal'
-      && row.performanceTrack !== 'live-model'
-      && (row.recommendationAction === 'reference' || row.reviewRole === 'reference')
-    ));
-    if (referenceBestRow?.resultStatus === 'WON') summary.won += 1;
-    if (referenceBestRow?.resultStatus === 'LOST') summary.lost += 1;
-    return summary;
-  }, { won: 0, lost: 0 }), [allSystemReviewMatches, formalReviewPerformance?.startDate]);
-  const cumulativeReferenceSettled = cumulativeReferencePerformance.won + cumulativeReferencePerformance.lost;
-  const cumulativeReferenceHitRate = cumulativeReferenceSettled > 0
-    ? cumulativeReferencePerformance.won / cumulativeReferenceSettled
-    : null;
-  const cumulativeFormalPerformance = formalReviewPerformance?.cumulative;
-  const formatHitRate = (rate: number | null | undefined) => (
-    typeof rate === 'number' && Number.isFinite(rate) ? `${(rate * 100).toFixed(1)}%` : '--'
-  );
+  // Both daily and cumulative rates come from the complete server ledger.
+  // Browser history is only a paginated detail list, never a statistics fallback.
+  const selectedFormalPerformance = dailyReviewBucket(formalReviewPerformance, activeReviewDate);
+  const selectedReferencePerformance = dailyReviewBucket(referenceReviewPerformance, activeReviewDate);
+  const cumulativeReferencePerformance = validReviewBucket(referenceReviewPerformance?.cumulative);
+  const cumulativeFormalPerformance = validReviewBucket(formalReviewPerformance?.cumulative);
+  const formatHitRate = (bucket: ReturnType<typeof validReviewBucket>) => !bucket
+    ? (language === 'zh' ? '统计待更新' : 'Statistics pending')
+    : bucket.hitRate === null
+      ? (language === 'zh' ? '无已结算样本' : 'No settled samples')
+      : `${(bucket.hitRate * 100).toFixed(1)}%`;
+  const performanceCards = [
+    { key: 'data-review-date-reference-hit-rate', title: language === 'zh' ? '当日参考 BEST' : 'Daily reference BEST', scope: activeReviewDate || '--', bucket: selectedReferencePerformance },
+    { key: 'data-review-date-hit-rate', title: language === 'zh' ? '当日正式 BEST' : 'Daily formal BEST', scope: activeReviewDate || '--', bucket: selectedFormalPerformance },
+    { key: 'data-review-cumulative-reference-hit-rate', title: language === 'zh' ? '参考 BEST 累计' : 'Reference BEST cumulative', scope: `${language === 'zh' ? '自' : 'Since'} ${referenceReviewPerformance?.startDate || '--'}`, bucket: cumulativeReferencePerformance },
+    { key: 'data-review-cumulative-hit-rate', title: language === 'zh' ? '正式 BEST 累计' : 'Formal BEST cumulative', scope: `${language === 'zh' ? '自' : 'Since'} ${formalReviewPerformance?.startDate || '--'}`, bucket: cumulativeFormalPerformance },
+  ];
+  const formatStatisticsTime = (value: string | null | undefined) => {
+    const ms = Date.parse(value || '');
+    return Number.isFinite(ms)
+      ? new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-GB', {
+        timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+      }).format(new Date(ms)) : '--';
+  };
 
   const translations = {
     title: { zh: '个人赛前复盘笔记', en: 'Personal Pre-match Review Notes' },
@@ -215,30 +216,32 @@ export const HitAndWin: React.FC = () => {
             onSelectDate={setSelectedReviewDate}
           />
         )}
-        {systemReviewMatches.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.78rem', color: 'hsl(var(--text-secondary))' }}>
-            <span className="mini-watch">{t('reviewedCount')} {systemReviewSummary.reviewed}/{systemReviewMatches.length}</span>
-            {systemReviewSummary.resultOnly > 0 && <span className="mini-watch">{t('resultOnlyCount')} {systemReviewSummary.resultOnly}</span>}
-            <span className="mini-hit" data-review-date-reference-hit-rate={selectedReferenceHitRate ?? ''}>
-              {language === 'zh' ? '当日数据推荐命中率' : 'Daily data-pick hit rate'} {formatHitRate(selectedReferenceHitRate)} ({systemReviewSummary.referenceWon}/{selectedReferenceSettled})
-            </span>
-            {selectedFormalSettled > 0 && (
-              <span className="mini-hit" data-review-date-hit-rate={selectedFormalHitRate ?? ''}>
-                {language === 'zh' ? '当日正式命中率' : 'Daily formal hit rate'} {formatHitRate(selectedFormalHitRate)} ({selectedFormalWon}/{selectedFormalSettled})
+        <div data-review-statistics-scope="server-complete-history" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '12px' }}>
+          {performanceCards.map(({ key, title, scope, bucket }) => (
+            <article key={key} {...{ [key]: bucket?.hitRate ?? '' }} style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: '8px', padding: '14px', border: '1px solid hsl(var(--border))', borderRadius: '12px', background: 'hsl(var(--bg))' }}>
+              <h3 style={{ fontSize: '13px', fontWeight: 650, color: 'hsl(var(--text-secondary))', lineHeight: 1.5 }}>{title}</h3>
+              <span style={{ fontSize: '12px', color: 'hsl(var(--text-muted))', lineHeight: 1.4 }}>{scope}</span>
+              <strong style={{ fontSize: bucket?.hitRate != null ? '22px' : '16px', fontWeight: 750, color: bucket?.hitRate != null ? 'hsl(var(--text-primary))' : 'hsl(var(--text-muted))', lineHeight: 1.35, paddingBlock: '2px' }}>{formatHitRate(bucket)}</strong>
+              <span style={{ fontSize: '12px', color: 'hsl(var(--text-secondary))', lineHeight: 1.5 }}>
+                {bucket
+                  ? (language === 'zh' ? `命中 ${bucket.won} / 已结算 ${bucket.settled}` : `Won ${bucket.won} / settled ${bucket.settled}`)
+                  : (language === 'zh' ? '等待服务端完整统计' : 'Awaiting complete server statistics')}
               </span>
-            )}
-            {cumulativeReferenceSettled > 0 && (
-              <span className="mini-hit" data-review-cumulative-reference-hit-rate={cumulativeReferenceHitRate ?? ''}>
-                {language === 'zh' ? `数据推荐累计（自 ${formalReviewPerformance?.startDate || '2026-08-16'}）` : `Data-pick cumulative since ${formalReviewPerformance?.startDate || '2026-08-16'}`} {formatHitRate(cumulativeReferenceHitRate)} ({cumulativeReferencePerformance.won}/{cumulativeReferenceSettled})
-              </span>
-            )}
-            {Number(cumulativeFormalPerformance?.settled || 0) > 0 && (
-              <span className="mini-hit" data-review-cumulative-hit-rate={cumulativeFormalPerformance?.hitRate ?? ''}>
-                {language === 'zh' ? `累计命中率（自 ${formalReviewPerformance?.startDate || '2026-08-16'}）` : `Cumulative since ${formalReviewPerformance?.startDate || '2026-08-16'}`} {formatHitRate(cumulativeFormalPerformance?.hitRate)} ({Number(cumulativeFormalPerformance?.won || 0)}/{Number(cumulativeFormalPerformance?.settled || 0)})
-              </span>
-            )}
-          </div>
-        )}
+            </article>
+          ))}
+        </div>
+        <p data-review-denominator="one-frozen-best-per-match" style={{ color: 'hsl(var(--text-muted))', fontSize: '0.76rem', lineHeight: 1.6 }}>
+          {language === 'zh'
+            ? '统计来自服务端完整历史；每场只计一个赛前冻结 BEST，命中数 / 已结算数。正式与参考独立，实时、外部赛果影子、逐玩法分析和作废场次不混入。下方列表按页加载，不影响累计。'
+            : 'Statistics use complete server history: one frozen BEST per match, won / settled. Formal and reference ledgers are separate; live, external-result shadow, per-market analysis, and void rows are excluded. The paginated list does not limit cumulative totals.'}
+          <br />
+          {language === 'zh' ? '统计生成（北京时间）' : 'Statistics generated (Asia/Shanghai)'}：
+          {language === 'zh' ? '参考' : 'Reference'} {formatStatisticsTime(referenceReviewPerformance?.generatedAt)} · {language === 'zh' ? '正式' : 'Formal'} {formatStatisticsTime(formalReviewPerformance?.generatedAt)}
+        </p>
+        <p style={{ color: 'hsl(var(--text-muted))', fontSize: '12px', lineHeight: 1.5 }}>
+          {language === 'zh' ? '本页已加载复盘' : 'Reviews loaded on this page'} {systemReviewSummary.reviewed}/{systemReviewMatches.length}
+          {systemReviewSummary.resultOnly > 0 ? ` · ${t('resultOnlyCount')} ${systemReviewSummary.resultOnly}` : ''}
+        </p>
         {systemReviewMatches.length === 0 ? (
           <p style={{ padding: '1.25rem', textAlign: 'center', color: 'hsl(var(--text-muted))', border: '1px dashed hsl(var(--border))', borderRadius: '10px' }}>{t('noSystemReview')}</p>
         ) : (

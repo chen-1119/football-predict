@@ -4,7 +4,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { pipeline } = require("node:stream/promises");
-const { Readable } = require("node:stream");
+const { Readable, Transform } = require("node:stream");
 const {
   createPostgresPool,
   getPostgresHealth,
@@ -61,10 +61,25 @@ function previousSeasonCode(now = new Date()) {
   return `${String(seasonStart).slice(-2)}${String(seasonStart + 1).slice(-2)}`;
 }
 
+function currentSeasonCode(now = new Date()) {
+  const start = now.getUTCFullYear() - (now.getUTCMonth() < 6 ? 1 : 0);
+  return `${String(start).slice(-2)}${String(start + 1).slice(-2)}`;
+}
+
+function resolveSeason(value, now = new Date()) {
+  if (!value || value === "previous") return previousSeasonCode(now);
+  if (value === "current") return currentSeasonCode(now);
+  if (!/^\d{4}$/.test(String(value))) throw new Error("--season must be current, previous or a four-digit season code");
+  const code = String(value);
+  if ((Number(code.slice(0, 2)) + 1) % 100 !== Number(code.slice(2))) throw new Error("season code must contain consecutive years");
+  return code;
+}
+
 function sourceList({ season, only } = {}) {
   const selected = only
     ? new Set(String(only).split(",").map((value) => value.trim().toUpperCase()).filter(Boolean))
     : null;
+  if (selected && [...selected].some(code => ![...MAIN_DIVISIONS, ...WORLD_DIVISIONS].includes(code))) throw new Error("--only contains an unknown division");
   const rows = [
     ...MAIN_DIVISIONS.map((code) => ({
       code,
@@ -80,27 +95,56 @@ function sourceList({ season, only } = {}) {
   return selected ? rows.filter((row) => selected.has(row.code)) : rows;
 }
 
-async function downloadCsv(source, destination, prior = {}, refresh = false) {
+async function downloadCsv(source, destination, prior = {}, refresh = false, { maxBytes = 16 * 1024 * 1024, now = () => new Date().toISOString() } = {}) {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) throw new Error("invalid CSV download size limit");
+  const oldBytes = fs.existsSync(destination) && fs.statSync(destination).size <= maxBytes ? fs.readFileSync(destination) : null;
+  const priorDigest = oldBytes ? sha256(oldBytes) : null;
+  const receipt = prior.observation;
+  const validPriorReceipt = receipt?.version === "football-data-content-observation-v1" && receipt.sourceUrl === source.url
+    && receipt.sha256 === priorDigest && receipt.scope === "local-fetch-only" && receipt.sourceVerified === false
+    && typeof receipt.firstObservedAt === "string" && Number.isFinite(Date.parse(receipt.firstObservedAt))
+    && new Date(receipt.firstObservedAt).toISOString() === receipt.firstObservedAt
+    && Date.parse(receipt.firstObservedAt) <= Date.parse(now());
   const headers = {
     accept: "text/csv,text/plain;q=0.9,*/*;q=0.1",
     "user-agent": "football-predict-free-source-sync/1.0",
   };
-  if (!refresh && prior.etag) headers["if-none-match"] = prior.etag;
-  if (!refresh && prior.lastModified) headers["if-modified-since"] = prior.lastModified;
+  // A legacy/tampered/missing cached file cannot become fresh through a 304.
+  if (!refresh && validPriorReceipt && prior.etag) headers["if-none-match"] = prior.etag;
+  if (!refresh && validPriorReceipt && prior.lastModified) headers["if-modified-since"] = prior.lastModified;
   const response = await fetch(source.url, { headers, redirect: "follow", signal: AbortSignal.timeout(45_000) });
-  if (response.status === 304 && fs.existsSync(destination)) {
-    return { ok: true, changed: false, status: 304, bytes: fs.statSync(destination).size };
+  if (response.status === 304) {
+    if (!validPriorReceipt) return { ok: false, changed: false, status: 304, error: "304 without verified cached content receipt" };
+    return { ok: true, changed: false, status: 304, bytes: oldBytes.length, sha256: priorDigest,
+      etag: response.headers.get("etag") || prior.etag || null,
+      lastModified: response.headers.get("last-modified") || prior.lastModified || null,
+      observation: receipt };
   }
   if (!response.ok) {
+    await response.body?.cancel();
     return { ok: false, changed: false, status: response.status, error: `HTTP ${response.status}` };
   }
   const contentType = String(response.headers.get("content-type") || "").toLowerCase();
   if (!contentType.includes("csv") && !contentType.includes("text/plain") && !contentType.includes("octet-stream")) {
+    await response.body?.cancel();
     return { ok: false, changed: false, status: response.status, error: `unexpected content type ${contentType}` };
   }
+  if (Number(response.headers.get("content-length")) > maxBytes) {
+    await response.body?.cancel();
+    return { ok: false, changed: false, status: response.status, error: "CSV exceeds download size limit" };
+  }
   fs.mkdirSync(path.dirname(destination), { recursive: true });
-  const temporary = `${destination}.tmp-${process.pid}`;
-  await pipeline(Readable.fromWeb(response.body), fs.createWriteStream(temporary, { mode: 0o600 }));
+  const temporary = `${destination}.tmp-${process.pid}-${crypto.randomUUID()}`;
+  let received = 0;
+  try {
+    await pipeline(Readable.fromWeb(response.body), new Transform({ transform(chunk, encoding, done) {
+      received += chunk.length;
+      done(received > maxBytes ? new Error("CSV exceeds download size limit") : null, chunk);
+    } }), fs.createWriteStream(temporary, { mode: 0o600, flags: "wx" }));
+  } catch (error) {
+    if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
+    return { ok: false, changed: false, status: response.status, error: error.message };
+  }
   const bytes = fs.readFileSync(temporary);
   const firstLine = bytes.subarray(0, Math.min(bytes.length, 4096)).toString("utf8");
   if (!/(HomeTeam|Home),(AwayTeam|Away)/i.test(firstLine) || !/(FTHG|HG),(FTAG|AG)/i.test(firstLine)) {
@@ -108,11 +152,10 @@ async function downloadCsv(source, destination, prior = {}, refresh = false) {
     return { ok: false, changed: false, status: response.status, error: "CSV header contract failed" };
   }
   const digest = sha256(bytes);
-  const priorDigest = fs.existsSync(destination) ? sha256(fs.readFileSync(destination)) : null;
   if (digest === priorDigest) {
     fs.unlinkSync(temporary);
   } else if (fs.existsSync(destination)) {
-    const previous = `${destination}.previous-${process.pid}`;
+    const previous = `${destination}.previous-${process.pid}-${crypto.randomUUID()}`;
     fs.renameSync(destination, previous);
     try {
       fs.renameSync(temporary, destination);
@@ -130,19 +173,24 @@ async function downloadCsv(source, destination, prior = {}, refresh = false) {
     status: response.status,
     bytes: bytes.length,
     sha256: digest,
+    observation: validPriorReceipt && digest === priorDigest ? receipt : {
+      version: "football-data-content-observation-v1", scope: "local-fetch-only", sourceVerified: false,
+      sourceUrl: source.url, sha256: digest, firstObservedAt: now(),
+      policy: "first recorded receipt of these exact CSV bytes; not historical result availability or independent-source proof",
+    },
     etag: response.headers.get("etag"),
     lastModified: response.headers.get("last-modified"),
   };
 }
 
-async function main() {
-  const args = parseArgs(process.argv.slice(2));
-  const season = String(args.season || process.env.FOOTBALL_DATA_RESULTS_SEASON || previousSeasonCode());
-  if (!/^\d{4}$/.test(season)) throw new Error("--season must be a four-digit Football-Data season code such as 2526");
+async function main({ argv = process.argv.slice(2), sourceRows = null, quiet = false } = {}) {
+  const args = parseArgs(argv);
+  const season = resolveSeason(args.season || process.env.FOOTBALL_DATA_RESULTS_SEASON);
   const outputDir = path.resolve(args.output || defaultOutputDir);
   const statusFile = path.join(outputDir, "sync-status.json");
   const priorStatus = readJson(statusFile, { sources: {} });
-  const sources = sourceList({ season, only: args.only });
+  const sources = sourceRows || sourceList({ season, only: args.only });
+  if (!sources.length) throw new Error("no result sources selected");
   const startedAt = new Date().toISOString();
   const results = [];
   let pool = null;
@@ -157,24 +205,25 @@ async function main() {
     }
     for (const source of sources) {
       const destination = path.join(outputDir, source.group, `${source.code}-${season}.csv`);
-      const downloaded = await downloadCsv(
+      let downloaded;
+      try { downloaded = await downloadCsv(
         source,
         destination,
         priorStatus.sources?.[source.url] || {},
         args.refresh === true,
-      );
+      ); } catch (error) { downloaded = { ok: false, changed: false, error: error.message || String(error) }; }
       const row = { ...source, destination, downloaded, import: null };
       if (downloaded.ok && args.postgres) {
-        row.import = await importHistoricalFileToPostgres({
+        try { row.import = await importHistoricalFileToPostgres({
           pool,
           dataset: "football-data",
           filePath: destination,
           batchSize: Number(args["batch-size"] || 500),
           maxRejectedRatio: Number(args["max-rejected-ratio"] || 0.01),
-        });
+        }); } catch (error) { row.import = { ok: false, error: error.message || String(error) }; }
       }
       results.push(row);
-      process.stderr.write(`${source.code}: ${downloaded.ok ? "ok" : "failed"}${row.import ? ", imported" : ""}\n`);
+      if (!quiet) process.stderr.write(`${source.code}: ${downloaded.ok ? "ok" : "failed"}${row.import ? row.import.ok ? ", imported" : ", import failed" : ""}\n`);
     }
   } finally {
     if (pool) await pool.end();
@@ -182,7 +231,7 @@ async function main() {
 
   const completedAt = new Date().toISOString();
   const status = {
-    version: "football-data-results-sync-v1",
+    version: "football-data-results-sync-v2-content-observation",
     startedAt,
     completedAt,
     season,
@@ -191,30 +240,34 @@ async function main() {
     summary: {
       sources: results.length,
       downloadedOk: results.filter((row) => row.downloaded.ok).length,
-      failed: results.filter((row) => !row.downloaded.ok).length,
+      failed: results.filter((row) => !row.downloaded.ok || row.import?.ok === false).length,
       changed: results.filter((row) => row.downloaded.changed).length,
       imported: results.filter((row) => row.import?.ok).length,
     },
-    sources: Object.fromEntries(results.map((row) => [row.url, {
+    sources: { ...(priorStatus.sources || {}), ...Object.fromEntries(results.map((row) => [row.url, {
+      ...(priorStatus.sources?.[row.url] || {}),
       code: row.code,
       group: row.group,
       destination: row.destination,
       checkedAt: completedAt,
       ...row.downloaded,
+      error: row.downloaded.error || null,
       import: row.import ? {
         ok: row.import.ok,
+        error: row.import.error || null,
         idempotent: row.import.idempotent,
         runId: row.import.runId || row.import.priorRun?.run_id || null,
         acceptedRows: row.import.acceptedRows ?? row.import.priorRun?.accepted_rows ?? null,
         insertedEvents: row.import.insertedEvents ?? 0,
       } : null,
-    }])),
+    }])) },
   };
   writeJsonDurably(statusFile, status);
-  process.stdout.write(`${JSON.stringify(status, null, 2)}\n`);
-  if (status.summary.downloadedOk === 0 || (args.postgres && status.summary.imported === 0)) {
+  if (!quiet) process.stdout.write(`${JSON.stringify(status, null, 2)}\n`);
+  if (status.summary.failed > 0 || status.summary.downloadedOk === 0 || (args.postgres && status.summary.imported === 0)) {
     process.exitCode = 1;
   }
+  return status;
 }
 
 if (require.main === module) {
@@ -228,4 +281,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { MAIN_DIVISIONS, WORLD_DIVISIONS, previousSeasonCode, sourceList };
+module.exports = { MAIN_DIVISIONS, WORLD_DIVISIONS, previousSeasonCode, currentSeasonCode, resolveSeason, sourceList, downloadCsv, main };

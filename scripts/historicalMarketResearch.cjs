@@ -9,7 +9,7 @@ const {
   probabilityAudit,
 } = require("./dynamicGoalStrengthModel.cjs");
 
-const HISTORICAL_MARKET_RESEARCH_VERSION = "historical-market-research-shadow-v2";
+const HISTORICAL_MARKET_RESEARCH_VERSION = "historical-market-research-shadow-v3";
 const OUTCOMES = Object.freeze(["1", "X", "2"]);
 const DEFAULT_MODEL_WEIGHTS = Object.freeze([
   -0.2,
@@ -246,6 +246,7 @@ const buildResearchRows = (events, dynamicArtifact) => {
       sourceEventId: snapshot.sourceEventId,
       sourceDataset: event.sourceDataset || "unknown",
       date: snapshot.forecastDate,
+      availableAt: label.availableAt,
       competition: snapshot.match?.competition || event.competition || "unknown",
       actual: label.outcome,
       odds,
@@ -290,15 +291,14 @@ const selectionSplit = (rows) => {
     validationRows = candidate.concat(validationRows);
     splitIndex -= 1;
   }
-  const fitRows = groups.slice(0, splitIndex).flatMap((group) => group.rows);
-  if (!fitRows.length || !validationRows.length) {
-    const fallbackIndex = Math.max(1, Math.min(rows.length - 1, Math.floor(rows.length * 0.8)));
-    return {
-      fitRows: rows.slice(0, fallbackIndex),
-      validationRows: rows.slice(fallbackIndex),
-    };
-  }
-  return { fitRows, validationRows };
+  if (!validationRows.length) return null;
+  const fitPool = groups.slice(0, splitIndex).flatMap((group) => group.rows);
+  const boundary = Date.parse(`${validationRows[0].date}T00:00:00.000Z`);
+  const fitRows = fitPool.filter(row => Date.parse(row.availableAt) < boundary);
+  // Never fall back to a row split that divides a date batch. Results from
+  // earlier matches must also have been available before inner validation.
+  if (fitRows.length < minimumFitRows || !fitRows.length) return null;
+  return { fitRows, validationRows, unavailableFitRows: fitPool.length - fitRows.length };
 };
 
 const fitCandidateGrid = (rows, grid) => grid.map((candidate) => (
@@ -310,8 +310,8 @@ const metricsByCandidate = (rows, grid) => new Map(grid.map((candidate) => [
   metricsFor(rows, (row) => logPool(row.market, row.model, candidate)),
 ]));
 
-const candidateScore = (metrics) => Number(metrics?.logLoss || Infinity)
-  + 0.5 * Number(metrics?.brier || Infinity);
+const candidateScore = (metrics) => Number.isFinite(metrics?.logLoss) && Number.isFinite(metrics?.brier)
+  ? metrics.logLoss + 0.5 * metrics.brier : Infinity;
 
 const pickCandidate = ({ grid, metrics, requireModel = false }) => {
   const marketCandidate = grid.find((candidate) => (
@@ -343,6 +343,17 @@ const pickCandidate = ({ grid, metrics, requireModel = false }) => {
 };
 
 const nestedWalkForward = (rows, options = {}) => {
+  const seen = new Set();
+  for (const row of rows) {
+    if (!row?.sourceEventId || seen.has(row.sourceEventId)) throw new HistoricalMarketResearchError("research rows must contain one revision per event", { code: "DUPLICATE_RESEARCH_EVENT" });
+    seen.add(row.sourceEventId);
+    const date = Date.parse(`${row.date}T00:00:00.000Z`), available = Date.parse(row.availableAt);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(row.date || "") || !Number.isFinite(date)
+      || new Date(date).toISOString().slice(0, 10) !== row.date || !Number.isFinite(available) || available <= date) {
+      throw new HistoricalMarketResearchError("research rows require a valid result availability clock after the event date", { code: "INVALID_RESEARCH_AVAILABILITY" });
+    }
+  }
+  rows = rows.slice().sort((a, b) => a.date.localeCompare(b.date) || a.sourceEventId.localeCompare(b.sourceEventId));
   const minimumTrainingRows = Math.max(100, Math.trunc(Number(options.minimumTrainingRows) || 5000));
   const holdoutRows = Math.max(50, Math.trunc(Number(options.holdoutRows) || 2000));
   const minimumFolds = Math.max(2, Math.trunc(Number(options.minimumFolds) || 6));
@@ -355,6 +366,7 @@ const nestedWalkForward = (rows, options = {}) => {
     groupIndex += 1;
   }
   const folds = [];
+  const skippedWindows = [];
   const selectedRows = [];
   const selectedModelRows = [];
   const marketRows = [];
@@ -368,8 +380,20 @@ const nestedWalkForward = (rows, options = {}) => {
       holdout = holdout.concat(dateGroups[groupIndex].rows);
       groupIndex += 1;
     }
-    if (holdout.length < holdoutRows) break;
-    const selectionRows = selectionSplit(trainingRows);
+    if (holdout.length < holdoutRows) {
+      skippedWindows.push({ startDate: holdout[0]?.date || null, endDate: holdout.at(-1)?.date || null, rows: holdout.length, reason: "holdout-rows-insufficient" });
+      break;
+    }
+    const boundary = Date.parse(`${holdout[0].date}T00:00:00.000Z`);
+    const availableTraining = trainingRows.filter(row => Date.parse(row.availableAt) < boundary);
+    const selectionRows = availableTraining.length >= minimumTrainingRows ? selectionSplit(availableTraining) : null;
+    if (!selectionRows) {
+      skippedWindows.push({ startDate: holdout[0].date, endDate: holdout.at(-1).date, rows: holdout.length,
+        reason: availableTraining.length < minimumTrainingRows ? "available-training-rows-insufficient" : "inner-date-split-insufficient",
+        availableTrainingRows: availableTraining.length, unavailableTrainingRows: trainingRows.length - availableTraining.length });
+      trainingRows = trainingRows.concat(holdout);
+      continue;
+    }
     const selectionGrid = fitCandidateGrid(selectionRows.fitRows, grid);
     const selectionMetrics = metricsByCandidate(selectionRows.validationRows, selectionGrid);
     const selectedForRefit = pickCandidate({
@@ -382,11 +406,11 @@ const nestedWalkForward = (rows, options = {}) => {
       requireModel: true,
     });
     const selected = fitOutcomeBias(
-      trainingRows,
+      availableTraining,
       grid.find((candidate) => candidate.id === selectedForRefit.id),
     );
     const selectedModel = fitOutcomeBias(
-      trainingRows,
+      availableTraining,
       grid.find((candidate) => candidate.id === selectedModelForRefit.id),
     );
     const marketMetrics = metricsFor(holdout, (row) => row.market);
@@ -405,10 +429,12 @@ const nestedWalkForward = (rows, options = {}) => {
     const foldBody = {
       fold: folds.length + 1,
       training: {
-        rows: trainingRows.length,
-        startDate: trainingRows[0]?.date || null,
-        endDate: trainingRows.at(-1)?.date || null,
-        rootHash: stableHash(trainingRows.map((row) => `${row.sourceEventId}:${row.featureHash}:${row.labelHash}`)),
+        rows: availableTraining.length,
+        excludedUnavailableRows: trainingRows.length - availableTraining.length,
+        latestAvailableAt: new Date(Math.max(...availableTraining.map(row => Date.parse(row.availableAt)))).toISOString(),
+        startDate: availableTraining[0]?.date || null,
+        endDate: availableTraining.at(-1)?.date || null,
+        rootHash: stableHash(availableTraining.map((row) => `${row.sourceEventId}:${row.featureHash}:${row.labelHash}`)),
       },
       window: {
         rows: holdout.length,
@@ -417,9 +443,11 @@ const nestedWalkForward = (rows, options = {}) => {
         endDate: windowGroups.at(-1).date,
       },
       selection: {
-        policy: "inner chronological validation only; refit selected calibration on all prior rows; require both Brier and Log Loss non-worse than raw no-vig market; ties prefer lower model weight and weaker calibration",
+        policy: "whole-date chronological validation; fit labels available strictly before validation; refit only labels available strictly before holdout; require both Brier and Log Loss non-worse than raw no-vig market; ties prefer lower model weight and weaker calibration",
         fit: {
           rows: selectionRows.fitRows.length,
+          excludedUnavailableRows: selectionRows.unavailableFitRows,
+          latestAvailableAt: new Date(Math.max(...selectionRows.fitRows.map(row => Date.parse(row.availableAt)))).toISOString(),
           startDate: selectionRows.fitRows[0]?.date || null,
           endDate: selectionRows.fitRows.at(-1)?.date || null,
           rootHash: stableHash(selectionRows.fitRows.map((row) => (
@@ -428,6 +456,7 @@ const nestedWalkForward = (rows, options = {}) => {
         },
         validation: {
           rows: selectionRows.validationRows.length,
+          latestAvailableAt: new Date(Math.max(...selectionRows.validationRows.map(row => Date.parse(row.availableAt)))).toISOString(),
           startDate: selectionRows.validationRows[0]?.date || null,
           endDate: selectionRows.validationRows.at(-1)?.date || null,
           rootHash: stableHash(selectionRows.validationRows.map((row) => (
@@ -477,6 +506,9 @@ const nestedWalkForward = (rows, options = {}) => {
   };
   return {
     config: { minimumTrainingRows, holdoutRows, minimumFolds, candidateGrid: grid },
+    skippedWindows,
+    coverage: { inputRows: rows.length, initialTrainingRows: rows.length - selectedRows.length - skippedWindows.reduce((n, row) => n + row.rows, 0),
+      evaluatedRows: selectedRows.length, skippedRows: skippedWindows.reduce((n, row) => n + row.rows, 0) },
     folds,
     aggregate,
     status: folds.length >= minimumFolds ? "evaluated-research-shadow" : "blocked-research-shadow",
@@ -598,6 +630,11 @@ function verifyHistoricalMarketResearch(artifact) {
       const { foldManifestHash: _foldHash, ...foldBody } = fold;
       if (stableHash(foldBody) !== fold.foldManifestHash) return false;
       if (!(fold.training?.endDate < fold.window?.startDate)) return false;
+      if (!(fold.selection?.fit?.endDate < fold.selection?.validation?.startDate)) return false;
+      if (!(fold.selection?.validation?.endDate <= fold.training.endDate)) return false;
+      if (!(Date.parse(fold.selection.fit.latestAvailableAt) < Date.parse(`${fold.selection.validation.startDate}T00:00:00.000Z`))) return false;
+      if (!(Date.parse(fold.training.latestAvailableAt) < Date.parse(`${fold.window.startDate}T00:00:00.000Z`))) return false;
+      if (!(Date.parse(fold.selection.validation.latestAvailableAt) < Date.parse(`${fold.window.startDate}T00:00:00.000Z`))) return false;
       if (!(fold.window?.rows >= artifact.walkForward.config.holdoutRows)) return false;
       if (!fold.selection?.selectedCandidate || !fold.selection?.selectedModelCandidate) return false;
     }

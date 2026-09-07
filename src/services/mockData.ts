@@ -137,6 +137,23 @@ export interface PredictionDetail {
   resultStatus: 'WON' | 'LOST' | 'PENDING' | 'VOID';
 }
 
+export interface FormResultEvidenceSummary {
+  version: string;
+  sourceVerified: false;
+  sampleRows: number | null;
+  homeRows: number | null;
+  awayRows: number | null;
+  observedRows: number | null;
+  missingObservedAtRows: number | null;
+  missingSourceRows: number | null;
+  beforeKickoffRows: number | null;
+  afterDecisionRows: number | null;
+  latestObservedAt: string | null;
+  decisionAt: string | null;
+  temporalStatus: string | null;
+  selectionHash: string | null;
+}
+
 export interface MatchContextSignals {
   version?: string;
   trustPenalty?: number;
@@ -181,6 +198,16 @@ export interface MatchContextSignals {
     reasons?: string[];
   };
   dataGaps?: {
+    calculationUsage?: { version: string; scope: string; sourceVerified: boolean; rows: Array<{
+      key: string; stage: string; used: boolean; weight: number; receiptHash: string;
+      poolCode?: string | null; source?: string | null; sources?: string[]; fallbackMetrics?: number;
+    }> } | null;
+    inputSummaries?: {
+      version: string;
+      capturedAt: string | null;
+      form: { home: { sampleSize: number | null; lastMatchAt: string | null; resultEvidence?: FormResultEvidenceSummary | null } | null; away: { sampleSize: number | null; lastMatchAt: string | null; resultEvidence?: FormResultEvidenceSummary | null } | null; source: string | null };
+      elo: { homeMatches: number | null; awayMatches: number | null; source: string | null };
+    };
     version?: string;
     coverageScore?: number;
     sourceQuality?: 'high' | 'medium' | 'low' | string;
@@ -564,6 +591,7 @@ export interface ExternalMatchSignals {
 }
 
 export interface PredictionMeta {
+  decisionGeneratedAt?: string;
   policyVersion?: string;
   promptVersion?: string;
   modelVersion?: string;
@@ -603,7 +631,8 @@ export interface PredictionMeta {
     latestSignature?: string;
   };
   publicReferenceDecision?: {
-    version: 'public-reference-decision-v1';
+    version: 'public-reference-decision-v1' | 'public-reference-decision-v2';
+    evidenceBinding?: { version: string; evidenceHash: string; featureHash: string; modelHash: string; modelVersion: string; policyVersion: string } | null;
     sourceMatchId: string;
     kickoffTime: string;
     eventVersion?: string | null;

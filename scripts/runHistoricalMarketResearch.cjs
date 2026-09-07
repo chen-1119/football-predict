@@ -86,7 +86,11 @@ const main = () => {
     warehouseRows: query.rows,
     fullOddsRows: fullOddsRows.length,
     selectedRows: events.length,
-    evaluatedRows: artifact.source.evaluatedRows,
+    // source.evaluatedRows is the legacy model-ready pool, not the scored
+    // holdout denominator (warmup, delayed labels and tail windows differ).
+    modelReadyRows: artifact.source.evaluatedRows,
+    evaluatedRows: artifact.walkForward.aggregate.market.rows,
+    coverage: artifact.walkForward.coverage,
     folds: artifact.walkForward.folds.length,
     aggregate: artifact.walkForward.aggregate,
     evidenceBoundary: artifact.evidenceBoundary,

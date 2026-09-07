@@ -1,5 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const { VERSION: PUBLIC_REFERENCE_ARCHIVE_VERSION, SOURCE_ID: PUBLIC_REFERENCE_ARCHIVE_SOURCE_ID, buildPublicReferenceArchive } = require("../server/publicReferenceArchive.cjs");
+const { INDEX_VERSION: PUBLIC_REFERENCE_INDEX_VERSION, INDEX_ID, INDEX_PREFIX, buildPublicReferenceIndex } = require("../server/publicReferenceArchive.cjs");
 const {
   PREDICTION_STATE_IDENTITY_VERSION,
   asText,
@@ -84,12 +86,14 @@ const requireActiveGenerationFastPath = process.env.SQLITE_EXPORT_REQUIRE_ACTIVE
 const SQLITE_SCHEMA_VERSION = "football-sqlite-v2-incremental";
 const ACTIVE_GENERATION_FAST_PATH_VERSION = "sqlite-active-generation-clone-fast-path-v1";
 const expectedWarehousePolicy = Object.freeze({
-  version: 3,
+  version: 5,
   mode: "incremental-upsert",
   oddsIdentity: "sourceMatchId+bookmaker+pool+line+threeOdds",
   predictionIdentity: "sourceMatchId+phase+signature+featureHash",
   predictionObservationPolicy: "firstSeenAt/lastSeenAt/seenCount are observation metadata, not independent samples",
   jsonlImport: "byte-cursor-v2",
+  publicReferenceArchive: PUBLIC_REFERENCE_ARCHIVE_VERSION,
+  publicReferenceIndex: PUBLIC_REFERENCE_INDEX_VERSION,
   oddsStateLimit,
   predictionStateLimit,
 });
@@ -1393,6 +1397,39 @@ const exportIncrementalRows = async (db) => {
   collectReleasedPayloads();
 
   let predictionSnapshots = loadBaseProjection ? readCoreJson("prediction-snapshots.json", null) : null;
+  if (loadBaseProjection) {
+    const referenceArchive = buildPublicReferenceArchive(predictionSnapshots);
+    const referenceIndex = buildPublicReferenceIndex(referenceArchive);
+    // Reconcile membership atomically, but preserve unchanged payloads so a
+    // repeated base projection does not rewrite every evidence shard.
+    db.exec("CREATE TEMP TABLE IF NOT EXISTS export_active_reference_index_ids (id TEXT PRIMARY KEY); DELETE FROM export_active_reference_index_ids;");
+    const keepReferenceIndexId = db.prepare("INSERT INTO export_active_reference_index_ids (id) VALUES (?)");
+    if (referenceIndex) {
+      keepReferenceIndexId.run(INDEX_ID);
+      imported.sourceChanges += Number(sourceInsert.run(INDEX_ID, "sporttery:public-reference-index", referenceArchive.lastRecordedAt, JSON.stringify(referenceIndex.manifest)).changes || 0);
+      for (const shard of referenceIndex.shards) {
+        keepReferenceIndexId.run(shard.id);
+        imported.sourceChanges += Number(sourceInsert.run(shard.id, "sporttery:public-reference-index", referenceArchive.lastRecordedAt, JSON.stringify(shard.payload)).changes || 0);
+      }
+    }
+    imported.sourceChanges += Number(db.prepare(`DELETE FROM source_snapshots
+      WHERE (id = ? OR substr(id, 1, ?) = ?)
+      AND NOT EXISTS (SELECT 1 FROM export_active_reference_index_ids active WHERE active.id = source_snapshots.id)`)
+      .run(INDEX_ID, INDEX_PREFIX.length, INDEX_PREFIX).changes || 0);
+    if (referenceArchive) {
+      imported.sourceChanges += Number(sourceInsert.run(
+        PUBLIC_REFERENCE_ARCHIVE_SOURCE_ID,
+        referenceArchive.source,
+        referenceArchive.lastRecordedAt,
+        JSON.stringify(referenceArchive),
+      ).changes || 0);
+    } else {
+      // An unavailable ledger is not a current verified archive. Never leave
+      // a previous generation's document looking like this generation's proof.
+      imported.sourceChanges += Number(db.prepare("DELETE FROM source_snapshots WHERE id = ?")
+        .run(PUBLIC_REFERENCE_ARCHIVE_SOURCE_ID).changes || 0);
+    }
+  }
   let currentMatchesPayload = loadBaseProjection ? readCoreJson("matches-current.json", null) : null;
   let historyMatchesPayload = loadBaseProjection ? readCoreJson("matches-history.json", null) : null;
   let currentMatches = materializeArchiveProjection(currentMatchesPayload, predictionSnapshots);
