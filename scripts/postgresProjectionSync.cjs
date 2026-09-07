@@ -4,6 +4,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
+const { snapshotUpsertConflict } = require("./postgresSnapshotUpsert.cjs");
 const {
   createPostgresPool,
   runPostgresMigrations,
@@ -1365,13 +1366,7 @@ const syncPostgresProjectionFromSqlite = async (options = {}) => {
         sqliteSql: matchSql,
         mapper: toMatchRow,
         columns: ["id", "dataset", "match_id", "source_match_id", "kickoff_time", "status", "payload"],
-        conflict: `ON CONFLICT (id) DO UPDATE SET
-          dataset = EXCLUDED.dataset,
-          match_id = EXCLUDED.match_id,
-          source_match_id = EXCLUDED.source_match_id,
-          kickoff_time = EXCLUDED.kickoff_time,
-          status = EXCLUDED.status,
-          payload = EXCLUDED.payload`,
+        conflict: snapshotUpsertConflict("match_snapshots"),
         prune: true,
         pruneWhere: "target.dataset IN ('current','history')",
         collectRows: true,
@@ -1402,10 +1397,7 @@ const syncPostgresProjectionFromSqlite = async (options = {}) => {
           iterator: full ? sourceStatement.iterate() : sourceStatement.iterate(incrementalCutoff),
           mapper: toSourceRow,
           jsonColumns: ["payload"],
-          conflict: `ON CONFLICT (id) DO UPDATE SET
-            source = EXCLUDED.source,
-            captured_at = EXCLUDED.captured_at,
-            payload = EXCLUDED.payload`,
+          conflict: snapshotUpsertConflict("source_snapshots"),
         });
         rowCounts.source_snapshots = sourceRows.written;
         tableHashes.source_snapshots = sourceRows.hash;
@@ -1427,18 +1419,7 @@ const syncPostgresProjectionFromSqlite = async (options = {}) => {
           iterator: full ? oddsStatement.iterate() : oddsStatement.iterate(incrementalCutoff),
           mapper: toOddsRow,
           jsonColumns: ["payload"],
-          conflict: `ON CONFLICT (id) DO UPDATE SET
-            state_key = EXCLUDED.state_key,
-            match_id = EXCLUDED.match_id,
-            source_match_id = EXCLUDED.source_match_id,
-            pool = EXCLUDED.pool,
-            bookmaker = EXCLUDED.bookmaker,
-            handicap_line = EXCLUDED.handicap_line,
-            captured_at = EXCLUDED.captured_at,
-            first_seen_at = LEAST(football.odds_snapshots.first_seen_at, EXCLUDED.first_seen_at),
-            last_seen_at = GREATEST(football.odds_snapshots.last_seen_at, EXCLUDED.last_seen_at),
-            seen_count = GREATEST(football.odds_snapshots.seen_count, EXCLUDED.seen_count),
-            payload = EXCLUDED.payload`,
+          conflict: snapshotUpsertConflict("odds_snapshots"),
         });
         rowCounts.odds_snapshots = oddsRows.written;
         tableHashes.odds_snapshots = oddsRows.hash;
@@ -1460,16 +1441,7 @@ const syncPostgresProjectionFromSqlite = async (options = {}) => {
           iterator: full ? predictionStatement.iterate() : predictionStatement.iterate(incrementalCutoff),
           mapper: toPredictionRow,
           jsonColumns: ["payload"],
-          conflict: `ON CONFLICT (id) DO UPDATE SET
-            state_key = EXCLUDED.state_key,
-            match_id = EXCLUDED.match_id,
-            source_match_id = EXCLUDED.source_match_id,
-            phase = EXCLUDED.phase,
-            captured_at = EXCLUDED.captured_at,
-            first_seen_at = LEAST(football.prediction_snapshots.first_seen_at, EXCLUDED.first_seen_at),
-            last_seen_at = GREATEST(football.prediction_snapshots.last_seen_at, EXCLUDED.last_seen_at),
-            seen_count = GREATEST(football.prediction_snapshots.seen_count, EXCLUDED.seen_count),
-            payload = EXCLUDED.payload`,
+          conflict: snapshotUpsertConflict("prediction_snapshots"),
         });
         rowCounts.prediction_snapshots = predictionRows.written;
         tableHashes.prediction_snapshots = predictionRows.hash;
@@ -1503,13 +1475,7 @@ const syncPostgresProjectionFromSqlite = async (options = {}) => {
             payload_bytes: Number(row.payload_bytes),
             }),
             jsonColumns: ["payload"],
-            conflict: `ON CONFLICT (artifact_key) DO UPDATE SET
-              artifact_version = EXCLUDED.artifact_version,
-              generated_at = EXCLUDED.generated_at,
-              updated_at = EXCLUDED.updated_at,
-              payload = EXCLUDED.payload,
-              payload_sha256 = EXCLUDED.payload_sha256,
-              payload_bytes = EXCLUDED.payload_bytes`,
+            conflict: snapshotUpsertConflict("private_model_artifacts"),
           });
           rowCounts.private_model_artifacts = artifactRows.written;
           tableHashes.private_model_artifacts = artifactRows.hash;

@@ -375,6 +375,22 @@ const main = async () => {
     equal(existing.rows[0].namespace, null, "real PostgreSQL test refuses an existing football schema");
     await require("../server/postgresStore.cjs").runPostgresMigrations(realPool);
     await syncPostgresProjectionFromSqlite({ dbPath, pool: realPool, mode: "backfill", aiArenaPath: path.join(tempDir, "absent-synthetic-ai-arena.json") });
+    const snapshotTests = require("./verifyPostgresSnapshotUpsert.cjs");
+    checks += snapshotTests.verifySnapshotSqlContract();
+    const noOpChecks = await snapshotTests.verifySnapshotUpsertsInPostgres(realPool);
+    checks += noOpChecks.checks;
+    const tupleSnapshot = async () => {
+      const captured = {};
+      for (const table of ["match_snapshots", "source_snapshots", "odds_snapshots", "prediction_snapshots", "private_model_artifacts"]) {
+        const key = table === "private_model_artifacts" ? "artifact_key" : "id";
+        captured[table] = (await realPool.query(`SELECT ${key} AS id, xmin::text AS version, payload::text AS payload FROM football.${table} ORDER BY ${key}`)).rows;
+      }
+      return captured;
+    };
+    const beforeRepeat = await tupleSnapshot();
+    const repeated = await syncPostgresProjectionFromSqlite({ dbPath, pool: realPool, mode: "backfill", aiArenaPath: path.join(tempDir, "absent-synthetic-ai-arena.json") });
+    equal(repeated.skipped, false, "real repeat still runs full backfill rather than fingerprint skipping");
+    equal(await tupleSnapshot(), beforeRepeat, "real full backfill preserves unchanged snapshot tuple versions and JSON order");
     equal(await readPostgresCurrentMatches(realPool, { publicationIdentity: identity }), await readSqliteCurrentMatches(dbPath, { publicationIdentity: identity }), "real PostgreSQL driver matches SQLite current payload including immutable public record");
     equal(await readPostgresPredictionSnapshotRows(realPool, { sourceMatchId, publicationIdentity: identity }), await readSqlitePredictionSnapshotRows(dbPath, { sourceMatchId }), "real PostgreSQL candidate evidence survives actual writer and reader");
     const realEvidence = await readPostgresPublicReferenceEvidence(realPool, { referenceHash: reference.contentHash, publicationIdentity: identity });
