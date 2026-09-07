@@ -1,8 +1,10 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const { DatabaseSync } = require("node:sqlite");
 const {
   buildResultOnlyReviewCleanupCandidates,
+  iterateMatchSnapshotRows,
   pruneStaleResultOnlyReviews,
   resultOnlyIdentityFromStoredRows,
   reviewFromMatch,
@@ -14,6 +16,72 @@ const check = (condition, message) => {
   assert.ok(condition, message);
   checks += 1;
 };
+
+const verifyMatchInventory = () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    db.exec(`CREATE TABLE match_snapshots (
+      id TEXT PRIMARY KEY, dataset TEXT NOT NULL, match_id TEXT, source_match_id TEXT,
+      kickoff_time TEXT, status TEXT, payload TEXT NOT NULL
+    ); CREATE INDEX by_dataset ON match_snapshots(dataset); BEGIN`);
+    assert.deepEqual([...iterateMatchSnapshotRows(db)], []); checks += 1;
+    const insert = db.prepare("INSERT INTO match_snapshots VALUES(?,?,?,?,?,?,?)");
+    const keys = ["excluded:key", "a' OR 1=1 --", "\u{10000}", "\uE000", "中文", "10", "2", ""];
+    for (let i = 0; i < 403; i += 1) {
+      insert.run(keys[i] ?? `row:${String(403-i).padStart(4,"0")}`,
+        i % 5 === 0 ? "excluded" : i % 2 === 0 ? "current" : "history",
+        i % 3 ? `match:${i}` : null, `source:${i}`, null, "FINISHED",
+        `{ "z": ${i}, "a":2, "nested":{"draw":"平局","home":"主胜"} }`);
+    }
+    const reference = db.prepare("SELECT id,dataset,match_id,source_match_id,kickoff_time,status,payload FROM match_snapshots WHERE dataset IN ('current','history') ORDER BY id").all();
+    for (const size of [1, 2, 17, 199, 200]) {
+      assert.deepEqual([...iterateMatchSnapshotRows(db, size)], reference,
+        `batch ${size}: every original column, JSON byte, null and binary ID order must match`);
+      checks += 1;
+    }
+    for (const size of [0, -1, 201, 1.5, NaN, "2"]) {
+      assert.throws(() => [...iterateMatchSnapshotRows(db, size)]); checks += 1;
+    }
+    const queries = [];
+    const counted = { prepare(sql) {
+      const statement = db.prepare(sql);
+      return { *iterate(...ids) { queries.push({sql, ids}); yield* statement.iterate(...ids); } };
+    } };
+    assert.deepEqual([...iterateMatchSnapshotRows(counted)], reference); checks += 1;
+    check(!queries[0].sql.includes("payload"), "only IDs enter the inventory sort");
+    check(queries.slice(1).every(q => q.ids.length <= 200), "body lookups must remain bounded");
+    check(queries.length === 1 + Math.ceil(reference.length/200), "one lookup per bounded batch, no per-row SQL");
+    const payloadLookup = queries[1];
+    const plan = db.prepare("EXPLAIN QUERY PLAN " + payloadLookup.sql).all(...payloadLookup.ids);
+    check(plan.every(row => !row.detail.includes("TEMP B-TREE")), "PK body lookup must not sort complete payloads");
+    const interrupted = iterateMatchSnapshotRows(db, 2);
+    interrupted.next(); interrupted.return();
+    assert.deepEqual([...iterateMatchSnapshotRows(db)], reference); checks += 1;
+    const missing = { prepare(sql) {
+      if (sql.startsWith("SELECT id FROM")) return db.prepare(sql);
+      return { *iterate() {} };
+    } };
+    assert.throws(() => [...iterateMatchSnapshotRows(missing)], /inventory is incomplete/); checks += 1;
+    const failedRead = { prepare(sql) {
+      if (sql.startsWith("SELECT id FROM")) return db.prepare(sql);
+      throw new Error("fixture required payload read failed");
+    } };
+    assert.throws(() => [...iterateMatchSnapshotRows(failedRead)], /required payload read failed/); checks += 1;
+    for (const [field, value, error] of [["id", "wrong-id", /order changed/], ["dataset", "excluded", /dataset changed/]]) {
+      const changedRow = { prepare(sql) {
+        const statement = db.prepare(sql);
+        if (sql.startsWith("SELECT id FROM")) return statement;
+        return { *iterate(...ids) { for (const row of statement.iterate(...ids)) yield { ...row, [field]: value }; } };
+      } };
+      assert.throws(() => [...iterateMatchSnapshotRows(changedRow)], error); checks += 1;
+    }
+    insert.run(null, "current", null, null, null, null, "{}");
+    assert.throws(() => [...iterateMatchSnapshotRows(db)], /ID must be text/); checks += 1;
+    db.exec("ROLLBACK");
+  } finally { db.close(); }
+};
+
+verifyMatchInventory();
 
 const baseMatch = {
   sourceMatchId: "2040801",

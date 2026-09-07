@@ -1,5 +1,7 @@
 # 快速赛果：按需读取归档证据
 
+后续 2026-09-08 02:37–02:57 已补充独立真实 PostgreSQL 投影、全量正文/冻结记录一致性，并修复投影中大正文临时排序开销，详见 [PostgreSQL 小清单分批读取](postgres-match-id-batches.md)。新赛果发布和线上新版验收仍未完成，以下早期时间点的状态不代表当前持续状态。
+
 ## 本轮定位的事实
 
 2026-09-08 02:01 北京时间，线上 `/api/v1/health` 仍主读、dataFresh=true、recommendationReliable=false。快速赛果监视器处于实际运行状态，上一子进程报 `PUBLISHER_TIMEOUT`，lastLatencyMs=8042，之前 lastDeferredReason 为 `sync lock held`；并非主服务离线。此前监控文件中 `trusted-fast-result-endpoints-unavailable` 是旧阶段错误，不能当作一直未变化的根因。

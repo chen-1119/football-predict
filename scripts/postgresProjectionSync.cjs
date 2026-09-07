@@ -260,6 +260,45 @@ const toMatchRow = (row) => ({
   payload: row.payload,
 });
 
+// Called inside the source SQLite read transaction. Sort only the small ID
+// inventory: sorting complete payloads can spill tens of MB to a temp B-tree.
+// Each bounded PK lookup preserves the original binary ID order and raw JSON.
+// Keep the complete inventory/hash/pruning; this is not a changed-row shortcut.
+function* iterateMatchSnapshotRows(db, batchRows = DEFAULT_BATCH_ROWS) {
+  if (!Number.isSafeInteger(batchRows) || batchRows < 1 || batchRows > DEFAULT_BATCH_ROWS) {
+    throw new Error("Match projection batch size must be between 1 and 200");
+  }
+  const readBatch = function* (ids) {
+    const statement = db.prepare(`
+      SELECT id, dataset, match_id, source_match_id, kickoff_time, status, payload
+      FROM match_snapshots
+      WHERE id IN (${ids.map(() => "?").join(",")})
+      ORDER BY id
+    `);
+    let count = 0;
+    for (const row of statement.iterate(...ids)) {
+      if (row.id !== ids[count]) throw new Error("Match projection inventory order changed");
+      if (!["current", "history"].includes(row.dataset)) throw new Error("Match projection dataset changed");
+      count += 1;
+      yield row;
+    }
+    if (count !== ids.length) throw new Error("Match projection inventory is incomplete");
+  };
+  let ids = [];
+  const inventory = db.prepare(
+    "SELECT id FROM match_snapshots WHERE dataset IN ('current','history') ORDER BY id",
+  ).iterate();
+  for (const row of inventory) {
+    if (typeof row.id !== "string") throw new Error("Match projection ID must be text");
+    ids.push(row.id);
+    if (ids.length === batchRows) {
+      yield* readBatch(ids);
+      ids = [];
+    }
+  }
+  if (ids.length > 0) yield* readBatch(ids);
+}
+
 const toSourceRow = (row) => ({
   id: row.id,
   source: row.source,
@@ -1343,12 +1382,12 @@ const syncPostgresProjectionFromSqlite = async (options = {}) => {
       const tableHashes = {};
       const allMatchRows = [];
 
-      const syncTable = async ({ table, sqliteSql, mapper, columns, conflict, jsonColumns = ["payload"], prune = false, pruneWhere = "", collectRows = false }) => {
+      const syncTable = async ({ table, iterator, mapper, columns, conflict, jsonColumns = ["payload"], prune = false, pruneWhere = "", collectRows = false }) => {
         const streamed = await streamIteratorInsert({
           client,
           table,
           columns,
-          iterator: db.prepare(sqliteSql).iterate(),
+          iterator,
           mapper,
           conflict,
           jsonColumns,
@@ -1360,10 +1399,9 @@ const syncPostgresProjectionFromSqlite = async (options = {}) => {
         return streamed.rows;
       };
 
-      const matchSql = "SELECT id, dataset, match_id, source_match_id, kickoff_time, status, payload FROM match_snapshots WHERE dataset IN ('current','history') ORDER BY id";
       const matches = await syncTable({
         table: "match_snapshots",
-        sqliteSql: matchSql,
+        iterator: iterateMatchSnapshotRows(db),
         mapper: toMatchRow,
         columns: ["id", "dataset", "match_id", "source_match_id", "kickoff_time", "status", "payload"],
         conflict: snapshotUpsertConflict("match_snapshots"),
@@ -1549,6 +1587,7 @@ module.exports = {
   deactivateMissingAiCompetitors,
   dedupeSemanticReviews,
   inspectResultOnlyReviewConflicts,
+  iterateMatchSnapshotRows,
   isForwardCanonicalResultOnlyRebase,
   normalizeAiDecisionTimestamps,
   pruneStaleResultOnlyReviews,
