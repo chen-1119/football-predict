@@ -1684,10 +1684,13 @@ const run = async () => {
     });
 
     const matchDetailLifecycle = await runLocalJson(["scripts/verifyMatchDetailLifecycle.cjs"]);
-    pushCheck(checks, "match detail lifecycle artifact", matchDetailLifecycle.status === 0 && matchDetailLifecycle.body?.ok === true, {
+    pushCheck(checks, "match detail lifecycle artifact", matchDetailLifecycle.status === 0 && matchDetailLifecycle.body?.ok === true
+      && Array.isArray(matchDetailLifecycle.body?.checks) && matchDetailLifecycle.body.checks.length >= 24
+      && matchDetailLifecycle.body.checks.some(check => check.name === "isolated SSR collector alias executes the real diagnostics module" && check.ok === true), {
       status: matchDetailLifecycle.status,
       checks: Array.isArray(matchDetailLifecycle.body?.checks) ? matchDetailLifecycle.body.checks.length : null,
       stdoutTail: matchDetailLifecycle.status === 0 ? "" : matchDetailLifecycle.stdout.slice(-500),
+      stderrHead: matchDetailLifecycle.status === 0 ? "" : matchDetailLifecycle.stderr.slice(0, 500),
       stderrTail: matchDetailLifecycle.stderr.slice(-500)
     });
 

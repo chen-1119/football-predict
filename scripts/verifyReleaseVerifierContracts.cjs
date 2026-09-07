@@ -162,4 +162,23 @@ for (const bad of [{ ok: false }, { checks: 12 }, { independentChildRuns: 0 }, {
   check('independent replay gate rejects invalid proof ' + JSON.stringify(bad), () => assert.equal(replayGate({ ...replayProof, ...bad }), false));
 }
 check('independent replay gate rejects command failure', () => assert.equal(replayGate(replayProof, 1), false));
+const lifecycleStart = readiness.indexOf('    pushCheck(checks, "match detail lifecycle artifact",');
+const lifecycleEnd = readiness.indexOf('\n    const predictionMetricSemantics', lifecycleStart);
+assert.ok(lifecycleStart >= 0 && lifecycleEnd > lifecycleStart);
+const lifecycleGate = (body, status = 0) => {
+  let result;
+  vm.runInNewContext(readiness.slice(lifecycleStart, lifecycleEnd), { checks: [],
+    matchDetailLifecycle: { status, body, stdout: '', stderr: '' },
+    pushCheck: (_checks, _name, ok) => { result = ok; } }, { timeout: 1000 });
+  return result;
+};
+const lifecycleProof = { ok: true, checks: Array.from({length:24}, (_, i) => ({
+  name: i === 0 ? 'isolated SSR collector alias executes the real diagnostics module' : `existing check ${i}`, ok: true })) };
+check('lifecycle gate requires actual shared collector execution', () => assert.equal(lifecycleGate(lifecycleProof), true));
+for (const bad of [{ok:false}, {checks:[]}, {checks:lifecycleProof.checks.slice(0,23)},
+  {checks:lifecycleProof.checks.map(c=>({...c, name:'unrelated'}))},
+  {checks:lifecycleProof.checks.map((c,i)=>i===0?{...c,ok:false}:c)}]) {
+  check('lifecycle gate rejects absent or failing alias proof', () => assert.equal(lifecycleGate({...lifecycleProof,...bad}), false));
+}
+check('lifecycle gate rejects child failure', () => assert.equal(lifecycleGate(lifecycleProof,1),false));
 console.log(JSON.stringify({ok:true,verifier:'release-verifier-contracts-v1',checks,productionDataTouched:false},null,2));

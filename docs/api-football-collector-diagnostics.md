@@ -26,6 +26,39 @@ Reference: [Vite dependency optimization](https://vite.dev/config/dep-optimizati
 
 ## Verified scope
 
+### 2026-09-08: isolated SSR verifier compatibility
+
+r702 launched at 03:31 Beijing and failed before swap at 03:49:50. Its candidate
+readiness report had 167 checks with one failing check: `match detail lifecycle
+artifact`. The queue terminated without retry at 03:50:01; both live markers
+remained r699. The app and sync worker were independently verified active.
+This is not a successful deployment.
+
+The verifier intentionally uses `configFile:false` to avoid Vite cache writes
+inside a read-only candidate. That also omitted the browser alias above. The
+original failure reproduced locally as `Cannot find module
+'football-collector-diagnostics'`. A direct file externalization attempt then
+failed with `require is not defined`; neither failure was treated as a pass.
+
+The verifier now resolves only this exact alias through a virtual ESM bridge
+using Node `createRequire` to load the real CJS implementation and dependencies.
+It does not duplicate the policy or mock collector output. A new assertion
+checks function identity against the native CJS export, a nonempty fixture ID,
+and the complete projected output through the actual adoption service. All 24
+lifecycle checks pass on Windows Node22.22.1, including actual detail SSR render.
+The Vite cache remains under system temp and is realpath-validated before cleanup.
+This follows the separation of SSR loading and client builds described in
+[Vite SSR documentation](https://vite.dev/guide/ssr.html); production browser
+configuration and page rendering logic are unchanged.
+
+Readiness now requires the alias execution check and at least 24 lifecycle
+checks. It also records the beginning of an error, not only a truncated stack
+tail. Deployment configuration validation passes, and release-verifier contracts
+now total 99 passing checks, including rejection of absent, insufficient or
+failed alias proof. This repair is not in the frozen r702 package. Linux lifecycle
+revalidation, a new signed package and complete guarded release remain pending;
+the earlier 49-case Linux capture test is not lifecycle-release proof.
+
 - 24 checks: projection allowlist, strict clocks, re-projection, actual current-list
   compaction, and isolated JSON-store persistence. Added to production readiness.
 - 62 adoption checks: actual publisher, pure rules and TSX rendering, including

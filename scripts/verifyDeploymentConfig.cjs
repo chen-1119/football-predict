@@ -1404,6 +1404,10 @@ const run = () => {
     && lifecycleCacheCleanupIndex > lifecycleViteCloseIndex;
   pushCheck(checks, "match detail lifecycle verifier is safe in a read-only candidate tree", verifyMatchDetailLifecycle.includes("const os = require('node:os')")
     && verifyMatchDetailLifecycle.includes("configFile: false")
+    && verifyMatchDetailLifecycle.includes("football-collector-diagnostics:ssr-verifier")
+    && verifyMatchDetailLifecycle.includes("collectorModule.compactApiFootballDiagnostics === diagnostics.compactApiFootballDiagnostics")
+    && verifyMatchDetailLifecycle.includes("fs.realpathSync(viteCacheDir)")
+    && verifyMatchDetailLifecycle.includes("Unsafe lifecycle verifier cache cleanup")
     && lifecycleUsesSystemTempCache
     && lifecycleCleansTempCache, {
       disablesViteConfigLoading: verifyMatchDetailLifecycle.includes("configFile: false"),

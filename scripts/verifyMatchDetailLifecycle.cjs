@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 
 const rootDir = path.resolve(__dirname, '..');
 const detailPath = path.join(rootDir, 'src', 'pages', 'MatchDetail.tsx');
@@ -164,6 +165,19 @@ const run = async () => {
       plugins: [{
         name: 'expose-match-detail-state-for-verification',
         enforce: 'pre',
+        // configFile:false intentionally avoids writes in the frozen candidate
+        // tree. Resolve its browser alias to the same real CJS implementation;
+        // a virtual ESM bridge uses Node's real CJS loader, not a mock or copy.
+        resolveId(id) {
+          if (id !== 'football-collector-diagnostics') return null;
+          return '\0football-collector-diagnostics:ssr-verifier';
+        },
+        load(id) {
+          if (id !== '\0football-collector-diagnostics:ssr-verifier') return null;
+          return `import { createRequire } from 'node:module';
+            const load = createRequire(${JSON.stringify(pathToFileURL(path.join(rootDir, 'package.json')).href)});
+            export const compactApiFootballDiagnostics = load(${JSON.stringify(path.join(rootDir, 'src/services/apiFootballDiagnostics.cjs'))}).compactApiFootballDiagnostics;`;
+        },
         transform(code, id) {
           if (!/[\\/]src[\\/]pages[\\/]MatchDetail\.tsx$/.test(id)) return null;
           return code
@@ -176,6 +190,15 @@ const run = async () => {
 
     const detailModule = await vite.ssrLoadModule('/src/pages/MatchDetail.tsx');
     const contextModule = await vite.ssrLoadModule('/src/context/AppContextCore.ts');
+    const adoptionModule = await vite.ssrLoadModule('/src/services/dataAdoption.ts');
+    const collectorModule = await vite.ssrLoadModule('football-collector-diagnostics');
+    const diagnostics = require('../src/services/apiFootballDiagnostics.cjs');
+    const collectorFixture = { externalSignals: { apiFootball: { fixtureId: 123456, lastCheckedAt: '2026-01-01T00:00:00.000Z' } } };
+    check('isolated SSR collector alias executes the real diagnostics module',
+      collectorModule.compactApiFootballDiagnostics === diagnostics.compactApiFootballDiagnostics
+      && adoptionModule.getCollectorDiagnostics(collectorFixture)?.fixtureId === '123456'
+      && JSON.stringify(adoptionModule.getCollectorDiagnostics(collectorFixture))
+        === JSON.stringify(diagnostics.compactApiFootballDiagnostics(collectorFixture.externalSignals)));
     const { MatchDetail, getMatchFreshnessTime, isFormalPostReviewRow, selectFreshestMatch } = detailModule;
     const { AppContext } = contextModule;
     const fixture = loadFixture();
@@ -438,6 +461,11 @@ const run = async () => {
     try {
       await vite?.close();
     } finally {
+      const resolvedCache = fs.realpathSync(viteCacheDir);
+      if (path.dirname(resolvedCache) !== fs.realpathSync(os.tmpdir())
+        || !path.basename(resolvedCache).startsWith('football-match-detail-vite-')) {
+        throw new Error('Unsafe lifecycle verifier cache cleanup');
+      }
       fs.rmSync(viteCacheDir, { recursive: true, force: true });
     }
   }
