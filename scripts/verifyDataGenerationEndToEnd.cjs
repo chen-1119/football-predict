@@ -839,6 +839,37 @@ const verifyPostgresPrimaryColdStartPairing = async ({ previousIdentity, activeI
   );
   await stopServer();
 
+  // Start healthy, then commit a new pair without any HTTP request to arm
+  // refresh. This reproduces a quiet production server stuck two generations
+  // behind when its first later request arrives during another writer lock.
+  const silent = createFixture("active-cache-no-reader-catch-up");
+  const silentPaths = storePaths(silent.fixtureStoreDir);
+  const silentNextPointer = fs.readFileSync(silentPaths.currentPointer);
+  fs.writeFileSync(silentPaths.currentPointer, fs.readFileSync(silentPaths.previousPointer));
+  writePostgresIdentityState(silent.identityFile, { publication: previousProjectionIdentity });
+  const silentServer = await startPostgresPrimaryApi({
+    targetStoreDir: silent.fixtureStoreDir, targetDbPath: silent.fixtureDbPath,
+    identityFile: silent.identityFile, auditFile: silent.auditFile, preloadPath,
+  });
+  fs.writeFileSync(silentPaths.currentPointer, silentNextPointer);
+  writePostgresIdentityState(silent.identityFile, { publication: activeProjectionIdentity });
+  runExporter({ targetStoreDir: silent.fixtureStoreDir, targetDbPath: silent.fixtureDbPath,
+    targetPublicDataDir: silent.fixturePublicDataDir });
+  await waitForCondition(() => postgresAuditRows(silent.auditFile).some(row => row.isMainThread === false
+    && row.available === true && row.generationId === activeIdentity.generationId),
+  "healthy idle server failed to discover a later committed pair without HTTP traffic", 8_000);
+  check(true, "idle active server autonomously reads the new PostgreSQL pair before any post-commit HTTP request");
+  const silentAfter = await waitForCondition(async () => {
+    const response = await requestJson({ port: silentServer.port, pathname: "/api/v1/sync-meta" });
+    return samePublicationIdentity(response.body?.publication, activeIdentity) ? response : null;
+  }, "autonomously resolved publication did not become the served generation");
+  equal(silentAfter.status, 200, "autonomous idle catch-up serves the verified generation");
+  const idleResolverCount = postgresAuditRows(silent.auditFile).filter(row => row.isMainThread === false).length;
+  await new Promise(resolve => setTimeout(resolve, 5_500));
+  equal(postgresAuditRows(silent.auditFile).filter(row => row.isMainThread === false).length, idleResolverCount,
+    "unchanged healthy pointer polling does not spawn additional full resolver workers");
+  await stopServer();
+
   const activeCache = createFixture("active-cache-pointer-rotation");
   const activeCachePaths = storePaths(activeCache.fixtureStoreDir);
   const nextPointerBytes = fs.readFileSync(activeCachePaths.currentPointer);

@@ -437,11 +437,18 @@ const armPostgresPublicationRecheck = (delayMs = 5_000) => {
   if (
     basePublicationRecheckTimer
     || shuttingDown
-    || !postgresPublicationRecheckRequired()
+    || !shouldPreferPostgresRead()
+    || !basePublicationCache?.publication
   ) return;
   basePublicationRecheckTimer = setTimeout(() => {
     basePublicationRecheckTimer = null;
-    if (!postgresPublicationRecheckRequired()) return;
+    // Keep a lightweight pointer/SQLite-identity watch even when currently
+    // paired. Otherwise an idle server never notices a later commit until a
+    // user request, possibly after another writer has already taken the lock.
+    if (!postgresPublicationRecheckRequired()) {
+      armPostgresPublicationRecheck();
+      return;
+    }
     scheduleBasePublicationRefresh(generationPointerToken());
   }, Math.max(250, delayMs));
   basePublicationRecheckTimer.unref?.();
@@ -568,8 +575,7 @@ const scheduleBasePublicationRefresh = (token) => {
     basePublicationRefreshState.retryAfter = awaitingActivePair
       ? completedAtMs + 5_000
       : 0;
-    if (awaitingActivePair) armPostgresPublicationRecheck(5_000);
-    else clearPostgresPublicationRecheck();
+    armPostgresPublicationRecheck(5_000);
   };
 
   worker.once("message", (message) => finish({ message }));
@@ -12017,7 +12023,7 @@ const warmBasePublicationForStartup = async () => {
     ? "previous-serving-recheck"
     : "ready";
   basePublicationRefreshState.retryAfter = awaitingActivePair ? Date.now() + 5_000 : 0;
-  if (awaitingActivePair) armPostgresPublicationRecheck(5_000);
+  armPostgresPublicationRecheck(5_000);
   return publication;
 };
 
