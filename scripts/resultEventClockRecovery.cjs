@@ -104,10 +104,15 @@ const officialResultClockWasOmitted = (match) => (
   ].includes(match?.officialResultIdentity?.scheduleTimeAuthority)
 );
 
+const needsResultEventClockEvidence = (match) => Boolean(
+  match && typeof match === "object"
+  && RESULT_PHASES.has(text(match.status).toUpperCase())
+  && officialResultClockWasOmitted(match)
+  && shanghaiMidnight(match.kickoffTime)
+);
+
 const recoverResultEventClockFromSnapshots = (match, snapshots) => {
-  if (!match || typeof match !== "object") return match;
-  if (!RESULT_PHASES.has(text(match?.status).toUpperCase())) return match;
-  if (!officialResultClockWasOmitted(match) || !shanghaiMidnight(match?.kickoffTime)) return match;
+  if (!needsResultEventClockEvidence(match)) return match;
 
   const qualified = (Array.isArray(snapshots) ? snapshots : [])
     .filter((snapshot) => eligibleClockEvidence(match, snapshot));
@@ -166,5 +171,6 @@ const recoverResultEventClockFromSnapshots = (match, snapshots) => {
 
 module.exports = {
   eligibleClockEvidence,
+  needsResultEventClockEvidence,
   recoverResultEventClockFromSnapshots,
 };

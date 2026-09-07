@@ -5311,7 +5311,17 @@ function attachArchivedPreMatchPredictions(
   publicationIndex = null,
   capturedAt = new Date().toISOString()
 ) {
-  const snapshotIndex = buildPredictionSnapshotIndex(predictionSnapshotsPayload);
+  // A valid existing archive (or signed recovery) can decide without scanning
+  // snapshots. The fast publisher supplies a synchronous lazy reader; only
+  // the existing archive algorithm may decide when snapshot evidence is needed.
+  // Keep failures visible and share the same complete index once requested.
+  let resolvedSnapshotIndex;
+  const snapshotIndex = typeof predictionSnapshotsPayload === "function"
+    ? { get(sourceMatchId) {
+      resolvedSnapshotIndex ||= buildPredictionSnapshotIndex(predictionSnapshotsPayload());
+      return resolvedSnapshotIndex.get(sourceMatchId);
+    } }
+    : buildPredictionSnapshotIndex(predictionSnapshotsPayload);
   return (matches || []).map((match) => {
     const archivedPreMatchPrediction = buildArchivedPreMatchPrediction(
       match,

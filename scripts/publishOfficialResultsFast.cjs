@@ -27,6 +27,7 @@ const {
   encodeFastResultPublisherOutput,
 } = require("./fastResultPublisherProtocol.cjs");
 const {
+  needsResultEventClockEvidence,
   recoverResultEventClockFromSnapshots,
 } = require("./resultEventClockRecovery.cjs");
 const {
@@ -345,11 +346,14 @@ const attachStoredPreMatchArchive = ({
 }) => {
   if (!match || typeof match !== "object") return match;
   const sourceMatchId = normalizedSourceMatchId(match);
-  const rows = predictionSnapshotRowsForSource(db, sourceMatchId);
-  const clockRepairedMatch = recoverResultEventClockFromSnapshots(match, rows);
+  let rows;
+  const readRows = () => (rows ||= predictionSnapshotRowsForSource(db, sourceMatchId));
+  const clockRepairedMatch = needsResultEventClockEvidence(match)
+    ? recoverResultEventClockFromSnapshots(match, readRows())
+    : match;
   return attachArchivedPreMatchPredictions(
     [clockRepairedMatch],
-    { rows },
+    () => ({ rows: readRows() }),
     publicationIndex,
     capturedAt
   )[0] || clockRepairedMatch;
@@ -1863,6 +1867,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  attachStoredPreMatchArchive,
   fastResultReceiptRoot,
   fastResultCandidate,
   migrateLegacyFastResultIntegrity,

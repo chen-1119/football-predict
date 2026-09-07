@@ -9,6 +9,7 @@ const {
   readSqliteTransitionMatches,
 } = require("../server/sqliteStore.cjs");
 const {
+  attachStoredPreMatchArchive,
   migrateLegacyFastResultIntegrity,
   publishOfficialResultsFast,
   publishSyncMetaRevision,
@@ -26,6 +27,7 @@ const {
   sameEvent,
 } = require("../src/services/matchLifecycle.cjs");
 const {
+  attachArchivedPreMatchPredictions,
   attachPostMatchReviews,
   matchesFromSportteryRelaySnapshot,
   settleTrustedPublishedPredictions,
@@ -984,6 +986,41 @@ const run = async () => {
     const repairedArchive = archiveRepairHistory?.archivedPreMatchPrediction;
     const repairedReferenceBest = archiveRepairHistory?.postMatchReview
       ?.predictionReview?.rows?.find((row) => row.marketType === "BEST");
+    let lazySnapshotReads = 0;
+    const lazyRows = [referenceSnapshot(), referenceSnapshot({ capturedAt: "2026-07-13T02:10:00.000Z", tipCode: "2" })];
+    const lazyPayload = () => { lazySnapshotReads++; return { rows: lazyRows }; };
+    const retainedLazy = attachArchivedPreMatchPredictions([archiveRepairHistory], lazyPayload, null, observedAt)[0];
+    check("valid frozen archive resolves without reading historical snapshot payloads", (
+      lazySnapshotReads === 0
+      && JSON.stringify(retainedLazy) === JSON.stringify(attachArchivedPreMatchPredictions([archiveRepairHistory], { rows: lazyRows }, null, observedAt)[0])
+    ));
+    const noReadDb = { prepare() { throw new Error("unneeded-snapshot-read"); } };
+    check("fast publisher preserves a valid archive without touching prediction snapshot SQL", (
+      JSON.stringify(attachStoredPreMatchArchive({ db: noReadDb, match: archiveRepairHistory, capturedAt: observedAt }))
+        === JSON.stringify(retainedLazy)
+    ));
+    const missingLazyArchive = { ...archiveRepairHistory }; delete missingLazyArchive.archivedPreMatchPrediction;
+    const rebuiltLazy = attachArchivedPreMatchPredictions([missingLazyArchive, missingLazyArchive], lazyPayload, null, observedAt);
+    check("missing archive loads one complete shared snapshot index with eager-equivalent output", (
+      lazySnapshotReads === 1
+      && JSON.stringify(rebuiltLazy) === JSON.stringify(attachArchivedPreMatchPredictions([missingLazyArchive, missingLazyArchive], { rows: lazyRows }, null, observedAt))
+    ));
+    const lateOnly = { rows: [referenceSnapshot({ capturedAt: "2026-07-13T02:10:00.000Z", tipCode: "2" })] };
+    check("lazy snapshot path still rejects post-cutoff evidence", (
+      JSON.stringify(attachArchivedPreMatchPredictions([missingLazyArchive], () => lateOnly, null, observedAt))
+        === JSON.stringify(attachArchivedPreMatchPredictions([missingLazyArchive], lateOnly, null, observedAt))
+      && !attachArchivedPreMatchPredictions([missingLazyArchive], () => lateOnly, null, observedAt)[0].archivedPreMatchPrediction
+    ));
+    let lazyFailure = null;
+    try { attachArchivedPreMatchPredictions([missingLazyArchive], () => { throw new Error("snapshot-read-failed"); }, null, observedAt); }
+    catch (error) { lazyFailure = error.message; }
+    check("required lazy snapshot read failures remain fail-closed", lazyFailure === "snapshot-read-failed");
+    let invalidReads = 0;
+    const invalidLazyArchive = { ...archiveRepairHistory, archivedPreMatchPrediction: { ...repairedArchive, capturedAt: "2026-07-13T02:10:00.000Z" } };
+    const invalidLazy = attachArchivedPreMatchPredictions([invalidLazyArchive], () => { invalidReads++; return { rows: lazyRows }; }, null, observedAt);
+    check("invalid frozen archive cannot bypass snapshot validation through lazy loading", (
+      invalidReads === 1 && JSON.stringify(invalidLazy) === JSON.stringify(attachArchivedPreMatchPredictions([invalidLazyArchive], { rows: lazyRows }, null, observedAt))
+    ));
     check("fast result repairs a missing archive only from stored pre-cutoff snapshots", (
       archiveRepair.ok === true
       && archiveRepair.skipped === false
