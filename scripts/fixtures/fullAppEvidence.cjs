@@ -62,17 +62,30 @@ const summary = reference => {
 };
 function response(pathname, mode = 'complete') {
   const empty = mode === 'missing';
-  const currentMatch = mode === 'mutable-home' ? { ...current,
+  let currentMatch = mode === 'mutable-home' ? { ...current,
     predictions: [{ ...prediction, tipCode: '1', tipLabel: { zh: '主胜', en: 'Home win' }, odds: 2.1 }],
     probabilityModel: { ...current.probabilityModel, generatedAt: '2026-09-07T05:30:00Z', probabilities: { home: .7, draw: .1, away: .2 } },
   } : current;
+  if (mode === 'legacy-conflict') {
+    currentMatch = structuredClone(current);
+    // A distinct legacy event, not an attempt to erase an already cached
+    // independent public record for the preceding frozen-record test.
+    currentMatch.id = 'sporttery_991011';
+    currentMatch.sourceMatchId = '991011';
+    delete currentMatch.predictionMeta.publicReferenceDecision;
+    currentMatch.predictionMeta.immutableAnalysisReferenceDecision = {
+      version: 'immutable-analysis-reference-decision-v1', sourceMatchId: currentMatch.sourceMatchId,
+      kickoffTime: currentMatch.kickoffTime, eventVersion: currentMatch.eventVersion,
+      market: 'HAD', code: '1', source: { provider: '500.com' }, statisticsTrack: 'analysis-only',
+    };
+  }
   const apiPath = pathname.replace(/^\/api(?:\/v1)?/, '');
   if (pathname === '/data/runtime-config.json') return { dataApiBase: '/api/v1', preferDataApi: true, eventStreamPath: null };
   if (apiPath === '/access/status') return { authorized: true };
   if (apiPath === '/matches/current') return { rows: empty ? [] : [currentMatch], stale: false };
   if (apiPath === '/matches/history') return { rows: empty ? [] : mode === 'versions' ? versionHistory : history, pageInfo: { hasMore: false, nextCursor: null } };
   if (apiPath === '/matches/unresolved-archive') return { rows: [] };
-  if (apiPath === '/matches/sporttery_991010') return { match: currentMatch };
+  if (apiPath === `/matches/${currentMatch.id}`) return { match: currentMatch };
   if (apiPath === '/sync-meta') return { updatedAt: now, files: { current: empty ? 0 : 1, history: empty ? 0 : 2 }, api: { stale: false, currentStale: false, source: 'synthetic-only', freshnessTime: now } };
   if (apiPath === '/source-health') return { sources: [], updatedAt: now };
   if (apiPath === '/health') return { apiVersion: 'v1', status: { serviceOk: true, dataFresh: true, recommendationReliable: false }, data: { currentRead: { source: 'synthetic-only' } } };

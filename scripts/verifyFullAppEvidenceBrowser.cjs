@@ -187,6 +187,22 @@ const outputDir = path.resolve(__dirname, '../outputs');
       await page.waitForFunction(() => document.querySelector('[data-testid="benchmark-hit-rate-audit"]')?.getAttribute('data-audit-settled') === '0');
       assert.ok((await page.locator('[data-testid="research-audit-disclosure"] summary').textContent()).includes('正式已结算 0 场'));
       await audit('formal-zero-is-not-missing');
+      mode = 'legacy-conflict';
+      for (const route of ['/fixtures', '/predictions', '/match/sporttery_991011']) {
+        await page.goto(`${baseUrl}${route}`);
+        const warning = page.locator('[data-testid="legacy-reference-conflict"]').first();
+        try { await warning.waitFor({ timeout: 10000 }); }
+        catch (error) {
+          await page.screenshot({ path: path.join(outputDir, `legacy-conflict-failure-${width}-${route.split('/')[1]}.png`), fullPage: true });
+          throw new Error(`${width}/${route}: legacy notice missing; independent record labels=${await page.locator('.data-adoption-details__identity').allTextContents()}; runtime=${errors.join(' | ')}`, { cause: error });
+        }
+        assert.ok((await warning.textContent()).includes('无法确认当时展示的方向'));
+        assert.ok((await warning.textContent()).includes('不能据此补算命中'));
+        assert.equal(await warning.evaluate(e => e.scrollWidth > e.clientWidth + 1), false);
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await audit(`legacy-conflict-visible-${route}`);
+        if (route === '/fixtures') await warning.screenshot({ path: path.join(outputDir, `legacy-reference-conflict-${width}.png`) });
+      }
       mode = 'missing';
       await page.goto(`${baseUrl}/review`);
       await page.locator('[data-review-overview]').waitFor();

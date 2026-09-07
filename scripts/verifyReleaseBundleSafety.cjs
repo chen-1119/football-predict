@@ -243,6 +243,8 @@ const requiredReleaseEntries = [
   "scripts/verifyApiFootballDiagnostics.cjs",
   "scripts/verifyCandidateArtifactSeed.cjs",
   "scripts/verifyCandidateRevisionLineage.cjs",
+  "scripts/verifyLegacyReferenceConflict.cjs",
+  "src/services/legacyReferenceConflict.ts",
   "scripts/verifyModelInputUsage.cjs",
   "src/services/modelInputUsage.cjs",
   "scripts/teamCategoryIdentity.cjs",

@@ -1,5 +1,6 @@
 import type { Match, PredictionDetail } from '../../services/mockData';
 import { DataAdoptionDetails } from './DataAdoptionDetails';
+import { hasUnboundLegacyReferenceConflict } from '../../services/legacyReferenceConflict';
 import {
   formatCalibrationSample,
   formatEvidenceCompleteness,
@@ -86,6 +87,14 @@ export function RecommendationEvidenceFacts({
       data-market-consistency={breakdown.marketConsistency}
       aria-label={language === 'zh' ? '推荐置信度四维事实' : 'Four-dimension confidence facts'}
     >
+      {hasUnboundLegacyReferenceConflict(match) && (
+        <aside className="recommendation-evidence-facts__legacy-conflict" data-testid="legacy-reference-conflict" aria-label={language === 'zh' ? '旧参考记录冲突' : 'Conflicting legacy references'}>
+          <strong>{language === 'zh' ? '旧参考记录不一致 · 公开方向待核验' : 'Legacy references disagree · published direction unverified'}</strong>
+          <p>{language === 'zh'
+            ? '当前数据保留了不同方向的旧参考记录，但缺少独立公开冻结凭证，无法确认当时展示的方向。请勿将其视为可信推荐；原档案保持不变，不能据此补算命中。'
+            : 'Retained legacy references contain different directions, without an independent public freeze record proving what was shown. Do not treat them as a reliable pick. Original records remain unchanged; this does not justify adding a hit.'}</p>
+        </aside>
+      )}
       <dl className="recommendation-evidence-facts__grid">
         <div className={breakdown.modelProbability === null ? 'is-unavailable' : ''}>
           <dt>{language === 'zh' ? '模型概率' : 'Model probability'}</dt>

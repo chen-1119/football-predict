@@ -1282,6 +1282,14 @@ const run = async () => {
         stderrTail: apiFootballHardening.stderr.slice(-500),
       });
 
+    const legacyReferenceConflict = await runLocalJson(["scripts/verifyLegacyReferenceConflict.cjs"]);
+    pushCheck(checks, "legacy reference conflicts are explicit without rewriting history",
+      legacyReferenceConflict.status === 0 && legacyReferenceConflict.body?.ok === true
+        && Number(legacyReferenceConflict.body?.checks || 0) >= 14, {
+        status: legacyReferenceConflict.status, checks: legacyReferenceConflict.body?.checks ?? null,
+        stderrTail: legacyReferenceConflict.stderr.slice(-500),
+      });
+
     const collectorDiagnostics = await runLocalJson(["scripts/verifyApiFootballDiagnostics.cjs"]);
     pushCheck(checks, "collector diagnostics preserve privacy and frozen-decision separation",
       collectorDiagnostics.status === 0 && collectorDiagnostics.body?.ok === true
