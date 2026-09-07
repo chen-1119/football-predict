@@ -1942,6 +1942,42 @@ run_model_artifact_catchup() {
   sync_model_artifact_mirrors "$store_dir" "$app_dir" || return 1
 }
 
+seed_candidate_model_artifacts() {
+  # Called only inside the stopped-worker/cache barrier. Copy bytes, never
+  # initialize an empty ledger or point the disposable build at live storage.
+  local relative source target copy_status
+  [ "$CANDIDATE_STORE_DIR" = "$BUILD_DIR/server-data" ] \
+    && [ "$LIVE_STORE_DIR" != "$CANDIDATE_STORE_DIR" ] || return 1
+  for source in "$LIVE_STORE_DIR" "$LIVE_STORE_DIR/model-artifacts" "$CANDIDATE_STORE_DIR"; do
+    [ -d "$source" ] && [ ! -L "$source" ] \
+      && [ "$(realpath -e -- "$source")" = "$source" ] || return 1
+  done
+  target="$CANDIDATE_STORE_DIR/model-artifacts"
+  [ ! -e "$target" ] && [ ! -L "$target" ] || return 1
+  mkdir -m 0700 -- "$target" || return 1
+  for relative in \
+    model-strategy.json \
+    model-artifacts/evaluation.json \
+    model-artifacts/candidate-prospective-registry.json \
+    model-artifacts/candidate-prospective-challenger-suite.json \
+    model-artifacts/candidate-prospective-temperature-neutralization-suite.json \
+    model-artifacts/candidate-common-cohort-shadow-g2.json \
+    model-artifacts/candidate-common-cohort-shadow-g2-v2.json \
+    candidate-prospective-capture-status.json \
+    model-artifacts/benchmark-prospective-ledger.json; do
+    source="$LIVE_STORE_DIR/$relative"
+    target="$CANDIDATE_STORE_DIR/$relative"
+    [ ! -e "$target" ] && [ ! -L "$target" ] || return 1
+    copy_status=0
+    copy_regular_file_nofollow "$source" "$target" || copy_status="$?"
+    if [ "$copy_status" -eq 2 ] && [ "$relative" != "model-artifacts/candidate-prospective-registry.json" ]; then
+      continue
+    fi
+    [ "$copy_status" -eq 0 ] || return 1
+    cmp -s -- "$source" "$target" || return 1
+  done
+}
+
 run_candidate_model_artifact_catchup() {
   local store_dir="$1"
   local sqlite_path="$2"
@@ -7274,6 +7310,8 @@ fi
 if [ "$candidate_ai_state_status" -eq 0 ]; then
   log "preserved immutable live AI arena state for isolated candidate publication"
 fi
+seed_candidate_model_artifacts \
+  || abort_before_swap "candidate model artifact snapshot is missing or unsafe"
 stop_release_sync_write_barrier clean \
   || abort_before_swap "candidate cache snapshot sync barrier did not drain cleanly"
 restore_live_service_after_candidate_barrier candidate-cache-snapshot \

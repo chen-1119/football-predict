@@ -4350,6 +4350,8 @@ PATH=/usr/bin:/bin
 BUILD_HOME=/build-home
 BUILD_DIR=/candidate-build
 NODE_HOME=/node
+BUNDLE_SHA256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+RELEASE_SEQUENCE=1
 current_state=preserved
 mirrored_state=""
 generation_state=""
@@ -4396,6 +4398,7 @@ run_candidate_model_artifact_catchup /candidate-store /candidate-store/football.
       });
       assert.equal(result.status, 0, result.stderr || result.stdout);
       assert.deepEqual(result.stdout.trim().split(/\r?\n/u), [
+        "step=candidate-revision-baseline",
         "step=model-backtest",
         "step=optimize-strategy",
         "step=model-mirrors",
@@ -4403,6 +4406,7 @@ run_candidate_model_artifact_catchup /candidate-store /candidate-store/football.
         "step=candidate-generation-reconciled",
         "step=candidate-datastore-reconciled",
         "step=candidate-deadline-capture",
+        "step=candidate-revision-verification",
       ]);
     }
     assert.match(candidateRefreshBody, /--working-directory="\$NEXT_DIR"/);
@@ -4774,6 +4778,23 @@ check("declared revision transition rehearses the real isolated refreeze before 
   assert.equal((body.match(/--release-sequence/g) || []).length, 2);
   assert.match(body, /--snapshot "\$store_dir\/candidate-release-continuity-candidate-before\.json"/);
   assert.doesNotMatch(body, /--registry "\$LIVE_STORE_DIR/);
+});
+
+check("candidate rehearsal receives an isolated immutable live ledger snapshot", () => {
+  const main = mainProgram(bundleRelease);
+  assertOrdered(main, ['stop_worker_for_release_window', 'preserve_live_public_data_cache',
+    'seed_candidate_model_artifacts', 'stop_release_sync_write_barrier clean',
+    'restart_worker_if_needed', 'run_build_step npm-ci', 'run_candidate_model_artifact_catchup'],
+  "the ledger must be copied under the existing barrier before rehearsal and before resuming writers");
+  const seed = extractFunction(bundleRelease, "seed_candidate_model_artifacts");
+  assert.match(seed, /copy_regular_file_nofollow "\$source" "\$target"/);
+  assert.match(seed, /cmp -s -- "\$source" "\$target"/);
+  assert.match(seed, /\[ "\$relative" != "model-artifacts\/candidate-prospective-registry.json" \]/);
+  assert.match(seed, /realpath -e/);
+  if (process.platform === "linux") {
+    const result = require("./verifyCandidateArtifactSeed.cjs").verifyCandidateArtifactSeed();
+    assert.equal(result.cases, 8);
+  }
 });
 
 check("signed prebuilt frontend is hash-verified with a guarded remote-build fallback", () => {
