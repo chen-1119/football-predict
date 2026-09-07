@@ -35,6 +35,30 @@ check("missing source is not source proof", () => assert.equal(summarize([{ ...r
 check("timezone-free and date-only clocks cannot become exact instants", () => {
   for (const value of [null, "", false, 0, "2026-09-01", "2026-09-01T14:00:00"]) assert.equal(summarize([{ ...row, resultObservedAt: value }], "alpha", decisionAt).missingObservedAtRows, 1);
 });
+for (const value of ["2026-02-29T14:00:00Z", "2026-04-31T14:00:00Z", "1900-02-29T14:00:00Z", "2026-09-01T24:00:00Z", "2026-09-01T14:60:00Z", "2026-09-01T14:00:60Z", "2026-09-01T14:00:00+24:00", "2026-09-01T14:00:00+08:60"]) {
+  check(`invalid calendar or clock remains missing: ${value}`, () => {
+    const evidence = summarize([{ ...row, resultObservedAt: value }], "alpha", decisionAt);
+    assert.equal(evidence.latestObservedAt, null); assert.equal(evidence.observedRows, 0);
+    assert.equal(evidence.missingObservedAtRows, 1); assert.equal(evidence.temporalStatus, "unverified");
+  });
+}
+check("invalid decision and kickoff calendars cannot attest temporal eligibility", () => {
+  const badDecision = summarize([row], "alpha", "2026-09-31T01:00:00Z");
+  assert.equal(badDecision.decisionAt, null); assert.equal(badDecision.temporalStatus, "unverified");
+  const badKickoff = summarize([{ ...row, kickoffTime: "2026-08-32T12:00:00Z" }], "alpha", decisionAt);
+  assert.equal(badKickoff.beforeKickoffRows, 1); assert.equal(badKickoff.temporalStatus, "conflicting");
+});
+check("valid leap-day, fractional and explicit-offset clocks retain original representation", () => {
+  for (const value of ["2024-02-29T14:00:00Z", "2000-02-29T14:00:00Z", "2026-09-01T22:00:00.123456789+08:00", "2026-09-01T14:00Z"]) {
+    const evidence = summarize([{ ...row, kickoffTime: "1999-01-01T12:00:00Z", resultObservedAt: value }], "alpha", decisionAt);
+    assert.equal(evidence.latestObservedAt, value); assert.equal(evidence.temporalStatus, "clock-recorded");
+  }
+});
+check("different explicit offsets order by instant rather than lexical timestamp", () => {
+  const earlier = { ...row, resultObservedAt: "2026-09-01T22:00:00+08:00" };
+  const later = { ...row, resultObservedAt: "2026-09-01T15:00:00Z" };
+  assert.equal(summarize([later, earlier], "alpha", decisionAt).latestObservedAt, later.resultObservedAt);
+});
 check("late observation remains visible and conflicting", () => {
   const evidence = summarize([{ ...row, resultObservedAt: "2026-09-08T01:00:00Z" }], "alpha", decisionAt);
   assert.equal(evidence.afterDecisionRows, 1); assert.equal(evidence.temporalStatus, "conflicting");
