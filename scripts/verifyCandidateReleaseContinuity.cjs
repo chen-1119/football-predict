@@ -209,6 +209,7 @@ try {
 console.log(JSON.stringify({
   ok: true,
   verifier: "candidate-release-continuity",
+  revisionTransition: require("./verifyCandidateReleaseRevisionTransition.cjs").run(),
   assertions: {
     validAppendPasses: passing.ok,
     revisionDriftRejected: revisionFailure.blockers.includes("candidate-revision-id-changed"),

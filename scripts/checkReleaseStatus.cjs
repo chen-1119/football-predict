@@ -5,6 +5,7 @@ const http = require("node:http");
 const https = require("node:https");
 const net = require("node:net");
 const { spawnSync } = require("node:child_process");
+const { revisionTransitionReportValid } = require("./candidateReleaseContinuity.cjs");
 const {
   RELEASE_BUNDLE_POLICY_VERSION,
   findSensitiveReleaseEntries
@@ -596,22 +597,24 @@ const checkRemoteCandidateContinuity = (ssh, remoteRelease) => {
     && report.before.candidateRevisionId === report?.after?.candidateRevisionId
   );
   const chainValid = report?.before?.chainValid === true && report?.after?.chainValid === true;
+  const declaredTransitionValid = revisionTransitionReportValid(report);
+  const continuityAfter = declaredTransitionValid ? report.continuedLedger : report?.after;
   const rootHashesValid = /^[0-9a-f]{64}$/.test(String(report?.before?.rootHash || ""))
-    && /^[0-9a-f]{64}$/.test(String(report?.after?.rootHash || ""));
+    && /^[0-9a-f]{64}$/.test(String(continuityAfter?.rootHash || ""));
   const eventCountsValid = Number.isSafeInteger(Number(report?.before?.eventCount))
-    && Number.isSafeInteger(Number(report?.after?.eventCount))
-    && Number(report.after.eventCount) >= Number(report.before.eventCount)
-    && Number(report?.eventsAdded) === Number(report.after.eventCount) - Number(report.before.eventCount);
+    && Number.isSafeInteger(Number(continuityAfter?.eventCount))
+    && Number(continuityAfter.eventCount) >= Number(report.before.eventCount)
+    && Number(report?.eventsAdded) === Number(continuityAfter.eventCount) - Number(report.before.eventCount);
   const countsValid = ["admitted", "atomic", "settled", "formal", "finalized"].every((field) => (
     Number.isSafeInteger(Number(report?.before?.counts?.[field]))
-    && Number.isSafeInteger(Number(report?.after?.counts?.[field]))
-    && Number(report.after.counts[field]) >= Number(report.before.counts[field])
+    && Number.isSafeInteger(Number(continuityAfter?.counts?.[field]))
+    && Number(continuityAfter.counts[field]) >= Number(report.before.counts[field])
   ));
   const checkedAtValid = Number.isFinite(Date.parse(report?.checkedAt || ""));
   const ok = report?.version === "candidate-release-continuity-verification-v1"
     && report?.ok === true
     && blockers?.length === 0
-    && identityStable
+    && (identityStable || declaredTransitionValid)
     && chainValid
     && rootHashesValid
     && eventCountsValid
@@ -626,6 +629,7 @@ const checkRemoteCandidateContinuity = (ssh, remoteRelease) => {
     checkedAt: report?.checkedAt || null,
     blockers,
     identityStable,
+    declaredTransitionValid,
     chainValid,
     rootHashesValid,
     eventCountsValid,
@@ -638,7 +642,8 @@ const checkRemoteCandidateContinuity = (ssh, remoteRelease) => {
     activeLedgerId: report?.after?.activeLedgerId || null,
     candidateRevisionId: report?.after?.candidateRevisionId || null,
     beforeRootHash: report?.before?.rootHash || null,
-    afterRootHash: report?.after?.rootHash || null,
+    afterRootHash: continuityAfter?.rootHash || null,
+    activeLedgerRootHash: report?.after?.rootHash || null,
     evidenceSource: ssh.aggregate?.version || null
   };
 };

@@ -1945,6 +1945,15 @@ run_model_artifact_catchup() {
 run_candidate_model_artifact_catchup() {
   local store_dir="$1"
   local sqlite_path="$2"
+  # Exercise the exact signed revision transition on the isolated candidate
+  # before spending the live stop/swap window. This rehearsal never replaces
+  # the later baseline from the frozen live registry or its post-swap check.
+  run_build_step candidate-revision-baseline env PATH="$PATH" HOME="${BUILD_HOME:-/nonexistent}" \
+    "$NODE_HOME/bin/node" "$BUILD_DIR/scripts/candidateReleaseContinuity.cjs" snapshot \
+    --registry "$store_dir/model-artifacts/candidate-prospective-registry.json" \
+    --revision-transition "$BUILD_DIR/deploy/light-server/candidate-revision-transition.json" \
+    --output "$store_dir/candidate-release-continuity-candidate-before.json" \
+    --bundle-sha256 "$BUNDLE_SHA256" --release-sequence "$RELEASE_SEQUENCE" || return 1
   run_build_step model-backtest env PATH="$PATH" HOME="${BUILD_HOME:-/nonexistent}" SERVER_STORE_DIR="$store_dir" \
     DATASTORE_SQLITE_PATH="$sqlite_path" \
     "$NODE_HOME/bin/npm" run model:backtest || return 1
@@ -1977,6 +1986,13 @@ run_candidate_model_artifact_catchup() {
   run_build_step candidate-deadline-capture env PATH="$PATH" HOME="${BUILD_HOME:-/nonexistent}" SERVER_STORE_DIR="$store_dir" \
     DATASTORE_SQLITE_PATH="$sqlite_path" \
     "$NODE_HOME/bin/npm" run candidate:capture-deadline || return 1
+  run_build_step candidate-revision-verification env PATH="$PATH" HOME="${BUILD_HOME:-/nonexistent}" \
+    "$NODE_HOME/bin/node" "$BUILD_DIR/scripts/candidateReleaseContinuity.cjs" verify \
+    --registry "$store_dir/model-artifacts/candidate-prospective-registry.json" \
+    --revision-transition "$BUILD_DIR/deploy/light-server/candidate-revision-transition.json" \
+    --snapshot "$store_dir/candidate-release-continuity-candidate-before.json" \
+    --output "$store_dir/candidate-release-continuity-candidate-after.json" \
+    --bundle-sha256 "$BUNDLE_SHA256" --release-sequence "$RELEASE_SEQUENCE" || return 1
 }
 
 prepare_release_enrichment_reuse_request() {
@@ -7550,6 +7566,7 @@ stop_release_sync_write_barrier clean \
 snapshot_external_model_artifacts_for_rollback \
   || abort_before_swap "external model artifact rollback snapshot failed"
 "$NODE_HOME/bin/node" "$NEXT_DIR/scripts/candidateReleaseContinuity.cjs" snapshot \
+  --revision-transition "$NEXT_DIR/deploy/light-server/candidate-revision-transition.json" \
   --registry "$RECOVERY_DIR/external-model-artifacts/candidate-registry" \
   --output "$RECOVERY_DIR/candidate-release-continuity-before.json" \
   --bundle-sha256 "$BUNDLE_SHA256" \
@@ -7725,6 +7742,7 @@ run_as_service_user_with_runtime_env env VERIFY_BASE_URL="http://${HOST}:${PORT}
 wait_for_release_candidate_heartbeat_keeper_healthy \
   || rollback "release heartbeat keeper failed during production readiness"
 "$NODE_HOME/bin/node" "$APP_DIR/scripts/candidateReleaseContinuity.cjs" verify \
+  --revision-transition "$APP_DIR/deploy/light-server/candidate-revision-transition.json" \
   --registry "$LIVE_STORE_DIR/model-artifacts/candidate-prospective-registry.json" \
   --snapshot "$RECOVERY_DIR/candidate-release-continuity-before.json" \
   --output "$RECOVERY_DIR/candidate-release-continuity-after.json" \

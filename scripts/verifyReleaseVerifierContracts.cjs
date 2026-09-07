@@ -41,4 +41,12 @@ check('bundle creation checks verifier contracts before sequence reservation',()
   const reservation=bundle.indexOf('const sequenceReservation = reserveReleaseSequence(');
   assert.ok(preflight>=0&&reservation>preflight);
 });
+check('exact revision transition and its signed dependencies pass before sequence reservation',()=>{
+  const result=require('./verifyCandidateReleaseRevisionTransition.cjs').run();
+  assert.ok(result.checks>=27);
+  for(const entry of ['deploy/light-server/candidate-revision-transition.json','scripts/verifyCandidateReleaseRevisionTransition.cjs']){
+    assert.ok(bundle.includes(`"${entry}"`));
+    assert.ok(safety.includes(`"${entry}"`));
+  }
+});
 console.log(JSON.stringify({ok:true,verifier:'release-verifier-contracts-v1',checks,productionDataTouched:false},null,2));

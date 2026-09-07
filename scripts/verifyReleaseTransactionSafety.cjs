@@ -4732,6 +4732,8 @@ check("candidate ledger continuity is snapshotted before mutation and verified b
   const main = mainProgram(bundleRelease);
   assert.match(bundleRelease, /scripts\/candidateReleaseContinuity\.cjs" snapshot/);
   assert.match(bundleRelease, /scripts\/candidateReleaseContinuity\.cjs" verify/);
+  assert.match(bundleRelease, /--revision-transition "\$NEXT_DIR\/deploy\/light-server\/candidate-revision-transition\.json"/);
+  assert.match(bundleRelease, /--revision-transition "\$APP_DIR\/deploy\/light-server\/candidate-revision-transition\.json"/);
   assert.match(bundleRelease, /"\$NODE_HOME\/bin\/node" "\$APP_DIR\/scripts\/candidateReleaseContinuity\.cjs" verify/);
   assert.doesNotMatch(bundleRelease, /"\$NODE_HOME\/bin\/node" "\$NEXT_DIR\/scripts\/candidateReleaseContinuity\.cjs" verify/);
   assert.match(bundleRelease, /candidate-release-continuity-before\.json/);
@@ -4757,6 +4759,21 @@ check("candidate ledger continuity is snapshotted before mutation and verified b
   assert.match(bundleRelease, /mv -fT -- "\$\{APP_DIR\}\/\.release-candidate-continuity\.next"/);
   assert.match(bundleRelease, /stat -c '%u:%g:%a:%h'/);
   assert.match(bundleRelease, /sync -f "\$\{APP_DIR\}\/\.release-candidate-continuity\.json"/);
+});
+
+check("declared revision transition rehearses the real isolated refreeze before live swap", () => {
+  const start = bundleRelease.indexOf("run_candidate_model_artifact_catchup() {");
+  const end = bundleRelease.indexOf("\nprepare_release_enrichment_reuse_request()", start);
+  assert.ok(start > 0 && end > start);
+  const body = bundleRelease.slice(start, end);
+  assertOrdered(body, ["candidate-revision-baseline", "run_build_step model-backtest",
+    "run_build_step candidate-deadline-capture", "candidate-revision-verification"],
+  "isolated candidate must exercise the declared migration before live cutover");
+  assert.equal((body.match(/--revision-transition/g) || []).length, 2);
+  assert.equal((body.match(/--bundle-sha256/g) || []).length, 2);
+  assert.equal((body.match(/--release-sequence/g) || []).length, 2);
+  assert.match(body, /--snapshot "\$store_dir\/candidate-release-continuity-candidate-before\.json"/);
+  assert.doesNotMatch(body, /--registry "\$LIVE_STORE_DIR/);
 });
 
 check("signed prebuilt frontend is hash-verified with a guarded remote-build fallback", () => {

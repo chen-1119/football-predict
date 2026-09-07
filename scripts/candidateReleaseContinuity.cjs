@@ -5,14 +5,223 @@ const path = require("node:path");
 const {
   GENESIS_HASH,
   auditLedger,
+  buildCandidateCommitment,
+  buildWindowBoundaries,
+  candidateEvaluatorSemanticHashes,
   sha256,
   verifyRegistry,
 } = require("./candidateProspectiveLedger.cjs");
+const { strictInstant } = require("../src/services/strictInstant.cjs");
 
 const SNAPSHOT_VERSION = "candidate-release-continuity-snapshot-v1";
 const VERIFICATION_VERSION = "candidate-release-continuity-verification-v1";
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 const COUNT_FIELDS = ["admitted", "atomic", "settled", "formal", "finalized"];
+const TRANSITION_VERSION = "candidate-release-revision-transition-v1";
+
+const commitmentSummary = (ledger) => ({
+  headerHash: ledger.headerHash,
+  candidateRevisionId: ledger.header.candidateRevisionId,
+  candidateSpecHash: ledger.header.candidateSpecHash,
+  definitionHash: sha256(ledger.header.candidateDefinition),
+  implementationHash: sha256(ledger.header.candidateImplementation),
+  semanticHashes: ledger.header.candidateImplementation?.semanticHashes,
+  gateSpecHash: ledger.header.gateSpecHash,
+  nominationPolicyHash: ledger.header.nominationPolicyHash,
+  frozenAt: ledger.header.frozenAt,
+});
+
+// This is a declaration shipped INSIDE the signed release bundle, not a reset
+// flag or an approval to change selection/gates. Only one exact source ledger
+// may move to one exact new implementation of the same candidate definition.
+const transitionContractBlockers = (contract) => {
+  const blockers = [];
+  if (contract?.version !== TRANSITION_VERSION
+      || contract?.reason !== "result-input-timeline-commitment"
+      || !/^candidate-[a-f0-9]{24}$/.test(contract?.sourceLedgerId || "")
+      || contract?.onlineEffect !== false) blockers.push("transition-contract-invalid");
+  for (const value of [contract?.definitionHash, contract?.gateSpecHash,
+    contract?.nominationPolicyHash, contract?.from?.candidateSpecHash,
+    contract?.from?.implementationHash, contract?.to?.candidateSpecHash,
+    contract?.to?.implementationHash]) {
+    if (!SHA256_PATTERN.test(value || "")) blockers.push("transition-contract-hash-invalid");
+  }
+  for (const side of [contract?.from, contract?.to]) {
+    if (!side?.candidateRevisionId?.endsWith(`@${side?.candidateSpecHash?.slice(0, 16)}`)) {
+      blockers.push("transition-contract-revision-invalid");
+    }
+  }
+  if (contract?.from?.candidateRevisionId === contract?.to?.candidateRevisionId
+      || contract?.from?.implementationHash === contract?.to?.implementationHash) {
+    blockers.push("transition-contract-no-implementation-change");
+  }
+  return [...new Set(blockers)];
+};
+
+const commitmentMatches = (summary, side, contract) => Boolean(summary
+  && summary.candidateRevisionId === side?.candidateRevisionId
+  && summary.candidateSpecHash === side?.candidateSpecHash
+  && summary.implementationHash === side?.implementationHash
+  && summary.definitionHash === contract?.definitionHash
+  && summary.gateSpecHash === contract?.gateSpecHash
+  && summary.nominationPolicyHash === contract?.nominationPolicyHash);
+
+const bindRevisionTransition = (registry, contract, releaseIdentity) => {
+  if (!contract) return null;
+  const blockers = transitionContractBlockers(contract);
+  normalizeReleaseIdentity(releaseIdentity, { required: true });
+  const active = activeLedgerFor(registry);
+  const summary = active && commitmentSummary(active);
+  const alreadyApplied = commitmentMatches(summary, contract.to, contract);
+  if (!alreadyApplied && (active?.ledgerId !== contract.sourceLedgerId
+      || !commitmentMatches(summary, contract.from, contract))) {
+    blockers.push("transition-source-not-exact");
+  }
+  if (active) {
+    const next = buildCandidateCommitment(active.header.candidateDefinition, {
+      ...active.header.candidateImplementation,
+      semanticHashes: candidateEvaluatorSemanticHashes(),
+    });
+    if (next.candidateRevisionId !== contract.to?.candidateRevisionId
+        || next.candidateSpecHash !== contract.to?.candidateSpecHash
+        || sha256(next.implementation) !== contract.to?.implementationHash) {
+      blockers.push("transition-target-not-current-implementation");
+    }
+  }
+  if (blockers.length) throw new CandidateReleaseContinuityError(
+    "candidate revision transition cannot be bound", { blockers },
+  );
+  return { contract, contractHash: sha256(contract),
+    mode: alreadyApplied ? "already-applied" : "required",
+    releaseIdentity: normalizeReleaseIdentity(releaseIdentity, { required: true }) };
+};
+
+const verifyRevisionTransition = (before, registry, contract, checkedAt) => {
+  const binding = before?.revisionTransition;
+  if (!binding && !contract) return { required: false, ok: true, blockers: [] };
+  const blockers = transitionContractBlockers(contract);
+  if (!binding || binding.contractHash !== sha256(contract)
+      || sha256(binding.contract ?? null) !== binding.contractHash
+      || sha256(binding.releaseIdentity ?? null) !== sha256(before.releaseIdentity ?? null)
+      || !["required", "already-applied"].includes(binding.mode)) {
+    blockers.push("transition-snapshot-binding-mismatch");
+  }
+  const required = binding?.mode === "required";
+  const old = registry?.ledgers?.find((row) => row.ledgerId === before?.activeLedgerId);
+  const next = activeLedgerFor(registry);
+  if (!next || !commitmentMatches(commitmentSummary(next), contract?.to, contract)) {
+    blockers.push("transition-target-not-exact");
+  }
+  if (required) {
+    if (before.activeLedgerId !== contract?.sourceLedgerId
+        || !commitmentMatches(before.activeCommitment, contract?.from, contract)
+        || !old || !commitmentMatches(commitmentSummary(old), contract?.from, contract)) {
+      blockers.push("transition-source-not-exact");
+    }
+    if (before.registryContinuity?.ledgerContinuity?.some((row) => (
+      row.ledgerId === next?.ledgerId || row.candidateRevisionId === contract?.to?.candidateRevisionId
+    ))) blockers.push("transition-target-ledger-not-new");
+    const retirement = old?.events?.filter((row) => row.type === "retirement") || [];
+    if (retirement.length !== 1
+        || retirement[0].sequence <= before.eventCount
+        || retirement[0].reason !== "active-candidate-implementation-revision-changed-or-removed"
+        || retirement[0].replacementCandidateRevisionId !== contract?.to?.candidateRevisionId
+        || retirement[0].state !== "RETIRED" || retirement[0].onlineEffect !== false) {
+      blockers.push("transition-retirement-invalid");
+    }
+    const frozen = strictInstant(next?.header?.frozenAt);
+    const start = strictInstant(before.capturedAt);
+    const end = strictInstant(checkedAt);
+    const retirementAt = strictInstant(retirement[0]?.recordedAt);
+    if (!frozen || !start || !end || !retirementAt
+        || Date.parse(frozen) < Date.parse(start) || Date.parse(frozen) > Date.parse(end)
+        || Date.parse(retirementAt) < Date.parse(start)
+        || Date.parse(retirementAt) > Date.parse(frozen)) {
+      blockers.push("transition-freeze-clock-invalid");
+    }
+    for (const event of next?.events || []) {
+      const time = strictInstant(event.recordedAt);
+      if (!time || !frozen || !end || Date.parse(time) < Date.parse(frozen)
+          || Date.parse(time) > Date.parse(end) || event.onlineEffect !== false) {
+        blockers.push("transition-new-event-clock-or-effect-invalid");
+      }
+      if (event.candidateRevisionId && event.candidateRevisionId !== contract?.to?.candidateRevisionId) {
+        blockers.push("transition-new-event-revision-mismatch");
+      }
+      if (event.type === "decision") {
+        for (const key of ["decisionAt", "snapshotCapturedAt", "snapshotFirstSeenAt"]) {
+          const clock = strictInstant(event[key]);
+          if (!clock || !frozen || Date.parse(clock) < Date.parse(frozen)) {
+            blockers.push("transition-pre-freeze-decision-evidence");
+          }
+        }
+      }
+      if (event.type === "activation") {
+        const activation = strictInstant(event.activationAt);
+        if (!activation || !frozen || Date.parse(activation) < Date.parse(frozen)
+            || activation !== event.recordedAt
+            || sha256(event.windowBoundaries) !== sha256(buildWindowBoundaries(activation))) {
+          blockers.push("transition-activation-window-invalid");
+        }
+      }
+    }
+    if (next?.events?.[0]?.type !== "freeze" || next?.events?.[1]?.type !== "shadow-start") {
+      blockers.push("transition-new-ledger-start-invalid");
+    }
+  }
+  return { required, ok: blockers.length === 0, contractHash: binding?.contractHash || null,
+    sourceLedgerId: before?.activeLedgerId, targetLedgerId: next?.ledgerId || null,
+    blockers: [...new Set(blockers)] };
+};
+
+// Validate the root-owned remote completion report without pretending that the
+// actual active identity remained unchanged. This is NOT a replacement for the
+// release-time registry verification above; the marker is authenticated by SSH
+// and is separately bound to both committed release SHA markers by the caller.
+const revisionTransitionReportValid = (report) => {
+  try {
+    const { before, after, continuedLedger: continued, revisionTransition: transition } = report;
+    const binding = before?.revisionTransition, contract = binding?.contract;
+    if (binding?.mode !== "required" || transition?.required !== true || transition?.ok !== true
+        || transition.blockers?.length !== 0 || transitionContractBlockers(contract).length
+        || binding.contractHash !== sha256(contract) || transition.contractHash !== binding.contractHash
+        || sha256(normalizeReleaseIdentity(binding.releaseIdentity, { required: true }))
+          !== sha256(normalizeReleaseIdentity(report.releaseIdentity, { required: true }))
+        || sha256(before.releaseIdentity) !== sha256(report.releaseIdentity)
+        || sha256(after.releaseIdentity) !== sha256(report.releaseIdentity)
+        || sha256(continued?.releaseIdentity) !== sha256(report.releaseIdentity)
+        || before.activeLedgerId !== contract.sourceLedgerId
+        || transition.sourceLedgerId !== before.activeLedgerId
+        || transition.targetLedgerId !== after.activeLedgerId
+        || continued.activeLedgerId !== before.activeLedgerId
+        || continued.candidateRevisionId !== before.candidateRevisionId
+        || before.activeLedgerId === after.activeLedgerId
+        || !commitmentMatches(before.activeCommitment, contract.from, contract)
+        || !commitmentMatches(continued.activeCommitment, contract.from, contract)
+        || !commitmentMatches(after.activeCommitment, contract.to, contract)
+        || before.activeCommitment.headerHash !== continued.activeCommitment.headerHash
+        || [before, after, continued].some((snapshot) => snapshotBlockers(snapshot).length)) return false;
+    const oldInActualRegistry = after.registryContinuity.ledgerContinuity.find((row) => row.ledgerId === before.activeLedgerId);
+    if (!oldInActualRegistry || oldInActualRegistry.headerHash !== continued.activeCommitment.headerHash
+        || oldInActualRegistry.rootHash !== continued.rootHash
+        || oldInActualRegistry.eventCount !== continued.eventCount
+        || sha256(oldInActualRegistry.canonicalEventHashSequence) !== sha256(continued.canonicalEventHashSequence)
+        || before.registryContinuity.ledgerContinuity.some((row) => row.ledgerId === after.activeLedgerId)) return false;
+    for (const prior of before.registryContinuity.ledgerContinuity) {
+      const current = after.registryContinuity.ledgerContinuity.find((row) => row.ledgerId === prior.ledgerId);
+      if (!current || prior.candidateRevisionId !== current.candidateRevisionId
+          || (prior.headerHash && prior.headerHash !== current.headerHash)
+          || current.eventCount < prior.eventCount
+          || prior.canonicalEventHashSequence.some((hash, i) => hash !== current.canonicalEventHashSequence[i])) return false;
+    }
+    if (before.registryContinuity.candidateRegistryHashSequence.some((hash, i) => (
+      hash !== after.registryContinuity.candidateRegistryHashSequence[i]
+    ))) return false;
+    return continued.chainValid === true
+      && before.canonicalEventHashSequence.every((hash, i) => hash === continued.canonicalEventHashSequence[i])
+      && COUNT_FIELDS.every((field) => continued.counts[field] >= before.counts[field]);
+  } catch { return false; }
+};
 
 const normalizeReleaseIdentity = (value, { required = false } = {}) => {
   if (value == null && !required) return null;
@@ -112,6 +321,7 @@ const registrySnapshot = (registry, {
   capturedAt = new Date().toISOString(),
   registryPath = null,
   releaseIdentity = null,
+  revisionTransition = null,
 } = {}) => {
   const chain = verifyRegistry(registry);
   if (!registry || chain.valid !== true) {
@@ -158,6 +368,7 @@ const registrySnapshot = (registry, {
   }
   const ledgerContinuity = (registry.ledgers || []).map((ledger) => ({
     ledgerId: ledger.ledgerId,
+    headerHash: ledger.headerHash,
     candidateRevisionId: ledger.header?.candidateRevisionId || null,
     eventCount: Array.isArray(ledger.events) ? ledger.events.length : 0,
     canonicalEventHashSequence: (ledger.events || []).map((event) => (
@@ -174,11 +385,13 @@ const registrySnapshot = (registry, {
     chainValid: true,
     activeLedgerId: activeLedger.ledgerId,
     candidateRevisionId: activeLedger.header?.candidateRevisionId || null,
+    activeCommitment: commitmentSummary(activeLedger),
     eventCount: canonicalEventHashSequence.length,
     canonicalEventHashSequence,
     rootHash,
     counts,
     releaseIdentity: normalizeReleaseIdentity(releaseIdentity),
+    revisionTransition: bindRevisionTransition(registry, revisionTransition, releaseIdentity),
     registryContinuity: {
       activeLedgerId: registry.activeLedgerId,
       ledgerContinuity,
@@ -252,6 +465,7 @@ const verifyContinuity = (before, registry, {
   checkedAt = new Date().toISOString(),
   registryPath = null,
   releaseIdentity = null,
+  revisionTransition = null,
 } = {}) => {
   const blockers = snapshotBlockers(before);
   let expectedReleaseIdentity = null;
@@ -291,17 +505,28 @@ const verifyContinuity = (before, registry, {
     }
   }
 
+  const transition = verifyRevisionTransition(before, registry, revisionTransition, checkedAt);
+  blockers.push(...transition.blockers);
+  let continuedLedger = null;
+  if (transition.required && after && transition.ok) {
+    continuedLedger = registrySnapshot({ ...registry, activeLedgerId: before.activeLedgerId }, {
+      capturedAt: checkedAt, registryPath, releaseIdentity: after.releaseIdentity,
+    });
+  }
   if (after) {
-    if (before?.activeLedgerId !== after.activeLedgerId) {
+    // The old ledger remains the continuity subject during a declared revision
+    // migration. The actual new active ledger is still reported in `after`.
+    const comparison = continuedLedger || after;
+    if (before?.activeLedgerId !== comparison.activeLedgerId) {
       blockers.push("active-ledger-id-changed");
     }
-    if (before?.candidateRevisionId !== after.candidateRevisionId) {
+    if (before?.candidateRevisionId !== comparison.candidateRevisionId) {
       blockers.push("candidate-revision-id-changed");
     }
     const beforeHashes = Array.isArray(before?.canonicalEventHashSequence)
       ? before.canonicalEventHashSequence.map((hash) => String(hash).toLowerCase())
       : [];
-    const afterHashes = after.canonicalEventHashSequence;
+    const afterHashes = comparison.canonicalEventHashSequence;
     if (afterHashes.length < beforeHashes.length) {
       blockers.push("event-sequence-regressed");
     }
@@ -314,13 +539,13 @@ const verifyContinuity = (before, registry, {
     }
     for (const field of COUNT_FIELDS) {
       const beforeCount = nonNegativeInteger(before?.counts?.[field]);
-      const afterCount = nonNegativeInteger(after.counts[field]);
+      const afterCount = nonNegativeInteger(comparison.counts[field]);
       if (beforeCount !== null && afterCount !== null && afterCount < beforeCount) {
         blockers.push(`${field}-count-regressed`);
       }
     }
     if (afterHashes.length === beforeHashes.length
-        && String(before?.rootHash || "").toLowerCase() !== after.rootHash) {
+        && String(before?.rootHash || "").toLowerCase() !== comparison.rootHash) {
       blockers.push("root-changed-without-new-events");
     }
     const beforeRegistry = before?.registryContinuity || {};
@@ -347,6 +572,9 @@ const verifyContinuity = (before, registry, {
       if (beforeLedger.candidateRevisionId !== afterLedger.candidateRevisionId) {
         blockers.push(`ledger-revision-changed:${beforeLedger.ledgerId}`);
       }
+      if (beforeLedger.headerHash && beforeLedger.headerHash !== afterLedger.headerHash) {
+        blockers.push(`ledger-header-changed:${beforeLedger.ledgerId}`);
+      }
       const priorHashes = beforeLedger.canonicalEventHashSequence || [];
       const currentHashes = afterLedger.canonicalEventHashSequence || [];
       if (currentHashes.length < priorHashes.length) {
@@ -368,15 +596,18 @@ const verifyContinuity = (before, registry, {
     checkedAt,
     releaseIdentity: after?.releaseIdentity || before?.releaseIdentity || null,
     policy: {
-      activeIdentityStable: true,
+      activeIdentityStable: !transition.required,
+      exactDeclaredRevisionTransitionOnly: transition.required,
       priorEventsMustBeExactPrefix: true,
       countsMustBeMonotonic: COUNT_FIELDS,
       unchangedEventCountRequiresSameRoot: true,
     },
     before,
     after,
+    continuedLedger,
+    revisionTransition: transition,
     eventsAdded: after && Number.isInteger(Number(before?.eventCount))
-      ? after.eventCount - Number(before.eventCount)
+      ? (continuedLedger || after).eventCount - Number(before.eventCount)
       : null,
     blockers: uniqueBlockers,
   };
@@ -395,7 +626,7 @@ const parseArgs = (argv) => {
     if (!value || value.startsWith("--")) {
       throw new CandidateReleaseContinuityError("missing option value", { option: token });
     }
-    if (!["registry", "snapshot", "before", "output", "at", "bundle-sha256", "release-sequence"].includes(name)) {
+    if (!["registry", "snapshot", "before", "output", "at", "bundle-sha256", "release-sequence", "revision-transition"].includes(name)) {
       throw new CandidateReleaseContinuityError("unknown option", { option: token });
     }
     options[name] = value;
@@ -424,6 +655,8 @@ const main = (argv = process.argv.slice(2)) => {
   const registryPath = path.resolve(options.registry || defaultRegistryPath());
   const registry = readJsonFile(registryPath, "candidate registry");
   const at = options.at || new Date().toISOString();
+  const revisionTransition = options["revision-transition"]
+    ? readJsonFile(options["revision-transition"], "signed candidate revision transition") : null;
   const releaseIdentity = options["bundle-sha256"] || options["release-sequence"]
     ? normalizeReleaseIdentity({
       bundleSha256: options["bundle-sha256"],
@@ -432,7 +665,7 @@ const main = (argv = process.argv.slice(2)) => {
     : null;
   let payload;
   if (mode === "snapshot") {
-    payload = registrySnapshot(registry, { capturedAt: at, registryPath, releaseIdentity });
+    payload = registrySnapshot(registry, { capturedAt: at, registryPath, releaseIdentity, revisionTransition });
   } else {
     const snapshotPath = options.snapshot || options.before;
     if (!snapshotPath) {
@@ -445,6 +678,7 @@ const main = (argv = process.argv.slice(2)) => {
       checkedAt: at,
       registryPath,
       releaseIdentity,
+      revisionTransition,
     });
   }
   if (options.output) writeJsonAtomic(options.output, payload);
@@ -471,6 +705,13 @@ module.exports = {
   SNAPSHOT_VERSION,
   VERIFICATION_VERSION,
   COUNT_FIELDS,
+  TRANSITION_VERSION,
+  commitmentSummary,
+  transitionContractBlockers,
+  commitmentMatches,
+  bindRevisionTransition,
+  verifyRevisionTransition,
+  revisionTransitionReportValid,
   CandidateReleaseContinuityError,
   normalizeReleaseIdentity,
   activeLedgerFor,
