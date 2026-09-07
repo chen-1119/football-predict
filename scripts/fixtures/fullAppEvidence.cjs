@@ -35,6 +35,13 @@ const { buildReferenceReviewPerformance, compactReferenceReviewPerformance } = r
 const versionHistory = [frozenReviewFixture(), frozenReviewFixture('991004', 'frozen-model-b', 'HHAD'), frozenReviewFixture('991006')];
 delete versionHistory[2].postMatchReview.predictionReview.rows[0].frozenVersion;
 const versionSummary = compactReferenceReviewPerformance(buildReferenceReviewPerformance({ matches: versionHistory, generatedAt: '2026-09-07T15:00:00.000Z' }));
+const { fixture: pairFixture, trust: pairTrust } = require('../verifyPublicReferencePairs.cjs');
+const pairCases = [pairFixture(), pairFixture({ id: '997702', scores: [2,1] }), pairFixture({ id: '997703', pool: 'HHAD', scores: [2,1] })];
+const pairSummary = require('../../server/referencePairedBaseline.cjs').buildReferencePerformanceWithPairs({
+  matches: pairCases.map(f => f.match), generatedAt: '2026-09-20T15:00:00.000Z', trustRegistry: pairTrust.registry,
+  // Deliberately omit the losing HAD evidence: pair-subset 100%, full HAD 50%.
+  snapshotPayload: { publicReferenceDecisions: [pairCases[0].record, pairCases[2].record], publicReferenceEvidence: [pairCases[0].entry, pairCases[2].entry] },
+});
 const history = [true, false].map((won, i) => ({ ...base, id: `sporttery_99102${i}`, sourceMatchId: `99102${i}`,
   status: 'FINISHED', sourceStatus: 'FINISHED', kickoffTime: '2026-09-06T12:00:00Z', buyEndTime: '2026-09-06T12:00:00Z',
   eventVersion: '2026-09-06T12:00:00Z', businessDate: '2026-09-06', matchDate: '2026-09-06', predictionMeta: {},
@@ -71,8 +78,9 @@ function response(pathname, mode = 'complete') {
   if (apiPath === '/health') return { apiVersion: 'v1', status: { serviceOk: true, dataFresh: true, recommendationReliable: false }, data: { currentRead: { source: 'synthetic-only' } } };
   if (apiPath === '/model/evaluation') return empty ? {} : { publicScorecard: { version: 'synthetic-full-app-evidence-v1', sample: { predictionRows: 999 },
     ...(mode === 'formal-zero' ? { hitRateAudit: { observed: { settled: 0, hitRate: null }, minimumSettledRows: 500 } } : {}),
-    formalReviewPerformance: summary(false), referenceReviewPerformance: mode === 'versions' ? versionSummary : mode === 'exclusion-incomplete'
+    formalReviewPerformance: summary(false), referenceReviewPerformance: mode === 'pairs' ? pairSummary : mode === 'pairs-invalid'
+      ? { ...pairSummary, pairedBaseline: { ...pairSummary.pairedBaseline, cells: [] } } : mode === 'versions' ? versionSummary : mode === 'exclusion-incomplete'
       ? { ...summary(true), exclusions: { ...summary(true).exclusions, conflictingEvent: null, unrecognized: 1 } } : summary(true) } };
   return undefined;
 }
-module.exports = { now, current, response, versionSummary };
+module.exports = { now, current, response, versionSummary, pairSummary };

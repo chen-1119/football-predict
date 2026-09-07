@@ -290,7 +290,7 @@ const compactReviewPerformance = (value, track) => {
     if (!reconciles({ cumulative, daily }, all) || REVIEW_MARKETS.some(market => !reconciles(marketBreakdown[market], all.map(group => group.marketBreakdown[market])))) return null;
     versionBreakdown = { version: REVIEW_VERSION_BREAKDOWN_VERSION, scope: partition.scope, groups: groups.sort((a, b) => a.key.localeCompare(b.key)), unknown };
   }
-  return {
+  const result = {
     version, generatedAt: value.generatedAt || null, startDate, timezone: "Asia/Shanghai",
     cumulative, daily: daily.sort((a, b) => a.date.localeCompare(b.date)),
     exclusions: Object.fromEntries(Object.entries(value.exclusions || {}).filter(([, n]) => Number.isSafeInteger(n) && n >= 0)),
@@ -298,6 +298,10 @@ const compactReviewPerformance = (value, track) => {
     ...(marketBreakdown ? { marketBreakdown } : {}),
     ...(versionBreakdown ? { versionBreakdown } : {}),
   };
+  if (track === "reference" && value.pairedBaseline !== undefined) {
+    result.pairedBaseline = require("./referencePairedBaseline.cjs").compactReferencePairedBaseline(value.pairedBaseline, result);
+  }
+  return result;
 };
 
 const compactFormalReviewPerformance = (value) => compactReviewPerformance(value, "formal");

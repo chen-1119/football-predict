@@ -6,6 +6,7 @@ export interface ReviewPerformanceBucket {
 }
 
 export interface ReviewPerformanceSummary {
+  pairedBaseline?: ReferencePairedBaseline | null;
   version?: string;
   generatedAt?: string | null;
   startDate?: string;
@@ -35,6 +36,32 @@ export interface ReviewPerformanceSummary {
     identityVersion?: string;
     conflictingEvents?: string;
   } | null;
+}
+
+export interface ReferencePairCounts {
+  settledReferenceEvents: number;
+  paired: number;
+  excluded: number;
+  publishedWon: number;
+  baselineWon: number;
+  tiedBaselineOdds: number;
+  bothWon: number;
+  publicOnly: number;
+  baselineOnly: number;
+  bothLost: number;
+}
+export interface ReferencePairedBaseline {
+  version: string;
+  policyVersion: string;
+  scope: string;
+  generatedAt: string | null;
+  recommendationCoverage: null;
+  promotionEligible: false;
+  parameterRevisionVerified: false;
+  sourceBoundary: string;
+  resultBoundary: string;
+  tieOrder: string[];
+  cells: Array<ReferencePairCounts & { date: string; market: string; versionKey: string }>;
 }
 
 export interface ReviewMarketGroup {

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { ReviewPerformanceSummary } from '../../services/reviewPerformanceTypes';
-import { selectReviewMarketWindow, selectReviewExclusions, reviewShanghaiDate, reviewWilsonInterval, selectReviewVersions, selectReviewVersionWindow } from '../../services/reviewDashboard';
+import { selectReviewMarketWindow, selectReviewExclusions, reviewShanghaiDate, reviewWilsonInterval, selectReviewVersions, selectReviewVersionWindow, selectReferencePairedBaseline } from '../../services/reviewDashboard';
 import type { ReviewWindow, ReviewMarket } from '../../services/reviewDashboard';
 import './review.css';
 
@@ -34,6 +34,7 @@ export const ReviewEvidenceOverview: React.FC<Props> = ({ language, formal, refe
     : selectReviewMarketWindow(summary, resultTrack, window, market);
   const verifiedPartition = selectReviewMarketWindow(summary, track === 'formal' ? 'formal' : 'reference', 'all', 'HAD').state === 'ready';
   const isShadow = track === 'shadow';
+  const paired = track === 'reference' ? selectReferencePairedBaseline(reference, window, market, versionChoice) : null;
   const interval = !isShadow && result.state === 'ready' ? reviewWilsonInterval(result.counts) : null;
   const exclusions = selectReviewExclusions(summary, track === 'formal' ? 'formal' : 'reference');
   const labels = { formal: zh ? '正式推荐' : 'Formal picks', reference: zh ? '数据参考' : 'Data references', shadow: zh ? '研究影子' : 'Research shadow' };
@@ -83,7 +84,18 @@ export const ReviewEvidenceOverview: React.FC<Props> = ({ language, formal, refe
             <p>{zh ? '仅作样本不确定性描述，假设各场独立且命中概率相同；未校正同日或联赛相关性，不是未来命中率承诺，也不能证明优于赔率基准。不用于模型晋级。' : 'Describes sampling uncertainty assuming independent matches with a common hit probability. Not adjusted for day or league dependence, not a future hit-rate promise or evidence of beating market odds. Not used for model admission.'}</p>
           </details>}
         </article>
-        <article><h3>{zh ? '同组赔率基准' : 'Paired market baseline'}</h3><strong className="review-missing-value">{zh ? '待补证' : 'Evidence pending'}</strong><p>{zh ? '需要相同场次、相同玩法和同一决策时点的完整赔率。' : 'Requires the same matches, market and full odds at the decision time.'}</p><span>{zh ? '不使用赛后赔率或其他样本代替' : 'No post-match odds or unrelated cohorts'}</span></article>
+        <article data-review-paired-baseline><h3>{zh ? '同组赔率基准' : 'Paired market baseline'}</h3>
+          {paired ? <>
+            <strong className={paired.paired ? undefined : 'review-missing-value'} data-review-paired-rate>{paired.baselineHitRate == null ? '—' : `${(paired.baselineHitRate * 100).toFixed(1)}%`}</strong>
+            <p data-review-paired-reference>{zh ? '配对子集 · 参考命中率' : 'Paired subset · Reference hit rate'} {paired.publicHitRate == null ? '—' : `${(paired.publicHitRate * 100).toFixed(1)}%`}</p>
+            <span data-review-paired-count>{zh ? `可配对 ${count(paired.paired)} / 本窗口已结算 ${count(paired.settledReferenceEvents)} · 排除 ${count(paired.excluded)}` : `Paired ${count(paired.paired)} / window settled ${count(paired.settledReferenceEvents)} · Excluded ${count(paired.excluded)}`}</span>
+            <details className="review-uncertainty"><summary>{zh ? '配对口径与缺失证据' : 'Pair definition and evidence gaps'}</summary>
+              <p>{zh ? '只比较同场、同玩法、同一冻结决策时点的完整签名赔率。基准选择当时去水概率最高的结果；并列固定按主胜、平局、客胜取首项。' : 'Same match, market and frozen decision time, using complete signed odds. Baseline selects the highest de-vigged probability; exact ties use home, draw, away order.'}</p>
+              <p>{zh ? `参考命中 ${count(paired.publishedWon)}、基准命中 ${count(paired.baselineWon)}，共同分母 ${count(paired.paired)}；其中并列赔率 ${count(paired.tiedBaselineOdds)} 场。排除项缺少原始证据或未通过核验，不补算。` : `Reference wins ${count(paired.publishedWon)}, baseline wins ${count(paired.baselineWon)}, shared denominator ${count(paired.paired)}; odds ties ${count(paired.tiedBaselineOdds)}. Exclusions lack original evidence or fail verification and are not backfilled.`}</p>
+              <p>{zh ? '这是可配对子集，不能直接与全量命中率比较；不是推荐覆盖率，也不能证明模型更准。签名来自可信采集器，未重新核对原始响应；结算沿用应用可信完场口径，非独立赛果证明。' : 'This subset must not be compared directly against the full-ledger rate. It is not recommendation coverage or proof of model superiority. Trusted-collector signatures do not rehash the original response; application-trusted finals are not independent result attestations.'}</p>
+            </details>
+          </> : <><strong className="review-missing-value">{zh ? '待补证' : 'Evidence pending'}</strong><p>{zh ? '需要相同场次、相同玩法和同一决策时点的完整赔率。' : 'Requires the same matches, market and full odds at the decision time.'}</p><span>{zh ? '不使用赛后赔率或其他样本代替' : 'No post-match odds or unrelated cohorts'}</span></>}
+        </article>
         <article><h3>{zh ? '推荐覆盖率' : 'Recommendation coverage'}</h3><strong className="review-missing-value">{zh ? '分母待核验' : 'Universe unverified'}</strong><p>{zh ? '需冻结完整候选场次范围，再计算实际发布比例。' : 'Requires a frozen eligible universe before computing the published share.'}</p><span>{zh ? '已结算场数不等于全部候选场数' : 'Settled rows are not the eligible universe'}</span></article>
       </div>
       <dl className="review-metadata">

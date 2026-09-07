@@ -90,7 +90,7 @@ const {
 } = require("../server/sqliteStore.cjs");
 const { acquireSyncMetaCommitLock } = require("./syncMetaCommitLock.cjs");
 const { FREE_FOOTBALL_TEAM_ALIASES } = require("./freeFootballTeamAliases.cjs");
-const { buildFormalReviewPerformance, buildReferenceReviewPerformance } = require("../server/reviewPerformanceSummary.cjs");
+const { buildFormalReviewPerformance } = require("../server/reviewPerformanceSummary.cjs");
 const { auditRecommendationBias } = require("./auditRecommendationBatchBias.cjs");
 const {
   browserFallbackEnabled,
@@ -18011,9 +18011,11 @@ async function sync() {
     matches: split.history,
     generatedAt: capturedAt,
   });
-  postMatchReviewsPayload.referencePerformance = buildReferenceReviewPerformance({
+  postMatchReviewsPayload.referencePerformance = require("../server/referencePairedBaseline.cjs").buildReferencePerformanceWithPairs({
     matches: split.history,
     generatedAt: capturedAt,
+    snapshotPayload: predictionSnapshotsPayload,
+    trustRegistry: COLLECTOR_TRUST_REGISTRY,
   });
   let aiArenaPublication = null;
   let aiArenaDatabase = null;

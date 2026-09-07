@@ -1,4 +1,4 @@
-import type { ReviewPerformanceBucket, ReviewPerformanceSummary } from './reviewPerformanceTypes';
+import type { ReviewPerformanceBucket, ReviewPerformanceSummary, ReferencePairCounts } from './reviewPerformanceTypes';
 
 export type ReviewTrack = 'formal' | 'reference';
 export type ReviewWindow = 'version' | '7d' | '30d' | 'all';
@@ -101,6 +101,56 @@ const dateKey = (value: unknown): value is string => typeof value === 'string'
   && /^\d{4}-\d{2}-\d{2}$/.test(value)
   && Number.isFinite(Date.parse(`${value}T00:00:00Z`))
   && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
+
+/** Compare only the paired subset, never its baseline against all reference rows.
+ * Validate every cell against the complete date/market/frozen-label partition,
+ * including cells outside the selected window. No browser-list reconstruction. */
+export const selectReferencePairedBaseline = (summary: ReviewPerformanceSummary | null | undefined, window: ReviewWindow, market: ReviewMarket, versionKey = '') => {
+  const versions = selectReviewVersions(summary, 'reference');
+  const result = window === 'version' ? selectReviewVersionWindow(summary, 'reference', market, versionKey)
+    : selectReviewMarketWindow(summary, 'reference', window, market);
+  const raw = summary?.pairedBaseline;
+  if (!summary || !versions.available || result.state !== 'ready' || !raw
+    || raw.version !== 'reference-paired-baseline-v1' || raw.policyVersion !== 'signed-frozen-reference-pair-v1'
+    || raw.scope !== 'server-complete-reference-history' || raw.generatedAt !== summary.generatedAt
+    || raw.recommendationCoverage !== null || raw.promotionEligible !== false || raw.parameterRevisionVerified !== false
+    || raw.sourceBoundary !== 'trusted-collector-signed-commitment-raw-response-not-rehashed'
+    || raw.resultBoundary !== 'existing-application-trusted-final-not-independent-result-attestation'
+    || JSON.stringify(raw.tieOrder) !== JSON.stringify(['1', 'X', '2'])
+    || !Array.isArray(raw.cells) || raw.cells.length > 20000) return null;
+  const fields = ['settledReferenceEvents', 'paired', 'excluded', 'publishedWon', 'baselineWon', 'tiedBaselineOdds', 'bothWon', 'publicOnly', 'baselineOnly', 'bothLost'] as const;
+  const identity = (date: unknown, pool: unknown, version: unknown) => JSON.stringify([date, pool, version]);
+  const expected = new Map<string, ReviewPerformanceBucket>();
+  for (const group of [...versions.groups, versions.unknown!]) {
+    for (const pool of ['HAD', 'HHAD', 'UNKNOWN'] as const) {
+      for (const row of group.marketBreakdown![pool]!.daily!) {
+        if (row.settled! > 0) expected.set(identity(row.date, pool, group.key), row);
+      }
+    }
+  }
+  const totals = Object.fromEntries(fields.map(key => [key, 0])) as unknown as ReferencePairCounts;
+  const seen = new Set<string>();
+  for (const cell of raw.cells) {
+    if (!cell || typeof cell !== 'object' || Array.isArray(cell)
+      || Object.keys(cell).sort().join('|') !== ['date', 'market', 'versionKey', ...fields].sort().join('|')
+      || !fields.every(key => Number.isSafeInteger(cell[key]) && cell[key] >= 0)) return null;
+    const key = identity(cell.date, cell.market, cell.versionKey), target = expected.get(key);
+    if (!target || seen.has(key) || cell.settledReferenceEvents !== target.settled
+      || cell.paired + cell.excluded !== cell.settledReferenceEvents || cell.publishedWon > target.won!
+      || cell.paired - cell.publishedWon > target.lost! || cell.baselineWon > cell.paired || cell.tiedBaselineOdds > cell.paired
+      || cell.bothWon + cell.publicOnly !== cell.publishedWon || cell.bothWon + cell.baselineOnly !== cell.baselineWon
+      || cell.bothWon + cell.publicOnly + cell.baselineOnly + cell.bothLost !== cell.paired
+      || ((cell.market === 'UNKNOWN' || cell.versionKey === 'UNKNOWN') && cell.paired !== 0)) return null;
+    seen.add(key);
+    if (cell.date >= result.from! && cell.date <= result.through! && (market === 'BEST' || cell.market === market)
+      && (window !== 'version' || cell.versionKey === versionKey)) {
+      for (const field of fields) totals[field] += cell[field];
+    }
+  }
+  if (seen.size !== expected.size || totals.settledReferenceEvents !== result.counts!.settled) return null;
+  return { ...totals, publicHitRate: totals.paired ? totals.publishedWon / totals.paired : null,
+    baselineHitRate: totals.paired ? totals.baselineWon / totals.paired : null };
+};
 
 export const reviewCounts = (value: ReviewPerformanceBucket | null | undefined): ReviewCounts | null => {
   const { won, lost, settled } = value || {};

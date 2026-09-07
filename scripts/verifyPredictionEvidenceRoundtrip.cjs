@@ -282,6 +282,11 @@ const verifyEvidenceHttp = async (reference, identity, postgresUrl = "") => {
     const partition = scorecard.body.publicScorecard?.referenceReviewPerformance?.versionBreakdown;
     equal(partition?.groups?.[0]?.modelVersion, reference.evidenceBinding.modelVersion, "actual public scorecard exposes the reconciled frozen version labels");
     equal(partition?.groups?.[0]?.marketBreakdown?.HAD?.cumulative?.settled, 1, "actual scorecard preserves version and market denominator");
+    const paired = scorecard.body.publicScorecard?.referenceReviewPerformance?.pairedBaseline;
+    equal(paired?.version, "reference-paired-baseline-v1", "actual public HTTP exposes the complete-history paired count ledger");
+    equal(paired?.cells?.map(c => [c.market, c.settledReferenceEvents, c.paired, c.publishedWon, c.baselineWon, c.publicOnly]),
+      [["HAD", 1, 1, 1, 0, 1]], "actual database to public HTTP preserves original draw and paired market favorite counts");
+    equal([paired?.recommendationCoverage, paired?.promotionEligible, paired?.parameterRevisionVerified], [null, false, false], "public count ledger does not fabricate coverage or admission");
     equal((await request("/api/db/public-reference-evidence?referenceHash=bad", admin)).status, 400, "HTTP rejects malformed hash");
     equal((await request("/api/db/public-reference-evidence?referenceHash=" + "f".repeat(64), admin)).status, 404, "HTTP reports absent reference without fabricated evidence");
     equal((await request(route, admin, "POST")).status, 405, "evidence endpoint is read-only");
@@ -403,6 +408,9 @@ const main = async () => {
     "post-match-reviews.json": { version: "post-match-reviews-v2", generatedAt: "2026-09-07T15:00:00.000Z", rows: [finished.postMatchReview],
       referencePerformance: buildReferenceReviewPerformance({ matches: [finished], generatedAt: "2026-09-07T15:00:00.000Z" }) },
   };
+  payloads["post-match-reviews.json"].referencePerformance = require("../server/referencePairedBaseline.cjs").buildReferencePerformanceWithPairs({
+    matches: [finished], generatedAt: "2026-09-07T15:00:00.000Z", snapshotPayload: payloads["prediction-snapshots.json"], trustRegistry: trust.registry,
+  });
   for (const [name, payload] of Object.entries(payloads)) writeJson(name, payload);
   commitCurrentDataGeneration({ storeDir, publicDataDir, sourceCycleId, committedAt: publishedAt });
   exportSuccessfully();

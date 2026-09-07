@@ -29,7 +29,8 @@ function buildPublicReferencePairAudit({ matches, archive, trustRegistry, genera
     const different = new Set(results.filter(r => r.eligible).map(r => r.contentHash)).size > 1;
     const eligible = reasons.length === 0 && !different;
     const market = ["HAD", "HHAD", "UNKNOWN"].find(pool => cohort.marketBreakdown[pool].cumulative.settled === 1);
-    audits.push({ identity, date: businessDateForMatch(copies[0]), market, eligible,
+    const versionKey = cohort.versionBreakdown.groups.length === 1 ? cohort.versionBreakdown.groups[0].key : "UNKNOWN";
+    audits.push({ identity, date: businessDateForMatch(copies[0]), market, versionKey, eligible,
       reasons: [...reasons, ...(different ? ["duplicate-pair-evidence-conflict"] : [])],
       ...(eligible ? { pair: results[0] } : { details: [...new Set(results.flatMap(r => r.detail || []))].sort() }) });
   }

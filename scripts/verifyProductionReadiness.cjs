@@ -1477,6 +1477,13 @@ const run = async () => {
       stdoutTail: publicReferencePairs.status === 0 ? "" : publicReferencePairs.stdout.slice(-500), stderrTail: publicReferencePairs.stderr.slice(-500),
     });
 
+    const referencePairedBaseline = await runLocalJson(["scripts/verifyReferencePairedBaseline.cjs"]);
+    pushCheck(checks, "complete-history public paired baseline reconciles with browser selectors", referencePairedBaseline.status === 0
+      && referencePairedBaseline.body?.ok === true && referencePairedBaseline.body?.count >= 37, {
+      status: referencePairedBaseline.status, checks: referencePairedBaseline.body?.count ?? null,
+      stdoutTail: referencePairedBaseline.status === 0 ? "" : referencePairedBaseline.stdout.slice(-500), stderrTail: referencePairedBaseline.stderr.slice(-500),
+    });
+
     const archivedPreMatchCutoff = await runLocalJson([
       "scripts/verifyArchivedPreMatchCutoff.cjs"
     ]);
