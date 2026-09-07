@@ -2938,6 +2938,76 @@ check("the sync worker stays live during long isolated work and pauses only for 
   assert.match(exitTrapBody, /restore_pre_swap_transaction/);
 });
 
+check("candidate barrier cleanup restores and verifies HTTP before worker resume without reopening the final swap", () => {
+  const restoreBody = extractFunction(bundleRelease, "restore_live_service_after_candidate_barrier");
+  const restartBody = extractFunction(bundleRelease, "restart_service_if_needed");
+  const main = mainProgram(bundleRelease);
+  assertOrdered(restoreBody, ["restart_service_if_needed || return 1", 'systemctl is-active --quiet "$SERVICE_NAME" || return 1', 'wait_for_health "http://${HOST}:${PORT}" "$label-live-restored" 90 2 service || return 1'], "restart, active-state and consecutive health proof remain fail-closed");
+  for (const [boundary, label] of [["candidate cache snapshot sync barrier did not drain cleanly", "candidate-cache-snapshot"], ["candidate readiness sync barrier did not drain cleanly", "candidate-readiness-refresh"]]) {
+    const section = main.slice(main.indexOf(boundary));
+    assertOrdered(section, [`restore_live_service_after_candidate_barrier ${label}`, "restart_worker_if_needed"], "HTTP must recover before the next worker loop");
+  }
+  assert.equal((main.match(/restore_live_service_after_candidate_barrier /g) || []).length, 2);
+  assert.doesNotMatch(main.slice(main.indexOf('stop_service_for_release_window || abort_before_swap "live service could not be paused before swap"')), /restore_live_service_after_candidate_barrier/);
+  const bashPath = process.env.RELEASE_TEST_BASH || (process.platform === "linux" ? "/bin/bash" : "");
+  if (bashPath) {
+    assert.ok(fs.existsSync(bashPath), "configured shell test runtime must exist");
+    const harness = `
+set -euo pipefail
+SERVICE_NAME=football-predict
+HOST=127.0.0.1
+PORT=8788
+RELEASE_FAST_WATCHER_PAUSED_PROCESS=0
+restart_service_if_needed() {
+${restartBody}
+}
+restore_live_service_after_candidate_barrier() {
+${restoreBody}
+}
+systemctl() {
+  case "$1" in
+    start) starts=$((starts + 1)); [ "$start_fail" = 0 ] || return 1; active=1 ;;
+    is-active) [ "$active" = 1 ] ;;
+    *) return 91 ;;
+  esac
+}
+wait_for_health() {
+  [ "$active" = 1 ] || return 92
+  [ "$3:$4:$5" = "90:2:service" ] || return 93
+  probes=$((probes + 1))
+  [ "$health_fail" = 0 ]
+}
+for scenario in paused active start-fails health-fails foreign-inactive invalid-label; do
+  SERVICE_STOPPED_FOR_SWAP=1
+  active=0 starts=0 probes=0 start_fail=0 health_fail=0
+  label=candidate-cache-snapshot
+  expected=0
+  case "$scenario" in
+    active) SERVICE_STOPPED_FOR_SWAP=0; active=1 ;;
+    start-fails) start_fail=1; expected=1 ;;
+    health-fails) health_fail=1; expected=1 ;;
+    foreign-inactive) SERVICE_STOPPED_FOR_SWAP=0; expected=1 ;;
+    invalid-label) label=final-swap; expected=1 ;;
+  esac
+  result=0
+  restore_live_service_after_candidate_barrier "$label" || result=$?
+  [ "$result" = "$expected" ] || exit 94
+  case "$scenario" in
+    paused) [ "$active:$starts:$probes:$SERVICE_STOPPED_FOR_SWAP" = "1:1:1:0" ] ;;
+    active) [ "$starts:$probes" = "0:1" ] ;;
+    start-fails) [ "$starts:$probes:$SERVICE_STOPPED_FOR_SWAP" = "1:0:1" ] ;;
+    health-fails) [ "$starts:$probes" = "1:1" ] ;;
+    foreign-inactive|invalid-label) [ "$starts:$probes" = "0:0" ] ;;
+  esac
+  printf '%s\\n' "$scenario"
+done
+`;
+    const result = spawnSync(bashPath, ["-s"], { input: harness, encoding: "utf8", timeout: 20000, windowsHide: true });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.deepEqual(result.stdout.trim().split(/\r?\n/), ["paused", "active", "start-fails", "health-fails", "foreign-inactive", "invalid-label"]);
+  }
+});
+
 check("the live sync worker proves both loop contracts before release readiness", () => {
   const startBody = extractFunction(bundleRelease, "start_worker_for_live_release");
   const stateBody = extractFunction(bundleRelease, "assert_sync_worker_loop_process_state");

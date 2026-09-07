@@ -4304,6 +4304,17 @@ restart_service_if_needed() {
   SERVICE_STOPPED_FOR_SWAP=0
 }
 
+restore_live_service_after_candidate_barrier() {
+  local label="${1:-}"
+  case "$label" in candidate-cache-snapshot|candidate-readiness-refresh) ;; *) return 1 ;; esac
+  # Ownership-checked barrier cleanup can briefly stop the HTTP writer while
+  # reclaiming a dead helper lock. This is not the final swap: restore that
+  # service before resuming the worker or starting lengthy candidate work.
+  restart_service_if_needed || return 1
+  systemctl is-active --quiet "$SERVICE_NAME" || return 1
+  wait_for_health "http://${HOST}:${PORT}" "$label-live-restored" 90 2 service || return 1
+}
+
 stop_worker_for_release_window() {
   stop_release_candidate_heartbeat_keeper || return 1
   if [ "${WORKER_FROZEN_FOR_READINESS:-0}" = "1" ]; then
@@ -7248,6 +7259,8 @@ if [ "$candidate_ai_state_status" -eq 0 ]; then
 fi
 stop_release_sync_write_barrier clean \
   || abort_before_swap "candidate cache snapshot sync barrier did not drain cleanly"
+restore_live_service_after_candidate_barrier candidate-cache-snapshot \
+  || abort_before_swap "current HTTP service could not resume after candidate cache barrier cleanup"
 restart_worker_if_needed \
   || abort_before_swap "sync worker could not resume during isolated candidate build"
 chown -hR "$BUILD_USER:$BUILD_USER" "$BUILD_DIR"
@@ -7412,6 +7425,8 @@ wait_for_health "http://${HOST}:${CANDIDATE_PORT}" "candidate-server-refreshed" 
 # for the bounded live SQLite prebuild and atomic handoff below.
 stop_release_sync_write_barrier clean \
   || abort_before_swap "candidate readiness sync barrier did not drain cleanly"
+restore_live_service_after_candidate_barrier candidate-readiness-refresh \
+  || abort_before_swap "current HTTP service could not resume after candidate readiness barrier cleanup"
 LIVE_SQLITE_PUBLICATION_WORKER_STARTED_AT="$("$NODE_HOME/bin/node" -e 'process.stdout.write(new Date().toISOString())')" \
   || abort_before_swap "live SQLite publication worker marker could not be created"
 [ -n "$LIVE_SQLITE_PUBLICATION_WORKER_STARTED_AT" ] \
