@@ -59,6 +59,20 @@ failed alias proof. This repair is not in the frozen r702 package. Linux lifecyc
 revalidation, a new signed package and complete guarded release remain pending;
 the earlier 49-case Linux capture test is not lifecycle-release proof.
 
+Linux lifecycle revalidation completed at 04:02:19 Beijing on September 8:
+24/24 checks passed using the exact f1f1905 sources in an independent directory,
+with no stderr. The ordinary ubuntu user received EACCES on a write probe into
+the read-only test tree; all 131 source/fixture files retained their original
+hashes after the actual Vite/React SSR run. Node22.22.1 used a 512MiB heap limit
+and a 90-second child timeout. The production dependency directory was referenced
+read-only; no package installation or production write occurred.
+The fixture was one copied match, with lifecycle scenarios mutated only in memory;
+this does not certify all live match states or a completed deployment.
+Private report: `/var/tmp/football-lifecycle-EgispLXe/lifecycle-readonly-report.json`,
+SHA `de01d85b02a6c96e53335a99865f853e117a257c1423f11beb809276d0163cae`.
+This supersedes only the Linux lifecycle-pending statement above, not the remaining
+new-package and guarded-release requirements.
+
 - 24 checks: projection allowlist, strict clocks, re-projection, actual current-list
   compaction, and isolated JSON-store persistence. Added to production readiness.
 - 62 adoption checks: actual publisher, pure rules and TSX rendering, including
