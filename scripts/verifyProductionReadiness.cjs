@@ -645,6 +645,14 @@ const run = async () => {
       status: executionClock.status, checks: executionClock.body?.checks || 0,
       stderrTail: executionClock.stderr.slice(-500),
     });
+  const predictionReplay = await runLocalJson(["scripts/verifyPredictionReplay.cjs"]);
+  pushCheck(checks, "independent prediction replay requires exact executable runtime and rejects corrupt records",
+    predictionReplay.status === 0 && predictionReplay.body?.ok === true && predictionReplay.body?.checks >= 13
+      && predictionReplay.body?.independentChildRuns >= 1 && predictionReplay.body?.productionDataTouched === false
+      && predictionReplay.body?.providerRequests === 0 && predictionReplay.body?.fullOutputFieldsIgnored === 0, {
+      status: predictionReplay.status, checks: predictionReplay.body?.checks || 0,
+      stderrTail: predictionReplay.stderr.slice(-500),
+    });
   const localServerOwnership = startServer ? await startLocalServer() : null;
 
   try {

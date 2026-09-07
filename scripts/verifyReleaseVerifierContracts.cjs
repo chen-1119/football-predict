@@ -60,7 +60,8 @@ const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/servic
   'scripts/verifyOfficialClubResults.cjs', 'scripts/syncOfficialClubResults.cjs', 'scripts/verifyOfficialClubReceiptClocks.cjs',
   'scripts/competitionModelContext.cjs', 'scripts/verifyCompetitionModelContext.cjs',
   'scripts/predictionExecutionCapture.cjs', 'scripts/verifyPredictionExecutionCapture.cjs',
-  'src/services/predictionExecutionClock.cjs', 'scripts/verifyPredictionExecutionClock.cjs'];
+  'src/services/predictionExecutionClock.cjs', 'scripts/verifyPredictionExecutionClock.cjs',
+  'src/services/predictionRuntimeIdentity.cjs', 'scripts/replayPredictionCapture.cjs', 'scripts/verifyPredictionReplay.cjs'];
 const requiredEntries = source => {
   const match = /const required(?:Release)?Entries = (\[[\s\S]*?\n\]);/.exec(source);
   assert.ok(match, 'required release-entry array must be explicit');
@@ -130,7 +131,7 @@ for (const bad of [{ ok: false }, { checks: 21 }, { productionDataTouched: true 
 }
 check('execution gate rejects command failure', () => assert.equal(executionGate(executionProof, 1), false));
 const clockStart = readiness.indexOf('  pushCheck(checks, "prediction clock replays entire outputs without ignoring fields or forging observation times",');
-const clockEnd = readiness.indexOf('\n  const localServerOwnership', clockStart);
+const clockEnd = readiness.indexOf('\n  const predictionReplay', clockStart);
 assert.ok(clockStart >= 0 && clockEnd > clockStart);
 const clockGate = (body, status = 0) => {
   let result = null;
@@ -144,4 +145,19 @@ for (const bad of [{ ok: false }, { checks: 13 }, { productionDataTouched: true 
   check('clock gate rejects invalid proof ' + JSON.stringify(bad), () => assert.equal(clockGate({ ...clockProof, ...bad }), false));
 }
 check('clock gate rejects command failure', () => assert.equal(clockGate(clockProof, 1), false));
+const replayStart = readiness.indexOf('  pushCheck(checks, "independent prediction replay requires exact executable runtime and rejects corrupt records",');
+const replayEnd = readiness.indexOf('\n  const localServerOwnership', replayStart);
+assert.ok(replayStart >= 0 && replayEnd > replayStart);
+const replayGate = (body, status = 0) => {
+  let result = null;
+  vm.runInNewContext(readiness.slice(replayStart, replayEnd), { checks: [], predictionReplay: { status, body, stderr: '' },
+    pushCheck: (_checks, _name, ok) => { result = ok; } }, { timeout: 1000 });
+  return result;
+};
+const replayProof = { ok: true, checks: 13, independentChildRuns: 1, productionDataTouched: false, providerRequests: 0, fullOutputFieldsIgnored: 0 };
+check('independent replay gate accepts complete child-process proof', () => assert.equal(replayGate(replayProof), true));
+for (const bad of [{ ok: false }, { checks: 12 }, { independentChildRuns: 0 }, { productionDataTouched: true }, { providerRequests: 1 }, { fullOutputFieldsIgnored: 1 }]) {
+  check('independent replay gate rejects invalid proof ' + JSON.stringify(bad), () => assert.equal(replayGate({ ...replayProof, ...bad }), false));
+}
+check('independent replay gate rejects command failure', () => assert.equal(replayGate(replayProof, 1), false));
 console.log(JSON.stringify({ok:true,verifier:'release-verifier-contracts-v1',checks,productionDataTouched:false},null,2));

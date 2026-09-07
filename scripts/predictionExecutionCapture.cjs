@@ -92,7 +92,7 @@ function createPredictionExecutionCapture(cycleAt) {
         if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("unsafe-store-entry");
         used += stat.size;
       }
-      const body = { ...status, cycleAt, runtime: { node: process.version, platform: process.platform, arch: process.arch }, records };
+      const body = { ...status, cycleAt, runtime: require("../src/services/predictionRuntimeIdentity.cjs").predictionRuntimeIdentity(), records };
       const raw = Buffer.from(JSON.stringify(body)), sha256 = digest(raw), file = path.join(dir, `${sha256}.json.gz`);
       if (fs.existsSync(file)) {
         if (!zlib.gunzipSync(fs.readFileSync(file), { maxOutputLength: LIMITS.batchBytes + 1024 * 1024 }).equals(raw)) throw new Error("existing-capture-mismatch");
