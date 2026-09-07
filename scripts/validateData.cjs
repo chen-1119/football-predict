@@ -14,6 +14,10 @@ const {
 } = require("../src/services/dualMarketDecisionBinding.cjs");
 
 const publicDir = path.join(__dirname, "..", "public");
+// Static distribution builds cannot inspect a server-private archive. The
+// default server scope remains strict; only the explicit Pages CLI opts out
+// of that private read, never out of public data or archive-count contracts.
+const publicDistribution = process.argv.includes('--public-distribution');
 const distDir = path.join(__dirname, "..", "dist");
 const matchesPath = path.join(publicDir, "matches.json");
 const currentMatchesPath = path.join(publicDir, "data", "matches-current.json");
@@ -56,7 +60,7 @@ const rootMatches = validateLegacyStaticPayloads && fs.existsSync(matchesPath) ?
 const currentMatches = fs.existsSync(currentMatchesPath) ? readJson(currentMatchesPath) : rootMatches;
 const historyMatches = fs.existsSync(historyMatchesPath) ? readJson(historyMatchesPath) : [];
 const syncMeta = fs.existsSync(syncMetaPath) ? readJson(syncMetaPath) : null;
-const unresolvedArchivePayload = fs.existsSync(unresolvedArchivePath) ? readJson(unresolvedArchivePath) : null;
+const unresolvedArchivePayload = !publicDistribution && fs.existsSync(unresolvedArchivePath) ? readJson(unresolvedArchivePath) : null;
 const unresolvedArchiveRows = Array.isArray(unresolvedArchivePayload)
   ? unresolvedArchivePayload
   : (Array.isArray(unresolvedArchivePayload?.rows) ? unresolvedArchivePayload.rows : []);
@@ -230,10 +234,16 @@ for (const match of unresolvedArchiveRows) {
 }
 
 if (syncMeta?.currentListPolicy?.version === "kickoff-retention-v1") {
-  if (Number(syncMeta?.files?.archivedUnsettled || 0) !== unresolvedArchiveRows.length) {
+  const fileCount = syncMeta?.files?.archivedUnsettled;
+  const policyCount = syncMeta?.currentListPolicy?.archivedUnsettled;
+  if (!Number.isSafeInteger(fileCount) || fileCount < 0
+      || !Number.isSafeInteger(policyCount) || policyCount < 0 || fileCount !== policyCount) {
+    errors.push("sync-meta private archive counts must be explicit equal non-negative safe integers.");
+  }
+  if (!publicDistribution && fileCount !== unresolvedArchiveRows.length) {
     errors.push("sync-meta archivedUnsettled count must match the private unresolved archive.");
   }
-  if (Number(syncMeta?.currentListPolicy?.archivedUnsettled || 0) !== unresolvedArchiveRows.length) {
+  if (!publicDistribution && policyCount !== unresolvedArchiveRows.length) {
     errors.push("sync-meta currentListPolicy archive count must match the private unresolved archive.");
   }
 }
@@ -567,6 +577,8 @@ console.log(
   JSON.stringify(
     {
       ok: true,
+      validationScope: publicDistribution ? 'public-distribution' : 'server-complete',
+      privateArchiveVerified: !publicDistribution && unresolvedArchivePayload !== null,
       count: matches.length,
       statuses,
       officialOddsCount,
@@ -577,7 +589,8 @@ console.log(
       currentListPolicy: {
         evaluatedAt: currentListEvaluatedAt,
         unsettledRetentionHours: currentUnsettledRetentionHours,
-        archivedUnsettled: unresolvedArchiveRows.length,
+        archivedUnsettled: publicDistribution ? null : unresolvedArchiveRows.length,
+        declaredArchivedUnsettled: syncMeta?.files?.archivedUnsettled ?? null,
       },
     },
     null,

@@ -12,6 +12,8 @@
     "verify:data-adoption": "node scripts/verifyDataAdoption.cjs",
     "verify:data-adoption-browser": "node scripts/verifyDataAdoptionBrowser.cjs",
     "verify:full-app-evidence-browser": "node scripts/verifyFullAppEvidenceBrowser.cjs",
+    "validate:data:public": "node scripts/validateData.cjs --public-distribution",
+    "verify:data-validation-scopes": "node scripts/verifyDataValidationScopes.cjs",
     "verify:model-input-usage": "node scripts/verifyModelInputUsage.cjs",
     "dev": "vite",
     "build": "tsc -b && vite build && node scripts/stripLargeStaticPayloads.cjs",
