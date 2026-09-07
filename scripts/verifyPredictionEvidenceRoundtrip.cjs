@@ -14,7 +14,7 @@ const { DatabaseSync } = require("node:sqlite");
 const { createCollectorAttestationTestContext } = require("./collectorAttestationTestFixture.cjs");
 const trust = createCollectorAttestationTestContext({ keyId: "q1-synthetic-roundtrip-only" });
 // The test trust registry must exist before the real source module is loaded.
-const { buildPredictionFeatureSnapshot, predictionSnapshotRow, buildArchivedPreMatchPrediction } = require("./syncData.cjs");
+const { buildPredictionFeatureSnapshot, predictionSnapshotRow, buildArchivedPreMatchPrediction, buildPostMatchReview } = require("./syncData.cjs");
 const { bindPublicReferenceDecision: bind, attestPublicReferenceDecision: attest } = require("../src/services/publicReferenceDecision.cjs");
 const { commitCurrentDataGeneration, resolveActivePublication } = require("../server/dataGenerationBundle.cjs");
 const { canonicalPredictionState } = require("./sqliteWarehouse.cjs");
@@ -28,6 +28,10 @@ const { observePredictionEvidence } = require("./predictionEvidenceAudit.cjs");
 const { isDecisionClockAuditEligible } = require("../src/services/decisionSnapshot.cjs");
 const { bindHistoricalContentObservation } = require("./historicalContentObservation.cjs");
 const { summarizeRecentFormEvidence } = require("./recentFormEvidence.cjs");
+const { readSqliteHistoryMatchesForList } = require("../server/sqliteStore.cjs");
+const { readPostgresHistoryMatchesForList } = require("../server/postgresProjectionStore.cjs");
+const { resolveFrozenReviewVersion } = require("../src/services/frozenReviewVersion.cjs");
+const { buildReferenceReviewPerformance, compactReferenceReviewPerformance } = require("../server/reviewPerformanceSummary.cjs");
 
 const rootDir = path.resolve(__dirname, "..");
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "football-evidence-roundtrip-"));
@@ -172,7 +176,8 @@ const capturePostgres = () => {
         return { rows, rowCount: rows.length };
       }
       if (/^SELECT payload\s+FROM football\.match_snapshots/.test(statement)) {
-        const rows = (tables.get("match_snapshots") || []).filter((row) => row.dataset === "current")
+        const dataset = /dataset = 'history'/.test(statement) ? "history" : "current";
+        const rows = (tables.get("match_snapshots") || []).filter((row) => row.dataset === dataset)
           .map((row) => ({ payload: state.payloadAsText ? row.payload : JSON.parse(row.payload) }));
         return { rows, rowCount: rows.length };
       }
@@ -223,8 +228,9 @@ const verifyEvidenceHttp = async (reference, identity, postgresUrl = "") => {
   child.stdout.on("data", data => output.push(String(data)));
   child.stderr.on("data", data => output.push(String(data)));
   const exited = new Promise(resolve => child.once("exit", resolve));
-  const request = async (route, headers = {}, method = "GET") => {
-    const response = await fetch(`http://127.0.0.1:${port}${route}`, { headers, method, signal: AbortSignal.timeout(5000) });
+  const request = async (route, headers = {}, method = "GET", body) => {
+    const response = await fetch(`http://127.0.0.1:${port}${route}`, { headers: { ...headers, ...(body ? { "content-type": "application/json" } : {}) },
+      method, ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(5000) });
     return { status: response.status, cache: response.headers.get("cache-control"), body: await response.json() };
   };
   try {
@@ -247,6 +253,24 @@ const verifyEvidenceHttp = async (reference, identity, postgresUrl = "") => {
     equal(result.body.evidence.featureSnapshot.modelInputs.form.home.resultEvidence.contentObservation,
       reference.dataGaps.inputSummaries.form.home.resultEvidence.contentObservation, "actual primary-mode HTTP retains the separate local file receipt summary");
     equal(result.body.publication.generationId, identity.generationId, "HTTP evidence read is publication paired");
+    equal((await request("/api/matches/history?limit=10", admin)).status, 401, "admin token alone never bypasses public-history access protection");
+    // Disposable local application only: exercise the normal code/session
+    // exchange, do not disable protection or touch production credentials.
+    const issued = await request("/api/admin/access-codes", admin, "POST", { label: "synthetic-version-roundtrip", ttlSeconds: 300 });
+    equal(issued.status, 200, "local test code created");
+    const verified = await request("/api/access/verify", {}, "POST", { code: issued.body.code });
+    equal(verified.status, 200, "local test code exchanged normally");
+    const history = await request("/api/matches/history?limit=10", { authorization: `Bearer ${verified.body.session.token}` });
+    equal(history.status, 200, "authenticated history HTTP succeeds");
+    const frozenRow = history.body[0]?.postMatchReview?.predictionReview?.rows?.find(row => row.marketType === "BEST");
+    check(frozenRow?.frozenVersion, "actual history list compactor retains frozen version receipt");
+    equal(frozenRow.frozenVersion.referenceHash, reference.contentHash, "history HTTP version receipt addresses original public record");
+    equal(frozenRow.frozenVersion.modelVersion, reference.evidenceBinding.modelVersion, "history HTTP never substitutes current model version");
+    const scorecard = await request("/api/v1/model/evaluation", { authorization: `Bearer ${verified.body.session.token}` });
+    equal(scorecard.status, 200, "public scorecard HTTP succeeds with a real local recommendation session");
+    const partition = scorecard.body.publicScorecard?.referenceReviewPerformance?.versionBreakdown;
+    equal(partition?.groups?.[0]?.modelVersion, reference.evidenceBinding.modelVersion, "actual public scorecard exposes the reconciled frozen version labels");
+    equal(partition?.groups?.[0]?.marketBreakdown?.HAD?.cumulative?.settled, 1, "actual scorecard preserves version and market denominator");
     equal((await request("/api/db/public-reference-evidence?referenceHash=bad", admin)).status, 400, "HTTP rejects malformed hash");
     equal((await request("/api/db/public-reference-evidence?referenceHash=" + "f".repeat(64), admin)).status, 404, "HTTP reports absent reference without fabricated evidence");
     equal((await request(route, admin, "POST")).status, 405, "evidence endpoint is read-only");
@@ -349,15 +373,24 @@ const main = async () => {
   const archive = buildArchivedPreMatchPrediction(after, new Map(), null, "2026-09-07T12:01:00.000Z");
   equal(archive.prediction.tipCode, "X", "archive replays public draw, not later private home win");
   equal(archive.prediction.recommendationAction, "reference", "archive does not promote the reference track");
+  const finished = { ...json(after), status: "FINISHED", scoreHome: 1, scoreAway: 1, archivedPreMatchPrediction: archive,
+    resultProvenance: { provider: "sporttery", official: true, trusted: true, scoreHome: 1, scoreAway: 1 } };
+  finished.postMatchReview = buildPostMatchReview(finished, "2026-09-07T15:00:00.000Z", new Map());
+  const frozenRow = finished.postMatchReview?.predictionReview?.rows?.find(row => row.marketType === "BEST");
+  check(resolveFrozenReviewVersion(finished, frozenRow), "real public capture to archive to settled version receipt validates");
+  equal(frozenRow.resultStatus, "WON", "synthetic draw settles without adopting private home win");
 
   const payloads = {
-    "matches-current.json": [match], "matches-history.json": [],
+    "matches-current.json": [match], "matches-history.json": [finished],
     "sync-meta.json": { source: "synthetic-test-only", sourceCycleId, updatedAt: publishedAt },
     "external-signals.json": { source: "synthetic-test-only", updatedAt: publishedAt, matches: {} },
     "odds-history.json": { version: 3, rows: [] },
     "prediction-snapshots.json": { version: 3, updatedAt: publishedAt, rows: [snapshot], publicReferenceDecisions: [reference],
       publicReferenceEvidence: [require("../src/services/publicReferenceDecision.cjs").pendingPublicReferenceEvidence(match)].filter(Boolean) },
     "model-calibration.json": { version: "synthetic-uncalibrated", generatedAt: publishedAt },
+    "model-evaluation.json": { version: "rolling-backtest-v19", generatedAt: publishedAt, sample: {} },
+    "post-match-reviews.json": { version: "post-match-reviews-v2", generatedAt: "2026-09-07T15:00:00.000Z", rows: [finished.postMatchReview],
+      referencePerformance: buildReferenceReviewPerformance({ matches: [finished], generatedAt: "2026-09-07T15:00:00.000Z" }) },
   };
   for (const [name, payload] of Object.entries(payloads)) writeJson(name, payload);
   commitCurrentDataGeneration({ storeDir, publicDataDir, sourceCycleId, committedAt: publishedAt });
@@ -421,6 +454,9 @@ const main = async () => {
   equal(sqliteMatches.length, 1, "SQLite current read is publication bound");
   equal(sqliteMatches[0].predictionMeta.publicReferenceDecision, json(reference), "SQLite current payload preserves the exact public reference hash");
   equal(sqliteMatches[0].eventVersion, match.eventVersion, "SQLite current event identity retained");
+  const sqliteHistory = await readSqliteHistoryMatchesForList(dbPath, 10, { publicationIdentity: identity });
+  equal(sqliteHistory.length, 1, "SQLite returns the real settled fixture");
+  equal(sqliteHistory[0].postMatchReview.predictionReview.rows[0].frozenVersion, json(frozenRow.frozenVersion), "SQLite preserves complete frozen review version receipt");
 
   const transport = capturePostgres();
   const projected = await syncPostgresProjectionFromSqlite({ dbPath, pool: transport.pool, mode: "backfill",
@@ -430,6 +466,14 @@ const main = async () => {
   equal(pgRows, sqliteRows, "SQLite to PostgreSQL reader preserves all immutable evidence JSON");
   const pgMatches = await readPostgresCurrentMatches(transport.pool, { publicationIdentity: identity });
   equal(pgMatches, sqliteMatches, "current match payload survives real PostgreSQL SQL transport");
+  const pgHistory = await readPostgresHistoryMatchesForList(transport.pool, 10, { publicationIdentity: identity });
+  equal(pgHistory, sqliteHistory, "PostgreSQL history reader preserves frozen review version receipt");
+  const versionSummary = compactReferenceReviewPerformance(buildReferenceReviewPerformance({ matches: pgHistory, generatedAt: "2026-09-07T15:00:00.000Z" }));
+  equal(versionSummary?.versionBreakdown?.groups?.[0]?.modelVersion, reference.evidenceBinding.modelVersion, "database history builds reconciled frozen-label partition");
+  if (realPool) {
+    const nativeHistory = await readPostgresHistoryMatchesForList(realPool, 10, { publicationIdentity: identity });
+    equal(nativeHistory, sqliteHistory, "native PostgreSQL stores and returns the frozen history receipt unchanged");
+  }
   check(attest(pgMatches[0].predictionMeta.publicReferenceDecision, pgMatches[0]), "reference order-sensitive hash still verifies after both projections");
   transport.state.payloadAsText = true;
   equal(await readPostgresPredictionSnapshotRows(transport.pool, { sourceMatchId, publicationIdentity: identity }), sqliteRows,

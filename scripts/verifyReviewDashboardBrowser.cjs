@@ -55,7 +55,7 @@ const outputDir = path.resolve(__dirname, '../outputs');
       await page.getByRole('button', { name: '近 30 天', exact: true }).click();
       assert.ok(await page.getByText('（不足完整窗口）', { exact: false }).count());
       await audit('reference-30d-partial');
-      await page.getByRole('button', { name: '本版本', exact: true }).click();
+      await page.getByRole('button', { name: '按版本', exact: true }).click();
       assert.equal(await page.locator('[data-review-overview-rate]').textContent(), '—');
       const disclosure = page.locator('.review-evidence-gaps summary');
       await disclosure.focus(); await page.keyboard.press('Enter');

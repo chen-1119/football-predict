@@ -5775,6 +5775,7 @@ const compactPredictionReviewRowForList = (row) => {
     liveRecommendation: row.liveRecommendation,
     livePublicationEvidence: row.livePublicationEvidence,
     performanceTrack: row.performanceTrack,
+    ...(row.frozenVersion ? { frozenVersion: require("../src/services/frozenReviewVersion.cjs").compactFrozenReviewVersion(row.frozenVersion, row) } : {}),
     reviewRole: row.reviewRole
   };
 };

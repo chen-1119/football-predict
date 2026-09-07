@@ -26,6 +26,12 @@
 .review-metric-grid article { min-width:0; padding:22px; border:1px solid hsl(var(--border)); border-radius:12px; display:flex; flex-direction:column; align-items:flex-start; gap:12px; }
 .review-metric-grid h3 { font-size:12px; font-weight:500; color:hsl(var(--text-secondary)); }
 .review-primary-metric { background:hsl(var(--primary)/.045); }
+.review-version-picker { margin:0 24px 18px; min-width:0; }
+.review-version-picker label { display:block; font-size:12px; color:hsl(var(--text-secondary)); }
+.review-version-picker select { display:block; width:100%; min-width:0; max-width:100%; margin-top:8px; min-height:44px; padding:9px; color:hsl(var(--text-primary)); background:hsl(var(--bg)); border:1px solid hsl(var(--border)); border-radius:8px; }
+.review-version-picker p { font-size:12px; line-height:1.8; color:hsl(var(--text-secondary)); margin-top:10px; }
+.review-version-picker select:focus-visible { outline:2px solid hsl(var(--primary)); outline-offset:3px; }
+@media(max-width:480px) { .review-version-picker { margin:0 16px 16px; } }
 .review-uncertainty { width:100%; border-top:1px solid hsl(var(--border)); padding-top:10px; }
 .review-uncertainty summary { cursor:pointer; font-size:11px; color:hsl(var(--text-secondary)); line-height:1.8; }
 .review-uncertainty summary span { display:block; font-size:15px; font-variant-numeric:tabular-nums; color:hsl(var(--text-primary)); }

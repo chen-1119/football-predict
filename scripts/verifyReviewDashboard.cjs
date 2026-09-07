@@ -6,7 +6,7 @@ const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
 const load = require('./lib/loadReviewTsForVerification.cjs');
 const root = path.resolve(__dirname, '..');
-const { selectReviewWindow, selectReviewMarketWindow, selectReviewExclusions, reviewShanghaiDate, reviewWilsonInterval } = load(ts, path.join(root, 'src/services/reviewDashboard.ts'));
+const { selectReviewWindow, selectReviewMarketWindow, selectReviewExclusions, reviewShanghaiDate, reviewWilsonInterval, selectReviewVersions, selectReviewVersionWindow } = load(ts, path.join(root, 'src/services/reviewDashboard.ts'));
 const checks = [];
 const check = (name, fn) => { fn(); checks.push(name); };
 const fixture = () => ({
@@ -78,14 +78,14 @@ check('malformed counts, duplicate days, out-of-window rows and unreconciled tot
 const render = (track, window, props = {}) => {
   let hook = 0;
   const { ReviewEvidenceOverview } = load(ts, path.join(root, 'src/components/review/ReviewEvidenceOverview.tsx'), {
-    react: { ...React, useState: () => [[track, window, 'HAD'][hook++], () => {}] },
+    react: { ...React, useState: () => [[track, window, 'HAD', props.versionChoice || ''][hook++], () => {}] },
   });
   const reference = withMarkets(fixture()); const formal = { ...withMarkets(fixture()), version: 'formal-review-performance-v1' };
   return renderToStaticMarkup(React.createElement(ReviewEvidenceOverview, { language: 'zh', formal, reference, ...props }));
 };
 check('actual overview renders category/window controls and honest mixed-market/evidence disclosures', () => {
   const html = render('reference', '7d');
-  for (const value of ['55.6%', '命中 5 / 已结算 9', '正式推荐', '数据参考', '研究影子', '本版本', '近 7 天', '近 30 天',
+  for (const value of ['55.6%', '命中 5 / 已结算 9', '正式推荐', '数据参考', '研究影子', '按版本', '近 7 天', '近 30 天',
     'HAD 冻结 BEST · 独立玩法口径', 'HHAD 让球', 'BEST 总账', '待补证', '分母待核验', '2026-09-01', '2026-09-07', 'aria-pressed="true"', '<details', '<summary']) assert.ok(html.includes(value), value);
 });
 check('actual current-version and missing-data UI do not invent a performance number', () => {
@@ -187,5 +187,33 @@ check('interval uses selected reconciled market/window and cannot leak to unknow
   for (const words of ['95% Wilson', '假设各场独立', '未校正同日或联赛相关性', '不用于模型晋级']) assert.ok(html.includes(words));
   for (const absent of [render('reference', 'version'), render('shadow', 'all'), render('formal', 'all', { formal: undefined }),
     render('reference', 'all', { reference: fixture() })]) assert.ok(!absent.includes('data-review-uncertainty'));
+});
+const versionFixture = () => {
+  const { fixture: make } = require('./verifyFrozenReviewVersion.cjs');
+  const { buildReferenceReviewPerformance, compactReferenceReviewPerformance } = require('../server/reviewPerformanceSummary.cjs');
+  const unknown = make('991006'); delete unknown.postMatchReview.predictionReview.rows[0].frozenVersion;
+  return compactReferenceReviewPerformance(buildReferenceReviewPerformance({ matches: [make(), make('991004', 'frozen-model-b', 'HHAD'), unknown], generatedAt: '2026-09-07T15:00:00.000Z' }));
+};
+check('actual server partition selects exact model/policy labels and independent markets without a default current version', () => {
+  const s = versionFixture(), versions = selectReviewVersions(s, 'reference');
+  assert.equal(versions.available, true); assert.equal(versions.groups.length, 2);
+  const b = versions.groups.find(g => g.modelVersion === 'frozen-model-b');
+  assert.equal(selectReviewVersionWindow(s, 'reference', 'HHAD', b.key).counts.hitRate, 0);
+  assert.equal(selectReviewVersionWindow(s, 'reference', 'HAD', b.key).counts.hitRate, null);
+  assert.equal(selectReviewVersionWindow(s, 'reference', 'HAD', 'UNKNOWN').counts.settled, 1);
+  assert.equal(selectReviewVersionWindow(s, 'reference', 'HAD', '').counts, null);
+  const html = render('reference', 'version', { reference: s });
+  assert.ok(html.includes('请选择已记录的冻结版本')); assert.ok(html.includes('完整历史有 1 场版本未追溯'));
+  assert.ok(!html.includes('data-review-uncertainty'));
+  const selected = render('reference', 'version', { reference: s, versionChoice: versions.groups.find(g => g.modelVersion === 'frozen-model-a').key });
+  assert.ok(selected.includes('命中 1 / 已结算 1')); assert.ok(selected.includes('frozen-model-a / frozen-policy-a'));
+});
+check('UI version selector rejects malformed, duplicate and unreconciled full partitions', () => {
+  for (const mutate of [s => s.versionBreakdown.groups.push(null), s => delete s.versionBreakdown.unknown,
+    s => s.versionBreakdown.groups.push(s.versionBreakdown.groups[0]), s => s.versionBreakdown.groups[0].cumulative.won++,
+    s => s.versionBreakdown.scope = 'current-model', s => s.versionBreakdown.unknown.daily[0].date = '2026-09-06',
+    s => s.versionBreakdown.groups[0].modelVersion = '']) {
+    const s = versionFixture(); mutate(s); assert.equal(selectReviewVersions(s, 'reference').available, false);
+  }
 });
 console.log(JSON.stringify({ ok: true, checks: checks.length, cases: checks }, null, 2));

@@ -19,6 +19,12 @@ export interface ReviewPerformanceSummary {
     UNKNOWN?: ReviewMarketGroup;
   } | null;
   exclusions?: Record<string, number>;
+  versionBreakdown?: {
+    version?: string;
+    scope?: string;
+    groups?: ReviewVersionGroup[];
+    unknown?: ReviewVersionGroup;
+  } | null;
   policy?: {
     denominator?: string;
     includedStatuses?: string[];
@@ -34,4 +40,11 @@ export interface ReviewPerformanceSummary {
 export interface ReviewMarketGroup {
   cumulative?: ReviewPerformanceBucket | null;
   daily?: Array<ReviewPerformanceBucket & { date?: string }>;
+}
+
+export interface ReviewVersionGroup extends ReviewMarketGroup {
+  key?: string;
+  modelVersion?: string;
+  policyVersion?: string;
+  marketBreakdown?: ReviewPerformanceSummary['marketBreakdown'];
 }

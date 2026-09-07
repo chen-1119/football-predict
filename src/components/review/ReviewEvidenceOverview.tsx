@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { ReviewPerformanceSummary } from '../../services/reviewPerformanceTypes';
-import { selectReviewMarketWindow, selectReviewExclusions, reviewShanghaiDate, reviewWilsonInterval } from '../../services/reviewDashboard';
+import { selectReviewMarketWindow, selectReviewExclusions, reviewShanghaiDate, reviewWilsonInterval, selectReviewVersions, selectReviewVersionWindow } from '../../services/reviewDashboard';
 import type { ReviewWindow, ReviewMarket } from '../../services/reviewDashboard';
 import './review.css';
 
@@ -25,14 +25,19 @@ export const ReviewEvidenceOverview: React.FC<Props> = ({ language, formal, refe
   const [track, setTrack] = useState<'formal' | 'reference' | 'shadow'>('formal');
   const [window, setWindow] = useState<ReviewWindow>('all');
   const [market, setMarket] = useState<ReviewMarket>('HAD');
+  const [versionChoice, setVersionChoice] = useState('');
   const summary = track === 'formal' ? formal : reference;
-  const result = selectReviewMarketWindow(summary, track === 'formal' ? 'formal' : 'reference', window, market);
+  const resultTrack = track === 'formal' ? 'formal' : 'reference';
+  const versions = selectReviewVersions(summary, resultTrack);
+  const chosenVersion = versionChoice === 'UNKNOWN' ? versions.unknown : versions.groups.find(group => group.key === versionChoice);
+  const result = window === 'version' ? selectReviewVersionWindow(summary, resultTrack, market, versionChoice)
+    : selectReviewMarketWindow(summary, resultTrack, window, market);
   const verifiedPartition = selectReviewMarketWindow(summary, track === 'formal' ? 'formal' : 'reference', 'all', 'HAD').state === 'ready';
   const isShadow = track === 'shadow';
   const interval = !isShadow && result.state === 'ready' ? reviewWilsonInterval(result.counts) : null;
   const exclusions = selectReviewExclusions(summary, track === 'formal' ? 'formal' : 'reference');
   const labels = { formal: zh ? '正式推荐' : 'Formal picks', reference: zh ? '数据参考' : 'Data references', shadow: zh ? '研究影子' : 'Research shadow' };
-  const windowLabels: Record<ReviewWindow, string> = { version: zh ? '本版本' : 'This version', '7d': zh ? '近 7 天' : '7 days', '30d': zh ? '近 30 天' : '30 days', all: zh ? '累计' : 'All time' };
+  const windowLabels: Record<ReviewWindow, string> = { version: zh ? '按版本' : 'By version', '7d': zh ? '近 7 天' : '7 days', '30d': zh ? '近 30 天' : '30 days', all: zh ? '累计' : 'All time' };
   const clock = isShadow ? shadow?.evaluatedAt : summary?.generatedAt;
   const date = reviewShanghaiDate(clock);
   const updated = date && clock ? new Intl.DateTimeFormat(zh ? 'zh-CN' : 'en-GB', {
@@ -40,7 +45,7 @@ export const ReviewEvidenceOverview: React.FC<Props> = ({ language, formal, refe
   }).format(new Date(clock)) : (zh ? '未提供' : 'Unavailable');
   const value = isShadow ? '—' : result.counts?.hitRate != null ? `${(result.counts.hitRate * 100).toFixed(1)}%` : '—';
   const status = isShadow ? (zh ? '独立观察，不替代正式推荐' : 'Independent observation, not formal picks')
-    : result.state === 'version-unavailable' ? (zh ? '缺少可核验的版本分组' : 'Verified version partition unavailable')
+    : result.state === 'version-unavailable' ? (versions.available ? (zh ? '请选择已记录的冻结版本' : 'Choose a recorded frozen version') : (zh ? '缺少可核验的版本分组' : 'Verified version partition unavailable'))
       : result.state === 'market-unavailable' ? (zh ? '完整玩法分组待更新' : 'Complete market partition pending')
       : result.state !== 'ready' ? (zh ? '完整统计待更新' : 'Complete statistics pending')
         : result.counts?.settled === 0 ? (zh ? '本窗口无已结算样本' : 'No settled samples in this window')
@@ -62,6 +67,14 @@ export const ReviewEvidenceOverview: React.FC<Props> = ({ language, formal, refe
       </div>
       {!isShadow && <div className="review-market-switch" role="group" aria-label={zh ? '统计玩法' : 'Statistics market'}>{(['HAD', 'HHAD', 'BEST'] as const).map((key) => <button type="button" key={key} aria-pressed={market === key} onClick={() => setMarket(key)}>{key === 'HAD' ? (zh ? 'HAD 胜平负' : 'HAD 1X2') : key === 'HHAD' ? (zh ? 'HHAD 让球' : 'HHAD handicap') : (zh ? 'BEST 总账' : 'BEST combined')}</button>)}</div>}
       {!isShadow && verifiedPartition && Number(summary?.marketBreakdown?.UNKNOWN?.cumulative?.settled) > 0 && <p className="review-unknown-market" data-review-unknown-market>{zh ? `全部历史中有 ${count(summary?.marketBreakdown?.UNKNOWN?.cumulative?.settled)} 场玩法未知，仅保留在 BEST 总账。` : `${count(summary?.marketBreakdown?.UNKNOWN?.cumulative?.settled)} all-time rows have unknown markets and remain only in combined BEST.`}</p>}
+      {!isShadow && window === 'version' && versions.available && <div className="review-version-picker" data-review-version-picker>
+        <label>{zh ? '选择冻结版本标签' : 'Choose frozen version labels'}<select value={chosenVersion?.key || ''} onChange={event => setVersionChoice(event.target.value)}>
+          <option value="">{zh ? '请选择，不自动归入当前模型' : 'Choose; never infer the current model'}</option>
+          {versions.groups.map(group => <option key={group.key} value={group.key}>{`${group.modelVersion} / ${group.policyVersion}`}</option>)}
+          <option value="UNKNOWN">{zh ? '版本未追溯' : 'Version untraced'}</option>
+        </select></label>
+        <p>{zh ? `完整历史有 ${count(versions.unknown?.cumulative?.settled)} 场版本未追溯。标签来自原公开记录，不代表完整参数修订已验证；不补写旧版本。` : `${count(versions.unknown?.cumulative?.settled)} all-time matches have untraced versions. Labels come from original public records, not verified parameter revisions; old versions are not backfilled.`}</p>
+      </div>}
       <div className="review-metric-grid" aria-live="polite" aria-atomic="true">
         <article className="review-primary-metric"><h3>{zh ? '已结算命中率' : 'Settled hit rate'}</h3><strong data-review-overview-rate>{value}</strong><p>{status}</p>
           <span>{!isShadow && result.counts ? (zh ? `命中 ${count(result.counts.won)} / 已结算 ${count(result.counts.settled)}` : `Won ${count(result.counts.won)} / settled ${count(result.counts.settled)}`) : isShadow ? (zh ? `影子已结算 ${count(shadow?.cohort?.shadow?.settled)} · 命中数未提供` : `Shadow settled ${count(shadow?.cohort?.shadow?.settled)} · Wins unavailable`) : (zh ? '没有数据时不显示 0% 或 50%' : 'Missing data is not 0% or 50%')}</span>
@@ -74,7 +87,7 @@ export const ReviewEvidenceOverview: React.FC<Props> = ({ language, formal, refe
         <article><h3>{zh ? '推荐覆盖率' : 'Recommendation coverage'}</h3><strong className="review-missing-value">{zh ? '分母待核验' : 'Universe unverified'}</strong><p>{zh ? '需冻结完整候选场次范围，再计算实际发布比例。' : 'Requires a frozen eligible universe before computing the published share.'}</p><span>{zh ? '已结算场数不等于全部候选场数' : 'Settled rows are not the eligible universe'}</span></article>
       </div>
       <dl className="review-metadata">
-        <div><dt>{zh ? '模型 / 策略版本' : 'Model / policy version'}</dt><dd>{isShadow ? shadow?.candidateRevisionId || (zh ? '尚未登记' : 'Not registered') : (zh ? '历史统计未提供冻结版本分组' : 'Frozen version partition unavailable')}</dd></div>
+        <div><dt>{zh ? '模型 / 策略版本' : 'Model / policy version'}</dt><dd>{isShadow ? shadow?.candidateRevisionId || (zh ? '尚未登记' : 'Not registered') : window === 'version' && chosenVersion ? chosenVersion.key === 'UNKNOWN' ? (zh ? '版本未追溯' : 'Version untraced') : `${chosenVersion.modelVersion} / ${chosenVersion.policyVersion}` : versions.available ? (zh ? `已记录 ${versions.groups.length} 组版本标签；可按版本查看` : `${versions.groups.length} recorded label groups; use By version`) : (zh ? '历史统计未提供冻结版本分组' : 'Frozen version partition unavailable')}</dd></div>
         <div><dt>{zh ? '统计窗口' : 'Statistics window'}</dt><dd>{isShadow ? (shadow?.frozenAt && date ? `${reviewShanghaiDate(shadow.frozenAt) || '—'} → ${date}` : (zh ? '窗口待核验' : 'Window unverified')) : result.from && result.through ? `${result.from} → ${result.through}` : '—'}{result.partial ? (zh ? '（不足完整窗口）' : ' (partial window)') : ''}</dd></div>
         <div><dt>{zh ? '数据更新 · 北京时间' : 'Data updated · Asia/Shanghai'}</dt><dd>{updated}</dd></div>
       </dl>
@@ -86,7 +99,7 @@ export const ReviewEvidenceOverview: React.FC<Props> = ({ language, formal, refe
         {exclusions.unknownFields > 0 && <p>{zh ? `另有 ${exclusions.unknownFields} 项未识别口径，等待接口版本核验。` : `${exclusions.unknownFields} unrecognized counters require an API version check.`}</p>}
       </details>}
       <details className="review-evidence-gaps"><summary>{zh ? '为什么暂时不能说模型更准？' : 'Why is model superiority not established?'}<span>{zh ? '查看缺失证据' : 'View evidence gaps'}</span></summary>
-        <ul><li>{zh ? '版本分组尚未提供，累计不能当作本版本成绩。HAD / HHAD 按原冻结 BEST 玩法独立统计；未知玩法只留在 BEST 总账，不分配到任一玩法。' : 'Version partitions are unavailable; cumulative is not version-specific. HAD / HHAD use the original frozen BEST market. Unknown markets remain only in combined BEST.'}</li>
+        <ul><li>{zh ? '累计不能当作当前模型成绩。仅按已有冻结版本标签分组，未追溯记录保持未知；标签不等于完整参数修订。HAD / HHAD 按原冻结 BEST 玩法独立统计；未知玩法只留在 BEST 总账。' : 'Cumulative is not current-model performance. Only frozen labels are grouped; untraced rows stay unknown. Labels are not full parameter revisions. HAD / HHAD use frozen BEST markets; unknown markets stay in combined BEST.'}</li>
           <li>{zh ? '同组基准与覆盖率缺失时不计算“提升幅度”；缺失不等于表现为零。' : 'No improvement is calculated without paired baseline and coverage evidence; missing evidence is not zero performance.'}</li>
           <li>{zh ? '历史复盘与研究影子不能替代独立前瞻验证。新模型通过既定准入门槛前，保持独立观察。' : 'Historical reviews and research shadows cannot replace independent prospective validation. New models remain separate until established admission gates pass.'}</li></ul>
       </details>

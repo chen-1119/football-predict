@@ -291,7 +291,7 @@ check("market compaction rejects missing/extra groups and cross-market daily dri
     s => s.marketBreakdown.HAD = s.marketBreakdown.HHAD]) {
     const value = make(); mutate(value); assert.equal(compactReferenceReviewPerformance(value), null);
   }
-  const legacy = make(); delete legacy.marketBreakdown;
+  const legacy = make(); delete legacy.marketBreakdown; delete legacy.versionBreakdown;
   assert.equal(compactReferenceReviewPerformance(legacy).cumulative.settled, 2);
   assert.equal(compactReferenceReviewPerformance(legacy).marketBreakdown, undefined);
 });

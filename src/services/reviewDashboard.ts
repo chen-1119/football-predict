@@ -63,6 +63,40 @@ export const selectReviewMarketWindow = (
   return selectReviewWindow(groups[market === 'HAD' ? 0 : 1], track, window);
 };
 
+/** Frozen version labels, not attested parameter revisions. Reconcile the whole
+ * partition (including UNKNOWN), each market, and each calendar day first. */
+export const selectReviewVersions = (summary: ReviewPerformanceSummary | null | undefined, track: ReviewTrack) => {
+  const missing = { available: false as const, groups: [], unknown: null };
+  if (!summary || selectReviewMarketWindow(summary, track, 'all', 'HAD').state !== 'ready') return missing;
+  const partition = summary.versionBreakdown;
+  if (partition?.version !== 'review-frozen-version-labels-v1' || partition.scope !== 'frozen-labels-not-model-revision'
+    || !Array.isArray(partition.groups) || partition.groups.length > 1024 || partition.unknown?.key !== 'UNKNOWN'
+    || partition.unknown.modelVersion !== undefined || partition.unknown.policyVersion !== undefined) return missing;
+  const groups = partition.groups;
+  if (groups.some(group => !group || !/^[a-f0-9]{64}$/.test(group.key || '') || ![group.modelVersion, group.policyVersion].every(v => typeof v === 'string' && v.trim() === v && v.length > 0 && v.length <= 240 && [...v].every(c => c.charCodeAt(0) >= 32 && c.charCodeAt(0) !== 127)))
+    || new Set(groups.map(group => group.key)).size !== groups.length
+    || new Set(groups.map(group => JSON.stringify([group.modelVersion, group.policyVersion]))).size !== groups.length) return missing;
+  const all = [...groups, partition.unknown].map(group => ({ ...summary, ...group }));
+  if (all.some(group => selectReviewMarketWindow(group, track, 'all', 'HAD').state !== 'ready')) return missing;
+  for (const market of ['BEST', 'HAD', 'HHAD', 'UNKNOWN'] as const) {
+    const root = market === 'BEST' ? summary : summary.marketBreakdown![market]!;
+    const parts = all.map(group => market === 'BEST' ? group : group.marketBreakdown![market]!);
+    const rootDates = new Set(root.daily!.map(row => row.date));
+    const dates = parts.map(group => new Map(group.daily!.map(row => [row.date, row])));
+    if ((['won', 'lost', 'settled'] as const).some(key => parts.reduce((n, group) => n + group.cumulative![key]!, 0) !== root.cumulative![key])
+      || dates.some(group => [...group.keys()].some(date => !rootDates.has(date)))
+      || root.daily!.some(row => (['won', 'lost', 'settled'] as const).some(key => dates.reduce((n, group) => n + (group.get(row.date)?.[key] || 0), 0) !== row[key]))) return missing;
+  }
+  return { available: true as const, groups, unknown: partition.unknown };
+};
+
+export const selectReviewVersionWindow = (summary: ReviewPerformanceSummary | null | undefined, track: ReviewTrack, market: ReviewMarket, key: string) => {
+  const versions = selectReviewVersions(summary, track);
+  const group = key === 'UNKNOWN' ? versions.unknown : versions.groups.find(group => group.key === key);
+  if (!versions.available || !group || !summary) return { state: 'version-unavailable' as const, counts: null, from: null, through: null, partial: false };
+  return selectReviewMarketWindow({ ...summary, ...group }, track, 'all', market);
+};
+
 const dateKey = (value: unknown): value is string => typeof value === 'string'
   && /^\d{4}-\d{2}-\d{2}$/.test(value)
   && Number.isFinite(Date.parse(`${value}T00:00:00Z`))

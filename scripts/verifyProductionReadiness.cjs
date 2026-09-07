@@ -1463,6 +1463,13 @@ const run = async () => {
       stderrTail: reviewPerformance.stderr.slice(-500)
     });
 
+    const frozenReviewVersion = await runLocalJson(["scripts/verifyFrozenReviewVersion.cjs"]);
+    pushCheck(checks, "frozen public version to settlement and reconciled partitions", frozenReviewVersion.status === 0
+      && frozenReviewVersion.body?.ok === true && frozenReviewVersion.body?.checks >= 20, {
+      status: frozenReviewVersion.status, checks: frozenReviewVersion.body?.checks ?? null,
+      stdoutTail: frozenReviewVersion.status === 0 ? "" : frozenReviewVersion.stdout.slice(-500), stderrTail: frozenReviewVersion.stderr.slice(-500),
+    });
+
     const archivedPreMatchCutoff = await runLocalJson([
       "scripts/verifyArchivedPreMatchCutoff.cjs"
     ]);

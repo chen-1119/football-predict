@@ -6,6 +6,9 @@ const FORMAL_REVIEW_PERFORMANCE_START_DATE = "2026-08-16";
 const REVIEW_IDENTITY_VERSION = "review-event-identity-v2";
 const REVIEW_MARKET_BREAKDOWN_VERSION = "review-best-market-v1";
 const REVIEW_MARKETS = ["HAD", "HHAD", "UNKNOWN"];
+const REVIEW_VERSION_BREAKDOWN_VERSION = "review-frozen-version-labels-v1";
+const { resolveFrozenReviewVersion } = require("../src/services/frozenReviewVersion.cjs");
+const { digest } = require("../src/services/publicReferenceEvidence.cjs");
 
 const asText = (value) => typeof value === "string" ? value.trim() : "";
 const validDate = (value) => {
@@ -92,7 +95,10 @@ const settlementForTrack = (match, track) => {
   if (track === "formal" && review.formalBestStatus !== status) return { conflict: true };
   // Partition by the settled frozen BEST row itself, never current match odds
   // or a supporting market. Missing legacy pool labels remain UNKNOWN.
-  return { status, fingerprint: [...fingerprints][0], market: ["HAD", "HHAD"].includes(rows[0].oddsPoolCode) ? rows[0].oddsPoolCode : "UNKNOWN" };
+  const traces = rows.map(row => resolveFrozenReviewVersion(match, row));
+  const trace = traces.every(value => value && value.contentHash === traces[0]?.contentHash) ? traces[0] : null;
+  return { status, fingerprint: [...fingerprints][0], market: ["HAD", "HHAD"].includes(rows[0].oddsPoolCode) ? rows[0].oddsPoolCode : "UNKNOWN",
+    versionTrace: trace ? { identity: trace.contentHash, modelVersion: trace.modelVersion, policyVersion: trace.policyVersion } : null };
 };
 
 const formalBestSettlement = (match) => settlementForTrack(match, "formal")?.status || null;
@@ -140,10 +146,14 @@ const buildReviewPerformance = ({
         || (previous.knownEventTime !== null && binding.knownEventTime !== null
           && previous.knownEventTime !== binding.knownEventTime)) previous.conflict = true;
       if (previous.knownEventTime === null) previous.knownEventTime = binding.knownEventTime;
+      // A duplicate with absent/different provenance cannot donate a newer
+      // version to an old settlement. Keep its result in UNKNOWN, not deleted.
+      if (!incoming.versionTrace || incoming.versionTrace.identity !== previous.versionTrace?.identity) previous.versionTrace = null;
     } else events.set(identity, incoming);
   }
   const byDate = new Map();
   const byMarket = new Map(REVIEW_MARKETS.map((market) => [market, new Map()]));
+  const byVersion = new Map();
   for (const event of events.values()) {
     if (event.conflict) { excluded.conflictingEvent += 1; continue; }
     const bucket = byDate.get(event.date) || emptyBucket(event.date);
@@ -157,6 +167,11 @@ const buildReviewPerformance = ({
     if (event.status === "WON") marketBucket.won += 1;
     else marketBucket.lost += 1;
     marketDates.set(event.date, marketBucket);
+    const labels = event.versionTrace ? { modelVersion: event.versionTrace.modelVersion, policyVersion: event.versionTrace.policyVersion } : null;
+    const key = labels ? digest(labels) : "UNKNOWN";
+    const group = byVersion.get(key) || { key, ...labels, events: [] };
+    group.events.push(event);
+    byVersion.set(key, group);
   }
   const daily = [...byDate.values()].map(finalizeBucket).sort((a, b) => a.date.localeCompare(b.date));
   const cumulative = finalizeBucket(daily.reduce((total, row) => ({
@@ -177,8 +192,31 @@ const buildReviewPerformance = ({
         return [market, { cumulative: marketCumulative, daily: marketDaily }];
       })),
     },
+    versionBreakdown: {
+      version: REVIEW_VERSION_BREAKDOWN_VERSION, scope: "frozen-labels-not-model-revision",
+      groups: [...byVersion.values()].filter(group => group.key !== "UNKNOWN").sort((a, b) => a.key.localeCompare(b.key)).map(versionGroup),
+      unknown: versionGroup(byVersion.get("UNKNOWN") || { key: "UNKNOWN", events: [] }),
+    },
   };
 };
+
+function versionGroup(group) {
+  const bucketFor = events => {
+    const dates = new Map();
+    for (const event of events) {
+      const row = dates.get(event.date) || emptyBucket(event.date);
+      row.settled++; row[event.status === "WON" ? "won" : "lost"]++;
+      dates.set(event.date, row);
+    }
+    const daily = [...dates.values()].map(finalizeBucket).sort((a, b) => a.date.localeCompare(b.date));
+    const cumulative = finalizeBucket(daily.reduce((total, row) => ({ date: null, won: total.won + row.won,
+      lost: total.lost + row.lost, settled: total.settled + row.settled }), emptyBucket(null)));
+    return { cumulative, daily };
+  };
+  return { key: group.key, ...(group.key !== "UNKNOWN" ? { modelVersion: group.modelVersion, policyVersion: group.policyVersion } : {}),
+    ...bucketFor(group.events), marketBreakdown: { version: REVIEW_MARKET_BREAKDOWN_VERSION,
+      ...Object.fromEntries(REVIEW_MARKETS.map(market => [market, bucketFor(group.events.filter(event => event.market === market))])) } };
+}
 
 const buildFormalReviewPerformance = (options) => buildReviewPerformance(options, "formal");
 const buildReferenceReviewPerformance = (options) => buildReviewPerformance(options, "reference");
@@ -223,12 +261,42 @@ const compactReviewPerformance = (value, track) => {
     if (marketDates.some((dates) => [...dates.keys()].some((date) => !rootDates.has(date)))) return null;
     if (daily.some((row) => ["won", "lost", "settled"].some((key) => marketDates.reduce((sum, dates) => sum + (dates.get(row.date)?.[key] || 0), 0) !== row[key]))) return null;
   }
+  let versionBreakdown;
+  if (value.versionBreakdown !== undefined) {
+    const partition = value.versionBreakdown;
+    if (!partition || partition.version !== REVIEW_VERSION_BREAKDOWN_VERSION || partition.scope !== "frozen-labels-not-model-revision"
+      || !Array.isArray(partition.groups) || partition.groups.length > 1024 || !marketBreakdown) return null;
+    const compactGroup = (group, unknown = false) => {
+      if (!group || (unknown ? group.key !== "UNKNOWN" || group.modelVersion !== undefined || group.policyVersion !== undefined
+        : ![group.modelVersion, group.policyVersion].every(v => typeof v === "string" && v.length > 0 && v.length <= 240 && v.trim() === v && !/[\u0000-\u001f\u007f]/.test(v))
+          || group.key !== digest({ modelVersion: group.modelVersion, policyVersion: group.policyVersion }))) return null;
+      const summary = compactReviewPerformance({ version, generatedAt: value.generatedAt, startDate,
+        cumulative: group.cumulative, daily: group.daily, marketBreakdown: group.marketBreakdown, policy: value.policy }, track);
+      if (!summary?.marketBreakdown) return null;
+      return { key: group.key, ...(!unknown ? { modelVersion: group.modelVersion, policyVersion: group.policyVersion } : {}),
+        cumulative: summary.cumulative, daily: summary.daily, marketBreakdown: summary.marketBreakdown };
+    };
+    const groups = partition.groups.map(group => compactGroup(group));
+    const unknown = compactGroup(partition.unknown, true);
+    if (!unknown || groups.some(group => !group) || new Set(groups.map(group => group.key)).size !== groups.length) return null;
+    const all = [...groups, unknown];
+    const reconciles = (root, partitions) => {
+      const rootDates = new Set(root.daily.map(row => row.date));
+      const dates = partitions.map(group => new Map(group.daily.map(row => [row.date, row])));
+      return !["won", "lost", "settled"].some(key => partitions.reduce((n, group) => n + group.cumulative[key], 0) !== root.cumulative[key])
+        && !dates.some(group => [...group.keys()].some(date => !rootDates.has(date)))
+        && !root.daily.some(row => ["won", "lost", "settled"].some(key => dates.reduce((n, group) => n + (group.get(row.date)?.[key] || 0), 0) !== row[key]));
+    };
+    if (!reconciles({ cumulative, daily }, all) || REVIEW_MARKETS.some(market => !reconciles(marketBreakdown[market], all.map(group => group.marketBreakdown[market])))) return null;
+    versionBreakdown = { version: REVIEW_VERSION_BREAKDOWN_VERSION, scope: partition.scope, groups: groups.sort((a, b) => a.key.localeCompare(b.key)), unknown };
+  }
   return {
     version, generatedAt: value.generatedAt || null, startDate, timezone: "Asia/Shanghai",
     cumulative, daily: daily.sort((a, b) => a.date.localeCompare(b.date)),
     exclusions: Object.fromEntries(Object.entries(value.exclusions || {}).filter(([, n]) => Number.isSafeInteger(n) && n >= 0)),
     policy: { ...policyFor(track), identityVersion: value.policy?.identityVersion || "legacy-review-event-identity-v1" },
     ...(marketBreakdown ? { marketBreakdown } : {}),
+    ...(versionBreakdown ? { versionBreakdown } : {}),
   };
 };
 
@@ -239,6 +307,7 @@ module.exports = {
   FORMAL_REVIEW_PERFORMANCE_START_DATE, FORMAL_REVIEW_PERFORMANCE_VERSION,
   REFERENCE_REVIEW_PERFORMANCE_VERSION, REVIEW_IDENTITY_VERSION,
   REVIEW_MARKET_BREAKDOWN_VERSION,
+  REVIEW_VERSION_BREAKDOWN_VERSION,
   buildFormalReviewPerformance, buildReferenceReviewPerformance, businessDateForMatch,
   compactFormalReviewPerformance, compactReferenceReviewPerformance,
   formalBestSettlement, referenceBestSettlement, matchIdentity,

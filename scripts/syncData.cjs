@@ -4314,6 +4314,8 @@ function buildPredictionReviewRows(match, actuals, publicationIndex = null) {
           : market === "BTTS"
             ? actuals.btts
             : actuals.had;
+      const frozenVersion = !isMainRecommendation && !isLiveRecommendation
+        ? require("../src/services/frozenReviewVersion.cjs").compactFrozenReviewVersion(prediction.frozenVersion, prediction) : null;
       return {
         marketType: prediction.marketType,
         oddsPoolCode: prediction.oddsPoolCode || (market === "HAD" ? "HAD" : undefined),
@@ -4322,7 +4324,7 @@ function buildPredictionReviewRows(match, actuals, publicationIndex = null) {
           : undefined,
         tipCode: prediction.tipCode,
         tipLabel: prediction.tipLabel,
-        odds: Number.isFinite(officialOdds) && officialOdds > 1 ? officialOdds : undefined,
+        odds: Number.isFinite(officialOdds) && (officialOdds > 1 || (officialOdds === 0 && frozenVersion)) ? officialOdds : undefined,
         actualCode,
         actualLabel: reviewResultLabel(actualCode, market, match),
         resultStatus: status,
@@ -4334,6 +4336,7 @@ function buildPredictionReviewRows(match, actuals, publicationIndex = null) {
         liveRecommendation: compactLiveRecommendationForAudit(prediction.liveRecommendation),
         livePublicationEvidence: compactLivePublicationEvidenceForAudit(prediction.livePublicationEvidence),
         performanceTrack: isMainRecommendation ? "formal" : isLiveRecommendation ? "live-model" : "reference",
+        ...(frozenVersion ? { frozenVersion } : {}),
         reviewRole: isMainRecommendation ? "main" : "reference",
         publicationId: publication?.publicationId || null,
         publicationEvidence: publication ? prediction.publicationEvidence : null,
@@ -4413,6 +4416,7 @@ function predictionsFromPriorReview(priorReview) {
       livePublicationEvidence: compactLivePublicationEvidenceForAudit(row.livePublicationEvidence),
       publicationId: row.publicationId || null,
       publicationEvidence: row.publicationEvidence || null,
+      ...(row.frozenVersion ? { frozenVersion: require("../src/services/frozenReviewVersion.cjs").compactFrozenReviewVersion(row.frozenVersion, row) } : {}),
     }));
 }
 
@@ -5275,6 +5279,10 @@ function buildArchivedPreMatchPrediction(
       tipCode: normText(best.tipCode).toUpperCase(),
       tipLabel: archivedTipLabel(match, best),
       odds: Number(best.odds || 0),
+      ...(canonicalBest?.source === "public-reference-decision" ? {
+        frozenVersion: require("../src/services/frozenReviewVersion.cjs").captureFrozenReviewVersion(
+          match?.predictionMeta?.publicReferenceDecision, match, best),
+      } : {}),
       trustScore: Number(best.trustScore || 0),
       recommendationAction: best.recommendationAction || "reference",
       recommendationTier: best.recommendationTier || "reference",
@@ -5562,7 +5570,16 @@ function buildPostMatchReview(match, capturedAt, snapshotIndex = null, publicati
   // a later/backdated ledger append must never turn it into a formal sample.
   if (priorReview) {
     const verifiedPriorRows = lockedVerifiedPublicationRows(priorReview);
+    // Version metadata follows the already-settled row, never a later public
+    // record or a newly enriched archive with the same outcome direction.
+    const priorVersionRows = Array.isArray(priorReview.predictionReview?.rows) ? priorReview.predictionReview.rows : [];
     predictionRows = predictionRows.map((row) => {
+      const { frozenReviewSelection } = require("../src/services/frozenReviewVersion.cjs");
+      const candidates = priorVersionRows.filter(prior => frozenReviewSelection(prior) && frozenReviewSelection(prior) === frozenReviewSelection(row));
+      const traces = candidates.map(prior => require("../src/services/frozenReviewVersion.cjs").compactFrozenReviewVersion(prior.frozenVersion, prior));
+      const version = traces.length && traces.every(trace => trace && trace.contentHash === traces[0]?.contentHash) ? traces[0] : null;
+      const { frozenVersion: ignoredVersion, ...withoutVersion } = row;
+      row = { ...withoutVersion, ...(version ? { frozenVersion: version } : {}) };
       const locked = verifiedPriorRows.get(reviewSelectionKey(row));
       if (locked) {
         return {
@@ -5841,6 +5858,7 @@ function compactPredictionReviewRow(row) {
     reviewRole: row.reviewRole,
     publicationId: row.publicationId || null,
     publicationEvidence: row.publicationEvidence || null,
+    ...(row.frozenVersion ? { frozenVersion: require("../src/services/frozenReviewVersion.cjs").compactFrozenReviewVersion(row.frozenVersion, row) } : {}),
   };
 }
 

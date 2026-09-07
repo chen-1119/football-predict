@@ -30,6 +30,11 @@ const base = { id: 'sporttery_991010', sourceMatchId: '991010', status: 'SCHEDUL
     } }
   } };
 const current = bindPublicReferenceDecision(base, null, '2026-09-07T05:00:01Z');
+const { fixture: frozenReviewFixture } = require('../verifyFrozenReviewVersion.cjs');
+const { buildReferenceReviewPerformance, compactReferenceReviewPerformance } = require('../../server/reviewPerformanceSummary.cjs');
+const versionHistory = [frozenReviewFixture(), frozenReviewFixture('991004', 'frozen-model-b', 'HHAD'), frozenReviewFixture('991006')];
+delete versionHistory[2].postMatchReview.predictionReview.rows[0].frozenVersion;
+const versionSummary = compactReferenceReviewPerformance(buildReferenceReviewPerformance({ matches: versionHistory, generatedAt: '2026-09-07T15:00:00.000Z' }));
 const history = [true, false].map((won, i) => ({ ...base, id: `sporttery_99102${i}`, sourceMatchId: `99102${i}`,
   status: 'FINISHED', sourceStatus: 'FINISHED', kickoffTime: '2026-09-06T12:00:00Z', buyEndTime: '2026-09-06T12:00:00Z',
   eventVersion: '2026-09-06T12:00:00Z', businessDate: '2026-09-06', matchDate: '2026-09-06', predictionMeta: {},
@@ -58,7 +63,7 @@ function response(pathname, mode = 'complete') {
   if (pathname === '/data/runtime-config.json') return { dataApiBase: '/api/v1', preferDataApi: true, eventStreamPath: null };
   if (apiPath === '/access/status') return { authorized: true };
   if (apiPath === '/matches/current') return { rows: empty ? [] : [currentMatch], stale: false };
-  if (apiPath === '/matches/history') return { rows: empty ? [] : history, pageInfo: { hasMore: false, nextCursor: null } };
+  if (apiPath === '/matches/history') return { rows: empty ? [] : mode === 'versions' ? versionHistory : history, pageInfo: { hasMore: false, nextCursor: null } };
   if (apiPath === '/matches/unresolved-archive') return { rows: [] };
   if (apiPath === '/matches/sporttery_991010') return { match: currentMatch };
   if (apiPath === '/sync-meta') return { updatedAt: now, files: { current: empty ? 0 : 1, history: empty ? 0 : 2 }, api: { stale: false, currentStale: false, source: 'synthetic-only', freshnessTime: now } };
@@ -66,8 +71,8 @@ function response(pathname, mode = 'complete') {
   if (apiPath === '/health') return { apiVersion: 'v1', status: { serviceOk: true, dataFresh: true, recommendationReliable: false }, data: { currentRead: { source: 'synthetic-only' } } };
   if (apiPath === '/model/evaluation') return empty ? {} : { publicScorecard: { version: 'synthetic-full-app-evidence-v1', sample: { predictionRows: 999 },
     ...(mode === 'formal-zero' ? { hitRateAudit: { observed: { settled: 0, hitRate: null }, minimumSettledRows: 500 } } : {}),
-    formalReviewPerformance: summary(false), referenceReviewPerformance: mode === 'exclusion-incomplete'
+    formalReviewPerformance: summary(false), referenceReviewPerformance: mode === 'versions' ? versionSummary : mode === 'exclusion-incomplete'
       ? { ...summary(true), exclusions: { ...summary(true).exclusions, conflictingEvent: null, unrecognized: 1 } } : summary(true) } };
   return undefined;
 }
-module.exports = { now, current, response };
+module.exports = { now, current, response, versionSummary };
