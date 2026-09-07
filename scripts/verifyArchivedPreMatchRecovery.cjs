@@ -14,7 +14,6 @@ const {
 } = require("./syncData.cjs");
 const {
   applyOfficialClubResult,
-  loadOfficialClubResults,
 } = require("./syncOfficialClubResults.cjs");
 
 const manifest = JSON.parse(fs.readFileSync(DEFAULT_RECOVERY_PATH, "utf8"));
@@ -190,7 +189,9 @@ assert.equal(
   "an unrecoverable post-cutoff archive must fail closed"
 );
 
-const officialClubResults = loadOfficialClubResults();
+// Recovery behavior must not depend on an untracked generated local cache.
+// These explicit offline HTML parser fixtures are not production evidence.
+const { syntheticStore: officialClubResults } = require("./verifyOfficialClubResults.cjs");
 const priorWrongReview = (tipCode, odds) => ({
   version: "post-match-review-v2",
   generatedAt: "2026-07-28T23:43:57.782Z",
@@ -299,5 +300,6 @@ console.log(JSON.stringify({
   invalidLegacyArchiveStripped: true,
   knownWrongLegacyArchiveCorrected: true,
   recoveredReviews,
+  syntheticResultInputs: true,
   manifest: path.relative(process.cwd(), DEFAULT_RECOVERY_PATH).replaceAll("\\", "/"),
 }, null, 2));

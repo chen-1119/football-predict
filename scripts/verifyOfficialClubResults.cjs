@@ -3,6 +3,7 @@ const crypto = require("node:crypto");
 const {
   applyOfficialClubResult,
   buildEvidenceRecord,
+  evidenceHashForRecord,
   isTrustedOfficialClubResult,
   loadSourceManifest,
   parseOfficialClubPage,
@@ -95,7 +96,56 @@ assert.equal(
   "an unapproved host must fail closed",
 );
 
-console.log(JSON.stringify({
+let strictAdmissionChecks = 0;
+for (const side of ["scoreHome", "scoreAway"]) {
+  for (const value of [null, undefined, false, true, "", " ", "0", [], [0], {}, NaN, Infinity, -1, 0.5, Number.MAX_SAFE_INTEGER + 1]) {
+    const invalid = { ...aikRecord, [side]: value };
+    invalid.evidenceHash = evidenceHashForRecord(invalid);
+    assert.equal(validOfficialClubEvidenceForMatch(aikMatch, invalid), false,
+      `non-numeric or invalid ${side} must not become a result, even with a recomputed hash`);
+    assert.equal(applyOfficialClubResult(aikMatch, { matches: { "2040641": invalid } }), aikMatch);
+    assert.equal(isTrustedOfficialClubResult({ ...settledAik, [side]: value,
+      resultProvenance: { ...settledAik.resultProvenance, evidenceHash: invalid.evidenceHash } }), false);
+    assert.throws(() => buildEvidenceRecord(aikMatch, aikSource, { ...aikParsed, [side]: value }, responseFor(aikSource, aikHtml), observedAt));
+    strictAdmissionChecks++;
+  }
+}
+for (const observedAt of ["2026-09-31T00:00:00Z", "2026-07-28T24:00:00Z", "2026-07-29 00:00:00", true]) {
+  const invalid = { ...aikRecord, observedAt };
+  assert.equal(validOfficialClubEvidenceForMatch(aikMatch, invalid), false, "invalid or timezone-less observation clock must be rejected");
+  assert.throws(() => buildEvidenceRecord(aikMatch, aikSource, aikParsed, responseFor(aikSource, aikHtml), observedAt));
+  strictAdmissionChecks++;
+}
+for (const eventVersion of ["2026-02-30T12:00:00Z", "2026-07-27T24:00:00Z", "2026-07-28 17:00:00"]) {
+  const malformedMatch = { ...aikMatch, kickoffTime: eventVersion, eventVersion };
+  const invalid = { ...aikRecord, kickoffTime: eventVersion, eventVersion, providerKickoffTime: eventVersion };
+  invalid.evidenceHash = evidenceHashForRecord(invalid);
+  assert.equal(validOfficialClubEvidenceForMatch(malformedMatch, invalid), false, "normalization cannot turn an invalid event clock into source proof");
+  assert.throws(() => buildEvidenceRecord(malformedMatch, { ...aikSource, providerKickoffTime: eventVersion }, aikParsed, responseFor(aikSource, aikHtml), observedAt));
+  strictAdmissionChecks++;
+}
+assert.throws(() => buildEvidenceRecord(aikMatch, { ...aikSource, sourceMatchId: "wrong-event" }, aikParsed, responseFor(aikSource, aikHtml), observedAt));
+strictAdmissionChecks++;
+const laterAt = "2026-07-30T00:00:00.000Z";
+const invalidPrevious = { ...aikRecord, scoreHome: null, firstObservedAt: "1900-01-01T00:00:00Z" };
+invalidPrevious.evidenceHash = evidenceHashForRecord(invalidPrevious);
+const freshAfterInvalid = buildEvidenceRecord(aikMatch, aikSource, aikParsed, responseFor(aikSource, aikHtml), laterAt, invalidPrevious);
+assert.equal(freshAfterInvalid.firstObservedAt, laterAt, "invalid previous null score cannot donate a fake first observation to a real zero score");
+assert.equal(freshAfterInvalid.resultRevision, 1);
+strictAdmissionChecks++;
+const repeated = buildEvidenceRecord(aikMatch, aikSource, aikParsed, responseFor(aikSource, aikHtml), laterAt, aikRecord);
+assert.equal(repeated.firstObservedAt, aikRecord.firstObservedAt);
+assert.equal(repeated.resultRevision, aikRecord.resultRevision);
+assert.equal(repeated.evidenceHash, aikRecord.evidenceHash, "valid legacy score and event hash contract is unchanged");
+strictAdmissionChecks++;
+const corrected = buildEvidenceRecord(aikMatch, aikSource, { ...aikParsed, scoreHome: 1 }, responseFor(aikSource, aikHtml), laterAt, aikRecord);
+assert.equal(corrected.firstObservedAt, laterAt);
+assert.equal(corrected.resultRevision, aikRecord.resultRevision + 1);
+strictAdmissionChecks++;
+// Deliberate parser-generated synthetic evidence for offline recovery tests.
+// Never use this store as production input or proof that a page was fetched.
+module.exports = { syntheticStore: { version: "official-club-results-v1", matches: { "2040641": aikRecord, "2040642": rbkRecord } }, strictAdmissionChecks };
+if (require.main === module) console.log(JSON.stringify({
   ok: true,
   verifier: "official-club-results-v1",
   sources: manifest.sources.length,
@@ -105,4 +155,7 @@ console.log(JSON.stringify({
   },
   promotionEligible: false,
   tamperRejected: true,
+  strictAdmissionChecks,
+  syntheticInput: true,
+  networkCalls: 0,
 }, null, 2));

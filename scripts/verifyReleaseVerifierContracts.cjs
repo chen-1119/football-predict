@@ -56,7 +56,8 @@ check('fixed hypothesis lineage survives competing retrospective winners before 
 const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/services/apiFootballDiagnostics.d.cts',
   'scripts/apiFootballClockEvidence.cjs', 'scripts/verifyApiFootballClockEvidence.cjs',
   'scripts/verifyApiFootballDiagnostics.cjs', 'scripts/verifyCandidateArtifactSeed.cjs', 'scripts/verifyCandidateRevisionLineage.cjs',
-  'scripts/verifyLegacyReferenceConflict.cjs', 'src/services/legacyReferenceConflict.ts', 'scripts/verifyFrozenArchiveAuthority.cjs'];
+  'scripts/verifyLegacyReferenceConflict.cjs', 'src/services/legacyReferenceConflict.ts', 'scripts/verifyFrozenArchiveAuthority.cjs',
+  'scripts/verifyOfficialClubResults.cjs', 'scripts/syncOfficialClubResults.cjs'];
 const requiredEntries = source => {
   const match = /const required(?:Release)?Entries = (\[[\s\S]*?\n\]);/.exec(source);
   assert.ok(match, 'required release-entry array must be explicit');

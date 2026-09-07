@@ -1,6 +1,7 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
+const { strictInstant } = require("../src/services/strictInstant.cjs");
 
 const ROOT_DIR = path.resolve(__dirname, "..");
 const CURRENT_FILE = path.join(ROOT_DIR, "public", "data", "matches-current.json");
@@ -35,7 +36,7 @@ const writeJsonAtomic = (file, value) => {
 };
 
 const canonicalInstant = (value) => {
-  const parsed = Date.parse(value || "");
+  const parsed = Date.parse(strictInstant(value) || "");
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
 };
 
@@ -149,8 +150,8 @@ const validOfficialClubEvidenceForMatch = (match, record) => {
   const recordVersion = canonicalInstant(record?.eventVersion || record?.kickoffTime);
   const providerKickoff = canonicalInstant(record?.providerKickoffTime);
   const observedAt = canonicalInstant(record?.observedAt);
-  const scoreHome = Number(record?.scoreHome);
-  const scoreAway = Number(record?.scoreAway);
+  const scoreHome = record?.scoreHome;
+  const scoreAway = record?.scoreAway;
   return Boolean(
     match
     && record
@@ -173,9 +174,9 @@ const validOfficialClubEvidenceForMatch = (match, record) => {
     && observedAt
     && Date.parse(observedAt) >= Date.parse(eventVersion)
     && allowedOfficialClubUrl(record.sourceUrl)
-    && Number.isInteger(scoreHome)
+    && Number.isSafeInteger(scoreHome)
     && scoreHome >= 0
-    && Number.isInteger(scoreAway)
+    && Number.isSafeInteger(scoreAway)
     && scoreAway >= 0
     && /^[a-f0-9]{64}$/.test(String(record.responseSha256 || ""))
     && /^[a-f0-9]{64}$/.test(String(record.evidenceHash || ""))
@@ -187,13 +188,21 @@ const buildEvidenceRecord = (match, source, parsed, response, observedAt, previo
   const sourceMatchId = canonicalSourceMatchId(match?.sourceMatchId || match?.id);
   const eventVersion = canonicalInstant(match?.eventVersion || match?.kickoffTime);
   const providerKickoffTime = canonicalInstant(source.providerKickoffTime);
-  if (!eventVersion || providerKickoffTime !== eventVersion) {
-    throw new Error(`official club result clock mismatch: ${sourceMatchId}`);
+  if (!eventVersion || providerKickoffTime !== eventVersion
+    || canonicalSourceMatchId(source.sourceMatchId) !== sourceMatchId) {
+    throw new Error(`official club result event identity or clock mismatch: ${sourceMatchId}`);
   }
-  const samePreviousScore = previous
-    && Number(previous.scoreHome) === parsed.scoreHome
-    && Number(previous.scoreAway) === parsed.scoreAway;
-  const priorRevision = Math.max(0, Number(previous?.resultRevision || 0));
+  const observedInstant = canonicalInstant(observedAt);
+  if (!observedInstant || Date.parse(observedInstant) < Date.parse(eventVersion)
+    || !Number.isSafeInteger(parsed?.scoreHome) || parsed.scoreHome < 0
+    || !Number.isSafeInteger(parsed?.scoreAway) || parsed.scoreAway < 0) {
+    throw new Error(`official club result score or observation clock invalid: ${sourceMatchId}`);
+  }
+  const validPrevious = validOfficialClubEvidenceForMatch(match, previous);
+  const samePreviousScore = validPrevious
+    && previous.scoreHome === parsed.scoreHome
+    && previous.scoreAway === parsed.scoreAway;
+  const priorRevision = validPrevious ? Math.max(0, Number(previous.resultRevision || 0)) : 0;
   const record = {
     version: VERSION,
     provider: RESULT_PROVIDER,
