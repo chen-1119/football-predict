@@ -275,6 +275,7 @@ console.log(JSON.stringify({
   ok: true,
   verifier: "historical-strength-model",
   checks: 33,
+  inputAdmission: require("./verifyHistoricalInputAdmission.cjs").run(),
   sample: {
     events: events.length,
     dateBatches: artifact.featureArtifact.input.dateBatches,

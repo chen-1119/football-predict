@@ -1,6 +1,7 @@
 "use strict";
 
 const crypto = require("node:crypto");
+const { strictInstant } = require("../src/services/strictInstant.cjs");
 
 const HISTORICAL_ASOF_FEATURE_ARTIFACT_VERSION = "historical-asof-feature-artifact-v1";
 const HISTORICAL_ASOF_FEATURE_SNAPSHOT_VERSION = "historical-asof-feature-snapshot-v1";
@@ -57,14 +58,14 @@ function normalizeEntity(value) {
 }
 
 function canonicalIso(value, field) {
-  const millis = Date.parse(String(value || ""));
-  if (!Number.isFinite(millis)) {
+  const instant = strictInstant(value);
+  if (!instant) {
     throw new HistoricalAsOfFeatureError(`${field} must be a valid timestamp`, {
       code: "INVALID_TIMESTAMP",
       field,
     });
   }
-  return new Date(millis).toISOString();
+  return new Date(instant).toISOString();
 }
 
 function canonicalDate(value, field = "date") {
@@ -86,15 +87,18 @@ function canonicalDate(value, field = "date") {
 }
 
 function nonNegativeInteger(value, field) {
-  const number = Number(value);
-  if (!Number.isSafeInteger(number) || number < 0) {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
     throw new HistoricalAsOfFeatureError(`${field} must be a non-negative integer`, {
       code: "INVALID_LABEL",
       field,
     });
   }
-  return number;
+  return value;
 }
+
+// A declared null/blank/boolean is invalid evidence, not permission to borrow
+// a different alias or coerce a missing goal into zero. Only absence falls back.
+const firstDeclared = (...values) => values.find((value) => value !== undefined);
 
 function teamProjection(event, side) {
   const source = event?.[`${side}Team`];
@@ -124,11 +128,11 @@ function teamProjection(event, side) {
 function scoreProjection(event) {
   const outcome = event?.historicalOutcome || event?.score || {};
   const home = nonNegativeInteger(
-    outcome.homeGoals ?? outcome.home ?? event?.scoreHome,
+    firstDeclared(outcome.homeGoals, outcome.home, event?.scoreHome),
     "historicalOutcome.homeGoals",
   );
   const away = nonNegativeInteger(
-    outcome.awayGoals ?? outcome.away ?? event?.scoreAway,
+    firstDeclared(outcome.awayGoals, outcome.away, event?.scoreAway),
     "historicalOutcome.awayGoals",
   );
   return {
@@ -154,7 +158,7 @@ function normalizeHistoricalEvent(event) {
   const forecastBoundary = `${date}T00:00:00.000Z`;
   const forecastMs = Date.parse(forecastBoundary);
   const availableAt = canonicalIso(
-    event.availableAt || event.resultAvailableAt || event?.availability?.availableAt,
+    firstDeclared(event.availableAt, event.resultAvailableAt, event?.availability?.availableAt),
     "availableAt",
   );
   const availableMs = Date.parse(availableAt);
@@ -466,6 +470,7 @@ function verifyHistoricalAsOfFeatureArtifact(artifact) {
     }
 
     const labelIds = new Set();
+    const normalizedEvents = [];
     for (const label of labels) {
       if (label.version !== HISTORICAL_ASOF_LABEL_VERSION) return false;
       if (!label.sourceEventId || labelIds.has(label.sourceEventId) || !snapshotIds.has(label.sourceEventId)) return false;
@@ -476,8 +481,54 @@ function verifyHistoricalAsOfFeatureArtifact(artifact) {
       if (stableHash(labelBody) !== label.labelHash) return false;
       if (stableHash({ match: snapshotById.get(label.sourceEventId)?.match, label: labelBody })
           !== label.eventCommitmentHash) return false;
-      if (Date.parse(label.availableAt || "") <= Date.parse(`${label.date}T00:00:00.000Z`)) return false;
+      // Hash consistency is not semantic validity. Re-enter the same strict
+      // normalization boundary used by the builder, including score/outcome,
+      // actual calendar dates, explicit zones and post-forecast availability.
+      const normalized = normalizeHistoricalEvent({
+        ...snapshotById.get(label.sourceEventId).match,
+        availableAt: label.availableAt,
+        score: label.score,
+      });
+      if (normalized.label.labelHash !== label.labelHash
+          || normalized.eventCommitmentHash !== label.eventCommitmentHash
+          || stableHash(normalized.match) !== stableHash(snapshotById.get(label.sourceEventId).match)) return false;
+      normalizedEvents.push(normalized);
     }
+    normalizedEvents.sort((left, right) => left.match.date.localeCompare(right.match.date)
+      || left.sourceEventId.localeCompare(right.sourceEventId));
+    const resultBatches = groupEventsByDate(normalizedEvents).sort((left, right) => (
+      left.batchAvailableMs - right.batchAvailableMs || left.date.localeCompare(right.date)
+        || left.batchCommitmentHash.localeCompare(right.batchCommitmentHash)
+    ));
+    const expectedWatermark = { consumedRows: 0, consumedBatches: 0, consumedRootHash: null,
+      maxConsumedAvailableAt: null, maxConsumedMatchDate: null, strictBeforeForecast: true };
+    let cursor = 0;
+    const advance = (forecastMs) => {
+      while (cursor < resultBatches.length && resultBatches[cursor].batchAvailableMs < forecastMs) {
+        const batch = resultBatches[cursor++];
+        expectedWatermark.consumedRows += batch.events.length;
+        expectedWatermark.consumedBatches++;
+        expectedWatermark.consumedRootHash = stableHash({ batchCommitmentHash: batch.batchCommitmentHash,
+          previousRootHash: expectedWatermark.consumedRootHash });
+        expectedWatermark.maxConsumedAvailableAt = batch.batchAvailableAt;
+        if (!expectedWatermark.maxConsumedMatchDate || batch.date > expectedWatermark.maxConsumedMatchDate) {
+          expectedWatermark.maxConsumedMatchDate = batch.date;
+        }
+      }
+    };
+    for (const [index, snapshot] of snapshots.entries()) {
+      if (snapshot.sourceEventId !== normalizedEvents[index].sourceEventId
+          || labels[index].sourceEventId !== snapshot.sourceEventId) return false;
+      advance(Date.parse(snapshot.forecastBoundary));
+      if (stableHash(snapshot.stateWatermark) !== stableHash(expectedWatermark)) return false;
+    }
+    advance(Infinity);
+    for (const key of Object.keys(expectedWatermark).filter((key) => key !== "strictBeforeForecast")) {
+      if (artifact.watermark?.[key] !== expectedWatermark[key]) return false;
+    }
+    if (artifact.input.dateBatches !== resultBatches.length
+        || artifact.input.firstDate !== normalizedEvents[0].match.date
+        || artifact.input.lastDate !== normalizedEvents.at(-1).match.date) return false;
     const inputRootHash = stableHash(labels
       .map((row) => `${row.sourceEventId}:${row.eventCommitmentHash}`)
       .sort());

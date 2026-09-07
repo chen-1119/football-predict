@@ -7,7 +7,7 @@ const { buildDynamicGoalStrengthArtifact, verifyDynamicGoalStrengthArtifact } = 
 const { canonicalMarketOdds, devigOdds } = require("./historicalMarketResearch.cjs");
 const { freezeProtocol, runFixedAbcResearch } = require("./fixedAbcResearch.cjs");
 const { runFixedAbcAblations } = require("./fixedAbcAblationResearch.cjs");
-const implementationFiles = ["fixedAbcResearch.cjs", "pairedCalendarBlockResearch.cjs", "fixedAbcAblationResearch.cjs", "runFixedAbcResearch.cjs", "dynamicGoalStrengthModel.cjs", "historicalAsOfFeatureBuilder.cjs", "historicalTrainingWarehouse.cjs", "historicalMarketResearch.cjs", "historicalEventStore.cjs"];
+const implementationFiles = ["fixedAbcResearch.cjs", "pairedCalendarBlockResearch.cjs", "fixedAbcAblationResearch.cjs", "runFixedAbcResearch.cjs", "dynamicGoalStrengthModel.cjs", "historicalAsOfFeatureBuilder.cjs", "historicalTrainingWarehouse.cjs", "historicalMarketResearch.cjs", "historicalEventStore.cjs", "../src/services/strictInstant.cjs"];
 const readImplementationHashes = () => Object.fromEntries(implementationFiles.map(name => [name, stableHash(fs.readFileSync(path.join(__dirname, name), "utf8").replace(/\r\n/g, "\n"))]));
 const implementationHashes = readImplementationHashes();
 const root = path.resolve(__dirname, "..");
