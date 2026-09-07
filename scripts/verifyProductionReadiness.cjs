@@ -1604,6 +1604,16 @@ const run = async () => {
       stderrTail: currentMatchRetention.stderr.slice(-500)
     });
 
+    const communityObservations = await runLocalJson(["scripts/verifyOpenFootballObservations.cjs"]);
+    pushCheck(checks, "community raw receipts preserve first clocks and cannot publish predictions", communityObservations.status === 0
+      && communityObservations.body?.ok === true && communityObservations.body?.checks >= 51
+      && communityObservations.body?.providerRequests === 0
+      && communityObservations.body?.productionDataTouched === false, {
+      status: communityObservations.status, checks: communityObservations.body?.checks ?? null,
+      stdoutTail: communityObservations.status === 0 ? "" : communityObservations.stdout.slice(-500),
+      stderrTail: communityObservations.stderr.slice(-500),
+    });
+
     const generationCompatibility = await runLocalJson(["scripts/verifyDataGenerationEndToEnd.cjs", "--buffered-compatibility-only"]);
     pushCheck(checks, "buffered generation preserves canonical identity and isolated publication behavior", generationCompatibility.status === 0
       && generationCompatibility.body?.ok === true

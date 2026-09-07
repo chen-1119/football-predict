@@ -61,6 +61,7 @@ const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/servic
   'scripts/competitionModelContext.cjs', 'scripts/verifyCompetitionModelContext.cjs',
   'scripts/predictionExecutionCapture.cjs', 'scripts/verifyPredictionExecutionCapture.cjs', 'scripts/verifyDataGenerationPointerLockRace.cjs',
   'scripts/verifyDataGenerationEndToEnd.cjs',
+  'scripts/openFootballObservationStore.cjs', 'scripts/auditOpenFootballCurrentSeason.cjs', 'scripts/verifyOpenFootballObservations.cjs',
   'src/services/predictionExecutionClock.cjs', 'scripts/verifyPredictionExecutionClock.cjs',
   'src/services/predictionRuntimeIdentity.cjs', 'scripts/replayPredictionCapture.cjs', 'scripts/verifyPredictionReplay.cjs'];
 const requiredEntries = source => {
@@ -199,4 +200,20 @@ for (const bad of [{ ok: false }, { version: 'unrelated-test' }, { checks: 124 }
   check('generation gate rejects incomplete or writing proof ' + JSON.stringify(bad), () => assert.equal(generationGate({ ...generationProof, ...bad }), false));
 }
 check('generation gate rejects child failure', () => assert.equal(generationGate(generationProof, 1), false));
+const communityStart = readiness.indexOf('    pushCheck(checks, "community raw receipts preserve first clocks and cannot publish predictions",');
+const communityEnd = readiness.indexOf('\n    const generationCompatibility', communityStart);
+assert.ok(communityStart >= 0 && communityEnd > communityStart);
+const communityGate = (body, status = 0) => {
+  let result;
+  vm.runInNewContext(readiness.slice(communityStart, communityEnd), { checks: [],
+    communityObservations: { status, body, stdout: '', stderr: '' },
+    pushCheck: (_checks, _name, ok) => { result = ok; } }, { timeout: 1000 });
+  return result;
+};
+const communityProof = { ok: true, checks: 51, providerRequests: 0, productionDataTouched: false };
+check('community gate requires isolated durable receipt proof', () => assert.equal(communityGate(communityProof), true));
+for (const bad of [{ ok: false }, { checks: 50 }, { providerRequests: 1 }, { productionDataTouched: true }]) {
+  check('community gate rejects invalid receipt evidence ' + JSON.stringify(bad), () => assert.equal(communityGate({ ...communityProof, ...bad }), false));
+}
+check('community gate rejects command failure', () => assert.equal(communityGate(communityProof, 1), false));
 console.log(JSON.stringify({ok:true,verifier:'release-verifier-contracts-v1',checks,productionDataTouched:false},null,2));

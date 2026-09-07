@@ -94,8 +94,10 @@ function inspectSource(raw, { season, league, receivedAt }) {
   };
 }
 
-async function fetchSource(season, league, fetchImpl = fetch) {
+async function fetchSourceBytes(season, league, fetchImpl = fetch, clock = () => new Date().toISOString()) {
   const url = sourceUrl(season, league);
+  const requestStartedAt = clock();
+  if (!strictInstant(requestStartedAt)) throw new Error("Invalid request clock");
   const response = await fetchImpl(url, {
     redirect: "error", signal: AbortSignal.timeout(20_000),
     headers: { Accept: "application/json", "User-Agent": "football-openfootball-readonly-audit/1.0" },
@@ -114,7 +116,17 @@ async function fetchSource(season, league, fetchImpl = fetch) {
       chunks.push(Buffer.from(value));
     }
   } finally { await reader.cancel(); reader.releaseLock(); }
-  return inspectSource(Buffer.concat(chunks), { season, league, receivedAt: new Date().toISOString() });
+  const receivedAt = clock();
+  if (!strictInstant(receivedAt) || Date.parse(receivedAt) < Date.parse(requestStartedAt)) {
+    throw new Error("Invalid complete-response receipt clock");
+  }
+  const raw = Buffer.concat(chunks);
+  const inspected = inspectSource(raw, { season, league, receivedAt });
+  return { raw, requestStartedAt: new Date(requestStartedAt).toISOString(), receivedAt: new Date(receivedAt).toISOString(), inspected };
+}
+
+async function fetchSource(season, league, fetchImpl = fetch) {
+  return (await fetchSourceBytes(season, league, fetchImpl)).inspected;
 }
 
 async function auditSeason(season, fetchImpl = fetch) {
@@ -149,4 +161,4 @@ if (require.main === module) {
   }).catch((error) => { console.error(error.message); process.exitCode = 1; });
 }
 
-module.exports = { LEAGUES, MAX_BYTES, sourceUrl, inspectSource, fetchSource, auditSeason };
+module.exports = { LEAGUES, MAX_BYTES, sourceUrl, inspectSource, fetchSourceBytes, fetchSource, auditSeason };
