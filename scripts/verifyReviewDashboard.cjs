@@ -6,7 +6,7 @@ const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
 const load = require('./lib/loadReviewTsForVerification.cjs');
 const root = path.resolve(__dirname, '..');
-const { selectReviewWindow, selectReviewMarketWindow, reviewShanghaiDate } = load(ts, path.join(root, 'src/services/reviewDashboard.ts'));
+const { selectReviewWindow, selectReviewMarketWindow, selectReviewExclusions, reviewShanghaiDate } = load(ts, path.join(root, 'src/services/reviewDashboard.ts'));
 const checks = [];
 const check = (name, fn) => { fn(); checks.push(name); };
 const fixture = () => ({
@@ -122,5 +122,46 @@ check('unknown market rows are visible and excluded from HAD instead of silently
   assert.ok(html.includes('命中 10 / 已结算 20'));
   assert.equal(selectReviewMarketWindow(s, 'reference', 'all', 'HAD').counts.hitRate, .5);
   assert.equal(selectReviewMarketWindow(s, 'reference', 'all', 'BEST').counts.hitRate, 13 / 25);
+});
+const exclusionFixture = () => ({ ...withMarkets(fixture()), exclusions: { beforeStart: 1700, invalidDate: 0, invalidIdentity: 2,
+  duplicateEvent: 3, conflictingEvent: 1, withoutFrozenReferenceSettlement: 800 } });
+check('complete exclusions preserve separate event and record units without affecting rates', () => {
+  const s = exclusionFixture(), audit = selectReviewExclusions(s, 'reference');
+  assert.equal(audit.complete, true); assert.equal(audit.rows.find(r => r.key === 'conflictingEvent').unit, 'event');
+  assert.equal(audit.rows.find(r => r.key === 'duplicateEvent').unit, 'record');
+  assert.equal(audit.rows.find(r => r.key === 'invalidDate').value, 0);
+  assert.deepEqual(select(s), select(fixture())); assert.equal(Object.hasOwn(audit, 'total'), false);
+});
+check('missing wrong-track or invalid summary never turns exclusions into verified zeros', () => {
+  for (const s of [undefined, fixture(), { ...exclusionFixture(), version: 'old' }, { ...exclusionFixture(), exclusions: [] }]) {
+    const audit = selectReviewExclusions(s, 'reference'); assert.equal(audit.complete, false);
+    assert.ok(audit.rows.every(r => r.value === null));
+  }
+  assert.equal(selectReviewExclusions(exclusionFixture(), 'formal').available, false);
+});
+check('exclusion counters reject malformed values, absent fields, inheritance and unknown schemas', () => {
+  for (const value of [null, '', '0', false, -1, 0.1, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+    const s = exclusionFixture(); s.exclusions.conflictingEvent = value;
+    const audit = selectReviewExclusions(s, 'reference'); assert.equal(audit.complete, false);
+    assert.equal(audit.rows.find(r => r.key === 'conflictingEvent').value, null);
+  }
+  const missing = exclusionFixture(); delete missing.exclusions.invalidIdentity;
+  assert.equal(selectReviewExclusions(missing, 'reference').complete, false);
+  const inherited = exclusionFixture(); inherited.exclusions = Object.create(inherited.exclusions);
+  assert.ok(selectReviewExclusions(inherited, 'reference').rows.every(r => r.value === null));
+  const extra = exclusionFixture(); extra.exclusions.unrecognized = 12;
+  assert.equal(selectReviewExclusions(extra, 'reference').unknownFields, 1);
+  assert.equal(selectReviewExclusions(extra, 'reference').complete, false);
+});
+check('actual exclusion UI explains whole-input scope in a filtered window and stays out of shadow', () => {
+  const s = exclusionFixture();
+  for (const w of ['7d', '30d', 'all', 'version']) {
+    const html = render('reference', w, { reference: s });
+    assert.ok(html.includes('统计排除与去重')); assert.ok(html.includes('不随上方时间或玩法筛选变化'));
+    assert.ok(html.includes('1,700')); assert.ok(html.includes('条记录')); assert.ok(html.includes('场赛事'));
+    assert.ok(!html.includes('不能视为已完成审计'));
+  }
+  assert.ok(!render('shadow', 'all', { reference: s }).includes('data-review-exclusions'));
+  assert.ok(render('reference', 'all', { reference: withMarkets(fixture()) }).includes('不能视为已完成审计'));
 });
 console.log(JSON.stringify({ ok: true, checks: checks.length, cases: checks }, null, 2));

@@ -38,6 +38,8 @@ const summary = reference => {
   const empty = { cumulative: { won: 0, lost: 0, settled: 0 }, daily: [] };
   return { version: reference ? 'reference-review-performance-v1' : 'formal-review-performance-v1', generatedAt: now,
     startDate: '2026-08-16', timezone: 'Asia/Shanghai', cumulative, daily, policy: { sourceScope: 'server-complete-history', unit: 'match-best' },
+    exclusions: { beforeStart: 7, invalidDate: 0, invalidIdentity: 1, duplicateEvent: 3, conflictingEvent: 2,
+      [reference ? 'withoutFrozenReferenceSettlement' : 'withoutFrozenFormalSettlement']: reference ? 10 : 12 },
     marketBreakdown: { version: 'review-best-market-v1', HAD: { cumulative, daily }, HHAD: empty, UNKNOWN: empty } };
 };
 function response(pathname, mode = 'complete') {
@@ -58,7 +60,8 @@ function response(pathname, mode = 'complete') {
   if (apiPath === '/health') return { apiVersion: 'v1', status: { serviceOk: true, dataFresh: true, recommendationReliable: false }, data: { currentRead: { source: 'synthetic-only' } } };
   if (apiPath === '/model/evaluation') return empty ? {} : { publicScorecard: { version: 'synthetic-full-app-evidence-v1', sample: { predictionRows: 999 },
     ...(mode === 'formal-zero' ? { hitRateAudit: { observed: { settled: 0, hitRate: null }, minimumSettledRows: 500 } } : {}),
-    formalReviewPerformance: summary(false), referenceReviewPerformance: summary(true) } };
+    formalReviewPerformance: summary(false), referenceReviewPerformance: mode === 'exclusion-incomplete'
+      ? { ...summary(true), exclusions: { ...summary(true).exclusions, conflictingEvent: null, unrecognized: 1 } } : summary(true) } };
   return undefined;
 }
 module.exports = { now, current, response };

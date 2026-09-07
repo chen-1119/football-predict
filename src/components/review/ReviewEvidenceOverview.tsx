@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { ReviewPerformanceSummary } from '../../services/reviewPerformanceTypes';
-import { selectReviewMarketWindow, reviewShanghaiDate } from '../../services/reviewDashboard';
+import { selectReviewMarketWindow, selectReviewExclusions, reviewShanghaiDate } from '../../services/reviewDashboard';
 import type { ReviewWindow, ReviewMarket } from '../../services/reviewDashboard';
 import './review.css';
 
@@ -29,6 +29,7 @@ export const ReviewEvidenceOverview: React.FC<Props> = ({ language, formal, refe
   const result = selectReviewMarketWindow(summary, track === 'formal' ? 'formal' : 'reference', window, market);
   const verifiedPartition = selectReviewMarketWindow(summary, track === 'formal' ? 'formal' : 'reference', 'all', 'HAD').state === 'ready';
   const isShadow = track === 'shadow';
+  const exclusions = selectReviewExclusions(summary, track === 'formal' ? 'formal' : 'reference');
   const labels = { formal: zh ? '正式推荐' : 'Formal picks', reference: zh ? '数据参考' : 'Data references', shadow: zh ? '研究影子' : 'Research shadow' };
   const windowLabels: Record<ReviewWindow, string> = { version: zh ? '本版本' : 'This version', '7d': zh ? '近 7 天' : '7 days', '30d': zh ? '近 30 天' : '30 days', all: zh ? '累计' : 'All time' };
   const clock = isShadow ? shadow?.evaluatedAt : summary?.generatedAt;
@@ -72,6 +73,13 @@ export const ReviewEvidenceOverview: React.FC<Props> = ({ language, formal, refe
         <div><dt>{zh ? '统计窗口' : 'Statistics window'}</dt><dd>{isShadow ? (shadow?.frozenAt && date ? `${reviewShanghaiDate(shadow.frozenAt) || '—'} → ${date}` : (zh ? '窗口待核验' : 'Window unverified')) : result.from && result.through ? `${result.from} → ${result.through}` : '—'}{result.partial ? (zh ? '（不足完整窗口）' : ' (partial window)') : ''}</dd></div>
         <div><dt>{zh ? '数据更新 · 北京时间' : 'Data updated · Asia/Shanghai'}</dt><dd>{updated}</dd></div>
       </dl>
+      {!isShadow && <details className="review-exclusion-audit" data-review-exclusions>
+        <summary>{zh ? '统计排除与去重' : 'Exclusions and deduplication'}<span>{exclusions.complete ? (zh ? '查看完整输入审计' : 'View full input audit') : (zh ? '部分口径待核验' : 'Some counters unverified')}</span></summary>
+        <p>{zh ? '完整输入口径，包含统计起点以前的记录；不随上方时间或玩法筛选变化。记录数和赛事数不可相加，不能用来反推推荐覆盖率。' : 'Full input audit, including records before the statistics start. Not filtered by the window or market above. Record and event counts must not be added or used to infer recommendation coverage.'}</p>
+        <dl>{exclusions.rows.map(row => <div key={row.key} data-review-exclusion={row.key}><dt>{zh ? row.zh : row.en}</dt><dd>{count(row.value)} <small>{row.unit === 'event' ? (zh ? '场赛事' : 'events') : (zh ? '条记录' : 'records')}</small></dd></div>)}</dl>
+        {!exclusions.complete && <p className="review-exclusion-warning">{zh ? '缺失或非法计数显示“—”，不表示零；不能视为已完成审计。' : 'Missing or invalid counters show “—”, not zero; the audit is incomplete.'}</p>}
+        {exclusions.unknownFields > 0 && <p>{zh ? `另有 ${exclusions.unknownFields} 项未识别口径，等待接口版本核验。` : `${exclusions.unknownFields} unrecognized counters require an API version check.`}</p>}
+      </details>}
       <details className="review-evidence-gaps"><summary>{zh ? '为什么暂时不能说模型更准？' : 'Why is model superiority not established?'}<span>{zh ? '查看缺失证据' : 'View evidence gaps'}</span></summary>
         <ul><li>{zh ? '版本分组尚未提供，累计不能当作本版本成绩。HAD / HHAD 按原冻结 BEST 玩法独立统计；未知玩法只留在 BEST 总账，不分配到任一玩法。' : 'Version partitions are unavailable; cumulative is not version-specific. HAD / HHAD use the original frozen BEST market. Unknown markets remain only in combined BEST.'}</li>
           <li>{zh ? '同组基准与覆盖率缺失时不计算“提升幅度”；缺失不等于表现为零。' : 'No improvement is calculated without paired baseline and coverage evidence; missing evidence is not zero performance.'}</li>

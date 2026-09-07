@@ -4,6 +4,32 @@ export type ReviewTrack = 'formal' | 'reference';
 export type ReviewWindow = 'version' | '7d' | '30d' | 'all';
 export type ReviewMarket = 'HAD' | 'HHAD' | 'BEST';
 export type ReviewCounts = { won: number; lost: number; settled: number; hitRate: number | null };
+export type ReviewExclusionRow = { key: string; zh: string; en: string; unit: 'record' | 'event'; value: number | null };
+
+/** These counters audit the complete input, including pre-start rows. They are
+ * NOT a selected-window/market denominator and mix record and event units. */
+export const selectReviewExclusions = (summary: ReviewPerformanceSummary | null | undefined, track: ReviewTrack) => {
+  const definitions: Array<Omit<ReviewExclusionRow, 'value'>> = [
+    { key: 'beforeStart', zh: '早于统计起点', en: 'Before statistics start', unit: 'record' },
+    { key: 'invalidDate', zh: '业务日期无效', en: 'Invalid business date', unit: 'record' },
+    { key: 'invalidIdentity', zh: '赛事身份无效', en: 'Invalid event identity', unit: 'record' },
+    { key: 'duplicateEvent', zh: '重复记录去重', en: 'Duplicate records', unit: 'record' },
+    { key: 'conflictingEvent', zh: '冲突赛事排除', en: 'Conflicting events', unit: 'event' },
+    { key: track === 'formal' ? 'withoutFrozenFormalSettlement' : 'withoutFrozenReferenceSettlement',
+      zh: track === 'formal' ? '无可计入的冻结正式结算' : '无可计入的冻结参考结算',
+      en: track === 'formal' ? 'Without eligible frozen formal settlement' : 'Without eligible frozen reference settlement', unit: 'record' },
+  ];
+  const raw = summary?.exclusions;
+  const available = selectReviewWindow(summary, track, 'all').state === 'ready'
+    && !!raw && typeof raw === 'object' && !Array.isArray(raw);
+  const rows = definitions.map(row => {
+    const n = available && Object.hasOwn(raw, row.key) ? raw[row.key] : undefined;
+    return { ...row, value: typeof n === 'number' && Number.isSafeInteger(n) && n >= 0 ? n : null };
+  });
+  const keys = new Set(definitions.map(row => row.key));
+  const unknownFields = available ? Object.keys(raw).filter(key => !keys.has(key)).length : 0;
+  return { available, complete: available && unknownFields === 0 && rows.every(row => row.value !== null), rows, unknownFields };
+};
 export type ReviewWindowResult = {
   state: 'ready' | 'pending' | 'version-unavailable' | 'market-unavailable';
   counts: ReviewCounts | null;

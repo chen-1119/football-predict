@@ -37,7 +37,7 @@ const outputDir = path.resolve(__dirname, '../outputs');
         const issues = await page.evaluate(() => {
           const bar = document.querySelector('.app-topbar')?.getBoundingClientRect();
           const main = document.querySelector('#main-content')?.getBoundingClientRect();
-          const truncated = [...document.querySelectorAll('[data-summary-state],.review-metadata dd,.review-metric-grid strong')]
+          const truncated = [...document.querySelectorAll('[data-summary-state],.review-metadata dd,.review-metric-grid strong,[data-review-exclusion] dd')]
             .filter(e => e.checkVisibility()).filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.textContent);
           return { pageOverflow: document.documentElement.scrollWidth > innerWidth, headerOverlap: !!(bar && main && main.top < bar.bottom - 1), truncated,
             routeError: !!document.querySelector('.route-error') };
@@ -52,6 +52,18 @@ const outputDir = path.resolve(__dirname, '../outputs');
       await page.waitForFunction(() => document.querySelector('.review-fixture-grid')?.children.length === 2);
       await audit('review-full-shell');
       await page.screenshot({ path: path.join(outputDir, `full-app-review-${width}.png`), fullPage: true });
+      const exclusionPanel = page.locator('[data-review-exclusions]');
+      assert.equal(await exclusionPanel.getAttribute('open'), null);
+      await exclusionPanel.locator('summary').focus(); await page.keyboard.press('Enter');
+      assert.equal(await exclusionPanel.getAttribute('open'), '');
+      assert.match(await page.locator('[data-review-exclusion="conflictingEvent"] dd').textContent(), /2.*场赛事/);
+      assert.match(await page.locator('[data-review-exclusion="duplicateEvent"] dd').textContent(), /3.*条记录/);
+      await page.getByRole('button', { name: '近 7 天', exact: true }).click();
+      assert.match(await page.locator('[data-review-exclusion="beforeStart"] dd').textContent(), /7.*条记录/);
+      assert.equal(await page.locator('[data-review-overview-rate]').textContent(), '50.0%');
+      assert.ok((await exclusionPanel.textContent()).includes('不随上方时间或玩法筛选变化'));
+      await page.evaluate(() => window.scrollTo(0, 0)); await audit('whole-input-exclusions-keyboard-open');
+      await page.screenshot({ path: path.join(outputDir, `full-app-review-exclusions-${width}.png`), fullPage: true });
       for (const routePath of ['/fixtures', '/predictions', '/match/sporttery_991010']) {
         await page.goto(`${baseUrl}${routePath}`);
         await page.getByText('合成验收主队长名称足球俱乐部', { exact: false }).first().waitFor();
@@ -98,6 +110,16 @@ const outputDir = path.resolve(__dirname, '../outputs');
         assert.equal(await page.locator(`.data-adoption-details__identity strong[title="${fixture.current.predictionMeta.publicReferenceDecision.contentHash}"]`).count(), 1);
         await audit(`frozen-reference-survives-private-change${pathname}`);
       }
+      mode = 'exclusion-incomplete';
+      await page.goto(`${baseUrl}/review`);
+      await page.locator('[data-review-overview]').waitFor();
+      await page.getByRole('button', { name: /数据参考/ }).click();
+      await page.waitForFunction(() => document.querySelector('[data-review-overview-rate]')?.textContent === '50.0%');
+      await page.locator('[data-review-exclusions] summary').focus(); await page.keyboard.press('Enter');
+      assert.match(await page.locator('[data-review-exclusion="conflictingEvent"] dd').textContent(), /—/);
+      assert.match(await page.locator('[data-review-exclusion="invalidDate"] dd').textContent(), /0.*条记录/);
+      assert.ok((await page.locator('[data-review-exclusions]').textContent()).includes('1 项未识别口径'));
+      await page.evaluate(() => window.scrollTo(0, 0)); await audit('incomplete-exclusions-never-zero-or-hidden');
       mode = 'formal-zero';
       await page.goto(`${baseUrl}/predictions`);
       await page.waitForFunction(() => document.querySelector('[data-testid="benchmark-hit-rate-audit"]')?.getAttribute('data-audit-settled') === '0');
