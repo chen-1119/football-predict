@@ -1,5 +1,5 @@
 import type { Match } from '../../services/mockData';
-import { adoptionLabel, adoptionReason, getDataAdoptionReport } from '../../services/dataAdoption';
+import { adoptionLabel, adoptionReason, getDataAdoptionReport, getCollectorDiagnostics } from '../../services/dataAdoption';
 
 const displayTime = (value: string | null, language: 'zh' | 'en') => value
   ? new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-GB', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value))
@@ -7,6 +7,14 @@ const displayTime = (value: string | null, language: 'zh' | 'en') => value
 
 export function DataAdoptionDetails({ match, language }: { match: Match; language: 'zh' | 'en' }) {
   const { rows, calculationRows, asOf, bound, modelVersion, referenceHash } = getDataAdoptionReport(match);
+  const collector = getCollectorDiagnostics(match);
+  const collectorLabels = {
+    'not-received': { zh: '未取得该项记录', en: 'No fragment received' },
+    'clock-rejected': { zh: '时间证据未通过', en: 'Time evidence rejected' },
+    'receipt-recorded': { zh: '接收时间已记录', en: 'Receipt time recorded' },
+    'legacy-unverified': { zh: '旧记录 · 时间待核验', en: 'Legacy record · time unverified' },
+  };
+  const featureLabels = { injuries: { zh: '伤停', en: 'Injuries' }, lineups: { zh: '首发', en: 'Lineups' }, apiFootballOdds: { zh: '外源赔率', en: 'Provider odds' } };
   const missing = rows.filter((row) => row.state === 'missing').length;
   const unverified = rows.filter((row) => ['unknown', 'unverified', 'available-not-adopted'].includes(row.state)).length;
   const summaryCounts = [
@@ -34,6 +42,26 @@ export function DataAdoptionDetails({ match, language }: { match: Match; languag
         <span>{language === 'zh' ? '记录身份' : 'Record identity'}<strong title={referenceHash || undefined}>{referenceHash ? referenceHash.slice(0, 12) : (language === 'zh' ? '未绑定公开记录' : 'No public record binding')}</strong></span>
       </div>
       {!bound && <p className="data-adoption-details__warning">{language === 'zh' ? '缺少有效公开记录绑定；以下字段不能证明用户当时看到的推荐采用了这些数据。' : 'No valid public record binding; these fields do not prove usage in the published recommendation.'}</p>}
+      {collector && <section className="collector-diagnostics" aria-label={language === 'zh' ? '补充源采集记录' : 'Supplemental collector record'}>
+        <header><h3>{language === 'zh' ? '补充源采集记录' : 'Supplemental collector record'}</h3><span>API-Football</span></header>
+        <p>{language === 'zh' ? '这是本次返回的采集记录，不是冻结决策证据；不回填原推荐，不计入上方缺口统计。' : 'Collector data in this response, not frozen decision evidence. It does not backfill a recommendation or change the counts above.'}</p>
+        <div className="collector-diagnostics__meta">
+          <span>{language === 'zh' ? '映射状态' : 'Mapping status'}<strong data-mapping-status={collector.mappingStatus}>{collector.mappingStatus === 'recorded'
+            ? (language === 'zh' ? '采集器记录了映射' : 'Mapping recorded by collector')
+            : collector.mappingStatus === 'conflicting' ? (language === 'zh' ? '身份冲突 · 不采用' : 'Identity conflict · do not use')
+              : (language === 'zh' ? '映射未核验' : 'Mapping unverified')}</strong></span>
+          <span>{language === 'zh' ? '检查记录（北京）' : 'Check recorded (Beijing)'}<strong>{displayTime(collector.checkedAt, language)}</strong></span>
+          <span>{language === 'zh' ? '提供方赛事 ID' : 'Provider fixture ID'}<strong>{collector.fixtureId || '—'}</strong></span>
+        </div>
+        <ul>{collector.features.map(feature => <li key={feature.key} data-collector-state={feature.state}>
+          <div><strong>{featureLabels[feature.key][language]}</strong><span>{collectorLabels[feature.state][language]}</span></div>
+          <small>{language === 'zh' ? '接收时间' : 'Receipt time'} · {displayTime(feature.receivedAt, language)}</small>
+          <small>{language === 'zh' ? '上游时间标记（未核验）' : 'Upstream clock (unverified)'} · {feature.sourceUpdatedAt ? displayTime(feature.sourceUpdatedAt, language) : (language === 'zh' ? '未提供' : 'Not supplied')}</small>
+          <p>{feature.state === 'clock-rejected' ? (language === 'zh' ? '先核对时间与截止限制，不能仅凭缓存标记继续使用。' : 'Check source times and cutoff limits; a cached flag is insufficient.')
+            : feature.state === 'not-received' ? (language === 'zh' ? '未取得不等于没有伤停、没有阵容或赔率为零。' : 'Missing data does not mean no injuries, no lineup or zero odds.')
+              : (language === 'zh' ? '有采集记录不等于模型已采用，也不证明来源是独立、官方或最新。' : 'A record does not prove model usage or an independent, official, current source.')}</p>
+        </li>)}</ul>
+      </section>}
       {calculationRows.length > 0 && <section className="data-adoption-details__usage" aria-label={language === 'zh' ? '基础计算使用记录' : 'Base calculation usage'}>
         <h3>{language === 'zh' ? '基础计算使用记录' : 'Base calculation usage'}</h3>
         <p>{language === 'zh' ? '以下系数来自实际计算回执，各阶段不能相加。不代表来源已验证，也不代表最终推荐贡献率。' : 'Coefficients come from execution receipts. Different stages cannot be added; these are not source verification or final recommendation contributions.'}</p>

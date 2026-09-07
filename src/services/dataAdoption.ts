@@ -1,4 +1,9 @@
 import type { Match } from './mockData';
+import { compactApiFootballDiagnostics } from 'football-collector-diagnostics';
+
+// Deliberately separate from getDataAdoptionReport: current collector records
+// cannot change a frozen decision's rows, totals, direction or evidence hash.
+export const getCollectorDiagnostics = (match: Match) => compactApiFootballDiagnostics(match.externalSignals);
 
 export type AdoptionState = 'available-not-adopted' | 'not-yet-published' | 'missing' | 'unknown' | 'stale' | 'conflicting' | 'unverified' | 'after-decision';
 const FAMILIES = [

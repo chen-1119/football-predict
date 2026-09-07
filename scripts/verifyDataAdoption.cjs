@@ -15,7 +15,7 @@ const load = (file, overrides = {}) => {
   new Function("require", "module", "exports", compiled)(id => overrides[id] || require(id), module, module.exports);
   return module.exports;
 };
-const service = load("src/services/dataAdoption.ts");
+const service = load("src/services/dataAdoption.ts", { "football-collector-diagnostics": require("../src/services/apiFootballDiagnostics.cjs") });
 const { DataAdoptionDetails } = load("src/components/predictions/DataAdoptionDetails.tsx", { "../../services/dataAdoption": service });
 const clone = value => JSON.parse(JSON.stringify(value));
 const at = "2026-09-07T01:00:00.000Z";
@@ -223,6 +223,20 @@ check("closed summary accounts for every input and exposes conflicts, late and a
     assert.equal(actual.unverified, report.rows.filter(r => ["unknown", "unverified", "available-not-adopted"].includes(r.state)).length);
     assert.equal(actual["not-yet-published"], 1);
     assert.equal(summary.includes("%"), false);
+  }
+});
+check("collector diagnostics never change frozen evidence or its counts", () => {
+  const match = clone(published);
+  const before = service.getDataAdoptionReport(match);
+  match.externalSignals = { apiFootball: { fixtureId: 7711, mappingVerified: false, lastCheckedAt: "2026-09-07T14:00:00Z",
+    temporalRejections: ["lineups:clock-evidence-not-verifiable"], privateToken: "NEVER_PUBLIC" } };
+  assert.deepEqual(service.getDataAdoptionReport(match), before);
+  assert.equal(service.getCollectorDiagnostics(match).features[1].state, "clock-rejected");
+  for (const language of ["zh", "en"]) {
+    const html = renderToStaticMarkup(React.createElement(DataAdoptionDetails, { match, language }));
+    assert.ok(html.includes(language === "zh" ? "不回填原推荐" : "does not backfill"));
+    assert.ok(html.includes(language === "zh" ? "时间证据未通过" : "Time evidence rejected"));
+    assert.ok(!html.includes("NEVER_PUBLIC"));
   }
 });
 console.log(JSON.stringify({ ok: true, checks, scope: "actual publisher, pure TS rules and actual TSX rendering; synthetic only", modelWeightsChanged: false }, null, 2));

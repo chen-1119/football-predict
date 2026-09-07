@@ -6,6 +6,7 @@ const { spawn } = require("node:child_process");
 const { Worker } = require("node:worker_threads");
 const crypto = require("node:crypto");
 const zlib = require("node:zlib");
+const { compactApiFootballDiagnostics } = require("../src/services/apiFootballDiagnostics.cjs");
 const {
   TABLES,
   ensureDataStore,
@@ -5415,6 +5416,7 @@ const compactBookmakerOddsForList = (bookmakerOdds) => {
 const compactExternalSignalsForList = (signals) => {
   if (!signals || typeof signals !== "object") return signals || null;
   return {
+    apiFootballDiagnostics: compactApiFootballDiagnostics(signals),
     source: signals.source,
     updatedAt: signals.updatedAt,
     sourceMatchId: signals.sourceMatchId,

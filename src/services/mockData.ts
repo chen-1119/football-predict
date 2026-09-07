@@ -508,6 +508,7 @@ export interface ExternalMatchSignals {
     matchedAt?: string | null;
     lastCheckedAt?: string;
   };
+  apiFootballDiagnostics?: import('./apiFootballDiagnostics.cjs').ApiFootballCollectorDiagnostics | null;
   worldCupPrior?: {
     source?: string;
     version?: string;

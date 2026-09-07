@@ -76,6 +76,14 @@ export default defineConfig({
   publicDir: false,
   plugins: [react(), tailwindcss(), copyFilteredPublicAssets(), stripLargeStaticPayloads()],
   base: process.env.VITE_BASE_PATH || '/',
+  resolve: {
+    alias: { 'football-collector-diagnostics': resolve(rootDir, 'src/services/apiFootballDiagnostics.cjs') },
+  },
+  // Shared server/browser policies are CommonJS. Prebundle the same sources
+  // in development so named imports behave like the production build.
+  optimizeDeps: {
+    include: ['football-collector-diagnostics'],
+  },
   server: {
     proxy: {
       '/api': 'http://localhost:8788',

@@ -23,8 +23,11 @@ const match = params.get('mode') === 'missing' ? {} : { predictionMeta: { public
   } }, away: { sampleSize: 0 } },
     elo: { homeMatches: 20, awayMatches: 20 } } }
 } } };
+const collector = params.get('mode') === 'collector' ? { apiFootball: { fixtureId: 991222, lastCheckedAt: '2026-09-07T14:00:00Z',
+  mappingVerified: false, verificationBlockers: ['provider-entity-registry-not-exact'],
+  temporalRejections: ['lineups:clock-evidence-not-verifiable'] } } : undefined;
 createRoot(document.getElementById('root')!).render(<main style={{ maxWidth: 900, margin: '0 auto', padding: 16 }}>
   <p>本地合成数据验收 · 不代表线上比赛或来源核验</p>
   <h1 style={{ fontSize: 26, margin: '16px 0' }}>数据采用与缺口</h1>
-  <DataAdoptionDetails match={match as unknown as Match} language={language} />
+  <DataAdoptionDetails match={{ ...match, externalSignals: collector } as unknown as Match} language={language} />
 </main>);

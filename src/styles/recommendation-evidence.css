@@ -122,7 +122,23 @@
 .data-adoption-details__usage ul { display: grid; gap: 0.7rem; list-style: none; padding: 0; margin: 0.65rem 0 0; }
 .data-adoption-details__usage li { display: grid; gap: 0.15rem; color: hsl(var(--text-secondary)); overflow-wrap: anywhere; }
 .data-adoption-details__usage small { color: hsl(var(--text-secondary)); font-size: 0.75rem; }
+.collector-diagnostics { margin: 1rem 0; padding: 0.9rem; border: 1px solid hsl(var(--text-muted) / 0.25); border-radius: 12px; background: hsl(var(--bg-card) / 0.7); }
+.collector-diagnostics header { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; align-items: center; justify-content: space-between; }
+.collector-diagnostics h3 { margin: 0; font-size: 0.95rem; color: hsl(var(--text-primary)); }
+.collector-diagnostics header > span { font-size: 0.75rem; color: hsl(var(--text-muted)); }
+.collector-diagnostics__meta { display: grid; gap: 0.65rem; padding: 0.7rem 0; border-bottom: 1px solid hsl(var(--text-muted) / 0.18); }
+.collector-diagnostics__meta > span { color: hsl(var(--text-muted)); font-size: 0.75rem; }
+.collector-diagnostics__meta strong { display: block; color: hsl(var(--text-secondary)); font-size: 0.85rem; font-weight: 500; overflow-wrap: anywhere; }
+.collector-diagnostics ul { display: grid; gap: 0.6rem; list-style: none; padding: 0; margin: 0.75rem 0 0; }
+.collector-diagnostics li { min-width: 0; padding: 0.65rem 0.75rem; border-radius: 8px; background: hsl(var(--bg-primary) / 0.35); overflow-wrap: anywhere; }
+.collector-diagnostics li > div { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.3rem 0.7rem; }
+.collector-diagnostics li strong { color: hsl(var(--text-primary)); font-size: 0.85rem; }
+.collector-diagnostics li > div > span, .collector-diagnostics li small { color: hsl(var(--text-secondary)); font-size: 0.75rem; }
+.collector-diagnostics li small { display: block; margin-top: 0.35rem; }
+.collector-diagnostics li p { font-size: 0.75rem; margin-bottom: 0; }
+.collector-diagnostics [data-collector-state='clock-rejected'] > div > span, .collector-diagnostics [data-mapping-status='conflicting'] { color: hsl(var(--danger)); }
 @container (min-width: 540px) {
+  .collector-diagnostics__meta { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .data-adoption-details dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .data-adoption-details__identity { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }

@@ -3,6 +3,7 @@ const fsp = require("node:fs/promises");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const readline = require("node:readline");
+const { compactApiFootballDiagnostics } = require("../src/services/apiFootballDiagnostics.cjs");
 const {
   reconcileMatchLifecycle,
   resolveMatchLifecycle
@@ -542,6 +543,7 @@ const externalSummaryFor = (match) => {
   const signals = match.externalSignals;
   if (!signals || typeof signals !== "object") return null;
   return {
+    apiFootballDiagnostics: compactApiFootballDiagnostics(signals),
     source: signals.source || "external",
     updatedAt: signals.updatedAt || null,
     sourceMatchId: signals.sourceMatchId || null,

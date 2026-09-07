@@ -182,7 +182,17 @@ const detailModelProjection = section(
   "const normalizeProbabilityModelForDetail =",
   "const compactVerifiedDualMarketDecision ="
 );
-assert.match(detailModelProjection, /\.\.\.model,/, "detail probability payload must retain the full model object");
+// Details retain public model fields, but raw execution receipts must remain
+// admin-only. The previous textual ...model assertion contradicted that policy.
+const normalizeDetailModel = Function("normalizeProbabilityLaneForDetail", "finiteNumberOrNull",
+  `${detailModelProjection}; return normalizeProbabilityModelForDetail;`
+)(value => value, value => typeof value === "number" && Number.isFinite(value) ? value : null);
+const detailedModel = normalizeDetailModel({ version: "public-test-version", publicExtra: { retained: true },
+  inputUsage: { privateExecutionReceipt: "MUST_NOT_LEAK" } });
+assert.equal(detailedModel.version, "public-test-version", "details retain public model version");
+assert.deepEqual(detailedModel.publicExtra, { retained: true }, "details retain other public model fields");
+assert.equal(Object.hasOwn(detailedModel, "inputUsage"), false, "raw execution receipts must not enter public details");
+assert.equal(JSON.stringify(detailedModel).includes("MUST_NOT_LEAK"), false, "private receipt values must not leak");
 
 const detailMatchProjection = section(
   "const normalizeMatchForDetailPayload =",
