@@ -157,4 +157,27 @@ check("legacy unbound observation metadata cannot backfill public evidence", () 
   const match = withObservation(observationFixture()); match.predictionMeta.publicReferenceDecision.evidenceBinding = null;
   assert.equal(row(match, "homeForm").resultObservation, null);
 });
+for (const key of ["homeForm", "elo"]) {
+  for (const status of ["conflicting", "published_after_cutoff", "stale"]) check(`sample presence preserves adverse source state: ${key}/${status}`, () => {
+    const match = clone(published);
+    match.predictionMeta.publicReferenceDecision.dataGaps.preMatchQuality.components[key] = { status };
+    const expected = status === "published_after_cutoff" ? "after-decision" : status;
+    assert.equal(row(match, key).state, expected);
+  });
+}
+for (const value of ["2026-02-30T00:00:00Z", "2026-04-31T00:00:00Z", "2025-02-29T00:00:00Z", "2026-09-01T24:00:00Z", "2026-09-01", "09/01/2026", "2026-09-01T00:00:00+08:60", "2026-02-30 08:00:00"]) {
+  check("invalid observation calendar/clock cannot attest timeliness: " + value, () => {
+    const match = clone(published);
+    match.predictionMeta.publicReferenceDecision.dataGaps.preMatchQuality.components.weather = { status: "verified", sourceObservedAt: value };
+    assert.equal(row(match, "weather").observedAt, null);
+    assert.equal(row(match, "weather").state, "unverified");
+    assert.equal(row(match, "weather").reason, "clock-missing");
+  });
+}
+for (const value of ["2024-02-29T00:00:00Z", "2026-09-01T08:00:00+08:00", "2026-09-01T00:00:00.123Z", "2026-09-01 08:00"]) check("valid explicit and Beijing legacy clocks remain accepted: " + value, () => {
+  const match = clone(published);
+  match.predictionMeta.publicReferenceDecision.dataGaps.preMatchQuality.components.weather = { status: "verified", sourceObservedAt: value };
+  assert.notEqual(row(match, "weather").observedAt, null);
+  assert.equal(row(match, "weather").state, "available-not-adopted");
+});
 console.log(JSON.stringify({ ok: true, checks, scope: "actual publisher, pure TS rules and actual TSX rendering; synthetic only", modelWeightsChanged: false }, null, 2));
