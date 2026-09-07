@@ -496,6 +496,25 @@ check(
   "a live Chinese-to-provider alias match must commit the same verified entity identity used by fixture scoring",
 );
 
+const localizedCurrentCycle = api.mappingVerificationState(localizedTrustMatch, localizedMapping, localizedLearned.registry, { liveTrustContext: trustContext });
+check(localizedCurrentCycle.verified && localizedCurrentCycle.currentCycleQualification?.eligible === true
+  && localizedCurrentCycle.verificationSource === "registry-exact+live-current-cycle",
+  "the same curated aliases must survive actual registry ingestion and current-cycle revalidation");
+const localizedWrongReceipt = api.mappingVerificationState(localizedTrustMatch, localizedMapping, localizedLearned.registry,
+  { liveTrustContext: { ...trustContext, providerResponseSha256: "c".repeat(64) } });
+check(localizedWrongReceipt.currentCycleQualification?.eligible === false
+  && localizedWrongReceipt.verificationSource === "registry-exact",
+  "curated aliases cannot turn a mismatched receipt into new current-cycle proof");
+const localizedCached = api.mappingVerificationState(localizedTrustMatch, localizedMapping, localizedLearned.registry);
+check(localizedCached.currentCycleQualification === null && localizedCached.verificationSource === "registry-exact",
+  "cached exact registry identity stays distinct from a new live provider observation");
+check(!api.mappingVerificationState(localizedTrustMatch,
+  { ...localizedMapping, score: { ...localizedMapping.score, reversed: true } }, localizedLearned.registry,
+  { liveTrustContext: trustContext }).verified, "alias revalidation never accepts a reversed fixture");
+check(!api.mappingVerificationState(localizedTrustMatch,
+  { ...localizedMapping, homeTeamName: "Santos Women" }, localizedLearned.registry,
+  { liveTrustContext: trustContext }).verified, "alias revalidation preserves category conflict rejection");
+
 const injuries = api.buildInjuriesByFixture([mappedEntry], [{
   fixture: { id: 7001 },
   team: { id: 11, name: "Home" },

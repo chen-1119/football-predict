@@ -401,6 +401,14 @@ const targetTeamAliases = (match, side) => {
   ]);
 };
 
+// Keep scorer, append-only registry ingestion and current-cycle revalidation
+// on the same existing curated alias set. Aliases are not provider ID proof.
+const matchWithTeamAliases = (match) => ({
+  ...match,
+  homeTeamAliases: targetTeamAliases(match, "home"),
+  awayTeamAliases: targetTeamAliases(match, "away"),
+});
+
 const targetLeagueAliases = (match) => uniq([
   ...aliasesFor(match.leagueName, LEAGUE_ALIASES),
   ...aliasesFor(match.leagueNameEn, LEAGUE_ALIASES),
@@ -1058,7 +1066,7 @@ const mappingVerificationState = (match, mapping, entityRegistry, options = {}) 
 
   const trustContext = options.liveTrustContext || null;
   const currentCycleQualification = trustContext?.live === true
-    ? qualifyingFixtureMapping(mapping, {}, { match, trustContext })
+    ? qualifyingFixtureMapping(mapping, {}, { match: matchWithTeamAliases(match), trustContext })
     : null;
   return {
     verified: blockers.length === 0,
@@ -1237,15 +1245,7 @@ const absorbEntityResolutionEvidence = (matches, cache, registry, trustContexts 
     if (!match) continue;
     const result = applyFixtureMappingEvidence({
       registry: nextRegistry,
-      match: {
-        ...match,
-        // The fixture scorer already proved these aliases against the live
-        // provider response.  Pass the same canonical alias set into the
-        // append-only entity registry so a Chinese display name does not
-        // fail a second, raw-name-only comparison.
-        homeTeamAliases: targetTeamAliases(match, "home"),
-        awayTeamAliases: targetTeamAliases(match, "away"),
-      },
+      match: matchWithTeamAliases(match),
       mapping,
       observedAt: mapping?.matchedAt || nowIso(),
       trustContext: trustContexts.get(String(mapping?.sportteryMatchId || "")) || null,
