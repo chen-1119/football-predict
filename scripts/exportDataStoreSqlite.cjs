@@ -50,6 +50,7 @@ const {
 } = require("../server/dataGenerationBundle.cjs");
 const {
   acquirePointerCommitLock,
+  readGenerationSelectedObject,
   storePaths,
 } = require("../server/dataGenerationStore.cjs");
 const {
@@ -1355,8 +1356,11 @@ const exportIncrementalRows = async (db) => {
     if (upgrade) {
       // Read and validate the immutable generation's actual archive. The old
       // live DB/source pointer and unrelated base/fast-result rows stay untouched.
-      const snapshot = readCoreJson("prediction-snapshots.json", null);
-      imported.sourceChanges = projectPublicReferenceArchive(db, snapshot);
+      const selection = readGenerationSelectedObject(inputPublication.context, "prediction-snapshots.json", {
+        keys: ["updatedAt", "retentionDays", "publicReferenceDecisions", "publicReferenceEvidence"],
+      });
+      imported.sourceChanges = projectPublicReferenceArchive(db, selection.value);
+      imported.publicReferenceSelection = selection.evidence;
       upsertMeta(db, "warehouse_policy", JSON.stringify(expectedWarehousePolicy), now);
     }
     const fastPath = fastPathEvidenceFor(true, now);

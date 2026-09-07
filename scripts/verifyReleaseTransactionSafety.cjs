@@ -4799,7 +4799,10 @@ check("release clone reference migration is explicit and does not allow a genera
   assert.match(source, /mismatch === "warehouse-policy-mismatch"/);
   assert.match(source, /isExactReferencePolicyUpgrade\(meta.warehouse_policy\)/);
   assert.match(source, /metadata.warehouse_policy !== activeGenerationFastPath.priorWarehousePolicy/);
-  assert.match(source, /imported.sourceChanges = projectPublicReferenceArchive\(db, snapshot\)/);
+  assert.match(source, /readGenerationSelectedObject\(inputPublication.context, "prediction-snapshots.json"/);
+  assert.match(source, /keys: \["updatedAt", "retentionDays", "publicReferenceDecisions", "publicReferenceEvidence"\]/);
+  assert.match(source, /imported.sourceChanges = projectPublicReferenceArchive\(db, selection.value\)/);
+  assert.match(source, /imported.publicReferenceSelection = selection.evidence/);
   assert.match(source, /if \(requireActiveGenerationFastPath && !activeGenerationFastPath.eligible\)/);
 });
 

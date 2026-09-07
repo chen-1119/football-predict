@@ -493,6 +493,25 @@ const readGenerationFile = (context, inputPath, { encoding = null, parseJson = f
   return encoding ? bytes.toString(encoding) : bytes;
 };
 
+const readGenerationSelectedObject = (context, inputPath, { keys, ...limits } = {}) => {
+  if (!context || typeof context !== "object" || !context.generationDir || !context.manifest) {
+    fail("INVALID_CONTEXT", "a resolved generation context is required");
+  }
+  const relativePath = normalizeRelativePath(inputPath);
+  const entry = context.manifest.files.find(item => item.path === relativePath);
+  if (!entry) fail("FILE_NOT_IN_MANIFEST", `file is not part of generation: ${relativePath}`);
+  const absolutePath = path.join(context.generationDir, ...relativePath.split("/"));
+  assertPlainFile(absolutePath, relativePath);
+  try {
+    return require("./selectedJsonObjectFile.cjs").readSelectedJsonObjectFile({
+      ...limits, filePath: absolutePath, expectedBytes: entry.bytes, expectedSha256: entry.sha256, keys,
+    });
+  } catch (error) {
+    if (error?.code) fail(error.code, `${relativePath}: ${error.message}`);
+    throw error;
+  }
+};
+
 const invokeFault = (faultInjector, point, details = {}) => {
   if (!faultInjector) return;
   let shouldFail = false;
@@ -1150,6 +1169,7 @@ module.exports = {
   generationIdForManifestHash,
   normalizeRelativePath,
   readGenerationFile,
+  readGenerationSelectedObject,
   readPointer,
   resolveCurrentGeneration,
   resolveGeneration,

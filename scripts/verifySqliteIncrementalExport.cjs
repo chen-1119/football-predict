@@ -1306,6 +1306,10 @@ try {
   assert.equal(upgraded.incremental.oddsChanges, 0);
   assert.equal(upgraded.incremental.predictionChanges, 0);
   assert.ok(upgraded.incremental.sourceChanges >= 3);
+  assert.ok(upgraded.incremental.publicReferenceSelection.bytes > 0, "upgrade validates the whole immutable source file");
+  assert.ok(/^[a-f0-9]{64}$/.test(upgraded.incremental.publicReferenceSelection.sha256));
+  assert.ok(upgraded.incremental.publicReferenceSelection.selectedKeys.includes("publicReferenceDecisions"));
+  assert.ok(!upgraded.incremental.publicReferenceSelection.selectedKeys.includes("matches"), "unrelated base snapshots are not retained in memory");
   upgradeDb = new DatabaseSync(upgradePath, { readOnly: true });
   for (const table of preservedTables) assert.deepEqual(upgradeDb.prepare(`SELECT * FROM ${table} ORDER BY 1`).all(), preservedRows[table], `${table} must remain byte-equivalent`);
   assert.equal(upgradeDb.prepare("SELECT value FROM schema_meta WHERE key='exported_at'").get().value, beforeExportClock);

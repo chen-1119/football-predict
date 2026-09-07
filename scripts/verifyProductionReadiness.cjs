@@ -1496,6 +1496,18 @@ const run = async () => {
       stderrTail: currentMatchRetention.stderr.slice(-500)
     });
 
+    const selectedJson = await runLocalJson(["scripts/verifySelectedJsonObjectFile.cjs"]);
+    pushCheck(checks, "bounded immutable JSON selection and full-file integrity", selectedJson.status === 0
+      && selectedJson.body?.ok === true
+      && selectedJson.body?.largeEvidence?.evidence?.bytes >= 440 * 1024 * 1024
+      && selectedJson.body?.largeEvidence?.maxRssKiB < 320 * 1024, {
+      status: selectedJson.status,
+      checks: selectedJson.body?.checks ?? null,
+      largeEvidence: selectedJson.body?.largeEvidence || null,
+      stdoutTail: selectedJson.status === 0 ? "" : selectedJson.stdout.slice(-500),
+      stderrTail: selectedJson.stderr.slice(-500),
+    });
+
     const sqliteIncremental = await runLocalJson(["scripts/verifySqliteIncrementalExport.cjs"]);
     pushCheck(checks, "incremental SQLite warehouse artifact", sqliteIncremental.status === 0
       && sqliteIncremental.body?.ok === true
