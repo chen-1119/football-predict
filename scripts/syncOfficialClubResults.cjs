@@ -199,9 +199,17 @@ const buildEvidenceRecord = (match, source, parsed, response, observedAt, previo
     throw new Error(`official club result score or observation clock invalid: ${sourceMatchId}`);
   }
   const validPrevious = validOfficialClubEvidenceForMatch(match, previous);
+  const previousObservedAt = validPrevious ? canonicalInstant(previous.observedAt) : null;
+  if (previousObservedAt && Date.parse(observedInstant) < Date.parse(previousObservedAt)) {
+    throw new Error(`official club result observation clock moved backwards: ${sourceMatchId}`);
+  }
   const samePreviousScore = validPrevious
     && previous.scoreHome === parsed.scoreHome
     && previous.scoreAway === parsed.scoreAway;
+  const previousFirstObservedAt = validPrevious ? canonicalInstant(previous.firstObservedAt) : null;
+  const validPreviousFirst = previousFirstObservedAt
+    && Date.parse(previousFirstObservedAt) >= Date.parse(eventVersion)
+    && Date.parse(previousFirstObservedAt) <= Date.parse(previousObservedAt);
   const priorRevision = validPrevious ? Math.max(0, Number(previous.resultRevision || 0)) : 0;
   const record = {
     version: VERSION,
@@ -226,7 +234,7 @@ const buildEvidenceRecord = (match, source, parsed, response, observedAt, previo
     status: "FINISHED",
     observedAt,
     firstObservedAt: samePreviousScore
-      ? (previous.firstObservedAt || previous.observedAt || observedAt)
+      ? (validPreviousFirst ? previous.firstObservedAt : previous.observedAt)
       : observedAt,
     observationSource: "official-club-page-response-received-at",
     resultObservationFallback: false,
@@ -328,6 +336,7 @@ const isTrustedOfficialClubResult = (match) => {
 const fetchOfficialPage = async (source) => {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const requestStartedAt = new Date(Date.now()).toISOString();
   try {
     const response = await fetch(source.sourceUrl, {
       redirect: "follow",
@@ -342,8 +351,11 @@ const fetchOfficialPage = async (source) => {
     }
     const raw = Buffer.from(await response.arrayBuffer());
     if (raw.length > MAX_RESPONSE_BYTES) throw new Error("official club result page exceeded configured byte limit");
+    const receivedAt = new Date(Date.now()).toISOString();
     return {
       url: response.url,
+      requestStartedAt,
+      receivedAt,
       raw,
       html: raw.toString("utf8"),
       responseSha256: sha256(raw),
@@ -367,9 +379,6 @@ const syncOfficialClubResults = async (options = {}) => {
   ]));
   const existing = loadOfficialClubResults(outputFile);
   const nextMatches = { ...(existing.matches || {}) };
-  const observedAt = new Date(
-    Number.isFinite(Number(options.nowMs)) ? Number(options.nowMs) : Date.now()
-  ).toISOString();
   const rejections = [];
   let matched = 0;
 
@@ -382,6 +391,14 @@ const syncOfficialClubResults = async (options = {}) => {
     }
     try {
       const response = options.responses?.[sourceMatchId] || await fetchOfficialPage(source);
+      // Receipt is captured after the full body, never at batch/request start.
+      // Injected offline responses must provide their own explicit receipt.
+      const observedAt = canonicalInstant(response.receivedAt);
+      const requestStartedAt = canonicalInstant(response.requestStartedAt);
+      if (!observedAt || (Object.hasOwn(response, "requestStartedAt")
+        && (!requestStartedAt || Date.parse(observedAt) < Date.parse(requestStartedAt)))) {
+        throw new Error("official club result response receipt clock invalid");
+      }
       const parsed = parseOfficialClubPage(response.html, source);
       const record = buildEvidenceRecord(
         match,
@@ -405,7 +422,7 @@ const syncOfficialClubResults = async (options = {}) => {
     version: VERSION,
     source: RESULT_SOURCE,
     sourceKind: RESULT_SOURCE_KIND,
-    checkedAt: observedAt,
+    checkedAt: new Date(Date.now()).toISOString(),
     manifestVersion: manifest.version,
     manifestSha256: sha256(JSON.stringify(manifest)),
     summary: {

@@ -57,7 +57,7 @@ const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/servic
   'scripts/apiFootballClockEvidence.cjs', 'scripts/verifyApiFootballClockEvidence.cjs',
   'scripts/verifyApiFootballDiagnostics.cjs', 'scripts/verifyCandidateArtifactSeed.cjs', 'scripts/verifyCandidateRevisionLineage.cjs',
   'scripts/verifyLegacyReferenceConflict.cjs', 'src/services/legacyReferenceConflict.ts', 'scripts/verifyFrozenArchiveAuthority.cjs',
-  'scripts/verifyOfficialClubResults.cjs', 'scripts/syncOfficialClubResults.cjs'];
+  'scripts/verifyOfficialClubResults.cjs', 'scripts/syncOfficialClubResults.cjs', 'scripts/verifyOfficialClubReceiptClocks.cjs'];
 const requiredEntries = source => {
   const match = /const required(?:Release)?Entries = (\[[\s\S]*?\n\]);/.exec(source);
   assert.ok(match, 'required release-entry array must be explicit');
@@ -79,5 +79,21 @@ for (const entry of collectorEntries) for (const side of ['creator', 'validator'
     assert.equal(collectorDependenciesPresent(side === 'creator' ? missing(bundle) : bundle,
       side === 'validator' ? missing(safety) : safety), false);
   });
+}
+const receiptMarker = '  pushCheck(checks, "official club receipt clocks follow complete responses and preserve newer evidence",';
+const receiptStart = readiness.indexOf(receiptMarker);
+const receiptEnd = readiness.indexOf('\n  const localServerOwnership', receiptStart);
+assert.ok(receiptStart >= 0 && receiptEnd > receiptStart);
+const receiptGate = body => {
+  let result = null;
+  vm.runInNewContext(readiness.slice(receiptStart, receiptEnd), { checks: [],
+    clubResultReceipts: { status: 0, body, stderr: '' }, pushCheck: (_checks, _name, ok) => { result = ok; } }, { timeout: 1000 });
+  return result;
+};
+const receiptProof = { ok: true, checks: 21, networkCalls: 0, productionDataTouched: false };
+check('production receipt gate accepts complete isolated clock coverage', () => assert.equal(receiptGate(receiptProof), true));
+for (const [name, bad] of Object.entries({ failed: { ok: false }, insufficient: { checks: 20 },
+  network: { networkCalls: 1 }, productionWrite: { productionDataTouched: true } })) {
+  check(`production receipt gate rejects ${name} proof`, () => assert.equal(receiptGate({ ...receiptProof, ...bad }), false));
 }
 console.log(JSON.stringify({ok:true,verifier:'release-verifier-contracts-v1',checks,productionDataTouched:false},null,2));

@@ -1047,6 +1047,13 @@ const readPlanSqliteStatus = async () => {
   pushCheck("02-data-warehouse-sync", "official club result supplement is allowlisted, tamper-evident, and archive-safe", (
     scripts["sync:official-club-results"] === "node scripts/syncOfficialClubResults.cjs"
     && scripts["verify:official-club-results"] === "node scripts/verifyOfficialClubResults.cjs"
+    && scripts["verify:official-club-receipts"] === "node scripts/verifyOfficialClubReceiptClocks.cjs"
+    && hasAll(verifyProduction, [
+      'runLocalJson(["scripts/verifyOfficialClubReceiptClocks.cjs"])',
+      "clubResultReceipts.body?.checks >= 21",
+      "clubResultReceipts.body?.networkCalls === 0",
+      "clubResultReceipts.body?.productionDataTouched === false"
+    ])
     && hasAll(syncWorker, [
       "sync:official-club-results",
       "ENABLE_OFFICIAL_CLUB_RESULTS_SYNC",

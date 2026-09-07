@@ -246,6 +246,7 @@ const requiredReleaseEntries = [
   "scripts/verifyLegacyReferenceConflict.cjs",
   "scripts/verifyFrozenArchiveAuthority.cjs",
   "scripts/verifyOfficialClubResults.cjs",
+  "scripts/verifyOfficialClubReceiptClocks.cjs",
   "scripts/syncOfficialClubResults.cjs",
   "src/services/legacyReferenceConflict.ts",
   "scripts/verifyModelInputUsage.cjs",

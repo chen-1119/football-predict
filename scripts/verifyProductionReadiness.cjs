@@ -613,6 +613,15 @@ const run = async () => {
       status: publicReferenceIntegrity.status, checks: publicReferenceIntegrity.body?.checks || 0,
       stderrTail: publicReferenceIntegrity.stderr.slice(-500),
     });
+  const clubResultReceipts = await runLocalJson(["scripts/verifyOfficialClubReceiptClocks.cjs"]);
+  pushCheck(checks, "official club receipt clocks follow complete responses and preserve newer evidence",
+    clubResultReceipts.status === 0 && clubResultReceipts.body?.ok === true
+      && clubResultReceipts.body?.checks >= 21
+      && clubResultReceipts.body?.networkCalls === 0
+      && clubResultReceipts.body?.productionDataTouched === false, {
+      status: clubResultReceipts.status, checks: clubResultReceipts.body?.checks || 0,
+      stderrTail: clubResultReceipts.stderr.slice(-500),
+    });
   const localServerOwnership = startServer ? await startLocalServer() : null;
 
   try {
