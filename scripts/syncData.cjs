@@ -2907,7 +2907,8 @@ function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLamb
     contextSignals,
   });
   return {
-    version: "independent-elo-form-poisson-v9",
+    version: "independent-elo-form-poisson-v10",
+    competitionContext: require("./competitionModelContext.cjs").competitionModelContext(match),
     generatedAt: new Date().toISOString(),
     basis: PREDICTION_MODEL_BASIS,
     ensembleWeights: {
@@ -9286,7 +9287,7 @@ function enforceUnifiedPosteriorRecommendation(match, context) {
   );
   const unifiedProbabilityModel = {
     ...probabilityModel,
-    version: "unified-poisson-bayes-v73",
+    version: "unified-poisson-bayes-v74",
     oneXTwo: {
       ...(probabilityModel.oneXTwo || {}),
       unifiedPosterior: asPercentTriplet(unified.hadPosterior),
@@ -9296,7 +9297,7 @@ function enforceUnifiedPosteriorRecommendation(match, context) {
       unifiedPosterior: asPercentTriplet(unified.hhadPosterior),
     } : probabilityModel.handicap,
     unifiedPosterior: {
-      version: "v73-draw-aware-evidence-shrinkage-argmax",
+      version: "v74-competition-metadata-draw-aware-evidence-shrinkage-argmax",
       generatedAt: new Date().toISOString(),
       selectedMarket: selected.market,
       selectedCode: selected.code,
@@ -9415,20 +9416,7 @@ function pickValueProfile(pick, modelProbabilities, marketProbabilities) {
 }
 
 function matchVolatilityProfile(match) {
-  const text = [
-    match.leagueName,
-    match.leagueNameEn,
-    match.leagueShortName,
-    match.countryName,
-    match.countryNameEn,
-    match.homeTeam,
-    match.awayTeam,
-  ].filter(Boolean).join(" ");
-
-  return {
-    isInternational: /(\u56fd\u9645|\u53cb\u8c0a|\u4e16\u754c\u676f|\u4e16\u9884|\u56fd\u5bb6|international|friendly|world cup|qualifier|fifa)/i.test(text),
-    isJapan: /(\u65e5\u804c|\u65e5\u8054|\u65e5\u672c|j1|j2|japan)/i.test(text),
-  };
+  return require("./competitionModelContext.cjs").competitionProfile(match);
 }
 
 function firstFiniteNumber(...values) {
@@ -11448,7 +11436,7 @@ function buildModelOnlyProbabilityModel(match, probabilities, homeLambda, awayLa
   return {
     probabilityModel: {
       ...probabilityModel,
-      version: "model-only-no-official-sp-v2",
+      version: "model-only-no-official-sp-v3",
       basis: {
         zh: "未开售模型参考：官方 SP/让球 SP 暂无时，按球队强弱、历史样本、赛程与 Poisson 比分分布生成参考推荐；不作为串关 SP。",
         en: "Model-only reference while official SP/handicap SP is unavailable. It uses team strength, historical samples, schedule context, and Poisson score distribution, and is not a parlay SP."

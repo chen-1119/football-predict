@@ -57,7 +57,8 @@ const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/servic
   'scripts/apiFootballClockEvidence.cjs', 'scripts/verifyApiFootballClockEvidence.cjs',
   'scripts/verifyApiFootballDiagnostics.cjs', 'scripts/verifyCandidateArtifactSeed.cjs', 'scripts/verifyCandidateRevisionLineage.cjs',
   'scripts/verifyLegacyReferenceConflict.cjs', 'src/services/legacyReferenceConflict.ts', 'scripts/verifyFrozenArchiveAuthority.cjs',
-  'scripts/verifyOfficialClubResults.cjs', 'scripts/syncOfficialClubResults.cjs', 'scripts/verifyOfficialClubReceiptClocks.cjs'];
+  'scripts/verifyOfficialClubResults.cjs', 'scripts/syncOfficialClubResults.cjs', 'scripts/verifyOfficialClubReceiptClocks.cjs',
+  'scripts/competitionModelContext.cjs', 'scripts/verifyCompetitionModelContext.cjs'];
 const requiredEntries = source => {
   const match = /const required(?:Release)?Entries = (\[[\s\S]*?\n\]);/.exec(source);
   assert.ok(match, 'required release-entry array must be explicit');
@@ -82,7 +83,7 @@ for (const entry of collectorEntries) for (const side of ['creator', 'validator'
 }
 const receiptMarker = '  pushCheck(checks, "official club receipt clocks follow complete responses and preserve newer evidence",';
 const receiptStart = readiness.indexOf(receiptMarker);
-const receiptEnd = readiness.indexOf('\n  const localServerOwnership', receiptStart);
+const receiptEnd = readiness.indexOf('\n  const competitionContext', receiptStart);
 assert.ok(receiptStart >= 0 && receiptEnd > receiptStart);
 const receiptGate = body => {
   let result = null;
@@ -96,4 +97,19 @@ for (const [name, bad] of Object.entries({ failed: { ok: false }, insufficient: 
   network: { networkCalls: 1 }, productionWrite: { productionDataTouched: true } })) {
   check(`production receipt gate rejects ${name} proof`, () => assert.equal(receiptGate({ ...receiptProof, ...bad }), false));
 }
+const competitionStart = readiness.indexOf('  pushCheck(checks, "model competition weights ignore team labels and preserve executed context",');
+const competitionEnd = readiness.indexOf('\n  const localServerOwnership', competitionStart);
+assert.ok(competitionStart >= 0 && competitionEnd > competitionStart);
+const competitionGate = (body, status = 0) => {
+  let result = null;
+  vm.runInNewContext(readiness.slice(competitionStart, competitionEnd), { checks: [],
+    competitionContext: { status, body, stderr: '' }, pushCheck: (_checks, _name, ok) => { result = ok; } }, { timeout: 1000 });
+  return result;
+};
+const competitionProof = { ok: true, checks: 16, productionWrites: 0 };
+check('competition gate accepts actual isolated coverage', () => assert.equal(competitionGate(competitionProof), true));
+for (const bad of [{ ok: false }, { checks: 15 }, { productionWrites: 1 }]) {
+  check('competition gate rejects incomplete or writing proof ' + JSON.stringify(bad), () => assert.equal(competitionGate({ ...competitionProof, ...bad }), false));
+}
+check('competition gate rejects failed command even with success JSON', () => assert.equal(competitionGate(competitionProof, 1), false));
 console.log(JSON.stringify({ok:true,verifier:'release-verifier-contracts-v1',checks,productionDataTouched:false},null,2));

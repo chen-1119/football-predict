@@ -622,6 +622,13 @@ const run = async () => {
       status: clubResultReceipts.status, checks: clubResultReceipts.body?.checks || 0,
       stderrTail: clubResultReceipts.stderr.slice(-500),
     });
+  const competitionContext = await runLocalJson(["scripts/verifyCompetitionModelContext.cjs"]);
+  pushCheck(checks, "model competition weights ignore team labels and preserve executed context",
+    competitionContext.status === 0 && competitionContext.body?.ok === true
+      && competitionContext.body?.checks >= 16 && competitionContext.body?.productionWrites === 0, {
+      status: competitionContext.status, checks: competitionContext.body?.checks || 0,
+      stderrTail: competitionContext.stderr.slice(-500),
+    });
   const localServerOwnership = startServer ? await startLocalServer() : null;
 
   try {
