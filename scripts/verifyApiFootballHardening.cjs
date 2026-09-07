@@ -935,6 +935,10 @@ if (fs.existsSync(META_FILE)) {
   legacyMetaReadable = true;
 }
 
+const liveCompetitionShapes = require("./verifyApiFootballLiveCompetitionShapes.cjs").verifyLiveCompetitionShapes();
+check(liveCompetitionShapes.ok && liveCompetitionShapes.cases === 4,
+  "actual full-label competition shapes must pass the release hardening gate");
+
 console.log(JSON.stringify({
   ok: true,
   verifier: "api-football-hardening-v1",
@@ -942,6 +946,7 @@ console.log(JSON.stringify({
   networkCalls: requestsDuringImport,
   legacyCacheCompatible,
   legacyMetaReadable,
+  liveCompetitionShapes,
   covered: [
     "status-preflight-fail-closed",
     "quota-block",

@@ -217,6 +217,10 @@ const TEAM_ALIASES = {
 };
 
 const LEAGUE_ALIASES = {
+  // Actual Sporttery current payloads repeat these full Chinese labels in
+  // leagueNameEn. Do not rely on an English field or shorthand being present.
+  "西班牙甲级联赛": ["la liga"],
+  "意大利甲级联赛": ["serie a"],
   "\u56fd\u9645\u8d5b": ["friendly", "friendlies", "international"],
   "\u4e16\u754c\u676f": ["world cup", "fifa world cup"],
   "\u4e16\u9884\u8d5b": ["world cup qualification", "world cup qualifiers"],
