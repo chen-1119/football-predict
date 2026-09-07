@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const https = require("https");
 const path = require("path");
 const { fixtureTeamCategoryAudit } = require("./teamCategoryIdentity.cjs");
+const { scopedTeamAliases } = require("./apiFootballScopedAliases.cjs");
 const {
   eventSafeExistingSignal,
   stampSignalEvent,
@@ -392,21 +393,27 @@ const aliasesFor = (value, aliasMap) => {
     .filter(Boolean);
 };
 
-const targetTeamAliases = (match, side) => {
+const targetTeamAliases = (match, side, fixture = null) => {
   const primary = side === "home" ? match.homeTeamName : match.awayTeamName;
   const english = side === "home" ? match.homeTeamNameEn : match.awayTeamNameEn;
   return uniq([
     ...aliasesFor(primary, TEAM_ALIASES),
-    ...aliasesFor(english, TEAM_ALIASES)
+    ...aliasesFor(english, TEAM_ALIASES),
+    ...scopedTeamAliases(match, side, fixture, targetLeagueAliases(match)).map(normalizeName),
   ]);
 };
 
 // Keep scorer, append-only registry ingestion and current-cycle revalidation
 // on the same existing curated alias set. Aliases are not provider ID proof.
-const matchWithTeamAliases = (match) => ({
+const matchWithTeamAliases = (match, mapping) => ({
   ...match,
-  homeTeamAliases: targetTeamAliases(match, "home"),
-  awayTeamAliases: targetTeamAliases(match, "away"),
+  homeTeamAliases: targetTeamAliases(match, "home", fixtureForMappingAliases(mapping)),
+  awayTeamAliases: targetTeamAliases(match, "away", fixtureForMappingAliases(mapping)),
+});
+
+const fixtureForMappingAliases = (mapping) => ({
+  league: { id: mapping?.leagueId, season: mapping?.season },
+  teams: { home: { id: mapping?.homeTeamId, name: mapping?.homeTeamName }, away: { id: mapping?.awayTeamId, name: mapping?.awayTeamName } },
 });
 
 const targetLeagueAliases = (match) => uniq([
@@ -485,8 +492,8 @@ const summarizeFixture = (item) => ({
 
 const confidenceForFixture = (match, fixture, entityRegistry = null) => {
   const teamCategory = fixtureTeamCategoryAudit(match, { home: fixture?.teams?.home?.name, away: fixture?.teams?.away?.name });
-  const homeTargets = targetTeamAliases(match, "home");
-  const awayTargets = targetTeamAliases(match, "away");
+  const homeTargets = targetTeamAliases(match, "home", fixture);
+  const awayTargets = targetTeamAliases(match, "away", fixture);
   const leagueTargets = targetLeagueAliases(match);
   const homeScore = nameScore(homeTargets, fixture?.teams?.home?.name);
   const awayScore = nameScore(awayTargets, fixture?.teams?.away?.name);
@@ -1066,7 +1073,7 @@ const mappingVerificationState = (match, mapping, entityRegistry, options = {}) 
 
   const trustContext = options.liveTrustContext || null;
   const currentCycleQualification = trustContext?.live === true
-    ? qualifyingFixtureMapping(mapping, {}, { match: matchWithTeamAliases(match), trustContext })
+    ? qualifyingFixtureMapping(mapping, {}, { match: matchWithTeamAliases(match, mapping), trustContext })
     : null;
   return {
     verified: blockers.length === 0,
@@ -1245,7 +1252,7 @@ const absorbEntityResolutionEvidence = (matches, cache, registry, trustContexts 
     if (!match) continue;
     const result = applyFixtureMappingEvidence({
       registry: nextRegistry,
-      match: matchWithTeamAliases(match),
+      match: matchWithTeamAliases(match, mapping),
       mapping,
       observedAt: mapping?.matchedAt || nowIso(),
       trustContext: trustContexts.get(String(mapping?.sportteryMatchId || "")) || null,

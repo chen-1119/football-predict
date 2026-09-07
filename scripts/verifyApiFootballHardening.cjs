@@ -11,6 +11,7 @@ const {
 } = require("./entityResolutionRegistry.cjs");
 const { attachExternalSignals, buildFiveHundredFallbackMatches } = require("./syncData.cjs");
 const { buildOddsSnapshots } = require("../server/dataStore.cjs");
+const { scopedTeamAliases } = require("./apiFootballScopedAliases.cjs");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const SYNC_FILE = path.join(__dirname, "syncApiFootballData.cjs");
@@ -514,6 +515,71 @@ check(!api.mappingVerificationState(localizedTrustMatch,
 check(!api.mappingVerificationState(localizedTrustMatch,
   { ...localizedMapping, homeTeamName: "Santos Women" }, localizedLearned.registry,
   { liveTrustContext: trustContext }).verified, "alias revalidation preserves category conflict rejection");
+
+// Synthetic reproductions of the two cached Spanish fixture identity shapes.
+// No provider requests, production registry writes or historical backfills.
+for (const [homeName, awayName, homeProvider, awayProvider, homeId, awayId] of [
+  ["赫塔费", "维戈塞尔塔", "Getafe", "Celta Vigo", 546, 538],
+  ["埃尔切", "皇家社会", "Elche", "Real Sociedad", 797, 548],
+]) {
+  const match = { ...trustMatch, id: `scoped_${homeId}`, sourceMatchId: `scoped_${homeId}`,
+    leagueName: "西甲", leagueNameEn: "La Liga", leagueShortName: "西甲", leagueShortNameEn: "La Liga",
+    homeTeamId: `local_${homeId}`, awayTeamId: `local_${awayId}`,
+    homeTeamName: homeName, homeTeamNameEn: homeName, awayTeamName: awayName, awayTeamNameEn: awayName };
+  const fixture = { fixtureId: 1570000 + homeId, date: match.kickoffTime,
+    league: { id: 140, name: "La Liga", season: 2026 },
+    teams: { home: { id: homeId, name: homeProvider }, away: { id: awayId, name: awayProvider } } };
+  const score = api.confidenceForFixture(match, fixture);
+  check(score.teamScore === 1 && score.confidence >= 0.9, `${homeName}: scoped vocabulary reaches real scorer`);
+  const mapping = { ...trustMapping, sportteryMatchId: match.id, sourceMatchId: match.sourceMatchId,
+    fixtureId: fixture.fixtureId, fixtureDate: fixture.date, leagueId: 140, leagueName: "La Liga", season: 2026,
+    homeTeamId: homeId, awayTeamId: awayId, homeTeamName: homeProvider, awayTeamName: awayProvider,
+    score, confidence: score.confidence };
+  mapping.providerEvidence = { ...trustMapping.providerEvidence, fixtureIdentitySha256: fixtureIdentityHashFor(mapping) };
+  const cache = api.createCache();
+  cache.fixtureMap[match.id] = mapping;
+  const blank = createEntityRegistry({ createdAt: observedAt });
+  const learn = (context) => api.absorbEntityResolutionEvidence([match], cache, blank,
+    context ? new Map([[match.id, context]]) : new Map());
+  check(learn(null).changedRows === 0, `${homeName}: vocabulary alone cannot approve cached identities`);
+  check(learn({ ...trustContext, live: false }).changedRows === 0, `${homeName}: stale trust cannot approve identity`);
+  check(learn({ ...trustContext, providerResponseSha256: "c".repeat(64) }).changedRows === 0,
+    `${homeName}: wrong source receipt cannot approve identity`);
+  const learned = learn(trustContext);
+  check(learned.changedRows === 1
+    && learned.registry.entities[match.homeTeamId]?.providers?.["api-football"]?.providerEntityId === String(homeId)
+    && learned.registry.entities[match.awayTeamId]?.providers?.["api-football"]?.providerEntityId === String(awayId),
+    `${homeName}: only verified current-cycle evidence creates scoped identities`);
+  const state = api.mappingVerificationState(match, mapping, learned.registry, { liveTrustContext: trustContext });
+  check(state.verified && state.currentCycleQualification?.eligible
+    && state.verificationSource === "registry-exact+live-current-cycle", `${homeName}: scorer aliases survive live revalidation`);
+  for (const [label, changedFixture] of [
+    ["wrong league", { ...fixture, league: { ...fixture.league, id: 141 } }],
+    ["wrong season", { ...fixture, league: { ...fixture.league, season: 2025 } }],
+    ["missing season", { ...fixture, league: { id: 140, name: "La Liga" } }],
+    ["wrong team ID", { ...fixture, teams: { ...fixture.teams, home: { id: 999, name: homeProvider } } }],
+    ["missing team ID", { ...fixture, teams: { ...fixture.teams, home: { name: homeProvider } } }],
+    ["wrong provider name", { ...fixture, teams: { ...fixture.teams, home: { id: homeId, name: `${homeProvider} Other` } } }],
+    ["reversed sides", { ...fixture, teams: { home: fixture.teams.away, away: fixture.teams.home } }],
+  ]) {
+    check(scopedTeamAliases(match, "home", changedFixture, ["la liga"]).length === 0,
+      `${homeName}: ${label} cannot unlock scoped alias`);
+    check(api.confidenceForFixture(match, changedFixture).teamScore < 0.86,
+      `${homeName}: ${label} cannot pass new fixture name qualification`);
+  }
+  for (const category of [" Women", " U21", " B"]) {
+    const categorized = { ...fixture, teams: { ...fixture.teams, home: { id: homeId, name: homeProvider + category } } };
+    check(api.confidenceForFixture(match, categorized).teamScore === 0,
+      `${homeName}: ${category} category remains rejected by real scorer`);
+  }
+  check(scopedTeamAliases(match, "home", fixture, ["premier league"]).length === 0,
+    `${homeName}: wrong local competition cannot unlock alias`);
+  check(scopedTeamAliases({ ...match, homeTeamName: homeName.slice(0, 1) }, "home", fixture, ["la liga"]).length === 0,
+    `${homeName}: historical short-name substrings are not imported`);
+  check(scopedTeamAliases(match, "home", { ...fixture, league: { id: "140", season: "2026" },
+    teams: { ...fixture.teams, home: { id: String(homeId), name: homeProvider } } }, ["la liga"])[0] === homeProvider,
+    `${homeName}: canonical numeric string IDs preserve exact scope`);
+}
 
 const injuries = api.buildInjuriesByFixture([mappedEntry], [{
   fixture: { id: 7001 },

@@ -377,6 +377,7 @@ const requiredEntries = [
   "src/services/modelInputUsage.cjs",
   "scripts/teamCategoryIdentity.cjs",
   "scripts/recentFormEvidence.cjs",
+  "scripts/apiFootballScopedAliases.cjs",
   "scripts/verifyRecentFormEvidence.cjs",
   "scripts/verifyFootballDataResultsSync.cjs",
   "scripts/verifyTeamCategoryIdentity.cjs",
