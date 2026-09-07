@@ -30,6 +30,14 @@ const {
 } = require("./releasePrebuiltDist.cjs");
 
 const rootDir = path.resolve(__dirname, "..");
+// Catch production-only verification dependencies and stale exact contracts
+// locally, before reserving/signing a sequence or starting a remote transaction.
+const verifierContracts = spawnSync(process.execPath, ["scripts/verifyReleaseVerifierContracts.cjs"], {
+  cwd: rootDir, encoding: "utf8", windowsHide: true, timeout: 30_000, maxBuffer: 2 * 1024 * 1024,
+});
+if (verifierContracts.status !== 0) {
+  throw new Error(`Release verifier contract preflight failed: ${String(verifierContracts.error?.message || verifierContracts.stderr || verifierContracts.stdout).slice(-2000)}`);
+}
 const outDir = path.join(rootDir, ".codex-tmp");
 const workspaceActionPath = path.join(rootDir, ".release-actions");
 let workspaceActionPresent = false;
@@ -457,6 +465,7 @@ const requiredEntries = [
   "scripts/fastResultObservations.cjs",
   "scripts/reconcileFastResultGeneration.cjs",
   "scripts/verifyFastResultGenerationReconciliation.cjs",
+  "scripts/verifyReleaseVerifierContracts.cjs",
   "scripts/verifyPostgresSemanticReviewCleanup.cjs",
   "scripts/verifyFastResultPublication.cjs",
   "scripts/verifyFastResultProductionClone.cjs",

@@ -269,6 +269,7 @@ const requiredReleaseEntries = [
   "scripts/verifyFastResultProductionClone.cjs",
   "scripts/reconcileFastResultGeneration.cjs",
   "scripts/verifyFastResultGenerationReconciliation.cjs",
+  "scripts/verifyReleaseVerifierContracts.cjs",
   "scripts/verifyPostgresSemanticReviewCleanup.cjs",
   "scripts/verifyReleaseRecovery.cjs",
   "deploy/light-server/release-from-bundle.sh",
