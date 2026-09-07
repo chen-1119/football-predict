@@ -687,6 +687,8 @@ const run = async () => {
     pushCheck(checks, "sync worker official-result-first pipeline", workerCadenceArtifact.status === 0
       && workerCadenceArtifact.body?.ok === true
       && workerCadenceArtifact.body?.officialFirst === true
+      && workerCadenceArtifact.body?.officialReconciliationBeforeGeneration === true
+      && workerCadenceArtifact.body?.failedOfficialReconciliationPreventsPublication === true
       && workerCadenceArtifact.body?.fullSyncRunsPerCycle === 1, {
       status: workerCadenceArtifact.status,
       stages: workerCadenceArtifact.body?.stages || null,
@@ -932,11 +934,13 @@ const run = async () => {
       fastResultGeneration.status === 0
       && fastResultGeneration.body?.ok === true
       && fastResultGeneration.body?.verifier === "fast-result-generation-reconciliation"
-      && Number(fastResultGeneration.body?.checks) === 21
-      && Number(fastResultGeneration.body?.passed) === 21
+      && Number(fastResultGeneration.body?.checks) === 23
+      && Number(fastResultGeneration.body?.passed) === 23
       && Array.isArray(fastResultGeneration.body?.failed)
       && fastResultGeneration.body.failed.length === 0
       && fastResultGenerationContract.receiptReviewCannotEnterFormalMetrics === true
+      && fastResultGenerationContract.pairedReferenceSurvivesReconciliation === true
+      && fastResultGenerationContract.invalidPairSourceFailsBeforeAnyWrite === true
       && fastResultGenerationContract.invalidReviewInputCannotAdvanceGeneration === true
       && fastResultGenerationContract.existingQuarantineLedgerIsStrictlyValidated === true
       && fastResultGenerationContract.existingSameEventReviewPreservedByteForByte === true

@@ -2,6 +2,47 @@
 
 Implemented 2026-09-07; this batch is not part of the running r697 release.
 
+## Production follow-through correction
+
+The first implementation at 08f783b covered the main sync but not the subsequent
+`reconcileFastResultGeneration.cjs` rewrite. The reconciler now regenerates paired
+counts as well, before any active or quarantine file write. It reads only the
+original public reference/evidence keys using the existing strict streaming JSON
+reader, verifies complete file bytes/hash/grammar, and does not retain unrelated
+large candidate arrays. Missing files mean missing evidence; corrupt syntax or
+bindings abort publication. Admission limits are 2 GiB input and 64 MiB selected
+characters. No producer synthesizes missing original records.
+
+The worker also reconciles receipt-owned reviews before the first official
+generation/SQLite publication, not only after slow enrichment. Reconciliation is
+fatal on failure, followed by data validation and then generation/export. The
+actual worker orchestration is exercised with failure-injected transports to
+prove a failed reconciliation or validation cannot reach generation commit.
+
+Live read-only inspection on 2026-09-07 observed an intermediate official phase:
+the source summary counted 164/334 while the same-generation guarded SQLite
+history counted 164/333. Match 2040952 had a rebuilt losing reference in JSON but
+the receipt-owned stored review had no BEST row. No historical record was edited.
+Existing slow reconciliation restored agreement at 333; the new worker ordering
+prevents exposing that intermediate mismatch in future cycles. The missing
+reconciliation projection stamp was observed before the slow phase and present
+afterwards; generation IDs alone were insufficient proof of result equivalence.
+
+At 10:20:11Z, complete read-only production history (2,227 rows, 72,650,894 bytes)
+exactly reproduced the published reference summary in g-110ee380… with the pointer
+unchanged: 164/333, HAD 321 and HHAD 12. Paired settlements were **0**: all 333 lacked
+the required frozen-version trace. The independent archive had 15 records, not 15
+settlements. Thus the correct paired rates are null, not 0% or a claimed uplift.
+The probe uses the nested reference summary generation clock, which can differ
+from the container's original `generatedAt` after reconciliation.
+
+Added reconciliation tests verify a real signed frozen pair survives an actual
+SQLite receipt reconciliation, a repeated no-op preserves bytes, and corrupt
+syntax/bindings leave all four active files unchanged. Existing 21 reconciliation
+cases remain and the suite now requires 23. Worker cadence verification additionally
+requires reconciliation-before-generation and failure-prevents-publication flags.
+This correction still needs its own signed production release and live field proof.
+
 ## Production path
 
 `syncData.cjs` builds `postMatchReviewsPayload.referencePerformance` from the full

@@ -1545,6 +1545,26 @@ try {
 }
 
 const verifyRelayWake = async () => {
+  // Execute the real official-publication orchestration with transport doubles;
+  // an invalid reconciliation must stop before validation or generation commit.
+  const start = workerSource.indexOf('await onBeforeHeavyStep("reconcile:fast-results-generation:official")');
+  const end = workerSource.indexOf("let officialPhaseFinishedAt", start);
+  assert.ok(start > 0 && end > start);
+  const execute = new (Object.getPrototypeOf(async function () {}).constructor)(
+    "onBeforeHeavyStep", "runOptional", "commandTimeouts", "runCommand", "npmCommand", "storeDir", "sqliteExportEnabled", "runSqliteExportOrReuse",
+    workerSource.slice(start, end) + "return officialFastResultReconciliationStep;",
+  );
+  for (const failing of [null, "reconcile:fast-results-generation", "validate:data"]) {
+    const calls = [];
+    const record = async name => { calls.push(name); if (name === failing) throw new Error("synthetic-stop"); return {ok:true,script:name}; };
+    const task = () => execute(async () => {}, async (enabled, name, env, options) => {
+      assert.equal(enabled, true); assert.notEqual(options?.fatal, false); return record(name);
+    }, {validation:1000,sqlite:1000}, async (_npm, args) => record(args[1]), "synthetic-npm", "synthetic-store", true, async () => record("datastore:sqlite"));
+    if (failing) await assert.rejects(task, /synthetic-stop/); else assert.equal((await task()).ok, true);
+    assert.deepEqual(calls, failing === "reconcile:fast-results-generation" ? [failing]
+      : failing === "validate:data" ? ["reconcile:fast-results-generation", failing]
+      : ["reconcile:fast-results-generation", "validate:data", "datastore:generation", "datastore:sqlite"]);
+  }
   const sharedArtifactEvents = [];
   const sharedArtifactResult = await runWithSharedSlowArtifactLock({
     enabled: true,
@@ -2385,6 +2405,8 @@ verifyRelayWake().then(({
     candidateDeadlineAttemptTelemetry: true,
     stages,
     officialFirst: true,
+    officialReconciliationBeforeGeneration: true,
+    failedOfficialReconciliationPreventsPublication: true,
     releaseEvidenceRejectsOldCycle: true,
     releaseReadinessRejectsRunningCycle: true,
     releaseReadinessRequiresFreshCompletedIdle: true,

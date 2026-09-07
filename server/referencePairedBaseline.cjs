@@ -70,4 +70,28 @@ function buildReferencePerformanceWithPairs({ matches, snapshotPayload, trustReg
   if (!pairedBaseline) throw new Error("Paired public baseline does not reconcile to original complete history");
   return {...summary,pairedBaseline};
 }
-module.exports = { VERSION, POLICY, FIELDS, compactReferencePairedBaseline, buildReferencePerformanceWithPairs };
+// The slow-result reconciliation runs after the main sync and must regenerate
+// pairs from the original ledger too. Stream the unrelated, very large candidate
+// array instead of retaining it alongside the complete historical match list.
+function readReferenceSnapshotFile(filePath) {
+  const fs = require("node:fs"), crypto = require("node:crypto");
+  let stat;
+  try { stat = fs.lstatSync(filePath); } catch (error) { if (error.code === "ENOENT") return {}; throw error; }
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 2 * 1024 * 1024 * 1024) throw new Error("Reference snapshot is not a bounded regular file");
+  const hash = crypto.createHash("sha256"), buffer = Buffer.allocUnsafe(1024 * 1024), fd = fs.openSync(filePath, "r");
+  try {
+    const opened = fs.fstatSync(fd);
+    if (!opened.isFile() || opened.dev !== stat.dev || opened.ino !== stat.ino) throw new Error("Reference snapshot changed before hashing");
+    let bytes, total = 0;
+    while ((bytes = fs.readSync(fd, buffer, 0, buffer.length, null)) > 0) {
+      total += bytes;
+      if (total > stat.size) throw new Error("Reference snapshot grew during bounded hashing");
+      hash.update(buffer.subarray(0, bytes));
+    }
+    if (total !== stat.size) throw new Error("Reference snapshot shrank during hashing");
+  }
+  finally { fs.closeSync(fd); }
+  return require("./selectedJsonObjectFile.cjs").readSelectedJsonObjectFile({ filePath, expectedBytes: stat.size,
+    expectedSha256: hash.digest("hex"), keys: ["publicReferenceDecisions", "publicReferenceEvidence"], maxSelectedChars: 64 * 1024 * 1024 }).value;
+}
+module.exports = { VERSION, POLICY, FIELDS, compactReferencePairedBaseline, buildReferencePerformanceWithPairs, readReferenceSnapshotFile };

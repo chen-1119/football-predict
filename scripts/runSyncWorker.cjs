@@ -3274,6 +3274,13 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
         { timeoutMs: commandTimeouts.enrichment }
       ),
     });
+    // The fast receipt can own an older frozen review than a rebuilt JSON row.
+    // Reconcile before the FIRST generation is visible, not only after slow
+    // enrichment; otherwise totals can disagree with guarded SQLite for minutes.
+    await onBeforeHeavyStep("reconcile:fast-results-generation:official");
+    const officialFastResultReconciliationStep = await runOptional(true, "reconcile:fast-results-generation", {}, {
+      timeoutMs: commandTimeouts.validation,
+    });
     const dataValidationStep = await runCommand(npmCommand, ["run", "validate:data"], {}, {
       timeoutMs: commandTimeouts.validation
     });
@@ -3312,6 +3319,7 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
       officialSyncStep,
       officialFreeFootballStep,
       officialPreMatchStep,
+      officialFastResultReconciliationStep,
       dataValidationStep,
       officialGenerationStep,
       sqliteStep

@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { DatabaseSync } = require("node:sqlite");
+const publicPairs = require("./verifyPublicReferencePairs.cjs");
 const {
   createFastResultObservation,
 } = require("./fastResultObservations.cjs");
@@ -472,6 +473,41 @@ const check = (name, fn) => {
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "football-fast-generation-"));
 try {
+  check("slow reconciliation retains actual original paired reference statistics", () => {
+    const fixture = buildFixture(path.join(root, "paired-reference"));
+    const f = publicPairs.fixture({ day: "2026-08-31" });
+    writeJson(path.join(fixture.dataDir, "matches-history.json"), [f.match]);
+    writeJson(path.join(fixture.dataDir, "post-match-reviews.json"), { version: 2, generatedAt: "2026-08-31T15:00:00Z", rows: [f.match.postMatchReview], summary: {} });
+    writeJson(path.join(fixture.dataDir, "prediction-snapshots.json"), { rows: [{ ignoredCandidate: "x".repeat(2 * 1024 * 1024) }], publicReferenceDecisions: [f.record], publicReferenceEvidence: [f.entry] });
+    assert.equal(reconcileFastResultGeneration(fixture).ok, true);
+    const reviews = JSON.parse(fs.readFileSync(path.join(fixture.dataDir, "post-match-reviews.json"), "utf8"));
+    const p = reviews.referencePerformance.pairedBaseline;
+    assert.equal(p.generatedAt, reviews.referencePerformance.generatedAt);
+    assert.deepEqual(p.cells.map(c => [c.market, c.paired, c.publishedWon, c.baselineWon, c.publicOnly]), [["HAD", 1, 1, 0, 1]]);
+    const snapshot = require("../server/referencePairedBaseline.cjs").readReferenceSnapshotFile(path.join(fixture.dataDir, "prediction-snapshots.json"));
+    assert.deepEqual(Object.keys(snapshot).sort(), ["publicReferenceDecisions", "publicReferenceEvidence"]);
+    assert.deepEqual(snapshot.publicReferenceDecisions, [f.record]);
+    const before = fs.readFileSync(path.join(fixture.dataDir, "post-match-reviews.json"), "utf8");
+    assert.equal(reconcileFastResultGeneration(fixture).skipped, true);
+    assert.equal(fs.readFileSync(path.join(fixture.dataDir, "post-match-reviews.json"), "utf8"), before);
+    return { paired: 1, publicOnly: 1, unrelatedCandidateBytesDiscarded: 2 * 1024 * 1024 };
+  });
+  check("corrupt pair snapshot fails before current history review or sync-meta writes", () => {
+    for (const kind of ["syntax", "binding"]) {
+      const fixture = buildFixture(path.join(root, `corrupt-pair-${kind}`));
+      const snapshotPath = path.join(fixture.dataDir, "prediction-snapshots.json");
+      if (kind === "syntax") fs.writeFileSync(snapshotPath, '{"rows":[invalid],"publicReferenceDecisions":[]}');
+      else {
+        const f = publicPairs.fixture({ day: "2026-08-31" }); f.record.contentHash = "a".repeat(64);
+        writeJson(snapshotPath, { publicReferenceDecisions: [f.record], publicReferenceEvidence: [f.entry] });
+      }
+      const files = ["matches-current.json", "matches-history.json", "post-match-reviews.json", "sync-meta.json"];
+      const before = files.map(name => fs.readFileSync(path.join(fixture.dataDir, name), "utf8"));
+      assert.throws(() => reconcileFastResultGeneration(fixture));
+      files.forEach((name, i) => assert.equal(fs.readFileSync(path.join(fixture.dataDir, name), "utf8"), before[i]));
+    }
+    return { rejectedModes: 2, activeFilesUnchanged: 4 };
+  });
   check("SQLite fast final is rebased before immutable generation", () => {
     const fixture = buildFixture(path.join(root, "happy"));
     const result = reconcileFastResultGeneration(fixture);
@@ -1385,6 +1421,8 @@ process.stdout.write(`${JSON.stringify({
   failed: failed.map((row) => row.name),
   contract: {
     receiptReviewCannotEnterFormalMetrics: true,
+    pairedReferenceSurvivesReconciliation: true,
+    invalidPairSourceFailsBeforeAnyWrite: true,
     invalidReviewInputCannotAdvanceGeneration: true,
     existingQuarantineLedgerIsStrictlyValidated: true,
     existingSameEventReviewPreservedByteForByte: true,

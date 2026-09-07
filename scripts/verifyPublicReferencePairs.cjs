@@ -9,14 +9,14 @@ const { buildPublicReferencePairAudit } = require("./auditPublicReferencePairs.c
 const { auditFrozenReferenceMarket, auditFrozenDecisionMarket } = require("../src/services/frozenReferenceMarketPair.cjs");
 const clone = v => JSON.parse(JSON.stringify(v));
 const auditAt = "2026-09-07T15:00:00.000Z";
-function fixture({ id = "997701", pool = "HAD", scores = [1, 1], quote = { odds1: 2.2, oddsX: 3.4, odds2: 3.1 }, receivedAt = "2026-09-07T00:58:00.000Z", mutateSource = () => {} } = {}) {
-  const at = "2026-09-07T01:00:00.000Z";
+function fixture({ id = "997701", day = "2026-09-07", pool = "HAD", scores = [1, 1], quote = { odds1: 2.2, oddsX: 3.4, odds2: 3.1 }, receivedAt = `${day}T00:58:00.000Z`, mutateSource = () => {} } = {}) {
+  const at = `${day}T01:00:00.000Z`;
   const proof = trust.buildSignedMarketProvenance({ poolCode: pool, sourceMatchId: id,
     odds: { "1": quote.odds1, X: quote.oddsX, "2": quote.odds2 }, handicapLine: pool === "HHAD" ? -1 : 0,
-    sourceUrl: "https://webapi.sporttery.cn/gateway/synthetic-pair.qry", providerObservedAt: "2026-09-07T00:57:00.000Z",
-    sourceTiming: { requestedAt: "2026-09-07T00:56:00.000Z", receivedAt, sourceCycleId: "synthetic-market-pair-cycle" } });
-  const source = { id: `sporttery_${id}`, sourceMatchId: id, status: "SCHEDULED", businessDate: "2026-09-07",
-    kickoffTime: "2026-09-07T12:00:00.000Z", eventVersion: "2026-09-07T12:00:00.000Z", buyEndTime: "2026-09-07T11:55:00.000Z",
+    sourceUrl: "https://webapi.sporttery.cn/gateway/synthetic-pair.qry", providerObservedAt: `${day}T00:57:00.000Z`,
+    sourceTiming: { requestedAt: `${day}T00:56:00.000Z`, receivedAt, sourceCycleId: "synthetic-market-pair-cycle" } });
+  const source = { id: `sporttery_${id}`, sourceMatchId: id, status: "SCHEDULED", businessDate: day,
+    kickoffTime: `${day}T12:00:00.000Z`, eventVersion: `${day}T12:00:00.000Z`, buyEndTime: `${day}T11:55:00.000Z`,
     homeTeamName: "SYNTHETIC HOME", awayTeamName: "SYNTHETIC AWAY", source: "sporttery",
     ...(pool === "HAD" ? { odds: quote, oddsMarketProvenance: proof } : { handicapOdds: quote, handicapLine: -1, handicapOddsMarketProvenance: proof }),
     predictions: [{ marketType: "BEST", recommendationAction: "reference", oddsPoolCode: pool, tipCode: "X", odds: quote.oddsX, ...(pool === "HHAD" ? { handicapLine: -1 } : {}) }],
@@ -24,7 +24,7 @@ function fixture({ id = "997701", pool = "HAD", scores = [1, 1], quote = { odds1
     probabilityModel: { version: "synthetic-model", generatedAt: at, oneXTwo: { final: { home: 35, draw: 40, away: 25 } } } };
   source.predictionMeta.featureSnapshot = buildPredictionFeatureSnapshot(source, at);
   mutateSource(source);
-  const published = bind(source, null, "2026-09-07T01:00:01.000Z");
+  const published = bind(source, null, `${day}T01:00:01.000Z`);
   const record = published.predictionMeta.publicReferenceDecision, entry = pendingPublicReferenceEvidence(published);
   assert.ok(entry, "real public builder captures original evidence");
   const match = { ...published, status: "FINISHED", scoreHome: scores[0], scoreAway: scores[1],
