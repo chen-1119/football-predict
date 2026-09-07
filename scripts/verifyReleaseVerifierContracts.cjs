@@ -124,9 +124,11 @@ const executionGate = (body, status = 0) => {
     executionCapture: { status, body, stderr: '' }, pushCheck: (_checks, _name, ok) => { result = ok; } }, { timeout: 1000 });
   return result;
 };
-const executionProof = { ok: true, checks: 22, productionDataTouched: false, providerRequests: 0 };
+const executionProof = { ok: true, checks: 40, retentionChecks: 18, realRetainedBatches: 513,
+  retentionPolicyVersion: "prediction-capture-capacity-v2", productionDataTouched: false, providerRequests: 0 };
 check('execution capture gate accepts actual boundary and storage cases', () => assert.equal(executionGate(executionProof), true));
-for (const bad of [{ ok: false }, { checks: 21 }, { productionDataTouched: true }, { providerRequests: 1 }]) {
+for (const bad of [{ ok: false }, { checks: 39 }, { retentionChecks: 17 }, { realRetainedBatches: 512 },
+  { retentionPolicyVersion: "prediction-capture-capacity-v1" }, { productionDataTouched: true }, { providerRequests: 1 }]) {
   check('execution gate rejects invalid evidence ' + JSON.stringify(bad), () => assert.equal(executionGate({ ...executionProof, ...bad }), false));
 }
 check('execution gate rejects command failure', () => assert.equal(executionGate(executionProof, 1), false));

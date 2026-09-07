@@ -2,8 +2,64 @@
 const fs = require("node:fs"), path = require("node:path"), crypto = require("node:crypto"), zlib = require("node:zlib");
 const { strictInstant } = require("../src/services/strictInstant.cjs");
 const LIMITS = Object.freeze({ recordBytes: 2 * 1024 * 1024, batchBytes: 16 * 1024 * 1024, records: 128,
-  storeBytes: 256 * 1024 * 1024, storeFiles: 512 });
+  storeBytes: 48 * 1024 ** 3, storeFiles: 60000, freeReserveBytes: 8 * 1024 ** 3 });
 const digest = value => crypto.createHash("sha256").update(value).digest("hex");
+// Capacity is bounded, not preallocated or a time-based deletion policy. Keep
+// every original content-addressed batch; stop adding before the shared disk
+// loses its reserve. Estimates are based on this batch, never a retention SLA.
+function captureStorageCapacity({ files, bytes, nextBatchBytes, availableBytes }) {
+  if (![files, bytes, nextBatchBytes, availableBytes].every(value => Number.isSafeInteger(value) && value >= 0)
+    || nextBatchBytes === 0) throw new Error("invalid-storage-capacity-observation");
+  const remainingFiles = Math.max(0, LIMITS.storeFiles - files);
+  const remainingBytes = Math.max(0, LIMITS.storeBytes - bytes);
+  const diskHeadroomBytes = Math.max(0, availableBytes - LIMITS.freeReserveBytes);
+  const remainingBatches = Math.min(remainingFiles, Math.floor(remainingBytes / nextBatchBytes), Math.floor(diskHeadroomBytes / nextBatchBytes));
+  const reason = remainingFiles === 0 || remainingBytes < nextBatchBytes ? "private-store-capacity-limit"
+    : diskHeadroomBytes < nextBatchBytes ? "private-store-disk-reserve" : null;
+  return { version: "prediction-capture-capacity-v2", files, bytes,
+    maxFiles: LIMITS.storeFiles, maxBytes: LIMITS.storeBytes, freeReserveBytes: LIMITS.freeReserveBytes,
+    availableBytes, nextBatchBytes, remainingFiles, remainingBytes, diskHeadroomBytes, remainingBatches,
+    estimatedDaysAtFiveMinuteCadence: Math.floor(remainingBatches / 288 * 10) / 10,
+    estimateAssumption: "constant current compressed batch size and one batch every five minutes; not guaranteed retention",
+    status: reason ? "full" : remainingBatches < 30 * 288 ? "watch" : "ok", reason };
+}
+function availableStorageBytes(dir) {
+  try {
+    const stat = fs.statfsSync(dir, { bigint: true });
+    const bytes = Number(stat.bavail * stat.bsize);
+    if (!Number.isSafeInteger(bytes) || bytes < 0) throw new Error("invalid available bytes");
+    return bytes;
+  } catch { throw new Error("private-store-free-space-unavailable"); }
+}
+function predictionCaptureStorageHealth(capture, nowMs = Date.now()) {
+  const count = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
+  const health = { status: "watch", reason: "capture-not-observed", persisted: capture?.persisted === true,
+    captured: count(capture?.captured), attempted: count(capture?.attempted),
+    sourceVerified: false, productionEligible: false };
+  if (!capture) return health;
+  if (capture.persisted !== true) {
+    const reasons = ["no-captured-records", "private-store-capacity-limit", "private-store-disk-reserve", "private-store-free-space-unavailable",
+      "private-store-busy", "private-store-io-failed", "unexpected-store-entry", "unsafe-private-directory", "unsafe-store-entry", "existing-capture-mismatch", "capture-readback-mismatch"];
+    return { ...health, status: capture.reason === "no-captured-records" ? "watch" : "failed",
+      reason: reasons.includes(capture.reason) ? capture.reason : "capture-persistence-failed" };
+  }
+  const observedAt = capture.storage?.observedAt;
+  if (capture.storage?.version !== "prediction-capture-capacity-v2" || !strictInstant(observedAt)
+    || !Number.isFinite(nowMs) || Date.parse(observedAt) > nowMs) return { ...health, reason: "capture-capacity-not-verifiable" };
+  try {
+    // Recompute the summary from numeric observations, not a stored healthy
+    // flag. Only aggregate fields leave the private sync metadata boundary.
+    const capacity = captureStorageCapacity({ files: capture.storage.files, bytes: capture.storage.bytes,
+      nextBatchBytes: capture.storage.nextBatchBytes, availableBytes: capture.storage.availableBytes });
+    const ageSeconds = Math.floor((nowMs - Date.parse(observedAt)) / 1000);
+    return { ...health, status: capacity.reason ? "failed" : ageSeconds > 1800 ? "watch" : capacity.status,
+      reason: capacity.reason || (ageSeconds > 1800 ? "capture-capacity-observation-stale" : capacity.status === "watch" ? "capture-capacity-low-headroom" : "capture-capacity-observed"),
+      observedAt, ageSeconds, files: capacity.files, bytes: capacity.bytes,
+      maxFiles: capacity.maxFiles, maxBytes: capacity.maxBytes, freeReserveBytes: capacity.freeReserveBytes,
+      remainingBatches: capacity.remainingBatches, estimatedDaysAtFiveMinuteCadence: capacity.estimatedDaysAtFiveMinuteCadence,
+      estimateAssumption: capacity.estimateAssumption };
+  } catch { return { ...health, reason: "capture-capacity-not-verifiable" }; }
+}
 const secretKey = /^(?:api[-_]?key|authorization|password|secret|token|access[-_]?token|access[-_]?code|private[-_]?key)$/i;
 const UNDEFINED = "$predictionExecutionUndefined";
 function encode(value) {
@@ -78,7 +134,7 @@ function createPredictionExecutionCapture(cycleAt) {
   function persist(storeDir) {
     const status = summary();
     if (!records.length) return { ...status, persisted: false, reason: "no-captured-records" };
-    let lock, lockPath;
+    let lock, lockPath, storage;
     try {
       const parent = fs.realpathSync(storeDir), dir = path.join(parent, "prediction-execution-captures");
       fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -91,22 +147,33 @@ function createPredictionExecutionCapture(cycleAt) {
         const stat = fs.lstatSync(path.join(dir, name));
         if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("unsafe-store-entry");
         used += stat.size;
+        if (!Number.isSafeInteger(used) || used < 0) throw new Error("unsafe-store-entry");
       }
       const body = { ...status, cycleAt, runtime: require("../src/services/predictionRuntimeIdentity.cjs").predictionRuntimeIdentity(), records };
       const raw = Buffer.from(JSON.stringify(body)), sha256 = digest(raw), file = path.join(dir, `${sha256}.json.gz`);
       if (fs.existsSync(file)) {
         if (!zlib.gunzipSync(fs.readFileSync(file), { maxOutputLength: LIMITS.batchBytes + 1024 * 1024 }).equals(raw)) throw new Error("existing-capture-mismatch");
-        return { ...status, persisted: true, sha256, duplicate: true };
+        try {
+          storage = { ...captureStorageCapacity({ files: names.length, bytes: used,
+            nextBatchBytes: fs.statSync(file).size, availableBytes: availableStorageBytes(parent) }), observedAt: new Date().toISOString() };
+        } catch { storage = { version: "prediction-capture-capacity-v2", status: "unknown", reason: "private-store-free-space-unavailable" }; }
+        return { ...status, persisted: true, sha256, duplicate: true, storage };
       }
       const zipped = zlib.gzipSync(raw);
-      if (names.length >= LIMITS.storeFiles || used + zipped.length > LIMITS.storeBytes) throw new Error("private-store-capacity-limit");
+      storage = { ...captureStorageCapacity({ files: names.length, bytes: used,
+        nextBatchBytes: zipped.length, availableBytes: availableStorageBytes(parent) }), observedAt: new Date().toISOString() };
+      if (storage.reason) throw new Error(storage.reason);
       const fd = fs.openSync(file, "wx", 0o600);
       try { fs.writeFileSync(fd, zipped); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
       if (!zlib.gunzipSync(fs.readFileSync(file), { maxOutputLength: LIMITS.batchBytes + 1024 * 1024 }).equals(raw)) throw new Error("capture-readback-mismatch");
-      return { ...status, persisted: true, sha256, duplicate: false };
+      // This is a pre-write free-space observation, adjusted for our own write;
+      // other processes can consume space too. ENOSPC still fails closed.
+      storage = { ...captureStorageCapacity({ files: names.length + 1, bytes: used + zipped.length,
+        nextBatchBytes: zipped.length, availableBytes: Math.max(0, storage.availableBytes - zipped.length) }), observedAt: storage.observedAt };
+      return { ...status, persisted: true, sha256, duplicate: false, storage };
     } catch (error) {
-      const known = ["unsafe-private-directory", "unexpected-store-entry", "unsafe-store-entry", "existing-capture-mismatch", "private-store-capacity-limit", "capture-readback-mismatch"];
-      return { ...status, persisted: false, reason: known.includes(error.message) ? error.message : error.code === "EEXIST" ? "private-store-busy" : "private-store-io-failed" };
+      const known = ["unsafe-private-directory", "unexpected-store-entry", "unsafe-store-entry", "existing-capture-mismatch", "private-store-capacity-limit", "private-store-disk-reserve", "private-store-free-space-unavailable", "capture-readback-mismatch"];
+      return { ...status, persisted: false, ...(storage ? { storage } : {}), reason: known.includes(error.message) ? error.message : error.code === "EEXIST" ? "private-store-busy" : "private-store-io-failed" };
     } finally {
       if (lock !== undefined) {
         // Diagnostics must never abort a successful public sync in cleanup.
@@ -117,4 +184,4 @@ function createPredictionExecutionCapture(cycleAt) {
   }
   return { run, summary, persist };
 }
-module.exports = { LIMITS, encode, decode, createPredictionExecutionCapture };
+module.exports = { LIMITS, captureStorageCapacity, predictionCaptureStorageHealth, encode, decode, createPredictionExecutionCapture };

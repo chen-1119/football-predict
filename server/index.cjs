@@ -8574,6 +8574,8 @@ const buildPublicV1Health = async () => {
       sqlite: health.storage?.sqlite || null,
       postgres: health.storage?.postgres || null,
       primary: health.storage?.primary || "sqlite",
+      predictionExecutionCapture: require("../scripts/predictionExecutionCapture.cjs")
+        .predictionCaptureStorageHealth(health.meta?.predictionExecutionCapture),
       fastResultIntegrity,
     },
     model: {

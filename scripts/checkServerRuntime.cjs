@@ -554,6 +554,10 @@ const checkHealth = async () => {
   const currentRead = body.data?.currentRead || {};
   const sqlite = storage.sqlite || {};
   const postgres = storage.postgres || {};
+  const executionCapture = storage.predictionExecutionCapture || null;
+  addCheck("prediction execution evidence storage",
+    ["ok", "watch", "failed"].includes(executionCapture?.status) ? executionCapture.status : "watch",
+    executionCapture || { reason: "capture-storage-health-not-observed" });
   const servingMode = status.servingMode || "unknown";
   const hardFlags = {
     serviceOk: status.serviceOk === true,

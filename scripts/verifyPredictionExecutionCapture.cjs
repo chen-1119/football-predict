@@ -1,6 +1,6 @@
 "use strict";
 const assert = require("node:assert/strict"), fs = require("node:fs"), path = require("node:path"), zlib = require("node:zlib"), crypto = require("node:crypto");
-const { createPredictionExecutionCapture: capture, LIMITS, encode, decode } = require("./predictionExecutionCapture.cjs");
+const { createPredictionExecutionCapture: capture, LIMITS, captureStorageCapacity, predictionCaptureStorageHealth, encode, decode } = require("./predictionExecutionCapture.cjs");
 const { rebuildPublishedPredictionModel } = require("./syncData.cjs");
 const root = path.resolve(__dirname, "..");
 fs.mkdirSync(path.join(root, "outputs"), { recursive: true });
@@ -15,11 +15,50 @@ const fixture = () => ({ id: "sporttery_capture-fixture", sourceMatchId: "captur
   formSnapshot: { sampleSize: 24, home: { sampleSize: 12, goalsForAvg: 1.92, goalsAgainstAvg: 1.08 }, away: { sampleSize: 12, goalsForAvg: 2.25, goalsAgainstAvg: 1.17 } } });
 const scorer = () => ({ probabilityModel: { version: "fixture", generatedAt: now() }, predictions: [] });
 const collector = capture(now()); let result, saved;
+let retentionChecks = 0;
+const retentionCheck = (name, test) => { check(name, test); retentionChecks++; };
+const capacityInput = { files: 0, bytes: 0, nextBatchBytes: 767824, availableBytes: 100 * 1024 ** 3 };
+retentionCheck("fixed bounded policy covers six calendar windows at the observed compressed size without preallocation", () => {
+  const policy = captureStorageCapacity(capacityInput);
+  assert.equal(policy.maxFiles, 60000); assert.equal(policy.maxBytes, 48 * 1024 ** 3);
+  assert.equal(policy.freeReserveBytes, 8 * 1024 ** 3);
+  assert.equal(policy.status, "ok"); assert.equal(policy.remainingBatches, 60000);
+  assert.equal(policy.estimatedDaysAtFiveMinuteCadence, 208.3);
+  assert.equal(policy.estimateAssumption.includes("not guaranteed"), true);
+});
+for (const [name, changes, reason] of [
+  ["file limit", { files: LIMITS.storeFiles }, "private-store-capacity-limit"],
+  ["byte limit", { bytes: LIMITS.storeBytes }, "private-store-capacity-limit"],
+  ["free space reserve", { availableBytes: LIMITS.freeReserveBytes }, "private-store-disk-reserve"],
+  ["oversized next write", { availableBytes: LIMITS.freeReserveBytes + capacityInput.nextBatchBytes - 1 }, "private-store-disk-reserve"],
+]) retentionCheck(name + " refuses new evidence without deleting older evidence", () => {
+  const policy = captureStorageCapacity({ ...capacityInput, ...changes });
+  assert.equal(policy.status, "full"); assert.equal(policy.reason, reason); assert.equal(policy.remainingBatches, 0);
+});
+retentionCheck("exact reserve and quota boundary admit one last write", () => {
+  const p = captureStorageCapacity({ ...capacityInput, files: LIMITS.storeFiles - 1,
+    bytes: LIMITS.storeBytes - capacityInput.nextBatchBytes,
+    availableBytes: LIMITS.freeReserveBytes + capacityInput.nextBatchBytes });
+  assert.equal(p.reason, null); assert.equal(p.remainingBatches, 1); assert.equal(p.status, "watch");
+});
+retentionCheck("warning exposes less than thirty days and does not claim fixed retention", () => {
+  const p = captureStorageCapacity({ ...capacityInput, files: LIMITS.storeFiles - 29 * 288 });
+  assert.equal(p.status, "watch"); assert.equal(p.estimatedDaysAtFiveMinuteCadence, 29);
+  const larger = captureStorageCapacity({ ...capacityInput, nextBatchBytes: 8 * 1024 ** 2 });
+  assert.ok(larger.estimatedDaysAtFiveMinuteCadence < 30);
+});
+retentionCheck("invalid observations cannot bypass disk or store quotas", () => {
+  for (const changes of [{ files: -1 }, { bytes: NaN }, { availableBytes: Infinity }, { nextBatchBytes: 0 }, { bytes: Number.MAX_SAFE_INTEGER + 1 }]) {
+    assert.throws(() => captureStorageCapacity({ ...capacityInput, ...changes }));
+  }
+});
 check("actual private rebuild captures exact normalized input and executed output", () => {
   const row = fixture(), before = JSON.stringify(row);
   result = rebuildPublishedPredictionModel(row, null, collector);
   assert.equal(collector.summary().captured, 1); assert.equal(JSON.stringify(row), before);
   saved = collector.persist(dir); assert.equal(saved.persisted, true);
+  assert.equal(saved.storage.files, 1); assert.equal(saved.storage.bytes, saved.storage.nextBatchBytes);
+  assert.ok(saved.storage.availableBytes >= LIMITS.freeReserveBytes);
   const body = JSON.parse(zlib.gunzipSync(fs.readFileSync(path.join(dir, "prediction-execution-captures", saved.sha256 + ".json.gz"))));
   const record = body.records[0];
   assert.deepEqual(record.input.formSnapshot, row.formSnapshot); assert.equal(record.input.awayTeam, "国际米兰");
@@ -31,6 +70,39 @@ check("actual private rebuild captures exact normalized input and executed outpu
 });
 check("persist is idempotent and does not overwrite the same captured batch", () => {
   const again = collector.persist(dir); assert.equal(again.sha256, saved.sha256); assert.equal(again.duplicate, true);
+});
+retentionCheck("public health exposes capacity aggregates but no private records, hashes or paths", () => {
+  const health = predictionCaptureStorageHealth({ ...saved, records: [{ secret: "private-canary" }], path: "private-canary",
+    storage: { ...saved.storage, records: ["private-canary"], path: "private-canary" }, productionEligible: true, sourceVerified: true });
+  assert.equal(health.status, "ok"); assert.equal(health.persisted, true);
+  assert.equal(health.files, 1); assert.equal(health.productionEligible, false); assert.equal(health.sourceVerified, false);
+  assert.equal(JSON.stringify(health).includes("private-canary"), false); assert.equal(JSON.stringify(health).includes(saved.sha256), false);
+});
+retentionCheck("unobserved and failed captures never report healthy capacity", () => {
+  assert.equal(predictionCaptureStorageHealth(null).status, "watch");
+  assert.equal(predictionCaptureStorageHealth({ persisted: false, reason: "no-captured-records" }).status, "watch");
+  assert.equal(predictionCaptureStorageHealth({ persisted: false, reason: "private-store-busy" }).status, "failed");
+  const unknown = predictionCaptureStorageHealth({ persisted: false, reason: "sensitive-path-canary" });
+  assert.equal(unknown.reason, "capture-persistence-failed"); assert.equal(JSON.stringify(unknown).includes("sensitive-path-canary"), false);
+});
+retentionCheck("public health recomputes full capacity even when stored status says ok", () => {
+  const health = predictionCaptureStorageHealth({ ...saved, storage: { ...saved.storage, status: "ok", files: LIMITS.storeFiles } });
+  assert.equal(health.status, "failed"); assert.equal(health.reason, "private-store-capacity-limit");
+});
+retentionCheck("stale, future and malformed observations are explicit rather than current capacity", () => {
+  const at = Date.parse(saved.storage.observedAt);
+  assert.equal(predictionCaptureStorageHealth(saved, at + 1801000).reason, "capture-capacity-observation-stale");
+  assert.equal(predictionCaptureStorageHealth(saved, at - 1).reason, "capture-capacity-not-verifiable");
+  assert.equal(predictionCaptureStorageHealth({ ...saved, storage: { ...saved.storage, bytes: NaN } }, at).reason, "capture-capacity-not-verifiable");
+});
+for (const unknownDisk of [false, true]) retentionCheck("verified duplicate remains retained when free-space inspection is " + (unknownDisk ? "unavailable" : "low"), () => {
+  const statfs = fs.statfsSync, file = path.join(dir, "prediction-execution-captures", saved.sha256 + ".json.gz"), before = fs.readFileSync(file);
+  try {
+    fs.statfsSync = () => { if (unknownDisk) throw new Error("fixture"); return { bavail: 0n, bsize: 4096n }; };
+    const status = collector.persist(dir);
+    assert.equal(status.persisted, true); assert.equal(status.duplicate, true); assert.ok(fs.readFileSync(file).equals(before));
+    assert.notEqual(predictionCaptureStorageHealth(status).status, "ok");
+  } finally { fs.statfsSync = statfs; }
 });
 check("capture callback returns the exact scorer object and executes it once", () => {
   const c = capture(now()); let calls = 0; const output = scorer();
@@ -109,6 +181,33 @@ check("store byte cap is enforced before writing without allocating a full disk"
     assert.deepEqual(fs.readdirSync(folder), [path.basename(file)]);
   } finally { fs.lstatSync = original; }
 });
+for (const [name, observation, reason] of [
+  ["low disk", { bavail: 1n, bsize: 4096n }, "private-store-disk-reserve"],
+  ["unknown disk", null, "private-store-free-space-unavailable"],
+  ["invalid disk", { bavail: -1n, bsize: 4096n }, "private-store-free-space-unavailable"],
+]) retentionCheck(name + " refuses writes but leaves the scorer result and previous files alone", () => {
+  const other = fs.mkdtempSync(path.join(dir, "disk-"));
+  const c = capture(now()), output = c.run(fixture(), scorer), statfs = fs.statfsSync;
+  try {
+    fs.statfsSync = () => { if (!observation) throw new Error("synthetic statfs failed"); return observation; };
+    const status = c.persist(other); assert.equal(status.persisted, false); assert.equal(status.reason, reason);
+    assert.deepEqual(fs.readdirSync(path.join(other, "prediction-execution-captures")), []);
+    assert.ok(output.probabilityModel);
+  } finally { fs.statfsSync = statfs; }
+});
+retentionCheck("real 513-batch append crosses the old file ceiling and preserves every earlier byte", () => {
+  const other = fs.mkdtempSync(path.join(dir, "retention-")), files = [];
+  for (let i = 0; i < 513; i++) {
+    const c = capture(now()); c.run({ ...fixture(), sourceMatchId: `retention-${i}` }, scorer);
+    const status = c.persist(other); assert.equal(status.persisted, true); assert.equal(status.duplicate, false);
+    assert.equal(status.storage.files, i + 1);
+    const file = path.join(other, "prediction-execution-captures", status.sha256 + ".json.gz");
+    const raw = fs.readFileSync(file); assert.equal(hash(zlib.gunzipSync(raw)), status.sha256);
+    files.push({ file, sha256: hash(raw) });
+  }
+  assert.equal(fs.readdirSync(path.join(other, "prediction-execution-captures")).length, 513);
+  for (const file of files) assert.equal(hash(fs.readFileSync(file.file)), file.sha256);
+});
 check("calculation crossing kickoff cannot acquire a prematch capture", () => {
   const RealDate = Date; let clock = RealDate.parse("2098-01-01T00:00:00Z");
   class TestDate extends RealDate { constructor(...args) { super(...(args.length ? args : [clock])); } static now() { return clock; } }
@@ -125,4 +224,5 @@ check("sensitive output does not prevent returning original result", () => {
   assert.equal(c.summary().captured, 0);
 });
 console.log(JSON.stringify({ ok: true, verifier: "prediction-execution-capture-v1", checks, fixtureDirectory: dir,
+  retentionChecks, realRetainedBatches: 513, retentionPolicyVersion: "prediction-capture-capacity-v2",
   productionDataTouched: false, providerRequests: 0, scope: "actual rebuild boundary plus bounded private JSON evidence; not deterministic full replay or source attestation" }, null, 2));

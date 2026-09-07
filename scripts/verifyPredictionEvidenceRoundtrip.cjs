@@ -250,6 +250,13 @@ const verifyEvidenceHttp = async (reference, identity, postgresUrl = "") => {
       await new Promise(resolve => setTimeout(resolve, 100));
     }
     const route = `/api/db/public-reference-evidence?referenceHash=${reference.contentHash}`;
+    const health = await request("/api/v1/health");
+    equal(health.status, 200, "real public health returns capacity aggregates without evidence authentication");
+    equal(health.body.storage?.predictionExecutionCapture?.status, "failed", "real health recomputes full capture capacity rather than trusting stored healthy status");
+    equal(health.body.storage?.predictionExecutionCapture?.reason, "private-store-capacity-limit", "actual SQLite metadata-to-health capacity reason is explicit");
+    equal(health.body.storage?.predictionExecutionCapture?.files, 60000, "stored capture count survives the real metadata and HTTP path");
+    check(!JSON.stringify(health.body).includes("capture-private-http-canary"), "public health must not expose private capture records or arbitrary metadata fields");
+    equal(health.body.storage?.predictionExecutionCapture?.productionEligible, false, "capture diagnostics never enable formal prediction authority");
     equal((await request(route)).status, 401, "real HTTP rejects anonymous evidence access");
     equal((await request(route, { authorization: "Bearer incorrect" })).status, 401, "real HTTP rejects wrong admin credentials");
     equal((await request(route + `&token=${token}`)).status, 401, "query-string token cannot bypass admin authentication");
@@ -398,7 +405,12 @@ const main = async () => {
 
   const payloads = {
     "matches-current.json": [match], "matches-history.json": [finished],
-    "sync-meta.json": { source: "synthetic-test-only", sourceCycleId, updatedAt: publishedAt },
+    "sync-meta.json": { source: "synthetic-test-only", sourceCycleId, updatedAt: publishedAt,
+      predictionExecutionCapture: { persisted: true, captured: 34, attempted: 34,
+        records: ["capture-private-http-canary"],
+        storage: { version: "prediction-capture-capacity-v2", observedAt: new Date().toISOString(), status: "ok",
+          files: 60000, bytes: 1000, nextBatchBytes: 767824, availableBytes: 100 * 1024 ** 3,
+          privatePath: "capture-private-http-canary" } } },
     "external-signals.json": { source: "synthetic-test-only", updatedAt: publishedAt, matches: {} },
     "odds-history.json": { version: 3, rows: [] },
     "prediction-snapshots.json": { version: 3, updatedAt: publishedAt, rows: [snapshot], publicReferenceDecisions: [reference],

@@ -1,6 +1,7 @@
 "use strict";
 
 const assert = require("node:assert/strict");
+const fs = require("node:fs"), path = require("node:path"), vm = require("node:vm");
 const {
   assessSqliteStorageStability,
   candidateProspectiveCaptureRuntimeStatus,
@@ -8,6 +9,23 @@ const {
   candidateProspectiveRuntimeState,
   candidateProspectiveTemporalRuntimeState,
 } = require("./checkServerRuntime.cjs");
+
+// Execute the actual health-to-monitor block, including the missing-capability
+// path used while an older signed release is still serving production.
+const runtimeSource = fs.readFileSync(path.join(__dirname, "checkServerRuntime.cjs"), "utf8");
+const storageStart = runtimeSource.indexOf("  const executionCapture = storage.predictionExecutionCapture || null;");
+const storageEnd = runtimeSource.indexOf("  const servingMode", storageStart);
+assert.ok(storageStart >= 0 && storageEnd > storageStart);
+let storageHealthAssertions = 1;
+for (const [value, expected] of [[{ status: "ok" }, "ok"], [{ status: "watch" }, "watch"],
+  [{ status: "failed" }, "failed"], [null, "watch"], [{ status: "unrecognized" }, "watch"]]) {
+  let observed;
+  vm.runInNewContext(runtimeSource.slice(storageStart, storageEnd), {
+    storage: { predictionExecutionCapture: value }, addCheck: (name, status, details) => { observed = { name, status, details }; },
+  }, { timeout: 1000 });
+  assert.equal(observed.name, "prediction execution evidence storage");
+  assert.equal(observed.status, expected); storageHealthAssertions += 2;
+}
 
 const gib = 1024 * 1024 * 1024;
 const stableLargeSqlite = assessSqliteStorageStability({
@@ -572,6 +590,7 @@ process.stdout.write(`${JSON.stringify({
   ok: true,
   verifier: "runtime-candidate-capture-monitor",
   assertions: 59,
+  storageHealthAssertions,
   healthy: {
     candidateRevisionId: healthy.candidateRevisionId,
     readiness: healthy.readiness,
