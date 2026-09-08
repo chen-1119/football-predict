@@ -70,5 +70,18 @@ automatically promoted candidates.
 `verify:candidate-transition-draft` covers original and previously revised
 sources, actual isolated refreeze, preserved headers/event prefixes/counts,
 empty new shadow state, no-op rejection and tampered source descriptions.
-The next production declaration is still deferred until r711 is terminal and
-its recovery state is clear. A local preview is not a signed or live change.
+After r711 completed with matching app/live markers and cleared recovery state,
+its one-time external acceptance passed. A read-only registry capture at
+2026-09-08T08:25:19.783Z then produced the next declaration through the actual
+generator and isolated continuity/refreeze path. The committed declaration is
+an exact copy of that preview: ledger `candidate-c7f83cec8ca3765fd4615702`,
+revision `1007d2124017d211` to `82ed62ae3c717dfb`. It preserves old ledgers,
+headers, events and counts; the new shadow revision starts at zero.
+
+The 27 transition cases, release continuity CLI and first pre-sign composition
+check after this declaration (232 checks) passed. Evidence is retained in
+`outputs/next-transition-preview-1788855930314.json` and
+`outputs/next-transition-validation-1788856083038.json`. This declaration is
+not a new signed package or live revision; deployment must rebind against the
+then-current actual registry rather than assume that the earlier capture is
+still fresh.
