@@ -16,8 +16,9 @@ runner. Unknown commands and absent/unsafe configuration execute the original
 verifier. No live endpoint, SQLite/PG projection, current data, model gate,
 production-plan coverage, source fetch or database-clone check is eligible.
 
-The first audited profiles are two source scanners: bet-slip recommendation
-gating and frontend evidence semantics. Their exact LF-normalized verifier
+The first audited profiles are two source scanners (bet-slip recommendation
+gating and frontend evidence semantics) and one isolated large-JSON fixture.
+Their exact LF-normalized verifier
 hashes are pinned in the profile. Changed verifier code is **not automatically
 enrolled**, even if a previous test passed: its dependency scope must be audited
 again. The dependency binding includes actual bytes of every declared file,
@@ -57,7 +58,7 @@ trust boundary or treated as a root release attestation. Production activation
 needs a root-owned signing/verification handoff and end-to-end proof of the
 candidate-to-live receipt path. No r710 source, package or process is changed.
 
-The two first profiles prove the mechanism, not a meaningful release speedup.
+The two first scanner profiles prove the mechanism, not a meaningful release speedup.
 They are cheap, and hashing the Node binary can cost more than rerunning them.
 An isolated Linux experiment observed first call 733 ms and cached call 425 ms;
 those numbers do **not** prove faster than an uncached original scanner.
@@ -65,6 +66,38 @@ Measure the direct baseline and amortize runtime identity over an immutable
 execution scope before enabling. Next, audit the expensive fixture suites'
 actual dependencies/environment and add only those whose isolation is proven.
 Keep mixed/live checks fresh and retain full cutover/frozen-record acceptance.
+
+## First measured expensive fixture profile (not production-enabled)
+
+`verifySelectedJsonObjectFile.cjs` generates its own temporary input: 440 MiB
+of ignored content and 32 MiB of retained content. It launches only the same
+Node executable with a fixed 128 MiB V8 heap. It has no provider requests or
+production data inputs. Its two executing modules, `selectedJsonObjectFile.cjs`
+and `dataGenerationStore.cjs`, are both fully byte-bound and pinned to their
+reviewed LF-normalized implementations. They import only Node builtins and the
+already-pinned parser module. Any changed module requires dependency reaudit;
+an added import cannot silently reuse or enroll a prior proof.
+
+This verifier uses a numeric check count, unlike the scanners. A dedicated
+result contract requires the exact nine-case inventory and full 494,927,962-byte
+evidence, both retained keys, the bounded retained value, and memory below
+320 MiB. An eight-case `VERIFY_SELECTED_JSON_SKIP_LARGE=1` result is neither
+written nor reused. Failed, timed-out, malformed, partial or over-budget results
+are not reusable. Default handling for all other verifiers is unchanged.
+
+An isolated Linux measurement on Node v22.22.1 observed an original direct run
+of 5,636 ms, a first receipt-path run of 6,267 ms, then three reuses of 417,
+417 and 414 ms without launching the large fixture again. This includes receipt
+input/runtime hashing and demonstrates a benefit for this **one** repeated
+fixture, with a first-run overhead. It does not estimate total deployment
+savings or enable the production cross-user handoff. The real shortened mode
+ran afresh; a deliberately broken imported parser failed on each real run;
+restoring exact bytes allowed the original proof to be reused. The temporary
+test directory was removed, with no production writes or provider requests.
+
+Evidence: `outputs/selected-receipt-linux-1788855564036.json`. The authenticated
+receipt suite now also covers executable-module mutation, exact output shape,
+case inventory, missing full-size evidence, memory limit and shortened mode.
 
 ## Evidence
 

@@ -1,6 +1,6 @@
 "use strict";
 
-// Only exact, audited source scanners are eligible. This is not a generic
+// Only exact, audited source scanners or isolated fixtures are eligible. This is not a generic
 // "skip verification" switch: changed verifier code and unknown commands run.
 const fs = require("node:fs");
 const path = require("node:path");
@@ -21,6 +21,19 @@ const PROFILES = Object.freeze({
     // Entire src tree, including membership, nested paths, CSS and TS/TSX.
     // Imported TS is read as text by this scanner, never executed.
     trees: ["src"],
+  }),
+  "scripts/verifySelectedJsonObjectFile.cjs": Object.freeze({
+    auditedSha256: "dd7a7bf88d5fe626d8c3317e4a031310f699be3acc7554261927dcc54f84934a",
+    files: ["server/selectedJsonObjectFile.cjs", "server/dataGenerationStore.cjs"],
+    trees: [],
+    // These two CJS modules execute; pin their audited code as well as hashing
+    // actual input bytes. A newly introduced dependency requires a new audit.
+    auditedModules: Object.freeze({
+      "server/selectedJsonObjectFile.cjs": "b0d447e3b2060c1f0a8783b8b0b88ac934e9ffc62fb8d6dc24d8b63735665373",
+      "server/dataGenerationStore.cjs": "8bfb4413fb3fad6d7dd118040fda04f8a02ca06880cb275050af8db6cd476dd4",
+    }),
+    absentEnvironment: ["VERIFY_SELECTED_JSON_SKIP_LARGE"],
+    resultContract: "selected-json-complete-v1",
   }),
 });
 const digest = value => crypto.createHash("sha256").update(value).digest("hex");
@@ -46,12 +59,16 @@ function regularFile(root, relative) {
   return fs.readFileSync(full);
 }
 
-function collectInputs(root, args) {
+function collectInputs(root, args, env = {}) {
   const profile = args.length === 1 ? PROFILES[args[0]] : null;
   if (!profile) return null;
+  if ((profile.absentEnvironment || []).some(name => env[name])) return null;
   root = fs.realpathSync(root);
   const entry = regularFile(root, args[0]);
   if (digest(entry.toString("utf8").replace(/\r\n?/g, "\n")) !== profile.auditedSha256) return null;
+  for (const [name, sha] of Object.entries(profile.auditedModules || {})) {
+    if (digest(regularFile(root, name).toString("utf8").replace(/\r\n?/g, "\n")) !== sha) return null;
+  }
   const names = new Set([args[0], "package.json", "package-lock.json", ...profile.files]);
   const memberships = [];
   function walk(relative) {
@@ -70,21 +87,38 @@ function collectInputs(root, args) {
   const files = [...names].sort().map(name => [name, digest(regularFile(root, name))]);
   // Policy/runner changes also invalidate old receipts; do not only hash tests.
   files.push(["receipt-policy", digest(fs.readFileSync(__filename))]);
-  return { version: VERSION, command: args, files, memberships, profile: profile.auditedSha256 };
+  return { version: VERSION, command: args, files, memberships, profile: profile.auditedSha256,
+    resultContract: profile.resultContract || "all-green-checks-v1" };
 }
 
-function success(result) {
+function success(result, inputs) {
   try {
-    return result?.status === 0 && result.timedOut !== true && result.body?.ok === true
-      && Array.isArray(result.body.checks) && result.body.checks.length > 0
-      && result.body.checks.every(check => check?.ok === true)
-      && typeof result.stdout === "string" && result.stdout.length < MAX_BYTES
-      && hashValue(JSON.parse(result.stdout)) === hashValue(result.body);
+    if (!(result?.status === 0 && result.timedOut !== true && result.body?.ok === true
+      && typeof result.stdout === "string" && Buffer.byteLength(result.stdout) < MAX_BYTES
+      && hashValue(JSON.parse(result.stdout)) === hashValue(result.body))) return false;
+    if (inputs?.resultContract === "selected-json-complete-v1") {
+      const body = result.body, evidence = body.largeEvidence?.evidence;
+      const expectedBytes = 472 * 1024 * 1024 + Buffer.byteLength(
+        '{"ignored":"","keep":{"x":"中😀","n":[1,true,null],"bulk":""},"updatedAt":"2026-09-07"}');
+      return inputs.command?.length === 1 && inputs.command[0] === "scripts/verifySelectedJsonObjectFile.cjs"
+        && inputs.profile === PROFILES[inputs.command[0]].auditedSha256
+        && body.checks === 9 && Array.isArray(body.cases) && body.cases.length === 9
+        && hashValue(body.cases) === "687da1ab0523d6e35ae8a53f90e0ead0af1507109ff4fbee56210b213751ab06"
+        && evidence?.bytes === expectedBytes && /^[a-f0-9]{64}$/.test(evidence.sha256)
+        && evidence.selectedChars >= 32 * 1024 * 1024 && evidence.selectedChars < 33 * 1024 * 1024
+        && evidence.maxObservedDepth === 3
+        && hashValue(evidence.selectedKeys) === hashValue(["keep", "updatedAt"])
+        && Number.isFinite(body.largeEvidence.maxRssKiB) && body.largeEvidence.maxRssKiB > 0
+        && body.largeEvidence.maxRssKiB < 320 * 1024;
+    }
+    if (inputs?.resultContract && inputs.resultContract !== "all-green-checks-v1") return false;
+    return Array.isArray(result.body.checks) && result.body.checks.length > 0
+      && result.body.checks.every(check => check?.ok === true);
   } catch { return false; }
 }
 
 function sealReceipt({ identity, result, key, now = Date.now(), elapsedMs }) {
-  if (!Buffer.isBuffer(key) || key.length !== 32 || !success(result)) throw new Error("not a successful verifier result");
+  if (!Buffer.isBuffer(key) || key.length !== 32 || !success(result, identity.inputs)) throw new Error("not a successful verifier result");
   const payload = { version: VERSION, identity, checkedAt: now, elapsedMs,
     result: { status: 0, body: result.body, stdout: result.stdout, stderr: "", timedOut: false } };
   return { payload, mac: crypto.createHmac("sha256", key).update(serialize(payload)).digest("hex") };
@@ -95,7 +129,7 @@ function openReceipt(receipt, { identity, key, now = Date.now() }) {
     const p = receipt.payload;
     if (p.version !== VERSION || !Number.isFinite(p.checkedAt) || p.checkedAt > now
       || now - p.checkedAt > MAX_AGE_MS || !Number.isFinite(p.elapsedMs) || p.elapsedMs < 0
-      || hashValue(p.identity) !== hashValue(identity) || !success(p.result)
+      || hashValue(p.identity) !== hashValue(identity) || !success(p.result, identity.inputs)
       || !/^[a-f0-9]{64}$/.test(receipt.mac)) return null;
     const mac = crypto.createHmac("sha256", key).update(serialize(p)).digest();
     if (!crypto.timingSafeEqual(mac, Buffer.from(receipt.mac, "hex"))) return null;
@@ -156,7 +190,7 @@ async function runWithStaticReceipt({ rootDir, args, env, execute }) {
     if (!/^[a-f0-9]{64}$/.test(env.VERIFY_STATIC_RELEASE_SHA || "")
       || !env.VERIFY_STATIC_RECEIPT_DIR || env.NODE_OPTIONS || env.NODE_PATH
       || process.execArgv.length > 0) return execute();
-    inputs = collectInputs(rootDir, args);
+    inputs = collectInputs(rootDir, args, env);
     if (!inputs) return execute();
     store = privateStore(env.VERIFY_STATIC_RECEIPT_DIR);
     if (!store) return execute();
@@ -166,12 +200,12 @@ async function runWithStaticReceipt({ rootDir, args, env, execute }) {
         locale: { TZ: env.TZ || null, LANG: env.LANG || null, LC_ALL: env.LC_ALL || null } } };
     name = `${hashValue(identity)}.json`;
     const receipt = openReceipt(JSON.parse(store.read(name)), { identity, key: store.key });
-    if (receipt && hashValue(collectInputs(rootDir, args)) === hashValue(inputs)) return receipt;
+    if (receipt && hashValue(collectInputs(rootDir, args, env)) === hashValue(inputs)) return receipt;
   } catch { /* Missing/invalid evidence cannot turn a failed test into a pass. */ }
   const result = await execute();
   try {
-    if (store && identity && name && success(result)
-      && hashValue(collectInputs(rootDir, args)) === hashValue(inputs)) {
+    if (store && identity && name && success(result, inputs)
+      && hashValue(collectInputs(rootDir, args, env)) === hashValue(inputs)) {
       const receipt = sealReceipt({ identity, result, key: store.key, elapsedMs: Date.now() - startedAt });
       const written = store.write(name, serialize(receipt));
       return { ...result, verificationReceipt: { reused: false, written, identityHash: hashValue(identity) } };

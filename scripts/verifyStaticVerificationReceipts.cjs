@@ -46,7 +46,7 @@ async function verifyStaticVerificationReceipts() {
     const altered = clone(seal); altered.mac = receipts.hashValue(altered.payload); assert.equal(open(altered), null);
   });
   const allowed = Object.keys(receipts.PROFILES);
-  check("only explicitly audited static scanners eligible", () => assert.deepEqual(allowed.sort(), ["scripts/verifyBetSlipRecommendationGate.cjs", "scripts/verifyFrontendEvidenceSemantics.cjs"].sort()));
+  check("only explicitly audited source or isolated fixture commands eligible", () => assert.deepEqual(allowed.sort(), ["scripts/verifyBetSlipRecommendationGate.cjs", "scripts/verifyFrontendEvidenceSemantics.cjs", "scripts/verifySelectedJsonObjectFile.cjs"].sort()));
   for (const command of ["scripts/verifyApiContracts.cjs", "scripts/verifyModelPromotionGate.cjs", "scripts/verifyProductionPlanCoverage.cjs", "scripts/verifyFastResultProductionClone.cjs", "scripts/exportDataStoreSqlite.cjs"])
     check(`live or mixed command always executes: ${command}`, () => assert.equal(receipts.collectInputs(root, [command]), null));
   check("additional arguments are not treated as the audited command", () => assert.equal(receipts.collectInputs(root, [allowed[0], "--different-mode"]), null));
@@ -93,7 +93,61 @@ async function verifyStaticVerificationReceipts() {
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "football-static-receipt-verify-"));
   try {
     const copy = name => { const to = path.join(fixture, name); fs.mkdirSync(path.dirname(to), { recursive: true }); fs.copyFileSync(path.join(root, name), to); };
-    for (const file of ["package.json", "package-lock.json", ...allowed, "src/services/generator.ts", "src/pages/BetSlipGenerator.tsx", "server/index.cjs"]) copy(file);
+    for (const file of ["package.json", "package-lock.json", ...allowed, "src/services/generator.ts", "src/pages/BetSlipGenerator.tsx", "server/index.cjs", "server/selectedJsonObjectFile.cjs", "server/dataGenerationStore.cjs"]) copy(file);
+    const selectedArgs = ["scripts/verifySelectedJsonObjectFile.cjs"], selectedInputs = receipts.collectInputs(fixture, selectedArgs);
+    check("isolated large JSON fixture binds both executing modules", () => {
+      assert.ok(selectedInputs);
+      for (const file of ["server/selectedJsonObjectFile.cjs", "server/dataGenerationStore.cjs"])
+        assert.ok(selectedInputs.files.some(([name]) => name === file));
+    });
+    check("audited fixture import inventory is closed over builtins and the two pinned modules", () => {
+      const expected = {
+        "scripts/verifySelectedJsonObjectFile.cjs": ["node:assert/strict", "node:fs", "node:os", "node:path", "node:crypto", "node:child_process", "../server/selectedJsonObjectFile.cjs", "../server/dataGenerationStore.cjs"],
+        "server/selectedJsonObjectFile.cjs": ["node:fs", "node:crypto"],
+        "server/dataGenerationStore.cjs": ["node:crypto", "node:fs", "node:os", "node:path", "./selectedJsonObjectFile.cjs"],
+      };
+      for (const [name, imports] of Object.entries(expected)) {
+        const source = fs.readFileSync(path.join(fixture, name), "utf8");
+        assert.deepEqual([...source.matchAll(/\brequire\(["']([^"']+)["']\)/g)].map(match => match[1]), imports);
+      }
+      // This inventory is a regression check, not an arbitrary-JS analyzer.
+      // Exact reviewed entry/module hashes enforce enrollment in production.
+    });
+    check("shortened fixture mode is ineligible even with a prior full proof", () => {
+      assert.equal(receipts.collectInputs(fixture, selectedArgs, { VERIFY_SELECTED_JSON_SKIP_LARGE: "1" }), null);
+      assert.equal(receipts.collectInputs(fixture, [...selectedArgs, "--large-child"]), null);
+    });
+    for (const moduleName of ["server/selectedJsonObjectFile.cjs", "server/dataGenerationStore.cjs"]) {
+      fs.appendFileSync(path.join(fixture, moduleName), "\nrequire('./new-unaudited-dependency.cjs');\n");
+      check(`changed executable module requires dependency reaudit: ${moduleName}`, () => assert.equal(receipts.collectInputs(fixture, selectedArgs), null));
+      copy(moduleName);
+    }
+    const selectedSource = fs.readFileSync(path.join(fixture, selectedArgs[0]), "utf8");
+    const cases = [...selectedSource.matchAll(/check\('([^']+)', /g)].map(match => match[1]);
+    const fullBody = { ok: true, checks: 9, cases, largeEvidence: { maxRssKiB: 200000, evidence: {
+      bytes: 472 * 1024 * 1024 + Buffer.byteLength('{"ignored":"","keep":{"x":"中😀","n":[1,true,null],"bulk":""},"updatedAt":"2026-09-07"}'),
+      sha256: "d".repeat(64), selectedChars: 32 * 1024 * 1024 + 64,
+      maxObservedDepth: 3, selectedKeys: ["keep", "updatedAt"],
+    } } };
+    const fixtureResult = body => ({ status: 0, body, stdout: JSON.stringify(body), timedOut: false });
+    const fixtureIdentity = { ...identity, inputs: selectedInputs };
+    check("complete fixture result uses its own exact authenticated output contract", () => {
+      const sealed = receipts.sealReceipt({ identity: fixtureIdentity, result: fixtureResult(fullBody), key, now, elapsedMs: 6000 });
+      assert.deepEqual(receipts.openReceipt(sealed, { identity: fixtureIdentity, key, now }).body, fullBody);
+      assert.equal(receipts.success(fixtureResult(fullBody)), false);
+    });
+    for (const [name, change] of [
+      ["skipped large fixture", body => { body.checks = 8; body.cases.pop(); body.largeEvidence = null; }],
+      ["missing memory evidence", body => { body.largeEvidence = null; }],
+      ["changed case inventory", body => { body.cases[0] = "different test"; }],
+      ["truncated large input", body => { body.largeEvidence.evidence.bytes--; }],
+      ["over-budget memory", body => { body.largeEvidence.maxRssKiB = 320 * 1024; }],
+      ["missing retained key", body => { body.largeEvidence.evidence.selectedKeys.pop(); }],
+      ["malformed content hash", body => { body.largeEvidence.evidence.sha256 = "unknown"; }],
+    ]) check(`${name} cannot become reusable fixture success`, () => {
+      const altered = clone(fullBody); change(altered);
+      assert.throws(() => receipts.sealReceipt({ identity: fixtureIdentity, result: fixtureResult(altered), key, now, elapsedMs: 1 }));
+    });
     const command = ["scripts/verifyBetSlipRecommendationGate.cjs"];
     const input = receipts.collectInputs(fixture, command); assert.ok(input);
     check("real source scanner dependency closure exists", () => assert.ok(input.files.some(([name]) => name === "src/services/generator.ts")));
