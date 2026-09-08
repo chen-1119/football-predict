@@ -42,8 +42,11 @@ if (process.env.RELEASE_DEPLOY_KEY) {
 }
 // Catch production-only verification dependencies and stale exact contracts
 // locally, before reserving/signing a sequence or starting a remote transaction.
+// The bounded source-boundary fixture owns a 300-second budget. Its outer
+// controller must not kill a valid child at the former 30-second total limit.
+const VERIFIER_CONTRACT_PREFLIGHT_TIMEOUT_MS = 660_000;
 const verifierContracts = spawnSync(process.execPath, ["scripts/verifyReleaseVerifierContracts.cjs"], {
-  cwd: rootDir, encoding: "utf8", windowsHide: true, timeout: 30_000, maxBuffer: 2 * 1024 * 1024,
+  cwd: rootDir, encoding: "utf8", windowsHide: true, timeout: VERIFIER_CONTRACT_PREFLIGHT_TIMEOUT_MS, maxBuffer: 2 * 1024 * 1024,
 });
 if (verifierContracts.status !== 0) {
   throw new Error(`Release verifier contract preflight failed: ${String(verifierContracts.error?.message || verifierContracts.stderr || verifierContracts.stdout).slice(-2000)}`);
@@ -592,6 +595,19 @@ const requiredEntries = [
   "scripts/verifyReleaseChangeClassification.cjs",
   "scripts/releaseArchiveSourceInventory.cjs",
   "scripts/verifyReleaseArchiveSourceInventory.cjs",
+  "scripts/releaseSourceBaseline.cjs",
+  "scripts/verifyReleaseSourceBaseline.cjs",
+  "scripts/verifyReleaseSourceBaselineIntegration.cjs",
+  "scripts/frontendBuildEvidence.cjs",
+  "scripts/verifyFrontendBuildEvidence.cjs",
+  "scripts/frontendBuildSandbox.cjs",
+  "scripts/verifyFrontendBuildSandbox.cjs",
+  "scripts/frontendOverlayTransaction.cjs",
+  "scripts/verifyFrontendOverlayTransaction.cjs",
+  "scripts/frontendRuntimeBoundary.cjs",
+  "scripts/verifyFrontendRuntimeBoundary.cjs",
+  "server/staticFileResponse.cjs",
+  "scripts/verifyStaticFileResponseIdentity.cjs",
   "scripts/verifyStaticVerificationReceipts.cjs",
   "scripts/productionPlanSourceContracts.cjs",
   "scripts/verifyProductionPlanSourceContracts.cjs",

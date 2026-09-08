@@ -172,30 +172,43 @@ async function captureReleaseArchiveSourceEvidence(bundlePath) {
   const before = fs.lstatSync(bundlePath);
   if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1
     || before.size <= 0 || before.size > MAX_COMPRESSED_BYTES) throw new Error("non-plain-or-oversized-release-archive");
-  const fd = fs.openSync(bundlePath, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
-  let source, gunzip, timer;
+  // FileHandle owns the descriptor state. A raw numeric fd plus destroy() and
+  // closeSync() can schedule a second asynchronous close after that number has
+  // already been reused by an unrelated caller.
+  const handle = await fs.promises.open(bundlePath, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
+  let source, gunzip, timer, sourceClosed, gunzipClosed, sourceError, failed = false;
   try {
-    if (stamp(fs.fstatSync(fd)) !== stamp(before)) throw new Error("archive-changed-before-read");
+    if (stamp(await handle.stat()) !== stamp(before)) throw new Error("archive-changed-before-read");
     const archiveHash = crypto.createHash("sha256"), parser = createTarInventoryParser();
     let archiveBytes = 0;
-    source = fs.createReadStream(bundlePath, { fd, autoClose: false, highWaterMark: 64 * 1024, start: 0, end: before.size - 1 });
+    source = handle.createReadStream({ autoClose: false, highWaterMark: 64 * 1024, start: 0, end: before.size - 1 });
+    sourceClosed = new Promise(resolve => source.once("close", resolve));
     gunzip = zlib.createGunzip({ chunkSize: 64 * 1024 });
+    gunzipClosed = new Promise(resolve => gunzip.once("close", resolve));
     source.on("data", chunk => { archiveHash.update(chunk); archiveBytes += chunk.length; });
-    source.on("error", error => gunzip.destroy(error));
+    source.on("error", error => { sourceError = error; gunzip.destroy(error); });
     timer = setTimeout(() => { source.destroy(new Error("archive-capture-timeout")); gunzip.destroy(new Error("archive-capture-timeout")); }, MAX_CAPTURE_MS);
     source.pipe(gunzip);
     for await (const chunk of gunzip) parser.write(chunk);
-    if (archiveBytes !== before.size || stamp(fs.fstatSync(fd)) !== stamp(before)
+    if (archiveBytes !== before.size || stamp(await handle.stat()) !== stamp(before)
       || stamp(fs.lstatSync(bundlePath)) !== stamp(before)) throw new Error("archive-changed-during-read");
     const inventory = parser.finish();
     return { version: VERSION, archiveSha256: archiveHash.digest("hex"), archiveBytes,
       archiveEntryCount: inventory.entryCount, inventory, inventorySha256: inventory.treeHash,
       frontendBuildBinding: null, frontendBuildBindingSha256: null,
       buildBindingStatus: "unavailable-input-tree-not-sealed", executionMode: "full" };
+  } catch (error) {
+    failed = true;
+    throw error;
   } finally {
     clearTimeout(timer);
     source?.destroy(); gunzip?.destroy();
-    try { fs.closeSync(fd); } catch (error) { if (error.code !== "EBADF") throw error; }
+    // close events follow completion of pending stream I/O and its FileHandle
+    // close. Wait before returning, then use the same handle's idempotent close
+    // for pre-stream failures as well. Never independently close its numeric fd.
+    await Promise.all([sourceClosed, gunzipClosed]);
+    await handle.close();
+    if (!failed && sourceError) throw sourceError;
   }
 }
 

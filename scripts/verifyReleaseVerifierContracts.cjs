@@ -112,6 +112,13 @@ const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/servic
   'scripts/releaseStageShellBridge.cjs', 'scripts/verifyReleaseStageShellBridge.cjs',
   'scripts/releaseChangeClassification.cjs', 'scripts/verifyReleaseChangeClassification.cjs',
   'scripts/releaseArchiveSourceInventory.cjs', 'scripts/verifyReleaseArchiveSourceInventory.cjs',
+  'scripts/releaseSourceBaseline.cjs', 'scripts/verifyReleaseSourceBaseline.cjs',
+  'scripts/verifyReleaseSourceBaselineIntegration.cjs',
+  'scripts/frontendBuildEvidence.cjs', 'scripts/verifyFrontendBuildEvidence.cjs',
+  'scripts/frontendBuildSandbox.cjs', 'scripts/verifyFrontendBuildSandbox.cjs',
+  'scripts/frontendOverlayTransaction.cjs', 'scripts/verifyFrontendOverlayTransaction.cjs',
+  'scripts/frontendRuntimeBoundary.cjs', 'scripts/verifyFrontendRuntimeBoundary.cjs',
+  'server/staticFileResponse.cjs', 'scripts/verifyStaticFileResponseIdentity.cjs',
   'scripts/productionPlanSourceContracts.cjs', 'scripts/verifyProductionPlanSourceContracts.cjs',
   'scripts/data/production-plan-source-contracts.json',
   'scripts/apiFootballClockEvidence.cjs', 'scripts/verifyApiFootballClockEvidence.cjs',
@@ -428,9 +435,16 @@ for (const [entry, script, minimum] of [
   ['verifyReleaseStageShellBridge.cjs', 'release-stage-shell-bridge', 8],
   ['verifyReleaseChangeClassification.cjs', 'release-change-classification', 36],
   ['verifyReleaseArchiveSourceInventory.cjs', 'release-archive-source-inventory', 8],
+  ['verifyReleaseSourceBaseline.cjs', 'release-source-baseline', 16],
+  ['verifyReleaseSourceBaselineIntegration.cjs', 'release-source-baseline-integration', 11],
+  ['verifyFrontendBuildEvidence.cjs', 'frontend-build-evidence', 17],
+  ['verifyFrontendBuildSandbox.cjs', 'frontend-build-sandbox', 8],
+  ['verifyFrontendRuntimeBoundary.cjs', 'frontend-runtime-boundary', 10],
+  ['verifyStaticFileResponseIdentity.cjs', 'static-file-response-identity', 19],
 ]) check(`release execution contract passes before signing: ${entry}`, () => {
   const run = require('node:child_process').spawnSync(process.execPath, [`scripts/${entry}`],
-    { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 30000, maxBuffer: 2 * 1024 * 1024 });
+    { cwd: root, encoding: 'utf8', windowsHide: true,
+      timeout: entry === 'verifyFrontendRuntimeBoundary.cjs' ? 300000 : 30000, maxBuffer: 2 * 1024 * 1024 });
   assert.equal(run.status, 0, run.stderr || run.stdout);
   const report = JSON.parse(run.stdout);
   assert.equal(report.ok, true); assert.ok(report.checks.length >= minimum);

@@ -59,6 +59,41 @@ async function verifyReleaseArchiveSourceInventory() {
       assert.equal(evidence.frontendBuildBinding, null);
       assert.equal(evidence.executionMode, "full");
     });
+    const damagedForFd = Buffer.from(fs.readFileSync(validBundle)); damagedForFd[damagedForFd.length - 1] ^= 1;
+    const malformedHeaderForFd = Buffer.from(header("early-reject.cjs")); malformedHeaderForFd[0] ^= 1;
+    const fdCases = [
+      { name: "success", bundle: validBundle, cycles: 34, error: null },
+      { name: "corrupt gzip", bundle: write("fd-corrupt.tgz", damagedForFd), cycles: 33, error: /check|length|data|gzip/i },
+      // Incompressible trailing data keeps source I/O outstanding when the
+      // first decompressed header makes the parser exit early.
+      { name: "early parser rejection", bundle: write("fd-early.tgz", zlib.gzipSync(Buffer.concat([
+        malformedHeaderForFd, crypto.randomBytes(256 * 1024),
+      ]))), cycles: 33, error: /tar-header-checksum-mismatch/ },
+    ];
+    const sentinelPath = write("fd-sentinel.bin", Buffer.alloc(64));
+    for (const testCase of fdCases) await check(`archive cleanup cannot close a newly reused sentinel fd after ${testCase.name}`, async () => {
+      for (let cycle = 0; cycle < testCase.cycles; cycle++) {
+        if (testCase.error) await assert.rejects(() => captureReleaseArchiveSourceEvidence(testCase.bundle), testCase.error);
+        else assert.equal((await captureReleaseArchiveSourceEvidence(testCase.bundle)).archiveSha256, evidence.archiveSha256);
+        // Open immediately in the capture's continuation, before any later
+        // event-loop cleanup could close the reused descriptor number.
+        const sentinel = fs.openSync(sentinelPath, fs.constants.O_RDWR), initial = fs.fstatSync(sentinel);
+        let failure;
+        try {
+          await new Promise(resolve => setImmediate(resolve));
+          await new Promise(resolve => setTimeout(resolve, 1));
+          const after = fs.fstatSync(sentinel);
+          assert.equal(after.dev, initial.dev); assert.equal(after.ino, initial.ino);
+          const payload = Buffer.from(`${testCase.name}:${cycle}`), actual = Buffer.alloc(payload.length);
+          assert.equal(fs.writeSync(sentinel, payload, 0, payload.length, 0), payload.length);
+          fs.fsyncSync(sentinel);
+          assert.equal(fs.readSync(sentinel, actual, 0, actual.length, 0), actual.length);
+          assert.deepEqual(actual, payload);
+        } catch (error) { failure = error; }
+        try { fs.closeSync(sentinel); } catch (error) { failure ||= error; }
+        if (failure) throw failure;
+      }
+    });
     await check("actual system tar archive retains nested sources and generated data", async () => {
       write("source/package.json", "{}"); write("source/src/outputs/policy.cjs", "module.exports = true;");
       write("source/public/data/sync-meta.json", '{"generation":"fixture"}');
@@ -211,7 +246,7 @@ async function verifyReleaseArchiveSourceInventory() {
       assert.ok(source.indexOf("archiveSourceEvidence,") < source.indexOf("signManifestBytes(manifestBytes"));
     });
     return { ok: true, verifier: "release-archive-source-inventory-v1", checks,
-      productionWrites: 0, networkCalls: 0, buildBindingAvailable: false, fastPathActivated: false };
+      descriptorReuseSentinelCycles: 100, productionWrites: 0, networkCalls: 0, buildBindingAvailable: false, fastPathActivated: false };
   } finally {
     const resolved = fs.realpathSync(root);
     assert.equal(path.dirname(resolved), fs.realpathSync(os.tmpdir()));
