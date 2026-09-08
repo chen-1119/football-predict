@@ -1808,7 +1808,20 @@ const deadlineOnlyResearchStatus = (status, version) => ({
     available: false,
     onlineEffect: false,
     chainValid: false,
+    // An absent suite has no trials. Preserve a complete admin API shape,
+    // without making research available or changing a prior malformed suite.
+    trials: [],
   }),
+  // Normalize only the exact unavailable placeholder emitted by older
+  // deadline-only captures. Never erase malformed/present trials or repair
+  // an available suite, a chain failure, a version, or its original blockers.
+  ...(status?.version === version
+    && status.available === false && status.onlineEffect === false
+    && status.chainValid === false
+    && status.reason === "deadline-only-research-deferred"
+    && status.deferredForPrimaryDeadlineCapture === true
+    && !Object.prototype.hasOwnProperty.call(status, "trials")
+    ? { trials: [] } : {}),
   // Deferring research does not repair its prior failure or make an absent
   // suite available. Keep those reasons separate from the formal heartbeat.
   ok: status?.ok !== false,

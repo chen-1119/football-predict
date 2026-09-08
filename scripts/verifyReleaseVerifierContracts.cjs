@@ -24,6 +24,36 @@ assert.ok(start>0&&end>start);
 const chunk=coverage.slice(start,end);
 const readiness=read('scripts/verifyProductionReadiness.cjs');
 const bundle=read('scripts/createReleaseBundle.cjs'),safety=read('scripts/verifyReleaseBundleSafety.cjs');
+// Catch the real producer/admin mismatch before reserving a sequence, without
+// replaying the full deadline/SQLite suite or touching runtime state.
+const deadlineResearchStatus = require('./captureCandidateProspectiveDeadline.cjs').deadlineOnlyResearchStatus;
+const apiContract = read('scripts/verifyApiContracts.cjs');
+const researchStart = apiContract.indexOf('      const challengerSuiteSerialized =');
+const researchEnd = apiContract.indexOf('      const exclusionAuditAllowedKeys =', researchStart);
+assert.ok(researchStart >= 0 && researchEnd > researchStart);
+const acceptsResearch = candidateChallengerSuite => vm.runInNewContext(
+  apiContract.slice(researchStart, researchEnd) + '\nchallengerSuiteIsSanitized;',
+  { candidateChallengerSuite }, { timeout: 1000 });
+const researchVersion = 'candidate-prospective-challenger-suite-audit-v1';
+check('absent deadline research satisfies unchanged admin contract before signing', () => {
+  const status = deadlineResearchStatus(null, researchVersion);
+  assert.equal(acceptsResearch(status), true); assert.equal(status.available, false);
+  assert.equal(status.chainValid, false); assert.equal(status.onlineEffect, false);
+  assert.deepEqual(status.blockers, ['deadline-only-research-unavailable']);
+});
+check('legacy unavailable placeholder is normalized without rewriting prior status', () => {
+  const prior = deadlineResearchStatus(null, researchVersion); delete prior.trials;
+  const bytes = JSON.stringify(prior); assert.equal(acceptsResearch(prior), false);
+  const next = deadlineResearchStatus(prior, researchVersion);
+  assert.equal(acceptsResearch(next), true); assert.equal(JSON.stringify(prior), bytes);
+  assert.deepEqual(next.blockers, prior.blockers); assert.equal(next.available, false);
+});
+check('deadline research deferral cannot repair malformed existing trial data', () => {
+  const prior = { ...deadlineResearchStatus(null, researchVersion), trials: null, ok: false };
+  const next = deadlineResearchStatus(prior, researchVersion);
+  assert.equal(acceptsResearch(next), false); assert.equal(next.ok, false);
+  assert.deepEqual(next.blockers, prior.blockers);
+});
 const evaluate=(overrides={})=>{
   let result=null;
   vm.runInNewContext(chunk,{scripts:pkg.scripts,verifyProduction:readiness,createReleaseBundle:bundle,verifyReleaseBundleSafety:safety,
