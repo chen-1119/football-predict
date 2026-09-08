@@ -13671,6 +13671,16 @@ function applyPredictionPersistence(match, existing, capturedAt, options = {}) {
   // scheduled match look post-deadline and erase its freshly built reference
   // recommendation.
   existing = existing && predictionPersistenceSameEvent(existing, match) ? existing : null;
+  // A fresh provider result has no local archive field. Carry the first
+  // validated archive across this merge before any early persistence return;
+  // otherwise a later snapshot retention gap can erase an already published
+  // direction. Check both event/cutoff contexts and leave signed recovery or
+  // independently attested parity correction to the archive authority stage.
+  const persistedArchive = validArchivedPreMatchPrediction(existing);
+  if (persistedArchive && !isOfficialVoidMatch(match)
+    && validArchivedPreMatchPrediction(match, persistedArchive)) {
+    match = { ...match, archivedPreMatchPrediction: persistedArchive };
+  }
   const existingPredictions = enabledPredictions(Array.isArray(existing?.predictions) ? existing.predictions : []);
   const nextPredictions = enabledPredictions(Array.isArray(match?.predictions) ? match.predictions : []);
   const explicitFinalizedAt = typeof options === "string" ? options : options?.finalizedAt;
