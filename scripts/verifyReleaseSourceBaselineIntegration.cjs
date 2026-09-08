@@ -3,6 +3,8 @@ const fs = require("node:fs"), path = require("node:path"), os = require("node:o
 const { spawnSync } = require("node:child_process");
 const root = path.resolve(__dirname, ".."), quote = value => "'" + value.replaceAll("'", "'\\''") + "'";
 const shellPath = value => process.platform === "win32" ? value.replaceAll("\\", "/").replace(/^([A-Za-z]):/, (_, d) => "/" + d.toLowerCase()) : value;
+const SOURCE_BASELINE_HELPER_MODULES = Object.freeze(["releaseSourceBaseline.cjs", "releaseSigning.cjs", "releaseArchiveSourceInventory.cjs",
+  "releaseChangeClassification.cjs", "releasePrebuiltDist.cjs", "frontendReleaseAuthorization.cjs"]);
 function verify() {
   const wrapper = fs.readFileSync(path.join(root, "deploy/light-server/football-release"), "utf8").replaceAll("\r\n", "\n");
   const bootstrap = fs.readFileSync(path.join(root, "deploy/light-server/bootstrap-release-entrypoints.sh"), "utf8").replaceAll("\r\n", "\n");
@@ -10,7 +12,7 @@ function verify() {
   assert.ok(start >= 0 && end > start); const actualFunction = wrapper.slice(start + 1, end + 3);
   const callStart = wrapper.indexOf("\nif ! preserve_signed_source_baseline; then\n"), callEnd = wrapper.indexOf("\nfi\n", callStart);
   assert.ok(callStart > 0 && callEnd > callStart); const actualCall = wrapper.slice(callStart + 1, callEnd + 4);
-  const modules = ["releaseSourceBaseline.cjs", "releaseSigning.cjs", "releaseArchiveSourceInventory.cjs", "releaseChangeClassification.cjs", "releasePrebuiltDist.cjs"];
+  const modules = SOURCE_BASELINE_HELPER_MODULES;
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "football-baseline-shell-")), checks = []; let count = 0;
   const check = (name, fn) => { fn(); checks.push({ name, ok: true }); };
   const gitPaths = process.platform === "win32" ? (spawnSync("where.exe", ["git.exe"], { encoding: "utf8", timeout: 5000, windowsHide: true }).stdout || "").trim().split(/\r?\n/).filter(Boolean) : [];
@@ -73,5 +75,5 @@ function verify() {
     fs.rmSync(temp, { recursive: true });
   }
 }
-module.exports = { verify };
+module.exports = { verify, SOURCE_BASELINE_HELPER_MODULES };
 if (require.main === module) { try { console.log(JSON.stringify(verify(), null, 2)); } catch (error) { console.error(error.stack); process.exitCode = 1; } }

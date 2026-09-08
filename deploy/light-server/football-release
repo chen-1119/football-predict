@@ -25,6 +25,7 @@ readonly APP_DIR="/opt/football-predict"
 readonly NODE_BIN="/opt/node-v22.22.1/bin/node"
 readonly RECOVERY_HELPER="/usr/local/libexec/football-release-recovery.cjs"
 readonly SOURCE_BASELINE_HELPER_DIR="/usr/local/libexec/football-release-source-baseline"
+readonly FRONTEND_HELPER_DIR="/usr/local/libexec/football-release-frontend"
 readonly EXPECTED_POLICY_VERSION="release-secret-policy-v2"
 readonly EXPECTED_MANIFEST_VERSION="3"
 readonly EXPECTED_SIGNATURE_ALGORITHM="rsa-sha256-pkcs1-v1_5"
@@ -119,13 +120,27 @@ preserve_signed_source_baseline() {
     [[ "$metadata" =~ ^0:0:([0-7]{3,4})$ ]] || return 1
     (( (8#${BASH_REMATCH[1]} & 8#022) == 0 )) || return 1
   done
-  for module in releaseSourceBaseline.cjs releaseSigning.cjs releaseArchiveSourceInventory.cjs releaseChangeClassification.cjs releasePrebuiltDist.cjs; do
+  for module in releaseSourceBaseline.cjs releaseSigning.cjs releaseArchiveSourceInventory.cjs releaseChangeClassification.cjs releasePrebuiltDist.cjs frontendReleaseAuthorization.cjs; do
     [ -f "${SOURCE_BASELINE_HELPER_DIR}/${module}" ] && [ ! -L "${SOURCE_BASELINE_HELPER_DIR}/${module}" ] || return 1
     [ "$(stat -c '%u:%g:%a:%h' -- "${SOURCE_BASELINE_HELPER_DIR}/${module}")" = "0:0:644:1" ] || return 1
   done
   timeout --kill-after=5s 45s env -i PATH="$PATH" LANG=C.UTF-8 \
     "$NODE_BIN" "${SOURCE_BASELINE_HELPER_DIR}/releaseSourceBaseline.cjs" \
     preserve "$BUNDLE_SHA" "$MANIFEST_SEQUENCE" "$work_dir"
+}
+
+assert_frontend_controller() {
+  local directory metadata module
+  for directory in / /usr /usr/local /usr/local/libexec "$FRONTEND_HELPER_DIR"; do
+    [ -d "$directory" ] && [ ! -L "$directory" ] || die "frontend controller directory is unsafe"
+    [ "$(realpath -e -- "$directory")" = "$directory" ] || die "frontend controller directory is not canonical"
+    metadata="$(stat -c '%u:%g:%a' -- "$directory")"
+    [[ "$metadata" =~ ^0:0:([0-7]{3,4})$ ]] && (( (8#${BASH_REMATCH[1]} & 8#022) == 0 )) \
+      || die "frontend controller directory is not root controlled"
+  done
+  for module in frontendReleaseController.cjs frontendReleaseAuthorization.cjs frontendReleaseTransaction.cjs frontendReleaseIdentity.cjs frontendInstalledRuntime.cjs frontendRuntimeBoundary.cjs frontendBuildSandbox.cjs frontendBuildEvidence.cjs releaseSourceBaseline.cjs releaseSigning.cjs releaseArchiveSourceInventory.cjs releaseChangeClassification.cjs releasePrebuiltDist.cjs; do
+    assert_root_controlled_file "${FRONTEND_HELPER_DIR}/${module}" 644 "fixed frontend policy"
+  done
 }
 
 acquire_release_lock() {
@@ -165,6 +180,9 @@ write_status() {
   else
     printf 'status=%s\nok=%s\nstartedAt=%s\nfinishedAt=%s\nexitCode=%s\nbundleSha256=%s\n' \
       "$state" "$ok" "$started_at" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$exit_code" "$sha" >"$tmp"
+  fi
+  if [ -n "${MANIFEST_KIND:-}" ] && [ -n "${MANIFEST_SEQUENCE:-}" ]; then
+    printf 'releaseKind=%s\nreleaseSequence=%s\n' "$MANIFEST_KIND" "$MANIFEST_SEQUENCE" >>"$tmp"
   fi
   chown root:"$upload_group" "$tmp"
   chmod 0640 "$tmp"
@@ -212,6 +230,11 @@ if [ "${1:-}" = "--recover" ]; then
   [ "$#" -eq 1 ] || die "usage: football-release --recover"
   check_recovery_runtime
   acquire_release_lock
+  if [ -e "${RECOVERY_CURRENT}/frontend-transaction.json" ] || [ -L "${RECOVERY_CURRENT}/frontend-transaction.json" ] \
+    || [ -e "${RECOVERY_CURRENT}/phase.json" ] || [ -L "${RECOVERY_CURRENT}/phase.json" ]; then
+    assert_frontend_controller
+    exec env -i PATH="$PATH" LANG=C.UTF-8 "$NODE_BIN" "${FRONTEND_HELPER_DIR}/frontendReleaseController.cjs" recover
+  fi
   exec env -i \
     PATH="$PATH" \
     HOME="/root" \
@@ -316,7 +339,27 @@ openssl dgst -sha256 -verify "$PUBLIC_KEY" -signature "$SIGNATURE_PATH" "$MANIFE
 readonly TRUSTED_KEY_ID="$(trusted_key_id)"
 readonly BUNDLE_BYTES="$(stat -c '%s' "$BUNDLE_PATH")"
 
-manifest_sequence="$(node - "$MANIFEST_PATH" "$BUNDLE_SHA" "$BUNDLE_BYTES" "$TRUSTED_KEY_ID" \
+# The outer signed identity chooses the route. Unknown kinds never execute the
+# full shell, and policy for a UI request is fixed before any candidate code.
+manifest_kind="$(env -i PATH="$PATH" LANG=C.UTF-8 "$NODE_BIN" - "$MANIFEST_PATH" <<'NODE'
+const fs = require("node:fs");
+const manifest = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+const kind = Object.hasOwn(manifest, "releaseKind") ? manifest.releaseKind : "full";
+if (!["full", "frontend-only"].includes(kind) || kind === "full" && Object.hasOwn(manifest, "frontendAuthorization")) throw new Error("unsupported signed release kind");
+process.stdout.write(kind);
+NODE
+)" || die "signed release kind rejected"
+readonly MANIFEST_KIND="$manifest_kind"
+if [ "$MANIFEST_KIND" = "frontend-only" ]; then
+  assert_frontend_controller
+  env -i PATH="$PATH" LANG=C.UTF-8 "$NODE_BIN" - "$MANIFEST_PATH" <<'NODE'
+const fs = require("node:fs");
+const policy = require("/usr/local/libexec/football-release-frontend/frontendReleaseAuthorization.cjs");
+policy.validateFrontendAuthorization(JSON.parse(fs.readFileSync(process.argv[2], "utf8")));
+NODE
+fi
+
+manifest_sequence="$(env -i PATH="$PATH" LANG=C.UTF-8 "$NODE_BIN" - "$MANIFEST_PATH" "$BUNDLE_SHA" "$BUNDLE_BYTES" "$TRUSTED_KEY_ID" \
   "$EXPECTED_MANIFEST_VERSION" "$EXPECTED_POLICY_VERSION" "$EXPECTED_SIGNATURE_ALGORITHM" \
   "$EXPECTED_SITE" "$EXPECTED_CHANNEL" "$HIGHEST_ACCEPTED_SEQUENCE" <<'NODE'
 const fs = require("node:fs");
@@ -384,6 +427,7 @@ process.stdout.write(String(manifest.releaseSequence));
 NODE
 )"
 readonly MANIFEST_SEQUENCE="$manifest_sequence"
+write_status "running" "0" "" "$BUNDLE_SHA" "$STARTED_AT" "$UPLOAD_GROUP"
 
 inventory_path="${work_dir}/archive-inventory.json"
 python3 - "$BUNDLE_PATH" "$inventory_path" "$MAX_ARCHIVE_ENTRIES" \
@@ -503,6 +547,28 @@ with open(inventory_path, "x", encoding="utf-8") as output:
     output.write("\n")
 PY
 
+if [ "$MANIFEST_KIND" = "frontend-only" ]; then
+  [ ! -e "$RECOVERY_CURRENT" ] && [ ! -L "$RECOVERY_CURRENT" ] || die "unresolved recovery before frontend build"
+  consume_release_sequence_before_execution "$MANIFEST_SEQUENCE"
+  printf 'football-release: signature accepted keyId=%s; starting single-build frontend release\n' "$TRUSTED_KEY_ID"
+  set +e
+  env -i PATH="$PATH" LANG=C.UTF-8 "$NODE_BIN" "${FRONTEND_HELPER_DIR}/frontendReleaseController.cjs" \
+    apply "$BUNDLE_SHA" "$MANIFEST_SEQUENCE" "$work_dir"
+  frontend_status="$?"
+  set -e
+  if [ "$frontend_status" -ne 0 ]; then
+    write_status "failed" "0" "$frontend_status" "$BUNDLE_SHA" "$STARTED_AT" "$UPLOAD_GROUP"
+    status_finalized=1
+    printf 'football-release: frontend-only release failed with exit %s; no full fallback\n' "$frontend_status"
+    exit "$frontend_status"
+  fi
+  write_status "complete" "1" "0" "$BUNDLE_SHA" "$STARTED_AT" "$UPLOAD_GROUP"
+  status_finalized=1
+  rm -f -- "$SOURCE_BUNDLE" "$SOURCE_SHA" "$SOURCE_MANIFEST" "$SOURCE_SIGNATURE"
+  printf 'football-release: frontend-only release complete %s\n' "$BUNDLE_SHA"
+  exit 0
+fi
+
 readonly TRUSTED_SOURCE_DIR="${work_dir}/trusted"
 [ ! -e "$TRUSTED_SOURCE_DIR" ] || die "trusted extraction path already exists"
 install -d -o root -g root -m 0700 -- "$TRUSTED_SOURCE_DIR"
@@ -604,6 +670,16 @@ fi
 
 write_status "complete" "1" "0" "$BUNDLE_SHA" "$STARTED_AT" "$UPLOAD_GROUP"
 status_finalized=1
+if [ "$MANIFEST_KIND" = "full" ]; then
+  # A failed optional UI baseline must not replay or relabel the accepted full
+  # runtime. Any interrupted frontend initialization remains recoverable.
+  if ! ( assert_frontend_controller
+    env -i PATH="$PATH" LANG=C.UTF-8 "$NODE_BIN" "${FRONTEND_HELPER_DIR}/frontendReleaseController.cjs" \
+      initialize "$BUNDLE_SHA" "$MANIFEST_SEQUENCE"
+  ); then
+    printf 'football-release: warning: full release accepted; frontend-only baseline initialization unavailable\n' >&2
+  fi
+fi
 rm -f -- "$SOURCE_BUNDLE" "$SOURCE_SHA" "$SOURCE_MANIFEST" "$SOURCE_SIGNATURE"
 printf 'football-release: guarded release complete %s\n' "$BUNDLE_SHA"
 

@@ -138,6 +138,7 @@ const validateReleaseManifestV3 = (manifest, { now = Date.now(), enforceFreshnes
   if (Object.hasOwn(manifest, "archiveSourceEvidence")) {
     require("./releaseArchiveSourceInventory.cjs").validateSignedArchiveSourceEvidence(manifest);
   }
+  require("./frontendReleaseAuthorization.cjs").validateFrontendAuthorization(manifest);
   return {
     site: manifest.site,
     channel: manifest.channel,

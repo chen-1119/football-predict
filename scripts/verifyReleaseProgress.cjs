@@ -33,6 +33,20 @@ function verifyReleaseProgress() {
     const report = evaluate(complete); assert.equal(report.transactionComplete, true); assert.equal(report.elapsedSeconds, 3000);
     assert.equal(report.liveAcceptanceProven, false); assert.equal(report.sourceValidationExecuted, false); assert.equal(report.nextAction, "run-live-acceptance");
   });
+  check("UI completion uses accepted frontend candidate and keeps both runtime markers unchanged", () => {
+    const runtimeSha = "b".repeat(64), frontendRelease = { version: "frontend-release-state-v1", kind: "frontend-only", phase: "accepted",
+      available: true, consistent: true, runtimeSha256: runtimeSha, runtimeSequence: 711, frontendSha256: sha, frontendSequence: 712,
+      indexSha256: "c".repeat(64), distTreeHash: "d".repeat(64), acceptanceSha256: "e".repeat(64) };
+    const ui = { ...complete, status: { ...complete.status, releaseKind: "frontend-only", releaseSequence: "712" },
+      markers: { app: runtimeSha, liveComplete: runtimeSha }, frontendRelease };
+    const report = evaluate(ui); assert.equal(report.transactionComplete, true); assert.equal(report.liveAcceptanceProven, true);
+    assert.equal(report.nextAction, "accepted-frontend-no-business-revalidation");
+    for (const change of [{ phase: "pending" }, { consistent: false }, { available: false }, { frontendSha256: runtimeSha },
+      { frontendSequence: 713 }, { acceptanceSha256: null }]) assert.equal(evaluate({ ...ui, frontendRelease: { ...frontendRelease, ...change } }).transactionComplete, false);
+    assert.equal(evaluate({ ...ui, markers: { app: sha, liveComplete: sha } }).transactionComplete, false);
+    assert.equal(evaluate({ ...ui, status: { ...ui.status, releaseSequence: undefined } }).transactionComplete, false);
+    assert.equal(evaluate({ ...ui, status: { ...ui.status, releaseKind: "unknown" }, markers: { app: sha, liveComplete: sha } }).transactionComplete, false);
+  });
   for (const [name, mutate] of [
     ["missing live marker", b => { b.markers.liveComplete = null; }],
     ["wrong application marker", b => { b.markers.app = "b".repeat(64); }],
@@ -73,7 +87,7 @@ function verifyReleaseProgress() {
     const readonlyFs = {
       constants: fs.constants,
       openSync(file, flags) { assert.ok(files.has(file), file); assert.equal(flags, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW); descriptors.set(++nextFd, Buffer.from(files.get(file))); return nextFd; },
-      fstatSync(fd) { return { isFile: () => true, size: descriptors.get(fd).length }; },
+      fstatSync(fd) { return { isFile: () => true, size: descriptors.get(fd).length, uid: 0, nlink: 1, mode: 0o644 }; },
       readSync(fd, buf, start, size, pos) { maxRead = Math.max(maxRead, size); return descriptors.get(fd).copy(buf, start, pos, pos + size); },
       closeSync(fd) { assert.ok(descriptors.delete(fd)); closed++; },
       existsSync(file) { assert.equal(file, "/var/lib/football-release/recovery/current"); return true; },
