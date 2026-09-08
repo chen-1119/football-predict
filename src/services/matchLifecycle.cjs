@@ -558,6 +558,40 @@ const buildResultProvenance = (match) => {
   };
 };
 
+// Commit the complete pure dependency closure of result admission, not the
+// whole lifecycle module (unrelated display/merge changes are not a new trial).
+// verifyResultTimelineSemanticClosure checks this inventory against lexical
+// dependencies and rejects newly introduced helpers that are not committed.
+const resultProvenanceSemanticCommitment = () => ({
+  version: "result-provenance-semantic-closure-v1",
+  constants: { MATCH_STATUS_PRIORITY },
+  builtins: ["node:crypto"],
+  functions: Object.fromEntries(Object.entries({
+    asText,
+    buildResultProvenance,
+    canonicalInstant,
+    canonicalMatchStatus,
+    canonicalSourceMatchId,
+    canonicalText,
+    canonicalVersion,
+    eventVersionOf,
+    isOfficialClubResultUrl,
+    isOfficialKLeagueResultUrl,
+    isOfficialSportteryFinal,
+    isOfficialSportterySource,
+    isOfficialSportteryUrl,
+    isTrustedKLeagueOfficialFinal,
+    isTrustedOfficialClubFinal,
+    isTrustedSportteryProvenance,
+    isTrustedUefaOfficialFinal,
+    isValidFinalScore,
+    kLeagueEvidenceHash,
+    officialClubEvidenceHash,
+    strictInstant,
+    uefaEvidenceHash,
+  }).map(([name, fn]) => [name, fn.toString().replace(/\r\n?/gu, "\n")])),
+});
+
 const nowMsFrom = (value) => {
   if (value instanceof Date) return value.getTime();
   if (typeof value === "number") return Number.isFinite(value) ? value : Date.now();
@@ -1043,6 +1077,7 @@ module.exports = {
   isTrustedOfficialFinal,
   isOfficialSportteryVoid,
   buildResultProvenance,
+  resultProvenanceSemanticCommitment,
   deriveMatchLifecycle,
   resolveMatchLifecycle,
   isBeforeMatchSaleCutoff,

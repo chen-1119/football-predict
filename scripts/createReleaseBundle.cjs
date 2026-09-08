@@ -502,6 +502,7 @@ const requiredEntries = [
   "model-research/world-cup-research-benchmark.json",
   "scripts/asOfResultTimeline.cjs",
   "scripts/verifyAsOfResultTimeline.cjs",
+  "scripts/verifyResultTimelineSemanticClosure.cjs",
   "scripts/walkForwardValidation.cjs",
   "scripts/verifyWalkForwardValidation.cjs",
   "scripts/releaseEnrichmentReuse.cjs",
