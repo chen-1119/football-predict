@@ -88,6 +88,8 @@ const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/servic
   'scripts/releaseWorkspaceFreshness.cjs', 'scripts/verifyReleaseWorkspaceFreshness.cjs',
   'scripts/releaseProgress.cjs', 'scripts/checkReleaseProgress.cjs', 'scripts/verifyReleaseProgress.cjs',
   'scripts/staticVerificationReceipts.cjs', 'scripts/verifyStaticVerificationReceipts.cjs',
+  'scripts/productionPlanSourceContracts.cjs', 'scripts/verifyProductionPlanSourceContracts.cjs',
+  'scripts/data/production-plan-source-contracts.json',
   'scripts/apiFootballClockEvidence.cjs', 'scripts/verifyApiFootballClockEvidence.cjs',
   'scripts/verifyApiFootballDiagnostics.cjs', 'scripts/verifyCandidateArtifactSeed.cjs', 'scripts/verifyCandidateRevisionLineage.cjs',
   'scripts/verifyLegacyReferenceConflict.cjs', 'src/services/legacyReferenceConflict.ts', 'scripts/verifyFrozenArchiveAuthority.cjs',
@@ -402,5 +404,11 @@ check('production verification still executes unknown or unconfigured checks and
   for(const entry of ['scripts/verifyApiContracts.cjs','scripts/verifyModelPromotionGate.cjs',
     'scripts/verifyProductionPlanCoverage.cjs','scripts/verifyFastResultProductionClone.cjs'])
     assert.equal(require('./staticVerificationReceipts.cjs').collectInputs(root,[entry]),null);
+});
+check('actual production-plan source predicates pass before reserving a release sequence',()=>{
+  const report=require('./verifyProductionPlanSourceContracts.cjs').verifyProductionPlanSourceContracts();
+  assert.equal(report.ok,true);assert.ok(report.actualSourceChecks>=73);
+  assert.equal(report.productionWrites,0);assert.equal(report.providerRequests,0);
+  assert.equal(pkg.scripts['verify:plan-source-contracts'],'node scripts/verifyProductionPlanSourceContracts.cjs');
 });
 console.log(JSON.stringify({ok:true,verifier:'release-verifier-contracts-v1',checks,productionDataTouched:false},null,2));

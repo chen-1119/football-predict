@@ -183,6 +183,7 @@ const verifySportteryFastResultLane = readText("scripts/verifySportteryFastResul
 const verifySportteryRelayDualFile = readText("scripts/verifySportteryRelayDualFile.cjs");
 const verifySportteryRelayDualLaneServer = readText("scripts/verifySportteryRelayDualLaneServer.cjs");
 const createReleaseBundle = readText("scripts/createReleaseBundle.cjs");
+const releaseWorkspaceFreshness = readText("scripts/releaseWorkspaceFreshness.cjs");
 const verifyReleaseBundleSafety = readText("scripts/verifyReleaseBundleSafety.cjs");
 const createOfflineReleaseKit = readText("scripts/createOfflineReleaseKit.cjs");
 const restoreSshOperatorKey = readText("deploy/light-server/restore-ubuntu-operator-key.sh");
@@ -2553,7 +2554,7 @@ const readPlanSqliteStatus = async () => {
     "signManifestBytes",
     "\".git\"",
     "\"node_modules\"",
-    "\"outputs\"",
+    "...listReleaseRootEntries(rootDir)",
     "\"dist\"",
     "\"server-data\"",
     "\"logs\"",
@@ -2584,6 +2585,9 @@ const readPlanSqliteStatus = async () => {
     "nested-expanding-window-candidate-selection-v2",
     "scripts/compactPublicOddsHistory.cjs",
     "deploy/light-server/release-from-bundle.sh"
+  ]) && hasAll(releaseWorkspaceFreshness, [
+    "function listReleaseRootEntries(root)",
+    "name !== \"outputs\""
   ]) && hasAll(verifyReleaseBundleSafety, [
     "scripts/asOfResultTimeline.cjs",
     "scripts/verifyAsOfResultTimeline.cjs",
