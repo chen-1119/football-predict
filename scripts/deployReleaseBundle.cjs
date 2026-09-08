@@ -21,6 +21,7 @@ const {
   parseFixedRecoveryHelperRotationContract
 } = require("./releaseRecoveryHelperRotation.cjs");
 const { buildReadOnlyWorkerProbe } = require("./releaseWorkerPreflight.cjs");
+const { collectFilesNewerThan } = require("./releaseWorkspaceFreshness.cjs");
 
 const rootDir = path.resolve(__dirname, "..");
 const tmpDir = path.join(rootDir, ".codex-tmp");
@@ -80,53 +81,7 @@ const scpOptions = [
   ...baseSshOptions
 ];
 
-const ignoredFreshnessDirs = new Set([
-  ".git",
-  ".codex",
-  ".agents",
-  ".codex-tmp",
-  "node_modules",
-  "dist",
-  "server-data",
-  "outputs",
-  "logs",
-  "coverage",
-  ".vite"
-]);
-const ignoredFreshnessPathPatterns = [
-  /^public\/data\/[^/]+\.json$/,
-  /^public\/matches\.json$/,
-  /^public\/odds-history\.json$/
-];
-const isIgnoredFreshnessPath = (relativePath) => (
-  relativePath !== "public/data/runtime-config.json"
-  && ignoredFreshnessPathPatterns.some((pattern) => pattern.test(relativePath))
-);
 const allowStaleBundle = process.env.RELEASE_DEPLOY_ALLOW_STALE_BUNDLE === "1";
-
-const collectFilesNewerThan = (dir, cutoffMs, root = dir, rows = []) => {
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const filePath = path.join(dir, entry.name);
-    const relativePath = path.relative(root, filePath).replace(/\\/g, "/");
-    const firstSegment = relativePath.split("/")[0];
-    if (entry.isDirectory()) {
-      if (ignoredFreshnessDirs.has(entry.name) || ignoredFreshnessDirs.has(firstSegment)) continue;
-      collectFilesNewerThan(filePath, cutoffMs, root, rows);
-      continue;
-    }
-    if (!entry.isFile()) continue;
-    if (entry.name.endsWith(".log")) continue;
-    if (isIgnoredFreshnessPath(relativePath)) continue;
-    const stat = fs.statSync(filePath);
-    if (stat.mtimeMs > cutoffMs + 1000) {
-      rows.push({
-        path: relativePath,
-        mtime: new Date(stat.mtimeMs).toISOString()
-      });
-    }
-  }
-  return rows;
-};
 
 const runCommand = (name, args, options = {}) => {
   if (dryRun) {

@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { spawnSync } = require("node:child_process");
+const { collectFilesNewerThan } = require("./releaseWorkspaceFreshness.cjs");
 const {
   RELEASE_BUNDLE_POLICY_VERSION,
   findSensitiveReleaseEntries
@@ -18,19 +19,6 @@ const publicBaseUrl = process.env.PUBLIC_BASE_URL || process.env.REMOTE_BASE_URL
 const allowStaleBundle = process.env.RELEASE_OFFLINE_ALLOW_STALE_BUNDLE === "1";
 const restoreKeyBundleEntry = "deploy/light-server/restore-ubuntu-operator-key.sh";
 
-const ignoredFreshnessDirs = new Set([
-  ".git",
-  ".codex",
-  ".agents",
-  ".codex-tmp",
-  "node_modules",
-  "dist",
-  "server-data",
-  "logs",
-  "coverage",
-  ".vite"
-]);
-
 const latestBundlePath = () => {
   if (process.env.RELEASE_BUNDLE_PATH) return path.resolve(process.env.RELEASE_BUNDLE_PATH);
   if (!fs.existsSync(tmpDir)) return "";
@@ -44,25 +32,6 @@ const latestBundlePath = () => {
 };
 
 const sha256File = (filePath) => crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
-
-const collectFilesNewerThan = (dir, cutoffMs, root = dir, rows = []) => {
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const filePath = path.join(dir, entry.name);
-    const relativePath = path.relative(root, filePath).replace(/\\/g, "/");
-    const firstSegment = relativePath.split("/")[0];
-    if (entry.isDirectory()) {
-      if (ignoredFreshnessDirs.has(entry.name) || ignoredFreshnessDirs.has(firstSegment)) continue;
-      collectFilesNewerThan(filePath, cutoffMs, root, rows);
-      continue;
-    }
-    if (!entry.isFile() || entry.name.endsWith(".log")) continue;
-    const stat = fs.statSync(filePath);
-    if (stat.mtimeMs > cutoffMs + 1000) {
-      rows.push({ path: relativePath, mtime: new Date(stat.mtimeMs).toISOString() });
-    }
-  }
-  return rows;
-};
 
 const fail = (message, details = {}) => {
   console.error(JSON.stringify({ ok: false, error: message, ...details }, null, 2));
@@ -138,7 +107,8 @@ if (bundledRestoreKeySha256 !== localRestoreKeySha256) {
     localRestoreKeySha256
   });
 }
-const newerWorkspaceFiles = collectFilesNewerThan(rootDir, bundleStat.mtimeMs)
+// An offline kit cannot fetch the live generation; retain its stricter data gate.
+const newerWorkspaceFiles = collectFilesNewerThan(rootDir, bundleStat.mtimeMs, { includeGeneratedData: true })
   .sort((a, b) => a.path.localeCompare(b.path));
 if (newerWorkspaceFiles.length && !allowStaleBundle) {
   fail("release bundle is older than current workspace changes", {

@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { spawnSync } = require("node:child_process");
+const { listReleaseRootEntries } = require("./releaseWorkspaceFreshness.cjs");
 process.umask(0o077);
 const {
   RELEASE_BUNDLE_POLICY_VERSION,
@@ -175,7 +176,6 @@ const excludes = [
   "node_modules",
   "server-data",
   "artifacts",
-  "outputs",
   "logs",
   "coverage",
   ".vite",
@@ -196,7 +196,7 @@ const tarArgs = [
   ...excludes.map((entry) => `--exclude=${entry}`),
   "-C",
   rootDir,
-  "."
+  ...listReleaseRootEntries(rootDir)
 ];
 
 if (tlsAction || historicalTrainingSourceArtifact.ok) {
@@ -558,6 +558,8 @@ const requiredEntries = [
   "scripts/verifyQaAccessOperator.cjs",
   "scripts/verifyReleaseTransactionSafety.cjs",
   "scripts/releaseWorkerPreflight.cjs",
+  "scripts/releaseWorkspaceFreshness.cjs",
+  "scripts/verifyReleaseWorkspaceFreshness.cjs",
   "scripts/verifyReleaseWorkerPreflight.cjs",
   "scripts/verifyReleaseRecovery.cjs",
   "scripts/verifyProductionReadiness.cjs",

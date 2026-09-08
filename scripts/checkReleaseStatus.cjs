@@ -6,6 +6,7 @@ const https = require("node:https");
 const net = require("node:net");
 const { spawnSync } = require("node:child_process");
 const { revisionTransitionReportValid } = require("./candidateReleaseContinuity.cjs");
+const { collectFilesNewerThan } = require("./releaseWorkspaceFreshness.cjs");
 const {
   RELEASE_BUNDLE_POLICY_VERSION,
   findSensitiveReleaseEntries
@@ -175,55 +176,6 @@ const inspectBundleEntrySha256 = (filePath, entry) => {
     ...inspection,
     bytes: inspection.bytes.length
   };
-};
-
-const ignoredFreshnessDirs = new Set([
-  ".git",
-  ".codex",
-  ".agents",
-  ".codex-tmp",
-  "node_modules",
-  "dist",
-  "server-data",
-  "logs",
-  "coverage",
-  ".vite"
-]);
-const ignoredFreshnessPathPatterns = [
-  /^public\/data\/[^/]+\.json$/,
-  /^public\/matches\.json$/,
-  /^public\/odds-history\.json$/
-];
-
-const isIgnoredFreshnessPath = (relativePath) => (
-  ignoredFreshnessPathPatterns.some((pattern) => pattern.test(relativePath))
-);
-
-const collectFilesNewerThan = (dir, cutoffMs, root = dir, rows = []) => {
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const filePath = path.join(dir, entry.name);
-    const relativePath = path.relative(root, filePath).replace(/\\/g, "/");
-    const firstSegment = relativePath.split("/")[0];
-    if (entry.isDirectory()) {
-      // The packager excludes root QA artifacts. Do not hide actual source
-      // directories such as src/outputs by adding this to the basename set.
-      if (relativePath === "outputs") continue;
-      if (ignoredFreshnessDirs.has(entry.name) || ignoredFreshnessDirs.has(firstSegment)) continue;
-      collectFilesNewerThan(filePath, cutoffMs, root, rows);
-      continue;
-    }
-    if (!entry.isFile()) continue;
-    if (entry.name.endsWith(".log")) continue;
-    if (isIgnoredFreshnessPath(relativePath)) continue;
-    const stat = fs.statSync(filePath);
-    if (stat.mtimeMs > cutoffMs + 1000) {
-      rows.push({
-        path: relativePath,
-        mtime: new Date(stat.mtimeMs).toISOString()
-      });
-    }
-  }
-  return rows;
 };
 
 const checkBundle = () => {

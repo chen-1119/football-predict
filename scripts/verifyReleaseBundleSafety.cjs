@@ -311,6 +311,8 @@ const requiredReleaseEntries = [
   "scripts/verifyQaAccessOperator.cjs",
   "scripts/verifyReleaseTransactionSafety.cjs",
   "scripts/releaseWorkerPreflight.cjs",
+  "scripts/releaseWorkspaceFreshness.cjs",
+  "scripts/verifyReleaseWorkspaceFreshness.cjs",
   "scripts/verifyReleaseWorkerPreflight.cjs",
   "scripts/verifyFastResultProductionClone.cjs",
   "scripts/reconcileFastResultGeneration.cjs",
