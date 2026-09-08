@@ -29,6 +29,7 @@ const {
 const {
   inspectPrebuiltDist,
 } = require("./releasePrebuiltDist.cjs");
+const { validateSignedArchiveSourceEvidence } = require("./releaseArchiveSourceInventory.cjs");
 
 const rootDir = path.resolve(__dirname, "..");
 // Online release callers already supply the pinned deployment key. Reject
@@ -258,6 +259,19 @@ const list = spawnSync("tar", ["-tzf", outputPath], {
   maxBuffer: 20 * 1024 * 1024
 });
 const entries = list.status === 0 ? list.stdout.split(/\r?\n/).filter(Boolean) : [];
+// Inventory the actual archive bytes, not a pre-exclusion workspace or a file
+// count. The helper streams gzip/tar, rejects duplicate/link/unsafe members and
+// returns every directory/file commitment. No build-success flag is accepted.
+const sourceInventoryCapture = spawnSync(process.execPath, ["scripts/releaseArchiveSourceInventory.cjs", "capture", outputPath], {
+  cwd: rootDir, encoding: "utf8", windowsHide: true, timeout: 35_000, maxBuffer: 4 * 1024 * 1024,
+});
+if (sourceInventoryCapture.status !== 0) {
+  throw new Error(`release archive source inventory failed: ${String(
+    sourceInventoryCapture.error?.message || sourceInventoryCapture.stderr || "capture failed"
+  ).slice(-2000)}`);
+}
+const archiveSourceEvidence = JSON.parse(sourceInventoryCapture.stdout);
+validateSignedArchiveSourceEvidence({ sha256: hash, bytes: stat.size, entries: entries.length, archiveSourceEvidence });
 const extractedModelEvaluation = spawnSync("tar", ["-xOzf", outputPath, `./${modelEvaluationBundleEntry}`], {
   cwd: rootDir,
   encoding: null,
@@ -566,6 +580,18 @@ const requiredEntries = [
   "scripts/checkReleaseProgress.cjs",
   "scripts/verifyReleaseProgress.cjs",
   "scripts/staticVerificationReceipts.cjs",
+  "scripts/rootStaticVerificationAttestations.cjs",
+  "scripts/createRootStaticVerificationAttestations.cjs",
+  "scripts/verifyRootStaticVerificationAttestations.cjs",
+  "scripts/verifyReleaseStaticAttestationIntegration.cjs",
+  "scripts/releaseStageEvidence.cjs",
+  "scripts/verifyReleaseStageEvidence.cjs",
+  "scripts/releaseStageShellBridge.cjs",
+  "scripts/verifyReleaseStageShellBridge.cjs",
+  "scripts/releaseChangeClassification.cjs",
+  "scripts/verifyReleaseChangeClassification.cjs",
+  "scripts/releaseArchiveSourceInventory.cjs",
+  "scripts/verifyReleaseArchiveSourceInventory.cjs",
   "scripts/verifyStaticVerificationReceipts.cjs",
   "scripts/productionPlanSourceContracts.cjs",
   "scripts/verifyProductionPlanSourceContracts.cjs",
@@ -635,6 +661,7 @@ const payload = {
   bytes: stat.size,
   sha256: hash,
   entries: entries.length,
+  archiveSourceEvidence,
   excludes,
   runtimeMutableSourceEntries,
   blockedEntries: blockedEntries.slice(0, 20),
@@ -654,6 +681,7 @@ const payload = {
 
 fs.writeFileSync(sha256Path, `${hash}  ${path.basename(outputPath)}\n`, { mode: 0o600 });
 const manifestBytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`, "utf8");
+if (manifestBytes.length > 1024 * 1024) throw new Error("release manifest with source inventory exceeds the trusted 1 MiB limit");
 fs.writeFileSync(manifestPath, manifestBytes, { mode: 0o600 });
 
 if (!payload.ok) {

@@ -106,6 +106,12 @@ const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/servic
   'scripts/releaseWorkspaceFreshness.cjs', 'scripts/verifyReleaseWorkspaceFreshness.cjs',
   'scripts/releaseProgress.cjs', 'scripts/checkReleaseProgress.cjs', 'scripts/verifyReleaseProgress.cjs',
   'scripts/staticVerificationReceipts.cjs', 'scripts/verifyStaticVerificationReceipts.cjs',
+  'scripts/rootStaticVerificationAttestations.cjs', 'scripts/createRootStaticVerificationAttestations.cjs',
+  'scripts/verifyRootStaticVerificationAttestations.cjs', 'scripts/verifyReleaseStaticAttestationIntegration.cjs',
+  'scripts/releaseStageEvidence.cjs', 'scripts/verifyReleaseStageEvidence.cjs',
+  'scripts/releaseStageShellBridge.cjs', 'scripts/verifyReleaseStageShellBridge.cjs',
+  'scripts/releaseChangeClassification.cjs', 'scripts/verifyReleaseChangeClassification.cjs',
+  'scripts/releaseArchiveSourceInventory.cjs', 'scripts/verifyReleaseArchiveSourceInventory.cjs',
   'scripts/productionPlanSourceContracts.cjs', 'scripts/verifyProductionPlanSourceContracts.cjs',
   'scripts/data/production-plan-source-contracts.json',
   'scripts/apiFootballClockEvidence.cjs', 'scripts/verifyApiFootballClockEvidence.cjs',
@@ -414,6 +420,22 @@ check('static receipt input scopes and failure behavior pass before signing',()=
   assert.equal(report.ok,true);assert.ok(report.checks.length>=42);
   assert.equal(report.productionWrites,0);
   assert.equal(pkg.scripts['verify:static-receipts'],'node scripts/verifyStaticVerificationReceipts.cjs');
+});
+for (const [entry, script, minimum] of [
+  ['verifyRootStaticVerificationAttestations.cjs', 'root-static-attestations', 39],
+  ['verifyReleaseStaticAttestationIntegration.cjs', 'release-static-attestation-integration', 8],
+  ['verifyReleaseStageEvidence.cjs', 'release-stage-evidence', 25],
+  ['verifyReleaseStageShellBridge.cjs', 'release-stage-shell-bridge', 8],
+  ['verifyReleaseChangeClassification.cjs', 'release-change-classification', 36],
+  ['verifyReleaseArchiveSourceInventory.cjs', 'release-archive-source-inventory', 8],
+]) check(`release execution contract passes before signing: ${entry}`, () => {
+  const run = require('node:child_process').spawnSync(process.execPath, [`scripts/${entry}`],
+    { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 30000, maxBuffer: 2 * 1024 * 1024 });
+  assert.equal(run.status, 0, run.stderr || run.stdout);
+  const report = JSON.parse(run.stdout);
+  assert.equal(report.ok, true); assert.ok(report.checks.length >= minimum);
+  assert.ok(report.checks.every(row => row.ok === true));
+  assert.equal(pkg.scripts[`verify:${script}`], `node scripts/${entry}`);
 });
 check('production verification still executes unknown or unconfigured checks and drains stdout',()=>{
   assert.ok(readiness.includes('execute: () => runLocalJsonFresh(args, env)'));

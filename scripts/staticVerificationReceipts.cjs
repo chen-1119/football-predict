@@ -182,6 +182,16 @@ function privateStore(directory) {
 }
 
 async function runWithStaticReceipt({ rootDir, args, env, execute }) {
+  if (env.VERIFY_STATIC_ATTESTATION_DIR) {
+    // Lazy import avoids a module-init cycle: the root attestor uses the same
+    // exact input/result contracts, while its private key never leaves root.
+    try {
+      const attested = require("./rootStaticVerificationAttestations.cjs").readRootAttestation({ rootDir, args, env });
+      if (attested) return attested;
+    } catch { /* Missing attestor code/evidence is a miss, not a passed check. */ }
+    // A failed root handoff must not downgrade to a service-writable HMAC cache.
+    return execute();
+  }
   let inputs, identity, store, name;
   const startedAt = Date.now();
   try {
