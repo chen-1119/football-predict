@@ -13,6 +13,9 @@ for command_name in install openssl visudo bash node id stat sha256sum awk sed h
 done
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+readonly SOURCE_BASELINE_SOURCE_DIR="${SCRIPT_DIR}/../../scripts"
+readonly SOURCE_BASELINE_INSTALL_DIR="/usr/local/libexec/football-release-source-baseline"
+readonly SOURCE_BASELINE_MODULES=(releaseSourceBaseline.cjs releaseSigning.cjs releaseArchiveSourceInventory.cjs releaseChangeClassification.cjs releasePrebuiltDist.cjs)
 PUBLIC_KEY_SOURCE="${1:-${FOOTBALL_RELEASE_PUBLIC_KEY:-}}"
 PUBLIC_BASE_URL="${2:-${FOOTBALL_PUBLIC_BASE_URL:-http://127.0.0.1:8788}}"
 UPLOAD_OWNER="${3:-${FOOTBALL_RELEASE_UPLOAD_USER:-ubuntu}}"
@@ -60,6 +63,11 @@ bash -n "${SCRIPT_DIR}/football-release"
 node --check "${SCRIPT_DIR}/football-release-recovery.cjs"
 bash -n "${SCRIPT_DIR}/football-relay-promote"
 visudo -cf "${SCRIPT_DIR}/football-automation.sudoers" >/dev/null
+for module in "${SOURCE_BASELINE_MODULES[@]}"; do
+  [ -f "${SOURCE_BASELINE_SOURCE_DIR}/${module}" ] && [ ! -L "${SOURCE_BASELINE_SOURCE_DIR}/${module}" ] \
+    || die "missing independently reviewed source baseline policy: ${module}"
+  node --check "${SOURCE_BASELINE_SOURCE_DIR}/${module}" >/dev/null
+done
 
 install -d -o root -g root -m 0755 /etc/football-release /var/lib/football-release /run/lock /usr/local/libexec
 exec 9>"$RELEASE_LOCK_PATH"
@@ -113,11 +121,25 @@ trap - EXIT
 install -d -o "$UPLOAD_OWNER" -g "$UPLOAD_GROUP" -m 0750 /var/lib/football-release/incoming
 install -d -o root -g root -m 0700 /var/lib/football-release/work
 install -d -o root -g root -m 0700 /var/lib/football-release/recovery
+install -d -o root -g root -m 0700 /var/lib/football-release/source-baselines
 install -d -o root -g "$UPLOAD_GROUP" -m 0750 /var/lib/football-release/status /var/lib/football-release/logs
 install -d -o "$UPLOAD_OWNER" -g "$UPLOAD_GROUP" -m 0750 /var/lib/football-relay/incoming
 install -d -o root -g root -m 0700 /var/lib/football-relay/work
 
 install -o root -g root -m 0644 "${SCRIPT_DIR}/football-release-recovery.cjs" /usr/local/libexec/football-release-recovery.cjs
+if [ -e "$SOURCE_BASELINE_INSTALL_DIR" ] || [ -L "$SOURCE_BASELINE_INSTALL_DIR" ]; then
+  [ -d "$SOURCE_BASELINE_INSTALL_DIR" ] && [ ! -L "$SOURCE_BASELINE_INSTALL_DIR" ] \
+    || die "source baseline helper directory is not a plain directory"
+  [ "$(stat -c '%u:%g:%a' -- "$SOURCE_BASELINE_INSTALL_DIR")" = "0:0:700" ] \
+    || die "source baseline helper directory must be root:root 0700"
+fi
+install -d -o root -g root -m 0700 "$SOURCE_BASELINE_INSTALL_DIR"
+for module in "${SOURCE_BASELINE_MODULES[@]}"; do
+  [ ! -L "${SOURCE_BASELINE_INSTALL_DIR}/${module}" ] || die "linked source baseline policy target"
+  install -o root -g root -m 0644 "${SOURCE_BASELINE_SOURCE_DIR}/${module}" "${SOURCE_BASELINE_INSTALL_DIR}/${module}"
+  [ "$(sha256sum "${SOURCE_BASELINE_SOURCE_DIR}/${module}" | awk '{print $1}')" = "$(sha256sum "${SOURCE_BASELINE_INSTALL_DIR}/${module}" | awk '{print $1}')" ] \
+    || die "installed source baseline policy differs from reviewed source: ${module}"
+done
 install -o root -g root -m 0755 "${SCRIPT_DIR}/football-release" /usr/local/sbin/football-release
 install -o root -g root -m 0755 "${SCRIPT_DIR}/football-relay-promote" /usr/local/sbin/football-relay-promote
 

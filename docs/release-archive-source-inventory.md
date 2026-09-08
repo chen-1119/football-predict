@@ -63,6 +63,13 @@ Archive file identity is checked through an opened regular single-link file
 descriptor and rechecked after read. The caller must still keep the archive in
 its private staging directory; this is not a hostile-filesystem sandbox.
 
+Descriptor lifetime has a single `FileHandle` owner. Capture waits for both
+stream close events and the handle's close before resolving or rejecting,
+including corrupt gzip and early parser rejection. It never races
+`ReadStream.destroy()` against a separate raw `closeSync(fd)`, and does not
+suppress `EBADF`. This prevents delayed stream cleanup from closing a descriptor
+number already reused by a subsequent baseline/sentinel file.
+
 ## Observed existing artifact and fixed production wrapper
 
 Read-only inspection of the already signed r711 archive succeeded without changing
@@ -124,6 +131,12 @@ and tamper rejection, standalone legacy-module compatibility, the exact fixed
 wrapper manifest validator, and the actual creator's child-capture block. It
 requires no provider calls, production writes, real signing key, sequence
 reservation, build, deployment or service restart.
+
+The focused verifier also performs 100 small filesystem-backed descriptor reuse
+cycles across successful capture, corrupt gzip and early parser rejection. Each
+cycle immediately opens a sentinel descriptor, yields through subsequent event
+loop ticks, and then validates its identity, writes, fsyncs and reads it. No
+large production archive is needed for this lifetime regression.
 
 Remaining work before an executable frontend-only path: real pre/post sealed
 build inputs and toolchain/environment provenance, retained authenticated baseline

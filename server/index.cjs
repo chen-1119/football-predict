@@ -6,6 +6,7 @@ const { spawn } = require("node:child_process");
 const { Worker } = require("node:worker_threads");
 const crypto = require("node:crypto");
 const zlib = require("node:zlib");
+const { sendStaticFileResponse } = require("./staticFileResponse.cjs");
 const { compactApiFootballDiagnostics } = require("../src/services/apiFootballDiagnostics.cjs");
 const {
   TABLES,
@@ -10734,37 +10735,32 @@ const getModelEvaluation = async ({ admin = false } = {}) => {
 };
 
 const sendFile = async (res, filePath) => {
-  try {
-    const ext = path.extname(filePath).toLowerCase();
-    const stat = await fsp.stat(filePath);
-    const request = res.__request;
-    const acceptEncoding = String(request?.headers?.["accept-encoding"] || "");
-    const contentType = mimeTypes[ext] || "application/octet-stream";
-    const shouldGzip = request?.method !== "HEAD"
-      && stat.size >= 1024
-      && isCompressibleType(contentType)
-      && /\bgzip\b/i.test(acceptEncoding);
-    const headers = {
-      "access-control-allow-origin": "*",
-      "access-control-allow-methods": "GET, POST, OPTIONS",
-      "access-control-allow-headers": "authorization, content-type, if-none-match, x-access-token",
-      "access-control-expose-headers": "cache-control, etag",
-      ...responseSecurityHeaders,
-      "cache-control": getStaticCacheControl(filePath, ext),
-      "content-type": contentType,
-      ...(shouldGzip ? { "content-encoding": "gzip", "vary": "Accept-Encoding" } : { "content-length": stat.size })
-    };
-    res.writeHead(200, headers);
-    if (request?.method === "HEAD") return res.end();
-    const stream = fs.createReadStream(filePath);
-    stream.on("error", () => {
-      if (!res.headersSent) sendJson(res, { ok: false, error: "not found" }, 404);
-      else res.destroy();
-    });
-    return shouldGzip ? stream.pipe(zlib.createGzip()).pipe(res) : stream.pipe(res);
-  } catch {
-    sendJson(res, { ok: false, error: "not found" }, 404);
-  }
+  return sendStaticFileResponse({
+    res,
+    filePath,
+    onNotFound: () => sendJson(res, { ok: false, error: "not found" }, 404),
+    prepare: (stat) => {
+      const ext = path.extname(filePath).toLowerCase();
+      const request = res.__request;
+      const acceptEncoding = String(request?.headers?.["accept-encoding"] || "");
+      const contentType = mimeTypes[ext] || "application/octet-stream";
+      const shouldGzip = request?.method !== "HEAD"
+        && stat.size >= 1024
+        && isCompressibleType(contentType)
+        && /\bgzip\b/i.test(acceptEncoding);
+      const headers = {
+        "access-control-allow-origin": "*",
+        "access-control-allow-methods": "GET, POST, OPTIONS",
+        "access-control-allow-headers": "authorization, content-type, if-none-match, x-access-token",
+        "access-control-expose-headers": "cache-control, etag",
+        ...responseSecurityHeaders,
+        "cache-control": getStaticCacheControl(filePath, ext),
+        "content-type": contentType,
+        ...(shouldGzip ? { "content-encoding": "gzip", "vary": "Accept-Encoding" } : { "content-length": stat.size })
+      };
+      return { headers, head: request?.method === "HEAD", gzip: shouldGzip };
+    },
+  });
 };
 
 const parseLimit = (value, fallback = 50, max = 200) => {

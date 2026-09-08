@@ -24,6 +24,7 @@ readonly LOCK_FILE="/run/lock/football-release.lock"
 readonly APP_DIR="/opt/football-predict"
 readonly NODE_BIN="/opt/node-v22.22.1/bin/node"
 readonly RECOVERY_HELPER="/usr/local/libexec/football-release-recovery.cjs"
+readonly SOURCE_BASELINE_HELPER_DIR="/usr/local/libexec/football-release-source-baseline"
 readonly EXPECTED_POLICY_VERSION="release-secret-policy-v2"
 readonly EXPECTED_MANIFEST_VERSION="3"
 readonly EXPECTED_SIGNATURE_ALGORITHM="rsa-sha256-pkcs1-v1_5"
@@ -104,6 +105,27 @@ check_release_runtime() {
   [[ "$upload_owner" =~ ^[a-z_][a-z0-9_-]*$ ]] || die "invalid configured upload owner"
   id "$upload_owner" >/dev/null 2>&1 || die "configured upload owner does not exist"
   assert_root_controlled_file "$HIGHEST_SEQUENCE_FILE" 600 "highest accepted sequence state"
+}
+
+preserve_signed_source_baseline() {
+  # Fixed, independently bootstrapped policy only. Never load this helper from
+  # the uploaded candidate. A miss leaves the UI route ineligible, not inferred.
+  local directory metadata module
+  command -v timeout >/dev/null 2>&1 || return 1
+  for directory in / /usr /usr/local /usr/local/libexec "$SOURCE_BASELINE_HELPER_DIR"; do
+    [ -d "$directory" ] && [ ! -L "$directory" ] || return 1
+    [ "$(realpath -e -- "$directory")" = "$directory" ] || return 1
+    metadata="$(stat -c '%u:%g:%a' -- "$directory")" || return 1
+    [[ "$metadata" =~ ^0:0:([0-7]{3,4})$ ]] || return 1
+    (( (8#${BASH_REMATCH[1]} & 8#022) == 0 )) || return 1
+  done
+  for module in releaseSourceBaseline.cjs releaseSigning.cjs releaseArchiveSourceInventory.cjs releaseChangeClassification.cjs releasePrebuiltDist.cjs; do
+    [ -f "${SOURCE_BASELINE_HELPER_DIR}/${module}" ] && [ ! -L "${SOURCE_BASELINE_HELPER_DIR}/${module}" ] || return 1
+    [ "$(stat -c '%u:%g:%a:%h' -- "${SOURCE_BASELINE_HELPER_DIR}/${module}")" = "0:0:644:1" ] || return 1
+  done
+  timeout --kill-after=5s 45s env -i PATH="$PATH" LANG=C.UTF-8 \
+    "$NODE_BIN" "${SOURCE_BASELINE_HELPER_DIR}/releaseSourceBaseline.cjs" \
+    preserve "$BUNDLE_SHA" "$MANIFEST_SEQUENCE" "$work_dir"
 }
 
 acquire_release_lock() {
@@ -553,6 +575,9 @@ bash -n "$RELEASE_SCRIPT_PATH" || die "signed release entrypoint has invalid bas
 [ ! -e "$RECOVERY_CURRENT" ] && [ ! -L "$RECOVERY_CURRENT" ] \
   || die "an unresolved release recovery transaction already exists: ${RECOVERY_CURRENT}"
 consume_release_sequence_before_execution "$MANIFEST_SEQUENCE"
+if ! preserve_signed_source_baseline; then
+  printf 'football-release: warning: authenticated source baseline unavailable; UI overlay remains ineligible\n' >&2
+fi
 printf 'football-release: signature accepted keyId=%s; starting guarded release\n' "$TRUSTED_KEY_ID"
 set +e
 env -i \
