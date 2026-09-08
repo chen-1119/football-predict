@@ -111,6 +111,141 @@
   margin-top: 0.55rem;
 }
 
+.data-adoption-overview {
+  container-type: inline-size;
+  min-width: 0;
+  margin-top: 0.85rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid hsl(var(--text-muted) / 0.2);
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+
+.data-adoption-overview__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.65rem;
+  margin-bottom: 0.55rem;
+}
+
+.data-adoption-overview__header h3 {
+  margin: 0;
+  color: hsl(var(--text-primary));
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.data-adoption-overview__header > span,
+.data-adoption-overview__clock-note,
+.data-adoption-overview__boundary {
+  color: hsl(var(--text-secondary));
+  font-size: 0.72rem;
+  font-weight: 400;
+}
+
+.data-adoption-overview__clock {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0.65rem;
+  color: hsl(var(--text-secondary));
+}
+
+.data-adoption-overview__clock strong {
+  color: hsl(var(--text-primary));
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.data-adoption-overview__clock-note { margin: 0.3rem 0 0; }
+
+.data-adoption-overview > .data-adoption-details__warning {
+  margin: 0.65rem 0;
+  padding: 0.6rem 0.7rem;
+  border-left: 2px solid hsl(var(--text-muted));
+  border-radius: 0 6px 6px 0;
+  background: hsl(var(--bg-card) / 0.5);
+  color: hsl(var(--text-secondary));
+  overflow-wrap: anywhere;
+}
+
+.data-adoption-overview__panels {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.7rem;
+  margin-top: 0.7rem;
+}
+
+.data-adoption-overview__panel {
+  min-width: 0;
+  padding: 0.7rem 0.75rem;
+  border: 1px solid hsl(var(--text-muted) / 0.17);
+  border-radius: 9px;
+  background: hsl(var(--bg-card) / 0.28);
+}
+
+.data-adoption-overview__panel h4 {
+  margin: 0 0 0.55rem;
+  color: hsl(var(--text-primary));
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.data-adoption-overview__calculations,
+.data-adoption-overview__gaps {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.data-adoption-overview__calculations li,
+.data-adoption-overview__gaps li {
+  display: grid;
+  min-width: 0;
+  gap: 0.12rem;
+  color: hsl(var(--text-secondary));
+  overflow-wrap: anywhere;
+}
+
+.data-adoption-overview__calculations strong,
+.data-adoption-overview__gaps strong {
+  color: hsl(var(--text-primary));
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.data-adoption-overview__calculations li > span,
+.data-adoption-overview__calculations small { font-size: 0.72rem; }
+
+.data-adoption-overview__calculations [data-calculation-used='false'] > span {
+  color: hsl(var(--text-secondary));
+  font-style: normal;
+}
+
+.data-adoption-overview__gaps [data-gap-state='conflicting'] > strong,
+.data-adoption-overview__gaps [data-gap-state='after-decision'] > strong {
+  color: hsl(var(--danger));
+}
+
+.data-adoption-overview__empty {
+  margin: 0;
+  color: hsl(var(--text-secondary));
+  overflow-wrap: anywhere;
+}
+
+.data-adoption-overview__boundary { margin: 0.65rem 0 0; }
+
+.data-adoption-details__audit-label {
+  color: hsl(var(--text-secondary));
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
 .data-adoption-details { container-type: inline-size; min-width: 0; margin-top: 0.75rem; border-top: 1px solid hsl(var(--text-muted) / 0.18); padding-top: 0.65rem; font-size: 0.875rem; line-height: 1.65; }
 .data-adoption-details summary { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; color: hsl(var(--text-primary)); cursor: pointer; min-height: 44px; font-weight: 650; }
 .data-adoption-details summary::after { content: '+'; margin-left: auto; }
@@ -158,7 +293,8 @@
 .collector-diagnostics li p { font-size: 0.75rem; margin-bottom: 0; }
 .collector-diagnostics [data-collector-state='clock-rejected'] > div > span, .collector-diagnostics [data-mapping-status='conflicting'] { color: hsl(var(--danger)); }
 @container (min-width: 540px) {
+  .data-adoption-overview__panels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .collector-diagnostics__meta { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .data-adoption-details dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .data-adoption-details__identity { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .data-adoption-details__identity { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

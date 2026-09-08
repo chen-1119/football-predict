@@ -10,7 +10,12 @@ const language = params.get('lang') === 'en' ? 'en' : 'zh';
 const match = params.get('mode') === 'missing' ? {} : { predictionMeta: { publicReferenceDecision: {
   integrityVerified: true, decisionAt: '2026-09-07T01:00:00Z', contentHash: 'a'.repeat(64),
   evidenceBinding: { modelVersion: `synthetic-model-${'long-version-'.repeat(20)}` },
-  dataGaps: { preMatchQuality: { components: {
+  dataGaps: { calculationUsage: {
+    version: 'model-input-usage-v1', scope: 'base-calculation-only', sourceVerified: false,
+    rows: [{ key: 'form', stage: 'form-lambda-blend', weight: .3, used: true, receiptHash: 'b'.repeat(64),
+      sources: ['500-recent-form'], fallbackMetrics: 2 },
+    { key: 'elo', stage: 'base-outcome-blend', weight: 0, used: false, receiptHash: 'c'.repeat(64) }],
+  }, preMatchQuality: { components: {
     homeForm: { status: 'conflicting' }, elo: { status: 'stale' },
     referee: { status: 'published_after_cutoff' }, lineup: { status: 'not_yet_publishable' },
     weather: { status: 'verified', sourceObservedAt: '2026-09-07T00:00:00Z' }, injuries: { status: 'missing' },

@@ -238,6 +238,8 @@ const requiredReleaseEntries = [
   "src/services/publicReferenceEvidence.cjs",
   "scripts/verifyPublicReferenceEvidence.cjs",
   "scripts/verifyDataAdoption.cjs",
+  "scripts/verifyDataAdoptionSources.cjs",
+  "scripts/verifyCandidatePromotionGaps.cjs",
   "src/services/apiFootballDiagnostics.cjs",
   "src/services/apiFootballDiagnostics.d.cts",
   "scripts/apiFootballClockEvidence.cjs",

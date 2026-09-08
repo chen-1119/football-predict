@@ -51,6 +51,7 @@ import { DateScopeBar } from '../components/predictions/DateScopeBar';
 import { MatchSummaryRow } from '../components/predictions/MatchSummaryRow';
 import { PredictionsPageHeader } from '../components/predictions/PredictionsPageHeader';
 import { RecommendationEvidenceFacts } from '../components/predictions/RecommendationEvidenceFacts';
+import { CandidatePromotionGaps } from '../components/predictions/CandidatePromotionGaps';
 import '../styles/predictions.css';
 import '../styles/predictions-refresh.css';
 
@@ -3741,11 +3742,12 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
                   <strong>{candidateBrierLabel}</strong>
                   <small>
                     {language === 'zh'
-                      ? `${Number(candidateProspective.metrics?.calendarWindows || 0)}/6 固定窗口 · 双指标胜窗 ${Number(candidateProspective.metrics?.winningCalendarWindows || 0)}/${Number(candidateProspective.metrics?.requiredWinningCalendarWindows || 5)}`
-                      : `${Number(candidateProspective.metrics?.calendarWindows || 0)}/6 fixed windows · dual-metric wins ${Number(candidateProspective.metrics?.winningCalendarWindows || 0)}/${Number(candidateProspective.metrics?.requiredWinningCalendarWindows || 5)}`}
+                      ? '逐项门槛与窗口证据缺口见下方'
+                      : 'See individual gates and window evidence gaps below'}
                   </small>
                 </span>
               </div>
+              <CandidatePromotionGaps candidate={candidateProspective} language={language} />
             </div>
           )}
           <div className="benchmark-audit-panel__rules">
