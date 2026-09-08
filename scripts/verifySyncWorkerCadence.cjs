@@ -2149,6 +2149,32 @@ const verifyRelayWake = async () => {
   );
   driftRaceHeartbeat.stop();
 
+  // A newly refrozen, non-nominated revision must not need fake activation
+  // to cross the real heavy-step health barrier (the r704 failure).
+  const { updateCandidateProspectiveLedger } = require("./candidateProspectiveLedger.cjs");
+  const { buildShadowObservationState } = require("../src/services/candidateCaptureState.cjs");
+  const shadowCandidate = { id: "shadow-worker-test", role: "shadow-feature-candidate", weights: { market: 1, temperature: 1.25 } };
+  const shadowAt = new Date(heartbeatEpochMs).toISOString();
+  const shadowUpdate = updateCandidateProspectiveLedger({
+    candidates: [shadowCandidate], selectedCandidate: shadowCandidate, evaluatedAt: shadowAt,
+  });
+  assert.equal(shadowUpdate.audit.state, "SHADOW");
+  const shadowStatus = exactDeadlineHeartbeatFixture(shadowAt);
+  shadowStatus.audit = { ...shadowUpdate.audit, captureState: buildShadowObservationState(shadowUpdate.audit) };
+  shadowStatus.readiness.candidateRevisionId = shadowUpdate.audit.candidateRevisionId;
+  const shadowHeartbeat = startCandidateProspectiveDeadlineHeartbeat({
+    immediate: false, now: () => heartbeatEpochMs + 1000, readStatus: () => shadowStatus,
+    run: async () => { throw new Error("valid shadow status should not trigger recovery"); },
+    timer: () => ({ unref() {} }), clearTimer: () => {},
+    retryTimer: () => ({ unref() {} }), clearRetryTimer: () => {},
+  });
+  try {
+    const healthyShadow = await shadowHeartbeat.waitForHealthy();
+    assert.equal(healthyShadow.audit.state, "SHADOW");
+    assert.equal(healthyShadow.audit.activationAt, null);
+    assert.equal(healthyShadow.audit.formalPromotionEligible, false);
+  } finally { shadowHeartbeat.stop(); }
+
   const baseline = { exists: true, token: "relay-a" };
   assert.equal(relaySnapshotChanged(baseline, { exists: true, token: "relay-b" }), true);
   assert.equal(relaySnapshotChanged(baseline, { exists: false, token: null }), false);

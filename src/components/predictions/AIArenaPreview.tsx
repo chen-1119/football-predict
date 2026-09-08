@@ -43,9 +43,9 @@ export const AIArenaPreview: React.FC<AIArenaPreviewProps> = ({ matches, arena: 
     { label: language === 'zh' ? '莽夫奖' : 'Boldest', award: arena.awards.reckless, digits: 0 },
   ] : [];
 
-  React.useEffect(() => {
-    if (activeDate !== 'all' && !arena.dates.includes(activeDate)) setActiveDate('all');
-  }, [activeDate, arena.dates]);
+  // Bounded adjustment before commit: do not paint an empty stale-date frame
+  // and then schedule a second update from an effect.
+  if (activeDate !== 'all' && !arena.dates.includes(activeDate)) setActiveDate('all');
 
   return (
     <>

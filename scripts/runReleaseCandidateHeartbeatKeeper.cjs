@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
+const { shadowObservationAuditValid } = require("../src/services/candidateCaptureState.cjs");
 
 const KEEPER_VERSION = "release-candidate-heartbeat-keeper-v2";
 const HEARTBEAT_VERSION = "prospective-deadline-heartbeat-v2";
@@ -183,7 +184,7 @@ const exactHeartbeatMatches = (
     && topLevelDueCountersMatch
     && status?.evaluatedAt === expectedEvaluatedAt
     && status?.readiness?.evaluatedAt === status.evaluatedAt
-    && status?.audit?.state === "ACTIVE"
+    && (status?.audit?.state === "ACTIVE" || shadowObservationAuditValid(status?.audit))
     && status?.audit?.chainValid === true
     && status?.audit?.evaluatedAt === status.evaluatedAt
     && typeof status?.audit?.candidateRevisionId === "string"

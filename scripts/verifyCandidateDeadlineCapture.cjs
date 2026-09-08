@@ -29,10 +29,15 @@ const {
   researchSettlementInputFingerprint,
   settlementHistoryIdentityValues,
   summarizeDeadlineBatches,
+  candidateReadinessPreview,
 } = require("./captureCandidateProspectiveDeadline.cjs");
 const {
   exactHeartbeatMatches,
 } = require("./runReleaseCandidateHeartbeatKeeper.cjs");
+const { candidateDeadlineCaptureStatusAdvanced } = require("./runSyncWorker.cjs");
+const {
+  shadowObservationAuditValid, projectShadowObservationState, buildShadowObservationState,
+} = require("../src/services/candidateCaptureState.cjs");
 const {
   AUDIT_VERSION: CHALLENGER_AUDIT_VERSION,
   compactCalibrationChallengerSuitePublic,
@@ -636,6 +641,138 @@ check("deadline-only mode commits the formal heartbeat without touching benchmar
       false,
       "deadline-only must not enter a research suite lock",
     );
+  }
+});
+
+check("a real ACTIVE implementation refreeze remains SHADOW but publishes a healthy exact heartbeat", () => {
+  const oldCommitment = { ...implementationCommitment, dependencyLockHash: "f".repeat(64) };
+  const oldFreeze = updateCandidateProspectiveLedger({
+    candidates: [baseline, candidate], selectedCandidate: candidate,
+    implementationCommitment: oldCommitment, evaluatedAt: "2026-07-27T00:01:00.000Z",
+  });
+  const old = updateCandidateProspectiveLedger({
+    priorRegistry: oldFreeze.registry, candidates: [baseline, candidate], selectedCandidate: candidate,
+    implementationCommitment: oldCommitment, evaluatedAt: "2026-07-27T00:02:00.000Z",
+    robustness: {
+      family: { inventoryHash: oldFreeze.audit.inventoryHashAtFreeze },
+      selectedCandidate: { id: candidate.id }, candidateReadyForProspectiveTest: true,
+    },
+  });
+  assert.equal(old.audit.state, "ACTIVE");
+  const priorEvents = structuredClone(old.registry.ledgers[0].events);
+  const refrozen = updateCandidateProspectiveLedger({
+    priorRegistry: old.registry, candidates: [baseline, candidate], selectedCandidate: candidate,
+    implementationCommitment, evaluatedAt: "2026-07-27T00:03:00.000Z",
+  });
+  assert.equal(refrozen.chainValid, true);
+  assert.equal(refrozen.audit.state, "SHADOW");
+  assert.notEqual(refrozen.audit.candidateRevisionId, old.audit.candidateRevisionId);
+  assert.deepEqual(refrozen.registry.ledgers[0].events.slice(0, priorEvents.length), priorEvents);
+  const refrozenRegistryFile = path.join(tempDir, "shadow-refrozen-registry.json");
+  const refrozenStatusFile = path.join(tempDir, "shadow-refrozen-status.json");
+  writeJson(refrozenRegistryFile, refrozen.registry);
+  const result = runCapture("2026-07-27T00:43:35.000Z", {
+    CANDIDATE_PROSPECTIVE_REGISTRY_FILE: refrozenRegistryFile,
+    CANDIDATE_PROSPECTIVE_CAPTURE_STATUS_FILE: refrozenStatusFile,
+  }, ["--deadline-only"]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const status = JSON.parse(fs.readFileSync(refrozenStatusFile, "utf8"));
+  const afterRegistry = JSON.parse(fs.readFileSync(refrozenRegistryFile, "utf8"));
+  assert.equal(verifyRegistry(afterRegistry).valid, true);
+  assert.equal(status.audit.state, "SHADOW");
+  assert.equal(shadowObservationAuditValid(status.audit), true);
+  assert.equal(exactHeartbeatMatches(status, status.evaluatedAt), true);
+  assert.equal(candidateDeadlineCaptureStatusAdvanced({ ok: true, startedAt: status.evaluatedAt }, status), true);
+  assert.equal(status.audit.activationAt, null);
+  assert.equal(status.audit.metrics.formalRows, 0);
+  assert.equal(status.audit.metrics.windowEvaluation.registeredWindows, 0);
+  assert.equal(status.audit.formalPromotionEligible, false);
+  assert.deepEqual(projectShadowObservationState(status.audit, afterRegistry), status.audit.captureState);
+  const activeLedger = afterRegistry.ledgers.find((row) => row.ledgerId === afterRegistry.activeLedgerId);
+  assert.equal(activeLedger.events.some((event) => event.type === "activation" || event.phase === "formal"), false);
+  for (const mutate of [
+    (s) => { delete s.audit.captureState; },
+    (s) => { s.audit.captureState.rootHash = "0".repeat(64); },
+    (s) => { s.audit.captureState.evaluatedAt = old.audit.evaluatedAt; },
+    (s) => { s.audit.activationAt = old.audit.activationAt; },
+    (s) => { s.audit.cohort.formal.universe = 1; },
+    (s) => { s.audit.metrics.formalRows = 1; },
+    (s) => { s.audit.metrics.windowEvaluation.registeredWindows = 6; },
+    (s) => { s.audit.formalPromotionEligible = true; },
+    (s) => { s.audit.onlineEffect = true; },
+    (s) => { s.audit.chainValid = false; },
+    (s) => { s.dueUnrecorded = 1; },
+    (s) => { s.dueAtomicComplete = false; },
+    (s) => { s.readiness.candidateRevisionId = old.audit.candidateRevisionId; },
+  ]) {
+    const invalid = structuredClone(status);
+    mutate(invalid);
+    assert.equal(exactHeartbeatMatches(invalid, invalid.evaluatedAt), false, mutate.toString());
+  }
+  assert.equal(exactHeartbeatMatches(status, status.evaluatedAt, {
+    requireFresh: true, nowMs: Date.parse(status.evaluatedAt) + 180001, maxAgeMs: 180000,
+  }), false);
+  const wrongRegistry = structuredClone(afterRegistry);
+  wrongRegistry.activeLedgerId = old.registry.activeLedgerId;
+  assert.equal(projectShadowObservationState(status.audit, wrongRegistry), null);
+});
+
+check("actual release keeper baseline and drained-stop bodies accept bound SHADOW and reject evidence drift", () => {
+  const releaseSource = fs.readFileSync(path.join(rootDir, "deploy/light-server/release-from-bundle.sh"), "utf8").replace(/\r\n/g, "\n");
+  const bodyFor = (name) => {
+    const start = releaseSource.indexOf(`${name}() {`);
+    const opening = releaseSource.indexOf("<<'NODE'\n", start);
+    const closing = releaseSource.indexOf("\nNODE", opening);
+    assert.ok(start >= 0 && opening > start && closing > opening);
+    return releaseSource.slice(opening + "<<'NODE'\n".length, closing);
+  };
+  const at = new Date().toISOString();
+  const shadow = updateCandidateProspectiveLedger({ candidates: [baseline, candidate], selectedCandidate: candidate, evaluatedAt: at, implementationCommitment });
+  const audit = { ...shadow.audit, captureState: buildShadowObservationState(shadow.audit) };
+  const registryPath = path.join(tempDir, "keeper-shadow-registry.json");
+  const controlPath = path.join(tempDir, "keeper-shadow-control.json");
+  const heartbeatPath = path.join(tempDir, "keeper-shadow-heartbeat.json");
+  const control = {
+    version: "release-candidate-heartbeat-keeper-v2", instanceId: "test-shadow-keeper", pid: 12345,
+    ok: true, state: "running", captureSequence: 1,
+  };
+  const heartbeat = {
+    version: "prospective-deadline-heartbeat-v2", captureMode: "deadline-only", evaluatedAt: at,
+    ok: true, skipped: false, dueCaptureComplete: true, dueAtomicComplete: true,
+    dueUnrecorded: 0, readyDueUnrecorded: 0, audit, blockers: [], registryFile: registryPath,
+    readiness: candidateReadinessPreview({ ledger: shadow.registry.ledgers[0], matches: [], snapshots: [], evaluatedAt: at, trustedCollectorCount: 2 }),
+  };
+  writeJson(registryPath, shadow.registry); writeJson(controlPath, control); writeJson(heartbeatPath, heartbeat);
+  const ledgerModule = path.join(rootDir, "scripts/candidateProspectiveLedger.cjs");
+  const matcherModule = path.join(rootDir, "scripts/runReleaseCandidateHeartbeatKeeper.cjs");
+  const stateModule = path.join(rootDir, "src/services/candidateCaptureState.cjs");
+  const runBody = (name, args) => spawnSync(process.execPath, ["-", ...args], {
+    input: bodyFor(name), encoding: "utf8", timeout: 10000, windowsHide: true,
+  });
+  const cleanBaseline = runBody("release_candidate_heartbeat_keeper_clean_baseline", [
+    controlPath, registryPath, control.instanceId, String(control.pid), ledgerModule, stateModule,
+  ]);
+  assert.equal(cleanBaseline.status, 0, cleanBaseline.stderr);
+  const baselineEvidence = JSON.parse(cleanBaseline.stdout);
+  const stopped = {
+    ...control, state: "stopped", failedClosed: false, awaitingExplicitStop: false,
+    stopSignal: "SIGTERM", stopDrained: true, activeAttempt: null, failure: null,
+    stopRequestedAt: at, stoppedAt: at, lastEvaluatedAt: at,
+    lastRegistryRootHash: audit.rootHash, lastCandidateRevisionId: audit.candidateRevisionId,
+  };
+  writeJson(controlPath, stopped);
+  const stopArgs = [controlPath, heartbeatPath, registryPath, control.instanceId, String(control.pid), JSON.stringify(baselineEvidence), "120", matcherModule, ledgerModule];
+  const stoppedResult = runBody("release_candidate_heartbeat_keeper_clean_stop_evidence_is_valid", stopArgs);
+  assert.equal(stoppedResult.status, 0, stoppedResult.stderr);
+  for (const mutate of [
+    (h) => { delete h.audit.captureState; },
+    (h) => { h.audit.state = "ACTIVE"; },
+    (h) => { h.audit.candidateRevisionId = "wrong-revision"; },
+    (h) => { h.audit.cohort.formal.settled = 1; },
+    (h) => { h.audit.captureState.formalRecommendationAllowed = true; },
+  ]) {
+    const invalid = structuredClone(heartbeat); mutate(invalid); writeJson(heartbeatPath, invalid);
+    assert.notEqual(runBody("release_candidate_heartbeat_keeper_clean_stop_evidence_is_valid", stopArgs).status, 0, mutate.toString());
   }
 });
 

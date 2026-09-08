@@ -3,6 +3,7 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
+const { buildShadowObservationState } = require("../src/services/candidateCaptureState.cjs");
 const {
   CAPTURE_FINALIZATION_GRACE_SECONDS,
   CAPTURE_FINALIZATION_POLICY_VERSION,
@@ -1660,6 +1661,10 @@ const compactBenchmarkAudit = (audit) => audit ? {
 
 const compactAudit = (audit) => audit ? {
   version: audit.version || null,
+  frozenAt: audit.frozenAt || null,
+  onlineEffect: audit.onlineEffect === true,
+  formalPromotionEligible: audit.formalPromotionEligible === true,
+  captureState: buildShadowObservationState(audit),
   evaluatedAt: audit.evaluatedAt || null,
   state: audit.state || null,
   candidateRevisionId: audit.candidateRevisionId || null,

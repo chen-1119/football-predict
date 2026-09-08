@@ -13,6 +13,7 @@ const {
 } = require("./sportteryRelayCircuit.cjs");
 const { summarizeRelayLanes } = require("./relayLaneFreshness.cjs");
 const { boundedRuntimeEnv, boundedRuntimeNumber } = require("./boundedRuntimeNumber.cjs");
+const { shadowObservationAuditValid } = require("../src/services/candidateCaptureState.cjs");
 
 const rootDir = path.resolve(__dirname, "..");
 const tmpDir = path.join(rootDir, ".codex-tmp");
@@ -192,7 +193,7 @@ const candidateDeadlineUrgencyFromEvaluation = ({
     && Number.isFinite(minutesUntilFinalization)
     && minutesUntilDeadline <= 0
     && minutesUntilFinalization >= 0;
-  const valid = candidate?.state === "ACTIVE"
+  const valid = (candidate?.state === "ACTIVE" || shadowObservationAuditValid(candidate))
     && candidate?.chainValid === true
     && heartbeat?.version === "prospective-deadline-heartbeat-v2"
     && heartbeat?.fresh === true

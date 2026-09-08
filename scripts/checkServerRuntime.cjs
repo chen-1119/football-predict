@@ -5,6 +5,7 @@ const https = require("node:https");
 const { spawnSync } = require("node:child_process");
 const { acquireSyncLock } = require("../server/syncLock.cjs");
 const { evaluateFallbackReadiness } = require("./fallbackReadiness.cjs");
+const { shadowObservationAuditValid } = require("../src/services/candidateCaptureState.cjs");
 
 const rootDir = path.resolve(__dirname, "..");
 const isWindows = process.platform === "win32";
@@ -1075,7 +1076,9 @@ const candidateProspectiveRuntimeState = (modelEvaluation) => {
   );
 
   if (!candidate) blockers.push("candidate-prospective-track-missing");
-  if (candidate?.state !== "ACTIVE") blockers.push("candidate-prospective-not-active");
+  if (candidate?.state !== "ACTIVE" && !shadowObservationAuditValid(candidate)) {
+    blockers.push("candidate-prospective-not-active");
+  }
   if (candidate?.chainValid !== true) blockers.push("candidate-prospective-chain-invalid");
   if (decisionRecord?.version !== "candidate-atomic-decision-record-v3") {
     blockers.push("atomic-decision-record-version-invalid");

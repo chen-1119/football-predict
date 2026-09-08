@@ -547,6 +547,18 @@ export interface DataSyncState {
           version?: string | null;
           evaluatedAt?: string | null;
           state?: 'SHADOW' | 'ACTIVE' | 'PROMOTED' | 'RETIRED' | string;
+          captureState?: {
+            version: string;
+            mode: 'shadow-observation';
+            reason: string;
+            candidateRevisionId: string;
+            rootHash: string;
+            evaluatedAt: string;
+            frozenAt: string;
+            formalTrialActive: false;
+            formalRecommendationAllowed: false;
+            onlineEffect: false;
+          } | null;
           onlineEffect?: false;
           baseCandidateId?: string | null;
           candidateRevisionId?: string | null;

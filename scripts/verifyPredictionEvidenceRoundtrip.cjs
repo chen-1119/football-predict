@@ -224,6 +224,24 @@ const verifyEvidenceHttp = async (reference, identity, postgresUrl = "") => {
   });
   fs.symlinkSync(path.join(rootDir, "node_modules"), path.join(app, "node_modules"), process.platform === "win32" ? "junction" : "dir");
   fs.cpSync(publicDataDir, path.join(app, "public", "data"), { recursive: true });
+  const { updateCandidateProspectiveLedger } = require("./candidateProspectiveLedger.cjs");
+  const { candidateReadinessPreview } = require("./captureCandidateProspectiveDeadline.cjs");
+  const { buildShadowObservationState, shadowObservationAuditValid } = require("../src/services/candidateCaptureState.cjs");
+  const shadowAt = new Date().toISOString();
+  const candidate = { id: "http-shadow-only", role: "shadow-feature-candidate", weights: { market: 1, temperature: 1.25 } };
+  const shadow = updateCandidateProspectiveLedger({ candidates: [candidate], selectedCandidate: candidate, evaluatedAt: shadowAt });
+  shadow.audit.captureState = buildShadowObservationState(shadow.audit);
+  check(shadow.audit.captureState, "real ledger constructs an explicitly unactivated observation receipt");
+  fs.mkdirSync(path.join(storeDir, "model-artifacts"), { recursive: true });
+  fs.writeFileSync(path.join(storeDir, "model-artifacts", "candidate-prospective-registry.json"), JSON.stringify(shadow.registry));
+  fs.writeFileSync(path.join(storeDir, "candidate-prospective-capture-status.json"), JSON.stringify({
+    version: "prospective-deadline-heartbeat-v2", captureMode: "deadline-only", evaluatedAt: shadowAt,
+    ok: true, skipped: false, captureDurationMs: 0, reason: "settlement-heartbeat",
+    dueMatches: 0, eventsAdded: 0, dueCaptureEventsAdded: 0, dueDecisionEventsAdded: 0,
+    dueExclusionEventsAdded: 0, dueAtomicDecisionEventsAdded: 0, dueCaptureComplete: true,
+    dueAtomicComplete: true, dueUnrecorded: 0, readyDueUnrecorded: 0, blockers: [], audit: shadow.audit,
+    readiness: candidateReadinessPreview({ ledger: shadow.registry.ledgers[0], matches: [], snapshots: [], evaluatedAt: shadowAt, trustedCollectorCount: 2 }),
+  }));
   const port = 24000 + Math.floor(Math.random() * 12000);
   const token = crypto.randomBytes(24).toString("hex");
   const output = [];
@@ -286,6 +304,17 @@ const verifyEvidenceHttp = async (reference, identity, postgresUrl = "") => {
     verifyStoredMarketPair(history.body[0], result.body, postgresUrl ? "real PostgreSQL history/admin HTTP" : "SQLite history/admin HTTP");
     const scorecard = await request("/api/v1/model/evaluation", { authorization: `Bearer ${verified.body.session.token}` });
     equal(scorecard.status, 200, "public scorecard HTTP succeeds with a real local recommendation session");
+    const publicShadow = scorecard.body.publicScorecard?.shadowTracks?.CANDIDATE_PROSPECTIVE;
+    equal(publicShadow?.state, "SHADOW", "real public HTTP never changes observation to ACTIVE");
+    equal(publicShadow?.captureState, shadow.audit.captureState, "actual public projection preserves the registry-bound observation receipt");
+    equal(shadowObservationAuditValid(publicShadow), true, "public compact counters remain sufficient for the shared operational gate");
+    equal([publicShadow?.onlineEffect, publicShadow?.formalPromotionEligible, publicShadow?.activationAt], [false, false, null], "operational health is not recommendation or trial activation permission");
+    const { candidateProspectiveRuntimeState } = require("./checkServerRuntime.cjs");
+    const observationRuntime = candidateProspectiveRuntimeState(scorecard.body);
+    equal(observationRuntime.ok, true, `actual public SHADOW output passes unchanged operational evidence checks: ${JSON.stringify(observationRuntime.blockers)}`);
+    const unboundPublic = json(scorecard.body);
+    unboundPublic.publicScorecard.shadowTracks.CANDIDATE_PROSPECTIVE.captureState = null;
+    check(candidateProspectiveRuntimeState(unboundPublic).blockers.includes("candidate-prospective-not-active"), "a SHADOW label alone does not satisfy the runtime health gate");
     const partition = scorecard.body.publicScorecard?.referenceReviewPerformance?.versionBreakdown;
     equal(partition?.groups?.[0]?.modelVersion, reference.evidenceBinding.modelVersion, "actual public scorecard exposes the reconciled frozen version labels");
     equal(partition?.groups?.[0]?.marketBreakdown?.HAD?.cumulative?.settled, 1, "actual scorecard preserves version and market denominator");

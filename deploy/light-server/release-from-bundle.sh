@@ -5435,9 +5435,10 @@ release_candidate_heartbeat_keeper_clean_baseline() {
   local expected_pid="$4"
   run_as_service_user "$NODE_HOME/bin/node" - \
     "$control_file" "$registry_file" "$expected_instance_id" "$expected_pid" \
-    "$APP_DIR/scripts/candidateProspectiveLedger.cjs" <<'NODE'
+    "$APP_DIR/scripts/candidateProspectiveLedger.cjs" \
+    "$APP_DIR/src/services/candidateCaptureState.cjs" <<'NODE'
 const fs = require("node:fs");
-const [controlPath, registryPath, expectedInstanceId, expectedPid, ledgerModule] = process.argv.slice(2);
+const [controlPath, registryPath, expectedInstanceId, expectedPid, ledgerModule, stateModule] = process.argv.slice(2);
 const readRegularJson = (filePath, maxBytes) => {
   const flags = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0);
   const fd = fs.openSync(filePath, flags);
@@ -5451,7 +5452,8 @@ const readRegularJson = (filePath, maxBytes) => {
     fs.closeSync(fd);
   }
 };
-const { verifyRegistry, ledgerState } = require(ledgerModule);
+const { verifyRegistry, ledgerState, auditLedger } = require(ledgerModule);
+const { buildShadowObservationState } = require(stateModule);
 const control = readRegularJson(controlPath, 1024 * 1024);
 const registry = readRegularJson(registryPath, 128 * 1024 * 1024);
 if (
@@ -5472,7 +5474,7 @@ const candidateRevisionId = String(active?.header?.candidateRevisionId || "");
 if (
   verification.valid !== true
   || !active
-  || ledgerState(active) !== "ACTIVE"
+  || (ledgerState(active) !== "ACTIVE" && !buildShadowObservationState(auditLedger(active)))
   || !candidateRevisionId
 ) process.exit(1);
 process.stdout.write(JSON.stringify({
@@ -5566,12 +5568,11 @@ const terminalRootHash = active?.events?.at(-1)?.eventHash || GENESIS_HASH;
 if (
   verification.valid !== true
   || !active
-  || ledgerState(active) !== "ACTIVE"
+  || ledgerState(active) !== heartbeat?.audit?.state
   || active.ledgerId !== baseline.activeLedgerId
   || candidateRevisionId !== baseline.candidateRevisionId
   || !/^[a-f0-9]{64}$/u.test(rootHash)
   || terminalRootHash !== rootHash
-  || heartbeat?.audit?.state !== "ACTIVE"
   || heartbeat?.audit?.chainValid !== true
   || heartbeat?.audit?.candidateRevisionId !== candidateRevisionId
   || heartbeat?.audit?.rootHash !== rootHash

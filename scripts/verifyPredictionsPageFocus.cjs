@@ -761,10 +761,10 @@ pushCheck("date chips use only the Sporttery business-day scope", hasAll(predict
 ]) && !predictions.includes("kickoffDay,\n    sportteryDay"));
 
 pushCheck("date navigation opens the nearest available match day and stays user-controlled", hasAll(predictions, [
-  "automaticInitialDateResolvedRef",
+  "automaticInitialDateResolved",
   "const nearestUpcomingDate = availableDates.find((date) => date >= todayStr)",
   "const nearestAvailableDate = nearestUpcomingDate || nearestRecentDate",
-  "automaticInitialDateResolvedRef.current = true",
+  "setAutomaticInitialDateResolved(true)",
   "onSelectDate={handleDateSelect}"
 ]) && hasAll(personalReview, [
   "<DateScopeBar",

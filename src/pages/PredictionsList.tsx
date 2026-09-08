@@ -933,7 +933,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
   const matchListRef = React.useRef<HTMLElement | null>(null);
   const refreshScrollAnchorRef = React.useRef<{ eventKey: string; top: number } | null>(null);
   const returnScrollRestoredRef = React.useRef(false);
-  const automaticInitialDateResolvedRef = React.useRef(restoreReturnView);
+  const [automaticInitialDateResolved, setAutomaticInitialDateResolved] = useState(restoreReturnView);
 
   React.useEffect(() => {
     const previousToday = previousTodayRef.current;
@@ -943,20 +943,23 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     }
   }, [todayStr]);
 
-  React.useEffect(() => {
-    if (automaticInitialDateResolvedRef.current || !dataSync.currentLoaded) return;
+  // Resolve the initial date once before painting; a user's explicit date is
+  // never replaced when a later background refresh changes the match list.
+  if (!automaticInitialDateResolved && dataSync.currentLoaded) {
     const availableDates = Array.from(new Set(matches.flatMap(getMatchDateCandidates).filter(Boolean))).sort();
-    if (availableDates.length === 0) return;
-    automaticInitialDateResolvedRef.current = true;
-    if (availableDates.includes(todayStr)) return;
-    const nearestUpcomingDate = availableDates.find((date) => date >= todayStr);
-    const nearestRecentDate = [...availableDates].reverse().find((date) => date < todayStr);
-    const nearestAvailableDate = nearestUpcomingDate || nearestRecentDate;
-    if (nearestAvailableDate) setSelectedDate(nearestAvailableDate);
-  }, [dataSync.currentLoaded, matches, todayStr]);
+    if (availableDates.length > 0) {
+      setAutomaticInitialDateResolved(true);
+      if (!availableDates.includes(todayStr)) {
+        const nearestUpcomingDate = availableDates.find((date) => date >= todayStr);
+        const nearestRecentDate = [...availableDates].reverse().find((date) => date < todayStr);
+        const nearestAvailableDate = nearestUpcomingDate || nearestRecentDate;
+        if (nearestAvailableDate) setSelectedDate(nearestAvailableDate);
+      }
+    }
+  }
 
   const handleDateSelect = React.useCallback((date: string) => {
-    automaticInitialDateResolvedRef.current = true;
+    setAutomaticInitialDateResolved(true);
     setSelectedDate(date);
   }, []);
 
@@ -3695,6 +3698,13 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
                   {language === 'zh' ? '候选冻结 · 前瞻确认账本' : 'Frozen candidate · Prospective confirmation'}
                 </span>
                 <strong>{candidateStateLabel}</strong>
+                {candidateProspective.state === 'SHADOW' && (
+                  <p data-candidate-observation-policy>
+                    {language === 'zh'
+                      ? '当前为激活前影子观察。采集正常不代表模型已通过验证；这些记录不计入正式命中率，也不授予正式推荐资格。'
+                      : 'Pre-activation shadow observation. Healthy capture is not model validation; these records do not enter formal accuracy or authorize formal recommendations.'}
+                  </p>
+                )}
                 <p>
                   {language === 'zh'
                     ? '候选参数、实现代码和依赖锁已绑定哈希。冻结前与激活前样本只作观察；只有激活后的官方同场赔率样本进入晋级分母，500补充推荐继续展示但不混入。'

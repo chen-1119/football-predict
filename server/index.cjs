@@ -148,6 +148,7 @@ const {
 const {
   selectCandidateProspectiveAudit,
 } = require("../src/services/candidateProspectiveProjection.cjs");
+const { projectShadowObservationState } = require("../src/services/candidateCaptureState.cjs");
 const {
   HISTORICAL_TRAINING_RELEASE_ENTRY,
   inspectHistoricalTrainingFile,
@@ -9636,6 +9637,7 @@ const buildPublicModelScorecard = ({
         version: rawCandidateProspective.version || null,
         evaluatedAt: rawCandidateProspective.evaluatedAt || null,
         state: rawCandidateProspective.state || "SHADOW",
+        captureState: projectShadowObservationState(rawCandidateProspective, candidateProspectiveRegistry),
         onlineEffect: false,
         baseCandidateId: rawCandidateProspective.baseCandidateId || null,
         candidateRevisionId: rawCandidateProspective.candidateRevisionId || null,
@@ -9986,6 +9988,7 @@ const buildPublicModelScorecard = ({
             settled: Number(rawCandidateProspective.cohort?.formal?.settled || 0),
             invalid: Number(rawCandidateProspective.cohort?.formal?.invalid || 0),
             finalized: Number(rawCandidateProspective.cohort?.formal?.finalized || 0),
+            invalidSettlements: rawCandidateProspective.cohort?.formal?.invalidSettlements ?? null,
             denominatorReconciled:
               rawCandidateProspective.cohort?.formal?.denominatorReconciled === true,
           },

@@ -4206,11 +4206,13 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
   assert.match(keeperStopBody, /release_candidate_heartbeat_keeper_clean_stop_evidence_is_valid/);
   assert.match(keeperBaselineBody, /verifyRegistry/);
   assert.match(keeperBaselineBody, /ledgerState\(active\) !== "ACTIVE"/);
+  assert.match(keeperBaselineBody, /buildShadowObservationState\(auditLedger\(active\)\)/);
   assert.match(keeperStoppedEvidenceBody, /control\?\.stopDrained !== true/);
   assert.match(keeperStoppedEvidenceBody, /control\?\.failure !== null/);
   assert.match(keeperStoppedEvidenceBody, /exactHeartbeatMatches/);
   assert.doesNotMatch(keeperStoppedEvidenceBody, /allowPreSwapLegacyTopLevelDueOmission/);
   assert.match(keeperStoppedEvidenceBody, /verifyRegistry/);
+  assert.match(keeperStoppedEvidenceBody, /ledgerState\(active\) !== heartbeat\?\.audit\?\.state/);
   assert.match(keeperStoppedEvidenceBody, /active\.ledgerId !== baseline\.activeLedgerId/);
   assert.match(keeperStoppedEvidenceBody, /heartbeat\?\.audit\?\.rootHash !== rootHash/);
   const workerFreezeIndex = main.indexOf(

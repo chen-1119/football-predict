@@ -29,12 +29,11 @@ export const AIArena: React.FC = () => {
   const { language, matches, accessSession } = useApp();
   const decodedMatchId = matchId ? decodeURIComponent(matchId) : '';
   const localArena = React.useMemo(() => buildBigFiveSurvivalArena(matches), [matches]);
-  const [publishedArena, setPublishedArena] = React.useState<BigFiveSurvivalArena | null>(null);
+  const [published, setPublished] = React.useState<{ token: string; arena: BigFiveSurvivalArena } | null>(null);
+  const publishedArena = accessSession?.token && published?.token === accessSession.token
+    ? published.arena : null;
   React.useEffect(() => {
-    if (!accessSession?.token) {
-      setPublishedArena(null);
-      return undefined;
-    }
+    if (!accessSession?.token) return undefined;
     const controller = new AbortController();
     const load = async () => {
       for (const delayMs of [0, 500, 1500]) {
@@ -42,13 +41,13 @@ export const AIArena: React.FC = () => {
         if (controller.signal.aborted) return;
         try {
           const payload = await fetchPublishedBigFiveSurvivalArena(accessSession.token, controller.signal);
-          if (!controller.signal.aborted) setPublishedArena(payload);
+          if (!controller.signal.aborted) setPublished(payload ? { token: accessSession.token, arena: payload } : null);
           return;
         } catch {
           if (controller.signal.aborted) return;
         }
       }
-      if (!controller.signal.aborted) setPublishedArena(null);
+      if (!controller.signal.aborted) setPublished(null);
     };
     void load();
     return () => controller.abort();

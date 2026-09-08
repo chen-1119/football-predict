@@ -6,6 +6,7 @@ const {
   isNonNegativeInteger
 } = require("./hhadCompanionPublicContract.cjs");
 const { evaluateFallbackReadiness } = require("./fallbackReadiness.cjs");
+const { shadowObservationAuditValid } = require("../src/services/candidateCaptureState.cjs");
 
 const baseUrl = new URL(process.env.REMOTE_BASE_URL || process.env.PUBLIC_BASE_URL || process.env.VERIFY_BASE_URL || "http://127.0.0.1:8788");
 const requireHealthy = process.env.REMOTE_REQUIRE_HEALTHY === "1";
@@ -843,7 +844,8 @@ const run = async () => {
   );
   pushCheck(checks, "candidate prospective cutoff heartbeat is live and unblocked",
     modelEvaluation.status === 200
-      && publicCandidateProspective?.state === "ACTIVE"
+      && (publicCandidateProspective?.state === "ACTIVE"
+        || shadowObservationAuditValid(publicCandidateProspective))
       && publicCandidateProspective?.chainValid === true
       && candidateCaptureHeartbeat?.version === "prospective-deadline-heartbeat-v2"
       && candidateCaptureHeartbeat?.fresh === true

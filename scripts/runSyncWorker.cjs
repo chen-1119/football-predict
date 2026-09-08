@@ -8,6 +8,7 @@ const { readPointer, storePaths } = require("../server/dataGenerationStore.cjs")
 const { apiFootballRuntimePolicyFor } = require("../src/services/apiFootballRuntimePolicy.cjs");
 const { runFootballDataFixtureRetry } = require("./footballDataFixtureRetry.cjs");
 const { runOpenFootballObservationSchedule } = require("./openFootballObservationSchedule.cjs");
+const { shadowObservationAuditValid } = require("../src/services/candidateCaptureState.cjs");
 const {
   evaluateReleaseEnrichmentReuseRequest,
   inspectReleaseWorkerPriorityRequest,
@@ -602,6 +603,11 @@ const runCandidateProspectiveDeadlineCapture = async ({
         reason: "candidate-deadline-capture-status-not-advanced",
         statusAdvanced: false,
         statusEvaluatedAt: status?.evaluatedAt || null,
+        publishedStatusState: ["ACTIVE", "SHADOW", "RETIRED"].includes(status?.audit?.state)
+          ? status.audit.state : null,
+        publishedStatusReason: /^[a-z0-9-]{1,120}$/.test(status?.reason || "")
+          ? status.reason : null,
+        publishedStatusOk: typeof status?.ok === "boolean" ? status.ok : null,
       };
       writeAttempt({
         startedAt: result.startedAt || attemptStartedAt,
@@ -611,6 +617,9 @@ const runCandidateProspectiveDeadlineCapture = async ({
         reason: failed.reason,
         statusAdvanced: false,
         publishedEvaluatedAt: failed.statusEvaluatedAt,
+        publishedStatusState: failed.publishedStatusState,
+        publishedStatusReason: failed.publishedStatusReason,
+        publishedStatusOk: failed.publishedStatusOk,
         attemptKind,
         timeoutMs: boundedTimeoutMs,
         childExecutionTimeoutMs,
@@ -1893,7 +1902,7 @@ const candidateImplementationDriftAwaitingRefreeze = (status) => {
     && Number.isFinite(Date.parse(status.evaluatedAt))
     && typeof status?.candidateRevisionId === "string"
     && status.candidateRevisionId.length > 0
-    && status?.audit?.state === "ACTIVE"
+    && (status?.audit?.state === "ACTIVE" || shadowObservationAuditValid(status?.audit))
     && status?.audit?.chainValid === true
     && status?.audit?.evaluatedAt === status.evaluatedAt
     && status?.audit?.candidateRevisionId === status.candidateRevisionId
