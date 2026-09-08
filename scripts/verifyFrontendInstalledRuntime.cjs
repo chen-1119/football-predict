@@ -69,7 +69,10 @@ function verifyInstalledSystemdContracts() {
       assert.equal(same(active, before, { ...before, ExecStart: after.ExecStart }), true);
     }
   });
-  return { ok: true, checks: checks.length, results: checks, actualTransportAndParserExecuted: true, transportMocked: true, productionWrites: 0 };
+  return { ok: true, verifier: "frontend-installed-systemd-contracts-v1", checks: checks.length, results: checks,
+    verificationScope: "systemd-vm-contracts-only", platform: process.platform, linuxFilesystemProof: false,
+    fullInstalledRuntimeProofRequired: true, signingEligible: false, realSystemdExecuted: false,
+    actualTransportAndParserExecuted: true, transportMocked: true, productionWrites: 0 };
 }
 
 function verifyFrontendInstalledRuntime() {
@@ -232,12 +235,17 @@ function verifyFrontendInstalledRuntime() {
       });
     } else skipped.push("POSIX root-owner and permission enforcement require a Linux fixture run");
     return { ok: true, checks: checks.length, results: checks, skipped, elapsedMs: Date.now() - startedAt,
+      verificationScope: "installed-runtime-filesystem-fixture", platform: process.platform,
+      linuxFilesystemProof: process.platform === "linux", signingEligible: false,
       productionWrites: 0, realSystemdExecuted: false, fixtureOnly: true, externalProgramBehaviorVerified: false };
   } finally { fixture.dispose(); }
 }
 if (require.main === module) {
-  try { const contracts = verifyInstalledSystemdContracts();
-    const result = process.argv.includes("--systemd-contracts-only") ? contracts : { ...verifyFrontendInstalledRuntime(), systemdContracts: contracts };
+  try {
+    const args = process.argv.slice(2);
+    assert.ok(args.length === 0 || args.length === 1 && args[0] === "--systemd-contracts-only", "unknown installed runtime verifier arguments");
+    const contracts = verifyInstalledSystemdContracts();
+    const result = args.length === 1 ? contracts : { ...verifyFrontendInstalledRuntime(), systemdContracts: contracts };
     console.log(JSON.stringify(result, null, 2)); if (!result.ok) process.exitCode = 1; }
   catch (error) { console.error(error.stack || error.message); process.exitCode = 1; }
 }
