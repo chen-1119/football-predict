@@ -57,6 +57,8 @@ const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/servic
   'scripts/apiFootballClockEvidence.cjs', 'scripts/verifyApiFootballClockEvidence.cjs',
   'scripts/verifyApiFootballDiagnostics.cjs', 'scripts/verifyCandidateArtifactSeed.cjs', 'scripts/verifyCandidateRevisionLineage.cjs',
   'scripts/verifyLegacyReferenceConflict.cjs', 'src/services/legacyReferenceConflict.ts', 'scripts/verifyFrozenArchiveAuthority.cjs',
+  'scripts/frozenArchiveRestoration.cjs', 'scripts/data/frozen-archive-restoration.json',
+  'scripts/verifyFrozenArchivePersistence.cjs', 'scripts/verifyFrozenArchiveRestoration.cjs',
   'scripts/verifyOfficialClubResults.cjs', 'scripts/syncOfficialClubResults.cjs', 'scripts/verifyOfficialClubReceiptClocks.cjs',
   'scripts/competitionModelContext.cjs', 'scripts/verifyCompetitionModelContext.cjs',
   'scripts/predictionExecutionCapture.cjs', 'scripts/verifyPredictionExecutionCapture.cjs', 'scripts/verifyDataGenerationPointerLockRace.cjs',

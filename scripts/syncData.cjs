@@ -132,8 +132,10 @@ const {
   loadArchivedPreMatchRecoveries,
   recoveryArchiveForMatch,
 } = require("./archivedPreMatchRecovery.cjs");
+const { loadRestorations, restoreMissingArchive, retainedRestorationReceipt } = require("./frozenArchiveRestoration.cjs");
 const ROOT_DIR = path.resolve(__dirname, "..");
 const ARCHIVED_PREMATCH_RECOVERY_INDEX = loadArchivedPreMatchRecoveries();
+const FROZEN_ARCHIVE_RESTORATION_INDEX = loadRestorations();
 const COLLECTOR_TRUST_REGISTRY_PATH = path.resolve(
   process.env.SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH
   || path.join(ROOT_DIR, "deploy", "light-server", "collector-trust-registry.json")
@@ -5322,7 +5324,10 @@ function attachArchivedPreMatchPredictions(
       return resolvedSnapshotIndex.get(sourceMatchId);
     } }
     : buildPredictionSnapshotIndex(predictionSnapshotsPayload);
-  return (matches || []).map((match) => {
+  return (matches || []).map((inputMatch) => {
+    const match = restoreMissingArchive(inputMatch, FROZEN_ARCHIVE_RESTORATION_INDEX, capturedAt,
+      (candidate, archive) => !isOfficialVoidMatch(candidate)
+        && validArchivedPreMatchPrediction(candidate, archive));
     const archivedPreMatchPrediction = buildArchivedPreMatchPrediction(
       match,
       snapshotIndex,
@@ -14056,7 +14061,11 @@ function finalizePublishedPredictionDecisions(matches, existingBySourceId, captu
       ? existingBySourceId.get(sourceMatchId)
       : null;
     const finalizedAt = decisionFinalizationInstant(finalizationClock, match, index);
-    return applyPredictionPersistence(match, existing, capturedAt, { finalizedAt });
+    const result = applyPredictionPersistence(match, existing, capturedAt, { finalizedAt });
+    const restorationReceipt = retainedRestorationReceipt(result, existing, FROZEN_ARCHIVE_RESTORATION_INDEX, finalizedAt);
+    return restorationReceipt ? { ...result, predictionMeta: {
+      ...(result.predictionMeta || {}), frozenArchiveRestoration: restorationReceipt,
+    } } : result;
   });
 }
 

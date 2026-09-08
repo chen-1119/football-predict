@@ -80,6 +80,12 @@ check(shadow(noForm).modelWeight === 0 && shadow(noForm).diagnostics.missingForm
 const frozenArchiveAuthority = require("./verifyFrozenArchiveAuthority.cjs").verifyFrozenArchiveAuthority();
 check(frozenArchiveAuthority.ok && frozenArchiveAuthority.checks >= 9,
   "unbound model and legacy reference declarations cannot overwrite frozen archives");
+const archivePersistence = require("./verifyFrozenArchivePersistence.cjs").verifyFrozenArchivePersistence();
+check(archivePersistence.ok && archivePersistence.checks >= 10,
+  "fresh result persistence inherits exact event-qualified frozen archives");
+const archiveRestoration = require("./verifyFrozenArchiveRestoration.cjs").verifyFrozenArchiveRestoration();
+check(archiveRestoration.ok && archiveRestoration.checks >= 23 && archiveRestoration.restoredFixtureObjects === 8,
+  "release-bound backup restores missing original archives without changing their contents");
 check(require("./verifyOfficialClubResults.cjs").strictAdmissionChecks >= 41,
   "official club ingress rejects coerced scores and invalid event clocks without erasing real zero scores");
 console.log(JSON.stringify({ ok: true, checks, fixture: "synthetic reproduction of public draw/private home identity conflict", productionDataTouched: false }, null, 2));

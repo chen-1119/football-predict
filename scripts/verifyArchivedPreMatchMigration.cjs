@@ -6,7 +6,6 @@ const {
   migrateArchivedPreMatchReferences,
 } = require("./migrateArchivedPreMatchReferences.cjs");
 
-const ROOT_DIR = path.resolve(__dirname, "..");
 const SOURCE_IDS = new Set(["2040649", "2040650"]);
 const sourceId = (row) => String(row?.sourceMatchId || row?.id || "")
   .replace(/^sporttery_/, "");
@@ -17,15 +16,37 @@ const writeJson = (filePath, payload) => fs.writeFileSync(
   "utf8"
 );
 
-const sourceDataDir = path.join(ROOT_DIR, "public", "data");
-// These two historical regression events eventually leave the rolling current
-// window. Keep the verifier deterministic by resolving the signed source row
-// from history first and allowing a still-current copy to override it.
-const sourceMatchesById = new Map([
-  ...readJson(path.join(sourceDataDir, "matches-history.json")),
-  ...readJson(path.join(sourceDataDir, "matches-current.json")),
-].filter((row) => SOURCE_IDS.has(sourceId(row))).map((row) => [sourceId(row), row]));
-const sourceMatches = [...sourceMatchesById.values()];
+// Fixed synthetic regression inputs, not the current predictions of these
+// historical IDs. Rolling production rows may expire or gain authoritative
+// publications; neither should change this snapshot-only migration contract.
+const sourceMatches = [...SOURCE_IDS].map(id => ({
+  id: `sporttery_${id}`, sourceMatchId: id, status: "FINISHED", sourceStatus: "FINISHED",
+  matchNo: `SYNTHETIC-${id}`,
+  homeTeamName: `SYNTHETIC HOME ${id}`, awayTeamName: `SYNTHETIC AWAY ${id}`,
+  kickoffTime: "2026-07-30T08:30:00+08:00", eventVersion: "2026-07-30T08:30:00+08:00",
+  businessDate: "2026-07-29", matchDate: "2026-07-29", buyEndTime: "2026-07-29T22:00:00+08:00",
+  scoreHome: 1, scoreAway: 0, predictionMeta: {},
+}));
+const snapshotsPayload = { version: 3, source: "synthetic-migration-regression", observations: [],
+  rows: sourceMatches.map(match => ({
+    sourceMatchId: match.sourceMatchId, matchId: match.id, kickoffTime: match.kickoffTime,
+    matchNo: match.matchNo,
+    eventVersion: match.eventVersion, homeTeamName: match.homeTeamName, awayTeamName: match.awayTeamName,
+    businessDate: match.businessDate, cutoffTime: match.buyEndTime,
+    capturedAt: "2026-07-29T13:40:00.000Z", phase: "baseline",
+    signature: "1X2:HAD:1:reference|BEST:HAD:1:reference",
+    best: { marketType: "BEST", oddsPoolCode: "HAD", tipCode: "1", odds: 0, recommendationAction: "reference" },
+    oneXTwo: { marketType: "1X2", oddsPoolCode: "HAD", tipCode: "1", odds: 0, recommendationAction: "reference" },
+  })) };
+for (const match of sourceMatches) {
+  match.archivedPreMatchPrediction = {
+    version: "archived-pre-match-prediction-v1", source: "immutable-pre-match-prediction-snapshot",
+    sourceMatchId: match.sourceMatchId, matchId: match.id, kickoffTime: match.kickoffTime,
+    eventVersion: match.eventVersion, capturedAt: "2026-07-29T13:40:00.000Z", cutoffTime: match.buyEndTime,
+    phase: "baseline", signature: "1X2:HAD:1:reference|BEST:HAD:1:reference", marketEvidenceScope: "model-only-reference",
+    prediction: { marketType: "BEST", oddsPoolCode: "HAD", tipCode: "1", odds: 0, recommendationAction: "reference" },
+  };
+}
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "football-archive-migration-"));
 const evidenceDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "football-archive-evidence-"));
 const ambiguityDir = fs.mkdtempSync(path.join(os.tmpdir(), "football-archive-ambiguity-"));
@@ -49,7 +70,6 @@ try {
       };
       return copy;
     });
-  const snapshotsPayload = readJson(path.join(sourceDataDir, "prediction-snapshots.json"));
   const snapshots = {
     ...snapshotsPayload,
     observations: [],
@@ -64,7 +84,7 @@ try {
   };
   assert.equal(current.length, 2, "the regression fixture must contain both result-feed matches");
   assert.equal(snapshots.rows.length, 0, "the preserved production fixture must reproduce trimmed evidence");
-  assert.ok(evidenceSnapshots.rows.length >= 2, "the signed release fixture must retain real pre-cutoff snapshots");
+  assert.ok(evidenceSnapshots.rows.length >= 2, "the fixed fixture must retain synthetic pre-cutoff snapshots");
 
   writeJson(path.join(tempDir, "matches-current.json"), current);
   writeJson(path.join(tempDir, "matches-history.json"), []);
@@ -295,6 +315,7 @@ try {
   console.log(JSON.stringify({
     ok: true,
     verifier: "archived-pre-match-reference-migration-v1",
+    fixture: "fixed synthetic snapshot-only regression; not current production predictions",
     recovered: first.changes,
     repeatedChanges: repeated.rows.changed,
     ambiguousEventChanges: ambiguous.rows.changed,
