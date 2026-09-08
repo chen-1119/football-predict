@@ -71,6 +71,22 @@ check('bundle creation checks verifier contracts before sequence reservation',()
   const reservation=bundle.indexOf('const sequenceReservation = reserveReleaseSequence(');
   assert.ok(preflight>=0&&reservation>preflight);
 });
+check('complete result admission dependency closure passes before signing', () => {
+  const run = require('node:child_process').spawnSync(process.execPath,
+    [path.join(root, 'scripts/verifyResultTimelineSemanticClosure.cjs')],
+    { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 15000, maxBuffer: 1024 * 1024 });
+  assert.equal(run.status, 0, run.stderr || run.stdout);
+  const result = JSON.parse(run.stdout);
+  assert.equal(result.ok, true); assert.ok(result.checks.length >= 17);
+  assert.ok(result.checks.every(row => row.ok === true));
+  assert.equal(result.productionWrites, 0); assert.equal(result.providerRequests, 0);
+  assert.notEqual(result.oldCommitment, result.newCommitment);
+});
+check('next revision declaration derives exact immutable source inputs before signing', () => {
+  const result = require('./verifyCandidateTransitionDraft.cjs').run();
+  assert.equal(result.ok, true); assert.ok(result.checks.length >= 17);
+  assert.equal(result.productionWrites, 0); assert.equal(result.providerRequests, 0);
+});
 check('exact revision transition and its signed dependencies pass before sequence reservation',()=>{
   const result=require('./verifyCandidateReleaseRevisionTransition.cjs').run();
   assert.ok(result.checks>=27);
@@ -84,6 +100,8 @@ check('fixed hypothesis lineage survives competing retrospective winners before 
   assert.equal(result.ok, true); assert.ok(result.checks >= 11);
 });
 const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/services/apiFootballDiagnostics.d.cts',
+  'scripts/verifyResultTimelineSemanticClosure.cjs',
+  'scripts/verifyCandidateTransitionDraft.cjs',
   'scripts/releaseWorkerPreflight.cjs', 'scripts/verifyReleaseWorkerPreflight.cjs',
   'scripts/releaseWorkspaceFreshness.cjs', 'scripts/verifyReleaseWorkspaceFreshness.cjs',
   'scripts/releaseProgress.cjs', 'scripts/checkReleaseProgress.cjs', 'scripts/verifyReleaseProgress.cjs',

@@ -1,4 +1,4 @@
-const { buildResultProvenance } = require("../src/services/matchLifecycle.cjs");
+const { buildResultProvenance, resultProvenanceSemanticCommitment } = require("../src/services/matchLifecycle.cjs");
 const { strictInstant } = require("../src/services/strictInstant.cjs");
 const { createHash } = require("node:crypto");
 
@@ -145,13 +145,25 @@ const forEachForecastAsOf = (matches, {
 
 // Bind this input-admission policy independently of probability arithmetic.
 // A changed timeline must start a new candidate revision, not mix cohorts.
-const resultTimelineSemanticHash = () => createHash("sha256").update(JSON.stringify({
-  version: "result-input-timeline-commitment-v1",
-  functions: [strictInstant, timeMs, forecastTimeForMatch, resultObservationForMatch, forEachForecastAsOf, buildResultProvenance]
-    .map(fn => fn.toString().replace(/\r\n?/gu, "\n")),
-})).digest("hex");
+const resultTimelineSemanticCommitment = () => ({
+  version: "result-input-timeline-commitment-v2",
+  functions: Object.fromEntries(Object.entries({
+    buildResultProvenance,
+    forEachForecastAsOf,
+    forecastTimeForMatch,
+    hasSettledScore,
+    matchIdentity,
+    resultObservationForMatch,
+    strictInstant,
+    timeMs,
+  }).map(([name, fn]) => [name, fn.toString().replace(/\r\n?/gu, "\n")])),
+  dependencies: { resultProvenance: resultProvenanceSemanticCommitment() },
+});
+const resultTimelineSemanticHash = () => createHash("sha256")
+  .update(JSON.stringify(resultTimelineSemanticCommitment())).digest("hex");
 
 module.exports = {
+  resultTimelineSemanticCommitment,
   resultTimelineSemanticHash,
   forEachForecastAsOf,
   forecastTimeForMatch,
