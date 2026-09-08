@@ -41,8 +41,21 @@
   版本连续性 27、公开投影 6、全量就绪分母 48、运行监控 59、采集熔断 28 通过。
 - 原生 SQLite + 实际 HTTP 的证据往返 285 项通过；公开 SHADOW 被运行巡检正确
   接受，删除回执则拒绝；原公开平局与原市场主胜仍各自绑定，不替换历史方向。
-  此次 PostgreSQL 仍是查询替身；原生 PG 测试须在固定提交后另留报告。
+  这 285 项中的 PostgreSQL 是查询替身，与下面的原生测试单独记录。
 - 页面结构 41 项、竞技场验证、lint、TypeScript 和生产构建通过。
+
+### 固定源码 f960eb23dedcb 的补充验证（08:15–08:16）
+
+- 原生 Windows PostgreSQL 16.15：404 项通过，实际迁移、全量/增量投影、
+  SQLite 和 PostgreSQL 两种主读的真实 HTTP 均覆盖新 SHADOW 公开契约。
+  临时数据库已停止清理。报告 `outputs/latest-native-evidence-1788826505484.json`；
+  原生报告 SHA256 `e09c1138d711f87f9934e5fb853c42263f4d25c8c93cf89ed02d9117e89d44d7`。
+- Linux：509 份源码按原始字节在独立 `/var/tmp/football-shadow-health-01s296/tree`
+  运行，root 所有且只读；普通用户写入被 EACCES 拒绝，测试进程禁用网络。
+  截止采集 35 组、实际 worker cadence 和 refreeze 17 项全部通过；源码前后哈希相同，
+  不触碰生产数据。报告 `outputs/shadow-health-linux-1788826565794.json`，
+  SHA256 `c988a2c1a09ab4d59787cd0c5bb9376d070b8e7699859a3ea2cd2e44bea8d2fa`。
+  首次传输脚本有正则转义语法错误，发生在远端执行前；修复隔离工具后才得到此通过结果。
 
 这些是隔离验证，不是生产部署成功、推荐命中率改善或真实前瞻样本。
 下一次发布必须使用新身份，继续保留签名验证、连续性声明、双数据库同代、
