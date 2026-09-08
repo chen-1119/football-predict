@@ -87,6 +87,7 @@ const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/servic
   'scripts/releaseWorkerPreflight.cjs', 'scripts/verifyReleaseWorkerPreflight.cjs',
   'scripts/releaseWorkspaceFreshness.cjs', 'scripts/verifyReleaseWorkspaceFreshness.cjs',
   'scripts/releaseProgress.cjs', 'scripts/checkReleaseProgress.cjs', 'scripts/verifyReleaseProgress.cjs',
+  'scripts/staticVerificationReceipts.cjs', 'scripts/verifyStaticVerificationReceipts.cjs',
   'scripts/apiFootballClockEvidence.cjs', 'scripts/verifyApiFootballClockEvidence.cjs',
   'scripts/verifyApiFootballDiagnostics.cjs', 'scripts/verifyCandidateArtifactSeed.cjs', 'scripts/verifyCandidateRevisionLineage.cjs',
   'scripts/verifyLegacyReferenceConflict.cjs', 'src/services/legacyReferenceConflict.ts', 'scripts/verifyFrozenArchiveAuthority.cjs',
@@ -384,5 +385,22 @@ check('read-only release progress cannot imply live acceptance or repeat deploym
   const report=require('./verifyReleaseProgress.cjs').verifyReleaseProgress();
   assert.equal(report.ok,true);assert.ok(report.checks.length>=21);
   assert.equal(report.productionWrites,0);assert.equal(report.networkCalls,0);
+});
+check('static receipt input scopes and failure behavior pass before signing',()=>{
+  const result=require('node:child_process').spawnSync(process.execPath,['scripts/verifyStaticVerificationReceipts.cjs'],
+    {cwd:root,encoding:'utf8',windowsHide:true,timeout:15000,maxBuffer:1024*1024});
+  assert.equal(result.status,0,result.stderr);
+  const report=JSON.parse(result.stdout);
+  assert.equal(report.ok,true);assert.ok(report.checks.length>=41);
+  assert.equal(report.productionWrites,0);
+  assert.equal(pkg.scripts['verify:static-receipts'],'node scripts/verifyStaticVerificationReceipts.cjs');
+});
+check('production verification still executes unknown or unconfigured checks and drains stdout',()=>{
+  assert.ok(readiness.includes('execute: () => runLocalJsonFresh(args, env)'));
+  assert.ok(readiness.includes('childProcess.on("close", (code, signal) =>'));
+  assert.ok(!readiness.includes('childProcess.on("exit", (code, signal) =>'));
+  for(const entry of ['scripts/verifyApiContracts.cjs','scripts/verifyModelPromotionGate.cjs',
+    'scripts/verifyProductionPlanCoverage.cjs','scripts/verifyFastResultProductionClone.cjs'])
+    assert.equal(require('./staticVerificationReceipts.cjs').collectInputs(root,[entry]),null);
 });
 console.log(JSON.stringify({ok:true,verifier:'release-verifier-contracts-v1',checks,productionDataTouched:false},null,2));

@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const http = require("node:http");
 const https = require("node:https");
 const path = require("node:path");
+const { runWithStaticReceipt } = require("./staticVerificationReceipts.cjs");
 const {
   publicHhadCompanionSchemaValid,
   findHhadCompanionSensitiveKeyLeaks,
@@ -235,7 +236,7 @@ const sampleFastSportteryRelaySnapshot = () => {
   });
 };
 
-const runLocalJson = (args, env = {}) => new Promise((resolve) => {
+const runLocalJsonFresh = (args, env = {}) => new Promise((resolve) => {
   const label = args.join(" ");
   const startedAt = Date.now();
   process.stderr.write(`[production-readiness] child-start ${label}\n`);
@@ -281,13 +282,24 @@ const runLocalJson = (args, env = {}) => new Promise((resolve) => {
   childProcess.on("error", (error) => {
     finish({ status: -1, error: error.message || String(error) });
   });
-  childProcess.on("exit", (code, signal) => {
+  childProcess.on("close", (code, signal) => {
     finish({
       status: timedOut ? 124 : (Number.isInteger(code) ? code : -1),
       error: signal && !stderr ? `child exited from signal ${signal}` : null
     });
   });
 });
+
+const runLocalJson = async (args, env = {}) => {
+  const result = await runWithStaticReceipt({ rootDir, args,
+    env: { ...process.env, ...env }, execute: () => runLocalJsonFresh(args, env) });
+  if (result.verificationReceipt) {
+    process.stderr.write(`[production-readiness] static-receipt ${JSON.stringify({
+      command: args[0], ...result.verificationReceipt,
+    })}\n`);
+  }
+  return result;
+};
 
 const failedArtifactChecks = (result) => (Array.isArray(result?.body?.checks)
   ? result.body.checks
