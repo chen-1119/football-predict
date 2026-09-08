@@ -3,7 +3,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const assert = require("node:assert/strict");
-const VERSION = "frozen-archive-restoration-v1";
+const VERSION = "frozen-archive-restoration-v2";
+const RESTORATION_SCOPE = "complete-original-published-baseline";
 const SOURCE = "release-bound-published-store-backup";
 const DEFAULT_PATH = path.join(__dirname, "data", "frozen-archive-restoration.json");
 const canonical = value => Array.isArray(value) ? value.map(canonical)
@@ -24,6 +25,7 @@ const identityKey = match => JSON.stringify([sourceId(match), instant(match?.eve
 function validateManifest(payload) {
   assert.equal(payload?.version, VERSION);
   assert.equal(payload?.source, SOURCE);
+  assert.equal(payload?.restorationScope, RESTORATION_SCOPE);
   const { integritySha256, ...body } = payload;
   assert.equal(digest(body), integritySha256, "restoration manifest integrity mismatch");
   const baseline = payload.baseline;
@@ -33,6 +35,7 @@ function validateManifest(payload) {
   assert.equal(digest(baseline.records), baseline.archiveRootHash);
   assert.match(text(baseline.releaseMarker), /^[a-f0-9]{64}$/);
   assert.match(text(payload.backup?.historySha256), /^[a-f0-9]{64}$/);
+  assert.match(text(payload.backup?.currentSha256), /^[a-f0-9]{64}$/);
   assert.match(text(payload.backup?.captureReceiptSha256), /^[a-f0-9]{64}$/);
   assert.equal(payload.backup?.stable, true);
   const baselineAt = instant(baseline.checkedAt), backupAt = instant(payload.backup.capturedAt);
@@ -41,8 +44,16 @@ function validateManifest(payload) {
   assert.ok(baselineAt <= backupAt && backupAt < lossAt, "backup must predate observed loss");
   assert.equal(payload.observedLoss.releaseMarker, baseline.releaseMarker);
   assert.ok(Array.isArray(payload.rows) && payload.rows.length > 0);
-  const expected = new Set(payload.observedLoss.sourceMatchIds);
-  assert.equal(expected.size, payload.rows.length);
+  // Losses observed at preparation time are only a subset. The complete signed
+  // baseline protects originals that a still-running old worker may omit later.
+  // This never permits an object outside the original baseline to be fabricated.
+  const observed = payload.observedLoss.sourceMatchIds;
+  assert.ok(Array.isArray(observed) && observed.length > 0);
+  assert.equal(new Set(observed).size, observed.length);
+  const expected = new Set(baseline.records.map(row => sourceId(row)));
+  assert.equal(expected.size, baseline.rows, "ambiguous baseline source identity");
+  assert.equal(payload.rows.length, baseline.rows, "complete baseline coverage required");
+  assert.ok(observed.every(id => expected.has(id)), "observed loss outside baseline");
   const index = new Map();
   assert.equal(new Set(payload.rows.map(row => sourceId(row.identity))).size, expected.size);
   for (const row of payload.rows) {
@@ -60,12 +71,13 @@ function validateManifest(payload) {
     "archive must match a complete original baseline entry");
     index.set(key, structuredClone({ ...row, manifestSha256: integritySha256, baselineRootHash: baseline.archiveRootHash, availableAfter: payload.observedLoss.checkedAt }));
   }
+  assert.equal(index.size, baseline.rows);
   return index;
 }
 
 function loadRestorations(file = DEFAULT_PATH) {
   const stat = fs.statSync(file);
-  assert.ok(stat.isFile() && stat.size > 0 && stat.size <= 1024 * 1024);
+  assert.ok(stat.isFile() && stat.size > 0 && stat.size <= 4 * 1024 * 1024);
   return validateManifest(JSON.parse(fs.readFileSync(file, "utf8")));
 }
 
@@ -105,4 +117,4 @@ function retainedRestorationReceipt(match, existing, index, capturedAt) {
     || restoredAt < instant(row.availableAfter) || restoredAt > now) return null;
   return structuredClone(receipt);
 }
-module.exports = { VERSION, SOURCE, DEFAULT_PATH, digest, validateManifest, loadRestorations, restoreMissingArchive, retainedRestorationReceipt };
+module.exports = { VERSION, SOURCE, RESTORATION_SCOPE, DEFAULT_PATH, digest, validateManifest, loadRestorations, restoreMissingArchive, retainedRestorationReceipt };

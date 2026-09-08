@@ -30,6 +30,14 @@ const {
 } = require("./releasePrebuiltDist.cjs");
 
 const rootDir = path.resolve(__dirname, "..");
+// Online release callers already supply the pinned deployment key. Reject
+// unrestorable originals before any sequence reservation or frontend build.
+// Offline bundle creation does not claim live readiness; deployment rechecks.
+if (process.env.RELEASE_DEPLOY_KEY) {
+  const { report } = require("./runReleaseArchivePreflight.cjs").runLiveArchivePreflight();
+  if (!report.ok) throw new Error(`release archive preflight rejected: ${JSON.stringify(report.blockers)}`);
+  console.error(JSON.stringify({ phase: "archive-preflight-before-build", ...report }));
+}
 // Catch production-only verification dependencies and stale exact contracts
 // locally, before reserving/signing a sequence or starting a remote transaction.
 const verifierContracts = spawnSync(process.execPath, ["scripts/verifyReleaseVerifierContracts.cjs"], {
@@ -383,6 +391,9 @@ const requiredEntries = [
   "scripts/verifyLegacyReferenceConflict.cjs",
   "scripts/verifyFrozenArchiveAuthority.cjs",
   "scripts/frozenArchiveRestoration.cjs",
+  "scripts/releaseArchivePreflight.cjs",
+  "scripts/runReleaseArchivePreflight.cjs",
+  "scripts/verifyReleaseArchivePreflight.cjs",
   "scripts/data/frozen-archive-restoration.json",
   "scripts/verifyFrozenArchivePersistence.cjs",
   "scripts/verifyFrozenArchiveRestoration.cjs",
