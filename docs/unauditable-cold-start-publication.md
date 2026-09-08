@@ -45,3 +45,41 @@ A new signed release must still satisfy the fresh old-worker publication gate,
 database parity, immutable-record continuity and post-swap checks. This patch
 alone does not prove that the old runtime can pass that pre-swap gate; do not
 replay r705 or bypass the gate to install it.
+
+## Current-input rehearsal (2026-09-08 09:42 Asia/Shanghai)
+
+Read-only capture obtained 22 files/derived inputs. All captured production
+files had identical hashes before and after transfer. The production odds
+loader's JSON plus read-only SQLite recovery was materialized once for both
+variants. No provider calls or production writes were made. The first capture
+stopped at a 256 MiB per-file bound; the prediction-snapshot history was then
+excluded because the chosen calculation boundary does not read it. The
+successful rehearsal's actual read trace confirmed that exclusion.
+
+Both variants used the current source, the same captured clock and inputs, and
+the actual `sync` pipeline through its existing prospective bias audit. The
+prior variant restored only the old cold-start suppression function in memory.
+Both stopped before publication/persistence and denied network/child processes
+and filesystem mutation during calculation.
+
+| Observation | Prior cold-start policy | Fixed policy |
+| --- | ---: | ---: |
+| Raw matches / fresh draft matches | 2275 / 2275 | 2275 / 2275 |
+| Upcoming rows in comparison | 28 | 28 |
+| Public directional rows in audit | 27 | 13 |
+| Home / away / draw directions | 22 / 5 / 0 | 9 / 4 / 0 |
+| Cold-start directional rows | 15 | 1 |
+| Bias publication blocked | Yes | No |
+
+Exactly 14 unauditable, no-odds directions became WATCH. The remaining 14 rows
+(including an already non-directional row) retained exactly the same BEST
+object and final probability. All 28 rows retained their odds. Source input
+hashes were unchanged. Comparison report:
+`outputs/real-cold-policy-comparison-1788831879804.json`.
+
+Limits: this is not the unsaved r705 incident-time cohort or an exact r699
+runtime replay. Runtime defaults were used except the explicit captured store,
+relay paths and materialized odds; SQLite fast-result receipts were not cloned
+(the calculation stops before receipt overlay). It does not prove successful
+full synchronization, database publication, live deployment or improved hit
+rate. The existing old-worker pre-swap dependency is still unresolved.
