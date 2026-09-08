@@ -126,6 +126,7 @@ const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/servic
   'scripts/verifyLegacyReferenceConflict.cjs', 'src/services/legacyReferenceConflict.ts', 'scripts/verifyFrozenArchiveAuthority.cjs',
   'scripts/frozenArchiveRestoration.cjs', 'scripts/data/frozen-archive-restoration.json',
   'scripts/releaseArchivePreflight.cjs', 'scripts/runReleaseArchivePreflight.cjs', 'scripts/verifyReleaseArchivePreflight.cjs',
+  'scripts/runReleaseWindowPreflight.cjs', 'scripts/verifyReleaseWindowPreflight.cjs',
   'scripts/verifyFrozenArchivePersistence.cjs', 'scripts/verifyFrozenArchiveRestoration.cjs',
   'scripts/verifyOfficialClubResults.cjs', 'scripts/syncOfficialClubResults.cjs', 'scripts/verifyOfficialClubReceiptClocks.cjs',
   'scripts/competitionModelContext.cjs', 'scripts/verifyCompetitionModelContext.cjs',
@@ -409,6 +410,11 @@ check('deployment rechecks archives before local clone and upload',()=>{
   assert.ok(probe>=0&&probe<client.indexOf('const localCloneVerifier = runCommand('));
   assert.ok(probe<client.indexOf('for (const artifact of uploads)'));
 });
+check('read-only release window preparation and actual entrypoint routing pass before signing',()=>{
+  const result=require('./verifyReleaseWindowPreflight.cjs').verifyReleaseWindowPreflight();
+  assert.equal(result.ok,true);assert.ok(result.checks.length>=25);
+  assert.equal(result.productionWrites,0);assert.equal(result.networkCalls,0);
+});
 check('all release entrypoints share tested workspace freshness before signing',()=>{
   const report=require('./verifyReleaseWorkspaceFreshness.cjs').verifyReleaseWorkspaceFreshness();
   assert.equal(report.ok,true);assert.ok(report.checks.length>=12);
@@ -444,7 +450,7 @@ for (const [entry, script, minimum] of [
   ['verifyFrontendSourceBundle.cjs', 'frontend-source-bundle', 23],
   ['verifyFrontendInstalledRuntime.cjs', 'frontend-installed-runtime', 12],
   ['verifyFrontendReleaseIdentity.cjs', 'frontend-release-identity', 19],
-  ['verifyFrontendReleaseConsumers.cjs', 'frontend-release-consumers', 6],
+  ['verifyFrontendReleaseConsumers.cjs', 'frontend-release-consumers', 7],
   ['verifyFrontendReleaseEntrypoints.cjs', 'frontend-release-entrypoints', 14],
   ['verifyStaticFileResponseIdentity.cjs', 'static-file-response-identity', 19],
 ]) check(`release execution contract passes before signing: ${entry}`, () => {
@@ -458,6 +464,10 @@ for (const [entry, script, minimum] of [
   assert.equal(report.ok, true); assert.ok(Array.isArray(rows) && rows.length >= (systemdOnly ? 3 : minimum));
   if (typeof report.checks === 'number') assert.equal(report.checks, rows.length);
   assert.ok(rows.every(row => row.ok === true));
+  if (entry === 'verifyFrontendReleaseConsumers.cjs') {
+    assert.equal(report.fullRecoveryRouting?.cases, 13);
+    assert.equal(report.fullRecoveryRouting?.assertions, 37);
+  }
   if (entry === 'verifyFrontendInstalledRuntime.cjs') {
     assert.equal(report.productionWrites, 0);
     if (systemdOnly) {

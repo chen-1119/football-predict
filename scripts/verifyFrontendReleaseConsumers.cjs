@@ -44,7 +44,8 @@ async function verifyFrontendReleaseConsumers() {
     assert.equal(queue(null, { releaseKind: "full", sha256: runtimeSha, releaseSequence: 711 }).complete, true);
   });
   const deploySource = read("scripts/deployReleaseBundle.cjs");
-  await check("actual deploy pre-upload route authenticates signed kind and real archive inventory before skipping only UI business fixtures", async () => {
+  const windowRouting = { cases: 0, assertions: 0 };
+  await check("actual deploy pre-upload route authenticates before window, archive and clone while UI and dry-run bypass live gates", async () => {
     const fixture = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "football-ui-consumer-route-"));
     const original = fs.lstatSync(fixture), bundlePath = path.join(fixture, "candidate.tgz"), source = path.join(fixture, "source");
     const hash = bytes => crypto.createHash("sha256").update(bytes).digest("hex");
@@ -74,34 +75,65 @@ async function verifyFrontendReleaseConsumers() {
       const start = deploySource.indexOf("const shaPath = `${bundlePath}.sha256`;"), end = deploySource.indexOf("// End authenticated local routing;");
       assert.ok(start > 0 && end > start);
       const fileHelpers = deploySource.slice(deploySource.indexOf("const readShaFile ="), deploySource.indexOf("const remoteJoin ="));
-      const route = async (mutate = () => {}, unsignedMutation = null) => {
+      const commandStart = deploySource.indexOf("const runCommand ="), commandEnd = deploySource.indexOf("const latestBundlePath =");
+      assert.ok(commandStart > 0 && commandEnd > commandStart);
+      const commandHelper = deploySource.slice(commandStart, commandEnd);
+      const route = async (mutate = () => {}, unsignedMutation = null, options = {}) => {
         const manifest = structuredClone(base); mutate(manifest);
         const bytes = Buffer.from(JSON.stringify(manifest)); fs.writeFileSync(bundlePath + ".manifest.json", bytes);
         fs.writeFileSync(bundlePath + ".manifest.sig", signing.signManifestBytes(bytes, keys.privateKey));
         if (unsignedMutation) { unsignedMutation(manifest); fs.writeFileSync(bundlePath + ".manifest.json", JSON.stringify(manifest)); }
-        const calls = [], context = { fs, path, crypto, spawnSync, Buffer, process, bundlePath, rootDir: fixture, dryRun: false,
+        const calls = [], context = { fs, path, crypto, Buffer, process, bundlePath, rootDir: fixture, dryRun: options.dryRun === true,
+          spawnSync: (command, args, spawnOptions) => {
+            if (command === "tar") return spawnSync(command, args, spawnOptions);
+            assert.equal(command, process.execPath); assert.equal(args[0], "scripts/verifyFastResultProductionClone.cjs");
+            calls.push("clone"); return { status: 0 };
+          },
           RELEASE_MANIFEST_VERSION: signing.RELEASE_MANIFEST_VERSION, RELEASE_SIGNATURE_ALGORITHM: signing.RELEASE_SIGNATURE_ALGORITHM,
           RELEASE_BUNDLE_POLICY_VERSION: policy.RELEASE_BUNDLE_POLICY_VERSION, findSensitiveReleaseEntries: policy.findSensitiveReleaseEntries,
           RELEASE_SHELL_ENTRY: rotation.RELEASE_SHELL_ENTRY, recoveryHelperEntry: "deploy/light-server/football-release-recovery.cjs",
           resolvePublicKeyPath: () => publicKeyPath,
           verifyManifestSignature: input => { calls.push("signature"); return signing.verifyManifestSignature(input); },
           fail: (message, detail) => { throw new Error(message + ":" + (detail?.reason || "")); },
-          runCommand: (command, args) => { assert.equal(command, process.execPath); assert.equal(args[0], "scripts/verifyFastResultProductionClone.cjs"); calls.push("clone"); return { status: 0 }; },
           require: name => {
             if (name === "./releaseArchiveSourceInventory.cjs") return { verifyArchiveSourceEvidence: async (...args) => {
               calls.push("actual-inventory"); return archive.verifyArchiveSourceEvidence(...args);
             } };
+            if (name === "./runReleaseWindowPreflight.cjs") return { runLiveReleaseWindowPreflight: () => {
+              calls.push("window");
+              if (options.windowThrows) throw new Error("fixture window observation failed");
+              return { version: "release-window-preflight-v1", ok: options.windowOpen !== false,
+                productionWrites: 0, readyToCutover: false, windowReserved: false };
+            } };
             assert.equal(name, "./runReleaseArchivePreflight.cjs"); return { runLiveArchivePreflight: () => { calls.push("live-preflight"); return { report: { ok: true } }; } };
           },
         };
-        try { await vm.runInNewContext("(async()=>{" + fileHelpers + "\n" + deploySource.slice(start, end) + "})()", context); return { ok: true, calls }; }
+        try { await vm.runInNewContext("(async()=>{" + commandHelper + "\n" + fileHelpers + "\n" + deploySource.slice(start, end) + "})()", context); return { ok: true, calls }; }
         catch (error) { return { ok: false, calls, error: error.message }; }
       };
-      assert.deepEqual(await route(), { ok: true, calls: ["signature", "actual-inventory"] });
+      const assertWindowRoute = (name, result, expectedOk, expectedCalls, errorPattern) => {
+        assert.equal(result.ok, expectedOk, name + ": route acceptance");
+        assert.deepEqual(result.calls, expectedCalls, name + ": exact ordered calls");
+        windowRouting.assertions += 2;
+        if (errorPattern) { assert.match(result.error, errorPattern, name + ": rejection reason"); windowRouting.assertions++; }
+        windowRouting.cases++;
+      };
+      const asFull = m => { m.releaseKind = "full"; delete m.frontendAuthorization; };
+      assertWindowRoute("UI verified inventory bypasses live gates", await route(), true, ["signature", "actual-inventory"]);
       for (const legacy of [false, true]) {
-        const full = await route(m => { m.releaseKind = "full"; delete m.frontendAuthorization; if (legacy) delete m.releaseKind; });
-        assert.deepEqual(full, { ok: true, calls: ["signature", "live-preflight", "clone"] });
+        const full = await route(m => { asFull(m); if (legacy) delete m.releaseKind; });
+        assertWindowRoute(legacy ? "legacy full ordered gates" : "full ordered gates", full, true, ["signature", "window", "live-preflight", "clone"]);
       }
+      assertWindowRoute("closed window stops before archive and clone", await route(asFull, null, { windowOpen: false }),
+        false, ["signature", "window"], /release window unavailable before clone\/upload/);
+      assertWindowRoute("throwing window stops before archive and clone", await route(asFull, null, { windowThrows: true }),
+        false, ["signature", "window"], /fixture window observation failed/);
+      for (const options of [{ windowOpen: false }, { windowThrows: true }])
+        assertWindowRoute("UI never consults unavailable window", await route(() => {}, null, options), true, ["signature", "actual-inventory"]);
+      assertWindowRoute("full dry-run performs no live probes or clone subprocess", await route(asFull, null, { dryRun: true, windowThrows: true }),
+        true, ["signature"]);
+      assertWindowRoute("UI dry-run still authenticates local inventory without live probes", await route(() => {}, null, { dryRun: true, windowThrows: true }),
+        true, ["signature", "actual-inventory"]);
       for (const change of [m => { m.releaseKind = "unknown"; }, m => { delete m.archiveSourceEvidence; },
         m => { m.frontendAuthorization.changedPaths = ["src/services/prediction.ts"]; }, m => { m.releaseActions = ["db-migrate"]; }]) {
         const rejected = await route(change); assert.equal(rejected.ok, false); assert.deepEqual(rejected.calls, ["signature"]);
@@ -123,10 +155,11 @@ async function verifyFrontendReleaseConsumers() {
   const deployStart = deploySource.indexOf("if ((release.status !== 0 || frontendOnly) && !dryRun) {");
   const deployBlock = deploySource.slice(deployStart, deploySource.indexOf("\nif (releaseStep.ok === true)", deployStart)); assert.ok(deployStart > 0);
   const helpers = deploySource.slice(deploySource.indexOf("const parseKeyValue ="), deploySource.indexOf("const buildRemotePreflightCommand ="));
-  const deploy = (proof, full = false, exitStatus = 0) => {
+  const deploy = (proof, full = false, exitStatus = 0, options = {}) => {
     let businessChecks = 0; const releaseCandidate = full ? { releaseKind: "full", sha256: runtimeSha, releaseSequence: 711 } : candidate;
-    const status = "bundleSha256=" + releaseCandidate.sha256 + "\nstatus=complete\nok=1\nexitCode=0\nfinishedAt=2026-09-08T00:00:00.000Z\n";
-    const transcript = "---status---\n" + status + "---marker---\n" + runtimeSha + "\n---live-complete---\n" + runtimeSha +
+    const state = { bundleSha256: releaseCandidate.sha256, status: "complete", ok: "1", exitCode: "0", finishedAt: "2026-09-08T00:00:00.000Z", ...options.status };
+    const status = Object.entries(state).map(([key, value]) => key + "=" + value).join("\n") + "\n";
+    const transcript = "---status---\n" + status + "---marker---\n" + (options.marker ?? runtimeSha) + "\n---live-complete---\n" + (options.liveComplete ?? runtimeSha) +
       "\n---frontend-identity---\n" + JSON.stringify(proof) + "\n---log-tail---\n---units---\nactive\nactive\nactive\nactive\n";
     const context = { release: { status: exitStatus }, frontendOnly: !full, releaseCandidate, actualSha256: releaseCandidate.sha256, dryRun: false,
       releaseStep: { ok: exitStatus === 0 }, steps: [], shellQuote: String, buildFrontendIdentityReaderSource: () => "reviewedInlineReader",
@@ -134,8 +167,8 @@ async function verifyFrontendReleaseConsumers() {
       remoteReleaseStatusPath: "/fixture/status", remoteReleaseLogPath: "/fixture/log", recoveryAttempts: 1, recoveryRetryDelayMs: 0,
       sshOptions: [], sshTarget: "fixture", publicBaseUrl: "https://fixture.invalid", parseJson,
       runCommand: command => {
-        if (command === "ssh") return { status: 0, stdout: transcript };
-        assert.equal(command, "fixture-node"); businessChecks++; return { status: 0, stdout: '{"ok":true}' };
+        if (command === "ssh") return { status: options.sshStatus ?? 0, stdout: transcript };
+        assert.equal(command, "fixture-node"); businessChecks++; return { status: options.publicStatus ?? 0, stdout: options.publicBody ?? '{"ok":true}' };
       },
     };
     vm.runInNewContext(helpers + "\n" + deployBlock, context); return { ...context, businessChecks };
@@ -145,6 +178,34 @@ async function verifyFrontendReleaseConsumers() {
     assert.equal(deploy({ ...frontend, consistent: false }).releaseStep.ok, false);
     assert.equal(deploy({ ...frontend, frontendSha256: runtimeSha }).releaseStep.ok, false);
     const full = deploy(null, true, 255); assert.equal(full.releaseStep.ok, true); assert.equal(full.businessChecks, 1);
+  });
+  const fullRecoveryRouting = { cases: 0, assertions: 0 };
+  await check("actual full recovery checks matching completion before public verification and preserves UI separation", () => {
+    const test = (name, options, expectedCalls, expectedAccepted, skipReason) => {
+      const result = deploy(options.ui ? options.proof || frontend : null, !options.ui, 255, options);
+      assert.equal(result.businessChecks, expectedCalls, name + ": public verifier call count");
+      assert.equal(result.releaseStep.ok, expectedAccepted, name + ": recovery acceptance");
+      fullRecoveryRouting.assertions += 2;
+      if (skipReason !== undefined) {
+        assert.equal(result.steps[0].publicVerifySkipReason, skipReason, name + ": explicit skip reason");
+        fullRecoveryRouting.assertions++;
+      }
+      fullRecoveryRouting.cases++;
+    };
+    const incomplete = "remote-status-not-complete-for-requested-bundle";
+    test("failed request with old live markers", { status: { status: "failed", ok: "0", exitCode: "1" }, marker: frontendSha, liveComplete: frontendSha }, 0, false, incomplete);
+    test("unknown status", { status: { status: "unknown" } }, 0, false, incomplete);
+    test("missing completion instant", { status: { finishedAt: "" } }, 0, false, incomplete);
+    test("status from another bundle", { status: { bundleSha256: frontendSha } }, 0, false, incomplete);
+    test("status transport failure", { sshStatus: 255 }, 0, false, incomplete);
+    test("old app marker", { marker: frontendSha }, 0, false, "bundle-marker-mismatch");
+    test("old accepted marker", { liveComplete: frontendSha }, 0, false, "live-complete-marker-mismatch");
+    test("matching complete full release after SSH interruption", {}, 1, true, null);
+    test("matching complete release but failed public child", { publicStatus: 1 }, 1, false, null);
+    test("matching complete release but unhealthy public body", { publicBody: '{"ok":false}' }, 1, false, null);
+    test("matching complete release but malformed public output", { publicBody: "not-json" }, 1, false, null);
+    test("UI exact receipt without business replay", { ui: true }, 0, true);
+    test("UI stale receipt without business replay", { ui: true, proof: { ...frontend, consistent: false } }, 0, false);
   });
   const statusSource = read("scripts/checkReleaseStatus.cjs"), runStart = statusSource.indexOf("const run = async () => {");
   const statusBlock = statusSource.slice(runStart, statusSource.lastIndexOf("\nrun().catch(")); assert.ok(runStart > 0);
@@ -181,6 +242,7 @@ async function verifyFrontendReleaseConsumers() {
     assert.equal(typeof compiled.readFrontendReleaseIdentity, "function");
   });
   return { ok: true, checks: checks.length, results: checks, actualConsumerBlocksExecuted: true, transportMocked: true,
+    windowRouting, fullRecoveryRouting,
     productionWrites: 0, networkCalls: 0, modelsOrDatabaseVerificationRun: 0 };
 }
 if (require.main === module) verifyFrontendReleaseConsumers().then(report => console.log(JSON.stringify(report, null, 2))).catch(error => { console.error(error.stack); process.exitCode = 1; });

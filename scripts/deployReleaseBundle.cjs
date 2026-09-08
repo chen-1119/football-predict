@@ -403,6 +403,8 @@ if (fs.statSync(bundlePath).size !== Number(manifest.bytes)) {
 }
 if (manifest.ok !== true) fail("release bundle manifest is not ok", { manifestPath });
 
+let releaseWindowPreflight = { windowChecked: false, reason: frontendOnly ? "frontend-only-no-data-cutover" : "dry-run",
+  readyToCutover: false, windowPreauthorized: false };
 if (frontendOnly) {
   // The signer validates the exact frontend source authorization and no-action
   // scope. Now bind every archive member/byte to that same signed inventory.
@@ -413,8 +415,14 @@ if (frontendOnly) {
       fail("frontend source archive lacks complete authenticated inventory");
   } catch (error) { fail("frontend source archive verification failed", { reason: error.message }); }
 } else {
-  // Preserve the full release's archive preflight -> local clone order.
+  // Reject a closed window before the archive scan, local clone, or uploads.
+  // This fresh advisory check does not replace any signed server-side gate.
   if (!dryRun) {
+    try {
+      const windowPreflight = require("./runReleaseWindowPreflight.cjs").runLiveReleaseWindowPreflight();
+      if (!windowPreflight.ok) fail("release window unavailable before clone/upload", { windowPreflight });
+      releaseWindowPreflight = { windowChecked: true, ...windowPreflight };
+    } catch (error) { fail("release window preflight rejected before clone/upload", { reason: error.message }); }
     try {
       const { report } = require("./runReleaseArchivePreflight.cjs").runLiveArchivePreflight();
       if (!report.ok) fail("release archive preflight rejected before clone/upload", { archivePreflight: report });
@@ -656,18 +664,6 @@ if ((release.status !== 0 || frontendOnly) && !dryRun) {
   const logTail = extractSection(remoteStatus.stdout || "", "log-tail", "units");
   const units = extractSection(remoteStatus.stdout || "", "units");
   remoteStatusKv = parseKeyValue(statusText);
-  const publicVerify = frontendOnly ? null : runCommand(process.execPath, ["scripts/verifyRemotePublicReadiness.cjs"], {
-    env: {
-      ...process.env,
-      REMOTE_BASE_URL: publicBaseUrl,
-      REMOTE_REQUIRE_HEALTHY: "0",
-      REMOTE_REQUIRE_SQLITE: "1",
-      REMOTE_REQUIRE_SYNC_WORKER: "1",
-      REMOTE_SQLITE_READY_ATTEMPTS: process.env.REMOTE_SQLITE_READY_ATTEMPTS || "12",
-      REMOTE_SQLITE_READY_RETRY_DELAY_MS: process.env.REMOTE_SQLITE_READY_RETRY_DELAY_MS || "5000"
-    }
-  });
-  const publicPayload = parseJson(publicVerify?.stdout || "");
   const frontendAccepted = frontendOnly && frontendIdentityMatchesCandidate(frontendRelease, releaseCandidate);
   const markerMatches = marker === (frontendOnly ? frontendRelease?.runtimeSha256 : actualSha256);
   const liveCompleteMatches = liveComplete === (frontendOnly ? frontendRelease?.runtimeSha256 : actualSha256);
@@ -677,8 +673,26 @@ if ((release.status !== 0 || frontendOnly) && !dryRun) {
     && remoteStatusKv.exitCode === "0"
     && remoteStatusKv.bundleSha256 === actualSha256
     && Boolean(remoteStatusKv.finishedAt);
+  const publicVerifySkipReason = frontendOnly ? null
+    : !remoteStatusComplete ? "remote-status-not-complete-for-requested-bundle"
+      : !markerMatches ? "bundle-marker-mismatch"
+        : !liveCompleteMatches ? "live-complete-marker-mismatch" : null;
+  // Only an already completed matching full release can be recovered after a
+  // transport failure. Do not run business verification against an old release.
+  const publicVerify = !frontendOnly && publicVerifySkipReason === null ? runCommand(process.execPath, ["scripts/verifyRemotePublicReadiness.cjs"], {
+    env: {
+      ...process.env,
+      REMOTE_BASE_URL: publicBaseUrl,
+      REMOTE_REQUIRE_HEALTHY: "0",
+      REMOTE_REQUIRE_SQLITE: "1",
+      REMOTE_REQUIRE_SYNC_WORKER: "1",
+      REMOTE_SQLITE_READY_ATTEMPTS: process.env.REMOTE_SQLITE_READY_ATTEMPTS || "12",
+      REMOTE_SQLITE_READY_RETRY_DELAY_MS: process.env.REMOTE_SQLITE_READY_RETRY_DELAY_MS || "5000"
+    }
+  }) : null;
+  const publicPayload = parseJson(publicVerify?.stdout || "");
   const remotePublicOk = frontendOnly ? frontendAccepted && units.split(/\r?\n/).filter(Boolean).slice(0, 2).length === 2
-    && units.split(/\r?\n/).filter(Boolean).slice(0, 2).every(state => state === "active") : publicVerify.status === 0 && publicPayload?.ok === true;
+    && units.split(/\r?\n/).filter(Boolean).slice(0, 2).every(state => state === "active") : publicVerify?.status === 0 && publicPayload?.ok === true;
   const recovered = remoteStatusComplete && markerMatches && liveCompleteMatches && remotePublicOk;
   releaseStep.ok = recovered;
   releaseStep.recovered = release.status !== 0 && recovered;
@@ -699,6 +713,7 @@ if ((release.status !== 0 || frontendOnly) && !dryRun) {
     units: units.split(/\r?\n/).filter(Boolean),
     publicVerifyStatus: publicVerify?.status ?? null,
     ...(frontendOnly ? { frontendRelease, frontendAccepted, acceptanceSource: "exact-root-receipt-current-index", repeatedBusinessVerification: false } : {}),
+    ...(!frontendOnly ? { publicVerifySkipped: publicVerify === null, publicVerifySkipReason } : {}),
     publicVerifyOk: publicPayload?.ok ?? null,
     publicCurrentReadSource: publicPayload?.summary?.currentReadSource || null,
     publicSqliteReady: publicPayload?.summary?.sqliteReady ?? null,
@@ -758,6 +773,7 @@ if (releaseStep.ok === true) {
 const ok = steps.every((step) => step.ok);
 console.log(JSON.stringify({
   ok,
+  releaseWindowPreflight,
   checkedAt: new Date().toISOString(),
   host,
   user,

@@ -52,9 +52,15 @@ const rootDir = path.resolve(__dirname, "..");
 // unrestorable originals before any sequence reservation or frontend build.
 // Offline bundle creation does not claim live readiness; deployment rechecks.
 if (process.env.RELEASE_DEPLOY_KEY) {
+  const windowPreflight = require("./runReleaseWindowPreflight.cjs").runLiveReleaseWindowPreflight();
+  console.error(JSON.stringify({ phase: "window-preflight-before-build", ...windowPreflight }));
+  if (!windowPreflight.ok) throw new Error("release window unavailable before archive preflight, sequence reservation and build");
   const { report } = require("./runReleaseArchivePreflight.cjs").runLiveArchivePreflight();
   if (!report.ok) throw new Error(`release archive preflight rejected: ${JSON.stringify(report.blockers)}`);
   console.error(JSON.stringify({ phase: "archive-preflight-before-build", ...report }));
+} else {
+  console.error(JSON.stringify({ phase: "window-preflight-before-build", windowChecked: false,
+    reason: "offline-bundle-creation", readyToCutover: false }));
 }
 // Catch production-only verification dependencies and stale exact contracts
 // locally, before reserving/signing a sequence or starting a remote transaction.
@@ -426,6 +432,8 @@ const requiredEntries = [
   "scripts/frozenArchiveRestoration.cjs",
   "scripts/releaseArchivePreflight.cjs",
   "scripts/runReleaseArchivePreflight.cjs",
+  "scripts/runReleaseWindowPreflight.cjs",
+  "scripts/verifyReleaseWindowPreflight.cjs",
   "scripts/verifyReleaseArchivePreflight.cjs",
   "scripts/data/frozen-archive-restoration.json",
   "scripts/verifyFrozenArchivePersistence.cjs",

@@ -250,6 +250,8 @@ const requiredReleaseEntries = [
   "scripts/frozenArchiveRestoration.cjs",
   "scripts/releaseArchivePreflight.cjs",
   "scripts/runReleaseArchivePreflight.cjs",
+  "scripts/runReleaseWindowPreflight.cjs",
+  "scripts/verifyReleaseWindowPreflight.cjs",
   "scripts/verifyReleaseArchivePreflight.cjs",
   "scripts/data/frozen-archive-restoration.json",
   "scripts/verifyFrozenArchivePersistence.cjs",
