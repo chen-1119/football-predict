@@ -32,6 +32,10 @@ TRANSACTION_VERSION=3
 RECOVERY_ROOT="/var/lib/football-release/recovery"
 RECOVERY_DIR="${RECOVERY_ROOT}/current"
 READINESS_EVIDENCE_ROOT="/var/lib/football-release/readiness-failures"
+RELEASE_STATIC_ATTESTATION_DIR=""
+RELEASE_STATIC_ATTESTATION_REUSE_DIR=""
+RELEASE_STATIC_ATTESTATION_DEVICE=""
+RELEASE_STATIC_ATTESTATION_INODE=""
 RELEASE_ENRICHMENT_REUSE_REQUEST="/var/lib/football-predict/release-enrichment-reuse-request.json"
 RELEASE_WORKER_PRIORITY_REQUEST="/var/lib/football-predict/release-worker-priority-request.json"
 LIVE_STORE_DIR="/var/lib/football-predict"
@@ -482,6 +486,63 @@ start_candidate_unit() {
   journalctl -u "$CANDIDATE_UNIT" --no-pager -n 80 >&2 || true
   stop_candidate || return 1
   return 1
+}
+
+release_stage_observe() {
+  # Same shell PID across calls. Observations never authorize a skip, retry,
+  # restore, or successful release; the existing transaction remains decisive.
+  local operation="$1"
+  shift
+  env -i PATH="$NODE_HOME/bin:/usr/bin:/bin" LANG=C.UTF-8 \
+    "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseStageShellBridge.cjs" \
+    "$operation" "$BUNDLE_SHA256" "$RELEASE_SEQUENCE" "$@" \
+    || log "warning: release stage observation unavailable"
+  return 0
+}
+
+cleanup_release_static_attestations() {
+  RELEASE_STATIC_ATTESTATION_REUSE_DIR=""
+  [ -n "$RELEASE_STATIC_ATTESTATION_DIR" ] || return 0
+  env -i PATH="$NODE_HOME/bin:/usr/bin:/bin" LANG=C.UTF-8 \
+    "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/createRootStaticVerificationAttestations.cjs" \
+    cleanup "$RELEASE_STATIC_ATTESTATION_DIR" "$RELEASE_STATIC_ATTESTATION_DEVICE" \
+    "$RELEASE_STATIC_ATTESTATION_INODE" "$BUNDLE_SHA256" || return 1
+  RELEASE_STATIC_ATTESTATION_DIR=""
+  RELEASE_STATIC_ATTESTATION_DEVICE=""
+  RELEASE_STATIC_ATTESTATION_INODE=""
+}
+
+prepare_release_static_attestations() {
+  local rc=0 directory="" metadata_ok=1
+  RELEASE_STATIC_ATTESTATION_REUSE_DIR=""
+  # NEXT is now root-owned/readable. The signed source remains root-private;
+  # neither the build user nor the live user receives the signing key.
+  directory="$(env -i PATH="$NODE_HOME/bin:/usr/bin:/bin" LANG=C.UTF-8 \
+    "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/createRootStaticVerificationAttestations.cjs" \
+    --shell "$NEXT_DIR" "$BUNDLE_SHA256")" || rc="$?"
+  if [[ "$directory" =~ ^/run/football-release-static\.[A-Za-z0-9]{6}$ ]] \
+    && [ -d "$directory" ] && [ ! -L "$directory" ] \
+    && [ "$(stat -c '%u:%g:%a' -- "$directory")" = "0:0:755" ]; then
+    RELEASE_STATIC_ATTESTATION_DIR="$directory"
+    RELEASE_STATIC_ATTESTATION_DEVICE="$(stat -c '%d' -- "$directory")" || metadata_ok=0
+    RELEASE_STATIC_ATTESTATION_INODE="$(stat -c '%i' -- "$directory")" || metadata_ok=0
+    [[ "$RELEASE_STATIC_ATTESTATION_DEVICE" =~ ^[0-9]+$ ]] \
+      && [[ "$RELEASE_STATIC_ATTESTATION_INODE" =~ ^[0-9]+$ ]] || metadata_ok=0
+    [ "$metadata_ok" -eq 1 ] || { [ "$rc" -ne 0 ] || rc=2; }
+  else
+    [ "$rc" -ne 0 ] || rc=2
+  fi
+  if [ "$rc" -eq 0 ]; then
+    RELEASE_STATIC_ATTESTATION_REUSE_DIR="$RELEASE_STATIC_ATTESTATION_DIR"
+    log "root-signed pure verifier proofs prepared; live/data checks remain fresh"
+    return 0
+  fi
+  cleanup_release_static_attestations \
+    || log "warning: incomplete pure verifier proof directory retained for inspection"
+  # A real failed verifier aborts. An unavailable optimization executes the
+  # original candidate/live checks; it never creates a successful receipt.
+  [ "$rc" -ne 3 ] || return 1
+  log "pure verifier handoff unavailable; original checks will execute afresh"
 }
 
 run_trusted_candidate_verifier() {
@@ -1320,7 +1381,8 @@ write_recovery_phase() {
   chmod 0600 "$temporary"
   sync -f "$temporary"
   mv -fT "$temporary" "${RECOVERY_DIR}/phase"
-  sync -f "$RECOVERY_DIR"
+  sync -f "$RECOVERY_DIR" || return 1
+  release_stage_observe recovery "$phase"
 }
 
 commit_release_transaction() {
@@ -6783,6 +6845,7 @@ start_release_candidate_heartbeat_keeper() {
 
 abort_before_swap() {
   local reason="$1"
+  cleanup_release_static_attestations || log "warning: pure verifier proof cleanup failed before abort"
   if [ "${SWAP_STARTED:-0}" = "1" ]; then
     rollback "$reason"
   fi
@@ -6802,6 +6865,7 @@ abort_before_swap() {
     || { log "fail-stop: live SQLite prebuild could not be cleaned before abort"; exit 1; }
   cleanup_build_tree || true
   rm -rf --one-file-system -- "$NEXT_DIR" || true
+  release_stage_observe finish error
   exit 1
 }
 
@@ -6856,6 +6920,7 @@ NODE
 
 rollback() {
   local reason="$1"
+  cleanup_release_static_attestations || log "warning: pure verifier proof cleanup failed before rollback"
   if [ "${TRANSACTION_COMMITTED:-0}" = "1" ] || [ "${TRANSACTION_FINALIZING:-0}" = "1" ]; then
     trap - EXIT
     log "FAIL-STOP: rollback is forbidden once transaction finalization has started; recovery state retained"
@@ -6955,6 +7020,7 @@ rollback() {
   clear_release_recovery_snapshot || { log "rollback restored service but could not clear recovery/current"; exit 1; }
   cleanup_live_sqlite_backup || true
   log "rollback restored the previous app, exact runtime/config state, sqlite, timers, service, and worker"
+  release_stage_observe finish error
   exit 1
 }
 
@@ -6962,6 +7028,7 @@ release_exit_trap() {
   local status="$?"
   local recovery_restored=1
   trap - EXIT
+  cleanup_release_static_attestations || log "warning: pure verifier proof cleanup failed in EXIT trap"
   stop_release_pointer_commit_keeper || {
     log "fail-stop: release pointer-commit keeper could not be reaped from EXIT trap"
     exit 1
@@ -7008,6 +7075,7 @@ release_exit_trap() {
     rm -rf --one-file-system -- "$RECOVERY_STAGING_DIR" || true
   fi
   cleanup_live_sqlite_backup || true
+  if [ "$status" -eq 0 ]; then release_stage_observe finish ok; else release_stage_observe finish error; fi
   exit "$status"
 }
 
@@ -7251,6 +7319,7 @@ if [ -e "$TLS_ACTION_DIR" ] || [ -L "$TLS_ACTION_DIR" ]; then
 fi
 
 trap release_exit_trap EXIT
+release_stage_observe init "$TRUSTED_SOURCE_DIR"
 log "preflight current service before stale backup cleanup"
 wait_for_health "http://${HOST}:${PORT}" "preflight-before-topology-cleanup" 90 2 service \
   || { printf 'current service is unhealthy; preserving the existing backup and refusing release\n' >&2; exit 1; }
@@ -7279,6 +7348,7 @@ quiesce_managed_maintenance_for_sqlite_snapshot \
   || abort_before_swap "managed maintenance could not be quiesced before candidate build"
 
 log "create isolated build tree from trusted source"
+release_stage_observe begin candidate-build
 cleanup_build_tree || abort_before_swap "stale isolated build tree could not be removed"
 rm -rf --one-file-system -- "$NEXT_DIR" || abort_before_swap "stale final assembly tree could not be removed"
 install -d -o root -g root -m 0700 -- "$BUILD_DIR"
@@ -7378,6 +7448,8 @@ fix_app_permissions "$NEXT_DIR"
 fix_worker_write_permissions "$NEXT_DIR"
 validate_build_artifacts "$NEXT_DIR" || abort_before_swap "assembled artifact tree changed safety properties"
 verify_worker_write_permissions "$NEXT_DIR" || abort_before_swap "candidate worker write probe failed"
+prepare_release_static_attestations || abort_before_swap "isolated pure verifier failed before candidate readiness"
+release_stage_observe end candidate-build ok
 
 log "start root-owned assembled candidate on ${HOST}:${CANDIDATE_PORT}"
 CANDIDATE_ADMIN_TOKEN="release-candidate-admin-$$"
@@ -7492,7 +7564,10 @@ LIVE_SQLITE_PUBLICATION_WORKER_STARTED_AT="$("$NODE_HOME/bin/node" -e 'process.s
   || abort_before_swap "live SQLite publication worker marker was empty"
 restart_worker_if_needed \
   || abort_before_swap "sync worker could not resume during isolated candidate verification"
+release_stage_observe begin candidate-readiness
 run_trusted_candidate_verifier env PATH="$PATH" HOME="$BUILD_HOME" ADMIN_TOKEN="$CANDIDATE_ADMIN_TOKEN" \
+  VERIFY_STATIC_ATTESTATION_DIR="$RELEASE_STATIC_ATTESTATION_REUSE_DIR" VERIFY_STATIC_RELEASE_SHA="$BUNDLE_SHA256" \
+  VERIFY_STATIC_RECEIPT_DIR= \
   ACCESS_CODE_ADMIN_TOKEN="$CANDIDATE_ADMIN_TOKEN" \
   MODEL_INPUT_AUDIT_MIN_MARKET_ROWS=30 \
   VERIFY_BASE_URL="http://${HOST}:${CANDIDATE_PORT}" VERIFY_START_SERVER=0 VERIFY_REQUIRE_SQLITE=1 \
@@ -7501,6 +7576,7 @@ run_trusted_candidate_verifier env PATH="$PATH" HOME="$BUILD_HOME" ADMIN_TOKEN="
   VERIFY_REQUIRE_AI_ARENA=1 \
   "$NODE_HOME/bin/node" scripts/verifyProductionReadiness.cjs \
   || abort_before_swap "candidate production readiness failed"
+release_stage_observe end candidate-readiness ok
 
 stop_candidate || abort_before_swap "candidate transient cgroup did not clear"
 assert_build_user_quiescent || abort_before_swap "build user is not quiescent after candidate stop"
@@ -7535,10 +7611,12 @@ prepare_release_perf_access_token \
 # restart above. The following canonical barrier waits out any consolidated
 # slow publication that won the lock next, closing the phase-boundary race
 # without requiring the whole slow cycle to fit a short pre-swap timeout.
+release_stage_observe begin official-prebuild-wait
 wait_for_worker_official_publish_after \
   "$LIVE_SQLITE_PUBLICATION_WORKER_STARTED_AT" \
   "$LIVE_STORE_DIR/sync-worker-status.json" \
   || abort_before_swap "sync worker did not publish a fresh official SQLite generation before live prebuild"
+release_stage_observe end official-prebuild-wait ok
 
 # Reassert that the timers and monitor/cleanup jobs which have remained
 # quiescent since candidate construction are still stopped before the HTTP
@@ -7572,7 +7650,9 @@ assert_live_sqlite_prebuild_capacity \
   || abort_before_swap "post-pressure live SQLite prebuild capacity gate rejected the release host"
 refresh_candidate_capture_heartbeat_for_readiness "$APP_DIR" "$NEXT_DIR" \
   || abort_before_swap "candidate deadline capture heartbeat refresh failed before live SQLite prebuild"
+release_stage_observe begin sqlite-prebuild
 if ! prepare_live_sqlite_prebuild "$LIVE_STORE_DIR" "$LIVE_SQLITE_PATH"; then
+  release_stage_observe end sqlite-prebuild error
   cleanup_live_sqlite_prebuild \
     || abort_before_swap "failed live SQLite prebuild could not be cleaned safely"
   if [ "$ALLOW_STOPPED_WINDOW_SQLITE_EXPORT" != "1" ]; then
@@ -7587,6 +7667,7 @@ else
     || abort_before_swap "candidate deadline capture heartbeat exceeded ${LIVE_SQLITE_PREBUILD_HEARTBEAT_MAX_AGE_SECONDS} seconds after live SQLite prebuild"
   wait_for_health "http://${HOST}:${PORT}" "post-live-sqlite-prebuild" 60 2 service \
     || abort_before_swap "current service degraded during live SQLite prebuild"
+  release_stage_observe end sqlite-prebuild ok
 fi
 assert_live_sqlite_prebuild_capacity \
   || abort_before_swap "post-prebuild live SQLite capacity gate rejected the release host"
@@ -7602,6 +7683,7 @@ assert_candidate_capture_heartbeat_refresh_fresh \
   || abort_before_swap "canonical generation pointer-commit lock could not be acquired before SQLite seal CAS"
 assert_release_fast_watcher_pause_guard \
   || abort_before_swap "fast watcher pause guard failed before the live service stop"
+release_stage_observe begin stopped-window
 stop_service_for_release_window || abort_before_swap "live service could not be paused before swap"
 stop_release_sync_write_barrier clean \
   || abort_before_swap "canonical live sync write barrier did not drain cleanly after service stop"
@@ -7641,6 +7723,7 @@ else
 fi
 
 log "swap release"
+release_stage_observe begin cutover
 [ ! -e "$BACKUP_DIR" ] && [ ! -L "$BACKUP_DIR" ] \
   || abort_before_swap "BACKUP appeared after transaction preparation"
 [ ! -e "$FAILED_DIR" ] && [ ! -L "$FAILED_DIR" ] \
@@ -7669,6 +7752,7 @@ mv "$NEXT_DIR" "$APP_DIR" || rollback "candidate app could not be activated"
   || release_pointer_commit_keeper_is_healthy \
   || rollback "generation pointer-commit keeper failed during app swap"
 write_recovery_phase "swap-complete" || rollback "recovery phase update failed after swap"
+release_stage_observe end cutover ok
 if [ -n "${BUNDLE_SHA256:-}" ]; then
   printf '%s\n' "$BUNDLE_SHA256" >"${APP_DIR}/.release-bundle-sha256.next" || rollback "bundle identity marker could not be written"
   chown root:root "${APP_DIR}/.release-bundle-sha256.next" || rollback "bundle identity marker ownership failed"
@@ -7700,17 +7784,20 @@ verify_store_write_permissions "$LIVE_STORE_DIR" "$LIVE_SQLITE_PATH" \
 verify_worker_write_permissions "$APP_DIR" || rollback "live worker write probe failed"
 if [ "$PRIMARY_READ_SOURCE" = "postgres" ]; then
   log "apply PostgreSQL schema migrations and rebuild the order-preserving primary projection"
+  release_stage_observe begin postgres-projection
   run_as_service_user_with_runtime_env env \
     FOOTBALL_POSTGRES_QUERY_TIMEOUT_MS=300000 \
     "$NODE_HOME/bin/npm" run postgres:migrate-schema \
     || rollback "PostgreSQL schema migration failed"
   run_as_service_user_with_runtime_env "$NODE_HOME/bin/npm" run postgres:backfill \
     || rollback "PostgreSQL order-preserving backfill failed"
+  release_stage_observe end postgres-projection ok
 fi
 restart_service_if_needed || rollback "service restart failed"
 
 wait_for_health "http://${HOST}:${PORT}" "post-swap-service" 120 2 service \
   || rollback "post-swap health failed"
+release_stage_observe end stopped-window ok
 assert_release_fast_watcher_health_state 1 \
   || rollback "post-swap service did not restore the fast watcher"
 if [ "${RELEASE_REFRESH_AFTER_HEALTH:-0}" = "1" ]; then
@@ -7750,10 +7837,14 @@ prepare_release_worker_priority_request \
 WORKER_RELEASE_STARTED_AT="$("$NODE_HOME/bin/node" -e 'process.stdout.write(new Date().toISOString())')" \
   || rollback "worker release start marker could not be created"
 start_worker_for_live_release || rollback "sync worker failed to start after release"
+release_stage_observe begin worker-official-wait
 wait_for_worker_official_publish_after "$WORKER_RELEASE_STARTED_AT" "$LIVE_STORE_DIR/sync-worker-status.json" \
   || rollback "sync worker failed to publish official results for this release"
+release_stage_observe end worker-official-wait ok
+release_stage_observe begin worker-enrichment-wait
 wait_for_worker_readiness_idle_after "$WORKER_RELEASE_STARTED_AT" "$LIVE_STORE_DIR/sync-worker-status.json" \
   || rollback "sync worker failed to reach readiness-safe idle for this release"
+release_stage_observe end worker-enrichment-wait ok
 # The release worker has just committed a new SQLite/PostgreSQL publication.
 # Restart the HTTP process before strict readiness so its in-memory current
 # read-source cache is rebuilt from that exact publication instead of retaining
@@ -7776,11 +7867,15 @@ clear_release_worker_priority_request \
   || rollback "one-cycle release worker priority request could not be cleared"
 clear_release_enrichment_reuse_request \
   || rollback "one-cycle enrichment reuse request could not be cleared"
+release_stage_observe begin post-swap-readiness
 run_as_service_user_with_runtime_env env VERIFY_BASE_URL="http://${HOST}:${PORT}" \
+  VERIFY_STATIC_ATTESTATION_DIR="$RELEASE_STATIC_ATTESTATION_REUSE_DIR" VERIFY_STATIC_RELEASE_SHA="$BUNDLE_SHA256" \
+  VERIFY_STATIC_RECEIPT_DIR= \
   VERIFY_START_SERVER=0 VERIFY_REQUIRE_SQLITE=1 VERIFY_REQUIRED_READ_SOURCE="$PRIMARY_READ_SOURCE" VERIFY_SQLITE_PREVALIDATED=1 \
   SERVER_STORE_DIR="$LIVE_STORE_DIR" \
   DATASTORE_SQLITE_PATH="$LIVE_SQLITE_PATH" "$NODE_HOME/bin/node" "$APP_DIR/scripts/verifyProductionReadiness.cjs" \
   || rollback "post-swap production readiness failed"
+release_stage_observe end post-swap-readiness ok
 wait_for_release_candidate_heartbeat_keeper_healthy \
   || rollback "release heartbeat keeper failed during production readiness"
 "$NODE_HOME/bin/node" "$APP_DIR/scripts/candidateReleaseContinuity.cjs" verify \
@@ -7853,6 +7948,7 @@ if [ -n "$PUBLIC_BASE_URL" ]; then
   run_as_service_user "$NODE_HOME/bin/node" "$APP_DIR/scripts/verifyRemotePublicReadiness.cjs" \
     || rollback "resumed sync worker public readiness failed"
 fi
+release_stage_observe begin finalization
 write_recovery_phase "readiness-passed" || rollback "recovery phase update failed after readiness"
 enable_managed_timers_after_readiness || rollback "managed timers could not be enabled after readiness"
 
@@ -7876,6 +7972,7 @@ RELEASE_HEARTBEAT_KEEPER_RUNTIME_DIR=""
 RELEASE_HEARTBEAT_KEEPER_CONTROL_FILE=""
 trap - EXIT
 cleanup_release_perf_access_token || log "warning: could not remove release performance credential after commit"
+cleanup_release_static_attestations || log "warning: could not remove pure verifier proofs after commit"
 cleanup_live_sqlite_backup || log "warning: could not remove live sqlite rollback snapshot after commit"
 cleanup_live_sqlite_prebuild || log "warning: could not remove live SQLite prebuild evidence after commit"
 
@@ -7888,3 +7985,5 @@ if [ "$KEEP_BACKUP" != "1" ]; then
 fi
 rm -rf "$FAILED_DIR" || log "warning: could not remove ${FAILED_DIR} after commit"
 log "bundle release complete"
+release_stage_observe end finalization ok
+release_stage_observe finish ok

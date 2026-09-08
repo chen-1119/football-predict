@@ -133,6 +133,11 @@ const validateReleaseManifestV3 = (manifest, { now = Date.now(), enforceFreshnes
     }
     if (expiresAtMs <= nowMs) throw new Error("release manifest has expired");
   }
+  // Legacy signed releases remain valid for the full path. New source metadata
+  // must be complete and exact; a partial or forged fast-path claim is rejected.
+  if (Object.hasOwn(manifest, "archiveSourceEvidence")) {
+    require("./releaseArchiveSourceInventory.cjs").validateSignedArchiveSourceEvidence(manifest);
+  }
   return {
     site: manifest.site,
     channel: manifest.channel,
