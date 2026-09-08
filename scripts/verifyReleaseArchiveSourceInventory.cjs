@@ -193,8 +193,15 @@ async function verifyReleaseArchiveSourceInventory() {
       assert.deepEqual(validateSignedArchiveSourceEvidence(verified.manifest), { status: "legacy-unavailable", executionMode: "full" });
       assert.deepEqual(await verifyArchiveSourceEvidence(validBundle, verified.manifest), { status: "legacy-unavailable", executionMode: "full" });
     });
-    await check("standalone legacy signing fixtures do not acquire undeclared module dependencies", () => {
-      const isolated = write("isolated/releaseSigning.cjs", fs.readFileSync(path.join(__dirname, "releaseSigning.cjs")));
+    await check("standalone legacy signing fixtures declare the exact policy dependency closure", () => {
+      const modules = ["releaseSigning.cjs", "frontendReleaseAuthorization.cjs", "releaseChangeClassification.cjs", "releasePrebuiltDist.cjs"];
+      for (const name of modules) {
+        const original = fs.readFileSync(path.join(__dirname, name));
+        const copied = write("isolated/" + name, original);
+        assert.equal(hash(fs.readFileSync(copied)), hash(original));
+      }
+      const isolated = path.join(root, "isolated/releaseSigning.cjs");
+      assert.deepEqual(fs.readdirSync(path.dirname(isolated)).sort(), [...modules].sort());
       const legacy = clone(manifest); delete legacy.archiveSourceEvidence;
       const args = signed(legacy);
       const result = spawnSync(process.execPath, ["-e",
@@ -206,16 +213,24 @@ async function verifyReleaseArchiveSourceInventory() {
     await check("fixed wrapper manifest contract accepts signed inventory without widening its 1 MiB cap", () => {
       const wrapper = fs.readFileSync(path.join(__dirname, "../deploy/light-server/football-release"), "utf8").replace(/\r\n/g, "\n");
       assert.ok(wrapper.includes('assert_regular_upload "$SOURCE_MANIFEST" "$UPLOAD_OWNER" $((1024 * 1024))'));
-      const from = wrapper.indexOf('manifest_sequence="$(node -');
-      const start = wrapper.indexOf("<<'NODE'\n", from) + "<<'NODE'\n".length;
-      const end = wrapper.indexOf("\nNODE\n)", start);
-      assert.ok(from >= 0 && start > from && end > start);
+      const fixedPrefix = 'manifest_sequence="$(env -i PATH="$PATH" LANG=C.UTF-8 "$NODE_BIN" - "$MANIFEST_PATH" ';
+      const extractSequenceValidator = text => {
+        const from = text.indexOf('manifest_sequence="$(');
+        const start = text.indexOf("<<'NODE'\n", from) + "<<'NODE'\n".length;
+        const end = text.indexOf("\nNODE\n)", start);
+        assert.ok(from >= 0 && start > from && end > start);
+        assert.ok(text.slice(from, start).startsWith(fixedPrefix), "manifest sequence must use fixed clean Node");
+        return text.slice(start, end);
+      };
+      const validator = extractSequenceValidator(wrapper);
+      assert.throws(() => extractSequenceValidator(wrapper.replace(fixedPrefix, 'manifest_sequence="$(node - "$MANIFEST_PATH" ')), /fixed clean Node/);
+      assert.throws(() => extractSequenceValidator(wrapper.replace(fixedPrefix, fixedPrefix.replace('"$NODE_BIN"', '"${work_dir}/node"'))), /fixed clean Node/);
       const args = signed(manifest);
       let output = "";
       const context = { require, process: { argv: [process.execPath, "-", args.manifestPath, manifest.sha256,
         String(manifest.bytes), manifest.signature.keyId, "3", manifest.policyVersion, RELEASE_SIGNATURE_ALGORITHM,
         manifest.site, manifest.channel, "0"], stdout: { write: value => { output += value; } } } };
-      vm.runInNewContext(wrapper.slice(start, end), context, { timeout: 1000 });
+      vm.runInNewContext(validator, context, { timeout: 1000 });
       assert.equal(output, "1");
       assert.ok(fs.statSync(args.manifestPath).size < 1024 * 1024);
     });

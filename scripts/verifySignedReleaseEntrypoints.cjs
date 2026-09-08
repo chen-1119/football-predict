@@ -301,17 +301,38 @@ pushCheck("release wrapper reads manifest identity and replay state under the re
     protectedStateReadIndexes: wrapperProtectedStateReads
   });
 
-const archiveValidationCompleted = releaseWrapper.indexOf('bash -n "$RELEASE_SCRIPT_PATH"');
-const sequenceConsumed = releaseWrapper.indexOf('consume_release_sequence_before_execution "$MANIFEST_SEQUENCE"');
-const guardedReleaseStarted = releaseWrapper.indexOf('bash "$RELEASE_SCRIPT_PATH" "$TRUSTED_SOURCE_DIR"');
+const antiReplayWrapper = releaseWrapper.replace(/\r\n?/g, "\n");
+const consumeSequenceToken = 'consume_release_sequence_before_execution "$MANIFEST_SEQUENCE"';
+const signatureValidated = antiReplayWrapper.indexOf('|| die "manifest signature verification failed"');
+const sequenceValidated = antiReplayWrapper.indexOf('readonly MANIFEST_SEQUENCE="$manifest_sequence"');
+const inventoryValidationStarted = antiReplayWrapper.indexOf('python3 - "$BUNDLE_PATH" "$inventory_path"');
+const inventoryValidationCompleted = antiReplayWrapper.indexOf("\nPY\n", inventoryValidationStarted);
+const frontendBranchStarted = antiReplayWrapper.indexOf('if [ "$MANIFEST_KIND" = "frontend-only" ]; then', inventoryValidationCompleted);
+const fullContinuationStarted = antiReplayWrapper.indexOf('readonly TRUSTED_SOURCE_DIR="${work_dir}/trusted"');
+const archiveValidationCompleted = antiReplayWrapper.indexOf('bash -n "$RELEASE_SCRIPT_PATH"', fullContinuationStarted);
+const sequenceConsumed = antiReplayWrapper.indexOf(consumeSequenceToken, fullContinuationStarted);
+const guardedReleaseStarted = antiReplayWrapper.indexOf('bash "$RELEASE_SCRIPT_PATH" "$TRUSTED_SOURCE_DIR"', fullContinuationStarted);
+const frontendBranch = antiReplayWrapper.slice(frontendBranchStarted, fullContinuationStarted);
+const frontendSequenceConsumed = frontendBranch.indexOf(consumeSequenceToken);
+const frontendControllerStarted = frontendBranch.indexOf('"${FRONTEND_HELPER_DIR}/frontendReleaseController.cjs" \\\n    apply "$BUNDLE_SHA" "$MANIFEST_SEQUENCE" "$work_dir"');
 pushCheck("release anti-replay sequence is atomically burned after validation and before execution", hasAll(releaseWrapper, [
   "highest accepted sequence changed while the release lock was held",
   "sync -f \"$state_tmp\"",
   "mv -fT \"$state_tmp\" \"$HIGHEST_SEQUENCE_FILE\"",
   "sync -f \"$state_dir\""
-]) && archiveValidationCompleted >= 0
+]) && signatureValidated >= 0
+  && sequenceValidated > signatureValidated
+  && inventoryValidationStarted > sequenceValidated
+  && inventoryValidationCompleted > inventoryValidationStarted
+  && frontendBranchStarted > inventoryValidationCompleted
+  && fullContinuationStarted > frontendBranchStarted
+  && frontendSequenceConsumed >= 0
+  && frontendControllerStarted > frontendSequenceConsumed
+  && frontendBranch.split(consumeSequenceToken).length === 2
+  && archiveValidationCompleted > fullContinuationStarted
   && sequenceConsumed > archiveValidationCompleted
   && guardedReleaseStarted > sequenceConsumed
+  && antiReplayWrapper.slice(fullContinuationStarted, guardedReleaseStarted).split(consumeSequenceToken).length === 2
   && !releaseWrapper.includes("commit_highest_accepted_sequence"));
 
 pushCheck("release wrapper does not accept caller-controlled production paths", [

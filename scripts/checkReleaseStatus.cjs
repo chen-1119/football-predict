@@ -7,6 +7,7 @@ const net = require("node:net");
 const { spawnSync } = require("node:child_process");
 const { revisionTransitionReportValid } = require("./candidateReleaseContinuity.cjs");
 const { collectFilesNewerThan } = require("./releaseWorkspaceFreshness.cjs");
+const { buildFrontendIdentityReaderSource, frontendIdentityMatchesCandidate } = require("../server/frontendReleaseIdentity.cjs");
 const {
   RELEASE_BUNDLE_POLICY_VERSION,
   findSensitiveReleaseEntries
@@ -256,6 +257,8 @@ const checkBundle = () => {
     signingKeyId: signatureVerification.keyId,
     bytes,
     actualSha256,
+    releaseKind: manifest.releaseKind === undefined ? "full" : manifest.releaseKind,
+    releaseSequence: manifest.releaseSequence,
     localCandidateSha256: actualSha256,
     declaredSha256,
     manifestSha256: manifest.sha256 || null,
@@ -305,6 +308,7 @@ const parseJsonSection = (value) => {
     return null;
   }
 };
+const shellQuote = (value) => `'${String(value).replace(/'/g, "'\\''")}'`;
 
 const runPinnedSsh = (command, { timeout = 35000, maxBuffer = 1024 * 1024 } = {}) => {
   const args = [
@@ -365,6 +369,8 @@ const checkSsh = () => {
     "cat /opt/football-predict/.release-bundle-sha256 2>/dev/null || true",
     "printf '%s\\n' '---live-complete---'",
     "cat /opt/football-predict/.release-live-complete 2>/dev/null || true",
+    "printf '%s\\n' '---frontend-identity---'",
+    `/opt/node-v22.22.1/bin/node -e ${shellQuote("console.log(JSON.stringify(" + buildFrontendIdentityReaderSource() + ".readFrontendReleaseIdentity()))")}`,
     "printf '%s\\n' '---candidate-continuity---'",
     "cat /opt/football-predict/.release-candidate-continuity.json 2>/dev/null || true",
     "printf '%s\\n' '---recovery-helper---'",
@@ -380,7 +386,8 @@ const checkSsh = () => {
   const result = run.result;
   const date = extractSection(result.stdout, "date", "marker").split(/\r?\n/)[0] || "";
   const markerSha256 = extractSection(result.stdout, "marker", "live-complete").split(/\s+/)[0] || null;
-  const liveCompleteSha256 = extractSection(result.stdout, "live-complete", "candidate-continuity").split(/\s+/)[0] || null;
+  const liveCompleteSha256 = extractSection(result.stdout, "live-complete", "frontend-identity").split(/\s+/)[0] || null;
+  const frontendRelease = parseJsonSection(extractSection(result.stdout, "frontend-identity", "candidate-continuity"));
   const candidateContinuity = parseJsonSection(extractSection(result.stdout, "candidate-continuity", "recovery-helper"));
   const recoveryHelperSha256 = extractSection(result.stdout, "recovery-helper", "preflight").split(/\s+/)[0]?.toLowerCase() || null;
   const preflightOutput = extractSection(result.stdout, "preflight", "preflight-exit");
@@ -399,6 +406,7 @@ const checkSsh = () => {
       version: "release-status-ssh-aggregate-v3",
       markerSha256,
       liveCompleteSha256,
+      frontendRelease,
       candidateContinuity,
       recoveryHelperSha256,
       preflightExit: Number.isFinite(preflightExit) ? preflightExit : null,
@@ -615,7 +623,19 @@ const run = async () => {
     bundle.recoveryHelperRotationContract,
   );
   const remoteCandidateContinuity = checkRemoteCandidateContinuity(ssh, remoteRelease);
+  const frontendOnly = bundle.releaseKind === "frontend-only";
+  const frontendRelease = ssh.aggregate?.frontendRelease || null;
+  const frontendMatchesCandidate = frontendOnly && frontendIdentityMatchesCandidate(frontendRelease,
+    { releaseKind: bundle.releaseKind, sha256: bundle.actualSha256, releaseSequence: bundle.releaseSequence })
+    && remoteRelease.markerSha256 === frontendRelease.runtimeSha256 && remoteRelease.liveCompleteSha256 === frontendRelease.runtimeSha256
+    && remoteCandidateContinuity.releaseSequence === frontendRelease.runtimeSequence;
   const health = await requestJson("/api/v1/health");
+  const frontendHealthMatches = !frontendOnly || frontendIdentityMatchesCandidate(health.body?.frontendRelease,
+    { releaseKind: bundle.releaseKind, sha256: bundle.actualSha256, releaseSequence: bundle.releaseSequence })
+    && health.body.frontendRelease.runtimeSha256 === frontendRelease?.runtimeSha256
+    && health.body.frontendRelease.acceptanceSha256 === frontendRelease?.acceptanceSha256
+    && health.body.frontendRelease.indexSha256 === frontendRelease?.indexSha256
+    && health.body.frontendRelease.distTreeHash === frontendRelease?.distTreeHash;
   const sourceHealth = await requestJson("/api/v1/source-health");
 
   const sqlite = health.body?.storage?.sqlite || {};
@@ -654,7 +674,8 @@ const run = async () => {
     && remotePreflight.ok
     && remoteRecoveryHelper.ok
     && remoteRelease.committed
-    && remoteCandidateContinuity.ok;
+    && remoteCandidateContinuity.ok
+    && (!frontendOnly || frontendMatchesCandidate && frontendHealthMatches);
   const blockers = [];
   if (!bundle.ok) blockers.push(bundle.workspaceFresh === false
     ? "release bundle is older than current workspace changes"
@@ -672,7 +693,9 @@ const run = async () => {
   }
   if (ssh.ok && !remoteCandidateContinuity.ok) blockers.push("remote candidate release continuity proof is missing or invalid");
   if (!remoteRelease.committed) blockers.push("remote release completion marker is missing or does not match the bundle marker");
-  if (bundle.ok && remoteRelease.ok && remoteRelease.markerSha256 !== bundle.actualSha256) {
+  if (frontendOnly && !frontendMatchesCandidate) blockers.push("accepted frontend receipt/current index proof does not match local UI candidate and runtime baseline");
+  if (frontendOnly && !frontendHealthMatches) blockers.push("public health frontend identity differs from current accepted SSH proof");
+  if (!frontendOnly && bundle.ok && remoteRelease.ok && remoteRelease.markerSha256 !== bundle.actualSha256) {
     blockers.push("remote release marker does not match local candidate bundle");
   }
   if (!publicReachable) blockers.push("public /api/v1/health is not reachable");
@@ -696,9 +719,10 @@ const run = async () => {
     ssh,
     remoteRelease: {
       ...remoteRelease,
+      ...(frontendOnly ? { frontendRelease, frontendMatchesCandidate } : {}),
       matchesLocalCandidate: Boolean(
         bundle.actualSha256
-        && remoteRelease.markerSha256 === bundle.actualSha256
+        && (frontendOnly ? frontendMatchesCandidate : remoteRelease.markerSha256 === bundle.actualSha256)
       )
     },
     remotePreflight,
@@ -713,6 +737,7 @@ const run = async () => {
         dataFresh: health.body?.status?.dataFresh ?? null,
         recommendationReliable: health.body?.status?.recommendationReliable ?? null,
         checkedAt: health.body?.checkedAt || null,
+        frontendRelease: health.body?.frontendRelease || null,
         error: health.error || null
       },
       sqlite: {

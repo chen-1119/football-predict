@@ -255,6 +255,7 @@ const main = async (argv = process.argv.slice(2)) => {
     for (const file of [signing, FIXED.entrypoint, FIXED.publicKey]) assertRegular(file, 2 * 1024 * 1024, 0);
     const { verifyManifestSignature } = require(signing);
     let childExit = null;
+    let authenticatedRelease = null;
     const validateBundle = () => {
       assertDirectory(FIXED.incoming, identity.uid);
       const base = path.join(FIXED.incoming, options.sha);
@@ -276,7 +277,15 @@ const main = async (argv = process.argv.slice(2)) => {
         for (;;) { const size = fs.readSync(fd, buffer, 0, buffer.length, null); if (!size) break; bytes += size; hash.update(buffer.subarray(0, size)); }
       } finally { fs.closeSync(fd); }
       if (bytes !== manifest.bytes || hash.digest("hex") !== options.sha) fail("signed-bundle-content-invalid");
-      return { identity: digest(checked.manifestBytes), expiresAtMs: canonicalTime(manifest.expiresAt) };
+      authenticatedRelease = { releaseKind: manifest.releaseKind === undefined ? "full" : manifest.releaseKind,
+        sha256: manifest.sha256, releaseSequence: manifest.releaseSequence };
+      if (!["full", "frontend-only"].includes(authenticatedRelease.releaseKind)) fail("unknown-signed-release-kind");
+      if (authenticatedRelease.releaseKind === "frontend-only") {
+        const readers = manifest.archiveSourceEvidence?.inventory?.entries?.filter(entry => entry.path === "server/frontendReleaseIdentity.cjs");
+        if (readers?.length !== 1 || readers[0].kind !== "file" || !SHA.test(readers[0].sha256 || "")) fail("signed-frontend-reader-commitment-missing");
+        authenticatedRelease.expectedFrontendIdentitySha256 = readers[0].sha256;
+      }
+      return { identity: digest(checked.manifestBytes), expiresAtMs: canonicalTime(manifest.expiresAt), ...authenticatedRelease };
     };
     const runtime = {
       pid: process.pid, previous, now: Date.now, cancelled: () => cancelled,
@@ -306,6 +315,22 @@ const main = async (argv = process.argv.slice(2)) => {
         if (fresh && status.status === "failed") return { failed: true, reason: "signed-release-failed-no-retry" };
         if (fresh && status.status === "complete" && status.ok === "1" && status.exitCode === "0") {
           try {
+            if (authenticatedRelease?.releaseKind === "frontend-only") {
+              // Authenticate this normal installed dependency BEFORE require;
+              // its expected bytes come from the already-verified manifest.
+              const readerFile = path.join(FIXED.app, "server/frontendReleaseIdentity.cjs");
+              for (const directory of ["/", "/opt", FIXED.app, path.join(FIXED.app, "server")]) {
+                assertDirectory(directory, 0);
+                if (fs.realpathSync(directory) !== directory) fail("frontend-reader-linked-ancestor");
+              }
+              const readerStat = assertRegular(readerFile, 256 * 1024, 0);
+              if ((readerStat.mode & 0o7777) !== 0o644 || fs.realpathSync(readerFile) !== readerFile ||
+                  digest(regularBytes(readerFile, 256 * 1024, 0)) !== authenticatedRelease.expectedFrontendIdentitySha256)
+                fail("frontend-reader-does-not-match-signed-source");
+              const { readFrontendReleaseIdentity, frontendIdentityMatchesCandidate } = require(readerFile);
+              if (frontendIdentityMatchesCandidate(readFrontendReleaseIdentity(), authenticatedRelease)) return { complete: true };
+              return { failed: true, reason: "signed-frontend-acceptance-proof-missing" };
+            }
             const marker = regularBytes(path.join(FIXED.app, ".release-bundle-sha256"), 4096, 0).toString("utf8").trim();
             const complete = regularBytes(path.join(FIXED.app, ".release-live-complete"), 4096, 0).toString("utf8").trim();
             if (marker === options.sha && complete === options.sha) return { complete: true };

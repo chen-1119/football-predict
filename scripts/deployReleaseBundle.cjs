@@ -22,6 +22,7 @@ const {
 } = require("./releaseRecoveryHelperRotation.cjs");
 const { buildReadOnlyWorkerProbe } = require("./releaseWorkerPreflight.cjs");
 const { collectFilesNewerThan } = require("./releaseWorkspaceFreshness.cjs");
+const { buildFrontendIdentityReaderSource, frontendIdentityMatchesCandidate } = require("../server/frontendReleaseIdentity.cjs");
 
 const rootDir = path.resolve(__dirname, "..");
 const tmpDir = path.join(rootDir, ".codex-tmp");
@@ -292,31 +293,14 @@ if (recoverMode) {
   process.exit(0);
 }
 
+async function deploySelectedBundle() {
 const bundlePath = latestBundlePath();
 if (!bundlePath || !fs.existsSync(bundlePath)) fail("release bundle not found", { bundlePath });
 
-if (!dryRun) {
-  try {
-    const { report } = require("./runReleaseArchivePreflight.cjs").runLiveArchivePreflight();
-    if (!report.ok) fail("release archive preflight rejected before clone/upload", { archivePreflight: report });
-  } catch (error) { fail("release archive preflight observation failed", { reason: error.message }); }
-}
-
-const localCloneVerifier = runCommand(process.execPath, [
-  "scripts/verifyFastResultProductionClone.cjs",
-  "--sqlite-path", path.join(rootDir, "server-data", "football.db"),
-  "--require-receipt",
-]);
-if (localCloneVerifier.status !== 0) {
-  fail("local production-clone fast-result migration verification failed", {
-    status: localCloneVerifier.status,
-    stdoutTail: localCloneVerifier.stdout?.slice(-3000) || "",
-    stderrTail: localCloneVerifier.stderr?.slice(-3000) || "",
-    error: localCloneVerifier.error || null,
-  });
-}
 if (!fs.existsSync(keyPath)) fail("ssh key not found", { keyPath });
 
+// Local routing begins only with the reviewed signature verifier. Neither an
+// environment flag nor an unverified manifest may suppress the full workflow.
 const shaPath = `${bundlePath}.sha256`;
 const manifestPath = `${bundlePath}.manifest.json`;
 const signaturePath = `${bundlePath}.manifest.sig`;
@@ -339,6 +323,10 @@ try {
   });
 }
 const manifest = signatureVerification.manifest;
+const releaseCandidate = { releaseKind: manifest.releaseKind === undefined ? "full" : manifest.releaseKind,
+  sha256: actualSha256, releaseSequence: manifest.releaseSequence };
+if (!["full", "frontend-only"].includes(releaseCandidate.releaseKind)) fail("unsupported signed release kind");
+const frontendOnly = releaseCandidate.releaseKind === "frontend-only";
 const bundleInspection = inspectBundleEntries(bundlePath);
 if (!bundleInspection.ok) {
   fail("release bundle contents could not be inspected", {
@@ -414,6 +402,39 @@ if (fs.statSync(bundlePath).size !== Number(manifest.bytes)) {
   });
 }
 if (manifest.ok !== true) fail("release bundle manifest is not ok", { manifestPath });
+
+if (frontendOnly) {
+  // The signer validates the exact frontend source authorization and no-action
+  // scope. Now bind every archive member/byte to that same signed inventory.
+  // The server still compares it with the retained authenticated baseline.
+  try {
+    const evidence = await require("./releaseArchiveSourceInventory.cjs").verifyArchiveSourceEvidence(bundlePath, manifest);
+    if (evidence.status !== "authenticated-inventory-build-unavailable" || evidence.archiveSha256 !== actualSha256)
+      fail("frontend source archive lacks complete authenticated inventory");
+  } catch (error) { fail("frontend source archive verification failed", { reason: error.message }); }
+} else {
+  // Preserve the full release's archive preflight -> local clone order.
+  if (!dryRun) {
+    try {
+      const { report } = require("./runReleaseArchivePreflight.cjs").runLiveArchivePreflight();
+      if (!report.ok) fail("release archive preflight rejected before clone/upload", { archivePreflight: report });
+    } catch (error) { fail("release archive preflight observation failed", { reason: error.message }); }
+  }
+  const localCloneVerifier = runCommand(process.execPath, [
+    "scripts/verifyFastResultProductionClone.cjs",
+    "--sqlite-path", path.join(rootDir, "server-data", "football.db"),
+    "--require-receipt",
+  ]);
+  if (localCloneVerifier.status !== 0) {
+    fail("local production-clone fast-result migration verification failed", {
+      status: localCloneVerifier.status,
+      stdoutTail: localCloneVerifier.stdout?.slice(-3000) || "",
+      stderrTail: localCloneVerifier.stderr?.slice(-3000) || "",
+      error: localCloneVerifier.error || null,
+    });
+  }
+}
+// End authenticated local routing; upload and server authorization remain below.
 const recoveryHelperRotationContract = parseFixedRecoveryHelperRotationContract(
   releaseShellInspection.content
 );
@@ -432,7 +453,7 @@ const releaseRunId = actualSha256;
 const expectedRecoveryHelperSha256 = recoveryHelperInspection.sha256;
 const remotePreflightCommand = buildRemotePreflightCommand(
   expectedRecoveryHelperSha256,
-  recoveryHelperRotationContract.ok === true
+  !frontendOnly && recoveryHelperRotationContract.ok === true
 );
 const remoteBundlePath = remoteJoin(remoteDir, `${actualSha256}.tgz`);
 const remoteShaPath = remoteJoin(remoteDir, `${actualSha256}.sha256`);
@@ -597,7 +618,9 @@ const releaseStep = {
 };
 steps.push(releaseStep);
 
-if (release.status !== 0 && !dryRun) {
+// A zero SSH exit is not enough for UI: both normal success and transport
+// recovery must observe the exact accepted receipt/current index commitment.
+if ((release.status !== 0 || frontendOnly) && !dryRun) {
   const remoteStatusCommand = [
     "set +e",
     "printf '%s\\n' '---status---'",
@@ -606,6 +629,8 @@ if (release.status !== 0 && !dryRun) {
     "cat /opt/football-predict/.release-bundle-sha256 2>/dev/null || true",
     "printf '%s\\n' '---live-complete---'",
     "cat /opt/football-predict/.release-live-complete 2>/dev/null || true",
+    "printf '%s\\n' '---frontend-identity---'",
+    `/opt/node-v22.22.1/bin/node -e ${shellQuote("console.log(JSON.stringify(" + buildFrontendIdentityReaderSource() + ".readFrontendReleaseIdentity()))")}`,
     "printf '%s\\n' '---log-tail---'",
     `tail -n 220 ${shellQuote(remoteReleaseLogPath)} 2>/dev/null || true`,
     "printf '%s\\n' '---units---'",
@@ -626,11 +651,12 @@ if (release.status !== 0 && !dryRun) {
   }
   const statusText = extractSection(remoteStatus.stdout || "", "status", "marker");
   const marker = extractSection(remoteStatus.stdout || "", "marker", "live-complete").split(/\s+/)[0] || "";
-  const liveComplete = extractSection(remoteStatus.stdout || "", "live-complete", "log-tail").split(/\s+/)[0] || "";
+  const liveComplete = extractSection(remoteStatus.stdout || "", "live-complete", "frontend-identity").split(/\s+/)[0] || "";
+  const frontendRelease = parseJson(extractSection(remoteStatus.stdout || "", "frontend-identity", "log-tail"));
   const logTail = extractSection(remoteStatus.stdout || "", "log-tail", "units");
   const units = extractSection(remoteStatus.stdout || "", "units");
   remoteStatusKv = parseKeyValue(statusText);
-  const publicVerify = runCommand(process.execPath, ["scripts/verifyRemotePublicReadiness.cjs"], {
+  const publicVerify = frontendOnly ? null : runCommand(process.execPath, ["scripts/verifyRemotePublicReadiness.cjs"], {
     env: {
       ...process.env,
       REMOTE_BASE_URL: publicBaseUrl,
@@ -641,21 +667,23 @@ if (release.status !== 0 && !dryRun) {
       REMOTE_SQLITE_READY_RETRY_DELAY_MS: process.env.REMOTE_SQLITE_READY_RETRY_DELAY_MS || "5000"
     }
   });
-  const publicPayload = parseJson(publicVerify.stdout || "");
-  const markerMatches = marker === actualSha256;
-  const liveCompleteMatches = liveComplete === actualSha256;
+  const publicPayload = parseJson(publicVerify?.stdout || "");
+  const frontendAccepted = frontendOnly && frontendIdentityMatchesCandidate(frontendRelease, releaseCandidate);
+  const markerMatches = marker === (frontendOnly ? frontendRelease?.runtimeSha256 : actualSha256);
+  const liveCompleteMatches = liveComplete === (frontendOnly ? frontendRelease?.runtimeSha256 : actualSha256);
   const remoteStatusComplete = remoteStatus.status === 0
     && remoteStatusKv.status === "complete"
     && remoteStatusKv.ok === "1"
     && remoteStatusKv.exitCode === "0"
     && remoteStatusKv.bundleSha256 === actualSha256
     && Boolean(remoteStatusKv.finishedAt);
-  const remotePublicOk = publicVerify.status === 0 && publicPayload?.ok === true;
+  const remotePublicOk = frontendOnly ? frontendAccepted && units.split(/\r?\n/).filter(Boolean).slice(0, 2).length === 2
+    && units.split(/\r?\n/).filter(Boolean).slice(0, 2).every(state => state === "active") : publicVerify.status === 0 && publicPayload?.ok === true;
   const recovered = remoteStatusComplete && markerMatches && liveCompleteMatches && remotePublicOk;
   releaseStep.ok = recovered;
-  releaseStep.recovered = recovered;
+  releaseStep.recovered = release.status !== 0 && recovered;
   steps.push({
-    name: "remote release recovery check",
+    name: frontendOnly ? "remote frontend acceptance check" : "remote release recovery check",
     status: remoteStatus.status,
     ok: recovered,
     command: remoteStatus.command,
@@ -669,17 +697,18 @@ if (release.status !== 0 && !dryRun) {
     remoteReleaseLogPath,
     remoteReleaseStatusPath,
     units: units.split(/\r?\n/).filter(Boolean),
-    publicVerifyStatus: publicVerify.status,
+    publicVerifyStatus: publicVerify?.status ?? null,
+    ...(frontendOnly ? { frontendRelease, frontendAccepted, acceptanceSource: "exact-root-receipt-current-index", repeatedBusinessVerification: false } : {}),
     publicVerifyOk: publicPayload?.ok ?? null,
     publicCurrentReadSource: publicPayload?.summary?.currentReadSource || null,
     publicSqliteReady: publicPayload?.summary?.sqliteReady ?? null,
     logTail: logTail.slice(-3000),
     stdoutTail: remoteStatus.stdout?.slice(-3000) || "",
     stderrTail: remoteStatus.stderr?.slice(-2000) || "",
-    publicVerifyTail: publicVerify.stdout?.slice(-2000) || "",
+    publicVerifyTail: publicVerify?.stdout?.slice(-2000) || "",
     recoveryAttempts,
     recoveryRetryDelayMs,
-    error: remoteStatus.error || publicVerify.error || null
+    error: remoteStatus.error || publicVerify?.error || null
   });
 }
 
@@ -738,3 +767,5 @@ console.log(JSON.stringify({
   steps
 }, null, 2));
 if (!ok) process.exit(1);
+}
+deploySelectedBundle().catch(error => fail("release deployment failed", { reason: error.message || String(error) }));

@@ -1,3 +1,19 @@
+// Dispatch before full-release preflight, verifier chains, sequence reservation
+// or local build. A UI package authorizes source for one later isolated build.
+const requestedReleaseKind = process.env.RELEASE_KIND;
+if (requestedReleaseKind !== undefined && requestedReleaseKind !== "full" && requestedReleaseKind !== "frontend-only") {
+  throw new Error("RELEASE_KIND must be full or frontend-only");
+}
+if (requestedReleaseKind === "frontend-only") {
+  const entryPath = require("node:path").join(__dirname, "createFrontendReleaseBundle.cjs");
+  const child = require("node:child_process").spawnSync(process.execPath, [entryPath], {
+    cwd: require("node:path").resolve(__dirname, ".."), env: process.env,
+    stdio: "inherit", windowsHide: true, timeout: 180000,
+  });
+  if (child.error) process.stderr.write("frontend source bundle child failed: " + child.error.code + "\n");
+  process.exit(Number.isInteger(child.status) && child.status >= 0 ? child.status : 1);
+}
+
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
@@ -606,6 +622,22 @@ const requiredEntries = [
   "scripts/verifyFrontendOverlayTransaction.cjs",
   "scripts/frontendRuntimeBoundary.cjs",
   "scripts/verifyFrontendRuntimeBoundary.cjs",
+  "scripts/createFrontendReleaseBundle.cjs",
+  "scripts/verifyFrontendSourceBundle.cjs",
+  "scripts/frontendReleaseAuthorization.cjs",
+  "scripts/verifyFrontendReleaseAuthorization.cjs",
+  "scripts/frontendReleaseController.cjs",
+  "scripts/verifyFrontendReleaseController.cjs",
+  "scripts/verifyFrontendReleaseEntrypoints.cjs",
+  "scripts/frontendReleaseTransaction.cjs",
+  "scripts/verifyFrontendReleaseTransaction.cjs",
+  "scripts/frontendBuildDependencies.cjs",
+  "scripts/verifyFrontendBuildDependencies.cjs",
+  "scripts/frontendInstalledRuntime.cjs",
+  "scripts/verifyFrontendInstalledRuntime.cjs",
+  "server/frontendReleaseIdentity.cjs",
+  "scripts/verifyFrontendReleaseIdentity.cjs",
+  "scripts/verifyFrontendReleaseConsumers.cjs",
   "server/staticFileResponse.cjs",
   "scripts/verifyStaticFileResponseIdentity.cjs",
   "scripts/verifyStaticVerificationReceipts.cjs",

@@ -5,6 +5,65 @@ const baseline = require("./releaseSourceBaseline.cjs");
 const { captureReleaseArchiveSourceEvidence } = require("./releaseArchiveSourceInventory.cjs");
 const { publicKeyId, signManifestBytes } = require("./releaseSigning.cjs");
 const hash = value => crypto.createHash("sha256").update(value).digest("hex");
+const SOURCE_BASELINE_HELPER_MODULES = Object.freeze(["releaseSourceBaseline.cjs", "releaseSigning.cjs", "releaseArchiveSourceInventory.cjs",
+  "releaseChangeClassification.cjs", "releasePrebuiltDist.cjs", "frontendReleaseAuthorization.cjs"]);
+
+// A bounded dependency delta, not another run of the RSA/archive retention
+// suite. Loading releaseSigning alone does not exercise its lazy require.
+function verifyReleaseSourceBaselineClosure() {
+  const directory = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), "football-baseline-closure-")), inode = fs.lstatSync(directory).ino;
+  const startedAt = Date.now(), sourceHashes = [], checks = [];
+  const sources = SOURCE_BASELINE_HELPER_MODULES.map(name => ({ name, bytes: fs.readFileSync(path.join(__dirname, name)) }));
+  const script = String.raw`
+    const assert = require("node:assert/strict");
+    try {
+      const baseline = require("./releaseSourceBaseline.cjs"), signing = require("./releaseSigning.cjs");
+      const manifest = { manifestVersion: 3, site: "fixture", channel: "test", releaseSequence: 1,
+        createdAt: "2026-01-01T00:00:00.000Z", expiresAt: "2026-01-02T00:00:00.000Z" };
+      assert.equal(typeof baseline.preserveSourceBaseline, "function");
+      assert.equal(signing.validateReleaseManifestV3(manifest, { enforceFreshness: false }).releaseSequence, 1);
+      assert.throws(() => signing.validateReleaseManifestV3({ ...manifest, releaseKind: "unknown" }, { enforceFreshness: false }), /unsupported-release-kind/);
+      console.log(JSON.stringify({ ok: true, fullValidated: true, unknownKindRejected: true }));
+    } catch (error) {
+      console.log(JSON.stringify({ ok: false, code: error.code || null, missingAuthorization: error.message.includes("frontendReleaseAuthorization.cjs") }));
+      process.exitCode = 1;
+    }
+  `;
+  const run = () => {
+    const child = spawnSync(process.execPath, ["-e", script], {
+      cwd: directory, encoding: "utf8", windowsHide: true, timeout: 10000, maxBuffer: 65536,
+      env: { PATH: path.dirname(process.execPath), ...(process.platform === "win32" ? { SystemRoot: process.env.SystemRoot } : {}) },
+    });
+    assert.equal(child.error, undefined); assert.equal(child.signal, null);
+    return { status: child.status, body: JSON.parse(child.stdout), stderr: child.stderr };
+  };
+  const report = { ok: false, suite: "release-source-baseline-closure-delta-v1", startedAt, sourceHashes, checks,
+    node: process.version, platform: process.platform, fixture: directory, temporaryFixturesRemoved: false, productionWrites: 0, providerRequests: 0 };
+  try {
+    for (const item of sources) {
+      sourceHashes.push({ name: item.name, sha256: hash(item.bytes) });
+      if (item.name !== "frontendReleaseAuthorization.cjs") fs.writeFileSync(path.join(directory, item.name), item.bytes, { flag: "wx", mode: 0o600 });
+    }
+    const missing = run(); assert.equal(missing.status, 1); assert.equal(missing.body.code, "MODULE_NOT_FOUND"); assert.equal(missing.body.missingAuthorization, true);
+    checks.push({ name: "actual old five-module copy reproduces lazy signature dependency failure", ok: true, observed: missing });
+    const added = sources.find(item => item.name === "frontendReleaseAuthorization.cjs");
+    fs.writeFileSync(path.join(directory, added.name), added.bytes, { flag: "wx", mode: 0o600 });
+    const complete = run(); assert.equal(complete.status, 0); assert.equal(complete.body.fullValidated, true); assert.equal(complete.body.unknownKindRejected, true);
+    checks.push({ name: "actual six-module copy loads baseline and executes signature authorization validation", ok: true, observed: complete });
+    assert.deepEqual(fs.readdirSync(directory).sort(), [...SOURCE_BASELINE_HELPER_MODULES].sort());
+    report.sourcesUnchanged = sources.every(item => hash(fs.readFileSync(path.join(__dirname, item.name))) === hash(item.bytes)
+      && hash(fs.readFileSync(path.join(directory, item.name))) === hash(item.bytes));
+    assert.equal(report.sourcesUnchanged, true); report.ok = true; return report;
+  } finally {
+    assert.equal(fs.lstatSync(directory).ino, inode); assert.equal(fs.realpathSync(directory), directory);
+    assert.equal(path.dirname(directory), fs.realpathSync(os.tmpdir())); assert.match(path.basename(directory), /^football-baseline-closure-/);
+    for (const name of fs.readdirSync(directory)) {
+      assert.ok(SOURCE_BASELINE_HELPER_MODULES.includes(name)); const file = path.join(directory, name), stat = fs.lstatSync(file);
+      assert.ok(stat.isFile() && !stat.isSymbolicLink() && stat.nlink === 1); fs.unlinkSync(file);
+    }
+    fs.rmdirSync(directory); report.temporaryFixturesRemoved = !fs.existsSync(directory); report.finishedAt = Date.now();
+  }
+}
 
 async function verifyReleaseSourceBaseline() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "football-source-baseline-")), checks = [];
@@ -181,5 +240,9 @@ async function verifyReleaseSourceBaseline() {
     assert.equal(fs.existsSync(exactRoot), false);
   }
 }
-module.exports = { verifyReleaseSourceBaseline };
-if (require.main === module) verifyReleaseSourceBaseline().then(result => console.log(JSON.stringify(result, null, 2))).catch(error => { console.error(error.stack); process.exitCode = 1; });
+module.exports = { verifyReleaseSourceBaseline, verifyReleaseSourceBaselineClosure, SOURCE_BASELINE_HELPER_MODULES };
+if (require.main === module) {
+  if (process.argv.length === 3 && process.argv[2] === "--closure-only") {
+    try { console.log(JSON.stringify(verifyReleaseSourceBaselineClosure(), null, 2)); } catch (error) { console.error(error.stack); process.exitCode = 1; }
+  } else verifyReleaseSourceBaseline().then(result => console.log(JSON.stringify(result, null, 2))).catch(error => { console.error(error.stack); process.exitCode = 1; });
+}

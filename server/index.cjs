@@ -7,6 +7,7 @@ const { Worker } = require("node:worker_threads");
 const crypto = require("node:crypto");
 const zlib = require("node:zlib");
 const { sendStaticFileResponse } = require("./staticFileResponse.cjs");
+const { readFrontendReleaseIdentity } = require("./frontendReleaseIdentity.cjs");
 const { compactApiFootballDiagnostics } = require("../src/services/apiFootballDiagnostics.cjs");
 const {
   TABLES,
@@ -11458,7 +11459,8 @@ const handleApi = async (req, res, url) => {
   }
 
   if (url.pathname === "/api/v1/health") {
-    return sendJsonCached(req, res, await getPublicV1Health(), { maxAgeSeconds: 5 });
+    // Business health stays cached; the root-published UI identity never does.
+    return sendJsonCached(req, res, { ...await getPublicV1Health(), frontendRelease: readFrontendReleaseIdentity() }, { maxAgeSeconds: 0 });
   }
 
   if (url.pathname === "/api/v1/source-health") {

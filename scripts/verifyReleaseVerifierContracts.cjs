@@ -440,15 +440,47 @@ for (const [entry, script, minimum] of [
   ['verifyFrontendBuildEvidence.cjs', 'frontend-build-evidence', 17],
   ['verifyFrontendBuildSandbox.cjs', 'frontend-build-sandbox', 8],
   ['verifyFrontendRuntimeBoundary.cjs', 'frontend-runtime-boundary', 10],
+  ['verifyFrontendReleaseAuthorization.cjs', 'frontend-release-authorization', 23],
+  ['verifyFrontendSourceBundle.cjs', 'frontend-source-bundle', 23],
+  ['verifyFrontendInstalledRuntime.cjs', 'frontend-installed-runtime', 12],
+  ['verifyFrontendReleaseIdentity.cjs', 'frontend-release-identity', 19],
+  ['verifyFrontendReleaseConsumers.cjs', 'frontend-release-consumers', 6],
+  ['verifyFrontendReleaseEntrypoints.cjs', 'frontend-release-entrypoints', 14],
   ['verifyStaticFileResponseIdentity.cjs', 'static-file-response-identity', 19],
 ]) check(`release execution contract passes before signing: ${entry}`, () => {
-  const run = require('node:child_process').spawnSync(process.execPath, [`scripts/${entry}`],
+  const systemdOnly = entry === 'verifyFrontendInstalledRuntime.cjs' && process.platform === 'win32';
+  const run = require('node:child_process').spawnSync(process.execPath, [`scripts/${entry}`, ...(systemdOnly ? ['--systemd-contracts-only'] : [])],
     { cwd: root, encoding: 'utf8', windowsHide: true,
       timeout: entry === 'verifyFrontendRuntimeBoundary.cjs' ? 300000 : 30000, maxBuffer: 2 * 1024 * 1024 });
   assert.equal(run.status, 0, run.stderr || run.stdout);
   const report = JSON.parse(run.stdout);
-  assert.equal(report.ok, true); assert.ok(report.checks.length >= minimum);
-  assert.ok(report.checks.every(row => row.ok === true));
+  const rows = Array.isArray(report.checks) ? report.checks : report.results;
+  assert.equal(report.ok, true); assert.ok(Array.isArray(rows) && rows.length >= (systemdOnly ? 3 : minimum));
+  if (typeof report.checks === 'number') assert.equal(report.checks, rows.length);
+  assert.ok(rows.every(row => row.ok === true));
+  if (entry === 'verifyFrontendInstalledRuntime.cjs') {
+    assert.equal(report.productionWrites, 0);
+    if (systemdOnly) {
+      assert.equal(report.verifier, 'frontend-installed-systemd-contracts-v1');
+      assert.equal(report.checks, 3);
+      assert.equal(report.verificationScope, 'systemd-vm-contracts-only');
+      assert.equal(report.platform, 'win32');
+      assert.equal(report.linuxFilesystemProof, false);
+      assert.equal(report.fullInstalledRuntimeProofRequired, true);
+      assert.equal(report.signingEligible, false);
+      assert.equal(report.realSystemdExecuted, false);
+      assert.equal(report.transportMocked, true);
+    } else {
+      assert.equal(process.platform, 'linux', 'complete installed runtime fixture requires Linux');
+      assert.equal(report.platform, 'linux');
+      assert.equal(report.verificationScope, 'installed-runtime-filesystem-fixture');
+      assert.equal(report.linuxFilesystemProof, true);
+      assert.equal(report.fixtureOnly, true);
+      assert.equal(report.systemdContracts?.ok, true);
+      assert.ok(report.systemdContracts.checks >= 3);
+      assert.ok(report.systemdContracts.results.every(row => row.ok === true));
+    }
+  }
   assert.equal(pkg.scripts[`verify:${script}`], `node scripts/${entry}`);
 });
 check('production verification still executes unknown or unconfigured checks and drains stdout',()=>{
