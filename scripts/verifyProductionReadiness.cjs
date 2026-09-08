@@ -255,8 +255,14 @@ const runLocalJsonFresh = (args, env = {}) => new Promise((resolve) => {
     stderr += `production-readiness child timed out after ${childTimeoutMs}ms: ${label}\n`;
     process.stderr.write(`[production-readiness] child-timeout ${label} elapsedMs=${Date.now() - startedAt}\n`);
     childProcess.kill("SIGTERM");
-    forceKillTimer = setTimeout(() => childProcess.kill("SIGKILL"), 5_000);
-    forceKillTimer.unref?.();
+    forceKillTimer = setTimeout(() => {
+      childProcess.kill("SIGKILL");
+      // A descendant can retain stdout after the direct child has exited.
+      // Never let waiting for pipe close defeat the existing hard deadline.
+      childProcess.stdout.destroy?.();
+      childProcess.stderr.destroy?.();
+      finish({ status: 124, error: stderr });
+    }, 5_000);
   }, childTimeoutMs);
   timeout.unref?.();
   const finish = ({ status, error = null }) => {

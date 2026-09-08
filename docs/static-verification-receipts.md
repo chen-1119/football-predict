@@ -43,7 +43,9 @@ ownership verification is implemented; ordinary checks continue to run there.
 The readiness runner also waits for child `close`, rather than `exit`, before
 parsing JSON, so final buffered stdout cannot be lost. This fixes a general
 completion-ordering hazard; it is not claimed as the cause of r709's reproduced
-research-schema failure.
+research-schema failure. The hard timeout still resolves failure even if a
+descendant retains the pipes after the direct child exits; the forced deadline
+remains referenced until the result is settled.
 
 ## Current activation and limitations
 
@@ -66,10 +68,11 @@ Keep mixed/live checks fresh and retain full cutover/frozen-record acceptance.
 
 ## Evidence
 
-- `npm.cmd run verify:static-receipts`: 41 authenticated-result, invalidation,
+- `npm.cmd run verify:static-receipts`: 42 authenticated-result, invalidation,
   scope, actual-source-scanner and exit-before-stdout ordering cases. The latter
   reproduce missing JSON with the old callback and complete JSON with the actual
   updated child runner, rather than only checking for a source-code string.
+  An inherited-pipe counterexample also proves the hard timeout still completes.
 - Isolated actual Linux: first write, second reuse without spawning, real source
   failure, failure re-execution, exact-source restoration, disk tampering,
   unsafe permissions and key/file mode checks. Five real scanner executions;

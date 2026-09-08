@@ -73,6 +73,23 @@ async function verifyStaticVerificationReceipts() {
     assert.equal(fixedDrain.status, 0); assert.equal(fixedDrain.body.ok, true);
     assert.equal(fixedDrain.body.checks.length, 1); assert.equal(fixedDrain.timedOut, false);
   });
+  const hangingChild = new EventEmitter(), kills = [], deadlines = [];
+  hangingChild.stdout = new EventEmitter(); hangingChild.stderr = new EventEmitter();
+  hangingChild.stdout.destroy = () => {}; hangingChild.stderr.destroy = () => {};
+  hangingChild.kill = signal => { kills.push(signal); return false; };
+  const hangingRunner = vm.runInNewContext(runnerSource + "\nrunLocalJsonFresh;", {
+    spawn: () => hangingChild, childTimeoutMs: 1000,
+    setTimeout: callback => { const timer = { callback, unref() {} }; deadlines.push(timer); return timer; }, clearTimeout() {},
+    process: { execPath: process.execPath, cwd: () => root, env: {}, stderr: { write() {} } },
+  });
+  const hangingResult = hangingRunner(["fixture-only.cjs"]);
+  hangingChild.emit("exit", 0, null);
+  deadlines[0].callback(); assert.equal(deadlines.length, 2); deadlines[1].callback();
+  const timeoutResult = await hangingResult;
+  check("inherited open pipes cannot bypass the hard timeout after direct child exits", () => {
+    assert.equal(timeoutResult.status, 124); assert.equal(timeoutResult.timedOut, true);
+    assert.deepEqual(kills, ["SIGTERM", "SIGKILL"]);
+  });
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "football-static-receipt-verify-"));
   try {
     const copy = name => { const to = path.join(fixture, name); fs.mkdirSync(path.dirname(to), { recursive: true }); fs.copyFileSync(path.join(root, name), to); };

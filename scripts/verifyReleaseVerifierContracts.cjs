@@ -391,7 +391,7 @@ check('static receipt input scopes and failure behavior pass before signing',()=
     {cwd:root,encoding:'utf8',windowsHide:true,timeout:15000,maxBuffer:1024*1024});
   assert.equal(result.status,0,result.stderr);
   const report=JSON.parse(result.stdout);
-  assert.equal(report.ok,true);assert.ok(report.checks.length>=41);
+  assert.equal(report.ok,true);assert.ok(report.checks.length>=42);
   assert.equal(report.productionWrites,0);
   assert.equal(pkg.scripts['verify:static-receipts'],'node scripts/verifyStaticVerificationReceipts.cjs');
 });
