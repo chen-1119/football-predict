@@ -135,6 +135,19 @@ assert.equal(
 
 const rootDir = path.resolve(__dirname, "..");
 const captureScript = path.join(__dirname, "captureCandidateProspectiveDeadline.cjs");
+// Execute the unchanged real admin API consumer gate, not a looser copy of it.
+// A healthy worker heartbeat and the public aggregate alone missed r709's
+// absent-suite payload: the admin API also requires an explicit trials array.
+const apiContractSource = fs.readFileSync(path.join(__dirname, "verifyApiContracts.cjs"), "utf8");
+const adminResearchStart = apiContractSource.indexOf("      const challengerSuiteSerialized =");
+const adminResearchEnd = apiContractSource.indexOf("      const exclusionAuditAllowedKeys =", adminResearchStart);
+assert.ok(adminResearchStart >= 0 && adminResearchEnd > adminResearchStart);
+const adminResearchGate = apiContractSource.slice(adminResearchStart, adminResearchEnd);
+const adminResearchContractValid = (candidateChallengerSuite) => require("node:vm").runInNewContext(
+  `${adminResearchGate}\nchallengerSuiteIsSanitized;`,
+  { candidateChallengerSuite },
+  { timeout: 1000 },
+);
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "candidate-deadline-capture-"));
 const registryFile = path.join(tempDir, "candidate-registry.json");
 const statusFile = path.join(tempDir, "capture-status.json");
@@ -548,8 +561,11 @@ check("deadline-only research preserves unavailable reasons and prior failures",
   const missing = deadlineOnlyResearchStatus(null, CHALLENGER_AUDIT_VERSION);
   assert.equal(missing.available, false);
   assert.equal(missing.chainValid, false);
+  assert.deepEqual(missing.trials, []);
+  assert.equal(adminResearchContractValid(missing), true);
   assert.deepEqual(missing.blockers, ["deadline-only-research-unavailable"]);
   const repeated = deadlineOnlyResearchStatus(missing, CHALLENGER_AUDIT_VERSION);
+  assert.equal(adminResearchContractValid(repeated), true);
   assert.deepEqual(repeated.blockers, missing.blockers);
   assert.notEqual(repeated.blockers, missing.blockers);
   const publicMissing = compactCalibrationChallengerSuitePublic(repeated);
@@ -568,6 +584,44 @@ check("deadline-only research preserves unavailable reasons and prior failures",
   assert.equal(deferredHealthy.chainValid, true);
   assert.deepEqual(deferredHealthy.blockers, []);
   assert.equal(deferredHealthy.onlineEffect, false);
+});
+
+check("missing research satisfies the unchanged admin gate without legitimizing malformed existing suites", () => {
+  for (const value of [null, undefined]) {
+    const empty = deadlineOnlyResearchStatus(value, CHALLENGER_AUDIT_VERSION);
+    assert.equal(adminResearchContractValid(empty), true);
+    assert.equal(empty.available, false);
+    assert.equal(empty.onlineEffect, false);
+    assert.equal(empty.chainValid, false);
+  }
+  const good = { ...reusableResearchStatus(CHALLENGER_AUDIT_VERSION), trials: [] };
+  const legacy = deadlineOnlyResearchStatus(null, CHALLENGER_AUDIT_VERSION);
+  delete legacy.trials;
+  const legacyBytes = JSON.stringify(legacy);
+  assert.equal(adminResearchContractValid(legacy), false);
+  const restoredShape = deadlineOnlyResearchStatus(legacy, CHALLENGER_AUDIT_VERSION);
+  assert.equal(adminResearchContractValid(restoredShape), true);
+  assert.deepEqual(restoredShape.trials, []);
+  assert.equal(restoredShape.available, false);
+  assert.equal(restoredShape.chainValid, false);
+  assert.deepEqual(restoredShape.blockers, legacy.blockers);
+  assert.equal(JSON.stringify(legacy), legacyBytes);
+  const frozen = JSON.stringify(good);
+  assert.equal(adminResearchContractValid(deadlineOnlyResearchStatus(good, CHALLENGER_AUDIT_VERSION)), true);
+  assert.equal(JSON.stringify(good), frozen);
+  for (const invalid of [
+    { ...good, version: "unknown" },
+    { ...good, onlineEffect: true },
+    { ...good, trials: null },
+    { ...good, trials: [{ events: [] }] },
+    { ...good, trials: Array.from({ length: 4 }, () => ({})) },
+    { ...legacy, reason: "unknown" },
+    { ...legacy, version: "unknown" },
+    { ...legacy, available: true },
+    { ...legacy, trials: null },
+  ]) {
+    assert.equal(adminResearchContractValid(deadlineOnlyResearchStatus(invalid, CHALLENGER_AUDIT_VERSION)), false);
+  }
 });
 
 check("deadline-only mode commits the formal heartbeat without touching benchmark", () => {
@@ -618,6 +672,8 @@ check("deadline-only mode commits the formal heartbeat without touching benchmar
   );
   assert.equal(activeResult.status, 0, activeResult.stderr || activeResult.stdout);
   const activeStatus = JSON.parse(fs.readFileSync(activeStatusFile, "utf8"));
+  assert.equal(adminResearchContractValid(activeStatus.challengerSuite), true,
+    "real deadline-only producer must satisfy the same admin contract checked after cutover");
   const publicResearch = compactCalibrationChallengerSuitePublic(activeStatus.challengerSuite);
   assert.equal(publicResearch.available, false);
   assert.equal(publicResearch.trialCount, 0);
