@@ -491,6 +491,7 @@ const requiredEntries = [
   "scripts/verifyCandidateCommonCohortShadowG2.cjs",
   "scripts/verifyCandidateReleaseContinuity.cjs",
   "scripts/verifyCandidateReleaseRevisionTransition.cjs",
+  "scripts/verifyCandidateTransitionDraft.cjs",
   "scripts/verifyCandidateReadinessFullCoverage.cjs",
   "scripts/verifyCandidateDeadlineCapture.cjs",
   "scripts/verifyShadowCandidateRobustness.cjs",

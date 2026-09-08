@@ -50,3 +50,25 @@ Commands: `npm.cmd run verify:result-timeline-closure`,
 and the existing pre-sign verifier contracts after the exact transition is set.
 Local synthetic checks do not replace signed deployment, live registry, new
 worker, archive continuity, database/API or browser acceptance.
+
+### Exact transition drafts
+
+`buildRevisionTransitionContract(registry)` derives the old identity and the
+new implementation from a validated active ledger. It preserves the precise
+hypothesis, gate and nomination policy; unchanged implementations cannot create
+a reset. The returned draft is detached from the source so editing nested
+weights cannot mutate an old ledger through object references.
+
+New v1 declarations include normalized `sourceDefinition` and
+`sourceImplementation`. Both must reconcile to the existing `from` hashes;
+partial, changed or noncanonical descriptions fail validation. Already signed
+legacy declarations without these two fields retain their old exact binding.
+Runtime binding to the actual source ledger, signed release identity and full
+old-event continuity remains mandatory. This is not a switch to arbitrary or
+automatically promoted candidates.
+
+`verify:candidate-transition-draft` covers original and previously revised
+sources, actual isolated refreeze, preserved headers/event prefixes/counts,
+empty new shadow state, no-op rejection and tampered source descriptions.
+The next production declaration is still deferred until r711 is terminal and
+its recovery state is clear. A local preview is not a signed or live change.

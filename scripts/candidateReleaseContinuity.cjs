@@ -8,6 +8,7 @@ const {
   buildCandidateCommitment,
   buildWindowBoundaries,
   candidateEvaluatorSemanticHashes,
+  fixedGateSpec,
   sha256,
   verifyRegistry,
 } = require("./candidateProspectiveLedger.cjs");
@@ -55,7 +56,59 @@ const transitionContractBlockers = (contract) => {
       || contract?.from?.implementationHash === contract?.to?.implementationHash) {
     blockers.push("transition-contract-no-implementation-change");
   }
+  // New declarations carry the exact normalized source inputs. Legacy signed
+  // declarations remain readable; a partial or mismatched new payload does not.
+  if (contract?.sourceDefinition !== undefined || contract?.sourceImplementation !== undefined) {
+    try {
+      if (!contract.sourceDefinition || !contract.sourceImplementation) throw new Error("partial source");
+      const source = buildCandidateCommitment(contract.sourceDefinition, contract.sourceImplementation);
+      if (sha256(source.definition) !== contract.definitionHash
+          || sha256(source.definition) !== sha256(contract.sourceDefinition)
+          || sha256(source.implementation) !== sha256(contract.sourceImplementation)
+          || source.candidateRevisionId !== contract.from?.candidateRevisionId
+          || source.candidateSpecHash !== contract.from?.candidateSpecHash
+          || sha256(source.implementation) !== contract.from?.implementationHash) {
+        blockers.push("transition-source-description-mismatch");
+      }
+    } catch { blockers.push("transition-source-description-invalid"); }
+  }
   return [...new Set(blockers)];
+};
+
+// Pure draft generation only: no registry mutation, signing, activation or
+// publication. The release must still bind this to a fresh actual snapshot.
+const buildRevisionTransitionContract = (registry) => {
+  const verification = verifyRegistry(registry), active = activeLedgerFor(registry);
+  if (!verification.valid || !active) throw new CandidateReleaseContinuityError(
+    "cannot draft a transition from an invalid or absent active ledger",
+    { blockers: verification.blockers.concat(active ? [] : ["transition-source-ledger-missing"]) },
+  );
+  // Detach nested weights/maps too: editing a returned unsigned draft must not
+  // mutate the immutable source ledger through shared object references.
+  const source = buildCandidateCommitment(JSON.parse(JSON.stringify(active.header.candidateDefinition)),
+    JSON.parse(JSON.stringify(active.header.candidateImplementation)));
+  const prior = commitmentSummary(active);
+  if (source.candidateRevisionId !== prior.candidateRevisionId
+      || source.candidateSpecHash !== prior.candidateSpecHash
+      || sha256(source.definition) !== prior.definitionHash
+      || sha256(source.implementation) !== prior.implementationHash
+      || sha256(fixedGateSpec()) !== prior.gateSpecHash) {
+    throw new CandidateReleaseContinuityError("stored source commitment does not reconcile",
+      { blockers: ["transition-source-commitment-mismatch"] });
+  }
+  const target = buildCandidateCommitment(source.definition, {
+    ...source.implementation, semanticHashes: candidateEvaluatorSemanticHashes(),
+  });
+  const side = value => ({ candidateRevisionId: value.candidateRevisionId,
+    candidateSpecHash: value.candidateSpecHash, implementationHash: sha256(value.implementation) });
+  const contract = { version: TRANSITION_VERSION, reason: "result-input-timeline-commitment",
+    sourceLedgerId: active.ledgerId, definitionHash: prior.definitionHash,
+    gateSpecHash: prior.gateSpecHash, nominationPolicyHash: prior.nominationPolicyHash,
+    from: side(source), to: side(target), sourceDefinition: source.definition,
+    sourceImplementation: source.implementation, onlineEffect: false };
+  const blockers = transitionContractBlockers(contract);
+  if (blockers.length) throw new CandidateReleaseContinuityError("no valid implementation-only transition to draft", { blockers });
+  return contract;
 };
 
 const commitmentMatches = (summary, side, contract) => Boolean(summary
@@ -708,6 +761,7 @@ module.exports = {
   TRANSITION_VERSION,
   commitmentSummary,
   transitionContractBlockers,
+  buildRevisionTransitionContract,
   commitmentMatches,
   bindRevisionTransition,
   verifyRevisionTransition,

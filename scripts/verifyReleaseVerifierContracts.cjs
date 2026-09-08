@@ -82,6 +82,11 @@ check('complete result admission dependency closure passes before signing', () =
   assert.equal(result.productionWrites, 0); assert.equal(result.providerRequests, 0);
   assert.notEqual(result.oldCommitment, result.newCommitment);
 });
+check('next revision declaration derives exact immutable source inputs before signing', () => {
+  const result = require('./verifyCandidateTransitionDraft.cjs').run();
+  assert.equal(result.ok, true); assert.ok(result.checks.length >= 17);
+  assert.equal(result.productionWrites, 0); assert.equal(result.providerRequests, 0);
+});
 check('exact revision transition and its signed dependencies pass before sequence reservation',()=>{
   const result=require('./verifyCandidateReleaseRevisionTransition.cjs').run();
   assert.ok(result.checks>=27);
@@ -96,6 +101,7 @@ check('fixed hypothesis lineage survives competing retrospective winners before 
 });
 const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/services/apiFootballDiagnostics.d.cts',
   'scripts/verifyResultTimelineSemanticClosure.cjs',
+  'scripts/verifyCandidateTransitionDraft.cjs',
   'scripts/releaseWorkerPreflight.cjs', 'scripts/verifyReleaseWorkerPreflight.cjs',
   'scripts/releaseWorkspaceFreshness.cjs', 'scripts/verifyReleaseWorkspaceFreshness.cjs',
   'scripts/releaseProgress.cjs', 'scripts/checkReleaseProgress.cjs', 'scripts/verifyReleaseProgress.cjs',
