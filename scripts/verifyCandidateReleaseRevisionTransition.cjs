@@ -166,7 +166,9 @@ const run = () => {
     const definition = { featureSet: ["sporttery-market", "current-probability-model", "negative-model-residual", "temperature-calibration"],
       id: "market-current-model-residual-minus-20-temperature-0_9", role: "shadow-model-candidate",
       weights: { market: 1.2, model: -0.2, temperature: 0.9 } };
-    const target = c.buildCandidateCommitment(definition, nextImplementation);
+    const target = c.buildCandidateCommitment(definition, {
+      ...(production.sourceImplementation || implementation), semanticHashes: c.candidateEvaluatorSemanticHashes(),
+    });
     assert.deepEqual(production.to, side(target));
     // New implementation-only transitions may start from an already revised
     // ledger. Its exact normalized inputs are bound by the signed declaration
