@@ -190,9 +190,11 @@ const coldStartGenerated = predictionSetWithoutOfficialOdds(productionFixture({
   leaguePrior: undefined,
 }));
 const coldStartBest = coldStartGenerated.predictions.find((row) => row.marketType === 'BEST');
-assert.equal(coldStartBest?.recommendationTier, 'cold-start-reference');
+assert.equal(coldStartBest?.recommendationTier, 'input-insufficient-watch');
+assert.equal(coldStartBest?.tipCode, 'WATCH');
+assert.equal(coldStartGenerated.probabilityModel.publicDecision.directionPublished, false);
 assert.ok(coldStartBest?.confidence?.publicMetrics,
-  'cold-start display conversion must preserve partial audited public metrics');
+  'withheld cold-start display must preserve partial audited public metrics');
 assert.equal(coldStartBest.confidence.publicMetrics.marketConsistency, 'unavailable');
 
 const persistenceFixture = productionFixture({

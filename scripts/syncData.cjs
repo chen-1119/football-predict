@@ -11275,6 +11275,9 @@ function auditableDirectionalInputCoverage(match) {
 }
 
 function suppressUnauditableDirectionalTips(result, inputCoverage) {
+  // Missing official odds AND insufficient audited inputs do not authorize a
+  // public cold-start direction. Keep the model only in the diagnostic branch;
+  // later persistence preserves existing immutable publications independently.
   const coverageTextZh = `Elo 样本 ${inputCoverage.elo.sampleSize}、状态样本 ${inputCoverage.form.sampleSize}、历史联赛样本 ${inputCoverage.history.leagueMatches}`;
   const coverageTextEn = `Elo sample ${inputCoverage.elo.sampleSize}, form sample ${inputCoverage.form.sampleSize}, league-history sample ${inputCoverage.history.leagueMatches}`;
   const predictions = (result?.predictions || []).map((prediction) => ({
@@ -11302,38 +11305,6 @@ function suppressUnauditableDirectionalTips(result, inputCoverage) {
     ],
     resultStatus: "PENDING",
   }));
-  const directionalPredictions = predictions.map((suppressed, index) => {
-    const original = result?.predictions?.[index] || suppressed;
-    const labelZh = normText(original?.tipLabel?.zh || original?.tipCode)
-      .replace(/^(?:\u53c2\u8003\u63a8\u8350|\u51b7\u542f\u52a8\u53c2\u8003)\s*/u, "");
-    const labelEn = normText(original?.tipLabel?.en || original?.tipCode)
-      .replace(/^(?:Reference pick:|Cold-start reference:)\s*/iu, "");
-    return {
-      ...original,
-      tipLabel: {
-        zh: `\u51b7\u542f\u52a8\u53c2\u8003 ${labelZh || original.tipCode}\uff08\u6570\u636e\u5f85\u8865\uff09`,
-        en: `Cold-start reference: ${labelEn || original.tipCode} (data pending)`,
-      },
-      odds: 0,
-      trustScore: clamp(Number(original?.trustScore || 35), 20, 38),
-      recommendationAction: "reference",
-      recommendationTier: "cold-start-reference",
-      explanation: {
-        zh: "\u5f53\u524d\u6ca1\u6709\u4e2d\u56fd\u7ade\u5f69\u7f51\u5b98\u65b9 SP\uff0c\u4e14 Elo\u3001\u8fd1\u671f\u72b6\u6001\u548c\u5386\u53f2\u6837\u672c\u672a\u8fbe\u5230\u53ef\u5ba1\u8ba1\u95e8\u69db\uff1b\u9875\u9762\u4ecd\u7ed9\u51fa\u4f4e\u6743\u91cd\u51b7\u542f\u52a8\u53c2\u8003\u65b9\u5411\uff0c\u4f46\u4e0d\u8ba1\u5165\u6b63\u5f0f\u63a8\u8350\u3001\u4e32\u5173\u6216\u547d\u4e2d\u7387\u3002",
-        en: "Official Sporttery SP and sufficient audited football inputs are unavailable. A low-weight cold-start direction is still shown, but it is excluded from formal picks, parlays, and hit-rate metrics.",
-      },
-      analysisItems: [{
-        zh: `\u8f93\u5165\u5ba1\u8ba1\uff1a${coverageTextZh}\uff1b\u5f53\u524d\u65b9\u5411\u4ec5\u4f7f\u7528\u4e2d\u6027\u5148\u9a8c\u3001\u4e3b\u573a\u4fee\u6b63\u548c\u53ef\u8bc6\u522b\u7403\u961f\u5f3a\u5ea6\uff0c\u5b98\u65b9\u8d54\u7387\u6216\u53ef\u9760\u6837\u672c\u5230\u8fbe\u540e\u4f1a\u81ea\u52a8\u91cd\u7b97\u3002`,
-        en: `Input audit: ${coverageTextEn}. This direction uses only neutral priors, home adjustment, and any recognized team strength, and is recalculated when official odds or reliable samples arrive.`,
-      }],
-      riskTags: [
-        { zh: "\u65e0\u5b98\u65b9\u8d54\u7387", en: "No official Sporttery odds" },
-        { zh: "\u53ef\u5ba1\u8ba1\u8f93\u5165\u4e0d\u8db3", en: "Insufficient audited inputs" },
-        { zh: "\u51b7\u542f\u52a8\u4f4e\u6743\u91cd", en: "Low-weight cold start" },
-      ],
-      resultStatus: "PENDING",
-    };
-  });
   const originalProbabilityModel = result?.probabilityModel || null;
   const probabilityModel = originalProbabilityModel ? {
     ...originalProbabilityModel,
@@ -11357,6 +11328,7 @@ function suppressUnauditableDirectionalTips(result, inputCoverage) {
     publicDecision: {
       tipCode: "WATCH",
       directionPublished: false,
+      formalRecommendation: false,
       reason: "insufficient-auditable-inputs-without-official-odds",
     },
     internalDirectionalAudit: {
@@ -11366,25 +11338,11 @@ function suppressUnauditableDirectionalTips(result, inputCoverage) {
       projectedScore: result?.projectedScore || null,
     },
   } : undefined;
-  const publishedProbabilityModel = originalProbabilityModel ? {
-    ...originalProbabilityModel,
-    inputSufficiency: inputCoverage,
-    publicDecision: {
-      tipCode: directionalPredictions.find((prediction) => prediction.marketType === "BEST")?.tipCode
-        || directionalPredictions[0]?.tipCode
-        || null,
-      directionPublished: true,
-      formalRecommendation: false,
-      reason: "cold-start-reference-without-official-odds",
-    },
-    internalDirectionalAudit: probabilityModel?.internalDirectionalAudit || null,
-  } : undefined;
-
   return {
     ...result,
-    predictions: directionalPredictions,
+    predictions,
     projectedScore: undefined,
-    probabilityModel: publishedProbabilityModel,
+    probabilityModel,
   };
 }
 

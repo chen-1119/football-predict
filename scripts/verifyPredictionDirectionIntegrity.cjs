@@ -641,19 +641,20 @@ const noAuditableOneXTwo = noAuditableInputs.predictions.find((row) => row.marke
 const noAuditableBest = noAuditableInputs.predictions.find((row) => row.marketType === "BEST");
 assert.equal(auditableDirectionalInputCoverage(noAuditableInputsFixture).sufficient, false);
 assert.ok(noAuditableInputs.predictions.length >= 2);
-assert.ok(noAuditableInputs.predictions.every((row) => ["1", "X", "2"].includes(row.tipCode)));
+assert.ok(noAuditableInputs.predictions.every((row) => row.tipCode === "WATCH"));
 assert.ok(noAuditableInputs.predictions.every((row) => row.recommendationAction === "reference"));
-assert.ok(noAuditableInputs.predictions.every((row) => row.recommendationTier === "cold-start-reference"));
-assert.ok(noAuditableInputs.predictions.every((row) => /^Cold-start reference:/.test(row.tipLabel.en)));
+assert.ok(noAuditableInputs.predictions.every((row) => row.recommendationTier === "input-insufficient-watch"));
+assert.ok(noAuditableInputs.predictions.every((row) => /^No pick:/.test(row.tipLabel.en)));
 assert.ok(noAuditableInputs.predictions.every((row) => !/[锛鏂璇绔妯姒鐞璁缁棰]/.test(JSON.stringify(row))));
 assert.equal(noAuditableInputs.projectedScore, undefined, "front-end payload must not expose a synthetic score direction");
-assert.ok(["1", "X", "2"].includes(noAuditableInputs.probabilityModel.publicDecision.tipCode));
-assert.equal(noAuditableInputs.probabilityModel.publicDecision.directionPublished, true);
+assert.equal(noAuditableInputs.probabilityModel.publicDecision.tipCode, "WATCH");
+assert.equal(noAuditableInputs.probabilityModel.publicDecision.directionPublished, false);
+assert.equal(noAuditableInputs.probabilityModel.oneXTwo.final, null);
 assert.equal(noAuditableInputs.probabilityModel.publicDecision.formalRecommendation, false);
 assert.equal(noAuditableInputs.probabilityModel.publicDecision.reason,
-  "cold-start-reference-without-official-odds");
+  "insufficient-auditable-inputs-without-official-odds");
 assert.ok(["1", "X", "2"].includes(noAuditableInputs.probabilityModel.internalDirectionalAudit.unifiedPosterior.selectedCode),
-  "internal model audit remains available alongside the low-confidence public reference");
+  "internal model audit remains available without publishing an unsupported direction");
 
 const unauditedReferenceOdds = predictionSet({
   ...noAuditableInputsFixture,
@@ -665,10 +666,10 @@ const unauditedReferenceOdds = predictionSet({
 const unauditedReferenceDirections = unauditedReferenceOdds.predictions
   .filter((row) => row.marketType === "1X2" || row.marketType === "BEST");
 assert.ok(unauditedReferenceDirections.length >= 2);
-assert.ok(unauditedReferenceDirections.every((row) => ["1", "X", "2"].includes(row.tipCode)),
-  "non-official odds may support a visibly low-confidence reference without entering formal metrics");
+assert.ok(unauditedReferenceDirections.every((row) => row.tipCode === "WATCH"),
+  "unverified non-official odds cannot revive a direction when audited football inputs are insufficient");
 assert.ok(unauditedReferenceOdds.predictions.every((row) => row.recommendationAction === "reference"));
-assert.equal(unauditedReferenceOdds.probabilityModel.publicDecision.directionPublished, true);
+assert.equal(unauditedReferenceOdds.probabilityModel.publicDecision.directionPublished, false);
 
 const oneSidedFormFixture = {
   ...noAuditableInputsFixture,
@@ -784,7 +785,8 @@ console.log(JSON.stringify({
     spCannotCapConfidence: true,
     hhadMarketContradictionDowngradesToWatch: true,
     materialHadMarketConflictBlocksFormalPromotionWithoutOverwritingDirection: true,
-    insufficientAuditableInputsPublishColdStartReference: true,
+    insufficientAuditableInputsWithholdNewDirection: true,
+    auditableModelOnlyReferencesRemainAvailable: true,
     sparseOfficialInputsUseDynamicReferenceBlend: true,
     sparseBalancedInputsUseDrawAwareShrinkage: true,
     confidenceUsesCoverageAndUncertainty: true,

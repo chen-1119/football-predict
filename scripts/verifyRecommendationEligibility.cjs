@@ -188,15 +188,14 @@ check("model-only fixtures are exercised independently of the runtime slate",
   deterministicFixtures: deterministicModelOnlyFixtures.length,
   isolatedFromRuntimeSlate: modelOnlyMatches === deterministicModelOnlyFixtures
 });
-check("model-only BEST rows keep a visible cold-start reference while formal eligibility fails closed", regeneratedBestRows.length === modelOnlyMatches.length
+check("model-only BEST rows withhold insufficient inputs while auditable model-only references remain available", regeneratedBestRows.length === modelOnlyMatches.length
   && regeneratedBestRows.every(({ prediction, inputSufficiency }) => (
     prediction.recommendationAction === "reference"
     && Number(prediction.odds || 0) === 0
     && prediction.resultStatus === "PENDING"
-    && ["1", "X", "2"].includes(prediction.tipCode)
     && (inputSufficiency?.sufficient === true
-      ? prediction.recommendationTier === "model-only-watch"
-      : prediction.recommendationTier === "cold-start-reference")
+      ? prediction.recommendationTier === "model-only-watch" && ["1", "X", "2"].includes(prediction.tipCode)
+      : prediction.recommendationTier === "input-insufficient-watch" && prediction.tipCode === "WATCH")
   )), { rows: regeneratedBestRows.map(({ matchId, prediction, inputSufficiency }) => ({
     matchId,
     inputSufficient: inputSufficiency?.sufficient ?? null,

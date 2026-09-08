@@ -7,6 +7,7 @@ const { auditRecommendationBias } = require("./auditRecommendationBatchBias.cjs"
 const {
   evidenceAwareIndependentProbabilities,
   independentBaseLambdas,
+  predictionSetWithoutOfficialOdds,
 } = require("./syncData.cjs");
 
 const match = (id, code, { cold = false } = {}) => ({
@@ -165,6 +166,28 @@ assert.equal(repeatedProbabilities.publicationBlocked, true);
 assert.ok(repeatedProbabilities.blockingReasons.includes("repeated-probability-cluster"));
 
 const syncSource = fs.readFileSync(path.join(__dirname, "syncData.cjs"), "utf8");
+const unknownTeamFixtures = Array.from({ length: 6 }, (_, index) => ({
+  id: `cold-publication-verifier-${index}`,
+  sourceMatchId: `cold-publication-verifier-${index}`,
+  homeTeam: `Unmapped verifier home ${index}`,
+  awayTeam: `Unmapped verifier away ${index}`,
+  leagueName: "Unmapped verifier league",
+  kickoffTime: "2026-09-08T10:30:00Z",
+  status: "SCHEDULED",
+}));
+const generatedColdRows = unknownTeamFixtures.map((fixture) => ({
+  ...fixture,
+  ...predictionSetWithoutOfficialOdds(fixture),
+}));
+assert.ok(generatedColdRows.every((row) => row.predictions.every((prediction) => prediction.tipCode === "WATCH")),
+  "real model-only builder must not revive default home directions when both official odds and audited inputs are missing");
+assert.ok(generatedColdRows.every((row) => row.probabilityModel.publicDecision.directionPublished === false));
+assert.ok(generatedColdRows.every((row) => row.probabilityModel.internalDirectionalAudit),
+  "withholding a public direction must preserve the internal diagnostic model");
+const generatedColdAudit = auditRecommendationBias(generatedColdRows, { nowMs: Date.parse("2026-09-08T01:00:00Z") });
+assert.equal(generatedColdAudit.rows, 0, "unpublished WATCH dispositions cannot count as public recommended directions");
+assert.equal(generatedColdAudit.publicationBlocked, false,
+  "a safely withheld unknown-team slate must not block official fixtures and results from syncing");
 assert.match(syncSource, /auditRecommendationBias\(prospectiveAuditMatches/,
   "the fail-closed audit must inspect the freshly generated candidate slate before persistence");
 assert.match(syncSource, /if \(recommendationBiasAudit\.publicationBlocked\)/,
@@ -186,4 +209,5 @@ console.log(JSON.stringify({ ok: true, verified: [
   "elo-led-poisson-seed",
   "prospective-pre-persistence-wiring",
   "no-artificial-direction-balancing",
+  "real-cold-builder-withholds-default-direction-before-publication",
 ] }, null, 2));
