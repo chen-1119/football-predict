@@ -1410,8 +1410,10 @@ const run = async () => {
 
     const recommendationEligibility = await runLocalJson(["scripts/verifyRecommendationEligibility.cjs"], runtimeStoreEnv);
     const recommendationComparison = recommendationEligibility.body?.comparison || {};
-    pushCheck(checks, "official recommendation eligibility", recommendationEligibility.status === 0 && recommendationEligibility.body?.ok === true, {
+    pushCheck(checks, "official recommendation eligibility", recommendationEligibility.status === 0 && recommendationEligibility.body?.ok === true
+      && recommendationEligibility.body?.policyContracts?.["model-only-input-sufficiency-v2"] === true, {
       status: recommendationEligibility.status,
+      policyContracts: recommendationEligibility.body?.policyContracts || null,
       beforeSettled: recommendationComparison.beforeSettled ?? null,
       afterSettled: recommendationComparison.afterSettled ?? null,
       coverage: recommendationComparison.coverage ?? null,

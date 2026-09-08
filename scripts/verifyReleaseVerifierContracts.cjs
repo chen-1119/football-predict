@@ -282,4 +282,48 @@ check('worker early rejection has behavioral and serialized read-only coverage',
   const result=require('./verifyReleaseWorkerPreflight.cjs').verifyReleaseWorkerPreflight();
   assert.equal(result.ok,true);assert.ok(result.checks>=20);assert.equal(result.productionWrites,0);
 });
+const selectionLabel='multi-factor recommendation gate is time ordered and shadow-safe';
+const selectionPosition=coverage.indexOf(selectionLabel);
+const selectionChunk=coverage.slice(coverage.lastIndexOf('  pushCheck(',selectionPosition),coverage.indexOf('\n  pushCheck(',selectionPosition));
+const selectionSources={modelBacktest:'scripts/runModelBacktest.cjs',modelStrategy:'scripts/optimizePredictionStrategy.cjs',
+  verifyRecommendationEligibility:'scripts/verifyRecommendationEligibility.cjs',verifyBetSlipRecommendationGate:'scripts/verifyBetSlipRecommendationGate.cjs',
+  verifyPredictionFeatureAsOf:'scripts/verifyPredictionFeatureAsOf.cjs',verifyServerRecommendationBoundary:'scripts/verifyServerRecommendationBoundary.cjs',
+  verifyLiveRecommendationLayer:'scripts/verifyLiveRecommendationLayer.cjs'};
+const selectionContext=Object.fromEntries(Object.entries(selectionSources).map(([name,file])=>[name,read(file)]));
+const selectionGate=(overrides={},source=selectionChunk)=>{
+  let passed=null;vm.runInNewContext(source,{...selectionContext,
+    modelEvaluation:{recommendationSelection:{gate:{eligible:false}}},formalStrategy:{recommendationSelection:{status:'shadow-only',hardMaxSp:null,directionSwitchByLowerSp:false}},
+    hasAll:(value,needles)=>needles.every(needle=>value.includes(needle)),pushCheck:(_phase,_name,ok)=>{passed=ok;},...overrides},{timeout:1000});return passed;
+};
+check('actual selection coverage accepts stable policy ID with valid synthetic artifact gates',()=>assert.equal(selectionGate(),true));
+check('original r707 stale-description failure reproduced without running deployment',()=>{
+  const old=selectionChunk.replace('model-only-input-sufficiency-v2','model-only BEST rows keep a visible cold-start reference while formal eligibility fails closed');
+  assert.equal(selectionGate({},old),false);
+});
+check('renaming descriptive text does not invalidate policy coverage',()=>assert.equal(selectionGate({verifyRecommendationEligibility:
+  selectionContext.verifyRecommendationEligibility.replace('model-only BEST rows withhold insufficient inputs while auditable model-only references remain available','A renamed human-readable explanation')}),true));
+check('missing stable policy declaration rejects coverage',()=>assert.equal(selectionGate({verifyRecommendationEligibility:
+  selectionContext.verifyRecommendationEligibility.replaceAll('model-only-input-sufficiency-v2','missing-contract')}),false));
+check('actual shadow artifact restriction remains mandatory',()=>assert.equal(selectionGate({modelEvaluation:{recommendationSelection:{gate:{eligible:true}}}}),false));
+const eligibilityPosition=readiness.indexOf('pushCheck(checks, "official recommendation eligibility"');
+const eligibilityChunk=readiness.slice(eligibilityPosition,readiness.indexOf('\n\n    const externalOddsReference',eligibilityPosition));
+const eligibilityGate=(body,status=0)=>{let passed=null;vm.runInNewContext(eligibilityChunk,{checks:[],recommendationComparison:{},
+  recommendationEligibility:{status,body,stdout:'',stderr:''},pushCheck:(_checks,_name,ok)=>{passed=ok;}},{timeout:1000});return passed;};
+const contractProof={ok:true,policyContracts:{'model-only-input-sufficiency-v2':true}};
+check('readiness requires actual successful named behavioral evidence',()=>assert.equal(eligibilityGate(contractProof),true));
+for(const body of [{ok:true},{...contractProof,ok:false},{ok:true,policyContracts:{'model-only-input-sufficiency-v2':false}}])
+  check('readiness rejects missing/failed policy evidence despite text presence',()=>assert.equal(eligibilityGate(body),false));
+check('readiness rejects failed verifier process even with named pass',()=>assert.equal(eligibilityGate(contractProof,1),false));
+const modelOnlySource=selectionContext.verifyRecommendationEligibility;
+const policyStart=modelOnlySource.indexOf('check("model-only BEST rows withhold');
+const policyChunk=modelOnlySource.slice(policyStart,modelOnlySource.indexOf('\ncheck("no model-only row is actionable"',policyStart));
+const policyFixture=(row)=>{let result=null;vm.runInNewContext(policyChunk,{regeneratedBestRows:[row],modelOnlyMatches:[{}],
+  check:(_name,ok,_details,contractId)=>{result={ok,contractId};}},{timeout:1000});return result;};
+const coldRow={inputSufficiency:{sufficient:false},prediction:{recommendationAction:'reference',odds:0,resultStatus:'PENDING',recommendationTier:'input-insufficient-watch',tipCode:'WATCH'}};
+check('named policy comes from actual no-input behavior',()=>assert.equal(policyFixture(coldRow).ok,true));
+check('named policy rejects fabricated cold-start direction',()=>assert.equal(policyFixture({...coldRow,prediction:{...coldRow.prediction,tipCode:'1'}}).ok,false));
+check('named policy preserves auditable model-only reference',()=>assert.equal(policyFixture({inputSufficiency:{sufficient:true},prediction:{...coldRow.prediction,recommendationTier:'model-only-watch',tipCode:'X'}}).ok,true));
+for(const mutation of [{recommendationAction:'recommend'},{odds:2.5},{resultStatus:'WON'}])
+  check('named policy rejects formal/executable/settled fixture',()=>assert.equal(policyFixture({...coldRow,prediction:{...coldRow.prediction,...mutation}}).ok,false));
+check('behavioral result is emitted under a stable non-display ID',()=>assert.equal(policyFixture(coldRow).contractId,'model-only-input-sufficiency-v2'));
 console.log(JSON.stringify({ok:true,verifier:'release-verifier-contracts-v1',checks,productionDataTouched:false},null,2));
