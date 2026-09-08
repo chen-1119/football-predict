@@ -563,6 +563,8 @@ const requiredEntries = [
   "scripts/releaseProgress.cjs",
   "scripts/checkReleaseProgress.cjs",
   "scripts/verifyReleaseProgress.cjs",
+  "scripts/staticVerificationReceipts.cjs",
+  "scripts/verifyStaticVerificationReceipts.cjs",
   "scripts/verifyReleaseWorkerPreflight.cjs",
   "scripts/verifyReleaseRecovery.cjs",
   "scripts/verifyProductionReadiness.cjs",
