@@ -56,7 +56,7 @@ const backtestSource = fs.readFileSync(
 );
 
 const checks = [];
-const check = (name, ok, details = {}) => checks.push({ name, ok: Boolean(ok), ...details });
+const check = (name, ok, details = {}, contractId = null) => checks.push({ name, ok: Boolean(ok), ...details, ...(contractId ? { contractId } : {}) });
 const selection = evaluation?.recommendationSelection || {};
 const before = selection.before || {};
 const after = selection.after || {};
@@ -204,7 +204,7 @@ check("model-only BEST rows withhold insufficient inputs while auditable model-o
     odds: prediction.odds,
     resultStatus: prediction.resultStatus,
     tipCode: prediction.tipCode
-  })) });
+  })) }, "model-only-input-sufficiency-v2");
 check("no model-only row is actionable", regeneratedModelOnlyRows.every(({ prediction }) => (
   prediction.recommendationAction !== "recommend"
   && prediction.resultStatus === "PENDING"
@@ -373,6 +373,7 @@ const failedChecks = checks
 console.log(JSON.stringify({
   ok,
   checkedAt: new Date().toISOString(),
+  policyContracts: Object.fromEntries(checks.filter(row => row.contractId).map(row => [row.contractId, row.ok])),
   comparison: {
     beforeSettled: before.settled ?? null,
     afterSettled: after.settled ?? null,

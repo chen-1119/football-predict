@@ -2180,7 +2180,7 @@ const readPlanSqliteStatus = async () => {
     "unknownSpAction: \"watch\"",
     "directionSwitchByLowerSp: false"
   ]) && hasAll(verifyRecommendationEligibility, [
-    "model-only BEST rows keep a visible cold-start reference while formal eligibility fails closed",
+    '"model-only-input-sufficiency-v2"',
     "recommendation denominator has no unknown SP",
     "rolling windows are chronological and non-overlapping",
     "insufficient samples remain shadow"
