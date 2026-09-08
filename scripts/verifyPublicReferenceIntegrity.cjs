@@ -84,7 +84,10 @@ const archivePersistence = require("./verifyFrozenArchivePersistence.cjs").verif
 check(archivePersistence.ok && archivePersistence.checks >= 10,
   "fresh result persistence inherits exact event-qualified frozen archives");
 const archiveRestoration = require("./verifyFrozenArchiveRestoration.cjs").verifyFrozenArchiveRestoration();
-check(archiveRestoration.ok && archiveRestoration.checks >= 23 && archiveRestoration.restoredFixtureObjects === 8,
+check(archiveRestoration.ok && archiveRestoration.checks >= 1215
+  && archiveRestoration.restoredFixtureObjects === 601 && archiveRestoration.baselineRows === 601
+  && archiveRestoration.restorationScope === "complete-original-published-baseline"
+  && archiveRestoration.laterBaselineOmissionCovered === true,
   "release-bound backup restores missing original archives without changing their contents");
 check(require("./verifyOfficialClubResults.cjs").strictAdmissionChecks >= 41,
   "official club ingress rejects coerced scores and invalid event clocks without erasing real zero scores");

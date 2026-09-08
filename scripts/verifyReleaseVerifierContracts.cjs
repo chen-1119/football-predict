@@ -59,6 +59,7 @@ const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/servic
   'scripts/verifyApiFootballDiagnostics.cjs', 'scripts/verifyCandidateArtifactSeed.cjs', 'scripts/verifyCandidateRevisionLineage.cjs',
   'scripts/verifyLegacyReferenceConflict.cjs', 'src/services/legacyReferenceConflict.ts', 'scripts/verifyFrozenArchiveAuthority.cjs',
   'scripts/frozenArchiveRestoration.cjs', 'scripts/data/frozen-archive-restoration.json',
+  'scripts/releaseArchivePreflight.cjs', 'scripts/runReleaseArchivePreflight.cjs', 'scripts/verifyReleaseArchivePreflight.cjs',
   'scripts/verifyFrozenArchivePersistence.cjs', 'scripts/verifyFrozenArchiveRestoration.cjs',
   'scripts/verifyOfficialClubResults.cjs', 'scripts/syncOfficialClubResults.cjs', 'scripts/verifyOfficialClubReceiptClocks.cjs',
   'scripts/competitionModelContext.cjs', 'scripts/verifyCompetitionModelContext.cjs',
@@ -326,4 +327,20 @@ check('named policy preserves auditable model-only reference',()=>assert.equal(p
 for(const mutation of [{recommendationAction:'recommend'},{odds:2.5},{resultStatus:'WON'}])
   check('named policy rejects formal/executable/settled fixture',()=>assert.equal(policyFixture({...coldRow,prediction:{...coldRow.prediction,...mutation}}).ok,false));
 check('behavioral result is emitted under a stable non-display ID',()=>assert.equal(policyFixture(coldRow).contractId,'model-only-input-sufficiency-v2'));
+check('complete archive preflight behaviors pass before signing',()=>{
+  const result=require('./verifyReleaseArchivePreflight.cjs').verifyReleaseArchivePreflight();
+  assert.equal(result.ok,true);assert.ok(result.checks.length>=17);assert.equal(result.productionWrites,0);
+});
+check('online archive preflight precedes sequence reservation and frontend build',()=>{
+  const probe=bundle.indexOf('require("./runReleaseArchivePreflight.cjs").runLiveArchivePreflight()');
+  assert.ok(probe>=0&&probe<bundle.indexOf('const sequenceReservation = reserveReleaseSequence('));
+  assert.ok(probe<bundle.indexOf('const frontendBuild = spawnSync('));
+  assert.ok(bundle.includes('if (process.env.RELEASE_DEPLOY_KEY)'));
+});
+check('deployment rechecks archives before local clone and upload',()=>{
+  const client=read('scripts/deployReleaseBundle.cjs');
+  const probe=client.indexOf('require("./runReleaseArchivePreflight.cjs").runLiveArchivePreflight()');
+  assert.ok(probe>=0&&probe<client.indexOf('const localCloneVerifier = runCommand('));
+  assert.ok(probe<client.indexOf('for (const artifact of uploads)'));
+});
 console.log(JSON.stringify({ok:true,verifier:'release-verifier-contracts-v1',checks,productionDataTouched:false},null,2));

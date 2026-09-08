@@ -340,6 +340,13 @@ if (recoverMode) {
 const bundlePath = latestBundlePath();
 if (!bundlePath || !fs.existsSync(bundlePath)) fail("release bundle not found", { bundlePath });
 
+if (!dryRun) {
+  try {
+    const { report } = require("./runReleaseArchivePreflight.cjs").runLiveArchivePreflight();
+    if (!report.ok) fail("release archive preflight rejected before clone/upload", { archivePreflight: report });
+  } catch (error) { fail("release archive preflight observation failed", { reason: error.message }); }
+}
+
 const localCloneVerifier = runCommand(process.execPath, [
   "scripts/verifyFastResultProductionClone.cjs",
   "--sqlite-path", path.join(rootDir, "server-data", "football.db"),
