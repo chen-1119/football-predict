@@ -546,6 +546,8 @@ const requiredEntries = [
   "deploy/light-server/football-automation.sudoers",
   "scripts/verifyQaAccessOperator.cjs",
   "scripts/verifyReleaseTransactionSafety.cjs",
+  "scripts/releaseWorkerPreflight.cjs",
+  "scripts/verifyReleaseWorkerPreflight.cjs",
   "scripts/verifyReleaseRecovery.cjs",
   "scripts/verifyProductionReadiness.cjs",
   "scripts/verifyRemotePublicReadiness.cjs",

@@ -54,6 +54,7 @@ check('fixed hypothesis lineage survives competing retrospective winners before 
   assert.equal(result.ok, true); assert.ok(result.checks >= 11);
 });
 const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/services/apiFootballDiagnostics.d.cts',
+  'scripts/releaseWorkerPreflight.cjs', 'scripts/verifyReleaseWorkerPreflight.cjs',
   'scripts/apiFootballClockEvidence.cjs', 'scripts/verifyApiFootballClockEvidence.cjs',
   'scripts/verifyApiFootballDiagnostics.cjs', 'scripts/verifyCandidateArtifactSeed.cjs', 'scripts/verifyCandidateRevisionLineage.cjs',
   'scripts/verifyLegacyReferenceConflict.cjs', 'src/services/legacyReferenceConflict.ts', 'scripts/verifyFrozenArchiveAuthority.cjs',
@@ -277,4 +278,8 @@ for (const bad of [{ ok: false }, { checks: 42 }, { fixtureAccessChecks: 18 }, {
   check('collector diagnostic gate rejects incomplete date-access proof', () => assert.equal(diagnosticGate({ ...diagnosticProof, ...bad }), false));
 }
 check('collector diagnostic gate rejects failed child', () => assert.equal(diagnosticGate(diagnosticProof, 1), false));
+check('worker early rejection has behavioral and serialized read-only coverage',()=>{
+  const result=require('./verifyReleaseWorkerPreflight.cjs').verifyReleaseWorkerPreflight();
+  assert.equal(result.ok,true);assert.ok(result.checks>=20);assert.equal(result.productionWrites,0);
+});
 console.log(JSON.stringify({ok:true,verifier:'release-verifier-contracts-v1',checks,productionDataTouched:false},null,2));

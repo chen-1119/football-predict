@@ -307,6 +307,8 @@ const requiredReleaseEntries = [
   "deploy/light-server/football-automation.sudoers",
   "scripts/verifyQaAccessOperator.cjs",
   "scripts/verifyReleaseTransactionSafety.cjs",
+  "scripts/releaseWorkerPreflight.cjs",
+  "scripts/verifyReleaseWorkerPreflight.cjs",
   "scripts/verifyFastResultProductionClone.cjs",
   "scripts/reconcileFastResultGeneration.cjs",
   "scripts/verifyFastResultGenerationReconciliation.cjs",

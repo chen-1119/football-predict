@@ -20,6 +20,7 @@ const {
   RELEASE_SHELL_ENTRY,
   parseFixedRecoveryHelperRotationContract
 } = require("./releaseRecoveryHelperRotation.cjs");
+const { buildReadOnlyWorkerProbe } = require("./releaseWorkerPreflight.cjs");
 
 const rootDir = path.resolve(__dirname, "..");
 const tmpDir = path.join(rootDir, ".codex-tmp");
@@ -256,6 +257,7 @@ const buildRemotePreflightCommand = (expectedRecoveryHelperSha256, rotationContr
   "case \"$entrypoint_check\" in *\"recoveryPending=0\"*) ;; *) echo \"release-recovery-pending\"; exit 24 ;; esac",
   "case \"$entrypoint_check\" in *\"appPresent=1\"*) ;; *) echo \"app-dir-missing\"; exit 22 ;; esac",
   "systemctl is-active football-predict >/dev/null || { echo \"service-inactive\"; exit 23; }",
+  `sudo -n /opt/node-v22.22.1/bin/node -e ${shellQuote(buildReadOnlyWorkerProbe())} || { echo "release-worker-preflight-rejected"; exit 27; }`,
   `if test "$recovery_helper_sha" = ${shellQuote(expectedRecoveryHelperSha256)}; then echo "recoveryHelperRotationRequired=0"; elif test ${shellQuote(rotationContractReady ? "1" : "0")} = "1"; then echo "recoveryHelperRotationRequired=1"; else echo "release-recovery-helper-mismatch"; exit 26; fi`,
   `echo "recoveryHelperRotationContractReady=${rotationContractReady ? "1" : "0"}"`,
   "echo preflight-ok"

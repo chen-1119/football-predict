@@ -7187,6 +7187,9 @@ fi
 log "trusted signed source accepted for ${BUNDLE_SHA256}"
 node "$TRUSTED_SOURCE_DIR/scripts/verifyDeploymentConfig.cjs" \
   || { printf 'trusted deployment configuration verification failed\n' >&2; exit 1; }
+log "probe current worker before host changes and candidate construction"
+"$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseWorkerPreflight.cjs" \
+  || { printf 'early release worker preflight rejected; no host changes or candidate rebuild performed\n' >&2; exit 1; }
 # Reject a closed transition window before changing host configuration or
 # starting expensive candidate reconstruction. Use the same validated budgets
 # as the later candidate lease, but never persist/reuse this advisory probe.
