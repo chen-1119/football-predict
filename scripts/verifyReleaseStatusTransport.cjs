@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
-const vm = require("node:vm");
+const { collectFilesNewerThan: scan } = require("./releaseWorkspaceFreshness.cjs");
 
 const source = fs.readFileSync(path.resolve(__dirname, "checkReleaseStatus.cjs"), "utf8");
 const checks = [];
@@ -71,11 +71,8 @@ check("strict status success is derived from the complete blocker set", () => {
   assert.ok(source.includes("remoteRecoveryHelper.ok"));
 });
 
-const freshnessStart = source.indexOf("const ignoredFreshnessDirs = new Set(");
-const freshnessEnd = source.indexOf("const checkBundle = () =>", freshnessStart);
-assert.ok(freshnessStart >= 0 && freshnessEnd > freshnessStart);
-// Exercise the actual filesystem scanner without running its SSH/HTTP entrypoint.
-const scan = vm.runInNewContext(`${source.slice(freshnessStart, freshnessEnd)}\ncollectFilesNewerThan`, { fs, path }, { timeout: 1000 });
+assert.ok(source.includes('require("./releaseWorkspaceFreshness.cjs")'));
+// Exercise the shared real scanner without running its SSH/HTTP entrypoint.
 const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "football-release-status-freshness-"));
 const cutoff = Date.parse("2020-01-01T00:00:00Z");
 const write = (relative) => {

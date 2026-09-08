@@ -2268,11 +2268,11 @@ const run = () => {
 
   pushCheck(checks, "release bundle excludes generated artifacts", createReleaseBundle.includes('"artifacts"')
     && createReleaseBundle.includes('normalized.startsWith("artifacts/")')
-    && createReleaseBundle.includes('"outputs"')
+    && createReleaseBundle.includes('...listReleaseRootEntries(rootDir)')
     && createReleaseBundle.includes('normalized.startsWith("outputs/")'), {
       excludesArtifacts: createReleaseBundle.includes('"artifacts"'),
       blocksArtifactEntries: createReleaseBundle.includes('normalized.startsWith("artifacts/")'),
-      excludesOutputs: createReleaseBundle.includes('"outputs"'),
+      excludesOutputs: createReleaseBundle.includes('...listReleaseRootEntries(rootDir)'),
       blocksOutputEntries: createReleaseBundle.includes('normalized.startsWith("outputs/")')
     });
 

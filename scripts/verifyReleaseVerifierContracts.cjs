@@ -55,6 +55,7 @@ check('fixed hypothesis lineage survives competing retrospective winners before 
 });
 const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/services/apiFootballDiagnostics.d.cts',
   'scripts/releaseWorkerPreflight.cjs', 'scripts/verifyReleaseWorkerPreflight.cjs',
+  'scripts/releaseWorkspaceFreshness.cjs', 'scripts/verifyReleaseWorkspaceFreshness.cjs',
   'scripts/apiFootballClockEvidence.cjs', 'scripts/verifyApiFootballClockEvidence.cjs',
   'scripts/verifyApiFootballDiagnostics.cjs', 'scripts/verifyCandidateArtifactSeed.cjs', 'scripts/verifyCandidateRevisionLineage.cjs',
   'scripts/verifyLegacyReferenceConflict.cjs', 'src/services/legacyReferenceConflict.ts', 'scripts/verifyFrozenArchiveAuthority.cjs',
@@ -342,5 +343,10 @@ check('deployment rechecks archives before local clone and upload',()=>{
   const probe=client.indexOf('require("./runReleaseArchivePreflight.cjs").runLiveArchivePreflight()');
   assert.ok(probe>=0&&probe<client.indexOf('const localCloneVerifier = runCommand('));
   assert.ok(probe<client.indexOf('for (const artifact of uploads)'));
+});
+check('all release entrypoints share tested workspace freshness before signing',()=>{
+  const report=require('./verifyReleaseWorkspaceFreshness.cjs').verifyReleaseWorkspaceFreshness();
+  assert.equal(report.ok,true);assert.ok(report.checks.length>=12);
+  assert.equal(report.productionWrites,0);assert.equal(report.networkCalls,0);
 });
 console.log(JSON.stringify({ok:true,verifier:'release-verifier-contracts-v1',checks,productionDataTouched:false},null,2));
