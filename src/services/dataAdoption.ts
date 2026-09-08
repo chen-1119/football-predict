@@ -36,6 +36,18 @@ const clock = (value: unknown) => {
 };
 const count = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
 const text = (value: unknown) => typeof value === 'string' && value.trim() ? value.slice(0, 160) : null;
+const calculationSources = (row: Record<string, unknown>): { sources: string[]; sourceDetailsRecorded: boolean } => {
+  const sources = row.sources;
+  // These names describe candidates in the bound base-calculation receipt, not
+  // source quality or final recommendation adoption. Never fill from live data.
+  if (row.key !== 'form' || row.stage !== 'form-lambda-blend' || !Array.isArray(sources)
+    || sources.length > 2 || [...sources].some(source => source !== 'training-history' && source !== '500-recent-form')
+    || new Set(sources).size !== sources.length || (row.used === true && sources.length === 0)) {
+    return { sources: [], sourceDetailsRecorded: false };
+  }
+  // A recorded zero-input calculation is different from an absent/invalid field.
+  return { sources: [...sources] as string[], sourceDetailsRecorded: true };
+};
 const formResultEvidence = (value: unknown, samples: number | null) => {
   const evidence = object(value);
   if (!evidence || evidence.version !== 'recent-form-result-evidence-v1' || evidence.sourceVerified !== false
@@ -77,7 +89,8 @@ export function getDataAdoptionReport(match: Match) {
         && typeof r.used === 'boolean' && r.used === (r.weight > 0) && typeof r.receiptHash === 'string' && /^[a-f0-9]{64}$/.test(r.receiptHash)
         && ['base-outcome-blend', 'form-lambda-blend'].includes(String(r.stage)))
       .map(r => ({ key: String(r.key), stage: String(r.stage), used: r.used as boolean, weight: r.weight as number,
-        receiptHash: String(r.receiptHash), poolCode: text(r.poolCode), source: text(r.source), fallbackMetrics: count(r.fallbackMetrics) })) : [];
+        receiptHash: String(r.receiptHash), poolCode: text(r.poolCode), source: text(r.source), fallbackMetrics: count(r.fallbackMetrics),
+        ...calculationSources(r) })) : [];
   const asOf = clock(frozen?.decisionAt || (!record ? match.predictionMeta?.decisionGeneratedAt || match.predictionMeta?.generatedAt : null));
   const rows = FAMILIES.map(([key, zh, en]) => {
     // Combined market/motivation components cannot attest either individual source.
