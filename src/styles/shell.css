@@ -202,6 +202,32 @@
 
 .app-shell-v2 .app-data-status {
   padding: 0 10px;
+  border-radius: 999px;
+}
+
+.app-shell-v2 .app-data-status.is-ready {
+  border-color: rgba(55, 184, 120, 0.32);
+  background: var(--shell-green-soft);
+  color: var(--shell-green);
+}
+
+.app-shell-v2 .app-data-status.is-syncing,
+.app-shell-v2 .app-data-status.is-watch {
+  border-color: rgba(215, 165, 72, 0.32);
+  background: rgba(215, 165, 72, 0.1);
+  color: var(--shell-warning);
+}
+
+.app-shell-v2 .app-data-status.is-error {
+  border-color: rgba(223, 107, 107, 0.32);
+  background: var(--shell-danger-soft);
+  color: var(--shell-danger);
+}
+
+.app-shell-v2 .app-data-status.is-locked {
+  border-color: var(--shell-border);
+  background: var(--shell-bg-elevated);
+  color: var(--shell-text-secondary);
 }
 
 .app-shell-v2 .app-data-status-dot {
