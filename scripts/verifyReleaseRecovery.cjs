@@ -576,6 +576,125 @@ function verifyRealSqliteRecovery() {
     scope: "synthetic real SQLite base/WAL image recovery and exact frozen rows; systemd, health and serving-generation rebuild mocked; production quick_check branch not exercised" };
 }
 
+// Explicit root/Linux-only diagnostic; not part of the unprivileged default
+// suite. Compile the original helper bytes without invoking main/recover and
+// expose only its snapshot loader. Every filesystem operation is constrained
+// to a newly created private directory; all process launches are forbidden.
+function verifySqliteSnapshotValidation() {
+  assert.equal(process.platform, "linux", "production snapshot branch requires Linux");
+  assert.equal(process.getuid(), 0, "production ownership checks require root");
+  const vm = require("node:vm"), { DatabaseSync } = require("node:sqlite");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "football-sqlite-validation-"));
+  fs.chmodSync(root, 0o700);
+  const checks = [], fds = new Set();
+  let opens = 0, quickChecks = 0, serial = 0;
+  const scoped = (value) => {
+    assert.equal(typeof value, "string");
+    const target = path.resolve(value);
+    assert.ok(target.startsWith(root + path.sep), "snapshot loader escaped private fixture");
+    return value;
+  };
+  const scopedFs = {
+    constants: fs.constants,
+    lstatSync: (...args) => fs.lstatSync(scoped(args[0]), ...args.slice(1)),
+    readFileSync: (...args) => fs.readFileSync(scoped(args[0]), ...args.slice(1)),
+    mkdtempSync: (...args) => fs.mkdtempSync(scoped(args[0]), ...args.slice(1)),
+    chmodSync: (...args) => fs.chmodSync(scoped(args[0]), ...args.slice(1)),
+    chownSync: (...args) => fs.chownSync(scoped(args[0]), ...args.slice(1)),
+    copyFileSync: (from, to, flags) => fs.copyFileSync(scoped(from), scoped(to), flags),
+    rmSync: (...args) => fs.rmSync(scoped(args[0]), ...args.slice(1)),
+    openSync: (...args) => { const fd = fs.openSync(scoped(args[0]), ...args.slice(1)); fds.add(fd); return fd; },
+    readSync: (fd, ...args) => { assert.ok(fds.has(fd)); return fs.readSync(fd, ...args); },
+    closeSync: (fd) => { assert.ok(fds.has(fd)); fs.closeSync(fd); fds.delete(fd); },
+  };
+  class ScopedDatabase extends DatabaseSync {
+    constructor(file) { super(scoped(file)); opens += 1; }
+    prepare(sql) { assert.equal(sql, "PRAGMA quick_check"); quickChecks += 1; return super.prepare(sql); }
+  }
+  const requireScoped = (name) => {
+    if (name === "node:fs") return scopedFs;
+    if (name === "node:path") return path;
+    if (name === "node:crypto") return crypto;
+    if (name === "node:sqlite") return { DatabaseSync: ScopedDatabase };
+    if (name === "node:child_process") return { spawnSync: () => { throw Error("snapshot verification cannot launch processes"); } };
+    throw Error("unexpected snapshot verifier dependency: " + name);
+  };
+  const loader = vm.runInNewContext(helperSource + "\nloadSqliteSnapshot;", {
+    require: requireScoped, module: { exports: {} }, Buffer,
+    process: { env: {}, platform: process.platform, getuid: () => process.getuid() },
+  }, { timeout: 1000 });
+  const fixture = (kind) => {
+    const current = path.join(root, "case-" + (++serial)), dir = path.join(current, "sqlite");
+    mkdir(dir); const file = path.join(dir, "football.db");
+    const wal = kind === "wal", db = new DatabaseSync(file);
+    try {
+      if (wal) db.exec("PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0;");
+      db.exec("CREATE TABLE evidence (id INTEGER PRIMARY KEY, value INTEGER CHECK(value > 0));");
+      if (wal) db.exec("PRAGMA wal_checkpoint(TRUNCATE);");
+      if (kind === "constraint") db.exec("PRAGMA ignore_check_constraints=ON; INSERT INTO evidence VALUES(1,-1);");
+      else db.exec("INSERT INTO evidence VALUES(1,7);");
+      if (wal) {
+        // Retain a real uncheckpointed image before the last connection closes.
+        for (const suffix of ["", "-wal", "-shm"]) fs.copyFileSync(file + suffix, file + suffix + ".saved");
+      }
+    } finally { db.close(); }
+    if (wal) for (const suffix of ["", "-wal", "-shm"]) fs.renameSync(file + suffix + ".saved", file + suffix);
+    if (kind === "header") write(file, Buffer.alloc(512, 65));
+    if (kind === "truncated") fs.truncateSync(file, 103);
+    const manifest = [];
+    for (const [token, suffix] of [["base", ""], ["wal", "-wal"], ["shm", "-shm"]]) {
+      if (!fs.existsSync(file + suffix)) manifest.push(`${token}\t0\t-\t-\t-\t-\t-`);
+      else {
+        fs.chmodSync(file + suffix, 0o600);
+        const bytes = fs.readFileSync(file + suffix);
+        manifest.push([token, "1", bytes.length, sha256(bytes), "0", "0", "600"].join("\t"));
+      }
+    }
+    write(path.join(dir, "manifest.tsv"), manifest.join("\n") + "\n");
+    write(path.join(dir, "live-path"), "/var/lib/football-predict/football.db\n");
+    return { current, dir, file };
+  };
+  const bytesOf = dir => Object.fromEntries(fs.readdirSync(dir).sort().map(name => [name, fs.readFileSync(path.join(dir, name))]));
+  try {
+    for (const kind of ["base", "wal", "header", "truncated", "constraint", "hash", "mode", "owner"]) {
+      const f = fixture(kind), beforeOpen = opens, beforeChecks = quickChecks;
+      if (kind === "hash") { const bytes = fs.readFileSync(f.file); bytes[100] ^= 1; write(f.file, bytes); }
+      if (kind === "mode") fs.chmodSync(f.file, 0o644);
+      if (kind === "owner") fs.chownSync(f.file, 65534, 65534);
+      const before = bytesOf(f.dir);
+      if (["base", "wal"].includes(kind)) {
+        const result = loader(f.current);
+        assert.equal(result.entries.get("base").present, true);
+        assert.equal(result.entries.get("wal").present, kind === "wal");
+        assert.equal(opens - beforeOpen, 1); assert.equal(quickChecks - beforeChecks, 1);
+      } else {
+        const expected = {
+          header: /sqlite rollback snapshot could not be opened safely/,
+          truncated: /sqlite rollback snapshot could not be opened safely/,
+          constraint: /sqlite rollback snapshot failed PRAGMA quick_check/,
+          hash: /sqlite base snapshot hash mismatch/,
+          mode: /mode must be 0600/,
+          owner: /not root-owned/,
+        }[kind];
+        assert.throws(() => loader(f.current), expected);
+        if (["hash", "mode", "owner"].includes(kind)) assert.equal(opens, beforeOpen, "unsafe snapshot must be rejected before SQLite open");
+        else assert.ok(quickChecks > beforeChecks, "matching hashes must still execute the real integrity check");
+      }
+      assert.deepEqual(bytesOf(f.dir), before, "validation must not modify source snapshot bytes");
+      assert.deepEqual(fs.readdirSync(f.current), ["sqlite"], "private validation copy must be removed on success and failure");
+      assert.equal(fds.size, 0);
+      checks.push({ kind, ok: true });
+    }
+    return { ok: true, checks, productionWrites: 0, productionTestMode: false,
+      actualSqliteQuickChecks: quickChecks, helperSha256: sha256(helperSource),
+      scope: "original snapshot loader with real Linux root ownership and SQLite integrity checks; path-constrained temporary files only; no main, recovery, services or publication rebuild" };
+  } finally {
+    for (const fd of fds) fs.closeSync(fd);
+    assert.equal(fs.realpathSync(root), root);
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+}
+
 function verifyOriginal() {
 let assertions = 0;
 {
@@ -1008,6 +1127,7 @@ console.log(JSON.stringify({
 if (require.main === module) {
   if (process.argv.length === 3 && process.argv[2] === "--full-after-ui") console.log(JSON.stringify(verifyFullAfterUiRecovery()));
   else if (process.argv.length === 3 && process.argv[2] === "--real-sqlite") console.log(JSON.stringify(verifyRealSqliteRecovery()));
+  else if (process.argv.length === 3 && process.argv[2] === "--sqlite-snapshot-validation") console.log(JSON.stringify(verifySqliteSnapshotValidation()));
   else { assert.equal(process.argv.length, 2, "unexpected recovery verifier arguments"); verifyOriginal(); }
 }
-module.exports = { verifyFullAfterUiRecovery, verifyRealSqliteRecovery };
+module.exports = { verifyFullAfterUiRecovery, verifyRealSqliteRecovery, verifySqliteSnapshotValidation };
