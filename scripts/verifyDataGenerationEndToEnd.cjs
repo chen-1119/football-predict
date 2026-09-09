@@ -1044,13 +1044,7 @@ const verifyPostgresPrimaryColdStartPairing = async ({ previousIdentity, activeI
 };
 
 const stopServer = async () => {
-  if (!server || server.exitCode !== null) return;
-  server.kill("SIGTERM");
-  await Promise.race([
-    new Promise((resolve) => server.once("exit", resolve)),
-    new Promise((resolve) => setTimeout(resolve, 5_000)),
-  ]);
-  if (server.exitCode === null) server.kill("SIGKILL");
+  await require("./stopVerificationChild.cjs").stopVerificationChild(server, { graceMs: 5000 });
 };
 
 (async () => {

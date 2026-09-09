@@ -17,6 +17,11 @@ const RELEASE_ONLY = new Set([
   "scripts/frontendInstalledRuntime.cjs", "scripts/verifyFrontendInstalledRuntime.cjs",
   "scripts/verifyFrontendRuntimeAlternatives.cjs", "scripts/verifyReleaseVerifierContracts.cjs",
   "scripts/frontendReleaseInputs.cjs", "scripts/prepareFrontendRelease.cjs", "scripts/verifyFrontendReleaseInputs.cjs",
+  // Fixture process lifecycle only; none of these files produce model inputs.
+  "scripts/stopVerificationChild.cjs", "scripts/verifyVerificationChildShutdown.cjs",
+  "scripts/verifyAccessCodeConcurrency.cjs", "scripts/verifyRelaySnapshotUploadSerialization.cjs",
+  "scripts/verifySportteryRelayDualLaneServer.cjs", "scripts/verifySyncWorkerEventBridge.cjs",
+  "scripts/verifyDataGenerationEndToEnd.cjs",
 ]);
 const UI_ONLY = new Set(FRONTEND_PATHS);
 const hash = bytes => crypto.createHash("sha256").update(bytes).digest("hex");

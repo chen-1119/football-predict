@@ -6,6 +6,7 @@ const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
+const { stopVerificationChild } = require("./stopVerificationChild.cjs");
 
 const rootDir = path.resolve(__dirname, "..");
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "football-relay-upload-serialization-"));
@@ -274,10 +275,7 @@ const startServer = async () => {
 };
 
 const stopServer = async () => {
-  if (!child || child.exitCode !== null) return;
-  child.kill("SIGTERM");
-  await Promise.race([new Promise((resolve) => child.once("exit", resolve)), sleep(3000)]);
-  if (child.exitCode === null) child.kill("SIGKILL");
+  await stopVerificationChild(child);
 };
 
 const run = async () => {

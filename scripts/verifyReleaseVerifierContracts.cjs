@@ -102,6 +102,7 @@ check('fixed hypothesis lineage survives competing retrospective winners before 
 const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/services/apiFootballDiagnostics.d.cts',
   'scripts/verifyFrontendRuntimeAlternatives.cjs',
   'scripts/frontendReleaseInputs.cjs', 'scripts/prepareFrontendRelease.cjs', 'scripts/verifyFrontendReleaseInputs.cjs',
+  'scripts/stopVerificationChild.cjs', 'scripts/verifyVerificationChildShutdown.cjs',
   'scripts/verifyResultTimelineSemanticClosure.cjs',
   'scripts/verifyCandidateTransitionDraft.cjs',
   'scripts/releaseWorkerPreflight.cjs', 'scripts/verifyReleaseWorkerPreflight.cjs',
@@ -433,6 +434,14 @@ check('frontend preparation inputs preserve dual identity and fail closed before
   assert.equal(run.status,0,run.stderr); const report=JSON.parse(run.stdout);
   assert.equal(report.ok,true); assert.ok(report.checks.length>=29 && report.checks.every(row=>row.ok));
   assert.equal(report.productionWrites,0); assert.equal(report.networkRequests,0); assert.equal(report.realSequencesConsumed,0);
+});
+check('verifier shutdown observes close and cancels losing timers before signing',()=>{
+  const result=require('node:child_process').spawnSync(process.execPath,['scripts/verifyVerificationChildShutdown.cjs'],
+    {cwd:root,encoding:'utf8',windowsHide:true,timeout:15000,maxBuffer:1024*1024});
+  assert.equal(result.status,0,result.stderr); const report=JSON.parse(result.stdout);
+  assert.equal(report.ok,true); assert.ok(report.checks.length>=(process.platform==='linux'?13:12) && report.checks.every(row=>row.ok));
+  assert.equal(report.nativeForcedShutdownTested,process.platform==='linux');
+  assert.equal(report.productionWrites,0);
 });
 check('static receipt input scopes and failure behavior pass before signing',()=>{
   const result=require('node:child_process').spawnSync(process.execPath,['scripts/verifyStaticVerificationReceipts.cjs'],

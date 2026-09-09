@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
+const { stopVerificationChild } = require("./stopVerificationChild.cjs");
 
 const rootDir = path.resolve(__dirname, "..");
 const workerSource = fs.readFileSync(path.join(rootDir, "scripts", "runSyncWorker.cjs"), "utf8");
@@ -72,13 +73,7 @@ child.stdout.on("data", (chunk) => { output += chunk.toString(); });
 child.stderr.on("data", (chunk) => { output += chunk.toString(); });
 
 const stopChild = async () => {
-  if (child.exitCode !== null) return;
-  child.kill("SIGTERM");
-  await Promise.race([
-    new Promise((resolve) => child.once("exit", resolve)),
-    new Promise((resolve) => setTimeout(resolve, 3000)),
-  ]);
-  if (child.exitCode === null) child.kill("SIGKILL");
+  await stopVerificationChild(child);
 };
 
 (async () => {
