@@ -23,8 +23,17 @@ const CONFIG_FIELDS = Object.freeze(["Id", "LoadState", "NeedDaemonReload", "Fra
 const OBSERVATION_FIELDS = Object.freeze(["ActiveState", "SubState", "MainPID", "InvocationID"]);
 const CREDENTIAL_SIGNATURES = Object.freeze({ LoadCredential: "a(ss)", LoadCredentialEncrypted: "a(ss)",
   SetCredential: "a(say)", SetCredentialEncrypted: "a(say)" });
+// systemctl omits empty command arrays even with --all on the live host.
+// Missing is never assumed empty: typed D-Bus zero-length proof is required.
+const OMITTED_ARRAY_SIGNATURES = Object.freeze({ ExecStartPre: "a(sasbttttuii)", ExecStartPost: "a(sasbttttuii)",
+  ExecCondition: "a(sasbttttuii)", ExecReload: "a(sasbttttuii)", ExecStop: "a(sasbttttuii)", ExecStopPost: "a(sasbttttuii)", EnvironmentFiles: "a(sb)" });
 const FRAGMENT_ROOTS = Object.freeze(["/etc/systemd/system/", "/run/systemd/system/", "/usr/lib/systemd/system/"]);
 const CONTROL_DROPIN_ROOT = "/run/systemd/system.control/";
+// Reviewed host alternative, not a general /etc or alternatives allowlist.
+// Both hops and the resolved binary are included in the runtime commitment.
+const AWK_ALTERNATIVE = Object.freeze({ entry: "/usr/bin/awk", link: "/etc/alternatives/awk", target: "/usr/bin/gawk" });
+const CONDITIONAL_UPLOAD = Object.freeze({ unit: "football-postgres-cos-upload.service", file: "/etc/football-predict/cos-backup.env",
+  conditionPrefix: 'a(sbbsi) 1 "ConditionPathExists" false false "/etc/football-predict/cos-backup.env" ' });
 const STABLE_UNIT_POLICY = "all-config-fields-exec-start-normalized-active-primary-observations-v1";
 const LIMITS = Object.freeze({ entries: 100000, fileBytes: 160 * 1024 * 1024, totalBytes: 2 * 1024 * 1024 * 1024,
   configBytes: 1024 * 1024, procBytes: 1024 * 1024, deadlineMs: 120000 });
@@ -32,7 +41,7 @@ const sha = bytes => crypto.createHash("sha256").update(bytes).digest("hex");
 const digest = value => sha(JSON.stringify(value));
 const POLICY_HASH = digest({ VERSION, APP, NODE, NPM_ROOT, FIXED_PATH, RUNTIME_ENV, UNITS, COMMANDS,
   TRANSIENT_ENV, CONFIG_FIELDS, OBSERVATION_FIELDS, CREDENTIAL_SIGNATURES, FRAGMENT_ROOTS, CONTROL_DROPIN_ROOT, STABLE_UNIT_POLICY,
-  LIMITS, boundaryPolicy: boundary.POLICY_HASH });
+  LIMITS, AWK_ALTERNATIVE, OMITTED_ARRAY_SIGNATURES, CONDITIONAL_UPLOAD, boundaryPolicy: boundary.POLICY_HASH });
 const metadata = stat => ({ mode: Number(stat.mode & 0o7777n), uid: Number(stat.uid), gid: Number(stat.gid) });
 const statIdentity = stat => [stat.dev, stat.ino, stat.mode, stat.uid, stat.gid, stat.nlink, stat.size, stat.mtimeNs, stat.ctimeNs].map(String).join(":");
 const fail = code => { const error = new Error(code); error.runtimeCode = code; throw error; };
@@ -176,11 +185,19 @@ function makeContext(fixtureRoot = null) {
         }
       }
       const file = local(current); ancestors(file); const stat = fs.lstatSync(file, { bigint: true });
+      if (current === AWK_ALTERNATIVE.link && (!stat.isSymbolicLink() ||
+          links.at(-1)?.path !== AWK_ALTERNATIVE.entry || links.at(-1)?.target !== AWK_ALTERNATIVE.link ||
+          links.slice(0, -1).some(link => link.path !== "/bin" || link.target !== "/usr/bin")))
+        fail("unreviewed-system-alternative-entry");
+      if (current === AWK_ALTERNATIVE.target && links.some(link => link.path === AWK_ALTERNATIVE.link) && stat.isSymbolicLink())
+        fail("unreviewed-system-alternative-target");
       if (!stat.isSymbolicLink()) { const result = readFile(current); if (!windows && !(result.mode & 0o111)) fail("nonexecutable-runtime-command"); return { ...result, requestedPath: logical, links }; }
       if (stat.uid !== BigInt(owner)) fail("unsafe-command-link-owner");
       const target = fs.readlinkSync(file).replace(/\\/g, "/");
       const next = path.posix.resolve(path.posix.dirname(current), target);
-      if (!(next.startsWith("/usr/") || next.startsWith("/opt/node-v22.22.1/"))) fail("runtime-command-link-escape");
+      if (current === AWK_ALTERNATIVE.link && target !== AWK_ALTERNATIVE.target) fail("unreviewed-system-alternative-target");
+      const reviewedAlternative = current === AWK_ALTERNATIVE.entry && target === AWK_ALTERNATIVE.link;
+      if (!(next.startsWith("/usr/") || next.startsWith("/opt/node-v22.22.1/") || reviewedAlternative)) fail("runtime-command-link-escape");
       links.push({ path: current, target }); observations.set(file, { identity: statIdentity(stat) }); current = next;
     }
     fail("runtime-command-link-depth");
@@ -200,14 +217,26 @@ function makeContext(fixtureRoot = null) {
     }
     fail("missing-required-runtime-command");
   };
+  const recordAbsent = logical => {
+    const file = local(logical); ancestors(file);
+    try { fs.lstatSync(file); } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+      observations.set(file, { absent: true }); return { path: logical, absent: true };
+    }
+    fail("conditional-environment-appeared");
+  };
   const recheck = () => {
     for (const [file, before] of observations) {
+      if (before.absent) {
+        try { fs.lstatSync(file); } catch (error) { if (error.code === "ENOENT") continue; throw error; }
+        fail("conditional-environment-appeared");
+      }
       const stat = fs.lstatSync(file, { bigint: true });
       const identity = before.directory ? [stat.dev, stat.ino, stat.mode, stat.uid, stat.gid].map(String).join(":") : statIdentity(stat);
       if (identity !== before.identity) fail("installed-runtime-changed-during-capture");
     }
   };
-  return { fixture, windows, owner, local, readFile, safeStat, ancestors, command, resolveExecutable, recheck, checkBudget, observations,
+  return { fixture, windows, owner, local, readFile, safeStat, ancestors, command, resolveExecutable, recordAbsent, recheck, checkBudget, observations,
     counts: () => ({ capturedFiles: count, capturedBytes: totalBytes }) };
 }
 
@@ -256,7 +285,7 @@ function captureDependencyTree(ctx, root) {
   } };
 }
 
-function readEmptyCredentials(ctx, unit) {
+function readEmptyCredentials(ctx, unit, signatures = CREDENTIAL_SIGNATURES) {
   // systemctl renders these arrays as [unprintable] even when empty. Resolve
   // the exact fixed unit through the manager, then require typed zero-length
   // values. Nonempty/unknown responses fail without emitting credential data.
@@ -273,7 +302,7 @@ function readEmptyCredentials(ctx, unit) {
     if (response !== 'o "' + object + '"\n') fail("systemd-credential-unit-object-mismatch");
   }
   const result = {};
-  for (const [key, signature] of Object.entries(CREDENTIAL_SIGNATURES)) {
+  for (const [key, signature] of Object.entries(signatures)) {
     const response = ctx.fixture ? fs.readFileSync(ctx.local("/fixture/units/" + unit + "." + key + ".bus"), "utf8")
       : bus(["get-property", "org.freedesktop.systemd1", object, "org.freedesktop.systemd1.Service", key]);
     if (response !== signature + " 0\n") fail("nonempty-or-unreviewed-systemd-credentials");
@@ -293,13 +322,24 @@ function readUnit(ctx, unit) {
   const result = {};
   for (const line of text.trimEnd().split("\n")) {
     const at = line.indexOf("="); const key = line.slice(0, at);
-    if (at < 1 || Object.hasOwn(result, key) || ![...CONFIG_FIELDS, ...OBSERVATION_FIELDS].includes(key)) fail("invalid-systemd-show-contract");
+    if (at < 1 || ![...CONFIG_FIELDS, ...OBSERVATION_FIELDS].includes(key)) fail("invalid-systemd-show-contract");
+    if (Object.hasOwn(result, key)) {
+      // systemctl renders multiple EnvironmentFile entries on separate lines.
+      // Preserve order; inspectUnit still rejects duplicate paths and bad syntax.
+      if (key !== "EnvironmentFiles" || !result[key] || !line.slice(at + 1)) fail("invalid-systemd-show-contract");
+      result[key] += " " + line.slice(at + 1); continue;
+    }
     result[key] = line.slice(at + 1);
   }
-  if (!exactKeys(result, [...CONFIG_FIELDS, ...OBSERVATION_FIELDS])) fail("missing-systemd-show-field");
+  const missing = [...CONFIG_FIELDS, ...OBSERVATION_FIELDS].filter(key => !Object.hasOwn(result, key));
+  if (missing.some(key => !Object.hasOwn(OMITTED_ARRAY_SIGNATURES, key))) fail("missing-systemd-show-field");
   for (const key of Object.keys(CREDENTIAL_SIGNATURES)) if (!["", "[unprintable]"].includes(result[key]))
     fail("unreviewed-systemd-credential-rendering");
-  Object.assign(result, readEmptyCredentials(ctx, unit));
+  const proved = readEmptyCredentials(ctx, unit, { ...CREDENTIAL_SIGNATURES,
+    ...Object.fromEntries(missing.map(key => [key, OMITTED_ARRAY_SIGNATURES[key]])) });
+  for (const key of missing) result[key] = "";
+  for (const key of Object.keys(CREDENTIAL_SIGNATURES)) result[key] = proved[key];
+  if (!exactKeys(result, [...CONFIG_FIELDS, ...OBSERVATION_FIELDS])) fail("missing-systemd-show-field");
   return result;
 }
 function stableUnitConfiguration(observed) {
@@ -314,6 +354,22 @@ function sameUnitObservation(unit, before, after) {
   // remain the exact live observations and are independently rechecked in /proc.
   return !["football-predict.service", "football-sync-worker.service"].includes(unit)
     || OBSERVATION_FIELDS.every(key => before[key] === after[key]);
+}
+function proveInactiveConditionalUpload(ctx, unit, observed) {
+  if (unit !== CONDITIONAL_UPLOAD.unit || observed.ActiveState !== "inactive" || observed.MainPID !== "0")
+    fail("missing-environment-without-inactive-condition");
+  let response;
+  if (ctx.fixture) response = fs.readFileSync(ctx.local("/fixture/units/" + unit + ".Conditions.bus"), "utf8");
+  else {
+    const result = spawnSync("/usr/bin/busctl", ["--system", "--no-pager", "get-property", "org.freedesktop.systemd1",
+      "/org/freedesktop/systemd1/unit/football_2dpostgres_2dcos_2dupload_2eservice", "org.freedesktop.systemd1.Unit", "Conditions"],
+      { env: { PATH: FIXED_PATH, LANG: "C", LC_ALL: "C" }, encoding: "utf8", timeout: 5000, maxBuffer: LIMITS.configBytes, windowsHide: true });
+    if (result.error || result.status !== 0) fail("conditional-upload-observation-failed"); response = result.stdout;
+  }
+  // Final integer is only the previous condition evaluation, not configuration.
+  if (!["-1", "0", "1"].some(value => response === CONDITIONAL_UPLOAD.conditionPrefix + value + "\n"))
+    fail("unreviewed-conditional-upload-configuration");
+  return { condition: "ConditionPathExists", path: CONDITIONAL_UPLOAD.file, absent: true };
 }
 function inspectUnit(ctx, unit, observed, envFiles, envValues) {
   if (observed.Id !== unit || observed.LoadState !== "loaded" || observed.NeedDaemonReload !== "no") fail("unloaded-or-stale-systemd-unit");
@@ -341,7 +397,7 @@ function inspectUnit(ctx, unit, observed, envFiles, envValues) {
     return ctx.readFile(file, LIMITS.configBytes);
   });
   const env = environmentPairs(shellWords(observed.Environment)); validateEnvironment(env);
-  const environmentPaths = []; let position = 0;
+  const environmentPaths = []; let position = 0, conditionalEnvironment = null;
   const grammar = /(\/[A-Za-z0-9_.+@/-]+) \(ignore_errors=(yes|no)\)(?: |$)/y;
   while (position < observed.EnvironmentFiles.length) {
     grammar.lastIndex = position; const match = grammar.exec(observed.EnvironmentFiles);
@@ -349,16 +405,25 @@ function inspectUnit(ctx, unit, observed, envFiles, envValues) {
     const file = match[1]; if (environmentPaths.includes(file)) fail("duplicate-environment-file");
     environmentPaths.push(file);
     if (!envFiles.has(file)) {
-      const row = ctx.readFile(file, LIMITS.configBytes, true); const parsed = environmentFile(row.content); validateEnvironment(parsed);
+      let row;
+      try { row = ctx.readFile(file, LIMITS.configBytes, true); }
+      catch (error) {
+        if (error.code !== "ENOENT" || file !== CONDITIONAL_UPLOAD.file) throw error;
+        conditionalEnvironment = proveInactiveConditionalUpload(ctx, unit, observed);
+        row = ctx.recordAbsent(file);
+      }
+      const parsed = row.absent ? {} : environmentFile(row.content); validateEnvironment(parsed);
       delete row.content; envFiles.set(file, row); envValues.set(file, parsed);
     }
+    if (envFiles.get(file).absent) conditionalEnvironment = proveInactiveConditionalUpload(ctx, unit, observed);
   }
   const config = stableUnitConfiguration(observed);
   const record = { unit, configurationSha256: digest(config), fragments: fileRows, environmentFiles: environmentPaths,
-    environmentSha256: digest(Object.keys(env).sort().map(key => [key, env[key]])) };
+    environmentSha256: digest(Object.keys(env).sort().map(key => [key, env[key]])),
+    ...(conditionalEnvironment ? { conditionalEnvironment } : {}) };
   const effectiveEnvironment = Object.assign({}, env, ...environmentPaths.map(file => envValues.get(file)));
   validateEnvironment(effectiveEnvironment);
-  return { record, environment: effectiveEnvironment };
+  return { record, environment: effectiveEnvironment, conditionalEnvironment };
 }
 function captureProcess(ctx, unit, state) {
   const pid = Number(state.MainPID), entry = boundary.ENTRYPOINTS[unit];
@@ -427,7 +492,7 @@ function capture(input, fixtureRoot = null) {
     const unitStates = [], units = [], processes = [], environments = [];
     for (const unit of UNITS) {
       const state = readUnit(ctx, unit), inspectedUnit = inspectUnit(ctx, unit, state, envFiles, envValues);
-      unitStates.push({ unit, state }); units.push(inspectedUnit.record); environments.push(inspectedUnit.environment);
+      unitStates.push({ unit, state, conditionalEnvironment: inspectedUnit.conditionalEnvironment }); units.push(inspectedUnit.record); environments.push(inspectedUnit.environment);
       if (["football-predict.service", "football-sync-worker.service"].includes(unit)) {
         const process = captureProcess(ctx, unit, state); processes.push(process); environments.push(process.environment); observations.services.push(process.observation);
       }
@@ -436,7 +501,11 @@ function capture(input, fixtureRoot = null) {
     for (const envPath of [...new Set(environments.map(env => env.PATH || FIXED_PATH))].sort()) {
       pathResolutions.push({ pathSha256: sha(envPath), commands: COMMANDS.map(name => ctx.command(name, envPath)) });
     }
-    for (const { unit, state } of unitStates) if (!sameUnitObservation(unit, state, readUnit(ctx, unit))) fail("systemd-runtime-changed-during-capture");
+    for (const { unit, state, conditionalEnvironment } of unitStates) {
+      const after = readUnit(ctx, unit);
+      if (!sameUnitObservation(unit, state, after)) fail("systemd-runtime-changed-during-capture");
+      if (conditionalEnvironment) proveInactiveConditionalUpload(ctx, unit, after);
+    }
     for (const process of processes) process.recheck(); dependencies.recheck(); npm.recheck(); ctx.recheck();
     const binding = { version: VERSION, assurance: fixtureRoot ? "isolated-filesystem-fixture" : "fixed-root-systemd-proc-v1",
       policyHash: POLICY_HASH, runtimeClosureHash, baselineInventoryHash: input.baselineInventory.treeHash,
@@ -445,12 +514,18 @@ function capture(input, fixtureRoot = null) {
       activeProcesses: processes.map(process => process.stable), pathResolutions };
     observations.runtimeSourceFiles = sources.length; observations.installedDependencyMembers = dependencies.rows.length;
     observations.installedNpmMembers = npm.rows.length; observations.capture = ctx.counts();
+    observations.inactiveConditionalUnits = unitStates.filter(row => row.conditionalEnvironment).map(row => row.unit);
     observations.componentHashes = { sourceSha256: digest(sources), dependencySha256: binding.dependenciesSha256,
       npmSha256: binding.npmSha256, systemdSha256: digest(units), environmentFilesSha256: digest(binding.environmentFiles),
       activeEnvironmentSha256: digest(binding.activeProcesses), commandsSha256: digest({ commandRows, pathResolutions }) };
     return { version: VERSION, ok: true, installedRuntimeSha256: digest(binding), runtimeClosureHash, observations, blockers: [],
       authorizationGranted: false, externalProgramBehaviorVerified: false };
   } catch (error) {
+    // Bounded path-only diagnostics; never emit environment contents, command
+    // output or arbitrary exception text from an installed-runtime capture.
+    if (["ENOENT", "EACCES", "EPERM"].includes(error.code) && typeof error.path === "string"
+        && /^\/(?:etc|usr|opt|run|var)\/[A-Za-z0-9_.+@/-]{1,240}$/.test(error.path))
+      observations.failedPath = error.path;
     return { version: VERSION, ok: false, installedRuntimeSha256: null, runtimeClosureHash: null, observations,
       blockers: [error.runtimeCode || (typeof error.code === "string" ? error.code : "installed-runtime-invalid-input-or-observation")],
       authorizationGranted: false, externalProgramBehaviorVerified: false };
@@ -474,4 +549,4 @@ function createInstalledFrontendRuntimeFixture() {
     } });
 }
 module.exports = { VERSION, POLICY_HASH, APP, NODE, NPM_ROOT, FIXED_PATH, RUNTIME_ENV, UNITS, COMMANDS,
-  TRANSIENT_ENV, CONFIG_FIELDS, OBSERVATION_FIELDS, CREDENTIAL_SIGNATURES, LIMITS, captureInstalledFrontendRuntime, createInstalledFrontendRuntimeFixture };
+  TRANSIENT_ENV, CONFIG_FIELDS, OBSERVATION_FIELDS, CREDENTIAL_SIGNATURES, OMITTED_ARRAY_SIGNATURES, LIMITS, AWK_ALTERNATIVE, captureInstalledFrontendRuntime, createInstalledFrontendRuntimeFixture };

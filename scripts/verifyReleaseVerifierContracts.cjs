@@ -472,7 +472,7 @@ for (const [entry, script, minimum] of [
     assert.equal(report.productionWrites, 0);
     if (systemdOnly) {
       assert.equal(report.verifier, 'frontend-installed-systemd-contracts-v1');
-      assert.equal(report.checks, 3);
+      assert.equal(report.checks, 5);
       assert.equal(report.verificationScope, 'systemd-vm-contracts-only');
       assert.equal(report.platform, 'win32');
       assert.equal(report.linuxFilesystemProof, false);
@@ -487,8 +487,14 @@ for (const [entry, script, minimum] of [
       assert.equal(report.linuxFilesystemProof, true);
       assert.equal(report.fixtureOnly, true);
       assert.equal(report.systemdContracts?.ok, true);
-      assert.ok(report.systemdContracts.checks >= 3);
+      assert.ok(report.systemdContracts.checks >= 5);
       assert.ok(report.systemdContracts.results.every(row => row.ok === true));
+      assert.ok(report.checks >= 13);
+      assert.equal(report.alternatives?.ok, true);
+      assert.equal(report.alternatives.linuxFilesystemProof, true);
+      assert.equal(report.alternatives.productionWrites, 0);
+      assert.ok(report.alternatives.checks >= 7);
+      assert.ok(report.alternatives.results.every(row => row.ok === true));
     }
   }
   assert.equal(pkg.scripts[`verify:${script}`], `node scripts/${entry}`);

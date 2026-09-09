@@ -13,23 +13,24 @@ function verifyInstalledSystemdContracts() {
     ExecStart: "{ path=" + runtime.NODE + " ; argv[]=" + runtime.NODE + " " + runtime.APP + "/scripts/runSyncWorker.cjs --loop ; ignore_errors=no ; pid=101 ; }",
     User: "football", Group: "football", WorkingDirectory: runtime.APP, DynamicUser: "no" });
   for (const key of Object.keys(runtime.CREDENTIAL_SIGNATURES)) values[key] = "[unprintable]";
-  let credentialOverride = null, objectOverride = null, showOverride = null, calls = [], files = [];
+  let credentialOverride = null, objectOverride = null, showOverride = null, showTextOverride = null, arrayOverride = null, calls = [], files = [];
   const context = { module: { exports: {} }, __dirname, process, Buffer, setTimeout, clearTimeout,
     require: name => name === "node:child_process" ? { spawnSync(command, args) {
       calls.push({ command, args }); assert.equal(args.includes("--no-pager"), true);
       if (command === "/usr/bin/systemctl") {
         assert.equal(args.includes("--all"), true); assert.equal(args.at(-1), unit);
-        return { status: 0, stdout: Object.entries(showOverride || values).map(([k, v]) => k + "=" + v).join("\n") + "\n" };
+        return { status: 0, stdout: showTextOverride ?? Object.entries(showOverride || values).map(([k, v]) => k + "=" + v).join("\n") + "\n" };
       }
       assert.equal(command, "/usr/bin/busctl"); assert.equal(args[0], "--system");
       if (args[2] === "call") { assert.deepEqual(Array.from(args.slice(3)), ["org.freedesktop.systemd1", "/org/freedesktop/systemd1", "org.freedesktop.systemd1.Manager", "GetUnit", "s", unit]);
         return { status: 0, stdout: objectOverride || 'o "' + expectedObject + '"\n' }; }
       assert.deepEqual(Array.from(args.slice(2, -1)), ["get-property", "org.freedesktop.systemd1", expectedObject, "org.freedesktop.systemd1.Service"]);
-      return credentialOverride || { status: 0, stdout: runtime.CREDENTIAL_SIGNATURES[args.at(-1)] + " 0\n" };
+      if (Object.hasOwn(runtime.OMITTED_ARRAY_SIGNATURES, args.at(-1)) && arrayOverride) return arrayOverride;
+      return credentialOverride || { status: 0, stdout: { ...runtime.CREDENTIAL_SIGNATURES, ...runtime.OMITTED_ARRAY_SIGNATURES }[args.at(-1)] + " 0\n" };
     } } : require(name),
   };
   vm.runInNewContext(source + "\nmodule.exports.unitForFixture=readUnit;module.exports.inspectForFixture=inspectUnit;module.exports.sameForFixture=sameUnitObservation;", context);
-  const ctx = { fixture: false, readFile: file => { files.push(file); return { path: file, sha256: "a".repeat(64) }; } };
+  const ctx = { fixture: false, readFile: file => { files.push(file); return { path: file, sha256: "a".repeat(64), content: Buffer.from("") }; } };
   const read = () => context.module.exports.unitForFixture(ctx, unit);
   const inspect = state => context.module.exports.inspectForFixture(ctx, unit, state, new Map(), new Map());
   const checks = [];
@@ -43,7 +44,32 @@ function verifyInstalledSystemdContracts() {
     }
     credentialOverride = null; objectOverride = 'o "/org/freedesktop/systemd1/unit/unknown"\n';
     assert.throws(read, /unit-object-mismatch/); objectOverride = null;
-    showOverride = { ...values }; delete showOverride.ExecStartPre; assert.throws(read, /missing-systemd-show-field/); showOverride = null;
+    showOverride = { ...values }; delete showOverride.User; assert.throws(read, /missing-systemd-show-field/); showOverride = null;
+  });
+  check("omitted command and environment-file arrays require exact typed D-Bus emptiness, never inferred defaults", () => {
+    showOverride = { ...values };
+    for (const key of Object.keys(runtime.OMITTED_ARRAY_SIGNATURES)) delete showOverride[key];
+    const result = read();
+    for (const key of Object.keys(runtime.OMITTED_ARRAY_SIGNATURES)) assert.equal(result[key], "");
+    inspect(result);
+    for (const response of [{ status: 0, stdout: 'a(sasbttttuii) 1 "private-command"\n' },
+      { status: 0, stdout: "as 0\n" }, { status: 0, stdout: "a(sb) 0\n" }, { status: 1, stdout: "private-error" }]) {
+      arrayOverride = response; assert.throws(read, error => !error.message.includes("private") && /credential/.test(error.message));
+    }
+    arrayOverride = null; showOverride = { ...values }; delete showOverride.EnvironmentFiles;
+    assert.equal(read().EnvironmentFiles, "");
+    arrayOverride = { status: 0, stdout: "a(sasbttttuii) 0\n" }; assert.throws(read, /credential/);
+    arrayOverride = null; showOverride = null;
+  });
+  check("systemctl repeated EnvironmentFiles preserve order while other duplicates and repeated paths fail", () => {
+    const prefix = Object.entries(values).filter(([key]) => key !== "EnvironmentFiles").map(([key, value]) => key + "=" + value).join("\n") + "\n";
+    showTextOverride = prefix + "EnvironmentFiles=/etc/football-predict/env (ignore_errors=no)\nEnvironmentFiles=/etc/football-predict/worker.env (ignore_errors=no)\n";
+    const value = read(); assert.equal(value.EnvironmentFiles, "/etc/football-predict/env (ignore_errors=no) /etc/football-predict/worker.env (ignore_errors=no)");
+    assert.deepEqual(Array.from(inspect(value).record.environmentFiles), ["/etc/football-predict/env", "/etc/football-predict/worker.env"]);
+    showTextOverride += "EnvironmentFiles=/etc/football-predict/env (ignore_errors=no)\n"; assert.throws(() => inspect(read()), /duplicate-environment-file/);
+    showTextOverride = prefix + "EnvironmentFiles=\nEnvironmentFiles=/etc/football-predict/env (ignore_errors=no)\n"; assert.throws(read, /invalid-systemd-show-contract/);
+    showTextOverride = prefix + "EnvironmentFiles=\nUser=football\n"; assert.throws(read, /invalid-systemd-show-contract/);
+    showTextOverride = null;
   });
   check("actual unit parser binds only exact root-owned system.control unit dropins and rejects adjacent or nested paths", () => {
     const state = read(), root = "/run/systemd/system.control/" + unit + ".d/";
@@ -217,6 +243,26 @@ function verifyFrontendInstalledRuntime() {
       const active = "football-predict.service", state = states.get(active);
       saveUnit(active, { ...state, ActiveState: "inactive", SubState: "dead" }); assert.equal(capture().ok, false); saveUnit(active, state);
     });
+    check("only the exact inactive condition-gated COS unit can bind absent configuration, never inventing credentials", () => {
+      const unit = "football-postgres-cos-upload.service", logical = "/etc/football-predict/cos-backup.env";
+      const file = fixture.at(logical), before = fs.readFileSync(file), state = states.get(unit);
+      const conditionPath = "/fixture/units/" + unit + ".Conditions.bus";
+      const condition = 'a(sbbsi) 1 "ConditionPathExists" false false "/etc/football-predict/cos-backup.env" 0\n';
+      logicalWrite(conditionPath, condition); fs.unlinkSync(file);
+      try {
+        const absent = capture(); assert.equal(absent.ok, true, JSON.stringify(absent));
+        assert.deepEqual(absent.observations.inactiveConditionalUnits, [unit]);
+        assert.notEqual(absent.installedRuntimeSha256, original.installedRuntimeSha256);
+        for (const invalid of [condition.replace('false false', 'false true'), condition.replace(' 1 ', ' 2 '),
+          condition.replace('cos-backup.env', 'other.env'), 'a(sbbsi) 0\n']) {
+          logicalWrite(conditionPath, invalid); assert.equal(capture().ok, false);
+        }
+        logicalWrite(conditionPath, condition);
+        saveUnit(unit, { ...state, ActiveState: "active", MainPID: "404" }); assert.equal(capture().ok, false); saveUnit(unit, state);
+        logicalWrite(logical, before); const configured = capture(); assert.equal(configured.ok, true, JSON.stringify(configured));
+        assert.notEqual(configured.installedRuntimeSha256, absent.installedRuntimeSha256);
+      } finally { logicalWrite(logical, before); saveUnit(unit, state); }
+    });
     check("fixed root production API cannot accept caller policy or paths", () => {
       assert.equal(runtime.captureInstalledFrontendRuntime({ ...input, app: fixture.at(runtime.APP) }).ok, false);
       assert.throws(() => runtime.createInstalledFrontendRuntimeFixture({ root: "/opt" }));
@@ -245,7 +291,8 @@ if (require.main === module) {
     const args = process.argv.slice(2);
     assert.ok(args.length === 0 || args.length === 1 && args[0] === "--systemd-contracts-only", "unknown installed runtime verifier arguments");
     const contracts = verifyInstalledSystemdContracts();
-    const result = args.length === 1 ? contracts : { ...verifyFrontendInstalledRuntime(), systemdContracts: contracts };
+    const result = args.length === 1 ? contracts : { ...verifyFrontendInstalledRuntime(), systemdContracts: contracts,
+      ...(process.platform === "linux" ? { alternatives: require("./verifyFrontendRuntimeAlternatives.cjs").verifyFrontendRuntimeAlternatives() } : {}) };
     console.log(JSON.stringify(result, null, 2)); if (!result.ok) process.exitCode = 1; }
   catch (error) { console.error(error.stack || error.message); process.exitCode = 1; }
 }
