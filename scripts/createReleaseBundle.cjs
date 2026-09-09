@@ -55,7 +55,7 @@ const rootDir = path.resolve(__dirname, "..");
 // unrestorable originals before any sequence reservation or frontend build.
 // Offline bundle creation does not claim live readiness; deployment rechecks.
 if (process.env.RELEASE_DEPLOY_KEY) {
-  const windowPreflight = require("./runReleaseWindowPreflight.cjs").runLiveReleaseWindowPreflight();
+  const windowPreflight = require("./runReleaseWindowPreflight.cjs").runLiveReleaseWindowPreflight({ stage: "before-build" });
   console.error(JSON.stringify({ phase: "window-preflight-before-build", ...windowPreflight }));
   if (!windowPreflight.ok) throw new Error("release window unavailable before archive preflight, sequence reservation and build");
   const { report } = require("./runReleaseArchivePreflight.cjs").runLiveArchivePreflight();

@@ -439,7 +439,7 @@ check('deployment rechecks archives before local clone and upload',()=>{
 });
 check('read-only release window preparation and actual entrypoint routing pass before signing',()=>{
   const result=require('./verifyReleaseWindowPreflight.cjs').verifyReleaseWindowPreflight();
-  assert.equal(result.ok,true);assert.ok(result.checks.length>=25);
+  assert.equal(result.ok,true);assert.ok(result.checks.length>=31 && result.checks.every(row=>row.ok));
   assert.equal(result.productionWrites,0);assert.equal(result.networkCalls,0);
 });
 check('all release entrypoints share tested workspace freshness before signing',()=>{

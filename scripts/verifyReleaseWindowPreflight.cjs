@@ -145,7 +145,8 @@ function runCreatePrefix(source, options = {}) {
       if (name === "./releaseSigning.cjs") return signing;
       if (name === "./historicalTrainingReleaseArtifact.cjs") return { HISTORICAL_TRAINING_RELEASE_ENTRY: "fixture.json", inspectHistoricalTrainingFile: () => ({ ok: true }) };
       if (["./releaseWorkspaceFreshness.cjs", "./releaseBundlePolicy.cjs", "./releasePrebuiltDist.cjs", "./releaseArchiveSourceInventory.cjs"].includes(name)) return {};
-      if (name === "./runReleaseWindowPreflight.cjs") return { runLiveReleaseWindowPreflight: () => {
+      if (name === "./runReleaseWindowPreflight.cjs") return { runLiveReleaseWindowPreflight: ({ stage }) => {
+        assert.equal(stage, "before-build");
         calls.push("window"); if (options.windowThrows) throw new Error("fixture window unavailable"); return { ok: options.windowOpen !== false, readyToCutover: false };
       } };
       assert.equal(name, "./runReleaseArchivePreflight.cjs"); return { runLiveArchivePreflight: () => { calls.push("archive"); return { report: { ok: true } }; } };
@@ -158,30 +159,65 @@ function runCreatePrefix(source, options = {}) {
 function verifyReleaseWindowPreflight() {
   const helper = require("./runReleaseWindowPreflight.cjs");
   const checks = [], check = (name, action) => { try { action(); checks.push({ name, ok: true }); } catch (error) { checks.push({ name, ok: false, error: error.stack }); } };
-  const evaluate = (value = observation(), now = START) => helper.evaluateReleaseWindowObservation(value, now);
+  const evaluate = (value = observation(), now = START, stage = "before-build") => helper.evaluateReleaseWindowObservation(value, now, { stage });
   const reject = mutate => { const value = observation(); mutate(value); assert.throws(() => evaluate(value)); };
   const noAuthority = result => {
     for (const field of ["readyToCutover", "windowReserved", "windowPreauthorized", "leaseCreated"]) assert.equal(result[field], false, field);
     assert.equal(result.productionWrites, 0);
   };
-  check("safe advisory requires 7620 release + 900 preparation + 5 observation seconds and grants no authority", () => {
+  check("before-build preserves 7620 release + 900 upload + 900 build + 5 observation seconds and grants no authority", () => {
     const result = evaluate(); assert.equal(result.ok, true); assert.equal(result.safeToStartPreparation, true);
-    assert.equal(result.releaseHorizonSeconds, 7620); assert.equal(result.preparationSeconds, 900);
-    assert.equal(result.observationReserveSeconds, 5); assert.equal(result.minimumHorizonSeconds, 8525); noAuthority(result);
+    assert.equal(result.releaseHorizonSeconds, 7620); assert.equal(result.preparationSeconds, 1800);
+    assert.equal(result.stage, "before-build"); assert.equal(result.uploadPreparationSeconds, 900); assert.equal(result.buildPreparationSeconds, 900);
+    assert.equal(result.observationReserveSeconds, 5); assert.equal(result.minimumHorizonSeconds, 9425); noAuthority(result);
+    assert.equal(result.latestStartBeforeNextTransition, iso(START + 1375_000));
+  });
+  check("before-upload retains the complete original 900-second allowance and server horizon", () => {
+    const result = evaluate(observation(), START, "before-upload");
+    assert.equal(result.minimumHorizonSeconds, 8525); assert.equal(result.releaseHorizonSeconds, 7620);
+    assert.equal(result.preparationSeconds, 900); assert.equal(result.buildPreparationSeconds, 0);
+    assert.equal(result.uploadPreparationSeconds, 900); assert.equal(result.stage, "before-upload");
+    assert.equal(result.latestStartBeforeNextTransition, iso(START + 2275_000)); noAuthority(result);
+  });
+  check("r722 boundary regression is rejected before spending build time, not by lowering the upload gate", () => {
+    const input = observation({ horizonSeconds: 8601 });
+    assert.equal(evaluate(input, START, "before-upload").ok, true);
+    assert.equal(evaluate(input).ok, false);
+    input.checkedAt = iso(START + 217_000);
+    assert.equal(evaluate(input, START + 217_000, "before-upload").ok, false);
+  });
+  check("planned build allowance leaves the full later upload allowance when fixtures stay unchanged", () => {
+    const input = observation({ horizonSeconds: 9425 });
+    assert.equal(evaluate(input).ok, true);
+    input.checkedAt = iso(START + 900_000);
+    const upload = evaluate(input, START + 900_000, "before-upload");
+    assert.equal(upload.ok, true); assert.equal(upload.availableHorizonSeconds, 8525);
+    input.checkedAt = iso(START + 901_000);
+    assert.equal(evaluate(input, START + 901_000, "before-upload").ok, false);
+  });
+  check("both stage boundaries reject even a one-second shortage and unknown stages fail before SSH", () => {
+    for (const [stage, minimum] of [["before-build", 9425], ["before-upload", 8525]]) {
+      assert.equal(evaluate(observation({ horizonSeconds: minimum }), START, stage).ok, true);
+      assert.equal(evaluate(observation({ horizonSeconds: minimum - 1 }), START, stage).ok, false);
+    }
+    for (const stage of ["", "skip", "before-swap", 0, null]) {
+      assert.throws(() => evaluate(observation(), START, stage), /unknown release preparation stage/);
+      assert.throws(() => helper.runLiveReleaseWindowPreflight({ stage }), /unknown release preparation stage/);
+    }
   });
   check("a nominal 8520-second window is closed once observation reserve is included", () => {
     const result = evaluate(observation({ horizonSeconds: 8520 })); assert.equal(result.ok, false);
-    assert.equal(result.reason, "transition-window-closed"); assert.equal(result.minimumHorizonSeconds, 8525);
+    assert.equal(result.reason, "transition-window-closed"); assert.equal(result.minimumHorizonSeconds, 9425);
     assert.equal(result.safeToStartPreparation, false); noAuthority(result);
   });
   check("positive observation age is rounded upward and projection stays anchored to remote checkedAt", () => {
     const result = evaluate(observation(), START + 4501);
-    assert.equal(result.observationReserveSeconds, 10); assert.equal(result.minimumHorizonSeconds, 8530);
+    assert.equal(result.observationReserveSeconds, 10); assert.equal(result.minimumHorizonSeconds, 9430);
     assert.equal(result.availableHorizonSeconds, 10800); assert.equal(result.nextTransition, iso(START + 10800_000));
   });
   check("permitted negative local clock skew cannot make remote transition time disappear", () => {
     const result = evaluate(observation(), START - 4000); assert.equal(result.observationReserveSeconds, 5);
-    assert.equal(result.availableHorizonSeconds, 10800); assert.equal(result.minimumHorizonSeconds, 8525);
+    assert.equal(result.availableHorizonSeconds, 10800); assert.equal(result.minimumHorizonSeconds, 9425);
     const crossed = observation({ horizonSeconds: 1 }); assert.equal(evaluate(crossed, START + 2000).ok, false);
   });
   check("stale, future and invalid observation clocks are rejected", () => {
@@ -280,6 +316,25 @@ function verifyReleaseWindowPreflight() {
     assert.throws(() => evaluate(fixture.run(helper)));
   });
   const create = readSource("scripts/createReleaseBundle.cjs");
+  check("actual deploy prefix requests upload stage and blocks clone or upload after a rejected observation", () => {
+    const deploy = readSource("scripts/deployReleaseBundle.cjs");
+    const start = deploy.indexOf("  // Reject a closed window before the archive scan, local clone, or uploads.");
+    const end = deploy.indexOf("  const localCloneVerifier =", start); assert.ok(start >= 0 && end > start);
+    for (const outcome of ["open", "closed", "throws"]) {
+      const calls = [];
+      const context = { dryRun: false, releaseWindowPreflight: null,
+        fail: message => { throw new Error(message); }, require: name => {
+          if (name === "./runReleaseWindowPreflight.cjs") return { runLiveReleaseWindowPreflight: ({ stage }) => {
+            assert.equal(stage, "before-upload"); calls.push("window");
+            if (outcome === "throws") throw new Error("observation unavailable"); return { ok: outcome === "open" };
+          } };
+          assert.equal(name, "./runReleaseArchivePreflight.cjs"); return { runLiveArchivePreflight: () => { calls.push("archive"); return { report: { ok: true } }; } };
+        } };
+      const run = () => vm.runInNewContext(deploy.slice(start, end), context, { timeout: 1000 });
+      if (outcome === "open") { run(); assert.deepEqual(calls, ["window", "archive"]); }
+      else { assert.throws(run); assert.deepEqual(calls, ["window"]); }
+    }
+  });
   check("actual online create prefix runs window before archive, preSign, sequence reservation and build", () => {
     const result = runCreatePrefix(create); assert.equal(result.ok, true, result.error);
     assert.deepEqual(result.calls, ["sequence-preflight", "window", "archive", "preSign", "reserve", "build"]);

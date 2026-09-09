@@ -419,7 +419,7 @@ if (frontendOnly) {
   // This fresh advisory check does not replace any signed server-side gate.
   if (!dryRun) {
     try {
-      const windowPreflight = require("./runReleaseWindowPreflight.cjs").runLiveReleaseWindowPreflight();
+      const windowPreflight = require("./runReleaseWindowPreflight.cjs").runLiveReleaseWindowPreflight({ stage: "before-upload" });
       if (!windowPreflight.ok) fail("release window unavailable before clone/upload", { windowPreflight });
       releaseWindowPreflight = { windowChecked: true, ...windowPreflight };
     } catch (error) { fail("release window preflight rejected before clone/upload", { reason: error.message }); }

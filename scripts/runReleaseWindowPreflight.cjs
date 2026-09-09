@@ -12,7 +12,18 @@ const { createTransitionLease } = require("./releaseTransitionLease.cjs");
 const { stableStringify } = require("../server/dataGenerationStore.cjs");
 
 const PREPARATION_SECONDS = 900;
+// Before-upload still needs its complete existing allowance. Before-build
+// additionally reserves local verification/build/packaging time so spending it
+// cannot consume the allowance required again by the later upload gate.
+// This is advisory planning, not a timeout guarantee or reusable permission.
+const BUILD_PREPARATION_SECONDS = 900;
 const MAX_OBSERVATION_AGE_MS = 60_000;
+function preparationBudget(stage) {
+  assert.ok(stage === "before-build" || stage === "before-upload", "unknown release preparation stage");
+  const buildPreparationSeconds = stage === "before-build" ? BUILD_PREPARATION_SECONDS : 0;
+  return { stage, buildPreparationSeconds, uploadPreparationSeconds: PREPARATION_SECONDS,
+    preparationSeconds: buildPreparationSeconds + PREPARATION_SECONDS };
+}
 
 // Sent as local reviewed source over pinned SSH. Only built-in Node modules are
 // loaded remotely, never executable code from APP. Read current fixtures only,
@@ -88,7 +99,8 @@ function collectReleaseWindowObservation() {
 
 const buildReadOnlyWindowProbe = () => `console.log(JSON.stringify((${collectReleaseWindowObservation.toString()})()));`;
 
-function evaluateReleaseWindowObservation(observation, now = Date.now()) {
+function evaluateReleaseWindowObservation(observation, now = Date.now(), { stage = "before-build" } = {}) {
+  const budget = preparationBudget(stage);
   assert.equal(observation?.version, "release-window-observation-v1");
   assert.equal(observation.productionWrites, 0);
   assert.match(observation.releaseMarker || "", /^[a-f0-9]{64}$/);
@@ -107,20 +119,24 @@ function evaluateReleaseWindowObservation(observation, now = Date.now()) {
   // has already crossed it. Reserve transport/clock uncertainty instead of
   // rebuilding the projection at a later instant and silently dropping it.
   const observationReserveSeconds = Math.ceil(Math.max(0, age) / 1000) + 5;
-  const proof = probeWindow(input, { preparationSeconds: PREPARATION_SECONDS + observationReserveSeconds },
+  const proof = probeWindow(input, { preparationSeconds: budget.preparationSeconds + observationReserveSeconds },
     Date.parse(observation.checkedAt), createTransitionLease);
+  const nextTransitionMs = Date.parse(proof.nextTransition);
+  const latestStartBeforeNextTransition = Number.isFinite(nextTransitionMs)
+    ? new Date(nextTransitionMs - proof.minimumHorizonSeconds * 1000).toISOString() : null;
   return { version: "release-window-preflight-v1", checkedAt: new Date(now).toISOString(), observationAt: observation.checkedAt,
     ok: proof.safe === true, ...proof, releaseMarker: observation.releaseMarker,
     sourceCycleId: observation.pointer.sourceCycleId, committedAt: observation.pointer.committedAt,
-    releaseHorizonSeconds: RELEASE_HORIZON_SECONDS, preparationSeconds: PREPARATION_SECONDS,
-    observationReserveSeconds,
+    releaseHorizonSeconds: RELEASE_HORIZON_SECONDS, ...budget,
+    observationReserveSeconds, latestStartBeforeNextTransition,
     generationAgeMs: generationAge, providerFreshnessVerified: false,
     productionWrites: 0, readyToCutover: false, windowReserved: false,
     safeToStartPreparation: proof.safe === true, windowPreauthorized: false, leaseCreated: false,
     scope: "Preparation only; fresh signed early, candidate lease, and final cutover checks remain mandatory." };
 }
 
-function runLiveReleaseWindowPreflight() {
+function runLiveReleaseWindowPreflight({ stage = "before-build" } = {}) {
+  preparationBudget(stage); // Reject typos before reading a key or making SSH calls.
   const rootDir = path.resolve(__dirname, ".."), tmpDir = path.join(rootDir, ".codex-tmp");
   const host = process.env.RELEASE_DEPLOY_HOST || "134.175.132.183", user = process.env.RELEASE_DEPLOY_USER || "ubuntu";
   assert.match(user, /^[a-z_][a-z0-9_-]*$/i);
@@ -134,12 +150,17 @@ function runLiveReleaseWindowPreflight() {
     windowsHide: true, timeout: 30_000, maxBuffer: 32 * 1024 * 1024 });
   // Do not echo remote stdout/stderr: stdout contains fixture data, not a report.
   if (child.status !== 0) throw new Error(`read-only release window observation failed (status=${Number.isInteger(child.status) ? child.status : "unknown"})`);
-  return evaluateReleaseWindowObservation(JSON.parse(child.stdout));
+  return evaluateReleaseWindowObservation(JSON.parse(child.stdout), Date.now(), { stage });
 }
 
-module.exports = { PREPARATION_SECONDS, MAX_OBSERVATION_AGE_MS,
+module.exports = { PREPARATION_SECONDS, BUILD_PREPARATION_SECONDS, MAX_OBSERVATION_AGE_MS, preparationBudget,
   collectReleaseWindowObservation, buildReadOnlyWindowProbe, evaluateReleaseWindowObservation, runLiveReleaseWindowPreflight };
 if (require.main === module) {
-  try { const report = runLiveReleaseWindowPreflight(); console.log(JSON.stringify(report, null, 2)); if (!report.ok) process.exitCode = 1; }
+  try {
+    const args = process.argv.slice(2);
+    assert.ok(args.length === 0 || (args.length === 2 && args[0] === "--stage"), "usage: runReleaseWindowPreflight.cjs [--stage before-build|before-upload]");
+    const report = runLiveReleaseWindowPreflight({ stage: args[1] || "before-build" });
+    console.log(JSON.stringify(report, null, 2)); if (!report.ok) process.exitCode = 1;
+  }
   catch (error) { console.log(JSON.stringify({ ok: false, error: String(error.message).slice(0, 700), productionWrites: 0, readyToCutover: false })); process.exitCode = 1; }
 }
