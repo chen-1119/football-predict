@@ -3,8 +3,8 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
-const { DatabaseSync } = require("node:sqlite");
 const { snapshotUpsertConflict } = require("./postgresSnapshotUpsert.cjs");
+const { privateArtifactStorage } = require("./runtimePrivateModelArtifactStore.cjs");
 const {
   createPostgresPool,
   runPostgresMigrations,
@@ -1327,32 +1327,60 @@ const persistAiArena = async (client, arena) => {
   };
 };
 
-const syncPostgresProjectionFromSqlite = async (options = {}) => {
+const createSqliteProjectionSource = (options = {}) => {
+  const dbPath = path.resolve(options.dbPath || process.env.DATASTORE_SQLITE_PATH || path.join(rootDir, "server-data", "football.db"));
+  const { DatabaseSync } = require("node:sqlite");
+  const stat = fs.statSync(dbPath), db = new DatabaseSync(dbPath, { readOnly: true });
+  try {
+    for (const table of ["schema_meta", "source_snapshots", "match_snapshots", "odds_snapshots", "prediction_snapshots"])
+      if (!tableExists(db, table)) throw new Error(`SQLite source table missing: ${table}`);
+    db.exec("BEGIN");
+    const meta = readMeta(db), publication = publicationFromMeta(meta);
+    const tableRows = (table, { full = true, cutoff = null } = {}) => {
+      if (table === "match_snapshots") return iterateMatchSnapshotRows(db);
+      if (!["source_snapshots", "odds_snapshots", "prediction_snapshots", "private_model_artifacts"].includes(table))
+        throw new Error("unsupported projection source table");
+      const where = full || table === "private_model_artifacts" ? "" : table === "source_snapshots"
+        ? "WHERE captured_at >= ? OR id = 'public-reference-decisions:current' OR source = 'sporttery:public-reference-index'"
+        : "WHERE COALESCE(last_seen_at, captured_at) >= ?";
+      const statement = db.prepare(`SELECT * FROM ${table} ${where} ORDER BY ${table === "private_model_artifacts" ? "artifact_key" : "id"}`);
+      return where ? statement.iterate(cutoff) : statement.iterate();
+    };
+    return { kind: "sqlite", path: dbPath, bytes: stat.size, meta, publication,
+      fingerprint: sourceFingerprint(dbPath, stat, publication, meta),
+      tableRows, activeIds: table => activeIdsFromTable(db, table),
+      hasPrivateAudit: () => tableExists(db, "private_model_artifacts"),
+      assertUnchanged() {},
+      close() { try { db.exec("ROLLBACK"); } finally { db.close(); } },
+    };
+  } catch (error) { db.close(); throw error; }
+};
+
+// Backend-independent transactional projector. Native generation sources must
+// provide complete inventories and an unchanged-source check; no SQLite shim.
+const syncPostgresProjectionFromSource = async (source, options = {}) => {
   const startedMs = Date.now();
   const startedAt = new Date(startedMs).toISOString();
-  const dbPath = path.resolve(options.dbPath || process.env.DATASTORE_SQLITE_PATH || path.join(rootDir, "server-data", "football.db"));
+  if (!source || !["sqlite", "native-generation"].includes(source.kind)
+    || typeof source.path !== "string" || !/^[a-f0-9]{64}$/.test(source.fingerprint || "")
+    || !["tableRows", "activeIds", "hasPrivateAudit", "assertUnchanged", "close"].every(key => typeof source[key] === "function"))
+    throw new Error("invalid complete PostgreSQL projection source");
+  const dbPath = source.path;
   const mode = MODE_VALUES.has(options.mode) ? options.mode : "incremental";
   const aiArenaPath = path.resolve(
     options.aiArenaPath
     || process.env.AI_ARENA_PATH
     || path.join(rootDir, "public", "data", "ai-arena.json"),
   );
-  const stat = fs.statSync(dbPath);
-  const db = new DatabaseSync(dbPath, { readOnly: true });
-  const pool = options.pool || createPostgresPool({ applicationName: `football-projection-${mode}` });
+  let pool;
   const ownsPool = !options.pool;
-  let sqliteTransaction = false;
   try {
-    const required = ["schema_meta", "source_snapshots", "match_snapshots", "odds_snapshots", "prediction_snapshots"];
-    for (const table of required) {
-      if (!tableExists(db, table)) throw new Error(`SQLite source table missing: ${table}`);
-    }
-    db.exec("BEGIN");
-    sqliteTransaction = true;
-    const meta = readMeta(db);
-    const publication = publicationFromMeta(meta);
+    const { meta, publication, fingerprint } = source;
     assertPublicationIdentity(publication);
-    const fingerprint = sourceFingerprint(dbPath, stat, publication, meta);
+    if (stableStringify(publicationFromMeta(meta)) !== stableStringify(publication))
+      throw new Error("projection source metadata and publication identity disagree");
+    source.assertUnchanged();
+    pool = options.pool || createPostgresPool({ applicationName: `football-projection-${mode}` });
     const arena = loadAiArena(aiArenaPath);
     await runPostgresMigrations(pool);
 
@@ -1365,6 +1393,7 @@ const syncPostgresProjectionFromSqlite = async (options = {}) => {
         LIMIT 1
       `);
       if (existing.rows[0]?.source_fingerprint === fingerprint && mode !== "backfill" && options.force !== true) {
+        source.assertUnchanged();
         return {
           ok: true,
           skipped: true,
@@ -1401,7 +1430,7 @@ const syncPostgresProjectionFromSqlite = async (options = {}) => {
 
       const matches = await syncTable({
         table: "match_snapshots",
-        iterator: iterateMatchSnapshotRows(db),
+        iterator: source.tableRows("match_snapshots"),
         mapper: toMatchRow,
         columns: ["id", "dataset", "match_id", "source_match_id", "kickoff_time", "status", "payload"],
         conflict: snapshotUpsertConflict("match_snapshots"),
@@ -1424,15 +1453,11 @@ const syncPostgresProjectionFromSqlite = async (options = {}) => {
         // The current public-reference archive can change through retention
         // or a binding correction while all recordedAt clocks remain old.
         // Project the document and its PK lookup shards outside that window.
-        const sourceSql = full
-          ? "SELECT id, source, captured_at, payload FROM source_snapshots ORDER BY id"
-          : "SELECT id, source, captured_at, payload FROM source_snapshots WHERE captured_at >= ? OR id = 'public-reference-decisions:current' OR source = 'sporttery:public-reference-index' ORDER BY id";
-        const sourceStatement = db.prepare(sourceSql);
         const sourceRows = await streamIteratorInsert({
           client,
           table: "source_snapshots",
           columns: ["id", "source", "captured_at", "payload"],
-          iterator: full ? sourceStatement.iterate() : sourceStatement.iterate(incrementalCutoff),
+          iterator: source.tableRows("source_snapshots", { full, cutoff: incrementalCutoff }),
           mapper: toSourceRow,
           jsonColumns: ["payload"],
           conflict: snapshotUpsertConflict("source_snapshots"),
@@ -1442,11 +1467,9 @@ const syncPostgresProjectionFromSqlite = async (options = {}) => {
         await pruneWithActiveIds(
           client,
           "source_snapshots",
-          full ? sourceRows.activeIds : activeIdsFromTable(db, "source_snapshots"),
+          full ? sourceRows.activeIds : source.activeIds("source_snapshots"),
         );
 
-        const oddsWhere = full ? "" : "WHERE COALESCE(last_seen_at, captured_at) >= ?";
-        const oddsStatement = db.prepare(`SELECT * FROM odds_snapshots ${oddsWhere} ORDER BY id`);
         const oddsRows = await streamIteratorInsert({
           client,
           table: "odds_snapshots",
@@ -1454,7 +1477,7 @@ const syncPostgresProjectionFromSqlite = async (options = {}) => {
             "id", "state_key", "match_id", "source_match_id", "pool", "bookmaker", "handicap_line",
             "captured_at", "first_seen_at", "last_seen_at", "seen_count", "payload",
           ],
-          iterator: full ? oddsStatement.iterate() : oddsStatement.iterate(incrementalCutoff),
+          iterator: source.tableRows("odds_snapshots", { full, cutoff: incrementalCutoff }),
           mapper: toOddsRow,
           jsonColumns: ["payload"],
           conflict: snapshotUpsertConflict("odds_snapshots"),
@@ -1464,11 +1487,9 @@ const syncPostgresProjectionFromSqlite = async (options = {}) => {
         await pruneWithActiveIds(
           client,
           "odds_snapshots",
-          full ? oddsRows.activeIds : activeIdsFromTable(db, "odds_snapshots"),
+          full ? oddsRows.activeIds : source.activeIds("odds_snapshots"),
         );
 
-        const predictionWhere = full ? "" : "WHERE COALESCE(last_seen_at, captured_at) >= ?";
-        const predictionStatement = db.prepare(`SELECT * FROM prediction_snapshots ${predictionWhere} ORDER BY id`);
         const predictionRows = await streamIteratorInsert({
           client,
           table: "prediction_snapshots",
@@ -1476,7 +1497,7 @@ const syncPostgresProjectionFromSqlite = async (options = {}) => {
             "id", "state_key", "match_id", "source_match_id", "phase", "captured_at",
             "first_seen_at", "last_seen_at", "seen_count", "payload",
           ],
-          iterator: full ? predictionStatement.iterate() : predictionStatement.iterate(incrementalCutoff),
+          iterator: source.tableRows("prediction_snapshots", { full, cutoff: incrementalCutoff }),
           mapper: toPredictionRow,
           jsonColumns: ["payload"],
           conflict: snapshotUpsertConflict("prediction_snapshots"),
@@ -1486,10 +1507,10 @@ const syncPostgresProjectionFromSqlite = async (options = {}) => {
         await pruneWithActiveIds(
           client,
           "prediction_snapshots",
-          full ? predictionRows.activeIds : activeIdsFromTable(db, "prediction_snapshots"),
+          full ? predictionRows.activeIds : source.activeIds("prediction_snapshots"),
         );
 
-        if (tableExists(db, "private_model_artifacts")) {
+        if (privateArtifactStorage() !== "postgres" && source.hasPrivateAudit()) {
           const artifactRows = await streamIteratorInsert({
             client,
             table: "private_model_artifacts",
@@ -1497,11 +1518,7 @@ const syncPostgresProjectionFromSqlite = async (options = {}) => {
               "artifact_key", "artifact_version", "generated_at", "updated_at",
               "payload", "payload_sha256", "payload_bytes",
             ],
-            iterator: db.prepare(`
-            SELECT artifact_key, artifact_version, generated_at, updated_at,
-                   payload_json, payload_sha256, payload_bytes
-            FROM private_model_artifacts ORDER BY artifact_key
-          `).iterate(),
+            iterator: source.tableRows("private_model_artifacts"),
             mapper: (row) => ({
             artifact_key: row.artifact_key,
             artifact_version: row.artifact_version,
@@ -1547,12 +1564,14 @@ const syncPostgresProjectionFromSqlite = async (options = {}) => {
         startedAt,
         durationMs,
         JSON.stringify({
-          sqliteBytes: stat.size,
+          sourceKind: source.kind,
+          sqliteBytes: source.kind === "sqlite" ? source.bytes : 0,
           exportedAt: meta.exported_at?.value || null,
           aiArenaVersion: arena?.version || null,
           aiArenaGeneratedAt: arena?.generatedAt || null,
         }),
       ]);
+      source.assertUnchanged();
       return {
         ok: true,
         skipped: false,
@@ -1567,19 +1586,12 @@ const syncPostgresProjectionFromSqlite = async (options = {}) => {
         durationMs,
       };
     }, { isolationLevel: "SERIALIZABLE" });
-    db.exec("COMMIT");
-    sqliteTransaction = false;
     return result;
-  } catch (error) {
-    if (sqliteTransaction) {
-      try { db.exec("ROLLBACK"); } catch { /* preserve sync failure */ }
-    }
-    throw error;
   } finally {
-    db.close();
-    if (ownsPool) await pool.end();
+    try { source.close(); } finally { if (ownsPool && pool) await pool.end(); }
   }
 };
+const syncPostgresProjectionFromSqlite = options => syncPostgresProjectionFromSource(createSqliteProjectionSource(options), options);
 
 module.exports = {
   archiveParityCorrection,
@@ -1596,5 +1608,7 @@ module.exports = {
   resultOnlyReviewIdentity,
   reviewFromMatch,
   syncPostgresProjectionFromSqlite,
+  syncPostgresProjectionFromSource,
+  createSqliteProjectionSource,
   upsertResultOnlyReviews,
 };

@@ -30,8 +30,9 @@ const {
 } = require("./collectorAttestationTestFixture.cjs");
 const {
   HHAD_COMPANION_AUDIT_KEY,
+  privateArtifactStorage,
   readPrivateModelArtifact,
-} = require("./privateModelArtifactStore.cjs");
+} = require("./runtimePrivateModelArtifactStore.cjs");
 const {
   WALK_FORWARD_PROTOCOL_VERSION,
   buildWalkForwardValidation,
@@ -793,7 +794,7 @@ const syntheticPromotionReadyEvaluation = () => {
 
 const cloneJson = (value) => JSON.parse(JSON.stringify(value));
 
-const run = () => {
+const run = async () => {
   const checks = [];
   const previousStableStrategy = {
     version: "strategy-idempotency-test-v1",
@@ -1438,8 +1439,9 @@ const run = () => {
   let privateAuditRecord = null;
   let privateAuditError = null;
   try {
-    privateAuditRecord = readPrivateModelArtifact({
-      dbPath: sqliteDbPath,
+    privateAuditRecord = await readPrivateModelArtifact({
+      dbPath: privateArtifactStorage() === "sqlite" ? sqliteDbPath : null,
+      storage: privateArtifactStorage(),
       artifactKey: HHAD_COMPANION_AUDIT_KEY,
     });
   } catch (error) {
@@ -1507,7 +1509,8 @@ const run = () => {
       && privateAuditRecord.integrity?.sizeVerified === true
       && /^[0-9a-f]{64}$/.test(privateAuditRecord.payloadSha256 || "")
       && Number(privateAuditRecord.payloadBytes) > 0, {
-      dbPath: sqliteDbPath,
+      storage: privateArtifactStorage(),
+      dbPath: privateArtifactStorage() === "sqlite" ? sqliteDbPath : null,
       artifactKey: privateAuditRecord?.artifactKey || null,
       artifactVersion: privateAuditRecord?.artifactVersion || null,
       payloadBytes: privateAuditRecord?.payloadBytes ?? null,
@@ -1727,4 +1730,4 @@ const run = () => {
   if (!ok) process.exitCode = 1;
 };
 
-run();
+run().catch(error => { console.error(error.message); process.exitCode = 1; });

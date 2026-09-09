@@ -209,6 +209,8 @@ const run = () => {
   const syncData = readText(syncDataPath);
   const oddsHistoryStore = readText(oddsHistoryStorePath);
   const privateModelArtifactStore = readText(privateModelArtifactStorePath);
+  const runtimePrivateModelArtifactStore = readText(path.join(rootDir, "scripts/runtimePrivateModelArtifactStore.cjs"));
+  const postgresPrivateModelArtifactStore = readText(path.join(rootDir, "scripts/postgresPrivateModelArtifactStore.cjs"));
   const runModelBacktest = readText(runModelBacktestPath);
   const verifyModelPromotionGate = readText(verifyModelPromotionGatePath);
   const packageJson = parseJsonFile(packageJsonPath) || { scripts: {} };
@@ -1743,11 +1745,15 @@ const run = () => {
     && privateModelArtifactStore.includes("INSERT INTO ${PRIVATE_MODEL_ARTIFACT_TABLE}")
     && privateModelArtifactStore.includes("readPrivateModelArtifact")
     && privateModelArtifactStore.includes("writePrivateModelArtifact")
-    && runModelBacktest.includes("privateModelArtifactStore.cjs")
+    && runModelBacktest.includes("runtimePrivateModelArtifactStore.cjs")
+    && runtimePrivateModelArtifactStore.includes("privateModelArtifactStore.cjs")
+    && runtimePrivateModelArtifactStore.includes("postgresPrivateModelArtifactStore.cjs")
+    && runtimePrivateModelArtifactStore.includes("invalid PRIVATE_MODEL_ARTIFACT_STORAGE")
+    && postgresPrivateModelArtifactStore.includes("transactional roundtrip changed audit evidence")
     && runModelBacktest.includes("writePrivateModelArtifact")
     && runModelBacktest.includes("removeLegacyPrivateAuditFile")
     && runModelBacktest.includes("outputFiles: [serverOutputFile, publicOutputFile, shadowCandidatesOutputFile]")
-    && verifyModelPromotionGate.includes("privateModelArtifactStore.cjs")
+    && verifyModelPromotionGate.includes("runtimePrivateModelArtifactStore.cjs")
     && verifyModelPromotionGate.includes("readPrivateModelArtifact")
     && verifyModelPromotionGate.includes("legacy HHAD private audit file has been removed")
     && !serverIndex.includes("private_model_artifacts");

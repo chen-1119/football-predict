@@ -23,8 +23,9 @@ const {
 } = require("../src/services/hhadCompanionShadowEvaluation.cjs");
 const {
   HHAD_COMPANION_AUDIT_KEY,
+  privateArtifactStorage,
   writePrivateModelArtifact,
-} = require("./privateModelArtifactStore.cjs");
+} = require("./runtimePrivateModelArtifactStore.cjs");
 const {
   buildWalkForwardValidation,
 } = require("./walkForwardValidation.cjs");
@@ -110,6 +111,10 @@ const candidateProspectiveRegistryLockTimeoutMs = Number.isFinite(
   ? Math.max(0, configuredCandidateProspectiveRegistryLockTimeoutMs)
   : DEFAULT_REGISTRY_LOCK_TIMEOUT_MS;
 const sqliteDbPath = path.resolve(process.env.DATASTORE_SQLITE_PATH || path.join(serverDataDir, "football.db"));
+const privateArtifactStorageMode = privateArtifactStorage();
+if (isolatedOutput && privateArtifactStorageMode === "postgres") {
+  throw new Error("isolated backtests must not write the configured runtime PostgreSQL audit");
+}
 const privateArtifactDbPath = path.resolve(
   process.env.MODEL_BACKTEST_PRIVATE_ARTIFACT_DB_PATH
     || (isolatedOutput ? `${isolatedOutputStem}.private.sqlite` : sqliteDbPath),
@@ -4379,8 +4384,10 @@ const privateHhadCompanionAudit = {
   finalExposureRows: hhadCompanionFinalExposureRows,
   settlementRows: hhadCompanionSettlementRows,
 };
-ensureIsolatedPrivateArtifactDb();
-const privateAuditWrite = writePrivateModelArtifact({
+async function persistModelOutputs() {
+if (privateArtifactStorageMode === "sqlite") ensureIsolatedPrivateArtifactDb();
+const privateAuditWrite = await writePrivateModelArtifact({
+  storage: privateArtifactStorageMode,
   dbPath: privateArtifactDbPath,
   artifactKey: HHAD_COMPANION_AUDIT_KEY,
   artifactVersion: privateHhadCompanionAudit.version,
@@ -4397,8 +4404,8 @@ console.log(JSON.stringify({
   ok: true,
   outputFiles: [serverOutputFile, publicOutputFile, shadowCandidatesOutputFile],
   privateArtifact: {
-    storage: "sqlite",
-    dbPath: privateAuditWrite.dbPath,
+    storage: privateArtifactStorageMode,
+    dbPath: privateAuditWrite.dbPath || null,
     table: "private_model_artifacts",
     artifactKey: privateAuditWrite.artifactKey,
     artifactVersion: privateAuditWrite.artifactVersion,
@@ -4483,3 +4490,5 @@ console.log(JSON.stringify({
     shadowRecommendationBucketCount: riskTiers.shadowRecommendationBuckets.length
   }
 }, null, 2));
+}
+persistModelOutputs().catch(error => { console.error(error.message); process.exitCode = 1; });
