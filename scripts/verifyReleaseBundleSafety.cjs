@@ -328,6 +328,8 @@ const requiredReleaseEntries = [
   "scripts/releaseReadinessPolicy.cjs",
   "scripts/releaseModelWorkPolicy.cjs",
   "scripts/verifyReleaseSpeedFix.cjs",
+  "scripts/releasePrivateModelSeed.cjs",
+  "scripts/verifyReleasePrivateModelSeed.cjs",
   "scripts/verifyReleaseReadinessEarlyExit.cjs",
   "scripts/verifyStaticVerificationReceipts.cjs",
   "scripts/rootStaticVerificationAttestations.cjs",

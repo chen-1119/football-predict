@@ -2042,6 +2042,11 @@ seed_candidate_model_artifacts() {
     [ "$copy_status" -eq 0 ] || return 1
     cmp -s -- "$source" "$target" || return 1
   done
+  # JSON alone is not the complete model artifact. Seed the exact private audit
+  # into the fresh candidate DB before export; invalid/missing evidence keeps
+  # recomputation mandatory. The live SQLite connection is read-only.
+  "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releasePrivateModelSeed.cjs" \
+    "$LIVE_STORE_DIR" "$CANDIDATE_STORE_DIR" || return 1
 }
 
 run_candidate_model_artifact_catchup() {
