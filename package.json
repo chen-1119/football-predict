@@ -4,6 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "verify:release-speed": "node scripts/verifyReleaseSpeedFix.cjs",
+    "verify:release-early-exit": "node scripts/verifyReleaseReadinessEarlyExit.cjs",
+    "verify:release-sequence": "node scripts/releaseSequencePreflight.cjs",
     "verify:historical-content-observation": "node scripts/verifyHistoricalContentObservation.cjs",
     "research:fixed-abc": "node scripts/runFixedAbcResearch.cjs",
     "research:form-recency-shadow": "node scripts/runFormRecencyShadow.cjs",

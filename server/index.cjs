@@ -4846,12 +4846,11 @@ const compactPreMatchQualityForList = (quality) => {
       : [],
     components: quality.components && typeof quality.components === "object"
       ? Object.fromEntries(Object.entries(quality.components).map(([key, item]) => [key, {
-          key: item?.key || key,
-          label: item?.label,
+          label: item?.status === "missing" ? item?.label : undefined,
           status: item?.status,
           score: item?.score,
           source: item?.source,
-          note: item?.note,
+          note: key === "lineup" ? item?.note : undefined,
           evidenceType: item?.evidenceType,
           availabilityState: item?.availabilityState,
           eligibleAtCutoff: item?.eligibleAtCutoff,
@@ -5025,7 +5024,10 @@ const compactPredictionMetaForList = (meta, match) => {
     immutableAnalysisReferenceDecision: compactVerifiedImmutableAnalysisReference(match),
     publicReferenceDecision: require("../src/services/publicReferenceDecision.cjs")
       .attestPublicReferenceDecision(meta.publicReferenceDecision, match),
-    decisionDataGaps: meta.decisionDataGaps || meta.featureSnapshot?.modelInputs?.dataGaps || null,
+    // Frozen public records already carry their bound gaps. Never duplicate
+    // them with mutable fallback evidence in the list payload.
+    decisionDataGaps: meta.publicReferenceDecision
+      ? undefined : meta.decisionDataGaps || meta.featureSnapshot?.modelInputs?.dataGaps || null,
   };
 };
 

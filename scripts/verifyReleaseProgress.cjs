@@ -74,6 +74,18 @@ function verifyReleaseProgress() {
     const report = evaluate({ ...baseline, logTail: "[production-readiness] child-end scripts/verifyApi.cjs status=0 elapsedMs=12\n[football-bundle-release] wait for this release worker cycle to finish slow enrichment and enter readiness-safe idle\n" });
     assert.equal(report.phase, "enrichment-wait");
   });
+  check("build and refresh expose real substep timing including failures without leaking log payloads", () => {
+    const start = evaluate({ ...baseline, logTail: "[football-bundle-release] step-start kind=build label=model-backtest\n" });
+    assert.deepEqual(start.lastBuildStep, { event: "start", kind: "build", name: "model-backtest", status: null, elapsedSeconds: null });
+    assert.equal(start.phase, "candidate-build");
+    const end = evaluate({ ...baseline, logTail: "[football-bundle-release] step-end kind=refresh label=candidate-generation-refresh status=1 elapsedSeconds=142\n" });
+    assert.deepEqual(end.lastBuildStep, { event: "end", kind: "refresh", name: "candidate-generation-refresh", status: 1, elapsedSeconds: 142 });
+    assert.equal(end.transactionComplete, false);
+    assert.equal(end.phase, "candidate-refresh");
+    const bad = evaluate({ ...baseline, logTail: "[football-bundle-release] step-end kind=build label=model-backtest status=0 elapsedSeconds=10 token=secret\n" });
+    assert.equal(Object.hasOwn(bad, "lastBuildStep"), false);
+    assert.equal(JSON.stringify(bad).includes("secret"), false);
+  });
   check("invalid SHA cannot form a remote filesystem path", () => {
     for (const invalid of ["../status", "A".repeat(64), sha + ";id", ""]) assert.throws(() => buildReadOnlyProgressProbe(invalid));
   });

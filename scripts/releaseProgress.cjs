@@ -44,7 +44,14 @@ function evaluateReleaseProgress(observation) {
     ["activated CAS-verified prebuilt live SQLite", "sqlite-activated"],
   ];
   let phase = null, lastCheck = null, lastDatabaseStage = null;
+  let lastBuildStep = null;
   for (const line of String(observation.logTail || "").split(/\r?\n/)) {
+    const build = /^\[football-bundle-release\] step-(start|end) kind=(build|refresh) label=([a-z][a-z0-9-]{0,79})(?: status=(-?\d+) elapsedSeconds=(\d+))?$/.exec(line);
+    if (build) {
+      lastBuildStep = { event: build[1], kind: build[2], name: build[3], status: build[4] === undefined ? null : Number(build[4]),
+        elapsedSeconds: build[5] === undefined ? null : Number(build[5]) };
+      phase = build[2] === "build" ? "candidate-build" : "candidate-refresh";
+    }
     const child = /^\[production-readiness\] child-(start|end|timeout) scripts\/([A-Za-z0-9_-]+\.cjs)(?:\s|$)/.exec(line);
     if (child) {
       lastCheck = { name: child[2], event: child[1], elapsedMs: null, status: null };
@@ -68,7 +75,7 @@ function evaluateReleaseProgress(observation) {
     version: "release-progress-observation-v1", observationOk: true, checkedAt, sha, state,
     runningConfirmed, transactionComplete,
     elapsedSeconds: Number.isFinite(start) && start <= now ? Math.floor(((clocksValid ? end : now) - start) / 1000) : null,
-    phase, lastCheck, lastDatabaseStage, logBytesRead: observation.logBytesRead, logTotalBytes: observation.logTotalBytes,
+    phase, lastCheck, lastDatabaseStage, ...(lastBuildStep ? { lastBuildStep } : {}), logBytesRead: observation.logBytesRead, logTotalBytes: observation.logTotalBytes,
     statusStable, processes, markers, recoveryPending, services: observation.services,
     ...(isFrontendOnly ? { releaseKind: "frontend-only", frontendRelease: frontend || null } : {}),
     productionWrites: 0, sourceValidationExecuted: false, liveAcceptanceProven: transactionComplete && frontendAccepted,

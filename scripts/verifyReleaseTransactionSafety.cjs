@@ -814,12 +814,11 @@ check("signed bundle release wires recovery into pre-swap failure and successful
 
 check("signed wrapper burns the accepted sequence before guarded release execution", () => {
   const burn = 'consume_release_sequence_before_execution "$MANIFEST_SEQUENCE"';
-  assert.equal(countLiteral(releaseWrapper, burn), 1, "sequence must be burned exactly once");
+  const { full } = require("./releaseSequencePreflight.cjs").validateSequenceBranches(releaseWrapper);
   const consumeBody = extractFunction(releaseWrapper, "consume_release_sequence_before_execution");
   assert.match(consumeBody, /HIGHEST_SEQUENCE_FILE/);
   assert.match(consumeBody, /mv -fT/);
-  assertOrdered(releaseWrapper, [
-    'readonly MANIFEST_SEQUENCE="$manifest_sequence"',
+  assertOrdered(full, [
     burn,
     "env -i \\",
     'bash "$RELEASE_SCRIPT_PATH" "$TRUSTED_SOURCE_DIR"',
@@ -4345,13 +4344,24 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
     ], "candidate strategy, archive reconciliation, publication pair, and deadline audit");
     assert.match(catchupBody, /SERVER_STORE_DIR="\$store_dir"/);
     assert.match(catchupBody, /DATASTORE_SQLITE_PATH="\$sqlite_path"/);
-    if (process.platform === "linux" && fs.existsSync("/bin/bash")) {
+    const modelBranchBash = process.env.VERIFY_BASH_EXECUTABLE || process.env.RELEASE_TEST_BASH || (process.platform === "linux" ? "/bin/bash" : "");
+    if (modelBranchBash) for (const modelMode of ["recompute", "preserve"]) {
       const harness = `
 set -euo pipefail
 PATH=/usr/bin:/bin
 BUILD_HOME=/build-home
 BUILD_DIR=/candidate-build
 NODE_HOME=/node
+TRUSTED_SOURCE_DIR=/trusted-fixture
+APP_DIR=/live-fixture
+log() { :; }
+# Only classification I/O is doubled. The real signed catchup function and
+# its branch dispatch execute unmodified; no production file is accessed.
+function /node/bin/node() {
+  [ "$1" = /trusted-fixture/scripts/releaseModelWorkPolicy.cjs ] || return 91
+  [ "$2" = /live-fixture ] && [ "$3" = /trusted-fixture ] && [ "$4" = /candidate-store ] || return 92
+  printf '${modelMode}\\n'
+}
 BUNDLE_SHA256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 RELEASE_SEQUENCE=1
 current_state=preserved
@@ -4389,24 +4399,25 @@ run_candidate_model_artifact_catchup() {
 ${catchupBody}
 }
 run_candidate_model_artifact_catchup /candidate-store /candidate-store/football.db
-[ "$current_state" = "archived" ]
-[ "$generation_state" = "archived" ]
+[ "$current_state" = "${modelMode === "recompute" ? "archived" : "preserved"}" ]
+[ "$generation_state" = "${modelMode === "recompute" ? "archived" : ""}" ]
 [ "$sqlite_generation_state" = "$generation_state" ]
 `;
-      const result = spawnSync("/bin/bash", ["-s"], {
+      const result = spawnSync(modelBranchBash, ["--noprofile", "--norc", "-s"], {
         input: harness,
         encoding: "utf8",
         timeout: 20_000,
+        windowsHide: true,
       });
       assert.equal(result.status, 0, result.stderr || result.stdout);
       assert.deepEqual(result.stdout.trim().split(/\r?\n/u), [
         "step=candidate-revision-baseline",
-        "step=model-backtest",
+        ...(modelMode === "recompute" ? ["step=model-backtest",
         "step=optimize-strategy",
         "step=model-mirrors",
         "step=archive-migration-reconciled",
         "step=candidate-generation-reconciled",
-        "step=candidate-datastore-reconciled",
+        "step=candidate-datastore-reconciled"] : []),
         "step=candidate-deadline-capture",
         "step=candidate-revision-verification",
       ]);

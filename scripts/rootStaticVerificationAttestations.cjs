@@ -78,6 +78,7 @@ function buildIdentity(rootDir, args, releaseSha, env) {
   if (!inputs) return null;
   return { version: VERSION, releaseSha, inputs, runtime: runtimeIdentity(),
     attestorPolicySha256: digest(fs.readFileSync(__filename)),
+    cachePolicySha256: digest(fs.readFileSync(path.join(__dirname, "rootStaticResultCache.cjs"))),
     issuerPolicySha256: digest(fs.readFileSync(path.join(__dirname, "createRootStaticVerificationAttestations.cjs"))) };
 }
 

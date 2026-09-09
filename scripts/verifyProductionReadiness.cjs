@@ -5,6 +5,8 @@ const http = require("node:http");
 const https = require("node:https");
 const path = require("node:path");
 const { runWithStaticReceipt } = require("./staticVerificationReceipts.cjs");
+const { recordCheck, probeCurrentList } = require("./releaseReadinessPolicy.cjs");
+const diagnosticAll = process.env.VERIFY_DIAGNOSTIC_ALL === "1";
 const {
   publicHhadCompanionSchemaValid,
   findHhadCompanionSensitiveKeyLeaks,
@@ -57,11 +59,14 @@ const childTimeoutMs = Math.min(
 let child = null;
 let childLogs = "";
 let childExit = null;
+const temporaryAccessCodes = new Set();
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const request = (method, pathname, body = null, headers = {}) => {
   const target = new URL(pathname, baseUrl);
+  // Fail-fast must not strand a permanent verifier credential on the service.
+  if (method === "POST" && target.pathname === "/api/admin/access-codes") body = { ...body, ttlSeconds: 900 };
   const payload = body ? JSON.stringify(body) : "";
   const transport = target.protocol === "https:" ? https : http;
   const cleanHeaders = Object.fromEntries(
@@ -91,6 +96,11 @@ const request = (method, pathname, body = null, headers = {}) => {
         } catch {
           json = null;
         }
+        if (method === "POST" && target.pathname === "/api/admin/access-codes" && typeof json?.id === "string") temporaryAccessCodes.add(json.id);
+        if (method === "POST" && target.pathname.endsWith("/revoke") && json?.ok === true && json?.row?.status === "revoked") {
+          const id = target.pathname.split("/").at(-2);
+          temporaryAccessCodes.delete(decodeURIComponent(id));
+        }
         resolve({
           status: res.statusCode,
           headers: res.headers,
@@ -109,7 +119,17 @@ const request = (method, pathname, body = null, headers = {}) => {
 };
 
 const pushCheck = (checks, name, ok, details = {}) => {
-  checks.push({ name, ...details, ok: Boolean(ok) });
+  recordCheck(checks, name, ok, details, diagnosticAll);
+};
+
+const cleanupTemporaryAccessCodes = async () => {
+  for (const id of [...temporaryAccessCodes]) {
+    const response = await request("POST", `/api/admin/access-codes/${encodeURIComponent(id)}/revoke`, null,
+      { authorization: `Bearer ${accessCodeAdminToken}` });
+    if (response.status !== 200 || response.body?.ok !== true || response.body?.row?.status !== "revoked") {
+      throw new Error("readiness temporary credential revocation failed; bounded expiry remains in force");
+    }
+  }
 };
 
 const sampleRelayEndpoint = ({ method, page = null, cycleId, observedMs, rows = 1 }) => {
@@ -569,6 +589,12 @@ const runAccessCodeRevocationChecks = async (checks) => {
 
 const run = async () => {
   const checks = [];
+  require("./releaseSequencePreflight.cjs").validateSequenceBranches(
+    fs.readFileSync(path.join(rootDir, "deploy/light-server/football-release"), "utf8")
+  );
+  // The guarded candidate already has its own listener: reject a broken
+  // customer payload before starting the expensive isolated fixture chain.
+  if (!startServer) checks.push(...(await probeCurrentList({ request, adminToken: accessCodeAdminToken })).checks);
   const postgresMigrationPlan = await runLocalJson(["scripts/verifyPostgresMigrationPlan.cjs"]);
   pushCheck(
     checks,
@@ -680,6 +706,7 @@ const run = async () => {
   const localServerOwnership = startServer ? await startLocalServer() : null;
 
   try {
+    if (startServer) checks.push(...(await probeCurrentList({ request, adminToken: accessCodeAdminToken })).checks);
     if (startServer) {
       pushCheck(checks, "local verification listener owned by child", localServerOwnership?.listenerOwned === true, {
         pid: localServerOwnership?.pid || null,
@@ -3108,12 +3135,15 @@ const run = async () => {
     console.log(JSON.stringify(payload, null, 2));
     if (!ok) process.exitCode = 1;
   } finally {
+    await cleanupTemporaryAccessCodes();
     stopLocalServer();
   }
 };
 
-run().catch((error) => {
+run().catch(async (error) => {
+  try { await cleanupTemporaryAccessCodes(); } catch { console.error("readiness credential cleanup incomplete; credentials expire after 900 seconds"); }
   stopLocalServer();
+  if (error.readinessReport) console.log(JSON.stringify(error.readinessReport, null, 2));
   console.error(error.stack || String(error));
   if (childExit || childLogs) {
     console.error(JSON.stringify({

@@ -18,6 +18,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { spawnSync } = require("node:child_process");
+require("./releaseSequencePreflight.cjs").validateSequenceBranches(
+  fs.readFileSync(path.join(__dirname, "../deploy/light-server/football-release"), "utf8")
+);
 const { listReleaseRootEntries } = require("./releaseWorkspaceFreshness.cjs");
 process.umask(0o077);
 const {
@@ -609,6 +612,12 @@ const requiredEntries = [
   "scripts/checkReleaseProgress.cjs",
   "scripts/verifyReleaseProgress.cjs",
   "scripts/staticVerificationReceipts.cjs",
+  "scripts/rootStaticResultCache.cjs",
+  "scripts/releaseSequencePreflight.cjs",
+  "scripts/releaseReadinessPolicy.cjs",
+  "scripts/releaseModelWorkPolicy.cjs",
+  "scripts/verifyReleaseSpeedFix.cjs",
+  "scripts/verifyReleaseReadinessEarlyExit.cjs",
   "scripts/rootStaticVerificationAttestations.cjs",
   "scripts/createRootStaticVerificationAttestations.cjs",
   "scripts/verifyRootStaticVerificationAttestations.cjs",

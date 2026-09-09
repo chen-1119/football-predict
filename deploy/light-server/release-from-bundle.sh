@@ -288,7 +288,8 @@ transient_build_properties() {
 run_build_step() {
   local label="$1"
   shift
-  local unit rc
+  local unit rc started_seconds="$SECONDS"
+  log "step-start kind=build label=${label}"
   local memory_high="900M"
   local memory_max="1200M"
   local memory_swap_max="256M"
@@ -358,14 +359,16 @@ run_build_step() {
     -- /usr/bin/env NODE_OPTIONS=--max-old-space-size="$node_heap_mib" "$@"
   rc="$?"
   set -e
-  assert_transient_unit_cleared "$unit" || return 1
+  assert_transient_unit_cleared "$unit" || rc=1
+  log "step-end kind=build label=${label} status=${rc} elapsedSeconds=$((SECONDS - started_seconds))"
   return "$rc"
 }
 
 run_candidate_refresh_step() {
   local label="$1"
   shift
-  local unit rc
+  local unit rc started_seconds="$SECONDS"
+  log "step-start kind=refresh label=${label}"
   local memory_high="900M"
   local memory_max="1200M"
   local memory_swap_max="256M"
@@ -416,7 +419,8 @@ run_candidate_refresh_step() {
     -- /usr/bin/env NODE_OPTIONS=--max-old-space-size="$node_heap_mib" "$@"
   rc="$?"
   set -e
-  assert_transient_unit_cleared "$unit" || return 1
+  assert_transient_unit_cleared "$unit" || rc=1
+  log "step-end kind=refresh label=${label} status=${rc} elapsedSeconds=$((SECONDS - started_seconds))"
   return "$rc"
 }
 
@@ -2043,6 +2047,11 @@ seed_candidate_model_artifacts() {
 run_candidate_model_artifact_catchup() {
   local store_dir="$1"
   local sqlite_path="$2"
+  local model_work="recompute"
+  model_work="$("$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseModelWorkPolicy.cjs" \
+    "$APP_DIR" "$TRUSTED_SOURCE_DIR" "$store_dir")" || return 1
+  case "$model_work" in preserve|recompute) ;; *) return 1 ;; esac
+  log "model-work mode=${model_work}; unknown compatibility retains recomputation"
   # Exercise the exact signed revision transition on the isolated candidate
   # before spending the live stop/swap window. This rehearsal never replaces
   # the later baseline from the frozen live registry or its post-swap check.
@@ -2052,6 +2061,7 @@ run_candidate_model_artifact_catchup() {
     --revision-transition "$BUILD_DIR/deploy/light-server/candidate-revision-transition.json" \
     --output "$store_dir/candidate-release-continuity-candidate-before.json" \
     --bundle-sha256 "$BUNDLE_SHA256" --release-sequence "$RELEASE_SEQUENCE" || return 1
+  if [ "$model_work" = "recompute" ]; then
   run_build_step model-backtest env PATH="$PATH" HOME="${BUILD_HOME:-/nonexistent}" SERVER_STORE_DIR="$store_dir" \
     DATASTORE_SQLITE_PATH="$sqlite_path" \
     "$NODE_HOME/bin/npm" run model:backtest || return 1
@@ -2078,6 +2088,11 @@ run_candidate_model_artifact_catchup() {
   run_build_step candidate-datastore-reconciled env PATH="$PATH" HOME="${BUILD_HOME:-/nonexistent}" SERVER_STORE_DIR="$store_dir" \
     DATASTORE_SQLITE_PATH="$sqlite_path" \
     "$NODE_HOME/bin/npm" run datastore:sqlite || return 1
+  else
+    # Ordinary compatible releases do not refit or rewrite current decisions.
+    # Registry continuity, deadline capture and runtime gates below still run.
+    log "model-work preserved; backtest, optimization and their duplicate data export not executed"
+  fi
   # model:backtest can refreeze the candidate registry under a new revision.
   # Refresh the deadline heartbeat from that exact revision before candidate
   # API verification so a stale pre-release status can never be accepted.
@@ -7253,6 +7268,8 @@ if [ ! -d "$APP_DIR" ]; then
 fi
 
 log "trusted signed source accepted for ${BUNDLE_SHA256}"
+"$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseSequencePreflight.cjs" \
+  || { printf 'release sequence preflight failed before candidate construction\n' >&2; exit 1; }
 node "$TRUSTED_SOURCE_DIR/scripts/verifyDeploymentConfig.cjs" \
   || { printf 'trusted deployment configuration verification failed\n' >&2; exit 1; }
 log "probe current worker before host changes and candidate construction"

@@ -2,6 +2,7 @@
 const fs = require("node:fs"), crypto = require("node:crypto"), path = require("node:path"), { spawnSync } = require("node:child_process");
 const { PROFILES, hashValue, success } = require("./staticVerificationReceipts.cjs");
 const attest = require("./rootStaticVerificationAttestations.cjs");
+const { openRootResultCache } = require("./rootStaticResultCache.cjs");
 
 function unitArguments({ rootDir, command, unit, user }) {
   if (!Object.hasOwn(PROFILES, command) || user !== undefined || !/^football-static-check-[a-f0-9]{24}\.service$/.test(unit)
@@ -86,17 +87,25 @@ function create({ rootDir, releaseSha, commands = Object.keys(PROFILES), user })
     || commands.some(command => !Object.hasOwn(PROFILES, command))) throw new Error("audited-command-required");
   attest.protectedRootPath("/usr/bin/systemd-run");
   const env = attest.controlledEnvironment(), store = attest.createRootStore({ releaseSha }), checks = [];
+  const cache = openRootResultCache();
   try { for (const command of commands) {
     const identity = attest.buildIdentity(rootDir, [command], releaseSha, env);
     if (!identity) { checks.push({ command, eligible: false, reason: "source-requires-reaudit" }); continue; }
     for (const [file] of identity.inputs.files) if (file !== "receipt-policy") attest.protectedRootPath(path.join(rootDir, file));
-    const run = runIsolated({ rootDir, command });
+    const cached = cache?.read(identity);
+    const run = cached ? { result: cached.result, elapsedMs: cached.elapsedMs, checkedAt: cached.checkedAt,
+      unit: null, quiescent: true, error: null } : runIsolated({ rootDir, command });
     const ok = success(run.result, identity.inputs) && run.quiescent
       && hashValue(attest.buildIdentity(rootDir, [command], releaseSha, env)) === hashValue(identity);
-    checks.push({ command, eligible: true, ok, elapsedMs: run.elapsedMs, unit: run.unit,
+    checks.push({ command, eligible: true, ok, elapsedMs: cached ? 0 : run.elapsedMs,
+      executionReused: Boolean(cached), originalElapsedMs: run.elapsedMs,
+      reuseReason: cached ? "same-audited-source-runtime-and-root-receipt" : "no-valid-root-result-cache",
+      unit: run.unit,
       quiescent: run.quiescent, status: run.result.status, timedOut: run.result.timedOut, error: run.error });
     if (!ok) return { ok: false, verificationFailed: true, directory: store.directory, checks };
-    store.add({ identity, result: run.result, checkedAt: Date.now(), elapsedMs: run.elapsedMs });
+    const checkedAt = cached ? run.checkedAt : Date.now();
+    if (!cached) cache?.write(identity, run.result, run.elapsedMs, checkedAt);
+    store.add({ identity, result: run.result, checkedAt, elapsedMs: run.elapsedMs });
   }
   if (!checks.some(check => check.ok)) return { ok: false, verificationFailed: false, directory: store.directory, checks };
   return { ok: true, version: attest.VERSION, releaseSha, ...store.complete(), checks };
