@@ -100,6 +100,7 @@ check('fixed hypothesis lineage survives competing retrospective winners before 
   assert.equal(result.ok, true); assert.ok(result.checks >= 11);
 });
 const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/services/apiFootballDiagnostics.d.cts',
+  'scripts/verifyFrontendRuntimeAlternatives.cjs',
   'scripts/verifyResultTimelineSemanticClosure.cjs',
   'scripts/verifyCandidateTransitionDraft.cjs',
   'scripts/releaseWorkerPreflight.cjs', 'scripts/verifyReleaseWorkerPreflight.cjs',

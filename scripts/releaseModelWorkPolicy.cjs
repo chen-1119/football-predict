@@ -12,6 +12,10 @@ const RELEASE_ONLY = new Set([
   "scripts/verifyProductionReadiness.cjs", "scripts/staticVerificationReceipts.cjs",
   "scripts/rootStaticVerificationAttestations.cjs", "scripts/createRootStaticVerificationAttestations.cjs",
   "scripts/verifyCurrentListPayloadCompaction.cjs",
+  // Installed-runtime inspection and its release-only verifiers do not feed
+  // model features/training. Keep this exact allowlist, not a verify* wildcard.
+  "scripts/frontendInstalledRuntime.cjs", "scripts/verifyFrontendInstalledRuntime.cjs",
+  "scripts/verifyFrontendRuntimeAlternatives.cjs", "scripts/verifyReleaseVerifierContracts.cjs",
 ]);
 const UI_ONLY = new Set(FRONTEND_PATHS);
 const hash = bytes => crypto.createHash("sha256").update(bytes).digest("hex");

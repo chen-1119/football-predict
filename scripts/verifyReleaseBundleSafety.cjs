@@ -366,6 +366,7 @@ const requiredReleaseEntries = [
   "scripts/verifyFrontendBuildDependencies.cjs",
   "scripts/frontendInstalledRuntime.cjs",
   "scripts/verifyFrontendInstalledRuntime.cjs",
+  "scripts/verifyFrontendRuntimeAlternatives.cjs",
   "server/frontendReleaseIdentity.cjs",
   "scripts/verifyFrontendReleaseIdentity.cjs",
   "scripts/verifyFrontendReleaseConsumers.cjs",

@@ -86,6 +86,39 @@ exit "$release_status"
     put("candidate/src/styles/shell.css",".synthetic {}\n");assert.equal(classifyModelWork(options).mode,"preserve");
     assert.equal(classifyModelWork(options).modelPromotionAuthorized,false);
   });
+  await check("exact release-runtime tooling changes preserve models without rewriting artifacts",()=>{
+    const artifacts=["model-strategy.json","model-artifacts/evaluation.json","model-artifacts/candidate-prospective-registry.json"];
+    const before=artifacts.map(name=>fs.readFileSync(path.join(temp,"store",name),"utf8"));
+    for(const file of ["scripts/frontendInstalledRuntime.cjs","scripts/verifyFrontendInstalledRuntime.cjs",
+      "scripts/verifyFrontendRuntimeAlternatives.cjs","scripts/verifyReleaseVerifierContracts.cjs"]) {
+      put(`live/${file}`,"previous-release-tool");put(`candidate/${file}`,"updated-release-tool");
+      const result=classifyModelWork(options);
+      assert.equal(result.mode,"preserve",file);assert.equal(result.freshDataChecksRequired,true);
+      assert.equal(result.modelPromotionAuthorized,false);
+    }
+    assert.deepEqual(artifacts.map(name=>fs.readFileSync(path.join(temp,"store",name),"utf8")),before);
+    const unknown="candidate/scripts/verifyFrontendRuntimeAlternatives-extra.cjs";
+    put(unknown,"unreviewed source");assert.equal(classifyModelWork(options).mode,"recompute");
+    fs.unlinkSync(path.join(temp,unknown));
+  });
+  await check("Linux runtime verifier dependency is enforced by both real archive membership gates",()=>{
+    const entry="scripts/verifyFrontendRuntimeAlternatives.cjs", vm=require("node:vm");
+    const entries=source=>{
+      const match=/const required(?:Release)?Entries = (\[[\s\S]*?\n\]);/.exec(source);
+      const prebuilt=/const prebuiltDistBundleEntry = ("[^"\n]+");/.exec(source);
+      assert.ok(match&&prebuilt);
+      return vm.runInNewContext(match[1], {prebuiltDistBundleEntry:JSON.parse(prebuilt[1]),
+        HISTORICAL_TRAINING_RELEASE_ENTRY:require("./historicalTrainingReleaseArtifact.cjs").HISTORICAL_TRAINING_RELEASE_ENTRY}, {timeout:1000});
+    };
+    for(const file of ["scripts/createReleaseBundle.cjs","scripts/verifyReleaseBundleSafety.cjs"]) {
+      const source=fs.readFileSync(path.join(root,file),"utf8").replace(/\r\n?/g,"\n");
+      assert.equal(entries(source).filter(value=>value===entry).length,1);
+      assert.equal(entries(source.replace(`  "${entry}",\n`,"")).includes(entry),false);
+    }
+    assert.ok(fs.statSync(path.join(root,entry)).isFile());
+    assert.match(fs.readFileSync(path.join(root,"scripts/verifyFrontendInstalledRuntime.cjs"),"utf8"),
+      /require\("\.\/verifyFrontendRuntimeAlternatives.cjs"\)/);
+  });
   await check("model, unknown backend, dependency, added source and runtime changes require recomputation",()=>{
     for(const file of ["src/services/model.cjs","server/index.cjs","package-lock.json","package.json"]){
       put(`candidate/${file}`,"changed");assert.equal(classifyModelWork(options).mode,"recompute",file);put(`candidate/${file}`,"{}");}
