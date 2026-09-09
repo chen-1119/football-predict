@@ -156,14 +156,16 @@ stat() {
   builtin [ "$@"
 }
 readiness_arguments() {
-  local lane="$1" arg proof="missing" sha="missing" hmac="missing"
+  local lane="$1" arg proof="missing" sha="missing" hmac="missing" legacy="missing" mirror="missing"
   shift
   [[ "$1" == env ]] || return 97
   for arg in "$@"; do
     printf '%s\\t%s\\n' "$lane" "$arg" >> "$fixture/readiness-arguments"
     case "$arg" in VERIFY_STATIC_ATTESTATION_DIR=*) proof="\${arg#*=}";; VERIFY_STATIC_RELEASE_SHA=*) sha="\${arg#*=}";; VERIFY_STATIC_RECEIPT_DIR=*) hmac="\${arg#*=}";; esac
+    case "$arg" in WRITE_LEGACY_STATIC_PAYLOADS=*) legacy="\${arg#*=}";; MIRROR_PUBLISHED_DATA_TO_DIST=*) mirror="\${arg#*=}";; esac
   done
   [[ "$sha" == "$BUNDLE_SHA256" && "$proof" == "$RELEASE_STATIC_ATTESTATION_REUSE_DIR" && -z "$hmac" ]] || return 98
+  if [[ "$lane" == candidate ]]; then [[ "$legacy" == 0 && "$mirror" == 0 ]] || return 99; fi
   if [[ -n "$proof" ]]; then printf '%s:proof-reference\\n' "$lane"; else printf '%s:fresh-invocation\\n' "$lane"; fi >> "$fixture/readiness-events"
 }
 run_trusted_candidate_verifier() { readiness_arguments candidate "$@"; }
@@ -255,6 +257,16 @@ ${actionBody}
       for (const filename of ["deploy/light-server/env.example", "deploy/light-server/football-predict.service"]) {
         assert.doesNotMatch(fs.readFileSync(path.join(rootDir, filename), "utf8"), /VERIFY_STATIC_/);
       }
+    });
+    check("both isolated candidate starts and readiness use the production API-only data topology", () => {
+      const starts = main.match(/start_candidate_unit "\$NEXT_DIR" env (?:[^\n]*\\\n)*[^\n]*/g) || [];
+      assert.equal(starts.length, 2);
+      for (const invocation of [...starts, candidate]) {
+        assert.match(invocation, /WRITE_LEGACY_STATIC_PAYLOADS=0 MIRROR_PUBLISHED_DATA_TO_DIST=0/);
+      }
+      const runtime = extractFunction(source, "ensure_node_runtime_env");
+      assert.match(runtime, /"WRITE_LEGACY_STATIC_PAYLOADS" "0"/);
+      assert.match(runtime, /"MIRROR_PUBLISHED_DATA_TO_DIST" "0"/);
     });
     return { ok: true, verifier: "release-static-attestation-integration-v1", checks,
       shellFixtures: sequence, productionWrites: 0, providerRequests: 0,

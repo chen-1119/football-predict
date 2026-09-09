@@ -638,6 +638,7 @@ const run = async () => {
       && dataValidationScopes.body?.strictFinishedScoreCases === 46, {
       status: dataValidationScopes.status, checks: dataValidationScopes.body?.checks || 0,
       stdoutTail: dataValidationScopes.status === 0 ? "" : dataValidationScopes.stdout.slice(-500),
+      stderrHead: dataValidationScopes.status === 0 ? "" : dataValidationScopes.stderr.slice(0, 2000),
       stderrTail: dataValidationScopes.stderr.slice(-500),
     });
   const publicationIdentityCache = await runLocalJson(["scripts/verifySqlitePublicationIdentityCache.cjs"]);
