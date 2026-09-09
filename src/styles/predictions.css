@@ -118,7 +118,7 @@
 
 .predictions-v4__evidence-snapshot {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.38rem;
   margin: 0.5rem 0 0;
   padding: 0.5rem 0 0;
@@ -189,11 +189,19 @@
   font-size: 0.94rem;
 }
 
+.predictions-v4__snapshot-item.is-gaps {
+  grid-column: 1 / -1;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: baseline;
+  column-gap: 0.75rem;
+}
+
 .predictions-v4__snapshot-item.is-gaps dd {
   display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  font-weight: 600;
+  line-height: 1.55;
 }
 
 .predictions-v4 .worldcup-compact-entry {
@@ -986,6 +994,11 @@
   .predictions-v4__snapshot-item.is-tiers,
   .predictions-v4__snapshot-item.is-gaps {
     grid-column: 1 / -1;
+  }
+
+  .predictions-v4__snapshot-item.is-gaps {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.3rem;
   }
 
   .predictions-v4__header-meta {
