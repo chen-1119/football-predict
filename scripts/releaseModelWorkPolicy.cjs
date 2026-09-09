@@ -16,6 +16,7 @@ const RELEASE_ONLY = new Set([
   // model features/training. Keep this exact allowlist, not a verify* wildcard.
   "scripts/frontendInstalledRuntime.cjs", "scripts/verifyFrontendInstalledRuntime.cjs",
   "scripts/verifyFrontendRuntimeAlternatives.cjs", "scripts/verifyReleaseVerifierContracts.cjs",
+  "scripts/frontendReleaseInputs.cjs", "scripts/prepareFrontendRelease.cjs", "scripts/verifyFrontendReleaseInputs.cjs",
 ]);
 const UI_ONLY = new Set(FRONTEND_PATHS);
 const hash = bytes => crypto.createHash("sha256").update(bytes).digest("hex");
