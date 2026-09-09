@@ -69,10 +69,13 @@ function crashChild(args) {
   const context = { paths: p, uid: process.getuid(), boundary: root, fixture: true, assertFixtureLock() {},
     onStep: phase => { if (phase === failAt) process.kill(process.pid, "SIGKILL"); } };
   // This private VM test harness is not part of the production module API.
-  if (action === "begin") {
+  if (action === "begin" || action === "begin-next-ui") {
+    const next = action === "begin-next-ui";
     module.testOnly.begin(context, { expectedStateSha256: digest(fs.readFileSync(p.state)), expectedDistManifest: inspectPrebuiltDist(p.dist),
-      candidateIndex: artifact("<main>new UI</main>"), newAssets: [{ path: "assets/new-bbbbbbbb.js", ...artifact("new immutable module") }],
-      runtimeSha256, runtimeSequence: 10, frontendSha256, frontendSequence: 11, authorizationSha256 });
+      candidateIndex: artifact(next ? "<main>next UI</main>" : "<main>new UI</main>"),
+      newAssets: [{ path: next ? "assets/next-dddddddd.js" : "assets/new-bbbbbbbb.js", ...artifact(next ? "next immutable module" : "new immutable module") }],
+      runtimeSha256, runtimeSequence: 10, frontendSha256: next ? "d".repeat(64) : frontendSha256,
+      frontendSequence: next ? 12 : 11, authorizationSha256: next ? "e".repeat(64) : authorizationSha256 });
   } else if (action === "accept") {
     const record = JSON.parse(fs.readFileSync(path.join(p.current, "frontend-transaction.json"))), value = record.pendingState;
     const acceptanceReceiptBytes = bytes({ version: "frontend-readonly-acceptance-v1", transactionId: record.id, runtimeSha256: value.runtimeSha256,
@@ -246,6 +249,7 @@ function verify() {
     } finally { f.dispose(); }
   });
   return { ok: true, version: "frontend-release-transaction-verification-v1", node: process.version, checks,
+    successiveUiRecovery: verifySuccessiveUiRecovery(),
     actualAtomicRename: true, actualSigkillColdRecovery: true, actualInheritedKernelFlock: true,
     productionWrites: 0, providerRequests: 0, scope: "Private Linux fixture core, fault recovery and real kernel lock observation; not production authorization or deployment." };
 }
@@ -257,11 +261,91 @@ function verifyStateSchemaDelta() {
     return { ok: true, deltaOnly: true, checks: [{ name: "frontend-only state rejects equal runtime and frontend SHA", ok: true }], productionWrites: 0, providerRequests: 0 };
   } finally { f.dispose(); }
 }
+function verifySuccessiveUiRecovery() {
+  if (process.platform !== "linux") throw new Error("successive UI recovery requires real Linux files and SIGKILL");
+  const consumer = require("../server/frontendReleaseIdentity.cjs"), checks = [];
+  const check = (name, work) => { work(); checks.push({ name, ok: true }); };
+  const nextSha = "d".repeat(64), nextIndex = artifact("<main>next UI</main>");
+  const start = f => { f.prepared(); f.accept(f.adapter.begin(f.plan()).transactionId); f.accepted(frontendSha256); };
+  const nextPlan = (f, sequence = 12) => ({ ...f.plan(), candidateIndex: nextIndex,
+    newAssets: [{ path: "assets/next-dddddddd.js", ...artifact("next immutable module") }],
+    frontendSha256: nextSha, frontendSequence: sequence, authorizationSha256: "e".repeat(64) });
+  const cold = (f, action, failAt = "never") => spawnSync(process.execPath,
+    [__filename, "--fixture-child", f.adapter.rootDir, action, failAt], { encoding: "utf8", timeout: 10000 });
+  const recover = f => { const r = cold(f, "recover"); assert.equal(r.status, 0, r.stderr); };
+  const publicIdentity = f => {
+    // Feed the actual durable transaction bytes through the unmodified public
+    // reader in its own private filesystem fixture; no fabricated receipt.
+    const reader = consumer.createFrontendReleaseIdentityFixture();
+    try {
+      for (const [to, from] of [[reader.paths.projection, f.p.projection], [reader.paths.acceptance, f.p.acceptanceProjection],
+        [reader.paths.index, path.join(f.p.dist, "index.html")], [reader.paths.runtimeMarker, path.join(f.p.app, ".release-bundle-sha256")],
+        [reader.paths.acceptedRuntimeMarker, path.join(f.p.app, ".release-live-complete")]]) put(to, fs.readFileSync(from));
+      const result = reader.read(); assert.equal(result.available, true); assert.equal(result.consistent, true);
+      assert.equal(result.runtimeSha256, runtimeSha256); assert.equal(result.runtimeSequence, 10);
+      return result;
+    } finally { reader.dispose(); }
+  };
+  const matches = (identity, sha, sequence) => consumer.frontendIdentityMatchesCandidate(identity,
+    { releaseKind: "frontend-only", sha256: sha, releaseSequence: sequence });
+  const retained = f => {
+    assert.deepEqual(fs.readFileSync(path.join(f.p.dist, "assets/old-aaaaaaaa.js")), f.oldAsset.bytes);
+    assert.deepEqual(fs.readFileSync(path.join(f.p.dist, "assets/new-bbbbbbbb.js")), f.newAsset.bytes);
+    assert.deepEqual(fs.readFileSync(path.join(f.p.dist, "assets/next-dddddddd.js")), Buffer.from("next immutable module"));
+  };
+  check("second UI SIGKILL rollback restores accepted UI, not the older full baseline", () => {
+    const f = createFixture(); try {
+      start(f); const previous = f.state(); put(f.p.sequence, "12\n", 0o600);
+      const killed = cold(f, "begin-next-ui", "index-renamed"); assert.equal(killed.signal, "SIGKILL", killed.stderr);
+      assert.deepEqual(fs.readFileSync(path.join(f.p.dist, "index.html")), nextIndex.bytes);
+      recover(f); f.accepted(frontendSha256); retained(f);
+      assert.equal(f.state().kind, "frontend-only"); assert.equal(f.state().frontendSequence, 11);
+      assert.deepEqual(fs.readFileSync(path.join(f.p.dist, "index.html")), f.candidate.bytes);
+      const receipt = JSON.parse(fs.readFileSync(f.p.acceptanceProjection));
+      assert.equal(receipt.version, "frontend-rollback-acceptance-v1"); assert.deepEqual(receipt.previousState, previous);
+      assert.equal(receipt.newFrontendAccepted, false); assert.equal(receipt.retainedAssetCount, 1);
+      assert.notEqual(f.state().distTreeHash, previous.distTreeHash);
+      assert.equal(fs.readFileSync(f.p.sequence, "utf8"), "12\n", "recovery must not rewind the consumed sequence");
+      const identity = publicIdentity(f); assert.equal(matches(identity, frontendSha256, 11), true);
+      assert.equal(matches(identity, nextSha, 12), false);
+      // A later independently authorized sequence may reuse retained immutable
+      // assets. This is not replaying the consumed request through the wrapper.
+      put(f.p.sequence, "13\n", 0o600); f.adapter.begin(nextPlan(f, 13));
+      const accepted = cold(f, "accept"); assert.equal(accepted.status, 0, accepted.stderr);
+      f.accepted(nextSha); retained(f); assert.equal(matches(publicIdentity(f), nextSha, 13), true);
+      assert.equal(f.adapter.recover().action, "noop");
+    } finally { f.dispose(); }
+  });
+  check("second UI durable accept intent rolls forward after real SIGKILL", () => {
+    const f = createFixture(); try {
+      start(f); put(f.p.sequence, "12\n", 0o600); f.adapter.begin(nextPlan(f));
+      const killed = cold(f, "accept", "accept-intent-written"); assert.equal(killed.signal, "SIGKILL", killed.stderr);
+      recover(f); f.accepted(nextSha); retained(f);
+      const identity = publicIdentity(f); assert.equal(matches(identity, nextSha, 12), true);
+      assert.equal(matches(identity, frontendSha256, 11), false);
+      assert.equal(JSON.parse(fs.readFileSync(f.p.acceptanceProjection)).version, "frontend-readonly-acceptance-v1");
+    } finally { f.dispose(); }
+  });
+  check("interrupted rollback of a second UI resumes from every durable rollback phase", () => {
+    for (const phase of ["rollback-intent-written", "rollback-index-renamed", "acceptance-projection-written", "root-state-written", "projection-written", "rolled-back"]) {
+      const f = createFixture(); try {
+        start(f); put(f.p.sequence, "12\n", 0o600); f.adapter.begin(nextPlan(f)); f.arm(phase);
+        assert.throws(() => f.adapter.recover(), /fixture-interruption/);
+        recover(f); f.accepted(frontendSha256); retained(f);
+        assert.equal(matches(publicIdentity(f), nextSha, 12), false);
+      } finally { f.dispose(); }
+    }
+  });
+  return { ok: true, version: "successive-ui-cold-recovery-v1", checks, rollbackInterruptionPhases: 6,
+    actualSigkillCases: 2, actualPublicReader: true, productionWrites: 0, providerRequests: 0,
+    scope: "Linux isolated consecutive UI transactions and public receipt consumption; not a production rollback or full-release timing" };
+}
 if (require.main === module) {
   try {
     if (process.argv[2] === "--fixture-child") crashChild(process.argv.slice(3));
     else if (process.argv[2] === "--state-schema-delta") console.log(JSON.stringify(verifyStateSchemaDelta()));
+    else if (process.argv[2] === "--successive-ui-recovery") console.log(JSON.stringify(verifySuccessiveUiRecovery()));
     else console.log(JSON.stringify(verify()));
   } catch (error) { console.error(error.stack); process.exitCode = 1; }
 }
-module.exports = { verify, verifyStateSchemaDelta };
+module.exports = { verify, verifyStateSchemaDelta, verifySuccessiveUiRecovery };

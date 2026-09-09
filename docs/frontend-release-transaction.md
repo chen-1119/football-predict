@@ -226,3 +226,32 @@ systemd/cgroup quiescence, exact isolated-fixture cleanup and unchanged input
 source hashes. No provider requests or production writes occurred. Targeted
 ESLint recommended rules reported zero warnings/errors for both new CJS files;
 Node syntax checks and git diff whitespace checks also passed.
+
+## Consecutive UI cold-recovery acceptance (2026-09-09)
+
+The default Linux verifier now additionally executes `verifySuccessiveUiRecovery`.
+For a delta-only run use `node scripts/verifyFrontendReleaseTransaction.cjs
+--successive-ui-recovery`. It is not a Windows fallback or a production command.
+
+The scenario first accepts UI sequence 11 over full runtime 10, then interrupts
+UI 12. A real SIGKILL after index rename must recover UI 11, not runtime 10's old
+index. The failed UI's immutable assets are retained and the consumed sequence
+is not rewound. Exact durable transaction outputs are copied into the unmodified
+public identity reader's private filesystem fixture: UI 11 remains accepted and
+UI 12 does not match. A later independently authorized sequence 13 can reuse the
+retained assets and complete normally. Another real SIGKILL after durable accept
+intent must roll UI 12 forward. Six rollback interruption phases also resume
+without changing the accepted prior UI identity or runtime/data sentinels.
+
+The existing 41 native groups and the three new consecutive-UI groups passed in
+8.559 seconds. The new groups were separately rerun against the exact installed
+transaction, dist inspector and public reader bytes as unprivileged UID 1000 in
+2.992 seconds. The installed dist inspector differs from the local source only
+in mixed line endings; that second run preserves its raw bytes, not a normalized
+substitute. Reports: `outputs/successive-ui-recovery-linux-1788947619633.json` and
+`outputs/successive-ui-installed-policy-1788947834865.json`.
+
+This proves isolated Linux recovery and public receipt consumption for the
+deployed policies. It does not claim an injected production failure, power-loss
+durability, full-backend rollback, or a new online release. No provider calls or
+production writes occurred; all private test trees were removed after success.
