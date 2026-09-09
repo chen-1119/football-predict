@@ -95,7 +95,7 @@ exit "$release_status"
       "scripts/stopVerificationChild.cjs","scripts/verifyVerificationChildShutdown.cjs",
       "scripts/verifyAccessCodeConcurrency.cjs","scripts/verifyRelaySnapshotUploadSerialization.cjs",
       "scripts/verifySportteryRelayDualLaneServer.cjs","scripts/verifySyncWorkerEventBridge.cjs",
-      "scripts/verifyDataGenerationEndToEnd.cjs","scripts/verifyFrontendReleaseTransaction.cjs"]) {
+      "scripts/verifyDataGenerationEndToEnd.cjs","scripts/verifyFrontendReleaseTransaction.cjs","scripts/verifyReleaseRecovery.cjs"]) {
       put(`live/${file}`,"previous-release-tool");put(`candidate/${file}`,"updated-release-tool");
       const result=classifyModelWork(options);
       assert.equal(result.mode,"preserve",file);assert.equal(result.freshDataChecksRequired,true);

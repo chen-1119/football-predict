@@ -78,8 +78,8 @@ const identityFor = (treePath, recordedPath) => {
     gid: String(stat.gid),
     mode: Number(stat.mode & 0o7777n).toString(8),
     treeMarker: fs.readFileSync(treeMarkerPath, "utf8").trim(),
-    bundleMarker: "-",
-    liveMarker: "-"
+    bundleMarker: fs.existsSync(path.join(treePath, ".release-bundle-sha256")) ? fs.readFileSync(path.join(treePath, ".release-bundle-sha256"), "utf8").trim() : "-",
+    liveMarker: fs.existsSync(path.join(treePath, ".release-live-complete")) ? fs.readFileSync(path.join(treePath, ".release-live-complete"), "utf8").trim() : "-"
   };
 };
 
@@ -99,7 +99,7 @@ const defaultSystemState = () => ({
   }
 });
 
-const createFixture = (phase, { health = true, modelArtifactCount = 2, legacyManagedConfig = false } = {}) => {
+const createFixture = (phase, { health = true, modelArtifactCount = 2, legacyManagedConfig = false, acceptedUi = false } = {}) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "football-release-recovery-"));
   const current = mapped(root, "/var/lib/football-release/recovery/current");
   const recoveryRoot = path.dirname(current);
@@ -117,6 +117,7 @@ const createFixture = (phase, { health = true, modelArtifactCount = 2, legacyMan
   mkdir(next, 0o755);
   write(path.join(app, "tree-id"), "old\n", 0o644);
   write(path.join(next, "tree-id"), "new\n", 0o644);
+  const frontend = acceptedUi ? installAcceptedUiFixture(root, app, next) : null;
   const oldIdentity = identityFor(app, "/opt/football-predict");
   const newIdentity = identityFor(next, "/opt/football-predict.next");
   const postSwap = !preSwapPhases.has(phase) || forwardPhases.includes(phase);
@@ -338,6 +339,7 @@ const createFixture = (phase, { health = true, modelArtifactCount = 2, legacyMan
     commonCohortG2V2Target,
     captureStatusTarget,
     benchmarkProspectiveTarget,
+    frontend,
   };
 };
 
@@ -354,6 +356,90 @@ const runRecovery = (fixture) => spawnSync(process.execPath, [helperPath], {
 const readTreeId = (tree) => fs.readFileSync(path.join(tree, "tree-id"), "utf8").trim();
 const assertAbsent = (target) => assert.equal(fs.existsSync(target), false, `expected absent: ${target}`);
 
+// Model the real precondition: the full runtime and the latest accepted UI
+// have DIFFERENT identities. The full rollback must restore the old APP tree
+// including that UI, while leaving its external root state/binding untouched.
+function installAcceptedUiFixture(root, app, next) {
+  const runtimeSha256 = "7".repeat(64), frontendSha256 = "8".repeat(64);
+  const index = Buffer.from("<main>accepted UI newer than runtime</main>\n");
+  const asset = Buffer.from("accepted UI lazy asset\n");
+  const oldAsset = Buffer.from("retained older client asset\n");
+  write(path.join(app, "dist/index.html"), index, 0o644);
+  write(path.join(app, "dist/assets/accepted-88888888.js"), asset, 0o644);
+  write(path.join(app, "dist/assets/old-77777777.js"), oldAsset, 0o644);
+  const distTreeHash = require("./releasePrebuiltDist.cjs").inspectPrebuiltDist(path.join(app, "dist")).treeHash;
+  const receipt = Buffer.from(JSON.stringify({ version: "frontend-readonly-acceptance-v1", transactionId: "c".repeat(24),
+    runtimeSha256, runtimeSequence: 40, frontendSha256, frontendSequence: 41,
+    indexSha256: sha256(index), distTreeHash, authorizationSha256: "d".repeat(64),
+    checkedAt: "2026-09-09T10:00:00.000Z", checks: { index: true, assets: true, health: true, protected: true, services: true } }) + "\n");
+  const state = Buffer.from(JSON.stringify({ version: "frontend-release-state-v1", kind: "frontend-only", phase: "accepted",
+    runtimeSha256, runtimeSequence: 40, frontendSha256, frontendSequence: 41,
+    indexSha256: sha256(index), distTreeHash, acceptanceSha256: sha256(receipt) }) + "\n");
+  const files = { ".release-bundle-sha256": Buffer.from(runtimeSha256 + "\n"), ".release-live-complete": Buffer.from(runtimeSha256 + "\n"),
+    ".frontend-release-state.json": state, ".frontend-release-acceptance.json": receipt,
+    ".frontend-release-binding.json": Buffer.from('{"fixture":"accepted-runtime-binding"}\n'),
+    "dist/index.html": index, "dist/assets/accepted-88888888.js": asset, "dist/assets/old-77777777.js": oldAsset };
+  for (const [name, content] of Object.entries(files)) write(path.join(app, name), content, 0o644);
+  const rootState = mapped(root, "/var/lib/football-release/frontend-state.json");
+  const rootBinding = mapped(root, "/var/lib/football-release/frontend-runtime-binding.json");
+  write(rootState, state); write(rootBinding, files[".frontend-release-binding.json"]);
+  write(mapped(root, "/var/lib/football-release/highest-accepted-sequence"), "42\n");
+  write(path.join(next, "dist/index.html"), "<main>candidate full release</main>\n", 0o644);
+  return { runtimeSha256, frontendSha256, files, state, rootState, rootBinding };
+}
+
+function readFixtureFrontend(app) {
+  const reader = require("../server/frontendReleaseIdentity.cjs").createFrontendReleaseIdentityFixture();
+  try {
+    for (const [target, name] of [[reader.paths.projection, ".frontend-release-state.json"],
+      [reader.paths.acceptance, ".frontend-release-acceptance.json"], [reader.paths.runtimeMarker, ".release-bundle-sha256"],
+      [reader.paths.acceptedRuntimeMarker, ".release-live-complete"], [reader.paths.index, "dist/index.html"]]) {
+      const source = path.join(app, name);
+      if (fs.existsSync(source)) write(target, fs.readFileSync(source), 0o644);
+    }
+    return reader.read();
+  } finally { reader.dispose(); }
+}
+
+function verifyFullAfterUiRecovery() {
+  const checks = [];
+  for (const phase of [...rollbackPhases, ...forwardPhases]) {
+    const fixture = createFixture(phase, { acceptedUi: true });
+    try {
+      const f = fixture.frontend, forward = forwardPhases.includes(phase);
+      const before = readFixtureFrontend(preSwapPhases.has(phase) ? fixture.app : fixture.backup);
+      assert.equal(before.available, true); assert.equal(before.consistent, true);
+      assert.equal(before.runtimeSha256, f.runtimeSha256); assert.equal(before.frontendSha256, f.frontendSha256);
+      const result = runRecovery(fixture); assert.equal(result.status, 0, `${phase}: ${result.stderr}`);
+      assert.equal(JSON.parse(result.stdout).action, forward ? "commit" : "rollback");
+      assert.deepEqual(fs.readFileSync(f.rootState), f.state);
+      assert.deepEqual(fs.readFileSync(f.rootBinding), f.files[".frontend-release-binding.json"]);
+      assert.equal(fs.readFileSync(mapped(fixture.root, "/var/lib/football-release/highest-accepted-sequence"), "utf8"), "42\n");
+      const after = readFixtureFrontend(fixture.app);
+      if (forward) {
+        assert.equal(readTreeId(fixture.app), "new");
+        assert.equal(after.available, false, "old UI root state cannot authenticate the committed new APP before full initialization");
+      } else {
+        for (const [name, content] of Object.entries(f.files)) {
+          const file = path.join(fixture.app, name); assert.deepEqual(fs.readFileSync(file), content, phase + ": " + name);
+          assert.equal(fs.statSync(file).nlink, 1);
+          if (process.platform !== "win32") assert.equal(fs.statSync(file).mode & 0o777, 0o644);
+        }
+        assert.equal(after.available, true); assert.equal(after.consistent, true);
+        assert.equal(after.runtimeSequence, 40); assert.equal(after.frontendSequence, 41);
+        assert.equal(after.frontendSha256, f.frontendSha256);
+        assert.equal(require("./releasePrebuiltDist.cjs").inspectPrebuiltDist(path.join(fixture.app, "dist")).treeHash, after.distTreeHash);
+        const again = runRecovery(fixture); assert.equal(again.status, 0, again.stderr);
+        assert.equal(JSON.parse(again.stdout).action, "noop");
+      }
+      checks.push({ phase, action: forward ? "commit" : "rollback", ok: true });
+    } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+  }
+  return { ok: true, checks, actualPublicReader: true, productionWrites: 0,
+    scope: "isolated real file/tree recovery and receipt reading; systemd/health/SQLite are fixtures, not live rollback or database acceptance" };
+}
+
+function verifyOriginal() {
 let assertions = 0;
 {
   const start = helperSource.indexOf("const recoverForward =");
@@ -776,5 +862,13 @@ console.log(JSON.stringify({
   checkedAt: new Date().toISOString(),
   rollbackPhases: rollbackPhases.length,
   forwardPhases: forwardPhases.length,
-  assertions
+  assertions,
+  fullAfterUiRecovery: verifyFullAfterUiRecovery()
 }, null, 2));
+}
+
+if (require.main === module) {
+  if (process.argv.length === 3 && process.argv[2] === "--full-after-ui") console.log(JSON.stringify(verifyFullAfterUiRecovery()));
+  else { assert.equal(process.argv.length, 2, "unexpected recovery verifier arguments"); verifyOriginal(); }
+}
+module.exports = { verifyFullAfterUiRecovery };
