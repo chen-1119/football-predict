@@ -22,6 +22,7 @@ const RELEASE_ONLY = new Set([
   "scripts/verifyAccessCodeConcurrency.cjs", "scripts/verifyRelaySnapshotUploadSerialization.cjs",
   "scripts/verifySportteryRelayDualLaneServer.cjs", "scripts/verifySyncWorkerEventBridge.cjs",
   "scripts/verifyDataGenerationEndToEnd.cjs",
+  "scripts/verifyFrontendReleaseTransaction.cjs",
 ]);
 const UI_ONLY = new Set(FRONTEND_PATHS);
 const hash = bytes => crypto.createHash("sha256").update(bytes).digest("hex");
