@@ -83,6 +83,17 @@ check('bundle creation checks verifier contracts before sequence reservation',()
   const reservation=bundle.indexOf('const sequenceReservation = reserveReleaseSequence(');
   assert.ok(preflight>=0&&reservation>preflight);
 });
+check('Linux-only model seed behavior fails early before recovery and candidate construction',()=>{
+  const shell=read('deploy/light-server/release-from-bundle.sh');
+  const early=shell.indexOf('"$TRUSTED_SOURCE_DIR/scripts/verifyCandidateArtifactSeed.cjs"');
+  const recovery=shell.indexOf('\ninitialize_release_recovery_snapshot\n');
+  const build=shell.indexOf('log "create isolated build tree from trusted source"');
+  assert.ok(early>=0&&early<recovery&&recovery<build);
+  assert.ok(shell.slice(early,recovery).includes('exit 1; }'));
+  const fixture=read('scripts/verifyCandidateArtifactSeed.cjs');
+  for(const required of ['NODE_HOME=${quote(runtime)}','TRUSTED_SOURCE_DIR=${quote(trustedRoot)}',
+    'valid-private-audit','seedPrivateModelAudit','unbound variable'])assert.ok(fixture.includes(required),required);
+});
 check('complete result admission dependency closure passes before signing', () => {
   const run = require('node:child_process').spawnSync(process.execPath,
     [path.join(root, 'scripts/verifyResultTimelineSemanticClosure.cjs')],
