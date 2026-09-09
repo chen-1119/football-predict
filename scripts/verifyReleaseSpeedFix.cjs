@@ -79,7 +79,7 @@ exit "$release_status"
     for(const name of ["src/services/model.cjs","scripts/syncData.cjs","server/index.cjs","package.json","package-lock.json","deploy/light-server/candidate-revision-transition.json"])
       put(`${side}/${name}`,"{}");
   }
-  for(const file of ["model-strategy.json","model-artifacts/evaluation.json","model-artifacts/candidate-prospective-registry.json"]) put(`store/${file}`,'{"version":"synthetic-only"}');
+  require("./verifyReleasePrivateModelSeed.cjs").fixture(path.join(temp,"store"));
   const options={liveRoot:path.join(temp,"live"),sourceRoot:path.join(temp,"candidate"),storeDir:path.join(temp,"store"),runtime:"v22.22.1"};
   await check("unchanged complete model code preserves existing products; UI-only source need not refit",()=>{
     assert.equal(classifyModelWork(options).mode,"preserve");
@@ -95,7 +95,8 @@ exit "$release_status"
       "scripts/stopVerificationChild.cjs","scripts/verifyVerificationChildShutdown.cjs",
       "scripts/verifyAccessCodeConcurrency.cjs","scripts/verifyRelaySnapshotUploadSerialization.cjs",
       "scripts/verifySportteryRelayDualLaneServer.cjs","scripts/verifySyncWorkerEventBridge.cjs",
-      "scripts/verifyDataGenerationEndToEnd.cjs","scripts/verifyFrontendReleaseTransaction.cjs","scripts/verifyReleaseRecovery.cjs"]) {
+      "scripts/verifyDataGenerationEndToEnd.cjs","scripts/verifyFrontendReleaseTransaction.cjs","scripts/verifyReleaseRecovery.cjs",
+      "scripts/releasePrivateModelSeed.cjs","scripts/verifyReleasePrivateModelSeed.cjs"]) {
       put(`live/${file}`,"previous-release-tool");put(`candidate/${file}`,"updated-release-tool");
       const result=classifyModelWork(options);
       assert.equal(result.mode,"preserve",file);assert.equal(result.freshDataChecksRequired,true);
@@ -105,6 +106,21 @@ exit "$release_status"
     const unknown="candidate/scripts/verifyFrontendRuntimeAlternatives-extra.cjs";
     put(unknown,"unreviewed source");assert.equal(classifyModelWork(options).mode,"recompute");
     fs.unlinkSync(path.join(temp,unknown));
+  });
+  await check("model reuse requires a hash-verified matching private SQLite audit",()=>{
+    const { DatabaseSync }=require("node:sqlite"),file=path.join(temp,"store/football.db");
+    const before=classifyModelWork(options);assert.equal(before.mode,"preserve");
+    assert.ok(before.artifacts["sqlite:hhad-companion-audit"].sha256);
+    let db=new DatabaseSync(file);const row=db.prepare("SELECT * FROM private_model_artifacts").get();
+    db.prepare("UPDATE private_model_artifacts SET payload_sha256=?").run("0".repeat(64));db.close();
+    assert.equal(classifyModelWork(options).mode,"recompute");
+    db=new DatabaseSync(file);db.prepare("UPDATE private_model_artifacts SET payload_sha256=?").run(row.payload_sha256);db.close();
+    const evaluation=path.join(temp,"store/model-artifacts/evaluation.json"),bytes=fs.readFileSync(evaluation);
+    const data=JSON.parse(bytes);data.hhadCompanionEvaluation.gate.onlineEffect="active";
+    fs.writeFileSync(evaluation,JSON.stringify(data));assert.equal(classifyModelWork(options).mode,"recompute");
+    fs.writeFileSync(evaluation,bytes);
+    fs.renameSync(file,file+".fixture-held");assert.equal(classifyModelWork(options).mode,"recompute");
+    fs.renameSync(file+".fixture-held",file);assert.equal(classifyModelWork(options).mode,"preserve");
   });
   await check("runtime and reusable preparation dependencies are enforced by both real archive membership gates",()=>{
     const required=["scripts/verifyFrontendRuntimeAlternatives.cjs","scripts/frontendReleaseInputs.cjs","scripts/prepareFrontendRelease.cjs","scripts/verifyFrontendReleaseInputs.cjs","scripts/stopVerificationChild.cjs","scripts/verifyVerificationChildShutdown.cjs"], vm=require("node:vm");

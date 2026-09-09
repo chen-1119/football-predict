@@ -1331,6 +1331,9 @@ const run = async () => {
       gateStatus: modelPromotionSummary.gateStatus || null,
       onlineEffect: modelPromotionSummary.onlineEffect || null,
       reasons: modelPromotionSummary.reasons || [],
+      failedChecks: Array.isArray(modelPromotion.body?.checks)
+        ? modelPromotion.body.checks.filter(row => row.ok !== true).slice(0, 20)
+          .map(row => String(row.name || "unnamed model check").slice(0, 200)) : [],
       stdoutTail: modelPromotion.status === 0 ? "" : modelPromotion.stdout.slice(-500),
       stderrTail: modelPromotion.stderr.slice(-500)
     });

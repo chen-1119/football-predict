@@ -24,6 +24,18 @@ assert.ok(start>0&&end>start);
 const chunk=coverage.slice(start,end);
 const readiness=read('scripts/verifyProductionReadiness.cjs');
 const bundle=read('scripts/createReleaseBundle.cjs'),safety=read('scripts/verifyReleaseBundleSafety.cjs');
+check('model gate exposes bounded failed names without changing admission or leaking rows',()=>{
+  const start=readiness.indexOf('    const modelPromotionSummary =');
+  const end=readiness.indexOf('\n    const ragNeutrality',start);assert.ok(start>=0&&end>start);
+  const inspect=modelPromotion=>{let result=null;
+    vm.runInNewContext(readiness.slice(start,end),{modelPromotion,checks:[],pushCheck:(_rows,name,ok,detail)=>{result={name,ok,detail};}},{timeout:1000});return result;};
+  const input={status:1,body:{ok:false,summary:{gateStatus:'shadow'},checks:Array.from({length:25},()=>({name:'missing-audit',ok:false,payload:{private:'secret'}}))},stdout:'',stderr:''};
+  const failed=inspect(input);assert.equal(failed.ok,false);assert.equal(failed.detail.failedChecks.length,20);
+  assert.equal(JSON.stringify(failed).includes('secret'),false);
+  assert.equal(inspect({...input,status:0,body:{ok:true,checks:[]}}).ok,true);
+  assert.equal(inspect({...input,status:0}).ok,false);
+  assert.equal(inspect({...input,body:{ok:true,checks:[]}}).ok,false);
+});
 // Catch the real producer/admin mismatch before reserving a sequence, without
 // replaying the full deadline/SQLite suite or touching runtime state.
 const deadlineResearchStatus = require('./captureCandidateProspectiveDeadline.cjs').deadlineOnlyResearchStatus;
@@ -100,6 +112,7 @@ check('fixed hypothesis lineage survives competing retrospective winners before 
   assert.equal(result.ok, true); assert.ok(result.checks >= 11);
 });
 const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/services/apiFootballDiagnostics.d.cts',
+  'scripts/releasePrivateModelSeed.cjs', 'scripts/verifyReleasePrivateModelSeed.cjs',
   'scripts/verifyFrontendRuntimeAlternatives.cjs',
   'scripts/frontendReleaseInputs.cjs', 'scripts/prepareFrontendRelease.cjs', 'scripts/verifyFrontendReleaseInputs.cjs',
   'scripts/stopVerificationChild.cjs', 'scripts/verifyVerificationChildShutdown.cjs',
@@ -442,6 +455,12 @@ check('verifier shutdown observes close and cancels losing timers before signing
   assert.equal(report.ok,true); assert.ok(report.checks.length>=(process.platform==='linux'?13:12) && report.checks.every(row=>row.ok));
   assert.equal(report.nativeForcedShutdownTested,process.platform==='linux');
   assert.equal(report.productionWrites,0);
+});
+check('private model reuse retains exact SQLite audit through export before signing',()=>{
+  const report=require('./verifyReleasePrivateModelSeed.cjs').run();
+  assert.equal(report.ok,true); assert.ok(report.checks.length>=16 && report.checks.every(row=>row.ok));
+  assert.equal(report.productionWrites,0); assert.equal(report.providerRequests,0);
+  assert.equal(report.nativeSymlinksTested,process.platform==='linux');
 });
 check('static receipt input scopes and failure behavior pass before signing',()=>{
   const result=require('node:child_process').spawnSync(process.execPath,['scripts/verifyStaticVerificationReceipts.cjs'],

@@ -3,6 +3,7 @@
 // evidence always retains the full model lane. No prediction/result writes.
 const fs = require("node:fs"), path = require("node:path"), crypto = require("node:crypto");
 const { FRONTEND_PATHS } = require("./releaseChangeClassification.cjs");
+const { validateReusablePrivateAudit } = require("./releasePrivateModelSeed.cjs");
 const VERSION = "release-model-work-policy-v1";
 const RELEASE_ONLY = new Set([
   "scripts/createReleaseBundle.cjs", "scripts/deployReleaseBundle.cjs", "scripts/verifyReleaseBundleSafety.cjs",
@@ -24,6 +25,7 @@ const RELEASE_ONLY = new Set([
   "scripts/verifyDataGenerationEndToEnd.cjs",
   "scripts/verifyFrontendReleaseTransaction.cjs",
   "scripts/verifyReleaseRecovery.cjs",
+  "scripts/releasePrivateModelSeed.cjs", "scripts/verifyReleasePrivateModelSeed.cjs",
 ]);
 const UI_ONLY = new Set(FRONTEND_PATHS);
 const hash = bytes => crypto.createHash("sha256").update(bytes).digest("hex");
@@ -76,7 +78,7 @@ function classifyModelWork({ liveRoot, sourceRoot, storeDir, runtime = process.v
     const live = inputInventory(liveRoot), candidate = inputInventory(sourceRoot);
     if (live.hash !== candidate.hash) return { version: VERSION, mode: "recompute", reason: "model-or-unknown-source-changed",
       liveHash: live.hash, candidateHash: candidate.hash };
-    const artifacts = {};
+    const artifacts = {}; let evaluation;
     // Existing products remain private and unchanged. Shape and promotion
     // semantics are still checked by the original fresh readiness gates.
     for (const name of ["model-strategy.json", "model-artifacts/evaluation.json", "model-artifacts/candidate-prospective-registry.json"]) {
@@ -88,7 +90,11 @@ function classifyModelWork({ liveRoot, sourceRoot, storeDir, runtime = process.v
       const content = readPlain(file, 64 * 1024 * 1024), parsed = JSON.parse(content);
       if (!parsed || Array.isArray(parsed) || typeof parsed !== "object" || Object.keys(parsed).length === 0) throw new Error("missing-model-artifact");
       artifacts[name] = hash(content);
+      if (name === "model-artifacts/evaluation.json") evaluation = parsed;
     }
+    const audit = validateReusablePrivateAudit({ storeDir, evaluation });
+    artifacts["sqlite:hhad-companion-audit"] = { sha256: audit.payloadSha256, bytes: audit.payloadBytes,
+      version: audit.artifactVersion, generatedAt: audit.generatedAt, updatedAt: audit.updatedAt };
     if (inputInventory(liveRoot).hash !== live.hash || inputInventory(sourceRoot).hash !== candidate.hash) throw new Error("source-changed-during-classification");
     return { version: VERSION, mode: "preserve", reason: "same-complete-model-input-code-and-existing-artifacts",
       sourceHash: live.hash, artifacts, freshDataChecksRequired: true, modelPromotionAuthorized: false };
