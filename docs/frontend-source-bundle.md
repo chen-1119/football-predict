@@ -8,6 +8,12 @@ are not packaged and must not be described as deployed.
 
 ## Entry and inputs
 
+For reusable current-state preparation without handwritten version constants,
+use `node scripts/prepareFrontendRelease.cjs` as described in
+[frontend-release-preparation.md](frontend-release-preparation.md). It supports
+an accepted UI identity newer than the full runtime. Its observation is not
+server authorization and does not replace the constructor/controller gates.
+
 Set RELEASE_KIND=frontend-only and use the existing createReleaseBundle.cjs
 entry. Its first operation validates the kind and dispatches the fixed
 createFrontendReleaseBundle.cjs child exactly once. Undefined/full retains the
