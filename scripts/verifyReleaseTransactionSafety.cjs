@@ -4795,6 +4795,9 @@ check("declared revision transition rehearses the real isolated refreeze before 
 
 check("candidate rehearsal receives an isolated immutable live ledger snapshot", () => {
   const main = mainProgram(bundleRelease);
+  assertOrdered(main, ['"$TRUSTED_SOURCE_DIR/scripts/verifyCandidateArtifactSeed.cjs"',
+    'initialize_release_recovery_snapshot', 'seed_candidate_model_artifacts'],
+  "native seed fixture must reject a broken Linux-only contract before recovery or candidate work");
   assertOrdered(main, ['stop_worker_for_release_window', 'preserve_live_public_data_cache',
     'seed_candidate_model_artifacts', 'stop_release_sync_write_barrier clean',
     'restart_worker_if_needed', 'run_build_step npm-ci', 'run_candidate_model_artifact_catchup'],
@@ -4806,7 +4809,7 @@ check("candidate rehearsal receives an isolated immutable live ledger snapshot",
   assert.match(seed, /realpath -e/);
   if (process.platform === "linux") {
     const result = require("./verifyCandidateArtifactSeed.cjs").verifyCandidateArtifactSeed();
-    assert.equal(result.cases, 8);
+    assert.equal(result.cases, 9);
   }
 });
 

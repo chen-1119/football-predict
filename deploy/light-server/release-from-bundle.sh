@@ -7345,6 +7345,9 @@ release_stage_observe init "$TRUSTED_SOURCE_DIR"
 log "preflight current service before stale backup cleanup"
 wait_for_health "http://${HOST}:${PORT}" "preflight-before-topology-cleanup" 90 2 service \
   || { printf 'current service is unhealthy; preserving the existing backup and refusing release\n' >&2; exit 1; }
+log "preflight native candidate model seed contract before recovery or candidate build"
+"$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/verifyCandidateArtifactSeed.cjs" \
+  || { printf 'native candidate model seed contract failed before transaction start\n' >&2; exit 1; }
 prepare_managed_tree_topology_for_transaction \
   || { printf 'managed APP/BACKUP/FAILED/NEXT topology is unsafe before transaction start\n' >&2; exit 1; }
 initialize_release_recovery_snapshot

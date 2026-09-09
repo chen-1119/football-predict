@@ -26,6 +26,7 @@ const RELEASE_ONLY = new Set([
   "scripts/verifyFrontendReleaseTransaction.cjs",
   "scripts/verifyReleaseRecovery.cjs",
   "scripts/releasePrivateModelSeed.cjs", "scripts/verifyReleasePrivateModelSeed.cjs",
+  "scripts/verifyCandidateArtifactSeed.cjs",
 ]);
 const UI_ONLY = new Set(FRONTEND_PATHS);
 const hash = bytes => crypto.createHash("sha256").update(bytes).digest("hex");
