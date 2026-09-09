@@ -3,11 +3,6 @@
 const path = require("node:path");
 
 let DatabaseSync = null;
-try {
-  ({ DatabaseSync } = require("node:sqlite"));
-} catch {
-  DatabaseSync = null;
-}
 
 const ensureSchema = (db) => db.exec(`
   PRAGMA journal_mode = WAL;
@@ -84,7 +79,10 @@ const ensurePredictionAuditColumns = (db) => {
 };
 
 const persistAiArenaSqlite = ({ dbPath, state, payload }) => {
-  if (!DatabaseSync) throw new Error("node:sqlite is unavailable for AI arena persistence");
+  if (!DatabaseSync) {
+    try { ({ DatabaseSync } = require("node:sqlite")); }
+    catch { throw new Error("node:sqlite is unavailable for AI arena persistence"); }
+  }
   const resolvedPath = path.resolve(dbPath);
   const db = new DatabaseSync(resolvedPath);
   try {

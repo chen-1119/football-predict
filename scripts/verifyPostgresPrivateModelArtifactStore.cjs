@@ -15,13 +15,15 @@ async function run() {
   const check = async (name, action) => { await action(); checks.push({ name, ok: true }); };
   const load = Module._load;
   let sqliteAttempts = 0;
+  const sqliteStacks = [];
   try {
     const empty = await pool.query("SELECT count(*)::int AS n FROM information_schema.tables WHERE table_schema='football'");
     assert.equal(empty.rows[0].n, 0, "refuse an existing football database");
     await runPostgresMigrations(pool);
     Module._load = function(name, ...args) {
       if (name === "node:sqlite" || /(?:^|\/)privateModelArtifactStore\.cjs$/.test(name)) {
-        sqliteAttempts++; throw new Error("SQLite access is forbidden in native audit tests");
+        sqliteAttempts++; const error = new Error("SQLite access is forbidden in native audit tests");
+        sqliteStacks.push(error.stack); throw error;
       }
       return load.call(this, name, ...args);
     };
@@ -95,9 +97,10 @@ async function run() {
       assert.equal(restored.updatedAt, first.updatedAt); assert.deepEqual(restored.payload, payload);
     });
     const projection = await require("./verifyPostgresProjectionSource.cjs").verifyProjectionSource(pool);
-    assert.equal(sqliteAttempts, 0);
-    return { ok: true, checks, projection, sqliteAttempts, productionWrites: 0, scope: "disposable native PostgreSQL; full retirement and deployment not implied" };
+    const generation = await require("./verifyPostgresGenerationSource.cjs").verifyGenerationSource(pool);
+    assert.equal(sqliteAttempts, 0, sqliteStacks.join("\n"));
+    return { ok: true, checks, projection, generation, sqliteAttempts, productionWrites: 0, scope: "disposable native PostgreSQL; full retirement and deployment not implied" };
   } finally { Module._load = load; await pool.end(); }
 }
 module.exports = { run };
-if (require.main === module) run().then(result => console.log(JSON.stringify(result))).catch(error => { console.error(error.message); process.exitCode = 1; });
+if (require.main === module) run().then(result => console.log(JSON.stringify(result))).catch(error => { console.error(error.stack); process.exitCode = 1; });

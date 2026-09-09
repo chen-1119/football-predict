@@ -496,6 +496,12 @@ const main = async () => {
     const repeated = await syncPostgresProjectionFromSqlite({ dbPath, pool: realPool, mode: "backfill", aiArenaPath: path.join(tempDir, "absent-synthetic-ai-arena.json") });
     equal(repeated.skipped, false, "real repeat still runs full backfill rather than fingerprint skipping");
     equal(await tupleSnapshot(), beforeRepeat, "real full backfill preserves unchanged snapshot tuple versions and JSON order");
+    const { createPostgresGenerationSource } = require("./postgresGenerationSource.cjs");
+    const { syncPostgresProjectionFromSource } = require("./postgresProjectionSync.cjs");
+    await syncPostgresProjectionFromSource(createPostgresGenerationSource({ storeDir, publicDataDir }), {
+      pool: realPool, mode: "backfill", aiArenaPath: path.join(tempDir, "absent-synthetic-ai-arena.json"),
+    });
+    equal(await tupleSnapshot(), beforeRepeat, "direct generation migration preserves frozen decisions, evidence, raw JSON and PostgreSQL tuple versions");
     equal(await readPostgresCurrentMatches(realPool, { publicationIdentity: identity }), await readSqliteCurrentMatches(dbPath, { publicationIdentity: identity }), "real PostgreSQL driver matches SQLite current payload including immutable public record");
     equal(await readPostgresPredictionSnapshotRows(realPool, { sourceMatchId, publicationIdentity: identity }), await readSqlitePredictionSnapshotRows(dbPath, { sourceMatchId }), "real PostgreSQL candidate evidence survives actual writer and reader");
     const realEvidence = await readPostgresPublicReferenceEvidence(realPool, { referenceHash: reference.contentHash, publicationIdentity: identity });

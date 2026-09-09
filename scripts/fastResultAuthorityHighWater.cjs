@@ -166,6 +166,13 @@ const loadAuthorityHighWater = (db) => {
     WHERE key LIKE ?
     ORDER BY key ASC
   `).all(`${FAST_RESULT_AUTHORITY_HIGH_WATER_ROW_PREFIX}%`);
+  return validateAuthorityHighWaterMetadata({ manifestRow, initializedRow, storedRows });
+};
+
+const validateAuthorityHighWaterMetadata = ({ manifestRow, initializedRow, storedRows }) => {
+  if (new Set(storedRows.map(row => row.key)).size !== storedRows.length) {
+    throw new Error("duplicate fast-result authority key");
+  }
   if (!manifestRow && storedRows.length === 0 && !initializedRow) {
     return {
       valid: true,
@@ -400,6 +407,7 @@ module.exports = {
   authorityIdentityKey,
   expectedManifest,
   loadAuthorityHighWater,
+  validateAuthorityHighWaterMetadata,
   mergeAuthorityHighWater,
   persistAuthorityHighWater,
   rowsRootHash,

@@ -98,7 +98,7 @@ const assertPublicationIdentity = (publication) => {
     || !publication.sourceCycleId
     || !iso(publication.committedAt)
   ) {
-    const error = new Error("SQLite projection does not carry a complete active publication identity");
+    const error = new Error("projection source does not carry a complete active publication identity");
     error.code = "POSTGRES_SOURCE_PUBLICATION_IDENTITY_INVALID";
     error.publication = publication;
     throw error;
@@ -210,7 +210,7 @@ const streamIteratorInsert = async ({
     });
     batch = [];
   };
-  for (const raw of iterator) {
+  for await (const raw of iterator) {
     const row = mapper(raw);
     if (!row) continue;
     const identity = row.id || row.artifact_key || row.key || "";
@@ -1386,6 +1386,7 @@ const syncPostgresProjectionFromSource = async (source, options = {}) => {
 
     const result = await withPostgresTransaction(pool, async (client) => {
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", ["football-postgres-projection-sync-v1"]);
+      if (source.prepare) await source.prepare(client, { mode });
       const existing = await client.query(`
         SELECT run_id, source_fingerprint
         FROM football.projection_runs
@@ -1467,7 +1468,7 @@ const syncPostgresProjectionFromSource = async (source, options = {}) => {
         await pruneWithActiveIds(
           client,
           "source_snapshots",
-          full ? sourceRows.activeIds : source.activeIds("source_snapshots"),
+          await source.activeIds("source_snapshots"),
         );
 
         const oddsRows = await streamIteratorInsert({
@@ -1487,7 +1488,7 @@ const syncPostgresProjectionFromSource = async (source, options = {}) => {
         await pruneWithActiveIds(
           client,
           "odds_snapshots",
-          full ? oddsRows.activeIds : source.activeIds("odds_snapshots"),
+          await source.activeIds("odds_snapshots"),
         );
 
         const predictionRows = await streamIteratorInsert({
@@ -1507,7 +1508,7 @@ const syncPostgresProjectionFromSource = async (source, options = {}) => {
         await pruneWithActiveIds(
           client,
           "prediction_snapshots",
-          full ? predictionRows.activeIds : source.activeIds("prediction_snapshots"),
+          await source.activeIds("prediction_snapshots"),
         );
 
         if (privateArtifactStorage() !== "postgres" && source.hasPrivateAudit()) {
@@ -1585,7 +1586,7 @@ const syncPostgresProjectionFromSource = async (source, options = {}) => {
         finishedAt: new Date().toISOString(),
         durationMs,
       };
-    }, { isolationLevel: "SERIALIZABLE" });
+    }, { isolationLevel: "SERIALIZABLE", beforeCommit: source.beforeCommit ? () => source.beforeCommit() : undefined });
     return result;
   } finally {
     try { source.close(); } finally { if (ownsPool && pool) await pool.end(); }
@@ -1594,6 +1595,7 @@ const syncPostgresProjectionFromSource = async (source, options = {}) => {
 const syncPostgresProjectionFromSqlite = options => syncPostgresProjectionFromSource(createSqliteProjectionSource(options), options);
 
 module.exports = {
+  persistSemanticRows,
   archiveParityCorrection,
   buildResultOnlyReviewCleanupCandidates,
   deactivateMissingAiCompetitors,
