@@ -1,4 +1,5 @@
 const fs = require("node:fs");
+const { fastResultGenerationReconciliationStamp, normalizeLegacyReviewClock, capturedAtFor, syncMetaDataVersion, rawOddsRecord, rawPredictionRecord } = require("./generationProjectionRows.cjs");
 const path = require("node:path");
 const { VERSION: PUBLIC_REFERENCE_ARCHIVE_VERSION, SOURCE_ID: PUBLIC_REFERENCE_ARCHIVE_SOURCE_ID, buildPublicReferenceArchive } = require("../server/publicReferenceArchive.cjs");
 const { INDEX_VERSION: PUBLIC_REFERENCE_INDEX_VERSION, INDEX_ID, INDEX_PREFIX, buildPublicReferenceIndex } = require("../server/publicReferenceArchive.cjs");
@@ -180,23 +181,6 @@ if (sourcePointerReadOnly && !generationInputActive) {
   throw new Error("read-only source-pointer export requires an immutable active generation");
 }
 
-const fastResultGenerationReconciliationStamp = (syncMeta) => {
-  const reconciliation = syncMeta?.fastResultGenerationReconciliation;
-  const revision = Number(syncMeta?.fastResultGenerationRevision || 0);
-  if (
-    reconciliation?.version !== "fast-result-generation-reconciliation-v1"
-    || !Number.isSafeInteger(revision)
-    || revision <= 0
-    || Number(reconciliation.receiptRevision || 0) !== revision
-  ) return "";
-  return JSON.stringify({
-    version: reconciliation.version,
-    receiptRevision: revision,
-    publishedAt: asText(reconciliation.publishedAt) || null,
-    sourceCycleId: asText(reconciliation.sourceCycleId) || null,
-    datasetRevision: asText(reconciliation.datasetRevision) || null,
-  });
-};
 
 const inputFastResultGenerationReconciliationStamp = generationInputActive
   ? fastResultGenerationReconciliationStamp(inputSyncMeta)
@@ -385,43 +369,12 @@ const collectReleasedPayloads = () => {
   if (typeof global.gc === "function") global.gc();
 };
 
-const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
 
 // Older live caches predate the monotonic review clock.  Import them as the
 // first known revision, using the review's own persisted generation time.  Do
 // not use the export time and do not repair explicit invalid values: both
 // would turn corrupt data into a fabricated revision instead of failing the
 // readiness gate closed.
-const normalizeLegacyReviewClock = (match) => {
-  const review = match?.postMatchReview;
-  if (!review || typeof review !== "object" || Array.isArray(review)) return match;
-
-  const generatedAt = String(review.generatedAt || "").trim();
-  if (!Number.isFinite(Date.parse(generatedAt))) return match;
-
-  if (hasOwn(review, "settlement") && (
-    !review.settlement
-    || typeof review.settlement !== "object"
-    || Array.isArray(review.settlement)
-  )) return match;
-
-  const settlement = review.settlement || {};
-  const revisionMissing = !hasOwn(settlement, "resultRevision");
-  const generatedAtMissing = !hasOwn(settlement, "reviewGeneratedAt");
-  if (!revisionMissing && !generatedAtMissing) return match;
-
-  return {
-    ...match,
-    postMatchReview: {
-      ...review,
-      settlement: {
-        ...settlement,
-        ...(revisionMissing ? { resultRevision: 1 } : {}),
-        ...(generatedAtMissing ? { reviewGeneratedAt: generatedAt } : {}),
-      },
-    },
-  };
-};
 
 // The mutable JSON feed can cross kickoff between sync cycles while its
 // original pre-match snapshot is already immutable. Materialize that archive
@@ -449,14 +402,6 @@ const matchPayloadForJsonl = (row) => (
       : row
 );
 
-const capturedAtFor = (row) => row?.capturedAt
-  || row?.captureBucket
-  || row?.oddsUpdatedAt
-  || row?.updatedAt
-  || row?.lastSeenAt
-  || row?.finishedAt
-  || row?.at
-  || null;
 
 const legacyDatasetFor = (row) => {
   const dataset = asText(row?.dataset || row?.phase || "snapshot")
@@ -466,20 +411,6 @@ const legacyDatasetFor = (row) => {
   return `jsonl-${dataset || "snapshot"}`;
 };
 
-const syncMetaDataVersion = (meta) => {
-  for (const value of [
-    meta?.api?.currentFreshnessTime,
-    meta?.api?.historyFreshnessTime,
-    meta?.api?.freshnessTime,
-    meta?.updatedAt,
-    meta?.capturedAt,
-    meta?.lastAttemptAt,
-  ]) {
-    const time = Date.parse(value || "");
-    if (Number.isFinite(time)) return new Date(time).toISOString();
-  }
-  return "";
-};
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -687,43 +618,7 @@ const runPredictionStateInsert = (statement, state) => statement.run(
   JSON.stringify(state.payload)
 );
 
-const rawOddsRecord = (row, namespace = "raw") => {
-  const payload = readJsonPayload(row?.payload) || row || {};
-  const capturedAt = capturedAtFor(payload) || row?.captured_at || null;
-  const legacyId = asText(row?.id) || hashPayload(payload);
-  return {
-    id: `odds-raw-v2:${hashPayload(`${namespace}|${legacyId}`)}`,
-    stateKey: null,
-    matchId: row?.match_id || payload.matchId || null,
-    sourceMatchId: row?.source_match_id || payload.sourceMatchId || sourceMatchIdFor(payload.matchId) || null,
-    pool: row?.pool || payload.pool || payload.poolCode || payload.oddsPoolCode || null,
-    bookmaker: row?.bookmaker || payload.bookmaker || null,
-    handicapLine: row?.handicap_line ?? payload.handicapLine ?? payload.handicap ?? null,
-    capturedAt,
-    firstSeenAt: capturedAt,
-    lastSeenAt: payload.lastSeenAt || capturedAt,
-    seenCount: Math.max(1, Number(payload.seenCount || 1)),
-    payload,
-  };
-};
 
-const rawPredictionRecord = (row, namespace = "raw") => {
-  const payload = readJsonPayload(row?.payload) || row || {};
-  const capturedAt = capturedAtFor(payload) || row?.captured_at || null;
-  const legacyId = asText(row?.id) || hashPayload(payload);
-  return {
-    id: `prediction-raw-v2:${hashPayload(`${namespace}|${legacyId}`)}`,
-    stateKey: null,
-    matchId: row?.match_id || payload.matchId || null,
-    sourceMatchId: row?.source_match_id || payload.sourceMatchId || null,
-    phase: row?.phase || payload.phase || null,
-    capturedAt,
-    firstSeenAt: payload.firstSeenAt || capturedAt,
-    lastSeenAt: payload.lastSeenAt || capturedAt,
-    seenCount: Math.max(1, Number(payload.seenCount || 1)),
-    payload,
-  };
-};
 
 const migrateOddsTable = (db) => {
   if (!tableExists(db, "odds_snapshots")) {

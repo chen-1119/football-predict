@@ -15,18 +15,23 @@ const validIso = (value) => {
   const parsed = Date.parse(value || "");
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
 };
-const metaRow = (db, key) => db.prepare(
-  "SELECT value, updated_at FROM schema_meta WHERE key = ?"
-).get(key) || null;
+const FAST_RESULT_RECEIPT_META_KEYS = Object.freeze([
+  "fast_result_receipt", "fast_result_revision", "fast_result_source_cycle_id", "fast_result_dataset_revision",
+  "fast_result_published_at", "fast_result_authority_high_water", "fast_result_authority_high_water:initialized",
+]);
 const fastResultReceiptRoot = (rows) => crypto.createHash("sha256")
   .update(stableStringify([...rows].sort((left, right) => String(left.key).localeCompare(String(right.key)))))
   .digest("hex");
 
-const readFastResultReceiptState = (db) => {
-  const receiptRow = metaRow(db, "fast_result_receipt");
-  const revisionRow = metaRow(db, "fast_result_revision");
-  const sourceCycleRow = metaRow(db, "fast_result_source_cycle_id");
-  const datasetRevisionRow = metaRow(db, "fast_result_dataset_revision");
+// Storage-independent validation: PostgreSQL and the legacy SQLite reader
+// validate the very same persisted bytes and clocks, without a SQL facade.
+const validateFastResultReceiptMetadata = (rows) => {
+  const byKey = new Map(rows.map(row => [row.key, row]));
+  if (byKey.size !== rows.length) throw new Error("duplicate fast-result metadata key");
+  const receiptRow = byKey.get("fast_result_receipt") || null;
+  const revisionRow = byKey.get("fast_result_revision") || null;
+  const sourceCycleRow = byKey.get("fast_result_source_cycle_id") || null;
+  const datasetRevisionRow = byKey.get("fast_result_dataset_revision") || null;
   if (!receiptRow && !revisionRow) {
     const previouslyInitialized = [
       "fast_result_published_at",
@@ -34,12 +39,7 @@ const readFastResultReceiptState = (db) => {
       "fast_result_dataset_revision",
       "fast_result_authority_high_water",
       "fast_result_authority_high_water:initialized",
-    ].some((key) => Boolean(metaRow(db, key))) || Boolean(db.prepare(`
-      SELECT 1 AS present
-      FROM schema_meta
-      WHERE key LIKE 'fast_result_authority_high_water:event:%'
-      LIMIT 1
-    `).get());
+    ].some((key) => byKey.has(key)) || rows.some(row => row.key.startsWith("fast_result_authority_high_water:event:"));
     return previouslyInitialized
       ? { valid: false, missing: false, reason: "receipt-revision-pair-uninitialized" }
       : { valid: true, missing: true, revision: 0, receipt: null, observations: [] };
@@ -107,7 +107,21 @@ const readFastResultReceiptState = (db) => {
   };
 };
 
+const readFastResultReceiptState = (db) => {
+  // Receipt validation needs seven scalar keys, not every high-water event
+  // payload. Only test event existence when both receipt heads are absent.
+  const rows = db.prepare(`SELECT key,value,updated_at FROM schema_meta WHERE key IN (${FAST_RESULT_RECEIPT_META_KEYS.map(() => "?").join(",")})`)
+    .all(...FAST_RESULT_RECEIPT_META_KEYS);
+  if (!rows.some(row => ["fast_result_receipt", "fast_result_revision"].includes(row.key))) {
+    const event = db.prepare("SELECT key FROM schema_meta WHERE key LIKE 'fast_result_authority_high_water:event:%' LIMIT 1").get();
+    if (event) rows.push(event);
+  }
+  return validateFastResultReceiptMetadata(rows);
+};
+
 module.exports = {
   fastResultReceiptRoot,
+  FAST_RESULT_RECEIPT_META_KEYS,
   readFastResultReceiptState,
+  validateFastResultReceiptMetadata,
 };

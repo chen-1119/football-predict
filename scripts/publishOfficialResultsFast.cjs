@@ -1,7 +1,8 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
-const { DatabaseSync } = require("node:sqlite");
+const { runSynchronousPublication, runAsynchronousPublication } = require("./publicationOperationRunner.cjs");
+const { createSqliteFastResultRepository } = require("./sqliteFastResultRepository.cjs");
 const {
   attachArchivedPreMatchPredictions,
   attachPostMatchReviews,
@@ -342,12 +343,14 @@ const attachStoredPreMatchArchive = ({
   db,
   match,
   publicationIndex = null,
+  snapshotRows = null,
   capturedAt,
 }) => {
   if (!match || typeof match !== "object") return match;
   const sourceMatchId = normalizedSourceMatchId(match);
-  let rows;
-  const readRows = () => (rows ||= predictionSnapshotRowsForSource(db, sourceMatchId));
+  let rows = snapshotRows;
+  const readRows = () => typeof snapshotRows === "function" ? snapshotRows()
+    : (rows ||= predictionSnapshotRowsForSource(db, sourceMatchId));
   const clockRepairedMatch = needsResultEventClockEvidence(match)
     ? recoverResultEventClockFromSnapshots(match, readRows())
     : match;
@@ -358,6 +361,18 @@ const attachStoredPreMatchArchive = ({
     capturedAt
   )[0] || clockRepairedMatch;
 };
+
+function* attachRepositoryArchive({ repository, ...options }) {
+  // Keep the old lazy archive path: valid frozen objects do not read their
+  // potentially large prediction history just because storage is now async.
+  const needsSnapshots = new Error("archive requires original snapshot rows");
+  try {
+    return attachStoredPreMatchArchive({ ...options, snapshotRows: () => { throw needsSnapshots; } });
+  } catch (error) { if (error !== needsSnapshots) throw error; }
+  return attachStoredPreMatchArchive({ ...options,
+    snapshotRows: yield repository.predictions(normalizedSourceMatchId(options.match)),
+  });
+}
 
 const archiveComparable = (match) => JSON.stringify(
   match?.archivedPreMatchPrediction || null
@@ -820,12 +835,12 @@ const authorityHighWaterFailureReason = (merge) => (
       : "authority-high-water-overflow"
 );
 
-const publishOfficialResultsFast = (options = {}) => {
+function* publishOfficialResultsWithRepository(options = {}) {
   const startedAt = new Date().toISOString();
   const dbPath = path.resolve(options.dbPath || defaultDbPath);
   const syncMetaPath = path.resolve(options.syncMetaPath || defaultSyncMetaPath);
   const publicationLedgerPath = path.resolve(options.publicationLedgerPath || defaultPublicationLedgerPath);
-  if (!fs.existsSync(dbPath)) return skippedResult(startedAt, "sqlite-database-missing");
+  if (!options.repositoryFactory && !fs.existsSync(dbPath)) return skippedResult(startedAt, "sqlite-database-missing");
 
   // Capture the loader result once, then audit and consume this exact immutable
   // value. No validation/read-again window exists for a file replacement to
@@ -946,14 +961,13 @@ const publishOfficialResultsFast = (options = {}) => {
   let authorityHighWaterRows = 0;
 
   try {
-    db = new DatabaseSync(dbPath);
-    db.exec("PRAGMA busy_timeout = 5000");
-    if (!tableExists(db, "match_snapshots") || !tableExists(db, "schema_meta")) {
+    db = yield (options.repositoryFactory ? options.repositoryFactory() : createSqliteFastResultRepository(dbPath, migrateLegacyFastResultIntegrity));
+    if (!(yield db.available())) {
       return skippedResult(startedAt, "sqlite-schema-unavailable", { sourceCycleId });
     }
-    let preflightReceiptState = readFastResultReceiptState(db);
+    let preflightReceiptState = (yield db.receipt());
     if (preflightReceiptState.legacy) {
-      integrityMigration = migrateLegacyFastResultIntegrity(db);
+      integrityMigration = (yield db.migrateLegacy());
       writeTransactionStarted = true;
       if (!integrityMigration.ok) {
         return skippedResult(startedAt, "fast-result-receipt-invalid", {
@@ -961,7 +975,7 @@ const publishOfficialResultsFast = (options = {}) => {
           receiptBlocker: integrityMigration.reason,
         });
       }
-      preflightReceiptState = readFastResultReceiptState(db);
+      preflightReceiptState = (yield db.receipt());
     }
     if (!preflightReceiptState.valid) {
       return skippedResult(startedAt, "fast-result-receipt-invalid", {
@@ -974,7 +988,7 @@ const publishOfficialResultsFast = (options = {}) => {
       filePath: syncMetaPath,
       receiptState: preflightReceiptState,
     });
-    const preflightAuthorityHighWater = loadAuthorityHighWater(db);
+    const preflightAuthorityHighWater = (yield db.authority());
     if (!preflightAuthorityHighWater.valid) {
       return skippedResult(startedAt, "authority-high-water-invalid", {
         sourceCycleId,
@@ -1000,15 +1014,11 @@ const publishOfficialResultsFast = (options = {}) => {
     // loading the publication ledger or taking SQLite's single-writer lock.
     // Any ambiguity, correction, missing review, or stale review schema falls
     // through to the existing atomic reconciliation path below.
-    const preflightHistoryRowsForSource = db.prepare(`
-      SELECT id, dataset, match_id, source_match_id, kickoff_time, status, payload
-      FROM match_snapshots
-      WHERE dataset = 'history' AND source_match_id = ?
-    `);
-    const fastNoopRows = selected.rows.map((result) => {
+    const fastNoopRows = [];
+    for (const result of selected.rows) {
       const sourceMatchId = normalizedSourceMatchId(result);
       const exactTerminalHistory = parseMatchRows(
-        preflightHistoryRowsForSource.all(sourceMatchId)
+        yield db.history(sourceMatchId)
       )
         .map((entry) => ({
           ...entry,
@@ -1021,8 +1031,8 @@ const publishOfficialResultsFast = (options = {}) => {
         ));
       const entry = exactTerminalHistory.length === 1 ? exactTerminalHistory[0] : null;
       const archiveCandidate = entry
-        ? attachStoredPreMatchArchive({
-            db,
+        ? yield* attachRepositoryArchive({
+            repository: db,
             match: entry.match,
             capturedAt: validIso(result?.resultObservedAt, new Date().toISOString()),
           })
@@ -1081,7 +1091,7 @@ const publishOfficialResultsFast = (options = {}) => {
           resultProbeRevisionId: endpointTrust.resultProbeRevisionId,
         }));
       }
-      return Boolean(
+      fastNoopRows.push(Boolean(
         entry
         && sameScore(entry.resolved, entry.incoming)
         && metadataPlan?.reject !== true
@@ -1090,8 +1100,8 @@ const publishOfficialResultsFast = (options = {}) => {
         && isTrustedFinishedForSettlement(entry.resolved)
         && hasCompleteStoredReviewForScore(entry.match)
         && !archiveRepairRequired
-      );
-    });
+      ));
+    };
     if (preflightAuthorityEventMissing) {
       return skippedResult(startedAt, "authority-high-water-event-missing", {
         sourceCycleId,
@@ -1110,12 +1120,12 @@ const publishOfficialResultsFast = (options = {}) => {
         });
       }
       if (preflightHighWaterMerge.changed) {
-        db.exec("BEGIN IMMEDIATE");
+        yield db.begin();
         transactionOpen = true;
         writeTransactionStarted = true;
-        const lockedAuthorityHighWater = loadAuthorityHighWater(db);
+        const lockedAuthorityHighWater = (yield db.authority());
         if (!lockedAuthorityHighWater.valid) {
-          db.exec("ROLLBACK");
+          yield db.rollback();
           transactionOpen = false;
           return skippedResult(startedAt, "authority-high-water-invalid", {
             sourceCycleId,
@@ -1127,7 +1137,7 @@ const publishOfficialResultsFast = (options = {}) => {
           preflightAuthorityCandidates,
         );
         if (!lockedHighWaterMerge.valid) {
-          db.exec("ROLLBACK");
+          yield db.rollback();
           transactionOpen = false;
           return skippedResult(startedAt, authorityHighWaterFailureReason(lockedHighWaterMerge), {
             sourceCycleId,
@@ -1135,15 +1145,13 @@ const publishOfficialResultsFast = (options = {}) => {
           });
         }
         if (lockedHighWaterMerge.changed) {
-          authorityHighWaterUpdated = persistAuthorityHighWater(
-            db,
-            lockedHighWaterMerge,
+          authorityHighWaterUpdated = yield db.persistAuthority(lockedHighWaterMerge,
             observedAt,
           );
           authorityHighWaterRows = lockedHighWaterMerge.rows.length;
-          db.exec("COMMIT");
+          yield db.commit();
         } else {
-          db.exec("ROLLBACK");
+          yield db.rollback();
         }
         transactionOpen = false;
       }
@@ -1178,21 +1186,21 @@ const publishOfficialResultsFast = (options = {}) => {
 
     ledger = loadLedgerIndex(publicationLedgerPath);
     ledgerLoaded = true;
-    db.exec("BEGIN IMMEDIATE");
+    yield db.begin();
     transactionOpen = true;
     writeTransactionStarted = true;
-    const transactionAuthorityHighWater = loadAuthorityHighWater(db);
+    const transactionAuthorityHighWater = (yield db.authority());
     if (!transactionAuthorityHighWater.valid) {
-      db.exec("ROLLBACK");
+      yield db.rollback();
       transactionOpen = false;
       return skippedResult(startedAt, "authority-high-water-invalid", {
         sourceCycleId,
         verifiedFastEndpoints: endpointTrust.entries.length,
       });
     }
-    const transactionReceiptState = readFastResultReceiptState(db);
+    const transactionReceiptState = (yield db.receipt());
     if (!transactionReceiptState.valid) {
-      db.exec("ROLLBACK");
+      yield db.rollback();
       transactionOpen = false;
       return skippedResult(startedAt, "fast-result-receipt-invalid", {
         sourceCycleId,
@@ -1203,31 +1211,6 @@ const publishOfficialResultsFast = (options = {}) => {
     const priorReceiptObservations = transactionReceiptState.observations;
     revision = transactionReceiptState.revision + 1;
     datasetRevision = `sqlite-fast-result-r${revision}`;
-    const currentRowsForSource = db.prepare(`
-      SELECT id, dataset, match_id, source_match_id, kickoff_time, status, payload
-      FROM match_snapshots
-      WHERE dataset = 'current' AND source_match_id = ?
-    `);
-    const historyRowsForSource = db.prepare(`
-      SELECT id, dataset, match_id, source_match_id, kickoff_time, status, payload
-      FROM match_snapshots
-      WHERE dataset = 'history' AND source_match_id = ?
-    `);
-    const rowById = db.prepare("SELECT id, dataset, payload FROM match_snapshots WHERE id = ?");
-    const insertHistory = db.prepare(`
-      INSERT INTO match_snapshots
-        (id, dataset, match_id, source_match_id, kickoff_time, status, payload)
-      VALUES (?, 'history', ?, ?, ?, 'FINISHED', ?)
-    `);
-    const deleteCurrent = db.prepare(
-      "DELETE FROM match_snapshots WHERE id = ? AND dataset = 'current'"
-    );
-    const updateHistory = db.prepare(`
-      UPDATE match_snapshots
-      SET match_id = ?, source_match_id = ?, kickoff_time = ?, status = 'FINISHED', payload = ?
-      WHERE id = ? AND dataset = 'history'
-    `);
-
     for (const sourceResult of selected.rows) {
       let result = sourceResult;
       const observedAtForResult = validIso(result.resultObservedAt, null);
@@ -1236,7 +1219,7 @@ const publishOfficialResultsFast = (options = {}) => {
         continue;
       }
       const sourceMatchId = normalizedSourceMatchId(result);
-      const historyEntries = parseMatchRows(historyRowsForSource.all(sourceMatchId));
+      const historyEntries = parseMatchRows(yield db.history(sourceMatchId));
       const terminalHistory = historyEntries
         .map((entry) => ({
           ...entry,
@@ -1262,8 +1245,8 @@ const publishOfficialResultsFast = (options = {}) => {
       let persistedSourceCycleId = sourceCycleId;
 
       if (historyEntry) {
-        const historyBase = attachStoredPreMatchArchive({
-          db,
+        const historyBase = yield* attachRepositoryArchive({
+          repository: db,
           match: historyEntry.match,
           publicationIndex: ledger.index,
           capturedAt: observedAtForResult,
@@ -1298,7 +1281,7 @@ const publishOfficialResultsFast = (options = {}) => {
           && !historyAuthorityHighWater
           && (!sameStoredScore || metadataPlan?.conflicts === true)
         ) {
-          db.exec("ROLLBACK");
+          yield db.rollback();
           transactionOpen = false;
           return skippedResult(startedAt, "authority-high-water-event-missing", {
             sourceCycleId,
@@ -1421,7 +1404,7 @@ const publishOfficialResultsFast = (options = {}) => {
           changeType = "official-score-correction";
         }
       } else {
-        const currentEntries = parseMatchRows(currentRowsForSource.all(sourceMatchId));
+        const currentEntries = parseMatchRows(yield db.current(sourceMatchId));
         const matchingCurrent = currentEntries
           .map((entry) => ({
             ...entry,
@@ -1441,8 +1424,8 @@ const publishOfficialResultsFast = (options = {}) => {
         }
 
         currentEntry = matchingCurrent[0];
-        const currentBase = attachStoredPreMatchArchive({
-          db,
+        const currentBase = yield* attachRepositoryArchive({
+          repository: db,
           match: currentEntry.match,
           publicationIndex: ledger.index,
           capturedAt: observedAtForResult,
@@ -1559,7 +1542,7 @@ const publishOfficialResultsFast = (options = {}) => {
       // that row instead of rendering a second, apparently unrelated fixture.
       const persistedFinalMatch = finalMatch;
       if (historyEntry) {
-        const updated = updateHistory.run(
+        const updated = yield db.updateHistory(
           persistedFinalMatch.id || null,
           sourceMatchId,
           persistedFinalMatch.kickoffTime || null,
@@ -1572,7 +1555,7 @@ const publishOfficialResultsFast = (options = {}) => {
       } else {
         const baseHistoryId = `history:${finalMatch.id || sourceMatchId}`;
         let historyId = baseHistoryId;
-        let occupied = rowById.get(historyId);
+        let occupied = yield db.rowById(historyId);
         if (occupied) {
           const occupiedMatch = safeJsonParse(occupied.payload, null);
           if (occupiedMatch && sameAuthorityEvent(occupiedMatch, finalMatch)) {
@@ -1590,7 +1573,7 @@ const publishOfficialResultsFast = (options = {}) => {
             .digest("hex")
             .slice(0, 16);
           historyId = `${baseHistoryId}:event:${eventSuffix}`;
-          occupied = rowById.get(historyId);
+          occupied = yield db.rowById(historyId);
           if (occupied) {
             const occupiedEventMatch = safeJsonParse(occupied.payload, null);
             if (
@@ -1602,14 +1585,14 @@ const publishOfficialResultsFast = (options = {}) => {
             continue;
           }
         }
-        insertHistory.run(
+        yield db.insertHistory(
           historyId,
           persistedFinalMatch.id || null,
           sourceMatchId,
           persistedFinalMatch.kickoffTime || null,
           JSON.stringify(persistedFinalMatch)
         );
-        const deleted = deleteCurrent.run(currentEntry.row.id);
+        const deleted = yield db.deleteCurrent(currentEntry.row.id);
         if (Number(deleted.changes || 0) !== 1) {
           throw new Error(`fast-result-current-delete-race:${sourceMatchId}`);
         }
@@ -1634,7 +1617,7 @@ const publishOfficialResultsFast = (options = {}) => {
         transactionAuthorityCandidates,
       );
       if (!highWaterMerge.valid) {
-        db.exec("ROLLBACK");
+        yield db.rollback();
         transactionOpen = false;
         return skippedResult(startedAt, authorityHighWaterFailureReason(highWaterMerge), {
           sourceCycleId,
@@ -1642,15 +1625,13 @@ const publishOfficialResultsFast = (options = {}) => {
         });
       }
       if (highWaterMerge.changed) {
-        authorityHighWaterUpdated = persistAuthorityHighWater(
-          db,
-          highWaterMerge,
+        authorityHighWaterUpdated = yield db.persistAuthority(highWaterMerge,
           observedAt,
         );
         authorityHighWaterRows = highWaterMerge.rows.length;
-        db.exec("COMMIT");
+        yield db.commit();
       } else {
-        db.exec("ROLLBACK");
+        yield db.rollback();
       }
       transactionOpen = false;
       if (metaRecovery.updated) {
@@ -1696,13 +1677,13 @@ const publishOfficialResultsFast = (options = {}) => {
       priorReceiptObservations,
       observations
     ).rows;
-    upsertMeta(db, "fast_result_published_at", publishedAt, publishedAt);
-    upsertMeta(db, "fast_result_source_cycle_id", sourceCycleId, publishedAt);
-    upsertMeta(db, "fast_result_dataset_revision", datasetRevision, publishedAt);
-    upsertMeta(db, "source_cycle_id", sourceCycleId, publishedAt);
-    upsertMeta(db, "dataset_revision", datasetRevision, publishedAt);
-    upsertMeta(db, "fast_result_revision", revision, publishedAt);
-    upsertMeta(db, "fast_result_receipt", JSON.stringify({
+    yield db.upsertMeta("fast_result_published_at", publishedAt, publishedAt);
+    yield db.upsertMeta("fast_result_source_cycle_id", sourceCycleId, publishedAt);
+    yield db.upsertMeta("fast_result_dataset_revision", datasetRevision, publishedAt);
+    yield db.upsertMeta("source_cycle_id", sourceCycleId, publishedAt);
+    yield db.upsertMeta("dataset_revision", datasetRevision, publishedAt);
+    yield db.upsertMeta("fast_result_revision", revision, publishedAt);
+    yield db.upsertMeta("fast_result_receipt", JSON.stringify({
       version: "sqlite-fast-result-receipt-v2",
       revision,
       publishedAt,
@@ -1717,7 +1698,7 @@ const publishOfficialResultsFast = (options = {}) => {
       transactionAuthorityCandidates,
     );
     if (!highWaterMerge.valid) {
-      db.exec("ROLLBACK");
+      yield db.rollback();
       transactionOpen = false;
       return skippedResult(startedAt, authorityHighWaterFailureReason(highWaterMerge), {
         sourceCycleId,
@@ -1725,20 +1706,18 @@ const publishOfficialResultsFast = (options = {}) => {
       });
     }
     if (highWaterMerge.changed) {
-      authorityHighWaterUpdated = persistAuthorityHighWater(
-        db,
-        highWaterMerge,
+      authorityHighWaterUpdated = yield db.persistAuthority(highWaterMerge,
         observedAt,
       );
       authorityHighWaterRows = highWaterMerge.rows.length;
     }
-    db.exec("COMMIT");
+    yield db.commit();
     transactionOpen = false;
     committedAt = new Date().toISOString();
   } catch (error) {
     if (transactionOpen) {
       try {
-        db.exec("ROLLBACK");
+        yield db.rollback();
       } catch {
         // Preserve the publication error as the primary failure.
       }
@@ -1746,7 +1725,7 @@ const publishOfficialResultsFast = (options = {}) => {
     throw error;
   } finally {
     try {
-      db?.close();
+      yield db?.close();
     } catch {
       // Ignore close errors after a committed or rolled-back transaction.
     }
@@ -1803,6 +1782,17 @@ const publishOfficialResultsFast = (options = {}) => {
   };
 };
 
+const publishOfficialResultsFast = options => runSynchronousPublication(publishOfficialResultsWithRepository(options));
+const publishOfficialResultsPostgres = options => runAsynchronousPublication(publishOfficialResultsWithRepository({
+  ...options, repositoryFactory: () => require("./postgresFastResultRepository.cjs").createPostgresFastResultRepository(options),
+}));
+
+const publishOfficialResultsRuntime = async (options = {}) => {
+  const { postgresProjectionSource } = require("./runtimePostgresProjection.cjs");
+  if (postgresProjectionSource() === "sqlite") return publishOfficialResultsFast(options);
+  return { ...(await publishOfficialResultsPostgres(options)), storage: "postgres" };
+};
+
 const main = async () => {
   const machineMode = process.env[FAST_RESULT_PUBLISHER_MACHINE_ENV] === "1";
   const originalConsole = machineMode
@@ -1816,10 +1806,10 @@ const main = async () => {
   }
   let result;
   try {
-    result = publishOfficialResultsFast();
+    result = await publishOfficialResultsRuntime();
     const postgresMode = String(process.env.FOOTBALL_POSTGRES_MODE || "disabled").trim().toLowerCase();
     const postgresEnabled = ["shadow-write", "shadow-read", "primary"].includes(postgresMode);
-    const shouldReplicate = postgresEnabled && result?.ok === true && (
+    const shouldReplicate = postgresEnabled && result?.storage !== "postgres" && result?.ok === true && (
       Number(result?.publishedRows || 0) > 0 || result?.visibleStateChanged === true
     );
     if (shouldReplicate) {
@@ -1873,6 +1863,8 @@ module.exports = {
   migrateLegacyFastResultIntegrity,
   officialSportteryHttps,
   publishOfficialResultsFast,
+  publishOfficialResultsPostgres,
+  publishOfficialResultsRuntime,
   publishSyncMetaRevision,
   recoverSyncMetaFromReceipt,
   readFastResultReceiptState,

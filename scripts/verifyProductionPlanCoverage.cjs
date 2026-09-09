@@ -219,6 +219,8 @@ const modelBacktest = readText("scripts/runModelBacktest.cjs");
 const oddsObservationTrail = readText("src/services/oddsObservationTrail.cjs");
 const verifyOddsObservationTrail = readText("scripts/verifyOddsObservationTrail.cjs");
 const privateModelArtifactStore = readText("scripts/privateModelArtifactStore.cjs");
+const runtimePrivateModelArtifactStore = readText("scripts/runtimePrivateModelArtifactStore.cjs");
+const postgresPrivateModelArtifactStore = readText("scripts/postgresPrivateModelArtifactStore.cjs");
 const modelStrategy = readText("scripts/optimizePredictionStrategy.cjs");
 const hhadCompanionEvaluation = readText("src/services/hhadCompanionShadowEvaluation.cjs");
 const verifyHhadCompanionEvaluation = readText("scripts/verifyHhadCompanionShadowEvaluation.cjs");
@@ -2102,7 +2104,7 @@ const readPlanSqliteStatus = async () => {
     "evaluateHhadCompanionShadowHistory",
     "globalRiskTier",
     "includeInternalRows: true",
-    "privateModelArtifactStore.cjs",
+    "runtimePrivateModelArtifactStore.cjs",
     "writePrivateModelArtifact",
     "removeLegacyPrivateAuditFile",
     "outputFiles: [serverOutputFile, publicOutputFile, shadowCandidatesOutputFile]",
@@ -2116,10 +2118,12 @@ const readPlanSqliteStatus = async () => {
       "writePrivateModelArtifact"
     ]) && scripts["verify:private-model-artifact"] === "node scripts/verifyPrivateModelArtifactStore.cjs"
     && hasAll(verifyModelPromotionGate, [
-      "privateModelArtifactStore.cjs",
+      "runtimePrivateModelArtifactStore.cjs",
       "readPrivateModelArtifact",
       "legacy HHAD private audit file has been removed"
-    ]) && !serverIndex.includes("private_model_artifacts")
+    ]) && hasAll(runtimePrivateModelArtifactStore, ["privateModelArtifactStore.cjs", "postgresPrivateModelArtifactStore.cjs", "invalid PRIVATE_MODEL_ARTIFACT_STORAGE"])
+    && hasAll(postgresPrivateModelArtifactStore, ["payload::text AS payload_json", "payload SHA-256 mismatch", "transactional roundtrip changed audit evidence"])
+    && !serverIndex.includes("private_model_artifacts")
     && hasAll(hhadCompanionEvaluation, [
     "pairedThreeWay",
     "six-non-overlapping-chronological-match-day-windows",

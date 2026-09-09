@@ -101,6 +101,9 @@ const withPostgresTransaction = async (pool, callback, options = {}) => {
   try {
     await client.query(`BEGIN ISOLATION LEVEL ${isolationLevel}`);
     const result = await callback(client);
+    // A filesystem publication CAS must remain locked until the asynchronous
+    // database COMMIT has finished, not merely until the callback returns.
+    if (options.beforeCommit) await options.beforeCommit(client);
     await client.query("COMMIT");
     return result;
   } catch (error) {

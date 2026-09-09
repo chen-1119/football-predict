@@ -1,6 +1,6 @@
 "use strict";
 
-const { syncPostgresProjectionFromSqlite } = require("./postgresProjectionSync.cjs");
+const { syncRuntimePostgresProjection } = require("./runtimePostgresProjection.cjs");
 
 const postgresMode = String(process.env.FOOTBALL_POSTGRES_MODE || "disabled").trim().toLowerCase();
 const ifEnabled = process.argv.includes("--if-enabled");
@@ -19,7 +19,7 @@ const main = async () => {
   }
   const mode = requestedMode
     || (process.argv.includes("--backfill") ? "backfill" : "incremental");
-  const result = await syncPostgresProjectionFromSqlite({
+  const result = await syncRuntimePostgresProjection({
     mode,
     force: process.argv.includes("--force"),
   });

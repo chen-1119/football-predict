@@ -13,11 +13,6 @@ const {
 
 let DatabaseSync = null;
 let sqliteLoadError = null;
-try {
-  ({ DatabaseSync } = require("node:sqlite"));
-} catch (error) {
-  sqliteLoadError = error;
-}
 
 const safeJsonParse = (text, fallback = null) => {
   try {
@@ -36,6 +31,10 @@ const closeDatabase = (db) => {
 };
 
 const openReadonly = (dbPath) => {
+  if (!DatabaseSync && !sqliteLoadError) {
+    try { ({ DatabaseSync } = require("node:sqlite")); }
+    catch (error) { sqliteLoadError = error; }
+  }
   if (!DatabaseSync) {
     return {
       db: null,

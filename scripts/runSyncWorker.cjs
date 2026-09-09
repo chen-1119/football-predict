@@ -3163,14 +3163,15 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
     const fastResultStep = await runBestEffort(
       "publish:official-results-fast",
       async () => {
-        const { publishOfficialResultsFast } = require("./publishOfficialResultsFast.cjs");
+        const { publishOfficialResultsRuntime } = require("./publishOfficialResultsFast.cjs");
         let result = {
           script: "publish:official-results-fast",
-          ...publishOfficialResultsFast(),
+          ...await publishOfficialResultsRuntime(),
         };
         const postgresMode = String(process.env.FOOTBALL_POSTGRES_MODE || "disabled").trim().toLowerCase();
         if (
           ["shadow-write", "shadow-read", "primary"].includes(postgresMode)
+          && result.storage !== "postgres"
           && result.ok === true
           && (Number(result.publishedRows || 0) > 0 || result.visibleStateChanged === true)
         ) {
