@@ -5,6 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { spawn } = require("node:child_process");
+const { stopVerificationChild } = require("./stopVerificationChild.cjs");
 
 const rootDir = path.resolve(__dirname, "..");
 const runningServers = [];
@@ -122,15 +123,7 @@ const startServer = async ({ failWriteAfter = null } = {}) => {
 
 const stopServer = async (server) => {
   if (!server) return;
-  if (server.child.exitCode === null) {
-    server.child.kill("SIGTERM");
-    await Promise.race([
-      new Promise((resolve) => server.child.once("exit", resolve)),
-      sleep(3000).then(() => {
-        if (server.child.exitCode === null) server.child.kill("SIGKILL");
-      })
-    ]);
-  }
+  await stopVerificationChild(server.child);
   await fsp.rm(server.storeDir, { recursive: true, force: true });
 };
 
@@ -278,10 +271,20 @@ const checkPerCodeTtlIsShorteningOnly = async () => {
 };
 
 const run = async () => {
+  const scenario = async (execute) => {
+    const result = await execute();
+    // These cases share no server state. Release each fixture before starting
+    // the next instead of holding three full app processes until suite exit.
+    for (const server of [...runningServers]) {
+      await stopServer(server);
+      runningServers.splice(runningServers.indexOf(server), 1);
+    }
+    return result;
+  };
   try {
-    const revocationRace = await checkRevocationRace();
-    const writeFailure = await checkWriteFailureFailsClosed();
-    const perCodeTtl = await checkPerCodeTtlIsShorteningOnly();
+    const revocationRace = await scenario(checkRevocationRace);
+    const writeFailure = await scenario(checkWriteFailureFailsClosed);
+    const perCodeTtl = await scenario(checkPerCodeTtlIsShorteningOnly);
     console.log(JSON.stringify({
       ok: true,
       checkedAt: new Date().toISOString(),
@@ -296,8 +299,8 @@ const run = async () => {
     }, null, 2));
     process.exitCode = 1;
   } finally {
-    await Promise.all(runningServers.map((server) => stopServer(server).catch(() => {})));
+    await Promise.all(runningServers.map((server) => stopServer(server)));
   }
 };
 
-run();
+run().catch((error) => { console.error(error.message); process.exitCode = 1; });

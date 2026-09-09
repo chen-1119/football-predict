@@ -91,7 +91,11 @@ exit "$release_status"
     const before=artifacts.map(name=>fs.readFileSync(path.join(temp,"store",name),"utf8"));
     for(const file of ["scripts/frontendInstalledRuntime.cjs","scripts/verifyFrontendInstalledRuntime.cjs",
       "scripts/verifyFrontendRuntimeAlternatives.cjs","scripts/verifyReleaseVerifierContracts.cjs",
-      "scripts/frontendReleaseInputs.cjs","scripts/prepareFrontendRelease.cjs","scripts/verifyFrontendReleaseInputs.cjs"]) {
+      "scripts/frontendReleaseInputs.cjs","scripts/prepareFrontendRelease.cjs","scripts/verifyFrontendReleaseInputs.cjs",
+      "scripts/stopVerificationChild.cjs","scripts/verifyVerificationChildShutdown.cjs",
+      "scripts/verifyAccessCodeConcurrency.cjs","scripts/verifyRelaySnapshotUploadSerialization.cjs",
+      "scripts/verifySportteryRelayDualLaneServer.cjs","scripts/verifySyncWorkerEventBridge.cjs",
+      "scripts/verifyDataGenerationEndToEnd.cjs"]) {
       put(`live/${file}`,"previous-release-tool");put(`candidate/${file}`,"updated-release-tool");
       const result=classifyModelWork(options);
       assert.equal(result.mode,"preserve",file);assert.equal(result.freshDataChecksRequired,true);
@@ -103,7 +107,7 @@ exit "$release_status"
     fs.unlinkSync(path.join(temp,unknown));
   });
   await check("runtime and reusable preparation dependencies are enforced by both real archive membership gates",()=>{
-    const required=["scripts/verifyFrontendRuntimeAlternatives.cjs","scripts/frontendReleaseInputs.cjs","scripts/prepareFrontendRelease.cjs","scripts/verifyFrontendReleaseInputs.cjs"], vm=require("node:vm");
+    const required=["scripts/verifyFrontendRuntimeAlternatives.cjs","scripts/frontendReleaseInputs.cjs","scripts/prepareFrontendRelease.cjs","scripts/verifyFrontendReleaseInputs.cjs","scripts/stopVerificationChild.cjs","scripts/verifyVerificationChildShutdown.cjs"], vm=require("node:vm");
     const entries=source=>{
       const match=/const required(?:Release)?Entries = (\[[\s\S]*?\n\]);/.exec(source);
       const prebuilt=/const prebuiltDistBundleEntry = ("[^"\n]+");/.exec(source);

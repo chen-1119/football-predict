@@ -8,6 +8,7 @@ const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
+const { stopVerificationChild } = require("./stopVerificationChild.cjs");
 const {
   createFastUploadSnapshot,
   resultFingerprint,
@@ -395,13 +396,7 @@ const waitForServer = async (baseUrl, child) => {
 };
 
 const terminate = async (child) => {
-  if (!child || child.exitCode !== null) return;
-  child.kill("SIGTERM");
-  await Promise.race([
-    new Promise((resolve) => child.once("exit", resolve)),
-    new Promise((resolve) => setTimeout(resolve, 5000)),
-  ]);
-  if (child.exitCode === null) child.kill("SIGKILL");
+  await stopVerificationChild(child, { graceMs: 5000 });
 };
 
 const main = async () => {

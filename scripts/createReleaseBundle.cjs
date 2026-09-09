@@ -658,6 +658,8 @@ const requiredEntries = [
   "scripts/frontendReleaseInputs.cjs",
   "scripts/prepareFrontendRelease.cjs",
   "scripts/verifyFrontendReleaseInputs.cjs",
+  "scripts/stopVerificationChild.cjs",
+  "scripts/verifyVerificationChildShutdown.cjs",
   "server/frontendReleaseIdentity.cjs",
   "scripts/verifyFrontendReleaseIdentity.cjs",
   "scripts/verifyFrontendReleaseConsumers.cjs",
