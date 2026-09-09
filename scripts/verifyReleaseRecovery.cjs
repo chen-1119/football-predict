@@ -346,6 +346,9 @@ const createFixture = (phase, { health = true, modelArtifactCount = 2, legacyMan
 const runRecovery = (fixture) => spawnSync(process.execPath, [helperPath], {
   cwd: rootDir,
   encoding: "utf8",
+  timeout: 15000,
+  maxBuffer: 1024 * 1024,
+  windowsHide: true,
   env: {
     ...process.env,
     FOOTBALL_RELEASE_RECOVERY_TEST_MODE: "1",
@@ -437,6 +440,140 @@ function verifyFullAfterUiRecovery() {
   }
   return { ok: true, checks, actualPublicReader: true, productionWrites: 0,
     scope: "isolated real file/tree recovery and receipt reading; systemd/health/SQLite are fixtures, not live rollback or database acceptance" };
+}
+
+// Exercise the unchanged recovery helper against actual SQLite images. The
+// system adapter remains mocked: this proves image restoration, NOT production
+// quick_check rejection, serving-generation rebuild, or service recovery.
+function verifyRealSqliteRecovery() {
+  const { DatabaseSync } = require("node:sqlite");
+  const { ensurePrivateModelArtifactTable } = require("./privateModelArtifactStore.cjs");
+  const checks = [], suffixes = { base: "", wal: "-wal", shm: "-shm" };
+  const rows = (file) => {
+    const db = new DatabaseSync(file, { readOnly: true });
+    try {
+      assert.equal(db.prepare("PRAGMA quick_check").get().quick_check, "ok");
+      return {
+        predictions: db.prepare("SELECT * FROM prediction_snapshots ORDER BY id").all(),
+        privateAudit: db.prepare("SELECT * FROM private_model_artifacts ORDER BY artifact_key").all(),
+        generation: db.prepare("SELECT * FROM schema_meta ORDER BY key").all(),
+      };
+    } finally { db.close(); }
+  };
+  const makeImage = (file, state, wal) => {
+    const db = new DatabaseSync(file);
+    try {
+      if (wal) db.exec("PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0;");
+      ensurePrivateModelArtifactTable(db);
+      db.exec(`CREATE TABLE prediction_snapshots (
+        id TEXT PRIMARY KEY, state_key TEXT UNIQUE, match_id TEXT, source_match_id TEXT,
+        phase TEXT, captured_at TEXT, first_seen_at TEXT, last_seen_at TEXT,
+        seen_count INTEGER NOT NULL DEFAULT 1, payload TEXT NOT NULL);
+        CREATE TABLE schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);`);
+      // All business rows must remain in WAL in that scenario. A base-only
+      // restore would still be a valid SQLite database, but lose the evidence.
+      if (wal) db.exec("PRAGMA wal_checkpoint(TRUNCATE);");
+      const clock = "2026-09-09T00:01:00.000Z";
+      const payload = JSON.stringify({ matchId: "synthetic-frozen-match", phase: "prematch",
+        capturedAt: clock, frozen: true, tip: state === "old" ? "X" : "1",
+        recommendationAction: "reference", recommendationReliable: false }, null, 2) + "\n";
+      const audit = JSON.stringify({ version: "synthetic-recovery-audit-v1", state,
+        onlineEffect: "shadow", promotionAllowed: false }, null, 2) + "\n";
+      db.exec("BEGIN IMMEDIATE");
+      db.prepare("INSERT INTO prediction_snapshots VALUES (?,?,?,?,?,?,?,?,?,?)").run(
+        "frozen-1", "frozen-1", "synthetic-frozen-match", "synthetic-source", "prematch", clock, clock, clock, 3, payload);
+      db.prepare("INSERT INTO private_model_artifacts VALUES (?,?,?,?,?,?,?)").run(
+        hhadCompanionAuditArtifactKey, "synthetic-recovery-audit-v1", clock, clock,
+        audit, sha256(audit), Buffer.byteLength(audit));
+      db.prepare("INSERT INTO schema_meta VALUES (?,?)").run("generationId", "synthetic-generation-" + state);
+      db.exec("COMMIT");
+      const expected = rows(file);
+      if (!wal) db.close();
+      const images = {};
+      for (const [token, suffix] of Object.entries(suffixes))
+        images[token] = fs.existsSync(file + suffix) ? fs.readFileSync(file + suffix) : null;
+      if (wal) {
+        assert.ok(images.wal?.length > 32 && images.shm?.length > 0);
+        const baseOnly = file + ".base-only";
+        write(baseOnly, images.base);
+        assert.equal(rows(baseOnly).predictions.length, 0, "fixture must require WAL to recover its frozen row");
+      }
+      return { images, expected };
+    } finally { try { db.close(); } catch {} }
+  };
+  const installImages = (fixture, image) => {
+    const dir = path.join(fixture.current, "sqlite"), stat = fs.statSync(fixture.sqliteTarget);
+    const manifest = [];
+    for (const [token, suffix] of Object.entries(suffixes)) {
+      const bytes = image.images[token], snapshot = path.join(dir, "football.db" + suffix);
+      if (bytes === null) {
+        fs.rmSync(snapshot, { force: true }); manifest.push(`${token}\t0\t-\t-\t-\t-\t-`);
+      } else {
+        write(snapshot, bytes);
+        manifest.push([token, "1", bytes.length, sha256(bytes), stat.uid, stat.gid, octalMode(fixture.sqliteTarget)].join("\t"));
+      }
+    }
+    write(path.join(dir, "manifest.tsv"), manifest.join("\n") + "\n");
+  };
+  const assertImages = (target, image) => {
+    for (const [token, suffix] of Object.entries(suffixes)) {
+      if (image.images[token] === null) assertAbsent(target + suffix);
+      else assert.deepEqual(fs.readFileSync(target + suffix), image.images[token], token + " must be restored byte-for-byte before opening SQLite");
+    }
+  };
+  for (const wal of [false, true]) {
+    for (const phase of [...sqlitePhases, ...forwardPhases, "tampered-snapshot"]) {
+      const tampered = phase === "tampered-snapshot", forward = forwardPhases.includes(phase);
+      const fixture = createFixture(tampered ? "swap-complete" : phase, { acceptedUi: true });
+      try {
+        const old = makeImage(path.join(fixture.root, "old.db"), "old", wal);
+        const next = makeImage(path.join(fixture.root, "next.db"), "new", false);
+        const stale = makeImage(path.join(fixture.root, "stale.db"), "new", true);
+        installImages(fixture, old);
+        write(fixture.sqliteTarget, next.images.base, 0o640);
+        // Real stale sidecars from a different database, not placeholder text.
+        for (const token of ["wal", "shm"]) write(fixture.sqliteTarget + suffixes[token], stale.images[token], 0o640);
+        if (forward) {
+          // A committed database is already clean and must not be rolled back.
+          fs.rmSync(fixture.sqliteTarget + "-wal"); fs.rmSync(fixture.sqliteTarget + "-shm");
+        }
+        const systemPath = mapped(fixture.root, "/mock-systemd.json");
+        const beforeSystem = fs.readFileSync(systemPath), beforeDb = fs.readFileSync(fixture.sqliteTarget);
+        if (tampered) {
+          const token = wal ? "-wal" : "", file = path.join(fixture.current, "sqlite/football.db" + token);
+          const bytes = fs.readFileSync(file); bytes[bytes.length - 1] ^= 1; write(file, bytes);
+        }
+        const result = runRecovery(fixture);
+        if (tampered) {
+          assert.notEqual(result.status, 0);
+          assert.match(result.stderr, /sqlite (base|wal) snapshot hash mismatch/);
+          assert.deepEqual(fs.readFileSync(systemPath), beforeSystem, "invalid snapshot must fail before service mutation");
+          assert.deepEqual(fs.readFileSync(fixture.sqliteTarget), beforeDb);
+          assert.equal(readTreeId(fixture.app), "new");
+        } else {
+          assert.equal(result.status, 0, `${phase}: ${result.stderr}`);
+          assert.equal(JSON.parse(result.stdout).action, forward ? "commit" : "rollback");
+          const expected = forward ? next : old;
+          assertImages(fixture.sqliteTarget, expected);
+          assert.deepEqual(rows(fixture.sqliteTarget), expected.expected,
+            "frozen direction, raw payload whitespace, timestamps, audit columns and generation must survive");
+          if (!forward) {
+            const identity = readFixtureFrontend(fixture.app);
+            assert.equal(identity.consistent, true); assert.equal(identity.frontendSequence, 41);
+            const system = JSON.parse(fs.readFileSync(systemPath));
+            assert.equal(system.publicationAffinityRebuilds, 1, "only the adapter call, not a real rebuild, is covered");
+          }
+          const beforeNoop = fs.readFileSync(fixture.sqliteTarget), again = runRecovery(fixture);
+          assert.equal(again.status, 0, again.stderr); assert.equal(JSON.parse(again.stdout).action, "noop");
+          assert.deepEqual(fs.readFileSync(fixture.sqliteTarget), beforeNoop);
+          assert.deepEqual(rows(fixture.sqliteTarget), expected.expected);
+        }
+        checks.push({ phase, journal: wal ? "uncheckpointed-wal" : "base-only", ok: true });
+      } finally { fs.rmSync(fixture.root, { recursive: true, force: true }); }
+    }
+  }
+  return { ok: true, checks, productionWrites: 0, actualSqliteImages: true,
+    scope: "synthetic real SQLite base/WAL image recovery and exact frozen rows; systemd, health and serving-generation rebuild mocked; production quick_check branch not exercised" };
 }
 
 function verifyOriginal() {
@@ -863,12 +1000,14 @@ console.log(JSON.stringify({
   rollbackPhases: rollbackPhases.length,
   forwardPhases: forwardPhases.length,
   assertions,
-  fullAfterUiRecovery: verifyFullAfterUiRecovery()
+  fullAfterUiRecovery: verifyFullAfterUiRecovery(),
+  realSqliteRecovery: verifyRealSqliteRecovery()
 }, null, 2));
 }
 
 if (require.main === module) {
   if (process.argv.length === 3 && process.argv[2] === "--full-after-ui") console.log(JSON.stringify(verifyFullAfterUiRecovery()));
+  else if (process.argv.length === 3 && process.argv[2] === "--real-sqlite") console.log(JSON.stringify(verifyRealSqliteRecovery()));
   else { assert.equal(process.argv.length, 2, "unexpected recovery verifier arguments"); verifyOriginal(); }
 }
-module.exports = { verifyFullAfterUiRecovery };
+module.exports = { verifyFullAfterUiRecovery, verifyRealSqliteRecovery };
