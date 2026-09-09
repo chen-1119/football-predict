@@ -123,7 +123,19 @@ function runCreatePrefix(source, options = {}) {
     require: name => {
       if (name === "node:path") return path.posix;
       if (name === "node:crypto") return {};
-      if (name === "node:fs") return { lstatSync: file => { assert.equal(file, "/fixture/.release-actions"); throw Object.assign(new Error("absent"), { code: "ENOENT" }); } };
+      if (name === "node:fs") return {
+        readFileSync: file => {
+          assert.equal(file, "/fixture/deploy/light-server/football-release");
+          const wrapper = readSource("deploy/light-server/football-release");
+          const { BURN } = require("./releaseSequencePreflight.cjs");
+          return options.invalidSequence ? wrapper.replace(BURN, BURN + "\n" + BURN) : wrapper;
+        },
+        lstatSync: file => { assert.equal(file, "/fixture/.release-actions"); throw Object.assign(new Error("absent"), { code: "ENOENT" }); }
+      };
+      if (name === "./releaseSequencePreflight.cjs") return { validateSequenceBranches: wrapper => {
+        calls.push("sequence-preflight");
+        return require("./releaseSequencePreflight.cjs").validateSequenceBranches(wrapper);
+      } };
       if (name === "node:child_process") return { spawnSync: (command, args) => {
         if (args[0] === "/fixture/scripts/createFrontendReleaseBundle.cjs") { assert.equal(command, "/fixed/node"); calls.push("ui-source"); }
         else if (args[0] === "scripts/verifyReleaseVerifierContracts.cjs") { assert.equal(command, "/fixed/node"); calls.push("preSign"); }
@@ -270,20 +282,25 @@ function verifyReleaseWindowPreflight() {
   const create = readSource("scripts/createReleaseBundle.cjs");
   check("actual online create prefix runs window before archive, preSign, sequence reservation and build", () => {
     const result = runCreatePrefix(create); assert.equal(result.ok, true, result.error);
-    assert.deepEqual(result.calls, ["window", "archive", "preSign", "reserve", "build"]);
+    assert.deepEqual(result.calls, ["sequence-preflight", "window", "archive", "preSign", "reserve", "build"]);
     for (const options of [{ windowOpen: false }, { windowThrows: true }]) {
-      const rejected = runCreatePrefix(create, options); assert.equal(rejected.ok, false); assert.deepEqual(rejected.calls, ["window"]);
+      const rejected = runCreatePrefix(create, options); assert.equal(rejected.ok, false); assert.deepEqual(rejected.calls, ["sequence-preflight", "window"]);
     }
   });
   check("actual offline create prefix makes no live calls and explicitly reports no window authority", () => {
     const result = runCreatePrefix(create, { offline: true, windowThrows: true }); assert.equal(result.ok, true, result.error);
-    assert.deepEqual(result.calls, ["preSign", "reserve", "build"]);
+    assert.deepEqual(result.calls, ["sequence-preflight", "preSign", "reserve", "build"]);
     assert.equal(result.logs[0].windowChecked, false); assert.equal(result.logs[0].readyToCutover, false);
   });
   check("actual UI create dispatch exits before live gates, full verification and local build", () => {
     const result = runCreatePrefix(create, { kind: "frontend-only", windowThrows: true }); assert.equal(result.ok, true, result.error);
     assert.deepEqual(result.calls, ["ui-source"]);
     const unknown = runCreatePrefix(create, { kind: "unknown" }); assert.equal(unknown.ok, false); assert.deepEqual(unknown.calls, []);
+  });
+  check("actual invalid sequence branch stops before network, signing, reservation and build", () => {
+    const result = runCreatePrefix(create, { invalidSequence: true });
+    assert.equal(result.ok, false);
+    assert.deepEqual(result.calls, ["sequence-preflight"]);
   });
   const shell = readSource("deploy/light-server/release-from-bundle.sh");
   check("seven exact signed-shell budget defaults compose 7620 seconds and each default drift is rejected", () => {
