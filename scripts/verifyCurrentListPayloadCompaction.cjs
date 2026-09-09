@@ -210,4 +210,34 @@ assert.match(
   "detail payload must continue using the full detail probability normalizer"
 );
 
-console.log("Current list payload compaction source contract passed.");
+const qualityProjection = section("const compactPreMatchQualityForList =", "const compactProbabilityTripletForList =");
+const projectQuality = Function(`${qualityProjection}; return compactPreMatchQualityForList;`)();
+const serialize = value => JSON.parse(JSON.stringify(value));
+const clock = "2026-09-09T03:00:00.000Z";
+const quality = { score: 36, sourceQuality: "low", severeMissingCount: 2,
+  missing: [{ key: "injuries", zh: "缺少伤停", en: "Missing injuries", severity: "medium" }],
+  notYetPublishable: [{ key: "lineup", zh: "首发未公布", en: "Lineup not published", expectedPublishedAt: clock }],
+  components: {
+    injuries: { label: { zh: "伤停", en: "Injuries" }, status: "missing", score: 0, source: "missing",
+      availabilityState: "missing_overdue", eligibleAtCutoff: false, sourceObservedAt: null, expectedPublishedAt: null, confirmed: false },
+    lineup: { status: "verified", score: 100, source: "official", evidenceType: "confirmed-lineup",
+      note: { zh: "已确认", en: "Confirmed" }, availabilityState: "verified_pre_cutoff", eligibleAtCutoff: true,
+      sourceObservedAt: clock, expectedPublishedAt: clock, confirmed: true },
+  } };
+const originalQuality = structuredClone(quality);
+const compactQuality = serialize(projectQuality(quality));
+assert.equal(compactQuality.score, 36);
+assert.equal(compactQuality.sourceQuality, "low");
+assert.equal(compactQuality.severeMissingCount, 2);
+assert.deepEqual(compactQuality.missing, quality.missing);
+assert.equal(compactQuality.notYetPublishable[0].expectedPublishedAt, clock);
+assert.deepEqual(compactQuality.components.injuries, { label: quality.components.injuries.label,
+  status: "missing", availabilityState: "missing_overdue", eligibleAtCutoff: false });
+assert.deepEqual(compactQuality.components.lineup, { status: "verified", note: quality.components.lineup.note,
+  evidenceType: "confirmed-lineup", availabilityState: "verified_pre_cutoff", eligibleAtCutoff: true,
+  sourceObservedAt: clock, expectedPublishedAt: clock, confirmed: true });
+assert.equal(compactQuality.components.injuries.confirmed === true, false);
+assert.deepEqual(quality, originalQuality, "list projection cannot mutate detail/source evidence");
+assert.deepEqual(serialize(projectQuality(compactQuality)), compactQuality, "projection remains idempotent");
+
+console.log("Current list payload compaction source and quality wire contracts passed.");

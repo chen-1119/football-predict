@@ -4848,15 +4848,16 @@ const compactPreMatchQualityForList = (quality) => {
       ? Object.fromEntries(Object.entries(quality.components).map(([key, item]) => [key, {
           label: item?.status === "missing" ? item?.label : undefined,
           status: item?.status,
-          score: item?.score,
-          source: item?.source,
+          // Component scores/sources belong to the full detail response.
+          // The list retains quality totals and the unmodified frozen evidence
+          // record; absence of an optional clock/confirmation is not evidence.
           note: key === "lineup" ? item?.note : undefined,
           evidenceType: item?.evidenceType,
           availabilityState: item?.availabilityState,
           eligibleAtCutoff: item?.eligibleAtCutoff,
-          expectedPublishedAt: item?.expectedPublishedAt || null,
-          sourceObservedAt: item?.sourceObservedAt || null,
-          confirmed: item?.confirmed === true
+          expectedPublishedAt: item?.expectedPublishedAt || undefined,
+          sourceObservedAt: item?.sourceObservedAt || undefined,
+          confirmed: item?.confirmed === true ? true : undefined
         }]))
       : {}
   };
