@@ -61,6 +61,15 @@ async function verifyGenerationSource(pool) {
     const counts = await readPostgresWorkerCounts(readerOptions);
     assert.deepEqual(counts.counts, { oddsSnapshots: 1, predictionSnapshots: 1 });
     checks.push({ name: "worker acknowledges the active native projection, never a skipped export, and counts actual warehouse rows", ok: true });
+    const planStatus = await require("./nativePlanStorageStatus.cjs").readNativePlanStorageStatus(readerOptions);
+    assert.equal(planStatus.storage, "postgres"); assert.equal(planStatus.receiptValid, true);
+    assert.deepEqual(planStatus.counts, { currentMatches: 1, historyMatches: 0, oddsSnapshots: 1, predictionSnapshots: 1 });
+    assert.equal(planStatus.legacyJsonl, undefined); assert.equal(planStatus.publication.generationId, workerReady.generation.generationId);
+    await assert.rejects(require("./nativePlanStorageStatus.cjs").readNativePlanStorageStatus({ ...readerOptions,
+      pool: { connect: async () => { throw Error("qa unavailable native plan database"); } } }), /qa unavailable native plan database/);
+    checks.push({ name: "native production plan reads actual warehouse counts and receipt in one snapshot without legacy import or fallback", ok: true });
+    const mirror = await require("./verifyPostgresReleaseMirror.cjs").verifyPostgresReleaseMirror(readerOptions);
+    checks.push(...mirror.checks);
     const session = await openPostgresRuntimeReadSession(readerOptions);
     try {
       assert.equal(await session.receipt(), null);
@@ -240,7 +249,10 @@ async function verifyGenerationSource(pool) {
       await guarded.close();
       const unlocked = await concurrentWriter.query("SELECT pg_try_advisory_lock(hashtext($1)) AS acquired", ["football-postgres-projection-sync-v1"]);
       assert.equal(unlocked.rows[0].acquired, true);
+      await assert.rejects(openPostgresRuntimeReadSession({ ...readerOptions, protectReceipt: true }), /read barrier busy/);
       await concurrentWriter.query("SELECT pg_advisory_unlock(hashtext($1))", ["football-postgres-projection-sync-v1"]);
+      const resumed = await openPostgresRuntimeReadSession({ ...readerOptions, protectReceipt: true });
+      await resumed.close();
     } finally { await guarded.close(); await concurrentWriter.end(); }
     checks.push({ name: "reconciliation shared barrier protects receipt and history until local file work releases its read session", ok: true });
     fs.writeFileSync(path.join(publicDataDir, "post-match-reviews.json"), JSON.stringify({ rows: [] }));

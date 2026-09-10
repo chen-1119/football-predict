@@ -10,6 +10,7 @@ let checks = 1;
 for (const mutate of [h => { h.storage.primary = "sqlite"; }, h => { h.data.currentRead.source = "json"; },
   h => { h.storage.sqlite.retired = false; }, h => { h.storage.sqlite.available = true; },
   h => { h.storage.postgres.available = false; }, h => { h.storage.postgres.baseReady = false; },
+  h => { delete h.storage.postgres.baseReady; },
   h => { h.storage.postgres.baseBlockedReason = "mismatch"; }, h => { h.storage.postgres.publication.manifestHash = ""; },
   h => { h.storage.postgres.publication.sourceCycleId = null; }, h => { h.storage.fastResultIntegrity.valid = false; }]) {
   const changed = structuredClone(health); mutate(changed); assert.equal(nativeStorageReadiness(changed).ok, false); checks++;

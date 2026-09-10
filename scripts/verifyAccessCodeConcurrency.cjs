@@ -82,9 +82,13 @@ const startServer = async ({ failWriteAfter = null } = {}) => {
     env: {
       ...process.env,
       // This server owns only its temporary fixture, never the host's DB.
+      FOOTBALL_STORAGE_MODE: "hybrid",
       FOOTBALL_POSTGRES_MODE: "disabled",
       FOOTBALL_POSTGRES_URL: "",
       DATABASE_URL: "",
+      PRIVATE_MODEL_ARTIFACT_STORAGE: "sqlite",
+      POSTGRES_PROJECTION_SOURCE: "sqlite",
+      CURRENT_MATCH_SOURCE: "file",
       NODE_ENV: "test",
       HOST: "127.0.0.1",
       PORT: String(port),
