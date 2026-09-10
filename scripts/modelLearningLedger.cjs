@@ -3,7 +3,6 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
-const { DatabaseSync } = require("node:sqlite");
 
 const MODEL_LEARNING_LEDGER_VERSION = "model-learning-ledger-v1";
 const HASH_PATTERN = /^[a-f0-9]{64}$/;
@@ -185,6 +184,7 @@ const initializeLedger = (db) => {
 };
 
 const openLearningLedger = (dbPath, options = {}) => {
+  const { DatabaseSync } = require("node:sqlite");
   const resolved = path.resolve(dbPath);
   if (!options.readOnly) fs.mkdirSync(path.dirname(resolved), { recursive: true });
   const db = new DatabaseSync(resolved, { readOnly: options.readOnly === true });
@@ -868,9 +868,8 @@ const compareAndSwapActiveModel = (db, {
   return { swapped: true, pointer: activeModelPointer(db) };
 });
 
-const verifyLearningLedger = (db) => {
+const verifyLearningLedgerRows = ({ artifacts, events, pointer }) => {
   const errors = [];
-  const artifacts = db.prepare("SELECT * FROM model_artifacts ORDER BY artifact_hash").all();
   const artifactHashes = new Set();
   for (const artifact of artifacts) {
     const bytes = Buffer.from(artifact.artifact_bytes);
@@ -880,7 +879,6 @@ const verifyLearningLedger = (db) => {
     artifactHashes.add(artifact.artifact_hash);
   }
 
-  const events = db.prepare("SELECT * FROM model_learning_events ORDER BY sequence").all();
   let previousHash = null;
   const cycleHeads = new Map();
   for (let index = 0; index < events.length; index += 1) {
@@ -935,7 +933,6 @@ const verifyLearningLedger = (db) => {
     previousHash = row.event_hash;
   }
 
-  const pointer = activeModelPointer(db);
   if (pointer.artifactHash && !artifactHashes.has(pointer.artifactHash)) errors.push("pointer-artifact-missing");
   if (pointer.eventHash) {
     const event = events.find((row) => row.event_hash === pointer.eventHash);
@@ -967,8 +964,13 @@ const verifyLearningLedger = (db) => {
   };
 };
 
-const writeLedgerHeadAnchor = (db, anchorFile, { generatedAt, hmacKey = null } = {}) => {
-  const verification = verifyLearningLedger(db);
+const verifyLearningLedger = (db) => verifyLearningLedgerRows({
+  artifacts: db.prepare("SELECT * FROM model_artifacts ORDER BY artifact_hash").all(),
+  events: db.prepare("SELECT * FROM model_learning_events ORDER BY sequence").all(),
+  pointer: activeModelPointer(db),
+});
+
+const writeLedgerHeadAnchorFromVerification = (verification, anchorFile, { generatedAt, hmacKey = null } = {}) => {
   if (!verification.valid) {
     throw new ModelLearningLedgerError("cannot anchor an invalid ledger", {
       code: "LEDGER_INVALID",
@@ -1004,6 +1006,7 @@ const writeLedgerHeadAnchor = (db, anchorFile, { generatedAt, hmacKey = null } =
   }
   return anchor;
 };
+const writeLedgerHeadAnchor = (db, anchorFile, options) => writeLedgerHeadAnchorFromVerification(verifyLearningLedger(db), anchorFile, options);
 
 module.exports = {
   HASH_PATTERN,
@@ -1025,4 +1028,12 @@ module.exports = {
   stableStringify,
   verifyLearningLedger,
   writeLedgerHeadAnchor,
+  writeLedgerHeadAnchorFromVerification,
+  verifyLearningLedgerRows,
+  eventProjection,
+  stableValue,
+  canonicalIso,
+  nonempty,
+  assertHash,
+  asBuffer,
 };

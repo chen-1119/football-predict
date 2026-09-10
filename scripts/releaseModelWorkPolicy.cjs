@@ -3,7 +3,8 @@
 // evidence always retains the full model lane. No prediction/result writes.
 const fs = require("node:fs"), path = require("node:path"), crypto = require("node:crypto");
 const { FRONTEND_PATHS } = require("./releaseChangeClassification.cjs");
-const { validateReusablePrivateAudit } = require("./releasePrivateModelSeed.cjs");
+const { validateReusablePrivateAudit, validateReusablePrivateAuditPostgres } = require("./releasePrivateModelSeed.cjs");
+const { runSynchronousPublication, runAsynchronousPublication } = require("./publicationOperationRunner.cjs");
 const VERSION = "release-model-work-policy-v1";
 const RELEASE_ONLY = new Set([
   "scripts/createReleaseBundle.cjs", "scripts/deployReleaseBundle.cjs", "scripts/verifyReleaseBundleSafety.cjs",
@@ -74,7 +75,7 @@ function inputInventory(root) {
   files.sort((a,b) => a[0].localeCompare(b[0]));
   return { files, hash: hash(JSON.stringify(files)) };
 }
-function classifyModelWork({ liveRoot, sourceRoot, storeDir, runtime = process.version }) {
+function* classifyModelWorkOperations({ liveRoot, sourceRoot, storeDir, runtime = process.version, readAudit, storage }) {
   try {
     if (runtime !== "v22.22.1") throw new Error("runtime-not-audited");
     const live = inputInventory(liveRoot), candidate = inputInventory(sourceRoot);
@@ -94,8 +95,8 @@ function classifyModelWork({ liveRoot, sourceRoot, storeDir, runtime = process.v
       artifacts[name] = hash(content);
       if (name === "model-artifacts/evaluation.json") evaluation = parsed;
     }
-    const audit = validateReusablePrivateAudit({ storeDir, evaluation });
-    artifacts["sqlite:hhad-companion-audit"] = { sha256: audit.payloadSha256, bytes: audit.payloadBytes,
+    const audit = yield readAudit({ storeDir, evaluation });
+    artifacts[`${storage}:hhad-companion-audit`] = { sha256: audit.payloadSha256, bytes: audit.payloadBytes,
       version: audit.artifactVersion, generatedAt: audit.generatedAt, updatedAt: audit.updatedAt };
     if (inputInventory(liveRoot).hash !== live.hash || inputInventory(sourceRoot).hash !== candidate.hash) throw new Error("source-changed-during-classification");
     return { version: VERSION, mode: "preserve", reason: "same-complete-model-input-code-and-existing-artifacts",
@@ -104,9 +105,18 @@ function classifyModelWork({ liveRoot, sourceRoot, storeDir, runtime = process.v
     return { version: VERSION, mode: "recompute", reason: String(error.code || error.message).slice(0,120) };
   }
 }
-module.exports = { VERSION, RELEASE_ONLY, inputInventory, classifyModelWork };
+function classifyModelWork(options) {
+  return runSynchronousPublication(classifyModelWorkOperations({ ...options, storage: "sqlite", readAudit: validateReusablePrivateAudit }));
+}
+async function classifyModelWorkPostgres(options) {
+  return runAsynchronousPublication(classifyModelWorkOperations({ ...options, storage: "postgres",
+    readAudit: args => validateReusablePrivateAuditPostgres({ ...args, pool: options.pool }) }));
+}
+module.exports = { VERSION, RELEASE_ONLY, inputInventory, classifyModelWork, classifyModelWorkPostgres };
 if (require.main === module) {
   if (process.argv.length !== 5 || process.platform !== "linux" || process.getuid?.() !== 0) throw new Error("fixed-root-release-classifier-required");
-  const report = classifyModelWork({ liveRoot: process.argv[2], sourceRoot: process.argv[3], storeDir: process.argv[4] });
-  console.error(JSON.stringify(report)); console.log(report.mode);
+  const classify = require("../server/storageMode.cjs").readStorageMode().postgresOnly ? classifyModelWorkPostgres : classifyModelWork;
+  Promise.resolve(classify({ liveRoot: process.argv[2], sourceRoot: process.argv[3], storeDir: process.argv[4] }))
+    .then(report => { console.error(JSON.stringify(report)); console.log(report.mode); })
+    .catch(error => { console.error(error.message); process.exitCode = 1; });
 }

@@ -4,13 +4,6 @@ const http = require("node:http");
 const https = require("node:https");
 const { execFileSync } = require("node:child_process");
 
-let DatabaseSync = null;
-try {
-  ({ DatabaseSync } = require("node:sqlite"));
-} catch {
-  DatabaseSync = null;
-}
-
 const rootDir = path.resolve(__dirname, "..");
 const verifierName = "verifyCloudSyncFreshness";
 const taskName = process.env.FOOTBALL_CLOUD_TASK_NAME || "FootballPredictCloudSync";
@@ -41,6 +34,8 @@ const serverPrimaryMode = process.env.PRODUCTION_DATA_MODE === "server-primary"
   || (!process.env.PRODUCTION_DATA_MODE && !explicitLocalPushRequired);
 const requireLocalAutomation = explicitLocalPushRequired;
 const requireSqliteParity = process.env.CLOUD_SYNC_REQUIRE_SQLITE_PARITY === "1";
+const requireNativeStorage = process.env.CLOUD_SYNC_REQUIRE_POSTGRES_ONLY === "1";
+if (requireNativeStorage && requireSqliteParity) throw new Error("native cloud verification cannot require SQLite parity");
 const requireModelCoverage = process.env.CLOUD_SYNC_REQUIRE_MODEL_COVERAGE === "1";
 const modelCoverageMinRatio = Math.min(1, Math.max(0.5, Number(process.env.CLOUD_SYNC_MODEL_SQLITE_COVERAGE_MIN || 0.95)));
 const modelCoverageTriggerRatio = Math.min(1, Math.max(modelCoverageMinRatio, Number(
@@ -87,10 +82,10 @@ const asNumber = (value, fallback = 0) => {
 };
 
 const readSqliteCounts = (dbPath) => {
-  if (!DatabaseSync) return { ok: false, reason: "node:sqlite unavailable" };
   if (!fs.existsSync(dbPath)) return { ok: false, reason: "sqlite database not found", path: dbPath };
   let db = null;
   try {
+    const { DatabaseSync } = require("node:sqlite");
     db = new DatabaseSync(dbPath, { readOnly: true });
     const scalar = (sql) => Number(db.prepare(sql).get()?.value || 0);
     return {
@@ -498,16 +493,28 @@ const run = async () => {
     && sqliteCurrentMatches > 0
     && healthReadSource === "sqlite"
     && (sqlite.stale !== true || healthStatus.dataFresh === true || healthStatus.fallbackDataFresh === true);
-  pushCheck(checks, "remote sqlite store ready", sqliteServiceable, {
+  const postgres = health.body?.storage?.postgres || {};
+  const nativeRemote = sqlite.retired === true || requireNativeStorage;
+  const warehouse = healthReadSource === "postgres" ? postgres : sqlite;
+  const warehouseSource = healthReadSource === "postgres" ? "postgres" : "sqlite";
+  const warehouseServiceable = warehouseSource === "postgres"
+    ? postgres.available === true && postgres.baseReady !== false && !postgres.baseBlockedReason
+    : sqliteServiceable;
+  if (nativeRemote) {
+    const evidence = require("./nativeStorageReadiness.cjs").nativeStorageReadiness(health.body);
+    pushCheck(checks, "native PostgreSQL retirement and receipt contract", evidence.ok, evidence);
+  }
+  pushCheck(checks, "remote primary warehouse ready", warehouseServiceable, {
+      storage: warehouseSource,
       sqliteAvailable: sqlite.available ?? null,
       sqliteStale: sqlite.stale ?? null,
       dataFresh: healthStatus.dataFresh ?? null,
       fallbackDataFresh: healthStatus.fallbackDataFresh ?? null,
       sqlitePath: sqlite.path || null,
       currentReadSource: healthReadSource,
-      counts: sqlite.counts || null
+      counts: warehouse.counts || null
     });
-  const localSqlite = readSqliteCounts(localSqliteDbPath);
+  const localSqlite = nativeRemote ? { ok: false, reason: "sqlite-retired-postgres-only" } : readSqliteCounts(localSqliteDbPath);
   const sqliteBehind = sqliteBehindTables(localSqlite.counts, sqlite.counts);
   pushCheck(checks, "cloud sqlite warehouse parity", localSqlite.ok === true
     && sqlite.available === true
@@ -519,8 +526,8 @@ const run = async () => {
       behindTables: sqliteBehind,
       localReason: localSqlite.reason || null
     }, requireSqliteParity);
-  const remoteOddsRows = asNumber(sqlite.counts?.oddsSnapshots, 0);
-  const remotePredictionRows = asNumber(sqlite.counts?.predictionSnapshots, 0);
+  const remoteOddsRows = asNumber(warehouse.counts?.oddsSnapshots, 0);
+  const remotePredictionRows = asNumber(warehouse.counts?.predictionSnapshots, 0);
   const minModelOddsRows = Math.floor(remoteOddsRows * modelCoverageMinRatio);
   const minModelPredictionRows = Math.floor(remotePredictionRows * modelCoverageMinRatio);
   const modelCoverageOk = modelEvaluation.status === 200
@@ -528,7 +535,8 @@ const run = async () => {
     && modelEvaluation.body?.publicView === true
     && (remoteOddsRows === 0 || modelOddsRows >= minModelOddsRows)
     && (remotePredictionRows === 0 || modelPredictionRows >= minModelPredictionRows);
-  pushCheck(checks, "remote model evaluation covers sqlite warehouse", modelCoverageOk, {
+  pushCheck(checks, "remote model evaluation covers primary warehouse", modelCoverageOk, {
+    storage: warehouseSource,
     status: modelEvaluation.status,
     publicView: modelEvaluation.body?.publicView ?? null,
     generatedAt: modelEvaluation.body?.generatedAt || modelEvaluation.body?.backtest?.generatedAt || null,
@@ -696,7 +704,7 @@ const run = async () => {
   }
   if (task.supported && task.status === "Running") watch.push("local-task-currently-running");
   if (relayTask.supported && relayTask.status === "Running") watch.push("local-relay-task-currently-running");
-  if (!modelCoverageOk) watch.push("model-evaluation-behind-sqlite");
+  if (!modelCoverageOk) watch.push(`model-evaluation-behind-${warehouseSource}`);
   if (!modelCoverageTriggerOk) watch.push("model-evaluation-needs-catch-up");
   console.log(JSON.stringify({
     ok: requiredOk,
@@ -723,7 +731,9 @@ const run = async () => {
       remoteSportteryEgressWafBlocked: sportteryEgress.summary?.wafBlocked ?? null,
       sqliteParityBehindTables: sqliteBehind,
       localSqlitePredictionSnapshots: localSqlite.counts?.predictionSnapshots ?? null,
-      remoteSqlitePredictionSnapshots: sqlite.counts?.predictionSnapshots ?? null,
+      remoteSqlitePredictionSnapshots: nativeRemote ? null : sqlite.counts?.predictionSnapshots ?? null,
+      remoteWarehouseSource: warehouseSource,
+      remoteWarehousePredictionSnapshots: warehouse.counts?.predictionSnapshots ?? null,
       remoteModelEvaluationGeneratedAt: modelEvaluation.body?.generatedAt || modelEvaluation.body?.backtest?.generatedAt || null,
       remoteModelOddsRows: modelOddsRows,
       remoteModelPredictionRows: modelPredictionRows,

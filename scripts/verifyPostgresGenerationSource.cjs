@@ -14,7 +14,7 @@ async function verifyGenerationSource(pool) {
   const prediction = { matchId: "sporttery_qa-generation", sourceMatchId: "qa-generation", phase: "pre-match",
     signature: "original-draw-signature", capturedAt: at, tipCode: "X", note: "原始预测" };
   const odds = { matchId: prediction.matchId, sourceMatchId: prediction.sourceMatchId, poolCode: "HAD",
-    capturedAt: at, odds1: 2, oddsX: 3.6, odds2: 3.1 };
+    capturedAt: at, odds1: 2, oddsX: 3.6, odds2: 3.1, oddsSourceUrl: "https://webapi.sporttery.cn/qa" };
   const payloads = {
     "matches-current.json": [{ id: prediction.matchId, sourceMatchId: prediction.sourceMatchId, status: "SCHEDULED", kickoffTime: "2026-09-11T10:00:00.000Z" }],
     "matches-history.json": [], "sync-meta.json": { sourceCycleId: "qa-native-generation", updatedAt: at },
@@ -75,6 +75,20 @@ async function verifyGenerationSource(pool) {
       await assert.rejects(runtimeSnapshotsForMatches(universe.currentMatches, at, { session: { client: { query: async () => { throw new Error("qa native capture outage"); } } } }), /qa native capture outage/);
     } finally { await session.close(); }
     checks.push({ name: "native candidate queries retain original snapshots and cutoff bounds and refuse database fallback", ok: true });
+    const { loadPostgresOddsHistory } = require("./runtimeOddsHistory.cjs");
+    fs.writeFileSync(path.join(storeDir, "football.db"), "retired database must not be read");
+    const backfilled = await loadPostgresOddsHistory(temp, readerOptions);
+    assert.equal(backfilled.rows.length, 1);
+    assert.equal(backfilled.rows[0].firstSeenAt, at);
+    assert.equal(backfilled.rows[0].oddsX, 3.6);
+    const originalBackfillRow = (await rows("odds_snapshots"))[0];
+    try {
+      await pool.query("UPDATE football.odds_snapshots SET payload=$1::json WHERE id=$2",
+        [JSON.stringify({ ...JSON.parse(originalBackfillRow.raw), capturedAt: "2026-09-12T00:00:00.000Z" }), originalBackfillRow.id]);
+      assert.equal((await loadPostgresOddsHistory(temp, readerOptions)).rows.length, 0);
+    } finally { await pool.query("UPDATE football.odds_snapshots SET payload=$1::json WHERE id=$2", [originalBackfillRow.raw, originalBackfillRow.id]); }
+    await assert.rejects(loadPostgresOddsHistory(temp, { ...readerOptions, pool: { connect: async () => { throw Error("qa odds outage"); } } }), /qa odds outage/);
+    checks.push({ name: "native odds backfill retains original pre-cutoff clocks, excludes post-cutoff rows and never opens a remaining SQLite file", ok: true });
     const { withCandidateProspectiveRegistryLock, registryLockFileFor } = require("./candidateProspectiveLedger.cjs");
     const registry = path.join(storeDir, "qa-async-registry.json");
     for (const fail of [false, true]) {
@@ -237,7 +251,7 @@ async function verifyGenerationSource(pool) {
     assert.equal(JSON.parse(fs.readFileSync(path.join(publicDataDir, "matches-history.json")))[0].scoreHome, 3);
     assert.equal((await reconcileFastResultGenerationPostgres(readerOptions)).skipped, true);
     checks.push({ name: "native reconciliation rebases the latest signed final into generation inputs once without SQLite", ok: true });
-    assert.equal(fs.existsSync(path.join(storeDir, "football.db")), false);
+    assert.equal(fs.readFileSync(path.join(storeDir, "football.db"), "utf8"), "retired database must not be read");
     return { ok: true, checks, scope: "real generation files and native PostgreSQL; no production cutover" };
   } finally {
     const resolved = fs.realpathSync(temp);

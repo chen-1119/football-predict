@@ -11,7 +11,10 @@ const { shadowObservationAuditValid } = require("../src/services/candidateCaptur
 const baseUrl = new URL(process.env.REMOTE_BASE_URL || process.env.PUBLIC_BASE_URL || process.env.VERIFY_BASE_URL || "http://127.0.0.1:8788");
 const requireHealthy = process.env.REMOTE_REQUIRE_HEALTHY === "1";
 const requireSqlite = process.env.REMOTE_REQUIRE_SQLITE === "1";
-const requiredReadSource = String(process.env.REMOTE_REQUIRED_READ_SOURCE || (requireSqlite ? "sqlite" : "")).toLowerCase();
+const requireNativeStorage = process.env.REMOTE_REQUIRE_POSTGRES_ONLY === "1";
+if (requireNativeStorage && requireSqlite) throw new Error("remote native readiness cannot require SQLite");
+const requiredReadSource = String(process.env.REMOTE_REQUIRED_READ_SOURCE || (requireNativeStorage ? "postgres" : requireSqlite ? "sqlite" : "")).toLowerCase();
+if (requireNativeStorage && requiredReadSource !== "postgres") throw new Error("remote native readiness requires PostgreSQL reads");
 const requireSyncWorker = process.env.REMOTE_REQUIRE_SYNC_WORKER === "1";
 const auditOnly = process.env.REMOTE_AUDIT_ONLY === "1";
 const requestTimeoutMs = Math.max(5000, Number(process.env.REMOTE_REQUEST_TIMEOUT_MS || 20000));
@@ -225,6 +228,10 @@ const currentReadFromHealth = (health) => health.body?.data?.currentRead || heal
 const requiredStoreReady = (health) => {
   const sqlite = sqliteFromHealth(health);
   const postgres = postgresFromHealth(health);
+  if (requireNativeStorage) {
+    const evidence = require("./nativeStorageReadiness.cjs").nativeStorageReadiness(health.body);
+    pushCheck(checks, "PostgreSQL-only storage and receipt integrity", evidence.ok, evidence);
+  }
   const currentRead = currentReadFromHealth(health);
   if (requiredReadSource === "postgres") {
     return postgres.available === true

@@ -5,6 +5,7 @@ const os = require("node:os");
 const path = require("node:path");
 const {
   runAutonomousModelCycle,
+  runAutonomousModelCyclePostgres,
 } = require("./autonomousModelCycle.cjs");
 const {
   openLearningLedger,
@@ -43,7 +44,7 @@ const positiveInteger = (value, fallback) => {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
 };
 
-const main = () => {
+const main = async () => {
   if (!fs.existsSync(evaluationFile)) {
     throw new Error(`model evaluation not found: ${evaluationFile}`);
   }
@@ -52,10 +53,15 @@ const main = () => {
   }
   const evaluation = JSON.parse(fs.readFileSync(evaluationFile, "utf8"));
   const runAt = process.env.MODEL_LEARNING_RUN_AT || new Date().toISOString();
-  const { db, dbPath } = openLearningLedger(ledgerFile);
+  const native = require("../server/storageMode.cjs").readStorageMode().postgresOnly;
+  const opened = native
+    ? { repository: await require("./postgresLearningLedger.cjs").openPostgresLearningLedger() }
+    : openLearningLedger(ledgerFile);
+  const execute = native ? runAutonomousModelCyclePostgres : runAutonomousModelCycle;
   try {
-    const result = runAutonomousModelCycle({
-      db,
+    const result = await execute({
+      db: opened.db,
+      repository: opened.repository,
       anchorFile,
       evaluation,
       contract: {
@@ -83,7 +89,8 @@ const main = () => {
       status: result.status,
       evaluationFile,
       inferenceFile,
-      ledgerFile: dbPath,
+      storage: native ? "postgres" : "sqlite",
+      ledgerFile: opened.dbPath || null,
       anchorFile,
       cycleId: result.cycleId,
       candidateArtifactHash: result.candidateArtifactHash,
@@ -110,17 +117,16 @@ const main = () => {
     if (!result.ok) process.exitCode = 2;
     return result;
   } finally {
-    db.close();
+    if (opened.repository) await opened.repository.close();
+    else opened.db.close();
   }
 };
 
 if (require.main === module) {
-  try {
-    main();
-  } catch (error) {
+  main().catch((error) => {
     console.error(error?.stack || error?.message || String(error));
     process.exitCode = 1;
-  }
+  });
 }
 
 module.exports = { main };

@@ -6,6 +6,8 @@ const { openPostgresRuntimeReadSession } = require("./postgresRuntimeReadSession
 
 async function readPostgresWorkerObservation({ phase = null, validationStep, generationStep, sqliteStep,
   projectionStep = sqliteStep, storeDir, publicDataDir, pool } = {}) {
+  storeDir = path.resolve(storeDir || process.env.SERVER_STORE_DIR || process.env.DATA_STORE_DIR || path.join(__dirname, "../server-data"));
+  publicDataDir = path.resolve(publicDataDir || process.env.DATA_GENERATION_PUBLIC_DATA_DIR || path.join(__dirname, "../public/data"));
   const result = { phase, storage: "postgres", observedAt: new Date().toISOString(),
     public: {}, generation: {}, postgres: { readable: false },
     validationReady: validationStep?.ok === true && validationStep?.skipped !== true,

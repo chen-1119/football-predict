@@ -288,6 +288,10 @@ const verifyEvidenceHttp = async (reference, identity, postgresUrl = "", postgre
     if (postgresOnly) {
       equal(health.body.storage?.sqlite?.retired, true, `native HTTP reports SQLite retired: ${JSON.stringify(health.body).slice(0, 2000)}; ${output.join("").slice(-1800)}`);
       equal(health.body.storage?.fastResultIntegrity?.valid, true, "native HTTP validates PostgreSQL receipts without a SQLite SQL adapter");
+      const readiness = require("./nativeStorageReadiness.cjs").nativeStorageReadiness(health.body);
+      equal(readiness.ok, true, `native release storage verifier accepts the actual runtime proof: ${JSON.stringify(readiness)}`);
+      equal(require("./nativeStorageReadiness.cjs").nativeStorageReadiness({ ...health.body, storage: { ...health.body.storage, sqlite: { available: true } } }).ok,
+        false, "native release storage verifier refuses a live SQLite dependency");
     }
     equal(health.body.storage?.predictionExecutionCapture?.status, "failed", "real health recomputes full capture capacity rather than trusting stored healthy status");
     equal(health.body.storage?.predictionExecutionCapture?.reason, "private-store-capacity-limit", "actual SQLite metadata-to-health capacity reason is explicit");
@@ -527,6 +531,13 @@ const main = async () => {
     equal(existing.rows[0].namespace, null, "real PostgreSQL test refuses an existing football schema");
     await require("../server/postgresStore.cjs").runPostgresMigrations(realPool);
     await syncPostgresProjectionFromSqlite({ dbPath, pool: realPool, mode: "backfill", aiArenaPath: path.join(tempDir, "absent-synthetic-ai-arena.json") });
+    const retirementAudit = require("./verifyPostgresRetirementParity.cjs").verifyPostgresRetirementParity;
+    const parity = await retirementAudit({ pool: realPool, sqlitePath: dbPath, storeDir, publicDataDir });
+    equal(parity.ok, true, "one-time retirement audit compares every original byte and clock in the real databases");
+    equal(parity.sampled, false, "retirement equality is not inferred from sampled rows");
+    await realPool.query("UPDATE football.prediction_snapshots SET seen_count=seen_count+1");
+    await assert.rejects(retirementAudit({ pool: realPool, sqlitePath: dbPath, storeDir, publicDataDir }), /retirement original row differs/);
+    await realPool.query("UPDATE football.prediction_snapshots SET seen_count=seen_count-1");
     const snapshotTests = require("./verifyPostgresSnapshotUpsert.cjs");
     checks += snapshotTests.verifySnapshotSqlContract();
     const noOpChecks = await snapshotTests.verifySnapshotUpsertsInPostgres(realPool);
