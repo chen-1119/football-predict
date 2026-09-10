@@ -214,10 +214,10 @@ const capturePostgres = () => {
   return { tables, calls, state, pool: { connect: async () => client, query: client.query.bind(client) } };
 };
 
-const verifyEvidenceHttp = async (reference, identity, postgresUrl = "") => {
+const verifyEvidenceHttp = async (reference, identity, postgresUrl = "", postgresOnly = false) => {
   // Copy runtime code into the fixture: even startup's generated-file writes
   // must remain isolated from the user's working tree and production data.
-  const app = path.join(tempDir, postgresUrl ? "http-app-postgres" : "http-app");
+  const app = path.join(tempDir, postgresOnly ? "http-app-postgres-only" : postgresUrl ? "http-app-postgres" : "http-app");
   fs.mkdirSync(app);
   for (const dir of ["server", "scripts", "src"]) fs.cpSync(path.join(rootDir, dir), path.join(app, dir), {
     recursive: true, filter: p => fs.statSync(p).isDirectory() || /\.(cjs|json|sql)$/.test(p),
@@ -245,13 +245,28 @@ const verifyEvidenceHttp = async (reference, identity, postgresUrl = "") => {
   const port = 24000 + Math.floor(Math.random() * 12000);
   const token = crypto.randomBytes(24).toString("hex");
   const output = [];
-  const child = spawn(process.execPath, [path.join(app, "server", "index.cjs")], {
-    cwd: app, windowsHide: true, stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env, NODE_ENV: "test", NODE_OPTIONS: "", HOST: "127.0.0.1", PORT: String(port),
-      SERVER_STORE_DIR: storeDir, DATASTORE_SQLITE_PATH: dbPath, DATASTORE_READ_SOURCE: postgresUrl ? "postgres" : "sqlite", CURRENT_MATCH_SOURCE: postgresUrl ? "postgres" : "sqlite",
+  const sqliteTrap = path.join(app, "forbid-sqlite.cjs");
+  if (postgresOnly) fs.writeFileSync(sqliteTrap, `
+    const Module = require("node:module");
+    const original = Module._load;
+    Module._load = function(name, ...args) {
+      if (name === "node:sqlite" || name === "sqlite") {
+        console.error("SQLITE_FORBIDDEN_ATTEMPT");
+        throw new Error("PostgreSQL-only HTTP must never load SQLite");
+      }
+      return original.call(this, name, ...args);
+    };
+  `);
+  const runtimeEnv = { ...process.env, NODE_ENV: "test", NODE_OPTIONS: postgresOnly ? `--require="${sqliteTrap.replaceAll("\\", "/")}"` : "", HOST: "127.0.0.1", PORT: String(port),
+      FOOTBALL_STORAGE_MODE: postgresOnly ? "postgres-only" : "hybrid",
+      ENABLE_SQLITE_EXPORT: "0", PRIVATE_MODEL_ARTIFACT_STORAGE: postgresOnly ? "postgres" : "sqlite",
+      POSTGRES_PROJECTION_SOURCE: postgresOnly ? "native-generation" : "sqlite",
+      SERVER_STORE_DIR: storeDir, DATASTORE_SQLITE_PATH: postgresOnly ? path.join(app, "must-not-exist.sqlite") : dbPath, DATASTORE_READ_SOURCE: postgresUrl ? "postgres" : "sqlite", CURRENT_MATCH_SOURCE: postgresUrl ? "postgres" : "sqlite",
       FOOTBALL_POSTGRES_URL: postgresUrl, DATABASE_URL: "", FOOTBALL_POSTGRES_MODE: postgresUrl ? "primary" : "disabled", FOOTBALL_POSTGRES_SSL_MODE: "disable",
       ENABLE_SYNC_CRON: "0", ENABLE_GPT_CRON: "0", SYNC_WORKER_EVENT_BRIDGE: "0", RELAY_FAST_WATCHER_ENABLED: "0",
-      ADMIN_TOKEN: token, ACCESS_CODE_ADMIN_TOKEN: token, ACCESS_CODE_SECRET: crypto.randomBytes(32).toString("hex") },
+      ADMIN_TOKEN: token, ACCESS_CODE_ADMIN_TOKEN: token, ACCESS_CODE_SECRET: crypto.randomBytes(32).toString("hex") };
+  const child = spawn(process.execPath, [path.join(app, "server", "index.cjs")], {
+    cwd: app, windowsHide: true, stdio: ["ignore", "pipe", "pipe"], env: runtimeEnv,
   });
   child.stdout.on("data", data => output.push(String(data)));
   child.stderr.on("data", data => output.push(String(data)));
@@ -270,6 +285,10 @@ const verifyEvidenceHttp = async (reference, identity, postgresUrl = "") => {
     const route = `/api/db/public-reference-evidence?referenceHash=${reference.contentHash}`;
     const health = await request("/api/v1/health");
     equal(health.status, 200, "real public health returns capacity aggregates without evidence authentication");
+    if (postgresOnly) {
+      equal(health.body.storage?.sqlite?.retired, true, `native HTTP reports SQLite retired: ${JSON.stringify(health.body).slice(0, 2000)}; ${output.join("").slice(-1800)}`);
+      equal(health.body.storage?.fastResultIntegrity?.valid, true, "native HTTP validates PostgreSQL receipts without a SQLite SQL adapter");
+    }
     equal(health.body.storage?.predictionExecutionCapture?.status, "failed", "real health recomputes full capture capacity rather than trusting stored healthy status");
     equal(health.body.storage?.predictionExecutionCapture?.reason, "private-store-capacity-limit", "actual SQLite metadata-to-health capacity reason is explicit");
     equal(health.body.storage?.predictionExecutionCapture?.files, 60000, "stored capture count survives the real metadata and HTTP path");
@@ -327,6 +346,34 @@ const verifyEvidenceHttp = async (reference, identity, postgresUrl = "") => {
     equal((await request("/api/db/public-reference-evidence?referenceHash=" + "f".repeat(64), admin)).status, 404, "HTTP reports absent reference without fabricated evidence");
     equal((await request(route, admin, "POST")).status, 405, "evidence endpoint is read-only");
     equal((await request("/data/prediction-snapshots.json")).status, 410, "full static evidence dump remains disabled");
+    if (postgresOnly) {
+      check(!output.join("").includes("SQLITE_FORBIDDEN_ATTEMPT"), "native HTTP and resolver workers never attempt SQLite loading");
+      check(!fs.existsSync(path.join(app, "must-not-exist.sqlite")), "native HTTP never creates a fallback SQLite file");
+      const backtest = spawnSync(process.execPath, [path.join(app, "scripts", "runModelBacktest.cjs")], {
+        cwd: app, windowsHide: true, env: runtimeEnv, encoding: "utf8", timeout: 30000, maxBuffer: 4 * 1024 * 1024,
+      });
+      equal(backtest.status, 0, `native backtest CLI completes in isolated application: ${String(backtest.stderr || backtest.error || "").slice(-2000)}`);
+      check(!String(backtest.stderr).includes("SQLITE_FORBIDDEN_ATTEMPT"), "actual native backtest never attempts SQLite loading");
+      const evaluation = JSON.parse(fs.readFileSync(path.join(app, "public/data/model-evaluation.json"), "utf8"));
+      for (const label of ["matches", "predictionSnapshots", "oddsHistory"]) {
+        equal(evaluation.sample.dataSources[label].selectedSource, "postgres", `native backtest reports true ${label} storage`);
+      }
+      equal(evaluation.sample.dataSources.predictionSnapshots.publication.generationId, identity.generationId,
+        "backtest diagnostic binds to the same immutable generation");
+      const previousManifest = await realPool.query("SELECT value FROM football.projection_meta WHERE key='manifest_hash'");
+      try {
+        await realPool.query("UPDATE football.projection_meta SET value=$1 WHERE key='manifest_hash'", ["f".repeat(64)]);
+        const session = { authorization: `Bearer ${verified.body.session.token}` };
+        for (const endpoint of ["/api/v1/matches/current?view=detail", "/api/v1/matches/history?limit=7"]) {
+          const blocked = await request(endpoint, session);
+          equal(blocked.status, 503, "native mismatched PostgreSQL publication cannot fall back to old generation rows");
+          equal(blocked.body.code, "POSTGRES_REQUIRED_READ_UNAVAILABLE", "native data outage is explicitly labeled");
+        }
+      } finally {
+        await realPool.query("UPDATE football.projection_meta SET value=$1 WHERE key='manifest_hash'", [previousManifest.rows[0].value]);
+      }
+      check(!output.join("").includes("SQLITE_FORBIDDEN_ATTEMPT"), "failed native reads never probe SQLite as a recovery path");
+    }
   } finally {
     if (child.exitCode === null) child.kill();
     await exited;
@@ -511,6 +558,7 @@ const main = async () => {
     verifyStoredMarketPair((await readPostgresHistoryMatchesForList(realPool, 10, { publicationIdentity: identity }))[0], realEvidence, "native PostgreSQL history and evidence readers");
     equal((await readPostgresPublicReferenceEvidence(realPool, { referenceHash: reference.contentHash, publicationIdentity: { ...identity, generationId: "wrong" } })).reason, "generation-mismatch", "real PostgreSQL refuses mismatched generation");
     await verifyEvidenceHttp(reference, identity, realPostgresUrl);
+    await verifyEvidenceHttp(reference, identity, realPostgresUrl, true);
     // Force an old-clock incremental scenario in this newly created test schema only.
     await realPool.query("UPDATE football.projection_runs SET committed_at = '2026-09-10T01:00:00Z'");
   }
@@ -686,7 +734,7 @@ const main = async () => {
     observerProbe: { invocations: 10, cryptoVerifications: observerCryptoVerifications, durationMs: observerDurationMs },
     reusedObserverCryptoVerifications: reusedObserverVerifications,
     postgresScope: realPool ? "disposable local PostgreSQL with real migrations, driver, full/incremental writer, readers and primary-mode HTTP; query-capture regressions also retained" : "real writer/reader with query-capture transport; no live PostgreSQL server",
-    apiScope: realPool ? "isolated real HTTP servers with both SQLite and PostgreSQL primary, admin auth, exact hash retrieval, no-store, input validation and disabled static dump" : "isolated real HTTP server with SQLite, admin auth, exact hash retrieval, no-store, input validation and disabled static dump; PostgreSQL transport remains a test double",
+    apiScope: realPool ? "isolated SQLite, hybrid PostgreSQL and PostgreSQL-only HTTP; native API and backtest forbid SQLite loading; real auth, exact frozen hash, no-store and disabled static dump" : "isolated real HTTP server with SQLite, admin auth, exact hash retrieval, no-store, input validation and disabled static dump; PostgreSQL transport remains a test double",
     publicReferenceScope: "current match head and independent revision-ledger source document; old-clock/empty/missing incremental paths" }, null, 2));
 };
 

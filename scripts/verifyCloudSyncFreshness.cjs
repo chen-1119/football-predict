@@ -392,8 +392,8 @@ const run = async () => {
     || null;
   const modelSample = modelEvaluation.body?.backtest?.sample || {};
   const modelDataSources = modelSample.dataSources || {};
-  const modelOddsRows = asNumber(modelDataSources.oddsHistory?.sqliteRows, 0);
-  const modelPredictionRows = asNumber(modelDataSources.predictionSnapshots?.sqliteRows, 0);
+  const modelOddsRows = asNumber(modelDataSources.oddsHistory?.warehouseRows ?? modelDataSources.oddsHistory?.sqliteRows, 0);
+  const modelPredictionRows = asNumber(modelDataSources.predictionSnapshots?.warehouseRows ?? modelDataSources.predictionSnapshots?.sqliteRows, 0);
 
   if (task.supported) {
     const lastRunAge = task.lastRunAgeMinutes;

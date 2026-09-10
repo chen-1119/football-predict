@@ -263,6 +263,8 @@ export interface DataSyncState {
       minCoverageRatio?: number;
       odds?: {
         modelRows?: number;
+        warehouseRows?: number;
+        postgresRows?: number;
         sqliteRows?: number;
         minRows?: number;
         coverageRatio?: number | null;
@@ -270,6 +272,8 @@ export interface DataSyncState {
       };
       predictionSnapshots?: {
         modelRows?: number;
+        warehouseRows?: number;
+        postgresRows?: number;
         sqliteRows?: number;
         minRows?: number;
         coverageRatio?: number | null;

@@ -6,6 +6,8 @@ const { spawn } = require("node:child_process");
 const { Worker } = require("node:worker_threads");
 const crypto = require("node:crypto");
 const zlib = require("node:zlib");
+const { readStorageMode, retiredSqliteStatus } = require("./storageMode.cjs");
+const storageMode = readStorageMode();
 const { sendStaticFileResponse } = require("./staticFileResponse.cjs");
 const { readFrontendReleaseIdentity } = require("./frontendReleaseIdentity.cjs");
 const { compactApiFootballDiagnostics } = require("../src/services/apiFootballDiagnostics.cjs");
@@ -230,6 +232,7 @@ const basePublicationRefreshState = {
 };
 const generationPointerLockDir = path.join(storeDir, "data-generations", ".pointer-commit.lock");
 const cachedSqlitePublicationIdentity = ({ requirePreferred = true } = {}) => {
+  if (storageMode.postgresOnly) return { ...retiredSqliteStatus(), fileToken: "retired" };
   if (requirePreferred && !shouldPreferSqliteRead()) {
     return { available: false, reason: "sqlite-not-preferred", publication: null, fileToken: "not-preferred" };
   }
@@ -251,7 +254,7 @@ const generationPointerToken = () => {
       else parts.push(`${name}:missing`);
     }
   }
-  if (shouldPreferSqliteRead() || shouldPreferPostgresRead()) {
+  if (!storageMode.postgresOnly && (shouldPreferSqliteRead() || shouldPreferPostgresRead())) {
     const sqlite = cachedSqlitePublicationIdentity({ requirePreferred: false });
     const identity = sqlite.publication || {};
     parts.push(sqlite.available
@@ -306,7 +309,7 @@ const readPublicationFastResultReceiptState = async (publication) => {
       publicationIdentity: identity,
     });
   }
-  if (!state?.available || state?.valid !== true) {
+  if (!storageMode.postgresOnly && (!state?.available || state?.valid !== true)) {
     const sqliteState = await readSqliteFastResultReceiptState(sqliteDbPath, {
       publicationIdentity: identity,
     });
@@ -411,6 +414,9 @@ const requireMatchingPostgresPrimaryDatabasePair = (postgres) => {
       "PostgreSQL publication identity is incomplete during startup pairing",
     );
   }
+  // Native mode is paired with the immutable generation by resolveBasePublication,
+  // never with an obsolete fallback database. Keep the complete identity checks.
+  if (storageMode.postgresOnly) return postgres.publication;
   const sqlite = requirePostgresPrimarySqliteIdentity();
   if (!sqlitePublicationMatches(sqlite.publication, postgres.publication)) {
     throw publicationPairError(
@@ -421,6 +427,8 @@ const requireMatchingPostgresPrimaryDatabasePair = (postgres) => {
   return postgres.publication;
 };
 const requireSqlitePairForResolvedPostgresPublication = (publication) => {
+  // The resolver worker already validates PostgreSQL against the generation hash.
+  if (storageMode.postgresOnly) return;
   const sqlite = requirePostgresPrimarySqliteIdentity();
   if (!sqlitePublicationMatches(sqlite.publication, publication?.identity)) {
     throw publicationPairError(
@@ -4253,6 +4261,7 @@ const syncMetaMatchLane = (match) => {
 };
 
 const shouldPreferSqliteRead = () => {
+  if (storageMode.postgresOnly) return false;
   return datastoreReadSource === "sqlite" || process.env.CURRENT_MATCH_SOURCE === "sqlite";
 };
 
@@ -4320,12 +4329,22 @@ const getCachedPostgresReadStatus = async (meta = null, publicationIdentity = nu
   return promise;
 };
 
-const postgresFreshEnough = (status, countKey = "currentMatches", requiredCount = 1) => Boolean(
-  status?.available
-  && status?.baseReady !== false
-  && (status.withinReadGrace === true || !status.stale)
-  && Number(status?.counts?.[countKey] || 0) >= requiredCount
-);
+const postgresFreshEnough = (status, countKey = "currentMatches", requiredCount = 1) => {
+  return Boolean(
+    status?.available
+    && status?.baseReady !== false
+    && (status.withinReadGrace === true || !status.stale)
+    // An empty native dataset is authoritative, not a signal to read old files.
+    && Number(status?.counts?.[countKey] || 0) >= (storageMode.postgresOnly ? 0 : requiredCount)
+  );
+};
+const requireNativePostgresReadStatus = (status) => {
+  if (storageMode.postgresOnly && !postgresFreshEnough(status, "currentMatches", 0)) {
+    const error = publicationPairError("POSTGRES_REQUIRED_READ_UNAVAILABLE", "PostgreSQL publication is unavailable; refusing legacy data fallback");
+    error.statusCode = 503;
+    throw error;
+  }
+};
 
 const postgresStatusUpdatedAt = (status) => (
   status?.effectiveUpdatedAt
@@ -4336,6 +4355,7 @@ const postgresStatusUpdatedAt = (status) => (
 );
 
 const getSqliteReadStatus = async (meta = null, publicationIdentity = null) => {
+  if (storageMode.postgresOnly) return retiredSqliteStatus();
   const status = await getSqliteStatus(sqliteDbPath, { publicationIdentity });
   const metaUpdatedTime = syncMetaDataVersionTime(meta);
   const effectiveUpdatedAt = latestIsoTime(status.syncMetaUpdatedAt, status.exportedAt, status.mtime);
@@ -4467,7 +4487,7 @@ const readCurrentDataStoreMeta = async () => {
 };
 
 const readCurrentMatchesDetailed = async (options = {}) => {
-  const basePublication = options.basePublication || null;
+  const basePublication = options.basePublication || (storageMode.postgresOnly ? resolveBasePublication() : null);
   const meta = basePublication
     ? readStablePublicationMetadata(basePublication, "sync-meta.json", null)
     : await readJsonFile(path.join(dataDir, "sync-meta.json"), null);
@@ -4477,6 +4497,7 @@ const readCurrentMatchesDetailed = async (options = {}) => {
 
   if (shouldPreferPostgresRead() && options.preferPublication !== true) {
     const postgresStatus = await getCachedPostgresReadStatus(meta, basePublication?.identity || null);
+    requireNativePostgresReadStatus(postgresStatus);
     if (postgresFreshEnough(postgresStatus, "currentMatches", 0)) {
       const postgresMatches = Array.isArray(options.postgresRows)
         ? options.postgresRows
@@ -5972,19 +5993,20 @@ const readUnresolvedArchiveForListDetailed = async (limit = 200) => {
 
 const readHistoryMatchesForListDetailed = async (limit = 600, options = {}) => {
   const safeLimit = Math.max(1, Math.min(1200, Number(limit || 600)));
-  const basePublication = options.basePublication || null;
+  const basePublication = options.basePublication || (storageMode.postgresOnly ? resolveBasePublication() : null);
   if (shouldPreferPostgresRead()) {
     const meta = basePublication
       ? readStablePublicationMetadata(basePublication, "sync-meta.json", null)
       : await readJsonFile(path.join(dataDir, "sync-meta.json"), null);
     const postgresStatus = await getCachedPostgresReadStatus(meta, basePublication?.identity || null);
+    requireNativePostgresReadStatus(postgresStatus);
     if (postgresFreshEnough(postgresStatus, "historyMatches", 1)) {
       const postgresRows = await readPostgresHistoryMatchesForList(
         postgresPool,
         safeLimit,
         { publicationIdentity: basePublication?.identity || null },
       );
-      if (postgresRows.length > 0) {
+      if (storageMode.postgresOnly || postgresRows.length > 0) {
         return {
           source: "postgres",
           dbUpdatedAt: postgresStatusUpdatedAt(postgresStatus),
@@ -6077,7 +6099,7 @@ const readHistoryMatchesForList = async (limit = 600) => {
 
 const readMatchById = async (matchId, options = {}) => {
   const decodedId = decodeURIComponent(matchId || "");
-  const basePublication = options.basePublication || null;
+  const basePublication = options.basePublication || (storageMode.postgresOnly ? resolveBasePublication() : null);
   const current = basePublication
     ? (await readCurrentMatchesDetailed({ basePublication })).rows
     : await readCurrentMatches();
@@ -6095,10 +6117,12 @@ const readMatchById = async (matchId, options = {}) => {
       ? readStablePublicationMetadata(basePublication, "sync-meta.json", null)
       : await readJsonFile(path.join(dataDir, "sync-meta.json"), null);
     const postgresStatus = await getCachedPostgresReadStatus(meta, basePublication?.identity || null);
+    requireNativePostgresReadStatus(postgresStatus);
     if (postgresFreshEnough(postgresStatus, "historyMatches", 1)) {
       mergeCandidate(await readPostgresMatchById(postgresPool, decodedId, {
         publicationIdentity: basePublication?.identity || null,
       }));
+      if (storageMode.postgresOnly) return resolved ? enrichMatchHistoricalTraining(resolved) : null;
     }
   }
 
@@ -6144,6 +6168,7 @@ const readOddsHistoryPage = async (url) => {
     const basePublication = resolveBasePublication();
     const meta = readStablePublicationMetadata(basePublication, "sync-meta.json", null);
     const postgresStatus = await getCachedPostgresReadStatus(meta, basePublication.identity || null);
+    requireNativePostgresReadStatus(postgresStatus);
     if (postgresFreshEnough(postgresStatus, "oddsSnapshots", 1)) {
       const rows = await readPostgresOddsHistoryRows(postgresPool, {
         limit,
@@ -6152,7 +6177,7 @@ const readOddsHistoryPage = async (url) => {
         pool: url.searchParams.get("pool") || "",
         publicationIdentity: basePublication.identity || null,
       });
-      if (rows.length > 0 || url.searchParams.get("matchId") || url.searchParams.get("sourceMatchId") || url.searchParams.get("pool")) {
+      if (storageMode.postgresOnly || rows.length > 0 || url.searchParams.get("matchId") || url.searchParams.get("sourceMatchId") || url.searchParams.get("pool")) {
         return {
           ok: true,
           source: "postgres",
@@ -7976,8 +8001,8 @@ const buildModelEvaluationHealth = (evaluation, sqlite) => {
   const dataSources = sample.dataSources && typeof sample.dataSources === "object" ? sample.dataSources : {};
   const oddsSource = dataSources.oddsHistory || {};
   const predictionSource = dataSources.predictionSnapshots || {};
-  const modelOddsRows = numericOrZero(oddsSource.sqliteRows ?? sample.oddsHistoryRows);
-  const modelPredictionRows = numericOrZero(predictionSource.sqliteRows ?? sample.predictionSnapshots);
+  const modelOddsRows = numericOrZero(oddsSource.warehouseRows ?? oddsSource.sqliteRows ?? sample.oddsHistoryRows);
+  const modelPredictionRows = numericOrZero(predictionSource.warehouseRows ?? predictionSource.sqliteRows ?? sample.predictionSnapshots);
   const sqliteOddsRows = numericOrZero(sqlite?.counts?.oddsSnapshots);
   const sqlitePredictionRows = numericOrZero(sqlite?.counts?.predictionSnapshots);
   const minOddsRows = Math.floor(sqliteOddsRows * modelEvaluationCoverageMinRatio);
@@ -8001,14 +8026,16 @@ const buildModelEvaluationHealth = (evaluation, sqlite) => {
     minCoverageRatio: modelEvaluationCoverageMinRatio,
     odds: {
       modelRows: modelOddsRows,
-      sqliteRows: sqliteOddsRows,
+      warehouseRows: sqliteOddsRows,
+      ...(storageMode.postgresOnly ? { postgresRows: sqliteOddsRows } : { sqliteRows: sqliteOddsRows }),
       minRows: minOddsRows,
       coverageRatio: coverageRatio(modelOddsRows, sqliteOddsRows),
       ok: oddsCoverageOk
     },
     predictionSnapshots: {
       modelRows: modelPredictionRows,
-      sqliteRows: sqlitePredictionRows,
+      warehouseRows: sqlitePredictionRows,
+      ...(storageMode.postgresOnly ? { postgresRows: sqlitePredictionRows } : { sqliteRows: sqlitePredictionRows }),
       minRows: minPredictionRows,
       coverageRatio: coverageRatio(modelPredictionRows, sqlitePredictionRows),
       ok: predictionCoverageOk
@@ -8111,7 +8138,7 @@ const getAdminSourceHealth = async (health) => {
         apiFootballCache: { publicPath: publicPathForData("api-football-cache.json"), ...(await fileInfoWithPath(path.join(dataDir, "api-football-cache.json"))) },
         sportteryEgressStatus: await fileInfoWithPath(sportteryEgressStatusPath),
         syncWorkerStatus: await fileInfoWithPath(syncWorkerStatusPath),
-        sqlite: await fileInfoWithPath(sqliteDbPath)
+        sqlite: storageMode.postgresOnly ? retiredSqliteStatus() : await fileInfoWithPath(sqliteDbPath)
       },
       crawlerErrors: {
         sporttery: {
@@ -8751,6 +8778,14 @@ const compactBacktestDataSource = (source) => {
     "currentRows",
     "historyRows",
     "publicRows",
+    "warehouseRows",
+    "warehouseUniqueRows",
+    "postgresRows",
+    "selectedRows",
+    "invalidRows",
+    "filteredRows",
+    "compactedRows",
+    "limit",
     "sqliteRows",
     "sqliteLimit",
     "sqliteReason"
@@ -11137,6 +11172,7 @@ const buildV1HistoryPayload = async (url) => {
       const limit = parseLimit(url.searchParams.get("limit"), 50, 200);
       const offset = decodeCursor(url.searchParams.get("cursor"));
       const postgresStatus = await getCachedPostgresReadStatus(meta, basePublication.identity);
+      requireNativePostgresReadStatus(postgresStatus);
       if (postgresFreshEnough(postgresStatus, "historyMatches", 1)) {
         const postgresPage = await readPostgresHistoryMatchesPage(postgresPool, {
           limit,

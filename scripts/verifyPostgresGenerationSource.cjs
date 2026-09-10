@@ -35,6 +35,50 @@ async function verifyGenerationSource(pool) {
     assert.equal((await rows("prediction_snapshots"))[0].raw, JSON.stringify(canonicalPredictionState(prediction).payload));
     assert.equal((await rows("odds_snapshots"))[0].raw, JSON.stringify(canonicalOddsState(odds).payload));
     checks.push({ name: "real immutable generation projects canonical states directly into PostgreSQL", ok: true });
+    const { readPostgresModelInput } = require("./postgresModelInput.cjs");
+    const { createModelInputCollector } = require("./modelInputRows.cjs");
+    const modelOptions = { pool, storeDir, publicDataDir, createCollector: createModelInputCollector,
+      prediction_snapshots: { limit: 50, preferLatestRows: true, maxRowsPerMatch: 6 },
+      odds_snapshots: { limit: 50 } };
+    const input = await readPostgresModelInput(modelOptions);
+    assert.equal(input.current[0].id, prediction.matchId);
+    assert.equal(input.history.length, 0);
+    assert.equal(input.prediction_snapshots.source, "postgres");
+    assert.deepEqual(input.prediction_snapshots.rows, [canonicalPredictionState(prediction).payload]);
+    assert.deepEqual(input.odds_snapshots.rows, [canonicalOddsState(odds).payload]);
+    checks.push({ name: "native model input reads exact matches, predictions and odds in one generation-bound snapshot", ok: true });
+    await assert.rejects(readPostgresModelInput({ ...modelOptions,
+      publicationIdentity: { ...input.publication, generationId: "wrong" } }), /publication mismatch/);
+    await assert.rejects(readPostgresModelInput({ ...modelOptions,
+      odds_snapshots: { limit: NaN } }), /row limit/);
+    const deniedPool = { connect: async () => { throw new Error("qa model database unavailable"); } };
+    await assert.rejects(readPostgresModelInput({ ...modelOptions, pool: deniedPool }), /database unavailable/);
+    checks.push({ name: "native training refuses mismatched identity, unsafe bounds and database outage without fallback", ok: true });
+    const originalOdds = (await rows("odds_snapshots"))[0];
+    let concurrentWrite = false;
+    const concurrentPool = { connect: async () => {
+      const client = await pool.connect();
+      return { release: () => client.release(), query: async (sql, values) => {
+        if (sql.startsWith("FETCH FORWARD 128 FROM model_prediction") && !concurrentWrite) {
+          concurrentWrite = true;
+          const writer = new (require("pg").Client)(pool.options);
+          try {
+            await writer.connect();
+            await writer.query("UPDATE football.odds_snapshots SET payload = $1::json WHERE id = $2",
+              [JSON.stringify({ ...JSON.parse(originalOdds.raw), oddsX: 99 }), originalOdds.id]);
+          } finally { await writer.end(); }
+        }
+        return client.query(sql, values);
+      } };
+    } };
+    try {
+      const consistent = await readPostgresModelInput({ ...modelOptions, pool: concurrentPool });
+      assert.equal(concurrentWrite, true);
+      assert.deepEqual(consistent.odds_snapshots.rows, input.odds_snapshots.rows);
+    } finally {
+      await pool.query("UPDATE football.odds_snapshots SET payload = $1::json WHERE id = $2", [originalOdds.raw, originalOdds.id]);
+    }
+    checks.push({ name: "concurrent odds revision cannot mix with the training transaction's older predictions", ok: true });
     const pBefore = (await rows("prediction_snapshots"))[0];
     const same = await syncPostgresProjectionFromSource(source(), { ...syncOptions, mode: "incremental" });
     assert.equal(same.skipped, true); assert.equal((await rows("prediction_snapshots"))[0].raw, pBefore.raw);
@@ -97,6 +141,15 @@ async function verifyGenerationSource(pool) {
     assert.equal(finals.length, 1); assert.equal(finals[0].dataset, "history");
     const finalRaw = finals[0].raw;
     assert.equal(JSON.parse(finalRaw).scoreHome, 2);
+    const { readPostgresFastResultReceiptState } = require("../server/postgresProjectionStore.cjs");
+    const { resolveActivePublication } = require("../server/dataGenerationBundle.cjs");
+    const receiptState = await readPostgresFastResultReceiptState(pool, {
+      publicationIdentity: resolveActivePublication({ storeDir, publicDataDir }).identity,
+    });
+    assert.equal(receiptState.valid, true, JSON.stringify(receiptState));
+    assert.equal(receiptState.missing, false);
+    assert.equal(receiptState.receipt.observations[0].scoreHome, 2);
+    checks.push({ name: "native API reader validates the signed fast-result receipt directly without emulated SQLite SQL", ok: true });
     checks.push({ name: "signed official result publishes directly in PostgreSQL with an atomic history and receipt", ok: true });
     await syncPostgresProjectionFromSource(source(), syncOptions);
     finals = (await rows("match_snapshots")).filter(row => row.source_match_id === fastId);
