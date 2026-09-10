@@ -2,13 +2,13 @@ const fs = require("node:fs");
 const crypto = require("node:crypto");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
-const { getSqliteStatus } = require("../server/sqliteStore.cjs");
+const nativeStorage = require("../server/storageMode.cjs").readStorageMode().postgresOnly;
 
 const rootDir = path.resolve(__dirname, "..");
 const publicDataDir = path.join(rootDir, "public", "data");
 const productionStoreDir = "/var/lib/football-predict";
 const productionSqlitePath = path.join(productionStoreDir, "football.db");
-const defaultStoreDir = fs.existsSync(productionSqlitePath)
+const defaultStoreDir = (nativeStorage ? process.platform !== "win32" : fs.existsSync(productionSqlitePath))
   ? productionStoreDir
   : path.join(rootDir, "server-data");
 const storeDir = process.env.SERVER_STORE_DIR || process.env.DATA_STORE_DIR || defaultStoreDir;
@@ -668,7 +668,7 @@ const supportedLegacyJsonlVersion = (value) => [
 ].includes(String(value || ""));
 
 const readPlanSqliteStatus = async () => {
-  const direct = await getSqliteStatus(sqliteDbPath);
+  const direct = await require("../server/sqliteStore.cjs").getSqliteStatus(sqliteDbPath);
   if (positiveRuntimeCounts(direct) && supportedLegacyJsonlVersion(direct.legacyJsonl?.version)) {
     return { ...direct, statusSource: "direct" };
   }
@@ -688,7 +688,9 @@ const readPlanSqliteStatus = async () => {
 };
 
 (async () => {
-  const sqliteStatus = await readPlanSqliteStatus();
+  const warehouseStatus = nativeStorage
+    ? await require("./nativePlanStorageStatus.cjs").readNativePlanStorageStatus({ storeDir, publicDataDir })
+    : await readPlanSqliteStatus();
   const modelIntegrityGateArtifacts = new Map(
     modelIntegrityGateSpecs.map((spec) => [spec.id, runNodeVerifier(spec.file, spec.args || [])]),
   );
@@ -753,7 +755,14 @@ const readPlanSqliteStatus = async () => {
     "football-sqlite-v2-incremental"
   ]), { file: "scripts/exportDataStoreSqlite.cjs" });
 
-  const legacyJsonlRuntimeVersion = sqliteStatus.legacyJsonl?.version || null;
+  if (nativeStorage) {
+    pushCheck("02-data-warehouse-sync", "native warehouse publication and receipt are verified without legacy import", warehouseStatus.available === true
+      && warehouseStatus.receiptValid === true && warehouseStatus.publication?.mode === "active-generation", {
+      file: "scripts/nativePlanStorageStatus.cjs", statusSource: warehouseStatus.statusSource,
+      publication: warehouseStatus.publication, sqliteAccesses: warehouseStatus.sqliteAccesses,
+    });
+  } else {
+  const legacyJsonlRuntimeVersion = warehouseStatus.legacyJsonl?.version || null;
   pushCheck("02-data-warehouse-sync", "legacy JSONL import is cursor-incremental and migration-safe", hasAll(sqliteExporter, [
     "legacy-jsonl-incremental-v2",
     "processJsonlIncrement",
@@ -768,11 +777,12 @@ const readPlanSqliteStatus = async () => {
     && ["legacy-jsonl-import-v1", "legacy-jsonl-incremental-v2"].includes(legacyJsonlRuntimeVersion), {
     file: "scripts/exportDataStoreSqlite.cjs",
     behaviorVerifier: scripts["verify:sqlite-incremental"] || null,
-    statusSource: sqliteStatus.statusSource || null,
-    directReason: sqliteStatus.directReason || sqliteStatus.reason || null,
+    statusSource: warehouseStatus.statusSource || null,
+    directReason: warehouseStatus.directReason || warehouseStatus.reason || null,
     sqliteLegacyJsonl: legacyJsonlRuntimeVersion,
-    imported: sqliteStatus.legacyJsonl?.imported || null
+    imported: warehouseStatus.legacyJsonl?.imported || null
   });
+  }
 
   pushCheck("02-data-warehouse-sync", "odds state persistence and JSONL maintenance stay bounded", hasAll(dataStore, [
     "odds-state-",
@@ -1838,22 +1848,23 @@ const readPlanSqliteStatus = async () => {
     files: ["scripts/pushCloudSync.cjs", "scripts/verifyDeploymentConfig.cjs"]
   }, false);
 
-  const sqliteOddsRows = Number(sqliteStatus.counts?.oddsSnapshots || 0);
+  const warehouseOddsRows = Number(warehouseStatus.counts?.oddsSnapshots || 0);
   const riskGuard = formalStrategy?.activation?.riskGuard || null;
-  const missingOddsFailClosed = sqliteOddsRows === 0
+  const missingOddsFailClosed = warehouseOddsRows === 0
     && ["watch", "degraded"].includes(riskGuard?.riskTier)
     && riskGuard?.looseningAllowed === false
     && riskGuard?.tighteningAllowed === true;
-  pushCheck("02-data-warehouse-sync", "SQLite runtime counts support fail-closed prediction service", sqliteStatus.available === true
-    && Number(sqliteStatus.counts?.currentMatches || 0) > 0
-    && Number(sqliteStatus.counts?.historyMatches || 0) > 0
-    && (sqliteOddsRows > 0 || missingOddsFailClosed)
-    && Number(sqliteStatus.counts?.predictionSnapshots || 0) > 0, {
-      dbPath: sqliteStatus.path,
-      statusSource: sqliteStatus.statusSource || null,
-      directReason: sqliteStatus.directReason || sqliteStatus.reason || null,
-      healthUrl: sqliteStatus.healthUrl || null,
-      counts: sqliteStatus.counts,
+  pushCheck("02-data-warehouse-sync", `${nativeStorage ? "PostgreSQL" : "SQLite"} runtime counts support fail-closed prediction service`, warehouseStatus.available === true
+    && Number(warehouseStatus.counts?.currentMatches || 0) > 0
+    && Number(warehouseStatus.counts?.historyMatches || 0) > 0
+    && (warehouseOddsRows > 0 || missingOddsFailClosed)
+    && Number(warehouseStatus.counts?.predictionSnapshots || 0) > 0, {
+      storage: nativeStorage ? "postgres" : "sqlite",
+      dbPath: warehouseStatus.path,
+      statusSource: warehouseStatus.statusSource || null,
+      directReason: warehouseStatus.directReason || warehouseStatus.reason || null,
+      healthUrl: warehouseStatus.healthUrl || null,
+      counts: warehouseStatus.counts,
       missingOddsFailClosed,
       riskGuard
     });

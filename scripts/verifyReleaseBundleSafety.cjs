@@ -310,6 +310,8 @@ const requiredReleaseEntries = [
   "scripts/postgresWorkerObservation.cjs",
   "scripts/runtimeOddsHistory.cjs",
   "scripts/nativeStorageReadiness.cjs",
+  "scripts/nativePlanStorageStatus.cjs",
+  "scripts/postgresReleaseMirror.cjs",
   "scripts/runtimeFastResultInput.cjs",
   "scripts/postgresLearningLedger.cjs",
   "scripts/importPostgresLearningLedger.cjs",

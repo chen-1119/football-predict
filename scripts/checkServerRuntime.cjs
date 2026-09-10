@@ -58,6 +58,13 @@ const resolveMonitorPostgresMode = (env = process.env, readValues = readAllowedR
   return String(value || "disabled").trim().toLowerCase();
 };
 const postgresMode = resolveMonitorPostgresMode();
+const MONITOR_STORAGE_ENV_KEYS = Object.freeze(["FOOTBALL_STORAGE_MODE", "FOOTBALL_POSTGRES_MODE", "FOOTBALL_POSTGRES_URL", "DATABASE_URL",
+  "DATASTORE_READ_SOURCE", "CURRENT_MATCH_SOURCE", "ENABLE_SQLITE_EXPORT", "PRIVATE_MODEL_ARTIFACT_STORAGE", "POSTGRES_PROJECTION_SOURCE"]);
+const resolveMonitorStorageMode = (env = process.env, readValues = readAllowedRuntimeValues) => {
+  const configured = readValues(env.RUNTIME_MONITOR_AUTH_FILE, MONITOR_STORAGE_ENV_KEYS);
+  return require("../server/storageMode.cjs").readStorageMode(Object.fromEntries(MONITOR_STORAGE_ENV_KEYS.map(key => [key, env[key] ?? configured[key]])));
+};
+const nativeStorage = resolveMonitorStorageMode().postgresOnly;
 const checkSystemd = process.env.RUNTIME_MONITOR_CHECK_SYSTEMD !== "0" && !isWindows;
 const checkDisk = process.env.RUNTIME_MONITOR_CHECK_DISK !== "0" && !isWindows;
 const checkCleanup = process.env.RUNTIME_MONITOR_CHECK_CLEANUP !== "0";
@@ -452,6 +459,7 @@ const monitorRepairEnvironment = (stage, env = process.env, readValues = readAll
   return selected;
 };
 const runSqliteRepairCommands = ({ env = process.env, commandRunner = runCommand, now = Date.now } = {}) => {
+  if (resolveMonitorStorageMode(env).postgresOnly) throw new Error("retired SQLite repair is forbidden");
   const deadline = now() + sqliteRepairTimeoutMs;
   const runStep = (stage, script, args = []) => {
     const remainingMs = deadline - now();
@@ -711,6 +719,12 @@ const checkHealth = async () => {
   });
   addCheck("fast result probe freshness", resultProbeFreshness.status, resultProbeFreshness);
 
+  if (nativeStorage) {
+    const evidence = require("./nativeStorageReadiness.cjs").nativeStorageReadiness(body);
+    addCheck("PostgreSQL-only primary read", evidence.ok ? "ok" : "failed", evidence);
+    return body;
+  }
+
   const sqliteRequirement = evaluateSqliteReadRequirement({
     sqlite,
     postgres,
@@ -776,6 +790,18 @@ const markSqlitePrimaryReadRepaired = (details = {}) => {
 };
 
 const maybeRepairSqliteRead = async (health) => {
+  if (nativeStorage) {
+    // The native worker already owns generation reconciliation and retries.
+    // Monitoring must not race it with a second heavyweight rebuild or reopen
+    // a retired database when the primary store is unhealthy.
+    const evidence = require("./nativeStorageReadiness.cjs").nativeStorageReadiness(health);
+    addCheck("native projection reconciliation owner", evidence.ok ? "ok" : "failed", {
+      owner: "football-sync-worker", monitorDatabaseWrites: 0, sqliteRepairDisabled: true,
+      reason: evidence.ok ? "native-storage-ready" : "native-storage-unhealthy-worker-reconciliation-required",
+      blockers: evidence.blockers,
+    });
+    return health;
+  }
   const currentRead = health?.data?.currentRead || {};
   const sqlite = health?.storage?.sqlite || {};
   const postgres = health?.storage?.postgres || {};
@@ -2023,6 +2049,7 @@ if (require.main === module) {
 module.exports = {
   readAllowedRuntimeValues,
   resolveMonitorPostgresMode,
+  resolveMonitorStorageMode,
   monitorRepairEnvironment,
   runSqliteRepairCommands,
   assessFastResultProbeFreshness,

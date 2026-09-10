@@ -339,6 +339,8 @@ const verifyMonitorRepairIsolation = (storeDir) => {
   ].join("\n"));
   const env = {
     ...process.env,
+    // This verifies legacy repair using a mock command runner, not native repair.
+    FOOTBALL_STORAGE_MODE: "hybrid",
     RUNTIME_MONITOR_AUTH_FILE: envPath,
     SERVER_STORE_DIR: storeDir,
     ADMIN_TOKEN: "fixture-admin-secret", API_FOOTBALL_KEY: "fixture-provider-secret",

@@ -9,11 +9,11 @@ async function openPostgresRuntimeReadSession(options = {}) {
   const storeDir = path.resolve(options.storeDir || process.env.SERVER_STORE_DIR || process.env.DATA_STORE_DIR || path.join(__dirname, "../server-data"));
   const publicDataDir = path.resolve(options.publicDataDir || process.env.DATA_GENERATION_PUBLIC_DATA_DIR || path.join(__dirname, "../public/data"));
   const owned = !options.pool, pool = options.pool || createPostgresPool({ max: 1, applicationName: "football-runtime-reader" });
-  let client, lease, closed = false, sharedLock = false;
+  let client, lease, closed = false, sharedLock = false, lockQueryUncertain = false;
   const close = async () => {
     if (closed) return;
     closed = true;
-    let releaseError;
+    let releaseError = lockQueryUncertain ? new Error("native read lock acquisition outcome unknown") : undefined;
     try { if (client) await client.query("ROLLBACK"); }
     catch (error) { releaseError = error; }
     finally {
@@ -29,7 +29,14 @@ async function openPostgresRuntimeReadSession(options = {}) {
     if (options.protectReceipt) {
       // Acquire before BEGIN so a wait cannot pin a snapshot older than the
       // publisher whose exclusive lock just completed.
-      await client.query("SELECT pg_advisory_lock_shared(hashtext($1))", ["football-postgres-projection-sync-v1"]);
+      // Do not enqueue an unbounded lock wait behind a full projection. A
+      // failed attempt is retried by the owning worker on its next cycle.
+      // If the network times out after dispatch, discard the connection so a
+      // late server response cannot strand a session lock in the pool.
+      lockQueryUncertain = true;
+      const acquired = await client.query("SELECT pg_try_advisory_lock_shared(hashtext($1)) AS acquired", ["football-postgres-projection-sync-v1"]);
+      lockQueryUncertain = false;
+      if (acquired.rows[0]?.acquired !== true) throw new Error("native receipt read barrier busy; retry after projection completes");
       sharedLock = true;
     }
     await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
@@ -54,7 +61,7 @@ async function openPostgresRuntimeReadSession(options = {}) {
         if (state.legacy) throw new Error("native receipt requires explicit legacy migration");
         return state;
     };
-    return { client, identity, publication, close,
+    return { client, pool, identity, publication, close,
       async receipt() { return (await receiptState()).receipt; },
       async guardedFinals() {
         const state = await receiptState();
