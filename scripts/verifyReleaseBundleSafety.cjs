@@ -419,6 +419,7 @@ const requiredReleaseEntries = [
   "scripts/verifyReleaseVerifierContracts.cjs",
   "scripts/verifyPostgresSemanticReviewCleanup.cjs",
   "scripts/verifyReleaseRecovery.cjs",
+  "scripts/releaseStoragePreflight.cjs",
   "deploy/light-server/release-from-bundle.sh",
   "deploy/light-server/restore-ubuntu-operator-key.sh",
   "deploy/light-server/nginx.conf",

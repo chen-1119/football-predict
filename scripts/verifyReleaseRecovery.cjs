@@ -1130,4 +1130,5 @@ if (require.main === module) {
   else if (process.argv.length === 3 && process.argv[2] === "--sqlite-snapshot-validation") console.log(JSON.stringify(verifySqliteSnapshotValidation()));
   else { assert.equal(process.argv.length, 2, "unexpected recovery verifier arguments"); verifyOriginal(); }
 }
-module.exports = { verifyFullAfterUiRecovery, verifyRealSqliteRecovery, verifySqliteSnapshotValidation };
+module.exports = { verifyFullAfterUiRecovery, verifyRealSqliteRecovery, verifySqliteSnapshotValidation,
+  createFixture, runRecovery, mapped, write, sha256, readTreeId };

@@ -640,6 +640,10 @@ bash -n "$RELEASE_SCRIPT_PATH" || die "signed release entrypoint has invalid bas
 
 [ ! -e "$RECOVERY_CURRENT" ] && [ ! -L "$RECOVERY_CURRENT" ] \
   || die "an unresolved release recovery transaction already exists: ${RECOVERY_CURRENT}"
+# Read the fixed host environment using authenticated source before consuming a
+# sequence. The entrypoint repeats this cheap guard for older installed wrappers.
+env -i PATH="$PATH" "$NODE_BIN" "$TRUSTED_SOURCE_DIR/scripts/releaseStoragePreflight.cjs" \
+  || die "storage dispatch rejected; release sequence was not consumed"
 consume_release_sequence_before_execution "$MANIFEST_SEQUENCE"
 if ! preserve_signed_source_baseline; then
   printf 'football-release: warning: authenticated source baseline unavailable; UI overlay remains ineligible\n' >&2
