@@ -25,12 +25,11 @@ const {
   exactHeartbeatMatches,
 } = require("./runReleaseCandidateHeartbeatKeeper.cjs");
 
-let DatabaseSync = null;
-try {
-  ({ DatabaseSync } = require("node:sqlite"));
-} catch {
-  DatabaseSync = null;
-}
+const storageMode = require("../server/storageMode.cjs").readStorageMode();
+const loadSqlite = () => {
+  if (storageMode.postgresOnly) throw new Error("SQLite is retired in postgres-only worker");
+  try { return require("node:sqlite").DatabaseSync; } catch { return null; }
+};
 
 const rootDir = path.resolve(__dirname, "..");
 const storeDir = path.resolve(process.env.SERVER_STORE_DIR || process.env.DATA_STORE_DIR || path.join(rootDir, "server-data"));
@@ -121,6 +120,7 @@ const benchmarkProspectiveCaptureAttemptStatusFile = path.join(
 );
 const sqliteReadSourceEnabled = process.env.DATASTORE_READ_SOURCE === "sqlite" || process.env.CURRENT_MATCH_SOURCE === "sqlite";
 const sqliteExportEnabled = process.env.ENABLE_SQLITE_EXPORT === "1" || sqliteReadSourceEnabled;
+const runtimeProjectionEnabled = storageMode.postgresOnly || sqliteExportEnabled;
 const modelBacktestOnSync = process.env.ENABLE_MODEL_BACKTEST_ON_SYNC === "1";
 const modelBacktestMinIntervalMs = Math.max(5, Number(process.env.MODEL_BACKTEST_ON_SYNC_MIN_INTERVAL_MINUTES || 120)) * 60 * 1000;
 const modelBacktestForce = process.env.MODEL_BACKTEST_ON_SYNC_FORCE === "1";
@@ -1535,6 +1535,7 @@ const safeCoverageRatio = (modelRows, sqliteRows) => {
 };
 
 const readSqliteCounts = () => {
+  const DatabaseSync = loadSqlite();
   if (!DatabaseSync) return { ok: false, reason: "node:sqlite unavailable", path: sqliteDbPath };
   if (!fs.existsSync(sqliteDbPath)) return { ok: false, reason: "sqlite database not found", path: sqliteDbPath };
   let db = null;
@@ -1572,6 +1573,8 @@ const normalizedIdentityValue = (value) => (
 );
 
 const compareObservationPublicationIdentity = (observation) => {
+  const backend = observation?.storage === "postgres" ? "postgres" : "sqlite";
+  const stored = observation?.[backend];
   const publicIdentity = {
     generationId: normalizedIdentityValue(observation?.generation?.generationId),
     manifestHash: normalizedIdentityValue(observation?.generation?.manifestHash),
@@ -1579,10 +1582,10 @@ const compareObservationPublicationIdentity = (observation) => {
     committedAt: normalizedIdentityValue(observation?.generation?.committedAt),
   };
   const sqliteIdentity = {
-    generationId: normalizedIdentityValue(observation?.sqlite?.generationId),
-    manifestHash: normalizedIdentityValue(observation?.sqlite?.manifestHash),
-    sourceCycleId: normalizedIdentityValue(observation?.sqlite?.generationSourceCycleId),
-    committedAt: normalizedIdentityValue(observation?.sqlite?.committedAt),
+    generationId: normalizedIdentityValue(stored?.generationId),
+    manifestHash: normalizedIdentityValue(stored?.manifestHash),
+    sourceCycleId: normalizedIdentityValue(stored?.generationSourceCycleId),
+    committedAt: normalizedIdentityValue(stored?.committedAt),
   };
   const missingPublicFields = publicationIdentityFields.filter((field) => !publicIdentity[field]);
   const missingSqliteFields = publicationIdentityFields.filter((field) => !sqliteIdentity[field]);
@@ -1593,12 +1596,12 @@ const compareObservationPublicationIdentity = (observation) => {
   ));
   const blockers = [
     ...missingPublicFields.map((field) => `published-generation-identity-missing:${field}`),
-    ...missingSqliteFields.map((field) => `sqlite-publication-identity-missing:${field}`),
-    ...mismatchedFields.map((field) => `public-sqlite-publication-identity-mismatch:${field}`),
+    ...missingSqliteFields.map((field) => `${backend}-publication-identity-missing:${field}`),
+    ...mismatchedFields.map((field) => `public-${backend}-publication-identity-mismatch:${field}`),
   ];
   return {
     publicIdentity,
-    sqliteIdentity,
+    ...(backend === "sqlite" ? { sqliteIdentity } : { postgresIdentity: sqliteIdentity }),
     missingPublicFields,
     missingSqliteFields,
     mismatchedFields,
@@ -1611,7 +1614,7 @@ const inspectSqlitePublicationReuse = ({
   enabled = sqliteExportEnabled,
   sqlitePath: sqlitePathInput = sqliteDbPath,
   publicationStoreDir = storeDir,
-  DatabaseClass = DatabaseSync,
+  DatabaseClass = loadSqlite(),
 } = {}) => {
   const inspectedAt = new Date().toISOString();
   const sqlitePath = path.resolve(sqlitePathInput);
@@ -1706,6 +1709,20 @@ const runSqliteExportOrReuse = async ({
   return run(true, "datastore:sqlite", extraEnv, options);
 };
 
+const runRuntimeProjectionOrReuse = async (input = {}) => {
+  if (!storageMode.postgresOnly) return runSqliteExportOrReuse(input);
+  // Native incremental sync itself verifies the generation identity, takes the
+  // writer barrier and reuses an unchanged generation. Never invoke export.
+  const run = input.run || runOptional;
+  return { ...await run(input.enabled === true && input.generationStep?.ok === true,
+    "postgres:sync", input.extraEnv || {}, input.options || {}), storage: "postgres" };
+};
+const readRuntimeSourceCycleObservation = async (input = {}) => storageMode.postgresOnly
+  ? require("./postgresWorkerObservation.cjs").readPostgresWorkerObservation({
+    ...input, storeDir, publicDataDir: path.join(rootDir, "public/data"),
+  })
+  : readSourceCycleObservation(input);
+
 const readSourceCycleObservation = ({
   phase = null,
   validationStep = null,
@@ -1714,7 +1731,7 @@ const readSourceCycleObservation = ({
   syncMetaPath: syncMetaPathInput = path.join(rootDir, "public", "data", "sync-meta.json"),
   sqlitePath: sqlitePathInput = sqliteDbPath,
   publicationStoreDir = storeDir,
-  DatabaseClass = DatabaseSync,
+  DatabaseClass = loadSqlite(),
   resolvePublication = resolveActivePublication,
 } = {}) => {
   const observedAt = new Date().toISOString();
@@ -2335,6 +2352,7 @@ const describeConsolidatedSlowPublicationNeed = ({
 
 const describeModelBacktestNeed = ({
   sqliteStep = null,
+  warehouseCoverage = null,
   forceCandidateImplementationRefreeze = false,
 } = {}) => {
   const evaluation = readJson(path.join(rootDir, "public", "data", "model-evaluation.json"), null);
@@ -2344,7 +2362,7 @@ const describeModelBacktestNeed = ({
   const candidateImplementationDrift = forceCandidateImplementationRefreeze === true || (
     candidateCaptureStatus?.reason === "candidate-implementation-drift-awaiting-refreeze"
   );
-  const sqliteCoverage = readSqliteCounts();
+  const sqliteCoverage = warehouseCoverage || readSqliteCounts();
   const modelCoverage = readModelEvaluationCoverage(evaluation);
   const sqliteOddsRows = asNumber(sqliteCoverage.counts?.oddsSnapshots, 0);
   const sqlitePredictionRows = asNumber(sqliteCoverage.counts?.predictionSnapshots, 0);
@@ -2389,7 +2407,7 @@ const describeModelBacktestNeed = ({
     reason: !enabled
       ? "disabled"
       : !sqliteReady
-        ? "sqlite-export-not-ready"
+        ? (storageMode.postgresOnly ? "postgres-projection-not-ready" : "sqlite-export-not-ready")
         : modelBacktestForce
           ? "forced"
           : candidateImplementationDrift
@@ -2401,7 +2419,7 @@ const describeModelBacktestNeed = ({
             : coverageCritical
               ? "model-coverage-below-health-floor"
               : coverageBehind
-                ? "model-coverage-behind-sqlite"
+                ? (storageMode.postgresOnly ? "model-coverage-behind-postgres" : "model-coverage-behind-sqlite")
                 : evaluationStale && intervalReady
                   ? "evaluation-stale"
                   : evaluationStale
@@ -2415,21 +2433,28 @@ const describeModelBacktestNeed = ({
     lastSuccessAgeMinutes: Number.isFinite(lastSuccessAgeMs) ? Number((lastSuccessAgeMs / 60000).toFixed(2)) : null,
     minIntervalMinutes: Number((modelBacktestMinIntervalMs / 60000).toFixed(2)),
     coverage: {
-      sqliteReady: sqliteCoverage.ok === true,
-      sqliteReason: sqliteCoverage.reason || null,
-      sqlitePath: sqliteCoverage.path || sqliteDbPath,
+      storage: storageMode.postgresOnly ? "postgres" : "sqlite",
+      warehouseReady: sqliteCoverage.ok === true,
+      warehouseReason: sqliteCoverage.reason || null,
+      ...(storageMode.postgresOnly ? { postgresReady: sqliteCoverage.ok === true } : {
+        sqliteReady: sqliteCoverage.ok === true,
+        sqliteReason: sqliteCoverage.reason || null,
+        sqlitePath: sqliteCoverage.path || sqliteDbPath,
+      }),
       minRatio: modelCoverageMinRatio,
       triggerRatio: modelCoverageTriggerRatio,
       critical: coverageCritical,
       behind: coverageBehind,
       odds: {
         modelRows: modelCoverage.oddsRows,
-        sqliteRows: sqliteOddsRows,
+        warehouseRows: sqliteOddsRows,
+        [storageMode.postgresOnly ? "postgresRows" : "sqliteRows"]: sqliteOddsRows,
         coverageRatio: Number(oddsCoverageRatio.toFixed(4))
       },
       predictionSnapshots: {
         modelRows: modelCoverage.predictionRows,
-        sqliteRows: sqlitePredictionRows,
+        warehouseRows: sqlitePredictionRows,
+        [storageMode.postgresOnly ? "postgresRows" : "sqliteRows"]: sqlitePredictionRows,
         coverageRatio: Number(predictionCoverageRatio.toFixed(4))
       }
     }
@@ -2442,6 +2467,9 @@ const maybeRunModelBacktest = async ({
 } = {}) => {
   const decision = describeModelBacktestNeed({
     sqliteStep,
+    warehouseCoverage: storageMode.postgresOnly
+      ? await require("./postgresWorkerObservation.cjs").readPostgresWorkerCounts({ storeDir, publicDataDir: path.join(rootDir, "public/data") })
+      : null,
     forceCandidateImplementationRefreeze,
   });
   if (!decision.shouldRun) {
@@ -2520,7 +2548,7 @@ const describeCycleStages = () => ([
       "sync:prematch",
       "validate:data",
       "datastore:generation",
-      "datastore:sqlite",
+      storageMode.postgresOnly ? "postgres:sync" : "datastore:sqlite",
       "publish-event",
     ]
   },
@@ -2551,7 +2579,7 @@ const describeCycleStages = () => ([
       "reconcile:fast-results-generation:consolidated-slow-publication",
       "validate:data:consolidated-slow-publication",
       "datastore:generation:consolidated-slow-publication",
-      "datastore:sqlite:consolidated-slow-publication",
+      storageMode.postgresOnly ? "postgres:sync:consolidated-slow-publication" : "datastore:sqlite:consolidated-slow-publication",
       "observe:publication-readiness"
     ]
   }
@@ -3303,9 +3331,9 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
     }, {
       timeoutMs: commandTimeouts.sqlite
     });
-    await onBeforeHeavyStep("datastore:sqlite:official");
-    const sqliteStep = await runSqliteExportOrReuse({
-      enabled: sqliteExportEnabled,
+    await onBeforeHeavyStep(storageMode.postgresOnly ? "postgres:sync:official" : "datastore:sqlite:official");
+    const sqliteStep = await runRuntimeProjectionOrReuse({
+      enabled: runtimeProjectionEnabled,
       generationStep: officialGenerationStep,
       options: { timeoutMs: commandTimeouts.sqlite },
     });
@@ -3355,7 +3383,7 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
         : []),
     ];
     if (!slowPhasePlan.due) {
-      const readinessSourceCycleObservation = readSourceCycleObservation({
+      const readinessSourceCycleObservation = await readRuntimeSourceCycleObservation({
         phase: "readiness",
         validationStep: dataValidationStep,
         generationStep: officialGenerationStep,
@@ -3555,7 +3583,7 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
     // enrichment and strategy computation off the publication lock, then
     // publish their combined effect once. This removes the former
     // post-enrichment export followed by a second model-reconciled export.
-    const sourceCycleObservation = readSourceCycleObservation({
+    const sourceCycleObservation = await readRuntimeSourceCycleObservation({
       phase: "pre-consolidated-publication",
       validationStep: postEnrichmentDataValidationStep,
       generationStep: officialGenerationStep,
@@ -3572,13 +3600,13 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
           })
         )
       : {
-          ok: sqliteExportEnabled === false,
+          ok: runtimeProjectionEnabled === false,
           skipped: true,
           blocked: true,
           fatal: false,
           script: "model:backtest",
           reason: "post-enrichment-model-input-not-ready",
-          error: sqliteExportEnabled
+          error: runtimeProjectionEnabled
             ? `model input blocked: ${sourceCycleObservation.blockers.join(", ")}`
             : null,
           sourceCycleObservation,
@@ -3749,14 +3777,14 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
       )),
       phase: "consolidated-slow-publication",
     };
-    if (sqliteExportEnabled
+    if (runtimeProjectionEnabled
       && consolidatedPublicationRequired
       && consolidatedDataValidationStep.ok === true
       && consolidatedGenerationStep?.skipped !== true) {
-      await onBeforeHeavyStep("datastore:sqlite:consolidated-slow-publication");
+      await onBeforeHeavyStep(storageMode.postgresOnly ? "postgres:sync:consolidated-slow-publication" : "datastore:sqlite:consolidated-slow-publication");
     }
-    const consolidatedSqliteStep = await runSqliteExportOrReuse({
-      enabled: sqliteExportEnabled
+    const consolidatedSqliteStep = await runRuntimeProjectionOrReuse({
+      enabled: runtimeProjectionEnabled
         && consolidatedPublicationRequired
         && consolidatedDataValidationStep.ok === true
         && consolidatedGenerationStep?.skipped !== true,
@@ -3811,7 +3839,7 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
     const effectivePostEnrichmentSqliteStep = consolidatedPublicationRequired
       ? consolidatedSqliteStep
       : sqliteStep;
-    const readinessSourceCycleObservation = readSourceCycleObservation({
+    const readinessSourceCycleObservation = await readRuntimeSourceCycleObservation({
       phase: "readiness",
       validationStep: consolidatedPublicationRequired
         ? consolidatedDataValidationStep
@@ -3921,7 +3949,7 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
         plan: slowPhasePlan,
         warnings: [],
       });
-      const readinessSourceCycleObservation = readSourceCycleObservation({
+      const readinessSourceCycleObservation = await readRuntimeSourceCycleObservation({
         phase: "readiness",
         validationStep: dataValidationStep,
         generationStep: officialGenerationStep,
@@ -4757,6 +4785,8 @@ module.exports = {
   readSourceCycleObservation,
   inspectSqlitePublicationReuse,
   runSqliteExportOrReuse,
+  runRuntimeProjectionOrReuse,
+  readRuntimeSourceCycleObservation,
   runCommand,
   runCandidateProspectiveDeadlineCapture,
   runBenchmarkProspectiveDeadlineCapture,

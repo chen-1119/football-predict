@@ -47,6 +47,47 @@ async function verifyGenerationSource(pool) {
     assert.deepEqual(input.prediction_snapshots.rows, [canonicalPredictionState(prediction).payload]);
     assert.deepEqual(input.odds_snapshots.rows, [canonicalOddsState(odds).payload]);
     checks.push({ name: "native model input reads exact matches, predictions and odds in one generation-bound snapshot", ok: true });
+    const { openPostgresRuntimeReadSession } = require("./postgresRuntimeReadSession.cjs");
+    const { postgresCaptureUniverse } = require("./postgresCaptureUniverse.cjs");
+    const { runtimeSnapshotsForMatches, runtimeOddsForMatches } = require("./captureCandidateProspectiveDeadline.cjs");
+    const { readPostgresWorkerObservation, readPostgresWorkerCounts } = require("./postgresWorkerObservation.cjs");
+    const readerOptions = { pool, storeDir, publicDataDir };
+    const readyStep = { ok: true, skipped: false };
+    const observationOptions = { ...readerOptions, validationStep: readyStep, generationStep: readyStep, projectionStep: readyStep };
+    const workerReady = await readPostgresWorkerObservation(observationOptions);
+    assert.equal(workerReady.ready, true, JSON.stringify(workerReady));
+    assert.equal(workerReady.storage, "postgres"); assert.equal(workerReady.sqlite, undefined);
+    assert.equal((await readPostgresWorkerObservation({ ...observationOptions, projectionStep: { ok: true, skipped: true } })).ready, false);
+    const counts = await readPostgresWorkerCounts(readerOptions);
+    assert.deepEqual(counts.counts, { oddsSnapshots: 1, predictionSnapshots: 1 });
+    checks.push({ name: "worker acknowledges the active native projection, never a skipped export, and counts actual warehouse rows", ok: true });
+    const session = await openPostgresRuntimeReadSession(readerOptions);
+    try {
+      assert.equal(await session.receipt(), null);
+      const universe = await postgresCaptureUniverse(session, []);
+      assert.equal(universe.currentMatches[0].id, prediction.matchId);
+      assert.deepEqual(universe.historyMatches, []);
+      const capture = await runtimeSnapshotsForMatches(universe.currentMatches, at, { session, upperBoundForMatch: () => later });
+      assert.equal(capture.complete, true); assert.deepEqual(capture.rows, input.prediction_snapshots.rows);
+      assert.deepEqual((await runtimeOddsForMatches(universe.currentMatches, at, session)).rows, input.odds_snapshots.rows);
+      const earlier = await runtimeSnapshotsForMatches(universe.currentMatches, at, { session, upperBoundForMatch: () => "2026-09-09T00:00:00.000Z" });
+      assert.equal(earlier.rows.length, 0);
+      await assert.rejects(runtimeSnapshotsForMatches(universe.currentMatches, at, { session: { client: { query: async () => { throw new Error("qa native capture outage"); } } } }), /qa native capture outage/);
+    } finally { await session.close(); }
+    checks.push({ name: "native candidate queries retain original snapshots and cutoff bounds and refuse database fallback", ok: true });
+    const { withCandidateProspectiveRegistryLock, registryLockFileFor } = require("./candidateProspectiveLedger.cjs");
+    const registry = path.join(storeDir, "qa-async-registry.json");
+    for (const fail of [false, true]) {
+      let releaseWait;
+      const barrier = new Promise(resolve => { releaseWait = resolve; });
+      const pending = withCandidateProspectiveRegistryLock(registry, async () => { await barrier; if (fail) throw new Error("qa async reject"); return 7; });
+      assert.equal(fs.existsSync(registryLockFileFor(registry)), true);
+      assert.throws(() => withCandidateProspectiveRegistryLock(registry, () => {}, { timeoutMs: 0 }), /lock/i);
+      releaseWait();
+      if (fail) await assert.rejects(pending, /qa async reject/); else assert.equal(await pending, 7);
+      assert.equal(fs.existsSync(registryLockFileFor(registry)), false);
+    }
+    checks.push({ name: "candidate registry lock spans asynchronous reads and releases on both resolution and rejection", ok: true });
     await assert.rejects(readPostgresModelInput({ ...modelOptions,
       publicationIdentity: { ...input.publication, generationId: "wrong" } }), /publication mismatch/);
     await assert.rejects(readPostgresModelInput({ ...modelOptions,
@@ -170,6 +211,32 @@ async function verifyGenerationSource(pool) {
     assert.equal(older.publishedRows, 0);
     assert.equal((await rows("match_snapshots")).find(row => row.source_match_id === fastId).raw, correctedRaw);
     checks.push({ name: "new signed correction advances authority while an older score replay is refused", ok: true });
+    require("./verifyNativeWorkerRuntime.cjs").verifyNativeWorkerRuntime({ storeDir, publicDataDir, sourceMatchId: fastId });
+    checks.push({ name: "actual native worker module routes projection and result input with zero SQLite module access", ok: true });
+    const guarded = await openPostgresRuntimeReadSession({ ...readerOptions, protectReceipt: true });
+    const concurrentWriter = new (require("pg").Client)(pool.options);
+    try {
+      await concurrentWriter.connect();
+      const lock = await concurrentWriter.query("SELECT pg_try_advisory_lock(hashtext($1)) AS acquired", ["football-postgres-projection-sync-v1"]);
+      assert.equal(lock.rows[0].acquired, false);
+      const receipt = await guarded.receipt();
+      assert.ok(receipt.observations.some(row => row.sourceMatchId === fastId && row.scoreHome === 3));
+      assert.ok(receipt.observations.some(row => row.sourceMatchId === fastId && row.scoreHome === 2), "correction does not erase original observation");
+      assert.equal((await guarded.historyForSourceIds([fastId]))[0].scoreHome, 3);
+      await guarded.close();
+      const unlocked = await concurrentWriter.query("SELECT pg_try_advisory_lock(hashtext($1)) AS acquired", ["football-postgres-projection-sync-v1"]);
+      assert.equal(unlocked.rows[0].acquired, true);
+      await concurrentWriter.query("SELECT pg_advisory_unlock(hashtext($1))", ["football-postgres-projection-sync-v1"]);
+    } finally { await guarded.close(); await concurrentWriter.end(); }
+    checks.push({ name: "reconciliation shared barrier protects receipt and history until local file work releases its read session", ok: true });
+    fs.writeFileSync(path.join(publicDataDir, "post-match-reviews.json"), JSON.stringify({ rows: [] }));
+    const { reconcileFastResultGenerationPostgres } = require("./reconcileFastResultGeneration.cjs");
+    const reconciled = await reconcileFastResultGenerationPostgres(readerOptions);
+    assert.equal(reconciled.ok, true); assert.equal(reconciled.skipped, false); assert.equal(reconciled.storage, "postgres");
+    assert.equal(JSON.parse(fs.readFileSync(path.join(publicDataDir, "matches-current.json"))).length, 0);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(publicDataDir, "matches-history.json")))[0].scoreHome, 3);
+    assert.equal((await reconcileFastResultGenerationPostgres(readerOptions)).skipped, true);
+    checks.push({ name: "native reconciliation rebases the latest signed final into generation inputs once without SQLite", ok: true });
     assert.equal(fs.existsSync(path.join(storeDir, "football.db")), false);
     return { ok: true, checks, scope: "real generation files and native PostgreSQL; no production cutover" };
   } finally {

@@ -83,12 +83,9 @@ const {
   applyFastResultObservation,
   mergeFastResultObservations,
   overlayFastObservedFinals,
-  recentFastObservationSourceIds,
 } = require("./fastResultObservations.cjs");
-const {
-  readSqliteFastResultReceipt,
-  readSqliteTransitionMatches,
-} = require("../server/sqliteStore.cjs");
+const { readRuntimeFastResultInput } = require("./runtimeFastResultInput.cjs");
+const { readStorageMode } = require("../server/storageMode.cjs");
 const { acquireSyncMetaCommitLock } = require("./syncMetaCommitLock.cjs");
 const { FREE_FOOTBALL_TEAM_ALIASES } = require("./freeFootballTeamAliases.cjs");
 const { buildFormalReviewPerformance } = require("../server/reviewPerformanceSummary.cjs");
@@ -17653,7 +17650,10 @@ async function sync() {
   }).history.length);
   const existingSyncMeta = loadExistingSyncMeta(publicDir);
   const sqliteDataPath = process.env.DATASTORE_SQLITE_PATH || path.join(DEFAULT_STORE_DIR, "football.db");
-  const sqliteFastReceipt = await readSqliteFastResultReceipt(sqliteDataPath);
+  const { receipt: sqliteFastReceipt, finals: sqliteFastFinals } = await readRuntimeFastResultInput({
+    sqlitePath: sqliteDataPath, storeDir: DEFAULT_STORE_DIR, publicDataDir: dataDir,
+    existingObservations: existingSyncMeta?.fastResultObservations,
+  });
   const fastResultObservations = mergeFastResultObservations(
     existingSyncMeta?.fastResultObservations,
     sqliteFastReceipt?.observations || []
@@ -17670,16 +17670,6 @@ async function sync() {
         publishedRows: Number(sqliteFastReceipt.publishedRows || 0),
       }
     : (existingSyncMeta?.fastResultPublication || null);
-  const fastObservationSourceIds = recentFastObservationSourceIds(
-    fastResultObservations,
-    256
-  );
-  const sqliteFastFinals = fastObservationSourceIds.length > 0
-    ? await readSqliteTransitionMatches(
-        sqliteDataPath,
-        { sourceMatchIds: fastObservationSourceIds, limit: 256 }
-      )
-    : [];
   const existingModelCalibration = loadExistingJsonObject(path.join(dataDir, "model-calibration.json"));
   const existingModelStrategy = loadLatestExistingJsonObject([
     path.join(dataDir, "model-strategy.json"),
@@ -18025,7 +18015,9 @@ async function sync() {
       state: previousArenaState,
       now: capturedAt,
     });
-    aiArenaDatabase = persistAiArenaSqlite({
+    aiArenaDatabase = readStorageMode().postgresOnly ? {
+      storage: "postgres", pending: true, reason: "awaiting-generation-projection",
+    } : persistAiArenaSqlite({
       dbPath: AI_ARENA_SQLITE_PATH,
       state: nextArenaPublication.state,
       payload: nextArenaPublication.payload,
@@ -18382,7 +18374,9 @@ async function sync() {
       lockedAt: aiArenaPublication.payload.lockedAt,
       poolHash: aiArenaPublication.payload.poolHash,
       submissionRootHash: aiArenaPublication.payload.submissionRootHash,
-      database: aiArenaDatabase ? { ok: true, counts: aiArenaDatabase.counts } : { ok: false },
+      database: aiArenaDatabase?.pending
+        ? { ok: false, ...aiArenaDatabase }
+        : (aiArenaDatabase ? { ok: true, counts: aiArenaDatabase.counts } : { ok: false }),
       formalStatisticsExcluded: true,
       error: null,
     } : {
@@ -18510,7 +18504,9 @@ async function sync() {
       syncMeta.fastResultPublication = latestDiskSyncMeta.fastResultPublication;
     }
   }
-  const latestFastReceipt = await readSqliteFastResultReceipt(sqliteDataPath);
+  const { receipt: latestFastReceipt } = await readRuntimeFastResultInput({
+    sqlitePath: sqliteDataPath, storeDir: DEFAULT_STORE_DIR, publicDataDir: dataDir, receiptOnly: true,
+  });
   if (latestFastReceipt) {
     const latestFastRevision = Math.max(0, Number(latestFastReceipt.revision || 0));
     syncMeta.fastResultRevision = Math.max(

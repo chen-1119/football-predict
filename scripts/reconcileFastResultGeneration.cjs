@@ -3,7 +3,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
-const { DatabaseSync } = require("node:sqlite");
 const {
   FAST_RESULT_IDENTITY_RESOLUTION_VERSION,
   findFastResultObservation,
@@ -826,21 +825,23 @@ const readJsonPayload = (value) => {
   }
 };
 
-const readReceiptFinals = (db, receipt, { current = [], history = [] } = {}) => {
+const readReceiptFinals = (db, receipt, { current = [], history = [], storedHistory = null } = {}) => {
   const observations = observationRows(receipt?.observations);
   const sourceIds = [...new Set(observations
     .map((row) => asText(row.sourceMatchId).toLowerCase())
     .filter(Boolean))];
-  if (!sourceIds.length) return [];
-  const statement = db.prepare(`
+  if (!sourceIds.length) return { finals: [], recoveryRows: [] };
+  const statement = storedHistory ? null : db.prepare(`
     SELECT payload
     FROM match_snapshots
     WHERE dataset = 'history' AND LOWER(source_match_id) = ?
   `);
   const byEvent = new Map();
   for (const sourceId of sourceIds) {
-    for (const row of statement.all(sourceId)) {
-      const match = readJsonPayload(row.payload);
+    const matches = storedHistory
+      ? storedHistory.filter(match => asText(match.sourceMatchId).toLowerCase() === sourceId)
+      : statement.all(sourceId).map(row => readJsonPayload(row.payload));
+    for (const match of matches) {
       const observation = match && findFastResultObservation(match, observations);
       if (!match || !observation || !trustedOfficialFinal(match)) continue;
       byEvent.set(observation.key, chooseFinalPayload(byEvent.get(observation.key), match));
@@ -935,6 +936,7 @@ const reconcileFastResultGeneration = ({
   ),
   syncMetaPath = path.join(dataDir, "sync-meta.json"),
   quarantinePath = null,
+  nativeSource = null,
 } = {}) => {
   const startedAt = new Date().toISOString();
   const resolvedQuarantinePath = path.resolve(
@@ -944,7 +946,7 @@ const reconcileFastResultGeneration = ({
       "post-match-review-quarantine.json",
     )
   );
-  if (!fs.existsSync(dbPath)) {
+  if (!nativeSource && !fs.existsSync(dbPath)) {
     return {
       ok: true,
       skipped: true,
@@ -954,10 +956,11 @@ const reconcileFastResultGeneration = ({
     };
   }
 
-  const db = new DatabaseSync(dbPath, { readOnly: true });
+  const DatabaseSync = nativeSource ? null : require("node:sqlite").DatabaseSync;
+  const db = nativeSource ? null : new DatabaseSync(dbPath, { readOnly: true });
   let receipt;
   try {
-    receipt = readFastReceipt(db);
+    receipt = nativeSource ? nativeSource.receipt : readFastReceipt(db);
     if (!receipt) {
       return {
         ok: true,
@@ -968,7 +971,7 @@ const reconcileFastResultGeneration = ({
       };
     }
   } finally {
-    db.close();
+    db?.close();
   }
 
   const receiptRevision = Math.max(0, Number(receipt.revision || 0));
@@ -1010,12 +1013,12 @@ const reconcileFastResultGeneration = ({
     throw error;
   }
   const existingQuarantine = readValidatedQuarantine(resolvedQuarantinePath);
-  const receiptDb = new DatabaseSync(dbPath, { readOnly: true });
+  const receiptDb = nativeSource ? null : new DatabaseSync(dbPath, { readOnly: true });
   let receiptResolution;
   try {
-    receiptResolution = readReceiptFinals(receiptDb, receipt, { current, history });
+    receiptResolution = nativeSource?.resolution || readReceiptFinals(receiptDb, receipt, { current, history, storedHistory: nativeSource?.historyRows || null });
   } finally {
-    receiptDb.close();
+    receiptDb?.close();
   }
   const finals = receiptResolution.finals;
 
@@ -1280,25 +1283,42 @@ const reconcileFastResultGeneration = ({
   };
 };
 
-const main = () => {
-  const result = reconcileFastResultGeneration();
+const reconcileFastResultGenerationPostgres = async (options = {}) => {
+  const session = await require("./postgresRuntimeReadSession.cjs").openPostgresRuntimeReadSession({
+    ...options, publicDataDir: options.dataDir || options.publicDataDir, protectReceipt: true,
+  });
+  try {
+    // Old score observations stay in the receipt audit, but only the final
+    // bound to the verified authority high-water may enter the generation.
+    // Reuse the native projection's strict identity/score proof, not a clock
+    // sort or filtered replacement receipt that would lose audit history.
+    const guard = await session.guardedFinals();
+    const receipt = guard.receipt;
+    return { ...reconcileFastResultGeneration({ ...options,
+      dataDir: options.dataDir || options.publicDataDir,
+      quarantinePath: options.quarantinePath || (options.storeDir ? path.join(options.storeDir, "post-match-review-quarantine.json") : null),
+      nativeSource: { receipt, resolution: { finals: guard.rows.map(row => row.match), recoveryRows: [] } } }), storage: "postgres" };
+  } finally { await session.close(); }
+};
+const main = async () => {
+  const native = require("../server/storageMode.cjs").readStorageMode().postgresOnly;
+  const result = native ? await reconcileFastResultGenerationPostgres() : reconcileFastResultGeneration();
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 };
 
 if (require.main === module) {
-  try {
-    main();
-  } catch (error) {
+  main().catch((error) => {
     process.stderr.write(`${JSON.stringify({
       ok: false,
       error: error.message || String(error),
       errorCode: error.code || null,
     }, null, 2)}\n`);
     process.exitCode = 1;
-  }
+  });
 }
 
 module.exports = {
   reconcileFastResultGeneration,
+  reconcileFastResultGenerationPostgres,
   reviewSummary,
 };
