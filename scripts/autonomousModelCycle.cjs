@@ -193,7 +193,7 @@ const eventKeyFor = (cycleId, state) => sha256(stableStringify({
   state,
 }));
 
-const appendCycleEvent = (db, plan, {
+const cycleEventOptions = (plan, {
   state,
   eventType,
   occurredAt,
@@ -201,7 +201,7 @@ const appendCycleEvent = (db, plan, {
   payload,
   artifactHash = null,
   lease = null,
-}) => appendLearningEvent(db, {
+}) => ({
   cycleId: plan.cycleId,
   eventKey: eventKeyFor(plan.cycleId, state),
   eventType,
@@ -223,8 +223,8 @@ const baseEventPayload = (plan) => ({
   activePointerMutationAuthorized: false,
 });
 
-const runAutonomousModelCycle = ({
-  db,
+const autonomousCycleOperations = function* ({
+  repository,
   anchorFile,
   evaluation,
   contract,
@@ -237,8 +237,8 @@ const runAutonomousModelCycle = ({
   anchorHmacKey = null,
   onStateCommitted = null,
   clock = () => new Date().toISOString(),
-} = {}) => {
-  if (!db || typeof db.prepare !== "function") {
+} = {}) {
+  if (!repository || typeof repository.activeModelPointer !== "function") {
     throw new AutonomousModelCycleError("an open model learning ledger database is required", {
       code: "LEDGER_DB_REQUIRED",
     });
@@ -253,10 +253,14 @@ const runAutonomousModelCycle = ({
     observationCapturedAt = capturedAt ? canonicalIso(capturedAt, "capturedAt") : null;
     normalizedActor = canonicalActor(actor);
     plan = buildAutonomousCyclePlan({ evaluation, contract });
-    activeBefore = activeModelPointer(db);
+    const initialVerification = yield repository.verifyLearningLedger();
+    if (!initialVerification.valid) throw new AutonomousModelCycleError("model learning ledger failed preflight verification", {
+      code: "LEDGER_INVALID", errors: initialVerification.errors,
+    });
+    activeBefore = yield repository.activeModelPointer();
   } catch (error) {
     try {
-      writeLedgerHeadAnchor(db, resolvedAnchorFile, {
+      yield repository.writeLedgerHeadAnchor(resolvedAnchorFile, {
         generatedAt: occurredAt,
         hmacKey: anchorHmacKey,
       });
@@ -265,7 +269,7 @@ const runAutonomousModelCycle = ({
     }
     throw error;
   }
-  const record = (entry) => {
+  const record = function* (entry) {
     if (!lease?.acquired) {
       throw new AutonomousModelCycleError("a live fenced lease is required for cycle events", {
         code: "LEASE_FENCE_REQUIRED",
@@ -275,7 +279,7 @@ const runAutonomousModelCycle = ({
       typeof clock === "function" ? clock() : clock,
       "clock",
     );
-    const committed = appendCycleEvent(db, plan, {
+    const committed = yield repository.appendLearningEvent(cycleEventOptions(plan, {
       ...entry,
       occurredAt: checkedAt,
       lease: {
@@ -284,7 +288,7 @@ const runAutonomousModelCycle = ({
         fencingToken: lease.fencingToken,
         checkedAt,
       },
-    });
+    }));
     if (typeof onStateCommitted === "function") {
       onStateCommitted({
         cycleId: plan.cycleId,
@@ -302,7 +306,7 @@ const runAutonomousModelCycle = ({
   let failure = null;
 
   try {
-    lease = acquireLearningLease(db, {
+    lease = yield repository.acquireLearningLease({
       leaseName: nonempty(leaseName, "leaseName"),
       holderId: nonempty(holderId, "holderId"),
       now: occurredAt,
@@ -320,7 +324,7 @@ const runAutonomousModelCycle = ({
       };
     } else {
       const common = baseEventPayload(plan);
-      record({
+      yield* record({
         state: "DATASET_DISCOVERED",
         eventType: "DATASET_DISCOVERED",
         occurredAt,
@@ -330,7 +334,7 @@ const runAutonomousModelCycle = ({
           sourceEvaluationVersion: plan.evidence.sourceEvaluationVersion,
         },
       });
-      record({
+      yield* record({
         state: "SNAPSHOT_FROZEN",
         eventType: "SNAPSHOT_FROZEN",
         occurredAt,
@@ -344,7 +348,7 @@ const runAutonomousModelCycle = ({
 
       let ledgerArtifact = null;
       if (plan.legalCandidate) {
-        record({
+        yield* record({
           state: "TRAINED",
           eventType: "MODEL_TRAINED",
           occurredAt,
@@ -359,7 +363,7 @@ const runAutonomousModelCycle = ({
         });
       }
 
-      record({
+      yield* record({
         state: "EVALUATED",
         eventType: "CANDIDATE_EVALUATED",
         occurredAt,
@@ -374,7 +378,7 @@ const runAutonomousModelCycle = ({
       });
 
       if (plan.legalCandidate) {
-        ledgerArtifact = commitModelArtifact(db, {
+        ledgerArtifact = yield repository.commitModelArtifact({
           bytes: plan.candidateBytes,
           artifactType: "residual-market-shadow-candidate",
           mediaType: "application/vnd.football.model-candidate+json",
@@ -398,7 +402,7 @@ const runAutonomousModelCycle = ({
           createdAt: occurredAt,
           declaredHash: plan.candidateBytesHash,
         });
-        record({
+        yield* record({
           state: "ARTIFACT_COMMITTED",
           eventType: "ARTIFACT_COMMITTED",
           occurredAt,
@@ -410,7 +414,7 @@ const runAutonomousModelCycle = ({
             byteLength: ledgerArtifact.byteLength,
           },
         });
-        record({
+        yield* record({
           state: "REGISTERED_SHADOW",
           eventType: "REGISTERED_SHADOW",
           occurredAt,
@@ -426,7 +430,7 @@ const runAutonomousModelCycle = ({
           },
         });
       } else {
-        record({
+        yield* record({
           state: "REJECTED",
           eventType: "CANDIDATE_REJECTED",
           occurredAt,
@@ -439,7 +443,7 @@ const runAutonomousModelCycle = ({
         });
       }
 
-      const activeAfter = activeModelPointer(db);
+      const activeAfter = yield repository.activeModelPointer();
       if (!pointersEqual(activeBefore, activeAfter)) {
         throw new AutonomousModelCycleError("shadow cycle changed the active model pointer", {
           code: "ACTIVE_POINTER_MUTATED",
@@ -447,7 +451,7 @@ const runAutonomousModelCycle = ({
           activeAfter,
         });
       }
-      const verification = verifyLearningLedger(db);
+      const verification = yield repository.verifyLearningLedger();
       if (!verification.valid) {
         throw new AutonomousModelCycleError("model learning ledger failed verification", {
           code: "LEDGER_INVALID",
@@ -479,11 +483,11 @@ const runAutonomousModelCycle = ({
   } finally {
     if (lease?.acquired) {
       try {
-        leaseReleased = releaseLearningLease(db, {
+        leaseReleased = (yield repository.releaseLearningLease({
           leaseName: lease.leaseName,
           holderId: lease.holderId,
           fencingToken: lease.fencingToken,
-        }).released;
+        })).released;
         if (!leaseReleased && !failure) {
           failure = new AutonomousModelCycleError("learning lease release failed", {
             code: "LEASE_RELEASE_FAILED",
@@ -494,7 +498,7 @@ const runAutonomousModelCycle = ({
       }
     }
     try {
-      anchor = writeLedgerHeadAnchor(db, resolvedAnchorFile, {
+      anchor = yield repository.writeLedgerHeadAnchor(resolvedAnchorFile, {
         generatedAt: occurredAt,
         hmacKey: anchorHmacKey,
       });
@@ -504,7 +508,7 @@ const runAutonomousModelCycle = ({
   }
 
   if (failure) throw failure;
-  const activeAfter = activeModelPointer(db);
+  const activeAfter = yield repository.activeModelPointer();
   if (!pointersEqual(activeBefore, activeAfter)) {
     throw new AutonomousModelCycleError("active model pointer changed during shadow-only cycle", {
       code: "ACTIVE_POINTER_MUTATED",
@@ -521,6 +525,22 @@ const runAutonomousModelCycle = ({
   };
 };
 
+const { runSynchronousPublication, runAsynchronousPublication } = require("./publicationOperationRunner.cjs");
+const legacyLearningRepository = db => ({
+  activeModelPointer: () => activeModelPointer(db),
+  appendLearningEvent: options => appendLearningEvent(db, options),
+  commitModelArtifact: options => commitModelArtifact(db, options),
+  acquireLearningLease: options => acquireLearningLease(db, options),
+  releaseLearningLease: options => releaseLearningLease(db, options),
+  verifyLearningLedger: () => verifyLearningLedger(db),
+  writeLedgerHeadAnchor: (file, options) => writeLedgerHeadAnchor(db, file, options),
+});
+const runAutonomousModelCycle = options => {
+  if (!options?.db || typeof options.db.prepare !== "function") throw new AutonomousModelCycleError("an open model learning ledger database is required", { code: "LEDGER_DB_REQUIRED" });
+  return runSynchronousPublication(autonomousCycleOperations({ ...options, repository: legacyLearningRepository(options.db) }));
+};
+const runAutonomousModelCyclePostgres = options => runAsynchronousPublication(autonomousCycleOperations(options));
+
 module.exports = {
   AUTONOMOUS_MODEL_CYCLE_VERSION,
   AutonomousModelCycleError,
@@ -528,4 +548,5 @@ module.exports = {
   buildAutonomousCyclePlan,
   eventKeyFor,
   runAutonomousModelCycle,
+  runAutonomousModelCyclePostgres,
 };

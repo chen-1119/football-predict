@@ -77,6 +77,7 @@ const {
 // itself uses the shared result-semantics contract above.
 const { officialVoidDisposition } = require("../src/services/sportteryStatus.cjs");
 const { loadOddsHistory } = require("./oddsHistoryStore.cjs");
+const { loadRuntimeOddsHistory } = require("./runtimeOddsHistory.cjs");
 const { summarizeRelayLanes } = require("./relayLaneFreshness.cjs");
 const { boundedRuntimeEnv } = require("./boundedRuntimeNumber.cjs");
 const {
@@ -15875,8 +15876,8 @@ function oddsHistoryRowsForMatch(match, capturedAt) {
   }));
 }
 
-function appendOddsHistory(publicDir, matches, capturedAt) {
-  const history = loadOddsHistory(publicDir);
+function appendOddsHistory(publicDir, matches, capturedAt, historyPayload = null) {
+  const history = historyPayload || loadOddsHistory(publicDir);
   const cutoff = Date.parse(capturedAt) - ODDS_HISTORY_RETENTION_DAYS * 24 * 60 * 60 * 1000;
   const byState = new Map();
 
@@ -17717,7 +17718,7 @@ async function sync() {
       .map((match) => [matchStoreKey(match), match])
       .filter(([sourceMatchId]) => sourceMatchId)
   );
-  const oddsHistoryBeforeSync = loadOddsHistory(publicDir);
+  const oddsHistoryBeforeSync = await loadRuntimeOddsHistory(publicDir);
   const allRawMatches = (await fetchSportteryMatches()).map((match) => {
     const clockReconciledMatch = reconcileOfficialResultClock(
       existingBySourceId.get(matchStoreKey(match)),
@@ -17841,9 +17842,9 @@ async function sync() {
     predictionHealth,
   }));
 
-  const previousOddsHistoryPayload = loadOddsHistory(publicDir);
+  const previousOddsHistoryPayload = await loadRuntimeOddsHistory(publicDir);
   const oddsHistory = usedFreshOdds && (mergedPartialFresh || !keptExistingReason)
-    ? appendOddsHistory(publicDir, output, capturedAt)
+    ? appendOddsHistory(publicDir, output, capturedAt, previousOddsHistoryPayload)
     : {
         rows: previousOddsHistoryPayload.rows.length,
         appended: 0,

@@ -5,7 +5,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
-const { DatabaseSync } = require("node:sqlite");
 const { strictInstant } = require("../src/services/strictInstant.cjs");
 const { sourceUrl, inspectSource, fetchSourceBytes, LEAGUES } = require("./auditOpenFootballCurrentSeason.cjs");
 
@@ -22,6 +21,7 @@ const canonicalClock = value => {
 };
 
 function openStore(storeDir) {
+  const { DatabaseSync } = require("node:sqlite");
   if (typeof storeDir !== "string" || !path.isAbsolute(storeDir)) throw new Error("Explicit absolute observation directory required");
   fs.mkdirSync(storeDir, { recursive: true, mode: 0o700 });
   if (!fs.lstatSync(storeDir).isDirectory() || fs.lstatSync(storeDir).isSymbolicLink()) throw new Error("Unsafe observation directory");
@@ -81,6 +81,16 @@ function verifyReceipt(row) {
   return receipt;
 }
 
+const buildObservationReceipt = ({ sequence, url, league, season, contentHash, rawBytes, started, received,
+  firstObservedAt, previousReceiptHash, firstReceiptHash, candidateRows }) => ({
+  version: VERSION, scope: "local-complete-response-only", sequence,
+  sourceUrl: url, league, season, contentSha256: contentHash, bytes: rawBytes,
+  requestStartedAt: started, receivedAt: received, firstObservedAt,
+  previousReceiptHash, previousContentReceiptHash: firstReceiptHash, candidateRows,
+  sourceVerified: false, entityMappingStatus: "unverified", productionEligible: false,
+  upstreamPublishedAt: null, officialSettlementAllowed: false,
+});
+
 function recordSourceObservation({ storeDir, season, league, raw, requestStartedAt, receivedAt }) {
   const started = canonicalClock(requestStartedAt), received = canonicalClock(receivedAt);
   if (received < started) throw new Error("Response receipt precedes request");
@@ -110,16 +120,9 @@ function recordSourceObservation({ storeDir, season, league, raw, requestStarted
       const bytes = db.prepare("SELECT coalesce(sum(length(raw)),0) bytes FROM source_contents").get().bytes;
       if (bytes + raw.length > MAX_RAW_BYTES) throw new Error("Source content capacity reached; retain evidence and stop");
     }
-    const receipt = {
-      version: VERSION, scope: "local-complete-response-only", sequence,
-      sourceUrl: url, league, season, contentSha256: contentHash, bytes: raw.length,
-      requestStartedAt: started, receivedAt: received, firstObservedAt,
-      previousReceiptHash: previousRow?.receipt_hash || null,
-      previousContentReceiptHash: firstReceiptHash,
-      candidateRows: inspected.candidateRows,
-      sourceVerified: false, entityMappingStatus: "unverified", productionEligible: false,
-      upstreamPublishedAt: null, officialSettlementAllowed: false,
-    };
+    const receipt = buildObservationReceipt({ sequence, url, league, season, contentHash, rawBytes: raw.length,
+      started, received, firstObservedAt, previousReceiptHash: previousRow?.receipt_hash || null,
+      firstReceiptHash, candidateRows: inspected.candidateRows });
     const receiptHash = hashObject(receipt);
     if (!existing) db.prepare("INSERT INTO source_contents VALUES(?,?,?,?,?)")
       .run(url, contentHash, raw, received, receiptHash);
@@ -134,15 +137,16 @@ function recordSourceObservation({ storeDir, season, league, raw, requestStarted
   } finally { db.close(); }
 }
 
-function auditDatabase(db) {
-    if (db.prepare("SELECT value FROM observation_meta WHERE key='schema'").get()?.value !== VERSION) throw new Error("Unknown observation schema");
-    const count = db.prepare("SELECT count(*) n FROM observations").get().n;
+function createObservationAudit({ count, contents }) {
+    if (!Number.isSafeInteger(count) || count < 0 || !Number.isSafeInteger(contents.n) || contents.n < 0
+      || !Number.isSafeInteger(contents.bytes) || contents.bytes < 0) throw new Error("Invalid observation audit counts");
     if (count > MAX_OBSERVATIONS) throw new Error("Observation audit capacity exceeded");
-    const contents = db.prepare("SELECT count(*) n,coalesce(sum(length(raw)),0) bytes FROM source_contents").get();
     if (contents.bytes > MAX_RAW_BYTES) throw new Error("Content audit capacity exceeded");
     let previousHash = null, previousAt = null, expectedSequence = 1;
     const firstByContent = new Map();
-    for (const row of db.prepare("SELECT * FROM observations ORDER BY sequence").iterate()) {
+    const verifiedContents = new Set();
+    let verifiedBytes = 0;
+    return { receipt(row) {
       const receipt = verifyReceipt(row);
       if (receipt.sequence !== expectedSequence++ || receipt.previousReceiptHash !== previousHash
         || (previousAt && receipt.receivedAt < previousAt)) throw new Error("Observation chain discontinuity");
@@ -155,39 +159,58 @@ function auditDatabase(db) {
         firstByContent.set(key, { ...receipt, hash: row.receipt_hash });
       }
       previousHash = row.receipt_hash; previousAt = receipt.receivedAt;
-    }
-    if (firstByContent.size !== contents.n) throw new Error("Unreferenced source content");
-    for (const row of db.prepare("SELECT * FROM source_contents").iterate()) {
-      const first = firstByContent.get(JSON.stringify([row.source_url, row.content_hash]));
+    }, content(row) {
+      const key = JSON.stringify([row.source_url, row.content_hash]);
+      if (verifiedContents.has(key)) throw new Error("Duplicate source content");
+      const first = firstByContent.get(key);
       const raw = Buffer.from(row.raw);
       if (!first || digest(raw) !== row.content_hash || first.bytes !== raw.length
         || first.hash !== row.first_receipt_hash || first.receivedAt !== row.first_received_at) throw new Error("Source content binding failed");
       const inspected = inspectSource(raw, { season: first.season, league: first.league, receivedAt: first.receivedAt });
       if (inspected.candidateRows !== first.candidateRows) throw new Error("Source parse binding failed");
-    }
+      verifiedContents.add(key); verifiedBytes += raw.length;
+    }, finish() {
+    if (firstByContent.size !== contents.n || verifiedContents.size !== contents.n) throw new Error("Unreferenced source content");
+    if (expectedSequence - 1 !== count || verifiedBytes !== contents.bytes) throw new Error("Observation audit count mismatch");
     return { ok: true, version: VERSION, observations: count, sourceContents: contents.n,
       rawBytes: contents.bytes, lastReceiptHash: previousHash, latestReceivedAt: previousAt,
       sourceVerified: false, productionAdmittedRows: 0, writes: 0 };
+    } };
+}
+
+function auditDatabase(db) {
+  if (db.prepare("SELECT value FROM observation_meta WHERE key='schema'").get()?.value !== VERSION) throw new Error("Unknown observation schema");
+  const audit = createObservationAudit({ count: db.prepare("SELECT count(*) n FROM observations").get().n,
+    contents: db.prepare("SELECT count(*) n,coalesce(sum(length(raw)),0) bytes FROM source_contents").get() });
+  for (const row of db.prepare("SELECT * FROM observations ORDER BY sequence").iterate()) audit.receipt(row);
+  for (const row of db.prepare("SELECT * FROM source_contents").iterate()) audit.content(row);
+  return audit.finish();
 }
 
 function readAuditedObservationStore(storeDir, read) {
+  const { DatabaseSync } = require("node:sqlite");
   if (typeof storeDir !== "string" || !path.isAbsolute(storeDir)) throw new Error("Explicit absolute observation directory required");
   const file = path.join(fs.realpathSync(storeDir), "observations.sqlite");
   const stat = fs.lstatSync(file);
   if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || stat.size > MAX_DATABASE_BYTES) throw new Error("Unsafe observation database");
   const db = new DatabaseSync(file, { readOnly: true });
+  let deferredClose = false;
   try {
     db.exec("PRAGMA query_only=ON; PRAGMA busy_timeout=5000; BEGIN;");
     const audit = auditDatabase(db);
     const report = read ? read(db, audit) : audit;
+    if (report && typeof report.then === "function") {
+      deferredClose = true;
+      return Promise.resolve(report).then(value => { db.exec("COMMIT;"); return value; }).finally(() => db.close());
+    }
     db.exec("COMMIT;");
     return report;
-  } finally { db.close(); }
+  } finally { if (!deferredClose) db.close(); }
 }
 
 const auditObservationStore = storeDir => readAuditedObservationStore(storeDir);
 
-async function collectSeasonObservations({ storeDir, season, fetchImpl = fetch, clock }) {
+async function collectSeasonObservations({ storeDir, season, fetchImpl = fetch, clock, record = recordSourceObservation }) {
   // Validate configuration before making any request. Explicit storage means a
   // plain audit can never silently become production ingestion.
   if (typeof storeDir !== "string" || !path.isAbsolute(storeDir)) throw new Error("Explicit absolute observation directory required");
@@ -196,7 +219,7 @@ async function collectSeasonObservations({ storeDir, season, fetchImpl = fetch, 
   for (const league of Object.keys(LEAGUES)) {
     try {
       const response = await fetchSourceBytes(season, league, fetchImpl, clock);
-      const receipt = recordSourceObservation({ storeDir, season, league, ...response });
+      const receipt = await record({ storeDir, season, league, ...response });
       sources.push({ ok: true, league, receipt });
     } catch (error) {
       sources.push({ ok: false, league, error: error.message });
@@ -217,4 +240,5 @@ if (require.main === module) {
   }).catch(error => { console.error(error.message); process.exitCode = 1; });
 }
 
-module.exports = { VERSION, MAX_RAW_BYTES, MAX_OBSERVATIONS, recordSourceObservation, collectSeasonObservations, auditObservationStore, readAuditedObservationStore };
+module.exports = { VERSION, MAX_RAW_BYTES, MAX_OBSERVATIONS, recordSourceObservation, collectSeasonObservations, auditObservationStore, readAuditedObservationStore,
+  canonicalClock, digest, hashObject, verifyReceipt, buildObservationReceipt, createObservationAudit };

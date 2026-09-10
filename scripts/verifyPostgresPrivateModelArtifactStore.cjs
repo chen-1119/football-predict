@@ -98,8 +98,11 @@ async function run() {
     });
     const projection = await require("./verifyPostgresProjectionSource.cjs").verifyProjectionSource(pool);
     const generation = await require("./verifyPostgresGenerationSource.cjs").verifyGenerationSource(pool);
+    const learning = await require("./verifyPostgresLearningLedger.cjs").verifyPostgresLearningLedger(pool);
+    const observations = await require("./verifyPostgresObservationStore.cjs").verifyPostgresObservationStore(pool);
+    const releaseModel = await require("./verifyNativeReleaseModelSeed.cjs").verifyNativeReleaseModelSeed(pool);
     assert.equal(sqliteAttempts, 0, sqliteStacks.join("\n"));
-    return { ok: true, checks, projection, generation, sqliteAttempts, productionWrites: 0, scope: "disposable native PostgreSQL; full retirement and deployment not implied" };
+    return { ok: true, checks, projection, generation, learning, observations, releaseModel, sqliteAttempts, productionWrites: 0, scope: "disposable native PostgreSQL; full retirement and deployment not implied" };
   } finally { Module._load = load; await pool.end(); }
 }
 module.exports = { run };

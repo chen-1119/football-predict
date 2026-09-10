@@ -31,9 +31,12 @@ const explicitBaseUrl = process.env.VERIFY_BASE_URL || "";
 const baseUrl = new URL(explicitBaseUrl || `http://127.0.0.1:${defaultPort}`);
 const shouldAutoStartLocalServer = !explicitBaseUrl && process.env.VERIFY_START_SERVER !== "0";
 const startServer = process.env.VERIFY_START_SERVER === "1" || shouldAutoStartLocalServer;
-const requireSqlite = process.env.VERIFY_REQUIRE_SQLITE === "1"
-  || (startServer && process.env.VERIFY_REQUIRE_SQLITE !== "0");
-const requiredReadSource = String(process.env.VERIFY_REQUIRED_READ_SOURCE || (requireSqlite ? "sqlite" : "")).toLowerCase();
+const nativeStorage = require("../server/storageMode.cjs").readStorageMode().postgresOnly;
+if (nativeStorage && process.env.VERIFY_REQUIRE_SQLITE === "1") throw new Error("native readiness cannot require retired SQLite");
+const requireSqlite = !nativeStorage && (process.env.VERIFY_REQUIRE_SQLITE === "1"
+  || (startServer && process.env.VERIFY_REQUIRE_SQLITE !== "0"));
+const requiredReadSource = String(process.env.VERIFY_REQUIRED_READ_SOURCE || (nativeStorage ? "postgres" : requireSqlite ? "sqlite" : "")).toLowerCase();
+if (nativeStorage && requiredReadSource !== "postgres") throw new Error("native readiness requires PostgreSQL reads");
 const requireAiArenaPublication = process.env.VERIFY_REQUIRE_AI_ARENA === "1";
 const sqlitePrevalidated = requireSqlite
   && !startServer
@@ -355,6 +358,7 @@ const readModelEvaluationArtifact = () => {
 };
 
 const refreshSqliteAfterMutableChecks = async (checks) => {
+  if (nativeStorage) return verifyNativePublication(checks, "native projection remains paired after mutable checks");
   if (!requireSqlite) return;
   if (sqlitePrevalidated) {
     const { readSourceCycleObservation } = require("./runSyncWorker.cjs");
@@ -440,6 +444,7 @@ const waitForSqlitePrimaryRead = async (checks, name = "sqlite primary read afte
 };
 
 const refreshSqliteBeforeLocalServer = async (checks) => {
+  if (nativeStorage) return verifyNativePublication(checks, "native projection paired before local server");
   if (!requireSqlite || !startServer) return;
   const refresh = await runLocalJson(["scripts/exportDataStoreSqlite.cjs"]);
   pushCheck(checks, "sqlite refreshed before local server", refresh.status === 0 && refresh.body?.ok === true, {
@@ -449,6 +454,15 @@ const refreshSqliteBeforeLocalServer = async (checks) => {
     stdoutTail: refresh.status === 0 ? "" : refresh.stdout.slice(-500),
     stderrTail: refresh.stderr.slice(-500)
   });
+};
+
+const verifyNativePublication = async (checks, name) => {
+  // A verifier never repairs or exports production data. Its caller must
+  // prepare a native projection; any later identity drift is a real failure.
+  const observation = await require("./postgresWorkerObservation.cjs").readPostgresWorkerObservation({
+    validationStep: { ok: true }, generationStep: { ok: true }, projectionStep: { ok: true },
+  });
+  pushCheck(checks, name, observation.ready === true, observation);
 };
 
 const startLocalServer = async () => {
@@ -724,6 +738,10 @@ const run = async () => {
     const health = await request("GET", "/api/v1/health");
     const sqlite = health.body?.storage?.sqlite || null;
     const healthStatus = health.body?.status || {};
+    if (nativeStorage) {
+      const evidence = require("./nativeStorageReadiness.cjs").nativeStorageReadiness(health.body);
+      pushCheck(checks, "PostgreSQL-only storage and receipt integrity", evidence.ok, evidence);
+    }
     const runtimeStoreDir = process.env.SERVER_STORE_DIR
       || process.env.DATA_STORE_DIR
       || (sqlite?.path ? path.dirname(sqlite.path) : "");

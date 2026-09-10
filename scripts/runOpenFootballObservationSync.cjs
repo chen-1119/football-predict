@@ -26,11 +26,14 @@ async function syncObservations({ storeDir, season, fetchImpl, requestId = requi
     const statusFile = path.join(storeDir, "sync-status.json");
     let prior = null;
     try { prior = JSON.parse(fs.readFileSync(statusFile, "utf8")); } catch (error) { if (error.code !== "ENOENT" && !(error instanceof SyntaxError)) throw error; }
-    const result = await collectSeasonObservations({ storeDir, season, fetchImpl, clock });
+    const native = require("../server/storageMode.cjs").readStorageMode().postgresOnly;
+    const nativeStore = native ? require("./postgresObservationStore.cjs") : null;
+    const result = await (native ? nativeStore.collectPostgresSeasonObservations : collectSeasonObservations)({ storeDir, season, fetchImpl, clock });
     const completedAt = clock(), nowMs = Date.parse(completedAt);
-    const audit = fs.existsSync(path.join(storeDir, "observations.sqlite")) ? auditObservationStore(storeDir) : null;
+    const audit = native ? await nativeStore.auditPostgresObservationStore()
+      : (fs.existsSync(path.join(storeDir, "observations.sqlite")) ? auditObservationStore(storeDir) : null);
     if (!strictInstant(completedAt) || (audit?.latestReceivedAt && Date.parse(audit.latestReceivedAt) > nowMs)) throw new Error("Invalid collection completion clock");
-    const status = { version: STATUS_VERSION, requestId, season, completedAt, ok: result.ok && audit?.ok === true,
+    const status = { version: STATUS_VERSION, storage: native ? "postgres" : "sqlite", requestId, season, completedAt, ok: result.ok && audit?.ok === true,
       lastSuccessfulCollectionAt: result.ok && audit?.ok === true ? completedAt
         : usableStatus(prior, nowMs, season) ? prior.lastSuccessfulCollectionAt : null,
       requestedSources: result.providerRequests, successfulSources: result.sources.filter(s => s.ok).length,

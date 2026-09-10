@@ -11,6 +11,7 @@ const { Pool } = require("pg");
 const root = path.resolve(__dirname, "..");
 async function main() {
   if (process.platform !== "win32" || !process.argv[2]) throw new Error("Supply a PostgreSQL 16 bin directory on Windows");
+  if (process.argv[3] !== undefined && process.argv[3] !== "--all-native") throw new Error("Unknown native QA suite selection");
   const bin = fs.realpathSync(path.resolve(process.argv[2]));
   for (const name of ["initdb", "pg_ctl", "postgres", "createdb"]) if (!fs.statSync(path.join(bin, `${name}.exe`)).isFile()) throw new Error(`Missing ${name}`);
   const password = crypto.randomBytes(32).toString("hex");
@@ -45,6 +46,20 @@ async function main() {
       || result.rows[0].listen !== "127.0.0.1" || result.rows[0].address !== "127.0.0.1") throw new Error(`Local database identity mismatch: ${JSON.stringify({ actual: result.rows[0], expectedDirectory: data })}`);
     report.server = { version: result.rows[0].version, address: result.rows[0].address, port, isolatedDirectoryVerified: true };
     await pool.end(); pool = null;
+    if (process.argv[3] === "--all-native") {
+      // Reuse only this freshly initialized cluster, never a prior test result
+      // or an existing database. The two suites have independent empty DBs.
+      const runtimeDatabase = database + "_runtime";
+      run("createdb", ["-h", "127.0.0.1", "-p", String(port), "-U", "q2_test", runtimeDatabase]);
+      const runtimeUrl = new URL(connectionString); runtimeUrl.pathname = "/" + runtimeDatabase;
+      const runtimeTest = spawnSync(process.execPath, [path.join(__dirname, "verifyPostgresPrivateModelArtifactStore.cjs")], {
+        cwd: root, env: { ...env, EVIDENCE_TEST_POSTGRES_URL: runtimeUrl.href }, encoding: "utf8", windowsHide: true,
+        timeout: 120000, maxBuffer: 4 * 1024 * 1024,
+      });
+      if (runtimeTest.status !== 0) throw new Error(`Native runtime verification failed: ${(runtimeTest.stderr || runtimeTest.stdout || runtimeTest.error?.message || runtimeTest.status).toString().replaceAll(password, "[redacted]").slice(-2500)}`);
+      report.nativeRuntime = JSON.parse(runtimeTest.stdout);
+      if (report.nativeRuntime.ok !== true) throw new Error("Native runtime suite did not pass");
+    }
     const test = spawnSync(process.execPath, [path.join(__dirname, "verifyPredictionEvidenceRoundtrip.cjs")], {
       cwd: root, env: { ...env, EVIDENCE_TEST_POSTGRES_URL: connectionString }, encoding: "utf8", windowsHide: true, timeout: 120000, maxBuffer: 4 * 1024 * 1024,
     });

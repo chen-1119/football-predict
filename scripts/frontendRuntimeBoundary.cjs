@@ -62,7 +62,10 @@ const COMMAND_CALLER_FUNCTIONS = deepFreeze({
     "b74e76da5ab33c3324947402c71fe5bec7cfa31e05731cffcf8cfe6c1f396975", "af735eb6fea92353333bda9e4bb32b00154b2de6487eca2f04ed0b34362ad7b7",
     "e63c9f77354cb9c33033a2de5b8e92b02f98e47d795bd1893e1dd57dc3b94cc9"],
   "scripts/runSyncWorker.cjs": ["5f0e7b6a6cf61d7230ce91e034db03afc325f0a724b06588a1ed8361d3670120",
-    "dc5ba7f3cc3b8e8e65d6dc9450fce24c99b9575fdca632d9c8f3c114d749dfd2", "e35c0a392d9a0ab5ca3abdd8375d0578c8b06bd508da82871c3f23e7d81751e3"],
+    "dc5ba7f3cc3b8e8e65d6dc9450fce24c99b9575fdca632d9c8f3c114d749dfd2", "e35c0a392d9a0ab5ca3abdd8375d0578c8b06bd508da82871c3f23e7d81751e3",
+    // Reviewed native coverage await and postgres:sync routing. Commands stay
+    // literal; the full reachable code and package graph are still compared.
+    "994b5f575e5f8141fc06500fee5a2e036db26d6f3b4248673f462cdd97f701eb", "903a80bb8977aedb22e95ab1045b575c78490f5944961e5d4ee0866dbd363c51"],
 });
 const UNIT_SOURCE_HASHES = Object.freeze({
   "football-cleanup.service": "88b0b805ee484ff1b3915e8debad2e9bea512f024f77aa9ce691c8218fee0e85",

@@ -19,6 +19,15 @@ const orderPreservingMigrationPath = path.join(rootDir, "server", "postgres", "m
 const orderPreservingSql = fs.readFileSync(orderPreservingMigrationPath, "utf8");
 const freeSourceMigrationPath = path.join(rootDir, "server", "postgres", "migrations", "004_free_source_warehouse.sql");
 const freeSourceSql = fs.readFileSync(freeSourceMigrationPath, "utf8");
+const nativeTableGroups = {
+  "005_learning_ledger.sql": ["learning_ledger_meta", "learning_model_artifacts", "learning_events", "learning_active_model_pointer", "learning_leases"],
+  "006_research_observations.sql": ["research_observation_meta", "research_source_contents", "research_observations"],
+};
+for (const [file, tables] of Object.entries(nativeTableGroups)) {
+  const nativeSql = fs.readFileSync(path.join(rootDir, "server", "postgres", "migrations", file), "utf8");
+  for (const table of tables) assert.match(nativeSql, new RegExp(`CREATE TABLE football\\.${table}\\s*\\(`));
+  assert.doesNotMatch(nativeSql, /\b(?:DROP|TRUNCATE)\b/i);
+}
 const projectionStore = fs.readFileSync(path.join(rootDir, "server", "postgresProjectionStore.cjs"), "utf8");
 const projectionSync = fs.readFileSync(path.join(rootDir, "scripts", "postgresProjectionSync.cjs"), "utf8");
 const server = fs.readFileSync(path.join(rootDir, "server", "index.cjs"), "utf8");
@@ -49,6 +58,8 @@ assert.deepEqual(listMigrationFiles(), [
   "002_projection_runtime.sql",
   "003_order_preserving_payloads.sql",
   "004_free_source_warehouse.sql",
+  "005_learning_ledger.sql",
+  "006_research_observations.sql",
 ]);
 for (const table of requiredTables) {
   assert.match(sql, new RegExp(`CREATE TABLE IF NOT EXISTS football\\.${table}\\s*\\(`));
@@ -212,9 +223,8 @@ assert.match(packageJson.scripts["datastore:sqlite"], /syncPostgresProjection\.c
 console.log(JSON.stringify({
   ok: true,
   verifier: "postgres-migration-plan",
-  migrations: [migrationPath, projectionMigrationPath, orderPreservingMigrationPath, freeSourceMigrationPath]
-    .map((value) => path.relative(rootDir, value).replace(/\\/g, "/")),
-  tables: requiredTables.length + 14,
+  migrations: listMigrationFiles().map(file => `server/postgres/migrations/${file}`),
+  tables: requiredTables.length + 14 + Object.values(nativeTableGroups).flat().length,
   guarantees: [
     "single-current-publication",
     "immutable-decision-hash",

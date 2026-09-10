@@ -85,8 +85,8 @@ const readJson = (filePath, fallback = null) => {
   }
 };
 
-const currentMatchBoundaries = (publicDir) => {
-  const current = readJson(path.join(publicDir, "data", "matches-current.json"), []);
+const currentMatchBoundaries = (publicDir, matches) => {
+  const current = matches ?? readJson(path.join(publicDir, "data", "matches-current.json"), []);
   const boundaries = new Map();
   for (const match of Array.isArray(current) ? current : []) {
     const sourceMatchId = sourceMatchIdFor(match?.sourceMatchId || match?.id);
@@ -226,15 +226,7 @@ const sqliteBackfillRows = (publicDir, options = {}) => {
       ORDER BY captured_at ASC
       LIMIT 120000
     `).all(...ids);
-    const canonicalRows = records
-      .map((record) => canonicalSqliteOddsRow(record, boundaries.get(sourceMatchIdFor(record.source_match_id))))
-      .filter(Boolean);
-    const merged = mergeStateRows(canonicalRows).map((row) => {
-      const observations = canonicalRows.filter((candidate) => (
-        candidate.sourceMatchId === row.sourceMatchId && candidate.stateSignature === row.stateSignature
-      ));
-      return { ...row, seenCount: Math.max(1, Number(row.seenCount || 1), observations.length) };
-    });
+    const merged = canonicalBackfillRows(records, boundaries);
     sqliteBackfillCache.clear();
     sqliteBackfillCache.set(cacheKey, merged);
     return merged;
@@ -273,10 +265,25 @@ const loadOddsHistory = (publicDir, options = {}) => {
     || left.priority - right.priority
   ));
   const selected = candidates[0]?.payload || emptyOddsHistory();
-  const sqliteRows = sqliteBackfillRows(publicDir, options);
-  if (!sqliteRows.length) return selected;
+  return mergeOddsHistoryBackfill(selected, sqliteBackfillRows(publicDir, options));
+};
+
+const canonicalBackfillRows = (records, boundaries) => {
+  const counts = new Map();
+  const canonicalRows = records.map(record => canonicalSqliteOddsRow(record,
+    boundaries.get(sourceMatchIdFor(record.source_match_id)))).filter(Boolean);
+  for (const row of canonicalRows) {
+    const key = `${row.sourceMatchId}|${row.stateSignature}`;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return mergeStateRows(canonicalRows).map(row => ({ ...row,
+    seenCount: Math.max(1, Number(row.seenCount || 1), counts.get(`${row.sourceMatchId}|${row.stateSignature}`)) }));
+};
+
+const mergeOddsHistoryBackfill = (selected, warehouseRows) => {
+  if (!warehouseRows.length) return selected;
   const maxRows = Math.max(1000, Number(selected.maxRows || process.env.ODDS_HISTORY_MAX_ROWS || 12000));
-  const rows = mergeStateRows([...(selected.rows || []), ...sqliteRows])
+  const rows = mergeStateRows([...(selected.rows || []), ...warehouseRows])
     .sort((left, right) => timestampMs(left.capturedAt) - timestampMs(right.capturedAt))
     .slice(-maxRows);
   return {
@@ -293,4 +300,7 @@ module.exports = {
   normalizeOddsHistory,
   oddsHistoryCandidatePaths,
   sqliteBackfillRows,
+  currentMatchBoundaries,
+  canonicalBackfillRows,
+  mergeOddsHistoryBackfill,
 };

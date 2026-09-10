@@ -2,9 +2,7 @@
 // Release-only transport of an already verified private audit. Never creates
 // new model evidence, changes its clock, or authorizes model promotion.
 const fs = require("node:fs"), path = require("node:path"), crypto = require("node:crypto");
-const { DatabaseSync } = require("node:sqlite");
-const { HHAD_COMPANION_AUDIT_KEY: KEY, PRIVATE_MODEL_ARTIFACT_TABLE: TABLE,
-  readPrivateModelArtifact, ensurePrivateModelArtifactTable } = require("./privateModelArtifactStore.cjs");
+const { HHAD_COMPANION_AUDIT_KEY: KEY } = require("./runtimePrivateModelArtifactStore.cjs");
 const hash = bytes => crypto.createHash("sha256").update(bytes).digest("hex");
 const columns = ["artifact_key", "artifact_version", "generated_at", "updated_at", "payload_json", "payload_sha256", "payload_bytes"];
 function directory(value) {
@@ -41,9 +39,13 @@ function evaluationBytes(storeDir) {
   } finally { fs.closeSync(fd); }
 }
 function validateReusablePrivateAudit({ storeDir, evaluation = null }) {
+  const { readPrivateModelArtifact } = require("./privateModelArtifactStore.cjs");
   const dbPath = databasePath(storeDir);
   evaluation = evaluation || JSON.parse(evaluationBytes(storeDir));
   const record = readPrivateModelArtifact({ dbPath, artifactKey: KEY, busyTimeoutMs: 1000 });
+  return validateAuditEvaluation(record, evaluation);
+}
+function validateAuditEvaluation(record, evaluation) {
   const { finalExposureRows, settlementRows, ...aggregate } = record.payload;
   if (record.artifactVersion !== aggregate.version || record.generatedAt !== aggregate.evaluatedAt
     || !Array.isArray(finalExposureRows) || !Array.isArray(settlementRows)
@@ -56,6 +58,8 @@ function validateReusablePrivateAudit({ storeDir, evaluation = null }) {
   return record;
 }
 function seedPrivateModelAudit({ sourceStore, candidateStore }) {
+  const { DatabaseSync } = require("node:sqlite");
+  const { PRIVATE_MODEL_ARTIFACT_TABLE: TABLE, ensurePrivateModelArtifactTable } = require("./privateModelArtifactStore.cjs");
   sourceStore = directory(sourceStore); candidateStore = directory(candidateStore);
   if (sourceStore === candidateStore || sourceStore.startsWith(candidateStore + path.sep)
     || candidateStore.startsWith(sourceStore + path.sep)) throw new Error("private-seed-stores-overlap");
@@ -109,7 +113,29 @@ function seedPrivateModelAudit({ sourceStore, candidateStore }) {
     generatedAt: result.generatedAt, updatedAt: result.updatedAt, payloadSha256: result.payloadSha256,
     payloadBytes: result.payloadBytes, modelPromotionAuthorized: false };
 }
-module.exports = { seedPrivateModelAudit, validateReusablePrivateAudit };
+async function validateReusablePrivateAuditPostgres({ storeDir, pool, evaluation = null }) {
+  evaluation = evaluation || JSON.parse(evaluationBytes(storeDir));
+  const record = await require("./postgresPrivateModelArtifactStore.cjs").readPrivateModelArtifact({ pool, artifactKey: KEY });
+  return validateAuditEvaluation(record, evaluation);
+}
+async function seedPrivateModelAuditPostgres({ sourcePool, candidatePool, candidateStore }) {
+  if (!sourcePool || !candidatePool || sourcePool === candidatePool) throw new Error("private-seed-independent-database-required");
+  // Check the server's actual database identity, not only a caller's URL label.
+  const identity = async pool => (await pool.query("SELECT current_database() AS name,inet_server_addr()::text AS address,inet_server_port() AS port")).rows[0];
+  const source = await identity(sourcePool), target = await identity(candidatePool);
+  if (!/^football_release_[a-f0-9]{12}_[0-9]{1,10}$/.test(target.name) || target.name === source.name)
+    throw new Error("private-seed-independent-database-required");
+  const record = await validateReusablePrivateAuditPostgres({ storeDir: candidateStore, pool: sourcePool });
+  const row = { artifact_key: record.artifactKey, artifact_version: record.artifactVersion, generated_at: record.generatedAt,
+    updated_at: record.updatedAt, payload_json: record.payloadJson, payload_sha256: record.payloadSha256, payload_bytes: record.payloadBytes };
+  await require("./postgresPrivateModelArtifactStore.cjs").importPrivateModelArtifact({ pool: candidatePool, row });
+  const verified = await validateReusablePrivateAuditPostgres({ storeDir: candidateStore, pool: candidatePool });
+  if (JSON.stringify(verified) !== JSON.stringify(record)) throw new Error("private-seed-copy-verification-failed");
+  return { mode: "seeded", seeded: true, storage: "postgres", candidateDatabase: target.name, artifactKey: KEY,
+    artifactVersion: verified.artifactVersion, generatedAt: verified.generatedAt, updatedAt: verified.updatedAt,
+    payloadSha256: verified.payloadSha256, payloadBytes: verified.payloadBytes, modelPromotionAuthorized: false };
+}
+module.exports = { seedPrivateModelAudit, validateReusablePrivateAudit, validateReusablePrivateAuditPostgres, seedPrivateModelAuditPostgres };
 if (require.main === module) {
   if (process.argv.length !== 4 || process.platform !== "linux" || process.getuid?.() !== 0)
     throw new Error("fixed-root-private-model-seed-required");
