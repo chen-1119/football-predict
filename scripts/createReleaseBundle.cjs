@@ -712,6 +712,7 @@ const requiredEntries = [
   "scripts/verifyDeploymentConfig.cjs",
   "scripts/deployReleaseBundle.cjs",
   "scripts/releaseRecoveryHelperRotation.cjs",
+  "scripts/releaseStoragePreflight.cjs",
   "scripts/verifyRecoveryHelperRotation.cjs",
   "scripts/checkReleaseStatus.cjs",
   "scripts/releaseSshHostKeyPin.cjs",

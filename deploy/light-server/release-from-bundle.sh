@@ -7266,6 +7266,10 @@ if [ ! -f "$TRUSTED_SOURCE_DIR/package.json" ] || [ -L "$TRUSTED_SOURCE_DIR/pack
   printf 'trusted source package.json is missing or unsafe\n' >&2
   exit 1
 fi
+# Native selectors must not enter the still-hybrid v3 lifecycle. In particular,
+# ensure_node_runtime_env below would overwrite ENABLE_SQLITE_EXPORT with 1.
+"$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseStoragePreflight.cjs" \
+  || { printf 'storage dispatch rejected before SQLite work or host changes\n' >&2; exit 1; }
 node -e "require('node:sqlite')" >/dev/null
 if [ ! -d "$APP_DIR" ]; then
   printf 'APP_DIR does not exist: %s\n' "$APP_DIR" >&2

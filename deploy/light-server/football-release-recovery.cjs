@@ -7,6 +7,7 @@ const crypto = require("node:crypto");
 const { spawnSync } = require("node:child_process");
 
 const TRANSACTION_VERSION = 3;
+const NATIVE_TRANSACTION_VERSION = 4;
 const APP_PATH = "/opt/football-predict";
 const BACKUP_PATH = "/opt/football-predict.previous";
 const FAILED_PATH = "/opt/football-predict.failed";
@@ -385,6 +386,22 @@ class SystemAdapter {
     ]);
   }
 
+  readNativeDatabaseTopology(contract) {
+    if (TEST_MODE) return this.state.nativeDatabaseTopology;
+    const names = ["football", contract.candidateDatabase, contract.archiveDatabase].filter(Boolean);
+    // Names have already passed a fixed identifier grammar. This is a bounded
+    // read-only query through the local PostgreSQL administrator, not a restore,
+    // rename, migration, connection termination or application-code invocation.
+    const sql = `BEGIN READ ONLY; SELECT json_build_object('clusterId',(SELECT system_identifier::text FROM pg_control_system()),
+      'databases',(SELECT coalesce(json_object_agg(datname,oid::text),'{}'::json) FROM pg_database WHERE datname IN (${names.map(name => "'" + name + "'").join(",")}))); ROLLBACK;`;
+    const result = spawnSync("/usr/sbin/runuser", ["-u", "postgres", "--", "/usr/bin/psql", "--no-psqlrc", "--quiet", "--tuples-only", "--no-align", "--set=ON_ERROR_STOP=1", "--dbname=postgres"], {
+      env: { PATH: "/usr/bin:/bin", PGHOST: "/var/run/postgresql", PGUSER: "postgres", PGCONNECT_TIMEOUT: "5", PGOPTIONS: "-c statement_timeout=5000 -c lock_timeout=1000" },
+      input: sql, encoding: "utf8", timeout: 10000, maxBuffer: 65536,
+    });
+    if (result.status !== 0) fail("native recovery database identity query failed; no restore attempted");
+    try { return JSON.parse(result.stdout.trim()); } catch { fail("invalid native database identity response"); }
+  }
+
   stopTransientUnits(bundleSha) {
     const prefix = `football-release-${bundleSha.slice(0, 12)}-`;
     if (TEST_MODE) {
@@ -436,6 +453,27 @@ class SystemAdapter {
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 2000);
     }
     fail("restored application did not become healthy");
+  }
+
+  waitForNativeHealth() {
+    if (TEST_MODE) {
+      if (this.state.nativeHealth !== true) fail("mock native storage health is failing");
+      return;
+    }
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const response = this.run("curl", ["-fsS", "--max-time", "8", "http://127.0.0.1:8788/api/v1/health"], { allowFailure: true });
+      try {
+        const health = JSON.parse(response.stdout), s = health.storage, p = s?.postgres, g = p?.publication;
+        if (response.status === 0 && s?.primary === "postgres" && health.data?.currentRead?.source === "postgres"
+            && s.sqlite?.retired === true && s.sqlite.available === false && s.sqlite.readSource === "postgres"
+            && p?.available === true && p.baseReady === true && !p.baseBlockedReason
+            && s.fastResultIntegrity?.valid === true && g?.mode === "active-generation"
+            && /^g-[a-f0-9]{64}$/.test(g.generationId || "") && /^[a-f0-9]{64}$/.test(g.manifestHash || "")
+            && g.sourceCycleId && Number.isFinite(Date.parse(g.committedAt || ""))) return;
+      } catch { /* A 200 response or an unparsable body is not storage proof. */ }
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 2000);
+    }
+    fail("restored application did not prove native publication and result integrity");
   }
 }
 
@@ -515,6 +553,60 @@ const loadRuntimeEnvSnapshot = (currentDir) => {
     parentState,
     parentMetadata
   };
+};
+
+const loadNativeRecovery = (currentDir, oldIdentity) => {
+  const dir = path.join(currentDir, "native-mode");
+  assertSecureDirectory(dir, "native recovery directory");
+  const contract = readJsonFile(path.join(dir, "state.json"), "native recovery contract");
+  const fields = ["version", "kind", "clusterId", "oldDatabaseOid", "newDatabaseOid", "candidateDatabase", "archiveDatabase", "compatibleRuntimeSha256"];
+  if (!contract || Object.keys(contract).sort().join() !== fields.sort().join()
+      || contract.version !== "native-app-data-forward-v1" || !["initial-cutover", "runtime-only"].includes(contract.kind)
+      || !/^[0-9]{10,20}$/.test(contract.clusterId || "")
+      || ![contract.oldDatabaseOid, contract.newDatabaseOid].every(oid => typeof oid === "string" && /^[1-9][0-9]{0,9}$/.test(oid) && BigInt(oid) <= 4294967295n)
+      || !validateDigest(contract.compatibleRuntimeSha256) || contract.compatibleRuntimeSha256 !== oldIdentity.bundleMarker
+      || oldIdentity.bundleMarker !== oldIdentity.liveMarker) fail("invalid or unbound native recovery contract");
+  if (contract.kind === "initial-cutover") {
+    if (contract.oldDatabaseOid === contract.newDatabaseOid
+        || !/^football_release_[a-f0-9]{12}_[0-9]{1,10}$/.test(contract.candidateDatabase || "")
+        || !/^football_legacy_[a-f0-9]{12}_[0-9]{1,10}$/.test(contract.archiveDatabase || "")) fail("invalid native database cutover identity");
+  } else if (contract.oldDatabaseOid !== contract.newDatabaseOid || contract.candidateDatabase !== null || contract.archiveDatabase !== null)
+    fail("runtime-only recovery cannot replace a database");
+  const runtimeEnv = loadRuntimeEnvSnapshot(dir);
+  if (!runtimeEnv.present || runtimeEnv.parentState !== "present" || runtimeEnv.bytes > 262144) fail("native recovery environment is missing or oversized");
+  const lines = fs.readFileSync(runtimeEnv.source, "utf8").split(/\r?\n/);
+  const value = key => {
+    const rows = lines.filter(line => new RegExp("^\\s*(?:export\\s+)?" + key + "\\s*=").test(line));
+    if (rows.length !== 1) fail("native recovery environment selector missing or duplicated: " + key);
+    const raw = rows[0].slice(rows[0].indexOf("=") + 1).trim();
+    if ((raw.startsWith("'") && raw.endsWith("'")) || (raw.startsWith('"') && raw.endsWith('"'))) return raw.slice(1, -1);
+    return raw;
+  };
+  for (const [key, required] of Object.entries({ FOOTBALL_STORAGE_MODE: "postgres-only", FOOTBALL_POSTGRES_MODE: "primary",
+    DATASTORE_READ_SOURCE: "postgres", CURRENT_MATCH_SOURCE: "postgres", ENABLE_SQLITE_EXPORT: "0",
+    PRIVATE_MODEL_ARTIFACT_STORAGE: "postgres", POSTGRES_PROJECTION_SOURCE: "native-generation" }))
+    if (value(key) !== required) fail("native recovery environment cannot re-enable a legacy reader or writer");
+  let url; try { url = new URL(value("FOOTBALL_POSTGRES_URL")); } catch { fail("native recovery PostgreSQL URL is invalid"); }
+  if (!["postgres:", "postgresql:"].includes(url.protocol) || decodeURIComponent(url.pathname) !== "/football"
+      || !["", "localhost", "127.0.0.1", "[::1]"].includes(url.hostname) || !["", "5432"].includes(url.port)
+      || decodeURIComponent(url.username) !== "football" || url.hash
+      || [...url.searchParams.keys()].some(key => !["host", "sslmode"].includes(key) || url.searchParams.getAll(key).length !== 1)
+      || (url.searchParams.has("host") && url.searchParams.get("host") !== "/var/run/postgresql")
+      || (!url.hostname && url.searchParams.get("host") !== "/var/run/postgresql")) fail("native recovery must use the fixed local football database");
+  return { contract, runtimeEnv };
+};
+
+const nativeDataActive = (native, system) => {
+  const c = native.contract, actual = system.readNativeDatabaseTopology(c);
+  if (actual?.clusterId !== c.clusterId || !actual.databases || typeof actual.databases !== "object") fail("native recovery cluster identity changed");
+  const db = actual.databases;
+  if (c.kind === "runtime-only") {
+    if (db.football !== c.newDatabaseOid) fail("native recovery database identity changed");
+    return true;
+  }
+  if (db.football === c.oldDatabaseOid && db[c.candidateDatabase] === c.newDatabaseOid && db[c.archiveDatabase] === undefined) return false;
+  if (db.football === c.newDatabaseOid && db[c.archiveDatabase] === c.oldDatabaseOid && db[c.candidateDatabase] === undefined) return true;
+  fail("native database rename state is incomplete or unrecognized; retain transaction");
 };
 
 const loadConfigSnapshot = (currentDir) => {
@@ -706,7 +798,7 @@ const loadTransaction = () => {
   if (!pathExistsNoFollow(currentDir)) return null;
   assertSecureDirectory(currentDir, "current release recovery transaction");
   const version = readSingleLine(path.join(currentDir, "transaction-version"), "transaction version");
-  if (version !== String(TRANSACTION_VERSION)) fail(`unsupported transaction version: ${version}`);
+  if (![String(TRANSACTION_VERSION), String(NATIVE_TRANSACTION_VERSION)].includes(version)) fail(`unsupported transaction version: ${version}`);
   const bundleSha = readSingleLine(path.join(currentDir, "bundle-sha256"), "transaction bundle sha256");
   if (!/^[0-9a-f]{64}$/.test(bundleSha)) fail("transaction bundle sha256 is invalid");
   const site = readSingleLine(path.join(currentDir, "site"), "transaction site");
@@ -721,6 +813,7 @@ const loadTransaction = () => {
   if (site !== expectedSite || channel !== expectedChannel) fail("transaction site or channel does not match fixed host identity");
   if (!ROLLBACK_PHASES.has(phase) && !FORWARD_PHASES.has(phase)) fail(`unknown recovery phase: ${phase}`);
   const oldIdentity = loadIdentity(currentDir, "old-app", true);
+  const native = version === String(NATIVE_TRANSACTION_VERSION) ? loadNativeRecovery(currentDir, oldIdentity) : null;
   const newIdentityRequired = NEW_IDENTITY_REQUIRED_PHASES.has(phase) || FORWARD_PHASES.has(phase);
   const newIdentity = loadIdentity(currentDir, "new-app", false);
   let rollbackAlreadyOnOldTree = false;
@@ -744,18 +837,20 @@ const loadTransaction = () => {
   const config = loadConfigSnapshot(currentDir);
   const sqliteSnapshotPresent = pathExistsNoFollow(path.join(currentDir, "sqlite"));
   const modelSnapshotPresent = pathExistsNoFollow(path.join(currentDir, "external-model-artifacts"));
+  if (native && (sqliteSnapshotPresent || modelSnapshotPresent || ["sqlite-snapshotted", "external-model-artifacts-snapshotted"].includes(phase)))
+    fail("native recovery must not contain database or model rewind snapshots");
   const convergedPreSnapshotRollback = !newIdentity
     && rollbackAlreadyOnOldTree
     && ["recovering-rollback", "rolled-back"].includes(phase);
   if (sqliteSnapshotPresent && !modelSnapshotPresent) {
     fail("sqlite rollback snapshot exists without its preceding model snapshot");
   }
-  const sqlite = SQLITE_REQUIRED_PHASES.has(phase)
+  const sqlite = !native && SQLITE_REQUIRED_PHASES.has(phase)
     ? (sqliteSnapshotPresent
         ? loadSqliteSnapshot(currentDir)
         : (convergedPreSnapshotRollback ? null : loadSqliteSnapshot(currentDir)))
     : null;
-  const model = MODEL_REQUIRED_PHASES.has(phase)
+  const model = !native && MODEL_REQUIRED_PHASES.has(phase)
     ? (modelSnapshotPresent
         ? loadModelSnapshot(currentDir)
         : (convergedPreSnapshotRollback ? null : loadModelSnapshot(currentDir)))
@@ -771,6 +866,7 @@ const loadTransaction = () => {
     oldIdentity,
     newIdentity,
     runtimeEnv,
+    native,
     config,
     sqlite,
     model
@@ -1086,13 +1182,19 @@ const resolveTransaction = (transaction) => {
 };
 
 const recoverRollback = (transaction, system) => {
+  const nativeWasActive = transaction.native ? nativeDataActive(transaction.native, system) : false;
   prevalidateRestoreTargets(transaction);
   updatePhase(transaction, "recovering-rollback");
   quiesceAll(transaction, system);
+  if (transaction.native && nativeDataActive(transaction.native, system) !== nativeWasActive) fail("native database changed during recovery quiesce");
   restoreOldTree(transaction, system);
   if (transaction.sqlite) restoreSqlite(transaction.sqlite);
   if (transaction.model) restoreModelArtifacts(transaction.model);
-  restoreRuntimeEnv(transaction.runtimeEnv);
+  // Native data is forward-only: restore compatible application code, never
+  // replace the database, frozen directions, receipt history or model ledger.
+  // A crash between atomic database rename and journal phase update is decided
+  // by actual cluster/database OIDs, not by the possibly stale phase string.
+  restoreRuntimeEnv(nativeWasActive ? transaction.native.runtimeEnv : transaction.runtimeEnv);
   restoreConfig(transaction.config, system);
   // The live worker intentionally remains available during the long isolated
   // build. Its generation pointer may therefore advance after the rollback
@@ -1103,14 +1205,18 @@ const recoverRollback = (transaction, system) => {
   const appState = transaction.config.units.find((entry) => entry.name === "football-predict.service");
   if (!appState?.active) fail("original application service was not active; automatic recovery is not authorized");
   system.waitForHealth();
+  if (nativeWasActive) system.waitForNativeHealth();
+  if (transaction.native && nativeDataActive(transaction.native, system) !== nativeWasActive) fail("native database identity changed after recovery");
   restoreTimerStates(transaction.config, system);
   isolateKnownFailedTree(transaction, system);
   updatePhase(transaction, "rolled-back");
   resolveTransaction(transaction);
-  return { action: "rollback", bundleSha256: transaction.bundleSha, phase: "rolled-back" };
+  return { action: "rollback", bundleSha256: transaction.bundleSha, phase: "rolled-back",
+    ...(transaction.native ? { storage: nativeWasActive ? "postgres-only" : "pre-cutover", databaseWrites: 0, liveModelDataPreserved: true } : {}) };
 };
 
 const recoverForward = (transaction, system) => {
+  if (transaction.native && !nativeDataActive(transaction.native, system)) fail("cannot commit native release before database activation");
   const topology = inspectTopology(transaction, system);
   if (topology.app.kind !== "new" || topology.backup.kind !== "old" || topology.failed.kind !== "absent") {
     fail("committed transaction topology is not the expected new APP plus old BACKUP");
@@ -1124,7 +1230,12 @@ const recoverForward = (transaction, system) => {
     }
   }
   updatePhase(transaction, "recovering-commit");
-  system.stopTransientUnits(transaction.bundleSha);
+  if (transaction.native) quiesceAll(transaction, system);
+  else system.stopTransientUnits(transaction.bundleSha);
+  if (transaction.native) {
+    prevalidateRestoreTargets(transaction);
+    restoreRuntimeEnv(transaction.native.runtimeEnv);
+  }
   system.daemonReload();
   const nginxState = transaction.config.units.find((entry) => entry.name === "nginx.service");
   system.validateAndReloadNginx(Boolean(nginxState?.active));
@@ -1133,6 +1244,10 @@ const recoverForward = (transaction, system) => {
   system.setEnabled("football-sync-worker.service", true);
   system.start("football-sync-worker.service");
   system.waitForHealth();
+  if (transaction.native) {
+    system.waitForNativeHealth();
+    if (!nativeDataActive(transaction.native, system)) fail("native database identity changed after committed recovery");
+  }
   for (const timer of TIMER_UNITS) {
     system.setEnabled(timer, true);
     system.start(timer);
@@ -1181,5 +1296,6 @@ module.exports = {
   RecoveryError,
   inspectTopology,
   loadTransaction,
+  nativeDataActive,
   recover
 };

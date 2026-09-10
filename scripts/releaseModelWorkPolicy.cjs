@@ -26,6 +26,8 @@ const RELEASE_ONLY = new Set([
   "scripts/verifyDataGenerationEndToEnd.cjs",
   "scripts/verifyFrontendReleaseTransaction.cjs",
   "scripts/verifyReleaseRecovery.cjs",
+  "scripts/verifyNativeReleaseRecovery.cjs",
+  "scripts/releaseStoragePreflight.cjs", "scripts/verifyReleaseStoragePreflight.cjs",
   "scripts/releasePrivateModelSeed.cjs", "scripts/verifyReleasePrivateModelSeed.cjs",
   "scripts/verifyCandidateArtifactSeed.cjs",
   "scripts/runReleaseWindowPreflight.cjs", "scripts/verifyReleaseWindowPreflight.cjs",
