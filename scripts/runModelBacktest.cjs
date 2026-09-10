@@ -111,6 +111,7 @@ const candidateProspectiveRegistryLockTimeoutMs = Number.isFinite(
   ? Math.max(0, configuredCandidateProspectiveRegistryLockTimeoutMs)
   : DEFAULT_REGISTRY_LOCK_TIMEOUT_MS;
 const sqliteDbPath = path.resolve(process.env.DATASTORE_SQLITE_PATH || path.join(serverDataDir, "football.db"));
+const storageMode = require("../server/storageMode.cjs").readStorageMode();
 const privateArtifactStorageMode = privateArtifactStorage();
 if (isolatedOutput && privateArtifactStorageMode === "postgres") {
   throw new Error("isolated backtests must not write the configured runtime PostgreSQL audit");
@@ -149,15 +150,17 @@ const MIN_PROMOTION_PROBABILITY_ROWS = 500;
 
 let DatabaseSync = null;
 let sqliteLoadError = null;
-try {
-  ({ DatabaseSync } = require("node:sqlite"));
-} catch (error) {
-  sqliteLoadError = error;
-}
+const loadSqlite = () => {
+  if (!DatabaseSync && !sqliteLoadError) {
+    try { ({ DatabaseSync } = require("node:sqlite")); }
+    catch (error) { sqliteLoadError = error; }
+  }
+};
 
 const ensureIsolatedPrivateArtifactDb = () => {
   if (!isolatedOutput) return;
   if (fs.existsSync(privateArtifactDbPath) && fs.statSync(privateArtifactDbPath).size > 0) return;
+  loadSqlite();
   if (!DatabaseSync) {
     throw sqliteLoadError || new Error("node:sqlite is required for isolated private model artifacts");
   }
@@ -224,22 +227,10 @@ const closeDatabase = (db) => {
   }
 };
 
-const payloadRowKey = (row, label) => label === "predictionSnapshots"
-  ? [
-      row?.sourceMatchId || row?.matchId || "",
-      row?.phase || "",
-      row?.signature || "",
-      row?.featureSnapshotHash || row?.featureSnapshot?.hash || "legacy",
-      row?.capturedAt || row?.firstSeenAt || "",
-    ].join("|")
-  : [
-      row?.sourceMatchId || row?.matchId || "",
-      row?.poolCode || row?.oddsPoolCode || "HAD",
-      row?.handicapLine ?? 0,
-      row?.stateSignature || row?.captureBucket || row?.capturedAt || "",
-    ].join("|");
+const { payloadRowKey, createModelInputCollector } = require("./modelInputRows.cjs");
 
 const readSqlitePayloadRows = (table, options = {}) => {
+  loadSqlite();
   const allowedTables = new Set(["odds_snapshots", "prediction_snapshots"]);
   const dbPath = path.resolve(options.dbPath || sqliteDbPath);
   if (!allowedTables.has(table)) {
@@ -261,8 +252,6 @@ const readSqlitePayloadRows = (table, options = {}) => {
 
   const limit = Math.max(1, Number(options.limit || 100000));
   const orderDirection = options.preferLatestRows === true ? "DESC" : "ASC";
-  const maxRowsPerMatch = Math.max(0, Number(options.maxRowsPerMatch || 0));
-  const label = table === "prediction_snapshots" ? "predictionSnapshots" : "oddsHistory";
   const orderColumn = table === "prediction_snapshots" ? "captured_at" : "captured_at";
   let db = null;
   try {
@@ -273,77 +262,9 @@ const readSqlitePayloadRows = (table, options = {}) => {
       ORDER BY ${orderColumn} ${orderDirection}
       LIMIT ?
     `);
-    const rowsByKey = new Map();
-    const retainedKeysByMatch = new Map();
-    let selectedRows = 0;
-    let parsedRows = 0;
-    let invalidRows = 0;
-    let duplicateRows = 0;
-    let filteredRows = 0;
-    let compactedRows = 0;
-    let peakHeapUsed = options.observeMemory === true ? process.memoryUsage().heapUsed : null;
-    for (const row of statement.iterate(limit)) {
-      selectedRows += 1;
-      const payload = safeJsonParse(row.payload, null);
-      if (!payload || typeof payload !== "object") {
-        invalidRows += 1;
-        continue;
-      }
-      parsedRows += 1;
-      if (typeof options.acceptPayload === "function" && options.acceptPayload(payload) !== true) {
-        filteredRows += 1;
-        continue;
-      }
-      const key = payloadRowKey(payload, label);
-      if (rowsByKey.has(key)) {
-        duplicateRows += 1;
-        // A descending scan sees the newest duplicate first. Do not let an
-        // older revision overwrite it while walking toward the past.
-        if (options.preferLatestRows === true) continue;
-      }
-      if (maxRowsPerMatch > 0) {
-        const matchKey = String(payload.sourceMatchId || payload.matchId || "").trim();
-        if (matchKey && !rowsByKey.has(key)) {
-          const retainedKeys = retainedKeysByMatch.get(matchKey) || [];
-          if (retainedKeys.length >= maxRowsPerMatch) {
-            compactedRows += 1;
-            if (options.preferLatestRows === true) continue;
-            const evictedKey = retainedKeys.shift();
-            if (evictedKey) rowsByKey.delete(evictedKey);
-          }
-          retainedKeys.push(key);
-          retainedKeysByMatch.set(matchKey, retainedKeys);
-        }
-      }
-      rowsByKey.set(key, payload);
-      if (options.observeMemory === true && selectedRows % 128 === 0) {
-        peakHeapUsed = Math.max(peakHeapUsed, process.memoryUsage().heapUsed);
-      }
-    }
-    if (options.observeMemory === true) {
-      peakHeapUsed = Math.max(peakHeapUsed, process.memoryUsage().heapUsed);
-    }
-    const rows = Array.from(rowsByKey.values());
-    if (options.preferLatestRows === true) {
-      rows.sort((a, b) => Date.parse(a?.capturedAt || a?.firstSeenAt || "")
-        - Date.parse(b?.capturedAt || b?.firstSeenAt || ""));
-    }
-    return {
-      ok: true,
-      rows,
-      source: "sqlite",
-      table,
-      path: dbPath,
-      limit,
-      selectedRows,
-      parsedRows,
-      invalidRows,
-      duplicateRows,
-      filteredRows,
-      compactedRows,
-      uniqueRows: rows.length,
-      peakHeapUsed,
-    };
+    const collector = createModelInputCollector(table, { ...options, limit });
+    for (const row of statement.iterate(limit)) collector.add(row);
+    return { ...collector.finish(), source: "sqlite", table, path: dbPath };
   } catch (error) {
     return {
       ok: false,
@@ -374,6 +295,13 @@ const isBacktestPredictionSnapshot = (snapshot) => {
 };
 
 const preferRows = (publicRows, sqliteResult, label) => {
+  if (sqliteResult?.source === "postgres") {
+    if (!sqliteResult.ok) throw new Error("PostgreSQL model input unavailable");
+    const { rows, ...audit } = sqliteResult;
+    return { rows, ...audit, label, selectedSource: "postgres", publicRows: 0,
+      warehouseRows: sqliteResult.parsedRows, warehouseUniqueRows: rows.length,
+      postgresRows: sqliteResult.parsedRows, mergedRows: rows.length };
+  }
   const publicCount = Array.isArray(publicRows) ? publicRows.length : 0;
   const sqliteRows = Array.isArray(sqliteResult?.rows) ? sqliteResult.rows : [];
   const sqliteParsedRows = Number.isSafeInteger(sqliteResult?.parsedRows)
@@ -3328,6 +3256,7 @@ const runSqliteStreamingSelfTest = () => {
   let db = null;
   let serializedBytes = 0;
   try {
+    loadSqlite();
     if (!DatabaseSync) throw sqliteLoadError || new Error("node:sqlite is unavailable");
     db = new DatabaseSync(dbPath);
     db.exec(`
@@ -3666,28 +3595,36 @@ if (process.argv.includes("--verify-odds-observation-time")) runOddsObservationB
 if (process.argv.includes("--verify-recommendation-selection-time-order")) runRecommendationSelectionTimeOrderSelfTest();
 if (process.argv.includes("--verify-probability-selection")) runProbabilitySelectionSelfTest();
 
-const current = readJson(path.join(publicDataDir, "matches-current.json"), []);
-const history = readJson(path.join(publicDataDir, "matches-history.json"), []);
-const oddsHistory = readJson(path.join(publicDataDir, "odds-history.json"), { rows: [] });
-const matches = dedupeMatches([...(Array.isArray(current) ? current : []), ...(Array.isArray(history) ? history : [])]);
-const publicOddsRows = Array.isArray(oddsHistory?.rows) ? oddsHistory.rows : [];
-const sqlitePredictionRows = readSqlitePayloadRows("prediction_snapshots", {
-  limit: Math.max(1, Number(process.env.MODEL_BACKTEST_SQLITE_PREDICTION_LIMIT || 50000)),
+async function runBacktest() {
+const predictionInputOptions = {
+  limit: Math.max(1, Number(process.env.MODEL_BACKTEST_PREDICTION_LIMIT || process.env.MODEL_BACKTEST_SQLITE_PREDICTION_LIMIT || 50000)),
   preferLatestRows: true,
   maxRowsPerMatch: Math.max(
     2,
     Number(process.env.MODEL_BACKTEST_SNAPSHOTS_PER_MATCH || 6),
   ),
   acceptPayload: isBacktestPredictionSnapshot,
-});
-const sqliteOddsRows = readSqlitePayloadRows("odds_snapshots", {
-  limit: Math.max(1, Number(process.env.MODEL_BACKTEST_SQLITE_ODDS_LIMIT || 120000))
-});
-// The synchronized SQLite publication is the authority during production
-// backtests. Avoid parsing the much larger JSON mirror a second time when
-// SQLite already yielded rows; retain the file only as a fail-safe fallback.
-const predictionSnapshots = sqlitePredictionRows.ok === true
-  && Number(sqlitePredictionRows.parsedRows || 0) > 0
+};
+const oddsInputOptions = {
+  limit: Math.max(1, Number(process.env.MODEL_BACKTEST_ODDS_LIMIT || process.env.MODEL_BACKTEST_SQLITE_ODDS_LIMIT || 120000)),
+};
+const nativeInput = storageMode.postgresOnly
+  ? await require("./postgresModelInput.cjs").readPostgresModelInput({
+      storeDir: serverDataDir, publicDataDir, createCollector: createModelInputCollector,
+      prediction_snapshots: predictionInputOptions, odds_snapshots: oddsInputOptions,
+    })
+  : null;
+const current = nativeInput ? nativeInput.current : readJson(path.join(publicDataDir, "matches-current.json"), []);
+const history = nativeInput ? nativeInput.history : readJson(path.join(publicDataDir, "matches-history.json"), []);
+const oddsHistory = nativeInput ? { rows: [] } : readJson(path.join(publicDataDir, "odds-history.json"), { rows: [] });
+const matches = dedupeMatches([...(Array.isArray(current) ? current : []), ...(Array.isArray(history) ? history : [])]);
+const publicOddsRows = Array.isArray(oddsHistory?.rows) ? oddsHistory.rows : [];
+const sqlitePredictionRows = nativeInput?.prediction_snapshots || readSqlitePayloadRows("prediction_snapshots", predictionInputOptions);
+const sqliteOddsRows = nativeInput?.odds_snapshots || readSqlitePayloadRows("odds_snapshots", oddsInputOptions);
+// Native input is authoritative even when empty and never merges another
+// publication's JSON mirror. Only the legacy path retains its file fallback.
+const predictionSnapshots = nativeInput || (sqlitePredictionRows.ok === true
+  && Number(sqlitePredictionRows.parsedRows || 0) > 0)
   ? { rows: [] }
   : readJson(path.join(publicDataDir, "prediction-snapshots.json"), { rows: [] });
 const publicSnapshotRows = Array.isArray(predictionSnapshots?.rows)
@@ -3699,7 +3636,8 @@ const snapshotRows = snapshotSelection.rows;
 const oddsRows = oddsSelection.rows;
 const dataSources = {
   matches: {
-    selectedSource: "public-json",
+    selectedSource: nativeInput ? "postgres" : "public-json",
+    ...(nativeInput ? { publication: nativeInput.publication } : {}),
     currentRows: Array.isArray(current) ? current.length : 0,
     historyRows: Array.isArray(history) ? history.length : 0
   },
@@ -4491,4 +4429,6 @@ console.log(JSON.stringify({
   }
 }, null, 2));
 }
-persistModelOutputs().catch(error => { console.error(error.message); process.exitCode = 1; });
+await persistModelOutputs();
+}
+runBacktest().catch(error => { console.error(error.message); process.exitCode = 1; });

@@ -1857,8 +1857,8 @@ const readModelEvaluationCoverage = (evaluation) => {
   const oddsHistory = dataSources.oddsHistory || {};
   const predictionSnapshots = dataSources.predictionSnapshots || {};
   return {
-    oddsRows: asNumber(oddsHistory.sqliteRows ?? sample.oddsHistoryRows, 0),
-    predictionRows: asNumber(predictionSnapshots.sqliteRows ?? sample.predictionSnapshots, 0)
+    oddsRows: asNumber(oddsHistory.warehouseRows ?? oddsHistory.sqliteRows ?? sample.oddsHistoryRows, 0),
+    predictionRows: asNumber(predictionSnapshots.warehouseRows ?? predictionSnapshots.sqliteRows ?? sample.predictionSnapshots, 0)
   };
 };
 

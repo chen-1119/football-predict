@@ -635,9 +635,9 @@ const run = async () => {
       coverageOk: healthModelEvaluation.coverageOk ?? null,
       stateConsistent: evaluationStateIsConsistent,
       oddsModelRows: healthModelEvaluation.odds?.modelRows ?? null,
-      oddsSqliteRows: healthModelEvaluation.odds?.sqliteRows ?? null,
+      oddsWarehouseRows: healthModelEvaluation.odds?.warehouseRows ?? healthModelEvaluation.odds?.sqliteRows ?? null,
       predictionModelRows: healthModelEvaluation.predictionSnapshots?.modelRows ?? null,
-      predictionSqliteRows: healthModelEvaluation.predictionSnapshots?.sqliteRows ?? null,
+      predictionWarehouseRows: healthModelEvaluation.predictionSnapshots?.warehouseRows ?? healthModelEvaluation.predictionSnapshots?.sqliteRows ?? null,
       inputAuditOk: healthModelEvaluation.inputAuditOk ?? null,
       riskTier: healthModelEvaluation.riskTier || null
     });

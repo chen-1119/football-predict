@@ -8,7 +8,8 @@ const {
   sqlitePublicationMatches,
 } = require("./dataGenerationBundle.cjs");
 const {
-  readFastResultReceiptState,
+  validateFastResultReceiptMetadata,
+  FAST_RESULT_RECEIPT_META_KEYS,
 } = require("../scripts/fastResultReceiptIntegrity.cjs");
 
 const PUBLICATION_META_KEYS = Object.freeze([
@@ -75,12 +76,15 @@ const selectMeta = async (client, keys = STATUS_META_KEYS) => {
 };
 
 const withReadSnapshot = async (pool, publicationIdentity, callback) => {
-  const client = await pool.connect();
+  const required = String(process.env.FOOTBALL_STORAGE_MODE || "").trim().toLowerCase() === "postgres-only";
+  let client;
   try {
+    client = await pool.connect();
     await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
     const meta = await selectMeta(client, PUBLICATION_META_KEYS);
     const publication = publicationIdentityFromMeta(meta, { strictGenerationSource: true });
     if (!sqlitePublicationMatches(publication, publicationIdentity)) {
+      if (required) throw new Error("postgres-generation-mismatch");
       await client.query("ROLLBACK");
       return { available: false, reason: "postgres-generation-mismatch", publication, value: null };
     }
@@ -88,7 +92,13 @@ const withReadSnapshot = async (pool, publicationIdentity, callback) => {
     await client.query("COMMIT");
     return { available: true, reason: null, publication, value };
   } catch (error) {
-    try { await client.query("ROLLBACK"); } catch { /* preserve read failure */ }
+    if (client) try { await client.query("ROLLBACK"); } catch { /* preserve read failure */ }
+    if (required) {
+      const failure = new Error("PostgreSQL publication is unavailable; refusing legacy data fallback");
+      failure.code = "POSTGRES_REQUIRED_READ_UNAVAILABLE";
+      failure.statusCode = 503;
+      throw failure;
+    }
     return {
       available: false,
       reason: error.message || String(error),
@@ -96,7 +106,7 @@ const withReadSnapshot = async (pool, publicationIdentity, callback) => {
       value: null,
     };
   } finally {
-    client.release();
+    client?.release();
   }
 };
 
@@ -390,35 +400,19 @@ const readPostgresPredictionSnapshotRows = async (pool, options = {}) => {
   return result.available ? result.value : [];
 };
 
-const fastResultStateFromMeta = (meta) => {
-  const keys = Object.keys(meta || {});
-  const virtualDb = {
-    prepare(sql) {
-      if (/WHERE key = \?/i.test(sql)) {
-        return { get: (key) => {
-          const row = meta?.[key];
-          return row ? { value: row.value, updated_at: row.updatedAt } : null;
-        } };
-      }
-      if (/key LIKE 'fast_result_authority_high_water:event:%'/i.test(sql)) {
-        return { get: () => keys.some((key) => key.startsWith("fast_result_authority_high_water:event:"))
-          ? { present: 1 }
-          : null };
-      }
-      throw new Error("unsupported PostgreSQL receipt compatibility query");
-    },
-  };
-  return readFastResultReceiptState(virtualDb);
-};
-
 const readPostgresFastResultReceiptState = async (pool, options = {}) => {
   const result = await withReadSnapshot(pool, options.publicationIdentity, async (client) => {
     const rows = await client.query(`
       SELECT key, value, updated_at
       FROM football.projection_meta
-      WHERE key LIKE 'fast_result_%'
-    `);
-    return fastResultStateFromMeta(metaObject(rows.rows));
+      WHERE key = ANY($1::text[])
+    `, [FAST_RESULT_RECEIPT_META_KEYS]);
+    if (!rows.rows.some(row => ["fast_result_receipt", "fast_result_revision"].includes(row.key))) {
+      const event = await client.query("SELECT key FROM football.projection_meta WHERE key LIKE 'fast_result_authority_high_water:event:%' LIMIT 1");
+      rows.rows.push(...event.rows);
+    }
+    return validateFastResultReceiptMetadata(rows.rows.map(row => ({ ...row,
+      updated_at: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at })));
   });
   if (!result.available) {
     return {
