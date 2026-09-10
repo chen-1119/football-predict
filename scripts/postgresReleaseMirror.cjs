@@ -9,6 +9,10 @@ const ident = value => { if (!/^[a-z_][a-z0-9_]{0,62}$/.test(value)) throw Error
 const tableSql = table => `football.${ident(table.name)}`;
 const keySql = (table, alias = "") => `array_to_json(ARRAY[${table.pk.map(name => `${alias}${ident(name)}::text`).join(",")}])::text`;
 const payloadSql = table => table.columns.map(col => `${ident(col.name)}::text AS ${ident(col.name)}`).join(",");
+// Hash original column text, including whitespace in JSON and generated values.
+// PostgreSQL builds the same length-safe JSON framing on both connections;
+// NULL and the string "null" remain different. No lossy jsonb conversion.
+const digestSql = table => `encode(sha256(convert_to(json_build_array(${table.columns.map(col => `${ident(col.name)}::text`).join(",")})::text,'UTF8')),'hex')`;
 const keyFor = (table, row) => JSON.stringify(table.pk.map(name => row[name]));
 const xid = value => typeof value === "string" && /^(0|[1-9][0-9]*)$/.test(value);
 const mac = (key, value) => crypto.createHmac("sha256", key).update(JSON.stringify(value)).digest("hex");
@@ -65,8 +69,8 @@ function keysWhere(table, rows) {
   }).join(",") + ")");
   return { sql: `(${table.pk.map(ident).join(",")}) IN (${expressions.join(",")})`, values };
 }
-async function eachSourceBatch(source, table, action) {
-  await source.query(`DECLARE mirror_rows NO SCROLL CURSOR FOR SELECT ${table.pk.map(name => `${ident(name)}::text AS ${ident(name)}`).join(",")},xmin::text AS mirror_xmin
+async function eachSourceBatch(source, table, compareSeed, action) {
+  await source.query(`DECLARE mirror_rows NO SCROLL CURSOR FOR SELECT ${table.pk.map(name => `${ident(name)}::text AS ${ident(name)}`).join(",")},xmin::text AS mirror_xmin${compareSeed ? `,${digestSql(table)} AS mirror_digest` : ""}
     FROM ${tableSql(table)}`);
   try {
     while (true) {
@@ -80,7 +84,7 @@ async function eachStagedBatch(target, table, action) {
   // Reuse the already-read metadata in a candidate-only temporary table.
   // Ordering by the source PK would require random heap reads for xmin; a
   // second source pass would reread gigabytes of review heap unnecessarily.
-  await target.query("DECLARE mirror_staged NO SCROLL CURSOR FOR SELECT key_json,source_xmin FROM mirror_seen WHERE table_name=$1", [table.name]);
+  await target.query("DECLARE mirror_staged NO SCROLL CURSOR FOR SELECT key_json,source_xmin,source_digest FROM mirror_seen WHERE table_name=$1", [table.name]);
   try {
     while (true) {
       const rows = (await target.query(`FETCH FORWARD ${METADATA_BATCH} FROM mirror_staged`)).rows;
@@ -88,31 +92,36 @@ async function eachStagedBatch(target, table, action) {
       await action(rows.map(row => {
         const values = JSON.parse(row.key_json);
         if (!Array.isArray(values) || values.length !== table.pk.length || !values.every(value => typeof value === "string")) throw Error("invalid staged mirror key");
-        return { ...Object.fromEntries(table.pk.map((name, index) => [name, values[index]])), mirror_xmin: row.source_xmin };
+        return { ...Object.fromEntries(table.pk.map((name, index) => [name, values[index]])), mirror_xmin: row.source_xmin, mirror_digest: row.source_digest };
       }));
     }
   } finally { await target.query("CLOSE mirror_staged"); }
 }
 
-async function mirrorPostgresCandidate({ sourceSession, candidatePool, key, expectedSourceDatabase, timeoutMs = 600000 }) {
+async function mirrorPostgresCandidate({ sourceSession, candidatePool, key, expectedSourceDatabase, timeoutMs = 600000, onProgress = () => {} }) {
   if (!Buffer.isBuffer(key) || key.length !== 32) throw Error("root-held mirror HMAC key required");
   if (!sourceSession?.client || !sourceSession.identity || !/^[a-z0-9_]+$/.test(expectedSourceDatabase || "")) throw Error("bound read-only source session required");
   if (candidatePool === sourceSession.pool) throw Error("independent candidate database required");
+  if (typeof onProgress !== "function") throw Error("invalid mirror progress callback");
   const source = sourceSession.client;
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 600000) throw Error("invalid mirror time budget");
-  const deadline = Date.now() + timeoutMs;
+  const startedAt = Date.now(), deadline = startedAt + timeoutMs;
+  let report, stage = "prepare", activeTable = null;
+  const progress = () => onProgress({ stage, table: activeTable, elapsedMs: Date.now() - startedAt,
+    inspectedRows: report?.inspectedRows || 0, copiedRows: report?.copiedRows || 0, verifiedSeedRows: report?.verifiedSeedRows || 0 });
   const withinBudget = () => { if (Date.now() >= deadline) throw Error("candidate mirror time budget exhausted"); };
   if ((await source.query("SHOW transaction_read_only")).rows[0].transaction_read_only !== "on"
     || (await source.query("SHOW transaction_isolation")).rows[0].transaction_isolation !== "repeatable read") throw Error("mirror source must be repeatable-read/read-only");
-  await source.query("SET LOCAL TIME ZONE 'UTC'");
+  await source.query("SET LOCAL TIME ZONE 'UTC'; SET LOCAL DateStyle='ISO, YMD'; SET LOCAL extra_float_digits=3; SET LOCAL bytea_output='hex'");
   const origin = await identity(source);
   if (origin.name !== expectedSourceDatabase) throw Error("mirror source database identity differs");
   const target = await candidatePool.connect();
-  let begun = false;
+  let begun = false, releaseError;
   try {
     const destination = await identity(target);
     if (!/^football_release_[a-f0-9]{12}_[0-9]{1,10}$/.test(destination.name) || destination.name === origin.name) throw Error("independent candidate database required");
-    await target.query("BEGIN; SET LOCAL lock_timeout='2s'; SET LOCAL statement_timeout='120s'; SET LOCAL TIME ZONE 'UTC'"); begun = true;
+    begun = true;
+    await target.query("BEGIN; SET LOCAL lock_timeout='2s'; SET LOCAL statement_timeout='120s'; SET LOCAL TIME ZONE 'UTC'; SET LOCAL DateStyle='ISO, YMD'; SET LOCAL extra_float_digits=3; SET LOCAL bytea_output='hex'");
     if (!(await target.query("SELECT pg_try_advisory_xact_lock(hashtext($1)) AS acquired", [VERSION])).rows[0].acquired) throw Error("candidate mirror busy");
     // Locks apply ONLY to the validated independent candidate. Source readers
     // never block official writers, and the caller's generation lease survives.
@@ -122,11 +131,13 @@ async function mirrorPostgresCandidate({ sourceSession, candidatePool, key, expe
     await source.query(`LOCK TABLE ${tables.map(tableSql).join(",")} IN ACCESS SHARE MODE`);
     await target.query(`LOCK TABLE ${tables.map(tableSql).join(",")} IN ACCESS EXCLUSIVE MODE`);
     if (hash(await catalog(target)) !== hash(targetCatalog)) throw Error("candidate schema changed while acquiring locks");
+    if (hash(await catalog(source)) !== hash(sourceCatalog)) throw Error("source schema changed while acquiring locks");
     const context = { version: VERSION, origin, destination, catalogHash: hash(sourceCatalog) }, contextHash = hash(context);
     await target.query(`CREATE SCHEMA IF NOT EXISTS football_release_private;
       CREATE TABLE IF NOT EXISTS football_release_private.mirror_head(singleton integer PRIMARY KEY CHECK(singleton=1),payload text NOT NULL,mac text NOT NULL);
       CREATE TABLE IF NOT EXISTS football_release_private.mirror_rows(table_name text NOT NULL,key_json text NOT NULL,source_xmin text NOT NULL,target_xmin text NOT NULL,mac text NOT NULL,PRIMARY KEY(table_name,key_json));
-      CREATE TEMP TABLE mirror_seen(table_name text NOT NULL,key_json text NOT NULL,source_xmin text NOT NULL,PRIMARY KEY(table_name,key_json)) ON COMMIT DROP`);
+      CREATE TEMP TABLE mirror_seen(table_name text NOT NULL,key_json text NOT NULL,source_xmin text NOT NULL,source_digest text,PRIMARY KEY(table_name,key_json)) ON COMMIT DROP;
+      CREATE TEMP TABLE mirror_actual(table_name text NOT NULL,key_json text NOT NULL,target_xmin text NOT NULL,target_digest text,PRIMARY KEY(table_name,key_json)) ON COMMIT DROP`);
     const sourceTx = (await source.query("SELECT txid_snapshot_xmax(txid_current_snapshot())::text AS value")).rows[0].value;
     const targetTx = (await target.query("SELECT txid_current()::text AS value")).rows[0].value;
     const head = (await target.query("SELECT payload,mac FROM football_release_private.mirror_head WHERE singleton=1")).rows[0];
@@ -139,18 +150,30 @@ async function mirrorPostgresCandidate({ sourceSession, candidatePool, key, expe
     const recent = (current, prior) => xid(current) && xid(prior) && BigInt(current) >= BigInt(prior)
       && BigInt(current) - BigInt(prior) < 2147483648n;
     const incremental = Boolean(previous && recent(sourceTx, previous.sourceTx) && recent(targetTx, previous.targetTx));
-    const report = { ok: false, version: VERSION, mode: incremental ? "incremental" : "full-seed", database: destination.name,
+    report = { ok: false, version: VERSION, mode: incremental ? "incremental" : "full-seed", database: destination.name,
       publication: sourceSession.identity, inspectedRows: 0, copiedRows: 0, copiedPayloadBytes: 0, reusedRows: 0, removedCandidateRows: 0,
-      batchSize: BATCH, metadataBatchSize: METADATA_BATCH, sourceMetadataPasses: 1, productionWrites: 0, tables: [] };
+      verifiedSeedRows: 0, batchSize: BATCH, metadataBatchSize: METADATA_BATCH, sourceMetadataPasses: 1, productionWrites: 0, tables: [] };
+    const writeStates = async (table, records) => {
+      if (!records.length) return;
+      const values = [], tuples = records.map(record => {
+        const parts = [table.name, record.key, record.sourceXmin, record.targetXmin];
+        parts.push(mac(key, [contextHash, ...parts]));
+        return "(" + parts.map(value => { values.push(value); return "$" + values.length; }).join(",") + ")";
+      });
+      await target.query(`INSERT INTO football_release_private.mirror_rows(table_name,key_json,source_xmin,target_xmin,mac) VALUES ${tuples.join(",")}
+        ON CONFLICT(table_name,key_json) DO UPDATE SET source_xmin=EXCLUDED.source_xmin,target_xmin=EXCLUDED.target_xmin,mac=EXCLUDED.mac`, values);
+    };
     // Populate membership before removing old candidate-only rows in reverse
     // foreign-key order. The canonical source database is never modified.
-    for (const table of tables) await eachSourceBatch(source, table, async rows => {
+    stage = "source-metadata";
+    for (const table of tables) { activeTable = table.name; progress(); await eachSourceBatch(source, table, !incremental, async rows => {
       withinBudget();
       const values = rows.map(row => keyFor(table, row));
-      await target.query("INSERT INTO mirror_seen SELECT $1,unnest($2::text[]),unnest($3::text[])", [table.name, values, rows.map(row => row.mirror_xmin)]);
-    });
+      await target.query("INSERT INTO mirror_seen SELECT $1,unnest($2::text[]),unnest($3::text[]),unnest($4::text[])", [table.name, values, rows.map(row => row.mirror_xmin), rows.map(row => row.mirror_digest || null)]);
+    }); }
     await target.query("ANALYZE mirror_seen");
     for (const table of [...tables].reverse()) {
+      stage = "remove-candidate-only"; activeTable = table.name; progress();
       withinBudget();
       const removed = await target.query(`DELETE FROM ${tableSql(table)} t WHERE NOT EXISTS
         (SELECT 1 FROM mirror_seen s WHERE s.table_name=$1 AND s.key_json=${keySql(table, "t.")})`, [table.name]);
@@ -160,25 +183,41 @@ async function mirrorPostgresCandidate({ sourceSession, candidatePool, key, expe
     // only a superseded candidate head; its changed xmin forces exact recopy.
     const current = (await source.query("SELECT publication_id FROM football.publications WHERE state='current'")).rows.map(row => row.publication_id);
     await target.query("UPDATE football.publications SET state='previous' WHERE state='current' AND NOT(publication_id=ANY($1::text[]))", [current]);
+    // Read the locked candidate heap once, in physical order. Looking up each
+    // 2048-key source batch in a restored database causes random heap/TOAST
+    // reads even though the source cursor itself is sequential. Subsequent
+    // comparisons use this compact candidate-local metadata table only.
     for (const table of tables) {
+      withinBudget(); stage = "candidate-metadata"; activeTable = table.name; progress();
+      await target.query(`INSERT INTO mirror_actual SELECT $1,${keySql(table)},xmin::text,${!incremental ? digestSql(table) : "NULL::text"} FROM ${tableSql(table)}`, [table.name]);
+    }
+    await target.query("ANALYZE mirror_actual");
+    for (const table of tables) {
+      stage = "verify-and-copy"; activeTable = table.name; progress();
       const summary = { table: table.name, rows: 0, copied: 0 };
       await eachStagedBatch(target, table, async rows => {
         withinBudget();
-        const where = keysWhere(table, rows), keys = rows.map(row => keyFor(table, row));
-        const actual = new Map((await target.query(`SELECT ${table.pk.map(name => `${ident(name)}::text AS ${ident(name)}`).join(",")},xmin::text AS mirror_xmin FROM ${tableSql(table)} WHERE ${where.sql}`, where.values)).rows.map(row => [keyFor(table, row), row.mirror_xmin]));
+        const keys = rows.map(row => keyFor(table, row));
+        const actual = new Map((await target.query("SELECT key_json,target_xmin AS mirror_xmin,target_digest AS mirror_digest FROM mirror_actual WHERE table_name=$1 AND key_json=ANY($2::text[])", [table.name, keys])).rows.map(row => [row.key_json, row]));
         const states = new Map((await target.query("SELECT * FROM football_release_private.mirror_rows WHERE table_name=$1 AND key_json=ANY($2::text[])", [table.name, keys])).rows.map(row => [row.key_json, row]));
+        const verified = [];
         const changed = rows.filter(row => {
           const k = keyFor(table, row), state = states.get(k);
           if (!xid(row.mirror_xmin)) throw Error("invalid source transaction identity");
           if (state && !validMac(key, [contextHash, table.name, k, state.source_xmin, state.target_xmin], state.mac)) throw Error("candidate mirror row authentication failed");
-          return !incremental || !state || state.source_xmin !== row.mirror_xmin || state.target_xmin !== actual.get(k);
+          const result = actual.get(k);
+          if (!incremental && result && /^[a-f0-9]{64}$/.test(row.mirror_digest) && result.mirror_digest === row.mirror_digest && xid(result.mirror_xmin)) {
+            verified.push({ key: k, sourceXmin: row.mirror_xmin, targetXmin: result.mirror_xmin }); return false;
+          }
+          return !incremental || !state || state.source_xmin !== row.mirror_xmin || state.target_xmin !== result?.mirror_xmin;
         });
-        summary.rows += rows.length; report.inspectedRows += rows.length; report.reusedRows += rows.length - changed.length;
+        await writeStates(table, verified); report.verifiedSeedRows += verified.length;
+        summary.rows += rows.length; report.inspectedRows += rows.length; report.reusedRows += rows.length - changed.length - verified.length;
         if (!changed.length) return;
         for (let offset = 0; offset < changed.length; offset += BATCH) {
         withinBudget();
         const slice = changed.slice(offset, offset + BATCH), changedWhere = keysWhere(table, slice);
-        const originals = (await source.query(`SELECT ${payloadSql(table)} FROM ${tableSql(table)} WHERE ${changedWhere.sql}`, changedWhere.values)).rows;
+        const originals = (await source.query(`SELECT ${payloadSql(table)},${digestSql(table)} AS mirror_digest FROM ${tableSql(table)} WHERE ${changedWhere.sql}`, changedWhere.values)).rows;
         if (originals.length !== slice.length) throw Error("source snapshot row membership changed");
         const columns = table.columns.filter(col => !col.generated), values = [];
         const tuples = originals.map(row => "(" + columns.map(col => {
@@ -187,19 +226,21 @@ async function mirrorPostgresCandidate({ sourceSession, candidatePool, key, expe
           return `$${values.length}::${col.type}`;
         }).join(",") + ")");
         const update = columns.filter(col => !table.pk.includes(col.name)).map(col => `${ident(col.name)}=EXCLUDED.${ident(col.name)}`).join(",");
-        await target.query(`INSERT INTO ${tableSql(table)} (${columns.map(col => ident(col.name)).join(",")}) VALUES ${tuples.join(",")}
-          ON CONFLICT (${table.pk.map(ident).join(",")}) DO ${update ? "UPDATE SET " + update : "NOTHING"}`, values);
-        const after = new Map((await target.query(`SELECT ${payloadSql(table)},xmin::text AS mirror_xmin FROM ${tableSql(table)} WHERE ${changedWhere.sql}`, changedWhere.values)).rows.map(row => [keyFor(table, row), row]));
-        const sourceXmins = new Map(slice.map(row => [keyFor(table, row), row.mirror_xmin])), stateValues = [];
-        const stateTuples = originals.map(row => {
+        // RETURNING digests avoids transferring gigabytes of original payload
+        // back out of the candidate merely to compare them a second time.
+        // PK-only tables need a no-op UPDATE so RETURNING still covers conflicts.
+        const conflictUpdate = update || `${ident(table.pk[0])}=EXCLUDED.${ident(table.pk[0])}`;
+        const inserted = await target.query(`INSERT INTO ${tableSql(table)} (${columns.map(col => ident(col.name)).join(",")}) VALUES ${tuples.join(",")}
+          ON CONFLICT (${table.pk.map(ident).join(",")}) DO UPDATE SET ${conflictUpdate}
+          RETURNING ${table.pk.map(name => `${ident(name)}::text AS ${ident(name)}`).join(",")},${digestSql(table)} AS mirror_digest,xmin::text AS mirror_xmin`, values);
+        const after = new Map(inserted.rows.map(row => [keyFor(table, row), row]));
+        const sourceXmins = new Map(slice.map(row => [keyFor(table, row), row.mirror_xmin]));
+        const records = originals.map(row => {
           const k = keyFor(table, row), result = after.get(k);
-          if (!result || !xid(result.mirror_xmin) || table.columns.some(col => row[col.name] !== result[col.name])) throw Error("candidate original bytes or generated values differ");
-          const parts = [table.name, k, sourceXmins.get(k), result.mirror_xmin];
-          parts.push(mac(key, [contextHash, ...parts]));
-          return "(" + parts.map(value => { stateValues.push(value); return "$" + stateValues.length; }).join(",") + ")";
+          if (!result || !xid(result.mirror_xmin) || !/^[a-f0-9]{64}$/.test(row.mirror_digest) || row.mirror_digest !== result.mirror_digest) throw Error("candidate original bytes or generated values differ");
+          return { key: k, sourceXmin: sourceXmins.get(k), targetXmin: result.mirror_xmin };
         });
-        await target.query(`INSERT INTO football_release_private.mirror_rows(table_name,key_json,source_xmin,target_xmin,mac) VALUES ${stateTuples.join(",")}
-          ON CONFLICT(table_name,key_json) DO UPDATE SET source_xmin=EXCLUDED.source_xmin,target_xmin=EXCLUDED.target_xmin,mac=EXCLUDED.mac`, stateValues);
+        await writeStates(table, records);
         summary.copied += originals.length; report.copiedRows += originals.length;
         }
       });
@@ -208,10 +249,14 @@ async function mirrorPostgresCandidate({ sourceSession, candidatePool, key, expe
     await target.query("DELETE FROM football_release_private.mirror_rows r WHERE NOT EXISTS(SELECT 1 FROM mirror_seen s WHERE s.table_name=r.table_name AND s.key_json=r.key_json)");
     const payload = { contextHash, sourceTx, targetTx };
     await target.query(`INSERT INTO football_release_private.mirror_head VALUES(1,$1,$2) ON CONFLICT(singleton) DO UPDATE SET payload=EXCLUDED.payload,mac=EXCLUDED.mac`, [JSON.stringify(payload), mac(key, payload)]);
-    withinBudget(); await target.query("COMMIT"); begun = false; report.ok = true; return report;
+    stage = "commit"; activeTable = null; progress();
+    withinBudget(); await target.query("COMMIT"); begun = false; report.ok = true; report.elapsedMs = Date.now() - startedAt; return report;
   } catch (error) {
-    if (begun) await target.query("ROLLBACK");
+    releaseError = error;
+    error.mirrorProgress = { stage, table: activeTable, elapsedMs: Date.now() - startedAt,
+      inspectedRows: report?.inspectedRows || 0, copiedRows: report?.copiedRows || 0, verifiedSeedRows: report?.verifiedSeedRows || 0 };
+    if (begun) try { await target.query("ROLLBACK"); } catch { /* Destroy uncertain connections; preserve the original failure. */ }
     throw error;
-  } finally { target.release(); }
+  } finally { target.release(releaseError); }
 }
 module.exports = { mirrorPostgresCandidate };
