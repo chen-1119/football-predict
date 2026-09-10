@@ -694,14 +694,14 @@ const resultFallbackIndex = workerSource.indexOf("const fiveHundredResultFallbac
 const fastPublishIndex = workerSource.indexOf("await onFastPublished(fastPhase)");
 const officialSyncIndex = workerSource.indexOf("const officialSyncStep = await runCommand");
 const officialGenerationIndex = workerSource.indexOf("const officialGenerationStep = await runOptional");
-const officialSqliteIndex = workerSource.indexOf("const sqliteStep = await runSqliteExportOrReuse");
+const officialSqliteIndex = workerSource.indexOf("const sqliteStep = await runRuntimeProjectionOrReuse");
 const officialPublishIndex = workerSource.indexOf("await onOfficialPublished(officialPhase)");
 const officialLockReleaseIndex = workerSource.indexOf("await releasePhaseLock();", officialPublishIndex);
 const slowEnrichmentIndex = workerSource.indexOf("const enrichmentSteps = []");
 const sourceValidationIndex = workerSource.indexOf("const sourceValidationStep = await runOptional");
 const postEnrichmentValidationIndex = workerSource.indexOf("const postEnrichmentDataValidationStep = {");
 const postEnrichmentPublicationPlanIndex = workerSource.indexOf("const postEnrichmentPublicationPlan =");
-const sourceCycleObservationIndex = workerSource.indexOf("const sourceCycleObservation = readSourceCycleObservation");
+const sourceCycleObservationIndex = workerSource.indexOf("const sourceCycleObservation = await readRuntimeSourceCycleObservation");
 const modelBacktestIndex = workerSource.indexOf("const modelBacktestStep = sourceCycleObservation.ready");
 const autonomousModelLearningIndex = workerSource.indexOf("const autonomousModelLearningStep = await runOptional");
 const modelLearningIndex = workerSource.indexOf("const modelLearningStep = await runOptional");
@@ -744,7 +744,7 @@ const consolidatedValidationIndex = workerSource.indexOf(
   consolidatedFastReconciliationIndex,
 );
 const consolidatedGenerationIndex = workerSource.indexOf("const consolidatedGenerationStep = {");
-const consolidatedSqliteIndex = workerSource.indexOf("const consolidatedSqliteStep = await runSqliteExportOrReuse");
+const consolidatedSqliteIndex = workerSource.indexOf("const consolidatedSqliteStep = await runRuntimeProjectionOrReuse");
 const consolidatedLockReleaseIndex = workerSource.indexOf(
   "await releaseSlowPhaseLock();",
   consolidatedSqliteIndex,
@@ -754,7 +754,7 @@ const consolidatedArtifactLockReleaseIndex = workerSource.indexOf(
   consolidatedSqliteIndex,
 );
 const readinessObservationIndex = workerSource.indexOf(
-  "const readinessSourceCycleObservation = readSourceCycleObservation",
+  "const readinessSourceCycleObservation = await readRuntimeSourceCycleObservation",
   consolidatedSqliteIndex,
 );
 assert.ok(fastResultIndex >= 0);
@@ -955,8 +955,8 @@ assert.deepEqual(
   "the consolidated publication remains fail-closed when validation is not ready",
 );
 assert.ok(
-  workerSource.includes("ok: sqliteExportEnabled === false"),
-  "a requested SQLite export with invalid source-cycle evidence must degrade the cycle"
+  workerSource.includes("ok: runtimeProjectionEnabled === false"),
+  "a requested runtime projection with invalid source-cycle evidence must degrade the cycle"
 );
 assert.ok(
   /sourceCycleObservation\.ready\s*&& process\.env\.ENABLE_AUTONOMOUS_MODEL_LEARNING/.test(workerSource),
@@ -967,8 +967,8 @@ assert.ok(
   "registry learning must fail closed when post-enrichment source-cycle evidence is not ready"
 );
 assert.ok(
-  /consolidatedPublicationRequired[\s\S]*?"datastore:generation"[\s\S]*?consolidatedGenerationStep[\s\S]*?runSqliteExportOrReuse/.test(workerSource),
-  "slow enrichment and strategy output must share one consolidated generation and SQLite export"
+  /consolidatedPublicationRequired[\s\S]*?"datastore:generation"[\s\S]*?consolidatedGenerationStep[\s\S]*?runRuntimeProjectionOrReuse/.test(workerSource),
+  "slow enrichment and strategy output must share one consolidated generation and runtime projection"
 );
 assert.ok(
   workerSource.includes('reason: "strategy-artifacts-unchanged"')
@@ -1552,7 +1552,7 @@ const verifyRelayWake = async () => {
   const end = workerSource.indexOf("let officialPhaseFinishedAt", start);
   assert.ok(start > 0 && end > start);
   const execute = new (Object.getPrototypeOf(async function () {}).constructor)(
-    "onBeforeHeavyStep", "runOptional", "commandTimeouts", "runCommand", "npmCommand", "storeDir", "sqliteExportEnabled", "runSqliteExportOrReuse",
+    "onBeforeHeavyStep", "runOptional", "commandTimeouts", "runCommand", "npmCommand", "storeDir", "runtimeProjectionEnabled", "runRuntimeProjectionOrReuse", "storageMode",
     workerSource.slice(start, end) + "return officialFastResultReconciliationStep;",
   );
   for (const failing of [null, "reconcile:fast-results-generation", "validate:data"]) {
@@ -1560,7 +1560,7 @@ const verifyRelayWake = async () => {
     const record = async name => { calls.push(name); if (name === failing) throw new Error("synthetic-stop"); return {ok:true,script:name}; };
     const task = () => execute(async () => {}, async (enabled, name, env, options) => {
       assert.equal(enabled, true); assert.notEqual(options?.fatal, false); return record(name);
-    }, {validation:1000,sqlite:1000}, async (_npm, args) => record(args[1]), "synthetic-npm", "synthetic-store", true, async () => record("datastore:sqlite"));
+    }, {validation:1000,sqlite:1000}, async (_npm, args) => record(args[1]), "synthetic-npm", "synthetic-store", true, async () => record("datastore:sqlite"), {postgresOnly:false});
     if (failing) await assert.rejects(task, /synthetic-stop/); else assert.equal((await task()).ok, true);
     assert.deepEqual(calls, failing === "reconcile:fast-results-generation" ? [failing]
       : failing === "validate:data" ? ["reconcile:fast-results-generation", failing]

@@ -464,8 +464,18 @@ const withCandidateProspectiveRegistryLock = (
       sleepSync(Math.max(10, Number(retryMs || 0)));
     }
   }
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    try { fs.closeSync(descriptor); }
+    finally {
+      try { releaseCandidateProspectiveRegistryLock(lockFile, owner); }
+      catch { /* protected work has finished; cleanup remains best effort */ }
+    }
+  };
   try {
-    return callback({
+    const result = callback({
       registryFile: resolvedRegistryFile,
       lockFile,
       acquiredAt: owner.acquiredAt,
@@ -473,17 +483,10 @@ const withCandidateProspectiveRegistryLock = (
       pid: owner.pid,
       processStartTime: owner.processStartTime,
     });
-  } finally {
-    try {
-      fs.closeSync(descriptor);
-    } finally {
-      try {
-        releaseCandidateProspectiveRegistryLock(lockFile, owner);
-      } catch {
-        // The protected write already completed; cleanup is best effort.
-      }
-    }
-  }
+    if (result && typeof result.then === "function") return Promise.resolve(result).finally(release);
+    release();
+    return result;
+  } catch (error) { release(); throw error; }
 };
 
 const deepClone = (value) => JSON.parse(JSON.stringify(value));

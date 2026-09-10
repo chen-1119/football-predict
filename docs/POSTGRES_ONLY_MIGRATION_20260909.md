@@ -46,3 +46,14 @@
 - 08:31（北京时间）只读核验线上仍为 r718 后端/r719 前端，serviceOk、dataFresh、采集 2/2、recoveryPending=false；推荐可靠性门槛未放宽。证据：`outputs/fast-runtime-live-state-1789000283055.json`。
 
 下一批明确目标：迁移 `runSyncWorker` 的完整投影/源周期观测/覆盖调度，`reconcileFastResultGeneration` 的回执及归档读取，以及 `captureCandidateProspectiveDeadline` 等旁路读者；然后处理独立 PostgreSQL 候选数据库和发布恢复。此时不能宣称 SQLite 已完成退役，不能关闭线上 SQLite 导出，也不能删除旧库或本地工作树。
+
+## 2026-09-10 采集主链与候选捕获续接（生产未切换）
+
+- `runSyncWorker` 在显式原生模式中执行 `postgres:sync`，不调用 SQLite export；官方阶段、合并补充阶段各沿用原有串行写屏障、校验及不可变 generation 顺序。读取真实 PostgreSQL 源周期和 generation 四字段，不把“关闭导出后的跳过”当作就绪。模型覆盖调度查询 PostgreSQL 实际行数，原生诊断报告 postgres/warehouse，不伪造 SQLite 计数。
+- `syncData` 的初始赛果回执与历史在同一只读快照中读取，最终新回执另开短事务；保留原始观测、比分修订、回执版本名。AI 竞技场 canonical state 保持原有文件写入，原生模式不再建立辅助 SQLite 副本；报告等待 generation projection，实际语义表由原生投影提交。
+- `captureCandidateProspectiveDeadline` 使用 PostgreSQL 小字段投影及截止前预测/赔率查询。原有截止界限、最大查询边界、扩展选样、缺证排除及正式候选先于 benchmark 的顺序不变。候选注册表锁支持异步回调，等待数据库操作结束或失败后才释放。
+- `reconcileFastResultGenerationPostgres` 持有与投影/快赛果写者配对的 shared advisory barrier，整个事务绑定不可变 generation。沿用原始审计/复盘验证，不放宽比分冲突保护。故障测试发现旧归档路径会同时恢复更正前后的比分；原生路径改用已有权威 high-water 校验器选取当前赛果，旧观察仍完整保存在哈希回执中，不能仅凭时间排序覆盖结果。
+- 隔离 PostgreSQL 16.15：38 个原生审计/投影/读取/捕获/归档场景通过，`sqliteAttempts=0`、`productionWrites=0`，测试集群已清理。额外遗留回归：归档 23 项、候选截止捕获 36 项、候选账本 59 项、模型 refreeze 17 项及 worker cadence 通过。证据：`outputs/native-private-audit-result.json`。
+- 09:21（北京时间）只读核验线上仍为已接受的 r718 后端/r719 前端，serviceOk/dataFresh/sourceHealthOk 为 true，采集 2/2，fast receipt revision 7547，recoveryPending=false。证据：`outputs/fast-runtime-live-state-1789003300239.json`。
+
+仍未完成：自主学习小账本 `model-learning.db`、社区研究回执 `observations.sqlite`、实际完整 worker 原生循环集成测试、独立 PostgreSQL 发布候选/备份恢复、生产一次性数据核验与切换、最终部署和本地清理。本批不是生产 SQLite 退役完成的证据；不能先关线上开关或删除旧库。

@@ -546,10 +546,10 @@ const check = (name, fn) => {
 
 check("formal candidate heartbeat runs before the heavier benchmark lane", () => {
   const source = fs.readFileSync(captureScript, "utf8").replace(/\r\n?/g, "\n");
-  const mainStart = source.indexOf("const main = () =>");
-  const candidateCapture = source.indexOf("const result = capture({ deadlineOnly });", mainStart);
+  const mainStart = source.indexOf("const runCaptureMain = async () =>");
+  const candidateCapture = source.indexOf("const result = await capture({ deadlineOnly });", mainStart);
   const benchmarkCapture = source.indexOf(
-    "benchmarkCaptureStatus = publishBenchmarkCaptureStatus(captureBenchmark());",
+    "benchmarkCaptureStatus = publishBenchmarkCaptureStatus(await captureBenchmark());",
     candidateCapture,
   );
   assert.ok(mainStart >= 0);
@@ -837,27 +837,27 @@ check("match-universe preparation stays outside candidate and benchmark ledger l
   for (const [name, startMarker, nextMarker, lockMarker] of [
     [
       "candidate",
-      "const capture = ({ deadlineOnly = false } = {}) => {",
-      "const main = () =>",
+      "const capture = async ({ deadlineOnly = false } = {}) => {",
+      "const runCaptureMain = async () =>",
       "return withCandidateProspectiveRegistryLock(\n    registryFile,",
     ],
     [
       "benchmark",
-      "const captureBenchmark = () => {",
-      "const capture = ({ deadlineOnly = false } = {}) => {",
+      "const captureBenchmark = async () => {",
+      "const capture = async ({ deadlineOnly = false } = {}) => {",
       "return withCandidateProspectiveRegistryLock(\n    benchmarkLedgerFile,",
     ],
   ]) {
     const start = source.indexOf(startMarker);
     const end = source.indexOf(nextMarker, start + startMarker.length);
     const body = source.slice(start, end);
-    const prepare = body.indexOf("const universe = matchUniverse();");
+    const prepare = body.indexOf("const universe = await matchUniverse();");
     const lock = body.indexOf(lockMarker);
     assert.ok(start >= 0 && end > start, `${name} function boundaries are available`);
     assert.ok(prepare >= 0, `${name} prepares the match universe`);
     assert.ok(lock > prepare, `${name} prepares the match universe before taking its ledger lock`);
     assert.equal(
-      body.indexOf("const universe = matchUniverse();", prepare + 1),
+      body.indexOf("const universe = await matchUniverse();", prepare + 1),
       -1,
       `${name} does not repeat heavyweight preparation inside the lock`,
     );

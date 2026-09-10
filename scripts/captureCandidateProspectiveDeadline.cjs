@@ -68,11 +68,12 @@ const {
 
 let DatabaseSync = null;
 let sqliteLoadError = null;
-try {
-  ({ DatabaseSync } = require("node:sqlite"));
-} catch (error) {
-  sqliteLoadError = error;
-}
+const loadSqlite = () => {
+  if (!DatabaseSync && !sqliteLoadError) try { ({ DatabaseSync } = require("node:sqlite")); }
+  catch (error) { sqliteLoadError = error; }
+};
+const { runSynchronousPublication, runAsynchronousPublication } = require("./publicationOperationRunner.cjs");
+let nativeReadSession = null;
 
 const rootDir = path.resolve(__dirname, "..");
 const publicDataDir = path.join(rootDir, "public", "data");
@@ -428,6 +429,7 @@ const sqliteProjectedMatchUniverse = (
   databasePath = sqliteDbPath,
   { historyIdentityValues = null } = {},
 ) => {
+  loadSqlite();
   if (!DatabaseSync) {
     return {
       ok: false,
@@ -667,7 +669,7 @@ const settlementHistoryIdentityValues = ({
   return [...identities].sort();
 };
 
-const matchUniverse = () => {
+const matchUniverse = async () => {
   if (matchUniverseCache) return matchUniverseCache;
 
   // Settlement only needs history rows corresponding to immutable decisions
@@ -691,7 +693,9 @@ const matchUniverse = () => {
             commonCohortG2SuiteFile,
           ],
   });
-  const sqlite = sqliteProjectedMatchUniverse(sqliteDbPath, {
+  const sqlite = nativeReadSession
+    ? await require("./postgresCaptureUniverse.cjs").postgresCaptureUniverse(nativeReadSession, historyIdentityValues)
+    : sqliteProjectedMatchUniverse(sqliteDbPath, {
     historyIdentityValues,
   });
   const currentPayload = readJson(currentMatchesFile, null);
@@ -712,7 +716,7 @@ const matchUniverse = () => {
     sqliteCurrent: sqlite.ok ? sqlite.currentMatches : [],
     sqliteHistory: sqlite.ok ? sqlite.historyMatches : [],
   });
-  const source = sqlite.ok
+  const source = nativeReadSession ? "public-json+postgres-authoritative-merge" : sqlite.ok
     ? "public-json+sqlite-authoritative-merge"
     : "public-json-fallback";
 
@@ -768,12 +772,13 @@ const timestampValue = (value) => {
   return value?.value || value?.at || null;
 };
 
-const sqliteSnapshotsForMatches = (matches, frozenAt, {
+const snapshotReadOperations = function* (matches, frozenAt, {
   dbPath = sqliteDbPath,
   upperBoundForMatch = () => evaluatedAt,
   perMatchLimit = readinessSnapshotsPerMatchLimit,
   ensureSelectable = false,
-} = {}) => {
+  session = null,
+} = {}) {
   if (!matches.length) {
     return {
       ok: true,
@@ -788,7 +793,8 @@ const sqliteSnapshotsForMatches = (matches, frozenAt, {
       reason: "no-due-matches",
     };
   }
-  if (!DatabaseSync) {
+  if (!session) loadSqlite();
+  if (!session && !DatabaseSync) {
     return {
       ok: false,
       complete: false,
@@ -797,7 +803,7 @@ const sqliteSnapshotsForMatches = (matches, frozenAt, {
       reason: sqliteLoadError?.message || "node:sqlite unavailable",
     };
   }
-  if (!fs.existsSync(dbPath)) {
+  if (!session && !fs.existsSync(dbPath)) {
     return {
       ok: false,
       complete: false,
@@ -813,7 +819,7 @@ const sqliteSnapshotsForMatches = (matches, frozenAt, {
   let unresolvedTruncationMatches = 0;
   let db = null;
   try {
-    db = new DatabaseSync(dbPath, { readOnly: true });
+    db = session ? null : new DatabaseSync(dbPath, { readOnly: true });
     for (const match of matches) {
       const ids = matchIdentityValues(match);
       if (!ids.length) continue;
@@ -821,7 +827,7 @@ const sqliteSnapshotsForMatches = (matches, frozenAt, {
       if (!Number.isFinite(Date.parse(upperBound))) continue;
       queriedMatches += 1;
       const placeholders = ids.map(() => "?").join(",");
-      const statement = db.prepare(`
+      const statement = session ? null : db.prepare(`
         SELECT payload
         FROM prediction_snapshots
         WHERE captured_at >= ?
@@ -837,7 +843,11 @@ const sqliteSnapshotsForMatches = (matches, frozenAt, {
       let selected = [];
       let saturated = false;
       while (true) {
-        const queried = statement.all(
+        const queried = session
+          ? (yield session.client.query(`SELECT payload::text AS payload FROM football.prediction_snapshots
+              WHERE captured_at >= $1 AND captured_at <= $2 AND (source_match_id=ANY($3::text[]) OR match_id=ANY($3::text[]))
+              ORDER BY captured_at DESC,id DESC LIMIT $4`, [frozenAt, upperBound, ids, Math.min(snapshotLimit, limit) + 1])).rows
+          : statement.all(
           frozenAt,
           upperBound,
           ...ids,
@@ -875,6 +885,7 @@ const sqliteSnapshotsForMatches = (matches, frozenAt, {
       rows.push(...selected);
     }
   } catch (error) {
+    if (session) throw error;
     return {
       ok: false,
       complete: false,
@@ -916,7 +927,12 @@ const sqliteSnapshotsForMatches = (matches, frozenAt, {
   };
 };
 
+const sqliteSnapshotsForMatches = (matches, frozenAt, options = {}) => runSynchronousPublication(snapshotReadOperations(matches, frozenAt, options));
+const runtimeSnapshotsForMatches = (matches, frozenAt, options = {}) => runAsynchronousPublication(
+  snapshotReadOperations(matches, frozenAt, { session: nativeReadSession, ...options }));
+
 const sqliteOddsForMatches = (matches, activatedAt) => {
+  loadSqlite();
   if (!matches.length) {
     return { ok: true, rows: [], selectedRows: 0, reason: "no-tracked-matches" };
   }
@@ -2333,20 +2349,30 @@ const publishBenchmarkCaptureStatus = (status) => {
   return status;
 };
 
-const captureBenchmark = () => {
+const runtimeOddsForMatches = async (matches, activatedAt, session = nativeReadSession) => {
+  if (!session) return sqliteOddsForMatches(matches, activatedAt);
+  const ids = [...new Set(matches.flatMap(matchIdentityValues))];
+  if (!ids.length) return { ok: true, rows: [], selectedRows: 0, reason: "no-tracked-matches" };
+  const result = await session.client.query(`SELECT payload::text AS payload FROM football.odds_snapshots
+    WHERE captured_at >= $1 AND (source_match_id=ANY($2::text[]) OR match_id=ANY($2::text[]))
+    ORDER BY captured_at ASC,id ASC LIMIT $3`, [activatedAt, ids, oddsLimit]);
+  return { ok: true, rows: parsePayloadRows(result.rows), selectedRows: result.rows.length, reason: null, source: "postgres" };
+};
+
+const captureBenchmark = async () => {
   // Prepare the read-only match universe before taking the append-only ledger
   // lock. SQLite replacement or JSON fallback can be slow under export load,
   // but none of that work needs to block another cutoff writer.
-  const universe = matchUniverse();
+  const universe = await matchUniverse();
   return withCandidateProspectiveRegistryLock(
     benchmarkLedgerFile,
-    () => {
+    async () => {
     const { currentMatches, historyMatches, matches } = universe;
     const priorLedger = readJson(benchmarkLedgerFile, null);
     const atMs = Date.parse(evaluatedAt);
     const dueMatches = benchmarkPendingMatches(priorLedger, matches, atMs);
     const trackedMatches = benchmarkTrackedMatches(priorLedger, matches, dueMatches);
-    const sqliteSnapshots = sqliteSnapshotsForMatches(
+    const sqliteSnapshots = await runtimeSnapshotsForMatches(
       dueMatches,
       GOODWIN_BENCHMARK_SHADOW_POLICY.activatedAt,
       {
@@ -2363,7 +2389,7 @@ const captureBenchmark = () => {
           ...publicSnapshotRows({ observationsOnly: sqliteSnapshots.ok }),
         ])
       : [];
-    const sqliteOdds = sqliteOddsForMatches(
+    const sqliteOdds = await runtimeOddsForMatches(
       trackedMatches,
       GOODWIN_BENCHMARK_SHADOW_POLICY.activatedAt,
     );
@@ -2429,14 +2455,14 @@ const captureBenchmark = () => {
   );
 };
 
-const capture = ({ deadlineOnly = false } = {}) => {
+const capture = async ({ deadlineOnly = false } = {}) => {
   // The universe is immutable for this evaluatedAt. Build it outside the
   // registry lock so the 1.22GB SQLite export lane cannot turn preparation
   // I/O into candidate-ledger lock contention.
-  const universe = matchUniverse();
+  const universe = await matchUniverse();
   return withCandidateProspectiveRegistryLock(
     registryFile,
-    () => {
+    async () => {
     let registry = readJson(registryFile, null);
     const verification = verifyRegistry(registry);
     if (!verification.valid) {
@@ -2595,7 +2621,7 @@ const capture = ({ deadlineOnly = false } = {}) => {
       const kickoffMs = kickoffMsFor(match);
       return Number.isFinite(kickoffMs) && kickoffMs > atMs;
     });
-    const sqlite = sqliteSnapshotsForMatches(
+    const sqlite = await runtimeSnapshotsForMatches(
       snapshotQueryMatches,
       ledger.header?.frozenAt || evaluatedAt,
       {
@@ -2610,7 +2636,7 @@ const capture = ({ deadlineOnly = false } = {}) => {
           ...publicSnapshotRows({ observationsOnly: sqlite.ok }),
         ])
       : [];
-    const readinessSqlite = sqliteSnapshotsForMatches(
+    const readinessSqlite = await runtimeSnapshotsForMatches(
       upcomingMatches,
       ledger.header?.frozenAt || evaluatedAt,
       {
@@ -2955,11 +2981,11 @@ const capture = ({ deadlineOnly = false } = {}) => {
   );
 };
 
-const main = () => {
+const runCaptureMain = async () => {
   const { deadlineOnly, benchmarkOnly } = captureExecutionMode();
   if (benchmarkOnly) {
     try {
-      benchmarkCaptureStatus = publishBenchmarkCaptureStatus(captureBenchmark());
+      benchmarkCaptureStatus = publishBenchmarkCaptureStatus(await captureBenchmark());
       process.stdout.write(`${JSON.stringify(benchmarkCaptureStatus, null, 2)}\n`);
       if (
         benchmarkCaptureStatus?.ok !== true
@@ -2993,7 +3019,7 @@ const main = () => {
   // before the heavier research benchmark work so a worker timeout cannot
   // leave the formal heartbeat stale.
   try {
-    const result = capture({ deadlineOnly });
+    const result = await capture({ deadlineOnly });
     if (result?.ok !== true) process.exitCode = 1;
   } catch (error) {
     const lockBusy = error?.code === "CANDIDATE_PROSPECTIVE_REGISTRY_LOCK_TIMEOUT";
@@ -3037,7 +3063,7 @@ const main = () => {
   if (deadlineOnly) return;
 
   try {
-    benchmarkCaptureStatus = publishBenchmarkCaptureStatus(captureBenchmark());
+    benchmarkCaptureStatus = publishBenchmarkCaptureStatus(await captureBenchmark());
   } catch (error) {
     const lockBusy = error?.code === "CANDIDATE_PROSPECTIVE_REGISTRY_LOCK_TIMEOUT";
     benchmarkCaptureStatus = {
@@ -3055,7 +3081,19 @@ const main = () => {
   }
 };
 
-if (require.main === module) main();
+const main = async () => {
+  try {
+    if (require("../server/storageMode.cjs").readStorageMode().postgresOnly) {
+      nativeReadSession = await require("./postgresRuntimeReadSession.cjs").openPostgresRuntimeReadSession();
+    }
+    await runCaptureMain();
+  } finally { await nativeReadSession?.close(); nativeReadSession = null; }
+};
+if (require.main === module) main().catch(error => {
+  writeStatus({ ok: false, skipped: true, reason: "native-capture-input-unavailable", error: error.message,
+    blockers: ["candidate-deadline-capture-failed"] });
+  process.exitCode = 1;
+});
 
 module.exports = {
   BENCHMARK_ONLY_FLAG,
@@ -3073,6 +3111,8 @@ module.exports = {
   researchSettlementInputFingerprint,
   settlementHistoryIdentityValues,
   sqliteSnapshotsForMatches,
+  runtimeSnapshotsForMatches,
+  runtimeOddsForMatches,
   sqliteProjectedMatchUniverse,
   summarizeDeadlineBatches,
 };
