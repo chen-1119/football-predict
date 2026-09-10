@@ -69,8 +69,31 @@ async function verifyPostgresReleaseMirror({ pool, storeDir, publicDataDir }) {
     checks.push({ name: "unauthenticated mirror receipts and a production database target are refused", ok: true });
     const forged = { ...JSON.parse((await candidatePool.query("SELECT payload FROM football_release_private.mirror_head")).rows[0].payload), sourceTx: "999999999999" };
     await candidatePool.query("UPDATE football_release_private.mirror_head SET payload=$1,mac=$2", [JSON.stringify(forged), crypto.createHmac("sha256", key).update(JSON.stringify(forged)).digest("hex")]);
-    const reseeded = await run(); assert.equal(reseeded.mode, "full-seed"); assert.equal(reseeded.copiedRows, reseeded.inspectedRows);
-    checks.push({ name: "transaction identity horizon changes force exact reseeding instead of unsafe xmin reuse", ok: true });
+    const reseeded = await run(); assert.equal(reseeded.mode, "full-seed"); assert.equal(reseeded.copiedRows, 0);
+    assert.equal(reseeded.verifiedSeedRows, reseeded.inspectedRows); assert.equal(reseeded.reusedRows, 0);
+    checks.push({ name: "transaction identity horizon changes force full original-text SHA256 verification instead of unsafe xmin reuse", ok: true });
+    // A pg_restore-created seed has no trusted per-row HMAC state. Compare all
+    // original column text before signing it, including formatting and NULLs.
+    await candidatePool.query("DROP SCHEMA football_release_private CASCADE");
+    await candidatePool.query("UPDATE football.prediction_snapshots SET payload='{ \"tipCode\": \"X\" }'::json");
+    const restored = await run(); assert.equal(restored.mode, "full-seed"); assert.equal(restored.copiedRows, 1);
+    assert.equal(restored.verifiedSeedRows, restored.inspectedRows - 1); assert.equal(restored.reusedRows, 0);
+    assert.deepEqual(await rows(candidatePool, "prediction_snapshots"), await rows(pool, "prediction_snapshots"));
+    checks.push({ name: "untrusted restored seed is fully hashed, original JSON whitespace differences repaired, matching bytes never retransferred", ok: true });
+    const atomicBefore = await rows(candidatePool, "source_snapshots");
+    await candidatePool.query("UPDATE football.source_snapshots SET payload='{\"rollbackCanary\":true}'::json WHERE id='sync-meta:current'");
+    const changedBeforeFailure = await rows(candidatePool, "source_snapshots");
+    const failureSession = await openPostgresRuntimeReadSession({ pool, storeDir, publicDataDir });
+    try {
+      await assert.rejects(mirrorPostgresCandidate({ sourceSession: failureSession, candidatePool, key, expectedSourceDatabase: source.name,
+        onProgress: state => { if (state.stage === "commit") throw Error("qa budget interruption"); } }), error => {
+        assert.equal(error.mirrorProgress.stage, "commit"); assert.equal(error.mirrorProgress.copiedRows, 1);
+        return /qa budget interruption/.test(error.message);
+      });
+    } finally { await failureSession.close(); }
+    assert.deepEqual(await rows(candidatePool, "source_snapshots"), changedBeforeFailure);
+    assert.equal((await run()).copiedRows, 1); assert.deepEqual(await rows(candidatePool, "source_snapshots"), atomicBefore);
+    checks.push({ name: "late failure rolls back all candidate writes, reports bounded progress and permits a clean subsequent retry", ok: true });
     return { ok: true, checks, productionWrites: 0, candidateDatabaseIsolated: true, warmCopiedPayloadBytes: warm.copiedPayloadBytes };
   } finally {
     // These three rows were created by this isolated test only.

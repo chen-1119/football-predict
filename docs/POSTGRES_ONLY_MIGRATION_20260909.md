@@ -86,3 +86,15 @@
 - 10:53 北京时间复查：线上仍 r718/r719，健康/数据新鲜/赛果完整性正常、采集 2/2、recoveryPending=false。独立镜像库冷/热实库压测还在进行；首轮排序元数据实现暴露随机读取瓶颈，主动取消的 QA 查询已回滚并清除自己的实验库（证据 `outputs/native-candidate-mirror-benchmark-1789009060224.json`），不能报作成功压测。
 
 下一步仍必须完成：原生发布与应用恢复入口接线及故障注入；完整真实 worker 原生循环；线上一次性数据/学习账本/研究回执核验导入；新的签名版本部署及公开/授权接口验收。生产配置和旧数据库尚未切换或删除。本地源代码、未提交内容及回退资料不能当缓存清理。
+
+## 2026-09-10 完整原生 worker 与大库候选核对
+
+- 新增独立 `--worker-cycle` 验收入口：创建全新 PostgreSQL QA 集群、空业务库和独立应用副本；真实执行 worker CLI 及采集、归档校验、generation、`postgres:sync`、完整回测、策略整理、再次 generation/入库。签名上游和补充源均为合成测试样本，不访问外部供应商，不继承生产密钥、连接或文件路径。
+- 11:24:14 北京时间完成的严格循环测试耗时 9,914 ms，41 条 Node 进程退出记录，SQLite 加载尝试 0，外部 HTTP 请求 0，最终 current=1、odds=2、predictions=1，来源周期/generation/PG 身份一致，warnings=[]。测试集群和成功应用副本已清理。证据：`outputs/native-worker-postgres-result.json` 与 `outputs/native-worker-cycle-result.json`。该小样本时间不是生产全量吞吐承诺；自主学习与社区采集仍由之前独立真实数据库测试覆盖。
+- 镜像复制支持 PostgreSQL 备份恢复后的未认证初始库。首次核对每行所有原始列文本的 SHA-256（含 JSON 空白、NULL、二进制及生成列），相同数据只建立 HMAC 基线，不重新传输完整载荷。不同内容仍从只读源修复并通过 INSERT RETURNING 的原始列摘要核对，减少大载荷再次出库。
+- 普通增量仍使用认证的来源/目标 xmin，不因业务时间未变而漏掉内容更新。事务标识跨度超限会进行全内容核对，不直接信任旧身份。失败附带阶段、表名、已扫描/复制计数；回滚失败或提交结果不确定的连接销毁，不返回连接池复用。
+- 两次实库失败均保留为失败证据：空候选复制超过 600 秒；备份恢复后逐主键核对在 600 秒时已核对 1,132,496 行、复制 8,165 行，但仍未完成，未提交候选状态。相关 QA 数据库均清理，生产业务写入和服务重启均为 0。证据 `outputs/native-candidate-mirror-benchmark-1789009720181.json`、`outputs/native-candidate-mirror-benchmark-1789010919257.json`。
+- 后者暴露恢复库的随机堆/TOAST 读取瓶颈。最新实现将候选原始摘要也一次顺序扫描到候选本地临时表；之后只对紧凑元数据进行逐键比较。59 个原生场景及 467 项数据库/API 回归已通过；该实现正在进行新的实库冷/热压测，尚未承诺生产耗时达标。
+- 11:29:27 北京时间再次只读核验：线上仍是 r718 后端/r719 前端，serviceOk/dataFresh/sourceHealthOk/fastResultIntegrityOk=true，采集 2/2、recoveryPending=false。证据 `outputs/fast-runtime-live-state-1789010967084.json`。
+
+尚未完成签名发布/恢复入口接线及生产切换，不能关闭旧链或删除旧库。最新工作交接以 `outputs/postgres-migration-handoff-20260910-v2.json` 为准；早期交接和早期窗口阻塞记录已过时。
