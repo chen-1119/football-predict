@@ -70,6 +70,32 @@ function verifyFrontendRuntimeBoundary() {
       assert.equal(inspection.ok, false, "mutated input must itself reject, not merely differ from baseline");
       rejected(candidate);
     };
+    check("warm parse cache rechecks local import resolution when a higher-priority file appears", () => {
+      changed("server/boundary-cache-fixture.js", () => "module.exports = {};\n", () => {
+        changed("server/index.cjs", text => `${text}\nrequire('./boundary-cache-fixture');\n`, candidate => {
+          assert.equal(inspectFrontendRuntimeBoundary(candidate).ok, true);
+          changed("server/boundary-cache-fixture.cjs", () => "require('../src/pages/PredictionsList.tsx');\n", replacement => {
+            const warm = inspectFrontendRuntimeBoundary(replacement);
+            assert.equal(warm.ok, false, "warm cached resolution must not hide newly reachable UI code");
+            assert.ok(warm.blockers.some(reason => reason.includes("runtime-ui-boundary-overlap")));
+          });
+          changed("server/boundary-cache-fixture.cjs", () => "module.exports = { changedTarget: true };\n", replacement => {
+            const warm = inspectFrontendRuntimeBoundary(replacement);
+            assert.equal(warm.ok, true);
+            assert.ok(warm.imports.some(row => row.specifier === "./boundary-cache-fixture" && row.target.endsWith(".cjs")));
+            const modulePath = require.resolve("./frontendRuntimeBoundary.cjs"), originalModule = require.cache[modulePath];
+            delete require.cache[modulePath];
+            try {
+              const cold = require(modulePath).inspectFrontendRuntimeBoundary(replacement);
+              assert.deepEqual(warm, cold, "cache history must not change resolved edges or acceptance evidence");
+            } finally { require.cache[modulePath] = originalModule; }
+          });
+          const fallback = inspectFrontendRuntimeBoundary(input(candidateRoot));
+          assert.equal(fallback.ok, true);
+          assert.ok(fallback.imports.some(row => row.specifier === "./boundary-cache-fixture" && row.target.endsWith(".js")));
+        });
+      });
+    });
     check("real page-only mutation preserves exact runtime closure without activating deployment", () => {
       changed("src/pages/PredictionsList.tsx", text => `${text}\n// UI-only fixture change\n`, candidate => {
         const result = compareFrontendRuntimeBoundary({ baseline, candidate });
