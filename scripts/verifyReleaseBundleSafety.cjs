@@ -419,6 +419,7 @@ const requiredReleaseEntries = [
   "scripts/reconcileFastResultGeneration.cjs",
   "scripts/verifyFastResultGenerationReconciliation.cjs",
   "scripts/verifyReleaseVerifierContracts.cjs",
+  "scripts/verifyPartialPolicyReplayState.cjs",
   "scripts/productionFixtureIsolationContract.cjs",
   "scripts/verifyProductionFixtureIsolationContract.cjs",
   "scripts/verifyProductionFixtureIsolation.cjs",
