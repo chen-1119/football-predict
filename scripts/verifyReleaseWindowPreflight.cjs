@@ -145,6 +145,10 @@ function runCreatePrefix(source, options = {}) {
       if (name === "./releaseSigning.cjs") return signing;
       if (name === "./historicalTrainingReleaseArtifact.cjs") return { HISTORICAL_TRAINING_RELEASE_ENTRY: "fixture.json", inspectHistoricalTrainingFile: () => ({ ok: true }) };
       if (["./releaseWorkspaceFreshness.cjs", "./releaseBundlePolicy.cjs", "./releasePrebuiltDist.cjs", "./releaseArchiveSourceInventory.cjs"].includes(name)) return {};
+      if (name === "./runReleaseWorkerPreflight.cjs") return { runLiveWorkerPreflight: () => {
+        calls.push("worker"); if (options.workerThrows) throw new Error("fixture worker observation unavailable");
+        return { ok: options.workerOpen !== false, blockers: options.workerOpen === false ? ["worker-latest-official-cycle-failed"] : [], readyToCutover: false };
+      } };
       if (name === "./runReleaseWindowPreflight.cjs") return { runLiveReleaseWindowPreflight: ({ stage }) => {
         assert.equal(stage, "before-build");
         calls.push("window"); if (options.windowThrows) throw new Error("fixture window unavailable"); return { ok: options.windowOpen !== false, readyToCutover: false };
@@ -335,11 +339,18 @@ function verifyReleaseWindowPreflight() {
       else { assert.throws(run); assert.deepEqual(calls, ["window"]); }
     }
   });
-  check("actual online create prefix runs window before archive, preSign, sequence reservation and build", () => {
+  check("actual online create prefix runs worker then window before archive, preSign, sequence reservation and build", () => {
     const result = runCreatePrefix(create); assert.equal(result.ok, true, result.error);
-    assert.deepEqual(result.calls, ["sequence-preflight", "window", "archive", "preSign", "reserve", "build"]);
+    assert.deepEqual(result.calls, ["sequence-preflight", "worker", "window", "archive", "preSign", "reserve", "build"]);
     for (const options of [{ windowOpen: false }, { windowThrows: true }]) {
-      const rejected = runCreatePrefix(create, options); assert.equal(rejected.ok, false); assert.deepEqual(rejected.calls, ["sequence-preflight", "window"]);
+      const rejected = runCreatePrefix(create, options); assert.equal(rejected.ok, false); assert.deepEqual(rejected.calls, ["sequence-preflight", "worker", "window"]);
+    }
+  });
+  check("actual online create stops at a failed or unavailable worker before window and all build side effects", () => {
+    for (const options of [{ workerOpen: false }, { workerThrows: true }]) {
+      const rejected = runCreatePrefix(create, options);
+      assert.equal(rejected.ok, false); assert.deepEqual(rejected.calls, ["sequence-preflight", "worker"]);
+      assert.match(rejected.error, options.workerThrows ? /worker observation unavailable/ : /worker-latest-official-cycle-failed/);
     }
   });
   check("actual offline create prefix makes no live calls and explicitly reports no window authority", () => {
