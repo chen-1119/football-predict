@@ -156,28 +156,35 @@ async function verifyFrontendReleaseConsumers() {
   const deployBlock = deploySource.slice(deployStart, deploySource.indexOf("\nif (releaseStep.ok === true)", deployStart)); assert.ok(deployStart > 0);
   const helpers = deploySource.slice(deploySource.indexOf("const parseKeyValue ="), deploySource.indexOf("const buildRemotePreflightCommand ="));
   const deploy = (proof, full = false, exitStatus = 0, options = {}) => {
-    let businessChecks = 0; const releaseCandidate = full ? { releaseKind: "full", sha256: runtimeSha, releaseSequence: 711 } : candidate;
+    let businessChecks = 0, publicEnvironment = null; const releaseCandidate = full ? { releaseKind: "full", sha256: runtimeSha, releaseSequence: 711 } : candidate;
     const state = { bundleSha256: releaseCandidate.sha256, status: "complete", ok: "1", exitCode: "0", finishedAt: "2026-09-08T00:00:00.000Z", ...options.status };
     const status = Object.entries(state).map(([key, value]) => key + "=" + value).join("\n") + "\n";
     const transcript = "---status---\n" + status + "---marker---\n" + (options.marker ?? runtimeSha) + "\n---live-complete---\n" + (options.liveComplete ?? runtimeSha) +
       "\n---frontend-identity---\n" + JSON.stringify(proof) + "\n---log-tail---\n---units---\nactive\nactive\nactive\nactive\n";
-    const context = { release: { status: exitStatus }, frontendOnly: !full, releaseCandidate, actualSha256: releaseCandidate.sha256, dryRun: false,
+    const context = { release: { status: exitStatus }, frontendOnly: !full, nativeFullRelease: full && options.native === true, releaseCandidate, actualSha256: releaseCandidate.sha256, dryRun: false,
       releaseStep: { ok: exitStatus === 0 }, steps: [], shellQuote: String, buildFrontendIdentityReaderSource: () => "reviewedInlineReader",
       frontendIdentityMatchesCandidate: identity.frontendIdentityMatchesCandidate, process: { execPath: "fixture-node", env: {} },
       remoteReleaseStatusPath: "/fixture/status", remoteReleaseLogPath: "/fixture/log", recoveryAttempts: 1, recoveryRetryDelayMs: 0,
       sshOptions: [], sshTarget: "fixture", publicBaseUrl: "https://fixture.invalid", parseJson,
-      runCommand: command => {
+      runCommand: (command, _args, runOptions) => {
         if (command === "ssh") return { status: options.sshStatus ?? 0, stdout: transcript };
-        assert.equal(command, "fixture-node"); businessChecks++; return { status: options.publicStatus ?? 0, stdout: options.publicBody ?? '{"ok":true}' };
+        assert.equal(command, "fixture-node"); publicEnvironment = runOptions.env; businessChecks++; return { status: options.publicStatus ?? 0, stdout: options.publicBody ?? '{"ok":true}' };
       },
     };
-    vm.runInNewContext(helpers + "\n" + deployBlock, context); return { ...context, businessChecks };
+    vm.runInNewContext(helpers + "\n" + deployBlock, context); return { ...context, businessChecks, publicEnvironment };
   };
   await check("actual deploy success and transport-recovery UI branches require receipt proof and never rerun business verification", () => {
     for (const exit of [0, 255]) { const result = deploy(frontend, false, exit); assert.equal(result.releaseStep.ok, true); assert.equal(result.businessChecks, 0); }
     assert.equal(deploy({ ...frontend, consistent: false }).releaseStep.ok, false);
     assert.equal(deploy({ ...frontend, frontendSha256: runtimeSha }).releaseStep.ok, false);
     const full = deploy(null, true, 255); assert.equal(full.releaseStep.ok, true); assert.equal(full.businessChecks, 1);
+    assert.equal(full.publicEnvironment.REMOTE_REQUIRE_SQLITE, "1");
+    assert.equal(full.publicEnvironment.REMOTE_REQUIRE_POSTGRES_ONLY, "0");
+    const native = deploy(null, true, 255, { native: true });
+    assert.equal(native.releaseStep.ok, true); assert.equal(native.businessChecks, 1);
+    assert.equal(native.publicEnvironment.REMOTE_REQUIRE_SQLITE, "0");
+    assert.equal(native.publicEnvironment.REMOTE_REQUIRE_POSTGRES_ONLY, "1");
+    assert.equal(native.publicEnvironment.REMOTE_REQUIRED_READ_SOURCE, "postgres");
   });
   const fullRecoveryRouting = { cases: 0, assertions: 0 };
   await check("actual full recovery checks matching completion before public verification and preserves UI separation", () => {
