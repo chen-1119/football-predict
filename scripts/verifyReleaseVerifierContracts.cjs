@@ -48,6 +48,20 @@ check('candidate observation prefix overflow stays bounded before signing', () =
   assert.equal(report.productionWrites, 0); assert.equal(report.providerRequests, 0);
 });
 const bundle=read('scripts/createReleaseBundle.cjs'),safety=read('scripts/verifyReleaseBundleSafety.cjs');
+check('large-file foundation reader and regression are included in signed source', () => {
+  for (const entry of ['server/chunkedJsonFile.cjs', 'scripts/verifyChunkedJsonFoundation.cjs']) {
+    assert.ok(bundle.includes('"' + entry + '"')); assert.ok(safety.includes('"' + entry + '"'));
+  }
+  const child = require('node:child_process').spawnSync(process.execPath, ['scripts/verifyChunkedJsonFoundation.cjs'],
+    { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 60000, maxBuffer: 1024 * 1024 });
+  assert.equal(child.status, 0, child.stderr || child.stdout);
+  const report = JSON.parse(child.stdout);
+  assert.equal(report.ok, true); assert.equal(report.verifier, 'chunked-json-foundation-v1');
+  assert.ok(report.checks.every(row => row.ok === true));
+  assert.equal(report.productionWrites, 0); assert.equal(report.providerRequests, 0);
+  assert.ok(report.boundaryProof.bytes > require('node:buffer').constants.MAX_STRING_LENGTH);
+  assert.equal(report.boundaryProof.readers, 5);
+});
 check('model gate exposes bounded failed names without changing admission or leaking rows',()=>{
   const start=readiness.indexOf('    const modelPromotionSummary =');
   const end=readiness.indexOf('\n    const ragNeutrality',start);assert.ok(start>=0&&end>start);

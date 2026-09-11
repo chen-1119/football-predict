@@ -484,6 +484,17 @@ const readGenerationFile = (context, inputPath, { encoding = null, parseJson = f
   const absolutePath = path.join(context.generationDir, ...relativePath.split("/"));
   const stat = assertPlainFile(absolutePath, relativePath);
   if (stat.size !== entry.bytes) fail("FILE_SIZE_MISMATCH", `generation file size mismatch: ${relativePath}`);
+  // Preserve the native parser's small-file latency on request/cache paths.
+  // Large projections never enter the file-sized Buffer/string branch below.
+  if (parseJson && stat.size >= 32 * 1024 * 1024) {
+    try {
+      return require("./chunkedJsonFile.cjs").readChunkedJsonFile(absolutePath, {
+        expectedBytes: entry.bytes, expectedSha256: entry.sha256,
+      }).value;
+    } catch (error) {
+      fail(error.code || "FILE_READ_FAILED", `${relativePath}: ${error.message}`);
+    }
+  }
   const bytes = fs.readFileSync(absolutePath);
   const actualHash = sha256(bytes);
   if (actualHash !== entry.sha256) fail("FILE_HASH_MISMATCH", `generation file hash mismatch: ${relativePath}`);

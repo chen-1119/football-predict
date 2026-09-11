@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const crypto = require("node:crypto");
 const path = require("node:path");
+const { readChunkedJsonFile } = require("./chunkedJsonFile.cjs");
 const {
   DataGenerationError,
   acquirePointerCommitLock,
@@ -65,20 +66,6 @@ const isPlainObject = (value) => Boolean(
 );
 
 const validIso = (value) => Number.isFinite(Date.parse(String(value || "")));
-
-const parseJsonBytes = (bytes, relativePath) => {
-  try {
-    const json = Buffer.isBuffer(bytes)
-      ? bytes.toString("utf8")
-      : Buffer.from(bytes).toString("utf8");
-    return JSON.parse(json);
-  } catch (error) {
-    fail("GENERATION_JSON_INVALID", `invalid JSON in ${relativePath}`, {
-      relativePath,
-      cause: error.message || String(error),
-    });
-  }
-};
 
 const collectReleasedPayloads = () => {
   if (typeof global.gc === "function") global.gc();
@@ -650,11 +637,15 @@ const readMutableBundle = ({ publicDataDir }) => {
   const readPayload = (relativePath) => {
     const entry = files.get(relativePath);
     if (!entry) fail("GENERATION_CORE_FILE_MISSING", `missing ${relativePath}`);
-    const bytes = fs.readFileSync(entry.filePath);
-    const payload = parseJsonBytes(bytes, relativePath);
+    let parsed;
+    try { parsed = readChunkedJsonFile(entry.filePath); } catch (error) {
+      fail(error.code === "FILE_JSON_INVALID" ? "GENERATION_JSON_INVALID" : (error.code || "GENERATION_READ_FAILED"),
+        `cannot read ${relativePath}`, { relativePath, cause: error.message });
+    }
+    const payload = parsed.value;
     observations.set(relativePath, Object.freeze({
-      sha256: crypto.createHash("sha256").update(bytes).digest("hex"),
-      bytes: bytes.length,
+      sha256: parsed.evidence.sha256,
+      bytes: parsed.evidence.bytes,
       rows: rowsForPayload(payload),
     }));
     return payload;
@@ -912,8 +903,10 @@ const readPublicationJson = (publication, relativePath, fallback = null) => {
     }
   }
   try {
-    return JSON.parse(fs.readFileSync(path.join(publication.publicDataDir, relativePath), "utf8"));
-  } catch {
+    return readChunkedJsonFile(path.join(publication.publicDataDir, relativePath)).value;
+  } catch (error) {
+    // An existing unreadable core file is not an empty bootstrap dataset.
+    if (definition?.required && error.code !== "ENOENT") throw error;
     return fallback;
   }
 };

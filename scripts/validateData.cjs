@@ -30,7 +30,7 @@ const storeDir = path.resolve(process.env.SERVER_STORE_DIR || process.env.DATA_S
 const unresolvedArchivePath = path.resolve(
   process.env.UNRESOLVED_MATCH_ARCHIVE_PATH || path.join(storeDir, "matches-unresolved-archive.json")
 );
-const readJson = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
+const readJson = (file) => require("../server/chunkedJsonFile.cjs").readChunkedJsonFile(file).value;
 const validateLegacyStaticPayloads = process.env.WRITE_LEGACY_STATIC_PAYLOADS !== "0";
 const validateDistMirrors = process.env.MIRROR_PUBLISHED_DATA_TO_DIST !== "0";
 const allowLargeStaticDist = process.env.ALLOW_LARGE_STATIC_DIST === "1";
@@ -556,9 +556,7 @@ if (fs.existsSync(distDir)) {
       errors.push(`dist/${fileName} must mirror public/${fileName}.`);
       continue;
     }
-    const publicText = fs.readFileSync(publicFile, "utf8");
-    const distText = fs.readFileSync(distFile, "utf8");
-    if (publicText !== distText) {
+    if (!require("./syncData.cjs").filesHaveSameBytes(publicFile, distFile)) {
       errors.push(`dist/${fileName} is stale; rerun sync:data to mirror current public data.`);
     }
   }

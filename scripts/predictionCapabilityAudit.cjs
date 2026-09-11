@@ -495,8 +495,9 @@ const buildCapabilityAudit = ({
 const readJson = (file, fallback) => {
   if (!fs.existsSync(file)) return fallback;
   try {
-    return JSON.parse(fs.readFileSync(file, "utf8"));
-  } catch {
+    return require("../server/chunkedJsonFile.cjs").readChunkedJsonFile(file).value;
+  } catch (error) {
+    if (path.basename(file) === "prediction-snapshots.json") throw error;
     return fallback;
   }
 };
@@ -528,7 +529,7 @@ const main = () => {
   };
   const sourceHashes = Object.fromEntries(Object.entries(files).map(([key, file]) => [
     key,
-    fs.existsSync(file) ? sha256(fs.readFileSync(file)) : null,
+    fs.existsSync(file) ? require("../server/dataGenerationStore.cjs").sha256File(file) : null,
   ]));
   const audit = buildCapabilityAudit({
     matches: readJson(files.matches, []),

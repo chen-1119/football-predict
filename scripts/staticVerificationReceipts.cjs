@@ -24,13 +24,14 @@ const PROFILES = Object.freeze({
   }),
   "scripts/verifySelectedJsonObjectFile.cjs": Object.freeze({
     auditedSha256: "dd7a7bf88d5fe626d8c3317e4a031310f699be3acc7554261927dcc54f84934a",
-    files: ["server/selectedJsonObjectFile.cjs", "server/dataGenerationStore.cjs"],
+    files: ["server/selectedJsonObjectFile.cjs", "server/dataGenerationStore.cjs", "server/chunkedJsonFile.cjs"],
     trees: [],
-    // These two CJS modules execute; pin their audited code as well as hashing
+    // These CJS modules execute; pin their audited code as well as hashing
     // actual input bytes. A newly introduced dependency requires a new audit.
     auditedModules: Object.freeze({
       "server/selectedJsonObjectFile.cjs": "b0d447e3b2060c1f0a8783b8b0b88ac934e9ffc62fb8d6dc24d8b63735665373",
-      "server/dataGenerationStore.cjs": "8bfb4413fb3fad6d7dd118040fda04f8a02ca06880cb275050af8db6cd476dd4",
+      "server/dataGenerationStore.cjs": "d4560309af14336d90fc24903b321c8374c1574a492e4cb8f27bfe2cb71875fb",
+      "server/chunkedJsonFile.cjs": "da65cde36f12868209d29f830d49c2ba37c27e6931e3a46dfac1a02d799705c3",
     }),
     absentEnvironment: ["VERIFY_SELECTED_JSON_SKIP_LARGE"],
     resultContract: "selected-json-complete-v1",

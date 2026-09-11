@@ -55,6 +55,9 @@ const rootDir = path.resolve(__dirname, "..");
 // unrestorable originals before any sequence reservation or frontend build.
 // Offline bundle creation does not claim live readiness; deployment rechecks.
 if (process.env.RELEASE_DEPLOY_KEY) {
+  const workerPreflight = require("./runReleaseWorkerPreflight.cjs").runLiveWorkerPreflight();
+  console.error(JSON.stringify({ phase: "worker-preflight-before-build", ...workerPreflight }));
+  if (!workerPreflight.ok) throw new Error(`release foundation unavailable before sequence reservation and build: ${workerPreflight.blockers.join(",")}`);
   const windowPreflight = require("./runReleaseWindowPreflight.cjs").runLiveReleaseWindowPreflight({ stage: "before-build" });
   console.error(JSON.stringify({ phase: "window-preflight-before-build", ...windowPreflight }));
   if (!windowPreflight.ok) throw new Error("release window unavailable before archive preflight, sequence reservation and build");
@@ -400,6 +403,7 @@ const requiredEntries = [
   "scripts/verifyCandidateProspectiveAdmission.cjs",
   "server/dataGenerationBundle.cjs",
   "server/dataGenerationStore.cjs",
+  "server/chunkedJsonFile.cjs",
   "src/services/apiFootballRuntimePolicy.cjs",
   "src/services/collectorAttestation.cjs",
   "src/services/dualMarketDecisionBinding.cjs",
@@ -601,6 +605,7 @@ const requiredEntries = [
   "scripts/verifyProductionFixtureIsolation.cjs",
   "scripts/readCandidatePublicObservations.cjs",
   "scripts/verifyCandidatePublicObservations.cjs",
+  "scripts/verifyChunkedJsonFoundation.cjs",
   "scripts/verifyPostgresSemanticReviewCleanup.cjs",
   "scripts/verifyFastResultPublication.cjs",
   "scripts/verifyFastResultProductionClone.cjs",
@@ -641,6 +646,7 @@ const requiredEntries = [
   "scripts/verifyQaAccessOperator.cjs",
   "scripts/verifyReleaseTransactionSafety.cjs",
   "scripts/releaseWorkerPreflight.cjs",
+  "scripts/runReleaseWorkerPreflight.cjs",
   "scripts/releaseWorkspaceFreshness.cjs",
   "scripts/verifyReleaseWorkspaceFreshness.cjs",
   "scripts/releaseProgress.cjs",
