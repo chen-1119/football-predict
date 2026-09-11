@@ -85,7 +85,7 @@
     "compact:datastore": "node scripts/compactDataStore.cjs",
     "datastore:generation": "node --expose-gc scripts/commitCurrentDataGeneration.cjs",
     "datastore:migrate-archives": "node scripts/migrateArchivedPreMatchReferences.cjs",
-    "datastore:sqlite": "node scripts/exportDataStoreSqlite.cjs && node scripts/syncPostgresProjection.cjs --if-enabled",
+    "datastore:sqlite": "node --expose-gc scripts/exportDataStoreSqlite.cjs && node scripts/syncPostgresProjection.cjs --if-enabled",
     "postgres:migrate-schema": "node scripts/migratePostgresSchema.cjs",
     "postgres:backfill": "node scripts/syncPostgresProjection.cjs --backfill",
     "postgres:sync": "node scripts/syncPostgresProjection.cjs --mode=incremental",

@@ -1126,6 +1126,19 @@ const publicSnapshotRows = ({ observationsOnly = false } = {}) => {
       rowsLoaded: 0,
       reason: prefix.reason,
     };
+    if (prefix.fileBytes > publicSnapshotPrefixMaxBytes) {
+      // Preserve every current observation, including arrays larger than the
+      // prefix window, without loading the unrelated historical state rows.
+      // Corruption, concurrent replacement and memory bounds fail closed.
+      const selected = require("./readCandidatePublicObservations.cjs").readCandidatePublicObservations(publicSnapshotsFile);
+      publicSnapshotObservationCache = selected.rows;
+      publicSnapshotReadAudit = {
+        version: "candidate-public-snapshot-read-audit-v1", mode: "observations-streamed",
+        bytesRead: prefix.bytesRead + selected.bytesRead, fileBytes: selected.fileBytes,
+        rowsLoaded: selected.rows.length, reason: null,
+      };
+      return publicSnapshotObservationCache;
+    }
   }
   const payload = readJson(publicSnapshotsFile, []);
   if (Array.isArray(payload)) return payload;

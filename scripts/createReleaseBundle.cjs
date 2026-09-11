@@ -599,6 +599,8 @@ const requiredEntries = [
   "scripts/productionFixtureIsolationContract.cjs",
   "scripts/verifyProductionFixtureIsolationContract.cjs",
   "scripts/verifyProductionFixtureIsolation.cjs",
+  "scripts/readCandidatePublicObservations.cjs",
+  "scripts/verifyCandidatePublicObservations.cjs",
   "scripts/verifyPostgresSemanticReviewCleanup.cjs",
   "scripts/verifyFastResultPublication.cjs",
   "scripts/verifyFastResultProductionClone.cjs",
