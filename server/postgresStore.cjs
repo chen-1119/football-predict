@@ -160,6 +160,22 @@ const runPostgresMigrations = async (pool) => withPostgresTransaction(
   },
 );
 
+// Native HTTP startup must be usable with a read-only candidate role. Schema
+// changes belong to the explicit release/migration lane, not every restart.
+const verifyPostgresSchemaCurrent = async (pool) => {
+  const expected = listMigrationFiles().map(fileName => ({ version: fileName.replace(/\.sql$/i, ""),
+    sha256: migrationSha256(fs.readFileSync(path.join(migrationsDir, fileName), "utf8")) }));
+  return withPostgresTransaction(pool, async client => {
+    await client.query("SET TRANSACTION READ ONLY");
+    const rows = (await client.query("SELECT version,sha256 FROM football.schema_migrations ORDER BY version COLLATE \"C\"")).rows;
+    if (rows.length !== expected.length || rows.some((row, index) => row.version !== expected[index].version || row.sha256 !== expected[index].sha256)) {
+      const error = new Error("Native runtime requires the exact explicitly installed PostgreSQL schema");
+      error.code = "POSTGRES_NATIVE_SCHEMA_MISMATCH"; throw error;
+    }
+    return { ok: true, applied: [], verified: expected.length, readOnly: true };
+  }, { isolationLevel: "REPEATABLE READ" });
+};
+
 const getPostgresHealth = async (pool) => {
   const startedAt = Date.now();
   const result = await pool.query(`
@@ -193,6 +209,7 @@ module.exports = {
   postgresSsl,
   postgresWriteEnabled,
   runPostgresMigrations,
+  verifyPostgresSchemaCurrent,
   sha256,
   withPostgresTransaction,
 };

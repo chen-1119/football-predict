@@ -23,6 +23,11 @@ const start=coverage.lastIndexOf('  pushCheck(',position),end=coverage.indexOf('
 assert.ok(start>0&&end>start);
 const chunk=coverage.slice(start,end);
 const readiness=read('scripts/verifyProductionReadiness.cjs');
+check('actual fixture-isolation producer and readiness consumer agree before signing', () => {
+  const report = require('./verifyProductionFixtureIsolationContract.cjs').run();
+  assert.equal(report.ok, true); assert.ok(report.checks.every(row => row.ok === true));
+  assert.equal(report.productionWrites, 0); assert.equal(report.providerRequests, 0);
+});
 const bundle=read('scripts/createReleaseBundle.cjs'),safety=read('scripts/verifyReleaseBundleSafety.cjs');
 check('model gate exposes bounded failed names without changing admission or leaking rows',()=>{
   const start=readiness.indexOf('    const modelPromotionSummary =');
@@ -123,6 +128,8 @@ check('fixed hypothesis lineage survives competing retrospective winners before 
   assert.equal(result.ok, true); assert.ok(result.checks >= 11);
 });
 const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/services/apiFootballDiagnostics.d.cts',
+  'scripts/productionFixtureIsolationContract.cjs', 'scripts/verifyProductionFixtureIsolationContract.cjs',
+  'scripts/verifyProductionFixtureIsolation.cjs',
   'scripts/releasePrivateModelSeed.cjs', 'scripts/verifyReleasePrivateModelSeed.cjs',
   'scripts/verifyFrontendRuntimeAlternatives.cjs',
   'scripts/frontendReleaseInputs.cjs', 'scripts/prepareFrontendRelease.cjs', 'scripts/verifyFrontendReleaseInputs.cjs',

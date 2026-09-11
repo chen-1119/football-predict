@@ -6,6 +6,7 @@ const https = require("node:https");
 const path = require("node:path");
 const { runWithStaticReceipt } = require("./staticVerificationReceipts.cjs");
 const { recordCheck, probeCurrentList } = require("./releaseReadinessPolicy.cjs");
+const { isolationReportPassed } = require("./productionFixtureIsolationContract.cjs");
 const diagnosticAll = process.env.VERIFY_DIAGNOSTIC_ALL === "1";
 const {
   publicHhadCompanionSchemaValid,
@@ -626,9 +627,7 @@ const run = async () => {
   );
   const fixtureIsolation = await runLocalJson(["scripts/verifyProductionFixtureIsolation.cjs"]);
   pushCheck(checks, "temporary verifier servers reject inherited production database settings",
-    fixtureIsolation.status === 0 && fixtureIsolation.body?.ok === true
-      && fixtureIsolation.body?.checks?.length === 3
-      && fixtureIsolation.body.checks.every((check) => check.ok === true), {
+    fixtureIsolation.status === 0 && !fixtureIsolation.timedOut && isolationReportPassed(fixtureIsolation.body), {
       status: fixtureIsolation.status,
       checks: fixtureIsolation.body?.checks || [],
       stdoutTail: fixtureIsolation.status === 0 ? "" : fixtureIsolation.stdout.slice(-500),
