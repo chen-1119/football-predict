@@ -402,6 +402,26 @@ class SystemAdapter {
     try { return JSON.parse(result.stdout.trim()); } catch { fail("invalid native database identity response"); }
   }
 
+  reopenBoundNativeDatabase(contract, nativeWasActive) {
+    if (TEST_MODE) return; // native-connection-fence fixture boundary
+    const expectedOid = nativeWasActive ? contract.newDatabaseOid : contract.oldDatabaseOid;
+    // Only the still-bound football database is reopened. The archived old
+    // database stays closed. A failed/uncertain catalog fence never requires a
+    // database restore or a rollback of newly committed business data.
+    const sql = `BEGIN; SET LOCAL lock_timeout='2s'; SET LOCAL statement_timeout='5s';
+      DO $fence$ BEGIN
+        IF (SELECT system_identifier::text FROM pg_control_system()) <> '${contract.clusterId}'
+          OR (SELECT oid::text FROM pg_database WHERE datname='football') IS DISTINCT FROM '${expectedOid}'
+        THEN RAISE EXCEPTION 'native connection fence identity changed'; END IF;
+      END $fence$;
+      ALTER DATABASE football ALLOW_CONNECTIONS true; COMMIT;`;
+    const result = spawnSync("/usr/sbin/runuser", ["-u", "postgres", "--", "/usr/bin/psql", "--no-psqlrc", "--quiet", "--tuples-only", "--no-align", "--set=ON_ERROR_STOP=1", "--dbname=postgres"], {
+      env: { PATH: "/usr/bin:/bin", PGHOST: "/var/run/postgresql", PGUSER: "postgres", PGCONNECT_TIMEOUT: "5" },
+      input: sql, encoding: "utf8", timeout: 10000, maxBuffer: 65536,
+    });
+    if (result.status !== 0) fail("bound native database connection fence could not be reopened; retain transaction");
+  }
+
   stopTransientUnits(bundleSha) {
     const prefix = `football-release-${bundleSha.slice(0, 12)}-`;
     if (TEST_MODE) {
@@ -1187,6 +1207,7 @@ const recoverRollback = (transaction, system) => {
   updatePhase(transaction, "recovering-rollback");
   quiesceAll(transaction, system);
   if (transaction.native && nativeDataActive(transaction.native, system) !== nativeWasActive) fail("native database changed during recovery quiesce");
+  if (transaction.native) system.reopenBoundNativeDatabase(transaction.native.contract, nativeWasActive);
   restoreOldTree(transaction, system);
   if (transaction.sqlite) restoreSqlite(transaction.sqlite);
   if (transaction.model) restoreModelArtifacts(transaction.model);
@@ -1234,6 +1255,7 @@ const recoverForward = (transaction, system) => {
   else system.stopTransientUnits(transaction.bundleSha);
   if (transaction.native) {
     prevalidateRestoreTargets(transaction);
+    system.reopenBoundNativeDatabase(transaction.native.contract, true);
     restoreRuntimeEnv(transaction.native.runtimeEnv);
   }
   system.daemonReload();

@@ -51,6 +51,8 @@ const {
 const { validateSignedArchiveSourceEvidence } = require("./releaseArchiveSourceInventory.cjs");
 
 const rootDir = path.resolve(__dirname, "..");
+const nativePolicyPath = path.join(rootDir, "deploy/light-server/native-release-policy.json");
+if (fs.existsSync(nativePolicyPath)) require("./validateNativeReleasePolicy.cjs").readPolicy(nativePolicyPath);
 // Online release callers already supply the pinned deployment key. Reject
 // unrestorable originals before any sequence reservation or frontend build.
 // Offline bundle creation does not claim live readiness; deployment rechecks.
@@ -725,6 +727,19 @@ const requiredEntries = [
   "scripts/releaseRecoveryHelperRotation.cjs",
   "scripts/releaseStoragePreflight.cjs",
   "scripts/nativeReleaseJournal.cjs",
+  "scripts/nativeDatabaseCutover.cjs",
+  "scripts/postgresReleaseMirror.cjs",
+  "scripts/nativeReleaseDatabaseSession.cjs",
+  "scripts/nativeReleaseDataPlane.cjs",
+  "scripts/nativeReleaseGenerationCopy.cjs",
+  "scripts/nativeReleasePostgresTransport.cjs",
+  "scripts/validateNativeReleasePolicy.cjs",
+  "scripts/verifyNativeReleasePipeline.cjs",
+  "scripts/verifyNativeReleaseDataPlane.cjs",
+  "scripts/verifyNativeReleaseGenerationCopy.cjs",
+  "scripts/verifyNativeReleaseDatabaseSession.cjs",
+  "deploy/light-server/release-native.sh",
+  "deploy/light-server/native-release-policy.json",
   "scripts/verifyRecoveryHelperRotation.cjs",
   "scripts/checkReleaseStatus.cjs",
   "scripts/releaseSshHostKeyPin.cjs",

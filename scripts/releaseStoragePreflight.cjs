@@ -50,6 +50,15 @@ module.exports = { assertLegacyStorageEnvironment };
 if (require.main === module) {
   try {
     if (process.argv.length !== 2 || process.platform !== "linux" || process.getuid?.() !== 0) throw new Error("fixed-root-release-storage-preflight-required");
-    console.log(JSON.stringify(assertLegacyStorageEnvironment(readFixedEnvironment())));
+    const content = readFixedEnvironment(), policy = path.resolve(__dirname, "../deploy/light-server/native-release-policy.json");
+    if (fs.existsSync(policy)) {
+      const native = require("./validateNativeReleasePolicy.cjs"), validated = native.readPolicy(policy);
+      const marker = name => { const file = "/opt/football-predict/" + name, st = fs.lstatSync(file);
+        if (!st.isFile() || st.isSymbolicLink() || st.uid !== 0 || (st.mode & 0o022) || st.nlink !== 1 || st.size > 128)
+          throw new Error("native release runtime marker unsafe");
+        return fs.readFileSync(file, "utf8").trim(); };
+      const runtime = native.validateNativeRuntimeEnvironment(content, { bundleMarker: marker(".release-bundle-sha256"), liveMarker: marker(".release-live-complete") });
+      console.log(JSON.stringify({ ...validated, ...runtime, databaseQueries: 0 }));
+    } else console.log(JSON.stringify(assertLegacyStorageEnvironment(content)));
   } catch (error) { console.error(JSON.stringify({ ok: false, phase: "storage-dispatch", reason: error.message })); process.exitCode = 1; }
 }

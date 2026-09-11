@@ -337,6 +337,10 @@ run_build_step() {
   next_transient_unit "$label"
   unit="$NEXT_TRANSIENT_UNIT"
   mapfile -t properties < <(transient_build_properties)
+  if [ "${TRANSACTION_VERSION:-3}" = "4" ]; then
+    [ -f "${NATIVE_BUILD_ENV_FILE:-}" ] && [ ! -L "$NATIVE_BUILD_ENV_FILE" ] || return 1
+    properties+=(--property="EnvironmentFile=$NATIVE_BUILD_ENV_FILE")
+  fi
   if [ -n "$runtime_max_seconds" ]; then
     runtime_properties=(--property="RuntimeMaxSec=${runtime_max_seconds}s")
   fi
@@ -399,6 +403,10 @@ run_candidate_refresh_step() {
   next_transient_unit "$label"
   unit="$NEXT_TRANSIENT_UNIT"
   mapfile -t properties < <(transient_build_properties)
+  if [ "${TRANSACTION_VERSION:-3}" = "4" ]; then
+    [ -f "${NATIVE_BUILD_ENV_FILE:-}" ] && [ ! -L "$NATIVE_BUILD_ENV_FILE" ] || return 1
+    properties+=(--property="EnvironmentFile=$NATIVE_BUILD_ENV_FILE")
+  fi
   set +e
   systemd-run --quiet --wait --collect --pipe --service-type=exec \
     --unit="$unit" --uid="$BUILD_USER" --working-directory="$NEXT_DIR" \
@@ -474,6 +482,10 @@ start_candidate_unit() {
   next_transient_unit candidate-server
   unit="$NEXT_TRANSIENT_UNIT"
   mapfile -t properties < <(transient_build_properties)
+  if [ "${TRANSACTION_VERSION:-3}" = "4" ]; then
+    [ -f "${NATIVE_CANDIDATE_ENV_FILE:-}" ] && [ ! -L "$NATIVE_CANDIDATE_ENV_FILE" ] || return 1
+    properties+=(--property="EnvironmentFile=$NATIVE_CANDIDATE_ENV_FILE")
+  fi
   systemd-run --quiet --collect --service-type=exec \
     --unit="$unit" --uid="$BUILD_USER" --working-directory="$working_directory" \
     "${properties[@]}" \
@@ -555,6 +567,10 @@ run_trusted_candidate_verifier() {
   next_transient_unit candidate-verifier
   unit="$NEXT_TRANSIENT_UNIT"
   mapfile -t properties < <(transient_build_properties)
+  if [ "${TRANSACTION_VERSION:-3}" = "4" ]; then
+    [ -f "${NATIVE_CANDIDATE_ENV_FILE:-}" ] && [ ! -L "$NATIVE_CANDIDATE_ENV_FILE" ] || return 1
+    properties+=(--property="EnvironmentFile=$NATIVE_CANDIDATE_ENV_FILE")
+  fi
   set +e
   systemd-run --quiet --wait --collect --pipe --service-type=exec \
     --unit="$unit" --uid="$BUILD_USER" --working-directory="$NEXT_DIR" \
@@ -2049,16 +2065,23 @@ seed_candidate_model_artifacts() {
   # JSON alone is not the complete model artifact. Seed the exact private audit
   # into the fresh candidate DB before export; invalid/missing evidence keeps
   # recomputation mandatory. The live SQLite connection is read-only.
-  "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releasePrivateModelSeed.cjs" \
-    "$LIVE_STORE_DIR" "$CANDIDATE_STORE_DIR" || return 1
+  if [ "${TRANSACTION_VERSION:-3}" != "4" ]; then
+    "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releasePrivateModelSeed.cjs" \
+      "$LIVE_STORE_DIR" "$CANDIDATE_STORE_DIR" || return 1
+  fi
 }
 
 run_candidate_model_artifact_catchup() {
   local store_dir="$1"
   local sqlite_path="$2"
   local model_work="recompute"
-  model_work="$("$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseModelWorkPolicy.cjs" \
-    "$APP_DIR" "$TRUSTED_SOURCE_DIR" "$store_dir")" || return 1
+  if [ "${TRANSACTION_VERSION:-3}" = "4" ]; then
+    model_work="$(set -a; . "$NATIVE_BUILD_ENV_FILE"; set +a; "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseModelWorkPolicy.cjs" \
+      "$APP_DIR" "$TRUSTED_SOURCE_DIR" "$store_dir")" || return 1
+  else
+    model_work="$("$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseModelWorkPolicy.cjs" \
+      "$APP_DIR" "$TRUSTED_SOURCE_DIR" "$store_dir")" || return 1
+  fi
   case "$model_work" in preserve|recompute) ;; *) return 1 ;; esac
   log "model-work mode=${model_work}; unknown compatibility retains recomputation"
   # Exercise the exact signed revision transition on the isolated candidate
@@ -2094,9 +2117,14 @@ run_candidate_model_artifact_catchup() {
   run_build_step candidate-generation-reconciled env PATH="$PATH" HOME="${BUILD_HOME:-/nonexistent}" SERVER_STORE_DIR="$store_dir" \
     DATA_GENERATION_PUBLIC_DATA_DIR="$BUILD_DIR/public/data" \
     "$NODE_HOME/bin/npm" run datastore:generation || return 1
-  run_build_step candidate-datastore-reconciled env PATH="$PATH" HOME="${BUILD_HOME:-/nonexistent}" SERVER_STORE_DIR="$store_dir" \
-    DATASTORE_SQLITE_PATH="$sqlite_path" \
-    "$NODE_HOME/bin/npm" run datastore:sqlite || return 1
+  if [ "${TRANSACTION_VERSION:-3}" = "4" ]; then
+    run_build_step candidate-postgres-reconciled env PATH="$PATH" HOME="${BUILD_HOME:-/nonexistent}" SERVER_STORE_DIR="$store_dir" \
+      DATA_GENERATION_PUBLIC_DATA_DIR="$BUILD_DIR/public/data" "$NODE_HOME/bin/npm" run postgres:sync || return 1
+  else
+    run_build_step candidate-datastore-reconciled env PATH="$PATH" HOME="${BUILD_HOME:-/nonexistent}" SERVER_STORE_DIR="$store_dir" \
+      DATASTORE_SQLITE_PATH="$sqlite_path" \
+      "$NODE_HOME/bin/npm" run datastore:sqlite || return 1
+  fi
   else
     # Ordinary compatible releases do not refit or rewrite current decisions.
     # Registry continuity, deadline capture and runtime gates below still run.
@@ -7274,6 +7302,13 @@ fi
 # ensure_node_runtime_env below would overwrite ENABLE_SQLITE_EXPORT with 1.
 "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseStoragePreflight.cjs" \
   || { printf 'storage dispatch rejected before SQLite work or host changes\n' >&2; exit 1; }
+if [ -f "$TRUSTED_SOURCE_DIR/deploy/light-server/native-release-policy.json" ]; then
+  # All source files above have passed the root-private signed tree checks.
+  # The policy and dispatch guard reject partial or unaccepted native switches.
+  source "$TRUSTED_SOURCE_DIR/deploy/light-server/release-native.sh"
+  run_native_release
+  exit 0
+fi
 node -e "require('node:sqlite')" >/dev/null
 if [ ! -d "$APP_DIR" ]; then
   printf 'APP_DIR does not exist: %s\n' "$APP_DIR" >&2
