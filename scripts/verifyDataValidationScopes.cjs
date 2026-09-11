@@ -29,6 +29,7 @@ const fixtureFiles = new Map([
 ]);
 let checks = 0;
 let fullPublicFileRuns = 0, fixtureDataReads = 0;
+let isolatedChunkedReads = 0, actualChunkedReads = 0;
 function run({ publicOnly = false, archive = null, count = 14, policyCount = count, omitCounts = false, badScore = false, officialHistory = false, scorePatch = null, fullPublicFiles = false } = {}) {
   const io = Object.create(fs), messages = [];
   let payload = null, exitCode = 0, archiveReads = 0;
@@ -63,7 +64,28 @@ function run({ publicOnly = false, archive = null, count = 14, policyCount = cou
     argv: ['node', file, ...(publicOnly ? ['--public-distribution'] : [])],
     exit: code => { exitCode = code; throw stop; } };
   const fn = vm.runInNewContext(`(function(require,__dirname,process,console){${source}\n})`, {});
-  try { fn(name => ['fs', 'node:fs'].includes(name) ? io : baseRequire(name), __dirname, proc,
+  const fixtureRequire = name => {
+    if (['fs', 'node:fs'].includes(name)) return io;
+    if (name === '../server/chunkedJsonFile.cjs') return {
+      readChunkedJsonFile: p => {
+        // Validator scope mutations own their complete I/O boundary. The
+        // imported reader must not escape that overlay and read live counters
+        // or ignore a synthetic malformed score/private archive.
+        const resolved = path.resolve(p);
+        if (!fullPublicFiles || resolved === archivePath || resolved === path.join(publicDir, 'data', 'sync-meta.json')) {
+          isolatedChunkedReads++;
+          return { value: JSON.parse(io.readFileSync(p, 'utf8')) };
+        }
+        // Both full public-file passes still execute the actual streaming
+        // reader on the actual data; only their explicitly mutated inputs use
+        // the overlay. Large-reader integrity is also tested independently.
+        actualChunkedReads++;
+        return baseRequire(name).readChunkedJsonFile(p);
+      },
+    };
+    return baseRequire(name);
+  };
+  try { fn(fixtureRequire, __dirname, proc,
     { error: s => messages.push(s), log: s => { payload = JSON.parse(s); } });
   } catch (e) { if (e !== stop) throw e; }
   return { exitCode, payload, messages: messages.join('\n'), archiveReads };
@@ -133,7 +155,9 @@ verify('complete actual public data still passes server-scope validation with is
   assert.equal(r.payload.privateArchiveVerified,true);assert.equal(r.archiveReads,1);assert.ok(r.payload.count>0);
 });
 assert.equal(fullPublicFileRuns,2);assert.equal(fixtureDataReads,201);
+assert.ok(isolatedChunkedReads >= fixtureDataReads);assert.ok(actualChunkedReads > 0);
 console.log(JSON.stringify({ ok: true, checks, productionDataTouched: false,
+  chunkedReaderBoundaryIsolated:true, isolatedChunkedReads, actualChunkedReads,
   fullPublicFileRuns, fixtureDataReads, strictFinishedScoreCases:46, elapsedMs:Date.now()-startedAtMs,
   scope:'actual validator; bounded scope fixtures plus two complete public-file passes; private archive is isolated',
 }, null, 2));
