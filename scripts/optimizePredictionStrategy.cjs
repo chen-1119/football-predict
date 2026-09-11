@@ -333,8 +333,9 @@ function loadModelLearningActivationAuthority(evaluation, registryFile, options 
 function readJson(file, fallback) {
   if (!fs.existsSync(file)) return fallback;
   try {
-    return JSON.parse(fs.readFileSync(file, "utf8"));
-  } catch {
+    return require("../server/chunkedJsonFile.cjs").readChunkedJsonFile(file).value;
+  } catch (error) {
+    if (path.basename(file) === "prediction-snapshots.json") throw error;
     return fallback;
   }
 }

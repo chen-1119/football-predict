@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const { readChunkedJsonFile } = require("../server/chunkedJsonFile.cjs");
 const {
   attachArchivedPreMatchPredictions,
   validArchivedPreMatchPrediction,
@@ -12,7 +13,7 @@ const ROOT_DIR = path.resolve(__dirname, "..");
 
 const readJson = (filePath, fallback) => {
   if (!fs.existsSync(filePath)) return fallback;
-  return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  return readChunkedJsonFile(filePath).value;
 };
 
 const canonicalJson = (value) => JSON.stringify(value);

@@ -93,18 +93,19 @@ async function verifyStaticVerificationReceipts() {
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "football-static-receipt-verify-"));
   try {
     const copy = name => { const to = path.join(fixture, name); fs.mkdirSync(path.dirname(to), { recursive: true }); fs.copyFileSync(path.join(root, name), to); };
-    for (const file of ["package.json", "package-lock.json", ...allowed, "src/services/generator.ts", "src/pages/BetSlipGenerator.tsx", "server/index.cjs", "server/selectedJsonObjectFile.cjs", "server/dataGenerationStore.cjs"]) copy(file);
+    for (const file of ["package.json", "package-lock.json", ...allowed, "src/services/generator.ts", "src/pages/BetSlipGenerator.tsx", "server/index.cjs", "server/selectedJsonObjectFile.cjs", "server/dataGenerationStore.cjs", "server/chunkedJsonFile.cjs"]) copy(file);
     const selectedArgs = ["scripts/verifySelectedJsonObjectFile.cjs"], selectedInputs = receipts.collectInputs(fixture, selectedArgs);
-    check("isolated large JSON fixture binds both executing modules", () => {
+    check("isolated large JSON fixture binds its complete executing module closure", () => {
       assert.ok(selectedInputs);
-      for (const file of ["server/selectedJsonObjectFile.cjs", "server/dataGenerationStore.cjs"])
+      for (const file of ["server/selectedJsonObjectFile.cjs", "server/dataGenerationStore.cjs", "server/chunkedJsonFile.cjs"])
         assert.ok(selectedInputs.files.some(([name]) => name === file));
     });
-    check("audited fixture import inventory is closed over builtins and the two pinned modules", () => {
+    check("audited fixture import inventory includes the new bounded reader", () => {
       const expected = {
         "scripts/verifySelectedJsonObjectFile.cjs": ["node:assert/strict", "node:fs", "node:os", "node:path", "node:crypto", "node:child_process", "../server/selectedJsonObjectFile.cjs", "../server/dataGenerationStore.cjs"],
         "server/selectedJsonObjectFile.cjs": ["node:fs", "node:crypto"],
-        "server/dataGenerationStore.cjs": ["node:crypto", "node:fs", "node:os", "node:path", "./selectedJsonObjectFile.cjs"],
+        "server/dataGenerationStore.cjs": ["node:crypto", "node:fs", "node:os", "node:path", "./chunkedJsonFile.cjs", "./selectedJsonObjectFile.cjs"],
+        "server/chunkedJsonFile.cjs": ["node:fs", "node:crypto"],
       };
       for (const [name, imports] of Object.entries(expected)) {
         const source = fs.readFileSync(path.join(fixture, name), "utf8");
@@ -117,7 +118,7 @@ async function verifyStaticVerificationReceipts() {
       assert.equal(receipts.collectInputs(fixture, selectedArgs, { VERIFY_SELECTED_JSON_SKIP_LARGE: "1" }), null);
       assert.equal(receipts.collectInputs(fixture, [...selectedArgs, "--large-child"]), null);
     });
-    for (const moduleName of ["server/selectedJsonObjectFile.cjs", "server/dataGenerationStore.cjs"]) {
+    for (const moduleName of ["server/selectedJsonObjectFile.cjs", "server/dataGenerationStore.cjs", "server/chunkedJsonFile.cjs"]) {
       fs.appendFileSync(path.join(fixture, moduleName), "\nrequire('./new-unaudited-dependency.cjs');\n");
       check(`changed executable module requires dependency reaudit: ${moduleName}`, () => assert.equal(receipts.collectInputs(fixture, selectedArgs), null));
       copy(moduleName);

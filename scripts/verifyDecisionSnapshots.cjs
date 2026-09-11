@@ -69,8 +69,9 @@ const marketProvenance = (poolCode, providerObservedAt, receivedAt) => (
 const rootDir = path.resolve(__dirname, "..");
 const readJson = (relativePath, fallback) => {
   try {
-    return JSON.parse(fs.readFileSync(path.join(rootDir, relativePath), "utf8"));
-  } catch {
+    return require("../server/chunkedJsonFile.cjs").readChunkedJsonFile(path.join(rootDir, relativePath)).value;
+  } catch (error) {
+    if (path.basename(relativePath) === "prediction-snapshots.json" && error.code !== "ENOENT") throw error;
     return fallback;
   }
 };

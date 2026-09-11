@@ -150,8 +150,9 @@ const jsonlFiles = {
 
 const readJson = (filePath, fallback) => {
   try {
-    return JSON.parse(fs.readFileSync(filePath, "utf8"));
-  } catch {
+    return require("../server/chunkedJsonFile.cjs").readChunkedJsonFile(filePath).value;
+  } catch (error) {
+    if (path.basename(filePath) === "prediction-snapshots.json" && error.code !== "ENOENT") throw error;
     return fallback;
   }
 };

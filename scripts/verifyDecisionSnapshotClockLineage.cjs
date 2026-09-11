@@ -741,8 +741,10 @@ assert.equal(isDecisionClockAuditEligible(tampered), false, "validator must reco
 const root = path.resolve(__dirname, "..");
 let persistedRows = [];
 try {
-  persistedRows = JSON.parse(fs.readFileSync(path.join(root, "public/data/prediction-snapshots.json"), "utf8"))?.rows || [];
-} catch {
+  persistedRows = require("../server/chunkedJsonFile.cjs")
+    .readChunkedJsonFile(path.join(root, "public/data/prediction-snapshots.json")).value?.rows || [];
+} catch (error) {
+  if (error.code !== "ENOENT") throw error;
   persistedRows = [];
 }
 const persistedV2 = persistedRows.filter((row) => row?.decisionSnapshot?.version === "candidate-decision-snapshot-v2");

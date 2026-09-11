@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const https = require("https");
 const crypto = require("crypto");
+const { readChunkedJsonFile } = require("../server/chunkedJsonFile.cjs");
 const { predictionNowMs, predictionNowIso, executeWithPredictionClock } = require("../src/services/predictionExecutionClock.cjs");
 const { spawn } = require("child_process");
 const {
@@ -16005,7 +16006,19 @@ function loadPredictionSnapshots(publicDir) {
   for (const file of files) {
     if (!fs.existsSync(file)) continue;
     try {
-      const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+      const parsed = readChunkedJsonFile(file).value;
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed) || !Array.isArray(parsed.rows)) {
+        const error = new Error("prediction snapshot must be an object with rows[]");
+        error.code = "PREDICTION_SNAPSHOT_INVALID";
+        throw error;
+      }
+      for (const field of ["observations", "publicReferenceDecisions", "publicReferenceEvidence"]) {
+        if (Object.hasOwn(parsed, field) && !Array.isArray(parsed[field])) {
+          const error = new Error(`prediction snapshot ${field} must be an array`);
+          error.code = "PREDICTION_SNAPSHOT_INVALID";
+          throw error;
+        }
+      }
       return {
         version: Number(parsed?.version || 1),
         source: "sporttery:prediction-snapshots",
@@ -16016,15 +16029,10 @@ function loadPredictionSnapshots(publicDir) {
         publicReferenceDecisions: Array.isArray(parsed?.publicReferenceDecisions) ? parsed.publicReferenceDecisions : [],
         publicReferenceEvidence: Array.isArray(parsed?.publicReferenceEvidence) ? parsed.publicReferenceEvidence : [],
       };
-    } catch {
-      return {
-        version: 1,
-        source: "sporttery:prediction-snapshots",
-        updatedAt: null,
-        retentionDays: PREDICTION_SNAPSHOT_RETENTION_DAYS,
-        maxRows: PREDICTION_SNAPSHOT_MAX_ROWS,
-        rows: [],
-      };
+    } catch (cause) {
+      const error = new Error(`existing prediction snapshots cannot be read; refusing to replace history: ${cause.message}`);
+      error.code = cause.code || "PREDICTION_SNAPSHOT_READ_FAILED";
+      throw error;
     }
   }
   return {
@@ -16759,46 +16767,49 @@ function indentSerializedJson(serialized, spaces) {
   return `${prefix}${serialized.replace(/\n/g, `\n${prefix}`)}`;
 }
 
-function writePrettyJsonArray(fd, rows, indent = 0) {
+function writePrettyJsonArray(fd, rows, indent = 0, compact = false) {
   const prefix = " ".repeat(indent);
   const itemIndent = indent + 2;
   writeTextFully(fd, "[");
   for (let index = 0; index < rows.length; index += 1) {
-    const serialized = JSON.stringify(rows[index], null, 2) ?? "null";
-    writeTextFully(fd, `${index === 0 ? "\n" : ",\n"}${indentSerializedJson(serialized, itemIndent)}`);
+    const serialized = JSON.stringify(rows[index], null, compact ? undefined : 2) ?? "null";
+    writeTextFully(fd, compact ? `${index === 0 ? "" : ","}${serialized}`
+      : `${index === 0 ? "\n" : ",\n"}${indentSerializedJson(serialized, itemIndent)}`);
   }
-  writeTextFully(fd, rows.length ? `\n${prefix}]` : "]");
+  writeTextFully(fd, rows.length && !compact ? `\n${prefix}]` : "]");
 }
 
-function writePrettyJsonStreaming(file, payload) {
+function writePrettyJsonStreaming(file, payload, compact = false) {
   const fd = fs.openSync(file, "w", 0o640);
   try {
     if (Array.isArray(payload)) {
-      writePrettyJsonArray(fd, payload);
+      writePrettyJsonArray(fd, payload, 0, compact);
       writeTextFully(fd, "\n");
       fs.fsyncSync(fd);
       return;
     }
 
     const entries = Object.entries(payload || {});
-    writeTextFully(fd, "{\n");
+    writeTextFully(fd, compact ? "{" : "{\n");
     let writtenEntries = 0;
     for (const [key, value] of entries) {
-      if (key === "rows" && Array.isArray(value)) {
-        writeTextFully(fd, `${writtenEntries > 0 ? ",\n" : ""}  ${JSON.stringify(key)}: `);
-        writePrettyJsonArray(fd, value, 2);
+      const prefix = compact ? `${writtenEntries > 0 ? "," : ""}${JSON.stringify(key)}:`
+        : `${writtenEntries > 0 ? ",\n" : ""}  ${JSON.stringify(key)}: `;
+      if (Array.isArray(value)) {
+        writeTextFully(fd, prefix);
+        writePrettyJsonArray(fd, value, 2, compact);
         writtenEntries += 1;
         continue;
       }
-      const serialized = JSON.stringify(value, null, 2);
+      const serialized = JSON.stringify(value, null, compact ? undefined : 2);
       if (serialized === undefined) continue;
       writeTextFully(
         fd,
-        `${writtenEntries > 0 ? ",\n" : ""}  ${JSON.stringify(key)}: ${serialized.replace(/\n/g, "\n  ")}`,
+        prefix + (compact ? serialized : serialized.replace(/\n/g, "\n  ")),
       );
       writtenEntries += 1;
     }
-    writeTextFully(fd, `${writtenEntries > 0 ? "\n" : ""}}\n`);
+    writeTextFully(fd, `${writtenEntries > 0 && !compact ? "\n" : ""}}\n`);
     fs.fsyncSync(fd);
   } finally {
     fs.closeSync(fd);
@@ -16853,11 +16864,12 @@ function shouldUseStreamingJson(payload) {
 
 function writeJson(file, payload) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  const useStreamingWrite = shouldUseStreamingJson(payload);
+  const compact = path.basename(file) === "prediction-snapshots.json";
+  const useStreamingWrite = compact || shouldUseStreamingJson(payload);
 
   if (!useStreamingWrite) {
     const next = `${JSON.stringify(payload, null, 2)}\n`;
-    if (fs.existsSync(file)) {
+    if (fs.existsSync(file) && fs.statSync(file).size === Buffer.byteLength(next, "utf8")) {
       const previous = withFileRetry(() => fs.readFileSync(file, "utf8"), `read ${file}`);
       if (previous === next) return false;
     }
@@ -16872,7 +16884,7 @@ function writeJson(file, payload) {
   const tmpFile = `${file}.${process.pid}.${Date.now()}.tmp`;
   return withFileRetry(() => {
     try {
-      writePrettyJsonStreaming(tmpFile, payload);
+      writePrettyJsonStreaming(tmpFile, payload, compact);
       if (filesHaveSameBytes(file, tmpFile)) {
         fs.unlinkSync(tmpFile);
         return false;
@@ -18649,6 +18661,7 @@ if (require.main === module) {
   });
 } else {
   module.exports = {
+    loadPredictionSnapshots,
     replayPredictionWithClock: (input, clock) => executeWithPredictionClock(
       () => input.odds || input.handicapOdds ? predictionSet(input) : predictionSetWithoutOfficialOdds(input), clock ?? null),
     rebuildPublishedPredictionModel,

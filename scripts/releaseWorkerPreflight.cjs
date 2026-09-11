@@ -25,6 +25,19 @@ function evaluateWorkerPreflight(observation) {
       && status.eventCycle?.ok === true) warnings.push('worker-slow-enrichment-failed-official-phase-published');
     else blockers.push('worker-latest-official-cycle-failed');
   } else if (status?.ok !== true) blockers.push('worker-status-not-understood');
+  // A retry changes phase/ok before it has fixed anything. Do not spend an
+  // upload and candidate build merely because the probe landed in that window.
+  if (status?.ok === true && status.lastCycle?.ok === false
+    && status.lastCycle?.phase === 'official-result-failed') {
+    const failedAt = Date.parse(status.lastCycle.finishedAt || '');
+    const published = status.eventCycle;
+    const publishStart = Date.parse(published?.startedAt || '');
+    const publishEnd = Date.parse(published?.finishedAt || '');
+    if (!(published?.ok === true && published.phase === 'official-result-published'
+      && Number.isFinite(failedAt) && failedAt >= startedAt
+      && publishStart >= failedAt && publishEnd >= publishStart && publishEnd <= statusAt))
+      blockers.push('worker-official-recovery-unproven');
+  }
   return {
     version: 'release-worker-preflight-v1', checkedAt, ok: blockers.length === 0,
     state: blockers.length ? 'prepare-rejected' : 'prepare-may-continue',
