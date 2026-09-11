@@ -5,12 +5,18 @@ const journal = require("./nativeReleaseJournal.cjs");
 const oldIdentity = { bundleMarker: "a".repeat(64), liveMarker: "a".repeat(64) };
 const topology = { clusterId: "7645341234567890123", databases: { football: "12345", football_release_aaaaaaaaaaaa_1789010100: "12346" } };
 const initial = { kind: "initial-cutover", oldIdentity, topology, candidateDatabase: "football_release_aaaaaaaaaaaa_1789010100", archiveDatabase: "football_legacy_bbbbbbbbbbbb_1789010100" };
-assert.equal(journal.BOOTSTRAP_SHA, null);
-assert.throws(() => journal.contractFor(initial), /no accepted native-capable bootstrap/);
+if (journal.BOOTSTRAP_SHA === null) assert.throws(() => journal.contractFor(initial), /no accepted native-capable bootstrap/);
+else {
+  assert.match(journal.BOOTSTRAP_SHA, /^[a-f0-9]{64}$/);
+  const accepted = journal.contractFor({ ...initial, oldIdentity: { bundleMarker: journal.BOOTSTRAP_SHA, liveMarker: journal.BOOTSTRAP_SHA } });
+  assert.equal(accepted.compatibleRuntimeSha256, journal.BOOTSTRAP_SHA);
+  assert.equal(accepted.kind, "initial-cutover");
+  assert.throws(() => journal.contractFor(initial), /exact accepted native-capable bootstrap/);
+}
 assert.throws(() => journal.contractFor({ ...initial, oldIdentity: { bundleMarker: "0".repeat(64), liveMarker: "0".repeat(64) } }), /bootstrap/);
 assert.throws(() => journal.contractFor({ kind: "runtime-only", oldIdentity, topology }), /implicitly/);
 const failedSha = "2671839d1f1580b73d1548466dbabea11c821aaa187ca71a62ae38195b82ac06";
-assert.throws(() => journal.contractFor({ ...initial, oldIdentity: { bundleMarker: failedSha, liveMarker: failedSha } }), /no accepted native-capable bootstrap/);
+assert.throws(() => journal.contractFor({ ...initial, oldIdentity: { bundleMarker: failedSha, liveMarker: failedSha } }), /bootstrap/);
 const env = journal.nativeEnvironment("KEEP_ME=yes\n FOOTBALL_STORAGE_MODE='hybrid'\nENABLE_SQLITE_EXPORT=1\nENABLE_SQLITE_EXPORT=1\nFOOTBALL_POSTGRES_URL=postgresql://bad@remote/candidate\n");
 assert.ok(env.includes("KEEP_ME=yes")); assert.equal(env.match(/ENABLE_SQLITE_EXPORT=/g).length, 1); assert.ok(!env.includes("remote"));
 assert.equal(require("../server/storageMode.cjs").readStorageMode(Object.fromEntries(env.trim().split("\n").map(line => [line.slice(0, line.indexOf("=")), line.slice(line.indexOf("=") + 1)]))).postgresOnly, true);
