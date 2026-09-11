@@ -105,6 +105,14 @@ for (const storage of ['postgres-only', 'hybrid']) for (const success of [false,
   }
 }
 checks.push('actual cold recovery selects full public acceptance for the recovered storage and rejects failed recovery');
+const { mirrorTimeBudget } = require("./postgresReleaseMirror.cjs");
+assert.equal(mirrorTimeBudget(), 600000); assert.equal(mirrorTimeBudget(true), 1200000);
+for (const value of [0, 999, 600001, Infinity]) assert.throws(() => mirrorTimeBudget(false, value));
+assert.throws(() => mirrorTimeBudget(true, 1200001)); assert.throws(() => mirrorTimeBudget("true"));
+const sessions = read("scripts/nativeReleaseDatabaseSession.cjs");
+assert.equal(sessions.split("preparation: true").length, 2);
+assert.ok(sessions.indexOf("preparation: true") < sessions.indexOf("async finalMirrorAndSwitch"));
+checks.push("online full mirror has measured preparation margin while the stopped-window bound remains unchanged");
 if (actualJournal.BOOTSTRAP_SHA) assert.equal(require("./validateNativeReleasePolicy.cjs").readPolicy(path.join(root, "deploy/light-server/native-release-policy.json")).ok, true);
 else assert.throws(() => require("./validateNativeReleasePolicy.cjs").readPolicy(path.join(root, "deploy/light-server/native-release-policy.json")), /accepted bootstrap proof/);
 console.log(JSON.stringify({ ok: true, checks, productionWrites: 0, bootstrapAccepted: Boolean(actualJournal.BOOTSTRAP_SHA),

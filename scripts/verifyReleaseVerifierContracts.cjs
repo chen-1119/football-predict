@@ -15,6 +15,13 @@ check('native policy, signed dispatch and exact generation copy pass before sign
     const report = JSON.parse(child.stdout); assert.equal(report.ok, true); assert.equal(report.productionWrites, 0);
   }
 });
+check('partial policy replay stays shadow and preserves per-market gates before signing', () => {
+  const child = require('node:child_process').spawnSync(process.execPath, ['scripts/verifyPartialPolicyReplayState.cjs'],
+    { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 10000, maxBuffer: 65536 });
+  assert.equal(child.status, 0, child.stderr || child.stdout);
+  const proof = JSON.parse(child.stdout); assert.equal(proof.ok, true); assert.equal(proof.checks, 47);
+  assert.equal(proof.productionWrites, 0); assert.equal(proof.modelPromotionAllowed, false);
+});
 check('review runtime verifier dependencies survive production pruning',()=>{
   for(const name of ['typescript','react','react-dom']){
     assert.ok(pkg.dependencies?.[name],`${name} is required by production review verification`);

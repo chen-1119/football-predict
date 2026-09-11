@@ -41,7 +41,7 @@ Validation completed during implementation:
 - Real v4 recovery/database tests: five recovery states, preserving appended data.
 - Native publication/API/model regression: real migrations, exact evidence bytes,
   full/incremental writers and PostgreSQL-only HTTP, with forbidden SQLite loads.
-- Five generation-copy/lease scenarios, six actual policy/client/shell routing
+- Five generation-copy/lease scenarios, eight actual policy/client/shell routing
   scenarios, 33 early-window contracts, and 65 legacy transaction safety checks.
 - Existing pre-sign contract suite passed 343 checks while bootstrap remained
   unaccepted. Final pinning and the final source tree must be reverified before
@@ -54,3 +54,10 @@ All 27 then-existing tables matched after an independent restore. The subsequent
 full-size mirror benchmark verified more than 1.65 million rows. These read-only
 rehearsals are distinct from the mandatory fresh backup and retirement proof of
 the actual signed native deployment. No model promotion is authorized here.
+
+The measured complete preparation scan approached ten minutes before the last
+lookup optimization. Its online preparation budget is twenty minutes; the final
+stopped-window mirror keeps the original ten-minute limit. Per-query limits,
+full row comparison, signed generation identity, and rollback gates are unchanged.
+A fresh Linux dump/restore/mirror/role fixture and the real PostgreSQL fenced
+final-session scenarios passed after this bounded timing adjustment.

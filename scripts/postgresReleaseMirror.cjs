@@ -98,13 +98,22 @@ async function eachStagedBatch(target, table, action) {
   } finally { await target.query("CLOSE mirror_staged"); }
 }
 
-async function mirrorPostgresCandidate({ sourceSession, candidatePool, key, expectedSourceDatabase, timeoutMs = 600000, onProgress = () => {} }) {
+// The first complete mirror runs while production remains online. The measured
+// full-size scan approached ten minutes; give that preparation a bounded margin.
+// The stopped-window final mirror retains its original ten-minute bound.
+function mirrorTimeBudget(preparation = false, requested) {
+  if (typeof preparation !== "boolean") throw Error("invalid mirror preparation mode");
+  const maximum = preparation ? 1200000 : 600000, value = requested ?? maximum;
+  if (!Number.isSafeInteger(value) || value < 1000 || value > maximum) throw Error("invalid mirror time budget");
+  return value;
+}
+async function mirrorPostgresCandidate({ sourceSession, candidatePool, key, expectedSourceDatabase, preparation = false, timeoutMs, onProgress = () => {} }) {
   if (!Buffer.isBuffer(key) || key.length !== 32) throw Error("root-held mirror HMAC key required");
   if (!sourceSession?.client || !sourceSession.identity || !/^[a-z0-9_]+$/.test(expectedSourceDatabase || "")) throw Error("bound read-only source session required");
   if (candidatePool === sourceSession.pool) throw Error("independent candidate database required");
   if (typeof onProgress !== "function") throw Error("invalid mirror progress callback");
   const source = sourceSession.client;
-  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 600000) throw Error("invalid mirror time budget");
+  timeoutMs = mirrorTimeBudget(preparation, timeoutMs);
   const startedAt = Date.now(), deadline = startedAt + timeoutMs;
   let report, stage = "prepare", activeTable = null;
   const progress = () => onProgress({ stage, table: activeTable, elapsedMs: Date.now() - startedAt,
@@ -265,4 +274,4 @@ async function mirrorPostgresCandidate({ sourceSession, candidatePool, key, expe
     throw error;
   } finally { target.release(releaseError); }
 }
-module.exports = { mirrorPostgresCandidate };
+module.exports = { mirrorPostgresCandidate, mirrorTimeBudget };

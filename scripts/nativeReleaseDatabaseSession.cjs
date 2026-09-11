@@ -40,7 +40,7 @@ class NativeReleaseDatabaseSession {
   async mirror(onProgress = () => {}) {
     assert.equal(this.phase, "snapshot");
     const report = await mirrorPostgresCandidate({ sourceSession: { client: this.source, pool: this.sourcePool, identity: this.identity },
-      candidatePool: this.candidatePool, key: this.key, expectedSourceDatabase: "football", onProgress });
+      candidatePool: this.candidatePool, key: this.key, expectedSourceDatabase: "football", preparation: true, onProgress });
     assert.equal(report.ok, true); assert.deepEqual(report.publication, this.identity);
     this.lastMirror = report; return report;
   }
