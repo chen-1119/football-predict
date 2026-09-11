@@ -648,6 +648,7 @@ const run = async () => {
     dataValidationScopes.status === 0 && dataValidationScopes.body?.ok === true
       && dataValidationScopes.body?.checks === 70 && dataValidationScopes.body?.productionDataTouched === false
       && dataValidationScopes.body?.fullPublicFileRuns === 2 && dataValidationScopes.body?.fixtureDataReads === 201
+      && dataValidationScopes.body?.chunkedReaderBoundaryIsolated === true && dataValidationScopes.body?.actualChunkedReads > 0
       && dataValidationScopes.body?.strictFinishedScoreCases === 46, {
       status: dataValidationScopes.status, checks: dataValidationScopes.body?.checks || 0,
       stdoutTail: dataValidationScopes.status === 0 ? "" : dataValidationScopes.stdout.slice(-500),

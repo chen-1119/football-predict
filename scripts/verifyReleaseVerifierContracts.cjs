@@ -39,6 +39,23 @@ check('actual fixture-isolation producer and readiness consumer agree before sig
   assert.equal(report.ok, true); assert.ok(report.checks.every(row => row.ok === true));
   assert.equal(report.productionWrites, 0); assert.equal(report.providerRequests, 0);
 });
+check('actual validator scope overlays and streaming reader stay isolated before signing', () => {
+  const child = require('node:child_process').spawnSync(process.execPath, ['scripts/verifyDataValidationScopes.cjs'],
+    { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 120000, maxBuffer: 1024 * 1024 });
+  assert.equal(child.status, 0, child.stderr || child.stdout);
+  const report = JSON.parse(child.stdout);
+  assert.equal(report.ok, true); assert.equal(report.checks, 70); assert.equal(report.productionDataTouched, false);
+  assert.equal(report.fullPublicFileRuns, 2); assert.equal(report.fixtureDataReads, 201); assert.equal(report.strictFinishedScoreCases, 46);
+  assert.equal(report.chunkedReaderBoundaryIsolated, true); assert.ok(report.actualChunkedReads > 0);
+  const start = readiness.indexOf('  pushCheck(checks, "Pages scope cannot weaken server private-archive validation",');
+  const end = readiness.indexOf('\n  const ', start); assert.ok(start > 0 && end > start);
+  const accepts = body => { let accepted = null;
+    vm.runInNewContext(readiness.slice(start, end), { checks: [], dataValidationScopes: { status: 0, body, stdout: '', stderr: '' },
+      pushCheck: (_checks, _name, ok) => { accepted = ok; } }, { timeout: 1000 }); return accepted; };
+  assert.equal(accepts(report), true);
+  assert.equal(accepts({ ...report, chunkedReaderBoundaryIsolated: false }), false);
+  assert.equal(accepts({ ...report, actualChunkedReads: 0 }), false);
+});
 check('candidate observation prefix overflow stays bounded before signing', () => {
   const child = require('node:child_process').spawnSync(process.execPath, ['scripts/verifyCandidatePublicObservations.cjs'],
     { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 60000, maxBuffer: 1024 * 1024 });
