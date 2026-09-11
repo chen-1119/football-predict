@@ -90,6 +90,9 @@ async function run() {
     const builder = await driver.candidateAccess(state, stateDir, true);
     const writer = new transport.NativeReleasePostgresPool({ database: candidateDatabase, databaseOid: state.candidateOid, clusterId: state.clusterId });
     try { await writer.query('SET ROLE "' + builder.role + '"');
+      const schema = await require("./postgresProjectionSync.cjs").ensureProjectionSchema({ kind: "native-generation" }, writer);
+      assert.equal(schema.readOnly, true); assert.ok(schema.verified > 0);
+      await assert.rejects(writer.query("CREATE SCHEMA forbidden_candidate_schema"), /permission denied/);
       await writer.query("UPDATE football.projection_meta SET value='candidate-only' WHERE key='data_generation_source_cycle_id'");
       assert.equal((await source.query("SELECT value FROM football.projection_meta WHERE key='data_generation_source_cycle_id'")).rows[0].value, identity.sourceCycleId);
     } finally { await writer.end(); }
