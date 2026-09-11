@@ -85,6 +85,26 @@ for (const nativeFullRelease of [false, true]) {
   assert.equal(calls, nativeFullRelease ? 0 : 1);
 }
 checks.push("actual authenticated client routing removes SQLite clone work only for the signed native lane");
+const recoveryStart = deploy.indexOf('  const sshRecoveryOk = recovery.status === 0');
+const recoveryEnd = deploy.indexOf('  console.log(JSON.stringify({', recoveryStart);
+assert.ok(recoveryStart > 0 && recoveryEnd > recoveryStart);
+for (const storage of ['postgres-only', 'hybrid']) for (const success of [false, true]) {
+  let selected = null;
+  const recovered = vm.runInNewContext(deploy.slice(recoveryStart, recoveryEnd) + '\n({ok,publicVerify});', {
+    recovery: { status: success ? 0 : 1, stdout: 'recoveryStorage=' + storage + '\nrecovery-ok\n' },
+    runCommand: (_command, args, options) => { assert.equal(args[0], 'scripts/verifyRemotePublicReadiness.cjs'); selected = options.env; return {status:0,stdout:'{"ok":true}'}; },
+    process: {execPath:'fixture-node',env:{}}, publicBaseUrl:'https://fixture.invalid', parseJson: value => {try{return JSON.parse(value)}catch{return null}},
+  }, {timeout:1000});
+  assert.equal(recovered.ok, success);
+  if (!success) assert.equal(selected, null);
+  else {
+    assert.equal(selected.REMOTE_REQUIRE_SQLITE, storage === 'hybrid' ? '1' : '0');
+    assert.equal(selected.REMOTE_REQUIRE_POSTGRES_ONLY, storage === 'postgres-only' ? '1' : '0');
+    assert.equal(selected.REMOTE_REQUIRED_READ_SOURCE, storage === 'postgres-only' ? 'postgres' : '');
+    assert.equal(selected.REMOTE_REQUIRE_SYNC_WORKER, '1');
+  }
+}
+checks.push('actual cold recovery selects full public acceptance for the recovered storage and rejects failed recovery');
 if (actualJournal.BOOTSTRAP_SHA) assert.equal(require("./validateNativeReleasePolicy.cjs").readPolicy(path.join(root, "deploy/light-server/native-release-policy.json")).ok, true);
 else assert.throws(() => require("./validateNativeReleasePolicy.cjs").readPolicy(path.join(root, "deploy/light-server/native-release-policy.json")), /accepted bootstrap proof/);
 console.log(JSON.stringify({ ok: true, checks, productionWrites: 0, bootstrapAccepted: Boolean(actualJournal.BOOTSTRAP_SHA),
