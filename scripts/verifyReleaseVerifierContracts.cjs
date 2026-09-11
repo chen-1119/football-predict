@@ -56,6 +56,14 @@ check('actual validator scope overlays and streaming reader stay isolated before
   assert.equal(accepts({ ...report, chunkedReaderBoundaryIsolated: false }), false);
   assert.equal(accepts({ ...report, actualChunkedReads: 0 }), false);
 });
+check('actual fast result publication and runtime facade pass before signing', () => {
+  const child = require('node:child_process').spawnSync(process.execPath, ['scripts/verifyFastResultPublication.cjs'],
+    { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 180000, maxBuffer: 4 * 1024 * 1024 });
+  assert.equal(child.status, 0, child.stderr || child.stdout);
+  const report = JSON.parse(child.stdout); assert.equal(report.ok, true);
+  assert.ok(report.summary.checks >= 105); assert.equal(report.summary.failed, 0);
+  assert.ok(report.checks.every(row => row.ok === true));
+});
 check('candidate observation prefix overflow stays bounded before signing', () => {
   const child = require('node:child_process').spawnSync(process.execPath, ['scripts/verifyCandidatePublicObservations.cjs'],
     { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 60000, maxBuffer: 1024 * 1024 });

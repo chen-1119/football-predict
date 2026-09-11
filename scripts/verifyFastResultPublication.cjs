@@ -3876,6 +3876,27 @@ const run = async () => {
       revision: crashMeta.fastResultRevision,
     });
 
+    // Exercise the facade used by full sync against the committed crash fixture.
+    // Keep this legacy-storage test independent of the candidate's runtime mode.
+    const facadeChild = spawnSync(process.execPath, ["-e", `
+      const assert = require('node:assert/strict');
+      const { readRuntimeFastResultInput } = require('./scripts/runtimeFastResultInput.cjs');
+      const { readSqliteFastResultReceipt } = require('./server/sqliteStore.cjs');
+      (async () => {
+        const sqlitePath = process.argv[1];
+        const full = await readRuntimeFastResultInput({ sqlitePath });
+        const receipt = await readSqliteFastResultReceipt(sqlitePath);
+        assert.equal(full.storage, 'sqlite'); assert.deepEqual(full.receipt, receipt);
+        assert.equal(full.finals.length, 1); assert.equal(full.finals[0].sourceMatchId, 'fast-4001');
+        const only = await readRuntimeFastResultInput({ sqlitePath, receiptOnly: true });
+        assert.deepEqual(only.receipt, receipt); assert.deepEqual(only.finals, []);
+        process.stdout.write(JSON.stringify({ ok: true }));
+      })().catch(error => { console.error(error); process.exitCode = 1; });
+    `, crashPaths.dbPath], { cwd: rootDir, env: { ...process.env, FOOTBALL_STORAGE_MODE: "hybrid" },
+      encoding: "utf8", windowsHide: true, timeout: 30000, maxBuffer: 1024 * 1024 });
+    check("runtime fast input facade preserves committed receipt and receipt-only isolation", facadeChild.status === 0,
+      { status: facadeChild.status, stderr: facadeChild.status === 0 ? "" : facadeChild.stderr });
+
     const workerSource = fs
       .readFileSync(path.join(rootDir, "scripts", "runSyncWorker.cjs"), "utf8")
       .replace(/\r\n?/g, "\n");
@@ -3909,10 +3930,10 @@ const run = async () => {
         < syncDataSource.indexOf("const postMatchReviews = attachPostMatchReviews(")
       && syncDataSource.includes("overlayFastObservedFinals(output, sqliteFastFinals, fastResultObservations)")
       && syncDataSource.includes("fastResultObservations,")
-      && syncDataSource.includes("readSqliteFastResultReceipt(sqliteDataPath)")
+      && syncDataSource.includes("const { receipt: sqliteFastReceipt, finals: sqliteFastFinals } = await readRuntimeFastResultInput({")
       && syncDataSource.includes("sqliteFastReceipt?.observations || []")
       && syncDataSource.includes("fastResultPublication,")
-      && syncDataSource.includes("const latestFastReceipt = await readSqliteFastResultReceipt(sqliteDataPath)")
+      && syncDataSource.includes("const { receipt: latestFastReceipt } = await readRuntimeFastResultInput({")
       && syncDataSource.includes("latestFastReceipt.observations || []")
     ));
     const serverSource = fs.readFileSync(path.join(rootDir, "server", "index.cjs"), "utf8");
@@ -3948,7 +3969,9 @@ const run = async () => {
     check("full and fast sync-meta writers share a re-read-under-lock commit boundary", (
       syncDataSource.includes("const syncMetaCommitLock = acquireSyncMetaCommitLock(")
       && syncDataSource.indexOf("const syncMetaCommitLock = acquireSyncMetaCommitLock(")
-        < syncDataSource.indexOf("const latestFastReceipt = await readSqliteFastResultReceipt(sqliteDataPath)")
+        < syncDataSource.indexOf("const { receipt: latestFastReceipt } = await readRuntimeFastResultInput({")
+      && syncDataSource.slice(syncDataSource.indexOf("const { receipt: latestFastReceipt } = await readRuntimeFastResultInput({"),
+        syncDataSource.indexOf("const { receipt: latestFastReceipt } = await readRuntimeFastResultInput({") + 240).includes("receiptOnly: true")
       && syncDataSource.includes("latestDiskSyncMeta = JSON.parse(fs.readFileSync(syncMetaCommitPath")
       && syncDataSource.includes("syncMetaCommitLock.release()")
       && fastPublisherSource.includes("const commitLock = acquireSyncMetaCommitLock({ filePath });")
