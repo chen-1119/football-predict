@@ -12,6 +12,8 @@ const RELEASE_ONLY = new Set([
   "scripts/releaseModelWorkPolicy.cjs", "scripts/verifyReleaseSpeedFix.cjs", "scripts/rootStaticResultCache.cjs",
   "scripts/verifyReleaseReadinessEarlyExit.cjs", "scripts/releaseProgress.cjs", "scripts/verifyReleaseProgress.cjs",
   "scripts/verifyProductionReadiness.cjs", "scripts/staticVerificationReceipts.cjs",
+  "scripts/productionFixtureIsolationContract.cjs", "scripts/verifyProductionFixtureIsolationContract.cjs",
+  "scripts/verifyProductionFixtureIsolation.cjs",
   "scripts/rootStaticVerificationAttestations.cjs", "scripts/createRootStaticVerificationAttestations.cjs",
   "scripts/verifyCurrentListPayloadCompaction.cjs",
   // Installed-runtime inspection and its release-only verifiers do not feed
@@ -27,6 +29,7 @@ const RELEASE_ONLY = new Set([
   "scripts/verifyFrontendReleaseTransaction.cjs",
   "scripts/verifyReleaseRecovery.cjs",
   "scripts/verifyNativeReleaseRecovery.cjs",
+  "scripts/nativeReleaseJournal.cjs", "scripts/verifyNativeReleaseJournal.cjs",
   "scripts/releaseStoragePreflight.cjs", "scripts/verifyReleaseStoragePreflight.cjs",
   "scripts/releasePrivateModelSeed.cjs", "scripts/verifyReleasePrivateModelSeed.cjs",
   "scripts/verifyCandidateArtifactSeed.cjs",

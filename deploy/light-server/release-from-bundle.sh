@@ -1362,6 +1362,10 @@ initialize_release_recovery_snapshot() {
   snapshot_app_tree_identity "$RECOVERY_STAGING_DIR" "old-app" "$APP_DIR" "/opt/football-predict" || return 1
   snapshot_runtime_env_for_rollback "$RECOVERY_STAGING_DIR" || return 1
   snapshot_managed_config_for_rollback "$RECOVERY_STAGING_DIR" || return 1
+  if [ "$TRANSACTION_VERSION" = "4" ]; then
+    "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/nativeReleaseJournal.cjs" \
+      "$RECOVERY_STAGING_DIR" "$NATIVE_RELEASE_KIND" "${NATIVE_CANDIDATE_DATABASE:--}" "${NATIVE_ARCHIVE_DATABASE:--}" || return 1
+  fi
   sync -f "${RECOVERY_STAGING_DIR}/transaction-version"
   sync -f "${RECOVERY_STAGING_DIR}/bundle-sha256"
   sync -f "${RECOVERY_STAGING_DIR}/site"

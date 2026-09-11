@@ -12045,7 +12045,9 @@ const ensurePostgresRuntime = async () => {
     return { ok: false, warning: true, error: error.message };
   }
   try {
-    const migrations = await runPostgresMigrations(postgresPool);
+    const migrations = storageMode.postgresOnly
+      ? await require("./postgresStore.cjs").verifyPostgresSchemaCurrent(postgresPool)
+      : await runPostgresMigrations(postgresPool);
     console.log(`[football-server] PostgreSQL ${postgresRuntimeMode} ready (${migrations.applied.length} migration(s) applied)`);
     return { ok: true, mode: postgresRuntimeMode, migrations };
   } catch (error) {
