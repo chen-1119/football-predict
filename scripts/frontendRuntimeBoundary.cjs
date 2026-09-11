@@ -195,13 +195,17 @@ function inspectFrontendRuntimeBoundary(input) {
         }
       }
     };
+    const localImportTarget = (from, specifier) => {
+      const base = path.posix.normalize(path.posix.join(path.posix.dirname(from), specifier));
+      if (base === ".." || base.startsWith("../") || specifier.includes("\\") || specifier.includes("\0")) throw new Error(`runtime-import-escape:${from}`);
+      const candidates = [base, `${base}.cjs`, `${base}.js`, `${base}.json`, `${base}.ts`, `${base}.tsx`, `${base}/index.cjs`, `${base}/index.js`, `${base}/index.ts`];
+      const target = candidates.find(name => index.get(name)?.kind === "file");
+      if (!target) throw new Error(`unresolved-runtime-import:${from}:${specifier}`);
+      return target;
+    };
     const resolveImport = (from, specifier, kind) => {
       if (specifier.startsWith(".")) {
-        const base = path.posix.normalize(path.posix.join(path.posix.dirname(from), specifier));
-        if (base === ".." || base.startsWith("../") || specifier.includes("\\") || specifier.includes("\0")) throw new Error(`runtime-import-escape:${from}`);
-        const candidates = [base, `${base}.cjs`, `${base}.js`, `${base}.json`, `${base}.ts`, `${base}.tsx`, `${base}/index.cjs`, `${base}/index.js`, `${base}/index.ts`];
-        const target = candidates.find(name => index.get(name)?.kind === "file");
-        if (!target) throw new Error(`unresolved-runtime-import:${from}:${specifier}`);
+        const target = localImportTarget(from, specifier);
         imports.push({ from, specifier, target, kind }); queue.push(target);
       } else {
         const bare = specifier.replace(/^node:/, "");
@@ -230,7 +234,13 @@ function inspectFrontendRuntimeBoundary(input) {
       const cacheKey = digest({ file, sha256: index.get(file).sha256, packageCommitment, scopePackages, policyHash: POLICY_HASH });
       const destinations = { imports, commands, npmEdges, externalImports, dynamicImports, workers, queue };
       const cached = parsedModuleCache.get(cacheKey);
-      if (cached) { for (const [key, rows] of Object.entries(cached)) destinations[key].push(...rows); continue; }
+      // Module bytes alone do not bind extension/index resolution in another
+      // authenticated tree. Re-parse on changed targets; never reuse old edges.
+      if (cached && cached.imports.every(row => localImportTarget(row.from, row.specifier) === row.target)) {
+        parsedModuleCache.delete(cacheKey); parsedModuleCache.set(cacheKey, cached);
+        for (const [key, rows] of Object.entries(cached)) destinations[key].push(...rows);
+        continue;
+      }
       const offsets = Object.fromEntries(Object.entries(destinations).map(([key, rows]) => [key, rows.length]));
       const sf = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
       if (sf.parseDiagnostics.length) throw new Error(`runtime-source-parse-error:${file}`);
@@ -359,7 +369,9 @@ function inspectFrontendRuntimeBoundary(input) {
         ts.forEachChild(node, visit);
       };
       visit(sf);
-      if (parsedModuleCache.size >= MAX_CLOSURE_FILES) parsedModuleCache.clear();
+      // Bound memory while retaining frequently reused baseline modules.
+      parsedModuleCache.delete(cacheKey);
+      if (parsedModuleCache.size >= MAX_CLOSURE_FILES) parsedModuleCache.delete(parsedModuleCache.keys().next().value);
       parsedModuleCache.set(cacheKey, deepFreeze(Object.fromEntries(Object.entries(destinations).map(([key, rows]) => [key, rows.slice(offsets[key])]))));
     }
   } catch (error) { blockers.push(error.code || error.message); }
