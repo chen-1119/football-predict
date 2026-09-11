@@ -420,6 +420,8 @@ const requiredReleaseEntries = [
   "scripts/productionFixtureIsolationContract.cjs",
   "scripts/verifyProductionFixtureIsolationContract.cjs",
   "scripts/verifyProductionFixtureIsolation.cjs",
+  "scripts/readCandidatePublicObservations.cjs",
+  "scripts/verifyCandidatePublicObservations.cjs",
   "scripts/verifyPostgresSemanticReviewCleanup.cjs",
   "scripts/verifyReleaseRecovery.cjs",
   "scripts/releaseStoragePreflight.cjs",

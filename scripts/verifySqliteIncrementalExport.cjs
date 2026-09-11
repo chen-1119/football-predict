@@ -80,7 +80,7 @@ const parseExporterOutput = (result) => {
   return JSON.parse(result.stdout);
 };
 
-const runExporter = (extraEnv = {}) => parseExporterOutput(spawnSync(process.execPath, [exporterPath], {
+const runExporter = (extraEnv = {}) => parseExporterOutput(spawnSync(process.execPath, ["--expose-gc", exporterPath], {
   cwd: rootDir,
   encoding: "utf8",
   env: {

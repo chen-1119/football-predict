@@ -23,9 +23,28 @@ const start=coverage.lastIndexOf('  pushCheck(',position),end=coverage.indexOf('
 assert.ok(start>0&&end>start);
 const chunk=coverage.slice(start,end);
 const readiness=read('scripts/verifyProductionReadiness.cjs');
+check('actual compatibility export command enables existing phase-boundary collection', () => {
+  const command = pkg.scripts['datastore:sqlite'];
+  assert.equal(command, 'node --expose-gc scripts/exportDataStoreSqlite.cjs && node scripts/syncPostgresProjection.cjs --if-enabled');
+  const prefix = command.split(' && ')[0].split(' ');
+  const child = require('node:child_process').spawnSync(process.execPath, [...prefix.slice(1, -1), '-e',
+    'if(typeof global.gc!=="function")process.exit(1);global.gc();'], { encoding: 'utf8', windowsHide: true, timeout: 5000 });
+  assert.equal(child.status, 0, child.stderr);
+  const exporter = read('scripts/exportDataStoreSqlite.cjs');
+  for (const released of ['externalSignals', 'predictionSnapshots', 'oddsHistory'])
+    assert.ok(exporter.includes(released + ' = null;\n  collectReleasedPayloads();'));
+});
 check('actual fixture-isolation producer and readiness consumer agree before signing', () => {
   const report = require('./verifyProductionFixtureIsolationContract.cjs').run();
   assert.equal(report.ok, true); assert.ok(report.checks.every(row => row.ok === true));
+  assert.equal(report.productionWrites, 0); assert.equal(report.providerRequests, 0);
+});
+check('candidate observation prefix overflow stays bounded before signing', () => {
+  const child = require('node:child_process').spawnSync(process.execPath, ['scripts/verifyCandidatePublicObservations.cjs'],
+    { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 60000, maxBuffer: 1024 * 1024 });
+  assert.equal(child.status, 0, child.stderr || child.stdout);
+  const report = JSON.parse(child.stdout); assert.equal(report.ok, true);
+  assert.equal(report.verifier, 'candidate-public-observations-v1'); assert.ok(report.checks.every(row => row.ok === true));
   assert.equal(report.productionWrites, 0); assert.equal(report.providerRequests, 0);
 });
 const bundle=read('scripts/createReleaseBundle.cjs'),safety=read('scripts/verifyReleaseBundleSafety.cjs');
@@ -130,6 +149,7 @@ check('fixed hypothesis lineage survives competing retrospective winners before 
 const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/services/apiFootballDiagnostics.d.cts',
   'scripts/productionFixtureIsolationContract.cjs', 'scripts/verifyProductionFixtureIsolationContract.cjs',
   'scripts/verifyProductionFixtureIsolation.cjs',
+  'scripts/readCandidatePublicObservations.cjs', 'scripts/verifyCandidatePublicObservations.cjs',
   'scripts/releasePrivateModelSeed.cjs', 'scripts/verifyReleasePrivateModelSeed.cjs',
   'scripts/verifyFrontendRuntimeAlternatives.cjs',
   'scripts/frontendReleaseInputs.cjs', 'scripts/prepareFrontendRelease.cjs', 'scripts/verifyFrontendReleaseInputs.cjs',
