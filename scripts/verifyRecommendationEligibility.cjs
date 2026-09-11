@@ -309,21 +309,24 @@ check("insufficient samples remain shadow instead of claiming an accuracy gain",
   && Number(selection?.gate?.thresholds?.minCandidateRows || 0) >= 300
   && Number(selection?.gate?.thresholds?.minBaselineRows || 0) >= 500);
 const productionValidation = selection?.productionValidation || {};
-const productionReplayStateConsistent = (validation, gate) => validation?.eligible === true
-  ? validation?.samePolicyImplementation === true
-    && validation?.perMarket?.HAD?.productionPolicyReplay === true
-    && validation?.perMarket?.HHAD?.productionPolicyReplay === true
-    && validation?.validatedMarkets?.includes("HAD")
-    && validation?.validatedMarkets?.includes("HHAD")
-    && gate?.productionPolicyValidated === true
-    && gate?.validatedMarkets?.includes("HAD")
-    && gate?.validatedMarkets?.includes("HHAD")
-  : validation?.perMarket?.HAD?.productionPolicyReplay === false
-    && validation?.perMarket?.HHAD?.productionPolicyReplay === false
-    && validation?.validatedMarkets?.length === 0
-    && gate?.productionPolicyValidated === false
-    && gate?.blockers?.length > 0
-    && gate?.blockers?.includes("HHAD-production-policy-unvalidated");
+const productionReplayStateConsistent = (validation, gate) => {
+  const markets = ["HAD", "HHAD"];
+  if (typeof validation?.samePolicyImplementation !== "boolean"
+    || !markets.every(market => typeof validation?.perMarket?.[market]?.productionPolicyReplay === "boolean")) return false;
+  const validated = markets.filter(market => validation.perMarket[market].productionPolicyReplay);
+  const exactMarkets = values => Array.isArray(values) && values.length === validated.length
+    && new Set(values).size === values.length && values.every(market => validated.includes(market));
+  const eligible = validation.samePolicyImplementation && validated.length === markets.length;
+  if (validation.eligible !== eligible || gate?.productionPolicyValidated !== eligible
+    || !exactMarkets(validation.validatedMarkets) || !exactMarkets(gate?.validatedMarkets)) return false;
+  if (eligible) return true;
+  const blockers = [
+    ...(!validation.samePolicyImplementation ? ["production-multi-factor-policy-not-replayed"] : []),
+    ...markets.filter(market => !validated.includes(market)).map(market => market + "-production-policy-unvalidated"),
+  ];
+  return gate?.eligible === false && gate?.action === "shadow-only"
+    && Array.isArray(gate.blockers) && blockers.every(blocker => gate.blockers.includes(blocker));
+};
 const replayStateConsistent = productionReplayStateConsistent(productionValidation, selection?.gate);
 check("validated policy replay fixture remains shadow under the outer promotion gate",
   productionReplayStateConsistent({

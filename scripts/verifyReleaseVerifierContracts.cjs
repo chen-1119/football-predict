@@ -7,6 +7,13 @@ const root=path.resolve(__dirname,'..');
 const read=relative=>fs.readFileSync(path.join(root,relative),'utf8').replace(/\r\n?/g,'\n');
 const pkg=JSON.parse(read('package.json')), lock=JSON.parse(read('package-lock.json'));
 const checks=[];const check=(name,test)=>{test();checks.push({name,ok:true});};
+check('partial policy replay stays shadow and preserves per-market gates before signing', () => {
+  const child = require('node:child_process').spawnSync(process.execPath, ['scripts/verifyPartialPolicyReplayState.cjs'],
+    { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 10000, maxBuffer: 65536 });
+  assert.equal(child.status, 0, child.stderr || child.stdout);
+  const proof = JSON.parse(child.stdout); assert.equal(proof.ok, true); assert.equal(proof.checks, 47);
+  assert.equal(proof.productionWrites, 0); assert.equal(proof.modelPromotionAllowed, false);
+});
 check('review runtime verifier dependencies survive production pruning',()=>{
   for(const name of ['typescript','react','react-dom']){
     assert.ok(pkg.dependencies?.[name],`${name} is required by production review verification`);
