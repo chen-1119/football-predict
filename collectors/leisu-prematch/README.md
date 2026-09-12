@@ -1,3 +1,15 @@
+# 线上定时策略（0.3.0）
+
+运行入口为 `scheduled.cjs`，由 `leisu-prematch.timer` 每 5 分钟唤醒。部署后设置 `LEISU_ENABLED=1` 启用策略。程序真实探测服务器浏览器访问，成功才运行现有采集链路；`LEISU_ACCESS_VALIDATED` 的手动值不作为定时器启用条件。
+
+范围：北京时间今天、明天且未开赛的站内比赛；伤停每 6 小时，阵容赛前 90/60/30 分钟检查，未公布时 20/10 分钟补查。源站 403/405 或登录失效时记录实际失败，6 小时后重试；期间定时器继续刷新运行状态，保留旧数据。有效窗口无比赛时不开浏览器。
+
+运行结果写入现有 PostgreSQL 的 `leisu_prematch.scheduler_runs`；伤停、阵容仍写入 `observations/latest_valid`。`LEISU_PUBLIC_DIR` 中的 `collection-status.json`、`latest-evidence.json` 供网站只读访问。共享目录须由 `leisu-collector:football` 持有、权限 2750；原子发布文件权限 0640。浏览器和私有配置仍不开放给网站。
+
+页面展示启用状态、最近执行、下次取数、具体失败原因和逐项内容。赔率自动采集尚未实现，采集数据不自动进入正式推荐。
+
+以下为 0.2.0 的实现和本地验收记录，不能作为当前线上验收结论。
+
 # 雷速赛前采集执行包
 
 当前开发版本：**0.2.0**。本轮仅开发、测试和打包，未进行服务器安装或部署。详细改动见 [CHANGELOG.md](CHANGELOG.md)。

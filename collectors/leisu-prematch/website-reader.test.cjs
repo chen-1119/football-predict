@@ -294,7 +294,7 @@ test('request query and path never override the one configured export file', asy
   assert.equal(res.statusCode, 200);
   assert.equal(JSON.parse(res.body).status, 'ok');
   assert.deepEqual(fixtureCalls, [ID]);
-  assert.deepEqual(opens, [exportPath]);
+  assert.deepEqual(opens, [path.join(directory, 'collection-status.json'), exportPath]);
 });
 
 test('missing or mismatched current fixtures return 404 without opening the export', async t => {

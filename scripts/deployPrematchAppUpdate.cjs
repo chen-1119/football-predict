@@ -116,6 +116,7 @@ async function main() {
   add('dist/index.html');
   for (const entry of fs.readdirSync(path.join(root, 'dist/assets'), { withFileTypes: true })) if (entry.isFile()) add('dist/assets/' + entry.name);
   const changed = run(['diff', '--name-only', base, commit, '--', 'src', 'server/index.cjs']).split(/\r?\n/).filter(Boolean);
+  if (!changed.includes('server/index.cjs')) changed.push('server/index.cjs');
   for (const file of changed) {
     let before;
     if (file === 'server/index.cjs') before = digest(normalize(cp.execFileSync(git, ['show', base + ':' + file], { cwd: root, maxBuffer: 2e6 })));

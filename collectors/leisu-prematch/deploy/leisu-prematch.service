@@ -11,7 +11,7 @@ Group=leisu-collector
 WorkingDirectory=/opt/football-leisu-collector
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
 EnvironmentFile=/etc/football-leisu-collector/collector.env
-ExecStart=/usr/bin/env node /opt/football-leisu-collector/cli.cjs collect-once
+ExecStart=/usr/bin/env node /opt/football-leisu-collector/scheduled.cjs
 UMask=0077
 TimeoutStartSec=10min
 NoNewPrivileges=true
@@ -22,7 +22,7 @@ ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
 RestrictSUIDSGID=true
-ReadWritePaths=/var/lib/football-leisu-collector
+ReadWritePaths=/var/lib/football-leisu-collector /var/lib/football-prematch-public
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=leisu-prematch

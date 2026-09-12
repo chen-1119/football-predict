@@ -1,6 +1,16 @@
 -- Dedicated observation storage. This migration never changes football.*.
 CREATE SCHEMA IF NOT EXISTS leisu_prematch;
 
+CREATE TABLE IF NOT EXISTS leisu_prematch.scheduler_runs (
+  run_id uuid PRIMARY KEY,
+  started_at timestamptz NOT NULL,
+  finished_at timestamptz NOT NULL,
+  status text NOT NULL,
+  payload jsonb NOT NULL,
+  CHECK (finished_at >= started_at),
+  CHECK (payload->>'predictionEligible' = 'false')
+);
+
 CREATE TABLE IF NOT EXISTS leisu_prematch.runs (
   run_id uuid PRIMARY KEY,
   started_at timestamptz NOT NULL DEFAULT now(),
