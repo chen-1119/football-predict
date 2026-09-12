@@ -1331,6 +1331,7 @@ const normalizeInjuryPlayer = (row, side, fixtureId, observedAt) => ({
 
 const buildInjuriesByFixture = (mappedMatches, response, context = {}) => {
   const byFixture = new Map();
+  const seenPlayers = new Set();
   for (const row of Array.isArray(response) ? response : []) {
     const fixtureId = row?.fixture?.id ?? context.providerFixtureId;
     if (!fixtureId) continue;
@@ -1345,6 +1346,15 @@ const buildInjuriesByFixture = (mappedMatches, response, context = {}) => {
         ? "away"
         : null;
     if (!side) continue;
+    // The provider can repeat the same player report in one fixture response.
+    // Deduplicate identical identified reports, retaining differing reports.
+    if (row?.player?.id != null) {
+      const key = JSON.stringify([String(fixtureId), String(teamId), String(row.player.id),
+        compactText(row.player.name), compactText(row.player.type || row.type),
+        compactText(row.player.reason || row.reason)]);
+      if (seenPlayers.has(key)) continue;
+      seenPlayers.add(key);
+    }
     if (!byFixture.has(fixtureId)) byFixture.set(fixtureId, { home: [], away: [] });
     byFixture.get(fixtureId)[side].push({
       label: multi(formatPerson(row)),

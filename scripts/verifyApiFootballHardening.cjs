@@ -596,6 +596,13 @@ const injuries = api.buildInjuriesByFixture([mappedEntry], [{
 
 check(Boolean(injuries?.summary?.zh) && Array.isArray(injuries?.home) && Array.isArray(injuries?.away), "injuries must retain legacy summary/home/away fields");
 const injuryPlayer = injuries.players[0];
+const repeatedInjury = { fixture: { id: 7001 }, team: { id: 11 },
+  player: { id: 101, name: "Player One", type: "Missing Fixture", reason: "Hamstring" } };
+const distinctInjuries = api.buildInjuriesByFixture([mappedEntry], [repeatedInjury,
+  structuredClone(repeatedInjury), { ...repeatedInjury, player: { ...repeatedInjury.player, reason: "Knee" } }],
+{ observedAt, sourceUpdatedAt: observedAt }).get("7001");
+check(distinctInjuries.players.length === 2 && distinctInjuries.home.length === 2,
+  "duplicate identified provider injury reports must be removed without discarding differing reports");
 check(
   injuryPlayer.playerId === 101
     && injuryPlayer.name === "Player One"
