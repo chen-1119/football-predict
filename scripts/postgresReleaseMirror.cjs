@@ -175,8 +175,8 @@ async function mirrorPostgresCandidate({ sourceSession, candidatePool, key, expe
         SELECT $1,unnest($2::text[]),unnest($3::text[]),unnest($4::text[]),unnest($5::text[])
         ${head ? "ON CONFLICT(table_name,key_json) DO UPDATE SET source_xmin=EXCLUDED.source_xmin,target_xmin=EXCLUDED.target_xmin,mac=EXCLUDED.mac" : ""}`, values);
     };
-    // Populate membership before removing old candidate-only rows in reverse
-    // foreign-key order. The canonical source database is never modified.
+    // Populate membership before copying rows. Retained child keys may still
+    // reference candidate-only parents until their source values are restored.
     stage = "source-metadata";
     for (const table of tables) { activeTable = table.name; progress(); await eachSourceBatch(source, table, !incremental, async rows => {
       withinBudget();
@@ -184,13 +184,6 @@ async function mirrorPostgresCandidate({ sourceSession, candidatePool, key, expe
       await target.query("INSERT INTO mirror_seen SELECT $1,unnest($2::text[]),unnest($3::text[]),unnest($4::text[])", [table.name, values, rows.map(row => row.mirror_xmin), rows.map(row => row.mirror_digest || null)]);
     }); }
     await target.query("ANALYZE mirror_seen");
-    for (const table of [...tables].reverse()) {
-      stage = "remove-candidate-only"; activeTable = table.name; progress();
-      withinBudget();
-      const removed = await target.query(`DELETE FROM ${tableSql(table)} t WHERE NOT EXISTS
-        (SELECT 1 FROM mirror_seen s WHERE s.table_name=$1 AND s.key_json=${keySql(table, "t.")})`, [table.name]);
-      report.removedCandidateRows += removed.rowCount;
-    }
     // The partial unique index permits only one current publication. Clear
     // only a superseded candidate head; its changed xmin forces exact recopy.
     const current = (await source.query("SELECT publication_id FROM football.publications WHERE state='current'")).rows.map(row => row.publication_id);
@@ -260,6 +253,15 @@ async function mirrorPostgresCandidate({ sourceSession, candidatePool, key, expe
         }
       });
       report.tables.push(summary);
+    }
+    // Restore surviving foreign keys before deleting their former parents.
+    // Both operations remain in the same candidate-only transaction.
+    for (const table of [...tables].reverse()) {
+      stage = "remove-candidate-only"; activeTable = table.name; progress();
+      withinBudget();
+      const removed = await target.query(`DELETE FROM ${tableSql(table)} t WHERE NOT EXISTS
+        (SELECT 1 FROM mirror_seen s WHERE s.table_name=$1 AND s.key_json=${keySql(table, "t.")})`, [table.name]);
+      report.removedCandidateRows += removed.rowCount;
     }
     if (head) await target.query("DELETE FROM football_release_private.mirror_rows r WHERE NOT EXISTS(SELECT 1 FROM mirror_seen s WHERE s.table_name=r.table_name AND s.key_json=r.key_json)");
     const payload = { contextHash, sourceTx, targetTx };
