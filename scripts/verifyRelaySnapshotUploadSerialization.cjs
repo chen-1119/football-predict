@@ -233,6 +233,15 @@ const startServer = async () => {
     cwd: rootDir,
     env: {
       ...process.env,
+      // This child owns a temporary upload fixture, never the serving DB.
+      FOOTBALL_STORAGE_MODE: "hybrid",
+      FOOTBALL_POSTGRES_MODE: "disabled",
+      FOOTBALL_POSTGRES_URL: "",
+      DATABASE_URL: "",
+      PRIVATE_MODEL_ARTIFACT_STORAGE: "sqlite",
+      POSTGRES_PROJECTION_SOURCE: "sqlite",
+      CURRENT_MATCH_SOURCE: "file",
+      ENABLE_SQLITE_EXPORT: "0",
       NODE_ENV: "test",
       HOST: "127.0.0.1",
       PORT: String(port),

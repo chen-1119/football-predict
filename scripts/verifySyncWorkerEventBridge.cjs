@@ -55,6 +55,16 @@ const child = spawn(process.execPath, [path.join(rootDir, "server", "index.cjs")
   cwd: rootDir,
   env: {
     ...process.env,
+    // The event bridge fixture has its own files and no production database.
+    FOOTBALL_STORAGE_MODE: "hybrid",
+    FOOTBALL_POSTGRES_MODE: "disabled",
+    FOOTBALL_POSTGRES_URL: "",
+    DATABASE_URL: "",
+    PRIVATE_MODEL_ARTIFACT_STORAGE: "sqlite",
+    POSTGRES_PROJECTION_SOURCE: "sqlite",
+    CURRENT_MATCH_SOURCE: "file",
+    DATASTORE_READ_SOURCE: "file",
+    ENABLE_SQLITE_EXPORT: "0",
     PORT: "0",
     HOST: "127.0.0.1",
     SERVER_STORE_DIR: tempDir,
