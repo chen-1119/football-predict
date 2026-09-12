@@ -5,7 +5,7 @@ const {
   resolveActivePublication, readPublicationJson, acquireGenerationReadLease,
   assertActivePublicationPointerUnchanged,
 } = require("../server/dataGenerationBundle.cjs");
-const { acquirePointerCommitLock, storePaths } = require("../server/dataGenerationStore.cjs");
+const { acquirePointerCommitLock, storePaths, readGenerationSelectedObject } = require("../server/dataGenerationStore.cjs");
 const { attachArchivedPreMatchPredictions } = require("./syncData.cjs");
 const {
   hashPayload, sourceMatchIdFor, canonicalOddsState, canonicalPredictionState,
@@ -114,7 +114,7 @@ function createPostgresGenerationSource(options = {}) {
     for (const row of rows) if (row.key !== "fast_result_generation_reconciliation") meta[row.key] = row;
   };
   async function* matchRows() {
-    const snapshots = read("prediction-snapshots.json");
+    const snapshots = () => read("prediction-snapshots.json");
     const result = new Map(guard.rows.map(row => [row.id, row]));
     const rebased = new Set(), seen = new Set();
     for (const dataset of ["current", "history"]) {
@@ -141,7 +141,10 @@ function createPostgresGenerationSource(options = {}) {
     for (const row of sorted(result.values())) yield row;
   }
   async function* sourceRows() {
-    const snapshot = read("prediction-snapshots.json");
+    assertUnchanged();
+    const { value: snapshot } = readGenerationSelectedObject(active.context, "prediction-snapshots.json", {
+      keys: ["updatedAt", "retentionDays", "publicReferenceDecisions", "publicReferenceEvidence"],
+    });
     const archive = buildPublicReferenceArchive(snapshot), index = buildPublicReferenceIndex(archive);
     const rows = [{ id: "sync-meta:current", source: syncMeta.source || "sporttery",
       captured_at: syncMeta.updatedAt || syncMeta.capturedAt || null, payload: JSON.stringify(syncMeta) }];

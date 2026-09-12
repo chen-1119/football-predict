@@ -15,7 +15,7 @@ check('actual root deployment configuration gate passes before signing', () => {
   assert.ok(proof.checks.length > 50 && proof.checks.every(row => row.ok === true));
 });
 check('native policy, signed dispatch and exact generation copy pass before signing', () => {
-  for (const entry of ['verifyNativeReleasePipeline.cjs', 'verifyNativeReleaseGenerationCopy.cjs']) {
+  for (const entry of ['verifyNativeReleasePipeline.cjs', 'verifyNativeReleaseGenerationCopy.cjs', 'verifyRecoveryColdStart.cjs']) {
     const child = require('node:child_process').spawnSync(process.execPath, [path.join(__dirname, entry)],
       { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 30000, maxBuffer: 1024 * 1024 });
     assert.equal(child.status, 0, child.stderr || child.stdout);

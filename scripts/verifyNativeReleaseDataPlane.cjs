@@ -93,6 +93,7 @@ async function run() {
       const schema = await require("./postgresProjectionSync.cjs").ensureProjectionSchema({ kind: "native-generation" }, writer);
       assert.equal(schema.readOnly, true); assert.ok(schema.verified > 0);
       await assert.rejects(writer.query("CREATE SCHEMA forbidden_candidate_schema"), /permission denied/);
+      await writer.query("BEGIN; CREATE TEMP TABLE native_projection_ids(id text PRIMARY KEY) ON COMMIT DROP; INSERT INTO native_projection_ids VALUES ('fixture'); COMMIT");
       await writer.query("UPDATE football.projection_meta SET value='candidate-only' WHERE key='data_generation_source_cycle_id'");
       assert.equal((await source.query("SELECT value FROM football.projection_meta WHERE key='data_generation_source_cycle_id'")).rows[0].value, identity.sourceCycleId);
     } finally { await writer.end(); }
