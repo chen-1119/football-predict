@@ -71,6 +71,14 @@ for (const failure of ["none", "restart", "active", "health"]) {
   assert.equal(result.stdout.includes("restore-complete"), failure === "none");
 }
 checks.push("actual native cache handoff calls the shared restore helper with an accepted label and propagates restart and health failures");
+const buildStep = source.match(/^run_build_step\(\) \{[\s\S]*?^\}/m)?.[0];
+assert.ok(buildStep);
+const budgetScript = "set -euo pipefail\nTRANSACTION_VERSION=3 BUILD_USER=fixture BUILD_DIR=/fixture\nlog(){ :; }\nnext_transient_unit(){ NEXT_TRANSIENT_UNIT=fixture; }\ntransient_build_properties(){ :; }\nassert_transient_unit_cleared(){ :; }\nsystemd-run(){ printf '%s\\n' \"$@\"; }\n" + buildStep + "\nrun_build_step candidate-postgres-reconciled true\n";
+const budgetResult = spawnSync(process.platform === "win32" ? "D:/app/Git/bin/bash.exe" : "/bin/bash", ["--noprofile", "--norc", "-s"],
+ { input: budgetScript, encoding: "utf8", windowsHide: true, timeout: 5000, env: {PATH:process.env.PATH,SystemRoot:process.env.SystemRoot} });
+assert.equal(budgetResult.status,0,budgetResult.stderr);
+for (const token of ["MemoryHigh=1600M", "MemoryMax=2200M", "MemorySwapMax=512M", "NODE_OPTIONS=--max-old-space-size=1536"]) assert.ok(budgetResult.stdout.includes(token), token);
+checks.push("actual native PostgreSQL build step receives the bounded large-projection memory allocation");
 const entries = ["scripts/nativeDatabaseCutover.cjs", "scripts/postgresReleaseMirror.cjs", "scripts/nativeReleaseDatabaseSession.cjs",
   "scripts/nativeReleaseDataPlane.cjs", "scripts/nativeReleaseGenerationCopy.cjs", "scripts/nativeReleasePostgresTransport.cjs",
   "scripts/validateNativeReleasePolicy.cjs", "scripts/verifyNativeReleasePipeline.cjs", "scripts/verifyNativeReleaseDataPlane.cjs",

@@ -52,7 +52,7 @@ for (const [phase, active, kind] of [["prepared", false, "initial-cutover"], ["p
     assert.equal(readTreeId(f.app), phase === "committed" ? "new" : "old");
     assert.deepEqual(files.map(file => fs.readFileSync(file)), before, "rollback must retain newer model, frozen registry and all database bytes");
     const state = JSON.parse(fs.readFileSync(f.mockPath));
-    assert.deepEqual(state.nativeDatabaseTopology, dbBefore); assert.equal(state.publicationAffinityRebuilds || 0, 0);
+    assert.deepEqual(state.nativeDatabaseTopology, dbBefore); assert.equal(state.publicationAffinityRebuilds || 0, active ? 0 : 1);
     assert.equal(fs.readFileSync(mapped(f.root, "/etc/football-predict/env"), "utf8"), active ? nativeEnv : "RELEASE_STATE=old\n");
     assert.equal(fs.existsSync(f.current), false);
     checks.push({ phase, active, kind, ok: true });

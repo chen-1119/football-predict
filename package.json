@@ -88,7 +88,7 @@
     "datastore:sqlite": "node --expose-gc scripts/exportDataStoreSqlite.cjs && node scripts/syncPostgresProjection.cjs --if-enabled",
     "postgres:migrate-schema": "node scripts/migratePostgresSchema.cjs",
     "postgres:backfill": "node scripts/syncPostgresProjection.cjs --backfill",
-    "postgres:sync": "node scripts/syncPostgresProjection.cjs --mode=incremental",
+    "postgres:sync": "node --max-old-space-size=1536 --expose-gc scripts/syncPostgresProjection.cjs --mode=incremental",
     "postgres:sync-fast": "node scripts/syncPostgresProjection.cjs --mode=fast-result",
     "postgres:import-history": "node scripts/importHistoricalSourcePostgres.cjs",
     "sync:football-data-results": "node scripts/syncFootballDataResults.cjs --postgres",

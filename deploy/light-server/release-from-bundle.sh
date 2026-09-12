@@ -308,7 +308,7 @@ run_build_step() {
       memory_swap_max="512M"
       node_heap_mib="1536"
       ;;
-    optimize-strategy|candidate-generation|candidate-generation-reconciled|candidate-datastore|candidate-datastore-reconciled|candidate-deadline-capture)
+    optimize-strategy|candidate-generation|candidate-generation-reconciled|candidate-datastore|candidate-datastore-reconciled|candidate-deadline-capture|candidate-postgres-reconciled)
       # Strategy optimization, generation and the cold SQLite projection all
       # traverse the full retained odds and prediction windows. The old 896
       # MiB V8 heap entered cgroup reclaim and then aborted while JSON.parse

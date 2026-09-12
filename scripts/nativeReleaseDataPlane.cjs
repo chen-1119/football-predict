@@ -234,6 +234,7 @@ async function candidateAccess(state, directory, writable = false) {
     write(path.join(directory, prefix + "-access-intent.json"), { role, database: state.candidateDatabase });
     await admin.query(`SET password_encryption='scram-sha-256'; CREATE ROLE "${role}" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS CONNECTION LIMIT 8 PASSWORD '${password}'`);
     await admin.query(`GRANT CONNECT ON DATABASE "${state.candidateDatabase}" TO "${role}"`);
+    if (writable) await admin.query(`GRANT TEMPORARY ON DATABASE "${state.candidateDatabase}" TO "${role}"`);
     await candidate.query(`GRANT USAGE ON SCHEMA football TO "${role}"; GRANT ${writable ? "SELECT,INSERT,UPDATE,DELETE" : "SELECT"} ON ALL TABLES IN SCHEMA football TO "${role}"`);
     if (writable) await candidate.query(`GRANT USAGE,SELECT,UPDATE ON ALL SEQUENCES IN SCHEMA football TO "${role}"`);
     await admin.query(`ALTER ROLE "${role}" SET default_transaction_read_only=${writable ? "off" : "on"}; ALTER ROLE "${role}" SET statement_timeout='120s'`);

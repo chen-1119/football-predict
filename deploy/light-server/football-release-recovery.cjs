@@ -467,7 +467,8 @@ class SystemAdapter {
       if (this.state.health === false) fail("mock application health is failing");
       return;
     }
-    for (let attempt = 0; attempt < 30; attempt += 1) {
+    const healthDeadline = Date.now() + 180_000;
+    while (Date.now() < healthDeadline) {
       const result = this.run("curl", ["-fsS", "--max-time", "8", "http://127.0.0.1:8788/api/v1/health"], { allowFailure: true });
       if (result.status === 0) return;
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 2000);
@@ -480,7 +481,8 @@ class SystemAdapter {
       if (this.state.nativeHealth !== true) fail("mock native storage health is failing");
       return;
     }
-    for (let attempt = 0; attempt < 30; attempt += 1) {
+    const healthDeadline = Date.now() + 180_000;
+    while (Date.now() < healthDeadline) {
       const response = this.run("curl", ["-fsS", "--max-time", "8", "http://127.0.0.1:8788/api/v1/health"], { allowFailure: true });
       try {
         const health = JSON.parse(response.stdout), s = health.storage, p = s?.postgres, g = p?.publication;
@@ -1221,7 +1223,7 @@ const recoverRollback = (transaction, system) => {
   // build. Its generation pointer may therefore advance after the rollback
   // SQLite snapshot was captured. Re-export from the restored app against the
   // current serving generation before any runtime unit is restarted.
-  if (transaction.sqlite) system.rebuildSqliteForServingGeneration();
+  if (transaction.sqlite || (transaction.native && !nativeWasActive)) system.rebuildSqliteForServingGeneration();
   restoreUnitStates(transaction.config, system);
   const appState = transaction.config.units.find((entry) => entry.name === "football-predict.service");
   if (!appState?.active) fail("original application service was not active; automatic recovery is not authorized");
@@ -1233,7 +1235,7 @@ const recoverRollback = (transaction, system) => {
   updatePhase(transaction, "rolled-back");
   resolveTransaction(transaction);
   return { action: "rollback", bundleSha256: transaction.bundleSha, phase: "rolled-back",
-    ...(transaction.native ? { storage: nativeWasActive ? "postgres-only" : "pre-cutover", databaseWrites: 0, liveModelDataPreserved: true } : {}) };
+    ...(transaction.native ? { storage: nativeWasActive ? "postgres-only" : "pre-cutover", projectionRebuilt: !nativeWasActive, liveModelDataPreserved: true } : {}) };
 };
 
 const recoverForward = (transaction, system) => {
