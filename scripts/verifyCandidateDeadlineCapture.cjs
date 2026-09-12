@@ -7,6 +7,19 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const { DatabaseSync } = require("node:sqlite");
+// These capture children own synthetic SQLite histories. Keep their storage
+// selectors separate from the native runtime running production readiness.
+const fixtureStorageEnvironment = {
+  FOOTBALL_STORAGE_MODE: "hybrid",
+  FOOTBALL_POSTGRES_MODE: "disabled",
+  FOOTBALL_POSTGRES_URL: "",
+  DATABASE_URL: "",
+  PRIVATE_MODEL_ARTIFACT_STORAGE: "sqlite",
+  POSTGRES_PROJECTION_SOURCE: "sqlite",
+  CURRENT_MATCH_SOURCE: "file",
+  DATASTORE_READ_SOURCE: "file",
+  ENABLE_SQLITE_EXPORT: "0",
+};
 const {
   ATOMIC_DECISION_VALIDATION_VERSION,
   SETTLEMENT_RECORD_VERSION,
@@ -512,6 +525,7 @@ const runCapture = (at, extraEnv = {}, extraArgs = []) => spawnSync(
     encoding: "utf8",
     env: {
       ...process.env,
+      ...fixtureStorageEnvironment,
       NODE_ENV: "test",
       SERVER_STORE_DIR: tempDir,
       DATASTORE_SQLITE_PATH: sqliteFile,
@@ -1448,6 +1462,7 @@ check("transient sqlite failure cannot create a terminal event and recovery comm
       encoding: "utf8",
       env: {
         ...process.env,
+        ...fixtureStorageEnvironment,
         NODE_ENV: "test",
         SERVER_STORE_DIR: recoveryDir,
         DATASTORE_SQLITE_PATH: dbPath,
@@ -1723,6 +1738,7 @@ const runIsolatedCapture = ({
   encoding: "utf8",
   env: {
     ...process.env,
+    ...fixtureStorageEnvironment,
     NODE_ENV: "test",
     SERVER_STORE_DIR: directory,
     DATASTORE_SQLITE_PATH: sqlitePath,
@@ -2147,6 +2163,7 @@ check("deadline heartbeat atomically captures all-ready and mixed six-match coho
         encoding: "utf8",
         env: {
           ...process.env,
+          ...fixtureStorageEnvironment,
           NODE_ENV: "test",
           SERVER_STORE_DIR: batchDir,
           DATASTORE_SQLITE_PATH: batchSqliteFile,
@@ -2308,6 +2325,7 @@ check("deadline heartbeat atomically captures all-ready and mixed six-match coho
         encoding: "utf8",
         env: {
           ...process.env,
+          ...fixtureStorageEnvironment,
           NODE_ENV: "test",
           SERVER_STORE_DIR: batchDir,
           DATASTORE_SQLITE_PATH: batchSqliteFile,
