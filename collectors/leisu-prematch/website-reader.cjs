@@ -51,6 +51,33 @@ function publicEvidence(selected, fixture) {
   };
 }
 
+async function readCollectionStatus(file, now) {
+  let handle;
+  try {
+    handle = await fs.open(file, 'r');
+    const stat = await handle.stat();
+    if (!stat.isFile() || stat.size > 16384) return null;
+    const bytes = Buffer.alloc(stat.size + 1);
+    const { bytesRead } = await handle.read(bytes, 0, bytes.length, 0);
+    if (bytesRead !== stat.size) return null;
+    const value = JSON.parse(bytes.subarray(0, bytesRead).toString('utf8'));
+    if (value.version !== 'prematch-scheduler-v1' || value.predictionEligible !== false) return null;
+    const states = new Set(['disabled', 'running', 'blocked', 'login_required', 'source-unavailable', 'fixture-stale',
+      'fixture-unavailable', 'collection-paused', 'completed', 'no-due-tasks', 'budget-exhausted', 'browser-unavailable', 'runtime-error']);
+    const time = input => typeof input === 'string' && Number.isFinite(Date.parse(input)) ? new Date(input).toISOString() : null;
+    const number = input => Number.isSafeInteger(input) && input >= 0 ? input : null;
+    return { enabled: value.enabled === true, state: states.has(value.state) ? value.state : 'runtime-error',
+      checkedAt: time(value.checkedAt), lastRunAt: time(value.lastRunAt), lastSuccessAt: time(value.lastSuccessAt), nextAttemptAt: time(value.nextAttemptAt),
+      statusFresh: Number.isFinite(Date.parse(value.checkedAt)) && now - Date.parse(value.checkedAt) >= 0 && now - Date.parse(value.checkedAt) < 15 * 60000,
+      sourceState: ['available', 'blocked', 'login_required', 'parse_error', 'conflict'].includes(value.sourceAccess?.state) ? value.sourceAccess.state : null,
+      sourceHttpStatus: number(value.sourceAccess?.httpStatus),
+      fixtureState: ['available', 'stale', 'unavailable'].includes(value.fixtureInput?.state) ? value.fixtureInput.state : null,
+      eligibleMatches: number(value.fixtureInput?.eligibleMatches), collectedRows: number(value.collectedRows),
+      strategy: { timezone: 'Asia/Shanghai', days: 2, checkMinutes: 5, injuriesEveryHours: 6,
+        lineupMinutesBeforeKickoff: [90, 60, 30, 20, 10], automaticOdds: false } };
+  } catch { return null; } finally { await handle?.close(); }
+}
+
 function createWebsiteReader({ exportPath, readFixture, maxBytes = 10 * 1024 * 1024, now = Date.now }) {
   if (typeof readFixture !== 'function') throw new TypeError('readFixture must read the current website fixture');
   if (exportPath && !path.isAbsolute(exportPath)) throw new TypeError('exportPath must be an absolute configured path');
@@ -60,6 +87,8 @@ function createWebsiteReader({ exportPath, readFixture, maxBytes = 10 * 1024 * 1
     if (!exportPath) return { matchId: siteMatchId, status: 'disabled', predictionEligible: false };
     const fixture = await readFixture(siteMatchId);
     if (!fixture || fixture.id !== siteMatchId) return { matchId: siteMatchId, status: 'missing', predictionEligible: false };
+    const collection = await readCollectionStatus(path.join(path.dirname(exportPath), 'collection-status.json'), now());
+    const statusFields = collection ? { collection } : {};
     let handle, document;
     try {
       // The path is operator configuration, never derived from a request ID.
@@ -77,10 +106,10 @@ function createWebsiteReader({ exportPath, readFixture, maxBytes = 10 * 1024 * 1
       if (offset > stat.size || offset > maxBytes) throw new Error('export grew beyond its size limit');
       document = JSON.parse(bytes.subarray(0, offset).toString('utf8'));
     } catch {
-      return { matchId: siteMatchId, status: 'unavailable', predictionEligible: false };
+      return { matchId: siteMatchId, status: 'unavailable', predictionEligible: false, ...statusFields };
     } finally { await handle?.close(); }
-    try { return publicEvidence(selectEvidence(document, fixture, now()), fixture); }
-    catch { return { matchId: siteMatchId, status: 'unavailable', predictionEligible: false }; }
+    try { return { ...publicEvidence(selectEvidence(document, fixture, now()), fixture), ...statusFields }; }
+    catch { return { matchId: siteMatchId, status: 'unavailable', predictionEligible: false, ...statusFields }; }
   };
 }
 
@@ -103,4 +132,4 @@ function createWebsiteHandler(options) {
   };
 }
 
-module.exports = { createWebsiteReader, createWebsiteHandler, publicEvidence };
+module.exports = { createWebsiteReader, createWebsiteHandler, publicEvidence, readCollectionStatus };

@@ -42,7 +42,7 @@ RUN_USER=leisu-collector
 RUN_GROUP=leisu-collector
 SERVICE_PATH=/etc/systemd/system/leisu-prematch.service
 TIMER_PATH=/etc/systemd/system/leisu-prematch.timer
-RUNTIME_FILES=(package.json package-lock.json cli.cjs scope.cjs store.cjs browser.cjs mapping.cjs runtime-policy.cjs failure-policy.cjs website-adapter.cjs website-reader.cjs schema.sql)
+RUNTIME_FILES=(package.json package-lock.json cli.cjs scheduled.cjs scope.cjs store.cjs browser.cjs mapping.cjs runtime-policy.cjs failure-policy.cjs website-adapter.cjs website-reader.cjs schema.sql)
 
 for executable in node npm systemctl sudo useradd getent install chown chmod apt-get; do
   if ! command -v "$executable" >/dev/null 2>&1; then
@@ -145,7 +145,7 @@ chmod 0700 "$STATE_DIR" "$STATE_DIR/browser" "$BROWSERS_DIR"
 install -o root -g root -m 0644 "$SOURCE_DIR/deploy/leisu-prematch.service" "$SERVICE_PATH"
 install -o root -g root -m 0644 "$SOURCE_DIR/deploy/leisu-prematch.timer" "$TIMER_PATH"
 # Bind the installed service to the same verified Node runtime.
-sed -i "s|^ExecStart=.*|ExecStart=$NODE_BIN $INSTALL_DIR/cli.cjs collect-once|" "$SERVICE_PATH"
+sed -i "s|^ExecStart=.*|ExecStart=$NODE_BIN $INSTALL_DIR/scheduled.cjs|" "$SERVICE_PATH"
 systemctl daemon-reload
 
 trap - ERR
