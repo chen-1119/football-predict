@@ -7,6 +7,14 @@ const root=path.resolve(__dirname,'..');
 const read=relative=>fs.readFileSync(path.join(root,relative),'utf8').replace(/\r\n?/g,'\n');
 const pkg=JSON.parse(read('package.json')), lock=JSON.parse(read('package-lock.json'));
 const checks=[];const check=(name,test)=>{test();checks.push({name,ok:true});};
+check('native policy, signed dispatch and exact generation copy pass before signing', () => {
+  for (const entry of ['verifyNativeReleasePipeline.cjs', 'verifyNativeReleaseGenerationCopy.cjs']) {
+    const child = require('node:child_process').spawnSync(process.execPath, [path.join(__dirname, entry)],
+      { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 30000, maxBuffer: 1024 * 1024 });
+    assert.equal(child.status, 0, child.stderr || child.stdout);
+    const report = JSON.parse(child.stdout); assert.equal(report.ok, true); assert.equal(report.productionWrites, 0);
+  }
+});
 check('partial policy replay stays shadow and preserves per-market gates before signing', () => {
   const child = require('node:child_process').spawnSync(process.execPath, ['scripts/verifyPartialPolicyReplayState.cjs'],
     { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 10000, maxBuffer: 65536 });

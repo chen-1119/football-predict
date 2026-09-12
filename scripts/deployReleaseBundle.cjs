@@ -231,7 +231,7 @@ if (recoverMode) {
     "case \"$check_output\" in *\"recoveryPending=0\"*\"appPresent=1\"*) ;; *) echo \"recovery-postcheck-failed\"; exit 25 ;; esac",
     "test ! -e /var/lib/football-release/recovery/current && test ! -L /var/lib/football-release/recovery/current",
     "systemctl is-active --quiet football-predict.service",
-    "curl -fsS --max-time 8 http://127.0.0.1:8788/api/v1/health >/dev/null",
+    `curl -fsS --max-time 8 http://127.0.0.1:8788/api/v1/health | /opt/node-v22.22.1/bin/node -e ${shellQuote("let s='';process.stdin.on('data',b=>s+=b);process.stdin.on('end',()=>{const h=JSON.parse(s),q=h.storage?.sqlite;if(q?.retired===true)console.log('recoveryStorage=postgres-only');else if(q?.available===true)console.log('recoveryStorage=hybrid');else process.exitCode=1;});")}`,
     "echo recovery-ok"
   ].join("; ");
   const recovery = runCommand("ssh", [
@@ -241,13 +241,16 @@ if (recoverMode) {
   ]);
   const sshRecoveryOk = recovery.status === 0
     && (recovery.dryRun || (recovery.stdout || "").includes("recovery-ok"));
+  const recoveredNativeStorage = /^recoveryStorage=postgres-only\r?$/m.test(recovery.stdout || "");
   const publicVerify = sshRecoveryOk
     ? runCommand(process.execPath, ["scripts/verifyRemotePublicReadiness.cjs"], {
       env: {
         ...process.env,
         REMOTE_BASE_URL: publicBaseUrl,
         REMOTE_REQUIRE_HEALTHY: "0",
-        REMOTE_REQUIRE_SQLITE: "1",
+        REMOTE_REQUIRE_SQLITE: recoveredNativeStorage ? "0" : "1",
+        REMOTE_REQUIRE_POSTGRES_ONLY: recoveredNativeStorage ? "1" : "0",
+        REMOTE_REQUIRED_READ_SOURCE: recoveredNativeStorage ? "postgres" : "",
         REMOTE_REQUIRE_SYNC_WORKER: "1",
         REMOTE_SQLITE_READY_ATTEMPTS: process.env.REMOTE_SQLITE_READY_ATTEMPTS || "12",
         REMOTE_SQLITE_READY_RETRY_DELAY_MS: process.env.REMOTE_SQLITE_READY_RETRY_DELAY_MS || "5000"
@@ -402,6 +405,21 @@ if (fs.statSync(bundlePath).size !== Number(manifest.bytes)) {
   });
 }
 if (manifest.ok !== true) fail("release bundle manifest is not ok", { manifestPath });
+// Routing depends on bytes already bound to the verified manifest signature
+// and archive hash above. Environment flags cannot disable legacy clone QA.
+let nativeFullRelease = false;
+if (!frontendOnly && bundleInspection.entries.some(entry => entry.replace(/^\.\//, "") === "deploy/light-server/native-release-policy.json")) {
+  const policy = inspectBundleEntryBytes(bundlePath, "deploy/light-server/native-release-policy.json");
+  const journal = inspectBundleEntryBytes(bundlePath, "scripts/nativeReleaseJournal.cjs");
+  if (!policy.ok || policy.bytes > 4096 || !journal.ok || journal.bytes > 32768) fail("signed native release policy is missing or oversized");
+  try {
+    const parsed = JSON.parse(policy.content.toString("utf8"));
+    require("./validateNativeReleasePolicy.cjs").validateNativeReleasePolicy(parsed);
+    const pin = /const BOOTSTRAP_SHA = "([a-f0-9]{64})";/.exec(journal.content.toString("utf8"));
+    if (!pin || pin[1] !== parsed.bootstrapSha256) fail("signed native journal bootstrap differs from policy");
+    nativeFullRelease = true;
+  } catch (error) { fail("signed native storage dispatch rejected", { reason: error.message }); }
+}
 
 let releaseWindowPreflight = { windowChecked: false, reason: frontendOnly ? "frontend-only-no-data-cutover" : "dry-run",
   readyToCutover: false, windowPreauthorized: false };
@@ -428,6 +446,7 @@ if (frontendOnly) {
       if (!report.ok) fail("release archive preflight rejected before clone/upload", { archivePreflight: report });
     } catch (error) { fail("release archive preflight observation failed", { reason: error.message }); }
   }
+  if (!nativeFullRelease) {
   const localCloneVerifier = runCommand(process.execPath, [
     "scripts/verifyFastResultProductionClone.cjs",
     "--sqlite-path", path.join(rootDir, "server-data", "football.db"),
@@ -440,6 +459,7 @@ if (frontendOnly) {
       stderrTail: localCloneVerifier.stderr?.slice(-3000) || "",
       error: localCloneVerifier.error || null,
     });
+  }
   }
 }
 // End authenticated local routing; upload and server authorization remain below.
@@ -684,7 +704,9 @@ if ((release.status !== 0 || frontendOnly) && !dryRun) {
       ...process.env,
       REMOTE_BASE_URL: publicBaseUrl,
       REMOTE_REQUIRE_HEALTHY: "0",
-      REMOTE_REQUIRE_SQLITE: "1",
+      REMOTE_REQUIRE_SQLITE: nativeFullRelease ? "0" : "1",
+      REMOTE_REQUIRE_POSTGRES_ONLY: nativeFullRelease ? "1" : "0",
+      REMOTE_REQUIRED_READ_SOURCE: nativeFullRelease ? "postgres" : "",
       REMOTE_REQUIRE_SYNC_WORKER: "1",
       REMOTE_SQLITE_READY_ATTEMPTS: process.env.REMOTE_SQLITE_READY_ATTEMPTS || "12",
       REMOTE_SQLITE_READY_RETRY_DELAY_MS: process.env.REMOTE_SQLITE_READY_RETRY_DELAY_MS || "5000"

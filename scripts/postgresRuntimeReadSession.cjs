@@ -49,7 +49,7 @@ async function openPostgresRuntimeReadSession(options = {}) {
     const publication = resolveServingPublicationForSqliteIdentity({ storeDir, publicDataDir, sqliteIdentity: identity, allowPrevious: true });
     if (!publication.context) throw new Error("native read requires matching immutable generation");
     lease = acquireGenerationReadLease({ storeDir, generationId: identity.generationId, context: publication.context,
-      owner: "postgres-runtime-reader", ttlMs: 15 * 60_000 });
+      owner: "postgres-runtime-reader", ttlMs: 15 * 60_000, pointerLockHandle: options.pointerLockHandle || null });
     const receiptState = async () => {
         const result = await client.query("SELECT key,value,updated_at FROM football.projection_meta WHERE key=ANY($1::text[])", [FAST_RESULT_RECEIPT_META_KEYS]);
         if (!result.rows.some(row => ["fast_result_receipt", "fast_result_revision"].includes(row.key))) {

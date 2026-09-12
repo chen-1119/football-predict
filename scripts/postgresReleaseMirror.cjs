@@ -98,13 +98,22 @@ async function eachStagedBatch(target, table, action) {
   } finally { await target.query("CLOSE mirror_staged"); }
 }
 
-async function mirrorPostgresCandidate({ sourceSession, candidatePool, key, expectedSourceDatabase, timeoutMs = 600000, onProgress = () => {} }) {
+// The first complete mirror runs while production remains online. The measured
+// full-size scan approached ten minutes; give that preparation a bounded margin.
+// The stopped-window final mirror retains its original ten-minute bound.
+function mirrorTimeBudget(preparation = false, requested) {
+  if (typeof preparation !== "boolean") throw Error("invalid mirror preparation mode");
+  const maximum = preparation ? 1200000 : 600000, value = requested ?? maximum;
+  if (!Number.isSafeInteger(value) || value < 1000 || value > maximum) throw Error("invalid mirror time budget");
+  return value;
+}
+async function mirrorPostgresCandidate({ sourceSession, candidatePool, key, expectedSourceDatabase, preparation = false, timeoutMs, onProgress = () => {} }) {
   if (!Buffer.isBuffer(key) || key.length !== 32) throw Error("root-held mirror HMAC key required");
   if (!sourceSession?.client || !sourceSession.identity || !/^[a-z0-9_]+$/.test(expectedSourceDatabase || "")) throw Error("bound read-only source session required");
   if (candidatePool === sourceSession.pool) throw Error("independent candidate database required");
   if (typeof onProgress !== "function") throw Error("invalid mirror progress callback");
   const source = sourceSession.client;
-  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 600000) throw Error("invalid mirror time budget");
+  timeoutMs = mirrorTimeBudget(preparation, timeoutMs);
   const startedAt = Date.now(), deadline = startedAt + timeoutMs;
   let report, stage = "prepare", activeTable = null;
   const progress = () => onProgress({ stage, table: activeTable, elapsedMs: Date.now() - startedAt,
@@ -155,13 +164,16 @@ async function mirrorPostgresCandidate({ sourceSession, candidatePool, key, expe
       verifiedSeedRows: 0, batchSize: BATCH, metadataBatchSize: METADATA_BATCH, sourceMetadataPasses: 1, productionWrites: 0, tables: [] };
     const writeStates = async (table, records) => {
       if (!records.length) return;
-      const values = [], tuples = records.map(record => {
-        const parts = [table.name, record.key, record.sourceXmin, record.targetXmin];
-        parts.push(mac(key, [contextHash, ...parts]));
-        return "(" + parts.map(value => { values.push(value); return "$" + values.length; }).join(",") + ")";
-      });
-      await target.query(`INSERT INTO football_release_private.mirror_rows(table_name,key_json,source_xmin,target_xmin,mac) VALUES ${tuples.join(",")}
-        ON CONFLICT(table_name,key_json) DO UPDATE SET source_xmin=EXCLUDED.source_xmin,target_xmin=EXCLUDED.target_xmin,mac=EXCLUDED.mac`, values);
+      // One fixed prepared shape avoids parsing thousands of parameter slots
+      // for each batch of a million-row restored seed. A missing head was
+      // already proved to have zero state rows, and source PKs are unique;
+      // those first inserts do not need a conflicting-row update path.
+      // Existing heads, including a required full reseed, keep the upsert.
+      const values = [table.name, records.map(row => row.key), records.map(row => row.sourceXmin), records.map(row => row.targetXmin),
+        records.map(row => mac(key, [contextHash, table.name, row.key, row.sourceXmin, row.targetXmin]))];
+      await target.query(`INSERT INTO football_release_private.mirror_rows(table_name,key_json,source_xmin,target_xmin,mac)
+        SELECT $1,unnest($2::text[]),unnest($3::text[]),unnest($4::text[]),unnest($5::text[])
+        ${head ? "ON CONFLICT(table_name,key_json) DO UPDATE SET source_xmin=EXCLUDED.source_xmin,target_xmin=EXCLUDED.target_xmin,mac=EXCLUDED.mac" : ""}`, values);
     };
     // Populate membership before removing old candidate-only rows in reverse
     // foreign-key order. The canonical source database is never modified.
@@ -199,7 +211,10 @@ async function mirrorPostgresCandidate({ sourceSession, candidatePool, key, expe
         withinBudget();
         const keys = rows.map(row => keyFor(table, row));
         const actual = new Map((await target.query("SELECT key_json,target_xmin AS mirror_xmin,target_digest AS mirror_digest FROM mirror_actual WHERE table_name=$1 AND key_json=ANY($2::text[])", [table.name, keys])).rows.map(row => [row.key_json, row]));
-        const states = new Map((await target.query("SELECT * FROM football_release_private.mirror_rows WHERE table_name=$1 AND key_json=ANY($2::text[])", [table.name, keys])).rows.map(row => [row.key_json, row]));
+        // With no head, the state table was proved empty and every source PK
+        // occurs exactly once. Earlier batches therefore cannot contain any
+        // of these keys. Existing authenticated baselines retain the lookup.
+        const states = head ? new Map((await target.query("SELECT * FROM football_release_private.mirror_rows WHERE table_name=$1 AND key_json=ANY($2::text[])", [table.name, keys])).rows.map(row => [row.key_json, row])) : new Map();
         const verified = [];
         const changed = rows.filter(row => {
           const k = keyFor(table, row), state = states.get(k);
@@ -246,7 +261,7 @@ async function mirrorPostgresCandidate({ sourceSession, candidatePool, key, expe
       });
       report.tables.push(summary);
     }
-    await target.query("DELETE FROM football_release_private.mirror_rows r WHERE NOT EXISTS(SELECT 1 FROM mirror_seen s WHERE s.table_name=r.table_name AND s.key_json=r.key_json)");
+    if (head) await target.query("DELETE FROM football_release_private.mirror_rows r WHERE NOT EXISTS(SELECT 1 FROM mirror_seen s WHERE s.table_name=r.table_name AND s.key_json=r.key_json)");
     const payload = { contextHash, sourceTx, targetTx };
     await target.query(`INSERT INTO football_release_private.mirror_head VALUES(1,$1,$2) ON CONFLICT(singleton) DO UPDATE SET payload=EXCLUDED.payload,mac=EXCLUDED.mac`, [JSON.stringify(payload), mac(key, payload)]);
     stage = "commit"; activeTable = null; progress();
@@ -259,4 +274,4 @@ async function mirrorPostgresCandidate({ sourceSession, candidatePool, key, expe
     throw error;
   } finally { target.release(releaseError); }
 }
-module.exports = { mirrorPostgresCandidate };
+module.exports = { mirrorPostgresCandidate, mirrorTimeBudget };

@@ -124,6 +124,7 @@ function runCreatePrefix(source, options = {}) {
       if (name === "node:path") return path.posix;
       if (name === "node:crypto") return {};
       if (name === "node:fs") return {
+        existsSync: file => { assert.equal(file, "/fixture/deploy/light-server/native-release-policy.json"); return Boolean(options.nativePolicy); },
         readFileSync: file => {
           assert.equal(file, "/fixture/deploy/light-server/football-release");
           const wrapper = readSource("deploy/light-server/football-release");
@@ -143,6 +144,10 @@ function runCreatePrefix(source, options = {}) {
         return { status: 0 };
       } };
       if (name === "./releaseSigning.cjs") return signing;
+      if (name === "./validateNativeReleasePolicy.cjs") return { readPolicy: file => {
+        assert.equal(file, "/fixture/deploy/light-server/native-release-policy.json"); calls.push("native-policy");
+        if (options.nativeRejected) throw new Error("fixture native bootstrap not accepted"); return { ok: true };
+      } };
       if (name === "./historicalTrainingReleaseArtifact.cjs") return { HISTORICAL_TRAINING_RELEASE_ENTRY: "fixture.json", inspectHistoricalTrainingFile: () => ({ ok: true }) };
       if (["./releaseWorkspaceFreshness.cjs", "./releaseBundlePolicy.cjs", "./releasePrebuiltDist.cjs", "./releaseArchiveSourceInventory.cjs"].includes(name)) return {};
       if (name === "./runReleaseWorkerPreflight.cjs") return { runLiveWorkerPreflight: () => {
@@ -323,7 +328,7 @@ function verifyReleaseWindowPreflight() {
   check("actual deploy prefix requests upload stage and blocks clone or upload after a rejected observation", () => {
     const deploy = readSource("scripts/deployReleaseBundle.cjs");
     const start = deploy.indexOf("  // Reject a closed window before the archive scan, local clone, or uploads.");
-    const end = deploy.indexOf("  const localCloneVerifier =", start); assert.ok(start >= 0 && end > start);
+    const end = deploy.indexOf("  if (!nativeFullRelease) {", start); assert.ok(start >= 0 && end > start);
     for (const outcome of ["open", "closed", "throws"]) {
       const calls = [];
       const context = { dryRun: false, releaseWindowPreflight: null,
@@ -352,6 +357,12 @@ function verifyReleaseWindowPreflight() {
       assert.equal(rejected.ok, false); assert.deepEqual(rejected.calls, ["sequence-preflight", "worker"]);
       assert.match(rejected.error, options.workerThrows ? /worker observation unavailable/ : /worker-latest-official-cycle-failed/);
     }
+  });
+  check("native policy rejects unaccepted bootstrap before network, reservation or build", () => {
+    const rejected = runCreatePrefix(create, { nativePolicy: true, nativeRejected: true });
+    assert.equal(rejected.ok, false); assert.deepEqual(rejected.calls, ["sequence-preflight", "native-policy"]);
+    const accepted = runCreatePrefix(create, { nativePolicy: true }); assert.equal(accepted.ok, true, accepted.error);
+    assert.deepEqual(accepted.calls, ["sequence-preflight", "native-policy", "worker", "window", "archive", "preSign", "reserve", "build"]);
   });
   check("actual offline create prefix makes no live calls and explicitly reports no window authority", () => {
     const result = runCreatePrefix(create, { offline: true, windowThrows: true }); assert.equal(result.ok, true, result.error);

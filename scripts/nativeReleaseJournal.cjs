@@ -3,9 +3,9 @@
 // recovery reader. This creates a journal, never activates or renames a DB.
 const fs = require("node:fs"), path = require("node:path"), crypto = require("node:crypto"), assert = require("node:assert/strict");
 const { spawnSync } = require("node:child_process");
-// r723 failed before activation. No compatible bootstrap has been accepted yet.
-// Initial cutover stays disabled until a later signed revision pins live proof.
-const BOOTSTRAP_SHA = null;
+// Exact accepted r730 runtime; original 198 decisions/evidence and frozen
+// archive continuity were independently verified after its official cycle.
+const BOOTSTRAP_SHA = "a69f15cc7deeb44343cede093f2b6b0e8ea02b01587121b856c2f4d10f6e194b";
 const NATIVE_SELECTORS = Object.freeze({ FOOTBALL_STORAGE_MODE: "postgres-only", FOOTBALL_POSTGRES_MODE: "primary",
   DATASTORE_READ_SOURCE: "postgres", CURRENT_MATCH_SOURCE: "postgres", ENABLE_SQLITE_EXPORT: "0",
   PRIVATE_MODEL_ARTIFACT_STORAGE: "postgres", POSTGRES_PROJECTION_SOURCE: "native-generation" });

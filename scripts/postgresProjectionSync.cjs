@@ -8,6 +8,7 @@ const { privateArtifactStorage } = require("./runtimePrivateModelArtifactStore.c
 const {
   createPostgresPool,
   runPostgresMigrations,
+  verifyPostgresSchemaCurrent,
   withPostgresTransaction,
 } = require("../server/postgresStore.cjs");
 const {
@@ -18,6 +19,10 @@ const {
 const rootDir = path.resolve(__dirname, "..");
 const DEFAULT_BATCH_ROWS = 200;
 const MODE_VALUES = new Set(["backfill", "incremental", "fast-result"]);
+// Native schema installation belongs to the explicit release lane. A candidate
+// writer has DML privileges only and must not need database/schema ownership.
+const ensureProjectionSchema = (source, pool) => source.kind === "native-generation"
+  ? verifyPostgresSchemaCurrent(pool) : runPostgresMigrations(pool);
 
 const sha256 = (value) => crypto.createHash("sha256").update(value).digest("hex");
 const stableValue = (value) => {
@@ -1382,7 +1387,7 @@ const syncPostgresProjectionFromSource = async (source, options = {}) => {
     source.assertUnchanged();
     pool = options.pool || createPostgresPool({ applicationName: `football-projection-${mode}` });
     const arena = loadAiArena(aiArenaPath);
-    await runPostgresMigrations(pool);
+    await ensureProjectionSchema(source, pool);
 
     const result = await withPostgresTransaction(pool, async (client) => {
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", ["football-postgres-projection-sync-v1"]);
@@ -1595,6 +1600,7 @@ const syncPostgresProjectionFromSource = async (source, options = {}) => {
 const syncPostgresProjectionFromSqlite = options => syncPostgresProjectionFromSource(createSqliteProjectionSource(options), options);
 
 module.exports = {
+  ensureProjectionSchema,
   persistSemanticRows,
   archiveParityCorrection,
   buildResultOnlyReviewCleanupCandidates,

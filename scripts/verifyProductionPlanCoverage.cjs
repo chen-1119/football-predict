@@ -2884,7 +2884,10 @@ const readPlanSqliteStatus = async () => {
     "if (recoverMode)",
     "--recover",
     "recoveryPending=0",
-    'REMOTE_REQUIRE_SQLITE: "1"',
+    'REMOTE_REQUIRE_SQLITE: recoveredNativeStorage ? "0" : "1"',
+    'REMOTE_REQUIRE_POSTGRES_ONLY: recoveredNativeStorage ? "1" : "0"',
+    'REMOTE_REQUIRED_READ_SOURCE: recoveredNativeStorage ? "postgres" : ""',
+    'recoveryStorage=postgres-only',
     'REMOTE_REQUIRE_SYNC_WORKER: "1"'
   ]) && hasAll(verifyReleaseRecovery, [
     "rollbackPhases",

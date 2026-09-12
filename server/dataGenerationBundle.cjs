@@ -7,6 +7,7 @@ const { readChunkedJsonFile } = require("./chunkedJsonFile.cjs");
 const {
   DataGenerationError,
   acquirePointerCommitLock,
+  inspectPointerCommitLockActivity,
   commitDataGeneration,
   readPointer,
   readGenerationFile,
@@ -1080,13 +1081,21 @@ const acquireGenerationReadLease = ({
   owner = `pid-${process.pid}`,
   ttlMs = DEFAULT_READER_LEASE_MS,
   now = Date.now(),
+  pointerLockHandle = null,
 }) => {
   if (!GENERATION_ID_PATTERN.test(String(generationId || ""))) {
     fail("INVALID_GENERATION_ID", "reader lease generationId is invalid");
   }
   const paths = storePaths(storeDir);
   fs.mkdirSync(paths.root, { recursive: true });
-  const pointerLock = acquirePointerCommitLock({
+  if (pointerLockHandle) {
+    const current = inspectPointerCommitLockActivity({ lockDir: paths.pointerLockDir });
+    if (!current.active || current.owner?.pid !== process.pid || current.owner?.token !== pointerLockHandle.owner?.token
+        || typeof pointerLockHandle.release !== "function") {
+      fail("GENERATION_READER_POINTER_LOCK_MISMATCH", "reader requires the caller's actual held pointer lock");
+    }
+  }
+  const pointerLock = pointerLockHandle || acquirePointerCommitLock({
     lockDir: paths.pointerLockDir,
     timeoutMs: 10_000,
     staleMs: 60_000,
@@ -1118,7 +1127,7 @@ const acquireGenerationReadLease = ({
       mode: 0o600,
     });
   } finally {
-    pointerLock.release();
+    if (!pointerLockHandle) pointerLock.release();
   }
   let released = false;
   return Object.freeze({

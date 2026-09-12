@@ -58,6 +58,18 @@ if (list.status !== 0) {
 }
 
 const entries = list.stdout.split(/\r?\n/).filter(Boolean);
+if (entries.some(entry => normalizeReleaseEntry(entry) === "deploy/light-server/native-release-policy.json")) {
+  const extract = (name, maxBuffer) => {
+    const result = spawnSync("tar", ["-xOzf", bundlePath, "./" + name], { encoding: "utf8", windowsHide: true, timeout: 15000, maxBuffer });
+    if (result.status !== 0) throw new Error("native policy source could not be read from archive: " + name);
+    return result.stdout;
+  };
+  const policy = JSON.parse(extract("deploy/light-server/native-release-policy.json", 4096));
+  require("./validateNativeReleasePolicy.cjs").validateNativeReleasePolicy(policy);
+  const journal = extract("scripts/nativeReleaseJournal.cjs", 32768);
+  const pinned = /const BOOTSTRAP_SHA = "([a-f0-9]{64})";/.exec(journal);
+  if (!pinned || pinned[1] !== policy.bootstrapSha256) throw new Error("archived native journal and signed policy bootstrap differ");
+}
 const runtimeMutableSourceEntries = [
   "public/data/gpt-predictions.json"
 ];
@@ -430,6 +442,19 @@ const requiredReleaseEntries = [
   "scripts/verifyReleaseRecovery.cjs",
   "scripts/releaseStoragePreflight.cjs",
   "scripts/nativeReleaseJournal.cjs",
+  "scripts/nativeDatabaseCutover.cjs",
+  "scripts/postgresReleaseMirror.cjs",
+  "scripts/nativeReleaseDatabaseSession.cjs",
+  "scripts/nativeReleaseDataPlane.cjs",
+  "scripts/nativeReleaseGenerationCopy.cjs",
+  "scripts/nativeReleasePostgresTransport.cjs",
+  "scripts/validateNativeReleasePolicy.cjs",
+  "scripts/verifyNativeReleasePipeline.cjs",
+  "scripts/verifyNativeReleaseDataPlane.cjs",
+  "scripts/verifyNativeReleaseGenerationCopy.cjs",
+  "scripts/verifyNativeReleaseDatabaseSession.cjs",
+  "deploy/light-server/release-native.sh",
+  "deploy/light-server/native-release-policy.json",
   "deploy/light-server/release-from-bundle.sh",
   "deploy/light-server/restore-ubuntu-operator-key.sh",
   "deploy/light-server/nginx.conf",
