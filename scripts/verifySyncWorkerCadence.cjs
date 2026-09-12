@@ -590,6 +590,8 @@ assert.equal(
   "ordinary cycles still perform immediate relay catch-up",
 );
 
+const postgresOnly = require("../server/storageMode.cjs").readStorageMode().postgresOnly;
+const projectionScript = postgresOnly ? "postgres:sync" : "datastore:sqlite";
 const stages = describeCycleStages();
 assert.deepEqual(stages.map((stage) => stage.id), [
   "candidate-deadline-heartbeat",
@@ -623,7 +625,7 @@ assert.deepEqual(stages[2].operations, [
   "sync:prematch",
   "validate:data",
   "datastore:generation",
-  "datastore:sqlite",
+  projectionScript,
   "publish-event",
 ]);
 assert.deepEqual(stages[3].operations, [
@@ -650,7 +652,7 @@ assert.deepEqual(stages[3].operations, [
   "reconcile:fast-results-generation:consolidated-slow-publication",
   "validate:data:consolidated-slow-publication",
   "datastore:generation:consolidated-slow-publication",
-  "datastore:sqlite:consolidated-slow-publication",
+  `${projectionScript}:consolidated-slow-publication`,
   "observe:publication-readiness"
 ]);
 const slowWeatherIndex = workerSource.indexOf(
