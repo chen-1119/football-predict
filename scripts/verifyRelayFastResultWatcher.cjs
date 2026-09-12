@@ -52,7 +52,14 @@ const isolatedRelayChildEnv = ({
   // Every real publisher child below owns only its temporary SQLite fixture.
   // Do not inherit the host's PostgreSQL-primary mode during post-swap
   // production readiness.
+  FOOTBALL_STORAGE_MODE: "hybrid",
   FOOTBALL_POSTGRES_MODE: "disabled",
+  FOOTBALL_POSTGRES_URL: "",
+  DATABASE_URL: "",
+  PRIVATE_MODEL_ARTIFACT_STORAGE: "sqlite",
+  POSTGRES_PROJECTION_SOURCE: "sqlite",
+  CURRENT_MATCH_SOURCE: "file",
+  DATASTORE_READ_SOURCE: "file",
   SERVER_STORE_DIR: caseDir,
   DATA_STORE_DIR: caseDir,
   DATASTORE_SQLITE_PATH: dbPath,
