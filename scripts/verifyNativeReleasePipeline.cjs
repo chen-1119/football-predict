@@ -34,9 +34,11 @@ const budgetRun = spawnSync(process.platform === "win32" ? "D:/app/Git/bin/bash.
   input: "set -euo pipefail\nWORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS=1500\nRELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS=900000\nPOST_SWAP_TRANSITION_START_BUDGET_SECONDS=1620\nCANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS=30\n" + nativeBudget + '\nprintf "%s" "$CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS"\n',
   encoding: "utf8", windowsHide: true, timeout: 5000,
 });
-assert.equal(budgetRun.status, 0, budgetRun.stderr); assert.equal(Number(budgetRun.stdout), 4890);
+assert.equal(budgetRun.status, 0, budgetRun.stderr); assert.equal(Number(budgetRun.stdout), 3390);
 const afterLease = lane.slice(lane.indexOf('"$NEXT_DIR/scripts/releaseTransitionLease.cjs" create'));
 assert.equal(afterLease.split("start_release_sync_write_barrier").length - 1, 1);
+assert.ok(afterLease.indexOf("stop_worker_for_release_window") < afterLease.indexOf("pause_current_fast_watcher_for_live_prebuild"));
+assert.ok(afterLease.indexOf("pause_current_fast_watcher_for_live_prebuild") < afterLease.indexOf("start_release_sync_write_barrier"));
 assert.ok(lane.indexOf("run_candidate_refresh_step native-deadline-refresh") < lane.indexOf('"$NEXT_DIR/scripts/releaseTransitionLease.cjs" create'));
 assert.ok(afterLease.includes('--required-margin-seconds "$POST_SWAP_TRANSITION_START_BUDGET_SECONDS"'));
 checks.push("native transition budget counts its actual barrier and retains final-data, official-cycle and rollback reserves");
