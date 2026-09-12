@@ -23,6 +23,8 @@ test('current verified collection is visible as reference after model cutoff', (
   assert.equal(result.sections.injuries.data.players.length, 1);
   assert.equal(result.sections.lineup.data.teams[0].starters.length, 11);
   assert.equal(buildReferenceExport([match], cache(), new Set(), now).items.length, 0);
+  assert.equal(selectReference(doc, { ...match, status: 'LIVE' }, Date.parse('2026-09-12T16:31:00Z')).status, 'ok');
+  assert.equal(selectReference(doc, { ...match, status: 'POSTPONED' }, now), null);
 });
 test('identity, receipt and lineup conflicts never become reference content', () => {
   const doc = build(cache());

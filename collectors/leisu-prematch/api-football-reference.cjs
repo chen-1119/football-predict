@@ -66,7 +66,18 @@ function buildReferenceExport(matches, cache, verifiedMappings, now = Date.now()
 }
 
 function selectReference(doc, currentMatch, now = Date.now()) {
-  const fixture = selectFixtures([currentMatch], now).selected[0];
+  // A match starting does not erase a pre-kickoff receipt from the reference
+  // view. Collection itself still uses selectFixtures and stops at kickoff.
+  const rawKickoff = instant(currentMatch?.kickoffTime), rawEvent = instant(currentMatch?.eventVersion || currentMatch?.kickoffTime);
+  const kickoff = rawKickoff ? new Date(rawKickoff).toISOString() : null;
+  const event = rawEvent ? new Date(rawEvent).toISOString() : null;
+  const id = currentMatch?.id, sourceId = String(currentMatch?.sourceMatchId || '');
+  const fixture = /^sporttery_[1-9]\d*$/.test(id || '') && id === 'sporttery_' + sourceId && kickoff && event === kickoff
+    && ['SCHEDULED', 'LIVE', 'FINISHED', 'PENDING_RESULT'].includes(currentMatch?.status)
+    && typeof currentMatch.homeTeamName === 'string' && currentMatch.homeTeamName.trim()
+    && typeof currentMatch.awayTeamName === 'string' && currentMatch.awayTeamName.trim()
+    && currentMatch.homeTeamName !== currentMatch.awayTeamName
+    ? { siteMatchId: id, eventVersion: event, kickoffUtc: kickoff, homeName: currentMatch.homeTeamName, awayName: currentMatch.awayTeamName } : null;
   if (!fixture || doc?.version !== VERSION || doc.predictionEligible !== false || doc.provider !== 'api-football'
       || !instant(doc.generatedAt) || Date.parse(doc.generatedAt) > now || now - Date.parse(doc.generatedAt) > 6 * 3600000
       || !Array.isArray(doc.items) || doc.items.length > 200) return null;
