@@ -154,7 +154,10 @@ async function openBrowser(profileDir,headless=true) {
   // navigating from the public home page initializes the required session.
   try {
     const page=await context.newPage();
-    try { await page.goto('https://www.leisu.com/',{waitUntil:'domcontentloaded',timeout:30000}); }
+    try {
+      await page.goto('https://www.leisu.com/',{waitUntil:'load',timeout:30000});
+      await page.waitForLoadState('networkidle',{timeout:5000}).catch(()=>{});
+    }
     finally { await page.close(); }
     return context;
   } catch(error) { await context.close().catch(()=>{});throw error; }
@@ -202,7 +205,7 @@ async function collectLeague(context,sourceUrl) {
     if(/\/login(?:$|[/?#])/.test(page.url())||/登录|sign\s*in|log\s*in/i.test(title))return result('login_required','source-login-page');
     if(page.url()!==sourceUrl)return result('conflict','unexpected-source-url');
     await page.locator('a[href*="shujufenxi-"]').first().waitFor({state:'visible',timeout:15000}).catch(()=>{});
-    const rows=await page.evaluate(()=>Array.from(document.querySelectorAll('tr')).filter(r=>r.getClientRects().length>0&&r.querySelector('a[href*="shujufenxi-"]')).map(r=>({text:r.innerText,href:r.querySelector('a[href*="shujufenxi-"]').href})));
+    const rows=await page.evaluate(()=>Array.from(document.querySelectorAll('tr, .tr')).filter(r=>r.getClientRects().length>0&&r.querySelector('a[href*="shujufenxi-"]')).map(r=>({text:r.innerText,href:r.querySelector('a[href*="shujufenxi-"]').href})));
     if(!Array.isArray(rows)||!rows.length)return result('parse_error','league-rows-missing');
     const candidates=normalizeLeagueRows(rows,sourceUrl);
     return candidates.length?result('available',null,candidates):result('parse_error','invalid-league-rows');
