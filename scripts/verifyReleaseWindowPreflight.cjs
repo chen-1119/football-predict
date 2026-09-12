@@ -63,7 +63,7 @@ function collectorFixture(input, options = {}) {
     fstatSync(fd) { const handle = descriptors.get(fd); assert.ok(handle); calls.push({ method: "fstat", file: handle.file }); return stat(handle.file, "fstat"); },
     readSync(fd, output, offset, length, position) {
       const handle = descriptors.get(fd); assert.ok(handle); assert.equal(position, null);
-      assert.ok(length >= 0 && length <= 16 * 1024 * 1024, "read length must be bounded");
+      assert.ok(length >= 0 && length <= 32 * 1024 * 1024, "read length must be bounded");
       const count = Math.min(length, handle.bytes.length - handle.offset);
       handle.bytes.copy(output, offset, handle.offset, handle.offset + count); handle.offset += count;
       calls.push({ method: "read", file: handle.file, requested: length, count }); return count;
@@ -247,7 +247,18 @@ function verifyReleaseWindowPreflight() {
   check("current payload requires exact bytes, canonical base64 and bounded encoded length", () => {
     reject(value => { value.currentBase64 = Buffer.from("[]").toString("base64"); });
     reject(value => { value.currentBase64 += "\n"; });
-    reject(value => { value.currentBase64 = "A".repeat(24 * 1024 * 1024 + 1); });
+    reject(value => { value.currentBase64 = "A".repeat(Math.ceil(32 * 1024 * 1024 / 3) * 4 + 1); });
+  });
+  check("current inventories above the former 16 MiB limit retain authenticated window checks", () => {
+    const row = JSON.parse(Buffer.from(observation().currentBase64, "base64"))[0];
+    const input = observation({ payload: [{ ...row, diagnosticPadding: "x".repeat(18 * 1024 * 1024) }] });
+    const result = collectorFixture(input).run(helper);
+    assert.equal(evaluate(result).ok, true);
+    result.currentBase64 = result.currentBase64.slice(0, -4) + "AAAA";
+    assert.throws(() => evaluate(result));
+    const oversized = collectorFixture(observation(), { stat: ({ file }) => file.endsWith("/matches-current.json") ? { size: 32 * 1024 * 1024 + 1 } : {} });
+    assert.throws(() => oversized.run(helper));
+    assert.ok(!oversized.calls.some(call => call.method === "open" && call.file.endsWith("/matches-current.json")));
   });
   check("authenticated empty or non-array inventories do not imply a safe window", () => {
     for (const payload of [[], { matches: [] }, { rows: [] }, { missing: [] }]) assert.throws(() => evaluate(observation({ payload })));
@@ -266,7 +277,7 @@ function verifyReleaseWindowPreflight() {
     const opened = new Set(fixture.calls.filter(row => row.method === "open").map(row => row.file));
     assert.deepEqual([...opened].sort(), [APP + "/.release-bundle-sha256", APP + "/.release-live-complete", DATA + "/current.json",
       fixture.generation + "/manifest.json", fixture.generation + "/matches-current.json"].sort());
-    assert.ok(fixture.calls.filter(row => row.method === "read").every(row => row.requested <= 16 * 1024 * 1024));
+    assert.ok(fixture.calls.filter(row => row.method === "read").every(row => row.requested <= 32 * 1024 * 1024));
   });
   check("collector rejects symlinks, hard links, nonregular files, unsafe owners and writable file modes", () => {
     for (const change of [{ isSymbolicLink: () => true }, { nlink: 2 }, { isFile: () => false }, { uid: 9999 }, { gid: 9999 }, { mode: 0o100666 }]) {

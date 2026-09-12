@@ -83,7 +83,7 @@ function collectReleaseWindowObservation() {
   const directory = root + "/generations/" + pointer.generationId;
   inspectDirectory(directory);
   const manifest = JSON.parse(read(directory + "/manifest.json", 4 * 1024 * 1024));
-  const currentBase64 = read(directory + "/matches-current.json", 16 * 1024 * 1024).toString("base64");
+  const currentBase64 = read(directory + "/matches-current.json", 32 * 1024 * 1024).toString("base64");
   const pointerAfter = JSON.parse(read(root + "/current.json", 64 * 1024));
   assert.equal(marker(), releaseMarker, "runtime changed during window probe");
   assert.equal(complete(), liveComplete, "acceptance changed during window probe");
@@ -111,8 +111,9 @@ function evaluateReleaseWindowObservation(observation, now = Date.now(), { stage
   assert.ok(Number.isFinite(generationAge) && generationAge >= -5000, "window generation time invalid or future-dated");
   // A successful semantic no-op preserves this pointer and its committedAt.
   // Age is telemetry, not proof of a recent provider collection or a blocker.
-  assert.ok(typeof observation.currentBase64 === "string" && observation.currentBase64.length <= 24 * 1024 * 1024, "window current payload unavailable or oversized");
+  assert.ok(typeof observation.currentBase64 === "string" && observation.currentBase64.length <= Math.ceil(32 * 1024 * 1024 / 3) * 4, "window current payload unavailable or oversized");
   const currentBytes = Buffer.from(observation.currentBase64, "base64");
+  assert.ok(currentBytes.length <= 32 * 1024 * 1024, "window current payload exceeds byte limit");
   assert.equal(currentBytes.toString("base64"), observation.currentBase64, "window current payload is not canonical base64");
   const input = inspectGenerationDocuments({ ...observation, currentBytes, stableStringify });
   // Keep the remote observation's next boundary even if a fast client clock
@@ -147,7 +148,7 @@ function runLiveReleaseWindowPreflight({ stage = "before-build" } = {}) {
   const args = ["-p", String(port), ...buildPinnedSshBaseOptions({ keyPath, pin }), `${user}@${host}`,
     "sudo", "-n", "/usr/bin/env", "-i", "PATH=/usr/bin:/bin", "/opt/node-v22.22.1/bin/node", "-"];
   const child = spawnSync("ssh", args, { input: buildReadOnlyWindowProbe(), encoding: "utf8",
-    windowsHide: true, timeout: 30_000, maxBuffer: 32 * 1024 * 1024 });
+    windowsHide: true, timeout: 30_000, maxBuffer: 48 * 1024 * 1024 });
   // Do not echo remote stdout/stderr: stdout contains fixture data, not a report.
   if (child.status !== 0) throw new Error(`read-only release window observation failed (status=${Number.isInteger(child.status) ? child.status : "unknown"})`);
   return evaluateReleaseWindowObservation(JSON.parse(child.stdout), Date.now(), { stage });
