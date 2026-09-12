@@ -55,11 +55,10 @@ run_native_release() {
   # it has no model/UI suites and is killed if it exceeds five minutes.
   CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS=300
   # This lane refreshes before creating its lease and acquires one subsequent
-  # write barrier. Reserve 900 seconds for final native reconciliation; retain
-  # the full official-cycle and post-swap rollback reserves. The legacy lane's
-  # second barrier and post-verifier refresh do not run here.
+  # write barrier after stopping the old worker and pausing its HTTP watcher.
+  # Reserve 900 seconds for final reconciliation plus the complete post-swap
+  # official-cycle/rollback reserve. No old official cycle is awaited here.
   CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS=$((
-    WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS +
     ((RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS + 999) / 1000) +
     900 + POST_SWAP_TRANSITION_START_BUDGET_SECONDS - CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS
   ))
@@ -184,8 +183,9 @@ run_native_release() {
   write_recovery_phase host-config-applied
   wait_for_health "http://${HOST}:${PORT}" native-before-stop 90 2 service
   quiesce_managed_maintenance_for_sqlite_snapshot
-  start_release_sync_write_barrier
   stop_worker_for_release_window
+  pause_current_fast_watcher_for_live_prebuild
+  start_release_sync_write_barrier
   stop_service_for_release_window
   stop_release_sync_write_barrier clean
   "$NODE_HOME/bin/node" "$NEXT_DIR/scripts/candidateReleaseContinuity.cjs" snapshot \
