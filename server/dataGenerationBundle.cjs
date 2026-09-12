@@ -856,16 +856,17 @@ const resolveActivePublication = ({
   });
 };
 
-const resolveServingPublication = ({ storeDir, publicDataDir, allowPrevious = true }) => {
+const resolveServingPublication = ({ storeDir, publicDataDir, allowPrevious = true, validatePayloadSemantics = true }) => {
+  if (typeof validatePayloadSemantics !== "boolean") fail("PUBLICATION_OPTION_INVALID", "validatePayloadSemantics must be boolean");
   const paths = storePaths(storeDir);
   if (!fs.existsSync(paths.currentPointer)) return legacyPublication(publicDataDir);
   try {
-    return resolveActivePublication({ storeDir, publicDataDir });
+    return resolveActivePublication({ storeDir, publicDataDir, validatePayloadSemantics });
   } catch (activeError) {
     if (!allowPrevious || !fs.existsSync(paths.previousPointer)) throw activeError;
     try {
       const context = resolvePreviousGeneration({ storeDir });
-      validateGenerationBundle(context);
+      if (validatePayloadSemantics) validateGenerationBundle(context);
       return Object.freeze({
         mode: "previous-generation",
         context,
@@ -1355,8 +1356,9 @@ const resolveServingPublicationForSqliteIdentity = ({
   publicDataDir,
   sqliteIdentity,
   allowPrevious = true,
+  validatePayloadSemantics = true,
 }) => {
-  const preferred = resolveServingPublication({ storeDir, publicDataDir, allowPrevious });
+  const preferred = resolveServingPublication({ storeDir, publicDataDir, allowPrevious, validatePayloadSemantics });
   if (sqlitePublicationMatches(sqliteIdentity, preferred.identity)) return preferred;
 
   const paths = storePaths(storeDir);
@@ -1367,7 +1369,7 @@ const resolveServingPublicationForSqliteIdentity = ({
   ) {
     try {
       const context = resolvePreviousGeneration({ storeDir });
-      validateGenerationBundle(context);
+      if (validatePayloadSemantics) validateGenerationBundle(context);
       const previous = Object.freeze({
         mode: "previous-generation",
         context,
