@@ -1950,7 +1950,12 @@ const run = () => {
       && releaseSudoers.includes("/usr/local/sbin/football-release --recover")
       && deployReleaseBundle.indexOf("if (recoverMode)") < deployReleaseBundle.indexOf("const bundlePath = latestBundlePath()")
       && deployReleaseBundle.includes("recoveryPending=0")
-      && deployReleaseBundle.includes('REMOTE_REQUIRE_SQLITE: "1"')
+      && [
+        'REMOTE_REQUIRE_SQLITE: recoveredNativeStorage ? "0" : "1"',
+        'REMOTE_REQUIRE_POSTGRES_ONLY: recoveredNativeStorage ? "1" : "0"',
+        'REMOTE_REQUIRED_READ_SOURCE: recoveredNativeStorage ? "postgres" : ""',
+        'recoveryStorage=postgres-only'
+      ].every(token => deployReleaseBundle.includes(token))
       && deployReleaseBundle.includes('REMOTE_REQUIRE_SYNC_WORKER: "1"')
       && releaseRecoveryHelper.includes("const TRANSACTION_VERSION = 3")
       && releaseRecoveryHelper.includes('treeMarker: readTreeMarker(mapped, ".release-tree-identity")')
