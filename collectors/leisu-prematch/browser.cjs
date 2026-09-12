@@ -147,8 +147,17 @@ function classifyView(view, task, httpStatus) {
 
 async function openBrowser(profileDir,headless=true) {
   const {chromium}=require('playwright');
-  return chromium.launchPersistentContext(profileDir,{headless,locale:'zh-CN',timezoneId:'Asia/Shanghai',
+  const context=await chromium.launchPersistentContext(profileDir,{headless,locale:'zh-CN',timezoneId:'Asia/Shanghai',
     viewport:{width:1440,height:1000},timeout:30000});
+  // Establish the site's normal visitor session before opening deep links.
+  // Production returns 405 for a fresh direct league navigation, whereas
+  // navigating from the public home page initializes the required session.
+  try {
+    const page=await context.newPage();
+    try { await page.goto('https://www.leisu.com/',{waitUntil:'domcontentloaded',timeout:30000}); }
+    finally { await page.close(); }
+    return context;
+  } catch(error) { await context.close().catch(()=>{});throw error; }
 }
 
 async function collectTask(context,task) {
