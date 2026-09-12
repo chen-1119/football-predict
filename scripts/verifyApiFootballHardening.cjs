@@ -582,6 +582,27 @@ for (const [homeName, awayName, homeProvider, awayProvider, homeId, awayId] of [
     `${homeName}: canonical numeric string IDs preserve exact scope`);
 }
 
+for (const [homeName, awayName, homeProvider, awayProvider, homeId, awayId] of [
+  ["托特纳姆热刺", "埃弗顿", "Tottenham", "Everton", 47, 45],
+  ["桑德兰", "阿森纳", "Sunderland", "Arsenal", 746, 42],
+]) {
+  const match = { ...trustMatch, leagueName: "英格兰超级联赛", leagueNameEn: "英格兰超级联赛",
+    leagueShortName: "英格兰超级联赛", leagueShortNameEn: "英格兰超级联赛",
+    homeTeamName: homeName, homeTeamNameEn: homeName, awayTeamName: awayName, awayTeamNameEn: awayName };
+  const fixture = { fixtureId: 1557400 + homeId, date: match.kickoffTime,
+    league: { id: 39, name: "Premier League", season: 2026 },
+    teams: { home: { id: homeId, name: homeProvider }, away: { id: awayId, name: awayProvider } } };
+  check(api.confidenceForFixture(match, fixture).teamScore === 1,
+    `${homeName}: exact live Premier League names must resolve through scoped vocabulary`);
+  for (const changed of [
+    { ...fixture, league: { ...fixture.league, id: 702 } },
+    { ...fixture, league: { ...fixture.league, season: 2025 } },
+    { ...fixture, teams: { ...fixture.teams, home: { id: homeId + 10000, name: homeProvider } } },
+    { ...fixture, teams: { ...fixture.teams, home: { id: homeId, name: homeProvider + " U21" } } },
+  ]) check(scopedTeamAliases(match, "home", changed, ["premier league"]).length === 0,
+    `${homeName}: unrelated identity must not gain this alias`);
+}
+
 const injuries = api.buildInjuriesByFixture([mappedEntry], [{
   fixture: { id: 7001 },
   team: { id: 11, name: "Home" },
