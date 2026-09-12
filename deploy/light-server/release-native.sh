@@ -146,6 +146,10 @@ run_native_release() {
     SERVER_STORE_DIR="$CANDIDATE_STORE_DIR" PUBLIC_DATA_DIR="$NEXT_DIR/public/data" DATA_GENERATION_PUBLIC_DATA_DIR="$NEXT_DIR/public/data" \
     "$NODE_HOME/bin/node" scripts/captureCandidateProspectiveDeadline.cjs --deadline-only
   fix_app_permissions "$NEXT_DIR"
+  # The deadline refresh is followed by root ownership normalization. Restore
+  # the service write directories before accepting and exchanging this tree.
+  fix_worker_write_permissions "$NEXT_DIR"
+  verify_worker_write_permissions "$NEXT_DIR"
   native_data drop-build-access
   native_data candidate-access
   NATIVE_CANDIDATE_ENV_FILE="$NATIVE_STATE_DIR/candidate.env"
