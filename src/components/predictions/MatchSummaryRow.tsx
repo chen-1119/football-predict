@@ -6,44 +6,46 @@ type MatchSummaryTone = 'formal' | 'analysis' | 'archive' | 'fixture';
 interface MatchSummaryRowProps {
   eventKey: string;
   tone: MatchSummaryTone;
-  isAnalysisView: boolean;
   timeLabel: string;
   teamsLabel: string;
+  marketOddsLabel: string;
+  pickLabel: string;
   oddsLabel: string;
-  decisionLabel: string;
+  resultLabel: string;
   detailsLabel: string;
   detailsAriaLabel?: string;
   time: ReactNode;
   teams: ReactNode;
+  marketOdds: ReactNode;
+  pick: ReactNode;
   odds: ReactNode;
-  decision?: ReactNode;
+  result: ReactNode;
   onOpen: () => void;
 }
 
 export const MatchSummaryRow = ({
   eventKey,
   tone,
-  isAnalysisView,
   timeLabel,
   teamsLabel,
+  marketOddsLabel,
+  pickLabel,
   oddsLabel,
-  decisionLabel,
+  resultLabel,
   detailsLabel,
   detailsAriaLabel,
   time,
   teams,
+  marketOdds,
+  pick,
   odds,
-  decision,
+  result,
   onOpen
-}: MatchSummaryRowProps) => {
-  const showDecision = isAnalysisView || decision !== undefined;
-
-  return (
+}: MatchSummaryRowProps) => (
   <article
     data-match-event-key={eventKey}
     data-selection-tone={tone}
-    data-has-decision={showDecision ? 'true' : 'false'}
-    className={`match-row predictions-v4__match-row is-${tone} ${showDecision ? 'has-decision' : ''}`}
+    className={`match-row predictions-v4__match-row compact-match-row is-${tone}`}
   >
     <div className="match-time-cell predictions-v4__match-slot is-time" data-label={timeLabel}>
       <span className="predictions-v4__slot-label">{timeLabel}</span>
@@ -53,16 +55,22 @@ export const MatchSummaryRow = ({
       <span className="predictions-v4__slot-label">{teamsLabel}</span>
       {teams}
     </div>
-    <div className="match-odds-cell predictions-v4__match-slot is-odds" data-label={oddsLabel}>
+    <div className="predictions-v4__match-slot is-market-odds" data-label={marketOddsLabel}>
+      <span className="predictions-v4__slot-label">{marketOddsLabel}</span>
+      {marketOdds}
+    </div>
+    <div className="predictions-v4__match-slot is-pick" data-label={pickLabel}>
+      <span className="predictions-v4__slot-label">{pickLabel}</span>
+      {pick}
+    </div>
+    <div className="predictions-v4__match-slot is-sp" data-label={oddsLabel}>
       <span className="predictions-v4__slot-label">{oddsLabel}</span>
       {odds}
     </div>
-    {showDecision && (
-      <div className="match-decision-cell predictions-v4__match-slot is-decision" data-label={decisionLabel}>
-        <span className="predictions-v4__slot-label">{decisionLabel}</span>
-        {decision}
-      </div>
-    )}
+    <div className="predictions-v4__match-slot is-result" data-label={resultLabel}>
+      <span className="predictions-v4__slot-label">{resultLabel}</span>
+      {result}
+    </div>
     <div className="match-action-cell predictions-v4__match-action">
       <button
         type="button"
@@ -78,5 +86,4 @@ export const MatchSummaryRow = ({
       </button>
     </div>
   </article>
-  );
-};
+);

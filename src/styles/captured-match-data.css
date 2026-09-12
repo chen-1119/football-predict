@@ -1,0 +1,181 @@
+.captured-only-detail {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.captured-only-detail__summary {
+  display: grid;
+  gap: 0.6rem;
+  padding: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.captured-only-detail__summary h1 { margin: 0; font-size: 1.25rem; line-height: 1.5; }
+.captured-only-detail__summary h1 span { color: hsl(var(--text-muted)); font-size: 0.9rem; }
+.captured-only-detail__summary p { margin: 0; color: hsl(var(--text-muted)); font-size: 0.8rem; }
+.captured-only-detail__summary > strong { color: hsl(var(--text-secondary)); font-size: 0.85rem; }
+
+.captured-match-data {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid hsl(var(--border) / 0.8);
+  border-radius: 0.65rem;
+  background: hsl(var(--bg-card));
+  color: hsl(var(--text-primary));
+  overflow-wrap: anywhere;
+}
+
+.captured-match-data h3,
+.captured-match-data h4,
+.captured-match-data h5,
+.captured-match-data p { margin: 0; }
+
+.captured-match-data h3 { font-size: 1rem; }
+.captured-match-data h4 { font-size: 0.86rem; }
+.captured-match-data h5 { font-size: 0.78rem; }
+
+.captured-match-data__header p,
+.captured-match-data__muted,
+.captured-match-data__section-head > span {
+  color: hsl(var(--text-muted));
+  font-size: 0.73rem;
+  line-height: 1.65;
+}
+
+.captured-match-data__header p { margin-top: 0.4rem; }
+
+.captured-match-data__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.85rem;
+}
+
+.captured-match-data__nav a {
+  padding: 0.35rem 0.65rem;
+  border: 1px solid hsl(var(--border) / 0.7);
+  border-radius: 0.4rem;
+  color: hsl(var(--text-secondary));
+  background: hsl(var(--bg) / 0.3);
+  font-size: 0.73rem;
+  text-decoration: none;
+}
+
+.captured-match-data h4,
+.captured-match-data h5 { scroll-margin-top: 6rem; }
+
+.captured-match-data__nav a:focus-visible,
+.captured-match-data__table-scroll:focus-visible { outline: 2px solid hsl(var(--text-secondary)); outline-offset: 2px; }
+
+.captured-match-data__section {
+  display: grid;
+  gap: 0.6rem;
+  padding-top: 0.9rem;
+  margin-top: 0.9rem;
+  border-top: 1px solid hsl(var(--border) / 0.65);
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
+.captured-match-data__section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+}
+
+.captured-match-data__team { min-width: 0; }
+.captured-match-data__team + .captured-match-data__team { margin-top: 0.35rem; }
+
+.captured-match-data table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  margin-top: 0.4rem;
+  font-size: 0.76rem;
+}
+
+.captured-match-data th,
+.captured-match-data td {
+  padding: 0.5rem 0.35rem;
+  border-bottom: 1px solid hsl(var(--border) / 0.45);
+  text-align: left;
+  vertical-align: top;
+}
+
+.captured-match-data th { color: hsl(var(--text-muted)); font-size: 0.68rem; }
+.captured-match-data th:first-child { width: 30%; }
+.captured-match-data th:nth-child(3) { width: 18%; }
+
+.captured-match-data__odds {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.captured-match-data__odds > div {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.65rem;
+  border: 1px solid hsl(var(--border) / 0.6);
+  border-radius: 0.4rem;
+  background: hsl(var(--bg) / 0.3);
+  text-align: center;
+}
+
+.captured-match-data__odds span { color: hsl(var(--text-muted)); font-size: 0.7rem; }
+.captured-match-data__odds strong { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+
+.captured-match-data__odds.is-initial > div { background: transparent; }
+.captured-match-data__odds.is-initial strong { font-size: 0.94rem; }
+.captured-match-data__history { min-width: 0; }
+.captured-match-data__history > p { margin-top: 0.45rem; }
+.captured-match-data__record-table th:first-child { width: 34%; }
+.captured-match-data__record-table th:not(:first-child) { width: 22%; }
+.captured-match-data__record-table td:not(:first-child) { font-variant-numeric: tabular-nums; }
+
+.captured-match-data__ranks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; margin: 0; }
+.captured-match-data__ranks > div { padding: 0.75rem; border: 1px solid hsl(var(--border) / 0.6); border-radius: 0.4rem; }
+.captured-match-data__ranks dt { color: hsl(var(--text-muted)); font-size: 0.75rem; }
+.captured-match-data__ranks dd { margin: 0.25rem 0 0; font-size: 1.2rem; font-weight: 750; font-variant-numeric: tabular-nums; }
+
+.captured-match-data__table-scroll { max-width: 100%; overflow-x: auto; }
+.captured-match-data__history-table { min-width: 32rem; }
+.captured-match-data__history-table th:first-child { width: 16%; }
+.captured-match-data__history-table th:nth-child(2) { width: 20%; }
+.captured-match-data__history-table th:nth-child(3) { width: 30%; }
+.captured-match-data__history-table th:nth-child(4) { width: 20%; }
+.captured-match-data__history-table th:nth-child(5) { width: 14%; }
+.captured-match-data__history-table small { display: block; margin: 0.2rem 0; color: hsl(var(--text-muted)); font-size: 0.68rem; }
+
+.captured-match-data__availability {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin: 0;
+}
+
+.captured-match-data__availability > div {
+  min-width: 0;
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.7rem;
+  border: 1px solid hsl(var(--border) / 0.6);
+  border-radius: 0.4rem;
+  background: hsl(var(--bg) / 0.2);
+}
+
+.captured-match-data__availability dt { color: hsl(var(--text-secondary)); font-size: 0.75rem; font-weight: 650; }
+.captured-match-data__availability dd { margin: 0; color: hsl(var(--text-muted)); font-size: 0.7rem; }
+
+@media (max-width: 560px) {
+  .captured-match-data { padding: 0.75rem; }
+  .captured-match-data table { font-size: 0.71rem; }
+  .captured-match-data th,
+  .captured-match-data td { padding: 0.45rem 0.2rem; }
+  .captured-match-data__odds { gap: 0.35rem; }
+  .captured-match-data__availability { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.4rem; }
+  .captured-match-data__availability > div { padding: 0.6rem; }
+}

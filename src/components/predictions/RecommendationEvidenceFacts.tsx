@@ -8,6 +8,7 @@ import {
   formatMarketConsistency,
   getPublishedRecommendationEvidenceBreakdown,
 } from '../../services/predictionPresentation';
+import { formatSourceNeutralText } from './sourceNeutralText';
 import '../../styles/recommendation-evidence.css';
 
 interface RecommendationEvidenceFactsProps {
@@ -58,7 +59,7 @@ const formatFreshnessClock = (
   const prefix = clock.kind === 'observed-at'
     ? (language === 'zh' ? '观测' : 'Observed')
     : clock.kind === 'source-updated-at'
-      ? (language === 'zh' ? '源更新' : 'Source updated')
+      ? (language === 'zh' ? '数据更新' : 'Data updated')
       : (language === 'zh' ? '截至' : 'As of');
   return `${prefix} ${formatted}`;
 };
@@ -74,7 +75,7 @@ export function RecommendationEvidenceFacts({
     ? '--'
     : `${Math.round(breakdown.modelProbability)}%`;
   const evidenceCompleteness = formatEvidenceCompleteness(breakdown, '--');
-  const marketConsistency = formatMarketConsistency(breakdown, language, '--');
+  const marketConsistency = formatSourceNeutralText(formatMarketConsistency(breakdown, language, '--'), language, '--');
   const freshnessQuality = formatFreshnessQuality(breakdown, '--');
   const calibrationSample = formatCalibrationSample(breakdown, '--');
   const freshnessClock = resolveFreshnessClock(breakdown);
@@ -85,7 +86,7 @@ export function RecommendationEvidenceFacts({
       className={joinClassNames('recommendation-evidence-facts', className)}
       data-testid="recommendation-evidence-breakdown"
       data-market-consistency={breakdown.marketConsistency}
-      aria-label={language === 'zh' ? '推荐置信度四维事实' : 'Four-dimension confidence facts'}
+      aria-label={language === 'zh' ? '模型概率与数据质量' : 'Model probability and data quality'}
     >
       {hasUnboundLegacyReferenceConflict(match) && (
         <aside className="recommendation-evidence-facts__legacy-conflict" data-testid="legacy-reference-conflict" aria-label={language === 'zh' ? '旧参考记录冲突' : 'Conflicting legacy references'}>

@@ -11638,6 +11638,17 @@ const handleApi = async (req, res, url) => {
     return sendJsonCached(req, res, await readOddsHistoryPage(url), { maxAgeSeconds: 20 });
   }
 
+  const prematchEvidenceRoute = url.pathname.match(/^\/api\/v1\/matches\/(sporttery_[1-9]\d*)\/prematch-evidence$/);
+  if (prematchEvidenceRoute) {
+    const { createWebsiteHandler } = require("../collectors/leisu-prematch/website-reader.cjs");
+    const handler = createWebsiteHandler({
+      exportPath: process.env.PREMATCH_EVIDENCE_FILE || "/var/lib/football-prematch-public/latest-evidence.json",
+      readFixture: readMatchById,
+      authorize: () => hasRecommendationAccess(req, url),
+    });
+    return handler(req, res, prematchEvidenceRoute[1]);
+  }
+
   const v1MatchDetailRoute = url.pathname.match(/^\/api\/v1\/matches\/([^/]+)$/);
   if (v1MatchDetailRoute) {
     const payload = await buildV1MatchPayload(v1MatchDetailRoute[1]);

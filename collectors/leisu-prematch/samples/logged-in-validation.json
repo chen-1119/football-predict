@@ -1,0 +1,225 @@
+{
+  "scope": "Small logged-in browser validation for one pre-match fixture",
+  "evidenceProvenance": "Observed by the root agent in the user's current browser session and supplied to this artifact-writing subagent",
+  "status": "partial-verification-finalized; automatic odds and upcoming lineup acquisition remain unverified",
+  "artifactChangeScope": "This subagent created only logged-in-validation.json and 登录后验证结果.md for this follow-up. Older reports, original samples and SQLite were not changed.",
+  "sessionObservation": {
+    "userCompletedLogin": true,
+    "wwwHomepageLoginAndRegisterLinksNoLongerVisible": true,
+    "refreshedMatchDetailLoginLinkNoLongerVisible": true,
+    "refreshedMatchDetailRenderedWithout405": true,
+    "scopeLimit": "These observations establish the current session state; they do not prove unrestricted or unattended future access"
+  },
+  "analysisPage": {
+    "observedAt": "2026-09-12T03:56:12.908Z",
+    "url": "https://live.leisu.com/shujufenxi-4558535",
+    "providerMatchId": "4558535",
+    "canvasElementCount": 913,
+    "domFields": {
+      "marketLinks": [
+        { "label": "让球", "url": "https://odds.leisu.com/yapan-4558535" },
+        { "label": "胜负", "url": "https://odds.leisu.com/oupei-4558535" },
+        { "label": "进球数", "url": "https://odds.leisu.com/daxiaoqiu-4558535" },
+        { "label": "三合一", "url": "https://odds.leisu.com/3in1-4558535" }
+      ],
+      "injuries": [
+        { "side": "home", "name": "格雷茨卡", "providerPlayerId": "40056", "reasonAsDisplayed": "膝关节受伤", "positionAsDisplayed": "未知", "returnDateAsDisplayed": "-" },
+        { "side": "home", "name": "奥纳纳", "providerPlayerId": "913163", "reasonAsDisplayed": "膝关节受伤", "positionAsDisplayed": "未知", "returnDateAsDisplayed": "-" },
+        { "side": "home", "name": "曼赞比", "providerPlayerId": "1694007", "reasonAsDisplayed": "膝关节受伤", "positionAsDisplayed": "未知", "returnDateAsDisplayed": "-" },
+        { "side": "home", "name": "马乔", "providerPlayerId": "1883580", "reasonAsDisplayed": "踝关节扭伤", "positionAsDisplayed": "未知", "returnDateAsDisplayed": "-" },
+        { "side": "away", "name": "萨沃纳", "providerPlayerId": "1375779", "reasonAsDisplayed": "膝关节受伤", "positionAsDisplayed": "未知", "returnDateAsDisplayed": "-" }
+      ]
+    },
+    "comparisonWithEarlierObservation": {
+      "previousLoggedOutMarketLinkCount": 0,
+      "currentLoggedInMarketLinkCount": 4,
+      "injuryTextRowsUnchanged": 5,
+      "newlyCapturedPlayerId": { "name": "马乔", "providerPlayerId": "1883580" },
+      "otherFourPlayerIdsAgreeWithEarlierRecord": true,
+      "scopeLimit": "A before/after observation in this session, not proof that login is the only factor controlling visibility or access"
+    },
+    "manualVisualReview": {
+      "newInjuryNumericValuesRecordedInThisFollowUp": false,
+      "renderingObservation": "Injury numeric fields are drawn with canvas, not automatically parsed into numeric data"
+    }
+  },
+  "matchDetailLineup": {
+    "url": "https://live.leisu.com/detail-4558535",
+    "domFields": { "sectionAsDisplayed": "球队阵容", "messageAsDisplayed": "暂无数据" },
+    "scopeLimit": "This one upcoming fixture still displayed no lineup data after login; no general claim about Leisu lineup coverage follows"
+  },
+  "historicalLineupSchemaValidation": {
+    "observedAt": "2026-09-12T03:59:31.638Z",
+    "url": "https://live.leisu.com/detail-4628409",
+    "providerMatchId": "4628409",
+    "scope": "historical-schema-validation-only",
+    "fixtureAsDisplayed": {
+      "homeName": "布鲁日",
+      "awayName": "阿斯顿维拉",
+      "kickoffAsDisplayed": "2026/09/09 00:45"
+    },
+    "navigation": "Clicked the visible 球队阵容 section",
+    "domExtraction": {
+      "teamListSelector": "ul.list",
+      "teamListsObserved": 2,
+      "groupSplitRule": "Split li entries at the entry whose text is 替补阵容",
+      "nameSelector": "a.name",
+      "numberSelector": "span.numb",
+      "playerIdSource": "Player link URL",
+      "automaticallyStructuredNameNumberIdExtraction": true
+    },
+    "domSummary": {
+      "home": {
+        "starterCount": 11,
+        "substituteCount": 12,
+        "startingFormationAsDisplayed": "4-2-3-1",
+        "coachAsDisplayed": "莱科",
+        "starterIdsUnique": true,
+        "substituteIdsUnique": true,
+        "startersAndSubstitutesOverlapCount": 0,
+        "allPlayersHaveIdNameAndNumber": true
+      },
+      "away": {
+        "starterCount": 11,
+        "substituteCount": 10,
+        "startingFormationAsDisplayed": "4-2-3-1",
+        "coachAsDisplayed": "埃梅里",
+        "starterIdsUnique": true,
+        "substituteIdsUnique": true,
+        "startersAndSubstitutesOverlapCount": 0,
+        "allPlayersHaveIdNameAndNumber": true
+      },
+      "totalPlayers": 44,
+      "totalStarters": 22,
+      "totalSubstitutes": 22
+    },
+    "rawRosterArtifact": "Full historical roster sample is being saved separately by the root agent; this file records the validated schema and counts only",
+    "limits": {
+      "prematchPublicationTimeProven": false,
+      "upcomingFixtureLineupProven": false,
+      "useForFutureFixtureFilling": false,
+      "useToRewriteFrozenPrediction": false,
+      "note": "Historical roster extraction proves only this page's readable schema. It must not populate fixture 4558535 or retrospectively modify a frozen prediction."
+    }
+  },
+  "europeanOddsPage": {
+    "url": "https://odds.leisu.com/oupei-4558535",
+    "observedAt": null,
+    "observationTimeStatus": "Exact capture timestamp not supplied for this page",
+    "companyRowsObserved": 19,
+    "canvasElementCount": 459,
+    "ordinaryInnerText": { "companyNamesReadable": false, "oddsNumbersReadable": false },
+    "domFields": {
+      "sampleCompanyTrendUrl": "https://odds.leisu.com/trend-4558535-2",
+      "sourceCompanyIdFromTrendLink": "2"
+    },
+    "naturalNetworkObservation": {
+      "method": "CDP observation of responses produced by normal page navigation and reload",
+      "mainDocumentStatus": 200,
+      "observedOtherRequests": ["public/time", "cloud device requests"],
+      "reusableBusinessJsonCaptured": false,
+      "requestHeadersCookiesOrCredentialsExtracted": false,
+      "hiddenEndpointsReplayed": false,
+      "scopeLimit": "No reusable business JSON was captured in this observation; it does not establish that none exists"
+    },
+    "manualVisualReview": {
+      "method": "Root agent's manual screenshot review of rendered canvas values",
+      "automaticallyStructuredOddsCapture": false,
+      "companyLabelAsDisplayed": "3*",
+      "sourceCompanyId": "2",
+      "companyFullName": null,
+      "companyFullNameStatus": "Not inferred from the abbreviated label or ID",
+      "initialWinDrawLossAsDisplayed": ["1.90", "3.50", "3.80"],
+      "currentWinDrawLossAsDisplayed": ["2.25", "3.30", "3.30"],
+      "otherLabelsAsDisplayed": ["官方", "官方(-1)"],
+      "officialSourceStatus": "These are source-page labels only, not independently authenticated official Jingcai data"
+    }
+  },
+  "oddsHistoryPage": {
+    "observedAt": "2026-09-12T03:57:45.720Z",
+    "url": "https://odds.leisu.com/trend-4558535-2",
+    "sourceCompanyId": "2",
+    "navigation": { "defaultMarketAsDisplayed": "让球", "clickedMarket": "胜负" },
+    "domFields": {
+      "historyRows": [
+        { "rowKey": "history-1", "timestampAsDisplayed": "09-12 09:07" },
+        { "rowKey": "history-2", "timestampAsDisplayed": "09-11 23:06" },
+        { "rowKey": "history-3", "timestampAsDisplayed": "09-11 20:07" }
+      ],
+      "timestampInterpretation": "Raw source strings retained. Full year, timezone and original source-publication semantics were not established."
+    },
+    "manualVisualReview": {
+      "method": "Root agent's manual screenshot review of canvas-rendered odds",
+      "automaticallyStructuredOddsCapture": false,
+      "historyRowOdds": [
+        { "rowKey": "history-1", "winDrawLossAsDisplayed": ["2.25", "3.30", "3.30"] },
+        { "rowKey": "history-2", "winDrawLossAsDisplayed": ["2.25", "3.40", "3.20"] },
+        { "rowKey": "history-3", "winDrawLossAsDisplayed": ["2.20", "3.40", "3.25"] }
+      ],
+      "initialWinDrawLossAsDisplayed": ["1.90", "3.50", "3.80"]
+    },
+    "changeEvidenceScope": "Historical variation displayed by the source, not a locally observed change across two real-time collection rounds"
+  },
+  "handicapPage": {
+    "observedAt": "2026-09-12T03:58:06.638Z",
+    "url": "https://odds.leisu.com/yapan-4558535",
+    "companyRowsObserved": 15,
+    "canvasElementCount": 117,
+    "domFields": { "sourceCompanyIdFromCorrespondingTrendLink": "2" },
+    "manualVisualReview": {
+      "method": "Root agent's manual screenshot review",
+      "automaticallyStructuredOddsCapture": false,
+      "companyLabelAsDisplayed": "3*",
+      "sourceCompanyId": "2",
+      "rawColumnOrder": ["主", "盘口", "客"],
+      "currentValuesAsDisplayed": ["0.92", "0.25", "0.92"],
+      "initialValuesAsDisplayed": ["0.95", "0.5", "0.90"]
+    },
+    "interpretationLimits": {
+      "handicapGivingReceivingDirectionConfirmed": false,
+      "waterPriceFormatConfirmed": false,
+      "mappedToJingcaiHHAD": false,
+      "note": "Raw values only; do not map these Asian handicap values to Jingcai handicap win/draw/loss"
+    }
+  },
+  "totalsPage": {
+    "observedAt": "2026-09-12T03:58:21.437Z",
+    "url": "https://odds.leisu.com/daxiaoqiu-4558535",
+    "companyRowsObserved": 16,
+    "canvasElementCount": 124,
+    "domFields": { "sourceCompanyIdFromCorrespondingTrendLink": "2" },
+    "manualVisualReview": {
+      "method": "Root agent's manual screenshot review",
+      "automaticallyStructuredOddsCapture": false,
+      "companyLabelAsDisplayed": "3*",
+      "sourceCompanyId": "2",
+      "rawColumnOrder": ["大", "盘口", "小"],
+      "currentValuesAsDisplayed": ["0.97", "2.5", "0.87"],
+      "initialValuesAsDisplayed": ["0.90", "2.5", "0.95"]
+    },
+    "interpretationLimits": { "waterPriceFormatConfirmed": false, "note": "Raw displayed strings retained without conversion to another odds format" }
+  },
+  "assessment": {
+    "verified": [
+      "Four real market links are visible on this logged-in analysis page",
+      "European odds, handicap, totals and a company history page rendered real sample content",
+      "The European odds main document returned HTTP 200 during the observed normal reload",
+      "Five injury text rows remained readable and all five player IDs are now recorded",
+      "Source-displayed historical odds variations can be visually inspected",
+      "Historical fixture 4628409 exposes 22 starters and 22 substitutes through DOM fields with complete name, number and ID; within-team groups have unique IDs and no starter/substitute overlap"
+    ],
+    "notVerified": [
+      "Automatic numeric odds parsing: ordinary text extraction is empty for these canvas fields",
+      "Rendered OCR accuracy or an authorized data API path",
+      "A local odds change across two real-time collection rounds",
+      "Confirmed lineup acquisition for the sampled upcoming fixture and the timing of lineup publication before kickoff",
+      "Unattended sustained acquisition and session longevity",
+      "Source authorization for ongoing collection and reuse",
+      "Production filling, official-data replacement or prediction improvements"
+    ],
+    "productionDatabaseWritten": false,
+    "newMarketValuesInsertedIntoSampleSqlite": false,
+    "conclusion": "Logged-in market entries and real odds/history pages are verified for this sample, and one historical roster schema supports direct DOM extraction. Odds values were manually reviewed from screenshots, not automatically acquired. Rendered OCR or an authorized API, upcoming lineups and pre-match publication timing remain to be validated."
+  },
+  "reportStatus": "Finalized for the completed small-sample session; sustained acquisition and production filling are not verified"
+}
