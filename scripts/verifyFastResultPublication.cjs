@@ -3349,7 +3349,14 @@ const run = async () => {
           // inheriting that mode would redirect the fixture publisher toward
           // the production projection (or fail when its secret URL is
           // intentionally absent from the verifier environment).
+          FOOTBALL_STORAGE_MODE: "hybrid",
           FOOTBALL_POSTGRES_MODE: "disabled",
+          FOOTBALL_POSTGRES_URL: "",
+          DATABASE_URL: "",
+          PRIVATE_MODEL_ARTIFACT_STORAGE: "sqlite",
+          POSTGRES_PROJECTION_SOURCE: "sqlite",
+          CURRENT_MATCH_SOURCE: "file",
+          DATASTORE_READ_SOURCE: "file",
           SERVER_STORE_DIR: caseDir,
           DATA_STORE_DIR: caseDir,
           DATASTORE_SQLITE_PATH: paths.dbPath,
