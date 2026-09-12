@@ -4387,9 +4387,17 @@ const main = async () => {
         requiresCandidateImplementationRefreeze: () => (
           candidateImplementationRefreezePending
         ),
-        onBeforeHeavyStep: async () => {
+        onBeforeHeavyStep: async (step) => {
           if (runtimeShutdownController.requested) {
             throw runtimeShutdownController.interruptionError();
+          }
+          const dataAdmission=await require("./officialDataAdmission.cjs").admitOfficialDataStep(step,candidateDeadlineHeartbeat);
+          if(dataAdmission.admitted){
+            if(runtimeShutdownController.requested)throw runtimeShutdownController.interruptionError();
+            if(candidateImplementationDriftAwaitingRefreeze(readJson(candidateProspectiveCaptureStatusFile,null)))candidateImplementationRefreezePending=true;
+            startupDeadlineAdmissionPending=false;
+            writeWorkerStatusBestEffort({...workerStatusState,checkedAt:new Date().toISOString(),officialDataAdmission:dataAdmission});
+            return;
           }
           if (startupDeadlineAdmissionPending && candidateDeadlineHeartbeat) {
             // The immediate startup capture may replace a structurally valid
