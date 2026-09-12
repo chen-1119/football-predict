@@ -220,6 +220,7 @@ const TEAM_ALIASES = {
 };
 
 const LEAGUE_ALIASES = {
+  "英格兰超级联赛": ["premier league"],
   // Actual Sporttery current payloads repeat these full Chinese labels in
   // leagueNameEn. Do not rely on an English field or shorthand being present.
   "西班牙甲级联赛": ["la liga"],
