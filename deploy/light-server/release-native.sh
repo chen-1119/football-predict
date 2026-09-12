@@ -51,6 +51,15 @@ NODE
 
 run_native_release() {
   local prebuilt_status native_seed_log candidate_ai_state_status
+  # This lane refreshes before creating its lease and acquires one subsequent
+  # write barrier. Reserve 900 seconds for final native reconciliation; retain
+  # the full official-cycle and post-swap rollback reserves. The legacy lane's
+  # second barrier and post-verifier refresh do not run here.
+  CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS=$((
+    WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS +
+    ((RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS + 999) / 1000) +
+    900 + POST_SWAP_TRANSITION_START_BUDGET_SECONDS - CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS
+  ))
   [ "$APP_DIR" = /opt/football-predict ] && [ "$NEXT_DIR" = /opt/football-predict.next ]
   [ "$BACKUP_DIR" = /opt/football-predict.previous ] && [ "$FAILED_DIR" = /opt/football-predict.failed ]
   export NODE_PATH="$APP_DIR/node_modules"

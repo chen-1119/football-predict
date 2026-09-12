@@ -28,6 +28,18 @@ for (const content of [native + "ENABLE_SQLITE_EXPORT=0\n", native.replace("ENAB
 assert.throws(() => environment(native, { ...identity, liveMarker: "" }));
 checks.push("native and initial environments require all storage selectors and completed live identity");
 const source = read("deploy/light-server/release-from-bundle.sh"), lane = read("deploy/light-server/release-native.sh");
+const nativeBudget = lane.match(/^  CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS=\$\(\([\s\S]*?^  \)\)/m)?.[0];
+assert.ok(nativeBudget);
+const budgetRun = spawnSync(process.platform === "win32" ? "D:/app/Git/bin/bash.exe" : "/bin/bash", ["--noprofile", "--norc", "-s"], {
+  input: "set -euo pipefail\nWORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS=1500\nRELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS=900000\nPOST_SWAP_TRANSITION_START_BUDGET_SECONDS=1620\nCANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS=30\n" + nativeBudget + '\nprintf "%s" "$CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS"\n',
+  encoding: "utf8", windowsHide: true, timeout: 5000,
+});
+assert.equal(budgetRun.status, 0, budgetRun.stderr); assert.equal(Number(budgetRun.stdout), 4890);
+const afterLease = lane.slice(lane.indexOf('"$NEXT_DIR/scripts/releaseTransitionLease.cjs" create'));
+assert.equal(afterLease.split("start_release_sync_write_barrier").length - 1, 1);
+assert.ok(lane.indexOf("run_candidate_refresh_step native-deadline-refresh") < lane.indexOf('"$NEXT_DIR/scripts/releaseTransitionLease.cjs" create'));
+assert.ok(afterLease.includes('--required-margin-seconds "$POST_SWAP_TRANSITION_START_BUDGET_SECONDS"'));
+checks.push("native transition budget counts its actual barrier and retains final-data, official-cycle and rollback reserves");
 const start = source.indexOf('if [ -f "$TRUSTED_SOURCE_DIR/deploy/light-server/native-release-policy.json" ]; then');
 const end = source.indexOf('\nnode -e "require(\'node:sqlite\')"', start); assert.ok(start > 0 && end > start);
 assert.ok(start > source.indexOf('"$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseStoragePreflight.cjs"'));
