@@ -12,7 +12,7 @@ WorkingDirectory=/opt/football-leisu-collector
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
 EnvironmentFile=/etc/football-leisu-collector/collector.env
 ExecStart=/usr/bin/env node /opt/football-leisu-collector/scheduled.cjs
-UMask=0077
+UMask=0027
 TimeoutStartSec=10min
 NoNewPrivileges=true
 ProtectSystem=strict
