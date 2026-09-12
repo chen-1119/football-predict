@@ -62,7 +62,7 @@ try {
   assert.ok(path.basename(temp).startsWith("football-native-dispatch-")); fs.rmSync(temp, { recursive: true });
 }
 for (const token of ["native_data seed", "native_data final", "initialize_release_recovery_snapshot", "candidateReleaseContinuity.cjs",
-  "verifyProductionReadiness.cjs", "wait_for_worker_official_publish_after", "wait_for_worker_readiness_idle_after", "REMOTE_REQUIRE_POSTGRES_ONLY=1",
+  "verifyNativeDeploymentCore.cjs", "wait_for_worker_official_publish_after", "wait_for_worker_readiness_idle_after", "REMOTE_REQUIRE_POSTGRES_ONLY=1",
   "commit_release_transaction", "verifyCandidateArtifactSeed.cjs"]) assert.ok(lane.includes(token), token);
 assert.ok(lane.indexOf("initialize_release_recovery_snapshot") < lane.indexOf("native_data seed"));
 assert.ok(lane.indexOf("native_data final") < lane.indexOf('mv "$APP_DIR" "$BACKUP_DIR"'));
