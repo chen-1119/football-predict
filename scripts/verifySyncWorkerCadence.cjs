@@ -1655,8 +1655,8 @@ const verifyRelayWake = async () => {
   );
   assert.match(
     workerSource,
-    /onBeforeHeavyStep: async \(\) => \{[\s\S]*candidateDeadlineHeartbeat\.waitForIdle\(\)[\s\S]*describeCandidateDeadlineStartupAdmission\([\s\S]*startupDeadlineAdmission\.waitForPublished[\s\S]*candidateDeadlineHeartbeat\.waitForStartupAdmission\(\)[\s\S]*candidateDeadlineHeartbeat\?\.waitForHealthy\(\{[\s\S]*allowImplementationDrift: candidateImplementationRefreezePending/,
-    "startup observes the first capture and every heavy step enforces exact or latched refreeze admission",
+    /onBeforeHeavyStep: async \(step\) => \{[\s\S]*admitOfficialDataStep\(step,candidateDeadlineHeartbeat\)[\s\S]*candidateDeadlineHeartbeat\.waitForIdle\(\)[\s\S]*describeCandidateDeadlineStartupAdmission\([\s\S]*startupDeadlineAdmission\.waitForPublished[\s\S]*candidateDeadlineHeartbeat\.waitForStartupAdmission\(\)[\s\S]*candidateDeadlineHeartbeat\?\.waitForHealthy\(\{[\s\S]*allowImplementationDrift: candidateImplementationRefreezePending/,
+    "official input refresh is admitted independently while model stages retain exact or latched refreeze admission",
   );
   assert.ok(
     (workerSource.match(/await onBeforeHeavyStep\(/g) || []).length >= 8,
