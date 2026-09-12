@@ -24,14 +24,32 @@ async function tick(env = process.env, overrides = {}) {
     strategy: { ...STRATEGY, maximumPages: cfg.maxPages, maximumSeconds: cfg.maxRunSeconds },
     checkedAt: new Date(now()).toISOString(), lastSuccessAt: previous?.lastSuccessAt || null };
   if (!cfg.enabled) { const result = { ...base, state: 'disabled' }; atomic(statusFile, result); return result; }
-  if (Date.parse(previous?.nextAttemptAt) > now()) {
-    const result = { ...previous, ...base }; atomic(statusFile, result); return result;
-  }
+  const coolingDown = Date.parse(previous?.nextAttemptAt) > now();
   const lockFile = path.join(cfg.stateDir, 'scheduled.lock');
   let lock;
   try { lock = fs.openSync(lockFile, 'wx', 0o600); }
   catch (error) { if (error.code === 'EEXIST') return { ...base, state: 'running' }; throw error; }
   fs.writeFileSync(lock, JSON.stringify({ pid: process.pid, at: base.checkedAt }));
+  if (coolingDown) {
+    // Provider backoff must not freeze the independent PostgreSQL input status.
+    // Keep the real source attempt and retry times; this is only a local read.
+    let fixturePool;
+    const result = { ...previous, ...base };
+    try {
+      fixturePool = createPool(cfg.fixtureUrl);
+      const feed = await readFeed(fixturePool, cfg.maxAge);
+      result.fixtureInput = { state: 'available', generatedAt: feed.generatedAt,
+        eligibleMatches: selectFixtures(feed.matches, now()).selected.length };
+    } catch (error) {
+      result.fixtureInput = { state: /stale/i.test(error.message) ? 'stale' : 'unavailable' };
+    } finally {
+      try {
+        await fixturePool?.end().catch(() => {});
+        atomic(statusFile, result);
+      } finally { fs.closeSync(lock); fs.unlinkSync(lockFile); }
+    }
+    return result;
+  }
   let pool, fixturePool, context;
   const runId = crypto.randomUUID(), startedAt = new Date(now()).toISOString();
   const result = { ...base, runId, lastRunAt: startedAt, state: 'running', sourceAccess: null, fixtureInput: null };
