@@ -1,3 +1,4 @@
+import { PrematchCollectionPanel } from '../components/predictions/PrematchCollectionPanel';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context/AppContextCore';
 import type { FiveHundredRecentFormRow, League, Match, MatchProbabilityModel, MultiLangString, OutcomeProbability, PredictionDetail, ScoreProbability, Team } from '../services/mockData';
@@ -30,6 +31,10 @@ import {
 } from '../services/matchLifecycle';
 import { TeamBadge } from '../components/TeamBadge';
 import { RecommendationEvidenceFacts } from '../components/predictions/RecommendationEvidenceFacts';
+import { CapturedMatchData, matchesSavedCaptureIdentity } from '../components/predictions/CapturedMatchData';
+import { CapturedReferenceAnalysisPanel } from '../components/predictions/CapturedReferenceAnalysisPanel';
+import type { SavedMatchCapture } from '../components/predictions/CapturedMatchData';
+import { formatSourceNeutralText } from '../components/predictions/sourceNeutralText';
 import { ArrowLeft, Trophy } from 'lucide-react';
 import {
   formatCalibratedModelProbability,
@@ -45,6 +50,7 @@ interface MatchDetailProps {
   matchId: string;
   onBack: () => void;
   initialTab?: DetailTab;
+  capturedData?: SavedMatchCapture;
 }
 
 type MatchDetailCacheEntry = {
@@ -1209,8 +1215,9 @@ const selectFreshestMatch = (
   return contextFreshness > detailFreshness ? resolvedContext : resolvedDetail;
 };
 
-export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initialTab = 'overview' }) => {
+export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initialTab = 'overview', capturedData }) => {
   const { language, matches, dataSync } = useApp();
+  const displayText = (value: string | null | undefined, fallback = '') => formatSourceNeutralText(value, language, fallback);
   const [activeTab, setActiveTab] = useState<DetailTab>(initialTab);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [fullMatch, setFullMatch] = useState<Match | null>(null);
@@ -1457,6 +1464,33 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
     );
   }
 
+  // Saved-capture reference calculations remain separate from the published model.
+  // Keep this branch after every hook and before the normal analytical presentation.
+  if (matchesSavedCaptureIdentity(capturedData, match)
+    && !match.predictions?.length && !match.probabilityModel && !match.gptPrediction) {
+    const capturedKickoff = new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-GB', {
+      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+      hourCycle: 'h23', timeZone: 'Asia/Shanghai'
+    }).format(new Date(match.kickoffTime));
+    return (
+      <div className="match-detail-shell captured-only-detail" data-section="captured-record-only">
+        <div className="detail-topbar">
+          <span>{displayText(match.leagueName || match.leagueShortName, language === 'zh' ? '赛事详情' : 'Fixture detail')}</span>
+          <button onClick={onBack} className="btn btn-secondary" type="button">
+            <ArrowLeft size={16} /> {language === 'zh' ? '返回列表' : 'Back'}
+          </button>
+        </div>
+        <header className="card captured-only-detail__summary">
+          <h1>{displayText(match.homeTeamName)} <span>{language === 'zh' ? '对阵' : 'vs'}</span> {displayText(match.awayTeamName)}</h1>
+          <p>{language === 'zh' ? '开赛时间：' : 'Kickoff: '}{displayText(capturedKickoff)}{language === 'zh' ? '（北京时间）' : ' (Beijing time)'}</p>
+          <strong>{language === 'zh' ? '赛前推荐与比赛参数' : 'Pre-match picks and match parameters'}</strong>
+        </header>
+        <CapturedReferenceAnalysisPanel match={match} capture={capturedData} language={language} now={nowMs} />
+        <CapturedMatchData capture={capturedData} language={language} />
+      </div>
+    );
+  }
+
   if (!detailShellReady || isPastKickoffAwaitingAuthoritativeDetail) {
     const scoreReady = Number.isInteger(match.scoreHome) && Number.isInteger(match.scoreAway);
     const statusText = match.resultDisposition === 'VOID'
@@ -1534,7 +1568,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
     backBtn: { zh: '返回列表', en: 'Back' },
     overviewTab: { zh: '概览', en: 'Overview' },
     probabilityTab: { zh: '概率与赔率', en: 'Probability & Odds' },
-    evidenceTab: { zh: '证据与风险', en: 'Evidence & Risk' },
+    evidenceTab: { zh: '数据与分析', en: 'Data & Analysis' },
     historyTab: { zh: '历史与复盘', en: 'History & Review' },
     market: { zh: '分析市场', en: 'Market' },
     tip: { zh: '分析方向', en: 'Direction' },
@@ -1810,8 +1844,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
   const historyDataSourceLabel = historySource === 'training'
     ? (language === 'zh' ? '长期历史训练库' : 'long-run training history')
     : historySource === 'five-hundred'
-      ? (language === 'zh' ? '500 近期战绩' : '500.com recent form')
-      : (language === 'zh' ? '已同步竞彩历史库' : 'synced Sporttery history');
+      ? (language === 'zh' ? '近期赛果记录' : 'recent result records')
+      : (language === 'zh' ? '已同步赛果记录' : 'synced result records');
   const matchSignal = getMatchSignal(match);
   const matchInsight = buildMatchInsight(match, {
     homeSampleSize: homeHistory.sampleSize,
@@ -1957,7 +1991,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
         return (
           <div key={item.key} className="probability-outcome">
             <div>
-              <span>{item[language]}</span>
+              <span>{displayText(item[language])}</span>
               <strong>{formatProbabilityValue(value)}</strong>
             </div>
             <em style={{ width: `${width}%` }} />
@@ -1986,7 +2020,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
         : (language === 'zh' ? '实时推荐' : 'Live pick');
     }
     if (isFiveHundredReferenceDirection) {
-      return language === 'zh' ? '500市场参考' : '500.com market reference';
+      return language === 'zh' ? '市场参考' : 'Market reference';
     }
     return language === 'zh' ? '分析参考' : 'Analysis reference';
   };
@@ -2142,8 +2176,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
   });
   const primaryOddsLabel = isFiveHundredReferenceDirection && fiveHundredMarketReference
     ? (language === 'zh'
-      ? `500参考价 ${fiveHundredMarketReference.reference.selectedSourceOdds.toFixed(2)}`
-      : `500.com reference ${fiveHundredMarketReference.reference.selectedSourceOdds.toFixed(2)}`)
+      ? `参考价 ${fiveHundredMarketReference.reference.selectedSourceOdds.toFixed(2)}`
+      : `Reference ${fiveHundredMarketReference.reference.selectedSourceOdds.toFixed(2)}`)
     : publicRecommendationCopy.oddsLabel;
   const publicScoreNote = isPreMatchRecordSettling
     ? settlingOutcomeReason
@@ -2197,13 +2231,11 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
   const localizedSignalText = (
     value: string | { zh?: string; en?: string } | undefined | null,
     fallback = ''
-  ) => (typeof value === 'string' ? value : value?.[language] || value?.zh || value?.en || fallback);
+  ) => displayText(typeof value === 'string' ? value : value?.[language] || value?.zh || value?.en || fallback);
   const oddsTrendSummaryText = localizedSignalText(match.oddsTrend?.summary);
   const weatherSummary = localizedSignalText(weatherSignal?.summary);
   const weatherImpactText = localizedSignalText(weatherSignal?.impact);
-  const venueSummary = typeof externalSignals?.venue?.summary === 'string'
-    ? externalSignals.venue.summary
-    : externalSignals?.venue?.summary?.[language];
+  const venueSummary = localizedSignalText(externalSignals?.venue?.summary);
   const weatherVerified = Boolean(
     weatherSignal &&
     (weatherSummary || weatherSignal.condition || Number.isFinite(weatherSignal.temperatureC) || Number.isFinite(weatherSignal.windKph))
@@ -2266,9 +2298,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
   const worldCupPriorAwayName = language === 'zh'
     ? worldCupPrior?.away?.nameZh || worldCupPrior?.away?.nameEn
     : worldCupPrior?.away?.nameEn || worldCupPrior?.away?.nameZh;
-  const weatherSourceLabel = weatherSignal?.source
-    ? `${weatherSignal.source} · ${weatherStatusDetail}`
-    : weatherStatusDetail;
+  const weatherSourceLabel = weatherStatusDetail;
   const weatherImpactLabel = weatherVerified
     ? (weatherVenueConfirmed
       ? (language === 'zh' ? '已进入赛前信息层' : 'Included in pre-match signal layer')
@@ -2276,7 +2306,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
     : (language === 'zh' ? '未验证，不参与概率加权' : 'Unverified, not weighted in probabilities');
   const weatherMetrics = [
     {
-      label: language === 'zh' ? '来源状态' : 'Source',
+      label: language === 'zh' ? '数据状态' : 'Data status',
       value: weatherStatusLabel
     },
     {
@@ -2553,11 +2583,11 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
         || (language === 'zh' ? '正式首发尚未到发布时间时不算数据缺口；截止后首发只展示，不修改正式推荐。' : 'A confirmed XI is not a data gap before its publication window; post-cutoff lineups are display-only and cannot change the formal pick.')
     },
     ...(hasUsableFiveHundredDetails ? [{
-      title: language === 'zh' ? '500网数据' : '500.com data',
+      title: language === 'zh' ? '赛前资料' : 'Pre-match data',
       value: fiveHundredDisplay.summaryLabel,
       tone: fiveHundredDisplay.tone,
       body: fiveHundredDisplay.summaryBody
-        || (language === 'zh' ? '500网赔率、亚洲盘、近况和阵容用于赛前校验，不单独生成正式推荐。' : '500.com odds, Asian lines, form, and projected XI validate the pre-match read; they do not create formal picks alone.')
+        || (language === 'zh' ? '参考赔率、亚洲盘、近况和阵容用于赛前校验，不单独生成正式推荐。' : 'Reference odds, Asian lines, form, and projected XI validate the pre-match read; they do not create formal picks alone.')
     }] : []),
     {
       title: language === 'zh' ? '外部均赔' : 'External odds',
@@ -2595,18 +2625,18 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
           <div>
             <h4>{language === 'zh' ? '计算公式' : 'Calculation Formula'}</h4>
             <p>
-              {trace.policy?.[language] || (language === 'zh'
+              {displayText(trace.policy?.[language] || (language === 'zh'
                 ? '先计算独立模型概率，再做风险校准；SP 只做市场校验。'
-                : 'Compute independent model probabilities first, then calibrate risk; SP is validation only.')}
+                : 'Compute independent model probabilities first, then calibrate risk; SP is validation only.'))}
             </p>
           </div>
-          <span>{trace.version}</span>
+          <span>{displayText(trace.version)}</span>
         </div>
 
         <div className="formula-card-grid">
           <article className="formula-card is-primary">
             <span>{language === 'zh' ? '胜平负总公式' : '1X2 formula'}</span>
-            <code>{trace.outcome?.formula?.[language] || 'P_final=calibrate(normalize(sum(w_i*P_i)))'}</code>
+            <code>{displayText(trace.outcome?.formula?.[language] || 'P_final=calibrate(normalize(sum(w_i*P_i)))')}</code>
             <p>
               {language === 'zh'
                 ? '主胜、平局、客胜分别套用同一条公式，最后归一化并应用冷却/风险校准。'
@@ -2617,9 +2647,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
           <article className="formula-card">
             <span>{language === 'zh' ? '本场代入' : 'This match'}</span>
             <ul className="formula-expression-list">
-              <li>{language === 'zh' ? '主胜' : 'Home'}: <strong>{expressions?.home || '--'}</strong></li>
-              <li>{language === 'zh' ? '平局' : 'Draw'}: <strong>{expressions?.draw || '--'}</strong></li>
-              <li>{language === 'zh' ? '客胜' : 'Away'}: <strong>{expressions?.away || '--'}</strong></li>
+              <li>{language === 'zh' ? '主胜' : 'Home'}: <strong>{displayText(expressions?.home || '--')}</strong></li>
+              <li>{language === 'zh' ? '平局' : 'Draw'}: <strong>{displayText(expressions?.draw || '--')}</strong></li>
+              <li>{language === 'zh' ? '客胜' : 'Away'}: <strong>{displayText(expressions?.away || '--')}</strong></li>
             </ul>
             {trace.outcome?.calibration?.applied && (
               <p>
@@ -2635,7 +2665,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
             <div className="formula-component-list">
               {modelComponents.map((component) => (
                 <div key={component.key}>
-                  <b>{component.label?.[language] || component.key}</b>
+                  <b>{displayText(component.label?.[language] || component.key)}</b>
                   <strong>{formatModelWeight(component.weight)}</strong>
                   <em>{renderOutcomeLine(component.probabilities)}</em>
                 </div>
@@ -2645,7 +2675,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
 
           <article className="formula-card">
             <span>{language === 'zh' ? '进球期望 lambda' : 'Expected goals lambda'}</span>
-            <code>{trace.expectedGoals?.formula?.[language] || '--'}</code>
+            <code>{displayText(trace.expectedGoals?.formula?.[language] || '--')}</code>
             <p>
               {language === 'zh' ? '独立初值' : 'Independent seed'}:
               {' '}
@@ -2664,7 +2694,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
 
           <article className="formula-card">
             <span>{language === 'zh' ? 'Poisson 比分' : 'Poisson score'}</span>
-            <code>{trace.poisson?.formula?.[language] || '--'}</code>
+            <code>{displayText(trace.poisson?.formula?.[language] || '--')}</code>
             <p>
               lambda H/A:
               {' '}
@@ -2679,16 +2709,16 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
 
           <article className="formula-card">
             <span>{language === 'zh' ? '大小球 / SP 规则' : 'Goals / SP rule'}</span>
-            <code>{trace.goals?.formula?.[language] || '--'}</code>
+            <code>{displayText(trace.goals?.formula?.[language] || '--')}</code>
             <p>
               {language === 'zh' ? '大2.5' : 'Over2.5'} <strong>{formatProbabilityValue(goalValues?.over25)}</strong>
               {' · BTTS '}
               <strong>{formatProbabilityValue(goalValues?.bttsYes)}</strong>
             </p>
             <p>
-              <strong>{trace.marketUse?.formula || 'marketWeight=0'}</strong>
+              <strong>{displayText(trace.marketUse?.formula || 'marketWeight=0')}</strong>
               {' · '}
-              {trace.marketUse?.[language] || (language === 'zh' ? 'SP 只做校验。' : 'SP is validation only.')}
+              {displayText(trace.marketUse?.[language] || (language === 'zh' ? 'SP 只做校验。' : 'SP is validation only.'))}
             </p>
             {marketComponent && (
               <p>
@@ -2921,9 +2951,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
               <div className="match-detail-v4__settlement-status" role="status">
                 <strong>{language === 'zh' ? '本场推荐作废' : 'Pick voided'}</strong>
                 <span>
-                  {language === 'zh'
+                  {displayText(language === 'zh'
                     ? `官方取消竞猜${match.voidReason ? `：${match.voidReason}` : ''}；收益按 0 处理，不计入命中率分母。`
-                    : `The official market was cancelled${match.voidReason ? `: ${match.voidReason}` : ''}; profit is zero and the row is excluded from hit-rate denominators.`}
+                    : `The official market was cancelled${match.voidReason ? `: ${match.voidReason}` : ''}; profit is zero and the row is excluded from hit-rate denominators.`)}
                 </span>
               </div>
             ) : isPendingResult && (
@@ -2970,7 +3000,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                             ? (language === 'zh' ? '胜平负已发布推荐' : 'Published Live 1X2 Pick')
                             : (language === 'zh' ? '胜平负实时推荐' : 'Live 1X2 Pick'))
                       : isFiveHundredReferenceDirection
-                        ? (language === 'zh' ? '500市场参考' : '500.com Market Reference')
+                        ? (language === 'zh' ? '市场参考' : 'Market Reference')
                       : isAnalysisReferenceDirection
                         ? primaryOutcomeIsHandicap
                           ? (language === 'zh' ? '让球分析参考' : 'HHAD Analysis Reference')
@@ -2979,7 +3009,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                   <b>{isPredictionArchiveOnly ? (language === 'zh' ? '归档' : 'Archive') : recommendationActionLabel(primaryOutcomePrediction)}</b>
                 </div>
                 <strong className="recommendation-overview-main">{primaryOutcomeTitle}</strong>
-                <p>{isPublishedLiveAwaitingSettlement
+                <p>{displayText(isPublishedLiveAwaitingSettlement
                   ? publishedLiveSettlementReason
                   : isPreMatchRecordSettling
                   ? settlingOutcomeReason
@@ -2989,13 +3019,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                     ? archiveOutcomeReason
                     : isFiveHundredReferenceDirection && fiveHundredMarketReference
                       ? fiveHundredMarketReference.prediction.explanation[language]
-                    : publicRecommendationCopy.reasons[0] || matchSignal.note[language]}</p>
-                <RecommendationEvidenceFacts
-                  match={match}
-                  prediction={primaryOutcomePrediction || primaryPostReviewPrediction}
-                  language={language}
-                  className="is-detail"
-                />
+                    : publicRecommendationCopy.reasons[0] || matchSignal.note[language])}</p>
                 {isLivePrimaryRecommendation && primaryOutcomePrediction?.liveRecommendation?.dataCoverageWarning && (
                   <div className="recommendation-mini-tags" aria-label={language === 'zh' ? '数据覆盖提示' : 'Data coverage notice'}>
                     <span>{language === 'zh' ? '辅助数据覆盖偏低' : 'Low auxiliary-data coverage'}</span>
@@ -3012,21 +3036,21 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                   </div>
                 )}
                 {isFiveHundredReferenceDirection && fiveHundredMarketReference && (
-                  <div className="recommendation-mini-tags" aria-label={language === 'zh' ? '500市场参考状态' : '500.com market-reference status'}>
-                    <span>{language === 'zh' ? '非官方500市场参考' : 'Non-official 500.com reference'}</span>
+                  <div className="recommendation-mini-tags" aria-label={language === 'zh' ? '市场参考状态' : 'Market-reference status'}>
+                    <span>{language === 'zh' ? '非正式推荐 · 市场参考' : 'Market reference · not a formal pick'}</span>
                     <span>{language === 'zh'
                       ? `去水首位 ${Math.round(fiveHundredMarketReference.reference.leaderProbability * 1000) / 10}%`
                       : `De-vigged leader ${Math.round(fiveHundredMarketReference.reference.leaderProbability * 1000) / 10}%`}</span>
                     <span>{language === 'zh' ? '不计命中率/不进串关' : 'Excluded from hit rate / bet slips'}</span>
                     {fiveHundredMarketReference.reference.handicapRisk && (
-                      <span>{fiveHundredMarketReference.reference.handicapRisk.label[language]}</span>
+                      <span>{displayText(fiveHundredMarketReference.reference.handicapRisk.label[language])}</span>
                     )}
                   </div>
                 )}
                 {!isPreMatchRecordSettling && !isFormalPrimaryRecommendation && !isLivePrimaryRecommendation && !isArchivedPrimaryDirection && publicRecommendationBlockers.length > 0 && (
                   <div className="recommendation-mini-tags" aria-label={language === 'zh' ? '未通过正式推荐原因' : 'Formal-pick blockers'}>
                     <span>{language === 'zh' ? '未通过正式推荐' : 'Not a formal pick'}</span>
-                    {publicRecommendationBlockers.slice(0, 3).map((blocker) => <span key={blocker}>{blocker}</span>)}
+                    {publicRecommendationBlockers.slice(0, 3).map((blocker) => <span key={blocker}>{displayText(blocker)}</span>)}
                   </div>
                 )}
                 <div className="recommendation-mini-tags">
@@ -3050,19 +3074,19 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                     </>
                   ) : (
                     <>
-                      <span>{publicRecommendationCopy.marketLabel}</span>
-                      <span>{publicRecommendationCopy.strengthLabel}</span>
-                      <span>{primaryOddsLabel}</span>
-                      <span>{publicRecommendationCopy.statusLabel}</span>
+                      <span>{displayText(publicRecommendationCopy.marketLabel)}</span>
+                      <span>{displayText(publicRecommendationCopy.strengthLabel)}</span>
+                      <span>{displayText(primaryOddsLabel)}</span>
+                      <span>{displayText(publicRecommendationCopy.statusLabel)}</span>
                     </>
                   )}
                 </div>
                 {companionRecommendation && (
                   <div className="recommendation-companion-panel">
-                    <span>{companionRecommendation.title}</span>
-                    <strong>{companionRecommendation.label}</strong>
-                    <p>{companionRecommendation.reason}</p>
-                    <em>{companionRecommendation.meta}</em>
+                    <span>{displayText(companionRecommendation.title)}</span>
+                    <strong>{displayText(companionRecommendation.label)}</strong>
+                    <p>{displayText(companionRecommendation.reason)}</p>
+                    <em>{displayText(companionRecommendation.meta)}</em>
                   </div>
                 )}
               </section>
@@ -3185,24 +3209,24 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                     : isArchivedPrimaryDirection
                       ? (language === 'zh' ? '赛前归档说明' : 'Archive Notes')
                       : (language === 'zh' ? '分析参考说明' : 'Analysis Reference Notes')}</span>
-                  <h3>{publicRecommendationCopy.title}</h3>
+                  <h3>{displayText(publicRecommendationCopy.title)}</h3>
                   {publicRecommendationCopy.reasons.map((reason) => (
-                    <p key={reason}>{reason}</p>
+                    <p key={reason}>{displayText(reason)}</p>
                   ))}
                   {companionRecommendation && (
-                    <p>{companionRecommendation.reason}</p>
+                    <p>{displayText(companionRecommendation.reason)}</p>
                   )}
                 </div>
                 <span className={`decision-pool-pill is-${publicRecommendationCopy.strengthTone}`}>
-                  {publicRecommendationCopy.strengthLabel}
+                  {displayText(publicRecommendationCopy.strengthLabel)}
                 </span>
               </div>
 
               <div className="decision-transparent-grid">
                 <section className="decision-transparent-panel">
                   <h4>{language === 'zh' ? (isFormalPrimaryRecommendation || isLivePrimaryRecommendation || isArchivedLiveRecommendation ? '推荐玩法' : '分析玩法') : 'Market'}</h4>
-                  <strong>{publicRecommendationCopy.marketLabel}</strong>
-                  <p>{primaryOddsLabel}</p>
+                  <strong>{displayText(publicRecommendationCopy.marketLabel)}</strong>
+                  <p>{displayText(primaryOddsLabel)}</p>
                 </section>
 
                 <section className="decision-transparent-panel">
@@ -3214,8 +3238,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                 {companionRecommendation && (
                   <section className="decision-transparent-panel is-companion">
                     <h4>{getHandicapCompanionHeading(companionRecommendation, language)}</h4>
-                    <strong>{companionRecommendation.title}</strong>
-                    <p>{companionRecommendation.meta}</p>
+                    <strong>{displayText(companionRecommendation.title)}</strong>
+                    <p>{displayText(companionRecommendation.meta)}</p>
                   </section>
                 )}
               </div>
@@ -3234,36 +3258,60 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
 
         {activeTab === 'evidence' && (
           <div className="match-detail-v4__section-stack" data-section="evidence">
+            <PrematchCollectionPanel matchId={match.id} language={language} />
+            {matchesSavedCaptureIdentity(capturedData, match)
+              && <CapturedMatchData capture={capturedData} language={language} />}
+
+            <section className="card match-detail-v4__data-analysis" aria-labelledby="match-detail-data-analysis-heading">
+              <div className="match-detail-v4__section-head">
+                <div>
+                  <span className="review-kicker">{language === 'zh' ? '数据与分析' : 'Data & analysis'}</span>
+                  <h3 id="match-detail-data-analysis-heading">{language === 'zh' ? '本场数据完整度与时效' : 'Evidence completeness and freshness'}</h3>
+                </div>
+                <span>{language === 'zh' ? '模型概率与已采集事实分别展示' : 'Model probability is separate from observed facts'}</span>
+              </div>
+              <RecommendationEvidenceFacts
+                match={match}
+                prediction={primaryOutcomePrediction || primaryPostReviewPrediction}
+                language={language}
+                className="is-detail"
+              />
+              <p className="match-detail-v4__data-analysis-note">
+                {language === 'zh'
+                  ? '保留数据时效、质量与缺失提示；确认首发、预计阵容和模型估计各按实际状态展示。'
+                  : 'Freshness, quality and missing-data notices are retained; confirmed lineups, projected rosters and model estimates remain distinct.'}
+              </p>
+            </section>
 
             {hasUsableFiveHundredDetails && (
               <div className={`card five-hundred-signal-card is-${fiveHundredDisplay.tone}`}>
                 <div className="five-hundred-signal-head">
                   <div>
                     <span className="review-kicker">
-                      {language === 'zh' ? '500网赛前数据' : '500.com pre-match data'}
+                      {language === 'zh' ? '赛前资料' : 'Pre-match data'}
                     </span>
-                    <h3>{fiveHundredDisplay.summaryLabel}</h3>
+                    <h3>{displayText(fiveHundredDisplay.summaryLabel)}</h3>
                     <p>
                       {language === 'zh'
-                        ? '先把500网能拿到的盘口、欧赔、近期战绩、排名和预计名单放到页面上；这些信号参与校验和降级，不会单独覆盖当前分析方向。'
-                        : '500.com market, odds, form, ranking, and projected XI are surfaced here first. They can downgrade the evidence assessment without overriding the analysis direction alone.'}
+                        ? '已取得的盘口、参考赔率、近期战绩、排名和预计名单用于赛前校验与风险判断，不会单独覆盖当前分析方向。'
+                        : 'Available markets, reference odds, form, ranking, and projected XI support validation and risk assessment without overriding the analysis direction alone.'}
                     </p>
                   </div>
                   <span className={`five-hundred-source-badge is-${fiveHundredDisplay.tone}`}>
-                    {fiveHundredDisplay.badge}
+                    {displayText(fiveHundredDisplay.badge)}
                   </span>
                 </div>
 
                 <div className="five-hundred-signal-grid">
                   {fiveHundredUsablePanels.map((panel) => (
                     <section key={panel.key} className={`five-hundred-signal-panel is-${panel.tone}`}>
-                      <span>{panel.title}</span>
-                      <strong>{panel.value}</strong>
-                      <p>{panel.body}</p>
+                      <span>{displayText(panel.title)}</span>
+                      <strong>{displayText(panel.value)}</strong>
+                      <p>{displayText(panel.body)}</p>
                       {panel.tags.length > 0 && (
                         <div className="five-hundred-chip-row">
                           {panel.tags.map((tag) => (
-                            <b key={`${panel.key}-${tag}`}>{tag}</b>
+                            <b key={`${panel.key}-${tag}`}>{displayText(tag)}</b>
                           ))}
                         </div>
                       )}
@@ -3274,7 +3322,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                 {fiveHundredDisplay.chips.length > 0 && (
                   <div className="five-hundred-chip-row is-summary">
                     {fiveHundredDisplay.chips.slice(0, 8).map((chip) => (
-                      <b key={chip}>{chip}</b>
+                      <b key={chip}>{displayText(chip)}</b>
                     ))}
                   </div>
                 )}
@@ -3299,13 +3347,13 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
               <div className="pre-match-risk-grid">
                 {publicPreMatchFactCards.map((item) => (
                   <section key={item.title} className={`pre-match-risk-panel is-${item.tone}`}>
-                    <span>{item.title}</span>
-                    <strong>{item.value}</strong>
-                    <p>{item.body}</p>
+                    <span>{displayText(item.title)}</span>
+                    <strong>{displayText(item.value)}</strong>
+                    <p>{displayText(item.body)}</p>
                     {item.tags.length > 0 && (
                       <div className="pre-match-risk-tags">
                         {item.tags.map((tag) => (
-                          <b key={tag}>{tag}</b>
+                          <b key={tag}>{displayText(tag)}</b>
                         ))}
                       </div>
                     )}
@@ -3384,7 +3432,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                                   : (language === 'zh' ? '分析参考' : 'Analysis reference')}
                             </span>
                             <strong>{localizedSignalText(row.tipLabel, row.tipCode || '--')}</strong>
-                            <em>{getPostReviewOutcomeLabel(row, language)} · {row.actualLabel?.[language] || row.actualCode || '--'}</em>
+                            <em>{getPostReviewOutcomeLabel(row, language)} · {displayText(row.actualLabel?.[language] || row.actualCode || '--')}</em>
                           </div>
                         ))}
                       </div>
@@ -3393,10 +3441,10 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                       <h4>{language === 'zh' ? '原因复盘' : 'Reason check'}</h4>
                       <div className="post-review-chip-list">
                         {primaryPostReviewMistakeSummary && (
-                          <span className="is-mistake-summary">{language === 'zh' ? '未命中与失误定位：' : 'Miss and error diagnosis: '}{primaryPostReviewMistakeSummary}</span>
+                          <span className="is-mistake-summary">{language === 'zh' ? '未命中与失误定位：' : 'Miss and error diagnosis: '}{displayText(primaryPostReviewMistakeSummary)}</span>
                         )}
                         {postReviewDiagnosis.map((item) => (
-                          <span key={item.code}>{isLivePostReviewRow(primaryPostReviewRow) && item.code === 'best-hit'
+                          <span key={item.code}>{displayText(isLivePostReviewRow(primaryPostReviewRow) && item.code === 'best-hit'
                             ? (language === 'zh' ? '实时推荐命中，已进入独立实时推荐样本复盘。' : 'The live pick hit and enters the separate live-pick review track.')
                             : isLivePostReviewRow(primaryPostReviewRow) && item.code === 'best-miss'
                               ? (language === 'zh' ? '实时推荐未中，已进入独立实时推荐样本复盘。' : 'The live pick missed and enters the separate live-pick review track.')
@@ -3404,7 +3452,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                             ? (language === 'zh' ? '分析参考主方向符合赛果，作为观察样本进入复盘。' : 'The archived analysis reference matched the result and enters review as an observation sample.')
                             : !isFormalPostReviewRow(primaryPostReviewRow) && item.code === 'best-miss'
                               ? (language === 'zh' ? '分析参考主方向不符合赛果，作为观察样本进入复盘。' : 'The archived analysis reference did not match the result and enters review as an observation sample.')
-                              : item[language]}</span>
+                              : item[language])}</span>
                         ))}
                       </div>
                     </section>
@@ -3412,16 +3460,16 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                       <h4>{language === 'zh' ? '下次调整' : 'Next adjustment'}</h4>
                       <div className="post-review-chip-list">
                         {postReviewAdjustments.map((item) => (
-                          <span key={item.code}>{item[language]}</span>
+                          <span key={item.code}>{displayText(item[language])}</span>
                         ))}
                       </div>
                     </section>
                     <section className="post-review-panel">
                       <h4>{language === 'zh' ? '事件数据' : 'Event data'}</h4>
-                      <p>{postMatchReview.eventFactors?.goals?.summary?.[language] || '--'}</p>
+                      <p>{displayText(postMatchReview.eventFactors?.goals?.summary?.[language] || '--')}</p>
                       <div className="post-review-chip-list is-muted">
                         {postReviewDataGaps.map((item) => (
-                          <span key={item.key}>{item[language]}</span>
+                          <span key={item.key}>{displayText(item[language])}</span>
                         ))}
                       </div>
                     </section>
@@ -3452,9 +3500,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
 
             <div className={`card signal-summary-card is-${matchSignal.category} ${isFormalPrimaryRecommendation || isLivePrimaryRecommendation || isArchivedLiveRecommendation ? '' : 'is-reference'}`}>
               <div>
-                <span className={`signal-badge is-${matchSignal.category}`}>{matchSignal.label[language]}</span>
+                <span className={`signal-badge is-${matchSignal.category}`}>{displayText(matchSignal.label[language])}</span>
                 <h3>{language === 'zh' ? '赛前判断' : 'Pre-Match Read'}</h3>
-                <p>{matchSignal.note[language]}</p>
+                <p>{displayText(matchSignal.note[language])}</p>
               </div>
               <div className="signal-summary-meta">
                 <span>{language === 'zh' ? '证据评分' : 'Evidence score'} <strong>{navEvidenceDetail}</strong></span>
@@ -3489,15 +3537,15 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                     ? (language === 'zh' ? '赛前方向：已归档' : 'Pre-match direction: archived')
                     : (language === 'zh' ? '分析状态：仅供观察' : 'Analysis status: observation only')}</strong>
                 <span>
-                  {language === 'zh'
+                  {displayText(language === 'zh'
                     ? `当前版本：${predictionVersionText} / 生成时间：${formatPolicyTimestamp(predictionGeneratedAt, language)} / 竞彩截止：${formatPolicyTimestamp(predictionCutoffRaw, language)}`
-                    : `Version: ${predictionVersionText} / Generated: ${formatPolicyTimestamp(predictionGeneratedAt, language)} / Cutoff: ${formatPolicyTimestamp(predictionCutoffRaw, language)}`}
+                    : `Version: ${predictionVersionText} / Generated: ${formatPolicyTimestamp(predictionGeneratedAt, language)} / Cutoff: ${formatPolicyTimestamp(predictionCutoffRaw, language)}`)}
                 </span>
               </div>
               <p>
                 {predictionDataPolicyCopy}
                 {predictionMeta?.updateReason && (
-                  <em>{predictionMeta.updateReason[language]}</em>
+                  <em>{displayText(predictionMeta.updateReason[language])}</em>
                 )}
               </p>
             </div>
@@ -3550,7 +3598,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                     </div>
                   ))}
                   <div className="odds-source detail-odds-source">
-                    {language === 'zh' ? '官方竞彩 HAD / HHAD' : 'Official Sporttery HAD / HHAD'}
+                    {language === 'zh' ? '竞彩 SP · HAD / HHAD' : 'Jingcai SP · HAD / HHAD'}
                   </div>
                   {match.oddsTrend && (
                     <div className={`sp-trend-box is-${match.oddsTrend.direction}`}>
@@ -3574,9 +3622,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                       {language === 'zh' ? 'AI 增强分析' : 'AI Enhanced Read'}
                     </span>
                     <h3>{language === 'zh' ? '赛前文字研判' : 'Pre-Match Analyst Note'}</h3>
-                    <p>{gptParsed.summary || (language === 'zh' ? '已生成赛前分析。' : 'Pre-match analysis generated.')}</p>
+                    <p>{displayText(gptParsed.summary || (language === 'zh' ? '已生成赛前分析。' : 'Pre-match analysis generated.'))}</p>
                   </div>
-                  <span>{gptPrediction?.relay?.model || 'GPT'}</span>
+                  <span>{displayText(gptPrediction?.relay?.model || 'GPT')}</span>
                 </div>
 
                 <div className="probability-model-grid">
@@ -3589,7 +3637,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                       </span>
                       <span>
                         {language === 'zh' ? '方向' : 'Direction'}
-                        <strong>{gptRecommendation?.pick || '--'}</strong>
+                        <strong>{displayText(gptRecommendation?.pick || '--')}</strong>
                       </span>
                       <span>
                         {language === 'zh' ? 'AI 自评证据分' : 'AI self-rated evidence'}
@@ -3597,7 +3645,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                       </span>
                       <span>
                         {language === 'zh' ? '风险' : 'Risk'}
-                        <strong>{gptRecommendation?.risk || '--'}</strong>
+                        <strong>{displayText(gptRecommendation?.risk || '--')}</strong>
                       </span>
                     </div>
                   </section>
@@ -3606,7 +3654,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                     <h4>{language === 'zh' ? '分析依据' : 'Reasons'}</h4>
                     <ul className="prediction-analysis-list">
                       {(gptParsed.reasons || []).slice(0, 6).map((reason, index) => (
-                        <li key={`gpt-reason-${index}`}>{reason}</li>
+                        <li key={`gpt-reason-${index}`}>{displayText(reason)}</li>
                       ))}
                       {(gptParsed.reasons || []).length === 0 && (
                         <li>{language === 'zh' ? '暂无额外文字依据。' : 'No extra analyst reasons yet.'}</li>
@@ -3619,7 +3667,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                       <h4>{language === 'zh' ? '待补数据' : 'Missing Data'}</h4>
                       <ul className="prediction-analysis-list">
                         {gptParsed.missingData.slice(0, 5).map((item, index) => (
-                          <li key={`gpt-missing-${index}`}>{item}</li>
+                          <li key={`gpt-missing-${index}`}>{displayText(item)}</li>
                         ))}
                       </ul>
                     </section>
@@ -3642,9 +3690,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                       {language === 'zh' ? '概率预测系统' : 'Probability Forecast'}
                     </span>
                     <h3>{language === 'zh' ? '赛前概率分布' : 'Pre-Match Probability Distribution'}</h3>
-                    <p>{probabilityModel.basis[language]}</p>
+                    <p>{displayText(probabilityModel.basis[language])}</p>
                   </div>
-                  <span>{probabilityModel.version}</span>
+                  <span>{displayText(probabilityModel.version)}</span>
                 </div>
 
                 <div className="probability-model-grid">
@@ -3707,7 +3755,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                       {probabilityModel.dynamicCalibration && (
                         <span className="probability-weight-line">
                           {language === 'zh' ? '动态校准' : 'Dynamic calibration'}：
-                          {calibrationReasonLabels[probabilityModel.dynamicCalibration.gate?.reason || 'neutral-profile']?.[language] || probabilityModel.dynamicCalibration.gate?.reason || '--'}
+                          {displayText(calibrationReasonLabels[probabilityModel.dynamicCalibration.gate?.reason || 'neutral-profile']?.[language] || probabilityModel.dynamicCalibration.gate?.reason || '--')}
                         </span>
                       )}
                     </div>
@@ -3822,7 +3870,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                         <span>
                           {language === 'zh' ? '场景' : 'Profile'}
                           <strong>{probabilityModel.dynamicCalibration.profileKey}</strong>
-                          <em>{probabilityModel.dynamicCalibration.version}</em>
+                          <em>{displayText(probabilityModel.dynamicCalibration.version)}</em>
                         </span>
                         <span>
                           {language === 'zh' ? '胜平负命中' : '1X2 hit'}
@@ -3907,9 +3955,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
               <div className="factor-card-grid">
                 {factorCards.map((item) => (
                   <div key={item.title} className={`factor-card is-${item.tone}`}>
-                    <span>{item.title}</span>
-                    <strong>{item.value}</strong>
-                    <p>{item.body}</p>
+                    <span>{displayText(item.title)}</span>
+                    <strong>{displayText(item.value)}</strong>
+                    <p>{displayText(item.body)}</p>
                   </div>
                 ))}
               </div>
@@ -3978,7 +4026,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                       : 'Combines long-run strength, last-year form, schedule density, score range, World Cup context, and pre-match signals; official odds, handicap, and movement are validation and risk markers only.'}
                   </p>
                 </div>
-                <span>{predictionMeta?.promptVersion || 'professional-football-analyst-v1'}</span>
+                <span>{displayText(predictionMeta?.promptVersion || 'professional-football-analyst-v1')}</span>
               </div>
               <div className="prompt-upgrade-strip">
                 <strong>{language === 'zh' ? '数据覆盖' : 'Data coverage'}</strong>
@@ -4032,7 +4080,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                 {weatherMetrics.map((item) => (
                   <div key={item.label} className="weather-metric">
                     <span>{item.label}</span>
-                    <strong>{item.value}</strong>
+                    <strong>{displayText(item.value)}</strong>
                   </div>
                 ))}
               </div>
@@ -4061,11 +4109,11 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                 <section>
                   <h4>{language === 'zh' ? '场地信息' : 'Venue info'}</h4>
                   <p>
-                    {venueSummary
+                    {displayText(venueSummary
                       || externalSignals?.venue?.name
                       || (language === 'zh'
                         ? '暂无可验证场地/草皮信息，暂不参与加权。'
-                        : 'No verified venue or pitch data yet, so no pitch weighting is applied.')}
+                        : 'No verified venue or pitch data yet, so no pitch weighting is applied.'))}
                   </p>
                 </section>
               </div>
@@ -4147,7 +4195,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                     <div key={stat.key} style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(64px, 1fr) minmax(150px, 2fr) minmax(64px, 1fr)', alignItems: 'center', gap: '0.6rem', fontSize: '0.85rem', fontWeight: 650 }}>
                         <span>{formatDecimal(stat.home)}{stat.unit}</span>
-                        <span style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.8rem', textAlign: 'center' }}>{stat.label}</span>
+                        <span style={{ color: 'hsl(var(--text-secondary))', fontSize: '0.8rem', textAlign: 'center' }}>{displayText(stat.label)}</span>
                         <span style={{ textAlign: 'right' }}>{formatDecimal(stat.away)}{stat.unit}</span>
                       </div>
                       <div style={{ display: 'flex', width: '100%', height: '8px', backgroundColor: 'hsl(var(--border))', borderRadius: '4px', overflow: 'hidden' }}>
@@ -4156,8 +4204,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                       </div>
                       <small style={{ color: 'hsl(var(--text-muted))', fontSize: '0.68rem', lineHeight: 1.4 }}>
                         {language === 'zh'
-                          ? `类型：模型估计 · 来源：${stat.source} · 质量：${stat.quality}`
-                          : `Type: model estimate · Source: ${stat.source} · Quality: ${stat.quality}`}
+                          ? `类型：模型估计 · 质量：${displayText(stat.quality)}`
+                          : `Type: model estimate · Quality: ${displayText(stat.quality)}`}
                       </small>
                     </div>
                   );
@@ -4195,9 +4243,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                   {language === 'zh' ? '数据缺口校验' : 'Data Gap Check'}
                 </strong>
                 <div>
-                  {language === 'zh'
+                  {displayText(language === 'zh'
                     ? `来源质量 ${dataGapSignal.sourceQuality || '--'}；主要缺口：${(dataGapSignal.missing || []).slice(0, 3).map((item) => item.zh || item.key).filter(Boolean).join('、') || '暂无关键缺口'}。`
-                    : `Source quality ${dataGapSignal.sourceQuality || '--'}; gaps: ${(dataGapSignal.missing || []).slice(0, 3).map((item) => item.en || item.key).filter(Boolean).join(', ') || 'no major gap'}.`}
+                    : `Source quality ${dataGapSignal.sourceQuality || '--'}; gaps: ${(dataGapSignal.missing || []).slice(0, 3).map((item) => item.en || item.key).filter(Boolean).join(', ') || 'no major gap'}.`)}
                 </div>
               </div>
             )}

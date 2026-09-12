@@ -23,6 +23,14 @@ const predictionsCss = readText("src/styles/predictions.css");
 const eligibilityModulePath = path.join(rootDir, "src", "services", "officialRecommendationEligibility.cjs");
 const { isOfficialRecommendationEligible, OFFICIAL_RECOMMENDATION_POLICY_VERSION } = require(eligibilityModulePath);
 
+const archivedPreMatchPrediction = readText("src/services/archivedPreMatchPrediction.ts");
+const evidenceFacts = readText("src/components/predictions/RecommendationEvidenceFacts.tsx");
+const sourceNeutralText = readText("src/components/predictions/sourceNeutralText.ts");
+const publicationLedger = readText("src/services/recommendationPublicationLedger.cjs");
+const { buildHitRateAudit } = require("../server/hitRateAudit.cjs");
+const { GOODWIN_BENCHMARK_SHADOW_POLICY, evaluateBenchmarkSelection } = require("../src/services/benchmarkSelectionPolicy.cjs");
+const { completeCandidateAudit } = require("../src/services/candidateProspectiveProjection.cjs");
+
 const checks = [];
 const pushCheck = (name, ok, details = {}) => checks.push({ name, ok: Boolean(ok), ...details });
 const hasAll = (text, needles) => needles.every((needle) => text.includes(needle));
@@ -92,68 +100,30 @@ pushCheck("primary navigation exposes the independent AI arena", hasAll(primaryN
     '<Route path="/hitwin" element={<Navigate to="/review" replace />} />'
   ]));
 
-const tieredRouteContract = hasAll(app, [
-  '<PredictionsList viewMode="analysis" onSelectMatch={selectMatch} />',
-  '<PredictionsList viewMode="fixtures" onSelectMatch={selectMatch} />'
-]) && hasAll(predictions, [
-  "const isAnalysisView = viewMode === 'analysis'",
-  "const isFixturesView = viewMode === 'fixtures'",
-  'const referenceTierCount = recommendationCounts.reference + recommendationCounts.live',
-  'const directionShownCount = recommendationCounts.home + recommendationCounts.draw + recommendationCounts.away',
-  'className="predictions-v4__evidence-snapshot"',
-  'className="predictions-v4__snapshot-item is-tiers"',
-  'className="predictions-v4__snapshot-item is-directions"',
-  'className="predictions-v4__snapshot-item is-sp"',
-  'className="predictions-v4__snapshot-item is-gaps"',
-  "const poolRows = isFixturesView",
-  "? getSportteryPoolRows(match, language).filter((row) => row.odds)"
-]);
-
-pushCheck("analysis and fixtures routes render distinct content modes", tieredRouteContract || hasAll(app, [
+// Both routes now share the same compact match/pick/SP/result row contract.
+pushCheck("analysis and fixtures routes share compact rows while retaining separate route state", hasAll(app, [
   '<PredictionsList viewMode="analysis" onSelectMatch={selectMatch} />',
   '<PredictionsList viewMode="fixtures" onSelectMatch={selectMatch} />'
 ]) && hasAll(predictions, [
   "viewMode: 'analysis' | 'fixtures'",
   "const isAnalysisView = viewMode === 'analysis'",
-  "const isFixturesView = viewMode === 'fixtures'",
-  "'赛前分析' : 'Pre-match Analysis'",
-  "'赛程与官方赔率' : 'Fixtures and Official Odds'",
-  'to="/predictions"',
-  "const marketSelection = getListMarketSelection(",
-  "publishedRecommendation,\n                    nowMs,\n                    true\n                  );",
-  "const poolRows = isFixturesView",
-  "? getSportteryPoolRows(match, language).filter((row) => row.odds)",
-  "const publishedRecommendation = isVoid",
-  "? null",
-  ": getOnSaleDisplayRecommendation(match, language, nowMs) || getLiveDisplayRecommendation(match, language)",
-  "const archivedPrediction = getArchivedPreMatchPrediction(match, now)",
-  "|| Boolean(archivedPrediction)",
-  "prediction = predictionFromReviewRow(reviewRow) || archivedPrediction",
-  "The selector already enforces SCHEDULED state, kickoff, cutoff, and",
-  "所有可用推荐直接标记方向",
-  "const marketSelectionSummary = marketSelection",
-  "const dualMarketSelectionSummary =",
-  "数据推荐：${dualMarketSelectionSummary || marketSelectionSummary}",
-  "const rowOutcomeLabel = rowSelection",
-  "getSelectionToneLabel(selectionTone, language)} · ${rowOutcomeLabel}",
-  "${recommendationCounts.reference} data references",
-  "场方向已显示"
-]) && predictions.includes('className="daily-review-panel is-compact is-priority"')
-  && predictions.includes('effectiveSelectedDate < todayStr')
-  && predictions.includes("{isAnalysisView && (\n      <details\n        className={`model-governance-panel system-model-details"), {
-  analysisRouteMode: app.includes('<PredictionsList viewMode="analysis"'),
-  fixturesRouteMode: app.includes('<PredictionsList viewMode="fixtures"'),
-  fixturesUsesOfficialPoolsOnly: predictions.includes("? getSportteryPoolRows(match, language).filter((row) => row.odds)")
-});
+  'data-view-mode={viewMode}',
+  "football.listView.",
+  "group.matches.map(renderMatchRow)",
+  "pickLabel={language === 'zh' ? '推荐方向' : 'Pick'}",
+  'oddsLabel="SP"',
+  "resultLabel={language === 'zh' ? '结果' : 'Result'}"
+]));
 
-pushCheck("initial cutover loading never presents a false zero-match conclusion", hasAll(predictions, [
-  'const headerDataPending = !dataSync.currentLoaded && baseFilteredMatches.length === 0',
-  'const headerDataRecovering = headerDataPending && Boolean(',
-  "? (language === 'zh' ? '赛程恢复中' : 'Schedule recovering')",
-  ": (language === 'zh' ? '赛程加载中' : 'Loading schedule')",
-  '正在自动重试赛程与推荐数据，不以 0 场作为结论',
-  'matchSummary={headerMatchSummary}',
-  'secondarySummary={headerSecondarySummary}'
+pushCheck("initial loading and errors never present a false zero-match conclusion", hasAll(predictions, [
+  "matchSummary={!dataSync.currentLoaded && baseFilteredMatches.length === 0",
+  "'加载中' : 'Loading'",
+  "const isLoading = Boolean(dataSync.currentLoading || (!dataSync.currentLoaded && !dataSync.error)",
+  "const emptyStateText = isLoading",
+  "!dataSync.currentLoaded && dataSync.error",
+  "'暂时无法加载比赛，请稍后重试。'",
+  "<p>{emptyStateText}</p>",
+  'role="status" aria-live="polite"'
 ]));
 
 pushCheck("secondary tools are bounded and explain empty formal pools", hasAll(betSlip, [
@@ -232,50 +202,33 @@ const coreOrder = indexMap(predictions, [
   'className="dashboard-hero is-compact"',
   'className="date-toolbar"',
   'className="panel filters-panel filters-details"',
-  'className="daily-review-panel is-compact is-priority"',
-  'className="league-stack"',
-  'className="notice-banner is-compact"',
-  'className={`source-health-panel',
-  'className={`model-governance-panel system-model-details'
+  'className="compact-record"',
+  'className="league-stack"'
 ]);
 const orderValues = Object.values(coreOrder);
-pushCheck("predictions puts historical result summary before archived fixtures", orderValues.every((value) => value >= 0)
-  && orderValues.every((value, index) => index === 0 || value > orderValues[index - 1]), {
-  order: coreOrder
-});
+pushCheck("compact settled summary precedes the fixtures without diagnostic panels", orderValues.every(value => value >= 0)
+  && orderValues.every((value, index) => index === 0 || value > orderValues[index - 1]), { order: coreOrder });
 
 const onSaleHelperStart = predictions.indexOf("const getOnSaleDisplayRecommendation");
 const componentStart = predictions.indexOf("export const PredictionsList", onSaleHelperStart);
 const onSaleHelper = predictions.slice(onSaleHelperStart, componentStart);
 const strictHelperUses = (predictions.match(/getOnSaleDisplayRecommendation\(/g) || []).length;
-const tieredDisplayContract = hasAll(predictions, [
-  "getOnSaleDisplayRecommendation(match, language, nowMs) || getLiveDisplayRecommendation(match, language)",
-  "displayRecommendation.publicationTrack === 'live'",
-  'const watchDirectionPrediction = !isFinished',
-  "has-watch-direction",
-  "if (!isReview) return null"
-]);
-pushCheck("formal picks require current SP while published live picks retain publication SP", tieredDisplayContract || hasAll(onSaleHelper, [
-  "match.status !== 'SCHEDULED'",
-  "getBestPrediction(match)",
-  "isPredictionOfficialResultPoolAvailable(match, storedBest)",
-  "getOfficialPredictionOdds(match, storedBest)",
-  "getOfficialPredictionHandicapLine(match, storedBest)",
-  "prediction: eligiblePrediction"
-]) && strictHelperUses >= 2 && hasAll(predictions, [
-  "getOnSaleDisplayRecommendation(match, language, nowMs) || getLiveDisplayRecommendation(match, language)",
-  "displayRecommendation.publicationTrack === 'live'",
-  "场推荐 / ${recommendationCounts.formal + recommendationCounts.live} 场正式或实时",
-  "模型证据仍不足，本场暂不强行给方向",
-  "赔率与可审计输入不足，暂不能形成可靠推荐。",
-  "if (!isReview) return null"
-]) && hasAll(displayRecommendation, [
-  "const publishedLiveOdds = Number(promotedPrediction.livePublicationEvidence?.officialSp)",
-  "odds: publishedOdds",
-  "publicationTrack === 'formal' && isHandicapMarketContradicted"
-]) && !predictions.includes("推荐SP"), {
-  strictHelperUses
-});
+pushCheck("formal picks require current bound SP while published live picks retain publication SP", onSaleHelperStart >= 0
+  && hasAll(onSaleHelper, [
+    "match.resultDisposition === 'VOID'", "match.status !== 'SCHEDULED'",
+    "!isBeforeMatchSaleCutoff(match, now)", "getBestPrediction(match)",
+    "isPredictionOfficialResultPoolAvailable(match, storedBest)",
+    "getOfficialPredictionOdds(match, storedBest)",
+    "isOfficialRecommendationEligible(", "getOfficialPredictionHandicapLine(match, storedBest)",
+    "const eligiblePrediction = { ...storedBest, odds: officialOdds }", "prediction: eligiblePrediction"
+  ]) && strictHelperUses >= 1 && hasAll(predictions, [
+    "getOnSaleDisplayRecommendation(match, language, nowMs) || getLiveDisplayRecommendation(match, language)",
+    "publishedRecommendation?.publicationTrack === 'live'",
+    "displayRecommendation.publicationTrack !== 'live'"
+  ]) && hasAll(displayRecommendation, [
+    "const publishedLiveOdds = Number(promotedPrediction.livePublicationEvidence?.officialSp)",
+    "odds: publishedOdds", "publicationTrack === 'formal' && isHandicapMarketContradicted"
+  ]), { strictHelperUses });
 
 const referenceSelectionOrder = indexMap(analysisReferenceSelection, [
   "isCalibratedMarketAnalysisReferenceEligible(match, storedBest, now)",
@@ -287,21 +240,13 @@ const referenceSelectionOrder = indexMap(analysisReferenceSelection, [
   "const lowEvidenceMarket = buildLowEvidenceMarketLeaderReference(",
 ]);
 const referenceSelectionOrderValues = Object.values(referenceSelectionOrder);
-pushCheck("analysis gives every normal fixture a separately-accounted data direction", hasAll(predictions, [
-  "getOnSaleAnalysisReference as selectAnalysisReferencePrediction",
-  "selectOnSaleAnalysisReference",
-  ") => selectAnalysisReferencePrediction(match, options);",
-  "allowModelOnly: true",
-  "candidate: rawDisplayRecommendation?.prediction",
+pushCheck("analysis keeps the shared reference selector and evidence gates without provider copy", hasAll(predictions, [
+  "import { selectOnSaleAnalysisReference }",
+  "const analysisReferenceSelection = !isFinished && !displayRecommendation",
+  "selectOnSaleAnalysisReference(match, { allowModelOnly: true, candidate: rawDisplayRecommendation?.prediction, now: nowMs })",
   "const analysisReference = analysisReferenceSelection?.prediction",
-  "now: nowMs",
-  "data picks",
-  "formatReferenceTime(",
-  "no official SP is on sale",
   "const nowMs = clockNow",
-  "getReferencePredictionOdds(match, pickedPrediction, language)",
-  "500数据推荐",
-  "500去水概率"
+  "getReferencePredictionOdds(match, pickedPrediction)"
 ]) && hasAll(bestTips, [
   "selectOnSaleAnalysisReference(match, { allowModelOnly: false, now })",
   "reference.source === 'official-calibrated-market'",
@@ -404,27 +349,27 @@ pushCheck("list card and detail overview share the same canonical BEST decision"
   detailCanonicalOrder
 });
 
-const recommendationCountsStart = predictions.indexOf("const recommendationCounts = useMemo");
-const fixtureCountsStart = predictions.indexOf("const fixtureMarketCounts = useMemo", recommendationCountsStart);
-const recommendationCountsSource = predictions.slice(recommendationCountsStart, fixtureCountsStart);
-pushCheck("reference picks count as recommendations and never inflate unavailable", hasAll(recommendationCountsSource, [
-  "const analysisReference = displayRecommendation ? undefined : getOnSaleAnalysisReference(match, {",
-  "allowModelOnly: true",
-  "const archivedPrediction = getArchivedPreMatchPrediction(match, nowMs)",
-  "if (isVoid || signal.category === 'finished' || archivedPrediction)",
-  "if (!isVoid && archivedPrediction)",
-  "counts.recommended += 1",
-  "counts.reference += 1",
-  "if (displayRecommendation || analysisReference) counts.recommended += 1",
-  "else if (analysisReference) counts.reference += 1",
-  "if (!displayRecommendation && !analysisReference) counts.unavailable += 1"
-]) && !recommendationCountsSource.includes("if (!displayRecommendation) counts.unavailable += 1"));
-
-pushCheck("500 data-pick cards show their labelled reference price instead of pending sale", hasAll(predictions, [
-  "const fiveHundredDisplayOdds = fiveHundredPresentation?.reference.selectedSourceOdds",
-  "'500.com reference odds'",
-  "`SP ${fiveHundredDisplayOdds.toFixed(2)}`"
+const rowStart = predictions.indexOf("const renderMatchRow =");
+const rowEnd = predictions.indexOf("const quickDateOptions =", rowStart);
+const rowSource = predictions.slice(rowStart, rowEnd);
+pushCheck("reference directions remain visible and never become unavailable or formal by default", hasAll(rowSource, [
+  "const pickedPrediction = reviewPrediction || displayRecommendation?.prediction || archivedPreMatchPrediction || analysisReference",
+  "const isReferencePick = Boolean(",
+  "(!isFinished && !displayRecommendation && analysisReference)",
+  "const hasPick = !isVoid && Boolean(pickedPrediction && directionLabel)",
+  "hasPick ? directionLabel", "'暂无推荐' : 'No pick'",
+  "isFormal ? 'is-formal' : 'is-reference'",
+  "'正式' : 'Formal'", "'参考' : 'Reference'",
+  "forceReference: isReferencePick"
 ]));
+
+pushCheck("reference prices retain their selected SP without exposing the provider", hasAll(rowSource, [
+  "const fiveHundredDisplayOdds = fiveHundredPresentation?.reference.selectedSourceOdds",
+  "analysisReferenceSelection.displayOdds",
+  "fiveHundredDisplayOdds && fiveHundredDisplayOdds > 1 ? fiveHundredDisplayOdds.toFixed(2)",
+  'odds={<><strong className="compact-sp">{sp}</strong>',
+  'className="compact-sp-note"', "'推荐方向' : 'Selected pick'"
+]) && !rowSource.includes("'500.com reference odds'") && !rowSource.includes("500数据推荐"));
 
 const directReferenceListStart = bestTips.indexOf('<div className="best-pool-v4__rows is-formal-list">');
 const directReferenceList = bestTips.slice(directReferenceListStart);
@@ -495,18 +440,17 @@ pushCheck("fixtures keeps the full schedule in the selected sort order", hasAll(
   "comparison = new Date(a.kickoffTime).getTime() - new Date(b.kickoffTime).getTime()"
 ]) && !predictions.includes("if (aHasDirection !== bHasDirection)"));
 
-pushCheck("fixtures render a decision for every row and keep archived decisions visible", hasAll(predictions, [
-  "decision={isAnalysisView || isFixturesView || isArchived",
-  "? renderDecisionCell(match, publishedRecommendation)",
-  ": undefined}"
-]) && hasAll(matchSummaryRow, [
-  "const showDecision = isAnalysisView || decision !== undefined;",
-  "data-has-decision={showDecision ? 'true' : 'false'}",
-  "{showDecision && ("
-]) && hasAll(predictionsCss, [
-  ".predictions-v4__match-list.is-fixtures-view .predictions-v4__match-row.has-decision",
-  "minmax(260px, 1.55fr)"
-]));
+pushCheck("every row renders market odds separately from direction, SP and archived results", rowStart >= 0
+  && hasAll(predictions, ["group.matches.map(renderMatchRow)", "getArchivedPreMatchPrediction(match, nowMs)"])
+  && hasAll(rowSource, ["pick={<div", "odds={<><strong", "result={<span",
+    "marketOdds={<MatchMarketOdds match={match} language={language} capturedData={capturedDataByMatchId?.[match.id]} />}"])
+  && hasAll(matchSummaryRow, [
+    "pick: ReactNode", "odds: ReactNode", "result: ReactNode", "marketOdds: ReactNode",
+    'className="predictions-v4__match-slot is-market-odds"', "{marketOdds}",
+    'className="predictions-v4__match-slot is-pick"',
+    'className="predictions-v4__match-slot is-sp"',
+    'className="predictions-v4__match-slot is-result"', "{pick}", "{odds}", "{result}"
+  ]) && !matchSummaryRow.includes("showDecision &&"));
 
 pushCheck("public diagnostics do not reuse observation wording for stale or risky states",
   !predictions.includes("language === 'zh' ? '观察' : 'Watch'")
@@ -534,130 +478,54 @@ pushCheck("filters are keyboard-accessible and collapsed by default", filterDeta
 });
 
 const sportteryMetaStart = predictions.indexOf("const getSportteryMeta");
-const kickoffLabelStart = predictions.indexOf("const getRowKickoffLabel", sportteryMetaStart);
-const kickoffLabelEnd = predictions.indexOf("const formatCoveragePercent", kickoffLabelStart);
+const kickoffLabelEnd = predictions.indexOf("const hasOfficialScore", sportteryMetaStart);
 const compactDateHelpers = predictions.slice(sportteryMetaStart, kickoffLabelEnd);
-pushCheck("fixture rows avoid repeated selected dates", hasAll(compactDateHelpers, [
-  "match.matchNo || ''",
-  "sportteryDay === kickoffDay",
-  "formatShortDate(kickoffDay, language)",
-  "formatKickoffTime(match.kickoffTime, language)"
-]) && !["竞彩日", "开赛日", "归档"].some((needle) => compactDateHelpers.includes(needle)));
+pushCheck("fixture rows avoid repeated dates but preserve cross-midnight kickoff context", hasAll(compactDateHelpers, [
+  "match.matchNo || ''", "sportteryDay === kickoffDay", "formatShortDate(kickoffDay, language)",
+  "getCrossDayKickoffLabel(match, language) || formatKickoffTime(match.kickoffTime, language)",
+  "timeZone: 'Asia/Shanghai'"
+]) && !["竞彩日", "开赛日", "归档"].some(needle => compactDateHelpers.includes(needle)));
 
-const teamsCellStart = predictions.indexOf("teams={(\n");
-const oddsCellStart = predictions.indexOf("odds={(\n", teamsCellStart);
-const decisionCellStart = predictions.indexOf("decision={", oddsCellStart);
-const teamsCell = predictions.slice(teamsCellStart, oddsCellStart);
-const oddsCell = predictions.slice(oddsCellStart, decisionCellStart);
-const fallbackDecisionStart = predictions.indexOf("if (\n      !isFinished\n      && !displayRecommendation\n      && !archivedPreMatchPrediction\n      && !analysisReference\n    )");
-const fallbackReturnStart = predictions.indexOf("    return (", fallbackDecisionStart);
-const fallbackDecisionEnd = predictions.indexOf("    return (", fallbackReturnStart + 1);
-const fallbackDecision = predictions.slice(fallbackDecisionStart, fallbackDecisionEnd);
-pushCheck("semantic match rows keep pending-sale copy out of team slots", teamsCellStart >= 0
+const teamsCellStart = rowSource.indexOf("teams={");
+const pickCellStart = rowSource.indexOf("pick={", teamsCellStart);
+const teamsCell = rowSource.slice(teamsCellStart, pickCellStart);
+pushCheck("semantic compact rows reserve team slots for teams and keep details keyboard-accessible", teamsCellStart >= 0
   && hasAll(matchSummaryRow, [
-    "<article",
-    'className="match-teams-cell predictions-v4__match-slot is-teams"',
-    'className="match-odds-cell predictions-v4__match-slot is-odds"',
-    'className="match-decision-cell predictions-v4__match-slot is-decision"',
-    'className="details-button"'
-  ])
-  && !matchSummaryRow.includes("onClick={onOpen}")
-  && !["待开售", "Pending sale", "match-signal-line", "signal-badge"].some((needle) => teamsCell.includes(needle))
-  && hasAll(oddsCell, ["t('closed')", "t('archivedOdds')", "alignedPoolRows.map"])
-  && hasAll(predictions, ["closed: { zh: '未开售'", "en: 'Not on sale'"])
-  && hasAll(fallbackDecision, [
-    "'暂无推荐'",
-    "'No pick'",
-    "模型证据仍不足，本场暂不强行给方向",
-    "赔率与可审计输入不足，暂不能形成可靠推荐。"
-  ])
-  && !fallbackDecision.includes("decision-meta")
-  && hasAll(predictions, [
-    "推荐结论",
-    "Recommendation",
-    "detailsAriaLabel",
-    "const analysisReference = analysisReferenceSelection?.prediction",
-    "const primaryMeta = fiveHundredPresentation",
-    "isLowEvidenceReference",
-    "RecommendationEvidenceFacts",
-    "证据评分"
-  ])
-  && !predictions.includes("AI决策"), {
-  teamsCellHasPendingCopy: ["待开售", "Pending sale"].some((needle) => teamsCell.includes(needle)),
-  fallbackHasExtraMeta: fallbackDecision.includes("decision-meta")
-});
+    "<article", 'className="match-teams-cell predictions-v4__match-slot is-teams"',
+    'className="details-button"', 'type="button"', "event.stopPropagation();", "onOpen();"
+  ]) && !matchSummaryRow.includes("onClick={onOpen}")
+  && !["待开售", "Pending sale", "match-signal-line", "signal-badge", "RecommendationEvidenceFacts"].some(needle => teamsCell.includes(needle))
+  && hasAll(rowSource, ["detailsAriaLabel=", "onOpen={() => onSelectMatch(match.id)}", "'暂无推荐' : 'No pick'"]));
 
-const liveArchiveFallbackStart = predictions.indexOf("const isInPlayArchiveFallback = match.status === 'LIVE'");
-const archivePickedPredictionStart = predictions.indexOf("const pickedPrediction = reviewPrediction", liveArchiveFallbackStart);
-const archiveFallbackGuardStart = predictions.indexOf("if (\n      !isFinished", archivePickedPredictionStart);
-const archiveFallbackProjection = predictions.slice(liveArchiveFallbackStart, archiveFallbackGuardStart);
-pushCheck("live rows render the immutable pre-match archive before the no-pick fallback", liveArchiveFallbackStart >= 0
-  && archivePickedPredictionStart > liveArchiveFallbackStart
-  && archiveFallbackGuardStart > archivePickedPredictionStart
-  && hasAll(archiveFallbackProjection, [
-    "match.status === 'LIVE'",
-    "&& !displayRecommendation",
-    "&& Boolean(archivedPreMatchPrediction)",
-    "|| archivedPreMatchPrediction\n      || analysisReference;",
+const liveArchiveFallbackStart = rowSource.indexOf("const isInPlayArchiveFallback = match.status === 'LIVE'");
+const archivePickedPredictionStart = rowSource.indexOf("const pickedPrediction = reviewPrediction", liveArchiveFallbackStart);
+const fallbackDecisionStart = rowSource.indexOf("const hasPick =", archivePickedPredictionStart);
+pushCheck("live rows retain immutable pre-match direction and recorded SP before no-pick fallback", liveArchiveFallbackStart >= 0
+  && archivePickedPredictionStart > liveArchiveFallbackStart && fallbackDecisionStart > archivePickedPredictionStart
+  && hasAll(rowSource, [
+    "&& !displayRecommendation && Boolean(archivedPreMatchPrediction)",
+    "reviewPrediction || displayRecommendation?.prediction || archivedPreMatchPrediction || analysisReference",
     "archivedPreMatchPrediction?.recommendationAction === 'recommend'",
-    "'原赛前推荐归档 · 进行中'",
-    "getPredictionTipDisplay(pickedPrediction, language, true)",
-    "pickedPrediction?.oddsPoolCode === 'HHAD'",
-    "pickedPrediction.handicapLine || match.handicapLine"
-  ])
-  && hasAll(fallbackDecision, [
-    "&& !displayRecommendation",
-    "&& !archivedPreMatchPrediction",
-    "&& !analysisReference"
-  ]), {
-  liveArchiveFallbackStart,
-  archivePickedPredictionStart,
-  archiveFallbackGuardStart,
-  fallbackDecisionStart
-});
+    "isFinished || isInPlayArchiveFallback ? (recordedOdds > 1 ? recordedOdds.toFixed(2) : '--')"
+  ]) && hasAll(archivedPreMatchPrediction, [
+    "archive.source === 'immutable-pre-match-prediction-snapshot'",
+    "archivedSourceMatchId === matchSourceMatchId", "archivedAt < kickoffAt",
+    "archivedAt <= archiveDeadlineAt", "archivedEventAt === matchEventAt",
+    "archivedPrediction?.marketType === 'BEST'"
+  ]), { liveArchiveFallbackStart, archivePickedPredictionStart, fallbackDecisionStart });
 
-const dualMarketFixtureStart = predictions.indexOf("const handicapSupplement =");
-const dualMarketFixtureEnd = predictions.indexOf("const fiveHundredMarketPresentation", dualMarketFixtureStart);
-const dualMarketFixtureProjection = predictions.slice(dualMarketFixtureStart, dualMarketFixtureEnd);
-pushCheck("odds table highlights the primary HAD and bound HHAD companion without promoting the companion", hasAll(predictions, [
-  "const marketSelection = getListMarketSelection(",
-  "const handicapSupplement =",
-  "publishedRecommendation?.companion",
-  "getAnalysisReferenceHandicapSupplement(",
-  "marketSelection?.referenceSource",
-  "publishedRecommendation?.prediction || marketSelection?.prediction",
-  "const handicapMarketSelection: ListMarketSelection | null",
-  "const dualMarketSelectionSummary =",
-  "data-hhad-selection-tone={handicapMarketSelection?.tone || 'none'}",
-  "const rowSelection = marketSelection?.poolCode === row.poolCode",
-  "marketSelection.referenceSource !== 'published-reference'",
-  "sameHandicapLine(",
-  "const isSelectedMarket = Boolean(rowSelection)",
-  "const isSelectedOutcome = isSelectedMarket && rowSelection?.tipCode === outcome.code",
-  "让球参考推荐",
-  "The 500.com market leader is a comparison only; the published reference may differ and is excluded from formal results",
-  "Cross-market directions conflict; no pick is issued",
-  "Odds comparison, not the selected market",
-  "Official odds comparison",
-  "Published picks are marked directly in the odds table",
-  "Official pick: ${dualMarketSelectionSummary",
-  "Data pick: ${dualMarketSelectionSummary"
-]) && hasAll(css, [
-  ".sporttery-pool-row.is-selected-market",
-  ".sporttery-pool-row.is-unselected-market",
-  ".pool-odd.is-selected.is-recommendation",
-  ".pool-odd.is-selected.is-analysis",
-  ".pool-odd.is-selected.is-review"
-]) && hasAll(dualMarketFixtureProjection, [
-  "&& Boolean(publishedRecommendation || marketSelection)",
-  "poolCode: 'HHAD'",
-  "tone: 'analysis'"
-]) && !dualMarketFixtureProjection.includes("tone: 'recommendation'")
-  && !oddsCell.includes("Math.min("), {
-  dualMarketFixtureStart,
-  dualMarketFixtureEnd,
-  lowestSpSelectionPresent: oddsCell.includes("Math.min(")
-});
+pushCheck("selected SP stays bound to its direction and HHAD line without promoting companion picks", hasAll(predictions, [
+  "prediction.oddsPoolCode === 'HHAD' ? official.hhad?.odds : official.had?.odds",
+  "!sameHandicapLine(prediction.handicapLine, official.hhad?.handicap)",
+  "!sameHandicapLine(prediction.handicapLine, resolved.hhad?.handicap)",
+  "prediction.tipCode === '1' ? odds?.odds1 : prediction.tipCode === 'X' ? odds?.oddsX : odds?.odds2",
+  "const isPublishedReferenceSpUnavailable =",
+  "isVoid || !pickedPrediction || isPublishedReferenceSpUnavailable ? '--'",
+  "companion: undefined"
+]) && hasAll(displayRecommendation, [
+  "recommendationAction: 'reference'", "recommendationTier: 'handicap-companion-bound'",
+  "const companion = companionAudit.status === 'bound'"
+]) && !rowSource.includes("Math.min(") && !rowSource.includes("companion?.prediction"));
 
 pushCheck("empty dates do not inherit historical leagues", !predictions.includes("import { leagues") && hasAll(predictions, [
   "const matchesForDate = matches.filter((match) => matchBelongsToDate(match, effectiveSelectedDate))",
@@ -668,90 +536,48 @@ pushCheck("empty dates do not inherit historical leagues", !predictions.includes
   importsStaticLeagues: predictions.includes("import { leagues")
 });
 
-pushCheck("historical date empty state waits for the history lane", hasAll(predictions, [
-  "const isHistoryDateLoading = Boolean(",
-  "effectiveSelectedDate < todayStr",
-  "dataSync.historyLoading",
-  "!dataSync.historyLoaded",
-  "baseFilteredMatches.length === 0",
-  ": isHistoryDateLoading",
-  "Historical results are loading; matches and post-match reviews for this date will appear when ready."
+pushCheck("historical empty state waits for the history lane", hasAll(predictions, [
+  "effectiveSelectedDate < todayStr && dataSync.historyLoading && !dataSync.historyLoaded",
+  "const emptyStateText = isLoading", "'比赛加载中…' : 'Loading matches…'",
+  "groupedMatches.length === 0", "<p>{emptyStateText}</p>"
 ]));
 
-const modelDetailsStart = predictions.indexOf("<details\n        className={`model-governance-panel system-model-details");
-const modelDetailsEnd = predictions.indexOf("</details>", modelDetailsStart);
-const modelDetails = predictions.slice(modelDetailsStart, modelDetailsEnd);
-const modelSummaryStart = modelDetails.indexOf('<summary className="system-model-summary">');
-const modelSummaryEnd = modelDetails.indexOf("</summary>", modelSummaryStart);
-const modelSummary = modelDetails.slice(modelSummaryStart, modelSummaryEnd);
-pushCheck("model detail is collapsed with a compact summary", modelDetailsStart >= 0
-  && !modelDetails.slice(0, modelDetails.indexOf(">") + 1).includes(" open")
-  && hasAll(modelSummary, ["系统与模型说明", "systemRecommendationLabel", "dashboardUpdatedAt"])
-  && modelSummary.indexOf("modelGovernanceItems") < 0
-  && modelDetails.indexOf('data-testid="data-sync-strip"') > modelSummaryEnd, {
-  modelDetailsStart,
-  modelDetailsEnd,
-  summaryContainsOnlyCompactFields: modelSummary.indexOf("modelGovernanceItems") < 0
-});
+const evidenceTabStart = matchDetail.indexOf("{activeTab === 'evidence' && (");
+const evidenceTabEnd = matchDetail.indexOf("{activeTab === 'history' && (", evidenceTabStart);
+const evidenceTab = matchDetail.slice(evidenceTabStart, evidenceTabEnd);
+const overviewTabStart = matchDetail.indexOf("{activeTab === 'overview' && (");
+const overviewTab = matchDetail.slice(overviewTabStart, evidenceTabStart);
+pushCheck("detailed evidence belongs to the match analysis tab and is absent from list and overview", evidenceTabStart >= 0
+  && evidenceTabEnd > evidenceTabStart && overviewTabStart >= 0
+  && hasAll(evidenceTab, [
+    'data-section="evidence"', "<RecommendationEvidenceFacts", "match={match}",
+    "prediction={primaryOutcomePrediction || primaryPostReviewPrediction}", 'className="is-detail"',
+    "数据与分析", "确认首发、预计阵容和模型估计各按实际状态展示"
+  ]) && !overviewTab.includes("<RecommendationEvidenceFacts")
+  && (matchDetail.match(/<RecommendationEvidenceFacts\b/g) || []).length === 1
+  && !predictions.includes("RecommendationEvidenceFacts"));
 
-const dailyReviewCondition = "{(\n        effectiveSelectedDate < todayStr\n        || dailyReviewStats.finished > 0\n        || dailyReviewStats.awaitingOfficial > 0\n        || dailyReviewStats.archivedDirections > 0\n        || dailyReviewStats.provisionalReferenceSettled > 0\n      ) && (";
-pushCheck("daily review keeps formal, live, data-pick BEST, and all analysis rows separate", predictions.includes(dailyReviewCondition)
-  && predictions.indexOf(dailyReviewCondition) < predictions.indexOf('className="league-stack"')
-  && predictions.includes('className="daily-review-panel is-compact is-priority"')
-  && hasAll(predictions, [
-    "row.recommendationAction === 'recommend'",
-    "row.reviewRole === 'main'",
-    "row.performanceTrack === 'formal'",
-    "isSettledReviewStatus(row.resultStatus)",
-    "row?.performanceTrack === 'live-model'",
-    "const formalBestRow = settledRows.find((row) => isFormalReviewRow(row) && row.marketType === 'BEST')",
-    "const liveBestRow = settledRows.find((row) => isLiveReviewRow(row) && row.marketType === 'BEST')",
-    "const referenceBestRow = analysisRows.find((row) => row.marketType === 'BEST')",
-    "acc.analysisSettled += analysisRows.length",
-    "formalHitRate",
-    "data-live-settled={dailyReviewStats.liveSettled}",
-    "liveSettled",
-    "liveHitRate",
-    "实时推荐",
-    "referenceBestSettled",
-    "referenceBestHitRate",
-    "analysisSettled",
-    "analysisHitRate",
-    "const provisionalOutcome = !hasSettledReview ? getProvisionalArchivedOutcome(match, now) : null",
-    "tone === 'archive'",
-    "原赛前归档推荐：",
-    "Original pre-match archive:",
-    "acc.provisionalReferenceSettled += 1",
-    "provisionalReferenceHitRate",
-    "data-provisional-reference-settled={dailyReviewStats.provisionalReferenceSettled}",
-    "data-awaiting-official={dailyReviewStats.awaitingOfficial}",
-    "data-archived-directions={dailyReviewStats.archivedDirections}",
-    "External-result shadow reference",
-    "Official settlement and external-result references use separate denominators.",
-    "await official results",
-    "原赛前方向归档",
-    "待官方赛果",
-    "数据推荐 BEST",
-    "全部分析项"
-  ])
-  && !predictions.includes("dailyReviewStats.liveSettled > 0 &&"));
+pushCheck("daily review retains separate formal, live, reference BEST and analysis denominators", hasAll(predictions, [
+  "row.recommendationAction === 'recommend'", "row.reviewRole === 'main'", "row.performanceTrack === 'formal'",
+  "isSettledReviewStatus(row.resultStatus)", "row?.performanceTrack === 'live-model'",
+  "const formalBestRow = settledRows.find((row) => isFormalReviewRow(row) && row.marketType === 'BEST')",
+  "const liveBestRow = settledRows.find((row) => isLiveReviewRow(row) && row.marketType === 'BEST')",
+  "const referenceBestRow = analysisRows.find((row) => row.marketType === 'BEST')",
+  "acc.analysisSettled += analysisRows.length",
+  "const provisionalOutcome = !hasSettledReview ? getProvisionalArchivedOutcome(match, now) : null",
+  "acc.provisionalReferenceSettled += 1",
+  "stats.formalWon / stats.formalSettled", "stats.liveWon / stats.liveSettled",
+  "stats.referenceBestWon / stats.referenceBestSettled", "stats.analysisWon / stats.analysisSettled",
+  "stats.provisionalReferenceWon / stats.provisionalReferenceSettled",
+  "参考、待赛果与作废场次不计入正式命中率。"
+]) && !/formal(?:Won|Settled)\s*\+\s*(?:(?:stats|acc|dailyReviewStats)\.)?(?:live|reference|analysis|provisional|candidate)/.test(predictions));
 
-const dailyReviewPanelCssStart = predictionsCss.indexOf(".predictions-v4 .daily-review-panel.is-compact");
-const dailyReviewPanelCssEnd = predictionsCss.indexOf(".predictions-v4 .daily-review-panel.is-priority", dailyReviewPanelCssStart);
+const dailyReviewPanelCssStart = predictionsCss.indexOf(".predictions-compact .compact-record {");
+const dailyReviewPanelCssEnd = predictionsCss.indexOf("}", dailyReviewPanelCssStart);
 const dailyReviewPanelCss = predictionsCss.slice(dailyReviewPanelCssStart, dailyReviewPanelCssEnd);
-const dailyReviewStatsCssStart = predictionsCss.indexOf(".predictions-v4 .daily-review-stats {");
-const dailyReviewStatsCssEnd = predictionsCss.indexOf(".predictions-v4 .daily-review-stats span", dailyReviewStatsCssStart);
-const dailyReviewStatsCss = predictionsCss.slice(dailyReviewStatsCssStart, dailyReviewStatsCssEnd);
-pushCheck("daily review summary keeps readable width above its metric grid", hasAll(dailyReviewPanelCss, [
-  "grid-template-columns: minmax(0, 1fr);",
-]) && hasAll(dailyReviewStatsCss, [
-  "grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));",
-  "width: 100%;"
-]) && !dailyReviewPanelCss.includes("grid-template-columns: minmax(0, 1fr) auto;"), {
-  singleColumnSummary: dailyReviewPanelCss.includes("grid-template-columns: minmax(0, 1fr);"),
-  responsiveMetricGrid: dailyReviewStatsCss.includes("grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));"),
-  legacyOverflowLayoutRemoved: !dailyReviewPanelCss.includes("grid-template-columns: minmax(0, 1fr) auto;")
-});
+pushCheck("compact settled summary wraps its independent counters at narrow widths", dailyReviewPanelCssStart >= 0
+  && hasAll(dailyReviewPanelCss, ["display: flex;", "flex-wrap: wrap;", "align-items: center;"])
+  && !dailyReviewPanelCss.includes("white-space: nowrap"));
 
 pushCheck("date chips use only the Sporttery business-day scope", hasAll(predictions, [
   "const sportteryDay = getSportteryDay(match);",
@@ -779,148 +605,82 @@ pushCheck("date navigation opens the nearest available match day and stays user-
   'data-review-denominator="one-frozen-best-per-match"'
 ]));
 
-pushCheck("model scorecard separates formal samples from shadow evaluation", hasAll(predictions, [
-  "configuredModelRequiredRows",
-  ": 500;",
-  "const rawScorecardFormalRows = scorecardSample?.formalRecommendationRows;",
-  "typeof rawScorecardFormalRows === 'number'",
-  "scorecardHasFormalSample",
-  "暂无正式样本",
-  "暂无正式推荐样本；影子 LL/Brier 不计入赔率区间表现",
-  "data-model-scorecard-has-formal-sample",
-  "data-model-formal-recommendation-rows"
-]) && !predictions.includes("scorecardSample?.formalRecommendationRows ?? scorecardSample?.predictionRows")
-  && !predictions.includes("modelGate?.thresholds?.minMarketBaselineRows ?? 100")
-  && !predictions.includes("scorecardOddsCount} bands / ${scorecardComparisonNote}"));
+const emptyAudit = buildHitRateAudit();
+const settledAudit = buildHitRateAudit({ metrics: { settled: 2, won: 1, lost: 1 } });
+pushCheck("formal sample gates survive removal of the model scorecard", emptyAudit.minimumSettledRows === 500
+  && emptyAudit.sampleReady === false && emptyAudit.observed.hitRate === null
+  && settledAudit.observed.hitRate === 0.5 && settledAudit.sampleReady === false
+  && hasAll(predictions, ["stats.formalSettled > 0", "stats.formalWon / stats.formalSettled", "row.performanceTrack === 'formal'"])
+  && !predictions.includes("scorecardSample") && !predictions.includes("benchmarkShadowMetrics"));
 
-pushCheck("publication and candidate samples use visibly independent ledgers", hasAll(predictions, [
-  'data-testid="benchmark-hit-rate-audit"',
-  'data-sample-track="publication-ledger"',
-  "客户正式发布结算",
-  '<strong>{hitRateAuditSettledLabel}/{hitRateAuditRequiredRows}</strong>',
-  'const rawHitRateAuditSettled = hitRateAuditObserved?.settled;',
-  "typeof rawHitRateAuditSettled === 'number'",
-  "const hitRateAuditSettledLabel = hitRateAuditSettled === null ? '--' : String(hitRateAuditSettled);",
-  'data-testid="benchmark-ledger-separation-note"',
-  "独立账本说明：客户正式发布结算",
-  "候选前瞻对标结算",
-  "不计入正式命中率",
-  'data-testid="candidate-prospective-ledger"',
-  'data-sample-track="candidate-prospective-ledger"',
-  '<strong>{candidateFormalSettled}/{candidateFormalRequired}</strong>',
-]) && hasAll(css, [
-  ".benchmark-audit-panel__ledger-note",
-  "grid-column: 1 / -1;",
-]) && !predictions.includes("hitRateAuditSettled + candidateFormalSettled")
-  && !predictions.includes("candidateFormalSettled + hitRateAuditSettled"));
+pushCheck("publication samples exclude candidate, live and reference rows even without ledger dashboards",
+  emptyAudit.denominatorPolicy.includes("formal-publication-ledger-only")
+  && emptyAudit.denominatorPolicy.includes("reference-live-and-analysis-tracks-excluded")
+  && hasAll(predictions, ["!isFormalReviewRow(row)", "!isLiveReviewRow(row)", "row.recommendationAction === 'reference'"])
+  && !predictions.includes("candidateFormalSettled") && !predictions.includes("hitRateAuditSettled"));
 
-const scopedHeaderContract = hasAll(predictions, [
-  "const referenceTierCount = recommendationCounts.reference + recommendationCounts.live",
-  "const directionShownCount = recommendationCounts.home + recommendationCounts.draw + recommendationCounts.away",
-  "Official SP ${fixtureMarketCounts.covered}/${baseFilteredMatches.length}",
-  "${directionShownCount} directions shown",
-  'className="predictions-v4__evidence-snapshot"'
-]);
-pushCheck("fixture header reports selected Sporttery-day direction coverage without a global claim", scopedHeaderContract || hasAll(predictions, [
-  "本日 ${recommendationCounts.recommended}/${baseFilteredMatches.length} 场方向已显示",
-  "${recommendationCounts.recommended}/${baseFilteredMatches.length} directions shown for this Sporttery day",
-]) && !predictions.includes("${recommendationCounts.recommended} 场推荐已显示"));
+pushCheck("fixture header reports only the selected date and filter count", hasAll(predictions, [
+  "matches.filter((match) => matchBelongsToDate(match, effectiveSelectedDate))",
+  "baseFilteredMatches.length + (language === 'zh' ? ' 场比赛' : ' matches')",
+  "查看比赛赔率、推荐方向、SP 与赛后结果"
+]) && !predictions.includes("场方向已显示") && !predictions.includes("directions shown")
+  && !predictions.includes("predictions-v4__evidence-snapshot"));
 
-pushCheck("missing audit metrics remain unavailable instead of coercing null to zero", hasAll(predictions, [
-  "const toFiniteNumericMetric = (value",
-  "const hitRateAuditRateLabel = formatModelPercent(hitRateAuditObserved?.hitRate);",
-  "toFiniteNumericMetric(hitRateAuditInterval?.lower)",
-  "toFiniteNumericMetric(hitRateAuditInterval?.upper)",
-  "const benchmarkShadowRateLabel = formatModelPercent(benchmarkShadowMetrics?.hitRate);",
-  "const benchmarkShadowRoi = toFiniteNumericMetric(benchmarkShadowMetrics?.roiPercent);",
-  "candidateProspectiveMetrics?.logLossImprovement",
-  "candidateProspectiveMetrics?.brierImprovement"
-]) && !predictions.includes("Number.isFinite(Number(hitRateAuditObserved?.hitRate))")
-  && !predictions.includes("Number(candidateProspectiveMetrics?.logLossImprovement)")
-  && !predictions.includes("Number(candidateProspectiveMetrics?.brierImprovement)"));
+pushCheck("missing rates and analysis facts stay unavailable instead of becoming zero", emptyAudit.observed.hitRate === null
+  && emptyAudit.observed.interval95.lower === null && emptyAudit.observed.interval95.upper === null
+  && emptyAudit.observed.brier === null && emptyAudit.observed.logLoss === null
+  && hasAll(predictions, ["const formatDailyRate =", "value === null ?", "'无样本' : 'N/A'"])
+  && hasAll(evidenceFacts, ["breakdown.modelProbability === null", "formatEvidenceCompleteness(breakdown, '--')",
+    "formatFreshnessQuality(breakdown, '--')", "formatCalibrationSample(breakdown, '--')", "观测时间未知"]));
 
-pushCheck("80 percent benchmark is visibly audited instead of advertised as a result", hasAll(predictions, [
-  'data-testid="benchmark-hit-rate-audit"',
-  "data-audit-external-claim={hitRateAudit?.externalBenchmark?.verificationStatus",
-  "80% 只作为待验证目标，不作为当前成绩",
-  "只统计赛前冻结、写入不可变发布账本且已结算的正式推荐",
-  "实时推荐、500 数据推荐和普通分析方向全部排除",
-  "胜负完整公开，不删除失误样本",
-  "截止后不可改方向、赔率或证据",
-  "外部 80% 声称：未核验，不进入训练标签",
-  "hitRateAuditObserved?.interval95",
-  "hitRateAuditSettledLabel}/{hitRateAuditRequiredRows",
-  "data-clv-version={hitRateClvAudit?.version",
-  "data-clv-timing-version={hitRateClvAudit?.timingAudit?.version",
-  "data-clv-eligible-rows={hitRateClvRows}",
-  "data-clv-candidate-rows={hitRateClvCandidateRows}",
-  "收盘时点有效覆盖",
-  "hitRateClvRows}/${hitRateClvCandidateRows}"
-]) && hasAll(css, [
-  ".benchmark-audit-panel",
-  ".benchmark-audit-panel__metrics",
-  ".benchmark-audit-panel__rules"
-]));
+pushCheck("80 percent remains an unverified audit target and never a public performance claim",
+  emptyAudit.targetRate === 0.8 && emptyAudit.externalBenchmark.verificationStatus === "unverified-external-claim"
+  && emptyAudit.externalBenchmark.usableAsTrainingLabel === false
+  && emptyAudit.publicationPolicy.immutableLedgerRequired === true
+  && emptyAudit.publicationPolicy.appendOnlySettlementRequired === true
+  && emptyAudit.publicationPolicy.completeWinsAndLossesRequired === true
+  && emptyAudit.publicationPolicy.postCutoffMutationForbidden === true
+  && emptyAudit.denominatorPolicy.includes("pre-match-frozen-before-cutoff")
+  && emptyAudit.denominatorPolicy.includes("settled-non-void-only")
+  && emptyAudit.denominatorPolicy.includes("no-retrospective-row-deletion")
+  && !predictions.includes("80%") && !predictions.includes("benchmark-hit-rate-audit"));
 
-pushCheck("research ledgers are accessible but collapsed outside the primary match flow", hasAll(predictions, [
-  '<details className="research-audit-disclosure" data-testid="research-audit-disclosure">',
-  '模型验证与研究记录', '正式统计未提供 · 研究记录不计入正式成绩',
-]) && hasAll(predictionsCss, ['.research-audit-disclosure > summary:focus-visible', '.research-audit-disclosure[open] > summary::after']));
+const shadowSelection = evaluateBenchmarkSelection({ marketType: "BEST", oddsPoolCode: "HAD", tipCode: "1", odds: 1.5, trustScore: 70 });
+pushCheck("benchmark cohort stays shadow-only and cannot promote formal recommendations",
+  shadowSelection.qualified === true && shadowSelection.role === "shadow-only" && shadowSelection.formalOnlineEffect === false
+  && GOODWIN_BENCHMARK_SHADOW_POLICY.minimumSettledRowsForPromotionReview >= 200
+  && GOODWIN_BENCHMARK_SHADOW_POLICY.minimumChronologicalFolds >= 6
+  && GOODWIN_BENCHMARK_SHADOW_POLICY.hitRateDisclosureOnly === true
+  && !predictions.includes("benchmark-shadow-track"));
 
-pushCheck("high-selectivity benchmark cohort is visible but cannot affect formal recommendations", hasAll(predictions, [
-  'data-testid="benchmark-shadow-track"',
-  "benchmarkShadow?.version",
-  "benchmarkShadow?.status",
-  "benchmarkShadow?.minimumSettledRowsForPromotionReview",
-  "benchmarkShadow?.minimumChronologicalFolds",
-  "benchmarkShadow?.promotionReviewReady",
-  "benchmarkShadowRateLabel",
-  "benchmarkShadowIntervalLabel",
-  "benchmarkShadowRoiLabel",
-  "benchmarkCaptureHeartbeat?.fresh",
-  "benchmarkCaptureHeartbeat?.intervalSeconds",
-  "前瞻截止心跳"
-]) && hasAll(css, [
-  ".benchmark-audit-panel__shadow",
-  ".benchmark-audit-panel__shadow-metrics"
-]));
+pushCheck("candidate audit still requires its immutable chain and complete decision/settlement pair",
+  completeCandidateAudit({ chainValid: false, decisionRecord: {}, settlementRecord: {}, cohort: {}, candidateRevisionId: "sample" }) === false
+  && completeCandidateAudit({ chainValid: true, decisionRecord: {}, cohort: {}, candidateRevisionId: "sample" }) === false
+  && completeCandidateAudit({ chainValid: true, decisionRecord: {}, settlementRecord: {}, cohort: {}, candidateRevisionId: "sample" }) === true
+  && hasAll(publicationLedger, ['"previousRecordHash"', '"recordHash"', '"evidenceHash"', '"featureHash"', '"publication-after-cutoff"', '"record-hash-mismatch"'])
+  && !predictions.includes("candidate-prospective-ledger"));
 
-pushCheck("frozen candidate prospective ledger is visible and keeps formal rows separate", hasAll(predictions, [
-  'data-testid="candidate-prospective-ledger"',
-  "candidateProspective.state",
-  "candidateProspective.chainValid",
-  "candidateProspective.rootHash",
-  "candidateProspective.gateSpecHash",
-  "candidateProspectiveMetrics?.logLossImprovement",
-  "candidateProspectiveMetrics?.brierImprovement",
-  "candidateFormalFinalized",
-  "candidateFormalSettled",
-  "candidateShadow?.universe",
-  "candidateCaptureHeartbeat?.fresh",
-  "candidateCaptureHeartbeat?.intervalSeconds",
-  "candidateAdmission?.admitted",
-  "candidateAdmission?.pendingDeadline",
-  "candidateAdmission?.dueUnrecorded",
-  "截止点心跳"
-]) && hasAll(predictions, [
-  "data-formal-finalized={candidateFormalFinalized}",
-  "data-formal-settled={candidateFormalSettled}",
-  "data-shadow-universe={Number(candidateShadow?.universe || 0)}",
-  "data-heartbeat-fresh={candidateCaptureHeartbeat?.fresh === true ? 'true' : 'false'}",
-  "data-admitted={Number(candidateAdmission?.admitted || 0)}",
-  "data-due-unrecorded={Number(candidateAdmission?.dueUnrecorded || 0)}"
-]));
+pushCheck("historical dates keep pending/void rows out of won/lost results and formal rates", hasAll(predictions, [
+  "if (isResultPhase) acc.resultPhaseFixtures += 1", "else acc.notYetResultPhase += 1",
+  "else if (isResultPhase)", "acc.awaitingOfficial += 1",
+  "const settledStatus = isFinished && reviewRow && isSettledReviewStatus(reviewRow.resultStatus) ? reviewRow.resultStatus : undefined",
+  "const resultLabel = isVoid ?", "'已作废' : 'Void'", "'待赛果' : 'Pending result'",
+  "参考、待赛果与作废场次不计入正式命中率。"
+]) && !rowSource.includes("getProvisionalArchivedOutcome("));
 
-pushCheck("historical business days distinguish not-yet-due settlement from missing results", hasAll(predictions, [
-  "const officialSettlementNotDue = dailyReviewStats.resultPhaseFixtures === 0;",
-  "data-settlement-phase={officialSettlementNotDue ? 'not-due' : 'result-phase'}",
-  "data-recorded-directions={reviewDirectionCount}",
-  "data-not-yet-result-phase={dailyReviewStats.notYetResultPhase}",
-  "赛前方向已记录",
-  "跨午夜比赛仍归属原竞彩日，终场后自动结算",
-  "官方结算状态",
-  "未到终场"
-]));
+const bannedListPanels = [
+  "source-health-panel", "model-governance-panel", "benchmark-audit-panel", "predictions-v4__evidence-snapshot",
+  "RecommendationEvidenceFacts", "recommendation-evidence-breakdown", "data-sync-strip", "model-scorecard"
+];
+pushCheck("main list contains no collection/source/model/evidence dashboard", bannedListPanels.every(needle => !predictions.includes(needle)), {
+  forbiddenPanelsFound: bannedListPanels.filter(needle => predictions.includes(needle))
+});
+const providerBindings = /(?:href\s*=\s*\{[^}]*source(?:Url|Path)|\{\s*(?:match|row|source)\.(?:sourceUrl|sourcePath)\s*\})/i;
+pushCheck("source addresses are excluded from list bindings and neutralized in detail text",
+  !providerBindings.test(predictions) && !providerBindings.test(matchDetail)
+  && hasAll(matchDetail, ["const displayText =", "formatSourceNeutralText(value, language, fallback)"])
+  && hasAll(sourceNeutralText, ["Presentation only: never pass the result back", "sourceUrl|source_url|sourcePath|source_path"])
+  && hasAll(evidenceFacts, ["formatSourceNeutralText(formatMarketConsistency("]));
 
 pushCheck("compact semantic rows expose the first fixture near the first viewport", hasAll(predictions, [
   "<PredictionsPageHeader",

@@ -1,0 +1,28 @@
+[Unit]
+Description=Isolated Leisu pre-match collection planner
+Wants=network-online.target
+After=network-online.target
+ConditionPathExists=/etc/football-leisu-collector/collector.env
+
+[Service]
+Type=oneshot
+User=leisu-collector
+Group=leisu-collector
+WorkingDirectory=/opt/football-leisu-collector
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=/etc/football-leisu-collector/collector.env
+ExecStart=/usr/bin/env node /opt/football-leisu-collector/cli.cjs collect-once
+UMask=0077
+TimeoutStartSec=10min
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/var/lib/football-leisu-collector
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=leisu-prematch

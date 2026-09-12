@@ -11,6 +11,191 @@
   min-width: 0;
 }
 
+/* Market snapshots and the selected recommendation's SP remain separate. */
+.predictions-compact .compact-match-row,
+.predictions-compact .predictions-v4__match-list.is-fixtures-view .compact-match-row {
+  grid-template-columns: minmax(72px, 0.65fr) minmax(150px, 1.35fr) minmax(250px, 2.1fr) minmax(100px, 1fr) minmax(56px, 0.45fr) minmax(64px, 0.6fr) 60px;
+  gap: 0.8rem;
+  align-items: center;
+  padding: 0.85rem 0.9rem;
+}
+
+.predictions-compact .compact-match-row .predictions-v4__slot-label {
+  display: block;
+  margin-bottom: 0.3rem;
+}
+
+.predictions-compact .compact-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.45rem;
+}
+
+.predictions-compact .compact-pick > strong {
+  color: hsl(var(--text-primary));
+  font-size: 0.94rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.predictions-compact .compact-pick > small {
+  width: 100%;
+  color: hsl(var(--text-muted));
+  font-size: 0.7rem;
+}
+
+.predictions-compact .compact-pick__tier {
+  border-radius: 4px;
+  background: hsl(var(--bg-soft));
+  padding: 0.12rem 0.32rem;
+  font-size: 0.66rem;
+}
+
+.predictions-compact .compact-pick__tier.is-reference {
+  color: var(--predictions-analysis);
+}
+
+.predictions-compact .compact-pick__tier.is-formal,
+.predictions-compact .compact-result.is-hit {
+  color: var(--predictions-formal);
+}
+
+.predictions-compact .compact-result.is-miss {
+  color: hsl(var(--danger));
+}
+
+.predictions-compact .compact-result.is-pending,
+.predictions-compact .match-score-summary {
+  color: hsl(var(--text-secondary));
+}
+
+.predictions-compact .compact-result {
+  font-size: 0.85rem;
+  font-weight: 750;
+}
+
+.predictions-compact .compact-sp {
+  color: hsl(var(--text-primary));
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.predictions-compact .compact-sp-note {
+  display: block;
+  margin-top: 0.2rem;
+  color: hsl(var(--text-muted));
+  font-size: 0.62rem;
+}
+
+.predictions-compact .compact-market-odds {
+  display: grid;
+  gap: 0.35rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.predictions-compact .compact-market-odds__row {
+  display: grid;
+  grid-template-columns: minmax(78px, 1.3fr) repeat(3, minmax(40px, 0.8fr));
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.38rem 0.45rem;
+  border: 1px solid var(--predictions-border);
+  border-radius: 6px;
+  background: var(--predictions-surface-muted);
+}
+
+.predictions-compact .compact-market-odds__name strong,
+.predictions-compact .compact-market-odds__name small,
+.predictions-compact .compact-market-odds__price span,
+.predictions-compact .compact-market-odds__price strong {
+  display: block;
+}
+
+.predictions-compact .compact-market-odds__name strong {
+  color: hsl(var(--text-secondary));
+  font-size: 0.67rem;
+  font-weight: 650;
+}
+
+.predictions-compact .compact-market-odds__name small,
+.predictions-compact .compact-market-odds__price span {
+  color: hsl(var(--text-muted));
+  font-size: 0.61rem;
+}
+
+.predictions-compact .compact-market-odds__price { text-align: center; }
+.predictions-compact .compact-market-odds__manual { border-top: 1px solid var(--border-color); padding-top: 6px; }
+.predictions-compact .compact-market-odds__manual p { color: var(--text-secondary); font-size: 10px; line-height: 1.5; margin: 4px 0 0; }
+.predictions-compact .compact-market-odds__price strong {
+  color: hsl(var(--text-primary));
+  font-size: 0.86rem;
+  font-weight: 750;
+}
+
+.predictions-compact .compact-record {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 1.3rem;
+  border: 1px solid var(--predictions-border);
+  border-radius: 8px;
+  background: var(--predictions-surface);
+  padding: 0.7rem 0.9rem;
+  color: hsl(var(--text-secondary));
+  font-size: 0.76rem;
+}
+
+.predictions-compact .compact-record strong,
+.predictions-compact .compact-record b {
+  margin-left: 0.3rem;
+  color: hsl(var(--text-primary));
+}
+
+.predictions-compact .compact-record small {
+  color: hsl(var(--text-muted));
+  font-size: 0.68rem;
+}
+
+@media (max-width: 980px) {
+  .predictions-compact .compact-match-row,
+  .predictions-compact .predictions-v4__match-list.is-fixtures-view .compact-match-row {
+    grid-template-columns: minmax(90px, 0.9fr) minmax(0, 1.6fr) minmax(0, 1.3fr);
+    gap: 0.75rem;
+  }
+
+  .predictions-compact .compact-match-row .predictions-v4__match-action {
+    grid-column: 1 / -1;
+  }
+
+  .predictions-compact .compact-match-row .is-teams { grid-column: 2 / -1; }
+  .predictions-compact .compact-match-row .is-market-odds { grid-column: 1 / -1; }
+}
+
+@media (max-width: 560px) {
+  .predictions-compact .compact-match-row,
+  .predictions-compact .predictions-v4__match-list.is-fixtures-view .compact-match-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0.7rem 1rem;
+    padding: 0.8rem;
+  }
+
+  .predictions-compact .compact-match-row .is-time {
+    grid-column: 1 / -1;
+  }
+
+  .predictions-compact .compact-match-row .is-teams,
+  .predictions-compact .compact-match-row .is-pick,
+  .predictions-compact .compact-match-row .is-sp,
+  .predictions-compact .compact-match-row .is-result {
+    grid-column: auto;
+  }
+
+  .predictions-compact .compact-match-row .predictions-v4__match-action {
+    grid-column: 1 / -1;
+  }
+}
+
 .predictions-v4.dashboard-stack {
   gap: 0.38rem;
 }
