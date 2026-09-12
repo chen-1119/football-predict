@@ -51,6 +51,15 @@ NODE
 
 run_native_release() {
   local prebuilt_status native_seed_log candidate_ai_state_status
+  # This lane refreshes before creating its lease and acquires one subsequent
+  # write barrier. Reserve 900 seconds for final native reconciliation; retain
+  # the full official-cycle and post-swap rollback reserves. The legacy lane's
+  # second barrier and post-verifier refresh do not run here.
+  CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS=$((
+    WORKER_OFFICIAL_PUBLISH_TIMEOUT_SECONDS +
+    ((RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS + 999) / 1000) +
+    900 + POST_SWAP_TRANSITION_START_BUDGET_SECONDS - CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS
+  ))
   [ "$APP_DIR" = /opt/football-predict ] && [ "$NEXT_DIR" = /opt/football-predict.next ]
   [ "$BACKUP_DIR" = /opt/football-predict.previous ] && [ "$FAILED_DIR" = /opt/football-predict.failed ]
   export NODE_PATH="$APP_DIR/node_modules"
@@ -155,7 +164,7 @@ run_native_release() {
     VERIFY_STATIC_ATTESTATION_DIR="$RELEASE_STATIC_ATTESTATION_REUSE_DIR" VERIFY_STATIC_RELEASE_SHA="$BUNDLE_SHA256" VERIFY_STATIC_RECEIPT_DIR= \
     WRITE_LEGACY_STATIC_PAYLOADS=0 MIRROR_PUBLISHED_DATA_TO_DIST=0 MODEL_INPUT_AUDIT_MIN_MARKET_ROWS=30 \
     VERIFY_BASE_URL="http://${HOST}:${CANDIDATE_PORT}" VERIFY_START_SERVER=0 VERIFY_REQUIRE_SQLITE=0 VERIFY_REQUIRED_READ_SOURCE=postgres \
-    SERVER_STORE_DIR="$CANDIDATE_STORE_DIR" VERIFY_REQUIRE_AI_ARENA=1 "$NODE_HOME/bin/node" scripts/verifyProductionReadiness.cjs
+    SERVER_STORE_DIR="$CANDIDATE_STORE_DIR" "$NODE_HOME/bin/node" scripts/verifyNativeDeploymentCore.cjs
   release_stage_observe end candidate-readiness ok
   stop_candidate
   assert_build_user_quiescent
@@ -231,7 +240,7 @@ native_finish_readiness() {
   run_as_service_user_with_runtime_env env VERIFY_BASE_URL="http://${HOST}:${PORT}" \
     VERIFY_STATIC_ATTESTATION_DIR="$RELEASE_STATIC_ATTESTATION_REUSE_DIR" VERIFY_STATIC_RELEASE_SHA="$BUNDLE_SHA256" VERIFY_STATIC_RECEIPT_DIR= \
     VERIFY_START_SERVER=0 VERIFY_REQUIRE_SQLITE=0 VERIFY_REQUIRED_READ_SOURCE=postgres SERVER_STORE_DIR="$LIVE_STORE_DIR" \
-    "$NODE_HOME/bin/node" "$APP_DIR/scripts/verifyProductionReadiness.cjs"
+    "$NODE_HOME/bin/node" "$APP_DIR/scripts/verifyNativeDeploymentCore.cjs"
   release_stage_observe end post-swap-readiness ok
   wait_for_release_candidate_heartbeat_keeper_healthy
   "$NODE_HOME/bin/node" "$APP_DIR/scripts/candidateReleaseContinuity.cjs" verify \
