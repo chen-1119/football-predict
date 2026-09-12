@@ -95,4 +95,15 @@ function selectReference(doc, currentMatch, now = Date.now()) {
   return { matchId: fixture.siteMatchId, eventVersion: fixture.eventVersion, provider: 'api-football',
     status: 'ok', updatedAt: doc.generatedAt, predictionEligible: false, sections };
 }
-module.exports = { VERSION, buildReferenceExport, selectReference };
+function mergeReferenceExports(current, previous, matches, now = Date.now()) {
+  const items = new Map(current.items.map(item => [item.fixture.siteMatchId, item]));
+  for (const match of matches) {
+    if (items.has(match.id)) continue;
+    const selected = selectReference(previous, match, now);
+    if (!selected) continue;
+    const old = previous.items.find(item => item.fixture.siteMatchId === match.id);
+    items.set(match.id, { fixture: old.fixture, sections: selected.sections });
+  }
+  return { ...current, items: [...items.values()].slice(0, 200) };
+}
+module.exports = { VERSION, buildReferenceExport, selectReference, mergeReferenceExports };

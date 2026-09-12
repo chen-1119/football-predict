@@ -1,6 +1,6 @@
 'use strict';
 const test = require('node:test'), assert = require('node:assert/strict');
-const { buildReferenceExport, selectReference } = require('./api-football-reference.cjs');
+const { buildReferenceExport, selectReference, mergeReferenceExports } = require('./api-football-reference.cjs');
 const { createWebsiteReader } = require('./website-reader.cjs');
 const fs = require('node:fs/promises'), os = require('node:os'), path = require('node:path');
 const now = Date.parse('2026-09-12T16:15:00Z');
@@ -35,6 +35,15 @@ test('identity, receipt and lineup conflicts never become reference content', ()
   assert.equal(build(c).items[0].sections.lineup.data, null);
   const future = cache(); for (const p of Object.values(future.fixtureSignals[1557406])) p.observedAt = '2026-09-12T16:31:00.000Z';
   assert.equal(build(future).items.length, 0);
+});
+test('a later collection cycle retains a started match receipt without changing its observation time', () => {
+  const previous = build(cache()), later = Date.parse('2026-09-12T16:31:00Z'), live = { ...match, status: 'LIVE' };
+  const current = buildReferenceExport([live], cache(), new Set([match.id]), later);
+  assert.equal(current.items.length, 0);
+  const merged = mergeReferenceExports(current, previous, [live], later);
+  assert.equal(merged.items.length, 1);
+  assert.equal(merged.items[0].sections.lineup.observedAt, previous.items[0].sections.lineup.observedAt);
+  assert.equal(mergeReferenceExports(current, previous, [{ ...live, awayTeamName: '另一队' }], later).items.length, 0);
 });
 test('authenticated reader can show independent reference content while original source is blocked', async t => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'api-prematch-reference-'));

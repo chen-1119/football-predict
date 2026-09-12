@@ -2263,10 +2263,13 @@ const main = async () => {
     hydrateCachedApiPieces(mappedMatches, cache, apiPieces, verifiedMappingSet);
     stats.callsThisSync = requestBudget.attempts;
 
-    const reference = require('../collectors/leisu-prematch/api-football-reference.cjs')
-      .buildReferenceExport(matches, cache, verifiedMappingSet);
+    const referenceApi = require('../collectors/leisu-prematch/api-football-reference.cjs');
+    const referenceFile = path.join(SERVER_STORE_DIR, 'api-football-prematch-evidence.json');
+    const reference = referenceApi.mergeReferenceExports(
+      referenceApi.buildReferenceExport(matches, cache, verifiedMappingSet),
+      readJsonFile(referenceFile, null), matches);
     if (reference.items.length) {
-      writeJsonFile(path.join(SERVER_STORE_DIR, 'api-football-prematch-evidence.json'), reference);
+      writeJsonFile(referenceFile, reference);
       stats.referenceMatches = reference.items.length;
     }
 
