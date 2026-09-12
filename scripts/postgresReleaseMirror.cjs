@@ -72,19 +72,22 @@ function keysWhere(table, rows) {
 async function eachSourceBatch(source, table, compareSeed, action) {
   await source.query(`DECLARE mirror_rows NO SCROLL CURSOR FOR SELECT ${table.pk.map(name => `${ident(name)}::text AS ${ident(name)}`).join(",")},xmin::text AS mirror_xmin${compareSeed ? `,${digestSql(table)} AS mirror_digest` : ""}
     FROM ${tableSql(table)}`);
+  let failed = false;
   try {
     while (true) {
       const rows = (await source.query(`FETCH FORWARD ${METADATA_BATCH} FROM mirror_rows`)).rows;
       if (!rows.length) break;
       await action(rows);
     }
-  } finally { await source.query("CLOSE mirror_rows"); }
+  } catch (error) { failed = true; throw error; }
+  finally { if (!failed) await source.query("CLOSE mirror_rows"); }
 }
 async function eachStagedBatch(target, table, action) {
   // Reuse the already-read metadata in a candidate-only temporary table.
   // Ordering by the source PK would require random heap reads for xmin; a
   // second source pass would reread gigabytes of review heap unnecessarily.
   await target.query("DECLARE mirror_staged NO SCROLL CURSOR FOR SELECT key_json,source_xmin,source_digest FROM mirror_seen WHERE table_name=$1", [table.name]);
+  let failed = false;
   try {
     while (true) {
       const rows = (await target.query(`FETCH FORWARD ${METADATA_BATCH} FROM mirror_staged`)).rows;
@@ -95,7 +98,8 @@ async function eachStagedBatch(target, table, action) {
         return { ...Object.fromEntries(table.pk.map((name, index) => [name, values[index]])), mirror_xmin: row.source_xmin, mirror_digest: row.source_digest };
       }));
     }
-  } finally { await target.query("CLOSE mirror_staged"); }
+  } catch (error) { failed = true; throw error; }
+  finally { if (!failed) await target.query("CLOSE mirror_staged"); }
 }
 
 // The first complete mirror runs while production remains online. The measured
@@ -184,6 +188,17 @@ async function mirrorPostgresCandidate({ sourceSession, candidatePool, key, expe
       await target.query("INSERT INTO mirror_seen SELECT $1,unnest($2::text[]),unnest($3::text[]),unnest($4::text[])", [table.name, values, rows.map(row => row.mirror_xmin), rows.map(row => row.mirror_digest || null)]);
     }); }
     await target.query("ANALYZE mirror_seen");
+    // Candidate-only leaf rows can occupy a source row's secondary unique
+    // key under a different primary key. No foreign key references these
+    // tables, so remove those obsolete rows before inserting source rows.
+    // Referenced parents stay until surviving children have been restored.
+    const referencedParents = new Set(tables.flatMap(table => table.parents));
+    for (const table of tables.filter(table => !referencedParents.has(table.name))) {
+      stage = "remove-candidate-only-leaves"; activeTable = table.name; progress(); withinBudget();
+      const removed = await target.query(`DELETE FROM ${tableSql(table)} t WHERE NOT EXISTS
+        (SELECT 1 FROM mirror_seen s WHERE s.table_name=$1 AND s.key_json=${keySql(table, "t.")})`, [table.name]);
+      report.removedCandidateRows += removed.rowCount;
+    }
     // The partial unique index permits only one current publication. Clear
     // only a superseded candidate head; its changed xmin forces exact recopy.
     const current = (await source.query("SELECT publication_id FROM football.publications WHERE state='current'")).rows.map(row => row.publication_id);
