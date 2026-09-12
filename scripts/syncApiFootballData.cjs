@@ -2263,6 +2263,13 @@ const main = async () => {
     hydrateCachedApiPieces(mappedMatches, cache, apiPieces, verifiedMappingSet);
     stats.callsThisSync = requestBudget.attempts;
 
+    const reference = require('../collectors/leisu-prematch/api-football-reference.cjs')
+      .buildReferenceExport(matches, cache, verifiedMappingSet);
+    if (reference.items.length) {
+      writeJsonFile(path.join(SERVER_STORE_DIR, 'api-football-prematch-evidence.json'), reference);
+      stats.referenceMatches = reference.items.length;
+    }
+
     mergeExternalSignals(matches, cache, apiPieces, stats, verifiedMappingSet);
     externalSignalsMerged = true;
   } catch (error) {
