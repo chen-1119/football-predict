@@ -2,7 +2,7 @@
 // Copies the exact immutable generation belonging to a held database snapshot,
 // never a newly generated prediction or a SQLite export. No activation occurs.
 const fs = require("node:fs"), path = require("node:path"), crypto = require("node:crypto"), assert = require("node:assert/strict");
-const { resolveGeneration, resolveCurrentGeneration, storePaths, MANIFEST_FILE, STORE_SCHEMA_VERSION } = require("../server/dataGenerationStore.cjs");
+const { resolveGeneration, resolveCurrentGeneration, acquirePointerCommitLock, storePaths, MANIFEST_FILE, STORE_SCHEMA_VERSION } = require("../server/dataGenerationStore.cjs");
 const { acquireGenerationReadLease } = require("../server/dataGenerationBundle.cjs");
 function copyNativeReleaseGeneration({ sourceStoreDir, targetStoreDir, identity }) {
   const source = fs.realpathSync(sourceStoreDir), target = path.resolve(targetStoreDir);
@@ -10,9 +10,14 @@ function copyNativeReleaseGeneration({ sourceStoreDir, targetStoreDir, identity 
   assert.equal(fs.realpathSync(path.dirname(target)), path.dirname(target), "candidate parent must be a real directory");
   assert.equal(identity?.mode, "active-generation"); assert.match(identity.generationId, /^g-[a-f0-9]{64}$/);
   assert.match(identity.manifestHash, /^[a-f0-9]{64}$/); assert.ok(identity.sourceCycleId && Number.isFinite(Date.parse(identity.committedAt)));
-  const context = resolveGeneration({ storeDir: source, generationId: identity.generationId,
-    manifestHash: identity.manifestHash, sourceCycleId: identity.sourceCycleId });
-  const lease = acquireGenerationReadLease({ storeDir: source, generationId: identity.generationId, context, owner: "native-release-generation-copy", ttlMs: 15 * 60_000 });
+  const pointerLock = acquirePointerCommitLock({ lockDir: storePaths(source).pointerLockDir, timeoutMs: 120_000, staleMs: 60_000 });
+  let context, lease;
+  try {
+    context = resolveGeneration({ storeDir: source, generationId: identity.generationId,
+      manifestHash: identity.manifestHash, sourceCycleId: identity.sourceCycleId });
+    lease = acquireGenerationReadLease({ storeDir: source, generationId: identity.generationId, context,
+      pointerLockHandle: pointerLock, owner: "native-release-generation-copy", ttlMs: 15 * 60_000 });
+  } finally { pointerLock.release(); }
   let bytes = 0;
   const directories = new Set();
   const sync = filename => { const fd = fs.openSync(filename, process.platform === "win32" ? "r+" : "r"); try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); } };

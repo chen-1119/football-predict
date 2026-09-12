@@ -88,7 +88,7 @@ async function copyGenerationAsService(identity, destination) {
   const target = path.join(temporary, "store");
   const source = `const {copyNativeReleaseGeneration}=require(${JSON.stringify(path.join(__dirname, "nativeReleaseGenerationCopy.cjs"))});process.setgroups([]);process.setgid('football');process.setuid('football');console.log(JSON.stringify(copyNativeReleaseGeneration(${JSON.stringify({ sourceStoreDir: STORE, targetStoreDir: target, identity })})));`;
   const child = spawnSync("/opt/node-v22.22.1/bin/node", ["--max-old-space-size=192", "-e", source], {
-    env: { PATH: "/usr/bin:/bin", NODE_PATH: "/opt/football-predict/node_modules" }, encoding: "utf8", timeout: 120000, maxBuffer: 16384,
+    env: { PATH: "/usr/bin:/bin", NODE_PATH: "/opt/football-predict/node_modules" }, encoding: "utf8", timeout: 240000, maxBuffer: 16384,
   });
   assert.equal(child.status, 0, "exact generation copy failed: " + (child.stderr || child.error?.message || ""));
   const proof = JSON.parse(child.stdout); assert.equal(proof.ok, true);

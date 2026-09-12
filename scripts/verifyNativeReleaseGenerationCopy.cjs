@@ -38,6 +38,17 @@ try {
   } finally { held.release(); }
   assert.throws(() => acquireGenerationReadLease({ storeDir: source, generationId: identity.generationId, pointerLockHandle: held }), /actual held pointer lock/);
   checks.push("retirement read lease reuses only the actual caller-held barrier without releasing it");
+  const ready = path.join(root, "writer-ready"), released = path.join(root, "writer-released");
+  const writerSource = "const fs=require('fs');const {acquirePointerCommitLock}=require(" + JSON.stringify(require.resolve("../server/dataGenerationStore.cjs")) + ");const lock=acquirePointerCommitLock({lockDir:" + JSON.stringify(lockDir) + "});fs.writeFileSync(" + JSON.stringify(ready) + ",'ready');setTimeout(()=>{lock.release();fs.writeFileSync(" + JSON.stringify(released) + ",'released');},11000);";
+  const writer = require("node:child_process").spawn(process.execPath, ["-e", writerSource], { windowsHide: true, stdio: "ignore" });
+  writer.unref();
+  const waitStarted = Date.now();
+  while (!fs.existsSync(ready)) { assert.ok(Date.now()-waitStarted < 5000); Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,20); }
+  const waitedCopy = copyNativeReleaseGeneration({ sourceStoreDir: source, targetStoreDir: path.join(root, "after-writer"), identity });
+  assert.equal(waitedCopy.ok, true); assert.ok(fs.existsSync(released));
+  assert.ok(Date.now()-waitStarted >= 11000); assert.equal(inspectPointerCommitLockActivity({lockDir}).active,false);
+  assert.deepEqual(readGenerationFile(resolveCurrentGeneration({ storeDir: path.join(root, "after-writer") }), "original.json"), raw);
+  checks.push("actual concurrent writer longer than 10 seconds releases before the authenticated copy without lock bypass");
   const originalFile = path.join(original.context.generationDir, "original.json");
   fs.writeFileSync(originalFile, Buffer.alloc(raw.length, 32));
   assert.throws(() => copyNativeReleaseGeneration({ sourceStoreDir: source, targetStoreDir: path.join(root, "tampered"), identity }));
