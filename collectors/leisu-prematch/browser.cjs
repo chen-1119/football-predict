@@ -201,7 +201,7 @@ async function collectLeague(context,sourceUrl) {
     if(/^(?:403|405|ERROR\s*403)|Forbidden|访问被阻断|访问被拦截|访问验证/i.test(title)||/\/403(?:$|[/?#])/.test(page.url()))return result('blocked','source-block-page');
     if(/\/login(?:$|[/?#])/.test(page.url())||/登录|sign\s*in|log\s*in/i.test(title))return result('login_required','source-login-page');
     if(page.url()!==sourceUrl)return result('conflict','unexpected-source-url');
-    await page.locator('a[href*="shujufenxi-"]').first().waitFor({state:'attached',timeout:15000}).catch(()=>{});
+    await page.locator('a[href*="shujufenxi-"]').first().waitFor({state:'visible',timeout:15000}).catch(()=>{});
     const rows=await page.evaluate(()=>Array.from(document.querySelectorAll('tr')).filter(r=>r.getClientRects().length>0&&r.querySelector('a[href*="shujufenxi-"]')).map(r=>({text:r.innerText,href:r.querySelector('a[href*="shujufenxi-"]').href})));
     if(!Array.isArray(rows)||!rows.length)return result('parse_error','league-rows-missing');
     const candidates=normalizeLeagueRows(rows,sourceUrl);

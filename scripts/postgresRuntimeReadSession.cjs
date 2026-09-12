@@ -46,7 +46,11 @@ async function openPostgresRuntimeReadSession(options = {}) {
     if (identity.mode !== "active-generation" || !identity.generationId || !identity.manifestHash || !identity.sourceCycleId || !identity.committedAt) {
       throw new Error("native read requires complete publication identity");
     }
-    const publication = resolveServingPublicationForSqliteIdentity({ storeDir, publicDataDir, sqliteIdentity: identity, allowPrevious: true });
+    // Rows come from the repeatable-read PostgreSQL snapshot below. Bind it
+    // to the immutable generation and verify every file hash, without parsing
+    // unrelated historical JSON payloads that this database reader never uses.
+    const publication = resolveServingPublicationForSqliteIdentity({ storeDir, publicDataDir, sqliteIdentity: identity,
+      allowPrevious: true, validatePayloadSemantics: false });
     if (!publication.context) throw new Error("native read requires matching immutable generation");
     lease = acquireGenerationReadLease({ storeDir, generationId: identity.generationId, context: publication.context,
       owner: "postgres-runtime-reader", ttlMs: 15 * 60_000, pointerLockHandle: options.pointerLockHandle || null });
