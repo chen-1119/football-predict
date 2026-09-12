@@ -3074,7 +3074,7 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
     expiresAt: releaseRequestEnvelope.evidence.expiresAt,
     initialLockWaitMs: releaseRequestEnvelope.pending === true
       ? releaseCycleInitialLockWaitMs
-      : Math.max(0, Number(process.env.SYNC_WORKER_LOCK_WAIT_MS || 0)),
+      : Math.max(0, Math.min(60_000, finiteEnvNumber("SYNC_WORKER_LOCK_WAIT_MS", 15_000))),
     retryMs: releaseCycleRetryMs,
   };
   const slowPhasePlan = describeSlowPhaseNeed({
