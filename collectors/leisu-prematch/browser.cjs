@@ -204,6 +204,17 @@ async function collectLeague(context,sourceUrl) {
     if(/^(?:403|405|ERROR\s*403)|Forbidden|访问被阻断|访问被拦截|访问验证/i.test(title)||/\/403(?:$|[/?#])/.test(page.url()))return result('blocked','source-block-page');
     if(/\/login(?:$|[/?#])/.test(page.url())||/登录|sign\s*in|log\s*in/i.test(title))return result('login_required','source-login-page');
     if(page.url()!==sourceUrl)return result('conflict','unexpected-source-url');
+    // The public HTML contains the fixture rows. Hydration can erase them
+    // when a later optional API request fails. Parse that actual response
+    // without executing scripts; fixture identity and kickoff checks still apply.
+    const html=await response.text();
+    if(html.length<=4*1024*1024){
+      const initialRows=await page.evaluate(html=>Array.from(new DOMParser().parseFromString(html,'text/html').querySelectorAll('tr, .tr'))
+        .filter(r=>r.querySelector('a[href*="shujufenxi-"]')).map(r=>({cells:Array.from(r.children).map(c=>c.textContent.trim()),
+          href:r.querySelector('a[href*="shujufenxi-"]').getAttribute('href')})),html);
+      const initialCandidates=normalizeLeagueCells(initialRows,sourceUrl);
+      if(initialCandidates.length)return result('available',null,initialCandidates);
+    }
     await page.locator('a[href*="shujufenxi-"]').first().waitFor({state:'visible',timeout:15000}).catch(()=>{});
     const rows=await page.evaluate(()=>Array.from(document.querySelectorAll('tr, .tr')).filter(r=>r.getClientRects().length>0&&r.querySelector('a[href*="shujufenxi-"]')).map(r=>({text:r.innerText,href:r.querySelector('a[href*="shujufenxi-"]').href})));
     if(!Array.isArray(rows)||!rows.length)return result('parse_error','league-rows-missing');
@@ -213,4 +224,16 @@ async function collectLeague(context,sourceUrl) {
   finally{if(page)await page.close().catch(()=>{});}
 }
 
-module.exports={readRenderedDocument,classifyView,openBrowser,collectTask,collectLeague,normalizeLeagueRows};
+function normalizeLeagueCells(rows,sourceUrl){
+  if(!Array.isArray(rows))return [];
+  const normalized=[];
+  for(const row of rows){
+    const c=row?.cells;if(!Array.isArray(c)||c.length!==6||c.some(x=>typeof x!=='string'))continue;
+    const time=/^(\d{2}\/\d{2}\/\d{2})\s*(\d{2}:\d{2})$/.exec(c[0]);
+    if(!time||c[2]!=='vs'||c[4]!=='-'||!/^分析\s+直播\s+历史$/.test(c[5]))continue;
+    const home=c[1].replace(/\[\d+\]/g,'').trim(),away=c[3].replace(/\[\d+\]/g,'').trim();
+    normalized.push({href:row.href,text:[time[1],time[2],home,c[2],away,c[4],...c[5].split(/\s+/)].join('\n')});
+  }
+  return normalizeLeagueRows(normalized,sourceUrl);
+}
+module.exports={readRenderedDocument,classifyView,openBrowser,collectTask,collectLeague,normalizeLeagueRows,normalizeLeagueCells};

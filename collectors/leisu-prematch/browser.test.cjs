@@ -1,6 +1,6 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
-const {classifyView,normalizeLeagueRows,collectLeague}=require('./browser.cjs');
+const {classifyView,normalizeLeagueRows,normalizeLeagueCells,collectLeague}=require('./browser.cjs');
 const sample=require('./samples/logged-in-validation.json');
 const historical=require('./samples/historical-lineup-sample.json');
 function fixture(){return {siteMatchId:'sporttery_2041418',homeName:'阿斯顿维拉',awayName:'诺丁汉森林',kickoffUtc:'2026-09-12T14:00:00.000Z',eventVersion:'2026-09-12T14:00:00.000Z'};}
@@ -64,7 +64,7 @@ test('invalid league dates and malformed rows cannot be normalized into valid ca
 });
 test('collectLeague reports parse_error when every rendered row has an invalid date',async()=>{
   let closed=false;
-  const page={goto:async()=>({status:()=>200}),title:async()=>'英超赛程',url:()=>leagueUrl,
+  const page={goto:async()=>({status:()=>200,text:async()=>''}),title:async()=>'英超赛程',url:()=>leagueUrl,
     locator:()=>({first:()=>({waitFor:async()=>{}})}),evaluate:async()=>[leagueRow('26/02/30')],close:async()=>{closed=true;}};
   const result=await collectLeague({newPage:async()=>page},leagueUrl);
   assert.equal(result.status,'parse_error');assert.deepEqual(result.candidates,[]);
@@ -84,7 +84,7 @@ test('league failures retain explicit HTTP and transport metadata for the source
     {httpStatus:0,error:new Error('simulated page read failure'),status:'parse_error',reason:'page-read-failed',paused:false}
   ]){
     let closed=0;
-    const page={goto:async()=>{if(spec.error)throw spec.error;return {status:()=>spec.httpStatus};},
+    const page={goto:async()=>{if(spec.error)throw spec.error;return {status:()=>spec.httpStatus,text:async()=>''};},
       title:async()=>{assert.equal(spec.httpStatus,200,'non-success HTTP must be classified before reading an error document');return spec.title||'英超赛程';},url:()=>spec.url||leagueUrl,
       locator:()=>({first:()=>({waitFor:async()=>{}})}),evaluate:async()=>spec.rows||[leagueRow()],close:async()=>{closed++;}};
     const result=await collectLeague({newPage:async()=>page},leagueUrl);
@@ -113,4 +113,12 @@ test('malformed page shapes, URLs and impossible header dates return classificat
   assert.equal(classifyView(view(),{...task(),kind:'odds'},200).status,'parse_error');
   const t={...task(),kind:'lineup',sourceUrl:'https://live.leisu.com/detail-4558535'};
   assert.equal(classifyView({...view(),url:t.sourceUrl,lineups:[null,null]},t,200).status,'parse_error');
+});
+
+test('real public HTML fixture cells retain exact names and kickoff and reject changed layout',()=>{
+  const url='https://www.leisu.com/data/zuqiu/comp-82';
+  const row={cells:['26/09/1300:30','[18] 热刺','vs','埃弗顿 [8]','-','分析 直播  历史'],href:'https://live.leisu.com/shujufenxi-4558551'};
+  const result=normalizeLeagueCells([row],url);assert.equal(result.length,1);assert.equal(result[0].homeName,'热刺');assert.equal(result[0].awayName,'埃弗顿');assert.equal(result[0].kickoffUtc,'2026-09-12T16:30:00.000Z');assert.equal(result[0].providerMatchId,'4558551');
+  assert.deepEqual(normalizeLeagueCells([{...row,cells:row.cells.map((v,i)=>i===2?'2-1':v)}],url),[]);
+  assert.deepEqual(normalizeLeagueCells([{...row,cells:row.cells.slice(1)}],url),[]);
 });
