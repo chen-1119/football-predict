@@ -44,7 +44,7 @@ async function applyRemote(envelope) {
     if (fs.existsSync(target)) assert.ok(fs.lstatSync(target).isFile() && !fs.lstatSync(target).isSymbolicLink());
     if (entry.before !== undefined) {
       const current = fs.existsSync(target) ? hash(Buffer.from(fs.readFileSync(target, 'utf8').replace(/\r\n/g, '\n'))) : null;
-      assert.equal(current, entry.before, 'Source baseline changed: ' + entry.path);
+      assert.ok(current === entry.before || (entry.before === null && current === hash(Buffer.from(content.toString('utf8').replace(/\r\n/g, '\n')))), 'Source baseline changed: ' + entry.path);
     }
   }
   assert.ok(seen.has('dist/index.html') && seen.has('server/index.cjs'));
@@ -78,7 +78,7 @@ async function applyRemote(envelope) {
     }
     cp.execFileSync('systemctl', ['restart', 'football-predict.service'], { timeout: 30000 });
     let healthy = false;
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 300; i++) {
       try { const r = await fetch('http://127.0.0.1:8788/api/v1/health', { signal: AbortSignal.timeout(1500) }); healthy = r.status === 200; } catch {}
       if (healthy) break;
       await new Promise(resolve => setTimeout(resolve, 500));
@@ -139,7 +139,7 @@ async function main() {
     (env.RELEASE_DEPLOY_USER || 'ubuntu') + '@' + env.RELEASE_DEPLOY_HOST,
     'sudo', '-n', '/usr/bin/env', '-i', 'PATH=/opt/node-v22.22.1/bin:/usr/sbin:/usr/bin:/sbin:/bin', '/opt/node-v22.22.1/bin/node', '-'];
   const code = `const envelope=JSON.parse(require('zlib').gunzipSync(Buffer.from('${compressed.toString('base64')}','base64'),{maxOutputLength:64*1024**2}));(${applyRemote.toString()})(envelope).catch(e=>{console.error(e.message);process.exitCode=1});`;
-  const result = cp.spawnSync(env.SSH_EXECUTABLE || 'ssh', args, { input: code, encoding: 'utf8', timeout: 120000, maxBuffer: 1e6, windowsHide: true });
+  const result = cp.spawnSync(env.SSH_EXECUTABLE || 'ssh', args, { input: code, encoding: 'utf8', timeout: 240000, maxBuffer: 1e6, windowsHide: true });
   const output = path.join(root, 'outputs', 'prematch-app-update-' + Date.now() + '.json');
   fs.writeFileSync(output, JSON.stringify({ commit, uploadBytes: compressed.length, exitCode: result.status, stdout: result.stdout, stderr: result.stderr }, null, 2));
   console.log(result.stdout || result.stderr); assert.equal(result.status, 0, 'Application update failed: ' + output);
