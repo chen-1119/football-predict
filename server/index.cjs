@@ -11643,6 +11643,7 @@ const handleApi = async (req, res, url) => {
     const { createWebsiteHandler } = require("../collectors/leisu-prematch/website-reader.cjs");
     const handler = createWebsiteHandler({
       exportPath: process.env.PREMATCH_EVIDENCE_FILE || "/var/lib/football-prematch-public/latest-evidence.json",
+      apiFootballReferencePath: path.join(storeDir, "api-football-prematch-evidence.json"),
       readFixture: readMatchById,
       authorize: () => hasRecommendationAccess(req, url),
     });

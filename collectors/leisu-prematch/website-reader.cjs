@@ -78,7 +78,7 @@ async function readCollectionStatus(file, now) {
   } catch { return null; } finally { await handle?.close(); }
 }
 
-function createWebsiteReader({ exportPath, readFixture, maxBytes = 10 * 1024 * 1024, now = Date.now }) {
+function createWebsiteReader({ exportPath, apiFootballReferencePath, readFixture, maxBytes = 10 * 1024 * 1024, now = Date.now }) {
   if (typeof readFixture !== 'function') throw new TypeError('readFixture must read the current website fixture');
   if (exportPath && !path.isAbsolute(exportPath)) throw new TypeError('exportPath must be an absolute configured path');
   if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0 || maxBytes > 50 * 1024 * 1024) throw new TypeError('Invalid export size limit');
@@ -89,6 +89,26 @@ function createWebsiteReader({ exportPath, readFixture, maxBytes = 10 * 1024 * 1
     if (!fixture || fixture.id !== siteMatchId) return { matchId: siteMatchId, status: 'missing', predictionEligible: false };
     const collection = await readCollectionStatus(path.join(path.dirname(exportPath), 'collection-status.json'), now());
     const statusFields = collection ? { collection } : {};
+    if (apiFootballReferencePath) {
+      let referenceHandle;
+      try {
+        referenceHandle = await fs.open(apiFootballReferencePath, 'r');
+        const stat = await referenceHandle.stat();
+        if (!stat.isFile() || stat.size > 2 * 1024 * 1024) throw Error('Reference export too large');
+        const reference = require('./api-football-reference.cjs').selectReference(JSON.parse(await referenceHandle.readFile('utf8')), fixture, now());
+        if (reference) {
+          // Only bounded public fields leave this private collector export.
+          for (const section of Object.values(reference.sections)) {
+            for (const player of section.data?.players || []) for (const key of ['name', 'reason', 'position']) player[key] = cleanText(player[key]);
+            for (const team of section.data?.teams || []) {
+              team.formation = cleanText(team.formation);
+              for (const player of [...team.starters, ...team.substitutes]) player.name = cleanText(player.name);
+            }
+          }
+          return { ...reference, ...statusFields };
+        }
+      } catch {} finally { await referenceHandle?.close(); }
+    }
     let handle, document;
     try {
       // The path is operator configuration, never derived from a request ID.
