@@ -9,10 +9,14 @@ const BOOTSTRAP_SHA = "a69f15cc7deeb44343cede093f2b6b0e8ea02b01587121b856c2f4d10
 const NATIVE_SELECTORS = Object.freeze({ FOOTBALL_STORAGE_MODE: "postgres-only", FOOTBALL_POSTGRES_MODE: "primary",
   DATASTORE_READ_SOURCE: "postgres", CURRENT_MATCH_SOURCE: "postgres", ENABLE_SQLITE_EXPORT: "0",
   PRIVATE_MODEL_ARTIFACT_STORAGE: "postgres", POSTGRES_PROJECTION_SOURCE: "native-generation" });
+const NATIVE_CAPTURE_BUDGETS = Object.freeze({
+  CANDIDATE_PROSPECTIVE_CAPTURE_TIMEOUT_MS: "80000",
+  CANDIDATE_PROSPECTIVE_CAPTURE_RECOVERY_BUDGET_MS: "80000",
+});
 const digest = bytes => crypto.createHash("sha256").update(bytes).digest("hex");
 function nativeEnvironment(text) {
   assert.ok(Buffer.byteLength(text) <= 262144 && !text.includes("\0"));
-  const remove = new Set([...Object.keys(NATIVE_SELECTORS), "FOOTBALL_POSTGRES_URL", "FOOTBALL_POSTGRES_SSL_MODE"]);
+  const remove = new Set([...Object.keys(NATIVE_SELECTORS), ...Object.keys(NATIVE_CAPTURE_BUDGETS), "FOOTBALL_POSTGRES_URL", "FOOTBALL_POSTGRES_SSL_MODE"]);
   const lines = text.split(/\r?\n/).filter(line => {
     const match = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/.exec(line);
     return !match || !remove.has(match[1]);
@@ -20,6 +24,7 @@ function nativeEnvironment(text) {
   // Fixed peer-authenticated local DB. No password or connection option is
   // copied from a temporary build/candidate database into the runtime.
   lines.push(...Object.entries(NATIVE_SELECTORS).map(([key, value]) => key + "=" + value),
+    ...Object.entries(NATIVE_CAPTURE_BUDGETS).map(([key, value]) => key + "=" + value),
     "FOOTBALL_POSTGRES_URL=postgresql://football@localhost/football?host=%2Fvar%2Frun%2Fpostgresql",
     "FOOTBALL_POSTGRES_SSL_MODE=disable");
   return lines.join("\n").replace(/\n+$/, "") + "\n";

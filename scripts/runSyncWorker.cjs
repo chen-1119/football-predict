@@ -586,6 +586,11 @@ const runCandidateProspectiveDeadlineCapture = async ({
       {
         SERVER_STORE_DIR: process.env.SERVER_STORE_DIR || storeDir,
         DATASTORE_SQLITE_PATH: process.env.DATASTORE_SQLITE_PATH || sqliteDbPath,
+        // Native deadline evidence uses the same measured allocation as the
+        // release refresh; the worker parent's smaller heap stays unchanged.
+        ...(storageMode.postgresOnly ? {
+          NODE_OPTIONS: `${process.env.NODE_OPTIONS || ""} --max-old-space-size=2304`.trim(),
+        } : {}),
       },
       {
         timeoutMs: childExecutionTimeoutMs,
