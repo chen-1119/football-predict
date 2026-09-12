@@ -201,7 +201,7 @@ async function finalize(state, directory) {
       assertWritersStopped();
       const transaction = require("../deploy/light-server/football-release-recovery.cjs").loadTransaction();
       assert.equal(transaction.bundleSha, state.sha); assert.deepEqual(transaction.native.contract, contract); assert.ok(transaction.newIdentity);
-      const activity = inspectPointerCommitLockActivity({ lockDir: paths.pointerLockDir });
+      const activity = inspectPointerCommitLockActivity({ lockDir: paths.pointerLockDir, staleMs: Number.MAX_SAFE_INTEGER });
       assert.equal(activity.active, true); assert.equal(activity.owner.token, held.owner.token); assert.equal(activity.owner.pid, process.pid);
     };
     const verifyGeneration = async identity => {

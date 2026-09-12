@@ -1089,7 +1089,10 @@ const acquireGenerationReadLease = ({
   const paths = storePaths(storeDir);
   fs.mkdirSync(paths.root, { recursive: true });
   if (pointerLockHandle) {
-    const current = inspectPointerCommitLockActivity({ lockDir: paths.pointerLockDir });
+    // An explicit same-process handle may outlive the observer's 60s freshness
+    // window during a release. Exact PID/token ownership, not elapsed time,
+    // proves this caller still holds the lock; other readers keep the default.
+    const current = inspectPointerCommitLockActivity({ lockDir: paths.pointerLockDir, staleMs: Number.MAX_SAFE_INTEGER });
     if (!current.active || current.owner?.pid !== process.pid || current.owner?.token !== pointerLockHandle.owner?.token
         || typeof pointerLockHandle.release !== "function") {
       fail("GENERATION_READER_POINTER_LOCK_MISMATCH", "reader requires the caller's actual held pointer lock");
