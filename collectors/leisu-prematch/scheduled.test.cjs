@@ -35,6 +35,22 @@ test('an empty valid fixture window opens no browser', async t => {
   const result = await tick(s.env, s.dependencies); assert.equal(result.state, 'no-due-tasks'); assert.equal(s.pages(), 0);
   assert.equal(s.writes.length, 1);
 });
+
+test('provider backoff still refreshes fixture input without inventing a source attempt', async t => {
+  const s = setup(t), first = await tick(s.env, s.dependencies);
+  s.advance(5 * 60000);
+  s.dependencies.readFeed = async () => ({ matches: [], generatedAt: '2026-09-12T04:04:00Z' });
+  const refreshed = await tick(s.env, s.dependencies);
+  assert.equal(refreshed.fixtureInput.state, 'available');
+  assert.equal(refreshed.fixtureInput.generatedAt, '2026-09-12T04:04:00Z');
+  assert.equal(refreshed.state, 'blocked'); assert.equal(refreshed.sourceAccess.httpStatus, 405);
+  assert.equal(refreshed.lastRunAt, first.lastRunAt); assert.equal(refreshed.nextAttemptAt, first.nextAttemptAt);
+  assert.equal(refreshed.lastSuccessAt, null); assert.equal(s.pages(), 1); assert.equal(s.writes.length, 1);
+  s.dependencies.readFeed = async () => { throw Error('connection refused'); };
+  const failed = await tick(s.env, s.dependencies);
+  assert.equal(failed.fixtureInput.state, 'unavailable'); assert.equal(s.pages(), 1);
+  assert.equal(fs.existsSync(path.join(s.dir, 'scheduled.lock')), false);
+});
 test('stale fixture input never reaches collection even if browser access works', async t => {
   const s = setup(t); s.dependencies.collectLeague = async () => ({ status: 'available', httpStatus: 200 });
   const result = await tick(s.env, s.dependencies); assert.equal(result.state, 'fixture-stale'); assert.equal(s.collections(), 0);
