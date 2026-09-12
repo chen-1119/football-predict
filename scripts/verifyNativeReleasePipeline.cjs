@@ -57,6 +57,20 @@ assert.ok(lane.indexOf("native_data final") < lane.indexOf('mv "$APP_DIR" "$BACK
 assert.ok(lane.indexOf("wait_for_worker_official_publish_after") < lane.indexOf("commit_release_transaction"));
 assert.ok(!lane.includes("datastore:sqlite") && !lane.includes("ensure_node_runtime_env"));
 checks.push("native preparation, durable journal, data cutover and mandatory official acceptance retain their ordering");
+const restoreFunction = source.match(/^restore_live_service_after_candidate_barrier\(\) \{[\s\S]*?^\}/m)?.[0];
+const restoreCall = lane.match(/^  restore_live_service_after_candidate_barrier [a-z-]+$/m)?.[0];
+assert.ok(restoreFunction && restoreCall);
+for (const failure of ["none", "restart", "active", "health"]) {
+  const script = "set -euo pipefail\nSERVICE_NAME=fixture HOST=127.0.0.1 PORT=8788\n" +
+    "restart_service_if_needed() { " + (failure === "restart" ? "return 1" : "return 0") + "; }\n" +
+    "systemctl() { " + (failure === "active" ? "return 1" : "return 0") + "; }\n" +
+    "wait_for_health() { " + (failure === "health" ? "return 1" : "printf 'health-verified\\n'; return 0") + "; }\n" + restoreFunction + "\n" + restoreCall + "\nprintf 'restore-complete\\n'\n";
+  const result = spawnSync(process.platform === "win32" ? "D:/app/Git/bin/bash.exe" : "/bin/bash", ["--noprofile", "--norc", "-s"],
+    { input: script, encoding: "utf8", windowsHide: true, timeout: 5000, env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot } });
+  assert.equal(result.status, failure === "none" ? 0 : 1, "native restore helper rejects its actual caller: " + failure);
+  assert.equal(result.stdout.includes("restore-complete"), failure === "none");
+}
+checks.push("actual native cache handoff calls the shared restore helper with an accepted label and propagates restart and health failures");
 const entries = ["scripts/nativeDatabaseCutover.cjs", "scripts/postgresReleaseMirror.cjs", "scripts/nativeReleaseDatabaseSession.cjs",
   "scripts/nativeReleaseDataPlane.cjs", "scripts/nativeReleaseGenerationCopy.cjs", "scripts/nativeReleasePostgresTransport.cjs",
   "scripts/validateNativeReleasePolicy.cjs", "scripts/verifyNativeReleasePipeline.cjs", "scripts/verifyNativeReleaseDataPlane.cjs",

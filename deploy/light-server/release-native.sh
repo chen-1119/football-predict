@@ -105,7 +105,7 @@ run_native_release() {
   copy_regular_file_nofollow "$LIVE_STORE_DIR/ai-arena-state.json" "$CANDIDATE_STORE_DIR/ai-arena-state.json" || candidate_ai_state_status="$?"
   [ "$candidate_ai_state_status" = 0 ] || [ "$candidate_ai_state_status" = 2 ]
   stop_release_sync_write_barrier clean
-  restore_live_service_after_candidate_barrier native-model-cache
+  restore_live_service_after_candidate_barrier candidate-cache-snapshot
   restart_worker_if_needed
   native_data import-ledgers
   native_data build-access
