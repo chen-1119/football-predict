@@ -79,6 +79,18 @@ const budgetResult = spawnSync(process.platform === "win32" ? "D:/app/Git/bin/ba
 assert.equal(budgetResult.status,0,budgetResult.stderr);
 for (const token of ["MemoryHigh=1600M", "MemoryMax=2200M", "MemorySwapMax=512M", "NODE_OPTIONS=--max-old-space-size=1536"]) assert.ok(budgetResult.stdout.includes(token), token);
 checks.push("actual native PostgreSQL build step receives the bounded large-projection memory allocation");
+const refreshStep = source.match(/^run_candidate_refresh_step\(\) \{[\s\S]*?^\}/m)?.[0];
+const refreshCall = lane.match(/^  run_candidate_refresh_step ([a-z-]+) env /m)?.[1];
+assert.ok(refreshStep && refreshCall);
+const refreshScript = budgetScript.slice(0, budgetScript.indexOf(buildStep)) +
+  "NEXT_DIR=/next CANDIDATE_STORE_DIR=/store CANDIDATE_REFRESH_STEP_RUNTIME_MAX_SECONDS=90\n" +
+  refreshStep + "\nrun_candidate_refresh_step " + refreshCall + " true\n";
+const refreshResult = spawnSync(process.platform === "win32" ? "D:/app/Git/bin/bash.exe" : "/bin/bash", ["--noprofile", "--norc", "-s"],
+  { input: refreshScript, encoding: "utf8", windowsHide: true, timeout: 5000, env: { PATH:process.env.PATH, SystemRoot:process.env.SystemRoot } });
+assert.equal(refreshResult.status,0,refreshResult.stderr);
+for(const token of ["MemoryHigh=3G", "MemoryMax=3500M", "MemorySwapMax=512M", "NODE_OPTIONS=--max-old-space-size=2304", "RuntimeMaxSec=110s"])
+  assert.ok(refreshResult.stdout.includes(token),token);
+checks.push("actual native deadline refresh caller uses the measured native evidence memory and runtime limits");
 const entries = ["scripts/nativeDatabaseCutover.cjs", "scripts/postgresReleaseMirror.cjs", "scripts/nativeReleaseDatabaseSession.cjs",
   "scripts/nativeReleaseDataPlane.cjs", "scripts/nativeReleaseGenerationCopy.cjs", "scripts/nativeReleasePostgresTransport.cjs",
   "scripts/validateNativeReleasePolicy.cjs", "scripts/verifyNativeReleasePipeline.cjs", "scripts/verifyNativeReleaseDataPlane.cjs",

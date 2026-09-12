@@ -380,6 +380,15 @@ run_candidate_refresh_step() {
   local runtime_max_seconds="$CANDIDATE_REFRESH_STEP_RUNTIME_MAX_SECONDS"
   local -a properties=()
   case "$label" in
+    native-deadline-refresh)
+      # Use the same measured native formal-evidence allocation as the live
+      # deadline refresh; both read the retained PostgreSQL capture universe.
+      memory_high="3G"
+      memory_max="3500M"
+      memory_swap_max="512M"
+      node_heap_mib="2304"
+      runtime_max_seconds="110"
+      ;;
     candidate-archive-refresh|candidate-generation-refresh|candidate-sqlite-affinity|candidate-deadline-capture-refresh)
       # Archive migration parses and rewrites the retained prediction/history
       # corpus as one integrity-checked transaction.  Keep the wider budget
