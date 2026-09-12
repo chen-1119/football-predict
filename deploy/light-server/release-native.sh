@@ -51,6 +51,9 @@ NODE
 
 run_native_release() {
   local prebuilt_status native_seed_log candidate_ai_state_status
+  # The core checker reads runtime health and one native publication identity;
+  # it has no model/UI suites and is killed if it exceeds five minutes.
+  CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS=300
   # This lane refreshes before creating its lease and acquires one subsequent
   # write barrier. Reserve 900 seconds for final native reconciliation; retain
   # the full official-cycle and post-swap rollback reserves. The legacy lane's
