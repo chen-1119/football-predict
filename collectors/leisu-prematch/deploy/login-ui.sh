@@ -110,12 +110,22 @@ CHILDREN=()
 BROWSER_PID=
 WORKER_PID=$BASHPID
 own_child_alive() {
-  local pid="$1" parent=
-  [[ -r "/proc/$pid/status" ]] || return 1
-  while read -r key value rest; do
-    if [[ "$key" == PPid: ]]; then parent="$value"; break; fi
-  done < "/proc/$pid/status"
-  [[ "$parent" == "$WORKER_PID" ]] && kill -0 "$pid" 2>/dev/null
+  local pid="$1" parent key value rest attempt
+  # A single interrupted /proc read must not close a live login session.
+  # Every successful check still requires both ownership and liveness.
+  for attempt in 1 2 3; do
+    parent=
+    if [[ -r "/proc/$pid/status" ]]; then
+      while IFS=$' \t' read -r key value rest; do
+        if [[ "$key" == PPid: ]]; then parent="$value"; break; fi
+      done < "/proc/$pid/status"
+      if [[ "$parent" == "$WORKER_PID" ]] && kill -0 "$pid" 2>/dev/null; then
+        return 0
+      fi
+    fi
+    [[ "$attempt" == 3 ]] || sleep 0.02
+  done
+  return 1
 }
 cleanup_children() {
   local result=$? pid attempt
@@ -202,7 +212,15 @@ CHILDREN+=("$BROWSER_PID")
 while own_child_alive "$BROWSER_PID"; do
   for pid in "$XVFB_PID" "$VNC_PID" "$WEB_PID"; do
     own_child_alive "$pid" || {
-      printf 'A login UI process exited; closing this session.\n' >&2
+      printf 'A login UI process exited: pid=%s xvfb=%s vnc=%s web=%s owner=%s.\n' "$pid" "$XVFB_PID" "$VNC_PID" "$WEB_PID" "$WORKER_PID" >&2
+      if [[ -r "/proc/$pid/status" ]]; then
+        sed -n -e '/^Name:/p' -e '/^State:/p' -e '/^PPid:/p' "/proc/$pid/status" >&2
+      fi
+      if ! kill -0 "$pid" 2>/dev/null; then
+        child_status=0
+        wait "$pid" || child_status=$?
+        printf 'Login child exit status: %s\n' "$child_status" >&2
+      fi
       tail -n 20 "$RUNTIME_DIR/xvfb.log" "$RUNTIME_DIR/x11vnc.log" "$RUNTIME_DIR/websockify.log" >&2
       exit 1
     }
