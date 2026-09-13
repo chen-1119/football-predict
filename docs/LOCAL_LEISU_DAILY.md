@@ -30,6 +30,6 @@ Node：`C:/Users/86188/Documents/football/.codex-tmp/prediction-quality-ui-20260
 
 ## 运维
 
-首次部署后只执行一次 `node scripts/syncLocalLeisuBrowser.cjs migrate`，只创建上述两张表和索引。
+首次部署由 PostgreSQL 管理员在现有数据库内执行 `collectors/leisu-prematch/local-browser-schema.sql`，并为现有采集账号授予这两张表的 SELECT、INSERT 权限。日常采集账号没有建表权限，不运行 migrate；本次部署已完成建表与授权。
 以 status 的实际数据库回读为成功证据。回滚定时任务只需暂停该本机 Codex 自动任务；保留已入库证据。
 服务器原有 `leisu-prematch.timer` 应停止，避免继续从返回 405 的服务器环境重复采集。
