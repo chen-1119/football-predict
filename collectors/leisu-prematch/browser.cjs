@@ -82,7 +82,7 @@ function readRenderedDocument() {
     errorText:(!home.name || !away.name)?shortPageText:''};
 }
 
-function classifyView(view, task, httpStatus) {
+function classifyView(view, task, httpStatus, { renderedOnly = false } = {}) {
   if (!view || typeof view !== 'object' || !task || typeof task !== 'object' || !task.fixture || typeof task.fixture !== 'object') {
     return {status:'parse_error',data:null,reason:'invalid-view-or-task'};
   }
@@ -90,7 +90,7 @@ function classifyView(view, task, httpStatus) {
       /^(?:403|405|ERROR\s*403)|Forbidden|访问被阻断|访问被拦截|访问验证/i.test(view.title+' '+view.errorText)) {
     return {status:'blocked',data:null,reason:'source-block-page'};
   }
-  if(!Number.isInteger(httpStatus)||httpStatus<200||httpStatus>=300) return {status:'parse_error',data:null,reason:'non-success-http-status'};
+  if(!renderedOnly && (!Number.isInteger(httpStatus)||httpStatus<200||httpStatus>=300)) return {status:'parse_error',data:null,reason:'non-success-http-status'};
   let expected, actual;
   try { expected = new URL(task.sourceUrl); actual = new URL(view.url); }
   catch { return {status:'parse_error',data:null,reason:'invalid-source-url'}; }
@@ -236,4 +236,7 @@ function normalizeLeagueCells(rows,sourceUrl){
   }
   return normalizeLeagueRows(normalized,sourceUrl);
 }
-module.exports={readRenderedDocument,classifyView,openBrowser,collectTask,collectLeague,normalizeLeagueRows,normalizeLeagueCells};
+// Browser Use provides rendered DOM, not an HTTP response. Keep HTTP unknown;
+// retain the same exact URL, identity, kickoff and payload validation.
+function classifyRenderedView(view, task) { return classifyView(view, task, null, {renderedOnly:true}); }
+module.exports={readRenderedDocument,classifyView,classifyRenderedView,openBrowser,collectTask,collectLeague,normalizeLeagueRows,normalizeLeagueCells};
