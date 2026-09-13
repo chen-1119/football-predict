@@ -42,7 +42,7 @@ RUN_USER=leisu-collector
 RUN_GROUP=leisu-collector
 SERVICE_PATH=/etc/systemd/system/leisu-prematch.service
 TIMER_PATH=/etc/systemd/system/leisu-prematch.timer
-RUNTIME_FILES=(package.json package-lock.json cli.cjs scheduled.cjs scope.cjs store.cjs browser.cjs mapping.cjs runtime-policy.cjs failure-policy.cjs website-adapter.cjs website-reader.cjs schema.sql)
+RUNTIME_FILES=(package.json package-lock.json cli.cjs scheduled.cjs scope.cjs store.cjs browser.cjs mapping.cjs runtime-policy.cjs failure-policy.cjs website-adapter.cjs website-reader.cjs schema.sql local-browser-ingest.cjs local-browser-schema.sql)
 
 for executable in node npm systemctl sudo useradd getent install chown chmod apt-get; do
   if ! command -v "$executable" >/dev/null 2>&1; then
