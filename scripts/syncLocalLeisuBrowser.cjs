@@ -17,6 +17,19 @@ function dispatch(action,input){
 }
 function main(){
   const action=process.argv[2],inputFile=process.argv[3],outputFile=process.argv[4];
+  if(action==='batch'){
+    const read=file=>JSON.parse(fs.readFileSync(path.resolve(file),'utf8').replace(/^\uFEFF/,''));
+    const plan=read(inputFile),chunk=read(outputFile),destination=process.argv[5];
+    if(!destination||plan.version!==require('../collectors/leisu-prematch/local-jingcai-scope.cjs').VERSION||!Array.isArray(chunk.entries)||chunk.entries.length>12)throw Error('Usage: batch <plan.json> <chunk.json> <new-batch.json>');
+    const entries=chunk.entries.map(entry=>{
+      const task=plan.targets.find(t=>t.fixture.siteMatchId===entry.siteMatchId&&t.kind===entry.kind);
+      if(!task)throw Error('Chunk contains a task outside the official-day plan');
+      return {fixture:task.fixture,kind:task.kind,observedAt:entry.observedAt,view:entry.view};
+    });
+    const batch={version:plan.version,runId:require('node:crypto').randomUUID(),cycleId:plan.cycleId,cycleStartedAt:plan.cycleStartedAt,businessDate:plan.businessDate,
+      startedAt:chunk.startedAt,leaguePages:plan.leaguePages,outcome:chunk.outcome,missing:chunk.missing||[],entries};
+    fs.writeFileSync(path.resolve(destination),JSON.stringify(batch,null,2)+'\n',{flag:'wx'});console.log(JSON.stringify({runId:batch.runId,entries:entries.length,businessDate:batch.businessDate,file:destination}));return;
+  }
   if(action==='plan'){
     const source=JSON.parse(fs.readFileSync(path.resolve(inputFile),'utf8').replace(/^\uFEFF/,''));
     const plan=require('../collectors/leisu-prematch/local-jingcai-scope.cjs').makePlan(source);
