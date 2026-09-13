@@ -201,7 +201,11 @@ BROWSER_PID=$!
 CHILDREN+=("$BROWSER_PID")
 while own_child_alive "$BROWSER_PID"; do
   for pid in "$XVFB_PID" "$VNC_PID" "$WEB_PID"; do
-    own_child_alive "$pid" || { printf 'A login UI process exited; closing this session.\n' >&2; exit 1; }
+    own_child_alive "$pid" || {
+      printf 'A login UI process exited; closing this session.\n' >&2
+      tail -n 20 "$RUNTIME_DIR/xvfb.log" "$RUNTIME_DIR/x11vnc.log" "$RUNTIME_DIR/websockify.log" >&2
+      exit 1
+    }
   done
   sleep 1
 done
