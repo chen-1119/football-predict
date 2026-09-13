@@ -172,7 +172,7 @@ x11vnc -display "$DISPLAY" -auth "$XAUTHORITY" -localhost -listen 127.0.0.1 \
   >"$RUNTIME_DIR/x11vnc.log" 2>&1 &
 VNC_PID=$!
 CHILDREN+=("$VNC_PID")
-websockify --web=/usr/share/novnc --file-only "127.0.0.1:$WEB_PORT" "127.0.0.1:$VNC_PORT" \
+websockify --web=/usr/share/novnc "127.0.0.1:$WEB_PORT" "127.0.0.1:$VNC_PORT" \
   >"$RUNTIME_DIR/websockify.log" 2>&1 &
 WEB_PID=$!
 CHILDREN+=("$WEB_PID")
