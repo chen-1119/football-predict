@@ -1,47 +1,92 @@
-# 数据采集与界面架构
+# 数据采集、取值与界面架构
 
-本次整理延续现有 Node.js、React、TypeScript、PostgreSQL 技术栈，不另建 Python 服务，不修改生产凭据，不自动部署或合并主分支。
+延续现有 Node.js、React、TypeScript、PostgreSQL 技术栈，不另建 Python 服务，不修改生产凭据，不自动部署或合并主分支。
 
-## 分层与责任
-
-| 层 | 现有入口 | 责任 |
-| --- | --- | --- |
-| 数据获取 | `scripts/sync500Data.cjs`、`collectors/leisu-prematch/` | 读取允许访问的数据；解析失败、限流与登录要求必须可见 |
-| 采集调度 | `scripts/runMarketCollector.cjs` | 控制频率、请求预算、错误退避与运行审计 |
-| 采集存储 | `football.market_observations`、`football.market_latest` | 保存来源命名空间下的赔率状态与最后观察时间 |
-| 展示取值 | `src/services/bettingDisplay.ts` | 数值、来源、时间和让球线必须来自同一候选记录 |
-| 发布投影 | `server/postgresProjectionStore.cjs` | 保持 publication/generation 一致性，不绕过现有冻结与发布校验 |
-| 界面 | `src/components/predictions/`、`src/styles/` | 展示来源、缺失与历史状态，不在浏览器伪造预测 |
+## 代码分层
 
 ```text
-公开/授权来源 -> 获取与解析 -> 标准化及身份校验 -> PostgreSQL 采集层
-                                                        |
-                                  校验后的发布与取值 <-+
-                                           |
-                                 React 比赛列表与详情
+公开/授权数据源
+    |
+collectors/market/http.cjs          请求时限、字节预算、限流响应
+    |
+现有 scripts/sync500Data.cjs       复用页面解析器
+    |
+collectors/market/policy.cjs        配置、字段校验、去重、轮询策略
+    |
+collectors/market/store.cjs         单源锁、运行审计、事务、最新状态
+    |                 |
+market_observations   +-> collectors/market/features.cjs
+market_latest                  |
+                     scripts/marketFeatureLogic.cjs
+                               |
+                     market_feature_latest（描述性统计）
+
+已发布的 Match 数据
+    |
+src/services/marketQuotePolicy.ts  原子候选选择、来源/时间/盘口校验
+    |
+src/services/bettingDisplay.ts    保留既有公开调用入口
+    |
+MatchMarketOdds -> MarketQuoteCard -> MatchSummaryRow
 ```
 
-## 不可破坏的数据约束
+| 层 | 责任 | 不做什么 |
+| --- | --- | --- |
+| HTTP | 有界 GET、正确识别 HTTP 状态和 Retry-After | 不绕过验证码、签名或访问控制 |
+| Policy | 校验单条候选，拒绝冲突，生成稳定状态 hash | 不把缺失字段补成 0、不生成预测 |
+| Store | 请求前取得单源锁，保留审计，原子提交数据和特征 | 不直接修改已冻结推荐或 serving publication |
+| Feature | 同一来源/比赛/玩法/公司和连续事件段的描述性统计 | 不把去水概率当模型概率、不把首次采集当官方初赔 |
+| Resolver | 整体选择赔率、来源、观察时间、盘口 | 不跨来源拼字段、不把参考报价伪装成官方 SP |
+| UI | 展示有效值、缺失、过期与出处；保留原始记录 SP | 不在浏览器根据最低赔率生成主推 |
 
-1. HAD 与 HHAD 独立；未知让球线不得按 0 处理，HHAD 不得回退成 HAD。
-2. 回退候选必须整体替换。不能将外部赔率配上旧的官方来源、官方时间或另一条让球线。
-3. 来源内的比赛 ID 不是全局 ID；500 ID 不能直接当作 Sporttery ID。
-4. 数据库收到数据的时间不等于源站发布时间。没有源站时间时保留未知。
-5. 最新观察值不是官方初赔。首条已采集值只能称为“首次采集赔率”。
-6. A -> B -> A 是三段状态，不得因为两个 A 的 hash 相同而抹掉中间轨迹。
-7. 采集频率不能突破源站 Retry-After；退避不因进程重启或普通轮询上限而缩短。
-8. 截止后可继续采集；不能改写截止前冻结的方向、SP 或证据。
-9. 真实 xG、模型进球期望和市场隐含概率分别标注，禁止互相冒充。
-10. 采集成功不等于已发布、不等于数据新鲜，也不等于允许用于预测。
+## 取值策略
 
-## 整理顺序
+`resolveMatchQuotes()` 返回 HAD、HHAD 及拒绝原因。`getResolvedMatchOdds()` 委托该策略，旧调用入口保留。
 
-先修正并测试取值与边界，再拆分采集运行逻辑，最后调整可复用 UI 组件。保留旧公共入口与 API 合约，避免一次搬动所有历史脚本。
+- 官方模式只能读取根记录中声明为 `sporttery:had` / `sporttery:hhad` 的相应报价；外部嵌套候选不能通过改 source 名称变成官方数据。
+- 数值、来源、时间和让球线在一个候选中绑定。外部回退不继承旧官方时间。
+- HHAD 必须具备整数让球线。显式 `0` 有效；空白、缺失、`-0.5` 或混合文本无效。Asian handicap 应走独立类型。
+- 通用 `externalOdds` 必须声明 HAD/HHAD，不能仅靠“没有让球线”来猜玩法。
+- 已提供的开赛时间、事件版本或站点比赛 ID 不一致时拒绝。来源内 ID 不与其他来源 ID 强行比较；仍需可靠的上游映射。
+- `preferFresh` 只用于当前行情展示；归档默认保留官方记录优先级。缺失时间显示未知，过期值显示滞后。
+- `asOf`、`prematchOnly`、`requireFresh` 可供严格调用方使用，未来观察值不可穿越时间截面。
+- 官方推荐 eligibility 与冻结发布仍由原有治理模块负责，展示回退不改变正式资格。
 
-`008_market_feature_latest.sql` 当前仅是预留结构。正式接入前必须完成事件版本/让球线隔离、时间截面测试与数据库集成测试。不得把空表当作已经运行的特征服务。
+## 采集与 PostgreSQL
 
-## 上线检查
+`runMarketCollector.cjs` 只负责编排，原导出函数保留。运行时不执行 DDL，只校验 migration；按原签名发布流程安装 schema。
 
-在开发分支完成回归验证后，再走仓库现有签名发布流程。迁移由 migration role 执行，采集运行身份只保留必要 DML 权限。不得直接写入会被 publication 投影清理的旧快照表。
+单源 advisory lock 在 HTTP 前取得，在周期结束后释放。一次请求只下载一份竞彩页面。运行记录在请求前写为 `running`，报价状态、最新指针、描述性特征与运行结果在同一事务内提交。重复 run 不累加计数，旧观察不倒退最新指针；A -> B -> A 仍保留三段。
 
-前端验收覆盖桌面、移动端、无赔率、数据过期、让球线未知、完场归档和键盘导航。正式推荐与参考记录必须保持独立口径。
+完成或失败后的下次执行时间保存进运行记录，重启继续遵守冷却期。普通轮询仍为 60 秒至 30 分钟；403/429 等阻断默认退避 6 小时，并取源站 Retry-After 与本地退避的较大值。退避不受普通 MAX_SECONDS 截短，不加负向抖动。
+
+`008_market_feature_latest.sql` 现在由采集事务内的特征 writer 填充。此表是**描述性参考层**，不是已接入预测的特征仓库：
+
+- 用当前连续开赛时间/让球线段计算首次采集价、最新价、极值、变化幅度、单步变化、反转次数。
+- 价格与事件发生往返变化时不丢掉中间段。
+- 最大读取 5000 条状态；截断时明确 `historyTruncated=true`。
+- 历史 as-of 不使用之后的价格，也不从未来 `last_seen_at` 伪造过去某一时刻的采集成功。
+- 压缩状态只证明采样时看到了相同值，不能证明两个样本之间从未变价。
+- `predictionEligible=false`；市场隐含概率、真实 xG 和模型概率保持独立。
+
+## UI 组织
+
+`MatchSummaryRow` 仅负责卡片布局，保留原 props、比赛事件 key、详情回调及正式/参考标识。
+
+`MatchMarketOdds` 选择报价与人工记录，`MarketQuoteCard` 统一展示价格、来源、北京时间和新鲜度。HAD 存在时 HHAD 在可键盘操作的原生 details 中展开；只有 HHAD 时不把它冒充 HAD。
+
+`matchday-cards.css` 管理赛事卡片；`matchday-shell.css` 管理导航与页面留白。没有继续向历史 `index.css` 追加页面规则。响应式覆盖 320px 至桌面宽屏，并支持 reduced motion。
+
+## 验证与发布
+
+```bash
+node scripts/verifyMarketPlatform.cjs
+node scripts/verifyMarketCollector.cjs
+npm run build
+```
+
+本地实际执行范围见 `docs/market-platform-validation.md`。完整 React 19/Vite 构建、真实 PostgreSQL 事务/权限测试和真实源站连续采集必须在项目依赖与数据库均可访问的环境中完成。
+
+新采集层仍未接入 `football.odds_snapshots` / `odds/history` 发布投影；不得直接往会被投影清理的旧表塞数据。旧 `sync:500` 和新 collector 的请求预算尚未全局合并，因此上线前需审查并行采集任务，不能宣称全站只有一次请求。
+
+本次没有重写预测算法、冻结记录或 20 多万字符的 MatchDetail 主组件。后续应按市场、球队状态、证据和归档分区逐步拆分，同时保留回归测试与发布边界。

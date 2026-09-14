@@ -1,4 +1,6 @@
 import type { ExternalMatchSignals, Odds, PredictionDetail } from './mockData';
+import { normalizeQuoteOdds, parseResultHandicap, resolveMatchQuotes } from './marketQuotePolicy';
+import type { QuoteResolutionOptions } from './marketQuotePolicy';
 
 type Language = 'zh' | 'en';
 export type SportteryOddsPoolCode = 'HAD' | 'HHAD';
@@ -15,6 +17,11 @@ export interface SportteryOddsPoolDisplay {
 }
 
 export interface MatchOddsInput {
+  id?: string;
+  kickoffTime?: string;
+  eventVersion?: string;
+  homeTeamName?: string;
+  awayTeamName?: string;
   odds?: Odds | null;
   oddsSource?: string;
   oddsUpdatedAt?: string;
@@ -39,82 +46,21 @@ export interface ResolvedMatchOdds {
   };
 }
 
-const isFiniteOdd = (value: unknown) => Number.isFinite(Number(value)) && Number(value) > 1;
+export const normalizeOdds = (value?: Partial<Odds> | null): Odds | null => normalizeQuoteOdds(value);
 
-export const normalizeOdds = (value?: Partial<Odds> | null): Odds | null => {
-  if (!value || !isFiniteOdd(value.odds1) || !isFiniteOdd(value.oddsX) || !isFiniteOdd(value.odds2)) {
-    return null;
-  }
-
-  return {
-    odds1: Number(value.odds1),
-    oddsX: Number(value.oddsX),
-    odds2: Number(value.odds2)
-  };
-};
-
-export function getResolvedMatchOdds(match: MatchOddsInput): ResolvedMatchOdds {
-  const signals = match.externalSignals;
-  const bookmakerOdds = signals?.bookmakerOdds;
-  const officialHad = normalizeOdds(match.odds);
-  const officialHhad = normalizeOdds(match.handicapOdds);
-  const externalHad = normalizeOdds(bookmakerOdds?.had || bookmakerOdds?.apiFootball?.had);
-  const externalHhad = normalizeOdds(bookmakerOdds?.hhad);
-  const externalOdds = normalizeOdds(signals?.externalOdds);
-  const externalOddsLooksLikeHad = Boolean(externalOdds && !externalHhad && !signals?.handicapLine);
-  const had = officialHad || externalHad || (externalOddsLooksLikeHad ? externalOdds : null);
-  const hhad = officialHhad || externalHhad || (!officialHad && !externalHad && signals?.handicapLine ? externalOdds : null);
-
-  return {
-    had: had
-      ? {
-          odds: had,
-          source: match.oddsSource || bookmakerOdds?.had?.source || bookmakerOdds?.apiFootball?.source || signals?.externalOdds?.source || signals?.source,
-          updatedAt: match.oddsUpdatedAt || bookmakerOdds?.had?.updatedAt || bookmakerOdds?.apiFootball?.updatedAt || signals?.updatedAt
-        }
-      : undefined,
-    hhad: hhad
-      ? {
-          odds: hhad,
-          handicap: match.handicapLine || bookmakerOdds?.hhad?.handicapLine || signals?.handicapLine,
-          source: match.handicapOddsSource || bookmakerOdds?.hhad?.source || signals?.source,
-          updatedAt: match.handicapOddsUpdatedAt || bookmakerOdds?.hhad?.updatedAt || signals?.updatedAt
-        }
-      : undefined
-  };
+// Keep the public API stable while selecting value/source/time/line atomically.
+export function getResolvedMatchOdds(
+  match: MatchOddsInput,
+  options: QuoteResolutionOptions = {}
+): ResolvedMatchOdds {
+  const { had, hhad } = resolveMatchQuotes(match, options);
+  return { had, hhad };
 }
 
-const isSportteryPoolSource = (source: string | undefined, pool: SportteryOddsPoolCode) => {
-  const normalized = String(source || '').toLowerCase();
-  const expected = `sporttery:${pool.toLowerCase()}`;
-  return normalized === expected || normalized.startsWith(`${expected}:`);
-};
-
 export function getOfficialMatchOdds(match: MatchOddsInput): ResolvedMatchOdds {
-  const had = isSportteryPoolSource(match.oddsSource, 'HAD')
-    ? normalizeOdds(match.odds)
-    : null;
-  const hhad = isSportteryPoolSource(match.handicapOddsSource, 'HHAD')
-    ? normalizeOdds(match.handicapOdds)
-    : null;
-
-  return {
-    had: had
-      ? {
-          odds: had,
-          source: match.oddsSource,
-          updatedAt: match.oddsUpdatedAt
-        }
-      : undefined,
-    hhad: hhad
-      ? {
-          odds: hhad,
-          handicap: match.handicapLine,
-          source: match.handicapOddsSource,
-          updatedAt: match.handicapOddsUpdatedAt
-        }
-      : undefined
-  };
+  // Reference fallback must never become an official SP or change formal eligibility.
+  const { had, hhad } = resolveMatchQuotes(match, { officialOnly: true });
+  return { had, hhad };
 }
 
 export function getOfficialResultPoolAvailability(match: MatchOddsInput) {
@@ -209,10 +155,7 @@ export function getPredictionMarketLabel(prediction: PredictionDetail, language:
   return getMarketLabel(prediction.marketType, language);
 }
 
-const parseHandicapNumber = (handicapLine: string | undefined) => {
-  const value = Number(String(handicapLine || '').replace(/[^\d.+-]/g, ''));
-  return Number.isFinite(value) ? value : null;
-};
+const parseHandicapNumber = (handicapLine: string | undefined) => parseResultHandicap(handicapLine);
 
 const formatHandicapForCopy = (line: number) => {
   const abs = Math.abs(line);

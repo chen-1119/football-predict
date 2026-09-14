@@ -1,0 +1,100 @@
+/* Component-owned layout; do not append new page overrides to the legacy index.css. */
+.predictions-v4.predictions-compact {
+  --matchday-accent: var(--shell-green, #37b878);
+  --matchday-panel: var(--shell-surface, #151c25);
+  --matchday-muted: var(--shell-text-secondary, #aab5c2);
+  --matchday-border: var(--shell-border-subtle, #202a34);
+  gap: 20px;
+}
+.predictions-v4.predictions-compact .league-stack { display: grid; gap: 28px; }
+.predictions-v4.predictions-compact .league-card { background: transparent; border: 0; box-shadow: none; overflow: visible; }
+.predictions-v4.predictions-compact .league-header {
+  display: flex; align-items: center; justify-content: space-between; padding: 0 4px 12px;
+  border: 0; background: transparent; gap: 12px;
+}
+.predictions-v4.predictions-compact .league-title { display: flex; align-items: center; gap: 10px; }
+.predictions-v4.predictions-compact .league-title h2 { font-size: 16px; font-weight: 650; letter-spacing: 0; }
+.predictions-v4.predictions-compact .league-count { color: var(--matchday-muted); font-size: 12px; }
+.predictions-v4.predictions-compact .predictions-v4__match-list { display: grid; gap: 12px; }
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card {
+  display: grid;
+  grid-template-columns: minmax(190px, 1fr) minmax(280px, 1.3fr) minmax(165px, .75fr);
+  grid-template-areas: "time time result" "teams market pick" "action market sp";
+  align-items: start; gap: 16px 28px; padding: 20px 24px;
+  min-width: 0; border: 1px solid var(--matchday-border); border-radius: 16px;
+  background: var(--matchday-panel); box-shadow: none; transform: none;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card:hover { border-color: var(--shell-border, #293441); background: var(--matchday-panel); transform: none; }
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card:focus-within { border-color: var(--matchday-accent); }
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card > .is-time { grid-area: time; }
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card > .is-teams { grid-area: teams; }
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card > .is-market-odds { grid-area: market; }
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card > .is-pick { grid-area: pick; }
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card > .is-sp { grid-area: sp; }
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card > .is-result { grid-area: result; text-align: right; }
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card > .predictions-v4__match-action { grid-area: action; align-self: end; }
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card > * { min-width: 0; }
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card .predictions-v4__slot-label { font-size: 11px; font-weight: 500; color: var(--matchday-muted); margin-bottom: 8px; }
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card > :is(.is-time,.is-teams,.is-result) > .predictions-v4__slot-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card .time-stack { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card .kickoff-time { font-size: 15px; line-height: 1.4; color: var(--shell-text, #f0f4f8); font-variant-numeric: tabular-nums; }
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card .status-note { font-size: 11px; color: var(--matchday-muted); }
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card .team-stack { display: grid; gap: 12px; }
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card .team-line { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card .team-name { font-size: 17px; font-weight: 650; line-height: 1.45; white-space: normal; overflow-wrap: anywhere; color: var(--shell-text, #f0f4f8); }
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card .compact-pick { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card .compact-pick > strong { font-size: 21px; font-weight: 650; letter-spacing: -.02em; line-height: 1.3; }
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card .compact-pick > small { width: 100%; font-size: 12px; color: var(--matchday-muted); }
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card .compact-pick__tier { font-size: 11px; border-radius: 5px; padding: 3px 6px; background: var(--shell-bg-elevated, #121821); }
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card .compact-pick__tier.is-formal { color: var(--matchday-accent); }
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card .compact-pick__tier.is-reference { color: var(--shell-warning, #d7a548); }
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card .compact-sp { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.03em; }
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card .compact-sp-note { font-size: 11px; color: var(--matchday-muted); }
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card .compact-result { display: inline-block; font-size: 12px; padding: 5px 9px; border-radius: 6px; background: var(--shell-bg-elevated, #121821); }
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card .details-button {
+  display: inline-flex; width: auto; min-height: 44px; align-items: center; justify-content: center; gap: 10px;
+  padding: 0 14px; border: 1px solid var(--matchday-border); border-radius: 8px;
+  color: var(--shell-text, #f0f4f8); background: transparent; cursor: pointer; font-size: 13px; font-weight: 550;
+}
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card .details-button:hover { color: var(--matchday-accent); border-color: var(--matchday-accent); }
+.market-quote-stack { display: grid; gap: 10px; min-width: 0; }
+.market-quote { min-width: 0; padding: 12px 14px; border-radius: 10px; background: var(--shell-bg-elevated, #121821); color: var(--shell-text, #f0f4f8); }
+.market-quote__heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 12px; }
+.market-quote__heading > strong { font-size: 12px; font-weight: 600; }
+.market-quote__heading > strong > span { color: var(--shell-text-secondary, #aab5c2); font-weight: 400; }
+.market-quote__source { font-size: 10px; color: var(--shell-text-secondary, #aab5c2); }
+.market-quote__source.is-official { color: var(--shell-green, #37b878); }
+.market-quote__prices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 12px 0; padding: 0; }
+.market-quote__prices > div { min-width: 0; }
+.market-quote__prices dt { color: var(--shell-text-secondary, #aab5c2); font-size: 11px; margin-bottom: 3px; }
+.market-quote__prices dd { margin: 0; color: var(--shell-text, #f0f4f8); font-size: 20px; font-weight: 600; line-height: 1.3; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.market-quote__receipt { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 5px 12px; color: var(--shell-text-secondary, #aab5c2); font-size: 10px; line-height: 1.5; }
+.market-quote[data-freshness="stale"] .market-quote__receipt > span,
+.market-quote[data-freshness="unknown"] .market-quote__receipt > span { color: var(--shell-warning, #d7a548); }
+.market-quote-disclosure { min-width: 0; border: 0; border-radius: 8px; }
+.market-quote-disclosure > summary { display: flex; min-height: 44px; align-items: center; justify-content: space-between; gap: 10px; padding: 0 4px; cursor: pointer; color: var(--shell-text-secondary, #aab5c2); font-size: 11px; list-style: none; }
+.market-quote-disclosure > summary::-webkit-details-marker { display: none; }
+.market-quote-disclosure > summary > span:last-child::after { content: ' +'; color: var(--shell-green, #37b878); font-size: 14px; }
+.market-quote-disclosure[open] > summary > span:last-child::after { content: ' −'; }
+.market-quote-disclosure > summary:focus-visible,
+.predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card .details-button:focus-visible { outline: 2px solid var(--shell-green, #37b878); outline-offset: 3px; }
+@media (max-width: 1000px) {
+  .predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas: "time result" "teams teams" "market market" "pick sp" "action action";
+    gap: 16px 20px; padding: 20px;
+  }
+  .predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card .team-stack { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card > .is-sp { text-align: right; }
+}
+@media (max-width: 560px) {
+  .predictions-v4.predictions-compact { gap: 16px; }
+  .predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card { padding: 16px; gap: 16px 12px; border-radius: 12px; }
+  .predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card .team-stack { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card .team-name { font-size: 16px; }
+  .predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card .details-button { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .predictions-v4.predictions-compact .compact-match-row.match-row.matchday-card { transition: none; }
+}
