@@ -1,0 +1,19 @@
+[Unit]
+Description=Unattended official betting-day prematch API to PostgreSQL
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=football
+Group=football
+WorkingDirectory=/opt/football-predict
+EnvironmentFile=/etc/football-predict/env
+ExecStart=/opt/node-v22.22.1/bin/node /opt/football-predict/scripts/syncDailyPrematchApi.cjs
+TimeoutStartSec=450
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/football-predict /opt/football-predict/public/data
+UMask=0077

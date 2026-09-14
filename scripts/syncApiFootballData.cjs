@@ -920,6 +920,16 @@ const apiGet = (cache, endpoint, params = {}, requestBudget = createRequestBudge
         reject(new Error(`${endpoint} returned invalid JSON`));
         return;
       }
+      // Optional private receipt spool for the PostgreSQL daily collector.
+      // Account responses and authentication headers never enter the spool.
+      if (process.env.API_FOOTBALL_RECEIPTS_FILE && ["/fixtures", "/injuries", "/fixtures/lineups"].includes(endpoint)) {
+        try {
+          fs.appendFileSync(process.env.API_FOOTBALL_RECEIPTS_FILE, JSON.stringify({
+            provider: "api-football", endpoint, query: params, httpStatus: res.statusCode,
+            receivedAt: nowIso(), payload, sha256: sha256(JSON.stringify(payload)), predictionEligible: false,
+          }) + "\n", { mode: 0o600 });
+        } catch (error) { reject(error); return; }
+      }
       const apiErrors = formatApiErrors(payload.errors);
       if (apiErrors.length) {
         const error = new Error(`${endpoint} API error: ${apiErrors.join("; ")}`);
@@ -2264,7 +2274,7 @@ const main = async () => {
     stats.callsThisSync = requestBudget.attempts;
 
     const referenceApi = require('../collectors/leisu-prematch/api-football-reference.cjs');
-    const referenceFile = path.join(SERVER_STORE_DIR, 'api-football-prematch-evidence.json');
+    const referenceFile = process.env.API_FOOTBALL_REFERENCE_FILE || path.join(SERVER_STORE_DIR, 'api-football-prematch-evidence.json');
     const reference = referenceApi.mergeReferenceExports(
       referenceApi.buildReferenceExport(matches, cache, verifiedMappingSet),
       readJsonFile(referenceFile, null), matches);

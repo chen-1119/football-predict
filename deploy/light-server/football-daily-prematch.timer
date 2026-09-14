@@ -1,0 +1,11 @@
+[Unit]
+Description=Check prematch API collection every 30 minutes
+
+[Timer]
+OnCalendar=*-*-* *:00,30:00 Asia/Shanghai
+Persistent=true
+RandomizedDelaySec=10
+Unit=football-daily-prematch.service
+
+[Install]
+WantedBy=timers.target
