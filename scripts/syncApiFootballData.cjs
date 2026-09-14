@@ -225,6 +225,12 @@ const LEAGUE_ALIASES = {
   // leagueNameEn. Do not rely on an English field or shorthand being present.
   "西班牙甲级联赛": ["la liga"],
   "意大利甲级联赛": ["serie a"],
+  "芬兰超级联赛": ["veikkausliiga"],
+  "瑞典超级联赛": ["allsvenskan"],
+  "挪威超级联赛": ["eliteserien"],
+  "亚洲冠军精英联赛": ["afc champions league", "afc champions league elite"],
+  "法国乙级联赛": ["ligue 2"],
+  "葡萄牙超级联赛": ["primeira liga"],
   "\u56fd\u9645\u8d5b": ["friendly", "friendlies", "international"],
   "\u4e16\u754c\u676f": ["world cup", "fifa world cup"],
   "\u4e16\u9884\u8d5b": ["world cup qualification", "world cup qualifiers"],
@@ -349,7 +355,8 @@ const credentialFingerprintFor = (key) => (
   key ? sha256(`api-football-credential-v1:${key}`).slice(0, 20) : null
 );
 
-const statusRefreshMinutesFor = (status) => (
+const isMinuteRateLimit = value => /per[- ]minute|minute request limit/i.test(String(value?.message || value || ''));
+const statusRefreshMinutesFor = (status) => isMinuteRateLimit(status?.reason) ? 1 : (
   status?.suspended === true || status?.blockers?.includes?.("account-suspended")
     ? SUSPENSION_PROBE_MINUTES
     : STATUS_REFRESH_MINUTES
@@ -643,6 +650,7 @@ const fixtureAccessSkipReason = (cache, date) => {
 
 const isBulkIdsUnsupportedError = (error) => {
   const message = error?.message || String(error || "");
+  if (isMinuteRateLimit(message)) return false;
   return /\/injuries/i.test(message)
     && /\bids\b|access|forbidden|plan|subscription|parameter/i.test(message)
     && /do not have access|not have access|forbidden|plan|subscription|not allowed|invalid.*ids|ids.*invalid/i.test(message);
@@ -650,6 +658,7 @@ const isBulkIdsUnsupportedError = (error) => {
 
 const rememberInjuryAccessError = (cache, error, mode = "fixture") => {
   const message = error?.message || String(error);
+  if (isMinuteRateLimit(message)) return;
   if (!/do not have access|not have access|forbidden|plan|subscription|not allowed|invalid.*ids|ids.*invalid/i.test(message)) return;
   const previous = cache.apiAccess?.injuries || {};
   const updatedAt = nowIso();
@@ -675,6 +684,9 @@ const injuryAccessSkipReason = (cache) => {
   const access = cache.apiAccess?.injuries;
   if (!access || !isFresh(access.updatedAt, ACCESS_ERROR_REFRESH_MINUTES)) return "";
   if (!access.fixtureUnsupported) return "";
+  // Earlier versions mistook the rate-limit text's "upgrade your plan" for
+  // denial of this endpoint. A minute limit is handled by account backoff.
+  if (isMinuteRateLimit(access.reason)) return "";
   return access.reason || "API-Football injuries skipped because per-fixture access is unavailable.";
 };
 
@@ -775,13 +787,14 @@ const rememberGlobalAccountError = (cache, error, statusCode = null) => {
   const checkedAt = nowIso();
   const message = error?.message || String(error);
   const quotaUnavailable = Number(statusCode) === 429 || /quota|rate limit|too many requests|daily.*limit/i.test(message);
+  const minuteLimit = isMinuteRateLimit(message);
   cache.apiAccess = {
     ...(cache.apiAccess || {}),
     status: {
       checkedAt,
       eligible: false,
       blocked: true,
-      blockers: [quotaUnavailable ? "provider-quota-unavailable" : "account-suspended"],
+      blockers: [minuteLimit ? "provider-minute-rate-limit" : quotaUnavailable ? "provider-quota-unavailable" : "account-suspended"],
       reason: message,
       suspended: !quotaUnavailable,
       active: null,
@@ -789,7 +802,7 @@ const rememberGlobalAccountError = (cache, error, statusCode = null) => {
       quota: {
         current: null,
         dailyLimit: null,
-        remaining: quotaUnavailable ? 0 : null
+        remaining: minuteLimit ? null : quotaUnavailable ? 0 : null
       },
       rateLimit: {}
     }
@@ -864,6 +877,7 @@ const reserveRequestAttempt = (cache, requestBudget, endpoint) => {
   return budget;
 };
 
+let lastRequestStartedAt = 0;
 const apiGet = (cache, endpoint, params = {}, requestBudget = createRequestBudget()) => new Promise((resolve, reject) => {
   ensureLedgerDate(cache);
   if (endpoint !== "/status") {
@@ -886,6 +900,11 @@ const apiGet = (cache, endpoint, params = {}, requestBudget = createRequestBudge
     reject(error);
     return;
   }
+
+  const interval = Math.max(0, Math.min(30000, Number(process.env.API_FOOTBALL_MIN_REQUEST_INTERVAL_MS || 0)));
+  const delay = interval - (Date.now() - lastRequestStartedAt);
+  if (delay > 0) sleepMs(delay);
+  lastRequestStartedAt = Date.now();
 
   const req = https.request(url, {
     method: "GET",
@@ -919,6 +938,16 @@ const apiGet = (cache, endpoint, params = {}, requestBudget = createRequestBudge
       if (!payload) {
         reject(new Error(`${endpoint} returned invalid JSON`));
         return;
+      }
+      // Optional private receipt spool for the PostgreSQL daily collector.
+      // Account responses and authentication headers never enter the spool.
+      if (process.env.API_FOOTBALL_RECEIPTS_FILE && ["/fixtures", "/injuries", "/fixtures/lineups"].includes(endpoint)) {
+        try {
+          fs.appendFileSync(process.env.API_FOOTBALL_RECEIPTS_FILE, JSON.stringify({
+            provider: "api-football", endpoint, query: params, httpStatus: res.statusCode,
+            receivedAt: nowIso(), payload, sha256: sha256(JSON.stringify(payload)), predictionEligible: false,
+          }) + "\n", { mode: 0o600 });
+        } catch (error) { reject(error); return; }
       }
       const apiErrors = formatApiErrors(payload.errors);
       if (apiErrors.length) {
@@ -1506,7 +1535,7 @@ const hasCachedBulkIdsRestriction = (cache) => {
 
 const buildInjuryRequestPlan = (cache, fixtureIds) => {
   const uniqueIds = uniq((fixtureIds || []).map(String));
-  if (hasCachedBulkIdsRestriction(cache)) {
+  if (process.env.API_FOOTBALL_INJURY_REQUEST_MODE === 'fixture' || hasCachedBulkIdsRestriction(cache)) {
     return uniqueIds.map((fixtureId) => ({
       mode: "fixture",
       endpoint: "/injuries",
@@ -2264,7 +2293,7 @@ const main = async () => {
     stats.callsThisSync = requestBudget.attempts;
 
     const referenceApi = require('../collectors/leisu-prematch/api-football-reference.cjs');
-    const referenceFile = path.join(SERVER_STORE_DIR, 'api-football-prematch-evidence.json');
+    const referenceFile = process.env.API_FOOTBALL_REFERENCE_FILE || path.join(SERVER_STORE_DIR, 'api-football-prematch-evidence.json');
     const reference = referenceApi.mergeReferenceExports(
       referenceApi.buildReferenceExport(matches, cache, verifiedMappingSet),
       readJsonFile(referenceFile, null), matches);
@@ -2332,6 +2361,7 @@ module.exports = {
   credentialFingerprintFor,
   confidenceForFixture,
   isBulkIdsUnsupportedError,
+  isMinuteRateLimit,
   fixtureAccessSkipReason,
   mappingVerificationState,
   rememberFixtureAccessError,
