@@ -4,6 +4,14 @@ const { officialRoster, dueMatches } = require('./syncDailyPrematchApi.cjs');
 const now = Date.parse('2026-09-14T02:00:00Z');
 const raw = { matchId: 123, businessDate: '2026-09-14', matchDate: '2026-09-15', matchTime: '03:00', matchStatus: 'Selling', homeTeamAllName: '利兹联', awayTeamAllName: '纽卡斯尔联', leagueAllName: '英格兰超级联赛', matchNumStr: '周一010' };
 const payload = rows => ({ success: true, value: { matchInfoList: [{ businessDate: '2026-09-14', subMatchList: rows }] } });
+test('published team IDs remain consistent with the existing entity registry', () => {
+ const { canonicalTeamId } = require('./syncDailyPrematchApi.cjs');
+ assert.equal(canonicalTeamId('国际米兰'), 'team_qdtac4');
+ assert.equal(canonicalTeamId('乌迪内斯'), 'team_koxf07');
+ const result = officialRoster(payload([{ ...raw, homeTeamId: 49 }]), ['2026-09-14']);
+ assert.equal(result[0].homeTeamId, canonicalTeamId('利兹联'));
+ assert.notEqual(result[0].homeTeamId, '49');
+});
 test('official betting day includes following morning and excludes another day', () => {
  const result = officialRoster(payload([raw]), ['2026-09-14']);
  assert.equal(result.length, 1); assert.equal(result[0].kickoffTime, '2026-09-15T03:00:00+08:00');
@@ -44,4 +52,13 @@ test('scoped aliases require both exact provider identity and the official compe
  assert.deepEqual(scopedTeamAliases({ ...match, leagueName: '瑞典超级联赛' }, 'home', fixture, ['veikkausliiga']), []);
  assert.deepEqual(scopedTeamAliases(match, 'home', { ...fixture, teams: { home: { id: 1165, name: 'Inter Turku' } } }, ['veikkausliiga']), []);
  assert.deepEqual(scopedTeamAliases(match, 'home', { ...fixture, teams: { home: { id: 1164, name: 'Inter Turku II' } } }, ['veikkausliiga']), []);
+});
+test('per-minute throttling is not a daily quota or unsupported bulk endpoint', () => {
+ const api = require('./syncApiFootballData.cjs');
+ const error = new Error('/injuries HTTP 429: You have reached your per-minute request limit. Upgrade your plan.');
+ assert.equal(api.isMinuteRateLimit(error), true);
+ assert.equal(api.isBulkIdsUnsupportedError(error), false);
+ assert.equal(api.statusRefreshMinutesFor({ reason: error.message }), 1);
+ assert.equal(api.isMinuteRateLimit('Daily request quota exceeded'), false);
+ assert.equal(api.isBulkIdsUnsupportedError(new Error('/injuries: Free plans do not have access to the Ids parameter.')), true);
 });

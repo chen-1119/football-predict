@@ -6,9 +6,16 @@ const { spawnSync } = require('node:child_process');
 const { beijingDay, validDay, selectDay } = require('../collectors/leisu-prematch/local-jingcai-scope.cjs');
 const contract = require('./sportteryEndpointContract.cjs');
 const root = path.resolve(__dirname, '..');
+const VERSION = 'daily-prematch-api-v2';
 const hash = value => crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const read = (file, fallback) => fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : fallback;
 const atomic = (file, value) => { fs.writeFileSync(file + '.next', JSON.stringify(value), { mode: 0o600 }); fs.renameSync(file + '.next', file); };
+// Same stable team identity as syncData's published match representation.
+function canonicalTeamId(name) {
+  let value = 2166136261;
+  for (const character of String(name || '').split('')) { value ^= character.charCodeAt(0); value = Math.imul(value, 16777619); }
+  return 'team_' + (value >>> 0).toString(36);
+}
 
 function officialRoster(payload, days) {
   if (payload?.success !== true || !Array.isArray(payload.value?.matchInfoList)) throw Error('Official roster response unavailable');
@@ -25,7 +32,7 @@ function officialRoster(payload, days) {
       const row = { id: `sporttery_${raw.matchId}`, sourceMatchId: String(raw.matchId), businessDate: day,
         matchNo: raw.matchNumStr, leagueName: raw.leagueAllName || raw.leagueAbbName,
         homeTeamName: raw.homeTeamAllName, awayTeamName: raw.awayTeamAllName,
-        homeTeamId: raw.homeTeamId, awayTeamId: raw.awayTeamId,
+        homeTeamId: canonicalTeamId(raw.homeTeamAllName), awayTeamId: canonicalTeamId(raw.awayTeamAllName),
         kickoffTime: kickoff, eventVersion: kickoff,
         status: raw.matchStatus === 'Selling' ? 'SCHEDULED' : 'UNAVAILABLE' };
       rows.push(row);
@@ -79,11 +86,11 @@ async function main() {
     if (process.argv.includes('--migrate')) { await client.query(fs.readFileSync(path.join(root, 'collectors/leisu-prematch/api-daily-schema.sql'), 'utf8')); console.log('Daily prematch tables ready in existing PostgreSQL'); return; }
     const now = Date.now(), startedAt = new Date(now).toISOString(), today = beijingDay(now);
     const last = read(path.join(dir, 'status.json'), {});
-    if (last.nextAttemptAt && Date.parse(last.nextAttemptAt) > now) { console.log(JSON.stringify({ state: 'backoff', nextAttemptAt: last.nextAttemptAt })); return; }
+    if (last.version === VERSION && last.nextAttemptAt && Date.parse(last.nextAttemptAt) > now) { console.log(JSON.stringify({ state: 'backoff', nextAttemptAt: last.nextAttemptAt })); return; }
     lock = await require('../server/syncLock.cjs').acquireSyncLock({ lockDir: path.join(store, 'locks/sync-enrichment-artifacts.lock'), owner: 'daily-prematch-api', source: 'scheduled-source-collection', waitMs: 5000 });
     if (!lock.acquired) { console.log(JSON.stringify({ state: 'writer-busy-retry-next-tick' })); return; }
     const runId = crypto.randomUUID(), job = path.join(dir, runId); fs.mkdirSync(job, { mode: 0o700 });
-    const summary = { version: 'daily-prematch-api-v1', runId, provider: 'api-football', startedAt, businessDate: today, predictionEligible: false, state: 'running', newReceipts: 0 };
+    const summary = { version: VERSION, runId, provider: 'api-football', startedAt, businessDate: today, predictionEligible: false, state: 'running', newReceipts: 0 };
     let matches = [], reference = { version: 'api-football-prematch-reference-v1', provider: 'api-football', predictionEligible: false, generatedAt: startedAt, items: [] }, receipts = [];
     try {
       const official = await fetchOfficial(); receipts.push(official);
@@ -97,7 +104,7 @@ async function main() {
       const cacheFile = path.join(root, 'public/data/api-football-cache.json');
       const aliasVersion = require('./apiFootballScopedAliases.cjs').VERSION;
       summary.aliasVersion = aliasVersion;
-      const before = read(cacheFile, {}), attempts = last.aliasVersion === aliasVersion ? read(path.join(dir, 'attempts.json'), {}) : {};
+      const before = read(cacheFile, {}), attempts = last.version === VERSION && last.aliasVersion === aliasVersion ? read(path.join(dir, 'attempts.json'), {}) : {};
       const candidates = dueMatches(matches, before, attempts, now);
       const consumed = before.requestLedger?.date === startedAt.slice(0, 10) ? Number(before.requestLedger.count || 0) : 0;
       const budget = Math.max(0, Math.min(16, 90 - consumed));
@@ -112,6 +119,7 @@ async function main() {
           env: { ...process.env, ENABLE_API_FOOTBALL_SYNC: '1', API_FOOTBALL_SYNC_MODE: 'shadow-enrichment',
             API_FOOTBALL_LIVE_SCORE_ENABLED: '0', API_FOOTBALL_ODDS_ENABLED: '0', API_FOOTBALL_LOOKBACK_HOURS: '0',
             API_FOOTBALL_STATUS_REFRESH_MINUTES: '360', API_FOOTBALL_INJURY_REFRESH_MINUTES: '360',
+            API_FOOTBALL_MIN_REQUEST_INTERVAL_MS: '7000', API_FOOTBALL_INJURY_REQUEST_MODE: 'fixture',
             API_FOOTBALL_LINEUP_LOOKAHEAD_MINUTES: '60', API_FOOTBALL_LINEUP_REFRESH_MINUTES: '30',
             API_FOOTBALL_MAX_CALLS_PER_SYNC: String(budget), API_FOOTBALL_CACHE_FILE: cacheFile,
             API_FOOTBALL_CURRENT_MATCHES_FILE: path.join(job, 'matches.json'), API_FOOTBALL_FALLBACK_MATCHES_FILE: path.join(job, 'matches.json'),
@@ -137,7 +145,7 @@ async function main() {
       summary.lineupTeams = reference.items.reduce((n, x) => n + (x.sections.lineup.data?.teams.length || 0), 0);
       summary.coverage = matches.map(m => { const item = reference.items.find(x => x.fixture.siteMatchId === m.id); return { id: m.id, businessDate: m.businessDate,
         home: m.homeTeamName, away: m.awayTeamName, kickoff: m.kickoffTime,
-        mapped: verified.has(m.id), injuries: item?.sections.injuries.status || 'missing', lineup: item?.sections.lineup.status || (Date.parse(m.kickoffTime) - now > 3600000 ? 'not-due' : 'missing') }; });
+        mapped: verified.has(m.id), injuries: item?.sections.injuries.status || 'missing', lineup: item?.sections.lineup.status === 'available' ? 'available' : (Date.parse(m.kickoffTime) - now > 3600000 ? 'not-due' : 'missing') }; });
       summary.dataComplete = matches.length > 0 && summary.coverage.every(m => m.injuries === 'available' && m.lineup === 'available');
       if (summary.state === 'completed' && summary.coverage.some(m => !m.mapped || m.injuries !== 'available' || m.lineup === 'missing')) summary.state = 'partial';
     } catch (error) {
@@ -154,11 +162,11 @@ async function main() {
       for (const [i, r] of receipts.entries()) await client.query('INSERT INTO football.prematch_source_receipts(run_id,ordinal,provider,endpoint,received_at,payload_sha256,receipt) VALUES($1,$2,$3,$4,$5,$6,$7)', [runId, i, r.provider, r.endpoint, r.receivedAt, r.sha256, r]);
       await client.query('COMMIT');
     } catch (error) { await client.query('ROLLBACK'); throw error; }
-    if (!['runtime-error', 'source-unavailable'].includes(summary.state)) atomic(path.join(store, 'api-football-prematch-evidence.json'), reference);
+    if (reference.items.length || !['runtime-error', 'source-unavailable'].includes(summary.state)) atomic(path.join(store, 'api-football-prematch-evidence.json'), reference);
     atomic(path.join(dir, 'status.json'), summary);
     console.log(JSON.stringify(summary));
     if (['runtime-error', 'source-unavailable'].includes(summary.state)) process.exitCode = 1;
   } finally { if (lock?.acquired) await lock.release(); await client.query('SELECT pg_advisory_unlock(68413922)').catch(() => {}); client.release(); await pool.end(); }
 }
-module.exports = { officialRoster, dueMatches };
+module.exports = { officialRoster, dueMatches, canonicalTeamId };
 if (require.main === module) main().catch(error => { console.error(JSON.stringify({ state: 'failed', code: error.code || 'COLLECTION_FAILED' })); process.exitCode = 1; });

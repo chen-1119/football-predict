@@ -355,7 +355,8 @@ const credentialFingerprintFor = (key) => (
   key ? sha256(`api-football-credential-v1:${key}`).slice(0, 20) : null
 );
 
-const statusRefreshMinutesFor = (status) => (
+const isMinuteRateLimit = value => /per[- ]minute|minute request limit/i.test(String(value?.message || value || ''));
+const statusRefreshMinutesFor = (status) => isMinuteRateLimit(status?.reason) ? 1 : (
   status?.suspended === true || status?.blockers?.includes?.("account-suspended")
     ? SUSPENSION_PROBE_MINUTES
     : STATUS_REFRESH_MINUTES
@@ -649,6 +650,7 @@ const fixtureAccessSkipReason = (cache, date) => {
 
 const isBulkIdsUnsupportedError = (error) => {
   const message = error?.message || String(error || "");
+  if (isMinuteRateLimit(message)) return false;
   return /\/injuries/i.test(message)
     && /\bids\b|access|forbidden|plan|subscription|parameter/i.test(message)
     && /do not have access|not have access|forbidden|plan|subscription|not allowed|invalid.*ids|ids.*invalid/i.test(message);
@@ -656,6 +658,7 @@ const isBulkIdsUnsupportedError = (error) => {
 
 const rememberInjuryAccessError = (cache, error, mode = "fixture") => {
   const message = error?.message || String(error);
+  if (isMinuteRateLimit(message)) return;
   if (!/do not have access|not have access|forbidden|plan|subscription|not allowed|invalid.*ids|ids.*invalid/i.test(message)) return;
   const previous = cache.apiAccess?.injuries || {};
   const updatedAt = nowIso();
@@ -681,6 +684,9 @@ const injuryAccessSkipReason = (cache) => {
   const access = cache.apiAccess?.injuries;
   if (!access || !isFresh(access.updatedAt, ACCESS_ERROR_REFRESH_MINUTES)) return "";
   if (!access.fixtureUnsupported) return "";
+  // Earlier versions mistook the rate-limit text's "upgrade your plan" for
+  // denial of this endpoint. A minute limit is handled by account backoff.
+  if (isMinuteRateLimit(access.reason)) return "";
   return access.reason || "API-Football injuries skipped because per-fixture access is unavailable.";
 };
 
@@ -781,13 +787,14 @@ const rememberGlobalAccountError = (cache, error, statusCode = null) => {
   const checkedAt = nowIso();
   const message = error?.message || String(error);
   const quotaUnavailable = Number(statusCode) === 429 || /quota|rate limit|too many requests|daily.*limit/i.test(message);
+  const minuteLimit = isMinuteRateLimit(message);
   cache.apiAccess = {
     ...(cache.apiAccess || {}),
     status: {
       checkedAt,
       eligible: false,
       blocked: true,
-      blockers: [quotaUnavailable ? "provider-quota-unavailable" : "account-suspended"],
+      blockers: [minuteLimit ? "provider-minute-rate-limit" : quotaUnavailable ? "provider-quota-unavailable" : "account-suspended"],
       reason: message,
       suspended: !quotaUnavailable,
       active: null,
@@ -795,7 +802,7 @@ const rememberGlobalAccountError = (cache, error, statusCode = null) => {
       quota: {
         current: null,
         dailyLimit: null,
-        remaining: quotaUnavailable ? 0 : null
+        remaining: minuteLimit ? null : quotaUnavailable ? 0 : null
       },
       rateLimit: {}
     }
@@ -870,6 +877,7 @@ const reserveRequestAttempt = (cache, requestBudget, endpoint) => {
   return budget;
 };
 
+let lastRequestStartedAt = 0;
 const apiGet = (cache, endpoint, params = {}, requestBudget = createRequestBudget()) => new Promise((resolve, reject) => {
   ensureLedgerDate(cache);
   if (endpoint !== "/status") {
@@ -892,6 +900,11 @@ const apiGet = (cache, endpoint, params = {}, requestBudget = createRequestBudge
     reject(error);
     return;
   }
+
+  const interval = Math.max(0, Math.min(30000, Number(process.env.API_FOOTBALL_MIN_REQUEST_INTERVAL_MS || 0)));
+  const delay = interval - (Date.now() - lastRequestStartedAt);
+  if (delay > 0) sleepMs(delay);
+  lastRequestStartedAt = Date.now();
 
   const req = https.request(url, {
     method: "GET",
@@ -1522,7 +1535,7 @@ const hasCachedBulkIdsRestriction = (cache) => {
 
 const buildInjuryRequestPlan = (cache, fixtureIds) => {
   const uniqueIds = uniq((fixtureIds || []).map(String));
-  if (hasCachedBulkIdsRestriction(cache)) {
+  if (process.env.API_FOOTBALL_INJURY_REQUEST_MODE === 'fixture' || hasCachedBulkIdsRestriction(cache)) {
     return uniqueIds.map((fixtureId) => ({
       mode: "fixture",
       endpoint: "/injuries",
@@ -2348,6 +2361,7 @@ module.exports = {
   credentialFingerprintFor,
   confidenceForFixture,
   isBulkIdsUnsupportedError,
+  isMinuteRateLimit,
   fixtureAccessSkipReason,
   mappingVerificationState,
   rememberFixtureAccessError,
