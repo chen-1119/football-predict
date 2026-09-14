@@ -377,6 +377,9 @@ interface TeamHistorySummary {
   bothScoreCount: number;
   over25Rate: number | null;
   bothScoreRate: number | null;
+  goalsFor: number;
+  goalsAgainst: number;
+  cleanSheets: number;
 }
 
 interface HeadToHeadSummary {
@@ -943,6 +946,9 @@ const buildTeamHistory = (
     losses,
     over25Count: over25,
     bothScoreCount: bothScore,
+    goalsFor: allRows.reduce((sum, row) => sum + row.ourScore, 0),
+    goalsAgainst: allRows.reduce((sum, row) => sum + row.oppScore, 0),
+    cleanSheets: allRows.filter(row => row.oppScore === 0).length,
     over25Rate: hasRateSample ? Math.round((over25 / allRows.length) * 100) : null,
     bothScoreRate: hasRateSample ? Math.round((bothScore / allRows.length) * 100) : null
   };
@@ -1021,6 +1027,9 @@ const summarizeHistoryRows = (rows: TeamHistoryResult[]): TeamHistorySummary => 
     losses,
     over25Count: over25,
     bothScoreCount: bothScore,
+    goalsFor: rows.reduce((sum, row) => sum + row.ourScore, 0),
+    goalsAgainst: rows.reduce((sum, row) => sum + row.oppScore, 0),
+    cleanSheets: rows.filter(row => row.oppScore === 0).length,
     over25Rate: hasRateSample ? Math.round((over25 / rows.length) * 100) : null,
     bothScoreRate: hasRateSample ? Math.round((bothScore / rows.length) * 100) : null
   };
@@ -2361,6 +2370,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
   const verifiedTeamStatLabels = language === 'zh'
     ? ['控球率', '射门', '射正', '角球', '越位', '犯规', '黄牌', '红牌']
     : ['Possession', 'Shots', 'Shots on target', 'Corners', 'Offsides', 'Fouls', 'Yellow cards', 'Red cards'];
+  const observedStatsNotStarted = !isVoid && match.status === 'SCHEDULED'
+    && Number.isFinite(Date.parse(match.kickoffTime)) && nowMs < Date.parse(match.kickoffTime);
   const dataGapLabels = ((preMatchQuality?.missing?.length ? preMatchQuality.missing : dataGapSignal?.missing) || [])
     .slice(0, 3)
     .map((item) => localizedSignalText(item))
@@ -2745,10 +2756,10 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
   };
 
   const renderFormSummaryCard = (teamName: string, teamColor: string, summary: TeamHistorySummary) => (
-    <div className="form-summary-card">
+    <div className="form-summary-card" data-testid="historical-score-summary">
       <h4>
         <span style={{ backgroundColor: teamColor }} />
-        {teamName} {language === 'zh' ? '近一年官方赛果' : 'Last-Year Official Results'}
+        {teamName} {language === 'zh' ? '历史赛果统计' : 'Historical result statistics'}
       </h4>
       <div className="form-stat-grid">
         <div className="form-stat-tile">
@@ -2765,6 +2776,21 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
           <span>{language === 'zh' ? '双方进球率' : 'BTTS'}</span>
           <strong>{formatRate(summary.bothScoreRate)}</strong>
           <em>{formatRateNote(summary.bothScoreCount, summary.sampleSize)}</em>
+        </div>
+        <div className="form-stat-tile" data-stat="goals-for">
+          <span>{language === 'zh' ? '场均进球' : 'Goals scored / match'}</span>
+          <strong>{summary.sampleSize ? (summary.goalsFor / summary.sampleSize).toFixed(2) : '--'}</strong>
+          <em>{summary.sampleSize ? (language === 'zh' ? `${summary.goalsFor} 球 / ${summary.sampleSize} 场` : `${summary.goalsFor} goals / ${summary.sampleSize} matches`) : (language === 'zh' ? '暂无已完场样本' : 'No finished-match sample')}</em>
+        </div>
+        <div className="form-stat-tile" data-stat="goals-against">
+          <span>{language === 'zh' ? '场均失球' : 'Goals conceded / match'}</span>
+          <strong>{summary.sampleSize ? (summary.goalsAgainst / summary.sampleSize).toFixed(2) : '--'}</strong>
+          <em>{summary.sampleSize ? (language === 'zh' ? `${summary.goalsAgainst} 球 / ${summary.sampleSize} 场` : `${summary.goalsAgainst} goals / ${summary.sampleSize} matches`) : (language === 'zh' ? '暂无已完场样本' : 'No finished-match sample')}</em>
+        </div>
+        <div className="form-stat-tile" data-stat="clean-sheets">
+          <span>{language === 'zh' ? '零封场次' : 'Clean sheets'}</span>
+          <strong>{summary.sampleSize ? summary.cleanSheets : '--'}</strong>
+          <em>{summary.sampleSize ? (language === 'zh' ? `${summary.cleanSheets}/${summary.sampleSize} 场未失球` : `${summary.cleanSheets}/${summary.sampleSize} matches without conceding`) : (language === 'zh' ? '暂无已完场样本' : 'No finished-match sample')}</em>
         </div>
       </div>
       <p>
@@ -4190,8 +4216,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
 
             <div style={{ padding: '0.85rem', borderRadius: '8px', border: '1px solid hsl(var(--accent) / 0.28)', background: 'hsl(var(--accent) / 0.06)', color: 'hsl(var(--text-secondary))', fontSize: '0.82rem', lineHeight: 1.55 }}>
               {language === 'zh'
-                ? '下列数值只来自带版本和来源的赛前模型输出，不是球队已经发生的控球、射门或牌数事实。随机/模拟占位统计已停止展示。'
-                : 'The values below come only from versioned pre-match model output. They are not observed possession, shot or card facts; random/simulated placeholders are hidden.'}
+                ? '模型进球期望用于描述赛前预测。两队已经发生的比赛表现，请查看下方带样本数量的历史赛果统计。'
+                : 'Expected goals here describe a pre-match prediction. See the historical result statistics below for past performance and sample counts.'}
             </div>
 
             {modelEstimateRows.length > 0 ? (
@@ -4229,24 +4255,14 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
               </div>
             )}
 
-            <div style={{ borderTop: '1px solid hsl(var(--border))', paddingTop: '1rem' }}>
-              <h4 style={{ fontSize: '0.95rem', fontWeight: 750 }}>
-                {language === 'zh' ? '可核验的真实球队统计' : 'Verified Observed Team Stats'}
-              </h4>
-              <p style={{ margin: '0.35rem 0 0.75rem', color: 'hsl(var(--text-secondary))', fontSize: '0.8rem', lineHeight: 1.5 }}>
-                {language === 'zh'
-                  ? '当前数据源没有提供可核验的主客队拆分统计，以下字段统一显示缺失，不使用模拟值补齐。'
-                  : 'The current source has no verified home/away split for these fields. Missing values stay missing and are never filled with simulations.'}
-              </p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.55rem' }}>
-                {verifiedTeamStatLabels.map((label) => (
-                  <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: '0.65rem', padding: '0.65rem 0.75rem', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '0.78rem' }}>
-                    <span style={{ color: 'hsl(var(--text-secondary))' }}>{label}</span>
-                    <strong style={{ color: 'hsl(var(--text-muted))' }}>{language === 'zh' ? '数据缺失' : 'Missing'}</strong>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <section className="match-stat-availability" data-testid="match-stat-availability" data-state={isVoid ? 'void' : observedStatsNotStarted ? 'not-started' : 'not-collected'} aria-labelledby="match-stat-availability-heading">
+              <header><h4 id="match-stat-availability-heading">{language === 'zh' ? '本场实况统计' : 'Statistics from this match'}</h4><span>{isVoid ? (language === 'zh' ? '赛事已取消' : 'Match cancelled') : observedStatsNotStarted ? (language === 'zh' ? '未开赛 · 尚未产生' : 'Not started · not yet generated') : (language === 'zh' ? '数据通道尚未接入' : 'Statistics feed not connected')}</span></header>
+              <p>{isVoid ? (language === 'zh' ? '本场已取消，不等待产生实况统计。可继续查看两队过往比赛记录。' : 'This fixture is cancelled. Historical team records remain available below.') : observedStatsNotStarted
+                ? (language === 'zh' ? '这场比赛尚未开始，控球、射门、角球和牌数等本场统计尚未产生，不属于数据丢失。赛前请参考下方两队已完场比赛的统计。' : 'This match has not started, so possession, shots, corners and cards have not been generated. Use the historical team statistics below for pre-match analysis.')
+                : (language === 'zh' ? '当前采集通道提供赛程、赔率、赛果及部分赛前资料，尚未接入本场主客队实况统计。这里没有可核验数值，不能按 0 解读。' : 'The current feeds provide fixtures, odds, results and some pre-match data. No verified home/away statistics from this match have been connected; absence does not mean zero.')}</p>
+              <div className="match-stat-availability__fields" aria-label={language === 'zh' ? '本场统计字段范围' : 'Match statistics fields'}>{verifiedTeamStatLabels.map(stat => <span key={stat}>{stat}</span>)}</div>
+              <a href="#historical-score-statistics">{language === 'zh' ? '查看已有历史赛果统计 ↓' : 'View available historical statistics ↓'}</a>
+            </section>
             {dataGapSignal && (
               <div style={{ padding: '0.85rem', borderRadius: '8px', border: '1px solid hsl(var(--border))', background: 'hsl(var(--border) / 0.22)', color: 'hsl(var(--text-secondary))', fontSize: '0.82rem', lineHeight: 1.55 }}>
                 <strong style={{ color: 'hsl(var(--text-primary))' }}>
@@ -4264,7 +4280,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
 
         {/* 历史与复盘：近期战绩 */}
         {activeTab === 'history' && (
-          <div className="form-history-stack">
+          <div className="form-history-stack" id="historical-score-statistics">
             <div className="form-summary-grid">
               {renderFormSummaryCard(homeTeam.shortName[language], homeTeam.color, homeHistory)}
               {renderFormSummaryCard(awayTeam.shortName[language], awayTeam.color, awayHistory)}

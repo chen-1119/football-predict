@@ -70,6 +70,16 @@
 }
 
 /* Scope the visual hierarchy to the detail page; publication semantics stay server-owned. */
+.match-stat-availability { border: 1px solid #354859; border-radius: 12px; background: #111b25; padding: 18px; }
+.match-stat-availability header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+.match-stat-availability h4 { font-size: 16px; font-weight: 700; }
+.match-stat-availability header > span { font-size: 12px; color: #b5c9df; padding: 5px 9px; border: 1px solid #3a5269; border-radius: 6px; background: #203043; }
+.match-stat-availability p { margin: 12px 0; color: #aab8c7; font-size: 13px; line-height: 1.8; }
+.match-stat-availability__fields { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+.match-stat-availability__fields > span { padding: 5px 10px; border: 1px solid #2f4153; border-radius: 6px; color: #99aec3; font-size: 12px; white-space: nowrap; }
+.match-stat-availability a { display: inline-block; font-size: 13px; color: #9dcaef; padding: 6px 0; }
+.match-stat-availability a:focus-visible { outline: 2px solid #9dcaef; outline-offset: 3px; }
+#historical-score-statistics { scroll-margin-top: 180px; }
 .match-detail-v4__cockpit { --pick-accent: #9bbce0; }
 .match-detail-v4__cockpit[data-recommendation-track="formal"] { --pick-accent: #dfbd73; }
 .match-detail-v4__cockpit[data-recommendation-track="live"] { --pick-accent: #6bcca7; }
