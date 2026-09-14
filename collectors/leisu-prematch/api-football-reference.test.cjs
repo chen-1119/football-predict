@@ -57,4 +57,15 @@ test('authenticated reader can show independent reference content while original
   assert.equal(result.status, 'ok'); assert.equal(result.collection.sourceHttpStatus, 405);
   assert.equal(result.provider, 'api-football'); assert.equal(result.predictionEligible, false);
   assert.ok(!/providerFixtureId|https?:|fixtureMap|provenance/.test(JSON.stringify(result)));
+  await fs.mkdir(path.join(dir, 'daily-prematch-api'));
+  await fs.writeFile(path.join(dir, 'daily-prematch-api/status.json'), JSON.stringify({ version: 'daily-prematch-api-v2', provider: 'api-football', predictionEligible: false,
+    state: 'partial', startedAt: new Date(now - 30000).toISOString(), completedAt: new Date(now).toISOString(), rosterReceivedAt: new Date(now).toISOString(), matches: 11, referenceMatches: 7, dataComplete: false }));
+  const updated = await read(match.id);
+  assert.equal(updated.collection.provider, 'api-football');
+  assert.equal(updated.collection.state, 'partial');
+  assert.equal(updated.collection.sourceHttpStatus, null);
+  assert.equal(updated.collection.fixtureState, 'available');
+  assert.equal(updated.collection.statusFresh, true);
+  assert.equal(updated.collection.strategy.checkMinutes, 30);
+  assert.equal(updated.collection.dataComplete, false);
 });
