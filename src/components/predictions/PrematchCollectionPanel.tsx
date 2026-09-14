@@ -1,41 +1,48 @@
 import { useEffect, useState } from 'react';
 import { getAccessAuthHeaders } from '../../services/accessControl';
 import { buildApiUrl } from '../../services/runtimeUrls';
+import '../../styles/prematch-collection.css';
 
-type Player = { name: string; side: 'home' | 'away'; reason?: string; position?: string; expectedReturn?: string };
+type Player = { name: string; side?: 'home' | 'away'; reason?: string; position?: string; expectedReturn?: string; jersey?: string };
 type Section = { status: string; observedAt: string | null; lastAttemptAt: string | null; previousValue: boolean;
-  data: { players?: Player[]; teams?: Array<{ side: 'home' | 'away'; formation: string; starters: Player[]; substitutes: Player[] }> } | null };
+  data: { players?: Player[]; teams?: Array<{ side: 'home' | 'away'; formation: string; coach?: string; starters: Player[]; substitutes: Player[] }> } | null };
 type Evidence = { matchId: string; status: string; provider?: 'api-football'; predictionEligible: false; sections?: { injuries: Section; lineup: Section };
   collection?: { provider?: 'api-football'; enabled: boolean; state: string; statusFresh: boolean; lastRunAt: string | null;
     lastSuccessAt: string | null; nextAttemptAt: string | null; sourceState: string | null;
     sourceHttpStatus: number | null; fixtureState: string | null; eligibleMatches: number | null } };
 const labels: Record<string, [string, string]> = {
-  available: ['已采集', 'Collected'], source_empty: ['暂未公布', 'Not announced'],
-  missing: ['尚未采集', 'Not collected'], unavailable: ['采集结果暂不可用', 'Collection unavailable'],
-  stale: ['采集结果已过期', 'Collection expired'], disabled: ['采集尚未启用', 'Collection not enabled'],
-  ineligible: ['不在当前竞彩日的赛前采集范围', 'Outside the current betting-day pre-match window'],
-  partial: ['本轮完成，部分资料暂缺', 'Run completed with missing data'],
-  blocked: ['采集通道访问受限', 'Collection access restricted'], login_required: ['采集会话需更新', 'Collection session expired'],
-  conflict: ['比赛身份待核对', 'Match identity needs checking'], parse_error: ['数据解析失败', 'Data parsing failed'],
-  loading: ['读取中', 'Loading'], unauthorized: ['请先验证访问权限', 'Access verification required'],
-  'fixture-stale': ['比赛输入快照已过期', 'Fixture snapshot expired'], 'fixture-unavailable': ['比赛输入暂不可用', 'Fixture input unavailable'],
-  'collection-paused': ['采集等待恢复', 'Collection awaiting recovery'], 'browser-unavailable': ['浏览器环境不可用', 'Browser unavailable'],
-  'source-unavailable': ['采集通道暂不可用', 'Collection source unavailable'], 'runtime-error': ['采集运行异常', 'Collection error'],
-  running: ['采集中', 'Collecting'], completed: ['本轮完成', 'Run completed'], 'no-due-tasks': ['本轮没有到期任务', 'No tasks due'],
-  'budget-exhausted': ['剩余任务下轮继续', 'Remaining tasks deferred'],
+  available: ['已有资料', 'Available'], source_empty: ['来源暂未提供', 'No source records'], missing: ['资料待补充', 'Awaiting data'],
+  unavailable: ['资料暂不可用', 'Unavailable'], stale: ['资料已过期', 'Expired'], disabled: ['采集尚未启用', 'Collection disabled'],
+  ineligible: ['不在赛前采集范围', 'Outside collection window'], partial: ['部分资料待补充', 'Partial coverage'],
+  blocked: ['来源访问受限', 'Source restricted'], login_required: ['采集会话需更新', 'Session expired'],
+  conflict: ['比赛身份待核对', 'Match identity unverified'], parse_error: ['来源数据解析失败', 'Source parsing failed'],
+  loading: ['正在读取资料', 'Loading data'], unauthorized: ['请先验证访问权限', 'Access verification required'],
+  'fixture-stale': ['比赛输入已过期', 'Fixture input expired'], 'fixture-unavailable': ['比赛输入暂不可用', 'Fixture unavailable'],
+  'collection-paused': ['采集等待恢复', 'Collection paused'], 'browser-unavailable': ['采集环境不可用', 'Collector unavailable'],
+  'source-unavailable': ['数据来源暂不可用', 'Source unavailable'], 'runtime-error': ['本轮采集异常', 'Collection error'],
+  running: ['正在采集', 'Collecting'], completed: ['本轮检查完成', 'Check completed'],
+  'no-due-tasks': ['本轮检查完成，等待更新窗口', 'Checked; awaiting refresh window'], 'budget-exhausted': ['剩余资料下轮补充', 'Remaining data deferred'],
 };
+const reasonLabels: Record<string, string> = {
+  'Achilles Tendon Injury': '跟腱伤情', 'Groin Injury': '腹股沟伤情', 'Knee Injury': '膝部伤情', 'Ankle Injury': '踝部伤情',
+  'Muscle Injury': '肌肉伤情', 'Hamstring Injury': '腿后肌伤情', 'Thigh Injury': '大腿伤情', 'Calf Injury': '小腿伤情',
+  'Foot Injury': '足部伤情', 'Back Injury': '背部伤情', 'Shoulder Injury': '肩部伤情', Illness: '身体不适',
+  Injury: '伤情未详述', Inactive: '未激活（来源标记）', Suspended: '停赛', 'Red Card': '红牌停赛',
+  'Yellow Cards': '累计黄牌停赛', Rest: '休整', 'Missing Fixture': '缺席（来源标记）',
+};
+const positions: Record<string, string> = { G: '门将', D: '后卫', M: '中场', F: '前锋', Goalkeeper: '门将', Defender: '后卫', Midfielder: '中场', Attacker: '前锋' };
 
-export function PrematchCollectionPanel({ matchId, language }: { matchId: string; language: 'zh' | 'en' }) {
+export function PrematchCollectionPanel({ matchId, language, homeName, awayName, kickoffTime }: {
+  matchId: string; language: 'zh' | 'en'; homeName?: string; awayName?: string; kickoffTime?: string;
+}) {
   const [result, setResult] = useState<Evidence | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
-  useEffect(() => {
-    const timer = setInterval(() => setRefreshTick(value => value + 1), 60000);
-    return () => clearInterval(timer);
-  }, []);
+  const [fetching, setFetching] = useState(false);
+  useEffect(() => { const timer = setInterval(() => setRefreshTick(value => value + 1), 60000); return () => clearInterval(timer); }, []);
   const evidence = result?.matchId === matchId ? result : null;
   useEffect(() => {
-    const controller = new AbortController();
-    let disposed = false;
+    const controller = new AbortController(); let disposed = false;
+    setFetching(true);
     const timer = setTimeout(() => controller.abort(), 10000);
     fetch(buildApiUrl(`/api/v1/matches/${encodeURIComponent(matchId)}/prematch-evidence`), {
       headers: getAccessAuthHeaders(), cache: 'no-store', signal: controller.signal,
@@ -43,39 +50,60 @@ export function PrematchCollectionPanel({ matchId, language }: { matchId: string
       if (!response.ok) throw new Error(response.status === 401 ? 'unauthorized' : 'unavailable');
       const value = await response.json() as Evidence;
       if (value.matchId !== matchId || value.predictionEligible !== false) throw new Error('unavailable');
-      if (!controller.signal.aborted) setResult(value);
+      if (!disposed && !controller.signal.aborted) setResult(value);
     }).catch(error => {
       if (!disposed) setResult({ matchId, status: error.message === 'unauthorized' ? 'unauthorized' : 'unavailable', predictionEligible: false });
-    }).finally(() => clearTimeout(timer));
+    }).finally(() => { clearTimeout(timer); if (!disposed) setFetching(false); });
     return () => { disposed = true; clearTimeout(timer); controller.abort(); };
   }, [matchId, refreshTick]);
-  const label = (status: string) => (labels[status] || labels.unavailable)[language === 'zh' ? 0 : 1];
-  const time = (value: string | null) => value && Number.isFinite(Date.parse(value))
-    ? new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-GB', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(Date.parse(value)) : '--';
-  return <section className="card captured-match-data" data-testid="prematch-collection" aria-live="polite">
-    <h3>{language === 'zh' ? '赛前采集资料' : 'Pre-match collection'}</h3>
-    <p>{language === 'zh' ? '按竞彩日采集，包含次日凌晨开赛的对应比赛。资料仅供参考，不计入正式推荐。' : 'Collected by official betting day, including its overnight fixtures. Reference information only.'}</p>
-    {evidence?.provider === 'api-football' && <p><strong>{language === 'zh' ? '资料来源：API-Football' : 'Source: API-Football'}</strong> · {language === 'zh' ? '按实际采集时间展示，不回写已冻结推荐。' : 'Shown with the actual collection time; frozen recommendations are unchanged.'}</p>}
-    {evidence?.collection && <div data-testid="prematch-scheduler-status">
-      <p><strong>{language === 'zh' ? (evidence.collection.enabled ? '定时采集已启用' : '定时采集未启用') : (evidence.collection.enabled ? 'Scheduled collection enabled' : 'Scheduled collection disabled')}</strong> · {label(evidence.collection.state)}</p>
-      {!evidence.collection.statusFresh && <p>{language === 'zh' ? '运行状态更新已延迟' : 'Scheduler status update delayed'}</p>}
-      <p>{evidence.collection.provider === 'api-football'
-        ? (language === 'zh' ? '服务器自动运行，无需网页登录。每 30 分钟检查；伤停每 6 小时更新；开赛前 60 分钟内补采阵容。' : 'Runs automatically on the server without browser login. Checks every 30 minutes; injuries every 6 hours; lineups within 60 minutes of kickoff.')
-        : (language === 'zh' ? '按来源计划检查，保留实际采集时间与缺失状态。' : 'Checks according to the source schedule, preserving receipt times and missing states.')}</p>
-      <p>{language === 'zh' ? '最近执行：' : 'Last run: '}{time(evidence.collection.lastRunAt)} · {language === 'zh' ? '下次取数：' : 'Next attempt: '}{time(evidence.collection.nextAttemptAt)}</p>
-      {evidence.collection.sourceState === 'blocked' && <p>{language === 'zh' ? '数据通道访问受限，保留已有数据并按间隔重试。' : 'Source access restricted; retaining existing data and retrying at the scheduled interval.'}</p>}
-      {evidence.collection.fixtureState === 'stale' && <p>{language === 'zh' ? '网站比赛输入快照已过期，等待更新后继续对应比赛。' : 'Website fixture snapshot expired; waiting for an updated match list.'}</p>}
-    </div>}
-    {evidence?.status !== 'ok' && <p>{label(evidence?.status || 'loading')}</p>}
-    {(['injuries', 'lineup'] as const).map(kind => {
-      const section = evidence?.sections?.[kind];
-      return <div className="captured-match-data__section" key={kind}>
-        <h4>{kind === 'injuries' ? (language === 'zh' ? '伤停' : 'Injuries') : (language === 'zh' ? '阵容' : 'Lineup')} · {label(section?.status || 'missing')}</h4>
-        <p>{language === 'zh' ? '采集时间（北京时间）：' : 'Collected (Beijing): '}{time(section?.observedAt || null)}</p>
-        {section?.previousValue && <p>{language === 'zh' ? '最近采集未成功，以下保留上次成功记录。' : 'Latest attempt failed; showing the last successful record.'}</p>}
-        {section?.data?.players?.map((player, i) => <p key={i}>{player.side === 'home' ? (language === 'zh' ? '主队' : 'Home') : (language === 'zh' ? '客队' : 'Away')} · {player.name} · {player.reason || '--'} · {player.expectedReturn || '--'}</p>)}
-        {section?.data?.teams?.map(team => <div key={team.side}><strong>{team.side === 'home' ? (language === 'zh' ? '主队' : 'Home') : (language === 'zh' ? '客队' : 'Away')} · {team.formation || '--'}</strong><p>{team.starters.map(player => player.name).join('、')}</p></div>)}
-      </div>;
-    })}
+  const zh = language === 'zh';
+  const label = (status: string) => (labels[status] || labels.unavailable)[zh ? 0 : 1];
+  const time = (value?: string | null) => value && Number.isFinite(Date.parse(value))
+    ? new Intl.DateTimeFormat(zh ? 'zh-CN' : 'en-GB', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(Date.parse(value)) : '—';
+  const sideName = (side: 'home' | 'away') => (side === 'home' ? homeName : awayName) || (side === 'home' ? (zh ? '主队' : 'Home') : (zh ? '客队' : 'Away'));
+  const injuries = evidence?.sections?.injuries, lineup = evidence?.sections?.lineup;
+  const players = injuries?.data?.players || [], teams = lineup?.data?.teams || [];
+  const observed = [injuries?.observedAt, lineup?.observedAt].filter((at): at is string => typeof at === 'string' && Number.isFinite(Date.parse(at))).sort();
+  const lineupWindow = kickoffTime && Number.isFinite(Date.parse(kickoffTime)) ? new Date(Date.parse(kickoffTime) - 3600000).toISOString() : null;
+  const beforeLineupWindow = lineupWindow && Date.now() < Date.parse(lineupWindow);
+  const collectingStopped = kickoffTime && Date.now() >= Date.parse(kickoffTime);
+  const position = (value?: string) => value ? (zh ? positions[value] || value : value) : '';
+  return <section className="card prematch-report" data-testid="prematch-collection" aria-labelledby={`prematch-heading-${matchId}`} aria-busy={fetching}>
+    <header className="prematch-report__head">
+      <div><span className="prematch-report__eyebrow">{zh ? '最新补充资料' : 'LATEST MATCH DATA'}</span><h3 id={`prematch-heading-${matchId}`}>{zh ? '伤停与比赛阵容' : 'Injuries & lineups'}</h3>
+        <p>{zh ? '查看本场实际采集的球员明细。新增资料仅供参考，推荐是否采用以决策记录为准。' : 'Collected player details for this match. Reference data; adoption is determined by the recorded decision.'}</p></div>
+      <button type="button" className="prematch-report__refresh" disabled={fetching} onClick={() => setRefreshTick(value => value + 1)}>{fetching ? (zh ? '读取中…' : 'Loading…') : (zh ? '刷新资料' : 'Refresh data')}</button>
+    </header>
+    <div className="prematch-report__metrics" aria-live="polite">
+      <div><span>{zh ? '伤停记录' : 'Injury records'}</span><strong>{evidence ? players.length : '—'}<small>{zh ? ' 条' : ' records'}</small></strong><p>{players.length ? (zh ? `主队 ${players.filter(p => p.side === 'home').length} · 客队 ${players.filter(p => p.side === 'away').length}` : `Home ${players.filter(p => p.side === 'home').length} · Away ${players.filter(p => p.side === 'away').length}`) : (evidence ? (zh ? '暂无可展示记录' : 'No records available') : label('loading'))}</p></div>
+      <div><span>{zh ? '确认首发' : 'Confirmed lineup'}</span><strong>{evidence ? teams.length : '—'}<small> / 2 {zh ? '队' : 'teams'}</small></strong><p>{teams.length ? (zh ? '首发与替补名单可查' : 'Starters and bench available') : beforeLineupWindow ? (zh ? '尚未到阵容采集窗口' : 'Awaiting lineup window') : (zh ? '等待来源提供名单' : 'Awaiting source lineup')}</p></div>
+      <div><span>{zh ? '资料采集时间 · 北京' : 'Data received · Beijing'}</span><strong className="prematch-report__time">{time(observed.at(-1))}</strong><p>{observed.length ? (zh ? '以实际收到资料的时间为准' : 'Actual data receipt time') : (zh ? '取得有效资料后显示' : 'Shown after data is received')}</p></div>
+    </div>
+    {evidence && !['ok', 'missing', 'unavailable'].includes(evidence.status) && <p className="prematch-report__notice" role="status">{label(evidence.status)}</p>}
+    {evidence?.status === 'unavailable' && <p className="prematch-report__notice" role="status">{zh ? '本场资料暂不可用，可刷新重试；这不代表球队没有伤停。' : 'Match data is unavailable. Retry to check; this does not confirm an injury-free squad.'}</p>}
+    <div className="prematch-report__section-head"><h4>{zh ? '伤停名单' : 'Injury list'}</h4><span>{label(injuries?.status || (evidence ? 'missing' : 'loading'))} · {time(injuries?.observedAt)}</span></div>
+    {injuries?.previousValue && <p className="prematch-report__notice">{zh ? '最近尝试未成功，以下为上次成功采集的记录。' : 'Latest attempt failed; these are the previous successful records.'}</p>}
+    <div className="prematch-report__teams">{(['home', 'away'] as const).map(side => {
+      const rows = players.filter(p => p.side === side);
+      return <section className="prematch-report__team" key={side} aria-label={`${sideName(side)} ${zh ? '伤停名单' : 'injury list'}`}>
+        <header><div><span className={`prematch-report__side is-${side}`}>{side === 'home' ? (zh ? '主' : 'H') : (zh ? '客' : 'A')}</span><h5>{sideName(side)}</h5></div><span>{rows.length} {zh ? '条记录' : 'records'}</span></header>
+        {rows.length ? <ul className="prematch-report__players">{rows.map((player, i) => <li key={`${player.name}-${i}`} data-testid="prematch-injury-row">
+          <div><strong>{player.name}</strong>{player.position && <small>{position(player.position)}</small>}</div>
+          <div><span className="prematch-report__reason">{player.reason ? (zh ? reasonLabels[player.reason] || player.reason : player.reason) : (zh ? '原因暂未提供' : 'Reason unavailable')}</span>
+            {zh && player.reason && reasonLabels[player.reason] && <small lang="en">{player.reason}</small>}
+            {player.expectedReturn && <small>{zh ? '预计回归：' : 'Expected return: '}{player.expectedReturn}</small>}</div>
+        </li>)}</ul> : <div className="prematch-report__empty"><strong>{evidence ? (zh ? '暂无可展示的伤停记录' : 'No injury records available') : label('loading')}</strong><p>{zh ? '尚未取得可核验记录，不代表全员健康或无人停赛。' : 'No verified records received; this does not confirm a fully available squad.'}</p></div>}
+      </section>;
+    })}</div>
+    <div className="prematch-report__section-head"><h4>{zh ? '首发与替补' : 'Starting XI & substitutes'}</h4><span>{teams.length ? label(lineup?.status || 'available') : (zh ? '名单待补充' : 'Awaiting lineup')} · {time(lineup?.observedAt)}</span></div>
+    {lineup?.previousValue && <p className="prematch-report__notice">{zh ? '最近阵容更新未成功，以下为上次成功采集的名单。' : 'Latest lineup update failed; showing the previous successful list.'}</p>}
+    {teams.length ? <div className="prematch-report__teams">{teams.map(team => <section className="prematch-report__team" key={team.side}>
+      <header><div><span className={`prematch-report__side is-${team.side}`}>{team.side === 'home' ? (zh ? '主' : 'H') : (zh ? '客' : 'A')}</span><h5>{sideName(team.side)}</h5></div><span>{team.formation || (zh ? '阵型未提供' : 'Formation unavailable')}</span></header>
+      {team.coach && <p className="prematch-report__coach">{zh ? '教练：' : 'Coach: '}{team.coach}</p>}
+      <ol className="prematch-report__lineup">{team.starters.map((p, i) => <li key={`${p.name}-${i}`}><span>{p.jersey || String(i + 1).padStart(2, '0')}</span><strong>{p.name}</strong><small>{position(p.position)}</small></li>)}</ol>
+      <details className="prematch-report__bench"><summary>{zh ? '替补名单' : 'Substitutes'} · {team.substitutes.length}</summary><ul>{team.substitutes.map((p, i) => <li key={`${p.name}-${i}`}><strong>{p.name}</strong><small>{position(p.position)}</small></li>)}</ul>{!team.substitutes.length && <p>{zh ? '来源暂未提供替补名单' : 'Source has not supplied a bench list'}</p>}</details>
+    </section>)}</div> : <div className="prematch-report__empty prematch-report__lineup-empty"><strong>{collectingStopped ? (zh ? '本场暂无已采集的赛前阵容' : 'No collected pre-match lineup') : beforeLineupWindow ? (zh ? '尚未到阵容采集窗口' : 'Lineup collection window has not opened') : (zh ? '等待来源提供首发名单' : 'Awaiting the source lineup')}</strong><p>{collectingStopped ? (zh ? '比赛已开赛，赛前采集停止；不补造首发名单。' : 'Kickoff has passed and pre-match collection has stopped.') : lineupWindow ? (zh ? `预计从 ${time(lineupWindow)} 起检查，每 30 分钟尝试一次；以来源实际公布为准。` : `Checks start from ${time(lineupWindow)}, then every 30 minutes, subject to source availability.`) : (zh ? '开赛前 60 分钟内检查，以来源实际公布为准。' : 'Checked within 60 minutes of kickoff, subject to source availability.')}</p></div>}
+    <footer className="prematch-report__footer"><span>{evidence?.provider === 'api-football' || evidence?.collection?.provider === 'api-football' ? 'API-Football' : (zh ? '赛前资料' : 'Pre-match data')}</span><p>{zh ? '球员姓名与原始原因保留来源写法。资料补充不改写已冻结推荐。' : 'Player names and original reasons follow the source. New data does not amend frozen picks.'}</p></footer>
+    {evidence?.collection && <details className="prematch-report__schedule" data-testid="prematch-scheduler-status"><summary>{zh ? '查看自动更新状态' : 'Automatic update status'} · {evidence.collection.enabled ? (zh ? '已启用' : 'Enabled') : (zh ? '未启用' : 'Disabled')}</summary><p>{label(evidence.collection.state)}{!evidence.collection.statusFresh && ` · ${zh ? '运行状态更新已延迟' : 'Status update delayed'}`}</p><dl><div><dt>{zh ? '最近检查' : 'Last check'}</dt><dd>{time(evidence.collection.lastRunAt)}</dd></div><div><dt>{zh ? '下次检查' : 'Next check'}</dt><dd>{time(evidence.collection.nextAttemptAt)}</dd></div></dl><p>{zh ? '按竞彩日包含次日凌晨比赛。每 30 分钟检查，伤停每 6 小时更新，阵容在开赛前 60 分钟内采集。检查时间不等于资料更新时间。' : 'Uses the official betting day including overnight fixtures. Checks every 30 minutes; injuries every 6 hours; lineups within 60 minutes of kickoff. Check time is separate from data receipt time.'}</p>{evidence.collection.sourceState === 'blocked' && <p>{label('blocked')}</p>}{evidence.collection.fixtureState === 'stale' && <p>{label('fixture-stale')}</p>}</details>}
   </section>;
 }
