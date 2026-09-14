@@ -2047,6 +2047,10 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
     ? getPredictionTipDisplay(primaryOutcomePrediction, language)
     : '--');
   const primaryOutcomeCode = isOutcomeTipCode(primaryOutcomePrediction?.tipCode) ? primaryOutcomePrediction.tipCode : undefined;
+  // Status is already visible in its own badge; keep the recorded direction intact.
+  const primaryOutcomeDisplayTitle = language === 'zh'
+    ? primaryOutcomeTitle.replace(/^(?:(?:参考推荐|动态证据参考|分析参考)\s+)+/, '')
+    : primaryOutcomeTitle;
   const primaryOutcomeIsHandicap = primaryOutcomePrediction?.oddsPoolCode === 'HHAD';
   const scoreBindingOutcomeCode = primaryOutcomeIsHandicap ? undefined : primaryOutcomeCode;
   const scoreDistributionRows = Array.isArray(probabilityModel?.scoreDistribution)
@@ -2943,7 +2947,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
       </div>
 
       {/* 3. 首屏决策驾驶舱：结论先于赔率与证据。兼容短视频导出脚本的既有类名。 */}
-      <section className="prediction-view-stack match-detail-v4__cockpit" data-view="summary" aria-labelledby="match-detail-decision-heading">
+      <section className="prediction-view-stack match-detail-v4__cockpit" data-view="summary" data-recommendation-track={isPredictionArchiveOnly || isArchivedPrimaryDirection || isArchivedLiveRecommendation ? 'archive' : isFormalPrimaryRecommendation ? 'formal' : isLivePrimaryRecommendation ? 'live' : isAnalysisReferenceDirection || isFiveHundredReferenceDirection ? 'reference' : 'watch'} aria-labelledby="match-detail-decision-heading">
             <h2 id="match-detail-decision-heading" className="sr-only">
               {language === 'zh' ? '本场决策结论' : 'Match decision'}
             </h2>
@@ -3008,7 +3012,11 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                         : (language === 'zh' ? '赛前观察' : 'Pre-match Watch')}</span>
                   <b>{isPredictionArchiveOnly ? (language === 'zh' ? '归档' : 'Archive') : recommendationActionLabel(primaryOutcomePrediction)}</b>
                 </div>
-                <strong className="recommendation-overview-main">{primaryOutcomeTitle}</strong>
+                <strong className="recommendation-overview-main">{primaryOutcomeDisplayTitle}</strong>
+                <div className="match-detail-v4__pick-facts" aria-label={language === 'zh' ? '方向与价格' : 'Market and price'}>
+                  <div><span>{language === 'zh' ? '分析玩法' : 'Market'}</span><strong>{displayText(publicRecommendationCopy.marketLabel)}</strong></div>
+                  <div><span>{language === 'zh' ? '本方向 SP' : 'Direction SP'}</span><strong>{displayText(primaryOddsLabel)}</strong></div>
+                </div>
                 <p>{displayText(isPublishedLiveAwaitingSettlement
                   ? publishedLiveSettlementReason
                   : isPreMatchRecordSettling
@@ -3181,6 +3189,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
         aria-labelledby={detailTabId(activeTab)}
         tabIndex={0}
       >
+        {(activeTab === 'overview' || activeTab === 'evidence') && (
+          <PrematchCollectionPanel matchId={match.id} language={language} homeName={homeTeam.name[language]} awayName={awayTeam.name[language]} kickoffTime={match.kickoffTime} />
+        )}
         {activeTab === 'overview' && (
           <div className="match-detail-v4__section-stack" data-section="overview">
 
@@ -3209,7 +3220,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                     : isArchivedPrimaryDirection
                       ? (language === 'zh' ? '赛前归档说明' : 'Archive Notes')
                       : (language === 'zh' ? '分析参考说明' : 'Analysis Reference Notes')}</span>
-                  <h3>{displayText(publicRecommendationCopy.title)}</h3>
+                  <h3>{language === 'zh' ? '推荐依据与风险' : 'Recommendation basis & risks'}</h3>
                   {publicRecommendationCopy.reasons.map((reason) => (
                     <p key={reason}>{displayText(reason)}</p>
                   ))}
@@ -3258,7 +3269,6 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
 
         {activeTab === 'evidence' && (
           <div className="match-detail-v4__section-stack" data-section="evidence">
-            <PrematchCollectionPanel matchId={match.id} language={language} />
             {matchesSavedCaptureIdentity(capturedData, match)
               && <CapturedMatchData capture={capturedData} language={language} />}
 
@@ -3266,9 +3276,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
               <div className="match-detail-v4__section-head">
                 <div>
                   <span className="review-kicker">{language === 'zh' ? '数据与分析' : 'Data & analysis'}</span>
-                  <h3 id="match-detail-data-analysis-heading">{language === 'zh' ? '本场数据完整度与时效' : 'Evidence completeness and freshness'}</h3>
+                  <h3 id="match-detail-data-analysis-heading">{language === 'zh' ? '推荐生成时的数据与依据' : 'Evidence at the recommendation decision'}</h3>
                 </div>
-                <span>{language === 'zh' ? '模型概率与已采集事实分别展示' : 'Model probability is separate from observed facts'}</span>
+                <span>{language === 'zh' ? '保留决策时点，最新补采资料见上方' : 'Decision-time record; latest collected data is shown above'}</span>
               </div>
               <RecommendationEvidenceFacts
                 match={match}
@@ -3278,8 +3288,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
               />
               <p className="match-detail-v4__data-analysis-note">
                 {language === 'zh'
-                  ? '保留数据时效、质量与缺失提示；确认首发、预计阵容和模型估计各按实际状态展示。'
-                  : 'Freshness, quality and missing-data notices are retained; confirmed lineups, projected rosters and model estimates remain distinct.'}
+                  ? '下面的缺项与分析对应推荐生成时点；后续补到的伤停、阵容在上方单独展示，不会自动改写这里的历史依据。'
+                  : 'Gaps and analysis below reflect the decision time. Subsequently collected injuries and lineups are shown above and do not automatically rewrite this record.'}
               </p>
             </section>
 

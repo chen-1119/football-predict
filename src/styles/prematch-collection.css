@@ -1,0 +1,99 @@
+.match-detail-v4 .prematch-report { padding: 24px; margin-bottom: 20px; border: 1px solid #304253; border-radius: 16px; background: #141d27; color: #eef3f8; }
+.prematch-report__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.prematch-report__eyebrow { color: #83b9ec; font-size: 12px; letter-spacing: .1em; font-weight: 700; }
+.prematch-report__head h3 { margin: 6px 0 8px; font-size: 23px; font-weight: 750; }
+.prematch-report p { color: #aab8c7; font-size: 13px; line-height: 1.8; margin: 0; }
+.prematch-report__refresh { flex-shrink: 0; min-height: 40px; padding: 8px 14px; border-radius: 8px; border: 1px solid #40576c; background: #1c2a37; color: #e4edf7; font-size: 13px; cursor: pointer; }
+.prematch-report__refresh:hover { background: #263d50; }
+.prematch-report__refresh:disabled { opacity: .65; cursor: wait; }
+.prematch-report button:focus-visible, .prematch-report summary:focus-visible { outline: 2px solid #89baf1; outline-offset: 4px; }
+.prematch-report__metrics { display: grid; grid-template-columns: 1fr 1fr 1.2fr; margin: 22px 0 26px; border: 1px solid #2e3e4e; border-radius: 12px; background: #101821; }
+.prematch-report__metrics > div { min-width: 0; padding: 16px 20px; }
+.prematch-report__metrics > div + div { border-left: 1px solid #2e3e4e; }
+.prematch-report__metrics > div > span { color: #aab8c7; font-size: 12px; }
+.prematch-report__metrics strong { display: block; color: #eef3f8; font-size: 27px; font-weight: 750; margin: 5px 0; font-variant-numeric: tabular-nums; }
+.prematch-report__metrics strong small { color: #aab8c7; font-size: 12px; font-weight: 500; }
+.prematch-report__metrics .prematch-report__time { font-size: 21px; line-height: 1.9; }
+.prematch-report__metrics p { font-size: 12px; }
+.prematch-report__section-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 22px 0 12px; }
+.prematch-report__section-head h4 { font-size: 16px; font-weight: 700; }
+.prematch-report__section-head > span { color: #9faec0; font-size: 12px; text-align: right; }
+.prematch-report__teams { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.prematch-report__team { min-width: 0; border: 1px solid #2d3e4e; border-radius: 12px; background: #111922; overflow: hidden; }
+.prematch-report__team > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px; border-bottom: 1px solid #2a3948; background: #1a2632; }
+.prematch-report__team > header > div { display: flex; align-items: center; min-width: 0; gap: 9px; }
+.prematch-report__team h5 { font-size: 15px; font-weight: 650; overflow-wrap: anywhere; }
+.prematch-report__team > header > span { flex-shrink: 0; color: #aab8c7; font-size: 12px; }
+.prematch-report__side { display: inline-grid; place-items: center; flex-shrink: 0; width: 27px; height: 27px; border-radius: 7px; font-size: 12px; background: #243f56; color: #a8d4fa; }
+.prematch-report__side.is-away { background: #37334b; color: #c9bced; }
+.prematch-report__players { list-style: none; margin: 0; padding: 0 16px; }
+.prematch-report__players li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); align-items: start; gap: 12px; padding: 14px 0; }
+.prematch-report__players li + li { border-top: 1px solid #253342; }
+.prematch-report__players strong { font-size: 14px; font-weight: 650; color: #eef3f8; }
+.prematch-report__players small { display: block; font-size: 11px; margin-top: 5px; color: #91a2b4; }
+.prematch-report__players li > div { min-width: 0; overflow-wrap: anywhere; }
+.prematch-report__reason { color: #dec3a0; font-size: 13px; line-height: 1.5; }
+.prematch-report__empty { padding: 24px 18px; }
+.prematch-report__empty > strong { display: block; color: #cad5e0; font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.prematch-report__lineup-empty { background: #111922; border: 1px dashed #3a4a5b; border-radius: 10px; }
+.prematch-report__notice { padding: 12px 14px; border-left: 2px solid #b89d70; background: #262722; margin-bottom: 14px !important; }
+.prematch-report__lineup { list-style: none; padding: 8px 16px; margin: 0; }
+.prematch-report__lineup li { display: grid; grid-template-columns: 25px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 9px 0; font-size: 13px; }
+.prematch-report__lineup li > span, .prematch-report__lineup small { color: #9faec0; font-variant-numeric: tabular-nums; }
+.prematch-report__lineup strong { font-weight: 550; overflow-wrap: anywhere; }
+.prematch-report__bench { border-top: 1px solid #2a3948; padding: 14px 16px; }
+.prematch-report summary { cursor: pointer; color: #b9c9da; font-size: 13px; min-height: 28px; }
+.prematch-report__bench ul { list-style: none; margin: 8px 0 0; padding: 0; }
+.prematch-report__bench li { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; font-size: 13px; }
+.prematch-report__bench strong { font-weight: 500; overflow-wrap: anywhere; }
+.prematch-report__bench small { color: #9faec0; }
+.prematch-report__coach { padding: 10px 16px 0; }
+.prematch-report__footer { display: flex; align-items: baseline; gap: 12px; margin-top: 20px; }
+.prematch-report__footer > span { flex-shrink: 0; font-size: 11px; letter-spacing: .03em; color: #a2c5e5; border: 1px solid #354c61; padding: 3px 7px; border-radius: 5px; }
+.prematch-report__footer p { font-size: 12px; }
+.prematch-report__schedule { border-top: 1px solid #2a3948; margin-top: 16px; padding-top: 14px; }
+.prematch-report__schedule dl { display: flex; flex-wrap: wrap; gap: 14px 32px; margin: 10px 0; font-size: 12px; }
+.prematch-report__schedule dt { color: #9faec0; }
+.prematch-report__schedule dd { margin: 4px 0; }
+@media (max-width: 700px) {
+  .match-detail-v4 .prematch-report { padding: 16px; }
+  .prematch-report__head { gap: 10px; }
+  .prematch-report__head h3 { font-size: 20px; }
+  .prematch-report__teams { grid-template-columns: minmax(0, 1fr); }
+  .prematch-report__metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 18px 0; }
+  .prematch-report__metrics > div { padding: 12px; }
+  .prematch-report__metrics > div:last-child { grid-column: 1 / -1; border-left: 0; border-top: 1px solid #2e3e4e; }
+  .prematch-report__metrics .prematch-report__time { font-size: 18px; }
+  .prematch-report__section-head { align-items: flex-start; }
+  .prematch-report__section-head > span { max-width: 60%; }
+  .prematch-report__footer { align-items: flex-start; flex-direction: column; gap: 8px; }
+}
+
+/* Scope the visual hierarchy to the detail page; publication semantics stay server-owned. */
+.match-detail-v4__cockpit { --pick-accent: #9bbce0; }
+.match-detail-v4__cockpit[data-recommendation-track="formal"] { --pick-accent: #dfbd73; }
+.match-detail-v4__cockpit[data-recommendation-track="live"] { --pick-accent: #6bcca7; }
+.match-detail-v4__cockpit[data-recommendation-track="archive"],
+.match-detail-v4__cockpit[data-recommendation-track="watch"] { --pick-accent: #afbac8; }
+.match-detail-v4 .match-detail-v4__hero { padding: 20px 24px; }
+.match-detail-v4 .match-detail-v4__cockpit { gap: 16px; }
+.match-detail-v4 .match-detail-v4__cockpit > .recommendation-overview-card { border: 1px solid #354556; border-left: 3px solid var(--pick-accent); border-radius: 14px; background: #151e29; padding: 24px; }
+.match-detail-v4 .match-detail-v4__cockpit .recommendation-overview-panel { border: 0; padding: 0; background: transparent; box-shadow: none; }
+.match-detail-v4 .match-detail-v4__cockpit .recommendation-overview-main { margin: 16px 0; font-size: clamp(25px, 3vw, 38px); line-height: 1.3; color: #edf3f9; letter-spacing: -.02em; font-weight: 760; }
+.match-detail-v4 .match-detail-v4__cockpit .recommendation-overview-head > span { color: #aab8c7; font-size: 13px; }
+.match-detail-v4 .match-detail-v4__cockpit .recommendation-overview-head > b { border: 1px solid color-mix(in srgb, var(--pick-accent) 35%, transparent); background: color-mix(in srgb, var(--pick-accent) 10%, transparent); color: var(--pick-accent); font-size: 12px; padding: 5px 10px; }
+.match-detail-v4__pick-facts { display: flex; flex-wrap: wrap; gap: 16px 32px; padding: 14px 0; margin-bottom: 14px; border-top: 1px solid #304052; border-bottom: 1px solid #304052; }
+.match-detail-v4__pick-facts > div { display: flex; flex-direction: column; gap: 6px; }
+.match-detail-v4__pick-facts span { font-size: 11px; color: #9aabbd; }
+.match-detail-v4__pick-facts strong { font-size: 17px; font-weight: 650; color: #e3ebf5; font-variant-numeric: tabular-nums; }
+.match-detail-v4 .match-detail-v4__cockpit .recommendation-overview-panel > p { font-size: 13px; line-height: 1.8; color: #b1bfce; }
+.match-detail-v4 .match-detail-v4__cockpit .recommendation-mini-tags > span { font-size: 11px; line-height: 1.65; padding: 4px 8px; border-color: #354555; background: #1a2633; color: #acbacc; }
+.match-detail-v4 .match-detail-v4__cockpit .recommendation-score-card { border: 1px solid #2e3d4b; border-radius: 14px; background: #111923; padding: 22px; }
+.match-detail-v4 .match-detail-v4__cockpit .recommendation-score-main strong { color: #b8c9dc; }
+.match-detail-v4 .decision-transparent-head h3 { font-size: 20px; }
+@media (max-width: 700px) {
+  .match-detail-v4 .match-detail-v4__cockpit > .recommendation-overview-card,
+  .match-detail-v4 .match-detail-v4__cockpit .recommendation-score-card { padding: 18px; }
+  .match-detail-v4 .match-detail-v4__cockpit .recommendation-overview-main { font-size: 28px; }
+  .match-detail-v4__pick-facts { gap: 20px; }
+}
