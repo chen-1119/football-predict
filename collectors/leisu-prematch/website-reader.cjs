@@ -78,6 +78,31 @@ async function readCollectionStatus(file, now) {
   } catch { return null; } finally { await handle?.close(); }
 }
 
+async function readApiCollectionStatus(referencePath, now) {
+  if (!referencePath) return null;
+  let handle;
+  try {
+    handle = await fs.open(path.join(path.dirname(referencePath), 'daily-prematch-api/status.json'), 'r');
+    const stat = await handle.stat();
+    if (!stat.isFile() || stat.size > 512 * 1024) return null;
+    const value = JSON.parse(await handle.readFile('utf8'));
+    const completed = Date.parse(value.completedAt);
+    const states = ['completed', 'partial', 'no-due-tasks', 'source-unavailable', 'runtime-error', 'budget-exhausted'];
+    if (value.version !== 'daily-prematch-api-v2' || value.provider !== 'api-football' || value.predictionEligible !== false
+      || !Number.isFinite(completed) || completed > now || !states.includes(value.state)) return null;
+    const failed = ['source-unavailable', 'runtime-error'].includes(value.state);
+    const count = n => Number.isSafeInteger(n) && n >= 0 ? n : null;
+    return { provider: 'api-football', enabled: true, state: value.state, checkedAt: value.completedAt,
+      lastRunAt: value.startedAt, lastSuccessAt: failed ? null : value.completedAt,
+      nextAttemptAt: value.nextAttemptAt || new Date((Math.floor(completed / 1800000) + 1) * 1800000).toISOString(),
+      statusFresh: now - completed < 65 * 60000, sourceState: failed ? 'parse_error' : 'available', sourceHttpStatus: null,
+      fixtureState: value.rosterReceivedAt && now - Date.parse(value.rosterReceivedAt) < 65 * 60000 ? 'available' : 'stale',
+      eligibleMatches: count(value.matches), collectedRows: count(value.referenceMatches), dataComplete: value.dataComplete === true,
+      strategy: { timezone: 'Asia/Shanghai', scope: 'official-business-date', checkMinutes: 30, injuriesEveryHours: 6,
+        lineupMinutesBeforeKickoff: [60, 30], automaticOdds: false } };
+  } catch { return null; } finally { await handle?.close(); }
+}
+
 function createWebsiteReader({ exportPath, apiFootballReferencePath, readFixture, maxBytes = 10 * 1024 * 1024, now = Date.now }) {
   if (typeof readFixture !== 'function') throw new TypeError('readFixture must read the current website fixture');
   if (exportPath && !path.isAbsolute(exportPath)) throw new TypeError('exportPath must be an absolute configured path');
@@ -87,7 +112,8 @@ function createWebsiteReader({ exportPath, apiFootballReferencePath, readFixture
     if (!exportPath) return { matchId: siteMatchId, status: 'disabled', predictionEligible: false };
     const fixture = await readFixture(siteMatchId);
     if (!fixture || fixture.id !== siteMatchId) return { matchId: siteMatchId, status: 'missing', predictionEligible: false };
-    const collection = await readCollectionStatus(path.join(path.dirname(exportPath), 'collection-status.json'), now());
+    const collection = await readApiCollectionStatus(apiFootballReferencePath, now())
+      || await readCollectionStatus(path.join(path.dirname(exportPath), 'collection-status.json'), now());
     const statusFields = collection ? { collection } : {};
     if (apiFootballReferencePath) {
       let referenceHandle;
@@ -152,4 +178,4 @@ function createWebsiteHandler(options) {
   };
 }
 
-module.exports = { createWebsiteReader, createWebsiteHandler, publicEvidence, readCollectionStatus };
+module.exports = { createWebsiteReader, createWebsiteHandler, publicEvidence, readCollectionStatus, readApiCollectionStatus };

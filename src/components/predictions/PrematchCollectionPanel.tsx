@@ -6,14 +6,15 @@ type Player = { name: string; side: 'home' | 'away'; reason?: string; position?:
 type Section = { status: string; observedAt: string | null; lastAttemptAt: string | null; previousValue: boolean;
   data: { players?: Player[]; teams?: Array<{ side: 'home' | 'away'; formation: string; starters: Player[]; substitutes: Player[] }> } | null };
 type Evidence = { matchId: string; status: string; provider?: 'api-football'; predictionEligible: false; sections?: { injuries: Section; lineup: Section };
-  collection?: { enabled: boolean; state: string; statusFresh: boolean; lastRunAt: string | null;
+  collection?: { provider?: 'api-football'; enabled: boolean; state: string; statusFresh: boolean; lastRunAt: string | null;
     lastSuccessAt: string | null; nextAttemptAt: string | null; sourceState: string | null;
     sourceHttpStatus: number | null; fixtureState: string | null; eligibleMatches: number | null } };
 const labels: Record<string, [string, string]> = {
   available: ['已采集', 'Collected'], source_empty: ['暂未公布', 'Not announced'],
   missing: ['尚未采集', 'Not collected'], unavailable: ['采集结果暂不可用', 'Collection unavailable'],
   stale: ['采集结果已过期', 'Collection expired'], disabled: ['采集尚未启用', 'Collection not enabled'],
-  ineligible: ['不在今天、明天的赛前采集范围', 'Outside the today/tomorrow pre-match window'],
+  ineligible: ['不在当前竞彩日的赛前采集范围', 'Outside the current betting-day pre-match window'],
+  partial: ['本轮完成，部分资料暂缺', 'Run completed with missing data'],
   blocked: ['采集通道访问受限', 'Collection access restricted'], login_required: ['采集会话需更新', 'Collection session expired'],
   conflict: ['比赛身份待核对', 'Match identity needs checking'], parse_error: ['数据解析失败', 'Data parsing failed'],
   loading: ['读取中', 'Loading'], unauthorized: ['请先验证访问权限', 'Access verification required'],
@@ -53,12 +54,14 @@ export function PrematchCollectionPanel({ matchId, language }: { matchId: string
     ? new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-GB', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).format(Date.parse(value)) : '--';
   return <section className="card captured-match-data" data-testid="prematch-collection" aria-live="polite">
     <h3>{language === 'zh' ? '赛前采集资料' : 'Pre-match collection'}</h3>
-    <p>{language === 'zh' ? '北京时间今天、明天的未开赛比赛。资料仅供参考，不计入正式推荐。' : 'Today/tomorrow in Beijing time, before kickoff. Reference information only.'}</p>
-    {evidence?.provider === 'api-football' && <p><strong>{language === 'zh' ? '资料来源：API-Football（备用数据源）' : 'Source: API-Football (fallback)'}</strong> · {language === 'zh' ? '按实际采集时间展示，不回写已冻结推荐。' : 'Shown with the actual collection time; frozen recommendations are unchanged.'}</p>}
+    <p>{language === 'zh' ? '按竞彩日采集，包含次日凌晨开赛的对应比赛。资料仅供参考，不计入正式推荐。' : 'Collected by official betting day, including its overnight fixtures. Reference information only.'}</p>
+    {evidence?.provider === 'api-football' && <p><strong>{language === 'zh' ? '资料来源：API-Football' : 'Source: API-Football'}</strong> · {language === 'zh' ? '按实际采集时间展示，不回写已冻结推荐。' : 'Shown with the actual collection time; frozen recommendations are unchanged.'}</p>}
     {evidence?.collection && <div data-testid="prematch-scheduler-status">
-      <p><strong>{evidence.provider === 'api-football' ? (language === 'zh' ? '原采集通道：' : 'Original collector: ') : ''}{language === 'zh' ? (evidence.collection.enabled ? '定时采集已启用' : '定时采集未启用') : (evidence.collection.enabled ? 'Scheduled collection enabled' : 'Scheduled collection disabled')}</strong> · {label(evidence.collection.state)}</p>
+      <p><strong>{language === 'zh' ? (evidence.collection.enabled ? '定时采集已启用' : '定时采集未启用') : (evidence.collection.enabled ? 'Scheduled collection enabled' : 'Scheduled collection disabled')}</strong> · {label(evidence.collection.state)}</p>
       {!evidence.collection.statusFresh && <p>{language === 'zh' ? '运行状态更新已延迟' : 'Scheduler status update delayed'}</p>}
-      <p>{language === 'zh' ? '每 5 分钟检查；伤停每 6 小时更新；阵容在赛前 90、60、30 分钟检查，未公布时在 20、10 分钟补查。' : 'Checks every 5 minutes; injuries every 6 hours; lineups at 90/60/30 minutes, with 20/10 minute follow-ups.'}</p>
+      <p>{evidence.collection.provider === 'api-football'
+        ? (language === 'zh' ? '服务器自动运行，无需网页登录。每 30 分钟检查；伤停每 6 小时更新；开赛前 60 分钟内补采阵容。' : 'Runs automatically on the server without browser login. Checks every 30 minutes; injuries every 6 hours; lineups within 60 minutes of kickoff.')
+        : (language === 'zh' ? '按来源计划检查，保留实际采集时间与缺失状态。' : 'Checks according to the source schedule, preserving receipt times and missing states.')}</p>
       <p>{language === 'zh' ? '最近执行：' : 'Last run: '}{time(evidence.collection.lastRunAt)} · {language === 'zh' ? '下次取数：' : 'Next attempt: '}{time(evidence.collection.nextAttemptAt)}</p>
       {evidence.collection.sourceState === 'blocked' && <p>{language === 'zh' ? '数据通道访问受限，保留已有数据并按间隔重试。' : 'Source access restricted; retaining existing data and retrying at the scheduled interval.'}</p>}
       {evidence.collection.fixtureState === 'stale' && <p>{language === 'zh' ? '网站比赛输入快照已过期，等待更新后继续对应比赛。' : 'Website fixture snapshot expired; waiting for an updated match list.'}</p>}
