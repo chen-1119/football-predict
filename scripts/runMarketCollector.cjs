@@ -3,7 +3,7 @@
 const crypto = require("node:crypto");
 const https = require("node:https");
 const iconv = require("iconv-lite");
-const { createPostgresPool, runPostgresMigrations, withPostgresTransaction } = require("../server/postgresStore.cjs");
+const { createPostgresPool, verifyPostgresSchemaCurrent, withPostgresTransaction } = require("../server/postgresStore.cjs");
 const { parseRows, requireUsableRows } = require("./sync500Data.cjs");
 
 const SOURCE = "500.com:jczq";
@@ -70,6 +70,9 @@ function marketsFromParsedRows(rows, observedAt) {
     if (!base.sourceMatchId) continue;
     for (const [pool, odds] of Object.entries(signal.bookmakerOdds || {})) {
       if (!odds || !Number.isFinite(Number(odds.odds1)) || !Number.isFinite(Number(odds.oddsX)) || !Number.isFinite(Number(odds.odds2))) continue;
+      const handicapLine = pool === "hhad" && signal.handicapLine !== undefined
+        ? Number(signal.handicapLine)
+        : null;
       const payload = {
         source: SOURCE,
         sourceMatchId: base.sourceMatchId,
@@ -82,7 +85,7 @@ function marketsFromParsedRows(rows, observedAt) {
         buyEndTime: base.buyEndTime,
         pool,
         bookmaker: "sporttery",
-        handicapLine: pool === "hhad" && signal.handicapLine !== undefined ? Number(signal.handicapLine) : null,
+        handicapLine: Number.isFinite(handicapLine) ? handicapLine : null,
         odds1: Number(odds.odds1),
         oddsX: Number(odds.oddsX),
         odds2: Number(odds.odds2),
@@ -110,8 +113,8 @@ function adaptivePollSeconds(markets, nowMs = Date.now()) {
   return seconds;
 }
 
-function jitteredDelayMs(seconds) {
-  const jitter = 0.85 + Math.random() * 0.3;
+function jitteredDelayMs(seconds, random = Math.random) {
+  const jitter = 0.85 + random() * 0.3;
   return Math.max(MIN_SECONDS * 1000, Math.round(seconds * 1000 * jitter));
 }
 
@@ -211,7 +214,7 @@ async function collectOnce(pool) {
 async function main() {
   const pool = createPostgresPool({ applicationName: "football-market-collector" });
   try {
-    await runPostgresMigrations(pool);
+    await verifyPostgresSchemaCurrent(pool);
     do {
       const result = await collectOnce(pool);
       console.log(JSON.stringify({ ...result, source: SOURCE, at: new Date().toISOString() }));
