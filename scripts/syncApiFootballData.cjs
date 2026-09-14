@@ -225,6 +225,12 @@ const LEAGUE_ALIASES = {
   // leagueNameEn. Do not rely on an English field or shorthand being present.
   "西班牙甲级联赛": ["la liga"],
   "意大利甲级联赛": ["serie a"],
+  "芬兰超级联赛": ["veikkausliiga"],
+  "瑞典超级联赛": ["allsvenskan"],
+  "挪威超级联赛": ["eliteserien"],
+  "亚洲冠军精英联赛": ["afc champions league", "afc champions league elite"],
+  "法国乙级联赛": ["ligue 2"],
+  "葡萄牙超级联赛": ["primeira liga"],
   "\u56fd\u9645\u8d5b": ["friendly", "friendlies", "international"],
   "\u4e16\u754c\u676f": ["world cup", "fifa world cup"],
   "\u4e16\u9884\u8d5b": ["world cup qualification", "world cup qualifiers"],

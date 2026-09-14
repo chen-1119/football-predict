@@ -36,3 +36,12 @@ test('unknown mapping waits six hours; over-eight match rosters remain complete'
  assert.equal(dueMatches(rows, {}, {}, now).length, 20);
  assert.equal(dueMatches(rows, {}, { sporttery_1: new Date(now).toISOString() }, now).length, 19);
 });
+test('scoped aliases require both exact provider identity and the official competition', () => {
+ const { scopedTeamAliases } = require('./apiFootballScopedAliases.cjs');
+ const match = { leagueName: '芬兰超级联赛', homeTeamName: '国际图尔库' };
+ const fixture = { league: { id: 244, season: 2026 }, teams: { home: { id: 1164, name: 'Inter Turku' } } };
+ assert.deepEqual(scopedTeamAliases(match, 'home', fixture, ['veikkausliiga']), ['Inter Turku']);
+ assert.deepEqual(scopedTeamAliases({ ...match, leagueName: '瑞典超级联赛' }, 'home', fixture, ['veikkausliiga']), []);
+ assert.deepEqual(scopedTeamAliases(match, 'home', { ...fixture, teams: { home: { id: 1165, name: 'Inter Turku' } } }, ['veikkausliiga']), []);
+ assert.deepEqual(scopedTeamAliases(match, 'home', { ...fixture, teams: { home: { id: 1164, name: 'Inter Turku II' } } }, ['veikkausliiga']), []);
+});

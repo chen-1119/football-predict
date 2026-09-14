@@ -95,7 +95,9 @@ async function main() {
       matches = officialRoster(official.payload, days);
       atomic(path.join(job, 'official.json'), official);
       const cacheFile = path.join(root, 'public/data/api-football-cache.json');
-      const before = read(cacheFile, {}), attempts = read(path.join(dir, 'attempts.json'), {});
+      const aliasVersion = require('./apiFootballScopedAliases.cjs').VERSION;
+      summary.aliasVersion = aliasVersion;
+      const before = read(cacheFile, {}), attempts = last.aliasVersion === aliasVersion ? read(path.join(dir, 'attempts.json'), {}) : {};
       const candidates = dueMatches(matches, before, attempts, now);
       const consumed = before.requestLedger?.date === startedAt.slice(0, 10) ? Number(before.requestLedger.count || 0) : 0;
       const budget = Math.max(0, Math.min(16, 90 - consumed));
@@ -131,11 +133,13 @@ async function main() {
       reference = require('../collectors/leisu-prematch/api-football-reference.cjs').buildReferenceExport(matches, cache, verified);
       summary.verifiedMappings = verified.size; summary.referenceMatches = reference.items.length;
       summary.injuryPlayers = reference.items.reduce((n, x) => n + (x.sections.injuries.data?.players.length || 0), 0);
+      summary.newInjuryPlayers = reference.items.reduce((n, x) => n + (Date.parse(x.sections.injuries.observedAt) >= now ? x.sections.injuries.data?.players.length || 0 : 0), 0);
       summary.lineupTeams = reference.items.reduce((n, x) => n + (x.sections.lineup.data?.teams.length || 0), 0);
       summary.coverage = matches.map(m => { const item = reference.items.find(x => x.fixture.siteMatchId === m.id); return { id: m.id, businessDate: m.businessDate,
         home: m.homeTeamName, away: m.awayTeamName, kickoff: m.kickoffTime,
         mapped: verified.has(m.id), injuries: item?.sections.injuries.status || 'missing', lineup: item?.sections.lineup.status || (Date.parse(m.kickoffTime) - now > 3600000 ? 'not-due' : 'missing') }; });
       summary.dataComplete = matches.length > 0 && summary.coverage.every(m => m.injuries === 'available' && m.lineup === 'available');
+      if (summary.state === 'completed' && summary.coverage.some(m => !m.mapped || m.injuries !== 'available' || m.lineup === 'missing')) summary.state = 'partial';
     } catch (error) {
       summary.state = 'runtime-error'; summary.errorCode = error.code || 'COLLECTION_FAILED';
       summary.nextAttemptAt = new Date(now + 3600000).toISOString();
