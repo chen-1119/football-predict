@@ -1,0 +1,27 @@
+[Unit]
+Description=Adaptive football market collector to PostgreSQL
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=football
+Group=football
+WorkingDirectory=/opt/football-predict
+EnvironmentFile=/etc/football-predict/env
+Environment=MARKET_COLLECTOR_LOOP=1
+Environment=MARKET_COLLECTOR_MIN_SECONDS=60
+Environment=MARKET_COLLECTOR_MAX_SECONDS=1800
+ExecStart=/opt/node-v22.22.1/bin/node /opt/football-predict/scripts/runMarketCollector.cjs --loop
+Restart=on-failure
+RestartSec=30
+TimeoutStopSec=20
+KillSignal=SIGTERM
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
