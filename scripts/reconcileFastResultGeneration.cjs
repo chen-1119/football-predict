@@ -20,6 +20,7 @@ const { acquireSyncMetaCommitLock } = require("./syncMetaCommitLock.cjs");
 const { buildFormalReviewPerformance } = require("../server/reviewPerformanceSummary.cjs");
 const { buildReferencePerformanceWithPairs, readReferenceSnapshotFile } = require("../server/referencePairedBaseline.cjs");
 const { loadCollectorTrustRegistry } = require("../src/services/collectorAttestation.cjs");
+const { storedResultTeamIdentity } = require("./storedResultTeamIdentity.cjs");
 const {
   eventVersionOf,
   reconcileMatchLifecycle,
@@ -73,7 +74,7 @@ const resultRevision = (match) => Math.max(
 
 const sameStoredEvent = (left, right) => (
   sourceMatchIdFor(left) === sourceMatchIdFor(right)
-  && sameEvent(left, right)
+  && sameEvent(storedResultTeamIdentity(left), storedResultTeamIdentity(right))
 );
 
 const sameReceiptScore = (match, observation) => (
@@ -242,6 +243,11 @@ const preserveExistingPublicIdentity = (existing, selected) => {
     ...selected,
     ...(existingId ? { id: existing.id } : {}),
     ...(existingMatchId ? { matchId: existing.matchId } : {}),
+    // A receipt's old short name must not rename the published team or detach
+    // the frozen archive/review from its original presentation identity.
+    ...Object.fromEntries(["homeTeamId", "awayTeamId", "homeTeamName", "awayTeamName"]
+      .filter((key) => asText(existing[key]))
+      .map((key) => [key, existing[key]])),
   };
 };
 
