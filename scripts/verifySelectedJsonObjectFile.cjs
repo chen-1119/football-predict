@@ -65,6 +65,18 @@ try {
     assert.throws(() => fixture(`{"${'x'.repeat(17000)}":1}`), e => e.code === 'SELECTED_JSON_KEY_LIMIT');
     assert.throws(() => fixture(`{"skip":${'1'.repeat(5000)}}`), e => e.code === 'SELECTED_JSON_SCALAR_LIMIT');
   });
+  check('pretty-print whitespace does not exhaust the retained-value bound or alter strings', () => {
+    const keep = { text: ' keep  spaces \n and\ttabs ', rows: [1, { x: true }, null] };
+    const compact = JSON.stringify(keep);
+    const source = JSON.stringify({ keep, ignored: ' untouched ' }, null, 10);
+    for (const chunkBytes of [1, 7, 31, 65536]) {
+      const result = fixture(source, ['keep'], { chunkBytes, maxSelectedChars: compact.length });
+      assert.deepEqual(result.value.keep, keep);
+      assert.equal(result.evidence.sha256, sha(source));
+      assert.throws(() => fixture(source, ['keep'], { chunkBytes, maxSelectedChars: compact.length - 1 }),
+        e => e.code === 'SELECTED_JSON_VALUE_LIMIT');
+    }
+  });
   check('deterministic mixed nested objects agree with JSON.parse selection', () => {
     let seed = 17;
     const random = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0);

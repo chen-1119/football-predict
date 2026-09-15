@@ -23,7 +23,13 @@ function readSelectedJsonObjectFile({ filePath, expectedBytes, expectedSha256, k
     if (!capture || !text) return;
     selectedChars += text.length;
     if (selectedChars > maxSelectedChars) fail('SELECTED_JSON_VALUE_LIMIT', 'selected JSON values exceed the memory admission bound');
-    capture.parts.push(text);
+    capture.pending.push(text);
+    capture.pendingChars += text.length;
+    if (capture.pendingChars >= 64 * 1024) {
+      capture.parts.push(capture.pending.join(''));
+      capture.pending = [];
+      capture.pendingChars = 0;
+    }
   };
   const appendKey = text => {
     keyText += text;
@@ -37,6 +43,7 @@ function readSelectedJsonObjectFile({ filePath, expectedBytes, expectedSha256, k
     parent.state = 'commaOrEnd';
     if (stack.length === 1 && capture) {
       appendCapture(currentText.slice(captureStart, end));
+      if (capture.pending.length) capture.parts.push(capture.pending.join(''));
       const key = capture.key, parts = capture.parts;
       capture = null; captureStart = -1;
       // JSON.parse supplies exact number/string/duplicate-key semantics for
@@ -94,7 +101,16 @@ function readSelectedJsonObjectFile({ filePath, expectedBytes, expectedSha256, k
         if (atom.length > 4096) fail('SELECTED_JSON_SCALAR_LIMIT', 'JSON scalar is too long');
         i++; continue;
       }
-      if (/[\x20\t\r\n]/.test(c)) { i++; continue; }
+      if (/[\x20\t\r\n]/.test(c)) {
+        // Formatting whitespace can dominate an audited pretty-printed ledger.
+        // Retain only JSON tokens; string contents still use the string branch
+        // above unchanged, and the hash continues to cover every original byte.
+        if (capture) {
+          appendCapture(text.slice(captureStart, i));
+          captureStart = i + 1;
+        }
+        i++; continue;
+      }
       if (rootDone) invalid('trailing content');
       if (!rootStarted) {
         if (c !== '{') invalid('top-level value must be an object');
@@ -116,7 +132,9 @@ function readSelectedJsonObjectFile({ filePath, expectedBytes, expectedSha256, k
         frame.state = frame.type === 'object' ? 'keyRequired' : 'valueRequired'; i++; continue;
       }
       if (frame.state === 'valueOrEnd' && c === ']') { closeContainer(++i); continue; }
-      if (stack.length === 1 && selected.has(frame.key)) { capture = { key: frame.key, parts: [] }; captureStart = i; }
+      if (stack.length === 1 && selected.has(frame.key)) {
+        capture = { key: frame.key, parts: [], pending: [], pendingChars: 0 }; captureStart = i;
+      }
       if (c === '{' || c === '[') { push(c === '{' ? 'object' : 'array'); i++; continue; }
       if (c === '"') { mode = 'string'; isKey = false; i++; continue; }
       if (c === '-' || /[0-9tfn]/.test(c)) { mode = 'atom'; atom = c; i++; continue; }

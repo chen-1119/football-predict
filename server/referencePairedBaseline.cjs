@@ -92,6 +92,9 @@ function readReferenceSnapshotFile(filePath) {
   }
   finally { fs.closeSync(fd); }
   return require("./selectedJsonObjectFile.cjs").readSelectedJsonObjectFile({ filePath, expectedBytes: stat.size,
-    expectedSha256: hash.digest("hex"), keys: ["publicReferenceDecisions", "publicReferenceEvidence"], maxSelectedChars: 64 * 1024 * 1024 }).value;
+    // The verified live reference ledger exceeds 64 MiB even after removing
+    // formatting whitespace. Use the reader's bounded 128 MiB admission limit;
+    // unrelated candidate data is still streamed and never materialized.
+    expectedSha256: hash.digest("hex"), keys: ["publicReferenceDecisions", "publicReferenceEvidence"], maxSelectedChars: 128 * 1024 * 1024 }).value;
 }
 module.exports = { VERSION, POLICY, FIELDS, compactReferencePairedBaseline, buildReferencePerformanceWithPairs, readReferenceSnapshotFile };
