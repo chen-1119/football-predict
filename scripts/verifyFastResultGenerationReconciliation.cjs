@@ -473,6 +473,62 @@ const check = (name, fn) => {
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "football-fast-generation-"));
 try {
+  check("native receipt team abbreviations keep one history/review and preserve published identity", () => {
+    const { derivedTeamId } = require("./storedResultTeamIdentity.cjs");
+    const fixture = buildFixture(path.join(root, "native-team-abbreviation"));
+    const raw = finalMatch();
+    delete raw.postMatchReview;
+    const history = attachPostMatchReviews([{
+      ...raw,
+      homeTeamName: "米德尔斯堡", homeTeamId: derivedTeamId("米德尔斯堡"),
+      awayTeamName: "雷克斯汉姆", awayTeamId: derivedTeamId("雷克斯汉姆"),
+    }], raw.resultObservedAt, null, null).matches[0];
+    const receipt = {
+      ...history, id: `fivehundred_${history.sourceMatchId}`,
+      homeTeamName: "米堡", homeTeamId: derivedTeamId("米堡"),
+      awayTeamName: "雷克斯", awayTeamId: derivedTeamId("雷克斯"),
+      // Ensure the incoming receipt actually wins payload selection.
+      resultObservedAt: new Date(Date.parse(raw.resultObservedAt) + 60000).toISOString(),
+    };
+    writeJson(path.join(fixture.dataDir, "matches-history.json"), [history]);
+    writeJson(path.join(fixture.dataDir, "post-match-reviews.json"), { rows: [history.postMatchReview] });
+    const options = { ...fixture, nativeSource: {
+      receipt: { revision: 1 }, resolution: { finals: [receipt], recoveryRows: [] },
+    } };
+    assert.equal(reconcileFastResultGeneration(options).ok, true);
+    const result = JSON.parse(fs.readFileSync(path.join(fixture.dataDir, "matches-history.json")));
+    const reviews = JSON.parse(fs.readFileSync(path.join(fixture.dataDir, "post-match-reviews.json")));
+    assert.equal(result.length, 1);
+    assert.equal(reviews.rows.length, 1);
+    for (const field of ["id", "homeTeamId", "awayTeamId", "homeTeamName", "awayTeamName", "scoreHome", "scoreAway"]) {
+      assert.equal(result[0][field], history[field], field);
+    }
+    assert.deepEqual(result[0].postMatchReview, history.postMatchReview);
+    assert.deepEqual(reviews.rows[0], history.postMatchReview);
+    assert.equal(reconcileFastResultGeneration(options).skipped, true);
+    return { historyRows: 1, reviewRows: 1, originalReviewPreserved: true };
+  });
+  check("stored team aliases retain source, kickoff, team-side and provider-ID guards", () => {
+    const { storedResultTeamIdentity: normalize, derivedTeamId } = require("./storedResultTeamIdentity.cjs");
+    const { sameEvent } = require("../src/services/matchLifecycle.cjs");
+    const base = {
+      sourceMatchId: "alias-guard", eventVersion: "2026-08-06T15:00:00Z", kickoffTime: "2026-08-06T15:00:00Z",
+      homeTeamName: "克拉约瓦大学", homeTeamId: derivedTeamId("克拉约瓦大学"),
+      awayTeamName: "埃斯托里尔", awayTeamId: derivedTeamId("埃斯托里尔"),
+    };
+    const alias = { ...base, homeTeamName: "克拉约瓦", homeTeamId: derivedTeamId("克拉约瓦") };
+    assert.equal(sameEvent(normalize(base), normalize(alias)), true);
+    for (const wrong of [
+      { sourceMatchId: "different-event" },
+      { kickoffTime: "2026-08-06T15:01:00Z" },
+      { eventVersion: "2026-08-06T15:01:00Z" },
+      { homeTeamName: "未知球队", homeTeamId: derivedTeamId("未知球队") },
+      { homeTeamId: "provider-team-123" },
+      { homeTeamName: base.awayTeamName, homeTeamId: base.awayTeamId },
+    ]) assert.equal(sameEvent(normalize(base), normalize({ ...alias, ...wrong })), false);
+    assert.equal(base.homeTeamId, derivedTeamId("克拉约瓦大学"));
+    return { rejectedIdentityConflicts: 6 };
+  });
   check("slow reconciliation retains actual original paired reference statistics", () => {
     const fixture = buildFixture(path.join(root, "paired-reference"));
     const f = publicPairs.fixture({ day: "2026-08-31" });
