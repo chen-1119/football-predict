@@ -512,6 +512,9 @@ const reviewFromMatch = (match, recommendation, observation) => {
 };
 
 const reviewBusinessKey = (review) => `${text(review?.match_id)}\u0000${text(review?.decision_id)}`;
+const decisionReviewId = (review) => `review:${sha256(stableStringify({
+  version: "decision-review-v1", matchId: text(review.match_id), decisionId: text(review.decision_id),
+}))}`;
 
 const reviewGeneratedAtMs = (review) => {
   const payload = jsonObject(review?.payload, null);
@@ -1095,6 +1098,14 @@ const persistSemanticRows = async (client, matches, publicationId) => {
     }
   }
   reviews = dedupeSemanticReviews(reviews);
+  // Legacy review IDs used match + review clock, which collides when the same
+  // review clock is attached to another frozen decision. The database's actual
+  // business key is match + decision. Derive new IDs only after legacy decision
+  // IDs/parity corrections have been resolved, and keep existing review IDs on
+  // the matching business-key upsert below.
+  for (const review of reviews) {
+    if (review.decision_id) review.review_id = decisionReviewId(review);
+  }
   if (recommendations.length > 0) {
     await insertBatches({
       client,
@@ -1146,7 +1157,6 @@ const persistSemanticRows = async (client, matches, publicationId) => {
         jsonColumns: ["payload"],
         rows: reviewsWithDecision,
         conflict: `ON CONFLICT (match_id, decision_id) DO UPDATE SET
-        review_id = EXCLUDED.review_id,
         observation_id = EXCLUDED.observation_id,
         settlement = EXCLUDED.settlement,
         formal_hit = EXCLUDED.formal_hit,
@@ -1606,6 +1616,7 @@ module.exports = {
   buildResultOnlyReviewCleanupCandidates,
   deactivateMissingAiCompetitors,
   dedupeSemanticReviews,
+  decisionReviewId,
   inspectResultOnlyReviewConflicts,
   iterateMatchSnapshotRows,
   isForwardCanonicalResultOnlyRebase,
