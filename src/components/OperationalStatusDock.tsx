@@ -1,5 +1,6 @@
 import React from 'react';
 import { Activity, ChevronDown, ChevronUp, Clock3, Layers3, Trophy } from 'lucide-react';
+import { getAccessAuthHeaders } from '../services/accessControl';
 
 type Language = 'zh' | 'en';
 
@@ -56,10 +57,15 @@ const staticUrl = (file: string) => {
   return `${base}data/${file}`;
 };
 
+const hasStoredAccess = () => Object.keys(getAccessAuthHeaders()).length > 0;
+
 const fetchOptionalJson = async <T,>(file: string, signal: AbortSignal): Promise<T | null> => {
   try {
+    const headers = getAccessAuthHeaders();
+    if (Object.keys(headers).length === 0) return null;
     const response = await fetch(`${staticUrl(file)}?v=${Date.now()}`, {
       cache: 'no-store',
+      headers,
       signal,
     });
     if (!response.ok) return null;
@@ -138,12 +144,22 @@ export const OperationalStatusDock: React.FC = () => {
   const [health, setHealth] = React.useState<RealtimeHealth | null>(null);
   const [featured, setFeatured] = React.useState<FeaturedPayload | null>(null);
   const [expanded, setExpanded] = React.useState(false);
+  const [accessActive, setAccessActive] = React.useState(hasStoredAccess);
   const language: Language = typeof document !== 'undefined' && document.documentElement.lang.startsWith('en') ? 'en' : 'zh';
 
   React.useEffect(() => {
     let alive = true;
     let controller: AbortController | null = null;
     const refresh = async () => {
+      const authorized = hasStoredAccess();
+      if (!alive) return;
+      setAccessActive(authorized);
+      if (!authorized) {
+        controller?.abort();
+        setHealth(null);
+        setFeatured(null);
+        return;
+      }
       controller?.abort();
       controller = new AbortController();
       const [nextHealth, nextFeatured] = await Promise.all([
@@ -162,6 +178,8 @@ export const OperationalStatusDock: React.FC = () => {
       window.clearInterval(timer);
     };
   }, []);
+
+  if (!accessActive) return null;
 
   const status = health?.status || 'source-stale';
   const statusLabel = status === 'live'
