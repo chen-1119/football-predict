@@ -34,8 +34,8 @@ jobs:
       - name: Verify daily featured combos
         run: node scripts/verifyDailyFeaturedCombos.cjs
 
-      - name: Verify realtime publication health
-        run: node scripts/verifyRealtimePublicationHealth.cjs
+      - name: Verify featured sync-meta publication binding
+        run: node scripts/verifyDailyFeaturedSyncMetaBinding.cjs
 
       - name: Verify existing lifecycle contract
         run: npm run verify:match-lifecycle
