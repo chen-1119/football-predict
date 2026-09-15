@@ -1,7 +1,9 @@
 'use strict';
 const { createHash } = require('node:crypto');
 const SOURCE = '500.com:jczq';
-const DEFAULT_SOURCE_URL = 'https://trade.500.com/jczq/';
+// The root page defaults to single-match HHAD and can be empty while the
+// publicly linked mixed-result page contains the day's HAD and HHAD markets.
+const DEFAULT_SOURCE_URL = 'https://trade.500.com/jczq/?playid=312&g=2';
 const failure = (code, message) => Object.assign(new Error(message), { code });
 const canonical = value => value && typeof value === 'object'
   ? Array.isArray(value) ? value.map(canonical) : Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])]))
@@ -65,6 +67,7 @@ function normalizeRows(rows, observedAt) {
       }
       const payload = {
         source: SOURCE, sourceMatchId, fixtureId: text(signal.fixtureId), matchNo: text(signal.matchNo),
+        matchKeys: Array.isArray(row.keys) ? [...new Set(row.keys.filter(key => typeof key === 'string' && key.trim()))].sort() : [],
         leagueName: text(signal.leagueName), homeTeamName: text(signal.homeTeamName), awayTeamName: text(signal.awayTeamName),
         kickoffTime: new Date(kickoffMs).toISOString(), buyEndTime: text(signal.buyEndTime),
         pool, bookmaker: 'sporttery', handicapLine: line, odds1: values[0], oddsX: values[1], odds2: values[2],

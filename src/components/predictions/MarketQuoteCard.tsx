@@ -35,7 +35,7 @@ export function MarketQuoteCard({ pool, quote, language, archived = false }: {
     data-freshness={quote?.freshness || 'missing'} aria-label={title}>
     <header className="market-quote__heading">
       <strong>{title}{pool === 'HHAD' && line !== null && <span> · {language === 'zh' ? '主队' : 'Home'} {line > 0 ? '+' : ''}{line}</span>}</strong>
-      {quote && <span className={`market-quote__source is-${quote.provenance}`} title={quote.source || ''}>{sourceLabel(quote, language)}</span>}
+      {quote && <span className={`market-quote__source is-${quote.provenance}`}>{sourceLabel(quote, language)}</span>}
     </header>
     <dl className="market-quote__prices">
       {(['odds1', 'oddsX', 'odds2'] as const).map((key, index) => <div key={key}>

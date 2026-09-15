@@ -139,4 +139,6 @@ LIMIT 50;
 
 ## Next integration step
 
+2026-09-15 deployment adds `collectors/market/signalBridge.cjs`: the existing PostgreSQL-mode `sync:500` now reads the shared acquisition store and preserves each quote's observed time. Only the standalone collector requests the source page. The bridge retains existing event reconciliation and frozen recommendation boundaries; it does not relabel reference quotes as official SP.
+
 The next safe step is to add a small projector from `football.market_observations` into the existing `football.odds_snapshots` serving contract and then expose collector freshness in `/api/v1/source-health`. That should be done after the ingestion lane has run in shadow mode long enough to confirm provider stability and match-ID parity with the current publication flow.

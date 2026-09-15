@@ -11,8 +11,8 @@ async function collectOnce(pool, dependencies = {}) {
   const now = dependencies.now || Date.now;
   const fetchPage = dependencies.fetchPage || transport.fetchMarketPage;
   const parse = dependencies.parseRows || ((body, observedAt) => {
-    const { parseRows, requireUsableRows } = require('./sync500Data.cjs');
-    return requireUsableRows(parseRows(new TextDecoder('gbk').decode(body), observedAt));
+    const { parseRows } = require('./sync500Data.cjs');
+    return parseRows(new TextDecoder('gbk').decode(body), observedAt);
   });
   const controller = new AbortController();
   const abort = () => controller.abort();
@@ -36,17 +36,19 @@ async function collectOnce(pool, dependencies = {}) {
       const response = await fetchPage(cfg.sourceUrl, { signal: controller.signal });
       const observedAt = new Date(now()).toISOString();
       const normalized = policy.normalizeRows(parse(response.body, observedAt), observedAt);
-      if (!normalized.markets.length) throw policy.failure('NO_VALID_MARKETS', 'Source returned no valid market rows');
+      const noEvents = !normalized.markets.length && normalized.rejected.length === 0
+        && /<p\b[^>]*class=["']nodata-txt["'][^>]*>\s*暂无赛事信息\s*<\/p>/i.test(new TextDecoder('gbk').decode(response.body));
+      if (!normalized.markets.length && !noEvents) throw policy.failure('NO_VALID_MARKETS', 'Source returned no valid market rows');
       const seconds = policy.adaptivePollSeconds(normalized.markets, now(), cfg);
       const nextPollSeconds = Math.ceil(policy.jitteredDelayMs(seconds, dependencies.random || Math.random, cfg) / 1000);
       const finishedAt = new Date(now()).toISOString();
       const payload = { url: cfg.sourceUrl, predictionEligible: false, consecutiveFailures: 0,
         nextAttemptAt: new Date(Date.parse(finishedAt) + nextPollSeconds * 1000).toISOString(),
-        rejectedRows: normalized.rejected, sourcePublishedAt: null };
+        rejectedRows: normalized.rejected, sourcePublishedAt: null, sourceState: noEvents ? 'no-events' : 'available' };
       const result = await store.persistRun(client, { runId, startedAt, finishedAt, status: 'completed',
         markets: normalized.markets, sourceSha256: policy.hash(response.body), sourceBytes: response.body.length,
         httpStatus: response.statusCode, nextPollSeconds, payload }, dependencies.refreshFeature);
-      return { ok: true, runId, rows: normalized.markets.length, rejectedRows: normalized.rejected.length, ...result, nextPollSeconds };
+      return { ok: true, runId, rows: normalized.markets.length, sourceState: payload.sourceState, rejectedRows: normalized.rejected.length, ...result, nextPollSeconds };
     } catch (error) {
       if (broken) throw error;
       const consecutiveFailures = Math.min(100, Number(previous?.payload?.consecutiveFailures || 0) + 1);

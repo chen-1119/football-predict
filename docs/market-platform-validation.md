@@ -1,4 +1,23 @@
-# 本轮验证记录
+# 市场采集发布验证（2026-09-15）
+
+## 本地与真实数据库补验
+
+- 完整 `npm.cmd run build` 通过（项目实际 React / TypeScript / Vite 依赖）。
+- `node scripts/verifyMarketPlatform.cjs`：52 项通过。
+- `node scripts/verifyMatchMarketOddsPresentation.cjs`：19 项通过，保留冻结推荐 SP 与当前报价隔离检查。
+- `verifyDisplayRecommendationBindingIntegrity`、`verifyExternalOddsAnalysisReference`、`verifyMarketSourceProvenance` 通过。
+- 完整应用在 320、390、768、1024、1440px 通过报价数值、键盘展开、详情导航及横向溢出检查。
+- `scripts/verifyMarketPostgres.cjs` 在 PostgreSQL 16、`football` 运行角色下通过全部迁移、真实写入、A-B-A、重复观察、回滚、跨进程锁、重启冷却、请求中止、连接中断和空档保留检查。只接受 `football_market_test_*` 测试库，验证后删除临时库，不复制生产比赛或推荐数据。
+
+## 本次补齐的运行连接
+
+- 新采集器是生产 500 盘口页面唯一的 HTTP 请求入口。原 `sync:500` 在 PostgreSQL 模式下读取 `market_latest`，复用原发布流程的事件映射与资料合并；无数据库模式保留原本地采集入口。
+- 快照包含原来源映射键。HAD / HHAD 分别保留采集时间，旧开赛时间的盘口不补入新事件；读取缓存不会把报价时间刷新为现在。
+- 默认使用源站公开链接的混合玩法页面 `?playid=312&g=2`。验收时该页面 HTTP 200，明确显示“暂无赛事信息”。这证明网页可访问，**不能证明本轮已取得新行情**。
+- 明确的空档页面记为 `completed` / `sourceState=no-events`，约 15 分钟后再检查，保留已有观察。无法识别的空页仍报错；403 / 405 / 429 仍进入持久退避。
+- 新特征仍为 `predictionEligible=false`，未自动写入正式模型；独立的行情投影与 source-health 展示仍是后续工作。
+
+## 网页端原始验证记录（以下为发布前历史记录）
 
 ## 已执行
 
