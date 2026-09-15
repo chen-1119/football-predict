@@ -1,16 +1,28 @@
 import React from 'react';
 import { Activity, ChevronDown, ChevronUp, Clock3, Layers3, Trophy } from 'lucide-react';
 import { getAccessAuthHeaders } from '../services/accessControl';
+import { buildApiUrl } from '../services/runtimeUrls';
 
 type Language = 'zh' | 'en';
+type RealtimeStatus = 'live' | 'publication-delayed' | 'source-stale';
 
-type RealtimeHealth = {
-  status?: 'live' | 'publication-delayed' | 'source-stale';
-  checkedAt?: string;
-  source?: { observedAt?: string | null; ageSeconds?: number | null; fresh?: boolean };
-  publication?: { committedAt?: string | null; ageSeconds?: number | null; fresh?: boolean; generationId?: string | null };
-  current?: { count?: number; businessDates?: string[] };
-  message?: { zh?: string; en?: string };
+type PublicHealth = {
+  status?: {
+    dataFresh?: boolean;
+    sourceDataFresh?: boolean;
+  };
+  data?: {
+    updatedAt?: string | null;
+    ageSeconds?: number | null;
+    currentAgeSeconds?: number | null;
+    currentCount?: number;
+    currentRead?: {
+      count?: number;
+      checkedAt?: string | null;
+      dbUpdatedAt?: string | null;
+      fileUpdatedAt?: string | null;
+    } | null;
+  };
 };
 
 type FeaturedLeg = {
@@ -50,20 +62,34 @@ type FeaturedPayload = {
   };
 };
 
-const STATIC_REFRESH_MS = 15_000;
-
-const staticUrl = (file: string) => {
-  const base = String(import.meta.env.BASE_URL || '/').replace(/\/?$/, '/');
-  return `${base}data/${file}`;
+type PublishedSyncMeta = {
+  publication?: {
+    generationId?: string | null;
+    committedAt?: string | null;
+  } | null;
+  files?: { current?: number };
+  dailyFeaturedCombos?: FeaturedPayload | null;
 };
+
+type OperationalSnapshot = {
+  status: RealtimeStatus;
+  sourceAgeSeconds: number | null;
+  publicationAgeSeconds: number | null;
+  currentCount: number | null;
+  featured: FeaturedPayload | null;
+};
+
+const REFRESH_MS = 15_000;
+const SOURCE_FRESH_SECONDS = 20 * 60;
+const PUBLICATION_LAG_GRACE_MS = 2 * 60 * 1000;
 
 const hasStoredAccess = () => Object.keys(getAccessAuthHeaders()).length > 0;
 
-const fetchOptionalJson = async <T,>(file: string, signal: AbortSignal): Promise<T | null> => {
+const fetchOptionalJson = async <T,>(url: string, signal: AbortSignal): Promise<T | null> => {
   try {
     const headers = getAccessAuthHeaders();
     if (Object.keys(headers).length === 0) return null;
-    const response = await fetch(`${staticUrl(file)}?v=${Date.now()}`, {
+    const response = await fetch(url, {
       cache: 'no-store',
       headers,
       signal,
@@ -73,6 +99,61 @@ const fetchOptionalJson = async <T,>(file: string, signal: AbortSignal): Promise
   } catch {
     return null;
   }
+};
+
+const instantMs = (value: string | null | undefined) => {
+  const parsed = Date.parse(String(value || ''));
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const secondsSince = (value: string | null | undefined, nowMs = Date.now()) => {
+  const parsed = instantMs(value);
+  return parsed === null ? null : Math.max(0, Math.floor((nowMs - parsed) / 1000));
+};
+
+const deriveOperationalSnapshot = (
+  health: PublicHealth | null,
+  meta: PublishedSyncMeta | null,
+  nowMs = Date.now()
+): OperationalSnapshot => {
+  const sourceAgeSeconds = Number.isFinite(health?.data?.ageSeconds)
+    ? Number(health?.data?.ageSeconds)
+    : secondsSince(health?.data?.updatedAt, nowMs);
+  const publicationCommittedAt = meta?.publication?.committedAt || null;
+  const publicationAgeSeconds = secondsSince(publicationCommittedAt, nowMs);
+  const sourceFresh = health?.status?.sourceDataFresh
+    ?? health?.status?.dataFresh
+    ?? (sourceAgeSeconds !== null && sourceAgeSeconds <= SOURCE_FRESH_SECONDS);
+  const sourceUpdatedMs = instantMs(health?.data?.updatedAt);
+  const publicationCommittedMs = instantMs(publicationCommittedAt);
+  const publicationBehindSource = sourceUpdatedMs !== null && (
+    publicationCommittedMs === null
+    || sourceUpdatedMs - publicationCommittedMs > PUBLICATION_LAG_GRACE_MS
+  );
+  const publicationDelayed = Boolean(
+    sourceFresh
+    && (health?.status?.dataFresh === false || publicationBehindSource)
+  );
+  const status: RealtimeStatus = !sourceFresh
+    ? 'source-stale'
+    : publicationDelayed
+      ? 'publication-delayed'
+      : 'live';
+  const currentCount = Number.isFinite(health?.data?.currentCount)
+    ? Number(health?.data?.currentCount)
+    : Number.isFinite(health?.data?.currentRead?.count)
+      ? Number(health?.data?.currentRead?.count)
+      : Number.isFinite(meta?.files?.current)
+        ? Number(meta?.files?.current)
+        : null;
+
+  return {
+    status,
+    sourceAgeSeconds,
+    publicationAgeSeconds,
+    currentCount,
+    featured: meta?.dailyFeaturedCombos || null,
+  };
 };
 
 const ageLabel = (seconds: number | null | undefined, language: Language) => {
@@ -141,8 +222,7 @@ const EditionCard = ({ edition, type, language }: {
 };
 
 export const OperationalStatusDock: React.FC = () => {
-  const [health, setHealth] = React.useState<RealtimeHealth | null>(null);
-  const [featured, setFeatured] = React.useState<FeaturedPayload | null>(null);
+  const [snapshot, setSnapshot] = React.useState<OperationalSnapshot | null>(null);
   const [expanded, setExpanded] = React.useState(false);
   const [accessActive, setAccessActive] = React.useState(hasStoredAccess);
   const language: Language = typeof document !== 'undefined' && document.documentElement.lang.startsWith('en') ? 'en' : 'zh';
@@ -156,22 +236,20 @@ export const OperationalStatusDock: React.FC = () => {
       setAccessActive(authorized);
       if (!authorized) {
         controller?.abort();
-        setHealth(null);
-        setFeatured(null);
+        setSnapshot(null);
         return;
       }
       controller?.abort();
       controller = new AbortController();
-      const [nextHealth, nextFeatured] = await Promise.all([
-        fetchOptionalJson<RealtimeHealth>('realtime-health.json', controller.signal),
-        fetchOptionalJson<FeaturedPayload>('daily-featured-combos.json', controller.signal),
+      const [health, meta] = await Promise.all([
+        fetchOptionalJson<PublicHealth>(buildApiUrl('/api/v1/health'), controller.signal),
+        fetchOptionalJson<PublishedSyncMeta>(buildApiUrl('/api/v1/sync-meta'), controller.signal),
       ]);
       if (!alive) return;
-      if (nextHealth) setHealth(nextHealth);
-      if (nextFeatured) setFeatured(nextFeatured);
+      setSnapshot(deriveOperationalSnapshot(health, meta));
     };
     void refresh();
-    const timer = window.setInterval(refresh, STATIC_REFRESH_MS);
+    const timer = window.setInterval(refresh, REFRESH_MS);
     return () => {
       alive = false;
       controller?.abort();
@@ -181,12 +259,13 @@ export const OperationalStatusDock: React.FC = () => {
 
   if (!accessActive) return null;
 
-  const status = health?.status || 'source-stale';
+  const status = snapshot?.status || 'source-stale';
   const statusLabel = status === 'live'
     ? (language === 'zh' ? '实时正常' : 'Live')
     : status === 'publication-delayed'
       ? (language === 'zh' ? '发布延迟' : 'Publish delayed')
       : (language === 'zh' ? '数据滞后' : 'Data stale');
+  const featured = snapshot?.featured;
   const today = featured?.today;
   const publishedCount = [today?.twoLeg, today?.threeLeg].filter((row) => row?.status === 'published').length;
 
@@ -196,7 +275,7 @@ export const OperationalStatusDock: React.FC = () => {
         <span className="ops-live-dot" aria-hidden="true" />
         <span className="ops-summary-copy">
           <strong>{statusLabel}</strong>
-          <small>{language === 'zh' ? `源 ${ageLabel(health?.source?.ageSeconds, language)} · 发布 ${ageLabel(health?.publication?.ageSeconds, language)}` : `source ${ageLabel(health?.source?.ageSeconds, language)} · publish ${ageLabel(health?.publication?.ageSeconds, language)}`}</small>
+          <small>{language === 'zh' ? `源 ${ageLabel(snapshot?.sourceAgeSeconds, language)} · 发布 ${ageLabel(snapshot?.publicationAgeSeconds, language)}` : `source ${ageLabel(snapshot?.sourceAgeSeconds, language)} · publish ${ageLabel(snapshot?.publicationAgeSeconds, language)}`}</small>
         </span>
         <span className="ops-summary-featured"><Trophy size={14} /> {publishedCount}/2</span>
         {expanded ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
@@ -205,9 +284,9 @@ export const OperationalStatusDock: React.FC = () => {
       {expanded && (
         <div className="ops-dock-body">
           <section className="ops-health-grid">
-            <div><Activity size={16} /><span>{language === 'zh' ? '源数据' : 'Source'}<b>{ageLabel(health?.source?.ageSeconds, language)}</b></span></div>
-            <div><Layers3 size={16} /><span>{language === 'zh' ? '页面发布' : 'Publication'}<b>{ageLabel(health?.publication?.ageSeconds, language)}</b></span></div>
-            <div><Clock3 size={16} /><span>{language === 'zh' ? '当前场次' : 'Fixtures'}<b>{health?.current?.count ?? '--'}</b></span></div>
+            <div><Activity size={16} /><span>{language === 'zh' ? '源数据' : 'Source'}<b>{ageLabel(snapshot?.sourceAgeSeconds, language)}</b></span></div>
+            <div><Layers3 size={16} /><span>{language === 'zh' ? '页面发布' : 'Publication'}<b>{ageLabel(snapshot?.publicationAgeSeconds, language)}</b></span></div>
+            <div><Clock3 size={16} /><span>{language === 'zh' ? '当前场次' : 'Fixtures'}<b>{snapshot?.currentCount ?? '--'}</b></span></div>
           </section>
 
           <div className="ops-featured-head">
@@ -228,3 +307,5 @@ export const OperationalStatusDock: React.FC = () => {
     </aside>
   );
 };
+
+export { deriveOperationalSnapshot };
