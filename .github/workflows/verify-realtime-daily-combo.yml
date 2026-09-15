@@ -1,0 +1,47 @@
+name: Verify realtime daily combo refactor
+
+on:
+  push:
+    branches:
+      - chatgpt/realtime-daily-combo-ui
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Verify reconciliation identity compatibility
+        run: node scripts/verifyReconcileIdentityCompatibility.cjs
+
+      - name: Verify daily featured combos
+        run: node scripts/verifyDailyFeaturedCombos.cjs
+
+      - name: Verify featured sync-meta publication binding
+        run: node scripts/verifyDailyFeaturedSyncMetaBinding.cjs
+
+      - name: Verify existing lifecycle contract
+        run: npm run verify:match-lifecycle
+
+      - name: Verify existing fast-result reconciliation contract
+        run: npm run verify:fast-results-generation
+
+      - name: Build production frontend
+        run: npm run build

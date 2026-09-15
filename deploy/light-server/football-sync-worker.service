@@ -12,7 +12,7 @@ Environment=SYNC_WORKER_LOOP=1
 Environment=ENABLE_SQLITE_EXPORT=1
 Environment="NODE_OPTIONS=--max-old-space-size=768 --expose-gc"
 Environment=MALLOC_ARENA_MAX=2
-ExecStart=/opt/node-v22.22.1/bin/node /opt/football-predict/scripts/runSyncWorker.cjs --loop
+ExecStart=/opt/node-v22.22.1/bin/node /opt/football-predict/scripts/runSyncWorkerOperational.cjs --loop
 Restart=on-failure
 RestartSec=10
 Nice=10
