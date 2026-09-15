@@ -91,10 +91,6 @@ const pickLabel = (leg: FeaturedLeg, language: Language) => {
   return `${value} (${line > 0 ? '+' : ''}${line})`;
 };
 
-const editionTitle = (edition: FeaturedEdition | null | undefined, fallback: '2x1' | '3x1') => (
-  edition?.type || fallback
-).replace('x', '串') + '串1'.replace('串串', '串');
-
 const EditionCard = ({ edition, type, language }: {
   edition: FeaturedEdition | null | undefined;
   type: '2x1' | '3x1';
