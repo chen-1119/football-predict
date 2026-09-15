@@ -34,6 +34,31 @@
   color: #dce7ff;
 }
 
+.app-frame.app-shell-v2 .app-data-status {
+  max-width: min(410px, 42vw);
+  padding-inline: 10px;
+  overflow: hidden;
+}
+
+.app-frame.app-shell-v2 .app-data-status > span:not(.app-data-status-dot) {
+  min-width: 0;
+}
+
+.app-frame.app-shell-v2 .app-data-status-live-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 2px;
+  padding-left: 8px;
+  border-left: 1px solid currentColor;
+  color: inherit;
+  opacity: .72;
+  font-family: var(--shell-font-mono);
+  font-size: 10px;
+  font-weight: 550;
+  letter-spacing: .015em;
+}
+
 .app-frame.app-shell-v2 .app-data-status.is-ready {
   border-color: rgba(82, 211, 160, .24);
   background: rgba(82, 211, 160, .09);
@@ -43,6 +68,18 @@
 .app-frame.app-shell-v2 .app-data-status.is-ready .app-data-status-dot {
   background: var(--shell-positive);
   box-shadow: 0 0 0 3px rgba(82, 211, 160, .12), 0 0 18px rgba(82, 211, 160, .24);
+}
+
+.app-frame.app-shell-v2 .app-data-status.is-syncing {
+  border-color: rgba(94, 212, 243, .26);
+  background: rgba(94, 212, 243, .08);
+  color: var(--shell-cyan);
+}
+
+.app-frame.app-shell-v2 .app-data-status.is-watch {
+  border-color: rgba(240, 179, 90, .28);
+  background: rgba(240, 179, 90, .09);
+  color: var(--shell-warning);
 }
 
 .app-frame.app-shell-v2 .page-main {
@@ -145,6 +182,10 @@
   color: var(--shell-danger);
 }
 
+@media (max-width: 1080px) {
+  .app-frame.app-shell-v2 .app-data-status-live-meta { display: none; }
+}
+
 @media (max-width: 760px) {
   .app-frame.app-shell-v2 {
     background:
@@ -159,6 +200,10 @@
 
   .app-frame.app-shell-v2 .btn-primary:hover {
     transform: none;
+  }
+
+  .app-frame.app-shell-v2 .app-data-status {
+    max-width: 148px;
   }
 }
 
