@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const rootDir = path.resolve(__dirname, "..");
-const dataDir = path.resolve(
+const defaultDataDir = path.resolve(
   process.env.DATA_GENERATION_PUBLIC_DATA_DIR || path.join(rootDir, "public", "data"),
 );
 
@@ -23,9 +23,13 @@ const atomicWriteJson = (filePath, payload) => {
   }
 };
 
-const publishDailyFeaturedToSyncMeta = ({ now = new Date().toISOString() } = {}) => {
-  const syncMetaPath = path.join(dataDir, "sync-meta.json");
-  const featuredPath = path.join(dataDir, "daily-featured-combos.json");
+const publishDailyFeaturedToSyncMeta = ({
+  now = new Date().toISOString(),
+  dataDir = defaultDataDir,
+} = {}) => {
+  const resolvedDataDir = path.resolve(dataDir);
+  const syncMetaPath = path.join(resolvedDataDir, "sync-meta.json");
+  const featuredPath = path.join(resolvedDataDir, "daily-featured-combos.json");
   const syncMeta = readJson(syncMetaPath, null);
   const featured = readJson(featuredPath, null);
   if (!syncMeta || typeof syncMeta !== "object" || Array.isArray(syncMeta)) {
