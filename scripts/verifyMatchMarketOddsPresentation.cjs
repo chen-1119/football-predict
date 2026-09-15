@@ -9,6 +9,9 @@ const root = path.resolve(__dirname, '..');
 const read = file => fs.readFileSync(path.resolve(root, file), 'utf8').replace(/\r\n/g, '\n');
 const allowedFiles = new Set([
   'src/components/predictions/MatchMarketOdds.tsx',
+  'src/components/predictions/MarketQuoteCard.tsx',
+  'src/services/marketQuotePolicy.ts',
+  'src/styles/matchday-cards.css',
   'src/components/predictions/MatchSummaryRow.tsx',
   'src/components/predictions/CapturedMatchData.tsx',
   'src/components/predictions/sourceNeutralText.ts',
@@ -106,19 +109,21 @@ const base = {
   odds: { odds1: 2.11, oddsX: 3.22, odds2: 4.33 }, oddsSource: 'sporttery:had',
   handicapOdds: { odds1: 1.45, oddsX: 4.56, odds2: 6.78 }, handicapOddsSource: 'sporttery:hhad', handicapLine: '-1'
 };
+// Deterministic clock: manual observations must already exist at render time.
+Date.now = () => Date.parse('2030-09-12T15:00:00Z');
 const renderMarket = (match, language = 'zh', capturedData) => renderToStaticMarkup(React.createElement(MatchMarketOdds, { match, language, capturedData }));
 const poolHtml = (html, code) => {
-  const parts = html.split(/(?=<div class="compact-market-odds__row" data-market-pool=")/);
-  const part = parts.find(value => value.startsWith('<div class="compact-market-odds__row" data-market-pool="' + code + '"'));
+  const parts = html.split(/(?=<section class="market-quote" data-market-pool=")/);
+  const part = parts.find(value => value.startsWith('<section class="market-quote" data-market-pool="' + code + '"'));
   assert.ok(part, 'Missing pool: ' + code);
   return part;
 };
-const prices = (html, code) => [...poolHtml(html, code).matchAll(/class="compact-market-odds__price"><span>[^<]*<\/span><strong>([^<]*)<\/strong>/g)].map(match => match[1]);
+const prices = (html, code) => [...poolHtml(html, code).split('</section>')[0].matchAll(/<dd>([^<]*)<\/dd>/g)].map(match => match[1]);
 const assertPrices = (html, had, hhad) => {
   assert.deepEqual(prices(html, 'HAD'), had);
   assert.deepEqual(prices(html, 'HHAD'), hhad);
 };
-const hadPrices = ['2.11', '3.22', '4.33'], hhadPrices = ['1.45', '4.56', '6.78'], unavailable = ['--', '--', '--'];
+const hadPrices = ['2.11', '3.22', '4.33'], hhadPrices = ['1.45', '4.56', '6.78'], unavailable = ['—', '—', '—'];
 
 check('complete official HAD and HHAD render six separately labelled prices', () => {
   const html = renderMarket(base);
@@ -139,7 +144,7 @@ check('missing or invalid current HHAD lines never borrow a recommendation archi
       archivedPreMatchPrediction: { prediction: { handicapLine: '-3', odds: 8.88 } },
       predictions: [{ oddsPoolCode: 'HHAD', handicapLine: '-3' }] });
     assertPrices(html, hadPrices, unavailable);
-    assert.ok(html.includes('让球未确认'));
+    assert.ok(html.includes('暂无可核验赔率'));
     assert.ok(!html.includes('主队 -3'));
   }
 });
@@ -150,11 +155,12 @@ check('missing pools show six unavailable prices without claiming a sale state',
     assert.ok(!/已停售|未开售|待开售|Closed|Sale closed/.test(html));
   }
 });
-check('external or unlabelled prices never replace official pool prices', () => {
+check('external or unlabelled prices remain reference quotes rather than official SP', () => {
   for (const source of [undefined, 'leisu', '500.com', 'sporttery:had-lookalike']) {
     const html = renderMarket({ ...base, oddsSource: source, handicapOddsSource: source,
       externalSignals: { bookmakerOdds: { had: base.odds, hhad: base.handicapOdds }, externalOdds: base.odds, handicapLine: '-1' } });
-    assertPrices(html, unavailable, unavailable);
+    assertPrices(html, hadPrices, hhadPrices);
+    assert.ok(!html.includes('is-official'));
   }
 });
 check('incomplete or invalid prices hide the whole affected pool without affecting the other pool', () => {
@@ -170,11 +176,11 @@ check('valid numeric strings and official source suffixes retain their normalize
 check('English output retains all six prices and explicit handicap semantics', () => {
   const html = renderMarket(base, 'en');
   assertPrices(html, hadPrices, hhadPrices);
-  for (const label of ['1X2', 'Handicap', 'Home -1', 'H.Home', 'H.Draw', 'H.Away']) assert.ok(html.includes(label));
+  for (const label of ['1X2', 'Handicap', 'Home -1', 'H. Home', 'H. Draw', 'H. Away']) assert.ok(html.includes(label));
 });
-check('source URLs, source names, timestamps and probabilities are absent from public market markup', () => {
+check('source labels and valid receipt times do not expose raw provider identifiers or paths', () => {
   const html = renderMarket({ ...base, oddsSource: 'sporttery:had:secret-provider-name',
-    handicapOddsSource: 'sporttery:hhad:secret-provider-name', oddsUpdatedAt: 'private-updated-at-marker',
+    handicapOddsSource: 'sporttery:hhad:secret-provider-name', oddsUpdatedAt: '2030-09-12T11:00:00Z',
     sourceUrl: 'https://private-source.invalid/secret', sourcePath: '/private/source/path' });
   assertPrices(html, hadPrices, hhadPrices);
   assert.ok(!/secret-provider-name|sporttery:|private-source|private-updated|\/private\/|href=|支持率|%/.test(html));
@@ -255,10 +261,10 @@ check('actual list binding shows qualified manual prices separately while offici
   const sp = actualArchivedSp(match);
   assert.equal(sp, '--');
   const html = renderSummary(match, sp, { [match.id]: manualCapture });
-  assertPrices(html, unavailable, unavailable);
+  assert.deepEqual(prices(html, 'HHAD'), unavailable);
   assert.deepEqual(prices(html, 'MANUAL_1X2'), manualPrices);
-  assert.equal((html.match(/data-market-pool=/g) || []).length, 3);
-  for (const label of ['人工核对', '非竞彩 SP', '采集于', '19:20', '北京时间']) assert.ok(html.includes(label), label);
+  assert.equal((html.match(/data-market-pool=/g) || []).length, 2);
+  for (const label of ['人工记录', '非竞彩 SP', '19:20', '北京']) assert.ok(html.includes(label), label);
   assert.ok(html.includes('class="compact-sp">--</strong>'));
   assert.equal(JSON.stringify({ match, manualCapture }), before, 'presentation cannot write captured prices back into the match');
 });
@@ -269,7 +275,7 @@ check('manual quotes never replace an existing official HAD pool or mix into the
     assert.deepEqual(prices(html, 'HAD'), hadPrices);
   }
   const html = renderMarket({ ...base, odds: undefined }, 'zh', manualCapture);
-  assertPrices(html, unavailable, hhadPrices);
+  assert.deepEqual(prices(html, 'HHAD'), hhadPrices);
   assert.deepEqual(prices(html, 'MANUAL_1X2'), manualPrices);
   assert.ok(poolHtml(html, 'HHAD').includes('主队 -1'));
 });
@@ -299,7 +305,7 @@ check('manual quotes require explicit valid capture time before kickoff and the 
   const html = renderMarket(noOfficialPools, 'en', { ...manualCapture,
     manualOdds: { ...manualCapture.manualOdds, observedAt: '2030-09-12T19:20:00+08:00' } });
   assert.deepEqual(prices(html, 'MANUAL_1X2'), manualPrices);
-  assert.ok(html.includes('Not Sporttery SP'));
+  assert.ok(html.includes('not Sporttery SP'));
   assert.ok(html.includes('19:20'));
 });
 check('missing, malformed, incomplete and nonfinite manual values stay hidden without throwing', () => {
@@ -319,7 +325,7 @@ check('manual reference display preserves archived recommendation SP and never e
   const sp = actualArchivedSp(match);
   assert.equal(sp, '2.45');
   const html = renderSummary(match, sp, { [match.id]: capture });
-  assertPrices(html, unavailable, unavailable);
+  assert.deepEqual(prices(html, 'HHAD'), unavailable);
   assert.deepEqual(prices(html, 'MANUAL_1X2'), manualPrices);
   assert.ok(html.includes('class="compact-sp">2.45</strong>'));
   assert.ok(!/private-source|href=|leisu/i.test(html));

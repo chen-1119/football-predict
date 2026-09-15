@@ -273,10 +273,25 @@ function writeJson(file, payload) {
 }
 
 async function main() {
-  const updatedAt = new Date().toISOString();
-  const body = await httpGetBuffer(SOURCE_URL);
-  const html = iconv.decode(body, "gbk");
-  const rows = requireUsableRows(parseRows(html, updatedAt));
+  let rows;
+  // Native production reads the shared PostgreSQL collector. Never create a
+  // second HTTP request budget, or bypass a persisted source cooldown.
+  const { postgresEnabled, createPostgresPool } = require('../server/postgresStore.cjs');
+  if (postgresEnabled()) {
+    const pool = createPostgresPool({ max: 1, applicationName: 'football-market-signal-bridge' });
+    try { rows = await require('../collectors/market/signalBridge.cjs').readMarketSignalRows(pool); }
+    finally { await pool.end(); }
+  } else {
+    const observedAt = new Date().toISOString();
+    const body = await httpGetBuffer(SOURCE_URL);
+    rows = requireUsableRows(parseRows(iconv.decode(body, 'gbk'), observedAt));
+  }
+  if (!rows.length) {
+    console.log(JSON.stringify({ ok: true, source: '500.com:jczq', rows: 0, skipped: 'source-no-events', preservedSnapshot: true }));
+    return;
+  }
+  // A cached quote keeps its receipt time; reading it is not a fresh observation.
+  const updatedAt = new Date(Math.max(...rows.map(row => Date.parse(row.signal.updatedAt)))).toISOString();
   const existing = readExisting();
   const matches = { ...(existing.matches || {}) };
 
