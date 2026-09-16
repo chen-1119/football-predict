@@ -5,7 +5,7 @@ import {
 } from './displayRecommendation';
 import { getArchivedPreMatchPrediction } from './archivedPreMatchPrediction';
 import { isBeforeMatchSaleCutoff } from './matchLifecycle';
-import { getCalibratedModelProbability, getEvidenceScore } from './predictionPresentation';
+import { getEvidenceScore } from './predictionPresentation';
 
 export type FeaturedPlanKind = 'TWO' | 'THREE';
 export type FeaturedPlanSettlement = 'WON' | 'LOST' | 'PENDING' | 'VOID';
@@ -83,6 +83,17 @@ const finite = (value: unknown) => {
   return Number.isFinite(numeric) ? numeric : null;
 };
 
+// Use evidence captured with the recommendation itself. Historical plan replay
+// must not depend on a probability model that may have been refreshed after
+// kickoff/settlement.
+const frozenModelProbability = (prediction: PredictionDetail) => {
+  const evidenceProbability = finite(prediction.multiFactorEvidence?.modelProbability);
+  if (evidenceProbability !== null) {
+    return evidenceProbability <= 1 ? evidenceProbability * 100 : evidenceProbability;
+  }
+  return finite(prediction.confidence?.publicMetrics?.modelProbability);
+};
+
 const selectionPassesFeaturedGate = (prediction: PredictionDetail, evidenceScore: number) => {
   if (prediction.marketType !== 'BEST') return false;
   if (!resultCodes.has(prediction.tipCode)) return false;
@@ -134,7 +145,7 @@ const currentFeaturedCandidates = (matches: Match[], businessDate: string, now: 
       match,
       prediction,
       evidenceScore,
-      modelProbability: getCalibratedModelProbability(match, prediction)
+      modelProbability: frozenModelProbability(prediction)
     };
   })
   .filter((selection): selection is FeaturedPlanSelection => Boolean(selection));
@@ -150,7 +161,7 @@ const archivedFeaturedCandidates = (matches: Match[], businessDate: string) => m
       match,
       prediction,
       evidenceScore,
-      modelProbability: getCalibratedModelProbability(match, prediction)
+      modelProbability: frozenModelProbability(prediction)
     };
   })
   .filter((selection): selection is FeaturedPlanSelection => Boolean(selection));
