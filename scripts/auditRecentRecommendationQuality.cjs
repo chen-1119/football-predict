@@ -6,7 +6,7 @@ const path = require("node:path");
 const rootDir = path.resolve(__dirname, "..");
 const historyFile = path.resolve(process.env.MATCH_HISTORY_FILE || path.join(rootDir, "public", "data", "matches-history.json"));
 const now = Number.isFinite(Date.parse(process.env.AUDIT_NOW || "")) ? Date.parse(process.env.AUDIT_NOW) : Date.now();
-const readJson = (file, fallback) => { try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return fallback; } };
+const readJson = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
 const text = (value) => String(value ?? "").trim();
 const finite = (value) => Number.isFinite(Number(value)) ? Number(value) : null;
 const parseLine = (value) => {
@@ -59,7 +59,14 @@ const summarize = (rows) => {
 };
 const group = (rows, keyFn) => Object.fromEntries([...new Set(rows.map(keyFn).filter(Boolean))].sort().map((key) => [key, summarize(rows.filter((row) => keyFn(row) === key))]));
 
-const history = readJson(historyFile, []);
+async function main() {
+let history, readSource;
+if (process.env.FOOTBALL_STORAGE_MODE === 'postgres-only') {
+  const pool = require('../server/postgresStore.cjs').createPostgresPool({max:1});
+  try { history = (await pool.query("SELECT payload FROM football.match_snapshots WHERE dataset='history'")).rows.map(row=>row.payload); readSource='postgres'; }
+  finally { await pool.end(); }
+} else { history=readJson(historyFile); readSource=historyFile; }
+if (!Array.isArray(history)) throw new Error('Invalid history input');
 const rows = (Array.isArray(history) ? history : []).filter((match) => match?.status === "FINISHED").map((match) => {
   const prediction = formalArchivedBest(match);
   if (!prediction) return null;
@@ -77,5 +84,8 @@ for (const days of [7, 14, 30, 90]) {
   windows[`${days}d`] = { ...summarize(scoped), byMarket: group(scoped, (row) => row.market), byOddsBucket: group(scoped, (row) => row.oddsBucket), byTip: group(scoped, (row) => `${row.market}:${row.tip}`), byLeague: group(scoped, (row) => row.league) };
 }
 
-console.log(JSON.stringify({ version: "recommendation-quality-audit-v1", generatedAt: new Date(now).toISOString(), historyFile, sampleRows: rows.length, windows,
+console.log(JSON.stringify({ version: "recommendation-quality-audit-v1", generatedAt: new Date(now).toISOString(), readSource, sampleRows: rows.length, windows,
   policy: { source: "immutable archived pre-match BEST recommendations only", postMatchDirectionReconstruction: false, intendedUse: "diagnostic and conservative gate tuning" } }, null, 2));
+
+}
+main().catch(error=>{console.error(error.message);process.exitCode=1;});

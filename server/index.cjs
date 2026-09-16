@@ -11521,6 +11521,16 @@ const handleApi = async (req, res, url) => {
     return sendJsonCached(req, res, await buildPublicSyncMeta(), { maxAgeSeconds: 5 });
   }
 
+  if (url.pathname === "/api/v1/daily-featured-combos") {
+    res.setHeader("Cache-Control", "no-store");
+    if (req.method !== "GET") return sendJson(res, { ok: false, error: "method not allowed" }, 405);
+    if (!(await hasRecommendationAccess(req, url))) return sendJson(res, { ok: false, error: "access code required" }, 401);
+    if (!shouldPreferPostgresRead()) return sendJson(res, { ok: false, error: "PostgreSQL unavailable" }, 503);
+    const result = await postgresPool.query("SELECT payload FROM football.daily_featured_combo_state WHERE id=1");
+    if (!result.rows[0]) return sendJson(res, { ok: false, error: "combo update pending" }, 503);
+    return sendJson(res, { ok: true, ...result.rows[0].payload });
+  }
+
   if (url.pathname === "/api/v1/model/evaluation") {
     const detail = url.searchParams.get("detail") === "admin";
     if (detail && !isAuthorized(req, url)) return sendJson(res, { ok: false, error: "unauthorized" }, 401);

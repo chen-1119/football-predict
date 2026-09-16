@@ -1,6 +1,6 @@
 "use strict";
 
-const finite = (value) => Number.isFinite(Number(value)) ? Number(value) : null;
+const finite = (value) => value !== null && value !== undefined && String(value).trim() !== "" && Number.isFinite(Number(value)) ? Number(value) : null;
 
 const evaluateHistoricalRecommendationGuard = (input = {}) => {
   const market = String(input.market || "").toUpperCase();

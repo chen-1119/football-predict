@@ -1,10 +1,25 @@
 {
   "name": "football-sporttery-collector",
-  "runtime": "Node.js20.15",
+  "runtime": "Node.js22.18",
   "handler": "index.handler",
   "memoryMb": 256,
   "timeoutSeconds": 60,
   "publicNetworkAccess": true,
+  "maxInstances": 1,
+  "reservedInstances": 0,
+  "async": {
+    "maxRetries": 0,
+    "maxEventAgeSeconds": 60
+  },
+  "costPolicy": {
+    "monthlyFreeGbSeconds": 400000,
+    "monthlyFreeRequests": 1000000,
+    "planningDays": 31,
+    "extraInvocationsAllowance": 100,
+    "plannedGbSecondsLimit": 150000,
+    "singleTimerOnly": true,
+    "paidServicesEnabled": false
+  },
   "timer": {
     "name": "sporttery-every-5-minutes",
     "rule": "@every 5m",

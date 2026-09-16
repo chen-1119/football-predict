@@ -3,6 +3,7 @@
 const crypto = require("node:crypto");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
+const costConfig = require("./function-config.json");
 
 if (!globalThis.crypto) globalThis.crypto = crypto.webcrypto;
 
@@ -62,9 +63,28 @@ const loadCollector = () => {
   return collectorModulePromise;
 };
 
+// Read the actual FunctionGraph allocation, not an environment variable that
+// could hide an expensive console configuration. Reject before any network work.
+const verifyRuntimeCostBounds = (context) => {
+  const memoryMb = Number(context?.getMemorySize?.());
+  const timeoutSeconds = Number(context?.getRunningTimeInSeconds?.());
+  if (!Number.isFinite(memoryMb) || memoryMb <= 0 || memoryMb > costConfig.memoryMb
+    || !Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0
+    || timeoutSeconds > costConfig.timeoutSeconds) {
+    throw new Error("Huawei collector runtime exceeds cost limits or runtime allocation is unavailable");
+  }
+  return { memoryMb, timeoutSeconds };
+};
+
 exports.handler = async (event, context) => {
   const startedAt = new Date().toISOString();
+  const allocation = verifyRuntimeCostBounds(context);
   const env = resolveEnvironment(context);
+  const requestedTimeoutMs = Number(env.SPORTTERY_COLLECTOR_REQUEST_TIMEOUT_MS);
+  env.SPORTTERY_COLLECTOR_REQUEST_TIMEOUT_MS = String(
+    Number.isFinite(requestedTimeoutMs) && requestedTimeoutMs > 0
+      ? Math.min(requestedTimeoutMs, 20_000) : 20_000,
+  );
   const collector = await loadCollector();
   if (!collector.sportteryCollectorConfigured(env)) {
     throw new Error("Huawei FunctionGraph collector signing settings are incomplete");
@@ -84,6 +104,7 @@ exports.handler = async (event, context) => {
     triggerType: text(event?.trigger_type) || "manual",
     startedAt,
     finishedAt: new Date().toISOString(),
+    allocation,
     sourceCycleId: result.sourceCycleId,
     endpoints: result.endpoints,
     acceptedRows: result.acceptedRows,

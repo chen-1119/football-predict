@@ -1,28 +1,13 @@
 "use strict";
 
 const crypto = require("node:crypto");
-const fs = require("node:fs");
-const path = require("node:path");
+const { createPostgresPool, withPostgresTransaction } = require("../server/postgresStore.cjs");
+const { readPostgresPublicationIdentity } = require("../server/postgresProjectionStore.cjs");
 const { isOfficialRecommendationEligible, parseHandicapLine } = require("../src/services/officialRecommendationEligibility.cjs");
 const { evaluateHistoricalRecommendationGuard } = require("../src/services/recommendationHistoricalGuard.cjs");
-const { isBeforeMatchSaleCutoff, eventVersionOf, canonicalSourceMatchId } = require("../src/services/matchLifecycle.cjs");
+const { isBeforeMatchSaleCutoff, eventVersionOf, canonicalSourceMatchId, isOfficialSportteryFinal, isOfficialSportteryVoid } = require("../src/services/matchLifecycle.cjs");
 
-const rootDir = path.resolve(__dirname, "..");
-const storeDir = path.resolve(process.env.SERVER_STORE_DIR || process.env.DATA_STORE_DIR || path.join(rootDir, "server-data"));
-const publicDataDir = path.resolve(process.env.PUBLIC_DATA_DIR || path.join(rootDir, "public", "data"));
-const ledgerFile = path.resolve(process.env.DAILY_FEATURED_COMBO_LEDGER || path.join(storeDir, "daily-featured-combos.json"));
-const publicFile = path.resolve(process.env.DAILY_FEATURED_COMBO_PUBLIC || path.join(publicDataDir, "daily-featured-combos.json"));
 const MINIMUMS = Object.freeze({ 2: 2.5, 3: 5 });
-
-const readJson = (file, fallback) => {
-  try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return fallback; }
-};
-const atomicWrite = (file, payload) => {
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify(payload, null, 2)}\n`, "utf8");
-  fs.renameSync(tmp, file);
-};
 const text = (value) => String(value ?? "").trim();
 const iso = (value) => {
   const parsed = Date.parse(value || "");
@@ -80,6 +65,8 @@ const formalCandidate = (match, now) => {
     matchId: text(match.id), sourceMatchId: canonicalSourceMatchId(match.sourceMatchId || match.id),
     eventVersion: eventVersionOf(match), kickoffTime: iso(match.kickoffTime),
     homeTeamName: match.homeTeamName || null, awayTeamName: match.awayTeamName || null,
+    homeTeamId: match.homeTeamId || null, awayTeamId: match.awayTeamId || null,
+    leagueId: match.leagueId || null,
     market: official.pool, tipCode: prediction.tipCode, handicapLine: official.pool === "HHAD" ? official.line : 0,
     odds: official.value, evidenceScore: evidence,
   };
@@ -100,7 +87,15 @@ const choose = (candidates, size) => {
       if (!bestRank || next.score < bestRank.score) { best = [...picked]; bestRank = next; }
       return;
     }
-    for (let i = start; i < candidates.length; i += 1) walk(i + 1, [...picked, candidates[i]]);
+    for (let i = start; i < candidates.length; i += 1) {
+      const next = candidates[i];
+      if (!next.sourceMatchId || picked.some((leg) => leg.sourceMatchId === next.sourceMatchId)) continue;
+      // Avoid shared teams and concentration in one competition.
+      const teams = [next.homeTeamId, next.awayTeamId].filter(Boolean);
+      if (picked.some((leg) => teams.some((team) => [leg.homeTeamId, leg.awayTeamId].includes(team)))) continue;
+      if (next.leagueId && picked.filter((leg) => leg.leagueId === next.leagueId).length >= 2) continue;
+      walk(i + 1, [...picked, next]);
+    }
   };
   walk(0, []);
   return best ? { size, minimumTotalOdds: floor, totalOdds: Number(bestRank.totalOdds.toFixed(2)), averageEvidenceScore: Number(bestRank.avg.toFixed(1)), legs: best } : null;
@@ -117,30 +112,30 @@ const outcomeCode = (match, leg) => {
 };
 const matchesLeg = (match, leg) => canonicalSourceMatchId(match?.sourceMatchId || match?.id) === leg.sourceMatchId && eventVersionOf(match) === leg.eventVersion;
 const settleEntry = (entry, history, settledAt) => {
-  if (entry.settlement?.status === "WON" || entry.settlement?.status === "LOST") return entry;
-  const legs = entry.legs.map((leg) => {
-    const match = history.find((row) => row?.status === "FINISHED" && matchesLeg(row, leg));
+  if (["WON", "LOST", "VOID"].includes(entry.settlement?.status)) return entry;
+  const results = entry.legs.map((leg) => {
+    const match = history.find((row) => matchesLeg(row, leg) && (isOfficialSportteryFinal(row) || isOfficialSportteryVoid(row)));
+    if (match && isOfficialSportteryVoid(match)) return { sourceMatchId: leg.sourceMatchId, result: "VOID", finalScore: null };
     const actual = match ? outcomeCode(match, leg) : null;
-    return { ...leg, result: actual ? (actual === leg.tipCode ? "WON" : "LOST") : "PENDING", finalScore: match && Number.isInteger(match.scoreHome) && Number.isInteger(match.scoreAway) ? `${match.scoreHome}-${match.scoreAway}` : null };
+    return { sourceMatchId: leg.sourceMatchId, result: actual ? (actual === leg.tipCode ? "WON" : "LOST") : "PENDING", finalScore: match && Number.isInteger(match.scoreHome) && Number.isInteger(match.scoreAway) ? `${match.scoreHome}-${match.scoreAway}` : null };
   });
-  const pending = legs.some((leg) => leg.result === "PENDING");
-  const status = pending ? "PENDING" : legs.every((leg) => leg.result === "WON") ? "WON" : "LOST";
-  return { ...entry, legs, settlement: { status, settledAt: status === "PENDING" ? null : settledAt } };
+  const status = results.some((leg) => leg.result === "VOID") ? "VOID"
+    : results.some((leg) => leg.result === "PENDING") ? "PENDING"
+      : results.every((leg) => leg.result === "WON") ? "WON" : "LOST";
+  return { ...entry, settlement: { status, results, settledAt: status === "PENDING" ? null : settledAt } };
 };
 const summarize = (entries, size) => {
   const rows = entries.filter((entry) => entry.size === size);
   const settled = rows.filter((entry) => ["WON", "LOST"].includes(entry.settlement?.status));
   const won = settled.filter((entry) => entry.settlement.status === "WON").length;
-  return { published: rows.length, settled: settled.length, won, lost: settled.length - won, hitRate: settled.length ? Number((won / settled.length).toFixed(4)) : null };
+  return { published: rows.length, settled: settled.length, won, lost: settled.length - won, void: rows.filter((row) => row.settlement?.status === "VOID").length, hitRate: settled.length ? Number((won / settled.length).toFixed(4)) : null };
 };
 
-function run({ now = Date.now() } = {}) {
+function buildLedger({ now = Date.now(), current, history, entries: priorEntries, publishable = false, publication }) {
+  if (![current, history, priorEntries].every(Array.isArray)) throw new Error("Invalid combo inputs; refusing to replace ledger");
   const clock = shanghaiParts(now);
-  const current = readJson(path.join(publicDataDir, "matches-current.json"), []);
-  const history = readJson(path.join(publicDataDir, "matches-history.json"), []);
-  const prior = readJson(ledgerFile, { version: "daily-featured-combo-ledger-v1", entries: [] });
-  let entries = Array.isArray(prior.entries) ? prior.entries : [];
-  const candidates = (Array.isArray(current) ? current : [])
+  let entries = [...priorEntries];
+  const candidates = (publishable ? current : [])
     .filter((match) => businessDate(match) === clock.date)
     .map((match) => formalCandidate(match, now)).filter(Boolean)
     .sort((a, b) => b.evidenceScore - a.evidenceScore || Date.parse(a.kickoffTime) - Date.parse(b.kickoffTime)).slice(0, 18);
@@ -153,23 +148,73 @@ function run({ now = Date.now() } = {}) {
       if (!selected) continue;
       const frozenAt = new Date(now).toISOString();
       const id = crypto.createHash("sha256").update(JSON.stringify({ businessDate: clock.date, size, frozenAt, legs: selected.legs.map((leg) => [leg.sourceMatchId, leg.eventVersion, leg.market, leg.tipCode, leg.odds]) })).digest("hex");
-      entries.push({ version: "daily-featured-combo-v1", id: `combo:${id}`, businessDate: clock.date, frozenAt, ...selected, settlement: { status: "PENDING", settledAt: null } });
+      entries.push({ version: "daily-featured-combo-v2", id: `combo:${id}`, businessDate: clock.date, frozenAt, publication, ...selected, settlement: { status: "PENDING", settledAt: null } });
     }
   }
 
   const settledAt = new Date(now).toISOString();
   entries = entries.map((entry) => settleEntry(entry, Array.isArray(history) ? history : [], settledAt));
-  const payload = { version: "daily-featured-combo-ledger-v1", updatedAt: settledAt, entries };
-  atomicWrite(ledgerFile, payload);
   const publicPayload = {
-    version: "daily-featured-combo-public-v1", updatedAt: settledAt,
+    version: "daily-featured-combo-public-v2", updatedAt: settledAt, businessDate: clock.date,
+    source: "postgres", publishable, publication,
+    previews: freezeReached ? [] : [choose(candidates, 2), choose(candidates, 3)].filter(Boolean),
     today: entries.filter((entry) => entry.businessDate === clock.date),
     statistics: { two: summarize(entries, 2), three: summarize(entries, 3) },
-    policy: { freeze: "weekday-21:00/weekend-22:00 Asia/Shanghai", twoMinimumSp: 2.5, threeMinimumSp: 5, forcedOutput: false, immutableDirections: true },
+    policy: { freeze: "weekday-21:00/weekend-22:00 Asia/Shanghai", twoMinimumSp: 2.5, threeMinimumSp: 5, forcedOutput: false, immutableDirections: true, voidPolicy: "any-official-void-excludes-combo-from-hit-rate" },
   };
-  atomicWrite(publicFile, publicPayload);
-  return publicPayload;
+  return { entries, publicPayload };
 }
 
-if (require.main === module) console.log(JSON.stringify(run(), null, 2));
-module.exports = { run, formalCandidate, choose, settleEntry, summarize, shanghaiParts };
+function canPublish(health, meta, publication, now) {
+  const age = now - Date.parse(meta?.updatedAt || "");
+  return health?.status?.modelRiskStable === true && health?.status?.recommendationReliable === true
+    && health?.status?.dataFresh === true && health?.status?.serviceOk === true
+    && age >= 0 && age <= 15 * 60000
+    && Boolean(publication?.manifestHash && publication?.generationId)
+    && meta?.publication?.manifestHash === publication.manifestHash
+    && meta?.publication?.generationId === publication.generationId;
+}
+
+async function persistLedger(client, options) {
+  const previous = await client.query("SELECT payload, settlement FROM football.daily_featured_combos ORDER BY business_date, size");
+  const prior = previous.rows.map((row) => ({ ...row.payload, settlement: row.settlement }));
+  const result = buildLedger({ ...options, entries: prior });
+  for (const entry of result.entries) {
+    const { settlement, ...payload } = entry;
+    const old = prior.find((row) => row.id === entry.id);
+    if (!old) await client.query(`INSERT INTO football.daily_featured_combos(id,business_date,size,payload,settlement)
+      VALUES($1,$2,$3,$4::jsonb,$5::jsonb)`, [entry.id, entry.businessDate, entry.size, JSON.stringify(payload), JSON.stringify(settlement)]);
+    else if (JSON.stringify(old.settlement) !== JSON.stringify(settlement)) {
+      await client.query("UPDATE football.daily_featured_combos SET settlement=$2::jsonb WHERE id=$1", [entry.id, JSON.stringify(settlement)]);
+    }
+  }
+  await client.query(`INSERT INTO football.daily_featured_combo_state(id,payload) VALUES(1,$1::jsonb)
+    ON CONFLICT(id) DO UPDATE SET payload=EXCLUDED.payload`, [JSON.stringify(result.publicPayload)]);
+  return result.publicPayload;
+}
+
+async function run({ now = Date.now() } = {}) {
+  const base = `http://127.0.0.1:${Number(process.env.PORT || 8788)}`;
+  const read = async (route) => {
+    const response = await fetch(base + route, { signal: AbortSignal.timeout(10000) });
+    if (!response.ok) throw new Error(`Combo readiness unavailable: ${response.status}`);
+    return response.json();
+  };
+  const [health, meta] = await Promise.all([read("/api/v1/health"), read("/api/v1/sync-meta")]);
+  const pool = createPostgresPool({ max: 1, applicationName: "football-featured-combos" });
+  try {
+    return await withPostgresTransaction(pool, async (client) => {
+      await client.query("SELECT pg_advisory_xact_lock(hashtext('daily-featured-combos-v2'))");
+      const identity = await readPostgresPublicationIdentity(client);
+      if (!identity.available || !identity.publication?.manifestHash) throw new Error("Combo PostgreSQL publication unavailable");
+      const rows = await client.query("SELECT dataset,payload FROM football.match_snapshots WHERE dataset IN ('current','history')");
+      return persistLedger(client, { now, publication: identity.publication,
+        publishable: canPublish(health, meta, identity.publication, now),
+        current: rows.rows.filter((row) => row.dataset === "current").map((row) => row.payload),
+        history: rows.rows.filter((row) => row.dataset === "history").map((row) => row.payload) });
+    });
+  } finally { await pool.end(); }
+}
+
+if (require.main === module) run().then((payload) => console.log(JSON.stringify(payload))).catch((error) => { console.error(error.message); process.exitCode = 1; });
+module.exports = { run, buildLedger, canPublish, persistLedger, formalCandidate, choose, settleEntry, summarize, shanghaiParts };

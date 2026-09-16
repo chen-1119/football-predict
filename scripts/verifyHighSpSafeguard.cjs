@@ -125,7 +125,7 @@ check('confidence is invariant to SP when all football evidence is identical',
   && longPriceConfidence.priceIndependent === true,
   { shortPriceConfidence, longPriceConfidence });
 
-check('policy contains no max-SP direction switch', MULTI_FACTOR_POLICY_VERSION === 'multi-factor-dynamic-evidence-v3'
+check('policy contains no max-SP direction switch', MULTI_FACTOR_POLICY_VERSION === 'multi-factor-dynamic-evidence-v4'
   && MIN_MODEL_GAP === 0.06
   && !JSON.stringify(highSpStrong).includes('maxSp')
   && highSpStrong.code === strongEvidence().code);

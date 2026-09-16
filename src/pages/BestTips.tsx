@@ -81,10 +81,10 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
   const pickCards = React.useMemo<PickCard[]>(() => matches
     .filter((match) => match.status === 'SCHEDULED' && Date.parse(match.kickoffTime) > now)
     .map((match): PickCard | null => {
-      const formal = formalPresentationAllowed && isBeforeMatchSaleCutoff(match, now)
+      const formal = comboEnabled && isBeforeMatchSaleCutoff(match, now)
         ? getFormalRecommendationPrediction(match)
         : undefined;
-      const live = formal ? undefined : getLiveRecommendationPrediction(match);
+      const live = formal || !comboEnabled ? undefined : getLiveRecommendationPrediction(match);
       const prediction = formal || live;
       if (!prediction) return null;
       const officialOdds = getOfficialRecommendationOdds(match, prediction);
@@ -98,7 +98,7 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
     })
     .filter((card): card is PickCard => Boolean(card))
     .sort((left, right) => right.evidence - left.evidence || Date.parse(left.match.kickoffTime) - Date.parse(right.match.kickoffTime)),
-  [formalPresentationAllowed, matches, now]);
+  [formalPresentationAllowed, comboEnabled, matches, now]);
 
   const publishedIds = React.useMemo(() => new Set(pickCards.map((card) => card.match.id)), [pickCards]);
 
@@ -160,7 +160,7 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
         <>
           <section className="best-pool-section" aria-label={language === 'zh' ? '正式赛前推荐' : 'Formal pre-match picks'}>
             <header className="best-pool-section__header">
-              <div><h2>{language === 'zh' ? '正式赛前方向' : 'Formal Pre-match Picks'}</h2><p>{language === 'zh' ? '高 SP、HHAD 和市场背离场次使用更严格门槛。' : 'Higher-SP, HHAD and market-conflict lanes use stricter gates.'}</p></div>
+              <div><h2>{language === 'zh' ? '正式 / 实时方向' : 'Formal Pre-match Picks'}</h2><p>{language === 'zh' ? '高 SP、HHAD 和市场背离场次使用更严格门槛。' : 'Higher-SP, HHAD and market-conflict lanes use stricter gates.'}</p></div>
               <span>{pickCards.length}</span>
             </header>
             {pickCards.length ? (
@@ -174,7 +174,7 @@ export const BestTips: React.FC<BestTipsProps> = ({ onSelectMatch }) => {
                       <div className="best-pool-v4__time"><strong>{formatKickoff(match.kickoffTime, language)}</strong><span>{track === 'formal' ? (language === 'zh' ? '正式' : 'Formal') : (language === 'zh' ? '实时' : 'Live')}</span></div>
                       <div className="best-pool-v4__teams"><span><TeamBadge team={home} size="sm" />{home.name[language]}</span><span><TeamBadge team={away} size="sm" />{away.name[language]}</span></div>
                       <div className="best-pool-v4__pick"><span>{getPredictionValueLabel(prediction, language)}</span><strong>{pickLabel(prediction, language)}</strong><small>@{Number(prediction.odds || 0).toFixed(2)} · {language === 'zh' ? '证据' : 'Evidence'} {formatEvidenceScore(prediction)}{modelProbability ? ` · ${modelProbability}` : ''}</small></div>
-                      <div className="best-pool-v4__reason"><span>{language === 'zh' ? '质量状态' : 'Quality'}</span><p>{language === 'zh' ? `证据评分 ${evidence.toFixed(0)}，已通过当前正式发布门槛。` : `Evidence ${evidence.toFixed(0)}, passed the current formal publication gate.`}</p></div>
+                      <div className="best-pool-v4__reason"><span>{language === 'zh' ? '质量状态' : 'Quality'}</span><p>{language === 'zh' ? `证据评分 ${evidence.toFixed(0)}，已通过当前${track === 'formal' ? '正式' : '实时'}发布门槛。` : `Evidence ${evidence.toFixed(0)}, passed the current formal publication gate.`}</p></div>
                       <button type="button" onClick={() => onSelectMatch(match.id)} className="best-pool-v4__action is-formal"><Trophy size={14} aria-hidden="true" />{language === 'zh' ? '查看分析' : 'Analyze'}</button>
                     </article>
                   );

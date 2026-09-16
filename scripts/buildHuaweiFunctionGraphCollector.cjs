@@ -4,6 +4,9 @@ const { spawnSync } = require("node:child_process");
 
 const rootDir = path.resolve(__dirname, "..");
 const sourceDir = path.join(rootDir, "deploy", "huawei-functiongraph");
+const costPlan = require("./huaweiFunctionGraphCostPolicy.cjs").validateCostPolicy(
+  require(path.join(sourceDir, "function-config.json")),
+);
 const tmpDir = path.join(rootDir, ".codex-tmp");
 const stamp = new Date().toISOString().replace(/[-:.TZ]/g, "");
 const stageDir = path.join(tmpDir, `huawei-functiongraph-collector-${stamp}`);
@@ -52,4 +55,5 @@ console.log(JSON.stringify({
   zipPath,
   bytes: fs.statSync(zipPath).size,
   entries: fs.readdirSync(stageDir).sort(),
+  costPlan,
 }, null, 2));
