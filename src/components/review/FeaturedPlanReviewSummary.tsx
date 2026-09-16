@@ -72,14 +72,14 @@ export const FeaturedPlanReviewSummary: React.FC<FeaturedPlanReviewSummaryProps>
   ];
 
   return (
-    <section className="featured-review" aria-label={language === 'zh' ? '精选组合复盘统计' : 'Featured plan review statistics'}>
+    <section className="featured-review" aria-label={language === 'zh' ? '已加载历史精选组合复盘' : 'Loaded-history featured plan replay'}>
       <header className="featured-review__header">
         <div>
           <span><BarChart3 size={14} aria-hidden="true" /> PRECISION REVIEW</span>
-          <h2>{language === 'zh' ? '精选组合复盘' : 'Featured plan review'}</h2>
+          <h2>{language === 'zh' ? '精选组合复盘 · 已加载历史' : 'Featured plan review · loaded history'}</h2>
           <p>{language === 'zh'
-            ? '按冻结赛前正式方向确定性重放；与单场正式 BEST 命中率分开统计，不用赛后盘口补造方向。'
-            : 'Deterministic replay from frozen formal pre-match directions; tracked separately from single-pick formal BEST results.'}</p>
+            ? '按当前浏览器已加载的冻结赛前正式方向确定性重放；与单场正式 BEST 命中率分开统计，不用赛后盘口补造方向。这里不是服务器全量累计统计。'
+            : 'Deterministic replay from frozen formal pre-match directions currently loaded in the browser. It is separate from the single-pick formal BEST record and is not a server-complete lifetime statistic.'}</p>
         </div>
       </header>
 
@@ -93,7 +93,7 @@ export const FeaturedPlanReviewSummary: React.FC<FeaturedPlanReviewSummaryProps>
               <span><XCircle size={13} />{language === 'zh' ? '未中' : 'Miss'} {bucket.lost}</span>
               <span><Clock3 size={13} />{language === 'zh' ? '待结算' : 'Pending'} {bucket.pending}</span>
             </div>
-            <small>{language === 'zh' ? `形成 ${bucket.available} 组 · 作废 ${bucket.void}` : `${bucket.available} plans · ${bucket.void} void`}</small>
+            <small>{language === 'zh' ? `已加载历史形成 ${bucket.available} 组 · 作废 ${bucket.void}` : `${bucket.available} loaded-history plans · ${bucket.void} void`}</small>
           </article>
         ))}
       </div>
