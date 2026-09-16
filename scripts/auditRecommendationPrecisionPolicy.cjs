@@ -8,6 +8,7 @@ const historyPath = path.resolve(
   process.env.PRECISION_AUDIT_HISTORY_PATH
   || path.join(__dirname, "..", "public", "data", "matches-history.json")
 );
+const BLOCKED_TIER_PATTERN = /reference|model[-_ ]?only|watch/i;
 
 const finite = (value) => {
   const numeric = Number(value);
@@ -48,7 +49,7 @@ const actualCode = (match, prediction) => {
 const isBaselineFormal = (prediction) => Boolean(
   prediction
   && prediction.recommendationAction === "recommend"
-  && prediction.recommendationTier === "main"
+  && !BLOCKED_TIER_PATTERN.test(String(prediction.recommendationTier || ""))
   && Number(prediction.odds) > 1
 );
 
