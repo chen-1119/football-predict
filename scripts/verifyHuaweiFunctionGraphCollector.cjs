@@ -30,7 +30,11 @@ const values = {
   FOOTBALL_PRODUCTION_BASE_URL: "https://production.test",
   FOOTBALL_PRODUCTION_ADMIN_TOKEN: "verification-upload-token",
 };
-const context = { getUserData: (name) => values[name] || "" };
+const context = {
+  getUserData: (name) => values[name] || "",
+  getMemorySize: () => 256,
+  getRunningTimeInSeconds: () => 60,
+};
 const trustRegistry = {
   version: "sporttery-collector-trust-registry-v1",
   keys: [{
@@ -90,6 +94,16 @@ const resultPayload = {
 };
 
 const run = async () => {
+  const { validateCostPolicy } = require("./huaweiFunctionGraphCostPolicy.cjs");
+  const config = require("../deploy/huawei-functiongraph/function-config.json");
+  const costPlan = validateCostPolicy(config);
+  assert.equal(costPlan.worstCaseExecutionGbSeconds, 135420);
+  for (const change of [
+    { memoryMb: 512 }, { timeoutSeconds: 300 },
+    { timer: { enabled: true, rule: "@every 1m" } },
+    { async: { maxRetries: 3, maxEventAgeSeconds: 60 } },
+    { reservedInstances: 1 }, { maxInstances: 10 },
+  ]) assert.throws(() => validateCostPolicy({ ...config, ...change }), /cost policy/);
   globalThis.crypto = crypto.webcrypto;
   process.env.SPORTTERY_COLLECTOR_MODULE_PATH = path.join(
     rootDir,
@@ -194,6 +208,20 @@ const run = async () => {
 
   try {
     const handler = require("../deploy/huawei-functiongraph/index.cjs").handler;
+    // Bad console allocations must fail before either data collection or upload.
+    let preflightFetches = 0;
+    const fixtureFetch = globalThis.fetch;
+    globalThis.fetch = async (...args) => { preflightFetches += 1; return fixtureFetch(...args); };
+    for (const invalidContext of [
+      { ...context, getMemorySize: () => 512 },
+      { ...context, getRunningTimeInSeconds: () => 300 },
+      { ...context, getMemorySize: () => NaN },
+      { getUserData: context.getUserData },
+    ]) {
+      await assert.rejects(handler({ trigger_type: "TIMER" }, invalidContext), /cost limits/);
+    }
+    assert.equal(preflightFetches, 0);
+    globalThis.fetch = fixtureFetch;
     const result = await handler({ trigger_type: "TIMER" }, context);
     assert.equal(result.ok, true);
     assert.equal(result.runtime, "huawei-functiongraph");
@@ -299,13 +327,14 @@ const run = async () => {
     hangResultBody = false;
     delete values.SPORTTERY_COLLECTOR_REQUEST_TIMEOUT_MS;
 
-    const invalidContext = { getUserData: (name) => name === "FOOTBALL_PRODUCTION_BASE_URL" ? "http://production.test" : values[name] || "" };
+    const invalidContext = { ...context, getUserData: (name) => name === "FOOTBALL_PRODUCTION_BASE_URL" ? "http://production.test" : values[name] || "" };
     await assert.rejects(handler({ trigger_type: "TIMER" }, invalidContext), /credential-free HTTPS origin/);
 
     console.log(JSON.stringify({
       ok: true,
       checkedAt: new Date().toISOString(),
-      assertions: 59,
+      assertions: 71,
+      costPlan,
       acceptedRows: validation.acceptedRows,
       fastLaneEndpoints: uploadedFastLane.endpoints.length,
       resultRows: result.fastLane.resultRows,
