@@ -2,6 +2,8 @@
 Description=Football Predict sync worker
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=12
 
 [Service]
 Type=simple
@@ -13,8 +15,10 @@ Environment=ENABLE_SQLITE_EXPORT=0
 Environment="NODE_OPTIONS=--max-old-space-size=768 --expose-gc"
 Environment=MALLOC_ARENA_MAX=2
 ExecStart=/opt/node-v22.22.1/bin/node /opt/football-predict/scripts/runSyncWorker.cjs --loop
-Restart=on-failure
-RestartSec=10
+Restart=always
+RestartSec=5
+TimeoutStopSec=45
+KillSignal=SIGTERM
 Nice=10
 IOSchedulingClass=best-effort
 IOSchedulingPriority=7
