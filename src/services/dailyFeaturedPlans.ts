@@ -60,19 +60,55 @@ export const featuredPlanBusinessDate = (match: Match) => (
 );
 
 const precisionFloorForPrediction = (prediction: PredictionDetail) => prediction.oddsPoolCode === 'HHAD'
-  ? { maxOdds: 1.85, minEvidence: 78 }
-  : { maxOdds: 2.05, minEvidence: 72 };
+  ? {
+      maxOdds: 1.85,
+      minEvidence: 78,
+      minDataQuality: 0.65,
+      minSupportingFactors: 6,
+      minExpectedValue: 0.02,
+      minProbabilityEdge: 0
+    }
+  : {
+      maxOdds: 2.05,
+      minEvidence: 72,
+      minDataQuality: 0.55,
+      minSupportingFactors: 5,
+      minExpectedValue: 0.01,
+      minProbabilityEdge: -0.01
+    };
+
+const finite = (value: unknown) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+};
 
 const selectionPassesFeaturedGate = (prediction: PredictionDetail, evidenceScore: number) => {
   if (prediction.marketType !== 'BEST') return false;
   if (!resultCodes.has(prediction.tipCode)) return false;
   if (prediction.recommendationAction !== 'recommend' || prediction.recommendationTier !== 'main') return false;
+  const evidence = prediction.multiFactorEvidence;
+  if (!evidence || evidence.eligible !== true || (evidence.blockers || []).length > 0) return false;
+
   const odds = Number(prediction.odds || 0);
   const floor = precisionFloorForPrediction(prediction);
+  const dataQuality = finite(evidence.dataQuality);
+  const expectedValue = finite(evidence.expectedValue);
+  const probabilityEdge = finite(evidence.probabilityEdge);
+  const severeMissingCount = Math.max(0, Math.trunc(finite(evidence.diagnostics?.severeMissingCount) || 0));
+  const supportingFactors = Array.isArray(evidence.supportingFactors) ? evidence.supportingFactors.length : 0;
+
   return Number.isFinite(odds)
     && odds > 1
     && odds <= floor.maxOdds
-    && evidenceScore >= floor.minEvidence;
+    && evidenceScore >= floor.minEvidence
+    && dataQuality !== null
+    && dataQuality >= floor.minDataQuality
+    && expectedValue !== null
+    && expectedValue >= floor.minExpectedValue
+    && probabilityEdge !== null
+    && probabilityEdge >= floor.minProbabilityEdge
+    && severeMissingCount === 0
+    && supportingFactors >= floor.minSupportingFactors;
 };
 
 const currentFeaturedCandidates = (matches: Match[], businessDate: string, now: number) => matches
