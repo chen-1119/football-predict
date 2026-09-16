@@ -3,6 +3,10 @@ const {
   precisionPolicyFor,
 } = require('./recommendationPrecisionPolicy.cjs');
 
+// Public evidence consumers (browser/server eligibility, archives and signed
+// publications) are pinned to this contract. Evolving recommendation logic
+// must not silently change the evidence schema identifier.
+const MULTI_FACTOR_EVIDENCE_VERSION = 'multi-factor-market-evidence-v2';
 const MULTI_FACTOR_POLICY_VERSION = 'multi-factor-dynamic-evidence-v4-precision';
 const MIN_MODEL_GAP = 0.06;
 
@@ -200,7 +204,8 @@ const evaluateMultiFactorRecommendation = (input = {}) => {
     : 'WATCH';
 
   return {
-    version: MULTI_FACTOR_POLICY_VERSION,
+    version: MULTI_FACTOR_EVIDENCE_VERSION,
+    policyVersion: MULTI_FACTOR_POLICY_VERSION,
     eligible,
     grade,
     evidenceScore,
@@ -248,6 +253,7 @@ const evaluateMultiFactorRecommendation = (input = {}) => {
 };
 
 module.exports = {
+  MULTI_FACTOR_EVIDENCE_VERSION,
   MULTI_FACTOR_POLICY_VERSION,
   MIN_MODEL_GAP,
   evaluateMultiFactorRecommendation,
