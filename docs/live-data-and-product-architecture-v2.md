@@ -29,7 +29,7 @@ datastore:generation (immutable publication)
           +-------+--------+
           |                |
           v                v
-      PostgreSQL        SQLite legacy
+      PostgreSQL        SQLite (测试/历史兼容)
           |
           v
        /api/v1
@@ -65,7 +65,7 @@ datastore:generation (immutable publication)
 - 必须存在相同 canonical sourceMatchId；
 - 必须存在完全一致的 eventVersion / kickoff event；
 - 只有 `teamId === derivedTeamId(teamName)` 时才视为 synthetic presentation id；
-- synthetic id 可以在同一 immutable event 中重绑定；
+- synthetic id 仅对已核实的简称/全称映射归一化；相同 event 不能证明任意两个队名代表同队；
 - 真实 provider-owned team id 永不改写；
 - 不修改全局 `matchLifecycle.sameEvent` 的严格规则；
 - 不允许相同 source id 在不同 eventVersion 之间合并。

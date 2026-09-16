@@ -4,6 +4,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { storedResultTeamIdentity } = require("./storedResultTeamIdentity.cjs");
 const { sameEvent, eventVersionOf, canonicalSourceMatchId } = require("../src/services/matchLifecycle.cjs");
+const { storePaths } = require("../server/dataGenerationStore.cjs");
+const { postgresReadEnabled, createPostgresPool } = require("../server/postgresStore.cjs");
+const { readPostgresPublicationIdentity } = require("../server/postgresProjectionStore.cjs");
 
 const rootDir = path.resolve(__dirname, "..");
 const storeDir = path.resolve(process.env.SERVER_STORE_DIR || process.env.DATA_STORE_DIR || path.join(rootDir, "server-data"));
@@ -77,14 +80,38 @@ const currentPath = path.join(publicDataDir, "matches-current.json");
 const historyPath = path.join(publicDataDir, "matches-history.json");
 const workerStatusPath = path.join(storeDir, "sync-worker-status.json");
 const quarantinePath = path.join(storeDir, "post-match-review-quarantine.json");
-const currentPointerPath = path.join(storeDir, "generations", "current.json");
+const currentPointerPath = storePaths(storeDir).currentPointer;
+
+async function main() {
 
 const syncMeta = readJson(syncMetaPath, {});
-const current = readJson(currentPath, []);
+let current = readJson(currentPath, []);
 const history = readJson(historyPath, []);
 const worker = readJson(workerStatusPath, {});
 const quarantine = readJson(quarantinePath, { rows: [] });
-const publicationPointer = readJson(currentPointerPath, null);
+const generationPointer = readJson(currentPointerPath, null);
+let publicationPointer = generationPointer;
+let readSource = "working-files";
+if (postgresReadEnabled()) {
+  const pool = createPostgresPool({ max: 1, queryTimeoutMillis: 15000 });
+  try {
+    // Observe identity and current rows from one database snapshot.
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+      const identity = await readPostgresPublicationIdentity(client);
+      if (!identity.available) throw new Error("PostgreSQL publication identity unavailable");
+      publicationPointer = identity.publication;
+      const result = await client.query("SELECT payload FROM football.match_snapshots WHERE dataset = 'current'");
+      current = result.rows.map((row) => row.payload);
+      await client.query("COMMIT");
+      readSource = "postgres";
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally { client.release(); }
+  } finally { await pool.end(); }
+}
 const today = shanghaiDay();
 
 const todayRows = (Array.isArray(current) ? current : []).filter((match) => businessDayOf(match) === today);
@@ -115,6 +142,8 @@ const publicationAgeMinutes = publicationCommittedAt && Number.isFinite(Date.par
   : null;
 
 const blockers = [];
+if (!publicationPointer?.generationId) blockers.push("publication-identity-missing");
+if (readSource === "postgres" && generationPointer?.generationId !== publicationPointer?.generationId) blockers.push("postgres-publication-transition");
 if (!Array.isArray(current) || current.length === 0) blockers.push("current-publication-empty");
 if (todayRows.length === 0 && futureRows.length === 0) blockers.push("no-today-or-future-fixtures");
 if (sourceAgeMinutes !== null && sourceAgeMinutes > 20) blockers.push("current-source-stale");
@@ -135,6 +164,8 @@ const report = {
     lastAttemptAt: syncMeta?.lastAttemptAt || null,
   },
   publication: {
+    readSource,
+    stagedGenerationId: generationPointer?.generationId || null,
     generationId: publicationPointer?.generationId || syncMeta?.generationId || null,
     sourceCycleId: publicationPointer?.sourceCycleId || syncMeta?.sourceCycleId || null,
     committedAt: publicationCommittedAt,
@@ -165,3 +196,9 @@ const report = {
 
 console.log(JSON.stringify(report, null, 2));
 if (!report.ok) process.exitCode = 2;
+}
+
+main().catch((error) => {
+  console.error(JSON.stringify({ ok: false, version: "live-data-diagnostics-v1", code: error.code || null, error: error.message }));
+  process.exitCode = 1;
+});

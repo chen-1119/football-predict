@@ -63,4 +63,12 @@ assert.equal(
   "same provider ID remains authoritative across display-name changes",
 );
 
-console.log(JSON.stringify({ ok: true, tests: 4 }));
+for (const wrong of [
+  { homeTeamName: "未知球队", homeTeamId: derivedTeamId("未知球队") },
+  { homeTeamName: base.awayTeamName, homeTeamId: base.awayTeamId },
+  { sourceMatchId: "10002" },
+  { kickoffTime: "2026-09-16T11:01:00.000Z" },
+]) {
+  assert.equal(sameEvent(storedResultTeamIdentity(base), storedResultTeamIdentity({ ...base, ...wrong })), false);
+}
+console.log(JSON.stringify({ ok: true, tests: 8 }));
