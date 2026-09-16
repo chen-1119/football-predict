@@ -4,6 +4,7 @@ import type { Match } from '../../services/mockData';
 import { getTeamById } from '../../services/entities';
 import { getPredictionTipDisplay } from '../../services/bettingDisplay';
 import { buildDailyFeaturedPlans, type DailyFeaturedPlan } from '../../services/dailyFeaturedPlans';
+import '../../styles/featured-plans.css';
 
 interface DailyFeaturedPlansProps {
   matches: Match[];
@@ -84,7 +85,7 @@ export const DailyFeaturedPlans: React.FC<DailyFeaturedPlansProps> = ({ matches,
     <section className="featured-plans" aria-label={language === 'zh' ? '每日精选组合分析' : 'Daily featured analysis plans'}>
       <header className="featured-plans__header">
         <div>
-          <span>{language === 'zh' ? 'PRECISION PICKS' : 'PRECISION PICKS'}</span>
+          <span>PRECISION PICKS</span>
           <h2>{language === 'zh' ? '每日精选组合分析' : 'Daily featured analysis'}</h2>
           <p>{language === 'zh'
             ? '只使用通过精度优先正式门槛的赛前方向；不满足质量与总 SP 要求时保持空缺。'
