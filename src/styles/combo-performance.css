@@ -1,0 +1,20 @@
+.daily-combo-performance {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding-top: 2px;
+}
+.daily-combo-performance > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid rgba(93,126,173,.18);
+  border-radius: 10px;
+  background: rgba(7,16,31,.34);
+}
+.daily-combo-performance span { color: var(--shell-text-secondary); font-size: 11px; }
+.daily-combo-performance strong { color: var(--shell-text); font: 750 16px/1.2 var(--font-numeric, monospace); }
+.daily-combo-performance small { grid-column: 1 / -1; color: var(--shell-text-muted); font-size: 10px; line-height: 1.4; }
+@media (max-width: 720px) { .daily-combo-performance { grid-template-columns: minmax(0, 1fr); } }
