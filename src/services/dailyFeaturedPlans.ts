@@ -41,6 +41,7 @@ const PLAN_RULES: Record<FeaturedPlanKind, { count: 2 | 3; minimumCombinedSp: nu
 };
 
 const resultCodes = new Set(['1', 'X', '2']);
+const blockedTierPattern = /reference|model[-_ ]?only|watch/i;
 
 const shanghaiDate = (value: string | number | Date) => {
   const date = value instanceof Date ? value : new Date(value);
@@ -85,7 +86,8 @@ const finite = (value: unknown) => {
 const selectionPassesFeaturedGate = (prediction: PredictionDetail, evidenceScore: number) => {
   if (prediction.marketType !== 'BEST') return false;
   if (!resultCodes.has(prediction.tipCode)) return false;
-  if (prediction.recommendationAction !== 'recommend' || prediction.recommendationTier !== 'main') return false;
+  if (prediction.recommendationAction !== 'recommend') return false;
+  if (blockedTierPattern.test(String(prediction.recommendationTier || ''))) return false;
   const evidence = prediction.multiFactorEvidence;
   if (!evidence || evidence.eligible !== true || (evidence.blockers || []).length > 0) return false;
 
