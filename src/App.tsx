@@ -17,7 +17,7 @@ import { useApp } from './context/AppContextCore';
 const PredictionsList = lazy(() => import('./pages/PredictionsList').then((module) => ({ default: module.PredictionsList })));
 const BestTips = lazy(() => import('./pages/BestTipsWithFeatured').then((module) => ({ default: module.BestTipsWithFeatured })));
 const BetSlipGenerator = lazy(() => import('./pages/BetSlipGenerator').then((module) => ({ default: module.BetSlipGenerator })));
-const HitAndWin = lazy(() => import('./pages/HitAndWin').then((module) => ({ default: module.HitAndWin })));
+const HitAndWin = lazy(() => import('./pages/HitAndWinWithFeatured').then((module) => ({ default: module.HitAndWinWithFeatured })));
 const Auth = lazy(() => import('./pages/Auth').then((module) => ({ default: module.Auth })));
 const AccessCodeAdmin = lazy(() => import('./pages/AccessCodeAdmin').then((module) => ({ default: module.AccessCodeAdmin })));
 const MatchDetail = lazy(() => import('./pages/MatchDetail').then((module) => ({ default: module.MatchDetail })));
