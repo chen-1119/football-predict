@@ -15,7 +15,7 @@ import { GlossaryModal } from './components/GlossaryModal';
 import { useApp } from './context/AppContextCore';
 
 const PredictionsList = lazy(() => import('./pages/PredictionsList').then((module) => ({ default: module.PredictionsList })));
-const BestTips = lazy(() => import('./pages/BestTips').then((module) => ({ default: module.BestTips })));
+const BestTips = lazy(() => import('./pages/BestTipsWithFeatured').then((module) => ({ default: module.BestTipsWithFeatured })));
 const BetSlipGenerator = lazy(() => import('./pages/BetSlipGenerator').then((module) => ({ default: module.BetSlipGenerator })));
 const HitAndWin = lazy(() => import('./pages/HitAndWin').then((module) => ({ default: module.HitAndWin })));
 const Auth = lazy(() => import('./pages/Auth').then((module) => ({ default: module.Auth })));
