@@ -2,6 +2,8 @@
 Description=Football Predict sync worker
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=12
 
 [Service]
 Type=simple
@@ -10,11 +12,16 @@ EnvironmentFile=/etc/football-predict/env
 Environment=SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH=/opt/football-predict/deploy/light-server/collector-trust-registry.json
 Environment=SYNC_WORKER_LOOP=1
 Environment=ENABLE_SQLITE_EXPORT=0
+Environment=ENABLE_MODEL_BACKTEST_ON_SYNC=1
+Environment=ENABLE_MODEL_STRATEGY_ON_SYNC=1
+Environment=MODEL_BACKTEST_ON_SYNC_MIN_INTERVAL_MINUTES=120
 Environment="NODE_OPTIONS=--max-old-space-size=768 --expose-gc"
 Environment=MALLOC_ARENA_MAX=2
 ExecStart=/opt/node-v22.22.1/bin/node /opt/football-predict/scripts/runSyncWorker.cjs --loop
-Restart=on-failure
-RestartSec=10
+Restart=always
+RestartSec=5
+TimeoutStopSec=45
+KillSignal=SIGTERM
 Nice=10
 IOSchedulingClass=best-effort
 IOSchedulingPriority=7
