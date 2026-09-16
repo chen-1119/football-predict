@@ -9,9 +9,16 @@ interface BestTipsWithFeaturedProps {
 
 export const BestTipsWithFeatured: React.FC<BestTipsWithFeaturedProps> = ({ onSelectMatch }) => {
   const { matches, language } = useApp();
+  const [now, setNow] = React.useState(() => Date.now());
+
+  React.useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
   return (
     <div className="best-tips-composed-page">
-      <DailyFeaturedPlans matches={matches} language={language} onSelectMatch={onSelectMatch} />
+      <DailyFeaturedPlans matches={matches} language={language} now={now} onSelectMatch={onSelectMatch} />
       <ExistingBestTips onSelectMatch={onSelectMatch} />
     </div>
   );
