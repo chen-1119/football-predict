@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Football Predict featured combo ledger every five minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=20s
+Persistent=true
+Unit=football-featured-combo.service
+
+[Install]
+WantedBy=timers.target

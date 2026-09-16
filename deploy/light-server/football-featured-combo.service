@@ -1,0 +1,24 @@
+[Unit]
+Description=Football Predict daily featured combo ledger
+After=network-online.target football-sync-worker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/football-predict
+EnvironmentFile=/etc/football-predict/env
+ExecStart=/opt/node-v22.22.1/bin/node /opt/football-predict/scripts/dailyFeaturedComboLedger.cjs
+User=football
+Group=football
+NoNewPrivileges=true
+UMask=0027
+PrivateDevices=true
+PrivateTmp=true
+ProtectHome=read-only
+ProtectSystem=strict
+TimeoutStartSec=60
+MemoryMax=256M
+LockPersonality=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6

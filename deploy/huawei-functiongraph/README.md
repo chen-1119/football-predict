@@ -14,7 +14,7 @@ signature-aware validator used by the result watcher.
 
 ## Function settings
 
-- Runtime: Node.js 20.15
+- Runtime: Node.js 22.18
 - Region: `cn-north-4` (华北-北京四)
 - Handler: `index.handler`
 - Memory: 256 MB

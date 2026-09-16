@@ -1,4 +1,6 @@
-const MULTI_FACTOR_POLICY_VERSION = 'multi-factor-dynamic-evidence-v3';
+const { evaluateHistoricalRecommendationGuard } = require('./recommendationHistoricalGuard.cjs');
+
+const MULTI_FACTOR_POLICY_VERSION = 'multi-factor-dynamic-evidence-v4';
 const MIN_MODEL_GAP = 0.06;
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -45,16 +47,6 @@ const formatHandicapLine = (value) => {
   return `${value > 0 ? '+' : '-'}${text}`;
 };
 
-/**
- * Decide whether a selected HAD/HHAD direction has enough independent,
- * market and data-quality evidence to be promoted. Official SP is a
- * continuous value/risk input; it is deliberately not an accuracy ceiling.
- *
- * The upstream gate is required because it already contains the independent
- * Elo/Poisson/form, draw-pressure, handicap-support and rolling-calibration
- * checks. This final gate prevents the unified-posterior layer from silently
- * overriding those checks merely because another direction has a lower SP.
- */
 const evaluateMultiFactorRecommendation = (input = {}) => {
   const market = String(input.market || input.oddsPoolCode || '').toUpperCase();
   const code = String(input.code || input.tipCode || '').toUpperCase();
@@ -149,12 +141,8 @@ const evaluateMultiFactorRecommendation = (input = {}) => {
   if (modelGap === null) blockers.push('missing-model-separation');
   if (dataQuality === null) blockers.push('missing-data-quality');
   if (!upstreamRecommended || !upstreamAligned) blockers.push('upstream-multi-factor-gate-not-passed');
-  // Fail closed: missing/unknown risk state is not equivalent to a stable,
-  // leakage-audited model release.
   if (globalRiskTier !== 'stable') blockers.push('model-risk-not-promotable');
 
-  // SP remains a continuous market/value feature. It must not choose a
-  // different probability floor, confidence cap, or promotion lane.
   const minimumModelProbability = 0.4;
   if (modelProbability !== null && modelProbability < minimumModelProbability) blockers.push('model-probability-too-low');
   if (modelGap !== null && modelGap < MIN_MODEL_GAP) blockers.push('model-separation-too-thin');
@@ -168,13 +156,32 @@ const evaluateMultiFactorRecommendation = (input = {}) => {
   if (trendContradicts && (probabilityEdge === null || probabilityEdge < 0.04)) blockers.push('official-sp-movement-contradiction');
   if (externalMarketContradicted && (probabilityEdge === null || probabilityEdge < 0.05)) blockers.push('external-market-contradiction');
 
+  const historicalGuard = evaluateHistoricalRecommendationGuard({
+    market,
+    code,
+    odds,
+    modelProbability,
+    modelGap,
+    probabilityEdge,
+    dataQuality,
+    marketLeaderAligned,
+    externalMarketAligned,
+    trendContradicts,
+  });
+  blockers.push(...historicalGuard.blockers);
+
+  const minimumEvidenceScore = market === 'HHAD' || (odds !== null && odds >= 2.06)
+    ? 74
+    : odds !== null && odds >= 1.71
+      ? 70
+      : 66;
   if (supportingFactors.length < 4) blockers.push('insufficient-independent-support');
-  if (evidenceScore < 66) blockers.push('evidence-score-below-threshold');
+  if (evidenceScore < minimumEvidenceScore) blockers.push('evidence-score-below-threshold');
 
   const uniqueBlockers = unique(blockers);
   const eligible = uniqueBlockers.length === 0;
   const grade = eligible
-    ? evidenceScore >= 80 ? 'A' : evidenceScore >= 72 ? 'B' : 'C'
+    ? evidenceScore >= 82 ? 'A' : evidenceScore >= 74 ? 'B' : 'C'
     : 'WATCH';
 
   return {
@@ -182,7 +189,7 @@ const evaluateMultiFactorRecommendation = (input = {}) => {
     eligible,
     grade,
     evidenceScore,
-    threshold: 66,
+    threshold: minimumEvidenceScore,
     market,
     code,
     handicapLine,
@@ -198,6 +205,7 @@ const evaluateMultiFactorRecommendation = (input = {}) => {
     penalty: Number(penalty.toFixed(2)),
     supportingFactors,
     blockers: uniqueBlockers,
+    historicalGuard,
     diagnostics: {
       scoreAligned,
       crossMarketCompatible,
