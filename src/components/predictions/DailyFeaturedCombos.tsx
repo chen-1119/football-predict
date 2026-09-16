@@ -4,6 +4,7 @@ import type { Match } from '../../services/mockData';
 import { buildDailyFeaturedCombos, type FeaturedCombo } from '../../services/dailyFeaturedCombos';
 import { getTeamById } from '../../services/entities';
 import { getPredictionTipDisplay } from '../../services/bettingDisplay';
+import '../../styles/recommendation-quality.css';
 
 type Language = 'zh' | 'en';
 
