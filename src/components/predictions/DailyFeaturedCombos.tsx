@@ -7,6 +7,9 @@ import { getPredictionTipDisplay } from '../../services/bettingDisplay';
 import '../../styles/recommendation-quality.css';
 
 type Language = 'zh' | 'en';
+type ComboStats = { published: number; settled: number; won: number; lost: number; hitRate: number | null };
+type FrozenCombo = { id: string; businessDate: string; size: 2 | 3; totalOdds: number; settlement?: { status?: 'PENDING' | 'WON' | 'LOST' } };
+type ComboLedgerPublic = { updatedAt?: string; today?: FrozenCombo[]; statistics?: { two?: ComboStats; three?: ComboStats } };
 
 interface DailyFeaturedCombosProps {
   matches: Match[];
@@ -60,8 +63,37 @@ const ComboCard: React.FC<{
   </article>
 );
 
+const formatRate = (stats: ComboStats | undefined, language: Language) => {
+  if (!stats || stats.settled === 0 || stats.hitRate === null) return language === 'zh' ? '待积累' : 'Pending';
+  return `${(stats.hitRate * 100).toFixed(1)}%`;
+};
+
 export const DailyFeaturedCombos: React.FC<DailyFeaturedCombosProps> = ({ matches, language, enabled, onSelectMatch }) => {
   const combos = React.useMemo(() => enabled ? buildDailyFeaturedCombos(matches) : null, [enabled, matches]);
+  const [ledger, setLedger] = React.useState<ComboLedgerPublic | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const base = import.meta.env.BASE_URL || '/';
+        const response = await fetch(`${base}data/daily-featured-combos.json?v=${Date.now()}`, { cache: 'no-store' });
+        if (!response.ok) return;
+        const payload = await response.json() as ComboLedgerPublic;
+        if (!cancelled) setLedger(payload);
+      } catch {
+        // Combo history is an auxiliary lane; live recommendations remain usable.
+      }
+    };
+    void load();
+    const timer = window.setInterval(load, 60_000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, []);
+
+  const twoStats = ledger?.statistics?.two;
+  const threeStats = ledger?.statistics?.three;
+  const todaySettled = (ledger?.today || []).filter((entry) => ['WON', 'LOST'].includes(entry.settlement?.status || '')).length;
+
   return (
     <section className="daily-combo-board" aria-label={language === 'zh' ? '每日精选分析组合' : 'Daily featured analysis combinations'}>
       <header className="daily-combo-board__header">
@@ -82,6 +114,11 @@ export const DailyFeaturedCombos: React.FC<DailyFeaturedCombosProps> = ({ matche
           <ComboCard combo={combos.three} language={language} onSelectMatch={onSelectMatch} />
         </div>
       )}
+      <footer className="daily-combo-performance" aria-label={language === 'zh' ? '精选组合复盘统计' : 'Featured combo review statistics'}>
+        <div><span>{language === 'zh' ? '2场组合累计' : '2-leg cumulative'}</span><strong>{formatRate(twoStats, language)}</strong><small>{twoStats ? `${twoStats.won}/${twoStats.settled}` : '--'}</small></div>
+        <div><span>{language === 'zh' ? '3场组合累计' : '3-leg cumulative'}</span><strong>{formatRate(threeStats, language)}</strong><small>{threeStats ? `${threeStats.won}/${threeStats.settled}` : '--'}</small></div>
+        <div><span>{language === 'zh' ? '今日已结算组合' : 'Settled today'}</span><strong>{todaySettled}</strong><small>{language === 'zh' ? '冻结后只结算，不改方向' : 'Frozen directions remain immutable'}</small></div>
+      </footer>
     </section>
   );
 };
