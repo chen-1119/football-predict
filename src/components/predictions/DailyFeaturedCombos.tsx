@@ -4,6 +4,8 @@ import type { Match } from '../../services/mockData';
 import type { FeaturedCombo } from '../../services/dailyFeaturedCombos';
 import { getTeamById } from '../../services/entities';
 import { getPredictionTipDisplay } from '../../services/bettingDisplay';
+import { getAccessAuthHeaders } from '../../services/accessControl';
+import { buildApiUrl } from '../../services/runtimeUrls';
 import '../../styles/recommendation-quality.css';
 
 type Language = 'zh' | 'en';
@@ -77,7 +79,7 @@ export const DailyFeaturedCombos: React.FC<DailyFeaturedCombosProps> = ({ matche
     let cancelled = false;
     const load = async () => {
       try {
-        const response = await fetch('/api/v1/daily-featured-combos', { cache: 'no-store', credentials: 'same-origin', signal: AbortSignal.timeout(10000) });
+        const response = await fetch(buildApiUrl('/api/v1/daily-featured-combos'), { headers: getAccessAuthHeaders(), cache: 'no-store', credentials: 'same-origin', signal: AbortSignal.timeout(10000) });
         if (!response.ok) throw new Error('combo unavailable');
         const payload = await response.json() as ComboLedgerPublic;
         if (!cancelled) { setLedger(payload); setError(false); }
@@ -133,7 +135,7 @@ export const DailyFeaturedCombos: React.FC<DailyFeaturedCombosProps> = ({ matche
       <footer className="daily-combo-performance" aria-label={language === 'zh' ? '精选组合复盘统计' : 'Featured combo review statistics'}>
         <div><span>{language === 'zh' ? '2场组合累计' : '2-leg cumulative'}</span><strong>{error ? '--' : formatRate(twoStats, language)}</strong><small>{twoStats ? `${twoStats.won}/${twoStats.settled}` : '--'}</small></div>
         <div><span>{language === 'zh' ? '3场组合累计' : '3-leg cumulative'}</span><strong>{error ? '--' : formatRate(threeStats, language)}</strong><small>{threeStats ? `${threeStats.won}/${threeStats.settled}` : '--'}</small></div>
-        <div><span>{language === 'zh' ? '今日已结算组合' : 'Settled today'}</span><strong>{todaySettled}</strong><small>{language === 'zh' ? '冻结后只结算，不改方向' : 'Frozen directions remain immutable'}</small></div>
+        <div><span>{language === 'zh' ? '今日已结算组合' : 'Settled today'}</span><strong>{error ? '--' : todaySettled}</strong><small>{language === 'zh' ? '冻结后只结算，不改方向' : 'Frozen directions remain immutable'}</small></div>
       </footer>
     </section>
   );
