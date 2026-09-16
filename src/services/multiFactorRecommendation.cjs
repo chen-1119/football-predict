@@ -1,4 +1,13 @@
-const MULTI_FACTOR_POLICY_VERSION = 'multi-factor-dynamic-evidence-v3';
+const {
+  evaluateRecommendationPrecision,
+  precisionPolicyFor,
+} = require('./recommendationPrecisionPolicy.cjs');
+
+// Public evidence consumers (browser/server eligibility, archives and signed
+// publications) are pinned to this contract. Evolving recommendation logic
+// must not silently change the evidence schema identifier.
+const MULTI_FACTOR_EVIDENCE_VERSION = 'multi-factor-market-evidence-v2';
+const MULTI_FACTOR_POLICY_VERSION = 'multi-factor-dynamic-evidence-v4-precision';
 const MIN_MODEL_GAP = 0.06;
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -46,14 +55,14 @@ const formatHandicapLine = (value) => {
 };
 
 /**
- * Decide whether a selected HAD/HHAD direction has enough independent,
- * market and data-quality evidence to be promoted. Official SP is a
- * continuous value/risk input; it is deliberately not an accuracy ceiling.
+ * Precision-first final promotion gate. The upstream model still computes every
+ * direction and keeps reference/shadow observations. This function decides
+ * whether one result-pool direction is strong enough to enter the formal lane.
  *
- * The upstream gate is required because it already contains the independent
- * Elo/Poisson/form, draw-pressure, handicap-support and rolling-calibration
- * checks. This final gate prevents the unified-posterior layer from silently
- * overriding those checks merely because another direction has a lower SP.
+ * The precision policy deliberately reduces recommendation volume. Historical
+ * evaluation showed that high-SP and HHAD cohorts were materially less stable,
+ * so those cohorts now need stronger evidence rather than sharing the old
+ * one-size-fits-all threshold.
  */
 const evaluateMultiFactorRecommendation = (input = {}) => {
   const market = String(input.market || input.oddsPoolCode || '').toUpperCase();
@@ -149,12 +158,8 @@ const evaluateMultiFactorRecommendation = (input = {}) => {
   if (modelGap === null) blockers.push('missing-model-separation');
   if (dataQuality === null) blockers.push('missing-data-quality');
   if (!upstreamRecommended || !upstreamAligned) blockers.push('upstream-multi-factor-gate-not-passed');
-  // Fail closed: missing/unknown risk state is not equivalent to a stable,
-  // leakage-audited model release.
   if (globalRiskTier !== 'stable') blockers.push('model-risk-not-promotable');
 
-  // SP remains a continuous market/value feature. It must not choose a
-  // different probability floor, confidence cap, or promotion lane.
   const minimumModelProbability = 0.4;
   if (modelProbability !== null && modelProbability < minimumModelProbability) blockers.push('model-probability-too-low');
   if (modelGap !== null && modelGap < MIN_MODEL_GAP) blockers.push('model-separation-too-thin');
@@ -167,22 +172,44 @@ const evaluateMultiFactorRecommendation = (input = {}) => {
   if (riskTagsCount > 4) blockers.push('too-many-risk-tags');
   if (trendContradicts && (probabilityEdge === null || probabilityEdge < 0.04)) blockers.push('official-sp-movement-contradiction');
   if (externalMarketContradicted && (probabilityEdge === null || probabilityEdge < 0.05)) blockers.push('external-market-contradiction');
-
   if (supportingFactors.length < 4) blockers.push('insufficient-independent-support');
   if (evidenceScore < 66) blockers.push('evidence-score-below-threshold');
 
+  const precision = evaluateRecommendationPrecision({
+    market,
+    odds,
+    modelProbability,
+    modelGap,
+    dataQuality,
+    expectedValue,
+    probabilityEdge,
+    evidenceScore,
+    supportingFactors: supportingFactors.length,
+    severeMissingCount,
+    riskPenalty,
+    riskTagsCount,
+    marketLeaderAligned: marketLeaderAlignment,
+    handicapAligned,
+    trendContradicts,
+    externalMarketContradicted,
+  });
+  blockers.push(...precision.blockers);
+
   const uniqueBlockers = unique(blockers);
   const eligible = uniqueBlockers.length === 0;
+  const precisionPolicy = precisionPolicyFor(market);
+  const threshold = precisionPolicy?.minEvidenceScore || 66;
   const grade = eligible
-    ? evidenceScore >= 80 ? 'A' : evidenceScore >= 72 ? 'B' : 'C'
+    ? evidenceScore >= 84 ? 'A' : evidenceScore >= threshold + 4 ? 'B' : 'C'
     : 'WATCH';
 
   return {
-    version: MULTI_FACTOR_POLICY_VERSION,
+    version: MULTI_FACTOR_EVIDENCE_VERSION,
+    policyVersion: MULTI_FACTOR_POLICY_VERSION,
     eligible,
     grade,
     evidenceScore,
-    threshold: 66,
+    threshold,
     market,
     code,
     handicapLine,
@@ -192,12 +219,18 @@ const evaluateMultiFactorRecommendation = (input = {}) => {
     probabilityEdge: probabilityEdge === null ? null : Number(probabilityEdge.toFixed(4)),
     expectedValue: expectedValue === null ? null : Number(expectedValue.toFixed(4)),
     modelGap,
-    minimumModelGap: MIN_MODEL_GAP,
+    minimumModelGap: Math.max(MIN_MODEL_GAP, precisionPolicy?.minModelGap || 0),
     dataQuality,
     components: Object.fromEntries(Object.entries(components).map(([key, value]) => [key, Number(value.toFixed(2))])),
     penalty: Number(penalty.toFixed(2)),
     supportingFactors,
     blockers: uniqueBlockers,
+    precision: {
+      version: precision.version,
+      eligible: precision.eligible,
+      policy: precision.policy,
+      blockers: precision.blockers,
+    },
     diagnostics: {
       scoreAligned,
       crossMarketCompatible,
@@ -220,6 +253,7 @@ const evaluateMultiFactorRecommendation = (input = {}) => {
 };
 
 module.exports = {
+  MULTI_FACTOR_EVIDENCE_VERSION,
   MULTI_FACTOR_POLICY_VERSION,
   MIN_MODEL_GAP,
   evaluateMultiFactorRecommendation,

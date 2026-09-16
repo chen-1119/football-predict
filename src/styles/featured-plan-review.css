@@ -1,0 +1,56 @@
+.featured-review {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding: 20px;
+  border: 1px solid rgba(93,126,173,.22);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(14,28,48,.96), rgba(9,19,35,.96));
+}
+.featured-review__header span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--shell-cyan, #5ed4f3);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .12em;
+}
+.featured-review__header h2 { margin: 5px 0; color: var(--shell-text); font-size: 22px; }
+.featured-review__header p { margin: 0; max-width: 780px; color: var(--shell-text-secondary); font-size: 12px; line-height: 1.65; }
+.featured-review__scorecards { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.featured-review__scorecards article {
+  display: grid;
+  gap: 9px;
+  padding: 16px;
+  border: 1px solid rgba(93,126,173,.2);
+  border-radius: 12px;
+  background: rgba(7,16,31,.45);
+}
+.featured-review__scorecard-title { display: flex; justify-content: space-between; gap: 10px; }
+.featured-review__scorecard-title strong { color: var(--shell-text); font-size: 14px; }
+.featured-review__scorecard-title span { color: var(--shell-gold,#e4bc68); font-size: 11px; }
+.featured-review__rate { color: #dce7ff; font-family: var(--font-numeric,monospace); font-size: 28px; letter-spacing: -.04em; }
+.featured-review__counts { display: flex; flex-wrap: wrap; gap: 8px 14px; color: var(--shell-text-secondary); font-size: 11px; }
+.featured-review__counts span { display: inline-flex; align-items: center; gap: 5px; }
+.featured-review__scorecards small { color: var(--shell-text-muted); font-size: 10px; }
+.featured-review__recent { display: grid; border-top: 1px solid rgba(93,126,173,.16); }
+.featured-review__recent-row {
+  display: grid;
+  grid-template-columns: 110px repeat(2,minmax(0,1fr));
+  gap: 12px;
+  align-items: center;
+  padding: 10px 2px;
+  border-bottom: 1px solid rgba(93,126,173,.12);
+  color: var(--shell-text-secondary);
+  font-size: 11px;
+}
+.featured-review__recent-row strong { color: var(--shell-text); font-family: var(--font-numeric,monospace); }
+.featured-review__recent-row span[data-result="won"] { color: var(--shell-positive,#52d3a0); }
+.featured-review__recent-row span[data-result="lost"] { color: var(--shell-danger,#f07878); }
+.featured-review__recent-row span[data-result="pending"] { color: var(--shell-warning,#e0aa57); }
+@media (max-width: 720px) {
+  .featured-review { padding: 15px; }
+  .featured-review__scorecards { grid-template-columns: minmax(0,1fr); }
+  .featured-review__recent-row { grid-template-columns: minmax(0,1fr); gap: 5px; }
+}
