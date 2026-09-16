@@ -5,6 +5,7 @@ import './styles/tokens.css'
 import './styles/base.css'
 import './styles/shell.css'
 import './styles/matchday-shell.css'
+import './styles/product-v3.css'
 import App from './App.tsx'
 
 createRoot(document.getElementById('root')!).render(
