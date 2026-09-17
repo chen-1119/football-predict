@@ -14,7 +14,10 @@ export interface PollingOptions<T> {
   clock?: PollingClock;
 }
 export function createPollingController<T>(options: PollingOptions<T>) {
-  const clock = options.clock ?? { setTimeout, clearTimeout };
+  const clock: PollingClock = options.clock ?? {
+    setTimeout: (callback, delay) => globalThis.setTimeout(callback, delay),
+    clearTimeout: (handle) => globalThis.clearTimeout(handle),
+  };
   const intervalMs = options.intervalMs ?? 30_000;
   const timeoutMs = options.timeoutMs ?? 10_000;
   const maxRetryMs = options.maxRetryMs ?? 120_000;
