@@ -1,0 +1,48 @@
+name: Recommendation runtime checks
+on:
+  pull_request:
+    paths:
+      - 'scripts/recommendationPlatform/**'
+      - 'scripts/dailyFeaturedComboLedger.cjs'
+      - 'scripts/verifyUnifiedRecommendationPostgres.cjs'
+      - 'server/postgres/migrations/011_unified_recommendation_runtime.sql'
+      - 'src/components/recommendations/**'
+      - 'src/hooks/useRecommendationCenter.ts'
+      - 'src/services/recommendationCenterView.ts'
+      - 'src/pages/BestTips.tsx'
+      - 'src/pages/BetSlipGenerator.tsx'
+      - 'src/pages/HitAndWin.tsx'
+      - 'tests/recommendation*.cjs'
+      - '.github/workflows/recommendation-runtime.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: recommendation_test
+          POSTGRES_PASSWORD: local_test_only
+          POSTGRES_DB: recommendation_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd 'pg_isready -U recommendation_test -d recommendation_test'
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.1'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: node --test tests/recommendation-unified.test.cjs tests/recommendation-center-view.test.cjs
+      - run: node scripts/verifyUnifiedRecommendationPostgres.cjs
+        env:
+          UNIFIED_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
+      - run: npm run build
