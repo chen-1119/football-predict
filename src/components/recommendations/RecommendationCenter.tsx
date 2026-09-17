@@ -46,11 +46,12 @@ export function RecommendationCenter({language,onSelectMatch,mode='recommendatio
   useEffect(()=>{const timer=window.setInterval(()=>setNow(Date.now()),10000);return ()=>window.clearInterval(timer);},[]);
   const zh=language==='zh',review=mode==='review';
   const summary=data?.review.statistics[tab==='single'?'single':tab];
-  const stale=!data?.inputAsOf||now-Date.parse(data.inputAsOf)>15*60000||data.lanes.publish?.status==='error';
+  const currentDay=data?.businessDate===new Date(now+8*3600000).toISOString().slice(0,10);
+  const stale=!currentDay||!data?.inputAsOf||now-Date.parse(data.inputAsOf)>15*60000||data.lanes.publish?.status==='error';
   const reviewDelayed=data?.lanes.settlement?.status==='error';
-  const rows=review?data?.review.singles||[]:data?.current||[];
+  const rows=review?data?.review.singles||[]:currentDay?data?.current||[]:[];
   const size=tab==='two'?2:3;
-  const frozen=(review?data?.review.combos:data?.todayCombos)?.filter(r=>r.combo.size===size)||[];
+  const frozen=(review?data?.review.combos:currentDay?data?.todayCombos:[])?.filter(r=>r.combo.size===size)||[];
   const preview=!review&&!failed&&!stale&&!frozen.length?data?.previews.find(c=>c.size===size&&visiblePreview(c,now)):undefined;
   return <section className="recommendation-center" aria-labelledby="rc-title">
     <header className="rc-heading"><div><span className="rc-eyebrow">{zh?'统一决策 · 可追溯发布':'One decision · Traceable publication'}</span><h1 id="rc-title">{review?(zh?'赛后复盘':'Result Review'):(zh?'今日推荐':'Today’s Recommendations')}</h1><p>{zh?'单场与串关共用决策版本；原始方向不改，官方赛果更正同步复盘。':'Singles and combos share decision versions. Original picks remain immutable; official corrections update both records.'}</p></div><button type="button" className="rc-refresh" onClick={refresh}><RefreshCw size={16} aria-hidden="true"/>{zh?'刷新':'Refresh'}</button></header>
