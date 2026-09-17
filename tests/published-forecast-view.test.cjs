@@ -1,0 +1,29 @@
+'use strict';
+const { test, after } = require('node:test'); const assert = require('node:assert/strict');
+const fs = require('node:fs'), path = require('node:path'), os = require('node:os'), ts = require('typescript');
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(),'forecast-view-')); after(()=>fs.rmSync(tmp,{recursive:true,force:true}));
+for (const name of ['publishedForecastView', 'dailyComboView']) {
+  const source = fs.readFileSync(path.join(__dirname, '../src/services', name + '.ts'), 'utf8');
+  const result = ts.transpileModule(source, { reportDiagnostics: true, compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } });
+  assert.deepEqual(result.diagnostics, [], `${name} must have valid TypeScript syntax`);
+  fs.writeFileSync(path.join(tmp, name + '.js'), result.outputText);
+}
+const {parsePublishedForecasts}=require(path.join(tmp,'publishedForecastView.js'));
+const {parseDailyComboLedger}=require(path.join(tmp,'dailyComboView.js'));
+const {evaluateForecast,buildRecord}=require('../src/services/publishedForecastPolicy.cjs');
+const {summarize}=require('../scripts/publishedForecastLedger.cjs');
+const now=Date.parse('2026-09-17T10:00:00Z'),pub={manifestHash:'a'.repeat(64),generationId:'test'};
+const m={id:'sporttery_1',sourceMatchId:'1',status:'SCHEDULED',businessDate:'2026-09-17',homeTeamId:'h',awayTeamId:'a',homeTeamName:'主队',awayTeamName:'客队',kickoffTime:'2026-09-17T15:00:00Z',probabilityModel:{generatedAt:'2026-09-17T10:00:00Z',oneXTwo:{final:{home:60,draw:25,away:15}}},odds:{odds1:1.8,oddsX:3.2,odds2:4.8},oddsSource:'sporttery:had',oddsUpdatedAt:'2026-09-17T10:00:00Z'};
+const r=buildRecord(evaluateForecast(m,{now,publication:pub}).candidate,now);
+const data=()=>({version:'published-forecast-public-v1',updatedAt:'2026-09-17T10:00:00Z',businessDate:'2026-09-17',current:[{forecast:structuredClone(r),settlement:null}],history:[],summary:summarize([{forecast:r,settlement:null}])});
+test('valid frozen publication renders while model is unvalidated',()=>{const p=parsePublishedForecasts(data());assert.equal(p.current[0].forecast.publicationStatus,'PUBLISHED');assert.equal(p.current[0].forecast.modelValidation,'unvalidated');});
+test('reference label cannot be passed off as a published record',()=>{const p=data();p.current[0].forecast.publicationStatus='reference';assert.throws(()=>parsePublishedForecasts(p));});
+test('null or numeric-string SP is rejected before toFixed',()=>{for(const value of [null,'1.8',NaN]){const p=data();p.current[0].forecast.odds=value;assert.throws(()=>parsePublishedForecasts(p));}});
+test('wrong vector and direction rejected',()=>{for(const change of [{tipCode:'2'},{probabilities:{'1':.6,X:.9,'2':.1}}]){const p=data();Object.assign(p.current[0].forecast,change);assert.throws(()=>parsePublishedForecasts(p));}});
+test('post-cutoff timestamps cannot be presented as frozen prematch',()=>{const p=data();p.current[0].forecast.publishedAt='2026-09-17T16:00:00Z';assert.throws(()=>parsePublishedForecasts(p));});
+test('duplicate rows do not inflate publication counts',()=>{const p=data();p.current.push(p.current[0]);assert.throws(()=>parsePublishedForecasts(p));});
+test('hit rate is derived from counts and stays null before results',()=>{const p=data();p.summary.hitRate=1;assert.equal(parsePublishedForecasts(p).summary.hitRate,null);});
+test('inconsistent totals rejected',()=>{const p=data();p.summary.settled=1;assert.throws(()=>parsePublishedForecasts(p));});
+test('wrong WON result for frozen direction rejected',()=>{const p=data();p.current[0].settlement={state:'WON',actual:'2',score:'0-2'};assert.throws(()=>parsePublishedForecasts(p));});
+test('old API response remains compatible and has no invented publications',()=>{const p=parseDailyComboLedger({updatedAt:'2026-09-17T10:00:00Z',businessDate:'2026-09-17',publishable:false,previews:[],today:[]});assert.equal(p.publishedForecasts,undefined);});
+test('shared endpoint passes the single publication track without disabling combos',()=>{const p=parseDailyComboLedger({updatedAt:'2026-09-17T10:00:00Z',businessDate:'2026-09-17',publishable:false,previews:[],today:[],publishedForecasts:data()});assert.equal(p.publishedForecasts.current.length,1);assert.deepEqual(p.previews,[]);});

@@ -5,11 +5,12 @@ const { persistLedger } = require("./dailyFeaturedComboLedger.cjs");
 async function verify(pool, migration) {
   const client = await pool.connect();
   const schema = `combo_verify_${process.pid}_${Date.now()}`;
-  const query = (sql, values) => client.query(sql.replaceAll("football.daily_featured", `${schema}.daily_featured`), values);
+  const query = (sql, values) => client.query(sql.replaceAll("football.", `${schema}.`), values);
   try {
     await client.query("BEGIN");
     await client.query(`CREATE SCHEMA ${schema}`);
     await query(migration);
+    await query(require('node:fs').readFileSync(require('node:path').join(__dirname, '../server/postgres/migrations/010_published_forecasts.sql'), 'utf8'));
     const legs = [1, 2].map((id) => ({ matchId: `sporttery_${id}`, sourceMatchId: String(id), eventVersion: "2026-09-16T14:00:00.000Z", market: "HAD", tipCode: "1", odds: 1.7, handicapLine: 0 }));
     const payload = { id: "test-frozen", businessDate: "2026-09-16", size: 2, frozenAt: "2026-09-16T13:00:00Z", totalOdds: 2.89, legs };
     await query("INSERT INTO football.daily_featured_combos VALUES($1,$2,$3,$4,$5)", [payload.id, payload.businessDate, 2, JSON.stringify(payload), JSON.stringify({ status: "PENDING" })]);
@@ -17,6 +18,7 @@ async function verify(pool, migration) {
     const options = { now: Date.parse("2026-09-17T02:00:00Z"), current: [], history, publishable: false, publication: { manifestHash: "test" } };
     const output = await persistLedger({ query }, options);
     assert.equal(output.statistics.two.won, 1);
+    assert.equal(output.publishedForecasts.summary.published, 0);
     const record = (await query("SELECT payload,settlement FROM football.daily_featured_combos")).rows[0];
     assert.deepEqual(record.payload, payload, "settlement must not rewrite frozen payload");
     assert.equal(record.settlement.status, "WON");
