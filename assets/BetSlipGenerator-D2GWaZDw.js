@@ -1,0 +1,1 @@
+import{d as e,x as t}from"./index-eyjEYz2M.js";import{t as n}from"./DailyFeaturedCombos-DiKwjGXh.js";var r=e();function i({onSelectMatch:e}){let{language:i}=t();return(0,r.jsx)(`div`,{className:`space-y-6`,children:(0,r.jsx)(n,{language:i,onSelectMatch:e})})}export{i as BetSlipGenerator};
