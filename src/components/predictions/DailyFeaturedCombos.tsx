@@ -1,141 +1,210 @@
 import React from 'react';
-import { Layers3, ShieldCheck } from 'lucide-react';
+import { Layers3, RefreshCw, ShieldCheck } from 'lucide-react';
 import type { Match } from '../../services/mockData';
-import type { FeaturedCombo } from '../../services/dailyFeaturedCombos';
-import { getTeamById } from '../../services/entities';
-import { getPredictionTipDisplay } from '../../services/bettingDisplay';
-import { getAccessAuthHeaders } from '../../services/accessControl';
-import { buildApiUrl } from '../../services/runtimeUrls';
+import {
+  visibleComboForSize,
+  type ComboRowView,
+  type ComboSize,
+  type ComboStatsView,
+} from '../../services/dailyComboView';
+import { useDailyFeaturedCombos } from '../../hooks/useDailyFeaturedCombos';
 import '../../styles/recommendation-quality.css';
 
 type Language = 'zh' | 'en';
-type ComboStats = { published: number; settled: number; won: number; lost: number; hitRate: number | null };
-type FrozenLeg = { matchId: string; homeTeamId: string; awayTeamId: string; homeTeamName?: string; awayTeamName?: string; market: 'HAD' | 'HHAD'; tipCode: string; handicapLine: number; odds: number; evidenceScore: number };
-type FrozenCombo = { id: string; businessDate: string; size: 2 | 3; totalOdds: number; averageEvidenceScore: number; legs: FrozenLeg[]; frozenAt?: string; settlement?: { status?: 'PENDING' | 'WON' | 'LOST' | 'VOID' } };
-type ComboLedgerPublic = { updatedAt?: string; businessDate?: string; previews?: FrozenCombo[]; publishable?: boolean; today?: FrozenCombo[]; statistics?: { two?: ComboStats; three?: ComboStats } };
 
 interface DailyFeaturedCombosProps {
-  matches: Match[];
+  matches?: Match[];
   language: Language;
-  enabled: boolean;
+  enabled?: boolean;
   onSelectMatch: (matchId: string) => void;
 }
 
-const ComboCard: React.FC<{
-  combo: FeaturedCombo;
-  language: Language;
-  onSelectMatch: (matchId: string) => void;
-}> = ({ combo, language, onSelectMatch }) => (
-  <article className={`daily-combo-card ${combo.status === 'ready' ? 'is-ready' : 'is-empty'}`}>
-    <header className="daily-combo-card__header">
-      <div>
-        <span>{language === 'zh' ? `${combo.size} 场精选分析` : `${combo.size}-match featured analysis`}</span>
-        <small>{language === 'zh' ? `总 SP ≥ ${combo.minimumTotalOdds.toFixed(2)}` : `Total SP ≥ ${combo.minimumTotalOdds.toFixed(2)}`}</small>
-      </div>
-      <strong>{combo.status === 'ready' ? `@${combo.totalOdds.toFixed(2)}` : '--'}</strong>
-    </header>
-    {combo.status === 'ready' ? (
-      <>
-        <div className="daily-combo-card__legs">
-          {combo.legs.map((leg, index) => {
-            const home = getTeamById(leg.match.homeTeamId);
-            const away = getTeamById(leg.match.awayTeamId);
-            return (
-              <button key={`${combo.size}-${leg.match.id}`} type="button" className="daily-combo-leg" onClick={() => onSelectMatch(leg.match.id)}>
-                <span className="daily-combo-leg__index">{index + 1}</span>
-                <span className="daily-combo-leg__match">
-                  <strong>{home.shortName[language]} vs {away.shortName[language]}</strong>
-                  <small>{getPredictionTipDisplay(leg.prediction, language, true)}</small>
-                </span>
-                <span className="daily-combo-leg__odds">@{leg.odds.toFixed(2)}</span>
-              </button>
-            );
-          })}
-        </div>
-        <footer className="daily-combo-card__footer">
-          <span>{language === 'zh' ? '平均证据评分' : 'Avg evidence'}</span>
-          <strong>{combo.averageEvidenceScore.toFixed(1)}</strong>
-        </footer>
-      </>
-    ) : (
-      <div className="daily-combo-card__empty">
-        <ShieldCheck size={18} aria-hidden="true" />
-        <p>{language === 'zh' ? '今日无合格组合。质量门槛或总 SP 下限未满足，不强行凑单。' : 'No combination currently clears both the quality gate and SP floor.'}</p>
-      </div>
-    )}
-  </article>
-);
-
-const formatRate = (stats: ComboStats | undefined, language: Language) => {
-  if (!stats || stats.settled === 0 || stats.hitRate === null) return language === 'zh' ? '待积累' : 'Pending';
-  return `${(stats.hitRate * 100).toFixed(1)}%`;
+const formatTime = (value: string | null | undefined, language: Language) => {
+  const parsed = Date.parse(value || '');
+  if (!Number.isFinite(parsed)) return '--';
+  return new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-GB', {
+    timeZone: 'Asia/Shanghai',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(parsed));
 };
 
-export const DailyFeaturedCombos: React.FC<DailyFeaturedCombosProps> = ({ matches, language, enabled, onSelectMatch }) => {
-  const [error, setError] = React.useState(false);
-  const [ledger, setLedger] = React.useState<ComboLedgerPublic | null>(null);
+const directionLabel = (code: string, language: Language) => {
+  if (code === '1') return language === 'zh' ? '主胜' : 'Home';
+  if (code === 'X') return language === 'zh' ? '平局' : 'Draw';
+  return language === 'zh' ? '客胜' : 'Away';
+};
+
+const percentage = (value: number | null | undefined) => (
+  typeof value === 'number' && Number.isFinite(value) ? `${(value * 100).toFixed(1)}%` : '--'
+);
+
+const rate = (stats: ComboStatsView | undefined) => (
+  stats && stats.settled > 0 && typeof stats.hitRate === 'number'
+    ? `${(stats.hitRate * 100).toFixed(1)}%`
+    : '--'
+);
+
+const settlementLabel = (row: ComboRowView, language: Language) => {
+  const zh = language === 'zh';
+  if (row.settlement?.status === 'WON') return zh ? '已命中' : 'Won';
+  if (row.settlement?.status === 'LOST') return zh ? '未命中' : 'Lost';
+  if (row.settlement?.status === 'VOID') return zh ? '无效，不计统计' : 'Void, excluded';
+  if (row.frozenAt) return zh ? '已冻结，待赛果' : 'Frozen, pending';
+  return zh ? '即时方案' : 'Live preview';
+};
+
+const ComboCard: React.FC<{
+  size: ComboSize;
+  row: ComboRowView | null;
+  language: Language;
+  loading: boolean;
+  failed: boolean;
+  onSelectMatch: (matchId: string) => void;
+}> = ({ size, row, language, loading, failed, onSelectMatch }) => {
+  const zh = language === 'zh';
+  return (
+    <article className={`daily-combo-card ${row ? 'is-ready' : 'is-empty'}`}>
+      <header className="daily-combo-card__header">
+        <div>
+          <span>{zh ? `${size}串1` : `${size}-leg combo`}</span>
+          <small>SP ≥ {size === 2 ? '2.50' : '5.00'}{row ? ` · ${settlementLabel(row, language)}` : ''}</small>
+        </div>
+        <strong>{row ? `@${row.totalOdds.toFixed(2)}` : '--'}</strong>
+      </header>
+
+      {row ? (
+        <>
+          <div className="daily-combo-card__legs">
+            {row.legs.map((leg, index) => {
+              const result = row.settlement?.results?.find((item) => item.sourceMatchId === leg.sourceMatchId);
+              return (
+                <button
+                  key={`${size}-${leg.sourceMatchId}`}
+                  type="button"
+                  className="daily-combo-leg"
+                  onClick={() => onSelectMatch(leg.matchId)}
+                >
+                  <span className="daily-combo-leg__index">{index + 1}</span>
+                  <span className="daily-combo-leg__match">
+                    <strong>{leg.homeTeamName || leg.homeTeamId || '--'} vs {leg.awayTeamName || leg.awayTeamId || '--'}</strong>
+                    <small>
+                      {leg.matchNo ? `${leg.matchNo} · ` : ''}{formatTime(leg.kickoffTime, language)} · {directionLabel(leg.tipCode, language)}
+                    </small>
+                    <small className="daily-combo-leg__probabilities">
+                      {zh ? '稳健概率' : 'Robust'} {percentage(leg.robustProbability)}
+                      {' · '}{zh ? '模型' : 'Model'} {percentage(leg.modelProbability)}
+                      {' · '}{zh ? '市场' : 'Market'} {percentage(leg.marketProbability)}
+                    </small>
+                    {result?.finalScore && (
+                      <small>{zh ? '赛果' : 'Result'} {result.finalScore} · {result.result}</small>
+                    )}
+                  </span>
+                  <span className="daily-combo-leg__odds">@{leg.odds.toFixed(2)}</span>
+                </button>
+              );
+            })}
+          </div>
+          <footer className="daily-combo-card__footer">
+            <span>
+              {row.frozenAt
+                ? `${zh ? '冻结' : 'Frozen'} ${formatTime(row.frozenAt, language)}`
+                : `${zh ? '计划冻结' : 'Freeze'} ${formatTime(row.freezeAt, language)}`}
+            </span>
+            <strong>
+              {typeof row.averageQualityScore === 'number'
+                ? `${zh ? '稳健分' : 'Quality'} ${(row.averageQualityScore * 100).toFixed(1)}`
+                : '--'}
+            </strong>
+          </footer>
+        </>
+      ) : (
+        <div className="daily-combo-card__empty">
+          <ShieldCheck size={18} aria-hidden="true" />
+          <p>
+            {loading
+              ? (zh ? '正在计算当天组合…' : 'Calculating today’s combinations…')
+              : failed
+                ? (zh ? '数据读取正在恢复；已冻结记录不会被清空。' : 'Data reconnecting; frozen records are retained.')
+                : (zh
+                  ? `当前场次尚未组成满足SP门槛的${size}串1；新数据到达后自动重算。`
+                  : `No ${size}-leg combination currently clears the SP floor; new data triggers recalculation.`)}
+          </p>
+        </div>
+      )}
+    </article>
+  );
+};
+
+export const DailyFeaturedCombos: React.FC<DailyFeaturedCombosProps> = ({
+  language,
+  onSelectMatch,
+}) => {
+  const { ledger, loading, failed, refresh } = useDailyFeaturedCombos();
+  const [now, setNow] = React.useState(() => Date.now());
 
   React.useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const response = await fetch(buildApiUrl('/api/v1/daily-featured-combos'), { headers: getAccessAuthHeaders(), cache: 'no-store', credentials: 'same-origin', signal: AbortSignal.timeout(10000) });
-        if (!response.ok) throw new Error('combo unavailable');
-        const payload = await response.json() as ComboLedgerPublic;
-        if (!cancelled) { setLedger(payload); setError(false); }
-      } catch {
-        if (!cancelled) setError(true);
-      }
-    };
-    void load();
-    const timer = window.setInterval(load, 60_000);
-    return () => { cancelled = true; window.clearInterval(timer); };
+    const timer = window.setInterval(() => setNow(Date.now()), 10_000);
+    return () => window.clearInterval(timer);
   }, []);
 
-  const clock = Date.now();
-  const fresh = Boolean(ledger?.updatedAt && clock - Date.parse(ledger.updatedAt) >= 0 && clock - Date.parse(ledger.updatedAt) < 10 * 60_000);
-  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(clock));
-  const frozen = ledger?.businessDate === today ? ledger.today || [] : [];
-  const previews = enabled && fresh && !error && ledger?.publishable && ledger.businessDate === today ? ledger.previews || [] : [];
-  const rows = frozen.length ? frozen : previews;
-  const cardFor = (size: 2 | 3): FeaturedCombo => {
-    const row = rows.find((entry) => entry.size === size);
-    return { size, minimumTotalOdds: size === 2 ? 2.5 : 5, totalOdds: row?.totalOdds || 1, averageEvidenceScore: row?.averageEvidenceScore || 0, status: row ? 'ready' : 'insufficient', legs: (row?.legs || []).map((leg) => ({
-      match: matches.find((match) => match.id === leg.matchId) || { id: leg.matchId, homeTeamId: leg.homeTeamId, awayTeamId: leg.awayTeamId } as Match,
-      prediction: { marketType: 'BEST', oddsPoolCode: leg.market, tipCode: leg.tipCode, handicapLine: String(leg.handicapLine), odds: leg.odds, tipLabel: { zh: leg.tipCode, en: leg.tipCode }, trustScore: leg.evidenceScore, explanation: { zh: '', en: '' }, visibilityStatus: 'FREE', resultStatus: 'PENDING' } as Match['predictions'][number],
-      odds: leg.odds, evidenceScore: leg.evidenceScore,
-    })) };
-  };
-  const twoStats = ledger?.statistics?.two;
-  const threeStats = ledger?.statistics?.three;
-  const todaySettled = (ledger?.today || []).filter((entry) => ['WON', 'LOST'].includes(entry.settlement?.status || '')).length;
+  const zh = language === 'zh';
+  const rows = {
+    2: visibleComboForSize(ledger, 2, now, failed),
+    3: visibleComboForSize(ledger, 3, now, failed),
+  } as const;
+  const stats = ledger?.independentStatistics || ledger?.statistics;
 
   return (
-    <section className="daily-combo-board" aria-label={language === 'zh' ? '每日精选分析组合' : 'Daily featured analysis combinations'}>
+    <section className="daily-combo-board" aria-label={zh ? '每日独立串关' : 'Independent daily combos'}>
       <header className="daily-combo-board__header">
         <div>
           <span className="daily-combo-board__icon"><Layers3 size={17} aria-hidden="true" /></span>
           <div>
-            <h2>{language === 'zh' ? '每日精选组合' : 'Daily Featured Combos'}</h2>
-            <p>{language === 'zh' ? '只使用当前正式赛前方向；优先证据强、总 SP 刚过门槛的组合。' : 'Uses current formal pre-match picks only, preferring strong evidence and totals just above the required floor.'}</p>
+            <h2>{zh ? '每日2串1 / 3串1' : 'Daily 2-leg / 3-leg Combos'}</h2>
+            <p>
+              {zh
+                ? '直接综合赛前模型概率与竞彩去水概率；不等待单场进入“正式推荐”。'
+                : 'Blends pre-match model and de-vigged Sporttery probabilities; no formal single-pick gate.'}
+            </p>
           </div>
         </div>
-        <span className="daily-combo-board__rule">{language === 'zh' ? '2场 ≥2.50 · 3场 ≥5.00' : '2-leg ≥2.50 · 3-leg ≥5.00'}</span>
-      </header>
-      {error ? <div className="daily-combo-board__disabled" role="alert">{language === 'zh' ? '组合记录暂时读取失败，请稍后重试；历史统计不按零计。' : 'Combo records unavailable; statistics are not reset.'}</div> : !ledger ? <div className="daily-combo-board__disabled" role="status">{language === 'zh' ? '正在读取组合记录…' : 'Loading combo records…'}</div> : null}
-      <p>{frozen.length ? (language === 'zh' ? '今日已冻结 · 方向与原始 SP 保持不变' : 'Frozen today · original directions and SP retained') : (language === 'zh' ? '待冻结候选 · 工作日 21:00 / 周末 22:00 冻结，未冻结不计入成绩' : 'Preview · freezes weekdays 21:00 / weekends 22:00, Shanghai time')}</p>
-      {!rows.length && !enabled ? (
-        <div className="daily-combo-board__disabled">{language === 'zh' ? '正式推荐池尚未达到可发布状态，精选组合保持暂停。' : 'The formal recommendation pool is not publishable yet; featured combinations remain paused.'}</div>
-      ) : (
-        <div className="daily-combo-board__grid">
-          <ComboCard combo={cardFor(2)} language={language} onSelectMatch={onSelectMatch} />
-          <ComboCard combo={cardFor(3)} language={language} onSelectMatch={onSelectMatch} />
+        <div className="daily-combo-board__actions">
+          <span className="daily-combo-board__rule">2串1 ≥2.50 · 3串1 ≥5.00</span>
+          <button type="button" className="daily-combo-board__refresh" onClick={refresh} aria-label={zh ? '刷新组合' : 'Refresh combos'}>
+            <RefreshCw size={14} aria-hidden="true" />
+          </button>
         </div>
-      )}
-      <footer className="daily-combo-performance" aria-label={language === 'zh' ? '精选组合复盘统计' : 'Featured combo review statistics'}>
-        <div><span>{language === 'zh' ? '2场组合累计' : '2-leg cumulative'}</span><strong>{error ? '--' : formatRate(twoStats, language)}</strong><small>{twoStats ? `${twoStats.won}/${twoStats.settled}` : '--'}</small></div>
-        <div><span>{language === 'zh' ? '3场组合累计' : '3-leg cumulative'}</span><strong>{error ? '--' : formatRate(threeStats, language)}</strong><small>{threeStats ? `${threeStats.won}/${threeStats.settled}` : '--'}</small></div>
-        <div><span>{language === 'zh' ? '今日已结算组合' : 'Settled today'}</span><strong>{error ? '--' : todaySettled}</strong><small>{language === 'zh' ? '冻结后只结算，不改方向' : 'Frozen directions remain immutable'}</small></div>
+      </header>
+
+      <div className="daily-combo-board__meta">
+        <span>{zh ? `候选场次 ${ledger?.candidateCount ?? '--'}` : `Candidates ${ledger?.candidateCount ?? '--'}`}</span>
+        <span>{zh ? `更新 ${formatTime(ledger?.updatedAt, language)}` : `Updated ${formatTime(ledger?.updatedAt, language)}`}</span>
+        <span>{zh ? '临近停售自动提前冻结' : 'Early freeze before the earliest cutoff'}</span>
+      </div>
+
+      <div className="daily-combo-board__grid">
+        <ComboCard size={2} row={rows[2]} language={language} loading={loading} failed={failed} onSelectMatch={onSelectMatch} />
+        <ComboCard size={3} row={rows[3]} language={language} loading={loading} failed={failed} onSelectMatch={onSelectMatch} />
+      </div>
+
+      <footer className="daily-combo-performance" aria-label={zh ? '独立串关复盘统计' : 'Independent combo performance'}>
+        <div>
+          <span>{zh ? '2串1累计' : '2-leg record'}</span>
+          <strong>{rate(stats?.two)}</strong>
+          <small>{stats?.two ? `${stats.two.won}/${stats.two.settled}` : '--'}</small>
+        </div>
+        <div>
+          <span>{zh ? '3串1累计' : '3-leg record'}</span>
+          <strong>{rate(stats?.three)}</strong>
+          <small>{stats?.three ? `${stats.three.won}/${stats.three.settled}` : '--'}</small>
+        </div>
+        <div>
+          <span>{zh ? '说明' : 'Method'}</span>
+          <strong>{zh ? '稳健融合' : 'Robust blend'}</strong>
+          <small>{zh ? '概率仅用于排序，不宣称组合命中率' : 'Probabilities rank legs; no parlay hit-rate claim'}</small>
+        </div>
       </footer>
     </section>
   );
