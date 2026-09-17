@@ -22,12 +22,10 @@ export function useDailyFeaturedCombos(): DailyComboQueryState {
   const [loading, setLoading] = React.useState(true);
   const [failed, setFailed] = React.useState(false);
   const [lastSuccessAt, setLastSuccessAt] = React.useState<number | null>(null);
-  const refreshNonce = React.useRef(0);
-  const [, forceRefresh] = React.useReducer((value) => value + 1, 0);
+  const [refreshKey, setRefreshKey] = React.useState(0);
 
   const refresh = React.useCallback(() => {
-    refreshNonce.current += 1;
-    forceRefresh();
+    setRefreshKey((value) => value + 1);
   }, []);
 
   React.useEffect(() => {
@@ -35,13 +33,12 @@ export function useDailyFeaturedCombos(): DailyComboQueryState {
     let timer: number | undefined;
     let activeController: AbortController | null = null;
 
-    const schedule = () => {
-      if (stopped) return;
-      timer = window.setTimeout(load, POLL_MS);
-    };
-
     const load = async () => {
       if (stopped || activeController) return;
+      if (timer !== undefined) {
+        window.clearTimeout(timer);
+        timer = undefined;
+      }
       activeController = new AbortController();
       const timeout = window.setTimeout(() => activeController?.abort(), REQUEST_TIMEOUT_MS);
       try {
@@ -65,27 +62,27 @@ export function useDailyFeaturedCombos(): DailyComboQueryState {
         activeController = null;
         if (!stopped) {
           setLoading(false);
-          schedule();
+          timer = window.setTimeout(load, POLL_MS);
         }
       }
     };
 
-    const onFocus = () => {
+    const onVisible = () => {
       if (document.visibilityState === 'visible') void load();
     };
 
-    setLoading((current) => current && !ledger);
+    if (!ledger) setLoading(true);
     void load();
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onFocus);
+    window.addEventListener('focus', onVisible);
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       stopped = true;
       if (timer !== undefined) window.clearTimeout(timer);
       activeController?.abort();
-      window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onFocus);
+      window.removeEventListener('focus', onVisible);
+      document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [refreshNonce.current]);
+  }, [refreshKey]);
 
   return { ledger, loading, failed, lastSuccessAt, refresh };
 }
