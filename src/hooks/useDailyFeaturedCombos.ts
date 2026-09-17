@@ -1,10 +1,8 @@
 import * as React from 'react';
 import { getAccessAuthHeaders } from '../services/accessControl';
 import { buildApiUrl } from '../services/runtimeUrls';
-import {
-  parseDailyComboLedger,
-  type DailyComboLedgerView,
-} from '../services/dailyComboView';
+import { parseDailyComboLedger, type DailyComboLedgerView } from '../services/dailyComboView';
+import { createPollingController } from '../services/pollingController';
 
 export interface DailyComboQueryState {
   ledger: DailyComboLedgerView | null;
@@ -13,76 +11,47 @@ export interface DailyComboQueryState {
   lastSuccessAt: number | null;
   refresh: () => void;
 }
-
-const POLL_MS = 30_000;
-const REQUEST_TIMEOUT_MS = 10_000;
-
 export function useDailyFeaturedCombos(): DailyComboQueryState {
   const [ledger, setLedger] = React.useState<DailyComboLedgerView | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [failed, setFailed] = React.useState(false);
   const [lastSuccessAt, setLastSuccessAt] = React.useState<number | null>(null);
-  const [refreshKey, setRefreshKey] = React.useState(0);
-
-  const refresh = React.useCallback(() => {
-    setRefreshKey((value) => value + 1);
-  }, []);
+  const refreshRef = React.useRef<() => void>(() => undefined);
+  const refresh = React.useCallback(() => refreshRef.current(), []);
 
   React.useEffect(() => {
-    let stopped = false;
-    let timer: number | undefined;
-    let activeController: AbortController | null = null;
-
-    const load = async () => {
-      if (stopped || activeController) return;
-      if (timer !== undefined) {
-        window.clearTimeout(timer);
-        timer = undefined;
-      }
-      activeController = new AbortController();
-      const timeout = window.setTimeout(() => activeController?.abort(), REQUEST_TIMEOUT_MS);
-      try {
+    let newestLedgerAt = Number.NEGATIVE_INFINITY;
+    const controller = createPollingController<DailyComboLedgerView>({
+      request: async (signal) => {
         const response = await fetch(buildApiUrl('/api/v1/daily-featured-combos'), {
-          headers: getAccessAuthHeaders(),
-          cache: 'no-store',
-          credentials: 'same-origin',
-          signal: activeController.signal,
+          headers: getAccessAuthHeaders(), cache: 'no-store', credentials: 'same-origin', signal,
         });
-        if (!response.ok) throw new Error(`combo api ${response.status}`);
-        const payload = parseDailyComboLedger(await response.json());
-        if (!stopped) {
-          setLedger(payload);
-          setFailed(false);
-          setLastSuccessAt(Date.now());
+        if (!response.ok) throw Object.assign(new Error('Combo API request failed'), { status: response.status });
+        return parseDailyComboLedger(await response.json());
+      },
+      onData: (payload) => {
+        const stamp = Date.parse(payload.updatedAt || '');
+        if (!Number.isFinite(stamp) || stamp < newestLedgerAt || stamp > Date.now() + 300000) {
+          throw new Error('Refusing a regressed or invalid ledger clock');
         }
-      } catch {
-        if (!stopped) setFailed(true);
-      } finally {
-        window.clearTimeout(timeout);
-        activeController = null;
-        if (!stopped) {
-          setLoading(false);
-          timer = window.setTimeout(load, POLL_MS);
-        }
-      }
-    };
-
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') void load();
-    };
-
-    if (!ledger) setLoading(true);
-    void load();
-    window.addEventListener('focus', onVisible);
-    document.addEventListener('visibilitychange', onVisible);
+        newestLedgerAt = stamp;
+        setLedger(payload); setFailed(false); setLastSuccessAt(Date.now());
+      },
+      onError: () => setFailed(true),
+      onSettled: () => setLoading(false),
+      isVisible: () => document.visibilityState === 'visible',
+    });
+    refreshRef.current = () => controller.refresh();
+    const onFocus = () => { if (document.visibilityState === 'visible') controller.refresh(); };
+    const onVisibility = () => controller.visibilityChanged();
+    controller.start();
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
-      stopped = true;
-      if (timer !== undefined) window.clearTimeout(timer);
-      activeController?.abort();
-      window.removeEventListener('focus', onVisible);
-      document.removeEventListener('visibilitychange', onVisible);
+      refreshRef.current = () => undefined;
+      controller.stop();
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [refreshKey]);
-
+  }, []);
   return { ledger, loading, failed, lastSuccessAt, refresh };
-}

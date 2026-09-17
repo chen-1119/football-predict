@@ -1,113 +1,83 @@
-const OFFICIAL_RECOMMENDATION_POLICY_VERSION = 'multi-factor-market-evidence-v2';
-
-const BLOCKED_TIER_PATTERN = /reference|model[-_ ]?only|watch/i;
-
+// Generated from the TypeScript sibling; checked for behavioral parity.
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.isServerOfficialRecommendationEligible = exports.isOfficialRecommendationEligible = exports.recommendationLinesMatch = exports.parseHandicapLine = exports.SUPPORTED_RECOMMENDATION_EVIDENCE_VERSIONS = exports.OFFICIAL_RECOMMENDATION_POLICY_VERSION = void 0;
+exports.recommendationEligibilityReasons = recommendationEligibilityReasons;
+// Keep the historical publication contract identifier stable. Producer
+// versions are a separate concern; accepting them never creates a publication.
+exports.OFFICIAL_RECOMMENDATION_POLICY_VERSION = 'multi-factor-market-evidence-v2';
+exports.SUPPORTED_RECOMMENDATION_EVIDENCE_VERSIONS = Object.freeze([
+    exports.OFFICIAL_RECOMMENDATION_POLICY_VERSION,
+    'multi-factor-dynamic-evidence-v3',
+    'multi-factor-dynamic-evidence-v4',
+]);
+const BLOCKED_TIER_PATTERN = /reference|model[-_ ]?only|watch|shadow/i;
 const parseHandicapLine = (value) => {
-  if (typeof value === 'number') return Number.isFinite(value) ? (value === 0 ? 0 : value) : null;
-  if (typeof value !== 'string') return null;
-  const normalized = value
-    .trim()
-    .replace(/\uFF0B/g, '+')
-    .replace(/[\uFF0D\u2212\u2013\u2014]/g, '-');
-  if (/^(?:\u4E0D\u8BA9\u7403|\u4E0D\u8BA9|\u5E73\u624B|HAD)$/i.test(normalized)) return 0;
-  const match = normalized.match(/^(?:(?:\u8BA9\u7403|HHAD|handicap)\s*[:\uFF1A]?\s*)?([+-]?(?:\d+(?:\.\d+)?|\.\d+))(?:\s*\u7403)?$/i);
-  if (!match) return null;
-  const line = Number(match[1]);
-  return Number.isFinite(line) ? (line === 0 ? 0 : line) : null;
+    if (typeof value === 'number')
+        return Number.isFinite(value) ? (value === 0 ? 0 : value) : null;
+    if (typeof value !== 'string')
+        return null;
+    const normalized = value.trim().replace(/\uFF0B/g, '+').replace(/[\uFF0D\u2212\u2013\u2014]/g, '-');
+    if (/^(?:\u4E0D\u8BA9\u7403|\u4E0D\u8BA9|\u5E73\u624B|HAD)$/i.test(normalized))
+        return 0;
+    const match = normalized.match(/^(?:(?:\u8BA9\u7403|HHAD|handicap)\s*[:\uFF1A]?\s*)?([+-]?(?:\d+(?:\.\d+)?|\.\d+))(?:\s*\u7403)?$/i);
+    if (!match)
+        return null;
+    const line = Number(match[1]);
+    return Number.isFinite(line) ? (line === 0 ? 0 : line) : null;
 };
-
+exports.parseHandicapLine = parseHandicapLine;
 const recommendationLineForPool = (pool, value) => {
-  if (pool === 'HAD' && (value === null || value === undefined || String(value).trim() === '')) return 0;
-  return parseHandicapLine(value);
+    if (pool === 'HAD' && (value === null || value === undefined || String(value).trim() === ''))
+        return 0;
+    return (0, exports.parseHandicapLine)(value);
 };
-
 const recommendationLinesMatch = (prediction, evidence, currentOfficialHandicapLine) => {
-  const pool = prediction?.oddsPoolCode;
-  const predictionLine = recommendationLineForPool(pool, prediction?.handicapLine);
-  const evidenceLine = recommendationLineForPool(pool, evidence?.handicapLine);
-  const officialLine = recommendationLineForPool(pool, currentOfficialHandicapLine);
-  if (pool === 'HAD') return predictionLine === 0 && evidenceLine === 0 && officialLine === 0;
-  return pool === 'HHAD'
-    && predictionLine !== null
-    && evidenceLine !== null
-    && officialLine !== null
-    && predictionLine === evidenceLine
-    && evidenceLine === officialLine;
+    const pool = prediction?.oddsPoolCode;
+    const line = recommendationLineForPool(pool, prediction?.handicapLine);
+    const evidenceLine = recommendationLineForPool(pool, evidence?.handicapLine);
+    const officialLine = recommendationLineForPool(pool, currentOfficialHandicapLine);
+    if (pool === 'HAD')
+        return line === 0 && evidenceLine === 0 && officialLine === 0;
+    return pool === 'HHAD' && line !== null && evidenceLine !== null && officialLine !== null
+        && line === evidenceLine && evidenceLine === officialLine;
 };
-
-/**
- * Canonical eligibility gate for the production server and Node verification
- * scripts. The browser uses the independent TypeScript sibling with identical
- * behavior so Vite never imports this CommonJS module at runtime. Keeping this
- * module dependency-free lets signed releases verify the policy after
- * development dependencies are pruned.
- *
- * @param {{
- *   marketType?: string;
- *   oddsPoolCode?: string;
- *   tipCode?: string;
- *   recommendationAction?: string;
- *   recommendationTier?: string;
- *   multiFactorEvidence?: {
- *     version?: string;
- *     eligible?: boolean;
- *     market?: string;
- *     code?: string;
- *     handicapLine?: string | number;
- *     odds?: number;
- *     blockers?: string[];
- *   };
- *   handicapLine?: string | number;
- * } | null | undefined} prediction
- * @param {number} officialOdds
- * @param {string | number | null | undefined} currentOfficialHandicapLine
- */
-const isOfficialRecommendationEligible = (prediction, officialOdds, currentOfficialHandicapLine) => {
-  const odds = Number(officialOdds);
-  const tier = String(prediction?.recommendationTier || '');
-  const evidence = prediction?.multiFactorEvidence;
-  const evidenceOdds = Number(evidence?.odds);
-  return Boolean(
-    prediction
-    && prediction.marketType === 'BEST'
-    && prediction.recommendationAction === 'recommend'
-    && (prediction.oddsPoolCode === 'HAD' || prediction.oddsPoolCode === 'HHAD')
-    && (prediction.tipCode === '1' || prediction.tipCode === 'X' || prediction.tipCode === '2')
-    && !BLOCKED_TIER_PATTERN.test(tier)
-    && Number.isFinite(odds)
-    && odds > 1
-    && evidence?.version === OFFICIAL_RECOMMENDATION_POLICY_VERSION
-    && evidence?.eligible === true
-    && evidence?.market === prediction.oddsPoolCode
-    && evidence?.code === prediction.tipCode
-    && recommendationLinesMatch(prediction, evidence, currentOfficialHandicapLine)
-    && Array.isArray(evidence?.blockers)
-    && evidence.blockers.length === 0
-    && Number.isFinite(evidenceOdds)
-    && Math.abs(evidenceOdds - odds) <= 0.001
-  );
-};
-
-/**
- * Production-server boundary. Browser eligibility remains presentation-only;
- * the server additionally requires a verified Sporttery source and a stable
- * global model-risk tier before any executable recommendation can leave the
- * API.
- *
- * @param {Parameters<typeof isOfficialRecommendationEligible>[0]} prediction
- * @param {number} officialOdds
- * @param {{ officialSource?: boolean; globalRiskTier?: string; officialHandicapLine?: string | number | null } | null | undefined} context
- */
-const isServerOfficialRecommendationEligible = (prediction, officialOdds, context) => Boolean(
-  isOfficialRecommendationEligible(prediction, officialOdds, context?.officialHandicapLine)
-  && context?.officialSource === true
-  && String(context?.globalRiskTier || '').toLowerCase() === 'stable'
-);
-
-module.exports = {
-  OFFICIAL_RECOMMENDATION_POLICY_VERSION,
-  isOfficialRecommendationEligible,
-  isServerOfficialRecommendationEligible,
-  parseHandicapLine,
-  recommendationLinesMatch
-};
+exports.recommendationLinesMatch = recommendationLinesMatch;
+function recommendationEligibilityReasons(prediction, officialOdds, currentOfficialHandicapLine) {
+    if (!prediction)
+        return ['prediction-missing'];
+    const evidence = prediction.multiFactorEvidence;
+    const odds = Number(officialOdds), evidenceOdds = Number(evidence?.odds);
+    const reasons = [];
+    if (prediction.marketType !== 'BEST')
+        reasons.push('selection-role-not-best');
+    if (prediction.recommendationAction !== 'recommend')
+        reasons.push('not-a-published-recommendation-action');
+    if (BLOCKED_TIER_PATTERN.test(prediction.recommendationTier || ''))
+        reasons.push('reference-or-shadow-tier');
+    if (!['HAD', 'HHAD'].includes(prediction.oddsPoolCode || ''))
+        reasons.push('unsupported-market');
+    if (!['1', 'X', '2'].includes(prediction.tipCode || ''))
+        reasons.push('unsupported-direction');
+    if (!Number.isFinite(odds) || odds <= 1)
+        reasons.push('official-sp-missing');
+    if (!exports.SUPPORTED_RECOMMENDATION_EVIDENCE_VERSIONS.includes(evidence?.version || ''))
+        reasons.push('unsupported-evidence-version');
+    if (evidence?.eligible !== true)
+        reasons.push('evidence-not-eligible');
+    if (evidence?.market !== prediction.oddsPoolCode || evidence?.code !== prediction.tipCode)
+        reasons.push('evidence-selection-mismatch');
+    if (!(0, exports.recommendationLinesMatch)(prediction, evidence, currentOfficialHandicapLine))
+        reasons.push('handicap-line-mismatch');
+    if (!Array.isArray(evidence?.blockers) || evidence.blockers.length !== 0)
+        reasons.push('evidence-has-blockers');
+    if (!Number.isFinite(evidenceOdds) || Math.abs(evidenceOdds - odds) > 0.001)
+        reasons.push('evidence-sp-mismatch');
+    return reasons;
+}
+const isOfficialRecommendationEligible = (prediction, officialOdds, currentOfficialHandicapLine) => recommendationEligibilityReasons(prediction, officialOdds, currentOfficialHandicapLine).length === 0;
+exports.isOfficialRecommendationEligible = isOfficialRecommendationEligible;
+const isServerOfficialRecommendationEligible = (prediction, officialOdds, context) => (0, exports.isOfficialRecommendationEligible)(prediction, officialOdds, context?.officialHandicapLine)
+    && context?.officialSource === true
+    && String(context?.globalRiskTier || '').toLowerCase() === 'stable';
+exports.isServerOfficialRecommendationEligible = isServerOfficialRecommendationEligible;
