@@ -47,3 +47,4 @@ export function parsePublishedForecasts(value: unknown): PublishedForecastPayloa
   if (summary.won + summary.lost !== summary.settled || summary.settled + summary.pending + summary.void + summary.disputed !== summary.published) throw new Error('Inconsistent publication statistics');
   summary.hitRate = summary.settled ? summary.won / summary.settled : null;
   return { version: str(x.version), updatedAt: timestamp(x.updatedAt), businessDate: str(x.businessDate), current, history, summary };
+}

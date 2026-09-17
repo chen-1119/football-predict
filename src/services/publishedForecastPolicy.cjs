@@ -42,6 +42,7 @@ function dataPublishable(meta, publication, now) {
     && meta?.publication?.generationId === publication.generationId;
 }
 function evaluateForecast(match, { now, publication } = {}) {
+  match = require('./prospectiveForecastInput.cjs').forecastInputFor(match);
   const fail = reason => ({ eligible: false, reason, candidate: null });
   if (!Number.isFinite(now)) return fail('clock-invalid');
   if (match?.status !== 'SCHEDULED' || match.resultDisposition === 'VOID') return fail('not-pregame');

@@ -394,7 +394,7 @@ function RoutedContent() {
                 path="/betslip"
                 element={(
                   <RequireAccess>
-                    <BetSlipGenerator onOpenObservations={() => navigate('/best')} />
+                    <BetSlipGenerator onSelectMatch={selectMatch} />
                   </RequireAccess>
                 )}
               />

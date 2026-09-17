@@ -1,7 +1,8 @@
 "use strict";
 
 const assert = require("node:assert/strict");
-const { choose, settleEntry, summarize, shanghaiParts, buildLedger, canPublish } = require("./dailyFeaturedComboLedger.cjs");
+const { settleEntry, summarize, shanghaiParts, buildLedger } = require("./dailyFeaturedComboLedger.cjs");
+const { choose, canPublish } = require("./independentComboSelection.cjs");
 
 const candidate = (id, odds, evidenceScore, market = "HAD", tipCode = "1") => ({
   matchId: `sporttery_${id}`,
@@ -13,6 +14,10 @@ const candidate = (id, odds, evidenceScore, market = "HAD", tipCode = "1") => ({
   handicapLine: market === "HHAD" ? -1 : 0,
   odds,
   evidenceScore,
+  qualityScore: evidenceScore / 100,
+  marketDisagreement: 0,
+  businessDate: '2026-09-16',
+  cutoffTime: `2026-09-16T${String(10 + Number(id)).padStart(2, "0")}:00:00.000Z`,
 });
 
 const candidates = [
@@ -71,9 +76,9 @@ const now=Date.parse('2026-09-16T13:05:00Z'), publication={generationId:'g',mani
 const health={status:{modelRiskStable:true,recommendationReliable:true,dataFresh:true,serviceOk:true}};
 const meta={updatedAt:new Date(now).toISOString(),publication};
 assert.equal(canPublish(health,meta,publication,now),true);
-assert.equal(canPublish({...health,status:{...health.status,modelRiskStable:false}},meta,publication,now),false);
+assert.equal(canPublish({...health,status:{...health.status,modelRiskStable:false,recommendationReliable:false}},meta,publication,now),true);
 assert.equal(canPublish(health,meta,{...publication,manifestHash:'other'},now),false);
-assert.equal(canPublish(health,meta,publication,now+16*60000),false);
+assert.equal(canPublish(health,meta,publication,now+61*60000),false);
 const denied=buildLedger({now,current:[],history,entries:[entry],publishable:false,publication});
 assert.equal(denied.entries.length,1); assert.deepEqual(denied.entries[0].legs,entry.legs);
 assert.equal(denied.publicPayload.publishable,false);

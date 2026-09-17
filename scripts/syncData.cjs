@@ -17900,6 +17900,9 @@ async function sync() {
   // Existing locked decisions still flow through applyPredictionPersistence's
   // preservation branch and retain their original revision/source cycle.
   output = finalizePublishedPredictionDecisions(output, existingBySourceId, capturedAt);
+  output = require('../src/services/prospectiveForecastInput.cjs').attachProspectiveForecastInputs(
+    output, prospectiveAuditMatches, Date.now(),
+  );
   output = attachImmutableAnalysisReferenceDecisions(output, existingBySourceId, capturedAt);
   output = output.map((match) => attachWorldCupPrior(match, worldCupKimiDataset));
   output = output.map(normalizePublishedPredictionText);

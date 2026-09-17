@@ -2,7 +2,12 @@
 const { test, after } = require('node:test'); const assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path'), os = require('node:os'), ts = require('typescript');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(),'forecast-view-')); after(()=>fs.rmSync(tmp,{recursive:true,force:true}));
-for(const name of ['publishedForecastView','dailyComboView']){const s=fs.readFileSync(path.join(__dirname,'../src/services',name+'.ts'),'utf8');fs.writeFileSync(path.join(tmp,name+'.js'),ts.transpileModule(s,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText);}
+for (const name of ['publishedForecastView', 'dailyComboView']) {
+  const source = fs.readFileSync(path.join(__dirname, '../src/services', name + '.ts'), 'utf8');
+  const result = ts.transpileModule(source, { reportDiagnostics: true, compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } });
+  assert.deepEqual(result.diagnostics, [], `${name} must have valid TypeScript syntax`);
+  fs.writeFileSync(path.join(tmp, name + '.js'), result.outputText);
+}
 const {parsePublishedForecasts}=require(path.join(tmp,'publishedForecastView.js'));
 const {parseDailyComboLedger}=require(path.join(tmp,'dailyComboView.js'));
 const {evaluateForecast,buildRecord}=require('../src/services/publishedForecastPolicy.cjs');

@@ -61,7 +61,7 @@ const normalizeProbabilityTriplet = (value) => {
   const percentageScale = Math.abs(total - 100) <= 0.5;
   const fractionScale = Math.abs(total - 1) <= 0.02;
   if (!percentageScale && !fractionScale) return null;
-  const denominator = percentageScale ? 100 : total;
+  const denominator = total;
   return { "1": raw[0] / denominator, X: raw[1] / denominator, "2": raw[2] / denominator };
 };
 
@@ -160,6 +160,7 @@ const effectiveDeadlineMs = (match, date) => {
 };
 
 function independentCandidate(match, now = Date.now()) {
+  match = require('../src/services/prospectiveForecastInput.cjs').forecastInputFor(match);
   if (!Number.isFinite(now) || match?.status !== "SCHEDULED" || match?.resultDisposition === "VOID") return null;
   if (match?.isOnSale === false || ["CLOSED", "SUSPENDED", "STOPPED"].includes(text(match?.saleStatus).toUpperCase())) return null;
   const id = sourceMatchId(match?.sourceMatchId || match?.id);
@@ -193,7 +194,7 @@ function independentCandidate(match, now = Date.now()) {
   const freshnessFactor = clamp(1 - (quoteAgeMs / Math.max(quoteAgeLimitMs, 1)) * 0.04, 0.96, 1);
   const disagreementPenalty = clamp(selected.disagreement / 0.25, 0, 1) * 0.08;
   const qualityScore = clamp(selected.robustProbability * freshnessFactor - disagreementPenalty, 0.01, 0.99);
-  const quoteSignature = JSON.stringify({ id, eventVersion, source: quote.source, observedAt: iso(quote.observedMs), odds: quote.normalizedOdds });
+  const quoteSignature = JSON.stringify({ id, eventVersion, source: quote.source, observedAt: new Date(quote.observedMs).toISOString(), odds: quote.normalizedOdds });
 
   return {
     matchId: text(match.id),

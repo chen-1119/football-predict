@@ -87,6 +87,12 @@ async function persistLedger(client, options) {
     current: options.current, history: options.history, publication: options.publication,
     publishable: options.forecastPublishable === true, now: options.now, clock: options.clock, validators,
   });
+  const deadlines = result.entries.filter(entry => !prior.some(old => old.id === entry.id))
+    .flatMap(entry => entry.legs.map(leg => timeMs(leg.cutoffTime)));
+  const forecastDeadline = timeMs(result.publicPayload.publishedForecasts.commitDeadline);
+  if (Number.isFinite(forecastDeadline)) deadlines.push(forecastDeadline);
+  result.publicPayload.commitDeadline = deadlines.length ? new Date(Math.min(...deadlines)).toISOString() : null;
+  if (deadlines.length && (options.clock?.() ?? options.now) >= Math.min(...deadlines)) throw new Error('Publication crossed cutoff before commit');
   await client.query('INSERT INTO football.daily_featured_combo_state(id,payload) VALUES(1,$1::jsonb) ON CONFLICT(id) DO UPDATE SET payload=EXCLUDED.payload', [JSON.stringify(result.publicPayload)]);
   return result.publicPayload;
 }
@@ -115,7 +121,7 @@ async function run({ now } = {}) {
             current: rows.rows.filter(row => row.dataset === 'current').map(row => row.payload),
             history: rows.rows.filter(row => row.dataset === 'history').map(row => row.payload),
           });
-          commitDeadline = payload.publishedForecasts?.commitDeadline;
+          commitDeadline = payload.commitDeadline;
           return payload;
         }, { beforeCommit: () => { if (commitDeadline && (now ?? Date.now()) >= Date.parse(commitDeadline)) throw new Error('Forecast cutoff crossed before commit'); } });
       } catch (error) { if (error?.code !== '40001' || attempt === 2) throw error; }
