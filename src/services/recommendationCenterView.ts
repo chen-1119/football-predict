@@ -11,7 +11,7 @@ export interface SingleRow { decision:Decision; settlement:Settlement }
 export interface Combo { id:string; businessDate:string; size:2|3; totalOdds:number; rawTotalOdds:number; legs:Decision[]; decisionIds:string[]; freezeAt:string; frozenAt?:string; generatedAt:string }
 export interface ComboRow { combo:Combo; settlement:Settlement }
 export interface Summary { published:number;settled:number;won:number;lost:number;pending:number;void:number;disputed:number;hitRate:number|null;brier?:number|null;logLoss?:number|null;marketBrier?:number|null }
-export interface Lane {status:'ok'|'error';lastSuccessAt?:string;lastAttemptAt:string;errorCode?:string|null}
+export interface Lane {status:'ok'|'error';lastSuccessAt?:string;lastAttemptAt:string;errorCode?:string|null;inputAsOf?:string;candidateCount?:number;eligibleCount?:number;bindingFailures?:number}
 export interface RecommendationCenterData {
   version:'recommendation-center-v1';updatedAt:string;businessDate:string;inputAsOf:string|null;resultAsOf:string|null;
   lanes:Partial<Record<'publish'|'combos'|'settlement'|'view',Lane>>;
@@ -74,10 +74,30 @@ export function parseRecommendationCenter(response:unknown):RecommendationCenter
   const root=object(response),x=object(root.recommendationCenter),review=object(x.review),stats=object(review.statistics),lanes=object(x.lanes);
   if(x.version!=='recommendation-center-v1'||x.modelValidation!=='unvalidated')throw new Error('Unsupported center contract');
   const parsedLanes:RecommendationCenterData['lanes']={};
-  for(const k of ['publish','combos','settlement','view'] as const){if(lanes[k]==null)continue;const l=object(lanes[k]);if(l.status!=='ok'&&l.status!=='error')throw new Error('Invalid lane status');parsedLanes[k]={status:l.status,lastAttemptAt:stamp(l.lastAttemptAt),lastSuccessAt:l.lastSuccessAt==null?undefined:stamp(l.lastSuccessAt),errorCode:l.errorCode==null?null:text(l.errorCode)};}
+  for(const k of ['publish','combos','settlement','view'] as const){if(lanes[k]==null)continue;const l=object(lanes[k]);if(l.status!=='ok'&&l.status!=='error')throw new Error('Invalid lane status');parsedLanes[k]={status:l.status,lastAttemptAt:stamp(l.lastAttemptAt),lastSuccessAt:l.lastSuccessAt==null?undefined:stamp(l.lastSuccessAt),errorCode:l.errorCode==null?null:text(l.errorCode),inputAsOf:l.inputAsOf==null?undefined:stamp(l.inputAsOf),candidateCount:l.candidateCount==null?undefined:count(l.candidateCount),eligibleCount:l.eligibleCount==null?undefined:count(l.eligibleCount),bindingFailures:l.bindingFailures==null?undefined:count(l.bindingFailures)};}
   const result:RecommendationCenterData={version:'recommendation-center-v1',updatedAt:stamp(x.updatedAt),businessDate:date(x.businessDate),inputAsOf:x.inputAsOf==null?null:stamp(x.inputAsOf),resultAsOf:x.resultAsOf==null?null:stamp(x.resultAsOf),lanes:parsedLanes,current:list(x.current).map(single),previews:list(x.previews).map(combo),todayCombos:list(x.todayCombos).map(comboRow),overlapDecisionIds:list(x.overlapDecisionIds).map(text),review:{singles:list(review.singles).map(single),combos:list(review.combos).map(comboRow),limit:count(review.limit),statistics:{single:summary(stats.single),two:summary(stats.two),three:summary(stats.three)},definition:text(review.definition)},excludedCorruptRecords:count(x.excludedCorruptRecords),modelValidation:'unvalidated'};
   if(new Set(result.current.map(r=>r.decision.decisionId)).size!==result.current.length)throw new Error('Duplicate current decision');
   for(const c of result.previews)for(const leg of c.legs){const same=result.current.find(s=>s.decision.decisionId===leg.decisionId);if(same&&same.decision.recordHash!==leg.recordHash)throw new Error('Conflicting decision payload');}
   return result;
 }
 export function visiblePreview(c:Combo,now:number):boolean{return c.legs.every(l=>now<Date.parse(l.cutoffTime)&&now>=Date.parse(l.quoteObservedAt)&&now-Date.parse(l.quoteObservedAt)<=15*60000);}
+
+/** The combo lane, not the single-pick lane, owns preview availability.
+ * View refreshes do not refresh its input clock. Quotes/cutoffs are still
+ * checked per leg; frozen records are rendered separately even during errors. */
+export function comboLaneFresh(data:RecommendationCenterData|undefined|null,now:number):boolean {
+  if(!data||!Number.isFinite(now)||data.businessDate!==new Date(now+8*3600000).toISOString().slice(0,10))return false;
+  const lane=data.lanes.combos;
+  if(lane?.status!=='ok')return false;
+  const fresh=(value:string|undefined|null)=>{
+    const stamp=Date.parse(value||'');return Number.isFinite(stamp)&&stamp<=now&&now-stamp<=15*60000;
+  };
+  // Older API responses may lack the per-lane source clock. Their source
+  // watermark is a compatibility fallback, never a single-pick status gate.
+  return fresh(lane.inputAsOf??data.inputAsOf)&&fresh(lane.lastSuccessAt);
+}
+export function comboPreviewForSize(data:RecommendationCenterData|undefined|null,size:2|3,now:number,readFailed=false):Combo|undefined {
+  if(readFailed||!comboLaneFresh(data,now)||!data)return undefined;
+  if(data.todayCombos.some(r=>r.combo.size===size&&r.combo.businessDate===data.businessDate))return undefined;
+  return data.previews.find(c=>c.size===size&&c.businessDate===data.businessDate&&visiblePreview(c,now));
+}

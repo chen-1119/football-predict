@@ -41,7 +41,7 @@ jobs:
           node-version: '22.22.1'
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: node --test tests/recommendation-unified.test.cjs tests/recommendation-center-view.test.cjs
+      - run: node --test tests/recommendation-unified.test.cjs tests/recommendation-center-view.test.cjs tests/recommendation-combo-availability.test.cjs
       - run: node scripts/verifyUnifiedRecommendationPostgres.cjs
         env:
           UNIFIED_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
