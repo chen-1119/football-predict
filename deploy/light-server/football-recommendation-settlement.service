@@ -1,13 +1,13 @@
 [Unit]
-Description=Football unified recommendation publisher
-After=network-online.target football-sync-worker.service
+Description=Football shared official result settlement
+After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 WorkingDirectory=/opt/football-predict
 EnvironmentFile=/etc/football-predict/env
-ExecStart=/opt/node-v22.22.1/bin/node /opt/football-predict/scripts/dailyFeaturedComboLedger.cjs --watch
+ExecStart=/opt/node-v22.22.1/bin/node /opt/football-predict/scripts/runRecommendationSettlement.cjs --watch
 User=football
 Group=football
 Restart=on-failure
