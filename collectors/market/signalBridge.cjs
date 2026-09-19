@@ -35,7 +35,7 @@ function projectSignalRows(observations) {
     return { keys, signal: { ...signal, externalOdds: { ...signal.bookmakerOdds[pool], poolCode: pool.toUpperCase() } } };
   });
 }
-async function readMarketSignalRows(pool) {
+async function readMarketSignalRows(pool, { allowEmpty = false } = {}) {
   const latest = await pool.query(`SELECT observation.payload, latest.updated_at,
       observation.observation_id, observation.first_seen_at, observation.last_seen_at,
       observation.content_hash, latest.content_hash AS latest_content_hash,
@@ -48,7 +48,7 @@ async function readMarketSignalRows(pool) {
     LEFT JOIN football.market_collector_runs acquisition ON acquisition.run_id=observation.run_id
     WHERE latest.source=$1`, [SOURCE]);
   const rows = projectSignalRows(latest.rows);
-  if (!rows.length) {
+  if (!rows.length && !allowEmpty) {
     const run = (await pool.query(`SELECT status,payload FROM football.market_collector_runs
       WHERE source=$1 AND finished_at IS NOT NULL ORDER BY finished_at DESC LIMIT 1`, [SOURCE])).rows[0];
     if (run?.status !== 'completed' || run.payload?.sourceState !== 'no-events') {

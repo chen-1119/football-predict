@@ -4,6 +4,11 @@ const { hash } = require('../../src/services/publishedForecastPolicy.cjs');
 class Repository {
   constructor(client) { this.client=client; }
   async current() { return (await this.client.query("SELECT payload FROM football.match_snapshots WHERE dataset='current'")).rows.map(r=>r.payload); }
+  async currentInputs(now) {
+    const current=await this.current();
+    const signals=await require('../../collectors/market/signalBridge.cjs').readMarketSignalRows(this.client,{allowEmpty:true});
+    return require('./currentInputs.cjs').joinCurrentMarket(current,signals,now);
+  }
   async publication() { const {readPostgresPublicationIdentity}=require('../../server/postgresProjectionStore.cjs'); const value=await readPostgresPublicationIdentity(this.client); if(!value.available)throw Object.assign(new Error('Publication unavailable'),{code:'SOURCE_UNAVAILABLE'});return value.publication; }
   async insertDecision(d) {
     const last=(await this.client.query(`SELECT payload FROM football.recommendation_decisions

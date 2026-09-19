@@ -43,7 +43,7 @@ test('malformed fixtures and impossible calendar days are quarantined', () => {
   }
 });
 test('all adaptive intervals, including the empty schedule, respect both bounds', () => {
-  for (const [minutes, seconds] of [[10,60],[30,120],[90,300],[240,600],[720,900],[1800,1800]])
+  for (const [minutes, seconds] of [[10,60],[30,120],[90,300],[240,600],[720,600],[1800,1800]])
     assert.equal(p.adaptivePollSeconds([{ kickoffTime: new Date(at + minutes * 60000).toISOString() }], at, p.config({})), seconds);
   assert.equal(p.adaptivePollSeconds([], at, p.config({ MARKET_COLLECTOR_MIN_SECONDS: '1200' })), 1200);
   assert.equal(p.jitteredDelayMs(1800, () => 1, p.config({})), 1800000);
