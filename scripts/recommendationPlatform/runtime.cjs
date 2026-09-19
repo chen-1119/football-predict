@@ -5,6 +5,26 @@ const {day,time,hash}=require('../../src/services/publishedForecastPolicy.cjs');
 
 function freshPublication(p,now){return p && /^[a-f0-9]{64}$/.test(p.manifestHash||'') && typeof p.generationId==='string' && p.generationId.length>0 && Number.isFinite(time(p.committedAt)) && now>=time(p.committedAt) && now-time(p.committedAt)<=15*60000;}
 function requireBeforeCutoff(records,now){if(records.some(d=>now>=time(d.cutoffTime)))throw Object.assign(new Error('Cutoff crossed'),{code:'DEADLINE_CROSSED'});}
+/** Bind the exact current inputs inside the caller's transaction. The source
+ * may have advanced since the separate single-publication transaction ended.
+ * Missing rows are persisted with the SAME decision policy, not discarded or
+ * replaced by stale decisions. Existing immutable publication times are kept. */
+async function bindCurrentDecisions(repo, decisions, clock) {
+  const byId=new Map((await repo.decisions(decisions.map(d=>d.decisionId))).map(d=>[d.decisionId,d]));
+  const accepted=[],issues=[];
+  for(const d of decisions){
+    const item=await repo.savepoint(async()=>{
+      requireBeforeCutoff([d],clock());
+      const stored=byId.get(d.decisionId)||await repo.insertDecision(d);
+      if(!validDecision(stored)||stored.decisionId!==d.decisionId||stored.inputHash!==d.inputHash)
+        throw Object.assign(new Error('Decision read-back mismatch'),{code:'DECISION_BINDING_INVALID'});
+      return stored;
+    });
+    if(item.error)issues.push({sourceMatchId:d.sourceMatchId,reason:'decision-binding-failed'});
+    else accepted.push(item.value);
+  }
+  return {accepted,issues};
+}
 /** Each action commits independently. Never call all lanes inside one outer DB transaction. */
 function createRuntime(ports,{validators}={}){
   const clock=ports.clock || Date.now;
@@ -26,17 +46,8 @@ function createRuntime(ports,{validators}={}){
     const publication=await repo.publication(),now=clock();
     if(!freshPublication(publication,now))throw Object.assign(new Error('Fresh input required'),{code:'SOURCE_STALE'});
     const current=await repo.current();const {decisions,issues}=evaluateCurrent(current,{now,publication});
-    const accepted=[];
-    for(const d of decisions){
-      const item=await repo.savepoint(async()=>{
-        requireBeforeCutoff([d],clock());
-        const stored=await repo.insertDecision(d);
-        if(!validDecision(stored)||stored.inputHash!==d.inputHash)throw new Error('Decision read-back mismatch');
-        return stored;
-      });
-      if(item.error)issues.push({sourceMatchId:d.sourceMatchId,reason:'publication-write-failed'});
-      else accepted.push(item.value);
-    }
+    const bound=await bindCurrentDecisions(repo,decisions,clock);
+    const accepted=bound.accepted;issues.push(...bound.issues);
     for(const issue of issues)await repo.issue('publish',issue);
     requireBeforeCutoff(accepted,clock());
     return {publication,decisionIds:accepted.map(d=>d.decisionId),inputAsOf:publication.committedAt,issues:issues.length,attempted:current.length};
@@ -46,9 +57,14 @@ function createRuntime(ports,{validators}={}){
     if(!freshPublication(publication,now))throw Object.assign(new Error('Fresh input required'),{code:'SOURCE_STALE'});
     // Recheck actual sale state and exact current input before freezing. A
     // retained preview alone is never authority to publish after suspension.
-    const {decisions}=evaluateCurrent(await repo.current(),{now,publication});
-    const stored=await repo.decisions(decisions.map(d=>d.decisionId));
-    const candidates=stored.filter(d=>validDecision(d) && decisions.some(f=>f.decisionId===d.decisionId && f.inputHash===d.inputHash));
+    const current=await repo.current();
+    const assessed=evaluateCurrent(current,{now,publication});
+    const bound=await bindCurrentDecisions(repo,assessed.decisions,clock);
+    const candidates=bound.accepted;
+    const issues=[...assessed.issues,...bound.issues];
+    for(const issue of issues)await repo.issue('combos',issue);
+    if(assessed.decisions.length>0 && candidates.length===0 && bound.issues.length>0)
+      throw Object.assign(new Error('No current decision could be bound'),{code:'DECISION_BINDING_FAILED'});
     const frozen=await repo.frozenCombos(day(now)),previews=[],created=[];
     for(const size of [2,3]){
       if(frozen.some(c=>c.size===size))continue;
@@ -58,7 +74,7 @@ function createRuntime(ports,{validators}={}){
       else previews.push(selection);
     }
     requireBeforeCutoff(created,clock());
-    return {publication,previews,inputAsOf:publication.committedAt,candidateCount:candidates.length};
+    return {publication,previews,inputAsOf:publication.committedAt,candidateCount:candidates.length,eligibleCount:assessed.decisions.length,bindingFailures:bound.issues.length};
   });}
   async function settle(){return stage('settlement',async repo=>{
     const verify=validators || (()=>{const m=require('../../src/services/matchLifecycle.cjs');return {isFinal:m.isOfficialSportteryFinal,isVoid:m.isOfficialSportteryVoid};})();
@@ -93,7 +109,7 @@ function createRuntime(ports,{validators}={}){
     const today=combos.filter(r=>r.combo.businessDate===day(now));
     const overlap=previews.length===2?previews[0].decisionIds.filter(id=>previews[1].decisionIds.includes(id)):[];
     const center={version:'recommendation-center-v1',policyVersion:VERSION,updatedAt:new Date(now).toISOString(),businessDate:day(now),
-      inputAsOf:lanes.publish?.inputAsOf||null,resultAsOf:lanes.settlement?.lastSuccessAt||null,lanes,
+      inputAsOf:[lanes.publish?.inputAsOf,lanes.combos?.inputAsOf].filter(v=>Number.isFinite(time(v))).sort((a,b)=>time(b)-time(a))[0]||null,resultAsOf:lanes.settlement?.lastSuccessAt||null,lanes,
       current:selected,previews,todayCombos:today,overlapDecisionIds:overlap,
       review:{singles:singles.slice(0,100),combos:combos.slice(0,100),limit:100,
         statistics:{single:summary(singles,true),two:summary(combos.filter(r=>r.combo.size===2)),three:summary(combos.filter(r=>r.combo.size===3))},

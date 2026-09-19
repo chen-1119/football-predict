@@ -24,6 +24,10 @@ function attachProspectiveForecastInputs(matches, freshMatches, now) {
     const input = Object.fromEntries(fields.filter(key => fresh[key] !== undefined).map(key => [key, fresh[key]]));
     input.probabilityModel = { version: model.version, generatedAt: model.generatedAt, sourceMatchId: fresh.sourceMatchId, eventVersion: fresh.eventVersion || fresh.kickoffTime, dataQuality: model.dataQuality, oneXTwo: { final: model.oneXTwo?.final } };
     input.predictionMeta = { cutoffTime: fresh.predictionMeta?.cutoffTime };
+    // Carry the current-cycle quote as one object. Never borrow a later quote
+    // from the parent frozen match or refresh a receipt by copying metadata.
+    const had = fresh.externalSignals?.bookmakerOdds?.had;
+    if (had?.lotterySpReceipt) input.externalSignals = { bookmakerOdds: { had: structuredClone(had) } };
     result.prospectiveForecastInput = structuredClone(input);
     return result;
   });

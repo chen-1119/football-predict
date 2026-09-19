@@ -74,32 +74,36 @@ function evaluateForecast(match, { now, publication } = {}) {
   const ranked = CODES.slice().sort((a, b) => p[b] - p[a]);
   if (p[ranked[0]] - p[ranked[1]] <= 1e-9) return fail('no-unique-first-direction');
   const had = match.externalSignals?.bookmakerOdds?.had;
+  const copiedQuote = require('./warehouseLotterySp.cjs').warehouseQuoteForMatch(match, now, deadline);
   const candidates = [
     { odds: match.odds, source: match.oddsSource, at: match.oddsReceivedAt || match.oddsUpdatedAt, id: match.sourceMatchId, event: match.eventVersion },
     { odds: had, source: had?.source, at: had?.receivedAt || had?.updatedAt, id: had?.sourceMatchId, event: had?.eventVersion },
+    ...(copiedQuote ? [copiedQuote] : []),
   ].map(q => ({ ...q, atMs: time(q.at), values: [q.odds?.odds1, q.odds?.oddsX, q.odds?.odds2].map(numeric) }))
-    .filter(q => /^sporttery:had(?:$|:)/i.test(text(q.source)) && q.values.every(v => v !== null && v > 1)
+    .filter(q => (/^sporttery:had(?:$|:)/i.test(text(q.source)) || Boolean(copiedQuote && q.receipt === copiedQuote.receipt)) && q.values.every(v => v !== null && v > 1)
       && Number.isFinite(q.atMs) && q.atMs <= now && q.atMs < deadline && now - q.atMs <= 15 * 60000
       && (!q.id || sourceId(q.id) === sourceId(match.sourceMatchId || match.id)) && (!q.event || iso(q.event) === eventVersion))
-    .sort((a, b) => b.atMs - a.atMs);
+    .sort((a, b) => b.atMs - a.atMs || Number(Boolean(a.receipt)) - Number(Boolean(b.receipt)));
   const q = candidates[0];
   if (!q) return fail('official-had-quote-unavailable');
+  const quoteDeadline = Math.min(deadline, q.cutoffMs ?? deadline);
   const odds = Object.fromEntries(CODES.map((c, i) => [c, q.values[i]]));
   const inverseTotal = q.values.reduce((sum, v) => sum + 1 / v, 0);
   const market = Object.fromEntries(CODES.map(c => [c, (1 / odds[c]) / inverseTotal]));
   const tipCode = ranked[0];
   return { eligible: true, reason: 'ready-for-publication', candidate: {
     policyVersion: POLICY, statisticsTrack: TRACK, matchId: text(match.id), sourceMatchId: sourceId(match.sourceMatchId || match.id),
-    eventVersion, businessDate, kickoffTime: new Date(kickoff).toISOString(), cutoffTime: new Date(deadline).toISOString(),
+    eventVersion, businessDate, kickoffTime: new Date(kickoff).toISOString(), cutoffTime: new Date(quoteDeadline).toISOString(),
     matchNo: text(match.matchNo || match.matchNumStr || match.matchNum) || null,
     homeTeamId: text(match.homeTeamId), awayTeamId: text(match.awayTeamId), homeTeamName: text(match.homeTeamName), awayTeamName: text(match.awayTeamName),
     leagueId: text(match.leagueId) || null, market: 'HAD', handicapLine: 0, tipCode, odds: odds[tipCode], probabilities: p,
     marketProbabilities: market, modelProbability: p[tipCode], modelMarketGap: p[tipCode] - market[tipCode],
     modelExpectedValue: p[tipCode] * odds[tipCode] - 1, modelValidation: 'unvalidated',
-    sourceVerification: 'source-label-and-publication-binding',
+    sourceVerification: q.receipt ? 'warehouse-jczq-extraction' : 'source-label-and-publication-binding',
+    ...(q.receipt ? { quoteProvenance: structuredClone(q.receipt) } : {}),
     modelGeneratedAt: new Date(modelAt).toISOString(), quoteSource: q.source, quoteObservedAt: new Date(q.atMs).toISOString(), quoteOdds: odds,
     publication: { generationId: publication.generationId, manifestHash: publication.manifestHash },
-    inputHash: hash({ id: match.id, eventVersion, p, odds, quoteAt: q.atMs, modelAt }),
+    inputHash: hash({ id: match.id, eventVersion, p, odds, quoteAt: q.atMs, modelAt, ...(q.receipt ? { quoteReceiptHash: q.receipt.receiptHash } : {}) }),
   } };
 }
 function buildRecord(candidate, now) {

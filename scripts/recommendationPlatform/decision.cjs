@@ -35,6 +35,15 @@ function validDecision(row) {
   if (!row || row.version !== VERSION || row.policyVersion !== VERSION || row.market !== 'HAD' || row.handicapLine !== 0 || row.modelValidation !== 'unvalidated') return false;
   const { recordHash, ...body } = row;
   if (hash(body) !== recordHash || row.decisionId !== `decision_${hash([VERSION, row.sourceMatchId, row.eventVersion, row.market, row.inputHash])}` || row.id !== row.decisionId) return false;
+  if (row.quoteSource === '500.com:jczq:HAD') {
+    const proof = row.quoteProvenance;
+    const bound = require('../../src/services/warehouseLotterySp.cjs').warehouseQuoteForMatch({
+      ...row, id: row.matchId, externalSignals: { bookmakerOdds: { had: { ...proof?.quoteOdds, lotterySpReceipt: proof } } },
+    }, time(row.publishedAt), time(row.cutoffTime));
+    if (!bound || row.sourceVerification !== 'warehouse-jczq-extraction'
+      || time(row.quoteObservedAt) !== time(bound.at)
+      || ['1','X','2'].some((c,i) => row.quoteOdds?.[c] !== bound.odds[['odds1','oddsX','odds2'][i]])) return false;
+  }
   const p = row.probabilities;
   if (!p || !['1','X','2'].includes(row.tipCode) || !['1','X','2'].every(c => typeof p[c] === 'number' && Number.isFinite(p[c]) && p[c] >= 0 && p[c] <= 1)) return false;
   if (Math.abs(p['1'] + p.X + p['2'] - 1) > 1e-8 || p[row.tipCode] !== row.modelProbability) return false;

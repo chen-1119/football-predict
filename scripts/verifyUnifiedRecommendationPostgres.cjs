@@ -49,6 +49,54 @@ async function verify(pool){
     const afterFrozen=(await q('SELECT payload FROM football.recommendation_combo_records ORDER BY size')).rows;check(()=>assert.deepEqual(afterFrozen,frozen));
     const revisions=(await q('SELECT count(*)::int AS n FROM football.recommendation_result_events')).rows[0].n;await runtime.settlementCycle();check(()=>assert.ok(revisions>=4));
     const afterRevisions=(await q('SELECT count(*)::int AS n FROM football.recommendation_result_events')).rows[0].n;check(()=>assert.equal(afterRevisions,revisions));
+    // Reproduce the empty-combo race on a fresh business day, using real
+    // independently committed PostgreSQL transactions rather than mock rows.
+    const nextDate=new Date(Date.parse(`${tomorrow}T00:00:00Z`)+86400000).toISOString().slice(0,10);
+    now=Date.parse(`${nextDate}T10:00:00Z`);
+    const nextFixture=id=>({...fixture(id),businessDate:nextDate,kickoffTime:`${nextDate}T16:00:00Z`,eventVersion:`${nextDate}T16:00:00Z`});
+    const sourceVersion=async label=>{
+      await q("UPDATE football.projection_meta SET value=$1 WHERE key='committed_at'",[new Date(now).toISOString()]);
+      await q("UPDATE football.projection_meta SET value=$1 WHERE key='data_generation_id'",[label]);
+    };
+    await q("DELETE FROM football.match_snapshots WHERE dataset='current'");
+    for(const id of [101,102,103])await write(nextFixture(id));
+    await sourceVersion('race-before-publish');
+    const firstRacePublish=await runtime.publish();check(()=>assert.equal(firstRacePublish.ok,true));
+    now+=60000;
+    for(const id of [101,102,103])await write(nextFixture(id));
+    await sourceVersion('race-after-publish');
+    const raceCombos=await runtime.combos();check(()=>assert.equal(raceCombos.ok,true));
+    check(()=>assert.deepEqual(raceCombos.value.previews.map(c=>c.size),[2,3]));
+    const raceDecisions=(await q('SELECT payload FROM football.recommendation_decisions WHERE business_date=$1',[nextDate])).rows.map(r=>r.payload);
+    check(()=>assert.equal(raceDecisions.length,6));
+    check(()=>assert.ok(raceCombos.value.previews.every(c=>c.legs.every(d=>d.modelGeneratedAt===new Date(now).toISOString()&&raceDecisions.some(p=>p.decisionId===d.decisionId&&p.recordHash===d.recordHash)))));
+    await Promise.all([runtime.publish(),runtime.combos()]);
+    check(()=>assert.equal((raceCombos.value.previews[0].rawTotalOdds),3.24));
+    const repeated=(await q('SELECT count(*)::int AS n FROM football.recommendation_decisions WHERE business_date=$1',[nextDate])).rows[0].n;
+    check(()=>assert.equal(repeated,6));
+
+    // A failure isolated to the single lane must not create a hidden single
+    // prerequisite in either combo persistence or the frontend projection.
+    await q(`CREATE FUNCTION football.fail_single_lane_test() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN IF NEW.lane='publish' THEN RAISE EXCEPTION 'injected single lane failure'; END IF; RETURN NEW; END; $$;
+      CREATE TRIGGER injected_single_lane BEFORE INSERT OR UPDATE ON football.recommendation_lanes
+        FOR EACH ROW EXECUTE FUNCTION football.fail_single_lane_test();`);
+    now+=60000;
+    await q("DELETE FROM football.match_snapshots WHERE dataset='current'");
+    for(const id of [201,202,203])await write(nextFixture(id));
+    await sourceVersion('combo-without-single');
+    const failedSingle=await runtime.publish();check(()=>assert.equal(failedSingle.ok,false));
+    const independentCombos=await runtime.combos();check(()=>assert.equal(independentCombos.ok,true));
+    check(()=>assert.deepEqual(independentCombos.value.previews.map(c=>c.size),[2,3]));
+    check(()=>assert.ok(independentCombos.value.previews.every(c=>c.legs.every(d=>['201','202','203'].includes(d.sourceMatchId)))));
+    check(()=>assert.equal(independentCombos.value.inputAsOf,new Date(now).toISOString()));
+    await runtime.view();
+    const newView=(await q('SELECT payload FROM football.daily_featured_combo_state WHERE id=1')).rows[0].payload.recommendationCenter;
+    check(()=>assert.equal(newView.previews.length,2));
+    check(()=>assert.equal(newView.lanes.combos.status,'ok'));
+    await q('DROP TRIGGER injected_single_lane ON football.recommendation_lanes');
+    const oldFrozen=(await q('SELECT payload FROM football.recommendation_combo_records WHERE business_date=$1 ORDER BY size',[tomorrow])).rows;
+    check(()=>assert.deepEqual(oldFrozen,frozen));
     return {ok:true,checks,schema,scope:'disposable-test-schema',productionRowsWritten:0};
   }finally{await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);}
 }
