@@ -74,13 +74,15 @@ async function verify(pool){
     check(()=>assert.deepEqual(refreshed.combinations.value.previews.map(c=>c.size),[2,3]));
     check(()=>assert.equal(refreshed.combinations.value.inputAsOf,new Date(now).toISOString()));
     check(()=>assert.ok(refreshed.combinations.value.previews.every(c=>c.legs.every(d=>d.quoteObservedAt===new Date(now).toISOString()&&d.modelGeneratedAt===first.observedAt))));
-    check(()=>assert.deepEqual((await q("SELECT payload FROM football.match_snapshots WHERE dataset='current' ORDER BY id")).rows,originalProjection));
+    const unchangedProjection=(await q("SELECT payload FROM football.match_snapshots WHERE dataset='current' ORDER BY id")).rows;
+    check(()=>assert.deepEqual(unchangedProjection,originalProjection));
     const versions=(await q('SELECT payload FROM football.recommendation_decisions ORDER BY id')).rows;
     check(()=>assert.equal(versions.length,6));check(()=>assert.ok(originalDecisions.every(d=>versions.some(v=>JSON.stringify(v)===JSON.stringify(d)))));
     now+=60000;await collect('jczq-copy-failed',true);
     const afterFailure=(await readMarketSignalRows({query:q}))[0].signal.bookmakerOdds.had.lotterySpReceipt;
     check(()=>assert.deepEqual(afterFailure,confirmed));
-    await runtime.publishingCycle();check(()=>assert.equal((await q('SELECT count(*)::int AS n FROM football.recommendation_decisions')).rows[0].n,6));
+    await runtime.publishingCycle();const unchangedCount=(await q('SELECT count(*)::int AS n FROM football.recommendation_decisions')).rows[0].n;
+    check(()=>assert.equal(unchangedCount,6));
     now+=16*60000;await runtime.publishingCycle();
     const expired=(await q('SELECT payload FROM football.daily_featured_combo_state WHERE id=1')).rows[0].payload.recommendationCenter;
     check(()=>assert.equal(expired.previews.length,0));check(()=>assert.equal(expired.lanes.combos.status,'error'));
