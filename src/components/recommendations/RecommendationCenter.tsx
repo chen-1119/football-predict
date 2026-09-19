@@ -42,8 +42,11 @@ function Stats({value,zh}:{value:Summary|undefined;zh:boolean}){return <div clas
 ].map(([label,v])=><div key={label}><span>{label}</span><strong>{v}</strong></div>)}</div>;}
 export function RecommendationCenter({language,onSelectMatch,mode='recommendations',initialTab='single'}:Props){
   const {data,loading,failed,authorizationRequired,refresh}=useRecommendationCenter();
-  const [tab,setTab]=useState(initialTab),[now,setNow]=useState(Date.now);
-  useEffect(()=>{const timer=window.setInterval(()=>setNow(Date.now()),10000);return ()=>window.clearInterval(timer);},[]);
+  const [tab,setTab]=useState(initialTab),[,setClockTick]=useState(0);
+  // The interval wakes an idle page; every data render must use the actual
+  // clock. A saved tick can precede a newly received lane timestamp by seconds.
+  const now=Date.now();
+  useEffect(()=>{const timer=window.setInterval(()=>setClockTick(tick=>tick+1),10000);return ()=>window.clearInterval(timer);},[]);
   const zh=language==='zh',review=mode==='review';
   const summary=data?.review.statistics[tab==='single'?'single':tab];
   const currentDay=data?.businessDate===new Date(now+8*3600000).toISOString().slice(0,10);
