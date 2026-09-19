@@ -18,7 +18,8 @@ async function verify(pool){
     await q(`CREATE TABLE football.projection_meta(key text PRIMARY KEY,value text,updated_at timestamptz DEFAULT clock_timestamp());
       CREATE TABLE football.match_snapshots(id text,dataset text,payload jsonb,PRIMARY KEY(id,dataset));
       CREATE TABLE football.daily_featured_combo_state(id integer PRIMARY KEY,payload jsonb);`);
-    await q(fs.readFileSync(path.join(__dirname,'../server/postgres/migrations/011_unified_recommendation_runtime.sql'),'utf8'));
+    for(const migration of ['007_market_collector_runtime.sql','011_unified_recommendation_runtime.sql'])
+      await q(fs.readFileSync(path.join(__dirname,'../server/postgres/migrations/',migration),'utf8'));
     for(const [key,value] of Object.entries({data_publication_mode:'generation',data_generation_id:'test-generation',manifest_hash:'a'.repeat(64),data_generation_source_cycle_id:'test-source',committed_at:new Date(now).toISOString()}))await q('INSERT INTO football.projection_meta(key,value) VALUES($1,$2)',[key,value]);
     await Promise.all([1,2,3].map(id=>write(fixture(id))));
     const runtime=createRuntime(postgresPorts(mappedPool,()=>now),{validators:{isFinal:r=>r.testOfficial===true&&r.status==='FINISHED',isVoid:r=>r.testOfficial===true&&r.resultDisposition==='VOID'}});

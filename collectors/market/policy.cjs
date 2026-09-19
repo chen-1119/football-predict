@@ -87,7 +87,9 @@ function adaptivePollSeconds(markets, nowMs = Date.now(), cfg = config()) {
   const nearest = Math.min(...markets.map(market => instant(market.kickoffTime)).filter(value => value !== null && value > nowMs));
   const minutes = (nearest - nowMs) / 60000;
   const seconds = nearest === Infinity ? 900 : minutes <= 15 ? 60 : minutes <= 60 ? 120
-    : minutes <= 120 ? 300 : minutes <= 360 ? 600 : minutes <= 1440 ? 900 : 1800;
+    // Leave room for positive jitter, HTTP latency and the 30-second consumer
+    // tick inside the 15-minute SP validity window. Failure backoff is separate.
+    : minutes <= 120 ? 300 : minutes <= 1440 ? 600 : 1800;
   return Math.max(cfg.minSeconds, Math.min(cfg.maxSeconds, seconds));
 }
 function jitteredDelayMs(seconds, random = Math.random, cfg = config()) {

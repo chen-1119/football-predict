@@ -5,6 +5,25 @@ const {day,time,hash}=require('../../src/services/publishedForecastPolicy.cjs');
 
 function freshPublication(p,now){return p && /^[a-f0-9]{64}$/.test(p.manifestHash||'') && typeof p.generationId==='string' && p.generationId.length>0 && Number.isFinite(time(p.committedAt)) && now>=time(p.committedAt) && now-time(p.committedAt)<=15*60000;}
 function requireBeforeCutoff(records,now){if(records.some(d=>now>=time(d.cutoffTime)))throw Object.assign(new Error('Cutoff crossed'),{code:'DEADLINE_CROSSED'});}
+async function assessInputs(repo,publication,now){
+  const committed=time(publication?.committedAt);
+  if(!publication || !/^[a-f0-9]{64}$/.test(publication.manifestHash||'') || !publication.generationId
+    || !Number.isFinite(committed) || committed>now)throw Object.assign(new Error('Valid committed input required'),{code:'SOURCE_STALE'});
+  const inputs=repo.currentInputs?await repo.currentInputs(now):{current:await repo.current(),receiptHashes:new Set()};
+  const assessed=evaluateCurrent(inputs.current,{now,publication});
+  // A full model publication is not a quote clock. An older generation may
+  // supply a still-valid prospective model ONLY with a fresh, independently
+  // acquired exact-event receipt in this transaction. Model/cutoff policy is
+  // unchanged. No receipt means the original 15-minute source gate still holds.
+  if(!freshPublication(publication,now)){
+    const fresh=assessed.decisions.filter(d=>inputs.receiptHashes.has(d.quoteProvenance?.receiptHash));
+    if(!fresh.length)throw Object.assign(new Error('Fresh input required'),{code:'SOURCE_STALE'});
+    for(const d of assessed.decisions)if(!fresh.includes(d))assessed.issues.push({sourceMatchId:d.sourceMatchId,reason:'source-stale'});
+    assessed.decisions=fresh;
+  }
+  const quoteTimes=assessed.decisions.map(d=>time(d.quoteObservedAt));
+  return {...assessed,attempted:inputs.current.length,inputAsOf:quoteTimes.length?new Date(Math.min(...quoteTimes)).toISOString():publication.committedAt};
+}
 /** Bind the exact current inputs inside the caller's transaction. The source
  * may have advanced since the separate single-publication transaction ended.
  * Missing rows are persisted with the SAME decision policy, not discarded or
@@ -44,21 +63,18 @@ function createRuntime(ports,{validators}={}){
   }
   async function publish(){return stage('publish',async repo=>{
     const publication=await repo.publication(),now=clock();
-    if(!freshPublication(publication,now))throw Object.assign(new Error('Fresh input required'),{code:'SOURCE_STALE'});
-    const current=await repo.current();const {decisions,issues}=evaluateCurrent(current,{now,publication});
+    const {decisions,issues,attempted,inputAsOf}=await assessInputs(repo,publication,now);
     const bound=await bindCurrentDecisions(repo,decisions,clock);
     const accepted=bound.accepted;issues.push(...bound.issues);
     for(const issue of issues)await repo.issue('publish',issue);
     requireBeforeCutoff(accepted,clock());
-    return {publication,decisionIds:accepted.map(d=>d.decisionId),inputAsOf:publication.committedAt,issues:issues.length,attempted:current.length};
+    return {publication,decisionIds:accepted.map(d=>d.decisionId),inputAsOf,basePublicationAsOf:publication.committedAt,issues:issues.length,attempted};
   });}
   async function combos(){return stage('combos',async repo=>{
     const publication=await repo.publication(),now=clock();
-    if(!freshPublication(publication,now))throw Object.assign(new Error('Fresh input required'),{code:'SOURCE_STALE'});
     // Recheck actual sale state and exact current input before freezing. A
     // retained preview alone is never authority to publish after suspension.
-    const current=await repo.current();
-    const assessed=evaluateCurrent(current,{now,publication});
+    const assessed=await assessInputs(repo,publication,now);
     const bound=await bindCurrentDecisions(repo,assessed.decisions,clock);
     const candidates=bound.accepted;
     const issues=[...assessed.issues,...bound.issues];
@@ -74,7 +90,7 @@ function createRuntime(ports,{validators}={}){
       else previews.push(selection);
     }
     requireBeforeCutoff(created,clock());
-    return {publication,previews,inputAsOf:publication.committedAt,candidateCount:candidates.length,eligibleCount:assessed.decisions.length,bindingFailures:bound.issues.length};
+    return {publication,previews,inputAsOf:assessed.inputAsOf,basePublicationAsOf:publication.committedAt,candidateCount:candidates.length,eligibleCount:assessed.decisions.length,bindingFailures:bound.issues.length};
   });}
   async function settle(){return stage('settlement',async repo=>{
     const verify=validators || (()=>{const m=require('../../src/services/matchLifecycle.cjs');return {isFinal:m.isOfficialSportteryFinal,isVoid:m.isOfficialSportteryVoid};})();
