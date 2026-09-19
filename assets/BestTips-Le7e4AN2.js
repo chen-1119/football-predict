@@ -1,0 +1,1 @@
+import{b as e,u as t}from"./index-BbN3oauu.js";import{t as n}from"./RecommendationCenter-CT3onQPX.js";var r=t();function i({onSelectMatch:t}){let{language:i}=e();return(0,r.jsx)(n,{language:i,onSelectMatch:t})}export{i as BestTips};
