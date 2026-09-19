@@ -5,6 +5,7 @@ const {
   acquireGenerationReadLease,
   resolveServingPublication,
   resolveServingPublicationForSqliteIdentity,
+  sqlitePublicationMatches,
 } = require("./dataGenerationBundle.cjs");
 const { readSqlitePublicationIdentity } = require("./sqliteStore.cjs");
 const {
@@ -35,6 +36,10 @@ const resolvePrimaryPairedPublication = async () => {
         const error = new Error(postgres?.reason || "PostgreSQL publication identity is unavailable");
         error.code = "POSTGRES_PUBLICATION_IDENTITY_UNAVAILABLE";
         throw error;
+      }
+      if (workerData.cachedPostgresIdentity
+        && sqlitePublicationMatches(postgres.publication, workerData.cachedPostgresIdentity)) {
+        return null;
       }
       // The pairing helper compares immutable publication identities. It is
       // intentionally storage-agnostic even though its historical name says
@@ -76,6 +81,10 @@ const resolvePrimaryPairedPublication = async () => {
 
 const main = async () => {
   const publication = await resolvePrimaryPairedPublication();
+  if (publication === null) {
+    parentPort.postMessage({ ok: true, unchangedPostgresIdentity: true });
+    return;
+  }
   lease = publication.context
     ? acquireGenerationReadLease({
         storeDir: workerData.storeDir,

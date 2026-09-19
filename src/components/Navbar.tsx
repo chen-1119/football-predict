@@ -98,12 +98,15 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
     'generation-sqlite-replacement',
     'sqlite-previous-pair',
     'previous-generation',
-    'generation-previous'
-  ].includes(dataSync.healthCurrentReadSource || '');
+    'generation-previous',
+    'postgres-publication-transition'
+  ].includes(dataSync.healthCurrentReadSource || '')
+    || Boolean(dataSync.error?.includes('[POSTGRES_PUBLICATION_TRANSITION]'));
   const visibleScheduleRetained = dataSync.currentLoaded && dataSync.currentCount > 0;
 
   const dataStatus: DataStatus = (() => {
     if (!currentUser) return 'locked';
+    if (publicationTransition) return 'syncing';
     if ((publicationTransition || dataSync.serviceTransitioning) && visibleScheduleRetained) return 'syncing';
     if (dataSync.error && !visibleScheduleRetained) return 'error';
     if ((dataSync.sourceHealthOk === false || dataSync.serviceDataFresh === false) && !visibleScheduleRetained) return 'error';
