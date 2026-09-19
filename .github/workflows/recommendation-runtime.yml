@@ -3,8 +3,13 @@ on:
   pull_request:
     paths:
       - 'scripts/recommendationPlatform/**'
+      - 'collectors/market/**'
+      - 'src/services/warehouseLotterySp.cjs'
+      - 'src/services/publishedForecastPolicy.cjs'
+      - 'src/services/prospectiveForecastInput.cjs'
       - 'scripts/dailyFeaturedComboLedger.cjs'
       - 'scripts/verifyUnifiedRecommendationPostgres.cjs'
+      - 'scripts/verifyWarehouseSpPostgres.cjs'
       - 'server/postgres/migrations/011_unified_recommendation_runtime.sql'
       - 'src/components/recommendations/**'
       - 'src/hooks/useRecommendationCenter.ts'
@@ -41,8 +46,11 @@ jobs:
           node-version: '22.22.1'
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: node --test tests/recommendation-unified.test.cjs tests/recommendation-center-view.test.cjs
+      - run: node --test tests/recommendation-unified.test.cjs tests/recommendation-center-view.test.cjs tests/recommendation-combo-availability.test.cjs tests/recommendation-warehouse-sp.test.cjs tests/recommendation-warehouse-sp-view.test.cjs
       - run: node scripts/verifyUnifiedRecommendationPostgres.cjs
+        env:
+          UNIFIED_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
+      - run: node scripts/verifyWarehouseSpPostgres.cjs
         env:
           UNIFIED_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
       - run: npm run build

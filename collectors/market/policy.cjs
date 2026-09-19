@@ -1,6 +1,7 @@
 'use strict';
 const { createHash } = require('node:crypto');
 const SOURCE = '500.com:jczq';
+const { CONTRACT: LOTTERY_SP_CONTRACT } = require('../../src/services/warehouseLotterySp.cjs');
 // The root page defaults to single-match HHAD and can be empty while the
 // publicly linked mixed-result page contains the day's HAD and HHAD markets.
 const DEFAULT_SOURCE_URL = 'https://trade.500.com/jczq/?playid=312&g=2';
@@ -71,6 +72,8 @@ function normalizeRows(rows, observedAt) {
         leagueName: text(signal.leagueName), homeTeamName: text(signal.homeTeamName), awayTeamName: text(signal.awayTeamName),
         kickoffTime: new Date(kickoffMs).toISOString(), buyEndTime: text(signal.buyEndTime),
         pool, bookmaker: 'sporttery', handicapLine: line, odds1: values[0], oddsX: values[1], odds2: values[2],
+        // Only newly acquired nspf/HAD rows get this schema marker. Old reference rows are not backfilled.
+        ...(pool === 'had' && signal.source === SOURCE ? { lotterySpContract: LOTTERY_SP_CONTRACT } : {}),
       };
       const contentHash = hash(payload), key = `${sourceMatchId}|${pool}`;
       if (markets.has(key) && markets.get(key).contentHash !== contentHash) throw failure('CONFLICTING_MARKETS', 'Conflicting prices or event identities within one page');
