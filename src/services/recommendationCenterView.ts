@@ -4,7 +4,7 @@ export interface Decision {
   decisionId:string; sourceMatchId:string; matchId:string; eventVersion:string; businessDate:string;
   publishedAt:string; cutoffTime:string; kickoffTime:string; homeTeamName:string; awayTeamName:string;
   matchNo:string|null; tipCode:Outcome; odds:number; probabilities:Record<Outcome,number>;
-  modelProbability:number; modelGeneratedAt:string; quoteObservedAt:string; recordHash:string;
+  modelProbability:number; modelGeneratedAt:string; quoteObservedAt:string; recordHash:string; quoteSource?:string|null;
 }
 export interface Settlement { state:ResultState; score?:string|null; actual?:Outcome; resultEventId?:string|null; legs?:Array<{decisionId:string;state:ResultState;score?:string|null}> }
 export interface SingleRow { decision:Decision; settlement:Settlement }
@@ -37,7 +37,17 @@ function decision(v:unknown):Decision{
   const publishedAt=stamp(d.publishedAt),kickoffTime=stamp(d.kickoffTime),cutoffTime=stamp(d.cutoffTime),quoteObservedAt=stamp(d.quoteObservedAt),modelGeneratedAt=stamp(d.modelGeneratedAt);
   if(Date.parse(publishedAt)>=Math.min(Date.parse(kickoffTime),Date.parse(cutoffTime))||Date.parse(quoteObservedAt)>Date.parse(publishedAt)||Date.parse(modelGeneratedAt)>Date.parse(publishedAt))throw new Error('Invalid pre-match publication');
   const recordHash=text(d.recordHash);if(!/^[a-f0-9]{64}$/.test(recordHash))throw new Error('Invalid record hash');
-  return {decisionId:text(d.decisionId),matchId:text(d.matchId),sourceMatchId:text(d.sourceMatchId),eventVersion:stamp(d.eventVersion),businessDate:date(d.businessDate),homeTeamName:text(d.homeTeamName),awayTeamName:text(d.awayTeamName),matchNo:d.matchNo==null?null:text(d.matchNo),publishedAt,kickoffTime,cutoffTime,tipCode,odds,probabilities,modelProbability,modelGeneratedAt,quoteObservedAt,recordHash};
+  const quoteSource=d.quoteSource==null?null:text(d.quoteSource);
+  if(quoteSource==='500.com:jczq:HAD') {
+    const receipt=object(d.quoteProvenance),quotes=object(receipt.quoteOdds);
+    const k=tipCode==='1'?'odds1':tipCode==='X'?'oddsX':'odds2';
+    if(receipt.version!=='500-jczq-had-copy-v1'||receipt.source!==quoteSource||receipt.officialDirect!==false
+      ||receipt.market!=='HAD'||receipt.priceType!=='lottery-sp'||receipt.observedAt!==quoteObservedAt
+      ||receipt.sourceMatchId!==d.sourceMatchId||Date.parse(String(receipt.kickoffTime))!==Date.parse(kickoffTime)
+      ||number(quotes[k])!==odds||! /^[a-f0-9]{64}$/.test(text(receipt.receiptHash))) throw new Error('Invalid copied lottery SP receipt');
+  }
+
+  return {decisionId:text(d.decisionId),matchId:text(d.matchId),sourceMatchId:text(d.sourceMatchId),eventVersion:stamp(d.eventVersion),businessDate:date(d.businessDate),homeTeamName:text(d.homeTeamName),awayTeamName:text(d.awayTeamName),matchNo:d.matchNo==null?null:text(d.matchNo),publishedAt,kickoffTime,cutoffTime,tipCode,odds,probabilities,modelProbability,modelGeneratedAt,quoteObservedAt,recordHash,quoteSource};
 }
 function settlement(v:unknown):Settlement{
   const s=object(v),result:Settlement={state:state(s.state)};
@@ -100,4 +110,10 @@ export function comboPreviewForSize(data:RecommendationCenterData|undefined|null
   if(readFailed||!comboLaneFresh(data,now)||!data)return undefined;
   if(data.todayCombos.some(r=>r.combo.size===size&&r.combo.businessDate===data.businessDate))return undefined;
   return data.previews.find(c=>c.size===size&&c.businessDate===data.businessDate&&visiblePreview(c,now));
+}
+
+export function quoteSourceLabel(d:Pick<Decision,'quoteSource'>,language:'zh'|'en'):string {
+  if(d.quoteSource==='500.com:jczq:HAD')return language==='zh'?'500竞彩页面转录':'500 JCZQ SP copy';
+  if(/^sporttery:had(?:$|:)/i.test(d.quoteSource||''))return language==='zh'?'竞彩网来源SP':'Sporttery-sourced SP';
+  return language==='zh'?'已存档SP，来源见原记录':'Archived SP; see original source';
 }

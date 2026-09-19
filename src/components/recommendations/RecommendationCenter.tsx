@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { RefreshCw, ChevronDown } from 'lucide-react';
 import { useRecommendationCenter } from '../../hooks/useRecommendationCenter';
-import { comboLaneFresh, comboPreviewForSize, type Decision, type Settlement, type Combo, type Summary, type Outcome } from '../../services/recommendationCenterView';
+import { quoteSourceLabel, comboLaneFresh, comboPreviewForSize, type Decision, type Settlement, type Combo, type Summary, type Outcome } from '../../services/recommendationCenterView';
 import '../../styles/recommendation-center.css';
 
 type Language='zh'|'en';
@@ -13,14 +13,14 @@ function RecordDetails({d,language,onSelectMatch}:{d:Decision;language:Language;
   const zh=language==='zh';
   return <details className="rc-details"><summary><ChevronDown size={14} aria-hidden="true"/>{zh?'分析依据与冻结版本':'Evidence & frozen version'}</summary>
     <div><p>{zh?'唯一首选取自本次完整模型概率的最大项；串关引用相同版本，不再次更改方向。':'The primary pick is the maximum of this model vector. A combo references this exact version without changing its direction.'}</p>
-      <dl><dt>{zh?'模型生成':'Model generated'}</dt><dd>{format(d.modelGeneratedAt,language)}</dd><dt>{zh?'SP采集':'SP observed'}</dt><dd>{format(d.quoteObservedAt,language)}</dd><dt>{zh?'实际发布':'Published'}</dt><dd>{format(d.publishedAt,language)}</dd><dt>{zh?'决策版本':'Decision ID'}</dt><dd className="rc-id">{d.decisionId}</dd></dl>
+      <dl><dt>{zh?'SP来源':'SP source'}</dt><dd>{quoteSourceLabel(d,language)}</dd><dt>{zh?'模型生成':'Model generated'}</dt><dd>{format(d.modelGeneratedAt,language)}</dd><dt>{zh?'SP采集':'SP observed'}</dt><dd>{format(d.quoteObservedAt,language)}</dd><dt>{zh?'实际发布':'Published'}</dt><dd>{format(d.publishedAt,language)}</dd><dt>{zh?'决策版本':'Decision ID'}</dt><dd className="rc-id">{d.decisionId}</dd></dl>
       <button type="button" className="rc-link" onClick={()=>onSelectMatch(d.matchId)}>{zh?'查看球队与赛程资料':'Team & fixture information'}</button>
     </div></details>;
 }
 function Pick({d,settlement,language,onSelectMatch}:{d:Decision;settlement:Settlement;language:Language;onSelectMatch:(id:string)=>void}){
   const zh=language==='zh';
   return <article className="rc-pick"><header><span>{d.matchNo||d.sourceMatchId} · {format(d.kickoffTime,language)}</span><span className={`rc-state rc-state--${settlement.state}`}>{resultLabel(settlement.state,zh)}</span></header>
-    <div className="rc-pick__main"><div><h3>{d.homeTeamName} <span>vs</span> {d.awayTeamName}</h3><small>{zh?'发布':'Published'} {format(d.publishedAt,language)}</small></div><div className="rc-selection"><span>{zh?'唯一首选':'Primary pick'}</span><strong>{title(d.tipCode,zh)}</strong><small>SP {d.odds.toFixed(2)}</small></div></div>
+    <div className="rc-pick__main"><div><h3>{d.homeTeamName} <span>vs</span> {d.awayTeamName}</h3><small>{zh?'发布':'Published'} {format(d.publishedAt,language)}</small></div><div className="rc-selection"><span>{zh?'唯一首选':'Primary pick'}</span><strong>{title(d.tipCode,zh)}</strong><small>SP {d.odds.toFixed(2)}</small><small>{quoteSourceLabel(d,language)}</small></div></div>
     <div className="rc-probabilities" aria-label={zh?'发布时胜平负概率':'Published outcome probabilities'}>{(['1','X','2'] as const).map(c=><div key={c} className={c===d.tipCode?'is-selected':''}><span>{title(c,zh)}</span><strong>{(d.probabilities[c]*100).toFixed(1)}%</strong><span className="rc-bar"><i style={{width:`${d.probabilities[c]*100}%`}}/></span></div>)}</div>
     {settlement.score&&<p className="rc-score">{zh?'90分钟赛果':'90-minute result'} <strong>{settlement.score}</strong></p>}
     <RecordDetails d={d} language={language} onSelectMatch={onSelectMatch}/>
@@ -31,7 +31,7 @@ function ComboCard({combo,settlement,language,onSelectMatch}:{combo:Combo;settle
   return <article className="rc-combo"><header><div><small>{zh?'每日精选':'Daily selection'}</small><h3>{combo.size}{zh?'串1':'-leg combo'}</h3></div><div><strong>SP {combo.totalOdds.toFixed(2)}</strong><small>{zh?'下限':'Minimum'} {combo.size===2?'2.50':'5.00'}</small></div></header>
     <div className="rc-combo__status"><span className={`rc-state rc-state--${settlement?.state||'PENDING'}`}>{settlement?resultLabel(settlement.state,zh):(zh?'即时方案 · 未冻结':'Preview · not frozen')}</span><span>{combo.frozenAt?(zh?'冻结':'Frozen'):(zh?'计划冻结':'Freeze at')} {format(combo.frozenAt||combo.freezeAt,language)}</span></div>
     {combo.legs.map((leg,index)=>{const result=settlement?.legs?.find(l=>l.decisionId===leg.decisionId);return <section className="rc-combo__leg" key={leg.decisionId}><div className="rc-leg-heading"><span className="rc-leg-number">{index+1}</span><div><strong>{leg.homeTeamName} vs {leg.awayTeamName}</strong><small>{leg.matchNo||leg.sourceMatchId} · {format(leg.kickoffTime,language)}</small></div><strong>{title(leg.tipCode,zh)} <small>@{leg.odds.toFixed(2)}</small></strong></div>
-      <div className="rc-leg-meta"><span>{zh?'绑定版本发布于':'Bound version published'} {format(leg.publishedAt,language)}</span>{result&&<span>{result.score||'—'} · {resultLabel(result.state,zh)}</span>}</div>
+      <div className="rc-leg-meta"><span>{quoteSourceLabel(leg,language)}</span><span>{zh?'绑定版本发布于':'Bound version published'} {format(leg.publishedAt,language)}</span>{result&&<span>{result.score||'—'} · {resultLabel(result.state,zh)}</span>}</div>
       <RecordDetails d={leg} language={language} onSelectMatch={onSelectMatch}/></section>;})}
     <p className="rc-disclaimer">{zh?'每腿绑定真实决策ID；模型概率用于排序，不代表已验证的组合命中率。':'Each leg binds an actual decision ID. Model probabilities rank selections; they are not verified combo hit rates.'}</p>
   </article>;
