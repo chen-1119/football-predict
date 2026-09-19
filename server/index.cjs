@@ -8,6 +8,7 @@ const crypto = require("node:crypto");
 const zlib = require("node:zlib");
 const { readStorageMode, retiredSqliteStatus } = require("./storageMode.cjs");
 const storageMode = readStorageMode();
+const { publicationRefreshBlocked, nativePublicationReadError, publicationTransitionHealth } = require("./publicationRefreshPolicy.cjs");
 const { sendStaticFileResponse } = require("./staticFileResponse.cjs");
 const { readFrontendReleaseIdentity } = require("./frontendReleaseIdentity.cjs");
 const { compactApiFootballDiagnostics } = require("../src/services/apiFootballDiagnostics.cjs");
@@ -472,10 +473,13 @@ const clearPostgresPublicationRecheck = () => {
 };
 const scheduleBasePublicationRefresh = (token) => {
   if (shuttingDown || !basePublicationCache?.publication || basePublicationRefresh) return;
-  // Timer retries and superseded workers must respect the same writer barrier
-  // as HTTP-triggered refreshes. A retry is never permission to read mid-commit.
-  if (pointerCommitLockActive({ lockDir: generationPointerLockDir, staleMs: 60_000 })
-    || syncLockActive({ lockDir: syncPublicationLockDir })) {
+  // Native PostgreSQL commits atomically; its fully verified resolver may run
+  // while the sync job continues enrichment. Legacy stores retain the barrier.
+  if (publicationRefreshBlocked({
+    postgresOnly: storageMode.postgresOnly,
+    pointerLocked: pointerCommitLockActive({ lockDir: generationPointerLockDir, staleMs: 60_000 }),
+    syncLocked: syncLockActive({ lockDir: syncPublicationLockDir }),
+  })) {
     basePublicationRefreshState.status = "publication-write-in-progress-serving-previous";
     basePublicationRefreshState.requestedToken = token;
     armPostgresPublicationRecheck();
@@ -498,6 +502,7 @@ const scheduleBasePublicationRefresh = (token) => {
       sqliteDbPath,
       requireSqlitePair: shouldPreferSqliteRead(),
       requirePostgresPair: shouldPreferPostgresRead(),
+      cachedPostgresIdentity: storageMode.postgresOnly ? basePublicationCache.publication.identity : null,
       ownerPid: process.pid,
     },
   });
@@ -522,6 +527,14 @@ const scheduleBasePublicationRefresh = (token) => {
     const completedAtMs = Date.now();
     basePublicationRefreshState.completedAt = new Date(completedAtMs).toISOString();
     basePublicationRefreshState.durationMs = completedAtMs - startedAtMs;
+
+    if (!error && message?.ok === true && message.unchangedPostgresIdentity === true) {
+      // The file pointer may lead the database. Keep the existing verified
+      // context and poll only its identity until PostgreSQL actually commits.
+      basePublicationRefreshState.status = "awaiting-postgres-commit";
+      armPostgresPublicationRecheck(5_000);
+      return;
+    }
 
     let pairError = error;
     if (!pairError && message?.ok === true && message?.publication && shouldPreferPostgresRead()) {
@@ -609,16 +622,14 @@ const resolveBasePublication = ({ coldStartPairIdentity = null } = {}) => {
     ) scheduleBasePublicationRefresh(token);
     return basePublicationCache.publication;
   }
-  // A committed generation is immutable and already protected by its reader
-  // lease. Keep serving it for the complete generation + database projection
-  // transaction, instead of exposing the new generation during the interval
-  // where PostgreSQL or SQLite still carries the previous publication identity.
-  // The sync worker deliberately holds syncPublicationLockDir through both commands;
-  // generationPointerLockDir also covers direct/non-worker pointer commits.
-  const publicationWriteInProgress = pointerCommitLockActive({
-    lockDir: generationPointerLockDir,
-    staleMs: 60_000,
-  }) || syncLockActive({ lockDir: syncPublicationLockDir });
+  // Keep the verified context during pointer writes. Native PostgreSQL's
+  // resolver observes committed identities, while legacy stores must also wait
+  // for the complete generation/database publication under the sync lock.
+  const publicationWriteInProgress = publicationRefreshBlocked({
+    postgresOnly: storageMode.postgresOnly,
+    pointerLocked: pointerCommitLockActive({ lockDir: generationPointerLockDir, staleMs: 60_000 }),
+    syncLocked: syncLockActive({ lockDir: syncPublicationLockDir }),
+  });
   if (basePublicationCache?.publication && publicationWriteInProgress) {
     basePublicationRefreshState.status = "publication-write-in-progress-serving-previous";
     basePublicationRefreshState.requestedToken = token;
@@ -4340,9 +4351,7 @@ const postgresFreshEnough = (status, countKey = "currentMatches", requiredCount 
 };
 const requireNativePostgresReadStatus = (status) => {
   if (storageMode.postgresOnly && !postgresFreshEnough(status, "currentMatches", 0)) {
-    const error = publicationPairError("POSTGRES_REQUIRED_READ_UNAVAILABLE", "PostgreSQL publication is unavailable; refusing legacy data fallback");
-    error.statusCode = 503;
-    throw error;
+    throw nativePublicationReadError(status, publicationPairTransitionActive(basePublicationCache?.publication));
   }
 };
 
@@ -8661,8 +8670,8 @@ const getPublicV1Health = async () => {
       publicV1HealthCache = { createdAt: Date.now(), value };
     }
     return value;
-  }).catch(() => {
-    const value = {
+  }).catch((error) => {
+    const value = publicationTransitionHealth({
       ok: false,
       apiVersion: "v1",
       service: "football-predict-server",
@@ -8744,7 +8753,7 @@ const getPublicV1Health = async () => {
         checkedAt: nowIso(),
         refreshFailed: true
       }
-    };
+    }, error);
     publicV1HealthFailure = {
       retryAfter: Date.now() + publicV1HealthCacheTtlMs,
       value

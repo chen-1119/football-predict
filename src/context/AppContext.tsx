@@ -431,7 +431,11 @@ const fetchJsonOnce = async <T,>(
     if (res.status === 304 && cached) {
       return cached.data as T;
     }
-    if (!res.ok) throw new Error(`${url}: HTTP ${res.status} ${res.statusText}`);
+    if (!res.ok) {
+      const failure = await res.json().catch(() => null);
+      const code = typeof failure?.code === 'string' && /^[A-Z_]{1,80}$/.test(failure.code) ? failure.code : '';
+      throw new Error(`${url}: HTTP ${res.status} ${res.statusText}${code ? ` [${code}]` : ''}`);
+    }
     const data = await res.json() as T;
     const etag = res.headers.get('etag');
     if (useConditionalRequest && etag) {
