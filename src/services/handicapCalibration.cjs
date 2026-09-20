@@ -5,6 +5,7 @@ const VERSION = 'handicap-calibration-v1';
 const CODES = Object.freeze(['1','X','2']);
 const MIN_ROWS = 18;
 const MIN_HOLDOUT = 6;
+const MIN_SAMPLE_DAYS = 4;
 const PRIOR_STRENGTH = 24;
 const MAX_ABS_ADJUSTMENT = 0.12;
 const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
@@ -34,35 +35,42 @@ function applyResidual(raw,residual,weight){
 }
 function fit(rows,key){
   const ordered=rows.slice().sort((a,b)=>Date.parse(a.publishedAt)-Date.parse(b.publishedAt)||a.id.localeCompare(b.id));
+  const days=[...new Set(ordered.map(r=>r.businessDate).filter(Boolean))].sort();
   const outcomeCounts={'1':0,X:0,'2':0},rawTopCounts={'1':0,X:0,'2':0},meanRaw={'1':0,X:0,'2':0};
   for(const r of ordered){outcomeCounts[r.actual]++;rawTopCounts[top(r.raw)]++;for(const c of CODES)meanRaw[c]+=r.raw[c];}
   for(const c of CODES)meanRaw[c]=ordered.length?meanRaw[c]/ordered.length:0;
   const actualShare=Object.fromEntries(CODES.map(c=>[c,ordered.length?outcomeCounts[c]/ordered.length:0]));
   const bias=Object.fromEntries(CODES.map(c=>[c,round(meanRaw[c]-actualShare[c])]));
-  if(ordered.length<MIN_ROWS)return {key,rows:ordered.length,active:false,reason:'insufficient-samples',outcomeCounts,rawTopCounts,meanRaw,actualShare,bias};
-  const holdout=Math.max(MIN_HOLDOUT,Math.floor(ordered.length*.25)),train=ordered.slice(0,-holdout),test=ordered.slice(-holdout);
-  if(train.length<MIN_ROWS-MIN_HOLDOUT)return {key,rows:ordered.length,active:false,reason:'insufficient-training-window',outcomeCounts,rawTopCounts,meanRaw,actualShare,bias};
+  if(ordered.length<MIN_ROWS)return {key,rows:ordered.length,sampleDays:days.length,active:false,reason:'insufficient-samples',outcomeCounts,rawTopCounts,meanRaw,actualShare,bias};
+  if(days.length<MIN_SAMPLE_DAYS)return {key,rows:ordered.length,sampleDays:days.length,active:false,reason:'insufficient-sample-days',outcomeCounts,rawTopCounts,meanRaw,actualShare,bias};
+  const holdoutDayCount=Math.max(2,Math.ceil(days.length*.25)),holdoutDays=new Set(days.slice(-holdoutDayCount));
+  const train=ordered.filter(r=>!holdoutDays.has(r.businessDate)),test=ordered.filter(r=>holdoutDays.has(r.businessDate));
+  if(train.length<MIN_ROWS-MIN_HOLDOUT||test.length<MIN_HOLDOUT)return {key,rows:ordered.length,sampleDays:days.length,active:false,reason:'insufficient-time-forward-window',outcomeCounts,rawTopCounts,meanRaw,actualShare,bias};
   const residual={'1':0,X:0,'2':0};
   for(const r of train)for(const c of CODES)residual[c]+=Number(c===r.actual)-r.raw[c];
   for(const c of CODES)residual[c]=clamp(residual[c]/train.length,-MAX_ABS_ADJUSTMENT,MAX_ABS_ADJUSTMENT);
   const weight=clamp(train.length/(train.length+PRIOR_STRENGTH),.15,.65);
   let rawB=0,calB=0,rawL=0,calL=0,rawHit=0,calHit=0;
   for(const r of test){const adjusted=applyResidual(r.raw,residual,weight);rawB+=brier(r.raw,r.actual);calB+=brier(adjusted,r.actual);rawL+=logLoss(r.raw,r.actual);calL+=logLoss(adjusted,r.actual);rawHit+=Number(top(r.raw)===r.actual);calHit+=Number(top(adjusted)===r.actual);}
-  const metrics={holdout:test.length,rawBrier:rawB/test.length,calibratedBrier:calB/test.length,rawLogLoss:rawL/test.length,calibratedLogLoss:calL/test.length,rawHitRate:rawHit/test.length,calibratedHitRate:calHit/test.length};
+  const metrics={sampleDays:days.length,holdoutDays:holdoutDays.size,holdout:test.length,rawBrier:rawB/test.length,calibratedBrier:calB/test.length,rawLogLoss:rawL/test.length,calibratedLogLoss:calL/test.length,rawHitRate:rawHit/test.length,calibratedHitRate:calHit/test.length};
   const active=metrics.calibratedBrier<=metrics.rawBrier-.002&&metrics.calibratedLogLoss<=metrics.rawLogLoss+.01&&metrics.calibratedHitRate>=metrics.rawHitRate-.02;
-  return {key,rows:ordered.length,trainRows:train.length,active,reason:active?'holdout-improved':'holdout-not-improved',weight:round(weight),residual:Object.fromEntries(CODES.map(c=>[c,round(residual[c])])),metrics:Object.fromEntries(Object.entries(metrics).map(([k,v])=>[k,typeof v==='number'?round(v):v])),outcomeCounts,rawTopCounts,meanRaw:Object.fromEntries(CODES.map(c=>[c,round(meanRaw[c])])),actualShare:Object.fromEntries(CODES.map(c=>[c,round(actualShare[c])])),bias};
+  return {key,rows:ordered.length,sampleDays:days.length,trainRows:train.length,active,reason:active?'holdout-improved':'holdout-not-improved',weight:round(weight),residual:Object.fromEntries(CODES.map(c=>[c,round(residual[c])])),metrics:Object.fromEntries(Object.entries(metrics).map(([k,v])=>[k,typeof v==='number'?round(v):v])),outcomeCounts,rawTopCounts,meanRaw:Object.fromEntries(CODES.map(c=>[c,round(meanRaw[c])])),actualShare:Object.fromEntries(CODES.map(c=>[c,round(actualShare[c])])),bias};
 }
 function sampleRows(decisions,heads,currentBusinessDate){
   const rows=[];
   for(const d of decisions||[]){
-    const h=d?.handicapAnalysis;if(!h||!normalized(h.rawProbabilities||h.probabilities)||!Number.isSafeInteger(h.handicapLine)||h.handicapLine===0)continue;
-    if(!d.businessDate||d.businessDate>=currentBusinessDate)continue;
-    const eventKey=JSON.stringify([String(d.sourceMatchId||'').replace(/^sporttery_/,''),new Date(Date.parse(d.eventVersion||d.kickoffTime)).toISOString()]);
-    const e=heads instanceof Map?heads.get(eventKey):null;
-    if(!e||e.state!=='FINAL'||!Number.isSafeInteger(e.scoreHome)||!Number.isSafeInteger(e.scoreAway))continue;
-    if((e.homeTeamId&&e.homeTeamId!==d.homeTeamId)||(e.awayTeamId&&e.awayTeamId!==d.awayTeamId))continue;
-    const actual=actualCode(h.handicapLine,e.scoreHome,e.scoreAway);if(!actual)continue;
-    rows.push({id:d.decisionId,publishedAt:d.publishedAt,line:h.handicapLine,group:lineGroup(h.handicapLine),straightTipCode:d.tipCode,raw:normalized(h.rawProbabilities||h.probabilities),actual});
+    try{
+      const h=d?.handicapAnalysis,raw=normalized(h?.rawProbabilities||h?.probabilities);
+      if(!h||!raw||!Number.isSafeInteger(h.handicapLine)||h.handicapLine===0)continue;
+      if(typeof d.businessDate!=='string'||d.businessDate>=currentBusinessDate||!Number.isFinite(Date.parse(d.publishedAt)))continue;
+      const eventMs=Date.parse(d.eventVersion||d.kickoffTime);if(!Number.isFinite(eventMs))continue;
+      const eventKey=JSON.stringify([String(d.sourceMatchId||'').replace(/^sporttery_/,''),new Date(eventMs).toISOString()]);
+      const e=heads instanceof Map?heads.get(eventKey):null;
+      if(!e||e.state!=='FINAL'||!Number.isSafeInteger(e.scoreHome)||!Number.isSafeInteger(e.scoreAway))continue;
+      if((e.homeTeamId&&e.homeTeamId!==d.homeTeamId)||(e.awayTeamId&&e.awayTeamId!==d.awayTeamId))continue;
+      const actual=actualCode(h.handicapLine,e.scoreHome,e.scoreAway);if(!actual)continue;
+      rows.push({id:String(d.decisionId||eventKey),businessDate:d.businessDate,publishedAt:d.publishedAt,line:h.handicapLine,group:lineGroup(h.handicapLine),straightTipCode:d.tipCode,raw,actual});
+    }catch{/* A corrupt historical row is excluded; it cannot block current publication. */}
   }
   return rows;
 }
@@ -83,4 +91,4 @@ function calibrateHandicapProbabilities(raw,line,straightTipCode,profile){
   return {probabilities,applied:true,key:chosen.key,profileHash:profile.profileHash,reason:chosen.reason,weight:chosen.weight,residual:chosen.residual,metrics:chosen.metrics};
 }
 function groupsafe(profile,key){const value=profile?.version===VERSION?profile.groups?.[key]:null;return value&&typeof value==='object'?value:null;}
-module.exports={VERSION,MIN_ROWS,MIN_HOLDOUT,lineGroup,actualCode,applyResidual,buildHandicapCalibration,calibrateHandicapProbabilities};
+module.exports={VERSION,MIN_ROWS,MIN_HOLDOUT,MIN_SAMPLE_DAYS,lineGroup,actualCode,applyResidual,buildHandicapCalibration,calibrateHandicapProbabilities};

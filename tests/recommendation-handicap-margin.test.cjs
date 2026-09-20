@@ -105,3 +105,17 @@ test('handicap strength buckets separate one, two and three-plus goals and both 
   assert.equal(lineGroup(-1),'home-give-1');assert.equal(lineGroup(-2),'home-give-2');assert.equal(lineGroup(-4),'home-give-3plus');
   assert.equal(lineGroup(1),'home-receive-1');assert.equal(lineGroup(2),'home-receive-2');assert.equal(lineGroup(4),'home-receive-3plus');
 });
+
+test('many samples from only one match day cannot activate calibration',()=>{
+  const {decisions,heads}=calibrationFixture(24);
+  for(const d of decisions)d.businessDate='2026-08-01';
+  const profile=buildHandicapCalibration(decisions,heads,'2026-09-20');
+  assert.equal(profile.groups['home-give-2|straight:1'].active,false);
+  assert.equal(profile.groups['home-give-2|straight:1'].reason,'insufficient-sample-days');
+});
+test('one corrupt historical decision is excluded without blocking calibration of valid rows',()=>{
+  const {decisions,heads}=calibrationFixture(24);
+  decisions.push({decisionId:'broken',businessDate:'2026-08-01',publishedAt:'bad',eventVersion:'bad',handicapAnalysis:{handicapLine:-2,probabilities:{'1':.3,X:.2,'2':.5}},tipCode:'1'});
+  const profile=buildHandicapCalibration(decisions,heads,'2026-09-20');
+  assert.equal(profile.sampleRows,24);
+});
