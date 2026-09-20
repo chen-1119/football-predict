@@ -24,14 +24,19 @@ test('preview becomes unavailable after cutoff or quote staleness',async()=>{con
 test('settlement failure leaves visible publications and a separate stale-review state',async()=>{const p=memoryPorts(),r=createRuntime(p,{validators});await r.publishingCycle();p.faults.add('history');await r.settlementCycle();const x=parseRecommendationCenter({recommendationCenter:p.state.view});assert.equal(x.current.length,3);assert.equal(x.lanes.settlement.status,'error');});
 test('frozen records remain parseable across midnight and retain bound IDs',async()=>{const p=memoryPorts();p.now=Date.parse('2026-09-17T13:00:00Z');p.current=[1,2,3].map(id=>match(id,p.now));const r=createRuntime(p,{validators});await r.publishingCycle();p.now=Date.parse('2026-09-17T17:00:00Z');await r.view();const x=parseRecommendationCenter({recommendationCenter:p.state.view});assert.equal(x.review.combos.length,2);assert.equal(x.todayCombos.length,0);});
 
-test('handicap calibration profile is exposed even before groups become active',async()=>{const x=parseRecommendationCenter(await sample());assert.equal(x.review.handicapCalibration.version,'handicap-calibration-v1');assert.equal(typeof x.review.handicapCalibration.profileHash,'string');assert.equal(x.review.handicapCalibration.sampleRows,0);});
+test('handicap calibration profile is exposed even before groups become active',async()=>{const x=parseRecommendationCenter(await sample());assert.equal(x.review.handicapCalibration.version,'handicap-calibration-v2');assert.equal(typeof x.review.handicapCalibration.profileHash,'string');assert.equal(x.review.handicapCalibration.sampleRows,0);});
 test('tampered handicap calibration profile is rejected by frontend parsing',async()=>{const x=await sample();x.recommendationCenter.review.handicapCalibration.profileHash='bad';assert.throws(()=>parseRecommendationCenter(x));});
 
 test('top-card summary exposes both straight and handicap primary picks without opening details',()=>{
   const summary=primarySelectionSummary({tipCode:'1',odds:1.72,modelProbability:.61,handicapAnalysis:{tipCode:'X',handicapLine:-1,handicapLineText:'-1',modelProbability:.38,marketReference:{selectedOdds:3.45},historicalCalibration:{applied:true}}});
-  assert.deepEqual(summary,{had:{code:'1',odds:1.72,probability:.61},handicap:{code:'X',line:-1,lineText:'-1',probability:.38,odds:3.45,calibrated:true}});
+  assert.deepEqual(summary,{had:{code:'1',odds:1.72,probability:.61},handicap:{code:'X',line:-1,lineText:'-1',probability:.38,odds:3.45,calibrated:true,conditional:false,overallCode:null}});
 });
 test('top-card summary keeps handicap slot explicitly unavailable when no handicap analysis exists',()=>{
   const summary=primarySelectionSummary({tipCode:'2',odds:2.1,modelProbability:.47,handicapAnalysis:null});
   assert.equal(summary.had.code,'2');assert.equal(summary.handicap,null);
+});
+
+test('top-card summary uses coherent companion direction even when standalone HHAD diagnostic differs',()=>{
+  const summary=primarySelectionSummary({tipCode:'1',odds:1.6,modelProbability:.6,handicapAnalysis:{tipCode:'X',handicapLine:-1,handicapLineText:'-1',modelProbability:.7,probabilityBasis:'conditional-on-straight-primary',overallTipCode:'2',marketReference:null,historicalCalibration:{applied:false}}});
+  assert.equal(summary.had.code,'1');assert.equal(summary.handicap.code,'X');assert.equal(summary.handicap.conditional,true);assert.equal(summary.handicap.overallCode,'2');
 });

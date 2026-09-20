@@ -1,8 +1,10 @@
 export type Outcome = '1' | 'X' | '2';
 export type ResultState = 'PENDING' | 'WON' | 'LOST' | 'VOID' | 'DISPUTED';
 export interface HandicapAnalysis {
-  version:'handicap-margin-v1'; market:'HHAD'; handicapLine:number; handicapLineText:string; tipCode:Outcome;
-  rawProbabilities?:Record<Outcome,number>; probabilities:Record<Outcome,number>; modelProbability:number; modelGap:number; exactMargin:number; exactMarginProbability:number;
+  version:'handicap-margin-v1'|'handicap-margin-v2'; market:'HHAD'; handicapLine:number; handicapLineText:string; tipCode:Outcome;
+  companionPolicyVersion?:'straight-conditioned-margin-v1'; probabilityBasis?:'conditional-on-straight-primary';
+  rawProbabilities?:Record<Outcome,number>; companionRawProbabilities?:Record<Outcome,number>; probabilities:Record<Outcome,number>; modelProbability:number; modelGap:number; exactMargin:number; exactMarginProbability:number;
+  overallProbabilities?:Record<Outcome,number>; overallTipCode?:Outcome; overallModelProbability?:number;
   coverProbability:number; landOnLineProbability:number; failCoverProbability:number; straightTipCode:Outcome|null; relation:string;
   lambdas:{home:number;away:number;source:string}; calibration:'unvalidated';
   marketReference?:{source:string;observedAt:string;selectedOdds:number;selectedProbability:number;aligned:boolean}|null;
@@ -45,7 +47,7 @@ const outcome=(v:unknown):Outcome=>{if(v!=='1'&&v!=='X'&&v!=='2')throw new Error
 const state=(v:unknown):ResultState=>{if(!['PENDING','WON','LOST','VOID','DISPUTED'].includes(String(v)))throw new Error('Invalid result');return v as ResultState;};
 function handicapAnalysis(v:unknown):HandicapAnalysis{
   const h=object(v),p=object(h.probabilities),probabilities={'1':number(p['1']),X:number(p.X),'2':number(p['2'])};
-  if(h.version!=='handicap-margin-v1'||h.market!=='HHAD'||h.calibration!=='unvalidated')throw new Error('Unsupported handicap analysis');
+  if((h.version!=='handicap-margin-v1'&&h.version!=='handicap-margin-v2')||h.market!=='HHAD'||h.calibration!=='unvalidated')throw new Error('Unsupported handicap analysis');
   const handicapLine=number(h.handicapLine),tipCode=outcome(h.tipCode),modelProbability=number(h.modelProbability);
   if(!Number.isSafeInteger(handicapLine)||handicapLine===0||Object.values(probabilities).some(n=>n<0||n>1)
     ||Math.abs(probabilities['1']+probabilities.X+probabilities['2']-1)>1e-6
@@ -55,11 +57,21 @@ function handicapAnalysis(v:unknown):HandicapAnalysis{
   if(home<0||away<0||number(h.exactMargin)!==-handicapLine)throw new Error('Invalid handicap margin model');
   let marketReference:HandicapAnalysis['marketReference']=null;
   if(h.marketReference!=null){const m=object(h.marketReference);marketReference={source:text(m.source),observedAt:stamp(m.observedAt),selectedOdds:number(m.selectedOdds),selectedProbability:number(m.selectedProbability),aligned:Boolean(m.aligned)};if(marketReference.selectedOdds<=1||marketReference.selectedProbability<0||marketReference.selectedProbability>1)throw new Error('Invalid handicap market reference');}
-  const raw=h.rawProbabilities==null?undefined:(()=>{const r=object(h.rawProbabilities);return {'1':number(r['1']),X:number(r.X),'2':number(r['2'])};})();
-  if(raw&&(Object.values(raw).some(n=>n<0||n>1)||Math.abs(raw['1']+raw.X+raw['2']-1)>1e-6))throw new Error('Invalid raw handicap probabilities');
+  const parseTriplet=(value:unknown)=>{const r=object(value);const x={'1':number(r['1']),X:number(r.X),'2':number(r['2'])};if(Object.values(x).some(n=>n<0||n>1)||Math.abs(x['1']+x.X+x['2']-1)>1e-6)throw new Error('Invalid handicap probability vector');return x;};
+  const raw=h.rawProbabilities==null?undefined:parseTriplet(h.rawProbabilities);
+  const companionRaw=h.companionRawProbabilities==null?undefined:parseTriplet(h.companionRawProbabilities);
+  const overall=h.overallProbabilities==null?undefined:parseTriplet(h.overallProbabilities);
+  const overallTipCode=h.overallTipCode==null?undefined:outcome(h.overallTipCode),overallModelProbability=h.overallModelProbability==null?undefined:number(h.overallModelProbability);
+  if(h.version==='handicap-margin-v2'){
+    if(h.companionPolicyVersion!=='straight-conditioned-margin-v1'||h.probabilityBasis!=='conditional-on-straight-primary'||!companionRaw||!overall||!overallTipCode||overallModelProbability==null)throw new Error('Invalid coherent handicap contract');
+    if(Math.abs(overall[overallTipCode]-overallModelProbability)>1e-9||Object.entries(overall).some(([c,n])=>c!==overallTipCode&&n>=overallModelProbability))throw new Error('Invalid overall handicap diagnostic');
+  }
   let historicalCalibration:HandicapAnalysis['historicalCalibration']=null;
   if(h.historicalCalibration!=null){const c=object(h.historicalCalibration),metrics=c.metrics==null?null:object(c.metrics);historicalCalibration={version:text(c.version),applied:Boolean(c.applied),profileHash:c.profileHash==null?null:text(c.profileHash),key:c.key==null?null:text(c.key),reason:c.reason==null?null:text(c.reason),weight:c.weight==null?null:number(c.weight),metrics:metrics?{rawBrier:metrics.rawBrier==null?undefined:number(metrics.rawBrier),calibratedBrier:metrics.calibratedBrier==null?undefined:number(metrics.calibratedBrier),rawHitRate:metrics.rawHitRate==null?undefined:number(metrics.rawHitRate),calibratedHitRate:metrics.calibratedHitRate==null?undefined:number(metrics.calibratedHitRate)}:null};if(historicalCalibration.applied&&!/^[a-f0-9]{64}$/.test(historicalCalibration.profileHash||''))throw new Error('Invalid handicap calibration hash');}
-  return {version:'handicap-margin-v1',market:'HHAD',handicapLine,handicapLineText:text(h.handicapLineText),tipCode,rawProbabilities:raw,probabilities,modelProbability,
+  return {version:h.version as HandicapAnalysis['version'],market:'HHAD',handicapLine,handicapLineText:text(h.handicapLineText),tipCode,
+    companionPolicyVersion:h.companionPolicyVersion==='straight-conditioned-margin-v1'?'straight-conditioned-margin-v1':undefined,
+    probabilityBasis:h.probabilityBasis==='conditional-on-straight-primary'?'conditional-on-straight-primary':undefined,
+    rawProbabilities:raw,companionRawProbabilities:companionRaw,probabilities,modelProbability,overallProbabilities:overall,overallTipCode,overallModelProbability,
     modelGap:number(h.modelGap),exactMargin:number(h.exactMargin),exactMarginProbability:number(h.exactMarginProbability),
     coverProbability:number(h.coverProbability),landOnLineProbability:number(h.landOnLineProbability),failCoverProbability:number(h.failCoverProbability),
     straightTipCode:h.straightTipCode==null?null:outcome(h.straightTipCode),relation:text(h.relation),lambdas:{home,away,source:text(lambdas.source)},
@@ -167,7 +179,7 @@ export function primarySelectionSummary(d:Pick<Decision,'tipCode'|'odds'|'modelP
   const h=d.handicapAnalysis;
   return {
     had:{code:d.tipCode,odds:d.odds,probability:d.modelProbability},
-    handicap:h?{code:h.tipCode,line:h.handicapLine,lineText:h.handicapLineText,probability:h.modelProbability,odds:h.marketReference?.selectedOdds??null,calibrated:h.historicalCalibration?.applied===true}:null,
+    handicap:h?{code:h.tipCode,line:h.handicapLine,lineText:h.handicapLineText,probability:h.modelProbability,odds:h.marketReference?.selectedOdds??null,calibrated:h.historicalCalibration?.applied===true,conditional:h.probabilityBasis==='conditional-on-straight-primary',overallCode:h.overallTipCode??null}:null,
   };
 }
 
