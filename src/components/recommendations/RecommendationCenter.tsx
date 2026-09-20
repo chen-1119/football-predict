@@ -9,6 +9,32 @@ interface Props {language:Language;onSelectMatch:(id:string)=>void;mode?:'recomm
 const format=(s:string|null|undefined,lang:Language)=>s?new Intl.DateTimeFormat(lang==='zh'?'zh-CN':'en-GB',{timeZone:'Asia/Shanghai',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(s)):'—';
 const title=(code:Outcome,zh:boolean)=>code==='1'?(zh?'主胜':'Home'):code==='X'?(zh?'平局':'Draw'):(zh?'客胜':'Away');
 const resultLabel=(s:Settlement['state'],zh:boolean)=>({PENDING:zh?'待赛果':'Pending',WON:zh?'命中':'Won',LOST:zh?'未命中':'Lost',VOID:zh?'无效':'Void',DISPUTED:zh?'赛果待核':'Disputed'}[s]);
+const handicapTitle=(code:Outcome,zh:boolean)=>code==='1'?(zh?'让胜':'Handicap home'):code==='X'?(zh?'让平':'Handicap draw'):(zh?'让负':'Handicap away');
+function handicapNarrative(d:Decision,zh:boolean){
+  const h=d.handicapAnalysis;if(!h)return '';
+  if(d.tipCode==='1'&&h.handicapLine<0){
+    if(h.tipCode==='1')return zh?'主胜方向下，净胜球分布更偏穿盘，让胜优先。':'Home-win view also leans to covering the handicap.';
+    if(h.tipCode==='X')return zh?`主胜方向下，更集中在净胜${Math.abs(h.handicapLine)}球，让平优先。`:'Home-win view is concentrated on landing exactly on the handicap.';
+    return zh?'主胜仍是胜平负首选，但净胜幅度不足，盘口更偏让负。':'Home win remains the 1X2 pick, but the margin is less likely to cover.';
+  }
+  if(d.tipCode==='2'&&h.handicapLine>0){
+    if(h.tipCode==='2')return zh?'客胜方向下，客队净胜幅度更偏穿盘，让负优先。':'Away-win view also leans to covering the handicap.';
+    if(h.tipCode==='X')return zh?`客胜方向下，更集中在客队净胜${Math.abs(h.handicapLine)}球，让平优先。`:'Away-win view is concentrated on landing exactly on the handicap.';
+    return zh?'客胜仍是胜平负首选，但优势不足以穿受让盘，让胜更稳。':'Away win remains the 1X2 pick, but the margin may not cover the handicap.';
+  }
+  return zh?'让球方向由完整净胜球分布单独计算，不直接照搬胜平负。':'The handicap pick is derived from the full goal-margin distribution, not copied from 1X2.';
+}
+function HandicapBlock({d,settlement,language}:{d:Decision;settlement?:Settlement|null;language:Language}){
+  const h=d.handicapAnalysis;if(!h)return null;const zh=language==='zh';
+  return <section className="rc-handicap">
+    <header><div><span>{zh?'让球分析':'Handicap analysis'} {h.handicapLineText}</span><strong>{handicapTitle(h.tipCode,zh)}</strong></div>
+      <span className={`rc-state rc-state--${settlement?.state||'PENDING'}`}>{settlement?resultLabel(settlement.state,zh):(zh?'待赛果':'Pending')}</span></header>
+    <p>{handicapNarrative(d,zh)}</p>
+    <div className="rc-handicap__probabilities">{(['1','X','2'] as const).map(code=><div key={code} className={code===h.tipCode?'is-selected':''}><span>{handicapTitle(code,zh)}</span><strong>{(h.probabilities[code]*100).toFixed(1)}%</strong></div>)}</div>
+    <div className="rc-handicap__meta"><span>{zh?'卡盘概率':'Land on line'} {(h.landOnLineProbability*100).toFixed(1)}%</span><span>{zh?'对应净胜球':'Exact margin'} {h.exactMargin>0?'+':''}{h.exactMargin}</span>
+      {h.marketReference?.selectedOdds&&<span>{zh?'让球SP':'HHAD SP'} {h.marketReference.selectedOdds.toFixed(2)}</span>}</div>
+  </section>;
+}
 function RecordDetails({d,language,onSelectMatch}:{d:Decision;language:Language;onSelectMatch:(id:string)=>void}){
   const zh=language==='zh';
   return <details className="rc-details"><summary><ChevronDown size={14} aria-hidden="true"/>{zh?'分析依据与冻结版本':'Evidence & frozen version'}</summary>
@@ -17,11 +43,12 @@ function RecordDetails({d,language,onSelectMatch}:{d:Decision;language:Language;
       <button type="button" className="rc-link" onClick={()=>onSelectMatch(d.matchId)}>{zh?'查看球队与赛程资料':'Team & fixture information'}</button>
     </div></details>;
 }
-function Pick({d,settlement,language,onSelectMatch}:{d:Decision;settlement:Settlement;language:Language;onSelectMatch:(id:string)=>void}){
+function Pick({d,settlement,handicapSettlement,language,onSelectMatch}:{d:Decision;settlement:Settlement;handicapSettlement?:Settlement|null;language:Language;onSelectMatch:(id:string)=>void}){
   const zh=language==='zh';
   return <article className="rc-pick"><header><span>{d.matchNo||d.sourceMatchId} · {format(d.kickoffTime,language)}</span><span className={`rc-state rc-state--${settlement.state}`}>{resultLabel(settlement.state,zh)}</span></header>
     <div className="rc-pick__main"><div><h3>{d.homeTeamName} <span>vs</span> {d.awayTeamName}</h3><small>{zh?'发布':'Published'} {format(d.publishedAt,language)}</small></div><div className="rc-selection"><span>{zh?'唯一首选':'Primary pick'}</span><strong>{title(d.tipCode,zh)}</strong><small>SP {d.odds.toFixed(2)}</small><small>{quoteSourceLabel(d,language)}</small></div></div>
     <div className="rc-probabilities" aria-label={zh?'发布时胜平负概率':'Published outcome probabilities'}>{(['1','X','2'] as const).map(c=><div key={c} className={c===d.tipCode?'is-selected':''}><span>{title(c,zh)}</span><strong>{(d.probabilities[c]*100).toFixed(1)}%</strong><span className="rc-bar"><i style={{width:`${d.probabilities[c]*100}%`}}/></span></div>)}</div>
+    <HandicapBlock d={d} settlement={handicapSettlement} language={language}/>
     {settlement.score&&<p className="rc-score">{zh?'90分钟赛果':'90-minute result'} <strong>{settlement.score}</strong></p>}
     <RecordDetails d={d} language={language} onSelectMatch={onSelectMatch}/>
   </article>;
@@ -49,6 +76,7 @@ export function RecommendationCenter({language,onSelectMatch,mode='recommendatio
   useEffect(()=>{const timer=window.setInterval(()=>setClockTick(tick=>tick+1),10000);return ()=>window.clearInterval(timer);},[]);
   const zh=language==='zh',review=mode==='review';
   const summary=data?.review.statistics[tab==='single'?'single':tab];
+  const handicapSummary=data?.review.statistics.handicap;
   const currentDay=data?.businessDate===new Date(now+8*3600000).toISOString().slice(0,10);
   const stale=!currentDay||!data?.inputAsOf||now-Date.parse(data.inputAsOf)>15*60000||data.lanes.publish?.status==='error';
   const reviewDelayed=data?.lanes.settlement?.status==='error';
@@ -64,13 +92,13 @@ export function RecommendationCenter({language,onSelectMatch,mode='recommendatio
     <header className="rc-heading"><div><span className="rc-eyebrow">{zh?'统一决策 · 可追溯发布':'One decision · Traceable publication'}</span><h1 id="rc-title">{review?(zh?'赛后复盘':'Result Review'):(zh?'今日推荐':'Today’s Recommendations')}</h1><p>{zh?'单场与串关共用决策版本；原始方向不改，官方赛果更正同步复盘。':'Singles and combos share decision versions. Original picks remain immutable; official corrections update both records.'}</p></div><button type="button" className="rc-refresh" onClick={refresh}><RefreshCw size={16} aria-hidden="true"/>{zh?'刷新':'Refresh'}</button></header>
     <div className="rc-meta"><span>{zh?'业务日':'Match day'} {data?.businessDate||'—'}</span><span>{zh?'行情截至':'Inputs as of'} {format(activeInputs,language)}</span><span>{zh?'赛果核对':'Results checked'} {format(data?.resultAsOf,language)}</span><span>{zh?'模型验证中':'Model unvalidated'}</span></div>
     <div className="rc-tabs" role="group" aria-label={zh?'推荐类型':'Recommendation type'}>{(['single','two','three'] as const).map(t=><button key={t} type="button" aria-pressed={tab===t} onClick={()=>setTab(t)}>{t==='single'?(zh?'单场':'Singles'):t==='two'?(zh?'2串1 · SP≥2.50':'2-leg · SP≥2.50'):(zh?'3串1 · SP≥5.00':'3-leg · SP≥5.00')}</button>)}</div>
-    <Stats value={summary} zh={zh}/>
+    <Stats value={summary} zh={zh}/>{review&&tab==='single'&&handicapSummary&&<div className="rc-handicap-summary"><span>{zh?'让球复盘':'Handicap review'}</span><strong>{handicapSummary.hitRate==null?'—':`${(handicapSummary.hitRate*100).toFixed(1)}%`}</strong><small>{zh?'命中 / 已结算':'Won / Settled'} {handicapSummary.won} / {handicapSummary.settled}</small></div>}
     {authorizationRequired?<p className="rc-notice" role="alert">{zh?'请使用网站访问权限重新登录。':'Please sign in with your website access.'}</p>:failed?<p className="rc-notice" role="status">{zh?'连接恢复中；保留上次已发布记录，不将读取失败显示为零成绩。':'Reconnecting. Retaining the last published records; errors do not reset statistics.'}</p>:null}
     {!loading&&(tab==='single'?stale:!comboFresh)&&<p className="rc-notice">{zh?'当前显示已发布快照，行情更新延迟；旧快照不作为新串关输入。':'Published snapshots are retained while inputs are delayed; old snapshots do not create new combos.'}</p>}
     {reviewDelayed&&<p className="rc-notice">{zh?'赛果核对正在恢复，新推荐发布不受此任务影响。':'Result verification is recovering; recommendation publication is independent.'}</p>}
     {(data?.excludedCorruptRecords||0)>0&&<p className="rc-notice">{zh?'有记录正在单独核验，当前统计不包含这些记录。':'Some records are quarantined for verification and excluded from these statistics.'}</p>}
     {loading&&!data?<div className="rc-empty" role="status">{zh?'正在读取推荐与复盘…':'Loading recommendations and review…'}</div>:tab==='single'?
-      <div className="rc-picks">{rows.length?rows.map(row=><Pick key={row.decision.decisionId} d={row.decision} settlement={row.settlement} language={language} onSelectMatch={onSelectMatch}/>):<p className="rc-empty">{zh?'当前还没有已落库的有效赛前记录。新数据到达后自动评估发布，不等待旧正式资格。':'No persisted eligible pre-match record yet. New inputs are evaluated without the old formal-pick gate.'}</p>}</div>:
+      <div className="rc-picks">{rows.length?rows.map(row=><Pick key={row.decision.decisionId} d={row.decision} settlement={row.settlement} handicapSettlement={row.handicapSettlement} language={language} onSelectMatch={onSelectMatch}/>):<p className="rc-empty">{zh?'当前还没有已落库的有效赛前记录。新数据到达后自动评估发布，不等待旧正式资格。':'No persisted eligible pre-match record yet. New inputs are evaluated without the old formal-pick gate.'}</p>}</div>:
       <div className="rc-combos">{frozen.map(row=><ComboCard key={row.combo.id} combo={row.combo} settlement={row.settlement} language={language} onSelectMatch={onSelectMatch}/>)}{preview&&<ComboCard combo={preview} language={language} onSelectMatch={onSelectMatch}/>}{!frozen.length&&!preview&&<p className="rc-empty">{review?(zh?'暂无该类型的冻结复盘记录。':'No frozen review records for this size.'):
         comboUnavailable?(zh?'串关数据正在更新；已冻结记录仍然保留。':'Combo data is updating; frozen records are retained.'):
         typeof comboCandidates==='number'&&comboCandidates<size?(zh?`当前可用${comboCandidates}场，${size}串1需要${size}场不同比赛。新场次到达后自动重算。`:`${comboCandidates} valid matches available; this combo requires ${size} distinct matches.`):

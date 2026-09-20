@@ -1,6 +1,7 @@
 'use strict';
 
 const { evaluateForecast, hash, time, day } = require('../../src/services/publishedForecastPolicy.cjs');
+const { buildHandicapMarginDecision, validHandicapMarginDecision } = require('../../src/services/handicapMarginDecision.cjs');
 const VERSION = 'unified-decision-v1';
 const COMBO_VERSION = 'unified-combo-v1';
 const FLOORS = Object.freeze({ 2: 2.5, 3: 5 });
@@ -19,22 +20,31 @@ function makeDecision(match, { now, publication }) {
   if (!result.eligible) return { decision: null, reason: result.reason };
   const candidate = result.candidate;
   const input = require('../../src/services/prospectiveForecastInput.cjs').forecastInputFor(match);
+  if (!input) return { decision:null, reason:'prospective-input-invalid' };
   if (Object.values(candidate.quoteOdds).some(value => units(value) === null)) return { decision: null, reason: 'unsupported-sp-precision' };
-  const identity = [VERSION, candidate.sourceMatchId, candidate.eventVersion, candidate.market, candidate.inputHash];
+  const handicapAnalysis = buildHandicapMarginDecision(input, { now, cutoffTime:candidate.cutoffTime, straightTipCode:candidate.tipCode });
+  const hadInputHash = candidate.inputHash;
+  const inputHash = hash({ hadInputHash, handicapInputHash: handicapAnalysis?.inputHash || null });
+  const identity = [VERSION, candidate.sourceMatchId, candidate.eventVersion, candidate.market, inputHash];
   const decisionId = `decision_${hash(identity)}`;
-  const body = { ...candidate, version: VERSION, policyVersion: VERSION, decisionId, id: decisionId,
+  const body = { ...candidate, hadInputHash, inputHash, handicapAnalysis, version: VERSION, policyVersion: VERSION, decisionId, id: decisionId,
     statisticsTrack: 'unified-decision', publishedAt: new Date(now).toISOString(), publicationStatus: 'PUBLISHED',
-    // A new input creates a new immutable version; old directions are never overwritten.
     evaluationRule: 'latest-published-input-before-cutoff-per-event', modelValidation: 'unvalidated',
     upstreamModelVersion: String(input?.probabilityModel?.version || 'unknown'),
     sourceCycleId: String(input?.sourceCycleId || publication.sourceCycleId || ''),
-    inputEvidence: { model: { version: input.probabilityModel.version || null, generatedAt: candidate.modelGeneratedAt, oneXTwo: { final: structuredClone(input.probabilityModel.oneXTwo.final) } }, quoteSource: candidate.quoteSource, quoteObservedAt: candidate.quoteObservedAt } };
+    inputEvidence: { model: { version: input.probabilityModel.version || null, generatedAt: candidate.modelGeneratedAt,
+      oneXTwo: { final: structuredClone(input.probabilityModel.oneXTwo.final) },
+      handicapMarginInputHash: handicapAnalysis?.inputHash || null },
+      quoteSource: candidate.quoteSource, quoteObservedAt: candidate.quoteObservedAt } };
   return { decision: immutable({ ...body, recordHash: hash(body) }), reason: null };
 }
 function validDecision(row) {
   if (!row || row.version !== VERSION || row.policyVersion !== VERSION || row.market !== 'HAD' || row.handicapLine !== 0 || row.modelValidation !== 'unvalidated') return false;
   const { recordHash, ...body } = row;
   if (hash(body) !== recordHash || row.decisionId !== `decision_${hash([VERSION, row.sourceMatchId, row.eventVersion, row.market, row.inputHash])}` || row.id !== row.decisionId) return false;
+  if (row.hadInputHash && row.inputHash !== hash({ hadInputHash:row.hadInputHash, handicapInputHash:row.handicapAnalysis?.inputHash || null })) return false;
+  if (!validHandicapMarginDecision(row.handicapAnalysis)) return false;
+  if (row.handicapAnalysis && row.handicapAnalysis.straightTipCode !== row.tipCode) return false;
   if (row.quoteSource === '500.com:jczq:HAD') {
     const proof = row.quoteProvenance;
     const bound = require('../../src/services/warehouseLotterySp.cjs').warehouseQuoteForMatch({
@@ -75,7 +85,6 @@ function evaluateCurrent(matches, context) {
   }
   return { decisions, issues };
 }
-/** Up to four decimal digits, without a rounding step before floor comparison. */
 function units(value) {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 1) return null;
   const s = String(value);
@@ -110,7 +119,6 @@ function chooseCombo(decisions, size, now) {
       return;
     }
     if (candidates.length - start < need) return;
-    // Optimistic probability bound only; never drop candidates merely by rank.
     const bound = candidates.slice(start,start+need).reduce((sum,d) => sum + Math.log(d.modelProbability),logp);
     if (bound < score - 1e-12) return;
     for (let i=start;i<=candidates.length-need;i++) {
@@ -126,7 +134,6 @@ function chooseCombo(decisions, size, now) {
     businessDate: day(now), size, minimumTotalOdds: FLOORS[size], totalOdds: Number(bestProduct.toFixed(2)), rawTotalOdds: bestProduct,
     legs: best, decisionIds: best.map(d => d.decisionId), generatedAt: new Date(now).toISOString(), freezeAt: new Date(freezeAt(day(now),best)).toISOString(),
     rankingMethod: 'sum-log-unchanged-model-probability', jointProbability: null, statisticsTrack: 'unified-combo',
-    // A shared input is auditable; independence is only a ranking approximation.
     calibration: 'unvalidated', overlapWarning: null };
   return immutable(body);
 }

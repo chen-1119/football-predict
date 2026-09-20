@@ -1,6 +1,6 @@
 'use strict';
 const {evaluateCurrent,validDecision,chooseCombo,freezeCombo,VERSION}=require('./decision.cjs');
-const {key,collectResults,settleDecision,settleCombo,summary,validResultEvent}=require('./results.cjs');
+const {key,collectResults,settleDecision,settleHandicapDecision,settleCombo,summary,handicapSummary,validResultEvent}=require('./results.cjs');
 const {day,time,hash}=require('../../src/services/publishedForecastPolicy.cjs');
 
 function freshPublication(p,now){return p && /^[a-f0-9]{64}$/.test(p.manifestHash||'') && typeof p.generationId==='string' && p.generationId.length>0 && Number.isFinite(time(p.committedAt)) && now>=time(p.committedAt) && now-time(p.committedAt)<=15*60000;}
@@ -107,7 +107,7 @@ function createRuntime(ports,{validators}={}){
     const rawHeads=await repo.resultHeads();
     for(const e of rawHeads)if(!validResultEvent(e))quarantined.push({reason:'invalid-result-record',id:String(e?.eventId||'unknown')});
     const heads=new Map(rawHeads.filter(validResultEvent).map(e=>[e.eventKey,e]));
-    const singles=decisions.map(d=>({decision:d,settlement:settleDecision(d,heads.get(key(d)))}));
+    const singles=decisions.map(d=>{const event=heads.get(key(d));return {decision:d,settlement:settleDecision(d,event),handicapSettlement:settleHandicapDecision(d,event)};});
     const records=await repo.frozenCombos();const ids=[...new Set(records.flatMap(c=>Array.isArray(c?.decisionIds)?c.decisionIds:[]))];
     const bindings=new Map((await repo.decisions(ids)).map(d=>[d.decisionId,d]));
     const combos=[];
@@ -128,7 +128,7 @@ function createRuntime(ports,{validators}={}){
       inputAsOf:[lanes.publish?.inputAsOf,lanes.combos?.inputAsOf].filter(v=>Number.isFinite(time(v))).sort((a,b)=>time(b)-time(a))[0]||null,resultAsOf:lanes.settlement?.lastSuccessAt||null,lanes,
       current:selected,previews,todayCombos:today,overlapDecisionIds:overlap,
       review:{singles:singles.slice(0,100),combos:combos.slice(0,100),limit:100,
-        statistics:{single:summary(singles,true),two:summary(combos.filter(r=>r.combo.size===2)),three:summary(combos.filter(r=>r.combo.size===3))},
+        statistics:{single:summary(singles,true),handicap:handicapSummary(singles),two:summary(combos.filter(r=>r.combo.size===2)),three:summary(combos.filter(r=>r.combo.size===3))},
         definition:'latest-published-decision-before-cutoff-per-event; combos-use-exact-bound-versions'},
       excludedCorruptRecords:quarantined.length,modelValidation:'unvalidated',legacyRecordsReclassified:0};
     await repo.saveView(center);
