@@ -6,7 +6,7 @@ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'recommendation-center-test-'));
 after(()=>fs.rmSync(dir,{recursive:true,force:true}));
 const source=fs.readFileSync(path.join(__dirname,'../src/services/recommendationCenterView.ts'),'utf8');
 fs.writeFileSync(path.join(dir,'view.cjs'),ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText);
-const {parseRecommendationCenter,visiblePreview}=require(path.join(dir,'view.cjs'));
+const {parseRecommendationCenter,visiblePreview,primarySelectionSummary}=require(path.join(dir,'view.cjs'));
 const {createRuntime}=require('../scripts/recommendationPlatform/runtime.cjs');
 const {match,memoryPorts,validators}=require('./recommendationFixture.cjs');
 async function sample(){const p=memoryPorts();await createRuntime(p,{validators}).publishingCycle();return {recommendationCenter:p.state.view};}
@@ -26,3 +26,12 @@ test('frozen records remain parseable across midnight and retain bound IDs',asyn
 
 test('handicap calibration profile is exposed even before groups become active',async()=>{const x=parseRecommendationCenter(await sample());assert.equal(x.review.handicapCalibration.version,'handicap-calibration-v1');assert.equal(typeof x.review.handicapCalibration.profileHash,'string');assert.equal(x.review.handicapCalibration.sampleRows,0);});
 test('tampered handicap calibration profile is rejected by frontend parsing',async()=>{const x=await sample();x.recommendationCenter.review.handicapCalibration.profileHash='bad';assert.throws(()=>parseRecommendationCenter(x));});
+
+test('top-card summary exposes both straight and handicap primary picks without opening details',()=>{
+  const summary=primarySelectionSummary({tipCode:'1',odds:1.72,modelProbability:.61,handicapAnalysis:{tipCode:'X',handicapLine:-1,handicapLineText:'-1',modelProbability:.38,marketReference:{selectedOdds:3.45},historicalCalibration:{applied:true}}});
+  assert.deepEqual(summary,{had:{code:'1',odds:1.72,probability:.61},handicap:{code:'X',line:-1,lineText:'-1',probability:.38,odds:3.45,calibrated:true}});
+});
+test('top-card summary keeps handicap slot explicitly unavailable when no handicap analysis exists',()=>{
+  const summary=primarySelectionSummary({tipCode:'2',odds:2.1,modelProbability:.47,handicapAnalysis:null});
+  assert.equal(summary.had.code,'2');assert.equal(summary.handicap,null);
+});
