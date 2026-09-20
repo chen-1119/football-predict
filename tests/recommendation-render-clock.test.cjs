@@ -10,11 +10,13 @@ test('incoming lane timestamp between timer ticks stays visible without acceptin
   const original=Date.now;let now=p.now,index=0;const state=[];
   Date.now=()=>now;
   try{
-    const component=compile(require.resolve('../src/components/recommendations/RecommendationCenter.tsx'),id=>{
+    const component=compile(require.resolve('../src/components/recommendations/RecommendationCenter.tsx'),function dependencies(id){
       if(id==='react')return{useEffect:()=>{},useState:initial=>{const i=index++;if(!(i in state))state[i]=typeof initial==='function'?initial():initial;return[state[i],()=>{}];}};
       if(id==='react/jsx-runtime')return{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})};
       if(id==='../../hooks/useRecommendationCenter')return{useRecommendationCenter:()=>({data,loading:false,failed:false,authorizationRequired:false,refresh:()=>{}})};
       if(id==='../../services/recommendationCenterView')return V;
+      // Load the actual optional component; preserve every clock assertion below.
+      if(id==='./HandicapAnalysisCard')return compile(require.resolve('../src/components/recommendations/HandicapAnalysisCard.tsx'),dependencies);
       if(id==='lucide-react')return{};if(id.endsWith('.css'))return{};throw Error(id);
     });
     const hasCombo=node=>!!node&&typeof node==='object'&&(node.type?.name==='ComboCard'||Object.values(node).some(value=>Array.isArray(value)?value.some(hasCombo):hasCombo(value)));
