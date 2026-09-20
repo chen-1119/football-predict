@@ -1,12 +1,13 @@
 export type Outcome = '1' | 'X' | '2';
 export type ResultState = 'PENDING' | 'WON' | 'LOST' | 'VOID' | 'DISPUTED';
 export interface Decision {
+  handicapAnalysis?:HandicapAnalysisView;
   decisionId:string; sourceMatchId:string; matchId:string; eventVersion:string; businessDate:string;
   publishedAt:string; cutoffTime:string; kickoffTime:string; homeTeamName:string; awayTeamName:string;
   matchNo:string|null; tipCode:Outcome; odds:number; probabilities:Record<Outcome,number>;
   modelProbability:number; modelGeneratedAt:string; quoteObservedAt:string; recordHash:string; quoteSource?:string|null;
 }
-export interface Settlement { state:ResultState; score?:string|null; actual?:Outcome; resultEventId?:string|null; legs?:Array<{decisionId:string;state:ResultState;score?:string|null}> }
+export interface Settlement { handicap?:HandicapSettlementView; state:ResultState; score?:string|null; actual?:Outcome; resultEventId?:string|null; legs?:Array<{decisionId:string;state:ResultState;score?:string|null}> }
 export interface SingleRow { decision:Decision; settlement:Settlement }
 export interface Combo { id:string; businessDate:string; size:2|3; totalOdds:number; rawTotalOdds:number; legs:Decision[]; decisionIds:string[]; freezeAt:string; frozenAt?:string; generatedAt:string }
 export interface ComboRow { combo:Combo; settlement:Settlement }
@@ -47,10 +48,10 @@ function decision(v:unknown):Decision{
       ||number(quotes[k])!==odds||! /^[a-f0-9]{64}$/.test(text(receipt.receiptHash))) throw new Error('Invalid copied lottery SP receipt');
   }
 
-  return {decisionId:text(d.decisionId),matchId:text(d.matchId),sourceMatchId:text(d.sourceMatchId),eventVersion:stamp(d.eventVersion),businessDate:date(d.businessDate),homeTeamName:text(d.homeTeamName),awayTeamName:text(d.awayTeamName),matchNo:d.matchNo==null?null:text(d.matchNo),publishedAt,kickoffTime,cutoffTime,tipCode,odds,probabilities,modelProbability,modelGeneratedAt,quoteObservedAt,recordHash,quoteSource};
+  return {handicapAnalysis:parseHandicapAnalysis(d.handicapAnalysis,{probabilities,publishedAt,modelGeneratedAt,sourceMatchId:text(d.sourceMatchId),eventVersion:stamp(d.eventVersion)}),decisionId:text(d.decisionId),matchId:text(d.matchId),sourceMatchId:text(d.sourceMatchId),eventVersion:stamp(d.eventVersion),businessDate:date(d.businessDate),homeTeamName:text(d.homeTeamName),awayTeamName:text(d.awayTeamName),matchNo:d.matchNo==null?null:text(d.matchNo),publishedAt,kickoffTime,cutoffTime,tipCode,odds,probabilities,modelProbability,modelGeneratedAt,quoteObservedAt,recordHash,quoteSource};
 }
 function settlement(v:unknown):Settlement{
-  const s=object(v),result:Settlement={state:state(s.state)};
+  const s=object(v),result:Settlement={state:state(s.state),handicap:parseHandicapSettlement(s.handicap)};
   if(s.score!=null){result.score=text(s.score);if(!/^\d+-\d+$/.test(result.score))throw new Error('Invalid score');}
   if(s.actual!=null)result.actual=outcome(s.actual);
   if(s.resultEventId!=null)result.resultEventId=text(s.resultEventId);
@@ -60,6 +61,7 @@ function settlement(v:unknown):Settlement{
 function single(v:unknown):SingleRow{
   const x=object(v),d=decision(x.decision),s=settlement(x.settlement);
   if(['WON','LOST'].includes(s.state)&&(!s.actual||!s.score||(s.actual===d.tipCode)!==(s.state==='WON')))throw new Error('Settlement disagrees with decision');
+  if(s.handicap && (d.handicapAnalysis?.status!=='ready'||s.handicap.line!==d.handicapAnalysis.line||s.handicap.tipCode!==d.handicapAnalysis.tipCode||s.handicap.score!==(s.score||null)))throw new Error('Handicap settlement binding mismatch');
   return {decision:d,settlement:s};
 }
 function combo(v:unknown):Combo{
@@ -116,4 +118,81 @@ export function quoteSourceLabel(d:Pick<Decision,'quoteSource'>,language:'zh'|'e
   if(d.quoteSource==='500.com:jczq:HAD')return language==='zh'?'500竞彩页面转录':'500 JCZQ SP copy';
   if(/^sporttery:had(?:$|:)/i.test(d.quoteSource||''))return language==='zh'?'竞彩网来源SP':'Sporttery-sourced SP';
   return language==='zh'?'已存档SP，来源见原记录':'Archived SP; see original source';
+}
+
+export type HandicapCode = '1' | 'X' | '2';
+export type HandicapVector = Record<HandicapCode, number>;
+export interface HandicapAnalysisView {
+  status: 'ready' | 'unavailable'; line: number | null; reason?: string;
+  tipCode?: HandicapCode | null; probabilities?: HandicapVector;
+  primaryTipCode?: HandicapCode | null; primaryProbability?: number | null;
+  conditionalOnPrimary?: HandicapVector | null;
+  conditions?: { homeWinMinimumMargin: number; drawExactMargin: number; awayWinMaximumMargin: number };
+  snapshot?: { lineObservedAt: string; modelGeneratedAt: string; homeLambda: number; awayLambda: number };
+}
+export interface HandicapSettlementView {
+  line: number; tipCode: HandicapCode; actual: HandicapCode | null;
+  state: 'PENDING' | 'WON' | 'LOST' | 'VOID' | 'DISPUTED'; score: string | null;
+}
+const hcCodes: HandicapCode[] = ['1', 'X', '2'];
+const hcObject = (v: unknown): Record<string, unknown> => {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error('Invalid handicap object');
+  return v as Record<string, unknown>;
+};
+function hcVector(value: unknown): HandicapVector {
+  const p = hcObject(value);
+  if (!hcCodes.every(c => typeof p[c] === 'number' && Number.isFinite(p[c]) && p[c] >= 0 && p[c] <= 1 + 1e-12)
+    || Math.abs(hcCodes.reduce((sum, c) => sum + (p[c] as number), 0) - 1) > 1e-8) throw new Error('Invalid handicap vector');
+  return { '1': p['1'] as number, X: p.X as number, '2': p['2'] as number };
+}
+const hcCode = (v: unknown): HandicapCode | null => {
+  if (v === null) return null;
+  if (v !== '1' && v !== 'X' && v !== '2') throw new Error('Invalid handicap direction');
+  return v;
+};
+const hcStamp = (v: unknown) => {
+  if (typeof v !== 'string' || !Number.isFinite(Date.parse(v))) throw new Error('Invalid handicap timestamp');
+  return v;
+};
+export function parseHandicapAnalysis(value: unknown, parent: { probabilities: HandicapVector; publishedAt: string; modelGeneratedAt: string; sourceMatchId: string; eventVersion: string }): HandicapAnalysisView | undefined {
+  if (value == null) return undefined;
+  const x = hcObject(value);
+  if (x.version !== 'net-margin-hhad-v1') throw new Error('Unsupported handicap analysis');
+  if (x.status === 'unavailable') {
+    if (typeof x.reason !== 'string' || x.probabilities || x.tipCode) throw new Error('Invalid unavailable handicap');
+    return { status: 'unavailable', line: Number.isSafeInteger(x.line) ? x.line as number : null, reason: x.reason };
+  }
+  if (x.status !== 'ready' || x.market !== 'HHAD' || x.period !== 'REGULATION_90' || x.modelValidation !== 'unvalidated'
+    || x.comboEligible !== false || x.odds !== null || !Number.isSafeInteger(x.line)) throw new Error('Invalid handicap contract');
+  const line = x.line as number, p = hcVector(x.probabilities), had = hcVector(x.hadProbabilities), s = hcObject(x.snapshot);
+  const tipCode = hcCode(x.tipCode), primaryTipCode = hcCode(x.primaryTipCode);
+  const ranked = hcCodes.slice().sort((a, b) => p[b] - p[a]);
+  const expected = p[ranked[0]] - p[ranked[1]] > 1e-9 ? ranked[0] : null;
+  if (tipCode !== expected || hcCodes.some(c => Math.abs(had[c] - parent.probabilities[c]) > 1e-8)
+    || !primaryTipCode || Math.abs(Number(x.primaryProbability) - had[primaryTipCode]) > 1e-8) throw new Error('Handicap and HAD disagree');
+  const conditional = x.conditionalOnPrimary === null ? null : hcVector(x.conditionalOnPrimary);
+  if (!conditional || hcCodes.some(c => conditional[c] * had[primaryTipCode] > p[c] + 1e-8)) throw new Error('Conditional probability exceeds full probability');
+  const lineObservedAt = hcStamp(s.lineObservedAt), modelGeneratedAt = hcStamp(s.modelGeneratedAt);
+  if (Date.parse(lineObservedAt) > Date.parse(parent.publishedAt) || modelGeneratedAt !== parent.modelGeneratedAt
+    || s.sourceMatchId !== parent.sourceMatchId || s.eventVersion !== parent.eventVersion) throw new Error('Handicap snapshot mismatch');
+  if (![s.homeLambda, s.awayLambda].every(v => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 30)) throw new Error('Invalid handicap expected goals');
+  const c = hcObject(x.conditions);
+  if (c.homeWinMinimumMargin !== 1 - line || c.drawExactMargin !== -line || c.awayWinMaximumMargin !== -line - 1) throw new Error('Handicap sign mismatch');
+  return { status: 'ready', line, tipCode, probabilities: p, primaryTipCode, primaryProbability: had[primaryTipCode], conditionalOnPrimary: conditional,
+    conditions: { homeWinMinimumMargin: 1 - line, drawExactMargin: -line, awayWinMaximumMargin: -line - 1 },
+    snapshot: { lineObservedAt, modelGeneratedAt, homeLambda: s.homeLambda as number, awayLambda: s.awayLambda as number } };
+}
+export function parseHandicapSettlement(value: unknown): HandicapSettlementView | undefined {
+  if (value == null) return undefined;
+  const x = hcObject(value), tipCode = hcCode(x.tipCode), actual = hcCode(x.actual);
+  if (!tipCode || !Number.isSafeInteger(x.line) || !['PENDING', 'WON', 'LOST', 'VOID', 'DISPUTED'].includes(String(x.state))) throw new Error('Invalid handicap result');
+  const score = x.score == null ? null : String(x.score);
+  if (['WON', 'LOST'].includes(String(x.state))) {
+    const m = /^(\d+)-(\d+)$/.exec(score || '');
+    if (!m) throw new Error('Missing handicap score');
+    const margin = Number(m[1]) - Number(m[2]) + Number(x.line);
+    const expected = margin > 0 ? '1' : margin < 0 ? '2' : 'X';
+    if (actual !== expected || (actual === tipCode) !== (x.state === 'WON')) throw new Error('Wrong handicap settlement');
+  }
+  return { line: x.line as number, tipCode, actual, state: x.state as HandicapSettlementView['state'], score };
 }

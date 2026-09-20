@@ -1,6 +1,7 @@
 'use strict';
 
 const { evaluateForecast, hash, time, day } = require('../../src/services/publishedForecastPolicy.cjs');
+const { buildHandicapAnalysis, validHandicapAnalysis } = require('./handicap.cjs');
 const VERSION = 'unified-decision-v1';
 const COMBO_VERSION = 'unified-combo-v1';
 const FLOORS = Object.freeze({ 2: 2.5, 3: 5 });
@@ -17,9 +18,15 @@ const eventKey = row => JSON.stringify([String(row.sourceMatchId || row.id || ''
 function makeDecision(match, { now, publication }) {
   const result = evaluateForecast(match, { now, publication });
   if (!result.eligible) return { decision: null, reason: result.reason };
-  const candidate = result.candidate;
+  let candidate = result.candidate;
   const input = require('../../src/services/prospectiveForecastInput.cjs').forecastInputFor(match);
   if (Object.values(candidate.quoteOdds).some(value => units(value) === null)) return { decision: null, reason: 'unsupported-sp-precision' };
+  const handicapAnalysis = buildHandicapAnalysis(input, candidate, now);
+  if (handicapAnalysis) {
+    const hadInputHash = candidate.inputHash;
+    candidate = { ...candidate, hadInputHash, handicapAnalysis,
+      inputHash: hash({ hadInputHash, handicapAnalysis }) };
+  }
   const identity = [VERSION, candidate.sourceMatchId, candidate.eventVersion, candidate.market, candidate.inputHash];
   const decisionId = `decision_${hash(identity)}`;
   const body = { ...candidate, version: VERSION, policyVersion: VERSION, decisionId, id: decisionId,
@@ -44,6 +51,9 @@ function validDecision(row) {
       || time(row.quoteObservedAt) !== time(bound.at)
       || ['1','X','2'].some((c,i) => row.quoteOdds?.[c] !== bound.odds[['odds1','oddsX','odds2'][i]])) return false;
   }
+  if (row.handicapAnalysis && (!row.hadInputHash
+    || row.inputHash !== hash({ hadInputHash: row.hadInputHash, handicapAnalysis: row.handicapAnalysis })
+    || !validHandicapAnalysis(row.handicapAnalysis, row))) return false;
   const p = row.probabilities;
   if (!p || !['1','X','2'].includes(row.tipCode) || !['1','X','2'].every(c => typeof p[c] === 'number' && Number.isFinite(p[c]) && p[c] >= 0 && p[c] <= 1)) return false;
   if (Math.abs(p['1'] + p.X + p['2'] - 1) > 1e-8 || p[row.tipCode] !== row.modelProbability) return false;

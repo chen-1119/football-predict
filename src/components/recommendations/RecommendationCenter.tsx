@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { RefreshCw, ChevronDown } from 'lucide-react';
+import { HandicapAnalysisCard } from './HandicapAnalysisCard';
 import { useRecommendationCenter } from '../../hooks/useRecommendationCenter';
 import { quoteSourceLabel, comboLaneFresh, comboPreviewForSize, type Decision, type Settlement, type Combo, type Summary, type Outcome } from '../../services/recommendationCenterView';
 import '../../styles/recommendation-center.css';
@@ -22,6 +23,7 @@ function Pick({d,settlement,language,onSelectMatch}:{d:Decision;settlement:Settl
   return <article className="rc-pick"><header><span>{d.matchNo||d.sourceMatchId} · {format(d.kickoffTime,language)}</span><span className={`rc-state rc-state--${settlement.state}`}>{resultLabel(settlement.state,zh)}</span></header>
     <div className="rc-pick__main"><div><h3>{d.homeTeamName} <span>vs</span> {d.awayTeamName}</h3><small>{zh?'发布':'Published'} {format(d.publishedAt,language)}</small></div><div className="rc-selection"><span>{zh?'唯一首选':'Primary pick'}</span><strong>{title(d.tipCode,zh)}</strong><small>SP {d.odds.toFixed(2)}</small><small>{quoteSourceLabel(d,language)}</small></div></div>
     <div className="rc-probabilities" aria-label={zh?'发布时胜平负概率':'Published outcome probabilities'}>{(['1','X','2'] as const).map(c=><div key={c} className={c===d.tipCode?'is-selected':''}><span>{title(c,zh)}</span><strong>{(d.probabilities[c]*100).toFixed(1)}%</strong><span className="rc-bar"><i style={{width:`${d.probabilities[c]*100}%`}}/></span></div>)}</div>
+    <HandicapAnalysisCard analysis={d.handicapAnalysis} result={settlement.handicap} language={language}/>
     {settlement.score&&<p className="rc-score">{zh?'90分钟赛果':'90-minute result'} <strong>{settlement.score}</strong></p>}
     <RecordDetails d={d} language={language} onSelectMatch={onSelectMatch}/>
   </article>;

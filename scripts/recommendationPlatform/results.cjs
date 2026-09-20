@@ -51,7 +51,7 @@ function collectResults(history, previous, { isFinal, isVoid }, now) {
   }
   return { updates, issues };
 }
-function settleDecision(decision, event) {
+function settleDecisionBase(decision, event) {
   if (!event) return { state:'PENDING',score:null,resultEventId:null };
   if(key(decision)!==key(event)) return {state:'DISPUTED',score:null,resultEventId:event.eventId,reason:'event-identity-conflict'};
   if ((event.homeTeamId && event.homeTeamId!==decision.homeTeamId) || (event.awayTeamId && event.awayTeamId!==decision.awayTeamId)) return {state:'DISPUTED',score:null,resultEventId:event.eventId,reason:'team-identity-conflict'};
@@ -62,6 +62,11 @@ function settleDecision(decision, event) {
   const adjusted=event.scoreHome+line;
   const actual=adjusted>event.scoreAway?'1':adjusted<event.scoreAway?'2':'X';
   return {state:actual===decision.tipCode?'WON':'LOST',actual,score:`${event.scoreHome}-${event.scoreAway}`,resultEventId:event.eventId,revision:event.revision};
+}
+function settleDecision(decision, event) {
+  const result = settleDecisionBase(decision, event);
+  const handicap = require('./handicap.cjs').settleHandicap(decision.handicapAnalysis, result);
+  return handicap ? { ...result, handicap } : result;
 }
 function settleCombo(combo, heads) {
   if (!Array.isArray(combo?.legs) || ![2,3].includes(combo.size) || combo.legs.length!==combo.size) throw new Error('Invalid frozen combo');

@@ -4,7 +4,7 @@ const instant = value => {
   return Date.parse(/Z$|[+-]\d{2}:\d{2}$/.test(value) ? value : value.replace(' ', 'T') + '+08:00');
 };
 const identity = m => JSON.stringify([String(m?.sourceMatchId || m?.id || '').replace(/^sporttery_/, ''), instant(m?.eventVersion || m?.kickoffTime), m?.homeTeamId, m?.awayTeamId]);
-const fields = ['id', 'sourceMatchId', 'eventVersion', 'businessDate', 'matchDate', 'kickoffDate', 'kickoffTime', 'buyEndTime', 'matchNo', 'matchNumStr', 'status', 'resultDisposition', 'isOnSale', 'saleStatus', 'homeTeamId', 'awayTeamId', 'homeTeamName', 'awayTeamName', 'leagueId', 'odds', 'oddsSource', 'oddsReceivedAt', 'oddsUpdatedAt', 'sourceCycleId'];
+const fields = ['id', 'sourceMatchId', 'eventVersion', 'businessDate', 'matchDate', 'kickoffDate', 'kickoffTime', 'buyEndTime', 'matchNo', 'matchNumStr', 'status', 'resultDisposition', 'isOnSale', 'saleStatus', 'homeTeamId', 'awayTeamId', 'homeTeamName', 'awayTeamName', 'leagueId', 'odds', 'oddsSource', 'oddsReceivedAt', 'oddsUpdatedAt', 'sourceCycleId', 'handicapLine', 'handicapOddsSource', 'handicapOddsReceivedAt', 'handicapOddsUpdatedAt'];
 
 // The current-cycle model and quote travel together. Frozen display decisions
 // keep their original probabilities and timestamps in the parent match.
@@ -23,6 +23,11 @@ function attachProspectiveForecastInputs(matches, freshMatches, now) {
       || cutoffs.some(v => !Number.isFinite(v)) || !cutoffs.length || now >= Math.min(...cutoffs)) return result;
     const input = Object.fromEntries(fields.filter(key => fresh[key] !== undefined).map(key => [key, fresh[key]]));
     input.probabilityModel = { version: model.version, generatedAt: model.generatedAt, sourceMatchId: fresh.sourceMatchId, eventVersion: fresh.eventVersion || fresh.kickoffTime, dataQuality: model.dataQuality, oneXTwo: { final: model.oneXTwo?.final } };
+    // Only carry current-cycle goal parameters and handicap identity. Never borrow
+    // a score forecast or handicap from the frozen display parent.
+    const lambdas = model.calculationTrace?.poisson?.lambdas;
+    if (lambdas) input.probabilityModel.calculationTrace = { poisson: { lambdas: structuredClone(lambdas) } };
+    if (model.handicap?.line != null) input.probabilityModel.handicap = { line: model.handicap.line };
     input.predictionMeta = { cutoffTime: fresh.predictionMeta?.cutoffTime };
     // Carry the current-cycle quote as one object. Never borrow a later quote
     // from the parent frozen match or refresh a receipt by copying metadata.

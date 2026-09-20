@@ -10,7 +10,7 @@ async function verify(pool){
   const tomorrow=new Date(Date.now()+86400000).toISOString().slice(0,10);
   const dow=new Date(`${tomorrow}T12:00:00Z`).getUTCDay();
   let now=Date.parse(`${tomorrow}T${[0,6].includes(dow)?'14':'13'}:00:00Z`);
-  const fixture=id=>({id:`sporttery_${id}`,sourceMatchId:String(id),businessDate:tomorrow,status:'SCHEDULED',homeTeamId:`h${id}`,awayTeamId:`a${id}`,homeTeamName:`Home ${id}`,awayTeamName:`Away ${id}`,kickoffTime:`${tomorrow}T16:00:00Z`,eventVersion:`${tomorrow}T16:00:00Z`,probabilityModel:{generatedAt:new Date(now).toISOString(),oneXTwo:{final:{home:55,draw:25,away:20}}},odds:{odds1:1.8,oddsX:3.5,odds2:4.5},oddsSource:'sporttery:had',oddsUpdatedAt:new Date(now).toISOString(),predictions:[]});
+  const fixture=id=>({id:`sporttery_${id}`,sourceMatchId:String(id),businessDate:tomorrow,status:'SCHEDULED',homeTeamId:`h${id}`,awayTeamId:`a${id}`,homeTeamName:`Home ${id}`,awayTeamName:`Away ${id}`,kickoffTime:`${tomorrow}T16:00:00Z`,eventVersion:`${tomorrow}T16:00:00Z`,handicapLine:'-1',handicapOddsSource:'sporttery:HHAD',handicapOddsUpdatedAt:new Date(now).toISOString(),probabilityModel:{calculationTrace:{poisson:{lambdas:{home:1.8,away:.7}}},generatedAt:new Date(now).toISOString(),oneXTwo:{final:{home:55,draw:25,away:20}}},odds:{odds1:1.8,oddsX:3.5,odds2:4.5},oddsSource:'sporttery:had',oddsUpdatedAt:new Date(now).toISOString(),predictions:[]});
   let checks=0;const check=(fn)=>{fn();checks++;};
   const write=async(m,dataset='current')=>q('INSERT INTO football.match_snapshots(id,dataset,payload) VALUES($1,$2,$3::jsonb) ON CONFLICT(id,dataset) DO UPDATE SET payload=EXCLUDED.payload',[m.id,dataset,JSON.stringify(m)]);
   try{
@@ -28,6 +28,8 @@ async function verify(pool){
     const frozen=(await q('SELECT payload FROM football.recommendation_combo_records ORDER BY size')).rows;
     check(()=>assert.equal(frozen.length,2));
     check(()=>assert.equal(frozen[1].payload.legs.length,3));
+    check(()=>assert.equal(frozen[1].payload.legs[0].handicapAnalysis.status,'ready'));
+    check(()=>assert.equal(frozen[1].payload.legs[0].handicapAnalysis.line,-1));
     const before=(await q('SELECT payload FROM football.recommendation_decisions ORDER BY id')).rows;
     await Promise.all([runtime.publishingCycle(),runtime.publishingCycle()]);
     check(()=>assert.equal(before.length,3));
@@ -46,6 +48,7 @@ async function verify(pool){
     await q('DROP TRIGGER injected_failure ON football.recommendation_result_events');await runtime.settlementCycle();
     await write({...fixture(1),status:'FINISHED',testOfficial:true,scoreHome:0,scoreAway:2,resultRevision:2},'history');await runtime.settlementCycle();
     const center=(await q('SELECT payload FROM football.daily_featured_combo_state WHERE id=1')).rows[0].payload.recommendationCenter;
+    check(()=>assert.equal(center.review.singles.find(r=>r.decision.sourceMatchId==='1').settlement.handicap.actual,'2'));
     check(()=>assert.equal(center.review.statistics.single.lost,1));check(()=>assert.equal(center.review.statistics.three.lost,1));
     const afterFrozen=(await q('SELECT payload FROM football.recommendation_combo_records ORDER BY size')).rows;check(()=>assert.deepEqual(afterFrozen,frozen));
     const revisions=(await q('SELECT count(*)::int AS n FROM football.recommendation_result_events')).rows[0].n;await runtime.settlementCycle();check(()=>assert.ok(revisions>=4));
