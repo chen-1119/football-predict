@@ -1,7 +1,8 @@
 'use strict';
 const {evaluateCurrent,validDecision,chooseCombo,freezeCombo,VERSION}=require('./decision.cjs');
-const {key,collectResults,settleDecision,settleCombo,summary,validResultEvent}=require('./results.cjs');
+const {key,collectResults,settleDecision,settleHandicapDecision,settleCombo,summary,handicapSummary,validResultEvent}=require('./results.cjs');
 const {day,time,hash}=require('../../src/services/publishedForecastPolicy.cjs');
+const {buildHandicapCalibration}=require('../../src/services/handicapCalibration.cjs');
 
 function freshPublication(p,now){return p && /^[a-f0-9]{64}$/.test(p.manifestHash||'') && typeof p.generationId==='string' && p.generationId.length>0 && Number.isFinite(time(p.committedAt)) && now>=time(p.committedAt) && now-time(p.committedAt)<=15*60000;}
 function requireBeforeCutoff(records,now){if(records.some(d=>now>=time(d.cutoffTime)))throw Object.assign(new Error('Cutoff crossed'),{code:'DEADLINE_CROSSED'});}
@@ -10,7 +11,10 @@ async function assessInputs(repo,publication,now){
   if(!publication || !/^[a-f0-9]{64}$/.test(publication.manifestHash||'') || !publication.generationId
     || !Number.isFinite(committed) || committed>now)throw Object.assign(new Error('Valid committed input required'),{code:'SOURCE_STALE'});
   const inputs=repo.currentInputs?await repo.currentInputs(now):{current:await repo.current(),receiptHashes:new Set()};
-  const assessed=evaluateCurrent(inputs.current,{now,publication});
+  const [historical,rawHeads]=await Promise.all([repo.latest(),repo.resultHeads()]);
+  const calibrationHeads=new Map(rawHeads.filter(validResultEvent).map(e=>[e.eventKey,e]));
+  const handicapCalibration=buildHandicapCalibration(historical,calibrationHeads,day(now));
+  const assessed=evaluateCurrent(inputs.current,{now,publication,handicapCalibration});
   // A full model publication is not a quote clock. An older generation may
   // supply a still-valid prospective model ONLY with a fresh, independently
   // acquired exact-event receipt in this transaction. Model/cutoff policy is
@@ -22,7 +26,7 @@ async function assessInputs(repo,publication,now){
     assessed.decisions=fresh;
   }
   const quoteTimes=assessed.decisions.map(d=>time(d.quoteObservedAt));
-  return {...assessed,attempted:inputs.current.length,inputAsOf:quoteTimes.length?new Date(Math.min(...quoteTimes)).toISOString():publication.committedAt};
+  return {...assessed,handicapCalibration,attempted:inputs.current.length,inputAsOf:quoteTimes.length?new Date(Math.min(...quoteTimes)).toISOString():publication.committedAt};
 }
 /** Bind the exact current inputs inside the caller's transaction. The source
  * may have advanced since the separate single-publication transaction ended.
@@ -63,12 +67,12 @@ function createRuntime(ports,{validators}={}){
   }
   async function publish(){return stage('publish',async repo=>{
     const publication=await repo.publication(),now=clock();
-    const {decisions,issues,attempted,inputAsOf}=await assessInputs(repo,publication,now);
+    const {decisions,issues,attempted,inputAsOf,handicapCalibration}=await assessInputs(repo,publication,now);
     const bound=await bindCurrentDecisions(repo,decisions,clock);
     const accepted=bound.accepted;issues.push(...bound.issues);
     for(const issue of issues)await repo.issue('publish',issue);
     requireBeforeCutoff(accepted,clock());
-    return {publication,decisionIds:accepted.map(d=>d.decisionId),inputAsOf,basePublicationAsOf:publication.committedAt,issues:issues.length,attempted};
+    return {publication,decisionIds:accepted.map(d=>d.decisionId),inputAsOf,basePublicationAsOf:publication.committedAt,issues:issues.length,attempted,handicapCalibration:{profileHash:handicapCalibration.profileHash,sampleRows:handicapCalibration.sampleRows,activeGroups:Object.values(handicapCalibration.groups).filter(g=>g.active).length}};
   });}
   async function combos(){return stage('combos',async repo=>{
     const publication=await repo.publication(),now=clock();
@@ -90,7 +94,7 @@ function createRuntime(ports,{validators}={}){
       else previews.push(selection);
     }
     requireBeforeCutoff(created,clock());
-    return {publication,previews,inputAsOf:assessed.inputAsOf,basePublicationAsOf:publication.committedAt,candidateCount:candidates.length,eligibleCount:assessed.decisions.length,bindingFailures:bound.issues.length};
+    return {publication,previews,inputAsOf:assessed.inputAsOf,basePublicationAsOf:publication.committedAt,candidateCount:candidates.length,eligibleCount:assessed.decisions.length,bindingFailures:bound.issues.length,handicapCalibration:{profileHash:assessed.handicapCalibration.profileHash,sampleRows:assessed.handicapCalibration.sampleRows,activeGroups:Object.values(assessed.handicapCalibration.groups).filter(g=>g.active).length}};
   });}
   async function settle(){return stage('settlement',async repo=>{
     const verify=validators || (()=>{const m=require('../../src/services/matchLifecycle.cjs');return {isFinal:m.isOfficialSportteryFinal,isVoid:m.isOfficialSportteryVoid};})();
@@ -107,7 +111,8 @@ function createRuntime(ports,{validators}={}){
     const rawHeads=await repo.resultHeads();
     for(const e of rawHeads)if(!validResultEvent(e))quarantined.push({reason:'invalid-result-record',id:String(e?.eventId||'unknown')});
     const heads=new Map(rawHeads.filter(validResultEvent).map(e=>[e.eventKey,e]));
-    const singles=decisions.map(d=>({decision:d,settlement:settleDecision(d,heads.get(key(d)))}));
+    const singles=decisions.map(d=>{const event=heads.get(key(d));return {decision:d,settlement:settleDecision(d,event),handicapSettlement:settleHandicapDecision(d,event)};});
+    const handicapCalibration=buildHandicapCalibration(decisions,heads,day(now));
     const records=await repo.frozenCombos();const ids=[...new Set(records.flatMap(c=>Array.isArray(c?.decisionIds)?c.decisionIds:[]))];
     const bindings=new Map((await repo.decisions(ids)).map(d=>[d.decisionId,d]));
     const combos=[];
@@ -128,7 +133,7 @@ function createRuntime(ports,{validators}={}){
       inputAsOf:[lanes.publish?.inputAsOf,lanes.combos?.inputAsOf].filter(v=>Number.isFinite(time(v))).sort((a,b)=>time(b)-time(a))[0]||null,resultAsOf:lanes.settlement?.lastSuccessAt||null,lanes,
       current:selected,previews,todayCombos:today,overlapDecisionIds:overlap,
       review:{singles:singles.slice(0,100),combos:combos.slice(0,100),limit:100,
-        statistics:{single:summary(singles,true),two:summary(combos.filter(r=>r.combo.size===2)),three:summary(combos.filter(r=>r.combo.size===3))},
+        statistics:{single:summary(singles,true),handicap:handicapSummary(singles),two:summary(combos.filter(r=>r.combo.size===2)),three:summary(combos.filter(r=>r.combo.size===3))},handicapCalibration,
         definition:'latest-published-decision-before-cutoff-per-event; combos-use-exact-bound-versions'},
       excludedCorruptRecords:quarantined.length,modelValidation:'unvalidated',legacyRecordsReclassified:0};
     await repo.saveView(center);
