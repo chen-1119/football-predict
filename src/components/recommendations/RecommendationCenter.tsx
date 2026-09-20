@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { RefreshCw, ChevronDown } from 'lucide-react';
 import { useRecommendationCenter } from '../../hooks/useRecommendationCenter';
-import { quoteSourceLabel, comboLaneFresh, comboPreviewForSize, type Decision, type Settlement, type Combo, type Summary, type Outcome, type HandicapCalibrationProfile } from '../../services/recommendationCenterView';
+import { quoteSourceLabel, comboLaneFresh, comboPreviewForSize, primarySelectionSummary, type Decision, type Settlement, type Combo, type Summary, type Outcome, type HandicapCalibrationProfile } from '../../services/recommendationCenterView';
 import '../../styles/recommendation-center.css';
 
 type Language='zh'|'en';
@@ -35,6 +35,14 @@ function HandicapBlock({d,settlement,language}:{d:Decision;settlement?:Settlemen
       {h.marketReference?.selectedOdds&&<span>{zh?'让球SP':'HHAD SP'} {h.marketReference.selectedOdds.toFixed(2)}</span>}</div>
   </section>;
 }
+function PrimaryPickHeader({d,language}:{d:Decision;language:Language}){
+  const zh=language==='zh',summary=primarySelectionSummary(d),h=summary.handicap;
+  return <div className="rc-primary-picks" aria-label={zh?'本场两个首选方向':'Primary 1X2 and handicap picks'}>
+    <div className="rc-primary-pick rc-primary-pick--had"><span>{zh?'胜平负首选':'1X2 primary'}</span><strong>{title(summary.had.code,zh)}</strong><small>SP {summary.had.odds.toFixed(2)} · {(summary.had.probability*100).toFixed(1)}%</small></div>
+    <span className="rc-primary-divider" aria-hidden="true">｜</span>
+    <div className="rc-primary-pick rc-primary-pick--hhad"><span>{zh?'让球首选':'Handicap primary'}</span>{h?<><strong>{h.lineText} · {handicapTitle(h.code,zh)}</strong><small>{(h.probability*100).toFixed(1)}%{h.odds?(' · SP '+h.odds.toFixed(2)):''}{h.calibrated?(zh?' · 已校准':' · calibrated'):''}</small></>:<><strong>—</strong><small>{zh?'等待有效让球线与净胜球数据':'Awaiting valid handicap inputs'}</small></>}</div>
+  </div>;
+}
 function RecordDetails({d,language,onSelectMatch}:{d:Decision;language:Language;onSelectMatch:(id:string)=>void}){
   const zh=language==='zh';
   return <details className="rc-details"><summary><ChevronDown size={14} aria-hidden="true"/>{zh?'分析依据与冻结版本':'Evidence & frozen version'}</summary>
@@ -46,7 +54,8 @@ function RecordDetails({d,language,onSelectMatch}:{d:Decision;language:Language;
 function Pick({d,settlement,handicapSettlement,language,onSelectMatch}:{d:Decision;settlement:Settlement;handicapSettlement?:Settlement|null;language:Language;onSelectMatch:(id:string)=>void}){
   const zh=language==='zh';
   return <article className="rc-pick"><header><span>{d.matchNo||d.sourceMatchId} · {format(d.kickoffTime,language)}</span><span className={`rc-state rc-state--${settlement.state}`}>{resultLabel(settlement.state,zh)}</span></header>
-    <div className="rc-pick__main"><div><h3>{d.homeTeamName} <span>vs</span> {d.awayTeamName}</h3><small>{zh?'发布':'Published'} {format(d.publishedAt,language)}</small></div><div className="rc-selection"><span>{zh?'唯一首选':'Primary pick'}</span><strong>{title(d.tipCode,zh)}</strong><small>SP {d.odds.toFixed(2)}</small><small>{quoteSourceLabel(d,language)}</small></div></div>
+    <PrimaryPickHeader d={d} language={language}/>
+    <div className="rc-pick__main"><div><h3>{d.homeTeamName} <span>vs</span> {d.awayTeamName}</h3><small>{zh?'发布':'Published'} {format(d.publishedAt,language)} · {quoteSourceLabel(d,language)}</small></div></div>
     <div className="rc-probabilities" aria-label={zh?'发布时胜平负概率':'Published outcome probabilities'}>{(['1','X','2'] as const).map(c=><div key={c} className={c===d.tipCode?'is-selected':''}><span>{title(c,zh)}</span><strong>{(d.probabilities[c]*100).toFixed(1)}%</strong><span className="rc-bar"><i style={{width:`${d.probabilities[c]*100}%`}}/></span></div>)}</div>
     <HandicapBlock d={d} settlement={handicapSettlement} language={language}/>
     {settlement.score&&<p className="rc-score">{zh?'90分钟赛果':'90-minute result'} <strong>{settlement.score}</strong></p>}

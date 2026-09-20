@@ -163,6 +163,14 @@ export function comboPreviewForSize(data:RecommendationCenterData|undefined|null
   return data.previews.find(c=>c.size===size&&c.businessDate===data.businessDate&&visiblePreview(c,now));
 }
 
+export function primarySelectionSummary(d:Pick<Decision,'tipCode'|'odds'|'modelProbability'|'handicapAnalysis'>){
+  const h=d.handicapAnalysis;
+  return {
+    had:{code:d.tipCode,odds:d.odds,probability:d.modelProbability},
+    handicap:h?{code:h.tipCode,line:h.handicapLine,lineText:h.handicapLineText,probability:h.modelProbability,odds:h.marketReference?.selectedOdds??null,calibrated:h.historicalCalibration?.applied===true}:null,
+  };
+}
+
 export function quoteSourceLabel(d:Pick<Decision,'quoteSource'>,language:'zh'|'en'):string {
   if(d.quoteSource==='500.com:jczq:HAD')return language==='zh'?'500竞彩页面转录':'500 JCZQ SP copy';
   if(/^sporttery:had(?:$|:)/i.test(d.quoteSource||''))return language==='zh'?'竞彩网来源SP':'Sporttery-sourced SP';
