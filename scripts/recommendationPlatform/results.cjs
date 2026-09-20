@@ -10,8 +10,6 @@ function fingerprint(value) {
   return hash({ state:value.state, scoreHome:value.scoreHome, scoreAway:value.scoreAway,
     homeTeamId:value.homeTeamId, awayTeamId:value.awayTeamId, revision:value.revision });
 }
-/** Trusted normalization once for both products. Unknown/revoked rows do not
- * erase previously observed results. Same-revision conflicts stay disputed. */
 function collectResults(history, previous, { isFinal, isVoid }, now) {
   const grouped = new Map(), issues = [];
   for (const row of history) {
@@ -38,7 +36,6 @@ function collectResults(history, previous, { isFinal, isVoid }, now) {
     if (old && rev < old.revision) continue;
     const latest = rows.filter(r=>r.revision===rev);
     const states = new Set(latest.map(fingerprint));
-    // A conflict cannot be resolved by simply dropping one row next cycle.
     if (old && old.revision===rev) states.add(fingerprint(old));
     let next = latest[0];
     if (states.size>1 || (old?.revision===rev && old.state==='DISPUTED')) next={...next,state:'DISPUTED',scoreHome:null,scoreAway:null};
@@ -51,17 +48,33 @@ function collectResults(history, previous, { isFinal, isVoid }, now) {
   }
   return { updates, issues };
 }
-function settleDecision(decision, event) {
+function identityGuard(decision,event){
   if (!event) return { state:'PENDING',score:null,resultEventId:null };
   if(key(decision)!==key(event)) return {state:'DISPUTED',score:null,resultEventId:event.eventId,reason:'event-identity-conflict'};
-  if ((event.homeTeamId && event.homeTeamId!==decision.homeTeamId) || (event.awayTeamId && event.awayTeamId!==decision.awayTeamId)) return {state:'DISPUTED',score:null,resultEventId:event.eventId,reason:'team-identity-conflict'};
+  if ((event.homeTeamId && event.homeTeamId!==decision.homeTeamId) || (event.awayTeamId && event.awayTeamId!==decision.awayTeamId))
+    return {state:'DISPUTED',score:null,resultEventId:event.eventId,reason:'team-identity-conflict'};
   if (event.state==='VOID' || event.state==='DISPUTED') return {state:event.state,score:null,resultEventId:event.eventId};
   if (event.state!=='FINAL') return {state:'PENDING',score:null,resultEventId:null};
+  return null;
+}
+function settleDecision(decision, event) {
+  const guarded=identityGuard(decision,event); if(guarded)return guarded;
   const line = decision.market === 'HHAD' ? Number(decision.handicapLine) : 0;
   if (!Number.isInteger(line) || ![event.scoreHome,event.scoreAway].every(Number.isSafeInteger)) return {state:'DISPUTED',score:null,resultEventId:event.eventId};
   const adjusted=event.scoreHome+line;
   const actual=adjusted>event.scoreAway?'1':adjusted<event.scoreAway?'2':'X';
   return {state:actual===decision.tipCode?'WON':'LOST',actual,score:`${event.scoreHome}-${event.scoreAway}`,resultEventId:event.eventId,revision:event.revision};
+}
+function settleHandicapDecision(decision,event){
+  if(!decision?.handicapAnalysis?.tipCode)return null;
+  const guarded=identityGuard(decision,event);if(guarded)return guarded;
+  const line=Number(decision.handicapAnalysis.handicapLine);
+  if(!Number.isSafeInteger(line)||line===0||![event.scoreHome,event.scoreAway].every(Number.isSafeInteger))
+    return {state:'DISPUTED',score:null,resultEventId:event.eventId,reason:'handicap-line-invalid'};
+  const adjusted=event.scoreHome+line;
+  const actual=adjusted>event.scoreAway?'1':adjusted<event.scoreAway?'2':'X';
+  return {state:actual===decision.handicapAnalysis.tipCode?'WON':'LOST',actual,score:`${event.scoreHome}-${event.scoreAway}`,
+    resultEventId:event.eventId,revision:event.revision,handicapLine:line};
 }
 function settleCombo(combo, heads) {
   if (!Array.isArray(combo?.legs) || ![2,3].includes(combo.size) || combo.legs.length!==combo.size) throw new Error('Invalid frozen combo');
@@ -88,9 +101,13 @@ function summary(rows, modelMetrics=false) {
   counts.hitRate=counts.settled?counts.won/counts.settled:null;
   return {...counts,...(modelMetrics?{scored,brier:scored?brier/scored:null,logLoss:scored?logLoss/scored:null,marketBrier:scored?marketBrier/scored:null}:{} )};
 }
+function handicapSummary(rows){
+  const eligible=rows.filter(row=>row.decision?.handicapAnalysis?.tipCode);
+  return summary(eligible.map(row=>({decision:row.decision,settlement:row.handicapSettlement||{state:'PENDING'}})),false);
+}
 function validResultEvent(e){
   try{return Boolean(e && ['FINAL','VOID','DISPUTED'].includes(e.state) && Number.isSafeInteger(e.revision) && e.revision>=0
     && e.eventKey===key(e) && e.stateHash===fingerprint(e) && e.eventId===`result_${hash([e.eventKey,e.stateHash,e.previousEventId])}`
     && (e.state!=='FINAL'||[e.scoreHome,e.scoreAway].every(n=>Number.isSafeInteger(n)&&n>=0)));}catch{return false;}
 }
-module.exports={key,collectResults,settleDecision,settleCombo,summary,validResultEvent};
+module.exports={key,collectResults,settleDecision,settleHandicapDecision,settleCombo,summary,handicapSummary,validResultEvent};
