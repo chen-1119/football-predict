@@ -23,7 +23,7 @@ interface NavbarProps {
   openGlossary: () => void;
 }
 
-type NavTab = 'predictions' | 'fixtures' | 'arena' | 'review' | 'leagues';
+type NavTab = 'best' | 'fixtures' | 'arena' | 'review' | 'leagues';
 type DataStatus = 'locked' | 'ready' | 'syncing' | 'watch' | 'error';
 
 const navItems: Array<{
@@ -31,7 +31,7 @@ const navItems: Array<{
   labelKey: 'todayAnalysis' | 'fixtures' | 'arena' | 'review' | 'topLeagues';
   icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
 }> = [
-  { key: 'predictions', labelKey: 'todayAnalysis', icon: ListChecks },
+  { key: 'best', labelKey: 'todayAnalysis', icon: ListChecks },
   { key: 'fixtures', labelKey: 'fixtures', icon: CalendarDays },
   { key: 'review', labelKey: 'review', icon: BookOpen },
   { key: 'arena', labelKey: 'arena', icon: Target },
@@ -60,7 +60,8 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
     topLeagues: { zh: '联赛', en: 'Leagues' },
     brand: { zh: '90分钟足球', en: '90’ Football' },
     subtitle: { zh: '赛程 · 数据 · 分析', en: 'Fixtures · Data · Analysis' },
-    todayAnalysis: { zh: '分析', en: 'Analysis' },
+    todayAnalysis: { zh: '推荐', en: 'Picks' },
+    matchAnalysis: { zh: '赛前资料', en: 'Pre-match data' },
     fixtures: { zh: '赛程', en: 'Fixtures' },
     arena: { zh: '策略', en: 'Strategy' },
     review: { zh: '复盘', en: 'Review' },
@@ -91,7 +92,8 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
 
   const t = (key: keyof typeof translations) => translations[key][language] || '';
   const activeTab = currentTab === 'detail' ? 'fixtures' : currentTab;
-  const toolsActive = currentTab === 'tools' || currentTab === 'best' || currentTab === 'generator';
+  const toolsActive = currentTab === 'tools' || currentTab === 'generator';
+  const moreActive = toolsActive || currentTab === 'predictions';
   const publicationTransition = [
     'generation-sqlite-mismatch',
     'generation-pair-refresh',
@@ -234,7 +236,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
     <>
       <header className="app-topbar">
         <div className="container app-topbar-inner">
-          <button type="button" className="app-brand" onClick={() => setCurrentTab('predictions')} aria-label={t('brand')}>
+          <button type="button" className="app-brand" onClick={() => setCurrentTab('best')} aria-label={t('brand')}>
             <span className="app-brand-mark" aria-hidden="true">90</span>
             <span className="app-brand-copy">
               <span className="app-brand-title">{t('brand')}</span>
@@ -255,7 +257,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
             </span>
 
             <div className="app-more" ref={moreRootRef}>
-              <button ref={moreTriggerRef} type="button" className={`app-more-trigger ${isMoreOpen || toolsActive ? 'is-active' : ''}`}
+              <button ref={moreTriggerRef} type="button" className={`app-more-trigger ${isMoreOpen || moreActive ? 'is-active' : ''}`}
                 aria-label={t('moreMenu')} aria-haspopup="menu" aria-expanded={isMoreOpen} aria-controls="app-more-menu"
                 onClick={() => setIsMoreOpen((current) => !current)}
                 onKeyDown={(event) => {
@@ -284,7 +286,11 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
                     onClick={() => selectFromMenu(() => setLanguage(language === 'zh' ? 'en' : 'zh'))}>
                     <Globe size={17} /><span>{t('language')}</span>
                   </button>
-                  {currentUser && <button ref={(node) => { menuItemRefs.current[3] = node; }} type="button" role="menuitem" className="is-danger"
+                  <button ref={(node) => { menuItemRefs.current[3] = node; }} type="button" role="menuitem"
+                    className={currentTab === 'predictions' ? 'is-active' : undefined} onClick={() => selectFromMenu(() => setCurrentTab('predictions'))}>
+                    <ListChecks size={17} /><span>{t('matchAnalysis')}</span>
+                  </button>
+                  {currentUser && <button ref={(node) => { menuItemRefs.current[4] = node; }} type="button" role="menuitem" className="is-danger"
                     onClick={() => selectFromMenu(logout)}><LogOut size={17} /><span>{t('logout')}</span></button>}
                 </div>
               )}
