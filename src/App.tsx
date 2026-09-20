@@ -216,17 +216,17 @@ function ToolsHub({ openGlossary }: { openGlossary: () => void }) {
       key: 'formal',
       title: language === 'zh' ? '赛前推荐' : 'Pre-match picks',
       description: language === 'zh'
-        ? '查看官方在售、正期望且通过硬风险过滤的今日精选；正式命中统计保持独立。'
-        : 'Today’s selected on-sale positive-EV picks; audited formal statistics remain separate.',
+        ? '查看已发布单场、让球分析与每日串关；模型保持参考／影子状态。'
+        : 'Published singles, handicap analysis and daily combos; the model remains unvalidated.',
       action: language === 'zh' ? '打开赛前推荐' : 'Open pre-match picks',
       onClick: () => navigate('/best')
     },
     {
       key: 'combo',
-      title: language === 'zh' ? '正式组合工具' : 'Formal combo tool',
+      title: language === 'zh' ? '每日串关' : 'Daily combos',
       description: language === 'zh'
-        ? '只消费已开售的正式推荐；正式池不足时不会生成组合。'
-        : 'Consumes only on-sale formal picks and stays paused when the formal pool is insufficient.',
+        ? '查看绑定单场版本的2串1和3串1；没有满足SP门槛的组合时明确显示原因。'
+        : 'View 2-leg and 3-leg combos bound to published singles, with clear availability reasons.',
       action: language === 'zh' ? '打开组合工具' : 'Open combo tool',
       onClick: () => navigate('/betslip')
     },
@@ -334,7 +334,7 @@ function RoutedContent() {
   const handleAuthSuccess = () => {
     const state = location.state as { from?: { pathname?: string; search?: string } } | null;
     const from = state?.from;
-    navigate(from?.pathname ? `${from.pathname}${from.search || ''}` : '/predictions', { replace: true });
+    navigate(from?.pathname ? `${from.pathname}${from.search || ''}` : '/best', { replace: true });
   };
 
   return (
@@ -347,7 +347,7 @@ function RoutedContent() {
       </div>
       <Navbar
         currentTab={getTabFromPath(location.pathname)}
-        setCurrentTab={(tab) => navigate(tabPaths[tab] || '/predictions')}
+        setCurrentTab={(tab) => navigate(tabPaths[tab] || '/best')}
         openGlossary={() => setIsGlossaryOpen(true)}
       />
 
@@ -355,7 +355,7 @@ function RoutedContent() {
         <RouteErrorBoundary key={location.pathname}>
           <Suspense fallback={<LoadingPanel />}>
             <Routes>
-              <Route path="/" element={<Navigate to="/predictions" replace />} />
+              <Route path="/" element={<Navigate to="/best" replace />} />
               <Route
                 path="/predictions"
                 element={(
@@ -445,7 +445,7 @@ function RoutedContent() {
                   </RequireAccess>
                 )}
               />
-              <Route path="*" element={<Navigate to="/predictions" replace />} />
+              <Route path="*" element={<Navigate to="/best" replace />} />
             </Routes>
           </Suspense>
         </RouteErrorBoundary>
