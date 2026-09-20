@@ -1,7 +1,7 @@
 'use strict';
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const {marginDistribution,buildHandicapMarginDecision,validHandicapMarginDecision}=require('../src/services/handicapMarginDecision.cjs');
+const {marginDistribution,conditionalHandicapDistribution,buildHandicapMarginDecision,validHandicapMarginDecision}=require('../src/services/handicapMarginDecision.cjs');
 const {buildHandicapCalibration,calibrateHandicapProbabilities,lineGroup}=require('../src/services/handicapCalibration.cjs');
 const {makeDecision,validDecision}=require('../scripts/recommendationPlatform/decision.cjs');
 const {settleHandicapDecision,handicapSummary}=require('../scripts/recommendationPlatform/results.cjs');
@@ -77,7 +77,7 @@ function calibrationFixture(count,{line=-2,raw={'1':.35,X:.25,'2':.40},score=[3,
     const sourceMatchId='cal'+i,eventVersion='2026-08-'+String((i%28)+1).padStart(2,'0')+'T10:00:00.000Z';
     const decisionId='d'+i,businessDate='2026-08-'+String((i%28)+1).padStart(2,'0');
     decisions.push({decisionId,sourceMatchId,eventVersion,businessDate,publishedAt:eventVersion,homeTeamId:'h'+i,awayTeamId:'a'+i,tipCode:'1',
-      handicapAnalysis:{version:'handicap-margin-v1',handicapLine:line,rawProbabilities:raw,probabilities:raw,tipCode:'2'}});
+      handicapAnalysis:{version:'handicap-margin-v2',companionPolicyVersion:'straight-conditioned-margin-v1',handicapLine:line,companionRawProbabilities:raw,rawProbabilities:raw,probabilities:raw,tipCode:'2'}});
     const eventKey=JSON.stringify([sourceMatchId,eventVersion]);
     heads.set(eventKey,{eventKey,state:'FINAL',sourceMatchId,eventVersion,scoreHome:score[0],scoreAway:score[1],homeTeamId:'h'+i,awayTeamId:'a'+i});
   }
@@ -118,4 +118,32 @@ test('one corrupt historical decision is excluded without blocking calibration o
   decisions.push({decisionId:'broken',businessDate:'2026-08-01',publishedAt:'bad',eventVersion:'bad',handicapAnalysis:{handicapLine:-2,probabilities:{'1':.3,X:.2,'2':.5}},tipCode:'1'});
   const profile=buildHandicapCalibration(decisions,heads,'2026-09-20');
   assert.equal(profile.sampleRows,24);
+});
+
+test('home-win plus minus-one never publishes handicap-away as the companion pick',()=>{
+  const h=buildHandicapMarginDecision(match(.6,.2,-1),{now:NOW,cutoffTime:'2026-09-20T09:30:00Z',straightTipCode:'1'});
+  assert.equal(h.overallTipCode,'2');
+  assert.equal(h.tipCode,'X');
+  assert.equal(h.probabilities['2'],0);
+  assert.equal(h.probabilityBasis,'conditional-on-straight-primary');
+});
+test('home-win plus minus-two may legitimately resolve to handicap-away when the model expects only a one-goal win',()=>{
+  const h=buildHandicapMarginDecision(match(.6,.1,-2),{now:NOW,cutoffTime:'2026-09-20T09:30:00Z',straightTipCode:'1'});
+  assert.equal(h.tipCode,'2');
+  assert.ok(h.probabilities['2']>.7);
+  assert.equal(h.relation,'home-not-cover');
+});
+test('conditional margin support is mathematically coherent with the frozen straight pick',()=>{
+  const home=conditionalHandicapDistribution(.6,.2,-1,'1');
+  assert.equal(home.probabilities['2'],0);
+  const away=conditionalHandicapDistribution(.6,1.8,1,'2');
+  assert.equal(away.probabilities['1'],0);
+});
+test('calibration v2 ignores matches where the frozen HAD thesis missed',()=>{
+  const {decisions,heads}=calibrationFixture(24);
+  const first=decisions[0],eventKey=JSON.stringify([first.sourceMatchId,first.eventVersion]);
+  const old=heads.get(eventKey);heads.set(eventKey,{...old,scoreHome:0,scoreAway:1});
+  const profile=buildHandicapCalibration(decisions,heads,'2026-09-20');
+  assert.equal(profile.sampleRows,23);
+  assert.equal(profile.version,'handicap-calibration-v2');
 });
