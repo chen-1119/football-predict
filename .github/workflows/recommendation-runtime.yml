@@ -46,7 +46,7 @@ jobs:
           node-version: '22.22.1'
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: node --test tests/recommendation-unified.test.cjs tests/recommendation-center-view.test.cjs tests/recommendation-combo-availability.test.cjs tests/recommendation-warehouse-sp.test.cjs tests/recommendation-warehouse-sp-view.test.cjs tests/recommendation-live-market.test.cjs
+      - run: node --test tests/recommendation-unified.test.cjs tests/recommendation-center-view.test.cjs tests/recommendation-combo-availability.test.cjs tests/recommendation-warehouse-sp.test.cjs tests/recommendation-warehouse-sp-view.test.cjs tests/recommendation-live-market.test.cjs tests/recommendation-handicap-margin.test.cjs
       - run: node --test tests/market-collector-policy.test.cjs tests/market-store.test.cjs tests/market-signal-bridge.test.cjs tests/market-http.test.cjs tests/market-features.test.cjs
       - run: node --test tests/recommendation-render-clock.test.cjs
       - run: node scripts/verifyUnifiedRecommendationPostgres.cjs
