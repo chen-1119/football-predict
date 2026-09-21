@@ -1,9 +1,14 @@
 import type { Team } from './mockData';
+import crestCatalog from './teamCrestCatalog.json';
+import { teamBadgeAssets } from './teamBadgeAssets';
 
 export type TeamVisualType = 'flag' | 'crest' | 'crest-placeholder';
 
-type TeamVisual = {
+export type TeamVisual = {
   logo: string;
+  candidates: string[];
+  source: string;
+  nativeFlag: string;
   label: string;
   fallbackText: string;
   logoType: TeamVisualType;
@@ -91,6 +96,16 @@ const CLUB_CREST_BY_NAME: Record<string, string> = {
 };
 
 const FLAG_CODE_BY_NAME: Record<string, string> = {
+  philippines: 'ph', 菲律宾: 'ph',
+  unitedarabemirates: 'ae', uae: 'ae', 阿联酋: 'ae',
+  maldives: 'mv', 马尔代夫: 'mv',
+  vietnam: 'vn', 越南: 'vn',
+  indonesia: 'id', 印度尼西亚: 'id', 印尼: 'id',
+  malaysia: 'my', 马来西亚: 'my',
+  hongkong: 'hk', 中国香港: 'hk', 香港: 'hk',
+  macau: 'mo', macao: 'mo', 中国澳门: 'mo', 澳门: 'mo',
+  northkorea: 'kp', 朝鲜: 'kp',
+  kosovo: 'xk', 科索沃: 'xk',
   argentina: 'ar',
   algeria: 'dz',
   australia: 'au',
@@ -273,150 +288,67 @@ const FALLBACK_TEAM: Team = {
   color: '#64748b'
 };
 
-export const isImageLogo = (logo: string) => /^(https?:\/\/|\/|\.\/)/.test(logo);
+
+export const isImageLogo = (logo: string) => /^(https?:\/\/[^/]|\/(?!\/)|\.\/)/i.test(logo) || /^data:image\/(?:png|webp|jpeg);base64,[a-z0-9+/]+=*$/i.test(logo);
 export const isFlagEmoji = (logo: string) => /\p{Regional_Indicator}/u.test(logo);
 
-const normalizeToken = (value?: string) => (
-  String(value || '')
-    .trim()
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, '')
-    .replace(/[·.()（）'’\-_/]/g, '')
-    .replace(/国家队|男子|男足|女子|女足|队$/g, '')
-);
-
-const isoFromFlagUrl = (value?: string) => {
-  const match = String(value || '').match(/flagcdn\.com\/(?:w\d+\/)?([a-z]{2}(?:-[a-z]{3})?)\.png/i);
-  return match?.[1]?.toLowerCase() || '';
-};
+const normalizeToken = (value?: string) => String(value || '').trim().toLowerCase()
+  .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/\s+/g, '').replace(/[·.()（）'’\-_/]/g, '');
+const countryToken = (value?: string) => normalizeToken(value)
+  .replace(/(?:国家队|nationalteam|亚运会?(?:男足|女足|男子|女子)?|亚运(?:男足|女足|男子|女子)?|亚足|男足|女足|男子|女子|women|woman|men|u\d{2}|under\d{2}|队)+$/gi, '');
+const isoFromFlagUrl = (value?: string) => String(value || '').match(/^https:\/\/flagcdn\.com\/(?:w\d+\/)?([a-z]{2}(?:-[a-z]{3})?)\.(?:png|svg|webp)$/i)?.[1]?.toLowerCase() || '';
+const validCountryCodes = new Set([...Object.values(FLAG_CODE_BY_NAME), 'xk']);
+const flagEmojiForCode = (code: string) => /^[a-z]{2}$/i.test(code)
+  ? Array.from(code.toUpperCase()).map(char => String.fromCodePoint(0x1f1e6 + char.charCodeAt(0) - 65)).join('') : '';
 const regionalFlag = (...tags: number[]) => String.fromCodePoint(0x1f3f4, ...tags, 0xe007f);
-
-const FLAG_FALLBACK_BY_CODE: Record<string, string> = {
+const flagFallbackForCode = (code: string) => ({
   'gb-eng': regionalFlag(0xe0067, 0xe0062, 0xe0065, 0xe006e, 0xe0067),
-  'gb-nir': '🇬🇧',
   'gb-sct': regionalFlag(0xe0067, 0xe0062, 0xe0073, 0xe0063, 0xe0074),
   'gb-wls': regionalFlag(0xe0067, 0xe0062, 0xe0077, 0xe006c, 0xe0073),
-  xk: 'XK'
-};
-
-const flagEmojiForCode = (code: string) => {
-  const normalized = code.toUpperCase();
-  if (!/^[A-Z]{2}$/.test(normalized)) return '';
-  return Array.from(normalized)
-    .map((char) => String.fromCodePoint(0x1f1e6 + char.charCodeAt(0) - 65))
-    .join('');
-};
-
-const flagFallbackForCode = (code: string) => {
-  const normalized = code.toLowerCase();
-  const mapped = FLAG_FALLBACK_BY_CODE[normalized];
-  if (mapped) return mapped;
-  return flagEmojiForCode(normalized) || code.toUpperCase();
-};
-const flagUrl = (code: string) => `https://flagcdn.com/w80/${code.toLowerCase()}.png`;
-const findClubCrest = (...values: Array<string | undefined>) => {
-  for (const value of values) {
-    const raw = String(value || '').trim();
-    if (!raw) continue;
-    const direct = CLUB_CREST_BY_NAME[raw] || CLUB_CREST_BY_NAME[normalizeToken(raw)];
-    if (direct) return direct;
-  }
-  return '';
-};
+  'gb-nir': '🇬🇧',
+} as Record<string, string>)[code] || flagEmojiForCode(code);
+const flagUrl = (code: string) => 'https://flagcdn.com/w80/' + code + '.png';
+const namesOf = (team: Team) => [team.name.zh, team.name.en, team.shortName.zh, team.shortName.en];
+const catalogByName = new Map(crestCatalog.flatMap(entry => entry.aliases.map(alias => [normalizeToken(alias), entry] as const)));
+const legacyByName = new Map(Object.entries(CLUB_CREST_BY_NAME).map(([name, url]) => [normalizeToken(name), url]));
 
 export function resolveCountryIso(...values: Array<string | undefined>) {
   for (const value of values) {
     const raw = String(value || '').trim();
-    if (!raw) continue;
-    const fromFlagUrl = isoFromFlagUrl(raw);
-    if (fromFlagUrl) return fromFlagUrl;
-    const normalized = normalizeToken(raw);
-    const direct = FLAG_CODE_BY_NAME[raw] || FLAG_CODE_BY_NAME[normalized];
-    if (direct) return direct;
-    if (/^[a-z]{2}(-[a-z]{3})?$/i.test(raw)) return raw.toLowerCase();
+    const fromUrl = isoFromFlagUrl(raw);
+    if (fromUrl) return fromUrl;
+    const normalized = countryToken(raw);
+    const known = FLAG_CODE_BY_NAME[raw] || FLAG_CODE_BY_NAME[normalized];
+    if (known) return known;
+    if (validCountryCodes.has(raw.toLowerCase())) return raw.toLowerCase();
   }
   return '';
 }
 
 export function resolveTeamVisual(team?: Team): TeamVisual {
-  const safeTeam = team ?? FALLBACK_TEAM;
-  const rawLogo = safeTeam.logo || '';
-  const label = safeTeam.shortName.zh || safeTeam.shortName.en || safeTeam.name.zh || safeTeam.name.en || '球队';
-  // Club badges must never manufacture a crest from a team name or initials.
-  // TeamBadge owns the visual fallback and renders a neutral, text-free shield.
-  const fallbackText = '';
-  const isoFromName = resolveCountryIso(safeTeam.shortName.zh, safeTeam.name.zh, safeTeam.shortName.en, safeTeam.name.en);
-  const clubCrest = findClubCrest(safeTeam.shortName.zh, safeTeam.name.zh, safeTeam.shortName.en, safeTeam.name.en, rawLogo);
-
-  if (isoFromName && (safeTeam.logoType === 'flag' || rawLogo.includes('flagcdn.com') || !isImageLogo(rawLogo))) {
-    return {
-      logo: flagUrl(isoFromName),
-      label,
-      fallbackText: flagFallbackForCode(isoFromName),
-      logoType: 'flag',
-      isImage: true
-    };
-  }
-
-  if (clubCrest && !rawLogo.includes('flagcdn.com')) {
-    return {
-      logo: clubCrest,
-      label,
-      fallbackText,
-      logoType: 'crest',
-      isImage: true
-    };
-  }
-
-  if (isImageLogo(rawLogo)) {
-    const flagIso = isoFromFlagUrl(rawLogo);
-    if (flagIso) {
-      return {
-        logo: rawLogo,
-        label,
-        fallbackText: flagFallbackForCode(flagIso),
-        logoType: 'flag',
-        isImage: true
-      };
-    }
-
-    return {
-      logo: rawLogo,
-      label,
-      fallbackText,
-      logoType: safeTeam.logoType || (rawLogo.includes('flagcdn.com') ? 'flag' : 'crest'),
-      isImage: true
-    };
-  }
-
-  if (isFlagEmoji(rawLogo)) {
-    return {
-      logo: rawLogo,
-      label,
-      fallbackText,
-      logoType: 'flag',
-      isImage: false
-    };
-  }
-
-  const iso = resolveCountryIso(rawLogo);
-  if (iso) {
-    return {
-      logo: flagUrl(iso),
-      label,
-      fallbackText: flagFallbackForCode(iso),
-      logoType: 'flag',
-      isImage: true
-    };
-  }
-
-  return {
-    logo: '',
-    label,
-    fallbackText,
-    logoType: safeTeam.logoType || 'crest-placeholder',
-    isImage: false
-  };
+  const t = team ?? FALLBACK_TEAM;
+  const raw = String(t.logo || '').trim();
+  const names = namesOf(t);
+  const label = t.shortName.zh || t.shortName.en || t.name.zh || t.name.en || '球队';
+  // A shortened label may omit Women / U23. Full identity takes precedence.
+  const restrictedCategory = /女足|女子|青年|少年|预备|二队|(?:women|ladies|youth|reserves?)\b|u[\s-]?\d{2}\b|under[\s-]?\d{2}\b/i.test(t.name.zh + ' ' + t.name.en);
+  const clubNames = restrictedCategory ? [] : names;
+  const entry = clubNames.map(name => catalogByName.get(normalizeToken(name))).find(Boolean);
+  const legacy = clubNames.map(name => legacyByName.get(normalizeToken(name))).find(Boolean) || '';
+  const image = isImageLogo(raw) ? raw : '';
+  // Country metadata is not a club crest. Only a confirmed country name or
+  // explicitly typed national-team flag can choose a country illustration.
+  const namedIso = resolveCountryIso(...names.filter(name => !/^[a-z]{2}$/i.test(name)));
+  const iso = entry || legacy ? '' : namedIso || (t.logoType === 'flag' ? resolveCountryIso(raw) : '');
+  const logoType: TeamVisualType = entry || legacy ? 'crest' : iso || isFlagEmoji(raw) || t.logoType === 'flag' ? 'flag' : image ? 'crest' : 'crest-placeholder';
+  const cached = entry ? teamBadgeAssets[entry.key] : iso ? teamBadgeAssets['flag-' + iso] : '';
+  const candidates = [...new Set([cached,
+    // A supplied image is tried only within the resolved identity category.
+    logoType === 'crest' && isoFromFlagUrl(image) ? '' : image,
+    entry?.logoUrl, legacy, iso ? flagUrl(iso) : '',
+  ].filter((value): value is string => Boolean(value && isImageLogo(value))))];
+  const nativeFlag = iso ? flagFallbackForCode(iso) : isFlagEmoji(raw) ? raw : '';
+  return { logo: candidates[0] || nativeFlag, candidates, source: entry?.provider || (iso ? 'flagpedia' : legacy ? 'known-club' : image ? 'match-source' : 'unavailable'),
+    label, fallbackText: nativeFlag, nativeFlag, logoType, isImage: candidates.length > 0 };
 }

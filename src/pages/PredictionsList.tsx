@@ -2,13 +2,13 @@ import React, { useMemo, useState } from 'react';
 import { CalendarDays, ChevronDown, ChevronUp, RotateCcw, Search, SlidersHorizontal, Trophy, X } from 'lucide-react';
 import { useApp } from '../context/AppContextCore';
 import { formatBeijingDateString, getDateStringOffset } from '../services/mockData';
-import type { Country, League, Match, PredictionDetail, Team } from '../services/mockData';
+import type { Country, League, Match, PredictionDetail } from '../services/mockData';
 import { getOfficialMatchOdds, getPredictionMarketLabel, getPredictionTipDisplay, getResolvedMatchOdds, isPredictionOfficialResultPoolAvailable } from '../services/bettingDisplay';
-import { getCountryById, getLeagueById, getTeamById } from '../services/entities';
+import { getCountryById, getLeagueById } from '../services/entities';
 import { type MatchSignalCategory } from '../services/matchSignal';
 import { getVisiblePrediction } from '../services/predictionVisibility';
 import { buildPublicRecommendationCopy } from '../services/recommendationCopy';
-import { getDisplayRecommendation, getLiveDisplayRecommendation } from '../services/displayRecommendation';
+import { getDisplayRecommendation, getLiveDisplayRecommendation, getMatchDisplayTeam } from '../services/displayRecommendation';
 import type { DisplayRecommendation } from '../services/displayRecommendation';
 import { isOfficialRecommendationEligible } from '../services/officialRecommendationEligibility';
 import { selectOnSaleAnalysisReference } from '../services/analysisReferenceSelection';
@@ -301,31 +301,6 @@ const getDailyReviewStats = (matches: Match[], now = Date.now()): DailyReviewSta
 const formatDailyRate = (value: number | null, language: 'zh' | 'en') => (
   value === null ? (language === 'zh' ? '无样本' : 'N/A') : `${value}%`
 );
-
-const getMatchDisplayTeam = (match: Match, side: 'home' | 'away'): Team => {
-  const base = getTeamById(side === 'home' ? match.homeTeamId : match.awayTeamId);
-  const teamName = side === 'home' ? match.homeTeamName : match.awayTeamName;
-  const teamNameEn = side === 'home' ? match.homeTeamNameEn : match.awayTeamNameEn;
-  const teamLogo = side === 'home' ? match.homeTeamLogo : match.awayTeamLogo;
-  const teamLogoType = side === 'home' ? match.homeTeamLogoType : match.awayTeamLogoType;
-  const teamCountryIso = side === 'home' ? match.homeTeamCountryIso : match.awayTeamCountryIso;
-  const teamColor = side === 'home' ? match.homeTeamColor : match.awayTeamColor;
-  const teamValue = side === 'home' ? match.homeTeamValue : match.awayTeamValue;
-  const nameZh = teamName || base.name.zh;
-  const nameEn = teamNameEn || teamName || base.name.en;
-
-  return {
-    ...base,
-    name: { zh: nameZh, en: nameEn },
-    shortName: { zh: nameZh, en: nameEn },
-    logo: teamLogoType === 'flag' && teamCountryIso
-      ? teamCountryIso
-      : teamLogo || teamCountryIso || base.logo,
-    logoType: teamLogoType || base.logoType || (teamCountryIso ? 'flag' : undefined),
-    value: teamValue || base.value,
-    color: teamColor || base.color
-  };
-};
 
 const getMatchDisplayLeague = (match: Match): League => {
   const base = getLeagueById(match.leagueId);

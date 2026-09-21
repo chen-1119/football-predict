@@ -20,7 +20,7 @@ import { TeamBadge } from '../components/TeamBadge';
 import { WorldCupLastDance } from '../components/WorldCupLastDance';
 import { useApp } from '../context/AppContextCore';
 import { getPredictionTipDisplay, getSportteryPoolRows, type SportteryOddsPoolDisplay } from '../services/bettingDisplay';
-import { getDisplayRecommendation } from '../services/displayRecommendation';
+import { getDisplayRecommendation, getMatchDisplayTeam as getDisplayTeam } from '../services/displayRecommendation';
 import { getLeagueById, getTeamById } from '../services/entities';
 import type { Match, MultiLangString, Team } from '../services/mockData';
 import { WORLD_CUP_DATASET_SAFETY } from '../services/worldCupDatasetSafety';
@@ -402,31 +402,6 @@ const getMarketRecommendation = (
   }
 
   return null;
-};
-
-const getDisplayTeam = (match: Match, side: 'home' | 'away'): Team => {
-  const isHome = side === 'home';
-  const registered = getTeamById(isHome ? match.homeTeamId : match.awayTeamId);
-  const syncedName = isHome ? match.homeTeamName : match.awayTeamName;
-  const syncedNameEn = isHome ? match.homeTeamNameEn : match.awayTeamNameEn;
-  const syncedLogo = isHome ? match.homeTeamLogo : match.awayTeamLogo;
-  const syncedLogoType = isHome ? match.homeTeamLogoType : match.awayTeamLogoType;
-  const syncedCountryIso = isHome ? match.homeTeamCountryIso : match.awayTeamCountryIso;
-  const isUnknown = registered.shortName.zh === '未知' && registered.shortName.en === 'Unknown';
-
-  if (!isUnknown || !syncedName) return registered;
-
-  return {
-    id: isHome ? match.homeTeamId : match.awayTeamId,
-    name: { zh: syncedName, en: syncedNameEn || syncedName },
-    shortName: { zh: syncedName, en: syncedNameEn || syncedName },
-    logo: syncedLogoType === 'flag' && syncedCountryIso
-      ? syncedCountryIso
-      : syncedLogo || syncedCountryIso || syncedName,
-    logoType: syncedLogoType,
-    value: '',
-    color: isHome ? '#0f9f6e' : '#2563eb'
-  };
 };
 
 const MatchCard = ({

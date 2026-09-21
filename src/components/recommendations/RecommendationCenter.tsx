@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { RefreshCw, ChevronDown, Search, ArrowUpRight } from 'lucide-react';
 import { useRecommendationCenter } from '../../hooks/useRecommendationCenter';
+import { TeamBadge } from '../TeamBadge';
+import type { Team } from '../../services/mockData';
 import { quoteSourceLabel, comboLaneFresh, comboPreviewForSize, comboLegSelection, primarySelectionSummary, handicapAnalysisBasis, calibrationSampleBasis, type Decision, type Settlement, type Combo, type ComboSelection, type Summary, type Outcome, type HandicapCalibrationProfile, type HandicapBreakdown } from '../../services/recommendationCenterView';
 import '../../styles/recommendation-center.css';
 
@@ -10,6 +12,14 @@ const format=(s:string|null|undefined,lang:Language)=>s?new Intl.DateTimeFormat(
 const title=(code:Outcome,zh:boolean)=>code==='1'?(zh?'主胜':'Home'):code==='X'?(zh?'平局':'Draw'):(zh?'客胜':'Away');
 const resultLabel=(s:Settlement['state'],zh:boolean)=>({PENDING:zh?'待赛果':'Pending',WON:zh?'命中':'Won',LOST:zh?'未命中':'Lost',VOID:zh?'无效':'Void',DISPUTED:zh?'赛果待核':'Disputed'}[s]);
 const handicapTitle=(code:Outcome,zh:boolean)=>code==='1'?(zh?'让胜':'Handicap home'):code==='X'?(zh?'让平':'Handicap draw'):(zh?'让负':'Handicap away');
+function FrozenMatchTeams({d}:{d:Decision}){
+  // Badge lookup follows the archived names, never a replacement current fixture.
+  const team=(side:'home'|'away'):Team=>{
+    const name=side==='home'?d.homeTeamName:d.awayTeamName;
+    return {id:`${d.decisionId}:${side}`,name:{zh:name,en:name},shortName:{zh:name,en:name},logo:'',value:'',color:'#64748b'};
+  };
+  return <><span className="rc-team-label"><TeamBadge team={team('home')} size="sm" className="rc-team-badge"/><span className="rc-team-name">{d.homeTeamName}</span></span><span className="rc-team-versus">vs</span><span className="rc-team-label"><TeamBadge team={team('away')} size="sm" className="rc-team-badge"/><span className="rc-team-name">{d.awayTeamName}</span></span></>;
+}
 function handicapNarrative(d:Decision,zh:boolean){
   const h=d.handicapAnalysis;if(!h)return '';
   if(handicapAnalysisBasis(d)==='unconditional')return zh?'本条为旧版独立让球分析，依据完整净胜球分布；不以胜平负首选命中为前提。':'This archived standalone handicap analysis uses the full goal-margin distribution, without conditioning on the 1X2 pick.';
@@ -57,7 +67,7 @@ function RecordDetails({d,selection,language,onSelectMatch}:{d:Decision;selectio
 function Pick({d,settlement,handicapSettlement,language,onSelectMatch}:{d:Decision;settlement:Settlement;handicapSettlement?:Settlement|null;language:Language;onSelectMatch:(id:string)=>void}){
   const zh=language==='zh';
   return <article className="rc-pick"><header><span>{d.matchNo||d.sourceMatchId} · {format(d.kickoffTime,language)}</span><span className={`rc-state rc-state--${settlement.state}`}>{resultLabel(settlement.state,zh)}</span></header>
-    <div className="rc-pick__main"><h3>{d.homeTeamName} <span>vs</span> {d.awayTeamName}</h3>{settlement.score&&<span className="rc-match-score" aria-label={zh?'90分钟赛果':'90-minute result'}>{settlement.score.replace('-', ' : ')}</span>}</div>
+    <div className="rc-pick__main"><h3 className="rc-team-matchup"><FrozenMatchTeams d={d}/></h3>{settlement.score&&<span className="rc-match-score" aria-label={zh?'90分钟赛果':'90-minute result'}>{settlement.score.replace('-', ' : ')}</span>}</div>
     <PrimaryPickHeader d={d} language={language}/>
     <div className="rc-card-footer"><span>{zh?'发布于':'Published'} {format(d.publishedAt,language)}</span><button type="button" className="rc-match-link" onClick={()=>onSelectMatch(d.matchId)}>{zh?'比赛详情':'Match details'}<ArrowUpRight size={14} aria-hidden="true"/></button></div>
     <details className="rc-analysis"><summary><span>{zh?'概率与让球分析':'Probabilities & handicap analysis'}</span><ChevronDown size={16} aria-hidden="true"/></summary><div className="rc-analysis__body">
@@ -71,7 +81,7 @@ function ComboCard({combo,settlement,language,onSelectMatch}:{combo:Combo;settle
   const zh=language==='zh';
   return <article className="rc-combo"><header><div><small>{zh?'每日精选':'Daily selection'}</small><h3>{combo.size}{zh?'串1':'-leg combo'}</h3></div><div><strong>SP {combo.totalOdds.toFixed(2)}</strong><small>{zh?'下限':'Minimum'} {combo.size===2?'2.50':'5.00'}</small></div></header>
     <div className="rc-combo__status"><span className={`rc-state rc-state--${settlement?.state||'PENDING'}`}>{settlement?resultLabel(settlement.state,zh):(zh?'即时方案 · 未冻结':'Preview · not frozen')}</span><span>{combo.frozenAt?(zh?'冻结':'Frozen'):(zh?'计划冻结':'Freeze at')} {format(combo.frozenAt||combo.freezeAt,language)}</span></div>
-    {combo.legs.map((leg,index)=>{const pick=comboLegSelection(combo,index),handicap=pick.market==='HHAD',result=settlement?.legs?.find(l=>l.decisionId===leg.decisionId);return <section className="rc-combo__leg" key={leg.decisionId}><div className="rc-leg-heading"><span className="rc-leg-number">{index+1}</span><div><strong>{leg.homeTeamName} vs {leg.awayTeamName}</strong><small>{leg.matchNo||leg.sourceMatchId} · {format(leg.kickoffTime,language)}</small></div><strong className="rc-leg-pick"><span className={`rc-market-label${handicap?' rc-market-label--hhad':''}`}>{handicap?(zh?'让球胜平负':'Handicap 1X2'):(zh?'胜平负':'1X2')}{handicap?` ${pick.handicapLine>0?'+':''}${pick.handicapLine}`:''}</span><span>{handicap?handicapTitle(pick.tipCode,zh):title(pick.tipCode,zh)} <small>SP {pick.odds.toFixed(2)}</small></span></strong></div>
+    {combo.legs.map((leg,index)=>{const pick=comboLegSelection(combo,index),handicap=pick.market==='HHAD',result=settlement?.legs?.find(l=>l.decisionId===leg.decisionId);return <section className="rc-combo__leg" key={leg.decisionId}><div className="rc-leg-heading"><span className="rc-leg-number">{index+1}</span><div><strong className="rc-team-matchup"><FrozenMatchTeams d={leg}/></strong><small>{leg.matchNo||leg.sourceMatchId} · {format(leg.kickoffTime,language)}</small></div><strong className="rc-leg-pick"><span className={`rc-market-label${handicap?' rc-market-label--hhad':''}`}>{handicap?(zh?'让球胜平负':'Handicap 1X2'):(zh?'胜平负':'1X2')}{handicap?` ${pick.handicapLine>0?'+':''}${pick.handicapLine}`:''}</span><span>{handicap?handicapTitle(pick.tipCode,zh):title(pick.tipCode,zh)} <small>SP {pick.odds.toFixed(2)}</small></span></strong></div>
       <div className="rc-leg-meta"><span>{quoteSourceLabel(pick,language)}</span><span>{zh?'SP采集':'SP observed'} {format(pick.quoteObservedAt,language)}</span>{result&&<span>{result.score||'—'} · {resultLabel(result.state,zh)}</span>}</div>
       <RecordDetails d={leg} selection={combo.selections?.[index]} language={language} onSelectMatch={onSelectMatch}/></section>;})}
     <p className="rc-disclaimer">{zh?'可混合胜平负与让球胜平负，每场只选一腿；模型仍在验证，未将单场概率相乘作为真实串关命中率。':'1X2 and handicap 1X2 may be mixed, with one leg per match. The model remains unvalidated; multiplying single probabilities does not establish a real combo hit rate.'}</p>

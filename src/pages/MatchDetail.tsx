@@ -1,7 +1,7 @@
 import { PrematchCollectionPanel } from '../components/predictions/PrematchCollectionPanel';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context/AppContextCore';
-import type { FiveHundredRecentFormRow, League, Match, MatchProbabilityModel, MultiLangString, OutcomeProbability, PredictionDetail, ScoreProbability, Team } from '../services/mockData';
+import type { FiveHundredRecentFormRow, League, Match, MatchProbabilityModel, MultiLangString, OutcomeProbability, PredictionDetail, ScoreProbability } from '../services/mockData';
 import {
   getOfficialMatchOdds,
   getOfficialResultPoolAvailability,
@@ -15,7 +15,7 @@ import { getMatchSignal } from '../services/matchSignal';
 import { buildMatchInsight } from '../services/predictionInsight';
 import { getVisiblePrediction, getVisiblePredictions } from '../services/predictionVisibility';
 import { buildPublicRecommendationCopy } from '../services/recommendationCopy';
-import { getAnalysisReferenceHandicapSupplement, getDisplayRecommendation, getHandicapCompanionHeading, getLiveDisplayRecommendation, isFormalRecommendationPrediction } from '../services/displayRecommendation';
+import { getAnalysisReferenceHandicapSupplement, getDisplayRecommendation, getHandicapCompanionHeading, getLiveDisplayRecommendation, getMatchDisplayTeam as getDisplayTeam, isFormalRecommendationPrediction } from '../services/displayRecommendation';
 import { getAccessAuthHeaders } from '../services/accessControl';
 import { buildApiUrl } from '../services/runtimeUrls';
 import { buildFiveHundredDisplay } from '../services/fiveHundredDisplay';
@@ -354,7 +354,6 @@ const HISTORY_LOOKBACK_DAYS = 365;
 const TEAM_HISTORY_DISPLAY_LIMIT = 12;
 const H2H_DISPLAY_LIMIT = 10;
 const MIN_RATE_SAMPLE_SIZE = 3;
-const fallbackColor = '#64748b';
 
 interface TeamHistoryResult {
   id: string;
@@ -845,33 +844,6 @@ const getTeamNameInMatch = (match: Match, teamId: string, language: Language) =>
     : (language === 'zh' ? match.awayTeamName : match.awayTeamNameEn) || match.awayTeamName;
 
   return fallback || team.shortName[language] || team.name[language];
-};
-
-const getDisplayTeam = (match: Match, side: 'home' | 'away'): Team => {
-  const isHome = side === 'home';
-  const teamId = isHome ? match.homeTeamId : match.awayTeamId;
-  const registered = getTeamById(teamId);
-  const syncedName = isHome ? match.homeTeamName : match.awayTeamName;
-  const syncedNameEn = isHome ? match.homeTeamNameEn : match.awayTeamNameEn;
-  const syncedLogo = isHome ? match.homeTeamLogo : match.awayTeamLogo;
-  const syncedLogoType = isHome ? match.homeTeamLogoType : match.awayTeamLogoType;
-  const syncedCountryIso = isHome ? match.homeTeamCountryIso : match.awayTeamCountryIso;
-  const syncedColor = isHome ? match.homeTeamColor : match.awayTeamColor;
-  const isUnknown = registered.shortName.en === 'Unknown';
-
-  if (!isUnknown || !syncedName) return registered;
-
-  return {
-    id: teamId,
-    name: { zh: syncedName, en: syncedNameEn || syncedName },
-    shortName: { zh: syncedName, en: syncedNameEn || syncedName },
-    logo: syncedLogoType === 'flag' && syncedCountryIso
-      ? syncedCountryIso
-      : syncedLogo || syncedCountryIso || syncedName.slice(0, 2),
-    logoType: syncedLogoType,
-    value: '',
-    color: syncedColor || fallbackColor
-  };
 };
 
 const getCompetitionName = (match: Match, language: Language) => {
