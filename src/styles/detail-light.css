@@ -1,0 +1,123 @@
+/* Legacy detail panels use HSL variables and a few !important decorations.
+   Scope the light palette to detail pages so charts and team identity remain intact. */
+.app-frame.app-shell-v2 .match-detail-shell {
+  --bg: 200 20% 97%;
+  --bg-card: 0 0% 100%;
+  --bg-card-hover: 200 20% 97%;
+  --text-primary: 200 37% 15%;
+  --text-secondary: 200 15% 37%;
+  --text-muted: 200 13% 46%;
+  --primary: 168 88% 26%;
+  --premium: 221 83% 53%;
+  --border: 198 20% 86%;
+  color: #182b34;
+  gap: 16px;
+}
+
+.app-frame.app-shell-v2 .match-detail-shell .card,
+.app-frame.app-shell-v2 .match-detail-shell .prediction-policy-note,
+.app-frame.app-shell-v2 .match-detail-shell .match-detail-v4__framework-details {
+  background: #fff;
+  border-color: #dce5e8;
+  color: #182b34;
+  box-shadow: 0 2px 10px #16363b04;
+}
+.app-frame.app-shell-v2 .match-detail-shell .match-detail-v4__hero {
+  display: grid;
+  grid-template-columns: minmax(150px, .45fr) minmax(0, 1.55fr);
+  align-items: center;
+  gap: 20px;
+  min-height: 0;
+  padding: 20px 24px !important;
+  border-color: #dce5e8 !important;
+  background: #fff !important;
+  box-shadow: 0 2px 10px #16363b04;
+  text-align: left;
+}
+.app-frame.app-shell-v2 .match-detail-shell .match-hero-card::before,
+.app-frame.app-shell-v2 .match-detail-shell .match-hero-card::after {
+  content: none;
+  display: none;
+}
+.app-frame.app-shell-v2 .match-detail-v4__hero-meta {justify-items: start; gap: 6px;}
+.app-frame.app-shell-v2 .match-detail-v4__competition {color: #087f67; font-size: 12px; letter-spacing: .025em;}
+.app-frame.app-shell-v2 .match-detail-v4__kickoff {color: #52636e; font-size: 12px;}
+.app-frame.app-shell-v2 .match-detail-v4__match-meta,
+.app-frame.app-shell-v2 .match-detail-v4__team .match-team-value {color: #667783; font-size: 11px;}
+.app-frame.app-shell-v2 .match-detail-shell .match-detail-v4__matchup {
+  grid-template-columns: minmax(0, 1fr) 100px minmax(0, 1fr);
+  width: 100% !important;
+  max-width: 800px !important;
+  margin: 0 auto;
+  gap: 16px !important;
+}
+.app-frame.app-shell-v2 .match-detail-shell .match-detail-v4__team {gap: 7px !important; text-align: center;}
+.app-frame.app-shell-v2 .match-detail-shell .match-detail-v4__team .team-badge-lg {width: 52px; height: 52px; filter: none;}
+.app-frame.app-shell-v2 .match-detail-shell .match-detail-v4__team .team-badge-lg.team-badge-flag {width: 65px; height: 44px;}
+.app-frame.app-shell-v2 .match-detail-shell .match-detail-v4__team h3 {max-width: 100%; margin: 0; font-size: 18px !important; line-height: 1.35; font-weight: 700 !important; color: #182b34;}
+.app-frame.app-shell-v2 .match-detail-shell .match-detail-v4__status {gap: 6px !important; text-align: center;}
+.app-frame.app-shell-v2 .match-detail-shell .matchup-status > div > div,
+.app-frame.app-shell-v2 .match-detail-shell .match-detail-v4__status > div[style] {font-size: 29px !important; font-weight: 750 !important; color: #182b34 !important; line-height: 1.15; letter-spacing: .02em !important; text-shadow: none;}
+.app-frame.app-shell-v2 .match-detail-shell .matchup-status .badge {font-size: 10px; min-height: 23px;}
+
+.app-frame.app-shell-v2 .match-detail-shell .match-detail-v4__cockpit {gap: 14px;}
+.app-frame.app-shell-v2 .match-detail-shell .match-detail-v4__cockpit > .card {padding: 12px; background: #fff; border-color: #dce5e8;}
+.app-frame.app-shell-v2 .match-detail-shell .recommendation-overview-panel {padding: 16px; gap: 11px; border-color: #e1e9eb; background: #fff; color: #182b34;}
+.app-frame.app-shell-v2 .match-detail-shell .recommendation-overview-panel.is-outcome,
+.app-frame.app-shell-v2 .match-detail-shell .recommendation-overview-panel.is-goals {background: #f0f8f4; border-color: #d0e6db;}
+.app-frame.app-shell-v2 .match-detail-shell .recommendation-overview-panel.is-score {background: #f7f9fc; border-color: #dde6ef;}
+.app-frame.app-shell-v2 .match-detail-shell .recommendation-overview-head span {color: #52636e; font-size: 12px; font-weight: 650;}
+.app-frame.app-shell-v2 .match-detail-shell .recommendation-overview-head b {background: #e5f2ec; border-color: #bfdcce; color: #087f67; font-weight: 650;}
+.app-frame.app-shell-v2 .match-detail-shell .recommendation-overview-panel.is-score .recommendation-overview-head b {background: #edf3ff; border-color: #cdddf8; color: #2563eb;}
+.app-frame.app-shell-v2 .match-detail-shell .recommendation-overview-main {color: #087f67; font-size: clamp(24px, 2.8vw, 32px); line-height: 1.2; font-weight: 750;}
+.app-frame.app-shell-v2 .match-detail-shell .match-detail-v4__pick-facts {display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 11px 0; border-top: 1px solid #c9ded3; border-bottom: 1px solid #c9ded3; background: transparent;}
+.app-frame.app-shell-v2 .match-detail-shell .match-detail-v4__pick-facts > div {display: grid; gap: 6px; min-width: 0; padding: 0; background: transparent;}
+.app-frame.app-shell-v2 .match-detail-shell .match-detail-v4__pick-facts > div + div {padding-left: 14px; border-left: 1px solid #c9ded3;}
+.app-frame.app-shell-v2 .match-detail-shell .match-detail-v4__pick-facts span {color: #526b60 !important; font-size: 11px; line-height: 1.5; font-weight: 550; opacity: 1;}
+.app-frame.app-shell-v2 .match-detail-shell .match-detail-v4__pick-facts strong {color: #183f31 !important; font-size: 16px; line-height: 1.4; font-weight: 700; opacity: 1; overflow-wrap: anywhere; text-shadow: none;}
+.app-frame.app-shell-v2 .match-detail-shell .recommendation-overview-panel p {color: #52636e; font-size: 12px; font-weight: 500; line-height: 1.75;}
+.app-frame.app-shell-v2 .match-detail-shell .recommendation-score-option {background: #fff; border-color: #dfe7eb; padding: 12px;}
+.app-frame.app-shell-v2 .match-detail-shell .recommendation-score-option.is-aligned {background: #edf7f1; border-color: #c7e1d2;}
+.app-frame.app-shell-v2 .match-detail-shell .recommendation-score-option strong {font-size: 25px; font-weight: 750; color: #182b34;}
+.app-frame.app-shell-v2 .match-detail-shell .recommendation-score-option span,
+.app-frame.app-shell-v2 .match-detail-shell .recommendation-score-option em {color: #667783; font-size: 11px; font-weight: 550;}
+.app-frame.app-shell-v2 .match-detail-shell .recommendation-score-option.is-aligned strong,
+.app-frame.app-shell-v2 .match-detail-shell .recommendation-score-option.is-aligned em {color: #087f67;}
+.app-frame.app-shell-v2 .match-detail-shell .recommendation-mini-tags > span {min-height: 24px; border-color: #dce5e8; border-radius: 6px; background: #fff; color: #52636e; font-size: 10px; font-weight: 550;}
+.app-frame.app-shell-v2 .match-detail-shell .recommendation-overview-panel.is-outcome .recommendation-mini-tags > span:first-child {background: #e5f3ec; border-color: #c1decd; color: #087f67;}
+.app-frame.app-shell-v2 .match-detail-shell .recommendation-companion-panel {background: #f0f5ff; border-color: #d5e1f6;}
+.app-frame.app-shell-v2 .match-detail-shell .recommendation-companion-panel strong {color: #2563eb; font-weight: 700;}
+.app-frame.app-shell-v2 .match-detail-shell .recommendation-companion-panel span,
+.app-frame.app-shell-v2 .match-detail-shell .recommendation-companion-panel em {color: #59739c; font-weight: 550;}
+
+.app-frame.app-shell-v2 .match-detail-shell :is(.decision-transparent-panel,.five-hundred-signal-panel,.pre-match-risk-panel,.factor-card,.weather-metric,.weather-rule-grid section,.formula-card,.probability-panel,.form-summary-card,.form-stat-tile,.team-history-row,.post-review-panel,.insight-metric,.insight-section,.review-grid > div) {background: #f7f9fa; border-color: #dfe7ea; color: #344e5c; box-shadow: none;}
+.app-frame.app-shell-v2 .match-detail-shell :is(.decision-transparent-panel.is-companion,.probability-panel.is-wide,.formula-card.is-primary) {background: #f0f7f4; border-color: #cfe4d9;}
+.app-frame.app-shell-v2 .match-detail-shell :is(.decision-transparent-panel,.five-hundred-signal-panel,.pre-match-risk-panel,.factor-card,.weather-metric,.formula-card,.probability-panel,.form-summary-card,.form-stat-tile,.post-review-panel,.insight-metric) :is(h3,h4,strong) {color: #294653;}
+.app-frame.app-shell-v2 .match-detail-shell :is(.decision-transparent-panel.is-companion,.formula-card.is-primary) strong {color: #087f67;}
+.app-frame.app-shell-v2 .match-detail-shell :is(.decision-transparent-head,.decision-transparent-panel,.five-hundred-signal-head,.five-hundred-signal-panel,.pre-match-risk-head,.pre-match-risk-panel,.factor-analysis-head,.factor-card,.weather-analysis-head,.weather-rule-grid,.formula-card,.probability-panel,.post-review-panel) p {color: #52636e; font-weight: 500; line-height: 1.75;}
+.app-frame.app-shell-v2 .match-detail-shell :is(.review-kicker,.probability-panel > span,.form-stat-tile span,.weather-metric span,.factor-card > span,.five-hundred-signal-panel > span,.pre-match-risk-panel > span) {color: #667783;}
+.app-frame.app-shell-v2 .match-detail-shell :is(.post-review-chip-list span,.five-hundred-chip-row span,.pre-match-risk-tags b,.decision-risk-row span) {background: #f3f7f8; border-color: #dce5e8; color: #52636e;}
+.app-frame.app-shell-v2 .match-detail-shell .match-detail-v4__score-value {font-size: 30px; color: #182b34;}
+.app-frame.app-shell-v2 .match-detail-shell .responsive-table {background: #fff; color: #344e5c;}
+.app-frame.app-shell-v2 .match-detail-shell .responsive-table th {background: #f3f7f8; color: #52636e; border-color: #dce5e8;}
+.app-frame.app-shell-v2 .match-detail-shell .responsive-table td {border-color: #e5ecef;}
+.app-frame.app-shell-v2 .match-detail-shell .match-detail-v4__tabs .tab-btn {font-size: 13px;}
+
+@media(max-width:900px) {
+  .app-frame.app-shell-v2 .match-detail-shell .match-detail-v4__hero {grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 17px 20px !important;}
+  .app-frame.app-shell-v2 .match-detail-v4__hero-meta {display: flex; justify-content: center; align-items: baseline; flex-wrap: wrap; gap: 6px 14px;}
+}
+@media(max-width:560px) {
+  .app-frame.app-shell-v2 .match-detail-shell .match-detail-v4__hero {gap: 14px; padding: 15px 12px !important;}
+  .app-frame.app-shell-v2 .match-detail-shell .match-detail-v4__matchup {grid-template-columns: minmax(0, 1fr) 70px minmax(0, 1fr); gap: 8px !important;}
+  .app-frame.app-shell-v2 .match-detail-shell .match-detail-v4__team .team-badge-lg {width: 42px; height: 42px;}
+  .app-frame.app-shell-v2 .match-detail-shell .match-detail-v4__team .team-badge-lg.team-badge-flag {width: 54px; height: 36px;}
+  .app-frame.app-shell-v2 .match-detail-shell .match-detail-v4__team h3 {font-size: 15px !important; line-height: 1.4;}
+  .app-frame.app-shell-v2 .match-detail-shell .matchup-status > div > div,
+  .app-frame.app-shell-v2 .match-detail-shell .match-detail-v4__status > div[style] {font-size: 23px !important;}
+  .app-frame.app-shell-v2 .match-detail-shell .match-detail-v4__cockpit > .card {padding: 8px;}
+  .app-frame.app-shell-v2 .match-detail-shell .recommendation-overview-panel {padding: 13px;}
+  .app-frame.app-shell-v2 .match-detail-shell .recommendation-overview-main {font-size: 25px;}
+  .app-frame.app-shell-v2 .match-detail-shell .recommendation-score-option strong {font-size: 23px;}
+  .app-frame.app-shell-v2 .match-detail-shell .match-detail-v4__tabs .tab-btn {font-size: 12px;}
+}

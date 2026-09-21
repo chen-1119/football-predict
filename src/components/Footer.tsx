@@ -1,21 +1,34 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { ShieldAlert } from 'lucide-react';
 import { useApp } from '../context/AppContextCore';
 import { ContactDock } from './ContactDock';
 
 export const Footer: React.FC = () => {
   const { language } = useApp();
+  const policyRootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const closePolicies = () => policyRootRef.current?.querySelectorAll<HTMLDetailsElement>('details[open]').forEach(detail => { detail.open = false; });
+    const pointer = (event: PointerEvent) => { if (!policyRootRef.current?.contains(event.target as Node)) closePolicies(); };
+    const keyboard = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || !policyRootRef.current?.contains(event.target as Node)) return;
+      const detail = (event.target as Element).closest('details');
+      closePolicies(); detail?.querySelector('summary')?.focus();
+    };
+    document.addEventListener('pointerdown', pointer); document.addEventListener('keydown', keyboard);
+    return () => { document.removeEventListener('pointerdown', pointer); document.removeEventListener('keydown', keyboard); };
+  }, []);
 
   const translations = {
-    brand: { zh: '足球数据看板', en: 'Football Data Board' },
+    brand: { zh: '90分钟足球', en: '90’ Football' },
     tagline: {
-      zh: '基于中国竞彩网官方赛程与赔率快照，提供轻量化赛前数据看板。',
-      en: 'A lightweight pre-match dashboard based on official Sporttery fixtures and odds snapshots.'
+      zh: '赛前数据，赛后复盘。',
+      en: 'Pre-match insights. Post-match review.'
     },
     responsible: { zh: '18+ 理性提示', en: '18+ Notice' },
     warning: {
-      zh: '本站仅提供数据分析与赛前推荐参考，不保证赛果。请保持娱乐心态，禁止未成年人参与，切勿盲目跟单。',
-      en: 'Analytics and pre-match picks are for reference only and do not guarantee results. Please stay responsible, 18+ only, and never follow picks blindly.'
+      zh: '数据与模型仅供参考，不保证赛果或收益。请理性对待，未成年人禁止参与。',
+      en: 'Data and models are for reference only, with no guaranteed results or returns. Stay responsible. Adults 18+ only.'
     },
     about: { zh: '关于我们', en: 'About' },
     terms: { zh: '服务条款', en: 'Terms' },
@@ -33,7 +46,7 @@ export const Footer: React.FC = () => {
       zh: '本站使用 localStorage 保存 football_access_session（访问令牌与到期时间）、nerdy_lang（语言）、nerdy_user（校验显示状态）、nerdy_hw_submission（本地选择）和 football_worldcup_prediction_wall（本设备昵称、评论与预测）。服务切换期间还会在当前标签页的 sessionStorage 中短暂保留最多 3 分钟的最近一次已验证赛程；它仅用于连续显示，不参与串关生成，并会在退出、访问失效或标签页关闭时清除。访问令牌只会发送到本站配置的受保护 API（本机部署默认为同源）；服务端会记录校验码状态、使用次数和时间。本设备预测记录不会上传或共享。退出校验会清除访问状态；清除本站浏览器数据可删除全部本地记录。',
       en: 'This site uses localStorage for football_access_session (access token and expiry), nerdy_lang (language), nerdy_user (verification display state), nerdy_hw_submission (local selections), and football_worldcup_prediction_wall (on-device nickname, comment, and picks). During a service cutover, the current tab may also retain the last verified schedule in sessionStorage for up to three minutes. It is display-only, cannot enter bet-slip generation, and is cleared on sign-out, access expiry, or tab close. The access token is sent only to this site\'s configured protected API (same-origin by default on this deployment); the server records access-code status, use count, and timestamps. On-device prediction-wall entries are not uploaded or shared. Clearing access removes verification state, and clearing this site\'s browser data removes all local entries.'
     },
-    copyright: { zh: '© 2026 足球数据看板', en: '© 2026 Football Data Board' }
+    copyright: { zh: '© 2026 90分钟足球', en: '© 2026 90’ Football' }
   };
 
   const t = (key: keyof typeof translations) => translations[key][language];
@@ -63,9 +76,12 @@ export const Footer: React.FC = () => {
         </div>
 
         <div className="app-footer-actions">
-          <div className="footer-policy-list app-footer-policies" aria-label={t('policyNavigation') as string}>
+          <div className="footer-policy-list app-footer-policies" aria-label={t('policyNavigation') as string} ref={policyRootRef}>
             {policyItems.map((item) => (
-              <details className="footer-policy-details app-footer-policy" key={item.key}>
+              <details className="footer-policy-details app-footer-policy" key={item.key} onToggle={(event) => {
+                const current = event.currentTarget;
+                if (current.open) policyRootRef.current?.querySelectorAll<HTMLDetailsElement>('details[open]').forEach(detail => { if (detail !== current) detail.open = false; });
+              }}>
                 <summary>{item.title}</summary>
                 <p>{item.body}</p>
               </details>

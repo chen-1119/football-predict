@@ -1,219 +1,120 @@
-/* Final visual layer. Keep component-specific layout in its own stylesheets. */
-.app-frame.app-shell-v2 {
-  background:
-    radial-gradient(circle at 12% -10%, rgba(91, 140, 255, .13), transparent 30rem),
-    radial-gradient(circle at 88% 4%, rgba(94, 212, 243, .08), transparent 28rem),
-    var(--shell-bg);
+/* Shared light surfaces. Component layouts and navigation live in their own stylesheets. */
+html,
+body {
+  color-scheme: light;
+  background: var(--shell-bg);
+  color: var(--shell-text);
 }
-
-.app-frame.app-shell-v2 .app-topbar {
-  border-bottom-color: rgba(93, 126, 173, .18);
-  background: rgba(7, 16, 31, .82);
-  box-shadow: 0 10px 32px rgba(0, 0, 0, .22);
-  backdrop-filter: blur(20px) saturate(1.18);
-  -webkit-backdrop-filter: blur(20px) saturate(1.18);
-}
-
-.app-frame.app-shell-v2 .app-brand-mark,
-.app-frame.app-shell-v2 .app-footer-mark {
-  border-color: rgba(91, 140, 255, .42);
-  background: linear-gradient(145deg, rgba(91, 140, 255, .23), rgba(94, 212, 243, .08));
-  color: #dce7ff;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
-}
-
-.app-frame.app-shell-v2 .app-nav-item,
-.app-frame.app-shell-v2 .app-more-trigger,
-.app-frame.app-shell-v2 .app-data-status {
-  border-radius: 10px;
-}
-
-.app-frame.app-shell-v2 .app-nav-item.is-active,
-.app-frame.app-shell-v2 .app-more-trigger.is-active {
-  background: rgba(91, 140, 255, .13);
-  color: #dce7ff;
-}
-
-.app-frame.app-shell-v2 .app-data-status {
-  max-width: min(410px, 42vw);
-  padding-inline: 10px;
-  overflow: hidden;
-}
-
-.app-frame.app-shell-v2 .app-data-status > span:not(.app-data-status-dot) {
-  min-width: 0;
-}
-
-.app-frame.app-shell-v2 .app-data-status > span:not(.app-data-status-dot):not(.app-data-status-live-meta) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.app-frame.app-shell-v2 .app-data-status-live-meta {
-  display: inline-flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 4px;
-  margin-left: 2px;
-  padding-left: 8px;
-  border-left: 1px solid currentColor;
-  color: inherit;
-  opacity: .72;
-  font-family: var(--shell-font-mono);
-  font-size: 10px;
-  font-weight: 550;
-  letter-spacing: .015em;
-}
-
-.app-frame.app-shell-v2 .app-data-status.is-ready {
-  border-color: rgba(82, 211, 160, .24);
-  background: rgba(82, 211, 160, .09);
-  color: var(--shell-positive);
-}
-
-.app-frame.app-shell-v2 .app-data-status.is-ready .app-data-status-dot {
-  background: var(--shell-positive);
-  box-shadow: 0 0 0 3px rgba(82, 211, 160, .12), 0 0 18px rgba(82, 211, 160, .24);
-}
-
-.app-frame.app-shell-v2 .app-data-status.is-syncing {
-  border-color: rgba(94, 212, 243, .26);
-  background: rgba(94, 212, 243, .08);
-  color: var(--shell-cyan);
-}
-
-.app-frame.app-shell-v2 .app-data-status.is-watch {
-  border-color: rgba(240, 179, 90, .28);
-  background: rgba(240, 179, 90, .09);
-  color: var(--shell-warning);
-}
-
-.app-frame.app-shell-v2 .page-main {
+#root::before,
+#root::after,
+.app-frame.app-shell-v2::before,
+.app-frame.app-shell-v2::after,
+.app-frame.app-shell-v2 .page-main::before,
+.app-frame.app-shell-v2 .page-main::after { display: none; }
+.app-frame.app-shell-v2 { background: var(--shell-bg); }
+.app-frame.app-shell-v2 .page-main.container {
   width: min(100%, var(--shell-content-width));
+  padding-top: 28px;
+  padding-bottom: 40px;
+  background: transparent;
 }
-
 .app-frame.app-shell-v2 :is(.card, .panel, .league-card, .review-evidence-card, .tools-hub-card) {
-  border-color: rgba(93, 126, 173, .22);
+  border-color: var(--shell-border);
+  background: var(--shell-surface);
+  box-shadow: var(--shell-shadow-sm);
 }
-
-.app-frame.app-shell-v2 .card {
-  background: linear-gradient(180deg, rgba(15, 29, 49, .96), rgba(11, 22, 40, .96));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .025), 0 12px 34px rgba(0, 0, 0, .12);
-}
-
 .app-frame.app-shell-v2 :is(button, a, summary):focus-visible {
-  outline: 2px solid rgba(119, 160, 255, .92);
+  outline: 2px solid var(--shell-green);
   outline-offset: 3px;
 }
-
 .app-frame.app-shell-v2 .btn {
-  min-height: 42px;
+  min-height: 44px;
   border-radius: 10px;
   font-weight: 650;
-  letter-spacing: .01em;
+  letter-spacing: 0;
+  transition: background-color 140ms ease, border-color 140ms ease;
 }
-
 .app-frame.app-shell-v2 .btn-primary {
-  border-color: rgba(91, 140, 255, .7);
-  background: linear-gradient(135deg, #5b8cff, #6f7cff);
-  color: white;
-  box-shadow: 0 8px 22px rgba(91, 140, 255, .18);
+  border-color: var(--shell-green);
+  background: var(--shell-green);
+  color: #fff;
+  box-shadow: none;
 }
-
-.app-frame.app-shell-v2 .btn-primary:hover {
-  background: linear-gradient(135deg, #6b99ff, #7d89ff);
-  transform: translateY(-1px);
-}
-
+.app-frame.app-shell-v2 .btn-primary:hover { background: var(--shell-green-hover); transform: none; }
 .app-frame.app-shell-v2 .btn-secondary {
-  border-color: rgba(93, 126, 173, .32);
-  background: rgba(15, 29, 49, .72);
-  color: var(--shell-text-secondary);
-}
-
-.app-frame.app-shell-v2 .btn-secondary:hover {
-  border-color: rgba(91, 140, 255, .52);
-  background: rgba(91, 140, 255, .09);
+  border-color: var(--shell-border);
+  background: #fff;
   color: var(--shell-text);
 }
-
+.app-frame.app-shell-v2 .btn-secondary:hover { border-color: var(--shell-green); background: var(--shell-green-soft); }
 .app-frame.app-shell-v2 :is(input, select, textarea) {
-  border-color: rgba(93, 126, 173, .28);
-  background: rgba(7, 16, 31, .58);
+  border-color: var(--shell-border);
+  background: #fff;
+  color: var(--shell-text);
+  accent-color: var(--shell-green);
+}
+.app-frame.app-shell-v2 :is(input, textarea)::placeholder { color: var(--shell-text-muted); opacity: 1; }
+.app-frame.app-shell-v2 :is(input, select, textarea):focus { border-color: var(--shell-green); box-shadow: var(--shell-focus); }
+.app-frame.app-shell-v2 :is(button, input, select, textarea):disabled { cursor: not-allowed; }
+.app-frame.app-shell-v2 .gradient-text {
+  background: none;
+  -webkit-text-fill-color: currentColor;
   color: var(--shell-text);
 }
-
-.app-frame.app-shell-v2 :is(input, select, textarea):focus {
-  border-color: rgba(91, 140, 255, .76);
-  box-shadow: var(--shell-focus);
-}
-
-.app-frame.app-shell-v2 .gradient-text {
-  background: linear-gradient(110deg, #f7f9fc 10%, #a9c4ff 56%, #75dcf5 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
 .app-frame.app-shell-v2 :is(.review-page-header, .tools-hub-header) h1 {
   color: var(--shell-text);
-  font-size: clamp(26px, 3vw, 38px);
-  font-weight: 720;
+  font-size: clamp(25px, 3vw, 34px);
+  font-weight: 750;
   letter-spacing: -.035em;
 }
+.app-frame.app-shell-v2 :is(.review-page-header, .tools-hub-header) p { color: var(--shell-text-secondary); line-height: 1.65; }
+.app-frame.app-shell-v2 .tabs-container { border-color: var(--shell-border); background: #fff; }
+.app-frame.app-shell-v2 .tab-btn.active { color: var(--shell-green); background: var(--shell-green-soft); }
+.app-frame.app-shell-v2 :is(.compact-result.is-hit, .is-success) { color: var(--shell-positive); }
+.app-frame.app-shell-v2 :is(.compact-result.is-miss, .is-danger) { color: var(--shell-danger); }
 
-.app-frame.app-shell-v2 :is(.review-page-header, .tools-hub-header) p {
-  max-width: 780px;
-  color: var(--shell-text-secondary);
-  line-height: 1.7;
+/* Retire dark hard-coded surfaces in secondary routes without altering their data. */
+.app-frame.app-shell-v2 :is(.survival-hero, .survival-scoreboard, .survival-daily, .survival-rules-panel, .survival-baseline, .survival-detail-hero, .survival-analysis-card, .leagues-hero__stats article) {
+  background: #fff;
+  border-color: var(--shell-border);
+  box-shadow: var(--shell-shadow-sm);
+}
+.app-frame.app-shell-v2 .survival-hero::after { display: none; }
+.app-frame.app-shell-v2 :is(.survival-hero, .survival-detail-hero) { padding: 24px; }
+.app-frame.app-shell-v2 :is(.survival-stage-card>strong, .survival-league-progress strong, .survival-awards strong, .survival-season-table span, .survival-agent-picks strong, .survival-agent-picks b, .survival-rule-grid strong, .survival-balance-history strong, .survival-probability-grid strong, .survival-analysis-card header>b, .survival-analysis-pick>strong, .survival-principles svg) { color: var(--shell-green); }
+.app-frame.app-shell-v2 :is(.survival-integrity, .survival-detail-result, .survival-analysis-card footer, .survival-not-found a, .survival-date-tabs button.is-active) { color: var(--shell-green); }
+.app-frame.app-shell-v2 .survival-settlement { color: var(--shell-green) !important; }
+.app-frame.app-shell-v2 :is(.survival-status.is-yellow, .survival-tier.is-high_evidence) { color: var(--shell-warning); background: #fff5df; }
+.app-frame.app-shell-v2 :is(.survival-status.is-bankrupt, .survival-tier.is-low_confidence, .survival-agent-picks em.is-miss, .survival-flop-board article b) { color: var(--shell-danger); }
+.app-frame.app-shell-v2 .survival-integrity code { background: var(--shell-green-soft); color: var(--shell-green); }
+.app-frame.app-shell-v2 :is(.benchmark-audit-panel__metrics span, .benchmark-audit-panel__shadow, .benchmark-audit-panel__shadow-metrics span) { background: var(--surface-2); color: var(--shell-text-secondary); border-color: var(--shell-border); }
+.app-frame.app-shell-v2 :is(.benchmark-audit-panel p, .benchmark-audit-panel small, .benchmark-audit-panel__rules span) { color: var(--shell-text-secondary); }
+.app-frame.app-shell-v2 .benchmark-audit-panel strong { color: var(--shell-text); }
+.app-frame.app-shell-v2 .candidate-ledger-heartbeat { color: var(--shell-cyan); }
+
+/* Detail tabs remain reachable while scrolling long evidence and history. */
+.app-frame.app-shell-v2 .match-detail-v4__hero { background: #fff; border-color: var(--shell-border); padding: 22px; }
+.app-frame.app-shell-v2 .match-detail-v4__tabs {
+  position: sticky;
+  top: calc(var(--shell-topbar-height) + 8px);
+  z-index: 20;
+  box-shadow: var(--shell-shadow-sm);
+}
+.app-frame.app-shell-v2 .match-detail-v4__tabs .tab-btn[aria-selected="true"] { background: var(--shell-green-soft); color: var(--shell-green); border-color: #b6ddd0; }
+.app-frame.app-shell-v2 .match-detail-v4__panel { scroll-margin-top: 145px; }
+@media(max-width:760px) {
+  .app-frame.app-shell-v2 .page-main.container { padding-top: 18px; padding-bottom: 24px; }
+  .app-frame.app-shell-v2 .card { box-shadow: none; border-radius: 12px; }
+  .app-frame.app-shell-v2 .match-detail-v4__tabs { top: calc(var(--shell-mobile-topbar-height) + 4px); }
+  .app-frame.app-shell-v2 .match-detail-v4__hero { padding: 16px; }
+  .app-frame.app-shell-v2 .match-detail-v4__panel { scroll-margin-top: 130px; }
 }
 
-.app-frame.app-shell-v2 .tabs-container {
-  border-color: rgba(93, 126, 173, .22);
-  background: rgba(9, 19, 35, .72);
-}
-
-.app-frame.app-shell-v2 .tab-btn.active {
-  color: #dce7ff;
-  background: rgba(91, 140, 255, .14);
-}
-
-.app-frame.app-shell-v2 .compact-result.is-hit,
-.app-frame.app-shell-v2 .is-success {
-  color: var(--shell-positive);
-}
-
-.app-frame.app-shell-v2 .compact-result.is-miss,
-.app-frame.app-shell-v2 .is-danger {
-  color: var(--shell-danger);
-}
-
-@media (max-width: 1080px) {
-  .app-frame.app-shell-v2 .app-data-status-live-meta { display: none; }
-}
-
-@media (max-width: 760px) {
-  .app-frame.app-shell-v2 {
-    background:
-      radial-gradient(circle at 30% -4%, rgba(91, 140, 255, .11), transparent 24rem),
-      var(--shell-bg);
-  }
-
-  .app-frame.app-shell-v2 .card {
-    border-radius: 14px;
-    box-shadow: none;
-  }
-
-  .app-frame.app-shell-v2 .btn-primary:hover {
-    transform: none;
-  }
-
-  .app-frame.app-shell-v2 .app-data-status {
-    max-width: 148px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .app-frame.app-shell-v2 .btn-primary:hover { transform: none; }
-}
+/* Secondary pages use the same readable type scale and status colors. */
+.app-frame.app-shell-v2 .leagues-hero { background:#fff; padding:24px; }
+.app-frame.app-shell-v2 :is(.survival-hero h1, .survival-detail-hero h1, .leagues-hero h1) { font-size:clamp(25px,3vw,34px); line-height:1.2; }
+.app-frame.app-shell-v2 :is(.survival-hero p, .survival-detail-hero p) { font-size:15px; color:var(--shell-text-secondary); }
+.app-frame.app-shell-v2 :is(.survival-kicker,.survival-section-heading>div>span,.survival-hero-badges span,.survival-lock,.survival-section-heading>small,.survival-status,.survival-agent-picks small,.survival-tier,.survival-agent-picks em.is-hit) { color:var(--shell-green); }
+.app-frame.app-shell-v2 .survival-disclosure { color:var(--shell-cyan); }
+.app-frame.app-shell-v2 :is(.survival-status.is-yellow,.survival-tier.is-high_evidence) { color:var(--shell-warning); }
+.app-frame.app-shell-v2 :is(.survival-status.is-bankrupt,.survival-tier.is-low_confidence) { color:var(--shell-danger); }
