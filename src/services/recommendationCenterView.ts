@@ -238,8 +238,9 @@ export function primarySelectionSummary(d:Pick<Decision,'tipCode'|'odds'|'modelP
   const h=d.handicapAnalysis;
   if(!h)return {had:{code:d.tipCode,odds:d.odds,probability:d.modelProbability},handicap:null};
   const aligned=alignedHandicapCodes(d.tipCode,h.handicapLine);
-  const rankedAligned=aligned.slice().sort((a,b)=>h.probabilities[b]-h.probabilities[a]);
-  const suggestedCode=rankedAligned.length&&h.probabilities[rankedAligned[0]]>0?rankedAligned[0]:null;
+  const probabilityFor=(code:Outcome)=>typeof h.probabilities?.[code]==='number'&&Number.isFinite(h.probabilities[code])?h.probabilities[code]:null;
+  const rankedAligned=aligned.filter(code=>probabilityFor(code)!==null).sort((a,b)=>(probabilityFor(b)??0)-(probabilityFor(a)??0));
+  const suggestedCode=rankedAligned.length&&(probabilityFor(rankedAligned[0])??0)>0?rankedAligned[0]:null;
   const recommended=aligned.includes(h.tipCode);
   return {
     had:{code:d.tipCode,odds:d.odds,probability:d.modelProbability},
@@ -255,7 +256,7 @@ export function primarySelectionSummary(d:Pick<Decision,'tipCode'|'odds'|'modelP
       riskCode:recommended?null:h.tipCode,
       riskProbability:recommended?null:h.modelProbability,
       suggestedCode:recommended?null:suggestedCode,
-      suggestedProbability:recommended||!suggestedCode?null:h.probabilities[suggestedCode],
+      suggestedProbability:recommended||!suggestedCode?null:probabilityFor(suggestedCode),
     },
   };
 }
