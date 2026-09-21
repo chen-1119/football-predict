@@ -28,9 +28,9 @@ test('frozen records remain parseable across midnight and retain bound IDs',asyn
 test('handicap calibration profile is exposed even before groups become active',async()=>{const x=parseRecommendationCenter(await sample());assert.equal(x.review.handicapCalibration.version,'handicap-calibration-v2');assert.equal(typeof x.review.handicapCalibration.profileHash,'string');assert.equal(x.review.handicapCalibration.sampleRows,0);});
 test('tampered handicap calibration profile is rejected by frontend parsing',async()=>{const x=await sample();x.recommendationCenter.review.handicapCalibration.profileHash='bad';assert.throws(()=>parseRecommendationCenter(x));});
 
-test('top-card summary exposes both straight and handicap primary picks without opening details',()=>{
-  const summary=primarySelectionSummary({tipCode:'1',odds:1.72,modelProbability:.61,handicapAnalysis:{tipCode:'X',handicapLine:-1,handicapLineText:'-1',modelProbability:.38,marketReference:{selectedOdds:3.45},historicalCalibration:{applied:true}}});
-  assert.deepEqual(summary,{had:{code:'1',odds:1.72,probability:.61},handicap:{code:'X',line:-1,lineText:'-1',probability:.38,odds:3.45,calibrated:true,conditional:false,overallCode:null}});
+test('top-card summary exposes aligned straight and handicap extension without opening details',()=>{
+  const summary=primarySelectionSummary({tipCode:'1',odds:1.72,modelProbability:.61,handicapAnalysis:{tipCode:'X',handicapLine:-1,handicapLineText:'-1',modelProbability:.38,probabilities:{'1':.32,X:.38,'2':.30},marketReference:{selectedOdds:3.45},historicalCalibration:{applied:true}}});
+  assert.deepEqual(summary,{had:{code:'1',odds:1.72,probability:.61},handicap:{status:'recommend',code:'X',line:-1,lineText:'-1',probability:.38,odds:3.45,calibrated:true,conditional:false,overallCode:null,riskCode:null,riskProbability:null,suggestedCode:null,suggestedProbability:null}});
 });
 test('top-card summary keeps handicap slot explicitly unavailable when no handicap analysis exists',()=>{
   const summary=primarySelectionSummary({tipCode:'2',odds:2.1,modelProbability:.47,handicapAnalysis:null});
@@ -100,4 +100,17 @@ test('rendered mixed combo shows selected HHAD line and SP plus unconditional ex
   payload.recommendationCenter.review.combos=[{combo:c,settlement:{state:'PENDING'}}];
   const html=renderedText(parseRecommendationCenter(payload),{mode:'review',initialTab:'two'});
   assert.match(html,/让球胜平负<!-- --> \+1|让球胜平负 \+1/);assert.match(html,/SP 1\.65/);assert.match(html,/SP 2\.97/);assert.match(html,/完整让球概率中最高的方向/);assert.match(html,/sporttery:HHAD/);
+});
+
+test('home win with minus one never surfaces let-away as the top extension',()=>{
+  const summary=primarySelectionSummary({tipCode:'1',odds:1.65,modelProbability:.58,handicapAnalysis:{tipCode:'2',handicapLine:-1,handicapLineText:'-1',modelProbability:.44,probabilities:{'1':.24,X:.32,'2':.44},marketReference:null,historicalCalibration:{applied:false}}});
+  assert.equal(summary.handicap.status,'pass');assert.equal(summary.handicap.code,null);assert.equal(summary.handicap.riskCode,'2');assert.equal(summary.handicap.suggestedCode,'X');
+});
+test('deep home handicap shows pass instead of contradictory let-away when narrow win risk leads',()=>{
+  const summary=primarySelectionSummary({tipCode:'1',odds:1.5,modelProbability:.64,handicapAnalysis:{tipCode:'2',handicapLine:-2,handicapLineText:'-2',modelProbability:.46,probabilities:{'1':.29,X:.25,'2':.46},marketReference:null,historicalCalibration:{applied:true}}});
+  assert.equal(summary.handicap.status,'pass');assert.equal(summary.handicap.suggestedCode,'1');assert.equal(summary.handicap.suggestedProbability,.29);
+});
+test('away win with positive handicap refuses contradictory let-home extension',()=>{
+  const summary=primarySelectionSummary({tipCode:'2',odds:2.05,modelProbability:.49,handicapAnalysis:{tipCode:'1',handicapLine:1,handicapLineText:'+1',modelProbability:.41,probabilities:{'1':.41,X:.24,'2':.35},marketReference:null,historicalCalibration:{applied:false}}});
+  assert.equal(summary.handicap.status,'pass');assert.equal(summary.handicap.suggestedCode,'2');
 });

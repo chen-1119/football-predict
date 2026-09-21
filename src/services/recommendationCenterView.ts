@@ -228,11 +228,34 @@ export function comboPreviewForSize(data:RecommendationCenterData|undefined|null
   return data.previews.find(c=>c.size===size&&c.businessDate===data.businessDate&&visiblePreview(c,now));
 }
 
+function alignedHandicapCodes(straight:Outcome,line:number):Outcome[]{
+  if(!Number.isSafeInteger(line)||line===0)return [];
+  if(straight==='1')return line<0?['1','X']:['1'];
+  if(straight==='2')return line>0?['2','X']:['2'];
+  return [line<0?'2':'1'];
+}
 export function primarySelectionSummary(d:Pick<Decision,'tipCode'|'odds'|'modelProbability'|'handicapAnalysis'>){
   const h=d.handicapAnalysis;
+  if(!h)return {had:{code:d.tipCode,odds:d.odds,probability:d.modelProbability},handicap:null};
+  const aligned=alignedHandicapCodes(d.tipCode,h.handicapLine);
+  const suggestedCode=aligned.slice().sort((a,b)=>h.probabilities[b]-h.probabilities[a])[0]??null;
+  const recommended=aligned.includes(h.tipCode);
   return {
     had:{code:d.tipCode,odds:d.odds,probability:d.modelProbability},
-    handicap:h?{code:h.tipCode,line:h.handicapLine,lineText:h.handicapLineText,probability:h.modelProbability,odds:h.marketReference?.selectedOdds??null,calibrated:h.historicalCalibration?.applied===true,conditional:h.probabilityBasis==='conditional-on-straight-primary',overallCode:h.overallTipCode??null}:null,
+    handicap:{
+      status:recommended?'recommend' as const:'pass' as const,
+      code:recommended?h.tipCode:null,
+      line:h.handicapLine,lineText:h.handicapLineText,
+      probability:recommended?h.modelProbability:null,
+      odds:recommended?h.marketReference?.selectedOdds??null:null,
+      calibrated:h.historicalCalibration?.applied===true,
+      conditional:h.probabilityBasis==='conditional-on-straight-primary',
+      overallCode:h.overallTipCode??null,
+      riskCode:recommended?null:h.tipCode,
+      riskProbability:recommended?null:h.modelProbability,
+      suggestedCode:recommended?null:suggestedCode,
+      suggestedProbability:recommended||!suggestedCode?null:h.probabilities[suggestedCode],
+    },
   };
 }
 
