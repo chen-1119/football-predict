@@ -238,7 +238,8 @@ export function primarySelectionSummary(d:Pick<Decision,'tipCode'|'odds'|'modelP
   const h=d.handicapAnalysis;
   if(!h)return {had:{code:d.tipCode,odds:d.odds,probability:d.modelProbability},handicap:null};
   const aligned=alignedHandicapCodes(d.tipCode,h.handicapLine);
-  const suggestedCode=aligned.slice().sort((a,b)=>h.probabilities[b]-h.probabilities[a])[0]??null;
+  const rankedAligned=aligned.slice().sort((a,b)=>h.probabilities[b]-h.probabilities[a]);
+  const suggestedCode=rankedAligned.length&&h.probabilities[rankedAligned[0]]>0?rankedAligned[0]:null;
   const recommended=aligned.includes(h.tipCode);
   return {
     had:{code:d.tipCode,odds:d.odds,probability:d.modelProbability},
