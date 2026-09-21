@@ -223,7 +223,7 @@ export const getLiveRecommendationPrediction = (match: Match): PredictionDetail 
   ));
 };
 
-const getMatchDisplayTeam = (match: Match, side: 'home' | 'away'): Team => {
+export const getMatchDisplayTeam = (match: Match, side: 'home' | 'away'): Team => {
   const base = getTeamById(side === 'home' ? match.homeTeamId : match.awayTeamId);
   const teamName = side === 'home' ? match.homeTeamName : match.awayTeamName;
   const teamNameEn = side === 'home' ? match.homeTeamNameEn : match.awayTeamNameEn;
@@ -239,10 +239,10 @@ const getMatchDisplayTeam = (match: Match, side: 'home' | 'away'): Team => {
     ...base,
     name: { zh: nameZh, en: nameEn },
     shortName: { zh: nameZh, en: nameEn },
-    logo: teamLogoType === 'flag' && teamCountryIso
-      ? teamCountryIso
-      : teamLogo || teamCountryIso || base.logo,
-    logoType: teamLogoType || base.logoType || (teamCountryIso ? 'flag' : undefined),
+    // A club's country is not its crest. Preserve supplied artwork, and use an
+    // ISO fallback only when the match explicitly identifies a national flag.
+    logo: teamLogo || (teamLogoType === 'flag' ? teamCountryIso : undefined) || base.logo,
+    logoType: teamLogoType || base.logoType,
     value: teamValue || base.value,
     color: teamColor || base.color
   };

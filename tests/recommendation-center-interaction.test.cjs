@@ -13,6 +13,7 @@ async function harness(){
     if(id==='react')return {useEffect:()=>{},useState:initial=>{const index=cursor++;if(!(index in state))state[index]=typeof initial==='function'?initial():initial;return [state[index],value=>{state[index]=typeof value==='function'?value(state[index]):value;}];}};
     if(id==='react/jsx-runtime')return {jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props}),Fragment:'fragment'};
     if(id==='../../hooks/useRecommendationCenter')return {useRecommendationCenter:()=>({data,loading:false,failed:false,authorizationRequired:false,refresh:()=>{}})};
+    if(id==='../TeamBadge')return {TeamBadge:({team,size})=>({type:'span',props:{'data-badge-name':team.name.zh,'data-badge-id':team.id,'data-badge-size':size}})};
     if(id==='../../services/recommendationCenterView')return view;if(id==='lucide-react')return new Proxy({},{get:()=>()=>null});if(id.endsWith('.css'))return {};throw Error(id);
   });
   const expand=node=>Array.isArray(node)?node.map(expand):node&&typeof node==='object'?(typeof node.type==='function'?expand(node.type(node.props)):{...node,props:{...node.props,children:expand(node.props?.children)}}):node;
@@ -44,4 +45,23 @@ test('changing review type resets the batch and filters combo legs by team witho
   const ui=await harness();const base=ui.data.previews.find(combo=>combo.size===2);ui.data.review.combos=Array.from({length:15},(_,index)=>({combo:{...base,id:'combo-ui-'+index,frozenAt:base.generatedAt,legs:base.legs.map((leg,i)=>({...leg,homeTeamName:index===14&&i===0?'指定串关球队':leg.homeTeamName}))},settlement:{state:index===14?'WON':'PENDING'}}));
   let tree=ui.render();button(tree,'再显示12条').props.onClick();tree=ui.render();button(tree,'2串1SP≥2.50').props.onClick();tree=ui.render();assert.equal(byClass(tree,'rc-combo').length,12);assert.match(words(tree),/共 15 条明细 · 已显示 12 条/);
   nodes(tree,n=>n.type==='input')[0].props.onChange({target:{value:'指定串关球队'}});tree=ui.render();assert.equal(byClass(tree,'rc-combo').length,1);assert.match(words(tree),/指定串关球队/);assert.match(words(tree),/冻结/);
+});
+
+test('single and combo badges use frozen team names without substituting current fixture identities',async()=>{
+  const ui=await harness();
+  const row=ui.data.review.singles[0];
+  row.decision=Object.freeze({...row.decision,homeTeamName:'冻结主队',awayTeamName:'冻结客队'});
+  ui.data.review.singles=[row];
+  ui.data.current[0].decision={...ui.data.current[0].decision,homeTeamName:'当前不同主队',awayTeamName:'当前不同客队'};
+  const base=ui.data.previews.find(combo=>combo.size===2);
+  const combo={...base,frozenAt:base.generatedAt,legs:base.legs.map((leg,i)=>Object.freeze({...leg,homeTeamName:`历史串关主队${i}`,awayTeamName:`历史串关客队${i}`}))};
+  ui.data.review.combos=[{combo,settlement:{state:'PENDING'}}];
+  const before=JSON.stringify({row,combo});
+  let tree=ui.render();
+  const badges=()=>nodes(tree,node=>Boolean(node.props?.['data-badge-name']));
+  assert.deepEqual(badges().map(node=>node.props['data-badge-name']),['冻结主队','冻结客队']);
+  assert(badges().every(node=>node.props['data-badge-size']==='sm'));
+  button(tree,'2串1SP≥2.50').props.onClick();tree=ui.render();
+  assert.deepEqual(badges().map(node=>node.props['data-badge-name']),['历史串关主队0','历史串关客队0','历史串关主队1','历史串关客队1']);
+  assert.equal(JSON.stringify({row,combo}),before);
 });
