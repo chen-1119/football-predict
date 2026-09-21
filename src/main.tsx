@@ -7,6 +7,7 @@ import './styles/shell.css'
 import './styles/matchday-shell.css'
 import './styles/product-v3.css'
 import App from './App.tsx'
+import './styles/detail-light.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { RefreshCw, ChevronDown } from 'lucide-react';
+import { RefreshCw, ChevronDown, Search, ArrowUpRight } from 'lucide-react';
 import { useRecommendationCenter } from '../../hooks/useRecommendationCenter';
 import { quoteSourceLabel, comboLaneFresh, comboPreviewForSize, comboLegSelection, primarySelectionSummary, handicapAnalysisBasis, calibrationSampleBasis, type Decision, type Settlement, type Combo, type ComboSelection, type Summary, type Outcome, type HandicapCalibrationProfile, type HandicapBreakdown } from '../../services/recommendationCenterView';
 import '../../styles/recommendation-center.css';
@@ -57,11 +57,13 @@ function RecordDetails({d,selection,language,onSelectMatch}:{d:Decision;selectio
 function Pick({d,settlement,handicapSettlement,language,onSelectMatch}:{d:Decision;settlement:Settlement;handicapSettlement?:Settlement|null;language:Language;onSelectMatch:(id:string)=>void}){
   const zh=language==='zh';
   return <article className="rc-pick"><header><span>{d.matchNo||d.sourceMatchId} · {format(d.kickoffTime,language)}</span><span className={`rc-state rc-state--${settlement.state}`}>{resultLabel(settlement.state,zh)}</span></header>
+    <div className="rc-pick__main"><h3>{d.homeTeamName} <span>vs</span> {d.awayTeamName}</h3>{settlement.score&&<span className="rc-match-score" aria-label={zh?'90分钟赛果':'90-minute result'}>{settlement.score.replace('-', ' : ')}</span>}</div>
     <PrimaryPickHeader d={d} language={language}/>
-    <div className="rc-pick__main"><div><h3>{d.homeTeamName} <span>vs</span> {d.awayTeamName}</h3><small>{zh?'发布':'Published'} {format(d.publishedAt,language)} · {quoteSourceLabel(d,language)}</small></div></div>
-    <div className="rc-probabilities" aria-label={zh?'发布时胜平负概率':'Published outcome probabilities'}>{(['1','X','2'] as const).map(c=><div key={c} className={c===d.tipCode?'is-selected':''}><span>{title(c,zh)}</span><strong>{(d.probabilities[c]*100).toFixed(1)}%</strong><span className="rc-bar"><i style={{width:`${d.probabilities[c]*100}%`}}/></span></div>)}</div>
-    <HandicapBlock d={d} settlement={handicapSettlement} language={language}/>
-    {settlement.score&&<p className="rc-score">{zh?'90分钟赛果':'90-minute result'} <strong>{settlement.score}</strong></p>}
+    <div className="rc-card-footer"><span>{zh?'发布于':'Published'} {format(d.publishedAt,language)}</span><button type="button" className="rc-match-link" onClick={()=>onSelectMatch(d.matchId)}>{zh?'比赛详情':'Match details'}<ArrowUpRight size={14} aria-hidden="true"/></button></div>
+    <details className="rc-analysis"><summary><span>{zh?'概率与让球分析':'Probabilities & handicap analysis'}</span><ChevronDown size={16} aria-hidden="true"/></summary><div className="rc-analysis__body">
+      <div className="rc-probabilities" aria-label={zh?'发布时胜平负概率':'Published outcome probabilities'}>{(['1','X','2'] as const).map(c=><div key={c} className={c===d.tipCode?'is-selected':''}><span>{title(c,zh)}</span><strong>{(d.probabilities[c]*100).toFixed(1)}%</strong><span className="rc-bar"><i style={{width:`${d.probabilities[c]*100}%`}}/></span></div>)}</div>
+      <HandicapBlock d={d} settlement={handicapSettlement} language={language}/>
+    </div></details>
     <RecordDetails d={d} language={language} onSelectMatch={onSelectMatch}/>
   </article>;
 }
@@ -75,11 +77,11 @@ function ComboCard({combo,settlement,language,onSelectMatch}:{combo:Combo;settle
     <p className="rc-disclaimer">{zh?'可混合胜平负与让球胜平负，每场只选一腿；模型仍在验证，未将单场概率相乘作为真实串关命中率。':'1X2 and handicap 1X2 may be mixed, with one leg per match. The model remains unvalidated; multiplying single probabilities does not establish a real combo hit rate.'}</p>
   </article>;
 }
-function Stats({value,zh}:{value:Summary|undefined;zh:boolean}){return <div className="rc-stats">{[
-  [zh?'已发布':'Published',value?.published??'—'],[zh?'命中 / 已结算':'Won / Settled',value?`${value.won} / ${value.settled}`:'—'],
-  [zh?'命中率':'Hit rate',value?.hitRate==null?'—':`${(value.hitRate*100).toFixed(1)}%`],[zh?'待核 / 无效':'Disputed / Void',value?`${value.disputed} / ${value.void}`:'—'],
-  [zh?'待赛果':'Pending results',value?.pending??'—'],
-].map(([label,v])=><div key={label}><span>{label}</span><strong>{v}</strong></div>)}</div>;}
+function Stats({value,zh}:{value:Summary|undefined;zh:boolean}){return <section className="rc-stats-wrap" aria-label={zh?'历史表现汇总':'Historical performance summary'}><div className="rc-stats-heading"><strong>{zh?'历史表现':'Historical performance'}</strong><small>{zh?'仅已结算计入命中率 · 不随明细筛选变化':'Hit rate uses settled records · filters only affect detail cards'}</small></div><div className="rc-stats">{[
+  [zh?'命中率':'Hit rate',value?.hitRate==null?'—':`${(value.hitRate*100).toFixed(1)}%`],
+  [zh?'命中 / 已结算':'Won / Settled',value?`${value.won} / ${value.settled}`:'—'],[zh?'待赛果':'Pending results',value?.pending??'—'],
+  [zh?'已发布':'Published',value?.published??'—'],[zh?'待核 / 无效':'Disputed / Void',value?`${value.disputed} / ${value.void}`:'—'],
+].map(([label,v],index)=><div key={label} className={index===0?'is-primary':undefined}><span>{label}</span><strong>{v}</strong></div>)}</div></section>;}
 function HandicapPerformance({breakdown,legacy,zh}:{breakdown?:HandicapBreakdown;legacy?:Summary;zh:boolean}){
   if(!breakdown)return legacy?<div className="rc-handicap-summary"><span>{zh?'让球历史合计 · 尚未按版本拆分':'Handicap history · version split unavailable'}</span><strong>{legacy.hitRate==null?'—':`${(legacy.hitRate*100).toFixed(1)}%`}</strong><small>{zh?'命中 / 已结算':'Won / Settled'} {legacy.won} / {legacy.settled}</small></div>:null;
   const rows:Array<{key:string;label:string;scope:string;value:Summary}>=[{key:'v1',label:zh?'旧版独立让球 · v1':'Standalone handicap · v1',scope:zh?'全部旧版已结算场次':'All settled legacy matches',value:breakdown.standaloneV1}];
@@ -108,6 +110,7 @@ function HandicapCalibrationPanel({profile,language}:{profile?:HandicapCalibrati
 export function RecommendationCenter({language,onSelectMatch,mode='recommendations',initialTab='single'}:Props){
   const {data,loading,failed,authorizationRequired,refresh}=useRecommendationCenter();
   const [tab,setTab]=useState(initialTab),[,setClockTick]=useState(0);
+  const [filters,setFilters]=useState<{query:string;state:'ALL'|Settlement['state'];limit:number}>({query:'',state:'ALL',limit:12});
   // The interval wakes an idle page; every data render must use the actual
   // clock. A saved tick can precede a newly received lane timestamp by seconds.
   const now=Date.now();
@@ -121,27 +124,36 @@ export function RecommendationCenter({language,onSelectMatch,mode='recommendatio
   const rows=review?data?.review.singles||[]:currentDay?data?.current||[]:[];
   const size=tab==='two'?2:3;
   const frozen=(review?data?.review.combos:currentDay?data?.todayCombos:[])?.filter(r=>r.combo.size===size)||[];
+  const needle=filters.query.trim().normalize('NFKC').toLocaleLowerCase();
+  const matchesFilter=(decisions:Decision[],settlement:Settlement)=>!review||((filters.state==='ALL'||settlement.state===filters.state)&&(!needle||decisions.some(d=>[d.homeTeamName,d.awayTeamName,d.matchNo||'',d.sourceMatchId].some(value=>value.normalize('NFKC').toLocaleLowerCase().includes(needle)))));
+  const filteredRows=rows.filter(row=>matchesFilter([row.decision],row.settlement)),filteredCombos=frozen.filter(row=>matchesFilter(row.combo.legs,row.settlement));
+  const visibleRows=review?filteredRows.slice(0,filters.limit):filteredRows,visibleFrozen=review?filteredCombos.slice(0,filters.limit):filteredCombos;
+  const filteredCount=tab==='single'?filteredRows.length:filteredCombos.length,displayedCount=tab==='single'?visibleRows.length:visibleFrozen.length;
+  const hasFilters=Boolean(needle)||filters.state!=='ALL';
+  const clearFilters=()=>setFilters({query:'',state:'ALL',limit:12});
   const comboFresh=comboLaneFresh(data,now);
   const preview=!review&&!frozen.length?comboPreviewForSize(data,size,now,failed):undefined;
   const comboCandidates=data?.lanes.combos?.candidateCount;
   const comboUnavailable=failed||!comboFresh;
   const activeInputs=tab==='single'?data?.inputAsOf:data?.lanes.combos?.inputAsOf??data?.inputAsOf;
   return <section className="recommendation-center" aria-labelledby="rc-title">
-    <header className="rc-heading"><div><span className="rc-eyebrow">{zh?'统一决策 · 可追溯发布':'One decision · Traceable publication'}</span><h1 id="rc-title">{review?(zh?'赛后复盘':'Result Review'):(zh?'今日推荐':'Today’s Recommendations')}</h1><p>{zh?'单场与串关共用决策版本；原始方向不改，官方赛果更正同步复盘。':'Singles and combos share decision versions. Original picks remain immutable; official corrections update both records.'}</p></div><button type="button" className="rc-refresh" onClick={refresh}><RefreshCw size={16} aria-hidden="true"/>{zh?'刷新':'Refresh'}</button></header>
-    <div className="rc-meta"><span>{zh?'业务日':'Match day'} {data?.businessDate||'—'}</span><span>{zh?'行情截至':'Inputs as of'} {format(activeInputs,language)}</span><span>{zh?'赛果核对':'Results checked'} {format(data?.resultAsOf,language)}</span><span>{zh?'模型验证中':'Model unvalidated'}</span></div>
-    <div className="rc-tabs" role="group" aria-label={zh?'推荐类型':'Recommendation type'}>{(['single','two','three'] as const).map(t=><button key={t} type="button" aria-pressed={tab===t} onClick={()=>setTab(t)}>{t==='single'?(zh?'单场':'Singles'):t==='two'?(zh?'2串1 · SP≥2.50':'2-leg · SP≥2.50'):(zh?'3串1 · SP≥5.00':'3-leg · SP≥5.00')}</button>)}</div>
-    <Stats value={summary} zh={zh}/>{review&&tab==='single'&&<><HandicapPerformance breakdown={data?.review.statistics.handicapBreakdown} legacy={handicapSummary} zh={zh}/><HandicapCalibrationPanel profile={data?.review.handicapCalibration} language={language}/></>}
+    <header className="rc-heading"><div><span className="rc-eyebrow">{zh?'比赛日 '+(data?.businessDate||'—'):'MATCH DAY '+(data?.businessDate||'—')}</span><h1 id="rc-title">{review?(zh?'赛后复盘':'Result Review'):(zh?'今日推荐':'Today’s Recommendations')}</h1><p>{review?(zh?'查看真实赛果，复盘每一次选择。':'Review every selection against actual results.'):(zh?'先看比赛与方向，再看选择依据。':'Start with the match and pick, then explore the evidence.')}</p></div><button type="button" className="rc-refresh" onClick={refresh} disabled={loading} aria-label={zh?'刷新推荐与复盘':'Refresh recommendations and review'}><RefreshCw size={16} aria-hidden="true"/>{loading?(zh?'更新中':'Updating'):(zh?'刷新':'Refresh')}</button></header>
+    <div className="rc-meta"><span className="rc-reference-label">{zh?'参考推荐 · 模型验证中':'Reference picks · Model unvalidated'}</span><span>{zh?'行情更新':'Inputs updated'} {format(activeInputs,language)}</span><span>{zh?'赛果核对':'Results checked'} {format(data?.resultAsOf,language)}</span></div>
+    <div className="rc-tabs" role="group" aria-label={zh?'推荐类型':'Recommendation type'}>{(['single','two','three'] as const).map(t=><button key={t} type="button" aria-pressed={tab===t} onClick={()=>{setTab(t);setFilters(current=>({...current,limit:12}));}}>{t==='single'?(zh?'单场推荐':'Singles'):t==='two'?(zh?'2串1':'2-leg combo'):(zh?'3串1':'3-leg combo')}{t!=='single'&&<small>SP≥{t==='two'?'2.50':'5.00'}</small>}</button>)}</div>
+    <Stats value={summary} zh={zh}/>{review&&tab==='single'&&<details className="rc-review-insights"><summary><div><strong>{zh?'让球复盘与模型校准':'Handicap review & calibration'}</strong><span>{zh?'按版本查看命中率、样本分母与验证结果':'Compare versions, denominators and validation results'}</span></div><ChevronDown size={18} aria-hidden="true"/></summary><div className="rc-review-insights__body"><HandicapPerformance breakdown={data?.review.statistics.handicapBreakdown} legacy={handicapSummary} zh={zh}/><HandicapCalibrationPanel profile={data?.review.handicapCalibration} language={language}/></div></details>}
     {authorizationRequired?<p className="rc-notice" role="alert">{zh?'请使用网站访问权限重新登录。':'Please sign in with your website access.'}</p>:failed?<p className="rc-notice" role="status">{zh?'连接恢复中；保留上次已发布记录，不将读取失败显示为零成绩。':'Reconnecting. Retaining the last published records; errors do not reset statistics.'}</p>:null}
     {!loading&&(tab==='single'?stale:!comboFresh)&&<p className="rc-notice">{zh?'当前显示已发布快照，行情更新延迟；旧快照不作为新串关输入。':'Published snapshots are retained while inputs are delayed; old snapshots do not create new combos.'}</p>}
     {reviewDelayed&&<p className="rc-notice">{zh?'赛果核对正在恢复，新推荐发布不受此任务影响。':'Result verification is recovering; recommendation publication is independent.'}</p>}
     {!review&&tab==='single'&&rows.length>0&&rows.every(row=>!row.decision.handicapAnalysis)&&<p className="rc-notice" role="status">{zh?'让球分析等待包含进球期望与盘口的新数据，更新后自动显示；旧冻结记录保留原内容。':'Handicap analysis will appear automatically when goal estimates and handicap lines arrive. Existing frozen records retain their original content.'}</p>}
     {(data?.excludedCorruptRecords||0)>0&&<p className="rc-notice">{zh?'有记录正在单独核验，当前统计不包含这些记录。':'Some records are quarantined for verification and excluded from these statistics.'}</p>}
+    {review&&<section className="rc-review-tools" aria-label={zh?'复盘明细筛选':'Review detail filters'}><div className="rc-filters"><label className="rc-search"><Search size={17} aria-hidden="true"/><span className="rc-sr-only">{zh?'搜索球队或比赛编号':'Search team or match number'}</span><input type="search" value={filters.query} placeholder={zh?'搜索球队或比赛编号':'Search team or match number'} onChange={event=>setFilters(current=>({...current,query:event.target.value,limit:12}))}/></label><label className="rc-status-filter"><span>{zh?'结算状态':'Result status'}</span><select value={filters.state} onChange={event=>setFilters(current=>({...current,state:event.target.value as typeof current.state,limit:12}))}><option value="ALL">{zh?'全部状态':'All results'}</option>{(['WON','LOST','PENDING','DISPUTED','VOID'] as const).map(state=><option key={state} value={state}>{resultLabel(state,zh)}</option>)}</select></label>{hasFilters&&<button type="button" className="rc-clear" onClick={clearFilters}>{zh?'清除筛选':'Clear filters'}</button>}</div><p className="rc-results-count" aria-live="polite">{zh?`共 ${filteredCount} 条${hasFilters?'符合条件的':''}明细 · 已显示 ${displayedCount} 条`:`${filteredCount} matching records · ${displayedCount} shown`}</p></section>}
     {loading&&!data?<div className="rc-empty" role="status">{zh?'正在读取推荐与复盘…':'Loading recommendations and review…'}</div>:tab==='single'?
-      <div className="rc-picks">{rows.length?rows.map(row=><Pick key={row.decision.decisionId} d={row.decision} settlement={row.settlement} handicapSettlement={row.handicapSettlement} language={language} onSelectMatch={onSelectMatch}/>):<p className="rc-empty">{zh?'当前还没有已落库的有效赛前记录。新数据到达后自动评估发布，不等待旧正式资格。':'No persisted eligible pre-match record yet. New inputs are evaluated without the old formal-pick gate.'}</p>}</div>:
-      <div className="rc-combos">{frozen.map(row=><ComboCard key={row.combo.id} combo={row.combo} settlement={row.settlement} language={language} onSelectMatch={onSelectMatch}/>)}{preview&&<ComboCard combo={preview} language={language} onSelectMatch={onSelectMatch}/>}{!frozen.length&&!preview&&<p className="rc-empty">{review?(zh?'暂无该类型的冻结复盘记录。':'No frozen review records for this size.'):
+      <div className="rc-picks">{visibleRows.length?visibleRows.map(row=><Pick key={row.decision.decisionId} d={row.decision} settlement={row.settlement} handicapSettlement={row.handicapSettlement} language={language} onSelectMatch={onSelectMatch}/>):<div className="rc-empty"><strong>{review&&hasFilters?(zh?'没有符合条件的比赛':'No matching matches'):(zh?'暂时没有可展示的推荐':'No recommendations yet')}</strong><p>{review&&hasFilters?(zh?'试试其他球队名称，或选择全部结算状态。':'Try another team or select all result states.'):(zh?'有效赛前数据到达后会自动更新，已冻结的历史记录继续保留。':'Eligible pre-match data will update automatically. Existing frozen records are retained.')}</p>{review&&hasFilters&&<button type="button" className="rc-link" onClick={clearFilters}>{zh?'清除筛选':'Clear filters'}</button>}</div>}</div>:
+      <div className="rc-combos">{visibleFrozen.map(row=><ComboCard key={row.combo.id} combo={row.combo} settlement={row.settlement} language={language} onSelectMatch={onSelectMatch}/>)}{preview&&<ComboCard combo={preview} language={language} onSelectMatch={onSelectMatch}/>}{!visibleFrozen.length&&!preview&&<div className="rc-empty"><strong>{review&&hasFilters?(zh?'没有符合条件的串关':'No matching combos'):(zh?'暂无可展示的组合':'No combo to show')}</strong><p>{review?(hasFilters?(zh?'试试其他球队名称，或选择全部结算状态。':'Try another team or select all result states.'):(zh?'暂无该类型的冻结复盘记录。':'No frozen review records for this size.')):
         comboUnavailable?(zh?'串关数据正在更新；已冻结记录仍然保留。':'Combo data is updating; frozen records are retained.'):
         typeof comboCandidates==='number'&&comboCandidates<size?(zh?`当前可用${comboCandidates}场，${size}串1需要${size}场不同比赛。新场次到达后自动重算。`:`${comboCandidates} valid matches available; this combo requires ${size} distinct matches.`):
-        (zh?`今日无合格组合。当前可用${comboCandidates??'—'}场，胜平负及让球首选尚未组成满足SP≥${size===2?'2.50':'5.00'}的${size}串1；不会改选第二方向凑SP。`:`No qualifying combo today. The available 1X2 and handicap primary picks do not form a ${size}-leg combination with SP≥${size===2?'2.50':'5.00'}; secondary directions are not substituted.`)}</p>}</div>}
+        (zh?`今日无合格组合。当前可用${comboCandidates??'—'}场，胜平负及让球首选尚未组成满足SP≥${size===2?'2.50':'5.00'}的${size}串1；不会改选第二方向凑SP。`:`No qualifying combo today. The available 1X2 and handicap primary picks do not form a ${size}-leg combination with SP≥${size===2?'2.50':'5.00'}; secondary directions are not substituted.`)}</p>{review&&hasFilters&&<button type="button" className="rc-link" onClick={clearFilters}>{zh?'清除筛选':'Clear filters'}</button>}</div>}</div>}
+    {review&&filteredCount>displayedCount&&<div className="rc-load-more"><span>{zh?`还有 ${filteredCount-displayedCount} 条明细`:`${filteredCount-displayedCount} more records`}</span><button type="button" className="rc-link" onClick={()=>setFilters(current=>({...current,limit:current.limit+12}))}>{zh?'再显示12条':'Show 12 more'}<ChevronDown size={15} aria-hidden="true"/></button></div>}
     <footer className="rc-footnote">{zh?'单场每场统计截止前最后一个真实发布版本；串关统计冻结时绑定的版本，两者不混算。未结算不记为未命中。':'Single statistics use the last actually published version before cutoff; combos use their bound frozen versions. Pending results are not losses.'}{review&&data?` ${zh?'明细最多展示':'Detail limit:'} ${data.review.limit}${zh?'条，统计来自完整新台账。':' rows; statistics cover the complete new ledger.'}`:''}</footer>
   </section>;
 }

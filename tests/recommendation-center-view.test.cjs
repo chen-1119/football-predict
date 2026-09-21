@@ -90,7 +90,7 @@ function renderedText(data,props){
   vm.runInNewContext(code,{module,exports:module.exports,Date,require:id=>{
     if(id==='react')return react;if(id==='react/jsx-runtime')return require(id);
     if(id==='../../hooks/useRecommendationCenter')return {useRecommendationCenter:()=>({data,loading:false,failed:false,authorizationRequired:false,refresh:()=>{}})};
-    if(id==='../../services/recommendationCenterView')return view;if(id==='lucide-react')return {RefreshCw:()=>null,ChevronDown:()=>null};if(id.endsWith('.css'))return {};throw Error(id);
+    if(id==='../../services/recommendationCenterView')return view;if(id==='lucide-react')return {RefreshCw:()=>null,ChevronDown:()=>null,Search:()=>null,ArrowUpRight:()=>null};if(id.endsWith('.css'))return {};throw Error(id);
   }});
   return renderToStaticMarkup(react.createElement(module.exports.RecommendationCenter,{language:'zh',onSelectMatch:()=>{},...props}));
 }

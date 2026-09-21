@@ -6,20 +6,20 @@
 .app-frame.app-shell-v2 .app-brand-title { font-size: 15px; font-weight: 720; letter-spacing: -.01em; }
 .app-frame.app-shell-v2 .app-brand-subtitle { font-size: 10px; font-weight: 480; color: var(--shell-text-muted); }
 .app-frame.app-shell-v2 .app-nav-item { min-height: 40px; padding-inline: 13px; font-weight: 600; }
-.app-frame.app-shell-v2 .app-nav-item.is-active { background: rgba(91, 140, 255, .13); }
+.app-frame.app-shell-v2 .app-nav-item.is-active { background: #e8f4ee; }
 .app-frame.app-shell-v2 .app-nav-item::after { display: none; }
 
 .app-frame.app-shell-v2 .predictions-v4 .dashboard-hero.is-compact {
-  padding: 24px 0 6px;
+  padding: 4px 0;
   border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
 }
-.app-frame.app-shell-v2 .predictions-v4__page-header { min-height: 76px; align-items: start; gap: 18px; }
+.app-frame.app-shell-v2 .predictions-v4__page-header { min-height: 0; align-items: center; gap: 18px; }
 .app-frame.app-shell-v2 .predictions-v4__title-line { flex-wrap: wrap; row-gap: 10px; }
 .app-frame.app-shell-v2 .predictions-v4__title-line h1 {
-  font-size: clamp(26px, 3vw, 38px);
+  font-size: clamp(25px, 2.5vw, 32px);
   font-weight: 720;
   line-height: 1.18;
   letter-spacing: -.04em;
@@ -40,27 +40,28 @@
 .app-frame.app-shell-v2 .predictions-v4 .date-toolbar { background: transparent; border: 0; padding-inline: 0; }
 .app-frame.app-shell-v2 .predictions-v4 .date-scope-note { margin-top: 10px; font-size: 11px; line-height: 1.6; color: var(--shell-text-muted); }
 .app-frame.app-shell-v2 .predictions-v4 .filters-panel {
-  border-radius: 13px;
-  border: 1px solid rgba(93, 126, 173, .2);
-  background: rgba(11, 22, 40, .72);
+  border-radius: 0;
+  border: 0;
+  border-top: 1px solid #edf1f2;
+  background: transparent;
   box-shadow: none;
 }
-.app-frame.app-shell-v2 .predictions-v4 .filters-summary { min-height: 50px; padding: 13px 16px; font-size: 13px; }
+.app-frame.app-shell-v2 .predictions-v4 .filters-summary { min-height: 44px; padding: 12px 0 0; font-size: 12px; }
 .app-frame.app-shell-v2 .predictions-v4 .filter-chip {
   min-height: 38px;
   border-radius: 9px;
   font-size: 12px;
 }
 .app-frame.app-shell-v2 .predictions-v4 .filter-chip.active {
-  border-color: rgba(91, 140, 255, .48);
-  background: rgba(91, 140, 255, .12);
-  color: #dce7ff;
+  border-color: #087f67;
+  background: #e9f5ef;
+  color: #076951;
 }
 .app-frame.app-shell-v2 .predictions-v4 .compact-record {
   padding: 15px 17px;
   border-radius: 12px;
-  border-color: rgba(93, 126, 173, .18);
-  background: rgba(11, 22, 40, .72);
+  border-color: #dce5e7;
+  background: #f5f9f7;
   font-size: 12px;
   gap: 12px 24px;
 }
@@ -75,6 +76,6 @@
   .app-frame.app-shell-v2 .page-main { padding-top: 14px; padding-bottom: calc(var(--shell-mobile-tabbar-height) + 30px); }
   .app-frame.app-shell-v2 .predictions-v4__page-header { grid-template-columns: minmax(0, 1fr); gap: 7px; }
   .app-frame.app-shell-v2 .predictions-v4__header-meta { justify-content: flex-start; padding-top: 0; white-space: normal; flex-wrap: wrap; }
-  .app-frame.app-shell-v2 .predictions-v4 .dashboard-hero.is-compact { padding-top: 14px; }
+  .app-frame.app-shell-v2 .predictions-v4 .dashboard-hero.is-compact { padding-top: 4px; }
   .app-frame.app-shell-v2 .predictions-v4__title-line h1 { font-size: 27px; }
 }

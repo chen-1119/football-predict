@@ -27,7 +27,7 @@ interface MatchSummaryRowProps {
 export const MatchSummaryRow = ({ eventKey, tone, timeLabel, teamsLabel, marketOddsLabel,
   pickLabel, oddsLabel, resultLabel, detailsLabel, detailsAriaLabel, time, teams,
   marketOdds, pick, odds, result, onOpen }: MatchSummaryRowProps) => (
-  <article data-match-event-key={eventKey} data-selection-tone={tone}
+  <article data-match-event-key={eventKey} data-selection-tone={tone} aria-label={detailsAriaLabel}
     className={`match-row predictions-v4__match-row compact-match-row matchday-card is-${tone}`}>
     <div className="match-time-cell predictions-v4__match-slot is-time" data-label={timeLabel}>
       <span className="predictions-v4__slot-label">{timeLabel}</span>{time}

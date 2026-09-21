@@ -1,39 +1,36 @@
 :root {
-  color-scheme: dark;
-
-  /* Product palette: deep navy surfaces, cool blue interaction, restrained status colors. */
-  --shell-bg: #07101f;
-  --shell-bg-elevated: #0b1628;
-  --shell-surface: #0f1d31;
-  --shell-surface-hover: #14253d;
-  --shell-surface-strong: #192b45;
-  --shell-border: #253a57;
-  --shell-border-subtle: #172a43;
-  --shell-text: #f7f9fc;
-  --shell-text-secondary: #b7c4d6;
-  --shell-text-muted: #7f91a8;
-  --shell-green: #5b8cff;
-  --shell-green-hover: #77a0ff;
-  --shell-green-soft: rgba(91, 140, 255, 0.14);
-  --shell-gold: #f5c76b;
-  --shell-warning: #f0b35a;
-  --shell-danger: #f07878;
-  --shell-danger-soft: rgba(240, 120, 120, 0.12);
-  --shell-positive: #52d3a0;
-  --shell-cyan: #5ed4f3;
-  --shell-violet: #a58bfa;
-
+  color-scheme: light;
+  --shell-bg: #f4f7f8;
+  --shell-bg-elevated: #ffffff;
+  --shell-surface: #ffffff;
+  --shell-surface-hover: #f2f7f6;
+  --shell-surface-strong: #eaf3f0;
+  --shell-border: #d8e2e5;
+  --shell-border-subtle: #e6edef;
+  --shell-text: #182b34;
+  --shell-text-secondary: #52636e;
+  --shell-text-muted: #667783;
+  --shell-green: #087f67;
+  --shell-green-hover: #066450;
+  --shell-green-soft: #e7f5ef;
+  --shell-brand: var(--shell-green);
+  --shell-gold: #926214;
+  --shell-warning: #936019;
+  --shell-danger: #bd3545;
+  --shell-danger-soft: #fff0f2;
+  --shell-positive: #087f67;
+  --shell-cyan: #13699a;
+  --shell-violet: #6851aa;
   --shell-radius-xs: 6px;
   --shell-radius-sm: 10px;
   --shell-radius-md: 14px;
   --shell-radius-lg: 18px;
-  --shell-shadow-sm: 0 8px 24px rgba(0, 0, 0, 0.18);
-  --shell-shadow-md: 0 24px 64px rgba(0, 0, 0, 0.34);
-  --shell-focus: 0 0 0 3px rgba(91, 140, 255, 0.28);
-
-  --shell-content-width: 1440px;
-  --shell-topbar-height: 64px;
-  --shell-mobile-topbar-height: 54px;
+  --shell-shadow-sm: 0 2px 8px rgba(24, 43, 52, .04);
+  --shell-shadow-md: 0 10px 32px rgba(24, 43, 52, .09);
+  --shell-focus: 0 0 0 3px rgba(8, 127, 103, .16);
+  --shell-content-width: 1320px;
+  --shell-topbar-height: 72px;
+  --shell-mobile-topbar-height: 60px;
   --shell-mobile-tabbar-height: 64px;
   --shell-space-1: 4px;
   --shell-space-2: 8px;
@@ -42,28 +39,25 @@
   --shell-space-5: 20px;
   --shell-space-6: 24px;
   --shell-space-8: 32px;
-
-  --shell-font-sans: "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+  --shell-font-sans: "Inter", "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
   --shell-font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-
   --canvas: var(--shell-bg);
   --surface-1: var(--shell-bg-elevated);
-  --surface-2: var(--shell-surface);
+  --surface-2: #f7f9fa;
   --surface-raised: var(--shell-surface-strong);
   --border-subtle: var(--shell-border-subtle);
   --border-strong: var(--shell-border);
+  --border-color: var(--shell-border);
   --text-1: var(--shell-text);
   --text-2: var(--shell-text-secondary);
   --text-3: var(--shell-text-muted);
   --brand: var(--shell-green);
-  --brand-foreground: #061126;
+  --brand-foreground: #ffffff;
   --info: var(--shell-cyan);
-  --warning: 37 82% 65%;
-  --danger: 0 78% 71%;
   --status-warning: var(--shell-warning);
   --status-danger: var(--shell-danger);
   --value: var(--shell-violet);
-  --live: #ff718c;
+  --live: #bd3545;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -79,27 +73,28 @@
   --font-numeric: var(--shell-font-mono);
 }
 
+/* HSL aliases serve the legacy pages as well as the application shell. */
+:root,
 .app-frame.app-shell-v2 {
-  /* Legacy HSL aliases keep old pages visually aligned with the refreshed shell. */
-  --bg: 218 63% 7%;
-  --bg-page: 218 63% 7%;
-  --bg-card: 216 53% 12%;
-  --bg-card-hover: 215 50% 16%;
-  --bg-soft: 216 48% 13%;
-  --border: 215 40% 24%;
-  --primary: 220 100% 68%;
-  --primary-hover: 220 100% 73%;
-  --primary-soft: 220 58% 19%;
-  --accent: 220 100% 68%;
-  --accent-hover: 220 100% 73%;
-  --premium: 40 87% 69%;
-  --premium-soft: 39 54% 18%;
-  --text-primary: 216 45% 98%;
-  --text-secondary: 215 26% 78%;
-  --text-muted: 215 19% 58%;
-  --warning: 37 82% 65%;
-  --danger: 0 78% 71%;
-  --success: 156 60% 58%;
+  --bg: 195 22% 96%;
+  --bg-page: 195 22% 96%;
+  --bg-card: 0 0% 100%;
+  --bg-card-hover: 156 25% 96%;
+  --bg-soft: 200 23% 98%;
+  --border: 194 20% 87%;
+  --primary: 168 88% 26%;
+  --primary-hover: 168 89% 21%;
+  --primary-soft: 154 41% 93%;
+  --accent: 221 83% 53%;
+  --accent-hover: 221 83% 43%;
+  --premium: 37 75% 32%;
+  --premium-soft: 42 75% 95%;
+  --text-primary: 199 37% 15%;
+  --text-secondary: 201 15% 38%;
+  --text-muted: 201 12% 46%;
+  --warning: 35 70% 34%;
+  --danger: 353 56% 47%;
+  --success: 168 88% 26%;
   --shadow: var(--shell-shadow-md);
   --radius: var(--shell-radius-md);
   --font-sans: var(--shell-font-sans);

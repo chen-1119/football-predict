@@ -32,6 +32,7 @@ export const DateScopeBar = ({
           onClick={() => onSelectDate(option.date)}
           className={`date-chip ${selectedDate === option.date ? 'active' : ''}`}
           aria-pressed={selectedDate === option.date}
+          aria-current={selectedDate === option.date ? 'date' : undefined}
         >
           <span className="date-label">{option.label}</span>
           <span className="date-value">{option.displayDate}</span>
