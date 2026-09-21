@@ -126,7 +126,8 @@ async function verify(pool){
     check(()=>assert.ok(mixedSettled.every(r=>r.settlement.state==='WON')));
     check(()=>assert.equal(mixedView.review.singles.find(r=>r.decision.sourceMatchId==='301').settlement.state,'LOST'));
     check(()=>assert.ok(mixedSettled.every(r=>r.settlement.legs.filter(l=>['301','302'].includes(l.sourceMatchId)).every(l=>l.state==='WON'))));
-    check(()=>assert.deepEqual((await q('SELECT payload FROM football.recommendation_combo_records WHERE business_date=$1 ORDER BY size',[mixedDate])).rows.map(x=>x.payload),mixedRecords));
+    const mixedAfterSettlement=(await q('SELECT payload FROM football.recommendation_combo_records WHERE business_date=$1 ORDER BY size',[mixedDate])).rows.map(x=>x.payload);
+    check(()=>assert.deepEqual(mixedAfterSettlement,mixedRecords));
     return {ok:true,checks,schema,scope:'disposable-test-schema',productionRowsWritten:0};
   }finally{await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);}
 }
