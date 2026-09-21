@@ -3,7 +3,7 @@
 const { evaluateForecast, hash, time, day } = require('../../src/services/publishedForecastPolicy.cjs');
 const { buildHandicapMarginDecision, validHandicapMarginDecision } = require('../../src/services/handicapMarginDecision.cjs');
 const VERSION = 'unified-decision-v1';
-const COMBO_VERSION = 'unified-combo-v1';
+const { COMBO_VERSION, candidatesFor, validCombo } = require('./comboSelections.cjs');
 const FLOORS = Object.freeze({ 2: 2.5, 3: 5 });
 const immutable = value => {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) {
@@ -45,6 +45,10 @@ function validDecision(row) {
   if (row.hadInputHash && row.inputHash !== hash({ hadInputHash:row.hadInputHash, handicapInputHash:row.handicapAnalysis?.inputHash || null })) return false;
   if (!validHandicapMarginDecision(row.handicapAnalysis)) return false;
   if (row.handicapAnalysis && row.handicapAnalysis.straightTipCode !== row.tipCode) return false;
+  if (row.handicapAnalysis?.version === 'handicap-margin-v3' && (row.handicapAnalysis.computedAt !== row.publishedAt
+    || row.handicapAnalysis.cutoffTime !== row.cutoffTime
+    || ['1','X','2'].some(c => Math.abs(row.handicapAnalysis.straightProbabilities?.[c] - row.probabilities?.[c]) > 1e-9
+      || !Number.isFinite(row.handicapAnalysis.straightProbabilities?.[c])))) return false;
   if (row.quoteSource === '500.com:jczq:HAD') {
     const proof = row.quoteProvenance;
     const bound = require('../../src/services/warehouseLotterySp.cjs').warehouseQuoteForMatch({
@@ -105,40 +109,41 @@ function freezeAt(date, legs) {
 }
 function chooseCombo(decisions, size, now) {
   if (!FLOORS[size] || !Number.isFinite(now)) return null;
-  const candidates = decisions.filter(d => validDecision(d) && d.businessDate === day(now) && now < time(d.cutoffTime) && now >= time(d.quoteObservedAt) && now - time(d.quoteObservedAt) <= 15*60000)
-    .slice().sort((a,b) => b.modelProbability - a.modelProbability || a.decisionId.localeCompare(b.decisionId));
+  const candidates = decisions.flatMap(d => candidatesFor(d,now))
+    .sort((a,b) => b.selection.modelProbability - a.selection.modelProbability || a.selection.selectionId.localeCompare(b.selection.selectionId));
   let best = null, score = -Infinity, bestProduct = Infinity, bestKey = '';
   function visit(start, picked, logp) {
     const need = size - picked.length;
     if (!need) {
-      const quote = product(picked); if (!quote?.passes(FLOORS[size])) return;
-      const key = picked.map(d => d.decisionId).sort().join('|');
+      const quote = product(picked.map(item=>item.selection)); if (!quote?.passes(FLOORS[size])) return;
+      const key = picked.map(item => item.selection.selectionId).sort().join('|');
       if (logp > score + 1e-12 || (Math.abs(logp-score) <= 1e-12 && (quote.value < bestProduct || (quote.value === bestProduct && key < bestKey)))) {
         best = picked.slice(); score = logp; bestProduct = quote.value; bestKey = key;
       }
       return;
     }
     if (candidates.length - start < need) return;
-    const bound = candidates.slice(start,start+need).reduce((sum,d) => sum + Math.log(d.modelProbability),logp);
+    const bound = candidates.slice(start,start+need).reduce((sum,item) => sum + Math.log(item.selection.modelProbability),logp);
     if (bound < score - 1e-12) return;
     for (let i=start;i<=candidates.length-need;i++) {
       const next = candidates[i];
-      if (picked.some(d => d.sourceMatchId === next.sourceMatchId || [d.homeTeamId,d.awayTeamId].some(t => [next.homeTeamId,next.awayTeamId].includes(t)))) continue;
-      visit(i+1,[...picked,next],logp+Math.log(next.modelProbability));
+      if (picked.some(({decision:d}) => d.sourceMatchId === next.decision.sourceMatchId || [d.homeTeamId,d.awayTeamId].some(t => [next.decision.homeTeamId,next.decision.awayTeamId].includes(t)))) continue;
+      visit(i+1,[...picked,next],logp+Math.log(next.selection.modelProbability));
     }
   }
   visit(0,[],0);
   if (!best) return null;
-  best.sort((a,b) => time(a.kickoffTime)-time(b.kickoffTime) || a.decisionId.localeCompare(b.decisionId));
-  const body = { version: COMBO_VERSION, id: `combo_${hash([COMBO_VERSION, day(now),size,best.map(d=>d.decisionId)])}`,
+  best.sort((a,b) => time(a.decision.kickoffTime)-time(b.decision.kickoffTime) || a.selection.selectionId.localeCompare(b.selection.selectionId));
+  const legs=best.map(item=>item.decision),selections=best.map(item=>item.selection),selectionIds=selections.map(s=>s.selectionId);
+  const body = { version: COMBO_VERSION, id: `combo_${hash([COMBO_VERSION, day(now),size,selectionIds])}`,
     businessDate: day(now), size, minimumTotalOdds: FLOORS[size], totalOdds: Number(bestProduct.toFixed(2)), rawTotalOdds: bestProduct,
-    legs: best, decisionIds: best.map(d => d.decisionId), generatedAt: new Date(now).toISOString(), freezeAt: new Date(freezeAt(day(now),best)).toISOString(),
-    rankingMethod: 'sum-log-unchanged-model-probability', jointProbability: null, statisticsTrack: 'unified-combo',
+    legs, decisionIds: legs.map(d => d.decisionId), selections, selectionIds, generatedAt: new Date(now).toISOString(), freezeAt: new Date(freezeAt(day(now),legs)).toISOString(),
+    rankingMethod: 'sum-log-unconditional-market-probability', jointProbability: null, statisticsTrack: 'unified-combo',
     calibration: 'unvalidated', overlapWarning: null };
   return immutable(body);
 }
 function freezeCombo(preview, now) {
-  if (!preview || !FLOORS[preview.size] || preview.legs.length !== preview.size || !product(preview.legs)?.passes(FLOORS[preview.size]) || preview.decisionIds?.length !== preview.size || preview.legs.some((d,i) => d.decisionId !== preview.decisionIds[i]) || now < time(preview.freezeAt) || preview.legs.some(d => !validDecision(d) || now >= time(d.cutoffTime) || now - time(d.quoteObservedAt) > 15*60000)) return null;
+  if (!validCombo(preview,{now}) || now < time(preview.freezeAt)) return null;
   const body = { ...preview, frozenAt: new Date(now).toISOString() };
   return immutable({ ...body, recordHash: hash(body) });
 }

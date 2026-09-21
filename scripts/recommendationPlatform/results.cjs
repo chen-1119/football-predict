@@ -1,6 +1,7 @@
 'use strict';
 const { hash, time } = require('../../src/services/publishedForecastPolicy.cjs');
 const { validDecision } = require('./decision.cjs');
+const { COMBO_VERSION,validCombo,comboSelections } = require('./comboSelections.cjs');
 const key = row => JSON.stringify([String(row?.sourceMatchId || row?.id || '').replace(/^sporttery_/, ''), new Date(time(row.eventVersion || row.kickoffTime)).toISOString()]);
 const revision = row => {
   const value = row?.resultRevision ?? row?.postMatchReview?.settlement?.resultRevision ?? 0;
@@ -77,8 +78,15 @@ function settleHandicapDecision(decision,event){
     resultEventId:event.eventId,revision:event.revision,handicapLine:line};
 }
 function settleCombo(combo, heads) {
-  if (!Array.isArray(combo?.legs) || ![2,3].includes(combo.size) || combo.legs.length!==combo.size) throw new Error('Invalid frozen combo');
-  const legs=combo.legs.map(leg=>({decisionId:leg.decisionId,sourceMatchId:leg.sourceMatchId,...settleDecision(leg,heads.get(key(leg)))}));
+  if (!validCombo(combo,{frozen:Boolean(combo?.frozenAt)})) throw new Error('Invalid frozen combo');
+  const selections=comboSelections(combo);
+  const legs=combo.legs.map((leg,i)=>{
+    const selection=selections[i];
+    const snapshot=combo.version===COMBO_VERSION?{...leg,market:selection.market,handicapLine:selection.handicapLine,tipCode:selection.tipCode}:leg;
+    return {decisionId:leg.decisionId,sourceMatchId:leg.sourceMatchId,
+      ...(combo.version===COMBO_VERSION?{selectionId:selection.selectionId,market:selection.market,handicapLine:selection.handicapLine,tipCode:selection.tipCode,odds:selection.odds}:{}),
+      ...settleDecision(snapshot,heads.get(key(leg)))};
+  });
   const state=legs.some(l=>l.state==='DISPUTED')?'DISPUTED':legs.some(l=>l.state==='VOID')?'VOID':legs.some(l=>l.state==='PENDING')?'PENDING':legs.every(l=>l.state==='WON')?'WON':'LOST';
   return {state,legs,revisionHash:hash(legs.map(l=>[l.decisionId,l.resultEventId,l.state]))};
 }
@@ -105,9 +113,44 @@ function handicapSummary(rows){
   const eligible=rows.filter(row=>row.decision?.handicapAnalysis?.tipCode);
   return summary(eligible.map(row=>({decision:row.decision,settlement:row.handicapSettlement||{state:'PENDING'}})),false);
 }
+function handicapBreakdown(rows){
+  const result={standaloneV1:handicapSummary(rows.filter(r=>r.decision?.handicapAnalysis?.version==='handicap-margin-v1'))};
+  for(const version of [2,3]){
+    const group=rows.filter(r=>r.decision?.handicapAnalysis?.version===`handicap-margin-v${version}`);
+    result[`companionV${version}All`]=handicapSummary(group);
+    result[`companionV${version}WhenHadWon`]=handicapSummary(group.filter(r=>r.settlement?.state==='WON'));
+    result[`companionV${version}BothWon`]=summary(group.map(r=>{
+      const a=r.settlement?.state||'PENDING',b=r.handicapSettlement?.state||'PENDING';
+      const state=[a,b].includes('DISPUTED')?'DISPUTED':[a,b].includes('VOID')?'VOID':[a,b].includes('PENDING')?'PENDING':a==='WON'&&b==='WON'?'WON':'LOST';
+      return {settlement:{state}};
+    }));
+  }
+  return result;
+}
+function marketBaseline(rows){
+  let tied=0;
+  const scored=[];
+  for(const row of rows){
+    const p=row.decision?.marketProbabilities;
+    if(!p||!['1','X','2'].every(c=>Number.isFinite(p[c])))continue;
+    const top=['1','X','2'].find(c=>['1','X','2'].every(other=>other===c||p[c]>p[other]+1e-12));
+    if(!top){tied++;continue;}
+    const s=row.settlement||{state:'PENDING'};
+    scored.push({settlement:['WON','LOST'].includes(s.state)?{...s,state:s.actual===top?'WON':'LOST'}:s});
+  }
+  return {...summary(scored),tied,definition:'unique-top-of-frozen-HAD-market-probabilities'};
+}
+function dailySummary(singles,combos){
+  const dates=[...new Set([...singles.map(r=>r.decision.businessDate),...combos.map(r=>r.combo.businessDate)])].sort().reverse();
+  return dates.map(businessDate=>{
+    const rows=singles.filter(r=>r.decision.businessDate===businessDate),groups=combos.filter(r=>r.combo.businessDate===businessDate);
+    return {businessDate,single:summary(rows,true),marketBaseline:marketBaseline(rows),handicapBreakdown:handicapBreakdown(rows),
+      two:summary(groups.filter(r=>r.combo.size===2)),three:summary(groups.filter(r=>r.combo.size===3))};
+  });
+}
 function validResultEvent(e){
   try{return Boolean(e && ['FINAL','VOID','DISPUTED'].includes(e.state) && Number.isSafeInteger(e.revision) && e.revision>=0
     && e.eventKey===key(e) && e.stateHash===fingerprint(e) && e.eventId===`result_${hash([e.eventKey,e.stateHash,e.previousEventId])}`
     && (e.state!=='FINAL'||[e.scoreHome,e.scoreAway].every(n=>Number.isSafeInteger(n)&&n>=0)));}catch{return false;}
 }
-module.exports={key,collectResults,settleDecision,settleHandicapDecision,settleCombo,summary,handicapSummary,validResultEvent};
+module.exports={key,collectResults,settleDecision,settleHandicapDecision,settleCombo,summary,handicapSummary,handicapBreakdown,marketBaseline,dailySummary,validResultEvent};

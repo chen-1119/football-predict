@@ -1,6 +1,7 @@
 'use strict';
 const {evaluateCurrent,validDecision,chooseCombo,freezeCombo,VERSION}=require('./decision.cjs');
-const {key,collectResults,settleDecision,settleHandicapDecision,settleCombo,summary,handicapSummary,validResultEvent}=require('./results.cjs');
+const {key,collectResults,settleDecision,settleHandicapDecision,settleCombo,summary,handicapSummary,handicapBreakdown,marketBaseline,dailySummary,validResultEvent}=require('./results.cjs');
+const {validCombo}=require('./comboSelections.cjs');
 const {day,time,hash}=require('../../src/services/publishedForecastPolicy.cjs');
 const {buildHandicapCalibration}=require('../../src/services/handicapCalibration.cjs');
 
@@ -13,7 +14,7 @@ async function assessInputs(repo,publication,now){
   const inputs=repo.currentInputs?await repo.currentInputs(now):{current:await repo.current(),receiptHashes:new Set()};
   const [historical,rawHeads]=await Promise.all([repo.latest(),repo.resultHeads()]);
   const calibrationHeads=new Map(rawHeads.filter(validResultEvent).map(e=>[e.eventKey,e]));
-  const handicapCalibration=buildHandicapCalibration(historical,calibrationHeads,day(now));
+  const handicapCalibration=buildHandicapCalibration(historical.filter(validDecision),calibrationHeads,day(now),{asOf:now});
   const assessed=evaluateCurrent(inputs.current,{now,publication,handicapCalibration});
   // A full model publication is not a quote clock. An older generation may
   // supply a still-valid prospective model ONLY with a fresh, independently
@@ -112,20 +113,19 @@ function createRuntime(ports,{validators}={}){
     for(const e of rawHeads)if(!validResultEvent(e))quarantined.push({reason:'invalid-result-record',id:String(e?.eventId||'unknown')});
     const heads=new Map(rawHeads.filter(validResultEvent).map(e=>[e.eventKey,e]));
     const singles=decisions.map(d=>{const event=heads.get(key(d));return {decision:d,settlement:settleDecision(d,event),handicapSettlement:settleHandicapDecision(d,event)};});
-    const handicapCalibration=buildHandicapCalibration(decisions,heads,day(now));
+    const handicapCalibration=buildHandicapCalibration(decisions,heads,day(now),{asOf:now});
     const records=await repo.frozenCombos();const ids=[...new Set(records.flatMap(c=>Array.isArray(c?.decisionIds)?c.decisionIds:[]))];
     const bindings=new Map((await repo.decisions(ids)).map(d=>[d.decisionId,d]));
     const combos=[];
     for(const c of records){
       try{
-        const {recordHash,...body}=c;
-        if(hash(body)!==recordHash || c.legs.length!==c.size || c.legs.some(d=>!validDecision(d)||bindings.get(d.decisionId)?.recordHash!==d.recordHash))throw new Error('Broken decision binding');
+        if(!validCombo(c,{frozen:true}) || c.legs.some(d=>!validDecision(bindings.get(d.decisionId))||bindings.get(d.decisionId)?.recordHash!==d.recordHash))throw new Error('Broken decision binding');
         combos.push({combo:c,settlement:settleCombo(c,heads)});
       }catch{quarantined.push({reason:'invalid-combo-binding',id:String(c?.id||'unknown')});}
     }
     for(const issue of quarantined)await repo.issue('view',issue);
     singles.sort((a,b)=>time(b.decision.publishedAt)-time(a.decision.publishedAt));
-    const previews=lanes.combos?.status==='ok' ? (lanes.combos.previews||[]).filter(c=>c.businessDate===day(now)&&c.legs.every(l=>now<time(l.cutoffTime)&&now-time(l.quoteObservedAt)<=15*60000)) : [];
+    const previews=lanes.combos?.status==='ok' ? (lanes.combos.previews||[]).filter(c=>c.businessDate===day(now)&&validCombo(c,{now})) : [];
     const selected=singles.filter(r=>r.decision.businessDate===day(now));
     const today=combos.filter(r=>r.combo.businessDate===day(now));
     const overlap=previews.length===2?previews[0].decisionIds.filter(id=>previews[1].decisionIds.includes(id)):[];
@@ -133,7 +133,7 @@ function createRuntime(ports,{validators}={}){
       inputAsOf:[lanes.publish?.inputAsOf,lanes.combos?.inputAsOf].filter(v=>Number.isFinite(time(v))).sort((a,b)=>time(b)-time(a))[0]||null,resultAsOf:lanes.settlement?.lastSuccessAt||null,lanes,
       current:selected,previews,todayCombos:today,overlapDecisionIds:overlap,
       review:{singles:singles.slice(0,100),combos:combos.slice(0,100),limit:100,
-        statistics:{single:summary(singles,true),handicap:handicapSummary(singles),two:summary(combos.filter(r=>r.combo.size===2)),three:summary(combos.filter(r=>r.combo.size===3))},handicapCalibration,
+        statistics:{single:summary(singles,true),handicap:handicapSummary(singles),handicapBreakdown:handicapBreakdown(singles),marketBaseline:marketBaseline(singles),daily:dailySummary(singles,combos),two:summary(combos.filter(r=>r.combo.size===2)),three:summary(combos.filter(r=>r.combo.size===3))},handicapCalibration,
         definition:'latest-published-decision-before-cutoff-per-event; combos-use-exact-bound-versions'},
       excludedCorruptRecords:quarantined.length,modelValidation:'unvalidated',legacyRecordsReclassified:0};
     await repo.saveView(center);
