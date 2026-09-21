@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { CalendarDays, ChevronDown, ChevronUp, RotateCcw, SlidersHorizontal, Trophy } from 'lucide-react';
+import { CalendarDays, ChevronDown, ChevronUp, RotateCcw, Search, SlidersHorizontal, Trophy, X } from 'lucide-react';
 import { useApp } from '../context/AppContextCore';
 import { formatBeijingDateString, getDateStringOffset } from '../services/mockData';
 import type { Country, League, Match, PredictionDetail, Team } from '../services/mockData';
@@ -47,6 +47,7 @@ type StoredListViewState = {
   savedAt: number;
   selectedDate: string;
   selectedLeagues: string[];
+  searchQuery: string;
   sortBy: SortBy;
   sortOrder: 'asc' | 'desc';
 };
@@ -73,6 +74,7 @@ const readStoredListViewState = (viewMode: PredictionsListProps['viewMode']): St
       selectedLeagues: Array.isArray(parsed.selectedLeagues)
         ? parsed.selectedLeagues.filter((item): item is string => typeof item === 'string')
         : [],
+      searchQuery: typeof parsed.searchQuery === 'string' ? parsed.searchQuery.slice(0, 100) : '',
       sortBy: SORT_OPTIONS.includes(parsed.sortBy as SortBy) ? parsed.sortBy as SortBy : 'time',
       sortOrder: parsed.sortOrder === 'desc' ? 'desc' : 'asc'
     };
@@ -536,6 +538,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
   const [selectedLeagues, setSelectedLeagues] = useState<string[]>(() => (
     restoreReturnView ? restoredViewState?.selectedLeagues || [] : []
   ));
+  const [searchQuery, setSearchQuery] = useState(() => restoreReturnView ? restoredViewState?.searchQuery || '' : '');
   const [sortBy, setSortBy] = useState<SortBy>(() => (
     restoreReturnView ? restoredViewState?.sortBy || 'time' : 'time'
   ));
@@ -582,13 +585,14 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         savedAt: Date.now(),
         selectedDate,
         selectedLeagues,
+        searchQuery,
         sortBy,
         sortOrder
       } satisfies StoredListViewState));
     } catch {
       // Filters remain fully usable when storage is disabled.
     }
-  }, [selectedDate, selectedLeagues, sortBy, sortOrder, viewMode]);
+  }, [selectedDate, selectedLeagues, searchQuery, sortBy, sortOrder, viewMode]);
 
   // A current/history refresh can remove one storage row and add another row
   // for the same fixture. Keep the first visible fixture at the same viewport
@@ -627,12 +631,12 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     sortTitle: { zh: '排序', en: 'Sort' },
     time: { zh: '开赛时间', en: 'Time' },
     odds: { zh: 'SP', en: 'SP' },
-    reset: { zh: '重置', en: 'Reset' },
+    reset: { zh: '清除筛选', en: 'Clear filters' },
     yesterday: { zh: '昨天', en: 'Yesterday' },
     today: { zh: '今天', en: 'Today' },
     tomorrow: { zh: '明天', en: 'Tomorrow' },
     dayAfterTomorrow: { zh: '后天', en: 'Day +2' },
-    details: { zh: '详情', en: 'Details' },
+    details: { zh: '查看详情', en: 'View match' },
     leagueMatches: { zh: '场比赛', en: 'matches' }
   };
   const t = (key: keyof typeof translations) => translations[key][language];
@@ -661,7 +665,19 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     });
   }, [effectiveSelectedDate, effectiveSelectedLeagues, matches]);
 
-  const filteredMatches = baseFilteredMatches;
+  const normalizedSearch = searchQuery.trim().toLocaleLowerCase();
+  const filteredMatches = useMemo(() => {
+    if (!normalizedSearch) return baseFilteredMatches;
+    return baseFilteredMatches.filter((match) => {
+      const home = getMatchDisplayTeam(match, 'home');
+      const away = getMatchDisplayTeam(match, 'away');
+      const league = getMatchDisplayLeague(match);
+      return [home.name.zh, home.name.en, away.name.zh, away.name.en, league.name.zh, league.name.en,
+        league.shortName.zh, league.shortName.en, getSportteryMeta(match)]
+        .some((value) => String(value || '').toLocaleLowerCase().includes(normalizedSearch));
+    });
+  }, [baseFilteredMatches, normalizedSearch]);
+  const hasActiveFilters = Boolean(normalizedSearch || effectiveSelectedLeagues.length || sortBy !== 'time' || sortOrder !== 'asc');
 
   const sortedMatches = useMemo(() => {
     const sorted = [...filteredMatches];
@@ -739,6 +755,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
 
   const handleResetFilters = () => {
     setSelectedLeagues([]);
+    setSearchQuery('');
     setSortBy('time');
     setSortOrder('asc');
   };
@@ -810,6 +827,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     const resultLabel = isVoid ? (language === 'zh' ? '已作废' : 'Void')
       : settledStatus === 'WON' ? (language === 'zh' ? '命中' : 'Hit')
       : settledStatus === 'LOST' ? (language === 'zh' ? '未命中' : 'Miss')
+      : !isFinished && match.status !== 'LIVE' ? (language === 'zh' ? '未开赛' : 'Upcoming')
+      : match.status === 'LIVE' ? (language === 'zh' ? '进行中' : 'Live')
       : (language === 'zh' ? '待赛果' : 'Pending result');
     const homeTeam = getMatchDisplayTeam(match, 'home');
     const awayTeam = getMatchDisplayTeam(match, 'away');
@@ -875,7 +894,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
   const isLoading = Boolean(dataSync.currentLoading || (!dataSync.currentLoaded && !dataSync.error) || (effectiveSelectedDate < todayStr && dataSync.historyLoading && !dataSync.historyLoaded));
   const emptyStateText = isLoading ? (language === 'zh' ? '比赛加载中…' : 'Loading matches…')
     : !dataSync.currentLoaded && dataSync.error ? (language === 'zh' ? '暂时无法加载比赛，请稍后重试。' : 'Matches could not be loaded. Please try again shortly.')
-    : (language === 'zh' ? '当前筛选暂无比赛。' : 'No matches for these filters.');
+    : normalizedSearch ? (language === 'zh' ? `没有找到“${searchQuery.trim()}”相关的比赛` : `No matches for “${searchQuery.trim()}”`)
+    : (language === 'zh' ? '这个竞彩日暂无比赛' : 'No matches for this match day');
   const filterLeagueSummary = effectiveSelectedLeagues.length === 0 ? (language === 'zh' ? '全部联赛' : 'All leagues')
     : effectiveSelectedLeagues.length + (language === 'zh' ? ' 个联赛' : ' leagues');
 
@@ -883,7 +903,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     <div className="predictions-v4 dashboard-stack predictions-compact" data-view-mode={viewMode}>
       <section className="dashboard-hero is-compact">
         <PredictionsPageHeader title={isAnalysisView ? (language === 'zh' ? '赛前推荐' : 'Match picks') : (language === 'zh' ? '赛程' : 'Fixtures')}
-          description={language === 'zh' ? '查看比赛赔率、推荐方向、SP 与赛后结果' : 'Match odds, picks, SP and settled results'}
+          description={language === 'zh' ? '按竞彩日查看赛程、SP 与赛后结果' : 'Fixtures, SP and results by match day'}
           matchSummary={!dataSync.currentLoaded && baseFilteredMatches.length === 0 ? (language === 'zh' ? '加载中' : 'Loading') : baseFilteredMatches.length + (language === 'zh' ? ' 场比赛' : ' matches')} />
       </section>
       <section
@@ -907,16 +927,36 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         />
         <p className="date-scope-note">
           {language === 'zh'
-            ? '按竞彩业务日归档；跨午夜比赛只计入原竞彩日。'
+            ? '按竞彩日查看，跨午夜比赛仍归属原竞彩日。'
             : 'Grouped by Sporttery business day; after-midnight fixtures remain on their original issue day.'}
         </p>
       </section>
 
-      {baseFilteredMatches.length > 0 && (
+      {(dataSync.currentLoaded || matches.length > 0) && (
         <section
           className="filter-workbench"
           aria-label={language === 'zh' ? '赛事范围、筛选与排序' : 'Fixture scope, filters and sorting'}
         >
+        <div className="matchday-searchbar">
+          <label className="matchday-search">
+            <Search size={18} aria-hidden="true" />
+            <input type="search" value={searchQuery} maxLength={100}
+              aria-label={language === 'zh' ? '搜索球队、联赛或赛事编号' : 'Search teams, leagues or match number'}
+              placeholder={language === 'zh' ? '搜索球队、联赛或赛事编号' : 'Search teams, leagues or match number'}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              onKeyDown={(event) => { if (event.key === 'Escape') setSearchQuery(''); }} />
+            {searchQuery && <button type="button" className="matchday-search-clear" onClick={() => setSearchQuery('')}
+              aria-label={language === 'zh' ? '清除搜索' : 'Clear search'}><X size={16} aria-hidden="true" /></button>}
+          </label>
+          <button type="button" onClick={handleResetFilters} className="reset-btn" disabled={!hasActiveFilters}>
+            <RotateCcw size={14} aria-hidden="true" />{t('reset')}
+          </button>
+        </div>
+        <div className="matchday-search-results" role="status" aria-live="polite" aria-atomic="true">
+          <span>{normalizedSearch ? (language === 'zh' ? '搜索结果' : 'Search results') : (language === 'zh' ? '当前显示' : 'Showing')}
+            {' '}<strong>{filteredMatches.length}</strong>{language === 'zh' ? ' 场比赛' : ' matches'}</span>
+          <span>{formatShortDate(effectiveSelectedDate, language)} · {filterLeagueSummary}</span>
+        </div>
         <details className="panel filters-panel filters-details" aria-label={language === 'zh' ? '赛事筛选与排序' : 'Fixture filters and sorting'}>
           <summary className="filters-summary">
             <span>
@@ -924,7 +964,8 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
               <strong>{language === 'zh' ? '筛选与排序' : 'Filter and sort'}</strong>
             </span>
             <span>
-              {filteredMatches.length} {language === 'zh' ? '场' : 'matches'} · {filterLeagueSummary}
+              {effectiveSelectedLeagues.length > 0 ? filterLeagueSummary : (language === 'zh' ? '全部联赛' : 'All leagues')}
+              <ChevronDown size={15} className="filters-summary-chevron" aria-hidden="true" />
             </span>
           </summary>
           <div className="filters-details-body">
@@ -994,14 +1035,10 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
               aria-pressed={sortOrder === 'desc'}
             >
               {sortOrder === 'asc' ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-              {sortOrder === 'asc' ? 'ASC' : 'DESC'}
+              {language === 'zh' ? (sortBy === 'time' ? (sortOrder === 'asc' ? '较早优先' : '较晚优先') : (sortOrder === 'asc' ? '从低到高' : '从高到低')) : (sortOrder === 'asc' ? 'Ascending' : 'Descending')}
             </button>
           </div>
 
-          <button type="button" onClick={handleResetFilters} className="reset-btn">
-            <RotateCcw size={14} />
-            {t('reset')}
-          </button>
         </div>
           </div>
         </details>
@@ -1018,7 +1055,10 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         </section>
       )}
       {groupedMatches.length === 0 ? (
-        <section className="empty-state" role="status" aria-live="polite"><div><CalendarDays size={40} /><p>{emptyStateText}</p></div></section>
+        <section className="empty-state" role="status" aria-live="polite"><div><CalendarDays size={32} aria-hidden="true" /><p>{emptyStateText}</p>
+          {!isLoading && hasActiveFilters && <button type="button" className="reset-btn" onClick={handleResetFilters}><RotateCcw size={15} aria-hidden="true" />{t('reset')}</button>}
+          {!isLoading && !hasActiveFilters && <small>{language === 'zh' ? '可选择其他日期查看比赛。' : 'Choose another date to browse matches.'}</small>}
+        </div></section>
       ) : (
         <section ref={matchListRef} className="league-stack" aria-label={language === 'zh' ? '比赛列表' : 'Matches'}>
           {groupedMatches.map((group) => (

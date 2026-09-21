@@ -1,94 +1,76 @@
-/* r688: readable density, intrinsic sizing and a deliberate mobile composition. */
-.predictions-v4.dashboard-stack { gap: 1rem; }
-.predictions-v4__match-row { scroll-margin-top: 80px; }
-.predictions-v4 .dashboard-hero.is-compact { padding: 1.25rem 1.4rem; border-radius: 16px; background: linear-gradient(110deg, rgba(55,184,120,.075), transparent 65%), var(--surface-1); }
-.predictions-v4__heading { gap: .4rem; }
-.predictions-v4__title-line h1 { font-size: clamp(1.5rem, 2.3vw, 2rem); font-weight: 750; letter-spacing: -.035em; line-height: 1.25; }
-.predictions-v4__heading p { font-size: .82rem; font-weight: 400; white-space: normal; }
-.predictions-v4__eyebrow { font-size: .7rem; font-weight: 600; letter-spacing: .12em; }
-.predictions-v4__system-status { font-weight: 600; padding: .35rem .6rem; }
-.predictions-v4 .league-header { padding: .85rem 1rem; background: var(--surface-1); }
-.predictions-v4 .league-title { font-size: .92rem; font-weight: 650; }
-.predictions-v4 .league-group { border-radius: 14px; overflow: clip; }
-.predictions-v4__match-row,
-.predictions-v4__match-list.is-fixtures-view .predictions-v4__match-row.has-decision {
-  grid-template-columns: 76px minmax(135px, .8fr) minmax(310px, 1.8fr) minmax(285px, 1.3fr) 52px;
-  gap: .9rem; padding: 1.15rem 1rem; align-items: start;
-}
-.predictions-v4__match-slot { min-width: 0; }
-.predictions-v4 .team-stack { gap: 1rem; }
-.predictions-v4 .team-name { font-size: .9rem; font-weight: 650; white-space: normal; overflow-wrap: break-word; }
-.predictions-v4 .kickoff-time { font-size: 1rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-.predictions-v4 .sporttery-pool-stack { border-radius: 10px; background: transparent; }
-.predictions-v4 .sporttery-pool-head, .predictions-v4 .sporttery-pool-row {
-  grid-template-columns: minmax(74px, 1fr) repeat(3, minmax(40px, .65fr)) minmax(68px, 1fr);
-}
-.predictions-v4 .sporttery-pool-head { min-height: 32px; font-size: .64rem; font-weight: 500; }
-.predictions-v4 .sporttery-pool-stack .sporttery-pool-row { min-height: 66px; }
-.predictions-v4 .decision-card { gap: .7rem; padding: .85rem; border-radius: 12px; background: var(--surface-1); }
-.predictions-v4 .decision-label { font-size: 1.06rem; font-weight: 700; line-height: 1.4; white-space: normal; overflow-wrap: break-word; }
-.predictions-v4 .decision-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; }
-.predictions-v4 .decision-facts span { border: 0; background: transparent; padding: .25rem 0; font-size: .7rem; line-height: 1.5; }
-.predictions-v4 .decision-facts strong { font-size: .78rem; white-space: normal; overflow: visible; text-overflow: clip; font-weight: 600; }
-.predictions-v4 .decision-reason { font-size: .74rem; font-weight: 400; line-height: 1.65; }
-.predictions-v4 .daily-review-panel.is-compact { padding: 1rem 1.2rem; border-radius: 14px; gap: .9rem; }
-.predictions-v4 .daily-review-stats { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: .65rem; }
-.predictions-v4 .daily-review-stats span { padding: .7rem; border: 0; border-radius: 9px; }
-.predictions-v4 .notice-banner.is-compact { padding: .8rem 1rem; border-radius: 10px; font-size: .8rem; }
-.predictions-v4 .source-health-head, .predictions-v4 .system-model-summary { padding: .9rem 1rem; }
-.predictions-v4 .recommendation-evidence-facts__sample { font-size: .7rem; justify-content: flex-start; }
-.predictions-v4 .recommendation-evidence-facts__sample strong { font-size: .72rem; }
-.predictions-v4 { --text-muted: 213 16% 64%; --text-3: #91a0b0; }
-.predictions-v4 .details-button { white-space: nowrap; }
-.decision-more-facts { width: 100%; border-top: 1px solid var(--border-subtle); padding-top: .6rem; }
-.decision-more-facts summary { font-size: .72rem; color: var(--text-2); cursor: pointer; min-height: 28px; line-height: 1.5; }
-.decision-more-facts summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
-.decision-more-facts[open] .decision-facts { margin-top: .6rem; }
-
-@media (min-width: 1200px) {
-  .predictions-v4__match-row.has-decision {
-    grid-template-columns: 74px minmax(150px, 1.2fr) minmax(290px, 1fr) 76px;
-    grid-template-rows: auto 1fr;
-  }
-  .predictions-v4__match-list.is-fixtures-view .predictions-v4__match-row.has-decision {
-    grid-template-columns: 74px minmax(150px, 1.2fr) minmax(290px, 1fr) 76px;
-  }
-  .predictions-v4__match-row.has-decision .is-time { grid-column: 1; grid-row: 1; }
-  .predictions-v4__match-row.has-decision .is-teams { grid-column: 2; grid-row: 1; }
-  .predictions-v4__match-row.has-decision .is-odds { grid-column: 1 / 3; grid-row: 2; align-self: start; }
-  .predictions-v4__match-row.has-decision .is-decision { grid-column: 3; grid-row: 1 / 3; }
-  .predictions-v4__match-row.has-decision .predictions-v4__match-action { grid-column: 4; grid-row: 1 / 3; align-items: flex-start; }
-}
-
-@media (max-width: 1199px) {
-  .predictions-v4__match-row,
-  .predictions-v4__match-list.is-fixtures-view .predictions-v4__match-row,
-  .predictions-v4__match-list.is-fixtures-view .predictions-v4__match-row.has-decision {
-    grid-template-columns: 80px minmax(0, 1fr) 52px;
-  }
-  .predictions-v4__match-slot.is-odds, .predictions-v4__match-slot.is-decision { grid-column: 1 / -1; }
-  .predictions-v4 .team-stack { display: flex; flex-wrap: wrap; gap: .8rem 2rem; }
-  .predictions-v4 .decision-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .predictions-v4 .decision-card > .recommendation-evidence-facts { grid-column: 2; grid-row: 1 / span 4; }
-  .predictions-v4 .decision-card > .decision-reason { grid-column: 1 / -1; }
-}
+/* Compact match-day tools. Date membership and recommendation logic live in the page. */
+.predictions-v4.predictions-compact { --text-muted: 214 13% 42%; --text-3: #64748b; }
+.predictions-v4.predictions-compact.dashboard-stack { gap: 20px; }
+.predictions-v4.predictions-compact .dashboard-hero.is-compact { padding: 4px 0; border: 0; background: transparent; box-shadow: none; }
+.predictions-v4.predictions-compact .predictions-v4__page-header { min-height: 0; align-items: center; }
+.predictions-v4.predictions-compact .predictions-v4__title-line h1 { color: #142b32; font-size: clamp(25px, 2.5vw, 32px); font-weight: 750; letter-spacing: -.03em; line-height: 1.25; }
+.predictions-v4.predictions-compact .predictions-v4__heading p { color: #64748b; font-size: 13px; font-weight: 400; white-space: normal; margin-top: 6px; }
+.predictions-v4.predictions-compact .predictions-v4__header-meta { color: #52636b; font-size: 13px; }
+.predictions-v4.predictions-compact .date-toolbar { margin: 0; padding: 0; border: 0; background: transparent; }
+.predictions-v4.predictions-compact .predictions-v4__date-scope { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.predictions-v4.predictions-compact .date-quick-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.predictions-v4.predictions-compact .date-chip { min-width: 90px; min-height: 58px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border: 1px solid #dce5e7; border-radius: 12px; background: #fff; color: #35494f; box-shadow: none; padding: 9px 18px; cursor: pointer; }
+.predictions-v4.predictions-compact .date-chip .date-label { font-size: 13px; font-weight: 650; }
+.predictions-v4.predictions-compact .date-chip .date-value { font-size: 11px; color: #64748b; }
+.predictions-v4.predictions-compact .date-chip:hover { border-color: #83bcb0; background: #f1faf6; transform: none; }
+.predictions-v4.predictions-compact .date-chip.active { background: #087f67; border-color: #087f67; color: #fff; box-shadow: 0 3px 8px rgba(8,127,103,.12); }
+.predictions-v4.predictions-compact .date-chip.active .date-value { color: #e0f3ed; }
+.predictions-v4.predictions-compact .history-date-select { min-height: 44px; display: inline-flex; align-items: center; gap: 7px; padding: 0 12px; border: 1px solid #dce5e7; border-radius: 10px; background: #fff; color: #52636b; }
+.predictions-v4.predictions-compact .history-date-select select { min-height: 42px; color: #35494f; background: #fff; border: 0; padding: 0; font-size: 12px; cursor: pointer; }
+.predictions-v4.predictions-compact .history-date-select.active { border-color: #087f67; color: #087f67; }
+.predictions-v4.predictions-compact .date-scope-note { margin: 9px 0 0; color: #64748b; font-size: 11px; line-height: 1.6; }
+.predictions-v4.predictions-compact .filter-workbench { display: grid; gap: 12px; padding: 18px; background: #fff; border: 1px solid #dce5e7; border-radius: 14px; }
+.matchday-searchbar { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.matchday-search { display: flex; flex: 1; align-items: center; gap: 10px; min-width: 0; min-height: 46px; padding: 0 12px; border: 1px solid #dce5e7; border-radius: 10px; color: #64748b; background: #f7f9fa; }
+.matchday-search:focus-within { outline: 2px solid #087f67; outline-offset: 2px; background: #fff; }
+.matchday-search > svg { flex: 0 0 auto; }
+.matchday-search input { width: 100%; min-width: 0; height: 44px; padding: 0; border: 0; outline: none; box-shadow: none; background: transparent; color: #203740; font: inherit; font-size: 13px; }
+.matchday-search input::placeholder { color: #738189; }
+.matchday-search input::-webkit-search-cancel-button { display: none; }
+.matchday-search-clear { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 32px; height: 36px; color: #52636b; background: transparent; border: 0; border-radius: 6px; cursor: pointer; }
+.matchday-search-clear:hover { color: #087f67; background: #e9f5ef; }
+.matchday-search-results { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 14px; color: #64748b; font-size: 12px; }
+.matchday-search-results strong { color: #203740; font-size: 14px; font-variant-numeric: tabular-nums; }
+.predictions-v4.predictions-compact .filters-panel { margin: 0; border: 0; border-top: 1px solid #edf1f2; border-radius: 0; background: transparent; box-shadow: none; }
+.predictions-v4.predictions-compact .filters-summary { display: flex; justify-content: space-between; align-items: center; min-height: 44px; padding: 12px 0 0; color: #35494f; font-size: 12px; cursor: pointer; list-style: none; }
+.predictions-v4.predictions-compact .filters-summary::-webkit-details-marker { display: none; }
+.predictions-v4.predictions-compact .filters-summary > span { display: inline-flex; align-items: center; gap: 8px; }
+.predictions-v4.predictions-compact .filters-summary > span:last-child { color: #64748b; font-size: 11px; }
+.predictions-v4.predictions-compact .filters-details[open] .filters-summary-chevron { transform: rotate(180deg); }
+.predictions-v4.predictions-compact .filters-details-body { display: grid; gap: 16px; padding: 16px 0 0; border: 0; }
+.predictions-v4.predictions-compact .panel-row { margin: 0; padding: 0; border: 0; gap: 12px; }
+.predictions-v4.predictions-compact .panel-label { color: #64748b; font-size: 12px; font-weight: 500; }
+.predictions-v4.predictions-compact .chip-row { flex-wrap: wrap; gap: 8px; }
+.predictions-v4.predictions-compact .filter-chip { min-height: 38px; border: 1px solid #dce5e7; border-radius: 8px; background: #fff; color: #43575f; font-size: 12px; padding: 7px 11px; }
+.predictions-v4.predictions-compact .filter-chip:hover { border-color: #83bcb0; }
+.predictions-v4.predictions-compact .filter-chip.active { border-color: #087f67; background: #e9f5ef; color: #076951; font-weight: 650; }
+.predictions-v4.predictions-compact .sort-controls { flex-wrap: wrap; gap: 10px; }
+.predictions-v4.predictions-compact .segmented { border: 1px solid #dce5e7; border-radius: 8px; background: #f7f9fa; padding: 3px; }
+.predictions-v4.predictions-compact .segment-btn { min-height: 34px; border: 0; border-radius: 6px; background: transparent; color: #64748b; font-size: 12px; }
+.predictions-v4.predictions-compact .segment-btn.active { background: #fff; color: #087f67; box-shadow: 0 1px 4px rgba(26,54,62,.1); }
+.predictions-v4.predictions-compact .sort-order-btn, .predictions-v4.predictions-compact .reset-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 8px 10px; border: 1px solid #dce5e7; border-radius: 8px; background: #fff; color: #43575f; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.predictions-v4.predictions-compact .reset-btn:hover:not(:disabled) { border-color: #087f67; color: #087f67; }
+.predictions-v4.predictions-compact .reset-btn:disabled { cursor: default; opacity: .45; }
+.predictions-v4.predictions-compact .compact-record { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; padding: 13px 16px; border: 1px solid #dce5e7; border-radius: 12px; background: #f5f9f7; color: #52636b; font-size: 12px; }
+.predictions-v4.predictions-compact .compact-record strong, .predictions-v4.predictions-compact .compact-record b { color: #203740; }
+.predictions-v4.predictions-compact .compact-record small { color: #64748b; font-size: 11px; line-height: 1.5; }
+.predictions-v4.predictions-compact .empty-state { min-height: 220px; border: 1px dashed #cddbdd; border-radius: 14px; background: #fff; color: #52636b; }
+.predictions-v4.predictions-compact .empty-state > div { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 24px; }
+.predictions-v4.predictions-compact .empty-state svg { color: #708b8b; }
+.predictions-v4.predictions-compact .empty-state p { margin: 0; font-size: 15px; color: #35494f; overflow-wrap: anywhere; }
+.predictions-v4.predictions-compact .empty-state small { color: #64748b; font-size: 12px; }
+.predictions-v4.predictions-compact :is(button, summary, select):focus-visible { outline: 2px solid #087f67; outline-offset: 3px; }
 @media (max-width: 600px) {
-  .predictions-v4 .dashboard-hero.is-compact { padding: 1rem; }
-  .predictions-v4__title-line { flex-wrap: wrap; }
-  .predictions-v4__match-row,
-  .predictions-v4__match-list.is-fixtures-view .predictions-v4__match-row,
-  .predictions-v4__match-list.is-fixtures-view .predictions-v4__match-row.has-decision {
-    grid-template-columns: 68px minmax(0, 1fr); padding: 1rem .75rem; gap: .85rem;
-  }
-  .predictions-v4 .team-stack { display: grid; gap: .6rem; }
-  .predictions-v4__match-action { grid-column: 1 / -1; }
-  .predictions-v4 .decision-card { display: flex; flex-direction: column; padding: .85rem; }
-  .predictions-v4 .decision-card > .recommendation-evidence-facts { width: 100%; }
-  .predictions-v4 .decision-facts { width: 100%; }
-  .predictions-v4 .sporttery-pool-head, .predictions-v4 .sporttery-pool-row {
-    grid-template-columns: minmax(56px, .8fr) repeat(3, minmax(34px, .6fr)) minmax(62px, 1fr);
-  }
-  .predictions-v4 .sporttery-pool-head { font-size: .6rem; }
-  .predictions-v4 .pool-name { display: block; font-size: .64rem; }
-  .predictions-v4 .daily-review-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .predictions-v4.predictions-compact.dashboard-stack { gap: 16px; }
+  .predictions-v4.predictions-compact .predictions-v4__page-header { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .predictions-v4.predictions-compact .predictions-v4__header-meta { justify-content: flex-start; padding: 0; }
+  .predictions-v4.predictions-compact .date-quick-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); width: 100%; }
+  .predictions-v4.predictions-compact .date-chip { min-width: 0; min-height: 58px; padding: 8px 10px; border-radius: 10px; }
+  .predictions-v4.predictions-compact .filter-workbench { padding: 14px; }
+  .matchday-searchbar { gap: 8px; }
+  .matchday-search { gap: 7px; padding-inline: 9px; }
+  .matchday-search input { font-size: 12px; }
+  .predictions-v4.predictions-compact .matchday-searchbar > .reset-btn { padding-inline: 8px; font-size: 11px; }
+  .predictions-v4.predictions-compact .matchday-searchbar > .reset-btn svg { display: none; }
+  .predictions-v4.predictions-compact .sort-controls { width: 100%; }
 }

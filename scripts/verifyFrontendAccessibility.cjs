@@ -121,7 +121,9 @@ pushCheck("mobile controls meet touch targets and match cards stay compact", [
 pushCheck("mobile navigation has one column per visible tab and never covers the footer",
   navbar.includes("{ key: 'leagues', labelKey: 'topLeagues'")
   && shellCss.includes("grid-template-columns: repeat(5, minmax(0, 1fr));")
-  && shellCss.includes("margin-bottom: calc(var(--shell-mobile-tabbar-height) + env(safe-area-inset-bottom));"));
+  // One reserve on the whole frame protects both content and footer; adding
+  // separate reserves to main and footer produced three blank navigation gaps.
+  && /\.app-frame\.app-shell-v2\s*\{\s*padding-bottom: calc\(var\(--shell-mobile-tabbar-height\) \+ env\(safe-area-inset-bottom\)\);/.test(shellCss));
 
 pushCheck("unverified access does not masquerade as an endless data sync",
   navbar.includes("type DataStatus = 'locked'")

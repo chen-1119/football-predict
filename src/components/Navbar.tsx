@@ -46,10 +46,14 @@ const finiteDate = (value: string | undefined) => {
 export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openGlossary }) => {
   const { language, setLanguage, currentUser, logout, dataSync } = useApp();
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [isStatusOpen, setIsStatusOpen] = useState(false);
   const [clockNow, setClockNow] = useState(() => Date.now());
   const moreRootRef = useRef<HTMLDivElement>(null);
   const moreTriggerRef = useRef<HTMLButtonElement>(null);
   const menuItemRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const statusRootRef = useRef<HTMLDivElement>(null);
+  const statusTriggerRef = useRef<HTMLButtonElement>(null);
+  const statusPanelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const timer = window.setInterval(() => setClockNow(Date.now()), 15_000);
@@ -70,6 +74,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
     tools: { zh: '分析工具', en: 'Analysis tools' },
     login: { zh: '校验', en: 'Verify' },
     account: { zh: '当前账户', en: 'Current account' },
+    accountMenu: { zh: '账户', en: 'Account' },
     help: { zh: '术语说明', en: 'Glossary' },
     language: { zh: '切换为 English', en: '切换为中文' },
     logout: { zh: '退出校验', en: 'Clear access' },
@@ -77,7 +82,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
     mobilePrimary: { zh: '移动端主导航', en: 'Mobile primary navigation' },
     dataStatus: { zh: '数据状态', en: 'Data status' },
     dataLocked: { zh: '待校验', en: 'Verify first' },
-    dataReady: { zh: '实时在线', en: 'Live' },
+    dataReady: { zh: '数据已同步', en: 'Up to date' },
     dataSyncing: { zh: '同步中', en: 'Syncing' },
     dataWatch: { zh: '数据待核', en: 'Data notice' },
     dataError: { zh: '数据异常', en: 'Data issue' },
@@ -85,9 +90,18 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
     dataRetrying: { zh: '同步重试', en: 'Retrying' },
     dataIntegrity: { zh: '完整性待核', en: 'Integrity check' },
     dataStale: { zh: '更新滞后', en: 'Delayed' },
-    dataEvidence: { zh: '模型影子', en: 'Model shadow' },
+    dataEvidence: { zh: '参考模式', en: 'Reference' },
     dataFallback: { zh: '降级读取', en: 'Fallback' },
-    dataLoading: { zh: '读取赛程', en: 'Loading' }
+    dataLoading: { zh: '读取赛程', en: 'Loading' },
+    dataTime: { zh: '数据时间（北京）', en: 'Data time (Beijing)' },
+    checkedTime: { zh: '最近检查（北京）', en: 'Last checked (Beijing)' },
+    connection: { zh: '更新连接', en: 'Update connection' },
+    modelStatus: { zh: '推荐状态', en: 'Recommendation status' },
+    reference: { zh: '参考／影子，尚未通过正式门槛', en: 'Reference / shadow; formal gate not passed' },
+    modelReady: { zh: '已通过当前发布校验', en: 'Current publication checks passed' },
+    unknown: { zh: '尚未取得状态', en: 'Status unavailable' },
+    close: { zh: '关闭数据状态', en: 'Close data status' },
+    retained: { zh: '正在显示保留快照', en: 'Showing a retained snapshot' }
   };
 
   const t = (key: keyof typeof translations) => translations[key][language] || '';
@@ -140,17 +154,11 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
     return '';
   })();
 
-  const latestActivityAt = Math.max(
-    finiteDate(dataSync.lastServerEventAt) || 0,
-    finiteDate(dataSync.lastCheckedAt) || 0,
-    finiteDate(dataSync.sourceUpdatedAt) || 0
-  );
+  const latestActivityAt = Math.max(finiteDate(dataSync.lastServerEventAt) || 0, finiteDate(dataSync.lastCheckedAt) || 0);
   const activityAgeSeconds = latestActivityAt > 0 ? Math.max(0, Math.round((clockNow - latestActivityAt) / 1000)) : null;
-  const transportLabel = dataSync.liveUpdates === 'sse'
-    ? 'SSE'
-    : dataSync.refreshIntervalSeconds
-      ? `${Math.round(dataSync.refreshIntervalSeconds)}s`
-      : 'POLL';
+  const transportLabel = !currentUser ? t('dataLocked') : dataSync.error ? t('dataRetrying') : dataSync.liveUpdates === 'sse'
+    ? (language === 'zh' ? '连续更新' : 'Live updates')
+    : dataSync.refreshIntervalSeconds ? (language === 'zh' ? `每 ${Math.round(dataSync.refreshIntervalSeconds)} 秒刷新` : `Refresh every ${Math.round(dataSync.refreshIntervalSeconds)}s`) : t('unknown');
   const countLabel = dataSync.currentLoaded ? `${dataSync.currentCount}` : '--';
   const freshnessLabel = activityAgeSeconds === null
     ? '--'
@@ -158,9 +166,11 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
       ? `${activityAgeSeconds}s`
       : `${Math.floor(activityAgeSeconds / 60)}m`;
   const dataStatusReadable = dataStatus !== 'ready' && dataStatus !== 'locked';
-  const dataStatusDisplayLabel = dataStatusReadable && dataStatusDetail
-    ? `${dataStatusLabel} · ${dataStatusDetail}`
-    : dataStatusLabel;
+  const dataStatusDisplayLabel = dataStatus === 'watch' && dataStatusDetail === t('dataEvidence') ? t('dataEvidence') : dataStatusLabel;
+  const formatTime = (value: string | undefined) => {
+    const at = finiteDate(value);
+    return at === null ? '—' : new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en-GB', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Shanghai' }).format(at);
+  };
   const dataStatusTitle = [
     t('dataStatus'),
     dataStatusLabel,
@@ -168,12 +178,15 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
     `${language === 'zh' ? '通道' : 'transport'} ${transportLabel}`,
     `${language === 'zh' ? '场次' : 'fixtures'} ${countLabel}`,
     `${language === 'zh' ? '活动' : 'activity'} ${freshnessLabel}`,
-    dataSync.lastServerEventType || ''
   ].filter(Boolean).join(' · ');
 
   const closeMore = useCallback((restoreFocus = false) => {
     setIsMoreOpen(false);
     if (restoreFocus) window.requestAnimationFrame(() => moreTriggerRef.current?.focus());
+  }, []);
+  const closeStatus = useCallback((restoreFocus = false) => {
+    setIsStatusOpen(false);
+    if (restoreFocus) window.requestAnimationFrame(() => statusTriggerRef.current?.focus());
   }, []);
 
   const focusMenuItem = useCallback((index: number) => {
@@ -202,6 +215,26 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
     };
   }, [closeMore, isMoreOpen]);
 
+  useEffect(() => {
+    if (!isStatusOpen) return;
+    const onPointerDown = (event: PointerEvent) => { if (!statusRootRef.current?.contains(event.target as Node)) closeStatus(); };
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); closeStatus(true); } };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => { document.removeEventListener('pointerdown', onPointerDown); document.removeEventListener('keydown', onKeyDown); };
+  }, [closeStatus, isStatusOpen]);
+
+  useEffect(() => { setIsMoreOpen(false); setIsStatusOpen(false); }, [currentTab]);
+
+  const openMore = (last = false) => {
+    setIsStatusOpen(false); setIsMoreOpen(true);
+    window.requestAnimationFrame(() => focusMenuItem(last ? -1 : 0));
+  };
+  const openStatus = () => {
+    setIsMoreOpen(false); setIsStatusOpen(true);
+    window.requestAnimationFrame(() => statusPanelRef.current?.focus());
+  };
+
   const handleMenuKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const items = menuItemRefs.current.filter((item): item is HTMLButtonElement => Boolean(item));
     const currentIndex = items.findIndex((item) => item === document.activeElement);
@@ -209,7 +242,6 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
     else if (event.key === 'ArrowUp') { event.preventDefault(); focusMenuItem(currentIndex - 1); }
     else if (event.key === 'Home') { event.preventDefault(); focusMenuItem(0); }
     else if (event.key === 'End') { event.preventDefault(); focusMenuItem(-1); }
-    else if (event.key === 'Tab') closeMore();
   };
 
   const selectFromMenu = (action: () => void) => {
@@ -247,25 +279,39 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
           {renderPrimaryNavigation()}
 
           <div className="app-topbar-actions">
-            <span className={`app-data-status is-${dataStatus} ${dataStatusReadable ? 'is-readable' : ''}`}
-              role="status" aria-live="polite" aria-label={dataStatusTitle} title={dataStatusTitle}>
-              <span className="app-data-status-dot" aria-hidden="true" />
-              <span>{dataStatusDisplayLabel}</span>
-              {currentUser && <span className="app-data-status-live-meta" aria-hidden="true">
-                <Radio size={11} /> {transportLabel} · {countLabel} · {freshnessLabel}
-              </span>}
-            </span>
+            <div className="app-status-root" ref={statusRootRef} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) closeStatus(); }}>
+              <button ref={statusTriggerRef} type="button" className={`app-data-status is-${dataStatus} ${dataStatusReadable ? 'is-readable' : ''}`}
+                aria-label={`${t('dataStatus')}：${dataStatusDisplayLabel}`} title={dataStatusTitle}
+                aria-expanded={isStatusOpen} aria-controls="app-status-panel" aria-haspopup="dialog"
+                onClick={() => isStatusOpen ? closeStatus() : openStatus()}
+                onKeyDown={(event) => { if (event.key === 'ArrowDown') { event.preventDefault(); openStatus(); } }}>
+                <span className="app-data-status-dot" aria-hidden="true" />
+                <span>{dataStatusDisplayLabel}</span><ChevronDown size={13} aria-hidden="true" />
+              </button>
+              {isStatusOpen && <div id="app-status-panel" className="app-status-panel" role="dialog" aria-label={t('dataStatus')} tabIndex={-1} ref={statusPanelRef}>
+                <div className="app-status-panel-heading"><Radio size={16} /><strong>{t('dataStatus')}</strong><button type="button" aria-label={t('close')} onClick={() => closeStatus(true)}>×</button></div>
+                <p className={`app-status-message is-${dataStatus}`}>{dataStatusLabel}{dataStatusDetail ? ` · ${dataStatusDetail}` : ''}</p>
+                {dataSync.dataChannel === 'retained' && <p className="app-status-retained">{t('retained')}</p>}
+                <dl>
+                  <div><dt>{t('dataTime')}</dt><dd>{formatTime(dataSync.sourceUpdatedAt)}</dd></div>
+                  <div><dt>{t('checkedTime')}</dt><dd>{formatTime(dataSync.lastCheckedAt)}</dd></div>
+                  <div><dt>{t('connection')}</dt><dd>{transportLabel}</dd></div>
+                  <div><dt>{language === 'zh' ? '当前比赛' : 'Current fixtures'}</dt><dd>{countLabel}</dd></div>
+                  <div><dt>{t('modelStatus')}</dt><dd>{!currentUser ? t('dataLocked') : dataSync.recommendationReliable === false ? t('reference') : dataSync.recommendationReliable === true ? t('modelReady') : t('unknown')}</dd></div>
+                </dl>
+              </div>}
+            </div>
 
-            <div className="app-more" ref={moreRootRef}>
+            <div className="app-more" ref={moreRootRef} onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) closeMore(); }}>
               <button ref={moreTriggerRef} type="button" className={`app-more-trigger ${isMoreOpen || moreActive ? 'is-active' : ''}`}
-                aria-label={t('moreMenu')} aria-haspopup="menu" aria-expanded={isMoreOpen} aria-controls="app-more-menu"
-                onClick={() => setIsMoreOpen((current) => !current)}
+                aria-label={currentUser ? `${t('accountMenu')} · ${t('moreMenu')}` : t('moreMenu')} aria-haspopup="menu" aria-expanded={isMoreOpen} aria-controls="app-more-menu"
+                onClick={() => isMoreOpen ? closeMore() : openMore()}
                 onKeyDown={(event) => {
-                  if (event.key === 'ArrowDown') { event.preventDefault(); setIsMoreOpen(true); window.requestAnimationFrame(() => focusMenuItem(0)); }
-                  else if (event.key === 'ArrowUp') { event.preventDefault(); setIsMoreOpen(true); window.requestAnimationFrame(() => focusMenuItem(-1)); }
+                  if (event.key === 'ArrowDown') { event.preventDefault(); openMore(); }
+                  else if (event.key === 'ArrowUp') { event.preventDefault(); openMore(true); }
                 }}>
-                <MoreHorizontal size={18} />
-                <span>{t('more')}</span>
+                {currentUser ? <UserIcon size={18} /> : <MoreHorizontal size={18} />}
+                <span>{currentUser ? t('accountMenu') : t('more')}</span>
                 <ChevronDown className="app-more-chevron" size={14} aria-hidden="true" />
               </button>
 
@@ -296,11 +342,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
               )}
             </div>
 
-            {currentUser ? (
-              <span className="app-account-chip" title={currentUser.username} aria-label={`${t('account')}：${currentUser.username}`}>
-                <UserIcon size={16} /><span>{currentUser.username}</span>
-              </span>
-            ) : (
+            {!currentUser && (
               <button type="button" className="app-account-button" onClick={() => setCurrentTab('auth')}>
                 <UserIcon size={16} /><span>{t('login')}</span>
               </button>
