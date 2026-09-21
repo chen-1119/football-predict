@@ -21,10 +21,10 @@ import {
 import { getPredictionTipDisplay } from '../services/bettingDisplay';
 import {
   getFormalRecommendationPrediction,
-  getLiveRecommendationPrediction
+  getLiveRecommendationPrediction,
+  getMatchDisplayTeam
 } from '../services/displayRecommendation';
-import { getTeamById } from '../services/entities';
-import type { Match, PredictionDetail, Team } from '../services/mockData';
+import type { Match, PredictionDetail } from '../services/mockData';
 import '../styles/leagues.css';
 
 type Language = 'zh' | 'en';
@@ -161,26 +161,6 @@ const getLeagueForMatch = (match: Match) => {
       leagueSignals.some((signal) => pattern.test(signal))
     ));
   });
-};
-
-const getMatchDisplayTeam = (match: Match, side: 'home' | 'away'): Team => {
-  const isHome = side === 'home';
-  const base = getTeamById(isHome ? match.homeTeamId : match.awayTeamId);
-  const nameZh = (isHome ? match.homeTeamName : match.awayTeamName) || base.name.zh;
-  const nameEn = (isHome ? match.homeTeamNameEn : match.awayTeamNameEn) || base.name.en || nameZh;
-  const logo = isHome ? match.homeTeamLogo : match.awayTeamLogo;
-  const logoType = isHome ? match.homeTeamLogoType : match.awayTeamLogoType;
-  const countryIso = isHome ? match.homeTeamCountryIso : match.awayTeamCountryIso;
-
-  return {
-    ...base,
-    name: { zh: nameZh, en: nameEn },
-    shortName: { zh: nameZh, en: nameEn },
-    logo: logo || countryIso || base.logo,
-    logoType: logoType || base.logoType,
-    color: (isHome ? match.homeTeamColor : match.awayTeamColor) || base.color,
-    value: (isHome ? match.homeTeamValue : match.awayTeamValue) || base.value
-  };
 };
 
 const getReferencePrediction = (match: Match) => (
