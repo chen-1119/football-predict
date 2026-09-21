@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { RefreshCw, ChevronDown } from 'lucide-react';
 import { useRecommendationCenter } from '../../hooks/useRecommendationCenter';
-import { quoteSourceLabel, comboLaneFresh, comboPreviewForSize, primarySelectionSummary, type Decision, type Settlement, type Combo, type Summary, type Outcome, type HandicapCalibrationProfile } from '../../services/recommendationCenterView';
+import { quoteSourceLabel, comboLaneFresh, comboPreviewForSize, comboLegSelection, primarySelectionSummary, handicapAnalysisBasis, calibrationSampleBasis, type Decision, type Settlement, type Combo, type ComboSelection, type Summary, type Outcome, type HandicapCalibrationProfile, type HandicapBreakdown } from '../../services/recommendationCenterView';
 import '../../styles/recommendation-center.css';
 
 type Language='zh'|'en';
@@ -12,26 +12,29 @@ const resultLabel=(s:Settlement['state'],zh:boolean)=>({PENDING:zh?'待赛果':'
 const handicapTitle=(code:Outcome,zh:boolean)=>code==='1'?(zh?'让胜':'Handicap home'):code==='X'?(zh?'让平':'Handicap draw'):(zh?'让负':'Handicap away');
 function handicapNarrative(d:Decision,zh:boolean){
   const h=d.handicapAnalysis;if(!h)return '';
+  if(handicapAnalysisBasis(d)==='unconditional')return zh?'本条为旧版独立让球分析，依据完整净胜球分布；不以胜平负首选命中为前提。':'This archived standalone handicap analysis uses the full goal-margin distribution, without conditioning on the 1X2 pick.';
   if(d.tipCode==='1'&&h.handicapLine<0){
-    if(h.tipCode==='1')return zh?'主胜方向下，净胜球分布更偏穿盘，让胜优先。':'Home-win view also leans to covering the handicap.';
-    if(h.tipCode==='X')return zh?`主胜方向下，更集中在净胜${Math.abs(h.handicapLine)}球，让平优先。`:'Home-win view is concentrated on landing exactly on the handicap.';
-    return zh?'主胜仍是胜平负首选，但净胜幅度不足，盘口更偏让负。':'Home win remains the 1X2 pick, but the margin is less likely to cover.';
+    if(h.tipCode==='1')return zh?'在主胜成立的比分路径里，净胜球分布更偏穿盘，因此让胜优先。':'Given the home-win thesis lands, the margin distribution leans to covering.';
+    if(h.tipCode==='X')return zh?`在主胜成立的比分路径里，更集中在净胜${Math.abs(h.handicapLine)}球，因此让平优先。`:'Given the home-win thesis lands, the margin is concentrated exactly on the handicap.';
+    if(Math.abs(h.handicapLine)===1)return zh?'主胜与主让1的让负不能同时成立；新版不会把让负作为该场伴随首选。':'A home win and -1 handicap-away cannot both occur; v2 will not publish that as the companion pick.';
+    return zh?`主胜仍成立，但更偏只赢1至${Math.abs(h.handicapLine)-1}球，无法覆盖${h.handicapLineText}，因此伴随方向为让负。`:'The home-win thesis still holds, but the expected winning margin is too small to cover the larger handicap.';
   }
   if(d.tipCode==='2'&&h.handicapLine>0){
-    if(h.tipCode==='2')return zh?'客胜方向下，客队净胜幅度更偏穿盘，让负优先。':'Away-win view also leans to covering the handicap.';
-    if(h.tipCode==='X')return zh?`客胜方向下，更集中在客队净胜${Math.abs(h.handicapLine)}球，让平优先。`:'Away-win view is concentrated on landing exactly on the handicap.';
-    return zh?'客胜仍是胜平负首选，但优势不足以穿受让盘，让胜更稳。':'Away win remains the 1X2 pick, but the margin may not cover the handicap.';
+    if(h.tipCode==='2')return zh?'在客胜成立的比分路径里，客队净胜幅度更偏穿盘，因此让负优先。':'Given the away-win thesis lands, the away margin leans to covering.';
+    if(h.tipCode==='X')return zh?`在客胜成立的比分路径里，更集中在客队净胜${Math.abs(h.handicapLine)}球，因此让平优先。`:'Given the away-win thesis lands, the away margin is concentrated exactly on the handicap.';
+    if(Math.abs(h.handicapLine)===1)return zh?'客胜与主受让1的让胜不能同时成立；新版不会把让胜作为该场伴随首选。':'An away win and home +1 handicap-home cannot both occur; v2 will not publish that as the companion pick.';
+    return zh?`客胜仍成立，但更偏只赢1至${Math.abs(h.handicapLine)-1}球，无法覆盖主队受让${h.handicapLineText}，因此伴随方向为让胜。`:'The away-win thesis still holds, but the winning margin is too small to beat the larger receiving handicap.';
   }
-  return zh?'让球方向由完整净胜球分布单独计算，不直接照搬胜平负。':'The handicap pick is derived from the full goal-margin distribution, not copied from 1X2.';
+  return zh?'该方向比较的是胜平负首选成立后的让球结果；串关另用不附加这一条件的完整让球概率。':'This companion compares handicap outcomes conditional on the 1X2 pick; combo selection uses the unconditional handicap probabilities.';
 }
 function HandicapBlock({d,settlement,language}:{d:Decision;settlement?:Settlement|null;language:Language}){
   const h=d.handicapAnalysis;if(!h)return null;const zh=language==='zh';
   return <section className="rc-handicap">
-    <header><div><span>{zh?'让球分析':'Handicap analysis'} {h.handicapLineText}</span><strong>{handicapTitle(h.tipCode,zh)}</strong></div>
+    <header><div><span>{h.probabilityBasis==='conditional-on-straight-primary'?(zh?'让球伴随分析':'Companion handicap analysis'):(zh?'让球分析':'Handicap analysis')} {h.handicapLineText}</span><strong>{handicapTitle(h.tipCode,zh)}</strong></div>
       <span className={`rc-state rc-state--${settlement?.state||'PENDING'}`}>{settlement?resultLabel(settlement.state,zh):(zh?'待赛果':'Pending')}</span></header>
-    <p>{handicapNarrative(d,zh)}</p>{h.historicalCalibration?.applied&&<small className="rc-handicap__learned">{zh?'历史盘口校准已启用':'Historical handicap calibration active'} · {h.historicalCalibration.key}</small>}
+    <p>{handicapNarrative(d,zh)}</p>{h.probabilityBasis==='conditional-on-straight-primary'&&<small className="rc-handicap__basis">{zh?'以下三项为“胜平负首选成立”条件下的净胜球占比，不是独立HHAD命中率。':'The three shares below are conditional on the 1X2 thesis landing; they are not standalone HHAD hit probabilities.'}</small>}{h.overallTipCode&&h.overallTipCode!==h.tipCode&&<small className="rc-handicap__diagnostic">{zh?'独立HHAD全局最高项':'Standalone HHAD top'}：{handicapTitle(h.overallTipCode,zh)} · {zh?'未作为伴随首选':'not used as companion pick'}</small>}{h.historicalCalibration?.applied&&<small className="rc-handicap__learned">{zh?'历史盘口校准已启用':'Historical handicap calibration active'} · {h.historicalCalibration.key}</small>}
     <div className="rc-handicap__probabilities">{(['1','X','2'] as const).map(code=><div key={code} className={code===h.tipCode?'is-selected':''}><span>{handicapTitle(code,zh)}</span><strong>{(h.probabilities[code]*100).toFixed(1)}%</strong></div>)}</div>
-    <div className="rc-handicap__meta"><span>{zh?'卡盘概率':'Land on line'} {(h.landOnLineProbability*100).toFixed(1)}%</span><span>{zh?'对应净胜球':'Exact margin'} {h.exactMargin>0?'+':''}{h.exactMargin}</span>
+    <div className="rc-handicap__meta"><span>{h.probabilityBasis==='conditional-on-straight-primary'?(zh?'条件卡盘占比':'Conditional land-on-line share'):(zh?'卡盘概率':'Land on line')} {(h.landOnLineProbability*100).toFixed(1)}%</span><span>{zh?'对应净胜球':'Exact margin'} {h.exactMargin>0?'+':''}{h.exactMargin}</span>
       {h.marketReference?.selectedOdds&&<span>{zh?'让球SP':'HHAD SP'} {h.marketReference.selectedOdds.toFixed(2)}</span>}</div>
   </section>;
 }
@@ -40,14 +43,14 @@ function PrimaryPickHeader({d,language}:{d:Decision;language:Language}){
   return <div className="rc-primary-picks" aria-label={zh?'本场两个首选方向':'Primary 1X2 and handicap picks'}>
     <div className="rc-primary-pick rc-primary-pick--had"><span>{zh?'胜平负首选':'1X2 primary'}</span><strong>{title(summary.had.code,zh)}</strong><small>SP {summary.had.odds.toFixed(2)} · {(summary.had.probability*100).toFixed(1)}%</small></div>
     <span className="rc-primary-divider" aria-hidden="true">｜</span>
-    <div className="rc-primary-pick rc-primary-pick--hhad"><span>{zh?'让球首选':'Handicap primary'}</span>{h?<><strong>{h.lineText} · {handicapTitle(h.code,zh)}</strong><small>{(h.probability*100).toFixed(1)}%{h.odds?(' · SP '+h.odds.toFixed(2)):''}{h.calibrated?(zh?' · 已校准':' · calibrated'):''}</small></>:<><strong>—</strong><small>{zh?'等待有效让球线与净胜球数据':'Awaiting valid handicap inputs'}</small></>}</div>
+    <div className="rc-primary-pick rc-primary-pick--hhad"><span>{zh?'让球首选':'Handicap primary'}</span>{h?<><strong>{h.lineText} · {handicapTitle(h.code,zh)}</strong><small>{h.conditional?(zh?'条件占比 ':'Conditional share '):''}{(h.probability*100).toFixed(1)}%{h.odds?(' · SP '+h.odds.toFixed(2)):''}{h.calibrated?(zh?' · 已校准':' · calibrated'):''}</small></>:<><strong>—</strong><small>{zh?'等待有效让球线与净胜球数据':'Awaiting valid handicap inputs'}</small></>}</div>
   </div>;
 }
-function RecordDetails({d,language,onSelectMatch}:{d:Decision;language:Language;onSelectMatch:(id:string)=>void}){
+function RecordDetails({d,selection,language,onSelectMatch}:{d:Decision;selection?:ComboSelection;language:Language;onSelectMatch:(id:string)=>void}){
   const zh=language==='zh';
   return <details className="rc-details"><summary><ChevronDown size={14} aria-hidden="true"/>{zh?'分析依据与冻结版本':'Evidence & frozen version'}</summary>
-    <div><p>{zh?'唯一首选取自本次完整模型概率的最大项；串关引用相同版本，不再次更改方向。':'The primary pick is the maximum of this model vector. A combo references this exact version without changing its direction.'}</p>
-      <dl><dt>{zh?'SP来源':'SP source'}</dt><dd>{quoteSourceLabel(d,language)}</dd><dt>{zh?'模型生成':'Model generated'}</dt><dd>{format(d.modelGeneratedAt,language)}</dd><dt>{zh?'SP采集':'SP observed'}</dt><dd>{format(d.quoteObservedAt,language)}</dd><dt>{zh?'实际发布':'Published'}</dt><dd>{format(d.publishedAt,language)}</dd><dt>{zh?'决策版本':'Decision ID'}</dt><dd className="rc-id">{d.decisionId}</dd></dl>
+    <div><p>{selection?.market==='HHAD'?(zh?'本腿选取完整让球概率中最高的方向，未使用“胜平负先命中”的条件占比；因此可以与单场卡片的伴随方向不同。盘口和SP均取自本条冻结记录。':'This leg uses the highest unconditional handicap probability, not the share conditional on a correct 1X2 pick. It may differ from the companion pick. The handicap and SP are archived with this selection.'):(zh?'胜平负首选取自完整模型概率的最大项；串关从同一决策中选择胜平负或让球玩法，每场只入选一腿。':'The 1X2 pick is the maximum of the model vector. A combo selects 1X2 or handicap from the same decision, with one leg per match.')}</p>
+      <dl>{selection&&<><dt>{zh?'选定玩法':'Selected market'}</dt><dd>{selection.market==='HHAD'?(zh?'让球胜平负':'Handicap 1X2'):(zh?'胜平负':'1X2')}{selection.market==='HHAD'?` (${selection.handicapLine>0?'+':''}${selection.handicapLine})`:''}</dd><dt>{zh?'选定方向 / SP':'Pick / SP'}</dt><dd>{selection.market==='HHAD'?handicapTitle(selection.tipCode,zh):title(selection.tipCode,zh)} · {selection.odds.toFixed(2)}</dd><dt>{zh?'完整模型概率':'Unconditional model probability'}</dt><dd>{(selection.modelProbability*100).toFixed(1)}% · {zh?'尚未验证':'unvalidated'}</dd></>}<dt>{zh?'SP来源':'SP source'}</dt><dd>{quoteSourceLabel(selection??d,language)}{selection?` (${selection.quoteSource})`:''}</dd><dt>{zh?'模型生成':'Model generated'}</dt><dd>{format(d.modelGeneratedAt,language)}</dd><dt>{zh?'SP采集':'SP observed'}</dt><dd>{format(selection?.quoteObservedAt??d.quoteObservedAt,language)}</dd><dt>{zh?'实际发布':'Published'}</dt><dd>{format(d.publishedAt,language)}</dd><dt>{zh?'决策版本':'Decision ID'}</dt><dd className="rc-id">{d.decisionId}</dd>{selection&&<><dt>{zh?'串关选项版本':'Selection ID'}</dt><dd className="rc-id">{selection.selectionId}</dd></>}</dl>
       <button type="button" className="rc-link" onClick={()=>onSelectMatch(d.matchId)}>{zh?'查看球队与赛程资料':'Team & fixture information'}</button>
     </div></details>;
 }
@@ -66,16 +69,30 @@ function ComboCard({combo,settlement,language,onSelectMatch}:{combo:Combo;settle
   const zh=language==='zh';
   return <article className="rc-combo"><header><div><small>{zh?'每日精选':'Daily selection'}</small><h3>{combo.size}{zh?'串1':'-leg combo'}</h3></div><div><strong>SP {combo.totalOdds.toFixed(2)}</strong><small>{zh?'下限':'Minimum'} {combo.size===2?'2.50':'5.00'}</small></div></header>
     <div className="rc-combo__status"><span className={`rc-state rc-state--${settlement?.state||'PENDING'}`}>{settlement?resultLabel(settlement.state,zh):(zh?'即时方案 · 未冻结':'Preview · not frozen')}</span><span>{combo.frozenAt?(zh?'冻结':'Frozen'):(zh?'计划冻结':'Freeze at')} {format(combo.frozenAt||combo.freezeAt,language)}</span></div>
-    {combo.legs.map((leg,index)=>{const result=settlement?.legs?.find(l=>l.decisionId===leg.decisionId);return <section className="rc-combo__leg" key={leg.decisionId}><div className="rc-leg-heading"><span className="rc-leg-number">{index+1}</span><div><strong>{leg.homeTeamName} vs {leg.awayTeamName}</strong><small>{leg.matchNo||leg.sourceMatchId} · {format(leg.kickoffTime,language)}</small></div><strong>{title(leg.tipCode,zh)} <small>@{leg.odds.toFixed(2)}</small></strong></div>
-      <div className="rc-leg-meta"><span>{quoteSourceLabel(leg,language)}</span><span>{zh?'绑定版本发布于':'Bound version published'} {format(leg.publishedAt,language)}</span>{result&&<span>{result.score||'—'} · {resultLabel(result.state,zh)}</span>}</div>
-      <RecordDetails d={leg} language={language} onSelectMatch={onSelectMatch}/></section>;})}
-    <p className="rc-disclaimer">{zh?'每腿绑定真实决策ID；模型概率用于排序，不代表已验证的组合命中率。':'Each leg binds an actual decision ID. Model probabilities rank selections; they are not verified combo hit rates.'}</p>
+    {combo.legs.map((leg,index)=>{const pick=comboLegSelection(combo,index),handicap=pick.market==='HHAD',result=settlement?.legs?.find(l=>l.decisionId===leg.decisionId);return <section className="rc-combo__leg" key={leg.decisionId}><div className="rc-leg-heading"><span className="rc-leg-number">{index+1}</span><div><strong>{leg.homeTeamName} vs {leg.awayTeamName}</strong><small>{leg.matchNo||leg.sourceMatchId} · {format(leg.kickoffTime,language)}</small></div><strong className="rc-leg-pick"><span className={`rc-market-label${handicap?' rc-market-label--hhad':''}`}>{handicap?(zh?'让球胜平负':'Handicap 1X2'):(zh?'胜平负':'1X2')}{handicap?` ${pick.handicapLine>0?'+':''}${pick.handicapLine}`:''}</span><span>{handicap?handicapTitle(pick.tipCode,zh):title(pick.tipCode,zh)} <small>SP {pick.odds.toFixed(2)}</small></span></strong></div>
+      <div className="rc-leg-meta"><span>{quoteSourceLabel(pick,language)}</span><span>{zh?'SP采集':'SP observed'} {format(pick.quoteObservedAt,language)}</span>{result&&<span>{result.score||'—'} · {resultLabel(result.state,zh)}</span>}</div>
+      <RecordDetails d={leg} selection={combo.selections?.[index]} language={language} onSelectMatch={onSelectMatch}/></section>;})}
+    <p className="rc-disclaimer">{zh?'可混合胜平负与让球胜平负，每场只选一腿；模型仍在验证，未将单场概率相乘作为真实串关命中率。':'1X2 and handicap 1X2 may be mixed, with one leg per match. The model remains unvalidated; multiplying single probabilities does not establish a real combo hit rate.'}</p>
   </article>;
 }
 function Stats({value,zh}:{value:Summary|undefined;zh:boolean}){return <div className="rc-stats">{[
   [zh?'已发布':'Published',value?.published??'—'],[zh?'命中 / 已结算':'Won / Settled',value?`${value.won} / ${value.settled}`:'—'],
   [zh?'命中率':'Hit rate',value?.hitRate==null?'—':`${(value.hitRate*100).toFixed(1)}%`],[zh?'待核 / 无效':'Disputed / Void',value?`${value.disputed} / ${value.void}`:'—'],
+  [zh?'待赛果':'Pending results',value?.pending??'—'],
 ].map(([label,v])=><div key={label}><span>{label}</span><strong>{v}</strong></div>)}</div>;}
+function HandicapPerformance({breakdown,legacy,zh}:{breakdown?:HandicapBreakdown;legacy?:Summary;zh:boolean}){
+  if(!breakdown)return legacy?<div className="rc-handicap-summary"><span>{zh?'让球历史合计 · 尚未按版本拆分':'Handicap history · version split unavailable'}</span><strong>{legacy.hitRate==null?'—':`${(legacy.hitRate*100).toFixed(1)}%`}</strong><small>{zh?'命中 / 已结算':'Won / Settled'} {legacy.won} / {legacy.settled}</small></div>:null;
+  const rows:Array<{key:string;label:string;scope:string;value:Summary}>=[{key:'v1',label:zh?'旧版独立让球 · v1':'Standalone handicap · v1',scope:zh?'全部旧版已结算场次':'All settled legacy matches',value:breakdown.standaloneV1}];
+  for(const version of [2,3] as const){
+    const all=version===2?breakdown.companionV2All:breakdown.companionV3All,conditional=version===2?breakdown.companionV2WhenHadWon:breakdown.companionV3WhenHadWon,both=version===2?breakdown.companionV2BothWon:breakdown.companionV3BothWon;
+    if(!all||!conditional||!both)continue;
+    const name=version===3?(zh?'统一比分模型 v3':'Coherent score model v3'):(zh?'伴随模型 v2':'Companion model v2');
+    rows.push({key:`v${version}-all`,label:name+(zh?' · 让球命中':' · handicap hit'),scope:zh?'全部该版已结算场次':'All settled matches in this version',value:all},
+      {key:`v${version}-conditional`,label:name+(zh?' · 主方向命中后':' · after 1X2 hit'),scope:zh?'仅胜平负首选命中的场次':'Only matches where the 1X2 pick won',value:conditional},
+      {key:`v${version}-both`,label:name+(zh?' · 双方向同时命中':' · both picks hit'),scope:zh?'全部该版已结算场次':'All settled matches in this version',value:both});
+  }
+  return <section className="rc-performance" aria-label={zh?'按版本与样本拆分的让球命中率':'Handicap performance by version and sample'}><header><strong>{zh?'让球命中率 · 分开看样本':'Handicap hit rates · separate samples'}</strong><p>{zh?'“主方向命中后”的比例只回答条件问题，不等于让球整体命中率，也不用于串关概率。待赛果不计为未命中。':'The rate after a correct 1X2 pick is conditional. It is neither an overall handicap hit rate nor a combo probability. Pending results are not losses.'}</p></header><div className="rc-performance__rows">{rows.map(row=><article key={row.key}><div><strong>{row.label}</strong><small>{zh?'分母：':'Denominator: '}{row.scope}</small></div><div><strong>{row.value.hitRate==null?'—':`${(row.value.hitRate*100).toFixed(1)}%`}</strong><small>{zh?'命中 / 已结算':'Won / Settled'} {row.value.won} / {row.value.settled} · {zh?'待赛果':'Pending'} {row.value.pending}</small></div></article>)}</div></section>;
+}
 const groupLabel=(key:string,zh:boolean)=>{
   const [base,straight]=key.split('|straight:');
   const baseLabel=base==='home-give-1'?(zh?'主让1':'Home -1'):base==='home-give-2'?(zh?'主让2':'Home -2'):base==='home-give-3plus'?(zh?'主让3+':'Home -3+'):base==='home-receive-1'?(zh?'主受让1':'Home +1'):base==='home-receive-2'?(zh?'主受让2':'Home +2'):(zh?'主受让3+':'Home +3+');
@@ -83,8 +100,9 @@ const groupLabel=(key:string,zh:boolean)=>{
 };
 function HandicapCalibrationPanel({profile,language}:{profile?:HandicapCalibrationProfile;language:Language}){
   const zh=language==='zh';
-  const groups=profile?Object.values(profile.groups).filter(g=>g.key.includes('|straight:')).sort((a,b)=>a.key.localeCompare(b.key)):[];
-  return <section className="rc-calibration"><header><div><span>{zh?'盘口强度分组复盘':'Handicap calibration by line'}</span><strong>{profile?.sampleRows??0}{zh?'个冻结样本':' frozen samples'}</strong></div><small>{zh?'只有时间前推验证通过的分组才自动影响新让球方向。':'Only holdout-validated groups can change new handicap picks.'}</small></header>
+  const conditional=calibrationSampleBasis(profile)==='had-won';
+  const groups=profile?Object.values(profile.groups).filter(g=>!conditional||g.key.includes('|straight:')).sort((a,b)=>a.key.localeCompare(b.key)):[];
+  return <section className="rc-calibration"><header><div><span>{zh?'盘口强度分组复盘':'Handicap calibration by line'}</span><strong>{profile?.sampleRows??0}{conditional?(zh?'个主方向命中样本':' HAD-hit frozen samples'):(zh?'个全部样本':' total frozen samples')}</strong></div><small>{zh?'只有时间前推验证通过的分组才自动影响新让球方向。':'Only holdout-validated groups can change new handicap picks.'}</small></header>
     {groups.length?<div className="rc-calibration__grid">{groups.map(g=>{const m=g.metrics;const awayBias=g.bias['2'];return <article key={g.key} className={g.active?'is-active':''}><div className="rc-calibration__top"><strong>{groupLabel(g.key,zh)}</strong><span>{g.active?(zh?'已启用':'Active'):(zh?'观察中':'Observe')}</span></div><div className="rc-calibration__numbers"><span>{zh?'样本':'Samples'} <b>{g.rows}</b></span><span>{zh?'让负偏差':'Hcap-away bias'} <b>{awayBias>=0?'+':''}{(awayBias*100).toFixed(1)}pp</b></span><span>{zh?'实际让负':'Actual hcap-away'} <b>{(g.actualShare['2']*100).toFixed(1)}%</b></span></div>{m&&<div className="rc-calibration__metrics"><span>Brier {m.rawBrier?.toFixed(3)??'—'} → {m.calibratedBrier?.toFixed(3)??'—'}</span><span>{zh?'验证命中':'Holdout hit'} {m.rawHitRate==null?'—':(m.rawHitRate*100).toFixed(1)+'%'} → {m.calibratedHitRate==null?'—':(m.calibratedHitRate*100).toFixed(1)+'%'}</span></div>}<small>{g.active?(zh?'该组偏差会按收缩权重修正新概率，不会硬改方向。':'This group adjusts new probabilities with shrinkage, never a forced pick.'):(zh?'样本不足或样本外表现未改善，暂不改动新预测。':'No live adjustment until sample/holdout checks pass.')}</small></article>;})}</div>:<p className="rc-empty">{zh?'正在积累让球冻结样本；未达到门槛前保持原净胜球模型。':'Collecting frozen handicap samples; the raw goal-margin model remains unchanged until thresholds are met.'}</p>}</section>;
 }
 export function RecommendationCenter({language,onSelectMatch,mode='recommendations',initialTab='single'}:Props){
@@ -112,7 +130,7 @@ export function RecommendationCenter({language,onSelectMatch,mode='recommendatio
     <header className="rc-heading"><div><span className="rc-eyebrow">{zh?'统一决策 · 可追溯发布':'One decision · Traceable publication'}</span><h1 id="rc-title">{review?(zh?'赛后复盘':'Result Review'):(zh?'今日推荐':'Today’s Recommendations')}</h1><p>{zh?'单场与串关共用决策版本；原始方向不改，官方赛果更正同步复盘。':'Singles and combos share decision versions. Original picks remain immutable; official corrections update both records.'}</p></div><button type="button" className="rc-refresh" onClick={refresh}><RefreshCw size={16} aria-hidden="true"/>{zh?'刷新':'Refresh'}</button></header>
     <div className="rc-meta"><span>{zh?'业务日':'Match day'} {data?.businessDate||'—'}</span><span>{zh?'行情截至':'Inputs as of'} {format(activeInputs,language)}</span><span>{zh?'赛果核对':'Results checked'} {format(data?.resultAsOf,language)}</span><span>{zh?'模型验证中':'Model unvalidated'}</span></div>
     <div className="rc-tabs" role="group" aria-label={zh?'推荐类型':'Recommendation type'}>{(['single','two','three'] as const).map(t=><button key={t} type="button" aria-pressed={tab===t} onClick={()=>setTab(t)}>{t==='single'?(zh?'单场':'Singles'):t==='two'?(zh?'2串1 · SP≥2.50':'2-leg · SP≥2.50'):(zh?'3串1 · SP≥5.00':'3-leg · SP≥5.00')}</button>)}</div>
-    <Stats value={summary} zh={zh}/>{review&&tab==='single'&&handicapSummary&&<div className="rc-handicap-summary"><span>{zh?'让球复盘':'Handicap review'}</span><strong>{handicapSummary.hitRate==null?'—':`${(handicapSummary.hitRate*100).toFixed(1)}%`}</strong><small>{zh?'命中 / 已结算':'Won / Settled'} {handicapSummary.won} / {handicapSummary.settled}</small></div>}{review&&tab==='single'&&<HandicapCalibrationPanel profile={data?.review.handicapCalibration} language={language}/>} 
+    <Stats value={summary} zh={zh}/>{review&&tab==='single'&&<><HandicapPerformance breakdown={data?.review.statistics.handicapBreakdown} legacy={handicapSummary} zh={zh}/><HandicapCalibrationPanel profile={data?.review.handicapCalibration} language={language}/></>}
     {authorizationRequired?<p className="rc-notice" role="alert">{zh?'请使用网站访问权限重新登录。':'Please sign in with your website access.'}</p>:failed?<p className="rc-notice" role="status">{zh?'连接恢复中；保留上次已发布记录，不将读取失败显示为零成绩。':'Reconnecting. Retaining the last published records; errors do not reset statistics.'}</p>:null}
     {!loading&&(tab==='single'?stale:!comboFresh)&&<p className="rc-notice">{zh?'当前显示已发布快照，行情更新延迟；旧快照不作为新串关输入。':'Published snapshots are retained while inputs are delayed; old snapshots do not create new combos.'}</p>}
     {reviewDelayed&&<p className="rc-notice">{zh?'赛果核对正在恢复，新推荐发布不受此任务影响。':'Result verification is recovering; recommendation publication is independent.'}</p>}
@@ -123,7 +141,7 @@ export function RecommendationCenter({language,onSelectMatch,mode='recommendatio
       <div className="rc-combos">{frozen.map(row=><ComboCard key={row.combo.id} combo={row.combo} settlement={row.settlement} language={language} onSelectMatch={onSelectMatch}/>)}{preview&&<ComboCard combo={preview} language={language} onSelectMatch={onSelectMatch}/>}{!frozen.length&&!preview&&<p className="rc-empty">{review?(zh?'暂无该类型的冻结复盘记录。':'No frozen review records for this size.'):
         comboUnavailable?(zh?'串关数据正在更新；已冻结记录仍然保留。':'Combo data is updating; frozen records are retained.'):
         typeof comboCandidates==='number'&&comboCandidates<size?(zh?`当前可用${comboCandidates}场，${size}串1需要${size}场不同比赛。新场次到达后自动重算。`:`${comboCandidates} valid matches available; this combo requires ${size} distinct matches.`):
-        (zh?`当前可用${comboCandidates??'—'}场，尚未组成满足SP≥${size===2?'2.50':'5.00'}的${size}串1；不会改选第二方向凑SP。`:`No ${size}-leg combination of the available matches meets SP≥${size===2?'2.50':'5.00'}; directions are not substituted.`)}</p>}</div>}
+        (zh?`今日无合格组合。当前可用${comboCandidates??'—'}场，胜平负及让球首选尚未组成满足SP≥${size===2?'2.50':'5.00'}的${size}串1；不会改选第二方向凑SP。`:`No qualifying combo today. The available 1X2 and handicap primary picks do not form a ${size}-leg combination with SP≥${size===2?'2.50':'5.00'}; secondary directions are not substituted.`)}</p>}</div>}
     <footer className="rc-footnote">{zh?'单场每场统计截止前最后一个真实发布版本；串关统计冻结时绑定的版本，两者不混算。未结算不记为未命中。':'Single statistics use the last actually published version before cutoff; combos use their bound frozen versions. Pending results are not losses.'}{review&&data?` ${zh?'明细最多展示':'Detail limit:'} ${data.review.limit}${zh?'条，统计来自完整新台账。':' rows; statistics cover the complete new ledger.'}`:''}</footer>
   </section>;
 }

@@ -1,7 +1,8 @@
 'use strict';
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const {marginDistribution,buildHandicapMarginDecision,validHandicapMarginDecision}=require('../src/services/handicapMarginDecision.cjs');
+const {marginDistribution,conditionalHandicapDistribution,coherentHandicapDistribution,buildHandicapMarginDecision,validHandicapMarginDecision}=require('../src/services/handicapMarginDecision.cjs');
+const {hash}=require('../src/services/publishedForecastPolicy.cjs');
 const {buildHandicapCalibration,calibrateHandicapProbabilities,lineGroup}=require('../src/services/handicapCalibration.cjs');
 const {makeDecision,validDecision}=require('../scripts/recommendationPlatform/decision.cjs');
 const {settleHandicapDecision,handicapSummary}=require('../scripts/recommendationPlatform/results.cjs');
@@ -76,10 +77,11 @@ function calibrationFixture(count,{line=-2,raw={'1':.35,X:.25,'2':.40},score=[3,
   for(let i=0;i<count;i++){
     const sourceMatchId='cal'+i,eventVersion='2026-08-'+String((i%28)+1).padStart(2,'0')+'T10:00:00.000Z';
     const decisionId='d'+i,businessDate='2026-08-'+String((i%28)+1).padStart(2,'0');
-    decisions.push({decisionId,sourceMatchId,eventVersion,businessDate,publishedAt:eventVersion,homeTeamId:'h'+i,awayTeamId:'a'+i,tipCode:'1',
-      handicapAnalysis:{version:'handicap-margin-v1',handicapLine:line,rawProbabilities:raw,probabilities:raw,tipCode:'2'}});
+    const body={decisionId,sourceMatchId,eventVersion,businessDate,publishedAt:eventVersion.replace('T10:','T09:'),homeTeamId:'h'+i,awayTeamId:'a'+i,tipCode:'1',
+      handicapAnalysis:{version:'handicap-margin-v2',companionPolicyVersion:'straight-conditioned-margin-v1',straightTipCode:'1',handicapLine:line,companionRawProbabilities:raw,rawProbabilities:raw,probabilities:raw,tipCode:'2'}};
+    decisions.push({...body,recordHash:hash(body)});
     const eventKey=JSON.stringify([sourceMatchId,eventVersion]);
-    heads.set(eventKey,{eventKey,state:'FINAL',sourceMatchId,eventVersion,scoreHome:score[0],scoreAway:score[1],homeTeamId:'h'+i,awayTeamId:'a'+i});
+    heads.set(eventKey,{eventKey,state:'FINAL',sourceMatchId,eventVersion,observedAt:eventVersion.replace('T10:','T12:'),scoreHome:score[0],scoreAway:score[1],homeTeamId:'h'+i,awayTeamId:'a'+i});
   }
   return {decisions,heads};
 }
@@ -108,7 +110,7 @@ test('handicap strength buckets separate one, two and three-plus goals and both 
 
 test('many samples from only one match day cannot activate calibration',()=>{
   const {decisions,heads}=calibrationFixture(24);
-  for(const d of decisions)d.businessDate='2026-08-01';
+  for(const d of decisions){d.businessDate='2026-08-01';const {recordHash,...body}=d;d.recordHash=hash(body);}
   const profile=buildHandicapCalibration(decisions,heads,'2026-09-20');
   assert.equal(profile.groups['home-give-2|straight:1'].active,false);
   assert.equal(profile.groups['home-give-2|straight:1'].reason,'insufficient-sample-days');
@@ -118,4 +120,130 @@ test('one corrupt historical decision is excluded without blocking calibration o
   decisions.push({decisionId:'broken',businessDate:'2026-08-01',publishedAt:'bad',eventVersion:'bad',handicapAnalysis:{handicapLine:-2,probabilities:{'1':.3,X:.2,'2':.5}},tipCode:'1'});
   const profile=buildHandicapCalibration(decisions,heads,'2026-09-20');
   assert.equal(profile.sampleRows,24);
+});
+
+test('home-win plus minus-one never publishes handicap-away as the companion pick',()=>{
+  const h=buildHandicapMarginDecision(match(.6,.2,-1),{now:NOW,cutoffTime:'2026-09-20T09:30:00Z',straightTipCode:'1'});
+  assert.equal(h.overallTipCode,'X');
+  assert.equal(h.tipCode,'X');
+  assert.equal(h.probabilities['2'],0);
+  assert.equal(h.probabilityBasis,'conditional-on-straight-primary');
+});
+test('home-win plus minus-two may legitimately resolve to handicap-away when the model expects only a one-goal win',()=>{
+  const h=buildHandicapMarginDecision(match(.6,.1,-2),{now:NOW,cutoffTime:'2026-09-20T09:30:00Z',straightTipCode:'1'});
+  assert.equal(h.tipCode,'2');
+  assert.ok(h.probabilities['2']>.7);
+  assert.equal(h.relation,'home-not-cover');
+});
+test('conditional margin support is mathematically coherent with the frozen straight pick',()=>{
+  const home=conditionalHandicapDistribution(.6,.2,-1,'1');
+  assert.equal(home.probabilities['2'],0);
+  const away=conditionalHandicapDistribution(.6,1.8,1,'2');
+  assert.equal(away.probabilities['1'],0);
+});
+test('calibration v2 ignores matches where the frozen HAD thesis missed',()=>{
+  const {decisions,heads}=calibrationFixture(24);
+  const first=decisions[0],eventKey=JSON.stringify([first.sourceMatchId,first.eventVersion]);
+  const old=heads.get(eventKey);heads.set(eventKey,{...old,scoreHome:0,scoreAway:1});
+  const profile=buildHandicapCalibration(decisions,heads,'2026-09-20');
+  assert.equal(profile.sampleRows,23);
+  assert.equal(profile.version,'handicap-calibration-v2');
+});
+
+test('one coherent score matrix reproduces final HAD and both conditional and unconditional HHAD',()=>{
+  const had={home:.51,draw:.30,away:.19};
+  const matrix=coherentHandicapDistribution(.6,.2,-1,had,'1');
+  for(const [code,expected] of [['1',.51],['X',.30],['2',.19]]){
+    assert.ok(Math.abs(Object.values(matrix.jointProbabilities[code]).reduce((s,p)=>s+p,0)-expected)<1e-12);
+  }
+  assert.equal(matrix.probabilities['2'],.49);
+  assert.equal(matrix.conditionalProbabilities['2'],0);
+  assert.ok(matrix.conditionalProbabilities.X>matrix.probabilities.X);
+  const m=match(.6,.2,-1);m.probabilityModel.oneXTwo.final=had;
+  const h=buildHandicapMarginDecision(m,{now:NOW,cutoffTime:m.buyEndTime,straightTipCode:'1'});
+  assert.equal(h.version,'handicap-margin-v3');assert.deepEqual(h.overallProbabilities,matrix.probabilities);
+  assert.deepEqual(h.probabilities,matrix.conditionalProbabilities);assert.equal(validHandicapMarginDecision(h),true);
+});
+test('coherence refuses unsupported score regions instead of adding synthetic mass',()=>{
+  assert.equal(coherentHandicapDistribution(0,0,-1,{home:.5,draw:.3,away:.2},'1'),null);
+  const m=match();delete m.probabilityModel.oneXTwo;
+  assert.equal(buildHandicapMarginDecision(m,{now:NOW,cutoffTime:m.buyEndTime,straightTipCode:'1'}),null);
+});
+test('conditional calibration keeps HAD marginal fixed and updates unconditional HHAD in the same matrix',()=>{
+  const matrix=coherentHandicapDistribution(2,.7,-2,{home:.6,draw:.25,away:.15},'1',{'1':.4,X:.35,'2':.25});
+  assert.deepEqual(matrix.conditionalProbabilities,{'1':.4,X:.35,'2':.25});
+  assert.deepEqual(matrix.probabilities,{'1':.24,X:.21,'2':.55});
+  for(const code of ['1','X','2'])assert.ok(Math.abs(Object.values(matrix.jointProbabilities[code]).reduce((s,p)=>s+p,0)-matrix.straightProbabilities[code])<1e-12);
+  assert.equal(coherentHandicapDistribution(2,.7,-1,{home:.6,draw:.25,away:.15},'1',{'1':.4,X:.35,'2':.25}),null);
+});
+test('coherent records reject altered overall probabilities, basis, hash, clocks and incomplete evidence',()=>{
+  const m=match(),h=buildHandicapMarginDecision(m,{now:NOW,cutoffTime:m.buyEndTime,straightTipCode:'1'});
+  const mutations=[
+    v=>{v.overallProbabilities['1']+=.02;v.overallProbabilities['2']-=.02;},
+    v=>{v.straightProbabilities['1']+=.02;v.straightProbabilities['2']-=.02;},
+    v=>{v.distributionBasis='bare-poisson';},v=>{v.inputHash='f'.repeat(64);},
+    v=>{v.computedAt=v.cutoffTime;},v=>{delete v.straightConditionedMass;},
+    v=>{delete v.overallRawProbabilities.X;},v=>{v.coverProbability+=.01;},
+    v=>{v.marketReference.handicapLine=-2;},v=>{v.marketReference.source='500.com:HHAD';},
+    v=>{v.marketReference.observedAt=new Date(NOW+1).toISOString();},
+    v=>{delete v.marketReference.odds.X;},
+  ];
+  for(const mutate of mutations){const changed=structuredClone(h);mutate(changed);assert.equal(validHandicapMarginDecision(changed),false);}
+});
+test('only complete fresh official quotes with the same explicit HHAD line enter evidence',()=>{
+  for(const mutate of [m=>{m.handicapOddsSource='500.com:HHAD';},m=>{delete m.handicapOdds.oddsX;},m=>{m.handicapOddsUpdatedAt=new Date(NOW+1).toISOString();}]){
+    const m=match();mutate(m);const h=buildHandicapMarginDecision(m,{now:NOW,cutoffTime:m.buyEndTime,straightTipCode:'1'});
+    assert.ok(h);assert.equal(h.marketReference,null);
+  }
+  const m=match();delete m.handicapOdds;m.externalSignals={bookmakerOdds:{hhad:{odds1:2,oddsX:3,odds2:4,source:'sporttery:HHAD',observedAt:new Date(NOW).toISOString()}}};
+  assert.equal(buildHandicapMarginDecision(m,{now:NOW,cutoffTime:m.buyEndTime,straightTipCode:'1'}).marketReference,null);
+});
+test('calibration counts each event once, excludes tampered records and excludes results after fit time',()=>{
+  const {decisions,heads}=calibrationFixture(24),first=decisions[0];
+  decisions.push({...first});
+  decisions[1].handicapAnalysis.companionRawProbabilities={'1':.4,X:.2,'2':.4};
+  const secondKey=JSON.stringify([decisions[2].sourceMatchId,decisions[2].eventVersion]);
+  heads.get(secondKey).observedAt='2026-10-01T00:00:00Z';
+  const p=buildHandicapCalibration(decisions,heads,'2026-09-20',{asOf:NOW});
+  assert.equal(p.sampleRows,22);
+});
+test('late training results unavailable at holdout start cannot activate calibration',()=>{
+  const {decisions,heads}=calibrationFixture(24);
+  for(const e of heads.values())e.observedAt='2026-09-01T00:00:00Z';
+  const p=buildHandicapCalibration(decisions,heads,'2026-09-20',{asOf:NOW});
+  assert.equal(p.sampleRows,24);assert.equal(p.groups['home-give-2|straight:1'].active,false);
+  assert.equal(p.groups['home-give-2|straight:1'].reason,'insufficient-time-forward-window');
+});
+test('profile hash tampering and profiles fitted in the future never change a new prediction',()=>{
+  const {decisions,heads}=calibrationFixture(24),profile=buildHandicapCalibration(decisions,heads,'2026-09-20',{asOf:NOW});
+  const broken=structuredClone(profile);broken.groups['home-give-2|straight:1'].weight=.65;
+  assert.equal(calibrateHandicapProbabilities({'1':.35,X:.25,'2':.40},-2,'1',broken).applied,false);
+  const future=buildHandicapCalibration(decisions,heads,'2026-09-20',{asOf:NOW+1});
+  const m=match(2,.7,-2),h=buildHandicapMarginDecision(m,{now:NOW,cutoffTime:m.buyEndTime,straightTipCode:'1',calibrationProfile:future});
+  assert.equal(h.historicalCalibration.applied,false);
+});
+test('unchanged calibration samples keep profile and handicap identity across retry clocks',()=>{
+  const {decisions,heads}=calibrationFixture(24),a=buildHandicapCalibration(decisions,heads,'2026-09-20',{asOf:NOW}),b=buildHandicapCalibration(decisions,heads,'2026-09-20',{asOf:NOW+1000});
+  assert.equal(a.profileHash,b.profileHash);assert.notEqual(a.asOf,b.asOf);
+  const m=match(2,.7,-2),h1=buildHandicapMarginDecision(m,{now:NOW,cutoffTime:m.buyEndTime,straightTipCode:'1',calibrationProfile:a}),h2=buildHandicapMarginDecision(m,{now:NOW+1000,cutoffTime:m.buyEndTime,straightTipCode:'1',calibrationProfile:b});
+  assert.equal(h1.historicalCalibration.applied,true);assert.equal(h1.inputHash,h2.inputHash);
+  assert.equal(validHandicapMarginDecision(h1),true);assert.equal(validHandicapMarginDecision(h2),true);
+});
+test('rounded percentage HAD input uses exactly the publication policy normalization',()=>{
+  const m=match();m.probabilityModel.oneXTwo.final={home:55.1,draw:25,away:19.8};
+  const d=makeDecision(m,{now:NOW,publication:PUB}).decision;
+  assert.ok(d.handicapAnalysis);assert.deepEqual(d.handicapAnalysis.straightProbabilities,d.probabilities);
+  assert.equal(validDecision(d),true);
+});
+test('frozen PR37 v2 evidence remains valid without recalculating it as coherent v3',()=>{
+  const legacy=require('./fixtures/handicap-margin-v2.json');
+  assert.equal(legacy.inputHash,'043dc2474fe8928a6b572dce2bc5643c3b7604cea8c6ba70966f1589f3dd24a7');
+  assert.equal(validHandicapMarginDecision(legacy),true);
+  const changed=structuredClone(legacy);changed.overallProbabilities['1']+=.02;changed.overallProbabilities['2']-=.02;
+  assert.equal(validHandicapMarginDecision(changed),false);
+});
+test('legacy v1 frozen analysis retains its original unconditional meaning',()=>{
+  const raw=marginDistribution(2.2,.6,-1).probabilities;
+  const legacy={version:'handicap-margin-v1',market:'HHAD',handicapLine:-1,tipCode:'1',rawProbabilities:raw,probabilities:raw,modelProbability:raw['1'],lambdas:{home:2.2,away:.6},exactMargin:1,inputHash:'a'.repeat(64)};
+  assert.equal(validHandicapMarginDecision(legacy),true);
 });
