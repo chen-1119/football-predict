@@ -98,6 +98,35 @@ async function verify(pool){
     await q('DROP TRIGGER injected_single_lane ON football.recommendation_lanes');
     const oldFrozen=(await q('SELECT payload FROM football.recommendation_combo_records WHERE business_date=$1 ORDER BY size',[tomorrow])).rows;
     check(()=>assert.deepEqual(oldFrozen,frozen));
+    // Actual PostgreSQL round-trip for mixed markets. The saved HAD decision
+    // stays immutable; only the bound combo selection can be HHAD.
+    const mixedDate=new Date(Date.parse(`${nextDate}T00:00:00Z`)+86400000).toISOString().slice(0,10);
+    const mixedDow=new Date(`${mixedDate}T12:00:00Z`).getUTCDay();
+    now=Date.parse(`${mixedDate}T${[0,6].includes(mixedDow)?'14':'13'}:00:00Z`);
+    const mixedFixture=id=>({ ...fixture(id),businessDate:mixedDate,kickoffTime:`${mixedDate}T16:00:00Z`,eventVersion:`${mixedDate}T16:00:00Z`,
+      probabilityModel:{version:'mixed-integration',generatedAt:new Date(now).toISOString(),oneXTwo:{final:id===303?{home:80,draw:12,away:8}:{home:45,draw:30,away:25}},calculationTrace:{poisson:{lambdas:{home:1.4,away:1.1}}}},
+      ...(id===303?{}:{handicapLine:1,handicapOdds:{odds1:1.8,oddsX:3.8,odds2:4.5},handicapOddsSource:'sporttery:HHAD',handicapOddsUpdatedAt:new Date(now).toISOString()}) });
+    await q("DELETE FROM football.match_snapshots WHERE dataset='current'");
+    for(const id of [301,302,303])await write(mixedFixture(id));
+    await sourceVersion('mixed-markets');
+    const mixedRun=await runtime.publishingCycle();check(()=>assert.equal(mixedRun.combinations.ok,true));
+    const mixedRecords=(await q('SELECT payload FROM football.recommendation_combo_records WHERE business_date=$1 ORDER BY size',[mixedDate])).rows.map(x=>x.payload);
+    check(()=>assert.equal(mixedRecords.length,2));
+    check(()=>assert.ok(mixedRecords.every(c=>c.selections.some(s=>s.market==='HHAD'))));
+    check(()=>assert.ok(mixedRecords.find(c=>c.size===3).selections.some(s=>s.market==='HAD')));
+    const mixedBindings=(await q('SELECT payload FROM football.recommendation_decisions WHERE business_date=$1',[mixedDate])).rows.map(x=>x.payload);
+    check(()=>assert.ok(mixedRecords.every(c=>c.legs.every(d=>d.market==='HAD'&&mixedBindings.some(s=>s.decisionId===d.decisionId&&s.recordHash===d.recordHash)))));
+    check(()=>assert.ok(mixedRecords.every(c=>Math.abs(c.rawTotalOdds-c.selections.reduce((p,s)=>p*s.odds,1))<1e-8)));
+    now=Date.parse(`${mixedDate}T19:00:00Z`);
+    for(const id of [301,302,303])await write({...mixedFixture(id),status:'FINISHED',testOfficial:true,scoreHome:id===303?2:0,scoreAway:0},'history');
+    await runtime.settlementCycle();
+    const mixedView=(await q('SELECT payload FROM football.daily_featured_combo_state WHERE id=1')).rows[0].payload.recommendationCenter;
+    const mixedSettled=mixedView.review.combos.filter(r=>r.combo.businessDate===mixedDate);
+    check(()=>assert.equal(mixedSettled.length,2));
+    check(()=>assert.ok(mixedSettled.every(r=>r.settlement.state==='WON')));
+    check(()=>assert.equal(mixedView.review.singles.find(r=>r.decision.sourceMatchId==='301').settlement.state,'LOST'));
+    check(()=>assert.ok(mixedSettled.every(r=>r.settlement.legs.filter(l=>['301','302'].includes(l.sourceMatchId)).every(l=>l.state==='WON'))));
+    check(()=>assert.deepEqual((await q('SELECT payload FROM football.recommendation_combo_records WHERE business_date=$1 ORDER BY size',[mixedDate])).rows.map(x=>x.payload),mixedRecords));
     return {ok:true,checks,schema,scope:'disposable-test-schema',productionRowsWritten:0};
   }finally{await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);}
 }
