@@ -112,11 +112,12 @@ test('real JSON export yields injuries and both starting/bench lineups through t
   assert.deepEqual(JSON.parse(await fs.readFile(exportPath, 'utf8')), document);
 });
 
-test('public DTO excludes provider, player IDs, source URLs, paths and storage metadata', async t => {
+test('public DTO identifies providers but excludes private IDs, source URLs, paths and storage metadata', async t => {
   const { exportPath } = await temporaryExport(t);
   const result = await createWebsiteReader(options(exportPath))(ID);
-  assert.deepEqual(keys(result), ['eventVersion', 'matchId', 'predictionEligible', 'sections', 'status', 'updatedAt']);
-  assert.deepEqual(keys(result.sections.injuries), ['data', 'lastAttemptAt', 'observedAt', 'previousValue', 'status']);
+  assert.deepEqual(keys(result), ['eventVersion', 'matchId', 'predictionEligible', 'provider', 'sections', 'sources', 'status', 'updatedAt']);
+  assert.deepEqual(keys(result.sections.injuries), ['data', 'fallback', 'lastAttemptAt', 'missingReason', 'observedAt', 'previousValue', 'provider', 'status']);
+  assert.equal(result.sections.injuries.provider, 'leisu');
   const encoded = JSON.stringify(result);
   assert.doesNotMatch(encoded, /providerMatchId|providerPlayerId|providerTeamId|sourceUrl|sourcePublishedAt|observationId|contentHash|taskKey|exportPath|collectorPath|internal-/);
   assert.doesNotMatch(encoded, addressPattern);
@@ -201,19 +202,20 @@ test('stale, started, canceled and rescheduled evidence is filtered before publi
 
 test('malformed, oversized and absent files return generic unavailable without configured paths', async t => {
   const { directory, exportPath } = await temporaryExport(t, '{"privatePath":"/srv/collector/secret"');
-  const expected = { matchId: ID, status: 'unavailable', predictionEligible: false };
-  assert.deepEqual(await createWebsiteReader(options(exportPath))(ID), expected);
+  const verify = result => { assert.equal(result.status, 'unavailable'); assert.equal(result.matchId, ID); assertNoEvidence(result); assert.doesNotMatch(JSON.stringify(result), addressPattern); };
+  verify(await createWebsiteReader(options(exportPath))(ID));
   await fs.writeFile(exportPath, JSON.stringify(sample()));
-  assert.deepEqual(await createWebsiteReader({ ...options(exportPath), maxBytes: 32 })(ID), expected);
-  assert.deepEqual(await createWebsiteReader(options(path.join(directory, 'secret-absent.json')))(ID), expected);
-  assert.deepEqual(await createWebsiteReader(options(directory))(ID), expected);
+  verify(await createWebsiteReader({ ...options(exportPath), maxBytes: 32 })(ID));
+  verify(await createWebsiteReader(options(path.join(directory, 'secret-absent.json')))(ID));
+  verify(await createWebsiteReader(options(directory))(ID));
 });
 
 test('malformed nested lineup data cannot throw private errors through the reader', async t => {
   const document = sample();
   document.items[0].evidence.sections.lineup.latestValid.data.teams[0].starters = null;
   const { exportPath } = await temporaryExport(t, document);
-  assert.deepEqual(await createWebsiteReader(options(exportPath))(ID), { matchId: ID, status: 'unavailable', predictionEligible: false });
+  const result = await createWebsiteReader(options(exportPath))(ID);
+  assert.equal(result.status, 'unavailable'); assertNoEvidence(result); assert.doesNotMatch(JSON.stringify(result), addressPattern);
 });
 
 test('authorization callback must be configured explicitly before a handler exists', () => {
@@ -348,4 +350,124 @@ test('malformed side fields cannot leak addresses through otherwise valid public
     assert.ok(['unavailable', 'conflict'].includes(result.status));
     assertNoEvidence(result);
   }
+});
+
+function apiSample() {
+  const doc = sample();
+  const sections = require('./website-reader.cjs').publicEvidence(require('./website-adapter.cjs').selectEvidence(doc, row(), NOW), row()).sections;
+  sections.injuries.data.players[0].name = 'API 球员';
+  for (const team of sections.lineup.data.teams) for (const player of [...team.starters, ...team.substitutes]) player.side = team.side;
+  return { version: 'api-football-prematch-reference-v1', provider: 'api-football', predictionEligible: false,
+    generatedAt: doc.generatedAt, items: [{ fixture: doc.items[0].fixture, sections }] };
+}
+
+async function dualReader(t, leisu = sample(), api = apiSample(), status = null) {
+  const { directory, exportPath } = await temporaryExport(t, leisu), referencePath = path.join(directory, 'reference.json');
+  await fs.writeFile(referencePath, JSON.stringify(api));
+  if (status) {
+    await fs.mkdir(path.join(directory, 'daily-prematch-api'));
+    await fs.writeFile(path.join(directory, 'daily-prematch-api/status.json'), JSON.stringify({ version: 'daily-prematch-api-v2',
+      provider: 'api-football', predictionEligible: false, state: 'partial', startedAt: '2026-09-12T13:37:00.000Z',
+      completedAt: '2026-09-12T13:39:00.000Z', rosterReceivedAt: NOW, ...status }));
+  }
+  return { directory, exportPath, referencePath, read: createWebsiteReader({ ...options(exportPath), apiFootballReferencePath: referencePath }) };
+}
+
+test('each section chooses fresh Leisu first and fills only its missing section from API', async t => {
+  const leisu = sample(), api = apiSample();
+  leisu.items[0].evidence.sections.lineup = { latestValid: null, latestAttempt: null };
+  const { read } = await dualReader(t, leisu, api), result = await read(ID);
+  assert.equal(result.provider, 'mixed'); assert.equal(result.status, 'ok');
+  assert.equal(result.sections.injuries.provider, 'leisu'); assert.equal(result.sections.injuries.data.players[0].name, '球员甲');
+  assert.equal(result.sections.lineup.provider, 'api-football'); assert.equal(result.sections.lineup.fallback, true);
+  assert.equal(result.sections.lineup.data.teams.length, 2);
+  assert.equal(result.sources.leisu.sections.lineup.status, 'missing');
+  assert.equal(result.sources['api-football'].sections.injuries.status, 'available');
+});
+
+test('one API section cannot hide a valid Leisu section or override it just by being present', async t => {
+  const api = apiSample(); api.items[0].sections.lineup = { status: 'missing', data: null };
+  const { read } = await dualReader(t, sample(), api), result = await read(ID);
+  assert.equal(result.sections.lineup.provider, 'leisu'); assert.equal(result.sections.injuries.provider, 'leisu');
+  assert.equal(result.sources['api-football'].sections.lineup.status, 'missing');
+});
+
+test('failed Leisu attempt chooses valid API but preserves the failed state and previous receipt', async t => {
+  const leisu = sample(); leisu.items[0].evidence.sections.injuries.latestAttempt = {
+    ...leisu.items[0].evidence.sections.injuries.latestAttempt, status: 'blocked', receivedAt: '2026-09-12T13:38:00.000Z', data: null };
+  const { read, directory } = await dualReader(t, leisu);
+  await fs.writeFile(path.join(directory, 'collection-status.json'), JSON.stringify({ version: 'prematch-scheduler-v1', predictionEligible: false,
+    enabled: true, state: 'blocked', checkedAt: NOW, sourceAccess: { state: 'blocked', httpStatus: 405 } }));
+  const result = await read(ID);
+  assert.equal(result.sections.injuries.provider, 'api-football');
+  assert.equal(result.sources.leisu.sections.injuries.status, 'blocked'); assert.equal(result.sources.leisu.sections.injuries.previousValue, true);
+  assert.equal(result.sources.leisu.sections.injuries.observedAt, '2026-09-12T13:30:00.000Z');
+  assert.equal(result.sources.leisu.collection.sourceHttpStatus, 405);
+});
+
+test('old section receipt does not become fresh when its export envelope is regenerated', async t => {
+  const leisu = sample(); for (const field of ['latestValid', 'latestAttempt']) leisu.items[0].evidence.sections.injuries[field].receivedAt = '2026-09-12T06:00:00.000Z';
+  const { read } = await dualReader(t, leisu), result = await read(ID);
+  assert.equal(result.sources.leisu.sections.injuries.status, 'stale');
+  assert.equal(result.sections.injuries.provider, 'api-football');
+  assert.equal(result.sections.injuries.observedAt, '2026-09-12T13:30:00.000Z');
+});
+
+test('strict per-match coverage distinguishes source empty from unmapped and excludes private errors', async t => {
+  const leisu = sample(); leisu.items = [];
+  const api = apiSample(); api.items = [];
+  const coverage = { id: ID, home: row().homeTeamName, away: row().awayTeamName, kickoff: row().kickoffTime,
+    mapped: true, injuries: 'source_empty', lineup: 'not-due', attempts: { injuries: { status: 'source_empty', lastAttemptAt: '2026-09-12T13:38:00.000Z' } }, error: 'token private /srv/collector/secret' };
+  const { read, directory } = await dualReader(t, leisu, api, { coverage: [coverage] });
+  let result = await read(ID);
+  assert.equal(result.sources['api-football'].mappingState, 'verified');
+  assert.equal(result.sections.injuries.missingReason, 'source_empty'); assert.equal(result.sections.injuries.data, null);
+  assert.equal(result.sources['api-football'].sections.injuries.lastAttemptAt, '2026-09-12T13:38:00.000Z');
+  assert.equal(result.sources['api-football'].sections.lineup.status, 'not-due');
+  assert.doesNotMatch(JSON.stringify(result), /token|private|\/srv\/collector|error/);
+  const file = path.join(directory, 'daily-prematch-api/status.json'), status = JSON.parse(await fs.readFile(file));
+  status.coverage[0].mapped = false; await fs.writeFile(file, JSON.stringify(status)); result = await read(ID);
+  assert.equal(result.sources['api-football'].sections.injuries.status, 'unmapped');
+  status.coverage[0].home = '另一支队'; await fs.writeFile(file, JSON.stringify(status)); result = await read(ID);
+  assert.equal(result.sources['api-football'].mappingState, 'unknown'); assert.equal(result.sources['api-football'].sections.injuries.status, 'missing');
+});
+
+test('wrong-event API records never fill missing Leisu sections and both sources are still inspected', async t => {
+  const leisu = sample(); leisu.items[0].evidence.sections.lineup = { latestValid: null, latestAttempt: null };
+  const api = apiSample(); api.items[0].fixture.eventVersion = '2026-09-12T15:00:00.000Z';
+  const { read } = await dualReader(t, leisu, api), result = await read(ID);
+  assert.equal(result.sections.injuries.provider, 'leisu'); assert.equal(result.sections.lineup.data, null);
+  assert.equal(result.sources['api-football'].mappingState, 'conflict');
+});
+
+test('API-only configured source works and accepts no user-selected private path', async t => {
+  const { referencePath } = await dualReader(t);
+  const result = await createWebsiteReader({ ...options(null), apiFootballReferencePath: referencePath })(ID);
+  assert.equal(result.status, 'ok'); assert.equal(result.sections.injuries.provider, 'api-football');
+  assert.equal(result.sources.leisu.status, 'disabled');
+  assert.throws(() => createWebsiteReader({ ...options(null), apiFootballReferencePath: '../private' }), /absolute configured path/);
+});
+
+test('expired API receipt is labeled stale rather than source empty or an identity conflict', async t => {
+  const api = apiSample(), leisu = sample(); leisu.items = [];
+  api.items[0].sections.injuries.observedAt = '2026-09-12T06:00:00.000Z';
+  api.items[0].sections.lineup.observedAt = '2026-09-12T10:00:00.000Z';
+  const { read } = await dualReader(t, leisu, api), result = await read(ID);
+  assert.equal(result.sources['api-football'].status, 'stale');
+  assert.equal(result.sources['api-football'].sections.injuries.status, 'stale');
+  assert.equal(result.sources['api-football'].sections.injuries.observedAt, '2026-09-12T06:00:00.000Z');
+  assert.equal(result.sections.injuries.data, null); assert.equal(result.sections.lineup.data, null);
+});
+
+test('API collection timing honors the new five-minute schedule and retains legacy thirty-minute defaults', async t => {
+  const { referencePath, directory } = await dualReader(t, sample(), apiSample(), {});
+  const file = path.join(directory, 'daily-prematch-api/status.json'), status = JSON.parse(await fs.readFile(file));
+  const { readApiCollectionStatus } = require('./website-reader.cjs');
+  for (const [interval, expected, next] of [[5, 5, '2026-09-12T13:40:00.000Z'], [30, 30, '2026-09-12T14:00:00.000Z'], [undefined, 30, '2026-09-12T14:00:00.000Z'], [1, 30, '2026-09-12T14:00:00.000Z']]) {
+    status.checkIntervalMinutes = interval; await fs.writeFile(file, JSON.stringify(status));
+    const result = await readApiCollectionStatus(referencePath, Date.parse(NOW), row());
+    assert.equal(result.strategy.checkMinutes, expected); assert.equal(result.nextAttemptAt, next);
+  }
+  status.checkIntervalMinutes = 5; status.nextAttemptAt = '2026-09-12T14:39:00.000Z'; await fs.writeFile(file, JSON.stringify(status));
+  assert.equal((await readApiCollectionStatus(referencePath, Date.parse(NOW), row())).nextAttemptAt, status.nextAttemptAt);
 });

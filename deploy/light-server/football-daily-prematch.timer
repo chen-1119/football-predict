@@ -1,8 +1,8 @@
 [Unit]
-Description=Check prematch API collection every 30 minutes
+Description=Check due prematch and priority collection every 5 minutes
 
 [Timer]
-OnCalendar=*-*-* *:00,30:00 Asia/Shanghai
+OnCalendar=*-*-* *:00/5:00 Asia/Shanghai
 Persistent=true
 RandomizedDelaySec=10
 Unit=football-daily-prematch.service
