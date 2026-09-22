@@ -5,6 +5,28 @@ function compile(file,requireFn,globals={}){const module={exports:{}};vm.runInNe
 function service(globals={}){return compile('../src/services/accountApi.ts',id=>{if(id==='./runtimeUrls')return{buildApiUrl:p=>p};throw Error(id);},{sessionStorage:storage(),...globals});}
 function hooks(){const cells=[];let cursor=0;return {reset(){cursor=0;},react:{createContext:()=>({Provider:'provider'}),useContext:()=>null,useCallback:fn=>fn,useEffect:()=>{},useMemo:fn=>fn(),useState:initial=>{const n=cursor++;if(!(n in cells))cells[n]=typeof initial==='function'?initial():initial;return[cells[n],v=>{cells[n]=typeof v==='function'?v(cells[n]):v;}];},useRef:initial=>{const n=cursor++;if(!(n in cells))cells[n]={current:initial};return cells[n];}}};}
 const jsx={jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props}),Fragment:'fragment'};
+test('following refreshes verified results on entry, visible polling and focus, then cleans up',()=>{
+ const effects=[],timers=new Map(),listeners=new Map();let calls=0,next=0;
+ const h=hooks(),account={...guest(),user:{id:'u'},refreshFollowing:async()=>{calls++;}};
+ const eventTarget={addEventListener:(key,fn)=>listeners.set(key,fn),removeEventListener:key=>listeners.delete(key)};
+ const doc={...eventTarget,visibilityState:'visible'};
+ const win={...eventTarget,setInterval:(fn,ms)=>{const id=++next;timers.set(id,{fn,ms});return id;},clearInterval:id=>timers.delete(id)};
+ const api=service(),mod=compile('../src/pages/Following.tsx',id=>{
+  if(id==='react')return{...h.react,useEffect:fn=>effects.push(fn)};
+  if(id==='react/jsx-runtime')return jsx;
+  if(id==='react-router-dom')return{Link:'a',useLocation:()=>({pathname:'/following',search:''}),useSearchParams:()=>[new URLSearchParams(),()=>{}]};
+  if(id.endsWith('/AccountContext'))return{useAccount:()=>account};
+  if(id.endsWith('/AppContextCore'))return{useApp:()=>({language:'zh'})};
+  if(id.endsWith('/accountApi'))return api;
+  if(id==='lucide-react'||id.endsWith('.css'))return{};
+  throw Error(id);
+ },{window:win,document:doc});
+ h.reset();mod.Following();const cleanups=effects.map(fn=>fn());assert.equal(calls,1);
+ const poll=[...timers.values()].find(row=>row.ms===60000);assert(poll);poll.fn();assert.equal(calls,2);
+ doc.visibilityState='hidden';poll.fn();listeners.get('focus')();assert.equal(calls,2);
+ doc.visibilityState='visible';listeners.get('visibilitychange')();assert.equal(calls,3);
+ cleanups.forEach(fn=>fn?.());assert.equal(timers.size,0);assert.equal(listeners.size,0);
+});
 const words=n=>n==null||typeof n==='boolean'?'':Array.isArray(n)?n.map(words).join(''):typeof n==='object'?words(n.props?.children):String(n);
 const nodes=(n,p)=>n&&typeof n==='object'?(Array.isArray(n)?n.flatMap(v=>nodes(v,p)):[...(p(n)?[n]:[]),...nodes(n.props?.children,p)]):[];
 const button=(tree,label)=>nodes(tree,n=>n.type==='button'&&words(n).trim()===label)[0];
