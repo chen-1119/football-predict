@@ -2,6 +2,25 @@ name: Recommendation runtime checks
 on:
   pull_request:
     paths:
+      - 'server/accounts.cjs'
+      - 'server/publicProduct.cjs'
+      - 'server/index.cjs'
+      - 'server/postgres/migrations/012_accounts_and_follows.sql'
+      - 'scripts/verifyAccountsPostgres.cjs'
+      - 'scripts/bootstrapAccountAdmin.cjs'
+      - 'src/App.tsx'
+      - 'src/context/**'
+      - 'src/pages/Auth.tsx'
+      - 'src/pages/Account.tsx'
+      - 'src/pages/AccountAdmin.tsx'
+      - 'src/pages/Following.tsx'
+      - 'src/pages/PublicBrowse.tsx'
+      - 'src/services/accountApi.ts'
+      - 'src/components/FollowButton.tsx'
+      - 'tests/accounts*.test.cjs'
+      - 'tests/account*.test.cjs'
+      - 'tests/public-product.test.cjs'
+      - 'tests/public-browse-flow.test.cjs'
       - 'scripts/recommendationPlatform/**'
       - 'collectors/market/**'
       - 'src/services/warehouseLotterySp.cjs'
@@ -67,6 +86,11 @@ jobs:
       - run: node --test tests/market-collector-policy.test.cjs tests/market-store.test.cjs tests/market-signal-bridge.test.cjs tests/market-http.test.cjs tests/market-features.test.cjs
       - run: node --test tests/recommendation-render-clock.test.cjs tests/recommendation-center-interaction.test.cjs tests/navbar-interaction.test.cjs
       - run: node --test tests/team-badge.test.cjs tests/team-badge-assets.test.cjs tests/match-display-team.test.cjs
+      - run: node --test tests/accounts*.test.cjs tests/account-frontend.test.cjs tests/account-admin.test.cjs tests/public-product.test.cjs tests/public-browse-flow.test.cjs
+      - name: 'Native PostgreSQL accounts: scripts/verifyAccountsPostgres.cjs'
+        run: node scripts/verifyAccountsPostgres.cjs
+        env:
+          ACCOUNTS_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
       - run: node scripts/verifyUnifiedRecommendationPostgres.cjs
         env:
           UNIFIED_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test

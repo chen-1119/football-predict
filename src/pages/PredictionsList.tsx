@@ -830,6 +830,7 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
         detailsLabel={t('details')}
         detailsAriaLabel={language === 'zh' ? '查看' + homeTeam.name[language] + '对阵' + awayTeam.name[language] + '的详情' : 'View ' + homeTeam.name[language] + ' vs ' + awayTeam.name[language]}
         onOpen={() => onSelectMatch(match.id)}
+        follow={<FollowButton matchId={match.id} compact />}
         time={<div className="time-stack"><strong className="kickoff-time">{getRowKickoffLabel(match, language)}</strong><span className="status-note">{statusLabel}</span>{getSportteryMeta(match) && <span className="status-note is-muted">{getSportteryMeta(match)}</span>}</div>}
         teams={<div className="team-stack"><div className="team-line"><TeamBadge team={homeTeam} size="sm" /><span className="team-name">{homeTeam.name[language]}</span></div><div className="team-line"><TeamBadge team={awayTeam} size="sm" /><span className="team-name">{awayTeam.name[language]}</span></div>{scoreText && <span className="match-score-summary">{scoreText}</span>}</div>}
         pick={<div className="compact-pick"><strong>{hasPick ? directionLabel : capturedReference ? capturedDirection : (language === 'zh' ? '暂无推荐' : 'No pick')}</strong>{hasPick && pickedPrediction && <><span className={'compact-pick__tier ' + (isFormal ? 'is-formal' : 'is-reference')}>{isFormal ? (language === 'zh' ? '正式' : 'Formal') : (language === 'zh' ? '参考' : 'Reference')}</span><small>{getPredictionMarketLabel(pickedPrediction, language)}</small></>}{capturedReference && <><span className="compact-pick__tier is-reference">{language === 'zh' ? '参考' : 'Reference'}</span><small>{(capturedReference.outcome.probability * 100).toFixed(1)}% · {language === 'zh' ? '胜平负推导' : '1X2 estimate'}</small><small>{capturedReference.scores[0].home}-{capturedReference.scores[0].away} · {capturedReference.goalsPick.label}{language === 'zh' ? '球' : ' goals'}</small></>}</div>}
@@ -1047,3 +1048,4 @@ export const PredictionsList: React.FC<PredictionsListProps> = ({ onSelectMatch,
     </div>
   );
 };
+import { FollowButton } from '../components/FollowButton';

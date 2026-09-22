@@ -6,6 +6,7 @@ import {
   CircleUserRound,
   Globe,
   HelpCircle,
+  Heart,
   LayoutGrid,
   ListChecks,
   LogOut,
@@ -16,6 +17,7 @@ import {
   User as UserIcon
 } from 'lucide-react';
 import { useApp } from '../context/AppContextCore';
+import { useAccount } from '../context/AccountContext';
 
 interface NavbarProps {
   currentTab: string;
@@ -23,19 +25,19 @@ interface NavbarProps {
   openGlossary: () => void;
 }
 
-type NavTab = 'best' | 'fixtures' | 'arena' | 'review' | 'leagues';
+type NavTab = 'best' | 'fixtures' | 'following' | 'review' | 'my';
 type DataStatus = 'locked' | 'ready' | 'syncing' | 'watch' | 'error';
 
 const navItems: Array<{
   key: NavTab;
-  labelKey: 'todayAnalysis' | 'fixtures' | 'arena' | 'review' | 'topLeagues';
+  labelKey: 'todayAnalysis' | 'fixtures' | 'following' | 'review' | 'my';
   icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
 }> = [
   { key: 'best', labelKey: 'todayAnalysis', icon: ListChecks },
   { key: 'fixtures', labelKey: 'fixtures', icon: CalendarDays },
+  { key: 'following', labelKey: 'following', icon: Heart },
   { key: 'review', labelKey: 'review', icon: BookOpen },
-  { key: 'arena', labelKey: 'arena', icon: Target },
-  { key: 'leagues', labelKey: 'topLeagues', icon: Shield }
+  { key: 'my', labelKey: 'my', icon: CircleUserRound }
 ];
 
 const finiteDate = (value: string | undefined) => {
@@ -44,7 +46,10 @@ const finiteDate = (value: string | undefined) => {
 };
 
 export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openGlossary }) => {
-  const { language, setLanguage, currentUser, logout, dataSync } = useApp();
+  const { language, setLanguage, currentUser, logout: legacyLogout, dataSync, isAccessVerified } = useApp();
+  const account = useAccount();
+  const [logoutError, setLogoutError] = useState('');
+  const logout = () => { void (async () => { try { if (account.user) await account.logout(); legacyLogout(); setCurrentTab('best'); } catch { setLogoutError(language === 'zh' ? '退出未完成，请重试。' : 'Sign out failed. Please retry.'); } })(); };
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [isStatusOpen, setIsStatusOpen] = useState(false);
   const [clockNow, setClockNow] = useState(() => Date.now());
@@ -64,7 +69,9 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
     topLeagues: { zh: '联赛', en: 'Leagues' },
     brand: { zh: '90分钟足球', en: '90’ Football' },
     subtitle: { zh: '赛程 · 数据 · 分析', en: 'Fixtures · Data · Analysis' },
-    todayAnalysis: { zh: '推荐', en: 'Picks' },
+    todayAnalysis: { zh: '今日', en: 'Today' },
+    following: { zh: '关注', en: 'Following' },
+    my: { zh: '我的', en: 'My account' },
     matchAnalysis: { zh: '赛前资料', en: 'Pre-match data' },
     fixtures: { zh: '赛程', en: 'Fixtures' },
     arena: { zh: '策略', en: 'Strategy' },
@@ -72,16 +79,16 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
     more: { zh: '更多', en: 'More' },
     moreMenu: { zh: '更多功能', en: 'More options' },
     tools: { zh: '分析工具', en: 'Analysis tools' },
-    login: { zh: '校验', en: 'Verify' },
+    login: { zh: '登录', en: 'Sign in' },
     account: { zh: '当前账户', en: 'Current account' },
     accountMenu: { zh: '账户', en: 'Account' },
     help: { zh: '术语说明', en: 'Glossary' },
     language: { zh: '切换为 English', en: '切换为中文' },
-    logout: { zh: '退出校验', en: 'Clear access' },
+    logout: { zh: '退出登录', en: 'Sign out' },
     primary: { zh: '主导航', en: 'Primary navigation' },
     mobilePrimary: { zh: '移动端主导航', en: 'Mobile primary navigation' },
     dataStatus: { zh: '数据状态', en: 'Data status' },
-    dataLocked: { zh: '待校验', en: 'Verify first' },
+    dataLocked: { zh: '公开预览', en: 'Public preview' },
     dataReady: { zh: '数据已同步', en: 'Up to date' },
     dataSyncing: { zh: '同步中', en: 'Syncing' },
     dataWatch: { zh: '数据待核', en: 'Data notice' },
@@ -105,7 +112,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
   };
 
   const t = (key: keyof typeof translations) => translations[key][language] || '';
-  const activeTab = currentTab === 'detail' ? 'fixtures' : currentTab;
+  const activeTab = currentTab === 'detail' ? 'fixtures' : currentTab === 'account' ? 'my' : currentTab;
   const toolsActive = currentTab === 'tools' || currentTab === 'generator';
   const moreActive = toolsActive || currentTab === 'predictions';
   const publicationTransition = [
@@ -121,7 +128,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
   const visibleScheduleRetained = dataSync.currentLoaded && dataSync.currentCount > 0;
 
   const dataStatus: DataStatus = (() => {
-    if (!currentUser) return 'locked';
+    if (!isAccessVerified) return 'locked';
     if (publicationTransition) return 'syncing';
     if ((publicationTransition || dataSync.serviceTransitioning) && visibleScheduleRetained) return 'syncing';
     if (dataSync.error && !visibleScheduleRetained) return 'error';
@@ -255,7 +262,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
         const isActive = activeTab === key;
         return (
           <button key={key} type="button" className={`${mobile ? 'app-mobile-tab' : 'app-nav-item'} ${isActive ? 'is-active' : ''}`}
-            aria-current={isActive ? 'page' : undefined} onClick={() => setCurrentTab(key)}>
+            aria-current={isActive ? 'page' : undefined} onClick={() => setCurrentTab(key === 'my' ? 'account' : key)}>
             <Icon size={mobile ? 19 : 16} strokeWidth={isActive ? 2.35 : 1.9} />
             <span>{t(labelKey)}</span>
           </button>
@@ -336,7 +343,9 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
                     className={currentTab === 'predictions' ? 'is-active' : undefined} onClick={() => selectFromMenu(() => setCurrentTab('predictions'))}>
                     <ListChecks size={17} /><span>{t('matchAnalysis')}</span>
                   </button>
-                  {currentUser && <button ref={(node) => { menuItemRefs.current[4] = node; }} type="button" role="menuitem" className="is-danger"
+                  <button ref={(node) => { menuItemRefs.current[4] = node; }} type="button" role="menuitem" onClick={() => selectFromMenu(() => setCurrentTab('arena'))}><Target size={17}/><span>{t('arena')}</span></button>
+                  <button ref={(node) => { menuItemRefs.current[5] = node; }} type="button" role="menuitem" onClick={() => selectFromMenu(() => setCurrentTab('leagues'))}><Shield size={17}/><span>{t('topLeagues')}</span></button>
+                  {currentUser && <button ref={(node) => { menuItemRefs.current[6] = node; }} type="button" role="menuitem" className="is-danger"
                     onClick={() => selectFromMenu(logout)}><LogOut size={17} /><span>{t('logout')}</span></button>}
                 </div>
               )}
@@ -350,6 +359,7 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, setCurrentTab, openG
           </div>
         </div>
       </header>
+      {logoutError && <p role="alert" className="account-inline-error">{logoutError}</p>}
       {renderPrimaryNavigation(true)}
     </>
   );

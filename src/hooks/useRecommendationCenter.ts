@@ -16,7 +16,7 @@ function start(){
   const controller=createPollingController<RecommendationCenterData>({
     intervalMs:15000,timeoutMs:10000,maxRetryMs:120000,
     request:async signal=>{
-      const response=await fetch(buildApiUrl('/api/v1/daily-featured-combos'),{headers:getAccessAuthHeaders(),cache:'no-store',credentials:'same-origin',signal});
+      const response=await fetch(buildApiUrl('/api/v1/daily-featured-combos'),{headers:getAccessAuthHeaders(),cache:'no-store',credentials:'include',signal});
       if(!response.ok)throw Object.assign(new Error('Recommendation request failed'),{status:response.status});
       return parseRecommendationCenter(await response.json());
     },
