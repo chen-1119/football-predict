@@ -2,6 +2,7 @@ import { PrematchCollectionPanel } from '../components/predictions/PrematchColle
 import { useRecommendationCenter } from '../hooks/useRecommendationCenter';
 import { publishedMatchRecommendation, usesPublishedRecommendation } from '../services/publishedMatchRecommendation';
 import { PublishedMatchPick } from '../components/recommendations/PublishedMatchPick';
+import { publishedDetailPresentation } from '../services/publishedDetailPresentation';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context/AppContextCore';
 import type { FiveHundredRecentFormRow, League, Match, MatchProbabilityModel, MultiLangString, OutcomeProbability, PredictionDetail, ScoreProbability } from '../services/mockData';
@@ -1450,6 +1451,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
     );
   }
 
+  const unifiedRow = publishedMatchRecommendation(published.data, match);
+  const useUnified = published.loading || published.failed || usesPublishedRecommendation(match, unifiedRow, nowMs);
   // Saved-capture reference calculations remain separate from the published model.
   // Keep this branch after every hook and before the normal analytical presentation.
   if (matchesSavedCaptureIdentity(capturedData, match)
@@ -1471,7 +1474,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
           <p>{language === 'zh' ? '开赛时间：' : 'Kickoff: '}{displayText(capturedKickoff)}{language === 'zh' ? '（北京时间）' : ' (Beijing time)'}</p>
           <strong>{language === 'zh' ? '赛前推荐与比赛参数' : 'Pre-match picks and match parameters'}</strong>
         </header>
-        <CapturedReferenceAnalysisPanel match={match} capture={capturedData} language={language} now={nowMs} />
+        {useUnified ? <PublishedMatchPick row={unifiedRow} language={language} loading={published.loading} failed={published.failed} now={nowMs} /> : <CapturedReferenceAnalysisPanel match={match} capture={capturedData} language={language} now={nowMs} />}
         <CapturedMatchData capture={capturedData} language={language} />
       </div>
     );
@@ -1637,8 +1640,6 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
     && !isPublishedLiveAwaitingSettlement
     && !archivedPreMatchPrediction;
   const isPredictionArchiveOnly = isResultPhase && !isPreMatchRecordSettling && !hasPredictionContent;
-  const unifiedRow = publishedMatchRecommendation(published.data, match);
-  const useUnified = published.loading || published.failed || usesPublishedRecommendation(match, unifiedRow, nowMs);
   // Publication risk may downgrade how a direction is labelled, but it must not
   // cause the detail page to choose a different direction from the list card.
   const detailAnalysisCandidate = rawDisplayRecommendation?.prediction;
@@ -1847,6 +1848,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
   const gptParsed = gptPrediction?.relay?.parsed;
   const gptRecommendation = gptParsed?.recommendation;
   const probabilityModel = normalizeProbabilityModel(match.probabilityModel);
+  const publishedDetail = publishedDetailPresentation(unifiedRow?.decision || null, probabilityModel?.scoreDistribution);
   const calculationTrace = probabilityModel?.calculationTrace;
   const probabilityModelForm = probabilityModel?.form;
   const modelHealth = probabilityModel?.modelHealth;
@@ -2091,7 +2093,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
   const secondScoreCandidate = reviewScoreCandidates.find((score) => scoreCandidateKey(score) !== firstScoreKey)
     || scoreDistributionCandidates.find((score) => scoreCandidateKey(score) !== firstScoreKey)
     || (projectedScoreCandidate && scoreCandidateKey(projectedScoreCandidate) !== firstScoreKey ? projectedScoreCandidate : null);
-  const scoreRecommendations = dedupeScoreCandidates(
+  const legacyScoreRecommendations = dedupeScoreCandidates(
     [firstScoreCandidate, secondScoreCandidate].filter((score): score is ScoreRecommendationCandidate => Boolean(score))
   ).slice(0, 2).map((score, index) => {
     const alignsWithOutcome = scoreBindingOutcomeCode ? getScoreOutcomeCode(score) === scoreBindingOutcomeCode : false;
@@ -2107,22 +2109,29 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
           : (language === 'zh' ? '备选比分' : 'Alt score')
     };
   });
-  const lockedTagText = predictionMeta?.lockedAt
+  const scoreRecommendations = useUnified
+    ? [publishedDetail?.primaryScore, publishedDetail?.alternativeScore].filter((score): score is ScoreProbability => Boolean(score)).map((score, index) => ({
+      ...score, tone: index === 0 ? 'aligned' : 'alternate',
+      tag: index === 0 ? (language === 'zh' ? '首选方向内的比分参考' : 'Score within the primary outcome') : (language === 'zh' ? '备选比分 · 不改变首选' : 'Alternative score · primary unchanged'),
+    }))
+    : legacyScoreRecommendations;
+  const displayedScoreText = useUnified ? publishedDetail?.primaryScore?.label || (language === 'zh' ? '暂无同向比分' : 'No aligned score available') : projectedScoreText;
+  const lockedTagText = useUnified ? (language === 'zh' ? '补充分布参考' : 'Supplemental distribution') : predictionMeta?.lockedAt
     ? (language === 'zh' ? '已锁定' : 'Locked')
     : (language === 'zh' ? '赛前监控' : 'Monitoring');
-  const predictionVersionText = predictionMeta?.strategyVersion
+  const predictionVersionText = useUnified ? publishedDetail?.decisionId || '--' : predictionMeta?.strategyVersion
     || predictionMeta?.policyVersion
     || predictionMeta?.promptVersion
     || probabilityModel?.version
     || postMatchReview?.version
     || '--';
-  const navEvidenceDetail = isFiveHundredReferenceDirection
+  const navEvidenceDetail = useUnified || isFiveHundredReferenceDirection
     ? '--'
     : formatEvidenceScore(primaryOutcomePrediction || primaryPostReviewPrediction);
-  const calibratedModelProbability = isFiveHundredReferenceDirection
+  const calibratedModelProbability = useUnified ? (publishedDetail ? `${(publishedDetail.modelProbability * 100).toFixed(1)}%` : '') : isFiveHundredReferenceDirection
     ? ''
     : formatCalibratedModelProbability(match, primaryOutcomePrediction);
-  const predictionGeneratedAt = (
+  const predictionGeneratedAt = useUnified ? publishedDetail?.modelGeneratedAt : (
     isFinished || isPredictionArchiveOnly || isPreMatchRecordSettling || isInPlayArchivedPrimaryDirection
   )
     ? match.archivedPreMatchPrediction?.capturedAt
@@ -2134,7 +2143,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
     || probabilityModel?.generatedAt
     || gptPrediction?.generatedAt
     || predictionMeta?.updatedAt;
-  const predictionCutoffRaw = (
+  const predictionCutoffRaw = useUnified ? publishedDetail?.cutoffTime : (
     isFinished || isPredictionArchiveOnly || isPreMatchRecordSettling || isInPlayArchivedPrimaryDirection
   )
     ? match.archivedPreMatchPrediction?.cutoffTime
@@ -2171,7 +2180,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
       ? `参考价 ${fiveHundredMarketReference.reference.selectedSourceOdds.toFixed(2)}`
       : `Reference ${fiveHundredMarketReference.reference.selectedSourceOdds.toFixed(2)}`)
     : publicRecommendationCopy.oddsLabel;
-  const publicScoreNote = isPreMatchRecordSettling
+  const publicScoreNote = useUnified
+    ? (language === 'zh' ? '首选比分只从已有补充模型分布中选择与已发布胜平负方向相同的一项；单一比分概率不等于胜平负总概率。补充分布并非该发布记录的冻结比分依据，不会改写历史记录。' : 'The primary score is selected only from existing supplemental distribution rows matching the published 1X2 outcome. A single score probability is not an outcome total. This supplemental distribution is not frozen score evidence for the publication and does not rewrite history.')
+    : isPreMatchRecordSettling
     ? settlingOutcomeReason
     : language === 'zh'
       ? `比分只作为赛果范围参考，不改变上面的${isFormalPrimaryRecommendation ? '正式推荐' : isLivePrimaryRecommendation || isArchivedLiveRecommendation ? '实时推荐记录' : '分析方向'}。`
@@ -3115,7 +3126,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                   <b>{lockedTagText}</b>
                 </div>
                 <div className="recommendation-score-list">
-                  {isPreMatchRecordSettling ? (
+                  {!useUnified && isPreMatchRecordSettling ? (
                     <div className="recommendation-score-option is-empty">
                       <span>{language === 'zh' ? '赛前记录' : 'Pre-match record'}</span>
                       <strong>--</strong>
@@ -3130,8 +3141,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                   )) : (
                     <div className="recommendation-score-option is-empty">
                       <span>{language === 'zh' ? '比分' : 'Score'}</span>
-                      <strong>{projectedScoreText}</strong>
-                      <em>{postMatchReview
+                      <strong>{displayedScoreText}</strong>
+                      <em>{useUnified ? (language === 'zh' ? '等待已有分布中的同向比分' : 'Waiting for an aligned distribution row') : postMatchReview
                         ? (language === 'zh' ? '比分快照缺失' : 'Score snapshot missing')
                         : (language === 'zh' ? '等待模型分布' : 'Waiting for distribution')}</em>
                     </div>
@@ -3284,20 +3295,21 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
               <div className="match-detail-v4__section-head">
                 <div>
                   <span className="review-kicker">{language === 'zh' ? '数据与分析' : 'Data & analysis'}</span>
-                  <h3 id="match-detail-data-analysis-heading">{useUnified ? (language === 'zh' ? '模型快照与补充资料' : 'Model snapshot and supporting data') : (language === 'zh' ? '推荐生成时的数据与依据' : 'Evidence at the recommendation decision')}</h3>
+                  <h3 id="match-detail-data-analysis-heading">{useUnified ? (language === 'zh' ? '统一发布记录与补充资料' : 'Published record and supporting data') : (language === 'zh' ? '推荐生成时的数据与依据' : 'Evidence at the recommendation decision')}</h3>
                 </div>
                 <span>{useUnified ? (language === 'zh' ? '已发布方向与SP以上方统一记录为准' : 'Published direction and SP follow the record above') : (language === 'zh' ? '保留决策时点，最新补采资料见上方' : 'Decision-time record; latest collected data is shown above')}</span>
               </div>
               <RecommendationEvidenceFacts
                 match={match}
                 prediction={primaryOutcomePrediction || primaryPostReviewPrediction}
+                publishedDecision={useUnified ? unifiedRow?.decision || null : undefined}
                 language={language}
                 className="is-detail"
               />
               <p className="match-detail-v4__data-analysis-note">
                 {language === 'zh'
-                  ? '下面的缺项与分析对应推荐生成时点；后续补到的伤停、阵容在上方单独展示，不会自动改写这里的历史依据。'
-                  : 'Gaps and analysis below reflect the decision time. Subsequently collected injuries and lineups are shown above and do not automatically rewrite this record.'}
+                  ? useUnified ? '已发布概率和时间来自同一记录；补充模型快照与最新采集资料分别标明来源，不作为该记录的采用证明。' : '下面的缺项与分析对应推荐生成时点；后续补到的伤停、阵容在上方单独展示，不会自动改写这里的历史依据。'
+                  : useUnified ? 'Published probabilities and times share one record. Supplemental model snapshots and newly collected data are separate, not proof of adoption by that record.' : 'Gaps and analysis below reflect the decision time. Subsequently collected injuries and lineups are shown above and do not automatically rewrite this record.'}
               </p>
             </section>
 
@@ -3517,6 +3529,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
               </div>
             )}
 
+            {useUnified ? <div className="card"><RecommendationEvidenceFacts match={match} publishedDecision={unifiedRow?.decision || null} language={language} supplementaryModel={false} /></div> : <>
             <div className={`card signal-summary-card is-${matchSignal.category} ${isFormalPrimaryRecommendation || isLivePrimaryRecommendation || isArchivedLiveRecommendation ? '' : 'is-reference'}`}>
               <div>
                 <span className={`signal-badge is-${matchSignal.category}`}>{displayText(matchSignal.label[language])}</span>
@@ -3568,12 +3581,15 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                 )}
               </p>
             </div>
+            </>}
 
           </div>
         )}
 
         {activeTab === 'probability' && (
           <div className="match-detail-v4__section-stack" data-section="probability">
+
+            {useUnified && <div className="card"><RecommendationEvidenceFacts match={match} publishedDecision={unifiedRow?.decision || null} language={language} supplementaryModel={false} /></div>}
 
             <section className="card match-detail-v4__odds-card" aria-labelledby="match-detail-odds-heading">
               <div className="match-detail-v4__section-head">
@@ -3961,11 +3977,11 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                   <span className="review-kicker">
                     {language === 'zh' ? '影响因素拆解' : 'Factor breakdown'}
                   </span>
-                  <h3>{language === 'zh'
+                  <h3>{useUnified ? (language === 'zh' ? '补充模型快照 · 非发布推荐依据' : 'Supplemental model snapshot · not published-pick evidence') : language === 'zh'
                     ? (isFormalPrimaryRecommendation ? '这场正式推荐主要看什么' : isLivePrimaryRecommendation || isArchivedLiveRecommendation ? '这场实时推荐主要看什么' : '这场分析方向主要看什么')
                     : (isFormalPrimaryRecommendation ? 'What this formal pick is based on' : isLivePrimaryRecommendation || isArchivedLiveRecommendation ? 'What this live pick is based on' : 'What this analysis direction is based on')}</h3>
                   <p>
-                    {language === 'zh'
+                    {useUnified ? (language === 'zh' ? '以下展示原模型快照中的输入信息；未提供与当前统一发布记录的独立采用绑定，不据此生成第二个推荐方向。' : 'These inputs belong to the original model snapshot. No independent adoption binding to the current publication is provided, and they do not generate a second pick.') : language === 'zh'
                       ? '方向判断不是单点结论，会综合长期强弱、近况、进球区间、世界杯背景和可验证赛前信息，再用官方赔率与外部均赔做交叉确认；只有完整通过门槛才会标为正式推荐。'
                       : 'The direction is not based on a single signal: it combines long-run strength, form, goal range, World Cup context, and verified pre-match information, then checks official and external odds; only the full gate can promote it to a formal pick.'}
                   </p>
@@ -3982,7 +3998,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
               </div>
             </div>
 
-            <div className={`card insight-card is-${matchInsight.tone}`}>
+            {!useUnified && <div className={`card insight-card is-${matchInsight.tone}`}>
               <div className="insight-head">
                 <div>
                   <span className={`insight-action is-${matchInsight.tone}`}>{localizedSignalText(matchInsight.action, '--')}</span>
@@ -4028,9 +4044,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                   </div>
                 </div>
               </div>
-            </div>
+            </div>}
 
-            <details className="match-detail-v4__framework-details">
+            {!useUnified && <details className="match-detail-v4__framework-details">
               <summary>{language === 'zh' ? '展开 12 项专业分析框架' : 'Open the 12-point analysis framework'}</summary>
               <div className="card professional-framework-card">
               <div className="professional-framework-head">
@@ -4069,7 +4085,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                 ))}
               </div>
               </div>
-            </details>
+            </details>}
 
             {weatherVerified && (
             <div className={`card weather-analysis-card is-${weatherRiskTone}`}>
@@ -4145,14 +4161,14 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
         {activeTab === 'probability' && (
           <div className="match-detail-v4__section-stack" data-section="score-projection">
 
-            {hasPredictionContent && !isPreMatchRecordSettling && (
+            {(useUnified || hasPredictionContent) && (useUnified || !isPreMatchRecordSettling) && (
               <div className="card score-projection-card match-detail-v4__score-projection">
                 <h4 className="match-detail-v4__score-heading">
                   <Trophy size={16} />
                   {t('scorePrediction')}
                 </h4>
                 <div className="match-detail-v4__score-value">
-                  {projectedScoreText}
+                  {displayedScoreText}
                 </div>
                 {actualScoreText && (
                   <p className="match-detail-v4__score-final">
@@ -4162,7 +4178,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                   </p>
                 )}
                 <p className="match-detail-v4__score-note">
-                  {hasModelGoalEstimate
+                  {useUnified ? publicScoreNote : hasModelGoalEstimate
                     ? (language === 'zh'
                       ? `比分热区来自赛前模型分布；模型进球期望为 ${formatDecimal(modelGoalHome)} : ${formatDecimal(modelGoalAway)}，不是实际球队统计。`
                       : `The score zone comes from the pre-match model distribution. Model goal expectation is ${formatDecimal(modelGoalHome)} : ${formatDecimal(modelGoalAway)}, not observed team statistics.`)
