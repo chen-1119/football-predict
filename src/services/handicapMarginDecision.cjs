@@ -130,12 +130,32 @@ function coherentHandicapDistribution(homeLambda,awayLambda,line,straight,straig
     structuralSupport:Object.fromEntries(CODES.map(c=>[c,joint[straightTipCode][c]>0])),
     exactMargin:-line,exactMarginProbability:round(overall.X),capturedMass:round(captured,12),tailMass:round(Math.max(0,1-captured),12)};
 }
-function marketFor(match, line, now, cutoff) {
+function officialHandicapSources(match, now, cutoff) {
   const external=match?.externalSignals?.bookmakerOdds?.hhad;
   const candidates=[
     {odds:match?.handicapOdds,line:match?.handicapLine,source:match?.handicapOddsSource,at:match?.handicapOddsReceivedAt||match?.handicapOddsObservedAt||match?.handicapOddsUpdatedAt},
-    {odds:external,line:external?.handicapLine,source:external?.source,at:external?.receivedAt||external?.observedAt||external?.updatedAt},
+    {odds:external,line:external?.handicapLine,source:external?.source,at:external?.receivedAt||external?.observedAt||external?.updatedAt,
+      sourceMatchId:external?.sourceMatchId,eventVersion:external?.eventVersion},
   ];
+  const sourceId=value=>String(value||'').replace(/^sporttery_/, '');
+  const event=instant(match?.eventVersion||match?.kickoffTime);
+  return candidates.filter(row=>{
+    const at=instant(row.at);
+    return row.source==='sporttery:HHAD' && parseLine(row.line)!==null
+      && Number.isFinite(at) && at<=now && at<cutoff
+      && (row.sourceMatchId==null||sourceId(row.sourceMatchId)===sourceId(match?.sourceMatchId||match?.id))
+      && (row.eventVersion==null||(Number.isFinite(event)&&instant(row.eventVersion)===event));
+  });
+}
+function officialHandicapLine(match, now, cutoff) {
+  const rows=officialHandicapSources(match,now,cutoff);
+  const lines=new Set(rows.map(row=>parseLine(row.line)));
+  // A numeric value alone is not authority for an official three-way handicap.
+  // Conflicting current source records must be reconciled before deriving a pick.
+  return lines.size===1?[...lines][0]:null;
+}
+function marketFor(match, line, now, cutoff) {
+  const candidates=officialHandicapSources(match,now,cutoff);
   for(const row of candidates){
     const rowLine=parseLine(row.line),odds=completeOdds(row.odds),at=instant(row.at);
     if(rowLine!==line||!odds||!Number.isFinite(at)||at>now||at>=cutoff||now-at>MAX_QUOTE_AGE_MS)continue;
@@ -151,10 +171,12 @@ function relation(straightTipCode, line, handicapTipCode) {
   return 'handicap-independent';
 }
 function buildHandicapMarginDecision(match, {now,cutoffTime,straightTipCode,calibrationProfile=null}={}) {
-  const line=parseLine(match?.handicapLine ?? match?.externalSignals?.bookmakerOdds?.hhad?.handicapLine);
   const cutoff=Date.parse(cutoffTime||'');
+  const line=officialHandicapLine(match,now,cutoff);
   const lambda=lambdasFor(match?.probabilityModel);
   if(line===null||!lambda||!Number.isFinite(now)||!Number.isFinite(cutoff)||now>=cutoff)return null;
+  const straight=normalizedStraight(match?.probabilityModel?.oneXTwo?.final);
+  if(!straight||topCode(straight)!==straightTipCode)return null;
   const rawDist=coherentHandicapDistribution(lambda.home,lambda.away,line,match?.probabilityModel?.oneXTwo?.final,straightTipCode);
   if(!rawDist)return null;
   const raw=rawDist.conditionalProbabilities;

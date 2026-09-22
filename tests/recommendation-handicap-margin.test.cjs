@@ -30,7 +30,8 @@ test('strong home -1 resolves to handicap win when cover probability leads',()=>
   assert.equal(h.tipCode,'1'); assert.equal(h.relation,'home-cover'); assert.ok(h.coverProbability>h.landOnLineProbability);
 });
 test('strong away against +1 resolves to handicap away when two-goal cover leads',()=>{
-  const h=buildHandicapMarginDecision(match(.7,1.8,1),{now:NOW,cutoffTime:'2026-09-20T09:30:00Z',straightTipCode:'2'});
+  const m=match(.7,1.8,1);m.probabilityModel.oneXTwo.final={home:.15,draw:.23,away:.62};
+  const h=buildHandicapMarginDecision(m,{now:NOW,cutoffTime:'2026-09-20T09:30:00Z',straightTipCode:'2'});
   assert.equal(h.tipCode,'2'); assert.equal(h.relation,'away-cover');
 });
 test('minus two uses exact two-goal margin for handicap draw and three-plus for cover',()=>{
@@ -191,9 +192,11 @@ test('coherent records reject altered overall probabilities, basis, hash, clocks
   for(const mutate of mutations){const changed=structuredClone(h);mutate(changed);assert.equal(validHandicapMarginDecision(changed),false);}
 });
 test('only complete fresh official quotes with the same explicit HHAD line enter evidence',()=>{
-  for(const mutate of [m=>{m.handicapOddsSource='500.com:HHAD';},m=>{delete m.handicapOdds.oddsX;},m=>{m.handicapOddsUpdatedAt=new Date(NOW+1).toISOString();}]){
-    const m=match();mutate(m);const h=buildHandicapMarginDecision(m,{now:NOW,cutoffTime:m.buyEndTime,straightTipCode:'1'});
-    assert.ok(h);assert.equal(h.marketReference,null);
+  const incomplete=match();delete incomplete.handicapOdds.oddsX;
+  const h=buildHandicapMarginDecision(incomplete,{now:NOW,cutoffTime:incomplete.buyEndTime,straightTipCode:'1'});
+  assert.ok(h);assert.equal(h.marketReference,null);
+  for(const mutate of [m=>{m.handicapOddsSource='500.com:HHAD';},m=>{m.handicapOddsUpdatedAt=new Date(NOW+1).toISOString();}]){
+    const m=match();mutate(m);assert.equal(buildHandicapMarginDecision(m,{now:NOW,cutoffTime:m.buyEndTime,straightTipCode:'1'}),null);
   }
   const m=match();delete m.handicapOdds;m.externalSignals={bookmakerOdds:{hhad:{odds1:2,oddsX:3,odds2:4,source:'sporttery:HHAD',observedAt:new Date(NOW).toISOString()}}};
   assert.equal(buildHandicapMarginDecision(m,{now:NOW,cutoffTime:m.buyEndTime,straightTipCode:'1'}).marketReference,null);
@@ -246,4 +249,70 @@ test('legacy v1 frozen analysis retains its original unconditional meaning',()=>
   const raw=marginDistribution(2.2,.6,-1).probabilities;
   const legacy={version:'handicap-margin-v1',market:'HHAD',handicapLine:-1,tipCode:'1',rawProbabilities:raw,probabilities:raw,modelProbability:raw['1'],lambdas:{home:2.2,away:.6},exactMargin:1,inputHash:'a'.repeat(64)};
   assert.equal(validHandicapMarginDecision(legacy),true);
+});
+
+test('a unique model draw remains the HAD primary despite a conflicting legacy BEST and cheaper home odds',()=>{
+  for(const line of [-1,1]){
+    const m=match(1.2,1.1,line);m.probabilityModel.oneXTwo.final={home:.25,draw:.5,away:.25};
+    m.predictions=[{marketType:'BEST',oddsPoolCode:'HHAD',tipCode:'1'}];
+    m.odds={odds1:1.1,oddsX:3.5,odds2:5};
+    const before=JSON.stringify(m),d=makeDecision(m,{now:NOW,publication:PUB}).decision;
+    assert.equal(d.market,'HAD');assert.equal(d.tipCode,'X');assert.equal(d.odds,3.5);assert.equal(d.modelProbability,.5);
+    assert.equal(d.handicapAnalysis.tipCode,line<0?'2':'1');
+    assert.equal(d.handicapAnalysis.probabilityBasis,'conditional-on-straight-primary');
+    assert.equal(d.handicapAnalysis.modelProbability,1);
+    assert.equal(d.handicapAnalysis.overallProbabilities[d.handicapAnalysis.tipCode],.75);
+    assert.equal(validDecision(d),true);assert.equal(JSON.stringify(m),before);
+  }
+});
+
+test('shared handicap builder refuses a direction that disagrees with the final HAD primary',()=>{
+  const m=match();m.probabilityModel.oneXTwo.final={home:.25,draw:.5,away:.25};
+  assert.equal(buildHandicapMarginDecision(m,{now:NOW,cutoffTime:m.buyEndTime,straightTipCode:'1'}),null);
+  assert.equal(buildHandicapMarginDecision(m,{now:NOW,cutoffTime:m.buyEndTime,straightTipCode:'2'}),null);
+});
+
+test('numeric but unverified, missing, future or fractional official lines cannot generate a new companion',()=>{
+  for(const patch of [{handicapOddsSource:'unverified-provider'},{handicapOddsSource:null},{handicapLine:null},
+    {handicapLine:0},{handicapLine:-1.5},{handicapOddsUpdatedAt:null},{handicapOddsUpdatedAt:new Date(NOW+1).toISOString()}]){
+    const m={...match(),...patch},d=makeDecision(m,{now:NOW,publication:PUB}).decision;
+    assert.ok(d);assert.equal(d.tipCode,'1');assert.equal(d.handicapAnalysis,null);assert.equal(validDecision(d),true);
+  }
+});
+
+test('official external handicap line must match the current event and may not conflict with the official direct line',()=>{
+  const make=()=>{const m=match();m.externalSignals={bookmakerOdds:{hhad:{odds1:2,oddsX:3,odds2:4,handicapLine:-1,
+    source:'sporttery:HHAD',receivedAt:new Date(NOW).toISOString(),sourceMatchId:'1',eventVersion:m.eventVersion}}};return m;};
+  const externalOnly=make();delete externalOnly.handicapLine;delete externalOnly.handicapOddsSource;
+  assert.equal(buildHandicapMarginDecision(externalOnly,{now:NOW,cutoffTime:externalOnly.buyEndTime,straightTipCode:'1'}).marketReference.odds.X,3);
+  const conflict=make();conflict.externalSignals.bookmakerOdds.hhad.handicapLine=1;
+  assert.equal(buildHandicapMarginDecision(conflict,{now:NOW,cutoffTime:conflict.buyEndTime,straightTipCode:'1'}),null);
+  for(const patch of [{sourceMatchId:'999'},{eventVersion:'2026-09-20T11:00:00Z'}]){
+    const m=make();delete m.handicapLine;delete m.handicapOddsSource;Object.assign(m.externalSignals.bookmakerOdds.hhad,patch);
+    assert.equal(buildHandicapMarginDecision(m,{now:NOW,cutoffTime:m.buyEndTime,straightTipCode:'1'}),null);
+    const direct=make();delete direct.handicapOdds;Object.assign(direct.externalSignals.bookmakerOdds.hhad,patch);
+    const result=buildHandicapMarginDecision(direct,{now:NOW,cutoffTime:direct.buyEndTime,straightTipCode:'1'});
+    assert.ok(result);assert.equal(result.marketReference,null,'a valid direct line cannot authorize another event quote');
+  }
+});
+
+test('new source requirements do not rewrite an already frozen valid v3 decision',()=>{
+  const m=match(),original=makeDecision(m,{now:NOW,publication:PUB}).decision,before=JSON.stringify(original);
+  m.handicapOddsSource='unverified-provider';
+  const next=makeDecision(m,{now:NOW,publication:PUB}).decision;
+  assert.equal(next.handicapAnalysis,null);assert.notEqual(next.decisionId,original.decisionId);
+  assert.equal(validDecision(original),true);assert.equal(JSON.stringify(original),before);
+});
+
+test('broad calibration never adds impossible handicap outcomes when conditioning on a draw',()=>{
+  for(const line of [-1,1]){
+    const {decisions,heads}=calibrationFixture(24,{line,raw:{'1':.35,X:.25,'2':.4},score:[3,0]});
+    const profile=buildHandicapCalibration(decisions,heads,'2026-09-20',{asOf:NOW});
+    assert.equal(profile.groups[lineGroup(line)].active,true);
+    const m=match(1.2,1.1,line);m.probabilityModel.oneXTwo.final={home:.25,draw:.5,away:.25};
+    const d=makeDecision(m,{now:NOW,publication:PUB,handicapCalibration:profile}).decision,h=d.handicapAnalysis,expected=line<0?'2':'1';
+    assert.equal(h.historicalCalibration.applied,true);assert.equal(h.tipCode,expected);assert.equal(h.probabilities[expected],1);
+    for(const code of ['1','X','2'].filter(c=>c!==expected))assert.equal(h.probabilities[code],0);
+    assert.equal(h.overallProbabilities[expected],.75);assert.equal(d.tipCode,'X');assert.equal(validDecision(d),true);
+  }
 });
