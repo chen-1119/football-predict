@@ -77,7 +77,12 @@ export function PrematchCollectionPanel({ matchId, language, homeName, awayName,
   const zh = language === 'zh';
   const label = (status: string) => (labels[status] || labels.unavailable)[zh ? 0 : 1];
   const sourceName = (provider?: Provider | null) => provider === 'api-football' ? 'API-Football' : provider === 'leisu' ? (zh ? '雷速' : 'Leisu') : (zh ? '暂无有效来源' : 'No verified source');
-  const sourceRows = Object.values(evidence?.sources || {}).filter((source): source is Source => Boolean(source));
+  const sourceRows: Source[] = (['leisu', 'api-football'] as const).map(provider => evidence?.sources?.[provider] || {
+    provider, status: evidence?.status || 'loading', mappingState: 'unknown', sections: {
+      injuries: { status: evidence?.status || 'loading', observedAt: null, lastAttemptAt: null, previousValue: false },
+      lineup: { status: evidence?.status || 'loading', observedAt: null, lastAttemptAt: null, previousValue: false },
+    },
+  });
   const mappingLabel = (state: string) => state === 'verified' ? (zh ? '比赛已匹配' : 'Fixture verified') : state === 'unmapped'
     ? label('unmapped') : state === 'conflict' ? label('conflict') : (zh ? '比赛匹配待确认' : 'Fixture mapping unknown');
   const time = (value?: string | null) => value && Number.isFinite(Date.parse(value))

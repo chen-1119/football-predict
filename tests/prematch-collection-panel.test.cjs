@@ -104,6 +104,14 @@ test('verified match links distinguish analysis and lineup pages', async () => {
   assert.match(words(card), /本场分析原页面/); assert.match(words(card), /本场阵容原页面/); assert.doesNotMatch(words(card), /尚未核对/);
 });
 
+test('provider website links remain available when the match data request is unavailable', async () => {
+  const data = { matchId: 'sporttery_123', status: 'unavailable', predictionEligible: false };
+  const u = await harness({ data }), tree = u.render();
+  assert.deepEqual(nodes(tree, n => n.type === 'a').map(n => n.props.href), ['https://www.leisu.com/', 'https://www.api-football.com/']);
+  assert.match(words(tree), /本场资料暂不可用/); assert.match(words(tree), /尚未核对本场对应页面/);
+  assert.doesNotMatch(words(tree), /来源可访问|比赛已匹配/);
+});
+
 test('endpoint URLs, credentials, query strings and unexpected origins cannot become source links', async () => {
   for (const url of ['javascript:alert(1)', 'https://v3.football.api-sports.io/injuries?fixture=123', 'https://live.leisu.com/detail-123?token=secret', 'https://live.leisu.com@evil.test/detail-123', 'https://evil.test/detail-123']) {
     const data = evidence();
