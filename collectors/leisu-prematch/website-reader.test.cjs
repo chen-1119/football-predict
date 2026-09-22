@@ -116,7 +116,7 @@ test('public DTO identifies providers but excludes private IDs, source URLs, pat
   const { exportPath } = await temporaryExport(t);
   const result = await createWebsiteReader(options(exportPath))(ID);
   assert.deepEqual(keys(result), ['eventVersion', 'matchId', 'predictionEligible', 'provider', 'sections', 'sources', 'status', 'updatedAt']);
-  assert.deepEqual(keys(result.sections.injuries), ['data', 'fallback', 'lastAttemptAt', 'missingReason', 'observedAt', 'previousValue', 'provider', 'status']);
+  assert.deepEqual(keys(result.sections.injuries), ['data', 'fallback', 'lastAttemptAt', 'missingReason', 'observedAt', 'previousValue', 'provider', 'status', 'statusProvider']);
   assert.equal(result.sections.injuries.provider, 'leisu');
   const encoded = JSON.stringify(result);
   assert.doesNotMatch(encoded, /providerMatchId|providerPlayerId|providerTeamId|sourceUrl|sourcePublishedAt|observationId|contentHash|taskKey|exportPath|collectorPath|internal-/);
@@ -470,4 +470,35 @@ test('API collection timing honors the new five-minute schedule and retains lega
   }
   status.checkIntervalMinutes = 5; status.nextAttemptAt = '2026-09-12T14:39:00.000Z'; await fs.writeFile(file, JSON.stringify(status));
   assert.equal((await readApiCollectionStatus(referencePath, Date.parse(NOW), row())).nextAttemptAt, status.nextAttemptAt);
+});
+
+test('confirmed empty API response outranks blocked Leisu as the visible missing reason without inventing a receipt', async t => {
+  const leisu = sample(); leisu.items = [];
+  const api = apiSample(); api.items = [];
+  const coverage = { id: ID, home: row().homeTeamName, away: row().awayTeamName, kickoff: row().kickoffTime,
+    mapped: true, injuries: 'source_empty', lineup: 'not-due', attempts: { injuries: { status: 'source_empty', lastAttemptAt: '2026-09-12T13:38:00.000Z' } } };
+  const { read, directory } = await dualReader(t, leisu, api, { coverage: [coverage] });
+  await fs.writeFile(path.join(directory, 'collection-status.json'), JSON.stringify({ version: 'prematch-scheduler-v1', predictionEligible: false,
+    enabled: true, state: 'blocked', checkedAt: NOW, sourceAccess: { state: 'blocked', httpStatus: 405 } }));
+  const result = await read(ID);
+  assert.equal(result.status, 'partial'); assert.equal(result.provider, null);
+  assert.equal(result.sections.injuries.status, 'source_empty'); assert.equal(result.sections.injuries.statusProvider, 'api-football');
+  assert.equal(result.sections.injuries.observedAt, null); assert.equal(result.sections.injuries.lastAttemptAt, '2026-09-12T13:38:00.000Z');
+  assert.equal(result.sections.lineup.status, 'not-due'); assert.equal(result.sections.lineup.statusProvider, 'api-football');
+  assert.equal(result.sections.lineup.observedAt, null); assert.equal(result.sections.lineup.lastAttemptAt, null);
+  assert.equal(result.sources.leisu.sections.injuries.status, 'blocked'); assert.equal(result.sources.leisu.collection.sourceHttpStatus, 405);
+});
+
+test('two empty sources expose the most recent explicit response while preserving both attempts', async t => {
+  const leisu = sample();
+  for (const kind of ['injuries', 'lineup']) {
+    const part = leisu.items[0].evidence.sections[kind];
+    part.latestValid = null; part.latestAttempt = { ...part.latestAttempt, status: 'source_empty', data: null, receivedAt: '2026-09-12T13:39:00.000Z' };
+  }
+  const api = apiSample(); api.items = [];
+  const coverage = { id: ID, home: row().homeTeamName, away: row().awayTeamName, kickoff: row().kickoffTime,
+    mapped: true, injuries: 'source_empty', lineup: 'source_empty', attempts: Object.fromEntries(['injuries', 'lineup'].map(kind => [kind, { status: 'source_empty', lastAttemptAt: '2026-09-12T13:38:00.000Z' }])) };
+  const { read } = await dualReader(t, leisu, api, { coverage: [coverage] }), result = await read(ID);
+  assert.equal(result.sections.injuries.statusProvider, 'leisu'); assert.equal(result.sections.injuries.lastAttemptAt, '2026-09-12T13:39:00.000Z');
+  assert.equal(result.sections.injuries.observedAt, null); assert.equal(result.sources['api-football'].sections.injuries.lastAttemptAt, '2026-09-12T13:38:00.000Z');
 });
