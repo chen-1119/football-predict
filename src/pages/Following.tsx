@@ -14,6 +14,14 @@ export function Following(){
   const updateFilters=(next:{q?:string;tab?:string})=>{const search=new URLSearchParams(params);for(const [key,value] of Object.entries(next)){if(value&&value!=='all')search.set(key,value);else search.delete(key);}setParams(search,{replace:true});};
   const [limit,setLimit]=useState(12),[busy,setBusy]=useState(''),[error,setError]=useState(''),[removed,setRemoved]=useState<FollowRow|null>(null),[now,setNow]=useState(Date.now());
   useEffect(()=>{const timer=window.setInterval(()=>setNow(Date.now()),30000);return()=>window.clearInterval(timer);},[]);
+  useEffect(()=>{
+    if(!account.user)return;
+    const refresh=()=>{if(document.visibilityState!=='hidden')void account.refreshFollowing();};
+    refresh();
+    const timer=window.setInterval(refresh,60000);
+    window.addEventListener('focus',refresh);document.addEventListener('visibilitychange',refresh);
+    return()=>{window.clearInterval(timer);window.removeEventListener('focus',refresh);document.removeEventListener('visibilitychange',refresh);};
+  },[account.user?.id,account.refreshFollowing]);
   const filtered=useMemo(()=>filterFollowing(account.following,query,group,now),[account.following,query,group,now]);
   const format=(value:string|undefined)=>value&&Number.isFinite(Date.parse(value))?new Date(value).toLocaleString(zh?'zh-CN':'en-GB',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'Asia/Shanghai'}):'—';
   const groups=[['all',zh?'全部':'All'],['upcoming',zh?'未赛':'Upcoming'],['pending',zh?'待结果':'Awaiting result'],['settled',zh?'已结算':'Settled']];
