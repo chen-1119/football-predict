@@ -28,6 +28,7 @@ test('a missing current publication stays pending instead of displaying a local 
 const words=node=>node==null||typeof node==='boolean'?'':Array.isArray(node)?node.map(words).join(''):typeof node==='object'?words(node.props?.children):String(node);
 const pick=compile(require.resolve('../src/components/recommendations/PublishedMatchPick.tsx'),id=>{
  if(id==='react/jsx-runtime')return{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props}),Fragment:'fragment'};
+ if(id==='./SelectionQualityNote')return require('./fixtures/selection-quality-note-module.cjs');
  if(id==='../../services/recommendationCenterView')return view;
  if(id==='../../services/publishedMatchRecommendation')return model;
  if(id.endsWith('.css'))return{};throw Error(id);

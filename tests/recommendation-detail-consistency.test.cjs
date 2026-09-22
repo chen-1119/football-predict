@@ -18,10 +18,14 @@ const Facts=compile('../src/components/predictions/RecommendationEvidenceFacts.t
  if(id==='./sourceNeutralText')return{formatSourceNeutralText:unavailable};
  if(id.endsWith('.css'))return{};throw Error(id);
 }).RecommendationEvidenceFacts;
+const qualityNote=compile('../src/components/recommendations/SelectionQualityNote.tsx',id=>{
+ if(id==='react/jsx-runtime')return jsx;throw Error(id);
+});
 const Pick=compile('../src/components/recommendations/PublishedMatchPick.tsx',id=>{
  if(id==='react/jsx-runtime')return jsx;
  if(id.endsWith('/recommendationCenterView'))return view;
  if(id.endsWith('/publishedMatchRecommendation'))return published;
+ if(id==='./SelectionQualityNote')return qualityNote;
  if(id.endsWith('.css'))return{};throw Error(id);
 }).PublishedMatchPick;
 
@@ -62,4 +66,80 @@ test('score selection rejects invented/invalid rows, ranks existing rows and nev
  const {row}=fixture.fixtures[0],scores=[{home:2,away:0,label:'2-0',probability:5},{home:1,away:0,label:'1-0',probability:10},{home:3,away:0,label:'3-0',probability:NaN},{home:-1,away:-2,label:'bad',probability:99},{home:1.5,away:0,label:'bad',probability:99}];
  const before=JSON.stringify(scores),result=presentation.publishedDetailPresentation(row.decision,scores);
  assert.equal(result.primaryScore.label,'1-0');assert.equal(result.alternativeScore.label,'2-0');assert.equal(JSON.stringify(scores),before);
+});
+
+const {makeDecision}=require('../scripts/recommendationPlatform/decision.cjs');
+const {buildPublishedScoreDistribution}=require('../src/services/publishedScoreDistribution.cjs');
+function scorePublication(){
+ const now=Date.parse('2026-09-20T02:00:00Z'),at=new Date(now).toISOString();
+ const match={id:'sporttery_1',sourceMatchId:'1',businessDate:'2026-09-20',status:'SCHEDULED',
+  homeTeamId:'h1',awayTeamId:'a1',homeTeamName:'Home',awayTeamName:'Away',
+  kickoffTime:'2026-09-20T10:00:00Z',eventVersion:'2026-09-20T10:00:00Z',buyEndTime:'2026-09-20T09:30:00Z',
+  odds:{odds1:1.7,oddsX:3.5,odds2:4.8},oddsSource:'sporttery:had',oddsUpdatedAt:at,
+  handicapLine:-1,handicapOdds:{odds1:2.05,oddsX:3.4,odds2:2.75},handicapOddsSource:'sporttery:HHAD',handicapOddsUpdatedAt:at,
+  probabilityModel:{version:'detail-score-test',generatedAt:at,oneXTwo:{final:{home:.4,draw:.35,away:.25}},calculationTrace:{poisson:{lambdas:{home:1.2,away:1.1}}}}};
+ const decision=makeDecision(match,{now,publication:{generationId:'g',manifestHash:'a'.repeat(64),sourceCycleId:'cycle'}}).decision;
+ const scores=buildPublishedScoreDistribution(decision);
+ assert.equal(scores.status,'available');return {decision,scores};
+}
+const legacyScores=[{home:8,away:0,label:'8-0',probability:99}];
+
+test('backend-derived scores replace supplemental values and preserve original global ranking and probabilities',()=>{
+ const {decision,scores}=scorePublication(),before=JSON.stringify({decision,scores});
+ const result=presentation.publishedDetailPresentation(decision,legacyScores,scores);
+ assert.equal(result.scoreSource,'published-matrix');
+ assert.equal(result.primaryScore.label,scores.alignedScores[0].label);
+ assert.equal(result.primaryScore.probability,scores.alignedScores[0].probability*100);
+ assert.equal(result.globalScores[0].label,scores.topScores[0].label);
+ assert.equal(scores.topScores[0].hadCode,'X');assert.equal(decision.tipCode,'1');
+ assert.equal(result.alternativeScore.label,scores.topScores[0].label);
+ assert.equal(result.alternativeScore.probability,scores.topScores[0].probability*100);
+ assert.equal(result.tipCode,decision.tipCode);assert.notEqual(result.primaryScore.label,'8-0');
+ assert.equal(JSON.stringify({decision,scores}),before);
+});
+
+test('bound score unavailable or explicit null never falls back to the old supplemental model',()=>{
+ const {decision,scores}=scorePublication();
+ for(const bound of [null,{...scores,status:'unavailable',topScores:[],alignedScores:[]}]){
+  const result=presentation.publishedDetailPresentation(decision,legacyScores,bound);
+  assert.equal(result.scoreSource,'unavailable');assert.equal(result.primaryScore,null);assert.equal(result.alternativeScore,null);
+ }
+ const legacy=presentation.publishedDetailPresentation(decision,legacyScores);
+ assert.equal(legacy.scoreSource,'legacy-supplemental');assert.equal(legacy.primaryScore.label,'8-0');
+});
+
+test('wrong record binding or malformed score units and outcome codes are rejected without a competing fallback',()=>{
+ const {decision,scores}=scorePublication();
+ for(const change of [
+  row=>{row.decisionId='another-decision';},row=>{row.recordHash='f'.repeat(64);},
+  row=>{row.topScores[0].probability*=100;},row=>{row.topScores[0].hadCode='1';},
+  row=>{row.alignedScores[0].hhadCode=row.alignedScores[0].hhadCode==='X'?'2':'X';},
+  row=>{row.topScores[0].home=-1;},row=>{row.topScores[0].label='false-score';},
+ ]){
+  const invalid=structuredClone(scores);change(invalid);
+  const result=presentation.publishedDetailPresentation(decision,legacyScores,invalid);
+  assert.equal(result.scoreSource,'unavailable');assert.equal(result.primaryScore,null);assert.equal(result.alternativeScore,null);
+ }
+});
+
+test('an empty aligned projection cannot promote the global modal draw into the primary score',()=>{
+ const {decision,scores}=scorePublication();
+ const result=presentation.publishedDetailPresentation(decision,legacyScores,{...scores,alignedScores:[]});
+ assert.equal(result.primaryScore,null);assert.equal(result.alternativeScore,null);
+ assert.equal(result.globalScores[0].label,scores.topScores[0].label);
+});
+
+test('frontend parser accepts server score projection and explicit unavailable without changing the frozen decision',()=>{
+ const {decision,scores}=scorePublication();
+ const summary={published:0,settled:0,won:0,lost:0,pending:0,void:0,disputed:0,hitRate:null};
+ const row={decision,settlement:{state:'PENDING'},scoreDistribution:scores};
+ const response={recommendationCenter:{version:'recommendation-center-v1',updatedAt:decision.publishedAt,businessDate:decision.businessDate,
+  inputAsOf:null,resultAsOf:null,lanes:{},current:[row],previews:[],todayCombos:[],overlapDecisionIds:[],
+  review:{singles:[],combos:[],limit:0,statistics:{single:summary,two:summary,three:summary},definition:'test'},excludedCorruptRecords:0,modelValidation:'unvalidated'}};
+ const parsed=view.parseRecommendationCenter(response).current[0];
+ const result=presentation.publishedDetailPresentation(parsed.decision,legacyScores,parsed.scoreDistribution);
+ assert.equal(result.scoreSource,'published-matrix');assert.equal(result.primaryScore.probability,scores.alignedScores[0].probability*100);
+ row.scoreDistribution={...scores,status:'unavailable',topScores:[],alignedScores:[]};
+ const missing=view.parseRecommendationCenter(response).current[0];
+ assert.equal(presentation.publishedDetailPresentation(missing.decision,legacyScores,missing.scoreDistribution).primaryScore,null);
 });

@@ -89,6 +89,7 @@ function renderedText(data,props,now){
   const code=ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/components/recommendations/RecommendationCenter.tsx'),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
   vm.runInNewContext(code,{module,exports:module.exports,Date:now==null?Date:class extends Date{static now(){return now;}},require:id=>{
     if(id==='react')return react;if(id==='react/jsx-runtime')return require(id);
+    if(id==='./SelectionQualityNote')return require('./fixtures/selection-quality-note-module.cjs');
     if(id==='../../hooks/useRecommendationCenter')return {useRecommendationCenter:()=>({data,loading:false,failed:false,authorizationRequired:false,refresh:()=>{}})};
     if(id==='../FollowButton')return {FollowButton:()=>null};
     if(id==='../TeamBadge')return {TeamBadge:({team})=>react.createElement('span',{'data-badge-name':team.name.zh})};
@@ -147,6 +148,7 @@ function renderPublished(row,compact,language='zh'){
   const modelModule={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/services/publishedMatchRecommendation.ts'),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,{module:modelModule,exports:modelModule.exports,Date});
   vm.runInNewContext(code,{module,exports:module.exports,Date,Intl,require:id=>{
     if(id==='react/jsx-runtime')return require(id);if(id==='../../services/recommendationCenterView')return view;
+    if(id==='./SelectionQualityNote')return require('./fixtures/selection-quality-note-module.cjs');
     if(id==='../../services/publishedMatchRecommendation')return modelModule.exports;if(id.endsWith('.css'))return {};throw Error(id);
   }});
   return renderToStaticMarkup(react.createElement(module.exports.PublishedMatchPick,{row,language,compact,now:Date.parse(row.decision.publishedAt)}));

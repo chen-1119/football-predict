@@ -2,6 +2,7 @@ import type { SingleRow } from '../../services/recommendationCenterView';
 import { primarySelectionSummary, handicapExtensionText, quoteSourceLabel } from '../../services/recommendationCenterView';
 import { publishedPickLabel, publishedResultLabel } from '../../services/publishedMatchRecommendation';
 import './published-match-pick.css';
+import { SelectionQualityNote } from './SelectionQualityNote';
 
 type Props = { row: SingleRow | null; language: 'zh'|'en'; loading?: boolean; failed?: boolean; compact?: boolean; now?: number };
 const time = (value:string,language:'zh'|'en') => new Intl.DateTimeFormat(language==='zh'?'zh-CN':'en-GB',{
@@ -20,6 +21,7 @@ export function PublishedMatchPick({row,language,loading=false,failed=false,comp
       <div className={h?.status==='pass'?'is-pass':undefined} data-handicap-extension={h?.status??'unavailable'}><small>{zh?'让球延伸':'Handicap extension'}</small><strong>{extension?.title??'—'}</strong><span>{extension?.detail??(zh?'等待有效让球数据':'Awaiting handicap data')}</span></div>
     </div>
     <small className="published-match-pick__status">{zh?'已发布 · 参考／影子':'Published · reference/shadow'}{quoteStale?(zh?' · SP待更新':' · SP refresh pending'):''}{failed?(zh?' · 更新暂时失败':' · Update temporarily failed'):''}</small>
+    <SelectionQualityNote quality={row.selectionQuality} language={language}/>
     {!compact&&<><p>{zh?'本场方向、SP和版本与今日推荐保持一致。串关可选择同一场的不同玩法；已冻结的串关保留选定时的版本。':'Direction, SP and version match Today. A combo may use another market; a frozen combo retains its selected version.'}</p>
       {h?.conditional&&<p>{zh?'让球伴随占比以胜平负首选成立为前提，不是独立让球命中率。':'The companion shares are conditional on the 1X2 pick landing, not standalone handicap win rates.'}</p>}
       {h?.status==='pass'&&<p className="published-match-pick__warning">{zh?'不追让球：盘口风险方向未作为胜平负首选的延伸。同向备选仅供比较，完整概率和已冻结串关仍保留原记录。':'Pass handicap: the model risk direction is not an extension of the 1X2 pick. Aligned alternatives are comparisons; full probabilities and frozen combos retain their original records.'}</p>}

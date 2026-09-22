@@ -23,17 +23,22 @@ function makeDecision(match, { now, publication, handicapCalibration=null }) {
   if (!input) return { decision:null, reason:'prospective-input-invalid' };
   if (Object.values(candidate.quoteOdds).some(value => units(value) === null)) return { decision: null, reason: 'unsupported-sp-precision' };
   const handicapAnalysis = buildHandicapMarginDecision(input, { now, cutoffTime:candidate.cutoffTime, straightTipCode:candidate.tipCode, calibrationProfile:handicapCalibration });
+  const {buildInputEvidence,validInputEvidence}=require('../../src/services/recommendationInputEvidence.cjs');
+  const proposedEvidence=input.probabilityModel.inputEvidence||buildInputEvidence(input.probabilityModel,input);
+  const modelInputEvidence=validInputEvidence(proposedEvidence,input.probabilityModel,input)?proposedEvidence:null;
+  const selectionPolicyVersion=require('../../src/services/recommendationSelectionQuality.cjs').VERSION;
   const hadInputHash = candidate.inputHash;
-  const inputHash = hash({ hadInputHash, handicapInputHash: handicapAnalysis?.inputHash || null });
+  const inputHash = hash({ hadInputHash, handicapInputHash: handicapAnalysis?.inputHash || null,selectionPolicyVersion,modelInputEvidenceHash:modelInputEvidence?.contentHash||null });
   const identity = [VERSION, candidate.sourceMatchId, candidate.eventVersion, candidate.market, inputHash];
   const decisionId = `decision_${hash(identity)}`;
   const body = { ...candidate, hadInputHash, inputHash, handicapAnalysis, version: VERSION, policyVersion: VERSION, decisionId, id: decisionId,
-    statisticsTrack: 'unified-decision', publishedAt: new Date(now).toISOString(), publicationStatus: 'PUBLISHED',
+    statisticsTrack: 'unified-decision', selectionPolicyVersion,publishedAt: new Date(now).toISOString(), publicationStatus: 'PUBLISHED',
     evaluationRule: 'latest-published-input-before-cutoff-per-event', modelValidation: 'unvalidated',
     upstreamModelVersion: String(input?.probabilityModel?.version || 'unknown'),
     sourceCycleId: String(input?.sourceCycleId || publication.sourceCycleId || ''),
     inputEvidence: { model: { version: input.probabilityModel.version || null, generatedAt: candidate.modelGeneratedAt,
       oneXTwo: { final: structuredClone(input.probabilityModel.oneXTwo.final) },
+      inputEvidence:modelInputEvidence,
       handicapMarginInputHash: handicapAnalysis?.inputHash || null },
       quoteSource: candidate.quoteSource, quoteObservedAt: candidate.quoteObservedAt } };
   return { decision: immutable({ ...body, recordHash: hash(body) }), reason: null };
@@ -42,7 +47,13 @@ function validDecision(row) {
   if (!row || row.version !== VERSION || row.policyVersion !== VERSION || row.market !== 'HAD' || row.handicapLine !== 0 || row.modelValidation !== 'unvalidated') return false;
   const { recordHash, ...body } = row;
   if (hash(body) !== recordHash || row.decisionId !== `decision_${hash([VERSION, row.sourceMatchId, row.eventVersion, row.market, row.inputHash])}` || row.id !== row.decisionId) return false;
-  if (row.hadInputHash && row.inputHash !== hash({ hadInputHash:row.hadInputHash, handicapInputHash:row.handicapAnalysis?.inputHash || null })) return false;
+  const qualityBinding=row.selectionPolicyVersion==null?{}:{selectionPolicyVersion:row.selectionPolicyVersion,modelInputEvidenceHash:row.inputEvidence?.model?.inputEvidence?.contentHash||null};
+  if(row.selectionPolicyVersion!=null){
+    if(row.selectionPolicyVersion!==require('../../src/services/recommendationSelectionQuality.cjs').VERSION)return false;
+    const model=row.inputEvidence?.model;
+    if(model?.inputEvidence&&!require('../../src/services/recommendationInputEvidence.cjs').validInputEvidence(model.inputEvidence,model,row))return false;
+  }
+  if (row.hadInputHash && row.inputHash !== hash({ hadInputHash:row.hadInputHash, handicapInputHash:row.handicapAnalysis?.inputHash || null,...qualityBinding })) return false;
   if (!validHandicapMarginDecision(row.handicapAnalysis)) return false;
   if (row.handicapAnalysis && row.handicapAnalysis.straightTipCode !== row.tipCode) return false;
   if (row.handicapAnalysis?.version === 'handicap-margin-v3' && (row.handicapAnalysis.computedAt !== row.publishedAt
@@ -107,9 +118,9 @@ function freezeAt(date, legs) {
   const dow = new Date(midnight + 8*3600000).getUTCDay();
   return Math.min(midnight + ([0,6].includes(dow) ? 22 : 21)*3600000, ...legs.map(l => time(l.cutoffTime) - 5*60000));
 }
-function chooseCombo(decisions, size, now) {
+function chooseCombo(decisions, size, now, {admit=()=>true}={}) {
   if (!FLOORS[size] || !Number.isFinite(now)) return null;
-  const candidates = decisions.flatMap(d => candidatesFor(d,now))
+  const candidates = decisions.flatMap(d => candidatesFor(d,now)).filter(admit)
     .sort((a,b) => b.selection.modelProbability - a.selection.modelProbability || a.selection.selectionId.localeCompare(b.selection.selectionId));
   let best = null, score = -Infinity, bestProduct = Infinity, bestKey = '';
   function visit(start, picked, logp) {

@@ -1,8 +1,14 @@
 'use strict';
 const {hash}=require('../src/services/publishedForecastPolicy.cjs');
+const {withVerifiedInputEvidence}=require('./fixtures/recommendation-input-helper.cjs');
 const NOW=Date.parse('2026-09-17T10:00:00Z');
 const publication=now=>({generationId:'generation-test',manifestHash:'a'.repeat(64),committedAt:new Date(now).toISOString()});
-function match(id=1,now=NOW,patch={}){return {id:`sporttery_${id}`,sourceMatchId:String(id),businessDate:'2026-09-17',status:'SCHEDULED',homeTeamId:`h${id}`,awayTeamId:`a${id}`,homeTeamName:`主队${id}`,awayTeamName:`客队${id}`,leagueId:'test',kickoffTime:'2026-09-17T15:00:00Z',eventVersion:'2026-09-17T15:00:00Z',probabilityModel:{generatedAt:new Date(now).toISOString(),oneXTwo:{final:{home:55,draw:25,away:20}}},odds:{odds1:1.8,oddsX:3.5,odds2:4.5},oddsSource:'sporttery:had',oddsUpdatedAt:new Date(now).toISOString(),predictions:[{marketType:'BEST',tipCode:'WATCH',recommendationAction:'reference'}],...patch};}
+function match(id=1,now=NOW,patch={}){
+ const base=withVerifiedInputEvidence({id:`sporttery_${id}`,sourceMatchId:String(id),businessDate:'2026-09-17',status:'SCHEDULED',homeTeamId:`h${id}`,awayTeamId:`a${id}`,homeTeamName:`主队${id}`,awayTeamName:`客队${id}`,leagueId:'test',kickoffTime:'2026-09-17T15:00:00Z',eventVersion:'2026-09-17T15:00:00Z',probabilityModel:{generatedAt:new Date(now).toISOString(),oneXTwo:{final:{home:55,draw:25,away:20}}},odds:{odds1:1.8,oddsX:3.5,odds2:4.5},oddsSource:'sporttery:had',oddsUpdatedAt:new Date(now).toISOString(),predictions:[{marketType:'BEST',tipCode:'WATCH',recommendationAction:'reference'}]});
+ // Explicit patches remain authoritative, including invalid/missing model
+ // evidence used by negative tests. Do not silently repair a patched model.
+ return {...base,...patch};
+}
 const validators={isFinal:r=>r.testOfficial===true&&r.status==='FINISHED',isVoid:r=>r.testOfficial===true&&r.resultDisposition==='VOID'};
 function memoryPorts(){
   let now=NOW,state={decisions:[],combos:[],results:[],lanes:{},issues:[],view:null};
