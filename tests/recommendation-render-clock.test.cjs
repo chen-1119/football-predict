@@ -14,7 +14,8 @@ test('incoming lane timestamp between timer ticks stays visible without acceptin
       if(id==='react')return{useEffect:()=>{},useState:initial=>{const i=index++;if(!(i in state))state[i]=typeof initial==='function'?initial():initial;return[state[i],()=>{}];}};
       if(id==='react/jsx-runtime')return{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})};
       if(id==='../../hooks/useRecommendationCenter')return{useRecommendationCenter:()=>({data,loading:false,failed:false,authorizationRequired:false,refresh:()=>{}})};
-      if(id==='../TeamBadge')return{TeamBadge:()=>null};
+      if(id==='../FollowButton')return {FollowButton:()=>null};
+    if(id==='../TeamBadge')return{TeamBadge:()=>null};
       if(id==='../../services/recommendationCenterView')return V;
       if(id==='lucide-react')return{};if(id.endsWith('.css'))return{};throw Error(id);
     });

@@ -5,6 +5,8 @@ const path = require("node:path");
 const { spawn } = require("node:child_process");
 const { Worker } = require("node:worker_threads");
 const crypto = require("node:crypto");
+const { createAccounts } = require("./accounts.cjs");
+const { publicFixture, publicOverview } = require("./publicProduct.cjs");
 const zlib = require("node:zlib");
 const { readStorageMode, retiredSqliteStatus } = require("./storageMode.cjs");
 const storageMode = readStorageMode();
@@ -2947,7 +2949,13 @@ const getActiveRequestAccessSession = async (req, url) => {
   });
 };
 
-const hasRecommendationAccess = async (req, url) => Boolean(await getActiveRequestAccessSession(req, url));
+const hasRecommendationAccess = async (req, url) => {
+  const account = await accountSystem.authenticate(req);
+  // A present, blocked/expired account must not acquire a second identity via a
+  // stale shared code. The account module clears invalid cookies on /me.
+  if (account || accountSystem.hasSessionCookie(req)) return Boolean(account?.access.active);
+  return Boolean(await getActiveRequestAccessSession(req, url));
+};
 
 const openResearchClientKey = (req) => {
   const token = getRequestAccessToken(req);
@@ -11370,8 +11378,90 @@ const buildV1MatchPayload = async (matchId) => {
   }
 };
 
+const readAccountResultEvent = async (identity) => {
+  if (!identity || !Number.isFinite(Date.parse(identity.eventVersion || identity.kickoffTime))) return null;
+  const sourceId=String(identity.sourceMatchId || identity.id || '').replace(/^sporttery_/,'');
+  const result=await postgresPool.query(`SELECT e.payload FROM football.recommendation_result_heads h
+    JOIN football.recommendation_result_events e ON e.id=h.event_id
+    WHERE h.source_match_id=$1 AND h.event_version=$2::timestamptz`,[sourceId,identity.eventVersion||identity.kickoffTime]);
+  const event=result.rows[0]?.payload;
+  const {validResultEvent,key}=require('../scripts/recommendationPlatform/results.cjs');
+  return validResultEvent(event) && key(identity)===key(event)
+    && (!event.homeTeamId || identity.homeTeamId===event.homeTeamId)
+    && (!event.awayTeamId || identity.awayTeamId===event.awayTeamId) ? event : null;
+};
+const accountSystem = postgresPool ? createAccounts({
+  pool: postgresPool,
+  readMatch: async (id) => {
+    const match=await readMatchById(id);
+    const event=await readAccountResultEvent(match);
+    return match ? {match,result:event?{verified:true,state:event.state==='FINAL'?'FINISHED':event.state,
+      score:event.state==='FINAL'?`${event.scoreHome}-${event.scoreAway}`:null,source:event.source,asOf:event.observedAt}:null}:null;
+  },
+  readDecision: async (id) => {
+    if (!postgresPool) return null;
+    const result = await postgresPool.query("SELECT payload FROM football.recommendation_decisions WHERE id=$1", [id]);
+    const decision=result.rows[0]?.payload;
+    if (!decision || !require('../scripts/recommendationPlatform/decision.cjs').validDecision(decision)) return null;
+    const event=await readAccountResultEvent(decision);
+    return {decision,result:event?{verified:true,...require('../scripts/recommendationPlatform/results.cjs').settleDecision(decision,event),source:event.source,asOf:event.observedAt}:null};
+  },
+  readLegacyCode: async (code) => withAccessCodeStateTransaction(async () => {
+    const store = await readAccessCodeStoreUnlocked();
+    const record = store.codes.find((item) => item.codeHash === hashAccessCode(code));
+    return record && getAccessCodeStatus(record) === "active" ? {codeId:record.id,expiresAt:record.expiresAt} : null;
+  }),
+  options: {
+    origin: process.env.ACCOUNT_PUBLIC_ORIGIN || "https://134.175.132.183",
+    csrfSecret: crypto.createHmac("sha256", accessCodeSecret).update("football-account-csrf-v1").digest("hex"),
+    secureCookies: !(process.env.NODE_ENV === "test" && /^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/.test(process.env.ACCOUNT_PUBLIC_ORIGIN || '')),
+    allowInsecureLoopback: process.env.NODE_ENV === "test",
+    passwordEnabled: process.env.ACCOUNTS_ENABLED === "1",
+    clientIp: (req) => {
+      const peer=req.socket?.remoteAddress || 'unknown',real=req.headers['x-real-ip'];
+      // Our nginx overwrites X-Real-IP from remote_addr. Never trust forwarded lists.
+      return ['127.0.0.1','::1','::ffff:127.0.0.1'].includes(peer) && typeof real==='string' && require('node:net').isIP(real) ? real : peer;
+    },
+  },
+}) : {
+  authenticate: async () => null,
+  hasSessionCookie: () => false,
+  handle: async (req,res,url) => {if(!url.pathname.startsWith('/api/account/'))return false;sendJson(res,{ok:false,error:'Account service unavailable'},503);return true;},
+};
+let publicProductCache = null;
+let publicProductInflight = null;
+const buildPublicProduct = async () => {
+  if (publicProductCache && Date.now()-publicProductCache.at<10000) return publicProductCache.value;
+  if (publicProductInflight) return publicProductInflight;
+  publicProductInflight = (async () => {
+    if (!postgresPool || !shouldPreferPostgresRead()) throw new Error("PUBLIC_DATA_UNAVAILABLE");
+    const [current, result] = await Promise.all([
+      buildV1CurrentPayload(new URL("http://localhost/api/v1/matches/current?view=list")),
+      postgresPool.query("SELECT payload FROM football.daily_featured_combo_state WHERE id=1"),
+    ]);
+    const value=publicOverview(current,result.rows[0]?.payload);
+    publicProductCache={at:Date.now(),value};
+    return value;
+  })();
+  try{return await publicProductInflight;}finally{publicProductInflight=null;}
+};
 const handleApi = async (req, res, url) => {
+  if (await accountSystem.handle(req, res, url)) return;
   if (req.method === "OPTIONS") return send(res, 204, "");
+
+  if (url.pathname === "/api/public/overview" || /^\/api\/public\/matches\/[^/]+$/.test(url.pathname)) {
+    if (process.env.PUBLIC_PREVIEW_ENABLED !== "1") return sendJson(res,{ok:false,error:"public preview unavailable"},404);
+    if (req.method !== "GET" && req.method !== "HEAD") return sendJson(res,{ok:false,error:"method not allowed"},405);
+    try {
+      const overview=await buildPublicProduct();
+      if (url.pathname === "/api/public/overview") return sendJsonCached(req,res,overview,{maxAgeSeconds:5});
+      const id=decodeURIComponent(url.pathname.slice("/api/public/matches/".length));
+      if (!/^[a-zA-Z0-9_-]{1,120}$/.test(id)) return sendJson(res,{ok:false,error:"invalid match"},400);
+      const match=overview.matches.find(row=>row.id===id)||publicFixture(await readMatchById(id));
+      if (!match) return sendJson(res,{ok:false,error:"match not found"},404);
+      return sendJsonCached(req,res,{ok:true,match,sourceUpdatedAt:overview.sourceUpdatedAt,stale:overview.stale,example:overview.review.example?.matchId===id?overview.review.example:null,referenceOnly:true},{maxAgeSeconds:5});
+    } catch {return sendJson(res,{ok:false,error:"public data temporarily unavailable"},503);}
+  }
 
   if (url.pathname === "/api/access/verify") {
     if (req.method !== "POST") return sendJson(res, { ok: false, error: "method not allowed" }, 405);

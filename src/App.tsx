@@ -9,16 +9,22 @@ import {
   useParams
 } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
+import { AccountProvider, useAccount } from './context/AccountContext';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { GlossaryModal } from './components/GlossaryModal';
 import { useApp } from './context/AppContextCore';
+import { safeAccountReturnTo } from './services/accountApi';
 
 const PredictionsList = lazy(() => import('./pages/PredictionsList').then((module) => ({ default: module.PredictionsList })));
 const BestTips = lazy(() => import('./pages/BestTips').then((module) => ({ default: module.BestTips })));
 const BetSlipGenerator = lazy(() => import('./pages/BetSlipGenerator').then((module) => ({ default: module.BetSlipGenerator })));
 const HitAndWin = lazy(() => import('./pages/HitAndWin').then((module) => ({ default: module.HitAndWin })));
 const Auth = lazy(() => import('./pages/Auth').then((module) => ({ default: module.Auth })));
+const Account = lazy(() => import('./pages/Account').then((module) => ({ default: module.Account })));
+const AccountAdmin = lazy(() => import('./pages/AccountAdmin').then((module) => ({ default: module.AccountAdmin })));
+const Following = lazy(() => import('./pages/Following').then((module) => ({ default: module.Following })));
+const PublicBrowse = lazy(() => import('./pages/PublicBrowse').then((module) => ({ default: module.PublicBrowse })));
 const AccessCodeAdmin = lazy(() => import('./pages/AccessCodeAdmin').then((module) => ({ default: module.AccessCodeAdmin })));
 const MatchDetail = lazy(() => import('./pages/MatchDetail').then((module) => ({ default: module.MatchDetail })));
 const BigFiveLeagues = lazy(() => import('./pages/BigFiveLeagues').then((module) => ({ default: module.BigFiveLeagues })));
@@ -148,6 +154,7 @@ const tabPaths: Record<string, string> = {
   best: '/best',
   generator: '/betslip',
   auth: '/auth'
+  ,following: '/following', account: '/account'
 };
 
 const decodeRouteParam = (value: string | undefined) => {
@@ -169,6 +176,8 @@ const getTabFromPath = (pathname: string) => {
   if (pathname.startsWith('/leagues') || pathname.startsWith('/worldcup')) return 'leagues';
   if (pathname.startsWith('/betslip') || pathname.startsWith('/generator')) return 'generator';
   if (pathname.startsWith('/auth')) return 'auth';
+  if (pathname.startsWith('/following')) return 'following';
+  if (pathname.startsWith('/account')) return 'account';
   if (pathname.startsWith('/match/')) return 'detail';
   return 'predictions';
 };
@@ -196,7 +205,7 @@ function MatchDetailRoute() {
   return (
     <MatchDetail
       matchId={resolvedMatchId}
-      initialTab={routeState?.fromPath === '/review' ? 'history' : 'overview'}
+      initialTab={new URLSearchParams(location.search).get('tab') === 'history' || routeState?.fromPath?.startsWith('/review') ? 'history' : 'overview'}
       onBack={() => {
         if (routeState?.openedFromList) {
           navigate(-1);
@@ -271,10 +280,13 @@ function ToolsHub({ openGlossary }: { openGlossary: () => void }) {
 
 function RequireAccess({ children }: { children: ReactNode }) {
   const { isAccessVerified } = useApp();
+  const account = useAccount();
   const location = useLocation();
 
+  if (account.loading) return <LoadingPanel />;
   if (!isAccessVerified) {
-    return <Navigate to="/auth" replace state={{ from: location }} />;
+    if (['/best','/fixtures','/review','/predictions','/leagues'].includes(location.pathname) || location.pathname.startsWith('/match/')) return <PublicBrowse />;
+    return <Navigate to={account.user ? '/account' : `/auth?returnTo=${encodeURIComponent(location.pathname + location.search)}`} replace state={{ from: location }} />;
   }
 
   return <>{children}</>;
@@ -297,7 +309,10 @@ function RoutedContent() {
       '/best': { zh: '赛前推荐', en: 'Pre-match Picks' },
       '/betslip': { zh: '组合工具', en: 'Bet Slip' },
       '/tools': { zh: '更多工具', en: 'Tools' },
-      '/auth': { zh: '访问校验', en: 'Access' },
+      '/auth': { zh: '登录与注册', en: 'Sign in' },
+      '/following': { zh: '我的关注', en: 'Following' },
+      '/account': { zh: '我的账号', en: 'My account' },
+      '/account-admin': { zh: '体验管理', en: 'Access administration' },
       '/codes': { zh: '访问码管理', en: 'Access Codes' }
     };
     return routeLabels[location.pathname]?.[language] || (language === 'zh' ? '足球分析' : 'Football Analysis');
@@ -334,7 +349,7 @@ function RoutedContent() {
   const handleAuthSuccess = () => {
     const state = location.state as { from?: { pathname?: string; search?: string } } | null;
     const from = state?.from;
-    navigate(from?.pathname ? `${from.pathname}${from.search || ''}` : '/best', { replace: true });
+    navigate(safeAccountReturnTo(new URLSearchParams(location.search).get('returnTo') || (from?.pathname ? `${from.pathname}${from.search || ''}` : '/best')), { replace: true });
   };
 
   return (
@@ -421,6 +436,9 @@ function RoutedContent() {
                 element={<Auth onSuccess={handleAuthSuccess} />}
               />
               <Route path="/codes" element={<AccessCodeAdmin />} />
+              <Route path="/account" element={<Account />} />
+              <Route path="/account-admin" element={<AccountAdmin />} />
+              <Route path="/following" element={<Following />} />
               <Route
                 path="/match/:matchId"
                 element={(
@@ -466,10 +484,10 @@ export default function App() {
     : undefined;
 
   return (
-    <AppProvider>
-      <BrowserRouter basename={baseName}>
+    <BrowserRouter basename={baseName}>
+      <AccountProvider><AppProvider>
         <RoutedContent />
-      </BrowserRouter>
-    </AppProvider>
+      </AppProvider></AccountProvider>
+    </BrowserRouter>
   );
 }
