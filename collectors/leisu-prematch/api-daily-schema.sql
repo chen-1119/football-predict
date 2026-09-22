@@ -22,3 +22,18 @@ CREATE TABLE IF NOT EXISTS football.prematch_source_receipts (
   PRIMARY KEY (run_id, ordinal)
 );
 CREATE INDEX IF NOT EXISTS prematch_source_runs_time ON football.prematch_source_runs(completed_at DESC);
+
+-- Small shared priority queue in the existing database. No provider request is
+-- made by the web process; the daily collector retains its quota and cutoff.
+CREATE TABLE IF NOT EXISTS football.prematch_refresh_requests (
+  match_id text PRIMARY KEY CHECK (match_id ~ '^sporttery_[1-9][0-9]*$'),
+  event_version timestamptz NOT NULL,
+  requested_at timestamptz NOT NULL,
+  next_allowed_at timestamptz NOT NULL,
+  expires_at timestamptz NOT NULL,
+  state text NOT NULL CHECK (state IN ('pending','completed')),
+  handled_at timestamptz,
+  CHECK (expires_at = event_version),
+  CHECK (next_allowed_at > requested_at),
+  CHECK (expires_at > requested_at)
+);

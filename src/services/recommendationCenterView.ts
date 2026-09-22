@@ -228,11 +228,46 @@ export function comboPreviewForSize(data:RecommendationCenterData|undefined|null
   return data.previews.find(c=>c.size===size&&c.businessDate===data.businessDate&&visiblePreview(c,now));
 }
 
+function alignedHandicapCodes(straight:Outcome,line:number):Outcome[]{
+  if(!Number.isSafeInteger(line)||line===0)return [];
+  // This is a display policy for extending the 1X2 thesis, not a change to
+  // score probabilities: a narrow win can still lose a deep handicap.
+  if(straight==='1')return line<0?['1','X']:['1'];
+  if(straight==='2')return line>0?['2','X']:['2'];
+  return [line<0?'2':'1'];
+}
 export function primarySelectionSummary(d:Pick<Decision,'tipCode'|'odds'|'modelProbability'|'handicapAnalysis'>){
   const h=d.handicapAnalysis;
+  if(!h)return {had:{code:d.tipCode,odds:d.odds,probability:d.modelProbability},handicap:null};
+  const aligned=alignedHandicapCodes(d.tipCode,h.handicapLine);
+  const probabilityFor=(code:Outcome)=>{const value=h.probabilities?.[code];return typeof value==='number'&&Number.isFinite(value)&&value>=0&&value<=1?value:null;};
+  const rankedAligned=aligned.filter(code=>probabilityFor(code)!==null).sort((a,b)=>(probabilityFor(b)??0)-(probabilityFor(a)??0));
+  const suggestedCode=rankedAligned.length&&(probabilityFor(rankedAligned[0])??0)>0?rankedAligned[0]:null;
+  const recommended=aligned.includes(h.tipCode);
   return {
     had:{code:d.tipCode,odds:d.odds,probability:d.modelProbability},
-    handicap:h?{code:h.tipCode,line:h.handicapLine,lineText:h.handicapLineText,probability:h.modelProbability,odds:h.marketReference?.selectedOdds??null,calibrated:h.historicalCalibration?.applied===true,conditional:h.probabilityBasis==='conditional-on-straight-primary',overallCode:h.overallTipCode??null}:null,
+    handicap:{
+      status:recommended?'recommend' as const:'pass' as const,
+      code:recommended?h.tipCode:null,line:h.handicapLine,lineText:h.handicapLineText,
+      probability:recommended?h.modelProbability:null,odds:recommended?h.marketReference?.selectedOdds??null:null,
+      calibrated:h.historicalCalibration?.applied===true,conditional:h.probabilityBasis==='conditional-on-straight-primary',overallCode:h.overallTipCode??null,
+      riskCode:recommended?null:h.tipCode,riskProbability:recommended?null:h.modelProbability,
+      suggestedCode:recommended?null:suggestedCode,suggestedProbability:recommended||!suggestedCode?null:probabilityFor(suggestedCode),
+    },
+  };
+}
+
+/** Shared copy keeps recommendation, fixture and detail cards on one policy. */
+export function handicapExtensionText(h:NonNullable<ReturnType<typeof primarySelectionSummary>['handicap']>,language:'zh'|'en'){
+  const zh=language==='zh';
+  const title=(code:Outcome)=>zh?({'1':'让胜',X:'让平','2':'让负'}[code]):({'1':'Handicap home',X:'Handicap draw','2':'Handicap away'}[code]);
+  if(h.status==='recommend')return {
+    title:`${h.lineText} · ${title(h.code!)}`,
+    detail:`${h.conditional?(zh?'条件占比 ':'Conditional share '):''}${(h.probability!*100).toFixed(1)}%${h.odds?' · SP '+h.odds.toFixed(2):''}${h.calibrated?(zh?' · 已校准':' · calibrated'):''}`,
+  };
+  return {
+    title:`${h.lineText} · ${zh?'不追让球':'Pass handicap'}`,
+    detail:`${h.conditional?(zh?'条件模型偏 ':'Conditional model leans '):(zh?'盘口模型偏 ':'Model leans ')}${title(h.riskCode!)} ${(h.riskProbability!*100).toFixed(1)}%${h.suggestedCode?(zh?' · 同向备选 ':' · aligned alternative ')+title(h.suggestedCode)+' '+(h.suggestedProbability!*100).toFixed(1)+'%':''}`,
   };
 }
 

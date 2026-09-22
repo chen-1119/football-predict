@@ -231,6 +231,8 @@ const LEAGUE_ALIASES = {
   "亚洲冠军精英联赛": ["afc champions league", "afc champions league elite"],
   "法国乙级联赛": ["ligue 2"],
   "葡萄牙超级联赛": ["primeira liga"],
+  "英格兰锦标赛": ["efl trophy"],
+  "亚运会男足": ["asian games"],
   "\u56fd\u9645\u8d5b": ["friendly", "friendlies", "international"],
   "\u4e16\u754c\u676f": ["world cup", "fifa world cup"],
   "\u4e16\u9884\u8d5b": ["world cup qualification", "world cup qualifiers"],
@@ -506,7 +508,7 @@ const summarizeFixture = (item) => ({
 });
 
 const confidenceForFixture = (match, fixture, entityRegistry = null) => {
-  const teamCategory = fixtureTeamCategoryAudit(match, { home: fixture?.teams?.home?.name, away: fixture?.teams?.away?.name });
+  const teamCategory = fixtureTeamCategoryAudit(match, { home: fixture?.teams?.home?.name, away: fixture?.teams?.away?.name }, fixture);
   const homeTargets = targetTeamAliases(match, "home", fixture);
   const awayTargets = targetTeamAliases(match, "away", fixture);
   const leagueTargets = targetLeagueAliases(match);
@@ -1074,7 +1076,7 @@ const buildLiveScoreObservation = (entry, fixture, context = {}) => {
 
 const mappingVerificationState = (match, mapping, entityRegistry, options = {}) => {
   const blockers = [];
-  const teamCategory = fixtureTeamCategoryAudit(match, { home: mapping?.homeTeamName, away: mapping?.awayTeamName });
+  const teamCategory = fixtureTeamCategoryAudit(match, { home: mapping?.homeTeamName, away: mapping?.awayTeamName }, mapping);
   blockers.push(...teamCategory.blockers);
   const key = matchKey(match);
   const identity = providerIdentityScore(
@@ -1572,6 +1574,7 @@ const recordInjuryResponse = ({ mappedMatches, cache, apiPieces, request, payloa
       ...(cache.fixtureSignals[fixtureId] || {}),
       injuriesFetchedAt: observedAt,
       injuriesRows: Array.isArray(injuries?.players) ? injuries.players.length : 0,
+      injuriesResponseRows: Array.isArray(payload.response) ? payload.response.length : null,
       injuriesRateLimit: rateLimit,
       injuriesFetchMode: request.mode
     };
@@ -1715,7 +1718,7 @@ const fetchLineups = async (
       cache.fixtureSignals[fixtureId] = {
         ...(cache.fixtureSignals[fixtureId] || {}),
         lineupsFetchedAt: observedAt,
-        lineupsRows: Array.isArray(payload.response) ? payload.response.length : 0,
+        lineupsRows: Array.isArray(payload.response) ? payload.response.length : null,
         lineupsRateLimit: rateLimit
       };
       if (lineups) {

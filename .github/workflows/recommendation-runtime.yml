@@ -5,6 +5,15 @@ on:
       - 'server/accounts.cjs'
       - 'server/publicProduct.cjs'
       - 'server/index.cjs'
+      - 'server/prematchRefresh.cjs'
+      - 'collectors/leisu-prematch/**'
+      - 'scripts/*Prematch*.cjs'
+      - 'scripts/*Football*.cjs'
+      - 'scripts/teamCategoryIdentity.cjs'
+      - 'scripts/entityResolutionRegistry.cjs'
+      - 'tests/prematch*.test.cjs'
+      - 'tests/api-football-scoped-coverage.test.cjs'
+      - 'deploy/light-server/football-daily-prematch.*'
       - 'server/postgres/migrations/012_accounts_and_follows.sql'
       - 'scripts/verifyAccountsPostgres.cjs'
       - 'scripts/bootstrapAccountAdmin.cjs'
@@ -91,6 +100,11 @@ jobs:
       - run: node --test tests/recommendation-render-clock.test.cjs tests/recommendation-center-interaction.test.cjs tests/recommendation-match-parity.test.cjs tests/recommendation-entry-flow.test.cjs tests/navbar-interaction.test.cjs
       - run: node --test tests/team-badge.test.cjs tests/team-badge-assets.test.cjs tests/match-display-team.test.cjs
       - run: node --test tests/accounts*.test.cjs tests/account-frontend.test.cjs tests/account-admin.test.cjs tests/public-product.test.cjs tests/public-browse-flow.test.cjs
+      - run: node --test tests/prematch*.test.cjs tests/api-football-scoped-coverage.test.cjs collectors/leisu-prematch/website-reader.test.cjs collectors/leisu-prematch/api-football-reference.test.cjs collectors/leisu-prematch/local-jingcai-scope.test.cjs
+      - run: node scripts/verifyApiFootballHardening.cjs && node scripts/verifyTeamCategoryIdentity.cjs
+      - run: node scripts/verifyPrematchPriorityPostgres.cjs
+        env:
+          PREMATCH_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
       - name: 'Native PostgreSQL accounts: scripts/verifyAccountsPostgres.cjs'
         run: node scripts/verifyAccountsPostgres.cjs
         env:

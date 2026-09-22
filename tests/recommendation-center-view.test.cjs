@@ -28,9 +28,9 @@ test('frozen records remain parseable across midnight and retain bound IDs',asyn
 test('handicap calibration profile is exposed even before groups become active',async()=>{const x=parseRecommendationCenter(await sample());assert.equal(x.review.handicapCalibration.version,'handicap-calibration-v2');assert.equal(typeof x.review.handicapCalibration.profileHash,'string');assert.equal(x.review.handicapCalibration.sampleRows,0);});
 test('tampered handicap calibration profile is rejected by frontend parsing',async()=>{const x=await sample();x.recommendationCenter.review.handicapCalibration.profileHash='bad';assert.throws(()=>parseRecommendationCenter(x));});
 
-test('top-card summary exposes both straight and handicap primary picks without opening details',()=>{
+test('top-card summary exposes the aligned handicap extension and supports older summary fixtures',()=>{
   const summary=primarySelectionSummary({tipCode:'1',odds:1.72,modelProbability:.61,handicapAnalysis:{tipCode:'X',handicapLine:-1,handicapLineText:'-1',modelProbability:.38,marketReference:{selectedOdds:3.45},historicalCalibration:{applied:true}}});
-  assert.deepEqual(summary,{had:{code:'1',odds:1.72,probability:.61},handicap:{code:'X',line:-1,lineText:'-1',probability:.38,odds:3.45,calibrated:true,conditional:false,overallCode:null}});
+  assert.deepEqual(summary,{had:{code:'1',odds:1.72,probability:.61},handicap:{status:'recommend',code:'X',line:-1,lineText:'-1',probability:.38,odds:3.45,calibrated:true,conditional:false,overallCode:null,riskCode:null,riskProbability:null,suggestedCode:null,suggestedProbability:null}});
 });
 test('top-card summary keeps handicap slot explicitly unavailable when no handicap analysis exists',()=>{
   const summary=primarySelectionSummary({tipCode:'2',odds:2.1,modelProbability:.47,handicapAnalysis:null});
@@ -84,10 +84,10 @@ test('legacy narratives and calibration denominator retain their original probab
   assert.equal(calibrationSampleBasis({version:'handicap-calibration-v1'}),'all');assert.equal(calibrationSampleBasis({version:'handicap-calibration-v2'}),'had-won');
 });
 
-function renderedText(data,props){
+function renderedText(data,props,now){
   const vm=require('node:vm'),module={exports:{}},react=require('react'),{renderToStaticMarkup}=require('react-dom/server');
   const code=ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/components/recommendations/RecommendationCenter.tsx'),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
-  vm.runInNewContext(code,{module,exports:module.exports,Date,require:id=>{
+  vm.runInNewContext(code,{module,exports:module.exports,Date:now==null?Date:class extends Date{static now(){return now;}},require:id=>{
     if(id==='react')return react;if(id==='react/jsx-runtime')return require(id);
     if(id==='../../hooks/useRecommendationCenter')return {useRecommendationCenter:()=>({data,loading:false,failed:false,authorizationRequired:false,refresh:()=>{}})};
     if(id==='../FollowButton')return {FollowButton:()=>null};
@@ -101,4 +101,70 @@ test('rendered mixed combo shows selected HHAD line and SP plus unconditional ex
   payload.recommendationCenter.review.combos=[{combo:c,settlement:{state:'PENDING'}}];
   const html=renderedText(parseRecommendationCenter(payload),{mode:'review',initialTab:'two'});
   assert.match(html,/让球胜平负<!-- --> \+1|让球胜平负 \+1/);assert.match(html,/SP 1\.65/);assert.match(html,/SP 2\.97/);assert.match(html,/完整让球概率中最高的方向/);assert.match(html,/sporttery:HHAD/);
+});
+
+function extensionDecision(straight,line,tip,probabilities){
+  return {tipCode:straight,odds:1.8,modelProbability:.55,handicapAnalysis:{tipCode:tip,handicapLine:line,handicapLineText:line>0?'+'+line:String(line),modelProbability:probabilities?.[tip]??.6,probabilities,marketReference:{selectedOdds:2.5},historicalCalibration:{applied:false}}};
+}
+test('extension passes opposing home and away handicap risks without promoting the aligned runner-up',()=>{
+  for(const [straight,line,tip,vector,alternative] of [
+    ['1',-1,'2',{'1':.24,X:.32,'2':.44},'X'],
+    ['1',-2,'2',{'1':.29,X:.25,'2':.46},'1'],
+    ['2',1,'1',{'1':.41,X:.24,'2':.35},'2'],
+    ['2',2,'1',{'1':.51,X:.29,'2':.2},'X'],
+  ]){
+    const d=extensionDecision(straight,line,tip,vector),before=JSON.stringify(d),h=primarySelectionSummary(d).handicap;
+    assert.equal(h.status,'pass');assert.equal(h.code,null);assert.equal(h.probability,null);assert.equal(h.odds,null);
+    assert.equal(h.riskCode,tip);assert.equal(h.riskProbability,vector[tip]);assert.equal(h.suggestedCode,alternative);
+    assert.equal(JSON.stringify(d),before);assert.match(view.handicapExtensionText(h,'zh').title,/不追让球/);
+  }
+});
+test('signed lines preserve draw and receiving-side mappings instead of using absolute handicap',()=>{
+  for(const [straight,line,aligned] of [['X',-1,'2'],['X',2,'1'],['1',1,'1'],['2',-1,'2']]){
+    const vector={'1':.2,X:.2,'2':.2};vector[aligned]=.6;
+    assert.equal(primarySelectionSummary(extensionDecision(straight,line,aligned,vector)).handicap.status,'recommend');
+    const opposite=aligned==='1'?'2':'1',risk={'1':.2,X:.2,'2':.2};risk[opposite]=.6;
+    assert.equal(primarySelectionSummary(extensionDecision(straight,line,opposite,risk)).handicap.status,'pass');
+  }
+});
+test('zero or unavailable alternative probability never creates a usable extension',()=>{
+  for(const vector of [{'1':0,X:0,'2':1},undefined,{'1':NaN,X:-.1,'2':.8},{'1':Infinity,X:1.1,'2':.8}]){
+    const h=primarySelectionSummary(extensionDecision('1',-1,'2',vector)).handicap;
+    assert.equal(h.status,'pass');assert.equal(h.suggestedCode,null);assert.equal(h.suggestedProbability,null);
+    assert.doesNotMatch(view.handicapExtensionText(h,'zh').detail,/同向备选/);
+  }
+});
+test('conditional risk stays conditional even when the independent diagnostic prefers another side',()=>{
+  const d=extensionDecision('1',-2,'2',{'1':.2,X:.3,'2':.5});Object.assign(d.handicapAnalysis,{version:'handicap-margin-v3',probabilityBasis:'conditional-on-straight-primary',overallTipCode:'1'});
+  const h=primarySelectionSummary(d).handicap;
+  assert.equal(h.status,'pass');assert.equal(h.riskCode,'2');assert.equal(h.overallCode,'1');
+  assert.match(view.handicapExtensionText(h,'zh').detail,/条件模型偏 让负 50.0%/);
+  assert.match(view.handicapExtensionText(h,'en').detail,/Conditional model leans Handicap away 50.0%/);
+});
+function renderPublished(row,compact,language='zh'){
+  const vm=require('node:vm'),module={exports:{}},react=require('react'),{renderToStaticMarkup}=require('react-dom/server');
+  const code=ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/components/recommendations/PublishedMatchPick.tsx'),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
+  const modelModule={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/services/publishedMatchRecommendation.ts'),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,{module:modelModule,exports:modelModule.exports,Date});
+  vm.runInNewContext(code,{module,exports:module.exports,Date,Intl,require:id=>{
+    if(id==='react/jsx-runtime')return require(id);if(id==='../../services/recommendationCenterView')return view;
+    if(id==='../../services/publishedMatchRecommendation')return modelModule.exports;if(id.endsWith('.css'))return {};throw Error(id);
+  }});
+  return renderToStaticMarkup(react.createElement(module.exports.PublishedMatchPick,{row,language,compact,now:Date.parse(row.decision.publishedAt)}));
+}
+test('real v3 narrow-win record renders the same pass in recommendation, fixture and detail without changing frozen evidence',async()=>{
+  const p=memoryPorts();p.current[0]={...p.current[0],handicapLine:-2,handicapOdds:{odds1:4.6,oddsX:4.0,odds2:1.6},handicapOddsSource:'sporttery:HHAD',handicapOddsUpdatedAt:new Date(p.now).toISOString(),probabilityModel:{...p.current[0].probabilityModel,calculationTrace:{poisson:{lambdas:{home:1.2,away:.5}}}}};
+  await createRuntime(p,{validators}).publishingCycle();const payload={recommendationCenter:p.state.view};
+  const frozen=payload.recommendationCenter.previews.find(c=>c.selections.some(s=>s.market==='HHAD'));
+  assert.ok(frozen);frozen.frozenAt=frozen.generatedAt;payload.recommendationCenter.review.combos=[{combo:frozen,settlement:{state:'PENDING'}}];
+  const data=parseRecommendationCenter(payload),row=data.current[0],h=row.decision.handicapAnalysis;
+  assert.equal(h.version,'handicap-margin-v3');assert.equal(h.tipCode,'2');assert.equal(primarySelectionSummary(row.decision).handicap.status,'pass');
+  const before=JSON.stringify(data),copy=view.handicapExtensionText(primarySelectionSummary(row.decision).handicap,'zh');
+  for(const html of [renderedText(data,{},p.now),renderPublished(row,true),renderPublished(row,false)]){
+    assert.ok(html.includes(copy.title));assert.ok(html.includes(copy.detail));assert.match(html,/data-handicap-extension="pass"/);
+    assert.ok(html.includes(row.decision.decisionId));assert.ok(html.includes(row.decision.recordHash));
+  }
+  const detailed=renderedText(data,{},p.now);assert.match(detailed,/窄胜风险/);assert.match(detailed,/完整三项概率及赛果保留原记录/);
+  const combo=renderedText(data,{mode:'review',initialTab:frozen.size===2?'two':'three'});
+  assert.match(combo,/让球胜平负<!-- --> -2|让球胜平负 -2/);assert.match(combo,/SP 1\.60/);
+  assert.equal(JSON.stringify(data),before);
 });

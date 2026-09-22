@@ -7,6 +7,7 @@ const { beijingDay, validDay, selectDay } = require('../collectors/leisu-prematc
 const contract = require('./sportteryEndpointContract.cjs');
 const root = path.resolve(__dirname, '..');
 const VERSION = 'daily-prematch-api-v2';
+const priorityQueue = require('../server/prematchRefresh.cjs');
 const hash = value => crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const read = (file, fallback) => fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : fallback;
 const atomic = (file, value) => { fs.writeFileSync(file + '.next', JSON.stringify(value), { mode: 0o600 }); fs.renameSync(file + '.next', file); };
@@ -42,8 +43,9 @@ function officialRoster(payload, days) {
   return rows;
 }
 
-function dueMatches(matches, cache, attempts = {}, now = Date.now()) {
+function dueMatches(matches, cache, attempts = {}, now = Date.now(), priorities = []) {
   const selected = [...new Set(matches.map(m => m.businessDate))].flatMap(day => selectDay(matches, day, now));
+  const priorityIds = new Set(priorities.filter(p => matches.some(m => m.id === p.match_id && Date.parse(m.kickoffTime) === Date.parse(p.event_version))).map(p => p.match_id));
   const due = [];
   for (const fixture of selected.filter(x => x.eligible)) {
     const row = matches.find(m => m.id === fixture.siteMatchId);
@@ -51,7 +53,7 @@ function dueMatches(matches, cache, attempts = {}, now = Date.now()) {
     const elapsed = at => Number.isFinite(Date.parse(at)) ? now - Date.parse(at) : Infinity;
     if (elapsed(attempts[id]) < 25 * 60000) continue;
     if (!map?.fixtureId || Math.abs(Date.parse(map.fixtureDate) - Date.parse(row.kickoffTime)) > 60000) {
-      if (elapsed(attempts[id]) >= 6 * 3600000) due.push(row);
+      if (priorityIds.has(id) || elapsed(attempts[id]) >= 6 * 3600000) due.push(row);
       continue;
     }
     const until = Date.parse(row.kickoffTime) - now;
@@ -59,7 +61,34 @@ function dueMatches(matches, cache, attempts = {}, now = Date.now()) {
       || (until <= 60 * 60000 && elapsed(state.lineupsFetchedAt) >= 30 * 60000)) due.push(row);
   }
   // Near-kickoff matches get the bounded request budget first.
-  return due.sort((a, b) => Date.parse(a.kickoffTime) - Date.parse(b.kickoffTime));
+  return due.sort((a, b) => Number(priorityIds.has(b.id)) - Number(priorityIds.has(a.id)) || Date.parse(a.kickoffTime) - Date.parse(b.kickoffTime));
+}
+
+function attemptedMatches(candidates, cache, since) {
+  return new Set(candidates.filter(m => {
+    const mapping = cache.fixtureMap?.[m.id], state = cache.fixtureSignals?.[mapping?.fixtureId] || {};
+    // Mapping alone is not an injury attempt: budget-starved mapped games stay
+    // due. A rejected mapping gets its own long retry interval only if searched.
+    return (!mapping?.fixtureId && Date.parse(mapping?.lastSearchAt) >= since)
+      || [state.injuriesFetchedAt, state.lineupsFetchedAt].some(at => Date.parse(at) >= since);
+  }).map(m => m.id));
+}
+
+function coverageFor(matches, reference, verified, cache, now) {
+  return matches.map(m => {
+    const item = reference.items.find(x => x.fixture.siteMatchId === m.id);
+    const mapped = verified.has(m.id), state = cache.fixtureSignals?.[cache.fixtureMap?.[m.id]?.fixtureId] || {};
+    const attempt = (kind, value, fetched, count, maxAge) => {
+      const at = Date.parse(fetched), fresh = mapped && Number.isFinite(at) && at <= now + 60000 && now - at <= maxAge;
+      return { status: !mapped ? 'unmapped' : fresh && count === 0 ? 'source_empty' : value === 'available' ? 'available' : 'missing', lastAttemptAt: fresh ? new Date(at).toISOString() : null };
+    };
+    const injuries = attempt('injuries', item?.sections.injuries.status, state.injuriesFetchedAt, state.injuriesResponseRows, 6 * 3600000);
+    const lineup = attempt('lineup', item?.sections.lineup.status, state.lineupsFetchedAt, state.lineupsRows, 30 * 60000);
+    return { id: m.id, businessDate: m.businessDate, home: m.homeTeamName, away: m.awayTeamName, kickoff: m.kickoffTime,
+      mapped, injuries: item?.sections.injuries.status === 'available' ? 'available' : injuries.status,
+      lineup: item?.sections.lineup.status === 'available' ? 'available' : Date.parse(m.kickoffTime) - now > 3600000 ? 'not-due' : lineup.status,
+      attempts: { injuries, lineup } };
+  });
 }
 
 async function fetchOfficial() {
@@ -92,6 +121,7 @@ async function main() {
     const runId = crypto.randomUUID(), job = path.join(dir, runId); fs.mkdirSync(job, { mode: 0o700 });
     const summary = { version: VERSION, runId, provider: 'api-football', startedAt, businessDate: today, predictionEligible: false, state: 'running', newReceipts: 0 };
     let matches = [], reference = { version: 'api-football-prematch-reference-v1', provider: 'api-football', predictionEligible: false, generatedAt: startedAt, items: [] }, receipts = [];
+    let priorities = [], handled = new Set();
     try {
       const official = await fetchOfficial(); receipts.push(official);
       // Previous-day rows are continuations of an already collected betting day,
@@ -105,10 +135,12 @@ async function main() {
       const aliasVersion = require('./apiFootballScopedAliases.cjs').VERSION;
       summary.aliasVersion = aliasVersion;
       const before = read(cacheFile, {}), attempts = last.version === VERSION && last.aliasVersion === aliasVersion ? read(path.join(dir, 'attempts.json'), {}) : {};
-      const candidates = dueMatches(matches, before, attempts, now);
+      priorities = await priorityQueue.readPriorities(client, now);
+      const candidates = dueMatches(matches, before, attempts, now, priorities);
       const consumed = before.requestLedger?.date === startedAt.slice(0, 10) ? Number(before.requestLedger.count || 0) : 0;
       const budget = Math.max(0, Math.min(16, 90 - consumed));
       summary.businessDates = days; summary.matches = matches.length; summary.dueMatches = candidates.length;
+      summary.priorityRequests = priorities.length; summary.checkIntervalMinutes = 5;
       summary.rosterReceivedAt = official.receivedAt; summary.rosterSource = 'sporttery-current-api';
       summary.state = candidates.length ? (budget ? 'completed' : 'budget-exhausted') : 'no-due-tasks';
       if (candidates.length && budget) {
@@ -130,7 +162,9 @@ async function main() {
         const meta = read(path.join(job, 'meta.json'), {});
         summary.calls = meta.callsThisSync || 0; summary.accountEligible = meta.accountStatus?.eligible;
         summary.mappingBlockers = meta.entityEvidenceBlockers || {}; summary.mappedMatches = meta.mappedMatches || 0;
-        for (const m of candidates) attempts[m.id] = startedAt;
+        const attempted = attemptedMatches(candidates, read(cacheFile, {}), now);
+        for (const id of attempted) attempts[id] = startedAt;
+        summary.attemptedMatches = attempted.size;
         for (const [id, at] of Object.entries(attempts)) if (now - Date.parse(at) > 3 * 86400000) delete attempts[id];
         atomic(path.join(dir, 'attempts.json'), attempts);
         if (result.status !== 0 || meta.ok !== true) { summary.state = 'source-unavailable'; summary.nextAttemptAt = new Date(now + 3600000).toISOString(); }
@@ -143,9 +177,13 @@ async function main() {
       summary.injuryPlayers = reference.items.reduce((n, x) => n + (x.sections.injuries.data?.players.length || 0), 0);
       summary.newInjuryPlayers = reference.items.reduce((n, x) => n + (Date.parse(x.sections.injuries.observedAt) >= now ? x.sections.injuries.data?.players.length || 0 : 0), 0);
       summary.lineupTeams = reference.items.reduce((n, x) => n + (x.sections.lineup.data?.teams.length || 0), 0);
-      summary.coverage = matches.map(m => { const item = reference.items.find(x => x.fixture.siteMatchId === m.id); return { id: m.id, businessDate: m.businessDate,
-        home: m.homeTeamName, away: m.awayTeamName, kickoff: m.kickoffTime,
-        mapped: verified.has(m.id), injuries: item?.sections.injuries.status || 'missing', lineup: item?.sections.lineup.status === 'available' ? 'available' : (Date.parse(m.kickoffTime) - now > 3600000 ? 'not-due' : 'missing') }; });
+      summary.coverage = coverageFor(matches, reference, verified, cache, Date.now());
+      handled = attemptedMatches(candidates, cache, now);
+      // An already fresh match needs no paid request merely because it was
+      // queued. The final identity and freshness checks still run here.
+      for (const m of summary.coverage) if (m.mapped && ['available','source_empty'].includes(m.injuries)
+        && ['available','source_empty','not-due'].includes(m.lineup)) handled.add(m.id);
+      summary.priorityHandled = priorities.filter(p => handled.has(p.match_id)).length;
       summary.dataComplete = matches.length > 0 && summary.coverage.every(m => m.injuries === 'available' && m.lineup === 'available');
       if (summary.state === 'completed' && summary.coverage.some(m => !m.mapped || m.injuries !== 'available' || m.lineup === 'missing')) summary.state = 'partial';
     } catch (error) {
@@ -160,6 +198,7 @@ async function main() {
     try {
       await client.query('INSERT INTO football.prematch_source_runs(run_id,started_at,completed_at,provider,summary,roster,reference) VALUES($1,$2,$3,$4,$5,$6,$7)', [runId, startedAt, summary.completedAt, 'api-football', summary, JSON.stringify(matches), reference]);
       for (const [i, r] of receipts.entries()) await client.query('INSERT INTO football.prematch_source_receipts(run_id,ordinal,provider,endpoint,received_at,payload_sha256,receipt) VALUES($1,$2,$3,$4,$5,$6,$7)', [runId, i, r.provider, r.endpoint, r.receivedAt, r.sha256, r]);
+      await priorityQueue.completePriorities(client, priorities, handled);
       await client.query('COMMIT');
     } catch (error) { await client.query('ROLLBACK'); throw error; }
     if (reference.items.length || !['runtime-error', 'source-unavailable'].includes(summary.state)) atomic(path.join(store, 'api-football-prematch-evidence.json'), reference);
@@ -168,5 +207,5 @@ async function main() {
     if (['runtime-error', 'source-unavailable'].includes(summary.state)) process.exitCode = 1;
   } finally { if (lock?.acquired) await lock.release(); await client.query('SELECT pg_advisory_unlock(68413922)').catch(() => {}); client.release(); await pool.end(); }
 }
-module.exports = { officialRoster, dueMatches, canonicalTeamId };
+module.exports = { officialRoster, dueMatches, canonicalTeamId, attemptedMatches, coverageFor };
 if (require.main === module) main().catch(error => { console.error(JSON.stringify({ state: 'failed', code: error.code || 'COLLECTION_FAILED' })); process.exitCode = 1; });

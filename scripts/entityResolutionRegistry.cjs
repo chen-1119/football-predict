@@ -209,7 +209,7 @@ const qualifyingFixtureMapping = (mapping, thresholds = {}, context = {}) => {
   if (!match) {
     blockers.push("local-match-context-missing");
   } else {
-    blockers.push(...fixtureTeamCategoryAudit(match, { home: mapping?.homeTeamName, away: mapping?.awayTeamName }).blockers);
+    blockers.push(...fixtureTeamCategoryAudit(match, { home: mapping?.homeTeamName, away: mapping?.awayTeamName }, mapping).blockers);
     const kickoffMs = Date.parse(String(match?.kickoffTime || ""));
     const fixtureMs = Date.parse(String(mapping?.fixtureDate || ""));
     if (!Number.isFinite(kickoffMs) || !Number.isFinite(fixtureMs)

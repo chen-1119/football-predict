@@ -6,6 +6,8 @@
 .prematch-report__refresh { flex-shrink: 0; min-height: 40px; padding: 8px 14px; border-radius: 8px; border: 1px solid #40576c; background: #1c2a37; color: #e4edf7; font-size: 13px; cursor: pointer; }
 .prematch-report__refresh:hover { background: #263d50; }
 .prematch-report__refresh:disabled { opacity: .65; cursor: wait; }
+.prematch-report__actions { display: flex; flex-shrink: 0; flex-wrap: wrap; gap: 8px; justify-content: flex-end; max-width: 50%; }
+.prematch-report__actions .prematch-report__refresh { white-space: normal; }
 .prematch-report button:focus-visible, .prematch-report summary:focus-visible { outline: 2px solid #89baf1; outline-offset: 4px; }
 .prematch-report__metrics { display: grid; grid-template-columns: 1fr 1fr 1.2fr; margin: 22px 0 26px; border: 1px solid #2e3e4e; border-radius: 12px; background: #101821; }
 .prematch-report__metrics > div { min-width: 0; padding: 16px 20px; }
@@ -55,11 +57,22 @@
 .prematch-report__schedule dl { display: flex; flex-wrap: wrap; gap: 14px 32px; margin: 10px 0; font-size: 12px; }
 .prematch-report__schedule dt { color: #9faec0; }
 .prematch-report__schedule dd { margin: 4px 0; }
+.prematch-report__sources { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 20px 0; }
+.prematch-report__sources article { min-width: 0; padding: 16px; border: 1px solid #395165; border-radius: 12px; background: #192734; }
+.prematch-report__sources header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+.prematch-report__sources header strong { color: #e9f3fc; font-size: 14px; }
+.prematch-report__sources header span { color: #bdd3e5; font-size: 12px; padding: 3px 7px; background: #243a4b; border-radius: 5px; }
+.prematch-report__sources dl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 16px; margin: 12px 0; }
+.prematch-report__sources dl > div { min-width: 0; }
+.prematch-report__sources dl > div:nth-child(3) { grid-column: 1 / -1; }
+.prematch-report__sources dt { color: #9cb2c5; font-size: 11px; }
+.prematch-report__sources dd { color: #dce8f2; font-size: 12px; line-height: 1.65; margin: 3px 0 0; overflow-wrap: anywhere; }
 @media (max-width: 700px) {
   .match-detail-v4 .prematch-report { padding: 16px; }
   .prematch-report__head { gap: 10px; }
   .prematch-report__head h3 { font-size: 20px; }
   .prematch-report__teams { grid-template-columns: minmax(0, 1fr); }
+  .prematch-report__sources { grid-template-columns: minmax(0, 1fr); }
   .prematch-report__metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 18px 0; }
   .prematch-report__metrics > div { padding: 12px; }
   .prematch-report__metrics > div:last-child { grid-column: 1 / -1; border-left: 0; border-top: 1px solid #2e3e4e; }
