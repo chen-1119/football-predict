@@ -3,6 +3,7 @@
 // A negative identity guard, not a name matcher or an entity approval.
 // Inspect original labels before alias normalization can erase squad markers.
 const VERSION = "team-category-identity-v1";
+const { scopedCategoryLabels } = require('./apiFootballScopedAliases.cjs');
 const FIELDS = ["gender", "ageGroup", "squad"];
 const profileFor = (names) => {
   const values = Object.fromEntries(FIELDS.map(key => [key, new Set()]));
@@ -23,12 +24,16 @@ const profileFor = (names) => {
 };
 const rawSideNames = (match, side) => [match?.[`${side}TeamName`], match?.[`${side}TeamNameEn`], match?.[`${side}Team`]];
 
-const fixtureTeamCategoryAudit = (match, providerNames) => {
+const fixtureTeamCategoryAudit = (match, providerNames, fixture = null) => {
   const blockers = [];
   const sides = {};
+  const evidence = scopedCategoryLabels(match, fixture, providerNames);
   for (const side of ["home", "away"]) {
-    const local = profileFor(rawSideNames(match, side));
-    const provider = profileFor([providerNames?.[side]]);
+    // Add narrowly verified competition identity to missing labels. Retain all
+    // raw labels so an explicit conflicting age/gender still fails closed.
+    const labels = evidence?.[side] || [];
+    const local = profileFor([...rawSideNames(match, side), ...labels]);
+    const provider = profileFor([providerNames?.[side], ...labels]);
     sides[side] = { local, provider };
     for (const field of FIELDS) {
       if (local.ambiguous.includes(field) || provider.ambiguous.includes(field)) {
@@ -40,6 +45,7 @@ const fixtureTeamCategoryAudit = (match, providerNames) => {
     }
   }
   return { version: VERSION, compatible: blockers.length === 0, blockers, sides,
+    ...(evidence ? { categoryEvidence: evidence.evidence } : {}),
     policy: "explicit-category-compatibility-only; absence-is-not-senior-or-male-proof" };
 };
 

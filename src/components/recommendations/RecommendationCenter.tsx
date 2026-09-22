@@ -4,7 +4,7 @@ import { useRecommendationCenter } from '../../hooks/useRecommendationCenter';
 import { TeamBadge } from '../TeamBadge';
 import { FollowButton } from '../FollowButton';
 import type { Team } from '../../services/mockData';
-import { quoteSourceLabel, comboLaneFresh, comboPreviewForSize, comboLegSelection, primarySelectionSummary, handicapAnalysisBasis, calibrationSampleBasis, type Decision, type Settlement, type Combo, type ComboSelection, type Summary, type Outcome, type HandicapCalibrationProfile, type HandicapBreakdown } from '../../services/recommendationCenterView';
+import { quoteSourceLabel, comboLaneFresh, comboPreviewForSize, comboLegSelection, primarySelectionSummary, handicapExtensionText, handicapAnalysisBasis, calibrationSampleBasis, type Decision, type Settlement, type Combo, type ComboSelection, type Summary, type Outcome, type HandicapCalibrationProfile, type HandicapBreakdown } from '../../services/recommendationCenterView';
 import '../../styles/recommendation-center.css';
 
 type Language='zh'|'en';
@@ -29,33 +29,33 @@ function handicapNarrative(d:Decision,zh:boolean){
     if(h.tipCode==='1')return zh?'在主胜成立的比分路径里，净胜球分布更偏穿盘，因此让胜优先。':'Given the home-win thesis lands, the margin distribution leans to covering.';
     if(h.tipCode==='X')return zh?`在主胜成立的比分路径里，更集中在净胜${Math.abs(h.handicapLine)}球，因此让平优先。`:'Given the home-win thesis lands, the margin is concentrated exactly on the handicap.';
     if(Math.abs(h.handicapLine)===1)return zh?'主胜与主让1的让负不能同时成立；新版不会把让负作为该场伴随首选。':'A home win and -1 handicap-away cannot both occur; v2 will not publish that as the companion pick.';
-    return zh?`主胜仍成立，但更偏只赢1至${Math.abs(h.handicapLine)-1}球，无法覆盖${h.handicapLineText}，因此伴随方向为让负。`:'The home-win thesis still holds, but the expected winning margin is too small to cover the larger handicap.';
+    return zh?`主胜仍可能成立，但模型更偏只赢1至${Math.abs(h.handicapLine)-1}球，无法覆盖${h.handicapLineText}。这是窄胜风险，顶部不追让球。`:'A home win remains possible, but the expected winning margin is too small to cover the larger handicap. This is narrow-win risk; the top extension is a pass.';
   }
   if(d.tipCode==='2'&&h.handicapLine>0){
     if(h.tipCode==='2')return zh?'在客胜成立的比分路径里，客队净胜幅度更偏穿盘，因此让负优先。':'Given the away-win thesis lands, the away margin leans to covering.';
     if(h.tipCode==='X')return zh?`在客胜成立的比分路径里，更集中在客队净胜${Math.abs(h.handicapLine)}球，因此让平优先。`:'Given the away-win thesis lands, the away margin is concentrated exactly on the handicap.';
     if(Math.abs(h.handicapLine)===1)return zh?'客胜与主受让1的让胜不能同时成立；新版不会把让胜作为该场伴随首选。':'An away win and home +1 handicap-home cannot both occur; v2 will not publish that as the companion pick.';
-    return zh?`客胜仍成立，但更偏只赢1至${Math.abs(h.handicapLine)-1}球，无法覆盖主队受让${h.handicapLineText}，因此伴随方向为让胜。`:'The away-win thesis still holds, but the winning margin is too small to beat the larger receiving handicap.';
+    return zh?`客胜仍可能成立，但模型更偏只赢1至${Math.abs(h.handicapLine)-1}球，无法覆盖主队受让${h.handicapLineText}。这是窄胜风险，顶部不追让球。`:'An away win remains possible, but the winning margin is too small to beat the larger receiving handicap. This is narrow-win risk; the top extension is a pass.';
   }
   return zh?'该方向比较的是胜平负首选成立后的让球结果；串关另用不附加这一条件的完整让球概率。':'This companion compares handicap outcomes conditional on the 1X2 pick; combo selection uses the unconditional handicap probabilities.';
 }
 function HandicapBlock({d,settlement,language}:{d:Decision;settlement?:Settlement|null;language:Language}){
-  const h=d.handicapAnalysis;if(!h)return null;const zh=language==='zh';
+  const h=d.handicapAnalysis;if(!h)return null;const zh=language==='zh',pass=primarySelectionSummary(d).handicap?.status==='pass';
   return <section className="rc-handicap">
-    <header><div><span>{h.probabilityBasis==='conditional-on-straight-primary'?(zh?'让球伴随分析':'Companion handicap analysis'):(zh?'让球分析':'Handicap analysis')} {h.handicapLineText}</span><strong>{handicapTitle(h.tipCode,zh)}</strong></div>
+    <header><div><span>{pass?(zh?'让球概率诊断':'Handicap probability diagnostic'):h.probabilityBasis==='conditional-on-straight-primary'?(zh?'让球伴随分析':'Companion handicap analysis'):(zh?'让球分析':'Handicap analysis')} {h.handicapLineText}</span><strong>{handicapTitle(h.tipCode,zh)}</strong></div>
       <span className={`rc-state rc-state--${settlement?.state||'PENDING'}`}>{settlement?resultLabel(settlement.state,zh):(zh?'待赛果':'Pending')}</span></header>
-    <p>{handicapNarrative(d,zh)}</p>{h.probabilityBasis==='conditional-on-straight-primary'&&<small className="rc-handicap__basis">{zh?'以下三项为“胜平负首选成立”条件下的净胜球占比，不是独立HHAD命中率。':'The three shares below are conditional on the 1X2 thesis landing; they are not standalone HHAD hit probabilities.'}</small>}{h.overallTipCode&&h.overallTipCode!==h.tipCode&&<small className="rc-handicap__diagnostic">{zh?'独立HHAD全局最高项':'Standalone HHAD top'}：{handicapTitle(h.overallTipCode,zh)} · {zh?'未作为伴随首选':'not used as companion pick'}</small>}{h.historicalCalibration?.applied&&<small className="rc-handicap__learned">{zh?'历史盘口校准已启用':'Historical handicap calibration active'} · {h.historicalCalibration.key}</small>}
+    <p>{handicapNarrative(d,zh)}</p>{pass&&<small className="rc-handicap__warning">{zh?'顶部延伸：不追让球。同向备选仅供比较，不是新增推荐；以下完整三项概率及赛果保留原记录，用于风险诊断和复盘。':'Top extension: pass the handicap. Aligned alternatives are comparisons, not additional picks; the original three-way probabilities and results remain for risk diagnosis and review.'}</small>}{h.probabilityBasis==='conditional-on-straight-primary'&&<small className="rc-handicap__basis">{zh?'以下三项为“胜平负首选成立”条件下的净胜球占比，不是独立HHAD命中率。':'The three shares below are conditional on the 1X2 thesis landing; they are not standalone HHAD hit probabilities.'}</small>}{h.overallTipCode&&h.overallTipCode!==h.tipCode&&<small className="rc-handicap__diagnostic">{zh?'独立HHAD全局最高项':'Standalone HHAD top'}：{handicapTitle(h.overallTipCode,zh)} · {zh?'未作为伴随首选':'not used as companion pick'}</small>}{h.historicalCalibration?.applied&&<small className="rc-handicap__learned">{zh?'历史盘口校准已启用':'Historical handicap calibration active'} · {h.historicalCalibration.key}</small>}
     <div className="rc-handicap__probabilities">{(['1','X','2'] as const).map(code=><div key={code} className={code===h.tipCode?'is-selected':''}><span>{handicapTitle(code,zh)}</span><strong>{(h.probabilities[code]*100).toFixed(1)}%</strong></div>)}</div>
     <div className="rc-handicap__meta"><span>{h.probabilityBasis==='conditional-on-straight-primary'?(zh?'条件卡盘占比':'Conditional land-on-line share'):(zh?'卡盘概率':'Land on line')} {(h.landOnLineProbability*100).toFixed(1)}%</span><span>{zh?'对应净胜球':'Exact margin'} {h.exactMargin>0?'+':''}{h.exactMargin}</span>
       {h.marketReference?.selectedOdds&&<span>{zh?'让球SP':'HHAD SP'} {h.marketReference.selectedOdds.toFixed(2)}</span>}</div>
   </section>;
 }
 function PrimaryPickHeader({d,language}:{d:Decision;language:Language}){
-  const zh=language==='zh',summary=primarySelectionSummary(d),h=summary.handicap;
-  return <div className="rc-primary-picks" aria-label={zh?'本场两个首选方向':'Primary 1X2 and handicap picks'}>
+  const zh=language==='zh',summary=primarySelectionSummary(d),h=summary.handicap,extension=h?handicapExtensionText(h,language):null;
+  return <div className="rc-primary-picks" aria-label={zh?'胜平负首选与让球延伸':'Primary 1X2 pick and handicap extension'}>
     <div className="rc-primary-pick rc-primary-pick--had"><span>{zh?'胜平负首选':'1X2 primary'}</span><strong>{title(summary.had.code,zh)}</strong><small>SP {summary.had.odds.toFixed(2)} · {(summary.had.probability*100).toFixed(1)}%</small></div>
     <span className="rc-primary-divider" aria-hidden="true">｜</span>
-    <div className="rc-primary-pick rc-primary-pick--hhad"><span>{zh?'让球首选':'Handicap primary'}</span>{h?<><strong>{h.lineText} · {handicapTitle(h.code,zh)}</strong><small>{h.conditional?(zh?'条件占比 ':'Conditional share '):''}{(h.probability*100).toFixed(1)}%{h.odds?(' · SP '+h.odds.toFixed(2)):''}{h.calibrated?(zh?' · 已校准':' · calibrated'):''}</small></>:<><strong>—</strong><small>{zh?'等待有效让球线与净胜球数据':'Awaiting valid handicap inputs'}</small></>}</div>
+    <div className={`rc-primary-pick rc-primary-pick--hhad${h?.status==='pass'?' is-pass':''}`} data-handicap-extension={h?.status??'unavailable'}><span>{zh?'让球延伸':'Handicap extension'}</span>{extension?<><strong>{extension.title}</strong><small>{extension.detail}</small></>:<><strong>—</strong><small>{zh?'等待有效让球线与净胜球数据':'Awaiting valid handicap inputs'}</small></>}</div>
   </div>;
 }
 function RecordDetails({d,selection,language,onSelectMatch}:{d:Decision;selection?:ComboSelection;language:Language;onSelectMatch:(id:string)=>void}){
