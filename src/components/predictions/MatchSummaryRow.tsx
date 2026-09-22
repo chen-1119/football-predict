@@ -21,12 +21,13 @@ interface MatchSummaryRowProps {
   odds: ReactNode;
   result: ReactNode;
   onOpen: () => void;
+  follow?: ReactNode;
 }
 
 /** Layout only: route keys, selected SP, review outcome and frozen picks remain caller-owned. */
 export const MatchSummaryRow = ({ eventKey, tone, timeLabel, teamsLabel, marketOddsLabel,
   pickLabel, oddsLabel, resultLabel, detailsLabel, detailsAriaLabel, time, teams,
-  marketOdds, pick, odds, result, onOpen }: MatchSummaryRowProps) => (
+  marketOdds, pick, odds, result, onOpen, follow }: MatchSummaryRowProps) => (
   <article data-match-event-key={eventKey} data-selection-tone={tone} aria-label={detailsAriaLabel}
     className={`match-row predictions-v4__match-row compact-match-row matchday-card is-${tone}`}>
     <div className="match-time-cell predictions-v4__match-slot is-time" data-label={timeLabel}>
@@ -48,6 +49,7 @@ export const MatchSummaryRow = ({ eventKey, tone, timeLabel, teamsLabel, marketO
       <span className="predictions-v4__slot-label">{resultLabel}</span>{result}
     </div>
     <div className="match-action-cell predictions-v4__match-action">
+      {follow}
       <button type="button" className="details-button" aria-label={detailsAriaLabel || detailsLabel}
         onClick={event => { event.stopPropagation(); onOpen(); }}>
         <span>{detailsLabel}</span><ArrowRight size={16} aria-hidden="true" />

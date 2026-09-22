@@ -1332,6 +1332,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
           for (let attempt = 0; attempt < detailRequest.maxAttempts; attempt += 1) {
             try {
               response = await fetchDetailWithTimeout(requestUrl, {
+                credentials: 'include',
                 cache: 'no-cache',
                 headers: Object.keys(headers).length ? headers : undefined
               }, detailRequest.timeoutMs, controller.signal);
@@ -2813,6 +2814,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
       
       {/* 1. 面包屑与返回 */}
       <div className="detail-topbar match-detail-v4__topbar">
+        <FollowButton matchId={match.id} />
         <div className="match-detail-v4__breadcrumb">
           {language === 'zh' ? '首页' : 'Home'} / {country.name[language]} / {league.name[language]} / {homeTeam.shortName[language]} vs {awayTeam.shortName[language]}
         </div>
@@ -4402,3 +4404,4 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
     </div>
   );
 };
+import { FollowButton } from '../components/FollowButton';

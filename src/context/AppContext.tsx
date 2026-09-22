@@ -2,10 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import type { Match } from '../services/mockData';
 import { getDateStringOffset, matchesPool, registerTeam, registerLeague, registerCountry } from '../services/mockData';
 import { AppContext } from './AppContextCore';
+import { useAccount } from './AccountContext';
 import type { DataSyncState, HitAndWinSubmission, Language, SourceFallbackCoverage, User } from './AppContextCore';
 import {
   clearStoredAccessSession,
-  getAccessAuthHeaders,
   isAccessSessionValid,
   persistAccessSession,
   readStoredAccessSession,
@@ -414,9 +414,9 @@ const fetchJsonOnce = async <T,>(
   }, timeoutMs);
 
   try {
-    const accessHeaders = accessToken
+    const accessHeaders: Record<string, string> = accessToken
       ? { authorization: `Bearer ${accessToken}` }
-      : getAccessAuthHeaders();
+      : {};
     const conditionalCacheKey = buildFetchCacheKey(url, accessHeaders);
     const cached = useConditionalRequest ? jsonResponseCache.get(conditionalCacheKey) : null;
     const headers = {
@@ -424,6 +424,7 @@ const fetchJsonOnce = async <T,>(
       ...(cached?.etag ? { 'if-none-match': cached.etag } : {})
     };
     const res = await fetch(requestUrl, {
+      credentials: 'include',
       cache: useConditionalRequest ? 'no-cache' : 'no-store',
       headers: Object.keys(headers).length ? headers : undefined,
       signal: controller.signal
@@ -626,6 +627,7 @@ const registerSyncedMatches = (data: SyncedMatch[]) => {
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const account = useAccount();
   const [language, setLanguageState] = useState<Language>(readStoredLanguage);
   const [accessSession, setAccessSession] = useState<AccessSession | null>(readStoredAccessSession);
   const [currentUser, setCurrentUser] = useState<User | null>(() => (
@@ -633,7 +635,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ));
   const [hitAndWinSubmission, setHitAndWinSubmission] = useState<HitAndWinSubmission | null>(readStoredHitAndWinSubmission);
   const [matches, setMatches] = useState<Match[]>([]);
-  const isAccessVerified = isAccessSessionValid(accessSession);
+  const isAccessVerified = account.user ? account.access.active : isAccessSessionValid(accessSession);
   const lastMetaRef = useRef<{ resultFreshnessTime?: string | null; finishedCount?: number }>({});
   const diagnosticRefreshAtRef = useRef({
     syncMeta: 0,
@@ -727,6 +729,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Load current matches first, then fill historical results in the background.
   useEffect(() => {
+    jsonResponseCache.clear();
     if (!isAccessVerified) {
       lastMetaRef.current = {};
       clearRetainedCurrentSnapshot();
@@ -744,11 +747,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let historyRefreshQueued = false;
     const effectRequestController = new AbortController();
     const effectRequestSignal = effectRequestController.signal;
-    const activeAccessToken = accessSession?.token || '';
-    const activeAccessSession = accessSession;
+    // Account sessions use HttpOnly cookies; legacy snapshots stay scoped to legacy tokens.
+    const activeAccessToken = account.user ? '' : accessSession?.token || '';
+    const activeAccessSession = account.user ? null : accessSession;
 
     const invalidateActiveAccessSession = (error: unknown) => {
       if (!isProtectedAuthFailure(error)) return false;
+      void account.refresh().catch(() => {});
       cancelled = true;
       effectRequestController.abort();
       jsonResponseCache.clear();
@@ -1469,7 +1474,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         try {
           const response = await fetch(streamUrl, {
             cache: 'no-store',
-            credentials: 'same-origin',
+            credentials: 'include',
             headers: activeAccessToken ? { authorization: `Bearer ${activeAccessToken}` } : undefined,
             signal: controller.signal
           });
@@ -1616,7 +1621,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       document.removeEventListener('visibilitychange', refreshOnWake);
       window.clearInterval(historyTimer);
     };
-  }, [isAccessVerified, accessSession]);
+  }, [isAccessVerified, accessSession, account.user?.id, account.refresh]);
 
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);
@@ -1650,7 +1655,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     <AppContext.Provider value={{
       language,
       setLanguage,
-      currentUser,
+      currentUser: account.user ? { username: account.user.displayName } : currentUser,
       setCurrentUser,
       accessSession,
       isAccessVerified,
