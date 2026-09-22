@@ -19,7 +19,10 @@ export interface Decision {
   handicapAnalysis?:HandicapAnalysis|null;
 }
 export interface Settlement { state:ResultState; score?:string|null; actual?:Outcome; resultEventId?:string|null; legs?:Array<{decisionId:string;selectionId?:string;state:ResultState;score?:string|null}> }
-export interface SingleRow { decision:Decision; settlement:Settlement; handicapSettlement?:Settlement|null }
+export interface SelectionQuality {version:'recommendation-selection-quality-v1';status:'watch'|'reference-qualified';qualified:boolean;reasons:string[];samples:{elo:{home:number|null;away:number|null};form:{home:number|null;away:number|null}}|null;probabilityLead:number|null;marketProbability:number|null;modelMarketGap:number|null;expectedValue:number|null;marketFavorite:boolean}
+export interface PublishedScore {home:number;away:number;label:string;probability:number;hadCode:Outcome;hhadCode:Outcome}
+export interface PublishedScores {status:'available'|'unavailable';version:'published-score-distribution-v1';decisionId:string;recordHash:string;topScores:PublishedScore[];alignedScores:PublishedScore[]}
+export interface SingleRow { decision:Decision; settlement:Settlement; handicapSettlement?:Settlement|null;selectionQuality?:SelectionQuality|null;scoreDistribution?:PublishedScores|null }
 export interface ComboSelection {
   version:'combo-selection-v1'; selectionId:string; decisionId:string; decisionRecordHash:string; recordHash:string;
   market:'HAD'|'HHAD'; handicapLine:number; tipCode:Outcome; odds:number; modelProbability:number;
@@ -29,7 +32,8 @@ export interface Combo { version:'unified-combo-v1'|'unified-combo-v2'; id:strin
 export interface ComboRow { combo:Combo; settlement:Settlement }
 export interface Summary { published:number;settled:number;won:number;lost:number;pending:number;void:number;disputed:number;hitRate:number|null;brier?:number|null;logLoss?:number|null;marketBrier?:number|null }
 export interface HandicapBreakdown {standaloneV1:Summary;companionV2All:Summary;companionV2WhenHadWon:Summary;companionV2BothWon:Summary;companionV3All?:Summary;companionV3WhenHadWon?:Summary;companionV3BothWon?:Summary}
-export interface Lane {status:'ok'|'error';lastSuccessAt?:string;lastAttemptAt:string;errorCode?:string|null;inputAsOf?:string;candidateCount?:number;eligibleCount?:number;bindingFailures?:number}
+export interface Lane {status:'ok'|'error';lastSuccessAt?:string;lastAttemptAt:string;errorCode?:string|null;inputAsOf?:string;candidateCount?:number;eligibleCount?:number;bindingFailures?:number;referenceCount?:number;watchCount?:number}
+export interface ModelQualityReport {independentMatchDays:number;settled:number;won:number;hitRate:number|null;marketTopHitRate:number|null;brier:number|null;marketBrier:number|null;logLoss:number|null;marketLogLoss:number|null;blockers:string[];minimumSettled:number;minimumMatchDays:number}
 export interface HandicapCalibrationGroup {
   key:string;rows:number;active:boolean;reason:string;bias:Record<Outcome,number>;meanRaw:Record<Outcome,number>;actualShare:Record<Outcome,number>;
   metrics?:{holdout?:number;rawBrier?:number;calibratedBrier?:number;rawLogLoss?:number;calibratedLogLoss?:number;rawHitRate?:number;calibratedHitRate?:number}|null;
@@ -39,7 +43,7 @@ export interface RecommendationCenterData {
   version:'recommendation-center-v1';updatedAt:string;businessDate:string;inputAsOf:string|null;resultAsOf:string|null;
   lanes:Partial<Record<'publish'|'combos'|'settlement'|'view',Lane>>;
   current:SingleRow[];previews:Combo[];todayCombos:ComboRow[];overlapDecisionIds:string[];
-  review:{singles:SingleRow[];combos:ComboRow[];limit:number;statistics:{single:Summary;handicap?:Summary;handicapBreakdown?:HandicapBreakdown;two:Summary;three:Summary};handicapCalibration?:HandicapCalibrationProfile;definition:string};
+  review:{singles:SingleRow[];combos:ComboRow[];limit:number;statistics:{single:Summary;qualifiedSingle?:Summary;handicap?:Summary;handicapBreakdown?:HandicapBreakdown;two:Summary;three:Summary};qualityReport?:ModelQualityReport;handicapCalibration?:HandicapCalibrationProfile;definition:string};
   excludedCorruptRecords:number;modelValidation:'unvalidated';
 }
 type Obj=Record<string,unknown>;
@@ -121,7 +125,23 @@ function single(v:unknown):SingleRow{
   if(['WON','LOST'].includes(s.state)&&(!s.actual||!s.score||(s.actual===d.tipCode)!==(s.state==='WON')))throw new Error('Settlement disagrees with decision');
   const hs=x.handicapSettlement==null?null:settlement(x.handicapSettlement);
   if(hs&&['WON','LOST'].includes(hs.state)&&d.handicapAnalysis&&(!hs.actual||!hs.score||(hs.actual===d.handicapAnalysis.tipCode)!==(hs.state==='WON')))throw new Error('Handicap settlement disagrees with decision');
-  return {decision:d,settlement:s,handicapSettlement:hs};
+  let quality:SelectionQuality|null=null,scores:PublishedScores|null=null;
+  if(x.selectionQuality!=null){
+    const q=object(x.selectionQuality),qualified=q.qualified===true;
+    if(q.version!=='recommendation-selection-quality-v1'||q.validation!=='unvalidated'||q.status!==(qualified?'reference-qualified':'watch')||q.priceFilterApplied!==false)throw new Error('Invalid selection quality');
+    const pair=(v:unknown)=>{const a=object(v);return {home:a.home==null?null:count(a.home),away:a.away==null?null:count(a.away)};};
+    const samples=q.samples==null?null:object(q.samples);
+    quality={version:q.version,status:qualified?'reference-qualified':'watch',qualified,reasons:list(q.reasons).map(text),samples:samples?{elo:pair(samples.elo),form:pair(samples.form)}:null,probabilityLead:q.probabilityLead==null?null:number(q.probabilityLead),marketProbability:q.marketProbability==null?null:number(q.marketProbability),modelMarketGap:q.modelMarketGap==null?null:number(q.modelMarketGap),expectedValue:q.expectedValue==null?null:number(q.expectedValue),marketFavorite:q.marketFavorite===true};
+    if(qualified&&quality.reasons.length)throw new Error('Contradictory selection quality');
+  }
+  if(x.scoreDistribution!=null){
+    const p=object(x.scoreDistribution);
+    if(p.version!=='published-score-distribution-v1'||p.decisionId!==d.decisionId||p.recordHash!==d.recordHash||!['available','unavailable'].includes(String(p.status)))throw new Error('Invalid score binding');
+    const score=(v:unknown):PublishedScore=>{const r=object(v),home=count(r.home),away=count(r.away),probability=number(r.probability);if(probability<=0||probability>1||r.label!==`${home}-${away}`)throw new Error('Invalid score probability');return {home,away,label:String(r.label),probability,hadCode:outcome(r.hadCode),hhadCode:outcome(r.hhadCode)};};
+    scores={version:p.version,status:p.status as PublishedScores['status'],decisionId:d.decisionId,recordHash:d.recordHash,topScores:list(p.topScores).map(score),alignedScores:list(p.alignedScores).map(score)};
+    if(scores.alignedScores.some(r=>r.hadCode!==d.tipCode||r.hhadCode!==d.handicapAnalysis?.tipCode))throw new Error('Incoherent aligned score');
+  }
+  return {decision:d,settlement:s,handicapSettlement:hs,selectionQuality:quality,scoreDistribution:x.scoreDistribution===undefined?undefined:scores};
 }
 function comboSelection(v:unknown,parent:Decision,rawParent:Obj):ComboSelection{
   const s=object(v),market=s.market,tipCode=outcome(s.tipCode),handicapLine=number(s.handicapLine),odds=number(s.odds),modelProbability=number(s.modelProbability);
@@ -186,12 +206,18 @@ function calibrationProfile(v:unknown):HandicapCalibrationProfile{
   const profileHash=text(p.profileHash);if(!/^[a-f0-9]{64}$/.test(profileHash))throw new Error('Invalid calibration profile hash');
   return {version:text(p.version),profileHash,sampleRows:count(p.sampleRows),groups};
 }
+function modelQuality(v:unknown):ModelQualityReport{
+ const q=object(v),m=object(q.overall),policy=object(q.policy);
+ if(q.version!=='frozen-quality-review-v1'||q.formalPromotion!==false)throw new Error('Invalid model quality report');
+ const metric=(key:string)=>m[key]==null?null:number(m[key]);
+ return {independentMatchDays:count(q.independentMatchDays),settled:count(m.settled),won:count(m.won),hitRate:metric('hitRate'),marketTopHitRate:metric('marketTopHitRate'),brier:metric('brier'),marketBrier:metric('marketBrier'),logLoss:metric('logLoss'),marketLogLoss:metric('marketLogLoss'),blockers:list(q.blockers).map(text),minimumSettled:count(policy.minimumSettled),minimumMatchDays:count(policy.minimumMatchDays)};
+}
 export function parseRecommendationCenter(response:unknown):RecommendationCenterData{
   const root=object(response),x=object(root.recommendationCenter),review=object(x.review),stats=object(review.statistics),lanes=object(x.lanes);
   if(x.version!=='recommendation-center-v1'||x.modelValidation!=='unvalidated')throw new Error('Unsupported center contract');
   const parsedLanes:RecommendationCenterData['lanes']={};
-  for(const k of ['publish','combos','settlement','view'] as const){if(lanes[k]==null)continue;const l=object(lanes[k]);if(l.status!=='ok'&&l.status!=='error')throw new Error('Invalid lane status');parsedLanes[k]={status:l.status,lastAttemptAt:stamp(l.lastAttemptAt),lastSuccessAt:l.lastSuccessAt==null?undefined:stamp(l.lastSuccessAt),errorCode:l.errorCode==null?null:text(l.errorCode),inputAsOf:l.inputAsOf==null?undefined:stamp(l.inputAsOf),candidateCount:l.candidateCount==null?undefined:count(l.candidateCount),eligibleCount:l.eligibleCount==null?undefined:count(l.eligibleCount),bindingFailures:l.bindingFailures==null?undefined:count(l.bindingFailures)};}
-  const result:RecommendationCenterData={version:'recommendation-center-v1',updatedAt:stamp(x.updatedAt),businessDate:date(x.businessDate),inputAsOf:x.inputAsOf==null?null:stamp(x.inputAsOf),resultAsOf:x.resultAsOf==null?null:stamp(x.resultAsOf),lanes:parsedLanes,current:list(x.current).map(single),previews:list(x.previews).map(combo),todayCombos:list(x.todayCombos).map(comboRow),overlapDecisionIds:list(x.overlapDecisionIds).map(text),review:{singles:list(review.singles).map(single),combos:list(review.combos).map(comboRow),limit:count(review.limit),statistics:{single:summary(stats.single),handicap:stats.handicap==null?undefined:summary(stats.handicap),handicapBreakdown:stats.handicapBreakdown==null?undefined:handicapBreakdown(stats.handicapBreakdown),two:summary(stats.two),three:summary(stats.three)},handicapCalibration:review.handicapCalibration==null?undefined:calibrationProfile(review.handicapCalibration),definition:text(review.definition)},excludedCorruptRecords:count(x.excludedCorruptRecords),modelValidation:'unvalidated'};
+  for(const k of ['publish','combos','settlement','view'] as const){if(lanes[k]==null)continue;const l=object(lanes[k]);if(l.status!=='ok'&&l.status!=='error')throw new Error('Invalid lane status');parsedLanes[k]={status:l.status,lastAttemptAt:stamp(l.lastAttemptAt),lastSuccessAt:l.lastSuccessAt==null?undefined:stamp(l.lastSuccessAt),errorCode:l.errorCode==null?null:text(l.errorCode),inputAsOf:l.inputAsOf==null?undefined:stamp(l.inputAsOf),candidateCount:l.candidateCount==null?undefined:count(l.candidateCount),eligibleCount:l.eligibleCount==null?undefined:count(l.eligibleCount),bindingFailures:l.bindingFailures==null?undefined:count(l.bindingFailures),referenceCount:l.referenceCount==null?undefined:count(l.referenceCount),watchCount:l.watchCount==null?undefined:count(l.watchCount)};}
+  const result:RecommendationCenterData={version:'recommendation-center-v1',updatedAt:stamp(x.updatedAt),businessDate:date(x.businessDate),inputAsOf:x.inputAsOf==null?null:stamp(x.inputAsOf),resultAsOf:x.resultAsOf==null?null:stamp(x.resultAsOf),lanes:parsedLanes,current:list(x.current).map(single),previews:list(x.previews).map(combo),todayCombos:list(x.todayCombos).map(comboRow),overlapDecisionIds:list(x.overlapDecisionIds).map(text),review:{singles:list(review.singles).map(single),combos:list(review.combos).map(comboRow),limit:count(review.limit),qualityReport:review.qualityReport==null?undefined:modelQuality(review.qualityReport),statistics:{single:summary(stats.single),qualifiedSingle:stats.qualifiedSingle==null?undefined:summary(stats.qualifiedSingle),handicap:stats.handicap==null?undefined:summary(stats.handicap),handicapBreakdown:stats.handicapBreakdown==null?undefined:handicapBreakdown(stats.handicapBreakdown),two:summary(stats.two),three:summary(stats.three)},handicapCalibration:review.handicapCalibration==null?undefined:calibrationProfile(review.handicapCalibration),definition:text(review.definition)},excludedCorruptRecords:count(x.excludedCorruptRecords),modelValidation:'unvalidated'};
   if(new Set(result.current.map(r=>r.decision.decisionId)).size!==result.current.length)throw new Error('Duplicate current decision');
   for(const c of result.previews)for(const leg of c.legs){const same=result.current.find(s=>s.decision.decisionId===leg.decisionId);if(same&&same.decision.recordHash!==leg.recordHash)throw new Error('Conflicting decision payload');}
   return result;

@@ -1848,7 +1848,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
   const gptParsed = gptPrediction?.relay?.parsed;
   const gptRecommendation = gptParsed?.recommendation;
   const probabilityModel = normalizeProbabilityModel(match.probabilityModel);
-  const publishedDetail = publishedDetailPresentation(unifiedRow?.decision || null, probabilityModel?.scoreDistribution);
+  const publishedDetail = publishedDetailPresentation(unifiedRow?.decision || null, probabilityModel?.scoreDistribution, unifiedRow?.scoreDistribution);
   const calculationTrace = probabilityModel?.calculationTrace;
   const probabilityModelForm = probabilityModel?.form;
   const modelHealth = probabilityModel?.modelHealth;
@@ -2112,11 +2112,17 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
   const scoreRecommendations = useUnified
     ? [publishedDetail?.primaryScore, publishedDetail?.alternativeScore].filter((score): score is ScoreProbability => Boolean(score)).map((score, index) => ({
       ...score, tone: index === 0 ? 'aligned' : 'alternate',
-      tag: index === 0 ? (language === 'zh' ? '首选方向内的比分参考' : 'Score within the primary outcome') : (language === 'zh' ? '备选比分 · 不改变首选' : 'Alternative score · primary unchanged'),
+      tag: index === 0
+        ? publishedDetail?.scoreSource === 'published-matrix' ? (language === 'zh' ? '同一模型同向比分' : 'Aligned score from the same model') : (language === 'zh' ? '旧补充分布 · 同向参考' : 'Legacy supplemental aligned score')
+        : (language === 'zh' ? '全局备选 · 不改变首选' : 'Global alternative · primary unchanged'),
     }))
     : legacyScoreRecommendations;
   const displayedScoreText = useUnified ? publishedDetail?.primaryScore?.label || (language === 'zh' ? '暂无同向比分' : 'No aligned score available') : projectedScoreText;
-  const lockedTagText = useUnified ? (language === 'zh' ? '补充分布参考' : 'Supplemental distribution') : predictionMeta?.lockedAt
+  const lockedTagText = useUnified
+    ? publishedDetail?.scoreSource === 'published-matrix' ? (language === 'zh' ? '同一发布记录' : 'Same published record')
+      : publishedDetail?.scoreSource === 'legacy-supplemental' ? (language === 'zh' ? '旧补充分布' : 'Legacy supplemental distribution')
+        : (language === 'zh' ? '同源比分暂缺' : 'Bound score unavailable')
+    : predictionMeta?.lockedAt
     ? (language === 'zh' ? '已锁定' : 'Locked')
     : (language === 'zh' ? '赛前监控' : 'Monitoring');
   const predictionVersionText = useUnified ? publishedDetail?.decisionId || '--' : predictionMeta?.strategyVersion
@@ -2181,7 +2187,11 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
       : `Reference ${fiveHundredMarketReference.reference.selectedSourceOdds.toFixed(2)}`)
     : publicRecommendationCopy.oddsLabel;
   const publicScoreNote = useUnified
-    ? (language === 'zh' ? '首选比分只从已有补充模型分布中选择与已发布胜平负方向相同的一项；单一比分概率不等于胜平负总概率。补充分布并非该发布记录的冻结比分依据，不会改写历史记录。' : 'The primary score is selected only from existing supplemental distribution rows matching the published 1X2 outcome. A single score probability is not an outcome total. This supplemental distribution is not frozen score evidence for the publication and does not rewrite history.')
+    ? publishedDetail?.scoreSource === 'published-matrix'
+      ? (language === 'zh' ? '比分与胜平负、让球来自同一发布记录。首选比分同时符合两个方向；全局备选保留模型原始排序。单一比分概率不是胜平负总概率，也不是实际命中率。' : 'Scores, 1X2 and handicap use the same published record. The primary score matches both directions; the global alternative keeps the model ranking. An individual score probability is neither an outcome total nor an observed hit rate.')
+      : publishedDetail?.scoreSource === 'legacy-supplemental'
+        ? (language === 'zh' ? '此旧记录尚无同源比分，当前为旧补充模型中的同向参考，未绑定该发布记录。单一比分概率不等于胜平负总概率。' : 'This older publication has no bound score projection. The aligned reference uses an older supplemental model, not this publication. A score probability is not an outcome total.')
+        : (language === 'zh' ? '当前发布记录暂无可核验的同源比分，待比分依据补齐后展示。胜平负、让球推荐保留原记录。' : 'No verified score projection is available for this publication. Scores will appear when its evidence is available; the recorded 1X2 and handicap picks remain available.')
     : isPreMatchRecordSettling
     ? settlingOutcomeReason
     : language === 'zh'
@@ -3137,12 +3147,13 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                       <span>{index === 0 ? (language === 'zh' ? '比分一' : 'Score 1') : (language === 'zh' ? '比分二' : 'Score 2')}</span>
                       <strong>{score.label}</strong>
                       <em>{score.tag}</em>
+                      {useUnified && typeof score.probability === 'number' && Number.isFinite(score.probability) && <small>{score.probability.toFixed(1)}% · {language === 'zh' ? '单一比分概率' : 'Individual score probability'}</small>}
                     </div>
                   )) : (
                     <div className="recommendation-score-option is-empty">
                       <span>{language === 'zh' ? '比分' : 'Score'}</span>
                       <strong>{displayedScoreText}</strong>
-                      <em>{useUnified ? (language === 'zh' ? '等待已有分布中的同向比分' : 'Waiting for an aligned distribution row') : postMatchReview
+                      <em>{useUnified ? (language === 'zh' ? '等待本条发布记录的同源比分' : 'Waiting for scores bound to this publication') : postMatchReview
                         ? (language === 'zh' ? '比分快照缺失' : 'Score snapshot missing')
                         : (language === 'zh' ? '等待模型分布' : 'Waiting for distribution')}</em>
                     </div>

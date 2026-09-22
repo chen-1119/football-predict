@@ -3,6 +3,7 @@
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const {createRuntime}=require('./recommendationPlatform/runtime.cjs');
 const {postgresPorts}=require('./recommendationPlatform/repository.cjs');
+const {withVerifiedInputEvidence}=require('../tests/fixtures/recommendation-input-helper.cjs');
 async function verify(pool){
   const schema=`recommendation_verify_${process.pid}_${Date.now()}`;
   const q=(sql,args)=>pool.query(sql.replaceAll('football.',`${schema}.`),args);
@@ -10,7 +11,8 @@ async function verify(pool){
   const tomorrow=new Date(Date.now()+86400000).toISOString().slice(0,10);
   const dow=new Date(`${tomorrow}T12:00:00Z`).getUTCDay();
   let now=Date.parse(`${tomorrow}T${[0,6].includes(dow)?'14':'13'}:00:00Z`);
-  const fixture=id=>({id:`sporttery_${id}`,sourceMatchId:String(id),businessDate:tomorrow,status:'SCHEDULED',homeTeamId:`h${id}`,awayTeamId:`a${id}`,homeTeamName:`Home ${id}`,awayTeamName:`Away ${id}`,kickoffTime:`${tomorrow}T16:00:00Z`,eventVersion:`${tomorrow}T16:00:00Z`,probabilityModel:{generatedAt:new Date(now).toISOString(),oneXTwo:{final:{home:55,draw:25,away:20}}},odds:{odds1:1.8,oddsX:3.5,odds2:4.5},oddsSource:'sporttery:had',oddsUpdatedAt:new Date(now).toISOString(),predictions:[]});
+  const rawFixture=id=>({id:`sporttery_${id}`,sourceMatchId:String(id),businessDate:tomorrow,status:'SCHEDULED',homeTeamId:`h${id}`,awayTeamId:`a${id}`,homeTeamName:`Home ${id}`,awayTeamName:`Away ${id}`,kickoffTime:`${tomorrow}T16:00:00Z`,eventVersion:`${tomorrow}T16:00:00Z`,probabilityModel:{generatedAt:new Date(now).toISOString(),oneXTwo:{final:{home:55,draw:25,away:20}}},odds:{odds1:1.8,oddsX:3.5,odds2:4.5},oddsSource:'sporttery:had',oddsUpdatedAt:new Date(now).toISOString(),predictions:[]});
+  const fixture=id=>withVerifiedInputEvidence(rawFixture(id));
   let checks=0;const check=(fn)=>{fn();checks++;};
   const write=async(m,dataset='current')=>q('INSERT INTO football.match_snapshots(id,dataset,payload) VALUES($1,$2,$3::jsonb) ON CONFLICT(id,dataset) DO UPDATE SET payload=EXCLUDED.payload',[m.id,dataset,JSON.stringify(m)]);
   try{
@@ -54,7 +56,7 @@ async function verify(pool){
     // independently committed PostgreSQL transactions rather than mock rows.
     const nextDate=new Date(Date.parse(`${tomorrow}T00:00:00Z`)+86400000).toISOString().slice(0,10);
     now=Date.parse(`${nextDate}T10:00:00Z`);
-    const nextFixture=id=>({...fixture(id),businessDate:nextDate,kickoffTime:`${nextDate}T16:00:00Z`,eventVersion:`${nextDate}T16:00:00Z`});
+    const nextFixture=id=>withVerifiedInputEvidence({...rawFixture(id),businessDate:nextDate,kickoffTime:`${nextDate}T16:00:00Z`,eventVersion:`${nextDate}T16:00:00Z`});
     const sourceVersion=async label=>{
       await q("UPDATE football.projection_meta SET value=$1 WHERE key='committed_at'",[new Date(now).toISOString()]);
       await q("UPDATE football.projection_meta SET value=$1 WHERE key='data_generation_id'",[label]);
@@ -103,7 +105,7 @@ async function verify(pool){
     const mixedDate=new Date(Date.parse(`${nextDate}T00:00:00Z`)+86400000).toISOString().slice(0,10);
     const mixedDow=new Date(`${mixedDate}T12:00:00Z`).getUTCDay();
     now=Date.parse(`${mixedDate}T${[0,6].includes(mixedDow)?'14':'13'}:00:00Z`);
-    const mixedFixture=id=>({ ...fixture(id),businessDate:mixedDate,kickoffTime:`${mixedDate}T16:00:00Z`,eventVersion:`${mixedDate}T16:00:00Z`,
+    const mixedFixture=id=>withVerifiedInputEvidence({ ...rawFixture(id),businessDate:mixedDate,kickoffTime:`${mixedDate}T16:00:00Z`,eventVersion:`${mixedDate}T16:00:00Z`,
       probabilityModel:{version:'mixed-integration',generatedAt:new Date(now).toISOString(),oneXTwo:{final:id===303?{home:80,draw:12,away:8}:{home:45,draw:30,away:25}},calculationTrace:{poisson:{lambdas:{home:1.4,away:1.1}}}},
       ...(id===303?{}:{handicapLine:1,handicapOdds:{odds1:1.8,oddsX:3.8,odds2:4.5},handicapOddsSource:'sporttery:HHAD',handicapOddsUpdatedAt:new Date(now).toISOString()}) });
     await q("DELETE FROM football.match_snapshots WHERE dataset='current'");
