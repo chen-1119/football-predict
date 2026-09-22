@@ -4,6 +4,9 @@ const {key,collectResults,settleDecision,settleHandicapDecision,settleCombo,summ
 const {validCombo}=require('./comboSelections.cjs');
 const {day,time,hash}=require('../../src/services/publishedForecastPolicy.cjs');
 const {buildHandicapCalibration}=require('../../src/services/handicapCalibration.cjs');
+const {selectionQuality,isQualifiedSelection}=require('../../src/services/recommendationSelectionQuality.cjs');
+const {buildPublishedScoreDistribution}=require('../../src/services/publishedScoreDistribution.cjs');
+const {buildQualityReport}=require('./qualityReport.cjs');
 
 function freshPublication(p,now){return p && /^[a-f0-9]{64}$/.test(p.manifestHash||'') && typeof p.generationId==='string' && p.generationId.length>0 && Number.isFinite(time(p.committedAt)) && now>=time(p.committedAt) && now-time(p.committedAt)<=15*60000;}
 function requireBeforeCutoff(records,now){if(records.some(d=>now>=time(d.cutoffTime)))throw Object.assign(new Error('Cutoff crossed'),{code:'DEADLINE_CROSSED'});}
@@ -89,13 +92,13 @@ function createRuntime(ports,{validators}={}){
     const frozen=await repo.frozenCombos(day(now)),previews=[],created=[];
     for(const size of [2,3]){
       if(frozen.some(c=>c.size===size))continue;
-      const selection=chooseCombo(candidates,size,now);if(!selection)continue;
+      const selection=chooseCombo(candidates,size,now,{admit:isQualifiedSelection});if(!selection)continue;
       const record=freezeCombo(selection,clock());
       if(record){await repo.insertCombo(record);created.push(...record.legs);}
       else previews.push(selection);
     }
     requireBeforeCutoff(created,clock());
-    return {publication,previews,inputAsOf:assessed.inputAsOf,basePublicationAsOf:publication.committedAt,candidateCount:candidates.length,eligibleCount:assessed.decisions.length,bindingFailures:bound.issues.length,handicapCalibration:{profileHash:assessed.handicapCalibration.profileHash,sampleRows:assessed.handicapCalibration.sampleRows,activeGroups:Object.values(assessed.handicapCalibration.groups).filter(g=>g.active).length}};
+    return {publication,previews,inputAsOf:assessed.inputAsOf,basePublicationAsOf:publication.committedAt,candidateCount:candidates.filter(d=>selectionQuality(d).qualified).length,referenceCount:candidates.length,watchCount:candidates.filter(d=>!selectionQuality(d).qualified).length,eligibleCount:assessed.decisions.length,bindingFailures:bound.issues.length,handicapCalibration:{profileHash:assessed.handicapCalibration.profileHash,sampleRows:assessed.handicapCalibration.sampleRows,activeGroups:Object.values(assessed.handicapCalibration.groups).filter(g=>g.active).length}};
   });}
   async function settle(){return stage('settlement',async repo=>{
     const verify=validators || (()=>{const m=require('../../src/services/matchLifecycle.cjs');return {isFinal:m.isOfficialSportteryFinal,isVoid:m.isOfficialSportteryVoid};})();
@@ -112,7 +115,7 @@ function createRuntime(ports,{validators}={}){
     const rawHeads=await repo.resultHeads();
     for(const e of rawHeads)if(!validResultEvent(e))quarantined.push({reason:'invalid-result-record',id:String(e?.eventId||'unknown')});
     const heads=new Map(rawHeads.filter(validResultEvent).map(e=>[e.eventKey,e]));
-    const singles=decisions.map(d=>{const event=heads.get(key(d));return {decision:d,settlement:settleDecision(d,event),handicapSettlement:settleHandicapDecision(d,event)};});
+    const singles=decisions.map(d=>{const event=heads.get(key(d));return {decision:d,selectionQuality:selectionQuality(d),scoreDistribution:buildPublishedScoreDistribution(d),settlement:settleDecision(d,event),handicapSettlement:settleHandicapDecision(d,event)};});
     const handicapCalibration=buildHandicapCalibration(decisions,heads,day(now),{asOf:now});
     const records=await repo.frozenCombos();const ids=[...new Set(records.flatMap(c=>Array.isArray(c?.decisionIds)?c.decisionIds:[]))];
     const bindings=new Map((await repo.decisions(ids)).map(d=>[d.decisionId,d]));
@@ -132,8 +135,8 @@ function createRuntime(ports,{validators}={}){
     const center={version:'recommendation-center-v1',policyVersion:VERSION,updatedAt:new Date(now).toISOString(),businessDate:day(now),
       inputAsOf:[lanes.publish?.inputAsOf,lanes.combos?.inputAsOf].filter(v=>Number.isFinite(time(v))).sort((a,b)=>time(b)-time(a))[0]||null,resultAsOf:lanes.settlement?.lastSuccessAt||null,lanes,
       current:selected,previews,todayCombos:today,overlapDecisionIds:overlap,
-      review:{singles:singles.slice(0,100),combos:combos.slice(0,100),limit:100,
-        statistics:{single:summary(singles,true),handicap:handicapSummary(singles),handicapBreakdown:handicapBreakdown(singles),marketBaseline:marketBaseline(singles),daily:dailySummary(singles,combos),two:summary(combos.filter(r=>r.combo.size===2)),three:summary(combos.filter(r=>r.combo.size===3))},handicapCalibration,
+      review:{singles:singles.slice(0,100),combos:combos.slice(0,100),limit:100,qualityReport:buildQualityReport(singles,{asOf:now}),
+        statistics:{single:summary(singles,true),qualifiedSingle:summary(singles.filter(r=>r.selectionQuality.qualified),true),handicap:handicapSummary(singles),handicapBreakdown:handicapBreakdown(singles),marketBaseline:marketBaseline(singles),daily:dailySummary(singles,combos),two:summary(combos.filter(r=>r.combo.size===2)),three:summary(combos.filter(r=>r.combo.size===3))},handicapCalibration,
         definition:'latest-published-decision-before-cutoff-per-event; combos-use-exact-bound-versions'},
       excludedCorruptRecords:quarantined.length,modelValidation:'unvalidated',legacyRecordsReclassified:0};
     await repo.saveView(center);

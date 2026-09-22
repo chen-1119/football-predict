@@ -7,6 +7,7 @@ const {readMarketSignalRows}=require('../collectors/market/signalBridge.cjs');
 const {attachProspectiveForecastInputs}=require('../src/services/prospectiveForecastInput.cjs');
 const {createRuntime}=require('./recommendationPlatform/runtime.cjs');
 const {postgresPorts}=require('./recommendationPlatform/repository.cjs');
+const {withVerifiedInputEvidence}=require('../tests/fixtures/recommendation-input-helper.cjs');
 async function verify(pool){
   const schema=`warehouse_sp_verify_${process.pid}_${Date.now()}`;
   const q=(sql,args)=>pool.query(sql.replaceAll('football.',`${schema}.`),args);
@@ -14,7 +15,7 @@ async function verify(pool){
   const date=new Date(Date.now()+86400000).toISOString().slice(0,10);
   let now=Date.parse(`${date}T10:00:00Z`),checks=0;
   const check=fn=>{fn();checks++;};
-  const fixture=id=>({id:`sporttery_${id}`,sourceMatchId:String(id),businessDate:date,status:'SCHEDULED',
+  const fixture=id=>withVerifiedInputEvidence({id:`sporttery_${id}`,sourceMatchId:String(id),businessDate:date,status:'SCHEDULED',
     homeTeamId:`h${id}`,awayTeamId:`a${id}`,homeTeamName:`Home ${id}`,awayTeamName:`Away ${id}`,
     kickoffTime:`${date}T16:00:00Z`,eventVersion:`${date}T16:00:00Z`,
     probabilityModel:{generatedAt:new Date(now).toISOString(),oneXTwo:{final:{home:55,draw:25,away:20}}},

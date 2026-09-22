@@ -1,4 +1,5 @@
 'use strict';
+const {buildInputEvidence,validInputEvidence}=require('./recommendationInputEvidence.cjs');
 const instant = value => {
   if (typeof value !== 'string' || !value.trim()) return NaN;
   return Date.parse(/Z$|[+-]\d{2}:\d{2}$/.test(value) ? value : value.replace(' ', 'T') + '+08:00');
@@ -52,6 +53,7 @@ function attachProspectiveForecastInputs(matches, freshMatches, now) {
       dataQuality: model.dataQuality,
       oneXTwo: { final: model.oneXTwo?.final },
       ...compactScoreInputs(model),
+      inputEvidence: buildInputEvidence(model,fresh),
     };
     input.predictionMeta = { cutoffTime: fresh.predictionMeta?.cutoffTime };
     // Carry current-cycle HAD/HHAD source objects only. Never borrow a later
@@ -75,6 +77,7 @@ function forecastInputFor(match) {
     || input.businessDate !== match.businessDate || input.buyEndTime !== match.buyEndTime
     || match.resultDisposition === 'VOID' || match.isOnSale === false
     || ['CLOSED', 'SUSPENDED', 'STOPPED'].includes(String(match.saleStatus || '').toUpperCase())) return null;
+  if(input.probabilityModel?.inputEvidence!=null&&!validInputEvidence(input.probabilityModel.inputEvidence,input.probabilityModel,input))return null;
   return input;
 }
 module.exports = { attachProspectiveForecastInputs, forecastInputFor, compactScoreInputs };

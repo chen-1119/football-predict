@@ -3,8 +3,9 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const {createRuntime}=require('../scripts/recommendationPlatform/runtime.cjs');
 const {memoryPorts,validators}=require('./recommendationFixture.cjs');
 function compile(file,requireFn){const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module,exports:module.exports,require:requireFn,Date});return module.exports;}
-async function harness(){
-  const p=memoryPorts();await createRuntime(p,{validators}).publishingCycle();
+async function harness({missingInputEvidence=false}={}){
+  const p=memoryPorts();if(missingInputEvidence)for(const m of p.current){const {version,generatedAt,oneXTwo}=m.probabilityModel;m.probabilityModel={version,generatedAt,oneXTwo};}
+  await createRuntime(p,{validators}).publishingCycle();
   const view=compile(require.resolve('../src/services/recommendationCenterView.ts'),require),data=view.parseRecommendationCenter({recommendationCenter:p.state.view});
   const original=data.current[0];data.review.singles=Array.from({length:69},(_,index)=>({...original,decision:{...original.decision,decisionId:'ui-'+index,sourceMatchId:String(index+1),homeTeamName:index===68?'目标球队':'主队'+(index+1),awayTeamName:'客队'+(index+1)},settlement:{state:index%2===0?'WON':'LOST',score:'1-0'}}));
   data.review.statistics.single={published:69,settled:69,won:35,lost:34,pending:0,void:0,disputed:0,hitRate:35/69};
@@ -12,6 +13,7 @@ async function harness(){
   const component=compile(require.resolve('../src/components/recommendations/RecommendationCenter.tsx'),id=>{
     if(id==='react')return {useEffect:()=>{},useState:initial=>{const index=cursor++;if(!(index in state))state[index]=typeof initial==='function'?initial():initial;return [state[index],value=>{state[index]=typeof value==='function'?value(state[index]):value;}];}};
     if(id==='react/jsx-runtime')return {jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props}),Fragment:'fragment'};
+    if(id==='./SelectionQualityNote')return require('./fixtures/selection-quality-note-module.cjs');
     if(id==='../../hooks/useRecommendationCenter')return {useRecommendationCenter:()=>({data,loading:false,failed:false,authorizationRequired:false,refresh:()=>{}})};
     if(id==='../FollowButton')return {FollowButton:()=>null};
     if(id==='../TeamBadge')return {TeamBadge:({team,size})=>({type:'span',props:{'data-badge-name':team.name.zh,'data-badge-id':team.id,'data-badge-size':size}})};
@@ -28,6 +30,16 @@ const button=(tree,label)=>nodes(tree,n=>n.type==='button'&&words(n)===label)[0]
 test('review initially renders twelve of sixty-nine records and loads twelve more without changing aggregate statistics',async()=>{
   const ui=await harness();let tree=ui.render();assert.equal(byClass(tree,'rc-pick').length,12);assert.match(words(tree),/共 69 条明细 · 已显示 12 条/);assert.match(words(byClass(tree,'rc-stats')[0]),/50\.7%/);
   button(tree,'再显示12条').props.onClick();tree=ui.render();assert.equal(byClass(tree,'rc-pick').length,24);assert.match(words(tree),/还有 45 条明细/);assert.match(words(byClass(tree,'rc-stats')[0]),/35 \/ 69/);
+});
+
+test('actual shared quality component distinguishes ready reference from watch without rewriting the frozen pick',async()=>{
+  const ready=await harness(),readyTree=ready.render(),readyNotes=byClass(readyTree,'selection-quality-note');
+  assert.equal(readyNotes.length,12);assert(readyNotes.every(n=>n.props['data-selection-status']==='reference-qualified'));
+  assert.match(words(readyNotes[0]),/参考入选 · 待验证/);assert.match(words(readyNotes[0]),/不代表已经验证命中率或回报/);
+  const watch=await harness({missingInputEvidence:true}),before=JSON.stringify(watch.data),watchTree=watch.render(),watchNotes=byClass(watchTree,'selection-quality-note');
+  assert.equal(watchNotes.length,12);assert(watchNotes.every(n=>n.props['data-selection-status']==='watch'));
+  assert.match(words(watchNotes[0]),/观望 · 保留模型方向/);assert.match(words(watchNotes[0]),/本次模型输入计算尚未核验|本次模型输入依据尚未完整存档/);assert.match(words(watchNotes[0]),/暂不进入新串关/);
+  assert.equal(JSON.stringify(watch.data),before);
 });
 
 test('team search and result status compose, show a truthful empty filter state and clear back to the first batch',async()=>{
