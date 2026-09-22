@@ -86,7 +86,10 @@ const marketsFromParsedRows = (rows, observedAt) => normalizeRows(rows, observed
 function adaptivePollSeconds(markets, nowMs = Date.now(), cfg = config()) {
   const nearest = Math.min(...markets.map(market => instant(market.kickoffTime)).filter(value => value !== null && value > nowMs));
   const minutes = (nearest - nowMs) / 60000;
-  const seconds = nearest === Infinity ? 900 : minutes <= 15 ? 60 : minutes <= 60 ? 120
+  // A successful empty page can occur while the provider rolls its daily
+  // schedule. Check again within five minutes instead of letting a transient
+  // empty response consume the entire quote TTL. This never renews old prices.
+  const seconds = nearest === Infinity ? 240 : minutes <= 15 ? 60 : minutes <= 60 ? 120
     // Leave room for positive jitter, HTTP latency and the 30-second consumer
     // tick inside the 15-minute SP validity window. Failure backoff is separate.
     : minutes <= 120 ? 300 : minutes <= 1440 ? 600 : 1800;

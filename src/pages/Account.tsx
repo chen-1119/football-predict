@@ -1,21 +1,25 @@
 import { useState } from 'react';
 import { ArrowRight, Clock, Heart, KeyRound, LogOut, ShieldCheck, UserRound } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAccount } from '../context/AccountContext';
 import { useApp } from '../context/AppContextCore';
 import { formatAccessCode } from '../services/accessControl';
+import { safeAccountReturnTo } from '../services/accountApi';
 import '../styles/account.css';
 
 export function Account(){
   const account=useAccount(),{language,clearAccessSession}=useApp(),navigate=useNavigate(),zh=language==='zh';
+  const [params]=useSearchParams(),requestedReturn=params.get('returnTo'),returnTo=safeAccountReturnTo(requestedReturn,'/best');
+  const signInReturn=requestedReturn?`/account?returnTo=${encodeURIComponent(returnTo)}`:'/account';
   const [code,setCode]=useState(''),[busy,setBusy]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState('');
   async function perform(action:string,fn:()=>Promise<unknown>,success:string){setBusy(action);setError('');setNotice('');try{const result=await fn();setNotice(typeof result==='number'?(zh?`已退出其他 ${result} 个登录会话。`:`Signed out ${result} other sessions.`):success);if(action==='redeem')setCode('');}catch(cause){setError(cause instanceof Error?cause.message:'操作未完成。');}finally{setBusy('');}}
   if(account.loading)return <div className="account-page"><div className="account-empty" role="status">{zh?'正在读取账号…':'Loading your account…'}</div></div>;
-  if(!account.user)return <div className="account-page"><section className="account-card account-welcome"><UserRound size={32}/><h1>{zh?'我的账号':'Your account'}</h1><p>{zh?'登录后保存关注，查看自己的赛后复盘。':'Sign in to follow matches and review their results.'}</p>{account.sessionError&&<p className="account-error" role="alert">{account.sessionError}</p>}<Link className="account-primary" to="/auth?returnTo=%2Faccount">{zh?'登录 / 注册':'Sign in / Register'}<ArrowRight size={16}/></Link><Link className="account-text-link" to="/fixtures">{zh?'先看看赛程':'Browse fixtures'}</Link></section></div>;
+  if(!account.user)return <div className="account-page"><section className="account-card account-welcome"><UserRound size={32}/><h1>{zh?'我的账号':'Your account'}</h1><p>{zh?'登录后保存关注，查看自己的赛后复盘。':'Sign in to follow matches and review their results.'}</p>{account.sessionError&&<p className="account-error" role="alert">{account.sessionError}</p>}<Link className="account-primary" to={`/auth?returnTo=${encodeURIComponent(signInReturn)}`}>{zh?'登录 / 注册':'Sign in / Register'}<ArrowRight size={16}/></Link><Link className="account-text-link" to="/fixtures">{zh?'先看看赛程':'Browse fixtures'}</Link></section></div>;
   const expiry=account.access.expiresAt&&Number.isFinite(Date.parse(account.access.expiresAt))?new Date(account.access.expiresAt).toLocaleString(zh?'zh-CN':'en-GB',{timeZone:'Asia/Shanghai',hour12:false}):null;
   const label=account.access.active?(account.access.kind==='trial'?(zh?'体验中':'Trial active'):account.access.kind==='legacy-code'?(zh?'访问码权益有效':'Access-code benefits active'):(zh?'内容权益有效':'Content access active')):(zh?'普通账号':'Free account');
   return <div className="account-page"><header className="account-heading"><span className="account-eyebrow">{zh?'我的':'ACCOUNT'}</span><h1>{zh?'你好，':'Hello, '}{account.user.displayName||account.user.username}</h1><p>{zh?'在这里管理内容权限和个人关注。':'Manage your content access and followed matches.'}</p></header>
     {error&&<p className="account-error" role="alert">{error}</p>}{notice&&<p className="account-success" role="status">{notice}</p>}{account.sessionError&&<p className="account-error" role="alert">{account.sessionError}</p>}
+    {requestedReturn&&account.access.active&&<p><Link className="account-primary" to={returnTo}>{zh?'权限已生效，继续查看':'Access active — continue'}<ArrowRight size={16}/></Link></p>}
     {(account.user.role==='operator'||account.user.role==='admin')&&<p><Link className="account-secondary" to="/account-admin">{zh?'体验管理后台':'Account administration'}</Link></p>}
     <div className="account-grid"><section className="account-card"><div className="account-card-title"><ShieldCheck size={22}/><h2>{zh?'内容权限':'Content access'}</h2><span className={`account-pill${account.access.active?' is-active':''}`}>{label}</span></div><p>{zh?'账号长期保留。内容权益到期后，仍可管理关注和查看已保存的复盘。':'Your account and followed records remain available after content access expires.'}</p>{expiry&&<p className="account-expiry"><Clock size={16}/>{zh?'权益截止（北京时间）：':'Access ends (Beijing): '}{expiry}</p>}
       {account.access.trialAvailable?<div className="account-trial"><strong>{zh?'领取 3 天体验':'Claim a 3-day trial'}</strong><p>{zh?'点击领取后开始计时；每个账号可领取一次，不自动续费。':'Starts when claimed. Once per account, with no automatic renewal.'}</p><button type="button" className="account-primary" disabled={Boolean(busy)} onClick={()=>perform('trial',account.claimTrial,zh?'3 天体验已启用。':'Your 3-day trial is active.')}>{busy==='trial'?(zh?'领取中…':'Activating…'):(zh?'主动领取体验':'Activate trial')}</button></div>:<p className="account-muted">{account.access.active?(zh?'当前内容权限已生效。':'Your content access is active.'):(zh?'当前没有有效内容权益；可使用已有访问码兑换。':'No active content access. Redeem an existing access code below.')}</p>}

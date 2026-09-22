@@ -5,14 +5,14 @@ const words=n=>n==null||typeof n==='boolean'?'':Array.isArray(n)?n.map(words).jo
 const nodes=(n,p)=>n&&typeof n==='object'?(Array.isArray(n)?n.flatMap(v=>nodes(v,p)):[...(p(n)?[n]:[]),...nodes(n.props?.children,p)]):[];
 const fixtures=[{id:'sporttery_a',sourceMatchId:'a',matchNo:'周二001',businessDate:'2026-09-22',homeTeamName:'阿森纳',homeTeamNameEn:'Arsenal',awayTeamName:'切尔西',leagueName:'英超',status:'SCHEDULED',kickoffTime:'2026-09-22T12:00:00Z',odds:{home:1.8,draw:3.2,away:null},oddsSource:'500-sp',sourceUpdatedAt:'2026-09-22T05:55:00Z'},{id:'sporttery_b',sourceMatchId:'b',matchNo:'周三002',businessDate:'2026-09-23',homeTeamName:'乌迪内斯',awayTeamName:'博洛尼亚',leagueName:'意甲',status:'SCHEDULED',kickoffTime:'2026-09-23T12:00:00Z',odds:{home:2.1,draw:null,away:3.3}}];
 const overview=()=>({businessDate:'2026-09-22',sourceUpdatedAt:'2026-09-22T05:59:00Z',stale:false,matches:structuredClone(fixtures),review:{updatedAt:'2026-09-22T05:00:00Z',summary:{settled:20,won:8,pending:4,hitRate:.4},example:{decisionId:'decision_saved',matchId:'sporttery_review',homeTeamName:'历史主队',awayTeamName:'历史客队',publishedAt:'2026-09-21T00:00:00Z',cutoffTime:'2026-09-21T01:00:00Z',tipCode:'2',odds:2.35,state:'LOST',score:'2-0',quoteSource:'official-archived-sp',quoteObservedAt:'2026-09-20T23:50:00Z'}}});
-async function harness({data=overview(),failure=false,matchId,route={pathname:'/fixtures',search:'',hash:'',state:null},user=null}={}){
+async function harness({data=overview(),failure=false,matchId,route={pathname:'/fixtures',search:'',hash:'',state:null},user=null,access={active:false,trialAvailable:false,expiresAt:null}}={}){
  let cursor=0,search=route.search,effectStarted=false;const cells=[],effects=[],fetches=[];
  const accountApi=compile('../src/services/accountApi.ts',id=>id==='./runtimeUrls'?{buildApiUrl:p=>p}:require(id));
  const mod=compile('../src/pages/PublicBrowse.tsx',id=>{
  if(id==='react')return{useState:initial=>{const n=cursor++;if(!(n in cells))cells[n]=typeof initial==='function'?initial():initial;return[cells[n],v=>{cells[n]=typeof v==='function'?v(cells[n]):v;}];},useEffect:fn=>{if(!effectStarted){effects.push(fn);effectStarted=true;}}};
  if(id==='react/jsx-runtime')return{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props}),Fragment:'fragment'};
  if(id==='react-router-dom')return{Link:'a',useLocation:()=>({...route,search}),useParams:()=>({matchId}),useSearchParams:()=>[new URLSearchParams(search),(next)=>{search='?'+next.toString();}]};
- if(id==='lucide-react')return new Proxy({},{get:()=>()=>null});if(id.endsWith('/AccountContext'))return{useAccount:()=>({user})};if(id.endsWith('/AppContextCore'))return{useApp:()=>({language:'zh'})};if(id.endsWith('/FollowButton'))return{FollowButton:'follow'};if(id.endsWith('/TeamBadge'))return{TeamBadge:'badge'};if(id.endsWith('/runtimeUrls'))return{buildApiUrl:p=>p};if(id.endsWith('/accountApi'))return accountApi;if(id.endsWith('.css'))return{};throw Error(id);
+ if(id==='lucide-react')return new Proxy({},{get:()=>()=>null});if(id.endsWith('/AccountContext'))return{useAccount:()=>({user,access})};if(id.endsWith('/AppContextCore'))return{useApp:()=>({language:'zh'})};if(id.endsWith('/FollowButton'))return{FollowButton:'follow'};if(id.endsWith('/TeamBadge'))return{TeamBadge:'badge'};if(id.endsWith('/runtimeUrls'))return{buildApiUrl:p=>p};if(id.endsWith('/accountApi'))return accountApi;if(id.endsWith('.css'))return{};throw Error(id);
  },{fetch:async(url)=>{fetches.push(url);if(failure)return{ok:false,status:503};return{ok:true,json:async()=>url.includes('/matches/')?{match:data.matches[0]}:data};}});
  const render=()=>{cursor=0;return mod.PublicBrowse();};let tree=render();assert.match(words(tree),/正在读取/);effects.forEach(fn=>fn());await new Promise(r=>setTimeout(r,0));await new Promise(r=>setTimeout(r,0));return{render,fetches,get search(){return search;}};
 }
@@ -26,3 +26,23 @@ test('unknown requested date stays visible in picker and yields genuine no-fixtu
 test('public detail drops unsafe back path and preserves its route as the sign-in return',async()=>{const u=await harness({matchId:'sporttery_a',route:{pathname:'/match/sporttery_a',search:'?tab=history',hash:'#evidence',state:{fromPath:'/\\evil.example'}}}),t=u.render();assert.equal(nodes(t,n=>n.type==='a'&&n.props.className==='public-back')[0].props.to,'/fixtures');assert.equal(nodes(t,n=>n.type==='a'&&n.props.className==='public-cta')[0].props.to,'/auth?returnTo=%2Fmatch%2Fsporttery_a%3Ftab%3Dhistory%23evidence');assert.equal(u.fetches.length,2);});
 
 test('public sample includes only actual published probability values and preserves missing outcomes',async()=>{const data=overview();data.review.example.probabilities={'1':.4,X:null,'2':.35};const u=await harness({data,route:{pathname:'/review',search:'',hash:'',state:null}}),t=u.render(),sample=nodes(t,n=>n.props?.className==='public-example')[0];assert.match(words(sample),/发布时胜平负模型概率（参考）/);assert.match(words(sample),/主胜40\.0%/);assert.match(words(sample),/平局—/);assert.match(words(sample),/客胜35\.0%/);});
+
+test('guest recommendation preview retains both combo entries and exact login return tabs without private reads',async()=>{
+ const u=await harness({route:{pathname:'/best',search:'?tab=three',hash:'',state:null}}),t=u.render();
+ const section=nodes(t,n=>n.props?.['aria-label']==='每日串关入口')[0];assert(section);assert.match(words(section),/2串1SP≥2\.50/);assert.match(words(section),/3串1SP≥5\.00/);assert.match(words(section),/尚未登录/);assert.match(words(section),/不代表今天没有组合/);
+ const links=nodes(section,n=>n.type==='a');assert.equal(links.length,2);
+ for(const [index,link] of links.entries()){assert.equal(link.props.to.split('?')[0],'/auth');assert.equal(new URLSearchParams(link.props.to.split('?')[1]).get('returnTo'),`/best?tab=${index?'three':'two'}`);}
+ assert.deepEqual(u.fetches,['/api/public/overview']);assert.doesNotMatch(words(section),/decision_saved|历史主队|3\.60|5\.69/);
+});
+
+test('inactive account combo entry distinguishes unclaimed trial from expired access and retains target',async()=>{
+ for(const scenario of [{access:{active:false,trialAvailable:true,expiresAt:null},message:'尚未领取体验',action:'领取3天体验'},{access:{active:false,trialAvailable:false,expiresAt:'2020-01-01T00:00:00Z'},message:'内容权益已到期',action:'管理内容权益'},{access:{active:false,trialAvailable:false,expiresAt:null},message:'暂无有效内容权益',action:'管理内容权益'}]){
+  const u=await harness({route:{pathname:'/best',search:'',hash:'',state:null},user:{id:'u'},access:scenario.access}),section=nodes(u.render(),n=>n.props?.['aria-label']==='每日串关入口')[0];
+  assert.match(words(section),new RegExp(scenario.message));assert.match(words(section),new RegExp(scenario.action));
+  const link=nodes(section,n=>n.type==='a')[1];assert.equal(link.props.to.split('?')[0],'/account');assert.equal(new URLSearchParams(link.props.to.split('?')[1]).get('returnTo'),'/best?tab=three');assert.deepEqual(u.fetches,['/api/public/overview']);
+ }
+});
+
+test('public fixture and review pages do not acquire an unrelated locked combo section',async()=>{
+ for(const pathname of ['/fixtures','/review']){const u=await harness({route:{pathname,search:'',hash:'',state:null}});assert.equal(nodes(u.render(),n=>n.props?.['aria-label']==='每日串关入口').length,0);}
+});
