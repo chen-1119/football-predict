@@ -56,7 +56,13 @@ test('authenticated reader can show independent reference content while original
   const result = await read(match.id);
   assert.equal(result.status, 'ok'); assert.equal(result.collection.sourceHttpStatus, 405);
   assert.equal(result.provider, 'api-football'); assert.equal(result.predictionEligible, false);
-  assert.ok(!/providerFixtureId|https?:|fixtureMap|provenance/.test(JSON.stringify(result)));
+  const privateFields = JSON.stringify(result, (key, value) => {
+    if (key !== 'sourcePage') return value;
+    assert.ok(['https://www.leisu.com/', 'https://www.api-football.com/'].includes(value.url));
+    assert.equal(value.scope, 'provider');
+    return undefined;
+  });
+  assert.ok(!/providerFixtureId|https?:|fixtureMap|provenance/.test(privateFields));
   await fs.mkdir(path.join(dir, 'daily-prematch-api'));
   await fs.writeFile(path.join(dir, 'daily-prematch-api/status.json'), JSON.stringify({ version: 'daily-prematch-api-v2', provider: 'api-football', predictionEligible: false,
     state: 'partial', startedAt: new Date(now - 30000).toISOString(), completedAt: new Date(now).toISOString(), rosterReceivedAt: new Date(now).toISOString(), matches: 11, referenceMatches: 7, dataComplete: false }));
