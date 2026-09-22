@@ -48,9 +48,9 @@ assert.equal(adaptivePollSeconds(marketAt(10), at), 60);
 assert.equal(adaptivePollSeconds(marketAt(30), at), 120);
 assert.equal(adaptivePollSeconds(marketAt(90), at), 300);
 assert.equal(adaptivePollSeconds(marketAt(240), at), 600);
-assert.equal(adaptivePollSeconds(marketAt(720), at), 900);
+assert.equal(adaptivePollSeconds(marketAt(720), at), 600);
 assert.equal(adaptivePollSeconds(marketAt(1800), at), 1800);
-assert.equal(adaptivePollSeconds([], at), 900);
+assert.equal(adaptivePollSeconds([], at), 240);
 
 assert.equal(jitteredDelayMs(120, () => 0), 102_000);
 assert.equal(jitteredDelayMs(120, () => 0.5), 120_000);

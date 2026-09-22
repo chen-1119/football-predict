@@ -1,4 +1,7 @@
 import { PrematchCollectionPanel } from '../components/predictions/PrematchCollectionPanel';
+import { useRecommendationCenter } from '../hooks/useRecommendationCenter';
+import { publishedMatchRecommendation, usesPublishedRecommendation } from '../services/publishedMatchRecommendation';
+import { PublishedMatchPick } from '../components/recommendations/PublishedMatchPick';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context/AppContextCore';
 import type { FiveHundredRecentFormRow, League, Match, MatchProbabilityModel, MultiLangString, OutcomeProbability, PredictionDetail, ScoreProbability } from '../services/mockData';
@@ -1198,6 +1201,7 @@ const selectFreshestMatch = (
 
 export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initialTab = 'overview', capturedData }) => {
   const { language, matches, dataSync } = useApp();
+  const published = useRecommendationCenter();
   const displayText = (value: string | null | undefined, fallback = '') => formatSourceNeutralText(value, language, fallback);
   const [activeTab, setActiveTab] = useState<DetailTab>(initialTab);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -1633,6 +1637,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
     && !isPublishedLiveAwaitingSettlement
     && !archivedPreMatchPrediction;
   const isPredictionArchiveOnly = isResultPhase && !isPreMatchRecordSettling && !hasPredictionContent;
+  const unifiedRow = publishedMatchRecommendation(published.data, match);
+  const useUnified = published.loading || published.failed || usesPublishedRecommendation(match, unifiedRow, nowMs);
   // Publication risk may downgrade how a direction is labelled, but it must not
   // cause the detail page to choose a different direction from the list card.
   const detailAnalysisCandidate = rawDisplayRecommendation?.prediction;
@@ -2034,7 +2040,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
     ? primaryOutcomeTitle.replace(/^(?:(?:参考推荐|动态证据参考|分析参考)\s+)+/, '')
     : primaryOutcomeTitle;
   const primaryOutcomeIsHandicap = primaryOutcomePrediction?.oddsPoolCode === 'HHAD';
-  const scoreBindingOutcomeCode = primaryOutcomeIsHandicap ? undefined : primaryOutcomeCode;
+  const scoreBindingOutcomeCode = useUnified ? unifiedRow?.decision.tipCode : primaryOutcomeIsHandicap ? undefined : primaryOutcomeCode;
   const scoreDistributionRows = Array.isArray(probabilityModel?.scoreDistribution)
     ? probabilityModel.scoreDistribution
     : [];
@@ -2814,7 +2820,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
       
       {/* 1. 面包屑与返回 */}
       <div className="detail-topbar match-detail-v4__topbar">
-        <FollowButton matchId={match.id} />
+        <FollowButton matchId={match.id} decisionId={unifiedRow?.decision.decisionId} />
         <div className="match-detail-v4__breadcrumb">
           {language === 'zh' ? '首页' : 'Home'} / {country.name[language]} / {league.name[language]} / {homeTeam.shortName[language]} vs {awayTeam.shortName[language]}
         </div>
@@ -2947,7 +2953,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
       </div>
 
       {/* 3. 首屏决策驾驶舱：结论先于赔率与证据。兼容短视频导出脚本的既有类名。 */}
-      <section className="prediction-view-stack match-detail-v4__cockpit" data-view="summary" data-recommendation-track={isPredictionArchiveOnly || isArchivedPrimaryDirection || isArchivedLiveRecommendation ? 'archive' : isFormalPrimaryRecommendation ? 'formal' : isLivePrimaryRecommendation ? 'live' : isAnalysisReferenceDirection || isFiveHundredReferenceDirection ? 'reference' : 'watch'} aria-labelledby="match-detail-decision-heading">
+      <section className="prediction-view-stack match-detail-v4__cockpit" data-view="summary" data-recommendation-track={useUnified ? 'published-reference' : isPredictionArchiveOnly || isArchivedPrimaryDirection || isArchivedLiveRecommendation ? 'archive' : isFormalPrimaryRecommendation ? 'formal' : isLivePrimaryRecommendation ? 'live' : isAnalysisReferenceDirection || isFiveHundredReferenceDirection ? 'reference' : 'watch'} aria-labelledby="match-detail-decision-heading">
             <h2 id="match-detail-decision-heading" className="sr-only">
               {language === 'zh' ? '本场决策结论' : 'Match decision'}
             </h2>
@@ -2960,7 +2966,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                     : `The official market was cancelled${match.voidReason ? `: ${match.voidReason}` : ''}; profit is zero and the row is excluded from hit-rate denominators.`)}
                 </span>
               </div>
-            ) : isPendingResult && (
+            ) : !useUnified && isPendingResult && (
               <div className="match-detail-v4__settlement-status" role="status">
                 <strong>
                   {provisionalArchivedOutcome
@@ -2978,8 +2984,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                 </span>
               </div>
             )}
-            <div className="card recommendation-overview-card recommendation-outcome-card">
+            {useUnified ? <div className="card recommendation-overview-card recommendation-outcome-card"><section className="recommendation-overview-panel is-outcome"><PublishedMatchPick row={unifiedRow} language={language} loading={published.loading} failed={published.failed} now={nowMs} /></section></div> : <div className="card recommendation-overview-card recommendation-outcome-card">
               <section className="recommendation-overview-panel is-outcome">
+                <small>{language === 'zh' ? '旧版赛前归档' : 'Legacy pre-match archive'}</small>
                 <div className="recommendation-overview-head">
                   <span>{isPublishedLiveAwaitingSettlement
                     ? primaryOutcomeIsHandicap
@@ -3100,6 +3107,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
               </section>
             </div>
 
+            }
             <div className="card recommendation-score-card">
               <section className="recommendation-overview-panel is-score">
                 <div className="recommendation-overview-head">
@@ -3195,7 +3203,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
         {activeTab === 'overview' && (
           <div className="match-detail-v4__section-stack" data-section="overview">
 
-            {isPredictionArchiveOnly && (
+            {!useUnified && isPredictionArchiveOnly && (
               <div className="card prediction-empty-card">
                 <h3>{language === 'zh' ? '本场仅保留赛果归档' : 'Result archive only'}</h3>
                 <p>{archiveOutcomeReason}</p>
@@ -3207,7 +3215,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
               </div>
             )}
 
-            {!isPreMatchRecordSettling && (
+            {!useUnified && !isPreMatchRecordSettling && (
             <div className="card decision-transparent-card">
               <div className="decision-transparent-head">
                 <div>
@@ -3276,9 +3284,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
               <div className="match-detail-v4__section-head">
                 <div>
                   <span className="review-kicker">{language === 'zh' ? '数据与分析' : 'Data & analysis'}</span>
-                  <h3 id="match-detail-data-analysis-heading">{language === 'zh' ? '推荐生成时的数据与依据' : 'Evidence at the recommendation decision'}</h3>
+                  <h3 id="match-detail-data-analysis-heading">{useUnified ? (language === 'zh' ? '模型快照与补充资料' : 'Model snapshot and supporting data') : (language === 'zh' ? '推荐生成时的数据与依据' : 'Evidence at the recommendation decision')}</h3>
                 </div>
-                <span>{language === 'zh' ? '保留决策时点，最新补采资料见上方' : 'Decision-time record; latest collected data is shown above'}</span>
+                <span>{useUnified ? (language === 'zh' ? '已发布方向与SP以上方统一记录为准' : 'Published direction and SP follow the record above') : (language === 'zh' ? '保留决策时点，最新补采资料见上方' : 'Decision-time record; latest collected data is shown above')}</span>
               </div>
               <RecommendationEvidenceFacts
                 match={match}
@@ -3377,7 +3385,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
 
         {activeTab === 'history' && (
           <div className="match-detail-v4__section-stack" data-section="history">
-            {isResultPhase && hasReviewPredictions && (
+            {useUnified && <div className="card review-card"><h3>{language === 'zh' ? '已发布推荐复盘' : 'Published recommendation review'}</h3><PublishedMatchPick row={unifiedRow} language={language} loading={published.loading} failed={published.failed} now={nowMs} /></div>}
+            {!useUnified && isResultPhase && hasReviewPredictions && (
               <div className="card review-card">
                 <div className="review-head">
                   <div>

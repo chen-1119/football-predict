@@ -86,6 +86,22 @@ function parseOdds(rowHtml, type) {
   return odds.odds1 && odds.oddsX && odds.odds2 ? odds : null;
 }
 
+// The data-*-sxname attributes are display abbreviations. The corresponding
+// team link carries the complete source name used by the official fixture.
+// Bind that title to its side and displayed short name, never to an arbitrary
+// title (rank/league/tooltips also have titles) or a fuzzy name replacement.
+function sourceTeamName(rowHtml, side, shortName) {
+  const names = new Set();
+  for (const link of rowHtml.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)) {
+    const attrs = parseAttrs(link[1]);
+    if (!norm(attrs.class).split(/\s+/).includes(side)) continue;
+    const label = norm(link[2].replace(/<[^>]*>/g, ''));
+    const title = norm(attrs.title);
+    if (title && label === shortName) names.add(title);
+  }
+  return names.size === 1 ? [...names][0] : shortName;
+}
+
 function signalKeys(attrs) {
   const keys = new Set();
   const sourceId = norm(attrs["data-id"]);
@@ -108,8 +124,8 @@ function buildSignal(attrs, rowHtml, updatedAt) {
   const handicapLine = norm(attrs["data-rangqiu"]);
   const matchDate = norm(attrs["data-matchdate"]);
   const matchTime = norm(attrs["data-matchtime"]);
-  const home = norm(attrs["data-homesxname"]);
-  const away = norm(attrs["data-awaysxname"]);
+  const home = sourceTeamName(rowHtml, 'team-l', norm(attrs["data-homesxname"]));
+  const away = sourceTeamName(rowHtml, 'team-r', norm(attrs["data-awaysxname"]));
   const leagueName = norm(attrs["data-simpleleague"]);
   const sourceMatchId = norm(attrs["data-id"]);
   const fixtureId = norm(attrs["data-fixtureid"]);

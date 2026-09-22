@@ -98,3 +98,20 @@ test('failed password login keeps anonymous CSRF and password form available for
 test('blocked account me refresh clears previous account and its saved rows',async()=>{
  const h=hooks();let blocked=false;const api=service({fetch:async()=>blocked?{ok:false,status:403,json:async()=>({ok:false,error:'account_blocked'})}:{ok:true,status:200,json:async()=>({ok:true,user:{id:'first',username:'first'},access:{active:true,kind:'trial',expiresAt:'2099-01-01T00:00:00Z',trialAvailable:false},authMethods:{password:true,sms:false},csrfToken:'csrf'})}});const mod=compile('../src/context/AccountContext.tsx',id=>id==='react'?h.react:id==='react/jsx-runtime'?jsx:id.endsWith('/accountApi')?api:require(id));const render=()=>{h.reset();return mod.AccountProvider({children:null}).props.value;};let c=render();await c.refresh();assert.equal(render().user.id,'first');blocked=true;await assert.rejects(c.refresh());c=render();assert.equal(c.user,null);assert.equal(c.access.active,false);assert.equal(c.following.length,0);
 });
+
+test('claiming access exposes a safe continue link preserving the selected combo tab',async()=>{
+ const a={...guest(),user:{id:'u',username:'person'},access:{active:false,trialAvailable:true,expiresAt:null}};
+ a.claimTrial=async()=>{a.access={active:true,trialAvailable:false,expiresAt:'2099-01-01T00:00:00Z',kind:'trial'};};
+ const u=ui('../src/pages/Account.tsx','Account',a,{pathname:'/account',search:'?returnTo=%2Fbest%3Ftab%3Dthree'});
+ assert.equal(nodes(u.render(),n=>n.type==='a'&&words(n).includes('继续查看')).length,0);
+ await button(u.render(),'主动领取体验').props.onClick();const link=nodes(u.render(),n=>n.type==='a'&&words(n).includes('继续查看'))[0];assert.equal(link.props.to,'/best?tab=three');assert.equal(u.navigations.length,0);
+ const unsafe=ui('../src/pages/Account.tsx','Account',a,{pathname:'/account',search:'?returnTo=https%3A%2F%2Fevil.example'});assert.equal(nodes(unsafe.render(),n=>n.type==='a'&&words(n).includes('继续查看'))[0].props.to,'/best');
+});
+
+test('combo login and expired account session retain the selected tab through access activation',async()=>{
+ const a=guest();a.login=async()=>{a.user={id:'u'};};
+ const auth=ui('../src/pages/Auth.tsx','Auth',a,{pathname:'/auth',search:'?returnTo=%2Fbest%3Ftab%3Dtwo'});
+ let t=auth.render();change(t,'account-username','person');change(t,'account-password','valid long password');await nodes(auth.render(),n=>n.type==='form')[0].props.onSubmit({preventDefault(){}});assert.equal(auth.navigations[0][0],'/best?tab=two');
+ const expired=ui('../src/pages/Account.tsx','Account',guest(),{pathname:'/account',search:'?returnTo=%2Fbest%3Ftab%3Dthree'}),link=nodes(expired.render(),n=>n.type==='a'&&n.props.className==='account-primary')[0];
+ const accountReturn=new URLSearchParams(link.props.to.split('?')[1]).get('returnTo');assert.equal(accountReturn,'/account?returnTo=%2Fbest%3Ftab%3Dthree');
+});
