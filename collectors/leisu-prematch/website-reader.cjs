@@ -3,6 +3,26 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { selectEvidence } = require('./website-adapter.cjs');
 
+function providerPage(provider) {
+  return provider === 'api-football'
+    ? { url: 'https://www.api-football.com/', label: 'API-Football 官网', scope: 'provider', reason: 'provider-only' }
+    : { url: 'https://www.leisu.com/', label: '雷速官网', scope: 'provider', reason: 'no-verified-match-page' };
+}
+
+// Only call with observations already accepted by website-adapter. Reconstruct
+// one exact public route; no URL, query, token or private endpoint is forwarded.
+function leisuPage(section, kind) {
+  const observations = [section?.latestValid, section?.latestAttempt].filter(Boolean);
+  const ids = new Set(observations.map(observation => observation.providerMatchId));
+  if (!observations.length || ids.size !== 1) return providerPage('leisu');
+  const id = observations[0].providerMatchId;
+  if (typeof id !== 'string' || !/^[1-9]\d{0,15}$/.test(id)) return providerPage('leisu');
+  const route = kind === 'injuries' ? 'shujufenxi' : 'detail';
+  const url = `https://live.leisu.com/${route}-${id}`;
+  if (observations.some(observation => observation.kind !== kind || observation.sourceUrl !== url)) return providerPage('leisu');
+  return { url, label: kind === 'injuries' ? '雷速本场伤停分析页' : '雷速本场阵容页', scope: 'match', reason: 'verified-match' };
+}
+
 const cleanText = value => typeof value === 'string' ? value
   .replace(/(["'])\\\\[^"'\r\n]+\1/g, '资料')
   .replace(/\\\\[^\s\\/<>"'，。；、（）【】\])]+[\\/][^\s<>"'，。；、（）【】\])]+/g, '资料')
@@ -19,6 +39,7 @@ function publicSection(section, kind) {
     observedAt: valid?.receivedAt || null,
     lastAttemptAt: attempt?.receivedAt || null,
     previousValue: Boolean(valid && attempt && attempt.status !== 'available'),
+    sourcePage: leisuPage(section, kind),
     data: null,
   };
   if (!valid?.data) return result;
@@ -40,14 +61,18 @@ function publicSection(section, kind) {
 
 function publicEvidence(selected, fixture) {
   const eventAt = Date.parse(fixture.eventVersion || fixture.kickoffTime || '');
+  const sections = {
+    injuries: publicSection(selected.sections?.injuries, 'injuries'),
+    lineup: publicSection(selected.sections?.lineup, 'lineup'),
+  };
+  const ids = new Set(Object.values(selected.sections || {}).flatMap(section => [section?.latestValid, section?.latestAttempt])
+    .filter(Boolean).map(observation => observation.providerMatchId));
+  if (ids.size > 1) for (const section of Object.values(sections)) section.sourcePage = providerPage('leisu');
   return {
     matchId: fixture.id, eventVersion: Number.isFinite(eventAt) ? new Date(eventAt).toISOString() : null,
     status: selected.status, updatedAt: selected.generatedAt,
     predictionEligible: false,
-    sections: {
-      injuries: publicSection(selected.sections?.injuries, 'injuries'),
-      lineup: publicSection(selected.sections?.lineup, 'lineup'),
-    },
+    sections,
   };
 }
 
@@ -230,7 +255,8 @@ function sourceSection(reference, kind, provider, collection, at) {
       : envelope && !['ok', 'missing'].includes(envelope) ? envelope : 'missing';
   }
   if (!result.data && coverage?.mappingState === 'unmapped') result.status = 'unmapped';
-  return { ...result, provider, missingReason: result.data ? null : result.status };
+  return { ...result, provider, missingReason: result.data ? null : result.status,
+    sourcePage: provider === 'leisu' ? result.sourcePage || providerPage(provider) : providerPage(provider) };
 }
 
 function mergeSources({ fixture, at, leisuReference, apiReference, apiReadState, apiDiagnostics, leisuCollection, apiCollection, statusFields }) {
@@ -257,12 +283,16 @@ function mergeSources({ fixture, at, leisuReference, apiReference, apiReadState,
       fallback: Boolean(selected.data && selected.provider === 'api-football'), provider: selected.data ? selected.provider : null }];
   }));
   const view = section => ({ status: section.status, observedAt: section.observedAt, lastAttemptAt: section.lastAttemptAt,
-    previousValue: section.previousValue, missingReason: section.missingReason });
+    previousValue: section.previousValue, missingReason: section.missingReason, sourcePage: section.sourcePage });
+  const leisuPages = Object.values(leisu).map(section => section.sourcePage);
+  const leisuSourcePage = leisuPages.find(page => page?.scope === 'match') || providerPage('leisu');
   const sources = {
     leisu: { provider: 'leisu', status: leisuReference.status,
+      sourcePage: leisuSourcePage,
       mappingState: Object.values(leisu).some(s => s.observedAt || s.lastAttemptAt) ? 'verified' : leisuReference.status === 'conflict' ? 'conflict' : 'unknown',
       sections: Object.fromEntries(Object.entries(leisu).map(([kind, section]) => [kind, view(section)])), ...(leisuCollection ? { collection: leisuCollection } : {}) },
     'api-football': { provider: 'api-football', status: apiReference?.status || apiReadState,
+      sourcePage: providerPage('api-football'),
       mappingState: apiReference ? 'verified' : apiCollection?.matchCoverage?.mappingState || (apiReadState === 'conflict' ? 'conflict' : 'unknown'),
       sections: Object.fromEntries(Object.entries(api).map(([kind, section]) => [kind, view(section)])), ...(apiCollection ? { collection: apiCollection } : {}) },
   };

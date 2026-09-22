@@ -5,13 +5,14 @@ import '../../styles/prematch-collection.css';
 
 type Player = { name: string; side?: 'home' | 'away'; reason?: string; position?: string; expectedReturn?: string; jersey?: string };
 type Provider = 'leisu' | 'api-football';
+type SourcePage = { url: string; scope: 'match' | 'provider'; reason?: string };
 type Section = { status: string; observedAt: string | null; lastAttemptAt: string | null; previousValue: boolean;
-  provider?: Provider | null; statusProvider?: Provider | null; fallback?: boolean; missingReason?: string | null;
+  provider?: Provider | null; statusProvider?: Provider | null; fallback?: boolean; missingReason?: string | null; sourcePage?: SourcePage;
   data: { players?: Player[]; teams?: Array<{ side: 'home' | 'away'; formation: string; coach?: string; starters: Player[]; substitutes: Player[] }> } | null };
 type Collection = { provider?: Provider; enabled: boolean; state: string; statusFresh: boolean; lastRunAt: string | null;
     lastSuccessAt: string | null; nextAttemptAt: string | null; sourceState: string | null;
     sourceHttpStatus: number | null; fixtureState: string | null; eligibleMatches: number | null };
-type Source = { provider: Provider; status: string; mappingState: string; sections: Record<'injuries' | 'lineup', Omit<Section, 'data'>>; collection?: Collection };
+type Source = { provider: Provider; status: string; mappingState: string; sourcePage?: SourcePage; sections: Record<'injuries' | 'lineup', Omit<Section, 'data'>>; collection?: Collection };
 type Evidence = { matchId: string; status: string; provider?: Provider | 'mixed' | null; predictionEligible: false; sections?: { injuries: Section; lineup: Section };
   sources?: Partial<Record<Provider, Source>>; collection?: Collection };
 type RefreshRequest = { matchId: string; state: 'queued' | 'cooldown' | 'error'; nextAllowedAt?: string; error?: string };
@@ -20,7 +21,7 @@ const labels: Record<string, [string, string]> = {
   available: ['已有资料', 'Available'], source_empty: ['来源暂未提供', 'No source records'], missing: ['资料待补充', 'Awaiting data'],
   unavailable: ['资料暂不可用', 'Unavailable'], stale: ['资料已过期', 'Expired'], disabled: ['采集尚未启用', 'Collection disabled'],
   ineligible: ['不在赛前采集范围', 'Outside collection window'], partial: ['部分资料待补充', 'Partial coverage'],
-  blocked: ['来源访问受限', 'Source restricted'], login_required: ['采集会话需更新', 'Session expired'],
+  blocked: ['自动采集暂不可用', 'Automatic collection unavailable'], login_required: ['采集会话需更新', 'Session expired'],
   conflict: ['比赛身份待核对', 'Match identity unverified'], parse_error: ['来源数据解析失败', 'Source parsing failed'],
   loading: ['正在读取资料', 'Loading data'], unauthorized: ['请先验证访问权限', 'Access verification required'],
   'fixture-stale': ['比赛输入已过期', 'Fixture input expired'], 'fixture-unavailable': ['比赛输入暂不可用', 'Fixture unavailable'],
@@ -38,6 +39,14 @@ const reasonLabels: Record<string, string> = {
   'Yellow Cards': '累计黄牌停赛', Rest: '休整', 'Missing Fixture': '缺席（来源标记）',
 };
 const positions: Record<string, string> = { G: '门将', D: '后卫', M: '中场', F: '前锋', Goalkeeper: '门将', Defender: '后卫', Midfielder: '中场', Attacker: '前锋' };
+
+// Public webpages only. Do not turn collection endpoints or arbitrary response URLs into links.
+function publicSourcePage(provider: Provider, page?: SourcePage): SourcePage {
+  if (provider === 'leisu' && page?.scope === 'match' && /^https:\/\/live\.leisu\.com\/(?:shujufenxi|detail)-[1-9]\d*$/.test(page.url)) return page;
+  return provider === 'leisu'
+    ? { url: 'https://www.leisu.com/', scope: 'provider', reason: 'no-verified-match-page' }
+    : { url: 'https://www.api-football.com/', scope: 'provider', reason: 'provider-only' };
+}
 
 export function PrematchCollectionPanel({ matchId, language, homeName, awayName, kickoffTime }: {
   matchId: string; language: 'zh' | 'en'; homeName?: string; awayName?: string; kickoffTime?: string;
@@ -112,6 +121,25 @@ export function PrematchCollectionPanel({ matchId, language, homeName, awayName,
     return !collection?.statusFresh || ['blocked', 'login_required', 'parse_error'].includes(collection?.sourceState || '')
       ? (zh ? '等待来源恢复' : 'Waiting for source recovery') : (zh ? '等待下轮检查' : 'Awaiting the next check');
   };
+  const sourceLinks = (source: Source) => {
+    const main = publicSourcePage(source.provider, source.sourcePage);
+    const pages = main.scope === 'match'
+      ? [main, ...Object.values(source.sections).map(section => publicSourcePage(source.provider, section.sourcePage))]
+        .filter((page, index, all) => page.scope === 'match' && all.findIndex(item => item.url === page.url) === index)
+      : [main];
+    return <div className="prematch-report__source-pages">
+      <strong>{zh ? '数据来源网页' : 'Source webpages'}</strong>
+      {pages.map(page => <a key={page.url} href={page.url} target="_blank" rel="noopener noreferrer" className="prematch-report__source-link">
+        <span>{page.scope === 'match'
+          ? page.url.includes('/detail-') ? (zh ? '本场阵容原页面' : 'Match lineup page') : (zh ? '本场分析原页面' : 'Match analysis page')
+          : source.provider === 'leisu' ? (zh ? '雷速体育官网' : 'Leisu website') : (zh ? 'API-Football 数据提供方官网' : 'API-Football provider website')} ↗</span>
+        <small>{page.url}</small>
+      </a>)}
+      {main.scope === 'provider' && <p>{source.provider === 'leisu'
+        ? (zh ? '尚未核对本场对应页面，先提供来源官网。' : 'The exact match page is not verified; this opens the provider website.')
+        : (zh ? '此链接为数据提供方官网，不是本场比赛详情页。' : 'This opens the provider website, not a match detail page.')}</p>}
+    </div>;
+  };
   return <section className="card prematch-report" data-testid="prematch-collection" aria-labelledby={`prematch-heading-${matchId}`} aria-busy={fetching}>
     <header className="prematch-report__head">
       <div><span className="prematch-report__eyebrow">{zh ? '最新补充资料' : 'LATEST MATCH DATA'}</span><h3 id={`prematch-heading-${matchId}`}>{zh ? '伤停与比赛阵容' : 'Injuries & lineups'}</h3>
@@ -132,7 +160,8 @@ export function PrematchCollectionPanel({ matchId, language, homeName, awayName,
     {evidence?.status === 'unavailable' && <p className="prematch-report__notice" role="status">{zh ? '本场资料暂不可用，可刷新重试；这不代表球队没有伤停。' : 'Match data is unavailable. Retry to check; this does not confirm an injury-free squad.'}</p>}
     {sourceRows.length > 0 && <div className="prematch-report__sources" aria-label={zh ? '双源采集状态' : 'Collection source status'}>{sourceRows.map(source => <article key={source.provider} data-testid={`prematch-source-${source.provider}`}>
       <header><strong>{sourceName(source.provider)}</strong><span>{mappingLabel(source.mappingState)}</span></header>
-      <p>{source.collection?.sourceState === 'available' ? (zh ? '来源可访问' : 'Source reachable') : label(source.collection?.sourceState || source.status)}{source.collection?.sourceHttpStatus ? ` · HTTP ${source.collection.sourceHttpStatus}` : ''}{source.collection?.sourceState && source.status !== 'ok' && ` · ${label(source.status)}`}</p>
+      <p>{source.collection?.sourceState === 'available' ? (zh ? '来源可访问' : 'Source reachable') : label(source.collection?.sourceState || source.status)}{source.collection?.sourceState && source.status !== 'ok' && ` · ${label(source.status)}`}</p>
+      {sourceLinks(source)}
       <dl><div><dt>{zh ? '伤停' : 'Injuries'}</dt><dd>{label(source.sections.injuries.status)}{source.sections.injuries.previousValue && (zh ? ' · 保留上次记录' : ' · Previous record')}</dd></div>
         <div><dt>{zh ? '阵容' : 'Lineup'}</dt><dd>{label(source.sections.lineup.status)}{source.sections.lineup.previousValue && (zh ? ' · 保留上次名单' : ' · Previous list')}</dd></div>
         <div><dt>{zh ? '最近尝试 · 伤停 / 阵容' : 'Last attempt · injuries / lineup'}</dt><dd>{time(source.sections.injuries.lastAttemptAt)} / {time(source.sections.lineup.lastAttemptAt)}</dd></div>

@@ -29,7 +29,8 @@ async function harness({ data = evidence(), postStatus = 200, postState = 'queue
 
 test('both source status cards remain visible when API fallback provides the injury list', async () => {
   const u = await harness(), tree = u.render(), source = id => nodes(tree, n => n.props?.['data-testid'] === id)[0];
-  assert.match(words(source('prematch-source-leisu')), /雷速.*来源访问受限.*HTTP 405/);
+  assert.match(words(source('prematch-source-leisu')), /雷速.*自动采集暂不可用/);
+  assert.doesNotMatch(words(tree), /HTTP 405/);
   assert.match(words(source('prematch-source-api-football')), /API-Football.*比赛已匹配.*已有资料/);
   assert.match(words(tree), /API-Football · 补充来源/); assert.match(words(tree), /球员甲/);
   assert.match(words(tree), /未到采集窗口/); assert.match(words(tree), /不代表全员健康或无人停赛/);
@@ -80,7 +81,35 @@ test('an empty reachable source is not labeled as having data and stale schedule
   assert.match(words(headings[0]), /状态来源：API-Football.*来源暂未提供.*最近尝试：09\/22 13:55/);
   assert.match(words(headings[1]), /状态来源：API-Football.*未到采集窗口.*最近尝试：—/);
   const leisuCard = nodes(tree, n => n.props?.['data-testid'] === 'prematch-source-leisu')[0];
-  assert.match(words(leisuCard), /HTTP 405/); assert.match(words(leisuCard), /等待来源恢复/); assert.doesNotMatch(words(leisuCard), /09\/14/);
+  assert.match(words(leisuCard), /自动采集暂不可用/); assert.match(words(leisuCard), /等待来源恢复/); assert.doesNotMatch(words(leisuCard), /HTTP 405|09\/14/);
   const metrics = nodes(tree, n => n.props?.className === 'prematch-report__metrics')[0];
   assert.match(words(metrics), /取得有效资料后显示/); assert.doesNotMatch(words(tree), /本场资料暂不可用，可刷新重试/);
+});
+
+test('source cards link to public provider websites without inventing an unmapped match page', async () => {
+  const u = await harness(), tree = u.render(), links = nodes(tree, n => n.type === 'a');
+  assert.deepEqual(links.map(n => n.props.href), ['https://www.leisu.com/', 'https://www.api-football.com/']);
+  for (const link of links) { assert.equal(link.props.target, '_blank'); assert.equal(link.props.rel, 'noopener noreferrer'); assert.match(words(link), /https:\/\//); }
+  assert.match(words(tree), /尚未核对本场对应页面/); assert.match(words(tree), /不是本场比赛详情页/);
+  assert.equal(u.fetches.length, 1, 'showing source links must not request a provider or trigger collection');
+});
+
+test('verified match links distinguish analysis and lineup pages', async () => {
+  const data = evidence(), leisu = data.sources.leisu;
+  leisu.sourcePage = { url: 'https://live.leisu.com/shujufenxi-4558551', scope: 'match' };
+  leisu.sections.injuries.sourcePage = leisu.sourcePage;
+  leisu.sections.lineup.sourcePage = { url: 'https://live.leisu.com/detail-4558551', scope: 'match' };
+  const u = await harness({ data }), tree = u.render(), card = nodes(tree, n => n.props?.['data-testid'] === 'prematch-source-leisu')[0];
+  assert.deepEqual(nodes(card, n => n.type === 'a').map(n => n.props.href), ['https://live.leisu.com/shujufenxi-4558551', 'https://live.leisu.com/detail-4558551']);
+  assert.match(words(card), /本场分析原页面/); assert.match(words(card), /本场阵容原页面/); assert.doesNotMatch(words(card), /尚未核对/);
+});
+
+test('endpoint URLs, credentials, query strings and unexpected origins cannot become source links', async () => {
+  for (const url of ['javascript:alert(1)', 'https://v3.football.api-sports.io/injuries?fixture=123', 'https://live.leisu.com/detail-123?token=secret', 'https://live.leisu.com@evil.test/detail-123', 'https://evil.test/detail-123']) {
+    const data = evidence();
+    for (const source of Object.values(data.sources)) { source.sourcePage = { url, scope: 'match' }; source.sections.injuries.sourcePage = source.sourcePage; }
+    const u = await harness({ data }), tree = u.render();
+    assert.deepEqual(nodes(tree, n => n.type === 'a').map(n => n.props.href), ['https://www.leisu.com/', 'https://www.api-football.com/']);
+    assert.doesNotMatch(words(tree), /secret|evil\.test|api-sports\.io|javascript:/);
+  }
 });

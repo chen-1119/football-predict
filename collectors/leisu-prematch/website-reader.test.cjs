@@ -11,6 +11,14 @@ const { createWebsiteReader, createWebsiteHandler } = require('./website-reader.
 const NOW = '2026-09-12T13:40:00.000Z';
 const ID = 'sporttery_123';
 const addressPattern = /https?:\/\/|www\.|leisu\.com|audit-source\.example|192\.0\.2\.8|\/srv\/collector|C:\\private\\collector/i;
+const withoutSourcePages = result => JSON.stringify(result, (key, value) => {
+  if (key !== 'sourcePage') return value;
+  assert.deepEqual(Object.keys(value).sort(), ['label', 'reason', 'scope', 'url']);
+  assert.match(value.url, /^(?:https:\/\/www\.(?:leisu\.com|api-football\.com)\/|https:\/\/live\.leisu\.com\/(?:shujufenxi|detail)-[1-9]\d{0,15})$/);
+  assert.equal(value.scope, value.url.startsWith('https://live.leisu.com/') ? 'match' : 'provider');
+  assert.ok(['verified-match', 'no-verified-match-page', 'provider-only'].includes(value.reason));
+  return undefined;
+});
 const row = (extra = {}) => ({
   id: ID, sourceMatchId: '123', homeTeamName: '主队', awayTeamName: '客队',
   kickoffTime: '2026-09-12T14:00:00.000Z', eventVersion: '2026-09-12T14:00:00.000Z',
@@ -112,13 +120,13 @@ test('real JSON export yields injuries and both starting/bench lineups through t
   assert.deepEqual(JSON.parse(await fs.readFile(exportPath, 'utf8')), document);
 });
 
-test('public DTO identifies providers but excludes private IDs, source URLs, paths and storage metadata', async t => {
+test('public DTO identifies providers and permitted public pages but excludes private IDs, raw source URLs, paths and storage metadata', async t => {
   const { exportPath } = await temporaryExport(t);
   const result = await createWebsiteReader(options(exportPath))(ID);
   assert.deepEqual(keys(result), ['eventVersion', 'matchId', 'predictionEligible', 'provider', 'sections', 'sources', 'status', 'updatedAt']);
-  assert.deepEqual(keys(result.sections.injuries), ['data', 'fallback', 'lastAttemptAt', 'missingReason', 'observedAt', 'previousValue', 'provider', 'status', 'statusProvider']);
+  assert.deepEqual(keys(result.sections.injuries), ['data', 'fallback', 'lastAttemptAt', 'missingReason', 'observedAt', 'previousValue', 'provider', 'sourcePage', 'status', 'statusProvider']);
   assert.equal(result.sections.injuries.provider, 'leisu');
-  const encoded = JSON.stringify(result);
+  const encoded = withoutSourcePages(result);
   assert.doesNotMatch(encoded, /providerMatchId|providerPlayerId|providerTeamId|sourceUrl|sourcePublishedAt|observationId|contentHash|taskKey|exportPath|collectorPath|internal-/);
   assert.doesNotMatch(encoded, addressPattern);
   for (const team of result.sections.lineup.data.teams) {
@@ -135,7 +143,7 @@ test('free text removes source addresses and paths while preserving SP and missi
   const { exportPath } = await temporaryExport(t, document);
   const result = await createWebsiteReader(options(exportPath))(ID);
   assert.equal(result.status, 'ok');
-  assert.doesNotMatch(JSON.stringify(result), addressPattern);
+  assert.doesNotMatch(withoutSourcePages(result), addressPattern);
   const reason = result.sections.injuries.data.players[0].reason;
   assert.match(reason, /SP 2\.45/);
   assert.match(reason, /阵容未公布，归队时间未取得/);
@@ -202,7 +210,7 @@ test('stale, started, canceled and rescheduled evidence is filtered before publi
 
 test('malformed, oversized and absent files return generic unavailable without configured paths', async t => {
   const { directory, exportPath } = await temporaryExport(t, '{"privatePath":"/srv/collector/secret"');
-  const verify = result => { assert.equal(result.status, 'unavailable'); assert.equal(result.matchId, ID); assertNoEvidence(result); assert.doesNotMatch(JSON.stringify(result), addressPattern); };
+  const verify = result => { assert.equal(result.status, 'unavailable'); assert.equal(result.matchId, ID); assertNoEvidence(result); assert.doesNotMatch(withoutSourcePages(result), addressPattern); };
   verify(await createWebsiteReader(options(exportPath))(ID));
   await fs.writeFile(exportPath, JSON.stringify(sample()));
   verify(await createWebsiteReader({ ...options(exportPath), maxBytes: 32 })(ID));
@@ -215,7 +223,7 @@ test('malformed nested lineup data cannot throw private errors through the reade
   document.items[0].evidence.sections.lineup.latestValid.data.teams[0].starters = null;
   const { exportPath } = await temporaryExport(t, document);
   const result = await createWebsiteReader(options(exportPath))(ID);
-  assert.equal(result.status, 'unavailable'); assertNoEvidence(result); assert.doesNotMatch(JSON.stringify(result), addressPattern);
+  assert.equal(result.status, 'unavailable'); assertNoEvidence(result); assert.doesNotMatch(withoutSourcePages(result), addressPattern);
 });
 
 test('authorization callback must be configured explicitly before a handler exists', () => {
@@ -346,7 +354,7 @@ test('malformed side fields cannot leak addresses through otherwise valid public
     else data.teams[0].side = 'https://audit-source.example/private';
     const { exportPath } = await temporaryExport(t, document);
     const result = await createWebsiteReader(options(exportPath))(ID);
-    assert.doesNotMatch(JSON.stringify(result), addressPattern);
+    assert.doesNotMatch(withoutSourcePages(result), addressPattern);
     assert.ok(['unavailable', 'conflict'].includes(result.status));
     assertNoEvidence(result);
   }
@@ -501,4 +509,77 @@ test('two empty sources expose the most recent explicit response while preservin
   const { read } = await dualReader(t, leisu, api, { coverage: [coverage] }), result = await read(ID);
   assert.equal(result.sections.injuries.statusProvider, 'leisu'); assert.equal(result.sections.injuries.lastAttemptAt, '2026-09-12T13:39:00.000Z');
   assert.equal(result.sections.injuries.observedAt, null); assert.equal(result.sources['api-football'].sections.injuries.lastAttemptAt, '2026-09-12T13:38:00.000Z');
+});
+
+test('verified Leisu observations expose human-readable match pages independently for injuries and lineups', async t => {
+  const { exportPath } = await temporaryExport(t), result = await createWebsiteReader(options(exportPath))(ID);
+  assert.deepEqual(result.sources.leisu.sourcePage, { url: 'https://live.leisu.com/shujufenxi-456', label: '雷速本场伤停分析页', scope: 'match', reason: 'verified-match' });
+  assert.equal(result.sources.leisu.sections.injuries.sourcePage.url, 'https://live.leisu.com/shujufenxi-456');
+  assert.equal(result.sources.leisu.sections.lineup.sourcePage.url, 'https://live.leisu.com/detail-456');
+  assert.equal(result.sections.injuries.sourcePage.url, 'https://live.leisu.com/shujufenxi-456');
+  assert.equal(result.sections.lineup.sourcePage.url, 'https://live.leisu.com/detail-456');
+  assert.doesNotMatch(withoutSourcePages(result), addressPattern);
+});
+
+test('unmapped, expired or wrong-event exports have only generic official pages, never a guessed match URL', async t => {
+  const { exportPath } = await temporaryExport(t);
+  for (const mutate of [doc => { doc.items = []; }, doc => { doc.generatedAt = '2026-09-12T13:20:00.000Z'; },
+    doc => { doc.items[0].fixture.eventVersion = '2026-09-12T15:00:00.000Z'; }, doc => { doc.items[0].fixture.homeName = '另一队'; }]) {
+    const doc = sample(); mutate(doc); doc.sourcePageUrl = 'https://audit-source.example/private?token=secret';
+    await fs.writeFile(exportPath, JSON.stringify(doc)); const result = await createWebsiteReader(options(exportPath))(ID);
+    assert.deepEqual(result.sources.leisu.sourcePage, { url: 'https://www.leisu.com/', label: '雷速官网', scope: 'provider', reason: 'no-verified-match-page' });
+    assert.doesNotMatch(JSON.stringify(result), /live\.leisu\.com|audit-source|token|secret/);
+    assert.doesNotMatch(withoutSourcePages(result), addressPattern);
+  }
+});
+
+test('lookalike domains, queries, fragments, credentials and mismatched provider IDs cannot become public links', async t => {
+  const { exportPath } = await temporaryExport(t);
+  for (const url of ['https://live.leisu.com/shujufenxi-456?token=secret', 'https://live.leisu.com/shujufenxi-456#secret',
+    'https://live.leisu.com.attacker.invalid/shujufenxi-456', 'https://user:secret@live.leisu.com/shujufenxi-456',
+    'http://live.leisu.com/shujufenxi-456', 'https://live.leisu.com/shujufenxi-999', 'https://v3.football.api-sports.io/injuries?fixture=456']) {
+    const doc = sample(); doc.items[0].evidence.sections.injuries.latestAttempt.sourceUrl = url;
+    await fs.writeFile(exportPath, JSON.stringify(doc)); const result = await createWebsiteReader(options(exportPath))(ID);
+    assert.equal(result.sources.leisu.sourcePage.scope, 'provider');
+    assert.doesNotMatch(JSON.stringify(result), /live\.leisu\.com|attacker|secret|football\.api-sports|token/);
+  }
+});
+
+test('conflicting provider IDs within a section or across sections fall back to the source homepage', async t => {
+  const { exportPath } = await temporaryExport(t);
+  for (const conflict of ['attempt', 'section']) {
+    const doc = sample();
+    if (conflict === 'attempt') Object.assign(doc.items[0].evidence.sections.injuries.latestAttempt,
+      { providerMatchId: '999', sourceUrl: 'https://live.leisu.com/shujufenxi-999', status: 'source_empty', data: null });
+    else for (const field of ['latestValid', 'latestAttempt']) {
+      const observation = doc.items[0].evidence.sections.lineup[field]; observation.providerMatchId = '999';
+      observation.sourceUrl = 'https://live.leisu.com/detail-999'; observation.data.providerMatchId = '999';
+    }
+    await fs.writeFile(exportPath, JSON.stringify(doc)); const result = await createWebsiteReader(options(exportPath))(ID);
+    assert.equal(result.sources.leisu.sourcePage.scope, 'provider');
+    for (const piece of Object.values(result.sections)) assert.equal(piece.sourcePage.scope, 'provider');
+    assert.doesNotMatch(JSON.stringify(result), /live\.leisu\.com|detail-999|shujufenxi-999/);
+  }
+});
+
+test('API-Football uses its official homepage even when reference data includes an arbitrary source URL', async t => {
+  const leisu = sample(); leisu.items = [];
+  const api = apiSample(); api.sourceUrl = 'https://v3.football.api-sports.io/injuries?api_key=secret';
+  for (const piece of Object.values(api.items[0].sections)) {
+    piece.sourcePage = { url: 'https://audit-source.example/private' }; piece.sourceUrl = api.sourceUrl;
+  }
+  const { read } = await dualReader(t, leisu, api), result = await read(ID);
+  assert.deepEqual(result.sources['api-football'].sourcePage, { url: 'https://www.api-football.com/', label: 'API-Football 官网', scope: 'provider', reason: 'provider-only' });
+  for (const piece of Object.values(result.sections)) assert.equal(piece.sourcePage.url, 'https://www.api-football.com/');
+  assert.doesNotMatch(JSON.stringify(result), /api_key|secret|api-sports|audit-source|providerFixtureId/);
+});
+
+test('a verified empty attempt keeps its real public match page without claiming received player data', async t => {
+  const doc = sample();
+  for (const kind of ['injuries', 'lineup']) { const piece = doc.items[0].evidence.sections[kind]; piece.latestValid = null; piece.latestAttempt.status = 'source_empty'; piece.latestAttempt.data = null; }
+  const { exportPath } = await temporaryExport(t, doc), result = await createWebsiteReader(options(exportPath))(ID);
+  assert.equal(result.status, 'partial'); assert.equal(result.sections.injuries.statusProvider, 'leisu');
+  assert.equal(result.sections.injuries.sourcePage.url, 'https://live.leisu.com/shujufenxi-456');
+  assert.equal(result.sections.injuries.data, null); assert.equal(result.sections.injuries.observedAt, null);
+  assert.equal(result.sections.lineup.sourcePage.url, 'https://live.leisu.com/detail-456');
 });
