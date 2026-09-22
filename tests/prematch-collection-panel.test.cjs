@@ -64,3 +64,23 @@ test('priority errors remain visible and started matches cannot queue pre-match 
   assert.equal(button.props.disabled, true); await button.props.onClick(); assert.equal(u.fetches.length, 1);
   assert.match(words(u.render()), /已开赛，停止赛前采集/);
 });
+
+test('an empty reachable source is not labeled as having data and stale schedules are not future promises', async () => {
+  const data = evidence(); data.status = 'partial'; data.provider = null;
+  data.sections.injuries = { ...section('source_empty'), statusProvider: 'api-football' };
+  data.sections.lineup = { ...section('not-due'), statusProvider: 'api-football', lastAttemptAt: null };
+  data.sources['api-football'].status = 'missing';
+  data.sources['api-football'].sections = { injuries: data.sections.injuries, lineup: data.sections.lineup };
+  data.sources.leisu.collection.statusFresh = false;
+  data.sources.leisu.collection.nextAttemptAt = '2026-09-14T06:00:00.000Z';
+  const u = await harness({ data }), tree = u.render();
+  const apiCard = nodes(tree, n => n.props?.['data-testid'] === 'prematch-source-api-football')[0];
+  assert.match(words(apiCard), /来源可访问/); assert.doesNotMatch(words(apiCard), /已有资料/);
+  const headings = nodes(tree, n => n.props?.className === 'prematch-report__section-head');
+  assert.match(words(headings[0]), /状态来源：API-Football.*来源暂未提供.*最近尝试：09\/22 13:55/);
+  assert.match(words(headings[1]), /状态来源：API-Football.*未到采集窗口.*最近尝试：—/);
+  const leisuCard = nodes(tree, n => n.props?.['data-testid'] === 'prematch-source-leisu')[0];
+  assert.match(words(leisuCard), /HTTP 405/); assert.match(words(leisuCard), /等待来源恢复/); assert.doesNotMatch(words(leisuCard), /09\/14/);
+  const metrics = nodes(tree, n => n.props?.className === 'prematch-report__metrics')[0];
+  assert.match(words(metrics), /取得有效资料后显示/); assert.doesNotMatch(words(tree), /本场资料暂不可用，可刷新重试/);
+});

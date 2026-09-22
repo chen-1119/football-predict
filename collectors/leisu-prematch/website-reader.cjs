@@ -244,11 +244,17 @@ function mergeSources({ fixture, at, leisuReference, apiReference, apiReadState,
   const sections = Object.fromEntries(['injuries', 'lineup'].map(kind => {
     // Selection is per section. A failed latest Leisu attempt may retain its
     // genuine prior receipt, but a fresh independent API receipt wins first.
-    const candidates = [leisu[kind], api[kind]], selected = candidates.find(piece => piece.data && !piece.previousValue)
+    const candidates = [leisu[kind], api[kind]];
+    const responseTime = piece => Date.parse(piece.lastAttemptAt || (piece.provider === 'leisu' ? leisuCollection : apiCollection)?.checkedAt || '') || 0;
+    const answered = candidates.filter(piece => ['source_empty', 'not-due'].includes(piece.status))
+      .sort((a, b) => responseTime(b) - responseTime(a));
+    const selected = candidates.find(piece => piece.data && !piece.previousValue)
       || candidates.find(piece => piece.data)
+      || answered[0]
       || candidates.find(piece => !['missing', 'disabled', 'unavailable'].includes(piece.status))
       || candidates.find(piece => piece.status !== 'disabled') || candidates[0];
-    return [kind, { ...selected, fallback: Boolean(selected.data && selected.provider === 'api-football'), provider: selected.data ? selected.provider : null }];
+    return [kind, { ...selected, statusProvider: selected.provider,
+      fallback: Boolean(selected.data && selected.provider === 'api-football'), provider: selected.data ? selected.provider : null }];
   }));
   const view = section => ({ status: section.status, observedAt: section.observedAt, lastAttemptAt: section.lastAttemptAt,
     previousValue: section.previousValue, missingReason: section.missingReason });
@@ -263,8 +269,9 @@ function mergeSources({ fixture, at, leisuReference, apiReference, apiReadState,
   const providers = [...new Set(Object.values(sections).filter(s => s.data).map(s => s.provider))];
   const updatedAt = [leisuReference.updatedAt, apiReference?.updatedAt].filter(Boolean).sort().at(-1) || null;
   const any = Object.values(sections).some(s => s.data);
+  const answered = Object.values(sections).some(s => ['source_empty', 'not-due'].includes(s.status));
   return { matchId: fixture.id, eventVersion: publicTime(fixture.eventVersion || fixture.kickoffTime),
-    status: any ? 'ok' : leisuReference.status === 'disabled' ? apiReadState : leisuReference.status,
+    status: any ? 'ok' : answered ? 'partial' : leisuReference.status === 'disabled' ? apiReadState : leisuReference.status,
     updatedAt, predictionEligible: false, provider: providers.length > 1 ? 'mixed' : providers[0] || null,
     sections, sources, ...statusFields };
 }
