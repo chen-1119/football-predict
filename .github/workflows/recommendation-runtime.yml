@@ -44,6 +44,10 @@ on:
       - 'src/components/Footer.tsx'
       - 'src/styles/**'
       - 'src/pages/PredictionsList.tsx'
+      - 'src/pages/MatchDetail.tsx'
+      - 'src/services/publishedMatchRecommendation.ts'
+      - 'scripts/sync500Data.cjs'
+      - 'scripts/runMarketCollector.cjs'
       - 'src/components/predictions/**'
       - 'src/components/TeamBadge.tsx'
       - 'src/services/teamVisuals.ts'
@@ -83,8 +87,8 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: node --test tests/recommendation-unified.test.cjs tests/recommendation-center-view.test.cjs tests/recommendation-combo-availability.test.cjs tests/recommendation-warehouse-sp.test.cjs tests/recommendation-warehouse-sp-view.test.cjs tests/recommendation-live-market.test.cjs tests/recommendation-handicap-margin.test.cjs tests/recommendation-mixed-combo.test.cjs tests/recommendation-quality-report.test.cjs
-      - run: node --test tests/market-collector-policy.test.cjs tests/market-store.test.cjs tests/market-signal-bridge.test.cjs tests/market-http.test.cjs tests/market-features.test.cjs
-      - run: node --test tests/recommendation-render-clock.test.cjs tests/recommendation-center-interaction.test.cjs tests/navbar-interaction.test.cjs
+      - run: node --test tests/market-collector-policy.test.cjs tests/market-store.test.cjs tests/market-signal-bridge.test.cjs tests/market-http.test.cjs tests/market-features.test.cjs tests/market-quote-refresh.test.cjs
+      - run: node --test tests/recommendation-render-clock.test.cjs tests/recommendation-center-interaction.test.cjs tests/recommendation-match-parity.test.cjs tests/recommendation-entry-flow.test.cjs tests/navbar-interaction.test.cjs
       - run: node --test tests/team-badge.test.cjs tests/team-badge-assets.test.cjs tests/match-display-team.test.cjs
       - run: node --test tests/accounts*.test.cjs tests/account-frontend.test.cjs tests/account-admin.test.cjs tests/public-product.test.cjs tests/public-browse-flow.test.cjs
       - name: 'Native PostgreSQL accounts: scripts/verifyAccountsPostgres.cjs'

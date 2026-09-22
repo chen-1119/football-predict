@@ -47,6 +47,7 @@ test('all adaptive intervals, including the empty schedule, respect both bounds'
     assert.equal(p.adaptivePollSeconds([{ kickoffTime: new Date(at + minutes * 60000).toISOString() }], at, p.config({})), seconds);
   assert.equal(p.adaptivePollSeconds([], at, p.config({ MARKET_COLLECTOR_MIN_SECONDS: '1200' })), 1200);
   assert.equal(p.jitteredDelayMs(1800, () => 1, p.config({})), 1800000);
+  assert.ok(p.jitteredDelayMs(p.adaptivePollSeconds([], at, p.config({})), () => 1, p.config({})) <= 300000);
 });
 test('Retry-After supports seconds and HTTP dates and is not capped by normal polling', () => {
   assert.equal(p.retryAfterSeconds('7200', at), 7200);
