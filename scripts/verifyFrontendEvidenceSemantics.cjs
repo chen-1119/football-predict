@@ -14,7 +14,6 @@ const sourceText = sourceFiles.map((file) => read(path.relative(rootDir, file)))
 const presentation = read('src/services/predictionPresentation.ts');
 const recommendationCopy = read('src/services/recommendationCopy.ts');
 const displayRecommendation = read('src/services/displayRecommendation.ts');
-const analysisReferenceSelection = read('src/services/analysisReferenceSelection.ts');
 const predictions = read('src/pages/PredictionsList.tsx');
 const bestTips = read('src/pages/BestTips.tsx');
 const detail = read('src/pages/MatchDetail.tsx');
@@ -23,6 +22,15 @@ const betSlip = read('src/pages/BetSlipGenerator.tsx');
 const css = read('src/index.css');
 const recommendationEvidenceFacts = read('src/components/predictions/RecommendationEvidenceFacts.tsx');
 const recommendationEvidenceCss = read('src/styles/recommendation-evidence.css');
+const recommendationCenter = read('src/components/recommendations/RecommendationCenter.tsx');
+const publishedMatchPick = read('src/components/recommendations/PublishedMatchPick.tsx');
+const publishedMatchRecommendation = read('src/services/publishedMatchRecommendation.ts');
+const recommendationCenterView = read('src/services/recommendationCenterView.ts');
+const recommendationCenterHook = read('src/hooks/useRecommendationCenter.ts');
+const selectionQualityNote = read('src/components/recommendations/SelectionQualityNote.tsx');
+const marketComparison = read('src/components/recommendations/MarketComparison.tsx');
+const dayCoverage = read('src/components/recommendations/DayCoverage.tsx');
+const publishedDetailPresentation = read('src/services/publishedDetailPresentation.ts');
 const server = read('server/index.cjs');
 
 const checks = [];
@@ -64,9 +72,14 @@ check('four-dimension model probability reads only the v4 public metric',
   && evidenceBreakdownSource.includes('modelProbability: normalizedPercent(metrics?.modelProbability)')
   && !evidenceBreakdownExecutableSource.includes('getCalibratedModelProbability(')
   && !/\b(?:trustScore|odds|posterior|marketProbability)\b/.test(evidenceBreakdownExecutableSource));
-check('list and detail recommendation cards render the four audited confidence facts',
-  predictions.includes('<RecommendationEvidenceFacts')
+check('legacy model facts remain audited and unified list/detail use bound publication facts',
+  predictions.includes('<PublishedMatchPick row={unifiedRow}')
   && detail.includes('<RecommendationEvidenceFacts')
+  && detail.includes('publishedDecision={useUnified ? unifiedRow?.decision || null : undefined}')
+  && recommendationEvidenceFacts.includes('if (publishedDecision !== undefined)')
+  && recommendationEvidenceFacts.includes('publishedDetailPresentation(publishedDecision)')
+  && recommendationEvidenceFacts.includes('data-decision-id={view?.decisionId}')
+  && recommendationEvidenceFacts.includes('data-record-hash={view?.recordHash}')
   && recommendationEvidenceFacts.includes('getPublishedRecommendationEvidenceBreakdown(match, prediction)')
   && recommendationEvidenceFacts.includes("'模型概率'")
   && recommendationEvidenceFacts.includes("'方向输入覆盖'")
@@ -145,120 +158,103 @@ check('list and detail copy resolve the same official outcome odds before stored
   && recommendationCopy.includes('const officialOddsValue = officialOutcomeOddsForPrediction(match, prediction)')
   && recommendationCopy.includes('officialOddsValue > 1')
   && recommendationCopy.includes('storedOddsValue > 1'));
-check('published analysis references never synthesize a client handicap companion',
+check('published handicap extension comes only from the bound decision',
   displayRecommendation.includes('export const getAnalysisReferenceHandicapSupplement = (')
   && displayRecommendation.includes("referenceSource === 'published-reference'")
-  && predictions.includes('getAnalysisReferenceHandicapSupplement(')
-  && predictions.includes('analysisReferenceSelection?.source')
-  && predictions.includes('marketSelection?.referenceSource')
   && detail.includes('getAnalysisReferenceHandicapSupplement(')
   && detail.includes('detailAnalysisReferenceSelection?.source')
+  && recommendationCenter.includes('primarySelectionSummary(d)')
+  && recommendationCenter.includes('handicapExtensionText(h,language)')
+  && publishedMatchPick.includes('primarySelectionSummary(d)')
+  && publishedMatchPick.includes('handicapExtensionText(h,language)')
   && !predictions.includes('getListHandicapSupplement(')
   && !detail.includes('getListHandicapSupplement('));
-check('published MODEL_ONLY and mismatched HHAD identities stay detached from odds-table markers',
-  predictions.includes("type ListMarketCode = ResultPoolCode | 'MODEL_ONLY_1X2'")
-  && predictions.includes("referenceSource === 'published-reference' && prediction.oddsPoolCode === undefined")
-  && predictions.includes("'模型 1X2（无官方 SP）'")
-  && predictions.includes('isPublishedReferenceSpUnavailable')
-  && predictions.includes("? 'SP --'")
-  && predictions.includes('publishedHhadLineMatches')
-  && predictions.includes("marketSelection.referenceSource !== 'published-reference'")
-  && predictions.includes('sameHandicapLine('));
+check('unified HAD and HHAD prices remain distinct and bound to archived selections',
+  recommendationCenter.includes('rc-primary-pick--had')
+  && recommendationCenter.includes('rc-primary-pick--hhad')
+  && recommendationCenter.includes("selection.market==='HHAD'")
+  && recommendationCenter.includes("comboLegSelection(combo,index)")
+  && recommendationCenterView.includes("if(market==='HAD')")
+  && recommendationCenterView.includes("if(handicapLine!==0||tipCode!==parent.tipCode||odds!==parent.odds)")
+  && recommendationCenterView.includes("if(!h||handicapLine===0||handicapLine!==h.handicapLine)")
+  && recommendationCenterView.includes("throw new Error('Selection differs from archived market evidence')"));
 check('reference copy keeps the generated BEST direction stable while updating evidence',
   recommendationCopy.includes('不会用市场概率首位改写已生成的主方向')
   && recommendationCopy.includes('赛前 BEST 主方向保持稳定')
   && !recommendationCopy.includes('参考推荐会随赔率、盘口与数据质量变化'));
-const referencePriority = [
-  "isCalibratedMarketAnalysisReferenceEligible(match, storedBest, now)",
-  "isDirectionalAnalysisReferenceEligible(match, storedBest, now)",
-  "isModelOnlyAnalysisReferenceEligible(match, storedBest, now)",
-  "const stableModelReference = buildStableLowEvidenceModelReference(match, storedBest, now)",
-  "const officialMarketConsensus = buildOfficialMarketConsensusReference(match, undefined, now)",
-  "const fiveHundred = buildFiveHundredMarketReferencePresentation(match, now)",
-  "const lowEvidenceMarket = buildLowEvidenceMarketLeaderReference(",
-].map((needle) => analysisReferenceSelection.indexOf(needle));
-check('analysis coverage and executable best-pick surfaces use separate reference gates',
-  predictions.includes("getOnSaleAnalysisReference as selectAnalysisReferencePrediction")
-  && predictions.includes('allowModelOnly: true')
-  && bestTips.includes("selectOnSaleAnalysisReference(match, { allowModelOnly: false, now })")
-  && analysisReferenceSelection.includes('OFFICIAL_MARKET_REFERENCE_MIN_LEADER_PROBABILITY = 0.55')
-  && analysisReferenceSelection.includes('OFFICIAL_MARKET_REFERENCE_MIN_LEADER_GAP = 0.08')
-  && analysisReferenceSelection.includes('leader.probability < OFFICIAL_MARKET_REFERENCE_MIN_LEADER_PROBABILITY')
-  && analysisReferenceSelection.includes('leader.probability - runnerUp.probability < OFFICIAL_MARKET_REFERENCE_MIN_LEADER_GAP')
-  && analysisReferenceSelection.includes("source: 'official-market-consensus'")
-  && analysisReferenceSelection.includes("source: 'model-low-evidence'")
-  && analysisReferenceSelection.includes('market probability leader cannot overwrite the model probability leader')
-  && analysisReferenceSelection.includes('const probabilityLeader = modelOutcomeLeader(modelProbabilities, match.id)')
-  && referencePriority.every((position) => position >= 0)
-  && referencePriority.every((position, index) => index === 0 || position > referencePriority[index - 1])
-  && !analysisReferenceSelection.includes("recommendationAction: 'recommend'"));
-check('action surfaces keep the risk gate while published list picks stay visible read-only',
-  [bestTips, detail, worldCup, betSlip]
-    .every((source) => source.includes('isFormalPresentationAllowed('))
+check('unified coverage and published picks keep qualified selection separate from model direction',
+  bestTips.includes('<RecommendationCenter language={language}')
+  && recommendationCenter.includes("data?.current.filter(row=>!qualifiedOnly||row.selectionQuality?.qualified)")
+  && recommendationCenter.includes('<DayCoverage coverage={data?.coverage}')
+  && dayCoverage.includes('current.qualifiedCount')
+  && dayCoverage.includes('current.targetCount')
+  && dayCoverage.includes('item.reasonText')
+  && recommendationCenter.includes("quality?.qualified===false?(zh?'观望方向'")
+  && selectionQualityNote.includes('quality.reasons.map')
+  && selectionQualityNote.includes('暂不进入新串关'));
+check('new published surfaces are reference only and old formal actions retain their gate',
+  detail.includes('isFormalPresentationAllowed(')
+  && worldCup.includes('isFormalPresentationAllowed(')
   && !predictions.includes('isFormalPresentationAllowed(')
-  && predictions.includes('getOnSaleDisplayRecommendation(match, language, nowMs)')
-  && predictions.includes('getLiveDisplayRecommendation(match, language)')
-  && predictions.includes('const marketSelection = getListMarketSelection(')
   && predictions.includes('const nowMs = clockNow')
-  && !predictions.includes('const nowMs = Math.max'));
+  && !predictions.includes('const nowMs = Math.max')
+  && bestTips.includes('<RecommendationCenter language={language}')
+  && betSlip.includes('<RecommendationCenter language={language}')
+  && recommendationCenter.includes('参考推荐 · 模型验证中')
+  && publishedMatchPick.includes('参考入选 · 尚未通过正式验证')
+  && recommendationCenterHook.includes("buildApiUrl('/api/v1/daily-featured-combos')")
+  && recommendationCenterHook.includes("cache:'no-store'")
+  && recommendationCenterHook.includes('data:authorizationRequired?null:snapshot.data')
+  && !recommendationCenter.includes('isFormalPresentationAllowed('));
 check('reference cards override positive green treatments', [
   '.decision-card.is-reference.is-steady',
   '.decision-card.is-reference.is-lean',
   '.signal-summary-card.is-reference .signal-badge'
 ].every((needle) => css.includes(needle)));
-const tipCardsStart = bestTips.indexOf('const tipCards = React.useMemo<TipCard[]>');
-const dataCardsStart = bestTips.indexOf('const observationCards = React.useMemo<ObservationCard[]>', tipCardsStart);
-const featuredCardsStart = bestTips.indexOf('const featuredMatchIds = React.useMemo', dataCardsStart);
-const translationsStart = bestTips.indexOf('const translations =', featuredCardsStart);
-const tipCardsSelection = bestTips.slice(tipCardsStart, dataCardsStart);
-const dataCardsSelection = bestTips.slice(dataCardsStart, featuredCardsStart);
-const featuredCardsSelection = bestTips.slice(featuredCardsStart, translationsStart);
-check('best-pick data recommendations stay fully visible with only three featured',
-  tipCardsStart >= 0
-  && dataCardsStart > tipCardsStart
-  && featuredCardsStart > dataCardsStart
-  && bestTips.includes('<div className="best-pool-v4__rows is-formal-list">')
-  && bestTips.includes('{observationCards.map((card) => {')
-  && bestTips.includes("observation: { zh: '数据推荐', en: 'Data pick' }")
-  && bestTips.includes("reference.source === 'official-market-consensus'")
-  && bestTips.includes("card.referenceSource === 'official-market-consensus'")
-  && bestTips.includes("官方市场数据推荐")
-  && bestTips.includes('tipCards.length + observationCards.length')
-  && !tipCardsSelection.includes('.slice(0, 3)')
-  && !dataCardsSelection.includes('remainingSlots')
-  && featuredCardsSelection.includes('[...tipCards, ...observationCards]')
-  && featuredCardsSelection.includes('.slice(0, 3)')
-  && bestTips.includes('全部赛前推荐 · 重点 3 场')
-  && bestTips.includes("const isLowEvidenceMarketSource = (source: AnalysisReferenceSource)")
-  && bestTips.includes('市场去水概率 ${probabilityLabel} · 证据等级低')
-  && !bestTips.includes('card.evidenceScore ?? Number(prediction.trustScore || 0)')
-  && !bestTips.includes('<details')
-  && !bestTips.includes('观察'));
-check('reference rows are recommended and excluded from unavailable totals',
-  predictions.includes('else if (analysisReference) counts.reference += 1')
-  && predictions.includes('if (!displayRecommendation && !analysisReference) counts.unavailable += 1')
-  && !predictions.includes('if (!displayRecommendation) counts.unavailable += 1'));
-check('recommendation cards expose accounting, usage, data clock and cutoff without mislabeling model scores as market probabilities',
-  predictions.includes('className="decision-accounting-fact"')
-  && predictions.includes('className="decision-usage-fact"')
-  && predictions.includes('className="decision-data-time-fact"')
-  && predictions.includes('className="decision-cutoff-time-fact"')
-  && predictions.includes("'model-low-evidence'")
-  && predictions.includes('Model direction · Low confidence')
-  && predictions.includes('不计入正式命中率')
-  && !predictions.includes('500.com data supplements')
-  && bestTips.includes('className="best-pool-v4__governance"')
-  && bestTips.includes('Included in formal record')
-  && bestTips.includes('Excluded from formal record'));
-check('benchmark review exposes actual kickoff or live-clock evidence coverage',
-  predictions.includes('data-time-integrity-coverage={benchmarkTimeIntegrityCoverage}')
-  && predictions.includes('benchmarkProspective?.metrics?.timeIntegrityEvidenceRows')
-  && predictions.includes('benchmarkProspective?.metrics?.timeIntegrityEvidenceCoverage')
-  && predictions.includes('below 95% blocks review'));
-check('model probability is rendered only through calibrated formatter',
-  [bestTips, detail, worldCup]
-    .every((source) => source.includes('formatCalibratedModelProbability'))
+check('all current published rows remain visible and reference selection is not counted as missing',
+  recommendationCenter.includes('const visibleRows=rows')
+  && recommendationCenter.includes('visibleRows.map(row=><Pick')
+  && recommendationCenter.includes('row.selectionQuality?.qualified')
+  && recommendationCenter.includes('暂时没有可展示的推荐')
+  && !recommendationCenter.includes('visibleRows.slice(0, 3)')
+  && recommendationCenter.includes('data?.review.statistics'));
+check('published and settled totals come from verified ledger, not list inference',
+  recommendationCenter.includes('value?.hitRate==null')
+  && recommendationCenter.includes('${value.won} / ${value.settled}')
+  && recommendationCenter.includes('value?.pending')
+  && recommendationCenterView.includes("throw new Error('Inconsistent statistics')")
+  && publishedMatchRecommendation.includes('const rows = data.current.filter(matches)')
+  && publishedMatchRecommendation.includes('Date.parse(d.eventVersion) === event')
+  && publishedMatchRecommendation.includes('Date.parse(d.kickoffTime) === event')
+  && publishedMatchRecommendation.includes('name(d.homeTeamName) === name(match.homeTeamName)')
+  && publishedMatchRecommendation.includes('name(d.awayTeamName) === name(match.awayTeamName)'));
+check('published cards expose identity, prices, clocks and reference status',
+  recommendationCenter.includes('data-decision-id={d.decisionId}')
+  && recommendationCenter.includes('data-record-hash={d.recordHash}')
+  && recommendationCenter.includes('d.modelGeneratedAt')
+  && recommendationCenter.includes('d.quoteObservedAt')
+  && recommendationCenter.includes('d.publishedAt')
+  && publishedMatchPick.includes('Date.parse(d.cutoffTime)')
+  && publishedMatchPick.includes('data-selection-status={row.selectionQuality?.status')
+  && publishedMatchPick.includes('quoteStale')
+  && !recommendationCenter.includes('500.com data supplements'));
+check('model validation status and daily coverage remain visible',
+  recommendationCenter.includes('data?.review.qualityReport')
+  && recommendationCenter.includes('modelQuality.independentMatchDays')
+  && recommendationCenter.includes('modelQuality.minimumSettled')
+  && recommendationCenter.includes('modelQuality.minimumMatchDays')
+  && recommendationCenter.includes('缺赛果不计入命中率')
+  && dayCoverage.includes('coverage?.businessDate === businessDate')
+  && dayCoverage.includes('current.missing'));
+check('new published probabilities are labeled unvalidated and bound to one decision',
+  recommendationCenter.includes('概率与让球分析')
+  && recommendationCenter.includes('<MarketComparison decision={d}')
+  && marketComparison.includes('buildMarketComparison(decision)')
+  && marketComparison.includes('data-decision-id={comparison.decisionId}')
+  && marketComparison.includes('概率为模型估计 · 尚未验证')
+  && marketComparison.includes('未保存可核验的完整报价；缺失项不补价。')
   && recommendationEvidenceFacts.includes('breakdown.modelProbability')
+  && publishedDetailPresentation.includes('decisionId: decision.decisionId, recordHash: decision.recordHash')
   && !sourceText.includes('formatGptProbability'));
 check('lineup referee injury and xG cards require auditable provenance before success',
   detail.includes('const hasAuditableSource = (signal:')
@@ -269,19 +265,23 @@ check('lineup referee injury and xG cards require auditable provenance before su
   && detail.includes('hasAuditableSource(externalSignals?.referee)')
   && detail.includes('const verifiedXgReady = Boolean(')
   && detail.includes("tone: verifiedXgReady ? 'success' : xgHasValue ? 'warning' : 'neutral'"));
-check('formal and reference settlement language remains separate', [
-  '推荐命中',
-  '推荐未中',
-  '分析参考符合赛果',
-  '分析参考不符合赛果'
-].every((needle) => predictions.includes(needle))
+check('published settlement is tied to record state while legacy references stay observational',
+  recommendationCenter.includes("resultLabel(settlement.state,zh)")
+  && recommendationCenter.includes('selected?resultLabel(selected.state,zh)')
+  && recommendationCenter.includes('仅已结算计入命中率')
+  && publishedMatchRecommendation.includes('row.settlement.state')
   && detail.includes('分析参考主方向符合赛果')
   && detail.includes('分析参考主方向不符合赛果'));
-check('combination controls expose evidence points, not pseudo-probability',
-  betSlip.includes("minTrustLabel: { zh: '最低证据评分'")
-  && betSlip.includes('{minTrust}/100')
-  && betSlip.includes('{displayedGenerationResult.averageTrust}/100')
-  && betSlip.includes('generationPoolSignature === formalPoolSignature'));
+check('combination surface uses bound market, SP, cutoff and freshness instead of pseudo-probability',
+  betSlip.includes('<RecommendationCenter language={language}')
+  && recommendationCenter.includes('comboLegSelection(combo,index)')
+  && recommendationCenter.includes('comboLaneFresh(data,now)')
+  && recommendationCenter.includes('comboPreviewForSize(data,size,now,failed)')
+  && recommendationCenter.includes('报价已超过15分钟有效期')
+  && recommendationCenter.includes('不会改选第二方向凑SP')
+  && recommendationCenterView.includes("throw new Error('Post-cutoff combo')")
+  && recommendationCenterView.includes("throw new Error('Invalid SP product')")
+  && recommendationCenter.includes('未将单场概率相乘作为真实串关命中率'));
 
 const failures = checks.filter((item) => !item.ok);
 console.log(JSON.stringify({

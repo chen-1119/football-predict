@@ -139,6 +139,11 @@ function runCreatePrefix(source, options = {}) {
       } };
       if (name === "node:child_process") return { spawnSync: (command, args) => {
         if (args[0] === "/fixture/scripts/createFrontendReleaseBundle.cjs") { assert.equal(command, "/fixed/node"); calls.push("ui-source"); }
+        else if (args[0] === "scripts/verifyFrontendEvidenceSemantics.cjs") {
+          assert.equal(command, "/fixed/node"); calls.push("frontend-evidence");
+          return { status: options.frontendEvidenceFails ? 1 : 0,
+            stdout: options.frontendEvidenceFails ? JSON.stringify({ checks: [{ name: "fixture frontend evidence failure", ok: false }] }) : "" };
+        }
         else if (args[0] === "scripts/verifyReleaseVerifierContracts.cjs") { assert.equal(command, "/fixed/node"); calls.push("preSign"); }
         else { assert.equal(command, "npm"); assert.deepEqual(Array.from(args), ["run", "build"]); calls.push("build"); }
         return { status: 0 };
@@ -361,12 +366,18 @@ function verifyReleaseWindowPreflight() {
       else { assert.throws(run); assert.deepEqual(calls, ["window"]); }
     }
   });
-  check("actual online create prefix runs worker then window before archive, preSign, sequence reservation and build", () => {
+  check("actual online create prefix runs worker, window, archive and frontend evidence before preSign, sequence reservation and build", () => {
     const result = runCreatePrefix(create); assert.equal(result.ok, true, result.error);
-    assert.deepEqual(result.calls, ["sequence-preflight", "worker", "window", "archive", "preSign", "reserve", "build"]);
+    assert.deepEqual(result.calls, ["sequence-preflight", "worker", "window", "archive", "frontend-evidence", "preSign", "reserve", "build"]);
     for (const options of [{ windowOpen: false }, { windowThrows: true }]) {
       const rejected = runCreatePrefix(create, options); assert.equal(rejected.ok, false); assert.deepEqual(rejected.calls, ["sequence-preflight", "worker", "window"]);
     }
+  });
+  check("failed frontend evidence blocks preSign, sequence reservation and build", () => {
+    const rejected = runCreatePrefix(create, { frontendEvidenceFails: true });
+    assert.equal(rejected.ok, false);
+    assert.deepEqual(rejected.calls, ["sequence-preflight", "worker", "window", "archive", "frontend-evidence"]);
+    assert.match(rejected.error, /Frontend evidence semantics preflight failed/);
   });
   check("actual online create stops at a failed or unavailable worker before window and all build side effects", () => {
     for (const options of [{ workerOpen: false }, { workerThrows: true }]) {
@@ -379,11 +390,11 @@ function verifyReleaseWindowPreflight() {
     const rejected = runCreatePrefix(create, { nativePolicy: true, nativeRejected: true });
     assert.equal(rejected.ok, false); assert.deepEqual(rejected.calls, ["sequence-preflight", "native-policy"]);
     const accepted = runCreatePrefix(create, { nativePolicy: true }); assert.equal(accepted.ok, true, accepted.error);
-    assert.deepEqual(accepted.calls, ["sequence-preflight", "native-policy", "worker", "window", "archive", "preSign", "reserve", "build"]);
+    assert.deepEqual(accepted.calls, ["sequence-preflight", "native-policy", "worker", "window", "archive", "frontend-evidence", "preSign", "reserve", "build"]);
   });
   check("actual offline create prefix makes no live calls and explicitly reports no window authority", () => {
     const result = runCreatePrefix(create, { offline: true, windowThrows: true }); assert.equal(result.ok, true, result.error);
-    assert.deepEqual(result.calls, ["sequence-preflight", "preSign", "reserve", "build"]);
+    assert.deepEqual(result.calls, ["sequence-preflight", "frontend-evidence", "preSign", "reserve", "build"]);
     assert.equal(result.logs[0].windowChecked, false); assert.equal(result.logs[0].readyToCutover, false);
   });
   check("actual UI create dispatch exits before live gates, full verification and local build", () => {
