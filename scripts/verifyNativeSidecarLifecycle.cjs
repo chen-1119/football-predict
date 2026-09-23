@@ -36,6 +36,7 @@ ${extractArray("NATIVE_AUXILIARY_UNITS")}
 ${[
   "quiesce_managed_maintenance_for_sqlite_snapshot",
   "quiesce_native_auxiliary_writers",
+  "assert_native_cutover_processes_drained",
   "restore_native_auxiliary_states_after_readiness",
   "restore_timer_states_after_rollback",
   "enable_managed_timers_after_readiness"
@@ -57,6 +58,22 @@ systemctl() {
       [[ "$quiet" == 1 ]] || printf 'inactive\\n'
       return 3 ;;
     is-enabled) [[ "\${mock_enabled[$unit]:-0}" == 1 ]] ;;
+    show)
+      case "$*" in
+        *--property=MainPID*)
+          if [[ "$scenario" == pid-drift && "$mock_health_calls" -ge 2 ]]; then
+            printf '9999\\n'
+          else
+            printf '4242\\n'
+          fi ;;
+        *--property=ControlGroup*)
+          if [[ "$scenario" == wrong-unit-cgroup ]]; then
+            printf '/system.slice/foreign.service\\n'
+          else
+            printf '/system.slice/%s\\n' "$RELEASE_SYNC_WRITE_BARRIER_UNIT"
+          fi ;;
+        *) return 99 ;;
+      esac ;;
     stop) mock_active[$unit]=0 ;;
     start) mock_active[$unit]=1 ;;
     enable) mock_enabled[$unit]=1 ;;
@@ -66,11 +83,35 @@ systemctl() {
 }
 pgrep() {
   [[ "$1" == -u && "$2" == football ]] || return 99
+  if [[ "$mock_barrier_running" == 0 ]]; then
+    case "$scenario" in
+      poststop-stray) printf '9999\\n'; return 0 ;;
+      poststop-error) return 2 ;;
+      *) return 1 ;;
+    esac
+  fi
   case "$scenario" in
-    normal|timer-*) return 1 ;;
-    persistent) return 0 ;;
+    normal|timer-*|poststop-*|unhealthy|health-after-fail|pid-drift|wrong-unit-cgroup|wrong-proc-cgroup)
+      printf '4242\\n'; return 0 ;;
+    persistent) printf '4242\\n9999\\n'; return 0 ;;
+    duplicate) printf '4242\\n4242\\n'; return 0 ;;
+    missing) return 1 ;;
     error) return 2 ;;
   esac
+}
+release_sync_write_barrier_is_healthy() {
+  mock_health_calls=$((mock_health_calls + 1))
+  [[ "$mock_barrier_running" == 1 ]] || return 1
+  [[ "$scenario" != unhealthy ]] || return 1
+  [[ "$scenario" != health-after-fail || "$mock_health_calls" -lt 2 ]]
+}
+grep() {
+  if [[ "$1" == -Fxq && "$2" == -- && "$4" == /proc/4242/cgroup ]]; then
+    [[ "$3" == "0::/system.slice/$RELEASE_SYNC_WRITE_BARRIER_UNIT" ]] || return 1
+    [[ "$scenario" != wrong-proc-cgroup ]]
+    return
+  fi
+  command grep "$@"
 }
 sleep() { :; }
 stat() {
@@ -92,6 +133,10 @@ assert_state() {
 }
 
 scenario="$1"
+RELEASE_SYNC_WRITE_BARRIER_UNIT=football-release-test-release-sync-write-barrier-17.service
+RELEASE_SYNC_WRITE_BARRIER_PID=4242
+mock_barrier_running=1
+mock_health_calls=0
 RECOVERY_ACTIVE=1
 RECOVERY_DIR="$(mktemp -d)"
 trap 'rm -f -- "$RECOVERY_DIR/managed-config/units.tsv" "$RECOVERY_DIR/managed-config/timers.tsv"; rmdir -- "$RECOVERY_DIR/managed-config" "$RECOVERY_DIR"' EXIT
@@ -141,10 +186,19 @@ assert_state football-featured-combo.timer 0 0
 assert_state football-market-collector.service 1 1
 mock_active[football-predict.service]=0
 mock_active[football-sync-worker.service]=0
-if [[ "$scenario" == normal || "$scenario" == timer-missing || "$scenario" == timer-reordered || "$scenario" == timer-malformed ]]; then
+if [[ "$scenario" == normal || "$scenario" == timer-* || "$scenario" == poststop-* ]]; then
   quiesce_native_auxiliary_writers
   assert_state football-market-collector.service 0 1
   assert_state football-recommendation-settlement.service 0 0
+  mock_barrier_running=0
+  if [[ "$scenario" == poststop-* ]]; then
+    if assert_native_cutover_processes_drained; then
+      printf 'post-stop football process or pgrep error allowed cutover: %s\\n' "$scenario" >&2
+      exit 1
+    fi
+  else
+    assert_native_cutover_processes_drained
+  fi
   restore_native_auxiliary_states_after_readiness
   if [[ "$scenario" == timer-* ]]; then
     case "$scenario" in
@@ -190,7 +244,9 @@ const harnessDir = fs.mkdtempSync(path.join(os.tmpdir(), "native-sidecar-harness
 const harnessPath = path.join(harnessDir, "harness.sh");
 fs.writeFileSync(harnessPath, harness, { flag: "wx" });
 try {
-  for (const scenario of ["normal", "persistent", "error", "status-error",
+  for (const scenario of ["normal", "persistent", "duplicate", "missing", "error",
+    "unhealthy", "health-after-fail", "pid-drift", "wrong-unit-cgroup", "wrong-proc-cgroup",
+    "poststop-stray", "poststop-error", "status-error",
     "timer-missing", "timer-reordered", "timer-malformed"]) {
     const result = spawnSync(bash, [harnessPath.replace(/\\/g, "/"), scenario], {
       cwd: workspace, encoding: "utf8", timeout: 30_000, windowsHide: true
@@ -201,5 +257,5 @@ try {
 } finally {
   fs.rmSync(harnessDir, { recursive: true, force: true });
 }
-console.log(JSON.stringify({ ok: true, cases: 7, productionWrites: 0,
-  scope: "actual release Bash functions, exact sidecar/timer restore, malformed journal and uncheckable process fail-closed" }));
+console.log(JSON.stringify({ ok: true, cases: 16, productionWrites: 0,
+  scope: "actual release Bash functions, authenticated barrier-only cutover, strict post-stop drain, exact sidecar/timer restore and fail-closed processes" }));

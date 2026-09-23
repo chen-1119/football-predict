@@ -702,9 +702,31 @@ check("release sequence is burned before execution and remains burned on failure
 
 const bundleRelease = readText(bundleReleasePath);
 assert.doesNotMatch(bundleRelease, /\r/u, "signed release shell entrypoint must use LF line endings");
+const nativeRelease = readText(path.join(rootDir, "deploy", "light-server", "release-native.sh"));
 const releaseRecovery = readText(releaseRecoveryPath);
 const releaseWrapper = readText(releaseWrapperPath);
 const sqlitePublicationIdentity = readText(sqlitePublicationIdentityPath);
+
+check("native PostgreSQL handoff preserves the authenticated barrier until all writers drain", () => {
+  const nativeBody = extractFunction(nativeRelease, "run_native_release");
+  const quiesceBody = extractFunction(bundleRelease, "quiesce_native_auxiliary_writers");
+  const drainedBody = extractFunction(bundleRelease, "assert_native_cutover_processes_drained");
+  assertOrdered(nativeBody, [
+    "start_release_sync_write_barrier",
+    "stop_service_for_release_window",
+    "quiesce_native_auxiliary_writers",
+    "stop_release_sync_write_barrier clean",
+    "assert_native_cutover_processes_drained",
+    "recommendation-schema-bridge.cjs",
+  ], "native handoff must stop the barrier only after other football processes drain");
+  assert.match(quiesceBody, /release_sync_write_barrier_is_healthy/);
+  assert.match(quiesceBody, /RELEASE_SYNC_WRITE_BARRIER_PID/);
+  assert.match(quiesceBody, /--property=ControlGroup/);
+  assert.match(quiesceBody, /\/proc\/\$barrier_pid\/cgroup/);
+  assert.match(quiesceBody, /\[ "\$observed_pids" = "\$barrier_pid" \]/);
+  assert.match(drainedBody, /pgrep -u football/);
+  assert.match(drainedBody, /\[ "\$pgrep_status" -eq 1 \]/);
+});
 
 check("candidate SQLite publication affinity reads metadata only", () => {
   assert.match(sqlitePublicationIdentity, /new DatabaseSync\(sqlitePath, \{ readOnly: true \}\)/);

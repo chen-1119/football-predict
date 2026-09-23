@@ -4564,27 +4564,52 @@ stop_service_for_release_window() {
 }
 
 quiesce_native_auxiliary_writers() {
-  local unit state attempt pgrep_status
+  local unit state attempt pgrep_status observed_pids barrier_pid barrier_cgroup
   for unit in "${NATIVE_AUXILIARY_UNITS[@]}" football-daily-prematch.service; do
     systemctl stop "$unit" >/dev/null 2>&1 || return 1
     state="$(systemctl is-active "$unit" 2>/dev/null || true)"
     case "$state" in inactive|failed) ;; *) return 1 ;; esac
   done
-  # Main service and worker were stopped first. A short bounded wait allows
-  # systemd to reap their children, while any unknown football process still
-  # blocks the PostgreSQL handoff.
+  # The signed release's own barrier must continue holding sync.lock until
+  # every other football writer has drained. Authenticate that one process by
+  # its recorded PID, systemd unit/cgroup and HELD lock evidence; any other
+  # football process still blocks the PostgreSQL handoff.
+  unit="$RELEASE_SYNC_WRITE_BARRIER_UNIT"
+  [ -n "$unit" ] && [[ "$RELEASE_SYNC_WRITE_BARRIER_PID" =~ ^[1-9][0-9]*$ ]] || return 1
   for attempt in 1 2 3 4 5 6 7 8 9 10; do
-    if pgrep -u football >/dev/null 2>&1; then
+    release_sync_write_barrier_is_healthy || return 1
+    barrier_pid="$(systemctl show "$unit" --property=MainPID --value 2>/dev/null)" || return 1
+    [ "$barrier_pid" = "$RELEASE_SYNC_WRITE_BARRIER_PID" ] || return 1
+    barrier_cgroup="$(systemctl show "$unit" --property=ControlGroup --value 2>/dev/null)" || return 1
+    [ "$barrier_cgroup" = "/system.slice/$unit" ] || return 1
+    grep -Fxq -- "0::$barrier_cgroup" "/proc/$barrier_pid/cgroup" 2>/dev/null || return 1
+    if observed_pids="$(pgrep -u football)"; then
       pgrep_status=0
     else
       pgrep_status=$?
     fi
-    [ "$pgrep_status" -eq 1 ] && return 0
     [ "$pgrep_status" -eq 0 ] || return 1
+    if [ "$observed_pids" = "$barrier_pid" ]; then
+      release_sync_write_barrier_is_healthy || return 1
+      [ "$(systemctl show "$unit" --property=MainPID --value 2>/dev/null)" = "$barrier_pid" ] || return 1
+      grep -Fxq -- "0::$barrier_cgroup" "/proc/$barrier_pid/cgroup" 2>/dev/null || return 1
+      return 0
+    fi
     sleep 0.5
   done
   printf 'football service process survived the native cutover pause\n' >&2
   return 1
+}
+
+assert_native_cutover_processes_drained() {
+  local pgrep_status
+  if pgrep -u football >/dev/null 2>&1; then
+    printf 'football process appeared after the native sync barrier drained\n' >&2
+    return 1
+  else
+    pgrep_status=$?
+  fi
+  [ "$pgrep_status" -eq 1 ] || return 1
 }
 
 restore_native_auxiliary_states_after_readiness() {
