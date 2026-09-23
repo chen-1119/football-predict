@@ -201,6 +201,7 @@ run_native_release() {
   stop_service_for_release_window
   quiesce_native_auxiliary_writers
   stop_release_sync_write_barrier clean
+  assert_native_cutover_processes_drained
   # All old PostgreSQL writers are stopped. Install the additive 013 schema in
   # the serving database immediately before the new application can start.
   # A durable intent lets cold recovery remove an empty 013 table and its
