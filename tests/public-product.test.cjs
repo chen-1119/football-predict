@@ -17,4 +17,16 @@ test('missing summary remains unavailable rather than fabricated zero results',(
 test('public fixture preserves native odds1 oddsX odds2 without generating missing quotes',()=>{
  const row=publicFixture({id:'sporttery_42',odds:{odds1:1.92,oddsX:3.8,odds2:null}});
  assert.deepEqual(row.odds,{home:1.92,draw:3.8,away:null});
+ assert.equal(row.quoteStatus,'missing');
+});
+test('fixture quote timestamp never borrows the fixture scrape clock or frozen recommendation price',()=>{
+ const now=Date.parse('2026-09-23T06:00:00Z');
+ const match={id:'sporttery_2041645',status:'SCHEDULED',kickoffTime:'2026-09-23T07:00:00Z',odds:{odds1:1.85,oddsX:3.4,odds2:4.5},oddsUpdatedAt:'2026-09-20T10:00:00Z',sourceObservedAt:'2026-09-23T05:59:00Z'};
+ const center={current:[{decision:{matchId:match.id,quoteOdds:{'1':1.92,X:3.3,'2':4.2},quoteObservedAt:'2026-09-23T05:29:00Z'}}],review:{singles:[],statistics:{}}};
+ const row=publicOverview({rows:[match],stale:false},{recommendationCenter:center},now).matches[0];
+ assert.deepEqual(row.odds,{home:1.85,draw:3.4,away:4.5});
+ assert.equal(row.sourceUpdatedAt,match.oddsUpdatedAt);
+ assert.equal(row.quoteStatus,'expired');
+ assert.equal(row.decisionId,undefined);
+ assert.equal(publicFixture(match,Date.parse(match.kickoffTime)).quoteStatus,'archived');
 });
