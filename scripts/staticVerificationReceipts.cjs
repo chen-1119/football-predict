@@ -16,7 +16,7 @@ const PROFILES = Object.freeze({
     trees: [],
   }),
   "scripts/verifyFrontendEvidenceSemantics.cjs": Object.freeze({
-    auditedSha256: "1f1c6026b813f73646e0f6310a9669642ae664d0ffdb1340d7cbc5edfcf38dab",
+    auditedSha256: "e355925866ebf90f722954bb46688f88b9720e02d8a80223577edc031097a52e",
     files: ["server/index.cjs"],
     // Entire src tree, including membership, nested paths, CSS and TS/TSX.
     // Imported TS is read as text by this scanner, never executed.
