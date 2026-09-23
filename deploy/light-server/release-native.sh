@@ -199,6 +199,7 @@ run_native_release() {
   pause_current_fast_watcher_for_live_prebuild
   start_release_sync_write_barrier
   stop_service_for_release_window
+  quiesce_native_auxiliary_writers
   stop_release_sync_write_barrier clean
   # All old PostgreSQL writers are stopped. Install the additive 013 schema in
   # the serving database immediately before the new application can start.
@@ -287,6 +288,7 @@ native_finish_readiness() {
   fi
   release_stage_observe begin finalization
   write_recovery_phase readiness-passed
+  restore_native_auxiliary_states_after_readiness
   enable_managed_timers_after_readiness
   printf '%s\n' "$BUNDLE_SHA256" >"$APP_DIR/.release-live-complete.next"
   chown root:root "$APP_DIR/.release-live-complete.next"

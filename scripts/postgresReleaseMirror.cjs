@@ -48,7 +48,7 @@ async function catalog(client) {
     (table.pk || []).forEach(ident);
     for (const column of table.columns) {
       ident(column.name);
-      if (!/^(text(?:\[\])?|json|jsonb|bytea|integer|bigint|smallint|boolean|date|double precision|time without time zone|timestamp with time zone|numeric(?:\([0-9]+,[0-9]+\))?)$/.test(column.type)) throw Error("unsupported mirror column type: " + column.type);
+      if (!/^(text(?:\[\])?|json|jsonb|bytea|uuid|integer|bigint|smallint|boolean|date|double precision|time without time zone|timestamp with time zone|numeric(?:\([0-9]+,[0-9]+\))?)$/.test(column.type)) throw Error("unsupported mirror column type: " + column.type);
     }
   }
   return tables;

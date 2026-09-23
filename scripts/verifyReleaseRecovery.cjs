@@ -701,8 +701,8 @@ let assertions = 0;
   const start = helperSource.indexOf("const recoverForward =");
   const end = helperSource.indexOf("\nconst recover =", start);
   const body = helperSource.slice(start, end);
-  assert.ok(start >= 0 && body.indexOf("system.waitForHealth()") < body.indexOf("for (const timer of TIMER_UNITS)"),
-    "roll-forward must prove health before enabling timers");
+  assert.ok(start >= 0 && body.indexOf("system.waitForHealth()") < body.indexOf("restoreTimerStates(transaction.config, system)"),
+    "roll-forward must prove health before restoring the exact timer states");
   assertions += 1;
 }
 for (const phase of rollbackPhases) {
@@ -1113,16 +1113,30 @@ for (const phase of forwardPhases) {
   }
 }
 
+const sidecarLifecycleChild = spawnSync(process.execPath,
+  [path.join(__dirname, "verifyNativeSidecarLifecycle.cjs")],
+  { cwd: rootDir, encoding: "utf8", windowsHide: true, timeout: 30000, maxBuffer: 65536 });
+assert.equal(sidecarLifecycleChild.status, 0,
+  sidecarLifecycleChild.error || sidecarLifecycleChild.stderr || sidecarLifecycleChild.stdout);
+const sidecarLifecycle = JSON.parse(sidecarLifecycleChild.stdout);
+assert.equal(sidecarLifecycle.ok, true);
+assert.equal(sidecarLifecycle.cases, 7);
+assert.equal(sidecarLifecycle.productionWrites, 0);
 console.log(JSON.stringify({
   ok: true,
   checkedAt: new Date().toISOString(),
   rollbackPhases: rollbackPhases.length,
   forwardPhases: forwardPhases.length,
   assertions,
+  sidecarRecovery: require("./verifyReleaseSidecarRecovery.cjs").verifyReleaseSidecarRecovery(),
+  sidecarLifecycle,
   fullAfterUiRecovery: verifyFullAfterUiRecovery(),
   realSqliteRecovery: verifyRealSqliteRecovery()
 }, null, 2));
 }
+
+module.exports = { verifyFullAfterUiRecovery, verifyRealSqliteRecovery, verifySqliteSnapshotValidation,
+  createFixture, runRecovery, mapped, write, sha256, readTreeId };
 
 if (require.main === module) {
   if (process.argv.length === 3 && process.argv[2] === "--full-after-ui") console.log(JSON.stringify(verifyFullAfterUiRecovery()));
@@ -1130,5 +1144,3 @@ if (require.main === module) {
   else if (process.argv.length === 3 && process.argv[2] === "--sqlite-snapshot-validation") console.log(JSON.stringify(verifySqliteSnapshotValidation()));
   else { assert.equal(process.argv.length, 2, "unexpected recovery verifier arguments"); verifyOriginal(); }
 }
-module.exports = { verifyFullAfterUiRecovery, verifyRealSqliteRecovery, verifySqliteSnapshotValidation,
-  createFixture, runRecovery, mapped, write, sha256, readTreeId };
