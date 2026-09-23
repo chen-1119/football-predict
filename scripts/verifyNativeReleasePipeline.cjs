@@ -126,8 +126,21 @@ const budgetScript = "set -euo pipefail\nTRANSACTION_VERSION=3 BUILD_USER=fixtur
 const budgetResult = spawnSync(process.platform === "win32" ? "D:/app/Git/bin/bash.exe" : "/bin/bash", ["--noprofile", "--norc", "-s"],
  { input: budgetScript, encoding: "utf8", windowsHide: true, timeout: 5000, env: {PATH:process.env.PATH,SystemRoot:process.env.SystemRoot} });
 assert.equal(budgetResult.status,0,budgetResult.stderr);
-for (const token of ["MemoryHigh=1600M", "MemoryMax=2200M", "MemorySwapMax=512M", "NODE_OPTIONS=--max-old-space-size=1536"]) assert.ok(budgetResult.stdout.includes(token), token);
-checks.push("actual native PostgreSQL build step receives the bounded large-projection memory allocation");
+for (const token of ["MemoryHigh=2300M", "MemoryMax=2600M", "MemorySwapMax=512M", "RuntimeMaxSec=600s",
+  "NODE_OPTIONS=--max-old-space-size=1536"]) assert.ok(budgetResult.stdout.includes(token), token);
+for (const [label, high, max] of [["candidate-generation-reconciled", "1600M", "2200M"],
+  ["candidate-datastore-reconciled", "2100M", "2600M"]]) {
+  const sibling = spawnSync(process.platform === "win32" ? "D:/app/Git/bin/bash.exe" : "/bin/bash", ["--noprofile", "--norc", "-s"], {
+    input: budgetScript.replace("run_build_step candidate-postgres-reconciled true", `run_build_step ${label} true`),
+    encoding: "utf8", windowsHide: true, timeout: 5000, env: {PATH:process.env.PATH,SystemRoot:process.env.SystemRoot},
+  });
+  assert.equal(sibling.status, 0, sibling.stderr);
+  assert.ok(sibling.stdout.includes(`MemoryHigh=${high}`), label);
+  assert.ok(sibling.stdout.includes(`MemoryMax=${max}`), label);
+  assert.ok(!sibling.stdout.includes("MemoryHigh=2300M"), label + " unexpectedly received PostgreSQL projection budget");
+}
+assert.match(source, /run_build_step candidate-postgres-reconciled env[^\n]*\n\s*DATA_GENERATION_PUBLIC_DATA_DIR=[^\n]*FOOTBALL_POSTGRES_QUERY_TIMEOUT_MS=120000/);
+checks.push("only the native PostgreSQL candidate step receives the measured memory headroom and 120s client read timeout");
 const refreshStep = source.match(/^run_candidate_refresh_step\(\) \{[\s\S]*?^\}/m)?.[0];
 const refreshCall = lane.match(/^  run_candidate_refresh_step ([a-z-]+) env /m)?.[1];
 assert.ok(refreshStep && refreshCall);
