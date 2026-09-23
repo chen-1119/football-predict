@@ -1065,12 +1065,12 @@ const run = () => {
 
   pushCheck(checks, "candidate release refreshes the exact-revision deadline heartbeat before API readiness", candidateDatastoreIndex >= 0
     && candidateDeadlineCaptureIndex > candidateDatastoreIndex
-    && bundleCandidateCatchup.includes('"$NODE_HOME/bin/npm" run candidate:capture-deadline')
+    && bundleCandidateCatchup.includes('"$NODE_HOME/bin/node" scripts/captureCandidateProspectiveDeadline.cjs --deadline-only')
     && bundleCandidateCatchup.includes('SERVER_STORE_DIR="$store_dir"')
     && bundleCandidateCatchup.includes('DATASTORE_SQLITE_PATH="$sqlite_path"'), {
       candidateDatastoreIndex,
       candidateDeadlineCaptureIndex,
-      runsExactRevisionDeadlineCapture: bundleCandidateCatchup.includes('"$NODE_HOME/bin/npm" run candidate:capture-deadline'),
+      runsExactRevisionDeadlineCapture: bundleCandidateCatchup.includes('"$NODE_HOME/bin/node" scripts/captureCandidateProspectiveDeadline.cjs --deadline-only'),
       usesCandidateStore: bundleCandidateCatchup.includes('SERVER_STORE_DIR="$store_dir"'),
       usesCandidateSqlite: bundleCandidateCatchup.includes('DATASTORE_SQLITE_PATH="$sqlite_path"')
     });

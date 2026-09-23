@@ -4340,7 +4340,7 @@ check("post-swap readiness freezes only a fresh completed worker idle window and
       "run_build_step candidate-generation-reconciled",
       "run_build_step candidate-datastore-reconciled",
       "run_build_step candidate-deadline-capture",
-      "npm\" run candidate:capture-deadline",
+      "scripts/captureCandidateProspectiveDeadline.cjs --deadline-only",
     ], "candidate strategy, archive reconciliation, publication pair, and deadline audit");
     assert.match(catchupBody, /SERVER_STORE_DIR="\$store_dir"/);
     assert.match(catchupBody, /DATASTORE_SQLITE_PATH="\$sqlite_path"/);
@@ -4424,7 +4424,7 @@ run_candidate_model_artifact_catchup /candidate-store /candidate-store/football.
     }
     assert.match(candidateRefreshBody, /--working-directory="\$NEXT_DIR"/);
     assert.match(candidateRefreshBody, /InaccessiblePaths=-\/etc\/football-predict -\/etc\/football-release -\/var\/lib\/football-predict -\/var\/lib\/football-release/);
-    assert.match(main, /candidate-deadline-capture-refresh[\s\S]*?SERVER_STORE_DIR="\$CANDIDATE_STORE_DIR" DATASTORE_SQLITE_PATH="\$CANDIDATE_SQLITE_PATH"[\s\S]*?scripts\/captureCandidateProspectiveDeadline\.cjs/);
+    assert.match(main, /candidate-deadline-capture-refresh[\s\S]*?SERVER_STORE_DIR="\$CANDIDATE_STORE_DIR" DATASTORE_SQLITE_PATH="\$CANDIDATE_SQLITE_PATH"[\s\S]*?scripts\/captureCandidateProspectiveDeadline\.cjs --deadline-only/);
     assertOrdered(main, [
       'run_candidate_model_artifact_catchup "$CANDIDATE_STORE_DIR" "$CANDIDATE_SQLITE_PATH"',
       'start root-owned assembled candidate',
