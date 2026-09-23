@@ -70,6 +70,24 @@ if (process.env.RELEASE_DEPLOY_KEY) {
   console.error(JSON.stringify({ phase: "window-preflight-before-build", windowChecked: false,
     reason: "offline-bundle-creation", readyToCutover: false }));
 }
+// This source-level production gate also runs on the server. Catch a failing
+// frontend evidence contract before reserving a sequence or uploading a bundle.
+const frontendEvidenceSemantics = spawnSync(process.execPath, ["scripts/verifyFrontendEvidenceSemantics.cjs"], {
+  cwd: rootDir, encoding: "utf8", windowsHide: true, timeout: 30_000, maxBuffer: 2 * 1024 * 1024,
+});
+if (frontendEvidenceSemantics.status !== 0) {
+  let failedChecks = [];
+  try {
+    failedChecks = JSON.parse(frontendEvidenceSemantics.stdout).checks
+      .filter((item) => item.ok !== true).map((item) => item.name);
+  } catch { /* Retain the child error and output when it did not return JSON. */ }
+  throw new Error(`Frontend evidence semantics preflight failed: ${JSON.stringify({
+    status: frontendEvidenceSemantics.status,
+    failedChecks,
+    error: frontendEvidenceSemantics.error?.message || null,
+    output: String(frontendEvidenceSemantics.stderr || frontendEvidenceSemantics.stdout || "").slice(-2000),
+  })}`);
+}
 // Catch production-only verification dependencies and stale exact contracts
 // locally, before reserving/signing a sequence or starting a remote transaction.
 // The bounded source-boundary fixture owns a 300-second budget. Its outer
