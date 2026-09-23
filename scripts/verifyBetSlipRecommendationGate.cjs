@@ -4,6 +4,8 @@ const path = require('node:path');
 const rootDir = path.resolve(__dirname, '..');
 const source = fs.readFileSync(path.join(rootDir, 'src/services/generator.ts'), 'utf8');
 const pageSource = fs.readFileSync(path.join(rootDir, 'src/pages/BetSlipGenerator.tsx'), 'utf8');
+const centerSource = fs.readFileSync(path.join(rootDir, 'src/components/recommendations/RecommendationCenter.tsx'), 'utf8');
+const viewSource = fs.readFileSync(path.join(rootDir, 'src/services/recommendationCenterView.ts'), 'utf8');
 const checks = [];
 const check = (name, ok, details = {}) => checks.push({ name, ok: Boolean(ok), ...details });
 const hasAll = (...needles) => needles.every((needle) => source.includes(needle));
@@ -20,13 +22,16 @@ check('reference odds cannot enter an executable bet slip', hasAll(
   "pool === 'HHAD' ? officialPool.handicap : 0"
 ) && !source.includes("candidateSelections.push(...getOfficialPickCandidates"));
 
-check('retained cutover snapshots cannot enter an executable bet slip', [
-  "dataSync.dataChannel !== 'retained'",
-  'dataSync.serviceTransitioning !== true',
-  'dataSync.currentRefreshHealthy === true',
-  'const canGenerateCombination = liveDataReadyForCombination && formalRecommendationCount >= 2',
-  "liveDataReadyForCombination ? t('unavailableReason') : t('retainedDataReason')"
-].every((needle) => pageSource.includes(needle)));
+check('retained cutover snapshots cannot enter a new combo preview',
+  pageSource.includes('<RecommendationCenter language={language} initialTab="two" onSelectMatch={onSelectMatch}/>')
+  && centerSource.includes('const comboFresh=comboLaneFresh(data,now)')
+  && centerSource.includes('const preview=!review&&!frozen.length?comboPreviewForSize(data,size,now,failed):undefined')
+  && centerSource.includes('visibleFrozen.map(row=><ComboCard')
+  && viewSource.includes("if(lane?.status!=='ok')return false")
+  && viewSource.includes('return fresh(lane.inputAsOf??data.inputAsOf)&&fresh(lane.lastSuccessAt)')
+  && viewSource.includes('if(readFailed||!comboLaneFresh(data,now)||!data)return undefined')
+  && viewSource.includes('visiblePreview(c,now)')
+  && viewSource.includes('now<Date.parse(l.cutoffTime)&&now>=observedAt&&now-observedAt<=15*60000'));
 
 check('odds-dropping option has real behavior', hasAll(
   'onlyOddsDropping: boolean',

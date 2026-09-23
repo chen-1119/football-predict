@@ -11,8 +11,8 @@ const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const MAX_BYTES = 1024 * 1024;
 const PROFILES = Object.freeze({
   "scripts/verifyBetSlipRecommendationGate.cjs": Object.freeze({
-    auditedSha256: "85d594caaeb4b61e30c6488937cc78ab4dc8b5e9559fe18e929214b06988d73e",
-    files: ["src/services/generator.ts", "src/pages/BetSlipGenerator.tsx"],
+    auditedSha256: "783fe09683a9ee0fddb4b4e9ac23ab570ada27b1d0f67ac5324a7cf8b2f3b8eb",
+    files: ["src/services/generator.ts", "src/pages/BetSlipGenerator.tsx", "src/components/recommendations/RecommendationCenter.tsx", "src/services/recommendationCenterView.ts"],
     trees: [],
   }),
   "scripts/verifyFrontendEvidenceSemantics.cjs": Object.freeze({
@@ -23,13 +23,13 @@ const PROFILES = Object.freeze({
     trees: ["src"],
   }),
   "scripts/verifySelectedJsonObjectFile.cjs": Object.freeze({
-    auditedSha256: "dd7a7bf88d5fe626d8c3317e4a031310f699be3acc7554261927dcc54f84934a",
+    auditedSha256: "f1d8b0db55c699ad692f56b07375031a73b1f9ac7586ec1fa0a0c4ac70376b39",
     files: ["server/selectedJsonObjectFile.cjs", "server/dataGenerationStore.cjs", "server/chunkedJsonFile.cjs"],
     trees: [],
     // These CJS modules execute; pin their audited code as well as hashing
     // actual input bytes. A newly introduced dependency requires a new audit.
     auditedModules: Object.freeze({
-      "server/selectedJsonObjectFile.cjs": "b0d447e3b2060c1f0a8783b8b0b88ac934e9ffc62fb8d6dc24d8b63735665373",
+      "server/selectedJsonObjectFile.cjs": "93bb9b7144e283a8ad54669d2ff5851eecb72ea4fc9553350169b51decaf4d99",
       "server/dataGenerationStore.cjs": "d4560309af14336d90fc24903b321c8374c1574a492e4cb8f27bfe2cb71875fb",
       "server/chunkedJsonFile.cjs": "da65cde36f12868209d29f830d49c2ba37c27e6931e3a46dfac1a02d799705c3",
     }),
@@ -103,8 +103,8 @@ function success(result, inputs) {
         '{"ignored":"","keep":{"x":"中😀","n":[1,true,null],"bulk":""},"updatedAt":"2026-09-07"}');
       return inputs.command?.length === 1 && inputs.command[0] === "scripts/verifySelectedJsonObjectFile.cjs"
         && inputs.profile === PROFILES[inputs.command[0]].auditedSha256
-        && body.checks === 9 && Array.isArray(body.cases) && body.cases.length === 9
-        && hashValue(body.cases) === "687da1ab0523d6e35ae8a53f90e0ead0af1507109ff4fbee56210b213751ab06"
+        && body.checks === 10 && Array.isArray(body.cases) && body.cases.length === 10
+        && hashValue(body.cases) === "a883c248ada1a2297807fb1515a33d2a4f33f3b7cbde1493edc0b93843abe4f7"
         && evidence?.bytes === expectedBytes && /^[a-f0-9]{64}$/.test(evidence.sha256)
         && evidence.selectedChars >= 32 * 1024 * 1024 && evidence.selectedChars < 33 * 1024 * 1024
         && evidence.maxObservedDepth === 3
