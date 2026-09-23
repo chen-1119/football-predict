@@ -6,6 +6,7 @@ const fs = require("node:fs"), path = require("node:path"), crypto = require("no
 const { spawn, spawnSync } = require("node:child_process"), { pipeline } = require("node:stream/promises");
 const { NativeReleasePostgresPool } = require("./nativeReleasePostgresTransport.cjs");
 const { NativeReleaseDatabaseSession } = require("./nativeReleaseDatabaseSession.cjs");
+const { assertMirrorSourceCatalog } = require("./postgresReleaseMirror.cjs");
 const { BOOTSTRAP_SHA, LEGACY_UNACCEPTED, runtimeTreeSha256, contractFor } = require("./nativeReleaseJournal.cjs");
 const ROOT = "/var/lib/football-release/native", STORE = "/var/lib/football-predict";
 const hash = bytes => crypto.createHash("sha256").update(bytes).digest("hex");
@@ -176,6 +177,10 @@ async function prepare(state, directory, seed) {
   write(path.join(directory, attempt + "-started.json"), { startedAt: new Date().toISOString(), sha: state.sha, seed });
   try {
     const identity = await session.beginSnapshot();
+    // Check the complete source schema in the held read-only snapshot before
+    // spending minutes on a backup/restore that the mirror cannot accept.
+    const mirrorCatalog = await assertMirrorSourceCatalog(session.source);
+    console.log(JSON.stringify({ phase: "native-source-catalog-preflight", ...mirrorCatalog, productionWrites: 0 }));
     const generation = await copyGenerationAsService(identity, store);
     let backup = null;
     if (seed) {
