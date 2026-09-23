@@ -30,6 +30,14 @@ on:
       - 'deploy/light-server/recommendation-schema-bridge.cjs'
       - 'deploy/light-server/release-native.sh'
       - 'deploy/light-server/football-release-recovery.cjs'
+      - 'deploy/light-server/native-release-policy.json'
+      - 'scripts/nativeRelease*.cjs'
+      - 'scripts/verifyNativeRelease*.cjs'
+      - 'scripts/releaseStoragePreflight.cjs'
+      - 'scripts/verifyReleaseStoragePreflight.cjs'
+      - 'scripts/runReleaseWindowPreflight.cjs'
+      - 'scripts/verifyReleaseWindowPreflight.cjs'
+      - 'scripts/validateNativeReleasePolicy.cjs'
       - 'scripts/createReleaseBundle.cjs'
       - 'scripts/verifyReleaseBundleSafety.cjs'
       - 'scripts/verifyPostgresMigrationPlan.cjs'
@@ -127,6 +135,9 @@ jobs:
           node-version: '22.22.1'
           cache: npm
       - run: npm ci --ignore-scripts
+      - name: Controlled native release and rollback contracts
+        run: node scripts/verifyReleaseWindowPreflight.cjs && node scripts/verifyReleaseStoragePreflight.cjs && node scripts/verifyNativeReleasePipeline.cjs && node scripts/verifyNativeReleaseJournal.cjs && node scripts/verifyNativeReleaseRecovery.cjs
+      - run: node scripts/verifyProductionPlanSourceContracts.cjs
       - run: node --test tests/football-data-lower-league-history.test.cjs tests/postgres-team-history.test.cjs
       - run: node --test tests/reconcile-history-admission.test.cjs
       - run: node --test tests/postgres-reference-admission.test.cjs

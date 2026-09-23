@@ -3,7 +3,7 @@
 // Chinese Sporttery display names -> canonical names used by the free
 // historical providers. An unresolved name remains unresolved; this table
 // must never be used to invent strength for an unknown team.
-const FREE_FOOTBALL_TEAM_ALIASES_VERSION = "free-football-team-aliases-v6-utf8-safe-20260923-mls-history";
+const FREE_FOOTBALL_TEAM_ALIASES_VERSION = "free-football-team-aliases-v7-utf8-safe-20260923-senior-history";
 const FREE_FOOTBALL_TEAM_ALIASES = Object.freeze({
   // The 2026-09-23 MLS fixture and both club identities are confirmed by MLS
   // and Real Salt Lake. The Football-Data USA warehouse has these exact senior
@@ -156,6 +156,15 @@ const FREE_FOOTBALL_TEAM_ALIASES = Object.freeze({
   "\u65af\u56fe\u52a0\u7279": "stuttgart",
   "\u96f7\u514b\u65af\u6c49\u59c6": "wrexham",
   "\u91cc\u5965\u963f\u7ef4": "rio ave",
+  // Exact senior national-team names with real keys in the signed
+  // international-results training index. Keep youth sides and the ambiguous
+  // Ireland label unresolved instead of borrowing senior-team samples.
+  "\u5384\u74dc\u591a\u5c14": "ecuador",
+  "\u9a6c\u5c14\u4ee3\u592b": "maldives",
+  "\u79d1\u7d22\u6c83": "kosovo",
+  "\u5a01\u5c14\u58eb": "wales",
+  "\u585e\u5c14\u7ef4\u4e9a": "serbia",
+  "\u5e0c\u814a": "greece",
 });
 
 module.exports = { FREE_FOOTBALL_TEAM_ALIASES, FREE_FOOTBALL_TEAM_ALIASES_VERSION };

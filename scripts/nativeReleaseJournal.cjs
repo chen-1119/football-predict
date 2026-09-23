@@ -6,6 +6,13 @@ const { spawnSync } = require("node:child_process");
 // Exact accepted r730 runtime; original 198 decisions/evidence and frozen
 // archive continuity were independently verified after its official cycle.
 const BOOTSTRAP_SHA = "a69f15cc7deeb44343cede093f2b6b0e8ea02b01587121b856c2f4d10f6e194b";
+// One observed PostgreSQL-only production tree never received its final
+// acceptance marker. This is a narrowly pinned repair source, not acceptance
+// of that release or permission to use arbitrary incomplete installations.
+const LEGACY_UNACCEPTED = Object.freeze({
+  bundleSha256: "54fd1057a7b746abd131e02a9528a770f6f0dac2f2d049737329722e3037db5d",
+  serverIndexSha256: "aa7fbc3d3aaf24666f7363dfc0f3767fd66b426935f4a177e6396ccad01c708d",
+});
 const NATIVE_SELECTORS = Object.freeze({ FOOTBALL_STORAGE_MODE: "postgres-only", FOOTBALL_POSTGRES_MODE: "primary",
   DATASTORE_READ_SOURCE: "postgres", CURRENT_MATCH_SOURCE: "postgres", ENABLE_SQLITE_EXPORT: "0",
   PRIVATE_MODEL_ARTIFACT_STORAGE: "postgres", POSTGRES_PROJECTION_SOURCE: "native-generation" });
@@ -14,6 +21,49 @@ const NATIVE_CAPTURE_BUDGETS = Object.freeze({
   CANDIDATE_PROSPECTIVE_CAPTURE_RECOVERY_BUDGET_MS: "80000",
 });
 const digest = bytes => crypto.createHash("sha256").update(bytes).digest("hex");
+// Bind the actual old executable, source and static public tree independently
+// of its stale bundle marker. Mutable public/data and server-data are verified
+// by the native generation snapshot/final-read lane.
+function runtimeTreeSha256(root, { verifyOwnership = true } = {}) {
+  const result = crypto.createHash("sha256"), buffer = Buffer.allocUnsafe(1024 * 1024);
+  const fileHash = file => { const h = crypto.createHash("sha256"), fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+    try { let n; while ((n = fs.readSync(fd, buffer, 0, buffer.length, null)) > 0) h.update(buffer.subarray(0, n)); }
+    finally { fs.closeSync(fd); } return h.digest("hex"); };
+  const visit = (absolute, relative) => {
+    const st = fs.lstatSync(absolute);
+    if (verifyOwnership) {
+      assert.equal(st.uid, 0, "unaccepted runtime tree is not root-owned: " + relative);
+      if (!st.isSymbolicLink()) assert.equal(st.mode & 0o022, 0, "unaccepted runtime tree is writable: " + relative);
+    }
+    if (st.isDirectory()) {
+      result.update(`d\t${relative}\t${st.mode & 0o7777}\n`);
+      for (const name of fs.readdirSync(absolute).sort()) {
+        if (relative === "public" && name === "data") continue;
+        visit(path.join(absolute, name), relative ? relative + "/" + name : name);
+      }
+    } else if (st.isFile()) {
+      assert.equal(st.nlink, 1, "unaccepted runtime tree has a hard link: " + relative);
+      result.update(`f\t${relative}\t${st.mode & 0o7777}\t${st.size}\t${fileHash(absolute)}\n`);
+    } else if (st.isSymbolicLink()) {
+      const target = fs.readlinkSync(absolute);
+      if (relative === "deploy/light-server/env") assert.equal(target, "/etc/football-predict/env", "runtime env link changed");
+      else {
+        const real = fs.realpathSync(absolute), inside = path.relative(root, real).replaceAll("\\", "/");
+        assert.ok(inside && inside !== ".." && !inside.startsWith("../") && !path.isAbsolute(inside)
+          && !inside.split("/")[0].startsWith(".release-")
+          && !["public", "server-data"].some(name => inside === name || inside.startsWith(name + "/")),
+        "unaccepted runtime tree has an external or data link: " + relative);
+      }
+      result.update(`l\t${relative}\t${target}\n`);
+    }
+    else throw new Error("unaccepted runtime tree has unsupported entry: " + relative);
+  };
+  for (const name of fs.readdirSync(root).sort()) {
+    if (name === "server-data" || name.startsWith(".release-")) continue;
+    visit(path.join(root, name), name);
+  }
+  return result.digest("hex");
+}
 function nativeEnvironment(text) {
   assert.ok(Buffer.byteLength(text) <= 262144 && !text.includes("\0"));
   const remove = new Set([...Object.keys(NATIVE_SELECTORS), ...Object.keys(NATIVE_CAPTURE_BUDGETS), "FOOTBALL_POSTGRES_URL", "FOOTBALL_POSTGRES_SSL_MODE"]);
@@ -29,11 +79,17 @@ function nativeEnvironment(text) {
     "FOOTBALL_POSTGRES_SSL_MODE=disable");
   return lines.join("\n").replace(/\n+$/, "") + "\n";
 }
-function contractFor({ kind, oldIdentity, topology, candidateDatabase = null, archiveDatabase = null, nativeAlreadyActive = false }) {
+function contractFor({ kind, oldIdentity, topology, candidateDatabase = null, archiveDatabase = null, nativeAlreadyActive = false,
+  legacyBaselineSha256 = null }) {
   assert.ok(["initial-cutover", "runtime-only"].includes(kind));
   assert.match(topology.clusterId, /^[0-9]{10,20}$/);
   assert.match(oldIdentity.bundleMarker || "", /^[a-f0-9]{64}$/);
-  assert.equal(oldIdentity.bundleMarker, oldIdentity.liveMarker, "old runtime is not accepted");
+  if (legacyBaselineSha256 !== null) {
+    assert.equal(kind, "runtime-only", "unaccepted baseline cannot change storage mode");
+    assert.equal(oldIdentity.bundleMarker, LEGACY_UNACCEPTED.bundleSha256, "unaccepted source marker changed");
+    assert.equal(oldIdentity.liveMarker, "-", "unaccepted source unexpectedly has a completion marker");
+    assert.match(legacyBaselineSha256, /^[a-f0-9]{64}$/, "unaccepted baseline receipt missing");
+  } else assert.equal(oldIdentity.bundleMarker, oldIdentity.liveMarker, "old runtime is not accepted");
   if (kind === "initial-cutover") {
     assert.match(BOOTSTRAP_SHA || "", /^[a-f0-9]{64}$/, "initial cutover disabled: no accepted native-capable bootstrap");
     assert.equal(oldIdentity.bundleMarker, BOOTSTRAP_SHA, "initial cutover requires the exact accepted native-capable bootstrap");
@@ -48,12 +104,25 @@ function contractFor({ kind, oldIdentity, topology, candidateDatabase = null, ar
   for (const value of [oldDatabaseOid, newDatabaseOid]) assert.ok(typeof value === "string" && /^[1-9][0-9]{0,9}$/.test(value) && BigInt(value) <= 4294967295n);
   if (kind === "initial-cutover") assert.notEqual(oldDatabaseOid, newDatabaseOid);
   return { version: "native-app-data-forward-v1", kind, clusterId: topology.clusterId, oldDatabaseOid, newDatabaseOid,
-    candidateDatabase, archiveDatabase, compatibleRuntimeSha256: oldIdentity.bundleMarker };
+    candidateDatabase, archiveDatabase, compatibleRuntimeSha256: oldIdentity.bundleMarker,
+    ...(legacyBaselineSha256 === null ? {} : { legacyBaselineSha256 }) };
 }
 function writeNativeSnapshot({ stagingDir, contract, environment }) {
   const dir = path.join(stagingDir, "native-mode");
   fs.mkdirSync(dir, { mode: 0o700 }); // No recursive overwrite or reuse.
   fs.cpSync(path.join(stagingDir, "runtime-env"), path.join(dir, "runtime-env"), { recursive: true, errorOnExist: true, force: false });
+  if (contract.legacyBaselineSha256) {
+    const bundleSha = fs.readFileSync(path.join(stagingDir, "bundle-sha256"), "utf8").trim();
+    assert.match(bundleSha, /^[a-f0-9]{64}$/);
+    const source = path.join("/var/lib/football-release/native", bundleSha, "legacy-unaccepted-baseline.json");
+    const st = fs.lstatSync(source);
+    assert.ok(st.isFile() && !st.isSymbolicLink() && st.nlink === 1 && st.uid === 0 && (st.mode & 0o777) === 0o600);
+    const bytes = fs.readFileSync(source);
+    assert.equal(digest(bytes), contract.legacyBaselineSha256, "legacy receipt changed before journal publication");
+    const target = path.join(dir, "legacy-unaccepted-baseline.json");
+    fs.writeFileSync(target, bytes, { flag: "wx", mode: 0o600 });
+    const fd = fs.openSync(target, "r+"); try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+  }
   const file = path.join(dir, "runtime-env/env"), manifest = path.join(dir, "runtime-env/manifest.tsv");
   const parts = fs.readFileSync(manifest, "utf8").trim().split("\t");
   assert.equal(parts.length, 8); assert.equal(parts[0], "env"); assert.equal(parts[1], "/etc/football-predict/env"); assert.equal(parts[2], "1");
@@ -68,7 +137,7 @@ function writeNativeSnapshot({ stagingDir, contract, environment }) {
   }
   return { ok: true, kind: contract.kind, databaseWrites: 0, environmentSha256: digest(environment) };
 }
-module.exports = { BOOTSTRAP_SHA, NATIVE_SELECTORS, nativeEnvironment, contractFor, writeNativeSnapshot };
+module.exports = { BOOTSTRAP_SHA, LEGACY_UNACCEPTED, NATIVE_SELECTORS, nativeEnvironment, runtimeTreeSha256, contractFor, writeNativeSnapshot };
 if (require.main === module) {
   try {
     assert.equal(process.platform, "linux"); assert.equal(process.getuid(), 0);
@@ -90,8 +159,14 @@ if (require.main === module) {
       env: { PATH: "/usr/bin:/bin", PGHOST: "/var/run/postgresql", PGCONNECT_TIMEOUT: "5", PGOPTIONS: "-c statement_timeout=5000" } });
     assert.equal(result.status, 0, "native journal database identity query failed");
     const nativeAlreadyActive = /^FOOTBALL_STORAGE_MODE=postgres-only\s*$/m.test(original);
+    const bundleSha = plain(path.join(stagingDir, "bundle-sha256")).trim();
+    assert.match(bundleSha, /^[a-f0-9]{64}$/);
+    const allocated = JSON.parse(plain(path.join("/var/lib/football-release/native", bundleSha, "state.json")));
+    assert.equal(allocated.sha, bundleSha); assert.equal(allocated.oldSha, oldIdentity.bundleMarker);
     const contract = contractFor({ kind, oldIdentity, topology: JSON.parse(result.stdout), candidateDatabase: candidate === "-" ? null : candidate,
-      archiveDatabase: archive === "-" ? null : archive, nativeAlreadyActive });
+      archiveDatabase: archive === "-" ? null : archive, nativeAlreadyActive,
+      legacyBaselineSha256: allocated.legacyBaselineSha256 });
+    assert.deepEqual(allocated.contract, contract, "allocated native contract changed before journal publication");
     console.log(JSON.stringify(writeNativeSnapshot({ stagingDir, contract, environment: nativeEnvironment(original) })));
   } catch (error) { console.error(JSON.stringify({ ok: false, phase: "native-recovery-journal", error: error.message })); process.exitCode = 1; }
 }

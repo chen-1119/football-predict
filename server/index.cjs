@@ -2320,7 +2320,9 @@ const HISTORICAL_TEAM_ALIASES = Object.freeze({
   "北爱尔兰": "northern ireland",
   "威尔士": "wales",
   "芬兰": "finland",
-  "希腊": "greece"
+  "希腊": "greece",
+  "马尔代夫": "maldives",
+  "科索沃": "kosovo"
 });
 
 const HISTORICAL_NAME_ZH = Object.freeze(Object.entries(HISTORICAL_TEAM_ALIASES)

@@ -10,6 +10,7 @@ const { buildPinnedSshBaseOptions, resolveReleaseSshHostKeyPin } = require("./re
 const { inspectGenerationDocuments, probeWindow, RELEASE_HORIZON_SECONDS } = require("./queueServerRelease.cjs");
 const { createTransitionLease } = require("./releaseTransitionLease.cjs");
 const { stableStringify } = require("../server/dataGenerationStore.cjs");
+const { LEGACY_UNACCEPTED } = require("./nativeReleaseJournal.cjs");
 
 const PREPARATION_SECONDS = 900;
 // Before-upload still needs its complete existing allowance. Before-build
@@ -75,9 +76,13 @@ function collectReleaseWindowObservation() {
     inspectDirectory(directory, ["/var", "/var/lib", "/opt", app].includes(directory));
   }
   const marker = () => read(app + "/.release-bundle-sha256", 4096, 0).toString("utf8").trim();
-  const complete = () => read(app + "/.release-live-complete", 4096, 0).toString("utf8").trim();
+  const complete = () => { try { return read(app + "/.release-live-complete", 4096, 0).toString("utf8").trim(); }
+    catch (error) { if (error.code === "ENOENT") return "-"; throw error; } };
   const releaseMarker = marker(), liveComplete = complete();
-  assert.match(releaseMarker, /^[a-f0-9]{64}$/); assert.equal(liveComplete, releaseMarker, "runtime not fully accepted");
+  assert.match(releaseMarker, /^[a-f0-9]{64}$/);
+  // This remote helper is advisory and has no source-tree dependencies. The
+  // signed storage, allocation and recovery gates bind the exact exception.
+  assert.ok(liveComplete === releaseMarker || liveComplete === "-", "runtime completion marker changed");
   const pointer = JSON.parse(read(root + "/current.json", 64 * 1024));
   assert.match(pointer.generationId || "", /^g-[a-f0-9]{64}$/);
   const directory = root + "/generations/" + pointer.generationId;
@@ -104,7 +109,9 @@ function evaluateReleaseWindowObservation(observation, now = Date.now(), { stage
   assert.equal(observation?.version, "release-window-observation-v1");
   assert.equal(observation.productionWrites, 0);
   assert.match(observation.releaseMarker || "", /^[a-f0-9]{64}$/);
-  assert.equal(observation.liveComplete, observation.releaseMarker);
+  const legacyUnaccepted = observation.liveComplete === "-";
+  if (legacyUnaccepted) assert.equal(observation.releaseMarker, LEGACY_UNACCEPTED.bundleSha256, "unreviewed incomplete runtime");
+  else assert.equal(observation.liveComplete, observation.releaseMarker);
   const age = now - Date.parse(observation.checkedAt);
   assert.ok(Number.isFinite(age) && age >= -5000 && age <= MAX_OBSERVATION_AGE_MS, "window observation expired or future-dated");
   const generationAge = now - Date.parse(observation.pointer?.committedAt);
@@ -126,7 +133,7 @@ function evaluateReleaseWindowObservation(observation, now = Date.now(), { stage
   const latestStartBeforeNextTransition = Number.isFinite(nextTransitionMs)
     ? new Date(nextTransitionMs - proof.minimumHorizonSeconds * 1000).toISOString() : null;
   return { version: "release-window-preflight-v1", checkedAt: new Date(now).toISOString(), observationAt: observation.checkedAt,
-    ok: proof.safe === true, ...proof, releaseMarker: observation.releaseMarker,
+    ok: proof.safe === true, ...proof, releaseMarker: observation.releaseMarker, legacyUnaccepted,
     sourceCycleId: observation.pointer.sourceCycleId, committedAt: observation.pointer.committedAt,
     releaseHorizonSeconds: RELEASE_HORIZON_SECONDS, ...budget,
     observationReserveSeconds, latestStartBeforeNextTransition,

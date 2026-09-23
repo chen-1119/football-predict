@@ -581,13 +581,43 @@ const loadNativeRecovery = (currentDir, oldIdentity) => {
   const dir = path.join(currentDir, "native-mode");
   assertSecureDirectory(dir, "native recovery directory");
   const contract = readJsonFile(path.join(dir, "state.json"), "native recovery contract");
-  const fields = ["version", "kind", "clusterId", "oldDatabaseOid", "newDatabaseOid", "candidateDatabase", "archiveDatabase", "compatibleRuntimeSha256"];
+  const legacy = oldIdentity.liveMarker === "-";
+  const fields = ["version", "kind", "clusterId", "oldDatabaseOid", "newDatabaseOid", "candidateDatabase", "archiveDatabase", "compatibleRuntimeSha256",
+    ...(legacy ? ["legacyBaselineSha256"] : [])];
   if (!contract || Object.keys(contract).sort().join() !== fields.sort().join()
       || contract.version !== "native-app-data-forward-v1" || !["initial-cutover", "runtime-only"].includes(contract.kind)
       || !/^[0-9]{10,20}$/.test(contract.clusterId || "")
       || ![contract.oldDatabaseOid, contract.newDatabaseOid].every(oid => typeof oid === "string" && /^[1-9][0-9]{0,9}$/.test(oid) && BigInt(oid) <= 4294967295n)
       || !validateDigest(contract.compatibleRuntimeSha256) || contract.compatibleRuntimeSha256 !== oldIdentity.bundleMarker
-      || oldIdentity.bundleMarker !== oldIdentity.liveMarker) fail("invalid or unbound native recovery contract");
+      || (!legacy && oldIdentity.bundleMarker !== oldIdentity.liveMarker)) fail("invalid or unbound native recovery contract");
+  let legacyBaseline = null;
+  if (legacy) {
+    const pinnedMarker = "54fd1057a7b746abd131e02a9528a770f6f0dac2f2d049737329722e3037db5d";
+    const pinnedIndex = "aa7fbc3d3aaf24666f7363dfc0f3767fd66b426935f4a177e6396ccad01c708d";
+    if (contract.kind !== "runtime-only" || oldIdentity.bundleMarker !== pinnedMarker
+        || !validateDigest(contract.legacyBaselineSha256)) fail("unaccepted runtime baseline is not pinned");
+    const receiptPath = path.join(dir, "legacy-unaccepted-baseline.json"), st = assertSecureFile(receiptPath, "unaccepted baseline receipt");
+    if (st.size <= 0 || st.size > 16 * 1024 * 1024 || sha256File(receiptPath) !== contract.legacyBaselineSha256)
+      fail("unaccepted baseline receipt digest mismatch");
+    legacyBaseline = readJsonFile(receiptPath, "unaccepted baseline receipt");
+    const bundleSha = readSingleLine(path.join(currentDir, "bundle-sha256"), "transaction bundle sha256");
+    if (legacyBaseline.version !== "legacy-unaccepted-baseline-v1" || legacyBaseline.releaseSha256 !== bundleSha
+        || legacyBaseline.oldBundleSha256 !== pinnedMarker || legacyBaseline.oldLiveMarker !== "-"
+        || !validateDigest(legacyBaseline.serverIndexSha256)
+        || (!TEST_MODE && legacyBaseline.serverIndexSha256 !== pinnedIndex)
+        || !validateDigest(legacyBaseline.runtimeTreeSha256)
+        || legacyBaseline.clusterId !== contract.clusterId
+        || legacyBaseline.databaseOid !== contract.oldDatabaseOid
+        || !/^g-[a-f0-9]{64}$/.test(legacyBaseline.generationId || "")
+        || !validateDigest(legacyBaseline.manifestHash)
+        || typeof legacyBaseline.sourceCycleId !== "string" || !legacyBaseline.sourceCycleId
+        || !Number.isFinite(Date.parse(legacyBaseline.committedAt))
+        || !Array.isArray(legacyBaseline.frozen) || legacyBaseline.frozen.length < 198
+        || legacyBaseline.frozen.length > 100000
+        || legacyBaseline.frozen.some((row, i) => typeof row?.decisionId !== "string" || !row.decisionId
+          || !validateDigest(row.sha256) || (i > 0 && legacyBaseline.frozen[i - 1].decisionId >= row.decisionId)))
+      fail("unaccepted baseline receipt content is invalid");
+  }
   if (contract.kind === "initial-cutover") {
     if (contract.oldDatabaseOid === contract.newDatabaseOid
         || !/^football_release_[a-f0-9]{12}_[0-9]{1,10}$/.test(contract.candidateDatabase || "")
@@ -615,7 +645,7 @@ const loadNativeRecovery = (currentDir, oldIdentity) => {
       || [...url.searchParams.keys()].some(key => !["host", "sslmode"].includes(key) || url.searchParams.getAll(key).length !== 1)
       || (url.searchParams.has("host") && url.searchParams.get("host") !== "/var/run/postgresql")
       || (!url.hostname && url.searchParams.get("host") !== "/var/run/postgresql")) fail("native recovery must use the fixed local football database");
-  return { contract, runtimeEnv };
+  return { contract, runtimeEnv, legacyBaseline };
 };
 
 const nativeDataActive = (native, system) => {
@@ -913,7 +943,7 @@ const readTreeMarker = (treePath, name) => {
   return value;
 };
 
-const inspectTree = (absolutePath, oldIdentity, newIdentity, bundleSha, system) => {
+const inspectTree = (absolutePath, oldIdentity, newIdentity, bundleSha, system, legacyBaseline = null) => {
   const mapped = hostPath(absolutePath);
   const stat = lstatOrNull(mapped, { bigint: true });
   if (!stat) return { absolutePath, mapped, kind: "absent" };
@@ -944,13 +974,56 @@ const inspectTree = (absolutePath, oldIdentity, newIdentity, bundleSha, system) 
     const allowed = kind === "old" ? new Set([identity[field]]) : new Set([identity[field], bundleSha]);
     if (!allowed.has(value)) fail(`managed app ${field} changed to an unexpected value: ${absolutePath}`);
   }
+  if (kind === "old" && legacyBaseline) {
+    const entry = path.join(mapped, "server/index.cjs"), st = assertSecureFile(entry, "unaccepted old runtime entrypoint", { mode: 0o644 });
+    if (st.size <= 0 || st.size > 8 * 1024 * 1024 || sha256File(entry) !== legacyBaseline.serverIndexSha256)
+      fail("unaccepted old runtime entrypoint changed");
+  }
   return { absolutePath, mapped, kind, stat };
+};
+
+const legacyRuntimeTreeSha256 = root => {
+  const result = crypto.createHash("sha256");
+  const visit = (absolute, relative) => {
+    const st = fs.lstatSync(absolute);
+    if (!TEST_MODE && (st.uid !== 0 || (!st.isSymbolicLink() && (st.mode & 0o022))))
+      fail("unaccepted runtime tree ownership changed: " + relative);
+    if (st.isDirectory()) {
+      result.update(`d\t${relative}\t${st.mode & 0o7777}\n`);
+      for (const name of fs.readdirSync(absolute).sort()) {
+        if (relative === "public" && name === "data") continue;
+        visit(path.join(absolute, name), relative ? relative + "/" + name : name);
+      }
+    } else if (st.isFile()) {
+      if (st.nlink !== 1) fail("unaccepted runtime tree hard link: " + relative);
+      result.update(`f\t${relative}\t${st.mode & 0o7777}\t${st.size}\t${sha256File(absolute)}\n`);
+    } else if (st.isSymbolicLink()) {
+      const target = fs.readlinkSync(absolute);
+      if (relative === "deploy/light-server/env") {
+        if (target !== "/etc/football-predict/env") fail("unaccepted runtime env link changed");
+      } else {
+        const real = fs.realpathSync(absolute), inside = path.relative(root, real).replaceAll("\\", "/");
+        if (!inside || inside === ".." || inside.startsWith("../") || path.isAbsolute(inside)
+            || inside.split("/")[0].startsWith(".release-")
+            || ["public", "server-data"].some(name => inside === name || inside.startsWith(name + "/")))
+          fail("unaccepted runtime tree external or data link: " + relative);
+      }
+      result.update(`l\t${relative}\t${target}\n`);
+    }
+    else fail("unaccepted runtime tree unsupported entry: " + relative);
+  };
+  for (const name of fs.readdirSync(root).sort()) {
+    if (name === "server-data" || name.startsWith(".release-")) continue;
+    visit(path.join(root, name), name);
+  }
+  return result.digest("hex");
 };
 
 const inspectTopology = (transaction, system) => {
   const result = {};
   for (const [key, absolutePath] of Object.entries({ app: APP_PATH, backup: BACKUP_PATH, failed: FAILED_PATH })) {
-    result[key] = inspectTree(absolutePath, transaction.oldIdentity, transaction.newIdentity, transaction.bundleSha, system);
+    result[key] = inspectTree(absolutePath, transaction.oldIdentity, transaction.newIdentity, transaction.bundleSha, system,
+      transaction.native?.legacyBaseline);
   }
   return result;
 };
@@ -1269,6 +1342,12 @@ const recoverRollback = (transaction, system) => {
   quiesceAll(transaction, system);
   if (transaction.native && nativeDataActive(transaction.native, system) !== nativeWasActive) fail("native database changed during recovery quiesce");
   if (transaction.native) system.reopenBoundNativeDatabase(transaction.native.contract, nativeWasActive);
+  if (transaction.native?.legacyBaseline) {
+    const topology = inspectTopology(transaction, system);
+    const oldTree = topology.app.kind === "old" ? topology.app.mapped : topology.backup.kind === "old" ? topology.backup.mapped : null;
+    if (!oldTree || legacyRuntimeTreeSha256(oldTree) !== transaction.native.legacyBaseline.runtimeTreeSha256)
+      fail("unaccepted old runtime source tree changed before rollback");
+  }
   restoreOldTree(transaction, system);
   if (transaction.sqlite) restoreSqlite(transaction.sqlite);
   if (transaction.model) restoreModelArtifacts(transaction.model);

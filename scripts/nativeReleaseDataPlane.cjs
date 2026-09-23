@@ -6,7 +6,7 @@ const fs = require("node:fs"), path = require("node:path"), crypto = require("no
 const { spawn, spawnSync } = require("node:child_process"), { pipeline } = require("node:stream/promises");
 const { NativeReleasePostgresPool } = require("./nativeReleasePostgresTransport.cjs");
 const { NativeReleaseDatabaseSession } = require("./nativeReleaseDatabaseSession.cjs");
-const { BOOTSTRAP_SHA, contractFor } = require("./nativeReleaseJournal.cjs");
+const { BOOTSTRAP_SHA, LEGACY_UNACCEPTED, runtimeTreeSha256, contractFor } = require("./nativeReleaseJournal.cjs");
 const ROOT = "/var/lib/football-release/native", STORE = "/var/lib/football-predict";
 const hash = bytes => crypto.createHash("sha256").update(bytes).digest("hex");
 function secureDirectory(directory) {
@@ -39,11 +39,74 @@ function mirrorContract(state) {
     oldDatabaseOid: state.oldDatabaseOid, newDatabaseOid: state.candidateOid, candidateDatabase: state.candidateDatabase,
     archiveDatabase: state.archiveDatabase, compatibleRuntimeSha256: state.oldSha };
 }
-async function allocate(sha, directory) {
+function readOldRuntimeIdentity() {
   secureDirectory("/opt/football-predict");
-  const marker = name => { const file = "/opt/football-predict/" + name, st = fs.lstatSync(file);
-    assert.ok(st.isFile() && !st.isSymbolicLink() && st.uid === 0 && !(st.mode & 0o022) && st.nlink === 1); return fs.readFileSync(file, "utf8").trim(); };
-  const oldSha = marker(".release-bundle-sha256"); assert.match(oldSha, /^[a-f0-9]{64}$/); assert.equal(marker(".release-live-complete"), oldSha);
+  const marker = (name, optional = false) => {
+    const file = "/opt/football-predict/" + name;
+    let st; try { st = fs.lstatSync(file); } catch (error) { if (optional && error.code === "ENOENT") return "-"; throw error; }
+    assert.ok(st.isFile() && !st.isSymbolicLink() && st.uid === 0 && !(st.mode & 0o022) && st.nlink === 1 && st.size <= 128,
+      "old runtime marker unsafe");
+    return fs.readFileSync(file, "utf8").trim();
+  };
+  const bundleMarker = marker(".release-bundle-sha256"), liveMarker = marker(".release-live-complete", true);
+  assert.match(bundleMarker, /^[a-f0-9]{64}$/);
+  let serverIndexSha256 = null;
+  if (liveMarker === "-") {
+    const file = "/opt/football-predict/server/index.cjs", st = fs.lstatSync(file);
+    assert.ok(st.isFile() && !st.isSymbolicLink() && st.uid === 0 && !(st.mode & 0o022) && st.nlink === 1 && st.size <= 8 * 1024 * 1024,
+      "unaccepted runtime entrypoint unsafe");
+    serverIndexSha256 = hash(fs.readFileSync(file));
+    assert.equal(bundleMarker, LEGACY_UNACCEPTED.bundleSha256, "unaccepted source marker changed");
+    assert.equal(serverIndexSha256, LEGACY_UNACCEPTED.serverIndexSha256, "unaccepted source code changed");
+  } else assert.equal(liveMarker, bundleMarker, "old runtime has mismatched acceptance marker");
+  return { bundleMarker, liveMarker, serverIndexSha256 };
+}
+async function captureLegacyBaseline({ sha, directory, oldIdentity, topologyBefore }) {
+  assert.equal(oldIdentity.liveMarker, "-");
+  const source = pool({ clusterId: topologyBefore.clusterId }, "football", topologyBefore.databases.football);
+  try {
+    const rows = (await source.query("SELECT decision_id,to_jsonb(f)::text AS record FROM football.frozen_recommendations f ORDER BY decision_id COLLATE \"C\"")).rows;
+    assert.ok(rows.length >= 198 && rows.length <= 100000, "unaccepted baseline frozen recommendation count unsafe");
+    const frozen = rows.map(row => ({ decisionId: row.decision_id, sha256: hash(row.record) }));
+    const generation = require("../server/dataGenerationStore.cjs").resolveCurrentGeneration({ storeDir: STORE }).pointer;
+    const metaRows = (await source.query("SELECT key,value FROM football.projection_meta WHERE key IN ('data_publication_mode','data_generation_id','manifest_hash','data_generation_source_cycle_id','committed_at')")).rows;
+    const meta = Object.fromEntries(metaRows.map(row => [row.key, row.value]));
+    assert.equal(meta.data_publication_mode, "active-generation", "unaccepted baseline is not a native generation");
+    assert.equal(meta.data_generation_id, generation.generationId, "unaccepted baseline PG/generation mismatch");
+    assert.equal(meta.manifest_hash, generation.manifestHash, "unaccepted baseline PG/manifest mismatch");
+    assert.equal(meta.data_generation_source_cycle_id, generation.sourceCycleId, "unaccepted baseline PG/source mismatch");
+    assert.equal(Date.parse(meta.committed_at), Date.parse(generation.committedAt), "unaccepted baseline PG/commit mismatch");
+    const receipt = { version: "legacy-unaccepted-baseline-v1", releaseSha256: sha,
+      oldBundleSha256: oldIdentity.bundleMarker, oldLiveMarker: "-", serverIndexSha256: oldIdentity.serverIndexSha256,
+      runtimeTreeSha256: runtimeTreeSha256("/opt/football-predict"),
+      clusterId: topologyBefore.clusterId, databaseOid: topologyBefore.databases.football,
+      generationId: generation.generationId, manifestHash: generation.manifestHash,
+      sourceCycleId: generation.sourceCycleId, committedAt: generation.committedAt,
+      frozen, capturedAt: new Date().toISOString() };
+    const bytes = JSON.stringify(receipt) + "\n";
+    assert.ok(Buffer.byteLength(bytes) <= 1024 * 1024, "unaccepted baseline receipt oversized");
+    write(path.join(directory, "legacy-unaccepted-baseline.json"), receipt);
+    return hash(bytes);
+  } finally { await source.end(); }
+}
+function legacyGenerationTransition(baseline, current) {
+  const fields = ["generationId", "manifestHash", "sourceCycleId", "committedAt"];
+  for (const field of fields) assert.ok(typeof baseline[field] === "string" && typeof current[field] === "string" && current[field],
+    "unaccepted baseline generation field missing: " + field);
+  assert.match(baseline.generationId, /^g-[a-f0-9]{64}$/);
+  assert.match(current.generationId, /^g-[a-f0-9]{64}$/);
+  assert.match(baseline.manifestHash, /^[a-f0-9]{64}$/);
+  assert.match(current.manifestHash, /^[a-f0-9]{64}$/);
+  const fromTime = Date.parse(baseline.committedAt), toTime = Date.parse(current.committedAt);
+  assert.ok(Number.isFinite(fromTime) && Number.isFinite(toTime), "unaccepted baseline generation clock invalid");
+  const advanced = baseline.generationId !== current.generationId;
+  if (advanced) assert.ok(toTime > fromTime, "unaccepted baseline generation regressed");
+  else for (const field of fields) assert.equal(current[field], baseline[field], "same generation identity changed: " + field);
+  return { from: Object.fromEntries(fields.map(field => [field, baseline[field]])),
+    to: Object.fromEntries(fields.map(field => [field, current[field]])), advanced };
+}
+async function allocate(sha, directory) {
+  const oldIdentity = readOldRuntimeIdentity(), oldSha = oldIdentity.bundleMarker;
   const environment = fs.readFileSync("/etc/football-predict/env", "utf8");
   const native = /^FOOTBALL_STORAGE_MODE=postgres-only\s*$/m.test(environment);
   if (!native) { assert.match(BOOTSTRAP_SHA || "", /^[a-f0-9]{64}$/, "accepted bootstrap has not been pinned"); assert.equal(oldSha, BOOTSTRAP_SHA); }
@@ -51,8 +114,11 @@ async function allocate(sha, directory) {
   const candidateDatabase = "football_release_" + suffix, archiveDatabase = "football_legacy_" + suffix;
   assert.equal(before.databases[candidateDatabase], undefined); assert.equal(before.databases[archiveDatabase], undefined);
   fs.mkdirSync(ROOT, { recursive: true, mode: 0o700 }); secureDirectory(ROOT); fs.mkdirSync(directory, { mode: 0o700 });
+  const legacyBaselineSha256 = oldIdentity.liveMarker === "-"
+    ? await captureLegacyBaseline({ sha, directory, oldIdentity, topologyBefore: before }) : null;
   const intent = { version: "native-release-preparation-v1", sha, oldSha, kind: native ? "runtime-only" : "initial-cutover", clusterId: before.clusterId,
-    maintenanceOid: before.databases.postgres, oldDatabaseOid: before.databases.football, candidateDatabase, archiveDatabase, key: crypto.randomBytes(32).toString("hex"), createdAt: new Date().toISOString() };
+    maintenanceOid: before.databases.postgres, oldDatabaseOid: before.databases.football, candidateDatabase, archiveDatabase,
+    legacyBaselineSha256, key: crypto.randomBytes(32).toString("hex"), createdAt: new Date().toISOString() };
   write(path.join(directory, "allocation-intent.json"), intent);
   const admin = pool(intent, "postgres", intent.maintenanceOid);
   try {
@@ -60,8 +126,9 @@ async function allocate(sha, directory) {
     await admin.query('REVOKE ALL ON DATABASE "' + candidateDatabase + '" FROM PUBLIC');
     const after = topology(); assert.equal(after.clusterId, before.clusterId); assert.equal(after.databases.football, intent.oldDatabaseOid);
     const state = { ...intent, candidateOid: after.databases[candidateDatabase] };
-    const contract = contractFor({ kind: intent.kind, oldIdentity: { bundleMarker: oldSha, liveMarker: oldSha }, topology: after,
-      candidateDatabase: native ? null : candidateDatabase, archiveDatabase: native ? null : archiveDatabase, nativeAlreadyActive: native });
+    const contract = contractFor({ kind: intent.kind, oldIdentity, topology: after,
+      candidateDatabase: native ? null : candidateDatabase, archiveDatabase: native ? null : archiveDatabase,
+      nativeAlreadyActive: native, legacyBaselineSha256 });
     write(path.join(directory, "state.json"), { ...state, contract });
     return { ok: true, directory, kind: intent.kind, candidateDatabase, archiveDatabase, candidateOid: state.candidateOid, productionWrites: 0 };
   } finally { await admin.end(); }
@@ -164,10 +231,27 @@ function publisherPointerLock() {
 }
 async function finalizeRuntime(state, directory) {
   assert.equal(state.kind, "runtime-only"); assert.equal(state.contract.oldDatabaseOid, state.contract.newDatabaseOid); assertWritersStopped();
+  if (state.contract.legacyBaselineSha256) {
+    const baselineFile = path.join(directory, "legacy-unaccepted-baseline.json"), baselineBytes = fs.readFileSync(baselineFile);
+    assert.equal(hash(baselineBytes), state.contract.legacyBaselineSha256, "unaccepted baseline receipt changed");
+    const baseline = read(baselineFile), observed = readOldRuntimeIdentity();
+    assert.equal(observed.bundleMarker, baseline.oldBundleSha256);
+    assert.equal(observed.liveMarker, "-");
+    assert.equal(observed.serverIndexSha256, baseline.serverIndexSha256);
+    assert.equal(runtimeTreeSha256("/opt/football-predict"), baseline.runtimeTreeSha256,
+      "old runtime source tree changed between baseline and stopped cutover");
+  }
   const seed = read(path.join(directory, "seed-accepted.json")); assert.equal(seed.ok, true); assert.equal(seed.sha, state.sha);
   write(path.join(directory, "final-started.json"), { sha: state.sha, startedAt: new Date().toISOString() });
   const held = publisherPointerLock(), sourcePool = pool(state, "football", state.oldDatabaseOid); let session;
   try {
+    if (state.contract.legacyBaselineSha256) {
+      const baseline = read(path.join(directory, "legacy-unaccepted-baseline.json"));
+      const observed = (await sourcePool.query("SELECT decision_id,to_jsonb(f)::text AS record FROM football.frozen_recommendations f ORDER BY decision_id COLLATE \"C\"")).rows;
+      const byId = new Map(observed.map(row => [row.decision_id, hash(row.record)]));
+      for (const row of baseline.frozen) assert.equal(byId.get(row.decisionId), row.sha256,
+        "frozen recommendation changed since unaccepted baseline: " + row.decisionId);
+    }
     const transaction = require("../deploy/light-server/football-release-recovery.cjs").loadTransaction();
     assert.equal(transaction.bundleSha, state.sha); assert.deepEqual(transaction.native.contract, state.contract); assert.ok(transaction.newIdentity);
     session = await require("./postgresRuntimeReadSession.cjs").openPostgresRuntimeReadSession({ pool: sourcePool, storeDir: STORE,
@@ -175,7 +259,10 @@ async function finalizeRuntime(state, directory) {
     await session.guardedFinals(); assertWritersStopped();
     const { storePaths, readPointer } = require("../server/dataGenerationStore.cjs"), pointer = readPointer(storePaths(STORE).currentPointer);
     for (const name of ["generationId", "manifestHash", "sourceCycleId", "committedAt"]) assert.equal(pointer[name], session.identity[name]);
+    const legacyBaselineTransition = state.contract.legacyBaselineSha256
+      ? legacyGenerationTransition(read(path.join(directory, "legacy-unaccepted-baseline.json")), session.identity) : null;
     const proof = { ok: true, sha: state.sha, kind: state.kind, publication: session.identity, databaseOid: state.oldDatabaseOid,
+      ...(legacyBaselineTransition ? { legacyBaselineTransition } : {}),
       databaseWrites: 0, databaseRenames: 0, sqliteAccesses: 0, sqliteExports: 0, completedAt: new Date().toISOString() };
     write(path.join(directory, "data-finalized.json"), proof); return proof;
   } finally { if (session) await session.close(); await sourcePool.end(); held.release(); }
@@ -284,5 +371,6 @@ async function main() {
   if (action === "refresh") assert.equal(read(path.join(directory, "seed-accepted.json")).ok, true);
   return prepare(state, directory, action === "seed");
 }
-module.exports = { allocate, prepare, read, write, copyGenerationAsService, mirrorContract, finalize, assertWritersStopped, candidateAccess, dropCandidateAccess };
+module.exports = { allocate, prepare, read, write, copyGenerationAsService, mirrorContract, finalize,
+  legacyGenerationTransition, assertWritersStopped, candidateAccess, dropCandidateAccess };
 if (require.main === module) main().then(result => console.log(JSON.stringify(result))).catch(error => { console.error(JSON.stringify({ ok: false, error: error.message, mirrorProgress: error.mirrorProgress })); process.exitCode = 1; });

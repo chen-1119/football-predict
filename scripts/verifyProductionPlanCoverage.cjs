@@ -214,7 +214,13 @@ const staticDistDataPolicy = readText("scripts/staticDistDataPolicy.cjs");
 const stripLargeStaticPayloadsScript = readText("scripts/stripLargeStaticPayloads.cjs");
 const appContext = readText("src/context/AppContext.tsx");
 const appContextCore = readText("src/context/AppContextCore.ts");
+const navbar = readText("src/components/Navbar.tsx");
 const predictionsList = readText("src/pages/PredictionsList.tsx");
+const matchDetail = readText("src/pages/MatchDetail.tsx");
+const publishedMatchPick = readText("src/components/recommendations/PublishedMatchPick.tsx");
+const recommendationCenter = readText("src/components/recommendations/RecommendationCenter.tsx");
+const reviewPageHook = readText("src/hooks/useRecommendationReviewPage.ts");
+const reviewPageParser = readText("src/services/recommendationReviewPage.ts");
 const modelBacktest = readText("scripts/runModelBacktest.cjs");
 const oddsObservationTrail = readText("src/services/oddsObservationTrail.cjs");
 const verifyOddsObservationTrail = readText("scripts/verifyOddsObservationTrail.cjs");
@@ -2456,25 +2462,44 @@ const readPlanSqliteStatus = async () => {
     ]
   });
 
-  pushCheck("06-c-end-release-experience", "frontend consumes v1 APIs and exposes observability DOM contracts", hasAll(appContext, [
+  pushCheck("06-c-end-release-experience", "frontend consumes v1 APIs and exposes current status and recommendation contracts", hasAll(appContext, [
     "apiBaseRef.current || '/api/v1'",
     "matches/current?view=list",
     "dataUrls('/source-health'",
     "dataUrls('/model/evaluation'"
+  ]) && hasAll(navbar, [
+    "dataSync.recommendationReliable === false",
+    "dataEvidence: { zh: '参考模式'",
+    "reference: { zh: '参考／影子，尚未通过正式门槛'",
+    "dataStatusDisplayLabel",
+    'id="app-status-panel"',
+    'role="dialog"'
   ]) && hasAll(predictionsList, [
-    'data-testid="data-sync-strip"',
-    'data-testid="source-health-panel"',
-    'data-testid="model-governance-panel"',
-    "data-sporttery-egress-status",
-    "data-model-input-audit-ok",
-    "data-model-risk-tier"
+    "usesPublishedRecommendation(match, unifiedRow, nowMs)",
+    "<PublishedMatchPick row={unifiedRow}"
+  ]) && hasAll(matchDetail, [
+    "data-recommendation-track={useUnified ? 'published-reference'",
+    "<RecommendationEvidenceFacts match={match} publishedDecision={unifiedRow?.decision || null}"
+  ]) && hasAll(publishedMatchPick, [
+    "primarySelectionSummary(d)",
+    "data-record-hash={d.recordHash}"
+  ]) && hasAll(recommendationCenter, [
+    "useRecommendationReviewPage(reviewFilters,review)",
+    "reviewPage.data?.summary.all",
+    "<MarketComparison decision={d}"
+  ]) && hasAll(reviewPageHook, [
+    "/api/v1/recommendations/review?",
+    "parseRecommendationReviewPage(await response.json())"
+  ]) && hasAll(reviewPageParser, [
+    "parseRecommendationSummary(summary.all)",
+    "parseRecommendationSummary(windows.last7)"
   ]) && hasAll(appContextCore, [
     "modelEvaluation?:",
     "inputAudit?:",
     "riskTiers?:",
     "sourceHealth?:",
     "sportteryEgress?:"
-  ]), { files: ["src/context/AppContext.tsx", "src/pages/PredictionsList.tsx", "src/context/AppContextCore.ts"] });
+  ]), { files: ["src/context/AppContext.tsx", "src/context/AppContextCore.ts", "src/components/Navbar.tsx", "src/pages/PredictionsList.tsx", "src/pages/MatchDetail.tsx", "src/components/recommendations/PublishedMatchPick.tsx", "src/components/recommendations/RecommendationCenter.tsx", "src/hooks/useRecommendationReviewPage.ts", "src/services/recommendationReviewPage.ts"] });
 
   pushCheck("06-c-end-release-experience", "frontend timeout, abort, and retained-history regressions block production", hasAll(
     verifyReviewSettlement,

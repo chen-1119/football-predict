@@ -13,7 +13,8 @@ const originalRequire = Module.createRequire(filename);
 m.require = name => name === "./nativeReleaseJournal.cjs" ? { ...actualJournal, BOOTSTRAP_SHA: bootstrap } : originalRequire(name);
 m._compile(fs.readFileSync(filename, "utf8"), filename);
 const { validateNativeReleasePolicy: validate, validateNativeRuntimeEnvironment: environment } = m.exports;
-const policy = { version: "native-release-policy-v1", storageMode: "postgres-only", transactionVersion: 4, bootstrapSha256: bootstrap };
+const policy = { version: "native-release-policy-v1", storageMode: "postgres-only", transactionVersion: 4, bootstrapSha256: bootstrap,
+  legacyUnaccepted: actualJournal.LEGACY_UNACCEPTED };
 assert.equal(validate(policy).ok, true);
 for (const mutation of [{ bootstrapSha256: null }, { bootstrapSha256: "b".repeat(64) }, { transactionVersion: 3 },
   { storageMode: "hybrid" }, { version: "unknown" }, { bypass: true }]) assert.throws(() => validate({ ...policy, ...mutation }));
@@ -23,10 +24,44 @@ assert.equal(environment("ENABLE_SQLITE_EXPORT=1\n", identity).kind, "initial-cu
 assert.throws(() => environment("ENABLE_SQLITE_EXPORT=1\n", { bundleMarker: "b".repeat(64), liveMarker: "b".repeat(64) }));
 const native = actualJournal.nativeEnvironment("KEEP_ME=yes\n");
 assert.equal(environment(native, identity).kind, "runtime-only");
+const unaccepted = { bundleMarker: actualJournal.LEGACY_UNACCEPTED.bundleSha256, liveMarker: "-",
+  serverIndexSha256: actualJournal.LEGACY_UNACCEPTED.serverIndexSha256 };
+assert.equal(environment(native, unaccepted).legacyUnaccepted, true);
+assert.throws(() => environment(native, { ...unaccepted, serverIndexSha256: "0".repeat(64) }));
+assert.throws(() => environment("ENABLE_SQLITE_EXPORT=1\n", unaccepted));
 for (const content of [native + "ENABLE_SQLITE_EXPORT=0\n", native.replace("ENABLE_SQLITE_EXPORT=0", "ENABLE_SQLITE_EXPORT=1"),
   native.replace("PRIVATE_MODEL_ARTIFACT_STORAGE=postgres", "PRIVATE_MODEL_ARTIFACT_STORAGE=sqlite")]) assert.throws(() => environment(content, identity));
 assert.throws(() => environment(native, { ...identity, liveMarker: "" }));
-checks.push("native and initial environments require all storage selectors and completed live identity");
+checks.push("native and initial environments require all storage selectors; one unaccepted native source is pinned to its entrypoint");
+const transition = require("./nativeReleaseDataPlane.cjs").legacyGenerationTransition;
+const startGeneration = { generationId: "g-" + "a".repeat(64), manifestHash: "a".repeat(64),
+  sourceCycleId: "initial", committedAt: "2026-09-23T00:00:00.000Z" };
+assert.equal(transition(startGeneration, startGeneration).advanced, false);
+assert.equal(transition(startGeneration, { generationId: "g-" + "b".repeat(64), manifestHash: "b".repeat(64),
+  sourceCycleId: "later", committedAt: "2026-09-23T01:00:00.000Z" }).advanced, true);
+assert.throws(() => transition(startGeneration, { ...startGeneration, manifestHash: "b".repeat(64) }));
+assert.throws(() => transition(startGeneration, { ...startGeneration, generationId: "g-" + "b".repeat(64),
+  committedAt: "2026-09-22T23:00:00.000Z" }));
+checks.push("unaccepted baseline final receipt distinguishes the same generation from a verified forward transition");
+{
+  const tree = fs.mkdtempSync(path.join(os.tmpdir(), "football-unaccepted-tree-"));
+  try {
+    fs.mkdirSync(path.join(tree, "server")); fs.writeFileSync(path.join(tree, "server/index.cjs"), "old code\n");
+    fs.writeFileSync(path.join(tree, ".release-omitted"), "unbound bytes\n");
+    const hashTree = actualJournal.runtimeTreeSha256;
+    assert.match(hashTree(tree, { verifyOwnership: false }), /^[a-f0-9]{64}$/);
+    try {
+      fs.symlinkSync(path.join(tree, ".release-omitted"), path.join(tree, "server/omitted"), "file");
+      assert.throws(() => hashTree(tree, { verifyOwnership: false }), /external or data link/);
+      fs.rmSync(path.join(tree, "server/omitted"));
+      fs.symlinkSync(path.join(os.tmpdir(), "outside-unaccepted-tree"), path.join(tree, "server/escape"), "file");
+      assert.throws(() => hashTree(tree, { verifyOwnership: false }));
+    } catch (error) { if (!(process.platform === "win32" && error.code === "EPERM")) throw error; }
+    checks.push("legacy runtime inventory rejects symlinks into omitted or external content");
+  } finally {
+    assert.ok(path.basename(tree).startsWith("football-unaccepted-tree-")); fs.rmSync(tree, { recursive: true, force: true });
+  }
+}
 const source = read("deploy/light-server/release-from-bundle.sh"), lane = read("deploy/light-server/release-native.sh");
 const nativeBudget = lane.match(/^  CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS=\$\(\([\s\S]*?^  \)\)/m)?.[0];
 assert.ok(nativeBudget);
