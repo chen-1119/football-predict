@@ -241,6 +241,8 @@ const collectorEntries = ['src/services/apiFootballDiagnostics.cjs', 'src/servic
   'scripts/verifyLegacyReferenceConflict.cjs', 'src/services/legacyReferenceConflict.ts', 'scripts/verifyFrozenArchiveAuthority.cjs',
   'scripts/frozenArchiveRestoration.cjs', 'scripts/data/frozen-archive-restoration.json',
   'scripts/releaseArchivePreflight.cjs', 'scripts/runReleaseArchivePreflight.cjs', 'scripts/verifyReleaseArchivePreflight.cjs',
+  'scripts/verifyReleaseArchiveSuccessor.cjs', 'scripts/verifyReleaseArchiveSuccessorContracts.cjs',
+  'scripts/data/archive-successor-lineage.json',
   'scripts/runReleaseWindowPreflight.cjs', 'scripts/verifyReleaseWindowPreflight.cjs',
   'scripts/verifyFrozenArchivePersistence.cjs', 'scripts/verifyFrozenArchiveRestoration.cjs',
   'scripts/verifyOfficialClubResults.cjs', 'scripts/syncOfficialClubResults.cjs', 'scripts/verifyOfficialClubReceiptClocks.cjs',
@@ -512,6 +514,10 @@ check('behavioral result is emitted under a stable non-display ID',()=>assert.eq
 check('complete archive preflight behaviors pass before signing',()=>{
   const result=require('./verifyReleaseArchivePreflight.cjs').verifyReleaseArchivePreflight();
   assert.equal(result.ok,true);assert.ok(result.checks.length>=17);assert.equal(result.productionWrites,0);
+});
+check('exact archive successor candidate and final contracts pass before signing',()=>{
+  const result=require('./verifyReleaseArchiveSuccessorContracts.cjs').verifyReleaseArchiveSuccessorContracts();
+  assert.equal(result.ok,true);assert.ok(result.checks>=12);assert.equal(result.productionWrites,0);
 });
 check('online archive preflight precedes sequence reservation and frontend build',()=>{
   const probe=bundle.indexOf('require("./runReleaseArchivePreflight.cjs").runLiveArchivePreflight()');

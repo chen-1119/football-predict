@@ -167,6 +167,7 @@ run_native_release() {
     ENABLE_SYNC_CRON=0 ENABLE_GPT_CRON=0 RELAY_FAST_WATCHER_ENABLED=0 SYNC_WORKER_EVENT_BRIDGE=0 \
     WRITE_LEGACY_STATIC_PAYLOADS=0 MIRROR_PUBLISHED_DATA_TO_DIST=0 SERVER_STORE_DIR="$CANDIDATE_STORE_DIR" "$NODE_HOME/bin/node" server/index.cjs
   wait_for_health "http://${HOST}:${CANDIDATE_PORT}" native-candidate 90 2 service
+  NODE_PATH="$APP_DIR/node_modules" "$NODE_HOME/bin/node" "$NEXT_DIR/scripts/verifyReleaseArchiveSuccessor.cjs" candidate "$BUNDLE_SHA256" "$CANDIDATE_STORE_DIR"
   "$NODE_HOME/bin/node" "$NEXT_DIR/scripts/releaseTransitionLease.cjs" create --current "$NEXT_DIR/public/data/matches-current.json" \
     --lease "$CANDIDATE_TRANSITION_LEASE" --at "$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')" \
     --verifier-runtime-max-seconds "$CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS" --preverify-refresh-budget-seconds "$CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS" \
@@ -260,6 +261,7 @@ native_finish_readiness() {
     VERIFY_STATIC_ATTESTATION_DIR="$RELEASE_STATIC_ATTESTATION_REUSE_DIR" VERIFY_STATIC_RELEASE_SHA="$BUNDLE_SHA256" VERIFY_STATIC_RECEIPT_DIR= \
     VERIFY_START_SERVER=0 VERIFY_REQUIRE_SQLITE=0 VERIFY_REQUIRED_READ_SOURCE=postgres SERVER_STORE_DIR="$LIVE_STORE_DIR" \
     "$NODE_HOME/bin/node" "$APP_DIR/scripts/verifyNativeDeploymentCore.cjs"
+  NODE_PATH="$APP_DIR/node_modules" "$NODE_HOME/bin/node" "$APP_DIR/scripts/verifyReleaseArchiveSuccessor.cjs" live "$BUNDLE_SHA256"
   release_stage_observe end post-swap-readiness ok
   wait_for_release_candidate_heartbeat_keeper_healthy
   "$NODE_HOME/bin/node" "$APP_DIR/scripts/candidateReleaseContinuity.cjs" verify \
