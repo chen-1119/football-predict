@@ -55,8 +55,11 @@ function buildReferencePerformanceWithPairs({ matches, snapshotPayload, trustReg
   const summary = compactReferenceReviewPerformance(buildReferenceReviewPerformance({matches,generatedAt,startDate}));
   if (!summary) throw new Error("Complete reference history failed validation before pairing");
   const audit = buildPublicReferencePairAudit({ matches, archive:buildPublicReferenceArchive(snapshotPayload), trustRegistry, generatedAt, startDate });
+  return composeReferencePerformance(summary, audit.rows);
+}
+function composeReferencePerformance(summary, rows) {
   const groups = new Map();
-  for (const row of audit.rows) {
+  for (const row of rows) {
     const key = identity(row), c = groups.get(key) || {date:row.date,market:row.market,versionKey:row.versionKey,...empty()};
     c.settledReferenceEvents++;
     if (!row.eligible) c.excluded++;
@@ -69,6 +72,54 @@ function buildReferencePerformanceWithPairs({ matches, snapshotPayload, trustReg
   const pairedBaseline = compactReferencePairedBaseline(envelope(summary,[...groups.values()]),summary);
   if (!pairedBaseline) throw new Error("Paired public baseline does not reconcile to original complete history");
   return {...summary,pairedBaseline};
+}
+
+// Same complete-ledger checks and per-copy pairing as the in-memory path, but
+// release each large feature/model evidence object immediately after auditing.
+function buildReferencePerformanceFromSnapshotFile({matches,filePath,trustRegistry,generatedAt,startDate}={}) {
+  const fs=require('node:fs');
+  try { fs.lstatSync(filePath); } catch(error) { if(error.code==='ENOENT') return buildReferencePerformanceWithPairs({matches,snapshotPayload:{},trustRegistry,generatedAt,startDate}); throw error; }
+  const {streamJsonObjectArrays}=require('./streamedJsonObjectArrays.cjs');
+  const {attestPublicReferenceDecision}=require('../src/services/publicReferenceDecision.cjs');
+  const {digest,verifyPublicReferenceEvidence}=require('../src/services/publicReferenceEvidence.cjs');
+  const {auditFrozenReferenceMarket,isFrozenPairClock}=require('../src/services/frozenReferenceMarketPair.cjs');
+  const {buildReferenceReviewPerformance,compactReferenceReviewPerformance,matchIdentity,businessDateForMatch}=require('./reviewPerformanceSummary.cjs');
+  if(!Array.isArray(matches)||!isFrozenPairClock(generatedAt))throw new Error('Explicit complete history and audit clock required');
+  const summary=compactReferenceReviewPerformance(buildReferenceReviewPerformance({matches,generatedAt,startDate}));
+  if(!summary)throw new Error('Complete reference history failed validation before pairing');
+  const records=new Map();let recordChars=0;
+  const first=streamJsonObjectArrays(filePath,{keys:['publicReferenceDecisions'],allowNonArrays:true,onItem:(_key,record)=>{
+    if(!record||typeof record.contentHash!=='string'||!/^[a-f0-9]{64}$/.test(record.contentHash)||records.has(record.contentHash)||!attestPublicReferenceDecision(record,record))throw new Error('REFERENCE_INDEX_RECORD_INVALID');
+    recordChars+=JSON.stringify(record).length;
+    if(recordChars>32*1024*1024||records.size>=100000)throw new Error('REFERENCE_DECISION_INDEX_LIMIT');
+    records.set(record.contentHash,record);
+  }});
+  const byEvent=new Map(),byReference=new Map(),results=new Map();
+  const referenceHash=match=>match?.postMatchReview?.predictionReview?.rows?.find(row=>row.marketType==='BEST'&&row.performanceTrack==='reference')?.frozenVersion?.referenceHash;
+  for(const match of matches){const identity=matchIdentity(match);if(identity){const copies=byEvent.get(identity)||[];copies.push(match);byEvent.set(identity,copies);}const hash=referenceHash(match),copies=byReference.get(hash)||[];copies.push(match);byReference.set(hash,copies);}
+  const seenEvidence=new Map();
+  streamJsonObjectArrays(filePath,{keys:['publicReferenceEvidence'],allowNonArrays:true,expectedBytes:first.bytes,expectedSha256:first.sha256,onItem:(_key,entry)=>{
+    const record=records.get(entry?.referenceHash);if(!record)return; // Original retention ignores raw orphan entries.
+    if(!verifyPublicReferenceEvidence(entry,record))throw new Error('PUBLIC_REFERENCE_EVIDENCE_BINDING_INVALID');
+    const entryHash=digest(entry),previous=seenEvidence.get(entry.referenceHash);
+    if(previous&&previous!==entryHash)throw new Error('PUBLIC_REFERENCE_EVIDENCE_BINDING_CONFLICT');
+    if(previous)return;
+    seenEvidence.set(entry.referenceHash,entryHash);
+    for(const match of byReference.get(entry.referenceHash)||[])results.set(match,auditFrozenReferenceMarket({match,record,entry,trustRegistry,auditAt:generatedAt}));
+  }});
+  // Never publish partial totals if an unrelated bound record has lost evidence.
+  for(const record of records.values())if(record.evidenceBinding&&!seenEvidence.has(record.contentHash))throw new Error('PUBLIC_REFERENCE_EVIDENCE_BINDING_MISSING');
+  const rows=[];
+  for(const copies of byEvent.values()){
+    const cohort=buildReferenceReviewPerformance({matches:copies,generatedAt,startDate});if(!cohort.cumulative.settled)continue;
+    const audits=copies.map(match=>results.get(match)||auditFrozenReferenceMarket({match,record:records.get(referenceHash(match)),trustRegistry,auditAt:generatedAt}));
+    const eligible=audits.every(audit=>audit.eligible)&&new Set(audits.filter(audit=>audit.eligible).map(audit=>audit.contentHash)).size<=1;
+    const market=['HAD','HHAD','UNKNOWN'].find(pool=>cohort.marketBreakdown[pool].cumulative.settled===1);
+    const versionKey=cohort.versionBreakdown.groups.length===1?cohort.versionBreakdown.groups[0].key:'UNKNOWN';
+    rows.push({date:businessDateForMatch(copies[0]),market,versionKey,eligible,...(eligible?{pair:audits[0]}:{})});
+  }
+  if(rows.length!==summary.cumulative.settled)throw new Error('Paired cohort does not reconcile to complete reference history');
+  return composeReferencePerformance(summary,rows);
 }
 // The slow-result reconciliation runs after the main sync and must regenerate
 // pairs from the original ledger too. Stream the unrelated, very large candidate
@@ -97,4 +148,4 @@ function readReferenceSnapshotFile(filePath) {
     // unrelated candidate data is still streamed and never materialized.
     expectedSha256: hash.digest("hex"), keys: ["publicReferenceDecisions", "publicReferenceEvidence"], maxSelectedChars: 128 * 1024 * 1024 }).value;
 }
-module.exports = { VERSION, POLICY, FIELDS, compactReferencePairedBaseline, buildReferencePerformanceWithPairs, readReferenceSnapshotFile };
+module.exports = { VERSION, POLICY, FIELDS, compactReferencePairedBaseline, buildReferencePerformanceWithPairs, buildReferencePerformanceFromSnapshotFile, readReferenceSnapshotFile };

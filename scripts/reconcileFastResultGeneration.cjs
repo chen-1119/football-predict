@@ -18,7 +18,7 @@ const {
 } = require("./syncData.cjs");
 const { acquireSyncMetaCommitLock } = require("./syncMetaCommitLock.cjs");
 const { buildFormalReviewPerformance } = require("../server/reviewPerformanceSummary.cjs");
-const { buildReferencePerformanceWithPairs, readReferenceSnapshotFile } = require("../server/referencePairedBaseline.cjs");
+const { buildReferencePerformanceFromSnapshotFile } = require("../server/referencePairedBaseline.cjs");
 const { loadCollectorTrustRegistry } = require("../src/services/collectorAttestation.cjs");
 const { storedResultTeamIdentity } = require("./storedResultTeamIdentity.cjs");
 const {
@@ -1138,8 +1138,8 @@ const reconcileFastResultGeneration = ({
   // files are written. Missing legacy evidence remains excluded; corrupt
   // evidence aborts instead of replacing an earlier valid summary with empties.
   const referencePerformance = reviews && typeof reviews === "object" && !Array.isArray(reviews)
-    ? buildReferencePerformanceWithPairs({ matches: nextHistory, generatedAt: startedAt,
-        snapshotPayload: readReferenceSnapshotFile(path.join(dataDir, "prediction-snapshots.json")),
+    ? buildReferencePerformanceFromSnapshotFile({ matches: nextHistory, generatedAt: startedAt,
+        filePath: path.join(dataDir, "prediction-snapshots.json"),
         trustRegistry: loadCollectorTrustRegistry(process.env.SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH
           || path.join(rootDir, "deploy/light-server/collector-trust-registry.json")),
       }) : null;
