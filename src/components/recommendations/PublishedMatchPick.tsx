@@ -20,7 +20,8 @@ export function PublishedMatchPick({row,language,loading=false,failed=false,comp
       <div><small>{zh?'胜平负首选':'1X2 primary'}</small><strong>{publishedPickLabel(s.had.code,language)}</strong><span>SP {s.had.odds.toFixed(2)} · {(s.had.probability*100).toFixed(1)}%</span></div>
       <div className={h?.status==='pass'?'is-pass':undefined} data-handicap-extension={h?.status??'unavailable'}><small>{zh?'让球延伸':'Handicap extension'}</small><strong>{extension?.title??'—'}</strong><span>{extension?.detail??(zh?'等待有效让球数据':'Awaiting handicap data')}</span></div>
     </div>
-    <small className="published-match-pick__status">{zh?'已发布 · 参考／影子':'Published · reference/shadow'}{quoteStale?(zh?' · SP待更新':' · SP refresh pending'):''}{failed?(zh?' · 更新暂时失败':' · Update temporarily failed'):''}</small>
+    <small className="published-match-pick__status" data-selection-status={row.selectionQuality?.status??'reference'}>{row.selectionQuality?.qualified===false?(zh?'已发布模型方向 · 观望':'Published model direction · watch'):row.selectionQuality?.qualified===true?(zh?'参考入选 · 尚未通过正式验证':'Reference eligible · formal validation pending'):(zh?'已发布 · 参考／影子':'Published · reference/shadow')}{quoteStale?(zh?' · SP待更新':' · SP refresh pending'):''}{failed?(zh?' · 更新暂时失败':' · Update temporarily failed'):''}</small>
+    {compact&&<small className="published-match-pick__quote-time">{zh?'冻结 SP 采集':'Frozen SP observed'} {time(d.quoteObservedAt,language)}</small>}
     <SelectionQualityNote quality={row.selectionQuality} language={language}/>
     {!compact&&<><p>{zh?'本场方向、SP和版本与今日推荐保持一致。串关可选择同一场的不同玩法；已冻结的串关保留选定时的版本。':'Direction, SP and version match Today. A combo may use another market; a frozen combo retains its selected version.'}</p>
       {h?.conditional&&<p>{zh?'让球伴随占比以胜平负首选成立为前提，不是独立让球命中率。':'The companion shares are conditional on the 1X2 pick landing, not standalone handicap win rates.'}</p>}

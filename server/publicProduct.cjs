@@ -4,13 +4,17 @@
 const text=(value,max=160)=>typeof value==='string'?value.slice(0,max):null;
 const finite=value=>typeof value==='number'&&Number.isFinite(value)?value:null;
 const iso=value=>typeof value==='string'&&Number.isFinite(Date.parse(value))?value:null;
-function publicFixture(match){
+const completeOdds=odds=>odds&&[odds.home,odds.draw,odds.away].every(value=>value!==null&&value>1);
+function publicFixture(match,now=Date.now()){
  if(!match||typeof match.id!=='string')return null;
  const fields=['id','sourceMatchId','matchNo','businessDate','homeTeamId','awayTeamId','homeTeamName','homeTeamNameEn','awayTeamName','awayTeamNameEn','homeTeamLogo','awayTeamLogo','homeTeamLogoType','awayTeamLogoType','leagueName','leagueNameEn','leagueId','status','effectiveStatus','kickoffTime','buyEndTime'];
  const row=Object.fromEntries(fields.map(key=>[key,text(match[key],key.endsWith('Logo')?500:160)]));
  row.homeTeamName=row.homeTeamName||'主队待更新';row.awayTeamName=row.awayTeamName||'客队待更新';
  row.odds={home:finite(match.odds?.odds1)??finite(match.odds?.home),draw:finite(match.odds?.oddsX)??finite(match.odds?.draw),away:finite(match.odds?.odds2)??finite(match.odds?.away)};
- row.oddsSource=text(match.oddsSource);row.sourceUpdatedAt=iso(match.sourceObservedAt)||iso(match.sourceReceivedAt);
+ // Fixture observation clocks do not prove when the odds themselves changed.
+ row.sourceUpdatedAt=iso(match.oddsUpdatedAt);
+ const cutoff=Date.parse(match.buyEndTime||match.kickoffTime||'');
+ row.quoteStatus=!completeOdds(row.odds)||!row.sourceUpdatedAt?'missing':Number.isFinite(cutoff)&&now>=cutoff?'archived':now-Date.parse(row.sourceUpdatedAt)>15*60000?'expired':'recent';
  // Settlement is attached by the established result pipeline, not inferred here.
  return row;
 }
@@ -27,6 +31,6 @@ function publicExample(row){
 function publicOverview(current,payload,now=Date.now()){
  const center=payload?.recommendationCenter||payload;
  const examples=(center?.review?.singles||[]).map(publicExample).filter(Boolean).sort((a,b)=>Date.parse(b.publishedAt)-Date.parse(a.publishedAt)||a.decisionId.localeCompare(b.decisionId));
- return {ok:true,version:'public-product-v1',businessDate:new Date(now+8*3600000).toISOString().slice(0,10),sourceUpdatedAt:iso(current?.sourceUpdatedAt),stale:current?.stale!==false,matches:(current?.rows||[]).map(publicFixture).filter(Boolean),review:{updatedAt:iso(center?.resultAsOf),summary:publicSummary(center?.review?.statistics?.single),example:examples[0]||null},referenceOnly:true};
+ return {ok:true,version:'public-product-v1',businessDate:new Date(now+8*3600000).toISOString().slice(0,10),sourceUpdatedAt:iso(current?.sourceUpdatedAt),stale:current?.stale!==false,matches:(current?.rows||[]).map(match=>publicFixture(match,now)).filter(Boolean),review:{updatedAt:iso(center?.resultAsOf),summary:publicSummary(center?.review?.statistics?.single),example:examples[0]||null},referenceOnly:true};
 }
 module.exports={publicFixture,publicSummary,publicExample,publicOverview};
