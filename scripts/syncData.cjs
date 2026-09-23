@@ -3010,6 +3010,7 @@ function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLamb
       diff: Math.round(match.eloSnapshot.diff),
       homeMatches: match.eloSnapshot.homeMatches,
       awayMatches: match.eloSnapshot.awayMatches,
+      warehouseHistory: match.eloSnapshot.warehouseHistory || null,
       historicalSource: match.eloSnapshot.historicalSource || null,
       lastUpdatedAt: match.eloSnapshot.lastUpdatedAt,
     } : null,
@@ -3020,6 +3021,7 @@ function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLamb
       home: match.formSnapshot.home,
       away: match.formSnapshot.away,
       h2h: match.formSnapshot.h2h,
+      warehouseHistory: match.formSnapshot.warehouseHistory || null,
       historicalSource: match.formSnapshot.historicalSource || null,
     } : null,
     leaguePrior: match.leaguePrior ? {
@@ -3896,7 +3898,7 @@ function summarizeHeadToHead(rows) {
   };
 }
 
-function buildFormSnapshots(matches, historicalTraining = null) {
+function buildFormSnapshots(matches, historicalTraining = null, historyOptions = {}) {
   const teamHistory = new Map();
   const h2hHistory = new Map();
   const snapshots = new Map();
@@ -3906,6 +3908,7 @@ function buildFormSnapshots(matches, historicalTraining = null) {
   const appendRow = (map, key, row) => {
     const rows = map.get(key) || [];
     rows.push(row);
+    if (historyOptions.chronologicalForm) rows.sort((a, b) => Date.parse(a.kickoffTime) - Date.parse(b.kickoffTime));
     if (rows.length > 40) rows.splice(0, rows.length - 40);
     map.set(key, rows);
   };
@@ -3927,12 +3930,12 @@ function buildFormSnapshots(matches, historicalTraining = null) {
       resultObservedAt: observation?.observedAt || null,
       resultObservationSource: observation?.source || null,
     };
-    appendRow(teamHistory, homeKey, row);
-    appendRow(teamHistory, awayKey, row);
-    appendRow(h2hHistory, pairKey(homeName, awayName), row);
+    if (!historyOptions.shouldApply || historyOptions.shouldApply('form', match, homeKey)) appendRow(teamHistory, homeKey, row);
+    if (!historyOptions.shouldApply || historyOptions.shouldApply('form', match, awayKey)) appendRow(teamHistory, awayKey, row);
+    if (!historyOptions.shouldApplyPair || historyOptions.shouldApplyPair(match)) appendRow(h2hHistory, pairKey(homeName, awayName), row);
   };
 
-  forEachForecastAsOf(matches, {
+  (historyOptions.timeline || forEachForecastAsOf)(matches, {
     onResult: appendObservedResult,
     onForecast: (match, asOf) => {
       const sourceMatchId = normText(match.sourceMatchId);
@@ -3951,6 +3954,7 @@ function buildFormSnapshots(matches, historicalTraining = null) {
         lookbackMatches: FORM_LOOKBACK_MATCHES,
         sampleSize,
         historicalSource: historicalSource ? { ...historicalSource, seededTeams } : null,
+        ...(historyOptions.warehouseHistory ? { warehouseHistory: historyOptions.historyForMatch ? historyOptions.historyForMatch(match) : historyOptions.warehouseHistory } : {}),
         asOf: {
           forecastAt: asOf.forecastAt,
           appliedResults: asOf.appliedResults,
@@ -3966,7 +3970,7 @@ function buildFormSnapshots(matches, historicalTraining = null) {
   return snapshots;
 }
 
-function buildEloSnapshots(matches, historicalTraining = null) {
+function buildEloSnapshots(matches, historicalTraining = null, historyOptions = {}) {
   const baseRating = 1500;
   const kFactor = 22;
   const ratings = new Map();
@@ -3981,7 +3985,7 @@ function buildEloSnapshots(matches, historicalTraining = null) {
   const addCount = (key) => counts.set(key, countFor(key) + 1);
 
   const frozenRatings = new Map();
-  forEachForecastAsOf(matches, {
+  (historyOptions.timeline || forEachForecastAsOf)(matches, {
     onResult: (match) => {
       const sourceMatchId = normText(match.sourceMatchId);
       const homeKey = teamKey(matchSideTeamName(match, "home"));
@@ -3995,10 +3999,8 @@ function buildEloSnapshots(matches, historicalTraining = null) {
       const goalDiff = Math.abs(match.scoreHome - match.scoreAway);
       const marginMultiplier = goalDiff <= 1 ? 1 : Math.min(1.75, Math.log(goalDiff + 1));
       const delta = kFactor * marginMultiplier * (actualHome - expectedHome);
-      setRating(homeKey, ratingFor(homeKey) + delta);
-      setRating(awayKey, ratingFor(awayKey) - delta);
-      addCount(homeKey);
-      addCount(awayKey);
+      if (!historyOptions.shouldApply || historyOptions.shouldApply('elo', match, homeKey)) { setRating(homeKey, ratingFor(homeKey) + delta); addCount(homeKey); }
+      if (!historyOptions.shouldApply || historyOptions.shouldApply('elo', match, awayKey)) { setRating(awayKey, ratingFor(awayKey) - delta); addCount(awayKey); }
     },
     onForecast: (match, asOf) => {
       const sourceMatchId = normText(match.sourceMatchId);
@@ -4019,6 +4021,7 @@ function buildEloSnapshots(matches, historicalTraining = null) {
         homeMatches: countFor(homeKey),
         awayMatches: countFor(awayKey),
         historicalSource: historicalSource ? { ...historicalSource, seededTeams } : null,
+        ...(historyOptions.warehouseHistory ? { warehouseHistory: historyOptions.historyForMatch ? historyOptions.historyForMatch(match) : historyOptions.warehouseHistory } : {}),
         asOf: {
           forecastAt: asOf.forecastAt,
           appliedResults: asOf.appliedResults,
@@ -13733,11 +13736,15 @@ function applyPredictionPersistence(match, existing, capturedAt, options = {}) {
   const scoreCalibrationSignature = scoreCalibrationVersion
     ? `${scoreCalibrationVersion}:${scoreTotalLambdaAdjustment.toFixed(3)}:${scoreBandSignature}:${scoreShapeSignature}`
     : null;
+  const warehouseHistory = match?.probabilityModel?.elo?.warehouseHistory || match?.probabilityModel?.form?.warehouseHistory;
+  const warehouseSignature = warehouseHistory?.inputHash && warehouseHistory?.asOf
+    ? `${warehouseHistory.version}:${warehouseHistory.inputHash}:${warehouseHistory.asOf}` : null;
   const dataSignature = [
     trainingSignature,
     `application:${HISTORICAL_TRAINING_APPLICATION_VERSION}`,
     worldCupPriorSignature,
     scoreCalibrationSignature,
+    warehouseSignature,
   ].filter(Boolean).join("|") || trainingVersion;
   const baseModelGeneratedAt = latestExplicitAuditInstant(match?.probabilityModel?.generatedAt);
   const unifiedPosteriorGeneratedAt = latestExplicitAuditInstant(match?.probabilityModel?.unifiedPosterior?.generatedAt);
@@ -17790,13 +17797,39 @@ async function sync() {
   const postTrainingCutoffMatches = matchesAfterHistoricalTrainingCutoff(modelingRawMatches, historicalTraining);
   const historicalEloSnapshots = buildEloSnapshots(postTrainingCutoffMatches, historicalTraining);
   const historicalFormSnapshots = buildFormSnapshots(postTrainingCutoffMatches, historicalTraining);
+  // PostgreSQL historical observations supplement only this cycle's future
+  // forecasts. They never become a new aggregate seed or backfill old models.
+  let postgresTeamHistorySummary = null;
+  let liveWarehouseElo = new Map(), liveWarehouseForm = new Map();
+  if (readStorageMode().postgresOnly) {
+    try {
+      const { loadPostgresTeamHistory, createLiveHistoryOptions } = require('./postgresTeamHistory.cjs');
+      const liveTargets = combinedRawMatchesForOutput.filter(match => (
+        Date.parse(match.kickoffTime) > Date.parse(capturedAt)
+        && !match.predictionMeta?.lockedAt && match.status !== 'FINISHED'
+      ));
+      const history = await loadPostgresTeamHistory({ matches: liveTargets, asOf: capturedAt, teamKey });
+      postgresTeamHistorySummary = { ...history.summary, status: history.matches.length ? 'available' : 'empty' };
+      if (history.matches.length) {
+        const options = createLiveHistoryOptions({ history, targets: liveTargets, existing: modelingRawMatches, training: historicalTraining, asOf: capturedAt, teamKey });
+        postgresTeamHistorySummary = { ...options.warehouseHistory, status: 'available' };
+        liveWarehouseElo = buildEloSnapshots(options.matches, options.training, options);
+        liveWarehouseForm = buildFormSnapshots(options.matches, options.training, options);
+      }
+    } catch (error) {
+      postgresTeamHistorySummary = { version: 'postgres-team-history-v1', status: 'unavailable', asOf: capturedAt, errorCode: error.code || error.name || 'HISTORY_READ_FAILED' };
+      console.warn('PostgreSQL team history unavailable; retaining existing model inputs:', postgresTeamHistorySummary.errorCode);
+    }
+  }
   const liveEloSnapshotFor = (match) => (
-    historicalEloSnapshots.get(normText(match.sourceMatchId))
+    liveWarehouseElo.get(normText(match.sourceMatchId))
+    || historicalEloSnapshots.get(normText(match.sourceMatchId))
     || eloSnapshots.get(normText(match.sourceMatchId))
     || null
   );
   const liveFormSnapshotFor = (match) => (
-    historicalFormSnapshots.get(normText(match.sourceMatchId))
+    liveWarehouseForm.get(normText(match.sourceMatchId))
+    || historicalFormSnapshots.get(normText(match.sourceMatchId))
     || formSnapshots.get(normText(match.sourceMatchId))
     || null
   );
@@ -18437,6 +18470,7 @@ async function sync() {
       activeGates: existingModelStrategy.activeGates,
     } : null,
     historicalTraining: historicalTrainingModeling,
+    postgresTeamHistory: postgresTeamHistorySummary,
     worldCupKimiData: worldCupKimiSummary,
     ...(keptExistingReason ? {
       fallback: {
@@ -18648,6 +18682,7 @@ async function sync() {
         distMirror,
         oddsHistory: oddsHistorySummary,
         historicalTraining: historicalTrainingModeling,
+        postgresTeamHistory: postgresTeamHistorySummary,
         worldCupKimiData: worldCupKimiSummary,
         byStatus,
       },

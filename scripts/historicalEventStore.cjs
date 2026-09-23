@@ -638,6 +638,7 @@ async function* iterateHistoricalEvents(options = {}) {
     leaves: [],
   };
   let header = null;
+  let emptyTrailingHeaderColumns = 0;
 
   for await (const csvRecord of iterateCsvRecords(sourceInput(options), {
     onRawChunk: (chunk) => fileHasher.update(chunk),
@@ -662,6 +663,15 @@ async function* iterateHistoricalEvents(options = {}) {
     }
 
     if (!header) {
+      // Some Football-Data exports contain unnamed trailing columns. Only
+      // discard an explicitly empty cell in each such column: values in an
+      // unnamed column must reject that row, never silently shift/drop data.
+      if (config.adapter === "football-data") {
+        while (cells.length > 0 && !cleanText(cells[cells.length - 1])) {
+          cells.pop();
+          emptyTrailingHeaderColumns += 1;
+        }
+      }
       header = uniqueNormalizedHeaders(cells, { allowCollisions: config.adapter === "football-data" });
       if (header.some((key) => !key)) throw new CsvParseError("CSV header contains an empty column name");
       if (new Set(header).size !== header.length) throw new CsvParseError("CSV header contains duplicate normalized names");
@@ -676,6 +686,12 @@ async function* iterateHistoricalEvents(options = {}) {
     const rawRowSha256 = sha256(Buffer.from(csvRecord.rawRecord, "utf8"));
     let event;
     try {
+      if (emptyTrailingHeaderColumns > 0) {
+        const expected = header.length + emptyTrailingHeaderColumns;
+        if (cells.length !== expected) throw new CsvParseError(`column count mismatch: expected ${expected}, received ${cells.length}`);
+        if (cells.slice(header.length).some(value => cleanText(value))) throw new CsvParseError("non-empty unnamed trailing column");
+        cells = cells.slice(0, header.length);
+      }
       const record = rowObject(header, cells);
       event = adapter(record, {
         config,
