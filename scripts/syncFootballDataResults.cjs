@@ -20,7 +20,7 @@ const defaultOutputDir = path.resolve(
 );
 
 const MAIN_DIVISIONS = Object.freeze([
-  "E0", "E1", "D1", "D2", "I1", "I2", "SP1", "SP2", "F1", "F2", "N1", "P1", "B1",
+  "E0", "E1", "E2", "E3", "D1", "D2", "I1", "I2", "SP1", "SP2", "F1", "F2", "N1", "P1", "B1",
 ]);
 const WORLD_DIVISIONS = Object.freeze([
   "ARG", "AUT", "BRA", "CHN", "DNK", "FIN", "IRL", "JPN", "MEX", "NOR",
