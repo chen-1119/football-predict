@@ -62,6 +62,18 @@ const server = http.createServer((req, res) => {
     assert.equal(resolveSeason(undefined, new Date("2026-09-07T00:00:00Z")), "2526");
     assert.throws(() => resolveSeason("2628")); assert.throws(() => sourceList({ season: "2627", only: "UNKNOWN" }));
   });
+  await check("targeted English lower-league repair selects only E2 and E3 in each explicit season", () => {
+    for (const season of ["2425", "2526", "2627"]) {
+      const rows = sourceList({ season: resolveSeason(season), only: " E2, e3,E2 " });
+      assert.deepEqual(rows.map(row => row.code), ["E2", "E3"]);
+      assert(rows.every(row => row.group === "main-league-season"));
+      assert.deepEqual(rows.map(row => row.url), [
+        `https://www.football-data.co.uk/mmz4281/${season}/E2.csv`,
+        `https://www.football-data.co.uk/mmz4281/${season}/E3.csv`,
+      ]);
+    }
+    assert.throws(() => sourceList({ season: "2627", only: "E2,E4" }));
+  });
   const first = await downloadCsv(source, destination, {}, false, { now: () => firstAt });
   await check("actual HTTP download creates a content-bound observation, not source truth", () => {
     assert.equal(first.ok, true); assert.equal(first.changed, true);

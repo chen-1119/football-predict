@@ -3,8 +3,14 @@
 // Chinese Sporttery display names -> canonical names used by the free
 // historical providers. An unresolved name remains unresolved; this table
 // must never be used to invent strength for an unknown team.
-const FREE_FOOTBALL_TEAM_ALIASES_VERSION = "free-football-team-aliases-v4-utf8-safe-20260826-historical-coverage";
+const FREE_FOOTBALL_TEAM_ALIASES_VERSION = "free-football-team-aliases-v5-utf8-safe-20260923-english-history";
 const FREE_FOOTBALL_TEAM_ALIASES = Object.freeze({
+  // Exact senior-club names from Football-Data E2/E3, 2024/25 through 2026/27.
+  // These canonical keys match the downloaded CSVs; no youth/reserve/women
+  // suffix is removed and provider-scoped aliases are not applied globally.
+  "米尔顿凯恩斯": "milton keynes dons", "克劳利": "crawley town",
+  "维冈竞技": "wigan", "布莱克浦": "blackpool",
+  "诺茨郡": "notts county", "格里姆斯比": "grimsby",
   "东京FC": "tokyo", "千叶市原": "chiba", "塞伊奈约基": "sjk", "拉赫蒂": "lahti",
   "天狼星": "sirius", "赫根": "hacken", "利雅得胜利": "al nassr",
   "胡巴尔卡德西亚": "al qadsiah", "吉达联合": "al ittihad",
