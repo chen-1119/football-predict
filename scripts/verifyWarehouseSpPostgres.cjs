@@ -36,7 +36,7 @@ async function verify(pool){
   try{
     await pool.query(`CREATE SCHEMA ${schema}`);
     await q(`CREATE TABLE football.projection_meta(key text PRIMARY KEY,value text,updated_at timestamptz DEFAULT clock_timestamp());
-      CREATE TABLE football.match_snapshots(id text,dataset text,payload jsonb,PRIMARY KEY(id,dataset));
+      CREATE TABLE football.match_snapshots(id text,dataset text,source_match_id text,kickoff_time timestamptz,payload jsonb,PRIMARY KEY(id,dataset));
       CREATE TABLE football.daily_featured_combo_state(id integer PRIMARY KEY,payload jsonb);`);
     for(const migration of ['007_market_collector_runtime.sql','011_unified_recommendation_runtime.sql'])
       await q(fs.readFileSync(path.join(__dirname,'../server/postgres/migrations/',migration),'utf8'));
@@ -50,7 +50,8 @@ async function verify(pool){
       const fresh={...fixture(Number(row.signal.sourceMatchId)),externalSignals:row.signal};
       const parent={...fresh,probabilityModel:{...fresh.probabilityModel,generatedAt:new Date(now-86400000).toISOString()}};
       const [attached]=attachProspectiveForecastInputs([parent],[fresh],now);
-      await q('INSERT INTO football.match_snapshots(id,dataset,payload) VALUES($1,$2,$3::jsonb)',[fresh.id,'current',JSON.stringify(attached)]);
+      await q('INSERT INTO football.match_snapshots(id,dataset,source_match_id,kickoff_time,payload) VALUES($1,$2,$3,$4,$5::jsonb)',
+        [fresh.id,'current',fresh.sourceMatchId,fresh.kickoffTime,JSON.stringify(attached)]);
     }
     const runtime=createRuntime(postgresPorts(mappedPool,()=>now),{validators:{isFinal:()=>false,isVoid:()=>false}});
     const copied=await runtime.combos();check(()=>assert.equal(copied.ok,true));
@@ -58,7 +59,7 @@ async function verify(pool){
     check(()=>assert.deepEqual(copied.value.previews.map(c=>c.size),[2,3]));
     check(()=>assert.ok(copied.value.previews.every(c=>c.legs.every(d=>d.quoteSource==='500.com:jczq:HAD'&&d.quoteProvenance.officialDirect===false))));
     check(()=>assert.ok(copied.value.previews.every(c=>c.rawTotalOdds>=(c.size===2?2.5:5))));
-    await runtime.view();
+    const projection=await runtime.view();check(()=>assert.equal(projection.ok,true));
     const view=(await q('SELECT payload FROM football.daily_featured_combo_state WHERE id=1')).rows[0].payload.recommendationCenter;
     check(()=>assert.equal(view.previews.length,2));
     const first=signals[0].signal.bookmakerOdds.had.lotterySpReceipt;
