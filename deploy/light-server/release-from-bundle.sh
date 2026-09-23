@@ -2182,7 +2182,7 @@ run_candidate_model_artifact_catchup() {
   # API verification so a stale pre-release status can never be accepted.
   run_build_step candidate-deadline-capture env PATH="$PATH" HOME="${BUILD_HOME:-/nonexistent}" SERVER_STORE_DIR="$store_dir" \
     DATASTORE_SQLITE_PATH="$sqlite_path" \
-    "$NODE_HOME/bin/npm" run candidate:capture-deadline || return 1
+    "$NODE_HOME/bin/node" scripts/captureCandidateProspectiveDeadline.cjs --deadline-only || return 1
   run_build_step candidate-revision-verification env PATH="$PATH" HOME="${BUILD_HOME:-/nonexistent}" \
     "$NODE_HOME/bin/node" "$BUILD_DIR/scripts/candidateReleaseContinuity.cjs" verify \
     --registry "$store_dir/model-artifacts/candidate-prospective-registry.json" \
@@ -7695,7 +7695,7 @@ run_candidate_refresh_step candidate-sqlite-affinity env PATH="$PATH" HOME="$BUI
 run_candidate_refresh_step candidate-deadline-capture-refresh env PATH="$PATH" HOME="$BUILD_HOME" NODE_ENV=production \
   SERVER_STORE_DIR="$CANDIDATE_STORE_DIR" DATASTORE_SQLITE_PATH="$CANDIDATE_SQLITE_PATH" \
   CANDIDATE_PROSPECTIVE_CAPTURE_EVALUATED_AT="$CANDIDATE_ARCHIVE_REFRESH_CAPTURED_AT" \
-  "$NODE_HOME/bin/node" scripts/captureCandidateProspectiveDeadline.cjs \
+  "$NODE_HOME/bin/node" scripts/captureCandidateProspectiveDeadline.cjs --deadline-only \
   || abort_before_swap "candidate deadline capture failed at archive refresh instant"
 fix_app_permissions "$NEXT_DIR" \
   || abort_before_swap "candidate permissions failed after archive refresh"
