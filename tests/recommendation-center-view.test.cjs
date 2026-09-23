@@ -90,7 +90,15 @@ function renderedText(data,props,now){
   vm.runInNewContext(code,{module,exports:module.exports,Date:now==null?Date:class extends Date{static now(){return now;}},require:id=>{
     if(id==='react')return react;if(id==='react/jsx-runtime')return require(id);
     if(id==='./SelectionQualityNote')return require('./fixtures/selection-quality-note-module.cjs');
+    if(id==='./DayCoverage')return {DayCoverage:()=>null};
+    if(id==='./MarketComparison')return {MarketComparison:()=>null};
     if(id==='../../hooks/useRecommendationCenter')return {useRecommendationCenter:()=>({data,loading:false,failed:false,authorizationRequired:false,refresh:()=>{}})};
+    if(id==='../../hooks/useRecommendationReviewPage')return {useRecommendationReviewPage:filters=>{
+      const source=filters.kind==='single'?data.review.singles:data.review.combos.filter(row=>row.combo.size===(filters.kind==='two'?2:3));
+      const rows=source.slice((filters.page-1)*filters.pageSize,filters.page*filters.pageSize).map(row=>({...row,selectedMarket:'HAD',selectedSettlement:row.settlement,selectedOdds:row.decision?.odds||row.combo?.totalOdds,oddsState:'available',versionKey:'a'.repeat(64),versionLabel:'fixture'}));
+      const summary=data.review.statistics[filters.kind==='single'?'single':filters.kind];
+      return{data:{rows,total:source.length,page:filters.page,pageCount:Math.ceil(source.length/filters.pageSize),summary:{all:summary,windows:{last7:summary,last30:summary}},versions:[]},loading:false,failed:false,authorizationRequired:false,refresh:()=>{}};
+    }};
     if(id==='../FollowButton')return {FollowButton:()=>null};
     if(id==='../TeamBadge')return {TeamBadge:({team})=>react.createElement('span',{'data-badge-name':team.name.zh})};
     if(id==='../../services/recommendationCenterView')return view;if(id==='lucide-react')return {RefreshCw:()=>null,ChevronDown:()=>null,Search:()=>null,ArrowUpRight:()=>null};if(id.endsWith('.css'))return {};throw Error(id);

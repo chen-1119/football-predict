@@ -88,6 +88,10 @@ run_native_release() {
   NATIVE_RELEASE_KIND="${native_state[0]}"
   NATIVE_CANDIDATE_DATABASE="${native_state[1]}"
   NATIVE_ARCHIVE_DATABASE="${native_state[2]}"
+  [ "$NATIVE_RELEASE_KIND" = runtime-only ] || {
+    log "signed 013 research migration requires the existing PostgreSQL-only runtime"
+    return 1
+  }
   if [ "$NATIVE_RELEASE_KIND" = runtime-only ]; then NATIVE_CANDIDATE_DATABASE=-; NATIVE_ARCHIVE_DATABASE=-; fi
   TRANSACTION_VERSION=4
   PRIMARY_READ_SOURCE=postgres
@@ -109,6 +113,9 @@ run_native_release() {
   native_seed_log="$NATIVE_STATE_DIR/seed.log"
   native_data seed >"$native_seed_log" 2>&1
   native_materialize_candidate
+  # Candidate reconciliation itself verifies the exact PostgreSQL schema, so
+  # migrate the isolated clone before any build role or candidate process runs.
+  "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/deploy/light-server/recommendation-schema-bridge.cjs" candidate "$BUNDLE_SHA256"
   start_release_sync_write_barrier "$APP_DIR"
   stop_worker_for_release_window
   seed_candidate_model_artifacts
@@ -192,6 +199,11 @@ run_native_release() {
   start_release_sync_write_barrier
   stop_service_for_release_window
   stop_release_sync_write_barrier clean
+  # All old PostgreSQL writers are stopped. Install the additive 013 schema in
+  # the serving database immediately before the new application can start.
+  # A durable intent lets cold recovery remove an empty 013 table and its
+  # migration row together if this release is rolled back.
+  "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/deploy/light-server/recommendation-schema-bridge.cjs" live "$BUNDLE_SHA256"
   "$NODE_HOME/bin/node" "$NEXT_DIR/scripts/candidateReleaseContinuity.cjs" snapshot \
     --revision-transition "$NEXT_DIR/deploy/light-server/candidate-revision-transition.json" \
     --registry "$LIVE_STORE_DIR/model-artifacts/candidate-prospective-registry.json" --output "$RECOVERY_DIR/candidate-release-continuity-before.json" \

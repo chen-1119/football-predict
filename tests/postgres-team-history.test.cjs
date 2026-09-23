@@ -32,6 +32,18 @@ test('live model consumes canonical PostgreSQL rows, has real counts and nonzero
  assert.equal(result.probabilityModel.elo.homeMatches,12);assert.ok(result.probabilityModel.ensembleWeights.elo>0);assert.ok(result.probabilityModel.lambdaBlend.formWeight>0);
  assert.equal(result.probabilityModel.elo.warehouseHistory.inputHash,'b'.repeat(64));
 });
+test('verified MLS club aliases use existing results while Asian Games sides stay separate from seniors',()=>{
+ assert.equal(teamKey('西雅图海湾人'),'seattle sounders');
+ assert.equal(teamKey('皇家盐湖城'),'real salt lake');
+ assert.notEqual(teamKey('中国亚运男足'),teamKey('中国'));
+ assert.notEqual(teamKey('日本亚足'),teamKey('日本'));
+ const p=projectRows(Array.from({length:12},(_,i)=>row(i+1,{home_name:'Seattle Sounders',away_name:'Real Salt Lake'})),{asOf:ASOF,teamKey});
+ const h={matches:p.matches,summary:{version:'postgres-team-history-v1',inputHash:'c'.repeat(64),asOf:ASOF,perTeamLimit:120,lookbackDays:1095,ratingScope:'bounded window',teams:['seattle sounders','real salt lake'].map(key=>({key,selectedMatches:12,mapping:'exact'}))}};
+ const fixture=target({sourceMatchId:'mls-future',homeTeamName:'西雅图海湾人',awayTeamName:'皇家盐湖城',kickoffTime:'2026-09-24T01:30:00Z'});
+ const {elo,form}=snapshots(h,null,[fixture]);
+ assert.equal(elo.get('mls-future').homeMatches,12);assert.equal(elo.get('mls-future').awayMatches,12);
+ assert.equal(form.get('mls-future').home.sampleSize,12);assert.equal(form.get('mls-future').away.sampleSize,12);
+});
 test('late imports never change old forecast/locked inputs or signed seed objects',()=>{
  const h=history([row(1)]),old=target({sourceMatchId:'old',kickoffTime:'2026-09-02T18:00:00Z'}),locked=target({sourceMatchId:'locked',predictionMeta:{lockedAt:'2026-09-23T09:00:00Z'}}),unrelated=target({sourceMatchId:'other',homeTeamName:'Alpha',awayTeamName:'Beta'});
  const original=JSON.stringify([h,old,locked,unrelated]);const {elo,form}=snapshots(h,null,[old,locked,unrelated,target()]);assert.deepEqual([...elo.keys()],['future']);assert.deepEqual([...form.keys()],['future']);assert.equal(JSON.stringify([h,old,locked,unrelated]),original);

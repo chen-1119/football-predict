@@ -60,7 +60,20 @@ assert.deepEqual(listMigrationFiles(), [
   "004_free_source_warehouse.sql",
   "005_learning_ledger.sql",
   "006_research_observations.sql",
+  "007_market_collector_runtime.sql",
+  "008_market_feature_latest.sql",
+  "009_daily_featured_combos.sql",
+  "010_published_forecasts.sql",
+  "011_unified_recommendation_runtime.sql",
+  "012_accounts_and_follows.sql",
+  "013_dual_choice_research.sql",
 ]);
+const dualResearchSql = fs.readFileSync(path.join(rootDir, "server", "postgres", "migrations", "013_dual_choice_research.sql"), "utf8");
+assert.match(dualResearchSql, /CREATE TABLE football\.recommendation_dual_research_records\s*\(/);
+assert.match(dualResearchSql, /REFERENCES football\.recommendation_decisions\(id\)/);
+assert.match(dualResearchSql, /CREATE TRIGGER dual_research_immutable/);
+assert.match(dualResearchSql, /CREATE CONSTRAINT TRIGGER dual_research_deadline/);
+assert.doesNotMatch(dualResearchSql, /\b(?:DROP|TRUNCATE|ALTER\s+TABLE\s+football\.(?!recommendation_dual_research_records))\b/i);
 for (const table of requiredTables) {
   assert.match(sql, new RegExp(`CREATE TABLE IF NOT EXISTS football\\.${table}\\s*\\(`));
 }
@@ -157,7 +170,8 @@ assert.match(projectionSync, /source-fingerprint-unchanged/);
 assert.match(projectionSync, /persistSemanticRows/);
 assert.match(projectionSync, /persistAiArena/);
 assert.match(projectionSync, /ON CONFLICT \(match_id, decision_id\) DO UPDATE SET/);
-assert.match(projectionSync, /review_id = EXCLUDED\.review_id/);
+assert.match(projectionSync, /ON CONFLICT \(review_id\) DO UPDATE SET/);
+assert.doesNotMatch(projectionSync, /review_id = EXCLUDED\.review_id/);
 const semanticReviewRows = dedupeSemanticReviews([
   {
     review_id: "review:old",

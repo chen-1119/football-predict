@@ -7,6 +7,8 @@ const {buildHandicapCalibration}=require('../../src/services/handicapCalibration
 const {selectionQuality,isQualifiedSelection}=require('../../src/services/recommendationSelectionQuality.cjs');
 const {buildPublishedScoreDistribution}=require('../../src/services/publishedScoreDistribution.cjs');
 const {buildQualityReport}=require('./qualityReport.cjs');
+const {buildDataCoverage}=require('../dataCoverage.cjs');
+const {createDualResearchRecord}=require('./dualChoiceResearch.cjs');
 
 function freshPublication(p,now){return p && /^[a-f0-9]{64}$/.test(p.manifestHash||'') && typeof p.generationId==='string' && p.generationId.length>0 && Number.isFinite(time(p.committedAt)) && now>=time(p.committedAt) && now-time(p.committedAt)<=15*60000;}
 function requireBeforeCutoff(records,now){if(records.some(d=>now>=time(d.cutoffTime)))throw Object.assign(new Error('Cutoff crossed'),{code:'DEADLINE_CROSSED'});}
@@ -53,7 +55,7 @@ async function bindCurrentDecisions(repo, decisions, clock) {
   return {accepted,issues};
 }
 /** Each action commits independently. Never call all lanes inside one outer DB transaction. */
-function createRuntime(ports,{validators}={}){
+function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_DUAL_RESEARCH==='1'}={}){
   const clock=ports.clock || Date.now;
   async function stage(lane,action){
     const attemptAt=clock();
@@ -78,6 +80,28 @@ function createRuntime(ports,{validators}={}){
     requireBeforeCutoff(accepted,clock());
     return {publication,decisionIds:accepted.map(d=>d.decisionId),inputAsOf,basePublicationAsOf:publication.committedAt,issues:issues.length,attempted,handicapCalibration:{profileHash:handicapCalibration.profileHash,sampleRows:handicapCalibration.sampleRows,activeGroups:Object.values(handicapCalibration.groups).filter(g=>g.active).length}};
   });}
+  // Research has its own transaction. A missing migration, late cutoff, or
+  // invalid research row cannot roll back the published single lane.
+  async function research(decisionIds=[]){
+    if(!dualResearchEnabled)return {ok:true,enabled:false,created:0,eligible:0,issues:0};
+    if(!decisionIds.length)return {ok:true,enabled:true,created:0,eligible:0,issues:0};
+    try{return await ports.transaction('dual-research',async repo=>{
+      if(typeof repo.insertDualResearch!=='function')return {ok:true,created:0,eligible:0,issues:0,enabled:false};
+      let created=0,eligible=0,issues=0;
+      for(const decision of await repo.decisions(decisionIds)){
+        const record=createDualResearchRecord(decision,clock());
+        if(!record)continue;
+        eligible++;
+        const result=await repo.savepoint(async()=>repo.insertDualResearch(record));
+        if(result.error){
+          if(['42P01','42703','42883'].includes(result.error.code))throw result.error;
+          issues++;await repo.issue('dual-research',{sourceMatchId:decision.sourceMatchId,reason:'research-record-insert-failed'});
+        }
+        else if(result.value)created++;
+      }
+      return {ok:true,enabled:true,created,eligible,issues};
+    });}catch(error){return {ok:false,enabled:true,errorCode:String(error.code||'DUAL_RESEARCH_FAILED').slice(0,64)};}
+  }
   async function combos(){return stage('combos',async repo=>{
     const publication=await repo.publication(),now=clock();
     // Recheck actual sale state and exact current input before freezing. A
@@ -132,9 +156,11 @@ function createRuntime(ports,{validators}={}){
     const selected=singles.filter(r=>r.decision.businessDate===day(now));
     const today=combos.filter(r=>r.combo.businessDate===day(now));
     const overlap=previews.length===2?previews[0].decisionIds.filter(id=>previews[1].decisionIds.includes(id)):[];
+    const targetRows=repo.todayTargets?await repo.todayTargets(day(now)):await repo.current();
+    const coverage=buildDataCoverage({targetRows,singles,now,lanes});
     const center={version:'recommendation-center-v1',policyVersion:VERSION,updatedAt:new Date(now).toISOString(),businessDate:day(now),
       inputAsOf:[lanes.publish?.inputAsOf,lanes.combos?.inputAsOf].filter(v=>Number.isFinite(time(v))).sort((a,b)=>time(b)-time(a))[0]||null,resultAsOf:lanes.settlement?.lastSuccessAt||null,lanes,
-      current:selected,previews,todayCombos:today,overlapDecisionIds:overlap,
+      current:selected,previews,todayCombos:today,overlapDecisionIds:overlap,coverage,
       review:{singles:singles.slice(0,100),combos:combos.slice(0,100),limit:100,qualityReport:buildQualityReport(singles,{asOf:now}),
         statistics:{single:summary(singles,true),qualifiedSingle:summary(singles.filter(r=>r.selectionQuality.qualified),true),handicap:handicapSummary(singles),handicapBreakdown:handicapBreakdown(singles),marketBaseline:marketBaseline(singles),daily:dailySummary(singles,combos),two:summary(combos.filter(r=>r.combo.size===2)),three:summary(combos.filter(r=>r.combo.size===3))},handicapCalibration,
         definition:'latest-published-decision-before-cutoff-per-event; combos-use-exact-bound-versions'},
@@ -142,8 +168,8 @@ function createRuntime(ports,{validators}={}){
     await repo.saveView(center);
     return {centerUpdatedAt:center.updatedAt,quarantined:quarantined.length};
   });}
-  return {publish,combos,settle,view,
-    async publishingCycle(){const publication=await publish();const combinations=await combos();const projection=await view();return {publication,combinations,projection};},
+  return {publish,research,combos,settle,view,
+    async publishingCycle(){const publication=await publish();const dualResearch=publication.ok?await research(publication.value.decisionIds):{ok:false,skipped:'publication-failed'};const combinations=await combos();const projection=await view();return {publication,dualResearch,combinations,projection};},
     async settlementCycle(){const settlement=await settle();const projection=await view();return {settlement,projection};}
   };
 }

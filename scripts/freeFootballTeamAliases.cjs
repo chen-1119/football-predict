@@ -3,8 +3,13 @@
 // Chinese Sporttery display names -> canonical names used by the free
 // historical providers. An unresolved name remains unresolved; this table
 // must never be used to invent strength for an unknown team.
-const FREE_FOOTBALL_TEAM_ALIASES_VERSION = "free-football-team-aliases-v5-utf8-safe-20260923-english-history";
+const FREE_FOOTBALL_TEAM_ALIASES_VERSION = "free-football-team-aliases-v6-utf8-safe-20260923-mls-history";
 const FREE_FOOTBALL_TEAM_ALIASES = Object.freeze({
+  // The 2026-09-23 MLS fixture and both club identities are confirmed by MLS
+  // and Real Salt Lake. The Football-Data USA warehouse has these exact senior
+  // club keys and prior 90-minute results; never map Asian Games/U23 sides to
+  // senior international records by dropping an age or tournament suffix.
+  "西雅图海湾人": "seattle sounders", "皇家盐湖城": "real salt lake",
   // Exact senior-club names from Football-Data E2/E3, 2024/25 through 2026/27.
   // These canonical keys match the downloaded CSVs; no youth/reserve/women
   // suffix is removed and provider-scoped aliases are not applied globally.
