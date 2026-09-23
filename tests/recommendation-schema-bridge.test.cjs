@@ -4,10 +4,22 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const vm = require("node:vm");
 const bridge = require("../deploy/light-server/recommendation-schema-bridge.cjs");
-const { buildDualResearchRollbackSql } = require("../deploy/light-server/football-release-recovery.cjs");
 
 const root = path.resolve(__dirname, "..");
+// Inspect only the pure SQL builder: importing cold recovery would execute its
+// production root guard in ordinary, unprivileged CI.
+const recoverySource = fs.readFileSync(path.join(root, "deploy/light-server/football-release-recovery.cjs"), "utf8");
+const builderStart = recoverySource.indexOf("const buildDualResearchRollbackSql =");
+const builderEnd = recoverySource.indexOf("const rollbackDualResearchSchemaIfNeeded =", builderStart);
+assert(builderStart >= 0 && builderEnd > builderStart);
+assert(recoverySource.includes("const sql = buildDualResearchRollbackSql(intent.migrationSha256);"));
+const buildDualResearchRollbackSql = vm.runInNewContext(
+  `${recoverySource.slice(builderStart, builderEnd)}\nbuildDualResearchRollbackSql;`,
+  { fail(message) { throw new Error(message); } },
+  { timeout: 1000 },
+);
 const signed = bridge.readSignedMigration();
 const baseline = bridge.expectedBaseline();
 
