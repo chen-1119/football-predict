@@ -40,6 +40,19 @@ const LEGACY_MANAGED_CONFIG_PATHS = MANAGED_CONFIG_PATHS.filter(
 const SUPPORTED_MANAGED_CONFIG_PATH_SETS = [MANAGED_CONFIG_PATHS, LEGACY_MANAGED_CONFIG_PATHS];
 
 const TIMER_UNITS = ["football-cleanup.timer", "football-monitor.timer"];
+// Older recovery journals contain only TIMER_UNITS and UNIT_STATE_NAMES.
+// New journals bind the independent football writers and their launch timers
+// so they cannot respawn between the final quiesce and the process fence.
+const SIDECAR_TIMER_UNITS = ["football-daily-prematch.timer", "football-featured-combo.timer"];
+const ALL_TIMER_UNITS = [...TIMER_UNITS, ...SIDECAR_TIMER_UNITS];
+const SIDECAR_UNIT_STATE_NAMES = [
+  "football-market-collector.service",
+  "football-featured-combo.service",
+  "football-recommendation-settlement.service"
+];
+// The prematch job is a static one-shot unit. Its timer is durable state;
+// its transient running/enabled service state must never be restored.
+const SIDECAR_ONESHOT_UNITS = ["football-daily-prematch.service"];
 const MAINTENANCE_UNITS = [
   "football-cleanup.timer",
   "football-monitor.timer",
@@ -48,6 +61,7 @@ const MAINTENANCE_UNITS = [
 ];
 const RUNTIME_UNITS = ["football-sync-worker.service", "football-predict.service"];
 const UNIT_STATE_NAMES = ["football-predict.service", "football-sync-worker.service", "nginx.service"];
+const ALL_UNIT_STATE_NAMES = [...UNIT_STATE_NAMES, ...SIDECAR_UNIT_STATE_NAMES];
 const COMMON_COHORT_G2_V1_PATH = `${STORE_PATH}/model-artifacts/candidate-common-cohort-shadow-g2.json`;
 const COMMON_COHORT_G2_V2_PATH = `${STORE_PATH}/model-artifacts/candidate-common-cohort-shadow-g2-v2.json`;
 const MODEL_ARTIFACTS = new Map([
@@ -450,10 +464,21 @@ class SystemAdapter {
       return;
     }
     for (const user of ["football", "football-build"]) {
-      this.run("pkill", ["-KILL", "-u", user], { allowFailure: true });
-      if (this.run("pgrep", ["-u", user], { allowFailure: true }).status === 0) {
-        fail(`dedicated service user still has a process after quiesce: ${user}`);
+      const kill = this.run("pkill", ["-KILL", "-u", user], { allowFailure: true });
+      if (![0, 1].includes(kill.status)) fail(`dedicated service user process kill failed: ${user}`);
+      // SIGKILL is asynchronous: allow the kernel/systemd a bounded interval
+      // to reap the process, while still failing closed on a restarting unit.
+      let quiescent = false;
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        const probe = this.run("pgrep", ["-u", user], { allowFailure: true });
+        if (probe.status === 1) {
+          quiescent = true;
+          break;
+        }
+        if (probe.status !== 0) fail(`dedicated service user process probe failed: ${user}`);
+        if (attempt < 19) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
       }
+      if (!quiescent) fail(`dedicated service user still has a process after quiesce: ${user}`);
     }
   }
 
@@ -700,17 +725,22 @@ const loadConfigSnapshot = (currentDir) => {
     fail(`managed config snapshot type is invalid: ${type}`);
   });
   const timerRows = parseTsv(path.join(dir, "timers.tsv"), "timer state manifest", 3);
-  if (timerRows.length !== TIMER_UNITS.length) fail("timer state manifest length mismatch");
+  const timerNames = timerRows.length === TIMER_UNITS.length ? TIMER_UNITS
+    : timerRows.length === ALL_TIMER_UNITS.length ? ALL_TIMER_UNITS : null;
+  if (!timerNames) fail("timer state manifest length mismatch");
   const timers = timerRows.map(([name, enabled, active], index) => {
-    if (name !== TIMER_UNITS[index] || !["0", "1"].includes(enabled) || !["0", "1"].includes(active)) {
+    if (name !== timerNames[index] || !["0", "1"].includes(enabled) || !["0", "1"].includes(active)) {
       fail("timer state manifest is invalid");
     }
     return { name, enabled: enabled === "1", active: active === "1" };
   });
   const unitRows = parseTsv(path.join(dir, "units.tsv"), "runtime unit state manifest", 3);
-  if (unitRows.length !== UNIT_STATE_NAMES.length) fail("runtime unit state manifest length mismatch");
+  const unitNames = unitRows.length === UNIT_STATE_NAMES.length ? UNIT_STATE_NAMES
+    : unitRows.length === ALL_UNIT_STATE_NAMES.length ? ALL_UNIT_STATE_NAMES : null;
+  if (!unitNames || timerNames.length !== (unitNames.length === UNIT_STATE_NAMES.length
+    ? TIMER_UNITS.length : ALL_TIMER_UNITS.length)) fail("runtime unit state manifest length mismatch");
   const units = unitRows.map(([name, enabled, active], index) => {
-    if (name !== UNIT_STATE_NAMES[index] || !["0", "1"].includes(enabled) || !["0", "1"].includes(active)) {
+    if (name !== unitNames[index] || !["0", "1"].includes(enabled) || !["0", "1"].includes(active)) {
       fail("runtime unit state manifest is invalid");
     }
     return { name, enabled: enabled === "1", active: active === "1" };
@@ -1226,13 +1256,23 @@ const restoreModelArtifacts = (snapshot) => {
 
 const quiesceAll = (transaction, system) => {
   system.stopTransientUnits(transaction.bundleSha);
-  for (const unit of [...MAINTENANCE_UNITS, ...RUNTIME_UNITS]) system.stop(unit);
+  for (const unit of [...SIDECAR_TIMER_UNITS, ...SIDECAR_UNIT_STATE_NAMES, ...SIDECAR_ONESHOT_UNITS,
+    ...MAINTENANCE_UNITS, ...RUNTIME_UNITS]) system.stop(unit);
   system.killDedicatedUserProcesses();
 };
 
 const restoreUnitStates = (snapshot, system) => {
   for (const state of snapshot.units) {
-    if (state.name === "nginx.service") continue;
+    if (state.name === "nginx.service" || SIDECAR_UNIT_STATE_NAMES.includes(state.name)) continue;
+    system.setEnabled(state.name, state.enabled);
+    if (state.active) system.start(state.name);
+    else system.stop(state.name);
+  }
+};
+
+const restoreSidecarUnitStates = (snapshot, system) => {
+  for (const state of snapshot.units) {
+    if (!SIDECAR_UNIT_STATE_NAMES.includes(state.name)) continue;
     system.setEnabled(state.name, state.enabled);
     if (state.active) system.start(state.name);
     else system.stop(state.name);
@@ -1371,6 +1411,7 @@ const recoverRollback = (transaction, system) => {
   system.waitForHealth();
   if (nativeWasActive) system.waitForNativeHealth();
   if (transaction.native && nativeDataActive(transaction.native, system) !== nativeWasActive) fail("native database identity changed after recovery");
+  restoreSidecarUnitStates(transaction.config, system);
   restoreTimerStates(transaction.config, system);
   isolateKnownFailedTree(transaction, system);
   updatePhase(transaction, "rolled-back");
@@ -1413,10 +1454,8 @@ const recoverForward = (transaction, system) => {
     system.waitForNativeHealth();
     if (!nativeDataActive(transaction.native, system)) fail("native database identity changed after committed recovery");
   }
-  for (const timer of TIMER_UNITS) {
-    system.setEnabled(timer, true);
-    system.start(timer);
-  }
+  restoreSidecarUnitStates(transaction.config, system);
+  restoreTimerStates(transaction.config, system);
   updatePhase(transaction, "committed");
   resolveTransaction(transaction);
   return { action: "commit", bundleSha256: transaction.bundleSha, phase: "committed" };

@@ -187,8 +187,16 @@ MANAGED_CONFIG_PATHS=(
   /etc/nginx/sites-enabled/default
   /etc/nginx/sites-enabled/football-predict
 )
-MANAGED_TIMERS=(football-cleanup.timer football-monitor.timer)
-MANAGED_STATE_UNITS=(football-predict.service football-sync-worker.service nginx.service)
+MANAGED_TIMERS=(football-cleanup.timer football-monitor.timer football-daily-prematch.timer football-featured-combo.timer)
+MANAGED_STATE_UNITS=(
+  football-predict.service football-sync-worker.service nginx.service
+  football-market-collector.service football-featured-combo.service
+  football-recommendation-settlement.service
+)
+NATIVE_AUXILIARY_UNITS=(
+  football-market-collector.service football-featured-combo.service
+  football-recommendation-settlement.service
+)
 MODEL_ARTIFACT_TOKENS=(strategy evaluation candidate-registry candidate-challenger-suite candidate-temperature-suite candidate-common-cohort-g2-v1 candidate-common-cohort-g2-v2 candidate-capture-status benchmark-prospective-ledger)
 MODEL_ARTIFACT_PATHS=(
   /var/lib/football-predict/model-strategy.json
@@ -1636,6 +1644,14 @@ restore_managed_unit_states_after_rollback() {
     systemctl stop "$unit" >/dev/null 2>&1 || return 1
   fi
 
+  for unit in "${NATIVE_AUXILIARY_UNITS[@]}"; do
+    if [ "${active_by_unit[$unit]}" = "1" ]; then
+      systemctl start "$unit" >/dev/null 2>&1 || return 1
+    else
+      systemctl stop "$unit" >/dev/null 2>&1 || return 1
+    fi
+  done
+
   for unit in "${MANAGED_STATE_UNITS[@]}"; do
     actual_enabled=0
     actual_active=0
@@ -1653,33 +1669,40 @@ restore_managed_unit_states_after_rollback() {
 restore_timer_states_after_rollback() {
   [ "$RECOVERY_ACTIVE" = "1" ] || return 0
   local timer_state="${RECOVERY_DIR}/managed-config/timers.tsv"
-  local timer enabled active actual_enabled actual_active
-  [ -f "$timer_state" ] && [ ! -L "$timer_state" ] || return 1
-  while IFS=$'\t' read -r timer enabled active; do
-    case "$timer" in
-      football-cleanup.timer|football-monitor.timer) ;;
-      *) return 1 ;;
-    esac
+  local timer enabled active extra index=0 actual_enabled actual_active
+  local -A enabled_by_timer=() active_by_timer=()
+  [ -f "$timer_state" ] && [ ! -L "$timer_state" ] \
+    && [ "$(stat -c '%u:%g:%a:%h' -- "$timer_state")" = "0:0:600:1" ] || return 1
+  # Validate the whole fixed-order snapshot before touching any timer.
+  while IFS=$'\t' read -r timer enabled active extra; do
+    [ -n "$timer" ] && [ -z "${extra:-}" ] || return 1
+    [ "$index" -lt "${#MANAGED_TIMERS[@]}" ] || return 1
+    [ "$timer" = "${MANAGED_TIMERS[$index]}" ] || return 1
+    [[ "$enabled" =~ ^[01]$ && "$active" =~ ^[01]$ ]] || return 1
+    enabled_by_timer[$timer]="$enabled"
+    active_by_timer[$timer]="$active"
+    index=$((index + 1))
+  done <"$timer_state"
+  [ "$index" -eq "${#MANAGED_TIMERS[@]}" ] || return 1
+  for timer in "${MANAGED_TIMERS[@]}"; do
+    enabled="${enabled_by_timer[$timer]}"
+    active="${active_by_timer[$timer]}"
     if [ "$enabled" = "1" ]; then
       systemctl enable "$timer" >/dev/null 2>&1 || return 1
-    elif [ "$enabled" = "0" ]; then
-      systemctl disable "$timer" >/dev/null 2>&1 || true
     else
-      return 1
+      systemctl disable "$timer" >/dev/null 2>&1 || true
     fi
     if [ "$active" = "1" ]; then
       systemctl start "$timer" >/dev/null 2>&1 || return 1
-    elif [ "$active" = "0" ]; then
-      systemctl stop "$timer" >/dev/null 2>&1 || true
     else
-      return 1
+      systemctl stop "$timer" >/dev/null 2>&1 || true
     fi
     actual_enabled=0
     actual_active=0
     systemctl is-enabled --quiet "$timer" >/dev/null 2>&1 && actual_enabled=1
     systemctl is-active --quiet "$timer" >/dev/null 2>&1 && actual_active=1
     [ "$actual_enabled" = "$enabled" ] && [ "$actual_active" = "$active" ] || return 1
-  done <"$timer_state"
+  done
   TIMER_STATE_DIRTY=0
 }
 
@@ -2944,37 +2967,31 @@ quiesce_managed_timers_for_config_change() {
 }
 
 quiesce_managed_maintenance_for_sqlite_snapshot() {
-  local unit state
-  for unit in "${MANAGED_TIMERS[@]}" football-cleanup.service football-monitor.service; do
-    state="$(systemctl is-active "$unit" 2>/dev/null || true)"
+  local unit state status
+  for unit in "${MANAGED_TIMERS[@]}" football-cleanup.service football-monitor.service football-daily-prematch.service; do
+    if state="$(systemctl is-active "$unit" 2>/dev/null)"; then status=0; else status=$?; fi
     case "$state" in
       active|activating|deactivating|reloading)
+        [ "$status" -eq 0 ] || return 1
         systemctl stop "$unit" >/dev/null 2>&1 || return 1
         ;;
+      inactive|failed) [ "$status" -eq 3 ] || return 1 ;;
+      *) return 1 ;;
     esac
   done
-  for unit in "${MANAGED_TIMERS[@]}" football-cleanup.service football-monitor.service; do
-    state="$(systemctl is-active "$unit" 2>/dev/null || true)"
+  for unit in "${MANAGED_TIMERS[@]}" football-cleanup.service football-monitor.service football-daily-prematch.service; do
+    if state="$(systemctl is-active "$unit" 2>/dev/null)"; then status=0; else status=$?; fi
     case "$state" in
-      ""|inactive|failed|unknown) ;;
-      *)
-        printf 'managed maintenance unit is not quiescent: %s (%s)\n' "$unit" "$state" >&2
-        return 1
-        ;;
+      inactive|failed) [ "$status" -eq 3 ] || return 1 ;;
+      *) printf 'managed maintenance unit is not quiescent: %s (%s)\n' "$unit" "$state" >&2; return 1 ;;
     esac
   done
 }
 
 enable_managed_timers_after_readiness() {
-  local timer
-  for timer in "${MANAGED_TIMERS[@]}"; do
-    if systemctl cat "$timer" >/dev/null 2>&1; then
-      systemctl enable --now "$timer" >/dev/null 2>&1 || return 1
-      systemctl is-enabled --quiet "$timer" || return 1
-      systemctl is-active --quiet "$timer" || return 1
-    fi
-  done
-  TIMER_STATE_DIRTY=0
+  # Keep the original enabled and active states, including the optional
+  # featured-combo timer that may deliberately be disabled.
+  restore_timer_states_after_rollback
 }
 
 install_systemd_units() {
@@ -4529,6 +4546,62 @@ stop_service_for_release_window() {
     systemctl is-active --quiet "$SERVICE_NAME" && return 1
   fi
   return 0
+}
+
+quiesce_native_auxiliary_writers() {
+  local unit state attempt pgrep_status
+  for unit in "${NATIVE_AUXILIARY_UNITS[@]}" football-daily-prematch.service; do
+    systemctl stop "$unit" >/dev/null 2>&1 || return 1
+    state="$(systemctl is-active "$unit" 2>/dev/null || true)"
+    case "$state" in inactive|failed) ;; *) return 1 ;; esac
+  done
+  # Main service and worker were stopped first. A short bounded wait allows
+  # systemd to reap their children, while any unknown football process still
+  # blocks the PostgreSQL handoff.
+  for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    if pgrep -u football >/dev/null 2>&1; then
+      pgrep_status=0
+    else
+      pgrep_status=$?
+    fi
+    [ "$pgrep_status" -eq 1 ] && return 0
+    [ "$pgrep_status" -eq 0 ] || return 1
+    sleep 0.5
+  done
+  printf 'football service process survived the native cutover pause\n' >&2
+  return 1
+}
+
+restore_native_auxiliary_states_after_readiness() {
+  local unit_state="${RECOVERY_DIR}/managed-config/units.tsv"
+  local unit enabled active extra index=0 actual_enabled actual_active
+  local -A enabled_by_unit=() active_by_unit=()
+  [ "$RECOVERY_ACTIVE" = "1" ] || return 1
+  [ -f "$unit_state" ] && [ ! -L "$unit_state" ] \
+    && [ "$(stat -c '%u:%g:%a:%h' -- "$unit_state")" = "0:0:600:1" ] || return 1
+  while IFS=$'\t' read -r unit enabled active extra; do
+    [ -n "$unit" ] && [ -z "${extra:-}" ] || return 1
+    [ "$index" -lt "${#MANAGED_STATE_UNITS[@]}" ] || return 1
+    [ "$unit" = "${MANAGED_STATE_UNITS[$index]}" ] || return 1
+    [[ "$enabled" =~ ^[01]$ && "$active" =~ ^[01]$ ]] || return 1
+    enabled_by_unit[$unit]="$enabled"
+    active_by_unit[$unit]="$active"
+    index=$((index + 1))
+  done <"$unit_state"
+  [ "$index" -eq "${#MANAGED_STATE_UNITS[@]}" ] || return 1
+  for unit in "${NATIVE_AUXILIARY_UNITS[@]}"; do
+    if [ "${active_by_unit[$unit]}" = "1" ]; then
+      systemctl start "$unit" >/dev/null 2>&1 || return 1
+    else
+      systemctl stop "$unit" >/dev/null 2>&1 || return 1
+    fi
+    actual_enabled=0
+    actual_active=0
+    systemctl is-enabled --quiet "$unit" >/dev/null 2>&1 && actual_enabled=1
+    systemctl is-active --quiet "$unit" >/dev/null 2>&1 && actual_active=1
+    [ "$actual_enabled" = "${enabled_by_unit[$unit]}" ] \
+      && [ "$actual_active" = "${active_by_unit[$unit]}" ] || return 1
+  done
 }
 
 start_worker_for_live_release() {

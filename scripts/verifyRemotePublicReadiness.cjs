@@ -228,10 +228,6 @@ const currentReadFromHealth = (health) => health.body?.data?.currentRead || heal
 const requiredStoreReady = (health) => {
   const sqlite = sqliteFromHealth(health);
   const postgres = postgresFromHealth(health);
-  if (requireNativeStorage) {
-    const evidence = require("./nativeStorageReadiness.cjs").nativeStorageReadiness(health.body);
-    pushCheck(checks, "PostgreSQL-only storage and receipt integrity", evidence.ok, evidence);
-  }
   const currentRead = currentReadFromHealth(health);
   if (requiredReadSource === "postgres") {
     return postgres.available === true
@@ -527,6 +523,10 @@ const run = async () => {
   const fallbackReadiness = evaluateFallbackReadiness(healthStatus, minFallbackRunwaySeconds);
   pushCheck(checks, "fallback reliability runway", fallbackReadiness.ok, fallbackReadiness);
   const postgres = postgresFromHealth(health);
+  if (requireNativeStorage) {
+    const evidence = require("./nativeStorageReadiness.cjs").nativeStorageReadiness(health.body);
+    pushCheck(checks, "PostgreSQL-only storage and receipt integrity", evidence.ok, evidence);
+  }
   pushCheck(checks, "configured primary read source when required", !requiredReadSource || requiredStoreReady(health), {
     requiredByEnv: requireSqlite,
     requiredReadSource: requiredReadSource || null,

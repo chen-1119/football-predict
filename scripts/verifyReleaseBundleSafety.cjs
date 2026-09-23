@@ -443,6 +443,8 @@ const requiredReleaseEntries = [
   "scripts/verifyChunkedJsonFoundation.cjs",
   "scripts/verifyPostgresSemanticReviewCleanup.cjs",
   "scripts/verifyReleaseRecovery.cjs",
+  "scripts/verifyReleaseSidecarRecovery.cjs",
+  "scripts/verifyNativeSidecarLifecycle.cjs",
   "scripts/releaseStoragePreflight.cjs",
   "scripts/nativeReleaseJournal.cjs",
   "scripts/nativeDatabaseCutover.cjs",

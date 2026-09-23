@@ -236,7 +236,8 @@ pushCheck("signed candidate odds compaction is file-based and fail-closed", hasA
 pushCheck("deploy recovery branches before bundle discovery and verifies public readiness", hasAll(deployBundle, [
   "const recoverMode =",
   "sudo -n ${shellQuote(remoteEntrypoint)} --recover",
-  'REMOTE_REQUIRE_SQLITE: "1"',
+  'REMOTE_REQUIRE_SQLITE: recoveredNativeStorage ? "0" : "1"',
+  'REMOTE_REQUIRE_POSTGRES_ONLY: recoveredNativeStorage ? "1" : "0"',
   'REMOTE_REQUIRE_SYNC_WORKER: "1"',
   'mode: "recover"',
   "recoveryPending=0"
@@ -435,6 +436,8 @@ const nodeFiles = [
   "scripts/pushSportteryRelaySnapshot.cjs",
   "scripts/verifyReleaseTransactionSafety.cjs",
   "scripts/verifyReleaseRecovery.cjs",
+  "scripts/verifyReleaseSidecarRecovery.cjs",
+  "scripts/verifyNativeSidecarLifecycle.cjs",
   "scripts/verifySignedReleaseEntrypoints.cjs"
 ];
 for (const relativePath of nodeFiles) {

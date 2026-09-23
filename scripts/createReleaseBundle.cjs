@@ -720,6 +720,8 @@ const requiredEntries = [
   "scripts/data/production-plan-source-contracts.json",
   "scripts/verifyReleaseWorkerPreflight.cjs",
   "scripts/verifyReleaseRecovery.cjs",
+  "scripts/verifyReleaseSidecarRecovery.cjs",
+  "scripts/verifyNativeSidecarLifecycle.cjs",
   "scripts/verifyProductionReadiness.cjs",
   "scripts/verifyRemotePublicReadiness.cjs",
   "scripts/fallbackReadiness.cjs",
