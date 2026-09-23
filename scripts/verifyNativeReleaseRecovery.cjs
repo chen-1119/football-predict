@@ -40,6 +40,38 @@ function rewriteNativeEnv(f, content) {
   parts[3] = String(Buffer.byteLength(content)); parts[4] = sha256(content); write(file, parts.join("\t") + "\n");
 }
 const checks = [];
+{
+  const f = fixture("swap-complete", true, "runtime-only");
+  try {
+    const pin = require("./nativeReleaseJournal.cjs").LEGACY_UNACCEPTED.bundleSha256;
+    const old = mapped(f.root, "/opt/football-predict.previous");
+    write(path.join(old, ".release-bundle-sha256"), pin + "\n", 0o644);
+    fs.rmSync(path.join(old, ".release-live-complete"));
+    write(path.join(old, "server/index.cjs"), "fixture old runtime\n", 0o644);
+    const identityFile = path.join(f.current, "trees/old-app.json"), identity = JSON.parse(fs.readFileSync(identityFile));
+    identity.bundleMarker = pin; identity.liveMarker = "-"; write(identityFile, JSON.stringify(identity) + "\n");
+    const treeHash = require("./nativeReleaseJournal.cjs").runtimeTreeSha256(old, { verifyOwnership: false });
+    const receipt = { version: "legacy-unaccepted-baseline-v1", releaseSha256: fs.readFileSync(path.join(f.current, "bundle-sha256"), "utf8").trim(),
+      oldBundleSha256: pin, oldLiveMarker: "-", serverIndexSha256: sha256("fixture old runtime\n"), runtimeTreeSha256: treeHash,
+      clusterId: f.contract.clusterId, databaseOid: f.contract.oldDatabaseOid, generationId: "g-" + "a".repeat(64),
+      manifestHash: "a".repeat(64), sourceCycleId: "fixture-cycle", committedAt: "2026-09-23T00:00:00.000Z",
+      frozen: Array.from({ length: 198 }, (_, i) => ({ decisionId: `decision-${String(i).padStart(3, "0")}`, sha256: "b".repeat(64) })),
+      capturedAt: "2026-09-23T00:00:00.000Z" };
+    const bytes = JSON.stringify(receipt) + "\n", receiptFile = path.join(f.nativeDir, "legacy-unaccepted-baseline.json");
+    write(receiptFile, bytes);
+    f.contract.compatibleRuntimeSha256 = pin; f.contract.legacyBaselineSha256 = sha256(bytes);
+    write(path.join(f.nativeDir, "state.json"), JSON.stringify(f.contract) + "\n");
+    write(receiptFile, bytes.replace("fixture-cycle", "tampered-cycle"));
+    assert.notEqual(runRecovery(f).status, 0, "tampered root receipt must be rejected");
+    write(receiptFile, bytes);
+    write(path.join(old, "server/index.cjs"), "tampered old runtime\n", 0o644);
+    assert.notEqual(runRecovery(f).status, 0, "changed old runtime tree must be rejected");
+    write(path.join(old, "server/index.cjs"), "fixture old runtime\n", 0o644);
+    const result = runRecovery(f); assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(readTreeId(f.app), "old"); assert.equal(fs.existsSync(path.join(f.app, ".release-live-complete")), false);
+    checks.push({ name: "pinned unaccepted native baseline rolls back original tree without forging completion", ok: true });
+  } finally { cleanup(f); }
+}
 for (const [phase, active, kind] of [["prepared", false, "initial-cutover"], ["prepared", true, "initial-cutover"],
   ["swap-complete", false, "initial-cutover"], ["swap-complete", true, "initial-cutover"], ["recovering-rollback", true, "initial-cutover"],
   ["swap-complete", true, "runtime-only"], ["committed", true, "initial-cutover"], ["committed", true, "runtime-only"]]) {

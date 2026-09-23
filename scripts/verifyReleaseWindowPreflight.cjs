@@ -270,6 +270,12 @@ function verifyReleaseWindowPreflight() {
     reject(value => { value.releaseMarker = "A".repeat(64); }); reject(value => { value.liveComplete = "b".repeat(64); });
     reject(value => { value.productionWrites = 1; }); reject(value => { value.version = "unreviewed"; });
   });
+  check("one pinned missing old completion marker permits advisory preparation only", () => {
+    const value = observation(); value.releaseMarker = require("./nativeReleaseJournal.cjs").LEGACY_UNACCEPTED.bundleSha256;
+    value.liveComplete = "-";
+    const report = evaluate(value); assert.equal(report.ok, true); assert.equal(report.legacyUnaccepted, true); noAuthority(report);
+    value.releaseMarker = "0".repeat(64); assert.throws(() => evaluate(value), /unreviewed incomplete runtime/);
+  });
   check("actual collector source reads only fixed bounded nofollow inputs and loads no APP policy", () => {
     const fixture = collectorFixture(observation()), result = fixture.run(helper);
     assert.equal(evaluate(result).ok, true); assert.equal(fixture.descriptors.size, 0);

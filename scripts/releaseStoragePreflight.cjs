@@ -2,7 +2,7 @@
 // Read-only dispatch guard. The v3 release lane copies/seals SQLite and must
 // never silently turn it back on after a PostgreSQL-only cutover. This is NOT
 // a native release implementation or a switch authorizing data migration.
-const fs = require("node:fs"), path = require("node:path");
+const fs = require("node:fs"), path = require("node:path"), crypto = require("node:crypto");
 const SELECTORS = new Set(["FOOTBALL_STORAGE_MODE", "PRIVATE_MODEL_ARTIFACT_STORAGE", "POSTGRES_PROJECTION_SOURCE", "ENABLE_SQLITE_EXPORT"]);
 function assertLegacyStorageEnvironment(content) {
   const values = new Map();
@@ -53,11 +53,20 @@ if (require.main === module) {
     const content = readFixedEnvironment(), policy = path.resolve(__dirname, "../deploy/light-server/native-release-policy.json");
     if (fs.existsSync(policy)) {
       const native = require("./validateNativeReleasePolicy.cjs"), validated = native.readPolicy(policy);
-      const marker = name => { const file = "/opt/football-predict/" + name, st = fs.lstatSync(file);
+      const marker = (name, optional = false) => { const file = "/opt/football-predict/" + name;
+        let st; try { st = fs.lstatSync(file); } catch (error) { if (optional && error.code === "ENOENT") return "-"; throw error; }
         if (!st.isFile() || st.isSymbolicLink() || st.uid !== 0 || (st.mode & 0o022) || st.nlink !== 1 || st.size > 128)
           throw new Error("native release runtime marker unsafe");
         return fs.readFileSync(file, "utf8").trim(); };
-      const runtime = native.validateNativeRuntimeEnvironment(content, { bundleMarker: marker(".release-bundle-sha256"), liveMarker: marker(".release-live-complete") });
+      const bundleMarker = marker(".release-bundle-sha256"), liveMarker = marker(".release-live-complete", true);
+      let serverIndexSha256;
+      if (liveMarker === "-") {
+        const file = "/opt/football-predict/server/index.cjs", st = fs.lstatSync(file);
+        if (!st.isFile() || st.isSymbolicLink() || st.uid !== 0 || (st.mode & 0o022) || st.nlink !== 1 || st.size > 8 * 1024 * 1024)
+          throw new Error("unaccepted runtime entrypoint unsafe");
+        serverIndexSha256 = crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
+      }
+      const runtime = native.validateNativeRuntimeEnvironment(content, { bundleMarker, liveMarker, serverIndexSha256 });
       console.log(JSON.stringify({ ...validated, ...runtime, databaseQueries: 0 }));
     } else console.log(JSON.stringify(assertLegacyStorageEnvironment(content)));
   } catch (error) { console.error(JSON.stringify({ ok: false, phase: "storage-dispatch", reason: error.message })); process.exitCode = 1; }

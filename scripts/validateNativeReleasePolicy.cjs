@@ -1,17 +1,25 @@
 "use strict";
 const fs = require("node:fs"), path = require("node:path"), assert = require("node:assert/strict");
-const { BOOTSTRAP_SHA, NATIVE_SELECTORS } = require("./nativeReleaseJournal.cjs");
+const { BOOTSTRAP_SHA, LEGACY_UNACCEPTED, NATIVE_SELECTORS } = require("./nativeReleaseJournal.cjs");
 function validateNativeReleasePolicy(policy) {
-  assert.deepEqual(Object.keys(policy).sort(), ["bootstrapSha256", "storageMode", "transactionVersion", "version"]);
+  assert.deepEqual(Object.keys(policy).sort(), ["bootstrapSha256", "legacyUnaccepted", "storageMode", "transactionVersion", "version"]);
   assert.equal(policy.version, "native-release-policy-v1");
   assert.equal(policy.storageMode, "postgres-only"); assert.equal(policy.transactionVersion, 4);
   assert.match(BOOTSTRAP_SHA || "", /^[a-f0-9]{64}$/, "native release requires accepted bootstrap proof");
   assert.equal(policy.bootstrapSha256, BOOTSTRAP_SHA);
+  assert.equal(Object.keys(policy.legacyUnaccepted || {}).sort().join(), "bundleSha256,serverIndexSha256",
+    "unaccepted source policy has unexpected fields");
+  for (const field of ["bundleSha256", "serverIndexSha256"])
+    assert.equal(policy.legacyUnaccepted[field], LEGACY_UNACCEPTED[field], "unaccepted source must be exactly pinned in signed policy");
   return { ok: true, lane: "postgres-only", transactionVersion: 4, bootstrapSha256: BOOTSTRAP_SHA };
 }
 function validateNativeRuntimeEnvironment(content, identity) {
   assert.match(identity?.bundleMarker || "", /^[a-f0-9]{64}$/);
-  assert.equal(identity.liveMarker, identity.bundleMarker, "runtime live acceptance is missing");
+  const legacy = identity.liveMarker === "-";
+  if (legacy) {
+    assert.equal(identity.bundleMarker, LEGACY_UNACCEPTED.bundleSha256, "unaccepted source marker changed");
+    assert.equal(identity.serverIndexSha256, LEGACY_UNACCEPTED.serverIndexSha256, "unaccepted source code changed");
+  } else assert.equal(identity.liveMarker, identity.bundleMarker, "runtime live acceptance is missing");
   const values = {};
   for (const line of content.split(/\r?\n/)) {
     if (!line.trim() || /^\s*[#;]/.test(line)) continue;
@@ -25,7 +33,7 @@ function validateNativeRuntimeEnvironment(content, identity) {
   }
   if (values.FOOTBALL_STORAGE_MODE === "postgres-only") {
     assert.equal(require("../server/storageMode.cjs").readStorageMode(values).postgresOnly, true);
-    return { ok: true, kind: "runtime-only" };
+    return { ok: true, kind: "runtime-only", legacyUnaccepted: legacy };
   }
   require("./releaseStoragePreflight.cjs").assertLegacyStorageEnvironment(content);
   assert.equal(identity.bundleMarker, BOOTSTRAP_SHA, "hybrid source is not the accepted native-capable bootstrap");

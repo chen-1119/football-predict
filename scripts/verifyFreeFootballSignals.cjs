@@ -8,6 +8,7 @@ const os = require("node:os");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const historicalTraining = require("../server-data/training/historical-training-index.json");
+const { buildEloSnapshots, buildFormSnapshots } = require("./syncData.cjs");
 const {
   buildFreeFootballSignal,
   componentUsableBeforeCutoff,
@@ -72,6 +73,46 @@ for (const [displayName, canonicalKey] of Object.entries(requiredHistoricalAlias
   assert.ok(historicalTeam, `${displayName} must resolve to a real signed historical team`);
   assert.ok(Number(historicalTeam.matches) > 0, `${canonicalKey} must contain historical matches`);
   assert.ok(Number.isFinite(Number(historicalTeam.latestElo)), `${canonicalKey} must contain finite Elo`);
+}
+
+const verifiedSeniorNations = Object.freeze({
+  "\u5384\u74dc\u591a\u5c14": "ecuador",
+  "\u9a6c\u5c14\u4ee3\u592b": "maldives",
+  "\u79d1\u7d22\u6c83": "kosovo",
+  "\u5a01\u5c14\u58eb": "wales",
+  "\u585e\u5c14\u7ef4\u4e9a": "serbia",
+  "\u5e0c\u814a": "greece",
+});
+for (const [displayName, canonicalKey] of Object.entries(verifiedSeniorNations)) {
+  assert.equal(FREE_FOOTBALL_TEAM_ALIASES[displayName], canonicalKey);
+  const indexed = historicalTraining.teams?.[canonicalKey];
+  assert.ok(indexed && indexed.matches > 0 && indexed.recent?.length > 0,
+    `${displayName} must have actual senior international history`);
+  const match = {
+    sourceMatchId: `senior-${canonicalKey}`,
+    kickoffTime: "2026-09-23T12:00:00.000Z",
+    status: "SCHEDULED",
+    homeTeamName: displayName,
+    awayTeamName: "Unknown Opponent",
+  };
+  const elo = buildEloSnapshots([match], historicalTraining).get(match.sourceMatchId);
+  const form = buildFormSnapshots([match], historicalTraining).get(match.sourceMatchId);
+  assert.equal(elo.homeRating, indexed.latestElo, `${displayName} must use its indexed Elo`);
+  assert.equal(elo.homeMatches, indexed.matches, `${displayName} must use its indexed match count`);
+  assert.ok(form.home.sampleSize > 0, `${displayName} must use recorded pre-match form`);
+}
+for (const displayName of ["\u7231\u5c14\u5170", "\u9a6c\u5c14\u4ee3\u592bu23", "\u79d1\u7d22\u6c83u21"]) {
+  assert.equal(FREE_FOOTBALL_TEAM_ALIASES[displayName], undefined,
+    `${displayName} must not inherit an ambiguous or senior national alias`);
+  const match = {
+    sourceMatchId: `unmapped-${displayName}`,
+    kickoffTime: "2026-09-23T12:00:00.000Z",
+    status: "SCHEDULED",
+    homeTeamName: displayName,
+    awayTeamName: "Unknown Opponent",
+  };
+  const elo = buildEloSnapshots([match], historicalTraining).get(match.sourceMatchId);
+  assert.equal(elo.homeMatches, 0, `${displayName} must not borrow senior international matches`);
 }
 
 const kickoffTime = "2026-08-13T20:00:00+08:00";
@@ -286,5 +327,6 @@ console.log(JSON.stringify({
     "lifecycle-and-cutoff-scoped-coverage",
     "cli-exit-code-preserves-pre-match-gates-and-rejects-malformed-input",
     "utf8-safe-active-sporttery-team-aliases",
+    "verified-senior-national-history-and-youth-isolation",
   ],
 }, null, 2));

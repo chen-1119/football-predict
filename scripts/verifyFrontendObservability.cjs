@@ -69,8 +69,13 @@ const run = async () => {
   const appContext = readText("src/context/AppContext.tsx");
   const appContextCore = readText("src/context/AppContextCore.ts");
   const appShell = readText("src/App.tsx");
+  const navbar = readText("src/components/Navbar.tsx");
   const predictionsList = readText("src/pages/PredictionsList.tsx");
   const matchDetail = readText("src/pages/MatchDetail.tsx");
+  const publishedMatchPick = readText("src/components/recommendations/PublishedMatchPick.tsx");
+  const recommendationCenter = readText("src/components/recommendations/RecommendationCenter.tsx");
+  const reviewPageHook = readText("src/hooks/useRecommendationReviewPage.ts");
+  const reviewPageParser = readText("src/services/recommendationReviewPage.ts");
   const runtimeUrls = readText("src/services/runtimeUrls.ts");
   const css = readText("src/index.css");
   const viteConfig = readText("vite.config.ts");
@@ -112,95 +117,66 @@ const run = async () => {
     historyPollSeconds: 300
   });
 
-  pushCheck(checks, "data sync dom contract", [
-    'data-testid="data-sync-strip"',
-    "data-source-version",
-    "data-source-stale",
-    "data-source-health-ok",
-    "data-recommendation-reliable",
-    "data-fallback-within-window",
-    "data-fallback-age-seconds",
-    "data-model-version"
-  ].every((needle) => predictionsList.includes(needle)), {
-    hasSourceVersion: predictionsList.includes("data-source-version"),
-    hasStaleFlag: predictionsList.includes("data-source-stale"),
-    hasRecommendationReliable: predictionsList.includes("data-recommendation-reliable"),
-    hasFallbackWindow: predictionsList.includes("data-fallback-within-window")
+  pushCheck(checks, "navbar data status and reference dom contract", [
+    "type DataStatus = 'locked' | 'ready' | 'syncing' | 'watch' | 'error'",
+    "dataSync.recommendationReliable === false",
+    "if (dataSync.recommendationReliable === false) return t('dataEvidence')",
+    "dataStatusDisplayLabel",
+    "dataEvidence: { zh: '参考模式'",
+    "reference: { zh: '参考／影子，尚未通过正式门槛'",
+    'className={`app-data-status is-${dataStatus}',
+    'aria-expanded={isStatusOpen}',
+    'id="app-status-panel"',
+    'role="dialog"',
+    "dataSync.sourceUpdatedAt",
+    "dataSync.lastCheckedAt"
+  ].every((needle) => navbar.includes(needle)), {
+    hasReferenceMode: navbar.includes("dataEvidence: { zh: '参考模式'") && navbar.includes("dataSync.recommendationReliable === false"),
+    hasStatusDialog: navbar.includes('id="app-status-panel"') && navbar.includes('role="dialog"'),
+    hasTiming: navbar.includes("dataSync.sourceUpdatedAt") && navbar.includes("dataSync.lastCheckedAt")
   });
 
-  pushCheck(checks, "source health dom contract", [
-    'data-testid="source-health-panel"',
-    "data-source-health-ok",
-    "data-source-health-checked-at",
-    "data-source-health-fallback",
-    "data-source-serving-mode",
-    "data-fallback-within-window",
-    "data-fallback-age-seconds",
-    "Reliability window",
-    "data-sporttery-egress-status",
-    "data-sporttery-egress-waf",
-    "sportteryEgressStatusLabel",
-    "data-sporttery-relay-current-fresh",
-    "data-sporttery-relay-current-rows",
-    "data-sporttery-sync-meta-current-stale",
-    "data-sporttery-relay-partial",
-    "Current lane",
-    "Paged crawl"
-  ].every((needle) => predictionsList.includes(needle)), {
-    hasCheckedAt: predictionsList.includes("data-source-health-checked-at"),
-    hasFallbackFlag: predictionsList.includes("data-source-health-fallback"),
-    hasServingMode: predictionsList.includes("data-source-serving-mode"),
-    hasSportteryEgress: predictionsList.includes("data-sporttery-egress-status")
+  pushCheck(checks, "published recommendation detail dom contract", [
+    "usesPublishedRecommendation(match, unifiedRow, nowMs)",
+    "<PublishedMatchPick row={unifiedRow}",
+    "publishedResultLabel(unifiedRow,language)"
+  ].every((needle) => predictionsList.includes(needle)) && [
+    "usesPublishedRecommendation(match, unifiedRow, nowMs)",
+    "data-recommendation-track={useUnified ? 'published-reference'",
+    "<PublishedMatchPick row={unifiedRow}",
+    "<RecommendationEvidenceFacts match={match} publishedDecision={unifiedRow?.decision || null}",
+    "Published probabilities and times share one record"
+  ].every((needle) => matchDetail.includes(needle)) && [
+    "primarySelectionSummary(d)",
+    "data-record-hash={d.recordHash}",
+    "row.selectionQuality",
+    "row.settlement.score"
+  ].every((needle) => publishedMatchPick.includes(needle)), {
+    listUsesPublishedDecision: predictionsList.includes("usesPublishedRecommendation(match, unifiedRow, nowMs)"),
+    detailBindsEvidence: matchDetail.includes("publishedDecision={unifiedRow?.decision || null}"),
+    displaysFrozenHash: publishedMatchPick.includes("data-record-hash={d.recordHash}")
   });
 
-  pushCheck(checks, "model governance dom contract", [
-    'data-testid="model-governance-panel"',
-    "data-model-version",
-    "data-model-online-effect",
-    "data-model-gate-status",
-    "data-model-evaluation-ok",
-    "data-model-evaluation-coverage-ok",
-    "data-model-odds-coverage",
-    "data-model-prediction-coverage",
-    "data-model-baseline-rows",
-    "data-model-input-audit-ok",
-    "data-model-input-audit-violations",
-    "data-model-risk-tier",
-    "data-model-risk-reasons",
-    "data-model-scorecard-version",
-    "data-model-public-scorecard",
-    "data-model-scorecard-has-formal-sample",
-    "data-model-formal-recommendation-rows",
-    "data-model-market-buckets",
-    "data-model-league-buckets",
-    "data-model-odds-buckets",
-    "data-model-probability-architecture",
-    "data-model-source-policy",
-    "data-hhad-companion-status",
-    "data-hhad-companion-paired-rows",
-    "data-hhad-companion-candidate-ready",
-    "data-hhad-companion-online-effect",
-    "hhadCompanionAvailable",
-    "hhadCompanionUiStatus",
-    "gate-not-passed",
-    "Evaluation unavailable",
-    "hhadCompanionMetricNote",
-    "data-five-hundred-cutover-allowed",
-    "data-five-hundred-coverage",
-    "model-probability-stack",
-    "model-source-policy",
-    "probabilityStackItems",
-    "sourcePolicyItems",
-    "modelGovernanceItems"
-  ].every((needle) => predictionsList.includes(needle)), {
-    hasGateStatus: predictionsList.includes("data-model-gate-status"),
-    hasBaselineRows: predictionsList.includes("data-model-baseline-rows"),
-    hasInputAudit: predictionsList.includes("data-model-input-audit-ok"),
-    hasRiskTier: predictionsList.includes("data-model-risk-tier"),
-    hasScorecard: predictionsList.includes("data-model-scorecard-version"),
-    hasHhadCompanion: predictionsList.includes("data-hhad-companion-status"),
-    hasProbabilityStack: predictionsList.includes("model-probability-stack"),
-    hasSourcePolicy: predictionsList.includes("model-source-policy")
+  pushCheck(checks, "review filters and complete-ledger dom contract", [
+    "useRecommendationReviewPage(reviewFilters,review)",
+    "<ReviewWindows seven={reviewPage.data?.summary.windows.last7}",
+    "<DayCoverage coverage={data?.coverage}",
+    "<MarketComparison decision={d}",
+    "reviewPage.data?.summary.all",
+    "reviewPage.data?.total"
+  ].every((needle) => recommendationCenter.includes(needle)) && [
+    "/api/v1/recommendations/review?",
+    "parseRecommendationReviewPage(await response.json())",
+    "getAccessAuthHeaders()"
+  ].every((needle) => reviewPageHook.includes(needle)) && [
+    "parseRecommendationSummary(summary.all)",
+    "parseRecommendationSummary(summary.filtered)",
+    "parseRecommendationSummary(windows.last7)",
+    "parseRecommendationSummary(windows.last30)"
+  ].every((needle) => reviewPageParser.includes(needle)), {
+    hasServerReview: reviewPageHook.includes("/api/v1/recommendations/review?"),
+    hasCompleteSummary: recommendationCenter.includes("reviewPage.data?.summary.all"),
+    hasWindowSummary: recommendationCenter.includes("<ReviewWindows seven={reviewPage.data?.summary.windows.last7}")
   });
 
   const unsafeDetailProbabilityReads = [
