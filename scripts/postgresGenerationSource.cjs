@@ -46,6 +46,37 @@ const rowFromState = (state, kind) => ({
     handicap_line: Number.isFinite(Number(state.handicapLine)) ? Number(state.handicapLine) : null } : { phase: state.phase || null }),
 });
 
+// The native PG archive really needs both complete arrays. Admit their object
+// graphs item by item, without also retaining one ledger-sized encoded string
+// and its JSON.parse copy. Each pass is bound to the immutable manifest.
+function readPostgresReferenceSnapshot(context, { maxRetainedChars = 256 * 1024 * 1024, maxItems = 100000 } = {}) {
+  if (!Number.isSafeInteger(maxRetainedChars) || maxRetainedChars < 1 || maxRetainedChars > 256 * 1024 * 1024
+    || !Number.isSafeInteger(maxItems) || maxItems < 1 || maxItems > 100000) throw new Error("invalid native reference admission bound");
+  const name = "prediction-snapshots.json";
+  // Reuse context/path admission and retain only tiny top-level metadata.
+  const { value: metadata } = readGenerationSelectedObject(context, name, {
+    keys: ["updatedAt", "retentionDays"], maxSelectedChars: 64 * 1024,
+  });
+  const entry = context.manifest.files.find(item => item.path === name);
+  const arrays = { publicReferenceDecisions: [], publicReferenceEvidence: [] };
+  let retainedChars = 0, items = 0;
+  const result = require("../server/streamedJsonObjectArrays.cjs").streamJsonObjectArrays(
+    path.join(context.generationDir, name), {
+      keys: Object.keys(arrays), allowNonArrays: true,
+      expectedBytes: entry.bytes, expectedSha256: entry.sha256,
+      onItem(key, value) {
+        retainedChars += JSON.stringify(value).length;
+        if (retainedChars > maxRetainedChars || ++items > maxItems) {
+          const error = new Error("native reference object graph exceeds bounded admission");
+          error.code = "POSTGRES_REFERENCE_ADMISSION_LIMIT";
+          throw error;
+        }
+        arrays[key].push(value);
+      },
+    });
+  return { ...metadata, ...Object.fromEntries(result.fields.map(key => [key, arrays[key]])) };
+}
+
 // Real immutable generation reader. No node:sqlite, SQLite database, or SQL
 // compatibility facade is used. Existing PG state is read under the writer's
 // SERIALIZABLE transaction/advisory lock; old states survive input retention.
@@ -142,22 +173,22 @@ function createPostgresGenerationSource(options = {}) {
   }
   async function* sourceRows() {
     assertUnchanged();
-    const { value: snapshot } = readGenerationSelectedObject(active.context, "prediction-snapshots.json", {
-      keys: ["updatedAt", "retentionDays", "publicReferenceDecisions", "publicReferenceEvidence"],
-    });
+    const snapshot = readPostgresReferenceSnapshot(active.context);
     const archive = buildPublicReferenceArchive(snapshot), index = buildPublicReferenceIndex(archive);
     const rows = [{ id: "sync-meta:current", source: syncMeta.source || "sporttery",
-      captured_at: syncMeta.updatedAt || syncMeta.capturedAt || null, payload: JSON.stringify(syncMeta) }];
+      captured_at: syncMeta.updatedAt || syncMeta.capturedAt || null, payload: syncMeta }];
     const external = read("external-signals.json");
     if (!external || typeof external !== "object" || Array.isArray(external)) throw new Error("native projection external signals missing");
-    rows.push({ id: "external-signals:current", source: external.source || "external-signals", captured_at: external.updatedAt || null, payload: JSON.stringify(external) });
-    if (archive) rows.push({ id: SOURCE_ID, source: archive.source, captured_at: archive.lastRecordedAt, payload: JSON.stringify(archive) });
+    rows.push({ id: "external-signals:current", source: external.source || "external-signals", captured_at: external.updatedAt || null, payload: external });
+    if (archive) rows.push({ id: SOURCE_ID, source: archive.source, captured_at: archive.lastRecordedAt, payload: archive });
     if (index) for (const entry of [{ id: INDEX_ID, payload: index.manifest }, ...index.shards]) rows.push({ id: entry.id,
-      source: "sporttery:public-reference-index", captured_at: archive.lastRecordedAt, payload: JSON.stringify(entry.payload) });
+      source: "sporttery:public-reference-index", captured_at: archive.lastRecordedAt, payload: entry.payload });
     const old = (await client.query("SELECT id FROM football.source_snapshots ORDER BY id")).rows;
     inventories.set("source_snapshots", [...new Set([...old.map(row => row.id).filter(id =>
       !id.startsWith("sync-meta:") && !id.startsWith("external-signals:") && id !== SOURCE_ID && id !== INDEX_ID && !id.startsWith(INDEX_PREFIX)), ...rows.map(row => row.id)])]);
-    for (const row of sorted(rows)) yield row;
+    // Only serialize a row when the bounded PG batch consumer requests it.
+    // The archive and all Merkle shards no longer coexist as duplicate strings.
+    for (const row of sorted(rows)) yield { ...row, payload: JSON.stringify(row.payload) };
   }
   async function* stateRows(kind) {
     const table = kind === "odds" ? "odds_snapshots" : "prediction_snapshots";
@@ -222,4 +253,4 @@ function createPostgresGenerationSource(options = {}) {
     },
   };
 }
-module.exports = { createPostgresGenerationSource, rowFromState };
+module.exports = { createPostgresGenerationSource, rowFromState, readPostgresReferenceSnapshot };
