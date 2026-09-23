@@ -34,6 +34,57 @@ test('published watch stays visible as unqualified and never becomes a formal pi
  assert.equal(x.missing[0].reasonCode,'team-samples-insufficient');assert.match(x.missing[0].reasonText,/历史样本不足/);
 });
 
+test('HAD missing with a complete HHAD collection record explains the separate market without publishing it',()=>{
+ const fixture=match(8,NOW,{odds:null,oddsSource:null,handicapLine:-1,
+   handicapOdds:{odds1:3.2,oddsX:3.5,odds2:1.8},handicapOddsSource:'sporttery:HHAD',
+   handicapOddsObservedAt:new Date(NOW).toISOString(),handicapOddsUpdatedAt:new Date(NOW).toISOString()});
+ const before=JSON.stringify(fixture);
+ const x=buildDataCoverage({targetRows:[fixture],singles:[],now:NOW,lanes:{publish:{publication:publication(NOW)}}});
+ assert.equal(x.publishableCount,0);assert.equal(x.qualifiedCount,0);
+ assert.equal(x.missing[0].reasonCode,'official-had-quote-unavailable');
+ assert.equal(x.missing[0].reasonText,'普通胜平负 SP 缺失；让球盘有采集记录，但当前没有可发布的独立让球推荐');
+ assert.equal(JSON.stringify(fixture),before);
+});
+
+test('an old HHAD observation and recent relay receipt use the same source-neutral collection wording',()=>{
+ const fixture=match(10,NOW,{odds:null,oddsSource:null,handicapLine:-2,
+   handicapOdds:{odds1:4.2,oddsX:3.5,odds2:1.6},handicapOddsSource:'sporttery:HHAD',
+   handicapOddsObservedAt:new Date(NOW-2*86400000).toISOString(),
+   handicapOddsReceivedAt:new Date(NOW).toISOString(),handicapOddsUpdatedAt:new Date(NOW).toISOString()});
+ const x=buildDataCoverage({targetRows:[fixture],singles:[],now:NOW,lanes:{publish:{publication:publication(NOW)}}});
+ assert.equal(x.missing[0].reasonCode,'official-had-quote-unavailable');
+ assert.equal(x.missing[0].reasonText,'普通胜平负 SP 缺失；让球盘有采集记录，但当前没有可发布的独立让球推荐');
+ assert.equal(x.publishableCount,0);
+});
+
+test('a complete 500 HHAD collection record gets the same source-neutral wording',()=>{
+ const fixture=match(11,NOW,{odds:null,oddsSource:null,handicapLine:-2,
+   handicapOdds:{odds1:4.2,oddsX:3.5,odds2:1.6},handicapOddsSource:'500.com:HHAD',
+   handicapOddsPoolCode:'HHAD',handicapOddsObservedAt:new Date(NOW).toISOString()});
+ const x=buildDataCoverage({targetRows:[fixture],singles:[],now:NOW,lanes:{publish:{publication:publication(NOW)}}});
+ assert.equal(x.missing[0].reasonCode,'official-had-quote-unavailable');
+ assert.equal(x.missing[0].reasonText,'普通胜平负 SP 缺失；让球盘有采集记录，但当前没有可发布的独立让球推荐');
+ assert.equal(x.publishableCount,0);
+});
+
+test('incomplete or mislabeled HHAD never claims a collected handicap quote',()=>{
+ const base={odds:null,oddsSource:null,handicapLine:-1,
+   handicapOdds:{odds1:3.2,oddsX:3.5,odds2:1.8},handicapOddsSource:'sporttery:HHAD',
+   handicapOddsUpdatedAt:new Date(NOW).toISOString()};
+ for(const patch of [
+   {handicapOdds:{odds1:3.2,oddsX:null,odds2:1.8}},
+   {handicapLine:'-0.5'},
+   {handicapOddsSource:'api-football'},
+   {handicapOddsPoolCode:'HAD'},
+   {handicapOddsUpdatedAt:new Date(NOW+60000).toISOString()},
+ ]){
+   const fixture=match(9,NOW,{...base,...patch});
+   const x=buildDataCoverage({targetRows:[fixture],singles:[],now:NOW,lanes:{publish:{publication:publication(NOW)}}});
+   assert.equal(x.missing[0].reasonCode,'official-had-quote-unavailable');
+   assert.equal(x.missing[0].reasonText,'赛前 SP 尚未取得或已过期，暂未入选');
+ }
+});
+
 test('all omitted targets are counted and the bounded list announces truncation',()=>{
  const rows=Array.from({length:103},(_,i)=>({...match(i+10),businessDate:'2026-09-17'}));
  const x=buildDataCoverage({targetRows:rows,singles:[],now:NOW});

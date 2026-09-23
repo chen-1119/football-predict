@@ -3,6 +3,7 @@
 // never creates a decision, changes qualification or counts a missing target
 // as a successful empty recommendation day.
 const {day,time,evaluateForecast}=require('../src/services/publishedForecastPolicy.cjs');
+const {parseLine}=require('../src/services/handicapMarginDecision.cjs');
 
 const VERSION='recommendation-day-coverage-v1';
 const MISSING_LIMIT=100;
@@ -31,6 +32,16 @@ const sourceId=value=>String(value??'').trim().replace(/^sporttery_/,'');
 const rawDate=row=>String(row?.businessDate||row?.matchDate||row?.kickoffDate||'').slice(0,10)
   ||(Number.isFinite(time(row?.kickoffTime))?day(time(row.kickoffTime)):null);
 const eventMs=row=>time(row?.eventVersion||row?.kickoffTime);
+const hasCollectedHhadQuote=(row,now)=>{
+  // Preserve the source observation: a later relay receipt is not a new quote.
+  const odds=row?.handicapOdds,observed=time(row?.handicapOddsObservedAt||row?.handicapOddsUpdatedAt||row?.handicapOddsReceivedAt);
+  const deadline=Math.min(...[row?.kickoffTime,row?.buyEndTime,row?.predictionMeta?.cutoffTime].map(time).filter(Number.isFinite));
+  return ['sporttery:HHAD','500.com:HHAD'].includes(row?.handicapOddsSource)
+    && (!row?.handicapOddsPoolCode||row.handicapOddsPoolCode==='HHAD')
+    && parseLine(row?.handicapLine)!==null
+    && ['odds1','oddsX','odds2'].every(key=>typeof odds?.[key]==='number'&&Number.isFinite(odds[key])&&odds[key]>1)
+    && Number.isFinite(deadline)&&Number.isFinite(observed)&&observed<=now&&observed<deadline;
+};
 
 function uniqueTargets(targetRows,businessDate){
   const groups=new Map();let index=0;
@@ -78,8 +89,11 @@ function buildDataCoverage({targetRows,singles=[],now,lanes={}}={}){
       : reasonForUnpublished(row,{now,publication:lanes.publish?.publication,conflict:target.conflict});
     const stableSourceId=sourceId(row.sourceMatchId||row.id);
     const storedMatchId=String(row.id??'').trim();
+    const reasonText=reasonCode==='official-had-quote-unavailable' && hasCollectedHhadQuote(row,now)
+      ? '普通胜平负 SP 缺失；让球盘有采集记录，但当前没有可发布的独立让球推荐'
+      : TEXT[reasonCode];
     missing.push({matchId:storedMatchId&&sourceId(storedMatchId)?storedMatchId:(stableSourceId?`sporttery_${stableSourceId}`:null),sourceMatchId:stableSourceId||null,
-      homeTeamName:String(row.homeTeamName||''),awayTeamName:String(row.awayTeamName||''),reasonCode,reasonText:TEXT[reasonCode]});
+      homeTeamName:String(row.homeTeamName||''),awayTeamName:String(row.awayTeamName||''),reasonCode,reasonText});
   }
   const targetCount=targets.length,unqualifiedCount=targetCount-qualifiedCount;
   return {version:VERSION,businessDate,targetCount,publishableCount,qualifiedCount,unqualifiedCount,
