@@ -111,6 +111,9 @@ function writeNativeSnapshot({ stagingDir, contract, environment }) {
   const dir = path.join(stagingDir, "native-mode");
   fs.mkdirSync(dir, { mode: 0o700 }); // No recursive overwrite or reuse.
   fs.cpSync(path.join(stagingDir, "runtime-env"), path.join(dir, "runtime-env"), { recursive: true, errorOnExist: true, force: false });
+  // cpSync creates the destination with process defaults on Linux. Recovery
+  // requires this private snapshot directory to remain root-only.
+  fs.chmodSync(path.join(dir, "runtime-env"), 0o700);
   if (contract.legacyBaselineSha256) {
     const bundleSha = fs.readFileSync(path.join(stagingDir, "bundle-sha256"), "utf8").trim();
     assert.match(bundleSha, /^[a-f0-9]{64}$/);
