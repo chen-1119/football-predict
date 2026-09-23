@@ -31,7 +31,7 @@ function verifyFrontendRuntimeBoundary() {
   };
   const check = (name, run) => { run(); checks.push({ name, ok: true }); };
   try {
-    for (const directory of ["server", "scripts", "src", "deploy/light-server", "cloudflare/sync-trigger/src"]) {
+    for (const directory of ["server", "scripts", "src", "collectors", "deploy/light-server", "cloudflare/sync-trigger/src"]) {
       copySource(path.join(originalRoot, directory), path.join(baselineRoot, directory));
     }
     for (const file of ["package.json", "package-lock.json"]) fs.copyFileSync(path.join(originalRoot, file), path.join(baselineRoot, file));
@@ -48,6 +48,9 @@ function verifyFrontendRuntimeBoundary() {
       assert.equal(observed.workers.length, 1);
       assert.ok(observed.files.some(row => row.path === "server/publicationResolverWorker.cjs"));
       assert.ok(observed.files.some(row => row.path === "scripts/publishOfficialResultsFast.cjs"));
+      for (const file of ["scripts/syncDailyPrematchApi.cjs", "scripts/syncApiFootballData.cjs", "scripts/dailyFeaturedComboLedger.cjs", "scripts/runMarketCollector.cjs", "scripts/runRecommendationSettlement.cjs"])
+        assert.ok(observed.files.some(row => row.path === file), `missing runtime closure: ${file}`);
+      assert.ok(observed.commands.some(row => row.file === "scripts/syncDailyPrematchApi.cjs" && row.api === "spawnSync"));
       assert.equal(observed.imports.some(row => /^src\/(pages|components)\//.test(row.target)), false);
       assert.equal(observed.externalRuntimeAttestationRequired, true);
     });
@@ -113,6 +116,8 @@ function verifyFrontendRuntimeBoundary() {
       changed("deploy/light-server/unknown.service", () => "[Service]\nExecStart=/bin/true\n", unreviewed);
       changed("deploy/light-server/football-predict.service", text => text.replace("[Service]", "[Service]\nExecStartPre=/bin/sh -c unknown"), unreviewed);
       changed("deploy/light-server/football-postgres-backup.sh", text => `${text}\n# unreviewed operational source\n`, unreviewed);
+      changed("deploy/light-server/football-daily-prematch.service", text => text.replace("scripts/syncDailyPrematchApi.cjs", "scripts/unknown.cjs"), unreviewed);
+      changed("scripts/syncDailyPrematchApi.cjs", text => text.replace("'scripts/syncApiFootballData.cjs'", "'scripts/unknown.cjs'"), unreviewed);
     });
     check("actual direct require of a UI module is detected as overlap", () => {
       changed("server/index.cjs", text => `${text}\nrequire('../src/pages/PredictionsList.tsx');\n`, candidate => {

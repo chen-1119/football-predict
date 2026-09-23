@@ -4,6 +4,19 @@ const { hash } = require('../../src/services/publishedForecastPolicy.cjs');
 class Repository {
   constructor(client) { this.client=client; }
   async current() { return (await this.client.query("SELECT payload FROM football.match_snapshots WHERE dataset='current'")).rows.map(r=>r.payload); }
+  async todayTargets(businessDate) {
+    if(typeof businessDate!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(businessDate)||new Date(businessDate+'T00:00:00Z').toISOString().slice(0,10)!==businessDate)
+      throw new TypeError('Valid Sporttery business date required');
+    // A match may move from current to history before the daily review runs.
+    // Count both datasets; a current copy wins when the same event appears in
+    // each. Never derive the denominator from published decisions alone.
+    const rows=(await this.client.query(`SELECT dataset,payload FROM football.match_snapshots
+      WHERE dataset IN ('current','history')
+        AND COALESCE(NULLIF(payload->>'businessDate',''),NULLIF(payload->>'matchDate',''),NULLIF(payload->>'kickoffDate',''),(kickoff_time AT TIME ZONE 'Asia/Shanghai')::date::text)=$1
+      ORDER BY CASE dataset WHEN 'current' THEN 0 ELSE 1 END,source_match_id,id LIMIT 513`,[businessDate])).rows;
+    if(rows.length>512)throw Object.assign(new Error('Current business-day target pool exceeds admission bound'),{code:'TARGET_POOL_LIMIT'});
+    return rows;
+  }
   async currentInputs(now) {
     const current=await this.current();
     const signals=await require('../../collectors/market/signalBridge.cjs').readMarketSignalRows(this.client,{allowEmpty:true});
@@ -21,6 +34,20 @@ class Repository {
     if(!row)throw new Error('Decision read-back failed');return row.payload;
   }
   async decisions(ids) {if(!ids.length)return [];return (await this.client.query('SELECT payload FROM football.recommendation_decisions WHERE id=ANY($1::text[])',[ids])).rows.map(r=>r.payload);}
+  async insertDualResearch(record) {
+    const decision=(await this.client.query('SELECT payload FROM football.recommendation_decisions WHERE id=$1',[record.decisionId])).rows[0]?.payload;
+    if(!require('./dualChoiceResearch.cjs').validDualResearchRecord(record,decision))
+      throw Object.assign(new Error('Invalid dual research binding'),{code:'DUAL_RESEARCH_INVALID'});
+    const result=await this.client.query(`INSERT INTO football.recommendation_dual_research_records
+      (id,decision_id,source_match_id,event_version,business_date,recorded_at,cutoff_at,payload)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb)
+      ON CONFLICT(source_match_id,event_version) DO NOTHING RETURNING id`,
+      [record.id,record.decisionId,record.sourceMatchId,record.eventVersion,record.businessDate,record.recordedAt,record.cutoffAt,JSON.stringify(record)]);
+    return result.rows.length>0;
+  }
+  async dualResearch() {
+    return (await this.client.query('SELECT payload FROM football.recommendation_dual_research_records ORDER BY business_date DESC,recorded_at DESC')).rows.map(r=>r.payload);
+  }
   async latest() { return (await this.client.query(`SELECT DISTINCT ON (source_match_id,event_version) payload
     FROM football.recommendation_decisions ORDER BY source_match_id,event_version,sequence DESC`)).rows.map(r=>r.payload); }
   async frozenCombos(date) {

@@ -93,7 +93,7 @@ async function verifyStaticVerificationReceipts() {
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "football-static-receipt-verify-"));
   try {
     const copy = name => { const to = path.join(fixture, name); fs.mkdirSync(path.dirname(to), { recursive: true }); fs.copyFileSync(path.join(root, name), to); };
-    for (const file of ["package.json", "package-lock.json", ...allowed, "src/services/generator.ts", "src/pages/BetSlipGenerator.tsx", "server/index.cjs", "server/selectedJsonObjectFile.cjs", "server/dataGenerationStore.cjs", "server/chunkedJsonFile.cjs"]) copy(file);
+    for (const file of ["package.json", "package-lock.json", ...allowed, "src/services/generator.ts", "src/pages/BetSlipGenerator.tsx", "src/components/recommendations/RecommendationCenter.tsx", "src/services/recommendationCenterView.ts", "server/index.cjs", "server/selectedJsonObjectFile.cjs", "server/dataGenerationStore.cjs", "server/chunkedJsonFile.cjs"]) copy(file);
     const selectedArgs = ["scripts/verifySelectedJsonObjectFile.cjs"], selectedInputs = receipts.collectInputs(fixture, selectedArgs);
     check("isolated large JSON fixture binds its complete executing module closure", () => {
       assert.ok(selectedInputs);
@@ -125,7 +125,7 @@ async function verifyStaticVerificationReceipts() {
     }
     const selectedSource = fs.readFileSync(path.join(fixture, selectedArgs[0]), "utf8");
     const cases = [...selectedSource.matchAll(/check\('([^']+)', /g)].map(match => match[1]);
-    const fullBody = { ok: true, checks: 9, cases, largeEvidence: { maxRssKiB: 200000, evidence: {
+    const fullBody = { ok: true, checks: 10, cases, largeEvidence: { maxRssKiB: 200000, evidence: {
       bytes: 472 * 1024 * 1024 + Buffer.byteLength('{"ignored":"","keep":{"x":"中😀","n":[1,true,null],"bulk":""},"updatedAt":"2026-09-07"}'),
       sha256: "d".repeat(64), selectedChars: 32 * 1024 * 1024 + 64,
       maxObservedDepth: 3, selectedKeys: ["keep", "updatedAt"],
@@ -138,7 +138,7 @@ async function verifyStaticVerificationReceipts() {
       assert.equal(receipts.success(fixtureResult(fullBody)), false);
     });
     for (const [name, change] of [
-      ["skipped large fixture", body => { body.checks = 8; body.cases.pop(); body.largeEvidence = null; }],
+      ["skipped large fixture", body => { body.checks = 9; body.cases.pop(); body.largeEvidence = null; }],
       ["missing memory evidence", body => { body.largeEvidence = null; }],
       ["changed case inventory", body => { body.cases[0] = "different test"; }],
       ["truncated large input", body => { body.largeEvidence.evidence.bytes--; }],
@@ -176,7 +176,7 @@ async function verifyStaticVerificationReceipts() {
       env: { VERIFY_STATIC_RELEASE_SHA: "a".repeat(64), VERIFY_STATIC_RECEIPT_DIR: fixture, NODE_OPTIONS: "--require unsafe.js" }, execute: raw });
     check("inherited Node injection disables reuse", () => assert.equal(calls, 3));
     const actual = spawnSync(process.execPath, command, { cwd: fixture, encoding: "utf8", windowsHide: true, timeout: 15000 });
-    check("audited real scanner still executes and passes against copied actual sources", () => { assert.equal(actual.status, 0); assert.equal(JSON.parse(actual.stdout).ok, true); });
+    check("audited real scanner still executes and passes against copied actual sources", () => { assert.equal(actual.status, 0, JSON.stringify({ stdout: actual.stdout, stderr: actual.stderr, error: actual.error?.message, signal: actual.signal })); assert.equal(JSON.parse(actual.stdout).ok, true); });
   } finally { fs.rmSync(fixture, { recursive: true, force: true }); }
   return { ok: true, verifier: "static-verification-receipts", checks, productionWrites: 0,
     scope: "authenticated evidence, exact audited dependency closure, real source scanner, fail-open-to-execution; not live acceptance or measured release acceleration" };

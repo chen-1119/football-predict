@@ -3,6 +3,7 @@
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const {createRuntime}=require('./recommendationPlatform/runtime.cjs');
 const {postgresPorts}=require('./recommendationPlatform/repository.cjs');
+const {readDualResearchReport}=require('./recommendationPlatform/dualResearchReport.cjs');
 const {withVerifiedInputEvidence}=require('../tests/fixtures/recommendation-input-helper.cjs');
 async function verify(pool){
   const schema=`recommendation_verify_${process.pid}_${Date.now()}`;
@@ -14,18 +15,21 @@ async function verify(pool){
   const rawFixture=id=>({id:`sporttery_${id}`,sourceMatchId:String(id),businessDate:tomorrow,status:'SCHEDULED',homeTeamId:`h${id}`,awayTeamId:`a${id}`,homeTeamName:`Home ${id}`,awayTeamName:`Away ${id}`,kickoffTime:`${tomorrow}T16:00:00Z`,eventVersion:`${tomorrow}T16:00:00Z`,probabilityModel:{generatedAt:new Date(now).toISOString(),oneXTwo:{final:{home:55,draw:25,away:20}}},odds:{odds1:1.8,oddsX:3.5,odds2:4.5},oddsSource:'sporttery:had',oddsUpdatedAt:new Date(now).toISOString(),predictions:[]});
   const fixture=id=>withVerifiedInputEvidence(rawFixture(id));
   let checks=0;const check=(fn)=>{fn();checks++;};
-  const write=async(m,dataset='current')=>q('INSERT INTO football.match_snapshots(id,dataset,payload) VALUES($1,$2,$3::jsonb) ON CONFLICT(id,dataset) DO UPDATE SET payload=EXCLUDED.payload',[m.id,dataset,JSON.stringify(m)]);
+  const write=async(m,dataset='current')=>q(`INSERT INTO football.match_snapshots(id,dataset,source_match_id,kickoff_time,payload)
+    VALUES($1,$2,$3,$4,$5::jsonb) ON CONFLICT(id,dataset) DO UPDATE
+    SET source_match_id=EXCLUDED.source_match_id,kickoff_time=EXCLUDED.kickoff_time,payload=EXCLUDED.payload`,
+    [m.id,dataset,m.sourceMatchId,m.kickoffTime,JSON.stringify(m)]);
   try{
     await pool.query(`CREATE SCHEMA ${schema}`);
     await q(`CREATE TABLE football.projection_meta(key text PRIMARY KEY,value text,updated_at timestamptz DEFAULT clock_timestamp());
-      CREATE TABLE football.match_snapshots(id text,dataset text,payload jsonb,PRIMARY KEY(id,dataset));
+      CREATE TABLE football.match_snapshots(id text,dataset text,source_match_id text,kickoff_time timestamptz,payload jsonb,PRIMARY KEY(id,dataset));
       CREATE TABLE football.daily_featured_combo_state(id integer PRIMARY KEY,payload jsonb);`);
-    for(const migration of ['007_market_collector_runtime.sql','011_unified_recommendation_runtime.sql'])
+    for(const migration of ['007_market_collector_runtime.sql','011_unified_recommendation_runtime.sql','013_dual_choice_research.sql'])
       await q(fs.readFileSync(path.join(__dirname,'../server/postgres/migrations/',migration),'utf8'));
     for(const [key,value] of Object.entries({data_publication_mode:'generation',data_generation_id:'test-generation',manifest_hash:'a'.repeat(64),data_generation_source_cycle_id:'test-source',committed_at:new Date(now).toISOString()}))await q('INSERT INTO football.projection_meta(key,value) VALUES($1,$2)',[key,value]);
     await Promise.all([1,2,3].map(id=>write(fixture(id))));
-    const runtime=createRuntime(postgresPorts(mappedPool,()=>now),{validators:{isFinal:r=>r.testOfficial===true&&r.status==='FINISHED',isVoid:r=>r.testOfficial===true&&r.resultDisposition==='VOID'}});
-    const first=await runtime.publishingCycle();check(()=>assert.equal(first.publication.ok,true));check(()=>assert.equal(first.combinations.ok,true));check(()=>assert.equal(first.projection.ok,true));
+    const runtime=createRuntime(postgresPorts(mappedPool,()=>now),{dualResearchEnabled:true,validators:{isFinal:r=>r.testOfficial===true&&r.status==='FINISHED',isVoid:r=>r.testOfficial===true&&r.resultDisposition==='VOID'}});
+    const first=await runtime.publishingCycle();check(()=>assert.equal(first.publication.ok,true));check(()=>assert.equal(first.dualResearch.ok,true));check(()=>assert.equal(first.combinations.ok,true));check(()=>assert.equal(first.projection.ok,true));
     check(()=>assert.equal((first.publication.value.decisionIds).length,3));
     const frozen=(await q('SELECT payload FROM football.recommendation_combo_records ORDER BY size')).rows;
     check(()=>assert.equal(frozen.length,2));
@@ -111,7 +115,14 @@ async function verify(pool){
     await q("DELETE FROM football.match_snapshots WHERE dataset='current'");
     for(const id of [301,302,303])await write(mixedFixture(id));
     await sourceVersion('mixed-markets');
-    const mixedRun=await runtime.publishingCycle();check(()=>assert.equal(mixedRun.combinations.ok,true));
+    const mixedRun=await runtime.publishingCycle();check(()=>assert.equal(mixedRun.dualResearch.ok,true));check(()=>assert.equal(mixedRun.combinations.ok,true));
+    const researchBefore=(await q('SELECT payload FROM football.recommendation_dual_research_records WHERE business_date=$1 ORDER BY source_match_id',[mixedDate])).rows.map(x=>x.payload);
+    check(()=>assert.equal(researchBefore.length,2));
+    check(()=>assert.ok(researchBefore.every(r=>r.cohort==='independent-research-only'&&r.totalStake===2&&r.formalPromotion===false)));
+    await runtime.publishingCycle();
+    const researchRepeated=(await q('SELECT payload FROM football.recommendation_dual_research_records WHERE business_date=$1 ORDER BY source_match_id',[mixedDate])).rows.map(x=>x.payload);
+    check(()=>assert.deepEqual(researchRepeated,researchBefore));
+    await assert.rejects(q('UPDATE football.recommendation_dual_research_records SET payload=payload'),{code:'23000'});checks++;
     const mixedRecords=(await q('SELECT payload FROM football.recommendation_combo_records WHERE business_date=$1 ORDER BY size',[mixedDate])).rows.map(x=>x.payload);
     check(()=>assert.equal(mixedRecords.length,2));
     check(()=>assert.ok(mixedRecords.every(c=>c.selections.some(s=>s.market==='HHAD'))));
@@ -122,6 +133,10 @@ async function verify(pool){
     now=Date.parse(`${mixedDate}T19:00:00Z`);
     for(const id of [301,302,303])await write({...mixedFixture(id),status:'FINISHED',testOfficial:true,scoreHome:id===303?2:0,scoreAway:0},'history');
     await runtime.settlementCycle();
+    const privateReport=await readDualResearchReport(mappedPool,now);
+    check(()=>assert.equal(privateReport.all.settled,2));
+    check(()=>assert.equal(privateReport.all.settledStake,4));
+    check(()=>assert.equal(privateReport.validation.formalPromotion,false));
     const mixedView=(await q('SELECT payload FROM football.daily_featured_combo_state WHERE id=1')).rows[0].payload.recommendationCenter;
     const mixedSettled=mixedView.review.combos.filter(r=>r.combo.businessDate===mixedDate);
     check(()=>assert.equal(mixedSettled.length,2));

@@ -1174,6 +1174,65 @@ const restoreTimerStates = (snapshot, system) => {
   }
 };
 
+const buildDualResearchRollbackSql = (migrationHash) => {
+  if (!/^[a-f0-9]{64}$/.test(migrationHash || "")) fail("schema rollback migration hash is invalid");
+  // DROP TABLE removes its own index and triggers. The metadata row is removed
+  // in the same PostgreSQL transaction, so a later signed retry can recreate
+  // exactly the same schema. Never discard a prospective research record.
+  return `BEGIN ISOLATION LEVEL SERIALIZABLE;
+SELECT pg_advisory_xact_lock(hashtext('football-schema-migrations-v1'));
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM football.schema_migrations WHERE version='013_dual_choice_research') THEN
+    IF (SELECT sha256 FROM football.schema_migrations WHERE version='013_dual_choice_research') <> '${migrationHash}' THEN
+      RAISE EXCEPTION '013 migration digest changed during rollback';
+    END IF;
+    IF to_regclass('football.recommendation_dual_research_records') IS NULL THEN
+      RAISE EXCEPTION 'recorded 013 table is absent';
+    END IF;
+    IF EXISTS (SELECT 1 FROM football.recommendation_dual_research_records LIMIT 1) THEN
+      RAISE EXCEPTION 'cannot roll back nonempty dual research records';
+    END IF;
+    DROP TABLE football.recommendation_dual_research_records;
+    DELETE FROM football.schema_migrations WHERE version='013_dual_choice_research';
+  ELSIF to_regclass('football.recommendation_dual_research_records') IS NOT NULL THEN
+    RAISE EXCEPTION 'unrecorded 013 table exists';
+  END IF;
+END $$;
+COMMIT;`;
+};
+
+const rollbackDualResearchSchemaIfNeeded = (transaction, system) => {
+  if (!transaction.native || transaction.native.contract.kind !== "runtime-only") return;
+  const intentPath = hostPath(`/var/lib/football-release/native/${transaction.bundleSha}/recommendation-schema-intent.json`);
+  if (!pathExistsNoFollow(intentPath)) return;
+  const intent = readJsonFile(intentPath, "signed recommendation schema intent");
+  if (intent.version !== "recommendation-schema-bridge-v1"
+      || intent.bundleSha256 !== transaction.bundleSha
+      || intent.migrationVersion !== "013_dual_choice_research"
+      || !/^[a-f0-9]{64}$/.test(intent.migrationSha256 || "")
+      || intent.databaseOid !== transaction.native.contract.oldDatabaseOid
+      || intent.clusterId !== transaction.native.contract.clusterId) {
+    fail("schema rollback intent does not match the native transaction");
+  }
+  // A later release can roll back to an app that already knows 013; then the
+  // migration remains part of that old app's accepted schema and is untouched.
+  const oldMigration = hostPath(`${APP_PATH}/server/postgres/migrations/013_dual_choice_research.sql`);
+  if (pathExistsNoFollow(oldMigration)) return;
+  if (TEST_MODE) {
+    system.state.dualResearchSchemaRolledBack = true;
+    system.save();
+    return;
+  }
+  const sql = buildDualResearchRollbackSql(intent.migrationSha256);
+  const result = spawnSync("/usr/sbin/runuser", ["-u", "postgres", "--", "/usr/bin/psql", "-X", "-q",
+    "--set=ON_ERROR_STOP=1", "--dbname=football"], {
+    input: sql, encoding: "utf8", timeout: 30000, maxBuffer: 8192,
+    env: { PATH: "/usr/bin:/bin", PGHOST: "/var/run/postgresql", PGCONNECT_TIMEOUT: "5" },
+  });
+  if (result.status !== 0) fail("013 schema rollback failed: " + String(result.stderr || result.error?.message || "psql failed").slice(-1200));
+};
+
 const isolateKnownFailedTree = (transaction, system) => {
   const topology = inspectTopology(transaction, system);
   if (topology.failed.kind === "absent") return;
@@ -1224,6 +1283,9 @@ const recoverRollback = (transaction, system) => {
   // SQLite snapshot was captured. Re-export from the restored app against the
   // current serving generation before any runtime unit is restarted.
   if (transaction.sqlite || (transaction.native && !nativeWasActive)) system.rebuildSqliteForServingGeneration();
+  // Restore the exact old schema contract before any old code is restarted.
+  // This is a no-op for failures before the live migration intent was written.
+  if (nativeWasActive) rollbackDualResearchSchemaIfNeeded(transaction, system);
   restoreUnitStates(transaction.config, system);
   const appState = transaction.config.units.find((entry) => entry.name === "football-predict.service");
   if (!appState?.active) fail("original application service was not active; automatic recovery is not authorized");
@@ -1314,6 +1376,7 @@ const main = () => {
 if (require.main === module) main();
 
 module.exports = {
+  buildDualResearchRollbackSql,
   FORWARD_PHASES,
   PRE_SWAP_PHASES,
   ROLLBACK_PHASES,

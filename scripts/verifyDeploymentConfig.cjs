@@ -1144,7 +1144,7 @@ const run = () => {
         && verifyReleaseBundleSafety.includes('"scripts/compactPublicOddsHistory.cjs"'),
     });
 
-  pushCheck(checks, "systemd split services", appService.includes("server/index.cjs") && appService.includes("TimeoutStopSec=8") && appService.includes("KillMode=mixed") && workerService.includes("runSyncWorker.cjs --loop") && workerService.includes("SYNC_WORKER_LOOP=1") && syncWorker.includes('process.argv.includes("--loop")') && !workerService.includes("Environment=DATASTORE_READ_SOURCE=") && workerService.includes("ENABLE_SQLITE_EXPORT=1"), {
+  pushCheck(checks, "systemd split services", appService.includes("server/index.cjs") && appService.includes("TimeoutStopSec=8") && appService.includes("KillMode=mixed") && workerService.includes("runSyncWorker.cjs --loop") && workerService.includes("SYNC_WORKER_LOOP=1") && syncWorker.includes('process.argv.includes("--loop")') && !workerService.includes("Environment=DATASTORE_READ_SOURCE=") && hasUnitDirective(workerService, "Environment", "ENABLE_SQLITE_EXPORT=0") && !workerService.includes("ENABLE_SQLITE_EXPORT=1"), {
     hasAppService: appService.includes("server/index.cjs"),
     appHasBoundedStop: appService.includes("TimeoutStopSec=8"),
     appKillModeMixed: appService.includes("KillMode=mixed"),
@@ -1152,7 +1152,7 @@ const run = () => {
     workerHasLoopEnvironment: workerService.includes("SYNC_WORKER_LOOP=1"),
     workerHasLoopArgumentFallback: syncWorker.includes('process.argv.includes("--loop")'),
     workerReadSourceFromEnvFile: !workerService.includes("Environment=DATASTORE_READ_SOURCE="),
-    workerSqliteExport: workerService.includes("ENABLE_SQLITE_EXPORT=1")
+    workerSqliteExportDisabled: hasUnitDirective(workerService, "Environment", "ENABLE_SQLITE_EXPORT=0")
   });
 
   const workerUsesBackgroundIoPriority = hasUnitDirective(workerService, "Nice", "10")
@@ -1348,9 +1348,16 @@ const run = () => {
       graceEnv: serverIndex.includes("SHUTDOWN_GRACE_MS")
     });
 
-  pushCheck(checks, "sync worker can be stopped for maintenance windows", workerService.includes("Restart=on-failure") && !workerService.includes("Restart=always"), {
-    restartOnFailure: workerService.includes("Restart=on-failure"),
-    restartAlways: workerService.includes("Restart=always")
+  pushCheck(checks, "sync worker can be stopped for maintenance windows", hasUnitDirective(workerService, "Restart", "always")
+    && hasUnitDirective(workerService, "TimeoutStopSec", "45")
+    && hasUnitDirective(workerService, "KillSignal", "SIGTERM")
+    && releaseScript.includes("stop_worker_for_release_window")
+    && bundleReleaseScript.includes("stop_worker_for_release_window"), {
+    restartAlways: hasUnitDirective(workerService, "Restart", "always"),
+    boundedStop: hasUnitDirective(workerService, "TimeoutStopSec", "45"),
+    sigtermStop: hasUnitDirective(workerService, "KillSignal", "SIGTERM"),
+    releaseStopsWorker: releaseScript.includes("stop_worker_for_release_window")
+      && bundleReleaseScript.includes("stop_worker_for_release_window")
   });
 
   pushCheck(checks, "release scripts pause sync worker and preserve live data before candidate build", [releaseScript, bundleReleaseScript].every((text) => (

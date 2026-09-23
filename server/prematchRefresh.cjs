@@ -1,5 +1,5 @@
 'use strict';
-const { beijingDay, selectDay } = require('../collectors/leisu-prematch/local-jingcai-scope.cjs');
+const { beijingDay, selectDay } = require('../collectors/leisu-prematch/local-jingcai-day.cjs');
 const COOLDOWN_MS = 30 * 60000;
 function eligibleFixture(match, now = Date.now()) {
   if (!match || match.businessDate !== beijingDay(now)) return null;

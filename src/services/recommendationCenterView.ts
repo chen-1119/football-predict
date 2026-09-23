@@ -8,14 +8,14 @@ export interface HandicapAnalysis {
   straightProbabilities?:Record<Outcome,number>; distributionBasis?:string;
   coverProbability:number; landOnLineProbability:number; failCoverProbability:number; straightTipCode:Outcome|null; relation:string;
   lambdas:{home:number;away:number;source:string}; calibration:'unvalidated';
-  marketReference?:{source:string;observedAt:string;selectedOdds:number;selectedProbability:number;aligned:boolean}|null;
+  marketReference?:{source:string;observedAt:string;selectedOdds:number;selectedProbability:number;aligned:boolean;odds?:Record<Outcome,number>}|null;
   historicalCalibration?:{version:string;applied:boolean;profileHash?:string|null;key?:string|null;reason?:string|null;weight?:number|null;metrics?:{rawBrier?:number;calibratedBrier?:number;rawHitRate?:number;calibratedHitRate?:number}|null}|null;
 }
 export interface Decision {
   decisionId:string; sourceMatchId:string; matchId:string; eventVersion:string; businessDate:string;
   publishedAt:string; cutoffTime:string; kickoffTime:string; homeTeamName:string; awayTeamName:string;
   matchNo:string|null; tipCode:Outcome; odds:number; probabilities:Record<Outcome,number>;
-  modelProbability:number; modelGeneratedAt:string; quoteObservedAt:string; recordHash:string; quoteSource?:string|null;
+  modelProbability:number; modelGeneratedAt:string; quoteObservedAt:string; recordHash:string; quoteSource?:string|null; quoteOdds?:Record<Outcome,number>;
   handicapAnalysis?:HandicapAnalysis|null;
 }
 export interface Settlement { state:ResultState; score?:string|null; actual?:Outcome; resultEventId?:string|null; legs?:Array<{decisionId:string;selectionId?:string;state:ResultState;score?:string|null}> }
@@ -39,12 +39,18 @@ export interface HandicapCalibrationGroup {
   metrics?:{holdout?:number;rawBrier?:number;calibratedBrier?:number;rawLogLoss?:number;calibratedLogLoss?:number;rawHitRate?:number;calibratedHitRate?:number}|null;
 }
 export interface HandicapCalibrationProfile {version:string;profileHash:string;sampleRows:number;groups:Record<string,HandicapCalibrationGroup>}
+export interface DayCoverageData {
+  version:'recommendation-day-coverage-v1';businessDate:string;targetCount:number;publishableCount:number;qualifiedCount:number;unqualifiedCount:number;
+  coverageRatio:number|null;updatedAt:string;missingTotal:number;hasMore:boolean;
+  missing:Array<{matchId:string|null;sourceMatchId:string|null;homeTeamName:string;awayTeamName:string;reasonCode:string;reasonText:string}>;
+}
 export interface RecommendationCenterData {
   version:'recommendation-center-v1';updatedAt:string;businessDate:string;inputAsOf:string|null;resultAsOf:string|null;
   lanes:Partial<Record<'publish'|'combos'|'settlement'|'view',Lane>>;
   current:SingleRow[];previews:Combo[];todayCombos:ComboRow[];overlapDecisionIds:string[];
   review:{singles:SingleRow[];combos:ComboRow[];limit:number;statistics:{single:Summary;qualifiedSingle?:Summary;handicap?:Summary;handicapBreakdown?:HandicapBreakdown;two:Summary;three:Summary};qualityReport?:ModelQualityReport;handicapCalibration?:HandicapCalibrationProfile;definition:string};
   excludedCorruptRecords:number;modelValidation:'unvalidated';
+  coverage?:DayCoverageData;
 }
 type Obj=Record<string,unknown>;
 const object=(v:unknown):Obj=>{if(!v||typeof v!=='object'||Array.isArray(v))throw new Error('Invalid recommendation response');return v as Obj;};
@@ -56,6 +62,12 @@ const date=(v:unknown)=>{const s=text(v);if(!/^\d{4}-\d{2}-\d{2}$/.test(s)||new 
 const list=(v:unknown):unknown[]=>{if(!Array.isArray(v))throw new Error('Missing array');return v;};
 const outcome=(v:unknown):Outcome=>{if(v!=='1'&&v!=='X'&&v!=='2')throw new Error('Invalid outcome');return v;};
 const state=(v:unknown):ResultState=>{if(!['PENDING','WON','LOST','VOID','DISPUTED'].includes(String(v)))throw new Error('Invalid result');return v as ResultState;};
+const frozenQuoteOdds=(value:unknown):Record<Outcome,number>|undefined=>{
+  if(value==null)return undefined;
+  const raw=object(value),prices={'1':number(raw['1']),X:number(raw.X),'2':number(raw['2'])};
+  if(Object.values(prices).some(price=>price<=1))throw new Error('Invalid frozen SP triplet');
+  return prices;
+};
 function handicapAnalysis(v:unknown):HandicapAnalysis{
   const h=object(v),p=object(h.probabilities),probabilities={'1':number(p['1']),X:number(p.X),'2':number(p['2'])};
   if(!['handicap-margin-v1','handicap-margin-v2','handicap-margin-v3'].includes(String(h.version))||h.market!=='HHAD'||h.calibration!=='unvalidated')throw new Error('Unsupported handicap analysis');
@@ -67,7 +79,12 @@ function handicapAnalysis(v:unknown):HandicapAnalysis{
   const lambdas=object(h.lambdas),home=number(lambdas.home),away=number(lambdas.away);
   if(home<0||away<0||number(h.exactMargin)!==-handicapLine)throw new Error('Invalid handicap margin model');
   let marketReference:HandicapAnalysis['marketReference']=null;
-  if(h.marketReference!=null){const m=object(h.marketReference);marketReference={source:text(m.source),observedAt:stamp(m.observedAt),selectedOdds:number(m.selectedOdds),selectedProbability:number(m.selectedProbability),aligned:Boolean(m.aligned)};if(marketReference.selectedOdds<=1||marketReference.selectedProbability<0||marketReference.selectedProbability>1)throw new Error('Invalid handicap market reference');}
+  if(h.marketReference!=null){const m=object(h.marketReference),odds=frozenQuoteOdds(m.odds);marketReference={source:text(m.source),observedAt:stamp(m.observedAt),selectedOdds:number(m.selectedOdds),selectedProbability:number(m.selectedProbability),aligned:Boolean(m.aligned),...(odds?{odds}:{})};
+    if(marketReference.selectedOdds<=1||marketReference.selectedProbability<0||marketReference.selectedProbability>1
+      ||(odds&&odds[tipCode]!==marketReference.selectedOdds)
+      ||(h.version==='handicap-margin-v3'&&(marketReference.source!=='sporttery:HHAD'||number(m.handicapLine)!==handicapLine)))throw new Error('Invalid handicap market reference');
+    if(odds){const inverse=1/odds[tipCode],total=1/odds['1']+1/odds.X+1/odds['2'];if(Math.abs(inverse/total-marketReference.selectedProbability)>1e-5)throw new Error('Handicap price probability mismatch');}
+  }
   const parseTriplet=(value:unknown)=>{const r=object(value);const x={'1':number(r['1']),X:number(r.X),'2':number(r['2'])};if(Object.values(x).some(n=>n<0||n>1)||Math.abs(x['1']+x.X+x['2']-1)>1e-6)throw new Error('Invalid handicap probability vector');return x;};
   const raw=h.rawProbabilities==null?undefined:parseTriplet(h.rawProbabilities);
   const companionRaw=h.companionRawProbabilities==null?undefined:parseTriplet(h.companionRawProbabilities);
@@ -98,8 +115,14 @@ function decision(v:unknown):Decision{
   if(Date.parse(publishedAt)>=Math.min(Date.parse(kickoffTime),Date.parse(cutoffTime))||Date.parse(quoteObservedAt)>Date.parse(publishedAt)||Date.parse(modelGeneratedAt)>Date.parse(publishedAt))throw new Error('Invalid pre-match publication');
   const recordHash=text(d.recordHash);if(!/^[a-f0-9]{64}$/.test(recordHash))throw new Error('Invalid record hash');
   const quoteSource=d.quoteSource==null?null:text(d.quoteSource);
+  const quoteOdds=frozenQuoteOdds(d.quoteOdds);
+  if(quoteOdds&&quoteOdds[tipCode]!==odds)throw new Error('Frozen HAD SP differs from selected SP');
   const parsedHandicap=d.handicapAnalysis==null?null:handicapAnalysis(d.handicapAnalysis);
   if(parsedHandicap&&parsedHandicap.straightTipCode!==tipCode)throw new Error('Handicap analysis is not bound to the straight pick');
+  if(parsedHandicap?.marketReference&&(
+    Date.parse(parsedHandicap.marketReference.observedAt)>Date.parse(publishedAt)
+    ||Date.parse(parsedHandicap.marketReference.observedAt)>=Math.min(Date.parse(kickoffTime),Date.parse(cutoffTime))
+  ))throw new Error('Handicap SP was observed after publication or cutoff');
   if(parsedHandicap?.version==='handicap-margin-v3'&&(parsedHandicap.distributionBasis!=='had-calibrated-poisson-score-matrix-v1'||!parsedHandicap.straightProbabilities||(['1','X','2'] as const).some(code=>Math.abs(parsedHandicap.straightProbabilities![code]-probabilities[code])>1e-8)))throw new Error('Incoherent straight and handicap probabilities');
   if(quoteSource==='500.com:jczq:HAD') {
     const receipt=object(d.quoteProvenance),quotes=object(receipt.quoteOdds);
@@ -107,10 +130,11 @@ function decision(v:unknown):Decision{
     if(receipt.version!=='500-jczq-had-copy-v1'||receipt.source!==quoteSource||receipt.officialDirect!==false
       ||receipt.market!=='HAD'||receipt.priceType!=='lottery-sp'||receipt.observedAt!==quoteObservedAt
       ||receipt.sourceMatchId!==d.sourceMatchId||Date.parse(String(receipt.kickoffTime))!==Date.parse(kickoffTime)
-      ||number(quotes[k])!==odds||! /^[a-f0-9]{64}$/.test(text(receipt.receiptHash))) throw new Error('Invalid copied lottery SP receipt');
+      ||number(quotes[k])!==odds||!!quoteOdds&&(['1','X','2'] as const).some((code)=>number(quotes[code==='1'?'odds1':code==='X'?'oddsX':'odds2'])!==quoteOdds[code])
+      ||! /^[a-f0-9]{64}$/.test(text(receipt.receiptHash))) throw new Error('Invalid copied lottery SP receipt');
   }
 
-  return {decisionId:text(d.decisionId),matchId:text(d.matchId),sourceMatchId:text(d.sourceMatchId),eventVersion:stamp(d.eventVersion),businessDate:date(d.businessDate),homeTeamName:text(d.homeTeamName),awayTeamName:text(d.awayTeamName),matchNo:d.matchNo==null?null:text(d.matchNo),publishedAt,kickoffTime,cutoffTime,tipCode,odds,probabilities,modelProbability,modelGeneratedAt,quoteObservedAt,recordHash,quoteSource,handicapAnalysis:parsedHandicap};
+  return {decisionId:text(d.decisionId),matchId:text(d.matchId),sourceMatchId:text(d.sourceMatchId),eventVersion:stamp(d.eventVersion),businessDate:date(d.businessDate),homeTeamName:text(d.homeTeamName),awayTeamName:text(d.awayTeamName),matchNo:d.matchNo==null?null:text(d.matchNo),publishedAt,kickoffTime,cutoffTime,tipCode,odds,probabilities,modelProbability,modelGeneratedAt,quoteObservedAt,recordHash,quoteSource,...(quoteOdds?{quoteOdds}:{}),handicapAnalysis:parsedHandicap};
 }
 function settlement(v:unknown):Settlement{
   const s=object(v),result:Settlement={state:state(s.state)};
@@ -182,6 +206,8 @@ function combo(v:unknown):Combo{
   return {version:c.version,id:text(c.id),businessDate:date(c.businessDate),size:c.size,totalOdds,rawTotalOdds,legs,decisionIds:ids,selections,selectionIds,freezeAt:stamp(c.freezeAt),frozenAt,generatedAt:stamp(c.generatedAt)};
 }
 const comboRow=(v:unknown):ComboRow=>{const x=object(v),c=combo(x.combo),s=settlement(x.settlement);if(!c.frozenAt)throw new Error('Unfrozen combo in record');if(s.legs&&(s.legs.length!==c.size||new Set(s.legs.map(l=>l.decisionId)).size!==c.size||s.legs.some(l=>!c.decisionIds.includes(l.decisionId)||(c.selections&&l.selectionId!==c.selections.find(a=>a.decisionId===l.decisionId)?.selectionId))))throw new Error('Settlement bindings disagree');return {combo:c,settlement:s};};
+export const parseRecommendationSingleRow=(value:unknown):SingleRow=>single(value);
+export const parseRecommendationComboRow=(value:unknown):ComboRow=>comboRow(value);
 function summary(v:unknown):Summary{
   const s=object(v),r:Summary={published:count(s.published),settled:count(s.settled),won:count(s.won),lost:count(s.lost),pending:count(s.pending),void:count(s.void),disputed:count(s.disputed),hitRate:null};
   if(r.won+r.lost!==r.settled||r.settled+r.pending+r.void+r.disputed!==r.published)throw new Error('Inconsistent statistics');
@@ -189,6 +215,7 @@ function summary(v:unknown):Summary{
   for(const k of ['brier','logLoss','marketBrier'] as const)if(s[k]!=null){r[k]=number(s[k]);if(r[k]!<0)throw new Error('Invalid model metric');}
   return r;
 }
+export const parseRecommendationSummary=(value:unknown):Summary=>summary(value);
 function handicapBreakdown(v:unknown):HandicapBreakdown{
   const b=object(v),r:HandicapBreakdown={standaloneV1:summary(b.standaloneV1),companionV2All:summary(b.companionV2All),companionV2WhenHadWon:summary(b.companionV2WhenHadWon),companionV2BothWon:summary(b.companionV2BothWon)};
   if(b.companionV3All!=null||b.companionV3WhenHadWon!=null||b.companionV3BothWon!=null){r.companionV3All=summary(b.companionV3All);r.companionV3WhenHadWon=summary(b.companionV3WhenHadWon);r.companionV3BothWon=summary(b.companionV3BothWon);}
@@ -212,12 +239,22 @@ function modelQuality(v:unknown):ModelQualityReport{
  const metric=(key:string)=>m[key]==null?null:number(m[key]);
  return {independentMatchDays:count(q.independentMatchDays),settled:count(m.settled),won:count(m.won),hitRate:metric('hitRate'),marketTopHitRate:metric('marketTopHitRate'),brier:metric('brier'),marketBrier:metric('marketBrier'),logLoss:metric('logLoss'),marketLogLoss:metric('marketLogLoss'),blockers:list(q.blockers).map(text),minimumSettled:count(policy.minimumSettled),minimumMatchDays:count(policy.minimumMatchDays)};
 }
+function dayCoverage(value:unknown):DayCoverageData{
+  const c=object(value),targetCount=count(c.targetCount),publishableCount=count(c.publishableCount),qualifiedCount=count(c.qualifiedCount),unqualifiedCount=count(c.unqualifiedCount),missingTotal=count(c.missingTotal);
+  if(c.version!=='recommendation-day-coverage-v1'||publishableCount>targetCount||qualifiedCount>publishableCount||unqualifiedCount!==targetCount-qualifiedCount||missingTotal!==unqualifiedCount||typeof c.hasMore!=='boolean')throw new Error('Invalid day coverage counts');
+  const coverageRatio=c.coverageRatio==null?null:number(c.coverageRatio);
+  if((targetCount===0&&coverageRatio!==null)||(targetCount>0&&(coverageRatio===null||Math.abs(coverageRatio-qualifiedCount/targetCount)>1e-9)))throw new Error('Invalid day coverage ratio');
+  const missing=list(c.missing).map(item=>{const m=object(item);if(typeof m.homeTeamName!=='string'||typeof m.awayTeamName!=='string')throw new Error('Invalid coverage team');return {matchId:m.matchId==null?null:text(m.matchId),sourceMatchId:m.sourceMatchId==null?null:String(m.sourceMatchId),homeTeamName:m.homeTeamName||'待核球队',awayTeamName:m.awayTeamName||'待核球队',reasonCode:text(m.reasonCode),reasonText:text(m.reasonText)};});
+  if(missing.length>missingTotal||(!c.hasMore&&missing.length!==missingTotal)||Boolean(c.hasMore)!==(missing.length<missingTotal))throw new Error('Invalid day coverage reasons');
+  return {version:'recommendation-day-coverage-v1',businessDate:date(c.businessDate),targetCount,publishableCount,qualifiedCount,unqualifiedCount,coverageRatio,updatedAt:stamp(c.updatedAt),missingTotal,hasMore:c.hasMore,missing};
+}
 export function parseRecommendationCenter(response:unknown):RecommendationCenterData{
   const root=object(response),x=object(root.recommendationCenter),review=object(x.review),stats=object(review.statistics),lanes=object(x.lanes);
   if(x.version!=='recommendation-center-v1'||x.modelValidation!=='unvalidated')throw new Error('Unsupported center contract');
   const parsedLanes:RecommendationCenterData['lanes']={};
   for(const k of ['publish','combos','settlement','view'] as const){if(lanes[k]==null)continue;const l=object(lanes[k]);if(l.status!=='ok'&&l.status!=='error')throw new Error('Invalid lane status');parsedLanes[k]={status:l.status,lastAttemptAt:stamp(l.lastAttemptAt),lastSuccessAt:l.lastSuccessAt==null?undefined:stamp(l.lastSuccessAt),errorCode:l.errorCode==null?null:text(l.errorCode),inputAsOf:l.inputAsOf==null?undefined:stamp(l.inputAsOf),candidateCount:l.candidateCount==null?undefined:count(l.candidateCount),eligibleCount:l.eligibleCount==null?undefined:count(l.eligibleCount),bindingFailures:l.bindingFailures==null?undefined:count(l.bindingFailures),referenceCount:l.referenceCount==null?undefined:count(l.referenceCount),watchCount:l.watchCount==null?undefined:count(l.watchCount)};}
-  const result:RecommendationCenterData={version:'recommendation-center-v1',updatedAt:stamp(x.updatedAt),businessDate:date(x.businessDate),inputAsOf:x.inputAsOf==null?null:stamp(x.inputAsOf),resultAsOf:x.resultAsOf==null?null:stamp(x.resultAsOf),lanes:parsedLanes,current:list(x.current).map(single),previews:list(x.previews).map(combo),todayCombos:list(x.todayCombos).map(comboRow),overlapDecisionIds:list(x.overlapDecisionIds).map(text),review:{singles:list(review.singles).map(single),combos:list(review.combos).map(comboRow),limit:count(review.limit),qualityReport:review.qualityReport==null?undefined:modelQuality(review.qualityReport),statistics:{single:summary(stats.single),qualifiedSingle:stats.qualifiedSingle==null?undefined:summary(stats.qualifiedSingle),handicap:stats.handicap==null?undefined:summary(stats.handicap),handicapBreakdown:stats.handicapBreakdown==null?undefined:handicapBreakdown(stats.handicapBreakdown),two:summary(stats.two),three:summary(stats.three)},handicapCalibration:review.handicapCalibration==null?undefined:calibrationProfile(review.handicapCalibration),definition:text(review.definition)},excludedCorruptRecords:count(x.excludedCorruptRecords),modelValidation:'unvalidated'};
+  const result:RecommendationCenterData={version:'recommendation-center-v1',updatedAt:stamp(x.updatedAt),businessDate:date(x.businessDate),inputAsOf:x.inputAsOf==null?null:stamp(x.inputAsOf),resultAsOf:x.resultAsOf==null?null:stamp(x.resultAsOf),lanes:parsedLanes,current:list(x.current).map(single),previews:list(x.previews).map(combo),todayCombos:list(x.todayCombos).map(comboRow),overlapDecisionIds:list(x.overlapDecisionIds).map(text),review:{singles:list(review.singles).map(single),combos:list(review.combos).map(comboRow),limit:count(review.limit),qualityReport:review.qualityReport==null?undefined:modelQuality(review.qualityReport),statistics:{single:summary(stats.single),qualifiedSingle:stats.qualifiedSingle==null?undefined:summary(stats.qualifiedSingle),handicap:stats.handicap==null?undefined:summary(stats.handicap),handicapBreakdown:stats.handicapBreakdown==null?undefined:handicapBreakdown(stats.handicapBreakdown),two:summary(stats.two),three:summary(stats.three)},handicapCalibration:review.handicapCalibration==null?undefined:calibrationProfile(review.handicapCalibration),definition:text(review.definition)},excludedCorruptRecords:count(x.excludedCorruptRecords),modelValidation:'unvalidated',coverage:x.coverage==null?undefined:dayCoverage(x.coverage)};
+  if(result.coverage&&result.coverage.businessDate!==result.businessDate)throw new Error('Day coverage date mismatch');
   if(new Set(result.current.map(r=>r.decision.decisionId)).size!==result.current.length)throw new Error('Duplicate current decision');
   for(const c of result.previews)for(const leg of c.legs){const same=result.current.find(s=>s.decision.decisionId===leg.decisionId);if(same&&same.decision.recordHash!==leg.recordHash)throw new Error('Conflicting decision payload');}
   return result;

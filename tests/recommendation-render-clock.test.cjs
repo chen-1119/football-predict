@@ -15,6 +15,9 @@ test('incoming lane timestamp between timer ticks stays visible without acceptin
       if(id==='react/jsx-runtime')return{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})};
       if(id==='./SelectionQualityNote')return require('./fixtures/selection-quality-note-module.cjs');
       if(id==='../../hooks/useRecommendationCenter')return{useRecommendationCenter:()=>({data,loading:false,failed:false,authorizationRequired:false,refresh:()=>{}})};
+      if(id==='../../hooks/useRecommendationReviewPage')return{useRecommendationReviewPage:()=>({data:null,loading:false,failed:false})};
+      if(id==='./DayCoverage')return{DayCoverage:()=>null};
+      if(id==='./MarketComparison')return{MarketComparison:()=>null};
       if(id==='../FollowButton')return {FollowButton:()=>null};
     if(id==='../TeamBadge')return{TeamBadge:()=>null};
       if(id==='../../services/recommendationCenterView')return V;

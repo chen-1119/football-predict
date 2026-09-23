@@ -11620,6 +11620,21 @@ const handleApi = async (req, res, url) => {
     return sendJsonCached(req, res, await buildPublicSyncMeta(), { maxAgeSeconds: 5 });
   }
 
+  if (url.pathname === "/api/v1/recommendations/review") {
+    res.setHeader("Cache-Control", "no-store");
+    if (req.method !== "GET") return sendJson(res, { ok: false, error: "method not allowed" }, 405);
+    if (!(await hasRecommendationAccess(req, url))) return sendJson(res, { ok: false, error: "access code required" }, 401);
+    if (!shouldPreferPostgresRead()) return sendJson(res, { ok: false, error: "PostgreSQL unavailable" }, 503);
+    try {
+      const page = await require('./recommendationReviewPage.cjs').readRecommendationReviewPage(postgresPool, url);
+      return sendJson(res, page);
+    } catch (error) {
+      if (error?.code === 'INVALID_REVIEW_QUERY') return sendJson(res, { ok: false, error: "invalid review filters" }, 400);
+      console.error("Recommendation review read failed:", error?.code || error?.message || "unknown");
+      return sendJson(res, { ok: false, error: "review temporarily unavailable" }, 503);
+    }
+  }
+
   if (url.pathname === "/api/v1/daily-featured-combos") {
     res.setHeader("Cache-Control", "no-store");
     if (req.method !== "GET") return sendJson(res, { ok: false, error: "method not allowed" }, 405);

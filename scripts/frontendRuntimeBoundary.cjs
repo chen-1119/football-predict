@@ -24,6 +24,10 @@ const ENTRYPOINTS = deepFreeze({
   "football-sync-worker.service": { script: "scripts/runSyncWorker.cjs", args: " --loop" },
   "football-monitor.service": { script: "scripts/checkServerRuntime.cjs", args: "" },
   "football-cleanup.service": { script: "scripts/cleanupServerArtifacts.cjs", args: "" },
+  "football-daily-prematch.service": { script: "scripts/syncDailyPrematchApi.cjs", args: "" },
+  "football-featured-combo.service": { script: "scripts/dailyFeaturedComboLedger.cjs", args: " --watch" },
+  "football-market-collector.service": { script: "scripts/runMarketCollector.cjs", args: " --loop" },
+  "football-recommendation-settlement.service": { script: "scripts/runRecommendationSettlement.cjs", args: " --watch" },
 });
 const EXTERNAL_UNITS = deepFreeze({
   "football-postgres-backup.service": { executable: "/usr/local/sbin/football-postgres-backup", source: "deploy/light-server/football-postgres-backup.sh" },
@@ -33,6 +37,7 @@ const EXTERNAL_UNITS = deepFreeze({
 // arbitrary command. Their enclosing function source must remain exact, and
 // baseline/candidate package and entire reachable-source bytes must also match.
 const COMMAND_FUNCTIONS = deepFreeze({
+  "scripts/syncDailyPrematchApi.cjs": ["91da78aabb2c925254c42abec031be710d4f9a5316a2ba059533b60189b3bedf"],
   "server/index.cjs": ["209dac00faf2eb81c7c6348cacd5c273dd31dfc8ef913d9f77e0cf2fd4a621b6"],
   "server/relayFastResultWatcher.cjs": ["dbea20508195f9cafdb058ff0e4242448cac19a914c163ef961cfa5d16243567"],
   "scripts/runSyncWorker.cjs": ["7ae9788ce2e4cbc8d321f4750c49de0bb653f132e19497bff992f7e08cb3ac37", "013f6d2f9ffd51b26366edb7f4f942ec80614e91101618a627277ba5d6cf2dbc"],
@@ -51,10 +56,14 @@ const SPORTTERY_IMPORT = Object.freeze({ file: "scripts/syncServerDirectSportter
   functionSha256: "df21028687f58815afd285073a948fdbc996940f7399c4d550da3fc146356d50" });
 const PUBLICATION_WORKER = Object.freeze({ file: "server/index.cjs", target: "server/publicationResolverWorker.cjs",
   argument: 'path.join(__dirname, "publicationResolverWorker.cjs")',
-  functionSha256: "b55ef569bcce545467674035144beb7dafab5b40b27e91375ceccb92e6db1ed8" });
+  functionSha256: "8c0aa528e4f77e431963383fc39b0b4570ca9746d57b6af5045637fe774255da" });
 const PROCESS_PARAMETER_ALIAS = Object.freeze({ file: "server/relayFastResultWatcher.cjs", expression: "spawnImpl = spawn",
   functionSha256: "db38fdab1eb8e7dde20b024ed125919468dbe22fe9f7f32a1678fe9a04ee3cd5",
   target: "scripts/publishOfficialResultsFast.cjs" });
+const DAILY_PREMATCH_CHILD = Object.freeze({ file: "scripts/syncDailyPrematchApi.cjs", api: "spawnSync",
+  target: "scripts/syncApiFootballData.cjs",
+  functionSha256: "91da78aabb2c925254c42abec031be710d4f9a5316a2ba059533b60189b3bedf",
+  callSha256: "b2ebc786811b687528499c0b1127882080858bed62dc18fc4368f84f377f9ba3" });
 const COMMAND_CALLER_FUNCTIONS = deepFreeze({
   "server/index.cjs": ["6444af2f96dc8c27a42b17fde3c1e8ecbbf78b431400db68705d79f435b81962",
     "69491dfa47b5ae271413cb7d26821c5fa672a9837bfcb524aff20280c24aaf57", "62533b17bd403660a466affcb7977306b864671de811e20282de706837079743"],
@@ -65,9 +74,13 @@ const COMMAND_CALLER_FUNCTIONS = deepFreeze({
     "dc5ba7f3cc3b8e8e65d6dc9450fce24c99b9575fdca632d9c8f3c114d749dfd2", "e35c0a392d9a0ab5ca3abdd8375d0578c8b06bd508da82871c3f23e7d81751e3",
     // Reviewed native coverage await and postgres:sync routing. Commands stay
     // literal; the full reachable code and package graph are still compared.
-    "994b5f575e5f8141fc06500fee5a2e036db26d6f3b4248673f462cdd97f701eb", "903a80bb8977aedb22e95ab1045b575c78490f5944961e5d4ee0866dbd363c51"],
+    "994b5f575e5f8141fc06500fee5a2e036db26d6f3b4248673f462cdd97f701eb", "50b4a036b586195589da6e7b56c11c6a1daa40cc8d183f8af039bc8415e42ff5"],
 });
 const UNIT_SOURCE_HASHES = Object.freeze({
+  "football-daily-prematch.service": "9e6af93d56635ed0940590b4a027e02ab5310080e53b2873775b520f46796d8a",
+  "football-featured-combo.service": "7412039439c38effc1679bf80b9966480ff414120084c690c51ee3d434fbee42",
+  "football-market-collector.service": "ea62d7e0b66c56a44cb1a61322222ddbe3a2a4cc18429baec9cede8cf3c46043",
+  "football-recommendation-settlement.service": "96206e75ff7276c3d2c428324d78f4222963af775ac89d6193ec9b2bdeb8a910",
   "football-cleanup.service": "88b0b805ee484ff1b3915e8debad2e9bea512f024f77aa9ce691c8218fee0e85",
   "football-monitor.service": "7112bc1c27cfbd2edb7ff22a1fc1c5f454eb59a784a2f2dd12d5ecff76c6b31e",
   "football-postgres-backup.service": "c3ca1d47cc65ad4e7dbf9a512ca669d059484f386ba3793a84ca64f551c998fa",
@@ -75,12 +88,12 @@ const UNIT_SOURCE_HASHES = Object.freeze({
   "football-postgres-cos-upload.service": "e6267a03da9facc1b9d421df368d70d3e333d5fb24c7a8ff83aec23a2baa7e52",
   "football-postgres-cos-upload.sh": "e9da629d53fae2ae0edfc0c230828d03c570cfdf7792ca9d8da8fbd92a6724f9",
   "football-predict.service": "392e5ab781fa24961ec05d847f354a57fb4bddc16ef34bdae5c61a687a049af3",
-  "football-sync-worker.service": "a4e2660e3891d43ce30e8be19c1af1862f69ba1138a9416c99abcfdb8ba6c107",
+  "football-sync-worker.service": "153025bc9e4f2effcadd0c1dedf66c53db969e0367d69194116360664f2d5e6c",
 });
 const POLICY_HASH = digest({ version: VERSION, parser: PARSER, entrypoints: ENTRYPOINTS, externalUnits: EXTERNAL_UNITS,
   unitSourceHashes: UNIT_SOURCE_HASHES,
   commandFunctions: COMMAND_FUNCTIONS, commandCallers: COMMAND_CALLER_FUNCTIONS, commandParameterAlias: PROCESS_PARAMETER_ALIAS,
-  dynamicImport: SPORTTERY_IMPORT, worker: PUBLICATION_WORKER, uiPaths: FRONTEND_PATHS,
+  dynamicImport: SPORTTERY_IMPORT, worker: PUBLICATION_WORKER, dailyPrematchChild: DAILY_PREMATCH_CHILD, uiPaths: FRONTEND_PATHS,
   commandGrammar: "node-reviewed-flags-local-script-arguments-and-and-v1" });
 const processApis = new Set(["spawn", "spawnSync", "exec", "execSync", "execFile", "execFileSync", "fork"]);
 const clone = value => JSON.parse(JSON.stringify(value));
@@ -332,6 +345,11 @@ function inspectFrontendRuntimeBoundary(input) {
             const functionSha256 = enclosingFunctionHash(node, sf);
             if (!processApis.has(processApi) || !(COMMAND_FUNCTIONS[file] || []).includes(functionSha256)) throw new Error(`unreviewed-process-command:${file}`);
             commands.push({ file, api: processApi, functionSha256, callSha256: sha(normalizeSource(node.getText(sf))) });
+            if (file === DAILY_PREMATCH_CHILD.file) {
+              if (processApi !== DAILY_PREMATCH_CHILD.api || functionSha256 !== DAILY_PREMATCH_CHILD.functionSha256
+                || sha(normalizeSource(node.getText(sf))) !== DAILY_PREMATCH_CHILD.callSha256) throw new Error(`unreviewed-prematch-child:${file}`);
+              queue.push(DAILY_PREMATCH_CHILD.target);
+            }
           }
           if (["eval", "Function"].includes(name)) throw new Error(`unreviewed-code-loader:${file}`);
           // An unchanged generic spawn adapter is not permission to add a new

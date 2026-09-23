@@ -29,7 +29,10 @@ async function center(){
   if(id==='react')return{useState:initial=>{const i=index++;if(!(i in state))state[i]=initial;return[state[i],v=>{state[i]=typeof v==='function'?v(state[i]):v;}];},useEffect:fn=>{if(!mounted){cleanup=fn();mounted=true;}}};
   if(id==='react/jsx-runtime')return jsx;
   if(id.endsWith('/useRecommendationCenter'))return{useRecommendationCenter:()=>({data,loading:false,failed:false,authorizationRequired:false,refresh(){}})};
+  if(id.endsWith('/useRecommendationReviewPage'))return{useRecommendationReviewPage:()=>({data:null,loading:false,failed:false})};
   if(id==='./SelectionQualityNote')return require('./fixtures/selection-quality-note-module.cjs');
+  if(id==='./DayCoverage')return{DayCoverage:()=>null};
+  if(id==='./MarketComparison')return{MarketComparison:()=>null};
   if(id.endsWith('/recommendationCenterView'))return view;
   if(id.endsWith('/TeamBadge'))return{TeamBadge:()=>null};if(id.endsWith('/FollowButton'))return{FollowButton:()=>null};
   if(id==='lucide-react'||id.endsWith('.css'))return{};throw Error(id);
