@@ -10,6 +10,32 @@ const { assertMirrorSourceCatalog } = require("./postgresReleaseMirror.cjs");
 const { BOOTSTRAP_SHA, LEGACY_UNACCEPTED, runtimeTreeSha256, contractFor } = require("./nativeReleaseJournal.cjs");
 const ROOT = "/var/lib/football-release/native", STORE = "/var/lib/football-predict";
 const hash = bytes => crypto.createHash("sha256").update(bytes).digest("hex");
+// These fields are refreshed by each PostgreSQL projection of the same frozen
+// decision. All other columns and payload fields, including the archived
+// pre-match prediction, remain bound to the unaccepted baseline receipt.
+const FROZEN_PROJECTION_META_PATHS = Object.freeze([
+  ["decisionId"], ["decisionRevision"], ["featureSnapshot", "capturedAt"],
+  ["featureSnapshot", "hash"], ["featureSnapshotHash"], ["publicationFinalizedAt"],
+  ["publicationGate", "finalizedAt"], ["publicationGate", "syncCapturedAt"],
+  ["syncCapturedAt"], ["updatedAt"], ["lockedAt"],
+]);
+function protectedFrozenRecommendationHash(record) {
+  assert.equal(typeof record, "string", "frozen recommendation record missing");
+  const row = JSON.parse(record);
+  assert.ok(row && typeof row === "object" && !Array.isArray(row), "frozen recommendation record invalid");
+  delete row.publication_id;
+  const meta = row.payload?.predictionMeta;
+  if (meta && typeof meta === "object" && !Array.isArray(meta)) {
+    for (const parts of FROZEN_PROJECTION_META_PATHS) {
+      let target = meta;
+      for (const part of parts.slice(0, -1)) {
+        target = target && typeof target === "object" && !Array.isArray(target) ? target[part] : null;
+      }
+      if (target && typeof target === "object" && !Array.isArray(target)) delete target[parts.at(-1)];
+    }
+  }
+  return hash(JSON.stringify(row));
+}
 function secureDirectory(directory) {
   for (let dir = directory;; dir = path.dirname(dir)) {
     const st = fs.lstatSync(dir); assert.ok(st.isDirectory() && !st.isSymbolicLink() && st.uid === 0 && !(st.mode & 0o022));
@@ -68,7 +94,7 @@ async function captureLegacyBaseline({ sha, directory, oldIdentity, topologyBefo
   try {
     const rows = (await source.query("SELECT decision_id,to_jsonb(f)::text AS record FROM football.frozen_recommendations f ORDER BY decision_id COLLATE \"C\"")).rows;
     assert.ok(rows.length >= 198 && rows.length <= 100000, "unaccepted baseline frozen recommendation count unsafe");
-    const frozen = rows.map(row => ({ decisionId: row.decision_id, sha256: hash(row.record) }));
+    const frozen = rows.map(row => ({ decisionId: row.decision_id, sha256: protectedFrozenRecommendationHash(row.record) }));
     const generation = require("../server/dataGenerationStore.cjs").resolveCurrentGeneration({ storeDir: STORE }).pointer;
     const metaRows = (await source.query("SELECT key,value FROM football.projection_meta WHERE key IN ('data_publication_mode','data_generation_id','manifest_hash','data_generation_source_cycle_id','committed_at')")).rows;
     const meta = Object.fromEntries(metaRows.map(row => [row.key, row.value]));
@@ -253,7 +279,7 @@ async function finalizeRuntime(state, directory) {
     if (state.contract.legacyBaselineSha256) {
       const baseline = read(path.join(directory, "legacy-unaccepted-baseline.json"));
       const observed = (await sourcePool.query("SELECT decision_id,to_jsonb(f)::text AS record FROM football.frozen_recommendations f ORDER BY decision_id COLLATE \"C\"")).rows;
-      const byId = new Map(observed.map(row => [row.decision_id, hash(row.record)]));
+      const byId = new Map(observed.map(row => [row.decision_id, protectedFrozenRecommendationHash(row.record)]));
       for (const row of baseline.frozen) assert.equal(byId.get(row.decisionId), row.sha256,
         "frozen recommendation changed since unaccepted baseline: " + row.decisionId);
     }
@@ -377,5 +403,5 @@ async function main() {
   return prepare(state, directory, action === "seed");
 }
 module.exports = { allocate, prepare, read, write, copyGenerationAsService, mirrorContract, finalize,
-  legacyGenerationTransition, assertWritersStopped, candidateAccess, dropCandidateAccess };
+  legacyGenerationTransition, protectedFrozenRecommendationHash, assertWritersStopped, candidateAccess, dropCandidateAccess };
 if (require.main === module) main().then(result => console.log(JSON.stringify(result))).catch(error => { console.error(JSON.stringify({ ok: false, error: error.message, mirrorProgress: error.mirrorProgress })); process.exitCode = 1; });
