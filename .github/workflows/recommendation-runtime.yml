@@ -15,6 +15,9 @@ on:
       - 'scripts/reconcileFastResultGeneration.cjs'
       - 'server/referencePairedBaseline.cjs'
       - 'server/streamedJsonObjectArrays.cjs'
+      - 'scripts/postgresGenerationSource.cjs'
+      - 'tests/postgres-reference-admission.test.cjs'
+      - 'tests/postgres-generation-native.integration.cjs'
       - 'tests/reconcile-history-admission.test.cjs'
       - 'tests/football-data-lower-league-history.test.cjs'
       - 'tests/postgres-team-history*.test.cjs'
@@ -110,6 +113,7 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: node --test tests/football-data-lower-league-history.test.cjs tests/postgres-team-history.test.cjs
       - run: node --test tests/reconcile-history-admission.test.cjs
+      - run: node --test tests/postgres-reference-admission.test.cjs
       - run: node scripts/verifyPublicReferencePairs.cjs && node scripts/verifyReferencePairedBaseline.cjs
       - run: node scripts/verifyFastResultGenerationReconciliation.cjs
       - run: node scripts/verifyHistoricalEventStore.cjs && node scripts/verifyFootballDataResultsSync.cjs
@@ -136,4 +140,7 @@ jobs:
       - run: node scripts/postgresTeamHistoryVerify.cjs
         env:
           TEAM_HISTORY_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
+      - run: node tests/postgres-generation-native.integration.cjs
+        env:
+          POSTGRES_GENERATION_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
       - run: npm run build
