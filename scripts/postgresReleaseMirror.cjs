@@ -35,7 +35,9 @@ async function catalog(client) {
       WHERE p.conrelid=c.oid AND p.contype='p' AND a.attrelid=c.oid AND a.attnum=k.num) AS pk,
     (SELECT json_agg(pg_get_constraintdef(p.oid) ORDER BY p.conname) FROM pg_constraint p WHERE p.conrelid=c.oid) AS constraints,
     (SELECT json_agg(pg_get_indexdef(i.indexrelid) ORDER BY i.indexrelid::regclass::text) FROM pg_index i WHERE i.indrelid=c.oid) AS indexes,
-    (SELECT count(*)::int FROM pg_trigger t WHERE t.tgrelid=c.oid AND NOT t.tgisinternal) AS triggers,
+    (SELECT coalesce(json_agg(json_build_object('name',t.tgname,'enabled',t.tgenabled,
+      'definition',pg_get_triggerdef(t.oid),'function',pg_get_functiondef(t.tgfoid)) ORDER BY t.tgname),'[]'::json)
+      FROM pg_trigger t WHERE t.tgrelid=c.oid AND NOT t.tgisinternal) AS triggers,
     (SELECT coalesce(json_agg(r.relname ORDER BY r.relname),'[]'::json) FROM pg_constraint p JOIN pg_class r ON r.oid=p.confrelid
       WHERE p.conrelid=c.oid AND p.contype='f') AS parents
     FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
@@ -43,8 +45,17 @@ async function catalog(client) {
   if (!tables.some(t => t.name === "prediction_snapshots") || !tables.some(t => t.name === "projection_meta")) throw Error("incomplete mirror schema");
   for (const table of tables) {
     ident(table.name);
-    if (!["r", "v"].includes(table.relkind) || table.relrowsecurity || table.triggers
+    if (!["r", "v"].includes(table.relkind) || table.relrowsecurity || !Array.isArray(table.triggers)
       || (table.relkind === "r" && (!Array.isArray(table.pk) || !table.pk.length))) throw Error("unsupported mirror table");
+    // Only ordinary enabled user triggers can be suppressed and restored
+    // exactly inside the independent candidate transaction. Internal FK
+    // triggers remain active, and source triggers are never modified.
+    for (const trigger of table.triggers) {
+      ident(trigger.name);
+      if (table.relkind !== "r" || trigger.enabled !== "O"
+        || typeof trigger.definition !== "string" || typeof trigger.function !== "string")
+        throw Error("unsupported mirror trigger: " + table.name + "." + trigger.name);
+    }
     (table.pk || []).forEach(ident);
     for (const column of table.columns) {
       ident(column.name);
@@ -52,6 +63,14 @@ async function catalog(client) {
     }
   }
   return tables;
+}
+async function assertMirrorSourceCatalog(source) {
+  if (!source || (await source.query("SHOW transaction_read_only")).rows[0].transaction_read_only !== "on"
+    || (await source.query("SHOW transaction_isolation")).rows[0].transaction_isolation !== "repeatable read")
+    throw Error("mirror catalog preflight requires repeatable-read/read-only source");
+  const tables = await catalog(source);
+  dependencyOrder(tables.filter(table => table.relkind === "r"));
+  return { tables: tables.length, userTriggers: tables.reduce((sum, table) => sum + table.triggers.length, 0), catalogHash: hash(tables) };
 }
 function dependencyOrder(tables) {
   const pending = new Map(tables.map(t => [t.name, t])), ordered = [], done = new Set();
@@ -163,6 +182,8 @@ async function mirrorPostgresCandidate({ sourceSession, candidatePool, key, expe
     const recent = (current, prior) => xid(current) && xid(prior) && BigInt(current) >= BigInt(prior)
       && BigInt(current) - BigInt(prior) < 2147483648n;
     const incremental = Boolean(previous && recent(sourceTx, previous.sourceTx) && recent(targetTx, previous.targetTx));
+    const triggeredTables = tables.filter(table => table.triggers.length);
+    for (const table of triggeredTables) await target.query(`ALTER TABLE ${tableSql(table)} DISABLE TRIGGER USER`);
     report = { ok: false, version: VERSION, mode: incremental ? "incremental" : "full-seed", database: destination.name,
       publication: sourceSession.identity, inspectedRows: 0, copiedRows: 0, copiedPayloadBytes: 0, reusedRows: 0, removedCandidateRows: 0,
       verifiedSeedRows: 0, batchSize: BATCH, metadataBatchSize: METADATA_BATCH, sourceMetadataPasses: 1, productionWrites: 0, tables: [] };
@@ -281,6 +302,8 @@ async function mirrorPostgresCandidate({ sourceSession, candidatePool, key, expe
     if (head) await target.query("DELETE FROM football_release_private.mirror_rows r WHERE NOT EXISTS(SELECT 1 FROM mirror_seen s WHERE s.table_name=r.table_name AND s.key_json=r.key_json)");
     const payload = { contextHash, sourceTx, targetTx };
     await target.query(`INSERT INTO football_release_private.mirror_head VALUES(1,$1,$2) ON CONFLICT(singleton) DO UPDATE SET payload=EXCLUDED.payload,mac=EXCLUDED.mac`, [JSON.stringify(payload), mac(key, payload)]);
+    for (const table of [...triggeredTables].reverse()) await target.query(`ALTER TABLE ${tableSql(table)} ENABLE TRIGGER USER`);
+    if (hash(await catalog(target)) !== hash(targetCatalog)) throw Error("candidate trigger schema not restored");
     stage = "commit"; activeTable = null; progress();
     withinBudget(); await target.query("COMMIT"); begun = false; report.ok = true; report.elapsedMs = Date.now() - startedAt; return report;
   } catch (error) {
@@ -291,4 +314,4 @@ async function mirrorPostgresCandidate({ sourceSession, candidatePool, key, expe
     throw error;
   } finally { target.release(releaseError); }
 }
-module.exports = { mirrorPostgresCandidate, mirrorTimeBudget };
+module.exports = { mirrorPostgresCandidate, mirrorTimeBudget, assertMirrorSourceCatalog };

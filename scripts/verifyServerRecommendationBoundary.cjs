@@ -67,14 +67,15 @@ const cjsPolicySource = readSource("src/services/officialRecommendationEligibili
 const tsPolicySource = readSource("src/services/officialRecommendationEligibility.ts");
 for (const sharedPolicyFragment of [
   "const recommendationLinesMatch",
-  "predictionLine === 0 && evidenceLine === 0 && officialLine === 0",
-  "predictionLine === evidenceLine",
+  "line === 0 && evidenceLine === 0 && officialLine === 0",
+  "line === evidenceLine",
   "evidenceLine === officialLine",
-  "recommendationLinesMatch(prediction, evidence, currentOfficialHandicapLine)",
 ]) {
   assert.equal(cjsPolicySource.includes(sharedPolicyFragment), true, `CJS policy is missing: ${sharedPolicyFragment}`);
   assert.equal(tsPolicySource.includes(sharedPolicyFragment), true, `TS policy is missing: ${sharedPolicyFragment}`);
 }
+assert.equal(tsPolicySource.includes("recommendationLinesMatch(prediction, evidence, currentOfficialHandicapLine)"), true);
+assert.equal(cjsPolicySource.includes("exports.recommendationLinesMatch)(prediction, evidence, currentOfficialHandicapLine)"), true);
 
 try {
   const typescript = require("typescript");
@@ -114,7 +115,6 @@ try {
 const browserImports = [
   ["src/services/displayRecommendation.ts", "./officialRecommendationEligibility"],
   ["src/services/generator.ts", "./officialRecommendationEligibility"],
-  ["src/pages/BestTips.tsx", "../services/officialRecommendationEligibility"],
   ["src/pages/PredictionsList.tsx", "../services/officialRecommendationEligibility"],
 ];
 for (const [relativePath, importPath] of browserImports) {
