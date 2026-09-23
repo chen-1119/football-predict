@@ -44,6 +44,54 @@ assert.throws(() => transition(startGeneration, { ...startGeneration, generation
   committedAt: "2026-09-22T23:00:00.000Z" }));
 checks.push("unaccepted baseline final receipt distinguishes the same generation from a verified forward transition");
 {
+  const fingerprint = require("./nativeReleaseDataPlane.cjs").protectedFrozenRecommendationHash;
+  const original = {
+    decision_id: "decision:fixture", match_id: "match:fixture", publication_id: "g-old",
+    track: "reference", market: "HAD", direction: "2", odds: 1.79,
+    evidence_score: 45, frozen_at: "2026-09-20T12:00:00Z", cutoff_at: "2026-09-20T13:00:00Z",
+    decision_hash: "frozen-hash",
+    payload: {
+      archivedPreMatchPrediction: { capturedAt: "2026-09-20T12:00:00Z", prediction: { tipCode: "2", odds: 1.79 } },
+      predictionMeta: {
+        decisionId: "decision-a", decisionRevision: 1, updatedAt: "time-a", syncCapturedAt: "sync-a",
+        featureSnapshot: { hash: "feature-a", capturedAt: "feature-time-a", evidence: "preserve" },
+        featureSnapshotHash: "feature-a", publicationFinalizedAt: "final-a",
+        publicationGate: { finalizedAt: "gate-a", syncCapturedAt: "gate-sync-a", reason: "preserve" },
+        lockedAt: "2026-09-20T12:00:00Z", dataPolicy: "preserve",
+      },
+    },
+  };
+  const digest = value => fingerprint(JSON.stringify(value));
+  const clone = () => structuredClone(original);
+  const before = digest(original);
+  const dynamicPaths = [
+    ["decisionId"], ["decisionRevision"], ["featureSnapshot", "capturedAt"],
+    ["featureSnapshot", "hash"], ["featureSnapshotHash"], ["publicationFinalizedAt"],
+    ["publicationGate", "finalizedAt"], ["publicationGate", "syncCapturedAt"],
+    ["syncCapturedAt"], ["updatedAt"], ["lockedAt"],
+  ];
+  for (const parts of dynamicPaths) {
+    const changed = clone(); let target = changed.payload.predictionMeta;
+    for (const part of parts.slice(0, -1)) target = target[part];
+    target[parts.at(-1)] = "new projection metadata";
+    assert.equal(digest(changed), before, "projection-only change must retain frozen fingerprint: " + parts.join("."));
+  }
+  const advanced = clone(); advanced.publication_id = "g-new"; assert.equal(digest(advanced), before);
+  for (const mutate of [
+    row => { row.direction = "1"; }, row => { row.odds = 1.80; },
+    row => { row.market = "HHAD"; }, row => { row.track = "formal"; },
+    row => { row.evidence_score = 46; }, row => { row.frozen_at = "2026-09-20T12:01:00Z"; },
+    row => { row.cutoff_at = "2026-09-20T13:01:00Z"; }, row => { row.decision_hash = "changed"; },
+    row => { row.payload.archivedPreMatchPrediction.prediction.tipCode = "1"; },
+    row => { row.payload.archivedPreMatchPrediction.prediction.odds = 1.80; },
+    row => { row.payload.predictionMeta.dataPolicy = "changed"; },
+    row => { row.payload.predictionMeta.featureSnapshot.evidence = "changed"; },
+    row => { row.payload.predictionMeta.publicationGate.reason = "changed"; },
+  ]) { const changed = clone(); mutate(changed); assert.notEqual(digest(changed), before); }
+  assert.throws(() => fingerprint("null"));
+  checks.push("unaccepted baseline permits only projection metadata refresh and still binds frozen directions, odds and archived evidence");
+}
+{
   const tree = fs.mkdtempSync(path.join(os.tmpdir(), "football-unaccepted-tree-"));
   try {
     fs.mkdirSync(path.join(tree, "server")); fs.writeFileSync(path.join(tree, "server/index.cjs"), "old code\n");
