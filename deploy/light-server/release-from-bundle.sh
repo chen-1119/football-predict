@@ -341,6 +341,20 @@ run_build_step() {
       node_heap_mib="1536"
       runtime_max_seconds="600"
       ;;
+    candidate-postgres-reconciled)
+      # Native projection parses the retained reference ledger while the
+      # transaction also holds its current match rows. At 1600 MiB the Node
+      # process can enter sustained memcg direct reclaim after PostgreSQL has
+      # already returned, eventually tripping the 30s client read timeout.
+      # Keep the V8 heap and bounded swap unchanged. The observed 1.76 GiB
+      # cgroup footprint needs headroom above its 1.6 GiB soft limit; this
+      # one candidate step gets 2.3 GiB before reclaim and a 2.6 GiB hard cap.
+      memory_high="2300M"
+      memory_max="2600M"
+      memory_swap_max="512M"
+      node_heap_mib="1536"
+      runtime_max_seconds="600"
+      ;;
   esac
   next_transient_unit "$label"
   unit="$NEXT_TRANSIENT_UNIT"
@@ -2151,7 +2165,8 @@ run_candidate_model_artifact_catchup() {
     "$NODE_HOME/bin/npm" run datastore:generation || return 1
   if [ "${TRANSACTION_VERSION:-3}" = "4" ]; then
     run_build_step candidate-postgres-reconciled env PATH="$PATH" HOME="${BUILD_HOME:-/nonexistent}" SERVER_STORE_DIR="$store_dir" \
-      DATA_GENERATION_PUBLIC_DATA_DIR="$BUILD_DIR/public/data" "$NODE_HOME/bin/npm" run postgres:sync || return 1
+      DATA_GENERATION_PUBLIC_DATA_DIR="$BUILD_DIR/public/data" FOOTBALL_POSTGRES_QUERY_TIMEOUT_MS=120000 \
+      "$NODE_HOME/bin/npm" run postgres:sync || return 1
   else
     run_build_step candidate-datastore-reconciled env PATH="$PATH" HOME="${BUILD_HOME:-/nonexistent}" SERVER_STORE_DIR="$store_dir" \
       DATASTORE_SQLITE_PATH="$sqlite_path" \
