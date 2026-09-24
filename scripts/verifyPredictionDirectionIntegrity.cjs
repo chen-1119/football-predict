@@ -4,6 +4,7 @@ const {
   buildEloSnapshots,
   buildFormSnapshots,
   matchesAfterHistoricalTrainingCutoff,
+  buildUnifiedOneXTwoPosteriorDecision,
   predictionSet,
   predictionSetWithoutOfficialOdds,
   selectValueAwareOneXTwo,
@@ -14,6 +15,20 @@ const {
 } = require("../src/services/recommendationConfidence.cjs");
 
 const noHandicapRelationships = { "1": null, X: null, "2": null };
+
+const sameSourceDistribution = { home: 0.5, draw: 0.27, away: 0.23 };
+const sameSourcePosterior = buildUnifiedOneXTwoPosteriorDecision(
+  { oneXTwo: { final: sameSourceDistribution, scoreImplied: sameSourceDistribution, poisson: sameSourceDistribution } },
+  sameSourceDistribution,
+  {},
+  {},
+  { sufficient: true, evidenceFamilies: 2, minimumEvidenceFamilies: 2 },
+);
+assert.equal(sameSourcePosterior.diagnostics.withinModelAgreement, 1);
+assert.equal(sameSourcePosterior.diagnostics.independentAgreement, null);
+assert.equal(sameSourcePosterior.diagnostics.independentComponentCount, 1);
+assert.equal(sameSourcePosterior.diagnostics.modelComponentCount, 3);
+assert.ok(Math.abs(Object.values(sameSourcePosterior.probabilities).reduce((sum, value) => sum + value, 0) - 1) < 1e-9);
 
 const confidenceEvidence = {
   selectedProbability: 0.54,
@@ -502,6 +517,25 @@ assert.equal(nonformalMildModelMarketDisagreement.probabilityModel.unifiedPoster
 assert.equal(nonformalMildModelMarketDisagreement.probabilityModel.unifiedPosterior.marketBaseline.leaderCode, "2");
 assert.equal(nonformalMildModelMarketDisagreement.probabilityModel.unifiedPosterior.marketBaseline.materialDirectionConflict, false,
   "fixture must exercise the non-material disagreement lane");
+const correlatedModelAudit = nonformalMildModelMarketDisagreement.probabilityModel.unifiedPosterior.evidenceShrinkage;
+assert.equal(correlatedModelAudit.modelComponentCount, 3,
+  "final, score-implied and Poisson remain available for internal consistency checks");
+assert.equal(correlatedModelAudit.independentComponentCount, 1,
+  "three distributions derived from the same inputs form one model family");
+assert.equal(correlatedModelAudit.independentAgreement, null,
+  "correlated model components cannot earn independent-agreement confidence credit");
+assert.ok(correlatedModelAudit.withinModelAgreement >= 0 && correlatedModelAudit.withinModelAgreement <= 1);
+const correlatedConfidence = buildDynamicRecommendationConfidence({
+  ...confidenceEvidence,
+  independentAgreement: correlatedModelAudit.independentAgreement,
+});
+const falselyIndependentConfidence = buildDynamicRecommendationConfidence({
+  ...confidenceEvidence,
+  independentAgreement: 1,
+});
+assert.equal(correlatedConfidence.components.independentAgreement, 0);
+assert.ok(correlatedConfidence.score < falselyIndependentConfidence.score,
+  "removing duplicate evidence must lower confidence without rewriting the direction");
 assert.equal(mildConflictBest.recommendationAction, "reference");
 assert.equal(mildConflictBest.tipCode, "1",
   "a non-promoted public reference must retain the fused model direction");

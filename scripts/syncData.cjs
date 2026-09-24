@@ -7988,8 +7988,11 @@ function buildUnifiedOneXTwoPosteriorDecision(probabilityModel, marketProbabilit
     0,
     1,
   );
-  const independentComponents = [final, scoreImplied, poisson].filter(Boolean);
-  const componentDiagnostics = tripletComponentDiagnostics(independentComponents);
+  // final already blends market/Poisson inputs and scoreImplied is derived from
+  // the same goal model. Their agreement is useful as an internal consistency
+  // check, but it is not agreement between independent prediction families.
+  const modelComponents = [final, scoreImplied, poisson].filter(Boolean);
+  const componentDiagnostics = tripletComponentDiagnostics(modelComponents);
   const independentPosterior = weightedLogPosterior([
     { probabilities: final, weight: 0.5 },
     { probabilities: scoreImplied, weight: 0.3 },
@@ -8070,8 +8073,10 @@ function buildUnifiedOneXTwoPosteriorDecision(probabilityModel, marketProbabilit
       evidenceFamilies: Number(inputCoverage?.evidenceFamilies || 0),
       minimumEvidenceFamilies: Number(inputCoverage?.minimumEvidenceFamilies || 2),
       coverageRatio: Number(coverageRatio.toFixed(3)),
-      independentComponentCount: componentDiagnostics.componentCount,
-      independentAgreement: componentDiagnostics.leaderAgreement,
+      independentComponentCount: modelComponents.length ? 1 : 0,
+      independentAgreement: null,
+      modelComponentCount: componentDiagnostics.componentCount,
+      withinModelAgreement: componentDiagnostics.leaderAgreement,
       componentDispersion: componentDiagnostics.dispersion,
       independentSideGap: Number(independentSideGap.toFixed(4)),
       drawAdjustment: Number(drawEvidence.toFixed(4)),
