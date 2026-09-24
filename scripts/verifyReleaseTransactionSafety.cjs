@@ -4495,7 +4495,7 @@ run_candidate_model_artifact_catchup /candidate-store /candidate-store/football.
     const refreshWindow = main.slice(refreshWindowStart, refreshWindowEnd);
     assert.match(
       buildStepBody,
-      /optimize-strategy\|candidate-generation\|candidate-generation-reconciled\|candidate-datastore\|candidate-datastore-reconciled\|candidate-deadline-capture/,
+      /model-backtest\|optimize-strategy\|candidate-generation\|candidate-generation-reconciled\|candidate-datastore\|candidate-datastore-reconciled\|candidate-deadline-capture/,
     );
     assert.match(buildStepBody, /application-build\|archive-migration\|archive-migration-reconciled\)/);
     assert.match(buildStepBody, /memory_high="1600M"/);
