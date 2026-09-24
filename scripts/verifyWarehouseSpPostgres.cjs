@@ -38,7 +38,7 @@ async function verify(pool){
     await q(`CREATE TABLE football.projection_meta(key text PRIMARY KEY,value text,updated_at timestamptz DEFAULT clock_timestamp());
       CREATE TABLE football.match_snapshots(id text,dataset text,source_match_id text,kickoff_time timestamptz,payload jsonb,PRIMARY KEY(id,dataset));
       CREATE TABLE football.daily_featured_combo_state(id integer PRIMARY KEY,payload jsonb);`);
-    for(const migration of ['007_market_collector_runtime.sql','011_unified_recommendation_runtime.sql'])
+    for(const migration of ['007_market_collector_runtime.sql','011_unified_recommendation_runtime.sql','014_dual_choice_market_neutral.sql'])
       await q(fs.readFileSync(path.join(__dirname,'../server/postgres/migrations/',migration),'utf8'));
     for(const [key,value] of Object.entries({data_publication_mode:'generation',data_generation_id:'test-copy-generation',
       manifest_hash:'a'.repeat(64),data_generation_source_cycle_id:'test-copy-source',committed_at:new Date(now).toISOString()}))
