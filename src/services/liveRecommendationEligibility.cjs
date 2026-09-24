@@ -40,6 +40,7 @@ const LIVE_HARD_BLOCKERS = new Set([
   'missing-model-probability',
   'missing-devigged-market-probability',
   'missing-model-separation',
+  'model-separation-too-thin',
   'missing-data-quality',
   'model-probability-too-low',
   'market-implied-probability-contradiction',

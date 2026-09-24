@@ -279,6 +279,7 @@ for (const blocker of [
   'negative-expected-value',
   'had-hhad-conflict',
   'market-implied-probability-contradiction',
+  'model-separation-too-thin',
   'low-sp-without-value',
   'model-risk-not-promotable',
   'upstream-multi-factor-gate-not-passed',
@@ -296,6 +297,27 @@ for (const blocker of [
     assert.equal(evaluateLiveRecommendation(prediction, 2.1, 0).eligible, false);
   });
 }
+
+check('a thin model lead stays reference and cannot create a live publication', () => {
+  const prediction = {
+    ...basePrediction,
+    multiFactorEvidence: {
+      ...basePrediction.multiFactorEvidence,
+      modelGap: 0.02,
+      supportingFactors: basePrediction.multiFactorEvidence.supportingFactors
+        .filter((factor) => factor !== 'model-separation'),
+      blockers: ['model-separation-too-thin'],
+    },
+  };
+  const decision = evaluateLiveRecommendation(prediction, 2.1, 0);
+  assert.equal(decision.eligible, false);
+  assert.ok(decision.blockers.includes('model-separation-too-thin'));
+  assert.equal(buildLivePublicationEvidence(
+    publicationMatch,
+    prediction,
+    '2026-07-16T08:00:00+08:00',
+  ), null);
+});
 
 for (const [name, patch] of [
   ['null expected value', { expectedValue: null }],
@@ -746,11 +768,13 @@ check('frontend reads direction, line and SP from the published live snapshot', 
   assert.match(displaySource, /tipCode:\s*publishedCode/);
   assert.match(displaySource, /odds:\s*publishedOdds/);
   assert.match(displaySource, /publicationTrack === 'formal' && isHandicapMarketContradicted/);
-  assert.match(listSource, /if \(displayRecommendation\?\.prediction\)/);
-  assert.match(listSource, /prediction = getOnSaleAnalysisReference\(match, \{ now, allowModelOnly \}\)/);
-  assert.match(listSource, /const archivedPrediction = getArchivedPreMatchPrediction\(match, now\)/);
-  assert.match(listSource, /predictionFromReviewRow\(reviewRow\) \|\| archivedPrediction/);
-  assert.match(listSource, /Published live pick/);
+  assert.match(listSource, /getOnSaleDisplayRecommendation\(match, language, nowMs\) \|\| getLiveDisplayRecommendation\(match, language\)/);
+  assert.match(listSource, /selectOnSaleAnalysisReference\(match, \{ allowModelOnly: true, candidate: rawDisplayRecommendation\?\.prediction, now: nowMs \}\)/);
+  assert.match(listSource, /const archivedPreMatchPrediction = getArchivedPreMatchPrediction\(match, nowMs\)/);
+  assert.match(listSource, /reviewPrediction \|\| displayRecommendation\?\.prediction \|\| archivedPreMatchPrediction \|\| analysisReference/);
+  assert.match(listSource, /publishedMatchRecommendation\(published\.data, match\)/);
+  assert.match(listSource, /usesPublishedRecommendation\(match, unifiedRow, nowMs\)/);
+  assert.match(listSource, /<PublishedMatchPick row=\{unifiedRow\}/);
   assert.match(listSource, /row\.performanceTrack === 'formal'/);
 });
 
@@ -813,19 +837,23 @@ check('canonical cutoff cannot extend a shorter buy-end clock', () => {
   assert.equal(isLiveRecommendationWindowOpen(match, parseShanghaiDateTime('2026-07-16 22:00:01')), false);
 });
 
-check('all recommendation screens display the fail-closed cutoff', () => {
-  const pageNames = ['PredictionsList.tsx', 'MatchDetail.tsx', 'BestTips.tsx'];
-  for (const pageName of pageNames) {
-    const source = fs.readFileSync(
-      path.join(__dirname, '..', 'src', 'pages', pageName),
-      'utf8',
-    );
-    assert.match(
-      source,
-      /liveRecommendationCutoffIso\(match\)/,
-      `${pageName} must use the earliest valid recommendation cutoff`,
-    );
-  }
+check('recommendation screens honor the sale cutoff and frozen publication', () => {
+  const readSource = (relativePath) => fs.readFileSync(path.join(__dirname, '..', relativePath), 'utf8');
+  const listSource = readSource('src/pages/PredictionsList.tsx');
+  const detailSource = readSource('src/pages/MatchDetail.tsx');
+  const bestSource = readSource('src/pages/BestTips.tsx');
+  const centerSource = readSource('src/components/recommendations/RecommendationCenter.tsx');
+  const publishedPickSource = readSource('src/components/recommendations/PublishedMatchPick.tsx');
+  const publishedViewSource = readSource('src/services/recommendationCenterView.ts');
+  assert.match(listSource, /!isBeforeMatchSaleCutoff\(match, now\)/);
+  assert.match(listSource, /<PublishedMatchPick row=\{unifiedRow\}/);
+  assert.match(detailSource, /useUnified \? publishedDetail\?\.cutoffTime/);
+  assert.match(detailSource, /liveRecommendationCutoffIso\(match\)/);
+  assert.match(bestSource, /<RecommendationCenter language=\{language\}/);
+  assert.match(centerSource, /useRecommendationCenter\(\)/);
+  assert.match(centerSource, /data\?\.current\.filter/);
+  assert.match(publishedPickSource, /now<Math\.min\(Date\.parse\(d\.cutoffTime\),Date\.parse\(d\.kickoffTime\)\)/);
+  assert.match(publishedViewSource, /Date\.parse\(publishedAt\)>=Math\.min\(Date\.parse\(kickoffTime\),Date\.parse\(cutoffTime\)\)/);
 });
 
 check('snapshot round-trip preserves structured live evidence', () => {

@@ -6,6 +6,7 @@ const {validDecision}=require('./decision.cjs');
 const {hash}=require('../../src/services/publishedForecastPolicy.cjs');
 const CODES=['1','X','2'];
 const POLICY=Object.freeze({version:'frozen-quality-review-v1',minimumSettled:100,minimumMatchDays:7});
+const marketLeader=probabilities=>CODES.find(c=>CODES.every(other=>other===c||probabilities[c]>probabilities[other]+1e-12))||null;
 function wilson(won,total){
   if(!total)return null;const z=1.959963984540054,p=won/total,den=1+z*z/total;
   const center=(p+z*z/(2*total))/den,spread=z*Math.sqrt(p*(1-p)/total+z*z/(4*total*total))/den;
@@ -14,12 +15,20 @@ function wilson(won,total){
 function measure(rows){
   let won=0,brier=0,marketBrier=0,logLoss=0,marketLogLoss=0,marketWon=0,marketTied=0;
   for(const {decision:d,settlement:s} of rows){
-    won+=Number(d.tipCode===s.actual);const marketTop=CODES.find(c=>CODES.every(other=>other===c||d.marketProbabilities[c]>d.marketProbabilities[other]+1e-12));if(marketTop)marketWon+=Number(marketTop===s.actual);else marketTied++;
+    won+=Number(d.tipCode===s.actual);const marketTop=marketLeader(d.marketProbabilities);if(marketTop)marketWon+=Number(marketTop===s.actual);else marketTied++;
     for(const c of CODES){brier+=(d.probabilities[c]-Number(c===s.actual))**2;marketBrier+=(d.marketProbabilities[c]-Number(c===s.actual))**2;}
     logLoss-=Math.log(Math.max(1e-15,d.probabilities[s.actual]));marketLogLoss-=Math.log(Math.max(1e-15,d.marketProbabilities[s.actual]));
   }
   const marketUnique=rows.length-marketTied;
   return {settled:rows.length,won,hitRate:rows.length?won/rows.length:null,hitRateInterval95:wilson(won,rows.length),marketTopWins:marketWon,marketUniqueTopSettled:marketUnique,marketTied,marketTopHitRate:marketUnique?marketWon/marketUnique:null,brier:rows.length?brier/rows.length:null,marketBrier:rows.length?marketBrier/rows.length:null,logLoss:rows.length?logLoss/rows.length:null,marketLogLoss:rows.length?marketLogLoss/rows.length:null};
+}
+function cohort(rows,allSettled){
+  return {...measure(rows),independentMatchDays:new Set(rows.map(r=>r.decision.businessDate)).size,
+    coverage:{settledEvents:rows.length,evaluatedSettledEvents:allSettled,share:allSettled?rows.length/allSettled:null}};
+}
+function leaderAgreement(decision){
+  const leader=marketLeader(decision.marketProbabilities);
+  return leader===null?'market-tied':leader===decision.tipCode?'agree':'disagree';
 }
 function buildQualityReport(input,{asOf=Date.now()}={}){
   if(!Array.isArray(input)||!Number.isFinite(asOf))throw new Error('Published rows and finite asOf are required');
@@ -52,7 +61,16 @@ function buildQualityReport(input,{asOf=Date.now()}={}){
   if(overall.logLoss===null||overall.logLoss>=overall.marketLogLoss)blockers.push('no-logloss-advantage-over-same-event-market');
   const daily=days.map(date=>({date,priorMatchDays:days.filter(d=>d<date).length,priorSettled:settled.filter(r=>r.decision.businessDate<date).length,...measure(settled.filter(r=>r.decision.businessDate===date))}));
   const bands=[[0,.4],[.4,.5],[.5,.6],[.6,1.000001]].map(([min,max])=>{const rows=settled.filter(r=>r.decision.modelProbability>=min&&r.decision.modelProbability<max);return{minimum:min,maximum:Math.min(1,max),meanPredicted:rows.length?rows.reduce((n,r)=>n+r.decision.modelProbability,0)/rows.length:null,...measure(rows)};});
-  return {version:POLICY.version,asOf:new Date(asOf).toISOString(),policy:POLICY,scope:'published-final-precutoff-per-event',interpretation:'observational-frozen-prediction-evaluation-not-a-trained-backtest',independentMatchDays:days.length,overall,daily,confidenceBands:bands,exclusions,preliminaryEvidenceSufficient:blockers.length===0,blockers,formalPromotion:false};
+  const byTipCode=Object.fromEntries(CODES.map(code=>[code,cohort(settled.filter(r=>r.decision.tipCode===code),settled.length)]));
+  const byLeaderAgreement=Object.fromEntries(['agree','disagree','market-tied'].map(group=>[
+    group,cohort(settled.filter(r=>leaderAgreement(r.decision)===group),settled.length),
+  ]));
+  const evaluationCoverage={inputRows:input.length,distinctPublishedEvents:latest.size,settledEvents:settled.length,
+    settledShareOfPublishedEvents:latest.size?settled.length/latest.size:null,fixtureCoverage:null,
+    scope:'supplied-frozen-publication-ledger-only'};
+  return {version:POLICY.version,asOf:new Date(asOf).toISOString(),policy:POLICY,scope:'published-final-precutoff-per-event',interpretation:'observational-frozen-prediction-evaluation-not-a-trained-backtest',independentMatchDays:days.length,overall,daily,confidenceBands:bands,
+    evaluationCoverage,byTipCode,byLeaderAgreement,leaderAgreementPolicy:'frozen-model-tip-versus-unique-frozen-market-probability-leader;ties-reported-separately',
+    exclusions,preliminaryEvidenceSufficient:blockers.length===0,blockers,formalPromotion:false};
 }
 if(require.main===module){
  const fs=require('fs'),args=process.argv.slice(2),at=args.indexOf('--input'),out=args.indexOf('--output');if(at<0||!args[at+1])throw new Error('Use --input <saved-audit.json> [--output <report.json>]');
