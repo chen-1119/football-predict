@@ -707,6 +707,39 @@ const releaseRecovery = readText(releaseRecoveryPath);
 const releaseWrapper = readText(releaseWrapperPath);
 const sqlitePublicationIdentity = readText(sqlitePublicationIdentityPath);
 
+check("candidate cache admits bounded live prediction history without widening other files", () => {
+  const validator = extractFunctionHeredoc(bundleRelease, "validate_build_artifacts", "NODE");
+  const start = validator.indexOf("const optionalDataMaxBytes =");
+  const end = validator.indexOf("const inspectOptionalData =", start);
+  assert.ok(start >= 0 && end > start, "candidate artifact cache policy is missing");
+  const policy = require("node:vm").runInNewContext(
+    `${validator.slice(start, end)}\n({ optionalDataMaxBytes, safeOptionalDataFile })`,
+    Object.create(null),
+  );
+  assert.match(validator.slice(end), /if \(!safeOptionalDataFile\(relative, info\)\)/);
+  const mib = 1024 * 1024;
+  const snapshot = "public/data/prediction-snapshots.json";
+  const other = "public/data/odds-history.json";
+  const file = (size, overrides = {}) => ({
+    isFile: () => true,
+    isSymbolicLink: () => false,
+    nlink: 1,
+    size,
+    ...overrides,
+  });
+  assert.equal(policy.optionalDataMaxBytes(snapshot), 640 * mib);
+  assert.equal(policy.safeOptionalDataFile(snapshot, file(546105531)), true);
+  assert.equal(policy.safeOptionalDataFile(snapshot, file(640 * mib)), true);
+  assert.equal(policy.safeOptionalDataFile(snapshot, file(640 * mib + 1)), false);
+  assert.equal(policy.optionalDataMaxBytes(other), 512 * mib);
+  assert.equal(policy.safeOptionalDataFile(other, file(512 * mib)), true);
+  assert.equal(policy.safeOptionalDataFile(other, file(512 * mib + 1)), false);
+  assert.equal(policy.safeOptionalDataFile(`${snapshot}.bak`, file(546105531)), false);
+  assert.equal(policy.safeOptionalDataFile(snapshot, file(546105531, { nlink: 2 })), false);
+  assert.equal(policy.safeOptionalDataFile(snapshot, file(546105531, { isSymbolicLink: () => true })), false);
+  assert.equal(policy.safeOptionalDataFile(snapshot, file(546105531, { isFile: () => false })), false);
+});
+
 check("native PostgreSQL handoff preserves the authenticated barrier until all writers drain", () => {
   const nativeBody = extractFunction(nativeRelease, "run_native_release");
   const quiesceBody = extractFunction(bundleRelease, "quiesce_native_auxiliary_writers");
