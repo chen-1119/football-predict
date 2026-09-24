@@ -18,6 +18,7 @@ test('incoming lane timestamp between timer ticks stays visible without acceptin
       if(id==='../../hooks/useRecommendationReviewPage')return{useRecommendationReviewPage:()=>({data:null,loading:false,failed:false})};
       if(id==='./DayCoverage')return{DayCoverage:()=>null};
       if(id==='./MarketComparison')return{MarketComparison:()=>null};
+  if(id==='./DualResearchV2')return{DualResearchV2:()=>null};
       if(id==='../FollowButton')return {FollowButton:()=>null};
     if(id==='../TeamBadge')return{TeamBadge:()=>null};
       if(id==='../../services/recommendationCenterView')return V;

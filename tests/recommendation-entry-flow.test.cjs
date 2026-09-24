@@ -33,6 +33,7 @@ async function center(){
   if(id==='./SelectionQualityNote')return require('./fixtures/selection-quality-note-module.cjs');
   if(id==='./DayCoverage')return{DayCoverage:()=>null};
   if(id==='./MarketComparison')return{MarketComparison:()=>null};
+  if(id==='./DualResearchV2')return{DualResearchV2:()=>null};
   if(id.endsWith('/recommendationCenterView'))return view;
   if(id.endsWith('/TeamBadge'))return{TeamBadge:()=>null};if(id.endsWith('/FollowButton'))return{FollowButton:()=>null};
   if(id==='lucide-react'||id.endsWith('.css'))return{};throw Error(id);
