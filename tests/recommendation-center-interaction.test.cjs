@@ -4,8 +4,9 @@ const {createRuntime}=require('../scripts/recommendationPlatform/runtime.cjs');
 const {memoryPorts,validators}=require('./recommendationFixture.cjs');
 function compile(file,requireFn){const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module,exports:module.exports,require:requireFn,Date,window:{setInterval:()=>0,clearInterval:()=>{},setTimeout:fn=>{fn();return 0;},clearTimeout:()=>{}}});return module.exports;}
 function aggregate(rows){const values=rows.map(row=>row.settlement?.state||'PENDING'),count=state=>values.filter(value=>value===state).length;const won=count('WON'),lost=count('LOST'),settled=won+lost;return{published:rows.length,settled,won,lost,pending:count('PENDING'),void:count('VOID'),disputed:count('DISPUTED'),hitRate:settled?won/settled:null};}
-async function harness({missingInputEvidence=false,reviewFailure=false}={}){
+async function harness({missingInputEvidence=false,reviewFailure=false,withHandicap=false,mode='review'}={}){
   const p=memoryPorts();if(missingInputEvidence)for(const m of p.current){const {version,generatedAt,oneXTwo}=m.probabilityModel;m.probabilityModel={version,generatedAt,oneXTwo};}
+  if(withHandicap)p.current[0]={...p.current[0],handicapLine:1,handicapOdds:{odds1:1.65,oddsX:3.8,odds2:4.8},handicapOddsSource:'sporttery:HHAD',handicapOddsUpdatedAt:new Date(p.now).toISOString(),probabilityModel:{...p.current[0].probabilityModel,calculationTrace:{poisson:{lambdas:{home:1.7,away:.8}}}}};
   await createRuntime(p,{validators}).publishingCycle();
   const view=compile(require.resolve('../src/services/recommendationCenterView.ts'),require),data=view.parseRecommendationCenter({recommendationCenter:p.state.view});
   const original=data.current[0];data.review.singles=Array.from({length:69},(_,index)=>({...original,decision:{...original.decision,decisionId:'ui-'+index,sourceMatchId:String(index+1),homeTeamName:index===68?'目标球队':'主队'+(index+1),awayTeamName:'客队'+(index+1)},settlement:{state:index%2===0?'WON':'LOST',score:'1-0'}}));
@@ -38,7 +39,7 @@ async function harness({missingInputEvidence=false,reviewFailure=false}={}){
     if(id==='../../services/recommendationCenterView')return view;if(id==='./DualResearchV2')return {DualResearchV2:()=>null};if(id==='lucide-react')return new Proxy({},{get:()=>()=>null});if(id.endsWith('.css'))return {};throw Error(id);
   });
   const expand=node=>Array.isArray(node)?node.map(expand):node&&typeof node==='object'?(typeof node.type==='function'?expand(node.type(node.props)):{...node,props:{...node.props,children:expand(node.props?.children)}}):node;
-  return {data,render(){cursor=0;return expand(component.RecommendationCenter({language:'zh',mode:'review',onSelectMatch:()=>{}}));},renderSettled(){this.render();return this.render();}};
+  return {data,render(){cursor=0;return expand(component.RecommendationCenter({language:'zh',mode,onSelectMatch:()=>{}}));},renderSettled(){this.render();return this.render();}};
 }
 function nodes(node,predicate){if(!node||typeof node!=='object')return [];if(Array.isArray(node))return node.flatMap(n=>nodes(n,predicate));return [...(predicate(node)?[node]:[]),...nodes(node.props?.children,predicate)];}
 function words(node){if(node==null||typeof node==='boolean')return '';if(Array.isArray(node))return node.map(words).join('');return typeof node==='object'?words(node.props?.children):String(node);}
@@ -59,6 +60,49 @@ test('actual shared quality component distinguishes ready reference from watch w
   assert.equal(watchNotes.length,12);assert(watchNotes.every(n=>n.props['data-selection-status']==='watch'));
   assert.match(words(watchNotes[0]),/观望 · 保留模型方向/);assert.match(words(watchNotes[0]),/本次模型输入计算尚未核验|本次模型输入依据尚未完整存档/);assert.match(words(watchNotes[0]),/暂不进入新串关/);
   assert.equal(JSON.stringify(watch.data),before);
+});
+
+test('negative model EV is prominent and input eligibility is not presented as prediction validation',async()=>{
+  const ui=await harness();
+  assert(ui.data.review.singles[0].selectionQuality.expectedValue<0);
+  ui.data.review.singles[1].selectionQuality={...ui.data.review.singles[1].selectionQuality,expectedValue:null};
+  const tree=ui.render(),notes=byClass(tree,'selection-quality-note');
+  assert.match(words(notes[0]),/只代表可列入参考，不代表已经验证命中率或回报/);
+  assert.match(words(notes[0]),/冻结发布时的模型概率与SP不占优/);
+  assert.match(words(notes[0]),/冻结发布模型期望值/);
+  assert.equal(nodes(notes[0],n=>n.props?.['data-model-ev']==='negative').length,1);
+  assert.equal(nodes(notes[1],n=>n.props?.['data-model-ev']==='negative').length,0);
+});
+
+test('missing market probability says favorite unavailable, not that the published pick differs',async()=>{
+  const ui=await harness();
+  ui.data.review.singles[0].selectionQuality={...ui.data.review.singles[0].selectionQuality,marketProbability:null,marketFavorite:false};
+  const note=byClass(ui.render(),'selection-quality-note')[0],copy=words(note);
+  assert.match(copy,/市场热门不可判定/);assert.doesNotMatch(copy,/方向与市场热门不同/);
+});
+
+test('HHAD review diagnostic does not inherit the HAD selection-quality label or EV',async()=>{
+  const ui=await harness({withHandicap:true});
+  let tree=ui.render();nodes(tree,n=>n.type==='select')[0].props.onChange({target:{value:'HHAD'}});tree=ui.render();
+  const cards=byClass(tree,'rc-pick');assert.equal(cards.length,12);
+  assert(cards.every(card=>card.props['data-selection-status']==='diagnostic'));
+  assert.equal(byClass(tree,'selection-quality-note').length,0);
+  assert.match(words(cards[0]),/让球归档诊断/);
+  assert.doesNotMatch(words(cards[0]),/参考入选 · 待验证/);
+});
+
+test('current match-day concentration warning disappears for mixed or too-small slates',async()=>{
+  const ui=await harness({mode:'recommendations'});
+  ui.data.businessDate=new Date(Date.now()+8*3600000).toISOString().slice(0,10);
+  assert.equal(new Set(ui.data.current.map(row=>row.decision.tipCode)).size,1);
+  let tree=ui.render(),warnings=byClass(tree,'rc-notice--concentration');
+  assert.equal(warnings.length,1);
+  assert.match(words(warnings[0]),/同向提示：当前竞彩日已发布的 3 场方向均为/);
+  assert.match(words(warnings[0]),/不能据此判断命中率/);
+  ui.data.current[2].decision={...ui.data.current[2].decision,tipCode:'2'};
+  tree=ui.render();assert.equal(byClass(tree,'rc-notice--concentration').length,0);
+  ui.data.current=ui.data.current.slice(0,2);
+  tree=ui.render();assert.equal(byClass(tree,'rc-notice--concentration').length,0);
 });
 
 test('server-side team and result filters compose, retain the cohort denominator, and clear',async()=>{

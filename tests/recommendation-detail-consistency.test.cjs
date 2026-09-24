@@ -29,6 +29,29 @@ const Pick=compile('../src/components/recommendations/PublishedMatchPick.tsx',id
  if(id.endsWith('.css'))return{};throw Error(id);
 }).PublishedMatchPick;
 
+test('published HAD direction and aligned supplemental research posterior remain separately labeled',()=>{
+ const compare=published.publishedPosteriorDisagreement;
+ const match={id:'sporttery_2041649',sourceMatchId:'2041649',kickoffTime:'2026-09-24T18:20:00+08:00',
+  probabilityModel:{generatedAt:'2026-09-24T15:20:00+08:00',oneXTwo:{final:{home:42,draw:33,away:25},unifiedPosterior:{home:34,draw:35.8,away:30.2}},
+   unifiedPosterior:{selectedMarket:'HHAD',selectedCode:'2'}}};
+ const decision={matchId:match.id,sourceMatchId:'2041649',eventVersion:match.kickoffTime,
+  modelGeneratedAt:match.probabilityModel.generatedAt,tipCode:'1',probabilities:{'1':.42,X:.33,'2':.25}};
+ assert.deepEqual(JSON.parse(JSON.stringify(compare(match,decision))),{published:'1',research:'X'},
+  'compare the HAD probability triplet rather than the unrelated top-level HHAD selection');
+ assert.equal(compare(match,{...decision,tipCode:'X'}),null);
+ assert.equal(compare({...match,probabilityModel:{...match.probabilityModel,generatedAt:'2026-09-24T15:21:00+08:00'}},decision),null,
+  'a later model snapshot cannot be compared with a frozen decision');
+ assert.equal(compare({...match,kickoffTime:'2026-09-24T19:20:00+08:00'},decision),null);
+ assert.equal(compare({...match,probabilityModel:{...match.probabilityModel,oneXTwo:{...match.probabilityModel.oneXTwo,final:{home:38,draw:37,away:25}}}},decision),null,
+  'a matching timestamp without matching frozen probabilities cannot bind a supplemental model output');
+ assert.equal(compare({...match,probabilityModel:{...match.probabilityModel,oneXTwo:{unifiedPosterior:{home:34,draw:35.8,away:30.2}}}},decision),null,
+  'no final-probability binding means no comparison');
+ assert.equal(compare({...match,probabilityModel:{...match.probabilityModel,oneXTwo:{...match.probabilityModel.oneXTwo,unifiedPosterior:{home:33,draw:33,away:34}}}},decision)?.research,'2');
+ assert.equal(compare({...match,probabilityModel:{...match.probabilityModel,oneXTwo:{...match.probabilityModel.oneXTwo,unifiedPosterior:{home:34,draw:34,away:32}}}},decision),null,
+  'a tied leader is not a second recommendation');
+ assert.equal(compare({...match,probabilityModel:{...match.probabilityModel,oneXTwo:{...match.probabilityModel.oneXTwo,unifiedPosterior:{home:1,draw:NaN,away:0}}}},decision),null);
+});
+
 for(const {match,row} of fixture.fixtures)test(`real ${match.id}: legacy draw cannot replace published home in detail scores or evidence`,()=>{
  const before=JSON.stringify({match,row});
  assert.equal(match.predictions.find(p=>p.marketType==='BEST').tipCode,'X');
