@@ -202,9 +202,9 @@ run_native_release() {
   quiesce_native_auxiliary_writers
   stop_release_sync_write_barrier clean
   assert_native_cutover_processes_drained
-  # All old PostgreSQL writers are stopped. Install the additive 013 schema in
+  # All old PostgreSQL writers are stopped. Install the additive 014 schema in
   # the serving database immediately before the new application can start.
-  # A durable intent lets cold recovery remove an empty 013 table and its
+  # A durable intent lets cold recovery remove an empty 014 table and its
   # migration row together if this release is rolled back.
   "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/deploy/light-server/recommendation-schema-bridge.cjs" live "$BUNDLE_SHA256"
   "$NODE_HOME/bin/node" "$NEXT_DIR/scripts/candidateReleaseContinuity.cjs" snapshot \

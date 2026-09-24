@@ -3,15 +3,16 @@
 // One signed, additive migration for the native PostgreSQL release lane.
 // Candidate and live databases are selected from the bound native release
 // state, never from a caller-supplied URL. The old live processes remain on
-// schema 012 until the stopped swap window.
+// schema 013 until the stopped swap window.
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "../..");
-const VERSION = "013_dual_choice_research";
+const VERSION = "014_dual_choice_market_neutral";
 const FILE = `${VERSION}.sql`;
+const TABLE = "football.recommendation_dual_research_v2_records";
 const SHA_RE = /^[a-f0-9]{64}$/;
 const sha256 = value => crypto.createHash("sha256").update(value).digest("hex");
 const canonicalSql = value => String(value).replace(/\r\n/g, "\n");
@@ -21,7 +22,7 @@ function readSignedMigration() {
   const stat = fs.lstatSync(migrationFile);
   assert(stat.isFile() && !stat.isSymbolicLink() && stat.nlink === 1, "signed migration source is unsafe");
   const sql = canonicalSql(fs.readFileSync(migrationFile, "utf8"));
-  assert.match(sql, /CREATE TABLE football\.recommendation_dual_research_records\s*\(/);
+  assert.match(sql, /CREATE TABLE football\.recommendation_dual_research_v2_records\s*\(/);
   assert.doesNotMatch(sql, /\b(?:DROP|TRUNCATE)\b/i);
   return { sql, hash: sha256(sql) };
 }
@@ -29,7 +30,7 @@ function readSignedMigration() {
 function expectedBaseline() {
   const dir = path.join(ROOT, "server/postgres/migrations");
   const files = fs.readdirSync(dir).filter(name => /^\d+_[a-z0-9_-]+\.sql$/i.test(name)).sort();
-  assert.equal(files.length, 13, "signed release must contain exactly migrations 001 through 013");
+  assert.equal(files.length, 14, "signed release must contain exactly migrations 001 through 014");
   assert.equal(files.at(-1), FILE);
   return files.slice(0, -1).map(file => ({
     version: file.slice(0, -4),
@@ -48,18 +49,18 @@ async function applyToPool(pool, signed, baseline) {
     assert.deepEqual(applied.slice(0, baseline.length), baseline, "signed base migrations differ from installed schema");
     assert(applied.length === baseline.length || applied.length === baseline.length + 1, "unexpected installed migration count");
     const existing = applied[baseline.length];
-    const table = (await client.query("SELECT to_regclass('football.recommendation_dual_research_records')::text AS name")).rows[0]?.name;
+    const table = (await client.query(`SELECT to_regclass('${TABLE}')::text AS name`)).rows[0]?.name;
     if (existing) {
-      assert.deepEqual(existing, { version: VERSION, sha256: signed.hash }, "013 migration digest mismatch");
-      assert.equal(table, "football.recommendation_dual_research_records", "recorded 013 table is absent");
+      assert.deepEqual(existing, { version: VERSION, sha256: signed.hash }, "014 migration digest mismatch");
+      assert.equal(table, TABLE, "recorded 014 table is absent");
       await client.query("COMMIT");
       began = false;
       return { ok: true, applied: false, version: VERSION, sha256: signed.hash };
     }
-    assert.equal(table, null, "unrecorded 013 table already exists");
+    assert.equal(table, null, "unrecorded 014 table already exists");
     await client.query(signed.sql);
-    await client.query("ALTER TABLE football.recommendation_dual_research_records OWNER TO football");
-    await client.query("GRANT SELECT, INSERT ON football.recommendation_dual_research_records TO football");
+    await client.query(`ALTER TABLE ${TABLE} OWNER TO football`);
+    await client.query(`GRANT SELECT, INSERT ON ${TABLE} TO football`);
     await client.query("INSERT INTO football.schema_migrations(version,sha256) VALUES ($1,$2)", [VERSION, signed.hash]);
     await client.query("COMMIT");
     began = false;
@@ -108,7 +109,7 @@ async function main() {
   assert.equal(process.argv.length, 4);
   assert(["candidate", "live"].includes(target));
   const { directory, state } = readState(sha);
-  assert.equal(state.kind, "runtime-only", "013 migration is for an existing PostgreSQL-only runtime");
+  assert.equal(state.kind, "runtime-only", "014 migration is for an existing PostgreSQL-only runtime");
   const signed = readSignedMigration(), baseline = expectedBaseline();
   if (target === "live") writeLiveIntent(directory, state, signed.hash);
   const database = target === "live" ? "football" : state.candidateDatabase;

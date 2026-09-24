@@ -1287,8 +1287,13 @@ const restoreTimerStates = (snapshot, system) => {
   }
 };
 
-const buildDualResearchRollbackSql = (migrationHash) => {
+const buildDualResearchRollbackSql = (migrationHash, migrationVersion = "014_dual_choice_market_neutral") => {
   if (!/^[a-f0-9]{64}$/.test(migrationHash || "")) fail("schema rollback migration hash is invalid");
+  const table = {
+    "013_dual_choice_research": "football.recommendation_dual_research_records",
+    "014_dual_choice_market_neutral": "football.recommendation_dual_research_v2_records",
+  }[migrationVersion];
+  if (!table) fail("unsupported schema rollback migration version");
   // DROP TABLE removes its own index and triggers. The metadata row is removed
   // in the same PostgreSQL transaction, so a later signed retry can recreate
   // exactly the same schema. Never discard a prospective research record.
@@ -1296,20 +1301,20 @@ const buildDualResearchRollbackSql = (migrationHash) => {
 SELECT pg_advisory_xact_lock(hashtext('football-schema-migrations-v1'));
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM football.schema_migrations WHERE version='013_dual_choice_research') THEN
-    IF (SELECT sha256 FROM football.schema_migrations WHERE version='013_dual_choice_research') <> '${migrationHash}' THEN
-      RAISE EXCEPTION '013 migration digest changed during rollback';
+  IF EXISTS (SELECT 1 FROM football.schema_migrations WHERE version='${migrationVersion}') THEN
+    IF (SELECT sha256 FROM football.schema_migrations WHERE version='${migrationVersion}') <> '${migrationHash}' THEN
+      RAISE EXCEPTION '${migrationVersion} digest changed during rollback';
     END IF;
-    IF to_regclass('football.recommendation_dual_research_records') IS NULL THEN
-      RAISE EXCEPTION 'recorded 013 table is absent';
+    IF to_regclass('${table}') IS NULL THEN
+      RAISE EXCEPTION 'recorded ${migrationVersion} table is absent';
     END IF;
-    IF EXISTS (SELECT 1 FROM football.recommendation_dual_research_records LIMIT 1) THEN
+    IF EXISTS (SELECT 1 FROM ${table} LIMIT 1) THEN
       RAISE EXCEPTION 'cannot roll back nonempty dual research records';
     END IF;
-    DROP TABLE football.recommendation_dual_research_records;
-    DELETE FROM football.schema_migrations WHERE version='013_dual_choice_research';
-  ELSIF to_regclass('football.recommendation_dual_research_records') IS NOT NULL THEN
-    RAISE EXCEPTION 'unrecorded 013 table exists';
+    DROP TABLE ${table};
+    DELETE FROM football.schema_migrations WHERE version='${migrationVersion}';
+  ELSIF to_regclass('${table}') IS NOT NULL THEN
+    RAISE EXCEPTION 'unrecorded ${migrationVersion} table exists';
   END IF;
 END $$;
 COMMIT;`;
@@ -1322,28 +1327,35 @@ const rollbackDualResearchSchemaIfNeeded = (transaction, system) => {
   const intent = readJsonFile(intentPath, "signed recommendation schema intent");
   if (intent.version !== "recommendation-schema-bridge-v1"
       || intent.bundleSha256 !== transaction.bundleSha
-      || intent.migrationVersion !== "013_dual_choice_research"
+      || !["013_dual_choice_research", "014_dual_choice_market_neutral"].includes(intent.migrationVersion)
       || !/^[a-f0-9]{64}$/.test(intent.migrationSha256 || "")
       || intent.databaseOid !== transaction.native.contract.oldDatabaseOid
       || intent.clusterId !== transaction.native.contract.clusterId) {
     fail("schema rollback intent does not match the native transaction");
   }
-  // A later release can roll back to an app that already knows 013; then the
+  // A later release can roll back to an app that already knows this migration; then the
   // migration remains part of that old app's accepted schema and is untouched.
-  const oldMigration = hostPath(`${APP_PATH}/server/postgres/migrations/013_dual_choice_research.sql`);
-  if (pathExistsNoFollow(oldMigration)) return;
+  const oldMigration = hostPath(`${APP_PATH}/server/postgres/migrations/${intent.migrationVersion}.sql`);
+  const oldMigrationStat = lstatOrNull(oldMigration);
+  if (oldMigrationStat) {
+    if (!oldMigrationStat.isFile() || oldMigrationStat.isSymbolicLink() || oldMigrationStat.nlink !== 1)
+      fail("old app migration source is unsafe");
+    const oldHash = sha256Text(fs.readFileSync(oldMigration, "utf8").replace(/\r\n/g, "\n"));
+    if (oldHash !== intent.migrationSha256) fail("old app migration digest differs from rollback intent");
+    return;
+  }
   if (TEST_MODE) {
     system.state.dualResearchSchemaRolledBack = true;
     system.save();
     return;
   }
-  const sql = buildDualResearchRollbackSql(intent.migrationSha256);
+  const sql = buildDualResearchRollbackSql(intent.migrationSha256, intent.migrationVersion);
   const result = spawnSync("/usr/sbin/runuser", ["-u", "postgres", "--", "/usr/bin/psql", "-X", "-q",
     "--set=ON_ERROR_STOP=1", "--dbname=football"], {
     input: sql, encoding: "utf8", timeout: 30000, maxBuffer: 8192,
     env: { PATH: "/usr/bin:/bin", PGHOST: "/var/run/postgresql", PGCONNECT_TIMEOUT: "5" },
   });
-  if (result.status !== 0) fail("013 schema rollback failed: " + String(result.stderr || result.error?.message || "psql failed").slice(-1200));
+  if (result.status !== 0) fail(`${intent.migrationVersion} schema rollback failed: ` + String(result.stderr || result.error?.message || "psql failed").slice(-1200));
 };
 
 const isolateKnownFailedTree = (transaction, system) => {

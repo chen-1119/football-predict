@@ -35,7 +35,7 @@ async function harness({missingInputEvidence=false,reviewFailure=false}={}){
     if(id==='../../hooks/useRecommendationReviewPage')return {useRecommendationReviewPage:reviewPage};
     if(id==='../FollowButton')return {FollowButton:()=>null};
     if(id==='../TeamBadge')return {TeamBadge:({team,size})=>({type:'span',props:{'data-badge-name':team.name.zh,'data-badge-id':team.id,'data-badge-size':size}})};
-    if(id==='../../services/recommendationCenterView')return view;if(id==='lucide-react')return new Proxy({},{get:()=>()=>null});if(id.endsWith('.css'))return {};throw Error(id);
+    if(id==='../../services/recommendationCenterView')return view;if(id==='./DualResearchV2')return {DualResearchV2:()=>null};if(id==='lucide-react')return new Proxy({},{get:()=>()=>null});if(id.endsWith('.css'))return {};throw Error(id);
   });
   const expand=node=>Array.isArray(node)?node.map(expand):node&&typeof node==='object'?(typeof node.type==='function'?expand(node.type(node.props)):{...node,props:{...node.props,children:expand(node.props?.children)}}):node;
   return {data,render(){cursor=0;return expand(component.RecommendationCenter({language:'zh',mode:'review',onSelectMatch:()=>{}}));},renderSettled(){this.render();return this.render();}};
