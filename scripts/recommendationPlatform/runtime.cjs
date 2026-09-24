@@ -114,11 +114,20 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
       const now=clock(),publication=await repo.publication();
       const inputs=await repo.currentInputs(now);
       let created=0,eligible=0,issues=0;
-      const seen=new Set();
+      // The warehouse can contain more than one row for a source match. Do not
+      // freeze whichever row an unordered query happened to return first.
+      const grouped=new Map();
       for(const match of inputs.current){
-        const identity=JSON.stringify([match?.sourceMatchId,match?.eventVersion]);
-        if(seen.has(identity))continue;
-        seen.add(identity);
+        const source=String(match?.sourceMatchId||match?.id||'').replace(/^sporttery_/,'');
+        if(!source)continue;
+        const rows=grouped.get(source)||[];rows.push(match);grouped.set(source,rows);
+      }
+      for(const [source,rows] of grouped){
+        if(new Set(rows.map(hash)).size!==1){
+          issues++;await repo.issue('dual-research-v2',{sourceMatchId:source,reason:'conflicting-current-input'});
+          continue;
+        }
+        const match=rows[0];
         const record=createDualResearchV2Record(match,{now:clock(),publication});
         if(!record)continue;
         eligible++;

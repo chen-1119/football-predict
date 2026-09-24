@@ -49,6 +49,28 @@ test('runtime captures HHAD-only research independently of failed HAD publicatio
   assert.deepEqual(second,{ok:true,enabled:true,created:0,eligible:1,issues:0});
 });
 
+test('conflicting current rows for one source never freeze an order-dependent HHAD pair',async()=>{
+  const original=hhadOnly();
+  const changed=structuredClone(original);
+  changed.id='sporttery_91_alternate';
+  changed.handicapOdds.odds1=2.15;
+  const {createDualResearchV2Record}=require('../scripts/recommendationPlatform/dualChoiceResearchV2.cjs');
+  assert(createDualResearchV2Record(original,{now:NOW,publication:publication(NOW)}));
+  assert(createDualResearchV2Record(changed,{now:NOW,publication:publication(NOW)}));
+  for(const current of [[original,changed],[changed,original]]){
+    const saved=[],issues=[];
+    const runtime=createRuntime({supportsResearchV2:true,clock:()=>NOW,async transaction(lane,action){
+      assert.equal(lane,'dual-research-v2');
+      return action({publication:async()=>publication(NOW),currentInputs:async()=>({current}),
+        insertDualResearchV2:async record=>{saved.push(record);return true;},
+        savepoint:async action=>({value:await action()}),issue:async(_,issue)=>issues.push(issue)});
+    }});
+    assert.deepEqual(await runtime.researchV2(),{ok:true,enabled:true,created:0,eligible:0,issues:1});
+    assert.equal(saved.length,0);
+    assert.deepEqual(issues,[{sourceMatchId:'91',reason:'conflicting-current-input'}]);
+  }
+});
+
 test('browser contract renders the two HHAD SPs as research and rejects altered coverage',async()=>{
   const row=hhadOnly();
   const {createDualResearchV2Record}=require('../scripts/recommendationPlatform/dualChoiceResearchV2.cjs');

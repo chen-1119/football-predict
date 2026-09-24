@@ -64,6 +64,17 @@ test('available official markets form a market-neutral pool without a fixed dire
   assert.equal(create(input({ had: false, hhad: false })), null);
 });
 
+test('an explicit non-HHAD pool code cannot authorize an HHAD leg', () => {
+  assert.equal(create(input({ handicapOddsPoolCode: 'HAD' })), null);
+  const hadOnly = create(input({ had: true, handicapOddsPoolCode: 'HAD' }));
+  assert(hadOnly);
+  assert.deepEqual(hadOnly.selections.map(s => s.market), ['HAD', 'HAD']);
+  const valid = create(input({ handicapOddsPoolCode: 'HHAD' }));
+  assert(valid);
+  assert.equal(valid.inputSnapshot.handicapOddsPoolCode, 'HHAD');
+  assert(validDualResearchV2Record(valid, valid.inputSnapshot));
+});
+
 test('quote, cutoff, identity, model arithmetic and sample gates fail closed', () => {
   assert.equal(create(input({ handicapOddsSource: '500.com:jczq:HHAD' })), null);
   assert.equal(create(input({ handicapOddsUpdatedAt: new Date(NOW - 16 * 60000).toISOString() })), null);

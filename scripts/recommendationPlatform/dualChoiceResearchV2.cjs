@@ -35,6 +35,7 @@ function snapshotFor(match) {
     odds: clone(input.odds), oddsSource: input.oddsSource,
     oddsReceivedAt: input.oddsReceivedAt, oddsUpdatedAt: input.oddsUpdatedAt,
     handicapLine: input.handicapLine, handicapOdds: clone(input.handicapOdds),
+    handicapOddsPoolCode: input.handicapOddsPoolCode,
     handicapOddsSource: input.handicapOddsSource,
     handicapOddsReceivedAt: input.handicapOddsReceivedAt,
     handicapOddsObservedAt: input.handicapOddsObservedAt,
@@ -107,9 +108,12 @@ function createDualResearchV2Record(match, { now, publication } = {}) {
     if (!straight) return null;
     const rankedStraight = CODES.slice().sort((a, b) => straight[b] - straight[a] || CODES.indexOf(a) - CODES.indexOf(b));
     if (straight[rankedStraight[0]] - straight[rankedStraight[1]] <= 1e-9) return null;
-    const analysis = buildHandicapMarginDecision(input, {
+    // A quote labelled as a different lottery pool cannot be used as an HHAD
+    // leg, even if its source string says HHAD. The HAD pool is independent.
+    const hhadPoolAllowed = input.handicapOddsPoolCode == null || input.handicapOddsPoolCode === 'HHAD';
+    const analysis = hhadPoolAllowed ? buildHandicapMarginDecision(input, {
       now, cutoffTime: new Date(cutoff).toISOString(), straightTipCode: rankedStraight[0],
-    });
+    }) : null;
     const marketRows = [];
     const had = evaluateForecast(input, { now, publication });
     // This research lane admits an explicitly official HAD pool only. The
