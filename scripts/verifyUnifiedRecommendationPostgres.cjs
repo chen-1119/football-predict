@@ -2,8 +2,9 @@
 // All writes use a unique temporary schema in an explicit disposable local DB.
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 const {createRuntime}=require('./recommendationPlatform/runtime.cjs');
-const {postgresPorts}=require('./recommendationPlatform/repository.cjs');
+const {Repository,postgresPorts}=require('./recommendationPlatform/repository.cjs');
 const {readDualResearchReport}=require('./recommendationPlatform/dualResearchReport.cjs');
+const {createDualResearchV2Record}=require('./recommendationPlatform/dualChoiceResearchV2.cjs');
 const {withVerifiedInputEvidence}=require('../tests/fixtures/recommendation-input-helper.cjs');
 async function verify(pool){
   const schema=`recommendation_verify_${process.pid}_${Date.now()}`;
@@ -24,7 +25,7 @@ async function verify(pool){
     await q(`CREATE TABLE football.projection_meta(key text PRIMARY KEY,value text,updated_at timestamptz DEFAULT clock_timestamp());
       CREATE TABLE football.match_snapshots(id text,dataset text,source_match_id text,kickoff_time timestamptz,payload jsonb,PRIMARY KEY(id,dataset));
       CREATE TABLE football.daily_featured_combo_state(id integer PRIMARY KEY,payload jsonb);`);
-    for(const migration of ['007_market_collector_runtime.sql','011_unified_recommendation_runtime.sql','013_dual_choice_research.sql'])
+    for(const migration of ['007_market_collector_runtime.sql','011_unified_recommendation_runtime.sql','013_dual_choice_research.sql','014_dual_choice_market_neutral.sql'])
       await q(fs.readFileSync(path.join(__dirname,'../server/postgres/migrations/',migration),'utf8'));
     for(const [key,value] of Object.entries({data_publication_mode:'generation',data_generation_id:'test-generation',manifest_hash:'a'.repeat(64),data_generation_source_cycle_id:'test-source',committed_at:new Date(now).toISOString()}))await q('INSERT INTO football.projection_meta(key,value) VALUES($1,$2)',[key,value]);
     await Promise.all([1,2,3].map(id=>write(fixture(id))));
@@ -145,6 +146,47 @@ async function verify(pool){
     check(()=>assert.ok(mixedSettled.every(r=>r.settlement.legs.filter(l=>['301','302'].includes(l.sourceMatchId)).every(l=>l.state==='WON'))));
     const mixedAfterSettlement=(await q('SELECT payload FROM football.recommendation_combo_records WHERE business_date=$1 ORDER BY size',[mixedDate])).rows.map(x=>x.payload);
     check(()=>assert.deepEqual(mixedAfterSettlement,mixedRecords));
+
+    // A HHAD-only event has no published HAD decision. Its frozen V2 research
+    // pair is stored once, remains immutable, and still receives official
+    // history for settlement under the exact event version.
+    const researchDate=new Date(Date.now()+4*86400000).toISOString().slice(0,10);
+    const researchNow=Date.parse(`${researchDate}T13:00:00Z`);
+    const researchFixture=withVerifiedInputEvidence({...rawFixture(901),businessDate:researchDate,
+      kickoffTime:`${researchDate}T16:00:00Z`,eventVersion:`${researchDate}T16:00:00Z`,
+      odds:null,oddsSource:null,oddsUpdatedAt:null,handicapLine:-1,
+      handicapOdds:{odds1:2.2,oddsX:3.5,odds2:3.1},handicapOddsSource:'sporttery:HHAD',
+      handicapOddsUpdatedAt:new Date(researchNow).toISOString(),
+      probabilityModel:{generatedAt:new Date(researchNow).toISOString(),oneXTwo:{final:{home:55,draw:25,away:20}},
+        calculationTrace:{poisson:{lambdas:{home:1.4,away:1.1}}}}});
+    const researchRecord=createDualResearchV2Record(researchFixture,{now:researchNow,
+      publication:{generationId:'test-generation',manifestHash:'a'.repeat(64),committedAt:new Date(researchNow).toISOString()}});
+    check(()=>assert.ok(researchRecord));
+    check(()=>assert.deepEqual(researchRecord.selections.map(s=>s.market),['HHAD','HHAD']));
+    await write(researchFixture);
+    const researchClient=await mappedPool.connect();
+    try{
+      const researchRepo=new Repository(researchClient);
+      check(()=>assert.equal(researchRepo instanceof Repository,true));
+      const beforeResearchHistory=await researchRepo.history();
+      check(()=>assert.equal(beforeResearchHistory.some(m=>m.sourceMatchId==='901'),false));
+      const createdResearch=await researchRepo.insertDualResearchV2(researchRecord,researchFixture);
+      check(()=>assert.equal(createdResearch,true));
+      const duplicatedResearch=await researchRepo.insertDualResearchV2(researchRecord,researchFixture);
+      check(()=>assert.equal(duplicatedResearch,false));
+      const researchRows=await researchRepo.dualResearchV2(researchDate);
+      check(()=>assert.equal(researchRows.length,1));
+      check(()=>assert.equal(researchRows[0].recordHash,researchRecord.recordHash));
+      await assert.rejects(researchRepo.insertDualResearchV2({...researchRecord,version:'dual-choice-research-v1'},researchFixture),
+        {code:'DUAL_RESEARCH_V2_INVALID'});checks++;
+      await write({...researchFixture,id:'sporttery_901_rescheduled',
+        kickoffTime:`${researchDate}T17:00:00Z`,eventVersion:`${researchDate}T17:00:00Z`},'history');
+      const afterResearchHistory=await researchRepo.history();
+      check(()=>assert.equal(afterResearchHistory.some(m=>m.sourceMatchId==='901'),true));
+      check(()=>assert.equal(afterResearchHistory.some(m=>m.id==='sporttery_901_rescheduled'),false));
+      await assert.rejects(q('UPDATE football.recommendation_dual_research_v2_records SET payload=payload'),{code:'23000'});checks++;
+      await assert.rejects(q('DELETE FROM football.recommendation_dual_research_v2_records'),{code:'23000'});checks++;
+    }finally{researchClient.release();}
     return {ok:true,checks,schema,scope:'disposable-test-schema',productionRowsWritten:0};
   }finally{await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);}
 }

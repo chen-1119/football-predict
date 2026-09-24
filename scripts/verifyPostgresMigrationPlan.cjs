@@ -67,6 +67,7 @@ assert.deepEqual(listMigrationFiles(), [
   "011_unified_recommendation_runtime.sql",
   "012_accounts_and_follows.sql",
   "013_dual_choice_research.sql",
+  "014_dual_choice_market_neutral.sql",
 ]);
 const dualResearchSql = fs.readFileSync(path.join(rootDir, "server", "postgres", "migrations", "013_dual_choice_research.sql"), "utf8");
 assert.match(dualResearchSql, /CREATE TABLE football\.recommendation_dual_research_records\s*\(/);
@@ -74,6 +75,17 @@ assert.match(dualResearchSql, /REFERENCES football\.recommendation_decisions\(id
 assert.match(dualResearchSql, /CREATE TRIGGER dual_research_immutable/);
 assert.match(dualResearchSql, /CREATE CONSTRAINT TRIGGER dual_research_deadline/);
 assert.doesNotMatch(dualResearchSql, /\b(?:DROP|TRUNCATE|ALTER\s+TABLE\s+football\.(?!recommendation_dual_research_records))\b/i);
+const dualResearchV2Sql = fs.readFileSync(path.join(rootDir, "server", "postgres", "migrations", "014_dual_choice_market_neutral.sql"), "utf8");
+assert.match(dualResearchV2Sql, /CREATE TABLE football\.recommendation_dual_research_v2_records\s*\(/);
+assert.doesNotMatch(dualResearchV2Sql, /REFERENCES football\.recommendation_decisions\(id\)/);
+assert.match(dualResearchV2Sql, /UNIQUE \(source_match_id, event_version\)/);
+assert.match(dualResearchV2Sql, /CREATE TRIGGER dual_research_v2_immutable/);
+assert.match(dualResearchV2Sql, /CREATE CONSTRAINT TRIGGER dual_research_v2_deadline/);
+assert.match(dualResearchV2Sql, /'dual-choice-research-v2'/);
+assert.match(dualResearchV2Sql, /'independent-research-only'/);
+assert.match(dualResearchV2Sql, /market' IN \('HAD', 'HHAD'\)/);
+assert.match(dualResearchV2Sql, /tipCode' <> payload->'selections'->1->>'tipCode'/);
+assert.doesNotMatch(dualResearchV2Sql, /\b(?:DROP|TRUNCATE|ALTER\s+TABLE)\b/i);
 for (const table of requiredTables) {
   assert.match(sql, new RegExp(`CREATE TABLE IF NOT EXISTS football\\.${table}\\s*\\(`));
 }

@@ -461,6 +461,7 @@ const requiredReleaseEntries = [
   "deploy/light-server/release-native.sh",
   "deploy/light-server/recommendation-schema-bridge.cjs",
   "server/postgres/migrations/013_dual_choice_research.sql",
+  "server/postgres/migrations/014_dual_choice_market_neutral.sql",
   "deploy/light-server/native-release-policy.json",
   "deploy/light-server/release-from-bundle.sh",
   "deploy/light-server/restore-ubuntu-operator-key.sh",

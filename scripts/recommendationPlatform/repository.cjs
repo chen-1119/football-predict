@@ -48,6 +48,26 @@ class Repository {
   async dualResearch() {
     return (await this.client.query('SELECT payload FROM football.recommendation_dual_research_records ORDER BY business_date DESC,recorded_at DESC')).rows.map(r=>r.payload);
   }
+  async insertDualResearchV2(record, match) {
+    if (!require('./dualChoiceResearchV2.cjs').validDualResearchV2Record(record, match))
+      throw Object.assign(new Error('Invalid market-neutral dual research binding'), { code: 'DUAL_RESEARCH_V2_INVALID' });
+    const result = await this.client.query(`INSERT INTO football.recommendation_dual_research_v2_records
+      (id,source_match_id,event_version,business_date,recorded_at,cutoff_at,payload)
+      VALUES($1,$2,$3,$4,$5,$6,$7::jsonb)
+      ON CONFLICT(source_match_id,event_version) DO NOTHING RETURNING id`,
+      [record.id,record.sourceMatchId,record.eventVersion,record.businessDate,record.recordedAt,record.cutoffAt,JSON.stringify(record)]);
+    return result.rows.length > 0;
+  }
+  async dualResearchV2(businessDate) {
+    if (businessDate !== undefined && (typeof businessDate !== 'string'
+      || !/^\d{4}-\d{2}-\d{2}$/.test(businessDate)
+      || new Date(`${businessDate}T00:00:00Z`).toISOString().slice(0, 10) !== businessDate))
+      throw new TypeError('Valid Sporttery business date required');
+    const sql = 'SELECT payload FROM football.recommendation_dual_research_v2_records';
+    return (await this.client.query(businessDate
+      ? `${sql} WHERE business_date=$1 ORDER BY recorded_at DESC` : `${sql} ORDER BY business_date DESC,recorded_at DESC`,
+    businessDate ? [businessDate] : [])).rows.map(r => r.payload);
+  }
   async latest() { return (await this.client.query(`SELECT DISTINCT ON (source_match_id,event_version) payload
     FROM football.recommendation_decisions ORDER BY source_match_id,event_version,sequence DESC`)).rows.map(r=>r.payload); }
   async frozenCombos(date) {
@@ -67,13 +87,18 @@ class Repository {
       JOIN football.recommendation_result_events e ON e.id=h.event_id`)).rows.map(r=>r.payload);
   }
   async history() {
-    // Restrict returned history to events we actually published. No unrelated
-    // historical prediction/strategy validation runs in this lane.
+    // Restrict history to published HAD decisions or prospectively captured V2
+    // research events. A HHAD-only event has no HAD decision, and an unrelated
+    // rescheduled match with the same source id must not settle its V2 record.
     return (await this.client.query(`SELECT m.payload FROM football.match_snapshots m
-      WHERE m.dataset IN ('current','history') AND EXISTS (
+      WHERE m.dataset IN ('current','history') AND (EXISTS (
         SELECT 1 FROM football.recommendation_decisions d
         WHERE d.source_match_id=COALESCE(NULLIF(m.payload->>'sourceMatchId',''),regexp_replace(m.payload->>'id','^sporttery_',''))
-      )`)).rows.map(r=>r.payload);
+      ) OR EXISTS (
+        SELECT 1 FROM football.recommendation_dual_research_v2_records r
+        WHERE r.source_match_id=COALESCE(NULLIF(m.payload->>'sourceMatchId',''),regexp_replace(m.payload->>'id','^sporttery_',''))
+          AND r.event_version=m.kickoff_time
+      ))`)).rows.map(r=>r.payload);
   }
   async appendResult(e) {
     await this.client.query(`INSERT INTO football.recommendation_result_events(id,source_match_id,event_version,observed_at,payload)
@@ -104,7 +129,7 @@ class Repository {
 }
 function postgresPorts(pool, clock=Date.now) {
   const {withPostgresTransaction}=require('../../server/postgresStore.cjs');
-  return {clock,async transaction(lane,action){
+  return {clock,supportsResearchV2:true,async transaction(lane,action){
     for(let attempt=0;attempt<3;attempt++){
       try{return await withPostgresTransaction(pool,async client=>{
         await client.query("SELECT set_config('lock_timeout','3000',true),set_config('statement_timeout','20000',true)");

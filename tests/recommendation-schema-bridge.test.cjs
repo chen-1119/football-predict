@@ -14,7 +14,7 @@ const recoverySource = fs.readFileSync(path.join(root, "deploy/light-server/foot
 const builderStart = recoverySource.indexOf("const buildDualResearchRollbackSql =");
 const builderEnd = recoverySource.indexOf("const rollbackDualResearchSchemaIfNeeded =", builderStart);
 assert(builderStart >= 0 && builderEnd > builderStart);
-assert(recoverySource.includes("const sql = buildDualResearchRollbackSql(intent.migrationSha256);"));
+assert(recoverySource.includes("const sql = buildDualResearchRollbackSql(intent.migrationSha256, intent.migrationVersion);"));
 const buildDualResearchRollbackSql = vm.runInNewContext(
   `${recoverySource.slice(builderStart, builderEnd)}\nbuildDualResearchRollbackSql;`,
   { fail(message) { throw new Error(message); } },
@@ -39,31 +39,32 @@ function fixture({ rows = baseline, table = null, failAt = "" } = {}) {
   return { pool: { async connect() { return client; } }, calls, get released() { return released; } };
 }
 
-test("013 applies only after the signed 001–012 baseline and commits table plus metadata", async () => {
-  assert.equal(baseline.length, 12);
+test("014 applies only after the signed 001–013 baseline and commits table plus metadata", async () => {
+  assert.equal(baseline.length, 13);
+  assert.equal(baseline.at(-1).version, "013_dual_choice_research");
   const f = fixture();
   const result = await bridge.applyToPool(f.pool, signed, baseline);
   assert.equal(result.applied, true);
   assert.equal(result.sha256, signed.hash);
   assert.equal(f.calls[0].sql, "BEGIN ISOLATION LEVEL SERIALIZABLE");
-  assert(f.calls.some(call => call.sql.includes("CREATE TABLE football.recommendation_dual_research_records")));
-  assert(f.calls.some(call => call.sql === "ALTER TABLE football.recommendation_dual_research_records OWNER TO football"));
+  assert(f.calls.some(call => call.sql.includes("CREATE TABLE football.recommendation_dual_research_v2_records")));
+  assert(f.calls.some(call => call.sql === "ALTER TABLE football.recommendation_dual_research_v2_records OWNER TO football"));
   assert.deepEqual(f.calls.find(call => call.sql.startsWith("INSERT INTO football.schema_migrations"))?.values,
-    ["013_dual_choice_research", signed.hash]);
+    ["014_dual_choice_market_neutral", signed.hash]);
   assert.equal(f.calls.at(-1).sql, "COMMIT");
   assert.equal(f.released, true);
 });
 
-test("already-applied matching 013 is idempotent; partial or mismatched schemas fail closed", async () => {
+test("already-applied matching 014 is idempotent; partial or mismatched schemas fail closed", async () => {
   const installed = [...baseline, { version: bridge.VERSION, sha256: signed.hash }];
-  const existing = fixture({ rows: installed, table: "football.recommendation_dual_research_records" });
+  const existing = fixture({ rows: installed, table: "football.recommendation_dual_research_v2_records" });
   assert.equal((await bridge.applyToPool(existing.pool, signed, baseline)).applied, false);
   assert(!existing.calls.some(call => call.sql.includes("CREATE TABLE")));
   for (const bad of [
     { rows: [...baseline.slice(0, -1), { ...baseline.at(-1), sha256: "0".repeat(64) }] },
-    { table: "football.recommendation_dual_research_records" },
+    { table: "football.recommendation_dual_research_v2_records" },
     { rows: [...baseline, { version: bridge.VERSION, sha256: "0".repeat(64) }],
-      table: "football.recommendation_dual_research_records" },
+      table: "football.recommendation_dual_research_v2_records" },
   ]) {
     const f = fixture(bad);
     await assert.rejects(bridge.applyToPool(f.pool, signed, baseline));
@@ -72,16 +73,22 @@ test("already-applied matching 013 is idempotent; partial or mismatched schemas 
   }
 });
 
-test("failed DDL rolls back and recovery drops only an empty research table with its row", async () => {
-  const f = fixture({ failAt: "CREATE TABLE football.recommendation_dual_research_records" });
+test("failed DDL rolls back and recovery drops only an empty v2 research table with its row", async () => {
+  const f = fixture({ failAt: "CREATE TABLE football.recommendation_dual_research_v2_records" });
   await assert.rejects(bridge.applyToPool(f.pool, signed, baseline), /injected PostgreSQL failure/);
   assert.equal(f.calls.at(-1).sql, "ROLLBACK");
   const rollback = buildDualResearchRollbackSql(signed.hash);
-  assert.match(rollback, /IF EXISTS \(SELECT 1 FROM football\.recommendation_dual_research_records LIMIT 1\)/);
-  assert(rollback.indexOf("DROP TABLE football.recommendation_dual_research_records")
+  assert.match(rollback, /IF EXISTS \(SELECT 1 FROM football\.recommendation_dual_research_v2_records LIMIT 1\)/);
+  assert(rollback.indexOf("DROP TABLE football.recommendation_dual_research_v2_records")
     < rollback.indexOf("DELETE FROM football.schema_migrations"));
+  assert.doesNotMatch(rollback, /DROP TABLE football\.recommendation_dual_research_records;/);
   assert.match(rollback, /COMMIT;$/);
   assert.throws(() => buildDualResearchRollbackSql("wrong"));
+  assert.throws(() => buildDualResearchRollbackSql(signed.hash, "015_untrusted"));
+  const legacy = buildDualResearchRollbackSql("a".repeat(64), "013_dual_choice_research");
+  assert.match(legacy, /DROP TABLE football\.recommendation_dual_research_records;/);
+  assert.doesNotMatch(legacy, /DROP TABLE football\.recommendation_dual_research_v2_records;/);
+  assert(recoverySource.includes("old app migration digest differs from rollback intent"));
 });
 
 test("signed native lane migrates candidate before reconciliation and live after stopping writers", () => {
@@ -98,5 +105,6 @@ test("signed native lane migrates candidate before reconciliation and live after
     const source = fs.readFileSync(path.join(root, file), "utf8");
     assert(source.includes('"deploy/light-server/recommendation-schema-bridge.cjs"'));
     assert(source.includes('"server/postgres/migrations/013_dual_choice_research.sql"'));
+    assert(source.includes('"server/postgres/migrations/014_dual_choice_market_neutral.sql"'));
   }
 });

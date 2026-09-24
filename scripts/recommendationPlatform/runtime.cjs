@@ -9,6 +9,7 @@ const {buildPublishedScoreDistribution}=require('../../src/services/publishedSco
 const {buildQualityReport}=require('./qualityReport.cjs');
 const {buildDataCoverage}=require('../dataCoverage.cjs');
 const {createDualResearchRecord}=require('./dualChoiceResearch.cjs');
+const {createDualResearchV2Record,validDualResearchV2Record,settleDualResearchV2}=require('./dualChoiceResearchV2.cjs');
 
 function freshPublication(p,now){return p && /^[a-f0-9]{64}$/.test(p.manifestHash||'') && typeof p.generationId==='string' && p.generationId.length>0 && Number.isFinite(time(p.committedAt)) && now>=time(p.committedAt) && now-time(p.committedAt)<=15*60000;}
 function requireBeforeCutoff(records,now){if(records.some(d=>now>=time(d.cutoffTime)))throw Object.assign(new Error('Cutoff crossed'),{code:'DEADLINE_CROSSED'});}
@@ -55,7 +56,7 @@ async function bindCurrentDecisions(repo, decisions, clock) {
   return {accepted,issues};
 }
 /** Each action commits independently. Never call all lanes inside one outer DB transaction. */
-function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_DUAL_RESEARCH==='1'}={}){
+function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_DUAL_RESEARCH==='1',dualResearchV2Enabled=process.env.ENABLE_DUAL_RESEARCH_V2!=='0'}={}){
   const clock=ports.clock || Date.now;
   async function stage(lane,action){
     const attemptAt=clock();
@@ -102,6 +103,34 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
       return {ok:true,enabled:true,created,eligible,issues};
     });}catch(error){return {ok:false,enabled:true,errorCode:String(error.code||'DUAL_RESEARCH_FAILED').slice(0,64)};}
   }
+  // The new cohort binds directly to the current pre-match input. In
+  // particular, a missing HAD quote must not prevent two HHAD outcomes from
+  // being studied. It never writes a recommendation decision or combo.
+  async function researchV2(){
+    if(!dualResearchV2Enabled||!ports.supportsResearchV2)return {ok:true,enabled:false,created:0,eligible:0,issues:0};
+    try{return await ports.transaction('dual-research-v2',async repo=>{
+      if(typeof repo.insertDualResearchV2!=='function'||typeof repo.currentInputs!=='function')
+        return {ok:true,enabled:false,created:0,eligible:0,issues:0};
+      const now=clock(),publication=await repo.publication();
+      const inputs=await repo.currentInputs(now);
+      let created=0,eligible=0,issues=0;
+      const seen=new Set();
+      for(const match of inputs.current){
+        const identity=JSON.stringify([match?.sourceMatchId,match?.eventVersion]);
+        if(seen.has(identity))continue;
+        seen.add(identity);
+        const record=createDualResearchV2Record(match,{now:clock(),publication});
+        if(!record)continue;
+        eligible++;
+        const result=await repo.savepoint(async()=>repo.insertDualResearchV2(record,match));
+        if(result.error){
+          if(['42P01','42703','42883'].includes(result.error.code))throw result.error;
+          issues++;await repo.issue('dual-research-v2',{sourceMatchId:record.sourceMatchId,reason:'research-record-insert-failed'});
+        }else if(result.value)created++;
+      }
+      return {ok:true,enabled:true,created,eligible,issues};
+    });}catch(error){return {ok:false,enabled:true,errorCode:String(error.code||'DUAL_RESEARCH_V2_FAILED').slice(0,64)};}
+  }
   async function combos(){return stage('combos',async repo=>{
     const publication=await repo.publication(),now=clock();
     // Recheck actual sale state and exact current input before freezing. A
@@ -139,6 +168,28 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
     const rawHeads=await repo.resultHeads();
     for(const e of rawHeads)if(!validResultEvent(e))quarantined.push({reason:'invalid-result-record',id:String(e?.eventId||'unknown')});
     const heads=new Map(rawHeads.filter(validResultEvent).map(e=>[e.eventKey,e]));
+    const dualV2Records=typeof repo.dualResearchV2==='function'?await repo.dualResearchV2(day(now)):[];
+    const todayDualResearch=[];
+    for(const record of dualV2Records){
+      if(record?.businessDate!==day(now)||!validDualResearchV2Record(record,record?.inputSnapshot)){
+        quarantined.push({reason:'invalid-dual-research-v2-record',id:String(record?.id||'unknown')});
+        continue;
+      }
+      const settlement=settleDualResearchV2(record,heads.get(key(record)));
+      todayDualResearch.push({
+        version:record.version,id:record.id,sourceMatchId:record.sourceMatchId,
+        matchId:record.inputSnapshot.id,eventVersion:record.eventVersion,businessDate:record.businessDate,
+        homeTeamName:record.inputSnapshot.homeTeamName,awayTeamName:record.inputSnapshot.awayTeamName,
+        recordedAt:record.recordedAt,cutoffAt:record.cutoffAt,recordHash:record.recordHash,
+        researchOnly:true,formalPromotion:false,totalStake:record.totalStake,
+        unionProbability:record.unionProbability,
+        selections:record.selections.map(selection=>({market:selection.market,tipCode:selection.tipCode,
+          handicapLine:selection.handicapLine,odds:selection.odds,modelProbability:selection.modelProbability,
+          quoteObservedAt:selection.quoteObservedAt})),
+        settlement:{state:settlement.state,grossReturn:settlement.grossReturn,
+          netProfit:settlement.netProfit,resultEventId:settlement.resultEventId},
+      });
+    }
     const singles=decisions.map(d=>{const event=heads.get(key(d));return {decision:d,selectionQuality:selectionQuality(d),scoreDistribution:buildPublishedScoreDistribution(d),settlement:settleDecision(d,event),handicapSettlement:settleHandicapDecision(d,event)};});
     const handicapCalibration=buildHandicapCalibration(decisions,heads,day(now),{asOf:now});
     const records=await repo.frozenCombos();const ids=[...new Set(records.flatMap(c=>Array.isArray(c?.decisionIds)?c.decisionIds:[]))];
@@ -160,7 +211,7 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
     const coverage=buildDataCoverage({targetRows,singles,now,lanes});
     const center={version:'recommendation-center-v1',policyVersion:VERSION,updatedAt:new Date(now).toISOString(),businessDate:day(now),
       inputAsOf:[lanes.publish?.inputAsOf,lanes.combos?.inputAsOf].filter(v=>Number.isFinite(time(v))).sort((a,b)=>time(b)-time(a))[0]||null,resultAsOf:lanes.settlement?.lastSuccessAt||null,lanes,
-      current:selected,previews,todayCombos:today,overlapDecisionIds:overlap,coverage,
+      current:selected,previews,todayCombos:today,todayDualResearch,overlapDecisionIds:overlap,coverage,
       review:{singles:singles.slice(0,100),combos:combos.slice(0,100),limit:100,qualityReport:buildQualityReport(singles,{asOf:now}),
         statistics:{single:summary(singles,true),qualifiedSingle:summary(singles.filter(r=>r.selectionQuality.qualified),true),handicap:handicapSummary(singles),handicapBreakdown:handicapBreakdown(singles),marketBaseline:marketBaseline(singles),daily:dailySummary(singles,combos),two:summary(combos.filter(r=>r.combo.size===2)),three:summary(combos.filter(r=>r.combo.size===3))},handicapCalibration,
         definition:'latest-published-decision-before-cutoff-per-event; combos-use-exact-bound-versions'},
@@ -168,8 +219,8 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
     await repo.saveView(center);
     return {centerUpdatedAt:center.updatedAt,quarantined:quarantined.length};
   });}
-  return {publish,research,combos,settle,view,
-    async publishingCycle(){const publication=await publish();const dualResearch=publication.ok?await research(publication.value.decisionIds):{ok:false,skipped:'publication-failed'};const combinations=await combos();const projection=await view();return {publication,dualResearch,combinations,projection};},
+  return {publish,research,researchV2,combos,settle,view,
+    async publishingCycle(){const publication=await publish();const dualResearch=publication.ok?await research(publication.value.decisionIds):{ok:false,skipped:'publication-failed'};const dualResearchV2=await researchV2();const combinations=await combos();const projection=await view();return {publication,dualResearch,dualResearchV2,combinations,projection};},
     async settlementCycle(){const settlement=await settle();const projection=await view();return {settlement,projection};}
   };
 }

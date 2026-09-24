@@ -2,6 +2,7 @@ import { PrematchCollectionPanel } from '../components/predictions/PrematchColle
 import { useRecommendationCenter } from '../hooks/useRecommendationCenter';
 import { publishedMatchRecommendation, usesPublishedRecommendation } from '../services/publishedMatchRecommendation';
 import { PublishedMatchPick } from '../components/recommendations/PublishedMatchPick';
+import { DualResearchV2 } from '../components/recommendations/DualResearchV2';
 import { publishedDetailPresentation } from '../services/publishedDetailPresentation';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context/AppContextCore';
@@ -1452,6 +1453,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
   }
 
   const unifiedRow = publishedMatchRecommendation(published.data, match);
+  const dualStudy = published.data?.todayDualResearch?.find(row => row.matchId === match.id
+    && Date.parse(row.eventVersion) === Date.parse(match.kickoffTime)) || null;
   const useUnified = published.loading || published.failed || usesPublishedRecommendation(match, unifiedRow, nowMs);
   // Saved-capture reference calculations remain separate from the published model.
   // Keep this branch after every hook and before the normal analytical presentation.
@@ -3184,6 +3187,8 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
             </div>
 
       </section>
+
+      {dualStudy && <DualResearchV2 row={dualStudy} language={language} />}
 
       {/* 4. 单层详情导航 */}
       <div className="tabs-container detail-tabs-nav match-detail-v4__tabs" role="tablist" aria-label={language === 'zh' ? '详情导航' : 'Detail sections'}>

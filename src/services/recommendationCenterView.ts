@@ -30,6 +30,13 @@ export interface ComboSelection {
 }
 export interface Combo { version:'unified-combo-v1'|'unified-combo-v2'; id:string; businessDate:string; size:2|3; totalOdds:number; rawTotalOdds:number; legs:Decision[]; decisionIds:string[]; selections?:ComboSelection[];selectionIds?:string[]; freezeAt:string; frozenAt?:string; generatedAt:string }
 export interface ComboRow { combo:Combo; settlement:Settlement }
+export interface DualResearchV2Row {
+  version:'dual-choice-research-v2';id:string;sourceMatchId:string;matchId:string;eventVersion:string;businessDate:string;
+  homeTeamName:string;awayTeamName:string;recordedAt:string;cutoffAt:string;recordHash:string;
+  researchOnly:true;formalPromotion:false;totalStake:2;unionProbability:number;
+  selections:Array<{market:'HAD'|'HHAD';tipCode:Outcome;handicapLine:number;odds:number;modelProbability:number;quoteObservedAt:string}>;
+  settlement:{state:ResultState;grossReturn:number|null;netProfit:number|null;resultEventId:string|null};
+}
 export interface Summary { published:number;settled:number;won:number;lost:number;pending:number;void:number;disputed:number;hitRate:number|null;brier?:number|null;logLoss?:number|null;marketBrier?:number|null }
 export interface HandicapBreakdown {standaloneV1:Summary;companionV2All:Summary;companionV2WhenHadWon:Summary;companionV2BothWon:Summary;companionV3All?:Summary;companionV3WhenHadWon?:Summary;companionV3BothWon?:Summary}
 export interface Lane {status:'ok'|'error';lastSuccessAt?:string;lastAttemptAt:string;errorCode?:string|null;inputAsOf?:string;candidateCount?:number;eligibleCount?:number;bindingFailures?:number;referenceCount?:number;watchCount?:number}
@@ -48,6 +55,7 @@ export interface RecommendationCenterData {
   version:'recommendation-center-v1';updatedAt:string;businessDate:string;inputAsOf:string|null;resultAsOf:string|null;
   lanes:Partial<Record<'publish'|'combos'|'settlement'|'view',Lane>>;
   current:SingleRow[];previews:Combo[];todayCombos:ComboRow[];overlapDecisionIds:string[];
+  todayDualResearch?:DualResearchV2Row[];
   review:{singles:SingleRow[];combos:ComboRow[];limit:number;statistics:{single:Summary;qualifiedSingle?:Summary;handicap?:Summary;handicapBreakdown?:HandicapBreakdown;two:Summary;three:Summary};qualityReport?:ModelQualityReport;handicapCalibration?:HandicapCalibrationProfile;definition:string};
   excludedCorruptRecords:number;modelValidation:'unvalidated';
   coverage?:DayCoverageData;
@@ -208,6 +216,41 @@ function combo(v:unknown):Combo{
 const comboRow=(v:unknown):ComboRow=>{const x=object(v),c=combo(x.combo),s=settlement(x.settlement);if(!c.frozenAt)throw new Error('Unfrozen combo in record');if(s.legs&&(s.legs.length!==c.size||new Set(s.legs.map(l=>l.decisionId)).size!==c.size||s.legs.some(l=>!c.decisionIds.includes(l.decisionId)||(c.selections&&l.selectionId!==c.selections.find(a=>a.decisionId===l.decisionId)?.selectionId))))throw new Error('Settlement bindings disagree');return {combo:c,settlement:s};};
 export const parseRecommendationSingleRow=(value:unknown):SingleRow=>single(value);
 export const parseRecommendationComboRow=(value:unknown):ComboRow=>comboRow(value);
+function dualResearchV2(value:unknown):DualResearchV2Row{
+  const r=object(value),recordedAt=stamp(r.recordedAt),cutoffAt=stamp(r.cutoffAt),eventVersion=stamp(r.eventVersion);
+  if(r.version!=='dual-choice-research-v2'||r.researchOnly!==true||r.formalPromotion!==false||r.totalStake!==2
+    ||!/^dual_research_v2_[a-f0-9]{64}$/.test(text(r.id))||!/^[a-f0-9]{64}$/.test(text(r.recordHash))
+    ||Date.parse(recordedAt)>=Date.parse(cutoffAt)||Date.parse(recordedAt)>=Date.parse(eventVersion))throw new Error('Invalid dual research binding');
+  const selections=list(r.selections).map(item=>{
+    const s=object(item),market=s.market,tipCode=outcome(s.tipCode),handicapLine=number(s.handicapLine),
+      odds=number(s.odds),modelProbability=number(s.modelProbability),quoteObservedAt=stamp(s.quoteObservedAt);
+    if((market!=='HAD'&&market!=='HHAD')||!Number.isSafeInteger(handicapLine)
+      ||(market==='HAD'&&handicapLine!==0)||(market==='HHAD'&&handicapLine===0)
+      ||odds<=1||modelProbability<0||modelProbability>1
+      ||Date.parse(quoteObservedAt)>Date.parse(recordedAt)||Date.parse(recordedAt)-Date.parse(quoteObservedAt)>15*60000)
+      throw new Error('Invalid dual research selection');
+    return {market:market as 'HAD'|'HHAD',tipCode,handicapLine,odds,modelProbability,quoteObservedAt};
+  });
+  if(selections.length!==2||selections[0].market===selections[1].market
+    &&selections[0].tipCode===selections[1].tipCode)throw new Error('Duplicate dual research direction');
+  const unionProbability=number(r.unionProbability);
+  if(unionProbability<0||unionProbability>1||unionProbability+1e-6<Math.max(...selections.map(s=>s.modelProbability))
+    ||unionProbability>selections.reduce((sum,s)=>sum+s.modelProbability,0)+1e-6)throw new Error('Invalid dual research union');
+  if(selections[0].market===selections[1].market
+    &&Math.abs(unionProbability-selections.reduce((sum,s)=>sum+s.modelProbability,0))>1e-6)
+    throw new Error('Same-market outcomes must be exclusive');
+  const settlementRaw=object(r.settlement),settlementState=state(settlementRaw.state),
+    grossReturn=settlementRaw.grossReturn==null?null:number(settlementRaw.grossReturn),
+    netProfit=settlementRaw.netProfit==null?null:number(settlementRaw.netProfit);
+  if((grossReturn===null)!==(netProfit===null)||grossReturn!==null&&Math.abs(netProfit!-(grossReturn-2))>1e-6
+    ||(['PENDING','DISPUTED'].includes(settlementState)&&(grossReturn!==null||netProfit!==null)))
+    throw new Error('Invalid dual research settlement');
+  return {version:'dual-choice-research-v2',id:text(r.id),sourceMatchId:text(r.sourceMatchId),matchId:text(r.matchId),
+    eventVersion,businessDate:date(r.businessDate),homeTeamName:text(r.homeTeamName),awayTeamName:text(r.awayTeamName),
+    recordedAt,cutoffAt,recordHash:text(r.recordHash),researchOnly:true,formalPromotion:false,totalStake:2,
+    unionProbability,selections,settlement:{state:settlementState,grossReturn,netProfit,
+      resultEventId:settlementRaw.resultEventId==null?null:text(settlementRaw.resultEventId)}};
+}
 function summary(v:unknown):Summary{
   const s=object(v),r:Summary={published:count(s.published),settled:count(s.settled),won:count(s.won),lost:count(s.lost),pending:count(s.pending),void:count(s.void),disputed:count(s.disputed),hitRate:null};
   if(r.won+r.lost!==r.settled||r.settled+r.pending+r.void+r.disputed!==r.published)throw new Error('Inconsistent statistics');
@@ -253,9 +296,12 @@ export function parseRecommendationCenter(response:unknown):RecommendationCenter
   if(x.version!=='recommendation-center-v1'||x.modelValidation!=='unvalidated')throw new Error('Unsupported center contract');
   const parsedLanes:RecommendationCenterData['lanes']={};
   for(const k of ['publish','combos','settlement','view'] as const){if(lanes[k]==null)continue;const l=object(lanes[k]);if(l.status!=='ok'&&l.status!=='error')throw new Error('Invalid lane status');parsedLanes[k]={status:l.status,lastAttemptAt:stamp(l.lastAttemptAt),lastSuccessAt:l.lastSuccessAt==null?undefined:stamp(l.lastSuccessAt),errorCode:l.errorCode==null?null:text(l.errorCode),inputAsOf:l.inputAsOf==null?undefined:stamp(l.inputAsOf),candidateCount:l.candidateCount==null?undefined:count(l.candidateCount),eligibleCount:l.eligibleCount==null?undefined:count(l.eligibleCount),bindingFailures:l.bindingFailures==null?undefined:count(l.bindingFailures),referenceCount:l.referenceCount==null?undefined:count(l.referenceCount),watchCount:l.watchCount==null?undefined:count(l.watchCount)};}
-  const result:RecommendationCenterData={version:'recommendation-center-v1',updatedAt:stamp(x.updatedAt),businessDate:date(x.businessDate),inputAsOf:x.inputAsOf==null?null:stamp(x.inputAsOf),resultAsOf:x.resultAsOf==null?null:stamp(x.resultAsOf),lanes:parsedLanes,current:list(x.current).map(single),previews:list(x.previews).map(combo),todayCombos:list(x.todayCombos).map(comboRow),overlapDecisionIds:list(x.overlapDecisionIds).map(text),review:{singles:list(review.singles).map(single),combos:list(review.combos).map(comboRow),limit:count(review.limit),qualityReport:review.qualityReport==null?undefined:modelQuality(review.qualityReport),statistics:{single:summary(stats.single),qualifiedSingle:stats.qualifiedSingle==null?undefined:summary(stats.qualifiedSingle),handicap:stats.handicap==null?undefined:summary(stats.handicap),handicapBreakdown:stats.handicapBreakdown==null?undefined:handicapBreakdown(stats.handicapBreakdown),two:summary(stats.two),three:summary(stats.three)},handicapCalibration:review.handicapCalibration==null?undefined:calibrationProfile(review.handicapCalibration),definition:text(review.definition)},excludedCorruptRecords:count(x.excludedCorruptRecords),modelValidation:'unvalidated',coverage:x.coverage==null?undefined:dayCoverage(x.coverage)};
+  const result:RecommendationCenterData={version:'recommendation-center-v1',updatedAt:stamp(x.updatedAt),businessDate:date(x.businessDate),inputAsOf:x.inputAsOf==null?null:stamp(x.inputAsOf),resultAsOf:x.resultAsOf==null?null:stamp(x.resultAsOf),lanes:parsedLanes,current:list(x.current).map(single),previews:list(x.previews).map(combo),todayCombos:list(x.todayCombos).map(comboRow),todayDualResearch:x.todayDualResearch==null?[]:list(x.todayDualResearch).map(dualResearchV2),overlapDecisionIds:list(x.overlapDecisionIds).map(text),review:{singles:list(review.singles).map(single),combos:list(review.combos).map(comboRow),limit:count(review.limit),qualityReport:review.qualityReport==null?undefined:modelQuality(review.qualityReport),statistics:{single:summary(stats.single),qualifiedSingle:stats.qualifiedSingle==null?undefined:summary(stats.qualifiedSingle),handicap:stats.handicap==null?undefined:summary(stats.handicap),handicapBreakdown:stats.handicapBreakdown==null?undefined:handicapBreakdown(stats.handicapBreakdown),two:summary(stats.two),three:summary(stats.three)},handicapCalibration:review.handicapCalibration==null?undefined:calibrationProfile(review.handicapCalibration),definition:text(review.definition)},excludedCorruptRecords:count(x.excludedCorruptRecords),modelValidation:'unvalidated',coverage:x.coverage==null?undefined:dayCoverage(x.coverage)};
   if(result.coverage&&result.coverage.businessDate!==result.businessDate)throw new Error('Day coverage date mismatch');
   if(new Set(result.current.map(r=>r.decision.decisionId)).size!==result.current.length)throw new Error('Duplicate current decision');
+  if(result.todayDualResearch?.some(r=>r.businessDate!==result.businessDate)
+    ||new Set(result.todayDualResearch?.map(r=>r.id)).size!==result.todayDualResearch?.length)
+    throw new Error('Invalid today dual research');
   for(const c of result.previews)for(const leg of c.legs){const same=result.current.find(s=>s.decision.decisionId===leg.decisionId);if(same&&same.decision.recordHash!==leg.recordHash)throw new Error('Conflicting decision payload');}
   return result;
 }

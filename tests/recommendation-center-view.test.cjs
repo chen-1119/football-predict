@@ -101,7 +101,7 @@ function renderedText(data,props,now){
     }};
     if(id==='../FollowButton')return {FollowButton:()=>null};
     if(id==='../TeamBadge')return {TeamBadge:({team})=>react.createElement('span',{'data-badge-name':team.name.zh})};
-    if(id==='../../services/recommendationCenterView')return view;if(id==='lucide-react')return {RefreshCw:()=>null,ChevronDown:()=>null,Search:()=>null,ArrowUpRight:()=>null};if(id.endsWith('.css'))return {};throw Error(id);
+    if(id==='../../services/recommendationCenterView')return view;if(id==='./DualResearchV2')return {DualResearchV2:()=>null};if(id==='lucide-react')return {RefreshCw:()=>null,ChevronDown:()=>null,Search:()=>null,ArrowUpRight:()=>null};if(id.endsWith('.css'))return {};throw Error(id);
   }});
   return renderToStaticMarkup(react.createElement(module.exports.RecommendationCenter,{language:'zh',onSelectMatch:()=>{},...props}));
 }
