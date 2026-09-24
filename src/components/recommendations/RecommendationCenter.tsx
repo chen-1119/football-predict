@@ -4,7 +4,7 @@ import { useRecommendationCenter } from '../../hooks/useRecommendationCenter';
 import { TeamBadge } from '../TeamBadge';
 import { FollowButton } from '../FollowButton';
 import type { Team } from '../../services/mockData';
-import { quoteSourceLabel, comboLaneFresh, comboPreviewForSize, comboLegSelection, primarySelectionSummary, handicapExtensionText, handicapAnalysisBasis, calibrationSampleBasis, type Decision, type Settlement, type Combo, type ComboSelection, type Summary, type Outcome, type HandicapCalibrationProfile, type HandicapBreakdown } from '../../services/recommendationCenterView';
+import { quoteSourceLabel, comboLaneFresh, comboPreviewForSize, comboLegSelection, primarySelectionSummary, handicapExtensionText, handicapAnalysisBasis, calibrationSampleBasis, sameDirectionConcentration, type Decision, type Settlement, type Combo, type ComboSelection, type Summary, type Outcome, type HandicapCalibrationProfile, type HandicapBreakdown } from '../../services/recommendationCenterView';
 import '../../styles/recommendation-center.css';
 import { SelectionQualityNote } from './SelectionQualityNote';
 import type { SelectionQuality } from '../../services/recommendationCenterView';
@@ -76,11 +76,11 @@ function RecordDetails({d,selection,language,onSelectMatch}:{d:Decision;selectio
 function Pick({d,settlement,handicapSettlement,quality,language,onSelectMatch,reviewSelection}:{d:Decision;settlement:Settlement;handicapSettlement?:Settlement|null;quality?:SelectionQuality|null;language:Language;onSelectMatch:(id:string)=>void;reviewSelection?:ReviewedSingleRow}){
   const zh=language==='zh';
   const selected=reviewSelection?.selectedMarket==='HHAD'?reviewSelection.selectedSettlement:settlement;
-  return <article className="rc-pick" data-decision-id={d.decisionId} data-record-hash={d.recordHash} data-selection-status={quality?.status??'reference'}><header><span>{d.matchNo||d.sourceMatchId} · {format(d.kickoffTime,language)} · {quality?.qualified===false?(zh?'观望方向':'Watch direction'):(zh?'参考方向':'Reference direction')}</span><span className={`rc-state rc-state--${selected?.state||'PENDING'}`}>{selected?resultLabel(selected.state,zh):(zh?'待赛果':'Pending')}</span></header>
+  return <article className="rc-pick" data-decision-id={d.decisionId} data-record-hash={d.recordHash} data-selection-status={reviewSelection?.selectedMarket==='HHAD'?'diagnostic':quality?.status??'reference'}><header><span>{d.matchNo||d.sourceMatchId} · {format(d.kickoffTime,language)} · {reviewSelection?.selectedMarket==='HHAD'?(zh?'让球归档诊断':'Archived handicap diagnostic'):quality?.qualified===false?(zh?'观望方向':'Watch direction'):(zh?'参考方向':'Reference direction')}</span><span className={`rc-state rc-state--${selected?.state||'PENDING'}`}>{selected?resultLabel(selected.state,zh):(zh?'待赛果':'Pending')}</span></header>
     <div className="rc-pick__main"><h3 className="rc-team-matchup"><FrozenMatchTeams d={d}/></h3>{settlement.score&&<span className="rc-match-score" aria-label={zh?'90分钟赛果':'90-minute result'}>{settlement.score.replace('-', ' : ')}</span>}</div>
     {reviewSelection&&<div className="rc-review-selection"><span>{reviewSelection.selectedMarket==='HHAD'?(zh?'归档让球方向诊断 · 非单场发布推荐':'Archived handicap diagnostic · not a published single pick'):(zh?'已发布胜平负方向':'Published 1X2 pick')}</span><strong>{reviewSelection.selectedMarket==='HHAD'&&d.handicapAnalysis?handicapTitle(d.handicapAnalysis.tipCode,zh):title(d.tipCode,zh)}</strong><small>{reviewSelection.selectedOdds==null?(zh?'冻结SP缺失':'Frozen SP unavailable'):`SP ${reviewSelection.selectedOdds.toFixed(2)}`}</small>{reviewSelection.selectedMarket==='HHAD'&&d.handicapAnalysis?.probabilityBasis==='conditional-on-straight-primary'&&<small className="rc-review-selection__basis">{zh?'此方向以胜平负首选成立为条件，可能不同于完整让球概率最高项。':'This companion is conditional on the 1X2 pick and may differ from the unconditional handicap leader.'}</small>}</div>}
     <PrimaryPickHeader d={d} language={language}/>
-    <SelectionQualityNote quality={quality} language={language}/>
+    {reviewSelection?.selectedMarket!=='HHAD'&&<SelectionQualityNote quality={quality} language={language}/>}
     <FollowButton matchId={d.matchId} decisionId={d.decisionId} compact />
     <div className="rc-card-footer"><span>{zh?'发布于':'Published'} {format(d.publishedAt,language)} · {zh?'冻结 SP 采集':'Frozen SP observed'} {format(d.quoteObservedAt,language)}</span><button type="button" className="rc-match-link" onClick={()=>onSelectMatch(d.matchId)}>{zh?'比赛详情':'Match details'}<ArrowUpRight size={14} aria-hidden="true"/></button></div>
     <details className="rc-analysis"><summary><span>{zh?'概率与让球分析':'Probabilities & handicap analysis'}</span><ChevronDown size={16} aria-hidden="true"/></summary><div className="rc-analysis__body">
@@ -154,6 +154,7 @@ export function RecommendationCenter({language,onSelectMatch,mode='recommendatio
   const summary=review?reviewPage.data?.summary.all:data?.review.statistics[tab==='single'?'single':tab];
   const handicapSummary=data?.review.statistics.handicap;
   const currentDay=data?.businessDate===new Date(now+8*3600000).toISOString().slice(0,10);
+  const sameDirection=!review&&currentDay?sameDirectionConcentration(data?.current??[]):null;
   const stale=!currentDay||!data?.inputAsOf||now-Date.parse(data.inputAsOf)>15*60000||data.lanes.publish?.status==='error';
   const reviewDelayed=data?.lanes.settlement?.status==='error';
   const rows=review?tab==='single'?(reviewPage.data?.rows as ReviewedSingleRow[]|undefined)||[]:[]:currentDay?data?.current.filter(row=>!qualifiedOnly||row.selectionQuality?.qualified)||[]:[];
@@ -178,6 +179,7 @@ export function RecommendationCenter({language,onSelectMatch,mode='recommendatio
     <div className="rc-meta"><span className="rc-reference-label">{zh?'参考推荐 · 模型验证中':'Reference picks · Model unvalidated'}</span><span>{zh?'行情更新':'Inputs updated'} {format(activeInputs,language)}</span><span>{zh?'赛果核对':'Results checked'} {format(data?.resultAsOf,language)}</span></div>
     <div className="rc-tabs" role="group" aria-label={zh?'推荐类型':'Recommendation type'}>{(['single','two','three'] as const).map(t=><button key={t} type="button" aria-pressed={tab===t} onClick={()=>setTab(t)}>{t==='single'?(zh?'单场推荐':'Singles'):t==='two'?(zh?'2串1':'2-leg combo'):(zh?'3串1':'3-leg combo')}{t!=='single'&&<small>SP≥{t==='two'?'2.50':'5.00'}</small>}</button>)}</div>
     {!review&&tab==='single'&&<DayCoverage coverage={data?.coverage} businessDate={data?.businessDate||''} qualifiedOnly={qualifiedOnly} onQualifiedOnlyChange={setQualifiedOnly} onSelectMatch={onSelectMatch} language={language}/>}
+    {!review&&tab==='single'&&sameDirection&&<p className="rc-notice rc-notice--concentration" role="note" data-direction-concentration={sameDirection.direction}>{zh?`同向提示：当前竞彩日已发布的 ${sameDirection.count} 场方向均为${title(sameDirection.direction,true)}。这只描述当前发布分布，不能据此判断命中率；请逐场查看依据。`:`Same-direction note: all ${sameDirection.count} published match-day directions are ${title(sameDirection.direction,false)}. This only describes the published slate; it does not establish accuracy. Review each match separately.`}</p>}
     {!review&&tab==='single'&&data&&<section className="rc-dual-research-list" aria-label={zh?'双选研究':'Dual-choice study'}>
       <h2>{zh?'双选研究':'Dual-choice study'}</h2>
       <p>{zh?'同场两个方向按各自 SP 单独记录；玩法由当场实际开放的官方报价决定，可为两项让球方向。研究结果不计入正式推荐或串关。':'Two outcomes of one match are recorded at their own SP. The pair follows whichever official markets are open, including two handicap outcomes. This study is separate from formal picks and parlays.'}</p>

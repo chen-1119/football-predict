@@ -23,6 +23,13 @@ export interface SelectionQuality {version:'recommendation-selection-quality-v1'
 export interface PublishedScore {home:number;away:number;label:string;probability:number;hadCode:Outcome;hhadCode:Outcome}
 export interface PublishedScores {status:'available'|'unavailable';version:'published-score-distribution-v1';decisionId:string;recordHash:string;topScores:PublishedScore[];alignedScores:PublishedScore[]}
 export interface SingleRow { decision:Decision; settlement:Settlement; handicapSettlement?:Settlement|null;selectionQuality?:SelectionQuality|null;scoreDistribution?:PublishedScores|null }
+// Count every published direction for the match day, including watch rows. A
+// qualified-only UI filter must not make a concentrated slate look diversified.
+export function sameDirectionConcentration(rows:SingleRow[]):{count:number;direction:Outcome}|null{
+  if(rows.length<3)return null;
+  const direction=rows[0].decision.tipCode;
+  return rows.every(row=>row.decision.tipCode===direction)?{count:rows.length,direction}:null;
+}
 export interface ComboSelection {
   version:'combo-selection-v1'; selectionId:string; decisionId:string; decisionRecordHash:string; recordHash:string;
   market:'HAD'|'HHAD'; handicapLine:number; tipCode:Outcome; odds:number; modelProbability:number;
@@ -164,6 +171,9 @@ function single(v:unknown):SingleRow{
     const pair=(v:unknown)=>{const a=object(v);return {home:a.home==null?null:count(a.home),away:a.away==null?null:count(a.away)};};
     const samples=q.samples==null?null:object(q.samples);
     quality={version:q.version,status:qualified?'reference-qualified':'watch',qualified,reasons:list(q.reasons).map(text),samples:samples?{elo:pair(samples.elo),form:pair(samples.form)}:null,probabilityLead:q.probabilityLead==null?null:number(q.probabilityLead),marketProbability:q.marketProbability==null?null:number(q.marketProbability),modelMarketGap:q.modelMarketGap==null?null:number(q.modelMarketGap),expectedValue:q.expectedValue==null?null:number(q.expectedValue),marketFavorite:q.marketFavorite===true};
+    // This diagnostic belongs to the frozen HAD decision, never to a later
+    // model update or an HHAD review selection.
+    if(quality.expectedValue!=null&&Math.abs(quality.expectedValue-(d.modelProbability*d.odds-1))>1e-8)throw new Error('Selection quality EV disagrees with frozen decision');
     if(qualified&&quality.reasons.length)throw new Error('Contradictory selection quality');
   }
   if(x.scoreDistribution!=null){

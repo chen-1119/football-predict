@@ -1,6 +1,6 @@
 import { PrematchCollectionPanel } from '../components/predictions/PrematchCollectionPanel';
 import { useRecommendationCenter } from '../hooks/useRecommendationCenter';
-import { publishedMatchRecommendation, usesPublishedRecommendation } from '../services/publishedMatchRecommendation';
+import { publishedMatchRecommendation, publishedPosteriorDisagreement, usesPublishedRecommendation } from '../services/publishedMatchRecommendation';
 import { PublishedMatchPick } from '../components/recommendations/PublishedMatchPick';
 import { DualResearchV2 } from '../components/recommendations/DualResearchV2';
 import { publishedDetailPresentation } from '../services/publishedDetailPresentation';
@@ -1851,6 +1851,9 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
   const gptParsed = gptPrediction?.relay?.parsed;
   const gptRecommendation = gptParsed?.recommendation;
   const probabilityModel = normalizeProbabilityModel(match.probabilityModel);
+  const posteriorDisagreement = useUnified
+    ? publishedPosteriorDisagreement(match, unifiedRow?.decision || null)
+    : null;
   const publishedDetail = publishedDetailPresentation(unifiedRow?.decision || null, probabilityModel?.scoreDistribution, unifiedRow?.scoreDistribution);
   const calculationTrace = probabilityModel?.calculationTrace;
   const probabilityModelForm = probabilityModel?.form;
@@ -3327,6 +3330,11 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                   ? useUnified ? '已发布概率和时间来自同一记录；补充模型快照与最新采集资料分别标明来源，不作为该记录的采用证明。' : '下面的缺项与分析对应推荐生成时点；后续补到的伤停、阵容在上方单独展示，不会自动改写这里的历史依据。'
                   : useUnified ? 'Published probabilities and times share one record. Supplemental model snapshots and newly collected data are separate, not proof of adoption by that record.' : 'Gaps and analysis below reflect the decision time. Subsequently collected injuries and lineups are shown above and do not automatically rewrite this record.'}
               </p>
+              {posteriorDisagreement && <p className="match-detail-v4__model-disagreement" role="note" data-model-direction-disagreement="true">
+                {language === 'zh'
+                  ? `补充模型快照的研究后验偏向${({ '1': '主胜', X: '平局', '2': '客胜' } as const)[posteriorDisagreement.research]}，与已发布的${({ '1': '主胜', X: '平局', '2': '客胜' } as const)[posteriorDisagreement.published]}不同。两者时间及基础概率一致，但缺少后验内容绑定，不能证明发布时采用过该后验；公开方向仍以冻结记录为准。`
+                  : `The supplemental model's research posterior favors ${({ '1': 'home', X: 'draw', '2': 'away' } as const)[posteriorDisagreement.research]}, while the published direction is ${({ '1': 'home', X: 'draw', '2': 'away' } as const)[posteriorDisagreement.published]}. The times and base probabilities align, but no posterior content binding proves it was used at publication. The frozen record remains the public direction.`}
+              </p>}
             </section>
 
             {hasUsableFiveHundredDetails && (

@@ -7,11 +7,26 @@ after(()=>fs.rmSync(dir,{recursive:true,force:true}));
 const source=fs.readFileSync(path.join(__dirname,'../src/services/recommendationCenterView.ts'),'utf8');
 fs.writeFileSync(path.join(dir,'view.cjs'),ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText);
 const view=require(path.join(dir,'view.cjs'));
-const {parseRecommendationCenter,visiblePreview,primarySelectionSummary,comboLegSelection,handicapAnalysisBasis,calibrationSampleBasis}=view;
+const {parseRecommendationCenter,visiblePreview,primarySelectionSummary,comboLegSelection,handicapAnalysisBasis,calibrationSampleBasis,sameDirectionConcentration}=view;
 const {createRuntime}=require('../scripts/recommendationPlatform/runtime.cjs');
 const {match,memoryPorts,validators}=require('./recommendationFixture.cjs');
 async function sample(){const p=memoryPorts();await createRuntime(p,{validators}).publishingCycle();return {recommendationCenter:p.state.view};}
 test('the actual runtime projection parses for current UI',async()=>{const x=parseRecommendationCenter(await sample());assert.equal(x.current.length,3);assert.equal(x.previews.length,2);assert.equal(x.review.statistics.single.published,3);});
+test('selection-quality EV must match the frozen published HAD probability and SP',async()=>{
+ const payload=await sample(),row=payload.recommendationCenter.current[0];
+ assert(Math.abs(row.selectionQuality.expectedValue-(row.decision.modelProbability*row.decision.odds-1))<1e-12);
+ row.selectionQuality.expectedValue+=.05;
+ assert.throws(()=>parseRecommendationCenter(payload),/Selection quality EV disagrees with frozen decision/);
+});
+test('same-direction warning counts all published directions, including watch rows, only for a real slate',async()=>{
+ const rows=parseRecommendationCenter(await sample()).current;
+ assert.equal(rows.length,3);
+ const direction=rows[0].decision.tipCode;
+ assert(rows.every(row=>row.decision.tipCode===direction));
+ assert.deepEqual(sameDirectionConcentration(rows),{count:3,direction});
+ assert.equal(sameDirectionConcentration(rows.slice(0,2)),null);
+ assert.equal(sameDirectionConcentration(rows.map((row,index)=>index===2?{...row,decision:{...row.decision,tipCode:direction==='1'?'2':'1'}}:row)),null);
+});
 test('missing product field is a read error rather than an empty successful recommendation pool',()=>assert.throws(()=>parseRecommendationCenter({ok:true,previews:[],today:[]})));
 test('invalid numbers are rejected before .toFixed',async()=>{for(const v of [null,'1.8',NaN,true]){const x=await sample();x.recommendationCenter.current[0].decision.odds=v;assert.throws(()=>parseRecommendationCenter(x));}});
 test('a changed combo direction cannot be presented as the same decision',async()=>{const x=await sample();x.recommendationCenter.previews[0].legs[0].tipCode='2';assert.throws(()=>parseRecommendationCenter(x));});
