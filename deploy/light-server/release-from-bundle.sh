@@ -316,12 +316,11 @@ run_build_step() {
       memory_swap_max="512M"
       node_heap_mib="1536"
       ;;
-    optimize-strategy|candidate-generation|candidate-generation-reconciled|candidate-datastore|candidate-datastore-reconciled|candidate-deadline-capture|candidate-postgres-reconciled)
-      # Strategy optimization, generation and the cold SQLite projection all
-      # traverse the full retained odds and prediction windows. The old 896
-      # MiB V8 heap entered cgroup reclaim and then aborted while JSON.parse
-      # still needed live objects, even when bounded host and swap runway
-      # remained available.
+    model-backtest|optimize-strategy|candidate-generation|candidate-generation-reconciled|candidate-datastore|candidate-datastore-reconciled|candidate-deadline-capture|candidate-postgres-reconciled)
+      # Model backtest exhausted the default 896 MiB V8 heap while reading
+      # retained odds and prediction windows. Strategy optimization, generation
+      # and the cold SQLite projection have also needed bounded headroom to
+      # avoid cgroup reclaim while JSON.parse still holds live objects.
       memory_high="1600M"
       memory_max="2200M"
       memory_swap_max="512M"
