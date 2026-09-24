@@ -111,6 +111,15 @@ checks.push("unaccepted baseline final receipt distinguishes the same generation
   }
 }
 const source = read("deploy/light-server/release-from-bundle.sh"), lane = read("deploy/light-server/release-native.sh");
+const cachePolicyStart = source.indexOf("const optionalDataMaxBytes =");
+const cachePolicyEnd = source.indexOf("const inspectOptionalData =", cachePolicyStart);
+assert.ok(cachePolicyStart >= 0 && cachePolicyEnd > cachePolicyStart);
+const cachePolicy = vm.runInNewContext(source.slice(cachePolicyStart, cachePolicyEnd)
+  + "\n({ optionalDataMaxBytes, safeOptionalDataFile })", Object.create(null));
+const liveSnapshot = { isFile: () => true, isSymbolicLink: () => false, nlink: 1, size: 546105531 };
+assert.equal(cachePolicy.safeOptionalDataFile("public/data/prediction-snapshots.json", liveSnapshot), true);
+assert.equal(cachePolicy.safeOptionalDataFile("public/data/odds-history.json", liveSnapshot), false);
+checks.push("native candidate validates the observed live snapshot without widening other data cache files");
 const nativeBudget = lane.match(/^  CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS=\$\(\([\s\S]*?^  \)\)/m)?.[0];
 assert.ok(nativeBudget);
 const budgetRun = spawnSync(process.platform === "win32" ? "D:/app/Git/bin/bash.exe" : "/bin/bash", ["--noprofile", "--norc", "-s"], {
