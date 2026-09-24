@@ -17,6 +17,8 @@ on:
       - 'server/referencePairedBaseline.cjs'
       - 'server/streamedJsonObjectArrays.cjs'
       - 'scripts/postgresGenerationSource.cjs'
+      - 'scripts/postgresModelInput.cjs'
+      - 'tests/postgres-model-input-paging.test.cjs'
       - 'tests/postgres-reference-admission.test.cjs'
       - 'tests/postgres-generation-native.integration.cjs'
       - 'tests/reconcile-history-admission.test.cjs'
@@ -146,6 +148,7 @@ jobs:
         run: node scripts/verifyReleaseArchivePreflight.cjs && node scripts/verifyReleaseWindowPreflight.cjs && node scripts/verifyReleaseStoragePreflight.cjs && node scripts/verifyNativeReleasePipeline.cjs && node scripts/verifyNativeReleaseJournal.cjs && node scripts/verifyNativeReleaseRecovery.cjs && node scripts/verifyReleaseArchiveSuccessorContracts.cjs
       - run: node scripts/verifyProductionPlanSourceContracts.cjs
       - run: node --test tests/football-data-lower-league-history.test.cjs tests/postgres-team-history.test.cjs
+      - run: node --test tests/postgres-model-input-paging.test.cjs
       - run: node --test tests/reconcile-history-admission.test.cjs
       - run: node --test tests/postgres-reference-admission.test.cjs
       - run: node scripts/verifyPublicReferencePairs.cjs && node scripts/verifyReferencePairedBaseline.cjs

@@ -5,6 +5,50 @@ const { publicationIdentityFromMeta } = require("../server/postgresProjectionSto
 const { sqlitePublicationMatches, resolveServingPublicationForSqliteIdentity,
   acquireGenerationReadLease } = require("../server/dataGenerationBundle.cjs");
 
+// Sort only narrow keys. Sorting payload::text detoasts the retained training
+// corpus into PostgreSQL temporary files before the LIMIT can be satisfied.
+// Hydrate each bounded page by primary key in the same MVCC transaction, then
+// restore the cursor order before giving rows to the model collector.
+async function scanPostgresModelInput(client, table, settings, consume) {
+  if (!["match_snapshots", "prediction_snapshots", "odds_snapshots"].includes(table)) throw new Error("model input table rejected");
+  const limit = Number(settings.limit);
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1_000_000) throw new Error("invalid model input row limit");
+  const direction = settings.preferLatestRows === true ? "DESC" : "ASC";
+  const cursor = `model_${table}`;
+  await client.query(`DECLARE ${cursor} NO SCROLL CURSOR FOR
+    SELECT id${table === "match_snapshots" ? ", dataset" : ""}
+    FROM football.${table} ${table === "match_snapshots" ? "WHERE dataset IN ('current', 'history')" : ""}
+    ORDER BY ${table === "match_snapshots" ? "kickoff_time" : "captured_at"} ${direction}, id ${direction} LIMIT $1`, [limit]);
+  let scanError = null;
+  try {
+    while (true) {
+      const page = await client.query(`FETCH FORWARD 128 FROM ${cursor}`);
+      if (!page.rows.length) break;
+      const ids = page.rows.map(row => row.id);
+      if (ids.some(id => typeof id !== "string" || !id) || new Set(ids).size !== ids.length) {
+        throw new Error("model input cursor returned invalid ids");
+      }
+      const hydrated = await client.query(`SELECT id, payload::text AS payload
+        FROM football.${table} WHERE id = ANY($1::text[])`, [ids]);
+      const byId = new Map(hydrated.rows.map(row => [row.id, row]));
+      if (byId.size !== ids.length || hydrated.rows.length !== ids.length) {
+        throw new Error("model input page changed inside read transaction");
+      }
+      for (const row of page.rows) {
+        const value = byId.get(row.id);
+        if (!value || typeof value.payload !== "string") throw new Error("model input page payload missing");
+        consume(table === "match_snapshots" ? { ...value, dataset: row.dataset } : value);
+      }
+    }
+  } catch (error) {
+    scanError = error;
+    throw error;
+  } finally {
+    try { await client.query(`CLOSE ${cursor}`); }
+    catch (error) { if (!scanError) throw error; }
+  }
+}
+
 // Each cursor is bounded; all input tables share one MVCC snapshot. Do not
 // stitch current fixtures or result corrections from another transaction into it.
 async function readPostgresModelInput(options = {}) {
@@ -31,30 +75,12 @@ async function readPostgresModelInput(options = {}) {
     }
     lease = acquireGenerationReadLease({ storeDir: options.storeDir, generationId: identity.generationId,
       context: publication.context, owner: "postgres-model-input", ttlMs: 30 * 60_000 });
-    const scan = async (table, settings, consume) => {
-      if (!["match_snapshots", "prediction_snapshots", "odds_snapshots"].includes(table)) throw new Error("model input table rejected");
-      const limit = Number(settings.limit);
-      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1_000_000) throw new Error("invalid model input row limit");
-      const direction = settings.preferLatestRows === true ? "DESC" : "ASC";
-      const cursor = `model_${table}`;
-      await client.query(`DECLARE ${cursor} NO SCROLL CURSOR FOR
-        SELECT payload::text AS payload${table === "match_snapshots" ? ", dataset" : ""}
-        FROM football.${table} ${table === "match_snapshots" ? "WHERE dataset IN ('current', 'history')" : ""}
-        ORDER BY ${table === "match_snapshots" ? "kickoff_time" : "captured_at"} ${direction}, id ${direction} LIMIT $1`, [limit]);
-      try {
-        while (true) {
-          const page = await client.query(`FETCH FORWARD 128 FROM ${cursor}`);
-          if (!page.rows.length) break;
-          for (const row of page.rows) consume(row);
-        }
-      } finally { await client.query(`CLOSE ${cursor}`); }
-    };
     const current = [], history = [];
     // Unlike snapshot training limits, match truncation must never silently
     // change the evaluation denominator. Refuse oversized input explicitly.
     const count = await client.query("SELECT COUNT(*)::int AS count FROM football.match_snapshots WHERE dataset IN ('current', 'history')");
     if (count.rows[0].count > 1_000_000) throw new Error("model input match limit exceeded");
-    await scan("match_snapshots", { limit: 1_000_000 }, row => {
+    await scanPostgresModelInput(client, "match_snapshots", { limit: 1_000_000 }, row => {
       const payload = JSON.parse(row.payload);
       if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("invalid model match payload");
       if (row.dataset === "current") current.push(payload);
@@ -65,7 +91,7 @@ async function readPostgresModelInput(options = {}) {
     for (const table of ["prediction_snapshots", "odds_snapshots"]) {
       const settings = options[table];
       const collector = options.createCollector(table, settings);
-      await scan(table, settings, collector.add);
+      await scanPostgresModelInput(client, table, settings, collector.add);
       results[table] = { ...collector.finish(), source: "postgres", table, publication: identity };
     }
     await client.query("COMMIT");
@@ -80,4 +106,4 @@ async function readPostgresModelInput(options = {}) {
   }
 }
 
-module.exports = { readPostgresModelInput };
+module.exports = { readPostgresModelInput, scanPostgresModelInput };
