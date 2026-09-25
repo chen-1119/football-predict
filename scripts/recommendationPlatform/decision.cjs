@@ -127,8 +127,9 @@ function chooseCombo(decisions, size, now, {admit=()=>true}={}) {
     const need = size - picked.length;
     if (!need) {
       const quote = product(picked.map(item=>item.selection)); if (!quote?.passes(FLOORS[size])) return;
-      const key = picked.map(item => item.selection.selectionId).sort().join('|');
-      if (logp > score + 1e-12 || (Math.abs(logp-score) <= 1e-12 && (quote.value < bestProduct || (quote.value === bestProduct && key < bestKey)))) {
+      // Selection IDs include SP. Equal model scores use event/market identity only.
+      const key = picked.map(({decision,selection}) => JSON.stringify([decision.sourceMatchId,decision.eventVersion,selection.market,selection.handicapLine,selection.tipCode])).sort().join('|');
+      if (logp > score + 1e-12 || (Math.abs(logp-score) <= 1e-12 && key < bestKey)) {
         best = picked.slice(); score = logp; bestProduct = quote.value; bestKey = key;
       }
       return;

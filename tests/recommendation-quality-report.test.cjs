@@ -80,3 +80,38 @@ test('frozen tip and market-leader cohorts use one settled denominator with pair
   assert(Math.abs(weighted-report.overall[metric])<1e-12);
  }
 });
+
+test('frozen SP and model-price groups partition the same settled events and retain paired scoring and unit returns',()=>{
+ const price=(id,odds,actual='1',other={oddsX:3.6,odds2:4.4})=>row(id,0,actual,{odds:{odds1:odds,...other}});
+ const selected=[
+  price(11,1.45),
+  price(12,1.70,'2'),
+  price(13,2.05,'1',{oddsX:2,odds2:4.4}),
+  price(14,2.60,'X',{oddsX:2.60,odds2:4.4}),
+  price(15,2.61),
+ ];
+ const pending=price(16,1.30);pending.settlement={state:'PENDING'};
+ const report=buildQualityReport([...selected,structuredClone(selected[0]),pending],{asOf:now+86400000});
+ assert.equal(report.overall.settled,5);
+ assert.equal(report.exclusions.unsettled,1);
+ assert.deepEqual(Object.values(report.bySpBucket).map(group=>group.settled),[1,1,1,1,1]);
+ assert.deepEqual(Object.values(report.byModelPriceSignal).map(group=>group.settled),[2,3]);
+ assert.equal(report.bySpBucket.sp_gt_1_70_le_2_05.won,1);
+ assert.equal(report.byModelPriceSignal.negative.won,1);
+ assert.equal(report.byModelPriceSignal.nonnegative.won,2);
+ assert.equal(report.overall.pricedRows,report.overall.settled);
+ assert(Math.abs(report.overall.flatStakeNetUnits-1.11)<1e-12);
+ assert(Math.abs(report.overall.flatStakeRoi-.222)<1e-12);
+ for(const groups of [report.bySpBucket,report.byModelPriceSignal]){
+  assert.equal(Object.values(groups).reduce((total,group)=>total+group.settled,0),report.overall.settled);
+  assert.equal(Object.values(groups).reduce((total,group)=>total+group.won,0),report.overall.won);
+  assert(Math.abs(Object.values(groups).reduce((total,group)=>total+(group.flatStakeNetUnits||0),0)-report.overall.flatStakeNetUnits)<1e-12);
+  assert(Math.abs(Object.values(groups).reduce((total,group)=>total+(group.brier||0)*group.settled,0)/report.overall.settled-report.overall.brier)<1e-12);
+  assert(Math.abs(Object.values(groups).reduce((total,group)=>total+(group.marketBrier||0)*group.settled,0)/report.overall.settled-report.overall.marketBrier)<1e-12);
+ }
+ const empty=buildQualityReport([],{asOf:now+86400000});
+ assert.equal(empty.bySpBucket.sp_le_1_45.flatStakeNetUnits,null);
+ assert.equal(empty.byModelPriceSignal.nonnegative.flatStakeRoi,null);
+ assert.equal(empty.preliminaryEvidenceSufficient,false);
+ assert.equal(empty.formalPromotion,false);
+});

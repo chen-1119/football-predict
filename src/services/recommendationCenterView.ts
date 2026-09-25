@@ -47,7 +47,8 @@ export interface DualResearchV2Row {
 export interface Summary { published:number;settled:number;won:number;lost:number;pending:number;void:number;disputed:number;hitRate:number|null;brier?:number|null;logLoss?:number|null;marketBrier?:number|null }
 export interface HandicapBreakdown {standaloneV1:Summary;companionV2All:Summary;companionV2WhenHadWon:Summary;companionV2BothWon:Summary;companionV3All?:Summary;companionV3WhenHadWon?:Summary;companionV3BothWon?:Summary}
 export interface Lane {status:'ok'|'error';lastSuccessAt?:string;lastAttemptAt:string;errorCode?:string|null;inputAsOf?:string;candidateCount?:number;eligibleCount?:number;bindingFailures?:number;referenceCount?:number;watchCount?:number}
-export interface ModelQualityReport {independentMatchDays:number;settled:number;won:number;hitRate:number|null;marketTopHitRate:number|null;brier:number|null;marketBrier:number|null;logLoss:number|null;marketLogLoss:number|null;blockers:string[];minimumSettled:number;minimumMatchDays:number}
+export interface ModelQualityCohort {settled:number;won:number;hitRate:number|null;brier:number|null;marketBrier:number|null;logLoss:number|null;marketLogLoss:number|null;flatStakeNetUnits:number|null;flatStakeRoi:number|null;independentMatchDays:number}
+export interface ModelQualityReport {independentMatchDays:number;settled:number;won:number;hitRate:number|null;marketTopHitRate:number|null;brier:number|null;marketBrier:number|null;logLoss:number|null;marketLogLoss:number|null;blockers:string[];minimumSettled:number;minimumMatchDays:number;bySpBucket?:Record<string,ModelQualityCohort>;byModelPriceSignal?:Record<string,ModelQualityCohort>}
 export interface HandicapCalibrationGroup {
   key:string;rows:number;active:boolean;reason:string;bias:Record<Outcome,number>;meanRaw:Record<Outcome,number>;actualShare:Record<Outcome,number>;
   metrics?:{holdout?:number;rawBrier?:number;calibratedBrier?:number;rawLogLoss?:number;calibratedLogLoss?:number;rawHitRate?:number;calibratedHitRate?:number}|null;
@@ -290,7 +291,31 @@ function modelQuality(v:unknown):ModelQualityReport{
  const q=object(v),m=object(q.overall),policy=object(q.policy);
  if(q.version!=='frozen-quality-review-v1'||q.formalPromotion!==false)throw new Error('Invalid model quality report');
  const metric=(key:string)=>m[key]==null?null:number(m[key]);
- return {independentMatchDays:count(q.independentMatchDays),settled:count(m.settled),won:count(m.won),hitRate:metric('hitRate'),marketTopHitRate:metric('marketTopHitRate'),brier:metric('brier'),marketBrier:metric('marketBrier'),logLoss:metric('logLoss'),marketLogLoss:metric('marketLogLoss'),blockers:list(q.blockers).map(text),minimumSettled:count(policy.minimumSettled),minimumMatchDays:count(policy.minimumMatchDays)};
+ const near=(left:number,right:number)=>Math.abs(left-right)<=1e-8*Math.max(1,Math.abs(right));
+ const totalSettled=count(m.settled),totalWon=count(m.won);
+ if(totalWon>totalSettled||metric('hitRate')!==(totalSettled?totalWon/totalSettled:null))throw new Error('Invalid overall model quality rate');
+ const group=(raw:unknown,keys:string[])=>{if(raw==null)return undefined;const groups=object(raw),result:Record<string,ModelQualityCohort>={};
+  for(const key of keys){const item=object(groups[key]),settled=count(item.settled),won=count(item.won),value=(name:string)=>item[name]==null?null:number(item[name]);
+   const net=value('flatStakeNetUnits'),roi=value('flatStakeRoi'),days=count(item.independentMatchDays);
+   if(won>settled||count(item.pricedRows)!==settled||days>count(q.independentMatchDays)
+      ||value('hitRate')!==(settled?won/settled:null)
+      ||(settled===0&&(net!==null||roi!==null||days!==0))
+      ||(settled>0&&(net===null||roi===null||!near(roi,net/settled))))throw new Error('Invalid model quality cohort');
+   for(const name of ['brier','marketBrier','logLoss','marketLogLoss']){
+    const score=value(name);if((settled===0&&score!==null)||(settled>0&&(score===null||score<0)))throw new Error('Invalid model quality score');
+   }
+   result[key]={settled,won,hitRate:value('hitRate'),brier:value('brier'),marketBrier:value('marketBrier'),logLoss:value('logLoss'),marketLogLoss:value('marketLogLoss'),flatStakeNetUnits:value('flatStakeNetUnits'),flatStakeRoi:value('flatStakeRoi'),independentMatchDays:count(item.independentMatchDays)};
+  }
+  const entries=Object.values(result);
+  if(entries.reduce((total,item)=>total+item.settled,0)!==totalSettled||entries.reduce((total,item)=>total+item.won,0)!==totalWon)throw new Error('Incomplete model quality partition');
+  const totalNet=metric('flatStakeNetUnits');
+  if(totalNet!==null&&!near(entries.reduce((total,item)=>total+(item.flatStakeNetUnits??0),0),totalNet))throw new Error('Inconsistent model quality returns');
+  for(const name of ['brier','marketBrier','logLoss','marketLogLoss'] as const){
+   const overall=metric(name);if(overall!==null&&!near(entries.reduce((total,item)=>total+(item[name]??0)*item.settled,0)/totalSettled,overall))throw new Error('Inconsistent model quality scoring');
+  }
+  return result;
+ };
+ return {independentMatchDays:count(q.independentMatchDays),settled:totalSettled,won:totalWon,hitRate:metric('hitRate'),marketTopHitRate:metric('marketTopHitRate'),brier:metric('brier'),marketBrier:metric('marketBrier'),logLoss:metric('logLoss'),marketLogLoss:metric('marketLogLoss'),blockers:list(q.blockers).map(text),minimumSettled:count(policy.minimumSettled),minimumMatchDays:count(policy.minimumMatchDays),bySpBucket:group(q.bySpBucket,['sp_le_1_45','sp_gt_1_45_le_1_70','sp_gt_1_70_le_2_05','sp_gt_2_05_le_2_60','sp_gt_2_60']),byModelPriceSignal:group(q.byModelPriceSignal,['negative','nonnegative'])};
 }
 function dayCoverage(value:unknown):DayCoverageData{
   const c=object(value),targetCount=count(c.targetCount),publishableCount=count(c.publishableCount),qualifiedCount=count(c.qualifiedCount),unqualifiedCount=count(c.unqualifiedCount),missingTotal=count(c.missingTotal);

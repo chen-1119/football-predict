@@ -84,6 +84,32 @@ test('the selected market exact SP product must cross the floor before display r
   assert.equal(chooseCombo(ds(1.58),2,NOW),null);
   const c=chooseCombo(ds(1.59),2,NOW);assert.equal(c.totalOdds,2.53);assert.equal(product(c.selections).passes(2.5),true);
 });
+test('equal model scores use stable match and market identity rather than the lowest SP',()=>{
+  const had=(id,sp)=>decide(match(id,NOW,{odds:{odds1:sp,oddsX:3.5,odds2:4.5}}));
+  const decisions=[had(1,1.7),had(2,2.5),had(3,1.8)];
+  const selected=chooseCombo(decisions,2,NOW);
+  assert.deepEqual(selected.legs.map(d=>d.sourceMatchId),['1','2']);
+  assert.equal(selected.rawTotalOdds,4.25);
+  assert.equal(validCombo(selected),true);
+  assert.deepEqual(chooseCombo(decisions.slice().reverse(),2,NOW).legs.map(d=>d.sourceMatchId),['1','2']);
+  assert.deepEqual(chooseCombo([had(1,1.7),had(2,2),had(3,2.3)],2,NOW).legs.map(d=>d.sourceMatchId),['1','2']);
+  const frozen=freezeCombo(selected,NOW),before=JSON.stringify(frozen);
+  assert.equal(validCombo(frozen,{frozen:true}),true);
+  chooseCombo([had(1,1.7),had(2,2),had(3,2.3)],2,NOW);
+  assert.equal(JSON.stringify(frozen),before);
+});
+test('model score still ranks first and SP only excludes combinations below the floor',()=>{
+  const had=(id,sp,home=55)=>{
+    const m=match(id,NOW,{odds:{odds1:sp,oddsX:3.5,odds2:4.5}});
+    m.probabilityModel.oneXTwo.final={home,draw:25,away:75-home};
+    return decide(m);
+  };
+  const stronger=chooseCombo([had(1,1.7),had(2,2.5),had(3,1.8,56)],2,NOW);
+  assert.deepEqual(stronger.legs.map(d=>d.sourceMatchId),['1','3']);
+  const floor=chooseCombo([had(1,1.4),had(2,1.6),had(3,1.8)],2,NOW);
+  assert.deepEqual(floor.legs.map(d=>d.sourceMatchId).sort(),['1','3']);
+  assert.equal(floor.rawTotalOdds,2.52);
+});
 test('selection tampering is rejected even if the outer frozen record is rehashed',()=>{
   for(const field of ['odds','handicapLine','modelProbability','decisionRecordHash','quoteObservedAt']){
     const c=structuredClone(freezeCombo(mixed(),NOW));
