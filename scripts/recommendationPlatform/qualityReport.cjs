@@ -6,21 +6,30 @@ const {validDecision}=require('./decision.cjs');
 const {hash}=require('../../src/services/publishedForecastPolicy.cjs');
 const CODES=['1','X','2'];
 const POLICY=Object.freeze({version:'frozen-quality-review-v1',minimumSettled:100,minimumMatchDays:7});
+const SP_BUCKETS=Object.freeze(['sp_le_1_45','sp_gt_1_45_le_1_70','sp_gt_1_70_le_2_05','sp_gt_2_05_le_2_60','sp_gt_2_60']);
 const marketLeader=probabilities=>CODES.find(c=>CODES.every(other=>other===c||probabilities[c]>probabilities[other]+1e-12))||null;
+function spBucket(odds){
+ if(odds<=1.45)return SP_BUCKETS[0];
+ if(odds<=1.70)return SP_BUCKETS[1];
+ if(odds<=2.05)return SP_BUCKETS[2];
+ if(odds<=2.60)return SP_BUCKETS[3];
+ return SP_BUCKETS[4];
+}
 function wilson(won,total){
   if(!total)return null;const z=1.959963984540054,p=won/total,den=1+z*z/total;
   const center=(p+z*z/(2*total))/den,spread=z*Math.sqrt(p*(1-p)/total+z*z/(4*total*total))/den;
   return {lower:Math.max(0,center-spread),upper:Math.min(1,center+spread)};
 }
 function measure(rows){
-  let won=0,brier=0,marketBrier=0,logLoss=0,marketLogLoss=0,marketWon=0,marketTied=0;
+  let won=0,brier=0,marketBrier=0,logLoss=0,marketLogLoss=0,marketWon=0,marketTied=0,flatStakeNetUnits=0,pricedRows=0;
   for(const {decision:d,settlement:s} of rows){
     won+=Number(d.tipCode===s.actual);const marketTop=marketLeader(d.marketProbabilities);if(marketTop)marketWon+=Number(marketTop===s.actual);else marketTied++;
+    if(Number.isFinite(d.odds)&&d.odds>1){pricedRows++;flatStakeNetUnits+=d.tipCode===s.actual?d.odds-1:-1;}
     for(const c of CODES){brier+=(d.probabilities[c]-Number(c===s.actual))**2;marketBrier+=(d.marketProbabilities[c]-Number(c===s.actual))**2;}
     logLoss-=Math.log(Math.max(1e-15,d.probabilities[s.actual]));marketLogLoss-=Math.log(Math.max(1e-15,d.marketProbabilities[s.actual]));
   }
   const marketUnique=rows.length-marketTied;
-  return {settled:rows.length,won,hitRate:rows.length?won/rows.length:null,hitRateInterval95:wilson(won,rows.length),marketTopWins:marketWon,marketUniqueTopSettled:marketUnique,marketTied,marketTopHitRate:marketUnique?marketWon/marketUnique:null,brier:rows.length?brier/rows.length:null,marketBrier:rows.length?marketBrier/rows.length:null,logLoss:rows.length?logLoss/rows.length:null,marketLogLoss:rows.length?marketLogLoss/rows.length:null};
+  return {settled:rows.length,won,hitRate:rows.length?won/rows.length:null,hitRateInterval95:wilson(won,rows.length),marketTopWins:marketWon,marketUniqueTopSettled:marketUnique,marketTied,marketTopHitRate:marketUnique?marketWon/marketUnique:null,brier:rows.length?brier/rows.length:null,marketBrier:rows.length?marketBrier/rows.length:null,logLoss:rows.length?logLoss/rows.length:null,marketLogLoss:rows.length?marketLogLoss/rows.length:null,pricedRows,flatStakeNetUnits:pricedRows?flatStakeNetUnits:null,flatStakeRoi:pricedRows?flatStakeNetUnits/pricedRows:null};
 }
 function cohort(rows,allSettled){
   return {...measure(rows),independentMatchDays:new Set(rows.map(r=>r.decision.businessDate)).size,
@@ -65,11 +74,21 @@ function buildQualityReport(input,{asOf=Date.now()}={}){
   const byLeaderAgreement=Object.fromEntries(['agree','disagree','market-tied'].map(group=>[
     group,cohort(settled.filter(r=>leaderAgreement(r.decision)===group),settled.length),
   ]));
+  const bySpBucket=Object.fromEntries(SP_BUCKETS.map(bucket=>[
+    bucket,cohort(settled.filter(r=>spBucket(r.decision.odds)===bucket),settled.length),
+  ]));
+  const byModelPriceSignal=Object.fromEntries(['negative','nonnegative'].map(group=>[
+    group,cohort(settled.filter(r=>(r.decision.modelProbability*r.decision.odds-1<0?'negative':'nonnegative')===group),settled.length),
+  ]));
   const evaluationCoverage={inputRows:input.length,distinctPublishedEvents:latest.size,settledEvents:settled.length,
     settledShareOfPublishedEvents:latest.size?settled.length/latest.size:null,fixtureCoverage:null,
     scope:'supplied-frozen-publication-ledger-only'};
   return {version:POLICY.version,asOf:new Date(asOf).toISOString(),policy:POLICY,scope:'published-final-precutoff-per-event',interpretation:'observational-frozen-prediction-evaluation-not-a-trained-backtest',independentMatchDays:days.length,overall,daily,confidenceBands:bands,
-    evaluationCoverage,byTipCode,byLeaderAgreement,leaderAgreementPolicy:'frozen-model-tip-versus-unique-frozen-market-probability-leader;ties-reported-separately',
+    evaluationCoverage,byTipCode,byLeaderAgreement,bySpBucket,byModelPriceSignal,
+    spBucketPolicy:'frozen selected SP; exact upper bounds 1.45, 1.70, 2.05 and 2.60; diagnostic only',
+    modelPriceSignalPolicy:'sign of frozen model probability times frozen selected SP minus one; descriptive only, not calibrated value or promotion',
+    flatStakePolicy:'one unit per settled frozen pick at its published SP; diagnostic only, no fees or correlated-bet claim',
+    leaderAgreementPolicy:'frozen-model-tip-versus-unique-frozen-market-probability-leader;ties-reported-separately',
     exclusions,preliminaryEvidenceSufficient:blockers.length===0,blockers,formalPromotion:false};
 }
 if(require.main===module){

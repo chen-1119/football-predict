@@ -52,23 +52,24 @@ test('review reads real pages of twelve out of sixty-nine without changing aggre
   button(tree,'下一页').props.onClick();tree=ui.render();assert.equal(byClass(tree,'rc-pick').length,12);assert.notEqual(byClass(tree,'rc-pick')[0].props['data-decision-id'],first);assert.match(words(tree),/第 2 \/ 6 页/);assert.match(words(byClass(tree,'rc-stats')[0]),/35 \/ 69/);
 });
 
-test('actual shared quality component distinguishes ready reference from watch without rewriting the frozen pick',async()=>{
+test('actual shared quality component distinguishes input readiness, price arithmetic and watch without rewriting the frozen pick',async()=>{
   const ready=await harness(),readyTree=ready.render(),readyNotes=byClass(readyTree,'selection-quality-note');
   assert.equal(readyNotes.length,12);assert(readyNotes.every(n=>n.props['data-selection-status']==='reference-qualified'));
-  assert.match(words(readyNotes[0]),/参考入选 · 待验证/);assert.match(words(readyNotes[0]),/不代表已经验证命中率或回报/);
+  assert.match(words(readyNotes[0]),/模型方向 · 当前价格不支持/);assert.match(words(readyNotes[0]),/这不是价格或命中率验证/);
+  assert.equal(readyNotes[0].props['data-price-status'],'unsupported');
   const watch=await harness({missingInputEvidence:true}),before=JSON.stringify(watch.data),watchTree=watch.render(),watchNotes=byClass(watchTree,'selection-quality-note');
   assert.equal(watchNotes.length,12);assert(watchNotes.every(n=>n.props['data-selection-status']==='watch'));
   assert.match(words(watchNotes[0]),/观望 · 保留模型方向/);assert.match(words(watchNotes[0]),/本次模型输入计算尚未核验|本次模型输入依据尚未完整存档/);assert.match(words(watchNotes[0]),/暂不进入新串关/);
   assert.equal(JSON.stringify(watch.data),before);
 });
 
-test('negative model EV is prominent and input eligibility is not presented as prediction validation',async()=>{
+test('negative model EV is prominent and input eligibility is not presented as price value',async()=>{
   const ui=await harness();
   assert(ui.data.review.singles[0].selectionQuality.expectedValue<0);
   ui.data.review.singles[1].selectionQuality={...ui.data.review.singles[1].selectionQuality,expectedValue:null};
   const tree=ui.render(),notes=byClass(tree,'selection-quality-note');
-  assert.match(words(notes[0]),/只代表可列入参考，不代表已经验证命中率或回报/);
-  assert.match(words(notes[0]),/冻结发布时的模型概率与SP不占优/);
+  assert.match(words(notes[0]),/模型概率最高只确定方向，不等于值得投注/);
+  assert.match(words(notes[0]),/期望值为负；不能仅因 SP 低/);
   assert.match(words(notes[0]),/冻结发布模型期望值/);
   assert.equal(nodes(notes[0],n=>n.props?.['data-model-ev']==='negative').length,1);
   assert.equal(nodes(notes[1],n=>n.props?.['data-model-ev']==='negative').length,0);
@@ -132,7 +133,8 @@ test('failed review read with archived records never claims zero or no matching 
 });
 
 test('versioned performance and per-match probability details are closed by default while their contents remain available',async()=>{
-  const ui=await harness(),tree=ui.render();const insights=byClass(tree,'rc-review-insights')[0];assert.equal(insights.type,'details');assert.notEqual(insights.props.open,true);assert.match(words(insights),/分母：全部该版已结算场次/);assert.match(words(insights),/仅胜平负首选命中的场次/);
+  const ui=await harness(),tree=ui.render();const insights=byClass(tree,'rc-review-insights').find(node=>words(node).includes('让球复盘与模型校准'));assert.equal(insights.type,'details');assert.notEqual(insights.props.open,true);assert.match(words(insights),/分母：全部该版已结算场次/);assert.match(words(insights),/仅胜平负首选命中的场次/);
+  const spReview=nodes(tree,node=>node.props?.['data-sp-band-review']==='observational')[0];assert.equal(spReview.type,'details');assert.notEqual(spReview.props.open,true);assert.match(words(spReview),/SP ≤ 1.45/);assert.match(words(spReview),/不是提高 SP 的选场规则/);
   assert.equal(byClass(tree,'rc-analysis').length,12);assert(byClass(tree,'rc-analysis').every(node=>node.type==='details'&&!node.props.open));assert(byClass(tree,'rc-details').every(node=>!node.props.open));
   const first=byClass(tree,'rc-pick')[0],children=first.props.children;assert(children.findIndex(node=>node.props?.className==='rc-pick__main')<children.findIndex(node=>node.props?.className==='rc-primary-picks'));assert.match(words(first),/1 : 0/);
 });

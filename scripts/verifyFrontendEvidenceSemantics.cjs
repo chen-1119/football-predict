@@ -189,7 +189,9 @@ check('unified coverage and published picks keep qualified selection separate fr
   && dayCoverage.includes('current.qualifiedCount')
   && dayCoverage.includes('current.targetCount')
   && dayCoverage.includes('item.reasonText')
-  && recommendationCenter.includes("quality?.qualified===false?(zh?'观望方向'")
+  && recommendationCenter.includes("quality.qualified===false?(zh?'观望方向'")
+  && recommendationCenter.includes("selectionPriceStatus(quality)==='unsupported'?(zh?'模型方向 · 价格不支持'")
+  && recommendationCenter.includes("data-price-status={reviewSelection?.selectedMarket==='HHAD'?'unknown':selectionPriceStatus(quality)}")
   && selectionQualityNote.includes('quality.reasons.map')
   && selectionQualityNote.includes('暂不进入新串关'));
 check('new published surfaces are reference only and old formal actions retain their gate',
@@ -281,7 +283,10 @@ check('combination surface uses bound market, SP, cutoff and freshness instead o
   && recommendationCenter.includes('不会改选第二方向凑SP')
   && recommendationCenterView.includes("throw new Error('Post-cutoff combo')")
   && recommendationCenterView.includes("throw new Error('Invalid SP product')")
-  && recommendationCenter.includes('未将单场概率相乘作为真实串关命中率'));
+  && recommendationCenter.includes('SP 只用于最低门槛')
+  && recommendationCenter.includes('也未验证价格优势或真实串关命中率')
+  && !recommendationCenter.includes('combo.probability')
+  && !recommendationCenter.includes('combo.modelProbability'));
 
 const failures = checks.filter((item) => !item.ok);
 console.log(JSON.stringify({

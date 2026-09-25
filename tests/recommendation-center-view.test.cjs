@@ -12,6 +12,20 @@ const {createRuntime}=require('../scripts/recommendationPlatform/runtime.cjs');
 const {match,memoryPorts,validators}=require('./recommendationFixture.cjs');
 async function sample(){const p=memoryPorts();await createRuntime(p,{validators}).publishingCycle();return {recommendationCenter:p.state.view};}
 test('the actual runtime projection parses for current UI',async()=>{const x=parseRecommendationCenter(await sample());assert.equal(x.current.length,3);assert.equal(x.previews.length,2);assert.equal(x.review.statistics.single.published,3);});
+test('SP review groups must partition the verified settled sample before display',async()=>{
+ const payload=await sample(),report=payload.recommendationCenter.review.qualityReport;
+ assert.equal(Object.values(report.bySpBucket).reduce((n,g)=>n+g.settled,0),report.overall.settled);
+ assert.equal(Object.values(report.byModelPriceSignal).reduce((n,g)=>n+g.settled,0),report.overall.settled);
+ assert.equal(parseRecommendationCenter(payload).review.qualityReport.bySpBucket.sp_le_1_45.settled,0);
+ report.bySpBucket.sp_le_1_45.settled++;
+ assert.throws(()=>parseRecommendationCenter(payload),/Invalid model quality cohort|Incomplete model quality partition/);
+});
+test('empty SP cohorts cannot claim wins, profit or probability accuracy',async()=>{
+ for(const [field,value] of [['hitRate',1.5],['flatStakeNetUnits',1e9],['flatStakeRoi',.8]]){
+  const payload=await sample();payload.recommendationCenter.review.qualityReport.bySpBucket.sp_le_1_45[field]=value;
+  assert.throws(()=>parseRecommendationCenter(payload),/Invalid model quality cohort/,field);
+ }
+});
 test('selection-quality EV must match the frozen published HAD probability and SP',async()=>{
  const payload=await sample(),row=payload.recommendationCenter.current[0];
  assert(Math.abs(row.selectionQuality.expectedValue-(row.decision.modelProbability*row.decision.odds-1))<1e-12);
