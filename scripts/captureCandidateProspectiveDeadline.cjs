@@ -255,7 +255,8 @@ const sha256File = (filePath) => {
 
 const activeLedgerFor = (registry) => (
   Array.isArray(registry?.ledgers)
-    ? registry.ledgers.find((ledger) => ledger?.ledgerId === registry.activeLedgerId) || null
+    ? registry.ledgers.find((ledger) => ledger?.ledgerId === registry.activeLedgerId
+      && !ledger.events.some((event) => event.type === "retirement")) || null
     : null
 );
 
@@ -2486,15 +2487,6 @@ const capture = async ({ deadlineOnly = false } = {}) => {
         blockers: verification.blockers,
       });
     }
-    let ledger = activeLedgerFor(registry);
-    if (!ledger) {
-      return writeStatus({
-        ok: true,
-        skipped: true,
-        reason: "active-ledger-missing",
-        blockers: ["active-ledger-missing"],
-      });
-    }
     const { currentMatches, historyMatches, matches } = universe;
     currentResearchSettlementInputFingerprint = deadlineOnly
       ? priorCaptureStatus?.researchSettlementInputFingerprint || null
@@ -2517,7 +2509,18 @@ const capture = async ({ deadlineOnly = false } = {}) => {
     if (settlementUpdate.changed) {
       writeJsonAtomic(registryFile, settlementUpdate.registry);
       registry = settlementUpdate.registry;
-      ledger = activeLedgerFor(registry) || ledger;
+    }
+    const ledger = activeLedgerFor(registry);
+    if (!ledger) {
+      return writeStatus({
+        ok: true,
+        skipped: true,
+        changed: settlementUpdate.changed === true,
+        reason: "active-ledger-missing",
+        settlementEventsAdded: Number(settlementUpdate.settlementsAdded || 0),
+        retiredSettlementsAdded: Number(settlementUpdate.retiredSettlementsAdded || 0),
+        blockers: ["active-ledger-missing"],
+      });
     }
     const initialResearchReuse = deadlineOnly ? null : researchHeartbeatReuseDecision({
       priorStatus: priorCaptureStatus,

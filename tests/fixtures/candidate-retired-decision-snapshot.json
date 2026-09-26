@@ -1,0 +1,149 @@
+{
+  "sourceMatchId": "retired-fixture",
+  "matchId": "sporttery_retired-fixture",
+  "kickoffTime": "2026-07-27T01:00:00.000Z",
+  "capturedAt": "2026-07-27T00:40:00.000Z",
+  "firstSeenAt": "2026-07-27T00:40:00.000Z",
+  "phase": "final",
+  "sourceCycleId": "cycle-retired-fixture",
+  "modelGeneratedAt": "2026-07-27T00:40:00.000Z",
+  "policyVersion": "prediction-policy-test-v1",
+  "promptVersion": "prediction-prompt-test-v1",
+  "modelVersion": "prediction-model-test-v1",
+  "calibrationVersion": "prediction-calibration-test-v1",
+  "best": {
+    "tipCode": "1",
+    "oddsPoolCode": "HAD",
+    "odds": 1.8,
+    "recommendationAction": "reference"
+  },
+  "oneXTwo": {
+    "tipCode": "1",
+    "oddsPoolCode": "HAD",
+    "odds": 1.8,
+    "recommendationAction": "reference"
+  },
+  "featureSnapshot": {
+    "version": "prediction-feature-snapshot-test-v1",
+    "capturedAt": "2026-07-27T00:40:00.000Z",
+    "modelGeneratedAt": "2026-07-27T00:40:00.000Z",
+    "sourceCycleId": "cycle-retired-fixture",
+    "modelVersion": "prediction-model-test-v1",
+    "calibrationVersion": "prediction-calibration-test-v1",
+    "modelInputs": {
+      "market": {
+        "home": 0.510729613734,
+        "draw": 0.270386266094,
+        "away": 0.218884120172
+      },
+      "form": {
+        "home": 1.8,
+        "away": 1.1
+      }
+    }
+  },
+  "decisionSnapshot": {
+    "version": "candidate-decision-snapshot-v2",
+    "sourceMatchId": "retired-fixture",
+    "matchId": "sporttery_retired-fixture",
+    "kickoffTime": "2026-07-27T01:00:00.000Z",
+    "capturedAt": "2026-07-27T00:40:00.000Z",
+    "decisionAt": "2026-07-27T00:40:00.000Z",
+    "sourceCycleId": "cycle-retired-fixture",
+    "policyVersion": "prediction-policy-test-v1",
+    "promptVersion": "prediction-prompt-test-v1",
+    "modelVersion": "prediction-model-test-v1",
+    "calibrationVersion": "prediction-calibration-test-v1",
+    "sourceTimestamps": {
+      "modelGeneratedAt": "2026-07-27T00:40:00.000Z"
+    },
+    "clockAudit": {
+      "version": "decision-clock-audit-v1",
+      "eligible": true,
+      "blockers": []
+    },
+    "probabilities": {
+      "HAD": {
+        "1": 0.59,
+        "2": 0.16,
+        "X": 0.25
+      },
+      "HHAD": {
+        "line": -1,
+        "outcomes": {
+          "1": 0.39,
+          "2": 0.3,
+          "X": 0.31
+        }
+      }
+    },
+    "markets": {
+      "HAD": {
+        "odds": {
+          "1": 1.8,
+          "2": 4.2,
+          "X": 3.4
+        },
+        "marketProbabilities": {
+          "1": 0.510729613734,
+          "2": 0.218884120172,
+          "X": 0.270386266094
+        },
+        "observedAt": "2026-07-27T00:40:00.000Z",
+        "receivedAt": "2026-07-27T00:40:00.000Z",
+        "provenanceHash": "4444444444444444444444444444444444444444444444444444444444444444",
+        "provenance": {
+          "hash": "4444444444444444444444444444444444444444444444444444444444444444",
+          "strict": {
+            "collectorAttestationKeyId": "collector-a",
+            "collectorAttestationCommitmentHash": "5555555555555555555555555555555555555555555555555555555555555555",
+            "trustedCollectorCount": 2
+          },
+          "extraction": {
+            "hash": "6666666666666666666666666666666666666666666666666666666666666666"
+          }
+        }
+      },
+      "HHAD": {
+        "line": -1,
+        "odds": {
+          "1": 2.45,
+          "2": 2.35,
+          "X": 3.5
+        },
+        "marketProbabilities": {
+          "1": 0.364623739333,
+          "2": 0.380139643134,
+          "X": 0.255236617533
+        },
+        "observedAt": "2026-07-27T00:40:00.000Z",
+        "receivedAt": "2026-07-27T00:40:00.000Z",
+        "provenanceHash": "7777777777777777777777777777777777777777777777777777777777777777",
+        "provenance": {
+          "hash": "7777777777777777777777777777777777777777777777777777777777777777",
+          "strict": {
+            "collectorAttestationKeyId": "collector-a",
+            "collectorAttestationCommitmentHash": "5555555555555555555555555555555555555555555555555555555555555555",
+            "trustedCollectorCount": 2
+          },
+          "extraction": {
+            "hash": "8888888888888888888888888888888888888888888888888888888888888888"
+          }
+        }
+      }
+    },
+    "exposure": {
+      "shadowTracks": {
+        "HHAD_COMPANION": {
+          "selection": {
+            "code": "1",
+            "handicapLine": -1,
+            "odds": 2.45,
+            "modelProbability": 0.39,
+            "marketProbability": 0.364623739333
+          }
+        }
+      }
+    }
+  }
+}
