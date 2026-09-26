@@ -2752,7 +2752,7 @@ for (const marker of ["Download the React DevTools", "Each child in a list shoul
 // generic cache limit without changing the signed release archive. Keep the
 // exception exact-path and bounded; every other optional cache retains 512 MiB.
 const optionalDataMaxBytes = relative => relative === "public/data/prediction-snapshots.json"
-  ? 640 * 1024 * 1024 : 512 * 1024 * 1024;
+  ? 768 * 1024 * 1024 : 512 * 1024 * 1024;
 const safeOptionalDataFile = (relative, info) => info.isFile() && !info.isSymbolicLink()
   && info.nlink === 1 && info.size <= optionalDataMaxBytes(relative);
 const inspectOptionalData = (relative) => {
