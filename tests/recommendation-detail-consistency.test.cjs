@@ -29,6 +29,20 @@ const Pick=compile('../src/components/recommendations/PublishedMatchPick.tsx',id
  if(id.endsWith('.css'))return{};throw Error(id);
 }).PublishedMatchPick;
 
+test('detail distinguishes a fresh draw study candidate from the unchanged published home direction',()=>{
+ const row=structuredClone(fixture.fixtures[0].row),quoteAt=Date.parse(row.decision.quoteObservedAt);
+ row.outcomeResearch={category:'balanced-draw',researchQualified:true,candidateCode:'X',reasons:[],outcomes:[
+  {code:'1',modelProbability:.4,odds:2.25},{code:'X',modelProbability:.34,odds:3.45},{code:'2',modelProbability:.26,odds:3.8},
+ ]};
+ const fresh=Pick({row,language:'zh',now:quoteAt+60000});
+ assert.match(words(fresh),/胜平负首选主胜/);
+ assert.match(words(fresh),/均势防平 · 平局/);
+ assert.match(words(fresh),/研究候选，尚未通过独立比赛日验证/);
+ const stale=Pick({row,language:'zh',now:quoteAt+16*60000});
+ assert.match(words(stale),/报价过期，仅供比较/);
+ assert.doesNotMatch(words(stale),/研究候选，尚未通过独立比赛日验证/);
+});
+
 test('published HAD direction and aligned supplemental research posterior remain separately labeled',()=>{
  const compare=published.publishedPosteriorDisagreement;
  const match={id:'sporttery_2041649',sourceMatchId:'2041649',kickoffTime:'2026-09-24T18:20:00+08:00',

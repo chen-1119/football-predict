@@ -23,7 +23,38 @@ export interface SelectionQuality {version:'recommendation-selection-quality-v1'
 export interface PublishedScore {home:number;away:number;label:string;probability:number;hadCode:Outcome;hhadCode:Outcome}
 export interface PublishedTotalGoals {label:string;probability:number}
 export interface PublishedScores {status:'available'|'unavailable';version:'published-score-distribution-v1';decisionId:string;recordHash:string;topScores:PublishedScore[];alignedScores:PublishedScore[];totalGoals?:PublishedTotalGoals[]}
-export interface SingleRow { decision:Decision; settlement:Settlement; handicapSettlement?:Settlement|null;selectionQuality?:SelectionQuality|null;scoreDistribution?:PublishedScores|null }
+export interface OutcomeCategoryResearch {
+  version:'outcome-category-research-v1';decisionId:string;recordHash:string;researchOnly:true;formalPromotionEligible:false;
+  category:'strong-favorite'|'balanced-draw'|'upset-signal'|'watch';candidateCode:Outcome|null;
+  modelLeaderCode?:Outcome;marketFavoriteCode?:Outcome;researchQualified:boolean;reasons:string[];evidenceCodes:string[];
+  outcomes:Array<{code:Outcome;modelProbability:number;fairMarketProbability:number;odds:number;probabilityEdge:number;expectedValue:number;modelRank:number;marketRank:number}>;
+}
+export function outcomeCategoryLabel(category:OutcomeCategoryResearch['category'],zh:boolean):string{
+  const labels={
+    'strong-favorite':zh?'强势热门':'Strong favorite',
+    'balanced-draw':zh?'均势防平':'Balanced draw',
+    'upset-signal':zh?'非热门方向':'Nonfavorite signal',
+    watch:zh?'暂无明确分类':'No clear category',
+  };
+  return labels[category];
+}
+export function outcomeResearchReasonLabel(reason:string,zh:boolean):string{
+  const labels:Record<string,[string,string]>={
+    'input-evidence-unavailable':['缺少绑定的模型输入证据','Bound model inputs unavailable'],
+    'input-arithmetic-unverified':['模型输入算术未核验','Model input arithmetic unverified'],
+    'team-samples-insufficient':['球队历史样本不足','Insufficient team history'],
+    'selection-quality-mismatch':['发布质量状态不一致','Published quality status mismatch'],
+    'official-had-quote-unverified':['官方胜平负 SP 未核验','Official 1X2 SP unverified'],
+    'quote-stale':['SP 超过15分钟有效期','SP older than the 15-minute limit'],
+    'cross-track-direction-conflict':['同场其他已核验方向冲突','Conflict with another verified direction'],
+    'category-holdout-unvalidated':['平局／非热门分类尚未通过独立验证','Draw or nonfavorite category lacks independent validation'],
+    'no-category-signal':['三方向均未形成合格分类','No outcome meets category rules'],
+    'price-edge-insufficient':['相对去水市场优势不足','Edge over de-vigged market insufficient'],
+    'expected-value-insufficient':['模型概率乘 SP 的估值不足','Model probability × SP value insufficient'],
+  };
+  return (labels[reason]??[reason,reason])[zh?0:1];
+}
+export interface SingleRow { decision:Decision; settlement:Settlement; handicapSettlement?:Settlement|null;selectionQuality?:SelectionQuality|null;scoreDistribution?:PublishedScores|null;outcomeResearch?:OutcomeCategoryResearch|null }
 export function boundOfficialHandicapSp(analysis:HandicapAnalysis|null|undefined,direction:Outcome|null|undefined):number|null{
   const quote=analysis?.marketReference;
   if(!direction||quote?.source!=='sporttery:HHAD')return null;
@@ -172,7 +203,7 @@ function single(v:unknown):SingleRow{
   if(['WON','LOST'].includes(s.state)&&(!s.actual||!s.score||(s.actual===d.tipCode)!==(s.state==='WON')))throw new Error('Settlement disagrees with decision');
   const hs=x.handicapSettlement==null?null:settlement(x.handicapSettlement);
   if(hs&&['WON','LOST'].includes(hs.state)&&d.handicapAnalysis&&(!hs.actual||!hs.score||(hs.actual===d.handicapAnalysis.tipCode)!==(hs.state==='WON')))throw new Error('Handicap settlement disagrees with decision');
-  let quality:SelectionQuality|null=null,scores:PublishedScores|null=null;
+  let quality:SelectionQuality|null=null,scores:PublishedScores|null=null,research:OutcomeCategoryResearch|null=null;
   if(x.selectionQuality!=null){
     const q=object(x.selectionQuality),qualified=q.qualified===true;
     if(!['recommendation-selection-quality-v1','recommendation-selection-quality-v2'].includes(String(q.version))||q.validation!=='unvalidated'||q.status!==(qualified?'reference-qualified':'watch')||q.priceFilterApplied!==(q.version==='recommendation-selection-quality-v2'))throw new Error('Invalid selection quality');
@@ -213,7 +244,34 @@ function single(v:unknown):SingleRow{
     scores={version:p.version,status:p.status as PublishedScores['status'],decisionId:d.decisionId,recordHash:d.recordHash,topScores,alignedScores,totalGoals};
     if(scores.alignedScores.some(r=>r.hadCode!==d.tipCode||r.hhadCode!==d.handicapAnalysis?.tipCode))throw new Error('Incoherent aligned score');
   }
-  return {decision:d,settlement:s,handicapSettlement:hs,selectionQuality:quality,scoreDistribution:x.scoreDistribution===undefined?undefined:scores};
+  if(x.outcomeResearch!=null){
+    const r=object(x.outcomeResearch),category=r.category;
+    if(r.version!=='outcome-category-research-v1'||r.decisionId!==d.decisionId||r.recordHash!==d.recordHash
+      ||r.researchOnly!==true||r.formalPromotionEligible!==false
+      ||!['strong-favorite','balanced-draw','upset-signal','watch'].includes(String(category)))throw new Error('Invalid outcome research binding');
+    const candidateCode=r.candidateCode==null?null:outcome(r.candidateCode);
+    const modelLeaderCode=r.modelLeaderCode==null?undefined:outcome(r.modelLeaderCode);
+    const marketFavoriteCode=r.marketFavoriteCode==null?undefined:outcome(r.marketFavoriteCode);
+    const outcomes=list(r.outcomes).map(value=>{const o=object(value),code=outcome(o.code),modelProbability=number(o.modelProbability),fairMarketProbability=number(o.fairMarketProbability),odds=number(o.odds),probabilityEdge=number(o.probabilityEdge),expectedValue=number(o.expectedValue),modelRank=count(o.modelRank),marketRank=count(o.marketRank);
+      if(modelProbability<0||modelProbability>1||fairMarketProbability<0||fairMarketProbability>1||odds<=1
+        ||modelRank<1||modelRank>3||marketRank<1||marketRank>3
+        ||Math.abs(modelProbability-d.probabilities[code])>1e-8||Math.abs(odds-(d.quoteOdds?.[code]??NaN))>1e-8
+        ||Math.abs(probabilityEdge-(modelProbability-fairMarketProbability))>1e-8
+        ||Math.abs(expectedValue-(modelProbability*odds-1))>1e-8)throw new Error('Invalid outcome research arithmetic');
+      return {code,modelProbability,fairMarketProbability,odds,probabilityEdge,expectedValue,modelRank,marketRank};});
+    if(outcomes.length!==0&&(
+      outcomes.length!==3||new Set(outcomes.map(o=>o.code)).size!==3
+      ||Math.abs(outcomes.reduce((total,o)=>total+o.fairMarketProbability,0)-1)>1e-8
+      ||outcomes.some(o=>Math.abs(o.fairMarketProbability-(1/o.odds)/outcomes.reduce((total,item)=>total+1/item.odds,0))>1e-8)
+      ||modelLeaderCode!==outcomes.find(o=>o.modelRank===1)?.code
+      ||marketFavoriteCode!==outcomes.find(o=>o.marketRank===1)?.code))throw new Error('Invalid outcome research ranks');
+    const reasons=list(r.reasons).map(text),evidenceCodes=list(r.evidenceCodes).map(text),researchQualified=r.researchQualified===true;
+    if((candidateCode&&!outcomes.some(o=>o.code===candidateCode))||(!candidateCode&&researchQualified)
+      ||(researchQualified&&reasons.length>0)||(outcomes.length===0&&(category!=='watch'||candidateCode!==null)))throw new Error('Contradictory outcome research');
+    research={version:'outcome-category-research-v1',decisionId:d.decisionId,recordHash:d.recordHash,researchOnly:true,formalPromotionEligible:false,
+      category:category as OutcomeCategoryResearch['category'],candidateCode,modelLeaderCode,marketFavoriteCode,researchQualified,reasons,evidenceCodes,outcomes};
+  }
+  return {decision:d,settlement:s,handicapSettlement:hs,selectionQuality:quality,scoreDistribution:x.scoreDistribution===undefined?undefined:scores,outcomeResearch:x.outcomeResearch===undefined?undefined:research};
 }
 function comboSelection(v:unknown,parent:Decision,rawParent:Obj):ComboSelection{
   const s=object(v),market=s.market,tipCode=outcome(s.tipCode),handicapLine=number(s.handicapLine),odds=number(s.odds),modelProbability=number(s.modelProbability);

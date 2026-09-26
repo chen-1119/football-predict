@@ -6,6 +6,7 @@ const {validCombo}=require('./comboSelections.cjs');
 const {day,time,hash}=require('../../src/services/publishedForecastPolicy.cjs');
 const {buildHandicapCalibration}=require('../../src/services/handicapCalibration.cjs');
 const {selectionQuality,prospectiveRiskReasons,isQualifiedSelection}=require('../../src/services/recommendationSelectionQuality.cjs');
+const {classifyOutcomeResearch}=require('../../src/services/outcomeCategoryResearch.cjs');
 const {conflictForDecision}=require('../../src/services/recommendationCrossTrackConflict.cjs');
 const {buildPublishedScoreDistribution}=require('../../src/services/publishedScoreDistribution.cjs');
 const {buildQualityReport}=require('./qualityReport.cjs');
@@ -223,10 +224,21 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
     const selected=singles.filter(r=>r.decision.businessDate===day(now)).map(row=>{
       const conflict=conflictForDecision(targetMatches,row.decision,now);
       const risk=prospectiveRiskReasons(row.selectionQuality);
-      if(!conflict&&!risk.length)return row;
-      return {...row,selectionQuality:{...row.selectionQuality,status:'watch',qualified:false,
+      const current=(!conflict&&!risk.length)?row:{...row,selectionQuality:{...row.selectionQuality,status:'watch',qualified:false,
         reasons:[...new Set([...(row.selectionQuality.reasons||[]),...risk,...(conflict?[conflict.reason]:[])])],
         ...(conflict?{crossTrack:conflict}:{})}};
+      // The research projection is read-only and exists only for an open
+      // pre-match row. It never changes the published decision or settlement.
+      const open=now<Math.min(time(row.decision.cutoffTime),time(row.decision.kickoffTime))
+        && row.settlement.state==='PENDING';
+      if(!open)return current;
+      const research=classifyOutcomeResearch(row);
+      const staleQuote=!Number.isFinite(time(row.decision.quoteObservedAt))
+        || now-time(row.decision.quoteObservedAt)>15*60000
+        || time(row.decision.quoteObservedAt)>now;
+      const restrictions=[...(conflict?[conflict.reason]:[]),...(staleQuote?['quote-stale']:[])];
+      return {...current,outcomeResearch:restrictions.length
+        ? {...research,researchQualified:false,reasons:[...new Set([...research.reasons,...restrictions])]}:research};
     });
     const today=combos.filter(r=>r.combo.businessDate===day(now)).map(row=>({
       ...row,currentAdvisory:row.combo.legs.flatMap((leg,index)=>{
