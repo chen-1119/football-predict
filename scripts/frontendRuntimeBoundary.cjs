@@ -88,7 +88,7 @@ const UNIT_SOURCE_HASHES = Object.freeze({
   "football-postgres-cos-upload.service": "e6267a03da9facc1b9d421df368d70d3e333d5fb24c7a8ff83aec23a2baa7e52",
   "football-postgres-cos-upload.sh": "e9da629d53fae2ae0edfc0c230828d03c570cfdf7792ca9d8da8fbd92a6724f9",
   "football-predict.service": "392e5ab781fa24961ec05d847f354a57fb4bddc16ef34bdae5c61a687a049af3",
-  "football-sync-worker.service": "153025bc9e4f2effcadd0c1dedf66c53db969e0367d69194116360664f2d5e6c",
+  "football-sync-worker.service": "06249e71449df12b4609ba0a66497b74c2810653e805417153b57b6a4e33ffb2",
 });
 const POLICY_HASH = digest({ version: VERSION, parser: PARSER, entrypoints: ENTRYPOINTS, externalUnits: EXTERNAL_UNITS,
   unitSourceHashes: UNIT_SOURCE_HASHES,

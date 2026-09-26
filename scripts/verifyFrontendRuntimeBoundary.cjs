@@ -115,6 +115,8 @@ function verifyFrontendRuntimeBoundary() {
       changed("deploy/light-server/football-predict.service", text => text.replace("server/index.cjs", "src/pages/PredictionsList.tsx"), unreviewed);
       changed("deploy/light-server/unknown.service", () => "[Service]\nExecStart=/bin/true\n", unreviewed);
       changed("deploy/light-server/football-predict.service", text => text.replace("[Service]", "[Service]\nExecStartPre=/bin/sh -c unknown"), unreviewed);
+      changed("deploy/light-server/football-sync-worker.service", text => text.replace("MemoryHigh=5G", "MemoryHigh=7G"), unreviewed);
+      changed("deploy/light-server/football-sync-worker.service", text => text.replace("MemoryMax=6G", "MemoryMax=7G"), unreviewed);
       changed("deploy/light-server/football-postgres-backup.sh", text => `${text}\n# unreviewed operational source\n`, unreviewed);
       changed("deploy/light-server/football-daily-prematch.service", text => text.replace("scripts/syncDailyPrematchApi.cjs", "scripts/unknown.cjs"), unreviewed);
       changed("scripts/syncDailyPrematchApi.cjs", text => text.replace("'scripts/syncApiFootballData.cjs'", "'scripts/unknown.cjs'"), unreviewed);
