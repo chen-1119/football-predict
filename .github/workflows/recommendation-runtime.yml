@@ -46,6 +46,8 @@ on:
       - 'scripts/verifyReleaseWindowPreflight.cjs'
       - 'scripts/validateNativeReleasePolicy.cjs'
       - 'scripts/createReleaseBundle.cjs'
+      - 'scripts/frontendRuntimeBoundary.cjs'
+      - 'scripts/verifyFrontendRuntimeBoundary.cjs'
       - 'scripts/verifyFrontendEvidenceSemantics.cjs'
       - 'scripts/verifyReleaseBundleSafety.cjs'
       - 'scripts/verifyPostgresMigrationPlan.cjs'
@@ -184,4 +186,6 @@ jobs:
           POSTGRES_GENERATION_TEST_DATABASE_URL: postgresql://recommendation_test:local_test_only@127.0.0.1:5432/recommendation_test
       - name: Frontend evidence semantics
         run: node scripts/verifyFrontendEvidenceSemantics.cjs
+      - name: Frontend runtime boundary
+        run: node scripts/verifyFrontendRuntimeBoundary.cjs
       - run: npm run build
