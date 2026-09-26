@@ -2872,6 +2872,7 @@ const auditLedger = (ledger, {
     : 0;
   const blockers = [];
   if (!verification.valid) blockers.push("hash-chain-invalid");
+  if (ledgerRetired(ledger)) blockers.push("candidate-retired");
   if (!activation) blockers.push("formal-activation-missing");
   if (formal.settled < MIN_FORMAL_SETTLED) {
     blockers.push(`formal-settled:${formal.settled}<${MIN_FORMAL_SETTLED}`);
@@ -3188,6 +3189,29 @@ const updateCandidateRegistry = (registry, inventory, evaluatedAt) => {
   ));
 };
 
+// Retirement closes prediction capture, not the results of predictions that
+// were already committed. Append only settlements to each retired ledger;
+// its immutable retirement link and earlier review prefixes stay untouched.
+const settleRetiredCohorts = ({ registry, matches, evaluatedAt }) => {
+  const nowMs = parseTime(evaluatedAt);
+  if (nowMs === null) return 0;
+  const observedMatches = (Array.isArray(matches) ? matches : []).filter((match) => {
+    const result = officialResultState(match);
+    const observedMs = parseTime(result.observedAt);
+    return result.eligible && observedMs !== null && observedMs <= nowMs;
+  });
+  let settlementsAdded = 0;
+  for (const ledger of registry?.ledgers || []) {
+    if (!ledgerRetired(ledger)) continue;
+    const lastRecordedMs = parseTime(ledger.events.at(-1)?.recordedAt);
+    if (lastRecordedMs === null || nowMs < lastRecordedMs) continue;
+    const before = ledger.events.length;
+    settleCohort({ ledger, matches: observedMatches, evaluatedAt });
+    settlementsAdded += ledger.events.length - before;
+  }
+  return settlementsAdded;
+};
+
 const settleCandidateProspectiveRegistry = ({
   priorRegistry = null,
   matches = [],
@@ -3206,17 +3230,21 @@ const settleCandidateProspectiveRegistry = ({
     };
   }
   const registry = deepClone(priorRegistry);
+  const retiredSettlementsAdded = settleRetiredCohorts({ registry, matches, evaluatedAt });
   const active = registry?.ledgers?.find(
-    (ledger) => ledger?.ledgerId === registry.activeLedgerId,
+    (ledger) => ledger?.ledgerId === registry.activeLedgerId && !ledgerRetired(ledger),
   ) || null;
   if (!active) {
+    if (retiredSettlementsAdded > 0) registry.updatedAt = isoTime(evaluatedAt);
+    const verification = verifyRegistry(registry);
     return {
       registry,
-      chainValid: true,
-      changed: false,
-      eventsAdded: 0,
-      settlementsAdded: 0,
-      blockers: ["active-ledger-missing"],
+      chainValid: verification.valid,
+      changed: retiredSettlementsAdded > 0,
+      eventsAdded: retiredSettlementsAdded,
+      settlementsAdded: retiredSettlementsAdded,
+      retiredSettlementsAdded,
+      blockers: [...verification.blockers, "active-ledger-missing"],
       audit: null,
     };
   }
@@ -3239,7 +3267,7 @@ const settleCandidateProspectiveRegistry = ({
       evaluatedAt,
     });
   }
-  const eventsAdded = Math.max(0, active.events.length - beforeEvents);
+  const eventsAdded = Math.max(0, active.events.length - beforeEvents) + retiredSettlementsAdded;
   if (eventsAdded > 0) registry.updatedAt = isoTime(evaluatedAt);
   const finalVerification = verifyRegistry(registry);
   return {
@@ -3247,7 +3275,8 @@ const settleCandidateProspectiveRegistry = ({
     chainValid: finalVerification.valid,
     changed: eventsAdded > 0,
     eventsAdded,
-    settlementsAdded,
+    settlementsAdded: settlementsAdded + retiredSettlementsAdded,
+    retiredSettlementsAdded,
     blockers: finalVerification.blockers,
     audit,
   };
@@ -3286,7 +3315,10 @@ const updateCandidateProspectiveLedger = ({
   let commitment = selectedCandidate
     ? buildCandidateCommitment(selectedCandidate, implementationCommitment)
     : null;
-  let active = registry.ledgers.find((ledger) => ledger.ledgerId === registry.activeLedgerId) || null;
+  let active = registry.ledgers.find((ledger) => (
+    ledger.ledgerId === registry.activeLedgerId && !ledgerRetired(ledger)
+  )) || null;
+  if (!active) registry.activeLedgerId = null;
   const activeInventoryCommitment = active
     ? inventory.entries.find((entry) => (
         entry.baseCandidateId === active.header.baseCandidateId
@@ -3388,13 +3420,16 @@ const updateCandidateProspectiveLedger = ({
     registry.ledgers.push(active);
     registry.activeLedgerId = active.ledgerId;
   }
+  const retiredSettlementsAdded = settleRetiredCohorts({ registry, matches, evaluatedAt });
   if (!active) {
     registry.updatedAt = isoTime(evaluatedAt);
+    const verification = verifyRegistry(registry);
     return {
       registry,
-      chainValid: true,
+      chainValid: verification.valid,
       changed: sha256(registry) !== beforeHash,
-      blockers: ["selected-candidate-missing"],
+      retiredSettlementsAdded,
+      blockers: [...verification.blockers, "selected-candidate-missing"],
       audit: null,
     };
   }
@@ -3444,6 +3479,7 @@ const updateCandidateProspectiveLedger = ({
     registry,
     chainValid: finalVerification.valid,
     changed: sha256(registry) !== beforeHash,
+    retiredSettlementsAdded,
     blockers: finalVerification.blockers,
     audit,
   };
