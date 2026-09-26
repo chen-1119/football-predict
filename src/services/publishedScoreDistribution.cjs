@@ -6,6 +6,7 @@ const MAX_SCORES = 37 * 37;
 const codeFor = margin => margin > 0 ? '1' : margin < 0 ? '2' : 'X';
 const emptyVector = () => Object.fromEntries(CODES.map(code => [code, 0]));
 const emptyJoint = () => Object.fromEntries(CODES.map(code => [code, emptyVector()]));
+const TOTAL_GOAL_LABELS = Object.freeze(['0', '1', '2', '3', '4', '5', '6', '7+']);
 
 // Keep the v1 projection's support identical to handicap-margin-v3's Poisson
 // enumeration. Only within-bucket ratios are used; its marginal probabilities
@@ -31,7 +32,7 @@ function buildPublishedScoreDistribution(decision, options = {}) {
   const unavailable = reason => ({ status: 'unavailable', version: VERSION, reason,
     decisionId: typeof decision?.decisionId === 'string' ? decision.decisionId : null,
     recordHash: typeof decision?.recordHash === 'string' ? decision.recordHash : null,
-    topScores: [], alignedScores: [] });
+    topScores: [], alignedScores: [], totalGoals: [] });
   if (!decision) return unavailable('decision-missing');
   try {
     const { validDecision } = require('../../scripts/recommendationPlatform/decision.cjs');
@@ -83,6 +84,13 @@ function buildPublishedScoreDistribution(decision, options = {}) {
       return unavailable('score-matrix-inconsistent');
     }
     scores.sort((a, b) => b.probability - a.probability || a.home - b.home || a.away - b.away);
+    // Use every frozen score cell, including those omitted from the displayed
+    // top scores. 7+ is the Sporttery tail bucket, not a truncated 7-goal cell.
+    const totalGoals = TOTAL_GOAL_LABELS.map(label => ({ label, probability: 0 }));
+    for (const row of scores) totalGoals[Math.min(7, row.home + row.away)].probability += row.probability;
+    if (Math.abs(totalGoals.reduce((sum, row) => sum + row.probability, 0) - 1) > 1e-9) {
+      return unavailable('score-matrix-inconsistent');
+    }
     const limit = Number.isSafeInteger(options?.limit) && options.limit > 0 ? Math.min(options.limit, MAX_SCORES) : 5;
     const aligned = scores.filter(row => row.hadCode === decision.tipCode && row.hhadCode === h.tipCode);
     const topScores = scores.slice(0, limit);
@@ -93,7 +101,7 @@ function buildPublishedScoreDistribution(decision, options = {}) {
       probabilityBasis: 'unconditional-score-matrix', modelValidation: decision.modelValidation,
       modelGeneratedAt: decision.modelGeneratedAt, publishedAt: decision.publishedAt,
       handicapLine: h.handicapLine, straightTipCode: decision.tipCode, handicapTipCode: h.tipCode,
-      topScores, alignedScores: aligned.slice(0, limit), topScoresProbability,
+      topScores, alignedScores: aligned.slice(0, limit), totalGoals, topScoresProbability,
       omittedProbability: Math.max(0, 1 - topScoresProbability),
       alignedProbability: aligned.reduce((sum, row) => sum + row.probability, 0),
       hadProbabilities, hhadProbabilities, capturedMass: matrix.capturedMass, tailMass: matrix.tailMass,

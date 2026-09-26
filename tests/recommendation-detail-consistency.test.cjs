@@ -162,7 +162,16 @@ test('frontend parser accepts server score projection and explicit unavailable w
  const parsed=view.parseRecommendationCenter(response).current[0];
  const result=presentation.publishedDetailPresentation(parsed.decision,legacyScores,parsed.scoreDistribution);
  assert.equal(result.scoreSource,'published-matrix');assert.equal(result.primaryScore.probability,scores.alignedScores[0].probability*100);
- row.scoreDistribution={...scores,status:'unavailable',topScores:[],alignedScores:[]};
+ assert.equal(JSON.stringify(parsed.scoreDistribution.totalGoals),JSON.stringify(scores.totalGoals));
+ const tampered=structuredClone(response);
+ tampered.recommendationCenter.current[0].scoreDistribution.totalGoals[0].probability+=.01;
+ assert.throws(()=>view.parseRecommendationCenter(tampered),/Invalid total-goals binding/);
+ const older=structuredClone(response);
+ delete older.recommendationCenter.current[0].scoreDistribution.totalGoals;
+ assert.equal(view.parseRecommendationCenter(older).current[0].scoreDistribution.totalGoals,undefined,
+  'older read-only projections remain displayable without a fabricated total-goals distribution');
+ row.scoreDistribution={...scores,status:'unavailable',topScores:[],alignedScores:[],totalGoals:[]};
  const missing=view.parseRecommendationCenter(response).current[0];
  assert.equal(presentation.publishedDetailPresentation(missing.decision,legacyScores,missing.scoreDistribution).primaryScore,null);
+ assert.equal(missing.scoreDistribution.totalGoals.length,0);
 });
