@@ -243,7 +243,7 @@ for (const releaseSource of [signedRelease, legacyRelease]) {
   assert.match(releaseSource, /REMOTE_REQUIRED_READ_SOURCE="\$PRIMARY_READ_SOURCE"/);
 }
 assert.equal(packageJson.scripts["postgres:backfill"], "node scripts/syncPostgresProjection.cjs --backfill");
-assert.equal(packageJson.scripts["postgres:sync"], "node --max-old-space-size=1536 --expose-gc scripts/syncPostgresProjection.cjs --mode=incremental");
+assert.equal(packageJson.scripts["postgres:sync"], "node --max-old-space-size=2304 --expose-gc scripts/syncPostgresProjection.cjs --mode=incremental");
 assert.match(packageJson.scripts["datastore:sqlite"], /syncPostgresProjection\.cjs --if-enabled/);
 
 console.log(JSON.stringify({

@@ -1170,8 +1170,8 @@ const run = () => {
       && hasUnitDirective(workerService, "OOMScoreAdjust", "500")
       && hasUnitDirective(workerService, "Environment", "\"NODE_OPTIONS=--max-old-space-size=768 --expose-gc\"")
       && hasUnitDirective(workerService, "Environment", "MALLOC_ARENA_MAX=2")
-      && hasUnitDirective(workerService, "MemoryHigh", "3G")
-      && hasUnitDirective(workerService, "MemoryMax", "4G")
+      && hasUnitDirective(workerService, "MemoryHigh", "5G")
+      && hasUnitDirective(workerService, "MemoryMax", "6G")
       && hasUnitDirective(workerService, "MemorySwapMax", "1G"), {
       appOomScoreAdjust: unitDirectiveValues(appService, "OOMScoreAdjust"),
       appMemoryLow: unitDirectiveValues(appService, "MemoryLow"),

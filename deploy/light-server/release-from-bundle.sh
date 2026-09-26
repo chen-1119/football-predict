@@ -341,17 +341,13 @@ run_build_step() {
       runtime_max_seconds="600"
       ;;
     candidate-postgres-reconciled)
-      # Native projection parses the retained reference ledger while the
-      # transaction also holds its current match rows. At 1600 MiB the Node
-      # process can enter sustained memcg direct reclaim after PostgreSQL has
-      # already returned, eventually tripping the 30s client read timeout.
-      # Keep the V8 heap and bounded swap unchanged. The observed 1.76 GiB
-      # cgroup footprint needs headroom above its 1.6 GiB soft limit; this
-      # one candidate step gets 2.3 GiB before reclaim and a 2.6 GiB hard cap.
-      memory_high="2300M"
-      memory_max="2600M"
+      # The current retained reference graph exceeds the old 1536 MiB V8
+      # budget. Keep this candidate-only PostgreSQL sync bounded, with native
+      # and page-cache headroom above the 2304 MiB projector heap.
+      memory_high="3G"
+      memory_max="3500M"
       memory_swap_max="512M"
-      node_heap_mib="1536"
+      node_heap_mib="2304"
       runtime_max_seconds="600"
       ;;
   esac

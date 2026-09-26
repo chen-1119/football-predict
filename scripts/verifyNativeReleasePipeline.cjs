@@ -183,8 +183,8 @@ const budgetScript = "set -euo pipefail\nTRANSACTION_VERSION=3 BUILD_USER=fixtur
 const budgetResult = spawnSync(process.platform === "win32" ? "D:/app/Git/bin/bash.exe" : "/bin/bash", ["--noprofile", "--norc", "-s"],
  { input: budgetScript, encoding: "utf8", windowsHide: true, timeout: 5000, env: {PATH:process.env.PATH,SystemRoot:process.env.SystemRoot} });
 assert.equal(budgetResult.status,0,budgetResult.stderr);
-for (const token of ["MemoryHigh=2300M", "MemoryMax=2600M", "MemorySwapMax=512M", "RuntimeMaxSec=600s",
-  "NODE_OPTIONS=--max-old-space-size=1536"]) assert.ok(budgetResult.stdout.includes(token), token);
+for (const token of ["MemoryHigh=3G", "MemoryMax=3500M", "MemorySwapMax=512M", "RuntimeMaxSec=600s",
+  "NODE_OPTIONS=--max-old-space-size=2304"]) assert.ok(budgetResult.stdout.includes(token), token);
 for (const [label, high, max] of [["model-backtest", "1600M", "2200M"],
   ["candidate-generation-reconciled", "1600M", "2200M"],
   ["candidate-datastore-reconciled", "2100M", "2600M"]]) {
@@ -197,7 +197,7 @@ for (const [label, high, max] of [["model-backtest", "1600M", "2200M"],
   assert.ok(sibling.stdout.includes(`MemoryMax=${max}`), label);
   assert.ok(sibling.stdout.includes("MemorySwapMax=512M"), label);
   assert.ok(sibling.stdout.includes("NODE_OPTIONS=--max-old-space-size=1536"), label);
-  assert.ok(!sibling.stdout.includes("MemoryHigh=2300M"), label + " unexpectedly received PostgreSQL projection budget");
+  assert.ok(!sibling.stdout.includes("MemoryHigh=3G"), label + " unexpectedly received PostgreSQL projection budget");
 }
 assert.match(source, /run_build_step candidate-postgres-reconciled env[^\n]*\n\s*DATA_GENERATION_PUBLIC_DATA_DIR=[^\n]*FOOTBALL_POSTGRES_QUERY_TIMEOUT_MS=120000/);
 checks.push("only the native PostgreSQL candidate step receives the measured memory headroom and 120s client read timeout");
