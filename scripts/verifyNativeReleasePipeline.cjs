@@ -116,7 +116,7 @@ const cachePolicyEnd = source.indexOf("const inspectOptionalData =", cachePolicy
 assert.ok(cachePolicyStart >= 0 && cachePolicyEnd > cachePolicyStart);
 const cachePolicy = vm.runInNewContext(source.slice(cachePolicyStart, cachePolicyEnd)
   + "\n({ optionalDataMaxBytes, safeOptionalDataFile })", Object.create(null));
-const liveSnapshot = { isFile: () => true, isSymbolicLink: () => false, nlink: 1, size: 546105531 };
+const liveSnapshot = { isFile: () => true, isSymbolicLink: () => false, nlink: 1, size: 691026358 };
 assert.equal(cachePolicy.safeOptionalDataFile("public/data/prediction-snapshots.json", liveSnapshot), true);
 assert.equal(cachePolicy.safeOptionalDataFile("public/data/odds-history.json", liveSnapshot), false);
 checks.push("native candidate validates the observed live snapshot without widening other data cache files");

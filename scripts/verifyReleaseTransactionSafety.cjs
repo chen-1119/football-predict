@@ -727,17 +727,17 @@ check("candidate cache admits bounded live prediction history without widening o
     size,
     ...overrides,
   });
-  assert.equal(policy.optionalDataMaxBytes(snapshot), 640 * mib);
-  assert.equal(policy.safeOptionalDataFile(snapshot, file(546105531)), true);
-  assert.equal(policy.safeOptionalDataFile(snapshot, file(640 * mib)), true);
-  assert.equal(policy.safeOptionalDataFile(snapshot, file(640 * mib + 1)), false);
+  assert.equal(policy.optionalDataMaxBytes(snapshot), 768 * mib);
+  assert.equal(policy.safeOptionalDataFile(snapshot, file(691026358)), true);
+  assert.equal(policy.safeOptionalDataFile(snapshot, file(768 * mib)), true);
+  assert.equal(policy.safeOptionalDataFile(snapshot, file(768 * mib + 1)), false);
   assert.equal(policy.optionalDataMaxBytes(other), 512 * mib);
   assert.equal(policy.safeOptionalDataFile(other, file(512 * mib)), true);
   assert.equal(policy.safeOptionalDataFile(other, file(512 * mib + 1)), false);
-  assert.equal(policy.safeOptionalDataFile(`${snapshot}.bak`, file(546105531)), false);
-  assert.equal(policy.safeOptionalDataFile(snapshot, file(546105531, { nlink: 2 })), false);
-  assert.equal(policy.safeOptionalDataFile(snapshot, file(546105531, { isSymbolicLink: () => true })), false);
-  assert.equal(policy.safeOptionalDataFile(snapshot, file(546105531, { isFile: () => false })), false);
+  assert.equal(policy.safeOptionalDataFile(`${snapshot}.bak`, file(691026358)), false);
+  assert.equal(policy.safeOptionalDataFile(snapshot, file(691026358, { nlink: 2 })), false);
+  assert.equal(policy.safeOptionalDataFile(snapshot, file(691026358, { isSymbolicLink: () => true })), false);
+  assert.equal(policy.safeOptionalDataFile(snapshot, file(691026358, { isFile: () => false })), false);
 });
 
 check("native PostgreSQL handoff preserves the authenticated barrier until all writers drain", () => {
