@@ -13,6 +13,7 @@ const {buildQualityReport}=require('./qualityReport.cjs');
 const {buildDataCoverage}=require('../dataCoverage.cjs');
 const {createDualResearchRecord}=require('./dualChoiceResearch.cjs');
 const {createDualResearchV2Record,validDualResearchV2Record,settleDualResearchV2}=require('./dualChoiceResearchV2.cjs');
+const {officialResultValidators,resultAllowsCalibration}=require('./officialResults.cjs');
 
 function freshPublication(p,now){return p && /^[a-f0-9]{64}$/.test(p.manifestHash||'') && typeof p.generationId==='string' && p.generationId.length>0 && Number.isFinite(time(p.committedAt)) && now>=time(p.committedAt) && now-time(p.committedAt)<=15*60000;}
 function requireBeforeCutoff(records,now){if(records.some(d=>now>=time(d.cutoffTime)))throw Object.assign(new Error('Cutoff crossed'),{code:'DEADLINE_CROSSED'});}
@@ -22,7 +23,7 @@ async function assessInputs(repo,publication,now){
     || !Number.isFinite(committed) || committed>now)throw Object.assign(new Error('Valid committed input required'),{code:'SOURCE_STALE'});
   const inputs=repo.currentInputs?await repo.currentInputs(now):{current:await repo.current(),receiptHashes:new Set()};
   const [historical,rawHeads]=await Promise.all([repo.latest(),repo.resultHeads()]);
-  const calibrationHeads=new Map(rawHeads.filter(validResultEvent).map(e=>[e.eventKey,e]));
+  const calibrationHeads=new Map(rawHeads.filter(e=>validResultEvent(e)&&resultAllowsCalibration(e)).map(e=>[e.eventKey,e]));
   const handicapCalibration=buildHandicapCalibration(historical.filter(validDecision),calibrationHeads,day(now),{asOf:now});
   const assessed=evaluateCurrent(inputs.current,{now,publication,handicapCalibration});
   // A full model publication is not a quote clock. An older generation may
@@ -168,7 +169,7 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
     return {publication,previews,inputAsOf:assessed.inputAsOf,basePublicationAsOf:publication.committedAt,candidateCount:eligibleSources.size,referenceCount:candidates.length,watchCount:candidates.filter(d=>!eligibleSources.has(d.sourceMatchId)).length,eligibleCount:assessed.decisions.length,bindingFailures:bound.issues.length,handicapCalibration:{profileHash:assessed.handicapCalibration.profileHash,sampleRows:assessed.handicapCalibration.sampleRows,activeGroups:Object.values(assessed.handicapCalibration.groups).filter(g=>g.active).length}};
   });}
   async function settle(){return stage('settlement',async repo=>{
-    const verify=validators || (()=>{const m=require('../../src/services/matchLifecycle.cjs');return {isFinal:m.isOfficialSportteryFinal,isVoid:m.isOfficialSportteryVoid};})();
+    const verify=validators || officialResultValidators(clock());
     const old=await repo.resultHeads();const previous=new Map(old.filter(validResultEvent).map(e=>[e.eventKey,e]));
     const {updates,issues}=collectResults(await repo.history(),previous,verify,clock());
     for(const event of updates)await repo.appendResult(event);
@@ -205,7 +206,8 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
       });
     }
     const singles=decisions.map(d=>{const event=heads.get(key(d));return {decision:d,selectionQuality:selectionQuality(d),scoreDistribution:buildPublishedScoreDistribution(d),settlement:settleDecision(d,event),handicapSettlement:settleHandicapDecision(d,event),supplementarySettlement:settleSupplementaryResearch(d,event)};});
-    const handicapCalibration=buildHandicapCalibration(decisions,heads,day(now),{asOf:now});
+    const calibrationHeads=new Map([...heads].filter(([,event])=>resultAllowsCalibration(event)));
+    const handicapCalibration=buildHandicapCalibration(decisions,calibrationHeads,day(now),{asOf:now});
     const records=await repo.frozenCombos();const ids=[...new Set(records.flatMap(c=>Array.isArray(c?.decisionIds)?c.decisionIds:[]))];
     const bindings=new Map((await repo.decisions(ids)).map(d=>[d.decisionId,d]));
     const combos=[];

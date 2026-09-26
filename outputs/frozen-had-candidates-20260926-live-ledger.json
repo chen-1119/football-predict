@@ -1,0 +1,3708 @@
+{
+  "version": "frozen-had-candidate-diagnostic-v1",
+  "observedAt": "2026-09-26T15:28:12.237Z",
+  "inputHash": "f7e7bdcca1d69d6731668253729216ff2af99170aa6fad2447a21617a236a287",
+  "researchOnly": true,
+  "productionWrites": 0,
+  "productionEligible": false,
+  "trainingPerformed": false,
+  "holdoutClaim": false,
+  "selectedCandidate": null,
+  "policy": {
+    "candidates": [
+      {
+        "id": "frozen-model",
+        "modelWeight": 1
+      },
+      {
+        "id": "frozen-market",
+        "modelWeight": 0
+      },
+      {
+        "id": "model75-market25",
+        "modelWeight": 0.75
+      },
+      {
+        "id": "model50-market50",
+        "modelWeight": 0.5
+      },
+      {
+        "id": "model25-market75",
+        "modelWeight": 0.25
+      }
+    ],
+    "selection": "fixed before this run; no retrospective winner promoted",
+    "eventSelection": "latest valid published pre-cutoff HAD single per event, conflicts excluded",
+    "resultBinding": "production validResultEvent and settleDecision; result observed after publication and no later than observedAt",
+    "denominator": "same paired settled events; common unique-direction denominator for accuracy, all paired vectors for probability loss",
+    "grouping": "modelVersion, frozen original tip/SP and original model-market agreement; never candidate-specific winning subsets",
+    "coverage": "published-ledger coverage only; total historical fixture universe unavailable",
+    "uncertainty": "Wilson intervals are descriptive, not independent-match-day proof; paired seven-calendar-day intervals require 28 calendar and 14 occupied business days; subgroup intervals are not multiplicity-adjusted",
+    "knownPendingOfficialResult": "ignored here; only accepted resultHeads settle frozen evidence"
+  },
+  "sample": {
+    "inputDecisions": 118,
+    "inputResultHeads": 75,
+    "publishedEvents": 118,
+    "settlementStates": {
+      "WON": 40,
+      "PENDING": 44,
+      "LOST": 34
+    },
+    "pairedSettledEvents": 74,
+    "pairedShareOfPublished": 0.6271186440677966,
+    "fixtureCoverage": null,
+    "settledBusinessDates": [
+      "2026-09-18",
+      "2026-09-19",
+      "2026-09-20",
+      "2026-09-22",
+      "2026-09-23",
+      "2026-09-24",
+      "2026-09-25",
+      "2026-09-26"
+    ],
+    "knownPendingOfficialResult": 1
+  },
+  "exclusions": {},
+  "overall": {
+    "probabilityRows": 74,
+    "commonDirectionRows": 74,
+    "tieExcludedRows": 0,
+    "independentMatchDays": 8,
+    "candidates": {
+      "frozen-model": {
+        "modelWeight": 1,
+        "rows": 74,
+        "brier": 0.6030182220390977,
+        "logLoss": 1.0084295057203463,
+        "commonDirection": {
+          "settled": 74,
+          "won": 40,
+          "hitRate": 0.5405405405405406,
+          "wilson95": {
+            "lower": 0.4278134568803063,
+            "upper": 0.649266290736203
+          }
+        },
+        "ownDirection": {
+          "settled": 74,
+          "won": 40,
+          "hitRate": 0.5405405405405406,
+          "abstainedTies": 0
+        },
+        "directionCounts": {
+          "1": 53,
+          "2": 21
+        },
+        "sameRowsMarket": {
+          "settled": 74,
+          "won": 41,
+          "hitRate": 0.5540540540540541
+        },
+        "pairedOutcomes": {
+          "candidateOnlyWins": 4,
+          "marketOnlyWins": 5,
+          "bothWin": 36,
+          "bothMiss": 29,
+          "netWins": -1
+        },
+        "candidateDirectionsDifferFromOriginal": 0
+      },
+      "frozen-market": {
+        "modelWeight": 0,
+        "rows": 74,
+        "brier": 0.5524081090031233,
+        "logLoss": 0.9367960144012916,
+        "commonDirection": {
+          "settled": 74,
+          "won": 41,
+          "hitRate": 0.5540540540540541,
+          "wilson95": {
+            "lower": 0.4409312201066908,
+            "upper": 0.6618417767153215
+          }
+        },
+        "ownDirection": {
+          "settled": 74,
+          "won": 41,
+          "hitRate": 0.5540540540540541,
+          "abstainedTies": 0
+        },
+        "directionCounts": {
+          "1": 51,
+          "2": 23
+        },
+        "sameRowsMarket": {
+          "settled": 74,
+          "won": 41,
+          "hitRate": 0.5540540540540541
+        },
+        "pairedOutcomes": {
+          "candidateOnlyWins": 0,
+          "marketOnlyWins": 0,
+          "bothWin": 41,
+          "bothMiss": 33,
+          "netWins": 0
+        },
+        "candidateDirectionsDifferFromOriginal": 14
+      },
+      "model75-market25": {
+        "modelWeight": 0.75,
+        "rows": 74,
+        "brier": 0.583970759730615,
+        "logLoss": 0.9817812781146903,
+        "commonDirection": {
+          "settled": 74,
+          "won": 40,
+          "hitRate": 0.5405405405405406,
+          "wilson95": {
+            "lower": 0.4278134568803063,
+            "upper": 0.649266290736203
+          }
+        },
+        "ownDirection": {
+          "settled": 74,
+          "won": 40,
+          "hitRate": 0.5405405405405406,
+          "abstainedTies": 0
+        },
+        "directionCounts": {
+          "1": 53,
+          "2": 21
+        },
+        "sameRowsMarket": {
+          "settled": 74,
+          "won": 41,
+          "hitRate": 0.5540540540540541
+        },
+        "pairedOutcomes": {
+          "candidateOnlyWins": 2,
+          "marketOnlyWins": 3,
+          "bothWin": 38,
+          "bothMiss": 31,
+          "netWins": -1
+        },
+        "candidateDirectionsDifferFromOriginal": 6
+      },
+      "model50-market50": {
+        "modelWeight": 0.5,
+        "rows": 74,
+        "brier": 0.5691865867884582,
+        "logLoss": 0.9610887079142537,
+        "commonDirection": {
+          "settled": 74,
+          "won": 41,
+          "hitRate": 0.5540540540540541,
+          "wilson95": {
+            "lower": 0.4409312201066908,
+            "upper": 0.6618417767153215
+          }
+        },
+        "ownDirection": {
+          "settled": 74,
+          "won": 41,
+          "hitRate": 0.5540540540540541,
+          "abstainedTies": 0
+        },
+        "directionCounts": {
+          "1": 53,
+          "2": 21
+        },
+        "sameRowsMarket": {
+          "settled": 74,
+          "won": 41,
+          "hitRate": 0.5540540540540541
+        },
+        "pairedOutcomes": {
+          "candidateOnlyWins": 2,
+          "marketOnlyWins": 2,
+          "bothWin": 39,
+          "bothMiss": 31,
+          "netWins": 0
+        },
+        "candidateDirectionsDifferFromOriginal": 8
+      },
+      "model25-market75": {
+        "modelWeight": 0.25,
+        "rows": 74,
+        "brier": 0.5586657032126278,
+        "logLoss": 0.9460305319857365,
+        "commonDirection": {
+          "settled": 74,
+          "won": 43,
+          "hitRate": 0.581081081081081,
+          "wilson95": {
+            "lower": 0.467402844507797,
+            "upper": 0.6867566507252213
+          }
+        },
+        "ownDirection": {
+          "settled": 74,
+          "won": 43,
+          "hitRate": 0.581081081081081,
+          "abstainedTies": 0
+        },
+        "directionCounts": {
+          "1": 50,
+          "2": 24
+        },
+        "sameRowsMarket": {
+          "settled": 74,
+          "won": 41,
+          "hitRate": 0.5540540540540541
+        },
+        "pairedOutcomes": {
+          "candidateOnlyWins": 2,
+          "marketOnlyWins": 0,
+          "bothWin": 41,
+          "bothMiss": 31,
+          "netWins": 2
+        },
+        "candidateDirectionsDifferFromOriginal": 11
+      }
+    }
+  },
+  "byModelVersion": {
+    "unified-poisson-bayes-v75": {
+      "probabilityRows": 74,
+      "commonDirectionRows": 74,
+      "tieExcludedRows": 0,
+      "independentMatchDays": 8,
+      "candidates": {
+        "frozen-model": {
+          "modelWeight": 1,
+          "rows": 74,
+          "brier": 0.6030182220390977,
+          "logLoss": 1.0084295057203463,
+          "commonDirection": {
+            "settled": 74,
+            "won": 40,
+            "hitRate": 0.5405405405405406,
+            "wilson95": {
+              "lower": 0.4278134568803063,
+              "upper": 0.649266290736203
+            }
+          },
+          "ownDirection": {
+            "settled": 74,
+            "won": 40,
+            "hitRate": 0.5405405405405406,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 53,
+            "2": 21
+          },
+          "sameRowsMarket": {
+            "settled": 74,
+            "won": 41,
+            "hitRate": 0.5540540540540541
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 4,
+            "marketOnlyWins": 5,
+            "bothWin": 36,
+            "bothMiss": 29,
+            "netWins": -1
+          },
+          "candidateDirectionsDifferFromOriginal": 0
+        },
+        "frozen-market": {
+          "modelWeight": 0,
+          "rows": 74,
+          "brier": 0.5524081090031233,
+          "logLoss": 0.9367960144012916,
+          "commonDirection": {
+            "settled": 74,
+            "won": 41,
+            "hitRate": 0.5540540540540541,
+            "wilson95": {
+              "lower": 0.4409312201066908,
+              "upper": 0.6618417767153215
+            }
+          },
+          "ownDirection": {
+            "settled": 74,
+            "won": 41,
+            "hitRate": 0.5540540540540541,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 51,
+            "2": 23
+          },
+          "sameRowsMarket": {
+            "settled": 74,
+            "won": 41,
+            "hitRate": 0.5540540540540541
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 0,
+            "marketOnlyWins": 0,
+            "bothWin": 41,
+            "bothMiss": 33,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 14
+        },
+        "model75-market25": {
+          "modelWeight": 0.75,
+          "rows": 74,
+          "brier": 0.583970759730615,
+          "logLoss": 0.9817812781146903,
+          "commonDirection": {
+            "settled": 74,
+            "won": 40,
+            "hitRate": 0.5405405405405406,
+            "wilson95": {
+              "lower": 0.4278134568803063,
+              "upper": 0.649266290736203
+            }
+          },
+          "ownDirection": {
+            "settled": 74,
+            "won": 40,
+            "hitRate": 0.5405405405405406,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 53,
+            "2": 21
+          },
+          "sameRowsMarket": {
+            "settled": 74,
+            "won": 41,
+            "hitRate": 0.5540540540540541
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 2,
+            "marketOnlyWins": 3,
+            "bothWin": 38,
+            "bothMiss": 31,
+            "netWins": -1
+          },
+          "candidateDirectionsDifferFromOriginal": 6
+        },
+        "model50-market50": {
+          "modelWeight": 0.5,
+          "rows": 74,
+          "brier": 0.5691865867884582,
+          "logLoss": 0.9610887079142537,
+          "commonDirection": {
+            "settled": 74,
+            "won": 41,
+            "hitRate": 0.5540540540540541,
+            "wilson95": {
+              "lower": 0.4409312201066908,
+              "upper": 0.6618417767153215
+            }
+          },
+          "ownDirection": {
+            "settled": 74,
+            "won": 41,
+            "hitRate": 0.5540540540540541,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 53,
+            "2": 21
+          },
+          "sameRowsMarket": {
+            "settled": 74,
+            "won": 41,
+            "hitRate": 0.5540540540540541
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 2,
+            "marketOnlyWins": 2,
+            "bothWin": 39,
+            "bothMiss": 31,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 8
+        },
+        "model25-market75": {
+          "modelWeight": 0.25,
+          "rows": 74,
+          "brier": 0.5586657032126278,
+          "logLoss": 0.9460305319857365,
+          "commonDirection": {
+            "settled": 74,
+            "won": 43,
+            "hitRate": 0.581081081081081,
+            "wilson95": {
+              "lower": 0.467402844507797,
+              "upper": 0.6867566507252213
+            }
+          },
+          "ownDirection": {
+            "settled": 74,
+            "won": 43,
+            "hitRate": 0.581081081081081,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 50,
+            "2": 24
+          },
+          "sameRowsMarket": {
+            "settled": 74,
+            "won": 41,
+            "hitRate": 0.5540540540540541
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 2,
+            "marketOnlyWins": 0,
+            "bothWin": 41,
+            "bothMiss": 31,
+            "netWins": 2
+          },
+          "candidateDirectionsDifferFromOriginal": 11
+        }
+      }
+    }
+  },
+  "byOriginalDirection": {
+    "1": {
+      "probabilityRows": 53,
+      "commonDirectionRows": 53,
+      "tieExcludedRows": 0,
+      "independentMatchDays": 8,
+      "candidates": {
+        "frozen-model": {
+          "modelWeight": 1,
+          "rows": 53,
+          "brier": 0.5819630705564468,
+          "logLoss": 0.9797029250468853,
+          "commonDirection": {
+            "settled": 53,
+            "won": 33,
+            "hitRate": 0.6226415094339622,
+            "wilson95": {
+              "lower": 0.4880689594175337,
+              "upper": 0.7406373452712388
+            }
+          },
+          "ownDirection": {
+            "settled": 53,
+            "won": 33,
+            "hitRate": 0.6226415094339622,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 53
+          },
+          "sameRowsMarket": {
+            "settled": 53,
+            "won": 33,
+            "hitRate": 0.6226415094339622
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 2,
+            "marketOnlyWins": 2,
+            "bothWin": 31,
+            "bothMiss": 18,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 0
+        },
+        "frozen-market": {
+          "modelWeight": 0,
+          "rows": 53,
+          "brier": 0.5192733066717683,
+          "logLoss": 0.8922777975009445,
+          "commonDirection": {
+            "settled": 53,
+            "won": 33,
+            "hitRate": 0.6226415094339622,
+            "wilson95": {
+              "lower": 0.4880689594175337,
+              "upper": 0.7406373452712388
+            }
+          },
+          "ownDirection": {
+            "settled": 53,
+            "won": 33,
+            "hitRate": 0.6226415094339622,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 45,
+            "2": 8
+          },
+          "sameRowsMarket": {
+            "settled": 53,
+            "won": 33,
+            "hitRate": 0.6226415094339622
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 0,
+            "marketOnlyWins": 0,
+            "bothWin": 33,
+            "bothMiss": 20,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 8
+        },
+        "model75-market25": {
+          "modelWeight": 0.75,
+          "rows": 53,
+          "brier": 0.55945264709101,
+          "logLoss": 0.948480910246638,
+          "commonDirection": {
+            "settled": 53,
+            "won": 32,
+            "hitRate": 0.6037735849056604,
+            "wilson95": {
+              "lower": 0.46941478673205517,
+              "upper": 0.7241059326199831
+            }
+          },
+          "ownDirection": {
+            "settled": 53,
+            "won": 32,
+            "hitRate": 0.6037735849056604,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 50,
+            "2": 3
+          },
+          "sameRowsMarket": {
+            "settled": 53,
+            "won": 33,
+            "hitRate": 0.6226415094339622
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 1,
+            "marketOnlyWins": 2,
+            "bothWin": 31,
+            "bothMiss": 19,
+            "netWins": -1
+          },
+          "candidateDirectionsDifferFromOriginal": 3
+        },
+        "model50-market50": {
+          "modelWeight": 0.5,
+          "rows": 53,
+          "brier": 0.5415008786217513,
+          "logLoss": 0.9237036126316185,
+          "commonDirection": {
+            "settled": 53,
+            "won": 32,
+            "hitRate": 0.6037735849056604,
+            "wilson95": {
+              "lower": 0.46941478673205517,
+              "upper": 0.7241059326199831
+            }
+          },
+          "ownDirection": {
+            "settled": 53,
+            "won": 32,
+            "hitRate": 0.6037735849056604,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 49,
+            "2": 4
+          },
+          "sameRowsMarket": {
+            "settled": 53,
+            "won": 33,
+            "hitRate": 0.6226415094339622
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 1,
+            "marketOnlyWins": 2,
+            "bothWin": 31,
+            "bothMiss": 19,
+            "netWins": -1
+          },
+          "candidateDirectionsDifferFromOriginal": 4
+        },
+        "model25-market75": {
+          "modelWeight": 0.25,
+          "rows": 53,
+          "brier": 0.5281077651486707,
+          "logLoss": 0.904931972084288,
+          "commonDirection": {
+            "settled": 53,
+            "won": 34,
+            "hitRate": 0.6415094339622641,
+            "wilson95": {
+              "lower": 0.5069114155535945,
+              "upper": 0.7569804744719122
+            }
+          },
+          "ownDirection": {
+            "settled": 53,
+            "won": 34,
+            "hitRate": 0.6415094339622641,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 46,
+            "2": 7
+          },
+          "sameRowsMarket": {
+            "settled": 53,
+            "won": 33,
+            "hitRate": 0.6226415094339622
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 1,
+            "marketOnlyWins": 0,
+            "bothWin": 33,
+            "bothMiss": 19,
+            "netWins": 1
+          },
+          "candidateDirectionsDifferFromOriginal": 7
+        }
+      }
+    },
+    "2": {
+      "probabilityRows": 21,
+      "commonDirectionRows": 21,
+      "tieExcludedRows": 0,
+      "independentMatchDays": 6,
+      "candidates": {
+        "frozen-model": {
+          "modelWeight": 1,
+          "rows": 21,
+          "brier": 0.6561574138762633,
+          "logLoss": 1.08092992361051,
+          "commonDirection": {
+            "settled": 21,
+            "won": 7,
+            "hitRate": 0.3333333333333333,
+            "wilson95": {
+              "lower": 0.17194752605083477,
+              "upper": 0.5462654802574476
+            }
+          },
+          "ownDirection": {
+            "settled": 21,
+            "won": 7,
+            "hitRate": 0.3333333333333333,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "2": 21
+          },
+          "sameRowsMarket": {
+            "settled": 21,
+            "won": 8,
+            "hitRate": 0.38095238095238093
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 2,
+            "marketOnlyWins": 3,
+            "bothWin": 5,
+            "bothMiss": 11,
+            "netWins": -1
+          },
+          "candidateDirectionsDifferFromOriginal": 0
+        },
+        "frozen-market": {
+          "modelWeight": 0,
+          "rows": 21,
+          "brier": 0.6360340386965425,
+          "logLoss": 1.0491515141974064,
+          "commonDirection": {
+            "settled": 21,
+            "won": 8,
+            "hitRate": 0.38095238095238093,
+            "wilson95": {
+              "lower": 0.20751011368564493,
+              "upper": 0.5912134622488425
+            }
+          },
+          "ownDirection": {
+            "settled": 21,
+            "won": 8,
+            "hitRate": 0.38095238095238093,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 6,
+            "2": 15
+          },
+          "sameRowsMarket": {
+            "settled": 21,
+            "won": 8,
+            "hitRate": 0.38095238095238093
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 0,
+            "marketOnlyWins": 0,
+            "bothWin": 8,
+            "bothMiss": 13,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 6
+        },
+        "model75-market25": {
+          "modelWeight": 0.75,
+          "rows": 21,
+          "brier": 0.645849805916284,
+          "logLoss": 1.0658250636864406,
+          "commonDirection": {
+            "settled": 21,
+            "won": 8,
+            "hitRate": 0.38095238095238093,
+            "wilson95": {
+              "lower": 0.20751011368564493,
+              "upper": 0.5912134622488425
+            }
+          },
+          "ownDirection": {
+            "settled": 21,
+            "won": 8,
+            "hitRate": 0.38095238095238093,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 3,
+            "2": 18
+          },
+          "sameRowsMarket": {
+            "settled": 21,
+            "won": 8,
+            "hitRate": 0.38095238095238093
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 1,
+            "marketOnlyWins": 1,
+            "bothWin": 7,
+            "bothMiss": 12,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 3
+        },
+        "model50-market50": {
+          "modelWeight": 0.5,
+          "rows": 21,
+          "brier": 0.639060040733004,
+          "logLoss": 1.055441567437095,
+          "commonDirection": {
+            "settled": 21,
+            "won": 9,
+            "hitRate": 0.42857142857142855,
+            "wilson95": {
+              "lower": 0.2446996892537596,
+              "upper": 0.6345344563069328
+            }
+          },
+          "ownDirection": {
+            "settled": 21,
+            "won": 9,
+            "hitRate": 0.42857142857142855,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 4,
+            "2": 17
+          },
+          "sameRowsMarket": {
+            "settled": 21,
+            "won": 8,
+            "hitRate": 0.38095238095238093
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 1,
+            "marketOnlyWins": 0,
+            "bothWin": 8,
+            "bothMiss": 12,
+            "netWins": 1
+          },
+          "candidateDirectionsDifferFromOriginal": 4
+        },
+        "model25-market75": {
+          "modelWeight": 0.25,
+          "rows": 21,
+          "brier": 0.6357881183264236,
+          "logLoss": 1.0497554688798696,
+          "commonDirection": {
+            "settled": 21,
+            "won": 9,
+            "hitRate": 0.42857142857142855,
+            "wilson95": {
+              "lower": 0.2446996892537596,
+              "upper": 0.6345344563069328
+            }
+          },
+          "ownDirection": {
+            "settled": 21,
+            "won": 9,
+            "hitRate": 0.42857142857142855,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 4,
+            "2": 17
+          },
+          "sameRowsMarket": {
+            "settled": 21,
+            "won": 8,
+            "hitRate": 0.38095238095238093
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 1,
+            "marketOnlyWins": 0,
+            "bothWin": 8,
+            "bothMiss": 12,
+            "netWins": 1
+          },
+          "candidateDirectionsDifferFromOriginal": 4
+        }
+      }
+    }
+  },
+  "byOriginalSpBand": {
+    "sp_gt_1_45_le_1_70": {
+      "probabilityRows": 13,
+      "commonDirectionRows": 13,
+      "tieExcludedRows": 0,
+      "independentMatchDays": 7,
+      "candidates": {
+        "frozen-model": {
+          "modelWeight": 1,
+          "rows": 13,
+          "brier": 0.5818472144907022,
+          "logLoss": 0.9761071064645598,
+          "commonDirection": {
+            "settled": 13,
+            "won": 10,
+            "hitRate": 0.7692307692307693,
+            "wilson95": {
+              "lower": 0.49743624053272495,
+              "upper": 0.9182047128150143
+            }
+          },
+          "ownDirection": {
+            "settled": 13,
+            "won": 10,
+            "hitRate": 0.7692307692307693,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 12,
+            "2": 1
+          },
+          "sameRowsMarket": {
+            "settled": 13,
+            "won": 10,
+            "hitRate": 0.7692307692307693
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 0,
+            "marketOnlyWins": 0,
+            "bothWin": 10,
+            "bothMiss": 3,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 0
+        },
+        "frozen-market": {
+          "modelWeight": 0,
+          "rows": 13,
+          "brier": 0.4587032568755924,
+          "logLoss": 0.819283237229891,
+          "commonDirection": {
+            "settled": 13,
+            "won": 10,
+            "hitRate": 0.7692307692307693,
+            "wilson95": {
+              "lower": 0.49743624053272495,
+              "upper": 0.9182047128150143
+            }
+          },
+          "ownDirection": {
+            "settled": 13,
+            "won": 10,
+            "hitRate": 0.7692307692307693,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 12,
+            "2": 1
+          },
+          "sameRowsMarket": {
+            "settled": 13,
+            "won": 10,
+            "hitRate": 0.7692307692307693
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 0,
+            "marketOnlyWins": 0,
+            "bothWin": 10,
+            "bothMiss": 3,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 0
+        },
+        "model75-market25": {
+          "modelWeight": 0.75,
+          "rows": 13,
+          "brier": 0.5439222402766627,
+          "logLoss": 0.9247079748004757,
+          "commonDirection": {
+            "settled": 13,
+            "won": 10,
+            "hitRate": 0.7692307692307693,
+            "wilson95": {
+              "lower": 0.49743624053272495,
+              "upper": 0.9182047128150143
+            }
+          },
+          "ownDirection": {
+            "settled": 13,
+            "won": 10,
+            "hitRate": 0.7692307692307693,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 12,
+            "2": 1
+          },
+          "sameRowsMarket": {
+            "settled": 13,
+            "won": 10,
+            "hitRate": 0.7692307692307693
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 0,
+            "marketOnlyWins": 0,
+            "bothWin": 10,
+            "bothMiss": 3,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 0
+        },
+        "model50-market50": {
+          "modelWeight": 0.5,
+          "rows": 13,
+          "brier": 0.5107565892694645,
+          "logLoss": 0.8817940059107284,
+          "commonDirection": {
+            "settled": 13,
+            "won": 10,
+            "hitRate": 0.7692307692307693,
+            "wilson95": {
+              "lower": 0.49743624053272495,
+              "upper": 0.9182047128150143
+            }
+          },
+          "ownDirection": {
+            "settled": 13,
+            "won": 10,
+            "hitRate": 0.7692307692307693,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 12,
+            "2": 1
+          },
+          "sameRowsMarket": {
+            "settled": 13,
+            "won": 10,
+            "hitRate": 0.7692307692307693
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 0,
+            "marketOnlyWins": 0,
+            "bothWin": 10,
+            "bothMiss": 3,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 0
+        },
+        "model25-market75": {
+          "modelWeight": 0.25,
+          "rows": 13,
+          "brier": 0.4823502614691077,
+          "logLoss": 0.8466714035505827,
+          "commonDirection": {
+            "settled": 13,
+            "won": 10,
+            "hitRate": 0.7692307692307693,
+            "wilson95": {
+              "lower": 0.49743624053272495,
+              "upper": 0.9182047128150143
+            }
+          },
+          "ownDirection": {
+            "settled": 13,
+            "won": 10,
+            "hitRate": 0.7692307692307693,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 12,
+            "2": 1
+          },
+          "sameRowsMarket": {
+            "settled": 13,
+            "won": 10,
+            "hitRate": 0.7692307692307693
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 0,
+            "marketOnlyWins": 0,
+            "bothWin": 10,
+            "bothMiss": 3,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 0
+        }
+      }
+    },
+    "sp_gt_1_70_le_2_05": {
+      "probabilityRows": 19,
+      "commonDirectionRows": 19,
+      "tieExcludedRows": 0,
+      "independentMatchDays": 6,
+      "candidates": {
+        "frozen-model": {
+          "modelWeight": 1,
+          "rows": 19,
+          "brier": 0.6456297393039211,
+          "logLoss": 1.067353999138863,
+          "commonDirection": {
+            "settled": 19,
+            "won": 9,
+            "hitRate": 0.47368421052631576,
+            "wilson95": {
+              "lower": 0.2732980516117956,
+              "upper": 0.6829219075488682
+            }
+          },
+          "ownDirection": {
+            "settled": 19,
+            "won": 9,
+            "hitRate": 0.47368421052631576,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 12,
+            "2": 7
+          },
+          "sameRowsMarket": {
+            "settled": 19,
+            "won": 9,
+            "hitRate": 0.47368421052631576
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 0,
+            "marketOnlyWins": 0,
+            "bothWin": 9,
+            "bothMiss": 10,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 0
+        },
+        "frozen-market": {
+          "modelWeight": 0,
+          "rows": 19,
+          "brier": 0.6382697760160891,
+          "logLoss": 1.0540612057627816,
+          "commonDirection": {
+            "settled": 19,
+            "won": 9,
+            "hitRate": 0.47368421052631576,
+            "wilson95": {
+              "lower": 0.2732980516117956,
+              "upper": 0.6829219075488682
+            }
+          },
+          "ownDirection": {
+            "settled": 19,
+            "won": 9,
+            "hitRate": 0.47368421052631576,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 12,
+            "2": 7
+          },
+          "sameRowsMarket": {
+            "settled": 19,
+            "won": 9,
+            "hitRate": 0.47368421052631576
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 0,
+            "marketOnlyWins": 0,
+            "bothWin": 9,
+            "bothMiss": 10,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 0
+        },
+        "model75-market25": {
+          "modelWeight": 0.75,
+          "rows": 19,
+          "brier": 0.6422712387066458,
+          "logLoss": 1.062043101683722,
+          "commonDirection": {
+            "settled": 19,
+            "won": 9,
+            "hitRate": 0.47368421052631576,
+            "wilson95": {
+              "lower": 0.2732980516117956,
+              "upper": 0.6829219075488682
+            }
+          },
+          "ownDirection": {
+            "settled": 19,
+            "won": 9,
+            "hitRate": 0.47368421052631576,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 12,
+            "2": 7
+          },
+          "sameRowsMarket": {
+            "settled": 19,
+            "won": 9,
+            "hitRate": 0.47368421052631576
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 0,
+            "marketOnlyWins": 0,
+            "bothWin": 9,
+            "bothMiss": 10,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 0
+        },
+        "model50-market50": {
+          "modelWeight": 0.5,
+          "rows": 19,
+          "brier": 0.6399250779595821,
+          "logLoss": 1.0580622676886025,
+          "commonDirection": {
+            "settled": 19,
+            "won": 9,
+            "hitRate": 0.47368421052631576,
+            "wilson95": {
+              "lower": 0.2732980516117956,
+              "upper": 0.6829219075488682
+            }
+          },
+          "ownDirection": {
+            "settled": 19,
+            "won": 9,
+            "hitRate": 0.47368421052631576,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 12,
+            "2": 7
+          },
+          "sameRowsMarket": {
+            "settled": 19,
+            "won": 9,
+            "hitRate": 0.47368421052631576
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 0,
+            "marketOnlyWins": 0,
+            "bothWin": 9,
+            "bothMiss": 10,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 0
+        },
+        "model25-market75": {
+          "modelWeight": 0.25,
+          "rows": 19,
+          "brier": 0.6385912570627298,
+          "logLoss": 1.0553989205718843,
+          "commonDirection": {
+            "settled": 19,
+            "won": 9,
+            "hitRate": 0.47368421052631576,
+            "wilson95": {
+              "lower": 0.2732980516117956,
+              "upper": 0.6829219075488682
+            }
+          },
+          "ownDirection": {
+            "settled": 19,
+            "won": 9,
+            "hitRate": 0.47368421052631576,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 12,
+            "2": 7
+          },
+          "sameRowsMarket": {
+            "settled": 19,
+            "won": 9,
+            "hitRate": 0.47368421052631576
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 0,
+            "marketOnlyWins": 0,
+            "bothWin": 9,
+            "bothMiss": 10,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 0
+        }
+      }
+    },
+    "sp_gt_2_05_le_2_60": {
+      "probabilityRows": 15,
+      "commonDirectionRows": 15,
+      "tieExcludedRows": 0,
+      "independentMatchDays": 6,
+      "candidates": {
+        "frozen-model": {
+          "modelWeight": 1,
+          "rows": 15,
+          "brier": 0.6652172985611571,
+          "logLoss": 1.1002982008993352,
+          "commonDirection": {
+            "settled": 15,
+            "won": 5,
+            "hitRate": 0.3333333333333333,
+            "wilson95": {
+              "lower": 0.1517632443971473,
+              "upper": 0.5828645226148023
+            }
+          },
+          "ownDirection": {
+            "settled": 15,
+            "won": 5,
+            "hitRate": 0.3333333333333333,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 9,
+            "2": 6
+          },
+          "sameRowsMarket": {
+            "settled": 15,
+            "won": 3,
+            "hitRate": 0.2
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 2,
+            "marketOnlyWins": 0,
+            "bothWin": 3,
+            "bothMiss": 10,
+            "netWins": 2
+          },
+          "candidateDirectionsDifferFromOriginal": 0
+        },
+        "frozen-market": {
+          "modelWeight": 0,
+          "rows": 15,
+          "brier": 0.6892597378621391,
+          "logLoss": 1.1318456704055075,
+          "commonDirection": {
+            "settled": 15,
+            "won": 3,
+            "hitRate": 0.2,
+            "wilson95": {
+              "lower": 0.07047549346981563,
+              "upper": 0.45185448715169363
+            }
+          },
+          "ownDirection": {
+            "settled": 15,
+            "won": 3,
+            "hitRate": 0.2,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 8,
+            "2": 7
+          },
+          "sameRowsMarket": {
+            "settled": 15,
+            "won": 3,
+            "hitRate": 0.2
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 0,
+            "marketOnlyWins": 0,
+            "bothWin": 3,
+            "bothMiss": 12,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 5
+        },
+        "model75-market25": {
+          "modelWeight": 0.75,
+          "rows": 15,
+          "brier": 0.6703664040136946,
+          "logLoss": 1.1072129455564421,
+          "commonDirection": {
+            "settled": 15,
+            "won": 5,
+            "hitRate": 0.3333333333333333,
+            "wilson95": {
+              "lower": 0.1517632443971473,
+              "upper": 0.5828645226148023
+            }
+          },
+          "ownDirection": {
+            "settled": 15,
+            "won": 5,
+            "hitRate": 0.3333333333333333,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 8,
+            "2": 7
+          },
+          "sameRowsMarket": {
+            "settled": 15,
+            "won": 3,
+            "hitRate": 0.2
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 2,
+            "marketOnlyWins": 0,
+            "bothWin": 3,
+            "bothMiss": 10,
+            "netWins": 2
+          },
+          "candidateDirectionsDifferFromOriginal": 1
+        },
+        "model50-market50": {
+          "modelWeight": 0.5,
+          "rows": 15,
+          "brier": 0.6760898457147042,
+          "logLoss": 1.1147506970928645,
+          "commonDirection": {
+            "settled": 15,
+            "won": 5,
+            "hitRate": 0.3333333333333333,
+            "wilson95": {
+              "lower": 0.1517632443971473,
+              "upper": 0.5828645226148023
+            }
+          },
+          "ownDirection": {
+            "settled": 15,
+            "won": 5,
+            "hitRate": 0.3333333333333333,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 8,
+            "2": 7
+          },
+          "sameRowsMarket": {
+            "settled": 15,
+            "won": 3,
+            "hitRate": 0.2
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 2,
+            "marketOnlyWins": 0,
+            "bothWin": 3,
+            "bothMiss": 10,
+            "netWins": 2
+          },
+          "candidateDirectionsDifferFromOriginal": 1
+        },
+        "model25-market75": {
+          "modelWeight": 0.25,
+          "rows": 15,
+          "brier": 0.6823876236641856,
+          "logLoss": 1.122946999998016,
+          "commonDirection": {
+            "settled": 15,
+            "won": 5,
+            "hitRate": 0.3333333333333333,
+            "wilson95": {
+              "lower": 0.1517632443971473,
+              "upper": 0.5828645226148023
+            }
+          },
+          "ownDirection": {
+            "settled": 15,
+            "won": 5,
+            "hitRate": 0.3333333333333333,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 7,
+            "2": 8
+          },
+          "sameRowsMarket": {
+            "settled": 15,
+            "won": 3,
+            "hitRate": 0.2
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 2,
+            "marketOnlyWins": 0,
+            "bothWin": 3,
+            "bothMiss": 10,
+            "netWins": 2
+          },
+          "candidateDirectionsDifferFromOriginal": 2
+        }
+      }
+    },
+    "sp_gt_2_60": {
+      "probabilityRows": 9,
+      "commonDirectionRows": 9,
+      "tieExcludedRows": 0,
+      "independentMatchDays": 4,
+      "candidates": {
+        "frozen-model": {
+          "modelWeight": 1,
+          "rows": 9,
+          "brier": 0.6674521405951779,
+          "logLoss": 1.09649247718168,
+          "commonDirection": {
+            "settled": 9,
+            "won": 2,
+            "hitRate": 0.2222222222222222,
+            "wilson95": {
+              "lower": 0.06322510711784671,
+              "upper": 0.5474110308930111
+            }
+          },
+          "ownDirection": {
+            "settled": 9,
+            "won": 2,
+            "hitRate": 0.2222222222222222,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 5,
+            "2": 4
+          },
+          "sameRowsMarket": {
+            "settled": 9,
+            "won": 5,
+            "hitRate": 0.5555555555555556
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 2,
+            "marketOnlyWins": 5,
+            "bothWin": 0,
+            "bothMiss": 2,
+            "netWins": -3
+          },
+          "candidateDirectionsDifferFromOriginal": 0
+        },
+        "frozen-market": {
+          "modelWeight": 0,
+          "rows": 9,
+          "brier": 0.6595945364372131,
+          "logLoss": 1.0909987308552245,
+          "commonDirection": {
+            "settled": 9,
+            "won": 5,
+            "hitRate": 0.5555555555555556,
+            "wilson95": {
+              "lower": 0.26665129349549305,
+              "upper": 0.8112214789023355
+            }
+          },
+          "ownDirection": {
+            "settled": 9,
+            "won": 5,
+            "hitRate": 0.5555555555555556,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 4,
+            "2": 5
+          },
+          "sameRowsMarket": {
+            "settled": 9,
+            "won": 5,
+            "hitRate": 0.5555555555555556
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 0,
+            "marketOnlyWins": 0,
+            "bothWin": 5,
+            "bothMiss": 4,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 9
+        },
+        "model75-market25": {
+          "modelWeight": 0.75,
+          "rows": 9,
+          "brier": 0.6593895611699438,
+          "logLoss": 1.084630399737603,
+          "commonDirection": {
+            "settled": 9,
+            "won": 2,
+            "hitRate": 0.2222222222222222,
+            "wilson95": {
+              "lower": 0.06322510711784671,
+              "upper": 0.5474110308930111
+            }
+          },
+          "ownDirection": {
+            "settled": 9,
+            "won": 2,
+            "hitRate": 0.2222222222222222,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 6,
+            "2": 3
+          },
+          "sameRowsMarket": {
+            "settled": 9,
+            "won": 5,
+            "hitRate": 0.5555555555555556
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 0,
+            "marketOnlyWins": 3,
+            "bothWin": 2,
+            "bothMiss": 4,
+            "netWins": -3
+          },
+          "candidateDirectionsDifferFromOriginal": 5
+        },
+        "model50-market50": {
+          "modelWeight": 0.5,
+          "rows": 9,
+          "brier": 0.6553924340018719,
+          "logLoss": 1.0792854232060114,
+          "commonDirection": {
+            "settled": 9,
+            "won": 3,
+            "hitRate": 0.3333333333333333,
+            "wilson95": {
+              "lower": 0.1205838183869109,
+              "upper": 0.6457978644196036
+            }
+          },
+          "ownDirection": {
+            "settled": 9,
+            "won": 3,
+            "hitRate": 0.3333333333333333,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 6,
+            "2": 3
+          },
+          "sameRowsMarket": {
+            "settled": 9,
+            "won": 5,
+            "hitRate": 0.5555555555555556
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 0,
+            "marketOnlyWins": 2,
+            "bothWin": 3,
+            "bothMiss": 4,
+            "netWins": -2
+          },
+          "candidateDirectionsDifferFromOriginal": 7
+        },
+        "model25-market75": {
+          "modelWeight": 0.25,
+          "rows": 9,
+          "brier": 0.6554607590909615,
+          "logLoss": 1.0809988729612694,
+          "commonDirection": {
+            "settled": 9,
+            "won": 5,
+            "hitRate": 0.5555555555555556,
+            "wilson95": {
+              "lower": 0.26665129349549305,
+              "upper": 0.8112214789023355
+            }
+          },
+          "ownDirection": {
+            "settled": 9,
+            "won": 5,
+            "hitRate": 0.5555555555555556,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 4,
+            "2": 5
+          },
+          "sameRowsMarket": {
+            "settled": 9,
+            "won": 5,
+            "hitRate": 0.5555555555555556
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 0,
+            "marketOnlyWins": 0,
+            "bothWin": 5,
+            "bothMiss": 4,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 9
+        }
+      }
+    },
+    "sp_le_1_45": {
+      "probabilityRows": 18,
+      "commonDirectionRows": 18,
+      "tieExcludedRows": 0,
+      "independentMatchDays": 7,
+      "candidates": {
+        "frozen-model": {
+          "modelWeight": 1,
+          "rows": 18,
+          "brier": 0.48928004733142366,
+          "logLoss": 0.8489866526390455,
+          "commonDirection": {
+            "settled": 18,
+            "won": 14,
+            "hitRate": 0.7777777777777778,
+            "wilson95": {
+              "lower": 0.5478541568378739,
+              "upper": 0.9099907189139831
+            }
+          },
+          "ownDirection": {
+            "settled": 18,
+            "won": 14,
+            "hitRate": 0.7777777777777778,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 15,
+            "2": 3
+          },
+          "sameRowsMarket": {
+            "settled": 18,
+            "won": 14,
+            "hitRate": 0.7777777777777778
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 0,
+            "marketOnlyWins": 0,
+            "bothWin": 14,
+            "bothMiss": 4,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 0
+        },
+        "frozen-market": {
+          "modelWeight": 0,
+          "rows": 18,
+          "brier": 0.36181583814865115,
+          "logLoss": 0.6582436910241395,
+          "commonDirection": {
+            "settled": 18,
+            "won": 14,
+            "hitRate": 0.7777777777777778,
+            "wilson95": {
+              "lower": 0.5478541568378739,
+              "upper": 0.9099907189139831
+            }
+          },
+          "ownDirection": {
+            "settled": 18,
+            "won": 14,
+            "hitRate": 0.7777777777777778,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 15,
+            "2": 3
+          },
+          "sameRowsMarket": {
+            "settled": 18,
+            "won": 14,
+            "hitRate": 0.7777777777777778
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 0,
+            "marketOnlyWins": 0,
+            "bothWin": 14,
+            "bothMiss": 4,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 0
+        },
+        "model75-market25": {
+          "modelWeight": 0.75,
+          "rows": 18,
+          "brier": 0.44164952501709404,
+          "logLoss": 0.7823291219502836,
+          "commonDirection": {
+            "settled": 18,
+            "won": 14,
+            "hitRate": 0.7777777777777778,
+            "wilson95": {
+              "lower": 0.5478541568378739,
+              "upper": 0.9099907189139831
+            }
+          },
+          "ownDirection": {
+            "settled": 18,
+            "won": 14,
+            "hitRate": 0.7777777777777778,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 15,
+            "2": 3
+          },
+          "sameRowsMarket": {
+            "settled": 18,
+            "won": 14,
+            "hitRate": 0.7777777777777778
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 0,
+            "marketOnlyWins": 0,
+            "bothWin": 14,
+            "bothMiss": 4,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 0
+        },
+        "model50-market50": {
+          "modelWeight": 0.5,
+          "rows": 18,
+          "brier": 0.4045286493818553,
+          "logLoss": 0.7288461087491548,
+          "commonDirection": {
+            "settled": 18,
+            "won": 14,
+            "hitRate": 0.7777777777777778,
+            "wilson95": {
+              "lower": 0.5478541568378739,
+              "upper": 0.9099907189139831
+            }
+          },
+          "ownDirection": {
+            "settled": 18,
+            "won": 14,
+            "hitRate": 0.7777777777777778,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 15,
+            "2": 3
+          },
+          "sameRowsMarket": {
+            "settled": 18,
+            "won": 14,
+            "hitRate": 0.7777777777777778
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 0,
+            "marketOnlyWins": 0,
+            "bothWin": 14,
+            "bothMiss": 4,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 0
+        },
+        "model25-market75": {
+          "modelWeight": 0.25,
+          "rows": 18,
+          "brier": 0.37791742042570775,
+          "logLoss": 0.6874309318499714,
+          "commonDirection": {
+            "settled": 18,
+            "won": 14,
+            "hitRate": 0.7777777777777778,
+            "wilson95": {
+              "lower": 0.5478541568378739,
+              "upper": 0.9099907189139831
+            }
+          },
+          "ownDirection": {
+            "settled": 18,
+            "won": 14,
+            "hitRate": 0.7777777777777778,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 15,
+            "2": 3
+          },
+          "sameRowsMarket": {
+            "settled": 18,
+            "won": 14,
+            "hitRate": 0.7777777777777778
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 0,
+            "marketOnlyWins": 0,
+            "bothWin": 14,
+            "bothMiss": 4,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 0
+        }
+      }
+    }
+  },
+  "byOriginalMarketAgreement": {
+    "agree": {
+      "probabilityRows": 60,
+      "commonDirectionRows": 60,
+      "tieExcludedRows": 0,
+      "independentMatchDays": 8,
+      "candidates": {
+        "frozen-model": {
+          "modelWeight": 1,
+          "rows": 60,
+          "brier": 0.587116894785321,
+          "logLoss": 0.9855412075363543,
+          "commonDirection": {
+            "settled": 60,
+            "won": 36,
+            "hitRate": 0.6,
+            "wilson95": {
+              "lower": 0.4736605349204075,
+              "upper": 0.7143050946511744
+            }
+          },
+          "ownDirection": {
+            "settled": 60,
+            "won": 36,
+            "hitRate": 0.6,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 45,
+            "2": 15
+          },
+          "sameRowsMarket": {
+            "settled": 60,
+            "won": 36,
+            "hitRate": 0.6
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 0,
+            "marketOnlyWins": 0,
+            "bothWin": 36,
+            "bothMiss": 24,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 0
+        },
+        "frozen-market": {
+          "modelWeight": 0,
+          "rows": 60,
+          "brier": 0.5219895004432651,
+          "logLoss": 0.8928486259842308,
+          "commonDirection": {
+            "settled": 60,
+            "won": 36,
+            "hitRate": 0.6,
+            "wilson95": {
+              "lower": 0.4736605349204075,
+              "upper": 0.7143050946511744
+            }
+          },
+          "ownDirection": {
+            "settled": 60,
+            "won": 36,
+            "hitRate": 0.6,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 45,
+            "2": 15
+          },
+          "sameRowsMarket": {
+            "settled": 60,
+            "won": 36,
+            "hitRate": 0.6
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 0,
+            "marketOnlyWins": 0,
+            "bothWin": 36,
+            "bothMiss": 24,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 0
+        },
+        "model75-market25": {
+          "modelWeight": 0.75,
+          "rows": 60,
+          "brier": 0.5639868938151777,
+          "logLoss": 0.9532723908811995,
+          "commonDirection": {
+            "settled": 60,
+            "won": 36,
+            "hitRate": 0.6,
+            "wilson95": {
+              "lower": 0.4736605349204075,
+              "upper": 0.7143050946511744
+            }
+          },
+          "ownDirection": {
+            "settled": 60,
+            "won": 36,
+            "hitRate": 0.6,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 45,
+            "2": 15
+          },
+          "sameRowsMarket": {
+            "settled": 60,
+            "won": 36,
+            "hitRate": 0.6
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 0,
+            "marketOnlyWins": 0,
+            "bothWin": 36,
+            "bothMiss": 24,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 0
+        },
+        "model50-market50": {
+          "modelWeight": 0.5,
+          "rows": 60,
+          "brier": 0.5454223277681205,
+          "logLoss": 0.9273030415765028,
+          "commonDirection": {
+            "settled": 60,
+            "won": 36,
+            "hitRate": 0.6,
+            "wilson95": {
+              "lower": 0.4736605349204075,
+              "upper": 0.7143050946511744
+            }
+          },
+          "ownDirection": {
+            "settled": 60,
+            "won": 36,
+            "hitRate": 0.6,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 45,
+            "2": 15
+          },
+          "sameRowsMarket": {
+            "settled": 60,
+            "won": 36,
+            "hitRate": 0.6
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 0,
+            "marketOnlyWins": 0,
+            "bothWin": 36,
+            "bothMiss": 24,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 0
+        },
+        "model25-market75": {
+          "modelWeight": 0.25,
+          "rows": 60,
+          "brier": 0.5314231966441498,
+          "logLoss": 0.9071483423628571,
+          "commonDirection": {
+            "settled": 60,
+            "won": 36,
+            "hitRate": 0.6,
+            "wilson95": {
+              "lower": 0.4736605349204075,
+              "upper": 0.7143050946511744
+            }
+          },
+          "ownDirection": {
+            "settled": 60,
+            "won": 36,
+            "hitRate": 0.6,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 45,
+            "2": 15
+          },
+          "sameRowsMarket": {
+            "settled": 60,
+            "won": 36,
+            "hitRate": 0.6
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 0,
+            "marketOnlyWins": 0,
+            "bothWin": 36,
+            "bothMiss": 24,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 0
+        }
+      }
+    },
+    "disagree": {
+      "probabilityRows": 14,
+      "commonDirectionRows": 14,
+      "tieExcludedRows": 0,
+      "independentMatchDays": 5,
+      "candidates": {
+        "frozen-model": {
+          "modelWeight": 1,
+          "rows": 14,
+          "brier": 0.6711667674124254,
+          "logLoss": 1.1065222122231702,
+          "commonDirection": {
+            "settled": 14,
+            "won": 4,
+            "hitRate": 0.2857142857142857,
+            "wilson95": {
+              "lower": 0.11721378644576919,
+              "upper": 0.5464908432989318
+            }
+          },
+          "ownDirection": {
+            "settled": 14,
+            "won": 4,
+            "hitRate": 0.2857142857142857,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 8,
+            "2": 6
+          },
+          "sameRowsMarket": {
+            "settled": 14,
+            "won": 5,
+            "hitRate": 0.35714285714285715
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 4,
+            "marketOnlyWins": 5,
+            "bothWin": 0,
+            "bothMiss": 5,
+            "netWins": -1
+          },
+          "candidateDirectionsDifferFromOriginal": 0
+        },
+        "frozen-market": {
+          "modelWeight": 0,
+          "rows": 14,
+          "brier": 0.6827735742596582,
+          "logLoss": 1.125141964760123,
+          "commonDirection": {
+            "settled": 14,
+            "won": 5,
+            "hitRate": 0.35714285714285715,
+            "wilson95": {
+              "lower": 0.1634473175355414,
+              "upper": 0.612355768960926
+            }
+          },
+          "ownDirection": {
+            "settled": 14,
+            "won": 5,
+            "hitRate": 0.35714285714285715,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 6,
+            "2": 8
+          },
+          "sameRowsMarket": {
+            "settled": 14,
+            "won": 5,
+            "hitRate": 0.35714285714285715
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 0,
+            "marketOnlyWins": 0,
+            "bothWin": 5,
+            "bothMiss": 9,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 14
+        },
+        "model75-market25": {
+          "modelWeight": 0.75,
+          "rows": 14,
+          "brier": 0.6696158993682022,
+          "logLoss": 1.1039622234010777,
+          "commonDirection": {
+            "settled": 14,
+            "won": 4,
+            "hitRate": 0.2857142857142857,
+            "wilson95": {
+              "lower": 0.11721378644576919,
+              "upper": 0.5464908432989318
+            }
+          },
+          "ownDirection": {
+            "settled": 14,
+            "won": 4,
+            "hitRate": 0.2857142857142857,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 8,
+            "2": 6
+          },
+          "sameRowsMarket": {
+            "settled": 14,
+            "won": 5,
+            "hitRate": 0.35714285714285715
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 2,
+            "marketOnlyWins": 3,
+            "bothWin": 2,
+            "bothMiss": 7,
+            "netWins": -1
+          },
+          "candidateDirectionsDifferFromOriginal": 6
+        },
+        "model50-market50": {
+          "modelWeight": 0.5,
+          "rows": 14,
+          "brier": 0.6710334111613332,
+          "logLoss": 1.105884420790328,
+          "commonDirection": {
+            "settled": 14,
+            "won": 5,
+            "hitRate": 0.35714285714285715,
+            "wilson95": {
+              "lower": 0.1634473175355414,
+              "upper": 0.612355768960926
+            }
+          },
+          "ownDirection": {
+            "settled": 14,
+            "won": 5,
+            "hitRate": 0.35714285714285715,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 8,
+            "2": 6
+          },
+          "sameRowsMarket": {
+            "settled": 14,
+            "won": 5,
+            "hitRate": 0.35714285714285715
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 2,
+            "marketOnlyWins": 2,
+            "bothWin": 3,
+            "bothMiss": 7,
+            "netWins": 0
+          },
+          "candidateDirectionsDifferFromOriginal": 8
+        },
+        "model25-market75": {
+          "modelWeight": 0.25,
+          "rows": 14,
+          "brier": 0.6754193027918184,
+          "logLoss": 1.1126684875123636,
+          "commonDirection": {
+            "settled": 14,
+            "won": 7,
+            "hitRate": 0.5,
+            "wilson95": {
+              "lower": 0.26799202452413634,
+              "upper": 0.7320079754758637
+            }
+          },
+          "ownDirection": {
+            "settled": 14,
+            "won": 7,
+            "hitRate": 0.5,
+            "abstainedTies": 0
+          },
+          "directionCounts": {
+            "1": 5,
+            "2": 9
+          },
+          "sameRowsMarket": {
+            "settled": 14,
+            "won": 5,
+            "hitRate": 0.35714285714285715
+          },
+          "pairedOutcomes": {
+            "candidateOnlyWins": 2,
+            "marketOnlyWins": 0,
+            "bothWin": 5,
+            "bothMiss": 7,
+            "netWins": 2
+          },
+          "candidateDirectionsDifferFromOriginal": 11
+        }
+      }
+    }
+  },
+  "pairedCalendarUncertainty": {
+    "frozen-model": {
+      "policy": {
+        "version": "paired-calendar-block-research-v1",
+        "blockDays": 7,
+        "iterations": 5000,
+        "minimumCalendarDays": 28,
+        "minimumOccupiedDays": 14,
+        "alpha": 0.05,
+        "comparisonCount": 4,
+        "endpointCount": 2
+      },
+      "researchOnly": true,
+      "promotionEligible": false,
+      "rows": 74,
+      "calendarDays": 9,
+      "occupiedDays": 8,
+      "calendarHash": "0288e2c1579c033a4a55ad035a8c76642fd174c8a26ed8115fcebc2e5a621c72",
+      "observedImprovement": {
+        "brier": -0.050610113,
+        "logLoss": -0.0716334913
+      },
+      "caveat": "historical descriptive sensitivity; assumes useful dependence capture in seven-day blocks; not team-cluster independence or prospective promotion evidence",
+      "status": "insufficient-calendar-support",
+      "unadjusted95": null,
+      "familyAdjusted": null
+    },
+    "model75-market25": {
+      "policy": {
+        "version": "paired-calendar-block-research-v1",
+        "blockDays": 7,
+        "iterations": 5000,
+        "minimumCalendarDays": 28,
+        "minimumOccupiedDays": 14,
+        "alpha": 0.05,
+        "comparisonCount": 4,
+        "endpointCount": 2
+      },
+      "researchOnly": true,
+      "promotionEligible": false,
+      "rows": 74,
+      "calendarDays": 9,
+      "occupiedDays": 8,
+      "calendarHash": "7e58ca34e7cabd2d1ac684f7f88a0585a451d1a20ed1d0d5ed7d5815153a1011",
+      "observedImprovement": {
+        "brier": -0.0315626507,
+        "logLoss": -0.0449852637
+      },
+      "caveat": "historical descriptive sensitivity; assumes useful dependence capture in seven-day blocks; not team-cluster independence or prospective promotion evidence",
+      "status": "insufficient-calendar-support",
+      "unadjusted95": null,
+      "familyAdjusted": null
+    },
+    "model50-market50": {
+      "policy": {
+        "version": "paired-calendar-block-research-v1",
+        "blockDays": 7,
+        "iterations": 5000,
+        "minimumCalendarDays": 28,
+        "minimumOccupiedDays": 14,
+        "alpha": 0.05,
+        "comparisonCount": 4,
+        "endpointCount": 2
+      },
+      "researchOnly": true,
+      "promotionEligible": false,
+      "rows": 74,
+      "calendarDays": 9,
+      "occupiedDays": 8,
+      "calendarHash": "01d2ce9b5b7cf5393c4805c67a69929800ff8b8dfa0eeda78a4859a27308a1ed",
+      "observedImprovement": {
+        "brier": -0.0167784778,
+        "logLoss": -0.0242926935
+      },
+      "caveat": "historical descriptive sensitivity; assumes useful dependence capture in seven-day blocks; not team-cluster independence or prospective promotion evidence",
+      "status": "insufficient-calendar-support",
+      "unadjusted95": null,
+      "familyAdjusted": null
+    },
+    "model25-market75": {
+      "policy": {
+        "version": "paired-calendar-block-research-v1",
+        "blockDays": 7,
+        "iterations": 5000,
+        "minimumCalendarDays": 28,
+        "minimumOccupiedDays": 14,
+        "alpha": 0.05,
+        "comparisonCount": 4,
+        "endpointCount": 2
+      },
+      "researchOnly": true,
+      "promotionEligible": false,
+      "rows": 74,
+      "calendarDays": 9,
+      "occupiedDays": 8,
+      "calendarHash": "486a74efcd903951a29b6ff96c8856bc615a815e832ebdaed8a14c2be309a020",
+      "observedImprovement": {
+        "brier": -0.0062575942,
+        "logLoss": -0.0092345176
+      },
+      "caveat": "historical descriptive sensitivity; assumes useful dependence capture in seven-day blocks; not team-cluster independence or prospective promotion evidence",
+      "status": "insufficient-calendar-support",
+      "unadjusted95": null,
+      "familyAdjusted": null
+    }
+  },
+  "sampleAdmission": {
+    "scope": "frozen input evidence only; Elo weight requires at least 6 per team, form weight at least 8 per team; missing evidence is unknown; available evidence does not establish provider truth, form confidence or causal accuracy gain",
+    "publishedCounts": {
+      "evidence-unavailable": 70,
+      "no-sample-floor-violation": 35,
+      "sample-floor-violation": 13
+    },
+    "settledCounts": {
+      "evidence-unavailable": 44,
+      "no-sample-floor-violation": 25,
+      "sample-floor-violation": 5
+    },
+    "byGroup": {
+      "evidence-unavailable": {
+        "probabilityRows": 44,
+        "commonDirectionRows": 44,
+        "tieExcludedRows": 0,
+        "independentMatchDays": 4,
+        "candidates": {
+          "frozen-model": {
+            "modelWeight": 1,
+            "rows": 44,
+            "brier": 0.6128395083067525,
+            "logLoss": 1.0216583022451817,
+            "commonDirection": {
+              "settled": 44,
+              "won": 22,
+              "hitRate": 0.5,
+              "wilson95": {
+                "lower": 0.35831760539989393,
+                "upper": 0.641682394600106
+              }
+            },
+            "ownDirection": {
+              "settled": 44,
+              "won": 22,
+              "hitRate": 0.5,
+              "abstainedTies": 0
+            },
+            "directionCounts": {
+              "1": 28,
+              "2": 16
+            },
+            "sameRowsMarket": {
+              "settled": 44,
+              "won": 22,
+              "hitRate": 0.5
+            },
+            "pairedOutcomes": {
+              "candidateOnlyWins": 4,
+              "marketOnlyWins": 4,
+              "bothWin": 18,
+              "bothMiss": 18,
+              "netWins": 0
+            },
+            "candidateDirectionsDifferFromOriginal": 0
+          },
+          "frozen-market": {
+            "modelWeight": 0,
+            "rows": 44,
+            "brier": 0.5857081985640993,
+            "logLoss": 0.9886567676003378,
+            "commonDirection": {
+              "settled": 44,
+              "won": 22,
+              "hitRate": 0.5,
+              "wilson95": {
+                "lower": 0.35831760539989393,
+                "upper": 0.641682394600106
+              }
+            },
+            "ownDirection": {
+              "settled": 44,
+              "won": 22,
+              "hitRate": 0.5,
+              "abstainedTies": 0
+            },
+            "directionCounts": {
+              "1": 29,
+              "2": 15
+            },
+            "sameRowsMarket": {
+              "settled": 44,
+              "won": 22,
+              "hitRate": 0.5
+            },
+            "pairedOutcomes": {
+              "candidateOnlyWins": 0,
+              "marketOnlyWins": 0,
+              "bothWin": 22,
+              "bothMiss": 22,
+              "netWins": 0
+            },
+            "candidateDirectionsDifferFromOriginal": 11
+          },
+          "model75-market25": {
+            "modelWeight": 0.75,
+            "rows": 44,
+            "brier": 0.6016407349482744,
+            "logLoss": 1.006545526646966,
+            "commonDirection": {
+              "settled": 44,
+              "won": 22,
+              "hitRate": 0.5,
+              "wilson95": {
+                "lower": 0.35831760539989393,
+                "upper": 0.641682394600106
+              }
+            },
+            "ownDirection": {
+              "settled": 44,
+              "won": 22,
+              "hitRate": 0.5,
+              "abstainedTies": 0
+            },
+            "directionCounts": {
+              "1": 29,
+              "2": 15
+            },
+            "sameRowsMarket": {
+              "settled": 44,
+              "won": 22,
+              "hitRate": 0.5
+            },
+            "pairedOutcomes": {
+              "candidateOnlyWins": 2,
+              "marketOnlyWins": 2,
+              "bothWin": 20,
+              "bothMiss": 20,
+              "netWins": 0
+            },
+            "candidateDirectionsDifferFromOriginal": 5
+          },
+          "model50-market50": {
+            "modelWeight": 0.5,
+            "rows": 44,
+            "brier": 0.5933859255383395,
+            "logLoss": 0.9958683782873204,
+            "commonDirection": {
+              "settled": 44,
+              "won": 23,
+              "hitRate": 0.5227272727272727,
+              "wilson95": {
+                "lower": 0.3793546556062164,
+                "upper": 0.662450089677489
+              }
+            },
+            "ownDirection": {
+              "settled": 44,
+              "won": 23,
+              "hitRate": 0.5227272727272727,
+              "abstainedTies": 0
+            },
+            "directionCounts": {
+              "1": 29,
+              "2": 15
+            },
+            "sameRowsMarket": {
+              "settled": 44,
+              "won": 22,
+              "hitRate": 0.5
+            },
+            "pairedOutcomes": {
+              "candidateOnlyWins": 2,
+              "marketOnlyWins": 1,
+              "bothWin": 21,
+              "bothMiss": 20,
+              "netWins": 1
+            },
+            "candidateDirectionsDifferFromOriginal": 7
+          },
+          "model25-market75": {
+            "modelWeight": 0.25,
+            "rows": 44,
+            "brier": 0.5880750800769478,
+            "logLoss": 0.9897336621393797,
+            "commonDirection": {
+              "settled": 44,
+              "won": 24,
+              "hitRate": 0.5454545454545454,
+              "wilson95": {
+                "lower": 0.40066183198961974,
+                "upper": 0.6829476585777909
+              }
+            },
+            "ownDirection": {
+              "settled": 44,
+              "won": 24,
+              "hitRate": 0.5454545454545454,
+              "abstainedTies": 0
+            },
+            "directionCounts": {
+              "1": 28,
+              "2": 16
+            },
+            "sameRowsMarket": {
+              "settled": 44,
+              "won": 22,
+              "hitRate": 0.5
+            },
+            "pairedOutcomes": {
+              "candidateOnlyWins": 2,
+              "marketOnlyWins": 0,
+              "bothWin": 22,
+              "bothMiss": 20,
+              "netWins": 2
+            },
+            "candidateDirectionsDifferFromOriginal": 8
+          }
+        }
+      },
+      "no-sample-floor-violation": {
+        "probabilityRows": 25,
+        "commonDirectionRows": 25,
+        "tieExcludedRows": 0,
+        "independentMatchDays": 5,
+        "candidates": {
+          "frozen-model": {
+            "modelWeight": 1,
+            "rows": 25,
+            "brier": 0.6202571929413628,
+            "logLoss": 1.0332326269224827,
+            "commonDirection": {
+              "settled": 25,
+              "won": 13,
+              "hitRate": 0.52,
+              "wilson95": {
+                "lower": 0.3349851695035678,
+                "upper": 0.6996871404588704
+              }
+            },
+            "ownDirection": {
+              "settled": 25,
+              "won": 13,
+              "hitRate": 0.52,
+              "abstainedTies": 0
+            },
+            "directionCounts": {
+              "1": 20,
+              "2": 5
+            },
+            "sameRowsMarket": {
+              "settled": 25,
+              "won": 14,
+              "hitRate": 0.56
+            },
+            "pairedOutcomes": {
+              "candidateOnlyWins": 0,
+              "marketOnlyWins": 1,
+              "bothWin": 13,
+              "bothMiss": 11,
+              "netWins": -1
+            },
+            "candidateDirectionsDifferFromOriginal": 0
+          },
+          "frozen-market": {
+            "modelWeight": 0,
+            "rows": 25,
+            "brier": 0.5464186673747417,
+            "logLoss": 0.9201923337163379,
+            "commonDirection": {
+              "settled": 25,
+              "won": 14,
+              "hitRate": 0.56,
+              "wilson95": {
+                "lower": 0.3706733186979878,
+                "upper": 0.7333436111893266
+              }
+            },
+            "ownDirection": {
+              "settled": 25,
+              "won": 14,
+              "hitRate": 0.56,
+              "abstainedTies": 0
+            },
+            "directionCounts": {
+              "1": 17,
+              "2": 8
+            },
+            "sameRowsMarket": {
+              "settled": 25,
+              "won": 14,
+              "hitRate": 0.56
+            },
+            "pairedOutcomes": {
+              "candidateOnlyWins": 0,
+              "marketOnlyWins": 0,
+              "bothWin": 14,
+              "bothMiss": 11,
+              "netWins": 0
+            },
+            "candidateDirectionsDifferFromOriginal": 3
+          },
+          "model75-market25": {
+            "modelWeight": 0.75,
+            "rows": 25,
+            "brier": 0.5926731736664211,
+            "logLoss": 0.9935640566338434,
+            "commonDirection": {
+              "settled": 25,
+              "won": 13,
+              "hitRate": 0.52,
+              "wilson95": {
+                "lower": 0.3349851695035678,
+                "upper": 0.6996871404588704
+              }
+            },
+            "ownDirection": {
+              "settled": 25,
+              "won": 13,
+              "hitRate": 0.52,
+              "abstainedTies": 0
+            },
+            "directionCounts": {
+              "1": 19,
+              "2": 6
+            },
+            "sameRowsMarket": {
+              "settled": 25,
+              "won": 14,
+              "hitRate": 0.56
+            },
+            "pairedOutcomes": {
+              "candidateOnlyWins": 0,
+              "marketOnlyWins": 1,
+              "bothWin": 13,
+              "bothMiss": 11,
+              "netWins": -1
+            },
+            "candidateDirectionsDifferFromOriginal": 1
+          },
+          "model50-market50": {
+            "modelWeight": 0.5,
+            "rows": 25,
+            "brier": 0.5711720796470037,
+            "logLoss": 0.9618957703069901,
+            "commonDirection": {
+              "settled": 25,
+              "won": 13,
+              "hitRate": 0.52,
+              "wilson95": {
+                "lower": 0.3349851695035678,
+                "upper": 0.6996871404588704
+              }
+            },
+            "ownDirection": {
+              "settled": 25,
+              "won": 13,
+              "hitRate": 0.52,
+              "abstainedTies": 0
+            },
+            "directionCounts": {
+              "1": 19,
+              "2": 6
+            },
+            "sameRowsMarket": {
+              "settled": 25,
+              "won": 14,
+              "hitRate": 0.56
+            },
+            "pairedOutcomes": {
+              "candidateOnlyWins": 0,
+              "marketOnlyWins": 1,
+              "bothWin": 13,
+              "bothMiss": 11,
+              "netWins": -1
+            },
+            "candidateDirectionsDifferFromOriginal": 1
+          },
+          "model25-market75": {
+            "modelWeight": 0.25,
+            "rows": 25,
+            "brier": 0.5557539108831105,
+            "logLoss": 0.9374671011975988,
+            "commonDirection": {
+              "settled": 25,
+              "won": 14,
+              "hitRate": 0.56,
+              "wilson95": {
+                "lower": 0.3706733186979878,
+                "upper": 0.7333436111893266
+              }
+            },
+            "ownDirection": {
+              "settled": 25,
+              "won": 14,
+              "hitRate": 0.56,
+              "abstainedTies": 0
+            },
+            "directionCounts": {
+              "1": 17,
+              "2": 8
+            },
+            "sameRowsMarket": {
+              "settled": 25,
+              "won": 14,
+              "hitRate": 0.56
+            },
+            "pairedOutcomes": {
+              "candidateOnlyWins": 0,
+              "marketOnlyWins": 0,
+              "bothWin": 14,
+              "bothMiss": 11,
+              "netWins": 0
+            },
+            "candidateDirectionsDifferFromOriginal": 3
+          }
+        }
+      },
+      "sample-floor-violation": {
+        "probabilityRows": 5,
+        "commonDirectionRows": 5,
+        "tieExcludedRows": 0,
+        "independentMatchDays": 3,
+        "candidates": {
+          "frozen-model": {
+            "modelWeight": 1,
+            "rows": 5,
+            "brier": 0.43039604837240686,
+            "logLoss": 0.768000490291117,
+            "commonDirection": {
+              "settled": 5,
+              "won": 5,
+              "hitRate": 1,
+              "wilson95": {
+                "lower": 0.5655175352168251,
+                "upper": 1
+              }
+            },
+            "ownDirection": {
+              "settled": 5,
+              "won": 5,
+              "hitRate": 1,
+              "abstainedTies": 0
+            },
+            "directionCounts": {
+              "1": 5
+            },
+            "sameRowsMarket": {
+              "settled": 5,
+              "won": 5,
+              "hitRate": 1
+            },
+            "pairedOutcomes": {
+              "candidateOnlyWins": 0,
+              "marketOnlyWins": 0,
+              "bothWin": 5,
+              "bothMiss": 0,
+              "netWins": 0
+            },
+            "candidateDirectionsDifferFromOriginal": 0
+          },
+          "frozen-market": {
+            "modelWeight": 0,
+            "rows": 5,
+            "brier": 0.28931452900844323,
+            "logLoss": 0.5634397896744543,
+            "commonDirection": {
+              "settled": 5,
+              "won": 5,
+              "hitRate": 1,
+              "wilson95": {
+                "lower": 0.5655175352168251,
+                "upper": 1
+              }
+            },
+            "ownDirection": {
+              "settled": 5,
+              "won": 5,
+              "hitRate": 1,
+              "abstainedTies": 0
+            },
+            "directionCounts": {
+              "1": 5
+            },
+            "sameRowsMarket": {
+              "settled": 5,
+              "won": 5,
+              "hitRate": 1
+            },
+            "pairedOutcomes": {
+              "candidateOnlyWins": 0,
+              "marketOnlyWins": 0,
+              "bothWin": 5,
+              "bothMiss": 0,
+              "netWins": 0
+            },
+            "candidateDirectionsDifferFromOriginal": 0
+          },
+          "model75-market25": {
+            "modelWeight": 0.75,
+            "rows": 5,
+            "brier": 0.3849629081361777,
+            "logLoss": 0.7049419984348979,
+            "commonDirection": {
+              "settled": 5,
+              "won": 5,
+              "hitRate": 1,
+              "wilson95": {
+                "lower": 0.5655175352168251,
+                "upper": 1
+              }
+            },
+            "ownDirection": {
+              "settled": 5,
+              "won": 5,
+              "hitRate": 1,
+              "abstainedTies": 0
+            },
+            "directionCounts": {
+              "1": 5
+            },
+            "sameRowsMarket": {
+              "settled": 5,
+              "won": 5,
+              "hitRate": 1
+            },
+            "pairedOutcomes": {
+              "candidateOnlyWins": 0,
+              "marketOnlyWins": 0,
+              "bothWin": 5,
+              "bothMiss": 0,
+              "netWins": 0
+            },
+            "candidateDirectionsDifferFromOriginal": 0
+          },
+          "model50-market50": {
+            "modelWeight": 0.5,
+            "rows": 5,
+            "brier": 0.34630494149677393,
+            "logLoss": 0.6509922966675831,
+            "commonDirection": {
+              "settled": 5,
+              "won": 5,
+              "hitRate": 1,
+              "wilson95": {
+                "lower": 0.5655175352168251,
+                "upper": 1
+              }
+            },
+            "ownDirection": {
+              "settled": 5,
+              "won": 5,
+              "hitRate": 1,
+              "abstainedTies": 0
+            },
+            "directionCounts": {
+              "1": 5
+            },
+            "sameRowsMarket": {
+              "settled": 5,
+              "won": 5,
+              "hitRate": 1
+            },
+            "pairedOutcomes": {
+              "candidateOnlyWins": 0,
+              "marketOnlyWins": 0,
+              "bothWin": 5,
+              "bothMiss": 0,
+              "netWins": 0
+            },
+            "candidateDirectionsDifferFromOriginal": 0
+          },
+          "model25-market75": {
+            "modelWeight": 0.25,
+            "rows": 5,
+            "brier": 0.3144221484541958,
+            "logLoss": 0.6042601405743693,
+            "commonDirection": {
+              "settled": 5,
+              "won": 5,
+              "hitRate": 1,
+              "wilson95": {
+                "lower": 0.5655175352168251,
+                "upper": 1
+              }
+            },
+            "ownDirection": {
+              "settled": 5,
+              "won": 5,
+              "hitRate": 1,
+              "abstainedTies": 0
+            },
+            "directionCounts": {
+              "1": 5
+            },
+            "sameRowsMarket": {
+              "settled": 5,
+              "won": 5,
+              "hitRate": 1
+            },
+            "pairedOutcomes": {
+              "candidateOnlyWins": 0,
+              "marketOnlyWins": 0,
+              "bothWin": 5,
+              "bothMiss": 0,
+              "netWins": 0
+            },
+            "candidateDirectionsDifferFromOriginal": 0
+          }
+        }
+      }
+    },
+    "violations": [
+      {
+        "sourceMatchId": "2041650",
+        "businessDate": "2026-09-24",
+        "modelVersion": "unified-poisson-bayes-v75",
+        "settlement": "WON",
+        "actual": "1",
+        "originalTip": "1",
+        "group": "sample-floor-violation",
+        "elo": "positive-weight-below-both-team-sample-floor",
+        "form": "no-sample-floor-violation",
+        "samples": {
+          "elo": {
+            "away": 0,
+            "home": 104
+          },
+          "form": {
+            "away": 0,
+            "home": 12
+          }
+        },
+        "weights": {
+          "elo": 0.35,
+          "form": 0,
+          "market": 0.12,
+          "poisson": 0.35,
+          "teamStrength": 0.18,
+          "worldCupPrior": 0
+        }
+      },
+      {
+        "sourceMatchId": "2041695",
+        "businessDate": "2026-09-25",
+        "modelVersion": "unified-poisson-bayes-v75",
+        "settlement": "WON",
+        "actual": "1",
+        "originalTip": "1",
+        "group": "sample-floor-violation",
+        "elo": "positive-weight-below-both-team-sample-floor",
+        "form": "no-sample-floor-violation",
+        "samples": {
+          "elo": {
+            "away": 0,
+            "home": 1101
+          },
+          "form": {
+            "away": 0,
+            "home": 12
+          }
+        },
+        "weights": {
+          "elo": 0.35,
+          "form": 0,
+          "market": 0.12,
+          "poisson": 0.35,
+          "teamStrength": 0.18,
+          "worldCupPrior": 0
+        }
+      },
+      {
+        "sourceMatchId": "2041706",
+        "businessDate": "2026-09-26",
+        "modelVersion": "unified-poisson-bayes-v75",
+        "settlement": "WON",
+        "actual": "1",
+        "originalTip": "1",
+        "group": "sample-floor-violation",
+        "elo": "no-sample-floor-violation",
+        "form": "positive-weight-below-both-team-sample-floor",
+        "samples": {
+          "elo": {
+            "away": 1,
+            "home": 3
+          },
+          "form": {
+            "away": 1,
+            "home": 3
+          }
+        },
+        "weights": {
+          "elo": 0,
+          "form": 0.034999999999999996,
+          "market": 0.15,
+          "poisson": 0.5,
+          "teamStrength": 0.35,
+          "worldCupPrior": 0
+        }
+      },
+      {
+        "sourceMatchId": "2041710",
+        "businessDate": "2026-09-26",
+        "modelVersion": "unified-poisson-bayes-v75",
+        "settlement": "WON",
+        "actual": "1",
+        "originalTip": "1",
+        "group": "sample-floor-violation",
+        "elo": "no-sample-floor-violation",
+        "form": "positive-weight-below-both-team-sample-floor",
+        "samples": {
+          "elo": {
+            "away": 2,
+            "home": 1
+          },
+          "form": {
+            "away": 12,
+            "home": 1
+          }
+        },
+        "weights": {
+          "elo": 0,
+          "form": 0.034999999999999996,
+          "market": 0.15,
+          "poisson": 0.5,
+          "teamStrength": 0.35,
+          "worldCupPrior": 0
+        }
+      },
+      {
+        "sourceMatchId": "2041712",
+        "businessDate": "2026-09-26",
+        "modelVersion": "unified-poisson-bayes-v75",
+        "settlement": "WON",
+        "actual": "1",
+        "originalTip": "1",
+        "group": "sample-floor-violation",
+        "elo": "no-sample-floor-violation",
+        "form": "positive-weight-below-both-team-sample-floor",
+        "samples": {
+          "elo": {
+            "away": 1,
+            "home": 3
+          },
+          "form": {
+            "away": 1,
+            "home": 3
+          }
+        },
+        "weights": {
+          "elo": 0,
+          "form": 0.034999999999999996,
+          "market": 0.15,
+          "poisson": 0.5,
+          "teamStrength": 0.35,
+          "worldCupPrior": 0
+        }
+      },
+      {
+        "sourceMatchId": "2041713",
+        "businessDate": "2026-09-26",
+        "modelVersion": "unified-poisson-bayes-v75",
+        "settlement": "PENDING",
+        "actual": null,
+        "originalTip": "2",
+        "group": "sample-floor-violation",
+        "elo": "positive-weight-below-both-team-sample-floor",
+        "form": "no-sample-floor-violation",
+        "samples": {
+          "elo": {
+            "away": 851,
+            "home": 0
+          },
+          "form": {
+            "away": 12,
+            "home": 0
+          }
+        },
+        "weights": {
+          "elo": 0.35,
+          "form": 0,
+          "market": 0.12,
+          "poisson": 0.35,
+          "teamStrength": 0.18,
+          "worldCupPrior": 0
+        }
+      },
+      {
+        "sourceMatchId": "2041716",
+        "businessDate": "2026-09-26",
+        "modelVersion": "unified-poisson-bayes-v75",
+        "settlement": "PENDING",
+        "actual": null,
+        "originalTip": "1",
+        "group": "sample-floor-violation",
+        "elo": "positive-weight-below-both-team-sample-floor",
+        "form": "no-sample-floor-violation",
+        "samples": {
+          "elo": {
+            "away": 0,
+            "home": 521
+          },
+          "form": {
+            "away": 0,
+            "home": 12
+          }
+        },
+        "weights": {
+          "elo": 0.35,
+          "form": 0,
+          "market": 0.12,
+          "poisson": 0.35,
+          "teamStrength": 0.18,
+          "worldCupPrior": 0
+        }
+      },
+      {
+        "sourceMatchId": "2041718",
+        "businessDate": "2026-09-26",
+        "modelVersion": "unified-poisson-bayes-v75",
+        "settlement": "PENDING",
+        "actual": null,
+        "originalTip": "2",
+        "group": "sample-floor-violation",
+        "elo": "positive-weight-below-both-team-sample-floor",
+        "form": "no-sample-floor-violation",
+        "samples": {
+          "elo": {
+            "away": 0,
+            "home": 239
+          },
+          "form": {
+            "away": 0,
+            "home": 12
+          }
+        },
+        "weights": {
+          "elo": 0.35,
+          "form": 0,
+          "market": 0.12,
+          "poisson": 0.35,
+          "teamStrength": 0.18,
+          "worldCupPrior": 0
+        }
+      },
+      {
+        "sourceMatchId": "2041720",
+        "businessDate": "2026-09-26",
+        "modelVersion": "unified-poisson-bayes-v75",
+        "settlement": "PENDING",
+        "actual": null,
+        "originalTip": "2",
+        "group": "sample-floor-violation",
+        "elo": "positive-weight-below-both-team-sample-floor",
+        "form": "no-sample-floor-violation",
+        "samples": {
+          "elo": {
+            "away": 884,
+            "home": 0
+          },
+          "form": {
+            "away": 12,
+            "home": 0
+          }
+        },
+        "weights": {
+          "elo": 0.35,
+          "form": 0,
+          "market": 0.12,
+          "poisson": 0.35,
+          "teamStrength": 0.18,
+          "worldCupPrior": 0
+        }
+      },
+      {
+        "sourceMatchId": "2041722",
+        "businessDate": "2026-09-26",
+        "modelVersion": "unified-poisson-bayes-v75",
+        "settlement": "PENDING",
+        "actual": null,
+        "originalTip": "1",
+        "group": "sample-floor-violation",
+        "elo": "positive-weight-below-both-team-sample-floor",
+        "form": "no-sample-floor-violation",
+        "samples": {
+          "elo": {
+            "away": 0,
+            "home": 790
+          },
+          "form": {
+            "away": 0,
+            "home": 12
+          }
+        },
+        "weights": {
+          "elo": 0.35,
+          "form": 0,
+          "market": 0.12,
+          "poisson": 0.35,
+          "teamStrength": 0.18,
+          "worldCupPrior": 0
+        }
+      },
+      {
+        "sourceMatchId": "2041724",
+        "businessDate": "2026-09-26",
+        "modelVersion": "unified-poisson-bayes-v75",
+        "settlement": "PENDING",
+        "actual": null,
+        "originalTip": "2",
+        "group": "sample-floor-violation",
+        "elo": "no-sample-floor-violation",
+        "form": "positive-weight-below-both-team-sample-floor",
+        "samples": {
+          "elo": {
+            "away": 1,
+            "home": 1
+          },
+          "form": {
+            "away": 1,
+            "home": 1
+          }
+        },
+        "weights": {
+          "elo": 0,
+          "form": 0.034999999999999996,
+          "market": 0.15,
+          "poisson": 0.5,
+          "teamStrength": 0.35,
+          "worldCupPrior": 0
+        }
+      },
+      {
+        "sourceMatchId": "2041727",
+        "businessDate": "2026-09-26",
+        "modelVersion": "unified-poisson-bayes-v75",
+        "settlement": "PENDING",
+        "actual": null,
+        "originalTip": "1",
+        "group": "sample-floor-violation",
+        "elo": "positive-weight-below-both-team-sample-floor",
+        "form": "positive-weight-below-both-team-sample-floor",
+        "samples": {
+          "elo": {
+            "away": 503,
+            "home": 1
+          },
+          "form": {
+            "away": 12,
+            "home": 1
+          }
+        },
+        "weights": {
+          "elo": 0.35,
+          "form": 0.034999999999999996,
+          "market": 0.12,
+          "poisson": 0.35,
+          "teamStrength": 0.18,
+          "worldCupPrior": 0
+        }
+      },
+      {
+        "sourceMatchId": "2041730",
+        "businessDate": "2026-09-26",
+        "modelVersion": "unified-poisson-bayes-v75",
+        "settlement": "PENDING",
+        "actual": null,
+        "originalTip": "1",
+        "group": "sample-floor-violation",
+        "elo": "positive-weight-below-both-team-sample-floor",
+        "form": "no-sample-floor-violation",
+        "samples": {
+          "elo": {
+            "away": 486,
+            "home": 0
+          },
+          "form": {
+            "away": 12,
+            "home": 0
+          }
+        },
+        "weights": {
+          "elo": 0.35,
+          "form": 0,
+          "market": 0.12,
+          "poisson": 0.35,
+          "teamStrength": 0.18,
+          "worldCupPrior": 0
+        }
+      }
+    ]
+  },
+  "changedEvents": [
+    {
+      "sourceMatchId": "2041541",
+      "businessDate": "2026-09-18",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "originalTip": "2",
+      "originalSp": 3.52,
+      "actual": "1",
+      "probabilities": {
+        "1": 0.3543543543543543,
+        "2": 0.3693693693693693,
+        "X": 0.27627627627627627
+      },
+      "marketProbabilities": {
+        "1": 0.5400176155478869,
+        "2": 0.25159911633481097,
+        "X": 0.2083832681173022
+      },
+      "resultObservedAt": "2026-09-19T01:38:49.081Z",
+      "candidateDirections": {
+        "frozen-model": "2",
+        "frozen-market": "1",
+        "model75-market25": "1",
+        "model50-market50": "1",
+        "model25-market75": "1"
+      }
+    },
+    {
+      "sourceMatchId": "2041544",
+      "businessDate": "2026-09-18",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "originalTip": "2",
+      "originalSp": 3.45,
+      "actual": "1",
+      "probabilities": {
+        "1": 0.361,
+        "2": 0.37,
+        "X": 0.26899999999999996
+      },
+      "marketProbabilities": {
+        "1": 0.5035701605586019,
+        "2": 0.2568937630675766,
+        "X": 0.2395360763738214
+      },
+      "resultObservedAt": "2026-09-19T01:38:49.081Z",
+      "candidateDirections": {
+        "frozen-model": "2",
+        "frozen-market": "1",
+        "model75-market25": "1",
+        "model50-market50": "1",
+        "model25-market75": "1"
+      }
+    },
+    {
+      "sourceMatchId": "2041545",
+      "businessDate": "2026-09-18",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "originalTip": "1",
+      "originalSp": 2.5,
+      "actual": "1",
+      "probabilities": {
+        "1": 0.45399999999999996,
+        "2": 0.289,
+        "X": 0.257
+      },
+      "marketProbabilities": {
+        "1": 0.35403424743864453,
+        "2": 0.3916308046887661,
+        "X": 0.2543349478725894
+      },
+      "resultObservedAt": "2026-09-19T01:38:49.081Z",
+      "candidateDirections": {
+        "frozen-model": "1",
+        "frozen-market": "2",
+        "model75-market25": "1",
+        "model50-market50": "1",
+        "model25-market75": "1"
+      }
+    },
+    {
+      "sourceMatchId": "2041556",
+      "businessDate": "2026-09-19",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "originalTip": "1",
+      "originalSp": 2.68,
+      "actual": "X",
+      "probabilities": {
+        "1": 0.392,
+        "2": 0.33,
+        "X": 0.278
+      },
+      "marketProbabilities": {
+        "1": 0.3307689548812854,
+        "2": 0.40850728068287784,
+        "X": 0.2607237644358367
+      },
+      "resultObservedAt": "2026-09-19T11:58:26.802Z",
+      "candidateDirections": {
+        "frozen-model": "1",
+        "frozen-market": "2",
+        "model75-market25": "1",
+        "model50-market50": "2",
+        "model25-market75": "2"
+      }
+    },
+    {
+      "sourceMatchId": "2041560",
+      "businessDate": "2026-09-19",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "originalTip": "2",
+      "originalSp": 3.8,
+      "actual": "2",
+      "probabilities": {
+        "1": 0.3243243243243243,
+        "2": 0.40740740740740744,
+        "X": 0.2682682682682683
+      },
+      "marketProbabilities": {
+        "1": 0.520944402132521,
+        "2": 0.23305407463823305,
+        "X": 0.246001523229246
+      },
+      "resultObservedAt": "2026-09-19T14:36:07.104Z",
+      "candidateDirections": {
+        "frozen-model": "2",
+        "frozen-market": "1",
+        "model75-market25": "1",
+        "model50-market50": "1",
+        "model25-market75": "1"
+      }
+    },
+    {
+      "sourceMatchId": "2041561",
+      "businessDate": "2026-09-19",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "originalTip": "2",
+      "originalSp": 2.8,
+      "actual": "1",
+      "probabilities": {
+        "1": 0.3236763236763237,
+        "2": 0.40159840159840166,
+        "X": 0.27472527472527475
+      },
+      "marketProbabilities": {
+        "1": 0.40255591054313095,
+        "2": 0.31629392971246006,
+        "X": 0.28115015974440893
+      },
+      "resultObservedAt": "2026-09-19T14:36:07.104Z",
+      "candidateDirections": {
+        "frozen-model": "2",
+        "frozen-market": "1",
+        "model75-market25": "2",
+        "model50-market50": "1",
+        "model25-market75": "1"
+      }
+    },
+    {
+      "sourceMatchId": "2041562",
+      "businessDate": "2026-09-19",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "originalTip": "2",
+      "originalSp": 2.52,
+      "actual": "X",
+      "probabilities": {
+        "1": 0.331,
+        "2": 0.395,
+        "X": 0.27399999999999997
+      },
+      "marketProbabilities": {
+        "1": 0.3574950231632217,
+        "2": 0.35182049898602763,
+        "X": 0.29068447785075074
+      },
+      "resultObservedAt": "2026-09-19T14:55:31.346Z",
+      "candidateDirections": {
+        "frozen-model": "2",
+        "frozen-market": "1",
+        "model75-market25": "2",
+        "model50-market50": "2",
+        "model25-market75": "2"
+      }
+    },
+    {
+      "sourceMatchId": "2041577",
+      "businessDate": "2026-09-19",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "originalTip": "2",
+      "originalSp": 2.34,
+      "actual": "2",
+      "probabilities": {
+        "1": 0.34,
+        "2": 0.397,
+        "X": 0.263
+      },
+      "marketProbabilities": {
+        "1": 0.3884462151394423,
+        "2": 0.3784860557768925,
+        "X": 0.23306772908366533
+      },
+      "resultObservedAt": "2026-09-20T01:16:54.562Z",
+      "candidateDirections": {
+        "frozen-model": "2",
+        "frozen-market": "1",
+        "model75-market25": "2",
+        "model50-market50": "2",
+        "model25-market75": "2"
+      }
+    },
+    {
+      "sourceMatchId": "2041589",
+      "businessDate": "2026-09-20",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "originalTip": "1",
+      "originalSp": 3.07,
+      "actual": "X",
+      "probabilities": {
+        "1": 0.3556443556443557,
+        "2": 0.3546453546453547,
+        "X": 0.2897102897102897
+      },
+      "marketProbabilities": {
+        "1": 0.28830200686379237,
+        "2": 0.4116684470101593,
+        "X": 0.30002954612604826
+      },
+      "resultObservedAt": "2026-09-20T12:37:45.459Z",
+      "candidateDirections": {
+        "frozen-model": "1",
+        "frozen-market": "2",
+        "model75-market25": "2",
+        "model50-market50": "2",
+        "model25-market75": "2"
+      }
+    },
+    {
+      "sourceMatchId": "2041610",
+      "businessDate": "2026-09-20",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "originalTip": "1",
+      "originalSp": 4.33,
+      "actual": "1",
+      "probabilities": {
+        "1": 0.37237237237237236,
+        "2": 0.35135135135135137,
+        "X": 0.27627627627627627
+      },
+      "marketProbabilities": {
+        "1": 0.20441296084461308,
+        "2": 0.5823079739849834,
+        "X": 0.21327906517040351
+      },
+      "resultObservedAt": "2026-09-21T01:47:36.456Z",
+      "candidateDirections": {
+        "frozen-model": "1",
+        "frozen-market": "2",
+        "model75-market25": "2",
+        "model50-market50": "2",
+        "model25-market75": "2"
+      }
+    },
+    {
+      "sourceMatchId": "2041613",
+      "businessDate": "2026-09-20",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "originalTip": "1",
+      "originalSp": 2.7,
+      "actual": "2",
+      "probabilities": {
+        "1": 0.4174174174174175,
+        "2": 0.30830830830830835,
+        "X": 0.2742742742742743
+      },
+      "marketProbabilities": {
+        "1": 0.3279056709713644,
+        "2": 0.368893879842785,
+        "X": 0.30320044918585065
+      },
+      "resultObservedAt": "2026-09-21T01:47:36.456Z",
+      "candidateDirections": {
+        "frozen-model": "1",
+        "frozen-market": "2",
+        "model75-market25": "1",
+        "model50-market50": "1",
+        "model25-market75": "2"
+      }
+    },
+    {
+      "sourceMatchId": "2041652",
+      "businessDate": "2026-09-24",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "originalTip": "1",
+      "originalSp": 2.58,
+      "actual": "X",
+      "probabilities": {
+        "1": 0.4194194194194194,
+        "2": 0.3213213213213213,
+        "X": 0.25925925925925924
+      },
+      "marketProbabilities": {
+        "1": 0.34322403015052694,
+        "2": 0.39709327255083393,
+        "X": 0.25968269729863913
+      },
+      "resultObservedAt": "2026-09-25T00:56:20.425Z",
+      "candidateDirections": {
+        "frozen-model": "1",
+        "frozen-market": "2",
+        "model75-market25": "1",
+        "model50-market50": "1",
+        "model25-market75": "2"
+      }
+    },
+    {
+      "sourceMatchId": "2041653",
+      "businessDate": "2026-09-24",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "originalTip": "1",
+      "originalSp": 2.75,
+      "actual": "2",
+      "probabilities": {
+        "1": 0.38799999999999996,
+        "2": 0.332,
+        "X": 0.28
+      },
+      "marketProbabilities": {
+        "1": 0.32210353327855384,
+        "2": 0.36154478225143794,
+        "X": 0.3163516844700082
+      },
+      "resultObservedAt": "2026-09-25T00:56:20.425Z",
+      "candidateDirections": {
+        "frozen-model": "1",
+        "frozen-market": "2",
+        "model75-market25": "1",
+        "model50-market50": "1",
+        "model25-market75": "2"
+      }
+    },
+    {
+      "sourceMatchId": "2041708",
+      "businessDate": "2026-09-26",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "originalTip": "1",
+      "originalSp": 2.51,
+      "actual": "X",
+      "probabilities": {
+        "1": 0.36036036036036034,
+        "2": 0.35735735735735735,
+        "X": 0.28228228228228225
+      },
+      "marketProbabilities": {
+        "1": 0.3528696188971803,
+        "2": 0.38508814931822727,
+        "X": 0.2620422317845925
+      },
+      "resultObservedAt": "2026-09-26T11:56:55.404Z",
+      "candidateDirections": {
+        "frozen-model": "1",
+        "frozen-market": "2",
+        "model75-market25": "2",
+        "model50-market50": "2",
+        "model25-market75": "2"
+      }
+    }
+  ],
+  "reportHash": "89d07fd21fdcdb7f3f6378bc2ab5eaf9e1acd09354f4f4efde28c5cf05c8ef8c"
+}
