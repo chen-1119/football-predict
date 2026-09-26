@@ -1,0 +1,1 @@
+import{t as e}from"./jsx-runtime-BF6S49EV.js";import{t}from"./RecommendationCenter-BbFAyTy0.js";import{k as n}from"./index-DwZ7gk28.js";var r=e();function i({onSelectMatch:e}){let{language:i}=n();return(0,r.jsx)(t,{language:i,initialTab:`two`,onSelectMatch:e})}export{i as BetSlipGenerator};
