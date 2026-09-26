@@ -37,6 +37,38 @@ test('current outcome study keeps its decision binding and rejects changed price
   assert.throws(()=>parseRecommendationCenter(copy));
  }
 });
+test('client rejects a promoted draw or upset and a category that contradicts its candidate',async()=>{
+ const payload=await sample(),raw=payload.recommendationCenter.current.find(row=>row.outcomeResearch);
+ assert(raw);
+ const reject=mutate=>{
+  const copy=structuredClone(payload);
+  const research=copy.recommendationCenter.current.find(row=>row.decision.decisionId===raw.decision.decisionId).outcomeResearch;
+  mutate(research);
+  assert.throws(()=>parseRecommendationCenter(copy),/Contradictory outcome research/);
+ };
+ reject(r=>{r.category='balanced-draw';r.candidateCode='X';r.reasons=['category-holdout-unvalidated'];r.researchQualified=true;});
+ reject(r=>{r.category='upset-signal';r.candidateCode='2';r.reasons=['category-holdout-unvalidated'];r.researchQualified=true;});
+ reject(r=>{r.category='balanced-draw';r.candidateCode='1';r.reasons=['category-holdout-unvalidated'];});
+ reject(r=>{r.category='upset-signal';r.candidateCode='1';r.reasons=['category-holdout-unvalidated'];});
+ reject(r=>{r.category='watch';r.candidateCode='1';});
+ reject(r=>{r.researchQualified=true;r.reasons=[];}); // Negative-EV favorite cannot be value-qualified.
+ reject(r=>{r.researchQualified='true';});
+});
+test('negative-EV favorite is shown as a tendency to watch, not a selectable value pick',async()=>{
+ const data=parseRecommendationCenter(await sample()),row=data.current[0],research=row.outcomeResearch;
+ assert.equal(research.category,'strong-favorite');
+ assert(research.outcomes.find(item=>item.code===research.candidateCode).expectedValue<0);
+ assert.equal(research.researchQualified,false);
+ assert.equal(view.outcomeCategoryLabel(research.category,true),'热门走势');
+ assert.match(view.outcomeResearchFavoriteValueWarning(research,true),/模型估值为负，仅供观察/);
+ const rendered=renderedText(data,{},Date.parse(row.decision.publishedAt));
+ assert.match(rendered,/热门倾向，但模型估值为负，仅供观察/);
+ assert.match(rendered,/data-research-qualified="false"/);
+ const detail=renderPublished(row,false);
+ assert.match(detail,/热门倾向，但模型估值为负，仅供观察/);
+ assert.match(detail,/data-research-qualified="false"/);
+ assert.equal(research.candidateCode,'1','published direction remains untouched');
+});
 test('bound official handicap SP uses the selected quote only for its own outcome',()=>{
  const analysis={tipCode:'2',marketReference:{source:'sporttery:HHAD',selectedOdds:2.75,odds:{'1':2.05,X:3.4,'2':2.75}}};
  assert.equal(boundOfficialHandicapSp(analysis,'1'),2.05);
