@@ -14,7 +14,7 @@ function compile(file, dependency = require) {
   const code = ts.transpileModule(fs.readFileSync(require.resolve(file), 'utf8'), {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX }
   }).outputText;
-  vm.runInNewContext(code, { module, exports: module.exports, require: dependency, Date, Number, Math, Intl });
+  vm.runInNewContext(code, { module, exports: module.exports, require: id => id.endsWith('/publishedRecommendationStatus.cjs') ? require('../src/services/publishedRecommendationStatus.cjs') : dependency(id), Date, Number, Math, Intl });
   return module.exports;
 }
 const view = compile('../src/services/recommendationCenterView.ts');

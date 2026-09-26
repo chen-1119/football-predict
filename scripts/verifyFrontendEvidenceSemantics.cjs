@@ -36,6 +36,40 @@ const server = read('server/index.cjs');
 const checks = [];
 const check = (name, ok) => checks.push({ name, ok: Boolean(ok) });
 
+// Execute the dependency-free helpers also used by the public components.
+const { selectionReferenceLabel, selectionPriceStatus, publicationLifecycle, publicationLifecycleLabel } = require('../src/services/publishedRecommendationStatus.cjs');
+check('published surfaces use the audited shared status and lifecycle helpers',
+  selectionQualityNote.includes("import { selectionPriceStatus, selectionReferenceLabel } from '../../services/publishedRecommendationStatus.cjs'")
+  && selectionQualityNote.includes('export { selectionPriceStatus, selectionReferenceLabel }')
+  && recommendationCenterView.includes("export { publicationLifecycle, publicationLifecycleLabel } from './publishedRecommendationStatus.cjs'"));
+const referenceLabelContract = [
+  [null, '模型方向 · 证据待核', 'Model direction · evidence pending'],
+  [{ qualified: false, expectedValue: .2 }, '观望 · 保留模型方向', 'Watch · model direction retained'],
+  [{ qualified: false, expectedValue: -.2 }, '观望 · 保留模型方向', 'Watch · model direction retained'],
+  [{ qualified: true, expectedValue: -.01 }, '模型方向 · 当前价格不支持', 'Model direction · price not supported'],
+  [{ qualified: true, expectedValue: 0 }, '参考入选 · 模型未验证', 'Reference-qualified · model unvalidated'],
+  [{ qualified: true, expectedValue: .2 }, '参考入选 · 模型未验证', 'Reference-qualified · model unvalidated'],
+  [{ qualified: true, expectedValue: null }, '参考入选 · 模型未验证', 'Reference-qualified · model unvalidated'],
+].every(([quality, zh, en]) => selectionReferenceLabel(quality, 'zh') === zh && selectionReferenceLabel(quality, 'en') === en);
+check('shared reference labels never promote input readiness or positive EV into validated advice', referenceLabelContract
+  && selectionPriceStatus(null) === 'unknown' && selectionPriceStatus({ expectedValue: null }) === 'unknown'
+  && selectionPriceStatus({ expectedValue: -.01 }) === 'unsupported' && selectionPriceStatus({ expectedValue: 0 }) === 'model-supported');
+const observed = Date.parse('2026-09-26T10:00:00Z');
+const lifecycleDecision = { quoteObservedAt: new Date(observed).toISOString(), cutoffTime: new Date(observed + 30 * 60000).toISOString(), kickoffTime: new Date(observed + 60 * 60000).toISOString() };
+const lifecycleContract = publicationLifecycle(lifecycleDecision, observed) === 'open'
+  && publicationLifecycle(lifecycleDecision, observed + 15 * 60000) === 'open'
+  && publicationLifecycle(lifecycleDecision, observed + 15 * 60000 + 1) === 'quote-stale'
+  && publicationLifecycle(lifecycleDecision, observed - 1) === 'quote-stale'
+  && publicationLifecycle({ ...lifecycleDecision, quoteObservedAt: 'invalid' }, observed) === 'quote-stale'
+  && publicationLifecycle(lifecycleDecision, observed + 30 * 60000) === 'review-only'
+  && publicationLifecycle({ ...lifecycleDecision, kickoffTime: new Date(observed).toISOString() }, observed) === 'review-only'
+  && publicationLifecycle(lifecycleDecision, NaN) === 'review-only'
+  && publicationLifecycle({ ...lifecycleDecision, cutoffTime: 'invalid' }, observed) === 'review-only'
+  && publicationLifecycle({ ...lifecycleDecision, kickoffTime: 'invalid' }, observed) === 'review-only'
+  && publicationLifecycleLabel('quote-stale', 'zh') === 'SP待更新 · 观望'
+  && publicationLifecycleLabel('review-only', 'zh') === '已截止 · 仅供复盘';
+check('shared lifecycle expires prices and stops current use at the earlier cutoff or kickoff', lifecycleContract);
+
 check('legacy trust score is explicitly ordinal evidence, not probability',
   presentation.includes('ordinal evidence score, never a')
   && presentation.includes('return boundedScore(prediction.trustScore)'));
@@ -189,8 +223,8 @@ check('unified coverage and published picks keep qualified selection separate fr
   && dayCoverage.includes('current.qualifiedCount')
   && dayCoverage.includes('current.targetCount')
   && dayCoverage.includes('item.reasonText')
-  && recommendationCenter.includes("quality.qualified===false?(zh?'观望方向'")
-  && recommendationCenter.includes("selectionPriceStatus(quality)==='unsupported'?(zh?'模型方向 · 价格不支持'")
+  && recommendationCenter.includes('selectionReferenceLabel(quality,language)')
+  && referenceLabelContract
   && recommendationCenter.includes("data-price-status={reviewSelection?.selectedMarket==='HHAD'?'unknown':selectionPriceStatus(quality)}")
   && selectionQualityNote.includes('quality.reasons.map')
   && selectionQualityNote.includes('暂不进入新串关'));
@@ -203,7 +237,8 @@ check('new published surfaces are reference only and old formal actions retain t
   && bestTips.includes('<RecommendationCenter language={language}')
   && betSlip.includes('<RecommendationCenter language={language}')
   && recommendationCenter.includes('参考推荐 · 模型验证中')
-  && publishedMatchPick.includes('参考入选 · 尚未通过正式验证')
+  && publishedMatchPick.includes('selectionReferenceLabel(row.selectionQuality,language)')
+  && referenceLabelContract
   && recommendationCenterHook.includes("buildApiUrl('/api/v1/daily-featured-combos')")
   && recommendationCenterHook.includes("cache:'no-store'")
   && recommendationCenterHook.includes('data:authorizationRequired?null:snapshot.data')
@@ -236,7 +271,8 @@ check('published cards expose identity, prices, clocks and reference status',
   && recommendationCenter.includes('d.modelGeneratedAt')
   && recommendationCenter.includes('d.quoteObservedAt')
   && recommendationCenter.includes('d.publishedAt')
-  && publishedMatchPick.includes('Date.parse(d.cutoffTime)')
+  && publishedMatchPick.includes('publicationLifecycle(d,now)')
+  && lifecycleContract
   && publishedMatchPick.includes('data-selection-status={row.selectionQuality?.status')
   && publishedMatchPick.includes('quoteStale')
   && !recommendationCenter.includes('500.com data supplements'));

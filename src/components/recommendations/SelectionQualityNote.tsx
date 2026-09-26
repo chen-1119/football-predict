@@ -1,19 +1,7 @@
 import type { SelectionQuality, SupplementaryResearch, SingleRow } from '../../services/recommendationCenterView';
 
-// This reads a frozen arithmetic diagnostic. It never promotes a pick: the
-// underlying model probability still needs independent calibration.
-export function selectionPriceStatus(quality:SelectionQuality|null|undefined):'unsupported'|'model-supported'|'unknown'{
- if(!quality||quality.expectedValue==null)return 'unknown';
- return quality.expectedValue<0?'unsupported':'model-supported';
-}
-
-export function selectionReferenceLabel(quality:SelectionQuality|null|undefined,language:'zh'|'en'):string{
- const zh=language==='zh';
- if(!quality)return zh?'模型方向 · 证据待核':'Model direction · evidence pending';
- return !quality.qualified?(zh?'观望 · 保留模型方向':'Watch · model direction retained')
-  :selectionPriceStatus(quality)==='unsupported'?(zh?'模型方向 · 当前价格不支持':'Model direction · price not supported')
-  :(zh?'参考入选 · 模型未验证':'Reference-qualified · model unvalidated');
-}
+import { selectionPriceStatus, selectionReferenceLabel } from '../../services/publishedRecommendationStatus.cjs';
+export { selectionPriceStatus, selectionReferenceLabel };
 export function SupplementaryResearchNote({research,settlement,language}:{research?:SupplementaryResearch|null;settlement?:SingleRow['supplementarySettlement'];language:'zh'|'en'}){
  if(!research)return null;
  const zh=language==='zh';

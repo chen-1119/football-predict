@@ -1,3 +1,4 @@
+export { publicationLifecycle, publicationLifecycleLabel } from './publishedRecommendationStatus.cjs';
 export type Outcome = '1' | 'X' | '2';
 export type ResultState = 'PENDING' | 'WON' | 'LOST' | 'VOID' | 'DISPUTED';
 export interface HandicapAnalysis {
@@ -72,15 +73,6 @@ export function outcomeResearchReasonLabel(reason:string,zh:boolean):string{
   return (labels[reason]??[reason,reason])[zh?0:1];
 }
 export interface SingleRow { decision:Decision; settlement:Settlement; handicapSettlement?:Settlement|null;selectionQuality?:SelectionQuality|null;scoreDistribution?:PublishedScores|null;outcomeResearch?:OutcomeCategoryResearch|null;supplementarySettlement?:{exactScore:SupplementaryResult;totalGoals:SupplementaryResult}|null }
-export function publicationLifecycle(d:Decision,now:number):'open'|'quote-stale'|'review-only'{
-  if(!Number.isFinite(now)||now>=Math.min(Date.parse(d.cutoffTime),Date.parse(d.kickoffTime)))return 'review-only';
-  const observed=Date.parse(d.quoteObservedAt);
-  return !Number.isFinite(observed)||now<observed||now-observed>15*60000?'quote-stale':'open';
-}
-export function publicationLifecycleLabel(status:ReturnType<typeof publicationLifecycle>,language:'zh'|'en'):string{
-  return status==='review-only'?(language==='zh'?'已截止 · 仅供复盘':'Cutoff passed · review only')
-    :status==='quote-stale'?(language==='zh'?'SP待更新 · 观望':'SP refresh pending · watch'):'';
-}
 export function boundOfficialHandicapSp(analysis:HandicapAnalysis|null|undefined,direction:Outcome|null|undefined):number|null{
   const quote=analysis?.marketReference;
   if(!direction||quote?.source!=='sporttery:HHAD')return null;
@@ -112,7 +104,16 @@ export interface Summary { published:number;settled:number;won:number;lost:numbe
 export interface HandicapBreakdown {standaloneV1:Summary;companionV2All:Summary;companionV2WhenHadWon:Summary;companionV2BothWon:Summary;companionV3All?:Summary;companionV3WhenHadWon?:Summary;companionV3BothWon?:Summary}
 export interface Lane {status:'ok'|'error';lastSuccessAt?:string;lastAttemptAt:string;errorCode?:string|null;inputAsOf?:string;candidateCount?:number;eligibleCount?:number;bindingFailures?:number;referenceCount?:number;watchCount?:number}
 export interface ModelQualityCohort {settled:number;won:number;hitRate:number|null;brier:number|null;marketBrier:number|null;logLoss:number|null;marketLogLoss:number|null;flatStakeNetUnits:number|null;flatStakeRoi:number|null;independentMatchDays:number}
-export interface ModelQualityReport {independentMatchDays:number;settled:number;won:number;hitRate:number|null;marketTopHitRate:number|null;brier:number|null;marketBrier:number|null;logLoss:number|null;marketLogLoss:number|null;blockers:string[];minimumSettled:number;minimumMatchDays:number;bySpBucket?:Record<string,ModelQualityCohort>;byModelPriceSignal?:Record<string,ModelQualityCohort>}
+export interface HitRateTargetCohort {
+  published:number;settled:number;won:number;pending:number;void:number;disputed:number;excludedSettlements:number;
+  pendingFromPastBusinessDays:number;pendingPastBusinessDays:number;independentMatchDays:number;hitRate:number|null;
+  hitRateInterval95:{lower:number;upper:number}|null;numericTargetReached:boolean|null;sampleSufficient:boolean;evidenceSufficient:boolean;blockers:string[];
+}
+export interface HitRateTarget {
+  targetHitRate:number;minimumSettled:number;minimumMatchDays:number;asOfBusinessDate:string;formalPromotion:false;
+  byModelVersion:Array<{modelVersion:string;overall:HitRateTargetCohort;windows:Record<'last7'|'last30',HitRateTargetCohort&{from:string;through:string}>}>;
+}
+export interface ModelQualityReport {independentMatchDays:number;settled:number;won:number;hitRate:number|null;marketTopHitRate:number|null;brier:number|null;marketBrier:number|null;logLoss:number|null;marketLogLoss:number|null;blockers:string[];minimumSettled:number;minimumMatchDays:number;bySpBucket?:Record<string,ModelQualityCohort>;byModelPriceSignal?:Record<string,ModelQualityCohort>;hitRateTarget?:HitRateTarget}
 export interface HandicapCalibrationGroup {
   key:string;rows:number;active:boolean;reason:string;bias:Record<Outcome,number>;meanRaw:Record<Outcome,number>;actualShare:Record<Outcome,number>;
   metrics?:{holdout?:number;rawBrier?:number;calibratedBrier?:number;rawLogLoss?:number;calibratedLogLoss?:number;rawHitRate?:number;calibratedHitRate?:number}|null;
@@ -463,6 +464,51 @@ function calibrationProfile(v:unknown):HandicapCalibrationProfile{
   const profileHash=text(p.profileHash);if(!/^[a-f0-9]{64}$/.test(profileHash))throw new Error('Invalid calibration profile hash');
   return {version:text(p.version),profileHash,sampleRows:count(p.sampleRows),groups};
 }
+function hitRateTarget(value:unknown):HitRateTarget{
+ const t=object(value);
+ if(t.version!=='had-hit-rate-target-v1'||t.market!=='HAD'||t.scope!=='per-model-version-final-precutoff-published-single'
+   ||t.thresholdScope!=='observational-target-only-not-formal-promotion'||t.evidenceRule!=='minimum-samples-and-days-and-95pct-wilson-lower-bound-at-target'
+   ||t.formalPromotion!==false||t.targetHitRate!==.65||t.minimumSettled!==100||t.minimumMatchDays!==7)throw new Error('Invalid hit-rate target policy');
+ const through=date(t.asOfBusinessDate),target=.65,minimumSettled=100,minimumMatchDays=7;
+ const parseCohort=(raw:unknown):HitRateTargetCohort=>{
+  const c=object(raw),published=count(c.published),settled=count(c.settled),won=count(c.won),pending=count(c.pending),voided=count(c.void),disputed=count(c.disputed),excludedSettlements=count(c.excludedSettlements),days=count(c.independentMatchDays);
+  const pendingFromPastBusinessDays=count(c.pendingFromPastBusinessDays),pendingPastBusinessDays=count(c.pendingPastBusinessDays);
+  const hitRate=c.hitRate===null?null:number(c.hitRate);
+  if(won>settled||published!==settled+pending+voided+disputed+excludedSettlements||hitRate!==(settled?won/settled:null)
+    ||days>settled||(settled===0?days!==0:days===0)||pendingFromPastBusinessDays>pending||pendingPastBusinessDays>pendingFromPastBusinessDays
+    ||(pendingFromPastBusinessDays===0?pendingPastBusinessDays!==0:pendingPastBusinessDays===0))throw new Error('Invalid hit-rate target counts');
+  let interval:HitRateTargetCohort['hitRateInterval95']=null;
+  if(settled){
+   const rawInterval=object(c.hitRateInterval95),lower=number(rawInterval.lower),upper=number(rawInterval.upper),z=1.959963984540054,p=won/settled,den=1+z*z/settled;
+   const center=(p+z*z/(2*settled))/den,spread=z*Math.sqrt(p*(1-p)/settled+z*z/(4*settled*settled))/den;
+   if(Math.abs(lower-Math.max(0,center-spread))>1e-10||Math.abs(upper-Math.min(1,center+spread))>1e-10)throw new Error('Invalid hit-rate target interval');
+   interval={lower,upper};
+  }else if(c.hitRateInterval95!==null)throw new Error('Empty hit-rate target interval');
+  const numericTargetReached=hitRate===null?null:hitRate>=target,sampleSufficient=settled>=minimumSettled&&days>=minimumMatchDays;
+  const blockers=[...(settled<minimumSettled?['insufficient-settled-events']:[]),...(days<minimumMatchDays?['insufficient-independent-match-days']:[]),...(!interval||interval.lower<target?['confidence-lower-bound-below-target']:[])];
+  const actualBlockers=list(c.blockers).map(text);
+  if(c.numericTargetReached!==numericTargetReached||c.sampleSufficient!==sampleSufficient||c.evidenceSufficient!==(blockers.length===0)
+    ||actualBlockers.length!==blockers.length||new Set(actualBlockers).size!==actualBlockers.length||blockers.some(key=>!actualBlockers.includes(key)))throw new Error('Invalid hit-rate target status');
+  return {published,settled,won,pending,void:voided,disputed,excludedSettlements,pendingFromPastBusinessDays,pendingPastBusinessDays,independentMatchDays:days,hitRate,hitRateInterval95:interval,numericTargetReached,sampleSufficient,evidenceSufficient:blockers.length===0,blockers};
+ };
+ const byModelVersion=list(t.byModelVersion).map(raw=>{
+  const g=object(raw),modelVersion=text(g.modelVersion),overall=parseCohort(g.overall),w=object(g.windows);
+  if(modelVersion==='unknown')throw new Error('Missing hit-rate target model version');
+  const window=(key:'last7'|'last30',days:number)=>{
+   const raw=object(w[key]),from=date(raw.from),end=date(raw.through),cohort=parseCohort(raw);
+   const expected=new Date(Date.parse(through+'T00:00:00Z')-(days-1)*86400000).toISOString().slice(0,10);
+   if(from!==expected||end!==through||cohort.independentMatchDays>days||cohort.pendingPastBusinessDays>days-1)throw new Error('Invalid hit-rate target window');
+   return {...cohort,from,through:end};
+  };
+  const windows={last7:window('last7',7),last30:window('last30',30)};
+  for(const key of ['published','settled','won','pending','void','disputed','excludedSettlements','independentMatchDays','pendingFromPastBusinessDays','pendingPastBusinessDays'] as const){
+   if(windows.last7[key]>windows.last30[key]||windows.last30[key]>overall[key])throw new Error('Inconsistent hit-rate target windows');
+  }
+  return {modelVersion,overall,windows};
+ });
+ if(new Set(byModelVersion.map(g=>g.modelVersion)).size!==byModelVersion.length)throw new Error('Duplicate hit-rate target model version');
+ return {targetHitRate:target,minimumSettled,minimumMatchDays,asOfBusinessDate:through,formalPromotion:false,byModelVersion};
+}
 function modelQuality(v:unknown):ModelQualityReport{
  const q=object(v),m=object(q.overall),policy=object(q.policy);
  if(q.version!=='frozen-quality-review-v1'||q.formalPromotion!==false)throw new Error('Invalid model quality report');
@@ -491,7 +537,7 @@ function modelQuality(v:unknown):ModelQualityReport{
   }
   return result;
  };
- return {independentMatchDays:count(q.independentMatchDays),settled:totalSettled,won:totalWon,hitRate:metric('hitRate'),marketTopHitRate:metric('marketTopHitRate'),brier:metric('brier'),marketBrier:metric('marketBrier'),logLoss:metric('logLoss'),marketLogLoss:metric('marketLogLoss'),blockers:list(q.blockers).map(text),minimumSettled:count(policy.minimumSettled),minimumMatchDays:count(policy.minimumMatchDays),bySpBucket:group(q.bySpBucket,['sp_le_1_45','sp_gt_1_45_le_1_70','sp_gt_1_70_le_2_05','sp_gt_2_05_le_2_60','sp_gt_2_60']),byModelPriceSignal:group(q.byModelPriceSignal,['negative','nonnegative'])};
+ return {independentMatchDays:count(q.independentMatchDays),settled:totalSettled,won:totalWon,hitRate:metric('hitRate'),marketTopHitRate:metric('marketTopHitRate'),brier:metric('brier'),marketBrier:metric('marketBrier'),logLoss:metric('logLoss'),marketLogLoss:metric('marketLogLoss'),blockers:list(q.blockers).map(text),minimumSettled:count(policy.minimumSettled),minimumMatchDays:count(policy.minimumMatchDays),bySpBucket:group(q.bySpBucket,['sp_le_1_45','sp_gt_1_45_le_1_70','sp_gt_1_70_le_2_05','sp_gt_2_05_le_2_60','sp_gt_2_60']),byModelPriceSignal:group(q.byModelPriceSignal,['negative','nonnegative']),hitRateTarget:q.hitRateTarget==null?undefined:hitRateTarget(q.hitRateTarget)};
 }
 function dayCoverage(value:unknown):DayCoverageData{
   const c=object(value),targetCount=count(c.targetCount),publishableCount=count(c.publishableCount),qualifiedCount=count(c.qualifiedCount),unqualifiedCount=count(c.unqualifiedCount),missingTotal=count(c.missingTotal);

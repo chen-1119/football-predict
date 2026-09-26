@@ -3,9 +3,12 @@
 // Offline evaluation of immutable, genuinely published predictions. It never
 // trains on its evaluation rows, writes production data or promotes a model.
 const {validDecision}=require('./decision.cjs');
-const {hash}=require('../../src/services/publishedForecastPolicy.cjs');
+const {hash,day}=require('../../src/services/publishedForecastPolicy.cjs');
 const CODES=['1','X','2'];
 const POLICY=Object.freeze({version:'frozen-quality-review-v1',minimumSettled:100,minimumMatchDays:7});
+// An observational target only; these thresholds never replace model-promotion
+// or publication policy. A point estimate of 65% is not proof of 65% accuracy.
+const TARGET_POLICY=Object.freeze({version:'had-hit-rate-target-v1',targetHitRate:.65,minimumSettled:100,minimumMatchDays:7});
 const SP_BUCKETS=Object.freeze(['sp_le_1_45','sp_gt_1_45_le_1_70','sp_gt_1_70_le_2_05','sp_gt_2_05_le_2_60','sp_gt_2_60']);
 const marketLeader=probabilities=>CODES.find(c=>CODES.every(other=>other===c||probabilities[c]>probabilities[other]+1e-12))||null;
 function spBucket(odds){
@@ -39,19 +42,77 @@ function leaderAgreement(decision){
   const leader=marketLeader(decision.marketProbabilities);
   return leader===null?'market-tied':leader===decision.tipCode?'agree':'disagree';
 }
+function rememberPublication(latest,row){
+  const d=row.decision,key=JSON.stringify([d.sourceMatchId,d.eventVersion]),publishedAt=Date.parse(d.publishedAt),old=latest.get(key);
+  const signature=hash({decisionId:d.decisionId,decisionRecordHash:d.recordHash,settlement:row.settlement??null});
+  if(!old||publishedAt>old.publishedAt)latest.set(key,{row,publishedAt,signature,ambiguous:false});
+  else if(publishedAt===old.publishedAt&&signature!==old.signature)old.ambiguous=true;
+}
+const validBusinessDate=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)
+  && Number.isFinite(Date.parse(value+'T00:00:00Z'))&&new Date(value+'T00:00:00Z').toISOString().slice(0,10)===value;
+function targetCohort(rows,through,asOf){
+  const settled=[],states={published:rows.length,pending:0,void:0,disputed:0,excludedSettlements:0,pendingFromPastBusinessDays:0};
+  const pendingDays=new Set();
+  for(const row of rows){
+    const d=row.decision,s=row.settlement;
+    if(!s||s.state==='PENDING'){
+      states.pending++;
+      if(d.businessDate<through){states.pendingFromPastBusinessDays++;pendingDays.add(d.businessDate);}
+    }else if(s.state==='VOID')states.void++;
+    else if(s.state==='DISPUTED')states.disputed++;
+    else if(['WON','LOST'].includes(s.state)&&Date.parse(d.kickoffTime)<=asOf
+      && CODES.includes(s.actual)&&s.resultEventId&&(d.tipCode===s.actual)===(s.state==='WON')
+      && d.marketProbabilities&&CODES.every(c=>Number.isFinite(d.marketProbabilities[c])&&d.marketProbabilities[c]>=0&&d.marketProbabilities[c]<=1)
+      && Math.abs(CODES.reduce((n,c)=>n+d.marketProbabilities[c],0)-1)<=1e-6)settled.push(row);
+    else states.excludedSettlements++;
+  }
+  const metrics=measure(settled),independentMatchDays=new Set(settled.map(row=>row.decision.businessDate)).size;
+  const paired=measure(settled.filter(row=>marketLeader(row.decision.marketProbabilities)!==null));
+  const sampleSufficient=metrics.settled>=TARGET_POLICY.minimumSettled&&independentMatchDays>=TARGET_POLICY.minimumMatchDays;
+  const blockers=[];
+  if(metrics.settled<TARGET_POLICY.minimumSettled)blockers.push('insufficient-settled-events');
+  if(independentMatchDays<TARGET_POLICY.minimumMatchDays)blockers.push('insufficient-independent-match-days');
+  if(metrics.hitRateInterval95===null||metrics.hitRateInterval95.lower<TARGET_POLICY.targetHitRate)blockers.push('confidence-lower-bound-below-target');
+  return {...states,...metrics,independentMatchDays,pendingPastBusinessDays:pendingDays.size,
+    numericTargetReached:metrics.hitRate===null?null:metrics.hitRate>=TARGET_POLICY.targetHitRate,
+    sampleSufficient,evidenceSufficient:blockers.length===0,blockers,
+    marketComparison:{settled:paired.settled,modelWins:paired.won,modelHitRate:paired.hitRate,
+      marketWins:paired.marketTopWins,marketHitRate:paired.marketTopHitRate,
+      hitRateDifference:paired.hitRate===null?null:paired.hitRate-paired.marketTopHitRate,
+      excludedMarketTies:metrics.marketTied}};
+}
+function buildHitRateTarget(latest,asOf,invalidRecords,futurePublications){
+  const through=day(asOf),groups=new Map(),exclusions={invalidRecords,futurePublications,ambiguous:0,notPublishedHadSingle:0,invalidBusinessDate:0,futureBusinessDate:0,missingModelVersion:0};
+  for(const {row,ambiguous} of latest.values()){
+    if(ambiguous){exclusions.ambiguous++;continue;}
+    const d=row.decision;
+    if(d.market!=='HAD'||d.publicationStatus!=='PUBLISHED'||d.statisticsTrack!=='unified-decision'){exclusions.notPublishedHadSingle++;continue;}
+    if(!validBusinessDate(d.businessDate)){exclusions.invalidBusinessDate++;continue;}
+    if(d.businessDate>through){exclusions.futureBusinessDate++;continue;}
+    if(typeof d.upstreamModelVersion!=='string'||!d.upstreamModelVersion.trim()||d.upstreamModelVersion==='unknown'){exclusions.missingModelVersion++;continue;}
+    const group=groups.get(d.upstreamModelVersion)||[];group.push(row);groups.set(d.upstreamModelVersion,group);
+  }
+  const byModelVersion=[...groups].sort(([a],[b])=>a.localeCompare(b)).map(([modelVersion,rows])=>{
+    const window=days=>{const from=new Date(Date.parse(through+'T00:00:00Z')-(days-1)*86400000).toISOString().slice(0,10);
+      return {from,through,...targetCohort(rows.filter(row=>row.decision.businessDate>=from&&row.decision.businessDate<=through),through,asOf)};};
+    return {modelVersion,overall:targetCohort(rows,through,asOf),windows:{last7:window(7),last30:window(30)}};
+  });
+  return {...TARGET_POLICY,market:'HAD',scope:'per-model-version-final-precutoff-published-single',asOfBusinessDate:through,
+    thresholdScope:'observational-target-only-not-formal-promotion',evidenceRule:'minimum-samples-and-days-and-95pct-wilson-lower-bound-at-target',
+    byModelVersion,exclusions,formalPromotion:false};
+}
 function buildQualityReport(input,{asOf=Date.now()}={}){
   if(!Array.isArray(input)||!Number.isFinite(asOf))throw new Error('Published rows and finite asOf are required');
-  const latest=new Map(),exclusions={invalid:0,future:0,unsettled:0,marketMissing:0,resultMismatch:0,ambiguous:0};
+  const latest=new Map(),targetLatest=new Map(),exclusions={invalid:0,future:0,unsettled:0,marketMissing:0,resultMismatch:0,ambiguous:0};
+  let targetFuturePublications=0;
   for(const row of input){
     const d=row?.decision;if(!validDecision(d)){exclusions.invalid++;continue;}
+    if(Date.parse(d.publishedAt)<=asOf)rememberPublication(targetLatest,row);else targetFuturePublications++;
     if(Date.parse(d.publishedAt)>asOf||Date.parse(d.kickoffTime)>asOf){exclusions.future++;continue;}
-    const key=JSON.stringify([d.sourceMatchId,d.eventVersion]),publishedAt=Date.parse(d.publishedAt),old=latest.get(key);
-    const signature=hash({decisionId:d.decisionId,decisionRecordHash:d.recordHash,settlement:row.settlement??null});
     // A timestamp alone cannot order two different published records or
     // conflicting result snapshots. Retain the ambiguity until a genuinely
     // later publication replaces it; an identical retry is just one sample.
-    if(!old||publishedAt>old.publishedAt)latest.set(key,{row,publishedAt,signature,ambiguous:false});
-    else if(publishedAt===old.publishedAt&&signature!==old.signature)old.ambiguous=true;
+    rememberPublication(latest,row);
   }
   const settled=[];
   for(const item of latest.values()){
@@ -85,6 +146,7 @@ function buildQualityReport(input,{asOf=Date.now()}={}){
     scope:'supplied-frozen-publication-ledger-only'};
   return {version:POLICY.version,asOf:new Date(asOf).toISOString(),policy:POLICY,scope:'published-final-precutoff-per-event',interpretation:'observational-frozen-prediction-evaluation-not-a-trained-backtest',independentMatchDays:days.length,overall,daily,confidenceBands:bands,
     evaluationCoverage,byTipCode,byLeaderAgreement,bySpBucket,byModelPriceSignal,
+    hitRateTarget:buildHitRateTarget(targetLatest,asOf,exclusions.invalid,targetFuturePublications),
     spBucketPolicy:'frozen selected SP; exact upper bounds 1.45, 1.70, 2.05 and 2.60; diagnostic only',
     modelPriceSignalPolicy:'sign of frozen model probability times frozen selected SP minus one; descriptive only, not calibrated value or promotion',
     flatStakePolicy:'one unit per settled frozen pick at its published SP; diagnostic only, no fees or correlated-bet claim',

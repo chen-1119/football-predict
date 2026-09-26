@@ -28,6 +28,7 @@ const {
 } = require("./runtimePrivateModelArtifactStore.cjs");
 const {
   buildWalkForwardValidation,
+  buildMatchDayWalkForwardResearch,
 } = require("./walkForwardValidation.cjs");
 const {
   evaluateResidualMarketWalkForward,
@@ -3765,6 +3766,9 @@ for (const match of matches) {
     const probabilityRow = {
       matchId: match.id || null,
       sourceMatchId: match.sourceMatchId || null,
+      // Sporttery's explicit business date can differ from the kickoff date.
+      // The match-day research audit reports missing dates; never infer one.
+      businessDate: match.businessDate ?? null,
       kickoffTime: match.kickoffTime || null,
       forecastTime: Number.isFinite(forecastTimeMs) ? new Date(forecastTimeMs).toISOString() : null,
       resultObservedAt: Number.isFinite(resultObservation?.observedMs)
@@ -4077,6 +4081,10 @@ const walkForwardValidation = buildWalkForwardValidation({
   rows: probabilityRows,
   candidates: shadowCandidates.candidates,
 });
+const matchDayWalkForwardResearch = buildMatchDayWalkForwardResearch({
+  rows: probabilityRows,
+  candidates: shadowCandidates.candidates,
+});
 const forecastHorizons = summarizeForecastHorizons(probabilityRows);
 const closingLineValue = summarizeClvRows(clvRows);
 const recommendationSelectionRows = shadowDecisionRows.length ? shadowDecisionRows : predictionRows;
@@ -4259,6 +4267,7 @@ const payload = {
   probabilityMetrics: modelProbabilityMetrics,
   inputAudit,
   walkForwardValidation,
+  matchDayWalkForwardResearch,
   residualMarketWalkForward,
   promotionEvidenceAudit,
   forecastHorizons,
@@ -4385,6 +4394,14 @@ console.log(JSON.stringify({
     protocolVersion: walkForwardValidation.protocolVersion,
     watermark: walkForwardValidation.watermark,
     blockers: walkForwardValidation.blockers
+  },
+  matchDayWalkForwardResearch: {
+    status: matchDayWalkForwardResearch.status,
+    promotionEligible: false,
+    sample: matchDayWalkForwardResearch.sample,
+    exclusions: matchDayWalkForwardResearch.exclusions,
+    blockers: matchDayWalkForwardResearch.blockers,
+    reportHash: matchDayWalkForwardResearch.reportHash,
   },
   residualMarketWalkForward: {
     status: residualMarketWalkForward.status,

@@ -75,7 +75,7 @@ test('runtime publishes and settles the new research cohort using only final off
 test('frontend preserves frozen research and rejects changed picks, promotion flags or settlements',async()=>{
   const fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript'),module={exports:{}};
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(require.resolve('../src/services/recommendationCenterView.ts'),'utf8'),
-    {compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,{module,exports:module.exports,Date});
+    {compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,{module,exports:module.exports,Date,require:require('node:module').createRequire(require.resolve('../src/services/recommendationCenterView.ts'))});
   const {parseRecommendationCenter,parseRecommendationSingleRow}=module.exports;
   const p=memoryPorts();p.current=[source()];const runtime=createRuntime(p,{validators});await runtime.publishingCycle();
   const payload={recommendationCenter:p.state.view};

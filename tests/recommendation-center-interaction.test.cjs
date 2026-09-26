@@ -2,7 +2,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
 const {createRuntime}=require('../scripts/recommendationPlatform/runtime.cjs');
 const {memoryPorts,validators}=require('./recommendationFixture.cjs');
-function compile(file,requireFn){const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module,exports:module.exports,require:requireFn,Date,window:{setInterval:()=>0,clearInterval:()=>{},setTimeout:fn=>{fn();return 0;},clearTimeout:()=>{}}});return module.exports;}
+function compile(file,requireFn){const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module,exports:module.exports,require:id=>id.endsWith('/publishedRecommendationStatus.cjs')?require('../src/services/publishedRecommendationStatus.cjs'):requireFn(id),Date,window:{setInterval:()=>0,clearInterval:()=>{},setTimeout:fn=>{fn();return 0;},clearTimeout:()=>{}}});return module.exports;}
 function aggregate(rows){const values=rows.map(row=>row.settlement?.state||'PENDING'),count=state=>values.filter(value=>value===state).length;const won=count('WON'),lost=count('LOST'),settled=won+lost;return{published:rows.length,settled,won,lost,pending:count('PENDING'),void:count('VOID'),disputed:count('DISPUTED'),hitRate:settled?won/settled:null};}
 async function harness({missingInputEvidence=false,reviewFailure=false,withHandicap=false,mode='review'}={}){
   const p=memoryPorts();if(missingInputEvidence)for(const m of p.current){const {version,generatedAt,oneXTwo}=m.probabilityModel;m.probabilityModel={version,generatedAt,oneXTwo};}
@@ -50,6 +50,20 @@ test('review reads real pages of twelve out of sixty-nine without changing aggre
   const ui=await harness();let tree=ui.render();assert.equal(byClass(tree,'rc-pick').length,12);assert.match(words(tree),/共 69 条明细 · 第 1 页，每页 12 条/);assert.match(words(byClass(tree,'rc-stats')[0]),/50\.7%/);
   const first=byClass(tree,'rc-pick')[0].props['data-decision-id'];
   button(tree,'下一页').props.onClick();tree=ui.render();assert.equal(byClass(tree,'rc-pick').length,12);assert.notEqual(byClass(tree,'rc-pick')[0].props['data-decision-id'],first);assert.match(words(tree),/第 2 \/ 6 页/);assert.match(words(byClass(tree,'rc-stats')[0]),/35 \/ 69/);
+});
+
+test('65 percent progress is a closed review-only panel with separate versions, empty rates and no automatic promotion claim',async()=>{
+ const ui=await harness(),target=ui.data.review.qualityReport.hitRateTarget;
+ const empty={published:3,settled:0,won:0,pending:3,hitRate:null,hitRateInterval95:null,independentMatchDays:0,numericTargetReached:null,sampleSufficient:false,evidenceSufficient:false};
+ const measured={...empty,published:100,settled:100,won:65,pending:0,hitRate:.65,hitRateInterval95:{lower:.5525,upper:.7364},independentMatchDays:7,numericTargetReached:true,sampleSufficient:true,evidenceSufficient:false};
+ const group=(modelVersion,row)=>({modelVersion,overall:row,windows:{last7:{...row,from:'2026-09-11',through:'2026-09-17'},last30:{...row,from:'2026-08-19',through:'2026-09-17'}}});
+ target.byModelVersion=[group('model-a',measured),group('model-b',empty)];
+ let tree=ui.render();const panel=nodes(tree,n=>n.props?.['data-hit-rate-target']==='observational')[0];
+ assert.equal(panel.type,'details');assert.notEqual(panel.props.open,true);const copy=words(panel);
+ assert.match(copy,/65%目标进度/);assert.match(copy,/model-a/);assert.match(copy,/model-b/);assert.match(copy,/65\.0%/);assert.match(copy,/65 \/ 100/);assert.match(copy,/数值达标 · 证据不足/);assert.match(copy,/待积累赛果/);assert.match(copy,/不会自动转为正式推荐/);
+ assert.equal(nodes(panel,n=>n.props?.['data-target-window']).length,4);assert.match(words(nodes(panel,n=>n.props?.['data-target-window']==='last7')[1]),/—.*0 \/ 0.*待赛果 3/);
+ button(tree,'2串1SP≥2.50').props.onClick();assert.equal(nodes(ui.render(),n=>n.props?.['data-hit-rate-target']).length,0);
+ const current=await harness({mode:'recommendations'});assert.equal(nodes(current.render(),n=>n.props?.['data-hit-rate-target']).length,0);
 });
 
 test('actual shared quality component distinguishes input readiness, price arithmetic and watch without rewriting the frozen pick',async()=>{

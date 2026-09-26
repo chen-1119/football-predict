@@ -16,11 +16,15 @@ const PROFILES = Object.freeze({
     trees: [],
   }),
   "scripts/verifyFrontendEvidenceSemantics.cjs": Object.freeze({
-    auditedSha256: "5cc287f559e627d979b64576536a885e9a36a40f7d980217c2787e5dce120469",
-    files: ["server/index.cjs"],
+    auditedSha256: "fc2c54d0157292e6a06087a70dd87652d49b1f66ab727428dfd7021e422f6346",
+    files: ["server/index.cjs", "src/services/publishedRecommendationStatus.cjs"],
     // Entire src tree, including membership, nested paths, CSS and TS/TSX.
-    // Imported TS is read as text by this scanner, never executed.
+    // TS/TSX is only scanned. The no-import status helper is the sole executed
+    // application module and must match its separately audited code hash.
     trees: ["src"],
+    auditedModules: Object.freeze({
+      "src/services/publishedRecommendationStatus.cjs": "03d869c32b22eefcdcca519fac3e6d408c5c21ede5458fce175e4fc6e186b384",
+    }),
   }),
   "scripts/verifySelectedJsonObjectFile.cjs": Object.freeze({
     auditedSha256: "f1d8b0db55c699ad692f56b07375031a73b1f9ac7586ec1fa0a0c4ac70376b39",

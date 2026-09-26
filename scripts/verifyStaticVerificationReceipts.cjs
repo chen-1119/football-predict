@@ -159,7 +159,22 @@ async function verifyStaticVerificationReceipts() {
     fs.appendFileSync(path.join(fixture, "package-lock.json"), "\n");
     check("dependency lock bytes invalidate", () => assert.notEqual(receipts.hashValue(receipts.collectInputs(fixture, command)), receipts.hashValue(input)));
     copy("package-lock.json");
+    const statusHelper = "src/services/publishedRecommendationStatus.cjs";
+    copy(statusHelper);
+    const statusSource = fs.readFileSync(path.join(fixture, statusHelper), "utf8");
+    check("audited status helper has no executable dependency imports", () => {
+      assert.equal(/\brequire\s*\(|\bimport\s*\(/.test(statusSource), false);
+      const frontendSource = fs.readFileSync(path.join(fixture, "scripts/verifyFrontendEvidenceSemantics.cjs"), "utf8");
+      assert.deepEqual([...frontendSource.matchAll(/\brequire\(["']([^"']+)["']\)/g)].map(match => match[1]),
+        ["node:fs", "node:path", "../src/services/publishedRecommendationStatus.cjs"]);
+    });
     const scanned = ["scripts/verifyFrontendEvidenceSemantics.cjs"], tree = receipts.collectInputs(fixture, scanned);
+    check("frontend receipt binds the exact executing status helper", () => {
+      assert.ok(tree); assert.ok(tree.files.some(([name]) => name === statusHelper));
+      fs.appendFileSync(path.join(fixture, statusHelper), "\n// changed status behavior\n");
+      assert.equal(receipts.collectInputs(fixture, scanned), null);
+      copy(statusHelper);
+    });
     fs.mkdirSync(path.join(fixture, "src/outputs")); fs.writeFileSync(path.join(fixture, "src/outputs/new.ts"), "new source");
     check("nested outputs source membership is covered", () => assert.notEqual(receipts.hashValue(receipts.collectInputs(fixture, scanned)), receipts.hashValue(tree)));
     fs.appendFileSync(path.join(fixture, command[0]), "\n// add unknown input reading\n");

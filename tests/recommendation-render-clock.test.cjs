@@ -3,7 +3,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const ts=require('typescript');
 const {createRuntime}=require('../scripts/recommendationPlatform/runtime.cjs');
 const {memoryPorts,validators}=require('./recommendationFixture.cjs');
-function compile(file,requireFn){const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module,exports:module.exports,require:requireFn,Date});return module.exports;}
+function compile(file,requireFn){const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module,exports:module.exports,require:id=>id.endsWith('/publishedRecommendationStatus.cjs')?require('../src/services/publishedRecommendationStatus.cjs'):requireFn(id),Date});return module.exports;}
 test('incoming lane timestamp between timer ticks stays visible without accepting future inputs',async()=>{
   const p=memoryPorts(),runtime=createRuntime(p,{validators});await runtime.publishingCycle();
   const V=compile(require.resolve('../src/services/recommendationCenterView.ts'),require);let data=V.parseRecommendationCenter({recommendationCenter:p.state.view});

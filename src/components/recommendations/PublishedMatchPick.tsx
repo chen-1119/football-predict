@@ -15,6 +15,8 @@ export function PublishedMatchPick({row,language,loading=false,failed=false,comp
   const d=row.decision,s=primarySelectionSummary(d),h=s.handicap,extension=h?handicapExtensionText(h,language):null;
   const lifecycle=publicationLifecycle(d,now),beforeCutoff=lifecycle!=='review-only',quoteStale=lifecycle==='quote-stale';
   const researchActive=Boolean(row.outcomeResearch?.researchQualified&&beforeCutoff&&!quoteStale&&now>=Date.parse(d.quoteObservedAt));
+  const compactCategory=compact&&lifecycle==='open'&&row.outcomeResearch?.candidateCode
+    &&(row.outcomeResearch.category==='balanced-draw'||row.outcomeResearch.category==='upset-signal')?row.outcomeResearch:null;
   const favoriteValueWarning=row.outcomeResearch?outcomeResearchFavoriteValueWarning(row.outcomeResearch,zh):null;
   return <div className={`published-match-pick${compact?' is-compact':''}`} data-decision-id={d.decisionId} data-record-hash={d.recordHash}>
     <div className="published-match-pick__directions">
@@ -24,7 +26,10 @@ export function PublishedMatchPick({row,language,loading=false,failed=false,comp
     <small className="published-match-pick__status" data-selection-status={row.selectionQuality?.status??'reference'}>{selectionReferenceLabel(row.selectionQuality,language)}{lifecycle!=='open'?` · ${publicationLifecycleLabel(lifecycle,language)}`:''}{failed?(zh?' · 更新暂时失败':' · Update temporarily failed'):''}</small>
     {compact&&<small className="published-match-pick__quote-time">{zh?'冻结 SP 采集':'Frozen SP observed'} {time(d.quoteObservedAt,language)}</small>}
     <SelectionQualityNote quality={row.selectionQuality} language={language}/>
-    {row.outcomeResearch&&<div className="published-match-pick__research" data-outcome-category={row.outcomeResearch.category} data-research-qualified={researchActive}>
+    {compactCategory?.candidateCode&&<div className="published-match-pick__category" role="note" data-outcome-category={compactCategory.category} data-research-qualified={researchActive}>
+      <span>{zh?'分类观察':'Category watch'} · {compactCategory.category==='upset-signal'?(zh?'防冷':'Upset watch'):outcomeCategoryLabel(compactCategory.category,zh)} · {publishedPickLabel(compactCategory.candidateCode,language)}</span>
+    </div>}
+    {!compact&&row.outcomeResearch&&<div className="published-match-pick__research" data-outcome-category={row.outcomeResearch.category} data-research-qualified={researchActive}>
       <small>{zh?'胜平负分类研究 · 不替换已发布方向':'1X2 category study · published pick unchanged'}</small>
       <strong>{outcomeCategoryLabel(row.outcomeResearch.category,zh)}{row.outcomeResearch.candidateCode?` · ${publishedPickLabel(row.outcomeResearch.candidateCode,language)}`:''}</strong>
       <span>{researchActive?(zh?'研究候选，尚未通过独立比赛日验证':'Study candidate; independent match-day validation pending'):!beforeCutoff?(zh?'已截止，仅供复盘':'Cutoff passed; review only'):quoteStale?(zh?'报价过期，仅供比较':'Price expired; comparison only'):favoriteValueWarning??(row.outcomeResearch.candidateCode?(zh?'分类观察，证据不足，不替换发布方向':'Category observation; evidence insufficient, published pick unchanged'):(zh?'证据不足，仅供三方向比较':'Insufficient evidence; three-way comparison only'))}</span>

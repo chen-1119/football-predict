@@ -6,6 +6,7 @@ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'recommendation-center-test-'));
 after(()=>fs.rmSync(dir,{recursive:true,force:true}));
 const source=fs.readFileSync(path.join(__dirname,'../src/services/recommendationCenterView.ts'),'utf8');
 fs.writeFileSync(path.join(dir,'view.cjs'),ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText);
+fs.copyFileSync(path.join(__dirname,'../src/services/publishedRecommendationStatus.cjs'),path.join(dir,'publishedRecommendationStatus.cjs'));
 const view=require(path.join(dir,'view.cjs'));
 const {parseRecommendationCenter,visiblePreview,primarySelectionSummary,comboLegSelection,handicapAnalysisBasis,calibrationSampleBasis,sameDirectionConcentration,boundOfficialHandicapSp}=view;
 const {createRuntime}=require('../scripts/recommendationPlatform/runtime.cjs');
@@ -17,6 +18,35 @@ const {hash}=require('../src/services/publishedForecastPolicy.cjs');
 const {bindPublicReferenceDecision}=require('../src/services/publicReferenceDecision.cjs');
 async function sample(){const p=memoryPorts();await createRuntime(p,{validators}).publishingCycle();return {recommendationCenter:p.state.view};}
 test('the actual runtime projection parses for current UI',async()=>{const x=parseRecommendationCenter(await sample());assert.equal(x.current.length,3);assert.equal(x.previews.length,2);assert.equal(x.review.statistics.single.published,3);});
+
+async function targetPayload(){
+ const payload=await sample();
+ const rows=payload.recommendationCenter.current.map((row,i)=>{
+  const d={...row.decision,upstreamModelVersion:i===2?'target-b':'target-a'};delete d.recordHash;d.recordHash=hash(d);
+  return {...row,decision:d,settlement:i===2?{state:'PENDING'}:{state:i===0?'WON':'LOST',actual:i===0?d.tipCode:'2',resultEventId:'target-result-'+i}};
+ });
+ payload.recommendationCenter.review.qualityReport=require('../scripts/recommendationPlatform/qualityReport.cjs').buildQualityReport(rows,{asOf:Date.parse(rows[0].decision.kickoffTime)+86400000});
+ return payload;
+}
+test('65 percent target parser keeps model versions, settled denominators and pending-only rates separate; old payloads remain valid',async()=>{
+ const payload=await targetPayload(),parsed=parseRecommendationCenter(payload).review.qualityReport.hitRateTarget;
+ assert.equal(parsed.targetHitRate,.65);assert.equal(parsed.formalPromotion,false);
+ const [a,b]=parsed.byModelVersion;assert.equal(a.modelVersion,'target-a');assert.equal(a.windows.last7.hitRate,.5);assert.equal(a.windows.last7.won,1);assert.equal(a.windows.last7.settled,2);
+ assert.equal(b.windows.last30.hitRate,null);assert.equal(b.windows.last30.pending,1);assert.equal(b.windows.last30.numericTargetReached,null);assert.equal(b.windows.last30.evidenceSufficient,false);
+ delete payload.recommendationCenter.review.qualityReport.hitRateTarget;
+ assert.equal(parseRecommendationCenter(payload).review.qualityReport.hitRateTarget,undefined);
+});
+test('target parser rejects promotion, invented rates, changed policy, intervals, windows and duplicate versions',async()=>{
+ const base=await targetPayload();
+ for(const change of [
+  t=>{t.formalPromotion=true;},t=>{t.targetHitRate=.1;},t=>{t.byModelVersion[0].overall.hitRate=.9;},
+  t=>{t.byModelVersion[0].windows.last7.numericTargetReached=true;},t=>{t.byModelVersion[0].windows.last7.sampleSufficient=true;},
+  t=>{t.byModelVersion[0].windows.last7.evidenceSufficient=true;},t=>{t.byModelVersion[0].windows.last7.hitRateInterval95.lower=.65;},
+  t=>{t.byModelVersion[0].windows.last7.blockers=[];},t=>{t.byModelVersion[0].windows.last7.from='2020-01-01';},
+  t=>{t.byModelVersion[0].windows.last30.published++;},t=>{t.byModelVersion[1].overall.hitRate=0;},
+  t=>{t.byModelVersion.push(structuredClone(t.byModelVersion[0]));},t=>{t.byModelVersion[0].modelVersion='unknown';},
+ ]){const payload=structuredClone(base);change(payload.recommendationCenter.review.qualityReport.hitRateTarget);assert.throws(()=>parseRecommendationCenter(payload),/hit-rate target/);}
+});
 test('published lifecycle distinguishes fresh, expired, future quotes and review-only records',async()=>{
  const row=parseRecommendationCenter(await sample()).current[0],d=row.decision,at=Date.parse(d.quoteObservedAt);
  assert.equal(view.publicationLifecycle(d,at),'open');
