@@ -1,5 +1,5 @@
 import type { SingleRow } from '../../services/recommendationCenterView';
-import { primarySelectionSummary, handicapExtensionText, quoteSourceLabel, outcomeCategoryLabel, outcomeResearchReasonLabel } from '../../services/recommendationCenterView';
+import { primarySelectionSummary, handicapExtensionText, quoteSourceLabel, outcomeCategoryLabel, outcomeResearchReasonLabel, outcomeResearchFavoriteValueWarning } from '../../services/recommendationCenterView';
 import { publishedPickLabel, publishedResultLabel } from '../../services/publishedMatchRecommendation';
 import './published-match-pick.css';
 import { SelectionQualityNote } from './SelectionQualityNote';
@@ -16,6 +16,7 @@ export function PublishedMatchPick({row,language,loading=false,failed=false,comp
   const beforeCutoff=now<Math.min(Date.parse(d.cutoffTime),Date.parse(d.kickoffTime));
   const quoteStale=beforeCutoff&&now-Date.parse(d.quoteObservedAt)>15*60000;
   const researchActive=Boolean(row.outcomeResearch?.researchQualified&&beforeCutoff&&!quoteStale&&now>=Date.parse(d.quoteObservedAt));
+  const favoriteValueWarning=row.outcomeResearch?outcomeResearchFavoriteValueWarning(row.outcomeResearch,zh):null;
   return <div className={`published-match-pick${compact?' is-compact':''}`} data-decision-id={d.decisionId} data-record-hash={d.recordHash}>
     <div className="published-match-pick__directions">
       <div><small>{zh?'胜平负首选':'1X2 primary'}</small><strong>{publishedPickLabel(s.had.code,language)}</strong><span>SP {s.had.odds.toFixed(2)} · {(s.had.probability*100).toFixed(1)}%</span></div>
@@ -27,7 +28,7 @@ export function PublishedMatchPick({row,language,loading=false,failed=false,comp
     {row.outcomeResearch&&<div className="published-match-pick__research" data-outcome-category={row.outcomeResearch.category} data-research-qualified={researchActive}>
       <small>{zh?'胜平负分类研究 · 不替换已发布方向':'1X2 category study · published pick unchanged'}</small>
       <strong>{outcomeCategoryLabel(row.outcomeResearch.category,zh)}{row.outcomeResearch.candidateCode?` · ${publishedPickLabel(row.outcomeResearch.candidateCode,language)}`:''}</strong>
-      <span>{researchActive?(zh?'研究候选，尚未通过独立比赛日验证':'Study candidate; independent match-day validation pending'):!beforeCutoff?(zh?'已截止，仅供复盘':'Cutoff passed; review only'):quoteStale?(zh?'报价过期，仅供比较':'Price expired; comparison only'):row.outcomeResearch.candidateCode?(zh?'分类观察，证据不足，不替换发布方向':'Category observation; evidence insufficient, published pick unchanged'):(zh?'证据不足，仅供三方向比较':'Insufficient evidence; three-way comparison only')}</span>
+      <span>{researchActive?(zh?'研究候选，尚未通过独立比赛日验证':'Study candidate; independent match-day validation pending'):!beforeCutoff?(zh?'已截止，仅供复盘':'Cutoff passed; review only'):quoteStale?(zh?'报价过期，仅供比较':'Price expired; comparison only'):favoriteValueWarning??(row.outcomeResearch.candidateCode?(zh?'分类观察，证据不足，不替换发布方向':'Category observation; evidence insufficient, published pick unchanged'):(zh?'证据不足，仅供三方向比较':'Insufficient evidence; three-way comparison only'))}</span>
       {!compact&&row.outcomeResearch.outcomes.length>0&&<div className="published-match-pick__research-odds">{row.outcomeResearch.outcomes.map(item=><span key={item.code}>{publishedPickLabel(item.code,language)} {(item.modelProbability*100).toFixed(1)}% · SP {item.odds.toFixed(2)}</span>)}</div>}
       {!compact&&row.outcomeResearch.reasons.length>0&&<small>{zh?'限制：':'Limits: '}{row.outcomeResearch.reasons.slice(0,2).map(reason=>outcomeResearchReasonLabel(reason,zh)).join(zh?'、':'; ')}</small>}
     </div>}

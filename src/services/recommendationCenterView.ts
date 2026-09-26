@@ -31,12 +31,21 @@ export interface OutcomeCategoryResearch {
 }
 export function outcomeCategoryLabel(category:OutcomeCategoryResearch['category'],zh:boolean):string{
   const labels={
-    'strong-favorite':zh?'强势热门':'Strong favorite',
+    'strong-favorite':zh?'热门走势':'Favorite tendency',
     'balanced-draw':zh?'均势防平':'Balanced draw',
     'upset-signal':zh?'非热门方向':'Nonfavorite signal',
     watch:zh?'暂无明确分类':'No clear category',
   };
   return labels[category];
+}
+export function outcomeResearchFavoriteValueWarning(research:OutcomeCategoryResearch,zh:boolean):string|null{
+  if(research.category!=='strong-favorite'||research.researchQualified)return null;
+  const candidate=research.outcomes.find(row=>row.code===research.candidateCode);
+  if(!candidate)return null;
+  if(candidate.expectedValue<0)return zh?'热门倾向，但模型估值为负，仅供观察':'Favorite tendency, but negative model EV; observation only';
+  if(candidate.probabilityEdge<0.015||candidate.expectedValue<0.025)
+    return zh?'热门倾向，但当前 SP 的价格优势不足，仅供观察':'Favorite tendency, but the current SP lacks sufficient price value; observation only';
+  return null;
 }
 export function outcomeResearchReasonLabel(reason:string,zh:boolean):string{
   const labels:Record<string,[string,string]>={
@@ -266,8 +275,17 @@ function single(v:unknown):SingleRow{
       ||modelLeaderCode!==outcomes.find(o=>o.modelRank===1)?.code
       ||marketFavoriteCode!==outcomes.find(o=>o.marketRank===1)?.code))throw new Error('Invalid outcome research ranks');
     const reasons=list(r.reasons).map(text),evidenceCodes=list(r.evidenceCodes).map(text),researchQualified=r.researchQualified===true;
-    if((candidateCode&&!outcomes.some(o=>o.code===candidateCode))||(!candidateCode&&researchQualified)
-      ||(researchQualified&&reasons.length>0)||(outcomes.length===0&&(category!=='watch'||candidateCode!==null)))throw new Error('Contradictory outcome research');
+    const candidate=outcomes.find(o=>o.code===candidateCode);
+    if(typeof r.researchQualified!=='boolean'
+      ||(candidateCode&&!candidate)||(!candidateCode&&researchQualified)
+      ||(researchQualified&&(category!=='strong-favorite'||reasons.length>0
+        ||!candidate||candidate.probabilityEdge<0.015||candidate.expectedValue<0.025))
+      ||(outcomes.length===0&&(category!=='watch'||candidateCode!==null))
+      ||(category==='watch'&&candidateCode!==null)
+      ||(category==='strong-favorite'&&(!candidate||candidateCode!==modelLeaderCode||candidateCode!==marketFavoriteCode))
+      ||(category==='balanced-draw'&&(candidateCode!=='X'||!reasons.includes('category-holdout-unvalidated')))
+      ||(category==='upset-signal'&&(!candidate||candidateCode==='X'||candidate.marketRank===1
+        ||!reasons.includes('category-holdout-unvalidated'))))throw new Error('Contradictory outcome research');
     research={version:'outcome-category-research-v1',decisionId:d.decisionId,recordHash:d.recordHash,researchOnly:true,formalPromotionEligible:false,
       category:category as OutcomeCategoryResearch['category'],candidateCode,modelLeaderCode,marketFavoriteCode,researchQualified,reasons,evidenceCodes,outcomes};
   }
