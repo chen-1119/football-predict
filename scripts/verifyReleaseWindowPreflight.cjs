@@ -193,6 +193,21 @@ function verifyReleaseWindowPreflight() {
     assert.equal(result.uploadPreparationSeconds, 900); assert.equal(result.stage, "before-upload");
     assert.equal(result.latestStartBeforeNextTransition, iso(START + 2275_000)); noAuthority(result);
   });
+  check("authenticated native path uses its exact 3720-second server lease plus preparation and observation reserve", () => {
+    const native = (horizonSeconds, stage = "before-upload") =>
+      helper.evaluateReleaseWindowObservation(observation({ horizonSeconds }), START, { stage, nativeFullRelease: true });
+    assert.equal(helper.NATIVE_RELEASE_HORIZON_SECONDS, 3720);
+    const upload = native(4625);
+    assert.equal(upload.ok, true); assert.equal(upload.minimumHorizonSeconds, 4625);
+    assert.equal(upload.releaseHorizonSeconds, 3720); assert.equal(upload.releaseWindowProfile, "signed-native-runtime");
+    assert.equal(upload.preparationSeconds, 900); noAuthority(upload);
+    assert.equal(native(4624).ok, false);
+    assert.equal(native(5525, "before-build").minimumHorizonSeconds, 5525);
+    assert.equal(native(5524, "before-build").ok, false);
+    assert.equal(evaluate(observation({ horizonSeconds: 4625 }), START, "before-upload").ok, false);
+    assert.throws(() => helper.evaluateReleaseWindowObservation(observation(), START,
+      { stage: "before-upload", nativeFullRelease: "true" }), /native release selection/);
+  });
   check("r722 boundary regression is rejected before spending build time, not by lowering the upload gate", () => {
     const input = observation({ horizonSeconds: 8601 });
     assert.equal(evaluate(input, START, "before-upload").ok, true);
@@ -353,10 +368,10 @@ function verifyReleaseWindowPreflight() {
     const end = deploy.indexOf("  if (!nativeFullRelease) {", start); assert.ok(start >= 0 && end > start);
     for (const outcome of ["open", "closed", "throws"]) {
       const calls = [];
-      const context = { dryRun: false, releaseWindowPreflight: null,
+      const context = { dryRun: false, releaseWindowPreflight: null, nativeFullRelease: true,
         fail: message => { throw new Error(message); }, require: name => {
-          if (name === "./runReleaseWindowPreflight.cjs") return { runLiveReleaseWindowPreflight: ({ stage }) => {
-            assert.equal(stage, "before-upload"); calls.push("window");
+          if (name === "./runReleaseWindowPreflight.cjs") return { runLiveReleaseWindowPreflight: ({ stage, nativeFullRelease }) => {
+            assert.equal(stage, "before-upload"); assert.equal(nativeFullRelease, true); calls.push("window");
             if (outcome === "throws") throw new Error("observation unavailable"); return { ok: outcome === "open" };
           } };
           assert.equal(name, "./runReleaseArchivePreflight.cjs"); return { runLiveArchivePreflight: () => { calls.push("archive"); return { report: { ok: true } }; } };
