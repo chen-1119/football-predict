@@ -7,6 +7,12 @@ const VERSION='postgres-team-history-v1';
 const stamp=value=>{const n=Date.parse(value instanceof Date?value.toISOString():value||'');return Number.isFinite(n)?n:null;};
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const regular=row=>row.source_key==='football-data-co-uk'&&row.payload?.sourceDataset==='football-data.co.uk:results-csv';
+// syncData supplies raw Home/AwayTeam fields before its public normalization.
+// Match the builders' TeamName -> Team -> Name precedence without mutating
+// the source row, its clocks or its identity/provenance fields.
+function normalizeHistoryMatch(match){
+ return{...match,homeTeamName:match?.homeTeamName||match?.homeTeam||match?.homeName||'',awayTeamName:match?.awayTeamName||match?.awayTeam||match?.awayName||''};
+}
 function projectRows(rows,{asOf,teamKey}){
  const at=stamp(asOf);if(at===null)throw new TypeError('An explicit history as-of is required');
  const groups=new Map(),rejected={};const reject=reason=>{rejected[reason]=(rejected[reason]||0)+1;};
@@ -39,7 +45,7 @@ function projectRows(rows,{asOf,teamKey}){
 async function loadPostgresTeamHistory({pool,matches,asOf,teamKey,perTeamLimit=120,lookbackDays=1095}={}){
  if(typeof teamKey!=='function'||stamp(asOf)===null)throw new TypeError('teamKey and explicit asOf required');
  if(!Number.isInteger(perTeamLimit)||perTeamLimit<1||perTeamLimit>200||!Number.isInteger(lookbackDays)||lookbackDays<1||lookbackDays>1826)throw new RangeError('History query bounds invalid');
- const requests=new Map();for(const match of matches||[])for(const side of ['home','away']){const name=match[side+'TeamName'],key=teamKey(name);if(!key)continue;const values=requests.get(key)||new Set();for(const value of [name,match[side+'TeamNameEn'],key])if(value)values.add(normalizeEntity(value));requests.set(key,values);}
+ const requests=new Map();for(const input of matches||[]){const match=normalizeHistoryMatch(input);for(const side of ['home','away']){const name=match[side+'TeamName'],key=teamKey(name);if(!key)continue;const values=requests.get(key)||new Set();for(const value of [name,match[side+'TeamNameEn'],key])if(value)values.add(normalizeEntity(value));requests.set(key,values);}}
  if(requests.size>256)throw new RangeError('Too many current teams for one model cycle');
  const requestRows=[...requests].map(([key,names])=>({key,names:[...names]}));if(!requestRows.length)return{matches:[],summary:{version:VERSION,asOf,teams:[],acceptedMatches:0}};
  const own=!pool;if(own)pool=require('../server/postgresStore.cjs').createPostgresPool({max:1,min:0,applicationName:'live-model-team-history'});
@@ -86,11 +92,11 @@ function seedCutoff(team,feature){
 function createLiveHistoryOptions({history,targets,existing=[],training=null,asOf,teamKey}){
  const at=stamp(asOf);if(at===null)throw new TypeError('asOf required');
  const covered=new Set((history.summary?.teams||[]).filter(t=>t.selectedMatches>0).map(t=>t.key));
- const live=(targets||[]).filter(m=>stamp(m.kickoffTime)>at&&!m.predictionMeta?.lockedAt&&m.status!=='FINISHED'&&[teamKey(m.homeTeamName),teamKey(m.awayTeamName)].some(k=>covered.has(k))).map(m=>({...m,predictionMeta:{...m.predictionMeta,generatedAt:new Date(at).toISOString()}}));
+ const live=(targets||[]).map(normalizeHistoryMatch).filter(m=>stamp(m.kickoffTime)>at&&!m.predictionMeta?.lockedAt&&m.status!=='FINISHED'&&[teamKey(m.homeTeamName),teamKey(m.awayTeamName)].some(k=>covered.has(k))).map(m=>({...m,predictionMeta:{...m.predictionMeta,generatedAt:new Date(at).toISOString()}}));
  const teams={...training?.teams},seedPolicy=[];for(const item of history.summary?.teams||[]){if(!item.selectedMatches||!teams[item.key])continue;const original=teams[item.key],cutoff=seedCutoff(original,'elo'),retain=cutoff!==null&&cutoff>=at-(history.summary.lookbackDays||1095)*86400000&&cutoff<at;teams[item.key]={...original,latestElo:retain?original.latestElo:null,matches:retain&&Number.isSafeInteger(original.eloMatches)?original.eloMatches:0,recent:[...(original.recent||[])].filter(row=>stamp(row.kickoffTime)<at).sort((a,b)=>stamp(a.kickoffTime)-stamp(b.kickoffTime))};seedPolicy.push({key:item.key,elo:retain?'retained-dated-baseline':'window-from-1500',eloCutoff:retain?new Date(cutoff).toISOString():null,seedEloCount:teams[item.key].matches,formCutoff:seedCutoff(original,'form')===null?null:new Date(seedCutoff(original,'form')).toISOString()});}
  const liveTraining=training?{...training,teams}:null;
  const eventKey=m=>[m.postgresTeamHistory?m.matchDate:new Date(stamp(m.kickoffTime)).toISOString().slice(0,10),teamKey(m.homeTeamName),teamKey(m.awayTeamName)].join('|');
- const grouped=new Map();const admissible=[];for(const match of [...existing,...history.matches]){const kickoff=stamp(match.kickoffTime);let observation=match.postgresTeamHistory?{observedMs:stamp(match.resultObservedAt),observedAt:match.resultObservedAt,source:match.resultObservationSource,fallback:false}:resultObservationForMatch(match);if(match.status!=='FINISHED'||kickoff===null||kickoff>=at||observation?.fallback||!Number.isFinite(observation?.observedMs)||observation.observedMs>at||observation.observedMs<=kickoff)continue;admissible.push({match,observation});}
+ const grouped=new Map();const admissible=[];for(const input of [...existing,...history.matches]){const match=normalizeHistoryMatch(input),kickoff=stamp(match.kickoffTime);let observation=match.postgresTeamHistory?{observedMs:stamp(match.resultObservedAt),observedAt:match.resultObservedAt,source:match.resultObservationSource,fallback:false}:resultObservationForMatch(match);if(match.status!=='FINISHED'||kickoff===null||kickoff>=at||observation?.fallback||!Number.isFinite(observation?.observedMs)||observation.observedMs>at||observation.observedMs<=kickoff)continue;admissible.push({match,observation});}
  const pair=m=>[teamKey(m.homeTeamName),teamKey(m.awayTeamName)].join('|'),existingByPair=new Map();for(const {match}of admissible){if(match.postgresTeamHistory)continue;const rows=existingByPair.get(pair(match))||[];rows.push(match);existingByPair.set(pair(match),rows);}
  let ambiguousDateOverlap=0;for(const entry of admissible){const {match}=entry;if(match.postgresTeamHistory?.dateOnly&&(existingByPair.get(pair(match))||[]).some(other=>eventKey(other)!==eventKey(match)&&Math.abs(stamp(other.kickoffTime)-stamp(match.kickoffTime))<172800000)){ambiguousDateOverlap++;continue;}const key=eventKey(match),rows=grouped.get(key)||[];rows.push(entry);grouped.set(key,rows);}
  const results=[];for(const rows of grouped.values()){if(new Set(rows.map(({match})=>match.scoreHome+':'+match.scoreAway)).size!==1)continue;results.push(rows.sort((a,b)=>a.observation.observedMs-b.observation.observedMs)[0]);}results.sort((a,b)=>stamp(a.match.kickoffTime)-stamp(b.match.kickoffTime)||a.match.sourceMatchId.localeCompare(b.match.sourceMatchId));

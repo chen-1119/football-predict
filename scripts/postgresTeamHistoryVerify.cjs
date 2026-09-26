@@ -43,6 +43,58 @@ async function verify(pool){
   const elo=buildEloSnapshots(options.matches,options.training,options).get(target.sourceMatchId),form=buildFormSnapshots(options.matches,options.training,options).get(target.sourceMatchId);
   check('actual Elo builder consumes two results per team without fake seed counts',()=>{assert.equal(elo.homeMatches,2);assert.equal(elo.awayMatches,2);assert(Number.isFinite(elo.homeRating)&&elo.homeRating!==1500);assert.equal(elo.asOf.forecastAt,asOf);});
   check('actual form builder consumes the same two chronological results',()=>{assert.equal(form.home.sampleSize,2);assert.equal(form.away.sampleSize,2);assert.equal(form.sampleSize,4);assert.equal(form.home.goalsForAvg,1.5);assert.equal(form.home.lastMatchAt,`${year}-01-04T12:00:00.000Z`);});
+  // Actual syncData call-site shape, before normalizeMatch adds TeamName.
+  const rawTarget={...target,homeTeam:'Alpha',awayTeam:'Beta'};delete rawTarget.homeTeamName;delete rawTarget.awayTeamName;
+  const rawBefore=JSON.stringify(rawTarget),rawHistory=await load({matches:[rawTarget],perTeamLimit:2});
+  const rawOptions=createLiveHistoryOptions({history:rawHistory,targets:[rawTarget],existing:[],training:null,asOf,teamKey});
+  const rawElo=buildEloSnapshots(rawOptions.matches,rawOptions.training,rawOptions).get(target.sourceMatchId);
+  const rawForm=buildFormSnapshots(rawOptions.matches,rawOptions.training,rawOptions).get(target.sourceMatchId);
+  check('raw syncData Team fields reach real bounded PostgreSQL queries and both feature builders',()=>{
+    assert.equal(rawHistory.matches.length,2);assert.equal(rawHistory.summary.inputHash,bounded.summary.inputHash);
+    const requested=JSON.parse(rawHistory.queries.find(r=>r.sql.includes('jsonb_to_recordset')).args[0]);
+    assert.deepEqual(requested.map(r=>r.key),['alpha','beta']);
+    assert.equal(rawHistory.queries.find(r=>r.sql.includes('CROSS JOIN LATERAL')).args[3],3);
+    assert.deepEqual(rawElo,elo);assert.deepEqual(rawForm,form);assert.equal(JSON.stringify(rawTarget),rawBefore);
+  });
+  const namesOnly={...target,homeName:'Alpha',awayName:'Beta'};delete namesOnly.homeTeamName;delete namesOnly.awayTeamName;
+  const legacyHistory=await load({matches:[namesOnly],perTeamLimit:2});
+  const preferredTarget={...target,homeTeam:'No Such Home',awayTeam:'No Such Away',homeName:'Other Home',awayName:'Other Away'};
+  const preferredHistory=await load({matches:[preferredTarget],perTeamLimit:2});
+  check('Name fallback and TeamName precedence preserve exact identity resolution',()=>{
+    assert.equal(legacyHistory.summary.inputHash,bounded.summary.inputHash);assert.equal(preferredHistory.summary.inputHash,bounded.summary.inputHash);
+    const preferred=createLiveHistoryOptions({history:preferredHistory,targets:[preferredTarget],asOf,teamKey});
+    assert.deepEqual(buildEloSnapshots(preferred.matches,preferred.training,preferred).get(target.sourceMatchId),elo);
+  });
+  const lockedRaw={...rawTarget,sourceMatchId:'raw-locked',predictionMeta:{lockedAt:observedAt,generatedAt:observedAt}};
+  const pastRaw={...rawTarget,sourceMatchId:'raw-past',kickoffTime:observedAt};
+  const unknownRaw={...rawTarget,sourceMatchId:'raw-unknown',homeTeam:'No Such Home',awayTeam:'No Such Away'};
+  const unknownHistory=await load({matches:[unknownRaw]});
+  const rawBoundaryInputs=[lockedRaw,pastRaw,unknownRaw,rawTarget],rawBoundaryBefore=JSON.stringify(rawBoundaryInputs);
+  const rawBoundaryOptions=createLiveHistoryOptions({history:rawHistory,targets:rawBoundaryInputs,asOf,teamKey});
+  check('raw compatibility leaves locked, past and unknown forecasts excluded and originals unchanged',()=>{
+    assert.equal(unknownHistory.matches.length,0);assert(unknownHistory.summary.teams.every(t=>t.mapping==='missing'));
+    assert.deepEqual([...buildEloSnapshots(rawBoundaryOptions.matches,null,rawBoundaryOptions).keys()],[target.sourceMatchId]);
+    assert.deepEqual([...buildFormSnapshots(rawBoundaryOptions.matches,null,rawBoundaryOptions).keys()],[target.sourceMatchId]);
+    assert.equal(JSON.stringify(rawBoundaryInputs),rawBoundaryBefore);
+  });
+  const rawOfficial={...rawHistory.matches[0],homeTeam:'Alpha',awayTeam:'Beta',postgresTeamHistory:undefined,sourceMatchId:'raw-official',eventVersion:rawHistory.matches[0].kickoffTime,resultSource:'sporttery:official-api',official:true,resultObservationSource:'sporttery:relay'};
+  delete rawOfficial.homeTeamName;delete rawOfficial.awayTeamName;
+  const rawExistingBefore=JSON.stringify(rawOfficial);
+  const rawExistingOptions=createLiveHistoryOptions({history:rawHistory,targets:[rawTarget],existing:[rawOfficial],asOf,teamKey});
+  check('raw existing official results deduplicate against PostgreSQL evidence without changing provenance',()=>{
+    assert.equal(rawExistingOptions.warehouseHistory.appliedUniqueResults,2);
+    const seen=[];rawExistingOptions.timeline(null,{onResult:(match,observation)=>seen.push({match,observation}),onForecast:()=>{}});
+    const chosen=seen.find(entry=>entry.match.sourceMatchId==='raw-official');
+    assert(chosen,'raw official event must be admitted, not silently dropped behind its PostgreSQL copy');
+    assert.equal(seen.filter(entry=>entry.match.kickoffTime===rawOfficial.kickoffTime).length,1);
+    assert.equal(chosen.match.eventVersion,rawOfficial.eventVersion);assert.equal(chosen.match.resultSource,rawOfficial.resultSource);
+    assert.equal(chosen.match.resultObservationSource,rawOfficial.resultObservationSource);assert.equal(chosen.match.resultObservedAt,rawOfficial.resultObservedAt);
+    assert.equal(chosen.observation.source,rawOfficial.resultObservationSource);assert.equal(chosen.observation.observedAt,rawOfficial.resultObservedAt);assert.equal(chosen.observation.fallback,false);
+    const e=buildEloSnapshots(rawExistingOptions.matches,null,rawExistingOptions).get(target.sourceMatchId),f=buildFormSnapshots(rawExistingOptions.matches,null,rawExistingOptions).get(target.sourceMatchId);
+    assert.equal(e.homeMatches,rawElo.homeMatches);assert.equal(e.awayMatches,rawElo.awayMatches);assert.equal(e.homeRating,rawElo.homeRating);
+    assert.equal(f.home.sampleSize,rawForm.home.sampleSize);assert.equal(f.away.sampleSize,rawForm.away.sampleSize);assert.equal(f.home.goalsForAvg,rawForm.home.goalsForAvg);
+    assert.equal(JSON.stringify(rawOfficial),rawExistingBefore);
+  });
   const beforeMeta=(await q('SELECT observation_id,observed_at FROM football.historical_result_observations ORDER BY observation_id')).rows;
   for(const [table,idColumn,clockColumn]of [['historical_result_observations','observation_id','observed_at'],['historical_source_events','source_event_id','observed_at'],['historical_result_observations','observation_id','available_at'],['data_ingest_runs','run_id','completed_at']]){
    const saved=(await q(`SELECT ${idColumn} AS id,${clockColumn} AS value FROM football.${table}`)).rows;
