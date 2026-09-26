@@ -216,7 +216,10 @@ function verifyFrontendRuntimeBoundary() {
       try { unreviewed(captured); } finally { fs.unlinkSync(link); }
       const rootLink = path.join(fixtureRoot, "linked-root");
       fs.symlinkSync(candidateRoot, rootLink, process.platform === "win32" ? "junction" : "dir");
-      try { unreviewed({ ...captured, root: rootLink }); } finally { fs.rmdirSync(rootLink); }
+      try { unreviewed({ ...captured, root: rootLink }); } finally {
+        if (process.platform === "win32") fs.rmdirSync(rootLink);
+        else fs.unlinkSync(rootLink);
+      }
     });
     check("runtime parse errors and unsupported import bindings reject", () => {
       changed("server/index.cjs", text => `${text}\nconst = invalid;\n`, unreviewed);
