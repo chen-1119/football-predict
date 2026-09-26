@@ -7,11 +7,14 @@ const revision = row => {
   const value = row?.resultRevision ?? row?.postMatchReview?.settlement?.resultRevision ?? 0;
   return Number.isSafeInteger(value) && value >= 0 ? value : null;
 };
+function resultState(value){return {state:value.state,scoreHome:value.scoreHome,scoreAway:value.scoreAway,
+  homeTeamId:value.homeTeamId,awayTeamId:value.awayTeamId,revision:value.revision};}
 function fingerprint(value) {
-  return hash({ state:value.state, scoreHome:value.scoreHome, scoreAway:value.scoreAway,
-    homeTeamId:value.homeTeamId, awayTeamId:value.awayTeamId, revision:value.revision });
+  return hash({ ...resultState(value),
+    ...(value.settlementOnly===true?{settlementOnly:true}:{}),
+    ...(value.officialResultEvidenceHash===undefined?{}:{officialResultEvidenceHash:value.officialResultEvidenceHash}) });
 }
-function collectResults(history, previous, { isFinal, isVoid }, now) {
+function collectResults(history, previous, { isFinal, isVoid, evidenceFor }, now) {
   const grouped = new Map(), issues = [];
   for (const row of history) {
     try {
@@ -22,11 +25,13 @@ function collectResults(history, previous, { isFinal, isVoid }, now) {
       if (!voided && (![row.scoreHome,row.scoreAway].every(n => Number.isSafeInteger(n) && n >= 0))) continue;
       const at = row.resultObservedAt || row.resultUpdatedAt;
       if (at && (!Number.isFinite(time(at)) || time(at)>now)) continue;
+      const supplemental=!voided&&evidenceFor?evidenceFor(row):null;
       const eventKey = key(row), values = grouped.get(eventKey) || [];
       values.push({ sourceMatchId:String(row.sourceMatchId || row.id).replace(/^sporttery_/,''), eventVersion:new Date(eventMs).toISOString(),
         revision:rev, homeTeamId:row.homeTeamId || null, awayTeamId:row.awayTeamId || null,
         state:voided?'VOID':'FINAL', scoreHome:voided?null:row.scoreHome, scoreAway:voided?null:row.scoreAway,
-        source:row.resultSource || row.voidSource || 'validated-result-adapter' });
+        source:(voided?row.voidSource:supplemental?.officialResultEvidence.provenance.source || row.resultSource) || 'validated-result-adapter',
+        ...(supplemental||{}) });
       grouped.set(eventKey,values);
     } catch { issues.push({ reason:'malformed-result',sourceMatchId:String(row?.sourceMatchId || '') }); }
   }
@@ -35,10 +40,18 @@ function collectResults(history, previous, { isFinal, isVoid }, now) {
     const old = previous.get(eventKey) || null;
     const rev = Math.max(...rows.map(r=>r.revision));
     if (old && rev < old.revision) continue;
+    if(old?.revision===rev&&old.state==='DISPUTED')continue;
     const latest = rows.filter(r=>r.revision===rev);
-    const states = new Set(latest.map(fingerprint));
-    if (old && old.revision===rev) states.add(fingerprint(old));
-    let next = latest[0];
+    // Same-score official confirmations are not result disputes. Prefer an
+    // admitted Sporttery result over a settlement-only supplement, while
+    // retaining a real score conflict until a higher official revision.
+    const states = new Set(latest.map(value=>hash(resultState(value))));
+    if (old && old.revision===rev) states.add(hash(resultState(old)));
+    let next = latest.find(value=>value.settlementOnly!==true)||latest[0];
+    // Retain the first verified receipt for an unchanged result rather than
+    // append another event on every refetch. A genuine Sporttery confirmation
+    // can replace settlement-only evidence at the same score and revision.
+    if(old?.revision===rev&&states.size===1&&!(old.settlementOnly===true&&next.settlementOnly!==true))continue;
     if (states.size>1 || (old?.revision===rev && old.state==='DISPUTED')) next={...next,state:'DISPUTED',scoreHome:null,scoreAway:null};
     const stateHash=fingerprint(next);
     if (old && stateHash === old.stateHash) continue;
@@ -172,6 +185,7 @@ function dailySummary(singles,combos){
 }
 function validResultEvent(e){
   try{return Boolean(e && ['FINAL','VOID','DISPUTED'].includes(e.state) && Number.isSafeInteger(e.revision) && e.revision>=0
+    && require('./officialResults.cjs').validSupplementaryEventEvidence(e)
     && e.eventKey===key(e) && e.stateHash===fingerprint(e) && e.eventId===`result_${hash([e.eventKey,e.stateHash,e.previousEventId])}`
     && (e.state!=='FINAL'||[e.scoreHome,e.scoreAway].every(n=>Number.isSafeInteger(n)&&n>=0)));}catch{return false;}
 }

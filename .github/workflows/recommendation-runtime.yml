@@ -72,6 +72,7 @@ on:
       - 'tests/public-product.test.cjs'
       - 'tests/public-browse-flow.test.cjs'
       - 'scripts/recommendationPlatform/**'
+      - 'scripts/research/frozenHadCandidates.cjs'
       - 'server/postgres/migrations/013_dual_choice_research.sql'
       - 'scripts/dataCoverage.cjs'
       - 'scripts/freeFootballTeamAliases.cjs'
@@ -86,6 +87,7 @@ on:
       - 'src/services/baselineEnsemblePolicy.cjs'
       - 'src/services/modelInputUsage.cjs'
       - 'tests/baseline-ensemble-policy.test.cjs'
+      - 'tests/national-team-history-aliases.test.cjs'
       - 'tests/recommendation-supplementary-research.test.cjs'
       - 'src/services/handicapMarginDecision.cjs'
       - 'src/services/handicapCalibration.cjs'
@@ -165,6 +167,7 @@ jobs:
       - run: node scripts/verifyFastResultGenerationReconciliation.cjs
       - run: node scripts/verifyHistoricalEventStore.cjs && node scripts/verifyFootballDataResultsSync.cjs
       - run: node --test tests/baseline-ensemble-policy.test.cjs tests/recommendation-supplementary-research.test.cjs
+      - run: node --test tests/recommendation-official-results.test.cjs tests/recommendation-frozen-had-candidates.test.cjs tests/national-team-history-aliases.test.cjs
       - run: node scripts/verifyWalkForwardValidation.cjs && node --test tests/matchday-walk-forward.test.cjs
       - run: node --test tests/recommendation-unified.test.cjs tests/recommendation-center-view.test.cjs tests/recommendation-combo-availability.test.cjs tests/recommendation-warehouse-sp.test.cjs tests/recommendation-warehouse-sp-view.test.cjs tests/recommendation-live-market.test.cjs tests/recommendation-handicap-margin.test.cjs tests/recommendation-mixed-combo.test.cjs tests/recommendation-quality-report.test.cjs
       - run: node --test tests/data-coverage.test.cjs tests/market-comparison.test.cjs tests/recommendation-review-page.test.cjs tests/recommendation-review-frontend.test.cjs tests/recommendation-dual-research.test.cjs tests/recommendation-schema-bridge.test.cjs
