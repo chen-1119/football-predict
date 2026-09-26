@@ -1,3 +1,4 @@
+export { publicationLifecycle, publicationLifecycleLabel } from './publishedRecommendationStatus.cjs';
 export type Outcome = '1' | 'X' | '2';
 export type ResultState = 'PENDING' | 'WON' | 'LOST' | 'VOID' | 'DISPUTED';
 export interface HandicapAnalysis {
@@ -17,7 +18,15 @@ export interface Decision {
   matchNo:string|null; tipCode:Outcome; odds:number; probabilities:Record<Outcome,number>;
   modelProbability:number; modelGeneratedAt:string; quoteObservedAt:string; recordHash:string; quoteSource?:string|null; quoteOdds?:Record<Outcome,number>;
   handicapAnalysis?:HandicapAnalysis|null;
+  supplementaryResearch?:SupplementaryResearch|null;
 }
+export interface SupplementaryResearch {
+  version:'supplementary-research-v1';contentHash:string;researchOnly:true;
+  exactScore:{home:number;away:number;label:string;probability:number};
+  totalGoals:{label:string;probability:number;distribution:PublishedTotalGoals[]};
+}
+export interface SupplementaryResult {state:ResultState;actual?:string;score?:string|null;resultEventId?:string|null}
+export interface SupplementarySummary {exactScore:Summary;totalGoals:Summary;excludedWithoutFrozenPicks:number}
 export interface Settlement { state:ResultState; score?:string|null; actual?:Outcome; resultEventId?:string|null; legs?:Array<{decisionId:string;selectionId?:string;state:ResultState;score?:string|null}> }
 export interface SelectionQuality {version:'recommendation-selection-quality-v1'|'recommendation-selection-quality-v2';status:'watch'|'reference-qualified';qualified:boolean;reasons:string[];samples:{elo:{home:number|null;away:number|null};form:{home:number|null;away:number|null}}|null;probabilityLead:number|null;marketProbability:number|null;modelMarketGap:number|null;expectedValue:number|null;marketFavorite:boolean;crossTrack?:{referenceTipCode:Outcome;referenceRecordedAt:string;knownAtPublication:boolean}}
 export interface PublishedScore {home:number;away:number;label:string;probability:number;hadCode:Outcome;hhadCode:Outcome}
@@ -63,7 +72,7 @@ export function outcomeResearchReasonLabel(reason:string,zh:boolean):string{
   };
   return (labels[reason]??[reason,reason])[zh?0:1];
 }
-export interface SingleRow { decision:Decision; settlement:Settlement; handicapSettlement?:Settlement|null;selectionQuality?:SelectionQuality|null;scoreDistribution?:PublishedScores|null;outcomeResearch?:OutcomeCategoryResearch|null }
+export interface SingleRow { decision:Decision; settlement:Settlement; handicapSettlement?:Settlement|null;selectionQuality?:SelectionQuality|null;scoreDistribution?:PublishedScores|null;outcomeResearch?:OutcomeCategoryResearch|null;supplementarySettlement?:{exactScore:SupplementaryResult;totalGoals:SupplementaryResult}|null }
 export function boundOfficialHandicapSp(analysis:HandicapAnalysis|null|undefined,direction:Outcome|null|undefined):number|null{
   const quote=analysis?.marketReference;
   if(!direction||quote?.source!=='sporttery:HHAD')return null;
@@ -95,7 +104,16 @@ export interface Summary { published:number;settled:number;won:number;lost:numbe
 export interface HandicapBreakdown {standaloneV1:Summary;companionV2All:Summary;companionV2WhenHadWon:Summary;companionV2BothWon:Summary;companionV3All?:Summary;companionV3WhenHadWon?:Summary;companionV3BothWon?:Summary}
 export interface Lane {status:'ok'|'error';lastSuccessAt?:string;lastAttemptAt:string;errorCode?:string|null;inputAsOf?:string;candidateCount?:number;eligibleCount?:number;bindingFailures?:number;referenceCount?:number;watchCount?:number}
 export interface ModelQualityCohort {settled:number;won:number;hitRate:number|null;brier:number|null;marketBrier:number|null;logLoss:number|null;marketLogLoss:number|null;flatStakeNetUnits:number|null;flatStakeRoi:number|null;independentMatchDays:number}
-export interface ModelQualityReport {independentMatchDays:number;settled:number;won:number;hitRate:number|null;marketTopHitRate:number|null;brier:number|null;marketBrier:number|null;logLoss:number|null;marketLogLoss:number|null;blockers:string[];minimumSettled:number;minimumMatchDays:number;bySpBucket?:Record<string,ModelQualityCohort>;byModelPriceSignal?:Record<string,ModelQualityCohort>}
+export interface HitRateTargetCohort {
+  published:number;settled:number;won:number;pending:number;void:number;disputed:number;excludedSettlements:number;
+  pendingFromPastBusinessDays:number;pendingPastBusinessDays:number;independentMatchDays:number;hitRate:number|null;
+  hitRateInterval95:{lower:number;upper:number}|null;numericTargetReached:boolean|null;sampleSufficient:boolean;evidenceSufficient:boolean;blockers:string[];
+}
+export interface HitRateTarget {
+  targetHitRate:number;minimumSettled:number;minimumMatchDays:number;asOfBusinessDate:string;formalPromotion:false;
+  byModelVersion:Array<{modelVersion:string;overall:HitRateTargetCohort;windows:Record<'last7'|'last30',HitRateTargetCohort&{from:string;through:string}>}>;
+}
+export interface ModelQualityReport {independentMatchDays:number;settled:number;won:number;hitRate:number|null;marketTopHitRate:number|null;brier:number|null;marketBrier:number|null;logLoss:number|null;marketLogLoss:number|null;blockers:string[];minimumSettled:number;minimumMatchDays:number;bySpBucket?:Record<string,ModelQualityCohort>;byModelPriceSignal?:Record<string,ModelQualityCohort>;hitRateTarget?:HitRateTarget}
 export interface HandicapCalibrationGroup {
   key:string;rows:number;active:boolean;reason:string;bias:Record<Outcome,number>;meanRaw:Record<Outcome,number>;actualShare:Record<Outcome,number>;
   metrics?:{holdout?:number;rawBrier?:number;calibratedBrier?:number;rawLogLoss?:number;calibratedLogLoss?:number;rawHitRate?:number;calibratedHitRate?:number}|null;
@@ -111,7 +129,7 @@ export interface RecommendationCenterData {
   lanes:Partial<Record<'publish'|'combos'|'settlement'|'view',Lane>>;
   current:SingleRow[];previews:Combo[];todayCombos:ComboRow[];overlapDecisionIds:string[];
   todayDualResearch?:DualResearchV2Row[];
-  review:{singles:SingleRow[];combos:ComboRow[];limit:number;statistics:{single:Summary;qualifiedSingle?:Summary;handicap?:Summary;handicapBreakdown?:HandicapBreakdown;two:Summary;three:Summary};qualityReport?:ModelQualityReport;handicapCalibration?:HandicapCalibrationProfile;definition:string};
+  review:{singles:SingleRow[];combos:ComboRow[];limit:number;statistics:{single:Summary;supplementary?:SupplementarySummary;qualifiedSingle?:Summary;handicap?:Summary;handicapBreakdown?:HandicapBreakdown;two:Summary;three:Summary};qualityReport?:ModelQualityReport;handicapCalibration?:HandicapCalibrationProfile;definition:string};
   excludedCorruptRecords:number;modelValidation:'unvalidated';
   coverage?:DayCoverageData;
 }
@@ -197,7 +215,47 @@ function decision(v:unknown):Decision{
       ||! /^[a-f0-9]{64}$/.test(text(receipt.receiptHash))) throw new Error('Invalid copied lottery SP receipt');
   }
 
-  return {decisionId:text(d.decisionId),matchId:text(d.matchId),sourceMatchId:text(d.sourceMatchId),eventVersion:stamp(d.eventVersion),businessDate:date(d.businessDate),homeTeamName:text(d.homeTeamName),awayTeamName:text(d.awayTeamName),matchNo:d.matchNo==null?null:text(d.matchNo),publishedAt,kickoffTime,cutoffTime,tipCode,odds,probabilities,modelProbability,modelGeneratedAt,quoteObservedAt,recordHash,quoteSource,...(quoteOdds?{quoteOdds}:{}),handicapAnalysis:parsedHandicap};
+  return {decisionId:text(d.decisionId),matchId:text(d.matchId),sourceMatchId:text(d.sourceMatchId),eventVersion:stamp(d.eventVersion),businessDate:date(d.businessDate),homeTeamName:text(d.homeTeamName),awayTeamName:text(d.awayTeamName),matchNo:d.matchNo==null?null:text(d.matchNo),publishedAt,kickoffTime,cutoffTime,tipCode,odds,probabilities,modelProbability,modelGeneratedAt,quoteObservedAt,recordHash,quoteSource,...(quoteOdds?{quoteOdds}:{}),handicapAnalysis:parsedHandicap, supplementaryResearch:parseSupplementaryResearch(d)};
+}
+function parseSupplementaryResearch(d:Obj):SupplementaryResearch|null{
+  if(d.supplementaryPolicyVersion===undefined){if(d.supplementaryResearch!==undefined)throw new Error('Unversioned supplementary picks');return null;}
+  if(d.supplementaryPolicyVersion!=='supplementary-research-v1')throw new Error('Unsupported supplementary policy');
+  if(d.supplementaryResearch===null)return null;
+  const r=object(d.supplementaryResearch),h=object(d.handicapAnalysis),exact=object(r.exactScore),total=object(r.totalGoals);
+  const probability=(v:unknown)=>{const n=number(v);if(n<0||n>1)throw new Error('Invalid supplementary probability');return n;};
+  const home=count(exact.home),away=count(exact.away),p=probability(exact.probability),label=text(exact.label);
+  const totalLabel=text(total.label),totalProbability=probability(total.probability);
+  const distribution=list(total.distribution).map(value=>{const row=object(value);return {label:text(row.label),probability:probability(row.probability)};});
+  const code=(margin:number)=>margin>0?'1':margin<0?'2':'X';
+  const winner=distribution.reduce((best,row)=>row.probability>best.probability?row:best,{label:'',probability:-1});
+  if(r.version!=='supplementary-research-v1'||r.researchOnly!==true||r.formalPromotionEligible!==false||r.modelValidation!=='unvalidated'
+    ||r.priceStatus!=='official-sp-unavailable'||r.odds!==null||r.probabilityBasis!=='unconditional-score-matrix'
+    ||r.sourceMatchId!==d.sourceMatchId||r.eventVersion!==d.eventVersion||r.modelGeneratedAt!==d.modelGeneratedAt
+    ||r.hadInputHash!==d.hadInputHash||r.handicapInputHash!==h.inputHash
+    ||exact.rule!=='highest-probability-aligned-HAD-HHAD'||total.rule!=='highest-probability-total-bucket-lowest-tie'
+    ||label!==`${home}-${away}`||p<=0||code(home-away)!==d.tipCode||code(home-away+number(h.handicapLine))!==h.tipCode
+    ||distribution.length!==8||distribution.some((row,i)=>row.label!==(i===7?'7+':String(i)))
+    ||Math.abs(distribution.reduce((sum,row)=>sum+row.probability,0)-1)>1e-9
+    ||winner.label!==totalLabel||winner.probability!==totalProbability||! /^[a-f0-9]{64}$/.test(text(r.contentHash)))throw new Error('Invalid frozen supplementary picks');
+  return {version:'supplementary-research-v1',contentHash:String(r.contentHash),researchOnly:true,
+    exactScore:{home,away,label,probability:p},totalGoals:{label:totalLabel,probability:totalProbability,distribution}};
+}
+function supplementaryResults(value:unknown,d:Decision,parent:Settlement):SingleRow['supplementarySettlement']{
+  if(value==null)return null;
+  if(!d.supplementaryResearch)throw new Error('Supplementary result without frozen picks');
+  const raw=object(value);
+  const parse=(key:'exactScore'|'totalGoals'):SupplementaryResult=>{
+    const row=object(raw[key]),result:SupplementaryResult={state:state(row.state),resultEventId:row.resultEventId==null?null:text(row.resultEventId)};
+    if(result.resultEventId!==(parent.resultEventId??null))throw new Error('Supplementary result event mismatch');
+    if(['WON','LOST'].includes(parent.state)){
+      if(!parent.score)throw new Error('Missing official score');
+      const [home,away]=parent.score.split('-').map(Number),actual=key==='exactScore'?parent.score:home+away>=7?'7+':String(home+away);
+      if(row.actual!==actual||row.score!==parent.score||row.state!==(actual===d.supplementaryResearch![key].label?'WON':'LOST'))throw new Error('Supplementary settlement mismatch');
+      result.actual=actual;result.score=parent.score;
+    }else if(result.state!==parent.state||row.actual!=null||row.score!=null)throw new Error('Supplementary settlement state mismatch');
+    return result;
+  };
+  return {exactScore:parse('exactScore'),totalGoals:parse('totalGoals')};
 }
 function settlement(v:unknown):Settlement{
   const s=object(v),result:Settlement={state:state(s.state)};
@@ -253,6 +311,11 @@ function single(v:unknown):SingleRow{
     scores={version:p.version,status:p.status as PublishedScores['status'],decisionId:d.decisionId,recordHash:d.recordHash,topScores,alignedScores,totalGoals};
     if(scores.alignedScores.some(r=>r.hadCode!==d.tipCode||r.hhadCode!==d.handicapAnalysis?.tipCode))throw new Error('Incoherent aligned score');
   }
+  if(d.supplementaryResearch&&scores?.status==='available'){
+    const frozen=d.supplementaryResearch,aligned=scores.alignedScores[0];
+    if(!aligned||aligned.label!==frozen.exactScore.label||aligned.probability!==frozen.exactScore.probability
+      ||scores.totalGoals?.some((row,i)=>row.label!==frozen.totalGoals.distribution[i].label||row.probability!==frozen.totalGoals.distribution[i].probability))throw new Error('Supplementary picks differ from frozen matrix');
+  }
   if(x.outcomeResearch!=null){
     const r=object(x.outcomeResearch),category=r.category;
     if(r.version!=='outcome-category-research-v1'||r.decisionId!==d.decisionId||r.recordHash!==d.recordHash
@@ -289,7 +352,7 @@ function single(v:unknown):SingleRow{
     research={version:'outcome-category-research-v1',decisionId:d.decisionId,recordHash:d.recordHash,researchOnly:true,formalPromotionEligible:false,
       category:category as OutcomeCategoryResearch['category'],candidateCode,modelLeaderCode,marketFavoriteCode,researchQualified,reasons,evidenceCodes,outcomes};
   }
-  return {decision:d,settlement:s,handicapSettlement:hs,selectionQuality:quality,scoreDistribution:x.scoreDistribution===undefined?undefined:scores,outcomeResearch:x.outcomeResearch===undefined?undefined:research};
+  return {decision:d,settlement:s,handicapSettlement:hs,supplementarySettlement:supplementaryResults(x.supplementarySettlement,d,s),selectionQuality:quality,scoreDistribution:x.scoreDistribution===undefined?undefined:scores,outcomeResearch:x.outcomeResearch===undefined?undefined:research};
 }
 function comboSelection(v:unknown,parent:Decision,rawParent:Obj):ComboSelection{
   const s=object(v),market=s.market,tipCode=outcome(s.tipCode),handicapLine=number(s.handicapLine),odds=number(s.odds),modelProbability=number(s.modelProbability);
@@ -376,6 +439,13 @@ function summary(v:unknown):Summary{
   for(const k of ['brier','logLoss','marketBrier'] as const)if(s[k]!=null){r[k]=number(s[k]);if(r[k]!<0)throw new Error('Invalid model metric');}
   return r;
 }
+function supplementarySummary(v:unknown):SupplementarySummary{
+  const s=object(v);
+  if(s.version!=='supplementary-research-v1'||s.researchOnly!==true||s.modelValidation!=='unvalidated'||s.roi!==null)throw new Error('Invalid supplementary statistics');
+  const exactScore=summary(s.exactScore),totalGoals=summary(s.totalGoals);
+  if(['published','settled','pending','void','disputed'].some(key=>exactScore[key as keyof Summary]!==totalGoals[key as keyof Summary]))throw new Error('Supplementary denominator mismatch');
+  return {exactScore,totalGoals,excludedWithoutFrozenPicks:count(s.excludedWithoutFrozenPicks)};
+}
 export const parseRecommendationSummary=(value:unknown):Summary=>summary(value);
 function handicapBreakdown(v:unknown):HandicapBreakdown{
   const b=object(v),r:HandicapBreakdown={standaloneV1:summary(b.standaloneV1),companionV2All:summary(b.companionV2All),companionV2WhenHadWon:summary(b.companionV2WhenHadWon),companionV2BothWon:summary(b.companionV2BothWon)};
@@ -393,6 +463,51 @@ function calibrationProfile(v:unknown):HandicapCalibrationProfile{
   for(const [key,value] of Object.entries(groupsObj)){const parsed=calibrationGroup(value);if(parsed.key!==key)throw new Error('Calibration group key mismatch');groups[key]=parsed;}
   const profileHash=text(p.profileHash);if(!/^[a-f0-9]{64}$/.test(profileHash))throw new Error('Invalid calibration profile hash');
   return {version:text(p.version),profileHash,sampleRows:count(p.sampleRows),groups};
+}
+function hitRateTarget(value:unknown):HitRateTarget{
+ const t=object(value);
+ if(t.version!=='had-hit-rate-target-v1'||t.market!=='HAD'||t.scope!=='per-model-version-final-precutoff-published-single'
+   ||t.thresholdScope!=='observational-target-only-not-formal-promotion'||t.evidenceRule!=='minimum-samples-and-days-and-95pct-wilson-lower-bound-at-target'
+   ||t.formalPromotion!==false||t.targetHitRate!==.65||t.minimumSettled!==100||t.minimumMatchDays!==7)throw new Error('Invalid hit-rate target policy');
+ const through=date(t.asOfBusinessDate),target=.65,minimumSettled=100,minimumMatchDays=7;
+ const parseCohort=(raw:unknown):HitRateTargetCohort=>{
+  const c=object(raw),published=count(c.published),settled=count(c.settled),won=count(c.won),pending=count(c.pending),voided=count(c.void),disputed=count(c.disputed),excludedSettlements=count(c.excludedSettlements),days=count(c.independentMatchDays);
+  const pendingFromPastBusinessDays=count(c.pendingFromPastBusinessDays),pendingPastBusinessDays=count(c.pendingPastBusinessDays);
+  const hitRate=c.hitRate===null?null:number(c.hitRate);
+  if(won>settled||published!==settled+pending+voided+disputed+excludedSettlements||hitRate!==(settled?won/settled:null)
+    ||days>settled||(settled===0?days!==0:days===0)||pendingFromPastBusinessDays>pending||pendingPastBusinessDays>pendingFromPastBusinessDays
+    ||(pendingFromPastBusinessDays===0?pendingPastBusinessDays!==0:pendingPastBusinessDays===0))throw new Error('Invalid hit-rate target counts');
+  let interval:HitRateTargetCohort['hitRateInterval95']=null;
+  if(settled){
+   const rawInterval=object(c.hitRateInterval95),lower=number(rawInterval.lower),upper=number(rawInterval.upper),z=1.959963984540054,p=won/settled,den=1+z*z/settled;
+   const center=(p+z*z/(2*settled))/den,spread=z*Math.sqrt(p*(1-p)/settled+z*z/(4*settled*settled))/den;
+   if(Math.abs(lower-Math.max(0,center-spread))>1e-10||Math.abs(upper-Math.min(1,center+spread))>1e-10)throw new Error('Invalid hit-rate target interval');
+   interval={lower,upper};
+  }else if(c.hitRateInterval95!==null)throw new Error('Empty hit-rate target interval');
+  const numericTargetReached=hitRate===null?null:hitRate>=target,sampleSufficient=settled>=minimumSettled&&days>=minimumMatchDays;
+  const blockers=[...(settled<minimumSettled?['insufficient-settled-events']:[]),...(days<minimumMatchDays?['insufficient-independent-match-days']:[]),...(!interval||interval.lower<target?['confidence-lower-bound-below-target']:[])];
+  const actualBlockers=list(c.blockers).map(text);
+  if(c.numericTargetReached!==numericTargetReached||c.sampleSufficient!==sampleSufficient||c.evidenceSufficient!==(blockers.length===0)
+    ||actualBlockers.length!==blockers.length||new Set(actualBlockers).size!==actualBlockers.length||blockers.some(key=>!actualBlockers.includes(key)))throw new Error('Invalid hit-rate target status');
+  return {published,settled,won,pending,void:voided,disputed,excludedSettlements,pendingFromPastBusinessDays,pendingPastBusinessDays,independentMatchDays:days,hitRate,hitRateInterval95:interval,numericTargetReached,sampleSufficient,evidenceSufficient:blockers.length===0,blockers};
+ };
+ const byModelVersion=list(t.byModelVersion).map(raw=>{
+  const g=object(raw),modelVersion=text(g.modelVersion),overall=parseCohort(g.overall),w=object(g.windows);
+  if(modelVersion==='unknown')throw new Error('Missing hit-rate target model version');
+  const window=(key:'last7'|'last30',days:number)=>{
+   const raw=object(w[key]),from=date(raw.from),end=date(raw.through),cohort=parseCohort(raw);
+   const expected=new Date(Date.parse(through+'T00:00:00Z')-(days-1)*86400000).toISOString().slice(0,10);
+   if(from!==expected||end!==through||cohort.independentMatchDays>days||cohort.pendingPastBusinessDays>days-1)throw new Error('Invalid hit-rate target window');
+   return {...cohort,from,through:end};
+  };
+  const windows={last7:window('last7',7),last30:window('last30',30)};
+  for(const key of ['published','settled','won','pending','void','disputed','excludedSettlements','independentMatchDays','pendingFromPastBusinessDays','pendingPastBusinessDays'] as const){
+   if(windows.last7[key]>windows.last30[key]||windows.last30[key]>overall[key])throw new Error('Inconsistent hit-rate target windows');
+  }
+  return {modelVersion,overall,windows};
+ });
+ if(new Set(byModelVersion.map(g=>g.modelVersion)).size!==byModelVersion.length)throw new Error('Duplicate hit-rate target model version');
+ return {targetHitRate:target,minimumSettled,minimumMatchDays,asOfBusinessDate:through,formalPromotion:false,byModelVersion};
 }
 function modelQuality(v:unknown):ModelQualityReport{
  const q=object(v),m=object(q.overall),policy=object(q.policy);
@@ -422,7 +537,7 @@ function modelQuality(v:unknown):ModelQualityReport{
   }
   return result;
  };
- return {independentMatchDays:count(q.independentMatchDays),settled:totalSettled,won:totalWon,hitRate:metric('hitRate'),marketTopHitRate:metric('marketTopHitRate'),brier:metric('brier'),marketBrier:metric('marketBrier'),logLoss:metric('logLoss'),marketLogLoss:metric('marketLogLoss'),blockers:list(q.blockers).map(text),minimumSettled:count(policy.minimumSettled),minimumMatchDays:count(policy.minimumMatchDays),bySpBucket:group(q.bySpBucket,['sp_le_1_45','sp_gt_1_45_le_1_70','sp_gt_1_70_le_2_05','sp_gt_2_05_le_2_60','sp_gt_2_60']),byModelPriceSignal:group(q.byModelPriceSignal,['negative','nonnegative'])};
+ return {independentMatchDays:count(q.independentMatchDays),settled:totalSettled,won:totalWon,hitRate:metric('hitRate'),marketTopHitRate:metric('marketTopHitRate'),brier:metric('brier'),marketBrier:metric('marketBrier'),logLoss:metric('logLoss'),marketLogLoss:metric('marketLogLoss'),blockers:list(q.blockers).map(text),minimumSettled:count(policy.minimumSettled),minimumMatchDays:count(policy.minimumMatchDays),bySpBucket:group(q.bySpBucket,['sp_le_1_45','sp_gt_1_45_le_1_70','sp_gt_1_70_le_2_05','sp_gt_2_05_le_2_60','sp_gt_2_60']),byModelPriceSignal:group(q.byModelPriceSignal,['negative','nonnegative']),hitRateTarget:q.hitRateTarget==null?undefined:hitRateTarget(q.hitRateTarget)};
 }
 function dayCoverage(value:unknown):DayCoverageData{
   const c=object(value),targetCount=count(c.targetCount),publishableCount=count(c.publishableCount),qualifiedCount=count(c.qualifiedCount),unqualifiedCount=count(c.unqualifiedCount),missingTotal=count(c.missingTotal);
@@ -438,7 +553,7 @@ export function parseRecommendationCenter(response:unknown):RecommendationCenter
   if(x.version!=='recommendation-center-v1'||x.modelValidation!=='unvalidated')throw new Error('Unsupported center contract');
   const parsedLanes:RecommendationCenterData['lanes']={};
   for(const k of ['publish','combos','settlement','view'] as const){if(lanes[k]==null)continue;const l=object(lanes[k]);if(l.status!=='ok'&&l.status!=='error')throw new Error('Invalid lane status');parsedLanes[k]={status:l.status,lastAttemptAt:stamp(l.lastAttemptAt),lastSuccessAt:l.lastSuccessAt==null?undefined:stamp(l.lastSuccessAt),errorCode:l.errorCode==null?null:text(l.errorCode),inputAsOf:l.inputAsOf==null?undefined:stamp(l.inputAsOf),candidateCount:l.candidateCount==null?undefined:count(l.candidateCount),eligibleCount:l.eligibleCount==null?undefined:count(l.eligibleCount),bindingFailures:l.bindingFailures==null?undefined:count(l.bindingFailures),referenceCount:l.referenceCount==null?undefined:count(l.referenceCount),watchCount:l.watchCount==null?undefined:count(l.watchCount)};}
-  const result:RecommendationCenterData={version:'recommendation-center-v1',updatedAt:stamp(x.updatedAt),businessDate:date(x.businessDate),inputAsOf:x.inputAsOf==null?null:stamp(x.inputAsOf),resultAsOf:x.resultAsOf==null?null:stamp(x.resultAsOf),lanes:parsedLanes,current:list(x.current).map(single),previews:list(x.previews).map(combo),todayCombos:list(x.todayCombos).map(comboRow),todayDualResearch:x.todayDualResearch==null?[]:list(x.todayDualResearch).map(dualResearchV2),overlapDecisionIds:list(x.overlapDecisionIds).map(text),review:{singles:list(review.singles).map(single),combos:list(review.combos).map(comboRow),limit:count(review.limit),qualityReport:review.qualityReport==null?undefined:modelQuality(review.qualityReport),statistics:{single:summary(stats.single),qualifiedSingle:stats.qualifiedSingle==null?undefined:summary(stats.qualifiedSingle),handicap:stats.handicap==null?undefined:summary(stats.handicap),handicapBreakdown:stats.handicapBreakdown==null?undefined:handicapBreakdown(stats.handicapBreakdown),two:summary(stats.two),three:summary(stats.three)},handicapCalibration:review.handicapCalibration==null?undefined:calibrationProfile(review.handicapCalibration),definition:text(review.definition)},excludedCorruptRecords:count(x.excludedCorruptRecords),modelValidation:'unvalidated',coverage:x.coverage==null?undefined:dayCoverage(x.coverage)};
+  const result:RecommendationCenterData={version:'recommendation-center-v1',updatedAt:stamp(x.updatedAt),businessDate:date(x.businessDate),inputAsOf:x.inputAsOf==null?null:stamp(x.inputAsOf),resultAsOf:x.resultAsOf==null?null:stamp(x.resultAsOf),lanes:parsedLanes,current:list(x.current).map(single),previews:list(x.previews).map(combo),todayCombos:list(x.todayCombos).map(comboRow),todayDualResearch:x.todayDualResearch==null?[]:list(x.todayDualResearch).map(dualResearchV2),overlapDecisionIds:list(x.overlapDecisionIds).map(text),review:{singles:list(review.singles).map(single),combos:list(review.combos).map(comboRow),limit:count(review.limit),qualityReport:review.qualityReport==null?undefined:modelQuality(review.qualityReport),statistics:{single:summary(stats.single),supplementary:stats.supplementary==null?undefined:supplementarySummary(stats.supplementary),qualifiedSingle:stats.qualifiedSingle==null?undefined:summary(stats.qualifiedSingle),handicap:stats.handicap==null?undefined:summary(stats.handicap),handicapBreakdown:stats.handicapBreakdown==null?undefined:handicapBreakdown(stats.handicapBreakdown),two:summary(stats.two),three:summary(stats.three)},handicapCalibration:review.handicapCalibration==null?undefined:calibrationProfile(review.handicapCalibration),definition:text(review.definition)},excludedCorruptRecords:count(x.excludedCorruptRecords),modelValidation:'unvalidated',coverage:x.coverage==null?undefined:dayCoverage(x.coverage)};
   if(result.coverage&&result.coverage.businessDate!==result.businessDate)throw new Error('Day coverage date mismatch');
   if(new Set(result.current.map(r=>r.decision.decisionId)).size!==result.current.length)throw new Error('Duplicate current decision');
   if(result.todayDualResearch?.some(r=>r.businessDate!==result.businessDate)

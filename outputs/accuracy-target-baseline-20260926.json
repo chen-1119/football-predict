@@ -1,0 +1,84 @@
+{
+  "version": "accuracy-target-live-baseline-v1",
+  "observedAt": "2026-09-26T22:53:08.795797+08:00",
+  "projectionUpdatedAt": "2026-09-26T14:52:55.953Z",
+  "source": "read-only aggregate query of production recommendationCenter projection",
+  "productionWrites": 0,
+  "target": { "market": "HAD", "selectionCount": 1, "hitRate": 0.65 },
+  "denominator": "latest published frozen HAD single decision per event; settled WON and LOST only; not the legacy reference archive or formal-promotion track",
+  "modelValidation": "unvalidated",
+  "windows": {
+    "7d": {
+      "startBusinessDate": "2026-09-20",
+      "endBusinessDate": "2026-09-26",
+      "published": 78,
+      "settled": 49,
+      "won": 28,
+      "lost": 21,
+      "pending": 29,
+      "hitRate": 0.5714285714285714,
+      "sameEventMarketWon": 29,
+      "sameEventMarketHitRate": 0.5918367346938775,
+      "independentSettledMatchDays": 6,
+      "fixtureCoverage": null
+    },
+    "30d": {
+      "startBusinessDate": "2026-08-28",
+      "endBusinessDate": "2026-09-26",
+      "firstObservedPublicationDay": "2026-09-18",
+      "published": 118,
+      "settled": 74,
+      "won": 40,
+      "lost": 34,
+      "pending": 44,
+      "hitRate": 0.5405405405405406,
+      "sameEventMarketWon": 41,
+      "sameEventMarketHitRate": 0.5540540540540541,
+      "independentSettledMatchDays": 8,
+      "fixtureCoverage": null
+    }
+  },
+  "overall": {
+    "settled": 74,
+    "won": 40,
+    "hitRate": 0.5405405405405406,
+    "hitRateInterval95": { "lower": 0.4278134568803063, "upper": 0.649266290736203 },
+    "brier": 0.6030182220390975,
+    "sameEventMarketBrier": 0.5524081090031229,
+    "logLoss": 1.008429505720347,
+    "sameEventMarketLogLoss": 0.9367960144012916,
+    "flatStakeRoi": -0.05148648648648647,
+    "scope": "existing frozen publication ledger; mixed historical model versions"
+  },
+  "byTipCode": {
+    "1": { "settled": 53, "won": 33, "hitRate": 0.6226415094339622 },
+    "X": { "settled": 0, "won": 0, "hitRate": null },
+    "2": { "settled": 21, "won": 7, "hitRate": 0.3333333333333333 }
+  },
+  "byMarketLeaderAgreement": {
+    "agree": { "settled": 60, "won": 36, "hitRate": 0.6 },
+    "disagree": { "settled": 14, "won": 4, "hitRate": 0.2857142857142857 }
+  },
+  "currentDayCoverage": {
+    "businessDate": "2026-09-26",
+    "targetCount": 25,
+    "publishableCount": 25,
+    "qualifiedReferenceCount": 2,
+    "qualifiedReferenceCoverage": 0.08,
+    "formalPromotion": false
+  },
+  "pendingByBusinessDate": [
+    { "date": "2026-09-18", "pending": 2 },
+    { "date": "2026-09-19", "pending": 13 },
+    { "date": "2026-09-20", "pending": 11 },
+    { "date": "2026-09-26", "pending": 18 }
+  ],
+  "formalReviewDaily": { "rows": 0, "verified7DayHitRate": null, "verified30DayHitRate": null },
+  "limitations": [
+    "Only eight settled business days are observed; the 30-day window is not 30 independent evaluation days.",
+    "Twenty-six historical published events remain unsettled and must not be deleted to improve displayed accuracy.",
+    "Historical full-fixture coverage is unavailable from this publication-ledger projection.",
+    "Draw, market-disagreement, handicap, two-choice research, score and goals require separate denominators.",
+    "These aggregates do not prove formal promotion or a 65 percent out-of-sample success rate."
+  ]
+}

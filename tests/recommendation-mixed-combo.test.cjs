@@ -25,8 +25,8 @@ function legacy(combo){
 
 test('mixed market ranking uses independent probability while preserving immutable HAD parents',()=>{
   const d=decide(input()),before=JSON.stringify(d),c=chooseCombo([d,plain(2)],2,NOW);
-  assert.equal(c.version,'unified-combo-v3');assert.deepEqual(c.selections.map(s=>s.market),['HHAD','HAD']);
-  const s=c.selections[0];assert.equal(s.probabilityBasis,'unconditional');assert.equal(s.modelProbability,d.handicapAnalysis.overallProbabilities[s.tipCode]);
+  assert.equal(c.version,'unified-combo-v3');assert.deepEqual(c.selections.map(s=>s.market).sort(),['HAD','HHAD']);
+  const s=c.selections.find(s=>s.decisionId===d.decisionId);assert.equal(s.probabilityBasis,'unconditional');assert.equal(s.modelProbability,d.handicapAnalysis.overallProbabilities[s.tipCode]);
   assert.equal(s.odds,d.handicapAnalysis.marketReference.odds[s.tipCode]);assert.equal(s.decisionRecordHash,d.recordHash);
   assert.equal(c.rawTotalOdds,2.05*1.8);assert.equal(c.jointProbability,null);assert.equal(JSON.stringify(d),before);
   assert.equal(validSelection(s,d),true);assert.equal(validCombo(c),true);assert.ok(freezeCombo(c,NOW));
@@ -41,10 +41,11 @@ test('unchanged HHAD input keeps one decision identity on retry while stored tim
   assert.equal(validDecision(a),true);assert.equal(validDecision(b),true);
 });
 test('HHAD settles the frozen integer handicap and corrects without rewriting the combination',()=>{
-  const c=freezeCombo(mixed(),NOW),before=JSON.stringify(c),h=heads(c,[[0,0],[1,0]]);
-  assert.equal(c.selections[0].handicapLine,1);assert.equal(settleCombo(c,h).state,'WON');
-  assert.equal(settleCombo(c,h).legs[0].actual,'1');
-  h.get(key(c.legs[0])).scoreAway=2;assert.equal(settleCombo(c,h).state,'LOST');
+  const c=freezeCombo(mixed(),NOW),before=JSON.stringify(c),index=c.selections.findIndex(s=>s.market==='HHAD');
+  const h=heads(c,c.selections.map(s=>s.market==='HHAD'?[0,0]:[1,0]));
+  assert.equal(c.selections[index].handicapLine,1);assert.equal(settleCombo(c,h).state,'WON');
+  assert.equal(settleCombo(c,h).legs[index].actual,'1');
+  h.get(key(c.legs[index])).scoreAway=2;assert.equal(settleCombo(c,h).state,'LOST');
   assert.equal(JSON.stringify(c),before);
 });
 test('minus-one independent direction may differ from the companion and uses its own SP and draw boundary',()=>{
@@ -72,7 +73,7 @@ test('absent, future and unverified HHAD quotes cannot enter the candidate pool'
 });
 test('HHAD quote age is checked independently again at freeze time',()=>{
   const d=decide(input(1,{handicapOddsUpdatedAt:new Date(NOW-14*60000).toISOString()})),c=chooseCombo([d,plain(2)],2,NOW);
-  assert.equal(c.selections[0].market,'HHAD');assert.equal(freezeCombo(c,NOW+2*60000),null);
+  assert.equal(c.selections.find(s=>s.decisionId===d.decisionId).market,'HHAD');assert.equal(freezeCombo(c,NOW+2*60000),null);
 });
 test('a match cannot fill two legs through HAD and HHAD or repeated input rows',()=>{
   const d=decide(input());assert.equal(candidatesFor(d,NOW).length,2);

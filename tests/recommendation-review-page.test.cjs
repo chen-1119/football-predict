@@ -113,6 +113,8 @@ test('HAD and HHAD remain separate denominators; missing HHAD odds is explicit',
   const older = structuredClone(decision);
   older.handicapAnalysis = require('./fixtures/handicap-margin-v2.json');
   delete older.selectionPolicyVersion;
+  delete older.supplementaryPolicyVersion;
+  delete older.supplementaryResearch;
   older.inputEvidence.model.handicapMarginInputHash = older.handicapAnalysis.inputHash;
   older.inputHash = hash({ hadInputHash: older.hadInputHash, handicapInputHash: older.handicapAnalysis.inputHash });
   older.decisionId = `decision_${hash([older.version, older.sourceMatchId, older.eventVersion, older.market, older.inputHash])}`;

@@ -115,3 +115,86 @@ test('frozen SP and model-price groups partition the same settled events and ret
  assert.equal(empty.preliminaryEvidenceSufficient,false);
  assert.equal(empty.formalPromotion,false);
 });
+
+function datedRow(id,date,actual='1',version='model-v76'){
+ const at=Date.parse(date+'T02:00:00Z');
+ return row(id,at-now,actual,{businessDate:date,kickoffTime:date+'T10:00:00Z',eventVersion:date+'T10:00:00Z',
+  probabilityModel:{version,generatedAt:new Date(at).toISOString(),oneXTwo:{final:{home:55,draw:25,away:20}}}});
+}
+function changedDecision(source,patch){
+ const result=structuredClone(source);Object.assign(result.decision,patch);
+ const {recordHash,...body}=result.decision;
+ result.decision.recordHash=require('../src/services/publishedForecastPolicy.cjs').hash(body);
+ return result;
+}
+test('65 percent target separates model versions, keeps final publications once and excludes other statistics tracks',()=>{
+ const older=row(301),newer=row(301,60000,'2',{probabilityModel:{version:'model-v76',generatedAt:new Date(now+60000).toISOString(),oneXTwo:{final:{home:55,draw:25,away:20}}}});
+ const oldModel=row(302),research=changedDecision(row(303),{statisticsTrack:'dual-choice-research'});
+ const unpublished=changedDecision(row(304),{publicationStatus:'RESEARCH'});
+ const legacy=changedDecision(row(305),{upstreamModelVersion:'unknown'});
+ const r=buildQualityReport([older,newer,structuredClone(newer),oldModel,research,unpublished,legacy],{asOf:now+86400000});
+ const target=r.hitRateTarget,groups=Object.fromEntries(target.byModelVersion.map(group=>[group.modelVersion,group]));
+ assert.equal(groups['model-v76'].overall.settled,1);assert.equal(groups['model-v76'].overall.won,0);
+ assert.equal(groups.test.overall.settled,1);assert.equal(groups.test.overall.won,1);
+ assert.equal(target.exclusions.notPublishedHadSingle,2);assert.equal(target.exclusions.missingModelVersion,1);
+ assert.equal(target.targetHitRate,.65);assert.equal(target.formalPromotion,false);assert.equal(r.formalPromotion,false);
+ assert.equal(target.thresholdScope,'observational-target-only-not-formal-promotion');
+});
+test('target windows use strict inclusive Beijing business dates, not rolling hours or kickoff dates',()=>{
+ const asOf=Date.parse('2026-10-01T16:00:00Z'); // Beijing October 2; UTC remains October 1.
+ const rows=[datedRow(311,'2026-10-02'),datedRow(312,'2026-09-26'),datedRow(313,'2026-09-25'),
+  datedRow(314,'2026-09-03'),datedRow(315,'2026-09-02')];
+ const malformed=changedDecision(datedRow(316,'2026-09-29'),{businessDate:'2026-09-31'});
+ const future=changedDecision(datedRow(317,'2026-09-29'),{businessDate:'2026-10-03'});
+ // This already-published row belongs to October 2 even though its kickoff
+ // is later; an asserted early score must not count before kickoff.
+ const publishedToday=changedDecision(datedRow(318,'2026-10-01'),{businessDate:'2026-10-02'});
+ const r=buildQualityReport([...rows,malformed,future,publishedToday],{asOf}).hitRateTarget;
+ const group=r.byModelVersion[0];
+ assert.equal(r.asOfBusinessDate,'2026-10-02');assert.equal(r.exclusions.futurePublications,1);
+ assert.equal(r.exclusions.invalidBusinessDate,1);assert.equal(r.exclusions.futureBusinessDate,1);
+ assert.equal(group.windows.last7.from,'2026-09-26');assert.equal(group.windows.last7.through,'2026-10-02');
+ assert.equal(group.windows.last7.settled,2);assert.equal(group.windows.last30.from,'2026-09-03');
+ assert.equal(group.windows.last30.settled,4);assert.equal(group.overall.settled,5);
+ const again=buildQualityReport([...rows,malformed,future,publishedToday],{asOf}).hitRateTarget;
+ assert.deepEqual(r,again);
+});
+test('a 65 percent estimate is not sufficient evidence; enough independent days and a supporting confidence interval are required',()=>{
+ const cohort=(won)=>Array.from({length:100},(_,i)=>datedRow(400+i,`2026-09-${String(20+i%7).padStart(2,'0')}`,i<won?'1':'2'));
+ const options={asOf:Date.parse('2026-09-26T14:00:00Z')};
+ const r=buildQualityReport(cohort(65),options).hitRateTarget.byModelVersion[0].windows.last7;
+ assert.equal(r.settled,100);assert.equal(r.won,65);assert.equal(r.hitRate,.65);
+ assert.equal(r.independentMatchDays,7);assert.equal(r.numericTargetReached,true);assert.equal(r.sampleSufficient,true);
+ assert.equal(r.evidenceSufficient,false);assert(r.blockers.includes('confidence-lower-bound-below-target'));
+ const strong=buildQualityReport(cohort(90),options).hitRateTarget.byModelVersion[0].windows.last7;
+ assert.equal(strong.numericTargetReached,true);assert.equal(strong.evidenceSufficient,true);
+ const concentrated=buildQualityReport(Array.from({length:100},(_,i)=>datedRow(600+i,'2026-09-26')),options).hitRateTarget.byModelVersion[0].overall;
+ assert.equal(concentrated.hitRate,1);assert.equal(concentrated.sampleSufficient,false);assert.equal(concentrated.evidenceSufficient,false);
+ assert(concentrated.blockers.includes('insufficient-independent-match-days'));
+});
+test('pending old business days are visible without becoming losses and empty new-version windows stay null',()=>{
+ const dates=['2026-09-18','2026-09-18','2026-09-19'];
+ const pending=dates.map((date,i)=>{const r=datedRow(710+i,date);r.settlement={state:'PENDING'};return r;});
+ const voided=datedRow(714,'2026-09-19');voided.settlement={state:'VOID'};
+ const disputed=datedRow(715,'2026-09-19');disputed.settlement={state:'DISPUTED'};
+ const asOf=Date.parse('2026-09-26T03:00:00Z'),today=datedRow(716,'2026-09-26');today.settlement={state:'PENDING'};
+ const impossible=datedRow(717,'2026-09-26'); // Claimed result before kickoff is excluded.
+ const group=buildQualityReport([...pending,voided,disputed,today,impossible],{asOf}).hitRateTarget.byModelVersion[0];
+ assert.equal(group.overall.published,7);assert.equal(group.overall.pending,4);
+ assert.equal(group.overall.pendingFromPastBusinessDays,3);assert.equal(group.overall.pendingPastBusinessDays,2);
+ assert.equal(group.overall.void,1);assert.equal(group.overall.disputed,1);assert.equal(group.overall.excludedSettlements,1);
+ for(const value of [group.overall,group.windows.last7,group.windows.last30]){
+  assert.equal(value.settled,0);assert.equal(value.hitRate,null);assert.equal(value.numericTargetReached,null);
+  assert.equal(value.sampleSufficient,false);assert.equal(value.evidenceSufficient,false);
+  assert.equal(value.marketComparison.modelHitRate,null);assert.equal(value.marketComparison.marketHitRate,null);
+ }
+ assert.equal(group.windows.last7.pending,1);assert.equal(group.windows.last7.pendingFromPastBusinessDays,0);
+ assert.deepEqual(buildQualityReport([],{asOf}).hitRateTarget.byModelVersion,[]);
+});
+test('target model and market hit rates compare the same unique-market subset while preserving all HAD outcomes',()=>{
+ const win=row(801),loss=row(802,0,'2');
+ const tie=changedDecision(row(803),{marketProbabilities:{'1':.4,X:.4,'2':.2}});
+ const group=buildQualityReport([win,loss,tie],{asOf:now+86400000}).hitRateTarget.byModelVersion[0].overall;
+ assert.equal(group.settled,3);assert.equal(group.hitRate,2/3);
+ assert.deepEqual(group.marketComparison,{settled:2,modelWins:1,modelHitRate:.5,marketWins:1,marketHitRate:.5,hitRateDifference:0,excludedMarketTies:1});
+});

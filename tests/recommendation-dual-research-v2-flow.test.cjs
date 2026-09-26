@@ -24,7 +24,7 @@ function compile(file,load){
   const module={exports:{}};
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname,file),'utf8'),
     {compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,
-  {module,exports:module.exports,require:load,Date,Intl,Set});
+  {module,exports:module.exports,require:id=>id.endsWith('/publishedRecommendationStatus.cjs')?require('../src/services/publishedRecommendationStatus.cjs'):load(id),Date,Intl,Set});
   return module.exports;
 }
 

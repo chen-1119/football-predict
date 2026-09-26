@@ -864,12 +864,148 @@ const buildWalkForwardValidation = ({
   return artifact;
 };
 
+// Additional diagnostic evidence only. Keep the v3 row-based promotion artifact
+// and its verifier unchanged; a day-grouped review cannot activate a model.
+const buildMatchDayWalkForwardResearch = ({
+  rows = [], candidates = [], minimumTrainingRows = 80,
+  minimumEvaluationRows = 40, requiredFolds = PROMOTION_MIN_REQUIRED_FOLDS,
+  minimumPassRate = PROMOTION_MIN_PASS_RATE,
+} = {}) => {
+  if (![minimumTrainingRows, minimumEvaluationRows, requiredFolds].every(n => Number.isSafeInteger(n) && n > 0)
+      || !Number.isFinite(minimumPassRate) || minimumPassRate < 0 || minimumPassRate > 1) {
+    throw new TypeError("Valid match-day research thresholds required");
+  }
+  const validDay = value => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)
+    && Number.isFinite(Date.parse(`${value}T00:00:00Z`))
+    && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value;
+  const input = Array.isArray(rows) ? rows : [];
+  const exclusions = { missingBusinessDate: 0, invalidBusinessDate: 0, conflictingBusinessDates: 0 };
+  const dated = [], datesByKey = new Map();
+  for (const row of input) {
+    if (row?.businessDate === null || row?.businessDate === undefined || row.businessDate === "") {
+      exclusions.missingBusinessDate++; continue;
+    }
+    if (!validDay(row.businessDate)) { exclusions.invalidBusinessDate++; continue; }
+    const key = rowKey(row), dates = datesByKey.get(key) || new Set();
+    dates.add(row.businessDate); datesByKey.set(key, dates); dated.push(row);
+  }
+  exclusions.conflictingBusinessDates = [...datesByKey.values()].filter(dates => dates.size > 1).length;
+  const canonical = canonicalizeBaseRows(dated);
+  const descriptors = (Array.isArray(candidates) ? candidates : [])
+    .filter(candidate => candidate?.id && candidate.id !== "market-baseline" && candidateUsesModelSignal(candidate))
+    .map(candidate => buildCandidateDescriptor(candidate, canonical.index))
+    // The caller may rank candidates using all outcomes. Resolve training ties
+    // by immutable identity, never by that evaluation-informed input order.
+    .sort((a, b) => a.manifest.id < b.manifest.id ? -1 : a.manifest.id > b.manifest.id ? 1
+      : a.manifest.specHash < b.manifest.specHash ? -1 : a.manifest.specHash > b.manifest.specHash ? 1 : 0);
+  const candidateConflicts = descriptors.reduce((n, descriptor) => n + descriptor.conflicts.length, 0);
+  const candidateDateBindings = { explicit: 0, matched: 0, inherited: 0, conflicts: 0 };
+  for (const descriptor of descriptors) {
+    for (const row of candidateRows(descriptor.candidate)) {
+      if (!row || !Object.prototype.hasOwnProperty.call(row, "businessDate")) {
+        candidateDateBindings.inherited++; continue;
+      }
+      candidateDateBindings.explicit++;
+      const base = canonical.index.get(rowKey(row))?.row;
+      if (!validDay(row.businessDate) || !base || row.businessDate !== base.businessDate) {
+        candidateDateBindings.conflicts++;
+      } else candidateDateBindings.matched++;
+    }
+  }
+  const dayMap = new Map();
+  for (const row of canonical.rows) {
+    const group = dayMap.get(row.businessDate) || [];
+    group.push(row); dayMap.set(row.businessDate, group);
+  }
+  const days = [...dayMap.keys()].sort(), folds = [], boundaries = [], blockers = [];
+  if (exclusions.missingBusinessDate) blockers.push("business-date-missing");
+  if (exclusions.invalidBusinessDate) blockers.push("business-date-invalid");
+  if (exclusions.conflictingBusinessDates) blockers.push("business-date-conflict");
+  if (canonical.conflicts.length) blockers.push("base-row-conflict");
+  if (canonical.rejectedRows) blockers.push("invalid-base-rows");
+  if (candidateConflicts) blockers.push("candidate-row-conflict");
+  if (candidateDateBindings.conflicts) blockers.push("candidate-business-date-conflict");
+  if (new Set(descriptors.map(d => d.candidate.id)).size !== descriptors.length) blockers.push("candidate-id-conflict");
+  if (!descriptors.length) blockers.push("model-candidates-missing");
+  // Missing/invalid rows may hide an unobserved result on an otherwise usable
+  // day. Do not claim whole-day evidence by silently dropping those rows.
+  if (!blockers.length) {
+    let start = 0;
+    while (start < days.length) {
+      let end = start, evaluationRows = [];
+      while (end < days.length && evaluationRows.length < minimumEvaluationRows) {
+        evaluationRows.push(...dayMap.get(days[end++]));
+      }
+      if (evaluationRows.length < minimumEvaluationRows) {
+        boundaries.push({ startBusinessDate: days[start], reason: "incomplete-final-evaluation-block", rows: evaluationRows.length });
+        break;
+      }
+      const evaluationStartedMs = Math.min(...evaluationRows.map(row => timeMs(row.forecastTime || row.kickoffTime)));
+      const priorDays = days.slice(0, start);
+      const trainingDays = priorDays.filter(date => dayMap.get(date)
+        .every(row => timeMs(row.resultObservedAt) < evaluationStartedMs));
+      const trainingRows = trainingDays.flatMap(date => dayMap.get(date));
+      const excludedUnobservedDays = priorDays.filter(date => !trainingDays.includes(date));
+      if (trainingRows.length < minimumTrainingRows) {
+        boundaries.push({ startBusinessDate: days[start], reason: "insufficient-fully-observed-training-days", rows: trainingRows.length, excludedUnobservedDays });
+        if (folds.length) { blockers.push("continuous-evaluation-training-gap"); break; }
+        start++; continue;
+      }
+      const trainingKeys = trainingRows.map(rowKey), evaluationKeys = evaluationRows.map(rowKey);
+      const selected = selectTrainingCandidate(descriptors, canonical.index, trainingKeys);
+      if (!selected) { blockers.push("training-candidate-coverage-gap"); break; }
+      const evaluated = pairedMetricsForKeys(selected.descriptor.index, canonical.index, evaluationKeys);
+      if (evaluated.coveredKeys.length !== evaluationRows.length) {
+        blockers.push("evaluation-candidate-coverage-gap");
+        boundaries.push({ startBusinessDate: days[start], selectedCandidateId: selected.descriptor.candidate.id,
+          reason: "evaluation-candidate-coverage-gap", expectedRows: evaluationRows.length, coveredRows: evaluated.coveredKeys.length });
+        break;
+      }
+      const trainingWatermarkMs = Math.max(...trainingRows.map(row => timeMs(row.resultObservedAt)));
+      folds.push({ index: folds.length + 1, selectedCandidateId: selected.descriptor.candidate.id,
+        selectedCandidateSpecHash: selected.descriptor.manifest.specHash,
+        training: { businessDates: trainingDays, rows: trainingRows.length, excludedUnobservedDays,
+          model: selected.model, market: selected.market, comparison: selected.comparison },
+        evaluation: { businessDates: days.slice(start, end), rows: evaluationRows.length,
+          model: evaluated.model, market: evaluated.market, comparison: evaluated.comparison },
+        watermark: { trainingDataMaxObservedAt: new Date(trainingWatermarkMs).toISOString(),
+          evaluationWindowStartedAt: new Date(evaluationStartedMs).toISOString(),
+          noOverlapVerified: trainingWatermarkMs < evaluationStartedMs },
+        passed: hasNonNegativeImprovementPair(evaluated.comparison),
+      });
+      start = end;
+    }
+  }
+  const passedFolds = folds.filter(fold => fold.passed).length, passRate = folds.length ? passedFolds / folds.length : null;
+  if (folds.length < requiredFolds) blockers.push("insufficient-independent-match-day-folds");
+  if (passRate !== null && passRate < minimumPassRate) blockers.push("match-day-pass-rate-below-target");
+  const structuralBlock = blockers.some(reason => ![
+    "insufficient-independent-match-day-folds", "match-day-pass-rate-below-target",
+  ].includes(reason));
+  const report = {
+    version: "match-day-walk-forward-research-v1", promotionEligible: false,
+    status: structuralBlock ? "blocked" : !blockers.length ? "research-complete" : "collecting",
+    scope: "explicit-business-date-whole-day-frozen-candidate-selection",
+    thresholds: { minimumTrainingRows, minimumEvaluationRows, requiredFolds, minimumPassRate },
+    sample: { inputRows: input.length, acceptedRows: canonical.rows.length, duplicateRows: canonical.duplicateRows,
+      rejectedRows: canonical.rejectedRows, independentMatchDays: days.length,
+      folds: folds.length, evaluationRows: folds.reduce((n, fold) => n + fold.evaluation.rows, 0), passedFolds, passRate },
+    inputDatasetHash: stableHash({ canonical: canonical.manifest.hash,
+      businessDays: canonical.rows.map(row => [rowKey(row), row.businessDate]) }),
+    candidateManifestHash: stableHash(descriptors.map(descriptor => descriptor.manifest)),
+    exclusions, candidateDateBindings, folds, boundaries, blockers,
+    policy: "Explicit businessDate only; whole days remain indivisible. Every training-day result must be observed before the earliest evaluation forecast. Select frozen candidates using training rows only, then evaluate the complete contiguous day block against the same-event market. Diagnostic selection review, not model refitting or formal promotion.",
+  };
+  return { ...report, reportHash: stableHash(report) };
+};
+
 module.exports = {
   PROMOTION_MIN_PASS_RATE,
   PROMOTION_MIN_REQUIRED_FOLDS,
   WALK_FORWARD_PROTOCOL_VERSION,
   WALK_FORWARD_VALIDATION_VERSION,
   buildWalkForwardValidation,
+  buildMatchDayWalkForwardResearch,
   candidateUsesModelSignal,
   compareMetrics,
   deepValidateWalkForwardArtifact,

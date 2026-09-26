@@ -4,7 +4,7 @@ const { day, hash } = require('../src/services/publishedForecastPolicy.cjs');
 const { validDecision } = require('../scripts/recommendationPlatform/decision.cjs');
 const { validCombo } = require('../scripts/recommendationPlatform/comboSelections.cjs');
 const {
-  key, settleDecision, settleHandicapDecision, settleCombo, summary, validResultEvent,
+  key, settleDecision, settleHandicapDecision, settleSupplementaryResearch, settleCombo, summary, validResultEvent,
 } = require('../scripts/recommendationPlatform/results.cjs');
 const { selectionQuality } = require('../src/services/recommendationSelectionQuality.cjs');
 const { buildPublishedScoreDistribution } = require('../src/services/publishedScoreDistribution.cjs');
@@ -76,11 +76,12 @@ function comboMarket(combo) {
 function singleReviewRow(decision, head, market) {
   const settlement = settleDecision(decision, head);
   const handicapSettlement = settleHandicapDecision(decision, head);
+  const supplementarySettlement = settleSupplementaryResearch(decision, head);
   const selectedSettlement = market === 'HHAD' ? handicapSettlement : settlement;
   const selectedOdds = market === 'HHAD'
     ? decision.handicapAnalysis?.marketReference?.selectedOdds ?? null : decision.odds;
   return {
-    decision, settlement, handicapSettlement,
+    decision, settlement, handicapSettlement, supplementarySettlement,
     selectedMarket: market, selectedSettlement,
     selectedOdds: Number.isFinite(selectedOdds) && selectedOdds > 1 ? selectedOdds : null,
     oddsState: Number.isFinite(selectedOdds) && selectedOdds > 1 ? 'available' : 'missing',

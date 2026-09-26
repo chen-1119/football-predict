@@ -1,6 +1,6 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
-const compile=(file,load=require)=>{const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module,exports:module.exports,require:load,Date,Intl});return module.exports;};
+const compile=(file,load=require)=>{const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module,exports:module.exports,require:id=>id.endsWith('/publishedRecommendationStatus.cjs')?require('../src/services/publishedRecommendationStatus.cjs'):load(id),Date,Intl});return module.exports;};
 const view=compile(require.resolve('../src/services/recommendationCenterView.ts'));
 const model=compile(require.resolve('../src/services/publishedMatchRecommendation.ts'));
 const {memoryPorts,validators}=require('./recommendationFixture.cjs'),{createRuntime}=require('../scripts/recommendationPlatform/runtime.cjs');
@@ -39,4 +39,35 @@ test('shared fixture/detail card keeps exact published SP, probability and recor
  const text=words(first);assert(text.includes(model.publishedPickLabel(d.tipCode,'zh')));assert(text.includes('SP '+d.odds.toFixed(2)));assert(text.includes((d.modelProbability*100).toFixed(1)+'%'));assert(text.includes(d.decisionId));
  const expired=words(pick({row,language:'zh',now:Date.parse(d.quoteObservedAt)+16*60000}));assert.match(expired,/SP待更新/);assert.match(expired,/不作为当前可用串关报价/);
  assert.match(words(pick({row:null,language:'zh',loading:false,failed:true})),/推荐暂未读取/);
+});
+
+const byClass=(node,name)=>node==null||typeof node!=='object'?[]:Array.isArray(node)?node.flatMap(child=>byClass(child,name)):[...((node.props?.className||'').split(' ').includes(name)?[node]:[]),...byClass(node.props?.children,name)];
+const categoryRow=(row,category,candidateCode,researchQualified=false)=>({...row,outcomeResearch:{...row.outcomeResearch,category,candidateCode,researchQualified,outcomes:[],reasons:['independent-validation-pending']}});
+
+test('compact fixtures retain fresh draw and nonfavorite observations without changing or promoting the published pick',async()=>{
+ const {row}=await fixture(),now=Date.parse(row.decision.quoteObservedAt);
+ for(const [category,candidateCode,label] of [['balanced-draw','X','均势防平 · 平局'],['upset-signal','2','防冷 · 客胜']]){
+  for(const qualified of [false,true]){
+   const input=categoryRow(row,category,candidateCode,qualified),before=JSON.stringify(input),tree=pick({row:input,language:'zh',compact:true,now});
+   const tags=byClass(tree,'published-match-pick__category');assert.equal(tags.length,1);
+   assert.equal(words(tags[0]),'分类观察 · '+label);assert.equal(tags[0].props['data-research-qualified'],qualified);
+   assert.equal(byClass(tree,'published-match-pick__research').length,0);
+   const directions=words(byClass(tree,'published-match-pick__directions')[0]);
+   assert(directions.includes(model.publishedPickLabel(row.decision.tipCode,'zh')));assert(directions.includes('SP '+row.decision.odds.toFixed(2)));
+   assert.equal(tree.props['data-record-hash'],row.decision.recordHash);assert.equal(JSON.stringify(input),before);
+  }
+ }
+});
+
+test('compact category observations disappear for expired, future, closed or missing research instead of inventing current picks',async()=>{
+ const {row}=await fixture(),now=Date.parse(row.decision.quoteObservedAt),input=categoryRow(row,'balanced-draw','X',true);
+ for(const clock of [now-1,now+15*60000+1,Date.parse(row.decision.cutoffTime),Date.parse(row.decision.kickoffTime),NaN]){
+  const tree=pick({row:input,language:'zh',compact:true,now:clock});assert.equal(byClass(tree,'published-match-pick__category').length,0);
+ }
+ for(const absent of [{...row,outcomeResearch:null},categoryRow(row,'watch',null),categoryRow(row,'balanced-draw',null),categoryRow(row,'strong-favorite','1')]){
+  assert.equal(byClass(pick({row:absent,language:'zh',compact:true,now}),'published-match-pick__category').length,0);
+ }
+ const detailed=pick({row:input,language:'zh',compact:false,now:now+16*60000});
+ assert.equal(byClass(detailed,'published-match-pick__category').length,0);
+ assert.match(words(byClass(detailed,'published-match-pick__research')[0]),/均势防平.*报价过期，仅供比较/);
 });

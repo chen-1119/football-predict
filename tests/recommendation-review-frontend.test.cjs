@@ -13,6 +13,7 @@ function loadFrontendParser(){
   const compile=file=>ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/services',file),'utf8'),
     {compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
   const load=(code,dependencies={})=>{const module={exports:{}};vm.runInNewContext(code,{module,exports:module.exports,require:id=>{
+    if(id==='./publishedRecommendationStatus.cjs')return require('../src/services/publishedRecommendationStatus.cjs');
     if(Object.hasOwn(dependencies,id))return dependencies[id];throw new Error('Unexpected dependency '+id);
   }});return module.exports;};
   const center=load(compile('recommendationCenterView.ts'));
