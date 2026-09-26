@@ -10,8 +10,47 @@ const view=require(path.join(dir,'view.cjs'));
 const {parseRecommendationCenter,visiblePreview,primarySelectionSummary,comboLegSelection,handicapAnalysisBasis,calibrationSampleBasis,sameDirectionConcentration}=view;
 const {createRuntime}=require('../scripts/recommendationPlatform/runtime.cjs');
 const {match,memoryPorts,validators}=require('./recommendationFixture.cjs');
+const {makeDecision,chooseCombo,freezeCombo}=require('../scripts/recommendationPlatform/decision.cjs');
+const {validCombo}=require('../scripts/recommendationPlatform/comboSelections.cjs');
+const {settleCombo}=require('../scripts/recommendationPlatform/results.cjs');
+const {hash}=require('../src/services/publishedForecastPolicy.cjs');
+const {bindPublicReferenceDecision}=require('../src/services/publicReferenceDecision.cjs');
 async function sample(){const p=memoryPorts();await createRuntime(p,{validators}).publishingCycle();return {recommendationCenter:p.state.view};}
 test('the actual runtime projection parses for current UI',async()=>{const x=parseRecommendationCenter(await sample());assert.equal(x.current.length,3);assert.equal(x.previews.length,2);assert.equal(x.review.statistics.single.published,3);});
+test('existing v2 frozen combo remains valid, settleable and readable after v3 publication',()=>{
+  const now=Date.parse('2026-09-17T13:00:00Z'),publication={generationId:'legacy-v2-test',manifestHash:'a'.repeat(64),committedAt:new Date(now).toISOString()};
+  const decisions=[1,2].map(id=>makeDecision(match(id,now),{now,publication}).decision);
+  const current=freezeCombo(chooseCombo(decisions,2,now),now);
+  assert(current);
+  const old={...structuredClone(current),version:'unified-combo-v2',rankingMethod:'sum-log-unconditional-market-probability'};
+  old.id=`combo_${hash([old.version,old.businessDate,old.size,old.selectionIds])}`;
+  delete old.recordHash;old.recordHash=hash(old);
+  assert(validCombo(old,{frozen:true}));
+  const settled=settleCombo(old,new Map());assert.equal(settled.state,'PENDING');
+  const parsed=view.parseRecommendationComboRow({combo:old,settlement:settled});
+  assert.equal(parsed.combo.version,'unified-combo-v2');
+  assert.deepEqual(parsed.combo.selectionIds,old.selectionIds);
+});
+test('a later attested opposite reference warns on today\'s frozen HAD combo without changing its hash',async()=>{
+  const p=memoryPorts(),at=Date.parse('2026-09-17T13:00:00Z');p.now=at;
+  p.current=[1,2,3].map(id=>match(id,at));
+  const runtime=createRuntime(p,{validators});await runtime.publishingCycle();
+  const frozen=p.state.combos.find(c=>c.size===2);assert(frozen);
+  const frozenHash=frozen.recordHash;
+  const opposite=structuredClone(p.current.find(m=>m.sourceMatchId==='1'));
+  opposite.predictions=[{marketType:'BEST',recommendationAction:'reference',oddsPoolCode:'HAD',tipCode:'2',odds:4.5}];
+  opposite.predictionMeta={decisionGeneratedAt:new Date(at).toISOString(),decisionId:'late-reference',
+    modelVersion:opposite.probabilityModel.version,policyVersion:'reference-test-v1',
+    featureSnapshot:{sourceMatchId:'1',kickoffTime:opposite.kickoffTime,capturedAt:new Date(at-1000).toISOString()}};
+  const bound=bindPublicReferenceDecision(opposite,null,new Date(at+60000).toISOString());
+  p.current=[bound,...p.current.filter(m=>m.sourceMatchId!=='1')];p.now=at+2*60000;
+  await runtime.view();
+  const projected=parseRecommendationCenter({recommendationCenter:p.state.view});
+  const flagged=projected.todayCombos.find(row=>row.combo.id===frozen.id);
+  assert(flagged?.currentAdvisory?.some(item=>item.referenceTipCode==='2'&&!item.knownAtFreeze));
+  assert.equal(p.state.combos.find(c=>c.id===frozen.id).recordHash,frozenHash);
+  assert.equal(validCombo(p.state.combos.find(c=>c.id===frozen.id),{frozen:true}),true);
+});
 test('SP review groups must partition the verified settled sample before display',async()=>{
  const payload=await sample(),report=payload.recommendationCenter.review.qualityReport;
  assert.equal(Object.values(report.bySpBucket).reduce((n,g)=>n+g.settled,0),report.overall.settled);

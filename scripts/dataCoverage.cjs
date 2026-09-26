@@ -25,6 +25,9 @@ const TEXT=Object.freeze({
   'input-evidence-unavailable':'模型输入证据不足，仅供参考',
   'input-arithmetic-unverified':'模型输入计算尚未核验，仅供参考',
   'team-samples-insufficient':'球队历史样本不足，仅供参考',
+  'model-lead-too-thin':'模型首位领先过薄，仅供观望',
+  'material-model-market-disagreement':'模型与同期官方市场差异过大，仅供观望',
+  'cross-track-direction-conflict':'同场赛前参考与发布方向相反，仅供观望',
   'awaiting-publication':'正在等待赛前推荐发布',
   'input-invalid':'比赛输入未通过核验，暂未入选',
 });

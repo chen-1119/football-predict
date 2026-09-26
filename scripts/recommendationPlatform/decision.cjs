@@ -49,7 +49,8 @@ function validDecision(row) {
   if (hash(body) !== recordHash || row.decisionId !== `decision_${hash([VERSION, row.sourceMatchId, row.eventVersion, row.market, row.inputHash])}` || row.id !== row.decisionId) return false;
   const qualityBinding=row.selectionPolicyVersion==null?{}:{selectionPolicyVersion:row.selectionPolicyVersion,modelInputEvidenceHash:row.inputEvidence?.model?.inputEvidence?.contentHash||null};
   if(row.selectionPolicyVersion!=null){
-    if(row.selectionPolicyVersion!==require('../../src/services/recommendationSelectionQuality.cjs').VERSION)return false;
+    const selectionPolicy=require('../../src/services/recommendationSelectionQuality.cjs');
+    if(![selectionPolicy.LEGACY_VERSION,selectionPolicy.VERSION].includes(row.selectionPolicyVersion))return false;
     const model=row.inputEvidence?.model;
     if(model?.inputEvidence&&!require('../../src/services/recommendationInputEvidence.cjs').validInputEvidence(model.inputEvidence,model,row))return false;
   }
@@ -150,7 +151,7 @@ function chooseCombo(decisions, size, now, {admit=()=>true}={}) {
   const body = { version: COMBO_VERSION, id: `combo_${hash([COMBO_VERSION, day(now),size,selectionIds])}`,
     businessDate: day(now), size, minimumTotalOdds: FLOORS[size], totalOdds: Number(bestProduct.toFixed(2)), rawTotalOdds: bestProduct,
     legs, decisionIds: legs.map(d => d.decisionId), selections, selectionIds, generatedAt: new Date(now).toISOString(), freezeAt: new Date(freezeAt(day(now),legs)).toISOString(),
-    rankingMethod: 'sum-log-unconditional-market-probability', jointProbability: null, statisticsTrack: 'unified-combo',
+    rankingMethod: 'sum-log-unconditional-model-probability', jointProbability: null, statisticsTrack: 'unified-combo',
     calibration: 'unvalidated', overlapWarning: null };
   return immutable(body);
 }

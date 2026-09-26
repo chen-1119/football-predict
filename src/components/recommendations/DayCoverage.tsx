@@ -21,19 +21,19 @@ export function DayCoverage({ coverage, businessDate, qualifiedOnly, onQualified
       <div>
         <span className="rc-coverage__eyebrow">{zh ? '当日竞彩' : 'MATCH-DAY COVERAGE'}</span>
         <h2>{zh ? '每场比赛都有明确状态' : 'A clear status for every match'}</h2>
-        <p>{zh ? '输入达标只表示球队样本与计算证据齐全，不表示 SP 有优势或命中率已验证；缺项仍计入目标比赛。' : 'Input checks cover team samples and arithmetic, not price value or proven accuracy. Missing inputs remain in the total.'}</p>
+        <p>{zh ? '参考入选还要求模型方向清晰，且不与同期 SP 严重冲突；仍不表示命中率已验证。缺项与观望场次均计入目标比赛。' : 'Reference admission requires usable samples, a clear model lead, and no material contradiction with same-time SP. Accuracy is not yet validated; watch cases remain in the total.'}</p>
       </div>
       <div className="rc-coverage__switch" role="group" aria-label={zh ? '推荐筛选' : 'Recommendation filter'}>
         <button type="button" aria-pressed={!qualifiedOnly} onClick={() => onQualifiedOnlyChange(false)}>{zh ? '全部已发布方向' : 'All published picks'}</button>
-        <button type="button" aria-pressed={qualifiedOnly} onClick={() => onQualifiedOnlyChange(true)}>{zh ? '输入达标' : 'Input-checked'}</button>
+        <button type="button" aria-pressed={qualifiedOnly} onClick={() => onQualifiedOnlyChange(true)}>{zh ? '参考入选' : 'Reference-qualified'}</button>
       </div>
     </div>
     {current ? <>
       <div className="rc-coverage__numbers">
         <div><span>{zh ? '目标比赛' : 'Target matches'}</span><strong>{current.targetCount}</strong></div>
         <div><span>{zh ? '已生成参考方向' : 'Published reference picks'}</span><strong>{current.publishableCount}</strong></div>
-        <div><span>{zh ? '输入达标' : 'Input-checked'}</span><strong>{current.qualifiedCount}</strong></div>
-        <div><span>{zh ? '输入覆盖率' : 'Input coverage'}</span><strong>{percent(current.qualifiedCount, current.targetCount)}</strong></div>
+        <div><span>{zh ? '参考入选' : 'Reference-qualified'}</span><strong>{current.qualifiedCount}</strong></div>
+        <div><span>{zh ? '入选覆盖率' : 'Admission coverage'}</span><strong>{percent(current.qualifiedCount, current.targetCount)}</strong></div>
       </div>
       {current.missingTotal || current.missing.length ? <details className="rc-coverage__missing" open={!qualifiedOnly}>
         <summary>{zh ? `查看未入选原因（${current.missingTotal ?? current.missing.length} 场）` : `Why not selected (${current.missingTotal ?? current.missing.length})`}</summary>

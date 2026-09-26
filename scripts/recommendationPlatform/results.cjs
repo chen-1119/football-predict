@@ -1,7 +1,7 @@
 'use strict';
 const { hash, time } = require('../../src/services/publishedForecastPolicy.cjs');
 const { validDecision } = require('./decision.cjs');
-const { COMBO_VERSION,validCombo,comboSelections } = require('./comboSelections.cjs');
+const { validCombo,comboSelections,hasSelections } = require('./comboSelections.cjs');
 const key = row => JSON.stringify([String(row?.sourceMatchId || row?.id || '').replace(/^sporttery_/, ''), new Date(time(row.eventVersion || row.kickoffTime)).toISOString()]);
 const revision = row => {
   const value = row?.resultRevision ?? row?.postMatchReview?.settlement?.resultRevision ?? 0;
@@ -82,9 +82,9 @@ function settleCombo(combo, heads) {
   const selections=comboSelections(combo);
   const legs=combo.legs.map((leg,i)=>{
     const selection=selections[i];
-    const snapshot=combo.version===COMBO_VERSION?{...leg,market:selection.market,handicapLine:selection.handicapLine,tipCode:selection.tipCode}:leg;
+    const snapshot=hasSelections(combo)?{...leg,market:selection.market,handicapLine:selection.handicapLine,tipCode:selection.tipCode}:leg;
     return {decisionId:leg.decisionId,sourceMatchId:leg.sourceMatchId,
-      ...(combo.version===COMBO_VERSION?{selectionId:selection.selectionId,market:selection.market,handicapLine:selection.handicapLine,tipCode:selection.tipCode,odds:selection.odds}:{}),
+      ...(hasSelections(combo)?{selectionId:selection.selectionId,market:selection.market,handicapLine:selection.handicapLine,tipCode:selection.tipCode,odds:selection.odds}:{}),
       ...settleDecision(snapshot,heads.get(key(leg)))};
   });
   const state=legs.some(l=>l.state==='DISPUTED')?'DISPUTED':legs.some(l=>l.state==='VOID')?'VOID':legs.some(l=>l.state==='PENDING')?'PENDING':legs.every(l=>l.state==='WON')?'WON':'LOST';

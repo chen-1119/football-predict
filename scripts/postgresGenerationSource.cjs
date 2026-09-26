@@ -49,8 +49,9 @@ const rowFromState = (state, kind) => ({
 // The native PG archive really needs both complete arrays. Admit their object
 // graphs item by item, without also retaining one ledger-sized encoded string
 // and its JSON.parse copy. Each pass is bound to the immutable manifest.
-function readPostgresReferenceSnapshot(context, { maxRetainedChars = 256 * 1024 * 1024, maxItems = 100000 } = {}) {
-  if (!Number.isSafeInteger(maxRetainedChars) || maxRetainedChars < 1 || maxRetainedChars > 256 * 1024 * 1024
+const MAX_REFERENCE_RETAINED_CHARS = 320 * 1024 * 1024;
+function readPostgresReferenceSnapshot(context, { maxRetainedChars = MAX_REFERENCE_RETAINED_CHARS, maxItems = 100000 } = {}) {
+  if (!Number.isSafeInteger(maxRetainedChars) || maxRetainedChars < 1 || maxRetainedChars > MAX_REFERENCE_RETAINED_CHARS
     || !Number.isSafeInteger(maxItems) || maxItems < 1 || maxItems > 100000) throw new Error("invalid native reference admission bound");
   const name = "prediction-snapshots.json";
   // Reuse context/path admission and retain only tiny top-level metadata.

@@ -19,7 +19,7 @@ export interface Decision {
   handicapAnalysis?:HandicapAnalysis|null;
 }
 export interface Settlement { state:ResultState; score?:string|null; actual?:Outcome; resultEventId?:string|null; legs?:Array<{decisionId:string;selectionId?:string;state:ResultState;score?:string|null}> }
-export interface SelectionQuality {version:'recommendation-selection-quality-v1';status:'watch'|'reference-qualified';qualified:boolean;reasons:string[];samples:{elo:{home:number|null;away:number|null};form:{home:number|null;away:number|null}}|null;probabilityLead:number|null;marketProbability:number|null;modelMarketGap:number|null;expectedValue:number|null;marketFavorite:boolean}
+export interface SelectionQuality {version:'recommendation-selection-quality-v1'|'recommendation-selection-quality-v2';status:'watch'|'reference-qualified';qualified:boolean;reasons:string[];samples:{elo:{home:number|null;away:number|null};form:{home:number|null;away:number|null}}|null;probabilityLead:number|null;marketProbability:number|null;modelMarketGap:number|null;expectedValue:number|null;marketFavorite:boolean;crossTrack?:{referenceTipCode:Outcome;referenceRecordedAt:string;knownAtPublication:boolean}}
 export interface PublishedScore {home:number;away:number;label:string;probability:number;hadCode:Outcome;hhadCode:Outcome}
 export interface PublishedScores {status:'available'|'unavailable';version:'published-score-distribution-v1';decisionId:string;recordHash:string;topScores:PublishedScore[];alignedScores:PublishedScore[]}
 export interface SingleRow { decision:Decision; settlement:Settlement; handicapSettlement?:Settlement|null;selectionQuality?:SelectionQuality|null;scoreDistribution?:PublishedScores|null }
@@ -35,8 +35,8 @@ export interface ComboSelection {
   market:'HAD'|'HHAD'; handicapLine:number; tipCode:Outcome; odds:number; modelProbability:number;
   probabilityBasis:'unconditional'; probabilities:Record<Outcome,number>; quoteOdds:Record<Outcome,number>; quoteObservedAt:string; quoteSource:string;
 }
-export interface Combo { version:'unified-combo-v1'|'unified-combo-v2'; id:string; businessDate:string; size:2|3; totalOdds:number; rawTotalOdds:number; legs:Decision[]; decisionIds:string[]; selections?:ComboSelection[];selectionIds?:string[]; freezeAt:string; frozenAt?:string; generatedAt:string }
-export interface ComboRow { combo:Combo; settlement:Settlement }
+export interface Combo { version:'unified-combo-v1'|'unified-combo-v2'|'unified-combo-v3'; id:string; businessDate:string; size:2|3; totalOdds:number; rawTotalOdds:number; legs:Decision[]; decisionIds:string[]; selections?:ComboSelection[];selectionIds?:string[]; freezeAt:string; frozenAt?:string; generatedAt:string }
+export interface ComboRow { combo:Combo; settlement:Settlement; currentAdvisory?:Array<{decisionId:string;referenceTipCode:Outcome;referenceRecordedAt:string;knownAtFreeze:boolean}> }
 export interface DualResearchV2Row {
   version:'dual-choice-research-v2';id:string;sourceMatchId:string;matchId:string;eventVersion:string;businessDate:string;
   homeTeamName:string;awayTeamName:string;recordedAt:string;cutoffAt:string;recordHash:string;
@@ -168,10 +168,21 @@ function single(v:unknown):SingleRow{
   let quality:SelectionQuality|null=null,scores:PublishedScores|null=null;
   if(x.selectionQuality!=null){
     const q=object(x.selectionQuality),qualified=q.qualified===true;
-    if(q.version!=='recommendation-selection-quality-v1'||q.validation!=='unvalidated'||q.status!==(qualified?'reference-qualified':'watch')||q.priceFilterApplied!==false)throw new Error('Invalid selection quality');
+    if(!['recommendation-selection-quality-v1','recommendation-selection-quality-v2'].includes(String(q.version))||q.validation!=='unvalidated'||q.status!==(qualified?'reference-qualified':'watch')||q.priceFilterApplied!==(q.version==='recommendation-selection-quality-v2'))throw new Error('Invalid selection quality');
     const pair=(v:unknown)=>{const a=object(v);return {home:a.home==null?null:count(a.home),away:a.away==null?null:count(a.away)};};
     const samples=q.samples==null?null:object(q.samples);
-    quality={version:q.version,status:qualified?'reference-qualified':'watch',qualified,reasons:list(q.reasons).map(text),samples:samples?{elo:pair(samples.elo),form:pair(samples.form)}:null,probabilityLead:q.probabilityLead==null?null:number(q.probabilityLead),marketProbability:q.marketProbability==null?null:number(q.marketProbability),modelMarketGap:q.modelMarketGap==null?null:number(q.modelMarketGap),expectedValue:q.expectedValue==null?null:number(q.expectedValue),marketFavorite:q.marketFavorite===true};
+    quality={version:q.version as SelectionQuality['version'],status:qualified?'reference-qualified':'watch',qualified,reasons:list(q.reasons).map(text),samples:samples?{elo:pair(samples.elo),form:pair(samples.form)}:null,probabilityLead:q.probabilityLead==null?null:number(q.probabilityLead),marketProbability:q.marketProbability==null?null:number(q.marketProbability),modelMarketGap:q.modelMarketGap==null?null:number(q.modelMarketGap),expectedValue:q.expectedValue==null?null:number(q.expectedValue),marketFavorite:q.marketFavorite===true};
+    if(q.crossTrack!=null){
+      const c=object(q.crossTrack),referenceTipCode=outcome(c.referenceTipCode),referenceRecordedAt=stamp(c.referenceRecordedAt);
+      if(c.version!=='recommendation-cross-track-conflict-v1'||c.reason!=='cross-track-direction-conflict'
+        ||c.sourceMatchId!==d.sourceMatchId||Date.parse(String(c.eventVersion))!==Date.parse(d.eventVersion)
+        ||c.market!=='HAD'||c.publishedTipCode!==d.tipCode||referenceTipCode===d.tipCode
+        ||!(/^[a-f0-9]{64}$/.test(String(c.referenceHash||'')))
+        ||Date.parse(referenceRecordedAt)>=Date.parse(d.cutoffTime)
+        ||c.knownAtPublication!==(Date.parse(referenceRecordedAt)<=Date.parse(d.publishedAt))
+        ||qualified||!quality.reasons.includes('cross-track-direction-conflict'))throw new Error('Invalid cross-track diagnostic');
+      quality.crossTrack={referenceTipCode,referenceRecordedAt,knownAtPublication:c.knownAtPublication};
+    }
     // This diagnostic belongs to the frozen HAD decision, never to a later
     // model update or an HHAD review selection.
     if(quality.expectedValue!=null&&Math.abs(quality.expectedValue-(d.modelProbability*d.odds-1))>1e-8)throw new Error('Selection quality EV disagrees with frozen decision');
@@ -208,11 +219,11 @@ function comboSelection(v:unknown,parent:Decision,rawParent:Obj):ComboSelection{
 }
 function combo(v:unknown):Combo{
   const c=object(v);if(c.size!==2&&c.size!==3)throw new Error('Invalid combo size');
-  if(c.version!=='unified-combo-v1'&&c.version!=='unified-combo-v2')throw new Error('Unsupported combo contract');
+  if(c.version!=='unified-combo-v1'&&c.version!=='unified-combo-v2'&&c.version!=='unified-combo-v3')throw new Error('Unsupported combo contract');
   const rawLegs=list(c.legs).map(object),legs=rawLegs.map(decision),ids=list(c.decisionIds).map(text);
   if(legs.length!==c.size||ids.length!==c.size||new Set(legs.map(l=>l.sourceMatchId)).size!==c.size||legs.some((l,i)=>l.decisionId!==ids[i]))throw new Error('Invalid combo decision binding');
   let selections:ComboSelection[]|undefined,selectionIds:string[]|undefined;
-  if(c.version==='unified-combo-v2'){
+  if(c.version==='unified-combo-v2'||c.version==='unified-combo-v3'){
     const rawSelections=list(c.selections);selectionIds=list(c.selectionIds).map(text);
     if(rawSelections.length!==c.size||selectionIds.length!==c.size||new Set(selectionIds).size!==c.size)throw new Error('Invalid combo selection count');
     selections=rawSelections.map((s,i)=>comboSelection(s,legs[i],rawLegs[i]));
@@ -224,7 +235,9 @@ function combo(v:unknown):Combo{
   if(frozenAt&&legs.some(l=>Date.parse(frozenAt)>=Date.parse(l.cutoffTime)))throw new Error('Post-cutoff combo');
   return {version:c.version,id:text(c.id),businessDate:date(c.businessDate),size:c.size,totalOdds,rawTotalOdds,legs,decisionIds:ids,selections,selectionIds,freezeAt:stamp(c.freezeAt),frozenAt,generatedAt:stamp(c.generatedAt)};
 }
-const comboRow=(v:unknown):ComboRow=>{const x=object(v),c=combo(x.combo),s=settlement(x.settlement);if(!c.frozenAt)throw new Error('Unfrozen combo in record');if(s.legs&&(s.legs.length!==c.size||new Set(s.legs.map(l=>l.decisionId)).size!==c.size||s.legs.some(l=>!c.decisionIds.includes(l.decisionId)||(c.selections&&l.selectionId!==c.selections.find(a=>a.decisionId===l.decisionId)?.selectionId))))throw new Error('Settlement bindings disagree');return {combo:c,settlement:s};};
+const comboRow=(v:unknown):ComboRow=>{const x=object(v),c=combo(x.combo),s=settlement(x.settlement);if(!c.frozenAt)throw new Error('Unfrozen combo in record');if(s.legs&&(s.legs.length!==c.size||new Set(s.legs.map(l=>l.decisionId)).size!==c.size||s.legs.some(l=>!c.decisionIds.includes(l.decisionId)||(c.selections&&l.selectionId!==c.selections.find(a=>a.decisionId===l.decisionId)?.selectionId))))throw new Error('Settlement bindings disagree');
+  const currentAdvisory=x.currentAdvisory==null?undefined:list(x.currentAdvisory).map(value=>{const a=object(value),decisionId=text(a.decisionId),referenceTipCode=outcome(a.referenceTipCode),referenceRecordedAt=stamp(a.referenceRecordedAt),index=c.decisionIds.indexOf(decisionId),leg=c.legs[index];if(index<0||c.selections?.[index]?.market==='HHAD'||referenceTipCode===leg.tipCode||Date.parse(referenceRecordedAt)>=Date.parse(leg.cutoffTime)||a.knownAtFreeze!==(Date.parse(referenceRecordedAt)<=Date.parse(c.frozenAt!)))throw new Error('Invalid current combo advisory');return {decisionId,referenceTipCode,referenceRecordedAt,knownAtFreeze:a.knownAtFreeze as boolean};});
+  return {combo:c,settlement:s,currentAdvisory};};
 export const parseRecommendationSingleRow=(value:unknown):SingleRow=>single(value);
 export const parseRecommendationComboRow=(value:unknown):ComboRow=>comboRow(value);
 function dualResearchV2(value:unknown):DualResearchV2Row{

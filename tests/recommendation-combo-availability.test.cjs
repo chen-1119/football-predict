@@ -88,7 +88,11 @@ test('stale SP cannot be made eligible merely by binding the decision again', as
   p.now += 16*60000; await r.combos(); assert.deepEqual(sizes(p), []);
 });
 test('impossible SP floor remains enforced; no second direction is substituted', async () => {
-  const p = memoryPorts(); p.current = [1,2,3].map(id => match(id, p.now, { odds: { odds1:1.2,oddsX:4,odds2:7 } }));
+  const p = memoryPorts(); p.current = [1,2,3].map(id => {
+    const m=match(id,p.now,{odds:{odds1:1.2,oddsX:4,odds2:7}});
+    m.probabilityModel.oneXTwo.final={home:70,draw:18,away:12};
+    return require('./fixtures/recommendation-input-helper.cjs').withVerifiedInputEvidence(m);
+  });
   const r = createRuntime(p, { validators }); await r.combos();
   assert.deepEqual(sizes(p), []); assert.equal(p.state.lanes.combos.candidateCount, 3);
   assert.ok(p.state.decisions.every(d => d.tipCode === '1'));
