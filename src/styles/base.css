@@ -51,6 +51,20 @@
   clip-path: inset(50%);
 }
 
+/* Keep recommendation cards focused on the match, selections and SP. The
+   underlying publication, quality and price diagnostics remain unchanged. */
+.published-match-pick > .published-match-pick__status,
+.published-match-pick > .published-match-pick__quote-time,
+.published-match-pick > .selection-quality-note,
+.rc-pick > .selection-quality-note,
+.rc-pick > .rc-card-footer > span {
+  display: none;
+}
+
+.rc-pick > .rc-card-footer {
+  justify-content: flex-end;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .app-shell-v2 *,
   .app-shell-v2 *::before,
