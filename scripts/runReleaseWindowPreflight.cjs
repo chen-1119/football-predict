@@ -19,6 +19,11 @@ const PREPARATION_SECONDS = 900;
 // This is advisory planning, not a timeout guarantee or reusable permission.
 const BUILD_PREPARATION_SECONDS = 900;
 const MAX_OBSERVATION_AGE_MS = 60_000;
+// The signed native PostgreSQL runtime path exits before the legacy release
+// shell's 7,620-second lease. Its own lease reserves a 300-second verifier,
+// 900-second barrier acquisition, 900-second final reconciliation, 1,620-second
+// post-swap worker/rollback budget, and the 30-second atomic margin.
+const NATIVE_RELEASE_HORIZON_SECONDS = 300 + 900 + 900 + 1620;
 function preparationBudget(stage) {
   assert.ok(stage === "before-build" || stage === "before-upload", "unknown release preparation stage");
   const buildPreparationSeconds = stage === "before-build" ? BUILD_PREPARATION_SECONDS : 0;
@@ -104,8 +109,30 @@ function collectReleaseWindowObservation() {
 
 const buildReadOnlyWindowProbe = () => `console.log(JSON.stringify((${collectReleaseWindowObservation.toString()})()));`;
 
-function evaluateReleaseWindowObservation(observation, now = Date.now(), { stage = "before-build" } = {}) {
+function probeNativeWindow(input, preparationSeconds, observedAt) {
+  try {
+    const lease = createTransitionLease(input.payload, {
+      refreshAt: new Date(observedAt).toISOString(),
+      verifierRuntimeMaxSeconds: 300,
+      preverifyRefreshBudgetSeconds: 900 + 900 + 1620 - 30 + preparationSeconds,
+      atomicSwapMarginSeconds: 30,
+    });
+    assert.equal(lease.minimumHorizonSeconds, NATIVE_RELEASE_HORIZON_SECONDS + preparationSeconds);
+    return { safe: true, generationId: input.generationId,
+      minimumHorizonSeconds: lease.minimumHorizonSeconds,
+      nextTransition: lease.nextTransition, availableHorizonSeconds: lease.availableHorizonSeconds };
+  } catch (error) {
+    if (error?.message !== "candidate transition horizon is too short") throw error;
+    return { safe: false, reason: "transition-window-closed", generationId: input.generationId,
+      minimumHorizonSeconds: NATIVE_RELEASE_HORIZON_SECONDS + preparationSeconds,
+      nextTransition: error.details?.nextTransition || null,
+      nextSafeWindow: error.details?.nextSafeWindow?.refreshStrictlyAfter || null };
+  }
+}
+
+function evaluateReleaseWindowObservation(observation, now = Date.now(), { stage = "before-build", nativeFullRelease = false } = {}) {
   const budget = preparationBudget(stage);
+  assert.equal(typeof nativeFullRelease, "boolean", "native release selection must be authenticated");
   assert.equal(observation?.version, "release-window-observation-v1");
   assert.equal(observation.productionWrites, 0);
   assert.match(observation.releaseMarker || "", /^[a-f0-9]{64}$/);
@@ -127,15 +154,18 @@ function evaluateReleaseWindowObservation(observation, now = Date.now(), { stage
   // has already crossed it. Reserve transport/clock uncertainty instead of
   // rebuilding the projection at a later instant and silently dropping it.
   const observationReserveSeconds = Math.ceil(Math.max(0, age) / 1000) + 5;
-  const proof = probeWindow(input, { preparationSeconds: budget.preparationSeconds + observationReserveSeconds },
-    Date.parse(observation.checkedAt), createTransitionLease);
+  const proof = nativeFullRelease
+    ? probeNativeWindow(input, budget.preparationSeconds + observationReserveSeconds, Date.parse(observation.checkedAt))
+    : probeWindow(input, { preparationSeconds: budget.preparationSeconds + observationReserveSeconds },
+      Date.parse(observation.checkedAt), createTransitionLease);
   const nextTransitionMs = Date.parse(proof.nextTransition);
   const latestStartBeforeNextTransition = Number.isFinite(nextTransitionMs)
     ? new Date(nextTransitionMs - proof.minimumHorizonSeconds * 1000).toISOString() : null;
   return { version: "release-window-preflight-v1", checkedAt: new Date(now).toISOString(), observationAt: observation.checkedAt,
     ok: proof.safe === true, ...proof, releaseMarker: observation.releaseMarker, legacyUnaccepted,
     sourceCycleId: observation.pointer.sourceCycleId, committedAt: observation.pointer.committedAt,
-    releaseHorizonSeconds: RELEASE_HORIZON_SECONDS, ...budget,
+    releaseHorizonSeconds: nativeFullRelease ? NATIVE_RELEASE_HORIZON_SECONDS : RELEASE_HORIZON_SECONDS,
+    releaseWindowProfile: nativeFullRelease ? "signed-native-runtime" : "legacy-full", ...budget,
     observationReserveSeconds, latestStartBeforeNextTransition,
     generationAgeMs: generationAge, providerFreshnessVerified: false,
     productionWrites: 0, readyToCutover: false, windowReserved: false,
@@ -143,8 +173,9 @@ function evaluateReleaseWindowObservation(observation, now = Date.now(), { stage
     scope: "Preparation only; fresh signed early, candidate lease, and final cutover checks remain mandatory." };
 }
 
-function runLiveReleaseWindowPreflight({ stage = "before-build" } = {}) {
+function runLiveReleaseWindowPreflight({ stage = "before-build", nativeFullRelease = false } = {}) {
   preparationBudget(stage); // Reject typos before reading a key or making SSH calls.
+  assert.equal(typeof nativeFullRelease, "boolean", "native release selection must be authenticated");
   const rootDir = path.resolve(__dirname, ".."), tmpDir = path.join(rootDir, ".codex-tmp");
   const host = process.env.RELEASE_DEPLOY_HOST || "134.175.132.183", user = process.env.RELEASE_DEPLOY_USER || "ubuntu";
   assert.match(user, /^[a-z_][a-z0-9_-]*$/i);
@@ -158,10 +189,11 @@ function runLiveReleaseWindowPreflight({ stage = "before-build" } = {}) {
     windowsHide: true, timeout: 30_000, maxBuffer: 48 * 1024 * 1024 });
   // Do not echo remote stdout/stderr: stdout contains fixture data, not a report.
   if (child.status !== 0) throw new Error(`read-only release window observation failed (status=${Number.isInteger(child.status) ? child.status : "unknown"})`);
-  return evaluateReleaseWindowObservation(JSON.parse(child.stdout), Date.now(), { stage });
+  return evaluateReleaseWindowObservation(JSON.parse(child.stdout), Date.now(), { stage, nativeFullRelease });
 }
 
-module.exports = { PREPARATION_SECONDS, BUILD_PREPARATION_SECONDS, MAX_OBSERVATION_AGE_MS, preparationBudget,
+module.exports = { PREPARATION_SECONDS, BUILD_PREPARATION_SECONDS, MAX_OBSERVATION_AGE_MS,
+  NATIVE_RELEASE_HORIZON_SECONDS, preparationBudget,
   collectReleaseWindowObservation, buildReadOnlyWindowProbe, evaluateReleaseWindowObservation, runLiveReleaseWindowPreflight };
 if (require.main === module) {
   try {

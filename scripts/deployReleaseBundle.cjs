@@ -437,7 +437,11 @@ if (frontendOnly) {
   // This fresh advisory check does not replace any signed server-side gate.
   if (!dryRun) {
     try {
-      const windowPreflight = require("./runReleaseWindowPreflight.cjs").runLiveReleaseWindowPreflight({ stage: "before-upload" });
+      // nativeFullRelease is derived only from the verified signed archive
+      // policy above; unknown or legacy full bundles retain the larger budget.
+      const windowPreflight = require("./runReleaseWindowPreflight.cjs").runLiveReleaseWindowPreflight({
+        stage: "before-upload", nativeFullRelease
+      });
       if (!windowPreflight.ok) fail("release window unavailable before clone/upload", { windowPreflight });
       releaseWindowPreflight = { windowChecked: true, ...windowPreflight };
     } catch (error) { fail("release window preflight rejected before clone/upload", { reason: error.message }); }
