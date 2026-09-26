@@ -17,6 +17,26 @@ const {hash}=require('../src/services/publishedForecastPolicy.cjs');
 const {bindPublicReferenceDecision}=require('../src/services/publicReferenceDecision.cjs');
 async function sample(){const p=memoryPorts();await createRuntime(p,{validators}).publishingCycle();return {recommendationCenter:p.state.view};}
 test('the actual runtime projection parses for current UI',async()=>{const x=parseRecommendationCenter(await sample());assert.equal(x.current.length,3);assert.equal(x.previews.length,2);assert.equal(x.review.statistics.single.published,3);});
+test('current outcome study keeps its decision binding and rejects changed prices or promotion flags',async()=>{
+ const payload=await sample(),raw=payload.recommendationCenter.current.find(row=>row.outcomeResearch);
+ assert(raw,'open current decision should carry the three-outcome study');
+ const parsed=parseRecommendationCenter(payload).current.find(row=>row.decision.decisionId===raw.decision.decisionId);
+ assert.equal(parsed.outcomeResearch.decisionId,parsed.decision.decisionId);
+ assert.equal(parsed.outcomeResearch.recordHash,parsed.decision.recordHash);
+ assert.equal(parsed.outcomeResearch.formalPromotionEligible,false);
+ assert.equal(parsed.outcomeResearch.outcomes.length,3);
+ for(const mutate of [
+  r=>{r.recordHash='0'.repeat(64);},
+  r=>{r.formalPromotionEligible=true;},
+  r=>{r.outcomes[0].expectedValue+=.1;},
+  r=>{r.outcomes[0].fairMarketProbability+=.1;},
+  r=>{r.outcomes[0].odds+=.1;},
+ ]){
+  const copy=structuredClone(payload),target=copy.recommendationCenter.current.find(row=>row.decision.decisionId===raw.decision.decisionId).outcomeResearch;
+  mutate(target);
+  assert.throws(()=>parseRecommendationCenter(copy));
+ }
+});
 test('bound official handicap SP uses the selected quote only for its own outcome',()=>{
  const analysis={tipCode:'2',marketReference:{source:'sporttery:HHAD',selectedOdds:2.75,odds:{'1':2.05,X:3.4,'2':2.75}}};
  assert.equal(boundOfficialHandicapSp(analysis,'1'),2.05);
