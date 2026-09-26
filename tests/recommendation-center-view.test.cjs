@@ -7,7 +7,7 @@ after(()=>fs.rmSync(dir,{recursive:true,force:true}));
 const source=fs.readFileSync(path.join(__dirname,'../src/services/recommendationCenterView.ts'),'utf8');
 fs.writeFileSync(path.join(dir,'view.cjs'),ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText);
 const view=require(path.join(dir,'view.cjs'));
-const {parseRecommendationCenter,visiblePreview,primarySelectionSummary,comboLegSelection,handicapAnalysisBasis,calibrationSampleBasis,sameDirectionConcentration}=view;
+const {parseRecommendationCenter,visiblePreview,primarySelectionSummary,comboLegSelection,handicapAnalysisBasis,calibrationSampleBasis,sameDirectionConcentration,boundOfficialHandicapSp}=view;
 const {createRuntime}=require('../scripts/recommendationPlatform/runtime.cjs');
 const {match,memoryPorts,validators}=require('./recommendationFixture.cjs');
 const {makeDecision,chooseCombo,freezeCombo}=require('../scripts/recommendationPlatform/decision.cjs');
@@ -17,6 +17,16 @@ const {hash}=require('../src/services/publishedForecastPolicy.cjs');
 const {bindPublicReferenceDecision}=require('../src/services/publicReferenceDecision.cjs');
 async function sample(){const p=memoryPorts();await createRuntime(p,{validators}).publishingCycle();return {recommendationCenter:p.state.view};}
 test('the actual runtime projection parses for current UI',async()=>{const x=parseRecommendationCenter(await sample());assert.equal(x.current.length,3);assert.equal(x.previews.length,2);assert.equal(x.review.statistics.single.published,3);});
+test('bound official handicap SP uses the selected quote only for its own outcome',()=>{
+ const analysis={tipCode:'2',marketReference:{source:'sporttery:HHAD',selectedOdds:2.75,odds:{'1':2.05,X:3.4,'2':2.75}}};
+ assert.equal(boundOfficialHandicapSp(analysis,'1'),2.05);
+ assert.equal(boundOfficialHandicapSp(analysis,'2'),2.75);
+ delete analysis.marketReference.odds;
+ assert.equal(boundOfficialHandicapSp(analysis,'2'),2.75);
+ assert.equal(boundOfficialHandicapSp(analysis,'1'),null,'a companion SP cannot be borrowed for the independent handicap leader');
+ analysis.marketReference.source='third-party';
+ assert.equal(boundOfficialHandicapSp(analysis,'2'),null);
+});
 test('existing v2 frozen combo remains valid, settleable and readable after v3 publication',()=>{
   const now=Date.parse('2026-09-17T13:00:00Z'),publication={generationId:'legacy-v2-test',manifestHash:'a'.repeat(64),committedAt:new Date(now).toISOString()};
   const decisions=[1,2].map(id=>makeDecision(match(id,now),{now,publication}).decision);

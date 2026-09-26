@@ -21,8 +21,15 @@ export interface Decision {
 export interface Settlement { state:ResultState; score?:string|null; actual?:Outcome; resultEventId?:string|null; legs?:Array<{decisionId:string;selectionId?:string;state:ResultState;score?:string|null}> }
 export interface SelectionQuality {version:'recommendation-selection-quality-v1'|'recommendation-selection-quality-v2';status:'watch'|'reference-qualified';qualified:boolean;reasons:string[];samples:{elo:{home:number|null;away:number|null};form:{home:number|null;away:number|null}}|null;probabilityLead:number|null;marketProbability:number|null;modelMarketGap:number|null;expectedValue:number|null;marketFavorite:boolean;crossTrack?:{referenceTipCode:Outcome;referenceRecordedAt:string;knownAtPublication:boolean}}
 export interface PublishedScore {home:number;away:number;label:string;probability:number;hadCode:Outcome;hhadCode:Outcome}
-export interface PublishedScores {status:'available'|'unavailable';version:'published-score-distribution-v1';decisionId:string;recordHash:string;topScores:PublishedScore[];alignedScores:PublishedScore[]}
+export interface PublishedTotalGoals {label:string;probability:number}
+export interface PublishedScores {status:'available'|'unavailable';version:'published-score-distribution-v1';decisionId:string;recordHash:string;topScores:PublishedScore[];alignedScores:PublishedScore[];totalGoals?:PublishedTotalGoals[]}
 export interface SingleRow { decision:Decision; settlement:Settlement; handicapSettlement?:Settlement|null;selectionQuality?:SelectionQuality|null;scoreDistribution?:PublishedScores|null }
+export function boundOfficialHandicapSp(analysis:HandicapAnalysis|null|undefined,direction:Outcome|null|undefined):number|null{
+  const quote=analysis?.marketReference;
+  if(!direction||quote?.source!=='sporttery:HHAD')return null;
+  const value=quote.odds?.[direction]??(direction===analysis?.tipCode?quote.selectedOdds:null);
+  return typeof value==='number'&&Number.isFinite(value)&&value>1?value:null;
+}
 // Count every published direction for the match day, including watch rows. A
 // qualified-only UI filter must not make a concentrated slate look diversified.
 export function sameDirectionConcentration(rows:SingleRow[]):{count:number;direction:Outcome}|null{
@@ -192,7 +199,18 @@ function single(v:unknown):SingleRow{
     const p=object(x.scoreDistribution);
     if(p.version!=='published-score-distribution-v1'||p.decisionId!==d.decisionId||p.recordHash!==d.recordHash||!['available','unavailable'].includes(String(p.status)))throw new Error('Invalid score binding');
     const score=(v:unknown):PublishedScore=>{const r=object(v),home=count(r.home),away=count(r.away),probability=number(r.probability);if(probability<=0||probability>1||r.label!==`${home}-${away}`)throw new Error('Invalid score probability');return {home,away,label:String(r.label),probability,hadCode:outcome(r.hadCode),hhadCode:outcome(r.hhadCode)};};
-    scores={version:p.version,status:p.status as PublishedScores['status'],decisionId:d.decisionId,recordHash:d.recordHash,topScores:list(p.topScores).map(score),alignedScores:list(p.alignedScores).map(score)};
+    const topScores=list(p.topScores).map(score),alignedScores=list(p.alignedScores).map(score);
+    const totalGoals=p.totalGoals===undefined?undefined:list(p.totalGoals).map(value=>{
+      const row=object(value),probability=number(row.probability);
+      if(probability<0||probability>1)throw new Error('Invalid total-goals probability');
+      return {label:text(row.label),probability};
+    });
+    if(totalGoals&&(p.status==='available'
+      ? totalGoals.length!==8||totalGoals.some((row,index)=>row.label!==(index===7?'7+':String(index)))
+        ||Math.abs(totalGoals.reduce((sum,row)=>sum+row.probability,0)-1)>1e-9
+        ||totalGoals.some((row,index)=>row.probability+1e-9<topScores.filter(score=>Math.min(7,score.home+score.away)===index).reduce((sum,score)=>sum+score.probability,0))
+      :totalGoals.length!==0))throw new Error('Invalid total-goals binding');
+    scores={version:p.version,status:p.status as PublishedScores['status'],decisionId:d.decisionId,recordHash:d.recordHash,topScores,alignedScores,totalGoals};
     if(scores.alignedScores.some(r=>r.hadCode!==d.tipCode||r.hhadCode!==d.handicapAnalysis?.tipCode))throw new Error('Incoherent aligned score');
   }
   return {decision:d,settlement:s,handicapSettlement:hs,selectionQuality:quality,scoreDistribution:x.scoreDistribution===undefined?undefined:scores};

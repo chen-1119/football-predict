@@ -33,6 +33,7 @@ function assertMarginals(decision) {
   assert.equal(result.status, 'available');
   const h = decision.handicapAnalysis;
   const sums = { had: { '1': 0, X: 0, '2': 0 }, hhad: { '1': 0, X: 0, '2': 0 }, conditional: { '1': 0, X: 0, '2': 0 } };
+  const totalGoalBuckets = Array(8).fill(0);
   for (const row of result.topScores) {
     assert.ok(Number.isFinite(row.probability) && row.probability > 0 && row.probability <= 1);
     assert.equal(row.hadCode, row.home > row.away ? '1' : row.home < row.away ? '2' : 'X');
@@ -40,8 +41,12 @@ function assertMarginals(decision) {
     assert.equal(row.hhadCode, margin > 0 ? '1' : margin < 0 ? '2' : 'X');
     sums.had[row.hadCode] += row.probability;
     sums.hhad[row.hhadCode] += row.probability;
+    totalGoalBuckets[Math.min(7, row.home + row.away)] += row.probability;
     if (row.hadCode === decision.tipCode) sums.conditional[row.hhadCode] += row.probability;
   }
+  assert.deepEqual(result.totalGoals.map(row => row.label), ['0', '1', '2', '3', '4', '5', '6', '7+']);
+  for (let index = 0; index < totalGoalBuckets.length; index++) near(result.totalGoals[index].probability, totalGoalBuckets[index]);
+  near(result.totalGoals.reduce((sum, row) => sum + row.probability, 0), 1);
   for (const c of CODES) {
     near(sums.had[c], decision.probabilities[c]);
     near(sums.hhad[c], h.overallProbabilities[c], 1e-6 + 1e-12);
@@ -60,6 +65,17 @@ test('score cells reproduce published HAD and both unconditional and conditional
     { home: 12, away: 11, line: -3, final: { home: .51, draw: .2, away: .29 } },
     { home: 0, away: 1.8, line: 1, final: { home: 0, draw: .2, away: .8 } },
   ]) assertMarginals(fixture(config));
+});
+
+test('7+ collects every high-scoring frozen cell, independent of the displayed top-score limit', () => {
+  const decision = fixture({ home: 3.5, away: 2.8, line: -1 });
+  const full = assertMarginals(decision);
+  const short = buildPublishedScoreDistribution(decision, { limit: 1 });
+  assert.ok(full.totalGoals[7].probability > 0);
+  assert.ok(full.topScores.some(row => row.home + row.away > 7));
+  near(full.totalGoals[7].probability,
+    full.topScores.filter(row => row.home + row.away >= 7).reduce((sum, row) => sum + row.probability, 0));
+  assert.deepEqual(short.totalGoals, full.totalGoals);
 });
 
 test('global modal draw can coexist with HAD home primary while aligned scores retain unconditional mass', () => {
@@ -136,6 +152,7 @@ test('stale HHAD SP does not remove score projections supported by a frozen offi
 
 test('invalid records and missing coherent inputs return unavailable without supplemental-score fallback', () => {
   assert.equal(buildPublishedScoreDistribution(null).reason, 'decision-missing');
+  assert.deepEqual(buildPublishedScoreDistribution(null).totalGoals, []);
   const d = fixture();
   for (const change of [row => { row.recordHash = 'f'.repeat(64); }, row => { row.handicapAnalysis.lambdas.home = 5; },
     row => { row.handicapAnalysis.version = 'handicap-margin-v2'; }, row => { row.probabilities['1'] = .8; }]) {
@@ -145,6 +162,7 @@ test('invalid records and missing coherent inputs return unavailable without sup
   const hadOnly = fixture({ line: 0 });
   assert.equal(hadOnly.handicapAnalysis, null);
   assert.equal(buildPublishedScoreDistribution(hadOnly).reason, 'unsupported-distribution-version');
+  assert.deepEqual(buildPublishedScoreDistribution(hadOnly).totalGoals, []);
 });
 
 test('a valid older frozen v2 record remains valid but cannot claim coherent v3 score evidence', () => {
