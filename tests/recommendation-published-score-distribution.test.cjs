@@ -169,6 +169,8 @@ test('a valid older frozen v2 record remains valid but cannot claim coherent v3 
   const legacy = structuredClone(fixture());
   legacy.handicapAnalysis = require('./fixtures/handicap-margin-v2.json');
   delete legacy.selectionPolicyVersion;
+  delete legacy.supplementaryPolicyVersion;
+  delete legacy.supplementaryResearch;
   legacy.inputEvidence.model.handicapMarginInputHash = legacy.handicapAnalysis.inputHash;
   legacy.inputHash = hash({ hadInputHash: legacy.hadInputHash, handicapInputHash: legacy.handicapAnalysis.inputHash });
   legacy.decisionId = `decision_${hash([legacy.version, legacy.sourceMatchId, legacy.eventVersion, legacy.market, legacy.inputHash])}`;

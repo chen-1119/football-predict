@@ -60,6 +60,7 @@ function assess(bound,samples,proof){
   else if(!clock.events.some(e=>e.operation==='iso'&&e.millis===instant(bound.modelGeneratedAt))||receipts.some(r=>!clock.events.some(e=>e.operation==='iso'&&e.millis===instant(r.recordedAt))))invalid.push('receipt-execution-clock-mismatch');
  }else issues.push('execution-clock-missing');
  if(base){
+  if(base.ensemblePolicy && ['elo','form'].some(family => ['home','away'].some(side => base.ensemblePolicy.samples?.[family]?.[side] !== samples[family][side])))invalid.push('ensemble-policy-samples-mismatch');
   if(!proof.baseBefore)issues.push('base-output-binding-missing');
   if(!proof.calibratedFinal)issues.push('final-output-binding-missing');
   else if(!sameProbability(proof.calibratedFinal,bound.final))invalid.push('final-output-mismatch');

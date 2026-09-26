@@ -28,11 +28,16 @@ function makeDecision(match, { now, publication, handicapCalibration=null }) {
   const modelInputEvidence=validInputEvidence(proposedEvidence,input.probabilityModel,input)?proposedEvidence:null;
   const selectionPolicyVersion=require('../../src/services/recommendationSelectionQuality.cjs').VERSION;
   const hadInputHash = candidate.inputHash;
-  const inputHash = hash({ hadInputHash, handicapInputHash: handicapAnalysis?.inputHash || null,selectionPolicyVersion,modelInputEvidenceHash:modelInputEvidence?.contentHash||null });
+  const supplementaryPolicy = require('../../src/services/supplementaryResearch.cjs');
+  const supplementaryPolicyVersion = supplementaryPolicy.VERSION;
+  const supplementaryResearch = supplementaryPolicy.buildSupplementaryResearch({ ...candidate, hadInputHash, handicapAnalysis });
+  const inputHash = hash({ hadInputHash, handicapInputHash: handicapAnalysis?.inputHash || null,selectionPolicyVersion,modelInputEvidenceHash:modelInputEvidence?.contentHash||null,
+    supplementaryPolicyVersion, supplementaryResearchHash: supplementaryResearch?.contentHash || null });
   const identity = [VERSION, candidate.sourceMatchId, candidate.eventVersion, candidate.market, inputHash];
   const decisionId = `decision_${hash(identity)}`;
   const body = { ...candidate, hadInputHash, inputHash, handicapAnalysis, version: VERSION, policyVersion: VERSION, decisionId, id: decisionId,
-    statisticsTrack: 'unified-decision', selectionPolicyVersion,publishedAt: new Date(now).toISOString(), publicationStatus: 'PUBLISHED',
+    statisticsTrack: 'unified-decision', selectionPolicyVersion, supplementaryPolicyVersion, supplementaryResearch,
+    publishedAt: new Date(now).toISOString(), publicationStatus: 'PUBLISHED',
     evaluationRule: 'latest-published-input-before-cutoff-per-event', modelValidation: 'unvalidated',
     upstreamModelVersion: String(input?.probabilityModel?.version || 'unknown'),
     sourceCycleId: String(input?.sourceCycleId || publication.sourceCycleId || ''),
@@ -54,7 +59,10 @@ function validDecision(row) {
     const model=row.inputEvidence?.model;
     if(model?.inputEvidence&&!require('../../src/services/recommendationInputEvidence.cjs').validInputEvidence(model.inputEvidence,model,row))return false;
   }
-  if (row.hadInputHash && row.inputHash !== hash({ hadInputHash:row.hadInputHash, handicapInputHash:row.handicapAnalysis?.inputHash || null,...qualityBinding })) return false;
+  const supplementaryBinding = row.supplementaryPolicyVersion === undefined ? {} : {
+    supplementaryPolicyVersion: row.supplementaryPolicyVersion, supplementaryResearchHash: row.supplementaryResearch?.contentHash || null };
+  if (!require('../../src/services/supplementaryResearch.cjs').validSupplementaryResearch(row)) return false;
+  if (row.hadInputHash && row.inputHash !== hash({ hadInputHash:row.hadInputHash, handicapInputHash:row.handicapAnalysis?.inputHash || null,...qualityBinding,...supplementaryBinding })) return false;
   if (!validHandicapMarginDecision(row.handicapAnalysis)) return false;
   if (row.handicapAnalysis && row.handicapAnalysis.straightTipCode !== row.tipCode) return false;
   if (row.handicapAnalysis?.version === 'handicap-margin-v3' && (row.handicapAnalysis.computedAt !== row.publishedAt

@@ -77,6 +77,28 @@ function settleHandicapDecision(decision,event){
   return {state:actual===decision.handicapAnalysis.tipCode?'WON':'LOST',actual,score:`${event.scoreHome}-${event.scoreAway}`,
     resultEventId:event.eventId,revision:event.revision,handicapLine:line};
 }
+function settleSupplementaryResearch(decision, event) {
+  if (!validDecision(decision) || !decision.supplementaryResearch) return null;
+  const research = decision.supplementaryResearch;
+  const guarded = event && !validResultEvent(event)
+    ? { state:'DISPUTED', score:null, resultEventId:event.eventId || null, reason:'invalid-result-event' }
+    : identityGuard(decision, event);
+  if (guarded) return { exactScore:{...guarded}, totalGoals:{...guarded} };
+  const score = `${event.scoreHome}-${event.scoreAway}`;
+  const total = event.scoreHome + event.scoreAway >= 7 ? '7+' : String(event.scoreHome + event.scoreAway);
+  const result = (actual, selected) => ({ state:actual === selected ? 'WON' : 'LOST', actual, score,
+    resultEventId:event.eventId, revision:event.revision });
+  return { exactScore:result(score, research.exactScore.label), totalGoals:result(total, research.totalGoals.label) };
+}
+function supplementarySummary(rows) {
+  // Only genuinely frozen selections enter this denominator. Never backfill
+  // a historical pick from today's projection of an older decision.
+  const eligible = rows.filter(row => row.decision?.supplementaryResearch && validDecision(row.decision));
+  return { version:'supplementary-research-v1', researchOnly:true, modelValidation:'unvalidated', roi:null,
+    excludedWithoutFrozenPicks: rows.length - eligible.length,
+    exactScore:summary(eligible.map(row => ({settlement:row.supplementarySettlement?.exactScore}))),
+    totalGoals:summary(eligible.map(row => ({settlement:row.supplementarySettlement?.totalGoals}))) };
+}
 function settleCombo(combo, heads) {
   if (!validCombo(combo,{frozen:Boolean(combo?.frozenAt)})) throw new Error('Invalid frozen combo');
   const selections=comboSelections(combo);
@@ -153,4 +175,4 @@ function validResultEvent(e){
     && e.eventKey===key(e) && e.stateHash===fingerprint(e) && e.eventId===`result_${hash([e.eventKey,e.stateHash,e.previousEventId])}`
     && (e.state!=='FINAL'||[e.scoreHome,e.scoreAway].every(n=>Number.isSafeInteger(n)&&n>=0)));}catch{return false;}
 }
-module.exports={key,collectResults,settleDecision,settleHandicapDecision,settleCombo,summary,handicapSummary,handicapBreakdown,marketBaseline,dailySummary,validResultEvent};
+module.exports={key,collectResults,settleDecision,settleHandicapDecision,settleSupplementaryResearch,supplementarySummary,settleCombo,summary,handicapSummary,handicapBreakdown,marketBaseline,dailySummary,validResultEvent};

@@ -28,15 +28,13 @@ function poissonWeights(lambda) {
 /** Read-only projection of a complete frozen publication, never a live model.
  * Every score probability is unconditional. Filtering aligned candidates or
  * displaying only a few scores does not renormalize their probabilities. */
-function buildPublishedScoreDistribution(decision, options = {}) {
+function projectFrozenScoreDistribution(decision, options = {}) {
   const unavailable = reason => ({ status: 'unavailable', version: VERSION, reason,
     decisionId: typeof decision?.decisionId === 'string' ? decision.decisionId : null,
     recordHash: typeof decision?.recordHash === 'string' ? decision.recordHash : null,
     topScores: [], alignedScores: [], totalGoals: [] });
   if (!decision) return unavailable('decision-missing');
   try {
-    const { validDecision } = require('../../scripts/recommendationPlatform/decision.cjs');
-    if (!validDecision(decision)) return unavailable('invalid-decision-record');
     const h = decision.handicapAnalysis;
     if (h?.version !== 'handicap-margin-v3' || h.distributionBasis !== DISTRIBUTION_BASIS) {
       return unavailable('unsupported-distribution-version');
@@ -111,4 +109,17 @@ function buildPublishedScoreDistribution(decision, options = {}) {
   }
 }
 
-module.exports = { VERSION, buildPublishedScoreDistribution };
+function buildPublishedScoreDistribution(decision, options = {}) {
+  // Only publication construction/validation may use the pure projection.
+  // Public callers must still present a complete, valid frozen decision.
+  try {
+    if (require('../../scripts/recommendationPlatform/decision.cjs').validDecision(decision)) {
+      return projectFrozenScoreDistribution(decision, options);
+    }
+  } catch { /* Invalid records cannot expose a distribution. */ }
+  return { status: 'unavailable', version: VERSION, reason: decision ? 'invalid-decision-record' : 'decision-missing',
+    decisionId: decision?.decisionId ?? null, recordHash: decision?.recordHash ?? null,
+    topScores: [], alignedScores: [], totalGoals: [] };
+}
+
+module.exports = { VERSION, buildPublishedScoreDistribution, projectFrozenScoreDistribution };

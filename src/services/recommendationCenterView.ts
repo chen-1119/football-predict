@@ -17,7 +17,15 @@ export interface Decision {
   matchNo:string|null; tipCode:Outcome; odds:number; probabilities:Record<Outcome,number>;
   modelProbability:number; modelGeneratedAt:string; quoteObservedAt:string; recordHash:string; quoteSource?:string|null; quoteOdds?:Record<Outcome,number>;
   handicapAnalysis?:HandicapAnalysis|null;
+  supplementaryResearch?:SupplementaryResearch|null;
 }
+export interface SupplementaryResearch {
+  version:'supplementary-research-v1';contentHash:string;researchOnly:true;
+  exactScore:{home:number;away:number;label:string;probability:number};
+  totalGoals:{label:string;probability:number;distribution:PublishedTotalGoals[]};
+}
+export interface SupplementaryResult {state:ResultState;actual?:string;score?:string|null;resultEventId?:string|null}
+export interface SupplementarySummary {exactScore:Summary;totalGoals:Summary;excludedWithoutFrozenPicks:number}
 export interface Settlement { state:ResultState; score?:string|null; actual?:Outcome; resultEventId?:string|null; legs?:Array<{decisionId:string;selectionId?:string;state:ResultState;score?:string|null}> }
 export interface SelectionQuality {version:'recommendation-selection-quality-v1'|'recommendation-selection-quality-v2';status:'watch'|'reference-qualified';qualified:boolean;reasons:string[];samples:{elo:{home:number|null;away:number|null};form:{home:number|null;away:number|null}}|null;probabilityLead:number|null;marketProbability:number|null;modelMarketGap:number|null;expectedValue:number|null;marketFavorite:boolean;crossTrack?:{referenceTipCode:Outcome;referenceRecordedAt:string;knownAtPublication:boolean}}
 export interface PublishedScore {home:number;away:number;label:string;probability:number;hadCode:Outcome;hhadCode:Outcome}
@@ -63,7 +71,16 @@ export function outcomeResearchReasonLabel(reason:string,zh:boolean):string{
   };
   return (labels[reason]??[reason,reason])[zh?0:1];
 }
-export interface SingleRow { decision:Decision; settlement:Settlement; handicapSettlement?:Settlement|null;selectionQuality?:SelectionQuality|null;scoreDistribution?:PublishedScores|null;outcomeResearch?:OutcomeCategoryResearch|null }
+export interface SingleRow { decision:Decision; settlement:Settlement; handicapSettlement?:Settlement|null;selectionQuality?:SelectionQuality|null;scoreDistribution?:PublishedScores|null;outcomeResearch?:OutcomeCategoryResearch|null;supplementarySettlement?:{exactScore:SupplementaryResult;totalGoals:SupplementaryResult}|null }
+export function publicationLifecycle(d:Decision,now:number):'open'|'quote-stale'|'review-only'{
+  if(!Number.isFinite(now)||now>=Math.min(Date.parse(d.cutoffTime),Date.parse(d.kickoffTime)))return 'review-only';
+  const observed=Date.parse(d.quoteObservedAt);
+  return !Number.isFinite(observed)||now<observed||now-observed>15*60000?'quote-stale':'open';
+}
+export function publicationLifecycleLabel(status:ReturnType<typeof publicationLifecycle>,language:'zh'|'en'):string{
+  return status==='review-only'?(language==='zh'?'已截止 · 仅供复盘':'Cutoff passed · review only')
+    :status==='quote-stale'?(language==='zh'?'SP待更新 · 观望':'SP refresh pending · watch'):'';
+}
 export function boundOfficialHandicapSp(analysis:HandicapAnalysis|null|undefined,direction:Outcome|null|undefined):number|null{
   const quote=analysis?.marketReference;
   if(!direction||quote?.source!=='sporttery:HHAD')return null;
@@ -111,7 +128,7 @@ export interface RecommendationCenterData {
   lanes:Partial<Record<'publish'|'combos'|'settlement'|'view',Lane>>;
   current:SingleRow[];previews:Combo[];todayCombos:ComboRow[];overlapDecisionIds:string[];
   todayDualResearch?:DualResearchV2Row[];
-  review:{singles:SingleRow[];combos:ComboRow[];limit:number;statistics:{single:Summary;qualifiedSingle?:Summary;handicap?:Summary;handicapBreakdown?:HandicapBreakdown;two:Summary;three:Summary};qualityReport?:ModelQualityReport;handicapCalibration?:HandicapCalibrationProfile;definition:string};
+  review:{singles:SingleRow[];combos:ComboRow[];limit:number;statistics:{single:Summary;supplementary?:SupplementarySummary;qualifiedSingle?:Summary;handicap?:Summary;handicapBreakdown?:HandicapBreakdown;two:Summary;three:Summary};qualityReport?:ModelQualityReport;handicapCalibration?:HandicapCalibrationProfile;definition:string};
   excludedCorruptRecords:number;modelValidation:'unvalidated';
   coverage?:DayCoverageData;
 }
@@ -197,7 +214,47 @@ function decision(v:unknown):Decision{
       ||! /^[a-f0-9]{64}$/.test(text(receipt.receiptHash))) throw new Error('Invalid copied lottery SP receipt');
   }
 
-  return {decisionId:text(d.decisionId),matchId:text(d.matchId),sourceMatchId:text(d.sourceMatchId),eventVersion:stamp(d.eventVersion),businessDate:date(d.businessDate),homeTeamName:text(d.homeTeamName),awayTeamName:text(d.awayTeamName),matchNo:d.matchNo==null?null:text(d.matchNo),publishedAt,kickoffTime,cutoffTime,tipCode,odds,probabilities,modelProbability,modelGeneratedAt,quoteObservedAt,recordHash,quoteSource,...(quoteOdds?{quoteOdds}:{}),handicapAnalysis:parsedHandicap};
+  return {decisionId:text(d.decisionId),matchId:text(d.matchId),sourceMatchId:text(d.sourceMatchId),eventVersion:stamp(d.eventVersion),businessDate:date(d.businessDate),homeTeamName:text(d.homeTeamName),awayTeamName:text(d.awayTeamName),matchNo:d.matchNo==null?null:text(d.matchNo),publishedAt,kickoffTime,cutoffTime,tipCode,odds,probabilities,modelProbability,modelGeneratedAt,quoteObservedAt,recordHash,quoteSource,...(quoteOdds?{quoteOdds}:{}),handicapAnalysis:parsedHandicap, supplementaryResearch:parseSupplementaryResearch(d)};
+}
+function parseSupplementaryResearch(d:Obj):SupplementaryResearch|null{
+  if(d.supplementaryPolicyVersion===undefined){if(d.supplementaryResearch!==undefined)throw new Error('Unversioned supplementary picks');return null;}
+  if(d.supplementaryPolicyVersion!=='supplementary-research-v1')throw new Error('Unsupported supplementary policy');
+  if(d.supplementaryResearch===null)return null;
+  const r=object(d.supplementaryResearch),h=object(d.handicapAnalysis),exact=object(r.exactScore),total=object(r.totalGoals);
+  const probability=(v:unknown)=>{const n=number(v);if(n<0||n>1)throw new Error('Invalid supplementary probability');return n;};
+  const home=count(exact.home),away=count(exact.away),p=probability(exact.probability),label=text(exact.label);
+  const totalLabel=text(total.label),totalProbability=probability(total.probability);
+  const distribution=list(total.distribution).map(value=>{const row=object(value);return {label:text(row.label),probability:probability(row.probability)};});
+  const code=(margin:number)=>margin>0?'1':margin<0?'2':'X';
+  const winner=distribution.reduce((best,row)=>row.probability>best.probability?row:best,{label:'',probability:-1});
+  if(r.version!=='supplementary-research-v1'||r.researchOnly!==true||r.formalPromotionEligible!==false||r.modelValidation!=='unvalidated'
+    ||r.priceStatus!=='official-sp-unavailable'||r.odds!==null||r.probabilityBasis!=='unconditional-score-matrix'
+    ||r.sourceMatchId!==d.sourceMatchId||r.eventVersion!==d.eventVersion||r.modelGeneratedAt!==d.modelGeneratedAt
+    ||r.hadInputHash!==d.hadInputHash||r.handicapInputHash!==h.inputHash
+    ||exact.rule!=='highest-probability-aligned-HAD-HHAD'||total.rule!=='highest-probability-total-bucket-lowest-tie'
+    ||label!==`${home}-${away}`||p<=0||code(home-away)!==d.tipCode||code(home-away+number(h.handicapLine))!==h.tipCode
+    ||distribution.length!==8||distribution.some((row,i)=>row.label!==(i===7?'7+':String(i)))
+    ||Math.abs(distribution.reduce((sum,row)=>sum+row.probability,0)-1)>1e-9
+    ||winner.label!==totalLabel||winner.probability!==totalProbability||! /^[a-f0-9]{64}$/.test(text(r.contentHash)))throw new Error('Invalid frozen supplementary picks');
+  return {version:'supplementary-research-v1',contentHash:String(r.contentHash),researchOnly:true,
+    exactScore:{home,away,label,probability:p},totalGoals:{label:totalLabel,probability:totalProbability,distribution}};
+}
+function supplementaryResults(value:unknown,d:Decision,parent:Settlement):SingleRow['supplementarySettlement']{
+  if(value==null)return null;
+  if(!d.supplementaryResearch)throw new Error('Supplementary result without frozen picks');
+  const raw=object(value);
+  const parse=(key:'exactScore'|'totalGoals'):SupplementaryResult=>{
+    const row=object(raw[key]),result:SupplementaryResult={state:state(row.state),resultEventId:row.resultEventId==null?null:text(row.resultEventId)};
+    if(result.resultEventId!==(parent.resultEventId??null))throw new Error('Supplementary result event mismatch');
+    if(['WON','LOST'].includes(parent.state)){
+      if(!parent.score)throw new Error('Missing official score');
+      const [home,away]=parent.score.split('-').map(Number),actual=key==='exactScore'?parent.score:home+away>=7?'7+':String(home+away);
+      if(row.actual!==actual||row.score!==parent.score||row.state!==(actual===d.supplementaryResearch![key].label?'WON':'LOST'))throw new Error('Supplementary settlement mismatch');
+      result.actual=actual;result.score=parent.score;
+    }else if(result.state!==parent.state||row.actual!=null||row.score!=null)throw new Error('Supplementary settlement state mismatch');
+    return result;
+  };
+  return {exactScore:parse('exactScore'),totalGoals:parse('totalGoals')};
 }
 function settlement(v:unknown):Settlement{
   const s=object(v),result:Settlement={state:state(s.state)};
@@ -253,6 +310,11 @@ function single(v:unknown):SingleRow{
     scores={version:p.version,status:p.status as PublishedScores['status'],decisionId:d.decisionId,recordHash:d.recordHash,topScores,alignedScores,totalGoals};
     if(scores.alignedScores.some(r=>r.hadCode!==d.tipCode||r.hhadCode!==d.handicapAnalysis?.tipCode))throw new Error('Incoherent aligned score');
   }
+  if(d.supplementaryResearch&&scores?.status==='available'){
+    const frozen=d.supplementaryResearch,aligned=scores.alignedScores[0];
+    if(!aligned||aligned.label!==frozen.exactScore.label||aligned.probability!==frozen.exactScore.probability
+      ||scores.totalGoals?.some((row,i)=>row.label!==frozen.totalGoals.distribution[i].label||row.probability!==frozen.totalGoals.distribution[i].probability))throw new Error('Supplementary picks differ from frozen matrix');
+  }
   if(x.outcomeResearch!=null){
     const r=object(x.outcomeResearch),category=r.category;
     if(r.version!=='outcome-category-research-v1'||r.decisionId!==d.decisionId||r.recordHash!==d.recordHash
@@ -289,7 +351,7 @@ function single(v:unknown):SingleRow{
     research={version:'outcome-category-research-v1',decisionId:d.decisionId,recordHash:d.recordHash,researchOnly:true,formalPromotionEligible:false,
       category:category as OutcomeCategoryResearch['category'],candidateCode,modelLeaderCode,marketFavoriteCode,researchQualified,reasons,evidenceCodes,outcomes};
   }
-  return {decision:d,settlement:s,handicapSettlement:hs,selectionQuality:quality,scoreDistribution:x.scoreDistribution===undefined?undefined:scores,outcomeResearch:x.outcomeResearch===undefined?undefined:research};
+  return {decision:d,settlement:s,handicapSettlement:hs,supplementarySettlement:supplementaryResults(x.supplementarySettlement,d,s),selectionQuality:quality,scoreDistribution:x.scoreDistribution===undefined?undefined:scores,outcomeResearch:x.outcomeResearch===undefined?undefined:research};
 }
 function comboSelection(v:unknown,parent:Decision,rawParent:Obj):ComboSelection{
   const s=object(v),market=s.market,tipCode=outcome(s.tipCode),handicapLine=number(s.handicapLine),odds=number(s.odds),modelProbability=number(s.modelProbability);
@@ -376,6 +438,13 @@ function summary(v:unknown):Summary{
   for(const k of ['brier','logLoss','marketBrier'] as const)if(s[k]!=null){r[k]=number(s[k]);if(r[k]!<0)throw new Error('Invalid model metric');}
   return r;
 }
+function supplementarySummary(v:unknown):SupplementarySummary{
+  const s=object(v);
+  if(s.version!=='supplementary-research-v1'||s.researchOnly!==true||s.modelValidation!=='unvalidated'||s.roi!==null)throw new Error('Invalid supplementary statistics');
+  const exactScore=summary(s.exactScore),totalGoals=summary(s.totalGoals);
+  if(['published','settled','pending','void','disputed'].some(key=>exactScore[key as keyof Summary]!==totalGoals[key as keyof Summary]))throw new Error('Supplementary denominator mismatch');
+  return {exactScore,totalGoals,excludedWithoutFrozenPicks:count(s.excludedWithoutFrozenPicks)};
+}
 export const parseRecommendationSummary=(value:unknown):Summary=>summary(value);
 function handicapBreakdown(v:unknown):HandicapBreakdown{
   const b=object(v),r:HandicapBreakdown={standaloneV1:summary(b.standaloneV1),companionV2All:summary(b.companionV2All),companionV2WhenHadWon:summary(b.companionV2WhenHadWon),companionV2BothWon:summary(b.companionV2BothWon)};
@@ -438,7 +507,7 @@ export function parseRecommendationCenter(response:unknown):RecommendationCenter
   if(x.version!=='recommendation-center-v1'||x.modelValidation!=='unvalidated')throw new Error('Unsupported center contract');
   const parsedLanes:RecommendationCenterData['lanes']={};
   for(const k of ['publish','combos','settlement','view'] as const){if(lanes[k]==null)continue;const l=object(lanes[k]);if(l.status!=='ok'&&l.status!=='error')throw new Error('Invalid lane status');parsedLanes[k]={status:l.status,lastAttemptAt:stamp(l.lastAttemptAt),lastSuccessAt:l.lastSuccessAt==null?undefined:stamp(l.lastSuccessAt),errorCode:l.errorCode==null?null:text(l.errorCode),inputAsOf:l.inputAsOf==null?undefined:stamp(l.inputAsOf),candidateCount:l.candidateCount==null?undefined:count(l.candidateCount),eligibleCount:l.eligibleCount==null?undefined:count(l.eligibleCount),bindingFailures:l.bindingFailures==null?undefined:count(l.bindingFailures),referenceCount:l.referenceCount==null?undefined:count(l.referenceCount),watchCount:l.watchCount==null?undefined:count(l.watchCount)};}
-  const result:RecommendationCenterData={version:'recommendation-center-v1',updatedAt:stamp(x.updatedAt),businessDate:date(x.businessDate),inputAsOf:x.inputAsOf==null?null:stamp(x.inputAsOf),resultAsOf:x.resultAsOf==null?null:stamp(x.resultAsOf),lanes:parsedLanes,current:list(x.current).map(single),previews:list(x.previews).map(combo),todayCombos:list(x.todayCombos).map(comboRow),todayDualResearch:x.todayDualResearch==null?[]:list(x.todayDualResearch).map(dualResearchV2),overlapDecisionIds:list(x.overlapDecisionIds).map(text),review:{singles:list(review.singles).map(single),combos:list(review.combos).map(comboRow),limit:count(review.limit),qualityReport:review.qualityReport==null?undefined:modelQuality(review.qualityReport),statistics:{single:summary(stats.single),qualifiedSingle:stats.qualifiedSingle==null?undefined:summary(stats.qualifiedSingle),handicap:stats.handicap==null?undefined:summary(stats.handicap),handicapBreakdown:stats.handicapBreakdown==null?undefined:handicapBreakdown(stats.handicapBreakdown),two:summary(stats.two),three:summary(stats.three)},handicapCalibration:review.handicapCalibration==null?undefined:calibrationProfile(review.handicapCalibration),definition:text(review.definition)},excludedCorruptRecords:count(x.excludedCorruptRecords),modelValidation:'unvalidated',coverage:x.coverage==null?undefined:dayCoverage(x.coverage)};
+  const result:RecommendationCenterData={version:'recommendation-center-v1',updatedAt:stamp(x.updatedAt),businessDate:date(x.businessDate),inputAsOf:x.inputAsOf==null?null:stamp(x.inputAsOf),resultAsOf:x.resultAsOf==null?null:stamp(x.resultAsOf),lanes:parsedLanes,current:list(x.current).map(single),previews:list(x.previews).map(combo),todayCombos:list(x.todayCombos).map(comboRow),todayDualResearch:x.todayDualResearch==null?[]:list(x.todayDualResearch).map(dualResearchV2),overlapDecisionIds:list(x.overlapDecisionIds).map(text),review:{singles:list(review.singles).map(single),combos:list(review.combos).map(comboRow),limit:count(review.limit),qualityReport:review.qualityReport==null?undefined:modelQuality(review.qualityReport),statistics:{single:summary(stats.single),supplementary:stats.supplementary==null?undefined:supplementarySummary(stats.supplementary),qualifiedSingle:stats.qualifiedSingle==null?undefined:summary(stats.qualifiedSingle),handicap:stats.handicap==null?undefined:summary(stats.handicap),handicapBreakdown:stats.handicapBreakdown==null?undefined:handicapBreakdown(stats.handicapBreakdown),two:summary(stats.two),three:summary(stats.three)},handicapCalibration:review.handicapCalibration==null?undefined:calibrationProfile(review.handicapCalibration),definition:text(review.definition)},excludedCorruptRecords:count(x.excludedCorruptRecords),modelValidation:'unvalidated',coverage:x.coverage==null?undefined:dayCoverage(x.coverage)};
   if(result.coverage&&result.coverage.businessDate!==result.businessDate)throw new Error('Day coverage date mismatch');
   if(new Set(result.current.map(r=>r.decision.decisionId)).size!==result.current.length)throw new Error('Duplicate current decision');
   if(result.todayDualResearch?.some(r=>r.businessDate!==result.businessDate)

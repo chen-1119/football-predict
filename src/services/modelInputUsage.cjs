@@ -26,6 +26,8 @@ function verifyModelInputUsage(receipt) {
     const weights = receipt.weights;
     const inputs = receipt.inputs;
     if (!weights || !inputs || !triplet(receipt.output)) return false;
+    if (receipt.ensemblePolicy !== undefined
+      && !require('./baselineEnsemblePolicy.cjs').validEnsemblePolicy(receipt.ensemblePolicy, weights)) return false;
     const raw = { home: 0, draw: 0, away: 0 };
     for (const key of ["market", "teamStrength", "elo", "poisson", "worldCupPrior"]) {
       const weight = weights[key];

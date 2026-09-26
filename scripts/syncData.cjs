@@ -2186,34 +2186,13 @@ function applyScoreOutcomeFeedback(match, probabilities, scoreImplied) {
 function blendOutcomeProbabilities(match, market, poisson, eloSnapshot, formSnapshot) {
   const teamStrength = syntheticModelOnlyProbabilities(match);
   const elo = normalizeOutcomeProbabilities(eloSnapshot?.probabilities);
-  const eloSample = (eloSnapshot?.homeMatches || 0) + (eloSnapshot?.awayMatches || 0);
-  const formSample = Number(formSnapshot?.sampleSize || 0);
-  const pairedFormConfidence = formConfidence(formSnapshot);
   const worldCupPrior = worldCupPriorOutcomeProbabilities(match);
-  const formReady = formSample >= 8 && pairedFormConfidence >= 0.25;
-  // Market is one evidence family, not a direction override. Keep a stable
-  // market anchor in every data regime while letting Elo, team strength and
-  // the form/context-aware Poisson layer take the majority of the blend when
-  // auditable samples are available. No branch is selected by SP level.
-  let weights = elo && eloSample >= 6 && formReady
-    ? { market: 0.1, teamStrength: 0.15, elo: 0.3, poisson: 0.45 }
-    : elo && eloSample >= 6
-      ? { market: 0.12, teamStrength: 0.18, elo: 0.35, poisson: 0.35 }
-      : formReady
-        ? { market: 0.12, teamStrength: 0.24, elo: 0, poisson: 0.64 }
-        : { market: 0.15, teamStrength: 0.35, elo: 0, poisson: 0.5 };
-  const worldCupPriorWeight = worldCupPrior
-    ? 0.18
-    : 0;
-  if (worldCupPriorWeight > 0) {
-    weights = {
-      market: Number((weights.market * (1 - worldCupPriorWeight)).toFixed(3)),
-      teamStrength: Number((weights.teamStrength * (1 - worldCupPriorWeight)).toFixed(3)),
-      elo: Number((weights.elo * (1 - worldCupPriorWeight)).toFixed(3)),
-      poisson: Number((weights.poisson * (1 - worldCupPriorWeight)).toFixed(3)),
-      worldCupPrior: worldCupPriorWeight,
-    };
-  }
+  const ensemblePolicy = require("../src/services/baselineEnsemblePolicy.cjs").selectEnsemblePolicy({
+    eloAvailable: Boolean(elo), eloHome: eloSnapshot?.homeMatches, eloAway: eloSnapshot?.awayMatches,
+    formHome: formSnapshot?.home?.sampleSize, formAway: formSnapshot?.away?.sampleSize,
+    formConfidence: formConfidence(formSnapshot), worldCupPriorAvailable: Boolean(worldCupPrior),
+  });
+  const weights = ensemblePolicy.weights;
   const blended = {
     home: market.home * weights.market + teamStrength.home * weights.teamStrength + (elo?.home || 0) * weights.elo + poisson.home * weights.poisson + (worldCupPrior?.home || 0) * (weights.worldCupPrior || 0),
     draw: market.draw * weights.market + teamStrength.draw * weights.teamStrength + (elo?.draw || 0) * weights.elo + poisson.draw * weights.poisson + (worldCupPrior?.draw || 0) * (weights.worldCupPrior || 0),
@@ -2225,11 +2204,13 @@ function blendOutcomeProbabilities(match, market, poisson, eloSnapshot, formSnap
     probabilities: blendOutput,
     usage: require("../src/services/modelInputUsage.cjs").recordModelInputUsage(match, "base-outcome-blend", {
       inputs: { market, teamStrength, elo, poisson, worldCupPrior },
+      ensemblePolicy,
       weights: { ...weights, worldCupPrior: weights.worldCupPrior || 0 }, output: blendOutput,
       marketPool: sanitizeOdds(match.odds) ? "HAD" : sanitizeHandicapOdds(match) ? "HHAD" : null,
       marketSource: sanitizeOdds(match.odds) ? match.oddsSource || null : sanitizeHandicapOdds(match) ? match.handicapOddsSource || null : null,
     }),
     weights,
+    ensemblePolicy,
     teamStrength,
   };
 }
@@ -2909,7 +2890,8 @@ function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLamb
     contextSignals,
   });
   return {
-    version: "independent-elo-form-poisson-v11",
+    version: "independent-elo-form-poisson-v12",
+    ensemblePolicy: blended.ensemblePolicy,
     competitionContext: require("./competitionModelContext.cjs").competitionModelContext(match),
     generatedAt: predictionNowIso(),
     basis: PREDICTION_MODEL_BASIS,
@@ -9310,7 +9292,8 @@ function enforceUnifiedPosteriorRecommendation(match, context) {
   );
   const unifiedProbabilityModel = {
     ...probabilityModel,
-    version: "unified-poisson-bayes-v75",
+    version: "unified-poisson-bayes-v76",
+    baseModelVersion: probabilityModel.version,
     oneXTwo: {
       ...(probabilityModel.oneXTwo || {}),
       unifiedPosterior: asPercentTriplet(unified.hadPosterior),
@@ -9320,7 +9303,7 @@ function enforceUnifiedPosteriorRecommendation(match, context) {
       unifiedPosterior: asPercentTriplet(unified.hhadPosterior),
     } : probabilityModel.handicap,
     unifiedPosterior: {
-      version: "v75-execution-clock-competition-metadata-draw-aware-evidence-shrinkage-argmax",
+      version: "v76-paired-sample-policy-execution-clock-draw-aware-evidence-shrinkage-argmax",
       generatedAt: predictionNowIso(),
       selectedMarket: selected.market,
       selectedCode: selected.code,

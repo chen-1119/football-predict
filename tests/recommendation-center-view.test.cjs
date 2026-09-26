@@ -17,6 +17,22 @@ const {hash}=require('../src/services/publishedForecastPolicy.cjs');
 const {bindPublicReferenceDecision}=require('../src/services/publicReferenceDecision.cjs');
 async function sample(){const p=memoryPorts();await createRuntime(p,{validators}).publishingCycle();return {recommendationCenter:p.state.view};}
 test('the actual runtime projection parses for current UI',async()=>{const x=parseRecommendationCenter(await sample());assert.equal(x.current.length,3);assert.equal(x.previews.length,2);assert.equal(x.review.statistics.single.published,3);});
+test('published lifecycle distinguishes fresh, expired, future quotes and review-only records',async()=>{
+ const row=parseRecommendationCenter(await sample()).current[0],d=row.decision,at=Date.parse(d.quoteObservedAt);
+ assert.equal(view.publicationLifecycle(d,at),'open');
+ assert.equal(view.publicationLifecycle(d,at+15*60000),'open');
+ assert.equal(view.publicationLifecycle(d,at+15*60000+1),'quote-stale');
+ assert.equal(view.publicationLifecycle(d,at-1),'quote-stale');
+ assert.equal(view.publicationLifecycle(d,Date.parse(d.cutoffTime)),'review-only');
+ assert.equal(view.publicationLifecycle(d,NaN),'review-only');
+ assert.match(view.publicationLifecycleLabel('quote-stale','zh'),/观望/);
+ const note=require('./fixtures/selection-quality-note-module.cjs');
+ const q={...row.selectionQuality,qualified:true,expectedValue:-.1};
+ assert.match(note.selectionReferenceLabel(q,'zh'),/价格不支持/);
+ assert.match(note.selectionReferenceLabel({...q,expectedValue:.1},'zh'),/模型未验证/);
+ assert.match(note.selectionReferenceLabel({...q,qualified:false},'zh'),/观望/);
+ assert.match(renderPublished({...row,selectionQuality:q},true),/模型方向 · 当前价格不支持/);
+});
 test('current outcome study keeps its decision binding and rejects changed prices or promotion flags',async()=>{
  const payload=await sample(),raw=payload.recommendationCenter.current.find(row=>row.outcomeResearch);
  assert(raw,'open current decision should carry the three-outcome study');
