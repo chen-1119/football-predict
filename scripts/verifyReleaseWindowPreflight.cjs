@@ -193,20 +193,48 @@ function verifyReleaseWindowPreflight() {
     assert.equal(result.uploadPreparationSeconds, 900); assert.equal(result.stage, "before-upload");
     assert.equal(result.latestStartBeforeNextTransition, iso(START + 2275_000)); noAuthority(result);
   });
-  check("authenticated native path uses its exact 3720-second server lease plus preparation and observation reserve", () => {
+  check("authenticated native path reserves candidate build before the unchanged 3720-second lease", () => {
     const native = (horizonSeconds, stage = "before-upload") =>
       helper.evaluateReleaseWindowObservation(observation({ horizonSeconds }), START, { stage, nativeFullRelease: true });
-    assert.equal(helper.NATIVE_RELEASE_HORIZON_SECONDS, 3720);
-    const upload = native(4625);
-    assert.equal(upload.ok, true); assert.equal(upload.minimumHorizonSeconds, 4625);
-    assert.equal(upload.releaseHorizonSeconds, 3720); assert.equal(upload.releaseWindowProfile, "signed-native-runtime");
+    assert.equal(helper.NATIVE_CANDIDATE_LEASE_HORIZON_SECONDS, 3720);
+    assert.equal(helper.NATIVE_CANDIDATE_PREPARATION_SECONDS, 3600);
+    assert.equal(helper.NATIVE_RELEASE_HORIZON_SECONDS, 7320);
+    const upload = native(8225);
+    assert.equal(upload.ok, true); assert.equal(upload.minimumHorizonSeconds, 8225);
+    assert.equal(upload.releaseHorizonSeconds, 7320); assert.equal(upload.releaseWindowProfile, "signed-native-runtime");
     assert.equal(upload.preparationSeconds, 900); noAuthority(upload);
-    assert.equal(native(4624).ok, false);
-    assert.equal(native(5525, "before-build").minimumHorizonSeconds, 5525);
-    assert.equal(native(5524, "before-build").ok, false);
-    assert.equal(evaluate(observation({ horizonSeconds: 4625 }), START, "before-upload").ok, false);
+    assert.equal(native(8224).ok, false);
+    assert.equal(native(9125, "before-build").minimumHorizonSeconds, 9125);
+    assert.equal(native(9124, "before-build").ok, false);
+    // A former 4,625-second admission would finish a 50-minute build too late
+    // to create the mandatory candidate lease.
+    assert.equal(native(4625).ok, false);
+    assert.equal(evaluate(observation({ horizonSeconds: 8225 }), START, "before-upload").ok, false);
     assert.throws(() => helper.evaluateReleaseWindowObservation(observation(), START,
       { stage: "before-upload", nativeFullRelease: "true" }), /native release selection/);
+  });
+  check("signed native early probe includes the build reserve and later candidate lease does not", () => {
+    const nativeShell = readSource("deploy/light-server/release-native.sh");
+    const verify = source => {
+      const earlyStart = source.indexOf('releaseTransitionLease.cjs" probe');
+      const candidateStart = source.indexOf('releaseTransitionLease.cjs" create');
+      assert.ok(earlyStart >= 0 && candidateStart > earlyStart);
+      const early = source.slice(earlyStart, source.indexOf('verifyCandidateArtifactSeed.cjs', earlyStart));
+      const candidate = source.slice(candidateStart, source.indexOf('release_stage_observe end candidate-build ok', candidateStart));
+      assert.match(source, /\n  NATIVE_CANDIDATE_PREPARATION_SECONDS=3600\n/);
+      assert.match(early, /--preverify-refresh-budget-seconds "\$\(\(CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS \+ NATIVE_CANDIDATE_PREPARATION_SECONDS\)\)"/);
+      assert.match(candidate, /--preverify-refresh-budget-seconds "\$CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS"/);
+      assert.doesNotMatch(candidate, /NATIVE_CANDIDATE_PREPARATION_SECONDS/);
+    };
+    verify(nativeShell);
+    for (const weakened of [
+      nativeShell.replace("NATIVE_CANDIDATE_PREPARATION_SECONDS=3600", "NATIVE_CANDIDATE_PREPARATION_SECONDS=0"),
+      nativeShell.replace("CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS + NATIVE_CANDIDATE_PREPARATION_SECONDS",
+        "CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS"),
+    ]) {
+      assert.notEqual(weakened, nativeShell);
+      assert.throws(() => verify(weakened));
+    }
   });
   check("r722 boundary regression is rejected before spending build time, not by lowering the upload gate", () => {
     const input = observation({ horizonSeconds: 8601 });
