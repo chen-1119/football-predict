@@ -62,6 +62,11 @@ run_native_release() {
     ((RELEASE_SYNC_WRITE_BARRIER_LOCK_WAIT_MS + 999) / 1000) +
     900 + POST_SWAP_TRANSITION_START_BUDGET_SECONDS - CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS
   ))
+  # The early probe runs before the candidate is seeded, installed and built.
+  # Reserve that entire preparation interval in addition to the unchanged
+  # candidate lease. The candidate still creates a fresh 3,720-second lease
+  # after the build and verifies it again immediately before the swap.
+  NATIVE_CANDIDATE_PREPARATION_SECONDS=3600
   [ "$APP_DIR" = /opt/football-predict ] && [ "$NEXT_DIR" = /opt/football-predict.next ]
   [ "$BACKUP_DIR" = /opt/football-predict.previous ] && [ "$FAILED_DIR" = /opt/football-predict.failed ]
   export NODE_PATH="$APP_DIR/node_modules"
@@ -72,7 +77,7 @@ run_native_release() {
   "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/releaseTransitionLease.cjs" probe \
     --current "$APP_DIR/public/data/matches-current.json" --at "$(date -u +'%Y-%m-%dT%H:%M:%S.000Z')" \
     --verifier-runtime-max-seconds "$CANDIDATE_VERIFIER_RUNTIME_MAX_SECONDS" \
-    --preverify-refresh-budget-seconds "$CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS" \
+    --preverify-refresh-budget-seconds "$((CANDIDATE_PREVERIFY_AND_BARRIER_BUDGET_SECONDS + NATIVE_CANDIDATE_PREPARATION_SECONDS))" \
     --atomic-swap-margin-seconds "$CANDIDATE_ATOMIC_SWAP_MARGIN_SECONDS"
   "$NODE_HOME/bin/node" "$TRUSTED_SOURCE_DIR/scripts/verifyCandidateArtifactSeed.cjs"
   rotate_fixed_recovery_helper

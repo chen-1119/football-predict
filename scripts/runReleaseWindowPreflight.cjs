@@ -20,10 +20,15 @@ const PREPARATION_SECONDS = 900;
 const BUILD_PREPARATION_SECONDS = 900;
 const MAX_OBSERVATION_AGE_MS = 60_000;
 // The signed native PostgreSQL runtime path exits before the legacy release
-// shell's 7,620-second lease. Its own lease reserves a 300-second verifier,
-// 900-second barrier acquisition, 900-second final reconciliation, 1,620-second
-// post-swap worker/rollback budget, and the 30-second atomic margin.
-const NATIVE_RELEASE_HORIZON_SECONDS = 300 + 900 + 900 + 1620;
+// shell's 7,620-second lease. Its candidate lease still needs 3,720 seconds:
+// a 300-second verifier, 900-second barrier acquisition, 900-second final
+// reconciliation, 1,620-second post-swap worker/rollback budget, and the
+// 30-second atomic margin. The early probe must also cover candidate build
+// before that lease is created; otherwise a long build can consume the whole
+// window even though the upload gate passed.
+const NATIVE_CANDIDATE_LEASE_HORIZON_SECONDS = 300 + 900 + 900 + 1620;
+const NATIVE_CANDIDATE_PREPARATION_SECONDS = 3600;
+const NATIVE_RELEASE_HORIZON_SECONDS = NATIVE_CANDIDATE_LEASE_HORIZON_SECONDS + NATIVE_CANDIDATE_PREPARATION_SECONDS;
 function preparationBudget(stage) {
   assert.ok(stage === "before-build" || stage === "before-upload", "unknown release preparation stage");
   const buildPreparationSeconds = stage === "before-build" ? BUILD_PREPARATION_SECONDS : 0;
@@ -114,7 +119,8 @@ function probeNativeWindow(input, preparationSeconds, observedAt) {
     const lease = createTransitionLease(input.payload, {
       refreshAt: new Date(observedAt).toISOString(),
       verifierRuntimeMaxSeconds: 300,
-      preverifyRefreshBudgetSeconds: 900 + 900 + 1620 - 30 + preparationSeconds,
+      preverifyRefreshBudgetSeconds: 900 + 900 + 1620 - 30
+        + NATIVE_CANDIDATE_PREPARATION_SECONDS + preparationSeconds,
       atomicSwapMarginSeconds: 30,
     });
     assert.equal(lease.minimumHorizonSeconds, NATIVE_RELEASE_HORIZON_SECONDS + preparationSeconds);
@@ -193,6 +199,7 @@ function runLiveReleaseWindowPreflight({ stage = "before-build", nativeFullRelea
 }
 
 module.exports = { PREPARATION_SECONDS, BUILD_PREPARATION_SECONDS, MAX_OBSERVATION_AGE_MS,
+  NATIVE_CANDIDATE_LEASE_HORIZON_SECONDS, NATIVE_CANDIDATE_PREPARATION_SECONDS,
   NATIVE_RELEASE_HORIZON_SECONDS, preparationBudget,
   collectReleaseWindowObservation, buildReadOnlyWindowProbe, evaluateReleaseWindowObservation, runLiveReleaseWindowPreflight };
 if (require.main === module) {
