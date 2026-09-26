@@ -19,6 +19,13 @@ test('public fixture preserves native odds1 oddsX odds2 without generating missi
  assert.deepEqual(row.odds,{home:1.92,draw:3.8,away:null});
  assert.equal(row.quoteStatus,'missing');
 });
+test('complete fixture prices without their own clock are available but time-unverified',()=>{
+ const row=publicFixture({id:'sporttery_43',odds:{odds1:1.92,oddsX:3.8,odds2:4.4},sourceObservedAt:'2026-09-23T05:59:00Z',predictionMeta:{updatedAt:'2026-09-23T05:58:00Z'}});
+ assert.deepEqual(row.odds,{home:1.92,draw:3.8,away:4.4});
+ assert.equal(row.sourceUpdatedAt,null);
+ assert.equal(row.quoteStatus,'unverified');
+ assert.equal(row.predictionMeta,undefined);
+});
 test('fixture quote timestamp never borrows the fixture scrape clock or frozen recommendation price',()=>{
  const now=Date.parse('2026-09-23T06:00:00Z');
  const match={id:'sporttery_2041645',status:'SCHEDULED',kickoffTime:'2026-09-23T07:00:00Z',odds:{odds1:1.85,oddsX:3.4,odds2:4.5},oddsUpdatedAt:'2026-09-20T10:00:00Z',sourceObservedAt:'2026-09-23T05:59:00Z'};

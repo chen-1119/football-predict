@@ -10,7 +10,7 @@ import { safeAccountReturnTo } from '../services/accountApi';
 import type { Team } from '../services/mockData';
 import '../styles/public-browse.css';
 
-interface Fixture {id:string;sourceMatchId:string;matchNo:string|null;businessDate:string|null;homeTeamName:string;awayTeamName:string;homeTeamNameEn?:string;awayTeamNameEn?:string;homeTeamLogo?:string;awayTeamLogo?:string;homeTeamId?:string;awayTeamId?:string;leagueName:string|null;status:string;effectiveStatus:string|null;kickoffTime:string|null;odds:{home:number|null;draw:number|null;away:number|null};sourceUpdatedAt?:string|null;quoteStatus?:'missing'|'recent'|'expired'|'archived'}
+interface Fixture {id:string;sourceMatchId:string;matchNo:string|null;businessDate:string|null;homeTeamName:string;awayTeamName:string;homeTeamNameEn?:string;awayTeamNameEn?:string;homeTeamLogo?:string;awayTeamLogo?:string;homeTeamId?:string;awayTeamId?:string;leagueName:string|null;status:string;effectiveStatus:string|null;kickoffTime:string|null;odds:{home:number|null;draw:number|null;away:number|null};sourceUpdatedAt?:string|null;quoteStatus?:'missing'|'unverified'|'recent'|'expired'|'archived'}
 interface Example {decisionId:string;matchId:string;homeTeamName:string;awayTeamName:string;publishedAt:string;cutoffTime:string;tipCode:string;odds:number|null;state:string;score:string|null;quoteSource:string|null;quoteObservedAt?:string|null;probabilities?:Record<string,number|null>}
 interface Overview {businessDate:string;sourceUpdatedAt:string|null;stale:boolean;matches:Fixture[];review:{updatedAt:string|null;summary:{settled:number;won:number;pending:number|null;hitRate:number|null}|null;example:Example|null}}
 const time=(value:string|null|undefined)=>value&&Number.isFinite(Date.parse(value))?new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(value)):'待更新';
@@ -41,7 +41,9 @@ export function PublicBrowse(){
   <Link className="public-matchup" to={`/match/${encodeURIComponent(m.id)}`} state={{openedFromList:true,fromPath:returnTo}}><span><TeamBadge team={team(m,'home')}/><strong>{m.homeTeamName}</strong></span><small>VS</small><span><TeamBadge team={team(m,'away')}/><strong>{m.awayTeamName}</strong></span></Link>
   <div className="public-odds">{(['home','draw','away'] as const).map((key,i)=><span key={key}>{(zh?['主胜','平局','客胜']:['Home','Draw','Away'])[i]}<strong>{typeof m.odds?.[key]==='number'&&Number.isFinite(m.odds[key])&&m.odds[key]!>1?m.odds[key]?.toFixed(2):'—'}</strong></span>)}</div>
   <p className="public-caption public-quote-note" role="status">{m.quoteStatus==='missing'
-    ?(zh?'胜平负报价或采集时间不完整；缺失项不补算。':'1X2 quotes or their observation time are incomplete; missing values are not inferred.')
+    ?(zh?'胜平负 SP 有缺项；缺失项不补算。':'Some 1X2 prices are missing; missing values are not inferred.')
+    :m.quoteStatus==='unverified'
+    ?(zh?'赛程胜平负 SP 已取得，报价时间未核验；推荐详情以发布时冻结 SP 为准。':'All fixture 1X2 prices are available, but their observation time is unverified; recommendation details use frozen publication SP.')
     :(zh?'赛程赔率快照；推荐详情以发布时冻结 SP 为准。':'Fixture quote snapshot; recommendation details use frozen publication SP.')}
     {m.quoteStatus==='expired'?(zh?' · 报价已超过15分钟':' · Quote older than 15 minutes'):''}
     {m.quoteStatus==='archived'?(zh?' · 已过赛前截止':' · Pre-match cutoff passed'):''}

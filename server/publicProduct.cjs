@@ -14,7 +14,7 @@ function publicFixture(match,now=Date.now()){
  // Fixture observation clocks do not prove when the odds themselves changed.
  row.sourceUpdatedAt=iso(match.oddsUpdatedAt);
  const cutoff=Date.parse(match.buyEndTime||match.kickoffTime||'');
- row.quoteStatus=!completeOdds(row.odds)||!row.sourceUpdatedAt?'missing':Number.isFinite(cutoff)&&now>=cutoff?'archived':now-Date.parse(row.sourceUpdatedAt)>15*60000?'expired':'recent';
+ row.quoteStatus=!completeOdds(row.odds)?'missing':!row.sourceUpdatedAt?'unverified':Number.isFinite(cutoff)&&now>=cutoff?'archived':now-Date.parse(row.sourceUpdatedAt)>15*60000?'expired':'recent';
  // Settlement is attached by the established result pipeline, not inferred here.
  return row;
 }
