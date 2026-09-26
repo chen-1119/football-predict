@@ -1,10 +1,12 @@
 'use strict';
 const {evaluateCurrent,validDecision,chooseCombo,freezeCombo,VERSION}=require('./decision.cjs');
+const {candidatesFor}=require('./comboSelections.cjs');
 const {key,collectResults,settleDecision,settleHandicapDecision,settleCombo,summary,handicapSummary,handicapBreakdown,marketBaseline,dailySummary,validResultEvent}=require('./results.cjs');
 const {validCombo}=require('./comboSelections.cjs');
 const {day,time,hash}=require('../../src/services/publishedForecastPolicy.cjs');
 const {buildHandicapCalibration}=require('../../src/services/handicapCalibration.cjs');
-const {selectionQuality,isQualifiedSelection}=require('../../src/services/recommendationSelectionQuality.cjs');
+const {selectionQuality,prospectiveRiskReasons,isQualifiedSelection}=require('../../src/services/recommendationSelectionQuality.cjs');
+const {conflictForDecision}=require('../../src/services/recommendationCrossTrackConflict.cjs');
 const {buildPublishedScoreDistribution}=require('../../src/services/publishedScoreDistribution.cjs');
 const {buildQualityReport}=require('./qualityReport.cjs');
 const {buildDataCoverage}=require('../dataCoverage.cjs');
@@ -33,7 +35,7 @@ async function assessInputs(repo,publication,now){
     assessed.decisions=fresh;
   }
   const quoteTimes=assessed.decisions.map(d=>time(d.quoteObservedAt));
-  return {...assessed,handicapCalibration,attempted:inputs.current.length,inputAsOf:quoteTimes.length?new Date(Math.min(...quoteTimes)).toISOString():publication.committedAt};
+  return {...assessed,currentInputs:inputs.current,handicapCalibration,attempted:inputs.current.length,inputAsOf:quoteTimes.length?new Date(Math.min(...quoteTimes)).toISOString():publication.committedAt};
 }
 /** Bind the exact current inputs inside the caller's transaction. The source
  * may have advanced since the separate single-publication transaction ended.
@@ -152,15 +154,17 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
     if(assessed.decisions.length>0 && candidates.length===0 && bound.issues.length>0)
       throw Object.assign(new Error('No current decision could be bound'),{code:'DECISION_BINDING_FAILED'});
     const frozen=await repo.frozenCombos(day(now)),previews=[],created=[];
+    const admit=item=>isQualifiedSelection(item)&&!conflictForDecision(assessed.currentInputs,item.decision,now);
+    const eligibleSources=new Set(candidates.flatMap(d=>candidatesFor(d,now)).filter(admit).map(item=>item.decision.sourceMatchId));
     for(const size of [2,3]){
       if(frozen.some(c=>c.size===size))continue;
-      const selection=chooseCombo(candidates,size,now,{admit:isQualifiedSelection});if(!selection)continue;
+      const selection=chooseCombo(candidates,size,now,{admit});if(!selection)continue;
       const record=freezeCombo(selection,clock());
       if(record){await repo.insertCombo(record);created.push(...record.legs);}
       else previews.push(selection);
     }
     requireBeforeCutoff(created,clock());
-    return {publication,previews,inputAsOf:assessed.inputAsOf,basePublicationAsOf:publication.committedAt,candidateCount:candidates.filter(d=>selectionQuality(d).qualified).length,referenceCount:candidates.length,watchCount:candidates.filter(d=>!selectionQuality(d).qualified).length,eligibleCount:assessed.decisions.length,bindingFailures:bound.issues.length,handicapCalibration:{profileHash:assessed.handicapCalibration.profileHash,sampleRows:assessed.handicapCalibration.sampleRows,activeGroups:Object.values(assessed.handicapCalibration.groups).filter(g=>g.active).length}};
+    return {publication,previews,inputAsOf:assessed.inputAsOf,basePublicationAsOf:publication.committedAt,candidateCount:eligibleSources.size,referenceCount:candidates.length,watchCount:candidates.filter(d=>!eligibleSources.has(d.sourceMatchId)).length,eligibleCount:assessed.decisions.length,bindingFailures:bound.issues.length,handicapCalibration:{profileHash:assessed.handicapCalibration.profileHash,sampleRows:assessed.handicapCalibration.sampleRows,activeGroups:Object.values(assessed.handicapCalibration.groups).filter(g=>g.active).length}};
   });}
   async function settle(){return stage('settlement',async repo=>{
     const verify=validators || (()=>{const m=require('../../src/services/matchLifecycle.cjs');return {isFinal:m.isOfficialSportteryFinal,isVoid:m.isOfficialSportteryVoid};})();
@@ -212,12 +216,29 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
     }
     for(const issue of quarantined)await repo.issue('view',issue);
     singles.sort((a,b)=>time(b.decision.publishedAt)-time(a.decision.publishedAt));
-    const previews=lanes.combos?.status==='ok' ? (lanes.combos.previews||[]).filter(c=>c.businessDate===day(now)&&validCombo(c,{now})) : [];
-    const selected=singles.filter(r=>r.decision.businessDate===day(now));
-    const today=combos.filter(r=>r.combo.businessDate===day(now));
-    const overlap=previews.length===2?previews[0].decisionIds.filter(id=>previews[1].decisionIds.includes(id)):[];
     const targetRows=repo.todayTargets?await repo.todayTargets(day(now)):await repo.current();
-    const coverage=buildDataCoverage({targetRows,singles,now,lanes});
+    const targetMatches=targetRows.map(row=>row?.payload||row);
+    const previews=lanes.combos?.status==='ok' ? (lanes.combos.previews||[]).filter(c=>c.businessDate===day(now)&&validCombo(c,{now})
+      && c.legs.every(d=>!conflictForDecision(targetMatches,d,now))) : [];
+    const selected=singles.filter(r=>r.decision.businessDate===day(now)).map(row=>{
+      const conflict=conflictForDecision(targetMatches,row.decision,now);
+      const risk=prospectiveRiskReasons(row.selectionQuality);
+      if(!conflict&&!risk.length)return row;
+      return {...row,selectionQuality:{...row.selectionQuality,status:'watch',qualified:false,
+        reasons:[...new Set([...(row.selectionQuality.reasons||[]),...risk,...(conflict?[conflict.reason]:[])])],
+        ...(conflict?{crossTrack:conflict}:{})}};
+    });
+    const today=combos.filter(r=>r.combo.businessDate===day(now)).map(row=>({
+      ...row,currentAdvisory:row.combo.legs.flatMap((leg,index)=>{
+        if(row.combo.selections?.[index]?.market==='HHAD')return [];
+        const conflict=conflictForDecision(targetMatches,leg,now);
+        return conflict?[{decisionId:leg.decisionId,referenceTipCode:conflict.referenceTipCode,
+          referenceRecordedAt:conflict.referenceRecordedAt,
+          knownAtFreeze:time(conflict.referenceRecordedAt)<=time(row.combo.frozenAt)}]:[];
+      }),
+    }));
+    const overlap=previews.length===2?previews[0].decisionIds.filter(id=>previews[1].decisionIds.includes(id)):[];
+    const coverage=buildDataCoverage({targetRows,singles:selected,now,lanes});
     const center={version:'recommendation-center-v1',policyVersion:VERSION,updatedAt:new Date(now).toISOString(),businessDate:day(now),
       inputAsOf:[lanes.publish?.inputAsOf,lanes.combos?.inputAsOf].filter(v=>Number.isFinite(time(v))).sort((a,b)=>time(b)-time(a))[0]||null,resultAsOf:lanes.settlement?.lastSuccessAt||null,lanes,
       current:selected,previews,todayCombos:today,todayDualResearch,overlapDecisionIds:overlap,coverage,

@@ -23,10 +23,10 @@ test('both Elo or both actually weighted form samples satisfy the existing model
  assert(!selectionQuality(make(verified(1,{eloHome:0,eloAway:0,formHome:8,formAway:8,formWeight:0}))).qualified);
  assert(!selectionQuality(make(verified(1,{eloHome:0,eloAway:0,formHome:8,formAway:8,formWeight:.1,weights:{market:.5,teamStrength:.5,elo:0,poisson:0}}))).qualified);
 });
-test('admission is outcome-neutral: draw below 50%, favorites and higher-SP directions are allowed',()=>{
- for(const [p,tip,odds] of [[{home:35,draw:40,away:25},'X',{odds1:2.1,oddsX:3.1,odds2:3.8}],[{home:70,draw:18,away:12},'1',{odds1:1.2,oddsX:5,odds2:8}],[{home:25,draw:30,away:45},'2',{odds1:1.6,oddsX:4,odds2:5}]]){
+test('admission keeps well-supported draws, low-SP favorites and higher-SP directions',()=>{
+ for(const [p,tip,odds] of [[{home:33,draw:42,away:25},'X',{odds1:2.1,oddsX:3.1,odds2:3.8}],[{home:70,draw:18,away:12},'1',{odds1:1.2,oddsX:5,odds2:8}],[{home:25,draw:30,away:45},'2',{odds1:1.6,oddsX:4,odds2:5}]]){
   const d=make(verified(1,{}, {probabilityModel:{generatedAt:new Date(NOW).toISOString(),oneXTwo:{final:p}},odds}));
-  assert(validDecision(d));assert.equal(d.tipCode,tip);const q=selectionQuality(d);assert(q.qualified);assert.equal(q.priceFilterApplied,false);
+  assert(validDecision(d));assert.equal(d.tipCode,tip);const q=selectionQuality(d);assert(q.qualified);assert.equal(q.priceFilterApplied,true);
   assert(Math.abs(q.expectedValue-d.modelProbability*d.odds+1)<1e-12);
  }
 });

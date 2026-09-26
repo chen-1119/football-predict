@@ -153,7 +153,7 @@ test('combo version filter binds each frozen leg market, including HHAD policy',
   const mixed = freezeCombo(chooseCombo(parents, 2, comboNow), comboNow);
   const hadOnly = freezeCombo(chooseCombo(parents, 2, comboNow,
     { admit: candidate => candidate.selection.market === 'HAD' }), comboNow);
-  assert.deepEqual(mixed.selections.map(row => row.market), ['HHAD', 'HAD']);
+  assert.deepEqual(mixed.selections.map(row => row.market).sort(), ['HAD', 'HHAD']);
   assert.deepEqual(hadOnly.selections.map(row => row.market), ['HAD', 'HAD']);
   const common = { decisions: [], resultEvents: [], boundDecisions: parents };
   const mixedPage = buildRecommendationReviewPage({ ...common, combos: [mixed] }, select('?kind=two'), at);

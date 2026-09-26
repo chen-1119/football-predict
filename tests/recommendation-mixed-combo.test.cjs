@@ -25,7 +25,7 @@ function legacy(combo){
 
 test('mixed market ranking uses independent probability while preserving immutable HAD parents',()=>{
   const d=decide(input()),before=JSON.stringify(d),c=chooseCombo([d,plain(2)],2,NOW);
-  assert.equal(c.version,'unified-combo-v2');assert.deepEqual(c.selections.map(s=>s.market),['HHAD','HAD']);
+  assert.equal(c.version,'unified-combo-v3');assert.deepEqual(c.selections.map(s=>s.market),['HHAD','HAD']);
   const s=c.selections[0];assert.equal(s.probabilityBasis,'unconditional');assert.equal(s.modelProbability,d.handicapAnalysis.overallProbabilities[s.tipCode]);
   assert.equal(s.odds,d.handicapAnalysis.marketReference.odds[s.tipCode]);assert.equal(s.decisionRecordHash,d.recordHash);
   assert.equal(c.rawTotalOdds,2.05*1.8);assert.equal(c.jointProbability,null);assert.equal(JSON.stringify(d),before);
@@ -88,11 +88,11 @@ test('equal model scores use stable match and market identity rather than the lo
   const had=(id,sp)=>decide(match(id,NOW,{odds:{odds1:sp,oddsX:3.5,odds2:4.5}}));
   const decisions=[had(1,1.7),had(2,2.5),had(3,1.8)];
   const selected=chooseCombo(decisions,2,NOW);
-  assert.deepEqual(selected.legs.map(d=>d.sourceMatchId),['1','2']);
+  assert.deepEqual(selected.legs.map(d=>d.sourceMatchId).sort(),['1','2']);
   assert.equal(selected.rawTotalOdds,4.25);
   assert.equal(validCombo(selected),true);
-  assert.deepEqual(chooseCombo(decisions.slice().reverse(),2,NOW).legs.map(d=>d.sourceMatchId),['1','2']);
-  assert.deepEqual(chooseCombo([had(1,1.7),had(2,2),had(3,2.3)],2,NOW).legs.map(d=>d.sourceMatchId),['1','2']);
+  assert.deepEqual(chooseCombo(decisions.slice().reverse(),2,NOW).legs.map(d=>d.sourceMatchId),selected.legs.map(d=>d.sourceMatchId));
+  assert.deepEqual(chooseCombo([had(1,1.7),had(2,2),had(3,2.3)],2,NOW).legs.map(d=>d.sourceMatchId).sort(),['1','2']);
   const frozen=freezeCombo(selected,NOW),before=JSON.stringify(frozen);
   assert.equal(validCombo(frozen,{frozen:true}),true);
   chooseCombo([had(1,1.7),had(2,2),had(3,2.3)],2,NOW);
@@ -105,7 +105,7 @@ test('model score still ranks first and SP only excludes combinations below the 
     return decide(m);
   };
   const stronger=chooseCombo([had(1,1.7),had(2,2.5),had(3,1.8,56)],2,NOW);
-  assert.deepEqual(stronger.legs.map(d=>d.sourceMatchId),['1','3']);
+  assert.deepEqual(stronger.legs.map(d=>d.sourceMatchId).sort(),['1','3']);
   const floor=chooseCombo([had(1,1.4),had(2,1.6),had(3,1.8)],2,NOW);
   assert.deepEqual(floor.legs.map(d=>d.sourceMatchId).sort(),['1','3']);
   assert.equal(floor.rawTotalOdds,2.52);

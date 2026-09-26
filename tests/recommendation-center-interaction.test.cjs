@@ -55,7 +55,7 @@ test('review reads real pages of twelve out of sixty-nine without changing aggre
 test('actual shared quality component distinguishes input readiness, price arithmetic and watch without rewriting the frozen pick',async()=>{
   const ready=await harness(),readyTree=ready.render(),readyNotes=byClass(readyTree,'selection-quality-note');
   assert.equal(readyNotes.length,12);assert(readyNotes.every(n=>n.props['data-selection-status']==='reference-qualified'));
-  assert.match(words(readyNotes[0]),/模型方向 · 当前价格不支持/);assert.match(words(readyNotes[0]),/这不是价格或命中率验证/);
+  assert.match(words(readyNotes[0]),/模型方向 · 当前价格不支持/);assert.match(words(readyNotes[0]),/这不是校准、收益或命中率验证/);
   assert.equal(readyNotes[0].props['data-price-status'],'unsupported');
   const watch=await harness({missingInputEvidence:true}),before=JSON.stringify(watch.data),watchTree=watch.render(),watchNotes=byClass(watchTree,'selection-quality-note');
   assert.equal(watchNotes.length,12);assert(watchNotes.every(n=>n.props['data-selection-status']==='watch'));
