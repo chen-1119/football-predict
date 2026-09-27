@@ -396,3 +396,25 @@ test('quality review partitions settled rows by frozen value-selection class',()
   assert.equal(report.bySelectionClass['market-favorite'].settled,1);
   assert.equal(report.bySelectionClass['market-favorite'].won,0);
 });
+
+test('client rejects tampered value-selection market leader and class',async()=>{
+  const p=memoryPorts();
+  p.current=[
+    valueCurrent(921,{'1':.47,X:.35,'2':.18},{'1':1.8,X:3.8,'2':4.5}),
+    valueCurrent(922,{'1':.58,X:.25,'2':.17},{'1':1.65,X:3.8,'2':5}),
+    valueCurrent(923,{'1':.57,X:.25,'2':.18},{'1':1.7,X:3.7,'2':4.8}),
+  ];
+  await createRuntime(p,{validators}).publishingCycle();
+  const payload={recommendationCenter:p.state.view};
+  const index=payload.recommendationCenter.current.findIndex(row=>row.decision.sourceMatchId==='921');
+  assert(index>=0);
+  for(const mutate of [
+    d=>{d.hadSelection.marketLeader=null;},
+    d=>{d.hadSelection.selectionClass='market-favorite';},
+    d=>{d.hadSelection.selectedExpectedValue+=.02;},
+  ]){
+    const copy=structuredClone(payload),d=copy.recommendationCenter.current[index].decision;
+    mutate(d);
+    assert.throws(()=>parseRecommendationCenter(copy),/HAD selection|value selection/);
+  }
+});

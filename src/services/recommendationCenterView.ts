@@ -216,17 +216,22 @@ function decision(v:unknown):Decision{
     const inverseTotal=1/quoteOdds['1']+1/quoteOdds.X+1/quoteOdds['2'];
     const marketProb={'1':(1/quoteOdds['1'])/inverseTotal,X:(1/quoteOdds.X)/inverseTotal,'2':(1/quoteOdds['2'])/inverseTotal};
     const marketOrder=(['1','X','2'] as const).slice().sort((a,b)=>marketProb[b]-marketProb[a]);
-    if(selectedTip!==tipCode||modelLeader!==modelOrder[0]||probabilities[modelOrder[0]]<=probabilities[modelOrder[1]]
-      ||(marketLeader!==null&&(marketLeader!==marketOrder[0]||marketProb[marketOrder[0]]<=marketProb[marketOrder[1]]))
+    const modelTopUnique=probabilities[modelOrder[0]]>probabilities[modelOrder[1]]+1e-12;
+    const marketTopUnique=marketProb[marketOrder[0]]>marketProb[marketOrder[1]]+1e-12;
+    if(selectedTip!==tipCode||!modelTopUnique||modelLeader!==modelOrder[0]
+      ||(marketLeader===null?marketTopUnique:(!marketTopUnique||marketLeader!==marketOrder[0]))
       ||Math.abs(selectedProbability-probabilities[tipCode])>1e-9||Math.abs(selectedMarketProbability-marketProb[tipCode])>1e-9
       ||Math.abs(selectedMarketEdge-(probabilities[tipCode]-marketProb[tipCode]))>1e-9
       ||Math.abs(selectedExpectedValue-(probabilities[tipCode]*quoteOdds[tipCode]-1))>1e-9
       ||Math.abs(gapToModelLeader-(probabilities[modelLeader]-probabilities[tipCode]))>1e-9)throw new Error('HAD selection evidence mismatch');
     if(mode==='market-dislocation'){
       const draw=tipCode==='X',minP=draw?.28:.24,minEdge=draw?.045:.055,minEv=draw?.06:.08,maxGap=draw?.14:.15;
-      if(marketLeader===null||tipCode===marketLeader||selectedProbability<minP||selectedMarketEdge<minEdge||selectedExpectedValue<minEv||gapToModelLeader>maxGap
+      if(marketLeader===null||modelLeader!==marketLeader||tipCode===marketLeader||selectedProbability<minP||selectedMarketEdge<minEdge||selectedExpectedValue<minEv||gapToModelLeader>maxGap
         ||selectionClass!==(draw?'draw-value':'underdog-value'))throw new Error('Invalid value selection');
-    }else if(mode!=='model-leader'||tipCode!==modelLeader||!['market-favorite','model-draw','model-underdog'].includes(selectionClass))throw new Error('Invalid model-leader selection');
+    }else {
+      const expectedClass=tipCode==='X'?'model-draw':marketLeader!==null&&tipCode!==marketLeader?'model-underdog':'market-favorite';
+      if(mode!=='model-leader'||tipCode!==modelLeader||selectionClass!==expectedClass)throw new Error('Invalid model-leader selection');
+    }
     hadSelection={version:'had-value-selection-v1',mode:mode as HadSelectionEvidence['mode'],selectionClass:selectionClass as HadSelectionEvidence['selectionClass'],
       tipCode,modelLeader,marketLeader,selectedProbability,selectedMarketProbability,selectedMarketEdge,selectedExpectedValue,gapToModelLeader};
   } else if(Object.entries(probabilities).some(([c,n])=>c!==tipCode&&n>=modelProbability)) throw new Error('Direction and probabilities disagree');
