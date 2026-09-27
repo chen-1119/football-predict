@@ -1,9 +1,11 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { readChunkedJsonFile } = require("../server/chunkedJsonFile.cjs");
+const { streamJsonObjectArrays } = require("../server/streamedJsonObjectArrays.cjs");
 const {
   attachArchivedPreMatchPredictions,
   validArchivedPreMatchPrediction,
+  writePrettyJsonStreaming,
 } = require("./syncData.cjs");
 const {
   recoverResultEventClockFromSnapshots,
@@ -17,6 +19,23 @@ const readJson = (filePath, fallback) => {
 };
 
 const canonicalJson = (value) => JSON.stringify(value);
+// Compare one match at a time; never retain two complete history strings.
+const rowsChanged = (before, after) => before.length !== after.length
+  || after.some((row, index) => row !== before[index]
+    && canonicalJson(row) !== canonicalJson(before[index]));
+
+const readSnapshotRows = (filePath, keep) => {
+  if (!fs.existsSync(filePath)) return { rows: [], totalRows: 0 };
+  const rows = [];
+  const result = streamJsonObjectArrays(filePath, {
+    keys: ["rows"],
+    onItem(_key, row) { if (keep(row)) rows.push(row); },
+  });
+  if (!result.fields.includes("rows")) {
+    throw new Error("prediction-snapshots.json must expose rows");
+  }
+  return { rows, totalRows: result.counts.rows };
+};
 
 const writeJsonAtomic = (filePath, payload) => {
   const directory = path.dirname(filePath);
@@ -25,11 +44,14 @@ const writeJsonAtomic = (filePath, payload) => {
     `.${path.basename(filePath)}.archive-migration-${process.pid}-${Date.now()}.tmp`
   );
   fs.mkdirSync(directory, { recursive: true });
-  fs.writeFileSync(temporaryPath, `${JSON.stringify(payload, null, 2)}\n`, {
-    encoding: "utf8",
-    flag: "wx",
-  });
-  fs.renameSync(temporaryPath, filePath);
+  fs.closeSync(fs.openSync(temporaryPath, "wx", 0o640));
+  try {
+    writePrettyJsonStreaming(temporaryPath, payload);
+    fs.renameSync(temporaryPath, filePath);
+  } catch (error) {
+    try { fs.unlinkSync(temporaryPath); } catch { /* Preserve the write failure. */ }
+    throw error;
+  }
 };
 
 const archiveKey = (match) => String(match?.sourceMatchId || match?.id || "")
@@ -171,16 +193,20 @@ const migrateArchivedPreMatchReferences = ({
   const snapshotsPath = path.join(dataDir, "prediction-snapshots.json");
   const current = readJson(currentPath, []);
   const history = readJson(historyPath, []);
-  const snapshots = readJson(snapshotsPath, { rows: [] });
-  const evidenceSnapshots = evidenceDataDir
-    ? readJson(path.join(evidenceDataDir, "prediction-snapshots.json"), { rows: [] })
-    : { rows: [] };
-  const evidenceCurrent = evidenceDataDir
-    ? readJson(path.join(evidenceDataDir, "matches-current.json"), [])
-    : [];
   if (!Array.isArray(current) || !Array.isArray(history)) {
     throw new Error("matches-current.json and matches-history.json must be arrays");
   }
+  const currentSourceIds = new Set(current.map(archiveKey).filter(Boolean));
+  const requiredSourceIds = new Set([...current, ...history].map((row) => normText(archiveKey(row))).filter(Boolean));
+  // The archive selector only reads rows for these matches. Validate the whole
+  // input while skipping the unrelated public-reference/evidence object graph.
+  const snapshots = readSnapshotRows(snapshotsPath, (row) => requiredSourceIds.has(normText(archiveKey(row))));
+  const evidenceSnapshots = evidenceDataDir
+    ? readSnapshotRows(path.join(evidenceDataDir, "prediction-snapshots.json"), (row) => currentSourceIds.has(archiveKey(row)))
+    : { rows: [], totalRows: 0 };
+  const evidenceCurrent = evidenceDataDir
+    ? readJson(path.join(evidenceDataDir, "matches-current.json"), [])
+    : [];
   if (!Array.isArray(snapshots?.rows)) {
     throw new Error("prediction-snapshots.json must expose rows");
   }
@@ -190,7 +216,6 @@ const migrateArchivedPreMatchReferences = ({
   if (!Array.isArray(evidenceCurrent)) {
     throw new Error("evidence matches-current.json must be an array");
   }
-  const currentSourceIds = new Set(current.map(archiveKey).filter(Boolean));
   const currentEvidenceRows = evidenceSnapshots.rows.filter((row) => (
     currentSourceIds.has(archiveKey(row))
   ));
@@ -251,33 +276,31 @@ const migrateArchivedPreMatchReferences = ({
   eventClocksRepaired += historyWithRecoveredClocks.reduce((count, match, index) => (
     canonicalJson(match) === canonicalJson(history[index]) ? count : count + 1
   ), 0);
-  const changesForRows = (beforeRows, afterRows, collection) => afterRows
-    .map((match, index) => ({
-      sourceMatchId: archiveKey(match),
-      collection,
-      before: canonicalJson(beforeRows[index]?.archivedPreMatchPrediction || null),
-      after: canonicalJson(match?.archivedPreMatchPrediction || null),
-      archive: match?.archivedPreMatchPrediction || null,
-    }))
-    .filter((row) => row.before !== row.after)
-    .map((row) => ({
-      sourceMatchId: row.sourceMatchId,
-      collection: row.collection,
-      action: row.archive ? "archive-attached-or-repaired" : "invalid-archive-removed",
-      marketEvidenceScope: row.archive?.marketEvidenceScope || null,
-      tipCode: row.archive?.prediction?.tipCode || null,
-      odds: Number(row.archive?.prediction?.odds ?? Number.NaN),
-      capturedAt: row.archive?.capturedAt || null,
-    }));
+  const changesForRows = (beforeRows, afterRows, collection) => {
+    const changed = [];
+    for (let index = 0; index < afterRows.length; index += 1) {
+      const match = afterRows[index], archive = match?.archivedPreMatchPrediction || null;
+      if (canonicalJson(beforeRows[index]?.archivedPreMatchPrediction || null) === canonicalJson(archive)) continue;
+      changed.push({
+        sourceMatchId: archiveKey(match), collection,
+        action: archive ? "archive-attached-or-repaired" : "invalid-archive-removed",
+        marketEvidenceScope: archive?.marketEvidenceScope || null,
+        tipCode: archive?.prediction?.tipCode || null,
+        odds: Number(archive?.prediction?.odds ?? Number.NaN),
+        capturedAt: archive?.capturedAt || null,
+      });
+    }
+    return changed;
+  };
   const changes = [
     ...changesForRows(current, nextCurrent, "current"),
     ...changesForRows(history, nextHistory, "history"),
   ];
 
-  if (write && canonicalJson(nextCurrent) !== canonicalJson(current)) {
+  if (write && rowsChanged(current, nextCurrent)) {
     writeJsonAtomic(currentPath, nextCurrent);
   }
-  if (write && canonicalJson(nextHistory) !== canonicalJson(history)) {
+  if (write && rowsChanged(history, nextHistory)) {
     writeJsonAtomic(historyPath, nextHistory);
   }
 
@@ -291,8 +314,8 @@ const migrateArchivedPreMatchReferences = ({
     rows: {
       current: nextCurrent.length,
       history: nextHistory.length,
-      snapshots: snapshots.rows.length,
-      evidenceSnapshots: evidenceSnapshots.rows.length,
+      snapshots: snapshots.totalRows,
+      evidenceSnapshots: evidenceSnapshots.totalRows,
       currentEvidenceSnapshots: currentEvidenceRows.length,
       mergedCurrentSnapshots: currentSnapshots.rows.length,
       evidenceCurrent: evidenceCurrent.length,
