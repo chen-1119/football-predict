@@ -87,6 +87,24 @@ async function verify(pool){
   const skipped=await sync({beforeCommit:async(client,context)=>{assert.equal(context.skipped,true);assert.equal(context.previousRunId,accepted.runId);assert.equal((await client.query('SELECT count(*)::int AS count FROM football.frozen_recommendations')).rows[0].count,2);skippedVerified=true;}});
   assert.equal(skipped.skipped,true);assert.equal(skippedVerified,true);
   passed.push('successful explicit validation commits normally and unchanged-source calls still execute the requested verifier');
+  const match=payloads['matches-current.json'][0];
+  const readFrozen=async()=> (await q('SELECT decision_id,decision_hash,publication_id,payload::text AS payload,to_jsonb(f)::text AS record FROM football.frozen_recommendations f WHERE match_id=$1',[match.id])).rows;
+  const [originalFrozen]=await readFrozen();assert.ok(originalFrozen);
+  const originalReview=(await q('SELECT review_id,observation_id,payload::text AS payload FROM football.post_match_reviews WHERE match_id=$1 AND decision_id=$2',[match.id,originalFrozen.decision_id])).rows[0];assert.ok(originalReview);
+  const archivedBytes=JSON.stringify(match.archivedPreMatchPrediction);
+  match.predictionMeta={...match.predictionMeta,modelVersion:'current-meta-after-freeze',currentDiagnostic:'must-not-rewrite-frozen'};
+  match.scoreHome=2;match.scoreAway=1;match.resultProvenance={...match.resultProvenance,scoreHome:2,scoreAway:1};match.resultObservedAt='2026-09-07T15:01:00.000Z';
+  match.postMatchReview=require('../scripts/syncData.cjs').buildPostMatchReview(match,match.resultObservedAt,new Map());
+  assert.equal(JSON.stringify(match.archivedPreMatchPrediction),archivedBytes);assert.equal(match.postMatchReview.predictionReview.referenceBestStatus,'LOST');
+  meta.sourceCycleId+='-mutable-meta-and-corrected-result';publish();const corrected=await sync();assert.equal(corrected.skipped,false);
+  const currentFrozen=await readFrozen();assert.equal(currentFrozen.length,1);const [preservedFrozen]=currentFrozen;
+  assert.equal(preservedFrozen.decision_id,originalFrozen.decision_id);assert.equal(preservedFrozen.decision_hash,originalFrozen.decision_hash);assert.equal(preservedFrozen.payload,originalFrozen.payload);
+  assert.equal(preservedFrozen.publication_id,corrected.publication.generationId);assert.notEqual(preservedFrozen.publication_id,originalFrozen.publication_id);
+  const {protectedFrozenRecommendationHash}=require('../scripts/nativeReleaseDataPlane.cjs');assert.equal(protectedFrozenRecommendationHash(preservedFrozen.record),protectedFrozenRecommendationHash(originalFrozen.record));
+  const reviewed=(await q('SELECT r.review_id,r.observation_id,r.payload::text AS review,o.result_identity,o.payload::text AS observation FROM football.post_match_reviews r JOIN football.result_observations o ON o.observation_id=r.observation_id WHERE r.match_id=$1 AND r.decision_id=$2',[match.id,originalFrozen.decision_id])).rows;
+  assert.equal(reviewed.length,1);assert.equal(reviewed[0].review_id,originalReview.review_id);assert.notEqual(reviewed[0].observation_id,originalReview.observation_id);assert.equal(reviewed[0].result_identity,'2:1|sporttery');
+  assert.equal(JSON.parse(reviewed[0].observation).scoreHome,2);assert.equal(JSON.parse(reviewed[0].review).predictionReview.referenceBestStatus,'LOST');
+  passed.push('same archived decision preserves its original frozen payload and hash despite new current metadata, while publication, corrected result and review advance');
   return{ok:true,checks:passed.length,passed,scope:'loopback-disposable-schema',database,schema,archiveRows:nextIndex.manifest.rowCount,sourceRows:(await rows()).rows.length,productionWrites:0};
  }finally{
   await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
