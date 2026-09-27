@@ -3,6 +3,7 @@
 const assert=require('node:assert/strict'),crypto=require('node:crypto');
 const VERSION='postgres-reference-repair-v1';
 const BASE_RUNTIME='e00b10693a0df6cb75f6d909d901fdb7f0e95298af55e353cc4ae0da84f0118e';
+const RECOVERY_ANCHOR_SHA='dd166f7347ce77e2c0082a48f64a2f98a1f8cff8d12ff3a7026e673b037fb2ba';
 const FILES=Object.freeze(['scripts/postgresGenerationSource.cjs','scripts/postgresProjectionSync.cjs','server/streamedPublicReferenceArchive.cjs','scripts/postgresFileJsonPayload.cjs']);
 const NEW_FILES=Object.freeze(FILES.slice(2));
 const ARTIFACTS=Object.freeze(['controller','proof','policy']);
@@ -16,6 +17,7 @@ const hash=value=>crypto.createHash('sha256').update(value).digest('hex');
 const sha=value=>assert.match(value||'',/^[a-f0-9]{64}$/);
 const stable=v=>Array.isArray(v)?v.map(stable):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort().map(k=>[k,stable(v[k])])):v;
 const objectHash=v=>hash(JSON.stringify(stable(v)));
+const incidentInputHash=o=>objectHash(Object.fromEntries(['runtime','complete','generation','previousGeneration','snapshot','postgres','frontendStateSha256','files','frozen','frozenRecords'].map(k=>[k,o[k]])));
 function validateObservation(o,{fresh=false,now=Date.now()}={}){
  assert.equal(o?.runtime,BASE_RUNTIME);assert.equal(o.complete,BASE_RUNTIME);
  assert.equal(o.productionWrites,0);assert.equal(o.faultCode,'POSTGRES_REFERENCE_ADMISSION_LIMIT');
@@ -47,8 +49,10 @@ function validateObservation(o,{fresh=false,now=Date.now()}={}){
  assert.ok(['admission-failure','publication-lag-after-admission'].includes(o.worker.mode));
  if(o.worker.mode==='admission-failure')assert.equal(e.errorCode,'POSTGRES_REFERENCE_ADMISSION_LIMIT');
  else{
-  assert.equal(e.errorCode,'PUBLICATION_SQLITE_IDENTITY_MISMATCH');const a=o.worker.admissionEvidence;assert.equal(a?.source,'journald');assert.equal(a.workerPid,o.worker.pid);assert.equal(a.invocationId,e.invocationId);assert.equal(a.errorCode,'POSTGRES_REFERENCE_ADMISSION_LIMIT');assert.equal(a.cycleStartedAt,o.generation.committedAt);assert.equal(a.cycleFinishedAt,o.worker.lastCycleStartedAt);assert.ok(Array.isArray(a.entries)&&a.entries.length>0&&a.entries.length<=8);
-  for(const entry of a.entries){const stamp=Date.parse(entry.at);assert.ok(Number.isSafeInteger(entry.pid)&&entry.pid>0&&Number.isFinite(stamp)&&stamp>=Date.parse(o.generation.committedAt)&&stamp<=cycleStart);sha(entry.messageSha256);}
+  assert.equal(e.errorCode,'PUBLICATION_SQLITE_IDENTITY_MISMATCH');const anchor=o.worker.admissionAnchor,a=anchor?.admissionEvidence||o.worker.admissionEvidence;assert.equal(a?.source,'journald');assert.equal(a.errorCode,'POSTGRES_REFERENCE_ADMISSION_LIMIT');assert.equal(a.cycleStartedAt,o.generation.committedAt);assert.ok(Array.isArray(a.entries)&&a.entries.length>0&&a.entries.length<=8);
+  if(anchor){assert.equal(o.worker.admissionEvidence,undefined);assert.equal(anchor.version,'r773-no-swap-recovery-anchor-v1');assert.equal(anchor.capsuleSha256,RECOVERY_ANCHOR_SHA);assert.equal(anchor.incidentInputHash,incidentInputHash(o));for(const key of ['signatureSha256','activationSha256','failureSha256','recoverySha256'])sha(anchor[key]);assert.equal(anchor.noWriteStages,true);assert.equal(anchor.servicesRestored,true);assert.equal(a.workerPid,anchor.originalWorkerPid);assert.equal(a.invocationId,anchor.originalInvocationId);assert.notEqual(a.invocationId,e.invocationId);assert.match(anchor.originalInvocationId,/^[a-f0-9]{32}$/);assert.ok(Number.isSafeInteger(anchor.originalWorkerPid)&&anchor.originalWorkerPid>0);const recovered=Date.parse(anchor.recoveredAt);assert.ok(Number.isFinite(recovered)&&recovered<=cycleFinish&&Date.parse(a.cycleFinishedAt)<=recovered);}
+  else{assert.equal(a.workerPid,o.worker.pid);assert.equal(a.invocationId,e.invocationId);assert.equal(a.cycleFinishedAt,o.worker.lastCycleStartedAt);}
+  for(const entry of a.entries){const stamp=Date.parse(entry.at);assert.ok(Number.isSafeInteger(entry.pid)&&entry.pid>0&&Number.isFinite(stamp)&&stamp>=Date.parse(o.generation.committedAt)&&stamp<=Date.parse(a.cycleFinishedAt)&&stamp<=cycleStart);sha(entry.messageSha256);}
   assert.ok(![o.generation.generationId,o.previousGeneration.generationId].includes(o.postgres.publication.generationId));assert.ok(Date.parse(o.postgres.publication.committedAt)<Date.parse(o.previousGeneration.committedAt),'PostgreSQL identity is not strictly behind both immutable pointers');
  }
  return o;
@@ -79,4 +83,4 @@ function compareFrozen(before,after){
  }
  return{ok:true,retained:Object.fromEntries(['recommendations','publicDecisions','publicEvidence','archives'].map(k=>[k,before[k].length]))};
 }
-module.exports={VERSION,BASE_RUNTIME,FILES,NEW_FILES,ARTIFACTS,ENTRYPOINT,GUARD_LINES,guardedEntrypoint,hash,validateObservation,verify,compareFrozen};
+module.exports={VERSION,BASE_RUNTIME,RECOVERY_ANCHOR_SHA,incidentInputHash,FILES,NEW_FILES,ARTIFACTS,ENTRYPOINT,GUARD_LINES,guardedEntrypoint,hash,validateObservation,verify,compareFrozen};
