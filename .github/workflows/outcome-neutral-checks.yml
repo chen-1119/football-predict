@@ -1,0 +1,42 @@
+name: Outcome-neutral policy and source-snapshot audit
+on:
+  pull_request:
+    paths:
+      - 'src/services/primaryDirectionAdmission.cjs'
+      - 'src/services/recommendationSelectionQuality.cjs'
+      - 'src/services/outcomeCategoryResearch.cjs'
+      - 'scripts/recommendationPlatform/decision.cjs'
+      - 'scripts/auditRecommendationBatchBias.cjs'
+      - 'scripts/auditOutcomeSelection.cjs'
+      - 'tests/outcome-neutral-*.test.cjs'
+      - '.github/workflows/outcome-neutral-checks.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.1'
+          cache: npm
+      - name: Pure admission and batch-diagnostic tests
+        run: node --test tests/outcome-neutral-unit.test.cjs
+      - name: Audit checked-out source snapshot without modifying it
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+        run: node scripts/auditOutcomeSelection.cjs --output "$RUNNER_TEMP/outcome-source-audit.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: outcome-source-audit
+          path: ${{ runner.temp }}/outcome-source-audit.json
+          retention-days: 7
+      - run: npm ci --ignore-scripts
+      - name: Actual publication, combo and legacy-policy integration
+        run: node --test tests/outcome-neutral-integration.test.cjs tests/recommendation-selection-quality.test.cjs tests/recommendation-center-view.test.cjs
+      - run: npm run build

@@ -1,24 +1,22 @@
 'use strict';
 const {validInputEvidence}=require('./recommendationInputEvidence.cjs');
+const primaryAdmission=require('./primaryDirectionAdmission.cjs');
 const LEGACY_VERSION='recommendation-selection-quality-v1';
 const VERSION='recommendation-selection-quality-v2';
 const CODES=['1','X','2'];
-// A weak top direction or a large disagreement with the same frozen official
-// market is a reason to abstain, not a reason to replace it with a long shot.
-// These are prospective safety checks, not an estimated improvement in ROI.
+// Existing v2 market-value safeguards and legacy admission semantics remain.
+// Future HAD decisions explicitly bind a separate, direction-neutral leader policy.
 const MIN_PROBABILITY_LEAD=0.06;
 const MATERIAL_MARKET_GAP=-0.10;
 const MATERIAL_MODEL_EV=-0.15;
-function prospectiveRiskReasons({probabilityLead,modelMarketGap,expectedValue}){
- const reasons=[];
- if(probabilityLead===null||probabilityLead<MIN_PROBABILITY_LEAD)reasons.push('model-lead-too-thin');
+function prospectiveRiskReasons({probabilityLead,modelMarketGap,expectedValue,primaryAdmissionVersion}={}){
+ const reasons=primaryAdmission.leaderReasons({probabilityLead,primaryAdmissionVersion})||[];
+ if(primaryAdmissionVersion!==primaryAdmission.VERSION&&(probabilityLead===null||!Number.isFinite(probabilityLead)||probabilityLead<MIN_PROBABILITY_LEAD))reasons.push('model-lead-too-thin');
  if(modelMarketGap!==null&&expectedValue!==null
    &&modelMarketGap<=MATERIAL_MARKET_GAP&&expectedValue<=MATERIAL_MODEL_EV)
   reasons.push('material-model-market-disagreement');
  return reasons;
 }
-/** Old decisions retain their original input-only admission policy. New
- * decisions additionally withhold thin or materially contradicted selections. */
 function selectionQuality(decision,selection=null){
  const model=decision?.inputEvidence?.model,e=model?.inputEvidence;
  const policy=decision?.selectionPolicyVersion;
@@ -39,11 +37,17 @@ function selectionQuality(decision,selection=null){
  const probabilityLead=numeric?p[tip]-Math.max(...CODES.filter(c=>c!==tip).map(c=>p[c])):null;
  const modelMarketGap=market?p[tip]-market[tip]:null;
  const expectedValue=numeric?p[tip]*q[tip]-1:null;
- if(isV2)reasons.push(...prospectiveRiskReasons({probabilityLead,modelMarketGap,expectedValue}));
- return {version:isV2?VERSION:LEGACY_VERSION,status:reasons.length?'watch':'reference-qualified',qualified:reasons.length===0,reasons,
+ const newHadPolicy=isV2&&decision?.primaryAdmissionVersion===primaryAdmission.VERSION
+   &&(selection?.market||decision?.market)==='HAD';
+ const admissionVersion=newHadPolicy?primaryAdmission.VERSION:null;
+ if(newHadPolicy&&(!primaryAdmission.validTriplet(p)||primaryAdmission.uniquePrimary(p)!==tip))reasons.push('no-unique-model-leader');
+ if(isV2)reasons.push(...prospectiveRiskReasons({probabilityLead,modelMarketGap,expectedValue,primaryAdmissionVersion:admissionVersion}));
+ const uniqueReasons=[...new Set(reasons)];
+ return {version:isV2?VERSION:LEGACY_VERSION,status:uniqueReasons.length?'watch':'reference-qualified',qualified:uniqueReasons.length===0,reasons:uniqueReasons,
   inputEvidenceHash:bound?e.contentHash:null,samples:bound?e.samples:null,weights:bound?e.weights:null,arithmeticStatus:bound?e.arithmetic.status:'unknown',
   probabilityLead,marketProbability:market?market[tip]:null,modelMarketGap,
   expectedValue,marketFavorite:favorite.includes(tip),marketFavoriteCodes:favorite,
+  ...(newHadPolicy?{primaryAdmissionVersion:admissionVersion,warnings:probabilityLead<MIN_PROBABILITY_LEAD?['close-model-lead']:[]}:{}),
   validation:'unvalidated',priceFilterApplied:isV2};
 }
 function isQualifiedSelection({decision,selection}){return selectionQuality(decision,selection).qualified;}
