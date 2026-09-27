@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { getAccessAuthHeaders } from '../../services/accessControl';
 import { buildApiUrl } from '../../services/runtimeUrls';
+import { SupplementaryFootballFacts, type SupplementaryData } from './SupplementaryFootballFacts';
 import '../../styles/prematch-collection.css';
 
 type Player = { name: string; side?: 'home' | 'away'; reason?: string; position?: string; expectedReturn?: string; jersey?: string };
 type Section = { status: string; observedAt: string | null; lastAttemptAt: string | null; previousValue: boolean;
   missingReason?: string | null;
   data: { players?: Player[]; teams?: Array<{ side: 'home' | 'away'; formation: string; coach?: string; starters: Player[]; substitutes: Player[] }> } | null };
-type Evidence = { matchId: string; status: string; predictionEligible: false; sections?: { injuries: Section; lineup: Section } };
+type Evidence = { matchId: string; status: string; predictionEligible: false; sections?: { injuries: Section; lineup: Section }; supplementary?: SupplementaryData | null };
 type RefreshRequest = { matchId: string; state: 'queued' | 'cooldown' | 'error'; nextAllowedAt?: string; error?: string };
 const labels: Record<string, [string, string]> = {
   ok: ['资料校验通过', 'Evidence verified'],
@@ -104,6 +105,7 @@ export function PrematchCollectionPanel({ matchId, language, homeName, awayName,
       <div className="prematch-report__actions"><button type="button" className="prematch-report__refresh" disabled={fetching} onClick={() => setRefreshTick(value => value + 1)}>{fetching ? (zh ? '读取中…' : 'Loading…') : (zh ? '刷新资料' : 'Refresh data')}</button>
         <button type="button" className="prematch-report__refresh" disabled={requesting || requestCooling || !canRequest} onClick={requestRefresh}>{requesting ? (zh ? '提交中…' : 'Queuing…') : requestCooling ? (zh ? '更新请求已提交' : 'Update requested') : (zh ? '更新本场资料' : 'Update match data')}</button></div>
     </header>
+    <SupplementaryFootballFacts data={evidence?.supplementary} language={language}/>
     {activeRequest && <p className="prematch-report__notice" role="status">{activeRequest.state === 'error'
       ? activeRequest.error === 'request-denied' ? (zh ? '补采请求未通过验证，请重新打开本站后重试。' : 'Request verification failed. Reopen this site and retry.') : label(activeRequest.error || 'unavailable')
       : (zh ? '更新请求已提交，有新资料后会自动显示。' : 'Update requested. New data will appear when available.')}
