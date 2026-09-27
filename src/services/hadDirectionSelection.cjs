@@ -4,7 +4,7 @@ const VERSION='had-direction-selection-v1';
 const CODES=Object.freeze(['1','X','2']);
 const EPS=1e-12;
 const RULES=Object.freeze({
-  draw:Object.freeze({minProbability:.27,maxLeaderDeficit:.09,minEdge:.035,minExpectedValue:.04,minEdgeAdvantage:.02,minExpectedValueAdvantage:.03,maxOdds:4.2,maxFavoriteProbability:.56}),
+  draw:Object.freeze({minProbability:.27,maxLeaderDeficit:.09,minEdge:.035,minExpectedValue:.04,minEdgeAdvantage:.02,minExpectedValueAdvantage:.03,maxOdds:4.2,maxFavoriteProbability:.50}),
   upset:Object.freeze({minProbability:.28,maxLeaderDeficit:.10,minEdge:.04,minExpectedValue:.055,minEdgeAdvantage:.025,minExpectedValueAdvantage:.04,maxOdds:4.2}),
 });
 const finite=v=>typeof v==='number'&&Number.isFinite(v);
@@ -114,9 +114,11 @@ function selectHadDirection(probabilitiesInput,quoteOddsInput){
     validation:'prospective-guarded-unvalidated',
   };
 }
+const stable=value=>Array.isArray(value)?value.map(stable):value&&typeof value==='object'
+  ?Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])])):value;
 function validHadDirectionSelection(value,probabilities,quoteOdds){
   if(!value||value.version!==VERSION)return false;
   const expected=selectHadDirection(probabilities,quoteOdds);
-  return Boolean(expected&&JSON.stringify(expected)===JSON.stringify(value));
+  return Boolean(expected&&JSON.stringify(stable(expected))===JSON.stringify(stable(value)));
 }
 module.exports={VERSION,CODES,RULES,devig,uniqueTop,favoriteCodes,marketRole,selectHadDirection,validHadDirectionSelection};

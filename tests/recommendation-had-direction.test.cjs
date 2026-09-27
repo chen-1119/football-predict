@@ -94,3 +94,11 @@ test('frozen review separates model leaders from value overrides and favorite/dr
   assert.equal(report.byMarketRole.draw.settled,1);
   assert.equal(report.byMarketRole.nonfavorite.settled,1);
 });
+
+test('draw override stays off when the frozen market has a clearly dominant favorite',()=>{
+  const p={'1':.40,X:.35,'2':.25},odds={'1':1.70,X:3.50,'2':4.80};
+  const selection=selectHadDirection(p,odds);
+  assert.equal(selection.tipCode,'1');
+  assert.equal(selection.mode,'model-leader');
+  assert.ok(Math.max(...Object.values(require('../src/services/hadDirectionSelection.cjs').devig(odds)))>.50);
+});

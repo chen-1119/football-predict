@@ -176,7 +176,7 @@ function buildHandicapMarginDecision(match, {now,cutoffTime,straightTipCode,cali
   const lambda=lambdasFor(match?.probabilityModel);
   if(line===null||!lambda||!Number.isFinite(now)||!Number.isFinite(cutoff)||now>=cutoff)return null;
   const straight=normalizedStraight(match?.probabilityModel?.oneXTwo?.final);
-  if(!straight||topCode(straight)!==straightTipCode)return null;
+  if(!straight||!CODES.includes(straightTipCode)||!(straight[straightTipCode]>0))return null;
   const rawDist=coherentHandicapDistribution(lambda.home,lambda.away,line,match?.probabilityModel?.oneXTwo?.final,straightTipCode);
   if(!rawDist)return null;
   const raw=rawDist.conditionalProbabilities;
