@@ -16,6 +16,7 @@ const {validCombo}=require('../scripts/recommendationPlatform/comboSelections.cj
 const {settleCombo}=require('../scripts/recommendationPlatform/results.cjs');
 const {hash}=require('../src/services/publishedForecastPolicy.cjs');
 const {bindPublicReferenceDecision}=require('../src/services/publicReferenceDecision.cjs');
+const {withVerifiedInputEvidence}=require('./fixtures/recommendation-input-helper.cjs');
 async function sample(){const p=memoryPorts();await createRuntime(p,{validators}).publishingCycle();return {recommendationCenter:p.state.view};}
 test('the actual runtime projection parses for current UI',async()=>{const x=parseRecommendationCenter(await sample());assert.equal(x.current.length,3);assert.equal(x.previews.length,2);assert.equal(x.review.statistics.single.published,3);});
 
@@ -353,4 +354,19 @@ test('real v3 narrow-win record renders the same pass in recommendation, fixture
   const combo=renderedText(data,{mode:'review',initialTab:frozen.size===2?'two':'three'});
   assert.match(combo,/让球胜平负<!-- --> -2|让球胜平负 -2/);assert.match(combo,/SP 1\.60/);
   assert.equal(JSON.stringify(data),before);
+});
+
+test('runtime value-draw publication survives projection and client parsing without reverting to the favorite',async()=>{
+ const p=memoryPorts(),base=match(81);
+ base.odds={odds1:2.00,oddsX:3.40,odds2:4.00};
+ base.oddsUpdatedAt=new Date(p.now).toISOString();
+ base.probabilityModel.oneXTwo.final={home:40,draw:35,away:25};
+ p.current=[withVerifiedInputEvidence(base)];
+ const runtime=createRuntime(p,{validators});await runtime.publishingCycle();
+ const parsed=parseRecommendationCenter({recommendationCenter:p.state.view});
+ assert.equal(parsed.current.length,1);
+ const d=parsed.current[0].decision;
+ assert.equal(d.tipCode,'X');assert.equal(d.directionSelection.mode,'market-edge-override');
+ assert.equal(d.directionSelection.category,'balanced-draw');
+ assert.equal(view.directionSelectionLabel(d.directionSelection,true),'价值平局');
 });

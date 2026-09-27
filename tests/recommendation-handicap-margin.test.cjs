@@ -266,10 +266,15 @@ test('a unique model draw remains the HAD primary despite a conflicting legacy B
   }
 });
 
-test('shared handicap builder refuses a direction that disagrees with the final HAD primary',()=>{
+test('shared handicap builder follows the frozen HAD primary even when a guarded value pick is not the model argmax',()=>{
   const m=match();m.probabilityModel.oneXTwo.final={home:.25,draw:.5,away:.25};
-  assert.equal(buildHandicapMarginDecision(m,{now:NOW,cutoffTime:m.buyEndTime,straightTipCode:'1'}),null);
-  assert.equal(buildHandicapMarginDecision(m,{now:NOW,cutoffTime:m.buyEndTime,straightTipCode:'2'}),null);
+  for(const code of ['1','2']){
+    const h=buildHandicapMarginDecision(m,{now:NOW,cutoffTime:m.buyEndTime,straightTipCode:code});
+    assert.ok(h);assert.equal(h.straightTipCode,code);assert.equal(h.probabilityBasis,'conditional-on-straight-primary');
+    assert.ok(Math.abs(h.probabilities['1']+h.probabilities.X+h.probabilities['2']-1)<1e-6);
+  }
+  const impossible=match();impossible.probabilityModel.oneXTwo.final={home:0,draw:.5,away:.5};
+  assert.equal(buildHandicapMarginDecision(impossible,{now:NOW,cutoffTime:impossible.buyEndTime,straightTipCode:'1'}),null);
 });
 
 test('numeric but unverified, missing, future or fractional official lines cannot generate a new companion',()=>{

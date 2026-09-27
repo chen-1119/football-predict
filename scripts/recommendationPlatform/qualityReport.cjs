@@ -42,6 +42,14 @@ function leaderAgreement(decision){
   const leader=marketLeader(decision.marketProbabilities);
   return leader===null?'market-tied':leader===decision.tipCode?'agree':'disagree';
 }
+function directionMode(decision){return decision?.directionSelection?.mode==='market-edge-override'?'market-edge-override':'model-leader';}
+function marketRoleForDecision(decision){
+  const stored=decision?.directionSelection?.marketRole;
+  if(['favorite','draw','nonfavorite'].includes(stored))return stored;
+  const leader=marketLeader(decision.marketProbabilities);
+  if(leader===decision.tipCode)return 'favorite';
+  return decision.tipCode==='X'?'draw':'nonfavorite';
+}
 function rememberPublication(latest,row){
   const d=row.decision,key=JSON.stringify([d.sourceMatchId,d.eventVersion]),publishedAt=Date.parse(d.publishedAt),old=latest.get(key);
   const signature=hash({decisionId:d.decisionId,decisionRecordHash:d.recordHash,settlement:row.settlement??null});
@@ -141,16 +149,24 @@ function buildQualityReport(input,{asOf=Date.now()}={}){
   const byModelPriceSignal=Object.fromEntries(['negative','nonnegative'].map(group=>[
     group,cohort(settled.filter(r=>(r.decision.modelProbability*r.decision.odds-1<0?'negative':'nonnegative')===group),settled.length),
   ]));
+  const byDirectionSelectionMode=Object.fromEntries(['model-leader','market-edge-override'].map(group=>[
+    group,cohort(settled.filter(r=>directionMode(r.decision)===group),settled.length),
+  ]));
+  const byMarketRole=Object.fromEntries(['favorite','draw','nonfavorite'].map(group=>[
+    group,cohort(settled.filter(r=>marketRoleForDecision(r.decision)===group),settled.length),
+  ]));
   const evaluationCoverage={inputRows:input.length,distinctPublishedEvents:latest.size,settledEvents:settled.length,
     settledShareOfPublishedEvents:latest.size?settled.length/latest.size:null,fixtureCoverage:null,
     scope:'supplied-frozen-publication-ledger-only'};
   return {version:POLICY.version,asOf:new Date(asOf).toISOString(),policy:POLICY,scope:'published-final-precutoff-per-event',interpretation:'observational-frozen-prediction-evaluation-not-a-trained-backtest',independentMatchDays:days.length,overall,daily,confidenceBands:bands,
-    evaluationCoverage,byTipCode,byLeaderAgreement,bySpBucket,byModelPriceSignal,
+    evaluationCoverage,byTipCode,byLeaderAgreement,bySpBucket,byModelPriceSignal,byDirectionSelectionMode,byMarketRole,
     hitRateTarget:buildHitRateTarget(targetLatest,asOf,exclusions.invalid,targetFuturePublications),
     spBucketPolicy:'frozen selected SP; exact upper bounds 1.45, 1.70, 2.05 and 2.60; diagnostic only',
     modelPriceSignalPolicy:'sign of frozen model probability times frozen selected SP minus one; descriptive only, not calibrated value or promotion',
     flatStakePolicy:'one unit per settled frozen pick at its published SP; diagnostic only, no fees or correlated-bet claim',
-    leaderAgreementPolicy:'frozen-model-tip-versus-unique-frozen-market-probability-leader;ties-reported-separately',
+    leaderAgreementPolicy:'frozen-selected-tip-versus-unique-frozen-market-probability-leader;ties-reported-separately',
+    directionSelectionPolicy:'model-leader-versus-guarded-market-edge-override;diagnostic cohorts only',
+    marketRolePolicy:'favorite/draw/nonfavorite classification at the same frozen de-vigged HAD quote;no quota enforcement',
     exclusions,preliminaryEvidenceSufficient:blockers.length===0,blockers,formalPromotion:false};
 }
 if(require.main===module){

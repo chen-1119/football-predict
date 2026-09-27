@@ -3,6 +3,7 @@ const {validInputEvidence}=require('./recommendationInputEvidence.cjs');
 const LEGACY_VERSION='recommendation-selection-quality-v1';
 const VERSION='recommendation-selection-quality-v2';
 const CODES=['1','X','2'];
+const {validHadDirectionSelection}=require('./hadDirectionSelection.cjs');
 // A weak top direction or a large disagreement with the same frozen official
 // market is a reason to abstain, not a reason to replace it with a long shot.
 // These are prospective safety checks, not an estimated improvement in ROI.
@@ -39,11 +40,21 @@ function selectionQuality(decision,selection=null){
  const probabilityLead=numeric?p[tip]-Math.max(...CODES.filter(c=>c!==tip).map(c=>p[c])):null;
  const modelMarketGap=market?p[tip]-market[tip]:null;
  const expectedValue=numeric?p[tip]*q[tip]-1:null;
- if(isV2)reasons.push(...prospectiveRiskReasons({probabilityLead,modelMarketGap,expectedValue}));
+ const selectionMarket=selection?.market||decision?.market;
+ const directionSelection=decision?.directionSelection;
+ const guardedOverride=Boolean(isV2&&selectionMarket==='HAD'&&tip===decision?.tipCode
+   &&directionSelection?.mode==='market-edge-override'
+   &&validHadDirectionSelection(directionSelection,decision?.probabilities,decision?.quoteOdds));
+ if(isV2){
+   if(!guardedOverride)reasons.push(...prospectiveRiskReasons({probabilityLead,modelMarketGap,expectedValue}));
+   else if(directionSelection.tipCode!==tip)reasons.push('direction-override-mismatch');
+ }
  return {version:isV2?VERSION:LEGACY_VERSION,status:reasons.length?'watch':'reference-qualified',qualified:reasons.length===0,reasons,
   inputEvidenceHash:bound?e.contentHash:null,samples:bound?e.samples:null,weights:bound?e.weights:null,arithmeticStatus:bound?e.arithmetic.status:'unknown',
   probabilityLead,marketProbability:market?market[tip]:null,modelMarketGap,
   expectedValue,marketFavorite:favorite.includes(tip),marketFavoriteCodes:favorite,
+  directionSelectionMode:guardedOverride?'market-edge-override':directionSelection?.mode||'model-leader',
+  marketRole:selectionMarket==='HAD'?(directionSelection?.marketRole||(favorite.includes(tip)?'favorite':tip==='X'?'draw':'nonfavorite')):null,
   validation:'unvalidated',priceFilterApplied:isV2};
 }
 function isQualifiedSelection({decision,selection}){return selectionQuality(decision,selection).qualified;}
