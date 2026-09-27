@@ -12,6 +12,10 @@ const {
 } = require("./resultEventClockRecovery.cjs");
 
 const ROOT_DIR = path.resolve(__dirname, "..");
+// Both signed snapshot inputs share one retained-row budget. The parser still
+// checks every input byte; unrelated public-reference graphs stay on disk.
+const MAX_RETAINED_SNAPSHOT_ROWS = 100_000;
+const MAX_RETAINED_SNAPSHOT_BYTES = 448 * 1024 * 1024;
 
 const readJson = (filePath, fallback) => {
   if (!fs.existsSync(filePath)) return fallback;
@@ -24,12 +28,22 @@ const rowsChanged = (before, after) => before.length !== after.length
   || after.some((row, index) => row !== before[index]
     && canonicalJson(row) !== canonicalJson(before[index]));
 
-const readSnapshotRows = (filePath, keep) => {
+const readSnapshotRows = (filePath, keep, budget) => {
   if (!fs.existsSync(filePath)) return { rows: [], totalRows: 0 };
   const rows = [];
   const result = streamJsonObjectArrays(filePath, {
     keys: ["rows"],
-    onItem(_key, row) { if (keep(row)) rows.push(row); },
+    onItem(_key, row) {
+      if (!keep(row)) return;
+      const bytes = Buffer.byteLength(JSON.stringify(row));
+      if (budget.rows + 1 > MAX_RETAINED_SNAPSHOT_ROWS
+        || budget.bytes + bytes > MAX_RETAINED_SNAPSHOT_BYTES) {
+        throw new Error("ARCHIVE_MIGRATION_SNAPSHOT_BUDGET_EXCEEDED: retained rows exceed 100000 or 448 MiB");
+      }
+      budget.rows += 1;
+      budget.bytes += bytes;
+      rows.push(row);
+    },
   });
   if (!result.fields.includes("rows")) {
     throw new Error("prediction-snapshots.json must expose rows");
@@ -198,11 +212,12 @@ const migrateArchivedPreMatchReferences = ({
   }
   const currentSourceIds = new Set(current.map(archiveKey).filter(Boolean));
   const requiredSourceIds = new Set([...current, ...history].map((row) => normText(archiveKey(row))).filter(Boolean));
+  const snapshotBudget = { rows: 0, bytes: 0 };
   // The archive selector only reads rows for these matches. Validate the whole
   // input while skipping the unrelated public-reference/evidence object graph.
-  const snapshots = readSnapshotRows(snapshotsPath, (row) => requiredSourceIds.has(normText(archiveKey(row))));
+  const snapshots = readSnapshotRows(snapshotsPath, (row) => requiredSourceIds.has(normText(archiveKey(row))), snapshotBudget);
   const evidenceSnapshots = evidenceDataDir
-    ? readSnapshotRows(path.join(evidenceDataDir, "prediction-snapshots.json"), (row) => currentSourceIds.has(archiveKey(row)))
+    ? readSnapshotRows(path.join(evidenceDataDir, "prediction-snapshots.json"), (row) => currentSourceIds.has(archiveKey(row)), snapshotBudget)
     : { rows: [], totalRows: 0 };
   const evidenceCurrent = evidenceDataDir
     ? readJson(path.join(evidenceDataDir, "matches-current.json"), [])
@@ -316,6 +331,10 @@ const migrateArchivedPreMatchReferences = ({
       history: nextHistory.length,
       snapshots: snapshots.totalRows,
       evidenceSnapshots: evidenceSnapshots.totalRows,
+      retainedSnapshotRows: snapshotBudget.rows,
+      retainedSnapshotBytes: snapshotBudget.bytes,
+      maxRetainedSnapshotRows: MAX_RETAINED_SNAPSHOT_ROWS,
+      maxRetainedSnapshotBytes: MAX_RETAINED_SNAPSHOT_BYTES,
       currentEvidenceSnapshots: currentEvidenceRows.length,
       mergedCurrentSnapshots: currentSnapshots.rows.length,
       evidenceCurrent: evidenceCurrent.length,
