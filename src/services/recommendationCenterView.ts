@@ -12,12 +12,20 @@ export interface HandicapAnalysis {
   marketReference?:{source:string;observedAt:string;selectedOdds:number;selectedProbability:number;aligned:boolean;odds?:Record<Outcome,number>}|null;
   historicalCalibration?:{version:string;applied:boolean;profileHash?:string|null;key?:string|null;reason?:string|null;weight?:number|null;metrics?:{rawBrier?:number;calibratedBrier?:number;rawHitRate?:number;calibratedHitRate?:number}|null}|null;
 }
+export interface HadDirectionSelection {
+  version:'had-direction-selection-v1'; mode:'model-leader'|'market-edge-override';
+  category:'favorite-leader'|'draw-leader'|'nonfavorite-leader'|'balanced-draw'|'upset-signal';
+  tipCode:Outcome; modelLeaderCode:Outcome; marketFavoriteCodes:Outcome[];
+  marketRole:'favorite'|'draw'|'nonfavorite'; validation:'prospective-guarded-unvalidated';
+  selected:{code:Outcome;modelProbability:number;marketProbability:number;odds:number;probabilityEdge:number;expectedValue:number;leaderDeficit:number;edgeAdvantage:number;expectedValueAdvantage:number};
+}
 export interface Decision {
   decisionId:string; sourceMatchId:string; matchId:string; eventVersion:string; businessDate:string;
   publishedAt:string; cutoffTime:string; kickoffTime:string; homeTeamName:string; awayTeamName:string;
   matchNo:string|null; tipCode:Outcome; odds:number; probabilities:Record<Outcome,number>;
   modelProbability:number; modelGeneratedAt:string; quoteObservedAt:string; recordHash:string; quoteSource?:string|null; quoteOdds?:Record<Outcome,number>;
   handicapAnalysis?:HandicapAnalysis|null;
+  directionSelection?:HadDirectionSelection|null;
   supplementaryResearch?:SupplementaryResearch|null;
 }
 export interface SupplementaryResearch {
@@ -28,7 +36,7 @@ export interface SupplementaryResearch {
 export interface SupplementaryResult {state:ResultState;actual?:string;score?:string|null;resultEventId?:string|null}
 export interface SupplementarySummary {exactScore:Summary;totalGoals:Summary;excludedWithoutFrozenPicks:number}
 export interface Settlement { state:ResultState; score?:string|null; actual?:Outcome; resultEventId?:string|null; legs?:Array<{decisionId:string;selectionId?:string;state:ResultState;score?:string|null}> }
-export interface SelectionQuality {version:'recommendation-selection-quality-v1'|'recommendation-selection-quality-v2';status:'watch'|'reference-qualified';qualified:boolean;reasons:string[];samples:{elo:{home:number|null;away:number|null};form:{home:number|null;away:number|null}}|null;probabilityLead:number|null;marketProbability:number|null;modelMarketGap:number|null;expectedValue:number|null;marketFavorite:boolean;crossTrack?:{referenceTipCode:Outcome;referenceRecordedAt:string;knownAtPublication:boolean}}
+export interface SelectionQuality {version:'recommendation-selection-quality-v1'|'recommendation-selection-quality-v2';status:'watch'|'reference-qualified';qualified:boolean;reasons:string[];samples:{elo:{home:number|null;away:number|null};form:{home:number|null;away:number|null}}|null;probabilityLead:number|null;marketProbability:number|null;modelMarketGap:number|null;expectedValue:number|null;marketFavorite:boolean;directionSelectionMode?:'model-leader'|'market-edge-override';marketRole?:'favorite'|'draw'|'nonfavorite'|null;crossTrack?:{referenceTipCode:Outcome;referenceRecordedAt:string;knownAtPublication:boolean}}
 export interface PublishedScore {home:number;away:number;label:string;probability:number;hadCode:Outcome;hhadCode:Outcome}
 export interface PublishedTotalGoals {label:string;probability:number}
 export interface PublishedScores {status:'available'|'unavailable';version:'published-score-distribution-v1';decisionId:string;recordHash:string;topScores:PublishedScore[];alignedScores:PublishedScore[];totalGoals?:PublishedTotalGoals[]}
@@ -38,6 +46,15 @@ export interface OutcomeCategoryResearch {
   modelLeaderCode?:Outcome;marketFavoriteCode?:Outcome;researchQualified:boolean;reasons:string[];evidenceCodes:string[];
   outcomes:Array<{code:Outcome;modelProbability:number;fairMarketProbability:number;odds:number;probabilityEdge:number;expectedValue:number;modelRank:number;marketRank:number}>;
 }
+export function directionSelectionLabel(selection:HadDirectionSelection|null|undefined,zh:boolean):string{
+  if(!selection)return zh?'模型首选':'Model leader';
+  if(selection.mode==='market-edge-override')return selection.category==='balanced-draw'
+    ?(zh?'价值平局':'Value draw'):(zh?'非热门信号':'Nonfavorite signal');
+  if(selection.marketRole==='draw')return zh?'模型平局首选':'Model draw leader';
+  if(selection.marketRole==='nonfavorite')return zh?'模型非热门首选':'Model nonfavorite leader';
+  return zh?'模型首选':'Model leader';
+}
+
 export function outcomeCategoryLabel(category:OutcomeCategoryResearch['category'],zh:boolean):string{
   const labels={
     'strong-favorite':zh?'热门走势':'Favorite tendency',
@@ -113,7 +130,7 @@ export interface HitRateTarget {
   targetHitRate:number;minimumSettled:number;minimumMatchDays:number;asOfBusinessDate:string;formalPromotion:false;
   byModelVersion:Array<{modelVersion:string;overall:HitRateTargetCohort;windows:Record<'last7'|'last30',HitRateTargetCohort&{from:string;through:string}>}>;
 }
-export interface ModelQualityReport {independentMatchDays:number;settled:number;won:number;hitRate:number|null;marketTopHitRate:number|null;brier:number|null;marketBrier:number|null;logLoss:number|null;marketLogLoss:number|null;blockers:string[];minimumSettled:number;minimumMatchDays:number;bySpBucket?:Record<string,ModelQualityCohort>;byModelPriceSignal?:Record<string,ModelQualityCohort>;hitRateTarget?:HitRateTarget}
+export interface ModelQualityReport {independentMatchDays:number;settled:number;won:number;hitRate:number|null;marketTopHitRate:number|null;brier:number|null;marketBrier:number|null;logLoss:number|null;marketLogLoss:number|null;blockers:string[];minimumSettled:number;minimumMatchDays:number;bySpBucket?:Record<string,ModelQualityCohort>;byModelPriceSignal?:Record<string,ModelQualityCohort>;byDirectionSelectionMode?:Record<string,ModelQualityCohort>;byMarketRole?:Record<string,ModelQualityCohort>;hitRateTarget?:HitRateTarget}
 export interface HandicapCalibrationGroup {
   key:string;rows:number;active:boolean;reason:string;bias:Record<Outcome,number>;meanRaw:Record<Outcome,number>;actualShare:Record<Outcome,number>;
   metrics?:{holdout?:number;rawBrier?:number;calibratedBrier?:number;rawLogLoss?:number;calibratedLogLoss?:number;rawHitRate?:number;calibratedHitRate?:number}|null;
@@ -191,13 +208,48 @@ function decision(v:unknown):Decision{
   const d=object(v),p=object(d.probabilities),probabilities={'1':number(p['1']),X:number(p.X),'2':number(p['2'])};
   if(d.version!=='unified-decision-v1'||d.market!=='HAD'||d.modelValidation!=='unvalidated')throw new Error('Unsupported decision contract');
   const tipCode=outcome(d.tipCode),odds=number(d.odds),modelProbability=number(d.modelProbability);
-  if(Object.values(probabilities).some(n=>n<0||n>1)||Math.abs(probabilities['1']+probabilities.X+probabilities['2']-1)>1e-8||modelProbability!==probabilities[tipCode]||Object.entries(probabilities).some(([c,n])=>c!==tipCode&&n>=modelProbability)||odds<=1)throw new Error('Direction and probabilities disagree');
+  if(Object.values(probabilities).some(n=>n<0||n>1)||Math.abs(probabilities['1']+probabilities.X+probabilities['2']-1)>1e-8||modelProbability!==probabilities[tipCode]||odds<=1)throw new Error('Direction and probabilities disagree');
   const publishedAt=stamp(d.publishedAt),kickoffTime=stamp(d.kickoffTime),cutoffTime=stamp(d.cutoffTime),quoteObservedAt=stamp(d.quoteObservedAt),modelGeneratedAt=stamp(d.modelGeneratedAt);
   if(Date.parse(publishedAt)>=Math.min(Date.parse(kickoffTime),Date.parse(cutoffTime))||Date.parse(quoteObservedAt)>Date.parse(publishedAt)||Date.parse(modelGeneratedAt)>Date.parse(publishedAt))throw new Error('Invalid pre-match publication');
   const recordHash=text(d.recordHash);if(!/^[a-f0-9]{64}$/.test(recordHash))throw new Error('Invalid record hash');
   const quoteSource=d.quoteSource==null?null:text(d.quoteSource);
   const quoteOdds=frozenQuoteOdds(d.quoteOdds);
   if(quoteOdds&&quoteOdds[tipCode]!==odds)throw new Error('Frozen HAD SP differs from selected SP');
+  let directionSelection:HadDirectionSelection|null=null;
+  if(d.directionSelection!==undefined||d.directionPolicyVersion!==undefined){
+    const ds=object(d.directionSelection),selected=object(ds.selected);
+    const mode=String(ds.mode),category=String(ds.category),marketRole=String(ds.marketRole);
+    const modelLeaderCode=outcome(ds.modelLeaderCode),selectionTip=outcome(ds.tipCode);
+    const favorites=list(ds.marketFavoriteCodes).map(outcome);
+    const uniqueTop=(['1','X','2'] as const).slice().sort((a,b)=>probabilities[b]-probabilities[a])[0];
+    if(d.directionPolicyVersion!=='had-direction-selection-v1'||ds.version!=='had-direction-selection-v1'
+      ||!['model-leader','market-edge-override'].includes(mode)
+      ||!['favorite-leader','draw-leader','nonfavorite-leader','balanced-draw','upset-signal'].includes(category)
+      ||!['favorite','draw','nonfavorite'].includes(marketRole)||selectionTip!==tipCode||modelLeaderCode!==uniqueTop
+      ||!favorites.length||favorites.some(code=>!['1','X','2'].includes(code))
+      ||ds.validation!=='prospective-guarded-unvalidated')throw new Error('Invalid HAD direction selection');
+    const parsedSelected={code:outcome(selected.code),modelProbability:number(selected.modelProbability),marketProbability:number(selected.marketProbability),
+      odds:number(selected.odds),probabilityEdge:number(selected.probabilityEdge),expectedValue:number(selected.expectedValue),
+      leaderDeficit:number(selected.leaderDeficit),edgeAdvantage:number(selected.edgeAdvantage),expectedValueAdvantage:number(selected.expectedValueAdvantage)};
+    if(!quoteOdds)throw new Error('Direction selection requires frozen HAD prices');
+    const inverseTotal=1/quoteOdds['1']+1/quoteOdds.X+1/quoteOdds['2'];
+    const fair={'1':(1/quoteOdds['1'])/inverseTotal,X:(1/quoteOdds.X)/inverseTotal,'2':(1/quoteOdds['2'])/inverseTotal};
+    const expectedFavorites=(['1','X','2'] as const).filter(code=>Math.abs(fair[code]-Math.max(fair['1'],fair.X,fair['2']))<=1e-12);
+    const expectedRole=expectedFavorites.includes(tipCode)?'favorite':tipCode==='X'?'draw':'nonfavorite';
+    const leaderEdge=probabilities[modelLeaderCode]-fair[modelLeaderCode],leaderEv=probabilities[modelLeaderCode]*quoteOdds[modelLeaderCode]-1;
+    const expectedEdge=probabilities[tipCode]-fair[tipCode],expectedEv=probabilities[tipCode]*quoteOdds[tipCode]-1;
+    const near=(a:number,b:number)=>Math.abs(a-b)<=1e-8*Math.max(1,Math.abs(b));
+    if(parsedSelected.code!==tipCode||parsedSelected.modelProbability!==modelProbability||parsedSelected.odds!==odds
+      ||!near(parsedSelected.marketProbability,fair[tipCode])||!near(parsedSelected.probabilityEdge,expectedEdge)||!near(parsedSelected.expectedValue,expectedEv)
+      ||!near(parsedSelected.leaderDeficit,probabilities[modelLeaderCode]-probabilities[tipCode])
+      ||!near(parsedSelected.edgeAdvantage,expectedEdge-leaderEdge)||!near(parsedSelected.expectedValueAdvantage,expectedEv-leaderEv)
+      ||marketRole!==expectedRole||favorites.length!==expectedFavorites.length||favorites.some(code=>!expectedFavorites.includes(code))
+      ||(mode==='model-leader'&&tipCode!==modelLeaderCode)||(mode==='market-edge-override'&&tipCode===modelLeaderCode))
+      throw new Error('Direction selection disagrees with frozen pick');
+    directionSelection={version:'had-direction-selection-v1',mode:mode as HadDirectionSelection['mode'],
+      category:category as HadDirectionSelection['category'],tipCode:selectionTip,modelLeaderCode,marketFavoriteCodes:favorites,
+      marketRole:marketRole as HadDirectionSelection['marketRole'],validation:'prospective-guarded-unvalidated',selected:parsedSelected};
+  } else if(Object.entries(probabilities).some(([c,n])=>c!==tipCode&&n>=modelProbability))throw new Error('Legacy direction is not the model leader');
   const parsedHandicap=d.handicapAnalysis==null?null:handicapAnalysis(d.handicapAnalysis);
   if(parsedHandicap&&parsedHandicap.straightTipCode!==tipCode)throw new Error('Handicap analysis is not bound to the straight pick');
   if(parsedHandicap?.marketReference&&(
@@ -215,7 +267,7 @@ function decision(v:unknown):Decision{
       ||! /^[a-f0-9]{64}$/.test(text(receipt.receiptHash))) throw new Error('Invalid copied lottery SP receipt');
   }
 
-  return {decisionId:text(d.decisionId),matchId:text(d.matchId),sourceMatchId:text(d.sourceMatchId),eventVersion:stamp(d.eventVersion),businessDate:date(d.businessDate),homeTeamName:text(d.homeTeamName),awayTeamName:text(d.awayTeamName),matchNo:d.matchNo==null?null:text(d.matchNo),publishedAt,kickoffTime,cutoffTime,tipCode,odds,probabilities,modelProbability,modelGeneratedAt,quoteObservedAt,recordHash,quoteSource,...(quoteOdds?{quoteOdds}:{}),handicapAnalysis:parsedHandicap, supplementaryResearch:parseSupplementaryResearch(d)};
+  return {decisionId:text(d.decisionId),matchId:text(d.matchId),sourceMatchId:text(d.sourceMatchId),eventVersion:stamp(d.eventVersion),businessDate:date(d.businessDate),homeTeamName:text(d.homeTeamName),awayTeamName:text(d.awayTeamName),matchNo:d.matchNo==null?null:text(d.matchNo),publishedAt,kickoffTime,cutoffTime,tipCode,odds,probabilities,modelProbability,modelGeneratedAt,quoteObservedAt,recordHash,quoteSource,...(quoteOdds?{quoteOdds}:{}),handicapAnalysis:parsedHandicap,directionSelection, supplementaryResearch:parseSupplementaryResearch(d)};
 }
 function parseSupplementaryResearch(d:Obj):SupplementaryResearch|null{
   if(d.supplementaryPolicyVersion===undefined){if(d.supplementaryResearch!==undefined)throw new Error('Unversioned supplementary picks');return null;}
@@ -537,7 +589,12 @@ function modelQuality(v:unknown):ModelQualityReport{
   }
   return result;
  };
- return {independentMatchDays:count(q.independentMatchDays),settled:totalSettled,won:totalWon,hitRate:metric('hitRate'),marketTopHitRate:metric('marketTopHitRate'),brier:metric('brier'),marketBrier:metric('marketBrier'),logLoss:metric('logLoss'),marketLogLoss:metric('marketLogLoss'),blockers:list(q.blockers).map(text),minimumSettled:count(policy.minimumSettled),minimumMatchDays:count(policy.minimumMatchDays),bySpBucket:group(q.bySpBucket,['sp_le_1_45','sp_gt_1_45_le_1_70','sp_gt_1_70_le_2_05','sp_gt_2_05_le_2_60','sp_gt_2_60']),byModelPriceSignal:group(q.byModelPriceSignal,['negative','nonnegative']),hitRateTarget:q.hitRateTarget==null?undefined:hitRateTarget(q.hitRateTarget)};
+ return {independentMatchDays:count(q.independentMatchDays),settled:totalSettled,won:totalWon,hitRate:metric('hitRate'),marketTopHitRate:metric('marketTopHitRate'),brier:metric('brier'),marketBrier:metric('marketBrier'),logLoss:metric('logLoss'),marketLogLoss:metric('marketLogLoss'),blockers:list(q.blockers).map(text),minimumSettled:count(policy.minimumSettled),minimumMatchDays:count(policy.minimumMatchDays),
+  bySpBucket:group(q.bySpBucket,['sp_le_1_45','sp_gt_1_45_le_1_70','sp_gt_1_70_le_2_05','sp_gt_2_05_le_2_60','sp_gt_2_60']),
+  byModelPriceSignal:group(q.byModelPriceSignal,['negative','nonnegative']),
+  byDirectionSelectionMode:group(q.byDirectionSelectionMode,['model-leader','market-edge-override']),
+  byMarketRole:group(q.byMarketRole,['favorite','draw','nonfavorite']),
+  hitRateTarget:q.hitRateTarget==null?undefined:hitRateTarget(q.hitRateTarget)};
 }
 function dayCoverage(value:unknown):DayCoverageData{
   const c=object(value),targetCount=count(c.targetCount),publishableCount=count(c.publishableCount),qualifiedCount=count(c.qualifiedCount),unqualifiedCount=count(c.unqualifiedCount),missingTotal=count(c.missingTotal);

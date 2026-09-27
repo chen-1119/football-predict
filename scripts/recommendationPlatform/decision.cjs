@@ -81,7 +81,12 @@ function validDecision(row) {
   const p = row.probabilities;
   if (!p || !['1','X','2'].includes(row.tipCode) || !['1','X','2'].every(c => typeof p[c] === 'number' && Number.isFinite(p[c]) && p[c] >= 0 && p[c] <= 1)) return false;
   if (Math.abs(p['1'] + p.X + p['2'] - 1) > 1e-8 || p[row.tipCode] !== row.modelProbability) return false;
-  if (!['1','X','2'].every(c => c === row.tipCode || p[row.tipCode] > p[c])) return false;
+  if (row.directionSelection !== undefined || row.directionPolicyVersion !== undefined) {
+    const directionPolicy=require('../../src/services/hadDirectionSelection.cjs');
+    if(row.directionPolicyVersion!==row.directionSelection?.version
+      ||!directionPolicy.validHadDirectionSelection(row.directionSelection,p,row.quoteOdds)
+      ||row.directionSelection.tipCode!==row.tipCode)return false;
+  } else if (!['1','X','2'].every(c => c === row.tipCode || p[row.tipCode] > p[c])) return false;
   if (!row.quoteOdds || !['1','X','2'].every(c => units(row.quoteOdds[c]) !== null) || row.quoteOdds[row.tipCode] !== row.odds) return false;
   return time(row.publishedAt) >= time(row.modelGeneratedAt) && time(row.publishedAt) >= time(row.quoteObservedAt)
     && time(row.publishedAt) < Math.min(time(row.cutoffTime), time(row.kickoffTime))
