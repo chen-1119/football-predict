@@ -28,7 +28,10 @@ const shortBrazil=decision('short-brazil',[30,22,48],[6,4,1.12]);
 const shortPoland=decision('short-poland',[48.2,26.2,25.6],[1.41,3.8,5]);
 const robust=[1,2,3].map(i=>decision(`robust-${i}`,[56,26,18],[2.2,3.4,3.8]));
 assert.equal(thin.selectionPolicyVersion,VERSION);
-assert.ok(selectionQuality(thin).reasons.includes('model-lead-too-thin'));
+// New policy warns on small positive margins without silently replacing the
+// model's unique primary. Legacy v2 behavior is separately checked below.
+assert.equal(selectionQuality(thin).qualified,true);
+assert.ok(selectionQuality(thin).warnings.includes('close-model-lead'));
 for(const d of [shortBrazil,shortPoland]){
  const q=selectionQuality(d);
  assert.equal(q.qualified,false);
@@ -40,20 +43,26 @@ const combo=chooseCombo([thin,shortBrazil,shortPoland,...robust],2,now,{admit:is
 assert.ok(combo);
 assert.ok(combo.legs.every(d=>d.sourceMatchId.startsWith('robust-')));
 
-// Historical records use their original input-only policy, identity and hash.
-const legacyBody={...thin,selectionPolicyVersion:LEGACY_VERSION};
-delete legacyBody.recordHash;
-delete legacyBody.supplementaryPolicyVersion;
-delete legacyBody.supplementaryResearch;
-legacyBody.inputHash=hash({hadInputHash:thin.hadInputHash,handicapInputHash:thin.handicapAnalysis?.inputHash||null,
- selectionPolicyVersion:LEGACY_VERSION,modelInputEvidenceHash:thin.inputEvidence.model.inputEvidence.contentHash});
-legacyBody.decisionId=`decision_${hash([legacyBody.version,legacyBody.sourceMatchId,legacyBody.eventVersion,legacyBody.market,legacyBody.inputHash])}`;
-legacyBody.id=legacyBody.decisionId;
-const legacy={...legacyBody,recordHash:hash(legacyBody)};
+// Historical records use their original policy, identity and hash. These are
+// synthetic old-schema fixtures, not rewrites of stored production decisions.
+function historical(policy){
+ const body={...thin,selectionPolicyVersion:policy};
+ delete body.recordHash; delete body.primaryAdmissionVersion;
+ delete body.supplementaryPolicyVersion; delete body.supplementaryResearch;
+ body.inputHash=hash({hadInputHash:thin.hadInputHash,handicapInputHash:thin.handicapAnalysis?.inputHash||null,
+  selectionPolicyVersion:policy,modelInputEvidenceHash:thin.inputEvidence.model.inputEvidence.contentHash});
+ body.decisionId=`decision_${hash([body.version,body.sourceMatchId,body.eventVersion,body.market,body.inputHash])}`;
+ body.id=body.decisionId; return {...body,recordHash:hash(body)};
+}
+const legacy=historical(LEGACY_VERSION);
 assert.ok(validDecision(legacy));
 assert.equal(selectionQuality(legacy).version,LEGACY_VERSION);
 assert.equal(selectionQuality(legacy).qualified,true);
 assert.equal(selectionQuality(legacy).priceFilterApplied,false);
+const previousV2=historical(VERSION);
+assert.ok(validDecision(previousV2));
+assert.ok(selectionQuality(previousV2).reasons.includes('model-lead-too-thin'));
+assert.equal(selectionQuality(previousV2).qualified,false);
 
 const referenceFixture=fixture('thin',[37.1,26.2,36.7],[2,3.5,3.06]);
 referenceFixture.predictions=[{marketType:'BEST',recommendationAction:'reference',
@@ -75,4 +84,4 @@ assert.equal(crossTrackConflict({...referenced,predictionMeta:{...referenced.pre
 const sameReference=bindPublicReferenceDecision({...referenceFixture,
  predictions:[{...referenceFixture.predictions[0],tipCode:'1',odds:2}]},null,new Date(now+1000).toISOString());
 assert.equal(crossTrackConflict(sameReference,thin,now+2000),null);
-console.log(JSON.stringify({ok:true,checks:22,policy:VERSION,legacy:LEGACY_VERSION}));
+console.log(JSON.stringify({ok:true,checks:26,policy:VERSION,legacy:LEGACY_VERSION}));
