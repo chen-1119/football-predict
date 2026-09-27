@@ -1,0 +1,59 @@
+name: Free football source pipeline
+on:
+  pull_request:
+    paths:
+      - 'collectors/football-sources/**'
+      - 'collectors/leisu-prematch/*website-reader.cjs'
+      - 'src/components/predictions/*FootballFacts*'
+      - 'src/components/predictions/PrematchCollectionPanel.tsx'
+      - 'src/components/predictions/supplementary-football-facts.css'
+      - 'tests/football-sources*'
+      - '.github/workflows/football-sources.yml'
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: source_test
+          POSTGRES_PASSWORD: local_test_only
+          POSTGRES_DB: source_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.1'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: mkdir -p qa
+      - name: New source unit, bridge and render regressions
+        run: node --test tests/football-sources.test.cjs tests/football-sources-bridge.test.cjs tests/football-sources-view.test.cjs | tee qa/free-source-tests.log
+      - name: Existing prematch contract regressions
+        run: node --test tests/prematch*.test.cjs collectors/leisu-prematch/website-reader.test.cjs collectors/leisu-prematch/api-football-reference.test.cjs | tee qa/prematch-tests.log
+      - name: Real PostgreSQL concurrency and rollback checks
+        run: node tests/football-sources-postgres.cjs | tee qa/free-source-postgres.log
+        env:
+          FOOTBALL_SOURCES_TEST_DATABASE_URL: postgresql://source_test:local_test_only@127.0.0.1:5432/source_test
+      - name: Full application build
+        run: npm run build | tee qa/build.log
+      - name: Live public-source probe (report only, no tokens)
+        if: always()
+        run: node tests/football-sources-smoke.cjs qa/free-source-smoke.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: free-source-verification
+          path: qa/

@@ -1,0 +1,9 @@
+[Unit]
+Description=Refresh free football facts with persistent provider budgets
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=5min
+RandomizedDelaySec=15
+Unit=football-free-sources.service
+[Install]
+WantedBy=timers.target
