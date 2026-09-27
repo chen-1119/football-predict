@@ -16,6 +16,11 @@ const labels: Record<string, [string,string]> = {
   'awaiting-source-or-mapping':['等待数据或比赛身份匹配','Awaiting data or fixture mapping'],
   'credentials-missing':['需配置免费接口密钥','Free API token not configured'],
 };
+const credits: Record<string, {url:string;license?:string;label:string}> = {
+  'met-norway':{url:'https://www.met.no/',license:'https://creativecommons.org/licenses/by/4.0/',label:'MET Norway · CC BY 4.0'},
+  openligadb:{url:'https://www.openligadb.de/',license:'https://opendatacommons.org/licenses/odbl/1-0/',label:'OpenLigaDB · ODbL'},
+  'football-data.org':{url:'https://www.football-data.org/',label:'football-data.org'},
+};
 export function SupplementaryFootballFacts({data,language}:{data?:SupplementaryData|null;language:'zh'|'en'}) {
   if(!data)return null;
   const zh=language==='zh', keys=['fixture','form','standings','weather'];
@@ -26,12 +31,14 @@ export function SupplementaryFootballFacts({data,language}:{data?:SupplementaryD
       const field=data.fields?.[key], d=object(field?.data), expiry=Date.parse(field?.expiresAt||'');
       const present=field?.status==='available'&&field.data!=null&&Number.isFinite(expiry)&&expiry>Date.now();
       const status=field?.data&&!present?'stale':field?.status||'awaiting-source-or-mapping';
+      const credit=credits[field?.provider||''];
       return <article key={key}><h5>{headings[i]}</h5>{!present?<p>{(labels[status]||labels['awaiting-source-or-mapping'])[zh?0:1]}</p>:<>
         {key==='fixture'&&<p><strong>{text(d.home)} vs {text(d.away)}</strong><br/>{text(d.status)}{zh?' · 仅供核验，不作竞彩结算':' · Reference, not official settlement'}</p>}
         {key==='form'&&(['home','away'] as const).map(side=>{const v=object(d[side]);return <p key={side}><strong>{side==='home'?(zh?'主队':'Home'):(zh?'客队':'Away')}</strong> · {zh?'样本':'Sample'} {numeric(v.sampleSize)}<br/>{zh?'场均进球 / 失球':'Goals for / against per match'} {numeric(v.goalsForAvg,2)} / {numeric(v.goalsAgainstAvg,2)}</p>;})}
         {key==='standings'&&(['home','away'] as const).map(side=>{const v=object(d[side]);return <p key={side}>{side==='home'?(zh?'主队':'Home'):(zh?'客队':'Away')} · {zh?'排名':'Rank'} {numeric(v.position)} · {zh?'积分':'Points'} {numeric(v.points)} · {zh?'已赛':'Played'} {numeric(v.played)}</p>;})}
         {key==='weather'&&<p>{numeric(d.temperatureC,1)} °C · {zh?'风速':'Wind'} {numeric(d.windKph,1)} km/h<br/>{zh?'小时降水':'Hourly precipitation'} {numeric(d.precipitationMm,1)} mm<br/>{zh?'预报对应时刻':'Forecast valid at'} {text(d.forecastAt)}</p>}
-        <small>{field?.attribution||field?.provider||'—'} · {zh?'采集':'Received'} {field?.observedAt?new Date(field.observedAt).toLocaleString(zh?'zh-CN':'en-GB',{timeZone:'Asia/Shanghai',hour12:false}):'—'}</small>
+        <small>{credit?<><a href={credit.url} target="_blank" rel="noopener noreferrer">{credit.label}</a>{credit.license&&<> · <a href={credit.license} target="_blank" rel="noopener noreferrer">{zh?'许可':'License'}</a></>}</>:field?.attribution||field?.provider||'—'} · {zh?'采集':'Received'} {field?.observedAt?new Date(field.observedAt).toLocaleString(zh?'zh-CN':'en-GB',{timeZone:'Asia/Shanghai',hour12:false}):'—'}</small>
+        {['form','weather'].includes(key)&&<small>{zh?'本系统整理计算：战绩均值或风速单位换算。':'Processed locally: form averages or wind-unit conversion.'}</small>}
       </>}</article>;
     })}</div>
   </section>;

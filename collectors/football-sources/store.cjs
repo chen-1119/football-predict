@@ -29,8 +29,9 @@ function repository(pool){return {
   async current(){return (await pool.query("SELECT payload FROM football.match_snapshots WHERE dataset='current'")).rows.map(r=>r.payload);},
   async saveView(match,view){const ident=identity(match);if(!ident)throw new Error('invalid-view-identity');return transaction(pool,async c=>{
     // Compare the whole event identity again, not just the source ID. A change
-    // during collection must not publish an old team's detail under a reused ID.
-    const rows=(await c.query("SELECT payload FROM football.match_snapshots WHERE dataset='current' AND payload->>'id'=$1 FOR SHARE",[match.id])).rows;
+    // during collection cannot be served under a reused ID: readView repeats
+    // this identity check. No UPDATE privilege on the core match table is needed.
+    const rows=(await c.query("SELECT payload FROM football.match_snapshots WHERE dataset='current' AND payload->>'id'=$1",[match.id])).rows;
     if(rows.length!==1||hash(identity(rows[0].payload))!==hash(ident))return false;
     await c.query(`INSERT INTO football_sources.match_views(match_id,event_version,input_hash,checked_at,payload) VALUES($1,$2,$3,$4,$5::jsonb)
       ON CONFLICT(match_id) DO UPDATE SET event_version=EXCLUDED.event_version,input_hash=EXCLUDED.input_hash,checked_at=EXCLUDED.checked_at,payload=EXCLUDED.payload

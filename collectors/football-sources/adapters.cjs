@@ -45,7 +45,7 @@ function openLiga(body,job) {
 }
 function metNorway(body,job,receivedAt) {
   const coords=body?.geometry?.coordinates,meta=body?.properties?.meta,units=meta?.units,updated=instant(meta?.updated_at);
-  if(body?.type!=='Feature'||!Array.isArray(coords)||Math.abs(coords[0]-job.lon)>.001||Math.abs(coords[1]-job.lat)>.001||updated===null||updated>receivedAt)throw new Error('weather-identity-or-clock');
+  if(body?.type!=='Feature'||!Array.isArray(coords)||number(coords[0])===null||number(coords[1])===null||Math.abs(coords[0]-job.lon)>.001||Math.abs(coords[1]-job.lat)>.001||updated===null||updated>receivedAt)throw new Error('weather-identity-or-clock');
   if(units?.air_temperature!=='celsius'||units?.wind_speed!=='m/s')throw new Error('unsupported-weather-units');
   const rows=requireArray(body.properties.timeseries,400).flatMap(r=>{
     const ms=instant(r.time),v=r.data?.instant?.details;

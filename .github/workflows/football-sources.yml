@@ -8,6 +8,7 @@ on:
       - 'src/components/predictions/PrematchCollectionPanel.tsx'
       - 'src/components/predictions/supplementary-football-facts.css'
       - 'tests/football-sources*'
+      - 'tests/prematch-collection-panel.test.cjs'
       - '.github/workflows/football-sources.yml'
 permissions:
   contents: read
@@ -27,7 +28,7 @@ jobs:
           POSTGRES_DB: source_test
         ports: ['5432:5432']
         options: >-
-          --health-cmd pg_isready --health-interval 5s
+          --health-cmd 'pg_isready -U source_test' --health-interval 5s
           --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
@@ -40,7 +41,7 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: mkdir -p qa
       - name: New source unit, bridge and render regressions
-        run: node --test tests/football-sources.test.cjs tests/football-sources-bridge.test.cjs tests/football-sources-view.test.cjs | tee qa/free-source-tests.log
+        run: node --test tests/football-sources*.test.cjs | tee qa/free-source-tests.log
       - name: Existing prematch contract regressions
         run: node --test tests/prematch*.test.cjs collectors/leisu-prematch/website-reader.test.cjs collectors/leisu-prematch/api-football-reference.test.cjs | tee qa/prematch-tests.log
       - name: Real PostgreSQL concurrency and rollback checks
