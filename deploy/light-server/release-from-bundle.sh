@@ -328,6 +328,13 @@ run_build_step() {
       ;;
   esac
   case "$label" in
+    archive-migration|archive-migration-reconciled)
+      # Bound a future large archive input without raising the per-step heap or
+      # cgroup ceilings. Exceeding the limit fails before the live swap.
+      runtime_max_seconds="900"
+      ;;
+  esac
+  case "$label" in
     candidate-datastore|candidate-datastore-reconciled)
       # The candidate SQLite projections retain about 1.8 GiB across the V8
       # heap, native SQLite state, and dirty page cache.  Keep their V8 heap
