@@ -11,6 +11,7 @@ const view=require(path.join(dir,'view.cjs'));
 const {parseRecommendationCenter,visiblePreview,primarySelectionSummary,comboLegSelection,handicapAnalysisBasis,calibrationSampleBasis,sameDirectionConcentration,boundOfficialHandicapSp}=view;
 const {createRuntime}=require('../scripts/recommendationPlatform/runtime.cjs');
 const {match,memoryPorts,validators}=require('./recommendationFixture.cjs');
+const {withVerifiedInputEvidence}=require('./fixtures/recommendation-input-helper.cjs');
 const {makeDecision,chooseCombo,freezeCombo}=require('../scripts/recommendationPlatform/decision.cjs');
 const {validCombo}=require('../scripts/recommendationPlatform/comboSelections.cjs');
 const {settleCombo}=require('../scripts/recommendationPlatform/results.cjs');
@@ -353,4 +354,45 @@ test('real v3 narrow-win record renders the same pass in recommendation, fixture
   const combo=renderedText(data,{mode:'review',initialTab:frozen.size===2?'two':'three'});
   assert.match(combo,/让球胜平负<!-- --> -2|让球胜平负 -2/);assert.match(combo,/SP 1\.60/);
   assert.equal(JSON.stringify(data),before);
+});
+
+function valueCurrent(id,probabilities,odds){
+  const base=match(id,Date.parse('2026-09-17T10:00:00Z'),{odds:{odds1:odds['1'],oddsX:odds.X,odds2:odds['2']}});
+  base.probabilityModel={...base.probabilityModel,generatedAt:'2026-09-17T10:00:00.000Z',
+    oneXTwo:{final:{home:probabilities['1']*100,draw:probabilities.X*100,away:probabilities['2']*100}}};
+  return withVerifiedInputEvidence(base);
+}
+test('formal draw-value publication parses and is labelled without reverting to the favorite',async()=>{
+  const p=memoryPorts();
+  p.current=[
+    valueCurrent(901,{'1':.47,X:.35,'2':.18},{'1':1.8,X:3.8,'2':4.5}),
+    valueCurrent(902,{'1':.58,X:.25,'2':.17},{'1':1.65,X:3.8,'2':5}),
+    valueCurrent(903,{'1':.57,X:.25,'2':.18},{'1':1.7,X:3.7,'2':4.8}),
+  ];
+  await createRuntime(p,{validators}).publishingCycle();
+  const data=parseRecommendationCenter({recommendationCenter:p.state.view});
+  const row=data.current.find(item=>item.decision.sourceMatchId==='901');
+  assert(row);assert.equal(row.decision.tipCode,'X');assert.equal(row.decision.hadSelection.selectionClass,'draw-value');
+  assert.equal(row.selectionQuality.qualified,true);
+  assert.equal(row.outcomeResearch.category,'balanced-draw');
+  assert.equal(row.outcomeResearch.candidateCode,'X');
+  const header=primarySelectionSummary(row.decision);
+  assert.equal(header.had.code,'X');assert.equal(header.had.selectionClass,'draw-value');
+  const html=renderedText(data,{},Date.parse(row.decision.publishedAt));
+  assert.match(html,/价值平局/);assert.match(html,/胜平负首选/);assert.match(html,/平局/);
+});
+test('quality review partitions settled rows by frozen value-selection class',()=>{
+  const {buildQualityReport}=require('../scripts/recommendationPlatform/qualityReport.cjs');
+  const now=Date.parse('2026-09-17T10:00:00Z');
+  const draw=makeDecision(valueCurrent(911,{'1':.47,X:.35,'2':.18},{'1':1.8,X:3.8,'2':4.5}),{now,publication:{generationId:'g',manifestHash:'a'.repeat(64),committedAt:new Date(now).toISOString()}}).decision;
+  const favorite=makeDecision(valueCurrent(912,{'1':.58,X:.25,'2':.17},{'1':1.65,X:3.8,'2':5}),{now,publication:{generationId:'g',manifestHash:'a'.repeat(64),committedAt:new Date(now).toISOString()}}).decision;
+  const settled=[
+    {decision:draw,settlement:{state:'WON',actual:'X',score:'1-1',resultEventId:'r1'}},
+    {decision:favorite,settlement:{state:'LOST',actual:'2',score:'0-1',resultEventId:'r2'}},
+  ];
+  const report=buildQualityReport(settled,{asOf:Date.parse('2026-09-18T18:00:00Z')});
+  assert.equal(report.bySelectionClass['draw-value'].settled,1);
+  assert.equal(report.bySelectionClass['draw-value'].won,1);
+  assert.equal(report.bySelectionClass['market-favorite'].settled,1);
+  assert.equal(report.bySelectionClass['market-favorite'].won,0);
 });

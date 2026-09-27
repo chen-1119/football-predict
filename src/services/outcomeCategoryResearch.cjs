@@ -82,7 +82,14 @@ function classifyOutcomeResearch(row) {
   let category = 'watch';
   let candidate = null;
   let evidenceCodes = [];
-  if (top.code === favorite.code && top.modelProbability >= 0.48
+  const formalValueSelection = decision?.hadSelection?.mode === 'market-dislocation'
+    && ['draw-value','underdog-value'].includes(decision.hadSelection.selectionClass)
+    && decision.hadSelection.tipCode === decision.tipCode;
+  if (formalValueSelection) {
+    category = decision.tipCode === 'X' ? 'balanced-draw' : 'upset-signal';
+    candidate = byCode[decision.tipCode];
+    evidenceCodes = ['formal-value-selection-bound','positive-price-dislocation'];
+  } else if (top.code === favorite.code && top.modelProbability >= 0.48
     && top.modelProbability - byCode[modelOrder[1]].modelProbability >= 0.08) {
     category = 'strong-favorite';
     candidate = top;
@@ -117,7 +124,7 @@ function classifyOutcomeResearch(row) {
   // Direction-changing categories remain observations until an independent,
   // source-timed cohort establishes that they outperform the same-event
   // market. Input completeness and a positive arithmetic EV cannot do that.
-  if (category === 'balanced-draw' || category === 'upset-signal')
+  if ((category === 'balanced-draw' || category === 'upset-signal') && !formalValueSelection)
     reasons.push('category-holdout-unvalidated');
   return { ...base, category, candidateCode: candidate?.code || null,
     modelLeaderCode: top.code, marketFavoriteCode: favorite.code,
