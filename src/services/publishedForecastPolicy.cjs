@@ -90,20 +90,23 @@ function evaluateForecast(match, { now, publication } = {}) {
   const odds = Object.fromEntries(CODES.map((c, i) => [c, q.values[i]]));
   const inverseTotal = q.values.reduce((sum, v) => sum + 1 / v, 0);
   const market = Object.fromEntries(CODES.map(c => [c, (1 / odds[c]) / inverseTotal]));
-  const tipCode = ranked[0];
+  const hadSelection = require('./hadSelectionPolicy.cjs').chooseHadSelection(p, odds);
+  if (!hadSelection) return fail('had-selection-unavailable');
+  const tipCode = hadSelection.tipCode;
   return { eligible: true, reason: 'ready-for-publication', candidate: {
     policyVersion: POLICY, statisticsTrack: TRACK, matchId: text(match.id), sourceMatchId: sourceId(match.sourceMatchId || match.id),
     eventVersion, businessDate, kickoffTime: new Date(kickoff).toISOString(), cutoffTime: new Date(quoteDeadline).toISOString(),
     matchNo: text(match.matchNo || match.matchNumStr || match.matchNum) || null,
     homeTeamId: text(match.homeTeamId), awayTeamId: text(match.awayTeamId), homeTeamName: text(match.homeTeamName), awayTeamName: text(match.awayTeamName),
     leagueId: text(match.leagueId) || null, market: 'HAD', handicapLine: 0, tipCode, odds: odds[tipCode], probabilities: p,
+    hadSelectionVersion: hadSelection.version, hadSelection,
     marketProbabilities: market, modelProbability: p[tipCode], modelMarketGap: p[tipCode] - market[tipCode],
     modelExpectedValue: p[tipCode] * odds[tipCode] - 1, modelValidation: 'unvalidated',
     sourceVerification: q.receipt ? 'warehouse-jczq-extraction' : 'source-label-and-publication-binding',
     ...(q.receipt ? { quoteProvenance: structuredClone(q.receipt) } : {}),
     modelGeneratedAt: new Date(modelAt).toISOString(), quoteSource: q.source, quoteObservedAt: new Date(q.atMs).toISOString(), quoteOdds: odds,
     publication: { generationId: publication.generationId, manifestHash: publication.manifestHash },
-    inputHash: hash({ id: match.id, eventVersion, p, odds, quoteAt: q.atMs, modelAt, ...(q.receipt ? { quoteReceiptHash: q.receipt.receiptHash } : {}) }),
+    inputHash: hash({ id: match.id, eventVersion, p, odds, quoteAt: q.atMs, modelAt, hadSelection, ...(q.receipt ? { quoteReceiptHash: q.receipt.receiptHash } : {}) }),
   } };
 }
 function buildRecord(candidate, now) {
@@ -123,13 +126,17 @@ function verifyRecord(record) {
   if (!p || !market || !CODES.includes(record.tipCode) || numeric(record.odds) === null || record.odds <= 1) return false;
   if (!record.quoteOdds || CODES.some(c => numeric(record.quoteOdds[c]) === null || record.quoteOdds[c] <= 1)) return false;
   if (record.quoteOdds[record.tipCode] !== record.odds || Math.abs(record.modelProbability - p[record.tipCode]) > 1e-9) return false;
+  const hasValueSelection = record.hadSelectionVersion !== undefined || record.hadSelection !== undefined;
+  if (hasValueSelection && (record.hadSelectionVersion !== require('./hadSelectionPolicy.cjs').VERSION
+    || !require('./hadSelectionPolicy.cjs').validHadSelection(record.hadSelection, p, record.quoteOdds)
+    || record.hadSelection.tipCode !== record.tipCode)) return false;
   if (!/^[a-f0-9]{64}$/.test(text(record.publication?.manifestHash)) || !text(record.publication?.generationId)) return false;
   if (!/^[a-f0-9]{64}$/.test(text(record.inputHash))) return false;
   const published = time(record.publishedAt);
   return Boolean(recordHash === hash(payload)
     && published < time(record.cutoffTime) && published < time(record.kickoffTime)
     && time(record.quoteObservedAt) <= published && time(record.modelGeneratedAt) <= published
-    && CODES.every(c => c === record.tipCode || p[record.tipCode] - p[c] > 1e-9)
+    && (hasValueSelection || CODES.every(c => c === record.tipCode || p[record.tipCode] - p[c] > 1e-9))
     && record.id === `forecast_${hash([TRACK, record.sourceMatchId, record.eventVersion, record.market])}`);
 }
 function evaluateBatch(matches, context) {

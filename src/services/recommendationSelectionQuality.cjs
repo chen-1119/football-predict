@@ -39,11 +39,17 @@ function selectionQuality(decision,selection=null){
  const probabilityLead=numeric?p[tip]-Math.max(...CODES.filter(c=>c!==tip).map(c=>p[c])):null;
  const modelMarketGap=market?p[tip]-market[tip]:null;
  const expectedValue=numeric?p[tip]*q[tip]-1:null;
- if(isV2)reasons.push(...prospectiveRiskReasons({probabilityLead,modelMarketGap,expectedValue}));
+ const valueSelection=decision?.hadSelection?.mode==='market-dislocation' && (!selection || selection.market==='HAD');
+ if(valueSelection){
+  const valid=require('./hadSelectionPolicy.cjs').validHadSelection(decision.hadSelection,p,q);
+  if(!valid)reasons.push('value-selection-evidence-invalid');
+  else if(modelMarketGap===null||expectedValue===null||modelMarketGap<=0||expectedValue<=0)reasons.push('value-selection-no-positive-edge');
+ }else if(isV2)reasons.push(...prospectiveRiskReasons({probabilityLead,modelMarketGap,expectedValue}));
  return {version:isV2?VERSION:LEGACY_VERSION,status:reasons.length?'watch':'reference-qualified',qualified:reasons.length===0,reasons,
   inputEvidenceHash:bound?e.contentHash:null,samples:bound?e.samples:null,weights:bound?e.weights:null,arithmeticStatus:bound?e.arithmetic.status:'unknown',
   probabilityLead,marketProbability:market?market[tip]:null,modelMarketGap,
   expectedValue,marketFavorite:favorite.includes(tip),marketFavoriteCodes:favorite,
+  selectionMode:decision?.hadSelection?.mode||'legacy-model-leader',selectionClass:decision?.hadSelection?.selectionClass||null,
   validation:'unvalidated',priceFilterApplied:isV2};
 }
 function isQualifiedSelection({decision,selection}){return selectionQuality(decision,selection).qualified;}

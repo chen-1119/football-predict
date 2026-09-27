@@ -25,7 +25,9 @@ function selectionFor(decision,market){
   if(!validDecision(decision)||!['HAD','HHAD'].includes(market))return null;
   const h=decision.handicapAnalysis;
   const probabilities=market==='HAD'?decision.probabilities:standaloneHandicap(h);
-  const tipCode=top(probabilities);if(!tipCode)return null;
+  const tipCode=market==='HAD'?decision.tipCode:top(probabilities);if(!tipCode)return null;
+  if(market==='HAD'&&decision.hadSelectionVersion!==undefined
+    && !require('../../src/services/hadSelectionPolicy.cjs').validHadSelection(decision.hadSelection,probabilities,decision.quoteOdds))return null;
   const quote=market==='HAD'?{odds:decision.quoteOdds,source:decision.quoteSource,observedAt:decision.quoteObservedAt}:h?.marketReference;
   const line=market==='HAD'?0:h?.handicapLine;
   if(!quote||!CODES.every(c=>units(quote.odds?.[c])!==null)||!Number.isSafeInteger(line)
