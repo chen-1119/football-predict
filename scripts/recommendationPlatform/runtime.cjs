@@ -225,7 +225,11 @@ function createRuntime(ports,{validators,dualResearchEnabled=process.env.ENABLE_
       && c.legs.every(d=>!conflictForDecision(targetMatches,d,now))) : [];
     const selected=singles.filter(r=>r.decision.businessDate===day(now)).map(row=>{
       const conflict=conflictForDecision(targetMatches,row.decision,now);
-      const risk=prospectiveRiskReasons(row.selectionQuality);
+      // A bound market-dislocation decision already passed the stricter value
+      // selector and selectionQuality verification. Reapplying the legacy
+      // model-leader gap here would silently turn every formal draw/upset back
+      // into watch status at presentation time.
+      const risk=row.decision.hadSelection?.mode==='market-dislocation'?[]:prospectiveRiskReasons(row.selectionQuality);
       const current=(!conflict&&!risk.length)?row:{...row,selectionQuality:{...row.selectionQuality,status:'watch',qualified:false,
         reasons:[...new Set([...(row.selectionQuality.reasons||[]),...risk,...(conflict?[conflict.reason]:[])])],
         ...(conflict?{crossTrack:conflict}:{})}};
