@@ -1,6 +1,7 @@
 "use strict";
 const crypto = require("node:crypto");
 const path = require("node:path");
+const fs = require("node:fs"), os = require("node:os");
 const {
   resolveActivePublication, readPublicationJson, acquireGenerationReadLease,
   assertActivePublicationPointerUnchanged,
@@ -17,8 +18,9 @@ const {
 } = require("./generationProjectionRows.cjs");
 const {
   SOURCE_ID, INDEX_ID, INDEX_PREFIX, VERSION, INDEX_VERSION,
-  buildPublicReferenceArchive, buildPublicReferenceIndex,
 } = require("../server/publicReferenceArchive.cjs");
+const { buildStreamedPublicReferenceArchive } = require("../server/streamedPublicReferenceArchive.cjs");
+const { streamJsonObjectArrays } = require("../server/streamedJsonObjectArrays.cjs");
 const { validateFastResultReceiptMetadata } = require("./fastResultReceiptIntegrity.cjs");
 const {
   validateAuthorityHighWaterMetadata, FAST_RESULT_AUTHORITY_HIGH_WATER_KEY: HIGH_WATER,
@@ -46,9 +48,8 @@ const rowFromState = (state, kind) => ({
     handicap_line: Number.isFinite(Number(state.handicapLine)) ? Number(state.handicapLine) : null } : { phase: state.phase || null }),
 });
 
-// The native PG archive really needs both complete arrays. Admit their object
-// graphs item by item, without also retaining one ledger-sized encoded string
-// and its JSON.parse copy. Each pass is bound to the immutable manifest.
+// Legacy bounded materializer kept for explicit diagnostic callers. The native
+// projection below uses the disk-backed builder, not this object-graph API.
 const MAX_REFERENCE_RETAINED_CHARS = 320 * 1024 * 1024;
 function readPostgresReferenceSnapshot(context, { maxRetainedChars = MAX_REFERENCE_RETAINED_CHARS, maxItems = 100000 } = {}) {
   if (!Number.isSafeInteger(maxRetainedChars) || maxRetainedChars < 1 || maxRetainedChars > MAX_REFERENCE_RETAINED_CHARS
@@ -78,6 +79,58 @@ function readPostgresReferenceSnapshot(context, { maxRetainedChars = MAX_REFEREN
   return { ...metadata, ...Object.fromEntries(result.fields.map(key => [key, arrays[key]])) };
 }
 
+// The projection only needs the retained tail of rows; reference evidence is
+// validated separately. Keep offsets (not payload graphs) while canonical
+// states are merged, sorted and compared with PostgreSQL.
+const archiveSourceKey = value => String(value?.sourceMatchId || String(value?.id || "").replace(/^sporttery_/, "")).trim();
+function spoolGenerationRows(context, name, limitRows, tempDir, complete = false) {
+  if (!["prediction-snapshots.json", "odds-history.json"].includes(name)
+    || !Number.isSafeInteger(limitRows) || limitRows < 1 || limitRows > 1000000) throw new Error("invalid native row spool options");
+  const entry = context?.manifest?.files?.find(item => item.path === name);
+  if (!entry || !context.generationDir) throw new Error("native row spool missing immutable manifest");
+  const base = fs.realpathSync(tempDir || os.tmpdir());
+  const directory = fs.mkdtempSync(path.join(base, "football-pg-states-"));
+  let fd = null, closed = false, bytes = 0, count = 0;
+  const tail = new Array(limitRows);
+  const close = () => {
+    if (closed) return; closed = true;
+    let closeError = null; if (fd !== null) { try { fs.closeSync(fd); } catch (error) { closeError = error; } }
+    if (path.dirname(directory) !== base || !path.basename(directory).startsWith("football-pg-states-")) throw new Error("unsafe state scratch cleanup");
+    fs.rmSync(directory, { recursive: true, force: true });
+    if (closeError) throw closeError;
+  };
+  const append = value => {
+    const buffer = Buffer.from(JSON.stringify(value));
+    if (bytes + buffer.length > 2 * 1024 ** 3) throw new Error("native state scratch exceeds bounded bytes");
+    const item = { offset: bytes, bytes: buffer.length, sha256: crypto.createHash("sha256").update(buffer).digest("hex") };
+    let offset = 0;
+    while (offset < buffer.length) { const n = fs.writeSync(fd, buffer, offset, buffer.length - offset); if (!n) throw new Error("native state scratch write stalled"); offset += n; }
+    bytes += buffer.length; return item;
+  };
+  const read = item => {
+    if (closed) throw new Error("native state scratch is closed");
+    const buffer = Buffer.allocUnsafe(item.bytes); let offset = 0;
+    while (offset < buffer.length) { const n = fs.readSync(fd, buffer, offset, buffer.length - offset, item.offset + offset); if (!n) throw new Error("native state scratch truncated"); offset += n; }
+    if (crypto.createHash("sha256").update(buffer).digest("hex") !== item.sha256) throw new Error("native state scratch integrity invalid");
+    return JSON.parse(buffer.toString("utf8"));
+  };
+  try {
+    fs.chmodSync(directory, 0o700);
+    fd = fs.openSync(path.join(directory, "states.json"), "wx+", 0o600);
+    const result = streamJsonObjectArrays(path.join(context.generationDir, name), { keys: ["rows"], expectedBytes: entry.bytes, expectedSha256: entry.sha256,
+      onItem(_key, value) {
+        if (complete && count >= limitRows) throw new Error("complete native archive row inventory exceeds bounded count");
+        tail[count++ % limitRows] = { ...append(value), sourceKey: archiveSourceKey(value) };
+      } });
+    if (!result.fields.includes("rows")) throw new Error("native projection missing rows array");
+    return { append, read, close, directory,
+      *rows() { for (let index = Math.max(0, count - limitRows); index < count; index++) yield read(tail[index % limitRows]); },
+      *rowsForSource(sourceKey) { for (let index = Math.max(0, count - limitRows); index < count; index++) {
+        const item = tail[index % limitRows]; if (item.sourceKey === sourceKey) yield read(item);
+      } } };
+  } catch (error) { close(); throw error; }
+}
+
 // Real immutable generation reader. No node:sqlite, SQLite database, or SQL
 // compatibility facade is used. Existing PG state is read under the writer's
 // SERIALIZABLE transaction/advisory lock; old states survive input retention.
@@ -92,7 +145,7 @@ function createPostgresGenerationSource(options = {}) {
   const predictionLimit = limit(options.predictionLimit ?? process.env.SQLITE_EXPORT_PREDICTION_LIMIT, 10000, 500);
   const oddsStateLimit = limit(options.oddsStateLimit ?? process.env.SQLITE_ODDS_STATE_LIMIT, Math.max(50000, oddsLimit), 1000);
   const predictionStateLimit = limit(options.predictionStateLimit ?? process.env.SQLITE_PREDICTION_STATE_LIMIT, Math.max(50000, predictionLimit), 500);
-  const policy = { version: "postgres-native-generation-v1", oddsLimit, predictionLimit, oddsStateLimit, predictionStateLimit,
+  const policy = { version: "postgres-native-generation-v2-streamed-reference", oddsLimit, predictionLimit, oddsStateLimit, predictionStateLimit,
     publicReferenceArchive: VERSION, publicReferenceIndex: INDEX_VERSION };
   const now = new Date().toISOString();
   const meta = {};
@@ -106,6 +159,7 @@ function createPostgresGenerationSource(options = {}) {
   const lease = acquireGenerationReadLease({ storeDir, generationId: publication.generationId, context: active.context,
     owner: "postgres-native-projection", ttlMs: 30 * 60 * 1000 });
   let closed = false, client = null, pointerLock = null, guard = null, syncMeta = null;
+  const scratch = new Set();
   const inventories = new Map();
   const assertOpen = () => { if (closed) throw new Error("native projection source is closed"); };
   const assertUnchanged = () => {
@@ -146,12 +200,20 @@ function createPostgresGenerationSource(options = {}) {
     for (const row of rows) if (row.key !== "fast_result_generation_reconciliation") meta[row.key] = row;
   };
   async function* matchRows() {
-    const snapshots = () => read("prediction-snapshots.json");
+    let archiveRows = null;
+    const snapshots = match => {
+      assertUnchanged();
+      // The selector only looks up this provider match ID. Index every row on
+      // disk, then materialize just that match's original complete history.
+      if (!archiveRows) { archiveRows = spoolGenerationRows(active.context, "prediction-snapshots.json", 1000000, options.referenceTempDir, true); scratch.add(archiveRows); }
+      return { rows: [...archiveRows.rowsForSource(archiveSourceKey(match))] };
+    };
+    try {
     const result = new Map(guard.rows.map(row => [row.id, row]));
     const rebased = new Set(), seen = new Set();
     for (const dataset of ["current", "history"]) {
-      const rows = attachArchivedPreMatchPredictions(array(read(`matches-${dataset}.json`), dataset), snapshots, null, now);
-      for (const original of rows) {
+      for (const input of array(read(`matches-${dataset}.json`), dataset)) {
+        const original = attachArchivedPreMatchPredictions([input], () => snapshots(input), null, now)[0];
         let match = normalizeLegacyReviewClock(original);
         const sourceId = match.sourceMatchId || sourceMatchIdFor(match.id) || null;
         let id = `${dataset}:${match.id || sourceId || hashPayload(match)}`;
@@ -171,36 +233,45 @@ function createPostgresGenerationSource(options = {}) {
       }
     }
     for (const row of sorted(result.values())) yield row;
+    } finally { if (archiveRows) { archiveRows.close(); scratch.delete(archiveRows); } }
   }
   async function* sourceRows() {
     assertUnchanged();
-    const snapshot = readPostgresReferenceSnapshot(active.context);
-    const archive = buildPublicReferenceArchive(snapshot), index = buildPublicReferenceIndex(archive);
+    const archive = buildStreamedPublicReferenceArchive(active.context, { tempDir: options.referenceTempDir });
+    if (archive) scratch.add(archive);
+    try {
     const rows = [{ id: "sync-meta:current", source: syncMeta.source || "sporttery",
-      captured_at: syncMeta.updatedAt || syncMeta.capturedAt || null, payload: syncMeta }];
+      captured_at: syncMeta.updatedAt || syncMeta.capturedAt || null, payload: JSON.stringify(syncMeta) }];
     const external = read("external-signals.json");
     if (!external || typeof external !== "object" || Array.isArray(external)) throw new Error("native projection external signals missing");
-    rows.push({ id: "external-signals:current", source: external.source || "external-signals", captured_at: external.updatedAt || null, payload: external });
-    if (archive) rows.push({ id: SOURCE_ID, source: archive.source, captured_at: archive.lastRecordedAt, payload: archive });
-    if (index) for (const entry of [{ id: INDEX_ID, payload: index.manifest }, ...index.shards]) rows.push({ id: entry.id,
-      source: "sporttery:public-reference-index", captured_at: archive.lastRecordedAt, payload: entry.payload });
+    rows.push({ id: "external-signals:current", source: external.source || "external-signals", captured_at: external.updatedAt || null, payload: JSON.stringify(external) });
     const old = (await client.query("SELECT id FROM football.source_snapshots ORDER BY id")).rows;
     inventories.set("source_snapshots", [...new Set([...old.map(row => row.id).filter(id =>
-      !id.startsWith("sync-meta:") && !id.startsWith("external-signals:") && id !== SOURCE_ID && id !== INDEX_ID && !id.startsWith(INDEX_PREFIX)), ...rows.map(row => row.id)])]);
-    // Only serialize a row when the bounded PG batch consumer requests it.
-    // The archive and all Merkle shards no longer coexist as duplicate strings.
-    for (const row of sorted(rows)) yield { ...row, payload: JSON.stringify(row.payload) };
+      !id.startsWith("sync-meta:") && !id.startsWith("external-signals:") && id !== SOURCE_ID && id !== INDEX_ID && !id.startsWith(INDEX_PREFIX)), ...rows.map(row => row.id), ...(archive?.ids || [])])]);
+    const ordinary = sorted(rows), references = archive?.rows(); let next = references?.next();
+    for (const row of ordinary) {
+      while (next && !next.done && Buffer.compare(Buffer.from(next.value.id), Buffer.from(row.id)) < 0) { yield next.value; next = references.next(); }
+      yield row;
+    }
+    while (next && !next.done) { yield next.value; next = references.next(); }
+    } finally { if (archive) { archive.close(); scratch.delete(archive); } }
   }
   async function* stateRows(kind) {
     const table = kind === "odds" ? "odds_snapshots" : "prediction_snapshots";
     const canonical = kind === "odds" ? canonicalOddsState : canonicalPredictionState;
     const merge = kind === "odds" ? mergeCanonicalOddsStates : mergeCanonicalPredictionStates;
     const raw = kind === "odds" ? rawOddsRecord : rawPredictionRecord;
-    const input = read(kind === "odds" ? "odds-history.json" : "prediction-snapshots.json");
+    assertUnchanged();
+    const input = spoolGenerationRows(active.context, kind === "odds" ? "odds-history.json" : "prediction-snapshots.json",
+      kind === "odds" ? oddsLimit : predictionLimit, options.referenceTempDir);
+    scratch.add(input);
+    try {
     const candidates = new Map();
-    for (const row of array(input?.rows, table).slice(-(kind === "odds" ? oddsLimit : predictionLimit))) {
+    for (const row of input.rows()) {
       const candidate = canonical(row) || raw(row, "public");
-      candidates.set(candidate.id, merge(candidates.get(candidate.id), candidate));
+      const previous = candidates.get(candidate.id);
+      const merged = merge(previous ? input.read(previous.item) : undefined, candidate);
+      candidates.set(candidate.id, { id: candidate.id, lastSeenAt: merged.lastSeenAt, capturedAt: merged.capturedAt, item: input.append(merged) });
     }
     // Small metadata inventory only; do not load the multi-GB warehouse into V8.
     const old = (await client.query(`SELECT id, state_key, captured_at, first_seen_at, last_seen_at, seen_count FROM football.${table} ORDER BY id`)).rows.map(normalizeStoredRow);
@@ -210,8 +281,9 @@ function createPostgresGenerationSource(options = {}) {
     const retained = [...mergedTimes].sort((a, b) => (Date.parse(b[1]) || 0) - (Date.parse(a[1]) || 0)
       || Buffer.compare(Buffer.from(b[0]), Buffer.from(a[0]))).slice(0, kind === "odds" ? oddsStateLimit : predictionStateLimit).map(([id]) => id);
     inventories.set(table, retained); const keep = new Set(retained);
-    for (const state of sorted(candidates.values())) {
-      if (!keep.has(state.id)) continue;
+    for (const descriptor of sorted(candidates.values())) {
+      if (!keep.has(descriptor.id)) continue;
+      const state = input.read(descriptor.item);
       const previous = oldById.get(state.id);
       if (!previous) { yield rowFromState(state, kind); continue; }
       if (String(previous.state_key || "") !== String(state.stateKey || "")) throw new Error("native projection state id collision");
@@ -230,6 +302,7 @@ function createPostgresGenerationSource(options = {}) {
       // prior state is not promoted to a canonical forecast by migration.
       yield rowFromState(merge(canonical(normalizeStoredRow(stored)), state), kind);
     }
+    } finally { input.close(); scratch.delete(input); }
   }
   return {
     kind: "native-generation", path: active.context.generationDir || `generation:${publication.generationId}`,
@@ -250,8 +323,9 @@ function createPostgresGenerationSource(options = {}) {
     },
     close() {
       if (closed) return; closed = true;
-      try { pointerLock?.release(); } finally { lease.release(); }
+      try { for (const resource of scratch) resource.close(); scratch.clear(); }
+      finally { try { pointerLock?.release(); } finally { lease.release(); } }
     },
   };
 }
-module.exports = { createPostgresGenerationSource, rowFromState, readPostgresReferenceSnapshot };
+module.exports = { createPostgresGenerationSource, rowFromState, readPostgresReferenceSnapshot, spoolGenerationRows };

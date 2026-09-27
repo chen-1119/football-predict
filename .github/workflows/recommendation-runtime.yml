@@ -23,6 +23,15 @@ on:
       - 'server/referencePairedBaseline.cjs'
       - 'server/streamedJsonObjectArrays.cjs'
       - 'scripts/postgresGenerationSource.cjs'
+      - 'scripts/postgresProjectionSync.cjs'
+      - 'scripts/postgresFileJsonPayload.cjs'
+      - 'server/streamedPublicReferenceArchive.cjs'
+      - 'scripts/*PostgresReferenceRepair*.cjs'
+      - 'scripts/postgresReferenceRepair*.cjs'
+      - 'scripts/deployReleaseBundle.cjs'
+      - 'tests/postgres-file-json-payload.test.cjs'
+      - 'tests/streamed-public-reference-archive.test.cjs'
+      - 'tests/postgres-reference-repair*.test.cjs'
       - 'scripts/postgresModelInput.cjs'
       - 'tests/postgres-model-input-paging.test.cjs'
       - 'tests/postgres-reference-admission.test.cjs'
@@ -166,6 +175,8 @@ jobs:
       - run: node --test tests/postgres-model-input-paging.test.cjs
       - run: node --test tests/reconcile-history-admission.test.cjs
       - run: node --test tests/postgres-reference-admission.test.cjs
+      - run: node --test tests/postgres-file-json-payload.test.cjs tests/streamed-public-reference-archive.test.cjs
+      - run: node --test tests/postgres-reference-repair-policy.test.cjs tests/postgres-reference-repair-recovery.test.cjs
       - run: node scripts/verifyPublicReferencePairs.cjs && node scripts/verifyReferencePairedBaseline.cjs
       - run: node scripts/verifyFastResultGenerationReconciliation.cjs
       - run: node scripts/verifyHistoricalEventStore.cjs && node scripts/verifyFootballDataResultsSync.cjs

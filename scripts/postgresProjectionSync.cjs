@@ -4,6 +4,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
 const { snapshotUpsertConflict } = require("./postgresSnapshotUpsert.cjs");
+const { isFileJsonPayload, fileJsonPayloadChunks } = require("./postgresFileJsonPayload.cjs");
 const { privateArtifactStorage } = require("./runtimePrivateModelArtifactStore.cjs");
 const {
   createPostgresPool,
@@ -18,6 +19,15 @@ const {
 
 const rootDir = path.resolve(__dirname, "..");
 const DEFAULT_BATCH_ROWS = 200;
+const DEFAULT_BATCH_BYTES = 4 * 1024 * 1024;
+// A v1 reference shard contains two admitted 16 Mi-character items. Allow
+// their worst-case UTF-8 size plus the envelope, while bounding every row.
+const MAX_INLINE_ROW_BYTES = 128 * 1024 * 1024;
+const INSERT_TABLES = new Set([
+  "projection_meta", "match_snapshots", "source_snapshots", "odds_snapshots", "prediction_snapshots",
+  "private_model_artifacts", "frozen_recommendations", "result_observations", "post_match_reviews",
+  "ai_competitors", "ai_decisions", "ai_score_ledger",
+]);
 const MODE_VALUES = new Set(["backfill", "incremental", "fast-result"]);
 // Native schema installation belongs to the explicit release lane. A candidate
 // writer has DML privileges only and must not need database/schema ownership.
@@ -129,6 +139,84 @@ const placeholders = (rowCount, columns, jsonColumnTypes = new Map()) => {
   }).join(",")})`).join(",");
 };
 
+const assertInsertShape = (table, columns, batchRows, batchBytes, maxRowBytes) => {
+  if (!INSERT_TABLES.has(table) || !Array.isArray(columns) || !columns.length
+    || columns.some(column => !/^[a-z][a-z0-9_]*$/.test(column))
+    || new Set(columns).size !== columns.length) throw new Error("Invalid projection insert target");
+  if (!Number.isSafeInteger(batchRows) || batchRows < 1 || batchRows * columns.length > 65535
+    || !Number.isSafeInteger(batchBytes) || batchBytes < 1 || batchBytes > DEFAULT_BATCH_BYTES
+    || !Number.isSafeInteger(maxRowBytes) || maxRowBytes < 1 || maxRowBytes > MAX_INLINE_ROW_BYTES) {
+    throw new Error("Invalid projection insert byte/row bound");
+  }
+};
+
+const inlineRowBytes = (row, columns, maxRowBytes) => {
+  let bytes = 0;
+  for (const column of columns) {
+    const value = row[column];
+    if (isFileJsonPayload(value)) continue;
+    bytes += 4 + (value == null ? 0 : Buffer.isBuffer(value) ? value.length
+      : Buffer.byteLength(typeof value === "string" ? value
+        : typeof value === "object" ? JSON.stringify(value) : String(value)));
+    if (bytes > maxRowBytes) {
+      const error = new Error("Projection row exceeds the inline byte limit; use an admitted source JSON file");
+      error.code = "POSTGRES_INLINE_ROW_LIMIT";
+      throw error;
+    }
+  }
+  return bytes;
+};
+
+const filePayloadForRow = (table, columns, row, conflict, jsonColumnTypes) => {
+  const fileColumns = columns.filter(column => isFileJsonPayload(row[column]));
+  if (!fileColumns.length) return null;
+  if (table !== "source_snapshots" || columns.join(",") !== "id,source,captured_at,payload"
+    || fileColumns.join(",") !== "payload" || jsonColumnTypes.get("payload") !== "json"
+    || conflict !== snapshotUpsertConflict("source_snapshots")) {
+    throw new Error("File JSON payload is only allowed for the standard source_snapshots payload upsert");
+  }
+  return row.payload;
+};
+
+const requireCompleteUpsert = (result, expectedRows, table, required) => {
+  if (!required || result.rowCount === expectedRows) return;
+  const error = new Error(`PostgreSQL ${table} upsert did not affect every fail-closed input row`);
+  error.code = "POSTGRES_FAIL_CLOSED_UPSERT_INCOMPLETE";
+  error.table = table;
+  error.expectedRows = expectedRows;
+  error.affectedRows = result.rowCount;
+  throw error;
+};
+
+const insertFileSourceRow = async ({ client, row, payload, conflict, onFileBytes, batchBytes }) => {
+  // The caller owns the transaction. Failure leaves its rollback responsible
+  // for the parts and all earlier projection writes; never catch/commit here.
+  const temp = `projection_json_parts_${crypto.randomBytes(12).toString("hex")}`;
+  await client.query(`CREATE TEMP TABLE ${temp} (seq integer PRIMARY KEY, piece text NOT NULL) ON COMMIT DROP`);
+  let parts = [], partBytes = 0, sequence = 0;
+  const flush = async () => {
+    if (!parts.length) return;
+    await client.query(`INSERT INTO ${temp} (seq,piece) VALUES ${parts.map((_, index) => `($${index * 2 + 1},$${index * 2 + 2})`).join(",")}`, parts.flat());
+    parts = [];
+    partBytes = 0;
+  };
+  for await (const piece of fileJsonPayloadChunks(payload, { onBytes: onFileBytes })) {
+    const bytes = Buffer.byteLength(piece) + 12;
+    if (partBytes + bytes > batchBytes) await flush();
+    parts.push([sequence++, piece]);
+    partBytes += bytes;
+  }
+  // Exhausting the iterator verifies the source hash/stat before assembly.
+  await flush();
+  const result = await client.query(`
+    INSERT INTO football.source_snapshots (id,source,captured_at,payload)
+    SELECT $1, $2, $3, string_agg(piece, '' ORDER BY seq)::json FROM ${temp}
+    ${conflict}
+  `, [row.id ?? null, row.source ?? null, row.captured_at ?? null]);
+  await client.query(`DROP TABLE ${temp}`);
+  return result;
+};
+
 const insertBatches = async ({
   client,
   table,
@@ -138,8 +226,12 @@ const insertBatches = async ({
   jsonColumns = [],
   jsonbColumns = [],
   batchRows = DEFAULT_BATCH_ROWS,
+  batchBytes = DEFAULT_BATCH_BYTES,
+  maxRowBytes = MAX_INLINE_ROW_BYTES,
   requireAffectedRows = false,
+  onFileBytes,
 }) => {
+  assertInsertShape(table, columns, batchRows, batchBytes, maxRowBytes);
   // Hash-bound payloads must use PostgreSQL `json`, not `jsonb`. `jsonb`
   // canonicalizes object keys, which changes legacy order-sensitive hashes
   // after a database round trip even when the semantic payload is identical.
@@ -147,9 +239,9 @@ const insertBatches = async ({
     ...jsonColumns.map((column) => [column, "json"]),
     ...jsonbColumns.map((column) => [column, "jsonb"]),
   ]);
-  let written = 0;
-  for (let offset = 0; offset < rows.length; offset += batchRows) {
-    const batch = rows.slice(offset, offset + batchRows);
+  let written = 0, batch = [], bytes = 0;
+  const flush = async () => {
+    if (!batch.length) return;
     const values = [];
     for (const row of batch) {
       for (const column of columns) values.push(row[column] ?? null);
@@ -159,16 +251,27 @@ const insertBatches = async ({
       VALUES ${placeholders(batch.length, columns, jsonColumnTypes)}
       ${conflict}
     `, values);
-    if (requireAffectedRows && result.rowCount !== batch.length) {
-      const error = new Error(`PostgreSQL ${table} upsert did not affect every fail-closed input row`);
-      error.code = "POSTGRES_FAIL_CLOSED_UPSERT_INCOMPLETE";
-      error.table = table;
-      error.expectedRows = batch.length;
-      error.affectedRows = result.rowCount;
-      throw error;
-    }
+    requireCompleteUpsert(result, batch.length, table, requireAffectedRows);
     written += batch.length;
+    batch = [];
+    bytes = 0;
+  };
+  for (const row of rows) {
+    const payload = filePayloadForRow(table, columns, row, conflict, jsonColumnTypes);
+    const rowBytes = inlineRowBytes(row, columns, maxRowBytes);
+    if (payload) {
+      await flush();
+      const result = await insertFileSourceRow({ client, row, payload, conflict, onFileBytes, batchBytes });
+      requireCompleteUpsert(result, 1, table, requireAffectedRows);
+      written += 1;
+      continue;
+    }
+    if (batch.length && (batch.length >= batchRows || bytes + rowBytes > batchBytes)) await flush();
+    batch.push(row);
+    bytes += rowBytes;
+    if (bytes >= batchBytes || batch.length >= batchRows) await flush();
   }
+  await flush();
   return written;
 };
 
@@ -195,12 +298,17 @@ const streamIteratorInsert = async ({
   conflict,
   jsonColumns = ["payload"],
   batchRows = DEFAULT_BATCH_ROWS,
+  batchBytes = DEFAULT_BATCH_BYTES,
+  maxRowBytes = MAX_INLINE_ROW_BYTES,
   collectRows = false,
 }) => {
+  assertInsertShape(table, columns, batchRows, batchBytes, maxRowBytes);
   const hash = crypto.createHash("sha256");
+  const jsonColumnTypes = new Map(jsonColumns.map(column => [column, "json"]));
   const activeIds = [];
   const collectedRows = [];
   let batch = [];
+  let bytes = 0;
   let written = 0;
   const flush = async () => {
     if (batch.length === 0) return;
@@ -212,21 +320,35 @@ const streamIteratorInsert = async ({
       conflict,
       jsonColumns,
       batchRows,
+      batchBytes,
+      maxRowBytes,
     });
     batch = [];
+    bytes = 0;
   };
   for await (const raw of iterator) {
     const row = mapper(raw);
     if (!row) continue;
+    const payload = filePayloadForRow(table, columns, row, conflict, jsonColumnTypes);
+    const rowBytes = inlineRowBytes(row, columns, maxRowBytes);
     const identity = row.id || row.artifact_key || row.key || "";
     activeIds.push(identity);
     if (collectRows) collectedRows.push(row);
     hash.update(identity);
     hash.update("\0");
+    if (payload) {
+      await flush();
+      written += await insertBatches({ client, table, columns, rows: [row], conflict, jsonColumns,
+        batchRows, batchBytes, maxRowBytes, onFileBytes: rawBytes => hash.update(rawBytes) });
+      hash.update("\n");
+      continue;
+    }
     hash.update(row.payload || row.payload_json || row.value || "");
     hash.update("\n");
+    if (batch.length && bytes + rowBytes > batchBytes) await flush();
     batch.push(row);
-    if (batch.length >= batchRows) await flush();
+    bytes += rowBytes;
+    if (batch.length >= batchRows || bytes >= batchBytes) await flush();
   }
   await flush();
   return {
@@ -1390,6 +1512,8 @@ const syncPostgresProjectionFromSource = async (source, options = {}) => {
   let pool;
   const ownsPool = !options.pool;
   try {
+    if (options.beforeCommit !== undefined && typeof options.beforeCommit !== "function")
+      throw new Error("projection beforeCommit must be a function");
     const { meta, publication, fingerprint } = source;
     assertPublicationIdentity(publication);
     if (stableStringify(publicationFromMeta(meta)) !== stableStringify(publication))
@@ -1399,6 +1523,7 @@ const syncPostgresProjectionFromSource = async (source, options = {}) => {
     const arena = loadAiArena(aiArenaPath);
     await ensureProjectionSchema(source, pool);
 
+    let transactionResult;
     const result = await withPostgresTransaction(pool, async (client) => {
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", ["football-postgres-projection-sync-v1"]);
       if (source.prepare) await source.prepare(client, { mode });
@@ -1410,7 +1535,7 @@ const syncPostgresProjectionFromSource = async (source, options = {}) => {
       `);
       if (existing.rows[0]?.source_fingerprint === fingerprint && mode !== "backfill" && options.force !== true) {
         source.assertUnchanged();
-        return {
+        return transactionResult = {
           ok: true,
           skipped: true,
           reason: "source-fingerprint-unchanged",
@@ -1588,7 +1713,7 @@ const syncPostgresProjectionFromSource = async (source, options = {}) => {
         }),
       ]);
       source.assertUnchanged();
-      return {
+      return transactionResult = {
         ok: true,
         skipped: false,
         runId,
@@ -1601,7 +1726,14 @@ const syncPostgresProjectionFromSource = async (source, options = {}) => {
         finishedAt: new Date().toISOString(),
         durationMs,
       };
-    }, { isolationLevel: "SERIALIZABLE", beforeCommit: source.beforeCommit ? () => source.beforeCommit() : undefined });
+    }, { isolationLevel: "SERIALIZABLE", beforeCommit: async (client) => {
+      // Inspect the actual projected rows and receipt on this same transaction.
+      // Any rejected invariant must roll back publication and data together.
+      if (options.beforeCommit) await options.beforeCommit(client, transactionResult);
+      source.assertUnchanged();
+      // Preserve the publication CAS lock through the asynchronous COMMIT.
+      if (source.beforeCommit) await source.beforeCommit();
+    } });
     return result;
   } finally {
     try { source.close(); } finally { if (ownsPool && pool) await pool.end(); }
@@ -1610,6 +1742,8 @@ const syncPostgresProjectionFromSource = async (source, options = {}) => {
 const syncPostgresProjectionFromSqlite = options => syncPostgresProjectionFromSource(createSqliteProjectionSource(options), options);
 
 module.exports = {
+  insertBatches,
+  streamIteratorInsert,
   ensureProjectionSchema,
   persistSemanticRows,
   archiveParityCorrection,
