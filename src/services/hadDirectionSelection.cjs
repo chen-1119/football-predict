@@ -4,8 +4,8 @@ const VERSION='had-direction-selection-v1';
 const CODES=Object.freeze(['1','X','2']);
 const EPS=1e-12;
 const RULES=Object.freeze({
-  draw:Object.freeze({minProbability:.27,maxLeaderDeficit:.09,minEdge:.035,minExpectedValue:.04,minEdgeAdvantage:.02,minExpectedValueAdvantage:.03,maxOdds:4.2,maxFavoriteProbability:.50}),
-  upset:Object.freeze({minProbability:.28,maxLeaderDeficit:.10,minEdge:.04,minExpectedValue:.055,minEdgeAdvantage:.025,minExpectedValueAdvantage:.04,maxOdds:4.2}),
+  draw:Object.freeze({minProbability:.27,minLeaderProbability:.40,maxLeaderDeficit:.09,minEdge:.035,minExpectedValue:.04,minEdgeAdvantage:.02,minExpectedValueAdvantage:.03,maxOdds:4.2,maxFavoriteProbability:.50}),
+  upset:Object.freeze({minProbability:.28,minLeaderProbability:.40,maxLeaderDeficit:.10,minEdge:.04,minExpectedValue:.055,minEdgeAdvantage:.025,minExpectedValueAdvantage:.04,maxOdds:4.2}),
 });
 const finite=v=>typeof v==='number'&&Number.isFinite(v);
 const normalize=value=>{
@@ -51,6 +51,7 @@ function metrics(probabilities,quoteOdds,fair,code,leaderCode){
 function qualifiedDraw(row,leader,fair){
   const r=RULES.draw,favoriteProbability=Math.max(...CODES.map(c=>fair[c]));
   return row.modelProbability>=r.minProbability
+    &&leader.modelProbability>=r.minLeaderProbability-EPS
     &&row.leaderDeficit<=r.maxLeaderDeficit+EPS
     &&row.probabilityEdge>=r.minEdge-EPS
     &&row.expectedValue>=r.minExpectedValue-EPS
@@ -62,6 +63,7 @@ function qualifiedDraw(row,leader,fair){
 function qualifiedUpset(row,leader){
   const r=RULES.upset;
   return row.modelProbability>=r.minProbability
+    &&leader.modelProbability>=r.minLeaderProbability-EPS
     &&row.leaderDeficit<=r.maxLeaderDeficit+EPS
     &&row.probabilityEdge>=r.minEdge-EPS
     &&row.expectedValue>=r.minExpectedValue-EPS

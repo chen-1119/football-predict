@@ -102,3 +102,11 @@ test('draw override stays off when the frozen market has a clearly dominant favo
   assert.equal(selection.mode,'model-leader');
   assert.ok(Math.max(...Object.values(require('../src/services/hadDirectionSelection.cjs').devig(odds)))>.50);
 });
+
+test('near-tied low-confidence model remains watch-like and cannot manufacture an upset override',()=>{
+  const p={'1':.371,X:.262,'2':.367},odds={'1':2.00,X:3.50,'2':3.06};
+  const selected=selectHadDirection(p,odds);
+  assert.equal(selected.tipCode,'1');
+  assert.equal(selected.mode,'model-leader');
+  assert.equal(selected.overrideCandidates.length,0);
+});
