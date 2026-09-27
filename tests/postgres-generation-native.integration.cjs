@@ -16,7 +16,8 @@ async function verify(pool){
  const temp=fs.mkdtempSync(path.join(os.tmpdir(),'football-pg-generation-native-'));
  const storeDir=path.join(temp,'store'),publicDataDir=path.join(temp,'public');fs.mkdirSync(publicDataDir);
  const {fixture,trust,auditAt}=require('../scripts/verifyPublicReferencePairs.cjs');
- const fixtures=[fixture({id:'887101'}),fixture({id:'887102'}),fixture({id:'887103'})];
+ // Force the real file-payload path, including multibyte UTF-8 boundaries.
+ const fixtures=[fixture({id:'887101',mutateSource:source=>{source.probabilityModel.padding='球队⚽'.repeat(250000);}}),fixture({id:'887102'}),fixture({id:'887103'})];
  const snapshot={updatedAt:auditAt,retentionDays:31,rows:[],publicReferenceDecisions:fixtures.map(f=>f.record),publicReferenceEvidence:fixtures.map(f=>f.entry)};
  const meta={source:'sporttery',sourceCycleId:'native-pg-reference',updatedAt:auditAt},external={updatedAt:auditAt,source:'external',matches:{}};
  const payloads={'matches-current.json':[],'matches-history.json':[],'sync-meta.json':meta,'external-signals.json':external,'odds-history.json':{rows:[]},'prediction-snapshots.json':snapshot,'model-calibration.json':{version:'qa',generatedAt:auditAt}};
@@ -37,13 +38,26 @@ async function verify(pool){
   for(const[id,payload]of expected)assert.equal(actual.find(r=>r.id===id)?.payload,payload,'Exact native JSON bytes '+id);
   assert.equal(actual.find(r=>r.id==='independent:keep')?.payload,'{"keep":true}');assert(!actual.some(r=>r.id===INDEX_PREFIX+'stale'));
   assert.equal(actual.length,expected.size+3);assert.equal(JSON.parse(actual.find(r=>r.id===INDEX_ID).payload).rowCount,3);
-  passed.push('real immutable generation sourceRows commit exact archive and odd-leaf index bytes through PostgreSQL json');
+  assert(Buffer.byteLength(expected.get(SOURCE_ID))>1024*1024);
+  passed.push('real streamed immutable generation sourceRows commit exact multi-MiB Unicode archive and odd-leaf index bytes through PostgreSQL json');
   passed.push('source inventory preserves independent entries and removes stale managed shards');
   const before=await state(),again=await sync();assert.equal(again.skipped,true);assert.deepEqual(await state(),before);
   passed.push('unchanged generation is idempotent with stable committed sources and receipts');
   snapshot.publicReferenceEvidence[1].evidence.probabilityModel.version='invalid-binding';meta.sourceCycleId+='-invalid';publish();
   await assert.rejects(sync(),/PUBLIC_REFERENCE_EVIDENCE_BINDING_INVALID/);assert.deepEqual(await state(),before);
   passed.push('invalid bound evidence rolls back all PostgreSQL projection changes and preserves the last receipt');
+  snapshot.publicReferenceEvidence[1].evidence.probabilityModel.version='synthetic-model';meta.sourceCycleId+='-late-failure';publish();
+  let assembled=false;const temporaryNames=[];
+  const failingPool={query:q,async connect(){const client=await mapped.connect();return{release:()=>client.release(),async query(sql,args){
+   if(sql.includes('string_agg(piece'))assembled=true;
+   if(sql.startsWith('CREATE TEMP TABLE projection_json_parts_'))temporaryNames.push(sql.match(/CREATE TEMP TABLE (projection_json_parts_[a-f0-9]+)/)[1]);
+   if(sql.includes('SELECT id, state_key, captured_at, first_seen_at, last_seen_at, seen_count FROM football.prediction_snapshots'))throw new Error('injected-after-streamed-source');
+   return client.query(sql,args);
+  }};}};
+  await assert.rejects(syncPostgresProjectionFromSource(source(),{pool:failingPool,mode:'incremental',aiArenaPath:path.join(temp,'absent-arena.json')}),/injected-after-streamed-source/);
+  assert.equal(assembled,true);assert.deepEqual(await state(),before);
+  assert.equal((await q("SELECT count(*)::int AS count FROM pg_class WHERE relname=ANY($1::text[]) AND relpersistence='t'",[temporaryNames])).rows[0].count,0);
+  passed.push('failure after real segmented JSON assembly rolls back source rows, metadata, receipts and temporary parts');
   return{ok:true,checks:passed.length,passed,scope:'loopback-disposable-schema',database,schema,archiveRows:3,sourceRows:actual.length,productionWrites:0};
  }finally{
   await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);

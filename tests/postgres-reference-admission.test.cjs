@@ -40,6 +40,31 @@ test('actual native source iterator emits exactly the original row bytes and pre
   assert.deepEqual(actual,expected);assert.deepEqual(new Set(source.activeIds('source_snapshots')),new Set(['independent:keep',...expected.map(row=>row.id)]));source.beforeCommit();
  }finally{source.close();}
 });
+test('spooled native state iterators preserve canonical merge bytes, timestamp order and complete lazy archive inputs',async()=>{
+ const {canonicalPredictionState,canonicalOddsState,mergeCanonicalPredictionStates,mergeCanonicalOddsStates}=require('../scripts/sqliteWarehouse.cjs');
+ const {rowFromState}=require('../scripts/postgresGenerationSource.cjs');
+ const {attachArchivedPreMatchPredictions}=require('../scripts/syncData.cjs');
+ const base=path.join(dir,'states');fs.mkdirSync(base);const publicDataDir=path.join(base,'public');fs.mkdirSync(publicDataDir);const storeDir=path.join(base,'store');
+ const at='2026-09-09T00:01:00.000Z',later='2026-09-09T01:01:00.000Z';
+ const prediction={matchId:'sporttery_qa-state',sourceMatchId:'qa-state',phase:'pre-match',signature:'original-draw',capturedAt:at,tipCode:'X',note:'原始预测'};
+ const odds={matchId:prediction.matchId,sourceMatchId:prediction.sourceMatchId,poolCode:'HAD',capturedAt:at,odds1:2,oddsX:3.6,odds2:3.1};
+ const predictions=[prediction,{...prediction,lastSeenAt:later,seenCount:2},{...prediction,signature:'other-state',capturedAt:later}],prices=[odds,{...odds,lastSeenAt:later,seenCount:2},{...odds,odds1:2.1,capturedAt:later}];
+ const matches=[{id:prediction.matchId,sourceMatchId:prediction.sourceMatchId,status:'FINISHED',kickoffTime:'2026-09-10T10:00:00.000Z',eventVersion:'2026-09-10T10:00:00.000Z',scoreHome:1,scoreAway:1}];
+ const files={'matches-current.json':[],'matches-history.json':matches,'sync-meta.json':{sourceCycleId:'qa-state-spool',updatedAt:at},'external-signals.json':{updatedAt:at,matches:{}},'odds-history.json':{rows:prices},'prediction-snapshots.json':{rows:predictions},'model-calibration.json':{version:'qa',generatedAt:at}};
+ for(const[name,value]of Object.entries(files))fs.writeFileSync(path.join(publicDataDir,name),JSON.stringify(value));commitCurrentDataGeneration({storeDir,publicDataDir,sourceCycleId:'qa-state-spool',committedAt:at});
+ const source=createPostgresGenerationSource({storeDir,publicDataDir,referenceTempDir:base});
+ try{await source.prepare({query:async()=>({rows:[]})},{mode:'backfill'});
+  for(const[kind,input,canonical,merge]of [['prediction',predictions,canonicalPredictionState,mergeCanonicalPredictionStates],['odds',prices,canonicalOddsState,mergeCanonicalOddsStates]]){
+   const expected=new Map();for(const row of input){const value=canonical(row);expected.set(value.id,merge(expected.get(value.id),value));}
+   const actual=[];for await(const row of source.tableRows(kind==='prediction'?'prediction_snapshots':'odds_snapshots'))actual.push(row);
+   assert.deepEqual(actual,[...expected.values()].map(value=>rowFromState(value,kind)).sort((a,b)=>Buffer.compare(Buffer.from(a.id),Buffer.from(b.id))));
+  }
+  const actual=[];for await(const row of source.tableRows('match_snapshots'))actual.push(row);
+  const expected=attachArchivedPreMatchPredictions(matches,{rows:predictions},null,new Date().toISOString());
+  assert.deepEqual(actual.map(row=>JSON.parse(row.payload)),expected);
+ }finally{source.close();}
+ assert.equal(fs.readdirSync(base).some(name=>name.startsWith('football-pg-')),false);
+});
 test('unique bound evidence over 256 MiB materializes and validates with bounded 1536 MiB heap',()=>{
  const base=path.join(dir,'large');fs.mkdirSync(base);const filePath=path.join(base,'prediction-snapshots.json'),records=[],evidenceHash=crypto.createHash('sha256'),fd=fs.openSync(filePath,'w');evidenceHash.update('[');
  try{fs.writeSync(fd,'{"updatedAt":'+JSON.stringify(auditAt)+',"retentionDays":31,"publicReferenceEvidence":[');for(let i=0;i<130;i++){const f=fixture({id:String(885000+i),mutateSource:source=>{source.probabilityModel.padding='x'.repeat(2*1024*1024);}}),entry=JSON.stringify(f.entry);records.push(f.record);fs.writeSync(fd,(i?',':'')+entry);evidenceHash.update((i?',':'')+entry);}evidenceHash.update(']');fs.writeSync(fd,'],"publicReferenceDecisions":'+JSON.stringify(records)+',"rows":[]}');}finally{fs.closeSync(fd);}
