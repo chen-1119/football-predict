@@ -28,13 +28,15 @@ jobs:
           POSTGRES_DB: source_test
         ports: ['5432:5432']
         options: >-
-          --health-cmd 'pg_isready -U source_test' --health-interval 5s
+          --health-cmd "pg_isready -U source_test" --health-interval 5s
           --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
+        id: checkout
         with:
           persist-credentials: false
       - uses: actions/setup-node@v4
+        id: node
         with:
           node-version: '22.22.1'
           cache: npm
@@ -51,8 +53,8 @@ jobs:
       - name: Full application build
         run: npm run build | tee qa/build.log
       - name: Live public-source probe (report only, no tokens)
-        if: always()
-        run: node tests/football-sources-smoke.cjs qa/free-source-smoke.json
+        if: always() && steps.checkout.outcome == 'success' && steps.node.outcome == 'success'
+        run: mkdir -p qa && node tests/football-sources-smoke.cjs qa/free-source-smoke.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
