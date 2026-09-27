@@ -1512,6 +1512,8 @@ const syncPostgresProjectionFromSource = async (source, options = {}) => {
   let pool;
   const ownsPool = !options.pool;
   try {
+    if (options.beforeCommit !== undefined && typeof options.beforeCommit !== "function")
+      throw new Error("projection beforeCommit must be a function");
     const { meta, publication, fingerprint } = source;
     assertPublicationIdentity(publication);
     if (stableStringify(publicationFromMeta(meta)) !== stableStringify(publication))
@@ -1521,6 +1523,7 @@ const syncPostgresProjectionFromSource = async (source, options = {}) => {
     const arena = loadAiArena(aiArenaPath);
     await ensureProjectionSchema(source, pool);
 
+    let transactionResult;
     const result = await withPostgresTransaction(pool, async (client) => {
       await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", ["football-postgres-projection-sync-v1"]);
       if (source.prepare) await source.prepare(client, { mode });
@@ -1532,7 +1535,7 @@ const syncPostgresProjectionFromSource = async (source, options = {}) => {
       `);
       if (existing.rows[0]?.source_fingerprint === fingerprint && mode !== "backfill" && options.force !== true) {
         source.assertUnchanged();
-        return {
+        return transactionResult = {
           ok: true,
           skipped: true,
           reason: "source-fingerprint-unchanged",
@@ -1710,7 +1713,7 @@ const syncPostgresProjectionFromSource = async (source, options = {}) => {
         }),
       ]);
       source.assertUnchanged();
-      return {
+      return transactionResult = {
         ok: true,
         skipped: false,
         runId,
@@ -1723,7 +1726,14 @@ const syncPostgresProjectionFromSource = async (source, options = {}) => {
         finishedAt: new Date().toISOString(),
         durationMs,
       };
-    }, { isolationLevel: "SERIALIZABLE", beforeCommit: source.beforeCommit ? () => source.beforeCommit() : undefined });
+    }, { isolationLevel: "SERIALIZABLE", beforeCommit: async (client) => {
+      // Inspect the actual projected rows and receipt on this same transaction.
+      // Any rejected invariant must roll back publication and data together.
+      if (options.beforeCommit) await options.beforeCommit(client, transactionResult);
+      source.assertUnchanged();
+      // Preserve the publication CAS lock through the asynchronous COMMIT.
+      if (source.beforeCommit) await source.beforeCommit();
+    } });
     return result;
   } finally {
     try { source.close(); } finally { if (ownsPool && pool) await pool.end(); }

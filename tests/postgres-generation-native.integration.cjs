@@ -20,12 +20,12 @@ async function verify(pool){
  const fixtures=[fixture({id:'887101',mutateSource:source=>{source.probabilityModel.padding='球队⚽'.repeat(250000);}}),fixture({id:'887102'}),fixture({id:'887103'})];
  const snapshot={updatedAt:auditAt,retentionDays:31,rows:[],publicReferenceDecisions:fixtures.map(f=>f.record),publicReferenceEvidence:fixtures.map(f=>f.entry)};
  const meta={source:'sporttery',sourceCycleId:'native-pg-reference',updatedAt:auditAt},external={updatedAt:auditAt,source:'external',matches:{}};
- const payloads={'matches-current.json':[],'matches-history.json':[],'sync-meta.json':meta,'external-signals.json':external,'odds-history.json':{rows:[]},'prediction-snapshots.json':snapshot,'model-calibration.json':{version:'qa',generatedAt:auditAt}};
+ const payloads={'matches-current.json':[fixtures[1].match],'matches-history.json':[],'sync-meta.json':meta,'external-signals.json':external,'odds-history.json':{rows:[]},'prediction-snapshots.json':snapshot,'model-calibration.json':{version:'qa',generatedAt:auditAt}};
  const publish=()=>{for(const[name,payload]of Object.entries(payloads))fs.writeFileSync(path.join(publicDataDir,name),JSON.stringify(payload));return commitCurrentDataGeneration({storeDir,publicDataDir,sourceCycleId:meta.sourceCycleId,committedAt:auditAt});};
  const source=()=>createPostgresGenerationSource({storeDir,publicDataDir});
- const sync=()=>syncPostgresProjectionFromSource(source(),{pool:mapped,mode:'incremental',aiArenaPath:path.join(temp,'absent-arena.json')});
+ const sync=(options={})=>syncPostgresProjectionFromSource(source(),{pool:mapped,mode:'incremental',aiArenaPath:path.join(temp,'absent-arena.json'),...options});
  const rows=()=>q('SELECT id,source,captured_at,payload::text AS payload FROM football.source_snapshots ORDER BY id');
- const state=async()=>({sources:(await rows()).rows,meta:(await q('SELECT key,value,updated_at FROM football.projection_meta ORDER BY key')).rows,runs:(await q('SELECT run_id,source_fingerprint FROM football.projection_runs ORDER BY run_id')).rows});
+ const state=async()=>({sources:(await rows()).rows,meta:(await q('SELECT key,value,updated_at FROM football.projection_meta ORDER BY key')).rows,runs:(await q('SELECT to_jsonb(r)::text AS row FROM football.projection_runs r ORDER BY run_id')).rows,publications:(await q('SELECT to_jsonb(p)::text AS row FROM football.publications p ORDER BY publication_id')).rows,frozen:(await q('SELECT to_jsonb(f)::text AS row FROM football.frozen_recommendations f ORDER BY decision_id')).rows});
  const passed=[];
  try{
   await runPostgresMigrations(mapped);
@@ -41,7 +41,7 @@ async function verify(pool){
   assert(Buffer.byteLength(expected.get(SOURCE_ID))>1024*1024);
   passed.push('real streamed immutable generation sourceRows commit exact multi-MiB Unicode archive and odd-leaf index bytes through PostgreSQL json');
   passed.push('source inventory preserves independent entries and removes stale managed shards');
-  const before=await state(),again=await sync();assert.equal(again.skipped,true);assert.deepEqual(await state(),before);
+  const before=await state(),again=await sync();assert.equal(before.frozen.length,1);assert.equal(again.skipped,true);assert.deepEqual(await state(),before);
   passed.push('unchanged generation is idempotent with stable committed sources and receipts');
   snapshot.publicReferenceEvidence[1].evidence.probabilityModel.version='invalid-binding';meta.sourceCycleId+='-invalid';publish();
   await assert.rejects(sync(),/PUBLIC_REFERENCE_EVIDENCE_BINDING_INVALID/);assert.deepEqual(await state(),before);
@@ -58,7 +58,36 @@ async function verify(pool){
   assert.equal(assembled,true);assert.deepEqual(await state(),before);
   assert.equal((await q("SELECT count(*)::int AS count FROM pg_class WHERE relname=ANY($1::text[]) AND relpersistence='t'",[temporaryNames])).rows[0].count,0);
   passed.push('failure after real segmented JSON assembly rolls back source rows, metadata, receipts and temporary parts');
-  return{ok:true,checks:passed.length,passed,scope:'loopback-disposable-schema',database,schema,archiveRows:3,sourceRows:actual.length,productionWrites:0};
+  const added=fixture({id:'887104'});
+  payloads['matches-current.json'].push(added.match);snapshot.publicReferenceDecisions.push(added.record);snapshot.publicReferenceEvidence.push(added.entry);
+  meta.sourceCycleId+='-before-commit';publish();
+  const nextArchive=buildPublicReferenceArchive(snapshot),nextIndex=buildPublicReferenceIndex(nextArchive);
+  const nextExpected=new Map([[SOURCE_ID,JSON.stringify(nextArchive)],[INDEX_ID,JSON.stringify(nextIndex.manifest)],...nextIndex.shards.map(s=>[s.id,JSON.stringify(s.payload)])]);
+  let verified=0;
+  const verifyPending=async(client,context)=>{
+   assert.equal(context.skipped,false);assert.equal(context.sourceFingerprint,sourceFingerprint);assert.equal(context.publication.generationId,publication.generationId);
+   assert.equal((await client.query('SHOW transaction_isolation')).rows[0].transaction_isolation,'serializable');
+   const projected=(await client.query('SELECT id,payload::text AS payload FROM football.source_snapshots')).rows;
+   for(const[id,payload]of nextExpected)assert.equal(projected.find(r=>r.id===id)?.payload,payload,'Uncommitted native JSON bytes '+id);
+   const current=(await client.query("SELECT publication_id FROM football.publications WHERE state='current'")).rows;
+   assert.deepEqual(current,[{publication_id:publication.generationId}]);
+   assert.equal((await client.query("SELECT value FROM football.projection_meta WHERE key='data_generation_id'")).rows[0].value,publication.generationId);
+   const receipt=(await client.query('SELECT publication_id,source_fingerprint FROM football.projection_runs WHERE run_id=$1',[context.runId])).rows;
+   assert.deepEqual(receipt,[{publication_id:publication.generationId,source_fingerprint:sourceFingerprint}]);
+   const frozen=(await client.query('SELECT match_id,publication_id,direction FROM football.frozen_recommendations ORDER BY match_id')).rows;
+   assert.deepEqual(frozen,[fixtures[1].match,added.match].map(m=>({match_id:m.id,publication_id:publication.generationId,direction:m.archivedPreMatchPrediction.prediction.tipCode})));
+   verified++;
+  };
+  const pendingSource=source(),{fingerprint:sourceFingerprint,publication}=pendingSource;pendingSource.close();
+  await assert.rejects(sync({beforeCommit:async(client,context)=>{await verifyPending(client,context);throw new Error('injected-frozen-validation-before-commit');}}),/injected-frozen-validation-before-commit/);
+  assert.equal(verified,1);assert.deepEqual(await state(),before);
+  passed.push('actual archive/index/shards, frozen decisions, publication and receipt validate before COMMIT; callback rejection rolls them all back');
+  const accepted=await sync({beforeCommit:verifyPending});assert.equal(accepted.skipped,false);assert.equal(verified,2);assert.equal((await state()).frozen.length,2);
+  let skippedVerified=false;
+  const skipped=await sync({beforeCommit:async(client,context)=>{assert.equal(context.skipped,true);assert.equal(context.previousRunId,accepted.runId);assert.equal((await client.query('SELECT count(*)::int AS count FROM football.frozen_recommendations')).rows[0].count,2);skippedVerified=true;}});
+  assert.equal(skipped.skipped,true);assert.equal(skippedVerified,true);
+  passed.push('successful explicit validation commits normally and unchanged-source calls still execute the requested verifier');
+  return{ok:true,checks:passed.length,passed,scope:'loopback-disposable-schema',database,schema,archiveRows:nextIndex.manifest.rowCount,sourceRows:(await rows()).rows.length,productionWrites:0};
  }finally{
   await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
   trust.cleanup();const resolved=fs.realpathSync(temp);assert.equal(path.dirname(resolved).toLowerCase(),fs.realpathSync(os.tmpdir()).toLowerCase());assert(path.basename(resolved).startsWith('football-pg-generation-native-'));fs.rmSync(resolved,{recursive:true,force:true});

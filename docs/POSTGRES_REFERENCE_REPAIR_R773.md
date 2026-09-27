@@ -34,7 +34,9 @@ Activation order:
 3. Atomically install only the four signed application files. With writers still
    stopped, invoke the same source/writer and verification function once against
    the signed production OID. The archive descriptor must equal the isolated
-   archive SHA before its transaction can commit. Record
+   archive SHA, and the actual PostgreSQL archive/index/shards/frozen hashes and
+   publication identity are all checked through the same borrowed transaction
+   client before COMMIT. A mismatch rolls back the whole projection. Record
    `productionProjectionWrites=true`; this is a forward projection, not a new
    recommendation or a data rollback.
 4. Start the API and a new Worker PID. Require a complete new successful official
