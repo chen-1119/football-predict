@@ -1238,9 +1238,10 @@ const persistSemanticRows = async (client, matches, publicationId) => {
       ],
       jsonColumns: ["payload"],
       rows: recommendations,
+      // The decision hash binds the archived decision, not mutable current
+      // predictionMeta. Retain its original payload on subsequent projections.
       conflict: `ON CONFLICT (decision_hash) DO UPDATE SET
-        publication_id = EXCLUDED.publication_id,
-        payload = EXCLUDED.payload`,
+        publication_id = EXCLUDED.publication_id`,
     });
   }
   if (observations.length > 0) {
