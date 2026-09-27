@@ -146,6 +146,8 @@ assert_frontend_controller() {
 acquire_release_lock() {
   exec 9>"$LOCK_FILE"
   flock -n 9 || die "another release or recovery is active"
+  [ ! -e "/var/lib/football-release/reference-repairs/current" ] && [ ! -L "/var/lib/football-release/reference-repairs/current" ] \
+    || die "a signed PostgreSQL reference repair requires its own recovery"
 }
 
 assert_regular_upload() {

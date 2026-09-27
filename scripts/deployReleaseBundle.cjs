@@ -1,3 +1,11 @@
+// A separate signed, incident-bound repair transaction; ordinary release gates below are unchanged.
+if (process.argv.includes('--signed-reference-repair')) {
+  require('./postgresReferenceRepairCli.cjs').main().catch(error => {
+    console.error(JSON.stringify({ ok: false, error: error.message, accepted: false }));
+    process.exitCode = 1;
+  });
+  return;
+}
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
@@ -212,6 +220,7 @@ const buildRemotePreflightCommand = (expectedRecoveryHelperSha256, rotationContr
   "printf '%s\\n' \"$entrypoint_check\"",
   "case \"$entrypoint_check\" in *\"recoveryPending=0\"*) ;; *) echo \"release-recovery-pending\"; exit 24 ;; esac",
   "case \"$entrypoint_check\" in *\"appPresent=1\"*) ;; *) echo \"app-dir-missing\"; exit 22 ;; esac",
+  "test ! -e /var/lib/football-release/reference-repairs/current && test ! -L /var/lib/football-release/reference-repairs/current || { echo 'release-reference-repair-recovery-pending'; exit 28; }",
   "systemctl is-active football-predict >/dev/null || { echo \"service-inactive\"; exit 23; }",
   `sudo -n /opt/node-v22.22.1/bin/node -e ${shellQuote(buildReadOnlyWorkerProbe())} || { echo "release-worker-preflight-rejected"; exit 27; }`,
   `if test "$recovery_helper_sha" = ${shellQuote(expectedRecoveryHelperSha256)}; then echo "recoveryHelperRotationRequired=0"; elif test ${shellQuote(rotationContractReady ? "1" : "0")} = "1"; then echo "recoveryHelperRotationRequired=1"; else echo "release-recovery-helper-mismatch"; exit 26; fi`,
