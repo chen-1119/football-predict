@@ -26,22 +26,32 @@ function auditRows(rows){
  const result={version:'outcome-selection-source-audit-v1',scope:'repository-snapshot-not-live-or-performance',inputRows:rows.length,stages,components,
    primary:{favorite:0,draw:0,nonfavorite:0,marketTied:0,marketMissing:0},thinLeads:{favorite:0,draw:0,nonfavorite:0},
    comparedWithMarket:0,agreesWithMarket:0,preCalibrationToFavorite:0,preCalibrationAwayFromFavorite:0,
-   modelEvidence:{verified:0,unknown:0,hasNoIndependentWeightedComponent:0},skipped:[],examples:[],alerts:[],forcedQuota:false};
+   modelEvidence:{verified:0,unknown:0,hasNoIndependentWeightedComponent:0},skipped:[],examples:[],missingFinalDiagnostics:[],alerts:[],forcedQuota:false};
  for(const parent of rows){
    const m=parent?.prospectiveForecastInput||parent,model=m?.probabilityModel;
    if(!m||typeof m!=='object'){result.skipped.push('invalid-row');continue;}
    if(parent.prospectiveForecastInput && (m.id!==parent.id || Date.parse(m.eventVersion||m.kickoffTime)!==Date.parse(parent.eventVersion||parent.kickoffTime))){result.skipped.push('prospective-event-mismatch');continue;}
-   const baseReceipt=(model?.inputUsage||[]).find(r=>r?.stage==='base-outcome-blend');
+   const baseReceipt=(Array.isArray(model?.inputUsage)?model.inputUsage:[]).find(r=>r?.stage==='base-outcome-blend');
    const raw=normalize(model?.calibrationAdjustment?.oneXTwo?.before||baseReceipt?.output);
    const final=normalize(model?.oneXTwo?.final);
    const market=normalize(model?.oneXTwo?.market)||marketOdds(m.odds);
    const before=register(stages.preCalibration,raw),after=register(stages.finalModel,final),fav=register(stages.market,market);
-   const best=(parent.predictions||[]).find(p=>p?.marketType==='BEST'&&CODES.includes(p.tipCode));stages.exposedBest[best?.tipCode||'missing']++;
+   const best=(Array.isArray(parent.predictions)?parent.predictions:[]).find(p=>p?.marketType==='BEST'&&CODES.includes(p.tipCode));stages.exposedBest[best?.tipCode||'missing']++;
    for(const [key,counts] of Object.entries(components))register(counts,normalize(baseReceipt?.inputs?.[key]));
    const e=model?.inputEvidence;
    result.modelEvidence[e?.arithmetic?.status==='verified'?'verified':'unknown']++;
    if(baseReceipt?.weights&&['elo','poisson','teamStrength','worldCupPrior'].every(k=>!baseReceipt.weights[k]))result.modelEvidence.hasNoIndependentWeightedComponent++;
-   if(!after)continue;
+   if(!after){
+     if(result.missingFinalDiagnostics.length<5)result.missingFinalDiagnostics.push({matchId:m.id,status:m.status||null,modelVersion:model?.version||null,
+       modelKeys:model?Object.keys(model).slice(0,50):[],oneXTwoKeys:model?.oneXTwo?Object.keys(model.oneXTwo):[],
+       finalType:model?.oneXTwo?.final===null?'null':typeof model?.oneXTwo?.final,
+       finalKeys:model?.oneXTwo?.final&&typeof model.oneXTwo.final==='object'?Object.keys(model.oneXTwo.final):[],
+       finalNumericValues:model?.oneXTwo?.final&&typeof model.oneXTwo.final==='object'?Object.fromEntries(Object.entries(model.oneXTwo.final).filter(([,v])=>typeof v==='number')):null,
+       calibrationAfterDiagnosticOnly:normalize(model?.calibrationAdjustment?.oneXTwo?.after),
+       inputEvidencePresent:Boolean(e),prospectiveInputUsed:Boolean(parent.prospectiveForecastInput),
+       publishedReferenceCode:parent.predictionMeta?.publicReferenceDecision?.prediction?.tipCode||null});
+     continue;
+   }
    const category=after==='X'?'draw':!market?'marketMissing':!fav?'marketTied':after===fav?'favorite':'nonfavorite';
    result.primary[category]++;
    const lead=final[after]-Math.max(...CODES.filter(c=>c!==after).map(c=>final[c]));
@@ -54,6 +64,7 @@ function auditRows(rows){
  result.marketAgreementRate=result.comparedWithMarket?result.agreesWithMarket/result.comparedWithMarket:null;
  if(result.comparedWithMarket>=5&&result.marketAgreementRate>=.95)result.alerts.push('market-leader-agreement-at-least-95pct-review-inputs');
  if(stages.exposedBest.missing>0)result.alerts.push('legacy-BEST-does-not-cover-all-model-rows');
+ if(stages.finalModel.missing>0)result.alerts.push('final-probabilities-unavailable-do-not-infer-live-direction-distribution');
  if(result.preCalibrationToFavorite>0)result.alerts.push('some-precalibration-leaders-flipped-to-market-favorite');
  if(result.modelEvidence.hasNoIndependentWeightedComponent)result.alerts.push('market-only-arithmetic-present');
  return result;

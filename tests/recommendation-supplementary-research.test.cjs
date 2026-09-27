@@ -15,6 +15,9 @@ function event(d,home,away,revision=0,previous=new Map(),patch={}){
 }
 function legacy(d){
   const row=structuredClone(d);delete row.supplementaryPolicyVersion;delete row.supplementaryResearch;
+  // This synthetic fixture models the historical schema, before either policy.
+  // Never remove this field from actual persisted records or relax validation.
+  delete row.primaryAdmissionVersion;
   row.inputHash=hash({hadInputHash:row.hadInputHash,handicapInputHash:row.handicapAnalysis?.inputHash||null,selectionPolicyVersion:row.selectionPolicyVersion,modelInputEvidenceHash:row.inputEvidence.model.inputEvidence?.contentHash||null});
   row.decisionId=row.id=`decision_${hash([row.version,row.sourceMatchId,row.eventVersion,row.market,row.inputHash])}`;
   const {recordHash,...body}=row;row.recordHash=hash(body);return row;
