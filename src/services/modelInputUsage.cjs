@@ -42,10 +42,12 @@ function verifyModelInputUsage(receipt) {
       || receipt.weight < 0 || receipt.weight > 1 || !Array.isArray(receipt.candidates)) return false;
     if (!receipt.candidates.length) return receipt.weight === 0 && same(receipt.before.home, receipt.output.home) && same(receipt.before.away, receipt.output.away);
     if (receipt.candidates.some(c => ![c.homeLambda, c.awayLambda, c.confidence].every(finite) || c.confidence <= 0)) return false;
+    if (receipt.lambdaPolicy !== undefined && receipt.lambdaPolicy !== 'evidence-rate-support-v2') return false;
+    const expanded = receipt.lambdaPolicy === 'evidence-rate-support-v2';
     const total = receipt.candidates.reduce((sum, c) => sum + c.confidence, 0);
     return ["home", "away"].every(side => {
-      const form = clamp(receipt.candidates.reduce((sum, c) => sum + c[`${side}Lambda`] * c.confidence, 0) / total, 0.25, 3.6);
-      return same(clamp(receipt.before[side] * (1 - receipt.weight) + form * receipt.weight, 0.25, 3.4), receipt.output[side]);
+      const form = clamp(receipt.candidates.reduce((sum, c) => sum + c[`${side}Lambda`] * c.confidence, 0) / total, 0.25, expanded ? 12 : 3.6);
+      return same(clamp(receipt.before[side] * (1 - receipt.weight) + form * receipt.weight, 0.25, expanded ? 12 : 3.4), receipt.output[side]);
     });
   }
   return false;

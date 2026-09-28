@@ -49,6 +49,19 @@ function handicapNarrative(d:Decision,zh:boolean){
 }
 function HandicapBlock({d,settlement,language}:{d:Decision;settlement?:Settlement|null;language:Language}){
   const h=d.handicapAnalysis;if(!h)return null;const zh=language==='zh',pass=primarySelectionSummary(d).handicap?.status==='pass';
+  if(d.primaryPickPolicyVersion==='independent-market-primary-v1'&&h.overallTipCode&&h.overallProbabilities){
+    const code=h.overallTipCode,probability=h.overallProbabilities[code],odds=h.marketReference?.odds?.[code];
+    const q=h.marketReference?.odds;
+    const marketProbability=q?(1/q[code])/(1/q['1']+1/q.X+1/q['2']):null;
+    return <section className="rc-handicap" data-probability-basis="unconditional">
+      <header><div><span>{zh?'让球首选 · 完整概率':'Handicap primary · full probability'} {h.handicapLineText}</span><strong>{handicapTitle(code,zh)}</strong></div>
+        <span className={`rc-state rc-state--${settlement?.state||'PENDING'}`}>{settlement?resultLabel(settlement.state,zh):(zh?'待赛果':'Pending')}</span></header>
+      <p>{zh?'按完整比分分布累计让胜、让平、让负，选择最高概率项。低置信；条件概率仅用于下方解释。':'Select the largest unconditional handicap probability from the complete score matrix. Low confidence; conditional shares are explanatory only.'}</p>
+      <div className="rc-handicap__probabilities">{(['1','X','2'] as const).map(c=><div key={c} className={c===code?'is-selected':''}><span>{handicapTitle(c,zh)}</span><strong>{(h.overallProbabilities![c]*100).toFixed(1)}%</strong></div>)}</div>
+      <div className="rc-handicap__meta">{odds&&<span>SP {odds.toFixed(2)} · {zh?'模型估值':'Model EV'} {(100*(probability*odds-1)).toFixed(1)}%</span>}{marketProbability!=null&&<span>{zh?'相对市场':'Model edge'} {(100*(probability-marketProbability)).toFixed(1)}pp</span>}</div>
+      <details><summary>{zh?'胜平负首选成立时的净胜球解释':'Margins conditional on the 1X2 pick'}</summary><p>{(['1','X','2'] as const).map(c=>`${handicapTitle(c,zh)} ${(h.probabilities[c]*100).toFixed(1)}%`).join(' · ')}</p></details>
+    </section>;
+  }
   return <section className="rc-handicap">
     <header><div><span>{pass?(zh?'让球概率诊断':'Handicap probability diagnostic'):h.probabilityBasis==='conditional-on-straight-primary'?(zh?'让球伴随分析':'Companion handicap analysis'):(zh?'让球分析':'Handicap analysis')} {h.handicapLineText}</span><strong>{handicapTitle(h.tipCode,zh)}</strong></div>
       <span className={`rc-state rc-state--${settlement?.state||'PENDING'}`}>{settlement?resultLabel(settlement.state,zh):(zh?'待赛果':'Pending')}</span></header>
@@ -68,7 +81,7 @@ function PrimaryPickHeader({d,language}:{d:Decision;language:Language}){
         ?` · ${zh?'相对市场':'edge'} ${d.directionSelection.selected.probabilityEdge>=0?'+':''}${(d.directionSelection.selected.probabilityEdge*100).toFixed(1)}pp`:''}</small>
     </div>
     <span className="rc-primary-divider" aria-hidden="true">｜</span>
-    <div className={`rc-primary-pick rc-primary-pick--hhad${h?.status==='pass'?' is-pass':''}`} data-handicap-extension={h?.status??'unavailable'}><span>{zh?'让球延伸':'Handicap extension'}</span>{extension?<><strong>{extension.title}</strong><small>{extension.detail}</small></>:<><strong>—</strong><small>{zh?'等待有效让球线与净胜球数据':'Awaiting valid handicap inputs'}</small></>}</div>
+    <div className={`rc-primary-pick rc-primary-pick--hhad${h?.status==='pass'?' is-pass':''}`} data-handicap-extension={h?.status??'unavailable'}><span>{d.primaryPickPolicyVersion?(zh?'让球首选':'Handicap primary'):(zh?'让球延伸':'Handicap extension')}</span>{extension?<><strong>{extension.title}</strong><small>{extension.detail}</small></>:<><strong>—</strong><small>{zh?'等待有效让球线与净胜球数据':'Awaiting valid handicap inputs'}</small></>}</div>
   </div>;
 }
 function OutcomeResearchPanel({research,language,now,quoteObservedAt,cutoffTime,kickoffTime}:{research:OutcomeCategoryResearch|null|undefined;language:Language;now:number;quoteObservedAt:string;cutoffTime:string;kickoffTime:string}){
@@ -96,7 +109,7 @@ function Pick({d,supplementarySettlement,settlement,handicapSettlement,quality,o
   const selected=reviewSelection?.selectedMarket==='HHAD'?reviewSelection.selectedSettlement:settlement;
   return <article className="rc-pick" data-decision-id={d.decisionId} data-record-hash={d.recordHash} data-selection-status={reviewSelection?.selectedMarket==='HHAD'?'diagnostic':quality?.status??'reference'} data-price-status={reviewSelection?.selectedMarket==='HHAD'?'unknown':selectionPriceStatus(quality)}><header><span>{d.matchNo||d.sourceMatchId} · {format(d.kickoffTime,language)} · {reviewSelection?.selectedMarket==='HHAD'?(zh?'让球归档诊断':'Archived handicap diagnostic'):selectionReferenceLabel(quality,language)}</span><span className={`rc-state rc-state--${selected?.state||'PENDING'}`}>{selected?resultLabel(selected.state,zh):(zh?'待赛果':'Pending')}</span></header>
     <div className="rc-pick__main"><h3 className="rc-team-matchup"><FrozenMatchTeams d={d}/></h3>{settlement.score&&<span className="rc-match-score" aria-label={zh?'90分钟赛果':'90-minute result'}>{settlement.score.replace('-', ' : ')}</span>}</div>
-    {reviewSelection&&<div className="rc-review-selection"><span>{reviewSelection.selectedMarket==='HHAD'?(zh?'归档让球方向诊断 · 非单场发布推荐':'Archived handicap diagnostic · not a published single pick'):(zh?'已发布胜平负方向':'Published 1X2 pick')}</span><strong>{reviewSelection.selectedMarket==='HHAD'&&d.handicapAnalysis?handicapTitle(d.handicapAnalysis.tipCode,zh):title(d.tipCode,zh)}</strong><small>{reviewSelection.selectedOdds==null?(zh?'冻结SP缺失':'Frozen SP unavailable'):`SP ${reviewSelection.selectedOdds.toFixed(2)}`}</small>{reviewSelection.selectedMarket==='HHAD'&&d.handicapAnalysis?.probabilityBasis==='conditional-on-straight-primary'&&<small className="rc-review-selection__basis">{zh?'此方向以胜平负首选成立为条件，可能不同于完整让球概率最高项。':'This companion is conditional on the 1X2 pick and may differ from the unconditional handicap leader.'}</small>}</div>}
+    {reviewSelection&&<div className="rc-review-selection"><span>{reviewSelection.selectedMarket==='HHAD'?(d.primaryPickPolicyVersion?(zh?'已发布独立让球首选':'Published independent handicap pick'):(zh?'归档让球方向诊断 · 非单场发布推荐':'Archived handicap diagnostic · not a published single pick')):(zh?'已发布胜平负方向':'Published 1X2 pick')}</span><strong>{reviewSelection.selectedMarket==='HHAD'&&d.handicapAnalysis?handicapTitle((d.primaryPickPolicyVersion?d.handicapAnalysis.overallTipCode:d.handicapAnalysis.tipCode)!,zh):title(d.tipCode,zh)}</strong><small>{reviewSelection.selectedOdds==null?(zh?'冻结SP缺失':'Frozen SP unavailable'):`SP ${reviewSelection.selectedOdds.toFixed(2)}`}</small>{reviewSelection.selectedMarket==='HHAD'&&!d.primaryPickPolicyVersion&&d.handicapAnalysis?.probabilityBasis==='conditional-on-straight-primary'&&<small className="rc-review-selection__basis">{zh?'此方向以胜平负首选成立为条件，可能不同于完整让球概率最高项。':'This companion is conditional on the 1X2 pick and may differ from the unconditional handicap leader.'}</small>}</div>}
     <PrimaryPickHeader d={d} language={language}/>
     {publicationLifecycle(d,now)!=='open'&&<small role="status">{publicationLifecycleLabel(publicationLifecycle(d,now),language)}</small>}
     {!reviewSelection&&d.directionSelection?.mode!=='market-edge-override'&&<OutcomeResearchPanel research={outcomeResearch} language={language} now={now} quoteObservedAt={d.quoteObservedAt} cutoffTime={d.cutoffTime} kickoffTime={d.kickoffTime}/>}
@@ -167,6 +180,7 @@ function ReviewWindows({seven,thirty,language}:{seven?:Summary;thirty?:Summary;l
 function HandicapPerformance({breakdown,legacy,zh}:{breakdown?:HandicapBreakdown;legacy?:Summary;zh:boolean}){
   if(!breakdown)return legacy?<div className="rc-handicap-summary"><span>{zh?'让球历史合计 · 尚未按版本拆分':'Handicap history · version split unavailable'}</span><strong>{legacy.hitRate==null?'—':`${(legacy.hitRate*100).toFixed(1)}%`}</strong><small>{zh?'命中 / 已结算':'Won / Settled'} {legacy.won} / {legacy.settled}</small></div>:null;
   const rows:Array<{key:string;label:string;scope:string;value:Summary}>=[{key:'v1',label:zh?'旧版独立让球 · v1':'Standalone handicap · v1',scope:zh?'全部旧版已结算场次':'All settled legacy matches',value:breakdown.standaloneV1}];
+  if(breakdown.independentPrimaryV1)rows.push({key:'independent-primary',label:zh?'独立让球首选':'Independent handicap primary',scope:zh?'全部新版已结算场次':'All settled new-policy matches',value:breakdown.independentPrimaryV1});
   for(const version of [2,3] as const){
     const all=version===2?breakdown.companionV2All:breakdown.companionV3All,conditional=version===2?breakdown.companionV2WhenHadWon:breakdown.companionV3WhenHadWon,both=version===2?breakdown.companionV2BothWon:breakdown.companionV3BothWon;
     if(!all||!conditional||!both)continue;

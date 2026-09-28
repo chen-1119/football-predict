@@ -73,7 +73,7 @@ test('actual shared quality component distinguishes input readiness, price arith
   assert.equal(readyNotes[0].props['data-price-status'],'unsupported');
   const watch=await harness({missingInputEvidence:true}),before=JSON.stringify(watch.data),watchTree=watch.render(),watchNotes=byClass(watchTree,'selection-quality-note');
   assert.equal(watchNotes.length,12);assert(watchNotes.every(n=>n.props['data-selection-status']==='watch'));
-  assert.match(words(watchNotes[0]),/观望 · 保留模型方向/);assert.match(words(watchNotes[0]),/本次模型输入计算尚未核验|本次模型输入依据尚未完整存档/);assert.match(words(watchNotes[0]),/暂不进入新串关/);
+  assert.match(words(watchNotes[0]),/低置信 · 保留唯一首选/);assert.match(words(watchNotes[0]),/本次模型输入计算尚未核验|本次模型输入依据尚未完整存档/);assert.match(words(watchNotes[0]),/暂不进入新串关/);
   assert.equal(JSON.stringify(watch.data),before);
 });
 

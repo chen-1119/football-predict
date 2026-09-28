@@ -1,6 +1,7 @@
 'use strict';
 
-const VERSION='had-direction-selection-v1';
+const LEGACY_VERSION='had-direction-selection-v1';
+const VERSION='had-direction-selection-v2';
 const CODES=Object.freeze(['1','X','2']);
 const EPS=1e-12;
 const RULES=Object.freeze({
@@ -71,10 +72,11 @@ function qualifiedUpset(row,leader){
     &&row.expectedValue-leader.expectedValue>=r.minExpectedValueAdvantage-EPS
     &&row.odds<=r.maxOdds+EPS;
 }
-function selectHadDirection(probabilitiesInput,quoteOddsInput){
+function selectHadDirection(probabilitiesInput,quoteOddsInput,{version=VERSION}={}){
   const probabilities=normalize(probabilitiesInput),quoteOdds=oddsVector(quoteOddsInput);
   if(!probabilities||!quoteOdds)return null;
-  const fair=devig(quoteOdds),leaderCode=uniqueTop(probabilities);
+  const fair=devig(quoteOdds),ranked=CODES.slice().sort((a,b)=>probabilities[b]-probabilities[a]||CODES.indexOf(a)-CODES.indexOf(b));
+  const leaderCode=uniqueTop(probabilities)||(version===VERSION?ranked[0]:null);
   if(!leaderCode)return null;
   const favorites=favoriteCodes(fair);
   const all=Object.fromEntries(CODES.map(code=>[code,metrics(probabilities,quoteOdds,fair,code,leaderCode)]));
@@ -95,7 +97,8 @@ function selectHadDirection(probabilitiesInput,quoteOddsInput){
     ||b.modelProbability-a.modelProbability||CODES.indexOf(a.code)-CODES.indexOf(b.code));
   const selected=overrides[0]||null,tipCode=selected?.code||leaderCode;
   return {
-    version:VERSION,
+    version,
+    ...(version===VERSION?{tieBreakPolicy:'stable-code-order',tiedLeaderCodes:CODES.filter(c=>Math.abs(probabilities[c]-probabilities[leaderCode])<=EPS)}:{}),
     mode:selected?'market-edge-override':'model-leader',
     category:selected?.category||(marketRole(leaderCode,favorites)==='favorite'?'favorite-leader':leaderCode==='X'?'draw-leader':'nonfavorite-leader'),
     tipCode,
@@ -119,8 +122,8 @@ function selectHadDirection(probabilitiesInput,quoteOddsInput){
 const stable=value=>Array.isArray(value)?value.map(stable):value&&typeof value==='object'
   ?Object.fromEntries(Object.keys(value).sort().map(key=>[key,stable(value[key])])):value;
 function validHadDirectionSelection(value,probabilities,quoteOdds){
-  if(!value||value.version!==VERSION)return false;
-  const expected=selectHadDirection(probabilities,quoteOdds);
+  if(!value||![VERSION,LEGACY_VERSION].includes(value.version))return false;
+  const expected=selectHadDirection(probabilities,quoteOdds,{version:value.version});
   return Boolean(expected&&JSON.stringify(stable(expected))===JSON.stringify(stable(value)));
 }
-module.exports={VERSION,CODES,RULES,devig,uniqueTop,favoriteCodes,marketRole,selectHadDirection,validHadDirectionSelection};
+module.exports={VERSION,LEGACY_VERSION,CODES,RULES,devig,uniqueTop,favoriteCodes,marketRole,selectHadDirection,validHadDirectionSelection};

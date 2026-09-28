@@ -32,7 +32,9 @@ function topCode(probabilities) {
   const ranked=CODES.map((code,index)=>({code,index,p:probabilities[code]})).sort((a,b)=>b.p-a.p||a.index-b.index);
   return Math.abs(ranked[0].p-ranked[1].p)<=1e-12 ? null : ranked[0].code;
 }
-function poisson(lambda) {
+const stableTop = p => CODES.slice().sort((a,b)=>p[b]-p[a]||CODES.indexOf(a)-CODES.indexOf(b))[0];
+function poisson(lambda, supportPolicy=null) {
+  if(supportPolicy==='adaptive-tail-v1')return require('./goalDistribution.cjs').poissonSupport(lambda);
   if (!Number.isFinite(lambda) || lambda < 0 || lambda > 12) return null;
   const target = 1 - 1e-12, max = Math.min(36, Math.max(12, Math.ceil(lambda + 10 * Math.sqrt(lambda + 1))));
   const values=[Math.exp(-lambda)]; let sum=values[0];
@@ -102,8 +104,8 @@ function roundedProbabilities(p) {
  * region's mass equal the frozen final HAD probability. An optional calibrated
  * companion split changes only cells inside its HAD region, never that region's
  * mass. Both published HHAD views therefore refer to the same distribution. */
-function coherentHandicapDistribution(homeLambda,awayLambda,line,straight,straightTipCode,conditionedTarget=null) {
-  const target=normalizedStraight(straight),home=poisson(homeLambda),away=poisson(awayLambda);
+function coherentHandicapDistribution(homeLambda,awayLambda,line,straight,straightTipCode,conditionedTarget=null,supportPolicy=null) {
+  const target=normalizedStraight(straight),home=poisson(homeLambda,supportPolicy),away=poisson(awayLambda,supportPolicy);
   if(!target||!home||!away||parseLine(line)===null||!CODES.includes(straightTipCode))return null;
   const joint=Object.fromEntries(CODES.map(c=>[c,{'1':0,X:0,'2':0}]));
   const baseStraight={'1':0,X:0,'2':0};let captured=0;
@@ -177,22 +179,24 @@ function buildHandicapMarginDecision(match, {now,cutoffTime,straightTipCode,cali
   if(line===null||!lambda||!Number.isFinite(now)||!Number.isFinite(cutoff)||now>=cutoff)return null;
   const straight=normalizedStraight(match?.probabilityModel?.oneXTwo?.final);
   if(!straight||!CODES.includes(straightTipCode)||!(straight[straightTipCode]>0))return null;
-  const rawDist=coherentHandicapDistribution(lambda.home,lambda.away,line,match?.probabilityModel?.oneXTwo?.final,straightTipCode);
+  const scoreSupportPolicy='adaptive-tail-v1';
+  const rawDist=coherentHandicapDistribution(lambda.home,lambda.away,line,match?.probabilityModel?.oneXTwo?.final,straightTipCode,null,scoreSupportPolicy);
   if(!rawDist)return null;
   const raw=rawDist.conditionalProbabilities;
   const profileAt=instant(calibrationProfile?.asOf);
   const calibration=calibrateHandicapProbabilities(raw,line,straightTipCode,Number.isFinite(profileAt)&&profileAt<=now?calibrationProfile:null);
-  const dist=calibration?.applied?coherentHandicapDistribution(lambda.home,lambda.away,line,rawDist.straightProbabilities,straightTipCode,calibration.probabilities):rawDist;
+  const dist=calibration?.applied?coherentHandicapDistribution(lambda.home,lambda.away,line,rawDist.straightProbabilities,straightTipCode,calibration.probabilities,scoreSupportPolicy):rawDist;
   if(!dist)return null;
   const probabilities=dist.conditionalProbabilities;
-  const tipCode=topCode(probabilities);
-  const overallTipCode=topCode(dist.probabilities);
+  const tied=!topCode(probabilities)||!topCode(dist.probabilities);
+  const tipCode=stableTop(probabilities);
+  const overallTipCode=stableTop(dist.probabilities);
   if(!tipCode||!overallTipCode)return null;
   const favoriteCode=line<0?'1':'2',failCode=line<0?'2':'1';
   const market=marketFor(match,line,now,cutoff);
   const value={
-    version:VERSION,market:'HHAD',handicapLine:line,handicapLineText:line>0?('+'+line):String(line),
-    distributionBasis:DISTRIBUTION_BASIS,straightProbabilities:rawDist.straightProbabilities,
+    version:VERSION,...(tied?{tieBreakPolicy:'stable-code-order'}:{}),market:'HHAD',handicapLine:line,handicapLineText:line>0?('+'+line):String(line),
+    distributionBasis:DISTRIBUTION_BASIS,scoreSupportPolicy,straightProbabilities:rawDist.straightProbabilities,
     computedAt:new Date(now).toISOString(),cutoffTime:new Date(cutoff).toISOString(),
     companionPolicyVersion:'straight-conditioned-margin-v1',probabilityBasis:'conditional-on-straight-primary',
     tipCode,companionRawProbabilities:raw,rawProbabilities:raw,probabilities,modelProbability:probabilities[tipCode],
@@ -216,24 +220,29 @@ function handicapInputHash(value) {
     companion:{policy:value.companionPolicyVersion,straightTipCode:value.straightTipCode,rawProbabilities:value.companionRawProbabilities},
     calibration:hc?{profileHash:hc.applied?hc.profileHash:null,key:hc.key,applied:hc.applied,weight:hc.weight||null,residual:hc.residual||null}:null};
   if(value.version===VERSION)Object.assign(inputs,{distributionBasis:value.distributionBasis,straightProbabilities:value.straightProbabilities,cutoffTime:value.cutoffTime});
+  if(value.tieBreakPolicy!==undefined)inputs.tieBreakPolicy=value.tieBreakPolicy;
+  if(value.scoreSupportPolicy!==undefined)inputs.scoreSupportPolicy=value.scoreSupportPolicy;
   return require('./publishedForecastPolicy.cjs').hash(inputs);
 }
 function validHandicapMarginDecision(value) {
   if(!value)return true;
   try{
+    if(value.scoreSupportPolicy!==undefined&&value.scoreSupportPolicy!=='adaptive-tail-v1')return false;
+    if(value.tieBreakPolicy!==undefined&&value.tieBreakPolicy!=='stable-code-order')return false;
+    const leader=p=>value.tieBreakPolicy==='stable-code-order'?stableTop(p):topCode(p);
     if(![VERSION,COMPANION_VERSION,LEGACY_VERSION].includes(value.version)||value.market!=='HHAD'||parseLine(value.handicapLine)===null||!CODES.includes(value.tipCode))return false;
     if(value.version===LEGACY_VERSION){
       const p=value.probabilities,raw=value.rawProbabilities||p;if(!p||!raw||!CODES.every(code=>typeof p[code]==='number'&&Number.isFinite(p[code])&&p[code]>=0&&p[code]<=1&&typeof raw[code]==='number'&&Number.isFinite(raw[code])&&raw[code]>=0&&raw[code]<=1))return false;
-      if(Math.abs(CODES.reduce((sum,c)=>sum+p[c],0)-1)>1e-6||topCode(p)!==value.tipCode||Math.abs(p[value.tipCode]-value.modelProbability)>1e-9)return false;
+      if(Math.abs(CODES.reduce((sum,c)=>sum+p[c],0)-1)>1e-6||leader(p)!==value.tipCode||Math.abs(p[value.tipCode]-value.modelProbability)>1e-9)return false;
       return Boolean(value.lambdas&&Number.isFinite(value.lambdas.home)&&Number.isFinite(value.lambdas.away)&&value.exactMargin===-value.handicapLine&&typeof value.inputHash==='string'&&/^[a-f0-9]{64}$/.test(value.inputHash));
     }
     if(value.companionPolicyVersion!=='straight-conditioned-margin-v1'||value.probabilityBasis!=='conditional-on-straight-primary'||!CODES.includes(value.straightTipCode))return false;
     const p=value.probabilities,raw=value.companionRawProbabilities||value.rawProbabilities,overall=value.overallProbabilities;
     if(!p||!raw||!overall||!CODES.every(code=>typeof p[code]==='number'&&Number.isFinite(p[code])&&p[code]>=0&&p[code]<=1&&typeof raw[code]==='number'&&Number.isFinite(raw[code])&&raw[code]>=0&&raw[code]<=1&&typeof overall[code]==='number'&&Number.isFinite(overall[code])&&overall[code]>=0&&overall[code]<=1))return false;
-    if(Math.abs(CODES.reduce((sum,c)=>sum+p[c],0)-1)>1e-6||Math.abs(CODES.reduce((sum,c)=>sum+raw[c],0)-1)>1e-6||Math.abs(CODES.reduce((sum,c)=>sum+overall[c],0)-1)>1e-6||topCode(p)!==value.tipCode||topCode(overall)!==value.overallTipCode||Math.abs(p[value.tipCode]-value.modelProbability)>1e-9)return false;
+    if(Math.abs(CODES.reduce((sum,c)=>sum+p[c],0)-1)>1e-6||Math.abs(CODES.reduce((sum,c)=>sum+raw[c],0)-1)>1e-6||Math.abs(CODES.reduce((sum,c)=>sum+overall[c],0)-1)>1e-6||leader(p)!==value.tipCode||leader(overall)!==value.overallTipCode||Math.abs(p[value.tipCode]-value.modelProbability)>1e-9)return false;
     if(!value.lambdas||!Number.isFinite(value.lambdas.home)||!Number.isFinite(value.lambdas.away)||value.lambdas.home<0||value.lambdas.away<0)return false;
     const coherent=value.version===VERSION;
-    const matrix=coherent?coherentHandicapDistribution(value.lambdas.home,value.lambdas.away,value.handicapLine,value.straightProbabilities,value.straightTipCode):null;
+    const matrix=coherent?coherentHandicapDistribution(value.lambdas.home,value.lambdas.away,value.handicapLine,value.straightProbabilities,value.straightTipCode,null,value.scoreSupportPolicy):null;
     if(coherent&&(!matrix||value.distributionBasis!==DISTRIBUTION_BASIS||!Number.isFinite(instant(value.computedAt))||!Number.isFinite(instant(value.cutoffTime))||instant(value.computedAt)>=instant(value.cutoffTime)))return false;
     const recomputedRaw=coherent?{probabilities:matrix.conditionalProbabilities}:conditionalHandicapDistribution(value.lambdas.home,value.lambdas.away,value.handicapLine,value.straightTipCode);
     if(!recomputedRaw||CODES.some(code=>Math.abs(recomputedRaw.probabilities[code]-raw[code])>1e-6))return false;
@@ -241,10 +250,10 @@ function validHandicapMarginDecision(value) {
     if(hc?.applied){
       if(hc.version!=='handicap-calibration-v2'||!/^[a-f0-9]{64}$/.test(String(hc.profileHash||''))||!hc.residual||!Number.isFinite(hc.weight))return false;
       const residual=applyResidual(raw,hc.residual,hc.weight,true);
-      const recomputed=coherent?coherentHandicapDistribution(value.lambdas.home,value.lambdas.away,value.handicapLine,value.straightProbabilities,value.straightTipCode,residual)?.conditionalProbabilities:residual;
+      const recomputed=coherent?coherentHandicapDistribution(value.lambdas.home,value.lambdas.away,value.handicapLine,value.straightProbabilities,value.straightTipCode,residual,value.scoreSupportPolicy)?.conditionalProbabilities:residual;
       if(!recomputed||CODES.some(code=>Math.abs(recomputed[code]-p[code])>1e-6+1e-12))return false;
     }else if(CODES.some(code=>Math.abs(raw[code]-p[code])>1e-6))return false;
-    const full=coherent?(hc?.applied?coherentHandicapDistribution(value.lambdas.home,value.lambdas.away,value.handicapLine,value.straightProbabilities,value.straightTipCode,p):matrix):marginDistribution(value.lambdas.home,value.lambdas.away,value.handicapLine);
+    const full=coherent?(hc?.applied?coherentHandicapDistribution(value.lambdas.home,value.lambdas.away,value.handicapLine,value.straightProbabilities,value.straightTipCode,p,value.scoreSupportPolicy):matrix):marginDistribution(value.lambdas.home,value.lambdas.away,value.handicapLine);
     if(!full||CODES.some(code=>Math.abs(full.probabilities[code]-overall[code])>1e-6))return false;
     if(coherent){
       if(!value.overallRawProbabilities||CODES.some(code=>typeof value.straightProbabilities[code]!=='number'||!Number.isFinite(value.straightProbabilities[code])||typeof value.overallRawProbabilities[code]!=='number'||!Number.isFinite(value.overallRawProbabilities[code])||Math.abs(matrix.straightProbabilities[code]-value.straightProbabilities[code])>1e-9||Math.abs(matrix.probabilities[code]-value.overallRawProbabilities[code])>1e-6))return false;

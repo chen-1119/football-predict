@@ -61,7 +61,7 @@ test('published lifecycle distinguishes fresh, expired, future quotes and review
  const q={...row.selectionQuality,qualified:true,expectedValue:-.1};
  assert.match(note.selectionReferenceLabel(q,'zh'),/价格不支持/);
  assert.match(note.selectionReferenceLabel({...q,expectedValue:.1},'zh'),/模型未验证/);
- assert.match(note.selectionReferenceLabel({...q,qualified:false},'zh'),/观望/);
+ assert.match(note.selectionReferenceLabel({...q,qualified:false},'zh'),/低置信/);
  assert.match(renderPublished({...row,selectionQuality:q},true),/模型方向 · 当前价格不支持/);
 });
 test('current outcome study keeps its decision binding and rejects changed prices or promotion flags',async()=>{
@@ -338,19 +338,19 @@ function renderPublished(row,compact,language='zh'){
   }});
   return renderToStaticMarkup(react.createElement(module.exports.PublishedMatchPick,{row,language,compact,now:Date.parse(row.decision.publishedAt)}));
 }
-test('real v3 narrow-win record renders the same pass in recommendation, fixture and detail without changing frozen evidence',async()=>{
+test('new v3 narrow-win record renders the same independent selection in recommendation, fixture and detail without changing frozen evidence',async()=>{
   const p=memoryPorts();p.current[0]={...p.current[0],handicapLine:-2,handicapOdds:{odds1:4.6,oddsX:4.0,odds2:1.6},handicapOddsSource:'sporttery:HHAD',handicapOddsUpdatedAt:new Date(p.now).toISOString(),probabilityModel:{...p.current[0].probabilityModel,calculationTrace:{poisson:{lambdas:{home:1.2,away:.5}}}}};
   await createRuntime(p,{validators}).publishingCycle();const payload={recommendationCenter:p.state.view};
   const frozen=payload.recommendationCenter.previews.find(c=>c.selections.some(s=>s.market==='HHAD'));
   assert.ok(frozen);frozen.frozenAt=frozen.generatedAt;payload.recommendationCenter.review.combos=[{combo:frozen,settlement:{state:'PENDING'}}];
   const data=parseRecommendationCenter(payload),row=data.current[0],h=row.decision.handicapAnalysis;
-  assert.equal(h.version,'handicap-margin-v3');assert.equal(h.tipCode,'2');assert.equal(primarySelectionSummary(row.decision).handicap.status,'pass');
+  assert.equal(h.version,'handicap-margin-v3');assert.equal(h.tipCode,'2');assert.equal(primarySelectionSummary(row.decision).handicap.status,'recommend');
   const before=JSON.stringify(data),copy=view.handicapExtensionText(primarySelectionSummary(row.decision).handicap,'zh');
   for(const html of [renderedText(data,{},p.now),renderPublished(row,true),renderPublished(row,false)]){
-    assert.ok(html.includes(copy.title));assert.ok(html.includes(copy.detail));assert.match(html,/data-handicap-extension="pass"/);
+    assert.ok(html.includes(copy.title));assert.ok(html.includes(copy.detail));assert.match(html,/data-handicap-extension="recommend"/);
     assert.ok(html.includes(row.decision.decisionId));assert.ok(html.includes(row.decision.recordHash));
   }
-  const detailed=renderedText(data,{},p.now);assert.match(detailed,/窄胜风险/);assert.match(detailed,/完整三项概率及赛果保留原记录/);
+  const detailed=renderedText(data,{},p.now);assert.match(detailed,/完整概率/);assert.match(detailed,/条件概率仅用于下方解释/);
   const combo=renderedText(data,{mode:'review',initialTab:frozen.size===2?'two':'three'});
   assert.match(combo,/让球胜平负<!-- --> -2|让球胜平负 -2/);assert.match(combo,/SP 1\.60/);
   assert.equal(JSON.stringify(data),before);

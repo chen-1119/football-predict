@@ -14,15 +14,15 @@ function event(d,home,away,revision=0,previous=new Map(),patch={}){
   return collectResults([{...d,status:'FINISHED',testOfficial:true,scoreHome:home,scoreAway:away,resultRevision:revision,...patch}],previous,validators,now).updates[0];
 }
 function legacy(d){
-  const row=structuredClone(d);delete row.supplementaryPolicyVersion;delete row.supplementaryResearch;
+  const row=structuredClone(d);delete row.supplementaryPolicyVersion;delete row.supplementaryResearch;delete row.primaryPickPolicyVersion;delete row.scoreModelInput;
   row.inputHash=hash({hadInputHash:row.hadInputHash,handicapInputHash:row.handicapAnalysis?.inputHash||null,selectionPolicyVersion:row.selectionPolicyVersion,modelInputEvidenceHash:row.inputEvidence.model.inputEvidence?.contentHash||null});
   row.decisionId=row.id=`decision_${hash([row.version,row.sourceMatchId,row.eventVersion,row.market,row.inputHash])}`;
   const {recordHash,...body}=row;row.recordHash=hash(body);return row;
 }
-test('freeze the displayed aligned score and full-matrix TTG mode with unpriced research evidence',()=>{
+test('freeze the full-matrix score mode and full-matrix TTG mode with unpriced research evidence',()=>{
   const d=decision(),r=d.supplementaryResearch,p=buildPublishedScoreDistribution(d);
   assert(validDecision(d));assert(Object.isFrozen(r));assert(Object.isFrozen(r.totalGoals.distribution));
-  assert.equal(r.exactScore.label,p.alignedScores[0].label);assert.equal(r.exactScore.probability,p.alignedScores[0].probability);
+  assert.equal(r.exactScore.label,p.topScores[0].label);assert.equal(r.exactScore.probability,p.topScores[0].probability);
   assert.equal(r.totalGoals.label,[...p.totalGoals].sort((a,b)=>b.probability-a.probability)[0].label);
   assert.deepEqual(r.totalGoals.distribution,p.totalGoals);assert.equal(r.odds,null);assert.equal(r.formalPromotionEligible,false);
   assert.equal(makeDecision(source(),{now:NOW+1000,publication:publication(NOW)}).decision.decisionId,d.decisionId);
@@ -79,7 +79,7 @@ test('frontend preserves frozen research and rejects changed picks, promotion fl
   const {parseRecommendationCenter,parseRecommendationSingleRow}=module.exports;
   const p=memoryPorts();p.current=[source()];const runtime=createRuntime(p,{validators});await runtime.publishingCycle();
   const payload={recommendationCenter:p.state.view};
-  const parsed=parseRecommendationCenter(payload);assert.equal(parsed.current[0].decision.supplementaryResearch.version,'supplementary-research-v1');
+  const parsed=parseRecommendationCenter(payload);assert.equal(parsed.current[0].decision.supplementaryResearch.version,'supplementary-research-v2');
   assert.equal(parsed.review.statistics.supplementary.exactScore.pending,1);
   for(const edit of [row=>row.decision.supplementaryResearch.formalPromotionEligible=true,
     row=>row.decision.supplementaryResearch.odds=2.5,row=>row.decision.supplementaryResearch.exactScore.label='9-9',

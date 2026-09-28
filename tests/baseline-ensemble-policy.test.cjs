@@ -39,7 +39,7 @@ test('the actual sync blend consumes the policy and archives it in its arithmeti
     eloSnapshot:{probabilities:{home:.8,draw:.1,away:.1},homeRating:1550,awayRating:1500,homeMatches:30,awayMatches:0,diff:50},
   }).probabilityModel;
   assert.equal(model.version,'unified-poisson-bayes-v76');
-  assert.equal(model.baseModelVersion,'independent-elo-form-poisson-v12');
+  assert.equal(model.baseModelVersion,'independent-elo-form-poisson-v13');
   assert.equal(model.ensembleWeights.elo,0);assert.equal(model.ensemblePolicy.regime,'cold-start');
   const result={usage:model.inputUsage.find(row=>row.stage==='base-outcome-blend')};
   assert.equal(verifyModelInputUsage(result.usage),true);

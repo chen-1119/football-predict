@@ -8,7 +8,7 @@ function selectionPriceStatus(quality){
 function selectionReferenceLabel(quality,language){
  const zh=language==='zh';
  if(!quality)return zh?'模型方向 · 证据待核':'Model direction · evidence pending';
- return !quality.qualified?(zh?'观望 · 保留模型方向':'Watch · model direction retained')
+ return !quality.qualified?(zh?'低置信 · 保留唯一首选':'Low confidence · single primary retained')
   :selectionPriceStatus(quality)==='unsupported'?(zh?'模型方向 · 当前价格不支持':'Model direction · price not supported')
   :(zh?'参考入选 · 模型未验证':'Reference-qualified · model unvalidated');
 }

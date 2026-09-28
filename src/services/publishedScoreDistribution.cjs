@@ -2,7 +2,7 @@
 
 const { coherentHandicapDistribution, CODES, DISTRIBUTION_BASIS } = require('./handicapMarginDecision.cjs');
 const VERSION = 'published-score-distribution-v1';
-const MAX_SCORES = 37 * 37;
+const MAX_SCORES = 81 * 81;
 const codeFor = margin => margin > 0 ? '1' : margin < 0 ? '2' : 'X';
 const emptyVector = () => Object.fromEntries(CODES.map(code => [code, 0]));
 const emptyJoint = () => Object.fromEntries(CODES.map(code => [code, emptyVector()]));
@@ -25,6 +25,32 @@ function poissonWeights(lambda) {
   return values;
 }
 
+// A score/TTG forecast does not depend on the presence of an HHAD quote or line.
+// The rates are frozen in the decision; missing rates are never interpreted as 0.
+function projectWithoutHandicap(decision, options, unavailable) {
+  const l = decision.scoreModelInput;
+  if (!l) return unavailable('goal-rates-missing');
+  const raw = require('./goalDistribution.cjs').scoreMatrix(l.home, l.away);
+  const base = emptyVector(), target = decision.probabilities;
+  for (const r of raw) base[codeFor(r.home-r.away)] += r.probability;
+  if (!raw.length || CODES.some(c => !Number.isFinite(target?.[c]) || target[c] < 0 || (target[c] > 0 && !base[c]))) return unavailable('score-matrix-unavailable');
+  const scores = raw.map(r => ({...r, label:`${r.home}-${r.away}`, hadCode:codeFor(r.home-r.away), hhadCode:null,
+    probability:base[codeFor(r.home-r.away)] ? r.probability * target[codeFor(r.home-r.away)] / base[codeFor(r.home-r.away)] : 0}))
+    .filter(r => r.probability > 0).sort((a,b) => b.probability-a.probability || a.home-b.home || a.away-b.away);
+  const totalGoals = TOTAL_GOAL_LABELS.map(label => ({label, probability:0}));
+  for (const r of scores) totalGoals[Math.min(7,r.home+r.away)].probability += r.probability;
+  const limit = Number.isSafeInteger(options.limit) && options.limit > 0 ? Math.min(options.limit,MAX_SCORES) : 5;
+  const topScores = scores.slice(0,limit), aligned = scores.filter(r => r.hadCode === decision.tipCode);
+  const topScoresProbability = topScores.reduce((sum,r) => sum+r.probability,0);
+  const capturedMass = raw.reduce((sum,r) => sum+r.probability,0);
+  return {status:'available',version:VERSION,decisionId:decision.decisionId,recordHash:decision.recordHash,
+    handicapInputHash:null,probabilityBasis:'unconditional-score-matrix',distributionBasis:DISTRIBUTION_BASIS,
+    handicapLine:null,straightTipCode:decision.tipCode,handicapTipCode:null,
+    topScores,alignedScores:aligned.slice(0,limit),totalGoals,topScoresProbability,
+    omittedProbability:Math.max(0,1-topScoresProbability),alignedProbability:target[decision.tipCode],
+    hadProbabilities:target,hhadProbabilities:null,capturedMass,tailMass:Math.max(0,1-capturedMass)};
+}
+
 /** Read-only projection of a complete frozen publication, never a live model.
  * Every score probability is unconditional. Filtering aligned candidates or
  * displaying only a few scores does not renormalize their probabilities. */
@@ -36,12 +62,14 @@ function projectFrozenScoreDistribution(decision, options = {}) {
   if (!decision) return unavailable('decision-missing');
   try {
     const h = decision.handicapAnalysis;
+    if (!h && decision.scoreModelInput !== undefined) return projectWithoutHandicap(decision, options, unavailable);
     if (h?.version !== 'handicap-margin-v3' || h.distributionBasis !== DISTRIBUTION_BASIS) {
       return unavailable('unsupported-distribution-version');
     }
     const matrix = coherentHandicapDistribution(h.lambdas.home, h.lambdas.away, h.handicapLine,
-      h.straightProbabilities, h.straightTipCode, h.historicalCalibration?.applied ? h.probabilities : null);
-    const homeWeights = poissonWeights(h.lambdas.home), awayWeights = poissonWeights(h.lambdas.away);
+      h.straightProbabilities, h.straightTipCode, h.historicalCalibration?.applied ? h.probabilities : null, h.scoreSupportPolicy);
+    const weights = h.scoreSupportPolicy === 'adaptive-tail-v1' ? lambda => require('./goalDistribution.cjs').poissonSupport(lambda)?.values : poissonWeights;
+    const homeWeights = weights(h.lambdas.home), awayWeights = weights(h.lambdas.away);
     if (!matrix || !homeWeights || !awayWeights) return unavailable('score-matrix-unavailable');
 
     const rawJoint = emptyJoint(), rawScores = [];

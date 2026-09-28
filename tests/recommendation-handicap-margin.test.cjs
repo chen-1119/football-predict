@@ -59,11 +59,14 @@ test('HHAD-only input change creates a new immutable decision id',()=>{
   const b=makeDecision(match(2.2,.6,-2),{now:NOW,publication:PUB}).decision;
   assert.notEqual(a.decisionId,b.decisionId);assert.equal(a.hadInputHash,b.hadInputHash);
 });
-test('settlement distinguishes landing on -1 from covering -1',()=>{
+test('independent settlement uses the full distribution, with legacy landing-on-line behavior preserved',()=>{
   const d=makeDecision(match(1.2,.1,-1),{now:NOW,publication:PUB}).decision;
   const base={sourceMatchId:'1',eventVersion:d.eventVersion,homeTeamId:'h1',awayTeamId:'a1',state:'FINAL',eventId:'r1',revision:1};
   const one=settleHandicapDecision(d,{...base,scoreHome:1,scoreAway:0});
-  assert.equal(one.actual,'X');assert.equal(one.state,'WON');
+  assert.equal(one.actual,'X');assert.equal(one.state,'LOST');
+  const legacy={...d,primaryPickPolicyVersion:undefined};
+  assert.equal(settleHandicapDecision(legacy,{...base,scoreHome:1,scoreAway:0}).state,'WON');
+  assert.equal(settleHandicapDecision(d,{...base,scoreHome:0,scoreAway:0}).state,'WON');
   const two=settleHandicapDecision(d,{...base,scoreHome:2,scoreAway:0});
   assert.equal(two.actual,'1');assert.equal(two.state,'LOST');
 });
