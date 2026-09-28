@@ -301,6 +301,8 @@ const requiredReleaseEntries = [
   "scripts/verifyModelInputUsage.cjs",
   "src/services/modelInputUsage.cjs",
   "src/services/goalDistribution.cjs",
+  "src/services/jointGoalFit.cjs",
+  "scripts/verifyJointGoalFit.cjs",
   "scripts/teamCategoryIdentity.cjs",
   "scripts/recentFormEvidence.cjs",
   "scripts/apiFootballScopedAliases.cjs",

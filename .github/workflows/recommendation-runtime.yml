@@ -182,6 +182,7 @@ jobs:
       - run: node scripts/verifyFastResultGenerationReconciliation.cjs
       - run: node scripts/verifyHistoricalEventStore.cjs && node scripts/verifyFootballDataResultsSync.cjs
       - run: node --test tests/baseline-ensemble-policy.test.cjs tests/recommendation-supplementary-research.test.cjs tests/recommendation-independent-markets.test.cjs
+      - run: node scripts/verifyJointGoalFit.cjs
       - run: node --test tests/recommendation-official-results.test.cjs tests/recommendation-frozen-had-candidates.test.cjs tests/national-team-history-aliases.test.cjs
       - run: node --test tests/candidate-retired-settlement.test.cjs
       - run: node scripts/verifyCandidateProspectiveLedger.cjs

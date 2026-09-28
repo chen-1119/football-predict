@@ -39,11 +39,11 @@ function assess(bound,samples,proof){
  let receipts=[];
  try{receipts=proof.receipts.map(text=>JSON.parse(text));}catch{invalid.push('receipt-json-invalid');}
  if(!receipts.length)issues.push('arithmetic-receipts-missing');
- if(receipts.length>2)invalid.push('unexpected-receipt-count');
+ if(receipts.length>3)invalid.push('unexpected-receipt-count');
  const seen=new Set();
  for(const receipt of receipts){
   const stage=receipt?.stage;
-  if(!['base-outcome-blend','form-lambda-blend'].includes(stage)||seen.has(stage)){invalid.push('receipt-stage-invalid-or-duplicate');continue;}
+  if(!['base-outcome-blend','form-lambda-blend','joint-goal-fit'].includes(stage)||seen.has(stage)){invalid.push('receipt-stage-invalid-or-duplicate');continue;}
   seen.add(stage);
   let verified=false;try{verified=verifyModelInputUsage(receipt);}catch{}
   if(!verified)invalid.push(`${stage}-arithmetic-invalid`);
