@@ -4,7 +4,7 @@ import { useRecommendationCenter } from '../../hooks/useRecommendationCenter';
 import { TeamBadge } from '../TeamBadge';
 import { FollowButton } from '../FollowButton';
 import type { Team } from '../../services/mockData';
-import { publicationLifecycle, publicationLifecycleLabel, quoteSourceLabel, comboLaneFresh, comboPreviewForSize, comboLegSelection, primarySelectionSummary, handicapExtensionText, handicapAnalysisBasis, calibrationSampleBasis, sameDirectionConcentration, outcomeCategoryLabel, outcomeResearchReasonLabel, outcomeResearchFavoriteValueWarning, type Decision, type Settlement, type Combo, type ComboSelection, type Summary, type Outcome, type OutcomeCategoryResearch, type HandicapCalibrationProfile, type HandicapBreakdown, type ModelQualityReport } from '../../services/recommendationCenterView';
+import { publicationLifecycle, publicationLifecycleLabel, quoteSourceLabel, comboLaneFresh, comboPreviewForSize, comboLegSelection, primarySelectionSummary, handicapExtensionText, handicapAnalysisBasis, calibrationSampleBasis, sameDirectionConcentration, directionSelectionLabel, outcomeCategoryLabel, outcomeResearchReasonLabel, outcomeResearchFavoriteValueWarning, type Decision, type Settlement, type Combo, type ComboSelection, type Summary, type Outcome, type OutcomeCategoryResearch, type HandicapCalibrationProfile, type HandicapBreakdown, type ModelQualityReport } from '../../services/recommendationCenterView';
 import '../../styles/recommendation-center.css';
 import { SelectionQualityNote, selectionPriceStatus, selectionReferenceLabel, SupplementaryResearchNote } from './SelectionQualityNote';
 import type { SelectionQuality, ComboRow, SingleRow, SupplementarySummary } from '../../services/recommendationCenterView';
@@ -61,7 +61,12 @@ function HandicapBlock({d,settlement,language}:{d:Decision;settlement?:Settlemen
 function PrimaryPickHeader({d,language}:{d:Decision;language:Language}){
   const zh=language==='zh',summary=primarySelectionSummary(d),h=summary.handicap,extension=h?handicapExtensionText(h,language):null;
   return <div className="rc-primary-picks" aria-label={zh?'胜平负首选与让球延伸':'Primary 1X2 pick and handicap extension'}>
-    <div className="rc-primary-pick rc-primary-pick--had"><span>{zh?'胜平负首选':'1X2 primary'}</span><strong>{title(summary.had.code,zh)}</strong><small>SP {summary.had.odds.toFixed(2)} · {(summary.had.probability*100).toFixed(1)}%</small></div>
+    <div className={`rc-primary-pick rc-primary-pick--had${d.directionSelection?.mode==='market-edge-override'?' is-value-override':''}`}>
+      <span>{zh?'胜平负首选':'1X2 primary'} <em className="rc-direction-mode">{directionSelectionLabel(d.directionSelection,zh)}</em></span>
+      <strong>{title(summary.had.code,zh)}</strong>
+      <small>SP {summary.had.odds.toFixed(2)} · {(summary.had.probability*100).toFixed(1)}%{d.directionSelection?.mode==='market-edge-override'
+        ?` · ${zh?'相对市场':'edge'} ${d.directionSelection.selected.probabilityEdge>=0?'+':''}${(d.directionSelection.selected.probabilityEdge*100).toFixed(1)}pp`:''}</small>
+    </div>
     <span className="rc-primary-divider" aria-hidden="true">｜</span>
     <div className={`rc-primary-pick rc-primary-pick--hhad${h?.status==='pass'?' is-pass':''}`} data-handicap-extension={h?.status??'unavailable'}><span>{zh?'让球延伸':'Handicap extension'}</span>{extension?<><strong>{extension.title}</strong><small>{extension.detail}</small></>:<><strong>—</strong><small>{zh?'等待有效让球线与净胜球数据':'Awaiting valid handicap inputs'}</small></>}</div>
   </div>;
@@ -94,7 +99,7 @@ function Pick({d,supplementarySettlement,settlement,handicapSettlement,quality,o
     {reviewSelection&&<div className="rc-review-selection"><span>{reviewSelection.selectedMarket==='HHAD'?(zh?'归档让球方向诊断 · 非单场发布推荐':'Archived handicap diagnostic · not a published single pick'):(zh?'已发布胜平负方向':'Published 1X2 pick')}</span><strong>{reviewSelection.selectedMarket==='HHAD'&&d.handicapAnalysis?handicapTitle(d.handicapAnalysis.tipCode,zh):title(d.tipCode,zh)}</strong><small>{reviewSelection.selectedOdds==null?(zh?'冻结SP缺失':'Frozen SP unavailable'):`SP ${reviewSelection.selectedOdds.toFixed(2)}`}</small>{reviewSelection.selectedMarket==='HHAD'&&d.handicapAnalysis?.probabilityBasis==='conditional-on-straight-primary'&&<small className="rc-review-selection__basis">{zh?'此方向以胜平负首选成立为条件，可能不同于完整让球概率最高项。':'This companion is conditional on the 1X2 pick and may differ from the unconditional handicap leader.'}</small>}</div>}
     <PrimaryPickHeader d={d} language={language}/>
     {publicationLifecycle(d,now)!=='open'&&<small role="status">{publicationLifecycleLabel(publicationLifecycle(d,now),language)}</small>}
-    {!reviewSelection&&<OutcomeResearchPanel research={outcomeResearch} language={language} now={now} quoteObservedAt={d.quoteObservedAt} cutoffTime={d.cutoffTime} kickoffTime={d.kickoffTime}/>}
+    {!reviewSelection&&d.directionSelection?.mode!=='market-edge-override'&&<OutcomeResearchPanel research={outcomeResearch} language={language} now={now} quoteObservedAt={d.quoteObservedAt} cutoffTime={d.cutoffTime} kickoffTime={d.kickoffTime}/>}
     {reviewSelection?.selectedMarket!=='HHAD'&&<SelectionQualityNote quality={quality} language={language}/>}
     <FollowButton matchId={d.matchId} decisionId={d.decisionId} compact />
     <div className="rc-card-footer"><span>{zh?'发布于':'Published'} {format(d.publishedAt,language)} · {zh?'冻结 SP 采集':'Frozen SP observed'} {format(d.quoteObservedAt,language)}</span><button type="button" className="rc-match-link" onClick={()=>onSelectMatch(d.matchId)}>{zh?'比赛详情':'Match details'}<ArrowUpRight size={14} aria-hidden="true"/></button></div>
