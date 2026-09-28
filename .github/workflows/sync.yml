@@ -10,6 +10,8 @@ on:
     paths:
       - '.github/workflows/sync.yml'
       - 'scripts/syncData.cjs'
+      - 'scripts/syncPreMatchSignals.cjs'
+      - 'src/services/jointGoalFit.cjs'
       - 'scripts/checkSportteryOdds.cjs'
       - 'scripts/validateData.cjs'
       - 'public/data/**'
@@ -70,6 +72,9 @@ jobs:
           SYNC_WORKFLOW_MINUTES: 5
           PAGE_POLL_SECONDS: 30
         run: node scripts/syncData.cjs
+
+      - name: Refresh Pre-Match Goal Evidence
+        run: npm run sync:prematch
 
       - name: Validate Prediction Data
         run: npm run validate:data
