@@ -19,7 +19,7 @@ function probabilitiesFor(decision, had, hhad) {
   const h = decision.handicapAnalysis;
   if (h?.version !== 'handicap-margin-v3' || h.distributionBasis !== DISTRIBUTION_BASIS) return null;
   const matrix = coherentHandicapDistribution(h.lambdas?.home, h.lambdas?.away, h.handicapLine,
-    h.straightProbabilities, h.straightTipCode, h.historicalCalibration?.applied ? h.probabilities : null);
+    h.straightProbabilities, h.straightTipCode, h.historicalCalibration?.applied ? h.probabilities : null, h.scoreSupportPolicy);
   if (!matrix) return null;
   const hadProbability = matrix.straightProbabilities[had.tipCode];
   const hhadProbability = matrix.probabilities[hhad.tipCode];

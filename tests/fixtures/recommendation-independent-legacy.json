@@ -1,0 +1,377 @@
+{
+  "synthetic": true,
+  "baselineCommit": "3b78e1d99a6ac90ba817e2f2079a0fb0ca322555",
+  "decision": {
+    "policyVersion": "unified-decision-v1",
+    "statisticsTrack": "unified-decision",
+    "matchId": "sporttery_1",
+    "sourceMatchId": "1",
+    "eventVersion": "2026-09-17T15:00:00.000Z",
+    "businessDate": "2026-09-17",
+    "kickoffTime": "2026-09-17T15:00:00.000Z",
+    "cutoffTime": "2026-09-17T14:00:00.000Z",
+    "matchNo": null,
+    "homeTeamId": "h1",
+    "awayTeamId": "a1",
+    "homeTeamName": "主队1",
+    "awayTeamName": "客队1",
+    "leagueId": "test",
+    "market": "HAD",
+    "handicapLine": 0,
+    "tipCode": "1",
+    "odds": 1.8,
+    "probabilities": {
+      "1": 0.55,
+      "2": 0.2,
+      "X": 0.25
+    },
+    "marketProbabilities": {
+      "1": 0.5223880597014926,
+      "2": 0.208955223880597,
+      "X": 0.26865671641791045
+    },
+    "modelProbability": 0.55,
+    "modelMarketGap": 0.027611940298507442,
+    "modelExpectedValue": -0.009999999999999898,
+    "directionPolicyVersion": "had-direction-selection-v1",
+    "directionSelection": {
+      "version": "had-direction-selection-v1",
+      "mode": "model-leader",
+      "category": "favorite-leader",
+      "tipCode": "1",
+      "modelLeaderCode": "1",
+      "marketFavoriteCodes": [
+        "1"
+      ],
+      "marketRole": "favorite",
+      "selected": {
+        "code": "1",
+        "modelProbability": 0.55,
+        "marketProbability": 0.5223880597014926,
+        "odds": 1.8,
+        "probabilityEdge": 0.027611940298507442,
+        "expectedValue": -0.009999999999999898,
+        "leaderDeficit": 0,
+        "edgeAdvantage": 0,
+        "expectedValueAdvantage": 0
+      },
+      "leader": {
+        "code": "1",
+        "modelProbability": 0.55,
+        "marketProbability": 0.5223880597014926,
+        "odds": 1.8,
+        "probabilityEdge": 0.027611940298507442,
+        "expectedValue": -0.009999999999999898,
+        "leaderDeficit": 0
+      },
+      "outcomes": {
+        "1": {
+          "code": "1",
+          "modelProbability": 0.55,
+          "marketProbability": 0.5223880597014926,
+          "odds": 1.8,
+          "probabilityEdge": 0.027611940298507442,
+          "expectedValue": -0.009999999999999898,
+          "leaderDeficit": 0
+        },
+        "2": {
+          "code": "2",
+          "modelProbability": 0.2,
+          "marketProbability": 0.208955223880597,
+          "odds": 4.5,
+          "probabilityEdge": -0.008955223880596996,
+          "expectedValue": -0.09999999999999998,
+          "leaderDeficit": 0.35000000000000003
+        },
+        "X": {
+          "code": "X",
+          "modelProbability": 0.25,
+          "marketProbability": 0.26865671641791045,
+          "odds": 3.5,
+          "probabilityEdge": -0.018656716417910446,
+          "expectedValue": -0.125,
+          "leaderDeficit": 0.30000000000000004
+        }
+      },
+      "overrideCandidates": [],
+      "thresholds": {
+        "draw": {
+          "minProbability": 0.27,
+          "minLeaderProbability": 0.4,
+          "maxLeaderDeficit": 0.09,
+          "minEdge": 0.035,
+          "minExpectedValue": 0.04,
+          "minEdgeAdvantage": 0.02,
+          "minExpectedValueAdvantage": 0.03,
+          "maxOdds": 4.2,
+          "maxFavoriteProbability": 0.5
+        },
+        "upset": {
+          "minProbability": 0.28,
+          "minLeaderProbability": 0.4,
+          "maxLeaderDeficit": 0.1,
+          "minEdge": 0.04,
+          "minExpectedValue": 0.055,
+          "minEdgeAdvantage": 0.025,
+          "minExpectedValueAdvantage": 0.04,
+          "maxOdds": 4.2
+        }
+      },
+      "validation": "prospective-guarded-unvalidated"
+    },
+    "modelValidation": "unvalidated",
+    "sourceVerification": "source-label-and-publication-binding",
+    "modelGeneratedAt": "2026-09-17T10:00:00.000Z",
+    "quoteSource": "sporttery:had",
+    "quoteObservedAt": "2026-09-17T10:00:00.000Z",
+    "quoteOdds": {
+      "1": 1.8,
+      "2": 4.5,
+      "X": 3.5
+    },
+    "publication": {
+      "generationId": "generation-test",
+      "manifestHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "inputHash": "c3e8f3afaff15967bd96695919d7304bbc4c1fc9dea43b84bdf2ccb23ce97d68",
+    "hadInputHash": "1871e1847812689722c365de97aa025169e7a15b9bba46c26202fdc8e8cf4f64",
+    "handicapAnalysis": {
+      "version": "handicap-margin-v3",
+      "market": "HHAD",
+      "handicapLine": -1,
+      "handicapLineText": "-1",
+      "distributionBasis": "had-calibrated-poisson-score-matrix-v1",
+      "straightProbabilities": {
+        "1": 0.55,
+        "2": 0.2,
+        "X": 0.25
+      },
+      "computedAt": "2026-09-17T10:00:00.000Z",
+      "cutoffTime": "2026-09-17T14:00:00.000Z",
+      "companionPolicyVersion": "straight-conditioned-margin-v1",
+      "probabilityBasis": "conditional-on-straight-primary",
+      "tipCode": "1",
+      "companionRawProbabilities": {
+        "1": 0.675156,
+        "2": 0,
+        "X": 0.324844
+      },
+      "rawProbabilities": {
+        "1": 0.675156,
+        "2": 0,
+        "X": 0.324844
+      },
+      "probabilities": {
+        "1": 0.675156,
+        "2": 0,
+        "X": 0.324844
+      },
+      "modelProbability": 0.675156,
+      "overallRawProbabilities": {
+        "1": 0.371336,
+        "2": 0.45,
+        "X": 0.178664
+      },
+      "overallProbabilities": {
+        "1": 0.371336,
+        "2": 0.45,
+        "X": 0.178664
+      },
+      "overallTipCode": "2",
+      "overallModelProbability": 0.45,
+      "runnerUpProbability": 0.324844,
+      "modelGap": 0.350312,
+      "favoriteCode": "1",
+      "coverProbability": 0.675156,
+      "landOnLineProbability": 0.324844,
+      "failCoverProbability": 0,
+      "exactMargin": 1,
+      "exactMarginProbability": 0.324844,
+      "straightTipCode": "1",
+      "relation": "home-cover",
+      "lambdas": {
+        "home": 2.8,
+        "away": 1.8,
+        "source": "calculationTrace.poisson.lambdas"
+      },
+      "capturedMass": 0.999999999999,
+      "tailMass": 1e-12,
+      "straightConditionedMass": 0.55,
+      "marketReference": {
+        "source": "sporttery:HHAD",
+        "handicapLine": -1,
+        "observedAt": "2026-09-17T10:00:00.000Z",
+        "odds": {
+          "1": 2.1,
+          "2": 2.9,
+          "X": 3.4
+        },
+        "probabilities": {
+          "1": 0.427025,
+          "2": 0.309225,
+          "X": 0.263751
+        },
+        "selectedOdds": 2.1,
+        "selectedProbability": 0.427025,
+        "aligned": true
+      },
+      "calibration": "unvalidated",
+      "historicalCalibration": {
+        "version": "handicap-calibration-v2",
+        "applied": false,
+        "profileHash": null,
+        "key": "home-give-1",
+        "reason": "no-profile",
+        "weight": null,
+        "residual": null,
+        "metrics": null
+      },
+      "inputHash": "5841f06ecdc1b8b33e25df17123627a632466e419d42592b5e721c0022cb6b4f"
+    },
+    "version": "unified-decision-v1",
+    "decisionId": "decision_edd7efdfa3306f26225c84c88fad612ba3e2631e4552fbcdb998ae93d9b1bd83",
+    "id": "decision_edd7efdfa3306f26225c84c88fad612ba3e2631e4552fbcdb998ae93d9b1bd83",
+    "selectionPolicyVersion": "recommendation-selection-quality-v2",
+    "supplementaryPolicyVersion": "supplementary-research-v1",
+    "supplementaryResearch": {
+      "version": "supplementary-research-v1",
+      "researchOnly": true,
+      "formalPromotionEligible": false,
+      "modelValidation": "unvalidated",
+      "priceStatus": "official-sp-unavailable",
+      "odds": null,
+      "sourceMatchId": "1",
+      "eventVersion": "2026-09-17T15:00:00.000Z",
+      "modelGeneratedAt": "2026-09-17T10:00:00.000Z",
+      "hadInputHash": "1871e1847812689722c365de97aa025169e7a15b9bba46c26202fdc8e8cf4f64",
+      "handicapInputHash": "5841f06ecdc1b8b33e25df17123627a632466e419d42592b5e721c0022cb6b4f",
+      "probabilityBasis": "unconditional-score-matrix",
+      "exactScore": {
+        "rule": "highest-probability-aligned-HAD-HHAD",
+        "home": 3,
+        "away": 1,
+        "label": "3-1",
+        "probability": 0.061865112587877864
+      },
+      "totalGoals": {
+        "rule": "highest-probability-total-bucket-lowest-tie",
+        "label": "4",
+        "probability": 0.20430683453096588,
+        "distribution": [
+          {
+            "label": "0",
+            "probability": 0.014427673760233442
+          },
+          {
+            "label": "1",
+            "probability": 0.04155195059520035
+          },
+          {
+            "label": "2",
+            "probability": 0.12326382835100642
+          },
+          {
+            "label": "3",
+            "probability": 0.14731475098572905
+          },
+          {
+            "label": "4",
+            "probability": 0.20430683453096588
+          },
+          {
+            "label": "5",
+            "probability": 0.15644480968921312
+          },
+          {
+            "label": "6",
+            "probability": 0.13948214846426144
+          },
+          {
+            "label": "7+",
+            "probability": 0.17320800362339164
+          }
+        ]
+      },
+      "contentHash": "e24703dd0a80f9a879e085b8d1f6f7fb1f28bfce10b4284dea6a5c94128bbdd1"
+    },
+    "publishedAt": "2026-09-17T10:00:00.000Z",
+    "publicationStatus": "PUBLISHED",
+    "evaluationRule": "latest-published-input-before-cutoff-per-event",
+    "upstreamModelVersion": "unknown",
+    "sourceCycleId": "",
+    "inputEvidence": {
+      "model": {
+        "version": null,
+        "generatedAt": "2026-09-17T10:00:00.000Z",
+        "oneXTwo": {
+          "final": {
+            "home": 0.55,
+            "draw": 0.25,
+            "away": 0.2
+          }
+        },
+        "inputEvidence": {
+          "version": "recommendation-input-evidence-v1",
+          "sourceMatchId": "1",
+          "eventVersion": "2026-09-17T15:00:00.000Z",
+          "modelVersion": null,
+          "modelGeneratedAt": "2026-09-17T10:00:00.000Z",
+          "final": {
+            "home": 0.55,
+            "draw": 0.25,
+            "away": 0.2
+          },
+          "samples": {
+            "elo": {
+              "home": null,
+              "away": null
+            },
+            "form": {
+              "home": null,
+              "away": null
+            }
+          },
+          "weights": {
+            "market": null,
+            "teamStrength": null,
+            "elo": null,
+            "poisson": null,
+            "worldCupPrior": null,
+            "form": null
+          },
+          "arithmetic": {
+            "status": "unknown",
+            "scope": "base-calculation-only",
+            "sourceVerified": false,
+            "stages": []
+          },
+          "issues": [
+            "arithmetic-receipts-missing",
+            "base-outcome-blend-receipt-missing",
+            "elo-away-samples-missing",
+            "elo-home-samples-missing",
+            "execution-clock-missing",
+            "form-away-samples-missing",
+            "form-home-samples-missing",
+            "form-lambda-blend-receipt-missing",
+            "model-version-missing"
+          ],
+          "proof": {
+            "receipts": [],
+            "baseBefore": null,
+            "calibratedFinal": null,
+            "baseWeights": {},
+            "formWeight": null,
+            "executionClock": null
+          },
+          "contentHash": "1e6a79c65c868973fad323e6aa0585ea914e872dc58c923c19fe859000a18771"
+        },
+        "handicapMarginInputHash": "5841f06ecdc1b8b33e25df17123627a632466e419d42592b5e721c0022cb6b4f"
+      },
+      "quoteSource": "sporttery:had",
+      "quoteObservedAt": "2026-09-17T10:00:00.000Z"
+    },
+    "recordHash": "30267287f6179d49f87e09183d01440590b2d744b04499ac8f3e0ad0fb964f07"
+  },
+  "projectedHash": "4611f9b8cfd82a8f7a9029b50c46a4df508dfe89ba18f3ed3ff11ce802f1a2bf"
+}

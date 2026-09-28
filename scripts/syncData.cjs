@@ -1396,28 +1396,12 @@ function poissonProbability(lambda, goals) {
 }
 
 function projectedScore(homeLambda, awayLambda) {
-  let best = { home: 0, away: 0, probability: 0 };
-  for (let home = 0; home <= 5; home += 1) {
-    for (let away = 0; away <= 5; away += 1) {
-      const probability = poissonProbability(homeLambda, home) * poissonProbability(awayLambda, away);
-      if (probability > best.probability) best = { home, away, probability };
-    }
-  }
-  return best;
+  return scoreMatrix(homeLambda, awayLambda).reduce((best, row) => row.probability > best.probability ? row : best,
+    { home: 0, away: 0, probability: 0 });
 }
 
-function scoreMatrix(homeLambda, awayLambda, maxGoals = 8) {
-  const rows = [];
-  for (let home = 0; home <= maxGoals; home += 1) {
-    for (let away = 0; away <= maxGoals; away += 1) {
-      rows.push({
-        home,
-        away,
-        probability: poissonProbability(homeLambda, home) * poissonProbability(awayLambda, away),
-      });
-    }
-  }
-  return rows;
+function scoreMatrix(homeLambda, awayLambda, _legacyMaxGoals = 8) {
+  return require("../src/services/goalDistribution.cjs").scoreMatrix(homeLambda, awayLambda);
 }
 
 function representativeScoreRank(row, homeLambda, awayLambda, modeProbability, preferredCode, context = {}) {
@@ -1845,8 +1829,8 @@ function recentFormCandidate(form, marketHomeLambda, marketAwayLambda, confidenc
   const awayDefense = recentFormNumber(form.away.goalsAgainstAvg, marketHomeLambda);
 
   return {
-    homeLambda: clamp(homeAttack * 0.58 + awayDefense * 0.42, 0.25, 3.6),
-    awayLambda: clamp(awayAttack * 0.58 + homeDefense * 0.42, 0.25, 3.6),
+    homeLambda: clamp(homeAttack * 0.58 + awayDefense * 0.42, 0.25, 12),
+    awayLambda: clamp(awayAttack * 0.58 + homeDefense * 0.42, 0.25, 12),
     confidence,
     source,
     fallbackMetrics: ["home.goalsForAvg", "home.goalsAgainstAvg", "away.goalsForAvg", "away.goalsAgainstAvg"]
@@ -1897,6 +1881,7 @@ function blendLambdasWithForm(match, marketHomeLambda, marketAwayLambda) {
       formHomeLambda: null,
       formAwayLambda: null,
       formUsage: require("../src/services/modelInputUsage.cjs").recordModelInputUsage(match, "form-lambda-blend", {
+        lambdaPolicy: "evidence-rate-support-v2",
         before: { home: marketHomeLambda, away: marketAwayLambda }, candidates: [], weight: 0,
         output: { home: marketHomeLambda, away: marketAwayLambda },
       }),
@@ -1907,27 +1892,28 @@ function blendLambdasWithForm(match, marketHomeLambda, marketAwayLambda) {
   const formHomeLambda = clamp(
     candidates.reduce((sum, item) => sum + item.homeLambda * item.confidence, 0) / confidenceTotal,
     0.25,
-    3.6
+    12
   );
   const formAwayLambda = clamp(
     candidates.reduce((sum, item) => sum + item.awayLambda * item.confidence, 0) / confidenceTotal,
     0.25,
-    3.6
+    12
   );
   const profile = matchVolatilityProfile(match);
   const maxWeight = profile.isInternational ? 0.34 : 0.42;
   const strongestConfidence = Math.max(...candidates.map((item) => item.confidence));
   const formWeight = clamp(strongestConfidence * maxWeight, 0, maxWeight);
   const formOutput = {
-    home: clamp(marketHomeLambda * (1 - formWeight) + formHomeLambda * formWeight, 0.25, 3.4),
-    away: clamp(marketAwayLambda * (1 - formWeight) + formAwayLambda * formWeight, 0.25, 3.4),
+    home: clamp(marketHomeLambda * (1 - formWeight) + formHomeLambda * formWeight, 0.25, 12),
+    away: clamp(marketAwayLambda * (1 - formWeight) + formAwayLambda * formWeight, 0.25, 12),
   };
 
   return {
     homeLambda: formOutput.home,
     awayLambda: formOutput.away,
     formUsage: require("../src/services/modelInputUsage.cjs").recordModelInputUsage(match, "form-lambda-blend", {
-      before: { home: marketHomeLambda, away: marketAwayLambda }, candidates, weight: formWeight, output: formOutput,
+      lambdaPolicy: "evidence-rate-support-v2",
+        before: { home: marketHomeLambda, away: marketAwayLambda }, candidates, weight: formWeight, output: formOutput,
     }),
     formWeight: Number(formWeight.toFixed(3)),
     formHomeLambda: Number(formHomeLambda.toFixed(2)),
@@ -1966,8 +1952,8 @@ function blendLambdasWithLeaguePrior(match, marketHomeLambda, marketAwayLambda) 
   const sourceWeight = prior.source === "historical-global-prior" ? 0.08 : 0.16;
   const sampleWeight = clamp(Math.log10(matches) / 4, 0.08, sourceWeight);
   return {
-    homeLambda: clamp(marketHomeLambda * (1 - sampleWeight) + priorHome * sampleWeight, 0.25, 3.4),
-    awayLambda: clamp(marketAwayLambda * (1 - sampleWeight) + priorAway * sampleWeight, 0.25, 3.4),
+    homeLambda: clamp(marketHomeLambda * (1 - sampleWeight) + priorHome * sampleWeight, 0.25, 12),
+    awayLambda: clamp(marketAwayLambda * (1 - sampleWeight) + priorAway * sampleWeight, 0.25, 12),
     leagueWeight: Number(sampleWeight.toFixed(3)),
     leagueHomeLambda: Number(priorHome.toFixed(2)),
     leagueAwayLambda: Number(priorAway.toFixed(2)),
@@ -2025,8 +2011,8 @@ function applyScoreCalibrationToLambdas(match, homeLambda, awayLambda) {
   const total = Math.max(0.1, homeLambda + awayLambda);
   const homeShare = clamp(homeLambda / total, 0.22, 0.78);
   return {
-    homeLambda: clamp(homeLambda + adjustment * homeShare, 0.25, 3.6),
-    awayLambda: clamp(awayLambda + adjustment * (1 - homeShare), 0.25, 3.6),
+    homeLambda: clamp(homeLambda + adjustment * homeShare, 0.25, 12),
+    awayLambda: clamp(awayLambda + adjustment * (1 - homeShare), 0.25, 12),
     applied: true,
     totalLambdaAdjustment: Number(adjustment.toFixed(3)),
     version: calibration?.version || null,
@@ -2644,8 +2630,8 @@ function buildProbabilityCalculationTrace(match, context) {
         en: "P(score h-a)=Pois(h;lambda_home)*Pois(a;lambda_away), where Pois(k;lambda)=e^-lambda*lambda^k/k!.",
       },
       lambdas: {
-        home: formulaNumber(context.homeLambda, 2),
-        away: formulaNumber(context.awayLambda, 2),
+        home: context.homeLambda,
+        away: context.awayLambda,
       },
       topScores: context.scoreDistribution || [],
     },
@@ -2890,7 +2876,7 @@ function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLamb
     contextSignals,
   });
   return {
-    version: "independent-elo-form-poisson-v12",
+    version: "independent-elo-form-poisson-v13",
     ensemblePolicy: blended.ensemblePolicy,
     competitionContext: require("./competitionModelContext.cjs").competitionModelContext(match),
     generatedAt: predictionNowIso(),
@@ -10215,8 +10201,8 @@ function applyContextLambdaAdjustment(homeLambda, awayLambda, contextSignals) {
   const homeAdjustment = totalAdjustment * homeShare;
   const awayAdjustment = totalAdjustment - homeAdjustment;
   return {
-    homeLambda: clamp(Number(homeLambda) + homeAdjustment, 0.25, 3.8),
-    awayLambda: clamp(Number(awayLambda) + awayAdjustment, 0.2, 3.6),
+    homeLambda: clamp(Number(homeLambda) + homeAdjustment, 0.25, 12),
+    awayLambda: clamp(Number(awayLambda) + awayAdjustment, 0.2, 12),
     applied: true,
     totalAdjustment: Number(totalAdjustment.toFixed(3)),
     homeAdjustment: Number(homeAdjustment.toFixed(3)),

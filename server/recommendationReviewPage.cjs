@@ -55,7 +55,7 @@ function versionFor(decisions, markets = null) {
     const market = markets?.[i];
     const basis = [modelVersion(d), policyVersion(d)];
     if (market === 'HHAD') basis.push('HHAD', String(d?.handicapAnalysis?.version || 'unknown'),
-      String(d?.handicapAnalysis?.companionPolicyVersion || 'none'));
+      String(d?.primaryPickPolicyVersion || d?.handicapAnalysis?.companionPolicyVersion || 'none'));
     else if (market === 'HAD' && markets?.length > 1) basis.push('HAD');
     return JSON.stringify(basis);
   }))].sort();
@@ -79,7 +79,9 @@ function singleReviewRow(decision, head, market) {
   const supplementarySettlement = settleSupplementaryResearch(decision, head);
   const selectedSettlement = market === 'HHAD' ? handicapSettlement : settlement;
   const selectedOdds = market === 'HHAD'
-    ? decision.handicapAnalysis?.marketReference?.selectedOdds ?? null : decision.odds;
+    ? (decision.primaryPickPolicyVersion === 'independent-market-primary-v1'
+      ? decision.handicapAnalysis?.marketReference?.odds?.[decision.handicapAnalysis.overallTipCode] ?? null
+      : decision.handicapAnalysis?.marketReference?.selectedOdds ?? null) : decision.odds;
   return {
     decision, settlement, handicapSettlement, supplementarySettlement,
     selectedMarket: market, selectedSettlement,

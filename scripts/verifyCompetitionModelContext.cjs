@@ -35,7 +35,7 @@ check("actual model retains precisely the competition inputs used and bumps mode
   const row = fixture(), before = JSON.stringify(row), model = predictionSet(row).probabilityModel;
   assert.deepEqual(model.competitionContext, context(row));
   assert.equal(model.version, "unified-poisson-bayes-v76");
-  assert.equal(model.baseModelVersion, "independent-elo-form-poisson-v12");
+  assert.equal(model.baseModelVersion, "independent-elo-form-poisson-v13");
   assert.equal(model.inputUsage.find(r => r.stage === "form-lambda-blend").weight, 0.42);
   assert.equal(model.competitionContext.sourceVerified, false);
   const { contentHash, ...body } = model.competitionContext;

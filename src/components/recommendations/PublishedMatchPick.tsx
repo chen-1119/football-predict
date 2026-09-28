@@ -21,7 +21,7 @@ export function PublishedMatchPick({row,language,loading=false,failed=false,comp
   return <div className={`published-match-pick${compact?' is-compact':''}`} data-decision-id={d.decisionId} data-record-hash={d.recordHash}>
     <div className="published-match-pick__directions">
       <div><small>{zh?'胜平负首选':'1X2 primary'}</small><strong>{publishedPickLabel(s.had.code,language)}</strong><span>SP {s.had.odds.toFixed(2)} · {(s.had.probability*100).toFixed(1)}%</span></div>
-      <div className={h?.status==='pass'?'is-pass':undefined} data-handicap-extension={h?.status??'unavailable'}><small>{zh?'让球延伸':'Handicap extension'}</small><strong>{extension?.title??'—'}</strong><span>{extension?.detail??(zh?'等待有效让球数据':'Awaiting handicap data')}</span></div>
+      <div className={h?.status==='pass'?'is-pass':undefined} data-handicap-extension={h?.status??'unavailable'}><small>{d.primaryPickPolicyVersion?(zh?'让球首选':'Handicap primary'):(zh?'让球延伸':'Handicap extension')}</small><strong>{extension?.title??'—'}</strong><span>{extension?.detail??(zh?'等待有效让球数据':'Awaiting handicap data')}</span></div>
     </div>
     <small className="published-match-pick__status" data-selection-status={row.selectionQuality?.status??'reference'}>{selectionReferenceLabel(row.selectionQuality,language)}{lifecycle!=='open'?` · ${publicationLifecycleLabel(lifecycle,language)}`:''}{failed?(zh?' · 更新暂时失败':' · Update temporarily failed'):''}</small>
     {compact&&<small className="published-match-pick__quote-time">{zh?'冻结 SP 采集':'Frozen SP observed'} {time(d.quoteObservedAt,language)}</small>}
@@ -36,6 +36,7 @@ export function PublishedMatchPick({row,language,loading=false,failed=false,comp
       {!compact&&row.outcomeResearch.outcomes.length>0&&<div className="published-match-pick__research-odds">{row.outcomeResearch.outcomes.map(item=><span key={item.code}>{publishedPickLabel(item.code,language)} {(item.modelProbability*100).toFixed(1)}% · SP {item.odds.toFixed(2)}</span>)}</div>}
       {!compact&&row.outcomeResearch.reasons.length>0&&<small>{zh?'限制：':'Limits: '}{row.outcomeResearch.reasons.slice(0,2).map(reason=>outcomeResearchReasonLabel(reason,zh)).join(zh?'、':'; ')}</small>}
     </div>}
+    {compact&&<SupplementaryResearchNote research={d.supplementaryResearch} settlement={row.supplementarySettlement} language={language}/>}
     {!compact&&<><p>{zh?'本场方向、SP和版本与今日推荐保持一致。串关可选择同一场的不同玩法；已冻结的串关保留选定时的版本。':'Direction, SP and version match Today. A combo may use another market; a frozen combo retains its selected version.'}</p>
       {h?.conditional&&<p>{zh?'让球伴随占比以胜平负首选成立为前提，不是独立让球命中率。':'The companion shares are conditional on the 1X2 pick landing, not standalone handicap win rates.'}</p>}
       {h?.status==='pass'&&<p className="published-match-pick__warning">{zh?'不追让球：盘口风险方向未作为胜平负首选的延伸。同向备选仅供比较，完整概率和已冻结串关仍保留原记录。':'Pass handicap: the model risk direction is not an extension of the 1X2 pick. Aligned alternatives are comparisons; full probabilities and frozen combos retain their original records.'}</p>}

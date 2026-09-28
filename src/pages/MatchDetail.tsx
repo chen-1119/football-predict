@@ -2131,7 +2131,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
     ? [publishedDetail?.primaryScore, publishedDetail?.alternativeScore].filter((score): score is ScoreProbability => Boolean(score)).map((score, index) => ({
       ...score, tone: index === 0 ? 'aligned' : 'alternate',
       tag: index === 0
-        ? publishedDetail?.scoreSource === 'published-matrix' ? (language === 'zh' ? '同一模型同向比分' : 'Aligned score from the same model') : (language === 'zh' ? '旧补充分布 · 同向参考' : 'Legacy supplemental aligned score')
+        ? publishedDetail?.scoreSource === 'published-matrix' ? (unifiedRow?.decision.primaryPickPolicyVersion ? (language === 'zh' ? '比分首选 · 低置信' : 'Score primary · low confidence') : (language === 'zh' ? '同一模型同向比分' : 'Aligned score from the same model')) : (language === 'zh' ? '旧补充分布 · 同向参考' : 'Legacy supplemental aligned score')
         : (language === 'zh' ? '全局备选 · 不改变首选' : 'Global alternative · primary unchanged'),
     }))
     : legacyScoreRecommendations;
@@ -2206,7 +2206,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
     : publicRecommendationCopy.oddsLabel;
   const publicScoreNote = useUnified
     ? publishedDetail?.scoreSource === 'published-matrix'
-      ? (language === 'zh' ? '比分与胜平负、让球来自同一发布记录。首选比分同时符合两个方向；全局备选保留模型原始排序。单一比分概率不是胜平负总概率，也不是实际命中率。' : 'Scores, 1X2 and handicap use the same published record. The primary score matches both directions; the global alternative keeps the model ranking. An individual score probability is neither an outcome total nor an observed hit rate.')
+      ? (unifiedRow?.decision.primaryPickPolicyVersion ? (language === 'zh' ? '各玩法来自同一完整比分分布，分别选择首选。比分首选不强制符合胜平负或让球首选；单个比分概率不等于总进球或胜平负概率。' : 'Each market selects its own primary from the same full score distribution. The score mode need not match the marginal 1X2 or handicap pick.') : (language === 'zh' ? '比分与胜平负、让球来自同一发布记录。首选比分同时符合两个方向；全局备选保留模型原始排序。单一比分概率不是胜平负总概率，也不是实际命中率。' : 'Scores, 1X2 and handicap use the same published record. The primary score matches both directions; the global alternative keeps the model ranking. An individual score probability is neither an outcome total nor an observed hit rate.'))
       : publishedDetail?.scoreSource === 'legacy-supplemental'
         ? (language === 'zh' ? '此旧记录尚无同源比分，当前为旧补充模型中的同向参考，未绑定该发布记录。单一比分概率不等于胜平负总概率。' : 'This older publication has no bound score projection. The aligned reference uses an older supplemental model, not this publication. A score probability is not an outcome total.')
         : (language === 'zh' ? '当前发布记录暂无可核验的同源比分，待比分依据补齐后展示。胜平负、让球推荐保留原记录。' : 'No verified score projection is available for this publication. Scores will appear when its evidence is available; the recorded 1X2 and handicap picks remain available.')

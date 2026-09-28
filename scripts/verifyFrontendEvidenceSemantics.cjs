@@ -44,8 +44,8 @@ check('published surfaces use the audited shared status and lifecycle helpers',
   && recommendationCenterView.includes("export { publicationLifecycle, publicationLifecycleLabel } from './publishedRecommendationStatus.cjs'"));
 const referenceLabelContract = [
   [null, '模型方向 · 证据待核', 'Model direction · evidence pending'],
-  [{ qualified: false, expectedValue: .2 }, '观望 · 保留模型方向', 'Watch · model direction retained'],
-  [{ qualified: false, expectedValue: -.2 }, '观望 · 保留模型方向', 'Watch · model direction retained'],
+  [{ qualified: false, expectedValue: .2 }, '低置信 · 保留唯一首选', 'Low confidence · single primary retained'],
+  [{ qualified: false, expectedValue: -.2 }, '低置信 · 保留唯一首选', 'Low confidence · single primary retained'],
   [{ qualified: true, expectedValue: -.01 }, '模型方向 · 当前价格不支持', 'Model direction · price not supported'],
   [{ qualified: true, expectedValue: 0 }, '参考入选 · 模型未验证', 'Reference-qualified · model unvalidated'],
   [{ qualified: true, expectedValue: .2 }, '参考入选 · 模型未验证', 'Reference-qualified · model unvalidated'],

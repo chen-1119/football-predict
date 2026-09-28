@@ -7,8 +7,8 @@ export function SupplementaryResearchNote({research,settlement,language}:{resear
  const zh=language==='zh';
  const state=(key:'exactScore'|'totalGoals')=>({PENDING:zh?'待赛果':'Pending',WON:zh?'命中':'Hit',LOST:zh?'未命中':'Miss',VOID:zh?'无效':'Void',DISPUTED:zh?'赛果待核':'Disputed'}[settlement?.[key].state??'PENDING']);
  return <div className="supplementary-research-note" data-supplementary-version={research.version}>
-  <strong>{zh?'比分与进球数 · 冻结研究首选':'Score & goals · frozen research picks'}</strong>
-  <p>{zh?'同向比分':'Aligned score'} {research.exactScore.label} · {(research.exactScore.probability*100).toFixed(1)}% · {state('exactScore')}</p>
+  <strong>{zh?'比分与进球数 · 唯一首选 · 低置信':'Score & goals · single primary · low confidence'}</strong>
+  <p>{research.version==='supplementary-research-v2'?(zh?'比分首选':'Score primary'):(zh?'同向比分':'Aligned score')} {research.exactScore.label} · {(research.exactScore.probability*100).toFixed(1)}% · {state('exactScore')}</p>
   <p>{zh?'总进球':'Total goals'} {research.totalGoals.label} · {(research.totalGoals.probability*100).toFixed(1)}% · {state('totalGoals')}</p>
   <small>{zh?'未绑定官方 SP；命中统计独立记录，模型尚未验证。':'No official SP bound; hits tracked separately, model unvalidated.'}</small>
  </div>;
@@ -17,7 +17,7 @@ export function SupplementaryResearchNote({research,settlement,language}:{resear
 export function SelectionQualityNote({quality,language}:{quality?:SelectionQuality|null;language:'zh'|'en'}){
  if(!quality)return null;
  const zh=language==='zh';
- const labels:Record<string,string>=zh?{'input-evidence-unavailable':'本次模型输入依据尚未完整存档','input-arithmetic-unverified':'本次模型输入计算尚未核验','team-samples-insufficient':'实际参与模型的球队样本不足','model-lead-too-thin':'模型首位与第二方向差距过小，不能当作明确推荐','material-model-market-disagreement':'模型概率与同期官方 SP 去水概率明显冲突，暂不纳入串关','cross-track-direction-conflict':'同场赛前参考与发布方向相反，当前观望'}:{'input-evidence-unavailable':'Current model inputs are not fully archived','input-arithmetic-unverified':'Current input arithmetic is unverified','team-samples-insufficient':'Too few team samples in the active model','model-lead-too-thin':'Model lead is too narrow for a clear recommendation','material-model-market-disagreement':'Model probability materially disagrees with the same-time official market; excluded from combos','cross-track-direction-conflict':'The pre-match reference conflicts with this published direction; watch only'};
+ const labels:Record<string,string>=zh?{'input-evidence-unavailable':'本次模型输入依据尚未完整存档','input-arithmetic-unverified':'本次模型输入计算尚未核验','team-samples-insufficient':'实际参与模型的球队样本不足','model-lead-too-thin':'模型首位与第二方向差距较小，保留唯一首选并降低置信度','material-model-market-disagreement':'模型概率与同期官方 SP 去水概率明显冲突，暂不纳入串关','cross-track-direction-conflict':'同场赛前参考与发布方向相反，当前观望'}:{'input-evidence-unavailable':'Current model inputs are not fully archived','input-arithmetic-unverified':'Current input arithmetic is unverified','team-samples-insufficient':'Too few team samples in the active model','model-lead-too-thin':'Model lead is narrow; retain the single primary at low confidence','material-model-market-disagreement':'Model probability materially disagrees with the same-time official market; excluded from combos','cross-track-direction-conflict':'The pre-match reference conflicts with this published direction; watch only'};
  const pct=(n:number|null)=>n==null?'—':`${(n*100).toFixed(1)}%`;
  const priceStatus=selectionPriceStatus(quality);
  return <div className="selection-quality-note" data-selection-status={quality.status} data-price-status={priceStatus} style={{padding:'12px 14px',margin:'12px 0',border:'1px solid var(--border-color, #d8e2ea)',borderRadius:12,background:'var(--bg-secondary, #f4f7fa)'}}>

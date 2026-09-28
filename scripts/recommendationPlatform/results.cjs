@@ -87,7 +87,7 @@ function settleHandicapDecision(decision,event){
     return {state:'DISPUTED',score:null,resultEventId:event.eventId,reason:'handicap-line-invalid'};
   const adjusted=event.scoreHome+line;
   const actual=adjusted>event.scoreAway?'1':adjusted<event.scoreAway?'2':'X';
-  return {state:actual===decision.handicapAnalysis.tipCode?'WON':'LOST',actual,score:`${event.scoreHome}-${event.scoreAway}`,
+  return {state:actual===(decision.primaryPickPolicyVersion==='independent-market-primary-v1'?decision.handicapAnalysis.overallTipCode:decision.handicapAnalysis.tipCode)?'WON':'LOST',actual,score:`${event.scoreHome}-${event.scoreAway}`,
     resultEventId:event.eventId,revision:event.revision,handicapLine:line};
 }
 function settleSupplementaryResearch(decision, event) {
@@ -149,9 +149,9 @@ function handicapSummary(rows){
   return summary(eligible.map(row=>({decision:row.decision,settlement:row.handicapSettlement||{state:'PENDING'}})),false);
 }
 function handicapBreakdown(rows){
-  const result={standaloneV1:handicapSummary(rows.filter(r=>r.decision?.handicapAnalysis?.version==='handicap-margin-v1'))};
+  const result={independentPrimaryV1:handicapSummary(rows.filter(r=>r.decision?.primaryPickPolicyVersion==='independent-market-primary-v1')),standaloneV1:handicapSummary(rows.filter(r=>r.decision?.handicapAnalysis?.version==='handicap-margin-v1'))};
   for(const version of [2,3]){
-    const group=rows.filter(r=>r.decision?.handicapAnalysis?.version===`handicap-margin-v${version}`);
+    const group=rows.filter(r=>!r.decision?.primaryPickPolicyVersion&&r.decision?.handicapAnalysis?.version===`handicap-margin-v${version}`);
     result[`companionV${version}All`]=handicapSummary(group);
     result[`companionV${version}WhenHadWon`]=handicapSummary(group.filter(r=>r.settlement?.state==='WON'));
     result[`companionV${version}BothWon`]=summary(group.map(r=>{

@@ -129,7 +129,7 @@ function createDualResearchV2Record(match, { now, publication } = {}) {
       const quote = analysis.marketReference;
       matrix = coherentHandicapDistribution(analysis.lambdas.home, analysis.lambdas.away,
         analysis.handicapLine, analysis.straightProbabilities, analysis.straightTipCode,
-        analysis.historicalCalibration?.applied ? analysis.probabilities : null);
+        analysis.historicalCalibration?.applied ? analysis.probabilities : null, analysis.scoreSupportPolicy);
       if (!matrix || CODES.some(c => Math.abs(matrix.straightProbabilities[c] - straight[c]) > 1e-9
         || Math.abs(matrix.probabilities[c] - analysis.overallProbabilities[c]) > 1e-6)) return null;
       if (quote.source === 'sporttery:HHAD' && quote.handicapLine === analysis.handicapLine

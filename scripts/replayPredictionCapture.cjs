@@ -45,7 +45,7 @@ function replayBatch(inputPath, manifestPath, { crossRuntimeDiagnostic = false }
   assert.equal(typeof crossRuntimeDiagnostic, "boolean", "explicit diagnostic flag must be boolean");
   const manifestBytes = boundedRead(manifestPath, 1024 * 1024), manifest = JSON.parse(manifestBytes);
   assert.ok(manifest.capture?.persisted === true && manifest.sourceHashes && typeof manifest.sourceHashes === "object", "captured source manifest required");
-  const required = ["syncData.cjs", "predictionExecutionCapture.cjs", "competitionModelContext.cjs", "../src/services/predictionExecutionClock.cjs", "../src/services/modelInputUsage.cjs", "../src/services/predictionRuntimeIdentity.cjs"];
+  const required = ["syncData.cjs", "predictionExecutionCapture.cjs", "competitionModelContext.cjs", "../src/services/predictionExecutionClock.cjs", "../src/services/modelInputUsage.cjs", "../src/services/goalDistribution.cjs", "../src/services/predictionRuntimeIdentity.cjs"];
   const implementation = required.map(name => {
     const file = path.resolve(__dirname, name), bytes = fs.readFileSync(file);
     assert.ok(sameHash(manifest.sourceHashes[name], bytes), "captured implementation mismatch: " + name);

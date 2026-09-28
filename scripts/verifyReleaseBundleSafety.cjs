@@ -300,6 +300,7 @@ const requiredReleaseEntries = [
   "src/services/legacyReferenceConflict.ts",
   "scripts/verifyModelInputUsage.cjs",
   "src/services/modelInputUsage.cjs",
+  "src/services/goalDistribution.cjs",
   "scripts/teamCategoryIdentity.cjs",
   "scripts/recentFormEvidence.cjs",
   "scripts/apiFootballScopedAliases.cjs",

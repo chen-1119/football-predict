@@ -115,6 +115,8 @@ test('HAD and HHAD remain separate denominators; missing HHAD odds is explicit',
   delete older.selectionPolicyVersion;
   delete older.supplementaryPolicyVersion;
   delete older.supplementaryResearch;
+  delete older.primaryPickPolicyVersion;
+  delete older.scoreModelInput;
   older.inputEvidence.model.handicapMarginInputHash = older.handicapAnalysis.inputHash;
   older.inputHash = hash({ hadInputHash: older.hadInputHash, handicapInputHash: older.handicapAnalysis.inputHash });
   older.decisionId = `decision_${hash([older.version, older.sourceMatchId, older.eventVersion, older.market, older.inputHash])}`;

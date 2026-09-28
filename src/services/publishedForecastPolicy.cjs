@@ -72,8 +72,8 @@ function evaluateForecast(match, { now, publication } = {}) {
   if (!p || !Number.isFinite(modelAt) || modelAt > now || modelAt >= deadline || now - modelAt > ageLimit) return fail('model-data-invalid-or-stale');
   if (model.eventVersion && iso(model.eventVersion) !== eventVersion) return fail('model-event-conflict');
   if (model.sourceMatchId && sourceId(model.sourceMatchId) !== sourceId(match.sourceMatchId || match.id)) return fail('model-match-conflict');
-  const ranked = CODES.slice().sort((a, b) => p[b] - p[a]);
-  if (p[ranked[0]] - p[ranked[1]] <= 1e-9) return fail('no-unique-first-direction');
+  // A tied valid vector still has a reproducible low-confidence primary;
+  // the direction policy freezes its tie rule separately from admission.
   const had = match.externalSignals?.bookmakerOdds?.had;
   const copiedQuote = require('./warehouseLotterySp.cjs').warehouseQuoteForMatch(match, now, deadline);
   const candidates = [

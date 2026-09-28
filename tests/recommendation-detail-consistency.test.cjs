@@ -125,12 +125,11 @@ test('backend-derived scores replace supplemental values and preserve original g
  const {decision,scores}=scorePublication(),before=JSON.stringify({decision,scores});
  const result=presentation.publishedDetailPresentation(decision,legacyScores,scores);
  assert.equal(result.scoreSource,'published-matrix');
- assert.equal(result.primaryScore.label,scores.alignedScores[0].label);
- assert.equal(result.primaryScore.probability,scores.alignedScores[0].probability*100);
+ assert.equal(result.primaryScore.label,scores.topScores[0].label);
+ assert.equal(result.primaryScore.probability,scores.topScores[0].probability*100);
  assert.equal(result.globalScores[0].label,scores.topScores[0].label);
  assert.equal(scores.topScores[0].hadCode,'X');assert.equal(decision.tipCode,'1');
- assert.equal(result.alternativeScore.label,scores.topScores[0].label);
- assert.equal(result.alternativeScore.probability,scores.topScores[0].probability*100);
+ assert.equal(result.alternativeScore,null);
  assert.equal(result.tipCode,decision.tipCode);assert.notEqual(result.primaryScore.label,'8-0');
  assert.equal(JSON.stringify({decision,scores}),before);
 });
@@ -159,10 +158,10 @@ test('wrong record binding or malformed score units and outcome codes are reject
  }
 });
 
-test('an empty aligned projection cannot promote the global modal draw into the primary score',()=>{
+test('independent score primary does not require an aligned alternative',()=>{
  const {decision,scores}=scorePublication();
  const result=presentation.publishedDetailPresentation(decision,legacyScores,{...scores,alignedScores:[]});
- assert.equal(result.primaryScore,null);assert.equal(result.alternativeScore,null);
+ assert.equal(result.primaryScore.label,scores.topScores[0].label);assert.equal(result.alternativeScore,null);
  assert.equal(result.globalScores[0].label,scores.topScores[0].label);
 });
 
@@ -175,7 +174,7 @@ test('frontend parser accepts server score projection and explicit unavailable w
   review:{singles:[],combos:[],limit:0,statistics:{single:summary,two:summary,three:summary},definition:'test'},excludedCorruptRecords:0,modelValidation:'unvalidated'}};
  const parsed=view.parseRecommendationCenter(response).current[0];
  const result=presentation.publishedDetailPresentation(parsed.decision,legacyScores,parsed.scoreDistribution);
- assert.equal(result.scoreSource,'published-matrix');assert.equal(result.primaryScore.probability,scores.alignedScores[0].probability*100);
+ assert.equal(result.scoreSource,'published-matrix');assert.equal(result.primaryScore.probability,scores.topScores[0].probability*100);
  assert.equal(JSON.stringify(parsed.scoreDistribution.totalGoals),JSON.stringify(scores.totalGoals));
  const tampered=structuredClone(response);
  tampered.recommendationCenter.current[0].scoreDistribution.totalGoals[0].probability+=.01;

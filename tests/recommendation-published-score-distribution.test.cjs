@@ -161,8 +161,8 @@ test('invalid records and missing coherent inputs return unavailable without sup
   }
   const hadOnly = fixture({ line: 0 });
   assert.equal(hadOnly.handicapAnalysis, null);
-  assert.equal(buildPublishedScoreDistribution(hadOnly).reason, 'unsupported-distribution-version');
-  assert.deepEqual(buildPublishedScoreDistribution(hadOnly).totalGoals, []);
+  assert.equal(buildPublishedScoreDistribution(hadOnly).status, 'available');
+  assert.equal(buildPublishedScoreDistribution(hadOnly).totalGoals.length, 8);
 });
 
 test('a valid older frozen v2 record remains valid but cannot claim coherent v3 score evidence', () => {
@@ -171,6 +171,8 @@ test('a valid older frozen v2 record remains valid but cannot claim coherent v3 
   delete legacy.selectionPolicyVersion;
   delete legacy.supplementaryPolicyVersion;
   delete legacy.supplementaryResearch;
+  delete legacy.primaryPickPolicyVersion;
+  delete legacy.scoreModelInput;
   legacy.inputEvidence.model.handicapMarginInputHash = legacy.handicapAnalysis.inputHash;
   legacy.inputHash = hash({ hadInputHash: legacy.hadInputHash, handicapInputHash: legacy.handicapAnalysis.inputHash });
   legacy.decisionId = `decision_${hash([legacy.version, legacy.sourceMatchId, legacy.eventVersion, legacy.market, legacy.inputHash])}`;
