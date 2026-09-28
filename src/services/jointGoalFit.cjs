@@ -15,16 +15,22 @@ const over = total => 1 - Math.exp(-total) * (1 + total + total * total / 2);
 
 function historyRow(match) {
   const stats = match?.stats;
+  const statsSource = stats?.source || stats?.provenance?.source || null;
   const observedStats = stats?.observed === true || stats?.provenance?.observed === true
     || ["observed", "official-post-match", "provider-post-match"].includes(stats?.sourceType || stats?.provenance?.sourceType);
+  const resultEligible = match?.resultObservationFallback !== true
+    && match?.resultProvenance?.promotionEligible !== false
+    && !/^500\.com/i.test(String(match?.resultSource || ""));
   return {
     sourceMatchId: String(match?.sourceMatchId || ""), kickoffTime: match?.kickoffTime,
     homeTeam: match?.homeTeamName || match?.homeTeam, awayTeam: match?.awayTeamName || match?.awayTeam,
     scoreHome: match?.scoreHome, scoreAway: match?.scoreAway,
-    resultObservedAt: match?.resultObservedAt, resultSource: match?.resultObservationSource || match?.resultProvenance?.source || null,
-    homeXg: observedStats ? stats?.xG?.home : null, awayXg: observedStats ? stats?.xG?.away : null,
+    resultObservedAt: resultEligible ? match?.resultObservedAt : null,
+    resultSource: resultEligible ? (match?.resultObservationSource || match?.resultProvenance?.source || null) : null,
+    homeXg: observedStats && !/^api-football/i.test(String(statsSource || "")) ? stats?.xG?.home : null,
+    awayXg: observedStats && !/^api-football/i.test(String(statsSource || "")) ? stats?.xG?.away : null,
     statsObservedAt: observedStats ? (stats?.observedAt || stats?.provenance?.observedAt) : null,
-    statsSource: observedStats ? (stats?.source || stats?.provenance?.source || null) : null,
+    statsSource: observedStats ? statsSource : null,
   };
 }
 
