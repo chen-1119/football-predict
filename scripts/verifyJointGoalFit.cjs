@@ -28,6 +28,14 @@ const fit = fitJointGoalRates(match, 1.3, 1.15, at);
 assert.ok(fit && verifyJointGoalFit(fit, match, at));
 assert.ok(fit.output.home > 1.3 && fit.output.away < 1.15);
 assert.ok(fit.over25Probability > 0 && fit.over25Probability < 1);
+const xgChange = fitJointGoalRates({ ...base, externalSignals: {
+  goalFitEvidence: buildGoalFitEvidence(history(0.7, 0.65), base, at) } }, 1.3, 1.15, at);
+assert.equal(xgChange.inputs.over25Rate, fit.inputs.over25Rate);
+assert.notEqual(xgChange.output.home, fit.output.home);
+const overChange = fitJointGoalRates({ ...base, externalSignals: {
+  goalFitEvidence: buildGoalFitEvidence(history().map((row, n) => ({ ...row, scoreHome: n % 5 === 0 ? 3 : 1, scoreAway: 0 })), base, at) } }, 1.3, 1.15, at);
+assert.equal(overChange.inputs.xgTotal, fit.inputs.xgTotal);
+assert.ok(overChange.output.home + overChange.output.away < fit.output.home + fit.output.away);
 assert.equal(fitJointGoalRates(base, 1.3, 1.15, at), null);
 assert.equal(fitJointGoalRates(match, 1.3, 1.15, "2026-08-01T12:00:00Z"), null);
 assert.equal(buildGoalFitEvidence(history().map(row => ({ ...row, stats: { ...row.stats, observedAt: null } })), base, at), null);
