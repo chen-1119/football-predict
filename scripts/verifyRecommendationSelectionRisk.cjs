@@ -45,6 +45,8 @@ const legacyBody={...thin,selectionPolicyVersion:LEGACY_VERSION};
 delete legacyBody.recordHash;
 delete legacyBody.supplementaryPolicyVersion;
 delete legacyBody.supplementaryResearch;
+delete legacyBody.primaryPickPolicyVersion;
+delete legacyBody.scoreModelInput;
 legacyBody.inputHash=hash({hadInputHash:thin.hadInputHash,handicapInputHash:thin.handicapAnalysis?.inputHash||null,
  selectionPolicyVersion:LEGACY_VERSION,modelInputEvidenceHash:thin.inputEvidence.model.inputEvidence.contentHash});
 legacyBody.decisionId=`decision_${hash([legacyBody.version,legacyBody.sourceMatchId,legacyBody.eventVersion,legacyBody.market,legacyBody.inputHash])}`;
