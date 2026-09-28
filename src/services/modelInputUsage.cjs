@@ -50,6 +50,12 @@ function verifyModelInputUsage(receipt) {
       return same(clamp(receipt.before[side] * (1 - receipt.weight) + form * receipt.weight, 0.25, expanded ? 12 : 3.4), receipt.output[side]);
     });
   }
+  if (receipt.stage === "joint-goal-fit") {
+    const { verifyJointGoalArithmetic } = require("./jointGoalFit.cjs");
+    return receipt.fit?.sourceMatchId === receipt.sourceMatchId
+      && receipt.fit?.kickoffTime === receipt.kickoffTime
+      && verifyJointGoalArithmetic(receipt.fit);
+  }
   return false;
 }
 
@@ -64,6 +70,7 @@ function summarizeModelInputUsage(model, match) {
   if (valid.length !== receipts.length || new Set(valid.map(r => r.stage)).size !== valid.length) return null;
   const blend = valid.find(r => r.stage === "base-outcome-blend");
   const form = valid.find(r => r.stage === "form-lambda-blend");
+  const joint = valid.find(r => r.stage === "joint-goal-fit");
   const rows = [];
   if (blend) {
     // Bind to the actual pre-calibration base result, not a later public direction.
@@ -79,6 +86,19 @@ function summarizeModelInputUsage(model, match) {
     rows.push({ key: "form", stage: form.stage, used: form.weight > 0, weight: form.weight, receiptHash: form.contentHash,
       sources: form.candidates.map(c => c.source),
       fallbackMetrics: form.candidates.reduce((n, c) => n + (c.fallbackMetrics?.length || 0), 0) });
+  }
+  if (joint) {
+    const fit = joint.fit;
+    if (model.lambdaBlend?.jointGoalFit && model.lambdaBlend.jointGoalFit.contentHash !== fit.contentHash) return null;
+    if (model.calculationTrace?.poisson?.lambdas
+      && (Math.abs(model.calculationTrace.poisson.lambdas.home - fit.output.home) > 1e-12
+        || Math.abs(model.calculationTrace.poisson.lambdas.away - fit.output.away) > 1e-12)) return null;
+    if (match?.externalSignals?.goalFitEvidence
+      && !require("./jointGoalFit.cjs").verifyJointGoalFit(fit, match, model.generatedAt)) return null;
+    rows.push({ key: "observedXg", stage: joint.stage, used: true, weight: fit.weights.xgTotal,
+      receiptHash: joint.contentHash, evidenceHash: fit.evidenceHash, samples: fit.inputs.samples });
+    rows.push({ key: "historicalOver25", stage: joint.stage, used: true, weight: fit.weights.over25Total,
+      receiptHash: joint.contentHash, evidenceHash: fit.evidenceHash, samples: fit.inputs.samples });
   }
   return { version: VERSION, scope: "base-calculation-only", sourceVerified: false, rows };
 }

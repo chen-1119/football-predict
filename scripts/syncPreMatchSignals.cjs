@@ -15,6 +15,8 @@ const {
   classifyEvidenceAvailability,
   dynamicEvidenceWeights,
 } = require("./preMatchEvidenceAvailability.cjs");
+const { buildObservedGoalHistoryIndex, buildGoalFitEvidence } = require("../src/services/jointGoalFit.cjs");
+const { strictInstant } = require("../src/services/strictInstant.cjs");
 
 const rootDir = path.join(__dirname, "..");
 const publicDir = path.join(rootDir, "public");
@@ -708,6 +710,7 @@ const main = () => {
   const external = readJson(EXTERNAL_SIGNALS_FILE, { version: 1, source: "external-signals", matches: {}, sources: {} });
   const externalMatches = { ...(external.matches || {}) };
   const teamHistoryIndex = buildCardHistory(history);
+  const goalHistoryIndex = buildObservedGoalHistoryIndex(history);
   const footballDataDiscipline = buildFootballDataDisciplineIndex();
   const preMatchRows = {};
   const warnings = [];
@@ -715,6 +718,10 @@ const main = () => {
   for (const match of matches) {
     const { key, signal } = findSignal(externalMatches, match);
     const forecastTime = matchForecastTime(match);
+    const evidenceAsOf = strictInstant(forecastTime) && strictInstant(updatedAt)
+      ? (Date.parse(forecastTime) < Date.parse(updatedAt) ? forecastTime : updatedAt)
+      : null;
+    const goalFitEvidence = evidenceAsOf ? buildGoalFitEvidence(goalHistoryIndex, match, evidenceAsOf) : null;
     const assignedReferee = signal?.referee?.name || "";
     const refereeProfile = assignedReferee
       ? refereeDisciplineProfile(footballDataDiscipline, assignedReferee, forecastTime)
@@ -762,6 +769,7 @@ const main = () => {
       source: Array.from(new Set(String(existingSignal.source || "external-signals").split("+").concat("pre-match-signals"))).filter(Boolean).join("+"),
       updatedAt: existingSignal.updatedAt || updatedAt,
       preMatch: payload,
+      ...(goalFitEvidence ? { goalFitEvidence } : { goalFitEvidence: null }),
       ...(discipline ? { discipline: { ...(existingSignal.discipline || {}), ...discipline } } : {})
     }, match);
     externalMatches[key] = nextSignal;

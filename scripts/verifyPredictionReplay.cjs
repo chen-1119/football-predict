@@ -15,7 +15,7 @@ rebuildPublishedPredictionModel({ sourceMatchId: "independent-replay-fixture", k
 const stored = collector.persist(dir); assert.equal(stored.persisted, true);
 const originalFile = path.join(dir, "prediction-execution-captures", stored.sha256 + ".json.gz");
 const originalBatch = JSON.parse(zlib.gunzipSync(fs.readFileSync(originalFile)));
-const names = ["syncData.cjs", "predictionExecutionCapture.cjs", "competitionModelContext.cjs", "../src/services/predictionExecutionClock.cjs", "../src/services/modelInputUsage.cjs", "../src/services/goalDistribution.cjs", "../src/services/predictionRuntimeIdentity.cjs"];
+const names = ["syncData.cjs", "predictionExecutionCapture.cjs", "competitionModelContext.cjs", "../src/services/predictionExecutionClock.cjs", "../src/services/modelInputUsage.cjs", "../src/services/goalDistribution.cjs", "../src/services/jointGoalFit.cjs", "../src/services/predictionRuntimeIdentity.cjs"];
 const baseManifest = { capture: stored, sourceHashes: Object.fromEntries(names.map(name => [name, hash(fs.readFileSync(path.resolve(__dirname, name)))])) };
 let serial = 0, checks = 0;
 const check = (name, callback) => { callback(); checks++; };

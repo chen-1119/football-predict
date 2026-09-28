@@ -4,6 +4,7 @@ const https = require("https");
 const crypto = require("crypto");
 const { readChunkedJsonFile } = require("../server/chunkedJsonFile.cjs");
 const { predictionNowMs, predictionNowIso, executeWithPredictionClock } = require("../src/services/predictionExecutionClock.cjs");
+const { fitJointGoalRates } = require("../src/services/jointGoalFit.cjs");
 const { spawn } = require("child_process");
 const {
   MULTI_FACTOR_POLICY_VERSION,
@@ -2604,7 +2605,10 @@ function buildProbabilityCalculationTrace(match, context) {
       },
     },
     expectedGoals: {
-      formula: {
+      formula: lambdaBlend.jointGoalFit ? {
+        zh: "基础进球率先经联赛、近期状态及赛前上下文调整；历史观测 xG 修正主客比例与总量，历史大 2.5 球频率同时修正总量；两项拟合均受幅度上限约束。",
+        en: "League, form and pre-match context set the base rates. Observed historical xG adjusts share and total, while historical over-2.5 frequency adjusts total, both with bounded changes.",
+      } : {
         zh: "lambda0 来自独立强度差和战平压力；lambda_league=(1-wL)*lambda0+wL*leagueAvg；lambda_final=(1-wF)*lambda_league+wF*formLambda。",
         en: "lambda0 comes from independent strength edge and draw pressure; lambda_league=(1-wL)*lambda0+wL*leagueAvg; lambda_final=(1-wF)*lambda_league+wF*formLambda.",
       },
@@ -2622,6 +2626,12 @@ function buildProbabilityCalculationTrace(match, context) {
         finalHome: formulaNumber(context.homeLambda, 2),
         finalAway: formulaNumber(context.awayLambda, 2),
       },
+      ...(lambdaBlend.jointGoalFit ? { jointFit: {
+        version: lambdaBlend.jointGoalFit.version,
+        evidenceHash: lambdaBlend.jointGoalFit.evidenceHash,
+        inputs: lambdaBlend.jointGoalFit.inputs,
+        weights: lambdaBlend.jointGoalFit.weights,
+      } } : {}),
     },
     contextSignals: context.contextSignals || null,
     poisson: {
@@ -2753,7 +2763,10 @@ function buildCalculationTraceFromPublishedModel(match, model) {
       },
     },
     expectedGoals: {
-      formula: {
+      formula: lambdaBlend.jointGoalFit ? {
+        zh: "基础进球率先经联赛、近期状态及赛前上下文调整；历史观测 xG 修正主客比例与总量，历史大 2.5 球频率同时修正总量；两项拟合均受幅度上限约束。",
+        en: "League, form and pre-match context set the base rates. Observed historical xG adjusts share and total, while historical over-2.5 frequency adjusts total, both with bounded changes.",
+      } : {
         zh: "lambda0 来自独立强度差和战平压力；lambda_league=(1-wL)*lambda0+wL*leagueAvg；lambda_final=(1-wF)*lambda_league+wF*formLambda。",
         en: "lambda0 comes from independent strength edge and draw pressure; lambda_league=(1-wL)*lambda0+wL*leagueAvg; lambda_final=(1-wF)*lambda_league+wF*formLambda.",
       },
@@ -2771,6 +2784,12 @@ function buildCalculationTraceFromPublishedModel(match, model) {
         finalHome: formulaNumber(finalHomeLambda, 2),
         finalAway: formulaNumber(finalAwayLambda, 2),
       },
+      ...(lambdaBlend.jointGoalFit ? { jointFit: {
+        version: lambdaBlend.jointGoalFit.version,
+        evidenceHash: lambdaBlend.jointGoalFit.evidenceHash,
+        inputs: lambdaBlend.jointGoalFit.inputs,
+        weights: lambdaBlend.jointGoalFit.weights,
+      } } : {}),
     },
     poisson: {
       formula: {
@@ -2876,7 +2895,7 @@ function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLamb
     contextSignals,
   });
   return {
-    version: "independent-elo-form-poisson-v13",
+    version: lambdaBlend?.jointGoalFit ? "independent-elo-form-poisson-v14-joint-goals" : "independent-elo-form-poisson-v13",
     ensemblePolicy: blended.ensemblePolicy,
     competitionContext: require("./competitionModelContext.cjs").competitionModelContext(match),
     generatedAt: predictionNowIso(),
@@ -2886,7 +2905,7 @@ function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLamb
       scoreFeedback: scoreOutcomeFeedback.weight,
     },
     calculationTrace,
-    inputUsage: [lambdaBlend?.formUsage, blended.usage].filter(Boolean),
+    inputUsage: [lambdaBlend?.formUsage, lambdaBlend?.jointFitUsage, blended.usage].filter(Boolean),
     dynamicCalibration: {
       version: match.modelCalibration?.version || "none",
       profileKey: calibration.profileKey,
@@ -2961,6 +2980,7 @@ function buildProbabilityModel(match, probabilities, hhadProbabilities, homeLamb
       contextTotalLambdaAdjustment: lambdaBlend.contextTotalLambdaAdjustment || 0,
       contextHomeLambdaAdjustment: lambdaBlend.contextHomeLambdaAdjustment || 0,
       contextAwayLambdaAdjustment: lambdaBlend.contextAwayLambdaAdjustment || 0,
+      jointGoalFit: lambdaBlend.jointGoalFit || null,
     } : undefined,
     oneXTwo: {
       market: asPercentTriplet(probabilities),
@@ -11351,10 +11371,22 @@ function buildModelOnlyProbabilityModel(match, probabilities, homeLambda, awayLa
       reason: lambdaContextAdjustment.reason || "attack-intent",
     };
   }
-  const contextGoalAdjustment = applyContextGoalAdjustments(over25Probability, bttsProbability, contextSignals);
-  over25Probability = contextGoalAdjustment.over25;
-  bttsProbability = contextGoalAdjustment.btts;
-  contextSignals.goalAdjustment = contextGoalAdjustment.meta;
+  const jointGoalFit = fitJointGoalRates(match, homeLambda, awayLambda, predictionNowIso());
+  if (jointGoalFit) {
+    homeLambda = jointGoalFit.output.home;
+    awayLambda = jointGoalFit.output.away;
+    rawGoalModel = rawGoalProbabilities(homeLambda, awayLambda);
+    over25Probability = rawGoalModel.over25;
+    bttsProbability = rawGoalModel.btts;
+    goalCalibration = { over25: over25Probability, btts: bttsProbability,
+      meta: { applied: true, reasons: ["joint-goal-fit"], version: jointGoalFit.version } };
+    contextSignals.goalAdjustment = { applied: false, reasons: ["joint-goal-fit"], over25Shift: 0, bttsShift: 0 };
+  } else {
+    const contextGoalAdjustment = applyContextGoalAdjustments(over25Probability, bttsProbability, contextSignals);
+    over25Probability = contextGoalAdjustment.over25;
+    bttsProbability = contextGoalAdjustment.btts;
+    contextSignals.goalAdjustment = contextGoalAdjustment.meta;
+  }
   const scoreCalibration = scoreCalibrationForMatch(match);
   const lambdaBlend = {
     marketHomeLambda: homeLambda,
@@ -11369,6 +11401,10 @@ function buildModelOnlyProbabilityModel(match, probabilities, homeLambda, awayLa
     contextTotalLambdaAdjustment: lambdaContextAdjustment.totalAdjustment,
     contextHomeLambdaAdjustment: lambdaContextAdjustment.homeAdjustment,
     contextAwayLambdaAdjustment: lambdaContextAdjustment.awayAdjustment,
+    ...(jointGoalFit ? {
+      jointGoalFit,
+      jointFitUsage: require("../src/services/modelInputUsage.cjs").recordModelInputUsage(match, "joint-goal-fit", { fit: jointGoalFit }),
+    } : {}),
   };
   const probabilityModel = buildProbabilityModel(
     match,
@@ -11386,7 +11422,7 @@ function buildModelOnlyProbabilityModel(match, probabilities, homeLambda, awayLa
   return {
     probabilityModel: {
       ...probabilityModel,
-      version: "model-only-no-official-sp-v4",
+      version: jointGoalFit ? "model-only-no-official-sp-v5-joint-goals" : "model-only-no-official-sp-v4",
       basis: {
         zh: "未开售模型参考：官方 SP/让球 SP 暂无时，按球队强弱、历史样本、赛程与 Poisson 比分分布生成参考推荐；不作为串关 SP。",
         en: "Model-only reference while official SP/handicap SP is unavailable. It uses team strength, historical samples, schedule context, and Poisson score distribution, and is not a parlay SP."
@@ -11561,6 +11597,8 @@ function predictionSetWithoutOfficialOddsInternal(match) {
     probabilityModel: {
       ...modelBundle.probabilityModel,
       version: "model-only-unified-v67",
+      ...(modelBundle.probabilityModel.version === "model-only-no-official-sp-v5-joint-goals"
+        ? { baseModelVersion: modelBundle.probabilityModel.version } : {}),
       unifiedPosterior: {
         version: "v67-model-only-execution-clock-evidence-led-poisson",
         generatedAt: predictionNowIso(),
@@ -11713,10 +11751,28 @@ function predictionSetInternal(match) {
     };
     score = projectedScore(homeLambda, awayLambda);
   }
-  const contextGoalAdjustment = applyContextGoalAdjustments(over25Probability, bttsProbability, contextSignals);
-  over25Probability = contextGoalAdjustment.over25;
-  bttsProbability = contextGoalAdjustment.btts;
-  contextSignals.goalAdjustment = contextGoalAdjustment.meta;
+  const jointGoalFit = fitJointGoalRates(match, homeLambda, awayLambda, predictionNowIso());
+  if (jointGoalFit) {
+    homeLambda = jointGoalFit.output.home;
+    awayLambda = jointGoalFit.output.away;
+    lambdaBlend.homeLambda = homeLambda;
+    lambdaBlend.awayLambda = awayLambda;
+    lambdaBlend.jointGoalFit = jointGoalFit;
+    lambdaBlend.jointFitUsage = require("../src/services/modelInputUsage.cjs").recordModelInputUsage(match, "joint-goal-fit", { fit: jointGoalFit });
+    rawGoalModel = rawGoalProbabilities(homeLambda, awayLambda);
+    totalLambda = rawGoalModel.totalLambda;
+    over25Probability = rawGoalModel.over25;
+    bttsProbability = rawGoalModel.btts;
+    goalCalibration = { over25: over25Probability, btts: bttsProbability,
+      meta: { applied: true, reasons: ["joint-goal-fit"], version: jointGoalFit.version } };
+    contextSignals.goalAdjustment = { applied: false, reasons: ["joint-goal-fit"], over25Shift: 0, bttsShift: 0 };
+    score = projectedScore(homeLambda, awayLambda);
+  } else {
+    const contextGoalAdjustment = applyContextGoalAdjustments(over25Probability, bttsProbability, contextSignals);
+    over25Probability = contextGoalAdjustment.over25;
+    bttsProbability = contextGoalAdjustment.btts;
+    contextSignals.goalAdjustment = contextGoalAdjustment.meta;
+  }
   const goalsTip = over25Probability >= 0.52 ? "O2.5" : "U2.5";
   const goalsProbability = goalsTip === "O2.5" ? over25Probability : 1 - over25Probability;
   const goalsOdds = Number(clamp(1 / Math.max(goalsProbability, 0.36), 1.2, 2.78).toFixed(2));
