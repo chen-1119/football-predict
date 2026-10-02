@@ -1,0 +1,80 @@
+{
+  "version": "existing-online-form-export-audit-v1",
+  "productionWrites": false,
+  "remoteCalls": 0,
+  "files": [
+    {
+      "file": "C:\\Users\\86188\\Documents\\football\\.codex\\worktrees\\00-integration\\outputs\\history-regression-20261002\\online-sample-v3.json",
+      "sha256": "151a20c0678b89ec41d0555f06149be75182beba0dbc17cd4a1b5a76435470e1",
+      "generationId": "g-79b3788d9a6029e3dccaeb3366d04ef0da49a8c01d24457492fe0c370a867273",
+      "capturedAt": "2026-10-02T13:50:16.968894+00:00",
+      "sourceFiles": [
+        {
+          "bytes": 127349227,
+          "core": true,
+          "path": "matches-history.json",
+          "rows": 2272,
+          "sha256": "2a7bd9159840871f19d5c63f5067f7e1c4a733044c0a7533f2181def679bc0cd"
+        },
+        {
+          "bytes": 766227110,
+          "core": true,
+          "path": "prediction-snapshots.json",
+          "rows": 5000,
+          "sha256": "57d8c8e2d9dd1a0c2315f3e8701da94a5ac188366166f7505de84b8045bb9f55"
+        }
+      ],
+      "exporterSha256": "6a814406b52e70f532e3edc346d906512b6e49d33a667305792a3a1be9488a7b",
+      "rows": 432,
+      "formStates": {
+        "export-omitted": 355,
+        "not-exported": 53,
+        "retained": 24
+      },
+      "omittedBytes": {
+        "min": 1027,
+        "max": 2150,
+        "total": 638330,
+        "over8192": 0,
+        "over1024": 355
+      }
+    },
+    {
+      "file": "C:\\Users\\86188\\Documents\\football\\.codex\\worktrees\\05-history-regression\\outputs\\history-regression-20261002\\online-sample-v2.json",
+      "sha256": "bf5a64878611af3b0112e4ee7dc5b671c59c2ea80a2c4e100246cff2942491a7",
+      "generationId": "g-79b3788d9a6029e3dccaeb3366d04ef0da49a8c01d24457492fe0c370a867273",
+      "capturedAt": "2026-10-02T13:44:55.308705+00:00",
+      "sourceFiles": [
+        {
+          "bytes": 127349227,
+          "core": true,
+          "path": "matches-history.json",
+          "rows": 2272,
+          "sha256": "2a7bd9159840871f19d5c63f5067f7e1c4a733044c0a7533f2181def679bc0cd"
+        },
+        {
+          "bytes": 766227110,
+          "core": true,
+          "path": "prediction-snapshots.json",
+          "rows": 5000,
+          "sha256": "57d8c8e2d9dd1a0c2315f3e8701da94a5ac188366166f7505de84b8045bb9f55"
+        }
+      ],
+      "exporterSha256": "2e0501ed4e4e6de12d56869dfc660e250a9b2c5d8056ddb08c46411e736d378c",
+      "rows": 432,
+      "formStates": {
+        "not-exported": 432
+      },
+      "omittedBytes": {
+        "min": null,
+        "max": null,
+        "total": 0,
+        "over8192": 0,
+        "over1024": 0
+      }
+    }
+  ],
+  "alreadyRetainedCanonicalMatches": [],
+  "newlyRecoveredRows": 0,
+  "conclusion": "Current exporter has no CLI/env pagination or field-selection controls. PAGE_SIZE is output hash metadata only. Per-row MODEL_INPUT_BYTES and trim thresholds apply before pagination, so re-running unchanged exporter cannot restore omitted form."
+}

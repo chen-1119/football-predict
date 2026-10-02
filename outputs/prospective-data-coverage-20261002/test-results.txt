@@ -1,0 +1,220 @@
+TAP version 13
+# Subtest: nanosecond clock comparison preserves original ordering across timezone offsets
+ok 1 - nanosecond clock comparison preserves original ordering across timezone offsets
+  ---
+  duration_ms: 1.1792
+  type: 'test'
+  ...
+# Subtest: strict clock rejects invalid value 2026-02-30T10:00:00Z
+ok 2 - strict clock rejects invalid value 2026-02-30T10:00:00Z
+  ---
+  duration_ms: 0.4413
+  type: 'test'
+  ...
+# Subtest: strict clock rejects invalid value 2026-10-02 10:00:00
+ok 3 - strict clock rejects invalid value 2026-10-02 10:00:00
+  ---
+  duration_ms: 0.0892
+  type: 'test'
+  ...
+# Subtest: strict clock rejects invalid value 2026-10-02T24:00:00Z
+ok 4 - strict clock rejects invalid value 2026-10-02T24:00:00Z
+  ---
+  duration_ms: 0.0728
+  type: 'test'
+  ...
+# Subtest: strict clock rejects invalid value null
+ok 5 - strict clock rejects invalid value null
+  ---
+  duration_ms: 0.1381
+  type: 'test'
+  ...
+# Subtest: valid declared evidence is retained as immutable shadow receipt with exact raw bytes
+ok 6 - valid declared evidence is retained as immutable shadow receipt with exact raw bytes
+  ---
+  duration_ms: 4.6266
+  type: 'test'
+  ...
+# Subtest: duplicate read after cutoff does not rewrite the original receipt or its first retention time
+ok 7 - duplicate read after cutoff does not rewrite the original receipt or its first retention time
+  ---
+  duration_ms: 2.4846
+  type: 'test'
+  ...
+# Subtest: old caller-declared received/available times cannot backdate a newly saved attachment
+ok 8 - old caller-declared received/available times cannot backdate a newly saved attachment
+  ---
+  duration_ms: 0.6235
+  type: 'test'
+  ...
+# Subtest: synthetic invalid evidence rejects provider after receipt
+ok 9 - synthetic invalid evidence rejects provider after receipt
+  ---
+  duration_ms: 0.4055
+  type: 'test'
+  ...
+# Subtest: synthetic invalid evidence rejects receipt after availability
+ok 10 - synthetic invalid evidence rejects receipt after availability
+  ---
+  duration_ms: 0.4978
+  type: 'test'
+  ...
+# Subtest: synthetic invalid evidence rejects availability after real retention
+ok 11 - synthetic invalid evidence rejects availability after real retention
+  ---
+  duration_ms: 0.2123
+  type: 'test'
+  ...
+# Subtest: synthetic invalid evidence rejects decision before real retention
+ok 12 - synthetic invalid evidence rejects decision before real retention
+  ---
+  duration_ms: 0.2238
+  type: 'test'
+  ...
+# Subtest: synthetic invalid evidence rejects decision one nanosecond beyond cutoff
+ok 13 - synthetic invalid evidence rejects decision one nanosecond beyond cutoff
+  ---
+  duration_ms: 0.1421
+  type: 'test'
+  ...
+# Subtest: synthetic invalid evidence rejects cutoff beyond kickoff
+ok 14 - synthetic invalid evidence rejects cutoff beyond kickoff
+  ---
+  duration_ms: 0.1072
+  type: 'test'
+  ...
+# Subtest: synthetic invalid evidence rejects optional clock reversed
+ok 15 - synthetic invalid evidence rejects optional clock reversed
+  ---
+  duration_ms: 0.101
+  type: 'test'
+  ...
+# Subtest: synthetic invalid evidence rejects missing clock
+ok 16 - synthetic invalid evidence rejects missing clock
+  ---
+  duration_ms: 0.088
+  type: 'test'
+  ...
+# Subtest: synthetic invalid evidence rejects unauthorized source
+ok 17 - synthetic invalid evidence rejects unauthorized source
+  ---
+  duration_ms: 0.07
+  type: 'test'
+  ...
+# Subtest: synthetic invalid evidence rejects missing authorization reference
+ok 18 - synthetic invalid evidence rejects missing authorization reference
+  ---
+  duration_ms: 0.0709
+  type: 'test'
+  ...
+# Subtest: synthetic invalid evidence rejects provider event mismatch
+ok 19 - synthetic invalid evidence rejects provider event mismatch
+  ---
+  duration_ms: 0.0856
+  type: 'test'
+  ...
+# Subtest: synthetic invalid evidence rejects missing event mapping hash
+ok 20 - synthetic invalid evidence rejects missing event mapping hash
+  ---
+  duration_ms: 0.0714
+  type: 'test'
+  ...
+# Subtest: synthetic invalid evidence rejects missing provider identity
+ok 21 - synthetic invalid evidence rejects missing provider identity
+  ---
+  duration_ms: 0.0541
+  type: 'test'
+  ...
+# Subtest: synthetic invalid evidence rejects missing match identity
+ok 22 - synthetic invalid evidence rejects missing match identity
+  ---
+  duration_ms: 0.0513
+  type: 'test'
+  ...
+# Subtest: synthetic invalid evidence rejects result feature name
+ok 23 - synthetic invalid evidence rejects result feature name
+  ---
+  duration_ms: 0.0477
+  type: 'test'
+  ...
+# Subtest: synthetic invalid evidence rejects source credential URL
+ok 24 - synthetic invalid evidence rejects source credential URL
+  ---
+  duration_ms: 0.0699
+  type: 'test'
+  ...
+# Subtest: synthetic invalid evidence rejects hash mismatch
+ok 25 - synthetic invalid evidence rejects hash mismatch
+  ---
+  duration_ms: 0.064
+  type: 'test'
+  ...
+# Subtest: synthetic invalid evidence rejects missing field pointer
+ok 26 - synthetic invalid evidence rejects missing field pointer
+  ---
+  duration_ms: 0.138
+  type: 'test'
+  ...
+# Subtest: declared observed historical xG needs a period before provider observation and cannot be market lambda
+ok 27 - declared observed historical xG needs a period before provider observation and cannot be market lambda
+  ---
+  duration_ms: 0.4235
+  type: 'test'
+  ...
+# Subtest: JSON pointer permits exact nested keys and rejects inherited properties and null values
+ok 28 - JSON pointer permits exact nested keys and rejects inherited properties and null values
+  ---
+  duration_ms: 0.1805
+  type: 'test'
+  ...
+# Subtest: correction creates a new receipt linked to the old receipt hash without changing it
+ok 29 - correction creates a new receipt linked to the old receipt hash without changing it
+  ---
+  duration_ms: 14.0691
+  type: 'test'
+  ...
+# Subtest: mutated receipt time is rejected even if the payload bytes still match
+ok 30 - mutated receipt time is rejected even if the payload bytes still match
+  ---
+  duration_ms: 12.157
+  type: 'test'
+  ...
+# Subtest: retention cannot target public data or any path outside worktree outputs
+ok 31 - retention cannot target public data or any path outside worktree outputs
+  ---
+  duration_ms: 0.2401
+  type: 'test'
+  ...
+# Subtest: frozen feature presence is not a source receipt and omission requests export repair
+ok 32 - frozen feature presence is not a source receipt and omission requests export repair
+  ---
+  duration_ms: 0.542
+  type: 'test'
+  ...
+# Subtest: coverage refuses unverified prior online receipt or raw response
+ok 33 - coverage refuses unverified prior online receipt or raw response
+  ---
+  duration_ms: 0.6287
+  type: 'test'
+  ...
+# Subtest: missing frozen snapshot remains distinct from a confirmed absent field in a snapshot
+ok 34 - missing frozen snapshot remains distinct from a confirmed absent field in a snapshot
+  ---
+  duration_ms: 0.1181
+  type: 'test'
+  ...
+# Subtest: coverage rechecks snapshot clock at nanosecond precision without relaxing original binding
+ok 35 - coverage rechecks snapshot clock at nanosecond precision without relaxing original binding
+  ---
+  duration_ms: 0.2242
+  type: 'test'
+  ...
+1..35
+# tests 35
+# suites 0
+# pass 35
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 143.2522

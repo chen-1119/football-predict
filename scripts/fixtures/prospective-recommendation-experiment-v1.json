@@ -1,0 +1,25 @@
+{
+  "version": "recommendation-selection-diagnostic-spec-v1",
+  "mode": "historical-diagnostic-only",
+  "timeZone": "Asia/Shanghai",
+  "source": {
+    "kind": "verified-online-history-export",
+    "evidenceSha256": "cebb126e0344787c0cfe4be1773a98d473394b1c6d57cfc32c5704c9abc125b9",
+    "expectedRows": 432,
+    "expectedPairedRows": 154,
+    "alreadyInspected": true
+  },
+  "groups": ["agreement", "modelDirection", "modelProbability", "marketFavoriteSp", "league"],
+  "modelProbabilityEdges": [0, 0.4, 0.5, 0.6, 0.7, 1],
+  "marketFavoriteSpEdges": [1, 1.5, 2, 3, null],
+  "bootstrap": {"iterations": 1000, "seed": 20261002, "minRows": 30, "minBlocks": 10},
+  "futureExecution": {
+    "status": "pending-existing-registry-activation-receipt",
+    "registeredAt": null,
+    "activationReceipt": null,
+    "owner": "candidateProspectiveLedger.cjs and candidateCommonCohortShadowG2.cjs",
+    "autoPromotion": false,
+    "backfillHistoricalRows": false,
+    "newCandidateDefinitions": []
+  }
+}

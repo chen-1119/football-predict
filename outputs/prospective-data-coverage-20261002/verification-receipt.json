@@ -1,0 +1,67 @@
+{
+  "version": "prospective-data-coverage-verification-v1",
+  "verifiedAt": "2026-10-02T15:51:55.254Z",
+  "runtime": "v22.22.1",
+  "productionWrites": false,
+  "liveSourceRecaptured": false,
+  "modelPromoted": false,
+  "newLiveFieldReceipts": 0,
+  "originalOnlineInputsUnchanged": true,
+  "sources": [
+    {
+      "path": "C:\\Users\\86188\\Documents\\football\\.codex\\worktrees\\05-history-regression\\outputs\\history-regression-20261002\\online-sample-v3.json",
+      "sha256": "151a20c0678b89ec41d0555f06149be75182beba0dbc17cd4a1b5a76435470e1"
+    },
+    {
+      "path": "C:/Users/86188/.codex/worktrees/football-release-oct02/football/outputs/online-validation-20261002/online-validation-inputs-receipt.json",
+      "sha256": "e6d9c19aebdf561c77449a4d50d1d019b40ea0d375bba0373e40de401901d42b"
+    },
+    {
+      "path": "C:\\Users\\86188\\Documents\\football\\.codex\\worktrees\\05-history-regression\\outputs\\history-regression-20261002\\online-sample-v3.json.remote-response.json",
+      "sha256": "6ed9802d2a9e43930ed5db44a7f7b809145eed8908d8af47770e77a93dddd507"
+    }
+  ],
+  "syntheticTests": {
+    "passed": 35,
+    "failed": 0,
+    "meaning": "Software contract tests only; not model accuracy or live field acquisition evidence."
+  },
+  "realExport": {
+    "envelopeVerified": true,
+    "previousPublicationMatched": true,
+    "rawHashRevalidated": true,
+    "tamperingRejected": true,
+    "funnel": {
+      "selected": 432,
+      "frozenProbabilityScorable": 180,
+      "sameDecisionPaired": 154,
+      "frozenProbabilityCoverage": 0.4166666666666667,
+      "sameDecisionPairedCoverage": 0.35648148148148145,
+      "featureReplayEligible": 0
+    }
+  },
+  "artifacts": [
+    {
+      "path": "scripts/prospectiveDataCoverage.cjs",
+      "sha256": "4772dcff3c653a333cbfacd4e7b0583a25eed2ac828b58cd457ea3e23ddacee3"
+    },
+    {
+      "path": "scripts/prospectiveDataCoverage.test.cjs",
+      "sha256": "56a4d5ee836af29126bf8d8d4c8f755873149ba7280b66d46e4cb368a042d4ea"
+    },
+    {
+      "path": "outputs/prospective-data-coverage-20261002/coverage-final.json",
+      "sha256": "d546952755acc851bc6b6e4a4d2367b4899e1392a14be52a36391136204436a5"
+    },
+    {
+      "path": "outputs/prospective-data-coverage-20261002/test-results.txt",
+      "sha256": "c50275807851ebaa08cbe70b4f809ea7a5c5c8a5409227be2cac631f6bb58f11"
+    }
+  ],
+  "limitations": [
+    "Not deployed or connected to live collectors.",
+    "Local retention and declared authorization do not replace signed collector/source approval.",
+    "Recovered export bytes cannot fabricate historical clocks or change frozen decisions.",
+    "Intermediate coverage.json is superseded by coverage-final.json."
+  ]
+}

@@ -17,7 +17,11 @@ function failureReceipt(result) {
     exitStatus:Number.isSafeInteger(result.status) ? result.status : null,
     receivedAt:new Date().toISOString() };
 }
-function capture({ programFile, outputFile }) {
+function capture(options) {
+  if (!options || typeof options !== 'object' || Array.isArray(options)
+    || Object.keys(options).some(key => !['programFile', 'outputFile', 'featureFocus'].includes(key))) throw Error('EXPORTER_OPTIONS_NOT_ALLOWED');
+  const { programFile, outputFile, featureFocus } = options;
+  if (featureFocus !== undefined && featureFocus !== 'form') throw Error('EXPORT_MODE_NOT_ALLOWED');
   const expectedProgram = path.join(__dirname,'historyRegressionRemote.py');
   if (path.resolve(programFile) !== expectedProgram || fs.realpathSync(programFile) !== fs.realpathSync(expectedProgram)) throw Error('EXPORTER_NOT_ALLOWED');
   const programStat = fs.lstatSync(programFile);
@@ -32,7 +36,7 @@ function capture({ programFile, outputFile }) {
   const source = fs.readFileSync(programFile);
   const result = spawnSync('ssh', ['-p','22', ...buildPinnedSshBaseOptions({
     keyPath:process.env.HISTORY_SSH_KEY || 'C:/Users/86188/.ssh/football-new-20260819', pin}),
-    'ubuntu@'+host, 'sudo -n timeout --signal=TERM --kill-after=5s 110s python3 -'], {input:source, windowsHide:true,
+    'ubuntu@'+host, 'sudo -n timeout --signal=TERM --kill-after=5s 110s python3 -' + (featureFocus === 'form' ? ' --feature-focus=form' : '')], {input:source, windowsHide:true,
     timeout:120000, maxBuffer:12*1024*1024});
   if (result.status !== 0 || result.error) {
     const receipt = failureReceipt(result), failureFile = outputFile + '.failure.json';
@@ -45,7 +49,8 @@ function capture({ programFile, outputFile }) {
   const rawResponse = result.stdout;
   try { document = JSON.parse(new TextDecoder('utf8',{fatal:true}).decode(rawResponse)); } catch { throw Error('INVALID_REMOTE_JSON'); }
   if (rawResponse.length > 10*1024*1024+1 || document.productionWrites !== false || document.ok !== true
-    || document.version !== 'bounded-online-history-export-v1' || document.sameSnapshot !== true
+    || document.version !== (featureFocus === 'form' ? 'bounded-online-history-form-supplement-v1' : 'bounded-online-history-export-v1') || document.sameSnapshot !== true
+    || (featureFocus === 'form' && (document.featureFocus !== 'form' || document.supplementOnly !== true || document.candidateEligible !== false))
     || !Array.isArray(document.rows) || document.rows.length > 500
     || new Set(document.rows.map(row => row.matchId)).size !== document.rows.length
     || rawResponse.toString('utf8').toUpperCase().includes('PRIVATE KEY')) throw Error('INVALID_READ_ONLY_RECEIPT');
@@ -60,9 +65,9 @@ function capture({ programFile, outputFile }) {
 }
 if(require.main===module){
   const args=process.argv.slice(2);
-  if(args.length!==2)throw Error('Usage: node scripts/captureHistoryRegression.cjs scripts/historyRegressionRemote.py OUTPUT.json');
+  if(args.length!==2 && !(args.length===3 && args[2]==='--feature-focus=form'))throw Error('Usage: node scripts/captureHistoryRegression.cjs scripts/historyRegressionRemote.py OUTPUT.json [--feature-focus=form]');
   // Only the reviewed exporter is accepted by the CLI, never arbitrary remote code.
   if(path.resolve(args[0])!==path.join(__dirname,'historyRegressionRemote.py'))throw Error('EXPORTER_NOT_ALLOWED');
-  console.log(JSON.stringify(capture({programFile:path.resolve(args[0]),outputFile:path.resolve(args[1])})));
+  console.log(JSON.stringify(capture({programFile:path.resolve(args[0]),outputFile:path.resolve(args[1]),featureFocus:args[2] ? 'form' : undefined})));
 }
 module.exports={capture, failureReceipt};

@@ -1,7 +1,7 @@
 """Read-only bounded production projection. Fixed window chosen before outcomes.
 No live app imports, database access, uploads or writes. Only immutable files.
 """
-import os, stat, json, hashlib, datetime, collections, codecs, re, math
+import os, stat, json, hashlib, datetime, collections, codecs, re, math, sys
 ROOT = '/var/lib/football-predict/data-generations'
 GENERATION = 'g-79b3788d9a6029e3dccaeb3366d04ef0da49a8c01d24457492fe0c370a867273'
 START = '2026-09-01T00:00:00+08:00'
@@ -11,10 +11,12 @@ MAX_OUTPUT_BYTES, MAX_FILE_BYTES, MAX_ITEM_BYTES = 10*1024*1024, 900*1024*1024, 
 READ_CHUNK = 65536
 SNAPSHOT_SOFT_BYTES, SNAPSHOT_HARD_BYTES, MODEL_INPUT_BYTES = 22000, 32768, 8192
 MODEL_INPUT_KEYS = 'usageSummary oneXTwoFinal market poisson elo form leaguePrior lambdaBlend worldCupPrior dataGaps lineup injuries weather xg scheduleDensity'.split()
+FORM_BYTES = 4096
+FORM_BINDING_KEYS = 'version capturedAt decisionAt sourceCycleId sourceMatchId matchId kickoffTime cutoffTime policyVersion modelVersion featureSnapshotHash'.split()
 REGISTRY = '/opt/football-predict/deploy/light-server/collector-trust-registry.json'
 # Verified against src/services/decisionSnapshot.cjs, not inferred from data.
 DECISION_VERSION = 'candidate-decision-snapshot-v2'
-SAFE_CODES = set('CONTROL_BOUND CONTROL_RACE SOURCE_BOUND SOURCE_RACE FILE_BOUND ITEM_BOUND JSON_SYNTAX JSON_DUPLICATE_KEY JSON_INCOMPLETE JSON_TRAILING_DATA SOURCE_HASH GENERATION_CHANGED MANIFEST_IDENTITY HISTORY_SHAPE PROJECTED_ROW_BOUND OUTPUT_BOUND READ_ONLY_EXPORT_FAILED JSON_NON_FINITE JSON_KEY_BOUND MANIFEST_SHAPE POINTER_SHAPE SOURCE_PATH REGISTRY_INVALID REGISTRY_CHANGED PRIVATE_KEY_FORBIDDEN MANIFEST_HASH'.split())
+SAFE_CODES = set('CONTROL_BOUND CONTROL_RACE SOURCE_BOUND SOURCE_RACE FILE_BOUND ITEM_BOUND JSON_SYNTAX JSON_DUPLICATE_KEY JSON_INCOMPLETE JSON_TRAILING_DATA SOURCE_HASH GENERATION_CHANGED MANIFEST_IDENTITY HISTORY_SHAPE PROJECTED_ROW_BOUND OUTPUT_BOUND READ_ONLY_EXPORT_FAILED JSON_NON_FINITE JSON_KEY_BOUND MANIFEST_SHAPE POINTER_SHAPE SOURCE_PATH REGISTRY_INVALID REGISTRY_CHANGED PRIVATE_KEY_FORBIDDEN MANIFEST_HASH EXPORT_MODE_NOT_ALLOWED'.split())
 
 def unique_object(pairs):
     result={}
@@ -102,6 +104,35 @@ def project_snapshot(row,index):
     if len(encoded(projected))>SNAPSHOT_SOFT_BYTES:trim_input_diagnostics(projected)
     if len(encoded(projected))>SNAPSHOT_HARD_BYTES:trim_input_diagnostics(projected,all_large=True)
     assert len(encoded(projected))<=SNAPSHOT_HARD_BYTES,'PROJECTED_ROW_BOUND'
+    return projected
+
+def feature_focus_argument(args):
+    if not args:return None
+    assert args==['--feature-focus=form'],'EXPORT_MODE_NOT_ALLOWED'
+    return 'form'
+
+def project_form_snapshot(row,index):
+    """Supplement only: keep source bindings without copying results or probabilities."""
+    source_feature=row.get('featureSnapshot')
+    source_inputs=source_feature.get('modelInputs') if isinstance(source_feature,dict) else None
+    present=isinstance(source_inputs,dict) and 'form' in source_inputs
+    value=source_inputs['form'] if present else None
+    raw=encoded(value) if present else None
+    retained=present and value is not None and len(raw)<=FORM_BYTES
+    projected={
+        'inputFileRowIndex':index,'originalObjectCanonicalSha256':sha(encoded(row)),
+        'decisionBinding':pick(row.get('decisionSnapshot'),FORM_BINDING_KEYS),
+        'featureBinding':pick(source_feature,'version capturedAt modelGeneratedAt sourceCycleId modelVersion hash cutoffTime sourceMatchId kickoffTime'.split()),
+        'sourceFeatureCanonicalSha256':sha(encoded(source_feature)) if isinstance(source_feature,dict) else None,
+        'sourceModelInputsCanonicalSha256':sha(encoded(source_inputs)) if isinstance(source_inputs,dict) else None,
+        'form':value if retained else None,
+        'formAudit':{'sourcePresent':present,'sourceNonNull':present and value is not None,
+            'status':'source-absent' if not present else 'source-null' if value is None else 'retained' if retained else 'export-omitted',
+            'canonicalBytes':len(raw) if present else None,'canonicalSha256':sha(raw) if present else None,
+            'maximumBytes':FORM_BYTES},
+        'supplementOnly':True,'candidateEligible':False,
+    }
+    assert len(encoded(projected))<=8192,'PROJECTED_ROW_BOUND'
     return projected
 def identity(s): return (s.st_dev,s.st_ino,s.st_size,s.st_mtime_ns,s.st_ctime_ns)
 def small(path,limit=262144):
@@ -199,7 +230,8 @@ class Stream:
             assert identity(self.before)==identity(os.fstat(self.f.fileno()))==identity(os.lstat(self.path)),'SOURCE_RACE'
         finally:self.f.close()
 
-def run():
+def run(feature_focus=None):
+    assert feature_focus in (None,'form'),'EXPORT_MODE_NOT_ALLOWED'
     began=utc();pointer=small(ROOT+'/current.json');p=strict_json(pointer)
     assert isinstance(p,dict) and isinstance(p.get('sourceCycleId'),str) and re.fullmatch('[a-f0-9]{64}',str(p.get('manifestHash',''))),'POINTER_SHAPE'
     assert p['generationId']==GENERATION,'GENERATION_CHANGED'
@@ -261,16 +293,19 @@ def run():
         statrow['preCutoffDecisions']+=1
         rank=(at,d.get('version')==DECISION_VERSION,-index)
         if mid in best and rank<=best[mid][0]:continue
-        best[mid]=(rank,project_snapshot(row,index))
+        best[mid]=(rank,project_form_snapshot(row,index) if feature_focus=='form' else project_snapshot(row,index))
     if type(entries['prediction-snapshots.json'].get('rows')) is int:assert snap_counts['rows']==entries['prediction-snapshots.json']['rows'],'HISTORY_SHAPE'
     rows=[{'matchId':mid,'market':'HAD','match':matches[mid],'snapshot':best.get(mid,(None,None))[1],
            'snapshotSelectionAudit':dict(per_match[mid]),'conflictingMatchRows':mid in conflicts} for mid in selected]
     # Reserve room for the envelope while retaining every chosen match and
     # decision. Availability survives any input truncation in a separate audit.
-    if len(encoded(rows))>MAX_OUTPUT_BYTES-524288:
+    if feature_focus=='form':
+        for row in rows:
+            row['match']=pick(row['match'],'id sourceMatchId kickoffTime inputFileRowIndex originalObjectCanonicalSha256'.split())
+    if feature_focus is None and len(encoded(rows))>MAX_OUTPUT_BYTES-524288:
         for row in rows:
             if row['snapshot']:trim_input_diagnostics(row['snapshot'])
-    if len(encoded(rows))>MAX_OUTPUT_BYTES-524288:
+    if feature_focus is None and len(encoded(rows))>MAX_OUTPUT_BYTES-524288:
         for row in rows:
             if row['snapshot']:trim_input_diagnostics(row['snapshot'],all_large=True)
     files=[entries[n] for n in ['matches-history.json','prediction-snapshots.json']]
@@ -290,10 +325,16 @@ def run():
                             'Object hashes use Python canonical JSON; input file hashes are original bytes.',
                             'Source-absent/source-null and export-omitted inputs are distinct in featureProjectionAudit; no current features or local historical seeds substituted.',
                             'Signed decision evidence is retained; snapshot soft limit trims diagnostics, hard limit or total output overflow fails the entire export without changing the sample.']}
+    if feature_focus=='form':
+        result['version']='bounded-online-history-form-supplement-v1'
+        result['featureFocus']='form';result['supplementOnly']=True;result['candidateEligible']=False
+        result['limitations']=['Read-only form supplement; never a standalone admission or training input.',
+            'Every field must be joined to the original capture by generation, source-file hashes, source row identity and canonical hashes.',
+            'Recovering frozen values does not supply missing field-level availability timestamps or permit model promotion.']
     out=encoded(result);assert len(out)+1<=MAX_OUTPUT_BYTES,'OUTPUT_BOUND';assert b'PRIVATE KEY' not in out.upper(),'PRIVATE_KEY_FORBIDDEN';print(out.decode('utf8'))
 
 if __name__=='__main__':
-    try:run()
+    try:run(feature_focus_argument(sys.argv[1:]))
     except Exception as error:
         print(json.dumps({'ok':False,'productionWrites':False,'errorClass':type(error).__name__,'code':str(error) if str(error) in SAFE_CODES else 'READ_ONLY_EXPORT_FAILED'}))
         raise SystemExit(1)
