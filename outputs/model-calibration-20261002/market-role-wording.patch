@@ -1,0 +1,9 @@
+diff --git a/scripts/syncData.cjs b/scripts/syncData.cjs
+--- a/scripts/syncData.cjs
++++ b/scripts/syncData.cjs
+@@ -269,1 +269,1 @@
+-    "独立概率先由 Elo 强度、Poisson 比分模型、近一年攻防、长期历史样本和赛程密度生成；世界杯先验仅在安全校验通过时参与，官方 SP 只作为市场校验和价值差参考。",
++    "基础概率结合球队强度、Elo、Poisson 与市场概率；世界杯先验仅在安全校验通过时参与。官方 SP 还用于后验混合、市场风控与价值比较；各阶段系数以计算记录为准，系数不等于最终贡献比例。",
+@@ -276,1 +276,1 @@
+-    "Independent probabilities are generated first from Elo strength, Poisson score modelling, last-year attack/defense form, long-run history, and schedule density; World Cup priors participate only after safety validation, while official SP is only market validation and value-gap reference.",
++    "Base probabilities combine team strength, Elo, Poisson and market probabilities; World Cup priors participate only after safety validation. Official SP also informs posterior blending, market risk checks and value comparisons. Stage coefficients follow calculation records and are not final contribution shares.",
