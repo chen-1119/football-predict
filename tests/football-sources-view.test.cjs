@@ -1,0 +1,11 @@
+'use strict';
+const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),Module=require('node:module');
+const ts=require('typescript'),{renderToStaticMarkup}=require('react-dom/server');
+const file=path.join(__dirname,'../src/components/predictions/SupplementaryFootballFacts.tsx');
+const compiled=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;
+const mod=new Module(file,module);mod.filename=file;mod.require=id=>id.endsWith('.css')?{}:require(id);mod._compile(compiled,file);
+const {SupplementaryFootballFacts}=mod.exports;
+const render=data=>renderToStaticMarkup(SupplementaryFootballFacts({data,language:'zh'}));
+test('disabled new source is backwards-compatible without an empty replacement panel',()=>assert.equal(render(undefined),''));
+test('unknown quantities display a dash, never artificial zero averages',()=>{const html=render({fields:{form:{status:'available',expiresAt:new Date(Date.now()+60000).toISOString(),observedAt:new Date().toISOString(),provider:'football-data.org',data:{home:{sampleSize:0,goalsForAvg:null,goalsAgainstAvg:null},away:{sampleSize:0}}}}});assert.ok(html.includes('football-data.org'));assert.ok(html.includes('—'));assert.ok(!html.includes('0.00'));});
+test('expired source values are not rendered as available even if backend state is cached',()=>{const html=render({fields:{weather:{status:'available',expiresAt:new Date(Date.now()-1000).toISOString(),data:{temperatureC:99}}}});assert.ok(html.includes('资料已过期'));assert.ok(!html.includes('99'));});

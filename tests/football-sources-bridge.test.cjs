@@ -1,0 +1,15 @@
+'use strict';
+const {test}=require('node:test'),assert=require('node:assert/strict');
+const {createWebsiteReader,createWebsiteHandler}=require('../collectors/leisu-prematch/website-reader.cjs');
+const {runCycle}=require('../collectors/football-sources/run.cjs');
+const NOW=Date.parse('2026-09-27T03:00:00Z');
+const match={id:'sporttery_123',sourceMatchId:'123',homeTeamId:'h',awayTeamId:'a',homeTeamName:'Home',awayTeamName:'Away',status:'SCHEDULED',leagueName:'德甲',kickoffTime:'2026-09-27T10:00:00Z'};
+const supplementary={status:'available',fields:{fixture:{data:{home:'Home',away:'Away'},status:'available'}},predictionEligible:false};
+test('new facts survive disabled Leisu and do not call the fixture store twice',async()=>{let n=0;const read=createWebsiteReader({readFixture:async()=>{n++;return match;},sourceReader:async()=>supplementary});const v=await read(match.id);assert.equal(v.status,'partial');assert.deepEqual(v.supplementary,supplementary);assert.equal(n,1);});
+test('new PostgreSQL source failure remains isolated from legacy evidence response',async()=>{const read=createWebsiteReader({readFixture:async()=>match,sourceReader:async()=>{throw Error('private database URL');}});const v=await read(match.id);assert.equal(v.supplementary.status,'source-store-unavailable');assert.ok(!JSON.stringify(v).includes('private database'));});
+test('unauthorized source read performs zero DB reads',async()=>{let reads=0;const handle=createWebsiteHandler({readFixture:async()=>{reads++;return match;},sourceReader:async()=>supplementary,authorize:async()=>false});const res={writeHead(n){this.status=n;},end(b){this.body=b;}};await handle({method:'GET'},res,match.id);assert.equal(res.status,401);assert.equal(reads,0);});
+test('end-to-end cycle publishes OpenLiga reference facts despite FD 403',async()=>{const caches=new Map(),views=[];const repo={current:async()=>[match],caches:async()=>[...caches.values()],getCache:async k=>caches.get(k),reserve:async()=>({allowed:true}),failure:async()=>{},save:async c=>caches.set(c.key,c),saveView:async(m,v)=>{views.push(v);return true;}};
+  const raw=[{matchID:1,leagueShortcut:'bl1',leagueSeason:2026,team1:{teamId:10,teamName:'Home'},team2:{teamId:20,teamName:'Away'},matchDateTimeUTC:match.kickoffTime,matchIsFinished:false,matchResults:[]}];
+  const result=await runCycle(repo,{now:()=>NOW,sleep:async()=>{},footballDataKey:'test',fetchImpl:async url=>url.includes('football-data.org')?new Response('',{status:403}):new Response(JSON.stringify(raw))});
+  assert.equal(result.published,1);assert.equal(views[0].fields.fixture.provider,'openligadb');assert.equal(result.attempts.some(a=>a.state==='access-restricted'),true);
+});
