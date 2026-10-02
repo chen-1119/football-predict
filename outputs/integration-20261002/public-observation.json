@@ -1,0 +1,119 @@
+{
+  "version": "release-quality-public-observation-v1",
+  "startedAt": "2026-10-02T14:25:01.580Z",
+  "completedAt": "2026-10-02T14:25:07.062Z",
+  "baseUrl": "https://134.175.132.183",
+  "publicObservationOk": true,
+  "checks": {
+    "healthReadable": true,
+    "frontendIdentityStable": true,
+    "frontendAccepted": true,
+    "exactIndexMatchesHealth": true,
+    "referencedAssetsReadable": true,
+    "anonymousProtectedEndpointsDenied": true,
+    "publicationStable": true
+  },
+  "frontendRelease": {
+    "version": "frontend-release-state-v1",
+    "kind": "frontend-only",
+    "phase": "accepted",
+    "runtimeSha256": "4ffe4a6f7328d68b6084b8ef2d51c399306b18e78d05abea9db4566a555f9042",
+    "runtimeSequence": 785,
+    "frontendSha256": "eef4d05777bbe03818b38780c1c26be474e9a09154e8475de9a0520998139f72",
+    "frontendSequence": 787,
+    "indexSha256": "ad35133366c97a22ca8ffbbefcaccf077c48f23789376c6438442922bbbe2ca5",
+    "distTreeHash": "f9966252e50c54bfba2bbd291347576a69429dcf6f571375d7a2aa5fba9261a2",
+    "acceptanceSha256": "a7cc5188038e808bd09126d8d58a00ccc6b01c45bb71687aa3b70cd439bb14ad",
+    "available": true,
+    "consistent": true
+  },
+  "readiness": {
+    "serviceOk": true,
+    "dataFresh": false,
+    "sourceHealthOk": false,
+    "recommendationReliable": false
+  },
+  "publication": {
+    "mode": "active-generation",
+    "generationId": "g-79b3788d9a6029e3dccaeb3366d04ef0da49a8c01d24457492fe0c370a867273",
+    "manifestHash": "79b3788d9a6029e3dccaeb3366d04ef0da49a8c01d24457492fe0c370a867273",
+    "sourceCycleId": "sporttery-full-sync:2026-09-30T15:34:00.845Z",
+    "committedAt": "2026-09-30T15:52:07.943Z"
+  },
+  "index": {
+    "status": 200,
+    "bytes": 1129,
+    "sha256": "ad35133366c97a22ca8ffbbefcaccf077c48f23789376c6438442922bbbe2ca5"
+  },
+  "assetChecks": [
+    {
+      "pathname": "/assets/index-3p0UqDD9.js",
+      "status": 200,
+      "bytes": 330667,
+      "sha256": "4ed19715e07ea101f48a8955f9cb522217e070ff447b950e55baa975829fa8af"
+    },
+    {
+      "pathname": "/assets/jsx-runtime-BF6S49EV.js",
+      "status": 200,
+      "bytes": 8408,
+      "sha256": "6ed7416c915e185e73374bf284befc5f202ef32181e7815e51b6d13555021d33"
+    },
+    {
+      "pathname": "/assets/index-DCcx4eav.css",
+      "status": 200,
+      "bytes": 296052,
+      "sha256": "2f324650cda89c90c92a3793c797d3fd4b6a3eab2b13c17896fad546c95b70f1"
+    }
+  ],
+  "protectedChecks": [
+    {
+      "pathname": "/api/v1/matches/current?view=list",
+      "status": 401,
+      "bytes": 43,
+      "sha256": "106b5c0058280e01526de5dce8d280caaf14e074e1ff6a4e33e00c4f59dfd833",
+      "denied": true,
+      "businessPayloadObserved": false
+    },
+    {
+      "pathname": "/api/v1/matches/sporttery_2041790",
+      "status": 401,
+      "bytes": 43,
+      "sha256": "106b5c0058280e01526de5dce8d280caaf14e074e1ff6a4e33e00c4f59dfd833",
+      "denied": true,
+      "businessPayloadObserved": false
+    },
+    {
+      "pathname": "/api/v1/model/evaluation?detail=admin",
+      "status": 401,
+      "bytes": 35,
+      "sha256": "e68751dab3b8f3d23102ee17146c3438164fc2821bfe882f1bcce7bd9635af1f",
+      "denied": true,
+      "businessPayloadObserved": false
+    },
+    {
+      "pathname": "/api/v1/daily-featured-combos",
+      "status": 401,
+      "bytes": 43,
+      "sha256": "106b5c0058280e01526de5dce8d280caaf14e074e1ff6a4e33e00c4f59dfd833",
+      "denied": true,
+      "businessPayloadObserved": false
+    },
+    {
+      "pathname": "/data/matches-current.json",
+      "status": 410,
+      "bytes": 94,
+      "sha256": "dadddfbe77252bf7cc214267155fd6f7f8ae79579a24372e1b8fe330432e5851",
+      "denied": true,
+      "businessPayloadObserved": false
+    }
+  ],
+  "notVerified": [
+    "signed acceptance receipt and signed asset hash binding",
+    "server/worker PID and process start continuity",
+    "authenticated live list/detail parity",
+    "official current source readiness",
+    "full release preflight gates"
+  ],
+  "productionWrites": 0,
+  "deploymentAuthorized": false
+}
