@@ -1,0 +1,397 @@
+TAP version 13
+# Subtest: real 05 receipt: file hashes, generation, admission, metrics and chronology pass independently
+ok 1 - real 05 receipt: file hashes, generation, admission, metrics and chronology pass independently
+  ---
+  duration_ms: 0.939
+  type: 'test'
+  ...
+# Subtest: independent report negative: different event with unchanged row count
+ok 2 - independent report negative: different event with unchanged row count
+  ---
+  duration_ms: 498.2736
+  type: 'test'
+  ...
+# Subtest: independent report negative: duplicate review snapshot counted independently
+ok 3 - independent report negative: duplicate review snapshot counted independently
+  ---
+  duration_ms: 506.1056
+  type: 'test'
+  ...
+# Subtest: independent report negative: different decision in market comparison
+ok 4 - independent report negative: different decision in market comparison
+  ---
+  duration_ms: 504.1834
+  type: 'test'
+  ...
+# Subtest: independent report negative: different market time in saved admission
+ok 5 - independent report negative: different market time in saved admission
+  ---
+  duration_ms: 557.206
+  type: 'test'
+  ...
+# Subtest: independent report negative: different odds in saved paired sample
+ok 6 - independent report negative: different odds in saved paired sample
+  ---
+  duration_ms: 498.2262
+  type: 'test'
+  ...
+# Subtest: independent report negative: missing frozen probability
+ok 7 - independent report negative: missing frozen probability
+  ---
+  duration_ms: 500.7534
+  type: 'test'
+  ...
+# Subtest: independent report negative: excluded events silently removed from denominator
+ok 8 - independent report negative: excluded events silently removed from denominator
+  ---
+  duration_ms: 477.1242
+  type: 'test'
+  ...
+# Subtest: independent report negative: missing-data funnel reason changed
+ok 9 - independent report negative: missing-data funnel reason changed
+  ---
+  duration_ms: 486.8527
+  type: 'test'
+  ...
+# Subtest: independent report negative: model Brier altered
+ok 10 - independent report negative: model Brier altered
+  ---
+  duration_ms: 480.7937
+  type: 'test'
+  ...
+# Subtest: independent report negative: market log loss altered
+ok 11 - independent report negative: market log loss altered
+  ---
+  duration_ms: 477.5952
+  type: 'test'
+  ...
+# Subtest: independent report negative: reliability bin inflated
+ok 12 - independent report negative: reliability bin inflated
+  ---
+  duration_ms: 479.2238
+  type: 'test'
+  ...
+# Subtest: independent report negative: paired confidence interval changed
+ok 13 - independent report negative: paired confidence interval changed
+  ---
+  duration_ms: 491.2405
+  type: 'test'
+  ...
+# Subtest: independent report negative: 154 relabeled as original strict 145
+ok 14 - independent report negative: 154 relabeled as original strict 145
+  ---
+  duration_ms: 499.3916
+  type: 'test'
+  ...
+# Subtest: independent report negative: known history relabeled prospective
+ok 15 - independent report negative: known history relabeled prospective
+  ---
+  duration_ms: 484.5793
+  type: 'test'
+  ...
+# Subtest: independent report negative: test event inserted in training membership
+ok 16 - independent report negative: test event inserted in training membership
+  ---
+  duration_ms: 474.5218
+  type: 'test'
+  ...
+# Subtest: independent report negative: training result readiness backfilled
+ok 17 - independent report negative: training result readiness backfilled
+  ---
+  duration_ms: 484.1547
+  type: 'test'
+  ...
+# Subtest: independent report negative: insufficient training selects candidate
+ok 18 - independent report negative: insufficient training selects candidate
+  ---
+  duration_ms: 498.4851
+  type: 'test'
+  ...
+# Subtest: independent report negative: final-test tuning claimed
+ok 19 - independent report negative: final-test tuning claimed
+  ---
+  duration_ms: 530.2583
+  type: 'test'
+  ...
+# Subtest: independent report negative: replay relabeled published achievement
+ok 20 - independent report negative: replay relabeled published achievement
+  ---
+  duration_ms: 597.8404
+  type: 'test'
+  ...
+# Subtest: raw-response mutation cannot pass the saved transport proof
+ok 21 - raw-response mutation cannot pass the saved transport proof
+  ---
+  duration_ms: 61.9251
+  type: 'test'
+  ...
+# Subtest: duplicate event remains rejected after rebinding transport bytes and changing snapshot ID
+ok 22 - duplicate event remains rejected after rebinding transport bytes and changing snapshot ID
+  ---
+  duration_ms: 173.6422
+  type: 'test'
+  ...
+# Subtest: real-row negative: missing probability
+ok 23 - real-row negative: missing probability
+  ---
+  duration_ms: 2.9694
+  type: 'test'
+  ...
+# Subtest: real-row negative: market provider time after cutoff
+ok 24 - real-row negative: market provider time after cutoff
+  ---
+  duration_ms: 0.9657
+  type: 'test'
+  ...
+# Subtest: real-row negative: market receipt time after kickoff
+ok 25 - real-row negative: market receipt time after kickoff
+  ---
+  duration_ms: 1.0761
+  type: 'test'
+  ...
+# Subtest: real-row negative: different-event wrapper
+ok 26 - real-row negative: different-event wrapper
+  ---
+  duration_ms: 2.5126
+  type: 'test'
+  ...
+# Subtest: real-row negative: review phase reused as prematch
+ok 27 - real-row negative: review phase reused as prematch
+  ---
+  duration_ms: 1.8796
+  type: 'test'
+  ...
+# Subtest: changing result receipt to an earlier unproved time cannot silently become a training label
+ok 28 - changing result receipt to an earlier unproved time cannot silently become a training label
+  ---
+  duration_ms: 1.7631
+  type: 'test'
+  ...
+# Subtest: same-match replay duplicate cannot inflate samples
+ok 29 - same-match replay duplicate cannot inflate samples
+  ---
+  duration_ms: 1.3353
+  type: 'test'
+  ...
+# Subtest: admission and scoring leave frozen input bytes unchanged
+ok 30 - admission and scoring leave frozen input bytes unchanged
+  ---
+  duration_ms: 27.4281
+  type: 'test'
+  ...
+# Subtest: synthetic positive control: explicit valid feature adapter gets separated stage inputs without result in predict
+ok 31 - synthetic positive control: explicit valid feature adapter gets separated stage inputs without result in predict
+  ---
+  duration_ms: 5.523
+  type: 'test'
+  ...
+# Subtest: synthetic known-good rejection: availableAt after decision is blocked
+ok 32 - synthetic known-good rejection: availableAt after decision is blocked
+  ---
+  duration_ms: 3.2986
+  type: 'test'
+  ...
+# Subtest: synthetic required rejection: future observed/received clocks cannot be hidden by an old availableAt
+not ok 33 - synthetic required rejection: future observed/received clocks cannot be hidden by an old availableAt
+  ---
+  duration_ms: 4.474
+  type: 'test'
+  location: 'C:\\Users\\86188\\Documents\\football\\.codex\\worktrees\\04-quality-release\\tests\\quality-history-interface.test.cjs:121:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Future provider/receipt feature times passed through despite being later than decision, cutoff and kickoff
+    
+    true !== false
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: false
+  actual: true
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (C:\Users\86188\Documents\football\.codex\worktrees\04-quality-release\tests\quality-history-interface.test.cjs:127:10)
+    Test.runInAsyncScope (node:async_hooks:226:14)
+    Test.run (node:internal/test_runner/test:1201:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+    Test.postRun (node:internal/test_runner/test:1330:19)
+    Test.run (node:internal/test_runner/test:1258:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:831:7)
+  ...
+# Subtest: synthetic required rejection: result-derived feature name resultObservedAt
+not ok 34 - synthetic required rejection: result-derived feature name resultObservedAt
+  ---
+  duration_ms: 4.1477
+  type: 'test'
+  location: 'C:\\Users\\86188\\Documents\\football\\.codex\\worktrees\\04-quality-release\\tests\\quality-history-interface.test.cjs:129:115'
+  failureType: 'testCodeFailure'
+  error: |-
+    Forbidden derived feature resultObservedAt entered the adapter and remained selectable
+    
+    true !== false
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: false
+  actual: true
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (C:\Users\86188\Documents\football\.codex\worktrees\04-quality-release\tests\quality-history-interface.test.cjs:131:10)
+    Test.runInAsyncScope (node:async_hooks:226:14)
+    Test.run (node:internal/test_runner/test:1201:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+    Test.postRun (node:internal/test_runner/test:1330:19)
+    Test.run (node:internal/test_runner/test:1258:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:831:7)
+  ...
+# Subtest: synthetic required rejection: result-derived feature name finalScore
+ok 35 - synthetic required rejection: result-derived feature name finalScore
+  ---
+  duration_ms: 3.0949
+  type: 'test'
+  ...
+# Subtest: synthetic required rejection: result-derived feature name finalScoreHome
+not ok 36 - synthetic required rejection: result-derived feature name finalScoreHome
+  ---
+  duration_ms: 3.3425
+  type: 'test'
+  location: 'C:\\Users\\86188\\Documents\\football\\.codex\\worktrees\\04-quality-release\\tests\\quality-history-interface.test.cjs:129:115'
+  failureType: 'testCodeFailure'
+  error: |-
+    Forbidden derived feature finalScoreHome entered the adapter and remained selectable
+    
+    true !== false
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: false
+  actual: true
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (C:\Users\86188\Documents\football\.codex\worktrees\04-quality-release\tests\quality-history-interface.test.cjs:131:10)
+    Test.runInAsyncScope (node:async_hooks:226:14)
+    Test.run (node:internal/test_runner/test:1201:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+    Test.postRun (node:internal/test_runner/test:1330:19)
+    Test.run (node:internal/test_runner/test:1258:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:831:7)
+  ...
+# Subtest: synthetic required rejection: result-derived feature name closingOdds
+not ok 37 - synthetic required rejection: result-derived feature name closingOdds
+  ---
+  duration_ms: 3.691
+  type: 'test'
+  location: 'C:\\Users\\86188\\Documents\\football\\.codex\\worktrees\\04-quality-release\\tests\\quality-history-interface.test.cjs:129:115'
+  failureType: 'testCodeFailure'
+  error: |-
+    Forbidden derived feature closingOdds entered the adapter and remained selectable
+    
+    true !== false
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: false
+  actual: true
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (C:\Users\86188\Documents\football\.codex\worktrees\04-quality-release\tests\quality-history-interface.test.cjs:131:10)
+    Test.runInAsyncScope (node:async_hooks:226:14)
+    Test.run (node:internal/test_runner/test:1201:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+    Test.postRun (node:internal/test_runner/test:1330:19)
+    Test.run (node:internal/test_runner/test:1258:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:831:7)
+  ...
+# Subtest: synthetic required rejection: result-derived feature name postMatchRating
+not ok 38 - synthetic required rejection: result-derived feature name postMatchRating
+  ---
+  duration_ms: 3.3544
+  type: 'test'
+  location: 'C:\\Users\\86188\\Documents\\football\\.codex\\worktrees\\04-quality-release\\tests\\quality-history-interface.test.cjs:129:115'
+  failureType: 'testCodeFailure'
+  error: |-
+    Forbidden derived feature postMatchRating entered the adapter and remained selectable
+    
+    true !== false
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: false
+  actual: true
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (C:\Users\86188\Documents\football\.codex\worktrees\04-quality-release\tests\quality-history-interface.test.cjs:131:10)
+    Test.runInAsyncScope (node:async_hooks:226:14)
+    Test.run (node:internal/test_runner/test:1201:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+    Test.postRun (node:internal/test_runner/test:1330:19)
+    Test.run (node:internal/test_runner/test:1258:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:831:7)
+  ...
+# Subtest: synthetic required rejection: missing candidateEligible must not grant audited feature authority
+not ok 39 - synthetic required rejection: missing candidateEligible must not grant audited feature authority
+  ---
+  duration_ms: 3.3468
+  type: 'test'
+  location: 'C:\\Users\\86188\\Documents\\football\\.codex\\worktrees\\04-quality-release\\tests\\quality-history-interface.test.cjs:133:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Missing positive field-audit admission was treated as eligible
+    
+    true !== false
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: false
+  actual: true
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (C:\Users\86188\Documents\football\.codex\worktrees\04-quality-release\tests\quality-history-interface.test.cjs:136:10)
+    Test.runInAsyncScope (node:async_hooks:226:14)
+    Test.run (node:internal/test_runner/test:1201:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+    Test.postRun (node:internal/test_runner/test:1330:19)
+    Test.run (node:internal/test_runner/test:1258:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:831:7)
+  ...
+# Subtest: synthetic required rejection: nonexistent dates cannot be silently normalized
+not ok 40 - synthetic required rejection: nonexistent dates cannot be silently normalized
+  ---
+  duration_ms: 1.5541
+  type: 'test'
+  location: 'C:\\Users\\86188\\Documents\\football\\.codex\\worktrees\\04-quality-release\\tests\\quality-history-interface.test.cjs:138:1'
+  failureType: 'testCodeFailure'
+  error: 'Missing expected exception.'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  operator: 'throws'
+  stack: |-
+    TestContext.<anonymous> (C:\Users\86188\Documents\football\.codex\worktrees\04-quality-release\tests\quality-history-interface.test.cjs:140:10)
+    Test.runInAsyncScope (node:async_hooks:226:14)
+    Test.run (node:internal/test_runner/test:1201:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:831:18)
+    Test.postRun (node:internal/test_runner/test:1330:19)
+    Test.run (node:internal/test_runner/test:1258:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:831:7)
+  ...
+# Subtest: synthetic default sample minima stop the adapter rather than auto-promote
+ok 41 - synthetic default sample minima stop the adapter rather than auto-promote
+  ---
+  duration_ms: 2.9191
+  type: 'test'
+  ...
+# Subtest: synthetic overlapping train/calibration windows are rejected
+ok 42 - synthetic overlapping train/calibration windows are rejected
+  ---
+  duration_ms: 0.3529
+  type: 'test'
+  ...
+1..42
+# tests 42
+# suites 0
+# pass 35
+# fail 7
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 16097.9889
