@@ -80,13 +80,29 @@ function collectWorkerPreflight() {
   return { checkedAt: new Date().toISOString(), serviceBefore, serviceAfter: service(), status, processMatches };
 }
 
-function buildReadOnlyWorkerProbe() {
-  return `'use strict';\n${evaluateWorkerPreflight.toString()}\n${collectWorkerPreflight.toString()}\n`
-    + `try { const report=evaluateWorkerPreflight(collectWorkerPreflight()); console.log(JSON.stringify(report)); if(!report.ok)process.exitCode=1; }
+// Frontend releases preserve the installed worker and published generation.
+// Keep collection failures visible while checking the same process identity,
+// status ownership and clocks. All full-release publication gates stay intact.
+function evaluateFrontendWorkerPreflight(observation) {
+  const report = evaluateWorkerPreflight(observation);
+  const dataBlockers = ['worker-latest-official-cycle-failed', 'worker-official-recovery-unproven'];
+  const blockers = report.blockers.filter(code => !dataBlockers.includes(code));
+  return { ...report, releaseKind: 'frontend-only', ok: blockers.length === 0,
+    state: blockers.length ? 'prepare-rejected' : 'prepare-may-continue', blockers,
+    warnings: [...report.warnings, ...report.blockers.filter(code => dataBlockers.includes(code))],
+    officialPublicationRequired: false,
+    scope: 'frontend process check only; collection failures remain unresolved; signed no-data-cutover and all frontend acceptance gates remain mandatory' };
+}
+
+function buildReadOnlyWorkerProbe({ releaseKind = 'full' } = {}) {
+  if (!['full', 'frontend-only'].includes(releaseKind)) throw new Error('unsupported-worker-preflight-release-kind');
+  const evaluator = releaseKind === 'frontend-only' ? 'evaluateFrontendWorkerPreflight' : 'evaluateWorkerPreflight';
+  return `'use strict';\n${evaluateWorkerPreflight.toString()}\n${evaluateFrontendWorkerPreflight.toString()}\n${collectWorkerPreflight.toString()}\n`
+    + `try { const report=${evaluator}(collectWorkerPreflight()); console.log(JSON.stringify(report)); if(!report.ok)process.exitCode=1; }
 catch { console.log(JSON.stringify({version:'release-worker-preflight-v1',ok:false,state:'prepare-rejected',blockers:['worker-probe-unavailable'],readyToCutover:false,productionWrites:0})); process.exitCode=1; }`;
 }
 
-module.exports = { evaluateWorkerPreflight, collectWorkerPreflight, buildReadOnlyWorkerProbe };
+module.exports = { evaluateWorkerPreflight, evaluateFrontendWorkerPreflight, collectWorkerPreflight, buildReadOnlyWorkerProbe };
 if (require.main === module) {
   try {
     const report = evaluateWorkerPreflight(collectWorkerPreflight());
