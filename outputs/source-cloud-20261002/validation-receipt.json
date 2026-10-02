@@ -1,0 +1,64 @@
+{
+  "version": "source-cloud-validation-v1",
+  "date": "2026-10-02",
+  "baseHead": "6fce1805d0d8db0410c71231d6df6ce72ec766cb",
+  "branch": "codex/football-source-cloud",
+  "productionWrites": 0,
+  "productionDeployment": false,
+  "schedulerIntegration": false,
+  "validationInput": "hash-bound published online generation from September 30; not newly collected match data",
+  "receiptPath": "C:/Users/86188/.codex/worktrees/football-release-oct02/football/outputs/online-validation-20261002/online-validation-inputs-receipt.json",
+  "receiptSha256": "e6d9c19aebdf561c77449a4d50d1d019b40ea0d375bba0373e40de401901d42b",
+  "matchesSha256": "a88e3e1502de0f2b9fe761b7c531cb9753a09fd637a61320221c18a9cb6ec7f7",
+  "coverageReportSha256": "97f113e6785868c9098eb3ee105b746df6c6327c5c669c542e3616eb7c8afc8d",
+  "deterministicReportEquality": true,
+  "tests": [
+    {
+      "command": "node --test scripts/verifySourceCloudDiagnostics.cjs",
+      "passed": 15,
+      "failed": 0,
+      "exitCode": 0
+    },
+    {
+      "command": "node --test tests/market-collector-policy.test.cjs",
+      "passed": 8,
+      "failed": 0,
+      "exitCode": 0
+    }
+  ],
+  "historicalSourceDiagnostic": {
+    "receiptPath": "C:/Users/86188/.codex/worktrees/football-release-oct02/football/outputs/release-oct02/source-diagnostics/receipt.json",
+    "receiptSha256": "f2f6d7debc597b36a3c0c7655d33b32305576d5a70194b8381c9453cca62253b",
+    "observedAt": "2026-10-02T11:53:03.088042+00:00",
+    "originalSha256": "55909f3eae91ee0a77f71435f975a9b2fe910c4252ad876bdd0a950cfdac0ec5",
+    "originalHashMatches": true,
+    "notFreshHealthProof": true,
+    "httpStatusAbsentFromSummary": true
+  },
+  "sharedFilesChanged": [],
+  "integrationPatchRequiredForThisBatch": false,
+  "blockers": [
+    "No designated dot/cloud desktop runtime receipt or order/budget",
+    "Raw HTTP response and clock adapter plus persisted scheduler integration pending",
+    "Supplemental raw-field evidence absent in this online export",
+    "New source authorization/shadow validation pending; keep old channels",
+    "Production runtime and freshness gates remain owned by controller"
+  ],
+  "costPlan": {
+    "verifiedScope": "local-deployment-plan-only",
+    "scheduledInvocations": 8928,
+    "extraInvocationsAllowance": 100,
+    "worstCaseExecutionGbSeconds": 135420,
+    "freeQuotaGbSeconds": 400000,
+    "freeQuotaRemainingGbSeconds": 264580,
+    "estimatedExecutionCnyWithFullFreeQuota": 0,
+    "assumptions": [
+      "one timer only",
+      "no retries",
+      "no reserved instances",
+      "no other functions consuming shared free quota",
+      "no additional paid services",
+      "live settings must be read back after deployment"
+    ]
+  }
+}
