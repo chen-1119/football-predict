@@ -266,14 +266,14 @@ const ANALYST_OUTPUT_SECTIONS = Object.freeze([
 const PROBABILITY_FORECASTING_PRINCIPLES = Object.freeze({
   zh: [
     "先输出胜平负、比分分布、大小球、双方进球和让球概率，不把任务简化成只猜胜负。",
-    "独立概率先由 Elo 强度、Poisson 比分模型、近一年攻防、长期历史样本和赛程密度生成；世界杯先验仅在安全校验通过时参与，官方 SP 只作为市场校验和价值差参考。",
+    "基础概率结合球队强度、Elo、Poisson 与市场概率；世界杯先验仅在安全校验通过时参与。官方 SP 还用于后验混合、市场风控与价值比较；各阶段系数以计算记录为准，系数不等于最终贡献比例。",
     "推荐阈值跟随 model-calibration 动态变化；低命中联赛、市场或方向自动降权并提高概率差与让球支持要求。",
     "回测必须按时间滚动，严禁赛后 xG、赛后射门、最终排名、未公开首发或时间点不一致的临场赔率泄漏。",
     "评估以 log loss、Brier score、校准误差和分桶可靠性为主，命中率只作为辅助观察。",
   ],
   en: [
     "Output 1X2, score distribution, totals, BTTS, and handicap probabilities first instead of reducing the task to one winner.",
-    "Independent probabilities are generated first from Elo strength, Poisson score modelling, last-year attack/defense form, long-run history, and schedule density; World Cup priors participate only after safety validation, while official SP is only market validation and value-gap reference.",
+    "Base probabilities combine team strength, Elo, Poisson and market probabilities; World Cup priors participate only after safety validation. Official SP also informs posterior blending, market risk checks and value comparisons. Stage coefficients follow calculation records and are not final contribution shares.",
     "Recommendation gates follow model-calibration dynamically; cold leagues, markets, or directions are down-weighted with higher probability-gap and handicap-support requirements.",
     "Backtests must be time-ordered and must not leak post-match xG, post-match shots, final table rank, unpublished lineups, or late odds into earlier forecast nodes.",
     "Evaluate with log loss, Brier score, calibration error, and bucket reliability; hit rate is only a secondary diagnostic.",

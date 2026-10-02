@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { isDeepStrictEqual } = require("node:util");
-const { compareRecommendationProjectionPair, isResultPhase } = require("../server/recommendationProjectionParity.cjs");
+const { compareRecommendationProjectionPair, archivedDecision, publishedBestDecision } = require("../server/recommendationProjectionParity.cjs");
 const { compactFrozenReviewVersion } = require("../src/services/frozenReviewVersion.cjs");
 const REQUIRED_FILES = ["matches-current.json", "model-evaluation.json", "model-strategy.json"];
 const SHA = /^[a-f0-9]{64}$/;
@@ -104,9 +104,11 @@ function auditProjection(list, detail, nowMs) {
   const blockers = [...base.reasons], unavailable = [];
   if (!Number.isFinite(nowMs)) blockers.push("projection-clock-invalid");
   if (!list || !detail) blockers.push("projection-input-missing");
-  const selected = row => isResultPhase(row, nowMs) ? row?.archivedPreMatchPrediction?.prediction
-    : (Array.isArray(row?.predictions) ? row.predictions.find(prediction => prediction?.marketType === "BEST") : undefined);
-  const a = selected(list), b = selected(detail);
+  // Inspect the same canonical decision as the base parity check. An earlier
+  // WATCH row or an invalid archive must not stand in for that decision.
+  const selected = (row, decision) => (decision?.source === "archive" ? archivedDecision(row)
+    : decision?.source === "published-best" ? publishedBestDecision(row) : null)?.prediction;
+  const a = selected(list, base.listDecision), b = selected(detail, base.detailDecision);
   const fields = {
     modelProbability: row => row?.confidence?.publicMetrics?.modelProbability,
     frozenVersion: row => row?.frozenVersion,

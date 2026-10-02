@@ -100,6 +100,29 @@ row.predictions[0].frozenVersion = { ...frozenBody, contentHash: digest(frozenBo
 test("list/detail probability and frozen version coverage is measured separately", () => {
   assert.deepEqual(auditProjection(row, structuredClone(row), nowMs), { ok: true, blockers: [], unavailable: [], probabilityCovered: true, decisionVersionCovered: true });
 });
+test("canonical BEST probability drift is rejected when WATCH precedes it", () => {
+  const list = structuredClone(row);
+  list.predictions.unshift({ marketType: "BEST", tipCode: "WATCH", recommendationAction: "withhold",
+    confidence: { publicMetrics: { modelProbability: 0.5 } } });
+  list.predictions[1].confidence.publicMetrics.modelProbability = 0.6;
+  const detail = structuredClone(list);
+  assert.equal(auditProjection(list, detail, nowMs).ok, true);
+  detail.predictions[1].confidence.publicMetrics.modelProbability = 0.9;
+  const result = auditProjection(list, detail, nowMs);
+  assert.equal(result.ok, false);
+  assert.ok(result.blockers.includes("modelProbability-projection-mismatch"));
+  assert.equal(result.probabilityCovered, false);
+  assert.equal(result.decisionVersionCovered, true);
+});
+test("supporting market rows do not replace the canonical BEST probability", () => {
+  const list = structuredClone(row);
+  list.predictions.unshift(
+    { marketType: "1X2", oddsPoolCode: "HAD", tipCode: "1", odds: 2, recommendationAction: "reference" },
+    { marketType: "1X2", oddsPoolCode: "HHAD", tipCode: "2", handicapLine: 1, odds: 3, recommendationAction: "reference" });
+  assert.deepEqual(auditProjection(list, structuredClone(list), nowMs), {
+    ok: true, blockers: [], unavailable: [], probabilityCovered: true, decisionVersionCovered: true,
+  });
+});
 for (const [name, mutate] of [
   ["probability drift", value => { value.predictions[0].confidence.publicMetrics.modelProbability = 0.6; }],
   ["probability missing on detail", value => { delete value.predictions[0].confidence; }],
