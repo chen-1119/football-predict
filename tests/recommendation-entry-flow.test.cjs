@@ -3,7 +3,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const {createRuntime}=require('../scripts/recommendationPlatform/runtime.cjs');
 const {memoryPorts,validators}=require('./recommendationFixture.cjs');
 const jsx={jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})};
-function compile(file,req,globals={}){const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(require.resolve(file),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module,exports:module.exports,require:id=>id.endsWith('/publishedRecommendationStatus.cjs')?require('../src/services/publishedRecommendationStatus.cjs'):req(id),Date,URLSearchParams,...globals});return module.exports;}
+function compile(file,req,globals={}){const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(require.resolve(file),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module,exports:module.exports,require:require('./fixtures/render-clock-require.cjs')(req,globals),Date,URLSearchParams,...globals});return module.exports;}
 const nodes=(n,p)=>n&&typeof n==='object'?(Array.isArray(n)?n.flatMap(v=>nodes(v,p)):[...(p(n)?[n]:[]),...nodes(n.props?.children,p)]):[];
 const words=n=>n==null||typeof n==='boolean'?'':Array.isArray(n)?n.map(words).join(''):typeof n==='object'?words(n.props?.children):String(n);
 test('BestTips honors login return tab, keeps query state through tab changes and browser navigation',()=>{
@@ -26,9 +26,9 @@ async function center(){
  let now=p.now,index=0,interval,cleanup,props={selectedTab:'two'};const state=[];let mounted=false;
  class Clock extends Date{static now(){return now;}}
  const mod=compile('../src/components/recommendations/RecommendationCenter.tsx',id=>{
-  if(id==='react')return{useState:initial=>{const i=index++;if(!(i in state))state[i]=initial;return[state[i],v=>{state[i]=typeof v==='function'?v(state[i]):v;}];},useEffect:fn=>{if(!mounted){cleanup=fn();mounted=true;}}};
+  if(id==='react')return{useState:initial=>{const i=index++;if(!(i in state))state[i]=typeof initial==='function'?initial():initial;return[state[i],v=>{state[i]=typeof v==='function'?v(state[i]):v;}];},useEffect:fn=>{if(!mounted){cleanup=fn();mounted=true;}}};
   if(id==='react/jsx-runtime')return jsx;
-  if(id.endsWith('/useRecommendationCenter'))return{useRecommendationCenter:()=>({data,loading:false,failed:false,authorizationRequired:false,refresh(){}})};
+  if(id.endsWith('/useRecommendationCenter'))return{useRecommendationCenter:()=>({data,loading:false,failed:false,authorizationRequired:false,receivedAt:now,refresh(){}})};
   if(id.endsWith('/useRecommendationReviewPage'))return{useRecommendationReviewPage:()=>({data:null,loading:false,failed:false})};
   if(id==='./SelectionQualityNote')return require('./fixtures/selection-quality-note-module.cjs');
   if(id==='./DayCoverage')return{DayCoverage:()=>null};

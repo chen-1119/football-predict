@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import type { Match } from '../services/mockData';
 import { getDateStringOffset, matchesPool, registerTeam, registerLeague, registerCountry } from '../services/mockData';
 import { AppContext } from './AppContextCore';
-import { useAccount } from './AccountContext';
+import { useAccount } from './AccountContextCore';
 import type { DataSyncState, HitAndWinSubmission, Language, SourceFallbackCoverage, User } from './AppContextCore';
 import {
   clearStoredAccessSession,
@@ -628,6 +628,8 @@ const registerSyncedMatches = (data: SyncedMatch[]) => {
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const account = useAccount();
+  const accountUserId = account.user?.id;
+  const refreshAccount = account.refresh;
   const [language, setLanguageState] = useState<Language>(readStoredLanguage);
   const [accessSession, setAccessSession] = useState<AccessSession | null>(readStoredAccessSession);
   const [currentUser, setCurrentUser] = useState<User | null>(() => (
@@ -748,12 +750,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const effectRequestController = new AbortController();
     const effectRequestSignal = effectRequestController.signal;
     // Account sessions use HttpOnly cookies; legacy snapshots stay scoped to legacy tokens.
-    const activeAccessToken = account.user ? '' : accessSession?.token || '';
-    const activeAccessSession = account.user ? null : accessSession;
+    const activeAccessToken = accountUserId ? '' : accessSession?.token || '';
+    const activeAccessSession = accountUserId ? null : accessSession;
 
     const invalidateActiveAccessSession = (error: unknown) => {
       if (!isProtectedAuthFailure(error)) return false;
-      void account.refresh().catch(() => {});
+      void refreshAccount().catch(() => {});
       cancelled = true;
       effectRequestController.abort();
       jsonResponseCache.clear();
@@ -1621,7 +1623,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       document.removeEventListener('visibilitychange', refreshOnWake);
       window.clearInterval(historyTimer);
     };
-  }, [isAccessVerified, accessSession, account.user?.id, account.refresh]);
+  }, [isAccessVerified, accessSession, accountUserId, refreshAccount]);
 
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);

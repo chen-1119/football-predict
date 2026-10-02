@@ -57,7 +57,7 @@ test('published lifecycle distinguishes fresh, expired, future quotes and review
  assert.equal(view.publicationLifecycle(d,Date.parse(d.cutoffTime)),'review-only');
  assert.equal(view.publicationLifecycle(d,NaN),'review-only');
  assert.match(view.publicationLifecycleLabel('quote-stale','zh'),/观望/);
- const note=require('./fixtures/selection-quality-note-module.cjs');
+ const note=require('../src/services/publishedRecommendationStatus.cjs');
  const q={...row.selectionQuality,qualified:true,expectedValue:-.1};
  assert.match(note.selectionReferenceLabel(q,'zh'),/价格不支持/);
  assert.match(note.selectionReferenceLabel({...q,expectedValue:.1},'zh'),/模型未验证/);
@@ -267,9 +267,11 @@ function renderedText(data,props,now){
   vm.runInNewContext(code,{module,exports:module.exports,Date:now==null?Date:class extends Date{static now(){return now;}},require:id=>{
     if(id==='react')return react;if(id==='react/jsx-runtime')return require(id);
     if(id==='./SelectionQualityNote')return require('./fixtures/selection-quality-note-module.cjs');
+    if(id==='../../services/publishedRecommendationStatus.cjs')return require('../src/services/publishedRecommendationStatus.cjs');
+    if(id==='../../hooks/useWallClock')return require('./fixtures/wall-clock-module.cjs')(react,{Date:now==null?Date:class extends Date{static now(){return now;}}});
     if(id==='./DayCoverage')return {DayCoverage:()=>null};
     if(id==='./MarketComparison')return {MarketComparison:()=>null};
-    if(id==='../../hooks/useRecommendationCenter')return {useRecommendationCenter:()=>({data,loading:false,failed:false,authorizationRequired:false,refresh:()=>{}})};
+    if(id==='../../hooks/useRecommendationCenter')return {useRecommendationCenter:()=>({data,loading:false,failed:false,authorizationRequired:false,receivedAt:now??Date.now(),refresh:()=>{}})};
     if(id==='../../hooks/useRecommendationReviewPage')return {useRecommendationReviewPage:filters=>{
       const source=filters.kind==='single'?data.review.singles:data.review.combos.filter(row=>row.combo.size===(filters.kind==='two'?2:3));
       const rows=source.slice((filters.page-1)*filters.pageSize,filters.page*filters.pageSize).map(row=>({...row,selectedMarket:'HAD',selectedSettlement:row.settlement,selectedOdds:row.decision?.odds||row.combo?.totalOdds,oddsState:'available',versionKey:'a'.repeat(64),versionLabel:'fixture'}));
@@ -333,6 +335,8 @@ function renderPublished(row,compact,language='zh'){
   const modelModule={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/services/publishedMatchRecommendation.ts'),'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText,{module:modelModule,exports:modelModule.exports,Date});
   vm.runInNewContext(code,{module,exports:module.exports,Date,Intl,require:id=>{
     if(id==='react/jsx-runtime')return require(id);if(id==='../../services/recommendationCenterView')return view;
+    if(id==='../../services/publishedRecommendationStatus.cjs')return require('../src/services/publishedRecommendationStatus.cjs');
+    if(id==='../../hooks/useWallClock')return require('./fixtures/wall-clock-module.cjs')(react);
     if(id==='./SelectionQualityNote')return require('./fixtures/selection-quality-note-module.cjs');
     if(id==='../../services/publishedMatchRecommendation')return modelModule.exports;if(id.endsWith('.css'))return {};throw Error(id);
   }});

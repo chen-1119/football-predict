@@ -19,11 +19,11 @@ async function mount(role = 'admin') {
   const module = { exports: {} };
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(require.resolve('../src/pages/AccountAdmin.tsx'), 'utf8'),
     { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText, {
-    module, exports: module.exports, AbortController, Error, require(id) {
+    module, exports: module.exports, AbortController, Error, window: { setTimeout, clearTimeout }, require(id) {
       if (id === 'react') return react;
       if (id === 'react/jsx-runtime') return { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }), Fragment: 'fragment' };
       if (id === 'react-router-dom') return { Link: 'a' };
-      if (id === '../context/AccountContext') return { useAccount: () => account };
+      if (id === '../context/AccountContextCore') return { useAccount: () => account };
       if (id === '../services/accountApi') return { accountRequest: async path => { requests.push({ path }); return { ok: true, rows }; } };
       if (id.endsWith('.css')) return {};
       throw Error(id);
@@ -33,7 +33,7 @@ async function mount(role = 'admin') {
   const find = predicate => flatten(tree).find(predicate);
   const field = id => find(node => node.props?.id === id);
   const change = (id, value) => { field(id).props.onChange({ target: { value } }); render(); };
-  render(); await new Promise(resolve => setImmediate(resolve)); render();
+  render(); await new Promise(resolve => setTimeout(resolve, 0)); render();
   return { render, find, field, change, requests, account, fail(value) { failure = value; }, text: () => words(tree),
     async submit() { await find(node => node.type === 'form').props.onSubmit({ preventDefault() {} }); render(); } };
 }

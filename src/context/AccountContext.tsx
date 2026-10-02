@@ -1,22 +1,14 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AccountApiError, accountRequest, clearPendingFollow, emptyAccountAccess, readPendingFollow } from '../services/accountApi';
 import type { AccountSession, FollowRow } from '../services/accountApi';
 
-interface AccountContextValue extends Omit<AccountSession,'ok'|'csrfToken'> {
-  loading:boolean; sessionError:string|null; following:FollowRow[]; followingLoading:boolean; followingError:string|null;
-  refresh:()=>Promise<AccountSession>; login:(username:string,password:string)=>Promise<void>; register:(username:string,password:string,displayName?:string)=>Promise<string>;
-  recoverPassword:(username:string,recoveryCode:string,newPassword:string)=>Promise<string>;
-  logout:()=>Promise<void>; claimTrial:()=>Promise<void>; redeemCode:(code:string)=>Promise<void>; revokeOtherSessions:()=>Promise<number>;
-  refreshFollowing:()=>Promise<void>; followMatch:(matchId:string,decisionId?:string)=>Promise<FollowRow>; unfollowMatch:(id:string)=>Promise<void>; isFollowing:(matchId:string)=>boolean;
-  resumePendingFollow:()=>Promise<boolean>;
-  accountAction:<T>(path:string,body?:unknown,method?:string)=>Promise<T>;
-}
-const AccountContext=createContext<AccountContextValue|null>(null);
+import { AccountContext, type AccountContextValue } from './AccountContextCore';
 const anonymous:AccountSession={ok:true,user:null,access:emptyAccountAccess,authMethods:{password:false,sms:false},csrfToken:''};
 export function AccountProvider({children}:{children:ReactNode}){
   const [session,setSession]=useState<AccountSession>(anonymous),[loading,setLoading]=useState(true),[sessionError,setSessionError]=useState<string|null>(null);
   const [following,setFollowing]=useState<FollowRow[]>([]),[followingLoading,setFollowingLoading]=useState(false),[followingError,setFollowingError]=useState<string|null>(null);
+  const userId=session.user?.id;
   const current=useRef(session),generation=useRef(0),refreshSequence=useRef(0),followRevision=useRef(0),pendingOperation=useRef<Promise<boolean>|null>(null);
   const apply=useCallback((next:AccountSession)=>{
     if(current.current.user?.id!==next.user?.id){generation.current++;setFollowing([]);setFollowingError(null);}
@@ -44,11 +36,11 @@ export function AccountProvider({children}:{children:ReactNode}){
     catch(error){if(stamp===generation.current){setFollowingError(error instanceof Error?error.message:'关注列表读取失败。');if(error instanceof AccountApiError&&error.status===401)apply(anonymous);}}
     finally{if(stamp===generation.current)setFollowingLoading(false);}
   },[apply]);
-  useEffect(()=>{void refresh().catch(()=>{});},[refresh]);
-  useEffect(()=>{if(session.user)void refreshFollowing();else{setFollowing([]);setFollowingLoading(false);}},[session.user?.id,refreshFollowing]);
+  useEffect(()=>{const timer=window.setTimeout(()=>{void refresh().catch(()=>{});},0);return()=>window.clearTimeout(timer);},[refresh]);
+  useEffect(()=>{const timer=window.setTimeout(()=>{if(userId)void refreshFollowing();else{setFollowing([]);setFollowingLoading(false);}},0);return()=>window.clearTimeout(timer);},[userId,refreshFollowing]);
   useEffect(()=>{const wake=()=>{if(document.visibilityState!=='hidden')void refresh().catch(()=>{});};const timer=window.setInterval(wake,60000);window.addEventListener('focus',wake);document.addEventListener('visibilitychange',wake);return()=>{window.clearInterval(timer);window.removeEventListener('focus',wake);document.removeEventListener('visibilitychange',wake);};},[refresh]);
   useEffect(()=>{if(!session.access.active||!session.access.expiresAt)return;const remaining=Date.parse(session.access.expiresAt)-Date.now();if(!Number.isFinite(remaining))return;const expire=()=>{const latest=current.current;if(latest.access.active&&Date.parse(latest.access.expiresAt||'')<=Date.now()){const next={...latest,access:{...latest.access,active:false}};current.current=next;setSession(next);void refresh().catch(()=>{});}};const timer=window.setTimeout(expire,Math.max(0,Math.min(remaining,2147483647)));return()=>window.clearTimeout(timer);},[session.access.active,session.access.expiresAt,refresh]);
-  useEffect(()=>{if(!session.user||!session.sessionExpiresAt)return;const remaining=Date.parse(session.sessionExpiresAt)-Date.now();if(!Number.isFinite(remaining))return;const timer=window.setTimeout(()=>{const latest=current.current;if(latest.user&&Date.parse(latest.sessionExpiresAt||'')<=Date.now()){apply({...anonymous,authMethods:latest.authMethods});setSessionError('登录已失效，请重新登录。');void refresh().catch(()=>{});}},Math.max(0,Math.min(remaining,2147483647)));return()=>window.clearTimeout(timer);},[session.user?.id,session.sessionExpiresAt,apply,refresh]);
+  useEffect(()=>{if(!userId||!session.sessionExpiresAt)return;const remaining=Date.parse(session.sessionExpiresAt)-Date.now();if(!Number.isFinite(remaining))return;const timer=window.setTimeout(()=>{const latest=current.current;if(latest.user&&Date.parse(latest.sessionExpiresAt||'')<=Date.now()){apply({...anonymous,authMethods:latest.authMethods});setSessionError('登录已失效，请重新登录。');void refresh().catch(()=>{});}},Math.max(0,Math.min(remaining,2147483647)));return()=>window.clearTimeout(timer);},[userId,session.sessionExpiresAt,apply,refresh]);
   const updateSession=useCallback(async(path:string,body:unknown={})=>{const next=await mutate<AccountSession>(path,body);refreshSequence.current++;apply(next);setLoading(false);},[mutate,apply]);
   const login=useCallback((username:string,password:string)=>updateSession('/login',{username:username.trim(),password}),[updateSession]);
   const register=useCallback(async(username:string,password:string,displayName?:string)=>{const next=await mutate<AccountSession&{recoveryCode:string}>('/register',{username:username.trim(),password,...(displayName?.trim()?{displayName:displayName.trim()}:{})});const {recoveryCode,...profile}=next;refreshSequence.current++;apply(profile);setLoading(false);return recoveryCode;},[mutate,apply]);
@@ -73,4 +65,3 @@ export function AccountProvider({children}:{children:ReactNode}){
   const value=useMemo<AccountContextValue>(()=>({user:session.user,access:session.access,authMethods:session.authMethods,loading,sessionError,following,followingLoading,followingError,refresh,login,register,recoverPassword,logout,claimTrial,redeemCode,revokeOtherSessions,refreshFollowing,followMatch,unfollowMatch,isFollowing:matchId=>following.some(row=>row.matchId===matchId),resumePendingFollow,accountAction:mutate}),[session,loading,sessionError,following,followingLoading,followingError,refresh,login,register,recoverPassword,logout,claimTrial,redeemCode,revokeOtherSessions,refreshFollowing,followMatch,unfollowMatch,resumePendingFollow,mutate]);
   return <AccountContext.Provider value={value}>{children}</AccountContext.Provider>;
 }
-export function useAccount(){const value=useContext(AccountContext);if(!value)throw new Error('AccountProvider is required.');return value;}

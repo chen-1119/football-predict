@@ -72,8 +72,12 @@ const {
   oddsObservationTrailForRow,
 } = require("../src/services/oddsObservationTrail.cjs");
 
+const { selectedEventPairForDecision, summarizePairedSelectedEvents } = require("./recommendationPairedEventScoring.cjs");
+
 const rootDir = path.resolve(__dirname, "..");
 const publicDataDir = path.join(rootDir, "public", "data");
+const hasInputDataOverride = Boolean(process.env.MODEL_BACKTEST_INPUT_DATA_DIR);
+const inputDataDir = path.resolve(process.env.MODEL_BACKTEST_INPUT_DATA_DIR || publicDataDir);
 const serverDataDir = process.env.SERVER_STORE_DIR || path.join(rootDir, "server-data");
 const outputDir = path.join(serverDataDir, "model-artifacts");
 const defaultPublicOutputFile = path.join(publicDataDir, "model-evaluation.json");
@@ -127,6 +131,28 @@ const legacyHhadCompanionAuditFile = path.resolve(
       ? `${isolatedOutputStem}.legacy-hhad-companion-audit.json`
       : path.join(outputDir, "hhad-companion-audit.json")),
 );
+
+// A read-only input override must never redirect any report, ledger or SQLite
+// write into its source directory. Defaults retain the existing production path.
+if (hasInputDataOverride) {
+  if (!process.env.MODEL_BACKTEST_PUBLIC_OUTPUT_FILE || !isolatedOutput) {
+    throw new Error("MODEL_BACKTEST_INPUT_DATA_DIR requires an explicit isolated MODEL_BACKTEST_PUBLIC_OUTPUT_FILE");
+  }
+  for (const outputFile of [publicOutputFile, serverOutputFile, shadowCandidatesOutputFile,
+    benchmarkProspectiveLedgerFile, candidateProspectiveRegistryFile, privateArtifactDbPath,
+    legacyHhadCompanionAuditFile]) {
+    const relative = path.relative(inputDataDir, outputFile);
+    const insideInput = relative === "" || (!relative.startsWith(`..${path.sep}`)
+      && relative !== ".." && !path.isAbsolute(relative));
+    if (insideInput || outputFile.toLowerCase() === sqliteDbPath.toLowerCase()) {
+      throw new Error(`Isolated backtest output overlaps a read-only input: ${outputFile}`);
+    }
+  }
+}
+const worldCupAuditInputDir = hasInputDataOverride ? inputDataDir : path.dirname(publicOutputFile);
+const worldCupResearchInputFile = process.env.MODEL_BACKTEST_WORLD_CUP_RESEARCH_FILE
+  ? path.resolve(process.env.MODEL_BACKTEST_WORLD_CUP_RESEARCH_FILE)
+  : hasInputDataOverride ? null : path.join(rootDir, "model-research", "world-cup-research-benchmark.json");
 
 const sha256File = (file) => {
   try {
@@ -296,10 +322,10 @@ const isBacktestPredictionSnapshot = (snapshot) => {
 };
 
 const preferRows = (publicRows, sqliteResult, label) => {
-  if (sqliteResult?.source === "postgres") {
-    if (!sqliteResult.ok) throw new Error("PostgreSQL model input unavailable");
+  if (["postgres", "online-snapshot"].includes(sqliteResult?.source)) {
+    if (!sqliteResult.ok) throw new Error("Native model input unavailable");
     const { rows, ...audit } = sqliteResult;
-    return { rows, ...audit, label, selectedSource: "postgres", publicRows: 0,
+    return { rows, ...audit, label, selectedSource: sqliteResult.source, publicRows: 0,
       warehouseRows: sqliteResult.parsedRows, warehouseUniqueRows: rows.length,
       postgresRows: sqliteResult.parsedRows, mergedRows: rows.length };
   }
@@ -827,6 +853,13 @@ const recommendationSelectionComparison = (rows, candidateDecisionRows = []) => 
   const before = summarizeRecommendationSelectionRows(sortedRows);
   const spOnlyBaseline = summarizeRecommendationSelectionRows(spOnlyRows);
   const after = summarizeRecommendationSelectionRows(candidateRows);
+  const pairedSelectedEventComparison = {
+    scoring: "binary-selected-event",
+    universe: summarizePairedSelectedEvents(sortedRows),
+    spOnlyBaseline: summarizePairedSelectedEvents(spOnlyRows),
+    candidate: summarizePairedSelectedEvents(candidateRows),
+    descriptiveSelectionComparison: "before/after/SP-only hit rate, ROI and cross-subset scores retain their original descriptive cohorts; they do not isolate a model effect",
+  };
   const rollingWindows = [];
   const windowCount = Math.min(6, sortedRows.length);
   for (let index = 0; index < windowCount; index += 1) {
@@ -935,6 +968,8 @@ const recommendationSelectionComparison = (rows, candidateDecisionRows = []) => 
     minRowsPerWindow: 40,
     requireModelBrierNonWorse: true,
     requireModelLogLossNonWorse: true,
+    requireCompletePairedSelectedEvents: true,
+    requirePairedModelNonWorseThanMarket: true,
     requireProductionPolicyReplay: true,
     requiredValidatedMarkets: ["HAD", "HHAD"]
   };
@@ -943,6 +978,18 @@ const recommendationSelectionComparison = (rows, candidateDecisionRows = []) => 
     && finiteMetric(window.hitRateDeltaVsSpOnly) !== null
     && finiteMetric(window.hitRateDeltaVsSpOnly) >= 0
   )).length;
+  const pairedCandidate = pairedSelectedEventComparison.candidate;
+  const pairedSamplesComplete = pairedSelectedEventComparison.universe.complete
+    && pairedSelectedEventComparison.universe.pairedRows >= thresholds.minBaselineRows
+    && pairedSelectedEventComparison.spOnlyBaseline.complete
+    && pairedCandidate.complete
+    && pairedCandidate.pairedRows >= thresholds.minCandidateRows;
+  const pairedModelBrierNonWorse = pairedCandidate.pairedRows > 0
+    && finiteMetric(pairedCandidate.relativeToMarket.brierImprovement) !== null
+    && pairedCandidate.relativeToMarket.brierImprovement >= 0;
+  const pairedModelLogLossNonWorse = pairedCandidate.pairedRows > 0
+    && finiteMetric(pairedCandidate.relativeToMarket.logLossImprovement) !== null
+    && pairedCandidate.relativeToMarket.logLossImprovement >= 0;
   const eligible = before.settled >= thresholds.minBaselineRows
     && after.settled >= thresholds.minCandidateRows
     && coverage >= thresholds.minCoverage
@@ -953,10 +1000,16 @@ const recommendationSelectionComparison = (rows, candidateDecisionRows = []) => 
     && stableWindows >= thresholds.minStableWindows
     && modelBrierNonWorse
     && modelLogLossNonWorse
+    && pairedSamplesComplete
+    && pairedModelBrierNonWorse
+    && pairedModelLogLossNonWorse
     && chronologyValid
     && productionValidation.eligible;
   const gateBlockers = [...productionValidation.blockers];
   if (!chronologyValid) gateBlockers.push(`invalid-kickoff-time:${invalidKickoffRows}`);
+  if (!pairedSamplesComplete) gateBlockers.push("selected-event-paired-samples-incomplete");
+  if (!pairedModelBrierNonWorse) gateBlockers.push("selected-event-paired-model-brier-not-non-worse");
+  if (!pairedModelLogLossNonWorse) gateBlockers.push("selected-event-paired-model-log-loss-not-non-worse");
   return {
     version: "multi-factor-selection-shadow-v3",
     policy: "SP is a continuous market/value feature; no max-SP reroute",
@@ -965,6 +1018,7 @@ const recommendationSelectionComparison = (rows, candidateDecisionRows = []) => 
     before,
     spOnlyBaseline,
     after,
+    pairedSelectedEventComparison,
     coverage,
     sourceRows: chronologicalRows.length,
     promotionResultRows: promotionResultRows.length,
@@ -989,6 +1043,9 @@ const recommendationSelectionComparison = (rows, candidateDecisionRows = []) => 
       stableWindows,
       modelBrierNonWorse,
       modelLogLossNonWorse,
+      pairedSamplesComplete,
+      pairedModelBrierNonWorse,
+      pairedModelLogLossNonWorse,
       productionPolicyValidated: productionValidation.eligible,
       validatedMarkets: productionValidation.validatedMarkets,
       blockers: gateBlockers,
@@ -3596,6 +3653,13 @@ if (process.argv.includes("--verify-odds-observation-time")) runOddsObservationB
 if (process.argv.includes("--verify-recommendation-selection-time-order")) runRecommendationSelectionTimeOrderSelfTest();
 if (process.argv.includes("--verify-probability-selection")) runProbabilitySelectionSelfTest();
 
+if (process.argv.includes("--verify-selected-event-pairing")) {
+  const result = require("./verifyRecommendationPairedEventScoring.cjs")
+    .runPairedEventScoringChecks(recommendationSelectionComparison);
+  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  process.exit(result.ok ? 0 : 1);
+}
+
 async function runBacktest() {
 const predictionInputOptions = {
   limit: Math.max(1, Number(process.env.MODEL_BACKTEST_PREDICTION_LIMIT || process.env.MODEL_BACKTEST_SQLITE_PREDICTION_LIMIT || 50000)),
@@ -3609,25 +3673,33 @@ const predictionInputOptions = {
 const oddsInputOptions = {
   limit: Math.max(1, Number(process.env.MODEL_BACKTEST_ODDS_LIMIT || process.env.MODEL_BACKTEST_SQLITE_ODDS_LIMIT || 120000)),
 };
-const nativeInput = storageMode.postgresOnly
+const nativeInput = hasInputDataOverride
+  ? require("./onlineSnapshotModelInput.cjs").readOnlineSnapshotModelInput({
+      inputDataDir, manifestFile: process.env.MODEL_BACKTEST_ONLINE_SNAPSHOT_MANIFEST,
+    })
+  : storageMode.postgresOnly
   ? await require("./postgresModelInput.cjs").readPostgresModelInput({
       storeDir: serverDataDir, publicDataDir, createCollector: createModelInputCollector,
       prediction_snapshots: predictionInputOptions, odds_snapshots: oddsInputOptions,
     })
   : null;
-const current = nativeInput ? nativeInput.current : readJson(path.join(publicDataDir, "matches-current.json"), []);
-const history = nativeInput ? nativeInput.history : readJson(path.join(publicDataDir, "matches-history.json"), []);
-const oddsHistory = nativeInput ? { rows: [] } : readJson(path.join(publicDataDir, "odds-history.json"), { rows: [] });
+const current = nativeInput ? nativeInput.current : readJson(path.join(inputDataDir, "matches-current.json"), []);
+const history = nativeInput ? nativeInput.history : readJson(path.join(inputDataDir, "matches-history.json"), []);
+const oddsHistory = nativeInput ? { rows: [] } : readJson(path.join(inputDataDir, "odds-history.json"), { rows: [] });
 const matches = dedupeMatches([...(Array.isArray(current) ? current : []), ...(Array.isArray(history) ? history : [])]);
 const publicOddsRows = Array.isArray(oddsHistory?.rows) ? oddsHistory.rows : [];
-const sqlitePredictionRows = nativeInput?.prediction_snapshots || readSqlitePayloadRows("prediction_snapshots", predictionInputOptions);
-const sqliteOddsRows = nativeInput?.odds_snapshots || readSqlitePayloadRows("odds_snapshots", oddsInputOptions);
+const sqlitePredictionRows = nativeInput?.prediction_snapshots || (hasInputDataOverride
+  ? { ok: false, rows: [], reason: "isolated-json-input-no-database-fallback" }
+  : readSqlitePayloadRows("prediction_snapshots", predictionInputOptions));
+const sqliteOddsRows = nativeInput?.odds_snapshots || (hasInputDataOverride
+  ? { ok: false, rows: [], reason: "isolated-json-input-no-database-fallback" }
+  : readSqlitePayloadRows("odds_snapshots", oddsInputOptions));
 // Native input is authoritative even when empty and never merges another
 // publication's JSON mirror. Only the legacy path retains its file fallback.
 const predictionSnapshots = nativeInput || (sqlitePredictionRows.ok === true
   && Number(sqlitePredictionRows.parsedRows || 0) > 0)
   ? { rows: [] }
-  : readJson(path.join(publicDataDir, "prediction-snapshots.json"), { rows: [] });
+  : readJson(path.join(inputDataDir, "prediction-snapshots.json"), { rows: [] });
 const publicSnapshotRows = Array.isArray(predictionSnapshots?.rows)
   ? predictionSnapshots.rows.filter(isBacktestPredictionSnapshot)
   : [];
@@ -3636,8 +3708,13 @@ const oddsSelection = preferRows(publicOddsRows, sqliteOddsRows, "oddsHistory");
 const snapshotRows = snapshotSelection.rows;
 const oddsRows = oddsSelection.rows;
 const dataSources = {
+  inputDataDir,
+  inputDataOverride: hasInputDataOverride,
+  sqliteInputFile: hasInputDataOverride ? null : sqliteDbPath,
+  worldCupAuditInputDir,
+  worldCupResearchInputFile,
   matches: {
-    selectedSource: nativeInput ? "postgres" : "public-json",
+    selectedSource: nativeInput ? nativeInput.source || "postgres" : "public-json",
     ...(nativeInput ? { publication: nativeInput.publication } : {}),
     currentRows: Array.isArray(current) ? current.length : 0,
     historyRows: Array.isArray(history) ? history.length : 0
@@ -3888,6 +3965,9 @@ for (const match of matches) {
           outcomeCode: settlement.outcomeCode,
           won: settlement.won,
         };
+        row.selectedEventPair = selectedEventPairForDecision(row, decisionSnapshot,
+          Number.isFinite(resultObservation?.observedMs)
+            ? new Date(resultObservation.observedMs).toISOString() : null);
         candidateDecisionRows.push(row);
         rowsForDecision.push(row);
         decisionSnapshotAudit.candidateRows += 1;
@@ -4145,11 +4225,12 @@ const {
   ...hhadCompanionEvaluation
 } = hhadCompanionAudit;
 const currentWorldCupResearchAudit = buildWorldCupAudit(
-  loadWorldCupAuditInputs(path.dirname(publicOutputFile)),
+  loadWorldCupAuditInputs(worldCupAuditInputDir),
 ).benchmarkShadow;
-const frozenWorldCupResearchSnapshot = loadWorldCupResearchSnapshot(
-  path.join(rootDir, "model-research", "world-cup-research-benchmark.json"),
-);
+const frozenWorldCupResearchSnapshot = worldCupResearchInputFile
+  ? loadWorldCupResearchSnapshot(worldCupResearchInputFile)
+  : { ok: false, missing: true, filePath: null,
+      blockers: ["isolated-input-frozen-research-not-selected"] };
 const benchmarkResearchAudit = Number(
   currentWorldCupResearchAudit?.walkForward?.selectedRows || 0,
 ) > 0
@@ -4430,6 +4511,7 @@ console.log(JSON.stringify({
     before: recommendationSelection.before,
     spOnlyBaseline: recommendationSelection.spOnlyBaseline,
     after: recommendationSelection.after,
+    pairedSelectedEventComparison: recommendationSelection.pairedSelectedEventComparison,
     coverage: recommendationSelection.coverage,
     highSpCandidates: recommendationSelection.highSpCandidates,
     lowSpRejected: recommendationSelection.lowSpRejected,

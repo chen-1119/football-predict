@@ -91,7 +91,7 @@ export function RecommendationEvidenceFacts({
         <p>{language === 'zh' ? '模型生成' : 'Model generated'} <time dateTime={view.modelGeneratedAt}>{formatFreshnessClock({ kind: 'as-of', value: view.modelGeneratedAt }, language)}</time></p>
         <p>{language === 'zh' ? '发布时间' : 'Published'} <time dateTime={view.publishedAt}>{formatFreshnessClock({ kind: 'as-of', value: view.publishedAt }, language)}</time></p>
         <p>{language === 'zh' ? 'SP采集' : 'SP observed'} <time dateTime={view.quoteObservedAt}>{formatFreshnessClock({ kind: 'observed-at', value: view.quoteObservedAt }, language)}</time></p>
-        <small>{language === 'zh' ? '参考／影子模型概率，尚未验证为真实命中率。以下补充资料不构成本条发布记录的采用凭证。' : 'Reference/shadow model probabilities are not validated hit rates. Supplemental data does not prove adoption by this publication.'}</small>
+        <small>{language === 'zh' ? '已发布参考的模型概率，尚未验证为真实命中率；发布不等于影子实验或正式推荐门槛通过。以下补充资料不构成本条发布记录的采用凭证。' : 'Published-reference probabilities are not validated hit rates; publication does not establish shadow-study or formal-gate approval. Supplemental data does not prove adoption by this publication.'}</small>
       </> : <p>{language === 'zh' ? '暂无已发布推荐，等待统一记录；不使用旧模型方向或概率补位。' : 'No published recommendation yet; legacy model directions and probabilities are not substituted.'}</p>}
       {supplementaryModel && <details><summary>{language === 'zh' ? '补充模型快照的数据记录（未绑定本次发布）' : 'Supplemental model data (not bound to this publication)'}</summary><p>{language === 'zh' ? '下列时点、绑定和采用情况仅属于原模型快照，不代表上方已发布方向使用了这些输入。' : 'The times, bindings and adoption below belong only to the original model snapshot, not the published pick above.'}</p><DataAdoptionDetails match={match} language={language} /></details>}
     </section>;

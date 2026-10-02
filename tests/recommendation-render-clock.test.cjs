@@ -3,7 +3,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const ts=require('typescript');
 const {createRuntime}=require('../scripts/recommendationPlatform/runtime.cjs');
 const {memoryPorts,validators}=require('./recommendationFixture.cjs');
-function compile(file,requireFn){const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module,exports:module.exports,require:id=>id.endsWith('/publishedRecommendationStatus.cjs')?require('../src/services/publishedRecommendationStatus.cjs'):requireFn(id),Date});return module.exports;}
+function compile(file,requireFn){const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module,exports:module.exports,require:require('./fixtures/render-clock-require.cjs')(requireFn),Date});return module.exports;}
 test('incoming lane timestamp between timer ticks stays visible without accepting future inputs',async()=>{
   const p=memoryPorts(),runtime=createRuntime(p,{validators});await runtime.publishingCycle();
   const V=compile(require.resolve('../src/services/recommendationCenterView.ts'),require);let data=V.parseRecommendationCenter({recommendationCenter:p.state.view});
@@ -14,7 +14,7 @@ test('incoming lane timestamp between timer ticks stays visible without acceptin
       if(id==='react')return{useEffect:()=>{},useState:initial=>{const i=index++;if(!(i in state))state[i]=typeof initial==='function'?initial():initial;return[state[i],()=>{}];}};
       if(id==='react/jsx-runtime')return{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})};
       if(id==='./SelectionQualityNote')return require('./fixtures/selection-quality-note-module.cjs');
-      if(id==='../../hooks/useRecommendationCenter')return{useRecommendationCenter:()=>({data,loading:false,failed:false,authorizationRequired:false,refresh:()=>{}})};
+      if(id==='../../hooks/useRecommendationCenter')return{useRecommendationCenter:()=>({data,loading:false,failed:false,authorizationRequired:false,receivedAt:Date.now(),refresh:()=>{}})};
       if(id==='../../hooks/useRecommendationReviewPage')return{useRecommendationReviewPage:()=>({data:null,loading:false,failed:false})};
       if(id==='./DayCoverage')return{DayCoverage:()=>null};
       if(id==='./MarketComparison')return{MarketComparison:()=>null};

@@ -34,6 +34,14 @@ const finiteNumber = (value) => {
   return Number.isFinite(number) ? number : null;
 };
 
+const knownMissingCount = (value) => {
+  if (typeof value !== "number" && typeof value !== "string") return null;
+  if (typeof value === "string" && !value.trim()) return null;
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number >= 0 ? number : null;
+};
+const knownBoolean = (value) => typeof value === "boolean" ? value : null;
+
 const rounded = (value, digits = 6) => {
   const number = finiteNumber(value);
   return number === null ? null : Number(number.toFixed(digits));
@@ -224,8 +232,10 @@ const fromFixedPoint = (value, scale) => (
 );
 
 const normalizeProbability = (value) => {
+  if (typeof value !== "number" && typeof value !== "string") return null;
+  if (typeof value === "string" && !value.trim()) return null;
   const number = finiteNumber(value);
-  if (number === null) return null;
+  if (number === null || number < 0 || number > 100) return null;
   const decimal = number > 1 ? number / 100 : number;
   if (decimal < 0 || decimal > 1) return null;
   return rounded(decimal);
@@ -360,10 +370,10 @@ const canonicalEvidenceInputsFor = ({
       FIXED_POINT_SCALES.riskPenalty,
       finiteNumber,
     ),
-    severeMissingCount: Math.max(0, Math.round(finiteNumber(source.severeMissingCount) ?? 0)),
+    severeMissingCount: knownMissingCount(source.severeMissingCount),
     riskTagsCount: Math.max(0, Math.round(finiteNumber(source.riskTagsCount) ?? 0)),
     scoreAligned: source.scoreAligned === true,
-    crossMarketCompatible: source.crossMarketCompatible !== false,
+    crossMarketCompatible: knownBoolean(source.crossMarketCompatible),
     handicapAligned: source.handicapAligned === true,
     marketLeaderAligned: source.marketLeaderAligned === true,
     trendSupports: source.trendSupports === true,
@@ -393,10 +403,10 @@ const evidenceEvaluatorInputFromCanonical = (input) => ({
   riskPenalty: fromFixedPoint(input?.riskPenaltyPpm, FIXED_POINT_SCALES.riskPenalty),
   severeMissingCount: Number.isSafeInteger(input?.severeMissingCount)
     ? input.severeMissingCount
-    : undefined,
+    : null,
   riskTagsCount: Number.isSafeInteger(input?.riskTagsCount) ? input.riskTagsCount : undefined,
   scoreAligned: input?.scoreAligned === true,
-  crossMarketCompatible: input?.crossMarketCompatible !== false,
+  crossMarketCompatible: knownBoolean(input?.crossMarketCompatible),
   handicapAligned: input?.handicapAligned === true,
   marketLeaderAligned: input?.marketLeaderAligned === true,
   trendSupports: input?.trendSupports === true,

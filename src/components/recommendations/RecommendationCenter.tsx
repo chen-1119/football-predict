@@ -6,7 +6,9 @@ import { FollowButton } from '../FollowButton';
 import type { Team } from '../../services/mockData';
 import { publicationLifecycle, publicationLifecycleLabel, quoteSourceLabel, comboLaneFresh, comboPreviewForSize, comboLegSelection, primarySelectionSummary, handicapExtensionText, handicapAnalysisBasis, calibrationSampleBasis, sameDirectionConcentration, directionSelectionLabel, outcomeCategoryLabel, outcomeResearchReasonLabel, outcomeResearchFavoriteValueWarning, type Decision, type Settlement, type Combo, type ComboSelection, type Summary, type Outcome, type OutcomeCategoryResearch, type HandicapCalibrationProfile, type HandicapBreakdown, type ModelQualityReport } from '../../services/recommendationCenterView';
 import '../../styles/recommendation-center.css';
-import { SelectionQualityNote, selectionPriceStatus, selectionReferenceLabel, SupplementaryResearchNote } from './SelectionQualityNote';
+import { SelectionQualityNote, SupplementaryResearchNote } from './SelectionQualityNote';
+import { selectionPriceStatus, selectionReferenceLabel } from '../../services/publishedRecommendationStatus.cjs';
+import { useWallClock } from '../../hooks/useWallClock';
 import type { SelectionQuality, ComboRow, SingleRow, SupplementarySummary } from '../../services/recommendationCenterView';
 import { DayCoverage } from './DayCoverage';
 import { DualResearchV2 } from './DualResearchV2';
@@ -204,17 +206,17 @@ function HandicapCalibrationPanel({profile,language}:{profile?:HandicapCalibrati
     {groups.length?<div className="rc-calibration__grid">{groups.map(g=>{const m=g.metrics;const awayBias=g.bias['2'];return <article key={g.key} className={g.active?'is-active':''}><div className="rc-calibration__top"><strong>{groupLabel(g.key,zh)}</strong><span>{g.active?(zh?'已启用':'Active'):(zh?'观察中':'Observe')}</span></div><div className="rc-calibration__numbers"><span>{zh?'样本':'Samples'} <b>{g.rows}</b></span><span>{zh?'让负偏差':'Hcap-away bias'} <b>{awayBias>=0?'+':''}{(awayBias*100).toFixed(1)}pp</b></span><span>{zh?'实际让负':'Actual hcap-away'} <b>{(g.actualShare['2']*100).toFixed(1)}%</b></span></div>{m&&<div className="rc-calibration__metrics"><span>Brier {m.rawBrier?.toFixed(3)??'—'} → {m.calibratedBrier?.toFixed(3)??'—'}</span><span>{zh?'验证命中':'Holdout hit'} {m.rawHitRate==null?'—':(m.rawHitRate*100).toFixed(1)+'%'} → {m.calibratedHitRate==null?'—':(m.calibratedHitRate*100).toFixed(1)+'%'}</span></div>}<small>{g.active?(zh?'该组偏差会按收缩权重修正新概率，不会硬改方向。':'This group adjusts new probabilities with shrinkage, never a forced pick.'):(zh?'样本不足或样本外表现未改善，暂不改动新预测。':'No live adjustment until sample/holdout checks pass.')}</small></article>;})}</div>:<p className="rc-empty">{zh?'正在积累让球冻结样本；未达到门槛前保持原净胜球模型。':'Collecting frozen handicap samples; the raw goal-margin model remains unchanged until thresholds are met.'}</p>}</section>;
 }
 export function RecommendationCenter({language,onSelectMatch,mode='recommendations',initialTab='single',selectedTab,onTabChange}:Props){
-  const {data,loading,failed,authorizationRequired,refresh}=useRecommendationCenter();
-  const [localTab,setLocalTab]=useState(initialTab),[,setClockTick]=useState(0);
+  const {data,loading,failed,authorizationRequired,receivedAt,refresh}=useRecommendationCenter();
+  const [localTab,setLocalTab]=useState(initialTab);
+  const clockNow=useWallClock(10000);
   const tab=selectedTab??localTab;
   const setTab=(next:RecommendationTab)=>{setLocalTab(next);onTabChange?.(next);setFilters(current=>({...current,market:'ALL',version:'',page:1}));};
   const [filters,setFilters]=useState<{query:string;date:string;market:ReviewMarket;version:string;state:ReviewState;page:number}>({query:'',date:'',market:'ALL',version:'',state:'ALL',page:1});
   const [debouncedQuery,setDebouncedQuery]=useState('');
   const [qualifiedOnly,setQualifiedOnly]=useState(false);
-  // The interval wakes an idle page; every data render must use the actual
-  // clock. A saved tick can precede a newly received lane timestamp by seconds.
-  const now=Date.now();
-  useEffect(()=>{const timer=window.setInterval(()=>setClockTick(tick=>tick+1),10000);return ()=>window.clearInterval(timer);},[]);
+  // A fresh response carries its actual receipt clock, so the idle-page tick
+  // cannot precede a newly received lane timestamp.
+  const now=Math.max(clockNow,receivedAt);
   useEffect(()=>{const timer=window.setTimeout(()=>setDebouncedQuery(filters.query.trim().normalize('NFKC')),250);return ()=>window.clearTimeout(timer);},[filters.query]);
   const zh=language==='zh',review=mode==='review';
   const modelQuality=data?.review.qualityReport;

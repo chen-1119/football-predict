@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { ArrowRight, Check, Clock, Eye, EyeOff, Heart, KeyRound, Loader2, ShieldCheck } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContextCore';
-import { useAccount } from '../context/AccountContext';
+import { useAccount } from '../context/AccountContextCore';
 import { clearPendingFollow, readPendingFollow, safeAccountReturnTo } from '../services/accountApi';
 import { formatAccessCode } from '../services/accessControl';
 import '../styles/account.css';

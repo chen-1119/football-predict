@@ -1,6 +1,6 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
-const compile=(file,load=require)=>{const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module,exports:module.exports,require:id=>id.endsWith('/publishedRecommendationStatus.cjs')?require('../src/services/publishedRecommendationStatus.cjs'):load(id),Date,Intl});return module.exports;};
+const compile=(file,load=require)=>{const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module,exports:module.exports,require:require('./fixtures/render-clock-require.cjs')(load),Date,Intl});return module.exports;};
 const view=compile(require.resolve('../src/services/recommendationCenterView.ts'));
 const model=compile(require.resolve('../src/services/publishedMatchRecommendation.ts'));
 const {memoryPorts,validators}=require('./recommendationFixture.cjs'),{createRuntime}=require('../scripts/recommendationPlatform/runtime.cjs');

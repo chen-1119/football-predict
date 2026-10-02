@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowRight, Bookmark, RefreshCw, Search } from 'lucide-react';
-import { useAccount } from '../context/AccountContext';
+import { useAccount } from '../context/AccountContextCore';
 import { useApp } from '../context/AppContextCore';
 import { FollowButton } from '../components/FollowButton';
 import { TeamBadge } from '../components/TeamBadge';
 import { buildApiUrl } from '../services/runtimeUrls';
 import { safeAccountReturnTo } from '../services/accountApi';
+import { useWallClock } from '../hooks/useWallClock';
 import type { Team } from '../services/mockData';
 import '../styles/public-browse.css';
 
@@ -19,9 +20,10 @@ function team(match:Fixture,side:'home'|'away'):Team {const name=match[`${side}T
 export function PublicBrowse(){
  const account=useAccount(),{language}=useApp(),location=useLocation(),{matchId}=useParams(),[params,setParams]=useSearchParams();
  const [data,setData]=useState<Overview|null>(null),[detail,setDetail]=useState<Fixture|null>(null),[error,setError]=useState(''),[loading,setLoading]=useState(true),[attempt,setAttempt]=useState(0);
+ const now=useWallClock();
  const zh=language==='zh',review=location.pathname==='/review',recommendations=location.pathname==='/best',query=params.get('q')||'',date=params.get('date')||'';
- useEffect(()=>{const controller=new AbortController();let active=true;setLoading(true);setError('');setDetail(null);const timer=setTimeout(()=>controller.abort(),15000);
-  void (async()=>{try{const response=await fetch(buildApiUrl('/api/public/overview'),{signal:controller.signal});if(!response.ok)throw new Error();const overview=await response.json() as Overview;if(!overview||!Array.isArray(overview.matches)||!overview.review)throw new Error();if(active)setData(overview);
+ useEffect(()=>{const controller=new AbortController();let active=true;const timer=setTimeout(()=>controller.abort(),15000);
+  void (async()=>{await Promise.resolve();if(!active)return;setLoading(true);setError('');setDetail(null);try{const response=await fetch(buildApiUrl('/api/public/overview'),{signal:controller.signal});if(!response.ok)throw new Error();const overview=await response.json() as Overview;if(!overview||!Array.isArray(overview.matches)||!overview.review)throw new Error();if(active)setData(overview);
    if(matchId){const response=await fetch(buildApiUrl(`/api/public/matches/${encodeURIComponent(matchId)}`),{signal:controller.signal});if(!response.ok)throw new Error();const result=await response.json();if(active)setDetail(result.match);}
   }catch{if(active)setError(zh?'内容暂时读取失败，请重试。':'Could not load content. Please retry.');}finally{clearTimeout(timer);if(active)setLoading(false);}})();
   return()=>{active=false;clearTimeout(timer);controller.abort();};
@@ -33,7 +35,7 @@ export function PublicBrowse(){
  const matches=(data?.matches||[]).filter(m=>(!selectedDay||m.businessDate===selectedDay)&&(!search||`${m.homeTeamName} ${m.awayTeamName} ${m.homeTeamNameEn||''} ${m.awayTeamNameEn||''} ${m.matchNo||''} ${m.leagueName||''}`.normalize('NFKC').toLocaleLowerCase().includes(search)));
  const returnTo=location.pathname+location.search+location.hash,example=data?.review.example,summary=data?.review.summary;
  const cta=account.user?'/account':`/auth?returnTo=${encodeURIComponent(returnTo)}`;
- const accessExpired=Boolean(account.access.expiresAt)&&Date.parse(account.access.expiresAt!)<=Date.now();
+ const accessExpired=Boolean(account.access.expiresAt)&&Date.parse(account.access.expiresAt!)<=now;
  const accessLabel=!account.user?(zh?'尚未登录':'Sign in required'):account.access.trialAvailable?(zh?'尚未领取体验':'Trial not activated'):accessExpired?(zh?'内容权益已到期':'Content access expired'):(zh?'暂无有效内容权益':'No active content access');
  const accessAction=!account.user?(zh?'登录 / 注册后查看':'Sign in / Register'):account.access.trialAvailable?(zh?'领取3天体验':'Claim a 3-day trial'):(zh?'管理内容权益':'Manage content access');
  const card=(m:Fixture)=><article className="public-fixture" key={m.id}>

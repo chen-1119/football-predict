@@ -462,14 +462,28 @@ const runCommand = (command, args, extraEnv = {}, options = {}) => {
   const terminateGraceMs = Math.max(1, Number(options.terminateGraceMs || commandTerminateGraceMs));
   const forceSettleMs = Math.max(1, Number(options.forceSettleMs || commandForceSettleMs));
   const useShell = process.platform === "win32" && /\.(?:cmd|bat)$/i.test(String(command));
+  // Capture only the validator's bounded stderr while retaining its normal
+  // journal output. Other command streams and admission checks stay unchanged.
+  const captureStderr = options.captureStderr === true && !options.stdio;
+  const stderrLimitBytes = 8192;
+  let capturedStderr = Buffer.alloc(0);
+  let stderrTruncated = false;
   const child = spawn(command, args, {
     cwd: rootDir,
     env: { ...process.env, ...extraEnv },
     shell: useShell,
     detached: process.platform !== "win32",
     windowsHide: true,
-    stdio: options.stdio || "inherit"
+    stdio: options.stdio || (captureStderr ? ["inherit", "inherit", "pipe"] : "inherit")
   });
+  if (captureStderr) {
+    child.stderr.on("data", (chunk) => {
+      process.stderr.write(chunk);
+      const nextStderr = Buffer.concat([capturedStderr, Buffer.from(chunk)]);
+      if (nextStderr.length > stderrLimitBytes) stderrTruncated = true;
+      capturedStderr = nextStderr.subarray(-stderrLimitBytes);
+    });
+  }
   runtimeShutdownController.register(child);
   let settled = false;
   let timedOut = false;
@@ -496,7 +510,7 @@ const runCommand = (command, args, extraEnv = {}, options = {}) => {
     }, terminateGraceMs);
   }, timeoutMs);
   child.on("error", (error) => finish(reject, timedOut ? timeoutError : error));
-  child.on("exit", (code, signal) => {
+  child.on(captureStderr ? "close" : "exit", (code, signal) => {
     const finishedAt = new Date().toISOString();
     if (timedOut) {
       timeoutError.signal = signal || null;
@@ -514,6 +528,10 @@ const runCommand = (command, args, extraEnv = {}, options = {}) => {
     error.args = args;
     error.exitCode = code;
     error.signal = signal || null;
+    if (captureStderr) {
+      error.stderr = capturedStderr.toString("utf8");
+      error.stderrTruncated = stderrTruncated;
+    }
     finish(reject, error);
   });
   });
@@ -3328,7 +3346,8 @@ const runCycle = async (cadence = describeSyncCadence(), hooks = {}) => {
       timeoutMs: commandTimeouts.validation,
     });
     const dataValidationStep = await runCommand(npmCommand, ["run", "validate:data"], {}, {
-      timeoutMs: commandTimeouts.validation
+      timeoutMs: commandTimeouts.validation,
+      captureStderr: true,
     });
     await onBeforeHeavyStep("datastore:generation:official");
     const officialGenerationStep = await runOptional(true, "datastore:generation", {
@@ -4203,6 +4222,39 @@ const nextCycleDelayMs = (
   return Math.max(minimumLoopIdleMs, Math.max(0, Number(intervalMs || 0) - elapsedMs));
 };
 
+const describeCurrentSourceFailureCooldown = (error, syncMeta) => {
+  const stderrLines = typeof error?.stderr === "string"
+    ? error.stderr.split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+    : [];
+  const api = syncMeta?.api;
+  const coverage = api?.fallbackCoverage;
+  // This is scheduling evidence only. A successful empty response, including
+  // a sales pause, cannot authorize fixtures, fresh SP, or a new publication.
+  // A second validator error, missing metadata, or another command must keep
+  // the ordinary failure path; never classify them using an empty list alone.
+  if (error?.code !== "SYNC_WORKER_COMMAND_FAILED"
+      || error.exitCode !== 1
+      || error.signal
+      || error.stderrTruncated !== false
+      || !/(?:^|[\\/])npm(?:\.cmd)?$/.test(String(error.command || ""))
+      || !Array.isArray(error.args)
+      || error.args.length !== 2
+      || error.args[0] !== "run"
+      || error.args[1] !== "validate:data"
+      || stderrLines.length !== 1
+      || stderrLines[0] !== "matches-current.json must contain a non-empty array."
+      || syncMeta?.files?.current !== 0
+      || !Number.isSafeInteger(syncMeta?.files?.history)
+      || syncMeta.files.history <= 0
+      || api?.transport !== "relay-history-only"
+      || api.currentStale !== true
+      || coverage?.currentMatches !== 0
+      || coverage.currentSportteryMatches !== 0
+      || coverage.officialOddsMatches !== 0
+      || coverage.currentLaneFresh !== false) return null;
+  return { reason: "current-source-empty", minimumDelayMs: 300_000, fromCompletion: true };
+};
+
 const main = async () => {
   if (statusOnly) {
     const cadence = describeSyncCadence();
@@ -4646,13 +4698,18 @@ const main = async () => {
         "post-deadline-near-kickoff",
         "recent-kickoff",
       ].includes(nextCadence.reason);
-      relayWakeEligible = nextCadence.mode === "hot" && !postDeadlineCooldown;
+      const currentSourceCooldown = describeCurrentSourceFailureCooldown(
+        error,
+        readJson(path.join(rootDir, "public", "data", "sync-meta.json"), null),
+      );
+      relayWakeEligible = nextCadence.mode === "hot" && !postDeadlineCooldown && !currentSourceCooldown;
       loopDelayMs = nextCycleDelayMs(
         activeCycleStartedAt,
         nextCadence.intervalMs,
         Date.now(),
-        { fromCompletion: postDeadlineCooldown || nextCadence.mode === "hot" },
+        { fromCompletion: Boolean(currentSourceCooldown) || postDeadlineCooldown || nextCadence.mode === "hot" },
       );
+      if (currentSourceCooldown) loopDelayMs = Math.max(currentSourceCooldown.minimumDelayMs, loopDelayMs);
       const nextWakeAt = loop ? new Date(Date.now() + loopDelayMs).toISOString() : null;
       const failure = {
         type: "sync-worker-failed",
@@ -4664,6 +4721,7 @@ const main = async () => {
         pid: process.pid,
         cadence: nextCadence,
         phase: "failed",
+        ...(currentSourceCooldown ? { failureCooldown: { ...currentSourceCooldown, delayMs: loopDelayMs } } : {}),
         pipeline: describeCycleStages(),
         wake: cycleWake,
         relayWake: {
@@ -4773,6 +4831,7 @@ module.exports = {
   createWorkerShutdownController,
   describeCycleStages,
   describeConsolidatedSlowPublicationNeed,
+  describeCurrentSourceFailureCooldown,
   describeFiveHundredResultFallbackNeed,
   describeCandidateDeadlineStartupAdmission,
   describeModelStrategyReconciliationNeed,

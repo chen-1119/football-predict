@@ -9,9 +9,11 @@ import {
   useParams
 } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
-import { AccountProvider, useAccount } from './context/AccountContext';
+import { AccountProvider } from './context/AccountContext';
+import { useAccount } from './context/AccountContextCore';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
+import { SalesClosureNotice } from './components/SalesClosureNotice';
 import { GlossaryModal } from './components/GlossaryModal';
 import { useApp } from './context/AppContextCore';
 import { safeAccountReturnTo } from './services/accountApi';
@@ -367,6 +369,7 @@ function RoutedContent() {
       />
 
       <main id="main-content" className="container page-main" tabIndex={-1}>
+            {!location.pathname.startsWith('/auth') && !location.pathname.startsWith('/account-admin') && <SalesClosureNotice language={language} />}
         <RouteErrorBoundary key={location.pathname}>
           <Suspense fallback={<LoadingPanel />}>
             <Routes>

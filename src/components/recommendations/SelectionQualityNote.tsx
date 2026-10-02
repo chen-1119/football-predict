@@ -1,7 +1,6 @@
 import type { SelectionQuality, SupplementaryResearch, SingleRow } from '../../services/recommendationCenterView';
 
 import { selectionPriceStatus, selectionReferenceLabel } from '../../services/publishedRecommendationStatus.cjs';
-export { selectionPriceStatus, selectionReferenceLabel };
 export function SupplementaryResearchNote({research,settlement,language}:{research?:SupplementaryResearch|null;settlement?:SingleRow['supplementarySettlement'];language:'zh'|'en'}){
  if(!research)return null;
  const zh=language==='zh';

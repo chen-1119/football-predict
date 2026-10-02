@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Heart, RefreshCw, Search } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useAccount } from '../context/AccountContext';
+import { useAccount } from '../context/AccountContextCore';
 import { useApp } from '../context/AppContextCore';
 import { filterFollowing, followGroup } from '../services/accountApi';
 import type { FollowRow } from '../services/accountApi';
@@ -9,19 +9,20 @@ import '../styles/account.css';
 
 export function Following(){
   const account=useAccount(),{language}=useApp(),zh=language==='zh';
+  const userId=account.user?.id,refreshFollowing=account.refreshFollowing;
   const [params,setParams]=useSearchParams();
   const query=params.get('q')||'',group=['upcoming','pending','settled'].includes(params.get('tab')||'')?params.get('tab')!:'all';
   const updateFilters=(next:{q?:string;tab?:string})=>{const search=new URLSearchParams(params);for(const [key,value] of Object.entries(next)){if(value&&value!=='all')search.set(key,value);else search.delete(key);}setParams(search,{replace:true});};
-  const [limit,setLimit]=useState(12),[busy,setBusy]=useState(''),[error,setError]=useState(''),[removed,setRemoved]=useState<FollowRow|null>(null),[now,setNow]=useState(Date.now());
+  const [limit,setLimit]=useState(12),[busy,setBusy]=useState(''),[error,setError]=useState(''),[removed,setRemoved]=useState<FollowRow|null>(null),[now,setNow]=useState(()=>Date.now());
   useEffect(()=>{const timer=window.setInterval(()=>setNow(Date.now()),30000);return()=>window.clearInterval(timer);},[]);
   useEffect(()=>{
-    if(!account.user)return;
-    const refresh=()=>{if(document.visibilityState!=='hidden')void account.refreshFollowing();};
+    if(!userId)return;
+    const refresh=()=>{if(document.visibilityState!=='hidden')void refreshFollowing();};
     refresh();
     const timer=window.setInterval(refresh,60000);
     window.addEventListener('focus',refresh);document.addEventListener('visibilitychange',refresh);
     return()=>{window.clearInterval(timer);window.removeEventListener('focus',refresh);document.removeEventListener('visibilitychange',refresh);};
-  },[account.user?.id,account.refreshFollowing]);
+  },[userId,refreshFollowing]);
   const filtered=useMemo(()=>filterFollowing(account.following,query,group,now),[account.following,query,group,now]);
   const format=(value:string|undefined)=>value&&Number.isFinite(Date.parse(value))?new Date(value).toLocaleString(zh?'zh-CN':'en-GB',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false,timeZone:'Asia/Shanghai'}):'—';
   const groups=[['all',zh?'全部':'All'],['upcoming',zh?'未赛':'Upcoming'],['pending',zh?'待结果':'Awaiting result'],['settled',zh?'已结算':'Settled']];

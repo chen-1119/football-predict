@@ -2,7 +2,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),ts=require('typescript');
 const {createRuntime}=require('../scripts/recommendationPlatform/runtime.cjs');
 const {memoryPorts,validators}=require('./recommendationFixture.cjs');
-function compile(file,requireFn){const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module,exports:module.exports,require:id=>id.endsWith('/publishedRecommendationStatus.cjs')?require('../src/services/publishedRecommendationStatus.cjs'):requireFn(id),Date,window:{setInterval:()=>0,clearInterval:()=>{},setTimeout:fn=>{fn();return 0;},clearTimeout:()=>{}}});return module.exports;}
+function compile(file,requireFn){const module={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText,{module,exports:module.exports,require:require('./fixtures/render-clock-require.cjs')(requireFn),Date,window:{setInterval:()=>0,clearInterval:()=>{},setTimeout:fn=>{fn();return 0;},clearTimeout:()=>{}}});return module.exports;}
 function aggregate(rows){const values=rows.map(row=>row.settlement?.state||'PENDING'),count=state=>values.filter(value=>value===state).length;const won=count('WON'),lost=count('LOST'),settled=won+lost;return{published:rows.length,settled,won,lost,pending:count('PENDING'),void:count('VOID'),disputed:count('DISPUTED'),hitRate:settled?won/settled:null};}
 async function harness({missingInputEvidence=false,reviewFailure=false,withHandicap=false,mode='review'}={}){
   const p=memoryPorts();if(missingInputEvidence)for(const m of p.current){const {version,generatedAt,oneXTwo}=m.probabilityModel;m.probabilityModel={version,generatedAt,oneXTwo};}
@@ -13,7 +13,7 @@ async function harness({missingInputEvidence=false,reviewFailure=false,withHandi
   data.review.statistics.single={published:69,settled:69,won:35,lost:34,pending:0,void:0,disputed:0,hitRate:35/69};
   let cursor=0;const state=[],versionKey='a'.repeat(64);
   const reviewPage=filters=>{
-    if(reviewFailure)return {data:null,loading:false,failed:true,authorizationRequired:false,refresh:()=>{}};
+    if(reviewFailure)return {data:null,loading:false,failed:true,authorizationRequired:false,receivedAt:Date.now(),refresh:()=>{}};
     const all=filters.kind==='single'?data.review.singles:data.review.combos.filter(row=>row.combo.size===(filters.kind==='two'?2:3));
     const marketRows=all.filter(row=>{
       if(filters.kind==='single')return filters.market!=='MIXED'&&(filters.market!=='HHAD'||Boolean(row.decision.handicapAnalysis?.tipCode));
@@ -24,7 +24,7 @@ async function harness({missingInputEvidence=false,reviewFailure=false,withHandi
     const cohort=marketRows.filter(row=>!filters.version||filters.version===versionKey),needle=filters.q.toLocaleLowerCase();
     const filtered=cohort.filter(row=>(!filters.date||(row.decision?.businessDate||row.combo?.businessDate)===filters.date)&&(!needle||[...(row.decision?[row.decision]:row.combo.legs)].flatMap(d=>[d.homeTeamName,d.awayTeamName,d.matchNo,d.sourceMatchId]).join(' ').normalize('NFKC').toLocaleLowerCase().includes(needle))&&(filters.state==='ALL'||row.settlement?.state===filters.state));
     const rows=filtered.slice((filters.page-1)*filters.pageSize,filters.page*filters.pageSize).map(row=>({...row,selectedMarket:filters.kind==='single'?(filters.market==='HHAD'?'HHAD':'HAD'):'HAD',selectedSettlement:row.settlement,selectedOdds:row.decision?.odds||row.combo?.totalOdds||null,oddsState:'available',versionKey,versionLabel:'fixture-model · fixture-policy'}));
-    return {data:{rows,total:filtered.length,page:filters.page,pageCount:Math.ceil(filtered.length/filters.pageSize),summary:{all:aggregate(cohort),windows:{last7:aggregate(cohort),last30:aggregate(cohort)}},versions:[{key:versionKey,label:'fixture-model · fixture-policy',count:all.length}]},loading:false,failed:false,authorizationRequired:false,refresh:()=>{}};
+    return {data:{rows,total:filtered.length,page:filters.page,pageCount:Math.ceil(filtered.length/filters.pageSize),summary:{all:aggregate(cohort),windows:{last7:aggregate(cohort),last30:aggregate(cohort)}},versions:[{key:versionKey,label:'fixture-model · fixture-policy',count:all.length}]},loading:false,failed:false,authorizationRequired:false,receivedAt:Date.now(),refresh:()=>{}};
   };
   const component=compile(require.resolve('../src/components/recommendations/RecommendationCenter.tsx'),id=>{
     if(id==='react')return {useEffect:callback=>callback(),useState:initial=>{const index=cursor++;if(!(index in state))state[index]=typeof initial==='function'?initial():initial;return [state[index],value=>{state[index]=typeof value==='function'?value(state[index]):value;}];}};
@@ -32,7 +32,7 @@ async function harness({missingInputEvidence=false,reviewFailure=false,withHandi
     if(id==='./SelectionQualityNote')return require('./fixtures/selection-quality-note-module.cjs');
     if(id==='./DayCoverage')return {DayCoverage:()=>null};
     if(id==='./MarketComparison')return {MarketComparison:()=>null};
-    if(id==='../../hooks/useRecommendationCenter')return {useRecommendationCenter:()=>({data,loading:false,failed:false,authorizationRequired:false,refresh:()=>{}})};
+    if(id==='../../hooks/useRecommendationCenter')return {useRecommendationCenter:()=>({data,loading:false,failed:false,authorizationRequired:false,receivedAt:Date.now(),refresh:()=>{}})};
     if(id==='../../hooks/useRecommendationReviewPage')return {useRecommendationReviewPage:reviewPage};
     if(id==='../FollowButton')return {FollowButton:()=>null};
     if(id==='../TeamBadge')return {TeamBadge:({team,size})=>({type:'span',props:{'data-badge-name':team.name.zh,'data-badge-id':team.id,'data-badge-size':size}})};
