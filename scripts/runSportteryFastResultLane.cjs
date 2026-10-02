@@ -404,12 +404,11 @@ const runCycle = async (previousState) => {
         }
       : failure;
     state.lastPublishDecision = heartbeatDecision;
-    const resultRetryMs = Date.now() + delayMs;
-    const heartbeatBaseMs = Date.parse(String(state.lastUploadOkAt || ""));
-    const heartbeatRetryMs = Number.isFinite(heartbeatBaseMs)
-      ? heartbeatBaseMs + currentHeartbeatMs
-      : Date.now();
-    state.nextAttemptAt = new Date(Math.min(resultRetryMs, heartbeatRetryMs)).toISOString();
+    // This loop always probes results first. An overdue current heartbeat must
+    // not shorten the failed probe's backoff or turn its next deadline into a
+    // past timestamp. Apply the existing failure/WAF delay from completion,
+    // including when the independent current heartbeat succeeded above.
+    state.nextAttemptAt = new Date(Date.now() + delayMs).toISOString();
     writeJsonAtomic(statePath, state);
     return {
       ok: false,
