@@ -3420,6 +3420,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
                 match={match}
                 prediction={primaryOutcomePrediction || primaryPostReviewPrediction}
                 publishedDecision={useUnified ? unifiedRow?.decision || null : undefined}
+                selectionQuality={useUnified ? unifiedRow?.selectionQuality : undefined}
                 language={language}
                 className="is-detail"
               />
@@ -3651,7 +3652,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
               </div>
             )}
 
-            {useUnified ? <div className="card"><RecommendationEvidenceFacts match={match} publishedDecision={unifiedRow?.decision || null} language={language} supplementaryModel={false} /></div> : <>
+            {useUnified ? <div className="card"><RecommendationEvidenceFacts match={match} publishedDecision={unifiedRow?.decision || null} selectionQuality={unifiedRow?.selectionQuality} language={language} supplementaryModel={false} /></div> : <>
             <div className={`card signal-summary-card is-${matchSignal.category} ${isFormalPrimaryRecommendation || isLivePrimaryRecommendation || isArchivedLiveRecommendation ? '' : 'is-reference'}`}>
               <div>
                 <span className={`signal-badge is-${matchSignal.category}`}>{displayText(matchSignal.label[language])}</span>
@@ -3711,7 +3712,7 @@ export const MatchDetail: React.FC<MatchDetailProps> = ({ matchId, onBack, initi
         {activeTab === 'probability' && (
           <div className="match-detail-v4__section-stack" data-section="probability">
 
-            {useUnified && <div className="card"><RecommendationEvidenceFacts match={match} publishedDecision={unifiedRow?.decision || null} language={language} supplementaryModel={false} /></div>}
+            {useUnified && <div className="card"><RecommendationEvidenceFacts match={match} publishedDecision={unifiedRow?.decision || null} selectionQuality={unifiedRow?.selectionQuality} language={language} supplementaryModel={false} /></div>}
 
             <section className="card match-detail-v4__odds-card" aria-labelledby="match-detail-odds-heading">
               <div className="match-detail-v4__section-head">
