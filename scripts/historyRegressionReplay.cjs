@@ -7,10 +7,22 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const { strictInstant } = require("../src/services/strictInstant.cjs");
 const OUTCOMES = Object.freeze(["home", "draw", "away"]);
 const VERSION = "history-regression-replay-v1";
 const EPSILON = 1e-15;
 const PROBABILITY_ROUNDING_TOLERANCE = 1e-5;
+// Extending this contract requires field-level provenance review. A caller's
+// feature name or a payload hash alone does not establish prematch semantics.
+const FEATURE_CONTRACT = Object.freeze({
+  version: "prematch-scalar-features-v2",
+  allowedNames: Object.freeze(["elo", "form", "weather"]),
+  requiredClocks: Object.freeze(["providerObservedAt", "receivedAt", "availableAt"]),
+  optionalClocks: Object.freeze(["observedAt"]),
+  ordering: "providerObservedAt <= observedAt (if declared) <= receivedAt <= availableAt <= decision.at",
+  eligibility: "features.candidateEligible must be true; each field must pass value, status, source/hash and original-clock checks",
+});
+const FEATURE_CLOCKS = [...FEATURE_CONTRACT.requiredClocks, ...FEATURE_CONTRACT.optionalClocks];
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -34,9 +46,8 @@ function freezeCopy(value) {
 
 function instant(value, field) {
   assert(typeof value === "string" && /(?:Z|[+-]\d\d:\d\d)$/.test(value), `${field}: explicit timezone required`);
-  const number = Date.parse(value);
-  assert(Number.isFinite(number), `${field}: invalid timestamp`);
-  return number;
+  assert(strictInstant(value) !== null, `${field}: invalid timestamp`);
+  return Date.parse(value);
 }
 
 function offsetFor(timeZone) {
@@ -133,20 +144,59 @@ function featureIsMissing(row, key) {
   return missingFeature(features.groups?.[key] ?? features.values?.[key] ?? features[key]);
 }
 
+function featureNanoseconds(value) {
+  // strictInstant accepts up to nine fractional digits. Date.parse alone would
+  // truncate a future sub-millisecond observation into the decision's millisecond.
+  const fraction = /\.(\d{1,9})(?:Z|[+-]\d\d:\d\d)$/.exec(value)?.[1] ?? "";
+  return BigInt(Date.parse(value)) * 1000000n + BigInt(fraction.padEnd(9, "0").slice(3));
+}
+
 function auditedFeatures(row, requiredFeatures = []) {
   if (!requiredFeatures.length) return {};
-  assert(row.features?.candidateEligible !== false, "features-declared-ineligible-for-candidate-replay");
+  assert(row.features?.candidateEligible === true, "features-explicit-candidate-eligibility-required");
+  assert(strictInstant(row.decision.at) !== null, "decision.at: invalid strict feature decision timestamp");
+  const decisionAt = featureNanoseconds(row.decision.at);
   const result = {};
   for (const key of requiredFeatures) {
-    assert(!/(?:^|[_-])(result|outcome|finalscore|closing|postmatch)(?:$|[_-])/i.test(key), `forbidden feature: ${key}`);
+    assert(FEATURE_CONTRACT.allowedNames.includes(key), `forbidden or unreviewed feature: ${key}`);
     const feature = row.features?.values?.[key] ?? row.features?.[key];
+    assert(!featureIsMissing(row, key) && !missingFeature(feature) && feature?.candidateEligible !== false
+      && row.features?.groups?.[key]?.candidateEligible !== false, `feature missing or declared ineligible: ${key}`);
     assert(feature && (typeof feature.value === "boolean" || (typeof feature.value === "number" && Number.isFinite(feature.value))), `audited numeric/boolean feature missing: ${key}`);
-    assert(typeof feature.source === "string" && feature.source && /^[a-f0-9]{64}$/.test(feature.payloadSha256 ?? ""), `feature source/hash missing: ${key}`);
-    assert(instant(feature.availableAt, `features.${key}.availableAt`) <= instant(row.decision.at, "decision.at"), `feature unavailable at decision: ${key}`);
+    assert(typeof feature.source === "string" && feature.source.trim() && /^[a-f0-9]{64}$/.test(feature.payloadSha256 ?? ""), `feature source/hash missing: ${key}`);
+    const clocks = {};
+    for (const clock of FEATURE_CLOCKS) {
+      const declared = Object.hasOwn(feature, clock);
+      assert(declared || !FEATURE_CONTRACT.requiredClocks.includes(clock), `feature clock missing: ${key}.${clock}`);
+      if (!declared) continue; // Never invent a missing original clock.
+      assert(strictInstant(feature[clock]) !== null, `invalid strict feature timestamp: ${key}.${clock}`);
+      clocks[clock] = feature[clock]; // Preserve the original timezone/precision bytes.
+      assert(featureNanoseconds(clocks[clock]) <= decisionAt, `feature unavailable at decision: ${key}.${clock}`);
+    }
+    const ordered = ["providerObservedAt", ...(Object.hasOwn(clocks, "observedAt") ? ["observedAt"] : []), "receivedAt", "availableAt"];
+    for (let i = 1; i < ordered.length; i += 1) {
+      assert(featureNanoseconds(clocks[ordered[i - 1]]) <= featureNanoseconds(clocks[ordered[i]]), `feature clock order invalid: ${key}.${ordered[i - 1]} > ${ordered[i]}`);
+    }
     // No arbitrary nested fields, scores, or later observations are passed on.
-    result[key] = { value: feature.value, availableAt: feature.availableAt, source: feature.source, payloadSha256: feature.payloadSha256 };
+    result[key] = { value: feature.value, ...clocks, source: feature.source, payloadSha256: feature.payloadSha256 };
   }
   return result;
+}
+
+function featureAudit(row, names) {
+  try { return { eligible: true, features: auditedFeatures(row, names) }; }
+  catch (error) {
+    // Rejected evidence retains declared clock bytes too. Invalid JS types are
+    // described before JSON copying could delete undefined or stringify Date.
+    const declaredClocks = Object.fromEntries(names.map((name) => {
+      const feature = row.features?.values?.[name] ?? row.features?.[name];
+      return [name, Object.fromEntries(FEATURE_CLOCKS.filter((key) => feature && Object.hasOwn(feature, key)).map((key) => {
+        const value = feature[key];
+        return [key, typeof value === "string" ? value : { invalidType: value === null ? "null" : typeof value }];
+      }))];
+    }));
+    return { eligible: false, reason: String(error.message).slice(0, 250), declaredClocks };
+  }
 }
 
 function oddsBand(row) {
@@ -279,21 +329,22 @@ function predictionBoundary(rows, window) {
   return Math.min(window.startMs, ...rows.map((row) => instant(row.decision.at, "decision.at")));
 }
 
-function predictInput(row, requiredFeatures = []) {
+function predictInput(row, features = {}) {
   // No outcome, result observation, later closing price, or arbitrary top-level
-  // payload is handed to prediction adapters. Feature as-of proof is upstream.
+  // payload is handed to prediction adapters. Features passed here have already
+  // passed the original (pre-JSON-copy) contract audit as well as upstream admission.
   return freezeCopy({
     matchId: row.matchId, market: row.market,
     league: String(typeof row.league === "object" ? row.league?.name ?? row.league?.id ?? "unknown" : row.league ?? "unknown"),
     kickoffAt: row.kickoffAt,
     decision: { id: row.decision.id, at: row.decision.at, modelVersion: row.decision.modelVersion, probabilities: probabilities(row.decision.probabilities) },
     officialOdds: { sp: Object.fromEntries(OUTCOMES.map((key) => [key, row.officialOdds.sp[key]])) },
-    features: auditedFeatures(row, requiredFeatures),
+    features,
   });
 }
 
-function labeledInput(row, requiredFeatures = []) {
-  return freezeCopy({ ...predictInput(row, requiredFeatures), result: { outcome: row.result.outcome, observedAt: row.result.observedAt } });
+function labeledInput(row, features = {}) {
+  return freezeCopy({ ...predictInput(row, features), result: { outcome: row.result.outcome, observedAt: row.result.observedAt } });
 }
 
 function syncCall(fn, ...args) {
@@ -346,15 +397,14 @@ function summarizeSet(rows, keys, bootstrap) {
  * network, clocks, global future data, or mutate inputs. State is JSON/frozen.
  * Candidate definitions are fixed before execution; no final-test tuning/refit.
  * Feature plugins must name requiredFeatures. Each features.values[name] (or
- * features[name]) must contain a finite numeric/boolean value, availableAt <=
- * decision.at, nonempty source and payloadSha256. Diagnostic-only features
- * with candidateEligible:false are withheld. No undeclared feature is exposed.
+ * features[name]) must satisfy FEATURE_CONTRACT. Explicit upstream eligibility
+ * is required; missing clocks are never backfilled. Every declared original
+ * clock is checked and retained. No undeclared feature is exposed.
  */
 function runHistoryRegressionReplay(records, options = {}) {
   const timeZone = options.timeZone ?? "Asia/Shanghai";
   const offset = offsetFor(timeZone);
   validateRecords(records, offset);
-  const input = freezeCopy(records).slice().sort((a, b) => instant(a.kickoffAt, "kickoffAt") - instant(b.kickoffAt, "kickoffAt") || a.matchId.localeCompare(b.matchId));
   const rawFolds = options.folds ?? [{ id: "fixed-1", ...options.windows }];
   assert(Array.isArray(rawFolds) && rawFolds.length > 0, "at least one explicit fold is required");
   const finalWindow = normalizeWindow(options.finalTest ?? options.windows?.finalTest, offset, "finalTest");
@@ -382,13 +432,22 @@ function runHistoryRegressionReplay(records, options = {}) {
     assert(!plugin.requiresCalibration || typeof plugin.calibrate === "function", "calibration required but adapter missing");
     assert(plugin.requiredFeatures === undefined || (Array.isArray(plugin.requiredFeatures) && plugin.requiredFeatures.every((key) => typeof key === "string" && key)), "plugin requiredFeatures must be string names");
   }
+  const featurePlugins = plugins.filter((plugin) => plugin.requiredFeatures?.length);
+  const featureAudits = new Map(records.map((row) => [row.matchId, new Map(featurePlugins.map((plugin) => [plugin.id, freezeCopy(featureAudit(row, plugin.requiredFeatures))]))]));
+  const admittedFeatures = (row, plugin) => {
+    if (!plugin.requiredFeatures?.length) return {};
+    const audit = featureAudits.get(row.matchId).get(plugin.id);
+    assert(audit.eligible, audit.reason);
+    return audit.features;
+  };
+  const input = freezeCopy(records).slice().sort((a, b) => instant(a.kickoffAt, "kickoffAt") - instant(b.kickoffAt, "kickoffAt") || a.matchId.localeCompare(b.matchId));
   const keys = [...pluginIds];
   const featureKeys = declaredFeatureKeys(input, options.featureKeys);
   const finalRows = input.filter((row) => within(row, finalWindow, offset));
   const finalBoundary = predictionBoundary(finalRows, finalWindow);
   const protocol = {
     timeZone, windowSemantics: "half-open whole kickoff-calendar days; outcomes must be observed strictly before next stage's earliest decision/start",
-    folds, finalTest: finalWindow, minimumRows: min, featureKeys,
+    folds, finalTest: finalWindow, minimumRows: min, featureKeys, featureContract: FEATURE_CONTRACT,
     selection: "pooled past validation logLoss, then Brier, then plugin id; full validation coverage required; final test read only after selection",
     candidates: plugins.map((plugin) => ({ id: plugin.id, version: plugin.version, implementationHash: plugin.implementationHash ?? null, selectable: plugin.selectable !== false, requiredFeatures: plugin.requiredFeatures ?? [] })),
     bootstrap: options.bootstrap ?? {},
@@ -400,8 +459,8 @@ function runHistoryRegressionReplay(records, options = {}) {
   const trainOrCalibrate = (plugin, trainRows, calibrationRows, context) => {
     assert(trainRows.length >= min.training, "insufficient-training-rows");
     if (plugin.calibrate || plugin.requiresCalibration) assert(calibrationRows.length >= min.calibration, "insufficient-calibration-rows");
-    let state = freezeCopy(syncCall(plugin.fit, freezeCopy(trainRows.map((row) => labeledInput(row, plugin.requiredFeatures))), context));
-    if (plugin.calibrate) state = freezeCopy(syncCall(plugin.calibrate, state, freezeCopy(calibrationRows.map((row) => labeledInput(row, plugin.requiredFeatures))), context));
+    let state = freezeCopy(syncCall(plugin.fit, freezeCopy(trainRows.map((row) => labeledInput(row, admittedFeatures(row, plugin)))), context));
+    if (plugin.calibrate) state = freezeCopy(syncCall(plugin.calibrate, state, freezeCopy(calibrationRows.map((row) => labeledInput(row, admittedFeatures(row, plugin)))), context));
     return state;
   };
   const predictRows = (plugin, state, rows, context) => {
@@ -409,7 +468,7 @@ function runHistoryRegressionReplay(records, options = {}) {
     const failures = [];
     for (const row of rows) {
       try {
-        const value = syncCall(plugin.predict, state, predictInput(row, plugin.requiredFeatures), context);
+        const value = syncCall(plugin.predict, state, predictInput(row, admittedFeatures(row, plugin)), context);
         if (value === null || value === undefined) failures.push({ matchId: row.matchId, reason: "plugin-abstained" });
         else map.set(row.matchId, probabilities(value));
       } catch (error) { failures.push({ matchId: row.matchId, reason: String(error.message).slice(0, 250) }); }
@@ -475,6 +534,10 @@ function runHistoryRegressionReplay(records, options = {}) {
     evaluationKinds: { publishedModel: "original-frozen-prediction-review", sameDecisionMarket: "same-decision-proportional-de-vig-benchmark", [frequencyBaseline.id]: "simple-baseline-replay", candidate: "candidateReplay-not-original-prediction" },
     input: { records: input.length, recordSetHash: hash(input), source: options.source ?? null, admission: "caller must provide independently admitted production evidence; this module rechecks structure, chronology and uniqueness only" },
     protocol, protocolHash, folds: foldReports,
+    featureAdmission: { contractVersion: FEATURE_CONTRACT.version, rows: featurePlugins.length ? input.map((row) => ({
+      matchId: row.matchId, market: row.market, decisionId: row.decision.id, decisionAt: row.decision.at,
+      inputRecordHash: hash(row), candidates: Object.fromEntries(featureAudits.get(row.matchId)),
+    })) : [] },
     validation: summarizeSet(pooledValidation, keys, options.bootstrap),
     selection: { selectedCandidate: selected?.id ?? null, candidateStateHash: selected ? lastStates.get(selected.id).stateHash : null, eligibleCandidates: eligible.map(({ plugin, metric }) => ({ id: plugin.id, n: metric.n, logLoss: metric.logLoss, brier: metric.brier })), reason: selected ? "selected-using-past-validation-only" : "no-full-coverage-candidate-with-sufficient-validation", finalTestUsedForSelection: false, stateFromFold: folds[folds.length - 1].id },
     finalTest: { ...summarizeSet(finalScored, selectedKeys, options.bootstrap), window: finalWindow, requiredRows: min.finalTest, sufficientRows: finalRows.length >= min.finalTest, pluginStatus: finalPluginStatus, perMatch: finalScored },
@@ -530,4 +593,4 @@ if (require.main === module) {
   try { cli(process.argv.slice(2)); } catch (error) { process.stderr.write(`${error.message}\n`); process.exitCode = 1; }
 }
 
-module.exports = { VERSION, OUTCOMES, score, summarize, probabilities, marketProbabilities, pairedDayBootstrap, runHistoryRegressionReplay, summarizePublishedHistory, frequencyBaseline };
+module.exports = { VERSION, OUTCOMES, FEATURE_CONTRACT, score, summarize, probabilities, marketProbabilities, pairedDayBootstrap, runHistoryRegressionReplay, summarizePublishedHistory, frequencyBaseline };

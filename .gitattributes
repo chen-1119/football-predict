@@ -10,6 +10,8 @@ server/postgres/migrations/*.sql text eol=lf
 server/postgres/migrations/002_projection_runtime.sql whitespace=-blank-at-eof
 
 # Preserve byte-hashed history-regression code and evidence across Windows checkouts.
+.gitattributes text eol=lf
+src/services/strictInstant.cjs text eol=lf
 docs/history-regression* text eol=lf
 scripts/historyRegression* text eol=lf
 scripts/captureHistoryRegression.cjs text eol=lf
@@ -19,3 +21,5 @@ scripts/plotHistoryRegression.py text eol=lf
 tests/history-regression-* text eol=lf
 outputs/history-regression-20261002/** text eol=lf
 outputs/history-regression-20261002/**/*.png -text
+outputs/history-feature-admission-20261002/** text eol=lf
+outputs/history-feature-admission-20261002/external-snapshot-*/** -text

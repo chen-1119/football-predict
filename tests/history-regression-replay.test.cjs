@@ -254,7 +254,7 @@ test("synthetic: unknown result and closing fields cannot pass through predictio
 });
 
 test("synthetic: declared features require finite values, source/hash and decision-time availability", () => {
-  const rows = syntheticRows().map((row) => ({ ...row, features: { candidateEligible: true, values: { form: { value: 0.3, source: "synthetic-source", payloadSha256: "a".repeat(64), availableAt: row.decision.at, extraFuture: "SECRET_OUTCOME" } } } }));
+  const rows = syntheticRows().map((row) => ({ ...row, features: { candidateEligible: true, values: { form: { value: 0.3, source: "synthetic-source", payloadSha256: "a".repeat(64), providerObservedAt: row.decision.at, receivedAt: row.decision.at, availableAt: row.decision.at, extraFuture: "SECRET_OUTCOME" } } } }));
   const candidate = {
     id: "synthetic-feature-audit", version: "1", requiredFeatures: ["form"],
     fit(train) { assert.equal(JSON.stringify(train).includes("SECRET_OUTCOME"), false); return { home: 0.5, draw: 0.25, away: 0.25 }; },
