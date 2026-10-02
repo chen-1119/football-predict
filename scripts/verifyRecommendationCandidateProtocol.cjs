@@ -21,6 +21,9 @@ for (const mutate of [m => m.calibration.calendarBlocks = ['day1'], m => m.final
   const copy = JSON.parse(original); mutate(copy); assert.equal(auditCandidateProtocol(copy).status, 'blocked');
 }
 assert.equal(JSON.stringify(manifest), original);
+const impossibleDate = JSON.parse(original);
+impossibleDate.training.startAt = '2026-02-30T00:00:00Z';
+assert.ok(auditCandidateProtocol(impossibleDate).blockers.includes('training-window-invalid'));
 const gates = { probabilitiesValid: true, sameDecisionMarketVerified: true, decisionClockVerified: true,
   cutoffOpen: true, inputEvidenceVerified: true, severeMissingCount: 0, existingPolicyEligible: true,
   riskEligible: true, modelPromotionEligible: true, dataFresh: true, sourceHealthOk: true, recommendationReliable: true };

@@ -1,8 +1,8 @@
 'use strict';
 
 const HASH = /^[a-f0-9]{64}$/;
-const instant = value => typeof value === 'string' && /(?:Z|[+-]\d{2}:\d{2})$/.test(value)
-  && Number.isFinite(Date.parse(value)) ? Date.parse(value) : null;
+const { strictInstant } = require('../src/services/strictInstant.cjs');
+const instant = value => strictInstant(value) ? Date.parse(value) : null;
 
 // Validates evaluation manifests supplied by the history task. No dataset
 // selection, training, replay, threshold tuning, or publication occurs here.
