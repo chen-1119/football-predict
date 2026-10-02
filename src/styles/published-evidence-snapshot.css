@@ -20,3 +20,18 @@
 .published-evidence-snapshot__clocks>div{display:grid;grid-template-columns:90px minmax(0,1fr);gap:8px}
 .published-evidence-snapshot__clocks dd{margin:0;overflow-wrap:anywhere}
 @media(max-width:480px){.published-evidence-snapshot__states{grid-template-columns:minmax(0,1fr)}.recommendation-evidence-facts .published-evidence-snapshot__outcomes{gap:5px}.published-evidence-snapshot__outcomes>div{padding:8px 4px}.published-evidence-snapshot__outcomes small b{display:block}}
+
+.published-evidence-readiness{margin:0 0 20px;padding:16px 18px;border:1px solid #bdd0c8;border-left:4px solid #326b56;border-radius:12px;background:#f0f6f3;color:#234436;line-height:1.7;overflow-wrap:anywhere}
+.published-evidence-readiness[data-display-stage="waiting-for-data"]{border-color:#d5c8ac;border-left-color:#89652b;background:#faf6ed;color:#59451f}
+.published-evidence-readiness__head{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+.published-evidence-readiness__head>div{min-width:0}
+.published-evidence-readiness__head span{display:block;font-size:12px;font-weight:500}
+.published-evidence-readiness__head strong{display:block;font-size:21px;line-height:1.4;margin-top:3px}
+.published-evidence-readiness__head b{display:block;font-size:14px;line-height:1.6;margin-top:4px}
+.recommendation-evidence-facts .published-evidence-readiness p,.published-evidence-readiness li{font-size:13px;line-height:1.8;color:inherit}
+.published-evidence-readiness ul{padding-left:18px;margin:12px 0 0}
+.recommendation-evidence-facts .published-evidence-readiness p{margin:10px 0 0}
+.published-evidence-readiness__reference{font-weight:650}
+.published-evidence-readiness__next{border-top:1px solid #c8d8d1;padding-top:10px}
+.published-evidence-readiness[data-display-stage="waiting-for-data"] .published-evidence-readiness__next{border-color:#ded2bd}
+@media(max-width:480px){.published-evidence-readiness{padding:14px}.published-evidence-readiness__head{gap:10px}.published-evidence-readiness__head strong{font-size:19px}.published-evidence-readiness__head b{font-size:13px}}

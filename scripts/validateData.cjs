@@ -171,7 +171,21 @@ let legacyStaleCurrentRows = 0;
 let legacyReviewHhadWithoutLineRows = 0;
 let legacyHadWithoutExplicitLineRows = 0;
 
-if (!Array.isArray(currentMatches) || currentMatches.length === 0) {
+let officialClosedScheduleEvidence = null;
+if (Array.isArray(currentMatches) && currentMatches.length === 0) {
+  if (!fs.existsSync(currentMatchesPath)) errors.push('Signed stop-sale proof requires an explicit matches-current.json empty array.');
+  officialClosedScheduleEvidence = require('./officialClosedScheduleEvidence.cjs').auditPublishedOfficialClosedSchedule(syncMeta, {
+    trustRegistryPath: process.env.SPORTTERY_COLLECTOR_TRUST_REGISTRY_PATH
+      || path.join(__dirname, '..', 'deploy', 'light-server', 'collector-trust-registry.json'),
+    asOf: new Date().toISOString(),
+  });
+  if (officialClosedScheduleEvidence.emptyCurrentIntegrityEligible) {
+    publicationWarnings.push('Official signed stop-sale evidence confirms an empty current list; odds freshness and recommendation gates remain unchanged.');
+  } else {
+    errors.push('Empty current list lacks fresh signed official stop-sale proof: ' + officialClosedScheduleEvidence.blockers.join(', '));
+  }
+}
+if (!Array.isArray(currentMatches) || (currentMatches.length === 0 && !officialClosedScheduleEvidence?.emptyCurrentIntegrityEligible)) {
   errors.push("matches-current.json must contain a non-empty array.");
 }
 
@@ -588,6 +602,7 @@ console.log(
       resultOnlyCount,
       oddsHistoryRows: oddsHistoryRows.length,
       publicationWarnings,
+      officialClosedScheduleEvidence,
       currentListPolicy: {
         evaluatedAt: currentListEvaluatedAt,
         unsettledRetentionHours: currentUnsettledRetentionHours,

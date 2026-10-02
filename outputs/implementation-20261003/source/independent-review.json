@@ -1,0 +1,73 @@
+{
+  "version": "official-closure-independent-review-v1",
+  "reviewedAt": "2026-10-02T16:38:13.541Z",
+  "reviewer": "/root/prospective_model_experiment",
+  "disposition": "ready-for-integration-not-deployed",
+  "scope": [
+    "scripts/officialClosedScheduleEvidence.cjs",
+    "scripts/syncData.cjs",
+    "scripts/validateData.cjs",
+    "tests/official-closed-schedule-evidence.test.cjs"
+  ],
+  "method": "Read-only final code/diff/test inspection and inspection of existing real signed projection replay receipt. No remote access or tests rerun by reviewer.",
+  "sourceModifiedByReviewer": false,
+  "providerRequestsByReviewer": 0,
+  "codeFiles": [
+    {
+      "file": "scripts/officialClosedScheduleEvidence.cjs",
+      "lfNormalizedUtf8Sha256": "90dd4b7f2c4521a8beb54e5692414122756796fba2926f1b1e3c9e185ccb51c5"
+    },
+    {
+      "file": "scripts/syncData.cjs",
+      "lfNormalizedUtf8Sha256": "5785236c94028e965cdcc494b6bd5aab55335b0af4a71ef46c16187dfe66e41f"
+    },
+    {
+      "file": "scripts/validateData.cjs",
+      "lfNormalizedUtf8Sha256": "d8033cf65a67a941217fcbfecdadb1af2133488e010897e4d2487771a5f107b4"
+    },
+    {
+      "file": "tests/official-closed-schedule-evidence.test.cjs",
+      "lfNormalizedUtf8Sha256": "bad7ecc82c7cf50344563a78da566ec58b827a3fcfd07e09efc84115eaddb9e9"
+    }
+  ],
+  "hashNote": "Hashes normalize CRLF to LF so root checkout normalization does not invalidate this logical review; byte hashes remain in the source replay and integration receipts.",
+  "openMaterialFindings": [],
+  "fixedFindings": [
+    {
+      "id": "missing-current-is-not-empty",
+      "file": "scripts/validateData.cjs",
+      "problem": "Fallback loading could represent a missing matches-current.json as an empty array, admitting the empty-list exception without the required file.",
+      "resolution": "Empty branch explicitly requires matches-current.json to exist; both server and public-distribution validator paths include rejection tests.",
+      "status": "resolved-in-reviewed-code"
+    }
+  ],
+  "verifiedBoundaries": [
+    "Current and calculator endpoints must be exact approved GET targets, successful HTTP 200 responses and empty; calculator must explicitly report both official stop-sale flags and exact messages.",
+    "Actual payload canonical hash, endpoint identity, cycle, response metadata and collector signatures are revalidated using the independently loaded trusted registry; self-declared eligibility or proof-supplied registry cannot grant trust.",
+    "Endpoints share collector key and runtime; signed original request/receive clocks are bound at nanosecond precision, with strict calendars, causal ordering and a 1200-second maximum age.",
+    "Public projection carries the two signed payloads for independent revalidation; full private snapshot hash is provenance metadata, not a claim that the exported projection equals the original snapshot bytes.",
+    "Public proof is bound to publication sourceCycleId and currentListPolicy.evaluatedAt; expiration is reevaluated on validation rather than trusting a saved true flag.",
+    "Change admits only explicit empty current-list structural integrity. Market freshness, recommendation eligibility, collector redundancy and historical score validation retain their existing gates.",
+    "Nonempty current lists keep the existing validation path, and private request headers, producer metadata and registry keys are excluded from generated public proof."
+  ],
+  "inspectedEvidence": {
+    "replayPath": "outputs/implementation-20261003/source/closure-proof-replay.json",
+    "reportedChecks": 44,
+    "testsRerunByReviewer": false,
+    "observationReplayEligible": true,
+    "laterReplayEligible": false,
+    "publishedProjectionObservationEligible": true,
+    "publishedProjectionLaterEligible": false,
+    "projectedProofBytes": 5177
+  },
+  "productionBoundary": {
+    "productionWritesByReviewer": false,
+    "deploymentVerified": false,
+    "liveSourceRecoveryEstablished": false,
+    "accuracyImprovementEstablished": false,
+    "marketDataPromoted": false,
+    "recommendationsPromoted": false,
+    "collectorRedundancyPromoted": false,
+    "requiredForProductionAcceptance": "Publish with a newly captured signed proof within 1200 seconds, an explicit empty matches-current.json, matching publication metadata and the independent trusted registry; run existing source, market and recommendation gates separately. The historical replay proof is already expired and is not deployable as current evidence."
+  }
+}

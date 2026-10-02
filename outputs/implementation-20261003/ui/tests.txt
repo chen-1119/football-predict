@@ -1,0 +1,148 @@
+TAP version 13
+# Subtest: data-only detail keeps actual injury fields and receipt time without source attribution or attempt clocks
+ok 1 - data-only detail keeps actual injury fields and receipt time without source attribution or attempt clocks
+  ---
+  duration_ms: 205.5224
+  type: 'test'
+  ...
+# Subtest: both team lineups retain formation, coach, real shirt numbers, starters and substitutes
+ok 2 - both team lineups retain formation, coach, real shirt numbers, starters and substitutes
+  ---
+  duration_ms: 46.7055
+  type: 'test'
+  ...
+# Subtest: previousValue keeps the actual injury and lineup records with original receipt times
+ok 3 - previousValue keeps the actual injury and lineup records with original receipt times
+  ---
+  duration_ms: 35.1135
+  type: 'test'
+  ...
+# Subtest: empty and failed data states never invent players, successful receipt times or collector diagnostics
+ok 4 - empty and failed data states never invent players, successful receipt times or collector diagnostics
+  ---
+  duration_ms: 437.4309
+  type: 'test'
+  ...
+# Subtest: GET failures stay readable without exposing source cards or remote URLs
+ok 5 - GET failures stay readable without exposing source cards or remote URLs
+  ---
+  duration_ms: 93.4213
+  type: 'test'
+  ...
+# Subtest: source metadata including legitimate and malicious sourcePage URLs is omitted in every display state
+ok 6 - source metadata including legitimate and malicious sourcePage URLs is omitted in every display state
+  ---
+  duration_ms: 616.9066
+  type: 'test'
+  ...
+# Subtest: explicit priority POST keeps authentication, single submission and cooldown while automatic reads stay separate
+ok 7 - explicit priority POST keeps authentication, single submission and cooldown while automatic reads stay separate
+  ---
+  duration_ms: 50.0567
+  type: 'test'
+  ...
+# Subtest: priority errors remain visible and kicked-off matches cannot queue requests or fabricate lineups
+ok 8 - priority errors remain visible and kicked-off matches cannot queue requests or fabricate lineups
+  ---
+  duration_ms: 167.0951
+  type: 'test'
+  ...
+# Subtest: unknown injuries use an unknown count for totals and each team
+ok 9 - unknown injuries use an unknown count for totals and each team
+  ---
+  duration_ms: 216.1352
+  type: 'test'
+  ...
+# Subtest: stale payloads never regain collected or confirmed status through data presence
+ok 10 - stale payloads never regain collected or confirmed status through data presence
+  ---
+  duration_ms: 15.3726
+  type: 'test'
+  ...
+# Subtest: captured production decisions keep probability, SP and provenance paired without reading current or legacy prices
+ok 11 - captured production decisions keep probability, SP and provenance paired without reading current or legacy prices
+  ---
+  duration_ms: 17.2212
+  type: 'test'
+  ...
+# Subtest: missing three-way SP shows only the archived selected price; invalid prices remain unknown
+ok 12 - missing three-way SP shows only the archived selected price; invalid prices remain unknown
+  ---
+  duration_ms: 2.4398
+  type: 'test'
+  ...
+# Subtest: model validation and service reference qualification stay distinct in both languages
+ok 13 - model validation and service reference qualification stay distinct in both languages
+  ---
+  duration_ms: 4.4399
+  type: 'test'
+  ...
+# Subtest: missing publication stays waiting and never displays a invented cutoff, version or probability
+ok 14 - missing publication stays waiting and never displays a invented cutoff, version or probability
+  ---
+  duration_ms: 0.2555
+  type: 'test'
+  ...
+# Subtest: historical online capture bytes remain bound to the prior UI source receipt
+ok 15 - historical online capture bytes remain bound to the prior UI source receipt
+  ---
+  duration_ms: 1.0558
+  type: 'test'
+  ...
+# Subtest: real recorded publications display analysis reference without hiding or changing frozen probabilities
+ok 16 - real recorded publications display analysis reference without hiding or changing frozen probabilities
+  ---
+  duration_ms: 15.9422
+  type: 'test'
+  ...
+# Subtest: synthetic missing publication is waiting; it does not invent probabilities or borrow a legacy pick
+ok 17 - synthetic missing publication is waiting; it does not invent probabilities or borrow a legacy pick
+  ---
+  duration_ms: 0.2556
+  type: 'test'
+  ...
+# Subtest: synthetic reference qualification never grants formal model promotion (zh)
+ok 18 - synthetic reference qualification never grants formal model promotion (zh)
+  ---
+  duration_ms: 0.1386
+  type: 'test'
+  ...
+# Subtest: synthetic unknown reason is readable without exposing source errors or private tokens (zh)
+ok 19 - synthetic unknown reason is readable without exposing source errors or private tokens (zh)
+  ---
+  duration_ms: 0.2049
+  type: 'test'
+  ...
+# Subtest: synthetic reference qualification never grants formal model promotion (en)
+ok 20 - synthetic reference qualification never grants formal model promotion (en)
+  ---
+  duration_ms: 0.0771
+  type: 'test'
+  ...
+# Subtest: synthetic unknown reason is readable without exposing source errors or private tokens (en)
+ok 21 - synthetic unknown reason is readable without exposing source errors or private tokens (en)
+  ---
+  duration_ms: 0.1654
+  type: 'test'
+  ...
+# Subtest: synthetic missing inputs show the service restriction but keep the frozen three-way probabilities
+ok 22 - synthetic missing inputs show the service restriction but keep the frozen three-way probabilities
+  ---
+  duration_ms: 2.1126
+  type: 'test'
+  ...
+# Subtest: synthetic known restrictions are mapped and de-duplicated; no UI probability threshold is evaluated
+ok 23 - synthetic known restrictions are mapped and de-duplicated; no UI probability threshold is evaluated
+  ---
+  duration_ms: 0.3866
+  type: 'test'
+  ...
+1..23
+# tests 23
+# suites 0
+# pass 23
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2143.2621

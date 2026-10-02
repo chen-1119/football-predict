@@ -1,0 +1,400 @@
+{
+  "schemaVersion": "football-bounded-cloud-status-run-v1",
+  "runId": "cloud-check-20261002T1614Z",
+  "businessDate": "2026-10-03",
+  "timezone": "Asia/Shanghai",
+  "role": "/root/run_football_cloud_trial",
+  "scope": "bounded status inspection plus immutable bootstrap restoration verification; not official fixture collection run-template",
+  "startedAt": "2026-10-02T16:14:18Z",
+  "completedAt": "2026-10-02T16:17:42.580821+00:00",
+  "startTimeSource": "runtime task receipt; individual requests separately instrumented",
+  "execution": {
+    "observedAt": "2026-10-02T16:14:54.222753+00:00",
+    "cwd": "/workspace/scratch/6211c9389618",
+    "nodeVersion": "v24.19.0",
+    "priorFootballDirectoryPresentAtInitialCheck": false,
+    "continuityClaim": false,
+    "timezone": "Asia/Shanghai",
+    "businessDate": "2026-10-03"
+  },
+  "restoration": {
+    "originalLibraryFileId": "libfile_09fcd91b25548191be5e12f52e437513",
+    "path": "football-dot/restored-evidence/20261002T1614Z/football-dot-bootstrap-20260930.zip",
+    "priorDirectoryMissing": true,
+    "archiveVerified": true,
+    "archiveBytes": 475470,
+    "archiveSha256": "96c7c5c1186b49bdc80bcdfc98ac149ad9cb3ccbe2376f92174432c582113e70",
+    "fileCount": 20,
+    "manifestItems": 19,
+    "manifestItemsAllHashAndSizePassed": true,
+    "dataAsOf": "2026-08-21T10:34:27.154Z",
+    "oldRunContinuityProven": false,
+    "historyUsedForCurrentFacts": false
+  },
+  "requests": [
+    {
+      "url": "https://134.175.132.183/api/v1/health",
+      "method": "GET",
+      "requestStartedAt": "2026-10-02T16:15:45.166815+00:00",
+      "tlsVerification": true,
+      "attempt": 1,
+      "status": 200,
+      "finalUrl": "https://134.175.132.183/api/v1/health",
+      "headers": {
+        "Server": "nginx",
+        "Date": "Fri, 02 Oct 2026 16:15:54 GMT",
+        "Content-Type": "application/json; charset=utf-8",
+        "Transfer-Encoding": "chunked",
+        "Connection": "close",
+        "Vary": "Accept-Encoding",
+        "access-control-allow-origin": "*",
+        "access-control-allow-methods": "GET, POST, OPTIONS",
+        "access-control-allow-headers": "authorization, content-type, if-none-match, x-access-token",
+        "access-control-expose-headers": "cache-control, etag",
+        "cache-control": "no-store",
+        "content-security-policy": "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self' data:; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: https:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'",
+        "permissions-policy": "camera=(), geolocation=(), microphone=(), payment=()",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "etag": "\"sha256-g2IRADmWNFzOtC4X0hK6jtMnwVWLqAjkLAMDDIOAbqs\"",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "strict-origin-when-cross-origin"
+      },
+      "responseBytes": 53660,
+      "responseSha256": "836211003996345cceb42e17d212ba8ed327c1558ba808e42c03030c83806eab",
+      "observedAt": "2026-10-02T16:15:54.841992+00:00"
+    },
+    {
+      "url": "https://134.175.132.183/api/v1/source-health",
+      "method": "GET",
+      "requestStartedAt": "2026-10-02T16:15:54.842273+00:00",
+      "tlsVerification": true,
+      "attempt": 1,
+      "status": 200,
+      "finalUrl": "https://134.175.132.183/api/v1/source-health",
+      "headers": {
+        "Server": "nginx",
+        "Date": "Fri, 02 Oct 2026 16:16:00 GMT",
+        "Content-Type": "application/json; charset=utf-8",
+        "Transfer-Encoding": "chunked",
+        "Connection": "close",
+        "Vary": "Accept-Encoding",
+        "access-control-allow-origin": "*",
+        "access-control-allow-methods": "GET, POST, OPTIONS",
+        "access-control-allow-headers": "authorization, content-type, if-none-match, x-access-token",
+        "access-control-expose-headers": "cache-control, etag",
+        "cache-control": "private, max-age=10, must-revalidate",
+        "content-security-policy": "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self' data:; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: https:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'",
+        "permissions-policy": "camera=(), geolocation=(), microphone=(), payment=()",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "etag": "\"sha256-BdhvoHxBm_HPrsIdwt2lUwHPfbi-87hmVPjWob13xww\"",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "strict-origin-when-cross-origin"
+      },
+      "responseBytes": 43849,
+      "responseSha256": "05d86fa07c419bf1cfaec21dc2dda55301cf7db8bef3b86654f8d6a1bd77c70c",
+      "observedAt": "2026-10-02T16:16:01.273869+00:00"
+    },
+    {
+      "url": "https://134.175.132.183/api/v1/model/evaluation",
+      "method": "GET",
+      "requestStartedAt": "2026-10-02T16:16:01.274308+00:00",
+      "tlsVerification": true,
+      "attempt": 1,
+      "status": 200,
+      "finalUrl": "https://134.175.132.183/api/v1/model/evaluation",
+      "headers": {
+        "Server": "nginx",
+        "Date": "Fri, 02 Oct 2026 16:16:08 GMT",
+        "Content-Type": "application/json; charset=utf-8",
+        "Transfer-Encoding": "chunked",
+        "Connection": "close",
+        "Vary": "Accept-Encoding",
+        "access-control-allow-origin": "*",
+        "access-control-allow-methods": "GET, POST, OPTIONS",
+        "access-control-allow-headers": "authorization, content-type, if-none-match, x-access-token",
+        "access-control-expose-headers": "cache-control, etag",
+        "cache-control": "private, max-age=60, must-revalidate",
+        "content-security-policy": "default-src 'self'; base-uri 'self'; connect-src 'self'; font-src 'self' data:; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: https:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'",
+        "permissions-policy": "camera=(), geolocation=(), microphone=(), payment=()",
+        "referrer-policy": "strict-origin-when-cross-origin",
+        "x-content-type-options": "nosniff",
+        "x-frame-options": "DENY",
+        "etag": "\"sha256-7wzjd-vOhvBJST4zWyCK7RvwAc7JunBTwEp-3TpHcP4\"",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "strict-origin-when-cross-origin"
+      },
+      "responseBytes": 96644,
+      "responseSha256": "ef0ce377ebce86f049493e335b208aed1bf001cec9ba7053c04a7edd3a4770fe",
+      "observedAt": "2026-10-02T16:16:08.931743+00:00"
+    }
+  ],
+  "rawFileReadback": [
+    {
+      "file": "health.raw.json",
+      "bytes": 53660,
+      "sha256": "836211003996345cceb42e17d212ba8ed327c1558ba808e42c03030c83806eab",
+      "diskReadbackMatches": true
+    },
+    {
+      "file": "source-health.raw.json",
+      "bytes": 43849,
+      "sha256": "05d86fa07c419bf1cfaec21dc2dda55301cf7db8bef3b86654f8d6a1bd77c70c",
+      "diskReadbackMatches": true
+    },
+    {
+      "file": "model-evaluation.raw.json",
+      "bytes": 96644,
+      "sha256": "ef0ce377ebce86f049493e335b208aed1bf001cec9ba7053c04a7edd3a4770fe",
+      "diskReadbackMatches": true
+    }
+  ],
+  "currentSourceFacts": {
+    "healthCheckedAt": "2026-10-02T16:15:54.296Z",
+    "sourceCheckedAt": "2026-10-02T16:15:54.296Z",
+    "dataFresh": false,
+    "recommendationReliable": false,
+    "sourceStatus": "missing",
+    "officialCurrentMatches": 0,
+    "officialOddsMatches": 0,
+    "transport": "relay-history-only",
+    "currentLaneFresh": false,
+    "resultLane": {
+      "capturedAt": "2026-10-02T15:56:03.103Z",
+      "latestCapturedAt": "2026-10-02T15:56:03.103Z",
+      "ageMinutes": 19.85,
+      "maxAgeMinutes": 20,
+      "maxFutureSkewMinutes": 5,
+      "futureClock": false,
+      "stale": false,
+      "rows": 10,
+      "usableEndpoints": 1,
+      "methods": [
+        "result"
+      ]
+    },
+    "resultLaneFreshAtResponse": true,
+    "resultFreshnessContinuityAfterResponse": "unknown; age19.85min close to20min threshold",
+    "historyLaneFreshAtResponse": true,
+    "trustedCollectors": 0,
+    "requiredTrustedCollectors": 2,
+    "sourceErrors": [
+      "sporttery current sync stale 19.86m",
+      "current matches 0 < 1"
+    ],
+    "sourceWarnings": [
+      "official Sporttery source redundancy watch: verified server direct/proxy unavailable and trusted collectors 0/2",
+      "sporttery relay fast lane file exists but failed strict provenance or clock validation",
+      "sporttery relay is using the last trusted fallback snapshot; partial live snapshots are not overwriting the source",
+      "pre-match rows 0 < 1"
+    ],
+    "latestWorkerError": {
+      "at": "2026-10-02T16:13:04.307Z",
+      "message": "npm run validate:data exited with 1",
+      "code": "SYNC_WORKER_COMMAND_FAILED",
+      "timeoutMs": null
+    }
+  },
+  "causeClassification": {
+    "marketClosure": "unknown",
+    "newSporttery567": "unknown-not-probed",
+    "upstreamParsingFailure": "unknown",
+    "trueEmptyOfficialFixtureList": "unknown",
+    "observedConclusion": "System current official coverage missing. Own endpoints returned valid JSON; cannot infer upstream empty schedule or closure from coverage0."
+  },
+  "sportteryPaused": {
+    "directAttemptsThisRun": 0,
+    "permissionToResumeReceived": false,
+    "previous567EvidenceRetainedAsHistorical": true,
+    "recovery": "requires provider permission or verifiable allowed restoration confirmation"
+  },
+  "coverage": {
+    "fixtures": {
+      "status": "missing",
+      "reason": "current official system coverage0; no real match identity collected"
+    },
+    "odds": {
+      "status": "missing",
+      "reason": "official coverage0; HAD/HHAD not established"
+    },
+    "history": {
+      "status": "missing",
+      "reason": "only system aggregate lane status obtained, no current match-level history"
+    },
+    "details": {
+      "status": "missing",
+      "reason": "not collected in bounded status inspection"
+    },
+    "weather": {
+      "status": "missing",
+      "reason": "not collected"
+    },
+    "players": {
+      "status": "missing",
+      "reason": "not collected"
+    },
+    "injuries": {
+      "status": "missing",
+      "reason": "not collected; unknown is not no injuries"
+    },
+    "lineups": {
+      "status": "missing",
+      "reason": "not collected; no confirmed or projected lineup asserted"
+    },
+    "results": {
+      "status": "missing",
+      "reason": "system aggregate10-row lane fresh at response only; no match-level result records collected"
+    }
+  },
+  "modelEvaluation": {
+    "observedAt": "2026-10-02T16:16:08.931743+00:00",
+    "generatedAt": "2026-09-30T15:38:01.326Z",
+    "freshFetchIsNotNewRecalculation": true,
+    "marketBaseline": {
+      "source": "sporttery-had-devigged-forecast-time-latest-at-or-before-legacy-diagnostic",
+      "metrics": {
+        "rows": 258,
+        "brier": 0.5419,
+        "logLoss": 0.9198,
+        "accuracy": 0.593,
+        "calibrationByConfidence": {
+          "p_ge_60": {
+            "rows": 92,
+            "avgConfidence": 0.6941,
+            "hitRate": 0.75,
+            "calibrationError": 0.0559
+          },
+          "p_lt_40": {
+            "rows": 34,
+            "avgConfidence": 0.3737,
+            "hitRate": 0.4412,
+            "calibrationError": 0.0674
+          },
+          "p_50_60": {
+            "rows": 56,
+            "avgConfidence": 0.5435,
+            "hitRate": 0.5536,
+            "calibrationError": 0.0101
+          },
+          "p_40_50": {
+            "rows": 76,
+            "avgConfidence": 0.4435,
+            "hitRate": 0.5,
+            "calibrationError": 0.0565
+          }
+        }
+      },
+      "modelOnSameRows": {
+        "rows": 258,
+        "brier": 0.6008,
+        "logLoss": 1.0053,
+        "accuracy": 0.5504,
+        "calibrationByConfidence": {
+          "p_40_50": {
+            "rows": 94,
+            "avgConfidence": 0.4387,
+            "hitRate": 0.5319,
+            "calibrationError": 0.0932
+          },
+          "p_lt_40": {
+            "rows": 112,
+            "avgConfidence": 0.3777,
+            "hitRate": 0.4821,
+            "calibrationError": 0.1044
+          },
+          "p_50_60": {
+            "rows": 44,
+            "avgConfidence": 0.5451,
+            "hitRate": 0.6818,
+            "calibrationError": 0.1367
+          },
+          "p_ge_60": {
+            "rows": 8,
+            "avgConfidence": 0.6276,
+            "hitRate": 1,
+            "calibrationError": 0.3724
+          }
+        }
+      },
+      "comparison": {
+        "rows": 258,
+        "brierImprovement": -0.0589,
+        "logLossImprovement": -0.0855,
+        "accuracyDelta": -0.0426,
+        "interpretation": "positive improvement means the model beats the market baseline"
+      },
+      "promotionEligible": false,
+      "note": "Legacy diagnostic cohort; pairing lag and wrapper provenance are audited separately and cannot activate a model."
+    },
+    "promotionEligible": false
+  },
+  "schedules": {
+    "receipt": {
+      "observedAt": "2026-10-02T16:14:22Z",
+      "source": "automations.list actual tool response",
+      "automations": [
+        {
+          "id": "6abf7f1911dc8191a0ba3fe47f657dc5",
+          "title": "足球早间协调巡检",
+          "is_enabled": true,
+          "default_timezone": "Asia/Shanghai",
+          "schedule": "BEGIN:VEVENT\nDTSTART;TZID=Asia/Shanghai:20261003T080000\nRRULE:FREQ=DAILY;BYHOUR=8;BYMINUTE=0;BYSECOND=0\nEND:VEVENT",
+          "next_run_time": null,
+          "last_run_time": null,
+          "updated_at": "2026-10-02T10:02:30.708898+00:00"
+        },
+        {
+          "id": "6abf7f19fa888191aee9d6f51cc6186c",
+          "title": "足球下午协调巡检",
+          "is_enabled": true,
+          "default_timezone": "Asia/Shanghai",
+          "schedule": "BEGIN:VEVENT\nDTSTART;TZID=Asia/Shanghai:20261003T160000\nRRULE:FREQ=DAILY;BYHOUR=16;BYMINUTE=0;BYSECOND=0\nEND:VEVENT",
+          "next_run_time": null,
+          "last_run_time": null,
+          "updated_at": "2026-10-02T10:02:31.076541+00:00"
+        }
+      ],
+      "nextScheduledTimesDerivedFromRule": [
+        "2026-10-03T08:00:00+08:00",
+        "2026-10-03T16:00:00+08:00"
+      ],
+      "nextTimesPriorUserUIConfirmed": true,
+      "executionReceiptAvailable": false
+    },
+    "receiptSha256": "6a362f71c87138350049139d47b5929cbac80b1fc7b727136b2bb76fa6030c8c",
+    "nextRunTimeApiValuesAreNull": true,
+    "nextTimesBasis": "rule derivation plus prior user UI report, not current API next_run_time",
+    "actualExecutionReceiptAvailable": false,
+    "modifiedThisRun": false
+  },
+  "userReportedCodeStatus": {
+    "commit": "295a173d117cb",
+    "restoredFormCount": 355,
+    "scoringRowsUnchanged": 154,
+    "checksPassed": 79,
+    "merged": true,
+    "deployed": false,
+    "source": "user report relayed by coordinator",
+    "independentlyVerifiedThisRun": false
+  },
+  "acceptance": {
+    "productionEligible": false,
+    "shadowOnly": true,
+    "officialCollectionAccepted": false,
+    "sevenDayTrialDaysEstablishedFromOfflineAcceptance": 0,
+    "sevenDayMigrationAccepted": false,
+    "oldServicesStopped": false,
+    "formalPredictionsChanged": false
+  },
+  "evidenceFiles": [
+    "bootstrap-verification.json",
+    "environment.json",
+    "schedule-status.json",
+    "health.raw.json",
+    "source-health.raw.json",
+    "model-evaluation.raw.json"
+  ]
+}

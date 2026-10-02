@@ -18412,6 +18412,18 @@ async function sync() {
       unsettledRetentionHours: CURRENT_UNSETTLED_RETENTION_HOURS,
       archivedUnsettled: unresolvedArchive.length,
       behavior: "old-unsettled-exits-current-without-fabricated-settlement",
+      // This is a separate empty-list integrity proof. It does not make the
+      // current odds lane fresh or count as an independent market collector.
+      ...(split.current.length === 0 ? {
+        officialClosedSchedule: require('./officialClosedScheduleEvidence.cjs').captureOfficialClosedSchedule({
+          snapshotPath: process.env.SPORTTERY_RELAY_SNAPSHOT || process.env.SPORTTERY_RELAY_SNAPSHOT_PATH || DEFAULT_SPORTTERY_RELAY_SNAPSHOT,
+          alternateSnapshotPath: process.env.SPORTTERY_RELAY_SNAPSHOT && process.env.SPORTTERY_RELAY_SNAPSHOT_PATH,
+          trustRegistryPath: COLLECTOR_TRUST_REGISTRY_PATH,
+          asOf: new Date().toISOString(),
+          publicationSourceCycleId: sourceCycleId,
+          currentListEvaluatedAt: capturedAt,
+        }),
+      } : {}),
     },
     files: {
       current: split.current.length,

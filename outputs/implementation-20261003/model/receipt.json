@@ -1,0 +1,209 @@
+{
+  "version": "model-implementation-receipt-v2",
+  "createdAt": "2026-10-02T16:24:21.586Z",
+  "baseHead": "295a173d117cbb0f889197dbeff13501d79dfd15",
+  "testedNode": "22.22.1",
+  "clockRegressionBefore": {
+    "total": 8,
+    "passed": 2,
+    "failed": 6
+  },
+  "clockRegressionAfter": {
+    "total": 8,
+    "passed": 8,
+    "failed": 0
+  },
+  "newTests": {
+    "total": 15,
+    "passed": 15,
+    "failed": 0,
+    "scope": "Initial implementation run before the v2 correction; preserved tests.tap."
+  },
+  "actualParentCompatibilityCases": 7,
+  "formRecencyExistingChecks": 24,
+  "legacyModelInputUsageVerifierPassed": false,
+  "productionProbabilitiesChanged": false,
+  "modelTrained": false,
+  "newCandidateActivated": false,
+  "productionWrites": false,
+  "source": {
+    "base": {
+      "path": "outputs/history-regression-20261002/online-sample-v3.json",
+      "sha256": "151a20c0678b89ec41d0555f06149be75182beba0dbc17cd4a1b5a76435470e1"
+    },
+    "supplement": {
+      "path": "outputs/next-phase-20261002/form-supplement.json",
+      "sha256": "d4924ea7e96e20d048f4fbb0066525ac15c1d9ea63defe9c7ad90ad43b995dec"
+    },
+    "recovery": {
+      "path": "outputs/next-phase-20261002/form-recovery-receipt.json",
+      "sha256": "6dc4362fe05403c694c23b5fe9c33611c9a7dea0a85bc9329669ee0ce34d2675"
+    },
+    "evidence": {
+      "path": "outputs/history-regression-20261002/report/per-match-evidence.jsonl",
+      "sha256": "cebb126e0344787c0cfe4be1773a98d473394b1c6d57cfc32c5704c9abc125b9"
+    }
+  },
+  "reportHash": "46ed8d561753f84299e0032cc90709d57ee47043cc903d93cdfdae28ce71313c",
+  "files": [
+    {
+      "file": "src/services/modelInputUsage.cjs",
+      "bytes": 7599,
+      "sha256": "bfc558e9450ff99e71f3ca6a8e0e869b3e49b8394ffc31135503e161b813ba4a"
+    },
+    {
+      "file": "scripts/diagnoseFrozenModelDisagreement.cjs",
+      "bytes": 18547,
+      "sha256": "319c7f4d38672c13125e22faad79a77ebeb9393f9b481abaeeadff28c00937c6"
+    },
+    {
+      "file": "tests/model-input-usage-clock.test.cjs",
+      "bytes": 5621,
+      "sha256": "c52038d9be2f3d4792c32a3d5d04aec00cf1f37d5f7be261db5a2acd53b80e49"
+    },
+    {
+      "file": "tests/frozen-model-disagreement.test.cjs",
+      "bytes": 7769,
+      "sha256": "82e19039ed4aa9f3bcd7923539864ffbe5bbd9b727b370bfc592487b4652acdc"
+    },
+    {
+      "file": "docs/model-disagreement-and-clock-repair-20261003.md",
+      "bytes": 6093,
+      "sha256": "c99069ea19bccb9e27d9aff325d35e78b96da1789e1b4bc42aaaff43d754c476"
+    },
+    {
+      "file": "outputs/implementation-20261003/model/clock-before.tap",
+      "bytes": 9502,
+      "sha256": "f70465c2d3c7f3ab840664d22f2b3e1a3de7db44e531f1af5e4daf84ce0da0d9"
+    },
+    {
+      "file": "outputs/implementation-20261003/model/clock-after.tap",
+      "bytes": 1782,
+      "sha256": "f4bf42c8e5c1d74584895e905964524b5160846293085238c0ade0cfd09b7aaa"
+    },
+    {
+      "file": "outputs/implementation-20261003/model/tests.tap",
+      "bytes": 3454,
+      "sha256": "3b9cc0316de39bf729d3620f6c0f88afb2b19124de520465a426097285063d4b"
+    },
+    {
+      "file": "outputs/implementation-20261003/model/form-recency-verification.txt",
+      "bytes": 258,
+      "sha256": "c4aa896b6c9f0cf5c87572c8ac809559add8d17bfb7ddde905570311aa8b84e3"
+    },
+    {
+      "file": "outputs/implementation-20261003/model/model-input-usage-fixed-fixture-clock.txt",
+      "bytes": 5427,
+      "sha256": "e19b0370f49973bda06357c6843ce379829bb174c79a306d8883f8000143a292"
+    },
+    {
+      "file": "outputs/implementation-20261003/model/legacy-verifier-limitations.json",
+      "bytes": 746,
+      "sha256": "e8ae44274e9404095fca81198d09d167bce9b960d550c10f9864018fd62fee17"
+    },
+    {
+      "file": "outputs/implementation-20261003/model/disagreement-attribution.json",
+      "bytes": 128990,
+      "sha256": "d561e8d0eb0ac9861291943de9c8a6d9f3b3f2f1d76f67af4d40eec6398aab75"
+    },
+    {
+      "file": "outputs/implementation-20261003/model/disagreement-attribution-v2.json",
+      "bytes": 148561,
+      "sha256": "154806e9bcdc7ead37995ce8d40da9a107cc0e7ea5a15ff98269a0a67a98d455"
+    },
+    {
+      "file": "outputs/implementation-20261003/model/summary-clock-before.tap",
+      "bytes": 1139,
+      "sha256": "829d3e06536c7fe995115218861dd658e5558fd0b84179865de57ca0809db04b"
+    },
+    {
+      "file": "outputs/implementation-20261003/model/summary-clock-after.tap",
+      "bytes": 2572,
+      "sha256": "dd39237ebae9a2b96f527252bfb936e3a991cddc1abeaadcbbf83b27b362f75d"
+    },
+    {
+      "file": "outputs/implementation-20261003/cloud/cloud-model-review.json",
+      "bytes": 76462,
+      "sha256": "67ff3a39cca958b17f9920f3a6ad38252ca355490011b40393b54f99faaae844"
+    }
+  ],
+  "sourceLineEndingNormalization": {
+    "receipt": "outputs/implementation-20261003/source-line-endings.json",
+    "at": "2026-10-02T16:36:09.299Z",
+    "semanticChanges": false
+  },
+  "updatedAt": "2026-10-02T16:50:09.047Z",
+  "previousReportHash": "d132a8505f41a37e838c1e8e449d4cfa437e691703d7ebad160aa150de96f40c",
+  "diagnosticRevision": {
+    "version": 2,
+    "trigger": "cloud-independent-qa-summary-cutoff-feedback",
+    "feedback": {
+      "path": "outputs/implementation-20261003/cloud/cloud-model-review.json",
+      "sha256": "67ff3a39cca958b17f9920f3a6ad38252ca355490011b40393b54f99faaae844",
+      "boundary": {
+        "source": "final independent QA handoff for the same two source files",
+        "reportedQaChecksPassed": 55,
+        "reportedQaChecksFailed": 0,
+        "reportedMissingEvidenceCategories": 8,
+        "metadataCompleteTeamSlots": 7,
+        "latestObservedAtBeforeOriginalDecision": true,
+        "reportedEvidenceDecisionAtAfterOriginalDecisionForAllSeven": true,
+        "consequence": "These summary slots do not prove original per-source availability clocks and add zero training admissions.",
+        "usageSummaryRequestDescriptorsVerifiedByQa": 22,
+        "usageSummaryRequestStatus": "prepared-not-executed"
+      }
+    },
+    "previousReport": {
+      "path": "outputs/implementation-20261003/model/disagreement-attribution.json",
+      "sha256": "d561e8d0eb0ac9861291943de9c8a6d9f3b3f2f1d76f67af4d40eec6398aab75",
+      "preservedByteIdentical": true
+    },
+    "currentReport": {
+      "path": "outputs/implementation-20261003/model/disagreement-attribution-v2.json",
+      "sha256": "154806e9bcdc7ead37995ce8d40da9a107cc0e7ea5a15ff98269a0a67a98d455",
+      "reportHash": "46ed8d561753f84299e0032cc90709d57ee47043cc903d93cdfdae28ce71313c"
+    },
+    "regressionBefore": {
+      "tests": 1,
+      "passed": 0,
+      "failed": 1,
+      "log": "outputs/implementation-20261003/model/summary-clock-before.tap"
+    },
+    "targetedAfter": {
+      "tests": 10,
+      "passed": 10,
+      "failed": 0,
+      "log": "outputs/implementation-20261003/model/summary-clock-after.tap",
+      "command": "node --test tests/frozen-model-disagreement.test.cjs"
+    },
+    "summaryCountsComplete": [
+      101,
+      66,
+      7
+    ],
+    "metadataCompleteAtOriginalDecision": [
+      22,
+      2,
+      0
+    ],
+    "countCompleteSummaryAfterOriginalDecision": [
+      79,
+      64,
+      7
+    ],
+    "originalDecisionAvailabilityProven": [
+      0,
+      0,
+      0
+    ],
+    "candidateEligible": [
+      0,
+      0,
+      0
+    ],
+    "clockMeaning": "Summary decisionAt is an evaluation cutoff, not generation time or evidence of original source availability.",
+    "productionProbabilitiesChanged": false,
+    "productionGatesChanged": false,
+    "remoteRequests": 0
+  }
+}

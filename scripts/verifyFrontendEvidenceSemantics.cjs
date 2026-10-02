@@ -40,7 +40,10 @@ const check = (name, ok) => checks.push({ name, ok: Boolean(ok) });
 const { selectionReferenceLabel, selectionPriceStatus, publicationLifecycle, publicationLifecycleLabel } = require('../src/services/publishedRecommendationStatus.cjs');
 check('published surfaces use the audited shared status and lifecycle helpers',
   selectionQualityNote.includes("import { selectionPriceStatus, selectionReferenceLabel } from '../../services/publishedRecommendationStatus.cjs'")
-  && selectionQualityNote.includes('export { selectionPriceStatus, selectionReferenceLabel }')
+  && selectionQualityNote.includes('selectionPriceStatus(quality)')
+  && selectionQualityNote.includes('selectionReferenceLabel(quality,language)')
+  && !/\b(?:function|const|let|var)\s+(?:selectionPriceStatus|selectionReferenceLabel)\b/.test(selectionQualityNote)
+  && !/\b(?:const|let|var)\s*\{[^}]*\b(?:selectionPriceStatus|selectionReferenceLabel)\b/.test(selectionQualityNote)
   && recommendationCenterView.includes("export { publicationLifecycle, publicationLifecycleLabel } from './publishedRecommendationStatus.cjs'"));
 const referenceLabelContract = [
   [null, '模型方向 · 证据待核', 'Model direction · evidence pending'],

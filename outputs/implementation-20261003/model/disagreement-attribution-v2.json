@@ -1,0 +1,3563 @@
+{
+  "version": "frozen-model-disagreement-diagnosis-v2",
+  "scope": "known-online-history-inspected-diagnostic-only",
+  "productionEligible": false,
+  "modelTrained": false,
+  "candidateRegistered": false,
+  "diagnosticCorrection": {
+    "trigger": "cloud-independent-qa-summary-cutoff-feedback",
+    "previousReport": {
+      "path": "outputs/implementation-20261003/model/disagreement-attribution.json",
+      "sha256": "d561e8d0eb0ac9861291943de9c8a6d9f3b3f2f1d76f67af4d40eec6398aab75",
+      "preservedByteIdentical": true
+    },
+    "correction": "v1 checked latestObservedAt but omitted the summary's decisionAt cutoff. v2 separates complete counts from strict cutoff consistency at the original decision; missing, invalid, later or internally contradictory summary clocks block the old metadata label.",
+    "clockMeaning": "resultEvidence.decisionAt is an evaluation cutoff, not a proven summary generation/availability timestamp.",
+    "unchanged": [
+      "154 paired events and frozen scores 78/83",
+      "26 disagreements and observed patterns 19/5/2",
+      "zero training admissions",
+      "production probabilities and promotion gates"
+    ],
+    "feedbackArtifact": {
+      "path": "outputs/implementation-20261003/cloud/cloud-model-review.json",
+      "sha256": "67ff3a39cca958b17f9920f3a6ad38252ca355490011b40393b54f99faaae844",
+      "boundary": {
+        "source": "final independent QA handoff for the same two source files",
+        "reportedQaChecksPassed": 55,
+        "reportedQaChecksFailed": 0,
+        "reportedMissingEvidenceCategories": 8,
+        "metadataCompleteTeamSlots": 7,
+        "latestObservedAtBeforeOriginalDecision": true,
+        "reportedEvidenceDecisionAtAfterOriginalDecisionForAllSeven": true,
+        "consequence": "These summary slots do not prove original per-source availability clocks and add zero training admissions.",
+        "usageSummaryRequestDescriptorsVerifiedByQa": 22,
+        "usageSummaryRequestStatus": "prepared-not-executed"
+      }
+    }
+  },
+  "coverage": {
+    "sourceRows": 432,
+    "recoveredFormRows": 379,
+    "pairedRows": 154,
+    "disagreementRows": 26
+  },
+  "pairedRecalculation": {
+    "modelHits": 78,
+    "marketHits": 83
+  },
+  "observations": {
+    "patterns": {
+      "poisson-and-market-align-but-base-final-disagrees": 5,
+      "poisson-component-already-disagrees-with-market": 19,
+      "poisson-direction-unavailable-or-ambiguous": 2
+    },
+    "modelVersions": {
+      "unified-poisson-bayes-v73": 4,
+      "unified-poisson-bayes-v75": 21,
+      "unified-poisson-bayes-v76": 1
+    },
+    "allBaseMarketsMatchSameDecisionMarketDirection": true,
+    "baseFinalAlignment": {
+      "unambiguousSameDirection": 25,
+      "ambiguousAfterRounding": 1,
+      "unambiguousDifferentDirection": 0,
+      "displayedArgmaxSameDirection": 26
+    },
+    "maximumBaseMarketDeltaPoints": 0.04962884411452961,
+    "usageSummaryStatuses": {
+      "not-present-in-frozen-inputs": 4,
+      "export-omitted": 22
+    }
+  },
+  "formEvidence": {
+    "allRecovered": {
+      "slots": 758,
+      "reportedStatus": {
+        "clock-recorded": 101,
+        "unverified": 301,
+        "empty": 120,
+        "missing": 236
+      },
+      "summaryCountsComplete": 101,
+      "metadataCompleteAtOriginalDecision": 22,
+      "summaryDecisionStatus": {
+        "after-original-decision": 264,
+        "at-or-before-original-decision": 258,
+        "missing": 236
+      },
+      "countCompleteSummaryAfterOriginalDecision": 79,
+      "latestObservedAfterSummaryDecision": 0,
+      "latestObservedAfterOriginalDecision": 0,
+      "originalDecisionAvailabilityProven": 0,
+      "candidateEligible": 0
+    },
+    "paired": {
+      "slots": 308,
+      "reportedStatus": {
+        "clock-recorded": 66,
+        "empty": 40,
+        "unverified": 112,
+        "missing": 90
+      },
+      "summaryCountsComplete": 66,
+      "metadataCompleteAtOriginalDecision": 2,
+      "summaryDecisionStatus": {
+        "after-original-decision": 214,
+        "at-or-before-original-decision": 4,
+        "missing": 90
+      },
+      "countCompleteSummaryAfterOriginalDecision": 64,
+      "latestObservedAfterSummaryDecision": 0,
+      "latestObservedAfterOriginalDecision": 0,
+      "originalDecisionAvailabilityProven": 0,
+      "candidateEligible": 0
+    },
+    "disagreement": {
+      "slots": 52,
+      "reportedStatus": {
+        "missing": 8,
+        "clock-recorded": 7,
+        "empty": 5,
+        "unverified": 32
+      },
+      "summaryCountsComplete": 7,
+      "metadataCompleteAtOriginalDecision": 0,
+      "summaryDecisionStatus": {
+        "missing": 8,
+        "after-original-decision": 44
+      },
+      "countCompleteSummaryAfterOriginalDecision": 7,
+      "latestObservedAfterSummaryDecision": 0,
+      "latestObservedAfterOriginalDecision": 0,
+      "originalDecisionAvailabilityProven": 0,
+      "candidateEligible": 0
+    }
+  },
+  "rows": [
+    {
+      "matchId": "2041175",
+      "kickoffAt": "2026-09-01T00:00:00+08:00",
+      "decisionAt": "2026-08-31T13:52:14.001Z",
+      "modelVersion": "unified-poisson-bayes-v73",
+      "league": "芬超",
+      "sourceSnapshotHash": "0f77bcc266c89ea8883ba0aa80605679bf904071ebe1dacfcc08a3f812d4ba5a",
+      "sourceRecordHash": "b64cb838aa0f180b26a95cbd4bb8e3c7a12a941660a5e31c5413e0afda91af2f",
+      "formCanonicalSha256": "1f82f586075b2cafe11106ac19cd1b11e54268e4f4194fe89e7f7897d8531927",
+      "originalFrozenProbabilities": {
+        "home": 0.352,
+        "draw": 0.289,
+        "away": 0.359
+      },
+      "sameDecisionMarket": {
+        "home": 0.4214459349959485,
+        "draw": 0.29305843161969936,
+        "away": 0.28549563338435224
+      },
+      "officialSp": {
+        "home": 2.1,
+        "draw": 3.02,
+        "away": 3.1
+      },
+      "frozenDirection": "away",
+      "marketDirection": "home",
+      "outcome": "home",
+      "components": {
+        "baseMarket": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 28.5,
+            "draw": 29.3,
+            "home": 42.1
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "poisson": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 34.1,
+            "draw": 27.4,
+            "home": 38.5
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "baseFinal": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 35.9,
+            "draw": 28.9,
+            "home": 35.2
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        }
+      },
+      "maxMarketRoundingDeltaPoints": 0.04956333843522387,
+      "observedComponentPattern": "poisson-and-market-align-but-base-final-disagrees",
+      "form": {
+        "home": {
+          "sampleSize": 0,
+          "lastMatchAt": null,
+          "lastMatchAgeDays": null,
+          "reportedTemporalStatus": "missing",
+          "observedRows": null,
+          "missingObservedAtRows": null,
+          "missingSourceRows": null,
+          "reportedEvidenceDecisionAt": null,
+          "latestObservedAt": null,
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "missing",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "positive-form-sample-missing",
+            "selected-result-evidence-missing",
+            "last-match-not-before-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        },
+        "away": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-08-09T12:00:00+00:00",
+          "lastMatchAgeDays": 22.07793982638889,
+          "reportedTemporalStatus": "missing",
+          "observedRows": null,
+          "missingObservedAtRows": null,
+          "missingSourceRows": null,
+          "reportedEvidenceDecisionAt": null,
+          "latestObservedAt": null,
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "missing",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "selected-result-evidence-missing"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        }
+      },
+      "calculationEvidence": {
+        "usageSummaryStatus": "not-present-in-frozen-inputs",
+        "usageSummaryCommitment": null,
+        "usageSummaryBytes": null,
+        "sourceJsonPointer": "/rows/1624/featureSnapshot/modelInputs/usageSummary",
+        "originalStageReceiptsAvailable": false,
+        "exactStageReplayEligible": false,
+        "causalAttribution": "unresolved-without-original-unrounded-stage-inputs-weights-and-calibration-receipts"
+      },
+      "productionEligible": false
+    },
+    {
+      "matchId": "2041244",
+      "kickoffAt": "2026-09-02T17:30:00+08:00",
+      "decisionAt": "2026-09-02T09:27:15.555Z",
+      "modelVersion": "unified-poisson-bayes-v73",
+      "league": "日联赛杯",
+      "sourceSnapshotHash": "3db3101fcdd2c7a77973bb78b1ea01aee985ee059ba81b5f9b2e76905c694c78",
+      "sourceRecordHash": "5471c8d109c69cc47342b02ac368f01a7691a536d6c884c080a9b4842ab69d56",
+      "formCanonicalSha256": "a711131bdb772b4d0ebe0bee059179722a08dce848ec34f53f72001dd791e5fb",
+      "originalFrozenProbabilities": {
+        "home": 0.36,
+        "draw": 0.285,
+        "away": 0.355
+      },
+      "sameDecisionMarket": {
+        "home": 0.3513167537081528,
+        "draw": 0.2828492713560847,
+        "away": 0.3658339749357625
+      },
+      "officialSp": {
+        "home": 2.52,
+        "draw": 3.13,
+        "away": 2.42
+      },
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "away",
+      "components": {
+        "baseMarket": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 36.6,
+            "draw": 28.3,
+            "home": 35.1
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "poisson": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 36,
+            "draw": 26.8,
+            "home": 37.2
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "baseFinal": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 35.5,
+            "draw": 28.5,
+            "home": 36
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        }
+      },
+      "maxMarketRoundingDeltaPoints": 0.031675370815278825,
+      "observedComponentPattern": "poisson-component-already-disagrees-with-market",
+      "form": {
+        "home": {
+          "sampleSize": 0,
+          "lastMatchAt": null,
+          "lastMatchAgeDays": null,
+          "reportedTemporalStatus": "missing",
+          "observedRows": null,
+          "missingObservedAtRows": null,
+          "missingSourceRows": null,
+          "reportedEvidenceDecisionAt": null,
+          "latestObservedAt": null,
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "missing",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "positive-form-sample-missing",
+            "selected-result-evidence-missing",
+            "last-match-not-before-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        },
+        "away": {
+          "sampleSize": 0,
+          "lastMatchAt": null,
+          "lastMatchAgeDays": null,
+          "reportedTemporalStatus": "missing",
+          "observedRows": null,
+          "missingObservedAtRows": null,
+          "missingSourceRows": null,
+          "reportedEvidenceDecisionAt": null,
+          "latestObservedAt": null,
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "missing",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "positive-form-sample-missing",
+            "selected-result-evidence-missing",
+            "last-match-not-before-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        }
+      },
+      "calculationEvidence": {
+        "usageSummaryStatus": "not-present-in-frozen-inputs",
+        "usageSummaryCommitment": null,
+        "usageSummaryBytes": null,
+        "sourceJsonPointer": "/rows/2522/featureSnapshot/modelInputs/usageSummary",
+        "originalStageReceiptsAvailable": false,
+        "exactStageReplayEligible": false,
+        "causalAttribution": "unresolved-without-original-unrounded-stage-inputs-weights-and-calibration-receipts"
+      },
+      "productionEligible": false
+    },
+    {
+      "matchId": "2041276",
+      "kickoffAt": "2026-09-05T21:30:00+08:00",
+      "decisionAt": "2026-09-05T13:23:32.345Z",
+      "modelVersion": "unified-poisson-bayes-v73",
+      "league": "德甲",
+      "sourceSnapshotHash": "7aab16e18848c12da81d8573c09c5d52af63f69faa92c3cf101a6d15c53fcf60",
+      "sourceRecordHash": "e0968dc8d81594dffa61e9329cebd1cc3bcd3831ce80006e4e33106c49774f2e",
+      "formCanonicalSha256": "df8b624b4c897d38df837af84e9db4fa3eba93353b11d3a441c8789522ba8b69",
+      "originalFrozenProbabilities": {
+        "home": 0.288,
+        "draw": 0.257,
+        "away": 0.455
+      },
+      "sameDecisionMarket": {
+        "home": 0.3868270307047385,
+        "draw": 0.23622237341702695,
+        "away": 0.37695059587823454
+      },
+      "officialSp": {
+        "home": 2.29,
+        "draw": 3.75,
+        "away": 2.35
+      },
+      "frozenDirection": "away",
+      "marketDirection": "home",
+      "outcome": "away",
+      "components": {
+        "baseMarket": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 37.7,
+            "draw": 23.6,
+            "home": 38.7
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "poisson": {
+          "status": "direction-ambiguous-after-rounding",
+          "percentages": {
+            "away": 36.8,
+            "draw": 26.5,
+            "home": 36.7
+          },
+          "direction": null,
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "baseFinal": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 45.5,
+            "draw": 25.7,
+            "home": 28.8
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        }
+      },
+      "maxMarketRoundingDeltaPoints": 0.02223734170269509,
+      "observedComponentPattern": "poisson-direction-unavailable-or-ambiguous",
+      "form": {
+        "home": {
+          "sampleSize": 1,
+          "lastMatchAt": "2026-08-29T21:30:00+08:00",
+          "lastMatchAgeDays": 6.995513252314815,
+          "reportedTemporalStatus": "missing",
+          "observedRows": null,
+          "missingObservedAtRows": null,
+          "missingSourceRows": null,
+          "reportedEvidenceDecisionAt": null,
+          "latestObservedAt": null,
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "missing",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "selected-result-evidence-missing"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        },
+        "away": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-08-23T02:30:00+08:00",
+          "lastMatchAgeDays": 13.787179918981481,
+          "reportedTemporalStatus": "missing",
+          "observedRows": null,
+          "missingObservedAtRows": null,
+          "missingSourceRows": null,
+          "reportedEvidenceDecisionAt": null,
+          "latestObservedAt": null,
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "missing",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "selected-result-evidence-missing"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        }
+      },
+      "calculationEvidence": {
+        "usageSummaryStatus": "not-present-in-frozen-inputs",
+        "usageSummaryCommitment": null,
+        "usageSummaryBytes": null,
+        "sourceJsonPointer": "/rows/2779/featureSnapshot/modelInputs/usageSummary",
+        "originalStageReceiptsAvailable": false,
+        "exactStageReplayEligible": false,
+        "causalAttribution": "unresolved-without-original-unrounded-stage-inputs-weights-and-calibration-receipts"
+      },
+      "productionEligible": false
+    },
+    {
+      "matchId": "2041301",
+      "kickoffAt": "2026-09-06T19:00:00+08:00",
+      "decisionAt": "2026-09-06T10:59:14.367Z",
+      "modelVersion": "unified-poisson-bayes-v73",
+      "league": "英冠",
+      "sourceSnapshotHash": "1964773e04a6c4475039d379b492c82bb4da03b8b15c5b41c33185e6df55b120",
+      "sourceRecordHash": "14188945f2e33dc758966f906aea36a5b0f849d8229b9df0ed5b0c35351179df",
+      "formCanonicalSha256": "a0322c95bb5eb62ab86d72f4d8261be4c38cc20896e84f472c1bbb6f8c891ca6",
+      "originalFrozenProbabilities": {
+        "home": 0.367,
+        "draw": 0.284,
+        "away": 0.349
+      },
+      "sameDecisionMarket": {
+        "home": 0.30230184828211815,
+        "draw": 0.28572400498922784,
+        "away": 0.41197414672865407
+      },
+      "officialSp": {
+        "home": 2.93,
+        "draw": 3.1,
+        "away": 2.15
+      },
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "draw",
+      "components": {
+        "baseMarket": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 41.2,
+            "draw": 28.6,
+            "home": 30.2
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "poisson": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 37.4,
+            "draw": 26.1,
+            "home": 36.5
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "baseFinal": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 34.9,
+            "draw": 28.4,
+            "home": 36.7
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        }
+      },
+      "maxMarketRoundingDeltaPoints": 0.030184828211815784,
+      "observedComponentPattern": "poisson-and-market-align-but-base-final-disagrees",
+      "form": {
+        "home": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-08-26T03:00:00+08:00",
+          "lastMatchAgeDays": 11.666138506944444,
+          "reportedTemporalStatus": "missing",
+          "observedRows": null,
+          "missingObservedAtRows": null,
+          "missingSourceRows": null,
+          "reportedEvidenceDecisionAt": null,
+          "latestObservedAt": null,
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "missing",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "selected-result-evidence-missing"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        },
+        "away": {
+          "sampleSize": 2,
+          "lastMatchAt": "2026-08-29T19:30:00+08:00",
+          "lastMatchAgeDays": 7.978638506944445,
+          "reportedTemporalStatus": "missing",
+          "observedRows": null,
+          "missingObservedAtRows": null,
+          "missingSourceRows": null,
+          "reportedEvidenceDecisionAt": null,
+          "latestObservedAt": null,
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "missing",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "selected-result-evidence-missing"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        }
+      },
+      "calculationEvidence": {
+        "usageSummaryStatus": "not-present-in-frozen-inputs",
+        "usageSummaryCommitment": null,
+        "usageSummaryBytes": null,
+        "sourceJsonPointer": "/rows/2926/featureSnapshot/modelInputs/usageSummary",
+        "originalStageReceiptsAvailable": false,
+        "exactStageReplayEligible": false,
+        "causalAttribution": "unresolved-without-original-unrounded-stage-inputs-weights-and-calibration-receipts"
+      },
+      "productionEligible": false
+    },
+    {
+      "matchId": "2041406",
+      "kickoffAt": "2026-09-12T15:30:00+08:00",
+      "decisionAt": "2026-09-12T06:18:45.494Z",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "league": "韩职",
+      "sourceSnapshotHash": "540f7c375503d45b0a14059cc9fd55289a3aaf29133f0102de240406cde3a78f",
+      "sourceRecordHash": "25ba45d72e681cbac2b7860bf07032fb244fb84e75953d3f4eef7892c219cfc4",
+      "formCanonicalSha256": "c64e2cbc0b859e233da4c48812356b5f246443018d7140421fce5a2502847f8b",
+      "originalFrozenProbabilities": {
+        "home": 0.360639,
+        "draw": 0.285714,
+        "away": 0.353646
+      },
+      "sameDecisionMarket": {
+        "home": 0.31390319447244475,
+        "draw": 0.28555064787493356,
+        "away": 0.40054615765262175
+      },
+      "officialSp": {
+        "home": 2.82,
+        "draw": 3.1,
+        "away": 2.21
+      },
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "away",
+      "components": {
+        "baseMarket": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 40.1,
+            "draw": 28.6,
+            "home": 31.4
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "poisson": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 38.7,
+            "draw": 26.7,
+            "home": 34.6
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "baseFinal": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 35.4,
+            "draw": 28.6,
+            "home": 36.1
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        }
+      },
+      "maxMarketRoundingDeltaPoints": 0.04538423473782416,
+      "observedComponentPattern": "poisson-and-market-align-but-base-final-disagrees",
+      "form": {
+        "home": {
+          "sampleSize": 4,
+          "lastMatchAt": "2026-08-25T18:30:00+08:00",
+          "lastMatchAgeDays": 17.825526550925925,
+          "reportedTemporalStatus": "clock-recorded",
+          "observedRows": 4,
+          "missingObservedAtRows": 0,
+          "missingSourceRows": 0,
+          "reportedEvidenceDecisionAt": "2026-09-12T07:30:00.000Z",
+          "latestObservedAt": "2026-09-12T05:29:07.558Z",
+          "summaryCountsComplete": true,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        },
+        "away": {
+          "sampleSize": 2,
+          "lastMatchAt": "2026-08-22T18:30:00+08:00",
+          "lastMatchAgeDays": 20.825526550925925,
+          "reportedTemporalStatus": "clock-recorded",
+          "observedRows": 2,
+          "missingObservedAtRows": 0,
+          "missingSourceRows": 0,
+          "reportedEvidenceDecisionAt": "2026-09-12T07:30:00.000Z",
+          "latestObservedAt": "2026-09-12T05:29:07.558Z",
+          "summaryCountsComplete": true,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        }
+      },
+      "calculationEvidence": {
+        "usageSummaryStatus": "export-omitted",
+        "usageSummaryCommitment": "d5c600cdf9ae57c96476fc6881c84fc42f6ead9dcd10a95f0e165001c9e47efb",
+        "usageSummaryBytes": 665,
+        "sourceJsonPointer": "/rows/3449/featureSnapshot/modelInputs/usageSummary",
+        "originalStageReceiptsAvailable": false,
+        "exactStageReplayEligible": false,
+        "causalAttribution": "unresolved-without-original-unrounded-stage-inputs-weights-and-calibration-receipts"
+      },
+      "productionEligible": false
+    },
+    {
+      "matchId": "2041408",
+      "kickoffAt": "2026-09-12T18:00:00+08:00",
+      "decisionAt": "2026-09-12T06:18:45.520Z",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "league": "日职",
+      "sourceSnapshotHash": "0af9a0d48744041babc8b94fdc774be0c5ce32219d1df0d9895aca074290e672",
+      "sourceRecordHash": "62d4f6436e617c1a4661b35fd80147376d572ba9d0392b78e8e918b7973d26dd",
+      "formCanonicalSha256": "4856c32434443c61ca59e99892fe8e9e2e4ae7a60419914481246283d5aa7baf",
+      "originalFrozenProbabilities": {
+        "home": 0.397602,
+        "draw": 0.320679,
+        "away": 0.281718
+      },
+      "sameDecisionMarket": {
+        "home": 0.2522862815055833,
+        "draw": 0.2530070994527421,
+        "away": 0.49470661904167446
+      },
+      "officialSp": {
+        "home": 3.51,
+        "draw": 3.5,
+        "away": 1.79
+      },
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "away",
+      "components": {
+        "baseMarket": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 49.5,
+            "draw": 25.3,
+            "home": 25.2
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "poisson": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 36,
+            "draw": 26.8,
+            "home": 37.2
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "baseFinal": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 28.2,
+            "draw": 32.1,
+            "home": 39.8
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        }
+      },
+      "maxMarketRoundingDeltaPoints": 0.029338095832557087,
+      "observedComponentPattern": "poisson-component-already-disagrees-with-market",
+      "form": {
+        "home": {
+          "sampleSize": 0,
+          "lastMatchAt": null,
+          "lastMatchAgeDays": null,
+          "reportedTemporalStatus": "empty",
+          "observedRows": 0,
+          "missingObservedAtRows": 0,
+          "missingSourceRows": 0,
+          "reportedEvidenceDecisionAt": "2026-09-12T10:00:00.000Z",
+          "latestObservedAt": null,
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "positive-form-sample-missing",
+            "latest-result-not-observed-by-original-decision",
+            "summary-decision-after-original-decision",
+            "result-source-label-missing",
+            "last-match-not-before-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        },
+        "away": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-08-21T18:30:00+08:00",
+          "lastMatchAgeDays": 21.82552685185185,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 2,
+          "missingObservedAtRows": 10,
+          "missingSourceRows": 10,
+          "reportedEvidenceDecisionAt": "2026-09-12T10:00:00.000Z",
+          "latestObservedAt": "2026-09-12T05:29:08.642Z",
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        }
+      },
+      "calculationEvidence": {
+        "usageSummaryStatus": "export-omitted",
+        "usageSummaryCommitment": "2ea8e473fc83bbec11f7424f2e6a286e929c9784f33b0d5b1665d2f090bcb965",
+        "usageSummaryBytes": 630,
+        "sourceJsonPointer": "/rows/3451/featureSnapshot/modelInputs/usageSummary",
+        "originalStageReceiptsAvailable": false,
+        "exactStageReplayEligible": false,
+        "causalAttribution": "unresolved-without-original-unrounded-stage-inputs-weights-and-calibration-receipts"
+      },
+      "productionEligible": false
+    },
+    {
+      "matchId": "2041409",
+      "kickoffAt": "2026-09-12T20:00:00+08:00",
+      "decisionAt": "2026-09-12T06:18:45.532Z",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "league": "西甲",
+      "sourceSnapshotHash": "64fc654c66c85306757fdb5981053c4fb1d9eb16dfbc65bc3046b3d8c827a3b1",
+      "sourceRecordHash": "d43ad07beefa72105e2565bca98b58098f41865d392d4863a0df4e3bc0e07915",
+      "formCanonicalSha256": "35a40387bade55eecbf0e8852a59cff2a1c9754e82ef2a4410a385bb5a95c87c",
+      "originalFrozenProbabilities": {
+        "home": 0.307692,
+        "draw": 0.25974,
+        "away": 0.432567
+      },
+      "sameDecisionMarket": {
+        "home": 0.38199478109596985,
+        "draw": 0.26065526239489706,
+        "away": 0.3573499565091331
+      },
+      "officialSp": {
+        "home": 2.32,
+        "draw": 3.4,
+        "away": 2.48
+      },
+      "frozenDirection": "away",
+      "marketDirection": "home",
+      "outcome": "home",
+      "components": {
+        "baseMarket": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 35.7,
+            "draw": 26.1,
+            "home": 38.2
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "poisson": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 45.7,
+            "draw": 23.9,
+            "home": 30.4
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "baseFinal": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 43.3,
+            "draw": 26,
+            "home": 30.8
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        }
+      },
+      "maxMarketRoundingDeltaPoints": 0.03499565091330936,
+      "observedComponentPattern": "poisson-component-already-disagrees-with-market",
+      "form": {
+        "home": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-08-24T01:30:00+08:00",
+          "lastMatchAgeDays": 19.533860324074073,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 3,
+          "missingObservedAtRows": 9,
+          "missingSourceRows": 9,
+          "reportedEvidenceDecisionAt": "2026-09-12T12:00:00.000Z",
+          "latestObservedAt": "2026-09-12T05:29:07.558Z",
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        },
+        "away": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-08-29T03:30:00+08:00",
+          "lastMatchAgeDays": 14.450526990740741,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 2,
+          "missingObservedAtRows": 10,
+          "missingSourceRows": 10,
+          "reportedEvidenceDecisionAt": "2026-09-12T12:00:00.000Z",
+          "latestObservedAt": "2026-09-12T05:29:06.555Z",
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        }
+      },
+      "calculationEvidence": {
+        "usageSummaryStatus": "export-omitted",
+        "usageSummaryCommitment": "3261dd45fbdd7ee6a651af35d5d0e09e2495c1e46a82933dc5855621dcfa5e26",
+        "usageSummaryBytes": 648,
+        "sourceJsonPointer": "/rows/3452/featureSnapshot/modelInputs/usageSummary",
+        "originalStageReceiptsAvailable": false,
+        "exactStageReplayEligible": false,
+        "causalAttribution": "unresolved-without-original-unrounded-stage-inputs-weights-and-calibration-receipts"
+      },
+      "productionEligible": false
+    },
+    {
+      "matchId": "2041410",
+      "kickoffAt": "2026-09-12T21:00:00+08:00",
+      "decisionAt": "2026-09-12T06:18:45.542Z",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "league": "意甲",
+      "sourceSnapshotHash": "38ab648cfd50ccd2e58553a41e97f9edd2af74e902a82a347d31b47c6bea6e36",
+      "sourceRecordHash": "5318b55af16147f9ce080e4e701c5bc25887be3d892c561bc2d0c0fc906c3b0b",
+      "formCanonicalSha256": "21ab6754c77ad0e25c61cb4136393e85484c70fef662327afc6ff710e443bca7",
+      "originalFrozenProbabilities": {
+        "home": 0.325674,
+        "draw": 0.274725,
+        "away": 0.3996
+      },
+      "sameDecisionMarket": {
+        "home": 0.4472405142677956,
+        "draw": 0.2716368767638758,
+        "away": 0.28112260896832864
+      },
+      "officialSp": {
+        "home": 1.98,
+        "draw": 3.26,
+        "away": 3.15
+      },
+      "frozenDirection": "away",
+      "marketDirection": "home",
+      "outcome": "draw",
+      "components": {
+        "baseMarket": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 28.1,
+            "draw": 27.2,
+            "home": 44.7
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "poisson": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 46.6,
+            "draw": 26.1,
+            "home": 27.3
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "baseFinal": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 40,
+            "draw": 27.5,
+            "home": 32.6
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        }
+      },
+      "maxMarketRoundingDeltaPoints": 0.03631232361241743,
+      "observedComponentPattern": "poisson-component-already-disagrees-with-market",
+      "form": {
+        "home": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-08-23T02:45:00+08:00",
+          "lastMatchAgeDays": 20.48177710648148,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 3,
+          "missingObservedAtRows": 9,
+          "missingSourceRows": 9,
+          "reportedEvidenceDecisionAt": "2026-09-12T13:00:00.000Z",
+          "latestObservedAt": "2026-09-12T05:29:07.558Z",
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        },
+        "away": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-08-24T00:30:00+08:00",
+          "lastMatchAgeDays": 19.57552710648148,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 4,
+          "missingObservedAtRows": 8,
+          "missingSourceRows": 8,
+          "reportedEvidenceDecisionAt": "2026-09-12T13:00:00.000Z",
+          "latestObservedAt": "2026-09-12T05:29:07.558Z",
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        }
+      },
+      "calculationEvidence": {
+        "usageSummaryStatus": "export-omitted",
+        "usageSummaryCommitment": "05fbcc916ed439530a1f21a67a7d9f9cb8ebaefff96e0225170b5b7609228280",
+        "usageSummaryBytes": 648,
+        "sourceJsonPointer": "/rows/3453/featureSnapshot/modelInputs/usageSummary",
+        "originalStageReceiptsAvailable": false,
+        "exactStageReplayEligible": false,
+        "causalAttribution": "unresolved-without-original-unrounded-stage-inputs-weights-and-calibration-receipts"
+      },
+      "productionEligible": false
+    },
+    {
+      "matchId": "2041415",
+      "kickoffAt": "2026-09-12T21:30:00+08:00",
+      "decisionAt": "2026-09-12T06:18:45.596Z",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "league": "德甲",
+      "sourceSnapshotHash": "49b8a65d063251f1525510b1135b70700a820087547208728cf3f46d1f45cfdf",
+      "sourceRecordHash": "843e15bb7e69039b02a055b6d71d0f55d2a4dfab1296e9e4484c8fd9d7ac8fcb",
+      "formCanonicalSha256": "afe0df99a3e42abc27f7a2bdd362013ecb91d118f6bf575ae01de1d44f37fb8e",
+      "originalFrozenProbabilities": {
+        "home": 0.301301,
+        "draw": 0.258258,
+        "away": 0.44044
+      },
+      "sameDecisionMarket": {
+        "home": 0.4082307247334931,
+        "draw": 0.2331212296504421,
+        "away": 0.3586480456160648
+      },
+      "officialSp": {
+        "home": 2.17,
+        "draw": 3.8,
+        "away": 2.47
+      },
+      "frozenDirection": "away",
+      "marketDirection": "home",
+      "outcome": "home",
+      "components": {
+        "baseMarket": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 35.9,
+            "draw": 23.3,
+            "home": 40.8
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "poisson": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 37.8,
+            "draw": 25.8,
+            "home": 36.4
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "baseFinal": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 44,
+            "draw": 25.8,
+            "home": 30.1
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        }
+      },
+      "maxMarketRoundingDeltaPoints": 0.03519543839352224,
+      "observedComponentPattern": "poisson-component-already-disagrees-with-market",
+      "form": {
+        "home": {
+          "sampleSize": 2,
+          "lastMatchAt": "2026-08-29T21:30:00+08:00",
+          "lastMatchAgeDays": 13.70052773148148,
+          "reportedTemporalStatus": "clock-recorded",
+          "observedRows": 2,
+          "missingObservedAtRows": 0,
+          "missingSourceRows": 0,
+          "reportedEvidenceDecisionAt": "2026-09-12T13:30:00.000Z",
+          "latestObservedAt": "2026-09-12T05:29:06.555Z",
+          "summaryCountsComplete": true,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        },
+        "away": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-08-29T02:30:00+08:00",
+          "lastMatchAgeDays": 14.492194398148149,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 3,
+          "missingObservedAtRows": 9,
+          "missingSourceRows": 9,
+          "reportedEvidenceDecisionAt": "2026-09-12T13:30:00.000Z",
+          "latestObservedAt": "2026-09-12T05:29:06.555Z",
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        }
+      },
+      "calculationEvidence": {
+        "usageSummaryStatus": "export-omitted",
+        "usageSummaryCommitment": "cd953e6fe5b1d4b53e887203e746ba99e2cac94a9d05740f06647536972fcf19",
+        "usageSummaryBytes": 665,
+        "sourceJsonPointer": "/rows/3458/featureSnapshot/modelInputs/usageSummary",
+        "originalStageReceiptsAvailable": false,
+        "exactStageReplayEligible": false,
+        "causalAttribution": "unresolved-without-original-unrounded-stage-inputs-weights-and-calibration-receipts"
+      },
+      "productionEligible": false
+    },
+    {
+      "matchId": "2041422",
+      "kickoffAt": "2026-09-12T23:15:00+08:00",
+      "decisionAt": "2026-09-12T06:18:45.674Z",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "league": "法甲",
+      "sourceSnapshotHash": "834ecce3578e8fe68171f63690e2a897bc06e36254291c07bd96a44770dfc215",
+      "sourceRecordHash": "5d3943163f2926c1e82db39efb7736bff6c74f799e347fc7362a17807ca2faa5",
+      "formCanonicalSha256": "4d6729a13b5a0654bcc361dc58885798681794e1699e78041bd2b3e57ebdc529",
+      "originalFrozenProbabilities": {
+        "home": 0.444,
+        "draw": 0.251,
+        "away": 0.305
+      },
+      "sameDecisionMarket": {
+        "home": 0.2980617317251743,
+        "draw": 0.24796732303186775,
+        "away": 0.4539709452429579
+      },
+      "officialSp": {
+        "home": 2.97,
+        "draw": 3.57,
+        "away": 1.95
+      },
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "draw",
+      "components": {
+        "baseMarket": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 45.4,
+            "draw": 24.8,
+            "home": 29.8
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "poisson": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 30.3,
+            "draw": 23.1,
+            "home": 46.6
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "baseFinal": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 30.5,
+            "draw": 25.1,
+            "home": 44.4
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        }
+      },
+      "maxMarketRoundingDeltaPoints": 0.006173172517428327,
+      "observedComponentPattern": "poisson-component-already-disagrees-with-market",
+      "form": {
+        "home": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-08-22T02:45:00+08:00",
+          "lastMatchAgeDays": 21.48177863425926,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 3,
+          "missingObservedAtRows": 9,
+          "missingSourceRows": 9,
+          "reportedEvidenceDecisionAt": "2026-09-12T15:15:00.000Z",
+          "latestObservedAt": "2026-09-12T05:29:08.642Z",
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        },
+        "away": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-08-23T23:15:00+08:00",
+          "lastMatchAgeDays": 19.627611967592593,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 3,
+          "missingObservedAtRows": 9,
+          "missingSourceRows": 9,
+          "reportedEvidenceDecisionAt": "2026-09-12T15:15:00.000Z",
+          "latestObservedAt": "2026-09-12T05:29:07.558Z",
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        }
+      },
+      "calculationEvidence": {
+        "usageSummaryStatus": "export-omitted",
+        "usageSummaryCommitment": "8b11cb3b15bd44a2aa2cd49c7576b78349faa76bc6bfe05a21f015dede95124a",
+        "usageSummaryBytes": 648,
+        "sourceJsonPointer": "/rows/3465/featureSnapshot/modelInputs/usageSummary",
+        "originalStageReceiptsAvailable": false,
+        "exactStageReplayEligible": false,
+        "causalAttribution": "unresolved-without-original-unrounded-stage-inputs-weights-and-calibration-receipts"
+      },
+      "productionEligible": false
+    },
+    {
+      "matchId": "2041441",
+      "kickoffAt": "2026-09-13T21:00:00+08:00",
+      "decisionAt": "2026-09-13T12:52:04.042Z",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "league": "意甲",
+      "sourceSnapshotHash": "69b7b5e38e51e2032b9f5c38905e99e44fb7a2eba45f1dfa898213ebb327390e",
+      "sourceRecordHash": "db6a6cc39cd71f88b0ecc72d9782832e977dabfb023cb3732572933b991a0880",
+      "formCanonicalSha256": "9be82ced81ec1917ad9508c310048fdb53693e2e480d415637e93353856cc3a1",
+      "originalFrozenProbabilities": {
+        "home": 0.374,
+        "draw": 0.288,
+        "away": 0.338
+      },
+      "sameDecisionMarket": {
+        "home": 0.32810180275715806,
+        "draw": 0.3244962884411453,
+        "away": 0.3474019088016968
+      },
+      "officialSp": {
+        "home": 2.7,
+        "draw": 2.73,
+        "away": 2.55
+      },
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "home",
+      "components": {
+        "baseMarket": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 34.7,
+            "draw": 32.4,
+            "home": 32.8
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "poisson": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 36,
+            "draw": 27.1,
+            "home": 36.9
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "baseFinal": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 33.8,
+            "draw": 28.8,
+            "home": 37.4
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        }
+      },
+      "maxMarketRoundingDeltaPoints": 0.04962884411452961,
+      "observedComponentPattern": "poisson-component-already-disagrees-with-market",
+      "form": {
+        "home": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-08-24T00:30:00+08:00",
+          "lastMatchAgeDays": 20.848657893518517,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 3,
+          "missingObservedAtRows": 9,
+          "missingSourceRows": 9,
+          "reportedEvidenceDecisionAt": "2026-09-13T13:00:00.000Z",
+          "latestObservedAt": "2026-09-13T12:00:08.257Z",
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        },
+        "away": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-08-23T00:30:00+08:00",
+          "lastMatchAgeDays": 21.848657893518517,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 4,
+          "missingObservedAtRows": 8,
+          "missingSourceRows": 8,
+          "reportedEvidenceDecisionAt": "2026-09-13T13:00:00.000Z",
+          "latestObservedAt": "2026-09-13T12:00:09.831Z",
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        }
+      },
+      "calculationEvidence": {
+        "usageSummaryStatus": "export-omitted",
+        "usageSummaryCommitment": "5288c426659bf7b64375826849bb9da8f1cc21a160a61783ed9cc6037c6942ea",
+        "usageSummaryBytes": 648,
+        "sourceJsonPointer": "/rows/3510/featureSnapshot/modelInputs/usageSummary",
+        "originalStageReceiptsAvailable": false,
+        "exactStageReplayEligible": false,
+        "causalAttribution": "unresolved-without-original-unrounded-stage-inputs-weights-and-calibration-receipts"
+      },
+      "productionEligible": false
+    },
+    {
+      "matchId": "2041556",
+      "kickoffAt": "2026-09-19T17:30:00+08:00",
+      "decisionAt": "2026-09-19T09:18:55.274Z",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "league": "日职",
+      "sourceSnapshotHash": "32049008961f3567f51015f720303f646aca156208c2b6b7340372578f3e8eae",
+      "sourceRecordHash": "a9286d4b45760a2a87c8f7d3236623a38ae4ab856056dc44ba9c9a895fda844f",
+      "formCanonicalSha256": "dd7ddccd825379f567d19677412d0ca454229b564bdcea11867682215e94b93e",
+      "originalFrozenProbabilities": {
+        "home": 0.392,
+        "draw": 0.278,
+        "away": 0.33
+      },
+      "sameDecisionMarket": {
+        "home": 0.3307689548812854,
+        "draw": 0.2607237644358367,
+        "away": 0.40850728068287784
+      },
+      "officialSp": {
+        "home": 2.68,
+        "draw": 3.4,
+        "away": 2.17
+      },
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "draw",
+      "components": {
+        "baseMarket": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 40.9,
+            "draw": 26.1,
+            "home": 33.1
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "poisson": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 33.2,
+            "draw": 26,
+            "home": 40.8
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "baseFinal": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 33,
+            "draw": 27.8,
+            "home": 39.2
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        }
+      },
+      "maxMarketRoundingDeltaPoints": 0.049271931712212336,
+      "observedComponentPattern": "poisson-component-already-disagrees-with-market",
+      "form": {
+        "home": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-08-21T18:00:00+08:00",
+          "lastMatchAgeDays": 28.971473078703703,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 1,
+          "missingObservedAtRows": 11,
+          "missingSourceRows": 11,
+          "reportedEvidenceDecisionAt": "2026-09-19T09:30:00.000Z",
+          "latestObservedAt": "2026-08-21T12:37:50.394Z",
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        },
+        "away": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-09-02T18:00:00+08:00",
+          "lastMatchAgeDays": 16.971473078703703,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 3,
+          "missingObservedAtRows": 9,
+          "missingSourceRows": 9,
+          "reportedEvidenceDecisionAt": "2026-09-19T09:30:00.000Z",
+          "latestObservedAt": "2026-09-14T10:22:07.838Z",
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        }
+      },
+      "calculationEvidence": {
+        "usageSummaryStatus": "export-omitted",
+        "usageSummaryCommitment": "71cc4f954bab8539842dda85b7a474cb82cae290be51a1a0974d565c6da8ddb6",
+        "usageSummaryBytes": 648,
+        "sourceJsonPointer": "/rows/4120/featureSnapshot/modelInputs/usageSummary",
+        "originalStageReceiptsAvailable": false,
+        "exactStageReplayEligible": false,
+        "causalAttribution": "unresolved-without-original-unrounded-stage-inputs-weights-and-calibration-receipts"
+      },
+      "productionEligible": false
+    },
+    {
+      "matchId": "2041560",
+      "kickoffAt": "2026-09-19T19:30:00+08:00",
+      "decisionAt": "2026-09-19T11:20:23.801Z",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "league": "英超",
+      "sourceSnapshotHash": "bff79f5b082e1a293120192c8d2d9906a85da4439b667b30a01bb2a45c5b9e07",
+      "sourceRecordHash": "2cd69a9aec1d2426de1e37f9dc44e881fa013fccaa000b8d675fab90be91886b",
+      "formCanonicalSha256": "63c668eb7af575b7f5ccb786a8a25910e6e0a92ab28ff4176f47aa9b0f388a1c",
+      "originalFrozenProbabilities": {
+        "home": 0.324324,
+        "draw": 0.268268,
+        "away": 0.407407
+      },
+      "sameDecisionMarket": {
+        "home": 0.520944402132521,
+        "draw": 0.246001523229246,
+        "away": 0.23305407463823305
+      },
+      "officialSp": {
+        "home": 1.7,
+        "draw": 3.6,
+        "away": 3.8
+      },
+      "frozenDirection": "away",
+      "marketDirection": "home",
+      "outcome": "away",
+      "components": {
+        "baseMarket": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 23.3,
+            "draw": 24.6,
+            "home": 52.1
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "poisson": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 43.8,
+            "draw": 25.4,
+            "home": 30.8
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "baseFinal": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 40.7,
+            "draw": 26.8,
+            "home": 32.4
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        }
+      },
+      "maxMarketRoundingDeltaPoints": 0.005559786747902251,
+      "observedComponentPattern": "poisson-component-already-disagrees-with-market",
+      "form": {
+        "home": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-09-16T03:00:00+08:00",
+          "lastMatchAgeDays": 3.6808310300925924,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 6,
+          "missingObservedAtRows": 6,
+          "missingSourceRows": 6,
+          "reportedEvidenceDecisionAt": "2026-09-19T11:30:00.000Z",
+          "latestObservedAt": "2026-09-16T00:50:37.247Z",
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        },
+        "away": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-09-17T03:00:00+08:00",
+          "lastMatchAgeDays": 2.6808310300925924,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 5,
+          "missingObservedAtRows": 7,
+          "missingSourceRows": 7,
+          "reportedEvidenceDecisionAt": "2026-09-19T11:30:00.000Z",
+          "latestObservedAt": "2026-09-17T01:06:48.358Z",
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        }
+      },
+      "calculationEvidence": {
+        "usageSummaryStatus": "export-omitted",
+        "usageSummaryCommitment": "5a31102804209efeab03d0123b72241267a74de2c5c5f52aaaf7e1a0483d35bd",
+        "usageSummaryBytes": 648,
+        "sourceJsonPointer": "/rows/4140/featureSnapshot/modelInputs/usageSummary",
+        "originalStageReceiptsAvailable": false,
+        "exactStageReplayEligible": false,
+        "causalAttribution": "unresolved-without-original-unrounded-stage-inputs-weights-and-calibration-receipts"
+      },
+      "productionEligible": false
+    },
+    {
+      "matchId": "2041561",
+      "kickoffAt": "2026-09-19T19:30:00+08:00",
+      "decisionAt": "2026-09-19T11:20:23.817Z",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "league": "英冠",
+      "sourceSnapshotHash": "8b7d752fb84acd8376aaff637ecfb5a4cead66e822c9cd100e511c6d4a60115c",
+      "sourceRecordHash": "329125f0518dd47d25d30acf474e3b3ad136086efb761f120c522f40a0c990cb",
+      "formCanonicalSha256": "c0d01f7c3a017785b33e8fadace6c9c51d00a5399c34b4955e3f7157562b8a51",
+      "originalFrozenProbabilities": {
+        "home": 0.323676,
+        "draw": 0.274725,
+        "away": 0.401598
+      },
+      "sameDecisionMarket": {
+        "home": 0.40255591054313095,
+        "draw": 0.28115015974440893,
+        "away": 0.31629392971246006
+      },
+      "officialSp": {
+        "home": 2.2,
+        "draw": 3.15,
+        "away": 2.8
+      },
+      "frozenDirection": "away",
+      "marketDirection": "home",
+      "outcome": "home",
+      "components": {
+        "baseMarket": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 31.6,
+            "draw": 28.1,
+            "home": 40.3
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "poisson": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 43.3,
+            "draw": 25.4,
+            "home": 31.3
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "baseFinal": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 40.2,
+            "draw": 27.5,
+            "home": 32.4
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        }
+      },
+      "maxMarketRoundingDeltaPoints": 0.04440894568690368,
+      "observedComponentPattern": "poisson-component-already-disagrees-with-market",
+      "form": {
+        "home": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-08-29T19:30:00+08:00",
+          "lastMatchAgeDays": 20.993331215277777,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 3,
+          "missingObservedAtRows": 9,
+          "missingSourceRows": 9,
+          "reportedEvidenceDecisionAt": "2026-09-19T11:30:00.000Z",
+          "latestObservedAt": "2026-09-14T10:22:08.751Z",
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        },
+        "away": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-08-22T22:00:00+08:00",
+          "lastMatchAgeDays": 27.88916454861111,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 2,
+          "missingObservedAtRows": 10,
+          "missingSourceRows": 10,
+          "reportedEvidenceDecisionAt": "2026-09-19T11:30:00.000Z",
+          "latestObservedAt": "2026-09-14T10:22:09.900Z",
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        }
+      },
+      "calculationEvidence": {
+        "usageSummaryStatus": "export-omitted",
+        "usageSummaryCommitment": "2579194fd0fdcd332b8545f08afd01c68c52d1bbeab300809de2082976efbaae",
+        "usageSummaryBytes": 648,
+        "sourceJsonPointer": "/rows/4141/featureSnapshot/modelInputs/usageSummary",
+        "originalStageReceiptsAvailable": false,
+        "exactStageReplayEligible": false,
+        "causalAttribution": "unresolved-without-original-unrounded-stage-inputs-weights-and-calibration-receipts"
+      },
+      "productionEligible": false
+    },
+    {
+      "matchId": "2041562",
+      "kickoffAt": "2026-09-19T20:00:00+08:00",
+      "decisionAt": "2026-09-19T11:59:24.054Z",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "league": "西甲",
+      "sourceSnapshotHash": "29cc7209016a98a33752ff47ad3a833bcaffae44f2d1265d6a2732043930f584",
+      "sourceRecordHash": "9d40083ff4115d9e86b0bd778f89f2852bd27a5dd73447e0513aed47f08e6ed9",
+      "formCanonicalSha256": "c9fb65de677f9955f890bbed9550dfeb291c4a4c1b641af6bece61ce7afa87bf",
+      "originalFrozenProbabilities": {
+        "home": 0.331,
+        "draw": 0.274,
+        "away": 0.395
+      },
+      "sameDecisionMarket": {
+        "home": 0.3574950231632217,
+        "draw": 0.29068447785075074,
+        "away": 0.35182049898602763
+      },
+      "officialSp": {
+        "home": 2.48,
+        "draw": 3.05,
+        "away": 2.52
+      },
+      "frozenDirection": "away",
+      "marketDirection": "home",
+      "outcome": "draw",
+      "components": {
+        "baseMarket": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 35.2,
+            "draw": 29.1,
+            "home": 35.7
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "poisson": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 42.6,
+            "draw": 25,
+            "home": 32.3
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "baseFinal": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 39.5,
+            "draw": 27.4,
+            "home": 33.1
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        }
+      },
+      "maxMarketRoundingDeltaPoints": 0.04950231632216173,
+      "observedComponentPattern": "poisson-component-already-disagrees-with-market",
+      "form": {
+        "home": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-09-17T01:00:00+08:00",
+          "lastMatchAgeDays": 2.791250625,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 6,
+          "missingObservedAtRows": 6,
+          "missingSourceRows": 6,
+          "reportedEvidenceDecisionAt": "2026-09-19T12:00:00.000Z",
+          "latestObservedAt": "2026-09-17T01:06:48.358Z",
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        },
+        "away": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-09-16T01:00:00+08:00",
+          "lastMatchAgeDays": 3.791250625,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 4,
+          "missingObservedAtRows": 8,
+          "missingSourceRows": 8,
+          "reportedEvidenceDecisionAt": "2026-09-19T12:00:00.000Z",
+          "latestObservedAt": "2026-09-16T00:50:37.247Z",
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        }
+      },
+      "calculationEvidence": {
+        "usageSummaryStatus": "export-omitted",
+        "usageSummaryCommitment": "5c5e2ad8c45d51e6dac95605c43f26f87c5206a94e5f33354ffb82eb30ffde85",
+        "usageSummaryBytes": 648,
+        "sourceJsonPointer": "/rows/4153/featureSnapshot/modelInputs/usageSummary",
+        "originalStageReceiptsAvailable": false,
+        "exactStageReplayEligible": false,
+        "causalAttribution": "unresolved-without-original-unrounded-stage-inputs-weights-and-calibration-receipts"
+      },
+      "productionEligible": false
+    },
+    {
+      "matchId": "2041565",
+      "kickoffAt": "2026-09-19T21:00:00+08:00",
+      "decisionAt": "2026-09-19T12:42:52.505Z",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "league": "瑞超",
+      "sourceSnapshotHash": "20f9617c82fd0ba77c536c577288f890912a05a0fea76fb5a0b5086f46e21329",
+      "sourceRecordHash": "20adbaa47f9526722ba321dbadb7a49781cd09af379b6a02581dda60752b96a4",
+      "formCanonicalSha256": "2fb9d5cd02cb64438cbce6d30154d33835724f178e2509f6593f328afd6c0dd9",
+      "originalFrozenProbabilities": {
+        "home": 0.37,
+        "draw": 0.27,
+        "away": 0.36
+      },
+      "sameDecisionMarket": {
+        "home": 0.24942417859322402,
+        "draw": 0.24460105911766444,
+        "away": 0.5059747622891115
+      },
+      "officialSp": {
+        "home": 3.55,
+        "draw": 3.62,
+        "away": 1.75
+      },
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "home",
+      "components": {
+        "baseMarket": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 50.6,
+            "draw": 24.5,
+            "home": 24.9
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "poisson": {
+          "status": "direction-ambiguous-after-rounding",
+          "percentages": {
+            "away": 37.3,
+            "draw": 25.3,
+            "home": 37.4
+          },
+          "direction": null,
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "baseFinal": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 36,
+            "draw": 27,
+            "home": 37
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        }
+      },
+      "maxMarketRoundingDeltaPoints": 0.04241785932240205,
+      "observedComponentPattern": "poisson-direction-unavailable-or-ambiguous",
+      "form": {
+        "home": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-08-14T12:00:00+00:00",
+          "lastMatchAgeDays": 36.02977436342593,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 0,
+          "missingObservedAtRows": 12,
+          "missingSourceRows": 12,
+          "reportedEvidenceDecisionAt": "2026-09-19T13:00:00.000Z",
+          "latestObservedAt": null,
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "latest-result-not-observed-by-original-decision",
+            "summary-decision-after-original-decision",
+            "result-source-label-missing"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        },
+        "away": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-08-25T01:00:00+08:00",
+          "lastMatchAgeDays": 25.821441030092593,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 3,
+          "missingObservedAtRows": 9,
+          "missingSourceRows": 9,
+          "reportedEvidenceDecisionAt": "2026-09-19T13:00:00.000Z",
+          "latestObservedAt": "2026-09-14T10:22:08.751Z",
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        }
+      },
+      "calculationEvidence": {
+        "usageSummaryStatus": "export-omitted",
+        "usageSummaryCommitment": "c2afa9190230eda2b7f9911ccee20c5693d54a20ab9828a6f795ff9372706ebd",
+        "usageSummaryBytes": 648,
+        "sourceJsonPointer": "/rows/4175/featureSnapshot/modelInputs/usageSummary",
+        "originalStageReceiptsAvailable": false,
+        "exactStageReplayEligible": false,
+        "causalAttribution": "unresolved-without-original-unrounded-stage-inputs-weights-and-calibration-receipts"
+      },
+      "productionEligible": false
+    },
+    {
+      "matchId": "2041566",
+      "kickoffAt": "2026-09-19T21:30:00+08:00",
+      "decisionAt": "2026-09-19T13:21:37.339Z",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "league": "德甲",
+      "sourceSnapshotHash": "6dc8c94f37aeeaba136d586a7686c542e0e3a03582d05fa78e2a2b784071476f",
+      "sourceRecordHash": "283870ddeb400028e04d9cbef25b3e370654125ba4ca41fde3f295d47c2ffec6",
+      "formCanonicalSha256": "6afc7bed36b5edd0052371ef8b248e33ea202a6672518c31a64b026668d80a8f",
+      "originalFrozenProbabilities": {
+        "home": 0.367367,
+        "draw": 0.274274,
+        "away": 0.358358
+      },
+      "sameDecisionMarket": {
+        "home": 0.37067649710353195,
+        "draw": 0.24746280113895008,
+        "away": 0.38186070175751785
+      },
+      "officialSp": {
+        "home": 2.39,
+        "draw": 3.58,
+        "away": 2.32
+      },
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "draw",
+      "components": {
+        "baseMarket": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 38.2,
+            "draw": 24.7,
+            "home": 37.1
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "poisson": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 39.2,
+            "draw": 25.3,
+            "home": 35.5
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "baseFinal": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 35.8,
+            "draw": 27.4,
+            "home": 36.7
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        }
+      },
+      "maxMarketRoundingDeltaPoints": 0.04628011389500841,
+      "observedComponentPattern": "poisson-and-market-align-but-base-final-disagrees",
+      "form": {
+        "home": {
+          "sampleSize": 3,
+          "lastMatchAt": "2026-08-29T21:30:00+08:00",
+          "lastMatchAgeDays": 20.99418216435185,
+          "reportedTemporalStatus": "clock-recorded",
+          "observedRows": 3,
+          "missingObservedAtRows": 0,
+          "missingSourceRows": 0,
+          "reportedEvidenceDecisionAt": "2026-09-19T13:30:00.000Z",
+          "latestObservedAt": "2026-09-14T10:22:08.751Z",
+          "summaryCountsComplete": true,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        },
+        "away": {
+          "sampleSize": 3,
+          "lastMatchAt": "2026-08-30T21:30:00+08:00",
+          "lastMatchAgeDays": 19.99418216435185,
+          "reportedTemporalStatus": "clock-recorded",
+          "observedRows": 3,
+          "missingObservedAtRows": 0,
+          "missingSourceRows": 0,
+          "reportedEvidenceDecisionAt": "2026-09-19T13:30:00.000Z",
+          "latestObservedAt": "2026-09-14T10:22:07.838Z",
+          "summaryCountsComplete": true,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        }
+      },
+      "calculationEvidence": {
+        "usageSummaryStatus": "export-omitted",
+        "usageSummaryCommitment": "febc80eca375de08d7a5c3bc2ce76a7b864a24546aae663d0fed7802d0d99086",
+        "usageSummaryBytes": 651,
+        "sourceJsonPointer": "/rows/4196/featureSnapshot/modelInputs/usageSummary",
+        "originalStageReceiptsAvailable": false,
+        "exactStageReplayEligible": false,
+        "causalAttribution": "unresolved-without-original-unrounded-stage-inputs-weights-and-calibration-receipts"
+      },
+      "productionEligible": false
+    },
+    {
+      "matchId": "2041572",
+      "kickoffAt": "2026-09-19T22:00:00+08:00",
+      "decisionAt": "2026-09-19T13:41:42.656Z",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "league": "挪超",
+      "sourceSnapshotHash": "b7b29fe597ef8a7833e16e7a6ffbbe59fdeb1dfdfd86ec36405b8626b4125886",
+      "sourceRecordHash": "87da19fd7b6433015a70bd76c7e47eb7a2c76789ae830bf76b7f761e61fedf1b",
+      "formCanonicalSha256": "2929afcf5623f5be15961b7df3421e8d00bb48629aba607e7f9f9b08342276f6",
+      "originalFrozenProbabilities": {
+        "home": 0.383,
+        "draw": 0.268,
+        "away": 0.349
+      },
+      "sameDecisionMarket": {
+        "home": 0.17528579205225914,
+        "draw": 0.19243331518780624,
+        "away": 0.6322808927599347
+      },
+      "officialSp": {
+        "home": 5.05,
+        "draw": 4.6,
+        "away": 1.4
+      },
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "away",
+      "components": {
+        "baseMarket": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 63.2,
+            "draw": 19.2,
+            "home": 17.5
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "poisson": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 36,
+            "draw": 26.7,
+            "home": 37.2
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "baseFinal": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 34.9,
+            "draw": 26.8,
+            "home": 38.3
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        }
+      },
+      "maxMarketRoundingDeltaPoints": 0.0433315187806258,
+      "observedComponentPattern": "poisson-component-already-disagrees-with-market",
+      "form": {
+        "home": {
+          "sampleSize": 0,
+          "lastMatchAt": null,
+          "lastMatchAgeDays": null,
+          "reportedTemporalStatus": "empty",
+          "observedRows": 0,
+          "missingObservedAtRows": 0,
+          "missingSourceRows": 0,
+          "reportedEvidenceDecisionAt": "2026-09-19T14:00:00.000Z",
+          "latestObservedAt": null,
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "positive-form-sample-missing",
+            "latest-result-not-observed-by-original-decision",
+            "summary-decision-after-original-decision",
+            "result-source-label-missing",
+            "last-match-not-before-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        },
+        "away": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-08-30T20:30:00+08:00",
+          "lastMatchAgeDays": 20.04979925925926,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 2,
+          "missingObservedAtRows": 10,
+          "missingSourceRows": 10,
+          "reportedEvidenceDecisionAt": "2026-09-19T14:00:00.000Z",
+          "latestObservedAt": "2026-09-14T10:22:07.838Z",
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        }
+      },
+      "calculationEvidence": {
+        "usageSummaryStatus": "export-omitted",
+        "usageSummaryCommitment": "5c1e1f10563b506dbba846a3a894712e16bf1931f47feab1ef8bf922b0c24c4c",
+        "usageSummaryBytes": 630,
+        "sourceJsonPointer": "/rows/4210/featureSnapshot/modelInputs/usageSummary",
+        "originalStageReceiptsAvailable": false,
+        "exactStageReplayEligible": false,
+        "causalAttribution": "unresolved-without-original-unrounded-stage-inputs-weights-and-calibration-receipts"
+      },
+      "productionEligible": false
+    },
+    {
+      "matchId": "2041589",
+      "kickoffAt": "2026-09-20T18:00:00+08:00",
+      "decisionAt": "2026-09-20T09:43:52.884Z",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "league": "韩职",
+      "sourceSnapshotHash": "35022ee80641f2677652d5e9a91e54f5fdd0cbb30a3078839051ea32bb6f5e48",
+      "sourceRecordHash": "1c639029ff9cda71d6f6846b75a8751d67604aea7659ac98b3c0048cc2b05942",
+      "formCanonicalSha256": "5358980cac19abda0141150c8daaf883e6bfbbdb14ed985aa39b1b8401420381",
+      "originalFrozenProbabilities": {
+        "home": 0.355644,
+        "draw": 0.28971,
+        "away": 0.354645
+      },
+      "sameDecisionMarket": {
+        "home": 0.28830200686379237,
+        "draw": 0.30002954612604826,
+        "away": 0.4116684470101593
+      },
+      "officialSp": {
+        "home": 3.07,
+        "draw": 2.95,
+        "away": 2.15
+      },
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "draw",
+      "components": {
+        "baseMarket": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 41.2,
+            "draw": 30,
+            "home": 28.8
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "poisson": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 36.6,
+            "draw": 26.5,
+            "home": 36.9
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "baseFinal": {
+          "status": "direction-ambiguous-after-rounding",
+          "percentages": {
+            "away": 35.5,
+            "draw": 29,
+            "home": 35.6
+          },
+          "direction": null,
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        }
+      },
+      "maxMarketRoundingDeltaPoints": 0.033155298984070214,
+      "observedComponentPattern": "poisson-component-already-disagrees-with-market",
+      "form": {
+        "home": {
+          "sampleSize": 3,
+          "lastMatchAt": "2026-08-26T18:30:00+08:00",
+          "lastMatchAgeDays": 24.967973194444443,
+          "reportedTemporalStatus": "clock-recorded",
+          "observedRows": 3,
+          "missingObservedAtRows": 0,
+          "missingSourceRows": 0,
+          "reportedEvidenceDecisionAt": "2026-09-20T10:00:00.000Z",
+          "latestObservedAt": "2026-09-14T10:22:08.751Z",
+          "summaryCountsComplete": true,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        },
+        "away": {
+          "sampleSize": 4,
+          "lastMatchAt": "2026-09-15T18:00:00+08:00",
+          "lastMatchAgeDays": 4.988806527777778,
+          "reportedTemporalStatus": "clock-recorded",
+          "observedRows": 4,
+          "missingObservedAtRows": 0,
+          "missingSourceRows": 0,
+          "reportedEvidenceDecisionAt": "2026-09-20T10:00:00.000Z",
+          "latestObservedAt": "2026-09-15T13:17:40.241Z",
+          "summaryCountsComplete": true,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        }
+      },
+      "calculationEvidence": {
+        "usageSummaryStatus": "export-omitted",
+        "usageSummaryCommitment": "213774d9dd4dbd64844bbadb869740b4d6f4a2208002ff08b0f11d275dd8b795",
+        "usageSummaryBytes": 651,
+        "sourceJsonPointer": "/rows/4316/featureSnapshot/modelInputs/usageSummary",
+        "originalStageReceiptsAvailable": false,
+        "exactStageReplayEligible": false,
+        "causalAttribution": "unresolved-without-original-unrounded-stage-inputs-weights-and-calibration-receipts"
+      },
+      "productionEligible": false
+    },
+    {
+      "matchId": "2041596",
+      "kickoffAt": "2026-09-20T21:00:00+08:00",
+      "decisionAt": "2026-09-20T12:57:09.850Z",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "league": "英超",
+      "sourceSnapshotHash": "49431c320f26db6be6d157f59556508195c0e55be2a481c77e53cceb8987693a",
+      "sourceRecordHash": "fa33259e3c8fb732afdac659921678b94ec392aea5c66b4f418b9e4397929328",
+      "formCanonicalSha256": "5399027a3325bc2f87761c5b40d35b4c0f9e61caa75cd6a4a1ba1d60ec80dd7a",
+      "originalFrozenProbabilities": {
+        "home": 0.372,
+        "draw": 0.273,
+        "away": 0.355
+      },
+      "sameDecisionMarket": {
+        "home": 0.30000383407813846,
+        "draw": 0.24380476874118695,
+        "away": 0.4561913971806746
+      },
+      "officialSp": {
+        "home": 2.95,
+        "draw": 3.63,
+        "away": 1.94
+      },
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "away",
+      "components": {
+        "baseMarket": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 45.6,
+            "draw": 24.4,
+            "home": 30
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "poisson": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 35.6,
+            "draw": 25.1,
+            "home": 39.3
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "baseFinal": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 35.5,
+            "draw": 27.3,
+            "home": 37.2
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        }
+      },
+      "maxMarketRoundingDeltaPoints": 0.019523125881303116,
+      "observedComponentPattern": "poisson-component-already-disagrees-with-market",
+      "form": {
+        "home": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-09-18T03:00:00+08:00",
+          "lastMatchAgeDays": 2.7480306712962963,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 5,
+          "missingObservedAtRows": 7,
+          "missingSourceRows": 7,
+          "reportedEvidenceDecisionAt": "2026-09-20T13:00:00.000Z",
+          "latestObservedAt": "2026-09-17T20:58:30.872Z",
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        },
+        "away": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-09-16T03:00:00+08:00",
+          "lastMatchAgeDays": 4.748030671296296,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 6,
+          "missingObservedAtRows": 6,
+          "missingSourceRows": 6,
+          "reportedEvidenceDecisionAt": "2026-09-20T13:00:00.000Z",
+          "latestObservedAt": "2026-09-16T00:50:37.247Z",
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        }
+      },
+      "calculationEvidence": {
+        "usageSummaryStatus": "export-omitted",
+        "usageSummaryCommitment": "79f9b9429bf535ee634e14af4ceefda02b00a518e0a7a6ad6e709045a3ff48ea",
+        "usageSummaryBytes": 648,
+        "sourceJsonPointer": "/rows/4370/featureSnapshot/modelInputs/usageSummary",
+        "originalStageReceiptsAvailable": false,
+        "exactStageReplayEligible": false,
+        "causalAttribution": "unresolved-without-original-unrounded-stage-inputs-weights-and-calibration-receipts"
+      },
+      "productionEligible": false
+    },
+    {
+      "matchId": "2041598",
+      "kickoffAt": "2026-09-20T21:00:00+08:00",
+      "decisionAt": "2026-09-20T12:57:09.813Z",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "league": "意甲",
+      "sourceSnapshotHash": "0d12d90dddddf9bde193651b700ea97ef28b04202d9a5739c8767526649d30b5",
+      "sourceRecordHash": "af21ced594094e2bfa5c96d34a2a60e3c733a4b850d4a2b0ee1f3143eefc25b4",
+      "formCanonicalSha256": "4953cee43326660527f8691282db2259c9422f23b2d52cf9864c7e25d399e5e1",
+      "originalFrozenProbabilities": {
+        "home": 0.401,
+        "draw": 0.293,
+        "away": 0.306
+      },
+      "sameDecisionMarket": {
+        "home": 0.2874609781477627,
+        "draw": 0.3405306971904266,
+        "away": 0.3720083246618106
+      },
+      "officialSp": {
+        "home": 3.08,
+        "draw": 2.6,
+        "away": 2.38
+      },
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "home",
+      "components": {
+        "baseMarket": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 37.2,
+            "draw": 34.1,
+            "home": 28.7
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "poisson": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 29.2,
+            "draw": 28.4,
+            "home": 42.4
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "baseFinal": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 30.6,
+            "draw": 29.3,
+            "home": 40.1
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        }
+      },
+      "maxMarketRoundingDeltaPoints": 0.04693028095734064,
+      "observedComponentPattern": "poisson-component-already-disagrees-with-market",
+      "form": {
+        "home": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-09-15T00:30:00+08:00",
+          "lastMatchAgeDays": 5.852196909722222,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 4,
+          "missingObservedAtRows": 8,
+          "missingSourceRows": 8,
+          "reportedEvidenceDecisionAt": "2026-09-20T13:00:00.000Z",
+          "latestObservedAt": "2026-09-15T03:03:32.283Z",
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        },
+        "away": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-08-31T02:45:00+08:00",
+          "lastMatchAgeDays": 20.758446909722224,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 4,
+          "missingObservedAtRows": 8,
+          "missingSourceRows": 8,
+          "reportedEvidenceDecisionAt": "2026-09-20T13:00:00.000Z",
+          "latestObservedAt": "2026-09-14T10:22:07.838Z",
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        }
+      },
+      "calculationEvidence": {
+        "usageSummaryStatus": "export-omitted",
+        "usageSummaryCommitment": "c65a0b715e8e6dbe8bababf88ba60f6aa9817c23c89da2ac2aafef9d9de51f8f",
+        "usageSummaryBytes": 648,
+        "sourceJsonPointer": "/rows/4367/featureSnapshot/modelInputs/usageSummary",
+        "originalStageReceiptsAvailable": false,
+        "exactStageReplayEligible": false,
+        "causalAttribution": "unresolved-without-original-unrounded-stage-inputs-weights-and-calibration-receipts"
+      },
+      "productionEligible": false
+    },
+    {
+      "matchId": "2041652",
+      "kickoffAt": "2026-09-25T02:45:00+08:00",
+      "decisionAt": "2026-09-24T13:53:20.135Z",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "league": "欧国联",
+      "sourceSnapshotHash": "8d00a197343429e734d643d8829330beff56445097e718e55da012656951a440",
+      "sourceRecordHash": "7ee0e91e94bf2f3d1bfaf2349684246d5c3f1b2795073c5c6b383ff9578059cc",
+      "formCanonicalSha256": "6d413bc258b421bed07065e194bf3fc8fa66bc2a7e58e183719bcc4ce831d2f2",
+      "originalFrozenProbabilities": {
+        "home": 0.419,
+        "draw": 0.259,
+        "away": 0.322
+      },
+      "sameDecisionMarket": {
+        "home": 0.34322403015052694,
+        "draw": 0.25968269729863913,
+        "away": 0.39709327255083393
+      },
+      "officialSp": {
+        "home": 2.58,
+        "draw": 3.41,
+        "away": 2.23
+      },
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "draw",
+      "components": {
+        "baseMarket": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 39.7,
+            "draw": 26,
+            "home": 34.3
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "poisson": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 30.9,
+            "draw": 24.3,
+            "home": 44.8
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "baseFinal": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 32.2,
+            "draw": 25.9,
+            "home": 41.9
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        }
+      },
+      "maxMarketRoundingDeltaPoints": 0.03173027013608731,
+      "observedComponentPattern": "poisson-component-already-disagrees-with-market",
+      "form": {
+        "home": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-06-08T12:00:00+00:00",
+          "lastMatchAgeDays": 108.0787052662037,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 0,
+          "missingObservedAtRows": 12,
+          "missingSourceRows": 12,
+          "reportedEvidenceDecisionAt": "2026-09-24T18:45:00.000Z",
+          "latestObservedAt": null,
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "latest-result-not-observed-by-original-decision",
+            "summary-decision-after-original-decision",
+            "result-source-label-missing"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        },
+        "away": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-06-06T12:00:00+00:00",
+          "lastMatchAgeDays": 110.0787052662037,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 0,
+          "missingObservedAtRows": 12,
+          "missingSourceRows": 12,
+          "reportedEvidenceDecisionAt": "2026-09-24T18:45:00.000Z",
+          "latestObservedAt": null,
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "latest-result-not-observed-by-original-decision",
+            "summary-decision-after-original-decision",
+            "result-source-label-missing"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        }
+      },
+      "calculationEvidence": {
+        "usageSummaryStatus": "export-omitted",
+        "usageSummaryCommitment": "937b43fd63e64f905f3e3975a5c704eda44ce003d56bfa366ca2414bab79709c",
+        "usageSummaryBytes": 648,
+        "sourceJsonPointer": "/rows/4539/featureSnapshot/modelInputs/usageSummary",
+        "originalStageReceiptsAvailable": false,
+        "exactStageReplayEligible": false,
+        "causalAttribution": "unresolved-without-original-unrounded-stage-inputs-weights-and-calibration-receipts"
+      },
+      "productionEligible": false
+    },
+    {
+      "matchId": "2041653",
+      "kickoffAt": "2026-09-25T02:45:00+08:00",
+      "decisionAt": "2026-09-24T13:53:20.146Z",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "league": "欧国联",
+      "sourceSnapshotHash": "1f4d72dfa0ef9963e799675bf8ff7cb04f07a5654b8b88e31323de8d19153057",
+      "sourceRecordHash": "58b1039e70c6b4c9bf93b93540883aab970e88581577ed8c1ec320a84eed3212",
+      "formCanonicalSha256": "a6871bbfea7caab781577d3142b8f454e26bf228e2367e9eb4a6bdef2439809d",
+      "originalFrozenProbabilities": {
+        "home": 0.387,
+        "draw": 0.28,
+        "away": 0.333
+      },
+      "sameDecisionMarket": {
+        "home": 0.32210353327855384,
+        "draw": 0.3163516844700082,
+        "away": 0.36154478225143794
+      },
+      "officialSp": {
+        "home": 2.75,
+        "draw": 2.8,
+        "away": 2.45
+      },
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "away",
+      "components": {
+        "baseMarket": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 36.2,
+            "draw": 31.6,
+            "home": 32.2
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "poisson": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 35.3,
+            "draw": 26,
+            "home": 38.7
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "baseFinal": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 33.3,
+            "draw": 28,
+            "home": 38.7
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        }
+      },
+      "maxMarketRoundingDeltaPoints": 0.045521774856212005,
+      "observedComponentPattern": "poisson-component-already-disagrees-with-market",
+      "form": {
+        "home": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-06-04T12:00:00+00:00",
+          "lastMatchAgeDays": 112.07870539351852,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 0,
+          "missingObservedAtRows": 12,
+          "missingSourceRows": 12,
+          "reportedEvidenceDecisionAt": "2026-09-24T18:45:00.000Z",
+          "latestObservedAt": null,
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "latest-result-not-observed-by-original-decision",
+            "summary-decision-after-original-decision",
+            "result-source-label-missing"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        },
+        "away": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-06-07T12:00:00+00:00",
+          "lastMatchAgeDays": 109.07870539351852,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 0,
+          "missingObservedAtRows": 12,
+          "missingSourceRows": 12,
+          "reportedEvidenceDecisionAt": "2026-09-24T18:45:00.000Z",
+          "latestObservedAt": null,
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "latest-result-not-observed-by-original-decision",
+            "summary-decision-after-original-decision",
+            "result-source-label-missing"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        }
+      },
+      "calculationEvidence": {
+        "usageSummaryStatus": "export-omitted",
+        "usageSummaryCommitment": "03dca36b8f6ea4dcebd1165ee1012372b19ccf4e888d85bab98ef93cec3592d5",
+        "usageSummaryBytes": 648,
+        "sourceJsonPointer": "/rows/4540/featureSnapshot/modelInputs/usageSummary",
+        "originalStageReceiptsAvailable": false,
+        "exactStageReplayEligible": false,
+        "causalAttribution": "unresolved-without-original-unrounded-stage-inputs-weights-and-calibration-receipts"
+      },
+      "productionEligible": false
+    },
+    {
+      "matchId": "2041708",
+      "kickoffAt": "2026-09-26T16:00:00+08:00",
+      "decisionAt": "2026-09-26T07:45:24.632Z",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "league": "日乙",
+      "sourceSnapshotHash": "02b0b57d7d952b32b5704185b3efa30706aae114b7096da68261789fc4b8eba2",
+      "sourceRecordHash": "4081b7a6fcf3a0bb585931d8b8cbdaa8476675048e3c884baf4dec030a8d7e97",
+      "formCanonicalSha256": "9fe790ee457bb0afb0e32702d042012f506ee96c4ac7312a5a262ad1562e2cb7",
+      "originalFrozenProbabilities": {
+        "home": 0.36036,
+        "draw": 0.282282,
+        "away": 0.357357
+      },
+      "sameDecisionMarket": {
+        "home": 0.3528696188971803,
+        "draw": 0.2620422317845925,
+        "away": 0.38508814931822727
+      },
+      "officialSp": {
+        "home": 2.51,
+        "draw": 3.38,
+        "away": 2.3
+      },
+      "frozenDirection": "home",
+      "marketDirection": "away",
+      "outcome": "draw",
+      "components": {
+        "baseMarket": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 38.5,
+            "draw": 26.2,
+            "home": 35.3
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "poisson": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 36,
+            "draw": 26.8,
+            "home": 37.2
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "baseFinal": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 35.7,
+            "draw": 28.2,
+            "home": 36
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        }
+      },
+      "maxMarketRoundingDeltaPoints": 0.013038110281961224,
+      "observedComponentPattern": "poisson-component-already-disagrees-with-market",
+      "form": {
+        "home": {
+          "sampleSize": 0,
+          "lastMatchAt": null,
+          "lastMatchAgeDays": null,
+          "reportedTemporalStatus": "empty",
+          "observedRows": 0,
+          "missingObservedAtRows": 0,
+          "missingSourceRows": 0,
+          "reportedEvidenceDecisionAt": "2026-09-26T08:00:00.000Z",
+          "latestObservedAt": null,
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "positive-form-sample-missing",
+            "latest-result-not-observed-by-original-decision",
+            "summary-decision-after-original-decision",
+            "result-source-label-missing",
+            "last-match-not-before-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        },
+        "away": {
+          "sampleSize": 0,
+          "lastMatchAt": null,
+          "lastMatchAgeDays": null,
+          "reportedTemporalStatus": "empty",
+          "observedRows": 0,
+          "missingObservedAtRows": 0,
+          "missingSourceRows": 0,
+          "reportedEvidenceDecisionAt": "2026-09-26T08:00:00.000Z",
+          "latestObservedAt": null,
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "positive-form-sample-missing",
+            "latest-result-not-observed-by-original-decision",
+            "summary-decision-after-original-decision",
+            "result-source-label-missing",
+            "last-match-not-before-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        }
+      },
+      "calculationEvidence": {
+        "usageSummaryStatus": "export-omitted",
+        "usageSummaryCommitment": "fe07fee9f08b088af682384c6581e7cf1d584e9576865ddfc5555ff39059ab61",
+        "usageSummaryBytes": 628,
+        "sourceJsonPointer": "/rows/4667/featureSnapshot/modelInputs/usageSummary",
+        "originalStageReceiptsAvailable": false,
+        "exactStageReplayEligible": false,
+        "causalAttribution": "unresolved-without-original-unrounded-stage-inputs-weights-and-calibration-receipts"
+      },
+      "productionEligible": false
+    },
+    {
+      "matchId": "2041718",
+      "kickoffAt": "2026-09-27T02:00:00+08:00",
+      "decisionAt": "2026-09-26T14:54:49.519Z",
+      "modelVersion": "unified-poisson-bayes-v75",
+      "league": "荷乙",
+      "sourceSnapshotHash": "62ed154135ba8b1d34f9b68df3524c12996e97ec4e6784034a8b00c964ba5113",
+      "sourceRecordHash": "431fee77e68fb1c682419a26969a10f1916274b4a68f0972092297e2c594ee7b",
+      "formCanonicalSha256": "f906dd23fddb42daaf188867e1ca95038ecaf5efa8fd99f7ea47423976f74cb4",
+      "originalFrozenProbabilities": {
+        "home": 0.333,
+        "draw": 0.28,
+        "away": 0.387
+      },
+      "sameDecisionMarket": {
+        "home": 0.404723593421878,
+        "draw": 0.2787247388660103,
+        "away": 0.31655166771211174
+      },
+      "officialSp": {
+        "home": 2.19,
+        "draw": 3.18,
+        "away": 2.8
+      },
+      "frozenDirection": "away",
+      "marketDirection": "home",
+      "outcome": "home",
+      "components": {
+        "baseMarket": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 31.7,
+            "draw": 27.9,
+            "home": 40.5
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "poisson": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 36,
+            "draw": 26.8,
+            "home": 37.3
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "baseFinal": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 38.7,
+            "draw": 28,
+            "home": 33.3
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        }
+      },
+      "maxMarketRoundingDeltaPoints": 0.0448332287888249,
+      "observedComponentPattern": "poisson-and-market-align-but-base-final-disagrees",
+      "form": {
+        "home": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-08-29T02:00:00+08:00",
+          "lastMatchAgeDays": 28.871406469907406,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 1,
+          "missingObservedAtRows": 11,
+          "missingSourceRows": 11,
+          "reportedEvidenceDecisionAt": "2026-09-26T18:00:00.000Z",
+          "latestObservedAt": "2026-09-14T10:22:08.751Z",
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        },
+        "away": {
+          "sampleSize": 0,
+          "lastMatchAt": null,
+          "lastMatchAgeDays": null,
+          "reportedTemporalStatus": "empty",
+          "observedRows": 0,
+          "missingObservedAtRows": 0,
+          "missingSourceRows": 0,
+          "reportedEvidenceDecisionAt": "2026-09-26T18:00:00.000Z",
+          "latestObservedAt": null,
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "positive-form-sample-missing",
+            "latest-result-not-observed-by-original-decision",
+            "summary-decision-after-original-decision",
+            "result-source-label-missing",
+            "last-match-not-before-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        }
+      },
+      "calculationEvidence": {
+        "usageSummaryStatus": "export-omitted",
+        "usageSummaryCommitment": "2838a8c79a266d7ba9b13be79748266d5fc147f08718d3bdad81d5ad5dac46b8",
+        "usageSummaryBytes": 630,
+        "sourceJsonPointer": "/rows/4704/featureSnapshot/modelInputs/usageSummary",
+        "originalStageReceiptsAvailable": false,
+        "exactStageReplayEligible": false,
+        "causalAttribution": "unresolved-without-original-unrounded-stage-inputs-weights-and-calibration-receipts"
+      },
+      "productionEligible": false
+    },
+    {
+      "matchId": "2041738",
+      "kickoffAt": "2026-09-28T02:45:00+08:00",
+      "decisionAt": "2026-09-27T14:48:49.734Z",
+      "modelVersion": "unified-poisson-bayes-v76",
+      "league": "欧国联",
+      "sourceSnapshotHash": "27d4d12f4d0f854a82588aefcec095d89a5f6a177af676598f25d5f36ba5aaa7",
+      "sourceRecordHash": "fcdfe5c05f8c2be48a77449598d7c75df5aaad74564a3ae45cbc92cfde8cdeaf",
+      "formCanonicalSha256": "cb0ffeda1ec42aff726ab78738f30df9cae21ded57e336746eb1d767f6c8e95c",
+      "originalFrozenProbabilities": {
+        "home": 0.338338,
+        "draw": 0.255255,
+        "away": 0.406406
+      },
+      "sameDecisionMarket": {
+        "home": 0.41774263681459584,
+        "draw": 0.2530326828705552,
+        "away": 0.32922468031484886
+      },
+      "officialSp": {
+        "home": 2.12,
+        "draw": 3.5,
+        "away": 2.69
+      },
+      "frozenDirection": "away",
+      "marketDirection": "home",
+      "outcome": "away",
+      "components": {
+        "baseMarket": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 32.9,
+            "draw": 25.3,
+            "home": 41.8
+          },
+          "direction": "home",
+          "displayedLeader": "home",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "poisson": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 38,
+            "draw": 24.3,
+            "home": 37.8
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        },
+        "baseFinal": {
+          "status": "rounded-component-observed",
+          "percentages": {
+            "away": 40.6,
+            "draw": 25.5,
+            "home": 33.8
+          },
+          "direction": "away",
+          "displayedLeader": "away",
+          "rounding": "stored 0.1 percentage points; not original unrounded arithmetic"
+        }
+      },
+      "maxMarketRoundingDeltaPoints": 0.025736318540410252,
+      "observedComponentPattern": "poisson-component-already-disagrees-with-market",
+      "form": {
+        "home": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-09-25T02:45:00+08:00",
+          "lastMatchAgeDays": 2.835992291666667,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 1,
+          "missingObservedAtRows": 11,
+          "missingSourceRows": 11,
+          "reportedEvidenceDecisionAt": "2026-09-27T18:45:00.000Z",
+          "latestObservedAt": "2026-09-25T00:55:06.718Z",
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        },
+        "away": {
+          "sampleSize": 12,
+          "lastMatchAt": "2026-09-25T02:45:00+08:00",
+          "lastMatchAgeDays": 2.835992291666667,
+          "reportedTemporalStatus": "unverified",
+          "observedRows": 1,
+          "missingObservedAtRows": 11,
+          "missingSourceRows": 11,
+          "reportedEvidenceDecisionAt": "2026-09-27T18:45:00.000Z",
+          "latestObservedAt": "2026-09-25T00:55:06.718Z",
+          "summaryCountsComplete": false,
+          "summaryDecisionStatus": "after-original-decision",
+          "metadataCompleteAtOriginalDecision": false,
+          "blockers": [
+            "result-clock-or-source-coverage-incomplete",
+            "summary-decision-after-original-decision"
+          ],
+          "originalDecisionAvailabilityProven": false,
+          "selectedOriginalRowsAvailable": false,
+          "providerSourceVerified": false,
+          "candidateEligible": false,
+          "meaning": "Counts and cutoff consistency describe summary metadata only. The summary cutoff is not a creation timestamp; neither complete counts nor consistent clocks prove original-decision source availability or training admission."
+        }
+      },
+      "calculationEvidence": {
+        "usageSummaryStatus": "export-omitted",
+        "usageSummaryCommitment": "c167ca971c72fea540058243dcbb6631cf046163c8425266e7bd0c640938cce3",
+        "usageSummaryBytes": 648,
+        "sourceJsonPointer": "/rows/4822/featureSnapshot/modelInputs/usageSummary",
+        "originalStageReceiptsAvailable": false,
+        "exactStageReplayEligible": false,
+        "causalAttribution": "unresolved-without-original-unrounded-stage-inputs-weights-and-calibration-receipts"
+      },
+      "productionEligible": false
+    }
+  ],
+  "boundedSupplementRequest": {
+    "status": "prepared-not-executed",
+    "productionWrites": false,
+    "generation": {
+      "committedAt": "2026-09-30T15:52:07.943Z",
+      "generationId": "g-79b3788d9a6029e3dccaeb3366d04ef0da49a8c01d24457492fe0c370a867273",
+      "manifestHash": "79b3788d9a6029e3dccaeb3366d04ef0da49a8c01d24457492fe0c370a867273",
+      "sourceCycleId": "sporttery-full-sync:2026-09-30T15:34:00.845Z"
+    },
+    "sourceFile": {
+      "bytes": 766227110,
+      "core": true,
+      "path": "prediction-snapshots.json",
+      "rows": 5000,
+      "sha256": "57d8c8e2d9dd1a0c2315f3e8701da94a5ac188366166f7505de84b8045bb9f55"
+    },
+    "maximumFieldBytes": 1024,
+    "purpose": "recover committed summary metadata only; this cannot reconstruct exact arithmetic receipts",
+    "rows": [
+      {
+        "matchId": "2041406",
+        "sourceSnapshotHash": "540f7c375503d45b0a14059cc9fd55289a3aaf29133f0102de240406cde3a78f",
+        "jsonPointer": "/rows/3449/featureSnapshot/modelInputs/usageSummary",
+        "expectedCanonicalSha256": "d5c600cdf9ae57c96476fc6881c84fc42f6ead9dcd10a95f0e165001c9e47efb",
+        "expectedCanonicalBytes": 665
+      },
+      {
+        "matchId": "2041408",
+        "sourceSnapshotHash": "0af9a0d48744041babc8b94fdc774be0c5ce32219d1df0d9895aca074290e672",
+        "jsonPointer": "/rows/3451/featureSnapshot/modelInputs/usageSummary",
+        "expectedCanonicalSha256": "2ea8e473fc83bbec11f7424f2e6a286e929c9784f33b0d5b1665d2f090bcb965",
+        "expectedCanonicalBytes": 630
+      },
+      {
+        "matchId": "2041409",
+        "sourceSnapshotHash": "64fc654c66c85306757fdb5981053c4fb1d9eb16dfbc65bc3046b3d8c827a3b1",
+        "jsonPointer": "/rows/3452/featureSnapshot/modelInputs/usageSummary",
+        "expectedCanonicalSha256": "3261dd45fbdd7ee6a651af35d5d0e09e2495c1e46a82933dc5855621dcfa5e26",
+        "expectedCanonicalBytes": 648
+      },
+      {
+        "matchId": "2041410",
+        "sourceSnapshotHash": "38ab648cfd50ccd2e58553a41e97f9edd2af74e902a82a347d31b47c6bea6e36",
+        "jsonPointer": "/rows/3453/featureSnapshot/modelInputs/usageSummary",
+        "expectedCanonicalSha256": "05fbcc916ed439530a1f21a67a7d9f9cb8ebaefff96e0225170b5b7609228280",
+        "expectedCanonicalBytes": 648
+      },
+      {
+        "matchId": "2041415",
+        "sourceSnapshotHash": "49b8a65d063251f1525510b1135b70700a820087547208728cf3f46d1f45cfdf",
+        "jsonPointer": "/rows/3458/featureSnapshot/modelInputs/usageSummary",
+        "expectedCanonicalSha256": "cd953e6fe5b1d4b53e887203e746ba99e2cac94a9d05740f06647536972fcf19",
+        "expectedCanonicalBytes": 665
+      },
+      {
+        "matchId": "2041422",
+        "sourceSnapshotHash": "834ecce3578e8fe68171f63690e2a897bc06e36254291c07bd96a44770dfc215",
+        "jsonPointer": "/rows/3465/featureSnapshot/modelInputs/usageSummary",
+        "expectedCanonicalSha256": "8b11cb3b15bd44a2aa2cd49c7576b78349faa76bc6bfe05a21f015dede95124a",
+        "expectedCanonicalBytes": 648
+      },
+      {
+        "matchId": "2041441",
+        "sourceSnapshotHash": "69b7b5e38e51e2032b9f5c38905e99e44fb7a2eba45f1dfa898213ebb327390e",
+        "jsonPointer": "/rows/3510/featureSnapshot/modelInputs/usageSummary",
+        "expectedCanonicalSha256": "5288c426659bf7b64375826849bb9da8f1cc21a160a61783ed9cc6037c6942ea",
+        "expectedCanonicalBytes": 648
+      },
+      {
+        "matchId": "2041556",
+        "sourceSnapshotHash": "32049008961f3567f51015f720303f646aca156208c2b6b7340372578f3e8eae",
+        "jsonPointer": "/rows/4120/featureSnapshot/modelInputs/usageSummary",
+        "expectedCanonicalSha256": "71cc4f954bab8539842dda85b7a474cb82cae290be51a1a0974d565c6da8ddb6",
+        "expectedCanonicalBytes": 648
+      },
+      {
+        "matchId": "2041560",
+        "sourceSnapshotHash": "bff79f5b082e1a293120192c8d2d9906a85da4439b667b30a01bb2a45c5b9e07",
+        "jsonPointer": "/rows/4140/featureSnapshot/modelInputs/usageSummary",
+        "expectedCanonicalSha256": "5a31102804209efeab03d0123b72241267a74de2c5c5f52aaaf7e1a0483d35bd",
+        "expectedCanonicalBytes": 648
+      },
+      {
+        "matchId": "2041561",
+        "sourceSnapshotHash": "8b7d752fb84acd8376aaff637ecfb5a4cead66e822c9cd100e511c6d4a60115c",
+        "jsonPointer": "/rows/4141/featureSnapshot/modelInputs/usageSummary",
+        "expectedCanonicalSha256": "2579194fd0fdcd332b8545f08afd01c68c52d1bbeab300809de2082976efbaae",
+        "expectedCanonicalBytes": 648
+      },
+      {
+        "matchId": "2041562",
+        "sourceSnapshotHash": "29cc7209016a98a33752ff47ad3a833bcaffae44f2d1265d6a2732043930f584",
+        "jsonPointer": "/rows/4153/featureSnapshot/modelInputs/usageSummary",
+        "expectedCanonicalSha256": "5c5e2ad8c45d51e6dac95605c43f26f87c5206a94e5f33354ffb82eb30ffde85",
+        "expectedCanonicalBytes": 648
+      },
+      {
+        "matchId": "2041565",
+        "sourceSnapshotHash": "20f9617c82fd0ba77c536c577288f890912a05a0fea76fb5a0b5086f46e21329",
+        "jsonPointer": "/rows/4175/featureSnapshot/modelInputs/usageSummary",
+        "expectedCanonicalSha256": "c2afa9190230eda2b7f9911ccee20c5693d54a20ab9828a6f795ff9372706ebd",
+        "expectedCanonicalBytes": 648
+      },
+      {
+        "matchId": "2041566",
+        "sourceSnapshotHash": "6dc8c94f37aeeaba136d586a7686c542e0e3a03582d05fa78e2a2b784071476f",
+        "jsonPointer": "/rows/4196/featureSnapshot/modelInputs/usageSummary",
+        "expectedCanonicalSha256": "febc80eca375de08d7a5c3bc2ce76a7b864a24546aae663d0fed7802d0d99086",
+        "expectedCanonicalBytes": 651
+      },
+      {
+        "matchId": "2041572",
+        "sourceSnapshotHash": "b7b29fe597ef8a7833e16e7a6ffbbe59fdeb1dfdfd86ec36405b8626b4125886",
+        "jsonPointer": "/rows/4210/featureSnapshot/modelInputs/usageSummary",
+        "expectedCanonicalSha256": "5c1e1f10563b506dbba846a3a894712e16bf1931f47feab1ef8bf922b0c24c4c",
+        "expectedCanonicalBytes": 630
+      },
+      {
+        "matchId": "2041589",
+        "sourceSnapshotHash": "35022ee80641f2677652d5e9a91e54f5fdd0cbb30a3078839051ea32bb6f5e48",
+        "jsonPointer": "/rows/4316/featureSnapshot/modelInputs/usageSummary",
+        "expectedCanonicalSha256": "213774d9dd4dbd64844bbadb869740b4d6f4a2208002ff08b0f11d275dd8b795",
+        "expectedCanonicalBytes": 651
+      },
+      {
+        "matchId": "2041596",
+        "sourceSnapshotHash": "49431c320f26db6be6d157f59556508195c0e55be2a481c77e53cceb8987693a",
+        "jsonPointer": "/rows/4370/featureSnapshot/modelInputs/usageSummary",
+        "expectedCanonicalSha256": "79f9b9429bf535ee634e14af4ceefda02b00a518e0a7a6ad6e709045a3ff48ea",
+        "expectedCanonicalBytes": 648
+      },
+      {
+        "matchId": "2041598",
+        "sourceSnapshotHash": "0d12d90dddddf9bde193651b700ea97ef28b04202d9a5739c8767526649d30b5",
+        "jsonPointer": "/rows/4367/featureSnapshot/modelInputs/usageSummary",
+        "expectedCanonicalSha256": "c65a0b715e8e6dbe8bababf88ba60f6aa9817c23c89da2ac2aafef9d9de51f8f",
+        "expectedCanonicalBytes": 648
+      },
+      {
+        "matchId": "2041652",
+        "sourceSnapshotHash": "8d00a197343429e734d643d8829330beff56445097e718e55da012656951a440",
+        "jsonPointer": "/rows/4539/featureSnapshot/modelInputs/usageSummary",
+        "expectedCanonicalSha256": "937b43fd63e64f905f3e3975a5c704eda44ce003d56bfa366ca2414bab79709c",
+        "expectedCanonicalBytes": 648
+      },
+      {
+        "matchId": "2041653",
+        "sourceSnapshotHash": "1f4d72dfa0ef9963e799675bf8ff7cb04f07a5654b8b88e31323de8d19153057",
+        "jsonPointer": "/rows/4540/featureSnapshot/modelInputs/usageSummary",
+        "expectedCanonicalSha256": "03dca36b8f6ea4dcebd1165ee1012372b19ccf4e888d85bab98ef93cec3592d5",
+        "expectedCanonicalBytes": 648
+      },
+      {
+        "matchId": "2041708",
+        "sourceSnapshotHash": "02b0b57d7d952b32b5704185b3efa30706aae114b7096da68261789fc4b8eba2",
+        "jsonPointer": "/rows/4667/featureSnapshot/modelInputs/usageSummary",
+        "expectedCanonicalSha256": "fe07fee9f08b088af682384c6581e7cf1d584e9576865ddfc5555ff39059ab61",
+        "expectedCanonicalBytes": 628
+      },
+      {
+        "matchId": "2041718",
+        "sourceSnapshotHash": "62ed154135ba8b1d34f9b68df3524c12996e97ec4e6784034a8b00c964ba5113",
+        "jsonPointer": "/rows/4704/featureSnapshot/modelInputs/usageSummary",
+        "expectedCanonicalSha256": "2838a8c79a266d7ba9b13be79748266d5fc147f08718d3bdad81d5ad5dac46b8",
+        "expectedCanonicalBytes": 630
+      },
+      {
+        "matchId": "2041738",
+        "sourceSnapshotHash": "27d4d12f4d0f854a82588aefcec095d89a5f6a177af676598f25d5f36ba5aaa7",
+        "jsonPointer": "/rows/4822/featureSnapshot/modelInputs/usageSummary",
+        "expectedCanonicalSha256": "c167ca971c72fea540058243dcbb6631cf046163c8425266e7bd0c640938cce3",
+        "expectedCanonicalBytes": 648
+      }
+    ],
+    "requirements": [
+      "same immutable generation and unchanged original file hash",
+      "verify each whole source snapshot hash and exact committed field hash/byte count",
+      "read-only bounded export; preserve original captures; no historical eligibility upgrade"
+    ]
+  },
+  "nextEvidence": [
+    "Recover committed usageSummary without changing original source generation; summary weights are not arithmetic replay.",
+    "For future decisions retain original model inputUsage plus pre/post feedback and cooldown probabilities, weights, original clocks and model version.",
+    "Reuse existing candidateProspectiveLedger/challenger/common-cohort gates; this diagnosis cannot select, activate or promote a candidate."
+  ],
+  "limitations": [
+    "Version mix v73/v75/v76 prevents treating all rows as one current model.",
+    "Poisson direction alignment is observed component evidence, not proof that form or cooldown caused the final result.",
+    "Already-inspected outcomes must not set model weights, confidence thresholds, or be reused as future holdout.",
+    "Missing result observation records remain unverified even when recovered aggregate form values are present."
+  ],
+  "inputs": {
+    "base": {
+      "path": "outputs/history-regression-20261002/online-sample-v3.json",
+      "sha256": "151a20c0678b89ec41d0555f06149be75182beba0dbc17cd4a1b5a76435470e1"
+    },
+    "supplement": {
+      "path": "outputs/next-phase-20261002/form-supplement.json",
+      "sha256": "d4924ea7e96e20d048f4fbb0066525ac15c1d9ea63defe9c7ad90ad43b995dec"
+    },
+    "recovery": {
+      "path": "outputs/next-phase-20261002/form-recovery-receipt.json",
+      "sha256": "6dc4362fe05403c694c23b5fe9c33611c9a7dea0a85bc9329669ee0ce34d2675"
+    },
+    "evidence": {
+      "path": "outputs/history-regression-20261002/report/per-match-evidence.jsonl",
+      "sha256": "cebb126e0344787c0cfe4be1773a98d473394b1c6d57cfc32c5704c9abc125b9"
+    }
+  },
+  "reportHash": "46ed8d561753f84299e0032cc90709d57ee47043cc903d93cdfdae28ce71313c"
+}

@@ -1,0 +1,70 @@
+TAP version 13
+# Subtest: close rounded component leaders are unknown, not forced directions
+ok 1 - close rounded component leaders are unknown, not forced directions
+  ---
+  duration_ms: 0.8812
+  type: 'test'
+  ...
+# Subtest: complete metadata has no source verification or model admission authority
+ok 2 - complete metadata has no source verification or model admission authority
+  ---
+  duration_ms: 0.6332
+  type: 'test'
+  ...
+# Subtest: later summary cutoff cannot become original-decision evidence even when latest observation is earlier
+ok 3 - later summary cutoff cannot become original-decision evidence even when latest observation is earlier
+  ---
+  duration_ms: 0.3454
+  type: 'test'
+  ...
+# Subtest: missing or invalid summary decision clock cannot be substituted by latest observation or original decision
+ok 4 - missing or invalid summary decision clock cannot be substituted by latest observation or original decision
+  ---
+  duration_ms: 0.2319
+  type: 'test'
+  ...
+# Subtest: latest result after the summary cutoff contradicts declared zero late rows at nanosecond precision
+ok 5 - latest result after the summary cutoff contradicts declared zero late rows at nanosecond precision
+  ---
+  duration_ms: 0.2083
+  type: 'test'
+  ...
+# Subtest: equal and earlier summary cutoffs compare exact zoned instants without claiming original source availability
+ok 6 - equal and earlier summary cutoffs compare exact zoned instants without claiming original source availability
+  ---
+  duration_ms: 0.1638
+  type: 'test'
+  ...
+# Subtest: reported clock-recorded label does not override missing raw observation counts
+ok 7 - reported clock-recorded label does not override missing raw observation counts
+  ---
+  duration_ms: 0.1648
+  type: 'test'
+  ...
+# Subtest: later evidence boundary cannot admit result recorded one nanosecond after actual decision
+ok 8 - later evidence boundary cannot admit result recorded one nanosecond after actual decision
+  ---
+  duration_ms: 0.0989
+  type: 'test'
+  ...
+# Subtest: invalid calendars and unknown sample size do not become full form coverage
+ok 9 - invalid calendars and unknown sample size do not become full form coverage
+  ---
+  duration_ms: 1.1014
+  type: 'test'
+  ...
+# Subtest: real frozen evidence joins recovered form by exact source snapshot and preserves 154/26
+ok 10 - real frozen evidence joins recovered form by exact source snapshot and preserves 154/26
+  ---
+  duration_ms: 194.5399
+  type: 'test'
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 278.439

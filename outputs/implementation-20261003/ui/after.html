@@ -1,0 +1,339 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>推荐资格展示验收</title><style>:root{--bg-card:0 0% 100%;--text-primary:166 29% 19%;--text-muted:160 12% 35%;--text-secondary:160 12% 35%}*{box-sizing:border-box}body{margin:0;padding:16px;background:#f4f7f6;font:14px/1.6 system-ui,sans-serif;color:#233e36}main{max-width:940px;margin:auto}h1{font-size:22px}h2{font-size:18px}article{background:white;padding:20px;border:1px solid #d5e2dd;border-radius:14px;margin:16px 0;min-width:0}code{overflow-wrap:anywhere}.recommendation-evidence-facts__legacy-conflict {
+  border: 1px solid #b78332;
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 12px;
+  background: #302619;
+  color: #ffe0a4;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.recommendation-evidence-facts__legacy-conflict p {
+  margin: 6px 0 0;
+}
+
+.recommendation-evidence-facts {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0.6rem;
+  background: transparent;
+}
+
+.recommendation-evidence-facts__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.recommendation-evidence-facts__grid > div {
+  min-width: 0;
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.38rem;
+  background: hsl(var(--bg-card) / 0.52);
+}
+
+.recommendation-evidence-facts__grid dt,
+.recommendation-evidence-facts__sample span {
+  color: hsl(var(--text-muted));
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.recommendation-evidence-facts__grid dd {
+  margin: 0.16rem 0 0;
+  color: hsl(var(--text-primary));
+  font-size: 0.95rem;
+  font-weight: 800;
+  line-height: 1.4;
+  overflow-wrap: break-word;
+}
+
+.recommendation-evidence-facts__grid dd small {
+  display: block;
+  margin-top: 0.16rem;
+  color: hsl(var(--text-muted));
+  font-size: 0.68rem;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.recommendation-evidence-facts__grid .is-market-aligned dd {
+  color: hsl(var(--success));
+}
+
+.recommendation-evidence-facts__grid .is-market-conflicted dd {
+  color: hsl(var(--danger));
+}
+
+.recommendation-evidence-facts__grid .is-unavailable dd,
+.recommendation-evidence-facts__grid .is-market-unavailable dd {
+  color: hsl(var(--text-muted));
+}
+
+.recommendation-evidence-facts__sample {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.3rem;
+  margin: 0.28rem 0 0;
+  color: hsl(var(--text-muted));
+  font-size: 0.6rem;
+  line-height: 1.2;
+}
+
+.recommendation-evidence-facts__sample strong {
+  color: hsl(var(--text-secondary));
+  font-size: 0.62rem;
+}
+
+@media (max-width: 720px) {
+  .recommendation-evidence-facts__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .recommendation-evidence-facts__sample {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .predictions-v4 .decision-card > .recommendation-evidence-facts {
+    grid-column: 1 / -1;
+  }
+}
+
+.recommendation-overview-card .recommendation-evidence-facts.is-detail {
+  margin-top: 0.55rem;
+}
+
+.data-adoption-overview {
+  container-type: inline-size;
+  min-width: 0;
+  margin-top: 0.85rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid hsl(var(--text-muted) / 0.2);
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+
+.data-adoption-overview__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.65rem;
+  margin-bottom: 0.55rem;
+}
+
+.data-adoption-overview__header h3 {
+  margin: 0;
+  color: hsl(var(--text-primary));
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.data-adoption-overview__header > span,
+.data-adoption-overview__clock-note,
+.data-adoption-overview__boundary {
+  color: hsl(var(--text-secondary));
+  font-size: 0.72rem;
+  font-weight: 400;
+}
+
+.data-adoption-overview__clock {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0.65rem;
+  color: hsl(var(--text-secondary));
+}
+
+.data-adoption-overview__clock strong {
+  color: hsl(var(--text-primary));
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.data-adoption-overview__clock-note { margin: 0.3rem 0 0; }
+
+.data-adoption-overview > .data-adoption-details__warning {
+  margin: 0.65rem 0;
+  padding: 0.6rem 0.7rem;
+  border-left: 2px solid hsl(var(--text-muted));
+  border-radius: 0 6px 6px 0;
+  background: hsl(var(--bg-card) / 0.5);
+  color: hsl(var(--text-secondary));
+  overflow-wrap: anywhere;
+}
+
+.data-adoption-overview__panels {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 0.7rem;
+  margin-top: 0.7rem;
+}
+
+.data-adoption-overview__panel {
+  min-width: 0;
+  padding: 0.7rem 0.75rem;
+  border: 1px solid hsl(var(--text-muted) / 0.17);
+  border-radius: 9px;
+  background: hsl(var(--bg-card) / 0.28);
+}
+
+.data-adoption-overview__panel h4 {
+  margin: 0 0 0.55rem;
+  color: hsl(var(--text-primary));
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.data-adoption-overview__calculations,
+.data-adoption-overview__gaps {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.data-adoption-overview__calculations li,
+.data-adoption-overview__gaps li {
+  display: grid;
+  min-width: 0;
+  gap: 0.12rem;
+  color: hsl(var(--text-secondary));
+  overflow-wrap: anywhere;
+}
+
+.data-adoption-overview__calculations strong,
+.data-adoption-overview__gaps strong {
+  color: hsl(var(--text-primary));
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.data-adoption-overview__calculations li > span,
+.data-adoption-overview__calculations small { font-size: 0.72rem; }
+
+.data-adoption-overview__calculations [data-calculation-used='false'] > span {
+  color: hsl(var(--text-secondary));
+  font-style: normal;
+}
+
+.data-adoption-overview__gaps [data-gap-state='conflicting'] > strong,
+.data-adoption-overview__gaps [data-gap-state='after-decision'] > strong {
+  color: hsl(var(--danger));
+}
+
+.data-adoption-overview__empty {
+  margin: 0;
+  color: hsl(var(--text-secondary));
+  overflow-wrap: anywhere;
+}
+
+.data-adoption-overview__boundary { margin: 0.65rem 0 0; }
+
+.data-adoption-details__audit-label {
+  color: hsl(var(--text-secondary));
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.data-adoption-details { container-type: inline-size; min-width: 0; margin-top: 0.75rem; border-top: 1px solid hsl(var(--text-muted) / 0.18); padding-top: 0.65rem; font-size: 0.875rem; line-height: 1.65; }
+.data-adoption-details summary { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; color: hsl(var(--text-primary)); cursor: pointer; min-height: 44px; font-weight: 650; }
+.data-adoption-details summary::after { content: '+'; margin-left: auto; }
+.data-adoption-details[open] summary::after { content: '−'; }
+.data-adoption-details summary:focus-visible { outline: 2px solid hsl(var(--text-primary)); outline-offset: 3px; border-radius: 4px; }
+.data-adoption-details p { margin: 0.55rem 0; color: hsl(var(--text-secondary)); }
+.data-adoption-details__counts { display: flex; flex-wrap: wrap; gap: 0.3rem 0.65rem; flex-basis: 100%; order: 1; font-size: 0.75rem; color: hsl(var(--text-secondary)); font-weight: 500; }
+.data-adoption-details__counts > span { white-space: nowrap; }
+.data-adoption-details__counts [data-summary-state='conflicting'],
+.data-adoption-details__counts [data-summary-state='after-decision'] { color: hsl(var(--danger)); }
+.data-adoption-details__identity { display: grid; gap: 0.45rem; padding: 0.7rem; background: hsl(var(--bg-card) / 0.55); border-radius: 8px; color: hsl(var(--text-muted)); }
+.data-adoption-details__identity strong { display: block; color: hsl(var(--text-secondary)); font-weight: 500; overflow-wrap: anywhere; }
+.data-adoption-details p.data-adoption-details__warning { border-left: 2px solid hsl(var(--text-muted)); padding-left: 0.65rem; }
+.data-adoption-details dl { display: grid; gap: 0.5rem; margin: 0.75rem 0; }
+.data-adoption-details dl > div { min-width: 0; padding: 0.9rem; border: 1px solid hsl(var(--text-muted) / 0.2); border-radius: 10px; background: hsl(var(--bg-card) / 0.45); }
+.data-adoption-details dt { display: flex; flex-wrap: wrap; gap: 0.35rem; justify-content: space-between; color: hsl(var(--text-primary)); font-weight: 600; }
+.data-adoption-details dt span { font-size: 0.75rem; font-weight: 500; color: hsl(var(--text-secondary)); }
+.data-adoption-details dd { margin: 0; overflow-wrap: anywhere; }
+.data-adoption-details dd p { margin: 0.4rem 0; }
+.data-adoption-details dd small { display: block; margin-top: 0.12rem; color: hsl(var(--text-secondary)); font-size: 0.75rem; }
+.data-adoption-details [data-state='conflicting'] dt span,
+.data-adoption-details [data-state='after-decision'] dt span { color: hsl(var(--danger)); }
+.data-adoption-details__usage { padding: 0.8rem; margin-top: 0.75rem; border: 1px solid hsl(var(--text-muted) / 0.25); border-radius: 8px; }
+.data-adoption-details__usage h3 { font-size: 0.875rem; margin: 0; color: hsl(var(--text-primary)); }
+.data-adoption-details__usage ul { display: grid; gap: 0.7rem; list-style: none; padding: 0; margin: 0.65rem 0 0; }
+.data-adoption-details__usage li { display: grid; gap: 0.15rem; color: hsl(var(--text-secondary)); overflow-wrap: anywhere; }
+.data-adoption-details__usage small { color: hsl(var(--text-secondary)); font-size: 0.75rem; }
+.collector-diagnostics { margin: 1rem 0; padding: 0.9rem; border: 1px solid hsl(var(--text-muted) / 0.25); border-radius: 12px; background: hsl(var(--bg-card) / 0.7); }
+.collector-diagnostics header { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; align-items: center; justify-content: space-between; }
+.collector-diagnostics h3 { margin: 0; font-size: 0.95rem; color: hsl(var(--text-primary)); }
+.collector-diagnostics header > span { font-size: 0.75rem; color: hsl(var(--text-muted)); }
+.collector-diagnostics__meta { display: grid; gap: 0.65rem; padding: 0.7rem 0; border-bottom: 1px solid hsl(var(--text-muted) / 0.18); }
+.collector-diagnostics__meta > span { color: hsl(var(--text-muted)); font-size: 0.75rem; }
+.collector-diagnostics__meta strong { display: block; color: hsl(var(--text-secondary)); font-size: 0.85rem; font-weight: 500; overflow-wrap: anywhere; }
+.collector-diagnostics ul { display: grid; gap: 0.6rem; list-style: none; padding: 0; margin: 0.75rem 0 0; }
+.collector-diagnostics__access { margin-top: 0.75rem; padding: 0.75rem; border: 1px solid hsl(var(--text-muted) / 0.25); border-left: 3px solid #e2ad55; border-radius: 8px; background: hsl(var(--bg-primary) / 0.35); overflow-wrap: anywhere; }
+.collector-diagnostics__access > strong { font-size: 0.85rem; color: hsl(var(--text-primary)); }
+.collector-diagnostics__access > p, .collector-diagnostics__access > small { display: block; margin: 0.4rem 0 0; color: hsl(var(--text-secondary)); font-size: 0.75rem; line-height: 1.65; }
+.collector-diagnostics__access time { display: inline-block; white-space: nowrap; }
+.collector-diagnostics li { min-width: 0; padding: 0.65rem 0.75rem; border-radius: 8px; background: hsl(var(--bg-primary) / 0.35); overflow-wrap: anywhere; }
+.collector-diagnostics li > div { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.3rem 0.7rem; }
+.collector-diagnostics li strong { color: hsl(var(--text-primary)); font-size: 0.85rem; }
+.collector-diagnostics li > div > span, .collector-diagnostics li small { color: hsl(var(--text-secondary)); font-size: 0.75rem; }
+.collector-diagnostics li small { display: block; margin-top: 0.35rem; }
+.collector-diagnostics li p { font-size: 0.75rem; margin-bottom: 0; }
+.collector-diagnostics [data-collector-state='clock-rejected'] > div > span, .collector-diagnostics [data-mapping-status='conflicting'] { color: hsl(var(--danger)); }
+@container (min-width: 540px) {
+  .data-adoption-overview__panels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .collector-diagnostics__meta { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .data-adoption-details dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .data-adoption-details__identity { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.published-evidence-snapshot__states{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0;color:var(--text-2,#52666d);font-size:12px;line-height:1.7}
+.published-evidence-snapshot__states>span{padding:10px 12px;border:1px solid var(--border-color,#d5e2dd);border-radius:8px;min-width:0;overflow-wrap:anywhere}
+.published-evidence-snapshot__states b{display:block;color:var(--text-1,#233e36);font-weight:650}
+.recommendation-evidence-facts .published-evidence-snapshot__outcomes{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0}
+.published-evidence-snapshot__outcomes>div{text-align:center;border:1px solid var(--border-color,#d5e2dd)}
+.recommendation-evidence-facts .published-evidence-snapshot__outcomes dd{font-variant-numeric:tabular-nums;color:var(--text-1,#233e36)}
+.recommendation-evidence-facts .published-evidence-snapshot__outcomes dt,.recommendation-evidence-facts .published-evidence-snapshot__outcomes dd small{color:var(--text-2,#52666d)}
+.published-evidence-snapshot__outcomes small b{font-size:13px;font-weight:650}
+.recommendation-evidence-facts .published-evidence-snapshot__scope{font-size:12px;line-height:1.7;color:var(--text-2,#52666d);margin:10px 0;overflow-wrap:anywhere}
+.published-evidence-snapshot__cutoff{font-size:13px;font-weight:650;padding:10px 12px;border-left:3px solid #327759;background:var(--bg-secondary,#f2f6f4);border-radius:6px;line-height:1.6}
+.published-evidence-snapshot__version{margin:10px 0;font-size:12px;line-height:1.7}
+.published-evidence-snapshot__version summary{min-height:44px;cursor:pointer;display:list-item;align-content:center;padding:10px 0}
+.published-evidence-snapshot__version summary:focus-visible{outline:3px solid #146746;outline-offset:3px;border-radius:4px}
+.published-evidence-snapshot__version dl{margin:0;padding:12px;border:1px solid var(--border-color,#d5e2dd);border-radius:8px}
+.published-evidence-snapshot__version dt{font-weight:650;margin-top:8px}
+.published-evidence-snapshot__version dt:first-child{margin-top:0}
+.published-evidence-snapshot__version dd{margin:4px 0 0;overflow-wrap:anywhere}
+.published-evidence-snapshot__version code{display:block;font-size:11px;overflow-wrap:anywhere}
+.published-evidence-snapshot__clocks{display:grid;gap:6px;margin:12px 0;font-size:12px;color:var(--text-2,#52666d);font-variant-numeric:tabular-nums}
+.published-evidence-snapshot__clocks>div{display:grid;grid-template-columns:90px minmax(0,1fr);gap:8px}
+.published-evidence-snapshot__clocks dd{margin:0;overflow-wrap:anywhere}
+@media(max-width:480px){.published-evidence-snapshot__states{grid-template-columns:minmax(0,1fr)}.recommendation-evidence-facts .published-evidence-snapshot__outcomes{gap:5px}.published-evidence-snapshot__outcomes>div{padding:8px 4px}.published-evidence-snapshot__outcomes small b{display:block}}
+
+.published-evidence-readiness{margin:0 0 20px;padding:16px 18px;border:1px solid #bdd0c8;border-left:4px solid #326b56;border-radius:12px;background:#f0f6f3;color:#234436;line-height:1.7;overflow-wrap:anywhere}
+.published-evidence-readiness[data-display-stage="waiting-for-data"]{border-color:#d5c8ac;border-left-color:#89652b;background:#faf6ed;color:#59451f}
+.published-evidence-readiness__head{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+.published-evidence-readiness__head>div{min-width:0}
+.published-evidence-readiness__head span{display:block;font-size:12px;font-weight:500}
+.published-evidence-readiness__head strong{display:block;font-size:21px;line-height:1.4;margin-top:3px}
+.published-evidence-readiness__head b{display:block;font-size:14px;line-height:1.6;margin-top:4px}
+.recommendation-evidence-facts .published-evidence-readiness p,.published-evidence-readiness li{font-size:13px;line-height:1.8;color:inherit}
+.published-evidence-readiness ul{padding-left:18px;margin:12px 0 0}
+.recommendation-evidence-facts .published-evidence-readiness p{margin:10px 0 0}
+.published-evidence-readiness__reference{font-weight:650}
+.published-evidence-readiness__next{border-top:1px solid #c8d8d1;padding-top:10px}
+.published-evidence-readiness[data-display-stage="waiting-for-data"] .published-evidence-readiness__next{border-color:#ded2bd}
+@media(max-width:480px){.published-evidence-readiness{padding:14px}.published-evidence-readiness__head{gap:10px}.published-evidence-readiness__head strong{font-size:19px}.published-evidence-readiness__head b{font-size:13px}}
+</style><main><h1>线上冻结记录回放 · 候选</h1><p>来源：2026年9月22日线上记录，输入已按既有回执哈希核验。并非今天的新推荐或登录后整页验收。</p><article><h2>维冈竞技 vs 布莱克浦</h2><section class="recommendation-evidence-facts" data-testid="published-recommendation-evidence" data-decision-id="decision_fec5f6760ce2603d649871d63f48f59e7142f925ed1c81656d730fa0d60527a4" data-record-hash="dc4c1e4a10f66e4fb2b6ee954d1e48c302b554f405d568e80271bbad3fb74718"><aside class="published-evidence-readiness" data-testid="recommendation-readiness" data-display-stage="analysis-reference" data-selection-status="unknown" aria-label="本场推荐状态"><div class="published-evidence-readiness__head"><div><span>当前展示</span><strong>分析参考</strong></div><div data-formal-status="model-unvalidated"><span>正式推荐资格</span><b>尚未通过模型验证</b></div></div><ul><li>单场参考资格尚未提供</li></ul><p class="published-evidence-readiness__next">查看冻结赔率及资料缺口；新资料须经新决策采用。</p></aside><h3>已发布胜平负记录</h3><strong>主胜 · 36.6%</strong><dl class="recommendation-evidence-facts__grid published-evidence-snapshot__outcomes" aria-label="同一冻结决策的概率与SP"><div data-outcome="1"><dt>主胜</dt><dd>36.6%<small>冻结 SP <b>2.25</b></small></dd></div><div data-outcome="X"><dt>平局</dt><dd>28.2%<small>冻结 SP <b>3.40</b></small></dd></div><div data-outcome="2"><dt>客胜</dt><dd>35.2%<small>冻结 SP <b>2.56</b></small></dd></div></dl><p class="published-evidence-snapshot__scope">仅展示本条记录自带的 SP；缺项显示 —，不借用当前赛程报价。SP 来源及官方核验以原记录为准。</p><p class="published-evidence-snapshot__cutoff">赛前截止 · 北京时间 <time dateTime="2026-09-22T14:00:00.000Z">2026/09/22 22:00</time></p><dl class="published-evidence-snapshot__clocks"><div><dt>模型生成</dt><dd><time dateTime="2026-09-22T07:15:48.207Z">2026/09/22 15:15</time></dd></div><div><dt>发布时间</dt><dd><time dateTime="2026-09-22T07:29:03.775Z">2026/09/22 15:29</time></dd></div><div><dt>SP采集</dt><dd><time dateTime="2026-09-22T07:25:52.049Z">2026/09/22 15:25</time></dd></div></dl><details class="published-evidence-snapshot__version"><summary>冻结版本与 SP 来源</summary><dl><dt>决策版本</dt><dd><code>decision_fec5f6760ce2603d649871d63f48f59e7142f925ed1c81656d730fa0d60527a4</code></dd><dt>记录哈希</dt><dd><code>dc4c1e4a10f66e4fb2b6ee954d1e48c302b554f405d568e80271bbad3fb74718</code></dd><dt>SP 原始来源</dt><dd>500.com:jczq:HAD</dd></dl></details><p class="published-evidence-snapshot__scope">数据采用情况：本条展示契约未提供完整输入采用凭证；不能据此判断伤停为零、阵容已确认或 xG 已取得。补充资料的最新时间不替代冻结记录时点。</p><small>已发布参考的模型概率，尚未验证为真实命中率；发布不等于影子实验或正式推荐门槛通过。以下补充资料不构成本条发布记录的采用凭证。</small></section></article><article><h2>诺茨郡 vs 格里姆斯比</h2><section class="recommendation-evidence-facts" data-testid="published-recommendation-evidence" data-decision-id="decision_523dcd31944931da373b11554af23eedb2c3d7c8c5bb04f1294bad4f2417b6c7" data-record-hash="93d8060a1d6c0b1356d03aec1f3de2e5e14e2deb3f70e6bdfcbceeab2c958465"><aside class="published-evidence-readiness" data-testid="recommendation-readiness" data-display-stage="analysis-reference" data-selection-status="unknown" aria-label="本场推荐状态"><div class="published-evidence-readiness__head"><div><span>当前展示</span><strong>分析参考</strong></div><div data-formal-status="model-unvalidated"><span>正式推荐资格</span><b>尚未通过模型验证</b></div></div><ul><li>单场参考资格尚未提供</li></ul><p class="published-evidence-readiness__next">查看冻结赔率及资料缺口；新资料须经新决策采用。</p></aside><h3>已发布胜平负记录</h3><strong>主胜 · 37.1%</strong><dl class="recommendation-evidence-facts__grid published-evidence-snapshot__outcomes" aria-label="同一冻结决策的概率与SP"><div data-outcome="1"><dt>主胜</dt><dd>37.1%<small>冻结 SP <b>2.04</b></small></dd></div><div data-outcome="X"><dt>平局</dt><dd>28.2%<small>冻结 SP <b>3.45</b></small></dd></div><div data-outcome="2"><dt>客胜</dt><dd>34.7%<small>冻结 SP <b>2.86</b></small></dd></div></dl><p class="published-evidence-snapshot__scope">仅展示本条记录自带的 SP；缺项显示 —，不借用当前赛程报价。SP 来源及官方核验以原记录为准。</p><p class="published-evidence-snapshot__cutoff">赛前截止 · 北京时间 <time dateTime="2026-09-22T14:00:00.000Z">2026/09/22 22:00</time></p><dl class="published-evidence-snapshot__clocks"><div><dt>模型生成</dt><dd><time dateTime="2026-09-22T07:15:48.195Z">2026/09/22 15:15</time></dd></div><div><dt>发布时间</dt><dd><time dateTime="2026-09-22T07:29:03.775Z">2026/09/22 15:29</time></dd></div><div><dt>SP采集</dt><dd><time dateTime="2026-09-22T07:25:52.049Z">2026/09/22 15:25</time></dd></div></dl><details class="published-evidence-snapshot__version"><summary>冻结版本与 SP 来源</summary><dl><dt>决策版本</dt><dd><code>decision_523dcd31944931da373b11554af23eedb2c3d7c8c5bb04f1294bad4f2417b6c7</code></dd><dt>记录哈希</dt><dd><code>93d8060a1d6c0b1356d03aec1f3de2e5e14e2deb3f70e6bdfcbceeab2c958465</code></dd><dt>SP 原始来源</dt><dd>500.com:jczq:HAD</dd></dl></details><p class="published-evidence-snapshot__scope">数据采用情况：本条展示契约未提供完整输入采用凭证；不能据此判断伤停为零、阵容已确认或 xG 已取得。补充资料的最新时间不替代冻结记录时点。</p><small>已发布参考的模型概率，尚未验证为真实命中率；发布不等于影子实验或正式推荐门槛通过。以下补充资料不构成本条发布记录的采用凭证。</small></section></article></main></html>

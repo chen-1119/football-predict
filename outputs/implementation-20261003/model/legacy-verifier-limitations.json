@@ -1,0 +1,10 @@
+{
+  "scope": "supplemental historical verifier, not the new clock repair tests",
+  "command": "node scripts/verifyModelInputUsage.cjs",
+  "actualClockOutcome": "failed: fixed September fixture is after cutoff when run on October 3; pending public evidence is null",
+  "fixedFixtureClockOutcome": "failed: compares current scorer against old commit 85759308a826e73b50681335ecf928802cc6f1dd; pre-existing GOALS and output-shape differences",
+  "fixedFixtureClockLog": "model-input-usage-fixed-fixture-clock.txt",
+  "newChangeRegression": "tests/model-input-usage-clock.test.cjs compares seven actual scorer cases against the exact parent 295a173d117cbb0f889197dbeff13501d79dfd15",
+  "legacyVerifierClaimedPassed": false,
+  "modelPromoted": false
+}

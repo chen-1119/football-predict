@@ -1,0 +1,192 @@
+node:assert:150
+  throw new AssertionError(obj);
+  ^
+
+AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
++ actual - expected
+... Skipped lines
+
+  {
+    goalLines: {
++     over25: 50.2,
++     under25: 49.8
+-     over25: 52.9,
+-     under25: 47.1
+    },
+    handicap: null,
+    lambdaBlend: {
+      contextAwayLambdaAdjustment: 0.012,
+      contextHomeLambdaAdjustment: 0.02,
+...
+      independentTotalLambda: 2.58,
++     jointGoalFit: null,
+      leagueAwayLambda: null,
+      leagueHomeLambda: null,
+      leaguePriorKey: null,
+      leagueWeight: 0,
+      marketAwayLambda: 1.04,
+...
+        market: 'GOALS',
++       odds: 0,
+-       odds: 1.89,
+        pool: undefined,
++       tip: 'WATCH'
+-       tip: 'O2.5'
+      },
+      {
+        action: 'reference',
+        market: 'BEST',
+        odds: 2.1,
+...
+      teamStrength: 0.15,
++     worldCupPrior: 0
+    }
+  }
+
+    at C:\Users\86188\Documents\football\.codex\worktrees\00-integration\scripts\verifyModelInputUsage.cjs:123:10
+    at check (C:\Users\86188\Documents\football\.codex\worktrees\00-integration\scripts\verifyModelInputUsage.cjs:14:31)
+    at Object.<anonymous> (C:\Users\86188\Documents\football\.codex\worktrees\00-integration\scripts\verifyModelInputUsage.cjs:121:4)
+    at Module._compile (node:internal/modules/cjs/loader:1705:14)
+    at Object..js (node:internal/modules/cjs/loader:1838:10)
+    at Module.load (node:internal/modules/cjs/loader:1441:32)
+    at Function._load (node:internal/modules/cjs/loader:1263:12)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Module.require (node:internal/modules/cjs/loader:1463:12) {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: {
+    oneXTwo: {
+      market: { home: 44.4, draw: 27.4, away: 28.2 },
+      teamStrength: { home: 35, draw: 30, away: 35 },
+      elo: { home: 45, draw: 30, away: 25 },
+      poisson: { home: 49.3, draw: 24.7, away: 25.9 },
+      scoreImplied: { home: 51.2, draw: 25.7, away: 23.1 },
+      worldCupPrior: null,
+      final: { home: 46.3, draw: 27.1, away: 26.6 },
+      unifiedPosterior: { home: 48.6, draw: 26.1, away: 25.4 }
+    },
+    weights: {
+      market: 0.1,
+      teamStrength: 0.15,
+      elo: 0.3,
+      poisson: 0.45,
+      worldCupPrior: 0,
+      scoreFeedback: 0.15
+    },
+    lambdaBlend: {
+      marketHomeLambda: 1.54,
+      marketAwayLambda: 1.04,
+      independentHomeLambda: 1.54,
+      independentAwayLambda: 1.04,
+      independentTotalLambda: 2.58,
+      independentHomeShare: 0.597,
+      leagueHomeLambda: null,
+      leagueAwayLambda: null,
+      leagueWeight: 0,
+      leaguePriorKey: null,
+      formHomeLambda: 1.67,
+      formAwayLambda: 1.16,
+      formWeight: 0.42,
+      scoreTotalLambdaAdjustment: 0,
+      scoreCalibrationVersion: null,
+      contextTotalLambdaAdjustment: 0.032,
+      contextHomeLambdaAdjustment: 0.02,
+      contextAwayLambdaAdjustment: 0.012,
+      jointGoalFit: null
+    },
+    goalLines: { over25: 50.2, under25: 49.8 },
+    handicap: null,
+    predictions: [
+      {
+        market: '1X2',
+        pool: 'HAD',
+        tip: '1',
+        odds: 2.1,
+        action: 'reference'
+      },
+      {
+        market: 'GOALS',
+        pool: undefined,
+        tip: 'WATCH',
+        odds: 0,
+        action: 'reference'
+      },
+      {
+        market: 'BEST',
+        pool: 'HAD',
+        tip: '1',
+        odds: 2.1,
+        action: 'reference'
+      }
+    ]
+  },
+  expected: {
+    oneXTwo: {
+      market: { home: 44.4, draw: 27.4, away: 28.2 },
+      teamStrength: { home: 35, draw: 30, away: 35 },
+      elo: { home: 45, draw: 30, away: 25 },
+      poisson: { home: 49.3, draw: 24.7, away: 25.9 },
+      scoreImplied: { home: 51.2, draw: 25.7, away: 23.1 },
+      worldCupPrior: null,
+      final: { home: 46.3, draw: 27.1, away: 26.6 },
+      unifiedPosterior: { home: 48.6, draw: 26.1, away: 25.4 }
+    },
+    weights: {
+      market: 0.1,
+      teamStrength: 0.15,
+      elo: 0.3,
+      poisson: 0.45,
+      scoreFeedback: 0.15
+    },
+    lambdaBlend: {
+      marketHomeLambda: 1.54,
+      marketAwayLambda: 1.04,
+      independentHomeLambda: 1.54,
+      independentAwayLambda: 1.04,
+      independentTotalLambda: 2.58,
+      independentHomeShare: 0.597,
+      leagueHomeLambda: null,
+      leagueAwayLambda: null,
+      leagueWeight: 0,
+      leaguePriorKey: null,
+      formHomeLambda: 1.67,
+      formAwayLambda: 1.16,
+      formWeight: 0.42,
+      scoreTotalLambdaAdjustment: 0,
+      scoreCalibrationVersion: null,
+      contextTotalLambdaAdjustment: 0.032,
+      contextHomeLambdaAdjustment: 0.02,
+      contextAwayLambdaAdjustment: 0.012
+    },
+    goalLines: { over25: 52.9, under25: 47.1 },
+    handicap: null,
+    predictions: [
+      {
+        market: '1X2',
+        pool: 'HAD',
+        tip: '1',
+        odds: 2.1,
+        action: 'reference'
+      },
+      {
+        market: 'GOALS',
+        pool: undefined,
+        tip: 'O2.5',
+        odds: 1.89,
+        action: 'reference'
+      },
+      {
+        market: 'BEST',
+        pool: 'HAD',
+        tip: '1',
+        odds: 2.1,
+        action: 'reference'
+      }
+    ]
+  },
+  operator: 'deepStrictEqual',
+  diff: 'simple'
+}
+
+Node.js v22.22.1

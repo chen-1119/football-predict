@@ -1,0 +1,260 @@
+{
+  "version": "closure-real-proof-replay-v1",
+  "replayedAt": "2026-10-02T16:29:49.766Z",
+  "node": "v22.22.1",
+  "productionWrites": false,
+  "providerRequests": 0,
+  "sourceEvidence": {
+    "file": "remote-empty-current-proof.json",
+    "sha256": "58d632fe3564f273971f61c85a7d0262810e3d38ac8d80309c4b206dc87d7352",
+    "observedAt": "2026-10-02T16:15:58.107675+00:00",
+    "transport": {
+      "host": "134.175.132.183",
+      "fingerprint": "SHA256:t3Y9DoAdbURl0ibCHQEYENSARoqcm3OSK+ERl/Sg8to",
+      "scriptSha256": "35726b27628a92d082eb58e2e9f5ed405c5a82cff2a2133daffd987713c81cf0",
+      "responseSha256": "6abcb7fa3c43b24f39be0359de7fe924539eef31bf73a603036745e79f6b31a5",
+      "receivedAt": "2026-10-02T16:15:58.170Z"
+    },
+    "originalRemoteSnapshot": {
+      "path": "/var/lib/football-predict/sporttery-relay-snapshot.json",
+      "sha256": "cd97b78f63e934176fcb51a97b0cb084b43ffe080c52258f1c470303534199bc",
+      "bytes": 2660009,
+      "capturedAt": "2026-10-02T15:56:02.682Z",
+      "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d"
+    }
+  },
+  "distinction": "The replay input is the exported two-endpoint projection, not the full original remote snapshot. Its separate file hash must not be substituted for the remote full snapshot hash.",
+  "trustRegistry": {
+    "path": "deploy\\light-server\\collector-trust-registry.json",
+    "sha256": "a5969ec4039dba8fde6e9d294aaaf9d49937df7c54409581a22457285f04c85a"
+  },
+  "atObservation": {
+    "version": "official-closed-schedule-integrity-v1",
+    "asOf": "2026-10-02T16:15:58.107675+00:00",
+    "emptyCurrentIntegrityEligible": true,
+    "state": "official-stop-sale",
+    "blockers": [],
+    "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+    "capturedAt": "2026-10-02T15:56:02.682Z",
+    "maxAgeSeconds": 1200,
+    "endpoints": [
+      {
+        "method": "current",
+        "signatureVerified": true,
+        "keyId": "football-mainland-collector-20260728",
+        "independenceDomain": "mainland-collector-runtime-1",
+        "commitmentHash": "9ad7d2463df2127ac0bdc437199c78c9de2e44e60cd87973aeb4da3b1291144e",
+        "canonicalPayloadSha256": "edad0f7c7475b52d40c9bba76a9cd37d4c2cfc98e81f4c238c635a7b571ea4e3",
+        "rawSha256": "e53d9aed8bafbaf8ab042e17d286ed749c639da013fc52de1ba1f9d6379c6f31",
+        "requestedAt": "2026-10-02T15:56:02.794Z",
+        "receivedAt": "2026-10-02T15:56:02.811Z"
+      },
+      {
+        "method": "calculator",
+        "signatureVerified": true,
+        "keyId": "football-mainland-collector-20260728",
+        "independenceDomain": "mainland-collector-runtime-1",
+        "commitmentHash": "8977e5eaadb181b5156f5d8a38a56b2dd83df084064c3904d44bfff1fb441aff",
+        "canonicalPayloadSha256": "38629eaeff25257d4dce790918929cace16704b6d957c118b977e0bd40ba1a9d",
+        "rawSha256": "38629eaeff25257d4dce790918929cace16704b6d957c118b977e0bd40ba1a9d",
+        "requestedAt": "2026-10-02T15:56:02.683Z",
+        "receivedAt": "2026-10-02T15:56:02.782Z"
+      }
+    ],
+    "marketDataEligible": false,
+    "recommendationEligible": false,
+    "independentCollectorRedundancyEligible": false,
+    "note": "Validates an empty current array only. Does not alter source freshness, odds, result authority, collector counts or recommendation gates."
+  },
+  "atReplay": {
+    "version": "official-closed-schedule-integrity-v1",
+    "asOf": "2026-10-02T16:29:49.766Z",
+    "emptyCurrentIntegrityEligible": false,
+    "state": "unproven-empty",
+    "blockers": [
+      "closure-calculator-clock-invalid",
+      "closure-current-clock-invalid",
+      "closure-envelope-clock-invalid"
+    ],
+    "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+    "capturedAt": "2026-10-02T15:56:02.682Z",
+    "maxAgeSeconds": 1200,
+    "endpoints": [
+      {
+        "method": "current",
+        "signatureVerified": true,
+        "keyId": "football-mainland-collector-20260728",
+        "independenceDomain": "mainland-collector-runtime-1",
+        "commitmentHash": "9ad7d2463df2127ac0bdc437199c78c9de2e44e60cd87973aeb4da3b1291144e",
+        "canonicalPayloadSha256": "edad0f7c7475b52d40c9bba76a9cd37d4c2cfc98e81f4c238c635a7b571ea4e3",
+        "rawSha256": "e53d9aed8bafbaf8ab042e17d286ed749c639da013fc52de1ba1f9d6379c6f31",
+        "requestedAt": "2026-10-02T15:56:02.794Z",
+        "receivedAt": "2026-10-02T15:56:02.811Z"
+      },
+      {
+        "method": "calculator",
+        "signatureVerified": true,
+        "keyId": "football-mainland-collector-20260728",
+        "independenceDomain": "mainland-collector-runtime-1",
+        "commitmentHash": "8977e5eaadb181b5156f5d8a38a56b2dd83df084064c3904d44bfff1fb441aff",
+        "canonicalPayloadSha256": "38629eaeff25257d4dce790918929cace16704b6d957c118b977e0bd40ba1a9d",
+        "rawSha256": "38629eaeff25257d4dce790918929cace16704b6d957c118b977e0bd40ba1a9d",
+        "requestedAt": "2026-10-02T15:56:02.683Z",
+        "receivedAt": "2026-10-02T15:56:02.782Z"
+      }
+    ],
+    "marketDataEligible": false,
+    "recommendationEligible": false,
+    "independentCollectorRedundancyEligible": false,
+    "note": "Validates an empty current array only. Does not alter source freshness, odds, result authority, collector counts or recommendation gates."
+  },
+  "publishedProjectionAsOfObservation": {
+    "version": "official-closed-schedule-integrity-v1",
+    "asOf": "2026-10-02T16:15:58.107675+00:00",
+    "emptyCurrentIntegrityEligible": true,
+    "state": "official-stop-sale",
+    "blockers": [],
+    "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+    "capturedAt": "2026-10-02T15:56:02.682Z",
+    "maxAgeSeconds": 1200,
+    "endpoints": [
+      {
+        "method": "current",
+        "signatureVerified": true,
+        "keyId": "football-mainland-collector-20260728",
+        "independenceDomain": "mainland-collector-runtime-1",
+        "commitmentHash": "9ad7d2463df2127ac0bdc437199c78c9de2e44e60cd87973aeb4da3b1291144e",
+        "canonicalPayloadSha256": "edad0f7c7475b52d40c9bba76a9cd37d4c2cfc98e81f4c238c635a7b571ea4e3",
+        "rawSha256": "e53d9aed8bafbaf8ab042e17d286ed749c639da013fc52de1ba1f9d6379c6f31",
+        "requestedAt": "2026-10-02T15:56:02.794Z",
+        "receivedAt": "2026-10-02T15:56:02.811Z"
+      },
+      {
+        "method": "calculator",
+        "signatureVerified": true,
+        "keyId": "football-mainland-collector-20260728",
+        "independenceDomain": "mainland-collector-runtime-1",
+        "commitmentHash": "8977e5eaadb181b5156f5d8a38a56b2dd83df084064c3904d44bfff1fb441aff",
+        "canonicalPayloadSha256": "38629eaeff25257d4dce790918929cace16704b6d957c118b977e0bd40ba1a9d",
+        "rawSha256": "38629eaeff25257d4dce790918929cace16704b6d957c118b977e0bd40ba1a9d",
+        "requestedAt": "2026-10-02T15:56:02.683Z",
+        "receivedAt": "2026-10-02T15:56:02.782Z"
+      }
+    ],
+    "marketDataEligible": false,
+    "recommendationEligible": false,
+    "independentCollectorRedundancyEligible": false,
+    "note": "Validates an empty current array only. Does not alter source freshness, odds, result authority, collector counts or recommendation gates.",
+    "publicationSourceCycleId": "local-readonly-replay-not-production",
+    "originalSnapshot": {
+      "name": "replay-input-two-endpoint-projection.json",
+      "bytes": 12515,
+      "sha256": "b825a155e66709efbed70bed2ae4cfbdc3250d9bce8386fb28cae3c1e3a1ded4"
+    },
+    "trustRegistry": {
+      "name": "collector-trust-registry.json",
+      "bytes": 1780,
+      "sha256": "a5969ec4039dba8fde6e9d294aaaf9d49937df7c54409581a22457285f04c85a"
+    }
+  },
+  "publishedProjectionNow": {
+    "version": "official-closed-schedule-integrity-v1",
+    "asOf": "2026-10-02T16:29:49.766Z",
+    "emptyCurrentIntegrityEligible": false,
+    "state": "unproven-empty",
+    "blockers": [
+      "closure-calculator-clock-invalid",
+      "closure-current-clock-invalid",
+      "closure-envelope-clock-invalid"
+    ],
+    "sourceCycleId": "sporttery-relay:20261002T155602682Z:081b699d-cb65-4cbc-ba75-c029ca9da80d",
+    "capturedAt": "2026-10-02T15:56:02.682Z",
+    "maxAgeSeconds": 1200,
+    "endpoints": [
+      {
+        "method": "current",
+        "signatureVerified": true,
+        "keyId": "football-mainland-collector-20260728",
+        "independenceDomain": "mainland-collector-runtime-1",
+        "commitmentHash": "9ad7d2463df2127ac0bdc437199c78c9de2e44e60cd87973aeb4da3b1291144e",
+        "canonicalPayloadSha256": "edad0f7c7475b52d40c9bba76a9cd37d4c2cfc98e81f4c238c635a7b571ea4e3",
+        "rawSha256": "e53d9aed8bafbaf8ab042e17d286ed749c639da013fc52de1ba1f9d6379c6f31",
+        "requestedAt": "2026-10-02T15:56:02.794Z",
+        "receivedAt": "2026-10-02T15:56:02.811Z"
+      },
+      {
+        "method": "calculator",
+        "signatureVerified": true,
+        "keyId": "football-mainland-collector-20260728",
+        "independenceDomain": "mainland-collector-runtime-1",
+        "commitmentHash": "8977e5eaadb181b5156f5d8a38a56b2dd83df084064c3904d44bfff1fb441aff",
+        "canonicalPayloadSha256": "38629eaeff25257d4dce790918929cace16704b6d957c118b977e0bd40ba1a9d",
+        "rawSha256": "38629eaeff25257d4dce790918929cace16704b6d957c118b977e0bd40ba1a9d",
+        "requestedAt": "2026-10-02T15:56:02.683Z",
+        "receivedAt": "2026-10-02T15:56:02.782Z"
+      }
+    ],
+    "marketDataEligible": false,
+    "recommendationEligible": false,
+    "independentCollectorRedundancyEligible": false,
+    "note": "Validates an empty current array only. Does not alter source freshness, odds, result authority, collector counts or recommendation gates.",
+    "publicationSourceCycleId": "local-readonly-replay-not-production",
+    "originalSnapshot": {
+      "name": "replay-input-two-endpoint-projection.json",
+      "bytes": 12515,
+      "sha256": "b825a155e66709efbed70bed2ae4cfbdc3250d9bce8386fb28cae3c1e3a1ded4"
+    },
+    "trustRegistry": {
+      "name": "collector-trust-registry.json",
+      "bytes": 1780,
+      "sha256": "a5969ec4039dba8fde6e9d294aaaf9d49937df7c54409581a22457285f04c85a"
+    }
+  },
+  "projectedProofBytes": 5177,
+  "sourceCapturedAtPreserved": true,
+  "tests": {
+    "ok": true,
+    "checks": 44,
+    "productionDataTouched": false,
+    "actualValidatorScopes": 2,
+    "sourceFreshnessPromoted": false,
+    "marketCollectorsPromoted": false,
+    "recommendationsPromoted": false
+  },
+  "syntaxChecks": [
+    {
+      "file": "scripts/officialClosedScheduleEvidence.cjs",
+      "ok": true
+    },
+    {
+      "file": "scripts/syncData.cjs",
+      "ok": true
+    },
+    {
+      "file": "scripts/validateData.cjs",
+      "ok": true
+    }
+  ],
+  "codeFiles": [
+    {
+      "file": "scripts/officialClosedScheduleEvidence.cjs",
+      "sha256": "90dd4b7f2c4521a8beb54e5692414122756796fba2926f1b1e3c9e185ccb51c5"
+    },
+    {
+      "file": "scripts/syncData.cjs",
+      "sha256": "12b574155e8736dee91b62740f02a990a710e61f64fa09d406461fce99257092"
+    },
+    {
+      "file": "scripts/validateData.cjs",
+      "sha256": "0ab9f9af87bfc9d23b0008cadb371fea5747e2422d8e71ae0d680c193ff15e93"
+    },
+    {
+      "file": "tests/official-closed-schedule-evidence.test.cjs",
+      "sha256": "bad7ecc82c7cf50344563a78da566ec58b827a3fcfd07e09efc84115eaddb9e9"
+    }
+  ],
+  "notDeployed": true,
+  "sourceFreshnessPromoted": false,
+  "recommendationEligible": false,
+  "independentCollectorRedundancyEligible": false
+}

@@ -15,6 +15,7 @@ import { selectionReferenceLabel } from '../../services/publishedRecommendationS
 import '../../styles/published-evidence-snapshot.css';
 import { publishedPickLabel } from '../../services/publishedMatchRecommendation';
 import { publishedDetailPresentation } from '../../services/publishedDetailPresentation';
+import { recommendationReadinessPresentation } from '../../services/recommendationReadinessPresentation';
 
 interface RecommendationEvidenceFactsProps {
   match: Match;
@@ -93,14 +94,17 @@ export function RecommendationEvidenceFacts({
 }: RecommendationEvidenceFactsProps) {
   if (publishedDecision !== undefined) {
     const view = publishedDetailPresentation(publishedDecision);
+    const readiness = recommendationReadinessPresentation(publishedDecision, selectionQuality, language);
     return <section className={joinClassNames('recommendation-evidence-facts', className)} data-testid="published-recommendation-evidence" data-decision-id={view?.decisionId} data-record-hash={view?.recordHash}>
+      <aside className="published-evidence-readiness" data-testid="recommendation-readiness" data-display-stage={readiness.stage} data-selection-status={selectionQuality?.status || 'unknown'} aria-label={language === 'zh' ? '本场推荐状态' : 'Recommendation state'}>
+        <div className="published-evidence-readiness__head"><div><span>{language === 'zh' ? '当前展示' : 'Currently shown'}</span><strong>{readiness.label}</strong></div><div data-formal-status={readiness.formalStatus}><span>{language === 'zh' ? '正式推荐资格' : 'Formal recommendation qualification'}</span><b>{readiness.formalLabel}</b></div></div>
+        {readiness.reasons.length > 0 && <ul>{readiness.reasons.map(reason => <li key={reason}>{reason}</li>)}</ul>}
+        {selectionQuality && <p className="published-evidence-readiness__reference">{selectionReferenceLabel(selectionQuality, language)}</p>}
+        <p className="published-evidence-readiness__next">{readiness.nextStep}</p>
+      </aside>
       <h3>{language === 'zh' ? '已发布胜平负记录' : 'Published 1X2 record'}</h3>
       {view ? <>
         <strong>{publishedPickLabel(view.tipCode, language)} · {(view.modelProbability * 100).toFixed(1)}%</strong>
-        <div className="published-evidence-snapshot__states" aria-label={language === 'zh' ? '验证与参考资格' : 'Validation and reference qualification'}>
-          <span><b>{language === 'zh' ? '模型验证' : 'Model validation'}</b>{publishedDecision?.modelValidation === 'unvalidated' ? (language === 'zh' ? '未验证参考' : 'Unvalidated reference') : (language === 'zh' ? '验证状态未提供' : 'Validation status unavailable')}</span>
-          <span data-selection-status={selectionQuality?.status || 'unknown'}><b>{language === 'zh' ? '单场参考资格' : 'Single-reference qualification'}</b>{selectionQuality ? selectionReferenceLabel(selectionQuality, language) : (language === 'zh' ? '证据待核 · 资格未提供' : 'Evidence pending · qualification unavailable')}</span>
-        </div>
         <dl className="recommendation-evidence-facts__grid published-evidence-snapshot__outcomes" aria-label={language === 'zh' ? '同一冻结决策的概率与SP' : 'Probabilities and SP from the same frozen decision'}>
           {(['home', 'draw', 'away'] as const).map((key, index) => {
             const code = (['1', 'X', '2'] as const)[index];
