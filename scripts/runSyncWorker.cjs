@@ -2746,6 +2746,8 @@ const workerHistoryFields = (status = null) => {
     ? status.lastError
     : legacyError;
   return {
+    ...(process.env.SYNC_WORKER_SOURCE_SHADOW === "1" && status?.sourceCollectionShadow
+      ? { sourceCollectionShadow: status.sourceCollectionShadow } : {}),
     lastCycle,
     lastCompleteCycle,
     lastSuccessAt: status?.lastSuccessAt
@@ -2770,6 +2772,36 @@ const workerHistoryFields = (status = null) => {
 };
 
 let workerStatusState = readJson(statusFile, null);
+
+// Optional observation only. Keep module loading and snapshot reads out of the
+// default path; none of these suggested delays controls the worker scheduler.
+const observeWorkerSourceCollectionShadow = ({
+  asOf,
+  previous = null,
+  enabled = process.env.SYNC_WORKER_SOURCE_SHADOW === "1",
+  sourceFiles = null,
+  readFiles = null,
+  readClosure = () => readJson(path.join(storeDir, "sporttery-sales-closure-verified.json"), null),
+} = {}) => {
+  if (!enabled) return null;
+  try {
+    const files = sourceFiles || [relaySnapshotPath,
+      ...(fs.existsSync(`${relaySnapshotPath}.last-failed.json`) ? [`${relaySnapshotPath}.last-failed.json`] : [])];
+    const read = readFiles || require("./sourceCollectorShadowAdapter.cjs").readSourceCollectorShadowFiles;
+    return read(files, { asOf, previous, closure: readClosure(), sourceDataUpdatedAt: null });
+  } catch {
+    // An unavailable observer is not a successful source attempt and must not
+    // erase the previous sequence or allow the same attempt to count twice.
+    return {
+      version: "source-collector-shadow-v1", state: "unknown-evidence", reason: "shadow-adapter-unavailable",
+      blockers: ["shadow-adapter-unavailable"], attemptKey: previous?.attemptKey || null,
+      consecutiveFailures: Number.isSafeInteger(previous?.consecutiveFailures) && previous.consecutiveFailures >= 0
+        ? previous.consecutiveFailures : 0,
+      retryAfterSeconds: null, nextAttemptAt: null, sourceDataUpdatedAt: null,
+      shadowOnly: true, publicationAction: "none", schedulingApplied: false,
+    };
+  }
+};
 
 const describeSlowPhaseNeed = ({
   releasePriority = false,
@@ -4623,6 +4655,12 @@ const main = async () => {
       const nextWakeAt = loop
         ? new Date(Date.now() + (relayCatchupRequired ? 0 : loopDelayMs)).toISOString()
         : null;
+      // Reset a failure sequence only when the adapter observes a verified
+      // available/closed source response. Worker success alone is not proof;
+      // skipped cycles retain the existing sequence without another read.
+      const sourceCollectionShadow = completedCycle.ok === true && completedCycle.skipped !== true
+        ? observeWorkerSourceCollectionShadow({ asOf: new Date().toISOString(), previous: workerStatusState?.sourceCollectionShadow })
+        : runningHistory.sourceCollectionShadow;
       writeWorkerStatus({
         ok: true,
         type: "sync-worker-cycle",
@@ -4660,6 +4698,7 @@ const main = async () => {
           : runningHistory.lastSlowPhaseAt,
         lastCycleDurationMs: completedCycle.durationMs,
         lastError: null,
+        ...(sourceCollectionShadow ? { sourceCollectionShadow } : {}),
         nextWakeAt
       });
       console.log(JSON.stringify({ type: "sync-worker-cycle", ...completedCycle }, null, 2));
@@ -4711,6 +4750,9 @@ const main = async () => {
       );
       if (currentSourceCooldown) loopDelayMs = Math.max(currentSourceCooldown.minimumDelayMs, loopDelayMs);
       const nextWakeAt = loop ? new Date(Date.now() + loopDelayMs).toISOString() : null;
+      const sourceCollectionShadow = observeWorkerSourceCollectionShadow({
+        asOf: failedAt, previous: workerStatusState?.sourceCollectionShadow,
+      });
       const failure = {
         type: "sync-worker-failed",
         ok: false,
@@ -4722,6 +4764,7 @@ const main = async () => {
         cadence: nextCadence,
         phase: "failed",
         ...(currentSourceCooldown ? { failureCooldown: { ...currentSourceCooldown, delayMs: loopDelayMs } } : {}),
+        ...(sourceCollectionShadow ? { sourceCollectionShadow } : {}),
         pipeline: describeCycleStages(),
         wake: cycleWake,
         relayWake: {
@@ -4846,6 +4889,7 @@ module.exports = {
   modelCandidateRegistryLockTimeoutMs,
   nextCycleDelayMs,
   officialPublishEvidenceAfter,
+  observeWorkerSourceCollectionShadow,
   officialCompensationRequired,
   phaseLockWaitMs,
   releaseCycleDelayMs,
