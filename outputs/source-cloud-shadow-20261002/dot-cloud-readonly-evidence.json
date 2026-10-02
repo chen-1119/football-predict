@@ -1,0 +1,236 @@
+{
+  "version": "source-cloud-readonly-handoff-v1",
+  "historicalReceiptsOnly": true,
+  "localEnvironment": {
+    "platform": "win32",
+    "node": "v25.8.1"
+  },
+  "cloudEnvironmentCurrentlyVerified": false,
+  "archiveFiles": [
+    {
+      "path": "analysis/data_dictionary.md",
+      "bytes": 4664,
+      "bytesMatch": true,
+      "sha256Matches": true
+    },
+    {
+      "path": "analysis/manifest.json",
+      "bytes": 9504,
+      "bytesMatch": true,
+      "sha256Matches": true
+    },
+    {
+      "path": "analysis/matches.csv",
+      "bytes": 728722,
+      "bytesMatch": true,
+      "sha256Matches": true
+    },
+    {
+      "path": "analysis/odds_snapshots.csv",
+      "bytes": 909052,
+      "bytesMatch": true,
+      "sha256Matches": true
+    },
+    {
+      "path": "analysis/predictions.csv",
+      "bytes": 2014069,
+      "bytesMatch": true,
+      "sha256Matches": true
+    },
+    {
+      "path": "analysis/prompt.md",
+      "bytes": 5730,
+      "bytesMatch": true,
+      "sha256Matches": true
+    },
+    {
+      "path": "analysis/settlements.csv",
+      "bytes": 560871,
+      "bytesMatch": true,
+      "sha256Matches": true
+    },
+    {
+      "path": "collection-task-list.json",
+      "bytes": 1161,
+      "bytesMatch": true,
+      "sha256Matches": true
+    },
+    {
+      "path": "deploy/dot-football/README.md",
+      "bytes": 7328,
+      "bytesMatch": true,
+      "sha256Matches": true
+    },
+    {
+      "path": "deploy/dot-football/dot-instructions.md",
+      "bytes": 6131,
+      "bytesMatch": true,
+      "sha256Matches": true
+    },
+    {
+      "path": "deploy/dot-football/migration-state.json",
+      "bytes": 839,
+      "bytesMatch": true,
+      "sha256Matches": true
+    },
+    {
+      "path": "deploy/dot-football/run-template.json",
+      "bytes": 281,
+      "bytesMatch": true,
+      "sha256Matches": true
+    },
+    {
+      "path": "deploy/dot-football/source-registry.json",
+      "bytes": 1202,
+      "bytesMatch": true,
+      "sha256Matches": true
+    },
+    {
+      "path": "docs/chatgpt-pro-football-audit-prompt.md",
+      "bytes": 5730,
+      "bytesMatch": true,
+      "sha256Matches": true
+    },
+    {
+      "path": "fixtures/current-fixtures.json",
+      "bytes": 76547,
+      "bytesMatch": true,
+      "sha256Matches": true
+    },
+    {
+      "path": "reports/history-summary.json",
+      "bytes": 228710,
+      "bytesMatch": true,
+      "sha256Matches": true
+    },
+    {
+      "path": "scripts/analyzeDotFootballHistory.cjs",
+      "bytes": 21985,
+      "bytesMatch": true,
+      "sha256Matches": true
+    },
+    {
+      "path": "scripts/dotFootballEvidence.cjs",
+      "bytes": 43844,
+      "bytesMatch": true,
+      "sha256Matches": true
+    },
+    {
+      "path": "scripts/exportChatGptAnalysisPack.cjs",
+      "bytes": 55317,
+      "bytesMatch": true,
+      "sha256Matches": true
+    }
+  ],
+  "sourceRegistryValidation": {
+    "ok": true,
+    "errors": []
+  },
+  "emptyTemplateValidation": {
+    "ok": false,
+    "errorCodes": [
+      "business-date",
+      "invalid-time",
+      "invalid-time",
+      "fixture-count",
+      "observation-count"
+    ],
+    "expectedFailure": true
+  },
+  "readbackChecks": [
+    {
+      "name": "history-cloud-replay-20260930.json",
+      "bytes": 228710,
+      "sha256": "5ac12f020073e39148a5d0716aa68629ce1532ab175ab479fabb2b6a33bac081",
+      "recordedSha256": "5ac12f020073e39148a5d0716aa68629ce1532ab175ab479fabb2b6a33bac081",
+      "hashMatches": true,
+      "priorLocalExactCopyFlag": false
+    },
+    {
+      "name": "cloud-unpack-verification-20260930.json",
+      "bytes": 6716,
+      "sha256": "2edf91339fc6677057061ac4385e36b831997b930a9cb08fe155de682c2f8cf6",
+      "recordedSha256": "2edf91339fc6677057061ac4385e36b831997b930a9cb08fe155de682c2f8cf6",
+      "hashMatches": true,
+      "priorLocalExactCopyFlag": true
+    },
+    {
+      "name": "cloud-terminal-execution-20260930.json",
+      "bytes": 8684,
+      "sha256": "6c6b07c0e005823bfc280d2ed3f77c69c5f1ea3f790b02b31c78d85eabd6d72e",
+      "recordedSha256": "6c6b07c0e005823bfc280d2ed3f77c69c5f1ea3f790b02b31c78d85eabd6d72e",
+      "hashMatches": true,
+      "priorLocalExactCopyFlag": true
+    },
+    {
+      "name": "cloud-offline-acceptance-20260930.json",
+      "bytes": 1852,
+      "sha256": "eb05b36039e1f3e4dabd83005fc3f88c27efcc6ca479cc134c08598cf7e959b1",
+      "recordedSha256": "eb05b36039e1f3e4dabd83005fc3f88c27efcc6ca479cc134c08598cf7e959b1",
+      "hashMatches": true,
+      "priorLocalExactCopyFlag": true
+    }
+  ],
+  "migration": {
+    "phase": "offline-cloud-accepted-official-source-support-request-sent",
+    "cloudComputerConnectedVerifiedHistorically": true,
+    "cloudExecutionVerified": false,
+    "cloudExecutionVerifiedScope": "official-live-collection-only; offline execution verified separately in offlineCloudExecution",
+    "cloudSchedulesConfirmed": false,
+    "productionEligible": false,
+    "websiteMigrationCompleted": false,
+    "legacyCollectorsDisabled": false
+  },
+  "historicalTerminalCommands": [
+    {
+      "label": "help",
+      "cwd": "/workspace/scratch/6211c9389618/football-dot/bootstrap/offline-20260930/extracted/bootstrap-20260930-0955",
+      "startedAt": "2026-09-30T02:58:19.444639+00:00",
+      "completedAt": "2026-09-30T02:58:19.571332+00:00",
+      "exitCode": 0
+    },
+    {
+      "label": "empty-template-validate",
+      "cwd": "/workspace/scratch/6211c9389618/football-dot/bootstrap/offline-20260930/extracted/bootstrap-20260930-0955",
+      "startedAt": "2026-09-30T02:58:19.571637+00:00",
+      "completedAt": "2026-09-30T02:58:19.678999+00:00",
+      "exitCode": 1
+    },
+    {
+      "label": "history-replay",
+      "cwd": "/workspace/scratch/6211c9389618/football-dot/bootstrap/offline-20260930/extracted/bootstrap-20260930-0955",
+      "startedAt": "2026-09-30T02:58:19.679296+00:00",
+      "completedAt": "2026-09-30T02:58:20.085681+00:00",
+      "exitCode": 0
+    }
+  ],
+  "coordinationSchedules": [
+    {
+      "title": "足球早间协调巡检",
+      "timezone": "Asia/Shanghai",
+      "time": "08:00",
+      "nextRunUiHistorical": "2026-10-03 GMT+8 08:00",
+      "toolNextRunTime": null,
+      "uiSavedAndEnabledHistorical": true
+    },
+    {
+      "title": "足球下午协调巡检",
+      "timezone": "Asia/Shanghai",
+      "time": "16:00",
+      "nextRunUiHistorical": "2026-10-03 GMT+8 16:00",
+      "toolNextRunTime": null,
+      "uiSavedAndEnabledHistorical": true
+    }
+  ],
+  "pending": [
+    "current persistent cloud runtime/version",
+    "raw HTTP live-source evidence and authorization",
+    "actual order/budget",
+    "continuous collector run receipts",
+    "seven-day comparison including sales reopening",
+    "rollback acceptance"
+  ],
+  "productionWrites": 0,
+  "networkRequests": 0,
+  "resourcesCreated": 0
+}
