@@ -1,0 +1,26 @@
+{
+  "task": "03-interface",
+  "branch": "codex/football-ui-experience",
+  "baseSha": "6fce1805d0d8db0410c71231d6df6ce72ec766cb",
+  "workspace": "C:/Users/86188/Documents/football/.codex/worktrees/03-interface",
+  "plan": "Improve public fixtures and match information first; supply future recommendation-card presentation contract separately.",
+  "codeStatus": "implemented locally; committed SHA is the Git commit containing this receipt",
+  "deployed": false,
+  "productionWrites": 0,
+  "changedCode": ["src/pages/PublicBrowse.tsx", "src/styles/public-browse.css", "tests/public-browse-flow.test.cjs"],
+  "changes": ["Compact hero, spacing and cards while retaining existing theme", "Equal-weight main/draw/away SP comparison with stronger numeric hierarchy", "Responsive auto-fit grid removes vacant half-column for a single fixture", "Explicit fixture snapshot time and selected-day count; older business dates do not claim today's sales", "Public detail identifies fields outside the preview and avoids duplicate snapshot copy", "Semantic time elements, named quote group and keyboard-focus styles", "Failed reads do not invent a zero-fixture count"],
+  "validation": {
+    "unitTests": {"passed": 20, "failed": 0, "source": "tests.txt", "scope": "Existing synthetic boundary and interaction tests plus three new regressions; not real forecast accuracy"},
+    "build": {"passed": true, "source": "build.txt", "existingWarning": "worldcup-glory-hero.jpg remains runtime-resolved; unrelated WorldCup route"},
+    "lint": {"exitCode": 0, "errors": 0, "warnings": 0, "source": "lint.txt"},
+    "browser": {"passedChecks": 12, "widths": [320,390,768,1440], "horizontalOverflow": false, "runtimeErrors": 0, "keyboard": ["expand/collapse published probability details", "search/clear", "back to fixtures"], "source": "browser-validation.json"},
+    "contrast": {"passedTextChecks": 44, "failed": 0, "source": "contrast-validation.json", "limitation": "Computed colour audit of public page, not a full accessibility certification"},
+    "visualInspection": ["fixtures candidate 390 and 1440", "detail candidate 390"],
+    "screenshots": "*-deployed-before-{390,1440}.png versus *-candidate-after-{390,1440}.png; before is read-only live r787, after is local replay of captured public responses"
+  },
+  "dataEvidence": {"source": "Fresh public HTTP responses captured on October 2; underlying business publication is September 30, not today's new data", "receipt": "source-evidence.json", "onlineExportHashVerified": true, "previewUsesRepositoryBusinessData": false},
+  "liveReadOnlyHealth": {"receipt": "live-health-readonly.json", "serviceOk": true, "dataFresh": false, "sourceHealthOk": false, "recommendationReliable": false},
+  "pendingIntegration": {"sharedFilePatch": null, "interfaceSuggestion": "recommendation-card-contract.md", "modelQualificationOwner": "02", "historicalRegressionOwner": "05"},
+  "remainingBlockers": ["Authenticated full-analysis page requires a valid account/access session for product acceptance", "Future recommendation card needs confirmed service contract from 02; no numerical or qualification logic added here", "Production deployment and full-release gates remain under coordinator control", "Browser widths were emulated; physical-phone acceptance remains pending"],
+  "oldManagedWorktree": {"status": "archived after confirming no tracked, untracked or ignored work", "identityKey": "C:/Users/86188/.codex/worktrees/football-ui-experience/football", "archivedAttachmentId": "01a0fcc2-3698-7ff0-be9b-c0c4ef16ca38"}
+}
