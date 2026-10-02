@@ -8,3 +8,14 @@ deploy/light-server/football-automation.sudoers text eol=lf
 deploy/light-server/football-access-code-qa.cjs text eol=lf
 server/postgres/migrations/*.sql text eol=lf
 server/postgres/migrations/002_projection_runtime.sql whitespace=-blank-at-eof
+
+# Preserve byte-hashed history-regression code and evidence across Windows checkouts.
+docs/history-regression* text eol=lf
+scripts/historyRegression* text eol=lf
+scripts/captureHistoryRegression.cjs text eol=lf
+scripts/reportHistoryRegression.cjs text eol=lf
+scripts/verifyHistoryRegressionDelivery.cjs text eol=lf
+scripts/plotHistoryRegression.py text eol=lf
+tests/history-regression-* text eol=lf
+outputs/history-regression-20261002/** text eol=lf
+outputs/history-regression-20261002/**/*.png -text
